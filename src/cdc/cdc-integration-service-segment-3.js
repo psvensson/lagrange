@@ -1,21 +1,12 @@
-import { CDC_INTEGRATION_SERVICE_SHARED } from "./cdc-integration-service-shared.js";
-import { CDCIntegrationServiceSegment2 } from "./cdc-integration-service-segment-2.js";
+import {CDC_INTEGRATION_SERVICE_SHARED} from './cdc-integration-service-shared.js';
+import {CDCIntegrationServiceSegment2} from './cdc-integration-service-segment-2.js';
 
 const {
   ADDRESS,
   AUTHORITATIVE_FALLBACK_OUTCOME,
   AUTHORITATIVE_FALLBACK_PHASE,
   AUTHORITATIVE_FALLBACK_RECENT_LIMIT,
-  AUTHORITATIVE_FALLBACK_REPAIR_BUDGET_MS,
-  AUTHORITATIVE_FALLBACK_RETRY_DELAY_MS,
-  AUTHORITATIVE_FALLBACK_WINDOW_MS,
-  AUTHORITATIVE_READ_SOURCE,
-  AUTHORITATIVE_ROW_VERSION_FIELD_CANDIDATES,
-  CDCEventHandler,
   CDCOperationType,
-  CDC_CONFIG_KEY,
-  CDC_DEFAULTS,
-  CDC_EPOCH_CONFIG_KEY,
   CDC_ERROR_MSG,
   CDC_EVENT,
   CDC_INTEGRATION_SERVICE_ERROR,
@@ -23,105 +14,40 @@ const {
   CDC_LOG_MSG,
   CDC_OPERATION,
   CDC_OPERATION_LABEL,
-  CDC_OWNER_HANDOFF_CLOSED_FRAGMENT,
-  CDC_OWNER_HANDOFF_CONNECTION_TO_NODE_FRAGMENT,
-  CDC_OWNER_HANDOFF_ROUTING_ERROR_FRAGMENTS,
   CDC_PRIMARY_KEY,
-  CDC_RETRY,
-  CDC_SESSION,
   CDC_SKIP_REASON,
   CDC_SOURCE,
   CDC_SQL,
   CDC_STATS_DEFAULT,
-  CDC_SUBSYSTEM,
-  CDC_SYSTEM_WRITE_RECOVERY_CANDIDATE_SELECTION_KIND,
   COLUMN,
-  CONTROL_PLANE_MUTATION_READINESS_ERROR,
-  CONTROL_PLANE_READINESS_DIMENSION,
-  CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE,
-  ConfigurationManager,
-  ENTITY_TYPE,
   ENTRYPOINT_DEFAULT,
   EPOCH_CONFIG_KEY,
-  ERRORS,
-  EventEmitter,
-  HLCClockService,
-  INITIAL_PARTITION_IDS,
   LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY,
-  LoggingService,
   METRICS_LOG_TAG,
   NODE_WEBSOCKET_ADDRESS_RESOLUTION_STATE,
   NUM,
-  OWNER_CONTRACT_NEXT_ACTION,
-  OWNER_CONTRACT_STATE,
-  PRESSURE_GOVERNOR_ACTION,
-  PRESSURE_WORK_CLASS,
   PROTOCOL,
-  PressureGovernor,
-  QUERY_ERROR_CODE,
-  QUERY_ERROR_MSG,
-  QUERY_TRANSPORT_NOT_READY_ERROR_CODE,
-  READ_MODEL_DIVERGENCE_TYPE,
   SERVICE_STATUS,
-  SERVICE_TYPE,
   SQL,
   SQL_RECONCILIATION_REASON,
   STATE,
-  STRING,
   SYSTEM_TABLE_NAME,
-  SYSTEM_TABLE_VISIBILITY_STATE,
-  TABLE_WRITE_FAILURE_LOG_SUPPRESSED_TABLES,
-  TABLE_WRITE_METRIC_SUPPRESSED_TABLES,
-  TIMEOUT_BUDGET_CLASSIFICATION,
-  TIME_MS,
   TYPEOF,
   VALID_SYSTEM_TABLES,
-  WRITE_ROUTER_MODE,
-  annotateSystemTableMutationError,
   buildCDCNodeJoinedResult,
   buildDivergenceEvent,
-  buildOwnerContractOutcome,
-  buildPendingVisibilityTimeoutResult,
-  buildPressureAdmissionFailure,
   buildSystemTableMutationError,
   buildSystemTableVisibilityResult,
   canonicalizeSystemTableRow,
-  createBootstrapDirectWriteRouter,
-  createSqlWriteRouter,
-  createTimeoutBudget,
-  createTimeoutBudgetError,
-  delay,
-  getControlPlaneErrorCode,
-  getControlPlaneErrorMessage,
-  getControlPlaneRetryAfterMs,
-  getRemainingBudgetMs,
   getSchemaByTableName,
   getSystemCachePrimaryKeyFieldOrFallback,
-  hasControlPlaneMutationRoutingGapFailureSignature,
-  hasSystemTableOwnerHandoffFailureSignature,
-  isCacheVisibilityTimeoutError,
-  isRetryableControlPlaneError,
-  isSystemTableOwnerHandoffFailure,
-  isTableInternalCachePropagationEnabled,
   logSystemTableWriteFailure,
   materializeNormalizedDefaultValue,
   normalizeAuthoritativeFallbackOutcome,
-  normalizeAuthoritativeFallbackPhase,
-  normalizeControlPlaneSystemTableVisibilityState,
-  normalizeDeliveryPriority,
-  normalizeLocalQueryTransportReadiness,
   normalizeSystemTableVisibilityResult,
-  normalizeSystemTableVisibilityState,
-  normalizeSystemTableWriteMode,
-  normalizeSystemWriteRecoveryCandidateSelectionKeyValue,
-  resolveAuthoritativeFallbackOutcome,
   resolveNodeWebSocketAddress,
-  resolveSystemTableMutationDeliveryPriority,
-  resolveSystemTableOwnerHandoffFailureTableName,
-  resolveSystemTableVisibilityContractOutcome,
   shouldEmitTableWriteMetric,
   shouldLogTableWriteFailure,
-  sortMutationKeyObject,
   stableSerializeMutationKey,
   uuidv4,
 } = CDC_INTEGRATION_SERVICE_SHARED;
@@ -143,8 +69,8 @@ class CDCIntegrationServiceSegment3 extends CDCIntegrationServiceSegment2 {
    */
   recordAuthoritativeFallbackSignal(options = {}) {
     const nowMs = Date.now();
-    const tableName = String(options.tableName || "");
-    const rowKey = String(options.key || "");
+    const tableName = String(options.tableName || '');
+    const rowKey = String(options.key || '');
     const phase = this.resolveAuthoritativeFallbackPhase(options.phase);
     const outcome = normalizeAuthoritativeFallbackOutcome(options.outcome);
     const identity = `${tableName}:${rowKey}:${phase}:${outcome}`;
@@ -475,7 +401,7 @@ class CDCIntegrationServiceSegment3 extends CDCIntegrationServiceSegment2 {
     const event = buildDivergenceEvent({
       divergenceType,
       tableName,
-      ownerComponent: "CDCIntegrationService",
+      ownerComponent: 'CDCIntegrationService',
       reconciliationReason:
         SQL_RECONCILIATION_REASON.DIAGNOSTICS_CACHE_RECONCILE,
       rowKey: key,
@@ -563,7 +489,7 @@ class CDCIntegrationServiceSegment3 extends CDCIntegrationServiceSegment2 {
         `${CDC_ERROR_MSG.INSERT_VALID_COLUMNS_PREFIX}${tableName}`,
       );
     }
-    const { generatePrimaryKey = true } = options;
+    const {generatePrimaryKey = true} = options;
     const idField = this.getPrimaryKeyField(tableName);
     if (!rowData[idField] && generatePrimaryKey) {
       rowData[idField] = uuidv4();
@@ -680,9 +606,9 @@ class CDCIntegrationServiceSegment3 extends CDCIntegrationServiceSegment2 {
     if (value === undefined || value === null) {
       return Object.freeze({
         state:
-          value === undefined
-            ? CDC_INTEGRATION_SERVICE_LITERAL.DEFAULT_VALUE_STATE_UNDEFINED
-            : CDC_INTEGRATION_SERVICE_LITERAL.DEFAULT_VALUE_STATE_NULL,
+          value === undefined ?
+            CDC_INTEGRATION_SERVICE_LITERAL.DEFAULT_VALUE_STATE_UNDEFINED :
+            CDC_INTEGRATION_SERVICE_LITERAL.DEFAULT_VALUE_STATE_NULL,
       });
     }
     if (typeof value !== TYPEOF.STRING) {
@@ -869,8 +795,7 @@ class CDCIntegrationServiceSegment3 extends CDCIntegrationServiceSegment2 {
     });
     return this.runCoalescedMutation(singleFlightKey, async () => {
       try {
-        const { columns, placeholders, values } =
-          this.buildInsertParts(rowData);
+        const {columns, placeholders, values} = this.buildInsertParts(rowData);
         const sql =
           `${options?.ignoreExisting === true ? SQL.INSERT_OR_IGNORE_INTO : SQL.INSERT_INTO} ${tableName} (${columns}) ` +
           `${SQL.VALUES} (${placeholders})`;
@@ -954,15 +879,15 @@ class CDCIntegrationServiceSegment3 extends CDCIntegrationServiceSegment2 {
               error: error.message,
               nodeId: this.nodeId,
               causeId:
-                typeof options?.causeId === TYPEOF.STRING
-                  ? options.causeId
-                  : null,
+                typeof options?.causeId === TYPEOF.STRING ?
+                  options.causeId :
+                  null,
               operation: CDC_OPERATION.INSERT,
-              primaryKey: trackingId
-                ? {
-                    [idField]: trackingId,
-                  }
-                : null,
+              primaryKey: trackingId ?
+                {
+                  [idField]: trackingId,
+                } :
+                null,
             },
             error,
           );
@@ -1025,9 +950,9 @@ class CDCIntegrationServiceSegment3 extends CDCIntegrationServiceSegment2 {
     });
     return this.runCoalescedMutation(singleFlightKey, async () => {
       try {
-        const { setClause, values: setValues } =
+        const {setClause, values: setValues} =
           this.buildUpdateParts(updateData);
-        const { whereStr, values: whereValues } =
+        const {whereStr, values: whereValues} =
           this.buildWhereParts(whereClause);
         const sql =
           `${SQL.UPDATE} ${tableName} ${SQL.SET} ${setClause} ` +
@@ -1044,12 +969,12 @@ class CDCIntegrationServiceSegment3 extends CDCIntegrationServiceSegment2 {
             coalescingKey: options?.coalescingKey,
             recoveryCandidateSelectionKey:
               options?.recoveryCandidateSelectionKey,
-          routingReadinessDimension: options?.routingReadinessDimension,
-          workloadClass: options?.workloadClass,
-          workClass: options?.workClass,
-          allowPressureDefer: options?.allowPressureDefer,
-          pressureRetryAfterMs: options?.pressureRetryAfterMs,
-          deliveryPriority: options?.deliveryPriority,
+            routingReadinessDimension: options?.routingReadinessDimension,
+            workloadClass: options?.workloadClass,
+            workClass: options?.workClass,
+            allowPressureDefer: options?.allowPressureDefer,
+            pressureRetryAfterMs: options?.pressureRetryAfterMs,
+            deliveryPriority: options?.deliveryPriority,
           },
         );
         const sqlDurationMs = Date.now() - sqlStartMs;
@@ -1068,14 +993,14 @@ class CDCIntegrationServiceSegment3 extends CDCIntegrationServiceSegment2 {
         ) {
           const expectedCacheFields =
             options?.expectedCacheFields &&
-            typeof options.expectedCacheFields === TYPEOF.OBJECT
-              ? options.expectedCacheFields
-              : null;
+            typeof options.expectedCacheFields === TYPEOF.OBJECT ?
+              options.expectedCacheFields :
+              null;
           const minimumCacheFields =
             options?.minimumCacheFields &&
-            typeof options.minimumCacheFields === TYPEOF.OBJECT
-              ? options.minimumCacheFields
-              : null;
+            typeof options.minimumCacheFields === TYPEOF.OBJECT ?
+              options.minimumCacheFields :
+              null;
           visibilityResult = normalizeSystemTableVisibilityResult(
             await this.waitForCacheUpdate(tableName, id, true, {
               expectedFields: expectedCacheFields,
@@ -1137,9 +1062,9 @@ class CDCIntegrationServiceSegment3 extends CDCIntegrationServiceSegment2 {
               error: error.message,
               nodeId: this.nodeId,
               causeId:
-                typeof options?.causeId === TYPEOF.STRING
-                  ? options.causeId
-                  : null,
+                typeof options?.causeId === TYPEOF.STRING ?
+                  options.causeId :
+                  null,
               operation: CDC_OPERATION.UPDATE,
               primaryKey: {
                 [idField]: id,
@@ -1205,8 +1130,7 @@ class CDCIntegrationServiceSegment3 extends CDCIntegrationServiceSegment2 {
           sessionId: options?.sessionId,
           disableSystemWriteSession: options?.disableSystemWriteSession,
           coalescingKey: options?.coalescingKey,
-          recoveryCandidateSelectionKey:
-            options?.recoveryCandidateSelectionKey,
+          recoveryCandidateSelectionKey: options?.recoveryCandidateSelectionKey,
           routingReadinessDimension: options?.routingReadinessDimension,
           workloadClass: options?.workloadClass,
           workClass: options?.workClass,
@@ -1341,8 +1265,7 @@ class CDCIntegrationServiceSegment3 extends CDCIntegrationServiceSegment2 {
           sessionId: options?.sessionId,
           disableSystemWriteSession: options?.disableSystemWriteSession,
           coalescingKey: options?.coalescingKey,
-          recoveryCandidateSelectionKey:
-            options?.recoveryCandidateSelectionKey,
+          recoveryCandidateSelectionKey: options?.recoveryCandidateSelectionKey,
           routingReadinessDimension: options?.routingReadinessDimension,
           workloadClass: options?.workloadClass,
           workClass: options?.workClass,
@@ -1650,15 +1573,13 @@ class CDCIntegrationServiceSegment3 extends CDCIntegrationServiceSegment2 {
         targetNodeId,
         nodeAddress,
         error:
-          CDC_INTEGRATION_SERVICE_ERROR
-            .MISSING_CANONICAL_NODE_ENDPOINTS_WEBSOCKET_ADDRESS,
+          CDC_INTEGRATION_SERVICE_ERROR.MISSING_CANONICAL_NODE_ENDPOINTS_WEBSOCKET_ADDRESS,
       });
       return buildCDCNodeJoinedResult({
         processed: false,
         nodeId: targetNodeId,
         error:
-          CDC_INTEGRATION_SERVICE_ERROR
-            .MISSING_CANONICAL_NODE_ENDPOINTS_WEBSOCKET_ADDRESS,
+          CDC_INTEGRATION_SERVICE_ERROR.MISSING_CANONICAL_NODE_ENDPOINTS_WEBSOCKET_ADDRESS,
       });
     }
     const wsAddress = wsAddressResolution.address;

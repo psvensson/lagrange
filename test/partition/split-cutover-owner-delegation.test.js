@@ -10,7 +10,6 @@
  *   .managedSplitWorkflow.advanceSplitPhase()
  */
 import {test} from '../../src/test-helpers/tap.js';
-import {EventEmitter} from 'events';
 import {
   PARTITION_TRANSITION_STATE,
   PARTITION_TRANSITION_METADATA_FIELD,
@@ -18,7 +17,6 @@ import {
 import {
   PARTITION_SERVICE_ERROR_MSG,
 } from '../../src/partition/partition-service-constants.js';
-import {QUERY_ERROR_MSG} from '../../src/query/query-constants.js';
 
 /**
  * Minimal PartitionService-like object that exposes only the methods

@@ -131,7 +131,7 @@ function buildCapabilityImports(manifest, policy, availableModules) {
  *   undeclared: string[]}} Result.
  */
 function checkUndeclaredCapabilities(
-  requestedCapabilities, manifest
+  requestedCapabilities, manifest,
 ) {
   const errors = [];
   const undeclared = [];

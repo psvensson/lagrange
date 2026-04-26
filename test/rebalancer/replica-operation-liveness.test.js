@@ -144,6 +144,110 @@ test(
 );
 
 test(
+  'replica-operation-liveness keeps REPLACE rows in flight while source remains active',
+  async (t) => {
+    const summary = summarizeReplicaOperationLiveness([{
+      operation_id: 'replace-source-active',
+      type: 'REPLACE',
+      partition_id: 'nodes-p1',
+      entity_type: 'partition',
+      entity_id: 'nodes-p1',
+      source_node_id: 'seed-node',
+      source_replica_id: 'nodes-p1-r1',
+      target_node_id: 'node-2',
+      replica_id: 'nodes-p1-r4',
+      status: 'active',
+      workflow_step: 'ACTIVE',
+      updated_at: 100,
+    }], {
+      nowMs: 200,
+      serviceRows: [{
+        service_id: 'nodes-p1-r4',
+        replica_id: 'nodes-p1-r4',
+        service_type: 'partition',
+        partition_id: 'nodes-p1',
+        node_id: 'node-2',
+        status: 'active',
+      }, {
+        service_id: 'nodes-p1-r1',
+        replica_id: 'nodes-p1-r1',
+        service_type: 'partition',
+        partition_id: 'nodes-p1',
+        node_id: 'seed-node',
+        status: 'active',
+      }],
+    });
+
+    t.equal(
+      summary.inFlightCount,
+      1,
+      'REPLACE should stay in flight until source ownership is retired',
+    );
+  },
+);
+
+test(
+  'replica-operation-liveness treats observed-completed REPLACE rows as not in flight',
+  async (t) => {
+    const summary = summarizeReplicaOperationLiveness([{
+      operation_id: 'replace-active-source-retired',
+      type: 'REPLACE',
+      partition_id: 'nodes-p1',
+      entity_type: 'partition',
+      entity_id: 'nodes-p1',
+      source_node_id: 'seed-node',
+      source_replica_id: 'nodes-p1-r1',
+      target_node_id: 'node-2',
+      replica_id: 'nodes-p1-r4',
+      status: 'active',
+      workflow_step: 'ACTIVE',
+      updated_at: 100,
+    }, {
+      operation_id: 'replace-stopping-source-retired',
+      type: 'REPLACE',
+      partition_id: 'services-p1',
+      entity_type: 'partition',
+      entity_id: 'services-p1',
+      source_node_id: 'seed-node',
+      source_replica_id: 'services-p1-r1',
+      target_node_id: 'node-3',
+      replica_id: 'services-p1-r4',
+      status: 'removing',
+      workflow_step: 'STOPPING',
+      updated_at: 100,
+    }], {
+      nowMs: 200,
+      serviceRows: [{
+        service_id: 'nodes-p1-r4',
+        replica_id: 'nodes-p1-r4',
+        service_type: 'partition',
+        partition_id: 'nodes-p1',
+        node_id: 'node-2',
+        status: 'active',
+      }, {
+        service_id: 'services-p1-r4',
+        replica_id: 'services-p1-r4',
+        service_type: 'partition',
+        partition_id: 'services-p1',
+        node_id: 'node-3',
+        status: 'active',
+      }],
+    });
+
+    t.equal(
+      summary.inFlightCount,
+      0,
+      'topology-completed REPLACE rows should not keep quiescence open',
+    );
+    t.same(
+      summary.inFlightOperationIds,
+      [],
+      'completed REPLACE rows should be absent from in-flight diagnostics',
+    );
+  },
+);
+
+test(
   'normalizeReplicaOperationRecord infers priority recovery identity from replicaId and steps history',
   async (t) => {
     const record = normalizeReplicaOperationRecord({
@@ -190,6 +294,11 @@ test(
       record.type,
       'REPLACE',
       'normalization should infer the replace workflow from source-replica metadata',
+    );
+    t.equal(
+      record.sourceReplicaId,
+      'sql_transactions-p1-r1',
+      'normalization should preserve source-replica metadata for replace liveness',
     );
     t.equal(
       record.targetNodeId,

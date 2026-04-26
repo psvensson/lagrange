@@ -136,7 +136,7 @@ test('DistributedTransactionCoordinator - rollback failure stays in rollback ' +
 test(
   'DistributedTransactionCoordinator - defers recovery sweep on retryable control-plane persistence failures',
   async (t) => {
-    let nowMs = 10_000;
+    const nowMs = 10_000;
     const coordinator = new DistributedTransactionCoordinator({
       now: () => nowMs,
       loadRecoveryStateForSweep: async () => ({

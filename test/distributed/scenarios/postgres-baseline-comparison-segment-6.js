@@ -1,4 +1,4 @@
-import { POSTGRES_BASELINE_COMPARISON_SEGMENT_5 } from "./postgres-baseline-comparison-segment-5.js";
+import {POSTGRES_BASELINE_COMPARISON_SEGMENT_5} from './postgres-baseline-comparison-segment-5.js';
 const {
   BENCHMARK_DEFAULTS,
   DISCOVERY_DIAGNOSTICS_FIELD_NODE_ADMISSION_TRACE_BY_NODE_ID,
@@ -32,9 +32,9 @@ const {
 
 async function resolveSutLoadNodes(nodeClient, nodes, seedNode, options = {}) {
   const timing = resolveScenarioTiming(options.timing);
-  const candidates = Array.isArray(nodes)
-    ? nodes.filter((node) => isLoadNodeCandidate(node))
-    : [];
+  const candidates = Array.isArray(nodes) ?
+    nodes.filter((node) => isLoadNodeCandidate(node)) :
+    [];
   if (candidates.length === ZERO || !isLoadNodeCandidate(seedNode)) {
     return {
       nodes: [],
@@ -55,7 +55,7 @@ async function resolveSutLoadNodes(nodeClient, nodes, seedNode, options = {}) {
 
   const candidateById = new Map();
   for (const node of candidates) {
-    if (typeof node?.id === "string" && node.id.length > ZERO) {
+    if (typeof node?.id === 'string' && node.id.length > ZERO) {
       candidateById.set(node.id, node);
     }
   }
@@ -68,31 +68,31 @@ async function resolveSutLoadNodes(nodeClient, nodes, seedNode, options = {}) {
   }
 
   const timeoutMs =
-    Number.isInteger(options.timeoutMs) && options.timeoutMs > ZERO
-      ? options.timeoutMs
-      : BENCHMARK_DEFAULTS.readyTimeoutMs;
+    Number.isInteger(options.timeoutMs) && options.timeoutMs > ZERO ?
+      options.timeoutMs :
+      BENCHMARK_DEFAULTS.readyTimeoutMs;
   const pollIntervalMs =
-    Number.isInteger(options.pollIntervalMs) && options.pollIntervalMs > ZERO
-      ? options.pollIntervalMs
-      : BENCHMARK_DEFAULTS.readyPollIntervalMs;
-  const discoveryTableName = normalizeTableName(options.tableName, "");
-  const discoveryTableId = normalizeTableId(options.tableId, "");
+    Number.isInteger(options.pollIntervalMs) && options.pollIntervalMs > ZERO ?
+      options.pollIntervalMs :
+      BENCHMARK_DEFAULTS.readyPollIntervalMs;
+  const discoveryTableName = normalizeTableName(options.tableName, '');
+  const discoveryTableId = normalizeTableId(options.tableId, '');
   const loadLaneTableProbeSql =
-    discoveryTableName.length > ZERO
-      ? buildSutTableProbeSql(discoveryTableName)
-      : "";
+    discoveryTableName.length > ZERO ?
+      buildSutTableProbeSql(discoveryTableName) :
+      '';
   const discoveryContext =
-    discoveryTableName.length > ZERO
-      ? {
-          ...NODE_CLIENT_TRANSIENT_CONTEXT,
-          [NODE_CLIENT_DISCOVERY_CONTEXT_TABLE_NAME]: discoveryTableName,
-          ...(discoveryTableId.length > ZERO
-            ? {
-                [NODE_CLIENT_DISCOVERY_CONTEXT_TABLE_ID]: discoveryTableId,
-              }
-            : {}),
-        }
-      : NODE_CLIENT_TRANSIENT_CONTEXT;
+    discoveryTableName.length > ZERO ?
+      {
+        ...NODE_CLIENT_TRANSIENT_CONTEXT,
+        [NODE_CLIENT_DISCOVERY_CONTEXT_TABLE_NAME]: discoveryTableName,
+        ...(discoveryTableId.length > ZERO ?
+          {
+            [NODE_CLIENT_DISCOVERY_CONTEXT_TABLE_ID]: discoveryTableId,
+          } :
+          {}),
+      } :
+      NODE_CLIENT_TRANSIENT_CONTEXT;
   const discoveryContextSequence = buildSutLoadDiscoveryContextSequence(
     discoveryContext,
     discoveryTableName,
@@ -132,9 +132,9 @@ async function resolveSutLoadNodes(nodeClient, nodes, seedNode, options = {}) {
   }
 
   function selectNonStrictFallbackNodes(candidates) {
-    const list = Array.isArray(candidates)
-      ? candidates.filter((node) => Boolean(node))
-      : [];
+    const list = Array.isArray(candidates) ?
+      candidates.filter((node) => Boolean(node)) :
+      [];
     if (list.length === ZERO) {
       return [];
     }
@@ -152,9 +152,9 @@ async function resolveSutLoadNodes(nodeClient, nodes, seedNode, options = {}) {
     const sourceResults = [];
     for (const sourceNode of discoverySources) {
       const sourceNodeId =
-        typeof sourceNode?.id === "string" && sourceNode.id.length > ZERO
-          ? sourceNode.id
-          : DISCOVERY_UNKNOWN_NODE_ID;
+        typeof sourceNode?.id === 'string' && sourceNode.id.length > ZERO ?
+          sourceNode.id :
+          DISCOVERY_UNKNOWN_NODE_ID;
       let sourceDiscoverySelection = null;
       let sourceScope = null;
       let sourceExcludedReadinessByNodeId = {};
@@ -162,15 +162,15 @@ async function resolveSutLoadNodes(nodeClient, nodes, seedNode, options = {}) {
       let attemptedScope = null;
       for (const contextEntry of discoveryContextSequence) {
         const contextScope =
-          typeof contextEntry?.scope === "string" &&
-          contextEntry.scope.length > ZERO
-            ? contextEntry.scope
-            : DISCOVERY_SOURCE_SCOPE_UNSCOPED;
+          typeof contextEntry?.scope === 'string' &&
+          contextEntry.scope.length > ZERO ?
+            contextEntry.scope :
+            DISCOVERY_SOURCE_SCOPE_UNSCOPED;
         attemptedScope = contextScope;
         const context =
-          contextEntry?.context && typeof contextEntry.context === "object"
-            ? contextEntry.context
-            : NODE_CLIENT_TRANSIENT_CONTEXT;
+          contextEntry?.context && typeof contextEntry.context === 'object' ?
+            contextEntry.context :
+            NODE_CLIENT_TRANSIENT_CONTEXT;
         try {
           const snapshot = await nodeClient.fetchServiceDiscovery(
             sourceNode,
@@ -195,7 +195,7 @@ async function resolveSutLoadNodes(nodeClient, nodes, seedNode, options = {}) {
           }
         } catch (error) {
           sourceErrors.push(
-            contextScope + "=" + summarizeDiscoverySourceError(error),
+            contextScope + '=' + summarizeDiscoverySourceError(error),
           );
         }
       }
@@ -292,9 +292,9 @@ async function resolveSutLoadNodes(nodeClient, nodes, seedNode, options = {}) {
         }
         const prioritizedFallbackCandidates =
           allowSoftDiscoveryNodeFallback === true &&
-          verifiedLoadLaneFallbackCandidates.length > ZERO
-            ? verifiedLoadLaneFallbackCandidates
-            : adminFallbackCandidates;
+          verifiedLoadLaneFallbackCandidates.length > ZERO ?
+            verifiedLoadLaneFallbackCandidates :
+            adminFallbackCandidates;
         if (
           prioritizedFallbackCandidates.length >
           bestAdminFallbackCandidates.length
@@ -372,9 +372,9 @@ async function resolveSutLoadNodes(nodeClient, nodes, seedNode, options = {}) {
           attemptsSinceBestReachableImprovement >=
             DISCOVERY_STALLED_ATTEMPT_THRESHOLD
         ) {
-          const gateReason = strictMinReachable
-            ? DISCOVERY_GATE_REASON_INSUFFICIENT_REACHABLE_NODES
-            : null;
+          const gateReason = strictMinReachable ?
+            DISCOVERY_GATE_REASON_INSUFFICIENT_REACHABLE_NODES :
+            null;
           return {
             nodes: strictMinReachable ? [] : bestReachableCandidates,
             diagnostics: buildDiscoveryDiagnostics({
@@ -396,59 +396,59 @@ async function resolveSutLoadNodes(nodeClient, nodes, seedNode, options = {}) {
       }
     }
     if (timing.now() >= deadline) {
-      const timedOutFallbackNodes = allowSoftDiscoveryNodeFallback
-        ? selectNonStrictFallbackNodes(bestAdminFallbackCandidates)
-        : [];
+      const timedOutFallbackNodes = allowSoftDiscoveryNodeFallback ?
+        selectNonStrictFallbackNodes(bestAdminFallbackCandidates) :
+        [];
       const timedOutFallbackNodeIds = timedOutFallbackNodes.map(
         (node) => node.id,
       );
       const timedOutNodes =
-        bestReachableCandidates.length > ZERO
-          ? bestReachableCandidates
-          : timedOutFallbackNodes.length > ZERO
-            ? timedOutFallbackNodes
-            : [];
+        bestReachableCandidates.length > ZERO ?
+          bestReachableCandidates :
+          timedOutFallbackNodes.length > ZERO ?
+            timedOutFallbackNodes :
+            [];
       const timedOutSourceResults =
-        bestReachableCandidates.length > ZERO
-          ? bestSourceResults
-          : timedOutFallbackNodes.length > ZERO
-            ? bestAdminFallbackSourceResults
-            : lastSourceResults;
+        bestReachableCandidates.length > ZERO ?
+          bestSourceResults :
+          timedOutFallbackNodes.length > ZERO ?
+            bestAdminFallbackSourceResults :
+            lastSourceResults;
       const timedOutDiscoveredNodeIds =
-        bestReachableCandidates.length > ZERO
-          ? bestDiscoveredNodeIds
-          : timedOutFallbackNodes.length > ZERO
-            ? bestAdminFallbackDiscoveredNodeIds
-            : lastDiscoveredNodeIds;
+        bestReachableCandidates.length > ZERO ?
+          bestDiscoveredNodeIds :
+          timedOutFallbackNodes.length > ZERO ?
+            bestAdminFallbackDiscoveredNodeIds :
+            lastDiscoveredNodeIds;
       const timedOutCandidateNodeIds =
-        bestReachableCandidates.length > ZERO
-          ? bestCandidateNodeIds
-          : timedOutFallbackNodes.length > ZERO
-            ? bestAdminFallbackCandidateNodeIds
-            : lastCandidateNodeIds;
+        bestReachableCandidates.length > ZERO ?
+          bestCandidateNodeIds :
+          timedOutFallbackNodes.length > ZERO ?
+            bestAdminFallbackCandidateNodeIds :
+            lastCandidateNodeIds;
       const timedOutReachableNodeIds =
-        bestReachableCandidates.length > ZERO
-          ? bestReachableNodeIds
-          : timedOutFallbackNodeIds.length > ZERO
-            ? timedOutFallbackNodeIds
-            : lastReachableNodeIds;
+        bestReachableCandidates.length > ZERO ?
+          bestReachableNodeIds :
+          timedOutFallbackNodeIds.length > ZERO ?
+            timedOutFallbackNodeIds :
+            lastReachableNodeIds;
       const timedOutProbeReadinessByNodeId =
-        bestReachableCandidates.length > ZERO
-          ? bestProbeReadinessByNodeId
-          : timedOutFallbackNodes.length > ZERO
-            ? bestAdminFallbackProbeReadinessByNodeId
-            : lastProbeReadinessByNodeId;
+        bestReachableCandidates.length > ZERO ?
+          bestProbeReadinessByNodeId :
+          timedOutFallbackNodes.length > ZERO ?
+            bestAdminFallbackProbeReadinessByNodeId :
+            lastProbeReadinessByNodeId;
       const timedOutNodeAdmissionTraceByNodeId =
-        bestReachableCandidates.length > ZERO
-          ? bestNodeAdmissionTraceByNodeId
-          : timedOutFallbackNodes.length > ZERO
-            ? bestAdminFallbackNodeAdmissionTraceByNodeId
-            : lastNodeAdmissionTraceByNodeId;
+        bestReachableCandidates.length > ZERO ?
+          bestNodeAdmissionTraceByNodeId :
+          timedOutFallbackNodes.length > ZERO ?
+            bestAdminFallbackNodeAdmissionTraceByNodeId :
+            lastNodeAdmissionTraceByNodeId;
       const gateReason =
         strictMinReachable &&
-        timedOutReachableNodeIds.length < requiredReachableNodeCount
-          ? DISCOVERY_GATE_REASON_INSUFFICIENT_REACHABLE_NODES
-          : null;
+        timedOutReachableNodeIds.length < requiredReachableNodeCount ?
+          DISCOVERY_GATE_REASON_INSUFFICIENT_REACHABLE_NODES :
+          null;
       return {
         nodes: strictMinReachable ? [] : timedOutNodes,
         diagnostics: buildDiscoveryDiagnostics({
@@ -476,7 +476,7 @@ function buildReplicaOperationProgressSignature(
 ) {
   if (
     !operationTimelineByOperationId ||
-    typeof operationTimelineByOperationId !== "object"
+    typeof operationTimelineByOperationId !== 'object'
   ) {
     return null;
   }
@@ -485,32 +485,32 @@ function buildReplicaOperationProgressSignature(
   for (const operationId of Object.keys(
     operationTimelineByOperationId,
   ).sort()) {
-    const timeline = Array.isArray(operationTimelineByOperationId[operationId])
-      ? operationTimelineByOperationId[operationId]
-      : [];
+    const timeline = Array.isArray(operationTimelineByOperationId[operationId]) ?
+      operationTimelineByOperationId[operationId] :
+      [];
     if (timeline.length === ZERO) {
-      signatures.push(String(operationId) + "=none");
+      signatures.push(String(operationId) + '=none');
       continue;
     }
     const entrySignatures = timeline.map((entry) => {
-      const timestampMs = Number.isFinite(entry?.timestampMs)
-        ? Math.floor(entry.timestampMs)
-        : null;
+      const timestampMs = Number.isFinite(entry?.timestampMs) ?
+        Math.floor(entry.timestampMs) :
+        null;
       return [
-        String(entry?.eventType || ""),
-        String(entry?.step || ""),
-        String(entry?.status || ""),
-        timestampMs === null ? "" : String(timestampMs),
-        entry?.inFlight === true ? "1" : "0",
-      ].join(":");
+        String(entry?.eventType || ''),
+        String(entry?.step || ''),
+        String(entry?.status || ''),
+        timestampMs === null ? '' : String(timestampMs),
+        entry?.inFlight === true ? '1' : '0',
+      ].join(':');
     });
-    signatures.push(String(operationId) + "=" + entrySignatures.join(","));
+    signatures.push(String(operationId) + '=' + entrySignatures.join(','));
   }
 
   if (signatures.length === ZERO) {
     return null;
   }
-  return signatures.join("|");
+  return signatures.join('|');
 }
 
 function summarizeInFlightReplicaOperationTimeline(
@@ -523,7 +523,7 @@ function summarizeInFlightReplicaOperationTimeline(
   };
   if (
     !operationTimelineByOperationId ||
-    typeof operationTimelineByOperationId !== "object"
+    typeof operationTimelineByOperationId !== 'object'
   ) {
     return summary;
   }
@@ -571,12 +571,12 @@ function summarizeInFlightReplicaOperationTimeline(
       normalizedTimeoutMs - normalizedAgeMs,
     );
     summary.nearestInFlightTimeoutRemainingMs =
-      summary.nearestInFlightTimeoutRemainingMs === null
-        ? timeoutRemainingMs
-        : Math.min(
-            summary.nearestInFlightTimeoutRemainingMs,
-            timeoutRemainingMs,
-          );
+      summary.nearestInFlightTimeoutRemainingMs === null ?
+        timeoutRemainingMs :
+        Math.min(
+          summary.nearestInFlightTimeoutRemainingMs,
+          timeoutRemainingMs,
+        );
   }
 
   return summary;

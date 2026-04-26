@@ -42,28 +42,21 @@ import {ReplicaDispatchService} from
   '../../src/control-plane/replica-dispatch-service.js';
 import {
   ExecutorOutcomeEmitter,
-  OUTCOME_EVENT_NAME,
 } from '../../src/rebalancer/executor-outcome-emitter.js';
 import {
-  EXECUTOR_OUTCOME_TYPE,
-  EXECUTOR_OUTCOME_FIELD,
 } from '../../src/rebalancer/executor-outcome-constants.js';
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
-import {SYSTEM_TABLE_NAME} from
-  '../../src/bootstrap/system-table-schemas-constants.js';
+import {TIMEOUT_BUDGET_DEFAULT} from
+  '../../src/control-plane/timeout-budget.js';
 import {
-  REBALANCE_COORDINATOR_EVENT,
   REBALANCER_SKIP_REASON,
 } from '../../src/rebalancer/rebalancer-constants.js';
 import {DurableWorkflowCoordinator} from
   '../../src/workflow/durable-workflow-coordinator.js';
 import {
-  ReplicaStatus,
   isCoordinatorOwnedOperationType,
 } from
   '../../src/rebalancer/replica-status.js';
-import {SystemTableCache} from
-  '../../src/cache/system-table-cache.js';
 import {
   createMockControlPlaneReadinessService,
   createMockTransactionCoordinator,
@@ -74,6 +67,8 @@ const TEST_OPERATION_ID = 'op-sw-1';
 const TEST_PARTITION_ID = 'partition-sw-1';
 const TEST_REPLICA_ID = 'partition-sw-1-r1';
 const REMOTE_NODE_ID = 'node-remote';
+const TEST_PRIORITY_PARTITION_ID = 'sql_transactions-p1';
+const TEST_PRIORITY_OPERATION_AGE_MS = 1000;
 
 /**
  * Build a minimal operation record for testing.
@@ -144,7 +139,7 @@ function createTestCoordinator(options = {}) {
   const emitter = new ExecutorOutcomeEmitter({logger: console});
   const workflowCoordinator = new DurableWorkflowCoordinator();
   const persisted = [];
-  const executeQuery = async (sql, params) => {
+  const executeQuery = async (sql, params, queryOptions = null) => {
     if (sql.includes('WHERE operation_id') && operation) {
       const opId = params?.[0];
       if (opId === operation.operationId) {
@@ -166,7 +161,7 @@ function createTestCoordinator(options = {}) {
           [];
         operation.replicaId = params?.[6] ?? operation.replicaId;
       }
-      persisted.push({sql, params});
+      persisted.push({sql, params, queryOptions});
       return persistResults;
     }
     return {success: true, rows: []};
@@ -174,7 +169,9 @@ function createTestCoordinator(options = {}) {
 
   const coordinator = new RebalanceCoordinator({
     nodeId: TEST_NODE_ID,
-    systemTableCache: {get() { return null; }},
+    systemTableCache: {get() {
+      return null;
+    }},
     cdcIntegrationService: {
       async waitForCacheUpdate() {},
     },
@@ -198,12 +195,9 @@ function createTestCoordinator(options = {}) {
       async readAuthoritativeRows(_tableName, sql, params) {
         return executeQuery(sql, params);
       },
-      async executeQuery(sql, params) {
-        return executeQuery(sql, params);
+      async executeQuery(sql, params, queryOptions) {
+        return executeQuery(sql, params, queryOptions);
       },
-    },
-    controlPlaneReadinessService: {
-      getNodeReadinessSync() { return null; },
     },
     operationWorkflowCoordinator: workflowCoordinator,
     executorOutcomeEmitter: emitter,
@@ -422,8 +416,8 @@ test('claimDispatchTransition uses compare-and-set owner claim for priority ' +
   'control-plane partitions',
 async (t) => {
   const operation = buildTestOperation({
-    partitionId: 'sql_transactions-p1',
-    entityId: 'sql_transactions-p1',
+    partitionId: TEST_PRIORITY_PARTITION_ID,
+    entityId: TEST_PRIORITY_PARTITION_ID,
     workflowStep: WORKFLOW_STEP.PENDING,
   });
   const txCalls = [];
@@ -470,6 +464,42 @@ async (t) => {
     persisted[0]?.sql || '',
     /WHERE operation_id = \? AND workflow_step = \?/,
     'priority dispatch claim should guard the update on the durable PENDING row',
+  );
+});
+
+test('claimDispatchTransition spends the rebalance operation budget for ' +
+  'priority control-plane compare-and-set writes',
+async (t) => {
+  const createdAt = Date.now() - TEST_PRIORITY_OPERATION_AGE_MS;
+  const operation = buildTestOperation({
+    partitionId: TEST_PRIORITY_PARTITION_ID,
+    entityId: TEST_PRIORITY_PARTITION_ID,
+    workflowStep: WORKFLOW_STEP.PENDING,
+    createdAt,
+    updatedAt: createdAt,
+  });
+  const {coordinator, persisted} = createTestCoordinator({operation});
+
+  const claimed = await coordinator.claimDispatchTransition(
+    TEST_OPERATION_ID,
+  );
+
+  t.ok(claimed, 'priority claim must return the operation');
+  t.equal(
+    persisted.length,
+    1,
+    'priority claim must still perform one durable compare-and-set update',
+  );
+  const timeoutBudget = persisted[0]?.queryOptions?.timeoutBudget;
+  t.equal(
+    timeoutBudget?.configuredBudgetMs,
+    TIMEOUT_BUDGET_DEFAULT.REBALANCE_OPERATION_BUDGET_MS,
+    'priority claim mutation should use the canonical rebalance budget',
+  );
+  t.equal(
+    timeoutBudget?.startedAtMs,
+    createdAt,
+    'priority claim mutation should anchor retry budget to operation creation',
   );
 });
 

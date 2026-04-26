@@ -211,11 +211,11 @@ test('Property 3 Bug Condition D: ' +
           assert.equal(
             postCallAccessCount,
             0,
-            `scheduleBackgroundRetry closure should NOT access ` +
-            `the original options object after the call ` +
+            'scheduleBackgroundRetry closure should NOT access ' +
+            'the original options object after the call ' +
             `returns (payload with ${fieldCount} fields), ` +
             `but ${postCallAccessCount} property access(es) ` +
-            `were detected via the closure`,
+            'were detected via the closure',
           );
         } finally {
           service.stop();

@@ -20,8 +20,6 @@ import {
   TIMEOUT_BUDGET_CLASSIFICATION,
 } from '../../src/control-plane/timeout-budget.js';
 import {
-  PARTICIPANT_ACK_FIELD,
-  PARTICIPANT_ACK_RESULT,
 } from '../../src/workflow/workflow-constants.js';
 import {
   buildWorkflow,
@@ -310,7 +308,6 @@ test('advanceSplitPhase rejects phases not in the owner-managed set ' +
   // The workflow is removed in the finally block of executeInternal,
   // so we need a fresh workflow with an active registration.
   const {workflow: freshWorkflow} = buildWorkflow();
-  const result = await freshWorkflow.execute('users-p1');
   // Register a workflow manually to test advanceSplitPhase in isolation.
   const wfCoordinator = freshWorkflow.workflowCoordinator;
   const wfRecord = await wfCoordinator.registerWorkflow({

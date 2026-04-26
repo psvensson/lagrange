@@ -1,80 +1,37 @@
-import { REPLICA_DISPATCH_SERVICE_SHARED } from "./replica-dispatch-service-shared.js";
-import { ReplicaDispatchServiceSegment3 } from "./replica-dispatch-service-segment-3.js";
-import { MESSAGE_GROUP_SERVICE_HANDLER_ADDRESS } from "../node/message-group-service-handler-constants.js";
-import { REPLICA_HANDLER_ADDRESS } from "../node/replica-handler-constants.js";
-import { RUNTIME_SERVICE_HANDLER_ADDRESS } from "../node/runtime-service-handler-constants.js";
-import { UNIFIED_SERVICE_TYPE } from "../constants/index.js";
+import {REPLICA_DISPATCH_SERVICE_SHARED} from './replica-dispatch-service-shared.js';
+import {ReplicaDispatchServiceSegment3} from './replica-dispatch-service-segment-3.js';
+import {MESSAGE_GROUP_SERVICE_HANDLER_ADDRESS} from '../node/message-group-service-handler-constants.js';
+import {REPLICA_HANDLER_ADDRESS} from '../node/replica-handler-constants.js';
+import {RUNTIME_SERVICE_HANDLER_ADDRESS} from '../node/runtime-service-handler-constants.js';
+import {UNIFIED_SERVICE_TYPE} from '../constants/index.js';
 
 const {
   COLUMN,
-  CONTROL_PLANE_ALLOWED_STATES,
-  CONTROL_PLANE_CONFIG_KEY,
-  CONTROL_PLANE_EVENT,
-  CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE,
-  CONTROL_PLANE_NODE_STATE_REPLAY_CONTEXT,
   CONTROL_PLANE_READINESS_DIMENSION,
-  ConfigurationManager,
   ControlPlaneField,
-  ControlPlaneMessageType,
   ControlPlaneReadinessService,
-  DEFAULT_READY_LEASE_MS,
-  DISPATCH_DEFAULT,
   DISPATCH_ERROR_MSG,
   DISPATCH_EVENT,
   DISPATCH_LOG_MSG,
   DISPATCH_QUEUE_NAME,
-  DISPATCH_READINESS_ERROR_CODE,
   DISPATCH_READINESS_ERROR_REASON,
   DISPATCH_READINESS_MESSAGE,
   DISPATCH_READINESS_REASON,
-  DISPATCH_STATE,
   DISPATCH_SUBSYSTEM,
-  EventEmitter,
-  LoggingService,
-  MEMBERSHIP_PUBLICATION_STATUS,
-  MESSAGE_GROUP_CDC_INGRESS_ACTION,
-  NODE_STATE_UPDATE_RETRY_ACTION,
-  NODE_STATE_UPDATE_RETRY_CLASS,
-  NODE_STATE_UPDATE_RETRY_POLICY,
   NUM,
   OPERATION_METADATA_KEY,
-  OperationType,
-  OwnerKeyReconcileQueue,
-  QUERY_ERROR_CODE,
-  QUERY_ERROR_MSG,
-  READY_NODE_PUBLICATION_ADVANCEMENT_STATE,
-  REBALANCE_COORDINATOR_EVENT,
-  RECONCILE_REASON,
   REPLICA_DISPATCH_SERVICE_LITERAL,
-  REPLICA_OPERATION_VISIBILITY_READ_MODE,
   ReplicaOperationField,
   SERVICE_STATUS,
   SERVICE_TYPE,
-  STATE,
   STRING,
   SYSTEM_TABLE_NAME,
   TYPEOF,
-  WORKFLOW_STEP,
-  assertCritical,
-  compareNodeHeartbeatWatermarks,
-  createControlPlaneRuntimeBundle,
-  getControlPlaneErrorCode,
-  getControlPlaneErrorMessage,
-  getControlPlaneMessageRequiredTables,
-  getControlPlaneNodeStatePublicationProfile,
-  getControlPlaneRetryAfterMs,
-  getNodeHeartbeatWatermark,
   getOperationMetadataObject,
   getOperationMetadataString,
   getOperationMetadataStringArray,
-  isCoordinatorOwnedOperationType,
-  isHeartbeatEscalatedControlPlaneNodeStatePublicationMode,
+  isSystemTablePartition,
   isRetryableControlPlaneError,
-  isTerminalMembershipPublicationStatus,
-  resolveControlPlaneNodeStatePublicationMode,
-  resolveReadyNodePublicationAdvancementState,
-  resolveReplayControlPlaneNodeStatePublicationMode,
-  shouldUseAuthoritativePriorityRecoveryRediscovery,
   unwrapRowReadResult,
   wasNodeRecordReadyWhenWritten,
 } = REPLICA_DISPATCH_SERVICE_SHARED;
@@ -148,13 +105,13 @@ class ReplicaDispatchServiceSegment4 extends ReplicaDispatchServiceSegment3 {
       this.operationDispatchQueues.length <= NUM.ONE
     ) {
       return Array.isArray(this.operationDispatchQueues) &&
-        this.operationDispatchQueues.length === NUM.ONE
-        ? this.operationDispatchQueues[NUM.ZERO]
-        : this.operationDispatchQueue;
+        this.operationDispatchQueues.length === NUM.ONE ?
+        this.operationDispatchQueues[NUM.ZERO] :
+        this.operationDispatchQueue;
     }
 
     const normalizedOwnerKey =
-      typeof ownerKey === TYPEOF.STRING ? ownerKey : String(ownerKey || "");
+      typeof ownerKey === TYPEOF.STRING ? ownerKey : String(ownerKey || '');
     let hash = NUM.ZERO;
     for (const char of normalizedOwnerKey) {
       hash =
@@ -322,9 +279,9 @@ class ReplicaDispatchServiceSegment4 extends ReplicaDispatchServiceSegment3 {
   buildOperationRowFromCoordinator(operation) {
     let stepsHistory = operation.stepsHistory;
     if (typeof stepsHistory !== TYPEOF.STRING) {
-      stepsHistory = Array.isArray(stepsHistory)
-        ? JSON.stringify(stepsHistory)
-        : STRING.EMPTY_JSON_ARRAY;
+      stepsHistory = Array.isArray(stepsHistory) ?
+        JSON.stringify(stepsHistory) :
+        STRING.EMPTY_JSON_ARRAY;
     }
 
     return {
@@ -347,20 +304,30 @@ class ReplicaDispatchServiceSegment4 extends ReplicaDispatchServiceSegment3 {
   }
 
   /**
-   * Dispatch is internal control-plane progression, so readiness gating uses
-   * recovery eligibility to avoid deadlocking on publication convergence.
+   * Dispatch is internal control-plane progression. Critical system-table
+   * recovery operations must use the recovery eligibility dimension because
+   * repair eligibility can remain closed until priority spread itself
+   * progresses.
    *
+   * @param {Object|string|null} operationOrPartitionId
    * @return {string}
    * @private
    */
-  resolveDispatchReadinessDecisionDimension() {
-    return CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE;
+  resolveDispatchReadinessDecisionDimension(operationOrPartitionId = null) {
+    const partitionId =
+      typeof operationOrPartitionId === TYPEOF.STRING ?
+        operationOrPartitionId :
+        operationOrPartitionId?.partitionId ||
+          operationOrPartitionId?.partition_id ||
+          null;
+    if (isSystemTablePartition({partitionId})) {
+      return CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE;
+    }
+    return CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE;
   }
 
   /**
-   * Check readiness eligibility for one decision dimension.
-   * Falls back to repairEligible only when legacy snapshots do not expose
-   * controlPlaneRecoveryEligible explicitly.
+   * Check readiness eligibility from explicit canonical evidence.
    *
    * @param {Object|null} readiness
    * @param {string} decisionDimension
@@ -369,9 +336,9 @@ class ReplicaDispatchServiceSegment4 extends ReplicaDispatchServiceSegment3 {
    */
   isReadinessDimensionSatisfied(readiness, decisionDimension) {
     const dimensions =
-      readiness?.dimensions && typeof readiness.dimensions === TYPEOF.OBJECT
-        ? readiness.dimensions
-        : null;
+      readiness?.dimensions && typeof readiness.dimensions === TYPEOF.OBJECT ?
+        readiness.dimensions :
+        null;
     if (!dimensions) {
       return false;
     }
@@ -384,12 +351,7 @@ class ReplicaDispatchServiceSegment4 extends ReplicaDispatchServiceSegment3 {
     ) {
       return false;
     }
-    if (Object.hasOwn(dimensions, decisionDimension)) {
-      return false;
-    }
-    return (
-      dimensions[CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE] === true
-    );
+    return false;
   }
 
   /**
@@ -474,7 +436,8 @@ class ReplicaDispatchServiceSegment4 extends ReplicaDispatchServiceSegment3 {
         retryAfterMs: null,
       });
     }
-    const decisionDimension = this.resolveDispatchReadinessDecisionDimension();
+    const decisionDimension =
+      this.resolveDispatchReadinessDecisionDimension(operation);
     const readyRetryReadiness = this.buildReadyRetryDispatchReadiness(
       operation,
       decisionDimension,
@@ -533,9 +496,9 @@ class ReplicaDispatchServiceSegment4 extends ReplicaDispatchServiceSegment3 {
         ) {
           const retryAfterMs =
             Number.isFinite(readiness?.retryAfterMs) &&
-            readiness.retryAfterMs > NUM.ZERO
-              ? Math.floor(readiness.retryAfterMs)
-              : null;
+            readiness.retryAfterMs > NUM.ZERO ?
+              Math.floor(readiness.retryAfterMs) :
+              null;
           return this.buildDispatchReadinessResult(
             readiness,
             decisionDimension,
@@ -566,23 +529,19 @@ class ReplicaDispatchServiceSegment4 extends ReplicaDispatchServiceSegment3 {
    * @return {Object|null}
    * @private
    */
-  buildReadyRetryDispatchReadiness(
-    operation,
-    decisionDimension,
-    options = {},
-  ) {
+  buildReadyRetryDispatchReadiness(operation, decisionDimension, options = {}) {
     const readyNodeId =
-      typeof options?.readyNodeId === TYPEOF.STRING
-        ? options.readyNodeId
-        : null;
+      typeof options?.readyNodeId === TYPEOF.STRING ?
+        options.readyNodeId :
+        null;
     const targetNodeId = operation?.targetNodeId || null;
     if (!readyNodeId || !targetNodeId || readyNodeId !== targetNodeId) {
       return null;
     }
     const readyNodeRow =
-      options?.readyNodeRow && typeof options.readyNodeRow === TYPEOF.OBJECT
-        ? options.readyNodeRow
-        : null;
+      options?.readyNodeRow && typeof options.readyNodeRow === TYPEOF.OBJECT ?
+        options.readyNodeRow :
+        null;
     if (
       !readyNodeRow ||
       !wasNodeRecordReadyWhenWritten(readyNodeRow, {
@@ -597,12 +556,10 @@ class ReplicaDispatchServiceSegment4 extends ReplicaDispatchServiceSegment3 {
     ) {
       return null;
     }
-    const syncReadiness = this.controlPlaneReadinessService.getNodeReadinessSync(
-      targetNodeId,
-      {
+    const syncReadiness =
+      this.controlPlaneReadinessService.getNodeReadinessSync(targetNodeId, {
         decisionDimension,
-      },
-    );
+      });
     if (!this.isReadinessDimensionSatisfied(syncReadiness, decisionDimension)) {
       return null;
     }
@@ -660,25 +617,25 @@ class ReplicaDispatchServiceSegment4 extends ReplicaDispatchServiceSegment3 {
    * @private
    */
   buildDispatchReadinessResult(readiness, decisionDimension, overrides = {}) {
-    const snapshot = Object.prototype.hasOwnProperty.call(overrides, "snapshot")
-      ? overrides.snapshot
-      : ControlPlaneReadinessService.compactSnapshotSummary(
-          readiness,
-          decisionDimension,
-        );
+    const snapshot = Object.prototype.hasOwnProperty.call(overrides, 'snapshot') ?
+      overrides.snapshot :
+      ControlPlaneReadinessService.compactSnapshotSummary(
+        readiness,
+        decisionDimension,
+      );
     const retryAfterMs = Object.prototype.hasOwnProperty.call(
       overrides,
-      "retryAfterMs",
-    )
-      ? overrides.retryAfterMs
-      : Number.isFinite(readiness?.retryAfterMs) &&
-          readiness.retryAfterMs > NUM.ZERO
-        ? Math.floor(readiness.retryAfterMs)
-        : null;
+      'retryAfterMs',
+    ) ?
+      overrides.retryAfterMs :
+      Number.isFinite(readiness?.retryAfterMs) &&
+          readiness.retryAfterMs > NUM.ZERO ?
+        Math.floor(readiness.retryAfterMs) :
+        null;
     const result = {
-      ready: Object.prototype.hasOwnProperty.call(overrides, "ready")
-        ? overrides.ready
-        : this.isReadinessDimensionSatisfied(readiness, decisionDimension),
+      ready: Object.prototype.hasOwnProperty.call(overrides, 'ready') ?
+        overrides.ready :
+        this.isReadinessDimensionSatisfied(readiness, decisionDimension),
       snapshot,
       retryAfterMs,
     };
@@ -760,9 +717,9 @@ class ReplicaDispatchServiceSegment4 extends ReplicaDispatchServiceSegment3 {
 
     const serviceRows =
       this.servicesOwner &&
-      typeof this.servicesOwner.listServicesFromCache === TYPEOF.FUNCTION
-        ? (await this.servicesOwner.listServicesFromCache()).rows || []
-        : this.getSystemTableRowsFromCache(SYSTEM_TABLE_NAME.SERVICES);
+      typeof this.servicesOwner.listServicesFromCache === TYPEOF.FUNCTION ?
+        (await this.servicesOwner.listServicesFromCache()).rows || [] :
+        this.getSystemTableRowsFromCache(SYSTEM_TABLE_NAME.SERVICES);
     return serviceRows.some((row) => {
       return (
         row?.[COLUMN.NODE_ID] === nodeId &&
@@ -787,8 +744,7 @@ class ReplicaDispatchServiceSegment4 extends ReplicaDispatchServiceSegment3 {
     if (!nodeId || nodeId !== this.nodeId) {
       return null;
     }
-    const handlerAddress =
-      LOCAL_DISPATCH_HANDLER_ADDRESS[entityType] || null;
+    const handlerAddress = LOCAL_DISPATCH_HANDLER_ADDRESS[entityType] || null;
     if (!handlerAddress) {
       return null;
     }
@@ -835,7 +791,7 @@ class ReplicaDispatchServiceSegment4 extends ReplicaDispatchServiceSegment3 {
         SYSTEM_TABLE_NAME.NODES,
         REPLICA_DISPATCH_SERVICE_LITERAL.SELECT_STAR_FROM_NODES_WHERE_NODE_ID_EQUALS_QUESTION_MARK,
         [nodeId],
-        { owner: DISPATCH_SUBSYSTEM },
+        {owner: DISPATCH_SUBSYSTEM},
       );
     } else if (typeof gateway.executeRead === TYPEOF.FUNCTION) {
       result = await gateway.executeRead(
@@ -854,7 +810,7 @@ class ReplicaDispatchServiceSegment4 extends ReplicaDispatchServiceSegment3 {
         SYSTEM_TABLE_NAME.NODES,
         REPLICA_DISPATCH_SERVICE_LITERAL.SELECT_STAR_FROM_NODES_WHERE_NODE_ID_EQUALS_QUESTION_MARK,
         [nodeId],
-        { owner: DISPATCH_SUBSYSTEM },
+        {owner: DISPATCH_SUBSYSTEM},
       );
     }
 
@@ -868,17 +824,17 @@ class ReplicaDispatchServiceSegment4 extends ReplicaDispatchServiceSegment3 {
           result.deferRetry === true ||
           result.error ===
             DISPATCH_READINESS_ERROR_REASON.AUTHORITATIVE_ROW_SOURCE_UNAVAILABLE,
-        retryAfterMs: Number.isFinite(result.retryAfterMs)
-          ? result.retryAfterMs
-          : this.nodeStateUpdateRetryAfterMs,
+        retryAfterMs: Number.isFinite(result.retryAfterMs) ?
+          result.retryAfterMs :
+          this.nodeStateUpdateRetryAfterMs,
       };
     }
 
-    const rows = Array.isArray(result?.rows)
-      ? result.rows
-      : Array.isArray(result)
-        ? result
-        : [];
+    const rows = Array.isArray(result?.rows) ?
+      result.rows :
+      Array.isArray(result) ?
+        result :
+        [];
     const row = rows[0] || null;
     return {
       success: true,
@@ -939,9 +895,9 @@ class ReplicaDispatchServiceSegment4 extends ReplicaDispatchServiceSegment3 {
           error,
           readError?.code ||
             DISPATCH_READINESS_ERROR_REASON.AUTHORITATIVE_ROW_SOURCE_UNAVAILABLE,
-          Number.isFinite(readError?.retryAfterMs)
-            ? readError.retryAfterMs
-            : this.nodeStateUpdateRetryAfterMs,
+          Number.isFinite(readError?.retryAfterMs) ?
+            readError.retryAfterMs :
+            this.nodeStateUpdateRetryAfterMs,
         );
       }
       return error;
@@ -990,11 +946,11 @@ class ReplicaDispatchServiceSegment4 extends ReplicaDispatchServiceSegment3 {
     const authoritativeOperationQuery =
       this.rebalanceCoordinator?.repository &&
       typeof this.rebalanceCoordinator.repository
-        .queryAuthoritativeOperationById === TYPEOF.FUNCTION
-        ? this.rebalanceCoordinator.repository.queryAuthoritativeOperationById.bind(
-            this.rebalanceCoordinator.repository,
-          )
-        : null;
+        .queryAuthoritativeOperationById === TYPEOF.FUNCTION ?
+        this.rebalanceCoordinator.repository.queryAuthoritativeOperationById.bind(
+          this.rebalanceCoordinator.repository,
+        ) :
+        null;
     if (authoritativeOperationQuery) {
       const authoritativeOperation = await authoritativeOperationQuery(
         operationId,
@@ -1019,7 +975,7 @@ class ReplicaDispatchServiceSegment4 extends ReplicaDispatchServiceSegment3 {
         SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
         REPLICA_DISPATCH_SERVICE_LITERAL.SELECT_STAR_FROM_REPLICA_OPERATIONS_WHERE_OPERATION_ID_EQUALS_QUESTION_MARK,
         [operationId],
-        { owner: DISPATCH_SUBSYSTEM },
+        {owner: DISPATCH_SUBSYSTEM},
       );
     } else if (typeof gateway.executeRead === TYPEOF.FUNCTION) {
       result = await gateway.executeRead(
@@ -1038,7 +994,7 @@ class ReplicaDispatchServiceSegment4 extends ReplicaDispatchServiceSegment3 {
         SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
         REPLICA_DISPATCH_SERVICE_LITERAL.SELECT_STAR_FROM_REPLICA_OPERATIONS_WHERE_OPERATION_ID_EQUALS_QUESTION_MARK,
         [operationId],
-        { owner: DISPATCH_SUBSYSTEM },
+        {owner: DISPATCH_SUBSYSTEM},
       );
     }
 
@@ -1046,11 +1002,11 @@ class ReplicaDispatchServiceSegment4 extends ReplicaDispatchServiceSegment3 {
       return null;
     }
 
-    const rows = Array.isArray(result?.rows)
-      ? result.rows
-      : Array.isArray(result)
-        ? result
-        : [];
+    const rows = Array.isArray(result?.rows) ?
+      result.rows :
+      Array.isArray(result) ?
+        result :
+        [];
     return rows[REPLICA_DISPATCH_SERVICE_LITERAL.ZERO] || null;
   }
 
@@ -1068,27 +1024,24 @@ class ReplicaDispatchServiceSegment4 extends ReplicaDispatchServiceSegment3 {
     const visibilityObservationQuery =
       this.rebalanceCoordinator?.repository &&
       typeof this.rebalanceCoordinator.repository
-        .getOperationByIdVisibilityObservation === TYPEOF.FUNCTION
-        ? this.rebalanceCoordinator.repository
-          .getOperationByIdVisibilityObservation.bind(
-            this.rebalanceCoordinator.repository,
-          )
-        : null;
+        .getOperationByIdVisibilityObservation === TYPEOF.FUNCTION ?
+        this.rebalanceCoordinator.repository.getOperationByIdVisibilityObservation.bind(
+          this.rebalanceCoordinator.repository,
+        ) :
+        null;
     if (visibilityObservationQuery) {
-      const observation = await visibilityObservationQuery(
-        operationId,
-        {
-          requireOwnerRpcRead: false,
-          allowPriorityRecoveryDeferredVisibility: true,
-        },
-      );
+      const observation = await visibilityObservationQuery(operationId, {
+        requireOwnerRpcRead: false,
+        allowPriorityRecoveryDeferredVisibility: true,
+      });
       const operation =
-        observation?.operation &&
-        typeof observation.operation === TYPEOF.OBJECT ?
+        observation?.operation && typeof observation.operation === TYPEOF.OBJECT ?
           observation.operation :
           null;
       return Object.freeze({
-        row: operation ? this.buildOperationRowFromCoordinator(operation) : null,
+        row: operation ?
+          this.buildOperationRowFromCoordinator(operation) :
+          null,
         deferredOutcome:
           observation?.deferredOutcome &&
           typeof observation.deferredOutcome === TYPEOF.OBJECT ?
@@ -1166,17 +1119,17 @@ class ReplicaDispatchServiceSegment4 extends ReplicaDispatchServiceSegment3 {
    * @private
    */
   async forwardToLeader(mgService, payload, options = {}) {
-    const requiredTables = Array.isArray(options.requiredTables)
-      ? [
-          ...new Set(
-            options.requiredTables.filter(
-              (tableName) =>
-                typeof tableName === TYPEOF.STRING &&
+    const requiredTables = Array.isArray(options.requiredTables) ?
+      [
+        ...new Set(
+          options.requiredTables.filter(
+            (tableName) =>
+              typeof tableName === TYPEOF.STRING &&
                 tableName.length > NUM.ZERO,
-            ),
           ),
-        ]
-      : [];
+        ),
+      ] :
+      [];
     if (requiredTables.length > NUM.ZERO) {
       const ingressDecision =
         options.ingressDecision ||
@@ -1211,11 +1164,11 @@ class ReplicaDispatchServiceSegment4 extends ReplicaDispatchServiceSegment3 {
       );
     }
 
-    const forwardedBy = Array.isArray(payload[ControlPlaneField.FORWARDED_BY])
-      ? payload[ControlPlaneField.FORWARDED_BY]
-      : payload[ControlPlaneField.FORWARDED_BY]
-        ? [payload[ControlPlaneField.FORWARDED_BY]]
-        : [];
+    const forwardedBy = Array.isArray(payload[ControlPlaneField.FORWARDED_BY]) ?
+      payload[ControlPlaneField.FORWARDED_BY] :
+      payload[ControlPlaneField.FORWARDED_BY] ?
+        [payload[ControlPlaneField.FORWARDED_BY]] :
+        [];
 
     if (forwardedBy.includes(this.nodeId)) {
       return;
@@ -1257,4 +1210,4 @@ class ReplicaDispatchServiceSegment4 extends ReplicaDispatchServiceSegment3 {
    */
 }
 
-export { ReplicaDispatchServiceSegment4 };
+export {ReplicaDispatchServiceSegment4};

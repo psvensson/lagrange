@@ -34,7 +34,10 @@ import {
 import {DurableWorkflowCoordinator} from '../workflow/durable-workflow-coordinator.js';
 import {OwnerKeyReconcileQueue} from '../workflow/owner-key-reconcile-queue.js';
 import {OperationLane} from '../workflow/operation-lane.js';
-import {isCoordinatorOwnedOperationType} from '../rebalancer/replica-status.js';
+import {
+  OperationType,
+  isCoordinatorOwnedOperationType,
+} from '../rebalancer/replica-status.js';
 import {
   REPLICA_OPERATION_VISIBILITY_READ_MODE,
 } from '../rebalancer/replica-operation-repository.js';
@@ -101,6 +104,22 @@ const MEMBERSHIP_PUBLICATION_PLANNING_EVIDENCE_VERSION_FIELDS = Object.freeze([
 ]);
 const PUBLICATION_WRITE_MAX_ATTEMPTS = 3;
 const PUBLICATION_REASON_ACK_TIMEOUT_EXCEEDED = 'ack_timeout_exceeded';
+const NO_MEMBERSHIP_PUBLICATION_TARGET_NODE_ID =
+  MEMBERSHIP_PUBLICATION_COORDINATOR_LITERAL.EMPTY;
+const MEMBERSHIP_PUBLICATION_TARGET_NODE_STATE = Object.freeze({
+  AVAILABLE: 'available',
+  UNAVAILABLE: 'unavailable',
+});
+const MEMBERSHIP_PUBLICATION_ACK_TRANSITION_STATE = Object.freeze({
+  NOOP: 'noop',
+  ACK_PENDING: 'ack_pending',
+  PUBLISHED: 'published',
+});
+const MEMBERSHIP_PUBLICATION_ACK_TRANSITION_REASON = Object.freeze({
+  ACKNOWLEDGEMENT_RECORDED: 'acknowledgement_recorded',
+  REQUIRED_ACKNOWLEDGEMENTS_COMPLETED:
+    'required_acknowledgements_completed',
+});
 const PUBLICATION_WORKFLOW_REASON = Object.freeze({
   DERIVE_MEMBERSHIP_PUBLICATION: 'derive-membership-publication',
   PERSIST_OPEN_PUBLICATION: 'persist-open-publication',
@@ -137,6 +156,117 @@ function normalizePositiveInteger(value, fallback = null) {
     return Math.trunc(normalized);
   }
   return fallback;
+}
+function normalizeMembershipPublicationNodeId(value) {
+  return typeof value === TYPEOF.STRING && value.length > NUM.ZERO ?
+    value :
+    MEMBERSHIP_PUBLICATION_COORDINATOR_LITERAL.EMPTY;
+}
+function collectMembershipPublicationEvidenceNodeIds(options = {}) {
+  return normalizeNodeIdList([
+    ...(Array.isArray(options.nodeRows) ?
+      options.nodeRows.map((row) => row?.node_id || row?.nodeId) :
+      []),
+    ...(Array.isArray(options.readinessEntries) ?
+      options.readinessEntries.map((entry) => entry?.nodeId || entry?.node_id) :
+      []),
+    ...(Array.isArray(options.connectedNodeIds) ? options.connectedNodeIds : []),
+    ...(Array.isArray(options.latestPublicationRow?.publishedActiveNodeIds) ?
+      options.latestPublicationRow.publishedActiveNodeIds :
+      []),
+    ...(Array.isArray(options.latestPublicationRow?.published_active_node_ids) ?
+      options.latestPublicationRow.published_active_node_ids :
+      []),
+    ...(Array.isArray(
+      options.latestPublishedPublicationRow?.publishedActiveNodeIds,
+    ) ?
+      options.latestPublishedPublicationRow.publishedActiveNodeIds :
+      []),
+    ...(Array.isArray(
+      options.latestPublishedPublicationRow?.published_active_node_ids,
+    ) ?
+      options.latestPublishedPublicationRow.published_active_node_ids :
+      []),
+  ]);
+}
+function buildMembershipPublicationTargetNodeDecision(options = {}) {
+  const priorityRecoveryPlanningSnapshot =
+    options.priorityRecoveryPlanningSnapshot &&
+      typeof options.priorityRecoveryPlanningSnapshot === TYPEOF.OBJECT ?
+      options.priorityRecoveryPlanningSnapshot :
+      null;
+  const explicitTargetNodeId = normalizeMembershipPublicationNodeId(
+    options.targetNodeId,
+  );
+  const planningTargetNodeId = normalizeMembershipPublicationNodeId(
+    priorityRecoveryPlanningSnapshot?.targetNodeId,
+  );
+  const publisherNodeId = normalizeMembershipPublicationNodeId(
+    options.publisherNodeId,
+  );
+  const publisherInEvidence =
+    publisherNodeId.length > NUM.ZERO &&
+    collectMembershipPublicationEvidenceNodeIds(options).includes(publisherNodeId);
+  const targetDecision = [
+    {
+      matches: explicitTargetNodeId.length > NUM.ZERO,
+      nodeId: explicitTargetNodeId,
+      state: MEMBERSHIP_PUBLICATION_TARGET_NODE_STATE.AVAILABLE,
+    },
+    {
+      matches: planningTargetNodeId.length > NUM.ZERO,
+      nodeId: planningTargetNodeId,
+      state: MEMBERSHIP_PUBLICATION_TARGET_NODE_STATE.AVAILABLE,
+    },
+    {
+      matches: publisherInEvidence,
+      nodeId: publisherNodeId,
+      state: MEMBERSHIP_PUBLICATION_TARGET_NODE_STATE.AVAILABLE,
+    },
+    {
+      matches: true,
+      nodeId: NO_MEMBERSHIP_PUBLICATION_TARGET_NODE_ID,
+      state: MEMBERSHIP_PUBLICATION_TARGET_NODE_STATE.UNAVAILABLE,
+    },
+  ].find((entry) => entry.matches === true);
+  return Object.freeze({
+    nodeId: targetDecision.nodeId,
+    state: targetDecision.state,
+  });
+}
+function resolveMembershipPublicationTargetNodeId(options = {}) {
+  return buildMembershipPublicationTargetNodeDecision(options).nodeId;
+}
+function resolveDispatchRetryNodeId(operation) {
+  if (
+    operation?.type === OperationType.REPLACE &&
+    operation?.workflowStep === WORKFLOW_STEP.ACTIVE
+  ) {
+    return (
+      operation.sourceNodeId ||
+      operation.targetNodeId ||
+      MEMBERSHIP_PUBLICATION_COORDINATOR_LITERAL.EMPTY
+    );
+  }
+  return (
+    operation?.targetNodeId ||
+    MEMBERSHIP_PUBLICATION_COORDINATOR_LITERAL.EMPTY
+  );
+}
+function isDispatchRetryOperation(operation) {
+  if (!operation) {
+    return false;
+  }
+  if (
+    operation.workflowStep === WORKFLOW_STEP.PENDING ||
+    operation.workflowStep === WORKFLOW_STEP.SENDING
+  ) {
+    return true;
+  }
+  return (
+    operation.type === OperationType.REPLACE &&
+    operation.workflowStep === WORKFLOW_STEP.ACTIVE
+  );
 }
 function buildTransitionHistoryEntry({state, reasonCode, at, metadata} = {}) {
   const entry = {
@@ -443,17 +573,10 @@ function buildMembershipPublicationEvidenceSnapshot(options = {}) {
       typeof options.priorityRecoveryPlanningSnapshot === TYPEOF.OBJECT ?
       options.priorityRecoveryPlanningSnapshot :
       null;
-  const targetNodeId =
-    typeof options.targetNodeId === TYPEOF.STRING &&
-      options.targetNodeId.length > NUM.ZERO ?
-      options.targetNodeId :
-      typeof options.publisherNodeId === TYPEOF.STRING &&
-        options.publisherNodeId.length > NUM.ZERO ?
-        options.publisherNodeId :
-        typeof priorityRecoveryPlanningSnapshot?.targetNodeId === TYPEOF.STRING &&
-          priorityRecoveryPlanningSnapshot.targetNodeId.length > NUM.ZERO ?
-          priorityRecoveryPlanningSnapshot.targetNodeId :
-          null;
+  const targetNodeDecision = buildMembershipPublicationTargetNodeDecision({
+    ...options,
+    priorityRecoveryPlanningSnapshot,
+  });
   return Object.freeze({
     latestPublicationRow: options.latestPublicationRow || null,
     latestPublishedPublicationRow: options.latestPublishedPublicationRow || null,
@@ -493,7 +616,8 @@ function buildMembershipPublicationEvidenceSnapshot(options = {}) {
       typeof options.membershipLifecycleSummary === TYPEOF.OBJECT ?
         options.membershipLifecycleSummary :
         null,
-    targetNodeId,
+    targetNodeId: targetNodeDecision.nodeId,
+    targetNodeState: targetNodeDecision.state,
     admissionState:
       typeof options.admissionState === TYPEOF.STRING &&
         options.admissionState.length > NUM.ZERO ?
@@ -695,6 +819,51 @@ function buildMembershipPublicationRow(options = {}) {
 function serializeMembershipPublicationRow(publicationRow = {}) {
   return serializeControlPlanePublicationRow(publicationRow);
 }
+function buildMembershipPublicationAcknowledgementDecision(options = {}) {
+  const normalizedPublication = options.normalizedPublication || {};
+  const acknowledgedNodeIds = normalizeNodeIdList(options.acknowledgedNodeIds);
+  const acknowledgementChanged =
+    !listEquals(
+      acknowledgedNodeIds,
+      normalizedPublication.acknowledgedNodeIds,
+    );
+  const allAcknowledged = listEquals(
+    acknowledgedNodeIds,
+    normalizedPublication.requiredAckNodeIds,
+  );
+  const publicationAlreadyClosed =
+    normalizedPublication.status === MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED;
+  const state =
+    allAcknowledged && !publicationAlreadyClosed ?
+      MEMBERSHIP_PUBLICATION_ACK_TRANSITION_STATE.PUBLISHED :
+      acknowledgementChanged ?
+        MEMBERSHIP_PUBLICATION_ACK_TRANSITION_STATE.ACK_PENDING :
+        MEMBERSHIP_PUBLICATION_ACK_TRANSITION_STATE.NOOP;
+  const statusByState = Object.freeze({
+    [MEMBERSHIP_PUBLICATION_ACK_TRANSITION_STATE.PUBLISHED]:
+      MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED,
+    [MEMBERSHIP_PUBLICATION_ACK_TRANSITION_STATE.ACK_PENDING]:
+      MEMBERSHIP_PUBLICATION_STATUS.ACK_PENDING,
+    [MEMBERSHIP_PUBLICATION_ACK_TRANSITION_STATE.NOOP]:
+      normalizedPublication.status,
+  });
+  const reasonByState = Object.freeze({
+    [MEMBERSHIP_PUBLICATION_ACK_TRANSITION_STATE.PUBLISHED]:
+      MEMBERSHIP_PUBLICATION_ACK_TRANSITION_REASON
+        .REQUIRED_ACKNOWLEDGEMENTS_COMPLETED,
+    [MEMBERSHIP_PUBLICATION_ACK_TRANSITION_STATE.ACK_PENDING]:
+      MEMBERSHIP_PUBLICATION_ACK_TRANSITION_REASON.ACKNOWLEDGEMENT_RECORDED,
+    [MEMBERSHIP_PUBLICATION_ACK_TRANSITION_STATE.NOOP]:
+      MEMBERSHIP_PUBLICATION_COORDINATOR_LITERAL.EMPTY,
+  });
+  return Object.freeze({
+    state,
+    nextStatus: statusByState[state],
+    reasonCode: reasonByState[state],
+    acknowledgementChanged,
+    allAcknowledged,
+  });
+}
 function acknowledgeMembershipPublication(options = {}) {
   const publicationRow = options.publicationRow || {};
   const normalizedPublication = normalizeControlPlanePublicationRow(publicationRow);
@@ -724,8 +893,15 @@ function acknowledgeMembershipPublication(options = {}) {
     ...normalizedPublication.acknowledgedNodeIds,
     nodeId,
   ]);
-  const isDuplicate = listEquals(acknowledgedNodeIds, normalizedPublication.acknowledgedNodeIds);
-  if (isDuplicate) {
+  const acknowledgementDecision =
+    buildMembershipPublicationAcknowledgementDecision({
+      normalizedPublication,
+      acknowledgedNodeIds,
+    });
+  if (
+    acknowledgementDecision.state ===
+    MEMBERSHIP_PUBLICATION_ACK_TRANSITION_STATE.NOOP
+  ) {
     return {
       ...publicationRow,
       acknowledged_node_ids: acknowledgedNodeIds,
@@ -733,23 +909,19 @@ function acknowledgeMembershipPublication(options = {}) {
       transition_history: [
         ...(Array.isArray(publicationRow.transition_history) ?
           publicationRow.transition_history :
-          normalizedPublication.transitionHistory),
+        normalizedPublication.transitionHistory),
       ],
     };
   }
-  const allAcknowledged = listEquals(acknowledgedNodeIds, requiredAckNodeIds);
-  const nextStatus = allAcknowledged ?
-    MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED :
-    MEMBERSHIP_PUBLICATION_STATUS.ACK_PENDING;
+  const allAcknowledged = acknowledgementDecision.allAcknowledged;
+  const nextStatus = acknowledgementDecision.nextStatus;
   const transitionHistory = [
     ...(Array.isArray(publicationRow.transition_history) ?
       publicationRow.transition_history :
       normalizedPublication.transitionHistory),
     buildTransitionHistoryEntry({
       state: nextStatus,
-      reasonCode: allAcknowledged ?
-        'required_acknowledgements_completed' :
-        'acknowledgement_recorded',
+      reasonCode: acknowledgementDecision.reasonCode,
       at: nowMs,
       metadata: {
         nodeId,
@@ -1037,6 +1209,7 @@ class MembershipPublicationCoordinator {
       terminal: this.isTerminalPublicationStatus(normalizedPublication.status),
       requiresAcknowledgement: requiredAckNodeIds.includes(normalizedNodeId),
       alreadyAcknowledged: acknowledgedNodeIds.includes(normalizedNodeId),
+      allRequiredAcknowledged: listEquals(acknowledgedNodeIds, requiredAckNodeIds),
     });
   }
 
@@ -1085,9 +1258,8 @@ class MembershipPublicationCoordinator {
         operation &&
         isCoordinatorOwnedOperationType(operation.type) &&
         this.isLocallyOwnedReplicaOperationRow(operation) &&
-        operation.targetNodeId === normalizedNodeId &&
-        (operation.workflowStep === WORKFLOW_STEP.PENDING ||
-          operation.workflowStep === WORKFLOW_STEP.SENDING)
+        resolveDispatchRetryNodeId(operation) === normalizedNodeId &&
+        isDispatchRetryOperation(operation)
       );
     });
     if (dispatchRows.length > NUM.ZERO) {
@@ -1133,9 +1305,9 @@ class MembershipPublicationCoordinator {
             normalizedOperation &&
             isCoordinatorOwnedOperationType(normalizedOperation.type) &&
             this.isLocallyOwnedReplicaOperationRow(normalizedOperation) &&
-            normalizedOperation.targetNodeId === normalizedNodeId &&
-            (normalizedOperation.workflowStep === WORKFLOW_STEP.PENDING ||
-              normalizedOperation.workflowStep === WORKFLOW_STEP.SENDING)
+            resolveDispatchRetryNodeId(normalizedOperation) ===
+              normalizedNodeId &&
+            isDispatchRetryOperation(normalizedOperation)
           );
         })
         .map((operation) => this.buildDispatchRetryRowFromOperation(operation));
@@ -1202,7 +1374,10 @@ class MembershipPublicationCoordinator {
     if (
       acknowledgementCandidate.terminal === true ||
       acknowledgementCandidate.requiresAcknowledgement !== true ||
-      acknowledgementCandidate.alreadyAcknowledged === true
+      (
+        acknowledgementCandidate.alreadyAcknowledged === true &&
+        acknowledgementCandidate.allRequiredAcknowledged !== true
+      )
     ) {
       return serializeMembershipPublicationRow(candidatePublicationRow);
     }

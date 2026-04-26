@@ -104,14 +104,14 @@ function parseOciReference(ref) {
   // the first slash to avoid matching port numbers in registry)
   let tag = null;
   const firstSlash = remainder.indexOf(OCI_PATH_SEPARATOR);
-  const afterRegistry = firstSlash !== NUM.NEGATIVE_ONE
-    ? remainder.slice(firstSlash)
-    : '';
+  const afterRegistry = firstSlash !== NUM.NEGATIVE_ONE ?
+    remainder.slice(firstSlash) :
+    '';
   const tagColonIdx = afterRegistry.lastIndexOf(OCI_TAG_SEPARATOR);
   if (tagColonIdx > NUM.ZERO) {
     tag = afterRegistry.slice(tagColonIdx + NUM.ONE);
     remainder = remainder.slice(
-      NUM.ZERO, firstSlash + tagColonIdx
+      NUM.ZERO, firstSlash + tagColonIdx,
     );
     if (!OCI_TAG_PATTERN.test(tag)) {
       errors.push(OCI_REFERENCE_ERROR.INVALID_TAG_FORMAT);
@@ -190,12 +190,12 @@ function formatOciReference(parts) {
   const errors = [];
   if (!parts.registry) {
     errors.push(
-      OCI_REFERENCE_ERROR.REGISTRY_REQUIRED_FOR_FORMAT
+      OCI_REFERENCE_ERROR.REGISTRY_REQUIRED_FOR_FORMAT,
     );
   }
   if (!parts.repository) {
     errors.push(
-      OCI_REFERENCE_ERROR.REPOSITORY_REQUIRED_FOR_FORMAT
+      OCI_REFERENCE_ERROR.REPOSITORY_REQUIRED_FOR_FORMAT,
     );
   }
   if (errors.length > NUM.ZERO) {

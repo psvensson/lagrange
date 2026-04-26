@@ -35,6 +35,7 @@ const TEST_STEP_DOWN_OPERATION_ID = 'step-down-op';
 const TEST_STEP_DOWN_PARTITION_ID = 'partition-1';
 const TEST_STEP_DOWN_REPLICA_ID = 'leader-replica';
 const TEST_STEP_DOWN_REASON = 'replace_source_leader_handoff';
+const TEST_STEP_DOWN_TARGET_ELECTION_REASON = 'replace_target_leader_election';
 const TEST_STEP_DOWN_CORRELATION_ID = 'corr-step-down';
 const TEST_STEP_DOWN_EMPTY_LEADER_ID = '';
 const TEST_STATUS_RETRY_PARTITION_ID = 'partition-status-retry';
@@ -1491,6 +1492,7 @@ test('ReplicaHandler', async (t) => {
     TEST_STEP_DOWN_PARTITION_ID,
     TEST_STEP_DOWN_REPLICA_ID,
     TEST_STEP_DOWN_REASON,
+    TEST_STEP_DOWN_TARGET_ELECTION_REASON,
     TEST_STEP_DOWN_CORRELATION_ID,
     TEST_STEP_DOWN_EMPTY_LEADER_ID,
     TEST_STATUS_RETRY_PARTITION_ID,

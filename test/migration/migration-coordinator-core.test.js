@@ -68,12 +68,17 @@ function createSqlitePartitionExecution(options = {}) {
   const tableName = options.tableName || 'users';
   database.exec(
     `CREATE TABLE ${tableName} (` +
-    'id INTEGER PRIMARY KEY, ' +
-    'name TEXT' +
-    ')',
+      'id INTEGER PRIMARY KEY, ' +
+      'name TEXT' +
+      ')',
   );
 
-  const executeOnPartition = async (_partitionId, sql, params = [], forRead = false) => {
+  const executeOnPartition = async (
+    _partitionId,
+    sql,
+    params = [],
+    forRead = false,
+  ) => {
     const statement = database.prepare(sql);
     if (forRead || /^\s*SELECT\b/i.test(sql)) {
       return {
@@ -115,11 +120,13 @@ function createCoordinatorHarness(options = {}) {
   };
 
   const state = {
-    tables: options.tables || [{
-      table_id: tableId,
-      table_name: tableName,
-      schema_definition: JSON.stringify(initialSchema),
-    }],
+    tables: options.tables || [
+      {
+        table_id: tableId,
+        table_name: tableName,
+        schema_definition: JSON.stringify(initialSchema),
+      },
+    ],
     migrations: options.migrations ?
       options.migrations.map((row) => ({...row})) :
       [],
@@ -164,18 +171,22 @@ function createCoordinatorHarness(options = {}) {
   }
 
   function getWritableTables(queryOptions) {
-    if (transactionState.active &&
-        isCutoverSession(queryOptions) &&
-        queryOptions?.sessionId === transactionState.sessionId) {
+    if (
+      transactionState.active &&
+      isCutoverSession(queryOptions) &&
+      queryOptions?.sessionId === transactionState.sessionId
+    ) {
       return transactionState.tablesSnapshot;
     }
     return state.tables;
   }
 
   function getWritablePartitionMigrations(queryOptions) {
-    if (transactionState.active &&
-        isCutoverSession(queryOptions) &&
-        queryOptions?.sessionId === transactionState.sessionId) {
+    if (
+      transactionState.active &&
+      isCutoverSession(queryOptions) &&
+      queryOptions?.sessionId === transactionState.sessionId
+    ) {
       return transactionState.partitionMigrationsSnapshot;
     }
     return state.partitionMigrations;
@@ -192,10 +203,7 @@ function createCoordinatorHarness(options = {}) {
           }
           return {
             success: true,
-            rows: [
-              {row_id: cursor + 1},
-              {row_id: cursor + 2},
-            ],
+            rows: [{row_id: cursor + 1}, {row_id: cursor + 2}],
           };
         }
         return {success: true, rows: []};
@@ -207,11 +215,13 @@ function createCoordinatorHarness(options = {}) {
     },
     async executeQuery(sql, params = [], queryOptions = {}) {
       if (sql === MIGRATION_SQL.SELECT_TABLE_BY_ID) {
-        const table = state.tables.find((row) => row.table_id === params[0]) || null;
+        const table =
+          state.tables.find((row) => row.table_id === params[0]) || null;
         return {success: true, rows: table ? [{...table}] : []};
       }
       if (sql === MIGRATION_SQL.SELECT_TABLE_BY_NAME) {
-        const table = state.tables.find((row) => row.table_name === params[0]) || null;
+        const table =
+          state.tables.find((row) => row.table_name === params[0]) || null;
         return {success: true, rows: table ? [{...table}] : []};
       }
       if (sql === MIGRATION_SQL.SELECT_MIGRATIONS_BY_TABLE) {
@@ -225,7 +235,9 @@ function createCoordinatorHarness(options = {}) {
         return {success: true, rows};
       }
       if (sql === MIGRATION_SQL.SELECT_MIGRATION_BY_ID) {
-        const row = state.migrations.find((entry) => entry.migration_id === params[0]);
+        const row = state.migrations.find(
+          (entry) => entry.migration_id === params[0],
+        );
         return {success: true, rows: row ? [{...row}] : []};
       }
       if (sql === MIGRATION_SQL.SELECT_PARTITIONS_BY_TABLE) {
@@ -278,7 +290,9 @@ function createCoordinatorHarness(options = {}) {
         return {success: true, changes: 1};
       }
       if (sql === MIGRATION_SQL.UPDATE_MIGRATION_BY_ID) {
-        const row = state.migrations.find((entry) => entry.migration_id === params[5]);
+        const row = state.migrations.find(
+          (entry) => entry.migration_id === params[5],
+        );
         if (!row) {
           return {success: false, error: 'migration missing'};
         }
@@ -291,16 +305,20 @@ function createCoordinatorHarness(options = {}) {
       }
       if (sql === MIGRATION_SQL.UPDATE_PARTITION_MIGRATION_BY_PK) {
         const writableRows = getWritablePartitionMigrations(queryOptions);
-        if (transactionState.active &&
-            isCutoverSession(queryOptions) &&
-            queryOptions.sessionId === transactionState.sessionId &&
-            cutoverFailOnPartitionIndex !== null &&
-            transactionState.partitionUpdateCount === cutoverFailOnPartitionIndex) {
+        if (
+          transactionState.active &&
+          isCutoverSession(queryOptions) &&
+          queryOptions.sessionId === transactionState.sessionId &&
+          cutoverFailOnPartitionIndex !== null &&
+          transactionState.partitionUpdateCount === cutoverFailOnPartitionIndex
+        ) {
           return {success: false, error: 'cutover partition update failure'};
         }
         transactionState.partitionUpdateCount += 1;
         const row = writableRows.find((entry) => {
-          return entry.migration_id === params[5] && entry.partition_id === params[6];
+          return (
+            entry.migration_id === params[5] && entry.partition_id === params[6]
+          );
         });
         if (!row) {
           return {success: false, error: 'partition migration missing'};
@@ -338,9 +356,13 @@ function createCoordinatorHarness(options = {}) {
           return {success: false, error: 'cutover commit failure'};
         }
         if (transactionState.active) {
-          state.tables = transactionState.tablesSnapshot.map((row) => ({...row}));
+          state.tables = transactionState.tablesSnapshot.map((row) => ({
+            ...row,
+          }));
           state.partitionMigrations =
-            transactionState.partitionMigrationsSnapshot.map((row) => ({...row}));
+            transactionState.partitionMigrationsSnapshot.map((row) => ({
+              ...row,
+            }));
           resetTransactionState();
         }
         return {success: true};
@@ -391,10 +413,16 @@ function expectedTransitionAllowed(fromStage, toStage) {
   if (fromStage === toStage) {
     return true;
   }
-  if (toStage === MIGRATION_STATUS.FAILED || toStage === MIGRATION_STATUS.CANCELLING) {
+  if (
+    toStage === MIGRATION_STATUS.FAILED ||
+    toStage === MIGRATION_STATUS.CANCELLING
+  ) {
     return !MIGRATION_TERMINAL_STATUSES.has(fromStage);
   }
-  if (fromStage === MIGRATION_STATUS.CANCELLING && toStage === MIGRATION_STATUS.CANCELLED) {
+  if (
+    fromStage === MIGRATION_STATUS.CANCELLING &&
+    toStage === MIGRATION_STATUS.CANCELLED
+  ) {
     return true;
   }
   const fromIndex = MIGRATION_STAGE_ORDER.indexOf(fromStage);
@@ -421,15 +449,20 @@ test('Property 1: Migration record creation completeness', async (t) => {
         const harness = createCoordinatorHarness({
           tableId: `table-${seed}`,
           tableName: `users_${seed}`,
-          partitions: [{partition_id: `table-${seed}-p1`, table_id: `table-${seed}`}],
+          partitions: [
+            {partition_id: `table-${seed}-p1`, table_id: `table-${seed}`},
+          ],
         });
         const alterSpec = createAlterSpec(migrationType, seed);
         const migrationId = await harness.coordinator.initiateMigration(
           harness.tableId,
           alterSpec,
         );
-        const row = harness.state.migrations.find((entry) => entry.migration_id === migrationId);
-        return row &&
+        const row = harness.state.migrations.find(
+          (entry) => entry.migration_id === migrationId,
+        );
+        return (
+          row &&
           row.table_id === harness.tableId &&
           row.migration_type === migrationType &&
           row.status === MIGRATION_STATUS.PENDING &&
@@ -437,7 +470,8 @@ test('Property 1: Migration record creation completeness', async (t) => {
           Number.isFinite(row.created_at) &&
           Number.isFinite(row.updated_at) &&
           typeof row.source_schema === 'string' &&
-          typeof row.target_schema === 'string';
+          typeof row.target_schema === 'string'
+        );
       },
     ),
     {numRuns: 10},
@@ -446,14 +480,13 @@ test('Property 1: Migration record creation completeness', async (t) => {
 });
 test('Property 2: Active migration exclusion', async (t) => {
   await fc.assert(
-    fc.asyncProperty(
-      fc.uuid(),
-      async (tableId) => {
-        const conflictingMigrationId = `m-${tableId}`;
-        const harness = createCoordinatorHarness({
-          tableId,
-          tableName: `users_${tableId.slice(0, 6)}`,
-          migrations: [{
+    fc.asyncProperty(fc.uuid(), async (tableId) => {
+      const conflictingMigrationId = `m-${tableId}`;
+      const harness = createCoordinatorHarness({
+        tableId,
+        tableName: `users_${tableId.slice(0, 6)}`,
+        migrations: [
+          {
             migration_id: conflictingMigrationId,
             table_id: tableId,
             table_name: `users_${tableId.slice(0, 6)}`,
@@ -466,50 +499,50 @@ test('Property 2: Active migration exclusion', async (t) => {
             created_at: 1,
             updated_at: 1,
             completed_at: null,
-          }],
-        });
+          },
+        ],
+      });
 
-        try {
-          await harness.coordinator.initiateMigration(
-            tableId,
-            createAlterSpec(MIGRATION_TYPE.ADD_COLUMN, 1),
-          );
-          return false;
-        } catch (error) {
-          return String(error.message || '').includes(conflictingMigrationId);
-        }
-      },
-    ),
+      try {
+        await harness.coordinator.initiateMigration(
+          tableId,
+          createAlterSpec(MIGRATION_TYPE.ADD_COLUMN, 1),
+        );
+        return false;
+      } catch (error) {
+        return String(error.message || '').includes(conflictingMigrationId);
+      }
+    }),
     {numRuns: 10},
   );
   t.pass('active migrations are rejected with conflict id');
 });
 test('Property 3: Partition migration record enumeration', async (t) => {
   await fc.assert(
-    fc.asyncProperty(
-      fc.integer({min: 1, max: 20}),
-      async (partitionCount) => {
-        const tableId = `table-${partitionCount}`;
-        const partitions = [];
-        for (let index = 0; index < partitionCount; index++) {
-          partitions.push({partition_id: `${tableId}-p${index + 1}`, table_id: tableId});
-        }
-        const harness = createCoordinatorHarness({
-          tableId,
-          tableName: `users_${partitionCount}`,
-          partitions,
+    fc.asyncProperty(fc.integer({min: 1, max: 20}), async (partitionCount) => {
+      const tableId = `table-${partitionCount}`;
+      const partitions = [];
+      for (let index = 0; index < partitionCount; index++) {
+        partitions.push({
+          partition_id: `${tableId}-p${index + 1}`,
+          table_id: tableId,
         });
+      }
+      const harness = createCoordinatorHarness({
+        tableId,
+        tableName: `users_${partitionCount}`,
+        partitions,
+      });
 
-        const migrationId = await harness.coordinator.initiateMigration(
-          tableId,
-          createAlterSpec(MIGRATION_TYPE.ADD_COLUMN, partitionCount),
-        );
-        const count = harness.state.partitionMigrations.filter((row) => {
-          return row.migration_id === migrationId;
-        }).length;
-        return count === partitionCount;
-      },
-    ),
+      const migrationId = await harness.coordinator.initiateMigration(
+        tableId,
+        createAlterSpec(MIGRATION_TYPE.ADD_COLUMN, partitionCount),
+      );
+      const count = harness.state.partitionMigrations.filter((row) => {
+        return row.migration_id === migrationId;
+      }).length;
+      return count === partitionCount;
+    }),
     {numRuns: 10},
   );
   t.pass('partition rows are created for every table partition');
@@ -522,12 +555,19 @@ test('Property 18: Monotonic stage transitions', async (t) => {
       fc.constantFrom(...Object.values(MIGRATION_STATUS)),
       (fromStage, toStage) => {
         const expected = expectedTransitionAllowed(fromStage, toStage);
-        return harness.coordinator.isMonotonicTransitionAllowed(fromStage, toStage) === expected;
+        return (
+          harness.coordinator.isMonotonicTransitionAllowed(
+            fromStage,
+            toStage,
+          ) === expected
+        );
       },
     ),
     {numRuns: 10},
   );
-  t.pass('transition validation enforces monotonic ordering with terminal exceptions');
+  t.pass(
+    'transition validation enforces monotonic ordering with terminal exceptions',
+  );
 });
 test('Property 20: Timeout budget derivation', async (t) => {
   await fc.assert(
@@ -553,12 +593,16 @@ test('Property 20: Timeout budget derivation', async (t) => {
         });
         const childBudget = allocation.budget;
 
-        const remainingBudgetMs = getRemainingBudgetMs(parentBudget, {now: () => nowMs});
+        const remainingBudgetMs = getRemainingBudgetMs(parentBudget, {
+          now: () => nowMs,
+        });
         if (!allocation.allowed || !childBudget) {
           return remainingBudgetMs <= 0;
         }
-        return childBudget.configuredBudgetMs <= remainingBudgetMs &&
-          childBudget.configuredBudgetMs <= configuredBudgetMs;
+        return (
+          childBudget.configuredBudgetMs <= remainingBudgetMs &&
+          childBudget.configuredBudgetMs <= configuredBudgetMs
+        );
       },
     ),
     {numRuns: 10},
@@ -625,8 +669,10 @@ test('Property 4: Dual-write schema shape acceptance', async (t) => {
             [],
             {forRead: true},
           );
-          return queryResult.success === true &&
-            queryResult.rows.length === includeNewColumnFlags.length;
+          return (
+            queryResult.success === true &&
+            queryResult.rows.length === includeNewColumnFlags.length
+          );
         } finally {
           sqlite.close();
         }
@@ -687,7 +733,10 @@ test('Property 5: Dual-write default application and query inclusion', async (t)
             {forRead: true},
           );
 
-          if (queryResult.success !== true || queryResult.rows.length !== rowCount) {
+          if (
+            queryResult.success !== true ||
+            queryResult.rows.length !== rowCount
+          ) {
             return false;
           }
           return queryResult.rows.every((row) => row.age === defaultValue);
@@ -698,7 +747,9 @@ test('Property 5: Dual-write default application and query inclusion', async (t)
     ),
     {numRuns: 10},
   );
-  t.pass('dual-write writes without new columns persist defaults and remain queryable');
+  t.pass(
+    'dual-write writes without new columns persist defaults and remain queryable',
+  );
 });
 test('Property 7: Partition operation retry with backoff and recording', async (t) => {
   await fc.assert(
@@ -737,15 +788,20 @@ test('Property 7: Partition operation retry with backoff and recording', async (
         }
 
         const partitionRow = harness.state.partitionMigrations.find((row) => {
-          return row.migration_id === migrationId && row.partition_id === partitionId;
+          return (
+            row.migration_id === migrationId && row.partition_id === partitionId
+          );
         });
         const expectedFailureAttempts = Math.min(
           failureCount,
           MIGRATION_DEFAULT.MAX_RETRY_COUNT + 1,
         );
-        const expectedSuccess = failureCount <= MIGRATION_DEFAULT.MAX_RETRY_COUNT;
-        return operationSucceeded === expectedSuccess &&
-          partitionRow.retry_count === expectedFailureAttempts;
+        const expectedSuccess =
+          failureCount <= MIGRATION_DEFAULT.MAX_RETRY_COUNT;
+        return (
+          operationSucceeded === expectedSuccess &&
+          partitionRow.retry_count === expectedFailureAttempts
+        );
       },
     ),
     {numRuns: 10},
@@ -754,95 +810,97 @@ test('Property 7: Partition operation retry with backoff and recording', async (
 });
 test('Property 8: Aggregate partition completion triggers parent transition', async (t) => {
   await fc.assert(
-    fc.asyncProperty(
-      fc.integer({min: 1, max: 20}),
-      async (partitionCount) => {
-        const tableId = `table-parent-${partitionCount}`;
-        const partitions = [];
-        for (let index = 0; index < partitionCount; index++) {
-          partitions.push({partition_id: `${tableId}-p${index + 1}`, table_id: tableId});
-        }
-        const harness = createCoordinatorHarness({
-          tableId,
-          tableName: `users_${partitionCount}`,
-          partitions,
-          executeOnPartition: async (_partitionId, sql, _params, forRead) => {
-            if (forRead && /SELECT rowid AS row_id/i.test(sql)) {
-              return {success: true, rows: []};
-            }
-            return {success: true, rows: []};
-          },
+    fc.asyncProperty(fc.integer({min: 1, max: 20}), async (partitionCount) => {
+      const tableId = `table-parent-${partitionCount}`;
+      const partitions = [];
+      for (let index = 0; index < partitionCount; index++) {
+        partitions.push({
+          partition_id: `${tableId}-p${index + 1}`,
+          table_id: tableId,
         });
-        const migrationId = await harness.coordinator.initiateMigration(
-          tableId,
-          createAlterSpec(MIGRATION_TYPE.ADD_COLUMN, partitionCount),
-        );
-        const createdRow = harness.state.migrations.find(
-          (row) => row.migration_id === migrationId,
-        );
-        await harness.coordinator.executeDualWriteStage(createdRow, null);
-        const afterDualWrite = harness.state.migrations.find(
-          (row) => row.migration_id === migrationId,
-        );
-        if (afterDualWrite.status !== MIGRATION_STATUS.DUAL_WRITE_COMPLETE) {
-          return false;
-        }
-        await harness.coordinator.executeBackfillStage(afterDualWrite, null);
-        const afterBackfill = harness.state.migrations.find(
-          (row) => row.migration_id === migrationId,
-        );
-        return afterBackfill.status === MIGRATION_STATUS.BACKFILL_COMPLETE;
-      },
-    ),
+      }
+      const harness = createCoordinatorHarness({
+        tableId,
+        tableName: `users_${partitionCount}`,
+        partitions,
+        executeOnPartition: async (_partitionId, sql, _params, forRead) => {
+          if (forRead && /SELECT rowid AS row_id/i.test(sql)) {
+            return {success: true, rows: []};
+          }
+          return {success: true, rows: []};
+        },
+      });
+      const migrationId = await harness.coordinator.initiateMigration(
+        tableId,
+        createAlterSpec(MIGRATION_TYPE.ADD_COLUMN, partitionCount),
+      );
+      const createdRow = harness.state.migrations.find(
+        (row) => row.migration_id === migrationId,
+      );
+      await harness.coordinator.executeDualWriteStage(createdRow, null);
+      const afterDualWrite = harness.state.migrations.find(
+        (row) => row.migration_id === migrationId,
+      );
+      if (afterDualWrite.status !== MIGRATION_STATUS.DUAL_WRITE_COMPLETE) {
+        return false;
+      }
+      await harness.coordinator.executeBackfillStage(afterDualWrite, null);
+      const afterBackfill = harness.state.migrations.find(
+        (row) => row.migration_id === migrationId,
+      );
+      return afterBackfill.status === MIGRATION_STATUS.BACKFILL_COMPLETE;
+    }),
     {numRuns: 10},
   );
-  t.pass('parent transitions complete once all partition rows reach completion stage');
+  t.pass(
+    'parent transitions complete once all partition rows reach completion stage',
+  );
 });
 test('Property 9: Backfill batch size enforcement', async (t) => {
   await fc.assert(
-    fc.asyncProperty(
-      fc.integer({min: 0, max: 600}),
-      async (totalRows) => {
-        const observedBatchLimits = [];
-        const observedBatchSizes = [];
-        const harness = createCoordinatorHarness({
-          executeOnPartition: async (_partitionId, sql, params, forRead) => {
-            if (forRead && /SELECT rowid AS row_id/i.test(sql)) {
-              const cursor = Number(params?.[0] || 0);
-              const limit = Number(params?.[1] || 0);
-              const remaining = Math.max(0, totalRows - cursor);
-              const emittedRows = Math.min(remaining, limit);
-              observedBatchLimits.push(limit);
-              observedBatchSizes.push(emittedRows);
-              const rows = [];
-              for (let offset = 1; offset <= emittedRows; offset++) {
-                rows.push({row_id: cursor + offset});
-              }
-              return {success: true, rows};
+    fc.asyncProperty(fc.integer({min: 0, max: 600}), async (totalRows) => {
+      const observedBatchLimits = [];
+      const observedBatchSizes = [];
+      const harness = createCoordinatorHarness({
+        executeOnPartition: async (_partitionId, sql, params, forRead) => {
+          if (forRead && /SELECT rowid AS row_id/i.test(sql)) {
+            const cursor = Number(params?.[0] || 0);
+            const limit = Number(params?.[1] || 0);
+            const remaining = Math.max(0, totalRows - cursor);
+            const emittedRows = Math.min(remaining, limit);
+            observedBatchLimits.push(limit);
+            observedBatchSizes.push(emittedRows);
+            const rows = [];
+            for (let offset = 1; offset <= emittedRows; offset++) {
+              rows.push({row_id: cursor + offset});
             }
-            return {success: true, rows: []};
-          },
-        });
+            return {success: true, rows};
+          }
+          return {success: true, rows: []};
+        },
+      });
 
-        const migrationId = await harness.coordinator.initiateMigration(
-          harness.tableId,
-          createAlterSpec(MIGRATION_TYPE.ADD_COLUMN, 9),
-        );
-        const migrationRow = harness.state.migrations.find(
-          (row) => row.migration_id === migrationId,
-        );
-        migrationRow.status = MIGRATION_STATUS.DUAL_WRITE_COMPLETE;
-        migrationRow.current_stage = MIGRATION_STATUS.DUAL_WRITE_COMPLETE;
+      const migrationId = await harness.coordinator.initiateMigration(
+        harness.tableId,
+        createAlterSpec(MIGRATION_TYPE.ADD_COLUMN, 9),
+      );
+      const migrationRow = harness.state.migrations.find(
+        (row) => row.migration_id === migrationId,
+      );
+      migrationRow.status = MIGRATION_STATUS.DUAL_WRITE_COMPLETE;
+      migrationRow.current_stage = MIGRATION_STATUS.DUAL_WRITE_COMPLETE;
 
-        await harness.coordinator.executeBackfillStage(migrationRow, null);
+      await harness.coordinator.executeBackfillStage(migrationRow, null);
 
-        return observedBatchLimits.every((limit) =>
-          limit <= MIGRATION_DEFAULT.BACKFILL_BATCH_SIZE,
-        ) && observedBatchSizes.every((size) =>
-          size <= MIGRATION_DEFAULT.BACKFILL_BATCH_SIZE,
-        );
-      },
-    ),
+      return (
+        observedBatchLimits.every(
+          (limit) => limit <= MIGRATION_DEFAULT.BACKFILL_BATCH_SIZE,
+        ) &&
+        observedBatchSizes.every(
+          (size) => size <= MIGRATION_DEFAULT.BACKFILL_BATCH_SIZE,
+        )
+      );
+    }),
     {numRuns: 10},
   );
   t.pass('backfill scan requests and batches respect configured batch size');
@@ -856,13 +914,17 @@ test('Property 10: Backfill cursor resumption round trip', async (t) => {
         const buildExecution = (state) => {
           return async (_partitionId, sql, params, forRead) => {
             if (forRead && /SELECT rowid AS row_id/i.test(sql)) {
-              if (!state.interrupted &&
-                state.completedBatches === interruptionBatch) {
+              if (
+                !state.interrupted &&
+                state.completedBatches === interruptionBatch
+              ) {
                 state.interrupted = true;
                 throw new Error('simulated interruption');
               }
               const cursor = Number(params?.[0] || 0);
-              const limit = Number(params?.[1] || MIGRATION_DEFAULT.BACKFILL_BATCH_SIZE);
+              const limit = Number(
+                params?.[1] || MIGRATION_DEFAULT.BACKFILL_BATCH_SIZE,
+              );
               const remaining = Math.max(0, totalRows - cursor);
               const emittedRows = Math.min(remaining, limit);
               const rows = [];
@@ -902,26 +964,29 @@ test('Property 10: Backfill cursor resumption round trip', async (t) => {
         });
 
         const alterSpec = createAlterSpec(MIGRATION_TYPE.ADD_COLUMN, 10);
-        const migrationIdA = await uninterruptedHarness.coordinator.initiateMigration(
-          uninterruptedHarness.tableId,
-          alterSpec,
-        );
+        const migrationIdA =
+          await uninterruptedHarness.coordinator.initiateMigration(
+            uninterruptedHarness.tableId,
+            alterSpec,
+          );
         const migrationRowA = uninterruptedHarness.state.migrations.find(
           (row) => row.migration_id === migrationIdA,
         );
-        const partitionRowA = uninterruptedHarness.state.partitionMigrations.find(
-          (row) => row.migration_id === migrationIdA,
-        );
+        const partitionRowA =
+          uninterruptedHarness.state.partitionMigrations.find(
+            (row) => row.migration_id === migrationIdA,
+          );
         await uninterruptedHarness.coordinator.runBackfillPartitionLoop(
           migrationRowA,
           partitionRowA,
           null,
         );
 
-        const migrationIdB = await interruptedHarness.coordinator.initiateMigration(
-          interruptedHarness.tableId,
-          alterSpec,
-        );
+        const migrationIdB =
+          await interruptedHarness.coordinator.initiateMigration(
+            interruptedHarness.tableId,
+            alterSpec,
+          );
         const migrationRowB = interruptedHarness.state.migrations.find(
           (row) => row.migration_id === migrationIdB,
         );
@@ -948,9 +1013,15 @@ test('Property 10: Backfill cursor resumption round trip', async (t) => {
           null,
         );
 
-        const uninterruptedRows = [...uninterruptedState.updatedRowIds].sort((a, b) => a - b);
-        const resumedRows = [...interruptedState.updatedRowIds].sort((a, b) => a - b);
-        return JSON.stringify(uninterruptedRows) === JSON.stringify(resumedRows);
+        const uninterruptedRows = [...uninterruptedState.updatedRowIds].sort(
+          (a, b) => a - b,
+        );
+        const resumedRows = [...interruptedState.updatedRowIds].sort(
+          (a, b) => a - b,
+        );
+        return (
+          JSON.stringify(uninterruptedRows) === JSON.stringify(resumedRows)
+        );
       },
     ),
     {numRuns: 10},
@@ -985,23 +1056,25 @@ test('Property 12: Atomic cutover via distributed transaction', async (t) => {
           tableId,
           tableName,
           partitions,
-          migrations: [{
-            migration_id: migrationId,
-            table_id: tableId,
-            table_name: tableName,
-            migration_type: alterSpec.migrationType,
-            source_schema: JSON.stringify(createInitialSchema()),
-            target_schema: JSON.stringify({
-              schema: targetSchema,
-              alterSpec,
-            }),
-            status: MIGRATION_STATUS.BACKFILL_COMPLETE,
-            current_stage: MIGRATION_STATUS.BACKFILL_COMPLETE,
-            error_message: null,
-            created_at: 1,
-            updated_at: 1,
-            completed_at: null,
-          }],
+          migrations: [
+            {
+              migration_id: migrationId,
+              table_id: tableId,
+              table_name: tableName,
+              migration_type: alterSpec.migrationType,
+              source_schema: JSON.stringify(createInitialSchema()),
+              target_schema: JSON.stringify({
+                schema: targetSchema,
+                alterSpec,
+              }),
+              status: MIGRATION_STATUS.BACKFILL_COMPLETE,
+              current_stage: MIGRATION_STATUS.BACKFILL_COMPLETE,
+              error_message: null,
+              created_at: 1,
+              updated_at: 1,
+              completed_at: null,
+            },
+          ],
           partitionMigrations: partitions.map((partition) => ({
             migration_id: migrationId,
             partition_id: partition.partition_id,
@@ -1031,19 +1104,23 @@ test('Property 12: Atomic cutover via distributed transaction', async (t) => {
           if (!injectPartitionFailure) {
             return false;
           }
-          return harness.state.tables[0].schema_definition === originalTableSchema &&
-            harness.state.partitionMigrations.every((row) =>
-              row.status === MIGRATION_STATUS.BACKFILL_COMPLETE,
+          return (
+            harness.state.tables[0].schema_definition === originalTableSchema &&
+            harness.state.partitionMigrations.every(
+              (row) => row.status === MIGRATION_STATUS.BACKFILL_COMPLETE,
             ) &&
-            harness.state.rollbackCount >= 1;
+            harness.state.rollbackCount >= 1
+          );
         }
 
-        return harness.state.tables[0].schema_definition ===
-          JSON.stringify(targetSchema) &&
-          harness.state.partitionMigrations.every((row) =>
-            row.status === MIGRATION_STATUS.COMPLETED,
+        return (
+          harness.state.tables[0].schema_definition ===
+            JSON.stringify(targetSchema) &&
+          harness.state.partitionMigrations.every(
+            (row) => row.status === MIGRATION_STATUS.COMPLETED,
           ) &&
-          harness.state.commitCount === 1;
+          harness.state.commitCount === 1
+        );
       },
     ),
     {numRuns: 10},
@@ -1053,14 +1130,13 @@ test('Property 12: Atomic cutover via distributed transaction', async (t) => {
 test('Property 21: Cancellation transitions and stops new work', async (t) => {
   const cancellableStages = [...MIGRATION_CANCELLABLE_STAGES];
   await fc.assert(
-    fc.asyncProperty(
-      fc.constantFrom(...cancellableStages),
-      async (stage) => {
-        const migrationId = `migration-cancel-${stage}`;
-        const alterSpec = createAlterSpec(MIGRATION_TYPE.ADD_COLUMN, 21);
-        let scanCount = 0;
-        const harness = createCoordinatorHarness({
-          migrations: [{
+    fc.asyncProperty(fc.constantFrom(...cancellableStages), async (stage) => {
+      const migrationId = `migration-cancel-${stage}`;
+      const alterSpec = createAlterSpec(MIGRATION_TYPE.ADD_COLUMN, 21);
+      let scanCount = 0;
+      const harness = createCoordinatorHarness({
+        migrations: [
+          {
             migration_id: migrationId,
             table_id: 'table-1',
             table_name: 'users',
@@ -1076,8 +1152,10 @@ test('Property 21: Cancellation transitions and stops new work', async (t) => {
             created_at: 1,
             updated_at: 1,
             completed_at: null,
-          }],
-          partitionMigrations: [{
+          },
+        ],
+        partitionMigrations: [
+          {
             migration_id: migrationId,
             partition_id: 'table-1-p1',
             status: MIGRATION_STATUS.BACKFILL,
@@ -1085,43 +1163,48 @@ test('Property 21: Cancellation transitions and stops new work', async (t) => {
             retry_count: 0,
             error_message: null,
             updated_at: 1,
-          }],
-          executeOnPartition: async (_partitionId, sql, _params, forRead) => {
-            if (forRead && /SELECT rowid AS row_id/i.test(sql)) {
-              scanCount += 1;
-              return {success: true, rows: [{row_id: 1}]};
-            }
-            return {success: true, rows: []};
           },
-        });
+        ],
+        executeOnPartition: async (_partitionId, sql, _params, forRead) => {
+          if (forRead && /SELECT rowid AS row_id/i.test(sql)) {
+            scanCount += 1;
+            return {success: true, rows: [{row_id: 1}]};
+          }
+          return {success: true, rows: []};
+        },
+      });
 
-        harness.coordinator.cancellationRequestedByMigrationId.add(migrationId);
-        const backfillResult = await harness.coordinator.runBackfillPartitionLoop(
-          harness.state.migrations[0],
-          harness.state.partitionMigrations[0],
-          null,
+      harness.coordinator.cancellationRequestedByMigrationId.add(migrationId);
+      const backfillResult = await harness.coordinator.runBackfillPartitionLoop(
+        harness.state.migrations[0],
+        harness.state.partitionMigrations[0],
+        null,
+      );
+      harness.coordinator.cancellationRequestedByMigrationId.delete(
+        migrationId,
+      );
+
+      const cancelResult =
+        await harness.coordinator.cancelMigration(migrationId);
+      const migrationRow = harness.state.migrations.find(
+        (row) => row.migration_id === migrationId,
+      );
+      const workflow =
+        harness.coordinator.workflowCoordinator.getWorkflowById(migrationId);
+      const hasCancellingTransition =
+        Array.isArray(workflow?.transitionHistory) &&
+        workflow.transitionHistory.some(
+          (entry) => entry.nextStep === MIGRATION_STATUS.CANCELLING,
         );
-        harness.coordinator.cancellationRequestedByMigrationId.delete(migrationId);
 
-        const cancelResult = await harness.coordinator.cancelMigration(migrationId);
-        const migrationRow = harness.state.migrations.find(
-          (row) => row.migration_id === migrationId,
-        );
-        const workflow =
-          harness.coordinator.workflowCoordinator.getWorkflowById(migrationId);
-        const hasCancellingTransition =
-          Array.isArray(workflow?.transitionHistory) &&
-          workflow.transitionHistory.some((entry) =>
-            entry.nextStep === MIGRATION_STATUS.CANCELLING,
-          );
-
-        return backfillResult?.cancelled === true &&
-          scanCount === 0 &&
-          cancelResult.success === true &&
-          migrationRow?.status === MIGRATION_STATUS.CANCELLED &&
-          hasCancellingTransition;
-      },
-    ),
+      return (
+        backfillResult?.cancelled === true &&
+        scanCount === 0 &&
+        cancelResult.success === true &&
+        migrationRow?.status === MIGRATION_STATUS.CANCELLED &&
+        hasCancellingTransition
+      );
+    }),
     {numRuns: 10},
   );
   t.pass('cancellation transitions and prevents new backfill batch scans');
@@ -1137,32 +1220,36 @@ test('Property 23: Cancel rejection for post-cutover migrations', async (t) => {
         const migrationId = `migration-post-cutover-${stage}`;
         const alterSpec = createAlterSpec(MIGRATION_TYPE.ADD_COLUMN, 23);
         const harness = createCoordinatorHarness({
-          migrations: [{
-            migration_id: migrationId,
-            table_id: 'table-1',
-            table_name: 'users',
-            migration_type: alterSpec.migrationType,
-            source_schema: JSON.stringify(createInitialSchema()),
-            target_schema: JSON.stringify({
-              schema: createInitialSchema(),
-              alterSpec,
-            }),
-            status: stage,
-            current_stage: stage,
-            error_message: null,
-            created_at: 1,
-            updated_at: 1,
-            completed_at: stage === MIGRATION_STATUS.COMPLETED ? 2 : null,
-          }],
-          partitionMigrations: [{
-            migration_id: migrationId,
-            partition_id: 'table-1-p1',
-            status: stage,
-            backfill_cursor: null,
-            retry_count: 0,
-            error_message: null,
-            updated_at: 1,
-          }],
+          migrations: [
+            {
+              migration_id: migrationId,
+              table_id: 'table-1',
+              table_name: 'users',
+              migration_type: alterSpec.migrationType,
+              source_schema: JSON.stringify(createInitialSchema()),
+              target_schema: JSON.stringify({
+                schema: createInitialSchema(),
+                alterSpec,
+              }),
+              status: stage,
+              current_stage: stage,
+              error_message: null,
+              created_at: 1,
+              updated_at: 1,
+              completed_at: stage === MIGRATION_STATUS.COMPLETED ? 2 : null,
+            },
+          ],
+          partitionMigrations: [
+            {
+              migration_id: migrationId,
+              partition_id: 'table-1-p1',
+              status: stage,
+              backfill_cursor: null,
+              retry_count: 0,
+              error_message: null,
+              updated_at: 1,
+            },
+          ],
         });
 
         try {
@@ -1182,7 +1269,12 @@ test('initiation supports all migration types', async (t) => {
     const harness = createCoordinatorHarness({
       tableId: `table-${migrationType}`,
       tableName: `users_${migrationType}`,
-      partitions: [{partition_id: `table-${migrationType}-p1`, table_id: `table-${migrationType}`}],
+      partitions: [
+        {
+          partition_id: `table-${migrationType}-p1`,
+          table_id: `table-${migrationType}`,
+        },
+      ],
     });
     const migrationId = await harness.coordinator.initiateMigration(
       harness.tableId,
@@ -1211,41 +1303,49 @@ test('cancel accepts each cancellable stage', async (t) => {
   for (const stage of MIGRATION_CANCELLABLE_STAGES) {
     const migrationId = `migration-cancellable-${stage}`;
     const harness = createCoordinatorHarness({
-      migrations: [{
-        migration_id: migrationId,
-        table_id: harnessTableId(stage),
-        table_name: harnessTableName(stage),
-        migration_type: alterSpec.migrationType,
-        source_schema: JSON.stringify(createInitialSchema()),
-        target_schema: JSON.stringify({
-          schema: createInitialSchema(),
-          alterSpec,
-        }),
-        status: stage,
-        current_stage: stage,
-        error_message: null,
-        created_at: 1,
-        updated_at: 1,
-        completed_at: null,
-      }],
-      tables: [{
-        table_id: harnessTableId(stage),
-        table_name: harnessTableName(stage),
-        schema_definition: JSON.stringify(createInitialSchema()),
-      }],
-      partitions: [{
-        partition_id: `${harnessTableId(stage)}-p1`,
-        table_id: harnessTableId(stage),
-      }],
-      partitionMigrations: [{
-        migration_id: migrationId,
-        partition_id: `${harnessTableId(stage)}-p1`,
-        status: stage,
-        backfill_cursor: null,
-        retry_count: 0,
-        error_message: null,
-        updated_at: 1,
-      }],
+      migrations: [
+        {
+          migration_id: migrationId,
+          table_id: harnessTableId(stage),
+          table_name: harnessTableName(stage),
+          migration_type: alterSpec.migrationType,
+          source_schema: JSON.stringify(createInitialSchema()),
+          target_schema: JSON.stringify({
+            schema: createInitialSchema(),
+            alterSpec,
+          }),
+          status: stage,
+          current_stage: stage,
+          error_message: null,
+          created_at: 1,
+          updated_at: 1,
+          completed_at: null,
+        },
+      ],
+      tables: [
+        {
+          table_id: harnessTableId(stage),
+          table_name: harnessTableName(stage),
+          schema_definition: JSON.stringify(createInitialSchema()),
+        },
+      ],
+      partitions: [
+        {
+          partition_id: `${harnessTableId(stage)}-p1`,
+          table_id: harnessTableId(stage),
+        },
+      ],
+      partitionMigrations: [
+        {
+          migration_id: migrationId,
+          partition_id: `${harnessTableId(stage)}-p1`,
+          status: stage,
+          backfill_cursor: null,
+          retry_count: 0,
+          error_message: null,
+          updated_at: 1,
+        },
+      ],
     });
     const result = await harness.coordinator.cancelMigration(migrationId);
     t.equal(result.success, true, `cancel succeeds for stage ${stage}`);
@@ -1258,35 +1358,42 @@ test('cancel accepts each cancellable stage', async (t) => {
 
 test('cancel rejects cutover_pending and completed stages', async (t) => {
   const alterSpec = createAlterSpec(MIGRATION_TYPE.ADD_COLUMN, 32);
-  for (const stage of [MIGRATION_STATUS.CUTOVER_PENDING, MIGRATION_STATUS.COMPLETED]) {
+  for (const stage of [
+    MIGRATION_STATUS.CUTOVER_PENDING,
+    MIGRATION_STATUS.COMPLETED,
+  ]) {
     const migrationId = `migration-noncancellable-${stage}`;
     const harness = createCoordinatorHarness({
-      migrations: [{
-        migration_id: migrationId,
-        table_id: 'table-1',
-        table_name: 'users',
-        migration_type: alterSpec.migrationType,
-        source_schema: JSON.stringify(createInitialSchema()),
-        target_schema: JSON.stringify({
-          schema: createInitialSchema(),
-          alterSpec,
-        }),
-        status: stage,
-        current_stage: stage,
-        error_message: null,
-        created_at: 1,
-        updated_at: 1,
-        completed_at: stage === MIGRATION_STATUS.COMPLETED ? 2 : null,
-      }],
-      partitionMigrations: [{
-        migration_id: migrationId,
-        partition_id: 'table-1-p1',
-        status: stage,
-        backfill_cursor: null,
-        retry_count: 0,
-        error_message: null,
-        updated_at: 1,
-      }],
+      migrations: [
+        {
+          migration_id: migrationId,
+          table_id: 'table-1',
+          table_name: 'users',
+          migration_type: alterSpec.migrationType,
+          source_schema: JSON.stringify(createInitialSchema()),
+          target_schema: JSON.stringify({
+            schema: createInitialSchema(),
+            alterSpec,
+          }),
+          status: stage,
+          current_stage: stage,
+          error_message: null,
+          created_at: 1,
+          updated_at: 1,
+          completed_at: stage === MIGRATION_STATUS.COMPLETED ? 2 : null,
+        },
+      ],
+      partitionMigrations: [
+        {
+          migration_id: migrationId,
+          partition_id: 'table-1-p1',
+          status: stage,
+          backfill_cursor: null,
+          retry_count: 0,
+          error_message: null,
+          updated_at: 1,
+        },
+      ],
     });
 
     await t.rejects(
@@ -1301,38 +1408,42 @@ test('cutover failure keeps migration in cutover_pending for retry', async (t) =
   const migrationId = 'migration-cutover-retry';
   const harness = createCoordinatorHarness({
     cutoverCommitFailures: 1,
-    migrations: [{
-      migration_id: migrationId,
-      table_id: 'table-1',
-      table_name: 'users',
-      migration_type: alterSpec.migrationType,
-      source_schema: JSON.stringify(createInitialSchema()),
-      target_schema: JSON.stringify({
-        schema: {
-          columns: [
-            {name: 'id', type: 'TEXT', primaryKey: true},
-            {name: 'name', type: 'TEXT'},
-            {name: alterSpec.columnName, type: alterSpec.dataType},
-          ],
-        },
-        alterSpec,
-      }),
-      status: MIGRATION_STATUS.BACKFILL_COMPLETE,
-      current_stage: MIGRATION_STATUS.BACKFILL_COMPLETE,
-      error_message: null,
-      created_at: 1,
-      updated_at: 1,
-      completed_at: null,
-    }],
-    partitionMigrations: [{
-      migration_id: migrationId,
-      partition_id: 'table-1-p1',
-      status: MIGRATION_STATUS.BACKFILL_COMPLETE,
-      backfill_cursor: '4',
-      retry_count: 0,
-      error_message: null,
-      updated_at: 1,
-    }],
+    migrations: [
+      {
+        migration_id: migrationId,
+        table_id: 'table-1',
+        table_name: 'users',
+        migration_type: alterSpec.migrationType,
+        source_schema: JSON.stringify(createInitialSchema()),
+        target_schema: JSON.stringify({
+          schema: {
+            columns: [
+              {name: 'id', type: 'TEXT', primaryKey: true},
+              {name: 'name', type: 'TEXT'},
+              {name: alterSpec.columnName, type: alterSpec.dataType},
+            ],
+          },
+          alterSpec,
+        }),
+        status: MIGRATION_STATUS.BACKFILL_COMPLETE,
+        current_stage: MIGRATION_STATUS.BACKFILL_COMPLETE,
+        error_message: null,
+        created_at: 1,
+        updated_at: 1,
+        completed_at: null,
+      },
+    ],
+    partitionMigrations: [
+      {
+        migration_id: migrationId,
+        partition_id: 'table-1-p1',
+        status: MIGRATION_STATUS.BACKFILL_COMPLETE,
+        backfill_cursor: '4',
+        retry_count: 0,
+        error_message: null,
+        updated_at: 1,
+      },
+    ],
   });
   const migrationRow = harness.state.migrations[0];
 
@@ -1341,8 +1452,8 @@ test('cutover failure keeps migration in cutover_pending for retry', async (t) =
   const finalRow = harness.state.migrations[0];
   const workflow =
     harness.coordinator.workflowCoordinator.getWorkflowById(migrationId);
-  const failedTransition = workflow.transitionHistory.find((entry) =>
-    entry.nextStep === MIGRATION_STATUS.FAILED,
+  const failedTransition = workflow.transitionHistory.find(
+    (entry) => entry.nextStep === MIGRATION_STATUS.FAILED,
   );
   t.equal(finalRow.status, MIGRATION_STATUS.COMPLETED);
   t.equal(harness.state.rollbackCount, 1);
@@ -1350,30 +1461,29 @@ test('cutover failure keeps migration in cutover_pending for retry', async (t) =
   t.equal(Boolean(failedTransition), false);
 });
 
-test('durable transition persistence records previous/next stage, reason, timestamp',
-  async (t) => {
-    const harness = createCoordinatorHarness();
-    const migrationId = await harness.coordinator.initiateMigration(
-      harness.tableId,
-      createAlterSpec(MIGRATION_TYPE.ADD_COLUMN, 34),
-    );
+test('durable transition persistence records previous/next stage, reason, timestamp', async (t) => {
+  const harness = createCoordinatorHarness();
+  const migrationId = await harness.coordinator.initiateMigration(
+    harness.tableId,
+    createAlterSpec(MIGRATION_TYPE.ADD_COLUMN, 34),
+  );
 
-    await harness.coordinator.transitionMigrationStage(
-      migrationId,
-      MIGRATION_STATUS.DUAL_WRITE,
-      'test_transition_reason',
-    );
+  await harness.coordinator.transitionMigrationStage(
+    migrationId,
+    MIGRATION_STATUS.DUAL_WRITE,
+    'test_transition_reason',
+  );
 
-    const workflow =
-      harness.coordinator.workflowCoordinator.getWorkflowById(migrationId);
-    const transition = workflow.transitionHistory[0];
-    t.equal(transition.previousStep, MIGRATION_STATUS.PENDING);
-    t.equal(transition.nextStep, MIGRATION_STATUS.DUAL_WRITE);
-    t.equal(transition.reason, 'test_transition_reason');
-    t.equal(Number.isFinite(transition.timestamp), true);
-    t.equal(transition.previous_stage, MIGRATION_STATUS.PENDING);
-    t.equal(transition.next_stage, MIGRATION_STATUS.DUAL_WRITE);
-  });
+  const workflow =
+    harness.coordinator.workflowCoordinator.getWorkflowById(migrationId);
+  const transition = workflow.transitionHistory[0];
+  t.equal(transition.previousStep, MIGRATION_STATUS.PENDING);
+  t.equal(transition.nextStep, MIGRATION_STATUS.DUAL_WRITE);
+  t.equal(transition.reason, 'test_transition_reason');
+  t.equal(Number.isFinite(transition.timestamp), true);
+  t.equal(transition.previous_stage, MIGRATION_STATUS.PENDING);
+  t.equal(transition.next_stage, MIGRATION_STATUS.DUAL_WRITE);
+});
 
 test('stage transition emits structured migration log entry', async (t) => {
   const logEntries = [];
@@ -1398,12 +1508,13 @@ test('stage transition emits structured migration log entry', async (t) => {
     'log_test_transition',
   );
 
-  const transitionLog = logEntries.find((entry) =>
-    entry.message === MIGRATION_LOG_MSG.STAGE_TRANSITION &&
-    entry.payload?.migration_id === migrationId &&
-    entry.payload?.previous_stage === MIGRATION_STATUS.PENDING &&
-    entry.payload?.next_stage === MIGRATION_STATUS.DUAL_WRITE &&
-    entry.payload?.reason === 'log_test_transition',
+  const transitionLog = logEntries.find(
+    (entry) =>
+      entry.message === MIGRATION_LOG_MSG.STAGE_TRANSITION &&
+      entry.payload?.migration_id === migrationId &&
+      entry.payload?.previous_stage === MIGRATION_STATUS.PENDING &&
+      entry.payload?.next_stage === MIGRATION_STATUS.DUAL_WRITE &&
+      entry.payload?.reason === 'log_test_transition',
   );
   t.equal(Boolean(transitionLog), true);
 });
@@ -1412,7 +1523,10 @@ test('partition migration record count matches 1/3/5 partitions', async (t) => {
   for (const partitionCount of [1, 3, 5]) {
     const partitions = [];
     for (let index = 0; index < partitionCount; index++) {
-      partitions.push({partition_id: `table-${partitionCount}-p${index + 1}`, table_id: `table-${partitionCount}`});
+      partitions.push({
+        partition_id: `table-${partitionCount}-p${index + 1}`,
+        table_id: `table-${partitionCount}`,
+      });
     }
     const harness = createCoordinatorHarness({
       tableId: `table-${partitionCount}`,
@@ -1424,39 +1538,49 @@ test('partition migration record count matches 1/3/5 partitions', async (t) => {
       harness.tableId,
       createAlterSpec(MIGRATION_TYPE.ADD_COLUMN, partitionCount),
     );
-    const rows = harness.state.partitionMigrations.filter((row) => row.migration_id === migrationId);
-    t.equal(rows.length, partitionCount, `created ${partitionCount} partition rows`);
+    const rows = harness.state.partitionMigrations.filter(
+      (row) => row.migration_id === migrationId,
+    );
+    t.equal(
+      rows.length,
+      partitionCount,
+      `created ${partitionCount} partition rows`,
+    );
   }
 });
 
 test('recovery resumes from persisted stage without re-running completed stages', async (t) => {
   const harness = createCoordinatorHarness({
-    migrations: [{
-      migration_id: 'migration-1',
-      table_id: 'table-1',
-      table_name: 'users',
-      migration_type: MIGRATION_TYPE.ADD_COLUMN,
-      source_schema: JSON.stringify(createInitialSchema()),
-      target_schema: JSON.stringify({
-        schema: createInitialSchema(),
-        alterSpec: createAlterSpec(MIGRATION_TYPE.ADD_COLUMN, 1),
-      }),
-      status: MIGRATION_STATUS.BACKFILL_COMPLETE,
-      current_stage: MIGRATION_STATUS.BACKFILL_COMPLETE,
-      error_message: null,
-      created_at: 1,
-      updated_at: 1,
-      completed_at: null,
-    }],
-    partitionMigrations: [{
-      migration_id: 'migration-1',
-      partition_id: 'table-1-p1',
-      status: MIGRATION_STATUS.BACKFILL_COMPLETE,
-      backfill_cursor: '10',
-      retry_count: 0,
-      error_message: null,
-      updated_at: 1,
-    }],
+    migrations: [
+      {
+        migration_id: 'migration-1',
+        table_id: 'table-1',
+        table_name: 'users',
+        migration_type: MIGRATION_TYPE.ADD_COLUMN,
+        source_schema: JSON.stringify(createInitialSchema()),
+        target_schema: JSON.stringify({
+          schema: createInitialSchema(),
+          alterSpec: createAlterSpec(MIGRATION_TYPE.ADD_COLUMN, 1),
+        }),
+        status: MIGRATION_STATUS.BACKFILL_COMPLETE,
+        current_stage: MIGRATION_STATUS.BACKFILL_COMPLETE,
+        error_message: null,
+        created_at: 1,
+        updated_at: 1,
+        completed_at: null,
+      },
+    ],
+    partitionMigrations: [
+      {
+        migration_id: 'migration-1',
+        partition_id: 'table-1-p1',
+        status: MIGRATION_STATUS.BACKFILL_COMPLETE,
+        backfill_cursor: '10',
+        retry_count: 0,
+        error_message: null,
+        updated_at: 1,
+      },
+    ],
   });
 
   let dualWriteCalled = 0;
@@ -1492,7 +1616,9 @@ test('retry exhaustion transitions migration to failed with error', async (t) =>
   );
 
   await harness.coordinator.advanceMigration(migrationId);
-  const row = harness.state.migrations.find((entry) => entry.migration_id === migrationId);
+  const row = harness.state.migrations.find(
+    (entry) => entry.migration_id === migrationId,
+  );
   t.equal(row.status, MIGRATION_STATUS.FAILED);
   t.match(row.error_message, /partition apply failed|retry/i);
   t.ok(row.updated_at >= row.created_at);

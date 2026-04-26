@@ -2,7 +2,10 @@
 
 ## Status
 
-Todo on 2026-04-21.
+Superseded on April 24, 2026 by
+[Rolling restart final leader-map consistency and CDC pressure](./done-20260424-rolling-restart-final-leader-map-consistency-and-cdc-pressure.md),
+then by
+[Rolling restart convergence timeout truth and classification](./done-20260425-rolling-restart-convergence-timeout-truth-and-classification.md).
 
 Observed signal after the startup/rejoin boundary fix:
 
@@ -16,8 +19,11 @@ Observed signal after the startup/rejoin boundary fix:
 
 This is no longer the same boundary as the node-join convergence failure.
 
-It should stay out of the active critical path while the remaining
-priority-recovery completion / remove-safety defect is closed.
+It stayed out of the active critical path while priority-recovery completion,
+remove-safety, and follow-up operation creation were closed. The latest
+secondary re-entry evidence now makes this area active again, but under the
+newer recovery-ready/admin transport pressure package because the concrete
+failure has sharper owner evidence than this older placeholder.
 
 ## Scope
 

@@ -22,7 +22,7 @@ test('WORKER_EVENT lifecycle constants exist and are non-empty strings', (t) => 
     const value = WORKER_EVENT[key];
     t.ok(
       typeof value === 'string' && value.length > 0,
-      `${key} should be a non-empty string, got: ${JSON.stringify(value)}`
+      `${key} should be a non-empty string, got: ${JSON.stringify(value)}`,
     );
   }
   t.end();
@@ -34,7 +34,7 @@ test('WORKER_EVENT lifecycle constants are distinct from each other', (t) => {
   t.equal(
     unique.size,
     values.length,
-    'all lifecycle event values should be unique'
+    'all lifecycle event values should be unique',
   );
   t.end();
 });
@@ -49,7 +49,7 @@ test('WORKER_EVENT lifecycle constants are distinct from existing events', (t) =
     const value = WORKER_EVENT[key];
     t.notOk(
       existingSet.has(value),
-      `${key} value "${value}" should not collide with existing events`
+      `${key} value "${value}" should not collide with existing events`,
     );
   }
   t.end();

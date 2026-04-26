@@ -1,8 +1,8 @@
-import { ERRORS, NUM, TYPEOF } from "../constants/index.js";
+import {ERRORS, NUM, TYPEOF} from '../constants/index.js';
 
 const QUERY_EXECUTION_BUDGET_FIELD = Object.freeze({
-  DELIVERY_SOURCE: "deliverySource",
-  DELIVERY_PRIORITY: "deliveryPriority",
+  DELIVERY_SOURCE: 'deliverySource',
+  DELIVERY_PRIORITY: 'deliveryPriority',
 });
 
 export function normalizeParticipantFailureString(value) {
@@ -91,8 +91,8 @@ export function resolvePartitionRetryDelayMs(
 ) {
   return Number.isFinite(failureDetails?.retryAfterMs) &&
     failureDetails.retryAfterMs > NUM.ZERO ?
-      Math.max(defaultRetryDelayMs, failureDetails.retryAfterMs) :
-      defaultRetryDelayMs;
+    Math.max(defaultRetryDelayMs, failureDetails.retryAfterMs) :
+    defaultRetryDelayMs;
 }
 
 export function createPartitionExecutionBudget({

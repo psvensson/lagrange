@@ -11,32 +11,23 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 import {
   ControlPlaneField,
   ControlPlaneMessageType,
-  CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE,
 } from '../../src/control-plane/control-plane-constants.js';
 import {
-  SYSTEM_TABLE_NAME,
 } from '../../src/bootstrap/system-table-schemas-constants.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {RECONCILE_REASON} from '../../src/workflow/reconcile-queue-constants.js';
 import {
-  NODE_STATE_UPDATE_RETRY_CLASS,
-  NODE_STATE_UPDATE_RETRY_POLICY,
 } from '../../src/control-plane/replica-dispatch-service-constants.js';
 import {
-  CONTROL_PLANE_WORKLOAD_CLASS,
 } from '../../src/control-plane/control-plane-workload-profile.js';
 import {
-  MESSAGE_GROUP_CDC_INGRESS_ACTION,
 } from '../../src/message-group/message-group-forwarding-owner.js';
 import {
-  REPLICA_OPERATION_VISIBILITY_READ_MODE,
 } from '../../src/rebalancer/replica-operation-repository.js';
 import {
-  COLUMN,
   NUM,
-  TYPEOF,
   SERVICE_STATUS,
   STATE,
   WORKFLOW_STEP,
@@ -134,11 +125,6 @@ function createService(options = {}) {
   return service;
 }
 
-const TEST_MEMBERSHIP_PUBLICATION_STATUS = Object.freeze({
-  ACK_PENDING: 'ACK_PENDING',
-  OPEN: 'OPEN',
-  PUBLISHED: 'PUBLISHED',
-});
 
 test('ReplicaDispatchService replays SENDING rows through the canonical ' +
   'dispatch owner path',
@@ -524,6 +510,109 @@ test('ReplicaDispatchService uses authoritative readiness before dispatching',
       service.stop();
     }
   });
+
+test('ReplicaDispatchService uses recovery eligibility for critical ' +
+  'system-table dispatches', async (t) => {
+  initEnv();
+
+  const TARGET_NODE_ID = 'node-2';
+  const SOURCE_NODE_ID = 'node-1';
+  const OPERATION_ID = 'op-critical-recovery-dispatch-1';
+  const PARTITION_ID = 'sql_write_operations-p1';
+  const REPLICA_ID = 'sql_write_operations-p1-r4';
+  const OPERATION_STATUS = 'pending';
+  const EMPTY_STEPS_HISTORY = '[]';
+
+  const authoritativeCalls = [];
+  let dispatchCalls = NUM.ZERO;
+  const operationRow = {
+    operation_id: OPERATION_ID,
+    type: OperationType.REPLACE,
+    partition_id: PARTITION_ID,
+    replica_id: REPLICA_ID,
+    source_node_id: SOURCE_NODE_ID,
+    target_node_id: TARGET_NODE_ID,
+    status: OPERATION_STATUS,
+    workflow_step: WORKFLOW_STEP.PENDING,
+    created_at: Date.now(),
+    updated_at: Date.now(),
+    steps_history: EMPTY_STEPS_HISTORY,
+  };
+
+  const service = createService({
+    cdcIntegrationService: {
+      upsertSystemTableRow: async () => ({success: true}),
+      updateSystemTableRow: async () => ({success: true}),
+    },
+    controlPlaneReadinessService: {
+      getNodeReadinessSync(nodeId, options) {
+        return {
+          nodeId,
+          dimensions: {
+            [CONTROL_PLANE_READINESS_DIMENSION
+              .CONTROL_PLANE_RECOVERY_ELIGIBLE]: true,
+            [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: false,
+          },
+          decisionDimension: options?.decisionDimension,
+          reasons: [],
+        };
+      },
+      async getNodeReadiness(nodeId, options) {
+        authoritativeCalls.push({nodeId, options});
+        return {
+          nodeId,
+          dimensions: {
+            [CONTROL_PLANE_READINESS_DIMENSION
+              .CONTROL_PLANE_RECOVERY_ELIGIBLE]: true,
+            [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: false,
+          },
+          decisionDimension: options?.decisionDimension,
+          reasons: [],
+        };
+      },
+    },
+    rebalanceCoordinator: {
+      async dispatchOperation() {
+        dispatchCalls += NUM.ONE;
+        return {success: true};
+      },
+      isOperationLocallyOwned() {
+        return true;
+      },
+    },
+  });
+
+  try {
+    await service.dispatchOperationRow(operationRow);
+
+    t.equal(
+      dispatchCalls,
+      NUM.ONE,
+      'critical system-table dispatch should proceed on recovery eligibility',
+    );
+    t.equal(
+      service.operationDispatchDeferredRetries.size,
+      NUM.ZERO,
+      'recovery-eligible critical dispatch should not defer as not-ready',
+    );
+    t.same(
+      authoritativeCalls[NUM.ZERO],
+      {
+        nodeId: TARGET_NODE_ID,
+        options: {
+          allowAuthoritativeRefresh: true,
+          decisionDimension:
+            CONTROL_PLANE_READINESS_DIMENSION
+              .CONTROL_PLANE_RECOVERY_ELIGIBLE,
+          maxCachedAgeMs: NUM.ZERO,
+        },
+      },
+      'critical dispatch readiness should refresh the recovery dimension',
+    );
+  } finally {
+    service.stop();
+  }
+});
 
 test('ReplicaDispatchService defers dispatch when authoritative readiness ' +
   'refresh fails', async (t) => {

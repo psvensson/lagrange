@@ -1,148 +1,51 @@
-import { PARTITION_SERVICE_SHARED } from "./partition-service-shared.js";
-import { PartitionServiceSegment4Part1 } from "./partition-service-segment-4-part-1.js";
+import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
+import {PartitionServiceSegment4Part1} from './partition-service-segment-4-part-1.js';
 
 const {
   ACTIVE_VOTER_ROLES,
   ADD_LIKE_REPLICA_OPERATION_TYPES,
-  AddressManager,
-  AuthoritativeRowMutationHelper,
-  CANONICAL_PARTITION_LEADER_OBSERVATION_STATE,
-  CDCEventBuffer,
-  CDCOperation,
-  CDCPipelineMetrics,
-  CDC_LIFECYCLE_LOG_MSG,
-  CDC_OPERATION,
-  CDC_PIPELINE_METRIC,
   COLUMN,
-  CONFIG_KEY,
-  CONTROL_PLANE_MUTATION_OPERATION,
   CONTROL_PLANE_PARTITION_IDS,
   CONTROL_PLANE_READINESS_DIMENSION,
   CRITICAL_SYSTEM_PARTITION_IDS,
-  ConfigurationManager,
-  DEFAULT_TRANSACTION_SESSION_ID,
-  Database,
-  ENTITY_TYPE,
-  ERRORS,
   EntityType,
-  EventEmitter,
-  HLCClockService,
-  INITIAL_PARTITION_IDS,
   LIFECYCLE_REASON,
-  LeaderActivationGate,
-  LeaderActivationScheduler,
-  LifeRaft,
-  LiferaftProvider,
-  LoggingService,
-  METRICS_LOG_TAG,
   NUM,
-  OperationType,
-  PARTICIPANT_ACK_FIELD,
-  PARTITION_CDC_EVENT_BUILD_STATE,
   PARTITION_RAFT_ROLE,
   PARTITION_REPLICA_COUNT_FIELD,
-  PARTITION_SERVICE_ADDRESS,
-  PARTITION_SERVICE_COLUMN,
-  PARTITION_SERVICE_COLUMN_SQL,
-  PARTITION_SERVICE_DB,
   PARTITION_SERVICE_DEFAULT,
   PARTITION_SERVICE_ERROR_MSG,
   PARTITION_SERVICE_EVENT,
-  PARTITION_SERVICE_INIT_STAGE,
   PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON,
-  PARTITION_SERVICE_LIFERAFT_TIMER,
   PARTITION_SERVICE_LITERAL,
   PARTITION_SERVICE_LOG_MSG,
-  PARTITION_SERVICE_MESSAGE_TYPE,
-  PARTITION_SERVICE_MIGRATION_OPERATION,
-  PARTITION_SERVICE_OPERATION,
-  PARTITION_SERVICE_REASON,
-  PARTITION_SERVICE_RESPONSE,
-  PARTITION_SERVICE_ROLE,
-  PARTITION_SERVICE_SQL,
-  PARTITION_SERVICE_SQL_FRAGMENT,
   PARTITION_SERVICE_STATUS,
   PARTITION_SERVICE_TYPE,
   PARTITION_SERVICE_VALUE,
-  PARTITION_SPLIT_MIRROR_ORIGIN,
-  PARTITION_STATE,
-  PARTITION_SUBSYSTEM,
-  PARTITION_TRANSITION_METADATA_FIELD,
-  PARTITION_TRANSITION_STATE,
-  PARTITION_WRITE_COMMIT_MODE,
   PRESSURE_WORK_CLASS,
-  PartitionCDCDelivery,
-  PartitionCDCGenerator,
-  PartitionRaftLogEntry,
-  PartitionRaftStorage,
-  PartitionState,
-  PendingRequestTracker,
-  ProposalQueue,
-  QUERY_PAYLOAD_FIELD_MIGRATION_ID,
-  QUERY_PAYLOAD_FIELD_MIGRATION_OPERATION,
   RaftRole,
   ReplicaStatus,
   SERVICE_TYPE,
-  SPLIT_ACK_CHECKPOINT_FIELD,
-  SPLIT_ACK_STATUS,
-  SPLIT_PARTICIPANT_PREFIX,
-  SPLIT_SNAPSHOT_BACKFILL_YIELD_EVERY_ROWS,
-  SQL,
-  SQLiteLogAdapter,
   STRING,
   SYSTEM_TABLE_NAME,
   TABLES,
   TERMINAL_STATUSES,
-  TIMEOUT_BUDGET_DEFAULT,
   TYPEOF,
   UnifiedRebalancer,
-  WRITE_PHASE_FIELD_APPLY_WRITE_MS,
-  WRITE_PHASE_FIELD_ENTRY_BUILD_MS,
-  WRITE_PHASE_FIELD_FORWARD_DELIVER_MS,
-  WRITE_PHASE_FIELD_LOG_APPEND_MS,
-  WRITE_PHASE_FIELD_RAFT_COMMAND_DISPATCH_MS,
-  WRITE_PHASE_FIELD_SQLITE_RUN_MS,
-  WRITE_PHASE_FIELD_TOTAL_MS,
-  applyRuntimeRaftTiming,
   assertCritical,
-  assertRaftProviderContract,
-  attachTrafficReadinessListener,
-  buildPartitionWriteEntry,
-  buildPartitionWriteFailureResult,
-  buildPartitionWriteSideEffectPlan,
   buildPriorityRecoveryCompletion,
   buildPriorityRecoveryLearnerPromotion,
   buildPriorityRecoveryOperationContextFromRecord,
   buildPriorityRecoveryPartitionAssessment,
-  cloneSplitRoutingEntry,
-  computeReplicaElectionTimeouts,
-  createControlPlaneRuntimeBundle,
-  executePartitionWriteStatement,
-  extractPartitionSplitRoutingKey,
-  fs,
-  getSystemCachePrimaryKeyFieldOrFallback,
   getTrafficReadinessSnapshot,
   hasPriorityRecoverySpreadGap,
-  isBackgroundWorkLifecycleReady,
-  isMetadataPublicationLifecycleReady,
   isPriorityControlPlanePartition,
-  isRaftPacket,
   isSystemTableWriteReady,
   normalizePublishedRaftRole,
-  path,
-  replayPartitionSplitEntry,
-  resolveCanonicalPartitionLeaderObservation,
-  resolvePartitionSplitTargetPartitionId,
-  resolvePartitionWriteCommitMode,
   resolvePriorityRecoveryActiveNodeCohort,
-  resolveRaftTransportDeliveryOptions,
-  routePartitionSplitMirroredWrite,
-  runRetryableControlPlaneWrite,
-  wireReplicaLifecycleEvents,
 } = PARTITION_SERVICE_SHARED;
 
 class PartitionServiceSegment4 extends PartitionServiceSegment4Part1 {
-
   /**
    * Build a rebalancer dependency bundle from current PartitionService
    * state. The bundle is the single shape consumed by
@@ -229,16 +132,16 @@ class PartitionServiceSegment4 extends PartitionServiceSegment4Part1 {
     ) {
       const setRebalanceCoordinator = assertCritical(
         typeof this.rebalancer.setRebalanceCoordinator ===
-          PARTITION_SERVICE_TYPE.FUNCTION
-          ? this.rebalancer.setRebalanceCoordinator.bind(this.rebalancer)
-          : null,
+          PARTITION_SERVICE_TYPE.FUNCTION ?
+          this.rebalancer.setRebalanceCoordinator.bind(this.rebalancer) :
+          null,
         PARTITION_SERVICE_ERROR_MSG.REBALANCER_SET_COORDINATOR_REQUIRED,
       );
       setRebalanceCoordinator(bundle.rebalanceCoordinator);
     }
     this.logger.debug(
       PARTITION_SERVICE_LOG_MSG.REBALANCER_DEPENDENCIES_APPLIED,
-      { partitionId: this.partitionId },
+      {partitionId: this.partitionId},
     );
   }
   /**
@@ -342,7 +245,7 @@ class PartitionServiceSegment4 extends PartitionServiceSegment4Part1 {
    */
   queueRoleUpdate(role) {
     this.roleMutationHelper.queue(
-      normalizePublishedRaftRole(role, { collapseLeaderToFollower: true }),
+      normalizePublishedRaftRole(role, {collapseLeaderToFollower: true}),
     );
   }
   /**
@@ -408,14 +311,14 @@ class PartitionServiceSegment4 extends PartitionServiceSegment4Part1 {
     );
   }
   getMetadataPublicationDeliveryPriority() {
-    return CONTROL_PLANE_PARTITION_IDS.has(this.partitionId)
-      ? PARTITION_SERVICE_LITERAL.CRITICAL
-      : PARTITION_SERVICE_LITERAL.BACKGROUND;
+    return CONTROL_PLANE_PARTITION_IDS.has(this.partitionId) ?
+      PARTITION_SERVICE_LITERAL.CRITICAL :
+      PARTITION_SERVICE_LITERAL.BACKGROUND;
   }
   getMetadataPublicationWorkClass() {
-    return CONTROL_PLANE_PARTITION_IDS.has(this.partitionId)
-      ? PRESSURE_WORK_CLASS.CRITICAL
-      : PRESSURE_WORK_CLASS.BACKGROUND;
+    return CONTROL_PLANE_PARTITION_IDS.has(this.partitionId) ?
+      PRESSURE_WORK_CLASS.CRITICAL :
+      PRESSURE_WORK_CLASS.BACKGROUND;
   }
   shouldMetadataPublicationAllowPressureDefer() {
     return (
@@ -499,7 +402,7 @@ class PartitionServiceSegment4 extends PartitionServiceSegment4Part1 {
         ) {
           this.logger.debug(
             PARTITION_SERVICE_LOG_MSG.TRACKER_SHUTDOWN_DELIVERY,
-            { requestId, partitionId: this.partitionId },
+            {requestId, partitionId: this.partitionId},
           );
           return buildTrackerShutdownAck();
         }
@@ -581,7 +484,7 @@ class PartitionServiceSegment4 extends PartitionServiceSegment4Part1 {
     }, delayMs);
   }
   isPriorityRecoveryPendingForLearnerPromotion() {
-    if (!isPriorityControlPlanePartition({ partitionId: this.partitionId })) {
+    if (!isPriorityControlPlanePartition({partitionId: this.partitionId})) {
       return false;
     }
     const readinessSnapshot = getTrafficReadinessSnapshot(
@@ -590,9 +493,9 @@ class PartitionServiceSegment4 extends PartitionServiceSegment4Part1 {
     if (!readinessSnapshot || readinessSnapshot.draining === true) {
       return false;
     }
-    const reasons = Array.isArray(readinessSnapshot.reasons)
-      ? readinessSnapshot.reasons
-      : [];
+    const reasons = Array.isArray(readinessSnapshot.reasons) ?
+      readinessSnapshot.reasons :
+      [];
     return reasons.includes(
       LIFECYCLE_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
     );
@@ -681,7 +584,7 @@ class PartitionServiceSegment4 extends PartitionServiceSegment4Part1 {
           operationRow.status ??
             operationRow.operation_status ??
             operationRow.operationStatus ??
-            "",
+            STRING.EMPTY,
         ).toLowerCase();
         return !TERMINAL_STATUSES.includes(operationStatus);
       },
@@ -698,11 +601,164 @@ class PartitionServiceSegment4 extends PartitionServiceSegment4Part1 {
           operationContext && typeof operationContext === TYPEOF.OBJECT,
       );
   }
+  getPartitionServiceRowsForPromotion() {
+    return this.systemTableCache &&
+      typeof this.systemTableCache.filter === PARTITION_SERVICE_TYPE.FUNCTION ?
+      this.systemTableCache.filter(TABLES.SERVICES, (serviceRow) => {
+        return (
+          serviceRow?.[COLUMN.PARTITION_ID] === this.partitionId &&
+            serviceRow?.[COLUMN.SERVICE_TYPE] === SERVICE_TYPE.PARTITION
+        );
+      }) :
+      [];
+  }
+  getReplicaServiceStatusForPromotion(serviceRow) {
+    return serviceRow?.[COLUMN.STATUS] || ReplicaStatus.ACTIVE;
+  }
+  isLiveReplicaServiceRowForPromotion(serviceRow) {
+    const status = this.getReplicaServiceStatusForPromotion(serviceRow);
+    return (
+      status !== ReplicaStatus.FAILED &&
+      status !== ReplicaStatus.REMOVING &&
+      status !== ReplicaStatus.REMOVED
+    );
+  }
+  isLocalReplicaServiceRowForPromotion(serviceRow) {
+    const localReplicaId = String(this.replicaId || STRING.EMPTY).trim();
+    const serviceReplicaId = String(
+      serviceRow?.[COLUMN.REPLICA_ID] ||
+        serviceRow?.[COLUMN.SERVICE_ID] ||
+        STRING.EMPTY,
+    ).trim();
+    const localNodeId = String(this.nodeId || STRING.EMPTY).trim();
+    const serviceNodeId = String(
+      serviceRow?.[COLUMN.NODE_ID] || STRING.EMPTY,
+    ).trim();
+    const replicaMatches =
+      localReplicaId.length > NUM.ZERO && serviceReplicaId === localReplicaId;
+    const nodeMatches =
+      localNodeId.length > NUM.ZERO && serviceNodeId === localNodeId;
+    return replicaMatches || nodeMatches;
+  }
+  getReplicaServiceRowReplicaIdForPromotion(serviceRow) {
+    return String(
+      serviceRow?.[COLUMN.REPLICA_ID] ||
+        serviceRow?.[COLUMN.SERVICE_ID] ||
+        STRING.EMPTY,
+    ).trim();
+  }
+  isLearnerServiceRowForPromotion(serviceRow) {
+    return (
+      this.isLiveReplicaServiceRowForPromotion(serviceRow) &&
+      serviceRow?.[COLUMN.RAFT_ROLE] === PARTITION_RAFT_ROLE.LEARNER
+    );
+  }
+  isActiveVoterServiceRowForPromotion(serviceRow) {
+    const raftRole = serviceRow?.[COLUMN.RAFT_ROLE];
+    return (
+      this.isLiveReplicaServiceRowForPromotion(serviceRow) &&
+      raftRole !== PARTITION_RAFT_ROLE.LEARNER &&
+      ACTIVE_VOTER_ROLES.has(raftRole)
+    );
+  }
+  resolveOperationScopedLearnerCountForPromotion(inFlightAddLikeReplicaIds) {
+    const operationReplicaIds =
+      inFlightAddLikeReplicaIds instanceof Set ?
+        inFlightAddLikeReplicaIds :
+        new Set();
+    if (operationReplicaIds.size === NUM.ZERO) {
+      return {scopeActive: false, learnerCount: NUM.ZERO};
+    }
+    let learnerCount = NUM.ZERO;
+    const serviceRows = this.getPartitionServiceRowsForPromotion();
+    const operationScopedLearnerRows = serviceRows.filter((serviceRow) => {
+      const serviceReplicaId =
+        this.getReplicaServiceRowReplicaIdForPromotion(serviceRow);
+      return (
+        this.isLearnerServiceRowForPromotion(serviceRow) &&
+        operationReplicaIds.has(serviceReplicaId)
+      );
+    });
+    for (const serviceRow of operationScopedLearnerRows) {
+      const serviceReplicaId =
+        this.getReplicaServiceRowReplicaIdForPromotion(serviceRow);
+      if (operationReplicaIds.has(serviceReplicaId)) {
+        learnerCount++;
+      }
+    }
+    const localReplicaId = String(this.replicaId || STRING.EMPTY).trim();
+    const localLearnerRowVisible = operationScopedLearnerRows.some(
+      (serviceRow) => this.isLocalReplicaServiceRowForPromotion(serviceRow),
+    );
+    if (
+      this.role === RaftRole.LEARNER &&
+      localReplicaId.length > NUM.ZERO &&
+      operationReplicaIds.has(localReplicaId) &&
+      !localLearnerRowVisible
+    ) {
+      learnerCount++;
+    }
+    return {scopeActive: true, learnerCount};
+  }
+  resolveLearnerPromotionCounts(observedCounts = {}) {
+    const observedActiveVoterCount = Number.isFinite(
+      observedCounts.activeVoterCount,
+    ) ?
+      observedCounts.activeVoterCount :
+      NUM.ZERO;
+    const observedLearnerCount = Number.isFinite(observedCounts.learnerCount) ?
+      observedCounts.learnerCount :
+      NUM.ZERO;
+    const operationScopedLearnerCount =
+      this.resolveOperationScopedLearnerCountForPromotion(
+        observedCounts.inFlightAddLikeReplicaIds,
+      );
+    const baseLearnerCount = operationScopedLearnerCount.scopeActive ?
+      operationScopedLearnerCount.learnerCount :
+      observedLearnerCount;
+    if (this.role !== RaftRole.LEARNER) {
+      return {
+        activeVoterCount: observedActiveVoterCount,
+        learnerCount: baseLearnerCount,
+      };
+    }
+    const localReplicaRows = this.getPartitionServiceRowsForPromotion().filter(
+      (serviceRow) => this.isLocalReplicaServiceRowForPromotion(serviceRow),
+    );
+    const localLearnerRowVisible = localReplicaRows.some((serviceRow) =>
+      this.isLearnerServiceRowForPromotion(serviceRow),
+    );
+    const localVoterRowVisible = localReplicaRows.some((serviceRow) =>
+      this.isActiveVoterServiceRowForPromotion(serviceRow),
+    );
+    const learnerCount =
+      localLearnerRowVisible || operationScopedLearnerCount.scopeActive ?
+        baseLearnerCount :
+        baseLearnerCount + NUM.ONE;
+    const activeVoterCount = localVoterRowVisible ?
+      Math.max(observedActiveVoterCount - NUM.ONE, NUM.ZERO) :
+      observedActiveVoterCount;
+    return {activeVoterCount, learnerCount};
+  }
+  resolveActiveLearnerNodeIdsForPromotion(serviceLearnerNodeIds) {
+    const learnerNodeIds = Array.isArray(serviceLearnerNodeIds) ?
+      [...serviceLearnerNodeIds] :
+      [];
+    const localNodeId = String(this.nodeId || STRING.EMPTY).trim();
+    if (
+      this.role !== RaftRole.LEARNER ||
+      localNodeId.length === NUM.ZERO ||
+      learnerNodeIds.includes(localNodeId)
+    ) {
+      return learnerNodeIds;
+    }
+    return [...learnerNodeIds, localNodeId];
+  }
   resolvePriorityRecoveryCompletionForLearnerPromotion(options = {}) {
     const priorityRecoveryActive =
       this.isPriorityRecoveryPendingForLearnerPromotion();
     if (
-      !isPriorityControlPlanePartition({ partitionId: this.partitionId }) &&
+      !isPriorityControlPlanePartition({partitionId: this.partitionId}) &&
       priorityRecoveryActive !== true
     ) {
       return null;
@@ -711,42 +767,31 @@ class PartitionServiceSegment4 extends PartitionServiceSegment4Part1 {
       this.getPriorityRecoveryPlanningSnapshotForLearnerPromotion();
     const priorityPartitionSummary =
       planningSnapshot?.priorityPartitionSummary || null;
-    const effectiveEligibleNodeIds = planningSnapshot
-      ? resolvePriorityRecoveryActiveNodeCohort(planningSnapshot).activeNodeIds
-      : [];
-    const services =
-      this.systemTableCache &&
-      typeof this.systemTableCache.filter === PARTITION_SERVICE_TYPE.FUNCTION
-        ? this.systemTableCache.filter(TABLES.SERVICES, (serviceRow) => {
-            return (
-              serviceRow?.partition_id === this.partitionId &&
-              serviceRow?.service_type === SERVICE_TYPE.PARTITION
-            );
-          })
-        : [];
+    const effectiveEligibleNodeIds = planningSnapshot ?
+      resolvePriorityRecoveryActiveNodeCohort(planningSnapshot).activeNodeIds :
+      [];
+    const services = this.getPartitionServiceRowsForPromotion();
     const readinessService = this.controlPlaneReadinessService;
-    const activeLearnerNodeIds = Array.isArray(services)
-      ? services
-          .filter((serviceRow) => {
-            const status = serviceRow?.status || ReplicaStatus.ACTIVE;
-            return (
-              status !== ReplicaStatus.FAILED &&
-              status !== ReplicaStatus.REMOVING &&
-              status !== ReplicaStatus.REMOVED &&
-              serviceRow?.raft_role === PARTITION_RAFT_ROLE.LEARNER
-            );
-          })
-          .map((serviceRow) => String(serviceRow?.node_id || "").trim())
-          .filter((nodeId) => nodeId.length > NUM.ZERO)
-      : [];
+    const serviceLearnerNodeIds = Array.isArray(services) ?
+      services
+        .filter((serviceRow) =>
+          this.isLearnerServiceRowForPromotion(serviceRow),
+        )
+        .map((serviceRow) =>
+          String(serviceRow?.[COLUMN.NODE_ID] || STRING.EMPTY).trim(),
+        )
+        .filter((nodeId) => nodeId.length > NUM.ZERO) :
+      [];
+    const activeLearnerNodeIds =
+      this.resolveActiveLearnerNodeIdsForPromotion(serviceLearnerNodeIds);
     const readinessByNodeId = {};
     for (const nodeId of activeLearnerNodeIds) {
       const readiness =
         readinessService &&
         typeof readinessService.getNodeReadinessSync ===
-          PARTITION_SERVICE_TYPE.FUNCTION
-          ? readinessService.getNodeReadinessSync(nodeId)
-          : null;
+          PARTITION_SERVICE_TYPE.FUNCTION ?
+          readinessService.getNodeReadinessSync(nodeId) :
+          null;
       if (readiness && typeof readiness === PARTITION_SERVICE_TYPE.OBJECT) {
         readinessByNodeId[nodeId] = readiness;
       }
@@ -819,10 +864,15 @@ class PartitionServiceSegment4 extends PartitionServiceSegment4Part1 {
       );
       return;
     }
-    const activeVoterCount = this.countActiveVoters();
-    const learnerCount = this.countPendingLearners();
     const inFlightAddLikeReplicaIds =
       this.getInFlightAddLikeOperationReplicaIds();
+    const promotionCounts = this.resolveLearnerPromotionCounts({
+      activeVoterCount: this.countActiveVoters(),
+      learnerCount: this.countPendingLearners(),
+      inFlightAddLikeReplicaIds,
+    });
+    const activeVoterCount = promotionCounts.activeVoterCount;
+    const learnerCount = promotionCounts.learnerCount;
     const hasOwnedAddLikeOperation = Boolean(
       inFlightAddLikeReplicaIds &&
       inFlightAddLikeReplicaIds.size > NUM.ZERO &&
@@ -836,23 +886,36 @@ class PartitionServiceSegment4 extends PartitionServiceSegment4Part1 {
       (this.isJoiningExistingGroup === true || hasOwnedAddLikeOperation) &&
       learnerCount === NUM.ONE &&
       activeVoterCount >= targetReplicaCount;
-    const priorityRecoveryCompletion = isCriticalSystemPartition
-      ? this.resolvePriorityRecoveryCompletionForLearnerPromotion({
-          targetReplicaCount,
-          activeVoterCount,
-          learnerCount,
-        })
-      : null;
+    const operationOwnedCriticalReplacementPromotionAllowed =
+      isCriticalSystemPartition &&
+      hasOwnedAddLikeOperation &&
+      activeVoterCount >= targetReplicaCount;
+    const replacementPromotionAllowed =
+      singleReplacementPromotionAllowed ||
+      operationOwnedCriticalReplacementPromotionAllowed;
+    const singleVoterExpansionPromotionAllowed =
+      this.isJoiningExistingGroup === true &&
+      learnerCount === NUM.ONE &&
+      activeVoterCount === NUM.ONE;
+    const priorityRecoveryCompletion = isCriticalSystemPartition ?
+      this.resolvePriorityRecoveryCompletionForLearnerPromotion({
+        targetReplicaCount,
+        activeVoterCount,
+        learnerCount,
+      }) :
+      null;
     const priorityRecoveryAdditionalVotersAllowed =
       isCriticalSystemPartition &&
-      Number.isFinite(priorityRecoveryCompletion?.temporaryOverflowVoterBudget)
-        ? priorityRecoveryCompletion.temporaryOverflowVoterBudget
-        : NUM.ZERO;
+      Number.isFinite(priorityRecoveryCompletion?.temporaryOverflowVoterBudget) ?
+        priorityRecoveryCompletion.temporaryOverflowVoterBudget :
+        NUM.ZERO;
     const priorityRecoveryOverflowPromotionAllowed =
       priorityRecoveryAdditionalVotersAllowed > NUM.ZERO;
     const maxAllowedVotersAfterPromotion =
       targetReplicaCount +
-      (singleReplacementPromotionAllowed ? NUM.ONE : NUM.ZERO) +
+      (replacementPromotionAllowed || singleVoterExpansionPromotionAllowed ?
+        NUM.ONE :
+        NUM.ZERO) +
       priorityRecoveryAdditionalVotersAllowed;
     const votersAfterPromotion = activeVoterCount + NUM.ONE;
     const wouldExceedTargetReplicaCount =
@@ -865,16 +928,17 @@ class PartitionServiceSegment4 extends PartitionServiceSegment4Part1 {
     if (
       wouldExceedTargetReplicaCount ||
       (wouldBeEven &&
-        !singleReplacementPromotionAllowed &&
+        !replacementPromotionAllowed &&
+        !singleVoterExpansionPromotionAllowed &&
         !priorityRecoveryOverflowPromotionAllowed &&
         !(allLearnersWouldBeOdd && allLearnersWithinTarget))
     ) {
       this.logger.info(PARTITION_SERVICE_LOG_MSG.LEARNER_PROMOTION_DEFERRED, {
         replicaId: this.replicaId,
         partitionId: this.partitionId,
-        reason: wouldExceedTargetReplicaCount
-          ? PARTITION_SERVICE_LITERAL.REPLICA_COUNT_LIMIT
-          : PARTITION_SERVICE_LITERAL.ODD_VOTER_REQUIREMENT,
+        reason: wouldExceedTargetReplicaCount ?
+          PARTITION_SERVICE_LITERAL.REPLICA_COUNT_LIMIT :
+          PARTITION_SERVICE_LITERAL.ODD_VOTER_REQUIREMENT,
         activeVoterCount,
         learnerCount,
         targetReplicaCount,
@@ -890,62 +954,73 @@ class PartitionServiceSegment4 extends PartitionServiceSegment4Part1 {
   getInFlightAddLikeOperationReplicaIds() {
     const operationRows =
       this.systemTableCache &&
-      typeof this.systemTableCache.filter === PARTITION_SERVICE_TYPE.FUNCTION
-        ? this.systemTableCache.filter(
-            TABLES.REPLICA_OPERATIONS,
-            (operationRow) => {
-              return (
-                operationRow?.partition_id === this.partitionId &&
+      typeof this.systemTableCache.filter === PARTITION_SERVICE_TYPE.FUNCTION ?
+        this.systemTableCache.filter(
+          TABLES.REPLICA_OPERATIONS,
+          (operationRow) => {
+            return (
+              operationRow?.[COLUMN.PARTITION_ID] === this.partitionId &&
                 ADD_LIKE_REPLICA_OPERATION_TYPES.has(operationRow?.type) &&
                 !TERMINAL_STATUSES.includes(
                   String(
-                    operationRow?.status ??
+                    operationRow?.[COLUMN.STATUS] ??
                       operationRow?.operation_status ??
                       operationRow?.operationStatus ??
-                      '',
+                      STRING.EMPTY,
                   ).toLowerCase(),
                 )
-              );
-            },
-          )
-        : [];
+            );
+          },
+        ) :
+        [];
     const replicaIds = new Set();
     for (const operationRow of operationRows) {
-      const replicaId = String(operationRow?.replica_id || '').trim();
+      const replicaId = String(
+        operationRow?.[COLUMN.REPLICA_ID] || STRING.EMPTY,
+      ).trim();
       if (replicaId.length > NUM.ZERO) {
         replicaIds.add(replicaId);
+      }
+      const targetNodeId = String(
+        operationRow?.[COLUMN.TARGET_NODE_ID] || STRING.EMPTY,
+      ).trim();
+      const localNodeId = String(this.nodeId || STRING.EMPTY).trim();
+      const localReplicaId = String(this.replicaId || STRING.EMPTY).trim();
+      if (
+        targetNodeId.length > NUM.ZERO &&
+        localReplicaId.length > NUM.ZERO &&
+        targetNodeId === localNodeId
+      ) {
+        replicaIds.add(localReplicaId);
       }
     }
     return replicaIds;
   }
   countPendingLearners() {
-    const services =
-      this.systemTableCache &&
-      typeof this.systemTableCache.filter === PARTITION_SERVICE_TYPE.FUNCTION
-        ? this.systemTableCache.filter(TABLES.SERVICES, (service) => {
-            return (
-              service.partition_id === this.partitionId &&
-              service.service_type === SERVICE_TYPE.PARTITION
-            );
-          })
-        : [];
+    const services = this.getPartitionServiceRowsForPromotion();
     let learnerCount = NUM.ZERO;
     for (const service of services) {
-      const status = service.status || ReplicaStatus.ACTIVE;
-      if (
-        status === ReplicaStatus.FAILED ||
-        status === ReplicaStatus.REMOVING ||
-        status === ReplicaStatus.REMOVED
-      ) {
-        continue;
-      }
-      if (service.raft_role === PARTITION_RAFT_ROLE.LEARNER) {
+      if (this.isLearnerServiceRowForPromotion(service)) {
         learnerCount++;
       }
     }
     return learnerCount;
   }
   getTargetReplicaCountForPromotion() {
+    const partitionRow =
+      this.systemTableCache &&
+      typeof this.systemTableCache.get === PARTITION_SERVICE_TYPE.FUNCTION ?
+        this.systemTableCache.get(TABLES.PARTITIONS, this.partitionId) :
+        {};
+    const publishedReplicaCount = Number(
+      partitionRow?.[PARTITION_REPLICA_COUNT_FIELD],
+    );
+    if (
+      Number.isInteger(publishedReplicaCount) &&
+      publishedReplicaCount > NUM.ZERO
+    ) {
+      return publishedReplicaCount;
+    }
     const configuredReplicaCount = Number(this.replicaCount);
     if (
       Number.isInteger(configuredReplicaCount) &&
@@ -956,31 +1031,10 @@ class PartitionServiceSegment4 extends PartitionServiceSegment4Part1 {
     return PARTITION_SERVICE_DEFAULT.DEFAULT_REPLICA_COUNT;
   }
   countActiveVoters() {
-    const services =
-      this.systemTableCache &&
-      typeof this.systemTableCache.filter === PARTITION_SERVICE_TYPE.FUNCTION
-        ? this.systemTableCache.filter(TABLES.SERVICES, (service) => {
-            return (
-              service.partition_id === this.partitionId &&
-              service.service_type === SERVICE_TYPE.PARTITION
-            );
-          })
-        : [];
+    const services = this.getPartitionServiceRowsForPromotion();
     let voterCount = NUM.ZERO;
     for (const service of services) {
-      const status = service.status || ReplicaStatus.ACTIVE;
-      const raftRole = service.raft_role;
-      if (
-        status === ReplicaStatus.FAILED ||
-        status === ReplicaStatus.REMOVING ||
-        status === ReplicaStatus.REMOVED
-      ) {
-        continue;
-      }
-      if (raftRole === PARTITION_RAFT_ROLE.LEARNER) {
-        continue;
-      }
-      if (ACTIVE_VOTER_ROLES.has(raftRole)) {
+      if (this.isActiveVoterServiceRowForPromotion(service)) {
         voterCount++;
       }
     }
@@ -1026,9 +1080,9 @@ class PartitionServiceSegment4 extends PartitionServiceSegment4Part1 {
   getStats() {
     const pendingRequestTrackerStats =
       this.pendingRequestTracker &&
-      typeof this.pendingRequestTracker.getStats === PARTITION_SERVICE_TYPE.FUNCTION
-        ? this.pendingRequestTracker.getStats()
-        : null;
+      typeof this.pendingRequestTracker.getStats === PARTITION_SERVICE_TYPE.FUNCTION ?
+        this.pendingRequestTracker.getStats() :
+        null;
     return {
       partitionId: this.partitionId,
       replicaId: this.replicaId,
@@ -1133,4 +1187,4 @@ class PartitionServiceSegment4 extends PartitionServiceSegment4Part1 {
   }
 }
 
-export { PartitionServiceSegment4 };
+export {PartitionServiceSegment4};

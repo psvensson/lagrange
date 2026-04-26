@@ -161,7 +161,7 @@ No `active-...` or `todo-...` package remains in this sprint.
 
 ## Final Closures In This Sprint
 
-1. [Priority-recovery operation-scheduling pressure and follow-up creation closure](../../packages/archived/done-20260423-priority-recovery-operation-scheduling-pressure-and-followup-creation-closure.md)
+1. [Priority-recovery operation-scheduling pressure and follow-up creation closure](../../packages/done-20260423-priority-recovery-operation-scheduling-pressure-and-followup-creation-closure.md)
 2. [Priority-recovery workflow-owner progress state-machine and timeout-reconcile closure](../../packages/archived/done-20260422-priority-recovery-workflow-owner-progress-state-machine-and-timeout-reconcile-closure.md)
 
 ## Closed In This Sprint

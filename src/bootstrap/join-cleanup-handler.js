@@ -14,6 +14,7 @@ import {
   JOINING_PHASE,
 } from './bootstrap-constants.js';
 import {
+  JOIN_CLEANUP_LIFECYCLE_TRANSITION_ERROR,
   JOINING_CLEANUP_STEP,
   JOINING_LOG_MSG,
 } from './node-joining-constants.js';
@@ -55,6 +56,19 @@ const JOINING_CLEANUP_STEPS_REVERSE = Object.freeze([
 
 const JOIN_CLEANUP_MEMBERSHIP_PUBLICATION_CONTEXT = Object.freeze({
   CLEANUP_STEP: JOINING_CLEANUP_STEP.QUERYING_STATE,
+});
+const JOIN_CLEANUP_DEFAULT_LIFECYCLE_STOP_PATH = Object.freeze([
+  NodeState.STOPPED,
+]);
+const JOIN_CLEANUP_LIFECYCLE_STOP_PATH_BY_STATE = Object.freeze({
+  [NodeState.READY]: Object.freeze([
+    NodeState.DRAINING,
+    NodeState.STOPPED,
+  ]),
+  [NodeState.DRAINING]: Object.freeze([
+    NodeState.STOPPED,
+  ]),
+  [NodeState.STOPPED]: Object.freeze([]),
 });
 
 /**
@@ -172,27 +186,48 @@ class JoinCleanupHandler {
         await this._executeJoinCleanupStep(step, cleanupContext);
     }
 
-    // Transition lifecycle state machine to STOPPED
     const lifecycleStateMachine =
       this.delegates.getLifecycleStateMachine();
-    const currentState = lifecycleStateMachine.getState();
-    if (currentState !== NodeState.STOPPED) {
-      try {
-        lifecycleStateMachine.transition(NodeState.STOPPED);
-      } catch (err) {
-        logger.warn(
-          JOINING_LOG_MSG.FAILED_JOIN_CLEANUP_COMPLETE, {
-            nodeId: this.nodeId,
-            transitionError: err.message,
-          });
-      }
-    }
+    this.transitionJoinCleanupLifecycleToStopped(
+      lifecycleStateMachine,
+      logger,
+    );
 
     logger.info(JOINING_LOG_MSG.FAILED_JOIN_CLEANUP_SUMMARY, {
       nodeId: this.nodeId,
       failedPhase,
       stepResults,
     });
+  }
+
+  resolveJoinCleanupLifecycleStopPath(currentState) {
+    return JOIN_CLEANUP_LIFECYCLE_STOP_PATH_BY_STATE[currentState] ||
+      JOIN_CLEANUP_DEFAULT_LIFECYCLE_STOP_PATH;
+  }
+
+  transitionJoinCleanupLifecycleToStopped(lifecycleStateMachine, logger) {
+    const stopPath = this.resolveJoinCleanupLifecycleStopPath(
+      lifecycleStateMachine.getState(),
+    );
+    for (const targetState of stopPath) {
+      if (lifecycleStateMachine.getState() === targetState) {
+        continue;
+      }
+      const transitioned = lifecycleStateMachine.transition(targetState);
+      if (transitioned === true) {
+        continue;
+      }
+      logger.warn(
+        JOINING_LOG_MSG.FAILED_JOIN_CLEANUP_COMPLETE,
+        {
+          nodeId: this.nodeId,
+          transitionError:
+            JOIN_CLEANUP_LIFECYCLE_TRANSITION_ERROR.TARGET_FAILED_PREFIX +
+              targetState,
+        },
+      );
+      return;
+    }
   }
 
   /**

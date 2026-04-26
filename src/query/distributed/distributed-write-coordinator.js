@@ -135,15 +135,33 @@ class DistributedWriteCoordinator {
    * @return {Promise<Object>} Aggregated write result.
    */
   async executePlan(plan, params = [], executionOptions = {}) {
-      const participantResults = [];
-      const orderedPartitions = Array.from(
-        plan.partitionStatements.keys(),
-      ).sort();
+    const participantResults = [];
+    const orderedPartitions = Array.from(
+      plan.partitionStatements.keys(),
+    ).sort();
 
-      if (orderedPartitions.length === 1) {
-        const partitionId = orderedPartitions[0];
+    if (orderedPartitions.length === 1) {
+      const partitionId = orderedPartitions[0];
+      const participant = plan.partitionStatements.get(partitionId);
+      const result = await this.executePartitionStatement(
+        plan.statementType,
+        participant.ast,
+        partitionId,
+        params,
+        {
+          ...(executionOptions || {}),
+          ...(participant.executionOptions || {}),
+        },
+      );
+      participantResults.push({
+        partitionId,
+        role: participant.role || PARTICIPANT_ROLE_PRIMARY,
+        ...result,
+      });
+    } else {
+      const promises = orderedPartitions.map((partitionId) => {
         const participant = plan.partitionStatements.get(partitionId);
-        const result = await this.executePartitionStatement(
+        return this.executePartitionStatement(
           plan.statementType,
           participant.ast,
           partitionId,
@@ -152,179 +170,161 @@ class DistributedWriteCoordinator {
             ...(executionOptions || {}),
             ...(participant.executionOptions || {}),
           },
-        );
-        participantResults.push({
+        ).then((result) => ({
           partitionId,
           role: participant.role || PARTICIPANT_ROLE_PRIMARY,
           ...result,
-        });
-      } else {
-        const promises = orderedPartitions.map((partitionId) => {
-          const participant = plan.partitionStatements.get(partitionId);
-          return this.executePartitionStatement(
-            plan.statementType,
-            participant.ast,
-            partitionId,
-            params,
-            {
-              ...(executionOptions || {}),
-              ...(participant.executionOptions || {}),
-            },
-          ).then((result) => ({
-            partitionId,
-            role: participant.role || PARTICIPANT_ROLE_PRIMARY,
-            ...result,
-          }));
-        });
-        const settled = await Promise.allSettled(promises);
-        for (const outcome of settled) {
-          if (outcome.status === PROMISE_STATUS_FULFILLED) {
-            participantResults.push(outcome.value);
-          } else {
-            participantResults.push({
-              partitionId: null,
-              success: false,
-              error: outcome.reason?.message ||
+        }));
+      });
+      const settled = await Promise.allSettled(promises);
+      for (const outcome of settled) {
+        if (outcome.status === PROMISE_STATUS_FULFILLED) {
+          participantResults.push(outcome.value);
+        } else {
+          participantResults.push({
+            partitionId: null,
+            success: false,
+            error: outcome.reason?.message ||
                 QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE,
-            });
-          }
-        }
-        participantResults.sort((a, b) => {
-          if (a.partitionId === null && b.partitionId === null) return 0;
-          if (a.partitionId === null) return 1;
-          if (b.partitionId === null) return -1;
-          return a.partitionId < b.partitionId ? -1 :
-            a.partitionId > b.partitionId ? 1 : 0;
-        });
-      }
-
-      const failedParticipants = participantResults.filter(
-        (result) => !result.success,
-      );
-      const primaryPartitions = participantResults
-        .filter((result) => result.role !== PARTICIPANT_ROLE_MIRROR)
-        .map((result) => result.partitionId)
-        .filter(Boolean);
-      const mirrorPartitions = participantResults
-        .filter((result) => result.role === PARTICIPANT_ROLE_MIRROR)
-        .map((result) => result.partitionId)
-        .filter(Boolean);
-      const rows = [];
-      let affectedRows = 0;
-      const retryCount = participantResults.reduce((sum, result) => {
-        const attempts = Number.isInteger(result.attempts) ?
-          result.attempts : 1;
-        return sum + Math.max(attempts - 1, 0);
-      }, 0);
-      for (const result of participantResults) {
-        if (!result.success) {
-          continue;
-        }
-        if (result.role === PARTICIPANT_ROLE_MIRROR) {
-          continue;
-        }
-        affectedRows += result.affectedRows || 0;
-        if (Array.isArray(result.rows) && result.rows.length > 0) {
-          rows.push(...result.rows);
+          });
         }
       }
+      participantResults.sort((a, b) => {
+        if (a.partitionId === null && b.partitionId === null) return 0;
+        if (a.partitionId === null) return 1;
+        if (b.partitionId === null) return -1;
+        return a.partitionId < b.partitionId ? -1 :
+          a.partitionId > b.partitionId ? 1 : 0;
+      });
+    }
 
-      if (failedParticipants.length > 0) {
-        const participantFailures = failedParticipants.map((result) => ({
-          partitionId: result.partitionId,
-          participantNodeId:
+    const failedParticipants = participantResults.filter(
+      (result) => !result.success,
+    );
+    const primaryPartitions = participantResults
+      .filter((result) => result.role !== PARTICIPANT_ROLE_MIRROR)
+      .map((result) => result.partitionId)
+      .filter(Boolean);
+    const mirrorPartitions = participantResults
+      .filter((result) => result.role === PARTICIPANT_ROLE_MIRROR)
+      .map((result) => result.partitionId)
+      .filter(Boolean);
+    const rows = [];
+    let affectedRows = 0;
+    const retryCount = participantResults.reduce((sum, result) => {
+      const attempts = Number.isInteger(result.attempts) ?
+        result.attempts : 1;
+      return sum + Math.max(attempts - 1, 0);
+    }, 0);
+    for (const result of participantResults) {
+      if (!result.success) {
+        continue;
+      }
+      if (result.role === PARTICIPANT_ROLE_MIRROR) {
+        continue;
+      }
+      affectedRows += result.affectedRows || 0;
+      if (Array.isArray(result.rows) && result.rows.length > 0) {
+        rows.push(...result.rows);
+      }
+    }
+
+    if (failedParticipants.length > 0) {
+      const participantFailures = failedParticipants.map((result) => ({
+        partitionId: result.partitionId,
+        participantNodeId:
             typeof result.participantNodeId === 'string' ?
               result.participantNodeId :
               null,
-          participantAddress:
+        participantAddress:
             typeof result.participantAddress === 'string' ?
               result.participantAddress :
               null,
-          errorCode:
+        errorCode:
             typeof result.errorCode === 'string' ?
               result.errorCode :
               null,
-          error:
+        error:
             result.error ||
             QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE,
-          durationMs:
+        durationMs:
             Number.isFinite(result?.durationMs) ?
               Math.max(0, Math.floor(result.durationMs)) :
               null,
-          retryAfterMs:
+        retryAfterMs:
             Number.isFinite(result?.retryAfterMs) &&
             result.retryAfterMs > 0 ?
               Math.floor(result.retryAfterMs) :
               null,
-          deferRetry: result?.deferRetry === true,
-          backpressured: result?.backpressured === true,
-          failedTable:
+        deferRetry: result?.deferRetry === true,
+        backpressured: result?.backpressured === true,
+        failedTable:
             typeof result.failedTable === 'string' ?
               result.failedTable :
               (typeof result.tableName === 'string' ?
                 result.tableName :
                 null),
-        }));
-        const firstFailedParticipant =
+      }));
+      const firstFailedParticipant =
           participantFailures.length > 0 ?
             participantFailures[0] :
             null;
-        const retryAfterMs = participantFailures.reduce(
-          (maxRetryAfterMs, result) => {
-            if (!Number.isFinite(result?.retryAfterMs) ||
+      const retryAfterMs = participantFailures.reduce(
+        (maxRetryAfterMs, result) => {
+          if (!Number.isFinite(result?.retryAfterMs) ||
                 result.retryAfterMs <= 0) {
-              return maxRetryAfterMs;
-            }
-            return Math.max(maxRetryAfterMs, result.retryAfterMs);
-          },
-          0,
-        );
-        return {
-          success: false,
-          operation: plan.statementType,
-          affectedRows,
-          rows,
-          partitions: primaryPartitions,
-          mirrorPartitions,
-          failedPartitions: failedParticipants.map(
-            (result) => result.partitionId,
-          ),
-          partitionErrors: failedParticipants.map((result) => ({
-            partitionId: result.partitionId,
-            error:
-              result.error ||
-              QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE,
-            retryAfterMs:
-              Number.isFinite(result?.retryAfterMs) &&
-              result.retryAfterMs > 0 ?
-                Math.floor(result.retryAfterMs) :
-                null,
-          })),
-          participantFailures,
-          firstFailedParticipant,
-          participantResults,
-          errorCode: QUERY_ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE,
-          error: QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE,
-          idempotencyKey: plan.idempotencyKey,
-          operationId: plan.operationId,
-          retryCount,
-          retryAfterMs: retryAfterMs > 0 ? retryAfterMs : null,
-        };
-      }
-
+            return maxRetryAfterMs;
+          }
+          return Math.max(maxRetryAfterMs, result.retryAfterMs);
+        },
+        0,
+      );
       return {
-        success: true,
+        success: false,
         operation: plan.statementType,
         affectedRows,
         rows,
         partitions: primaryPartitions,
         mirrorPartitions,
+        failedPartitions: failedParticipants.map(
+          (result) => result.partitionId,
+        ),
+        partitionErrors: failedParticipants.map((result) => ({
+          partitionId: result.partitionId,
+          error:
+              result.error ||
+              QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE,
+          retryAfterMs:
+              Number.isFinite(result?.retryAfterMs) &&
+              result.retryAfterMs > 0 ?
+                Math.floor(result.retryAfterMs) :
+                null,
+        })),
+        participantFailures,
+        firstFailedParticipant,
         participantResults,
+        errorCode: QUERY_ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE,
+        error: QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE,
         idempotencyKey: plan.idempotencyKey,
         operationId: plan.operationId,
         retryCount,
+        retryAfterMs: retryAfterMs > 0 ? retryAfterMs : null,
       };
     }
+
+    return {
+      success: true,
+      operation: plan.statementType,
+      affectedRows,
+      rows,
+      partitions: primaryPartitions,
+      mirrorPartitions,
+      participantResults,
+      idempotencyKey: plan.idempotencyKey,
+      operationId: plan.operationId,
+      retryCount,
+    };
+  }
 
   /**
    * Execute one partition write with bounded retry.

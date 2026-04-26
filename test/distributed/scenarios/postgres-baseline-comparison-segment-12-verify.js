@@ -1,167 +1,59 @@
-import { POSTGRES_BASELINE_COMPARISON_SEGMENT_11 } from "./postgres-baseline-comparison-segment-11.js";
+import {POSTGRES_BASELINE_COMPARISON_SEGMENT_11} from './postgres-baseline-comparison-segment-11.js';
 const {
   AUTHORITATIVE_FALLBACK_THRESHOLD_EXCEEDED_REASON,
-  BASELINE_SKIP_REASON_SUT_HARD_LOAD_FAILURE,
-  BASELINE_STATUS_SKIPPED,
-  BENCHMARK_EVENT_TABLE_FALLBACK,
-  BENCHMARK_METADATA_STAGE_CREATE_COMMITTED,
-  BENCHMARK_TABLE_CREATE_LARGE_CLUSTER_RETRY_TIMEOUT_MS,
-  BENCHMARK_WORKLOAD_OPERATIONS,
-  BENCHMARK_WORKLOAD_PROFILE,
   CDC_TELEMETRY_SCHEMA_MISSING_REASON,
-  CDC_TELEMETRY_SCHEMA_VERSION,
-  DISCOVERY_GATE_REASON_INSUFFICIENT_REACHABLE_NODES,
   DISCOVERY_GATE_STATUS_FAILED,
-  DISCOVERY_GATE_STATUS_PASSED,
-  HEARTBEAT_FRESHNESS_INVARIANT_FAILED_REASON,
-  HEARTBEAT_FRESHNESS_LARGE_CLUSTER_MAX_STALL_MS,
   INTERNAL_SIGNAL_THRESHOLD_BREACH_REASON,
-  LOAD_PARITY_STATUS_MISMATCHED,
   NODE_CLIENT_TRANSIENT_CONTEXT,
-  NO_PROGRESS_REASON_CODE,
   ONE,
-  OVERLOAD_POLICY_VIOLATION_REASON,
-  POST_LOAD_DRAIN_MODE_FAILED,
   POST_LOAD_DRAIN_STATUS_FAILED,
-  POST_LOAD_DRAIN_STATUS_OK,
-  PREFLIGHT_CONVERGENCE_LARGE_CLUSTER_NODE_THRESHOLD,
-  PRELOAD_QUIESCENCE_LARGE_CLUSTER_MAX_REPLICA_OPS_IN_FLIGHT,
-  PRELOAD_QUIESCENCE_LARGE_CLUSTER_STABLE_WINDOW_MS,
-  QUIESCENCE_REASON_IN_FLIGHT_QUERY_ERROR_PREFIX,
-  QUIESCENCE_REASON_LEADERSHIP_UNSTABLE_PREFIX,
-  QUIESCENCE_REASON_NODE_PROBE_ERROR_PREFIX,
-  QUIESCENCE_REASON_STALLED_NO_PROGRESS_PREFIX,
   QUIET_MODE_ACTIVE_PHASES,
   QUIET_MODE_REASON_RUN_FINALIZE,
-  QUIET_MODE_REASON_STRICT_BENCHMARK_MODE,
-  REBALANCING_PRESSURE_SCHEMA_VERSION,
-  REBALANCING_WINDOW_PINNING_VIOLATION_REASON,
-  REQUIRED_SCHEMA_VERSION_UNAVAILABLE_REASON,
-  ROOT_CAUSE_SNAPSHOT_KIND_CONTROL_SNAPSHOT,
-  ROOT_CAUSE_SNAPSHOT_KIND_PREFLIGHT_CRITICAL_PATH,
   SNAPSHOT_REFRESH_WARNING_PREFIX,
   SNAPSHOT_REFRESH_WARNING_SKIPPED,
   SNAPSHOT_REFRESH_WARNING_UNRESOLVED,
   SNAPSHOT_WARNING_PREFIX,
-  STRICT_INVARIANT_RETRY_MIN_POLL_INTERVAL_MS,
-  STRICT_PARITY_REASON_MISMATCH,
-  STRICT_PRELOAD_READINESS_NODE_REASONS_PREFIX,
-  STRICT_PRELOAD_READINESS_REASON_FAILED,
-  SYSTEM_TABLE_READ_PATH_MODE_CANONICAL,
-  WRITE_PRESSURE_THRESHOLD_EXCEEDED_REASON,
   ZERO,
   CONSISTENCY_VERDICT,
   NODE_CLIENT_CONTEXT_KEYS,
   PHASE_STATUS,
   SCENARIO_PHASE,
-  aggregateDiscoveryReadinessExclusionsByNodeId,
-  buildAdmissionRuntimeOwnershipSummary,
-  buildBenchmarkMetadataFlow,
   buildCdcTelemetryState,
-  buildComparison,
-  buildEffectiveAdmissionPolicy,
-  buildFailedPhaseDiagnostics,
   buildQuietModeDetails,
   buildInternalSignalCounts,
-  buildLoadParity,
-  buildNoProgressDiagnostics,
-  buildPhaseDecisions,
-  buildPhaseReasonSummary,
-  buildPostLoadDrainRebalancingPressure,
-  buildPreLoadRebalancingPressure,
-  buildSaturationCounters,
-  buildStartupDecisionRecord,
-  buildStrictDiscoveryGate,
-  buildStrictParityGate,
-  buildUnifiedFailureArtifact,
   buildVerificationArtifacts,
-  collectAdminQueryTraceByNodeId,
-  collectBenchmarkMetadataSnapshot,
   collectCdcTelemetryByNode,
   collectControlSnapshotsFromNodes,
-  createAdmissionRuntimeOwnershipAudit,
-  createEmptyInternalSignalClassCounts,
-  createEmptySaturationCounters,
-  createInitialPostLoadDrain,
   createVerificationSnapshotRefreshResult,
   emitPhaseMeaningfulChange,
-  emitPhaseNoProgressFailure,
   emitPhaseProgress,
-  emitScenarioPhaseEvent,
-  ensureSutBenchmarkTable,
   evaluateAssertionPolicy,
   evaluateAuthoritativeFallbackPolicy,
   evaluateInternalSignalThresholds,
-  evaluateOverloadPolicy,
-  evaluateStrictPreloadInvariantsFromSnapshots,
-  evaluateWritePressure,
   formatAuthoritativeFallbackViolations,
   formatCdcTelemetrySchemaErrors,
-  formatHeartbeatFreshnessFailures,
   formatInternalSignalBreaches,
-  formatLoadParityReasons,
-  formatLoadRebalancingPinningReasons,
-  formatOverloadPolicyViolations,
-  formatReadinessReasonsByNodeId,
-  formatSutLoadDiscoveryDiagnostics,
-  formatWritePressureViolations,
-  isLoadNodeCandidate,
-  isStrictBenchmarkMode,
-  mapPhaseArtifacts,
-  mapPhaseTimeline,
-  normalizeLoadMetrics,
-  parseDurationToMs,
   replaceSnapshotsByNodeId,
-  resolveBaselineLoadNodeCountForRun,
-  resolveBaselineMetrics,
-  resolveBenchmarkConfig,
-  resolveBenchmarkTableCreateAttempt,
-  resolveCanonicalSystemTableWriteNode,
-  resolveDiagnosticsCoverage,
   resolveFirstMismatchKind,
   resolveMismatchRefreshNodeIds,
-  resolveNodeClientChannelPolicyOverrides,
-  resolvePreflightConvergenceOptions,
-  resolvePrimaryProvider,
-  resolveScenarioOverrides,
-  resolveStrictInvariantRetryWindowMs,
-  resolveSutLoadNodes,
-  resolveSystemTableReadPath,
-  revalidateDegradedPreloadLoadNodes,
-  runSutSharedLoad,
-  selectFailureDiagnosticNodes,
   selectStrictInvariantGateEntries,
   selectVerificationNodes,
-  shouldRetryStrictInvariantBreaches,
   assertConsistencyFromSnapshots,
   exitQuietMode,
-  uniqueSorted,
-  waitForSutBenchmarkTableReady,
-  waitForSutLoadQuiescence,
 } = POSTGRES_BASELINE_COMPARISON_SEGMENT_11;
 
 export function buildVerificationPhaseHandlers(context) {
   const {
-    cluster,
-    nodes,
     benchmarkConfig,
     scenarioOverrides,
-    seedNode,
-    benchmarkTableName,
     nodeClient,
     state,
-    targetSutLoadNodeCount,
-    effectiveSutLoadDiscoveryTimeoutMs,
-    provider,
-    networkName,
-    nodeClientPolicySnapshot,
-    strictBenchmarkMode,
     consistencyEvaluator,
   } = context;
 
   return {
     [SCENARIO_PHASE.VERIFY]: async (phaseContext) => {
-      emitPhaseProgress(phaseContext, "collecting verification snapshots", {
+      emitPhaseProgress(phaseContext, 'collecting verification snapshots', {
         verificationCandidateCount: state.effectiveSutLoadNodes.length,
       });
       const verificationNodes = selectVerificationNodes(
@@ -185,21 +77,21 @@ export function buildVerificationPhaseHandlers(context) {
       let snapshots = initialSnapshotCollection.snapshots;
       const snapshotWarnings = [...initialSnapshotCollection.warnings];
       let evaluation =
-        state.verificationNodeIds.length <= ONE
-          ? {
-              verdict: CONSISTENCY_VERDICT.CONSISTENT,
-              hardFailure: false,
-              coverage: {
-                reachableNodes: state.verificationNodeIds.length,
-                snapshotNodes: snapshots.length,
-              },
-              mismatches: [],
-              evidenceWarnings: [],
-            }
-          : consistencyEvaluator.evaluate({
-              reachableNodeIds: state.verificationNodeIds,
-              snapshots,
-            });
+        state.verificationNodeIds.length <= ONE ?
+          {
+            verdict: CONSISTENCY_VERDICT.CONSISTENT,
+            hardFailure: false,
+            coverage: {
+              reachableNodes: state.verificationNodeIds.length,
+              snapshotNodes: snapshots.length,
+            },
+            mismatches: [],
+            evidenceWarnings: [],
+          } :
+          consistencyEvaluator.evaluate({
+            reachableNodeIds: state.verificationNodeIds,
+            snapshots,
+          });
       const snapshotRefresh = createVerificationSnapshotRefreshResult();
       const hasMismatches =
         Array.isArray(evaluation.mismatches) &&
@@ -207,7 +99,7 @@ export function buildVerificationPhaseHandlers(context) {
       if (hasMismatches && state.verificationNodeIds.length > ONE) {
         const verificationNodeById = new Map();
         for (const node of verificationNodes) {
-          const nodeId = String(node?.id || "");
+          const nodeId = String(node?.id || '');
           if (nodeId.length > ZERO) {
             verificationNodeById.set(nodeId, node);
           }
@@ -235,15 +127,15 @@ export function buildVerificationPhaseHandlers(context) {
             });
           snapshotWarnings.push(...refreshSnapshotCollection.warnings);
           for (const snapshot of refreshSnapshotCollection.snapshots) {
-            const nodeId = String(snapshot?.nodeId || "");
+            const nodeId = String(snapshot?.nodeId || '');
             if (nodeId.length > ZERO) {
               snapshotRefresh.refreshedNodeIds.push(nodeId);
             }
           }
           for (const warning of refreshSnapshotCollection.warnings) {
             const [nodeId] = String(warning)
-              .replace(SNAPSHOT_REFRESH_WARNING_PREFIX, "")
-              .split("=");
+              .replace(SNAPSHOT_REFRESH_WARNING_PREFIX, '')
+              .split('=');
             if (nodeId) {
               snapshotRefresh.failedNodeIds.push(nodeId);
             }
@@ -293,10 +185,10 @@ export function buildVerificationPhaseHandlers(context) {
       };
 
       assertConsistencyFromSnapshots(snapshots);
-      state.consistencyResult = { attempts: ONE };
+      state.consistencyResult = {attempts: ONE};
       emitPhaseMeaningfulChange(
         phaseContext,
-        "verification consistency evaluated",
+        'verification consistency evaluated',
         {
           verdict: state.consistencyVerdict,
           snapshotCount: snapshots.length,
@@ -355,7 +247,7 @@ export function buildVerificationPhaseHandlers(context) {
           }),
           errors: [
             CDC_TELEMETRY_SCHEMA_MISSING_REASON +
-              ": " +
+              ': ' +
               formatCdcTelemetrySchemaErrors(state.cdcTelemetry),
           ],
         };
@@ -372,7 +264,7 @@ export function buildVerificationPhaseHandlers(context) {
           }),
           errors: [
             AUTHORITATIVE_FALLBACK_THRESHOLD_EXCEEDED_REASON +
-              ": " +
+              ': ' +
               formatAuthoritativeFallbackViolations(
                 state.authoritativeFallbackResult,
               ),
@@ -390,7 +282,7 @@ export function buildVerificationPhaseHandlers(context) {
           }),
           errors: [
             INTERNAL_SIGNAL_THRESHOLD_BREACH_REASON +
-              ": " +
+              ': ' +
               formatInternalSignalBreaches(state.internalSignalThresholdResult),
           ],
         };

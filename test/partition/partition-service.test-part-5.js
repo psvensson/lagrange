@@ -4,43 +4,27 @@
  * Requirements: 3.2, 3.3, 3.4, 3.5, 4.4
  */
 
-import {EventEmitter} from 'node:events';
-import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
 import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import LifeRaft from '@markwylde/liferaft';
 import {
   PartitionService,
-  PartitionState,
   RaftRole,
   CDCOperation,
 } from '../../src/partition/partition-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {
-  PARTITION_SERVICE_INIT_STAGE,
-  PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON,
-  PARTITION_SERVICE_LOG_MSG,
-  PARTITION_SERVICE_OPERATION,
 } from '../../src/partition/partition-service-constants.js';
 import {
   SYSTEM_TABLE_NAME,
   INITIAL_PARTITION_IDS,
 } from '../../src/bootstrap/system-table-schemas-constants.js';
-import {
-  LIFECYCLE_PHASE,
-  LIFECYCLE_REASON,
-} from '../../src/bootstrap/lifecycle-controller-constants.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {
-  RAFT_TRANSPORT_BACKGROUND_DELIVERY_OPTIONS,
 } from '../../src/raft/constants.js';
 import {
-  COLUMN,
   SERVICE_TYPE,
   SERVICE_STATUS,
-  STATE,
   TABLES,
 } from '../../src/constants/index.js';
 import {
@@ -48,23 +32,12 @@ import {
   ReplicaStatus,
 } from '../../src/rebalancer/replica-status.js';
 import {
-  PARTITION_SPLIT_MIRROR_ORIGIN,
-  PARTITION_TRANSITION_METADATA_FIELD,
-  PARTITION_TRANSITION_STATE,
 } from '../../src/partition/partition-constants.js';
 import {
-  CONTROL_PLANE_READINESS_DIMENSION,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {
-  PRESSURE_WORK_CLASS,
 } from '../../src/control-plane/pressure-governor.js';
 
-const TEST_PARTITION_ID = 'partition-1';
-const TEST_OWNER_NODE_ID = 'node-owner';
-const TEST_STALE_OWNER_NODE_ID = 'node-stale-owner';
-const TEST_LIVE_LEADER_NODE_ID = 'node-live-leader';
-const TEST_OWNER_REPLICA_ID = 'replica-owner-row';
-const TEST_LIVE_LEADER_REPLICA_ID = 'replica-live-leader';
 
 beforeEach(() => {
   ConfigurationManager.resetInstance();
@@ -114,35 +87,6 @@ async function waitForCondition(
   return false;
 }
 
-function createTrafficReadinessState() {
-  const emitter = new EventEmitter();
-  let snapshot = {
-    phase: LIFECYCLE_PHASE.INIT,
-    ready: false,
-    reasons: [],
-  };
-
-  return {
-    getSnapshot() {
-      return {...snapshot};
-    },
-    on(eventName, listener) {
-      emitter.on(eventName, listener);
-    },
-    off(eventName, listener) {
-      emitter.off(eventName, listener);
-    },
-    transitionTo(phase, options = {}) {
-      snapshot = {
-        phase,
-        ready: options.ready === true,
-        reasons: Array.isArray(options.reasons) ? [...options.reasons] : [],
-      };
-      emitter.emit('transition', {...snapshot});
-      return {...snapshot};
-    },
-  };
-}
 
 test(
   'PartitionService - reconciled single-replica leader keeps promoted joiner follower',
@@ -732,6 +676,158 @@ test('PartitionService - learner deferred when all learners would still be even'
     partition.learnerPromotionTimer = null;
   }
 });
+
+test(
+  'PartitionService - critical operation-owned learner promotion tolerates stale peer learner',
+  async (t) => {
+    const criticalPartitionId =
+      INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.REPLICA_OPERATIONS];
+    const replicaCount = 3;
+    const leaderReplicaId = 'replica-1';
+    const leaderNodeId = 'node-1';
+    const firstFollowerReplicaId = 'replica-2';
+    const firstFollowerNodeId = 'node-2';
+    const secondFollowerReplicaId = 'replica-3';
+    const secondFollowerNodeId = 'node-3';
+    const currentReplicaId = 'replica-6';
+    const currentNodeId = 'node-6';
+    const staleReplicaId = 'replica-5';
+    const staleNodeId = 'node-5';
+    const staleOperationId = 'operation-stale-replace';
+    const currentOperationId = 'operation-current-replace';
+    const memoryDbPath = ':memory:';
+    const absentRow = null;
+    const partitionRow = {
+      partition_id: criticalPartitionId,
+      replica_count: replicaCount,
+    };
+    const services = [
+      {
+        service_id: leaderReplicaId,
+        replica_id: leaderReplicaId,
+        node_id: leaderNodeId,
+        partition_id: criticalPartitionId,
+        service_type: SERVICE_TYPE.PARTITION,
+        status: ReplicaStatus.ACTIVE,
+        raft_role: RaftRole.LEADER,
+      },
+      {
+        service_id: firstFollowerReplicaId,
+        replica_id: firstFollowerReplicaId,
+        node_id: firstFollowerNodeId,
+        partition_id: criticalPartitionId,
+        service_type: SERVICE_TYPE.PARTITION,
+        status: ReplicaStatus.ACTIVE,
+        raft_role: RaftRole.FOLLOWER,
+      },
+      {
+        service_id: secondFollowerReplicaId,
+        replica_id: secondFollowerReplicaId,
+        node_id: secondFollowerNodeId,
+        partition_id: criticalPartitionId,
+        service_type: SERVICE_TYPE.PARTITION,
+        status: ReplicaStatus.ACTIVE,
+        raft_role: RaftRole.FOLLOWER,
+      },
+      {
+        service_id: staleReplicaId,
+        replica_id: staleReplicaId,
+        node_id: staleNodeId,
+        partition_id: criticalPartitionId,
+        service_type: SERVICE_TYPE.PARTITION,
+        status: ReplicaStatus.ACTIVE,
+        raft_role: RaftRole.LEARNER,
+      },
+      {
+        service_id: currentReplicaId,
+        replica_id: currentReplicaId,
+        node_id: currentNodeId,
+        partition_id: criticalPartitionId,
+        service_type: SERVICE_TYPE.PARTITION,
+        status: ReplicaStatus.ACTIVE,
+        raft_role: RaftRole.LEARNER,
+      },
+    ];
+    const operations = [
+      {
+        operation_id: staleOperationId,
+        type: OperationType.REPLACE,
+        partition_id: criticalPartitionId,
+        replica_id: staleReplicaId,
+        target_node_id: staleNodeId,
+        status: ReplicaStatus.SYNCING,
+      },
+      {
+        operation_id: currentOperationId,
+        type: OperationType.REPLACE,
+        partition_id: criticalPartitionId,
+        replica_id: currentReplicaId,
+        target_node_id: currentNodeId,
+        status: ReplicaStatus.SYNCING,
+      },
+    ];
+    const mockCache = {
+      get: (tableName, key) => {
+        if (tableName === TABLES.PARTITIONS && key === criticalPartitionId) {
+          return partitionRow;
+        }
+        return absentRow;
+      },
+      filter: (tableName, predicate) => {
+        if (tableName === TABLES.PARTITIONS) {
+          return [partitionRow].filter(predicate);
+        }
+        if (tableName === TABLES.SERVICES) {
+          return services.filter(predicate);
+        }
+        if (tableName === TABLES.REPLICA_OPERATIONS) {
+          return operations.filter(predicate);
+        }
+        return [];
+      },
+    };
+
+    const partition = new PartitionService({
+      partitionId: criticalPartitionId,
+      tableId: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+      replicaId: currentReplicaId,
+      replicaIds: [currentReplicaId],
+      nodeId: currentNodeId,
+      dbPath: memoryDbPath,
+      isJoiningExistingGroup: false,
+      systemTableCache: mockCache,
+    });
+    let electionStarted = false;
+    partition.role = RaftRole.LEARNER;
+    partition.leaderId = leaderReplicaId;
+    partition.startElection = () => {
+      electionStarted = true;
+    };
+
+    partition.checkLearnerPromotion();
+
+    t.equal(
+      partition.role,
+      RaftRole.FOLLOWER,
+      'current replacement learner should promote despite stale active peer learner evidence',
+    );
+    t.equal(
+      partition.learnerPromotionTimer,
+      null,
+      'critical replacement promotion should not reschedule the learner timer',
+    );
+    t.equal(
+      electionStarted,
+      true,
+      'critical replacement promotion should enter the voter election path',
+    );
+
+    if (partition.learnerPromotionTimer) {
+      clearTimeout(partition.learnerPromotionTimer);
+      partition.learnerPromotionTimer = null;
+    }
+  },
+);
 
 test(
   'PartitionService - learner promotion ignores orphan learners that do not have active add-like operations',

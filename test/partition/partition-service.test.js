@@ -4,12 +4,10 @@
  * Requirements: 3.2, 3.3, 3.4, 3.5, 4.4
  */
 
-import {EventEmitter} from 'node:events';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
-import LifeRaft from '@markwylde/liferaft';
 import {
   PartitionService,
   PartitionState,
@@ -20,7 +18,6 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {
   PARTITION_SERVICE_INIT_STAGE,
-  PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON,
   PARTITION_SERVICE_LOG_MSG,
   PARTITION_SERVICE_OPERATION,
 } from '../../src/partition/partition-service-constants.js';
@@ -28,35 +25,22 @@ import {
   SYSTEM_TABLE_NAME,
   INITIAL_PARTITION_IDS,
 } from '../../src/bootstrap/system-table-schemas-constants.js';
-import {
-  LIFECYCLE_PHASE,
-  LIFECYCLE_REASON,
-} from '../../src/bootstrap/lifecycle-controller-constants.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {
-  RAFT_TRANSPORT_BACKGROUND_DELIVERY_OPTIONS,
 } from '../../src/raft/constants.js';
 import {
   COLUMN,
   SERVICE_TYPE,
-  SERVICE_STATUS,
-  STATE,
   TABLES,
 } from '../../src/constants/index.js';
 import {
-  OperationType,
   ReplicaStatus,
 } from '../../src/rebalancer/replica-status.js';
 import {
-  PARTITION_SPLIT_MIRROR_ORIGIN,
-  PARTITION_TRANSITION_METADATA_FIELD,
-  PARTITION_TRANSITION_STATE,
 } from '../../src/partition/partition-constants.js';
 import {
-  CONTROL_PLANE_READINESS_DIMENSION,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {
-  PRESSURE_WORK_CLASS,
 } from '../../src/control-plane/pressure-governor.js';
 
 const TEST_PARTITION_ID = 'partition-1';
@@ -80,69 +64,6 @@ afterEach(() => {
   LoggingService.resetInstance();
 });
 
-function createLoopbackTransport() {
-  const handlers = new Map();
-  return {
-    register(address, handler) {
-      handlers.set(address, handler);
-    },
-    unregister(address) {
-      handlers.delete(address);
-    },
-    async deliver(address, payload) {
-      const handler = handlers.get(address);
-      if (!handler) {
-        throw new Error(`No handler registered for ${address}`);
-      }
-      return handler({payload});
-    },
-  };
-}
-
-async function waitForCondition(
-  predicate,
-  timeoutMs = 1000,
-  intervalMs = 10,
-) {
-  const start = Date.now();
-  while (Date.now() - start < timeoutMs) {
-    if (await Promise.resolve(predicate())) {
-      return true;
-    }
-    await new Promise((resolve) => setTimeout(resolve, intervalMs));
-  }
-  return false;
-}
-
-function createTrafficReadinessState() {
-  const emitter = new EventEmitter();
-  let snapshot = {
-    phase: LIFECYCLE_PHASE.INIT,
-    ready: false,
-    reasons: [],
-  };
-
-  return {
-    getSnapshot() {
-      return {...snapshot};
-    },
-    on(eventName, listener) {
-      emitter.on(eventName, listener);
-    },
-    off(eventName, listener) {
-      emitter.off(eventName, listener);
-    },
-    transitionTo(phase, options = {}) {
-      snapshot = {
-        phase,
-        ready: options.ready === true,
-        reasons: Array.isArray(options.reasons) ? [...options.reasons] : [],
-      };
-      emitter.emit('transition', {...snapshot});
-      return {...snapshot};
-    },
-  };
-}
 
 test('PartitionService requests managed split evaluation from the local ' +
   'leader after user-table writes', async (t) => {

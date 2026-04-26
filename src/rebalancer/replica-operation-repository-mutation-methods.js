@@ -1,4 +1,7 @@
-function assignReplicaOperationRepositoryMutationMethods(ReplicaOperationRepository, options = {}) {
+function assignReplicaOperationRepositoryMutationMethods(
+  ReplicaOperationRepository,
+  options = {},
+) {
   const {
     CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
     CONTROL_PLANE_MUTATION_MERGE_POLICY,
@@ -46,52 +49,57 @@ function assignReplicaOperationRepositoryMutationMethods(ReplicaOperationReposit
   } = options;
 
   class ReplicaOperationRepositoryMutationMethods {
-  /**
-   * Persist a new operation row via SQL INSERT.
-   * @param {object} operation
-   * @return {Promise<boolean>}
-   */
+    /**
+     * Persist a new operation row via SQL INSERT.
+     * @param {object} operation
+     * @return {Promise<boolean>}
+     */
     async persistNewOperation(operation) {
       return this.runReplicaOperationTransitionExclusive(
         async () => {
-          const result = await this.executeReplicaOperationGatewayMutationWithRetry(
-            {
-              operation: CONTROL_PLANE_MUTATION_OPERATION.INSERT,
-              tableName: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
-              row: this.buildReplicaOperationRow(operation),
-              owner: REPLICA_OPERATION_OWNER_NAME,
-            },
-            {
-              ownerId: operation.operationId,
-              onRetryableFailure: (errorResult) =>
-                this.recoverPersistedReplicaOperationMutation(operation, errorResult),
-            },
-            {
-              sql: SQL.INSERT_OPERATION,
-              params: [
-                operation.operationId,
-                operation.type,
-                operation.partitionId,
-                operation.replicaId,
-                operation.sourceNodeId,
-                operation.targetNodeId,
-                operation.status,
-                operation.workflowStep,
-                operation.createdAt,
-                operation.updatedAt,
-                operation.completedAt,
-                operation.errorMessage,
-                JSON.stringify(operation.stepsHistory),
-                operation.entityType,
-                operation.entityId,
-              ],
-            },
-          );
-          if (!result.success) {
-            const recoveredPersistedMutation = await this.recoverPersistedReplicaOperationMutation(
-              operation,
-              result,
+          const result =
+            await this.executeReplicaOperationGatewayMutationWithRetry(
+              {
+                operation: CONTROL_PLANE_MUTATION_OPERATION.INSERT,
+                tableName: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+                row: this.buildReplicaOperationRow(operation),
+                owner: REPLICA_OPERATION_OWNER_NAME,
+              },
+              {
+                ownerId: operation.operationId,
+                onRetryableFailure: (errorResult) =>
+                  this.recoverPersistedReplicaOperationMutation(
+                    operation,
+                    errorResult,
+                  ),
+              },
+              {
+                sql: SQL.INSERT_OPERATION,
+                params: [
+                  operation.operationId,
+                  operation.type,
+                  operation.partitionId,
+                  operation.replicaId,
+                  operation.sourceNodeId,
+                  operation.targetNodeId,
+                  operation.status,
+                  operation.workflowStep,
+                  operation.createdAt,
+                  operation.updatedAt,
+                  operation.completedAt,
+                  operation.errorMessage,
+                  JSON.stringify(operation.stepsHistory),
+                  operation.entityType,
+                  operation.entityId,
+                ],
+              },
             );
+          if (!result.success) {
+            const recoveredPersistedMutation =
+              await this.recoverPersistedReplicaOperationMutation(
+                operation,
+                result,
+              );
             if (!recoveredPersistedMutation) {
               const persistError = this.buildOperationPersistError(result);
               this.logger.error(REBALANCE_COORDINATOR_LOG_MSG.PERSIST_FAILED, {
@@ -110,13 +118,16 @@ function assignReplicaOperationRepositoryMutationMethods(ReplicaOperationReposit
           this.recordOwnerPersistedTransitionVisibilityWitness(operation);
           let visibility = null;
           try {
-            visibility = await this.confirmReplicaOperationPersistence(operation);
+            visibility =
+              await this.confirmReplicaOperationPersistence(operation);
           } finally {
             if (
               visibility?.confirmationState !==
               REPLICA_OPERATION_VISIBILITY_CONFIRMATION_STATE.DEFERRED
             ) {
-              this.clearOwnerPersistedTransitionVisibilityWitness(operation.operationId);
+              this.clearOwnerPersistedTransitionVisibilityWitness(
+                operation.operationId,
+              );
             }
           }
           this.syncIncompleteOperationObservation(operation);
@@ -127,26 +138,29 @@ function assignReplicaOperationRepositoryMutationMethods(ReplicaOperationReposit
       );
     }
     /**
-   * Persist an operation update via SQL UPDATE.
-   * @param {object} operation
-   * @param {object} [options]
-   * @param {string} [options.sessionId]
-   * @param {boolean} [options.confirmPersistence]
-   * @param {string} [options.expectedWorkflowStep]
-   * @return {Promise<boolean>} True when a row changed or authoritative
-   *   confirmation already reflects the target state.
-   */
+     * Persist an operation update via SQL UPDATE.
+     * @param {object} operation
+     * @param {object} [options]
+     * @param {string} [options.sessionId]
+     * @param {boolean} [options.confirmPersistence]
+     * @param {string} [options.expectedWorkflowStep]
+     * @return {Promise<boolean>} True when a row changed or authoritative
+     *   confirmation already reflects the target state.
+     */
     async persistOperationUpdate(operation, options = {}) {
       const expectedWorkflowStep =
-      typeof options.expectedWorkflowStep === 'string' &&
-      options.expectedWorkflowStep.length > NUM.ZERO ?
-        options.expectedWorkflowStep :
-        null;
+        typeof options.expectedWorkflowStep === 'string' &&
+        options.expectedWorkflowStep.length > NUM.ZERO ?
+          options.expectedWorkflowStep :
+          null;
       const result = await this.executeReplicaOperationGatewayMutationWithRetry(
         {
           operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
           tableName: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
-          whereClause: this.buildReplicaOperationUpdateWhereClause(operation, expectedWorkflowStep),
+          whereClause: this.buildReplicaOperationUpdateWhereClause(
+            operation,
+            expectedWorkflowStep,
+          ),
           data: this.buildReplicaOperationUpdateData(operation),
           owner: REPLICA_OPERATION_OWNER_NAME,
         },
@@ -157,18 +171,27 @@ function assignReplicaOperationRepositoryMutationMethods(ReplicaOperationReposit
           disableSystemWriteSession: options.disableSystemWriteSession === true,
           mergePolicy: CONTROL_PLANE_MUTATION_MERGE_POLICY.REPLACE_PENDING,
           onRetryableFailure: (errorResult) =>
-            this.recoverPersistedReplicaOperationMutation(operation, errorResult),
+            this.recoverPersistedReplicaOperationMutation(
+              operation,
+              errorResult,
+            ),
         },
         {
-          sql: expectedWorkflowStep ? SQL.UPDATE_OPERATION_EXPECTING_STEP : SQL.UPDATE_OPERATION,
-          params: this.buildReplicaOperationUpdateParams(operation, expectedWorkflowStep),
+          sql: expectedWorkflowStep ?
+            SQL.UPDATE_OPERATION_EXPECTING_STEP :
+            SQL.UPDATE_OPERATION,
+          params: this.buildReplicaOperationUpdateParams(
+            operation,
+            expectedWorkflowStep,
+          ),
         },
       );
       if (!result.success) {
-        const recoveredPersistedMutation = await this.recoverPersistedReplicaOperationMutation(
-          operation,
-          result,
-        );
+        const recoveredPersistedMutation =
+          await this.recoverPersistedReplicaOperationMutation(
+            operation,
+            result,
+          );
         if (!recoveredPersistedMutation) {
           const persistError = this.buildOperationPersistError(result);
           this.logger.error(REBALANCE_COORDINATOR_LOG_MSG.PERSIST_FAILED, {
@@ -187,17 +210,17 @@ function assignReplicaOperationRepositoryMutationMethods(ReplicaOperationReposit
       const changeCount = this.extractMutationChangeCount(result);
       if (changeCount !== null && changeCount <= NUM.ZERO) {
         if (expectedWorkflowStep) {
-          const authoritativeOperation = await this.queryAuthoritativeOperationById(
-            operation.operationId,
-            {
-              authoritativeReadMode: CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
+          const authoritativeOperation =
+            await this.queryAuthoritativeOperationById(operation.operationId, {
+              authoritativeReadMode:
+                CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
               requireOwnerRpcRead: false,
-            },
-          );
-          const visibilitySatisfied = this.isReplicaOperationVisibilitySatisfied(
-            operation,
-            authoritativeOperation,
-          );
+            });
+          const visibilitySatisfied =
+            this.isReplicaOperationVisibilitySatisfied(
+              operation,
+              authoritativeOperation,
+            );
           if (visibilitySatisfied) {
             this.syncIncompleteOperationObservation(operation);
           }
@@ -218,23 +241,26 @@ function assignReplicaOperationRepositoryMutationMethods(ReplicaOperationReposit
           visibility?.confirmationState !==
           REPLICA_OPERATION_VISIBILITY_CONFIRMATION_STATE.DEFERRED
         ) {
-          this.clearOwnerPersistedTransitionVisibilityWitness(operation.operationId);
+          this.clearOwnerPersistedTransitionVisibilityWitness(
+            operation.operationId,
+          );
         }
       }
       this.syncIncompleteOperationObservation(operation);
       return true;
     }
     /**
-   * Confirm a persisted operation through authoritative reads and diagnose
-   * any cache lag as projection divergence.
-   * @param {object} operation
-   * @return {Promise<void>}
-   */
+     * Confirm a persisted operation through authoritative reads and diagnose
+     * any cache lag as projection divergence.
+     * @param {object} operation
+     * @return {Promise<void>}
+     */
     async confirmReplicaOperationPersistence(operation) {
       if (!operation?.operationId) {
         return null;
       }
-      const visibility = await this.confirmReplicaOperationVisibility(operation);
+      const visibility =
+        await this.confirmReplicaOperationVisibility(operation);
       if (
         visibility.confirmationState ===
         REPLICA_OPERATION_VISIBILITY_CONFIRMATION_STATE.DEFERRED
@@ -244,89 +270,107 @@ function assignReplicaOperationRepositoryMutationMethods(ReplicaOperationReposit
       if (!visibility.operation) {
         throw new Error(
           REPLICA_OPERATION_REPOSITORY_LITERAL.AUTHORITATIVE_REPLICA_OPERATION_NOT_CONFIRMED +
-          operation.operationId,
+            operation.operationId,
         );
       }
       this.emitReplicaOperationPersistenceDivergence(visibility.operation);
       return visibility;
     }
     /**
-   * Retryable/deferred mutation failures can still correspond to a durable
-   * authoritative row when the gateway accepted the write but surfaced a
-   * pressure-shaped completion outcome. Re-prove the final state through the
-   * canonical owner read before surfacing a hard failure.
-   * @param {object} operation
-   * @param {object|string} errorResult
-   * @return {Promise<boolean>}
-   * @private
-   */
+     * Retryable/deferred mutation failures can still correspond to a durable
+     * authoritative row when the gateway accepted the write but surfaced a
+     * pressure-shaped completion outcome. Re-prove the final state through the
+     * canonical owner read before surfacing a hard failure.
+     * @param {object} operation
+     * @param {object|string} errorResult
+     * @return {Promise<boolean>}
+     * @private
+     */
     shouldShortCircuitDeferredMutationRetry(errorResult) {
       return (
         errorResult?.deferRetry === true ||
-      errorResult?.firstFailedParticipant?.deferRetry === true ||
-      (Array.isArray(errorResult?.participantFailures) &&
-        errorResult.participantFailures.some((entry) => entry?.deferRetry === true))
+        errorResult?.firstFailedParticipant?.deferRetry === true ||
+        (Array.isArray(errorResult?.participantFailures) &&
+          errorResult.participantFailures.some(
+            (entry) => entry?.deferRetry === true,
+          ))
       );
     }
     /**
-   * Retryable/deferred mutation failures can still correspond to a durable
-   * authoritative row when the gateway accepted the write but surfaced a
-   * pressure-shaped completion outcome. Re-prove the final state through the
-   * canonical owner read before surfacing a hard failure.
-   * @param {object} operation
-   * @param {object|string} errorResult
-   * @return {Promise<boolean>}
-   * @private
-   */
+     * Retryable/deferred mutation failures can still correspond to a durable
+     * authoritative row when the gateway accepted the write but surfaced a
+     * pressure-shaped completion outcome. Re-prove the final state through the
+     * canonical owner read before surfacing a hard failure.
+     * @param {object} operation
+     * @param {object|string} errorResult
+     * @return {Promise<boolean>}
+     * @private
+     */
     async recoverPersistedReplicaOperationMutation(operation, errorResult) {
       if (
         !operation?.operationId ||
-      !this.isRetryableOperationPersistError(errorResult) ||
-      !this.shouldShortCircuitDeferredMutationRetry(errorResult)
+        !this.isRetryableOperationPersistError(errorResult) ||
+        !this.shouldShortCircuitDeferredMutationRetry(errorResult)
       ) {
         return false;
       }
-      const observation = await this.queryAuthoritativeOperationVisibilityObservation(
-        operation.operationId,
-        {
-          authoritativeReadMode: CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
-          requireOwnerRpcRead: false,
-          allowPriorityRecoveryDeferredVisibility: false,
-        },
-      );
-      if (!this.isReplicaOperationVisibilitySatisfied(operation, observation?.operation || null)) {
+      const observation =
+        await this.queryAuthoritativeOperationVisibilityObservation(
+          operation.operationId,
+          {
+            authoritativeReadMode:
+              CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
+            requireOwnerRpcRead: false,
+            allowPriorityRecoveryDeferredVisibility: false,
+          },
+        );
+      if (
+        !this.isReplicaOperationVisibilitySatisfied(
+          operation,
+          observation?.operation || null,
+        )
+      ) {
         return false;
       }
       this.emitReplicaOperationPersistenceDivergence(observation.operation);
       return true;
     }
     /**
-   * Confirm replica operation visibility through bounded authoritative reads.
-   * Cache propagation is eventually consistent under sustained control-plane
-   * load, so one missed cache observation must not be treated as a hard loss
-   * when the owner-local authoritative row is still progressing.
-   * @param {object} operation
-   * @return {Promise<object>}
-   * @private
-   */
+     * Confirm replica operation visibility through bounded authoritative reads.
+     * Cache propagation is eventually consistent under sustained control-plane
+     * load, so one missed cache observation must not be treated as a hard loss
+     * when the owner-local authoritative row is still progressing.
+     * @param {object} operation
+     * @return {Promise<object>}
+     * @private
+     */
     async confirmReplicaOperationVisibility(operation) {
       this.clearAuthoritativeOperationVisibilityOutcome();
-      const deadlineMs = Date.now() + this.replicaOperationAuthoritativeVisibilityTimeoutMs;
+      const deadlineMs =
+        Date.now() + this.replicaOperationAuthoritativeVisibilityTimeoutMs;
       let deferredOutcome = null;
       let sawVisibilityMismatch = false;
       while (true) {
-        const observation = await this.queryAuthoritativeOperationVisibilityObservation(
-          operation.operationId,
-          {
-            authoritativeReadMode: CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
-            allowPriorityRecoveryDeferredVisibility: true,
-            allowOwnerPersistedTransitionDeferredVisibility: true,
-            expectedOperation: operation,
-          },
-        );
-        if (this.isReplicaOperationVisibilitySatisfied(operation, observation.operation)) {
+        const observation =
+          await this.queryAuthoritativeOperationVisibilityObservation(
+            operation.operationId,
+            {
+              authoritativeReadMode:
+                CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
+              allowPriorityRecoveryDeferredVisibility: true,
+              allowOwnerPersistedTransitionDeferredVisibility: true,
+              expectedOperation: operation,
+            },
+          );
+        if (
+          this.isReplicaOperationVisibilitySatisfied(
+            operation,
+            observation.operation,
+          )
+        ) {
           return {
-            confirmationState: REPLICA_OPERATION_VISIBILITY_CONFIRMATION_STATE.CONFIRMED,
+            confirmationState:
+              REPLICA_OPERATION_VISIBILITY_CONFIRMATION_STATE.CONFIRMED,
             operation: observation.operation,
             deferredOutcome: null,
           };
@@ -344,13 +388,15 @@ function assignReplicaOperationRepositoryMutationMethods(ReplicaOperationReposit
               ...deferredOutcome,
             };
             return {
-              confirmationState: REPLICA_OPERATION_VISIBILITY_CONFIRMATION_STATE.DEFERRED,
+              confirmationState:
+                REPLICA_OPERATION_VISIBILITY_CONFIRMATION_STATE.DEFERRED,
               operation: null,
               deferredOutcome,
             };
           }
           return {
-            confirmationState: REPLICA_OPERATION_VISIBILITY_CONFIRMATION_STATE.MISSING,
+            confirmationState:
+              REPLICA_OPERATION_VISIBILITY_CONFIRMATION_STATE.MISSING,
             operation: null,
             deferredOutcome: null,
           };
@@ -362,72 +408,82 @@ function assignReplicaOperationRepositoryMutationMethods(ReplicaOperationReposit
     }
 
     /**
-   * @param {object} expectedOperation
-   * @param {object|null} observedOperation
-   * @return {boolean}
-   * @private
-   */
-    isReplicaOperationVisibilitySatisfied(expectedOperation, observedOperation) {
-      if (!observedOperation || observedOperation.operationId !== expectedOperation.operationId) {
+     * @param {object} expectedOperation
+     * @param {object|null} observedOperation
+     * @return {boolean}
+     * @private
+     */
+    isReplicaOperationVisibilitySatisfied(
+      expectedOperation,
+      observedOperation,
+    ) {
+      if (
+        !observedOperation ||
+        observedOperation.operationId !== expectedOperation.operationId
+      ) {
         return false;
       }
       if (
         expectedOperation.replicaId !== null &&
-      expectedOperation.replicaId !== undefined &&
-      observedOperation.replicaId !== expectedOperation.replicaId
+        expectedOperation.replicaId !== undefined &&
+        observedOperation.replicaId !== expectedOperation.replicaId
       ) {
         return false;
       }
       if (
         expectedOperation.workflowStep !== null &&
-      expectedOperation.workflowStep !== undefined &&
-      observedOperation.workflowStep !== expectedOperation.workflowStep
+        expectedOperation.workflowStep !== undefined &&
+        observedOperation.workflowStep !== expectedOperation.workflowStep
       ) {
         return false;
       }
       if (
         expectedOperation.status !== null &&
-      expectedOperation.status !== undefined &&
-      observedOperation.status !== expectedOperation.status
+        expectedOperation.status !== undefined &&
+        observedOperation.status !== expectedOperation.status
       ) {
         return false;
       }
       if (
         Number.isFinite(expectedOperation.updatedAt) &&
-      Number(observedOperation.updatedAt) < expectedOperation.updatedAt
+        Number(observedOperation.updatedAt) < expectedOperation.updatedAt
       ) {
         return false;
       }
       if (
         Number.isFinite(expectedOperation.completedAt) &&
-      Number(observedOperation.completedAt) < expectedOperation.completedAt
+        Number(observedOperation.completedAt) < expectedOperation.completedAt
       ) {
         return false;
       }
       return true;
     }
     /**
-   * Wait briefly before re-checking authoritative replica operation visibility.
-   * @param {number} delayMs
-   * @return {Promise<void>}
-   * @private
-   */
+     * Wait briefly before re-checking authoritative replica operation visibility.
+     * @param {number} delayMs
+     * @return {Promise<void>}
+     * @private
+     */
     async waitForReplicaOperationVisibilityRetry(delayMs) {
       await new Promise((resolve) => setTimeout(resolve, delayMs));
     }
     /**
-   * Emit divergence when the replica_operations cache lags the
-   * authoritative row after a confirmed write.
-   * @param {object} authoritativeOperation
-   * @return {void}
-   * @private
-   */
+     * Emit divergence when the replica_operations cache lags the
+     * authoritative row after a confirmed write.
+     * @param {object} authoritativeOperation
+     * @return {void}
+     * @private
+     */
     emitReplicaOperationPersistenceDivergence(authoritativeOperation) {
       if (!authoritativeOperation?.operationId) {
         return;
       }
-      const cachedRow = this.getReplicaOperationRowFromCache(authoritativeOperation.operationId);
-      const authoritativeValue = this.buildReplicaOperationDivergenceValue(authoritativeOperation);
+      const cachedRow = this.getReplicaOperationRowFromCache(
+        authoritativeOperation.operationId,
+      );
+      const authoritativeValue = this.buildReplicaOperationDivergenceValue(
+        authoritativeOperation,
+      );
       const cacheValue = cachedRow ?
         {
           operation_id: cachedRow.operation_id || null,
@@ -444,7 +500,9 @@ function assignReplicaOperationRepositoryMutationMethods(ReplicaOperationReposit
         divergentFields.push(...Object.keys(authoritativeValue));
       } else {
         for (const fieldName of Object.keys(authoritativeValue)) {
-          if ((cacheValue?.[fieldName] ?? null) !== authoritativeValue[fieldName]) {
+          if (
+            (cacheValue?.[fieldName] ?? null) !== authoritativeValue[fieldName]
+          ) {
             divergentFields.push(fieldName);
           }
         }
@@ -459,45 +517,59 @@ function assignReplicaOperationRepositoryMutationMethods(ReplicaOperationReposit
         divergenceType,
         tableName: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
         ownerComponent: COORDINATOR_OWNER_COMPONENT,
-        reconciliationReason: SQL_RECONCILIATION_REASON.RECOVERY_OPERATION_PERSIST_CONFIRMATION,
+        reconciliationReason:
+          SQL_RECONCILIATION_REASON.RECOVERY_OPERATION_PERSIST_CONFIRMATION,
         rowKey: authoritativeOperation.operationId,
         cacheValue,
         authoritativeValue,
         divergentFields,
       });
-      this.logger.warn(REBALANCE_COORDINATOR_LOG_MSG.READ_MODEL_DIVERGENCE, event);
+      this.logger.warn(
+        REBALANCE_COORDINATOR_LOG_MSG.READ_MODEL_DIVERGENCE,
+        event,
+      );
       if (this.emitter) {
-        this.emitter.emit(REBALANCE_COORDINATOR_EVENT.READ_MODEL_DIVERGENCE, event);
+        this.emitter.emit(
+          REBALANCE_COORDINATOR_EVENT.READ_MODEL_DIVERGENCE,
+          event,
+        );
       }
     }
     /**
-   * @param {object} operation
-   * @return {object}
-   * @private
-   */
+     * @param {object} operation
+     * @return {object}
+     * @private
+     */
     buildReplicaOperationDivergenceValue(operation) {
       return {
         operation_id: operation.operationId,
         replica_id: operation.replicaId ?? null,
         status: operation.status ?? null,
         workflow_step: operation.workflowStep ?? null,
-        updated_at: Number.isFinite(operation.updatedAt) ? operation.updatedAt : null,
-        completed_at: Number.isFinite(operation.completedAt) ? operation.completedAt : null,
+        updated_at: Number.isFinite(operation.updatedAt) ?
+          operation.updatedAt :
+          null,
+        completed_at: Number.isFinite(operation.completedAt) ?
+          operation.completedAt :
+          null,
         error_message: operation.errorMessage ?? null,
       };
     }
     /**
-   * Execute a mutation query with bounded retry on transient errors.
-   * @param {string} sql
-   * @param {Array} params
-   * @param {object} [options]
-   * @return {Promise<object>}
-   */
+     * Execute a mutation query with bounded retry on transient errors.
+     * @param {string} sql
+     * @param {Array} params
+     * @param {object} [options]
+     * @return {Promise<object>}
+     */
     async executeOperationMutationWithRetry(sql, params, options = {}) {
       const startedAt = Date.now();
       let retryAttempt = NUM.ZERO;
       while (true) {
-        const queryOptions = this.buildOperationMutationQueryOptions(options, retryAttempt);
+        const queryOptions = this.buildOperationMutationQueryOptions(
+          options,
+          retryAttempt,
+        );
         const result = await this.controlPlaneSystemTableGateway.executeQuery(
           sql,
           params,
@@ -517,27 +589,37 @@ function assignReplicaOperationRepositoryMutationMethods(ReplicaOperationReposit
         if (this.shouldRotateOperationMutationSessionOnRetry(result, options)) {
           retryAttempt += NUM.ONE;
         }
-        const waitMs = Math.min(this.resolveOperationMutationRetryDelayMs(result), remainingMs);
+        const waitMs = Math.min(
+          this.resolveOperationMutationRetryDelayMs(result),
+          remainingMs,
+        );
         await this.waitForOperationPersistRetry(waitMs);
       }
     }
     /**
-   * Execute one replica_operations mutation through the canonical gateway
-   * mutation ingress when available, falling back to raw query execution only
-   * for reduced test doubles that do not expose mutation helpers.
-   * @param {object} mutation
-   * @param {object} [options]
-   * @param {object} [fallback]
-   * @return {Promise<object>}
-   * @private
-   */
-    async executeReplicaOperationGatewayMutationWithRetry(mutation, options = {}, fallback = {}) {
+     * Execute one replica_operations mutation through the canonical gateway
+     * mutation ingress when available, falling back to raw query execution only
+     * for reduced test doubles that do not expose mutation helpers.
+     * @param {object} mutation
+     * @param {object} [options]
+     * @param {object} [fallback]
+     * @return {Promise<object>}
+     * @private
+     */
+    async executeReplicaOperationGatewayMutationWithRetry(
+      mutation,
+      options = {},
+      fallback = {},
+    ) {
       const startedAt = Date.now();
       let retryAttempt = NUM.ZERO;
       const shouldRetryDeferredCanonicalMutation =
-      this.canUseReplicaOperationMutationIngress(mutation?.operation);
+        this.canUseReplicaOperationMutationIngress(mutation?.operation);
       while (true) {
-        const queryOptions = this.buildOperationMutationQueryOptions(options, retryAttempt);
+        const queryOptions = this.buildOperationMutationQueryOptions(
+          options,
+          retryAttempt,
+        );
         const result = await this.executeReplicaOperationGatewayMutation(
           mutation,
           queryOptions,
@@ -547,15 +629,15 @@ function assignReplicaOperationRepositoryMutationMethods(ReplicaOperationReposit
           return result;
         }
         const recoveredAfterRetryableFailure =
-        typeof options?.onRetryableFailure === TYPEOF.FUNCTION ?
-          (await options.onRetryableFailure(result)) === true :
-          false;
+          typeof options?.onRetryableFailure === TYPEOF.FUNCTION ?
+            (await options.onRetryableFailure(result)) === true :
+            false;
         if (recoveredAfterRetryableFailure) {
           return {success: true, recoveredAfterRetryableFailure: true};
         }
         if (
           this.shouldShortCircuitDeferredMutationRetry(result) &&
-        !shouldRetryDeferredCanonicalMutation
+          !shouldRetryDeferredCanonicalMutation
         ) {
           return result;
         }
@@ -570,35 +652,45 @@ function assignReplicaOperationRepositoryMutationMethods(ReplicaOperationReposit
         if (this.shouldRotateOperationMutationSessionOnRetry(result, options)) {
           retryAttempt += NUM.ONE;
         }
-        const waitMs = Math.min(this.resolveOperationMutationRetryDelayMs(result), remainingMs);
+        const waitMs = Math.min(
+          this.resolveOperationMutationRetryDelayMs(result),
+          remainingMs,
+        );
         await this.waitForOperationPersistRetry(waitMs);
       }
     }
     /**
-   * @param {object} mutation
-   * @param {object} queryOptions
-   * @param {object} [fallback]
-   * @return {Promise<object>}
-   * @private
-   */
-    async executeReplicaOperationGatewayMutation(mutation, queryOptions, fallback = {}) {
+     * @param {object} mutation
+     * @param {object} queryOptions
+     * @param {object} [fallback]
+     * @return {Promise<object>}
+     * @private
+     */
+    async executeReplicaOperationGatewayMutation(
+      mutation,
+      queryOptions,
+      fallback = {},
+    ) {
       const gateway = this.controlPlaneSystemTableGateway;
-      const canUseCanonicalMutationIngress = this.canUseReplicaOperationMutationIngress(
-        mutation?.operation,
-      );
+      const canUseCanonicalMutationIngress =
+        this.canUseReplicaOperationMutationIngress(mutation?.operation);
       if (canUseCanonicalMutationIngress) {
         if (typeof gateway?.submitMutation === TYPEOF.FUNCTION) {
           return gateway.submitMutation(mutation, queryOptions);
         }
         if (
           mutation?.operation === CONTROL_PLANE_MUTATION_OPERATION.INSERT &&
-        typeof gateway?.insertSystemTableRow === TYPEOF.FUNCTION
+          typeof gateway?.insertSystemTableRow === TYPEOF.FUNCTION
         ) {
-          return gateway.insertSystemTableRow(mutation.tableName, mutation.row, queryOptions);
+          return gateway.insertSystemTableRow(
+            mutation.tableName,
+            mutation.row,
+            queryOptions,
+          );
         }
         if (
           mutation?.operation === CONTROL_PLANE_MUTATION_OPERATION.UPDATE &&
-        typeof gateway?.updateSystemTableRow === TYPEOF.FUNCTION
+          typeof gateway?.updateSystemTableRow === TYPEOF.FUNCTION
         ) {
           return gateway.updateSystemTableRow(
             mutation.tableName,
@@ -610,7 +702,7 @@ function assignReplicaOperationRepositoryMutationMethods(ReplicaOperationReposit
       }
       if (
         typeof gateway?.executeQuery === TYPEOF.FUNCTION &&
-      typeof fallback?.sql === TYPEOF.STRING
+        typeof fallback?.sql === TYPEOF.STRING
       ) {
         return gateway.executeQuery(
           fallback.sql,
@@ -619,34 +711,37 @@ function assignReplicaOperationRepositoryMutationMethods(ReplicaOperationReposit
         );
       }
       throw new Error(
-        REPLICA_OPERATION_REPOSITORY_LITERAL
-          .REPLICAOPERATIONREPOSITORY_REQUIRES_A_CONTROL_PLANE_MUTATION_INGRESS,
+        REPLICA_OPERATION_REPOSITORY_LITERAL.REPLICAOPERATIONREPOSITORY_REQUIRES_A_CONTROL_PLANE_MUTATION_INGRESS,
       );
     }
     /**
-   * @param {string} operationType
-   * @return {boolean}
-   * @private
-   */
+     * @param {string} operationType
+     * @return {boolean}
+     * @private
+     */
     canUseReplicaOperationMutationIngress(operationType) {
       const gateway = this.controlPlaneSystemTableGateway;
       const cdcIntegrationService =
-      typeof gateway?.resolveCdcIntegrationService === 'function' ?
-        gateway.resolveCdcIntegrationService() :
-        gateway?.cdcIntegrationService || null;
+        typeof gateway?.resolveCdcIntegrationService === 'function' ?
+          gateway.resolveCdcIntegrationService() :
+          gateway?.cdcIntegrationService || null;
       if (operationType === CONTROL_PLANE_MUTATION_OPERATION.INSERT) {
-        return typeof cdcIntegrationService?.insertSystemTableRow === TYPEOF.FUNCTION;
+        return (
+          typeof cdcIntegrationService?.insertSystemTableRow === TYPEOF.FUNCTION
+        );
       }
       if (operationType === CONTROL_PLANE_MUTATION_OPERATION.UPDATE) {
-        return typeof cdcIntegrationService?.updateSystemTableRow === TYPEOF.FUNCTION;
+        return (
+          typeof cdcIntegrationService?.updateSystemTableRow === TYPEOF.FUNCTION
+        );
       }
       return false;
     }
     /**
-   * Check whether a persist error is retryable.
-   * @param {object|string} errorResult
-   * @return {boolean}
-   */
+     * Check whether a persist error is retryable.
+     * @param {object|string} errorResult
+     * @return {boolean}
+     */
     isRetryableOperationPersistError(errorResult) {
       if (isRetryableControlPlaneError(errorResult)) {
         return true;
@@ -654,24 +749,24 @@ function assignReplicaOperationRepositoryMutationMethods(ReplicaOperationReposit
       const errorMessage = this.getOperationPersistErrorMessage(errorResult);
       return (
         typeof errorMessage === TYPEOF.STRING &&
-      (errorMessage.includes(ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE) ||
-        errorMessage.includes(ERRORS.PARTITION_SERVICE_NOT_FOUND) ||
-        RETRYABLE_OPERATION_PERSIST_ERROR_FRAGMENTS.some((fragment) =>
-          errorMessage.includes(fragment),
-        ) ||
-        isRetryableWorkflowParticipantLookupErrorMessage(errorMessage) ||
-        RETRYABLE_OPERATION_PERSIST_ERROR_MESSAGES.includes(errorMessage) ||
-        RETRYABLE_OPERATION_PERSIST_ERROR_PREFIXES.some((prefix) =>
-          errorMessage.startsWith(prefix),
-        ))
+        (errorMessage.includes(ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE) ||
+          errorMessage.includes(ERRORS.PARTITION_SERVICE_NOT_FOUND) ||
+          RETRYABLE_OPERATION_PERSIST_ERROR_FRAGMENTS.some((fragment) =>
+            errorMessage.includes(fragment),
+          ) ||
+          isRetryableWorkflowParticipantLookupErrorMessage(errorMessage) ||
+          RETRYABLE_OPERATION_PERSIST_ERROR_MESSAGES.includes(errorMessage) ||
+          RETRYABLE_OPERATION_PERSIST_ERROR_PREFIXES.some((prefix) =>
+            errorMessage.startsWith(prefix),
+          ))
       );
     }
     /**
-   * Normalize one operation persist error message for retry classification.
-   * @param {object|string} errorResult
-   * @return {string}
-   * @private
-   */
+     * Normalize one operation persist error message for retry classification.
+     * @param {object|string} errorResult
+     * @return {string}
+     * @private
+     */
     getOperationPersistErrorMessage(errorResult) {
       return typeof errorResult === TYPEOF.STRING ?
         errorResult :
@@ -682,35 +777,40 @@ function assignReplicaOperationRepositoryMutationMethods(ReplicaOperationReposit
             REPLICA_OPERATION_REPOSITORY_LITERAL.VALUE;
     }
     /**
-   * Preserve structured retry metadata when surfacing one failed mutation as
-   * an exception so owner-lane retry classification still sees pressure hints.
-   * @param {object|string|Error} errorResult
-   * @param {string} [fallbackMessage]
-   * @return {Error}
-   * @private
-   */
+     * Preserve structured retry metadata when surfacing one failed mutation as
+     * an exception so owner-lane retry classification still sees pressure hints.
+     * @param {object|string|Error} errorResult
+     * @param {string} [fallbackMessage]
+     * @return {Error}
+     * @private
+     */
     buildOperationPersistError(
       errorResult,
       fallbackMessage = REBALANCE_COORDINATOR_LOG_MSG.PERSIST_FAILED,
     ) {
-      const retryablePersistError = this.isRetryableOperationPersistError(errorResult);
+      const retryablePersistError =
+        this.isRetryableOperationPersistError(errorResult);
       const derivedRetryAfterMs = retryablePersistError ?
         this.resolveOperationMutationRetryDelayMs(errorResult) :
         NUM.ZERO;
       const retryAfterMs = getControlPlaneRetryAfterMs(errorResult);
       const nextRetryAfterMs =
-      retryAfterMs > NUM.ZERO ?
-        retryAfterMs :
-        derivedRetryAfterMs > NUM.ZERO ?
-          derivedRetryAfterMs :
-          NUM.ZERO;
+        retryAfterMs > NUM.ZERO ?
+          retryAfterMs :
+          derivedRetryAfterMs > NUM.ZERO ?
+            derivedRetryAfterMs :
+            NUM.ZERO;
       const deferRetry =
-      errorResult?.deferRetry === true ||
-      errorResult?.firstFailedParticipant?.deferRetry === true ||
-      (Array.isArray(errorResult?.participantFailures) &&
-        errorResult.participantFailures.some((entry) => entry?.deferRetry === true)) ||
-      retryablePersistError;
-      const error = new Error(this.getOperationPersistErrorMessage(errorResult) || fallbackMessage);
+        errorResult?.deferRetry === true ||
+        errorResult?.firstFailedParticipant?.deferRetry === true ||
+        (Array.isArray(errorResult?.participantFailures) &&
+          errorResult.participantFailures.some(
+            (entry) => entry?.deferRetry === true,
+          )) ||
+        retryablePersistError;
+      const error = new Error(
+        this.getOperationPersistErrorMessage(errorResult) || fallbackMessage,
+      );
       const errorCode = getControlPlaneErrorCode(errorResult);
       if (typeof errorCode === TYPEOF.STRING && errorCode.length > NUM.ZERO) {
         error.code = errorCode;
@@ -724,24 +824,24 @@ function assignReplicaOperationRepositoryMutationMethods(ReplicaOperationReposit
       }
       if (
         typeof errorResult?.reasonCode === TYPEOF.STRING &&
-      errorResult.reasonCode.length > NUM.ZERO
+        errorResult.reasonCode.length > NUM.ZERO
       ) {
         error.reasonCode = errorResult.reasonCode;
       }
       if (
         typeof errorResult?.participationKind === TYPEOF.STRING &&
-      errorResult.participationKind.length > NUM.ZERO
+        errorResult.participationKind.length > NUM.ZERO
       ) {
         error.participationKind = errorResult.participationKind;
       }
       if (
         typeof errorResult?.tableName === TYPEOF.STRING &&
-      errorResult.tableName.length > NUM.ZERO
+        errorResult.tableName.length > NUM.ZERO
       ) {
         error.tableName = errorResult.tableName;
       }
       const {participantFailures, firstFailedParticipant} =
-      cloneControlPlaneFailureParticipants(errorResult);
+        cloneControlPlaneFailureParticipants(errorResult);
       if (participantFailures.length > NUM.ZERO) {
         error.participantFailures = participantFailures;
       }
@@ -750,17 +850,20 @@ function assignReplicaOperationRepositoryMutationMethods(ReplicaOperationReposit
       }
       if (
         typeof errorResult?.pressureAction === TYPEOF.STRING &&
-      errorResult.pressureAction.length > NUM.ZERO
+        errorResult.pressureAction.length > NUM.ZERO
       ) {
         error.pressureAction = errorResult.pressureAction;
       }
       if (
         typeof errorResult?.pressureReason === TYPEOF.STRING &&
-      errorResult.pressureReason.length > NUM.ZERO
+        errorResult.pressureReason.length > NUM.ZERO
       ) {
         error.pressureReason = errorResult.pressureReason;
       }
-      if (typeof errorResult?.outcome === TYPEOF.STRING && errorResult.outcome.length > NUM.ZERO) {
+      if (
+        typeof errorResult?.outcome === TYPEOF.STRING &&
+        errorResult.outcome.length > NUM.ZERO
+      ) {
         error.outcome = errorResult.outcome;
       }
       if (errorResult?.cause && !error.cause) {
@@ -769,155 +872,181 @@ function assignReplicaOperationRepositoryMutationMethods(ReplicaOperationReposit
       return error;
     }
     /**
-   * Check whether a persist failure is a partition transaction contention.
-   * @param {object|string} errorResult
-   * @return {boolean}
-   * @private
-   */
+     * Check whether a persist failure is a partition transaction contention.
+     * @param {object|string} errorResult
+     * @return {boolean}
+     * @private
+     */
     isOperationMutationPartitionContention(errorResult) {
       return (
         this.getOperationPersistErrorMessage(errorResult) ===
-      PARTITION_SERVICE_ERROR_MSG.TRANSACTION_ALREADY_ACTIVE
+        PARTITION_SERVICE_ERROR_MSG.TRANSACTION_ALREADY_ACTIVE
       );
     }
     /**
-   * @param {object|string} errorResult
-   * @param {string} errorMessage
-   * @return {boolean}
-   * @private
-   */
+     * @param {object|string} errorResult
+     * @param {string} errorMessage
+     * @return {boolean}
+     * @private
+     */
     hasOperationMutationParticipantFailureEvidence(errorResult, errorMessage) {
       return (
         (Array.isArray(errorResult?.participantFailures) &&
-        errorResult.participantFailures.length > NUM.ZERO) ||
-      (errorResult?.firstFailedParticipant &&
-        typeof errorResult.firstFailedParticipant === REPLICA_OPERATION_REPOSITORY_LITERAL.OBJECT) ||
-      errorMessage.includes(QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE)
+          errorResult.participantFailures.length > NUM.ZERO) ||
+        (errorResult?.firstFailedParticipant &&
+          typeof errorResult.firstFailedParticipant ===
+            REPLICA_OPERATION_REPOSITORY_LITERAL.OBJECT) ||
+        errorMessage.includes(QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE)
       );
     }
     /**
-   * Route-shaped retry failures should rotate repository-owned sessions so the
-   * next attempt can re-resolve leader/service routing instead of inheriting a
-   * stale write affinity from the first failed attempt.
-   * @param {object|string} errorResult
-   * @return {boolean}
-   * @private
-   */
+     * Route-shaped retry failures should rotate repository-owned sessions so the
+     * next attempt can re-resolve leader/service routing instead of inheriting a
+     * stale write affinity from the first failed attempt.
+     * @param {object|string} errorResult
+     * @return {boolean}
+     * @private
+     */
     isOperationMutationRouteRepairCandidate(errorResult) {
       if (!this.isRetryableOperationPersistError(errorResult)) {
         return false;
       }
       const errorMessage = this.getOperationPersistErrorMessage(errorResult);
-      if (typeof errorMessage !== TYPEOF.STRING || errorMessage.length <= NUM.ZERO) {
+      if (
+        typeof errorMessage !== TYPEOF.STRING ||
+        errorMessage.length <= NUM.ZERO
+      ) {
         return hasControlPlaneMutationRoutingGapFailureSignature(errorResult);
       }
       return (
         hasControlPlaneMutationRoutingGapFailureSignature(errorResult) ||
-      errorMessage.includes(ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE) ||
-      errorMessage.includes(ERRORS.PARTITION_SERVICE_NOT_FOUND) ||
-      RETRYABLE_OPERATION_PERSIST_ERROR_FRAGMENTS.some((fragment) =>
-        errorMessage.includes(fragment),
-      ) ||
-      errorMessage.includes(TRANSPORT_ERROR_MSG.MESSAGE_TIMEOUT) ||
-      errorMessage.includes(ROUTER_ERROR_MSG.PENDING_RESPONSE_TIMEOUT) ||
-      isRetryableWorkflowParticipantLookupErrorMessage(errorMessage) ||
-      this.hasOperationMutationParticipantFailureEvidence(errorResult, errorMessage)
+        errorMessage.includes(ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE) ||
+        errorMessage.includes(ERRORS.PARTITION_SERVICE_NOT_FOUND) ||
+        RETRYABLE_OPERATION_PERSIST_ERROR_FRAGMENTS.some((fragment) =>
+          errorMessage.includes(fragment),
+        ) ||
+        errorMessage.includes(TRANSPORT_ERROR_MSG.MESSAGE_TIMEOUT) ||
+        errorMessage.includes(ROUTER_ERROR_MSG.PENDING_RESPONSE_TIMEOUT) ||
+        isRetryableWorkflowParticipantLookupErrorMessage(errorMessage) ||
+        this.hasOperationMutationParticipantFailureEvidence(
+          errorResult,
+          errorMessage,
+        )
       );
     }
     /**
-   * @param {object|string} errorResult
-   * @param {object} [options]
-   * @return {{state: string}}
-   * @private
-   */
+     * @param {object|string} errorResult
+     * @param {object} [options]
+     * @return {{state: string}}
+     * @private
+     */
     resolveOperationMutationSessionRetryDecision(errorResult, options = {}) {
-      if (typeof options?.sessionId === TYPEOF.STRING && options.sessionId.length > NUM.ZERO) {
+      if (
+        typeof options?.sessionId === TYPEOF.STRING &&
+        options.sessionId.length > NUM.ZERO
+      ) {
         return {
-          state: OPERATION_MUTATION_SESSION_RETRY_DECISION.RETAIN_EXISTING_SESSION,
+          state:
+            OPERATION_MUTATION_SESSION_RETRY_DECISION.RETAIN_EXISTING_SESSION,
         };
       }
       if (
         this.isOperationMutationPartitionContention(errorResult) ||
-      this.isOperationMutationRouteRepairCandidate(errorResult)
+        this.isOperationMutationRouteRepairCandidate(errorResult)
       ) {
         return {
-          state: OPERATION_MUTATION_SESSION_RETRY_DECISION.ROTATE_IMPLICIT_SESSION,
+          state:
+            OPERATION_MUTATION_SESSION_RETRY_DECISION.ROTATE_IMPLICIT_SESSION,
         };
       }
       return {
-        state: OPERATION_MUTATION_SESSION_RETRY_DECISION.RETAIN_EXISTING_SESSION,
+        state:
+          OPERATION_MUTATION_SESSION_RETRY_DECISION.RETAIN_EXISTING_SESSION,
       };
     }
     /**
-   * Rotate repository-generated retry sessions after route-shaped or
-   * transaction-contention failures. Explicit transition-owned sessions stay
-   * stable so the enclosing atomic boundary can decide when to rotate them.
-   * @param {object|string} errorResult
-   * @param {object} [options]
-   * @return {boolean}
-   * @private
-   */
+     * Rotate repository-generated retry sessions after route-shaped or
+     * transaction-contention failures. Explicit transition-owned sessions stay
+     * stable so the enclosing atomic boundary can decide when to rotate them.
+     * @param {object|string} errorResult
+     * @param {object} [options]
+     * @return {boolean}
+     * @private
+     */
     shouldRotateOperationMutationSessionOnRetry(errorResult, options = {}) {
       return (
-        this.resolveOperationMutationSessionRetryDecision(errorResult, options).state ===
-      OPERATION_MUTATION_SESSION_RETRY_DECISION.ROTATE_IMPLICIT_SESSION
+        this.resolveOperationMutationSessionRetryDecision(errorResult, options)
+          .state ===
+        OPERATION_MUTATION_SESSION_RETRY_DECISION.ROTATE_IMPLICIT_SESSION
       );
     }
     /**
-   * Resolve the next retry delay for one failed replica_operations mutation.
-   * Transaction-contention retries add light jitter so concurrent recovery
-   * writers do not keep colliding in lockstep under restart pressure.
-   * @param {object|string} errorResult
-   * @return {number}
-   * @private
-   */
+     * Resolve the next retry delay for one failed replica_operations mutation.
+     * Transaction-contention retries add light jitter so concurrent recovery
+     * writers do not keep colliding in lockstep under restart pressure.
+     * @param {object|string} errorResult
+     * @return {number}
+     * @private
+     */
     resolveOperationMutationRetryDelayMs(errorResult) {
       const retryAfterMs = getControlPlaneRetryAfterMs(errorResult);
       const baseDelayMs =
-      Number.isFinite(retryAfterMs) && retryAfterMs > NUM.ZERO ?
-        Math.floor(retryAfterMs) :
-        OPERATION_PERSIST_RETRY_DELAY_MS;
+        Number.isFinite(retryAfterMs) && retryAfterMs > NUM.ZERO ?
+          Math.floor(retryAfterMs) :
+          OPERATION_PERSIST_RETRY_DELAY_MS;
       if (!this.isOperationMutationPartitionContention(errorResult)) {
         return baseDelayMs;
       }
-      const jitterCeilingMs = Math.max(NUM.ONE, Math.floor(baseDelayMs / NUM.TWO));
-      const boundedRandom = Math.max(NUM.ZERO, Math.min(NUM.ONE, this.random()));
+      const jitterCeilingMs = Math.max(
+        NUM.ONE,
+        Math.floor(baseDelayMs / NUM.TWO),
+      );
+      const boundedRandom = Math.max(
+        NUM.ZERO,
+        Math.min(NUM.ONE, this.random()),
+      );
       const jitterMs = Math.floor(boundedRandom * jitterCeilingMs);
       return baseDelayMs + jitterMs;
     }
     /**
-   * Wait before retrying a failed persist.
-   * @param {number} delayMs
-   * @return {Promise<void>}
-   */
+     * Wait before retrying a failed persist.
+     * @param {number} delayMs
+     * @return {Promise<void>}
+     */
     async waitForOperationPersistRetry(delayMs) {
       await new Promise((resolve) => setTimeout(resolve, delayMs));
     }
     /**
-   * Clamp replica_operations retry time to the narrower of the local retry
-   * window and any enclosing timeout budget.
-   * @param {number} elapsedMs
-   * @param {Object|null} timeoutBudget
-   * @return {number}
-   * @private
-   */
+     * Clamp replica_operations retry time to the narrower of the local retry
+     * window and any enclosing timeout budget.
+     * @param {number} elapsedMs
+     * @param {Object|null} timeoutBudget
+     * @return {number}
+     * @private
+     */
     resolveOperationMutationRemainingRetryMs(elapsedMs, timeoutBudget = null) {
       const localRemainingMs = OPERATION_PERSIST_RETRY_TIMEOUT_MS - elapsedMs;
-      if (!timeoutBudget || typeof timeoutBudget !== REPLICA_OPERATION_REPOSITORY_LITERAL.OBJECT) {
+      if (
+        !timeoutBudget ||
+        typeof timeoutBudget !== REPLICA_OPERATION_REPOSITORY_LITERAL.OBJECT
+      ) {
         return localRemainingMs;
       }
       const budgetRemainingMs = getRemainingBudgetMs(timeoutBudget);
       return Math.min(localRemainingMs, budgetRemainingMs);
     }
     /**
-   * Clamp one replica_operations mutation query timeout to the canonical owner
-   * retry window and any enclosing timeout budget.
-   * @param {Object|null} timeoutBudget
-   * @return {number}
-   * @private
-   */
+     * Clamp one replica_operations mutation query timeout to the canonical owner
+     * retry window and any enclosing timeout budget.
+     * @param {Object|null} timeoutBudget
+     * @return {number}
+     * @private
+     */
     resolveOperationMutationQueryTimeoutMs(timeoutBudget = null) {
-      if (!timeoutBudget || typeof timeoutBudget !== REPLICA_OPERATION_REPOSITORY_LITERAL.OBJECT) {
+      if (
+        !timeoutBudget ||
+        typeof timeoutBudget !== REPLICA_OPERATION_REPOSITORY_LITERAL.OBJECT
+      ) {
         return REPLICA_OPERATION_MUTATION_QUERY_TIMEOUT_MS;
       }
       const budgetRemainingMs = getRemainingBudgetMs(timeoutBudget);
@@ -926,63 +1055,81 @@ function assignReplicaOperationRepositoryMutationMethods(ReplicaOperationReposit
       }
       return Math.max(
         NUM.ONE,
-        Math.min(REPLICA_OPERATION_MUTATION_QUERY_TIMEOUT_MS, budgetRemainingMs),
+        Math.min(
+          REPLICA_OPERATION_MUTATION_QUERY_TIMEOUT_MS,
+          budgetRemainingMs,
+        ),
       );
     }
     /**
-   * Build query options for an operation mutation.
-   * @param {object} [options]
-   * @param {number} [retryAttempt=0]
-   * @return {object}
-   */
+     * Build query options for an operation mutation.
+     * @param {object} [options]
+     * @param {number} [retryAttempt=0]
+     * @return {object}
+     */
     buildOperationMutationQueryOptions(options = {}, retryAttempt = NUM.ZERO) {
       const timeoutBudget =
-      options.timeoutBudget &&
-      typeof options.timeoutBudget === REPLICA_OPERATION_REPOSITORY_LITERAL.OBJECT ?
-        options.timeoutBudget :
-        undefined;
+        options.timeoutBudget &&
+        typeof options.timeoutBudget ===
+          REPLICA_OPERATION_REPOSITORY_LITERAL.OBJECT ?
+          options.timeoutBudget :
+          undefined;
       const ownerId =
-      typeof options.ownerId === 'string' && options.ownerId.length > NUM.ZERO ?
-        options.ownerId :
-        null;
+        typeof options.ownerId === 'string' && options.ownerId.length > NUM.ZERO ?
+          options.ownerId :
+          null;
       const sessionId =
-      options.disableSystemWriteSession === true ?
-        null :
-        this.resolveOperationMutationSessionId(options, retryAttempt);
+        options.disableSystemWriteSession === true ?
+          null :
+          this.resolveOperationMutationSessionId(options, retryAttempt);
       return {
         ...CONTROL_PLANE_QUERY_OPTIONS,
-        timeoutMs: this.resolveOperationMutationQueryTimeoutMs(timeoutBudget || null),
+        timeoutMs: this.resolveOperationMutationQueryTimeoutMs(
+          timeoutBudget || null,
+        ),
         skipCacheWait: true,
         timeoutBudget,
-        ...(typeof sessionId === TYPEOF.STRING && sessionId.length > NUM.ZERO ? {sessionId} : {}),
+        ...(typeof sessionId === TYPEOF.STRING && sessionId.length > NUM.ZERO ?
+          {sessionId} :
+          {}),
         disableSystemWriteSession: options.disableSystemWriteSession === true,
         deliveryPriority: REPLICA_OPERATION_REPOSITORY_LITERAL.CRITICAL,
-        workloadClass: REPLICA_OPERATION_MUTATION_WORKLOAD_PROFILE.workloadClass,
+        workloadClass:
+          REPLICA_OPERATION_MUTATION_WORKLOAD_PROFILE.workloadClass,
         workClass:
-        REPLICA_OPERATION_MUTATION_WORKLOAD_PROFILE.workClass || PRESSURE_WORK_CLASS.CRITICAL,
-        allowPressureDefer: REPLICA_OPERATION_MUTATION_WORKLOAD_PROFILE.allowPressureDefer === true,
+          REPLICA_OPERATION_MUTATION_WORKLOAD_PROFILE.workClass ||
+          PRESSURE_WORK_CLASS.CRITICAL,
+        allowPressureDefer:
+          REPLICA_OPERATION_MUTATION_WORKLOAD_PROFILE.allowPressureDefer ===
+          true,
         allowPressureDegrade:
-        REPLICA_OPERATION_MUTATION_WORKLOAD_PROFILE.allowPressureDegrade === true,
-        mergePolicy: options.mergePolicy || CONTROL_PLANE_MUTATION_MERGE_POLICY.SINGLE_FLIGHT,
+          REPLICA_OPERATION_MUTATION_WORKLOAD_PROFILE.allowPressureDegrade ===
+          true,
+        mergePolicy:
+          options.mergePolicy ||
+          CONTROL_PLANE_MUTATION_MERGE_POLICY.SINGLE_FLIGHT,
         controlPlaneTableName: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
         controlPlaneOperationKind: REPLICA_OPERATION_REPOSITORY_LITERAL.WRITE,
         ...(ownerId ? {coalescingKey: `replica-operation:${ownerId}`} : {}),
       };
     }
     /**
-   * Resolve a session ID for an operation mutation.
-   * @param {object} [options]
-   * @param {number} [retryAttempt=0]
-   * @return {string}
-   */
+     * Resolve a session ID for an operation mutation.
+     * @param {object} [options]
+     * @param {number} [retryAttempt=0]
+     * @return {string}
+     */
     resolveOperationMutationSessionId(options = {}, retryAttempt = NUM.ZERO) {
-      if (typeof options.sessionId === TYPEOF.STRING && options.sessionId.length > NUM.ZERO) {
+      if (
+        typeof options.sessionId === TYPEOF.STRING &&
+        options.sessionId.length > NUM.ZERO
+      ) {
         return options.sessionId;
       }
       const ownerId =
-      typeof options.ownerId === 'string' && options.ownerId.length > NUM.ZERO ?
-        options.ownerId :
-        uuidv4();
+        typeof options.ownerId === 'string' && options.ownerId.length > NUM.ZERO ?
+          options.ownerId :
+          uuidv4();
       const baseSessionId = `${REBALANCER_SUBSYSTEM.COORDINATOR}:${ownerId}`;
       if (retryAttempt <= NUM.ZERO) {
         return baseSessionId;
@@ -990,24 +1137,24 @@ function assignReplicaOperationRepositoryMutationMethods(ReplicaOperationReposit
       return `${baseSessionId}:retry${retryAttempt}`;
     }
     /**
-   * Extract the change count from a mutation result.
-   * @param {object} result
-   * @return {number|null}
-   */
+     * Extract the change count from a mutation result.
+     * @param {object} result
+     * @return {number|null}
+     */
     extractMutationChangeCount(result) {
       const candidate = Number(
         result?.changes ??
-        result?.affectedRows ??
-        result?.partitionResult?.changes ??
-        result?.partitionResult?.affectedRows,
+          result?.affectedRows ??
+          result?.partitionResult?.changes ??
+          result?.partitionResult?.affectedRows,
       );
       return Number.isFinite(candidate) ? candidate : null;
     }
     /**
-   * @param {object} operation
-   * @return {object}
-   * @private
-   */
+     * @param {object} operation
+     * @return {object}
+     * @private
+     */
     buildReplicaOperationRow(operation) {
       return {
         operation_id: operation.operationId,
@@ -1028,10 +1175,10 @@ function assignReplicaOperationRepositoryMutationMethods(ReplicaOperationReposit
       };
     }
     /**
-   * @param {object} operation
-   * @return {object}
-   * @private
-   */
+     * @param {object} operation
+     * @return {object}
+     * @private
+     */
     buildReplicaOperationUpdateData(operation) {
       return {
         type: operation.type,
@@ -1050,24 +1197,30 @@ function assignReplicaOperationRepositoryMutationMethods(ReplicaOperationReposit
       };
     }
     /**
-   * @param {object} operation
-   * @param {string|null} expectedWorkflowStep
-   * @return {object}
-   * @private
-   */
-    buildReplicaOperationUpdateWhereClause(operation, expectedWorkflowStep = null) {
+     * @param {object} operation
+     * @param {string|null} expectedWorkflowStep
+     * @return {object}
+     * @private
+     */
+    buildReplicaOperationUpdateWhereClause(
+      operation,
+      expectedWorkflowStep = null,
+    ) {
       const whereClause = {operation_id: operation.operationId};
-      if (typeof expectedWorkflowStep === TYPEOF.STRING && expectedWorkflowStep.length > NUM.ZERO) {
+      if (
+        typeof expectedWorkflowStep === TYPEOF.STRING &&
+        expectedWorkflowStep.length > NUM.ZERO
+      ) {
         whereClause.workflow_step = expectedWorkflowStep;
       }
       return whereClause;
     }
     /**
-   * @param {object} operation
-   * @param {string|null} expectedWorkflowStep
-   * @return {Array}
-   * @private
-   */
+     * @param {object} operation
+     * @param {string|null} expectedWorkflowStep
+     * @return {Array}
+     * @private
+     */
     buildReplicaOperationUpdateParams(operation, expectedWorkflowStep = null) {
       const params = [
         operation.status,
@@ -1079,20 +1232,25 @@ function assignReplicaOperationRepositoryMutationMethods(ReplicaOperationReposit
         operation.replicaId,
         operation.operationId,
       ];
-      if (typeof expectedWorkflowStep === TYPEOF.STRING && expectedWorkflowStep.length > NUM.ZERO) {
+      if (
+        typeof expectedWorkflowStep === TYPEOF.STRING &&
+        expectedWorkflowStep.length > NUM.ZERO
+      ) {
         params.push(expectedWorkflowStep);
       }
       return params;
     }
     /**
-   * Serialize replica operation transitions through a queue.
-   * @param {Function} executionFactory
-   * @return {Promise}
-   */
+     * Serialize replica operation transitions through a queue.
+     * @param {Function} executionFactory
+     * @return {Promise}
+     */
     runReplicaOperationTransitionExclusive(executionFactory, options = {}) {
       const lane = this.resolveReplicaOperationTransitionLane(options);
       const activeQueue = this.getReplicaOperationTransitionQueue(lane);
-      const queuedExecution = activeQueue.catch(() => {}).then(async () => executionFactory());
+      const queuedExecution = activeQueue
+        .catch(() => {})
+        .then(async () => executionFactory());
       this.replicaOperationTransitionQueues.set(
         lane,
         queuedExecution.catch(() => {}),
@@ -1100,14 +1258,14 @@ function assignReplicaOperationRepositoryMutationMethods(ReplicaOperationReposit
       return queuedExecution;
     }
     /**
-   * Resolve the transition lane for one replica operation mutation.
-   * Priority control-plane partitions keep a dedicated progression lane so
-   * unrelated ordinary replica_operations work cannot head-of-line block
-   * the partitions that publish and repair control-plane recovery itself.
-   * @param {Object} [options={}]
-   * @return {string}
-   * @private
-   */
+     * Resolve the transition lane for one replica operation mutation.
+     * Priority control-plane partitions keep a dedicated progression lane so
+     * unrelated ordinary replica_operations work cannot head-of-line block
+     * the partitions that publish and repair control-plane recovery itself.
+     * @param {Object} [options={}]
+     * @return {string}
+     * @private
+     */
     resolveReplicaOperationTransitionLane(options = {}) {
       const explicitLane = this.normalizeReplicaOperationTransitionLane(
         options.transitionLane || options.lane,
@@ -1116,16 +1274,18 @@ function assignReplicaOperationRepositoryMutationMethods(ReplicaOperationReposit
         return explicitLane;
       }
       const partitionClassificationInput =
-      this.buildReplicaOperationTransitionPartitionClassificationInput(options);
+        this.buildReplicaOperationTransitionPartitionClassificationInput(
+          options,
+        );
       return isPriorityControlPlanePartition(partitionClassificationInput) ?
         REPLICA_OPERATION_TRANSITION_LANE.PRIORITY_RECOVERY :
         REPLICA_OPERATION_TRANSITION_LANE.DEFAULT;
     }
     /**
-   * @param {string|null|undefined} lane
-   * @return {string|null}
-   * @private
-   */
+     * @param {string|null|undefined} lane
+     * @return {string|null}
+     * @private
+     */
     normalizeReplicaOperationTransitionLane(lane) {
       return lane === REPLICA_OPERATION_TRANSITION_LANE.PRIORITY_RECOVERY ?
         REPLICA_OPERATION_TRANSITION_LANE.PRIORITY_RECOVERY :
@@ -1134,53 +1294,58 @@ function assignReplicaOperationRepositoryMutationMethods(ReplicaOperationReposit
           null;
     }
     /**
-   * @param {Object} [options={}]
-   * @return {Object}
-   * @private
-   */
+     * @param {Object} [options={}]
+     * @return {Object}
+     * @private
+     */
     buildReplicaOperationTransitionPartitionClassificationInput(options = {}) {
       const operation = options.operation;
       const partitionRow =
-      options.partitionRow && typeof options.partitionRow === 'object' ?
-        options.partitionRow :
-        operation?.partitionRow && typeof operation.partitionRow === 'object' ?
-          operation.partitionRow :
-          null;
+        options.partitionRow && typeof options.partitionRow === 'object' ?
+          options.partitionRow :
+          operation?.partitionRow &&
+              typeof operation.partitionRow === 'object' ?
+            operation.partitionRow :
+            null;
       const partitionIdCandidate =
-      options.partitionId ??
-      operation?.partitionId ??
-      operation?.partition_id ??
-      partitionRow?.partition_id ??
-      partitionRow?.partitionId ??
-      null;
+        options.partitionId ??
+        operation?.partitionId ??
+        operation?.partition_id ??
+        partitionRow?.partition_id ??
+        partitionRow?.partitionId ??
+        null;
       const partitionId =
-      typeof partitionIdCandidate === 'string' ? partitionIdCandidate.trim() : null;
+        typeof partitionIdCandidate === 'string' ?
+          partitionIdCandidate.trim() :
+          null;
       return {
-        partitionId: partitionId && partitionId.length > NUM.ZERO ? partitionId : null,
+        partitionId:
+          partitionId && partitionId.length > NUM.ZERO ? partitionId : null,
         partitionRow,
       };
     }
     /**
-   * @param {string} lane
-   * @return {Promise<*>}
-   * @private
-   */
+     * @param {string} lane
+     * @return {Promise<*>}
+     * @private
+     */
     getReplicaOperationTransitionQueue(lane) {
       const normalizedLane =
-      this.normalizeReplicaOperationTransitionLane(lane) ||
-      REPLICA_OPERATION_TRANSITION_LANE.DEFAULT;
+        this.normalizeReplicaOperationTransitionLane(lane) ||
+        REPLICA_OPERATION_TRANSITION_LANE.DEFAULT;
       if (!this.replicaOperationTransitionQueues.has(normalizedLane)) {
-        this.replicaOperationTransitionQueues.set(normalizedLane, Promise.resolve());
+        this.replicaOperationTransitionQueues.set(
+          normalizedLane,
+          Promise.resolve(),
+        );
       }
       return this.replicaOperationTransitionQueues.get(normalizedLane);
     }
   }
 
-  for (
-    const methodName of Object.getOwnPropertyNames(
-      ReplicaOperationRepositoryMutationMethods.prototype,
-    )
-  ) {
+  for (const methodName of Object.getOwnPropertyNames(
+    ReplicaOperationRepositoryMutationMethods.prototype,
+  )) {
     if (methodName === 'constructor') {
       continue;
     }

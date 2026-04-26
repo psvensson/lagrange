@@ -62,7 +62,7 @@ test('isCapabilityAllowed - null allowlist', (t) => {
 
 test('enforceCapabilityPolicy - all allowed', (t) => {
   const result = enforceCapabilityPolicy(
-    makeManifest(), makePolicy()
+    makeManifest(), makePolicy(),
   );
   t.ok(result.valid);
   t.equal(result.errors.length, 0);
@@ -76,7 +76,7 @@ test('enforceCapabilityPolicy - partial denial', (t) => {
     allowedCapabilities: ['sql.read'],
   });
   const result = enforceCapabilityPolicy(
-    makeManifest(), policy
+    makeManifest(), policy,
   );
   t.notOk(result.valid);
   t.equal(result.allowed.length, 1);
@@ -119,7 +119,7 @@ test('buildCapabilityImports - injects allowed only', (t) => {
     'net.http': {exec: () => {}},
   };
   const result = buildCapabilityImports(
-    makeManifest(), makePolicy(), modules
+    makeManifest(), makePolicy(), modules,
   );
   t.equal(Object.keys(result.imports).length, 3);
   t.ok('sql.read' in result.imports);
@@ -139,7 +139,7 @@ test('buildCapabilityImports - denied caps produce errors', (t) => {
     'sql.write': {exec: () => {}},
   };
   const result = buildCapabilityImports(
-    makeManifest(), policy, modules
+    makeManifest(), policy, modules,
   );
   t.equal(Object.keys(result.imports).length, 1);
   t.ok('sql.read' in result.imports);
@@ -156,7 +156,7 @@ test('buildCapabilityImports - null manifest', (t) => {
 
 test('buildCapabilityImports - null policy', (t) => {
   const result = buildCapabilityImports(
-    makeManifest(), null, {}
+    makeManifest(), null, {},
   );
   t.ok(result.errors.includes(ERR.POLICY_REQUIRED));
   t.end();
@@ -164,7 +164,7 @@ test('buildCapabilityImports - null policy', (t) => {
 
 test('buildCapabilityImports - missing module impl', (t) => {
   const result = buildCapabilityImports(
-    makeManifest(), makePolicy(), {}
+    makeManifest(), makePolicy(), {},
   );
   t.equal(Object.keys(result.imports).length, 0);
   t.equal(result.errors.length, 0);
@@ -176,7 +176,7 @@ test('buildCapabilityImports - missing module impl', (t) => {
 test('checkUndeclaredCapabilities - all declared', (t) => {
   const manifest = makeManifest();
   const result = checkUndeclaredCapabilities(
-    ['sql.read', 'kv.session'], manifest
+    ['sql.read', 'kv.session'], manifest,
   );
   t.ok(result.valid);
   t.equal(result.undeclared.length, 0);
@@ -186,7 +186,7 @@ test('checkUndeclaredCapabilities - all declared', (t) => {
 test('checkUndeclaredCapabilities - undeclared cap', (t) => {
   const manifest = makeManifest();
   const result = checkUndeclaredCapabilities(
-    ['sql.read', 'net.http'], manifest
+    ['sql.read', 'net.http'], manifest,
   );
   t.notOk(result.valid);
   t.equal(result.undeclared.length, 1);
@@ -231,7 +231,7 @@ test('enforceCapabilityPolicy - all denied', (t) => {
 
 test('buildCapabilityImports - null availableModules', (t) => {
   const result = buildCapabilityImports(
-    makeManifest(), makePolicy(), null
+    makeManifest(), makePolicy(), null,
   );
   t.equal(Object.keys(result.imports).length, 0);
   t.equal(result.errors.length, 0);
@@ -241,7 +241,7 @@ test('buildCapabilityImports - null availableModules', (t) => {
 test('checkUndeclaredCapabilities - all undeclared', (t) => {
   const manifest = makeManifest({capabilities: []});
   const result = checkUndeclaredCapabilities(
-    ['net.http', 'fs.write'], manifest
+    ['net.http', 'fs.write'], manifest,
   );
   t.notOk(result.valid);
   t.equal(result.undeclared.length, 2);
@@ -267,7 +267,7 @@ test('PBT: allowed capabilities pass policy', (t) => {
           allowedCapabilities: capPool,
         });
         const result = enforceCapabilityPolicy(
-          manifest, policy
+          manifest, policy,
         );
         return result.valid === true &&
           result.denied.length === 0 &&
@@ -298,7 +298,7 @@ test('PBT: denied capabilities rejected by policy', (t) => {
           allowedCapabilities: ['sql.read'],
         });
         const result = enforceCapabilityPolicy(
-          manifest, policy
+          manifest, policy,
         );
         return result.valid === false &&
           result.denied.length === deniedCaps.length;
@@ -334,7 +334,7 @@ test('PBT: buildCapabilityImports only injects allowed', (t) => {
           allowedCapabilities: allowedCaps,
         });
         const result = buildCapabilityImports(
-          manifest, policy, modules
+          manifest, policy, modules,
         );
         const importedKeys = Object.keys(result.imports);
         // Every imported cap must be both declared and allowed

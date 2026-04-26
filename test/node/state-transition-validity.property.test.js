@@ -137,15 +137,15 @@ test('Property 3: State Transition Validity', async (t) => {
           (fromState, toState) => {
             initializeTestDependencies();
 
-          const transitionOutcome = resolveNodeLifecycleTransitionOutcome(
-            fromState,
-            toState,
-          );
+            const transitionOutcome = resolveNodeLifecycleTransitionOutcome(
+              fromState,
+              toState,
+            );
 
-          if (transitionOutcome !== TransitionOutcome.INVALID) {
-            resetTestDependencies();
-            return true;
-          }
+            if (transitionOutcome !== TransitionOutcome.INVALID) {
+              resetTestDependencies();
+              return true;
+            }
 
             // Create state machine starting in fromState
             const sm = new NodeLifecycleStateMachine({

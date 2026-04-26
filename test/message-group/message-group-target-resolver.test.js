@@ -186,7 +186,7 @@ test('message-group target resolver avoids ambiguous same-node canonical leader 
       'mg-1-r2',
       'forward service should prefer the explicit leader over another replica on the same node',
     );
-  t.equal(
+    t.equal(
       leaderService?.[COLUMN.SERVICE_ID],
       'mg-1-r2',
       'leader service should prefer the explicit leader over another replica on the same node',

@@ -8,46 +8,61 @@
  */
 
 import {test} from '../../../../src/test-helpers/tap.js';
-import http from 'node:http';
 import assert from 'node:assert';
-import {promises as fs} from 'node:fs';
-import {resolve as resolvePath} from 'node:path';
-import fc from 'fast-check';
-import {validate as uuidValidate} from 'uuid';
-import {WebSocketServer} from 'ws';
 import {
-  ACTIVE_WAIT_HANG_TEST_TIMEOUT_MS,
-  ADMIN_QUERY_TRACE_TIMEOUT_TEST_MS,
-  BENCHMARK_CRITICAL_CONTROL_PLANE_STABILITY_REASON_SNAPSHOT_UNAVAILABLE,
-  BENCHMARK_CRITICAL_CONTROL_PLANE_STABILITY_STATE,
-  BENCHMARK_DEGRADATION_STATE,
-  BENCHMARK_LOAD_ADMISSION_STATE,
-  buildCriticalSystemDiscoverySnapshot,
-  Cluster,
-  CONTAINER_ALREADY_STOPPED_ERROR_MESSAGE,
-  CONTAINER_ENV_KEYS,
   createCluster,
-  distributeNodes,
-  ENTRYPOINT_ENV,
-  LABELS,
-  LOAD_STOP_DISPATCH_SETTLE_MS,
-  LOAD_STOP_WAIT_TIMEOUT_MS,
-  NodeHandle,
-  NODE_CLIENT_CONTROL_SNAPSHOT_SQL,
-  NODE_CLIENT_SERVICE_DISCOVERY_SQL,
-  NODE_CLIENT_SERVICE_ID_ADMIN_META,
-  NODE_CLIENT_SERVICE_ID_POSTGRES_WIRE,
-  NODE_CLIENT_SERVICE_PROTOCOL_POSTGRESQL,
   NODE_ROLES,
-  PLAYBACK_EVENT_TYPE,
-  PORTS,
-  RAFT_PROVIDER_DEFAULTS,
 } from './cluster-test-helpers.js';
 
-const REUSE_START_COMMAND =
-  'if [ -f /harness-control/reset-data-on-start ]; then rm -rf /data/* && ' +
-  'rm -f /harness-control/reset-data-on-start; fi; ' +
-  'exec node --max-old-space-size=1536 /app/src/index.js';
+const LOAD_GATE_PROJECTION_TEST_CLUSTER_SIZE = 2;
+const LOAD_GATE_PROJECTION_TEST_NODE_A = 'node-a';
+const LOAD_GATE_PROJECTION_TEST_NODE_B = 'node-b';
+const LOAD_GATE_PROJECTION_TEST_NODE_IDS = Object.freeze([
+  LOAD_GATE_PROJECTION_TEST_NODE_A,
+  LOAD_GATE_PROJECTION_TEST_NODE_B,
+]);
+const LOAD_GATE_PROJECTION_TEST_TIMEOUT_MS = 1000;
+const LOAD_GATE_PROJECTION_TEST_READY_STATUS = 200;
+const LOAD_GATE_PROJECTION_TEST_BLOCKED_STATUS = 503;
+const LOAD_GATE_PROJECTION_TEST_PUBLICATION_EPOCH = 17;
+const LOAD_GATE_PROJECTION_TEST_READY_PHASE = 'TRAFFIC_READY';
+const LOAD_GATE_PROJECTION_TEST_READY_STATE = 'traffic_ready';
+const LOAD_GATE_PROJECTION_TEST_BLOCKED_PHASE = 'CONTROL_READY';
+const LOAD_GATE_PROJECTION_TEST_BLOCKED_STATE = 'degraded';
+const LOAD_GATE_PROJECTION_TEST_PENDING_REASON =
+  'PRIORITY_CONTROL_PLANE_RECOVERY_PENDING';
+const LOAD_GATE_PROJECTION_TEST_STABLE_WINDOW_REASON =
+  'READINESS_STABLE_WINDOW_PENDING';
+const LOAD_GATE_PROJECTION_TEST_OBSERVABILITY_BACKLOG_REASON =
+  'OBSERVABILITY_BACKLOG';
+const LOAD_GATE_PROJECTION_TEST_TIMEOUT_REASON_PREFIX =
+  'readiness_probe_timeout_fallback=';
+const LOAD_GATE_PROJECTION_TEST_SELECTED_REACHABILITY_TIMEOUT_ERROR =
+  'Control snapshot reachability probe timed out for node-timeout';
+const LOAD_GATE_PROJECTION_TEST_PUBLICATION_STATUS = 'PUBLISHED';
+const LOAD_GATE_PROJECTION_TEST_GATE_STATE = 'ready';
+const LOAD_GATE_PROJECTION_TEST_GATE_SOURCE =
+  'load_publication_gate_projection';
+const LOAD_GATE_PROJECTION_TEST_REACHABILITY_SOURCE = 'admin_health';
+const LOAD_GATE_PROJECTION_TEST_PRIORITY_PARTITION_COUNT = 5;
+const STARTUP_SNAPSHOT_PROJECTION_TEST_NODE_A = 'node-a';
+const STARTUP_SNAPSHOT_PROJECTION_TEST_NODE_B = 'node-b';
+const STARTUP_SNAPSHOT_PROJECTION_TEST_TIMEOUT_MS = 1000;
+const STARTUP_SNAPSHOT_PROJECTION_TEST_TIMEOUT_ERROR =
+  'Node readiness probe timed out for node-a';
+const STARTUP_SNAPSHOT_PROJECTION_TEST_STATUS_TIMEOUT_ERROR =
+  'Node status probe timed out for node-a';
+const STARTUP_SNAPSHOT_PROJECTION_TEST_READY_STATUS = 200;
+const STARTUP_SNAPSHOT_PROJECTION_TEST_PUBLICATION_EPOCH = 10;
+const STARTUP_SNAPSHOT_PROJECTION_TEST_PUBLICATION_STATUS = 'PUBLISHED';
+const STARTUP_SNAPSHOT_PROJECTION_TEST_REACHABILITY_SOURCE = 'admin_health';
+const STARTUP_SNAPSHOT_PROJECTION_TEST_GATE_SOURCE =
+  'startup_snapshot_projection';
+const STARTUP_SNAPSHOT_PROJECTION_TEST_GATE_REASON =
+  'startup_snapshot_ready';
+const STARTUP_SNAPSHOT_PROJECTION_TEST_ADMISSION_STATE =
+  'degraded_but_proceeding';
+const STARTUP_SNAPSHOT_PROJECTION_TEST_DIMENSION = 'clusterMemberHealthy';
 
 /**
  * Feature: distributed-testing-framework
@@ -467,6 +482,395 @@ test('Unit: _probeClusterActiveState prefers traffic readiness probe in load mod
     );
   });
 
+test(
+  'Unit: _probeClusterActiveState projects stale traffic recovery blockers ' +
+    'after load publication gate closes',
+  async () => {
+    const cluster = createCluster({
+      size: LOAD_GATE_PROJECTION_TEST_CLUSTER_SIZE,
+      docker: {socketPath: '/var/run/docker.sock'},
+      image: 'distributed-db:test',
+    });
+
+    const snapshotRow = {
+      nodes: LOAD_GATE_PROJECTION_TEST_NODE_IDS,
+      controlPlaneDiagnostics: {
+        publicationConvergence: {
+          publicationEpoch: LOAD_GATE_PROJECTION_TEST_PUBLICATION_EPOCH,
+          publicationStatus: LOAD_GATE_PROJECTION_TEST_PUBLICATION_STATUS,
+          publishedActiveNodeIds: LOAD_GATE_PROJECTION_TEST_NODE_IDS,
+          pendingAckNodeIds: [],
+          acknowledgedNodeIds: LOAD_GATE_PROJECTION_TEST_NODE_IDS,
+          priorityPartitionSummary: {
+            satisfied: true,
+          },
+        },
+        publicationConvergenceGate: {
+          state: LOAD_GATE_PROJECTION_TEST_GATE_STATE,
+          ready: true,
+          publicationEpoch: LOAD_GATE_PROJECTION_TEST_PUBLICATION_EPOCH,
+          publicationStatus: LOAD_GATE_PROJECTION_TEST_PUBLICATION_STATUS,
+          reasonCodes: [],
+          reasons: [],
+          priorityPartitionSummary: {
+            satisfied: true,
+            totalPriorityPartitionCount:
+              LOAD_GATE_PROJECTION_TEST_PRIORITY_PARTITION_COUNT,
+            missingPartitionIds: [],
+            blockedPartitions: [],
+          },
+          pendingAckNodeIds: [],
+          missingPublishedNodeIds: [],
+          prioritySpreadPending: false,
+          publicationPending: false,
+          ackPending: false,
+        },
+      },
+    };
+    const createNode = (nodeId) => ({
+      id: nodeId,
+      role:
+        nodeId === LOAD_GATE_PROJECTION_TEST_NODE_A ?
+          NODE_ROLES.SEED :
+          NODE_ROLES.JOINER,
+      async probeTrafficReadiness(_options) {
+        if (nodeId === LOAD_GATE_PROJECTION_TEST_NODE_A) {
+          return {
+            status: LOAD_GATE_PROJECTION_TEST_READY_STATUS,
+            phase: LOAD_GATE_PROJECTION_TEST_READY_PHASE,
+            state: LOAD_GATE_PROJECTION_TEST_READY_STATE,
+            reasons: [],
+          };
+        }
+        return {
+          status: LOAD_GATE_PROJECTION_TEST_BLOCKED_STATUS,
+          phase: LOAD_GATE_PROJECTION_TEST_BLOCKED_PHASE,
+          state: LOAD_GATE_PROJECTION_TEST_BLOCKED_STATE,
+          reasons: [LOAD_GATE_PROJECTION_TEST_PENDING_REASON],
+        };
+      },
+      async getReachabilityDiagnostics(_options) {
+        return {
+          adminReady: true,
+          reachable: true,
+          reachableBy: LOAD_GATE_PROJECTION_TEST_REACHABILITY_SOURCE,
+        };
+      },
+      async getControlSnapshot() {
+        return {
+          rows: [snapshotRow],
+        };
+      },
+      async getLogs(_options) {
+        return '';
+      },
+    });
+
+    cluster._nodes.set(
+      LOAD_GATE_PROJECTION_TEST_NODE_A,
+      createNode(LOAD_GATE_PROJECTION_TEST_NODE_A),
+    );
+    cluster._nodes.set(
+      LOAD_GATE_PROJECTION_TEST_NODE_B,
+      createNode(LOAD_GATE_PROJECTION_TEST_NODE_B),
+    );
+
+    const probeResult = await cluster._probeClusterActiveState(
+      Date.now() + LOAD_GATE_PROJECTION_TEST_TIMEOUT_MS,
+      {mode: 'load'},
+    );
+    const blockedNodeDiagnostic = probeResult.nodeDiagnostics.find(
+      (diagnostic) =>
+        diagnostic.nodeId === LOAD_GATE_PROJECTION_TEST_NODE_B,
+    );
+
+    assert.strictEqual(
+      probeResult.publicationConvergenceGate.ready,
+      true,
+      'fixture should expose the readiness-owned publication gate as closed',
+    );
+    assert.strictEqual(
+      probeResult.allActive,
+      true,
+      'stale local priority recovery readiness should not block load mode ' +
+        'after the canonical gate is ready',
+    );
+    assert.strictEqual(
+      blockedNodeDiagnostic?.active,
+      true,
+      'stale traffic readiness blocker should be projected active',
+    );
+    assert.strictEqual(
+      blockedNodeDiagnostic?.activitySource,
+      LOAD_GATE_PROJECTION_TEST_GATE_SOURCE,
+      'diagnostics should expose publication-gate projection as the ' +
+        'activity source',
+    );
+  },
+	);
+
+test(
+  'Unit: _probeClusterActiveState projects terminal load-mode readiness noise ' +
+    'after publication gate closure',
+  async () => {
+    const nodeIds = Object.freeze([
+      'node-ready',
+      'node-stable-window',
+      'node-observability',
+      'node-timeout',
+    ]);
+    const timeoutErrorMessage =
+      'Node readiness probe timed out for node-timeout';
+    const cluster = createCluster({
+      size: nodeIds.length,
+      docker: {socketPath: '/var/run/docker.sock'},
+      image: 'distributed-db:test',
+    });
+
+    const snapshotRow = {
+      nodes: [...nodeIds],
+      controlPlaneDiagnostics: {
+        publicationConvergence: {
+          publicationEpoch: LOAD_GATE_PROJECTION_TEST_PUBLICATION_EPOCH,
+          publicationStatus: LOAD_GATE_PROJECTION_TEST_PUBLICATION_STATUS,
+          publishedActiveNodeIds: [...nodeIds],
+          pendingAckNodeIds: [],
+          acknowledgedNodeIds: [...nodeIds],
+          priorityPartitionSummary: {
+            satisfied: true,
+          },
+        },
+        publicationConvergenceGate: {
+          state: LOAD_GATE_PROJECTION_TEST_GATE_STATE,
+          ready: true,
+          publicationEpoch: LOAD_GATE_PROJECTION_TEST_PUBLICATION_EPOCH,
+          publicationStatus: LOAD_GATE_PROJECTION_TEST_PUBLICATION_STATUS,
+          reasonCodes: [],
+          reasons: [],
+          priorityPartitionSummary: {
+            satisfied: true,
+            totalPriorityPartitionCount:
+              LOAD_GATE_PROJECTION_TEST_PRIORITY_PARTITION_COUNT,
+            missingPartitionIds: [],
+            blockedPartitions: [],
+          },
+          pendingAckNodeIds: [],
+          missingPublishedNodeIds: [],
+          prioritySpreadPending: false,
+          publicationPending: false,
+          ackPending: false,
+        },
+      },
+    };
+    const readinessByNodeId = {
+      'node-ready': {
+        status: LOAD_GATE_PROJECTION_TEST_READY_STATUS,
+        phase: LOAD_GATE_PROJECTION_TEST_READY_PHASE,
+        state: LOAD_GATE_PROJECTION_TEST_READY_STATE,
+        reasons: [],
+      },
+      'node-stable-window': {
+        status: LOAD_GATE_PROJECTION_TEST_BLOCKED_STATUS,
+        phase: LOAD_GATE_PROJECTION_TEST_BLOCKED_PHASE,
+        state: 'warming',
+        reasons: [LOAD_GATE_PROJECTION_TEST_STABLE_WINDOW_REASON],
+      },
+      'node-observability': {
+        status: LOAD_GATE_PROJECTION_TEST_BLOCKED_STATUS,
+        phase: LOAD_GATE_PROJECTION_TEST_BLOCKED_PHASE,
+        state: 'warming',
+        reasons: [LOAD_GATE_PROJECTION_TEST_OBSERVABILITY_BACKLOG_REASON],
+      },
+    };
+
+    for (const nodeId of nodeIds) {
+      cluster._nodes.set(nodeId, {
+        id: nodeId,
+        role: nodeId === 'node-ready' ? NODE_ROLES.SEED : NODE_ROLES.JOINER,
+        async probeTrafficReadiness(_options) {
+          if (nodeId === 'node-timeout') {
+            throw new Error(timeoutErrorMessage);
+          }
+          return readinessByNodeId[nodeId];
+        },
+        async getReachabilityDiagnostics(_options) {
+          return {
+            adminReady: true,
+            reachable: true,
+            reachableBy: LOAD_GATE_PROJECTION_TEST_REACHABILITY_SOURCE,
+          };
+        },
+        async getControlSnapshot() {
+          return {
+            rows: [snapshotRow],
+          };
+        },
+        async getLogs(_options) {
+          return '';
+        },
+      });
+    }
+
+    const probeResult = await cluster._probeClusterActiveState(
+      Date.now() + LOAD_GATE_PROJECTION_TEST_TIMEOUT_MS,
+      {mode: 'load'},
+    );
+    const projectedDiagnostics = probeResult.nodeDiagnostics.filter(
+      (diagnostic) =>
+        diagnostic.activitySource === LOAD_GATE_PROJECTION_TEST_GATE_SOURCE,
+    );
+    const timeoutDiagnostic = probeResult.nodeDiagnostics.find(
+      (diagnostic) => diagnostic.nodeId === 'node-timeout',
+    );
+
+    assert.strictEqual(
+      probeResult.allActive,
+      true,
+      'terminal load-readiness noise should not block after publication closes',
+    );
+    assert.strictEqual(
+      projectedDiagnostics.length,
+      nodeIds.length - 1,
+      'stable-window, observability, and timeout witnesses should be projected',
+    );
+    assert.strictEqual(
+      timeoutDiagnostic?.active,
+      true,
+      'timeout-shaped readiness should be admitted after canonical closure',
+    );
+    assert.strictEqual(
+      timeoutDiagnostic?.error,
+      null,
+      'projection should clear the timeout error after preserving sourceError',
+    );
+    assert.ok(
+      timeoutDiagnostic?.reasons.some((reason) =>
+        reason.startsWith(LOAD_GATE_PROJECTION_TEST_TIMEOUT_REASON_PREFIX),
+      ),
+      'timeout diagnostic should retain the readiness timeout reason',
+    );
+  },
+);
+
+test(
+  'Unit: _probeClusterActiveState trusts canonical load publication gate when ' +
+    'selected admin reachability times out',
+  async () => {
+    const nodeIds = Object.freeze(['node-timeout', 'node-pending']);
+    const readinessTimeoutErrorMessage =
+      'Node readiness probe timed out for node-timeout';
+    const cluster = createCluster({
+      size: nodeIds.length,
+      docker: {socketPath: '/var/run/docker.sock'},
+      image: 'distributed-db:test',
+    });
+
+    const snapshotRow = {
+      nodes: [...nodeIds],
+      controlPlaneDiagnostics: {
+        publicationConvergence: {
+          publicationEpoch: LOAD_GATE_PROJECTION_TEST_PUBLICATION_EPOCH,
+          publicationStatus: LOAD_GATE_PROJECTION_TEST_PUBLICATION_STATUS,
+          publishedActiveNodeIds: [...nodeIds],
+          pendingAckNodeIds: [],
+          acknowledgedNodeIds: [...nodeIds],
+          priorityPartitionSummary: {
+            satisfied: true,
+          },
+        },
+        publicationConvergenceGate: {
+          state: LOAD_GATE_PROJECTION_TEST_GATE_STATE,
+          ready: true,
+          publicationEpoch: LOAD_GATE_PROJECTION_TEST_PUBLICATION_EPOCH,
+          publicationStatus: LOAD_GATE_PROJECTION_TEST_PUBLICATION_STATUS,
+          reasonCodes: [],
+          reasons: [],
+          priorityPartitionSummary: {
+            satisfied: true,
+            totalPriorityPartitionCount:
+              LOAD_GATE_PROJECTION_TEST_PRIORITY_PARTITION_COUNT,
+            missingPartitionIds: [],
+            blockedPartitions: [],
+          },
+          pendingAckNodeIds: [],
+          missingPublishedNodeIds: [],
+          prioritySpreadPending: false,
+          publicationPending: false,
+          ackPending: false,
+        },
+      },
+    };
+
+    for (const nodeId of nodeIds) {
+      cluster._nodes.set(nodeId, {
+        id: nodeId,
+        role: nodeId === 'node-timeout' ? NODE_ROLES.SEED : NODE_ROLES.JOINER,
+        async probeTrafficReadiness(_options) {
+          if (nodeId === 'node-timeout') {
+            throw new Error(readinessTimeoutErrorMessage);
+          }
+          return {
+            status: LOAD_GATE_PROJECTION_TEST_BLOCKED_STATUS,
+            phase: LOAD_GATE_PROJECTION_TEST_BLOCKED_PHASE,
+            state: LOAD_GATE_PROJECTION_TEST_BLOCKED_STATE,
+            reasons: [LOAD_GATE_PROJECTION_TEST_PENDING_REASON],
+          };
+        },
+        async getReachabilityDiagnostics(_options) {
+          if (nodeId === 'node-timeout') {
+            throw new Error(
+              LOAD_GATE_PROJECTION_TEST_SELECTED_REACHABILITY_TIMEOUT_ERROR,
+            );
+          }
+          return {
+            adminReady: true,
+            reachable: true,
+            reachableBy: LOAD_GATE_PROJECTION_TEST_REACHABILITY_SOURCE,
+          };
+        },
+        async getControlSnapshot() {
+          return {
+            rows: [snapshotRow],
+          };
+        },
+        async getLogs(_options) {
+          return '';
+        },
+      });
+    }
+
+    const probeResult = await cluster._probeClusterActiveState(
+      Date.now() + LOAD_GATE_PROJECTION_TEST_TIMEOUT_MS,
+      {mode: 'load'},
+    );
+    const projectedDiagnostics = probeResult.nodeDiagnostics.filter(
+      (diagnostic) =>
+        diagnostic.activitySource === LOAD_GATE_PROJECTION_TEST_GATE_SOURCE,
+    );
+
+    assert.strictEqual(
+      probeResult.snapshotCoverage.selectedAdminReady,
+      false,
+      'fixture should preserve selected snapshot reachability timeout',
+    );
+    assert.strictEqual(
+      probeResult.publicationConvergenceGate.ready,
+      true,
+      'canonical publication gate should be closed',
+    );
+    assert.strictEqual(
+      probeResult.allActive,
+      true,
+      'canonical publication gate should admit terminal load-readiness noise',
+    );
+    assert.strictEqual(
+      projectedDiagnostics.length,
+      nodeIds.length,
+      'both timeout and stale priority recovery blockers should be projected',
+    );
+  },
+);
+
 test('Unit: _probeClusterActiveState allows converged load mode with partial snapshot coverage',
   async () => {
     const cluster = createCluster({
@@ -633,8 +1037,8 @@ test(
 );
 
 test(
-  'Unit: _probeClusterActiveState defers readiness-timeout fallback nodes ' +
-    'from load-mode traffic admission invariants',
+  'Unit: _probeClusterActiveState blocks readiness-timeout nodes during ' +
+    'load-mode traffic admission',
   async () => {
     const cluster = createCluster({
       size: 2,
@@ -700,6 +1104,27 @@ test(
       {mode: 'load'},
     );
 
+    assert.strictEqual(
+      probeResult.allActive,
+      false,
+      'load-mode readiness should not fall back to status on traffic timeout',
+    );
+    assert.strictEqual(
+      probeResult.nodeDiagnostics[0].active,
+      false,
+      'timeout-shaped traffic readiness should keep the node inactive',
+    );
+    assert.strictEqual(
+      probeResult.nodeDiagnostics[0].activitySource,
+      'traffic_readiness',
+      'diagnostics should preserve the traffic-readiness source',
+    );
+    assert.ok(
+      probeResult.nodeDiagnostics[0].reasons.some((reason) =>
+        reason.startsWith('readiness_probe_timeout_fallback='),
+      ),
+      'diagnostics should include the timeout reason without admitting traffic',
+    );
     const trafficGateInvariant = probeResult.priorityRecoveryInvariants.invariants
       .find((invariant) =>
         invariant.id === 'priority_recovery_readyz_closed_during_priority_recovery',
@@ -711,17 +1136,17 @@ test(
     assert.strictEqual(
       trafficGateInvariant.passed,
       true,
-      'timeout-fallback node should be deferred from violation accounting while spread is pending',
+      'blocked timeout node should satisfy traffic gate closure while spread is pending',
     );
     assert.deepStrictEqual(
       trafficGateInvariant.details.observedAdmittedNodeIds,
-      ['node-a'],
-      'invariant diagnostics should report observed admissions before timeout deferral',
+      [],
+      'timeout node should not be traffic-admitted in load mode',
     );
     assert.deepStrictEqual(
       trafficGateInvariant.details.deferredAdmittedNodeIds,
-      ['node-a'],
-      'invariant diagnostics should identify timeout-fallback admissions deferred during load-mode spread',
+      [],
+      'load-mode timeout should not require deferred admission accounting',
     );
     assert.deepStrictEqual(
       trafficGateInvariant.details.violatingNodeIds,
@@ -1039,6 +1464,116 @@ test('Unit: _probeClusterActiveState falls back to status when readiness probe t
     );
   });
 
+test(
+  'Unit: _probeClusterActiveState projects startup timeout from control snapshot',
+  async () => {
+    const cluster = createCluster({
+      size: 2,
+      docker: {socketPath: '/var/run/docker.sock'},
+      image: 'distributed-db:test',
+    });
+    const nodeIds = [
+      STARTUP_SNAPSHOT_PROJECTION_TEST_NODE_A,
+      STARTUP_SNAPSHOT_PROJECTION_TEST_NODE_B,
+    ];
+    const readinessByNodeId = Object.fromEntries(
+      nodeIds.map((nodeId) => [
+        nodeId,
+        {
+          dimensions: {
+            [STARTUP_SNAPSHOT_PROJECTION_TEST_DIMENSION]: true,
+          },
+        },
+      ]),
+    );
+    const snapshotRow = {
+      nodes: nodeIds,
+      controlPlaneDiagnostics: {
+        readinessByNodeId,
+        publicationConvergence: {
+          publicationEpoch:
+            STARTUP_SNAPSHOT_PROJECTION_TEST_PUBLICATION_EPOCH,
+          publicationStatus:
+            STARTUP_SNAPSHOT_PROJECTION_TEST_PUBLICATION_STATUS,
+          publishedActiveNodeIds: nodeIds,
+          pendingAckNodeIds: [],
+          acknowledgedNodeIds: nodeIds,
+        },
+      },
+    };
+    const createSnapshotNode = (nodeId) => ({
+      id: nodeId,
+      async getControlSnapshot() {
+        return {rows: [snapshotRow]};
+      },
+      async getReachabilityDiagnostics() {
+        return {
+          adminReady: true,
+          reachable: true,
+          reachableBy:
+            STARTUP_SNAPSHOT_PROJECTION_TEST_REACHABILITY_SOURCE,
+        };
+      },
+      async getLogs(_options) {
+        return '';
+      },
+    });
+    cluster._nodes.set(STARTUP_SNAPSHOT_PROJECTION_TEST_NODE_A, {
+      ...createSnapshotNode(STARTUP_SNAPSHOT_PROJECTION_TEST_NODE_A),
+      role: NODE_ROLES.SEED,
+      async probeBootstrapReadiness() {
+        throw new Error(STARTUP_SNAPSHOT_PROJECTION_TEST_TIMEOUT_ERROR);
+      },
+      async getStatus() {
+        throw new Error(
+          STARTUP_SNAPSHOT_PROJECTION_TEST_STATUS_TIMEOUT_ERROR,
+        );
+      },
+    });
+    cluster._nodes.set(STARTUP_SNAPSHOT_PROJECTION_TEST_NODE_B, {
+      ...createSnapshotNode(STARTUP_SNAPSHOT_PROJECTION_TEST_NODE_B),
+      role: NODE_ROLES.JOINER,
+      async probeBootstrapReadiness() {
+        return {
+          status: STARTUP_SNAPSHOT_PROJECTION_TEST_READY_STATUS,
+        };
+      },
+    });
+
+    const probeResult = await cluster._probeClusterActiveState(
+      Date.now() + STARTUP_SNAPSHOT_PROJECTION_TEST_TIMEOUT_MS,
+    );
+    const projectedDiagnostic = probeResult.nodeDiagnostics.find(
+      (diagnostic) =>
+        diagnostic.nodeId === STARTUP_SNAPSHOT_PROJECTION_TEST_NODE_A,
+    );
+
+    assert.strictEqual(probeResult.allActive, true);
+    assert.strictEqual(projectedDiagnostic.active, true);
+    assert.strictEqual(
+      projectedDiagnostic.activitySource,
+      STARTUP_SNAPSHOT_PROJECTION_TEST_GATE_SOURCE,
+    );
+    assert.strictEqual(
+      projectedDiagnostic.admissionState,
+      STARTUP_SNAPSHOT_PROJECTION_TEST_ADMISSION_STATE,
+    );
+    assert.strictEqual(
+      projectedDiagnostic.admissionReason,
+      STARTUP_SNAPSHOT_PROJECTION_TEST_GATE_REASON,
+    );
+    assert.ok(
+      projectedDiagnostic.reasons.includes(
+        STARTUP_SNAPSHOT_PROJECTION_TEST_GATE_REASON,
+      ),
+    );
+    assert.strictEqual(
+      projectedDiagnostic.sourceError,
+      STARTUP_SNAPSHOT_PROJECTION_TEST_TIMEOUT_ERROR,
+    );
+  },
+);
+
 test('Unit: _probeClusterActiveState requires control snapshot coverage even when ACTIVE',
   async () => {
     const cluster = createCluster({
@@ -1248,77 +1783,77 @@ test('Unit: _probeControlSnapshotCoverage forwards forced repair requests',
 
 test('Unit: _probeControlSnapshotCoverage parallelizes remaining nodes after ' +
   'a partial seed snapshot',
-  async () => {
-    const cluster = createCluster({
-      size: 3,
-      docker: {socketPath: '/var/run/docker.sock'},
-      image: 'distributed-db:test',
-    });
-
-    const probeCalls = [];
-    const nodeIds = ['node-a', 'node-b', 'node-c'];
-    for (const [index, nodeId] of nodeIds.entries()) {
-      cluster._nodes.set(nodeId, {
-        id: nodeId,
-        role: index === 0 ? NODE_ROLES.SEED : NODE_ROLES.JOINER,
-        async getStatus() {
-          return {rows: [{status: 'active'}]};
-        },
-        async getReachabilityDiagnostics() {
-          return {
-            reachable: true,
-            adminReady: true,
-            reachableBy: 'admin_health',
-            lastError: null,
-          };
-        },
-        async getControlSnapshot(options) {
-          probeCalls.push({
-            nodeId,
-            timeoutMs: options.timeoutMs,
-          });
-          return {
-            rows: [{
-              nodes: nodeIds.slice(0, index + 1),
-              capturedAtMs: 100 + index,
-            }],
-          };
-        },
-        async getLogs(_options) {
-          return '';
-        },
-      });
-    }
-
-    const coverage = await cluster._probeControlSnapshotCoverage(
-      Date.now() + 3500,
-      nodeIds,
-    );
-
-    assert.strictEqual(
-      coverage.completeCoverage,
-      true,
-      'final node should still be able to satisfy complete coverage',
-    );
-    assert.strictEqual(
-      probeCalls.length,
-      3,
-      'coverage probe should continue probing until a complete snapshot is found',
-    );
-    assert.ok(
-      Number.isInteger(probeCalls[0].timeoutMs) &&
-        probeCalls[0].timeoutMs > 0,
-      'seed snapshot probe should receive a positive timeout budget',
-    );
-    assert.ok(
-      probeCalls.every((call) =>
-        Number.isInteger(call.timeoutMs) && call.timeoutMs > 0),
-      'every snapshot probe should receive a positive timeout budget',
-    );
-    assert.strictEqual(
-      probeCalls[1].timeoutMs,
-      probeCalls[2].timeoutMs,
-      'remaining node probes should share the same timeout budget instead of ' +
-        'serially starving the tail node',
-    );
+async () => {
+  const cluster = createCluster({
+    size: 3,
+    docker: {socketPath: '/var/run/docker.sock'},
+    image: 'distributed-db:test',
   });
+
+  const probeCalls = [];
+  const nodeIds = ['node-a', 'node-b', 'node-c'];
+  for (const [index, nodeId] of nodeIds.entries()) {
+    cluster._nodes.set(nodeId, {
+      id: nodeId,
+      role: index === 0 ? NODE_ROLES.SEED : NODE_ROLES.JOINER,
+      async getStatus() {
+        return {rows: [{status: 'active'}]};
+      },
+      async getReachabilityDiagnostics() {
+        return {
+          reachable: true,
+          adminReady: true,
+          reachableBy: 'admin_health',
+          lastError: null,
+        };
+      },
+      async getControlSnapshot(options) {
+        probeCalls.push({
+          nodeId,
+          timeoutMs: options.timeoutMs,
+        });
+        return {
+          rows: [{
+            nodes: nodeIds.slice(0, index + 1),
+            capturedAtMs: 100 + index,
+          }],
+        };
+      },
+      async getLogs(_options) {
+        return '';
+      },
+    });
+  }
+
+  const coverage = await cluster._probeControlSnapshotCoverage(
+    Date.now() + 3500,
+    nodeIds,
+  );
+
+  assert.strictEqual(
+    coverage.completeCoverage,
+    true,
+    'final node should still be able to satisfy complete coverage',
+  );
+  assert.strictEqual(
+    probeCalls.length,
+    3,
+    'coverage probe should continue probing until a complete snapshot is found',
+  );
+  assert.ok(
+    Number.isInteger(probeCalls[0].timeoutMs) &&
+        probeCalls[0].timeoutMs > 0,
+    'seed snapshot probe should receive a positive timeout budget',
+  );
+  assert.ok(
+    probeCalls.every((call) =>
+      Number.isInteger(call.timeoutMs) && call.timeoutMs > 0),
+    'every snapshot probe should receive a positive timeout budget',
+  );
+  assert.strictEqual(
+    probeCalls[1].timeoutMs,
+    probeCalls[2].timeoutMs,
+    'remaining node probes should share the same timeout budget instead of ' +
+        'serially starving the tail node',
+  );
+});

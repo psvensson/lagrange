@@ -26,6 +26,12 @@ const RECONCILE_REASON = Object.freeze({
   NODES_CDC_READY: 'nodes_cdc_ready',
   NODES_CACHE_READY: 'nodes_cache_ready',
   SERVICES_CACHE_ACTIVE: 'services_cache_active',
+  CONTROL_PLANE_PUBLICATION_CDC_UPDATE:
+    'control_plane_publication_cdc_update',
+  CONTROL_PLANE_PUBLICATION_CACHE_UPDATE:
+    'control_plane_publication_cache_update',
+  CONTROL_PLANE_PUBLICATION_ACK_RETRY:
+    'control_plane_publication_ack_retry',
 
   // Rebalance: planning-level reasons
   PERIODIC_CHECK: 'periodic_check',

@@ -39,7 +39,7 @@ const OPERATION_TYPE_ADD = 'ADD';
  * @param {string} joiningNodeId - The joining node's ID.
  * @return {Object} Mock system table cache.
  */
-function createSystemTableCacheMock(replicaOperationRows, joiningNodeId) {
+function createSystemTableCacheMock(replicaOperationRows, _joiningNodeId) {
   return {
     getAll(tableName) {
       if (tableName === TABLES.REPLICA_OPERATIONS) {
@@ -56,7 +56,7 @@ function createSystemTableCacheMock(replicaOperationRows, joiningNodeId) {
       }
       return [];
     },
-    filter(tableName, predicate) {
+    filter(tableName, _predicate) {
       if (tableName === TABLES.SERVICES) {
         return [];
       }
@@ -171,11 +171,11 @@ async (t) => {
         assert.equal(
           result.inFlightOperations.length,
           NUM.ZERO,
-          `collectCanonicalInFlightReplicaOperationDetails should ` +
+          'collectCanonicalInFlightReplicaOperationDetails should ' +
           `exclude ${operationCount} self-targeted operation(s) ` +
           `where targetNodeId === '${JOINING_NODE_ID}', but ` +
           `returned ${result.inFlightOperations.length} ` +
-          `operation(s)`,
+          'operation(s)',
         );
       },
     ),
@@ -223,7 +223,7 @@ async (t) => {
         assert.equal(
           result.inFlightReplicaOperations,
           NUM.ZERO,
-          `inFlightReplicaOperations should be 0 when all ` +
+          'inFlightReplicaOperations should be 0 when all ' +
           `${operationCount} operation(s) target the joining ` +
           `node '${JOINING_NODE_ID}', but got ` +
           `${result.inFlightReplicaOperations}`,

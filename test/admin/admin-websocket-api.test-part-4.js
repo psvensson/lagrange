@@ -4,31 +4,17 @@
  */
 
 import {test} from '../../src/test-helpers/tap.js';
-import {AdminWebSocketAPI, MessageType, ErrorCode} from
+import {AdminWebSocketAPI, MessageType} from
   '../../src/admin/admin-websocket-api.js';
 import {
   ADMIN_CONTROL_SNAPSHOT,
-  ADMIN_ERROR_MESSAGE,
-  ADMIN_OPERATIONAL_DIAGNOSTICS,
-  ADMIN_ROUTE,
-  CONSISTENCY_MISMATCH_KIND,
 } from '../../src/admin/admin-constants.js';
-import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {createReadOnlyCache} from '../../src/cache/read-only-system-table-cache.js';
-import {getSystemCachePrimaryKeyField} from
-  '../../src/cache/system-cache-key-descriptor.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
-import {LogsTableService} from '../../src/logging/logs-table-service.js';
-import {createSqlRequest} from '../../src/query/sql-request.js';
-import {createInProcWebSocketPair} from '../../src/test-helpers/inproc-ws.js';
-import {TraceCollector} from '../../src/debug/trace-collector.js';
 import {COLUMN, TABLES, SERVICE_TYPE} from '../../src/constants/index.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
-  READINESS_SNAPSHOT_KEY,
-  RUNTIME_AUTHORITY_STATE,
-  RUNTIME_AUTHORITY_VISIBILITY_STATE,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {
   CONTROL_PLANE_SNAPSHOT_OBSERVATION_STATE,
@@ -39,16 +25,6 @@ import {
 ConfigurationManager.getInstance().initialize();
 LoggingService.getInstance().initialize({level: 'error'});
 
-const AUTHORITATIVE_REPAIR_TABLES = Object.freeze([
-  TABLES.NODES,
-  TABLES.PARTITIONS,
-  TABLES.SERVICES,
-  TABLES.TABLES,
-  TABLES.NODE_ENDPOINTS,
-  TABLES.SERVICE_DEFINITIONS,
-  TABLES.SERVICE_ENDPOINTS,
-  TABLES.REPLICA_OPERATIONS,
-]);
 const ERROR_UNEXPECTED_AUTHORITATIVE_PUBLISHED_MEMBERSHIP_READ =
   'unexpected_authoritative_published_membership_read';
 const TEST_LOCAL_SYSTEM_OBSERVATION_QUERY_ID =
@@ -73,32 +49,7 @@ const TEST_LOCAL_SYSTEM_OBSERVATION_LANE =
   'snapshot';
 const BACKGROUND_REPAIR_SETTLE_TURNS = 8;
 const BACKGROUND_REPAIR_SETTLE_DELAY_MS = 0;
-const BACKGROUND_REPAIR_WAIT_ATTEMPTS = 40;
 
-async function waitForBackgroundRepairToSettle(
-  turnCount = BACKGROUND_REPAIR_SETTLE_TURNS,
-)
-{
-  for (let index = 0; index < turnCount; index += 1) {
-    await new Promise((resolve) => {
-      setTimeout(resolve, BACKGROUND_REPAIR_SETTLE_DELAY_MS);
-    });
-  }
-}
-
-async function waitForBackgroundRepairCondition(
-  conditionFn,
-  attemptCount = BACKGROUND_REPAIR_WAIT_ATTEMPTS,
-)
-{
-  for (let index = 0; index < attemptCount; index += 1) {
-    if (conditionFn()) {
-      return true;
-    }
-    await waitForBackgroundRepairToSettle(1);
-  }
-  return conditionFn();
-}
 
 /**
  * Create a mock SQL query engine.
@@ -389,7 +340,7 @@ test(
       systemTableCache: createReadOnlyCache(writableCache),
       cacheMutationTarget: writableCache,
       controlPlaneReadinessService: {
-        async getAllNodeReadiness(options) {
+        async getAllNodeReadiness(_options) {
           return [{
             nodeId: 'node-local',
             dimensions: {

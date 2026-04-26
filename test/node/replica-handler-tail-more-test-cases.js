@@ -2,18 +2,12 @@ export async function registerReplicaHandlerTailMoreTests({
   t,
   fs,
   path,
-  os,
   ReplicaHandler,
   OperationType,
   ReplicaStatus,
   SYSTEM_TABLE_NAME,
-  SystemTableCache,
-  ConfigurationManager,
-  LoggingService,
   ReplicaStateMachine,
-  SERVICE_STATUS,
   WORKFLOW_STEP,
-  ReplicaOperationField,
   ReplicaOperationMessageType,
   ReplicaOperationResponseStatus,
   RAFT_ROLE,
@@ -22,6 +16,7 @@ export async function registerReplicaHandlerTailMoreTests({
   TEST_STEP_DOWN_PARTITION_ID,
   TEST_STEP_DOWN_REPLICA_ID,
   TEST_STEP_DOWN_REASON,
+  TEST_STEP_DOWN_TARGET_ELECTION_REASON,
   TEST_STEP_DOWN_CORRELATION_ID,
   TEST_STEP_DOWN_EMPTY_LEADER_ID,
   TEST_STATUS_RETRY_PARTITION_ID,
@@ -30,25 +25,10 @@ export async function registerReplicaHandlerTailMoreTests({
   TEST_STATUS_RETRY_SERVICE_ID,
   TEST_STATUS_RETRY_SERVICE_ADDRESS,
   TEST_STATUS_RETRY_ERROR,
-  TEST_ACTIVE_REPAIR_OPERATION_ID,
-  TEST_ACTIVE_REPAIR_PARTITION_ID,
-  TEST_ACTIVE_REPAIR_REPLICA_ID,
-  TEST_ACTIVE_REPAIR_NODE_ID,
-  TEST_REMOVE_DELETE_FAILURE_OPERATION_ID,
-  TEST_REMOVE_DELETE_FAILURE_PARTITION_ID,
-  TEST_REMOVE_DELETE_FAILURE_REPLICA_ID,
-  TEST_REMOVE_DELETE_FAILURE_REASON,
-  TEST_REMOVE_DELETE_FAILURE_MESSAGE,
-  TEST_REMOVED_CLEANUP_OPERATION_ID,
-  TEST_REMOVED_CLEANUP_PARTITION_ID,
-  TEST_REMOVED_CLEANUP_REPLICA_ID,
-  TEST_REMOVED_CLEANUP_REASON,
-  TEST_REMOVED_CLEANUP_DEFERRED_ERROR,
   createMockCDCService,
   createMockPartitionServiceFactory,
   createSeededCache,
   createMetadataOnlyCache,
-  createServiceOnlyCache,
   seedReplicaOperation,
   applyGatewayMutationToCache,
   waitForReplicaEvent,
@@ -564,7 +544,7 @@ export async function registerReplicaHandlerTailMoreTests({
           op.type === 'update' &&
           op.tableName === SYSTEM_TABLE_NAME.SERVICES &&
           op.whereClause?.service_id === TEST_FAILED_REMOVE_REPLICA_ID &&
-          op.data.status === ReplicaStatus.REMOVING
+          op.data.status === ReplicaStatus.REMOVING,
         ),
         'failed source removal should skip the invalid failed-to-removing status write',
       );
@@ -1224,6 +1204,104 @@ export async function registerReplicaHandlerTailMoreTests({
           electionTimerStartCount,
           1,
           'follower election progress should be rearmed after demotion',
+        );
+      } finally {
+        await handler.shutdown();
+      }
+    });
+
+  t.test('handleMessage re-arms follower election when STEP_DOWN_REPLICA carries replacement leader election intent',
+    async (t) => {
+      const cache = createSeededCache({
+        partitionId: TEST_STEP_DOWN_PARTITION_ID,
+        leaderReplicaId: TEST_STEP_DOWN_REPLICA_ID,
+      });
+      const mockCDC = createMockCDCService(cache);
+      const handler = new ReplicaHandler({
+        nodeId: 'test-node',
+        dataDir: tempDir,
+        systemTableCache: cache,
+        cdcIntegrationService: mockCDC,
+        createPartitionService: createMockPartitionServiceFactory(),
+      });
+
+      let electionTimerStartCount = 0;
+      let immediateElectionRequestCount = 0;
+      let raftChangePayload = null;
+      const trackedService = {
+        role: RAFT_ROLE.FOLLOWER,
+        getRole() {
+          return this.role;
+        },
+        raft: {
+          change(payload) {
+            raftChangePayload = payload;
+          },
+        },
+        raftProvider: {
+          requestElectionNow(raft) {
+            immediateElectionRequestCount += 1;
+            t.equal(
+              raft,
+              trackedService.raft,
+              'replacement leader election should target the tracked follower raft instance',
+            );
+          },
+          startElectionTimer(raft) {
+            electionTimerStartCount += 1;
+            t.equal(
+              raft,
+              trackedService.raft,
+              'replacement leader election should rearm the tracked follower raft instance',
+            );
+          },
+        },
+      };
+
+      handler.localServices.set(TEST_STEP_DOWN_REPLICA_ID, trackedService);
+      handler.setLocalReplica(TEST_STEP_DOWN_REPLICA_ID, {
+        replicaId: TEST_STEP_DOWN_REPLICA_ID,
+        partitionId: TEST_STEP_DOWN_PARTITION_ID,
+        service: trackedService,
+      });
+      handler.initialize();
+
+      try {
+        const response = await handler.handleMessage({
+          correlationId: TEST_STEP_DOWN_CORRELATION_ID,
+          payload: {
+            type: ReplicaOperationMessageType.STEP_DOWN_REPLICA,
+            operationId: TEST_STEP_DOWN_OPERATION_ID,
+            partitionId: TEST_STEP_DOWN_PARTITION_ID,
+            replicaId: TEST_STEP_DOWN_REPLICA_ID,
+            reason: TEST_STEP_DOWN_TARGET_ELECTION_REASON,
+          },
+        });
+
+        t.equal(
+          response.status,
+          ReplicaOperationResponseStatus.COMPLETED,
+          'replacement leader election should complete through the tracked handoff lane',
+        );
+        t.equal(
+          trackedService.role,
+          RAFT_ROLE.FOLLOWER,
+          'replacement leader election should not demote an already-follower replica again',
+        );
+        t.equal(
+          raftChangePayload,
+          null,
+          'replacement leader election should not force another raft state transition on a follower',
+        );
+        t.equal(
+          electionTimerStartCount,
+          0,
+          'replacement leader election should not wait on a normal follower election timer',
+        );
+        t.equal(
+          immediateElectionRequestCount,
+          1,
+          'replacement leader election should request immediate follower promotion',
         );
       } finally {
         await handler.shutdown();

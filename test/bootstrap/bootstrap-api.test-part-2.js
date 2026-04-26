@@ -4,12 +4,9 @@
  */
 
 import {test} from '../../src/test-helpers/tap.js';
-import {BootstrapAPI, BootstrapStrategy} from '../../src/bootstrap/bootstrap-api.js';
+import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
 import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {
-  BOOTSTRAP_API_HANDOFF_STATUS,
-  BOOTSTRAP_API_ERROR,
-  BOOTSTRAP_API_LOG_MSG,
   BOOTSTRAP_API_PROBE_REASON,
 } from '../../src/bootstrap/bootstrap-api-constants.js';
 import {
@@ -18,26 +15,16 @@ import {
 } from '../../src/bootstrap/bootstrap-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
-import {CACHE_HYDRATION_TABLES} from '../../src/cache/cache-constants.js';
 import {
-  ENDPOINT_STATUS,
-  SERVICE_STATUS,
-  SERVICE_TYPE,
-  STATE,
   TABLES,
-  TRANSPORT_TYPE,
 } from '../../src/constants/index.js';
-import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {BootstrapReadinessState} from '../../src/bootstrap/bootstrap-readiness-state.js';
 import {BOOTSTRAP_READINESS_STAGE} from '../../src/bootstrap/bootstrap-readiness-ladder.js';
 import {LIFECYCLE_REASON} from '../../src/bootstrap/lifecycle-controller-constants.js';
-import {STARTUP_JOIN_MODE} from '../../src/bootstrap/rejoin-hints-constants.js';
-import {STARTUP_RECOVERY_STAGE} from '../../src/bootstrap/startup-recovery-coordinator.js';
 import {
   CONTROL_PLANE_PRIORITY_RECOVERY_REASON,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {
-  CONTROL_PLANE_WORKLOAD_CLASS,
 } from '../../src/control-plane/control-plane-workload-profile.js';
 
 // Initialize configuration and logging for tests
@@ -100,20 +87,6 @@ function createSatisfiedControlPlaneReadinessService() {
   };
 }
 
-function createMutableControlPlaneReadinessService(initialDiagnostics) {
-  let diagnostics = initialDiagnostics;
-  return {
-    setDiagnostics(nextDiagnostics) {
-      diagnostics = nextDiagnostics;
-    },
-    async getMembershipPublicationDiagnostics() {
-      return diagnostics;
-    },
-    getMembershipPublicationDiagnosticsSync() {
-      return diagnostics;
-    },
-  };
-}
 
 function createPriorityRecoveryAuthorityControlPlaneReadinessService() {
   return {

@@ -19,72 +19,38 @@ import {PartitionService} from '../../src/partition/partition-service.js';
 import {CACHE_HYDRATION_TABLES} from '../../src/cache/cache-constants.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {ReplicaHandlerSetup} from '../../src/bootstrap/shared/replica-handler-setup.js';
-import {ControlPlaneSetup} from '../../src/bootstrap/shared/control-plane-setup.js';
 import {
-  PARTITION_SERVICE_ACTIVATION_ERROR,
 } from '../../src/bootstrap/shared/partition-service-activation.js';
 import {
-  ControlPlaneKernelIngress,
 } from '../../src/control-plane/control-plane-kernel-ingress.js';
 import {
-  JOIN_CHECKPOINT,
-  JoinSessionStore,
 } from '../../src/bootstrap/join-session-store.js';
 import {
-  JOINING_ERROR_MSG,
-  JOINING_LOG_MSG,
 } from '../../src/bootstrap/node-joining-constants.js';
 import {
-  MEMBERSHIP_LIFECYCLE_INTENT,
 } from '../../src/control-plane/membership-lifecycle-controller.js';
 import {
-  CONTROL_PLANE_READINESS_DIMENSION,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {
-  OWNER_CONTRACT_NEXT_ACTION,
-  OWNER_CONTRACT_STATE,
 } from '../../src/control-plane/owner-contract-outcome.js';
 import {
-  CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE,
 } from '../../src/control-plane/control-plane-constants.js';
 import {
-  QUERY_ROUTING_DIAGNOSTIC_REASON,
 } from '../../src/query/query-constants.js';
 import {
-  JOIN_PLAN_SEGMENT,
 } from '../../src/bootstrap/bootstrap-constants.js';
-import {STARTUP_JOIN_MODE} from '../../src/bootstrap/rejoin-hints-constants.js';
 import {
-  JOIN_PROMOTION_STATE,
-  JOIN_REJOIN_PROMOTION_RESTORE_STATE,
 } from '../../src/bootstrap/join-promotion-state-owner.js';
-import {WORK_CLASS} from '../../src/runtime/work-class-scheduler.js';
-import {ENTRYPOINT_DEFAULT} from '../../src/constants/entrypoint.js';
 import {
-  CDC_OPERATION,
   COLUMN,
-  ENDPOINT_STATUS,
   SERVICE_TYPE,
   SERVICE_STATUS,
   STATE,
   TABLES,
-  TRANSPORT_TYPE,
 } from '../../src/constants/index.js';
-import {CDC_EVENT} from '../../src/cdc/cdc-constants.js';
 import {META_SERVICE_ID} from '../../src/constants/wasm-meta.js';
 import {URL} from 'url';
-import {EventEmitter} from 'events';
 
-const DEFAULT_SEED_WS_ADDRESS =
-  `ws://localhost:${8080 + ENTRYPOINT_DEFAULT.WS_PORT_OFFSET}`;
-const NODES_ROUTING_PARTITION_ID = 'nodes-p1';
-const REMOTE_CANONICAL_LEADER_NODE_ID = 'seed-node-1';
-const REPORTER_FORWARD_NODE_ID = 'joiner-reporter-publication-mode';
-const REPORTER_FORWARD_NODE_ADDRESS = 'ws://localhost:19103';
-const REPORTER_FORWARD_SEED_ADDRESS = 'http://localhost:8080';
-const REPORTER_FORWARD_HEARTBEAT_AT = 4242;
-const REPORTER_FORWARD_READY_LEASE_AT = 8484;
-const REPORTER_FORWARD_TARGET_ADDRESS = 'seed-node-1/message-group/mg-1-r3';
 
 // Initialize configuration and logging for tests
 function initializeTestEnvironment() {
@@ -400,65 +366,65 @@ test('NodeJoiningService - full join with MOVE_REPLICA', async (t) => {
     heartbeatIntervalMs: 10,
   };
 
-test('NodeJoiningService - activates message-group rows from cache-visible endpoint publication without phase flag truth',
-  async (t) => {
-    initializeTestEnvironment();
+  test('NodeJoiningService - activates message-group rows from cache-visible endpoint publication without phase flag truth',
+    async (t) => {
+      initializeTestEnvironment();
 
-    const originalGetNodeService = NodeService.getInstance;
-    const cache = new SystemTableCache();
-    cache.applySystemTableChange(TABLES.SERVICE_ENDPOINTS, 'INSERT', {
-      endpoint_id: 'postgres-wire-endpoint-join-activation-node',
-      service_id: META_SERVICE_ID.POSTGRES_WIRE,
-      node_id: 'join-activation-node',
-      protocol: 'tcp',
-      address: 'join-activation-node',
-      port: 5432,
-      metadata: '{}',
-    });
-    NodeService.getInstance = () => ({
-      getSystemTableCache() {
-        return cache;
-      },
-    });
-
-    try {
-      const service = new NodeJoiningService({
-        nodeId: 'join-activation-node',
-        nodeAddress: 'ws://localhost:9191',
-        seedNodeAddress: 'ws://seed:8000',
+      const originalGetNodeService = NodeService.getInstance;
+      const cache = new SystemTableCache();
+      cache.applySystemTableChange(TABLES.SERVICE_ENDPOINTS, 'INSERT', {
+        endpoint_id: 'postgres-wire-endpoint-join-activation-node',
+        service_id: META_SERVICE_ID.POSTGRES_WIRE,
+        node_id: 'join-activation-node',
+        protocol: 'tcp',
+        address: 'join-activation-node',
+        port: 5432,
+        metadata: '{}',
       });
-      const activated = [];
-
-      service.messageGroupServiceHandler = {};
-      service.messageRouter = {
-        isRegistered: () => true,
-      };
-      service.messageGroupServices.set('mg-cache-r1', {
-        groupId: 'mg-cache',
-        unifiedAddress: 'join-activation-node/message-group/mg-cache-r1',
+      NodeService.getInstance = () => ({
+        getSystemTableCache() {
+          return cache;
+        },
       });
-      service.registerMessageGroupService = async (
-        groupId,
-        replicaId,
-        replicaService,
-        options,
-      ) => {
-        activated.push({groupId, replicaId, replicaService, options});
-      };
 
-      const activatedCount =
+      try {
+        const service = new NodeJoiningService({
+          nodeId: 'join-activation-node',
+          nodeAddress: 'ws://localhost:9191',
+          seedNodeAddress: 'ws://seed:8000',
+        });
+        const activated = [];
+
+        service.messageGroupServiceHandler = {};
+        service.messageRouter = {
+          isRegistered: () => true,
+        };
+        service.messageGroupServices.set('mg-cache-r1', {
+          groupId: 'mg-cache',
+          unifiedAddress: 'join-activation-node/message-group/mg-cache-r1',
+        });
+        service.registerMessageGroupService = async (
+          groupId,
+          replicaId,
+          replicaService,
+          options,
+        ) => {
+          activated.push({groupId, replicaId, replicaService, options});
+        };
+
+        const activatedCount =
         await service.activateMessageGroupServiceRows();
 
-      t.equal(activatedCount, 1,
-        'activation should proceed once local service_endpoints rows are visible in cache');
-      t.equal(activated.length, 1,
-        'activation should register the visible replica');
-      t.same(activated[0]?.options, {status: SERVICE_STATUS.ACTIVE},
-        'activation should mark the replica service row active');
-    } finally {
-      NodeService.getInstance = originalGetNodeService;
-    }
-  });
+        t.equal(activatedCount, 1,
+          'activation should proceed once local service_endpoints rows are visible in cache');
+        t.equal(activated.length, 1,
+          'activation should register the visible replica');
+        t.same(activated[0]?.options, {status: SERVICE_STATUS.ACTIVE},
+          'activation should mark the replica service row active');
+      } finally {
+        NodeService.getInstance = originalGetNodeService;
+      }
+    });
 
   // Create system table cache with message group data
   // This triggers MOVE_REPLICA strategy when there are 2+ replicas on same node

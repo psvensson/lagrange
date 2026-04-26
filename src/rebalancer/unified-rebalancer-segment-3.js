@@ -1,131 +1,99 @@
-import { UNIFIED_REBALANCER_SHARED } from "./unified-rebalancer-shared.js";
-import { UnifiedRebalancerSegment2 } from "./unified-rebalancer-segment-2.js";
+import {UNIFIED_REBALANCER_SHARED} from './unified-rebalancer-shared.js';
+import {UnifiedRebalancerSegment2} from './unified-rebalancer-segment-2.js';
 
 const {
-  CLUSTER_READINESS_TIMEOUT_MS,
   COLUMN,
-  CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
-  CONTROL_PLANE_PUBLICATION_STATUS,
   CONTROL_PLANE_READINESS_DIMENSION,
-  CONTROL_PLANE_WORKLOAD_CLASS,
-  COORDINATOR_OWNED_OPERATION_TYPES_SQL_CLAUSE,
-  CRITICAL_SYSTEM_ENDPOINT_VISIBILITY_AUTHORITATIVE_READ,
-  CRITICAL_SYSTEM_TOPOLOGY_SETTLING_BLOCKER_REASON,
-  ConfigurationManager,
-  ControlPlaneReadinessService,
-  DEFAULT_MESSAGE_GROUP_POLICY,
-  DEFAULT_PRIORITY_RECOVERY_ACTIVITY_STALE_GRACE_MS,
-  DEFAULT_TABLE_POLICY,
-  ENDPOINT_STATUS,
-  ENDPOINT_SYNC_HEALTH,
+  CONTROL_PLANE_READINESS_REASON,
   EntityType,
-  EventEmitter,
   LIFECYCLE_PHASE,
-  LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY,
-  LoggingService,
-  META_SERVICE_ID,
-  MovePlanner,
-  MoveType,
   NUM,
-  NodeStatus,
   OperationType,
-  OwnerKeyReconcileQueue,
-  PRESSURE_WORK_CLASS,
-  PRIORITY_BUDGET_BYPASS_COORDINATOR_OPTIONS,
-  PRIORITY_CONTROL_PLANE_RECOVERY_FALLBACK_REPLICA_COUNT,
-  PressureGovernor,
-  RAFT_ROLE,
   READINESS_SKIP_DETAIL,
-  REBALANCER_BUDGET_READ_OPTIONS,
-  REBALANCER_CONCURRENT_BUDGET_READ_MODE,
-  REBALANCER_CONFIG_KEY,
-  REBALANCER_DEFAULT,
-  REBALANCER_DEFAULT_POLICY,
-  REBALANCER_ENTITY_TYPE,
-  REBALANCER_ERROR_MSG,
-  REBALANCER_EVENT,
-  REBALANCER_LOG_MSG,
-  REBALANCER_MOVE_TYPE,
-  REBALANCER_NODE_STATUS,
-  REBALANCER_QUEUE_NAME,
-  REBALANCER_RUNTIME_REASON,
-  REBALANCER_SKIP_REASON,
-  REBALANCER_SUBSYSTEM,
-  REBALANCER_TRIGGER,
-  RECONCILE_REASON,
   REPLICA_OPERATION_SEMANTIC_PHASE,
-  REPLICA_OPERATION_VISIBILITY_READ_MODE,
   ReplicaStatus,
   SERVICE_STATUS,
-  SQL_BUDGET,
-  STABILIZATION_RESET_TRIGGER,
   STATE,
   SYSTEM_TABLE_NAME,
-  StartupRecoveryCoordinator,
-  StoragePressureBehavior,
   TABLES,
   TERMINAL_STATUSES,
-  TERMINAL_STATUS_SQL_CLAUSE,
   TOPOLOGY_IN_FLIGHT_REPLICA_OPERATION_SOURCE,
-  TRANSPORT_TYPE,
   TYPEOF,
-  TriggerType,
   UNIFIED_REBALANCER_LITERAL,
   WORKFLOW_STEP,
-  adjustToOddCount,
-  assertCritical,
-  buildControlPlaneWorkloadProfile,
   buildPriorityRecoveryBlockedPartitions,
-  buildPriorityRecoveryOperationAssessment,
   buildPriorityRecoveryOperationContextFromRecord,
   buildPriorityRecoveryPartitionAssessment,
   buildPublicationRecoveryGateSnapshot,
-  createControlPlaneRuntimeBundle,
-  getControlPlaneRetryAfterMs,
   getLocalControlPlaneMutationReadinessBlocker,
-  getNextOddCount,
-  getPartitionRowFromCache,
-  getPreviousOddCount,
-  hasPriorityRecoverySpreadGap,
   isBackgroundWorkLifecycleReadySnapshot,
   isCoordinatorOwnedOperationType,
-  isCriticalTransportControlPlanePartitionTable,
-  isNodeReadyLeaseExplicitlyCleared,
-  isNodeReadyWithConnection,
   isNodeReadyWithTransport,
-  isNodeRecordReady,
-  isOddReplicaCount,
   isPriorityControlPlanePartition,
   isReplaceRemoveDispatchPhase,
   isReplicaOperationInFlight,
   isReplicaOperationStale,
-  isRetryableControlPlaneError,
-  isSystemTablePartition,
   isTerminalReplicaOperationSemanticPhase,
   isTerminalStep,
   isValidWorkflowStep,
-  normalizeNodeEndpointRow,
-  normalizeNodeRow,
   normalizeReplicaOperationRecord,
-  normalizeServiceEndpointRow,
   normalizeServiceRow,
   resolvePriorityRecoveryActiveNodeCohort,
   resolveReplicaOperationSemanticPhase,
-  resolveTrackedPriorityRecoveryAdmissionPlan,
   shouldPriorityRecoveryOperationBlockPlanning,
-  wasNodeRecordReadyWhenWritten,
 } = UNIFIED_REBALANCER_SHARED;
+
+const REBALANCE_OPERATION_FIELD = Object.freeze({
+  REPLICA_ID_CAMEL: 'replicaId',
+  SERVICE_ID_CAMEL: 'serviceId',
+  SOURCE_REPLICA_ID: 'sourceReplicaId',
+  SOURCE_REPLICA_ID_SNAKE: 'source_replica_id',
+  STEPS_HISTORY: 'stepsHistory',
+  STEPS_HISTORY_SNAKE: 'steps_history',
+});
+
+const LOCAL_SERVE_READINESS_REASON_STATE = Object.freeze({
+  SERVE_ELIGIBLE: 'serve_eligible',
+  STARTUP_BYPASS: 'startup_bypass',
+  PRIORITY_RECOVERY_ONLY: 'priority_recovery_only',
+  BLOCKING_REASON_PRESENT: 'blocking_reason_present',
+});
+
+const LOCAL_SERVE_READINESS_PLANNING_DECISION = Object.freeze({
+  ALLOW_PLANNING: 'allow_planning',
+  DEFER_PLANNING: 'defer_planning',
+});
+
+const LOCAL_SERVE_READINESS_REASON_DECISION_TABLE = Object.freeze({
+  [LOCAL_SERVE_READINESS_REASON_STATE.SERVE_ELIGIBLE]:
+    LOCAL_SERVE_READINESS_PLANNING_DECISION.ALLOW_PLANNING,
+  [LOCAL_SERVE_READINESS_REASON_STATE.STARTUP_BYPASS]:
+    LOCAL_SERVE_READINESS_PLANNING_DECISION.ALLOW_PLANNING,
+  [LOCAL_SERVE_READINESS_REASON_STATE.PRIORITY_RECOVERY_ONLY]:
+    LOCAL_SERVE_READINESS_PLANNING_DECISION.ALLOW_PLANNING,
+  [LOCAL_SERVE_READINESS_REASON_STATE.BLOCKING_REASON_PRESENT]:
+    LOCAL_SERVE_READINESS_PLANNING_DECISION.DEFER_PLANNING,
+});
+
+const LOCAL_SERVE_PRIORITY_RECOVERY_REASON_CODES = Object.freeze([
+  CONTROL_PLANE_READINESS_REASON.CONTROL_PLANE_PUBLICATION_PENDING,
+  CONTROL_PLANE_READINESS_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
+]);
+
+const LOCAL_SERVE_PRIORITY_RECOVERY_REASON_CODE_SET = new Set(
+  LOCAL_SERVE_PRIORITY_RECOVERY_REASON_CODES,
+);
 
 class UnifiedRebalancerSegment3 extends UnifiedRebalancerSegment2 {
   async buildNonBlockingPriorityOperationIdSet(operations = []) {
     const operationsByPartitionId = new Map();
     for (const operation of Array.isArray(operations) ? operations : []) {
       const partitionId = String(
-        operation?.partitionId || operation?.partition_id || "",
+        operation?.partitionId || operation?.partition_id || '',
       ).trim();
       if (
         partitionId.length === NUM.ZERO ||
-        !isPriorityControlPlanePartition({ partitionId })
+        !isPriorityControlPlanePartition({partitionId})
       ) {
         continue;
       }
@@ -167,7 +135,7 @@ class UnifiedRebalancerSegment3 extends UnifiedRebalancerSegment2 {
       }
       for (const operation of partitionOperations) {
         const operationId = String(
-          operation?.operationId || operation?.operation_id || "",
+          operation?.operationId || operation?.operation_id || '',
         ).trim();
         if (operationId.length > NUM.ZERO) {
           nonBlockingOperationIds.add(operationId);
@@ -190,11 +158,11 @@ class UnifiedRebalancerSegment3 extends UnifiedRebalancerSegment2 {
     const operationsByPartitionId = new Map();
     for (const operation of Array.isArray(operations) ? operations : []) {
       const partitionId = String(
-        operation?.partitionId || operation?.partition_id || "",
+        operation?.partitionId || operation?.partition_id || '',
       ).trim();
       if (
         partitionId.length === NUM.ZERO ||
-        !isPriorityControlPlanePartition({ partitionId })
+        !isPriorityControlPlanePartition({partitionId})
       ) {
         continue;
       }
@@ -237,7 +205,7 @@ class UnifiedRebalancerSegment3 extends UnifiedRebalancerSegment2 {
       }
       for (const operation of partitionOperations) {
         const operationId = String(
-          operation?.operationId || operation?.operation_id || "",
+          operation?.operationId || operation?.operation_id || '',
         ).trim();
         if (operationId.length > NUM.ZERO) {
           nonBlockingOperationIds.add(operationId);
@@ -259,7 +227,7 @@ class UnifiedRebalancerSegment3 extends UnifiedRebalancerSegment2 {
    * @private
    */
   getControlPlanePrioritySpreadBlocker() {
-    if (this.isSystemPartitionEntity()) {
+    if (this.isControlPlanePriorityPartition()) {
       return null;
     }
 
@@ -294,62 +262,62 @@ class UnifiedRebalancerSegment3 extends UnifiedRebalancerSegment2 {
 
     const providedPublicationRecoveryGate =
       planningSnapshot?.publicationRecoveryGate &&
-      typeof planningSnapshot.publicationRecoveryGate === TYPEOF.OBJECT
-        ? planningSnapshot.publicationRecoveryGate
-        : null;
+      typeof planningSnapshot.publicationRecoveryGate === TYPEOF.OBJECT ?
+        planningSnapshot.publicationRecoveryGate :
+        null;
     const publicationRecoveryGate = buildPublicationRecoveryGateSnapshot({
       ...(providedPublicationRecoveryGate || {}),
       publicationEpoch:
-        Number.isFinite(planningSnapshot?.publicationEpoch)
-          ? planningSnapshot.publicationEpoch
-          : providedPublicationRecoveryGate?.publicationEpoch ?? null,
+        Number.isFinite(planningSnapshot?.publicationEpoch) ?
+          planningSnapshot.publicationEpoch :
+          providedPublicationRecoveryGate?.publicationEpoch ?? null,
       publicationStatus:
         typeof planningSnapshot?.publicationStatus === TYPEOF.STRING &&
-        planningSnapshot.publicationStatus.length > NUM.ZERO
-          ? planningSnapshot.publicationStatus
-          : typeof planningSnapshot?.status === TYPEOF.STRING &&
-              planningSnapshot.status.length > NUM.ZERO
-            ? planningSnapshot.status
-            : providedPublicationRecoveryGate?.publicationStatus ?? null,
+        planningSnapshot.publicationStatus.length > NUM.ZERO ?
+          planningSnapshot.publicationStatus :
+          typeof planningSnapshot?.status === TYPEOF.STRING &&
+              planningSnapshot.status.length > NUM.ZERO ?
+            planningSnapshot.status :
+            providedPublicationRecoveryGate?.publicationStatus ?? null,
       publicationObservationState:
         typeof planningSnapshot?.publicationObservationState === TYPEOF.STRING &&
-        planningSnapshot.publicationObservationState.length > NUM.ZERO
-          ? planningSnapshot.publicationObservationState
-          : providedPublicationRecoveryGate?.publicationObservationState ??
+        planningSnapshot.publicationObservationState.length > NUM.ZERO ?
+          planningSnapshot.publicationObservationState :
+          providedPublicationRecoveryGate?.publicationObservationState ??
             null,
       recoveryProtocolState:
         typeof planningSnapshot?.recoveryProtocolState === TYPEOF.STRING &&
-        planningSnapshot.recoveryProtocolState.length > NUM.ZERO
-          ? planningSnapshot.recoveryProtocolState
-          : providedPublicationRecoveryGate?.recoveryProtocolState ?? null,
+        planningSnapshot.recoveryProtocolState.length > NUM.ZERO ?
+          planningSnapshot.recoveryProtocolState :
+          providedPublicationRecoveryGate?.recoveryProtocolState ?? null,
       priorityRecoveryReasonCodes:
-        Array.isArray(planningSnapshot?.priorityRecoveryReasonCodes)
-          ? planningSnapshot.priorityRecoveryReasonCodes
-          : providedPublicationRecoveryGate?.reasonCodes,
+        Array.isArray(planningSnapshot?.priorityRecoveryReasonCodes) ?
+          planningSnapshot.priorityRecoveryReasonCodes :
+          providedPublicationRecoveryGate?.reasonCodes,
       priorityPartitionSummary:
         planningSnapshot?.priorityPartitionSummary &&
-        typeof planningSnapshot.priorityPartitionSummary === TYPEOF.OBJECT
-          ? planningSnapshot.priorityPartitionSummary
-          : providedPublicationRecoveryGate?.priorityPartitionSummary ?? null,
+        typeof planningSnapshot.priorityPartitionSummary === TYPEOF.OBJECT ?
+          planningSnapshot.priorityPartitionSummary :
+          providedPublicationRecoveryGate?.priorityPartitionSummary ?? null,
       priorityRecoveryClosureWitness:
         planningSnapshot?.priorityRecoveryClosureWitness &&
         typeof planningSnapshot.priorityRecoveryClosureWitness ===
-          TYPEOF.OBJECT
-          ? planningSnapshot.priorityRecoveryClosureWitness
-          : providedPublicationRecoveryGate?.priorityRecoveryClosureWitness ??
+          TYPEOF.OBJECT ?
+          planningSnapshot.priorityRecoveryClosureWitness :
+          providedPublicationRecoveryGate?.priorityRecoveryClosureWitness ??
             null,
       pendingAckNodeIds:
-        Array.isArray(planningSnapshot?.pendingAckNodeIds)
-          ? planningSnapshot.pendingAckNodeIds
-          : providedPublicationRecoveryGate?.pendingAckNodeIds ?? [],
+        Array.isArray(planningSnapshot?.pendingAckNodeIds) ?
+          planningSnapshot.pendingAckNodeIds :
+          providedPublicationRecoveryGate?.pendingAckNodeIds ?? [],
       missingPublishedNodeIds:
-        Array.isArray(planningSnapshot?.missingPublishedNodeIds)
-          ? planningSnapshot.missingPublishedNodeIds
-          : Array.isArray(
-                planningSnapshot?.missingPublishedRecoveryActiveNodeIds,
-              )
-            ? planningSnapshot.missingPublishedRecoveryActiveNodeIds
-            : providedPublicationRecoveryGate?.missingPublishedNodeIds ?? [],
+        Array.isArray(planningSnapshot?.missingPublishedNodeIds) ?
+          planningSnapshot.missingPublishedNodeIds :
+          Array.isArray(
+            planningSnapshot?.missingPublishedRecoveryActiveNodeIds,
+          ) ?
+            planningSnapshot.missingPublishedRecoveryActiveNodeIds :
+            providedPublicationRecoveryGate?.missingPublishedNodeIds ?? [],
     });
     const priorityPartitionSummary =
       publicationRecoveryGate.priorityPartitionSummary;
@@ -361,24 +329,24 @@ class UnifiedRebalancerSegment3 extends UnifiedRebalancerSegment2 {
     }
 
     const planningPublishedActiveNodeIds = new Set(
-      (Array.isArray(planningSnapshot?.publishedActiveNodeIds)
-        ? planningSnapshot.publishedActiveNodeIds
-        : Array.isArray(planningSnapshot?.published_active_node_ids)
-          ? planningSnapshot.published_active_node_ids
-          : []
+      (Array.isArray(planningSnapshot?.publishedActiveNodeIds) ?
+        planningSnapshot.publishedActiveNodeIds :
+        Array.isArray(planningSnapshot?.published_active_node_ids) ?
+          planningSnapshot.published_active_node_ids :
+          []
       ).filter(
         (nodeId) => typeof nodeId === TYPEOF.STRING && nodeId.length > NUM.ZERO,
       ),
     );
     const readyNodes =
-      planningPublishedActiveNodeIds.size > NUM.ZERO
-        ? this.getAvailableNodesConstrainedToNodeIds(
-            planningPublishedActiveNodeIds,
-          )
-        : this.getAvailableNodes();
+      planningPublishedActiveNodeIds.size > NUM.ZERO ?
+        this.getAvailableNodesConstrainedToNodeIds(
+          planningPublishedActiveNodeIds,
+        ) :
+        this.getAvailableNodes();
     const readyNodeIds = new Set(
       readyNodes
-        .map((node) => node?.node_id || node?.nodeId || "")
+        .map((node) => node?.node_id || node?.nodeId || '')
         .filter(Boolean),
     );
     const requiredDistinctNodeCount = Math.min(NUM.THREE, readyNodeIds.size);
@@ -395,18 +363,18 @@ class UnifiedRebalancerSegment3 extends UnifiedRebalancerSegment2 {
     )
       .map((partition) =>
         Object.freeze({
-          partitionId: String(partition?.partitionId || ""),
-          readyReplicaCount: Number.isFinite(partition?.readyReplicaCount)
-            ? partition.readyReplicaCount
-            : null,
+          partitionId: String(partition?.partitionId || ''),
+          readyReplicaCount: Number.isFinite(partition?.readyReplicaCount) ?
+            partition.readyReplicaCount :
+            null,
           readyDistinctNodeCount: Number.isFinite(
             partition?.readyDistinctNodeCount,
-          )
-            ? partition.readyDistinctNodeCount
-            : null,
-          spreadGap: Number.isFinite(partition?.spreadGap)
-            ? partition.spreadGap
-            : null,
+          ) ?
+            partition.readyDistinctNodeCount :
+            null,
+          spreadGap: Number.isFinite(partition?.spreadGap) ?
+            partition.spreadGap :
+            null,
         }),
       )
       .filter((partition) => partition.partitionId.length > NUM.ZERO);
@@ -445,9 +413,9 @@ class UnifiedRebalancerSegment3 extends UnifiedRebalancerSegment2 {
       connectedNodeIds.add(this.nodeId);
     }
     const peers =
-      typeof this.messageRouter?.getConnectedNodes === TYPEOF.FUNCTION
-        ? this.messageRouter.getConnectedNodes()
-        : [];
+      typeof this.messageRouter?.getConnectedNodes === TYPEOF.FUNCTION ?
+        this.messageRouter.getConnectedNodes() :
+        [];
     for (const peerNodeId of peers) {
       if (
         typeof peerNodeId === TYPEOF.STRING &&
@@ -477,13 +445,13 @@ class UnifiedRebalancerSegment3 extends UnifiedRebalancerSegment2 {
    */
   evaluateCriticalSystemEndpointVisibility(activeNodeIds = [], options = {}) {
     const nodeEndpointRows =
-      typeof this.systemTableCache?.getAll === TYPEOF.FUNCTION
-        ? this.systemTableCache.getAll(TABLES.NODE_ENDPOINTS)
-        : [];
+      typeof this.systemTableCache?.getAll === TYPEOF.FUNCTION ?
+        this.systemTableCache.getAll(TABLES.NODE_ENDPOINTS) :
+        [];
     const serviceEndpointRows =
-      typeof this.systemTableCache?.getAll === TYPEOF.FUNCTION
-        ? this.systemTableCache.getAll(TABLES.SERVICE_ENDPOINTS)
-        : [];
+      typeof this.systemTableCache?.getAll === TYPEOF.FUNCTION ?
+        this.systemTableCache.getAll(TABLES.SERVICE_ENDPOINTS) :
+        [];
     return this.summarizeCriticalSystemEndpointVisibility(
       activeNodeIds,
       nodeEndpointRows,
@@ -507,9 +475,9 @@ class UnifiedRebalancerSegment3 extends UnifiedRebalancerSegment2 {
       row?.partition_id ||
       row?.partitionId ||
       null;
-    const targetNodeId = String(row?.target_node_id || row?.targetNodeId || "");
+    const targetNodeId = String(row?.target_node_id || row?.targetNodeId || '');
     const status =
-      row?.status || String(row?.status || "").toLowerCase() || null;
+      row?.status || String(row?.status || '').toLowerCase() || null;
     const workflowStep = row?.workflow_step || row?.workflowStep || null;
     const semanticPhase = resolveReplicaOperationSemanticPhase(
       type,
@@ -564,14 +532,14 @@ class UnifiedRebalancerSegment3 extends UnifiedRebalancerSegment2 {
         observedAt: nowMs,
       });
     for (const row of rows) {
-      if (!this.isTopologySettlingInFlightOperation(row, { nowMs })) {
+      if (!this.isTopologySettlingInFlightOperation(row, {nowMs})) {
         continue;
       }
       if (scopeToEntity && !this.isOperationForEntity(row)) {
         continue;
       }
       const operationId = String(
-        row?.operationId || row?.operation_id || "",
+        row?.operationId || row?.operation_id || '',
       ).trim();
       if (
         operationId.length > NUM.ZERO &&
@@ -581,7 +549,7 @@ class UnifiedRebalancerSegment3 extends UnifiedRebalancerSegment2 {
       }
       const detail =
         this.buildCriticalSystemInFlightReplicaOperationDetail(row);
-      const { targetNodeId } = detail;
+      const {targetNodeId} = detail;
       if (!targetNodeId || !requiredNodeIds.has(targetNodeId)) {
         continue;
       }
@@ -592,6 +560,79 @@ class UnifiedRebalancerSegment3 extends UnifiedRebalancerSegment2 {
       count: details.length,
       details: Object.freeze(details),
       source: TOPOLOGY_IN_FLIGHT_REPLICA_OPERATION_SOURCE.CACHE,
+    });
+  }
+
+  normalizeLocalServeReadinessReasonCodes(readiness) {
+    const seenReasonCodes = new Set();
+    const reasonCodes = [];
+    for (const reason of Array.isArray(readiness?.reasons) ?
+      readiness.reasons :
+      []) {
+      const rawCode =
+        typeof reason === TYPEOF.STRING ?
+          reason :
+          reason?.code || reason?.reason ||
+            UNIFIED_REBALANCER_LITERAL.EMPTY_STRING;
+      const reasonCode = String(rawCode).trim();
+      if (
+        reasonCode.length === NUM.ZERO ||
+        seenReasonCodes.has(reasonCode)
+      ) {
+        continue;
+      }
+      seenReasonCodes.add(reasonCode);
+      reasonCodes.push(reasonCode);
+    }
+    return Object.freeze(reasonCodes);
+  }
+
+  resolveLocalServeReadinessReasonState({
+    readiness,
+    reasonCodes,
+    startupBypass,
+  } = {}) {
+    if (
+      readiness?.dimensions?.[
+        CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE
+      ] === true
+    ) {
+      return LOCAL_SERVE_READINESS_REASON_STATE.SERVE_ELIGIBLE;
+    }
+    if (startupBypass === true) {
+      return LOCAL_SERVE_READINESS_REASON_STATE.STARTUP_BYPASS;
+    }
+    if (
+      !this.isControlPlanePriorityPartition() ||
+      !Array.isArray(reasonCodes) ||
+      reasonCodes.length === NUM.ZERO
+    ) {
+      return LOCAL_SERVE_READINESS_REASON_STATE.BLOCKING_REASON_PRESENT;
+    }
+    const priorityRecoveryOnly = reasonCodes.every((reasonCode) =>
+      LOCAL_SERVE_PRIORITY_RECOVERY_REASON_CODE_SET.has(reasonCode),
+    );
+    return priorityRecoveryOnly ?
+      LOCAL_SERVE_READINESS_REASON_STATE.PRIORITY_RECOVERY_ONLY :
+      LOCAL_SERVE_READINESS_REASON_STATE.BLOCKING_REASON_PRESENT;
+  }
+
+  buildLocalServeReadinessPlanningSnapshot(readiness) {
+    const reasonCodes = this.normalizeLocalServeReadinessReasonCodes(readiness);
+    const startupBypass =
+      this.shouldBypassLocalPriorityControlPlaneStartupReadiness();
+    const reasonState = this.resolveLocalServeReadinessReasonState({
+      readiness,
+      reasonCodes,
+      startupBypass,
+    });
+    return Object.freeze({
+      reasonCodes,
+      reasonState,
+      startupBypass,
+      decision:
+        LOCAL_SERVE_READINESS_REASON_DECISION_TABLE[reasonState] ||
+        LOCAL_SERVE_READINESS_PLANNING_DECISION.DEFER_PLANNING,
     });
   }
 
@@ -616,23 +657,27 @@ class UnifiedRebalancerSegment3 extends UnifiedRebalancerSegment2 {
     ) {
       return null;
     }
-    if (this.shouldBypassLocalPriorityControlPlaneStartupReadiness()) {
-      return null;
-    }
     const readiness = this.controlPlaneReadinessService.getNodeReadinessSync(
       this.nodeId,
       {
         allowStaleOnCacheChange: false,
       },
     );
+    if (!readiness?.dimensions) {
+      return null;
+    }
+    const planningSnapshot =
+      this.buildLocalServeReadinessPlanningSnapshot(readiness);
     if (
-      !readiness?.dimensions ||
-      readiness.dimensions[CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE] ===
-        true
+      planningSnapshot.decision ===
+        LOCAL_SERVE_READINESS_PLANNING_DECISION.ALLOW_PLANNING
     ) {
       return null;
     }
-    return readiness;
+    return Object.freeze({
+      ...readiness,
+      localServeReadinessPlanning: planningSnapshot,
+    });
   }
 
   /**
@@ -659,9 +704,9 @@ class UnifiedRebalancerSegment3 extends UnifiedRebalancerSegment2 {
    */
   getLocalControlPlaneMutationReadinessBlocker() {
     const requiredDimensions =
-      this.shouldBypassLocalPriorityControlPlaneStartupReadiness()
-        ? [CONTROL_PLANE_READINESS_DIMENSION.METADATA_PUBLICATION_HEALTHY]
-        : null;
+      this.shouldBypassLocalPriorityControlPlaneStartupReadiness() ?
+        [CONTROL_PLANE_READINESS_DIMENSION.METADATA_PUBLICATION_HEALTHY] :
+        null;
     return getLocalControlPlaneMutationReadinessBlocker({
       nodeId: this.nodeId,
       controlPlaneReadinessService: this.controlPlaneReadinessService,
@@ -687,11 +732,11 @@ class UnifiedRebalancerSegment3 extends UnifiedRebalancerSegment2 {
     if (!this.bootstrapReadinessState) {
       return null;
     }
-    return typeof this.bootstrapReadinessState.evaluate === TYPEOF.FUNCTION
-      ? this.bootstrapReadinessState.evaluate()
-      : typeof this.bootstrapReadinessState.getSnapshot === TYPEOF.FUNCTION
-        ? this.bootstrapReadinessState.getSnapshot()
-        : null;
+    return typeof this.bootstrapReadinessState.evaluate === TYPEOF.FUNCTION ?
+      this.bootstrapReadinessState.evaluate() :
+      typeof this.bootstrapReadinessState.getSnapshot === TYPEOF.FUNCTION ?
+        this.bootstrapReadinessState.getSnapshot() :
+        null;
   }
 
   /**
@@ -877,9 +922,9 @@ class UnifiedRebalancerSegment3 extends UnifiedRebalancerSegment2 {
       return true;
     }
 
-    const pingTimeout = Number.isFinite(this.readinessPingTimeoutMs)
-      ? this.readinessPingTimeoutMs
-      : NUM.ZERO;
+    const pingTimeout = Number.isFinite(this.readinessPingTimeoutMs) ?
+      this.readinessPingTimeoutMs :
+      NUM.ZERO;
     return router.pingNode(nodeId, pingTimeout);
   }
 
@@ -944,9 +989,9 @@ class UnifiedRebalancerSegment3 extends UnifiedRebalancerSegment2 {
       this.enableReadinessPing &&
       typeof router.pingNode === TYPEOF.FUNCTION
     ) {
-      const pingTimeout = Number.isFinite(this.readinessPingTimeoutMs)
-        ? this.readinessPingTimeoutMs
-        : NUM.ZERO;
+      const pingTimeout = Number.isFinite(this.readinessPingTimeoutMs) ?
+        this.readinessPingTimeoutMs :
+        NUM.ZERO;
       const ok = await router.pingNode(nodeId, pingTimeout);
       if (!ok) {
         return READINESS_SKIP_DETAIL.PING_FAILED;
@@ -963,43 +1008,49 @@ class UnifiedRebalancerSegment3 extends UnifiedRebalancerSegment2 {
    */
   getCurrentReplicas() {
     if (this.entityType === EntityType.MESSAGE_GROUP) {
-      return this.systemTableCache.filter(
-        SYSTEM_TABLE_NAME.SERVICES,
-        (service) => {
-          const normalizedService = normalizeServiceRow(service);
-          return (
-            normalizedService.groupId === this.entityId &&
-            normalizedService.serviceType === EntityType.MESSAGE_GROUP
-          );
-        },
+      return this.filterReplicasRetiredByTerminalReplaceOperations(
+        this.systemTableCache.filter(
+          SYSTEM_TABLE_NAME.SERVICES,
+          (service) => {
+            const normalizedService = normalizeServiceRow(service);
+            return (
+              normalizedService.groupId === this.entityId &&
+              normalizedService.serviceType === EntityType.MESSAGE_GROUP
+            );
+          },
+        ),
       );
     }
 
     // For runtime services, match by service_type and service_id
     // that equals or is prefixed by the entity (definition) ID.
     if (this.entityType === EntityType.RUNTIME_SERVICE) {
-      return this.systemTableCache.filter(
-        SYSTEM_TABLE_NAME.SERVICES,
-        (service) => {
-          const normalizedService = normalizeServiceRow(service);
-          return (
-            normalizedService.serviceType === EntityType.RUNTIME_SERVICE &&
-            normalizedService.serviceId === this.entityId
-          );
-        },
+      return this.filterReplicasRetiredByTerminalReplaceOperations(
+        this.systemTableCache.filter(
+          SYSTEM_TABLE_NAME.SERVICES,
+          (service) => {
+            const normalizedService = normalizeServiceRow(service);
+            return (
+              normalizedService.serviceType === EntityType.RUNTIME_SERVICE &&
+              normalizedService.serviceId === this.entityId
+            );
+          },
+        ),
       );
     }
 
     // For partitions, get services with matching partition_id
-    return this.systemTableCache.filter(
-      SYSTEM_TABLE_NAME.SERVICES,
-      (service) => {
-        const normalizedService = normalizeServiceRow(service);
-        return (
-          normalizedService.partitionId === this.entityId &&
-          normalizedService.serviceType === EntityType.PARTITION
-        );
-      },
+    return this.filterReplicasRetiredByTerminalReplaceOperations(
+      this.systemTableCache.filter(
+        SYSTEM_TABLE_NAME.SERVICES,
+        (service) => {
+          const normalizedService = normalizeServiceRow(service);
+          return (
+            normalizedService.partitionId === this.entityId &&
+            normalizedService.serviceType === EntityType.PARTITION
+          );
+        },
+      ),
     );
   }
 
@@ -1056,7 +1107,7 @@ class UnifiedRebalancerSegment3 extends UnifiedRebalancerSegment2 {
     if (semanticPhase !== REPLICA_OPERATION_SEMANTIC_PHASE.UNKNOWN) {
       return true;
     }
-    const status = String(operation?.status || "").toLowerCase();
+    const status = String(operation?.status || '').toLowerCase();
     if (TERMINAL_STATUSES.includes(status)) {
       return false;
     }
@@ -1079,14 +1130,187 @@ class UnifiedRebalancerSegment3 extends UnifiedRebalancerSegment2 {
 
   /**
    * @param {Object} operation
+   * @return {Array<Object>}
+   * @private
+   */
+  getReplicaOperationStepsHistory(operation) {
+    const stepsHistory =
+      operation?.[REBALANCE_OPERATION_FIELD.STEPS_HISTORY] ??
+      operation?.[REBALANCE_OPERATION_FIELD.STEPS_HISTORY_SNAKE];
+    if (Array.isArray(stepsHistory)) {
+      return stepsHistory;
+    }
+    if (
+      typeof stepsHistory !== TYPEOF.STRING ||
+      stepsHistory.length === NUM.ZERO
+    ) {
+      return [];
+    }
+    try {
+      const parsed = JSON.parse(stepsHistory);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (_error) {
+      return [];
+    }
+  }
+
+  /**
+   * @param {Object} operation
+   * @return {string}
+   * @private
+   */
+  getReplaceSourceReplicaIdFromOperationRow(operation) {
+    const directSourceReplicaId = String(
+      operation?.[REBALANCE_OPERATION_FIELD.SOURCE_REPLICA_ID] ||
+        operation?.[REBALANCE_OPERATION_FIELD.SOURCE_REPLICA_ID_SNAKE] ||
+        UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
+    ).trim();
+    if (directSourceReplicaId.length > NUM.ZERO) {
+      return directSourceReplicaId;
+    }
+    const stepsHistory = this.getReplicaOperationStepsHistory(operation);
+    for (const entry of stepsHistory) {
+      const sourceReplicaId = String(
+        entry?.[REBALANCE_OPERATION_FIELD.SOURCE_REPLICA_ID] ||
+          entry?.[REBALANCE_OPERATION_FIELD.SOURCE_REPLICA_ID_SNAKE] ||
+          UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
+      ).trim();
+      if (sourceReplicaId.length > NUM.ZERO) {
+        return sourceReplicaId;
+      }
+    }
+    return UNIFIED_REBALANCER_LITERAL.EMPTY_STRING;
+  }
+
+  /**
+   * @param {Object} operation
+   * @return {string}
+   * @private
+   */
+  getReplicaIdFromOperationRow(operation) {
+    return String(
+      operation?.[COLUMN.REPLICA_ID] ||
+        operation?.[REBALANCE_OPERATION_FIELD.REPLICA_ID_CAMEL] ||
+        UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
+    ).trim();
+  }
+
+  /**
+   * @param {Object} replica
+   * @return {string}
+   * @private
+   */
+  getReplicaIdFromServiceRow(replica) {
+    return String(
+      replica?.[COLUMN.REPLICA_ID] ||
+        replica?.[REBALANCE_OPERATION_FIELD.REPLICA_ID_CAMEL] ||
+        replica?.[COLUMN.SERVICE_ID] ||
+        replica?.[REBALANCE_OPERATION_FIELD.SERVICE_ID_CAMEL] ||
+        UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
+    ).trim();
+  }
+
+  /**
+   * Completed REPLACE rows are authoritative retirement evidence for their
+   * source replica. This projects stale service cache rows out of planning
+   * before they can seed another replacement for the same retired source.
+   *
+   * @return {Set<string>}
+   * @private
+   */
+  getTerminalReplaceSourceReplicaIds() {
+    const retiredSourceReplicaIds = new Set();
+    const operations = this.systemTableCache.filter(
+      SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+      (operation) => {
+        if (!this.isOperationForEntity(operation)) {
+          return false;
+        }
+        const normalizedOperation = normalizeReplicaOperationRecord(operation, {
+          nowMs: this.nowFn(),
+        });
+        return (
+          normalizedOperation.type === OperationType.REPLACE &&
+          (normalizedOperation.status === ReplicaStatus.REMOVED ||
+            normalizedOperation.workflowStep === WORKFLOW_STEP.REMOVED)
+        );
+      },
+    );
+    for (const operation of operations) {
+      const sourceReplicaId =
+        this.getReplaceSourceReplicaIdFromOperationRow(operation);
+      if (sourceReplicaId.length > NUM.ZERO) {
+        retiredSourceReplicaIds.add(sourceReplicaId);
+      }
+    }
+    return retiredSourceReplicaIds;
+  }
+
+  /**
+   * Failed REPLACE rows can still leave the target replica in raft placement.
+   * Surface those target replica IDs to the planner as cleanup removals so a
+   * failed create path cannot hold the partition above target indefinitely.
+   *
+   * @return {Set<string>}
+   * @private
+   */
+  getTerminalFailedReplaceTargetReplicaIds() {
+    const failedTargetReplicaIds = new Set();
+    const operations = this.systemTableCache.filter(
+      SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+      (operation) => {
+        if (!this.isOperationForEntity(operation)) {
+          return false;
+        }
+        const normalizedOperation = normalizeReplicaOperationRecord(operation, {
+          nowMs: this.nowFn(),
+        });
+        return (
+          normalizedOperation.type === OperationType.REPLACE &&
+          (normalizedOperation.status === ReplicaStatus.FAILED ||
+            normalizedOperation.workflowStep === WORKFLOW_STEP.FAILED)
+        );
+      },
+    );
+    for (const operation of operations) {
+      const targetReplicaId = this.getReplicaIdFromOperationRow(operation);
+      if (targetReplicaId.length > NUM.ZERO) {
+        failedTargetReplicaIds.add(targetReplicaId);
+      }
+    }
+    return failedTargetReplicaIds;
+  }
+
+  /**
+   * @param {Array<Object>} replicas
+   * @return {Array<Object>}
+   * @private
+   */
+  filterReplicasRetiredByTerminalReplaceOperations(replicas) {
+    const normalizedReplicas = Array.isArray(replicas) ? replicas : [];
+    const retiredSourceReplicaIds = this.getTerminalReplaceSourceReplicaIds();
+    if (retiredSourceReplicaIds.size === NUM.ZERO) {
+      return normalizedReplicas;
+    }
+    return normalizedReplicas.filter((replica) => {
+      const replicaId = this.getReplicaIdFromServiceRow(replica);
+      return (
+        replicaId.length === NUM.ZERO ||
+        !retiredSourceReplicaIds.has(replicaId)
+      );
+    });
+  }
+
+  /**
+   * @param {Object} operation
    * @param {Object} options
    * @return {boolean}
    * @private
    */
   isTopologySettlingInFlightOperation(operation, options = {}) {
-    const nowMs = Number.isFinite(options.nowMs)
-      ? Math.floor(options.nowMs)
-      : Date.now();
+    const nowMs = Number.isFinite(options.nowMs) ?
+      Math.floor(options.nowMs) :
+      Date.now();
     const normalizedOperation = normalizeReplicaOperationRecord(operation, {
       nowMs,
     });
@@ -1096,7 +1320,7 @@ class UnifiedRebalancerSegment3 extends UnifiedRebalancerSegment2 {
     if (!this.isTopologyBlockingInFlightOperation(normalizedOperation)) {
       return false;
     }
-    return !isReplicaOperationStale(normalizedOperation, { nowMs });
+    return !isReplicaOperationStale(normalizedOperation, {nowMs});
   }
 
   /**
@@ -1206,4 +1430,4 @@ class UnifiedRebalancerSegment3 extends UnifiedRebalancerSegment2 {
    */
 }
 
-export { UnifiedRebalancerSegment3 };
+export {UnifiedRebalancerSegment3};

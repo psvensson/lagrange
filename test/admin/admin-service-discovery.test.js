@@ -24,8 +24,8 @@ const TEST_DISCOVERY_ROUTING_GAP_OWNER_MISSING = 'owner_missing';
 
 test('AdminServiceDiscovery routes authoritative cache repair through the ' +
   'gateway instead of mutating the cache directly', async (t) => {
-    const repairCalls = [];
-    const discovery = new AdminServiceDiscovery({
+  const repairCalls = [];
+  const discovery = new AdminServiceDiscovery({
     nodeId: TEST_DISCOVERY_NODE_ID,
     systemTableCache: {
       getAll() {

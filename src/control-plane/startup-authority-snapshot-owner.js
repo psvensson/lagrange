@@ -1,42 +1,42 @@
-import { NUM, TYPEOF } from "../constants/index.js";
+import {NUM, TYPEOF} from '../constants/index.js';
 import {
   AUTHORITY_DESCRIPTOR_STATE,
   AUTHORITY_PUBLICATION_OBSERVATION_STATE,
   CONTROL_PLANE_PRIORITY_RECOVERY_REASON,
-} from "./control-plane-readiness-constants.js";
+} from './control-plane-readiness-constants.js';
 import {
   resolvePriorityRecoveryActiveNodeCohort,
-} from "./priority-recovery-snapshot.js";
+} from './priority-recovery-snapshot.js';
 import {
   PUBLICATION_RECOVERY_GATE_STATE,
   buildPublicationRecoveryGateSnapshot,
 } from './publication-recovery-gate.js';
 
 export const PRIORITY_CONTROL_PLANE_RECOVERY_HEALTH_FAILURE = Object.freeze({
-  SERVICE_UNAVAILABLE: "control_plane_recovery_service_unavailable",
+  SERVICE_UNAVAILABLE: 'control_plane_recovery_service_unavailable',
   PLANNING_PROVIDER_UNAVAILABLE:
-    "control_plane_recovery_planning_provider_unavailable",
-  PLANNING_READ_FAILED: "control_plane_recovery_planning_read_failed",
-  PLANNING_UNAVAILABLE: "control_plane_recovery_planning_unavailable",
-  PLANNING_INCOMPLETE: "control_plane_recovery_planning_incomplete",
+    'control_plane_recovery_planning_provider_unavailable',
+  PLANNING_READ_FAILED: 'control_plane_recovery_planning_read_failed',
+  PLANNING_UNAVAILABLE: 'control_plane_recovery_planning_unavailable',
+  PLANNING_INCOMPLETE: 'control_plane_recovery_planning_incomplete',
 });
 
 export const STARTUP_AUTHORITY_STATE = Object.freeze({
-  READY: "ready",
-  RECOVERY_PENDING: "recovery_pending",
-  SEED_LOCALLY_READY_UNPUBLISHED: "seed_locally_ready_unpublished",
-  AUTHORITY_UNAVAILABLE: "authority_unavailable",
-  BLOCKED: "blocked",
+  READY: 'ready',
+  RECOVERY_PENDING: 'recovery_pending',
+  SEED_LOCALLY_READY_UNPUBLISHED: 'seed_locally_ready_unpublished',
+  AUTHORITY_UNAVAILABLE: 'authority_unavailable',
+  BLOCKED: 'blocked',
 });
 
 const STARTUP_AUTHORITY_PUBLICATION_STATE = Object.freeze({
-  AUTHORITATIVE: "authoritative",
-  ESTABLISHING: "establishing",
+  AUTHORITATIVE: 'authoritative',
+  ESTABLISHING: 'establishing',
 });
 export const STARTUP_AUTHORITY_ADMISSION_STATE = Object.freeze({
-  ADMITTED: "admitted",
-  BLOCKED: "blocked",
-  UNAVAILABLE: "unavailable",
+  ADMITTED: 'admitted',
+  BLOCKED: 'blocked',
+  UNAVAILABLE: 'unavailable',
 });
 const STARTUP_AUTHORITY_TRANSITIONAL_RECOVERY_GATE_STATE = new Set([
   PUBLICATION_RECOVERY_GATE_STATE.PUBLICATION_PENDING,
@@ -118,13 +118,13 @@ export function hasTransitionalStartupAuthorityEvidence(options = {}) {
 export function buildStartupAuthorityFailureDescriptor(failureReason) {
   return typeof failureReason === TYPEOF.STRING &&
     failureReason.length > NUM.ZERO ?
-      Object.freeze({
-        state: AUTHORITY_DESCRIPTOR_STATE.PRESENT,
-        reason: failureReason,
-      }) :
-      Object.freeze({
-        state: AUTHORITY_DESCRIPTOR_STATE.NONE,
-      });
+    Object.freeze({
+      state: AUTHORITY_DESCRIPTOR_STATE.PRESENT,
+      reason: failureReason,
+    }) :
+    Object.freeze({
+      state: AUTHORITY_DESCRIPTOR_STATE.NONE,
+    });
 }
 
 export function buildStartupAuthorityPublicationDescriptor(details = {}) {
@@ -171,13 +171,13 @@ export function buildStartupAuthorityPriorityPartitionDescriptor(
 ) {
   return priorityPartitionSummary &&
     typeof priorityPartitionSummary === TYPEOF.OBJECT ?
-      Object.freeze({
-        state: AUTHORITY_DESCRIPTOR_STATE.AVAILABLE,
-        summary: priorityPartitionSummary,
-      }) :
-      Object.freeze({
-        state: AUTHORITY_DESCRIPTOR_STATE.UNAVAILABLE,
-      });
+    Object.freeze({
+      state: AUTHORITY_DESCRIPTOR_STATE.AVAILABLE,
+      summary: priorityPartitionSummary,
+    }) :
+    Object.freeze({
+      state: AUTHORITY_DESCRIPTOR_STATE.UNAVAILABLE,
+    });
 }
 
 export function buildStartupAuthorityRecoveryProtocolDescriptor(
@@ -185,13 +185,13 @@ export function buildStartupAuthorityRecoveryProtocolDescriptor(
 ) {
   return typeof recoveryProtocolState === TYPEOF.STRING &&
     recoveryProtocolState.length > NUM.ZERO ?
-      Object.freeze({
-        state: AUTHORITY_DESCRIPTOR_STATE.KNOWN,
-        value: recoveryProtocolState,
-      }) :
-      Object.freeze({
-        state: AUTHORITY_DESCRIPTOR_STATE.UNAVAILABLE,
-      });
+    Object.freeze({
+      state: AUTHORITY_DESCRIPTOR_STATE.KNOWN,
+      value: recoveryProtocolState,
+    }) :
+    Object.freeze({
+      state: AUTHORITY_DESCRIPTOR_STATE.UNAVAILABLE,
+    });
 }
 
 export function buildStartupAuthorityTargetParticipationDescriptor(
@@ -199,13 +199,13 @@ export function buildStartupAuthorityTargetParticipationDescriptor(
 ) {
   return targetParticipation &&
     typeof targetParticipation === TYPEOF.OBJECT ?
-      Object.freeze({
-        state: AUTHORITY_DESCRIPTOR_STATE.AVAILABLE,
-        participation: targetParticipation,
-      }) :
-      Object.freeze({
-        state: AUTHORITY_DESCRIPTOR_STATE.UNAVAILABLE,
-      });
+    Object.freeze({
+      state: AUTHORITY_DESCRIPTOR_STATE.AVAILABLE,
+      participation: targetParticipation,
+    }) :
+    Object.freeze({
+      state: AUTHORITY_DESCRIPTOR_STATE.UNAVAILABLE,
+    });
 }
 
 export function buildStartupAuthorityAdmissionDescriptor(details = {}) {

@@ -17,14 +17,12 @@ import assert from 'node:assert/strict';
 import fc from 'fast-check';
 import {
   WasmComponentDriver,
-  WASM_COMPONENT_ERROR,
 } from '../../src/runtime/wasm-component-driver.js';
 import {
   RuntimeDriver,
   PREPARE_STATUS,
   START_STATUS,
   HEALTH_STATUS,
-  VALIDATION_STATUS,
 } from '../../src/runtime/runtime-driver.js';
 import {
   DriverValidationError,

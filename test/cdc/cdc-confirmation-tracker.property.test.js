@@ -35,8 +35,12 @@ import {
 function createCacheStub() {
   const listeners = new Set();
   return {
-    onCacheChange(listener) { listeners.add(listener); },
-    offCacheChange(listener) { listeners.delete(listener); },
+    onCacheChange(listener) {
+      listeners.add(listener);
+    },
+    offCacheChange(listener) {
+      listeners.delete(listener);
+    },
     fire(tableName, operation, record) {
       for (const l of listeners) l(tableName, operation, record);
     },

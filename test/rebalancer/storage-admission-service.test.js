@@ -837,65 +837,65 @@ test('checkAdd - critical admission requests control-plane recovery readiness',
 
 test('checkAdd - admits provisioning-convergence grace nodes when ' +
   'recovery stays open but repair remains closed', async (t) => {
-    initializeConfig();
-    const cache = new SystemTableCache();
-    const accounting = new StorageCapacityAccountingService({
-      systemTableCache: cache,
-    });
-    accounting.initialize({systemTableCache: cache});
-
-    insertRow(cache, TABLES.NODES, {
-      [COLUMN.NODE_ID]: 'node-convergence-grace',
-      [COLUMN.STORAGE_BUDGET_BYTES]: NUM.THOUSAND,
-    });
-
-    const admission = new StorageAdmissionService({
-      accountingService: accounting,
-      controlPlaneReadinessService: createReadinessService({
-        'node-convergence-grace': createReadiness(
-          'node-convergence-grace',
-          {
-            dimensions: {
-              clusterMemberHealthy: false,
-              controlPlaneWritable: false,
-              controlPlanePublished: false,
-              controlPlaneRecoveryEligible: true,
-              repairEligible: false,
-              provisioningEligible: true,
-              placementEligible: true,
-            },
-          },
-        ),
-      }),
-    });
-
-    const result = await admission.checkAdd({
-      targetNodeId: 'node-convergence-grace',
-      estimatedBytes: NUM.TEN,
-    });
-
-    t.equal(
-      result.allowed,
-      true,
-      'ordinary provisioning should honor the convergence-safe projection',
-    );
-    t.equal(
-      result.decisionType,
-      STORAGE_ADMISSION_DECISION_TYPE.ADMITTED,
-      'convergence grace should stay on the admitted path',
-    );
-    t.same(
-      result.eligibleNodeIds,
-      ['node-convergence-grace'],
-      'the grace node should remain in the admitted cohort',
-    );
-    t.same(
-      result.ineligibleNodes,
-      [],
-      'the grace node should not be classified as ineligible',
-    );
-    t.end();
+  initializeConfig();
+  const cache = new SystemTableCache();
+  const accounting = new StorageCapacityAccountingService({
+    systemTableCache: cache,
   });
+  accounting.initialize({systemTableCache: cache});
+
+  insertRow(cache, TABLES.NODES, {
+    [COLUMN.NODE_ID]: 'node-convergence-grace',
+    [COLUMN.STORAGE_BUDGET_BYTES]: NUM.THOUSAND,
+  });
+
+  const admission = new StorageAdmissionService({
+    accountingService: accounting,
+    controlPlaneReadinessService: createReadinessService({
+      'node-convergence-grace': createReadiness(
+        'node-convergence-grace',
+        {
+          dimensions: {
+            clusterMemberHealthy: false,
+            controlPlaneWritable: false,
+            controlPlanePublished: false,
+            controlPlaneRecoveryEligible: true,
+            repairEligible: false,
+            provisioningEligible: true,
+            placementEligible: true,
+          },
+        },
+      ),
+    }),
+  });
+
+  const result = await admission.checkAdd({
+    targetNodeId: 'node-convergence-grace',
+    estimatedBytes: NUM.TEN,
+  });
+
+  t.equal(
+    result.allowed,
+    true,
+    'ordinary provisioning should honor the convergence-safe projection',
+  );
+  t.equal(
+    result.decisionType,
+    STORAGE_ADMISSION_DECISION_TYPE.ADMITTED,
+    'convergence grace should stay on the admitted path',
+  );
+  t.same(
+    result.eligibleNodeIds,
+    ['node-convergence-grace'],
+    'the grace node should remain in the admitted cohort',
+  );
+  t.same(
+    result.ineligibleNodes,
+    [],
+    'the grace node should not be classified as ineligible',
+  );
+  t.end();
+});
 
 test('checkAdd reuses cached readiness snapshots for background admission',
   async (t) => {

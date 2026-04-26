@@ -1,4 +1,4 @@
-import { POSTGRES_BASELINE_COMPARISON_SEGMENT_10 } from "./postgres-baseline-comparison-segment-10.js";
+import {POSTGRES_BASELINE_COMPARISON_SEGMENT_10} from './postgres-baseline-comparison-segment-10.js';
 const {
   FAILURE_ARTIFACT_SCHEMA_VERSION,
   ZERO,
@@ -25,14 +25,14 @@ function buildUnifiedFailureArtifact(
     rawReasonCounts,
   );
   const reasonCounts =
-    Object.keys(canonicalStrictReasonCounts).length > ZERO
-      ? canonicalStrictReasonCounts
-      : rawReasonCounts;
+    Object.keys(canonicalStrictReasonCounts).length > ZERO ?
+      canonicalStrictReasonCounts :
+      rawReasonCounts;
   const dominantReason = resolveDominantStrictReason(reasonCounts);
   const failureArtifact = {
     schemaVersion: FAILURE_ARTIFACT_SCHEMA_VERSION,
     rootCauseClass: resolveFailureRootCauseClass(phaseResult, reasonCounts),
-    phase: String(phaseResult?.phase || "unknown"),
+    phase: String(phaseResult?.phase || 'unknown'),
     affectedNodeIds: buildFailureAffectedNodeIds(
       phaseResult,
       options?.loadMetrics || null,
@@ -43,30 +43,30 @@ function buildUnifiedFailureArtifact(
   };
 
   const versionConvergence = phaseResult?.artifacts?.versionConvergence;
-  if (versionConvergence && typeof versionConvergence === "object") {
+  if (versionConvergence && typeof versionConvergence === 'object') {
     failureArtifact.versionConvergence = versionConvergence;
     failureArtifact.versionLagSummary =
       buildVersionLagSummary(versionConvergence);
   }
 
   const saturation = phaseResult?.artifacts?.saturation;
-  if (saturation && typeof saturation === "object") {
+  if (saturation && typeof saturation === 'object') {
     failureArtifact.saturation = saturation;
   }
 
   const readinessTimeline = Array.isArray(
     phaseResult?.artifacts?.readinessTimeline,
-  )
-    ? phaseResult.artifacts.readinessTimeline
-    : Array.isArray(phaseResult?.artifacts?.gateResult?.readinessTimeline)
-      ? phaseResult.artifacts.gateResult.readinessTimeline
-      : [];
+  ) ?
+    phaseResult.artifacts.readinessTimeline :
+    Array.isArray(phaseResult?.artifacts?.gateResult?.readinessTimeline) ?
+      phaseResult.artifacts.gateResult.readinessTimeline :
+      [];
   if (readinessTimeline.length > ZERO) {
     failureArtifact.readinessTimeline = readinessTimeline;
   }
 
   const benchmarkMetadataFlow = phaseResult?.artifacts?.benchmarkMetadataFlow;
-  if (benchmarkMetadataFlow && typeof benchmarkMetadataFlow === "object") {
+  if (benchmarkMetadataFlow && typeof benchmarkMetadataFlow === 'object') {
     failureArtifact.benchmarkMetadataFlow = benchmarkMetadataFlow;
   }
   const replicaOperationTimelineByOperationId =
@@ -85,9 +85,9 @@ function buildUnifiedFailureArtifact(
 
 function selectVerificationNodes(effectiveNodes, postLoadDrain) {
   const includedNodeIds = new Set(
-    Array.isArray(postLoadDrain?.includedNodeIds)
-      ? postLoadDrain.includedNodeIds
-      : [],
+    Array.isArray(postLoadDrain?.includedNodeIds) ?
+      postLoadDrain.includedNodeIds :
+      [],
   );
   if (includedNodeIds.size === ZERO) {
     return [...effectiveNodes];

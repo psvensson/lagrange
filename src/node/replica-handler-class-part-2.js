@@ -6,30 +6,22 @@
  *
  * Requirements: 10.2, 3.1
  */
-import { EventEmitter } from "events";
-import fs from "fs";
-import path from "path";
-import { AddressManager } from "../address/address-manager.js";
-import { LoggingService } from "../logging/logging-service.js";
-import { ConfigurationManager } from "../config/configuration-manager.js";
-import { CONFIG_KEY } from "../config/config-constants.js";
-import { SYSTEM_TABLE_NAME } from "../bootstrap/system-table-schemas-constants.js";
-import { STORAGE_DEFAULT } from "../storage/storage-constants.js";
-import { NUM, WORKFLOW_STEP } from "../constants/index.js";
-import { assertCritical } from "../utils/assert.js";
-import { CONTROL_PLANE_MUTATION_OPERATION } from "../control-plane/control-plane-system-table-gateway.js";
-import { createControlPlaneRuntimeBundle } from "../control-plane/control-plane-runtime-bundle.js";
-import { PRESSURE_WORK_CLASS } from "../control-plane/pressure-governor.js";
-import { PartitionServiceRowOwner } from "../partition/partition-service-row-owner.js";
-import { createSystemMetadataGatewayRequiredError } from "../control-plane/system-metadata-access-error.js";
-import { runRetryableControlPlaneWrite } from "../bootstrap/shared/retryable-control-plane-write.js";
-import { OperationType, ReplicaStatus } from "../rebalancer/replica-status.js";
-import { EXECUTOR_OUTCOME_TYPE } from "../rebalancer/executor-outcome-constants.js";
+import fs from 'fs';
+import path from 'path';
+import {AddressManager} from '../address/address-manager.js';
+import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
+import {STORAGE_DEFAULT} from '../storage/storage-constants.js';
+import {NUM, WORKFLOW_STEP} from '../constants/index.js';
+import {createControlPlaneRuntimeBundle} from '../control-plane/control-plane-runtime-bundle.js';
+import {PRESSURE_WORK_CLASS} from '../control-plane/pressure-governor.js';
+import {PartitionServiceRowOwner} from '../partition/partition-service-row-owner.js';
+import {createSystemMetadataGatewayRequiredError} from '../control-plane/system-metadata-access-error.js';
+import {runRetryableControlPlaneWrite} from '../bootstrap/shared/retryable-control-plane-write.js';
+import {OperationType, ReplicaStatus} from '../rebalancer/replica-status.js';
+import {EXECUTOR_OUTCOME_TYPE} from '../rebalancer/executor-outcome-constants.js';
 import {
-  ReplicaOperationMessageType,
-  ReplicaOperationField,
-  ReplicaOperationResponseStatus,
-} from "../rebalancer/replica-operation-constants.js";
+  ReplicaOperationReason,
+} from '../rebalancer/replica-operation-constants.js';
 import {
   REPLICA_HANDLER_ADDRESS,
   REPLICA_HANDLER_DEFAULT,
@@ -38,38 +30,33 @@ import {
   REPLICA_HANDLER_EVENT,
   REPLICA_HANDLER_LOG_MSG,
   REPLICA_HANDLER_NUM,
-  REPLICA_HANDLER_PROGRESS,
   REPLICA_HANDLER_SERVICE,
-  REPLICA_HANDLER_SUBSYSTEM,
   REPLICA_HANDLER_TYPEOF,
-} from "./replica-handler-constants.js";
-import { PARTITION_SERVICE_INIT_STAGE } from "../partition/partition-service-constants.js";
-import { RAFT_ROLE } from "../raft/constants.js";
-import { isNodeRecordReady } from "./node-readiness-policy.js";
-import { ReplicaCreationProgressReporter } from "../utils/replica-creation-progress-reporter.js";
-import { ReplicaStateMachine } from "./replica-state-machine.js";
-import LifeRaft from "../raft/liferaft.js";
-import { assignReplicaHandlerRuntimeMethods } from "./replica-handler-runtime-methods.js";
-import { ReplicaHandlerPart1 } from './replica-handler-class-part-1.js';
+} from './replica-handler-constants.js';
+import {RAFT_ROLE} from '../raft/constants.js';
+import {isNodeRecordReady} from './node-readiness-policy.js';
+import LifeRaft from '../raft/liferaft.js';
+import {assignReplicaHandlerRuntimeMethods} from './replica-handler-runtime-methods.js';
+import {ReplicaHandlerPart1} from './replica-handler-class-part-1.js';
 const REPLICA_HANDLER_LEADER_HANDOFF_STATE = Object.freeze({
-  COMPLETED: "completed",
-  NOT_APPLICABLE: "not_applicable",
-  NOT_SUPPORTED: "not_supported",
+  COMPLETED: 'completed',
+  NOT_APPLICABLE: 'not_applicable',
+  NOT_SUPPORTED: 'not_supported',
 });
 const REPLICA_HANDLER_LEADER_HANDOFF_LITERAL = Object.freeze({
-  EMPTY_LEADER_ID: "",
+  EMPTY_LEADER_ID: '',
 });
 const REPLICA_HANDLER_LITERAL = Object.freeze({
-  READY_LEASE_EXPIRES_AT: "ready_lease_expires_at",
-  READYLEASEEXPIRESAT: "readyLeaseExpiresAt",
-  READYLEASEEXPIRESATMS: "readyLeaseExpiresAtMs",
-  READYLEASEEXPIRES: "readyLeaseExpires",
-  VALUE: "",
-  DURABLE_REMOVE_CLEANUP_COMPLETE: "durable_remove_cleanup_complete",
-  ADD: "ADD",
-  REPLICAHANDLER: "ReplicaHandler",
-  READ: "read",
-  SYSTEM_TABLE_QUERY_FAILED: "system table query failed",
+  READY_LEASE_EXPIRES_AT: 'ready_lease_expires_at',
+  READYLEASEEXPIRESAT: 'readyLeaseExpiresAt',
+  READYLEASEEXPIRESATMS: 'readyLeaseExpiresAtMs',
+  READYLEASEEXPIRES: 'readyLeaseExpires',
+  VALUE: '',
+  DURABLE_REMOVE_CLEANUP_COMPLETE: 'durable_remove_cleanup_complete',
+  ADD: 'ADD',
+  REPLICAHANDLER: 'ReplicaHandler',
+  READ: 'read',
+  SYSTEM_TABLE_QUERY_FAILED: 'system table query failed',
 });
 const CRITICAL_SYSTEM_PARTITION_IDS = new Set(
   Object.values(SYSTEM_TABLE_NAME).map((tableName) => `${tableName}-p1`),
@@ -80,8 +67,8 @@ const partitionMetadataMissingError =
   REPLICA_HANDLER_ERROR_MSG.PARTITION_METADATA_MISSING;
 const tableMetadataMissingError =
   REPLICA_HANDLER_ERROR_MSG.TABLE_METADATA_MISSING;
-const PARTITION_METADATA_MISSING_PREFIX = partitionMetadataMissingError("");
-const TABLE_METADATA_MISSING_PREFIX = tableMetadataMissingError("");
+const PARTITION_METADATA_MISSING_PREFIX = partitionMetadataMissingError('');
+const TABLE_METADATA_MISSING_PREFIX = tableMetadataMissingError('');
 const ESTABLISHED_VOTER_ROLES = new Set([
   RAFT_ROLE.LEADER,
   RAFT_ROLE.FOLLOWER,
@@ -104,7 +91,7 @@ const SYSTEM_TABLE_HYDRATION_SQL = Object.freeze({
   TABLE_BY_ID: `SELECT * FROM ${SYSTEM_TABLE_NAME.TABLES} WHERE table_id = ?`,
   PARTITION_SERVICES:
     `SELECT * FROM ${SYSTEM_TABLE_NAME.SERVICES} ` +
-    "WHERE partition_id = ? AND service_type = ?",
+    'WHERE partition_id = ? AND service_type = ?',
 });
 function resolveSnapshotStateForTransition(
   existingStatus,
@@ -118,18 +105,18 @@ function resolveSnapshotStateForTransition(
     return localStatus;
   }
   switch (targetStatus) {
-    case ReplicaStatus.CREATING:
-      return ReplicaStatus.PENDING;
-    case ReplicaStatus.SYNCING:
-      return ReplicaStatus.CREATING;
-    case ReplicaStatus.ACTIVE:
-      return ReplicaStatus.SYNCING;
-    case ReplicaStatus.REMOVING:
-      return ReplicaStatus.ACTIVE;
-    case ReplicaStatus.REMOVED:
-      return ReplicaStatus.REMOVING;
-    default:
-      return localStatus || ReplicaStatus.ACTIVE;
+  case ReplicaStatus.CREATING:
+    return ReplicaStatus.PENDING;
+  case ReplicaStatus.SYNCING:
+    return ReplicaStatus.CREATING;
+  case ReplicaStatus.ACTIVE:
+    return ReplicaStatus.SYNCING;
+  case ReplicaStatus.REMOVING:
+    return ReplicaStatus.ACTIVE;
+  case ReplicaStatus.REMOVED:
+    return ReplicaStatus.REMOVING;
+  default:
+    return localStatus || ReplicaStatus.ACTIVE;
   }
 }
 function isFreshPartitionBootstrapWindow(partition) {
@@ -185,22 +172,58 @@ function isReplicaJoinNodeViable(nodeRow, options = {}) {
  */
 class ReplicaHandler extends ReplicaHandlerPart1 {
   /**
+   * Request replacement ownership through the explicit election capability.
+   * Older provider doubles can still use the timer path, but real runtime
+   * providers must expose requestElectionNow via the Raft provider contract.
+   * @param {Object|null} raftProvider
+   * @param {Object|null} raft
+   * @return {string} Canonical leader handoff state.
+   * @private
+   */
+  requestTrackedReplacementLeaderElection(raftProvider, raft) {
+    if (!raftProvider || !raft) {
+      return REPLICA_HANDLER_LEADER_HANDOFF_STATE.NOT_SUPPORTED;
+    }
+    if (
+      typeof raftProvider.requestElectionNow ===
+      REPLICA_HANDLER_TYPEOF.FUNCTION
+    ) {
+      raftProvider.requestElectionNow(raft);
+      return REPLICA_HANDLER_LEADER_HANDOFF_STATE.COMPLETED;
+    }
+    if (
+      typeof raftProvider.startElectionTimer !==
+      REPLICA_HANDLER_TYPEOF.FUNCTION
+    ) {
+      return REPLICA_HANDLER_LEADER_HANDOFF_STATE.NOT_SUPPORTED;
+    }
+    raftProvider.startElectionTimer(raft);
+    return REPLICA_HANDLER_LEADER_HANDOFF_STATE.COMPLETED;
+  }
+
+  /**
    * Demote a tracked leader replica before safe source removal.
    * @param {string} replicaId - Replica ID to demote.
    * @return {string} Canonical leader handoff state.
    * @private
    */
-  requestTrackedPartitionLeaderHandoff(replicaId) {
+  requestTrackedPartitionLeaderHandoff(replicaId, reason = null) {
     const service = this.getTrackedService(replicaId);
     if (!service) {
       return REPLICA_HANDLER_LEADER_HANDOFF_STATE.NOT_APPLICABLE;
     }
     const trackedRole = this.getTrackedReplicaRole(replicaId);
-    if (trackedRole !== RAFT_ROLE.LEADER) {
-      return REPLICA_HANDLER_LEADER_HANDOFF_STATE.COMPLETED;
-    }
     const raft = service.raft || null;
     const raftProvider = service.raftProvider || null;
+    if (trackedRole !== RAFT_ROLE.LEADER) {
+      if (
+        trackedRole === RAFT_ROLE.FOLLOWER &&
+        reason === ReplicaOperationReason.REPLACE_TARGET_LEADER_ELECTION
+      ) {
+        return this.requestTrackedReplacementLeaderElection(raftProvider, raft);
+      }
+      return REPLICA_HANDLER_LEADER_HANDOFF_STATE.COMPLETED;
+    }
     if (
       !raft ||
       typeof raft.change !== REPLICA_HANDLER_TYPEOF.FUNCTION ||
@@ -236,21 +259,39 @@ class ReplicaHandler extends ReplicaHandlerPart1 {
       typeof this.replicaStateMachine?.getState === REPLICA_HANDLER_TYPEOF.FUNCTION ?
         this.replicaStateMachine.getState(replicaId) :
         null;
+    const trackedStatus =
+      typeof trackedState === REPLICA_HANDLER_TYPEOF.STRING ?
+        trackedState :
+        typeof trackedState?.state === REPLICA_HANDLER_TYPEOF.STRING ?
+          trackedState.state :
+          null;
     const localReplica = this.getLocalReplica(replicaId);
     const cachedServiceRow =
       this.systemTableCache?.get?.(SYSTEM_TABLE_NAME.SERVICES, replicaId) ||
       null;
+    const cachedStatus =
+      typeof cachedServiceRow?.status === REPLICA_HANDLER_TYPEOF.STRING ?
+        cachedServiceRow.status :
+        null;
+    const localStatus =
+      typeof localReplica?.status === REPLICA_HANDLER_TYPEOF.STRING ?
+        localReplica.status :
+        null;
     const currentStatus =
-      trackedState ||
-      localReplica?.status ||
-      cachedServiceRow?.status ||
+      trackedStatus ||
+      localStatus ||
+      cachedStatus ||
       null;
+    const durableStatus = trackedStatus || cachedStatus;
     return Object.freeze({
       trackedState,
-      localStatus: localReplica?.status || null,
-      cachedStatus: cachedServiceRow?.status || null,
+      trackedStatus,
+      localStatus,
+      cachedStatus,
       currentStatus,
-      skipRemovingStatusWrite: currentStatus === ReplicaStatus.FAILED,
+      skipRemovingStatusWrite:
+        durableStatus === ReplicaStatus.FAILED ||
+        durableStatus === ReplicaStatus.REMOVING,
     });
   }
   /**
@@ -260,9 +301,16 @@ class ReplicaHandler extends ReplicaHandlerPart1 {
    * @private
    */
   getTrackedReplicaLifecycleState(replicaId) {
-    return typeof this.replicaStateMachine?.getState ===
-      REPLICA_HANDLER_TYPEOF.FUNCTION ?
-      this.replicaStateMachine.getState(replicaId) :
+    const trackedState =
+      typeof this.replicaStateMachine?.getState ===
+        REPLICA_HANDLER_TYPEOF.FUNCTION ?
+        this.replicaStateMachine.getState(replicaId) :
+        null;
+    if (typeof trackedState === REPLICA_HANDLER_TYPEOF.STRING) {
+      return trackedState;
+    }
+    return typeof trackedState?.state === REPLICA_HANDLER_TYPEOF.STRING ?
+      trackedState.state :
       null;
   }
   /**
@@ -350,7 +398,7 @@ class ReplicaHandler extends ReplicaHandlerPart1 {
    * @private
    */
   async removeReplicaAsync(request) {
-    const { operationId, partitionId, replicaId, reason } = request;
+    const {operationId, partitionId, replicaId, reason} = request;
     let serviceRowRemoved = false;
     let cleanupError = null;
     const service = this.getTrackedService(replicaId);
@@ -441,7 +489,7 @@ class ReplicaHandler extends ReplicaHandlerPart1 {
         EXECUTOR_OUTCOME_TYPE.REPLICA_REMOVE_COMPLETED,
         operationId,
         WORKFLOW_STEP.REMOVED,
-        { replicaId },
+        {replicaId},
       );
       this.logger.info(REPLICA_HANDLER_LOG_MSG.REMOVE_COMPLETED, {
         operationId,
@@ -544,9 +592,9 @@ class ReplicaHandler extends ReplicaHandlerPart1 {
           this.logger.warn(REPLICA_HANDLER_LOG_MSG.UPDATE_STATUS_RETRY, {
             replicaId,
             partitionId:
-              additionalData.partitionId !== undefined
-                ? additionalData.partitionId
-                : null,
+              additionalData.partitionId !== undefined ?
+                additionalData.partitionId :
+                null,
             newStatus,
             attempt,
             delayMs,
@@ -574,18 +622,18 @@ class ReplicaHandler extends ReplicaHandlerPart1 {
       newStatus,
       nodeId: this.nodeId,
     });
-    const previousLocalReplica = this.localReplicas.has(replicaId)
-      ? { ...this.localReplicas.get(replicaId) }
-      : null;
+    const previousLocalReplica = this.localReplicas.has(replicaId) ?
+      {...this.localReplicas.get(replicaId)} :
+      null;
     try {
       const existing = this.systemTableCache.get(
         SYSTEM_TABLE_NAME.SERVICES,
         replicaId,
       );
       const partitionId =
-        additionalData.partitionId !== undefined
-          ? additionalData.partitionId
-          : existing?.partition_id || null;
+        additionalData.partitionId !== undefined ?
+          additionalData.partitionId :
+          existing?.partition_id || null;
       const localService = this.getTrackedService(replicaId);
       const localReplica = previousLocalReplica;
       const previousLocalStatus = localReplica?.status || null;
@@ -673,9 +721,9 @@ class ReplicaHandler extends ReplicaHandlerPart1 {
       return false;
     }
     const normalizedExplicitOperationType =
-      typeof explicitOperationType === REPLICA_HANDLER_TYPEOF.STRING
-        ? explicitOperationType.trim().toUpperCase()
-        : null;
+      typeof explicitOperationType === REPLICA_HANDLER_TYPEOF.STRING ?
+        explicitOperationType.trim().toUpperCase() :
+        null;
     if (normalizedExplicitOperationType) {
       return CRITICAL_VOTER_READY_GATED_OPERATION_TYPES.has(
         normalizedExplicitOperationType,
@@ -704,9 +752,9 @@ class ReplicaHandler extends ReplicaHandlerPart1 {
       );
     }
     const operationType =
-      typeof operationRow.type === REPLICA_HANDLER_TYPEOF.STRING
-        ? operationRow.type.toUpperCase()
-        : null;
+      typeof operationRow.type === REPLICA_HANDLER_TYPEOF.STRING ?
+        operationRow.type.toUpperCase() :
+        null;
     if (!operationType) {
       return false;
     }
@@ -741,9 +789,9 @@ class ReplicaHandler extends ReplicaHandlerPart1 {
     );
     return gateOperations.some((row) => {
       const workflowStep =
-        typeof row?.workflow_step === REPLICA_HANDLER_TYPEOF.STRING
-          ? row.workflow_step.toUpperCase()
-          : null;
+        typeof row?.workflow_step === REPLICA_HANDLER_TYPEOF.STRING ?
+          row.workflow_step.toUpperCase() :
+          null;
       if (workflowStep) {
         return (
           workflowStep !== WORKFLOW_STEP.REMOVED &&
@@ -751,9 +799,9 @@ class ReplicaHandler extends ReplicaHandlerPart1 {
         );
       }
       const status =
-        typeof row?.status === REPLICA_HANDLER_TYPEOF.STRING
-          ? row.status.toLowerCase()
-          : null;
+        typeof row?.status === REPLICA_HANDLER_TYPEOF.STRING ?
+          row.status.toLowerCase() :
+          null;
       return (
         status !== ReplicaStatus.REMOVED && status !== ReplicaStatus.FAILED
       );
@@ -888,4 +936,4 @@ assignReplicaHandlerRuntimeMethods(ReplicaHandler, {
   partitionMetadataMissingError,
 });
 
-export { ReplicaHandler };
+export {ReplicaHandler};

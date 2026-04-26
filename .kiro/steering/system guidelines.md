@@ -62,7 +62,7 @@ Mandatory rules:
 5. Work packages MUST be one executable concern per file. Do not mix unrelated
    concerns into one package.
 6. Package status lives in the filename:
-   `idea-`, `todo-`, `active-`, `done-`.
+   `idea-`, `todo-`, `active-`, `done-`, `superseded-`.
 7. Do not create a second status system in headings, directories, or sidecar
    trackers when the filename already carries status.
 8. `docs/` is reserved for end-user or operator-facing documentation. Internal
@@ -83,14 +83,17 @@ Mandatory rules:
    compensate for a stale filename.
 2. If a package is not being executed yet, rename it to `todo-...`; do not
    leave dormant work in `active-...`.
-3. Active sprint documents live directly in `work/sprints/`.
-4. Close a sprint by renaming it to `done-...` and moving it to
+3. If a package is displaced by newer evidence or another package, rename it to
+   `superseded-...` and link the superseding package from the body without
+   adding another status marker.
+4. Active sprint documents live directly in `work/sprints/`.
+5. Close a sprint by renaming it to `done-...` and moving it to
    `work/sprints/archived/`.
-5. `work/sprints/` should contain only the live `active-...` and `todo-...`
+6. `work/sprints/` should contain only the live `active-...` and `todo-...`
    sprint files plus the `archived/` folder.
-6. When archiving a sprint or closing a package, update in-repo links in the
+7. When archiving a sprint or closing a package, update in-repo links in the
    same change so the tracker remains navigable.
-7. Do not archive package files into a second package-status directory. Package
+8. Do not archive package files into a second package-status directory. Package
    status is carried by the filename; sprint archival is the exception used to
    keep the live sprint root small and readable.
 
@@ -230,6 +233,93 @@ Mandatory rules:
 4. If readers still need to infer progress from object existence, local
    booleans, or logs after the package lands, the package is not ready for
    closure.
+
+### 0.1.7 Static Drift Ledger And Guardrail Closure
+
+Every active package that touches runtime, control-plane, harness,
+diagnostics, admin, or shared test infrastructure MUST carry a static drift
+ledger in the package file.
+
+Mandatory rules:
+
+1. Before implementation starts, record the relevant guardrail status for the
+   touched boundary. At minimum, classify:
+   - decision-boundary guideline audit
+   - runtime-grammar contract audit when runtime meaning is touched
+   - metadata gateway or owner-ingress audit when system-table reads/writes are
+     touched
+   - scalar/literal guideline audit for files being materially edited
+   - dependency cycle and complexity ratchets for broad refactors
+2. The ledger must distinguish:
+   - inherited repo-wide debt outside the package boundary
+   - inherited debt in touched files
+   - new debt introduced by the package
+   - debt removed by the package
+3. A package may not close if any relevant guardrail count increases.
+4. A package may not close with an in-scope guardrail violation in a touched
+   production file unless a linked follow-on package is created before closure
+   and the original package explains why the violation is outside its boundary.
+5. If a guardrail fails repo-wide before work begins, the package must still
+   run the narrowest file-scoped guard for touched files before and after the
+   change and record both results.
+6. Do not hide guardrail failures by weakening scripts, expanding allowlists,
+   renaming files out of scan scope, or moving code into test-only paths.
+7. Any new allowlist, suppression, or accepted-boundary entry must name:
+   - the semantic owner
+   - the reason the exception is structurally necessary
+   - the expiry or follow-on package that removes it
+   - the guardrail that will fail once the exception is removed
+
+Static checks are not advisory lint. When a guard encodes this steering
+contract, its failure is package evidence that architecture drift is still
+present.
+
+### 0.1.8 LLM Sprint Entry And Width Limits
+
+LLM-driven sprint work must keep architectural width small enough that the
+model can preserve owner contracts across the whole touched boundary.
+
+Mandatory rules:
+
+1. A sprint must name one representative gate before broad execution starts.
+2. A package must name one primary architectural boundary and one primary
+   semantic owner.
+3. A package may touch several files only when those files are direct owner
+   collaborators for the same boundary.
+4. Guardrail cleanup and runtime behavior changes may share a package only
+   when they are the same boundary. Otherwise, split guard cleanup into a
+   separate package.
+5. A package may not widen from one failure migration to a second unrelated
+   blocker without updating the package scope or splitting a new package first.
+6. When an LLM sprint repeatedly exposes new blockers at the same boundary, the
+   next package must reduce the boundary surface area before adding more
+   symptom-specific behavior.
+
+### 0.1.9 Roadmap And Work-Tracker Truth Reconciliation
+
+Roadmap status must not outrun current representative evidence.
+
+Mandatory rules:
+
+1. A roadmap row marked complete means the capability exists and its declared
+   exit evidence is not contradicted by an active package or current
+   representative scenario.
+2. If an active sprint or package is still fixing a failure that belongs to a
+   completed roadmap row, the package must explicitly say whether the row is:
+   - capability-complete but gate-open
+   - status-overstated and needing roadmap correction
+   - a new maintenance concern outside the original completion claim
+3. Scenario-driven rows such as failure simulations, topology stabilization,
+   and production guarantees must not be treated as complete solely because
+   focused unit proof is green. The representative gate named by the package or
+   sprint must also be green or the remaining blocker must be named in a live
+   package.
+4. Before a sprint closes, reconcile its active packages with `../../roadmap.md`
+   and `../../architecture/current-owner-maps.md`. Do not leave the roadmap
+   saying "done" while work tracking says the same exit criterion still fails.
+5. Roadmap corrections are not product scope expansion. They are truth
+   maintenance and should happen in the same closure cycle that discovers the
+   contradiction.
 
 ## 0.2 Critical Generation Contract: Scalars And Decision Boundaries
 

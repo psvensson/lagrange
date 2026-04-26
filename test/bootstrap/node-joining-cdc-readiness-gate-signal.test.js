@@ -111,14 +111,12 @@ test('awaitCdcSubscriptionsForReadiness - proceeds after timeout with warning',
   async (t) => {
     initializeTestEnvironment();
 
-    let sleepCallCount = 0;
     const logMessages = [];
     const service = new NodeJoiningService({
       nodeId: 'test-node-1',
       nodeAddress: 'ws://localhost:9090',
       seedNodeAddress: 'http://localhost:8080',
       sleep: () => {
-        sleepCallCount++;
         return Promise.resolve();
       },
     });

@@ -117,7 +117,10 @@ off the old publication-closure seam:
 
 This package's simplification exit condition is therefore met. The next work
 is runtime stabilization on node-admission pressure and source-removal safety,
-not more publication-gate reinterpretation.
+not more publication-gate reinterpretation. The first runtime split from this
+boundary is:
+
+1. [Readiness planning runtime convergence under load](./done-20260424-readiness-planning-runtime-convergence-under-load.md)
 
 ## Detection / Analysis Tasks
 

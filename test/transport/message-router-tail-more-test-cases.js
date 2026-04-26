@@ -688,7 +688,7 @@ export async function registerMessageRouterTailMoreTests({
       t.equal(secondResult.id, 2, 'second delivery should preserve handler payload');
       t.ok(
         secondDurationMs < 80,
-        `second delivery should not be blocked by first ACK wait ` +
+        'second delivery should not be blocked by first ACK wait ' +
         `(took ${secondDurationMs}ms)`,
       );
     });

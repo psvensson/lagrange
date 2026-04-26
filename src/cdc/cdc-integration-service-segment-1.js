@@ -1,131 +1,42 @@
-import { CDC_INTEGRATION_SERVICE_SHARED } from "./cdc-integration-service-shared.js";
-import {
-  resolveControlPlaneSystemTableDeliverySource,
-} from "../control-plane/control-plane-system-table-gateway-shared.js";
+import {CDC_INTEGRATION_SERVICE_SHARED} from './cdc-integration-service-shared.js';
+import {resolveControlPlaneSystemTableDeliverySource} from '../control-plane/control-plane-system-table-gateway-shared.js';
 
 const {
   ADDRESS,
-  AUTHORITATIVE_FALLBACK_OUTCOME,
-  AUTHORITATIVE_FALLBACK_PHASE,
-  AUTHORITATIVE_FALLBACK_RECENT_LIMIT,
   AUTHORITATIVE_FALLBACK_REPAIR_BUDGET_MS,
   AUTHORITATIVE_FALLBACK_RETRY_DELAY_MS,
   AUTHORITATIVE_FALLBACK_WINDOW_MS,
   AUTHORITATIVE_READ_SOURCE,
   AUTHORITATIVE_ROW_VERSION_FIELD_CANDIDATES,
   CDCEventHandler,
-  CDCOperationType,
   CDC_CONFIG_KEY,
   CDC_DEFAULTS,
-  CDC_EPOCH_CONFIG_KEY,
   CDC_ERROR_MSG,
-  CDC_EVENT,
-  CDC_INTEGRATION_SERVICE_ERROR,
   CDC_INTEGRATION_SERVICE_LITERAL,
   CDC_LOG_MSG,
-  CDC_OPERATION,
-  CDC_OPERATION_LABEL,
-  CDC_OWNER_HANDOFF_CLOSED_FRAGMENT,
-  CDC_OWNER_HANDOFF_CONNECTION_TO_NODE_FRAGMENT,
-  CDC_OWNER_HANDOFF_ROUTING_ERROR_FRAGMENTS,
-  CDC_PRIMARY_KEY,
-  CDC_RETRY,
-  CDC_SESSION,
-  CDC_SKIP_REASON,
-  CDC_SOURCE,
-  CDC_SQL,
   CDC_STATS_DEFAULT,
   CDC_SUBSYSTEM,
-  CDC_SYSTEM_WRITE_RECOVERY_CANDIDATE_SELECTION_KIND,
-  COLUMN,
-  CONTROL_PLANE_MUTATION_READINESS_ERROR,
   CONTROL_PLANE_READINESS_DIMENSION,
-  CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE,
   ConfigurationManager,
   ENTITY_TYPE,
-  ENTRYPOINT_DEFAULT,
-  EPOCH_CONFIG_KEY,
-  ERRORS,
   EventEmitter,
   HLCClockService,
   INITIAL_PARTITION_IDS,
   LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY,
   LoggingService,
-  METRICS_LOG_TAG,
-  NODE_WEBSOCKET_ADDRESS_RESOLUTION_STATE,
   NUM,
-  OWNER_CONTRACT_NEXT_ACTION,
-  OWNER_CONTRACT_STATE,
-  PRESSURE_GOVERNOR_ACTION,
-  PRESSURE_WORK_CLASS,
-  PROTOCOL,
-  PressureGovernor,
   QUERY_ERROR_CODE,
-  QUERY_ERROR_MSG,
   QUERY_TRANSPORT_NOT_READY_ERROR_CODE,
-  READ_MODEL_DIVERGENCE_TYPE,
   SERVICE_STATUS,
   SERVICE_TYPE,
-  SQL,
-  SQL_RECONCILIATION_REASON,
-  STATE,
   STRING,
   SYSTEM_TABLE_NAME,
-  SYSTEM_TABLE_VISIBILITY_STATE,
-  TABLE_WRITE_FAILURE_LOG_SUPPRESSED_TABLES,
-  TABLE_WRITE_METRIC_SUPPRESSED_TABLES,
-  TIMEOUT_BUDGET_CLASSIFICATION,
-  TIME_MS,
   TYPEOF,
   VALID_SYSTEM_TABLES,
-  WRITE_ROUTER_MODE,
-  annotateSystemTableMutationError,
-  buildCDCNodeJoinedResult,
-  buildDivergenceEvent,
-  buildOwnerContractOutcome,
-  buildPendingVisibilityTimeoutResult,
-  buildPressureAdmissionFailure,
-  buildSystemTableMutationError,
-  buildSystemTableVisibilityResult,
-  canonicalizeSystemTableRow,
   createBootstrapDirectWriteRouter,
   createSqlWriteRouter,
-  createTimeoutBudget,
-  createTimeoutBudgetError,
-  delay,
-  getControlPlaneErrorCode,
-  getControlPlaneErrorMessage,
-  getControlPlaneRetryAfterMs,
-  getRemainingBudgetMs,
-  getSchemaByTableName,
-  getSystemCachePrimaryKeyFieldOrFallback,
-  hasControlPlaneMutationRoutingGapFailureSignature,
-  hasSystemTableOwnerHandoffFailureSignature,
-  isCacheVisibilityTimeoutError,
-  isRetryableControlPlaneError,
-  isSystemTableOwnerHandoffFailure,
-  isTableInternalCachePropagationEnabled,
-  logSystemTableWriteFailure,
-  materializeNormalizedDefaultValue,
-  normalizeAuthoritativeFallbackOutcome,
-  normalizeAuthoritativeFallbackPhase,
-  normalizeControlPlaneSystemTableVisibilityState,
-  normalizeDeliveryPriority,
   normalizeLocalQueryTransportReadiness,
-  normalizeSystemTableVisibilityResult,
-  normalizeSystemTableVisibilityState,
-  normalizeSystemTableWriteMode,
-  normalizeSystemWriteRecoveryCandidateSelectionKeyValue,
-  resolveAuthoritativeFallbackOutcome,
   resolveNodeWebSocketAddress,
-  resolveSystemTableMutationDeliveryPriority,
-  resolveSystemTableOwnerHandoffFailureTableName,
-  resolveSystemTableVisibilityContractOutcome,
-  shouldEmitTableWriteMetric,
-  shouldLogTableWriteFailure,
-  sortMutationKeyObject,
-  stableSerializeMutationKey,
-  uuidv4,
 } = CDC_INTEGRATION_SERVICE_SHARED;
 
 class CDCIntegrationServiceSegment1 extends EventEmitter {
@@ -139,20 +50,20 @@ class CDCIntegrationServiceSegment1 extends EventEmitter {
     this.cacheMutationTarget =
       options.cacheMutationTarget ||
       (typeof options.systemTableCache?.applySystemTableChange ===
-      TYPEOF.FUNCTION
-        ? options.systemTableCache
-        : null);
+      TYPEOF.FUNCTION ?
+        options.systemTableCache :
+        null);
 
     // Bootstrap mode for seed node direct writes
     this.bootstrapMode = false;
     this.bootstrapCompleted = false;
     this.localPartitionServices = null;
     this.partitionServicesProvider =
-      options.partitionServicesProvider instanceof Map
-        ? () => options.partitionServicesProvider
-        : typeof options.partitionServicesProvider === TYPEOF.FUNCTION
-          ? options.partitionServicesProvider
-          : null;
+      options.partitionServicesProvider instanceof Map ?
+        () => options.partitionServicesProvider :
+        typeof options.partitionServicesProvider === TYPEOF.FUNCTION ?
+          options.partitionServicesProvider :
+          null;
     this.writeRouter = this.createSqlWriteRouter();
 
     // HLC clock for timestamps
@@ -160,9 +71,9 @@ class CDCIntegrationServiceSegment1 extends EventEmitter {
 
     // Logging
     const loggingService = LoggingService.getInstance();
-    this.logger = loggingService.isInitialized()
-      ? loggingService.forSubsystem(CDC_SUBSYSTEM.INTEGRATION)
-      : console;
+    this.logger = loggingService.isInitialized() ?
+      loggingService.forSubsystem(CDC_SUBSYSTEM.INTEGRATION) :
+      console;
 
     // Configuration
     const config = ConfigurationManager.getInstance();
@@ -194,14 +105,14 @@ class CDCIntegrationServiceSegment1 extends EventEmitter {
     this.authoritativeFallbackWindowMs = AUTHORITATIVE_FALLBACK_WINDOW_MS;
     this.authoritativeFallbackRepairBudgetMs =
       Number.isFinite(options.authoritativeFallbackRepairBudgetMs) &&
-      options.authoritativeFallbackRepairBudgetMs > NUM.ZERO
-        ? Math.floor(options.authoritativeFallbackRepairBudgetMs)
-        : AUTHORITATIVE_FALLBACK_REPAIR_BUDGET_MS;
+      options.authoritativeFallbackRepairBudgetMs > NUM.ZERO ?
+        Math.floor(options.authoritativeFallbackRepairBudgetMs) :
+        AUTHORITATIVE_FALLBACK_REPAIR_BUDGET_MS;
     this.authoritativeFallbackRetryDelayMs =
       Number.isFinite(options.authoritativeFallbackRetryDelayMs) &&
-      options.authoritativeFallbackRetryDelayMs >= NUM.ZERO
-        ? Math.floor(options.authoritativeFallbackRetryDelayMs)
-        : AUTHORITATIVE_FALLBACK_RETRY_DELAY_MS;
+      options.authoritativeFallbackRetryDelayMs >= NUM.ZERO ?
+        Math.floor(options.authoritativeFallbackRetryDelayMs) :
+        AUTHORITATIVE_FALLBACK_RETRY_DELAY_MS;
     this.inFlightMutationsByKey = new Map();
     this.initialized = false;
   }
@@ -438,9 +349,9 @@ class CDCIntegrationServiceSegment1 extends EventEmitter {
   resolveSystemTablePartitionIds(tableName) {
     const cache = this.systemTableCache;
     if (!cache) {
-      return INITIAL_PARTITION_IDS[tableName]
-        ? [INITIAL_PARTITION_IDS[tableName]]
-        : [];
+      return INITIAL_PARTITION_IDS[tableName] ?
+        [INITIAL_PARTITION_IDS[tableName]] :
+        [];
     }
     const partitionPredicate = (row) => {
       const rowTableName = row?.table_name ?? row?.tableName ?? null;
@@ -448,13 +359,13 @@ class CDCIntegrationServiceSegment1 extends EventEmitter {
       return rowTableName === tableName || rowTableId === tableName;
     };
     const partitionRows =
-      typeof cache.filter === TYPEOF.FUNCTION
-        ? cache.filter(SYSTEM_TABLE_NAME.PARTITIONS, partitionPredicate)
-        : typeof cache.getAll === TYPEOF.FUNCTION
-          ? (cache.getAll(SYSTEM_TABLE_NAME.PARTITIONS) || []).filter(
-              partitionPredicate,
-            )
-          : [];
+      typeof cache.filter === TYPEOF.FUNCTION ?
+        cache.filter(SYSTEM_TABLE_NAME.PARTITIONS, partitionPredicate) :
+        typeof cache.getAll === TYPEOF.FUNCTION ?
+          (cache.getAll(SYSTEM_TABLE_NAME.PARTITIONS) || []).filter(
+            partitionPredicate,
+          ) :
+          [];
     const resolvedPartitionIds = [
       ...new Set(
         partitionRows
@@ -467,9 +378,9 @@ class CDCIntegrationServiceSegment1 extends EventEmitter {
     if (resolvedPartitionIds.length > NUM.ZERO) {
       return resolvedPartitionIds;
     }
-    return INITIAL_PARTITION_IDS[tableName]
-      ? [INITIAL_PARTITION_IDS[tableName]]
-      : [];
+    return INITIAL_PARTITION_IDS[tableName] ?
+      [INITIAL_PARTITION_IDS[tableName]] :
+      [];
   }
 
   /**
@@ -544,20 +455,20 @@ class CDCIntegrationServiceSegment1 extends EventEmitter {
       return true;
     }
     const role = String(
-      (typeof partitionService.getRole === TYPEOF.FUNCTION
-        ? partitionService.getRole()
-        : null) ||
+      (typeof partitionService.getRole === TYPEOF.FUNCTION ?
+        partitionService.getRole() :
+        null) ||
         partitionService.role ||
         partitionService.raftRole ||
-        "",
+        '',
     ).toLowerCase();
     if (role === CDC_INTEGRATION_SERVICE_LITERAL.LEADER) {
       return true;
     }
     const leaderId =
-      typeof partitionService.getLeaderId === TYPEOF.FUNCTION
-        ? partitionService.getLeaderId()
-        : partitionService.leaderId;
+      typeof partitionService.getLeaderId === TYPEOF.FUNCTION ?
+        partitionService.getLeaderId() :
+        partitionService.leaderId;
     const replicaId = partitionService.replicaId || partitionService.replica_id;
     return (
       typeof leaderId === TYPEOF.STRING &&
@@ -798,9 +709,9 @@ class CDCIntegrationServiceSegment1 extends EventEmitter {
     }
     return {
       available,
-      rows: available
-        ? this.mergeAuthoritativeSystemTableRowSets(tableName, rowSets)
-        : [],
+      rows: available ?
+        this.mergeAuthoritativeSystemTableRowSets(tableName, rowSets) :
+        [],
     };
   }
 
@@ -813,9 +724,9 @@ class CDCIntegrationServiceSegment1 extends EventEmitter {
    */
   buildSystemTableOperationDiagnostics(tableName, options = {}) {
     const queryOptions =
-      options?.queryOptions && typeof options.queryOptions === TYPEOF.OBJECT
-        ? options.queryOptions
-        : {};
+      options?.queryOptions && typeof options.queryOptions === TYPEOF.OBJECT ?
+        options.queryOptions :
+        {};
     const routingReadinessDimension =
       queryOptions.routingReadinessDimension ||
       CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE;
@@ -869,39 +780,39 @@ class CDCIntegrationServiceSegment1 extends EventEmitter {
       partitionRow?.leader_node_id ||
       partitionRow?.leaderNodeId ||
       null;
-    const serviceRowCount = Number.isFinite(routingSnapshot?.serviceRowCount)
-      ? routingSnapshot.serviceRowCount
-      : serviceRows.length;
+    const serviceRowCount = Number.isFinite(routingSnapshot?.serviceRowCount) ?
+      routingSnapshot.serviceRowCount :
+      serviceRows.length;
     const routableServiceCount = Number.isFinite(
       routingSnapshot?.routableServiceCount,
-    )
-      ? routingSnapshot.routableServiceCount
-      : serviceRows.filter((row) => {
-          return (
-            row?.status === SERVICE_STATUS.ACTIVE &&
+    ) ?
+      routingSnapshot.routableServiceCount :
+      serviceRows.filter((row) => {
+        return (
+          row?.status === SERVICE_STATUS.ACTIVE &&
             typeof row?.address === TYPEOF.STRING &&
             row.address.length > NUM.ZERO
-          );
-        }).length;
+        );
+      }).length;
     return Object.freeze({
       partitionId,
       leaderNodeId:
-        typeof leaderNodeId === TYPEOF.STRING && leaderNodeId.length > NUM.ZERO
-          ? leaderNodeId
-          : null,
+        typeof leaderNodeId === TYPEOF.STRING && leaderNodeId.length > NUM.ZERO ?
+          leaderNodeId :
+          null,
       serviceRowCount,
       routableServiceCount,
       queryTimeoutMs:
         Number.isFinite(queryOptions.timeoutMs) &&
-        queryOptions.timeoutMs > NUM.ZERO
-          ? Math.floor(queryOptions.timeoutMs)
-          : null,
+        queryOptions.timeoutMs > NUM.ZERO ?
+          Math.floor(queryOptions.timeoutMs) :
+          null,
       routingReadinessDimension,
       deniedByReadiness:
         routingSnapshot &&
-        typeof routingSnapshot.deniedByNodeId === TYPEOF.OBJECT
-          ? Object.keys(routingSnapshot.deniedByNodeId).length > NUM.ZERO
-          : false,
+        typeof routingSnapshot.deniedByNodeId === TYPEOF.OBJECT ?
+          Object.keys(routingSnapshot.deniedByNodeId).length > NUM.ZERO :
+          false,
     });
   }
 
@@ -1139,9 +1050,9 @@ class CDCIntegrationServiceSegment1 extends EventEmitter {
       sql: statement,
     });
     const executionOptions = {
-      ...(options.queryOptions && typeof options.queryOptions === TYPEOF.OBJECT
-        ? options.queryOptions
-        : {}),
+      ...(options.queryOptions && typeof options.queryOptions === TYPEOF.OBJECT ?
+        options.queryOptions :
+        {}),
       routingReadinessDimension,
       workClass:
         options?.queryOptions?.workClass || options?.workClass || undefined,
@@ -1186,24 +1097,24 @@ class CDCIntegrationServiceSegment1 extends EventEmitter {
           return {
             ...retryResult,
             rows: Array.isArray(retryResult.rows) ? retryResult.rows : [],
-            rowCount: Array.isArray(retryResult.rows)
-              ? retryResult.rows.length
-              : NUM.ZERO,
+            rowCount: Array.isArray(retryResult.rows) ?
+              retryResult.rows.length :
+              NUM.ZERO,
             source: AUTHORITATIVE_READ_SOURCE.OWNER_RPC_LANE,
             localReadHit: false,
             localReplicaFallbackHit: false,
             queryTimeoutMs: baseDiagnostics.queryTimeoutMs,
             localQueryTransport:
               localQueryTransportReadiness &&
-              typeof localQueryTransportReadiness === TYPEOF.OBJECT
-                ? {
-                    state: localQueryTransportReadiness.state || null,
-                    ready: localQueryTransportReadiness.ready === true,
-                    reason: localQueryTransportReadiness.reason || null,
-                    retryAfterMs:
+              typeof localQueryTransportReadiness === TYPEOF.OBJECT ?
+                {
+                  state: localQueryTransportReadiness.state || null,
+                  ready: localQueryTransportReadiness.ready === true,
+                  reason: localQueryTransportReadiness.reason || null,
+                  retryAfterMs:
                       localQueryTransportReadiness.retryAfterMs || NUM.ZERO,
-                  }
-                : null,
+                } :
+                null,
             systemTableDiagnostics: {
               ...baseDiagnostics,
               localReadHit: false,
@@ -1219,10 +1130,10 @@ class CDCIntegrationServiceSegment1 extends EventEmitter {
         return {
           ...(retryResult ||
             queryResult || {
-              success: false,
-              error: CDC_INTEGRATION_SERVICE_LITERAL.AUTHORITATIVE_QUERY_FAILED,
-              rows: [],
-            }),
+            success: false,
+            error: CDC_INTEGRATION_SERVICE_LITERAL.AUTHORITATIVE_QUERY_FAILED,
+            rows: [],
+          }),
           rows: Array.isArray(retryResult?.rows) ? retryResult.rows : [],
           source: AUTHORITATIVE_READ_SOURCE.OWNER_RPC_LANE,
           localReadHit: false,
@@ -1230,15 +1141,15 @@ class CDCIntegrationServiceSegment1 extends EventEmitter {
           queryTimeoutMs: baseDiagnostics.queryTimeoutMs,
           localQueryTransport:
             localQueryTransportReadiness &&
-            typeof localQueryTransportReadiness === TYPEOF.OBJECT
-              ? {
-                  state: localQueryTransportReadiness.state || null,
-                  ready: localQueryTransportReadiness.ready === true,
-                  reason: localQueryTransportReadiness.reason || null,
-                  retryAfterMs:
+            typeof localQueryTransportReadiness === TYPEOF.OBJECT ?
+              {
+                state: localQueryTransportReadiness.state || null,
+                ready: localQueryTransportReadiness.ready === true,
+                reason: localQueryTransportReadiness.reason || null,
+                retryAfterMs:
                     localQueryTransportReadiness.retryAfterMs || NUM.ZERO,
-                }
-              : null,
+              } :
+              null,
           systemTableDiagnostics: {
             ...baseDiagnostics,
             localReadHit: false,
@@ -1268,15 +1179,15 @@ class CDCIntegrationServiceSegment1 extends EventEmitter {
         queryTimeoutMs: baseDiagnostics.queryTimeoutMs,
         localQueryTransport:
           localQueryTransportReadiness &&
-          typeof localQueryTransportReadiness === TYPEOF.OBJECT
-            ? {
-                state: localQueryTransportReadiness.state || null,
-                ready: localQueryTransportReadiness.ready === true,
-                reason: localQueryTransportReadiness.reason || null,
-                retryAfterMs:
+          typeof localQueryTransportReadiness === TYPEOF.OBJECT ?
+            {
+              state: localQueryTransportReadiness.state || null,
+              ready: localQueryTransportReadiness.ready === true,
+              reason: localQueryTransportReadiness.reason || null,
+              retryAfterMs:
                   localQueryTransportReadiness.retryAfterMs || NUM.ZERO,
-              }
-            : null,
+            } :
+            null,
         systemTableDiagnostics: {
           ...baseDiagnostics,
           localReadHit: false,
@@ -1294,24 +1205,24 @@ class CDCIntegrationServiceSegment1 extends EventEmitter {
     return {
       ...queryResult,
       rows: Array.isArray(queryResult.rows) ? queryResult.rows : [],
-      rowCount: Array.isArray(queryResult.rows)
-        ? queryResult.rows.length
-        : NUM.ZERO,
+      rowCount: Array.isArray(queryResult.rows) ?
+        queryResult.rows.length :
+        NUM.ZERO,
       source: AUTHORITATIVE_READ_SOURCE.OWNER_RPC_LANE,
       localReadHit: false,
       localReplicaFallbackHit: false,
       queryTimeoutMs: baseDiagnostics.queryTimeoutMs,
       localQueryTransport:
         localQueryTransportReadiness &&
-        typeof localQueryTransportReadiness === TYPEOF.OBJECT
-          ? {
-              state: localQueryTransportReadiness.state || null,
-              ready: localQueryTransportReadiness.ready === true,
-              reason: localQueryTransportReadiness.reason || null,
-              retryAfterMs:
+        typeof localQueryTransportReadiness === TYPEOF.OBJECT ?
+          {
+            state: localQueryTransportReadiness.state || null,
+            ready: localQueryTransportReadiness.ready === true,
+            reason: localQueryTransportReadiness.reason || null,
+            retryAfterMs:
                 localQueryTransportReadiness.retryAfterMs || NUM.ZERO,
-            }
-          : null,
+          } :
+          null,
       systemTableDiagnostics: {
         ...baseDiagnostics,
         localReadHit: false,
@@ -1382,9 +1293,9 @@ class CDCIntegrationServiceSegment1 extends EventEmitter {
         reseeded: false,
       };
     }
-    const connectedNodes = this.messageRouter
-      ? this.messageRouter.getConnectedNodes()
-      : [];
+    const connectedNodes = this.messageRouter ?
+      this.messageRouter.getConnectedNodes() :
+      [];
     if (connectedNodes.length === NUM.ZERO) {
       return {
         reseeded: false,
@@ -1450,4 +1361,4 @@ class CDCIntegrationServiceSegment1 extends EventEmitter {
    */
 }
 
-export { CDCIntegrationServiceSegment1 };
+export {CDCIntegrationServiceSegment1};

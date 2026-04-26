@@ -23,7 +23,7 @@ import {
 
 test('createAuditRecord - produces frozen record', (t) => {
   const record = createAuditRecord(
-    MSG.MODULE_ACTIVATED, DECISION.ALLOWED, {moduleId: 'mod-1'}
+    MSG.MODULE_ACTIVATED, DECISION.ALLOWED, {moduleId: 'mod-1'},
   );
   t.ok(Object.isFrozen(record));
   t.equal(record.message, MSG.MODULE_ACTIVATED);
@@ -37,7 +37,7 @@ test('createAuditRecord - produces frozen record', (t) => {
 
 test('auditManifestValidation - passed', (t) => {
   const record = auditManifestValidation(
-    'mod-1', true, [], null
+    'mod-1', true, [], null,
   );
   t.equal(record.message, MSG.MANIFEST_VALIDATION_PASSED);
   t.equal(record.decision, DECISION.ALLOWED);
@@ -50,7 +50,7 @@ test('auditManifestValidation - passed', (t) => {
 test('auditManifestValidation - failed', (t) => {
   const errors = ['missing field'];
   const record = auditManifestValidation(
-    'mod-1', false, errors, null
+    'mod-1', false, errors, null,
   );
   t.equal(record.message, MSG.MANIFEST_VALIDATION_FAILED);
   t.equal(record.decision, DECISION.REJECTED);
@@ -61,7 +61,9 @@ test('auditManifestValidation - failed', (t) => {
 
 test('auditManifestValidation - calls logger', (t) => {
   let captured = null;
-  const logger = (rec) => { captured = rec; };
+  const logger = (rec) => {
+    captured = rec;
+  };
   auditManifestValidation('mod-1', true, [], logger);
   t.ok(captured);
   t.equal(captured.moduleId, 'mod-1');
@@ -72,7 +74,7 @@ test('auditManifestValidation - calls logger', (t) => {
 
 test('auditRunExportVerification - found', (t) => {
   const record = auditRunExportVerification(
-    'mod-1', 'run_batch', true, null
+    'mod-1', 'run_batch', true, null,
   );
   t.equal(record.message, MSG.RUN_EXPORT_VERIFIED);
   t.equal(record.decision, DECISION.RESOLVED);
@@ -83,7 +85,7 @@ test('auditRunExportVerification - found', (t) => {
 
 test('auditRunExportVerification - not found', (t) => {
   const record = auditRunExportVerification(
-    'mod-1', 'missing_fn', false, null
+    'mod-1', 'missing_fn', false, null,
   );
   t.equal(record.decision, DECISION.REJECTED);
   t.equal(record.found, false);
@@ -92,7 +94,9 @@ test('auditRunExportVerification - not found', (t) => {
 
 test('auditRunExportVerification - calls logger', (t) => {
   let captured = null;
-  const logger = (rec) => { captured = rec; };
+  const logger = (rec) => {
+    captured = rec;
+  };
   auditRunExportVerification('mod-1', 'run', true, logger);
   t.ok(captured);
   t.equal(captured.runExport, 'run');
@@ -103,7 +107,7 @@ test('auditRunExportVerification - calls logger', (t) => {
 
 test('auditDependencyResolution - resolved', (t) => {
   const record = auditDependencyResolution(
-    'mod-1', 'cap_sql', true, [], null
+    'mod-1', 'cap_sql', true, [], null,
   );
   t.equal(record.message, MSG.DEPENDENCY_RESOLVED);
   t.equal(record.decision, DECISION.RESOLVED);
@@ -114,7 +118,7 @@ test('auditDependencyResolution - resolved', (t) => {
 
 test('auditDependencyResolution - rejected', (t) => {
   const record = auditDependencyResolution(
-    'mod-1', 'cap_sql', false, ['not found'], null
+    'mod-1', 'cap_sql', false, ['not found'], null,
   );
   t.equal(record.message, MSG.DEPENDENCY_REJECTED);
   t.equal(record.decision, DECISION.REJECTED);
@@ -125,9 +129,11 @@ test('auditDependencyResolution - rejected', (t) => {
 
 test('auditDependencyResolution - calls logger', (t) => {
   let captured = null;
-  const logger = (rec) => { captured = rec; };
+  const logger = (rec) => {
+    captured = rec;
+  };
   auditDependencyResolution(
-    'mod-1', 'cap_sql', true, [], logger
+    'mod-1', 'cap_sql', true, [], logger,
   );
   t.ok(captured);
   t.equal(captured.depModuleId, 'cap_sql');
@@ -138,7 +144,7 @@ test('auditDependencyResolution - calls logger', (t) => {
 
 test('auditCapabilityDecision - allowed', (t) => {
   const record = auditCapabilityDecision(
-    'mod-1', 'sql.read', true, null
+    'mod-1', 'sql.read', true, null,
   );
   t.equal(record.message, MSG.CAPABILITY_ALLOWED);
   t.equal(record.decision, DECISION.ALLOWED);
@@ -149,7 +155,7 @@ test('auditCapabilityDecision - allowed', (t) => {
 
 test('auditCapabilityDecision - denied', (t) => {
   const record = auditCapabilityDecision(
-    'mod-1', 'net.http', false, null
+    'mod-1', 'net.http', false, null,
   );
   t.equal(record.message, MSG.CAPABILITY_DENIED);
   t.equal(record.decision, DECISION.DENIED);
@@ -159,7 +165,9 @@ test('auditCapabilityDecision - denied', (t) => {
 
 test('auditCapabilityDecision - calls logger', (t) => {
   let captured = null;
-  const logger = (rec) => { captured = rec; };
+  const logger = (rec) => {
+    captured = rec;
+  };
   auditCapabilityDecision('mod-1', 'sql.read', true, logger);
   t.ok(captured);
   t.equal(captured.capability, 'sql.read');
@@ -170,7 +178,7 @@ test('auditCapabilityDecision - calls logger', (t) => {
 
 test('auditModuleActivation - activated', (t) => {
   const record = auditModuleActivation(
-    'mod-1', true, [], null
+    'mod-1', true, [], null,
   );
   t.equal(record.message, MSG.MODULE_ACTIVATED);
   t.equal(record.decision, DECISION.ALLOWED);
@@ -181,7 +189,7 @@ test('auditModuleActivation - activated', (t) => {
 
 test('auditModuleActivation - rejected', (t) => {
   const record = auditModuleActivation(
-    'mod-1', false, ['policy denied'], null
+    'mod-1', false, ['policy denied'], null,
   );
   t.equal(record.message, MSG.MODULE_ACTIVATION_REJECTED);
   t.equal(record.decision, DECISION.REJECTED);
@@ -192,7 +200,9 @@ test('auditModuleActivation - rejected', (t) => {
 
 test('auditModuleActivation - calls logger', (t) => {
   let captured = null;
-  const logger = (rec) => { captured = rec; };
+  const logger = (rec) => {
+    captured = rec;
+  };
   auditModuleActivation('mod-1', true, [], logger);
   t.ok(captured);
   t.equal(captured.moduleId, 'mod-1');
@@ -201,7 +211,7 @@ test('auditModuleActivation - calls logger', (t) => {
 
 test('auditModuleActivation - no logger is safe', (t) => {
   const record = auditModuleActivation(
-    'mod-1', true, [], undefined
+    'mod-1', true, [], undefined,
   );
   t.ok(record);
   t.equal(record.moduleId, 'mod-1');

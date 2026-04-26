@@ -4,52 +4,18 @@ function assignAdminControlSnapshotReadinessDiagnosticsMethods(
 ) {
   const {
     ADMIN_CACHE_DUMP,
-    ADMIN_CONTROL_SNAPSHOT,
     ADMIN_CONTROL_SNAPSHOT_LITERAL,
-    ADMIN_ERROR_MESSAGE,
-    ADMIN_OPERATIONAL_DIAGNOSTICS,
-    AUTHORITATIVE_REPAIR_TRIGGER,
     COLUMN,
-    CONSISTENCY_MISMATCH_KIND,
     CONTROL_PLANE_DIAGNOSTICS_LEDGER_LIMIT,
     CONTROL_PLANE_PUBLICATION_STORY_NODE_STATE_FIELD,
     CONTROL_PLANE_PUBLICATION_STORY_SYNC_METHOD,
     CONTROL_PLANE_READINESS_DIMENSION,
     MANAGED_SPLIT_WORKFLOW_TYPE,
-    MEMBERSHIP_PUBLICATION_KIND,
-    NUM,
     PARTITION_TRANSITION_METADATA_FIELD,
-    PRIORITY_RECOVERY_BLOCKER_REASON_PRECEDENCE,
-    PRIORITY_RECOVERY_BLOCKER_TO_SEMANTIC_STATE,
-    PRIORITY_RECOVERY_CORRELATION_KEY,
-    PRIORITY_RECOVERY_DECISION_SNAPSHOT_SCHEMA_VERSION,
-    PRIORITY_RECOVERY_PROGRESS_CLASS_IDS,
-    PRIORITY_RECOVERY_SEMANTIC_STATE,
-    PRIORITY_RECOVERY_SEMANTIC_STATE_IDS,
-    PRIORITY_RECOVERY_UNRESOLVED_SEMANTIC_STATE_IDS,
     TYPEOF,
-    StartupRecoveryCoordinator,
-    attachAuthoritativeRepairDiagnostics,
-    buildMembershipPublicationReadOptions,
     buildCanonicalPublicationRecoveryEvidence,
-    buildPriorityRecoveryAdmissionByPartitionId,
-    buildPriorityRecoveryLearnerPromotionByPartitionId,
-    buildPriorityRecoveryPlannerByPartitionId,
-    buildPriorityRecoveryPublicationNodeDecisions,
-    buildPriorityRecoveryReplicaOperationContexts,
     buildPublicationRecoveryProtocolSnapshot,
-    buildSharedPriorityRecoveryDecisionSnapshots,
     firstStringField,
-    hasDurablePublishedMembershipObservation,
-    hasOnlyLeaderResolutionGapRepairCause,
-    hasPressureOrTimeoutRepairCause,
-    inferPriorityRecoveryTableNameFromPartitionId,
-    isRecoverableControlSnapshotPublicationReadError,
-    normalizeControlPlanePublicationRow,
-    resolveLatestMembershipPublicationRow,
-    resolvePublicationOrderingValue,
-    resolvePriorityRecoveryReasonCodesFromReadiness,
-    selectDurablePublishedMembershipObservation,
     uniqueSorted,
   } = options;
   class AdminControlSnapshotReadinessDiagnosticsMethods {
@@ -155,10 +121,10 @@ function assignAdminControlSnapshotReadinessDiagnosticsMethods(
       fallbackPublication = null,
     ) {
       const unavailablePublicationDiagnostics = Object.freeze({
-        publicationObservation: Object.freeze({ state: "unavailable" }),
+        publicationObservation: Object.freeze({state: 'unavailable'}),
         timestamps: Object.freeze({
-          publishedAt: Object.freeze({ state: "unavailable" }),
-          updatedAt: Object.freeze({ state: "unavailable" }),
+          publishedAt: Object.freeze({state: 'unavailable'}),
+          updatedAt: Object.freeze({state: 'unavailable'}),
         }),
       });
       const buildPublicationDiagnostics = (
@@ -179,7 +145,7 @@ function assignAdminControlSnapshotReadinessDiagnosticsMethods(
         const updatedAtKnown = Number.isFinite(timestampFields.updatedAt);
         return {
           publicationObservation: {
-            state: "available",
+            state: 'available',
             epoch: publicationSnapshot.publicationEpoch,
             status: publicationSnapshot.publicationStatus,
           },
@@ -199,23 +165,23 @@ function assignAdminControlSnapshotReadinessDiagnosticsMethods(
           sourceTopologyEpoch: publicationSnapshot.sourceTopologyEpoch,
           sourceSnapshotVersion: publicationSnapshot.sourceSnapshotVersion,
           timestamps: {
-            publishedAt: publishedAtKnown
-              ? {
-                  state: "known",
-                  value: timestampFields.publishedAt,
-                }
-              : { state: "unavailable" },
-            updatedAt: updatedAtKnown
-              ? {
-                  state: "known",
-                  value: timestampFields.updatedAt,
-                }
-              : { state: "unavailable" },
+            publishedAt: publishedAtKnown ?
+              {
+                state: 'known',
+                value: timestampFields.publishedAt,
+              } :
+              {state: 'unavailable'},
+            updatedAt: updatedAtKnown ?
+              {
+                state: 'known',
+                value: timestampFields.updatedAt,
+              } :
+              {state: 'unavailable'},
           },
-          ...(publishedAtKnown
-            ? { publishedAt: timestampFields.publishedAt }
-            : {}),
-          ...(updatedAtKnown ? { updatedAt: timestampFields.updatedAt } : {}),
+          ...(publishedAtKnown ?
+            {publishedAt: timestampFields.publishedAt} :
+            {}),
+          ...(updatedAtKnown ? {updatedAt: timestampFields.updatedAt} : {}),
           membershipLifecycleSummary:
             publicationSnapshot.membershipLifecycleSummary,
           projectionDiagnostics: publicationSnapshot.projectionDiagnostics,
@@ -233,9 +199,9 @@ function assignAdminControlSnapshotReadinessDiagnosticsMethods(
           publicationRecoveryGate: publicationSnapshot.publicationRecoveryGate,
         };
       };
-      for (const readiness of Array.isArray(readinessEntries)
-        ? readinessEntries
-        : []) {
+      for (const readiness of Array.isArray(readinessEntries) ?
+        readinessEntries :
+        []) {
         const membershipPublication = readiness?.membershipPublication;
         if (
           !membershipPublication ||
@@ -260,10 +226,10 @@ function assignAdminControlSnapshotReadinessDiagnosticsMethods(
     }
     resolvePriorityControlPlaneRecoveryByNodeId(readinessEntries = []) {
       const entries = {};
-      for (const readiness of Array.isArray(readinessEntries)
-        ? readinessEntries
-        : []) {
-        const nodeId = firstStringField(readiness, COLUMN.NODE_ID, "nodeId");
+      for (const readiness of Array.isArray(readinessEntries) ?
+        readinessEntries :
+        []) {
+        const nodeId = firstStringField(readiness, COLUMN.NODE_ID, 'nodeId');
         if (!nodeId) {
           continue;
         }
@@ -313,12 +279,12 @@ function assignAdminControlSnapshotReadinessDiagnosticsMethods(
      */
     buildPlacementEligibilityExplanation(readiness) {
       const dimensions =
-        readiness?.dimensions && typeof readiness.dimensions === TYPEOF.OBJECT
-          ? readiness.dimensions
-          : {};
-      const reasons = Array.isArray(readiness?.reasons)
-        ? readiness.reasons
-        : ADMIN_CACHE_DUMP.EMPTY;
+        readiness?.dimensions && typeof readiness.dimensions === TYPEOF.OBJECT ?
+          readiness.dimensions :
+          {};
+      const reasons = Array.isArray(readiness?.reasons) ?
+        readiness.reasons :
+        ADMIN_CACHE_DUMP.EMPTY;
       return {
         nodeId: firstStringField(
           readiness,
@@ -404,7 +370,7 @@ function assignAdminControlSnapshotReadinessDiagnosticsMethods(
       try {
         const entries =
           this.controlPlaneReadinessService.getParticipationDecisionLedgerEntries(
-            { limit: CONTROL_PLANE_DIAGNOSTICS_LEDGER_LIMIT },
+            {limit: CONTROL_PLANE_DIAGNOSTICS_LEDGER_LIMIT},
           );
         return Array.isArray(entries) ? entries : ADMIN_CACHE_DUMP.EMPTY;
       } catch (_error) {
@@ -427,7 +393,7 @@ function assignAdminControlSnapshotReadinessDiagnosticsMethods(
       try {
         const entries =
           this.controlPlaneReadinessService.getAuthoritativeReadinessRepairLedgerEntries(
-            { limit: CONTROL_PLANE_DIAGNOSTICS_LEDGER_LIMIT },
+            {limit: CONTROL_PLANE_DIAGNOSTICS_LEDGER_LIMIT},
           );
         return Array.isArray(entries) ? entries : ADMIN_CACHE_DUMP.EMPTY;
       } catch (_error) {
@@ -471,7 +437,7 @@ function assignAdminControlSnapshotReadinessDiagnosticsMethods(
       try {
         const entries =
           this.controlPlaneSystemTableGateway.getControlPlaneOperationLedgerEntries(
-            { limit: CONTROL_PLANE_DIAGNOSTICS_LEDGER_LIMIT },
+            {limit: CONTROL_PLANE_DIAGNOSTICS_LEDGER_LIMIT},
           );
         return Array.isArray(entries) ? entries : ADMIN_CACHE_DUMP.EMPTY;
       } catch (_error) {
@@ -504,7 +470,9 @@ function assignAdminControlSnapshotReadinessDiagnosticsMethods(
           ) {
             return nodeStatePublication;
           }
-        } catch (_error) {}
+        } catch (_error) {
+          void _error;
+        }
       }
       if (
         !this.heartbeatService ||
@@ -516,9 +484,9 @@ function assignAdminControlSnapshotReadinessDiagnosticsMethods(
       try {
         const diagnostics =
           this.heartbeatService.getHeartbeatPublicationDiagnostics();
-        return diagnostics && typeof diagnostics === TYPEOF.OBJECT
-          ? diagnostics
-          : null;
+        return diagnostics && typeof diagnostics === TYPEOF.OBJECT ?
+          diagnostics :
+          null;
       } catch (_error) {
         return null;
       }
@@ -538,9 +506,9 @@ function assignAdminControlSnapshotReadinessDiagnosticsMethods(
       }
       try {
         const diagnostics = splitManager.getEvaluationDiagnostics();
-        return diagnostics && typeof diagnostics === TYPEOF.OBJECT
-          ? diagnostics
-          : null;
+        return diagnostics && typeof diagnostics === TYPEOF.OBJECT ?
+          diagnostics :
+          null;
       } catch (_error) {
         return null;
       }
@@ -623,9 +591,9 @@ function assignAdminControlSnapshotReadinessDiagnosticsMethods(
         metadata,
         PARTITION_TRANSITION_METADATA_FIELD.FAILURE,
       );
-      const blockingReasons = Array.isArray(admission?.blockingReasons)
-        ? admission.blockingReasons
-        : ADMIN_CACHE_DUMP.EMPTY;
+      const blockingReasons = Array.isArray(admission?.blockingReasons) ?
+        admission.blockingReasons :
+        ADMIN_CACHE_DUMP.EMPTY;
       const timeoutClassification = this.resolveWorkflowTransitionMetadataObject(
         failure,
         'timeoutClassification',
@@ -681,9 +649,9 @@ function assignAdminControlSnapshotReadinessDiagnosticsMethods(
         ineligibleNodes: this.resolveWorkflowTransitionArray(
           admission?.ineligibleNodes,
         ),
-        estimatedBytes: Number.isFinite(Number(admission?.estimatedBytes))
-          ? Number(admission.estimatedBytes)
-          : null,
+        estimatedBytes: Number.isFinite(Number(admission?.estimatedBytes)) ?
+          Number(admission.estimatedBytes) :
+          null,
         admissionDecisionAt: firstStringField(
           admission,
           ADMIN_CONTROL_SNAPSHOT_LITERAL.DECISIONTIMESTAMP,
@@ -733,7 +701,7 @@ function assignAdminControlSnapshotReadinessDiagnosticsMethods(
   for (const methodName of Object.getOwnPropertyNames(
     AdminControlSnapshotReadinessDiagnosticsMethods.prototype,
   )) {
-    if (methodName === "constructor") {
+    if (methodName === 'constructor') {
       continue;
     }
     Object.defineProperty(
@@ -746,4 +714,4 @@ function assignAdminControlSnapshotReadinessDiagnosticsMethods(
     );
   }
 }
-export { assignAdminControlSnapshotReadinessDiagnosticsMethods };
+export {assignAdminControlSnapshotReadinessDiagnosticsMethods};

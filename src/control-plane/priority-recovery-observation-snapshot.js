@@ -1051,6 +1051,12 @@ function resolveObservationPriorityRecoveryBlockedPartitionIds(
   priorityPartitionSummary = null,
   decisionSnapshotSummary = null,
 ) {
+  const decisionBlockedPartitionIds = normalizeDistinctStringArray(
+    decisionSnapshotSummary?.blockedPartitionIds,
+  );
+  if (decisionBlockedPartitionIds.length > NUM.ZERO) {
+    return decisionBlockedPartitionIds;
+  }
   const convergenceBlockedPartitionIds = Object.freeze(
     normalizeDistinctStringArray([
       ...normalizeDistinctStringArray(priorityPartitionSummary?.missingPartitionIds),
@@ -1063,7 +1069,7 @@ function resolveObservationPriorityRecoveryBlockedPartitionIds(
   );
   return convergenceBlockedPartitionIds.length > NUM.ZERO ?
     convergenceBlockedPartitionIds :
-    decisionSnapshotSummary?.blockedPartitionIds || [];
+    decisionBlockedPartitionIds;
 }
 
 function resolveObservationActiveGateContext(options = {}) {

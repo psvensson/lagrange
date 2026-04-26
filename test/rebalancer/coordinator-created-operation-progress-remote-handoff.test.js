@@ -1,10 +1,69 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
-import {WORKFLOW_STEP} from '../../src/constants/index.js';
+import {NUM, SERVICE_TYPE, WORKFLOW_STEP} from '../../src/constants/index.js';
+import {
+  OperationType,
+  ReplicaStatus,
+} from '../../src/rebalancer/replica-status.js';
+import {TIMEOUT_BUDGET_DEFAULT} from
+  '../../src/control-plane/timeout-budget.js';
 import {
   createMockControlPlaneReadinessService,
   createMockTransactionCoordinator,
 } from './test-helpers.js';
+
+const REMOTE_HANDOFF_TEST_INITIAL_NOW_MS = 1_000_000;
+const REMOTE_HANDOFF_TIMEOUT_OVERRUN_MS = 1;
+const RECENT_INTENT_POLICY_NODE_ID = 'recent-intent-policy-node';
+const RECENT_INTENT_POLICY_TARGET_NODE_ID =
+  'recent-intent-policy-target-node';
+const RECENT_INTENT_PRIORITY_OPERATION_ID =
+  'recent-intent-priority-operation';
+const RECENT_INTENT_NON_PRIORITY_OPERATION_ID =
+  'recent-intent-non-priority-operation';
+const RECENT_INTENT_PRIORITY_PARTITION_ID = 'sql_write_operations-p1';
+const RECENT_INTENT_NON_PRIORITY_PARTITION_ID = 'customer_orders-p1';
+
+function createRecentIntentPolicyCoordinator() {
+  return new RebalanceCoordinator({
+    nodeId: RECENT_INTENT_POLICY_NODE_ID,
+    systemTableCache: {
+      get() {
+        return null;
+      },
+      getAll() {
+        return [];
+      },
+      filter() {
+        return [];
+      },
+    },
+    cdcIntegrationService: {
+      async waitForCacheUpdate() {},
+      async executeAuthoritativeSystemTableRead() {
+        return {success: true, rows: [], affectedRows: NUM.ZERO};
+      },
+    },
+    messageRouter: {
+      async deliver() {
+        return {acknowledged: true};
+      },
+    },
+    tablePolicyService: {
+      async getPolicyForPartition() {
+        return {minReplicaCount: NUM.ONE};
+      },
+    },
+    sqlQueryEngine: {
+      async executeQuery() {
+        return {success: true, rows: [], affectedRows: NUM.ZERO};
+      },
+    },
+    controlPlaneReadinessService: createMockControlPlaneReadinessService(),
+    transactionCoordinator: createMockTransactionCoordinator(),
+    enableTimeouts: false,
+  });
+}
 
 test('createOperation retries coordinator-created handoff for remote-owned ' +
   'priority REPLACE operations until the canonical owner wake-up succeeds',
@@ -150,11 +209,11 @@ async (t) => {
   try {
     const operation = await coordinator.createOperation({
       type: 'REPLACE',
-      partitionId: 'control_plane_publications-p1',
+      partitionId: 'sql_write_operations-p1',
       entityType: 'partition',
-      entityId: 'control_plane_publications-p1',
+      entityId: 'sql_write_operations-p1',
       nodeId: 'node-target',
-      replicaId: 'control_plane_publications-p1-r1',
+      replicaId: 'sql_write_operations-p1-r1',
       skipProvisioningAdmissionRecheck: true,
     });
 
@@ -371,13 +430,13 @@ async (t) => {
   }
 });
 
-test('createOperation stops re-arming acknowledged remote handoff once the ' +
-  'durable PENDING timeout budget is exhausted',
+test('createOperation continues re-arming acknowledged remote handoff after ' +
+  'durable PENDING timeout until operation budget exhaustion',
 async (t) => {
   const operationRows = new Map();
   const deferredTimers = [];
   const deliveries = [];
-  let nowMs = 1_000_000;
+  let nowMs = REMOTE_HANDOFF_TEST_INITIAL_NOW_MS;
   const originalDateNow = Date.now;
   Date.now = () => nowMs;
 
@@ -533,19 +592,118 @@ async (t) => {
       'the initial acknowledged handoff should still arm one verification timer',
     );
 
-    nowMs = operation.updatedAt + pendingTimeoutMs + 1;
+    nowMs =
+      operation.updatedAt +
+      pendingTimeoutMs +
+      REMOTE_HANDOFF_TIMEOUT_OVERRUN_MS;
     await deferredTimers[0].fn();
 
     t.equal(
       deliveries.length,
+      2,
+      'expired durable PENDING step budget should still re-send remote owner wake-ups while the operation budget remains',
+    );
+    t.equal(
+      coordinator.workflowOwner.createdOperationHandoffRetryTimerByOperationId
+        .size,
       1,
-      'expired durable PENDING budget should stop re-sending remote owner wake-ups',
+      'handoff verification should remain armed until the operation budget is exhausted',
+    );
+
+    nowMs =
+      operation.createdAt +
+      TIMEOUT_BUDGET_DEFAULT.REBALANCE_OPERATION_BUDGET_MS +
+      REMOTE_HANDOFF_TIMEOUT_OVERRUN_MS;
+    await deferredTimers[1].fn();
+
+    t.equal(
+      deliveries.length,
+      2,
+      'exhausted operation budget should stop re-sending remote owner wake-ups',
     );
     t.equal(
       coordinator.workflowOwner.createdOperationHandoffRetryTimerByOperationId
         .size,
       0,
-      'no further handoff verification timer should remain once the durable pending budget is exhausted',
+      'no further handoff verification timer should remain once the operation budget is exhausted',
+    );
+  } finally {
+    Date.now = originalDateNow;
+    await coordinator.shutdown();
+  }
+});
+
+test('priority add-like recent intents survive deferred authoritative ' +
+  'misses through the priority create-phase window',
+async (t) => {
+  let nowMs = REMOTE_HANDOFF_TEST_INITIAL_NOW_MS;
+  const originalDateNow = Date.now;
+  Date.now = () => nowMs;
+
+  const coordinator = createRecentIntentPolicyCoordinator();
+
+  try {
+    const pendingTimeoutMs = coordinator.config.pendingTimeoutMs;
+    const expiredStepStartedAtMs =
+      nowMs - pendingTimeoutMs - REMOTE_HANDOFF_TIMEOUT_OVERRUN_MS;
+    const priorityPendingOperation = {
+      operationId: RECENT_INTENT_PRIORITY_OPERATION_ID,
+      type: OperationType.REPLACE,
+      partitionId: RECENT_INTENT_PRIORITY_PARTITION_ID,
+      entityType: SERVICE_TYPE.PARTITION,
+      entityId: RECENT_INTENT_PRIORITY_PARTITION_ID,
+      targetNodeId: RECENT_INTENT_POLICY_TARGET_NODE_ID,
+      status: ReplicaStatus.PENDING,
+      workflowStep: WORKFLOW_STEP.PENDING,
+      createdAt: expiredStepStartedAtMs,
+      updatedAt: expiredStepStartedAtMs,
+    };
+    const priorityTtlMs =
+      coordinator.getRecentOperationIntentTtlMs(priorityPendingOperation);
+
+    t.ok(
+      priorityTtlMs > pendingTimeoutMs,
+      'priority recent-intent TTL should exceed the ordinary PENDING timeout',
+    );
+    t.equal(
+      coordinator.getRecentOperationMissReuseBudgetMs(
+        priorityPendingOperation,
+      ),
+      priorityTtlMs,
+      'priority PENDING add-like operations should use the priority miss reuse window',
+    );
+    t.equal(
+      coordinator.shouldReuseRecentOperationIntentOnAuthoritativeMiss(
+        priorityPendingOperation,
+      ),
+      true,
+      'priority PENDING add-like operations should remain reusable after the ordinary step timeout',
+    );
+
+    const prioritySendingOperation = {
+      ...priorityPendingOperation,
+      workflowStep: WORKFLOW_STEP.SENDING,
+    };
+    t.equal(
+      coordinator.shouldReuseRecentOperationIntentOnAuthoritativeMiss(
+        prioritySendingOperation,
+      ),
+      true,
+      'priority SENDING add-like operations should remain reusable after the ordinary step timeout',
+    );
+
+    const nonPriorityPendingOperation = {
+      ...priorityPendingOperation,
+      operationId: RECENT_INTENT_NON_PRIORITY_OPERATION_ID,
+      partitionId: RECENT_INTENT_NON_PRIORITY_PARTITION_ID,
+      entityId: RECENT_INTENT_NON_PRIORITY_PARTITION_ID,
+    };
+    t.equal(
+      coordinator.shouldReuseRecentOperationIntentOnAuthoritativeMiss(
+        nonPriorityPendingOperation,
+      ),
+      false,
+      'non-priority operation misses should not use priority recent-intent reuse',
     );
   } finally {
     Date.now = originalDateNow;

@@ -118,9 +118,10 @@ function buildNodeRow(nodeId, status) {
  * missing leaders (topology satisfied except for in-flight ops).
  *
  * @param {string} nodeId - The joining node's ID.
+ * @param {string[]} activeNodeIds - Readiness-owned active node ids.
  * @return {JoinReadinessEvaluator} Evaluator instance.
  */
-function createEvaluator(nodeId) {
+function createEvaluator(nodeId, activeNodeIds = []) {
   const emptyMissing = {
     missingPartitionLeaders: [],
     missingMessageGroupLeaders: [],
@@ -143,6 +144,12 @@ function createEvaluator(nodeId) {
       getSystemCacheHydrated: () => false,
       getJoinReadinessSnapshotProvider: () => null,
       getCdcIntegrationService: () => null,
+      getControlPlaneReadinessService: () => ({
+        getStartupAuthoritySnapshotSync: () => ({
+          authorityAvailable: activeNodeIds.length > NUM.ZERO,
+          canonicalStartupNodeIds: activeNodeIds,
+        }),
+      }),
       getLogger: () => console,
       getConfig: () => ({}),
     },
@@ -167,9 +174,8 @@ async (t) => {
     fc.asyncProperty(
       fc.integer({min: 1, max: 5}),
       async (operationCount) => {
-        const evaluator = createEvaluator(JOINING_NODE_ID);
-
         const rows = [];
+        const activeNodeIds = [];
         const nodeRows = [
           buildNodeRow(JOINING_NODE_ID, NODE_STATE.JOINING),
         ];
@@ -185,7 +191,9 @@ async (t) => {
           nodeRows.push(
             buildNodeRow(targetId, NODE_STATE.ACTIVE),
           );
+          activeNodeIds.push(targetId);
         }
+        const evaluator = createEvaluator(JOINING_NODE_ID, activeNodeIds);
 
         const cache = createSystemTableCacheMock(rows, nodeRows);
 
@@ -200,9 +208,9 @@ async (t) => {
         assert.equal(
           inFlightDetails.length,
           operationCount,
-          `collectCanonicalInFlightReplicaOperationDetails ` +
+          'collectCanonicalInFlightReplicaOperationDetails ' +
           `should return all ${operationCount} ACTIVE-targeted ` +
-          `operation(s), but returned ` +
+          'operation(s), but returned ' +
           `${inFlightDetails.length}`,
         );
 
@@ -212,7 +220,7 @@ async (t) => {
             inFlightDetails[i].targetNodeId,
             JOINING_NODE_ID,
             `Operation ${i} targetNodeId should not be the ` +
-            `joining node`,
+            'joining node',
           );
         }
       },
@@ -232,9 +240,8 @@ async (t) => {
       fc.integer({min: 1, max: 3}),
       fc.integer({min: 1, max: 3}),
       async (selfCount, activeCount) => {
-        const evaluator = createEvaluator(JOINING_NODE_ID);
-
         const rows = [];
+        const activeNodeIds = [];
         const nodeRows = [
           buildNodeRow(JOINING_NODE_ID, NODE_STATE.JOINING),
         ];
@@ -263,7 +270,9 @@ async (t) => {
           nodeRows.push(
             buildNodeRow(targetId, NODE_STATE.ACTIVE),
           );
+          activeNodeIds.push(targetId);
         }
+        const evaluator = createEvaluator(JOINING_NODE_ID, activeNodeIds);
 
         const cache = createSystemTableCacheMock(rows, nodeRows);
 
@@ -282,7 +291,7 @@ async (t) => {
         assert.equal(
           activeTargetedInResults.length,
           activeCount,
-          `ACTIVE-targeted operations should all be counted: ` +
+          'ACTIVE-targeted operations should all be counted: ' +
           `expected ${activeCount}, got ` +
           `${activeTargetedInResults.length}`,
         );

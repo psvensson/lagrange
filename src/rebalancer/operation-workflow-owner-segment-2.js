@@ -1,105 +1,33 @@
-import { OPERATION_WORKFLOW_OWNER_SHARED } from "./operation-workflow-owner-shared.js";
-import { OperationWorkflowOwnerSegment1 } from "./operation-workflow-owner-segment-1.js";
+import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
+import {OperationWorkflowOwnerSegment1} from './operation-workflow-owner-segment-1.js';
 
 const {
-  AUTHORITATIVE_TRANSITION_RECOVERY_STATUS,
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
-  CONTROL_PLANE_PARTICIPATION_KIND,
-  CONTROL_PLANE_PUBLICATION_STATUS,
-  CONTROL_PLANE_READINESS_DIMENSION,
   COORDINATOR_CREATED_REMOTE_HANDOFF_VERIFICATION_DELAY_MS,
   ControlPlaneField,
   ControlPlaneMessageType,
-  ControlPlaneReadinessService,
-  DEFAULT_MIN_REPLICA_COUNT,
   DISPATCH_RETRY_DELAY_MS,
-  EXECUTOR_OUTCOME_ACTION,
-  EXECUTOR_OUTCOME_ACTION_MAP,
-  EXECUTOR_OUTCOME_FIELD,
-  FAILURE_LOG_LEVEL,
-  INCOMPLETE_OPERATION_OBSERVATION_STATE,
-  INITIAL_PARTITION_IDS,
-  METRICS_LOG_TAG,
   NUM,
-  OBSERVED_PROGRESS_RELEVANT_SERVICE_STATUSES,
-  OBSERVED_PROGRESS_RELEVANT_WORKFLOW_STEPS,
   OBSERVED_PROGRESS_RETRY_DELAY_MS,
-  OPERATION_HANDLER,
-  OPERATION_LIFECYCLE_ACTION,
-  OPERATION_METADATA_KEY,
   OPERATION_OWNER_ACTION,
   OPERATION_SINGLE_FLIGHT_KEY_SEPARATOR,
   OPERATION_SINGLE_FLIGHT_SCOPE,
   OPERATION_TRANSITION_REASON,
   OPERATION_TRANSITION_SESSION_ATTEMPT_PREFIX,
   OPERATION_WORKFLOW_OWNER_LITERAL,
-  OPERATION_WORKFLOW_OWNER_REASON,
-  OperationType,
   PARTITION_SERVICE_ERROR_MSG,
-  PRIORITY_CONTROL_PLANE_SYNCING_TIMEOUT_CAP_MS,
-  PRIORITY_PUBLICATION_LEADER_HANDOFF_EVIDENCE,
-  PRIORITY_PUBLICATION_LEADER_REMOVE_SAFETY_STATE,
-  PRIORITY_PUBLICATION_SOURCE_ROLE_STATE,
-  PRIORITY_RECOVERY_COMPLETION_STATE,
-  PRIORITY_REMOVE_SAFETY_MEMBERSHIP_SOURCE,
   QUERY_ERROR_MSG,
-  RAFT_ROLE,
   REBALANCER_SKIP_REASON,
-  REBALANCE_COORDINATOR_DEFER_REASON,
   REBALANCE_COORDINATOR_ERROR_MSG,
-  REBALANCE_COORDINATOR_EVENT,
   REBALANCE_COORDINATOR_LOG_MSG,
-  RECOVERABLE_TRANSITION_COMMIT_STATUS,
-  RECOVERABLE_TRANSITION_ROLLBACK_STATUS,
-  REMOVE_SAFETY_EVALUATION_CLASSIFICATION,
-  REMOVE_SAFETY_OWNER_PARTICIPATION_KIND,
-  REMOVE_SAFETY_READINESS_DIMENSION,
-  REMOVE_SAFETY_READ_QUERY_OPTIONS,
-  REMOVE_SAFETY_SQL,
-  REPLACE_SOURCE_LEADER_HANDOFF_REQUIRED_PARTITION_IDS,
-  REPLICA_OPERATION_VISIBILITY_READ_MODE,
-  ReplicaOperationField,
-  ReplicaOperationMessageType,
-  ReplicaOperationResponseStatus,
-  ReplicaStatus,
-  SAFETY_DEFERRED_LOG_THROTTLE_MS,
-  SAFETY_DEFERRED_RETRY_DELAY_MS,
-  SERVICE_TYPE,
-  SQL_RECONCILIATION_REASON,
-  SYSTEM_TABLE_NAME,
-  TIMEOUT_BUDGET_CLASSIFICATION,
   TIMEOUT_BUDGET_DEFAULT,
-  TIME_MS,
-  TRANSACTION_STATUS,
-  TRANSITION_RECOVERY_READ_OPTIONS,
-  TRANSITION_RECOVERY_SQL,
-  TRANSITION_RETRY_DELAY_MS,
-  TRANSITION_STEP_OPTIONS,
   TYPEOF,
-  UNIFIED_SERVICE_TYPE,
   WORKFLOW_STEP,
-  WORKFLOW_STEP_TO_STATUS,
-  buildControlPlaneQueryOptions,
-  buildPriorityRecoveryBlockedPartitionIds,
-  buildPriorityRecoveryCompletion,
-  buildPriorityRecoveryOperationAssessment,
-  buildSelectRowsByTransactionIdsSql,
-  buildTimeoutClassification,
   classifyTransportDeliveryOutcome,
-  createChildTimeoutBudget,
-  createTopLevelOperationBudget,
   getControlPlaneRetryAfterMs,
-  getWorkflowSteps,
-  hasPriorityRecoverySpreadGap,
-  isCoordinatorOwnedOperationType,
   isDeliveredTransportDeliveryOutcome,
   isPriorityControlPlanePartition,
   isRetryableControlPlaneError,
-  isSystemTablePartition,
-  normalizeNodeIdList,
-  normalizeReplicaRowNodeIds,
-  readAuthoritativeControlPlaneRows,
-  resolvePriorityRecoveryActiveNodeCohort,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
 
 class OperationWorkflowOwnerSegment2 extends OperationWorkflowOwnerSegment1 {
@@ -118,9 +46,9 @@ class OperationWorkflowOwnerSegment2 extends OperationWorkflowOwnerSegment1 {
 
     const retryAfterMs = getControlPlaneRetryAfterMs(errorLike);
     const delayMs =
-      Number.isFinite(retryAfterMs) && retryAfterMs > NUM.ZERO
-        ? retryAfterMs
-        : DISPATCH_RETRY_DELAY_MS;
+      Number.isFinite(retryAfterMs) && retryAfterMs > NUM.ZERO ?
+        retryAfterMs :
+        DISPATCH_RETRY_DELAY_MS;
     const errorMessage = this.normalizeErrorMessage(
       errorLike,
       REBALANCE_COORDINATOR_ERROR_MSG.MESSAGE_NOT_ACKED,
@@ -313,10 +241,11 @@ class OperationWorkflowOwnerSegment2 extends OperationWorkflowOwnerSegment1 {
             }
           }
 
-          if (
-            this.isDispatchRetryableWorkflowStep(operation) &&
-            this.isOperationStepTimedOut(operation, Date.now())
-          ) {
+          const handoffTimeoutDecision =
+            this.buildCoordinatorCreatedRemoteHandoffTimeoutDecision(
+              operation,
+            );
+          if (handoffTimeoutDecision.shouldStop) {
             this.clearCreatedOperationHandoffRetry(operationId);
             return false;
           }
@@ -392,9 +321,9 @@ class OperationWorkflowOwnerSegment2 extends OperationWorkflowOwnerSegment1 {
     }
     const retryAfterMs = getControlPlaneRetryAfterMs(errorLike);
     const delayMs =
-      Number.isFinite(retryAfterMs) && retryAfterMs > NUM.ZERO
-        ? retryAfterMs
-        : OBSERVED_PROGRESS_RETRY_DELAY_MS;
+      Number.isFinite(retryAfterMs) && retryAfterMs > NUM.ZERO ?
+        retryAfterMs :
+        OBSERVED_PROGRESS_RETRY_DELAY_MS;
     const timerHandle = this.setTimeoutFn(() => {
       this.observedProgressRetryTimerByOperationId.delete(operationId);
       if (this.isShuttingDown || !this.isInitialized) {
@@ -435,17 +364,20 @@ class OperationWorkflowOwnerSegment2 extends OperationWorkflowOwnerSegment1 {
       this.repository &&
       typeof this.repository.getActualReplicaObservation === TYPEOF.FUNCTION
     ) {
-      const localObservation = await this.repository.getActualReplicaObservation(
-        replicaId,
-        partitionId,
-        targetNodeId,
-        {
-          authoritativeReadMode:
-            CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
-          allowCacheFallback: false,
-        },
-      );
-      if (localObservation?.state === OPERATION_WORKFLOW_OWNER_LITERAL.OBSERVED) {
+      const localObservation =
+        await this.repository.getActualReplicaObservation(
+          replicaId,
+          partitionId,
+          targetNodeId,
+          {
+            authoritativeReadMode:
+              CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
+            allowCacheFallback: false,
+          },
+        );
+      if (
+        localObservation?.state === OPERATION_WORKFLOW_OWNER_LITERAL.OBSERVED
+      ) {
         return localObservation.lifecycleStatus;
       }
     }
@@ -539,15 +471,15 @@ class OperationWorkflowOwnerSegment2 extends OperationWorkflowOwnerSegment1 {
    * @private
    */
   isOperationOwnerLaneHeld(operationId) {
-    const singleFlightKey = operationId
-      ? this.getOperationOwnerSingleFlightKey(operationId)
-      : null;
+    const singleFlightKey = operationId ?
+      this.getOperationOwnerSingleFlightKey(operationId) :
+      null;
     const inFlightOwnerKeys =
       this.operationWorkflowCoordinator?.inFlightExecutionsByOwnerKey;
     return Boolean(
       singleFlightKey &&
-      inFlightOwnerKeys instanceof Map &&
-      inFlightOwnerKeys.has(singleFlightKey),
+        inFlightOwnerKeys instanceof Map &&
+        inFlightOwnerKeys.has(singleFlightKey),
     );
   }
 
@@ -901,9 +833,9 @@ class OperationWorkflowOwnerSegment2 extends OperationWorkflowOwnerSegment1 {
     }
     const transactionState =
       this.transactionCoordinator.getTransaction(sessionId);
-    const deadlineMs = Number.isFinite(transactionState?.timeoutDeadline)
-      ? Math.floor(transactionState.timeoutDeadline)
-      : null;
+    const deadlineMs = Number.isFinite(transactionState?.timeoutDeadline) ?
+      Math.floor(transactionState.timeoutDeadline) :
+      null;
     if (!Number.isFinite(deadlineMs)) {
       return null;
     }
@@ -952,12 +884,13 @@ class OperationWorkflowOwnerSegment2 extends OperationWorkflowOwnerSegment1 {
       operation?.entityId,
       operation?.entity_id,
     ];
-    const partitionId = candidatePartitionIds.find((candidate) =>
-      typeof candidate === TYPEOF.STRING && candidate.length > NUM.ZERO,
+    const partitionId = candidatePartitionIds.find(
+      (candidate) =>
+        typeof candidate === TYPEOF.STRING && candidate.length > NUM.ZERO,
     );
-    return typeof partitionId === TYPEOF.STRING
-      ? partitionId
-      : OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_STRING;
+    return typeof partitionId === TYPEOF.STRING ?
+      partitionId :
+      OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_STRING;
   }
 
   /**
@@ -1023,7 +956,7 @@ class OperationWorkflowOwnerSegment2 extends OperationWorkflowOwnerSegment1 {
    * @return {boolean}
    */
   isStaleTransitionSessionConflict(errorLike) {
-    const message = this.normalizeErrorMessage(errorLike, "");
+    const message = this.normalizeErrorMessage(errorLike, '');
     return message === QUERY_ERROR_MSG.TRANSACTION_ACTIVE;
   }
 
@@ -1084,4 +1017,4 @@ class OperationWorkflowOwnerSegment2 extends OperationWorkflowOwnerSegment1 {
    */
 }
 
-export { OperationWorkflowOwnerSegment2 };
+export {OperationWorkflowOwnerSegment2};

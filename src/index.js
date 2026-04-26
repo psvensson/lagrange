@@ -238,6 +238,7 @@ async function startJoinNode(options) {
     partitionServices: nodeJoiningService.partitionServices,
     replicaHandler: nodeJoiningService.replicaHandler,
     systemTableCache: null,
+    bootstrapStartupAdapter: nodeJoiningService,
     bootstrapService: null,
     epochManager: nodeJoiningService.epochManager,
     messageRouter: nodeJoiningService.messageRouter,

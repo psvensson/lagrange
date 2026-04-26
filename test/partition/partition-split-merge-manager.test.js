@@ -696,65 +696,65 @@ test('PartitionSplitMergeManager - schedules deferred managed split retries ' +
 
 test('PartitionSplitMergeManager - limits automatic split execution per ' +
   'evaluation to preserve one control-plane execution lane', async (t) => {
-    const executedPartitionIds = [];
-    const manager = new PartitionSplitMergeManager({
-      listPartitions: async () => ([
-        {
-          partition_id: 'users-p1',
-          table_id: 'tbl-users',
-          partition_key_start: null,
-          partition_key_end: 100,
-          size_bytes: 128,
-        },
-        {
-          partition_id: 'users-p2',
-          table_id: 'tbl-users',
-          partition_key_start: 100,
-          partition_key_end: null,
-          size_bytes: 128,
-        },
-      ]),
-      getPartitionMetrics: async (_partitionId, partition) => ({
-        sizeBytes: partition.size_bytes,
-      }),
-      maxAutoExecuteSplitsPerEvaluation: 1,
-      executeSplitCandidate: async (partitionId) => {
-        executedPartitionIds.push(partitionId);
-        return {
-          success: true,
-          partitionId,
-          workflowId: `wf-${partitionId}`,
-        };
+  const executedPartitionIds = [];
+  const manager = new PartitionSplitMergeManager({
+    listPartitions: async () => ([
+      {
+        partition_id: 'users-p1',
+        table_id: 'tbl-users',
+        partition_key_start: null,
+        partition_key_end: 100,
+        size_bytes: 128,
       },
-      tablePolicyService: {
-        async getPolicyForPartition() {
-          return {splitStorageThreshold: 64};
-        },
+      {
+        partition_id: 'users-p2',
+        table_id: 'tbl-users',
+        partition_key_start: 100,
+        partition_key_end: null,
+        size_bytes: 128,
       },
-    });
-
-    const results = await manager.evaluateAllPartitions();
-
-    t.same(
-      executedPartitionIds,
-      ['users-p1'],
-      'only the first candidate should be auto-executed in the current evaluation pass',
-    );
-    t.equal(results.executedSplits.length, 1);
-    t.equal(results.splitDeferred.length, 1);
-    t.equal(
-      results.splitDeferred[0]?.partitionId,
-      'users-p2',
-      'overflow split candidates should be deferred rather than executed immediately',
-    );
-    t.equal(
-      results.splitDeferred[0]?.reason,
-      'control_plane_backpressure',
-      'overflow split candidates should carry the stable control-plane backpressure reason',
-    );
-
-    manager.shutdown();
+    ]),
+    getPartitionMetrics: async (_partitionId, partition) => ({
+      sizeBytes: partition.size_bytes,
+    }),
+    maxAutoExecuteSplitsPerEvaluation: 1,
+    executeSplitCandidate: async (partitionId) => {
+      executedPartitionIds.push(partitionId);
+      return {
+        success: true,
+        partitionId,
+        workflowId: `wf-${partitionId}`,
+      };
+    },
+    tablePolicyService: {
+      async getPolicyForPartition() {
+        return {splitStorageThreshold: 64};
+      },
+    },
   });
+
+  const results = await manager.evaluateAllPartitions();
+
+  t.same(
+    executedPartitionIds,
+    ['users-p1'],
+    'only the first candidate should be auto-executed in the current evaluation pass',
+  );
+  t.equal(results.executedSplits.length, 1);
+  t.equal(results.splitDeferred.length, 1);
+  t.equal(
+    results.splitDeferred[0]?.partitionId,
+    'users-p2',
+    'overflow split candidates should be deferred rather than executed immediately',
+  );
+  t.equal(
+    results.splitDeferred[0]?.reason,
+    'control_plane_backpressure',
+    'overflow split candidates should carry the stable control-plane backpressure reason',
+  );
+
+  manager.shutdown();
+});
 
 test('PartitionSplitMergeManager - coalesces reactive evaluation requests',
   async (t) => {
@@ -790,34 +790,34 @@ test('PartitionSplitMergeManager - coalesces reactive evaluation requests',
 
 test('PartitionSplitMergeManager - retries reactive evaluation once busy ' +
   'state clears', async (t) => {
-    let evaluateCalls = 0;
-    const manager = new PartitionSplitMergeManager({
-      reactiveEvaluationDebounceMs: 0,
-    });
-    manager.evaluateAllPartitions = async () => {
-      evaluateCalls += 1;
-      return {evaluated: true};
-    };
-
-    manager.state = OperationState.EVALUATING;
-    manager.requestEvaluation({
-      reasonCode: 'partition_size_changed',
-      partitionId: 'users-p1',
-    });
-
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    manager.state = OperationState.IDLE;
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    await new Promise((resolve) => setImmediate(resolve));
-
-    t.equal(
-      evaluateCalls,
-      1,
-      'requested evaluation should run once the manager returns to idle',
-    );
-
-    manager.shutdown();
+  let evaluateCalls = 0;
+  const manager = new PartitionSplitMergeManager({
+    reactiveEvaluationDebounceMs: 0,
   });
+  manager.evaluateAllPartitions = async () => {
+    evaluateCalls += 1;
+    return {evaluated: true};
+  };
+
+  manager.state = OperationState.EVALUATING;
+  manager.requestEvaluation({
+    reasonCode: 'partition_size_changed',
+    partitionId: 'users-p1',
+  });
+
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  manager.state = OperationState.IDLE;
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  await new Promise((resolve) => setImmediate(resolve));
+
+  t.equal(
+    evaluateCalls,
+    1,
+    'requested evaluation should run once the manager returns to idle',
+  );
+
+  manager.shutdown();
+});
 
 test('PartitionSplitMergeManager - defers reactive evaluation timers while ' +
   'the local node is backpressured', async (t) => {

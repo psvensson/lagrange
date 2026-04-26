@@ -5,12 +5,11 @@
 
 import {test} from '../../src/test-helpers/tap.js';
 import {BootstrapAPI, BootstrapStrategy} from '../../src/bootstrap/bootstrap-api.js';
-import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {
-  BOOTSTRAP_API_HANDOFF_STATUS,
   BOOTSTRAP_API_ERROR,
-  BOOTSTRAP_API_LOG_MSG,
   BOOTSTRAP_API_PROBE_REASON,
+  BOOTSTRAP_API_RESPONSE_FIELD,
+  BOOTSTRAP_API_ROUTE,
 } from '../../src/bootstrap/bootstrap-api-constants.js';
 import {
   BOOTSTRAP_PHASE,
@@ -18,27 +17,84 @@ import {
 } from '../../src/bootstrap/bootstrap-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
-import {CACHE_HYDRATION_TABLES} from '../../src/cache/cache-constants.js';
 import {
-  ENDPOINT_STATUS,
+  HTTP_STATUS,
   SERVICE_STATUS,
   SERVICE_TYPE,
-  STATE,
   TABLES,
-  TRANSPORT_TYPE,
 } from '../../src/constants/index.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {BootstrapReadinessState} from '../../src/bootstrap/bootstrap-readiness-state.js';
-import {BOOTSTRAP_READINESS_STAGE} from '../../src/bootstrap/bootstrap-readiness-ladder.js';
 import {LIFECYCLE_REASON} from '../../src/bootstrap/lifecycle-controller-constants.js';
 import {STARTUP_JOIN_MODE} from '../../src/bootstrap/rejoin-hints-constants.js';
-import {STARTUP_RECOVERY_STAGE} from '../../src/bootstrap/startup-recovery-coordinator.js';
 import {
-  CONTROL_PLANE_PRIORITY_RECOVERY_REASON,
-} from '../../src/control-plane/control-plane-readiness-constants.js';
-import {
-  CONTROL_PLANE_WORKLOAD_CLASS,
 } from '../../src/control-plane/control-plane-workload-profile.js';
+
+const BOOTSTRAP_ADMISSION_LEASE_TEST_NAME =
+  'BootstrapAPI - expires stale bootstrap admission lease before admitting retry';
+const BOOTSTRAP_ADMISSION_LEASE_TEST_SEED_NODE_ID = 'seed-node-1';
+const BOOTSTRAP_ADMISSION_LEASE_TEST_SEED_NODE_ADDRESS =
+  'ws://localhost:8080';
+const BOOTSTRAP_ADMISSION_LEASE_TEST_FIRST_NODE_ID =
+  '550e8400-e29b-41d4-a716-446655440021';
+const BOOTSTRAP_ADMISSION_LEASE_TEST_FIRST_NODE_ADDRESS =
+  'ws://localhost:9101';
+const BOOTSTRAP_ADMISSION_LEASE_TEST_RETRY_NODE_ID =
+  '550e8400-e29b-41d4-a716-446655440022';
+const BOOTSTRAP_ADMISSION_LEASE_TEST_RETRY_NODE_ADDRESS =
+  'ws://localhost:9102';
+const BOOTSTRAP_ADMISSION_LEASE_TEST_GROUP_ID = 'mg-test';
+const BOOTSTRAP_ADMISSION_LEASE_TEST_MAX_CONCURRENT = 1;
+const BOOTSTRAP_ADMISSION_LEASE_TEST_RETRY_AFTER_MS = 25;
+const BOOTSTRAP_ADMISSION_LEASE_TEST_LEASE_MS = 20;
+const BOOTSTRAP_ADMISSION_LEASE_TEST_EXPIRE_WAIT_MS = 40;
+const BOOTSTRAP_ADMISSION_LEASE_TEST_POLL_ATTEMPTS = 20;
+const BOOTSTRAP_LEADER_NOT_READY_STARTUP_AUTHORITY = Object.freeze({
+  state: 'recovery_pending',
+  ready: false,
+  authorityAvailable: true,
+  publication: Object.freeze({
+    observationState: 'establishing',
+  }),
+  canonicalStartupNodeIds: Object.freeze(['seed-node-1']),
+  failure: Object.freeze({
+    state: 'none',
+  }),
+});
+const BOOTSTRAP_ADMISSION_LEASE_TEST_POLL_MS = 5;
+const BOOTSTRAP_ADMISSION_LEASE_TEST_ACTIVE_COUNT = 1;
+const BOOTSTRAP_ADMISSION_LEASE_TEST_IDLE_COUNT = 0;
+const BOOTSTRAP_ADMISSION_LEASE_TEST_NO_VALUE = null;
+const BOOTSTRAP_ADMISSION_LEASE_TEST_EMPTY_OBJECT = Object.freeze({});
+const BOOTSTRAP_ADMISSION_LEASE_TEST_EMPTY_LIST = Object.freeze([]);
+const BOOTSTRAP_ADMISSION_LEASE_TEST_LISTEN_DISABLED = false;
+const BOOTSTRAP_ADMISSION_LEASE_TEST_LEADER_READY = Object.freeze({
+  ready: true,
+});
+const BOOTSTRAP_ADMISSION_LEASE_TEST_RELEASE_UNASSIGNED = () => {};
+const BOOTSTRAP_REQUEST_STARTUP_CONTRACT_TEST_NAME =
+  'BootstrapAPI - bootstrap request admission uses startup-complete adapter';
+const BOOTSTRAP_REQUEST_STARTUP_CONTRACT_SEED_NODE_ID = 'seed-node-1';
+const BOOTSTRAP_REQUEST_STARTUP_CONTRACT_SEED_NODE_ADDRESS =
+  'ws://localhost:8080';
+const BOOTSTRAP_REQUEST_STARTUP_CONTRACT_JOINING_NODE_ID =
+  '550e8400-e29b-41d4-a716-446655440113';
+const BOOTSTRAP_REQUEST_STARTUP_CONTRACT_JOINING_NODE_ADDRESS =
+  'ws://localhost:9093';
+const BOOTSTRAP_REQUEST_STARTUP_CONTRACT_GROUP_ID = 'mg-startup-contract';
+const BOOTSTRAP_REQUEST_STARTUP_CONTRACT_INCOMPLETE_PHASE =
+  BOOTSTRAP_PHASE.CACHE_HYDRATION;
+const BOOTSTRAP_REQUEST_STARTUP_CONTRACT_STARTUP_COMPLETE = true;
+const BOOTSTRAP_REQUEST_STARTUP_CONTRACT_LEADER_READY = Object.freeze({
+  ready: true,
+});
+const BOOTSTRAP_REQUEST_STARTUP_CONTRACT_EMPTY_CLUSTER_CONFIG =
+  Object.freeze({});
+const BOOTSTRAP_REQUEST_STARTUP_CONTRACT_EMPTY_TABLE_POLICIES =
+  Object.freeze({});
+const BOOTSTRAP_REQUEST_STARTUP_CONTRACT_EMPTY_READY_NODES =
+  Object.freeze([]);
+const BOOTSTRAP_REQUEST_STARTUP_CONTRACT_NO_HINTS = null;
 
 // Initialize configuration and logging for tests
 function initializeTestEnvironment() {
@@ -115,70 +171,25 @@ function createMutableControlPlaneReadinessService(initialDiagnostics) {
   };
 }
 
-function createPriorityRecoveryAuthorityControlPlaneReadinessService() {
-  return {
-    getPriorityControlPlaneRecoveryHealthSync() {
-      return {
-        healthy: false,
-        reasonCode: LIFECYCLE_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
-        details: {
-          recoveryProtocolState: 'publication_pending',
-          priorityRecoveryReasonCodes: [
-            CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PUBLICATION_EPOCH_PENDING,
-            CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PRIORITY_PARTITIONS_NOT_SPREAD,
-          ],
-          targetParticipation: {
-            nodeId: 'seed-node-1',
-            state: 'recovery_pending_publish',
-          },
-        },
-      };
-    },
-    getStartupAuthoritySnapshotSync() {
-      return {
-        state: 'seed_locally_ready_unpublished',
-        ready: false,
-        authorityAvailable: true,
-        publication: {
-          observationState: 'unpublished',
-        },
-        priorityPartition: {
-          state: 'available',
-          summary: {
-            satisfied: false,
-            missingPartitionIds: ['replica_operations-p1'],
-          },
-        },
-        recoveryProtocol: {
-          state: 'known',
-          value: 'publication_pending',
-        },
-        targetParticipationDetail: {
-          state: 'available',
-          participation: {
-            nodeId: 'seed-node-1',
-            state: 'recovery_pending_publish',
-          },
-        },
-        priorityRecoveryReasonCodes: [
-          CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PUBLICATION_EPOCH_PENDING,
-          CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PRIORITY_PARTITIONS_NOT_SPREAD,
-        ],
-        canonicalStartupNodeIds: ['seed-node-1'],
-        failure: {
-          state: 'none',
-        },
-        publicationObservationState: 'unpublished',
-      };
-    },
-    getMembershipPublicationDiagnosticsSync() {
-      return {
-        publicationEpoch: 14,
-        status: 'ACK_PENDING',
-      };
-    },
-  };
+async function sleepBootstrapAdmissionLeaseTest(ms) {
+  await new Promise((resolve) => setTimeout(resolve, ms));
 }
+
+async function waitForBootstrapAdmissionLeaseTestCount(api, expectedCount) {
+  for (
+    let attempt = 0;
+    attempt < BOOTSTRAP_ADMISSION_LEASE_TEST_POLL_ATTEMPTS;
+    attempt++
+  ) {
+    if (api.inFlightBootstrapRequestCount === expectedCount) {
+      return;
+    }
+    await sleepBootstrapAdmissionLeaseTest(
+      BOOTSTRAP_ADMISSION_LEASE_TEST_POLL_MS,
+    );
+  }
+}
+
 
 test('BootstrapAPI - readiness stays gated until startup dependencies and stable window complete',
   async (t) => {
@@ -892,6 +903,11 @@ test('BootstrapAPI - bootstrap conflict detection', async (t) => {
     seedNodeId: 'seed-node-1',
     seedNodeAddress: 'ws://localhost:8080',
     systemTableCache: mockSystemTableCache,
+    controlPlaneReadinessService: {
+      getStartupAuthoritySnapshotSync() {
+        return BOOTSTRAP_LEADER_NOT_READY_STARTUP_AUTHORITY;
+      },
+    },
   });
 
   await api.initialize(0, {listen: false});
@@ -1097,8 +1113,109 @@ test('BootstrapAPI - defers concurrent bootstrap requests when admission is satu
     t.equal(subsequentResponse.statusCode, 200,
       'later bootstrap requests should be admitted after the slot frees');
 
-    await api.shutdown();
+	    await api.shutdown();
+	  });
+
+test(BOOTSTRAP_ADMISSION_LEASE_TEST_NAME, async (t) => {
+  initializeTestEnvironment();
+
+  let releaseFirstRequest =
+    BOOTSTRAP_ADMISSION_LEASE_TEST_RELEASE_UNASSIGNED;
+  const firstRequestGate = new Promise((resolve) => {
+    releaseFirstRequest = resolve;
   });
+
+  const api = new BootstrapAPI({
+    seedNodeId: BOOTSTRAP_ADMISSION_LEASE_TEST_SEED_NODE_ID,
+    seedNodeAddress: BOOTSTRAP_ADMISSION_LEASE_TEST_SEED_NODE_ADDRESS,
+    systemTableCache: createEmptySystemTableCache(),
+    maxConcurrentBootstrapRequests:
+      BOOTSTRAP_ADMISSION_LEASE_TEST_MAX_CONCURRENT,
+    bootstrapAdmissionRetryAfterMs:
+      BOOTSTRAP_ADMISSION_LEASE_TEST_RETRY_AFTER_MS,
+    bootstrapAdmissionLeaseMs: BOOTSTRAP_ADMISSION_LEASE_TEST_LEASE_MS,
+  });
+
+  api.waitForServiceLeaders = async () =>
+    BOOTSTRAP_ADMISSION_LEASE_TEST_LEADER_READY;
+  api.determineAndReserveMessageGroupAssignment = async (nodeId) => {
+    if (nodeId === BOOTSTRAP_ADMISSION_LEASE_TEST_FIRST_NODE_ID) {
+      await firstRequestGate;
+    }
+    return {
+      strategy: BootstrapStrategy.CREATE_SELF_HOSTED,
+      groupId: BOOTSTRAP_ADMISSION_LEASE_TEST_GROUP_ID,
+    };
+  };
+  api.getCurrentEpoch = () => BOOTSTRAP_ADMISSION_LEASE_TEST_NO_VALUE;
+  api.getClusterConfiguration = () =>
+    BOOTSTRAP_ADMISSION_LEASE_TEST_EMPTY_OBJECT;
+  api.getReadyNodes = () => BOOTSTRAP_ADMISSION_LEASE_TEST_EMPTY_LIST;
+  api.getTablePolicies = () => BOOTSTRAP_ADMISSION_LEASE_TEST_EMPTY_OBJECT;
+  api.getLatencyTopologyHints = () => BOOTSTRAP_ADMISSION_LEASE_TEST_NO_VALUE;
+
+  await api.initialize(BOOTSTRAP_ADMISSION_LEASE_TEST_IDLE_COUNT, {
+    listen: BOOTSTRAP_ADMISSION_LEASE_TEST_LISTEN_DISABLED,
+  });
+
+  const firstRequestPromise = api.getFastify().inject({
+    method: 'POST',
+    url: BOOTSTRAP_API_ROUTE.BOOTSTRAP,
+    payload: {
+      nodeId: BOOTSTRAP_ADMISSION_LEASE_TEST_FIRST_NODE_ID,
+      nodeAddress: BOOTSTRAP_ADMISSION_LEASE_TEST_FIRST_NODE_ADDRESS,
+    },
+  });
+
+  await waitForBootstrapAdmissionLeaseTestCount(
+    api,
+    BOOTSTRAP_ADMISSION_LEASE_TEST_ACTIVE_COUNT,
+  );
+  t.equal(
+    api.inFlightBootstrapRequestCount,
+    BOOTSTRAP_ADMISSION_LEASE_TEST_ACTIVE_COUNT,
+    'first bootstrap request should hold one admission lease',
+  );
+
+  await sleepBootstrapAdmissionLeaseTest(
+    BOOTSTRAP_ADMISSION_LEASE_TEST_EXPIRE_WAIT_MS,
+  );
+
+  const retryResponse = await api.getFastify().inject({
+    method: 'POST',
+    url: BOOTSTRAP_API_ROUTE.BOOTSTRAP,
+    payload: {
+      nodeId: BOOTSTRAP_ADMISSION_LEASE_TEST_RETRY_NODE_ID,
+      nodeAddress: BOOTSTRAP_ADMISSION_LEASE_TEST_RETRY_NODE_ADDRESS,
+    },
+  });
+
+  t.equal(
+    retryResponse.statusCode,
+    HTTP_STATUS.OK,
+    'retry bootstrap request should be admitted after stale lease expiry',
+  );
+  t.equal(
+    api.inFlightBootstrapRequestCount,
+    BOOTSTRAP_ADMISSION_LEASE_TEST_IDLE_COUNT,
+    'completed retry should leave no active admission leases',
+  );
+
+  releaseFirstRequest();
+  const firstResponse = await firstRequestPromise;
+  t.equal(
+    firstResponse.statusCode,
+    HTTP_STATUS.OK,
+    'original request should still complete without decrementing below zero',
+  );
+  t.equal(
+    api.inFlightBootstrapRequestCount,
+    BOOTSTRAP_ADMISSION_LEASE_TEST_IDLE_COUNT,
+    'expired original request release should preserve idle admission count',
+  );
+
+  await api.shutdown();
+});
 
 test('BootstrapAPI - returns bootstrap-not-ready when control-plane dependencies are transiently unavailable',
   async (t) => {
@@ -1223,6 +1340,58 @@ test('BootstrapAPI - handleBootstrapRequest uses bounded bootstrap response topo
 
     await api.shutdown();
   });
+
+test(BOOTSTRAP_REQUEST_STARTUP_CONTRACT_TEST_NAME, async (t) => {
+  initializeTestEnvironment();
+
+  const api = new BootstrapAPI({
+    seedNodeId: BOOTSTRAP_REQUEST_STARTUP_CONTRACT_SEED_NODE_ID,
+    seedNodeAddress: BOOTSTRAP_REQUEST_STARTUP_CONTRACT_SEED_NODE_ADDRESS,
+    systemTableCache: createEmptySystemTableCache(),
+    bootstrapStartupAdapter: {
+      phase: BOOTSTRAP_REQUEST_STARTUP_CONTRACT_INCOMPLETE_PHASE,
+      isBootstrapStartupComplete() {
+        return BOOTSTRAP_REQUEST_STARTUP_CONTRACT_STARTUP_COMPLETE;
+      },
+    },
+  });
+
+  api.waitForServiceLeaders = async () =>
+    BOOTSTRAP_REQUEST_STARTUP_CONTRACT_LEADER_READY;
+  api.determineAndReserveMessageGroupAssignment = async () => ({
+    strategy: BootstrapStrategy.CREATE_SELF_HOSTED,
+    groupId: BOOTSTRAP_REQUEST_STARTUP_CONTRACT_GROUP_ID,
+  });
+  api.getClusterConfiguration = () =>
+    BOOTSTRAP_REQUEST_STARTUP_CONTRACT_EMPTY_CLUSTER_CONFIG;
+  api.getReadyNodes = () =>
+    BOOTSTRAP_REQUEST_STARTUP_CONTRACT_EMPTY_READY_NODES;
+  api.getTablePolicies = () =>
+    BOOTSTRAP_REQUEST_STARTUP_CONTRACT_EMPTY_TABLE_POLICIES;
+  api.getLatencyTopologyHints = () =>
+    BOOTSTRAP_REQUEST_STARTUP_CONTRACT_NO_HINTS;
+
+  await api.initialize(0, {
+    listen: BOOTSTRAP_ADMISSION_LEASE_TEST_LISTEN_DISABLED,
+  });
+
+  const response = await api.getFastify().inject({
+    method: 'POST',
+    url: BOOTSTRAP_API_ROUTE.BOOTSTRAP,
+    payload: {
+      nodeId: BOOTSTRAP_REQUEST_STARTUP_CONTRACT_JOINING_NODE_ID,
+      nodeAddress: BOOTSTRAP_REQUEST_STARTUP_CONTRACT_JOINING_NODE_ADDRESS,
+    },
+  });
+
+  t.equal(
+    response.statusCode,
+    HTTP_STATUS.OK,
+    'bootstrap request should use the adapter startup-complete contract',
+  );
+
+  await api.shutdown();
+});
 
 test('BootstrapAPI - forwards durable rejoin startup mode to assignment',
   async (t) => {
@@ -1372,6 +1541,11 @@ test('BootstrapAPI - returns bootstrap not ready while partition leaders are sti
     seedNodeId: 'seed-node-1',
     seedNodeAddress: 'ws://localhost:8080',
     systemTableCache: mockSystemTableCache,
+    controlPlaneReadinessService: {
+      getStartupAuthoritySnapshotSync() {
+        return BOOTSTRAP_LEADER_NOT_READY_STARTUP_AUTHORITY;
+      },
+    },
   });
 
   await api.initialize(0, {listen: false});
@@ -1395,6 +1569,11 @@ test('BootstrapAPI - returns bootstrap not ready while partition leaders are sti
     'should report missing partition leader diagnostics');
   t.equal(body.leaderReadiness.missingMessageGroupLeaders[0], 'mg-1',
     'should report missing message-group leader diagnostics');
+  t.same(
+    body[BOOTSTRAP_API_RESPONSE_FIELD.STARTUP_AUTHORITY],
+    BOOTSTRAP_LEADER_NOT_READY_STARTUP_AUTHORITY,
+    'should advertise startup authority on retryable leader-readiness responses',
+  );
 
   await api.shutdown();
 });

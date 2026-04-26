@@ -1,7 +1,6 @@
 import {describe, it} from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  META_ENDPOINT_VERSION,
   buildMetaServiceEndpoints,
   buildMetaServiceRoutingMetadata,
 } from '../../src/admin/admin-meta-endpoint-builder.js';

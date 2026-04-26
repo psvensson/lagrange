@@ -128,7 +128,7 @@ test('schema_migrations is queryable through SqlCore', async (t) => {
   });
 
   const result = await engine.executeQuery(
-    `SELECT migration_id, table_name, current_stage, created_at, updated_at ` +
+    'SELECT migration_id, table_name, current_stage, created_at, updated_at ' +
     `FROM ${TABLES.SCHEMA_MIGRATIONS}`,
     [],
     {sessionId: 'obs-1'},
@@ -151,7 +151,7 @@ test('schema_migration_partitions is queryable through SqlCore', async (t) => {
   });
 
   const result = await engine.executeQuery(
-    `SELECT partition_id, status, backfill_cursor, retry_count, error_message ` +
+    'SELECT partition_id, status, backfill_cursor, retry_count, error_message ' +
     `FROM ${TABLES.SCHEMA_MIGRATION_PARTITIONS}`,
     [],
     {sessionId: 'obs-2'},

@@ -1,156 +1,61 @@
-import { NODE_JOINING_SERVICE_SHARED } from "./node-joining-service-shared.js";
-import { NodeJoiningServiceSegment4 } from "./node-joining-service-segment-4.js";
+import {NODE_JOINING_SERVICE_SHARED} from './node-joining-service-shared.js';
+import {NodeJoiningServiceSegment4} from './node-joining-service-segment-4.js';
 
 const {
-  BOOTSTRAP_EVENT,
-  BOOTSTRAP_SUBSYSTEM,
-  BootstrapMessageGroupSelectionOwner,
   BootstrapTopologySnapshotOwner,
   CACHE_DEFAULT,
   CACHE_HYDRATION_TABLES,
   CDCIntegrationSetup,
   CDCPipelineReadinessGate,
-  CDC_EVENT,
-  CDC_LIFECYCLE_LOG_MSG,
   CDC_PROPAGATED_TABLES,
-  CDC_REESTABLISHMENT,
-  CDC_SUBSCRIPTION_STATUS,
   COLUMN,
-  CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE,
-  CONTROL_PLANE_NODE_STATE_REPLAY_CONTEXT,
   CONTROL_PLANE_READINESS_DIMENSION,
-  CONTROL_PLANE_ROLLOUT_REQUIRED,
-  CONTROL_PLANE_WORKLOAD_CLASS,
-  ConnectWebSocketPhase,
-  ContactSeedPhase,
-  ControlPlaneField,
-  ControlPlaneKernelIngress,
-  ControlPlaneMessageType,
   ControlPlaneSetup,
-  CreateMessageGroupPhase,
-  DEFAULT_NODE_CAPABILITIES,
-  EventEmitter,
-  HEARTBEAT_STATE,
-  JOINING_DEFAULT,
   JOINING_ERROR_MSG,
   JOINING_ERROR_NAME,
   JOINING_HTTP,
   JOINING_LOG_MSG,
-  JOINING_PHASE,
-  JOINING_PHASE_TO_SUB_PHASE,
   JOINING_UNIFIED_RECONCILE,
   JOIN_BACKFILL_QUERY,
-  JOIN_CHECKPOINT,
-  JOIN_DELEGATE_BUNDLE,
-  JOIN_PLAN_SEGMENT,
-  JOIN_READINESS_REPAIR,
   JOIN_REJOIN_PROMOTION_RESTORE_STATE,
-  JOIN_SESSION_PHASE,
-  JoinCleanupHandler,
-  JoinCoordinator,
-  JoinMessageGroupRuntimeOwner,
-  JoinReadinessEvaluator,
-  JoinSessionStore,
-  JoiningEvent,
-  JoiningPhase,
-  LEASE_STATE,
   LatencyTopologySetup,
-  LoggingService,
-  MembershipLifecycleController,
   MessageGroupServiceHandlerSetup,
   NODE_JOINING_SERVICE_LITERAL,
-  NODE_STATE_UPDATE_PUBLICATION_DEFER_REASON,
-  NODE_STATE_UPDATE_PUBLICATION_DEFER_STATE,
-  NODE_STATE_UPDATE_PUBLICATION_PATH,
-  NODE_STATE_UPDATE_PUBLICATION_RETRY_TARGET,
-  NODE_STATE_UPDATE_RETRY_CLASS,
   NUM,
-  NodeLifecycleStateMachine,
   NodeService,
-  NodeState,
-  NodeStatePublicationOwner,
   NodeStorageBudgetSetup,
-  OWNER_CONTRACT_NEXT_ACTION,
-  OWNER_CONTRACT_STATE,
-  PRESSURE_GOVERNOR_ACTION,
-  PRESSURE_WORK_CLASS,
   PartitionService,
   PgWireStartupSafetyGate,
-  PressureGovernor,
-  QUERY_ERROR_CODE,
-  QUERY_ERROR_MSG,
-  QuerySystemStatePhase,
   RAFT_ROLE,
-  RPCClient,
   ReplicaHandlerSetup,
   ReplicaStatus,
   RuntimeServiceHandlerSetup,
-  SERVICE_DESCRIPTOR_FIELD,
-  SERVICE_LIFECYCLE_STATE,
   SERVICE_STATUS,
   SERVICE_TYPE,
   SQLQueryEngine,
   STARTUP_JOIN_MODE,
-  STATE,
-  STORAGE_DEFAULT,
   STRING,
-  StartupPipelineRunner,
-  StartupRuntimeHandoffOwner,
-  StartupRuntimeSurfaceOwner,
-  StartupServiceLifecycleOwner,
   TABLES,
   TIME_MS,
   TYPEOF,
   TablePolicyService,
   UNIFIED_SERVICE_TYPE,
-  WORK_CLASS,
-  WaitForLeadershipPhase,
-  WorkClassScheduler,
   _deriveWsAddressFromNodeAddress,
   _formatLeaderMetadataDetails,
   _parseBootstrapError,
   _resolveSeedContactRetryAfterMs,
-  activateMessageGroupServiceRows,
-  activatePartitionServiceRows,
-  activateSteadyStateRuntimeHandoff,
   assertCritical,
-  assertJoinPlanSegments,
-  assertRequiredControlPlaneRollout,
-  buildControlPlaneWorkloadProfile,
   buildDurableRejoinPartitionRestorePlans,
-  buildNodeStateUpdateDeliveryError,
-  buildNodeStateUpdatePublicationDiagnostics,
-  buildNodeStateUpdatePublicationFailureAction,
-  buildNodeStateUpdatePublicationFailureError,
-  buildNodeStateUpdatePublicationOutcome,
-  buildOwnerContractOutcome,
   buildPartitionCdcPropagationSubscriber,
   canonicalizeSystemTableRow,
   classifyTransportDeliveryOutcome,
   compareJoinSchemaVersions,
-  createJoinStartupPlan,
-  createJoiningPhaseOwners,
-  createNodeStateUpdateDeferredPublicationState,
-  createRuntimeStartupWiring,
   extractJoinSchemaVersionFromRecord,
   formatReplicatedServiceAddress,
-  getControlPlaneErrorCode,
-  getControlPlaneErrorMessage,
-  getControlPlaneMessageRequiredTables,
-  getControlPlaneNodeStatePublicationProfile,
-  getControlPlaneRetryAfterMs,
   getSystemCachePrimaryKeyFieldOrFallback,
   isDeliveredTransportDeliveryOutcome,
-  isHeartbeatEscalatedControlPlaneNodeStatePublicationMode,
-  isRetryableControlPlaneError,
   resolveCanonicalLeaderIdentitySnapshot,
-  resolveControlPlaneNodeStatePublicationMode,
-  resolveMembershipJoinIntentType,
-  resolveReplayControlPlaneNodeStatePublicationMode,
   shouldAttachPartitionCdcPropagation,
-  uuidv4,
-  waitForLocalQueryTransportReadiness,
-  waitForMetadataPublicationReadiness,
   wireMigrationWorkflowOwners,
 } = NODE_JOINING_SERVICE_SHARED;
 
@@ -170,9 +75,9 @@ class NodeJoiningServiceSegment5 extends NodeJoiningServiceSegment4 {
       Object.prototype.hasOwnProperty.call(systemTableSnapshots, tableName);
     const bootstrapSnapshotRows = Array.isArray(
       systemTableSnapshots?.[tableName],
-    )
-      ? systemTableSnapshots[tableName]
-      : [];
+    ) ?
+      systemTableSnapshots[tableName] :
+      [];
     if (hasBootstrapSnapshot) {
       rowSets.push(bootstrapSnapshotRows);
     }
@@ -245,9 +150,9 @@ class NodeJoiningServiceSegment5 extends NodeJoiningServiceSegment4 {
       return null;
     }
     const partitions =
-      typeof sqlQueryEngine?.getTablePartitions === TYPEOF.FUNCTION
-        ? sqlQueryEngine.getTablePartitions(tableName)
-        : [];
+      typeof sqlQueryEngine?.getTablePartitions === TYPEOF.FUNCTION ?
+        sqlQueryEngine.getTablePartitions(tableName) :
+        [];
     if (!Array.isArray(partitions) || partitions.length !== NUM.ONE) {
       return null;
     }
@@ -258,9 +163,9 @@ class NodeJoiningServiceSegment5 extends NodeJoiningServiceSegment4 {
     }
     const queryExecutor = sqlQueryEngine?.queryExecutor || null;
     const partitionServices =
-      typeof queryExecutor?.getRoutablePartitionServices === TYPEOF.FUNCTION
-        ? queryExecutor.getRoutablePartitionServices(partitionId)
-        : [];
+      typeof queryExecutor?.getRoutablePartitionServices === TYPEOF.FUNCTION ?
+        queryExecutor.getRoutablePartitionServices(partitionId) :
+        [];
     if (
       !Array.isArray(partitionServices) ||
       partitionServices.length === NUM.ZERO
@@ -303,7 +208,7 @@ class NodeJoiningServiceSegment5 extends NodeJoiningServiceSegment4 {
     const rowSets = replicaResults
       .filter((result) => result.success)
       .map((result) => result.rows);
-    return rowSets.length > NUM.ZERO ? { partitionId, rowSets } : null;
+    return rowSets.length > NUM.ZERO ? {partitionId, rowSets} : null;
   }
   /**
    * Query one partition replica address for join backfill.
@@ -333,8 +238,8 @@ class NodeJoiningServiceSegment5 extends NodeJoiningServiceSegment4 {
       const response = classifyTransportDeliveryOutcome(
         await messageRouter.deliver(
           address,
-          { type: JOIN_BACKFILL_QUERY.MESSAGE_TYPE, sql, params: [] },
-          { deliveryPriority: options.deliveryPriority },
+          {type: JOIN_BACKFILL_QUERY.MESSAGE_TYPE, sql, params: []},
+          {deliveryPriority: options.deliveryPriority},
         ),
       );
       if (
@@ -362,7 +267,7 @@ class NodeJoiningServiceSegment5 extends NodeJoiningServiceSegment4 {
         error: response?.error || NODE_JOINING_SERVICE_LITERAL.QUERY_FAILED,
       };
     } catch (error) {
-      return { success: false, rows: [], error: error.message };
+      return {success: false, rows: [], error: error.message};
     }
   }
   /**
@@ -460,15 +365,15 @@ class NodeJoiningServiceSegment5 extends NodeJoiningServiceSegment4 {
         error.responseBody = errorBody;
         error.responseJson = parsedBody;
         const retryAfterHintMs = this.parseRetryAfterHeaderMs(retryAfterHeader);
-        const retryAfterBodyMs = Number.isFinite(parsedBody?.retryAfterMs)
-          ? Math.floor(parsedBody.retryAfterMs)
-          : null;
+        const retryAfterBodyMs = Number.isFinite(parsedBody?.retryAfterMs) ?
+          Math.floor(parsedBody.retryAfterMs) :
+          null;
         const retryAfterMs =
-          Number.isFinite(retryAfterHintMs) && Number.isFinite(retryAfterBodyMs)
-            ? Math.max(retryAfterHintMs, retryAfterBodyMs)
-            : Number.isFinite(retryAfterHintMs)
-              ? retryAfterHintMs
-              : retryAfterBodyMs;
+          Number.isFinite(retryAfterHintMs) && Number.isFinite(retryAfterBodyMs) ?
+            Math.max(retryAfterHintMs, retryAfterBodyMs) :
+            Number.isFinite(retryAfterHintMs) ?
+              retryAfterHintMs :
+              retryAfterBodyMs;
         if (Number.isFinite(retryAfterMs)) {
           error.retryAfterMs = retryAfterMs;
         }
@@ -652,7 +557,7 @@ class NodeJoiningServiceSegment5 extends NodeJoiningServiceSegment4 {
       JOINING_UNIFIED_RECONCILE.HYDRATION_REASON,
     );
     await this.activateJoinPartitionServiceRows(
-      restorePlans.map(({ replicaId }) => replicaId),
+      restorePlans.map(({replicaId}) => replicaId),
     );
     this.startDurableRejoinLocalPartitionElections(restorePlans);
     this.durableRejoinRestoreState =
@@ -663,7 +568,7 @@ class NodeJoiningServiceSegment5 extends NodeJoiningServiceSegment4 {
         nodeId: this.nodeId,
         restoredReplicaCount: restorePlans.length,
         restoredPartitionIds: restorePlans.map(
-          ({ partitionId }) => partitionId,
+          ({partitionId}) => partitionId,
         ),
       },
     );
@@ -711,8 +616,8 @@ class NodeJoiningServiceSegment5 extends NodeJoiningServiceSegment4 {
       this.tablePolicyService.initialize();
     }
     const createPartitionService = async (options) =>
-      this.createJoinLocalPartitionService({ ...options, messageGroupService }); // Use shared ReplicaHandlerSetup component
-    const { replicaHandler, replicaStateMachine } = ReplicaHandlerSetup.create({
+      this.createJoinLocalPartitionService({...options, messageGroupService}); // Use shared ReplicaHandlerSetup component
+    const {replicaHandler, replicaStateMachine} = ReplicaHandlerSetup.create({
       nodeId: this.nodeId,
       messageRouter: this.messageRouter,
       cdcIntegrationService: cdcIntegrationService,
@@ -745,9 +650,9 @@ class NodeJoiningServiceSegment5 extends NodeJoiningServiceSegment4 {
       });
       this.tablePolicyService.initialize();
     }
-    const cacheForPartition = this.systemCacheHydrated
-      ? systemTableCache
-      : null;
+    const cacheForPartition = this.systemCacheHydrated ?
+      systemTableCache :
+      null;
     const messageGroupService =
       options.messageGroupService || this.getLeaderMessageGroupService();
     const partition = new PartitionService({
@@ -780,18 +685,18 @@ class NodeJoiningServiceSegment5 extends NodeJoiningServiceSegment4 {
       if (!subscriptionMessageGroupService) {
         throw this.buildMessageGroupOwnerNotReadyError(subscriptionSelection, {
           message:
-            `Operational message-group ingress not ready ` +
+            'Operational message-group ingress not ready ' +
             `for ${tableName} CDC subscription`,
         });
       }
       await subscriptionMessageGroupService.subscribeToCDC(tableName);
       const subscriberId = [
-        "joining",
+        'joining',
         this.nodeId,
         tableName,
         options.replicaId,
-        subscriptionMessageGroupService?.groupId || "message-group",
-      ].join(":");
+        subscriptionMessageGroupService?.groupId || 'message-group',
+      ].join(':');
       const cdcSubscriber = buildPartitionCdcPropagationSubscriber({
         tableName,
         partitionId: options.partitionId,
@@ -810,7 +715,7 @@ class NodeJoiningServiceSegment5 extends NodeJoiningServiceSegment4 {
       });
       const handshake = await partition.subscribeToCDCWithHandshake(
         cdcSubscriber,
-        { subscriberId },
+        {subscriberId},
       );
       this.logger.debug(JOINING_LOG_MSG.CDC_SUBSCRIPTION_REGISTERED, {
         tableName,
@@ -852,13 +757,13 @@ class NodeJoiningServiceSegment5 extends NodeJoiningServiceSegment4 {
         serviceId: replicaId,
         serviceType: SERVICE_TYPE.PARTITION,
         serviceAddress:
-          typeof partition?.getUnifiedAddress === TYPEOF.FUNCTION
-            ? partition.getUnifiedAddress()
-            : formatReplicatedServiceAddress(
-                SERVICE_TYPE.PARTITION,
-                this.nodeId,
-                replicaId,
-              ),
+          typeof partition?.getUnifiedAddress === TYPEOF.FUNCTION ?
+            partition.getUnifiedAddress() :
+            formatReplicatedServiceAddress(
+              SERVICE_TYPE.PARTITION,
+              this.nodeId,
+              replicaId,
+            ),
       },
     );
   }
@@ -1000,7 +905,7 @@ class NodeJoiningServiceSegment5 extends NodeJoiningServiceSegment4 {
     const systemTableCache = NodeService.getInstance().getSystemTableCache();
     const descriptorForReplica = (replicaId) => ({
       serviceId: replicaId,
-      serviceType: "message_group",
+      serviceType: 'message_group',
       replicaId,
     });
     const result = MessageGroupServiceHandlerSetup.create({
@@ -1017,13 +922,13 @@ class NodeJoiningServiceSegment5 extends NodeJoiningServiceSegment4 {
       startMessageGroupReplica: async (options) => {
         return this.startJoinMessageGroupReplica(
           descriptorForReplica(options.replicaId),
-          { replicaOptions: options },
+          {replicaOptions: options},
         );
       },
       stopMessageGroupReplica: async (options) => {
         return this.stopJoinMessageGroupReplica(
           descriptorForReplica(options.replicaId),
-          { replicaOptions: options },
+          {replicaOptions: options},
         );
       },
       resolveLocalMessageGroupReplica: (replicaId) =>
@@ -1264,9 +1169,9 @@ class NodeJoiningServiceSegment5 extends NodeJoiningServiceSegment4 {
       return {
         ...baseStatus,
         promotionState: evaluation?.promotionState || null,
-        promotionReasons: Array.isArray(evaluation?.promotionReasons)
-          ? [...evaluation.promotionReasons]
-          : [],
+        promotionReasons: Array.isArray(evaluation?.promotionReasons) ?
+          [...evaluation.promotionReasons] :
+          [],
         snapshotRevision: evaluation?.snapshotRevision ?? null,
         snapshotRevisionState: evaluation?.snapshotRevisionState || null,
         snapshotExpectedMinimumRevision:
@@ -1293,6 +1198,16 @@ class NodeJoiningServiceSegment5 extends NodeJoiningServiceSegment4 {
     return this.getLeaderMessageGroupService() !== null;
   }
   /**
+   * Return seed-contact startup authority captured before full admission.
+   * @return {Object|null}
+   */
+  getSeedContactStartupAuthoritySnapshot() {
+    return this.seedContactStartupAuthority &&
+      typeof this.seedContactStartupAuthority === TYPEOF.OBJECT ?
+      this.seedContactStartupAuthority :
+      null;
+  }
+  /**
    * Check if any joined message group has a leader in the system cache.
    * @param {Object} systemTableCache - System table cache.
    * @return {boolean} True if cache reports a leader for any joined group.
@@ -1312,31 +1227,31 @@ class NodeJoiningServiceSegment5 extends NodeJoiningServiceSegment4 {
       return false;
     }
     const services =
-      typeof systemTableCache.filter === TYPEOF.FUNCTION
-        ? systemTableCache.filter(
-            TABLES.SERVICES,
-            (service) =>
-              service?.[COLUMN.SERVICE_TYPE] === SERVICE_TYPE.MESSAGE_GROUP &&
+      typeof systemTableCache.filter === TYPEOF.FUNCTION ?
+        systemTableCache.filter(
+          TABLES.SERVICES,
+          (service) =>
+            service?.[COLUMN.SERVICE_TYPE] === SERVICE_TYPE.MESSAGE_GROUP &&
               groupIds.has(service?.[COLUMN.GROUP_ID]) &&
               service?.[COLUMN.STATUS] === SERVICE_STATUS.ACTIVE,
-          )
-        : (systemTableCache.getAll?.(TABLES.SERVICES) || []).filter(
-            (service) =>
-              service?.[COLUMN.SERVICE_TYPE] === SERVICE_TYPE.MESSAGE_GROUP &&
+        ) :
+        (systemTableCache.getAll?.(TABLES.SERVICES) || []).filter(
+          (service) =>
+            service?.[COLUMN.SERVICE_TYPE] === SERVICE_TYPE.MESSAGE_GROUP &&
               groupIds.has(service?.[COLUMN.GROUP_ID]) &&
               service?.[COLUMN.STATUS] === SERVICE_STATUS.ACTIVE,
-          );
+        );
     if (services.length === NUM.ZERO) {
       return false;
     }
     const groupRows =
-      typeof systemTableCache.filter === TYPEOF.FUNCTION
-        ? systemTableCache.filter(TABLES.MESSAGE_GROUPS, (group) =>
-            groupIds.has(group?.[COLUMN.GROUP_ID]),
-          )
-        : (systemTableCache.getAll?.(TABLES.MESSAGE_GROUPS) || []).filter(
-            (group) => groupIds.has(group?.[COLUMN.GROUP_ID]),
-          );
+      typeof systemTableCache.filter === TYPEOF.FUNCTION ?
+        systemTableCache.filter(TABLES.MESSAGE_GROUPS, (group) =>
+          groupIds.has(group?.[COLUMN.GROUP_ID]),
+        ) :
+        (systemTableCache.getAll?.(TABLES.MESSAGE_GROUPS) || []).filter(
+          (group) => groupIds.has(group?.[COLUMN.GROUP_ID]),
+        );
     const activeServiceExistsForCanonicalLeader = groupRows.some((group) => {
       const groupId =
         group?.[COLUMN.GROUP_ID] || group?.group_id || group?.groupId || null;
@@ -1380,4 +1295,4 @@ class NodeJoiningServiceSegment5 extends NodeJoiningServiceSegment4 {
   }
 }
 
-export { NodeJoiningServiceSegment5 };
+export {NodeJoiningServiceSegment5};

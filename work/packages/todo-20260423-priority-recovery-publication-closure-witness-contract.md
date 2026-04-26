@@ -37,8 +37,8 @@ Sprint:
 
 Depends on:
 
-1. [Priority recovery readiness and workflow convergence closure](./active-20260423-priority-recovery-readiness-and-workflow-convergence-closure.md)
-2. [Membership publication planning evidence union closure](./active-20260423-membership-publication-planning-evidence-union-closure.md)
+1. [Priority recovery readiness and workflow convergence closure](./done-20260423-priority-recovery-readiness-and-workflow-convergence-closure.md)
+2. [Membership publication planning evidence union closure](./done-20260423-membership-publication-planning-evidence-union-closure.md)
 
 ## Dominant Blocker
 

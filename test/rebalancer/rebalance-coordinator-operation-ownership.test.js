@@ -15,6 +15,17 @@ import {
 import {registerRebalanceCoordinatorOperationOwnershipTailTests} from './rebalance-coordinator-operation-ownership-tail-test-cases.js';
 
 const EMERGENCY_TRANSPORT_PARTITION_ID = 'control_plane_publications-p1';
+const REPLICA_OPERATION_EMERGENCY_PARTITION_ID = 'replica_operations-p1';
+const ORDINARY_PRIORITY_TRANSACTION_PARTITION_ID = 'sql_transactions-p1';
+const ORDINARY_PRIORITY_WRITE_PARTITION_ID = 'sql_write_operations-p1';
+const CRITICAL_REMOVE_LANE_CONFLICT_OPERATION_ID =
+  'op-critical-remove-lane-conflict';
+const CRITICAL_REMOVE_LANE_TARGET_REPLICA_ID =
+  `${EMERGENCY_TRANSPORT_PARTITION_ID}-r4`;
+const CRITICAL_REMOVE_LANE_CONFLICT_REPLICA_ID =
+  `${EMERGENCY_TRANSPORT_PARTITION_ID}-r5`;
+const SINGLE_CONCURRENT_ADD_LIMIT = 1;
+const SINGLE_SPREAD_GAP = 1;
 
 function createWorkflowCoordinatorSpy() {
   const coordinator = new DurableWorkflowCoordinator();
@@ -396,6 +407,107 @@ async (t) => {
       canStartSecondOrdinaryPriority,
       false,
       'ordinary priority work should not consume the reserved emergency overflow slot once its own lane is full',
+    );
+  } finally {
+    await coordinator.shutdown();
+  }
+});
+
+test('RebalanceCoordinator admits the second emergency recovery owner while ' +
+  'ordinary priority work and one emergency owner are already in flight',
+async (t) => {
+  const coordinator = createCoordinator({
+    nodeId: 'node-local',
+    transactionCoordinator: createTransactionCoordinator(),
+    systemTableCache: {
+      get() {
+        return null;
+      },
+      getAll() {
+        return [];
+      },
+      filter() {
+        return [];
+      },
+    },
+    cdcIntegrationService: {
+      async waitForCacheUpdate() {},
+    },
+    tablePolicyService: {
+      async getPolicyForPartition() {
+        return {minReplicaCount: SINGLE_CONCURRENT_ADD_LIMIT};
+      },
+    },
+    messageRouter: {
+      async deliver() {
+        return {acknowledged: true, status: 'completed'};
+      },
+    },
+    enableTimeouts: false,
+  });
+  coordinator.initialize();
+
+  coordinator.isLocalRouterBackpressured = () => false;
+  coordinator.shouldDelayEmptyIncompleteOperationQuery = () => false;
+  coordinator.clearEmptyIncompleteOperationQueryDelay = () => {};
+  coordinator.markEmptyIncompleteOperationQueryAt = () => {};
+  coordinator.getPriorityRecoveryAdmissionPlan = () => buildPriorityRecoveryAdmissionPlan({
+    maxConcurrentAdds: SINGLE_CONCURRENT_ADD_LIMIT,
+    priorityPartitionSummary: {
+      satisfied: false,
+      blockedPartitions: [{
+        partitionId: EMERGENCY_TRANSPORT_PARTITION_ID,
+        spreadGap: SINGLE_SPREAD_GAP,
+      }, {
+        partitionId: REPLICA_OPERATION_EMERGENCY_PARTITION_ID,
+        spreadGap: SINGLE_SPREAD_GAP,
+      }],
+    },
+    isPriorityPartition: (partitionId) => (
+      partitionId === EMERGENCY_TRANSPORT_PARTITION_ID ||
+      partitionId === REPLICA_OPERATION_EMERGENCY_PARTITION_ID ||
+      partitionId === ORDINARY_PRIORITY_TRANSACTION_PARTITION_ID ||
+      partitionId === ORDINARY_PRIORITY_WRITE_PARTITION_ID
+    ),
+    isEmergencyPriorityPartition: (partitionId) => (
+      partitionId === EMERGENCY_TRANSPORT_PARTITION_ID ||
+      partitionId === REPLICA_OPERATION_EMERGENCY_PARTITION_ID
+    ),
+  });
+  coordinator.queryIncompleteOperations = async () => ([
+    {
+      type: OperationType.REPLACE,
+      partitionId: ORDINARY_PRIORITY_TRANSACTION_PARTITION_ID,
+      workflowStep: WORKFLOW_STEP.SENDING,
+    },
+    {
+      type: OperationType.REPLACE,
+      partitionId: EMERGENCY_TRANSPORT_PARTITION_ID,
+      workflowStep: WORKFLOW_STEP.SENDING,
+    },
+  ]);
+
+  try {
+    const canStartReplicaOperationRecovery = await coordinator
+      .canStartPriorityAddOperation({
+        partitionId: REPLICA_OPERATION_EMERGENCY_PARTITION_ID,
+      });
+
+    t.equal(
+      canStartReplicaOperationRecovery,
+      true,
+      'replica-operation recovery should keep its emergency owner slot while publication recovery is already in flight',
+    );
+
+    const canStartSecondOrdinaryPriority = await coordinator
+      .canStartPriorityAddOperation({
+        partitionId: ORDINARY_PRIORITY_WRITE_PARTITION_ID,
+      });
+
+    t.equal(
+      canStartSecondOrdinaryPriority,
+      false,
+      'ordinary priority work should still be serialized by the configured lane',
     );
   } finally {
     await coordinator.shutdown();
@@ -1368,6 +1480,89 @@ async (t) => {
   }
 });
 
+test('RebalanceCoordinator serializes critical publication removes behind ' +
+  'in-flight source removal',
+async (t) => {
+  const coordinator = new RebalanceCoordinator({
+    nodeId: 'node-local',
+    transactionCoordinator: createTransactionCoordinator(),
+    systemTableCache: {
+      get() {
+        return null;
+      },
+    },
+    cdcIntegrationService: {
+      async waitForCacheUpdate() {},
+    },
+    tablePolicyService: {
+      async getPolicyForPartition() {
+        return {minReplicaCount: 1};
+      },
+    },
+    messageRouter: {
+      async deliver() {
+        return {acknowledged: true, status: 'completed'};
+      },
+    },
+    sqlQueryEngine: {
+      async executeQuery() {
+        return {success: true, rows: [], changes: 1};
+      },
+    },
+    ...createStorageOwners(),
+    enableTimeouts: false,
+  });
+  coordinator.initialize();
+  coordinator.repository.getOperationsByEntityAuthoritativeObservation =
+    async () => ({
+      state: 'available',
+      operationCount: 1,
+      operations: [
+        {
+          operationId: CRITICAL_REMOVE_LANE_CONFLICT_OPERATION_ID,
+          type: OperationType.REPLACE,
+          partitionId: EMERGENCY_TRANSPORT_PARTITION_ID,
+          entityType: 'partition',
+          entityId: EMERGENCY_TRANSPORT_PARTITION_ID,
+          replicaId: CRITICAL_REMOVE_LANE_CONFLICT_REPLICA_ID,
+          sourceNodeId: 'node-old',
+          targetNodeId: 'node-new',
+          workflowStep: WORKFLOW_STEP.STOPPING,
+          status: ReplicaStatus.REMOVING,
+        },
+      ],
+    });
+
+  try {
+    try {
+      await coordinator.ensureCriticalPartitionRemoveLaneAvailable({
+        normalizedMoveType: OperationType.REMOVE,
+        partitionId: EMERGENCY_TRANSPORT_PARTITION_ID,
+        entityType: 'partition',
+        entityId: EMERGENCY_TRANSPORT_PARTITION_ID,
+        move: {
+          replicaId: CRITICAL_REMOVE_LANE_TARGET_REPLICA_ID,
+        },
+      });
+      t.fail(
+        'critical publication trim should wait for existing source removal',
+      );
+    } catch (error) {
+      assert.equal(
+        error?.rebalanceSkipReason,
+        REBALANCER_SKIP_REASON.BUDGET_EXCEEDED,
+      );
+      assert.equal(
+        error?.conflictingOperationId,
+        CRITICAL_REMOVE_LANE_CONFLICT_OPERATION_ID,
+      );
+      assert.match(error?.message, /remove-like operation in flight/);
+    }
+  } finally {
+    await coordinator.shutdown();
+  }
+});
+
 test('RebalanceCoordinator critical add-like gate ignores replace remove-phase work',
   async (t) => {
     const coordinator = new RebalanceCoordinator({
@@ -1430,42 +1625,42 @@ test('RebalanceCoordinator critical add-like gate ignores replace remove-phase w
 
 test('RebalanceCoordinator rejects a second add-like create while the same ' +
   'entity already has replace remove-phase work in flight',
-  async (t) => {
-    const ENTITY_ID = 'sql_write_operations-p1';
-    const ACTIVE_STATUS = 'active';
-    const REMOVING_STATUS = 'removing';
+async (t) => {
+  const ENTITY_ID = 'sql_write_operations-p1';
+  const ACTIVE_STATUS = 'active';
+  const REMOVING_STATUS = 'removing';
 
-    const coordinator = createCoordinator({
-      nodeId: 'node-local',
-      transactionCoordinator: createTransactionCoordinator(),
-      systemTableCache: {
-        get() {
-          return null;
-        },
+  const coordinator = createCoordinator({
+    nodeId: 'node-local',
+    transactionCoordinator: createTransactionCoordinator(),
+    systemTableCache: {
+      get() {
+        return null;
       },
-      cdcIntegrationService: {
-        async waitForCacheUpdate() {},
+    },
+    cdcIntegrationService: {
+      async waitForCacheUpdate() {},
+    },
+    tablePolicyService: {
+      async getPolicyForPartition() {
+        return {minReplicaCount: 1};
       },
-      tablePolicyService: {
-        async getPolicyForPartition() {
-          return {minReplicaCount: 1};
-        },
+    },
+    messageRouter: {
+      async deliver() {
+        return {acknowledged: true, status: 'completed'};
       },
-      messageRouter: {
-        async deliver() {
-          return {acknowledged: true, status: 'completed'};
-        },
+    },
+    sqlQueryEngine: {
+      async executeQuery() {
+        return {success: true, rows: [], changes: 1};
       },
-      sqlQueryEngine: {
-        async executeQuery() {
-          return {success: true, rows: [], changes: 1};
-        },
-      },
-      ...createStorageOwners(),
-      enableTimeouts: false,
-    });
-    coordinator.initialize();
-    coordinator.repository.getOperationsByEntityAuthoritativeObservation =
+    },
+    ...createStorageOwners(),
+    enableTimeouts: false,
+  });
+  coordinator.initialize();
+  coordinator.repository.getOperationsByEntityAuthoritativeObservation =
       async () => ({
         state: 'ready',
         operationCount: 1,
@@ -1490,48 +1685,48 @@ test('RebalanceCoordinator rejects a second add-like create while the same ' +
         deferredOutcome: null,
       });
 
+  try {
+    let conflictError = null;
     try {
-      let conflictError = null;
-      try {
-        await coordinator.createOperation({
-          type: OperationType.REPLACE,
-          partitionId: ENTITY_ID,
-          entityType: 'partition',
-          entityId: ENTITY_ID,
-          nodeId: 'node-c',
-          replicaId: `${ENTITY_ID}-r5`,
-        });
-      } catch (error) {
-        conflictError = error;
-      }
-      t.ok(
-        conflictError,
-        'same-entity add-like work should wait for replace remove-phase completion',
-      );
-      t.equal(
-        conflictError?.rebalanceSkipReason,
-        REBALANCER_SKIP_REASON.CONFLICTING_OPERATION_IN_FLIGHT,
-        'same-entity add-like overlap should surface stable conflict skip reason',
-      );
-      t.equal(
-        conflictError?.conflictingOperationId,
-        'replace-op-remove-phase',
-        'conflicting replace remove-phase operation id should be attached',
-      );
-      t.equal(
-        conflictError?.entityId,
-        ENTITY_ID,
-        'entity-scoped conflict should report the blocked entity id',
-      );
-      t.equal(
-        coordinator.stats.operationsCreated,
-        0,
-        'conflicting same-entity add-like create should not persist a new operation',
-      );
-    } finally {
-      await coordinator.shutdown();
+      await coordinator.createOperation({
+        type: OperationType.REPLACE,
+        partitionId: ENTITY_ID,
+        entityType: 'partition',
+        entityId: ENTITY_ID,
+        nodeId: 'node-c',
+        replicaId: `${ENTITY_ID}-r5`,
+      });
+    } catch (error) {
+      conflictError = error;
     }
-  });
+    t.ok(
+      conflictError,
+      'same-entity add-like work should wait for replace remove-phase completion',
+    );
+    t.equal(
+      conflictError?.rebalanceSkipReason,
+      REBALANCER_SKIP_REASON.CONFLICTING_OPERATION_IN_FLIGHT,
+      'same-entity add-like overlap should surface stable conflict skip reason',
+    );
+    t.equal(
+      conflictError?.conflictingOperationId,
+      'replace-op-remove-phase',
+      'conflicting replace remove-phase operation id should be attached',
+    );
+    t.equal(
+      conflictError?.entityId,
+      ENTITY_ID,
+      'entity-scoped conflict should report the blocked entity id',
+    );
+    t.equal(
+      coordinator.stats.operationsCreated,
+      0,
+      'conflicting same-entity add-like create should not persist a new operation',
+    );
+  } finally {
+    await coordinator.shutdown();
+  }
+});
 
 test('RebalanceCoordinator critical add-like gate still counts superseded priority recovery rows outside the current eligible cohort',
   async (t) => {

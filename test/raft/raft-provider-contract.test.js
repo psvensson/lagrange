@@ -11,6 +11,7 @@ const TEST_ROUTE_OVERRIDE_COMMAND = Object.freeze({
 });
 const TEST_RETRYABLE_FORWARD_HINT_MS = 7;
 const TEST_RETRYABLE_FORWARD_ERROR_MSG = 'Connection to node seed closed';
+const TEST_IMMEDIATE_ELECTION_DELAY_MS = 1;
 
 function buildProviderStub() {
   const provider = {};
@@ -94,6 +95,24 @@ test('LiferaftProvider startElectionTimer calls heartbeat(timeout())',
 
     provider.startElectionTimer(raftNode);
     t.equal(heartbeatDuration, 1234);
+  });
+
+test('LiferaftProvider requestElectionNow calls heartbeat with the immediate election delay',
+  async (t) => {
+    const provider = new LiferaftProvider();
+    let heartbeatDuration = null;
+    const raftNode = {
+      heartbeat: (durationMs) => {
+        heartbeatDuration = durationMs;
+      },
+    };
+
+    provider.requestElectionNow(raftNode);
+    t.equal(
+      heartbeatDuration,
+      TEST_IMMEDIATE_ELECTION_DELAY_MS,
+      'immediate election should use the canonical near-zero heartbeat delay',
+    );
   });
 
 test('LiferaftProvider clearTimers clears named and all timers', async (t) => {

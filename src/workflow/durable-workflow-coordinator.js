@@ -103,64 +103,64 @@ class DurableWorkflowCoordinator {
      *   transition idempotency key as committed after persistence.
      * @return {Promise<Object>} Updated workflow state.
      */
-    async transitionStep(workflowId, transition, updates = {}, options = {}) {
-      const nextStep = transition?.nextStep;
-      if (!nextStep) {
-        throw new Error(WORKFLOW_ERROR_MSG.NEXT_STEP_REQUIRED);
-      }
-      const reason = transition?.reason;
-      if (!reason) {
-        throw new Error(WORKFLOW_ERROR_MSG.REASON_REQUIRED);
-      }
+  async transitionStep(workflowId, transition, updates = {}, options = {}) {
+    const nextStep = transition?.nextStep;
+    if (!nextStep) {
+      throw new Error(WORKFLOW_ERROR_MSG.NEXT_STEP_REQUIRED);
+    }
+    const reason = transition?.reason;
+    if (!reason) {
+      throw new Error(WORKFLOW_ERROR_MSG.REASON_REQUIRED);
+    }
 
-      const workflow = this.requireWorkflow(workflowId);
+    const workflow = this.requireWorkflow(workflowId);
 
-      if (this.isTransitionIdempotent(workflowId, nextStep)) {
-        return workflow;
-      }
-
-      const transitionFence = transition.fenceToken;
-      if (transitionFence !== undefined && transitionFence !== null) {
-        const currentFence = workflow.fenceToken;
-        if (currentFence !== undefined && currentFence !== null &&
-            transitionFence < currentFence) {
-          throw new Error(WORKFLOW_ERROR_MSG.STALE_FENCE_TOKEN);
-        }
-        workflow.fenceToken = transitionFence;
-      }
-
-      const previousStep = workflow.step || null;
-      const now = this.now();
-
-      const historyEntry = {
-        [WORKFLOW_TRANSITION_FIELD.PREVIOUS_STEP]: previousStep,
-        [WORKFLOW_TRANSITION_FIELD.NEXT_STEP]: nextStep,
-        [WORKFLOW_TRANSITION_FIELD.REASON]: reason,
-        [WORKFLOW_TRANSITION_FIELD.TIMESTAMP]: now,
-        [WORKFLOW_TRANSITION_FIELD.OWNER_KEY]: workflow.ownerKey,
-        [WORKFLOW_TRANSITION_FIELD.FENCE_TOKEN]:
-          workflow.fenceToken ?? null,
-      };
-      if (transition.metadata &&
-          typeof transition.metadata === 'object') {
-        Object.assign(historyEntry, transition.metadata);
-      }
-
-      if (!Array.isArray(workflow.transitionHistory)) {
-        workflow.transitionHistory = [];
-      }
-      workflow.transitionHistory.push(historyEntry);
-
-      workflow.step = nextStep;
-      workflow.updatedAt = now;
-      Object.assign(workflow, updates);
-
-      await this.persistWorkflow(workflow);
-      if (options.markCommitted !== false) {
-        this.markTransitionCommitted(workflowId, nextStep);
-      }
+    if (this.isTransitionIdempotent(workflowId, nextStep)) {
       return workflow;
     }
+
+    const transitionFence = transition.fenceToken;
+    if (transitionFence !== undefined && transitionFence !== null) {
+      const currentFence = workflow.fenceToken;
+      if (currentFence !== undefined && currentFence !== null &&
+            transitionFence < currentFence) {
+        throw new Error(WORKFLOW_ERROR_MSG.STALE_FENCE_TOKEN);
+      }
+      workflow.fenceToken = transitionFence;
+    }
+
+    const previousStep = workflow.step || null;
+    const now = this.now();
+
+    const historyEntry = {
+      [WORKFLOW_TRANSITION_FIELD.PREVIOUS_STEP]: previousStep,
+      [WORKFLOW_TRANSITION_FIELD.NEXT_STEP]: nextStep,
+      [WORKFLOW_TRANSITION_FIELD.REASON]: reason,
+      [WORKFLOW_TRANSITION_FIELD.TIMESTAMP]: now,
+      [WORKFLOW_TRANSITION_FIELD.OWNER_KEY]: workflow.ownerKey,
+      [WORKFLOW_TRANSITION_FIELD.FENCE_TOKEN]:
+          workflow.fenceToken ?? null,
+    };
+    if (transition.metadata &&
+          typeof transition.metadata === 'object') {
+      Object.assign(historyEntry, transition.metadata);
+    }
+
+    if (!Array.isArray(workflow.transitionHistory)) {
+      workflow.transitionHistory = [];
+    }
+    workflow.transitionHistory.push(historyEntry);
+
+    workflow.step = nextStep;
+    workflow.updatedAt = now;
+    Object.assign(workflow, updates);
+
+    await this.persistWorkflow(workflow);
+    if (options.markCommitted !== false) {
+      this.markTransitionCommitted(workflowId, nextStep);
+    }
+    return workflow;
+  }
 
   /**
    * Persist the current workflow state.

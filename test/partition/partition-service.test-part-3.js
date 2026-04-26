@@ -5,24 +5,15 @@
  */
 
 import {EventEmitter} from 'node:events';
-import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
 import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
-import LifeRaft from '@markwylde/liferaft';
 import {
   PartitionService,
-  PartitionState,
   RaftRole,
   CDCOperation,
 } from '../../src/partition/partition-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {
-  PARTITION_SERVICE_INIT_STAGE,
-  PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON,
-  PARTITION_SERVICE_LOG_MSG,
-  PARTITION_SERVICE_OPERATION,
 } from '../../src/partition/partition-service-constants.js';
 import {
   SYSTEM_TABLE_NAME,
@@ -34,7 +25,6 @@ import {
 } from '../../src/bootstrap/lifecycle-controller-constants.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {
-  RAFT_TRANSPORT_BACKGROUND_DELIVERY_OPTIONS,
 } from '../../src/raft/constants.js';
 import {
   COLUMN,
@@ -44,13 +34,8 @@ import {
   TABLES,
 } from '../../src/constants/index.js';
 import {
-  OperationType,
-  ReplicaStatus,
 } from '../../src/rebalancer/replica-status.js';
 import {
-  PARTITION_SPLIT_MIRROR_ORIGIN,
-  PARTITION_TRANSITION_METADATA_FIELD,
-  PARTITION_TRANSITION_STATE,
 } from '../../src/partition/partition-constants.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
@@ -59,12 +44,6 @@ import {
   PRESSURE_WORK_CLASS,
 } from '../../src/control-plane/pressure-governor.js';
 
-const TEST_PARTITION_ID = 'partition-1';
-const TEST_OWNER_NODE_ID = 'node-owner';
-const TEST_STALE_OWNER_NODE_ID = 'node-stale-owner';
-const TEST_LIVE_LEADER_NODE_ID = 'node-live-leader';
-const TEST_OWNER_REPLICA_ID = 'replica-owner-row';
-const TEST_LIVE_LEADER_REPLICA_ID = 'replica-live-leader';
 
 beforeEach(() => {
   ConfigurationManager.resetInstance();
@@ -723,8 +702,8 @@ test(
       [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
       [COLUMN.CONNECTION_STATE]: STATE.READY,
       [COLUMN.LAST_HEARTBEAT]: now + 1,
-        [COLUMN.READY_LEASE_EXPIRES_AT]: now + 60_000,
-      });
+      [COLUMN.READY_LEASE_EXPIRES_AT]: now + 60_000,
+    });
 
     readinessState.transitionTo(LIFECYCLE_PHASE.CONTROL_READY, {
       ready: false,

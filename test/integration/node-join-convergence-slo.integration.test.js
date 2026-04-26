@@ -460,151 +460,150 @@ test('Node join convergence SLO', {timeout: INTEGRATION_TEST_TIMEOUT_MS}, async 
       await gracefulShutdown(bootstrapService, bootstrapResult, seedApi);
     }
   });
-
 });
 
 test('Node join convergence SLO real-network readiness path',
   {timeout: INTEGRATION_TEST_TIMEOUT_MS}, async (t) => {
-  initializeTestEnvironment({
-    raft: {
-      electionTimeoutMinMs: 300,
-      electionTimeoutMaxMs: 900,
-      heartbeatIntervalMs: 75,
-    },
-    rebalancer: {
-      periodicCheckIntervalMs: 4000,
-      periodicCheckJitterMs: 500,
-      criticalCheckDelayMs: 1000,
-      stabilizationPeriodMs: 2000,
-    },
-    replicaHandler: {
-      syncTimeoutMs: 15000,
-    },
-  });
-
-  const seedNodeId = '550e8400-e29b-41d4-a716-446655440211';
-  const joiningNodeId = '550e8400-e29b-41d4-a716-446655440212';
-  const seedWsPort = getUniquePort();
-  const joiningWsPort = getUniquePort();
-
-  const bootstrapService = new BootstrapService({
-    nodeId: seedNodeId,
-    nodeAddress: `ws://localhost:${seedWsPort}`,
-    wsPort: seedWsPort,
-    config: TEST_CONFIG.bootstrap,
-  });
-
-  let bootstrapResult = null;
-  let seedApi = null;
-  let joiningService = null;
-
-  try {
-    bootstrapResult = await bootstrapService.bootstrap();
-    t.equal(bootstrapResult.success, true, 'seed bootstrap should succeed');
-    if (!bootstrapResult.success) {
-      return;
-    }
-
-    const systemTableCache = NodeService.getInstance().getSystemTableCache();
-    const seedQueryEngine = new SQLQueryEngine({
-      systemCache: systemTableCache,
-      messageRouter: bootstrapResult.messageRouter,
-      nodeId: seedNodeId,
-    });
-    const readinessState = new BootstrapReadinessState({
-      readyStableWindowMs: 120,
-      demotionFailureThreshold: 2,
-      retryAfterMs: 100,
-    });
-    const readinessTransitions = [];
-    readinessState.on('transition', (transition) => {
-      readinessTransitions.push(transition);
-    });
-
-    seedApi = new BootstrapAPI({
-      seedNodeId,
-      seedNodeAddress: `ws://localhost:${seedWsPort}`,
-      seedNodeWsAddress: `ws://localhost:${seedWsPort}`,
-      messageGroupServices: bootstrapResult.messageGroupServices,
-      partitionServices: bootstrapResult.partitionServices,
-      systemTableCache,
-      messageRouter: bootstrapResult.messageRouter,
-      epochManager: bootstrapResult.epochManager,
-      bootstrapService,
-      readinessState,
-    });
-
-    await seedApi.initialize(0, {listen: true});
-    const listenerAddress = seedApi.getFastify().server.address();
-    const seedApiPort = listenerAddress &&
-      typeof listenerAddress === 'object' &&
-      Number.isInteger(listenerAddress.port) ?
-      listenerAddress.port :
-      0;
-    t.ok(seedApiPort > 0, 'seed API should listen on a concrete network port');
-
-    const initialProbe = await probeBootstrapReady(seedApiPort);
-    t.equal(initialProbe.statusCode, 503,
-      'readiness probe should be not-ready before SQL engine is wired');
-    t.equal(initialProbe.body?.ready, false,
-      'readiness probe payload should expose ready=false before wiring');
-
-    seedApi.setSqlQueryEngine(seedQueryEngine);
-
-    let observedReady = false;
-    const readyProbeObserved = await waitFor(async () => {
-      const probe = await probeBootstrapReady(seedApiPort);
-      if (probe.statusCode === 200 && probe.body?.ready === true) {
-        observedReady = true;
-        return true;
-      }
-      return false;
-    }, REAL_NETWORK_READINESS_TIMEOUT_MS, REAL_NETWORK_READINESS_INTERVAL_MS);
-
-    t.equal(readyProbeObserved, true,
-      'readiness probe should transition to ready over real network listener');
-    t.equal(observedReady, true,
-      'readiness probe should eventually expose ready=true over HTTP');
-    // The HTTP probe may return ready=true via bootstrap-join scope
-    // projection while the internal state is still in JOIN_READY phase
-    // (waiting for the stable window). Either an actual ready=true
-    // transition or reaching JOIN_READY satisfies the contract.
-    t.ok(
-      readinessTransitions.some((tr) =>
-        tr.ready === true ||
-        tr.phase === LIFECYCLE_PHASE.JOIN_READY),
-      'readiness transitions should reach JOIN_READY or ready=true',
-    );
-
-    joiningService = new NodeJoiningService({
-      nodeId: joiningNodeId,
-      nodeAddress: `ws://localhost:${joiningWsPort}`,
-      seedNodeAddress: `http://127.0.0.1:${seedApiPort}`,
-      seedNodeWsAddress: `ws://localhost:${seedWsPort}`,
-      wsPort: joiningWsPort,
-      config: {
-        ...TEST_CONFIG.bootstrap,
-        httpTimeoutMs: 5000,
-        leadershipWaitTimeoutMs: 12000,
+    initializeTestEnvironment({
+      raft: {
+        electionTimeoutMinMs: 300,
+        electionTimeoutMaxMs: 900,
+        heartbeatIntervalMs: 75,
+      },
+      rebalancer: {
+        periodicCheckIntervalMs: 4000,
+        periodicCheckJitterMs: 500,
+        criticalCheckDelayMs: 1000,
+        stabilizationPeriodMs: 2000,
+      },
+      replicaHandler: {
+        syncTimeoutMs: 15000,
       },
     });
 
-    const joinResult = await joiningService.join();
-    t.equal(joinResult.success, true, 'joining node should join successfully');
+    const seedNodeId = '550e8400-e29b-41d4-a716-446655440211';
+    const joiningNodeId = '550e8400-e29b-41d4-a716-446655440212';
+    const seedWsPort = getUniquePort();
+    const joiningWsPort = getUniquePort();
 
-    const nodeReadyObserved = await waitFor(async () => {
-      const nodeRow = systemTableCache.get(SYSTEM_TABLE_NAME.NODES, joiningNodeId);
-      return !!nodeRow &&
+    const bootstrapService = new BootstrapService({
+      nodeId: seedNodeId,
+      nodeAddress: `ws://localhost:${seedWsPort}`,
+      wsPort: seedWsPort,
+      config: TEST_CONFIG.bootstrap,
+    });
+
+    let bootstrapResult = null;
+    let seedApi = null;
+    let joiningService = null;
+
+    try {
+      bootstrapResult = await bootstrapService.bootstrap();
+      t.equal(bootstrapResult.success, true, 'seed bootstrap should succeed');
+      if (!bootstrapResult.success) {
+        return;
+      }
+
+      const systemTableCache = NodeService.getInstance().getSystemTableCache();
+      const seedQueryEngine = new SQLQueryEngine({
+        systemCache: systemTableCache,
+        messageRouter: bootstrapResult.messageRouter,
+        nodeId: seedNodeId,
+      });
+      const readinessState = new BootstrapReadinessState({
+        readyStableWindowMs: 120,
+        demotionFailureThreshold: 2,
+        retryAfterMs: 100,
+      });
+      const readinessTransitions = [];
+      readinessState.on('transition', (transition) => {
+        readinessTransitions.push(transition);
+      });
+
+      seedApi = new BootstrapAPI({
+        seedNodeId,
+        seedNodeAddress: `ws://localhost:${seedWsPort}`,
+        seedNodeWsAddress: `ws://localhost:${seedWsPort}`,
+        messageGroupServices: bootstrapResult.messageGroupServices,
+        partitionServices: bootstrapResult.partitionServices,
+        systemTableCache,
+        messageRouter: bootstrapResult.messageRouter,
+        epochManager: bootstrapResult.epochManager,
+        bootstrapService,
+        readinessState,
+      });
+
+      await seedApi.initialize(0, {listen: true});
+      const listenerAddress = seedApi.getFastify().server.address();
+      const seedApiPort = listenerAddress &&
+      typeof listenerAddress === 'object' &&
+      Number.isInteger(listenerAddress.port) ?
+        listenerAddress.port :
+        0;
+      t.ok(seedApiPort > 0, 'seed API should listen on a concrete network port');
+
+      const initialProbe = await probeBootstrapReady(seedApiPort);
+      t.equal(initialProbe.statusCode, 503,
+        'readiness probe should be not-ready before SQL engine is wired');
+      t.equal(initialProbe.body?.ready, false,
+        'readiness probe payload should expose ready=false before wiring');
+
+      seedApi.setSqlQueryEngine(seedQueryEngine);
+
+      let observedReady = false;
+      const readyProbeObserved = await waitFor(async () => {
+        const probe = await probeBootstrapReady(seedApiPort);
+        if (probe.statusCode === 200 && probe.body?.ready === true) {
+          observedReady = true;
+          return true;
+        }
+        return false;
+      }, REAL_NETWORK_READINESS_TIMEOUT_MS, REAL_NETWORK_READINESS_INTERVAL_MS);
+
+      t.equal(readyProbeObserved, true,
+        'readiness probe should transition to ready over real network listener');
+      t.equal(observedReady, true,
+        'readiness probe should eventually expose ready=true over HTTP');
+      // The HTTP probe may return ready=true via bootstrap-join scope
+      // projection while the internal state is still in JOIN_READY phase
+      // (waiting for the stable window). Either an actual ready=true
+      // transition or reaching JOIN_READY satisfies the contract.
+      t.ok(
+        readinessTransitions.some((tr) =>
+          tr.ready === true ||
+        tr.phase === LIFECYCLE_PHASE.JOIN_READY),
+        'readiness transitions should reach JOIN_READY or ready=true',
+      );
+
+      joiningService = new NodeJoiningService({
+        nodeId: joiningNodeId,
+        nodeAddress: `ws://localhost:${joiningWsPort}`,
+        seedNodeAddress: `http://127.0.0.1:${seedApiPort}`,
+        seedNodeWsAddress: `ws://localhost:${seedWsPort}`,
+        wsPort: joiningWsPort,
+        config: {
+          ...TEST_CONFIG.bootstrap,
+          httpTimeoutMs: 5000,
+          leadershipWaitTimeoutMs: 12000,
+        },
+      });
+
+      const joinResult = await joiningService.join();
+      t.equal(joinResult.success, true, 'joining node should join successfully');
+
+      const nodeReadyObserved = await waitFor(async () => {
+        const nodeRow = systemTableCache.get(SYSTEM_TABLE_NAME.NODES, joiningNodeId);
+        return !!nodeRow &&
         nodeRow.status === 'active' &&
         nodeRow.connection_state === 'ready';
-    }, 10000, 100);
-    t.equal(nodeReadyObserved, true, 'joining node should become ready in cache');
-  } finally {
-    await gracefulJoiningShutdown(joiningService);
-    await gracefulShutdown(bootstrapService, bootstrapResult, seedApi);
-    await cleanupTestEnvironment();
-  }
-});
+      }, 10000, 100);
+      t.equal(nodeReadyObserved, true, 'joining node should become ready in cache');
+    } finally {
+      await gracefulJoiningShutdown(joiningService);
+      await gracefulShutdown(bootstrapService, bootstrapResult, seedApi);
+      await cleanupTestEnvironment();
+    }
+  });
 
 test('Readiness endpoint remains reachable during background log buffer flush',
   {timeout: INTEGRATION_TEST_TIMEOUT_MS}, async (t) => {

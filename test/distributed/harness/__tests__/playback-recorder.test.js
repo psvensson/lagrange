@@ -739,136 +739,136 @@ test('PlaybackRecorder does not emit query-node-unavailable before the first ' +
 
 test('PlaybackRecorder does not emit query-node-unavailable before cluster ' +
   'active even after an earlier successful topology snapshot',
-  async () => {
-    const outputDir = await mkdtemp(
-      join(tmpdir(), 'playback-recorder-pre-active-query-node-'),
-    );
+async () => {
+  const outputDir = await mkdtemp(
+    join(tmpdir(), 'playback-recorder-pre-active-query-node-'),
+  );
 
-    let reachabilityCallCount = 0;
-    let queryCallCount = 0;
-    const node = {
-      id: 'node-1',
-      containerId: 'container-1',
-      _dockerProvider: {
-        async getContainerStats() {
-          return {
-            cpuPercent: 4,
-            memoryUsageBytes: 1024,
-            memoryLimitBytes: 4096,
-            rxBytes: 1,
-            txBytes: 2,
-          };
-        },
+  let reachabilityCallCount = 0;
+  let queryCallCount = 0;
+  const node = {
+    id: 'node-1',
+    containerId: 'container-1',
+    _dockerProvider: {
+      async getContainerStats() {
+        return {
+          cpuPercent: 4,
+          memoryUsageBytes: 1024,
+          memoryLimitBytes: 4096,
+          rxBytes: 1,
+          txBytes: 2,
+        };
       },
-      async getReachabilityDiagnostics() {
-        reachabilityCallCount += 1;
-        if (reachabilityCallCount === 1) {
-          return {
-            nodeId: 'node-1',
-            reachable: true,
-            adminReady: true,
-            reachableBy: 'admin_health',
-            adminHealth: {
-              attempted: true,
-              ok: true,
-              statusCode: 200,
-            },
-            sqlProbe: {
-              attempted: true,
-              ok: true,
-              query: 'SELECT node_id FROM nodes LIMIT 1',
-            },
-          };
-        }
+    },
+    async getReachabilityDiagnostics() {
+      reachabilityCallCount += 1;
+      if (reachabilityCallCount === 1) {
         return {
           nodeId: 'node-1',
-          reachable: false,
-          adminReady: false,
-          reachableBy: 'bootstrap_health',
-          bootstrapHealth: {
+          reachable: true,
+          adminReady: true,
+          reachableBy: 'admin_health',
+          adminHealth: {
             attempted: true,
             ok: true,
             statusCode: 200,
           },
-          adminHealth: {
-            attempted: true,
-            ok: false,
-            statusCode: -1,
-            error: 'http_status_-1',
-          },
-          adminWs: {
-            attempted: true,
-            ok: false,
-            error: 'connect ECONNREFUSED',
-          },
           sqlProbe: {
             attempted: true,
-            ok: false,
-            error: 'connect ECONNREFUSED',
+            ok: true,
             query: 'SELECT node_id FROM nodes LIMIT 1',
           },
-          lastError: 'connect ECONNREFUSED',
         };
-      },
-      async queryWithTimeout(sql) {
-        queryCallCount += 1;
-        if (sql.includes('FROM nodes')) {
-          return {
-            rows: [{
-              node_id: 'node-1',
-              status: 'active',
-            }],
-          };
-        }
-        return {rows: []};
-      },
-    };
+      }
+      return {
+        nodeId: 'node-1',
+        reachable: false,
+        adminReady: false,
+        reachableBy: 'bootstrap_health',
+        bootstrapHealth: {
+          attempted: true,
+          ok: true,
+          statusCode: 200,
+        },
+        adminHealth: {
+          attempted: true,
+          ok: false,
+          statusCode: -1,
+          error: 'http_status_-1',
+        },
+        adminWs: {
+          attempted: true,
+          ok: false,
+          error: 'connect ECONNREFUSED',
+        },
+        sqlProbe: {
+          attempted: true,
+          ok: false,
+          error: 'connect ECONNREFUSED',
+          query: 'SELECT node_id FROM nodes LIMIT 1',
+        },
+        lastError: 'connect ECONNREFUSED',
+      };
+    },
+    async queryWithTimeout(sql) {
+      queryCallCount += 1;
+      if (sql.includes('FROM nodes')) {
+        return {
+          rows: [{
+            node_id: 'node-1',
+            status: 'active',
+          }],
+        };
+      }
+      return {rows: []};
+    },
+  };
 
-    const cluster = {
-      getNodes() {
-        return [node];
-      },
-    };
-    const scheduler = createManualIntervalScheduler();
+  const cluster = {
+    getNodes() {
+      return [node];
+    },
+  };
+  const scheduler = createManualIntervalScheduler();
 
-    const recorder = new PlaybackRecorder({
-      outputDir,
-      topologyPollIntervalMs: 5,
-      resourcePollIntervalMs: 60000,
-      setIntervalFn: scheduler.setInterval,
-      clearIntervalFn: scheduler.clearInterval,
+  const recorder = new PlaybackRecorder({
+    outputDir,
+    topologyPollIntervalMs: 5,
+    resourcePollIntervalMs: 60000,
+    setIntervalFn: scheduler.setInterval,
+    clearIntervalFn: scheduler.clearInterval,
+  });
+
+  try {
+    await recorder.start({
+      scenarioName: 'pre-active-query-node-unavailable',
+      cluster,
+      skipInitialCapture: true,
     });
 
-    try {
-      await recorder.start({
-        scenarioName: 'pre-active-query-node-unavailable',
-        cluster,
-        skipInitialCapture: true,
-      });
+    await scheduler.tick(recorder._topologyPollTimer);
+    await scheduler.tick(recorder._topologyPollTimer);
 
-      await scheduler.tick(recorder._topologyPollTimer);
-      await scheduler.tick(recorder._topologyPollTimer);
+    const manifest = await recorder.stop({
+      reason: 'pre-active-finished',
+    });
+    const warningCodes = (manifest.warnings || [])
+      .map((warning) => warning.code);
 
-      const manifest = await recorder.stop({
-        reason: 'pre-active-finished',
-      });
-      const warningCodes = (manifest.warnings || [])
-        .map((warning) => warning.code);
-
-      assert.equal(
-        queryCallCount >= 4,
-        true,
-        'first topology snapshot should still query the topology tables',
-      );
-      assert.equal(
-        warningCodes.includes('query-node-unavailable'),
-        false,
-        'transient pre-active topology unavailability should not fail playback cleanliness',
-      );
-    } finally {
-      await rm(outputDir, {recursive: true, force: true});
-    }
-  });
+    assert.equal(
+      queryCallCount >= 4,
+      true,
+      'first topology snapshot should still query the topology tables',
+    );
+    assert.equal(
+      warningCodes.includes('query-node-unavailable'),
+      false,
+      'transient pre-active topology unavailability should not fail playback cleanliness',
+    );
+  } finally {
+    await rm(outputDir, {recursive: true, force: true});
+  }
+});
 
 test('PlaybackRecorder does not overlap topology polls while a capture is in flight',
   async () => {

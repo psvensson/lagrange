@@ -28,6 +28,7 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
     buildControlPlaneFailurePayload,
     buildReplicaOperationVisibilityReadOptions,
     getControlPlaneRetryAfterMs,
+    isPriorityControlPlanePartition,
     isCoordinatorOwnedOperationType,
     isRetryableControlPlaneError,
     readAuthoritativeControlPlaneRows,
@@ -36,6 +37,57 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
     shouldDeferReplicaOperationOwnerRead,
     WORKFLOW_STEP,
   } = options;
+
+  const INCOMPLETE_OPERATION_OWNER_VISIBILITY_STATE = Object.freeze({
+    LOCAL_OWNER: 'local_owner',
+    PRIORITY_RECOVERY_DRAIN_CANDIDATE: 'priority_recovery_drain_candidate',
+    REMOTE_OWNER: 'remote_owner',
+    NON_COORDINATOR_OPERATION: 'non_coordinator_operation',
+    TERMINAL_OPERATION: 'terminal_operation',
+  });
+
+  const INCOMPLETE_OPERATION_OWNER_VISIBILITY_ACTION = Object.freeze({
+    INCLUDE: 'include',
+    SKIP: 'skip',
+  });
+
+  const INCOMPLETE_OPERATION_OWNER_VISIBILITY_ACTION_BY_STATE = Object.freeze(
+    new Map([
+      [
+        INCOMPLETE_OPERATION_OWNER_VISIBILITY_STATE.LOCAL_OWNER,
+        INCOMPLETE_OPERATION_OWNER_VISIBILITY_ACTION.INCLUDE,
+      ],
+      [
+        INCOMPLETE_OPERATION_OWNER_VISIBILITY_STATE
+          .PRIORITY_RECOVERY_DRAIN_CANDIDATE,
+        INCOMPLETE_OPERATION_OWNER_VISIBILITY_ACTION.INCLUDE,
+      ],
+      [
+        INCOMPLETE_OPERATION_OWNER_VISIBILITY_STATE.REMOTE_OWNER,
+        INCOMPLETE_OPERATION_OWNER_VISIBILITY_ACTION.SKIP,
+      ],
+      [
+        INCOMPLETE_OPERATION_OWNER_VISIBILITY_STATE.NON_COORDINATOR_OPERATION,
+        INCOMPLETE_OPERATION_OWNER_VISIBILITY_ACTION.SKIP,
+      ],
+      [
+        INCOMPLETE_OPERATION_OWNER_VISIBILITY_STATE.TERMINAL_OPERATION,
+        INCOMPLETE_OPERATION_OWNER_VISIBILITY_ACTION.SKIP,
+      ],
+    ]),
+  );
+
+  const PRIORITY_RECOVERY_INCOMPLETE_OPERATION_VISIBILITY_STEPS =
+    Object.freeze(
+      new Set([
+        WORKFLOW_STEP.PENDING,
+        WORKFLOW_STEP.SENDING,
+        WORKFLOW_STEP.CREATING,
+        WORKFLOW_STEP.SYNCING,
+        WORKFLOW_STEP.ACTIVE,
+        WORKFLOW_STEP.STOPPING,
+      ]),
+    );
 
   class ReplicaOperationRepositoryReadMethods {
   /**
@@ -356,12 +408,8 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
     mapAndSortIncompleteOperations(rows = []) {
       return rows
         .map((row) => this.rowToOperation(row))
-        .filter(
-          (operation) =>
-            isCoordinatorOwnedOperationType(operation?.type) &&
-          this.isOperationLocallyOwned(operation) &&
-          !this.isOperationTerminal(operation),
-        )
+        .filter((operation) =>
+          this.shouldExposeIncompleteOperationToOwnerRead(operation))
         .sort((left, right) => {
           const leftUpdatedAt = Number(left?.updatedAt) || NUM.ZERO;
           const rightUpdatedAt = Number(right?.updatedAt) || NUM.ZERO;
@@ -372,6 +420,101 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
             left?.operationId || REPLICA_OPERATION_REPOSITORY_LITERAL.VALUE,
           ).localeCompare(String(right?.operationId || REPLICA_OPERATION_REPOSITORY_LITERAL.VALUE));
         });
+    }
+
+    /**
+   * Resolve whether an incomplete operation should be exposed to owner-read
+   * callers.
+   *
+   * @param {Object} operation
+   * @return {Object}
+   * @private
+   */
+    buildIncompleteOperationOwnerVisibilitySnapshot(operation) {
+      const coordinatorOwned =
+        isCoordinatorOwnedOperationType(operation?.type);
+      const terminal = this.isOperationTerminal(operation);
+      const localOwner = this.isOperationLocallyOwned(operation);
+      const priorityRecoveryDrainCandidate =
+        this.isPriorityRecoveryIncompleteOperationVisibilityCandidate(
+          operation,
+        );
+      const evidence = Object.freeze({
+        coordinatorOwned,
+        terminal,
+        localOwner,
+        priorityRecoveryDrainCandidate,
+      });
+      const state =
+        this.resolveIncompleteOperationOwnerVisibilityState(evidence);
+      const action =
+        INCOMPLETE_OPERATION_OWNER_VISIBILITY_ACTION_BY_STATE.get(state) ||
+        INCOMPLETE_OPERATION_OWNER_VISIBILITY_ACTION.SKIP;
+
+      return Object.freeze({
+        evidence,
+        state,
+        action,
+      });
+    }
+
+    /**
+   * @param {Object} evidence
+   * @return {string}
+   * @private
+   */
+    resolveIncompleteOperationOwnerVisibilityState(evidence) {
+      if (!evidence?.coordinatorOwned) {
+        return (
+          INCOMPLETE_OPERATION_OWNER_VISIBILITY_STATE
+            .NON_COORDINATOR_OPERATION
+        );
+      }
+      if (evidence.terminal) {
+        return INCOMPLETE_OPERATION_OWNER_VISIBILITY_STATE.TERMINAL_OPERATION;
+      }
+      if (evidence.localOwner) {
+        return INCOMPLETE_OPERATION_OWNER_VISIBILITY_STATE.LOCAL_OWNER;
+      }
+      if (evidence.priorityRecoveryDrainCandidate) {
+        return (
+          INCOMPLETE_OPERATION_OWNER_VISIBILITY_STATE
+            .PRIORITY_RECOVERY_DRAIN_CANDIDATE
+        );
+      }
+      return INCOMPLETE_OPERATION_OWNER_VISIBILITY_STATE.REMOTE_OWNER;
+    }
+
+    /**
+   * @param {Object} operation
+   * @return {boolean}
+   * @private
+   */
+    isPriorityRecoveryIncompleteOperationVisibilityCandidate(operation) {
+      return Boolean(
+        operation &&
+        operation.type === OperationType.REPLACE &&
+        isPriorityControlPlanePartition({
+          partitionId: operation.partitionId,
+        }) &&
+        PRIORITY_RECOVERY_INCOMPLETE_OPERATION_VISIBILITY_STEPS.has(
+          operation.workflowStep,
+        ),
+      );
+    }
+
+    /**
+   * @param {Object} operation
+   * @return {boolean}
+   * @private
+   */
+    shouldExposeIncompleteOperationToOwnerRead(operation) {
+      const snapshot =
+        this.buildIncompleteOperationOwnerVisibilitySnapshot(operation);
+      return (
+        snapshot.action ===
+        INCOMPLETE_OPERATION_OWNER_VISIBILITY_ACTION.INCLUDE
+      );
     }
     /**
    * Return only the cache-visible incomplete operations.

@@ -1,6 +1,5 @@
-import { POSTGRES_BASELINE_COMPARISON_SEGMENT_4 } from "./postgres-baseline-comparison-segment-4.js";
+import {POSTGRES_BASELINE_COMPARISON_SEGMENT_4} from './postgres-baseline-comparison-segment-4.js';
 const {
-  BENCHMARK_DEFAULTS,
   CONSISTENCY_MISMATCH_KIND,
   CDC_TELEMETRY_FALLBACK_PHASE_STEADY_STATE,
   CDC_TELEMETRY_MODE_CATCHUP,
@@ -33,7 +32,6 @@ const {
   hasLoadLaneConfirmableLocalReadinessBlock,
   isNodeAdminReady,
   normalizeSutLoadNodeAdmissionEvidence,
-  normalizeTableName,
   normalizeCdcTelemetryNodeSample,
   normalizeNonNegativeInteger,
   normalizeNonNegativeNumber,
@@ -111,12 +109,12 @@ function buildCdcTelemetrySummary(normalizedByNode) {
 
 function buildCdcTelemetrySchemaResult(options = {}) {
   const normalizedByNode =
-    options.normalizedByNode && typeof options.normalizedByNode === "object"
-      ? options.normalizedByNode
-      : {};
-  const requiredNodeIds = Array.isArray(options.requiredNodeIds)
-    ? options.requiredNodeIds.map((nodeId) => String(nodeId))
-    : [];
+    options.normalizedByNode && typeof options.normalizedByNode === 'object' ?
+      options.normalizedByNode :
+      {};
+  const requiredNodeIds = Array.isArray(options.requiredNodeIds) ?
+    options.requiredNodeIds.map((nodeId) => String(nodeId)) :
+    [];
   const strict = options.strict === true;
   const schemaErrors = [];
 
@@ -124,26 +122,26 @@ function buildCdcTelemetrySchemaResult(options = {}) {
     if (!Object.prototype.hasOwnProperty.call(normalizedByNode, nodeId)) {
       schemaErrors.push({
         nodeId,
-        missingFields: ["nodeTelemetry"],
+        missingFields: ['nodeTelemetry'],
       });
     }
   }
 
-  const fieldErrors = Array.isArray(options.fieldErrors)
-    ? options.fieldErrors
-    : [];
+  const fieldErrors = Array.isArray(options.fieldErrors) ?
+    options.fieldErrors :
+    [];
   for (const fieldError of fieldErrors) {
-    if (!fieldError || typeof fieldError !== "object") {
+    if (!fieldError || typeof fieldError !== 'object') {
       continue;
     }
-    const missingFields = Array.isArray(fieldError.missingFields)
-      ? fieldError.missingFields.map((fieldName) => String(fieldName))
-      : [];
+    const missingFields = Array.isArray(fieldError.missingFields) ?
+      fieldError.missingFields.map((fieldName) => String(fieldName)) :
+      [];
     if (missingFields.length === ZERO) {
       continue;
     }
     schemaErrors.push({
-      nodeId: String(fieldError.nodeId || "unknown"),
+      nodeId: String(fieldError.nodeId || 'unknown'),
       missingFields,
     });
   }
@@ -156,10 +154,10 @@ function buildCdcTelemetrySchemaResult(options = {}) {
 }
 
 async function collectCdcTelemetryByNode(nodeClient, nodes, scenarioOverrides) {
-  if (typeof scenarioOverrides?.getCdcTelemetryByNode === "function") {
+  if (typeof scenarioOverrides?.getCdcTelemetryByNode === 'function') {
     const overrideResult = scenarioOverrides.getCdcTelemetryByNode();
-    if (overrideResult && typeof overrideResult === "object") {
-      return { ...overrideResult };
+    if (overrideResult && typeof overrideResult === 'object') {
+      return {...overrideResult};
     }
   }
 
@@ -168,8 +166,8 @@ async function collectCdcTelemetryByNode(nodeClient, nodes, scenarioOverrides) {
     try {
       const snapshot = await nodeClient.fetchControlSnapshot(node);
       const cdcTelemetry = snapshot?.cdcTelemetry;
-      if (cdcTelemetry && typeof cdcTelemetry === "object") {
-        collectedByNode[String(node.id)] = { ...cdcTelemetry };
+      if (cdcTelemetry && typeof cdcTelemetry === 'object') {
+        collectedByNode[String(node.id)] = {...cdcTelemetry};
       }
     } catch (_error) {
       continue;
@@ -180,9 +178,9 @@ async function collectCdcTelemetryByNode(nodeClient, nodes, scenarioOverrides) {
 
 function buildCdcTelemetryState(options = {}) {
   const rawByNode =
-    options.rawByNode && typeof options.rawByNode === "object"
-      ? options.rawByNode
-      : {};
+    options.rawByNode && typeof options.rawByNode === 'object' ?
+      options.rawByNode :
+      {};
   const normalizedByNode = {};
   const fieldErrors = [];
   for (const [nodeId, sample] of Object.entries(rawByNode)) {
@@ -212,44 +210,44 @@ function buildCdcTelemetryState(options = {}) {
 }
 
 function formatCdcTelemetrySchemaErrors(cdcTelemetryState) {
-  const errors = Array.isArray(cdcTelemetryState?.schema?.errors)
-    ? cdcTelemetryState.schema.errors
-    : [];
+  const errors = Array.isArray(cdcTelemetryState?.schema?.errors) ?
+    cdcTelemetryState.schema.errors :
+    [];
   return errors
     .map(
       (error) =>
         String(error.nodeId) +
-        "=" +
-        (Array.isArray(error.missingFields)
-          ? error.missingFields.join(",")
-          : "unknown"),
+        '=' +
+        (Array.isArray(error.missingFields) ?
+          error.missingFields.join(',') :
+          'unknown'),
     )
-    .join("|");
+    .join('|');
 }
 
 function summarizeCandidateSnapshotErrors(errors, options = {}) {
   const normalizedErrors = Array.isArray(errors) ? errors : [];
   const fallbackReason =
-    typeof options.fallbackReason === "string" &&
-    options.fallbackReason.length > ZERO
-      ? options.fallbackReason
-      : QUIESCENCE_REASON_NO_SNAPSHOT_CANDIDATE;
+    typeof options.fallbackReason === 'string' &&
+    options.fallbackReason.length > ZERO ?
+      options.fallbackReason :
+      QUIESCENCE_REASON_NO_SNAPSHOT_CANDIDATE;
   if (normalizedErrors.length === ZERO) {
     return fallbackReason;
   }
   const errorPrefix =
-    typeof options.errorPrefix === "string" && options.errorPrefix.length > ZERO
-      ? options.errorPrefix
-      : QUIESCENCE_REASON_SNAPSHOT_QUERY_ERROR_PREFIX;
+    typeof options.errorPrefix === 'string' && options.errorPrefix.length > ZERO ?
+      options.errorPrefix :
+      QUIESCENCE_REASON_SNAPSHOT_QUERY_ERROR_PREFIX;
   const limitedErrors = normalizedErrors.slice(
     ZERO,
     QUIESCENCE_SNAPSHOT_ERROR_MAX_ENTRIES,
   );
   const errorSegments = limitedErrors.map(
     (entry) =>
-      String(entry.nodeId || "unknown") +
+      String(entry.nodeId || 'unknown') +
       QUIESCENCE_SNAPSHOT_ERROR_ASSIGN +
-      String(entry.error || "unknown"),
+      String(entry.error || 'unknown'),
   );
   const remainingCount = normalizedErrors.length - limitedErrors.length;
   if (remainingCount > ZERO) {
@@ -272,7 +270,7 @@ function resolveControlSnapshotCandidates(seedNode, loadNodes) {
   const candidates = [];
   for (const node of nodes) {
     const nodeId =
-      typeof node?.id === "string" && node.id.length > ZERO ? node.id : null;
+      typeof node?.id === 'string' && node.id.length > ZERO ? node.id : null;
     if (!nodeId) {
       continue;
     }
@@ -287,15 +285,15 @@ function resolveControlSnapshotCandidates(seedNode, loadNodes) {
 
 function resolveRequiredReachableLoadNodeCount(options = {}, candidateCount) {
   const boundedCandidateCount =
-    Number.isInteger(candidateCount) && candidateCount > ZERO
-      ? candidateCount
-      : ONE;
+    Number.isInteger(candidateCount) && candidateCount > ZERO ?
+      candidateCount :
+      ONE;
   const strictMinReachable = options.strictMinReachable === true;
   const requestedMinimum =
     Number.isInteger(options.minReachableNodeCount) &&
-    options.minReachableNodeCount > ZERO
-      ? options.minReachableNodeCount
-      : ONE;
+    options.minReachableNodeCount > ZERO ?
+      options.minReachableNodeCount :
+      ONE;
   if (strictMinReachable) {
     return Math.max(ONE, requestedMinimum);
   }
@@ -304,19 +302,19 @@ function resolveRequiredReachableLoadNodeCount(options = {}, candidateCount) {
 
 function formatReadinessReasonsByNodeId(reasonsByNodeId = {}) {
   return Object.entries(
-    reasonsByNodeId && typeof reasonsByNodeId === "object"
-      ? reasonsByNodeId
-      : {},
+    reasonsByNodeId && typeof reasonsByNodeId === 'object' ?
+      reasonsByNodeId :
+      {},
   )
     .map(
       ([nodeId, reasons]) =>
         String(nodeId) +
-        "=" +
-        (Array.isArray(reasons) && reasons.length > ZERO
-          ? reasons.join("|")
-          : "unknown"),
+        '=' +
+        (Array.isArray(reasons) && reasons.length > ZERO ?
+          reasons.join('|') :
+          'unknown'),
     )
-    .join("; ");
+    .join('; ');
 }
 
 async function evaluateSutLoadNodeAdmissionCandidates(
@@ -324,9 +322,9 @@ async function evaluateSutLoadNodeAdmissionCandidates(
   candidateNodes,
   options = {},
 ) {
-  const candidates = Array.isArray(candidateNodes)
-    ? candidateNodes.filter(Boolean)
-    : [];
+  const candidates = Array.isArray(candidateNodes) ?
+    candidateNodes.filter(Boolean) :
+    [];
   if (candidates.length === ZERO) {
     return {
       reachableCandidates: [],
@@ -339,17 +337,17 @@ async function evaluateSutLoadNodeAdmissionCandidates(
 
   const discoveryContextSequence =
     Array.isArray(options.contextSequence) &&
-    options.contextSequence.length > ZERO
-      ? options.contextSequence
-      : buildSutLoadDiscoveryContextSequence(
-          NODE_CLIENT_TRANSIENT_CONTEXT,
-          options.tableName,
-          options.tableId,
-        );
+    options.contextSequence.length > ZERO ?
+      options.contextSequence :
+      buildSutLoadDiscoveryContextSequence(
+        NODE_CLIENT_TRANSIENT_CONTEXT,
+        options.tableName,
+        options.tableId,
+      );
   const loadLaneTableProbeSql =
-    typeof options.loadLaneTableProbeSql === "string"
-      ? options.loadLaneTableProbeSql
-      : buildSutTableProbeSql(options.tableName);
+    typeof options.loadLaneTableProbeSql === 'string' ?
+      options.loadLaneTableProbeSql :
+      buildSutTableProbeSql(options.tableName);
   const allowSoftDiscoveryNodeFallback =
     options.allowSoftDiscoveryNodeFallback === true;
   const deferLocalReplicaReadiness =
@@ -388,12 +386,12 @@ async function evaluateSutLoadNodeAdmissionCandidates(
           (allowSoftDiscoveryNodeFallback === true &&
             shouldPreserveTopologyDeferredAdmission(localReadiness) !== true &&
             loadLaneTableProbeSql.length > ZERO);
-        const loadLaneReadiness = shouldProbeLoadLane
-          ? await probeLoadLaneReadiness(nodeClient, node, {
-              tableProbeSql: loadLaneTableProbeSql,
-              allowControlChannelFallback: hasConfirmableLocalReadinessBlock,
-            })
-          : { ready: false, reasons: [] };
+        const loadLaneReadiness = shouldProbeLoadLane ?
+          await probeLoadLaneReadiness(nodeClient, node, {
+            tableProbeSql: loadLaneTableProbeSql,
+            allowControlChannelFallback: hasConfirmableLocalReadinessBlock,
+          }) :
+          {ready: false, reasons: []};
         return {
           node,
           diagnostics,
@@ -428,12 +426,12 @@ async function evaluateSutLoadNodeAdmissionCandidates(
   for (const probeResult of readinessProbeResults) {
     const nodeId = String(probeResult?.node?.id || DISCOVERY_UNKNOWN_NODE_ID);
     const adminReasons =
-      probeResult?.adminReady === true
-        ? []
-        : summarizeReadinessProbeReasons({
-            diagnostics: probeResult?.diagnostics,
-            error: probeResult?.error,
-          });
+      probeResult?.adminReady === true ?
+        [] :
+        summarizeReadinessProbeReasons({
+          diagnostics: probeResult?.diagnostics,
+          error: probeResult?.error,
+        });
     const admissionDecision = adjudicateSutLoadNodeAdmission(
       normalizeSutLoadNodeAdmissionEvidence({
         nodeId,
@@ -499,7 +497,7 @@ async function revalidateDegradedPreloadLoadNodes(
   const admittedNodeIds = admission.reachableCandidates.map((node) => node.id);
   const admittedNodeIdSet = new Set(admittedNodeIds);
   const excludedNodeIds = candidateNodes
-    .map((node) => String(node?.id || ""))
+    .map((node) => String(node?.id || ''))
     .filter((nodeId) => nodeId.length > ZERO)
     .filter((nodeId) => !admittedNodeIdSet.has(nodeId));
   return {
@@ -539,9 +537,9 @@ async function fetchSnapshotFromCandidates(
   const errors = [];
   for (const node of candidates) {
     const nodeId =
-      typeof node?.id === "string" && node.id.length > ZERO
-        ? node.id
-        : "unknown";
+      typeof node?.id === 'string' && node.id.length > ZERO ?
+        node.id :
+        'unknown';
     try {
       return await fetchSnapshot(node);
     } catch (error) {
@@ -582,7 +580,7 @@ function createVerificationSnapshotRefreshResult() {
 
 function buildSnapshotWarning(prefix, nodeId, error) {
   return (
-    prefix + String(nodeId || "unknown") + "=" + String(error?.message || error)
+    prefix + String(nodeId || 'unknown') + '=' + String(error?.message || error)
   );
 }
 
@@ -593,21 +591,21 @@ async function collectControlSnapshotsFromNodes(
 ) {
   const candidates = Array.isArray(nodes) ? nodes : [];
   const context =
-    options.context && typeof options.context === "object"
-      ? options.context
-      : {};
+    options.context && typeof options.context === 'object' ?
+      options.context :
+      {};
   const warningPrefix =
-    typeof options.warningPrefix === "string" &&
-    options.warningPrefix.length > ZERO
-      ? options.warningPrefix
-      : SNAPSHOT_WARNING_PREFIX;
+    typeof options.warningPrefix === 'string' &&
+    options.warningPrefix.length > ZERO ?
+      options.warningPrefix :
+      SNAPSHOT_WARNING_PREFIX;
   const snapshots = [];
   const warnings = [];
   for (const node of candidates) {
     const nodeId =
-      typeof node?.id === "string" && node.id.length > ZERO
-        ? node.id
-        : "unknown";
+      typeof node?.id === 'string' && node.id.length > ZERO ?
+        node.id :
+        'unknown';
     try {
       snapshots.push(await nodeClient.fetchControlSnapshot(node, context));
     } catch (error) {
@@ -623,7 +621,7 @@ async function collectControlSnapshotsFromNodes(
 function resolvePartitionSetMismatchEntry(mismatches) {
   const entries = Array.isArray(mismatches) ? mismatches : [];
   for (const entry of entries) {
-    if (String(entry?.kind || "") === CONSISTENCY_MISMATCH_KIND.PARTITION_SET) {
+    if (String(entry?.kind || '') === CONSISTENCY_MISMATCH_KIND.PARTITION_SET) {
       return entry;
     }
   }
@@ -646,9 +644,9 @@ function resolvePartitionSetRefreshNodeIds(
 ) {
   const byNode =
     partitionSetMismatch?.byNode &&
-    typeof partitionSetMismatch.byNode === "object"
-      ? partitionSetMismatch.byNode
-      : {};
+    typeof partitionSetMismatch.byNode === 'object' ?
+      partitionSetMismatch.byNode :
+      {};
   const allowedNodeIds = new Set(
     (Array.isArray(verificationNodeIds) ? verificationNodeIds : []).map(
       (nodeId) => String(nodeId),
@@ -723,24 +721,24 @@ function resolveFirstMismatchKind(mismatches) {
   if (entries.length === ZERO) {
     return null;
   }
-  return String(entries[ZERO]?.kind || "");
+  return String(entries[ZERO]?.kind || '');
 }
 
 function replaceSnapshotsByNodeId(baseSnapshots, refreshedSnapshots) {
   const original = Array.isArray(baseSnapshots) ? baseSnapshots : [];
-  const replacements = Array.isArray(refreshedSnapshots)
-    ? refreshedSnapshots
-    : [];
+  const replacements = Array.isArray(refreshedSnapshots) ?
+    refreshedSnapshots :
+    [];
   const replacementByNodeId = new Map();
   for (const snapshot of replacements) {
-    const nodeId = String(snapshot?.nodeId || "");
+    const nodeId = String(snapshot?.nodeId || '');
     if (!nodeId) {
       continue;
     }
     replacementByNodeId.set(nodeId, snapshot);
   }
   const mergedSnapshots = original.map((snapshot) => {
-    const nodeId = String(snapshot?.nodeId || "");
+    const nodeId = String(snapshot?.nodeId || '');
     if (!nodeId || !replacementByNodeId.has(nodeId)) {
       return snapshot;
     }

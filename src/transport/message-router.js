@@ -1,113 +1,22 @@
-import { MESSAGE_ROUTER_SHARED } from './message-router-shared.js';
-import { MessageRouterSegment3 } from './message-router-segment-3.js';
+import {MESSAGE_ROUTER_SHARED} from './message-router-shared.js';
+import {MessageRouterSegment3} from './message-router-segment-3.js';
 
 const {
-  CONNECTION_CLOSE_DISPOSITION,
-  CONNECTION_STATE,
-  ConfigurationManager,
   ConnectionState,
-  EMPTY_ROUTER_REASON,
-  EventEmitter,
-  HOST,
-  INCOMING_CONNECTION_ADOPTION,
-  INLINE_ACK_PASSTHROUGH_KEYS,
-  INLINE_ACK_RESULT_FIELD,
-  INPROC,
-  IPV6_ANY_HOST,
-  IPV6_HOST_PREFIX,
-  IPV6_HOST_SUFFIX,
-  InProcWebSocket,
-  LoggingService,
-  MESSAGE_ROUTER_LITERAL,
-  METRICS_LOG_TAG,
-  OUTBOUND_DELIVERY_PRIORITY,
-  OUTBOUND_QUEUE_BACKPRESSURE_ERROR_CODE,
-  OUTBOUND_QUEUE_BACKPRESSURE_SCOPE,
-  OUTBOUND_QUEUE_PENDING_SOURCE_LIMIT_DIVISOR,
-  OUTBOUND_QUEUE_PENDING_SOURCE_LIMIT_MINIMUM,
   OutboundDeliveryPriority,
-  OutboundDeliveryRegistryOwner,
-  QUERY_DATA_PLANE_MESSAGE_TYPE,
-  QUERY_TRANSPORT_DELIVERY_STATE,
-  QUERY_TRANSPORT_SELECTION,
-  QUEUE_WAIT_BUCKETS,
-  QUEUE_WAIT_BUCKET_OVERFLOW,
-  RECONNECT_ADDRESS_SUPPRESSION_DEFAULT_MS,
-  RECONNECT_DISPOSITION,
-  RETIRED_PENDING_RESPONSE_REASON,
-  ROUTER_ADDRESS,
-  ROUTER_CONNECTION_CLOSED_ERROR_CODE,
   ROUTER_ERROR_MSG,
   ROUTER_LOG_MSG,
-  ROUTER_MESSAGE_TIMEOUT_ERROR_CODE,
-  ROUTER_MESSAGE_TYPE,
-  ROUTER_NO_CONNECTION_ERROR_CODE,
-  ROUTER_QUERY_TRANSPORT_NOT_READY_ERROR_CODE,
-  ROUTER_VALID_ENTITY_TYPES,
-  RouterConnectionAuthorityOwner,
   RouterMessageType,
-  SERVICE_RESPONSE_DISPOSITION_KIND,
-  TRANSPORT_CONFIG_KEY,
   TRANSPORT_DEFAULT,
-  TRANSPORT_DELIVERY_OUTCOME_METADATA_FIELDS,
-  TRANSPORT_ERROR_MSG,
   TRANSPORT_EVENT,
-  TRANSPORT_FORMAT,
-  TRANSPORT_METRIC,
-  TRANSPORT_METRIC_TRIGGER,
   TRANSPORT_NUM,
-  TRANSPORT_PRESSURE_SUMMARY_FIELD,
-  TRANSPORT_SUBSYSTEM,
   TRANSPORT_TYPEOF,
-  UNMATCHED_SERVICE_RESPONSE_WARN_INTERVAL_MS,
-  URL,
-  WEBSOCKET_CONNECT_TIMEOUT_CONFIG_KEY,
-  WEBSOCKET_CONNECT_TIMEOUT_ERROR_CODE,
   WebSocket,
-  WebSocketServer,
-  adjustInFlightPriorityCount,
-  buildDerivedDeliverySource,
-  buildPendingSourceSummary,
-  buildQueryTransportSemanticOutcome,
   buildQueueWaitSummary,
-  buildRetiredPendingClassification,
-  buildServiceResponseDisposition,
-  buildSupersededPendingResult,
-  buildTransportDeliveryOutcome,
-  canDispatchPendingItem,
   countInFlightByPriority,
   countPendingByPriority,
-  countPendingBySource,
-  createInProcWebSocketPair,
-  createQueueWaitHistogram,
-  dequeueNextPendingItem,
-  extractSqlOperationKind,
-  extractSqlTableName,
-  isRaftPacket,
-  isSupersedableHeartbeatNodeStateUpdate,
-  isSupersedableRaftAppendFail,
-  isSupersedableRaftHeartbeatAppend,
-  normalizeDeliveryOutcome,
-  normalizeIdentifier,
-  normalizeOutboundDeliveryPriority,
-  normalizeRetryAfterMs,
-  normalizeToWebSocketAddress,
-  peekNextPendingItem,
-  queueMicrotaskFn,
-  recordQueueWaitDuration,
   resolveBackgroundInFlightLimit,
   resolveBackgroundPendingLimit,
-  resolveBoundedCriticalReserve,
-  resolveDeliverySource,
-  resolveNextPendingItemIndex,
-  resolveNodeStateUpdateReplacementNodeId,
-  resolveOperationIdFromMessage,
-  resolvePendingReplacementKey,
-  resolvePendingSourceLimit,
-  resolveQueueWaitBucket,
-  resolveRequestIdFromMessage,
-  summarizeRaftAppendCommand,
-  uuidv4,
 } = MESSAGE_ROUTER_SHARED;
 
 class MessageRouter extends MessageRouterSegment3 {
@@ -118,7 +27,7 @@ class MessageRouter extends MessageRouterSegment3 {
         state: connection.state,
         isIncoming: connection.isIncoming,
         reconnectAttempts: connection.reconnectAttempts,
-        ackTimeoutStreak: connection.ackTimeoutStreak || TRANSPORT_NUM.ZERO
+        ackTimeoutStreak: connection.ackTimeoutStreak || TRANSPORT_NUM.ZERO,
       };
     }
     const outboundQueueStats = {};
@@ -127,11 +36,11 @@ class MessageRouter extends MessageRouterSegment3 {
         inFlight: queue.inFlight,
         inFlightCritical: countInFlightByPriority(
           queue,
-          OutboundDeliveryPriority.CRITICAL
+          OutboundDeliveryPriority.CRITICAL,
         ),
         inFlightBackground: countInFlightByPriority(
           queue,
-          OutboundDeliveryPriority.BACKGROUND
+          OutboundDeliveryPriority.BACKGROUND,
         ),
         pending: queue.pending.length,
         pendingCritical: countPendingByPriority(queue, OutboundDeliveryPriority.CRITICAL),
@@ -141,7 +50,7 @@ class MessageRouter extends MessageRouterSegment3 {
         backgroundMaxConcurrent: resolveBackgroundInFlightLimit(queue),
         maxConcurrent: queue.maxConcurrent,
         maxPending: queue.maxPending,
-        queueWait: buildQueueWaitSummary(queue)
+        queueWait: buildQueueWaitSummary(queue),
       };
     }
     return {
@@ -157,7 +66,7 @@ class MessageRouter extends MessageRouterSegment3 {
       handlers: this.handlers.size,
       connections: connectionStats,
       connectedNodes: this.getConnectedNodes().length,
-      outboundQueues: outboundQueueStats
+      outboundQueues: outboundQueueStats,
     };
   }
   /**
@@ -173,7 +82,7 @@ class MessageRouter extends MessageRouterSegment3 {
    */
   async shutdown() {
     this.logger.debug(ROUTER_LOG_MSG.SHUTTING_DOWN, {
-      routerId: this.routerId
+      routerId: this.routerId,
     });
     this.isShuttingDown = true;
     for (const [, pending] of this.pendingMessages) {
@@ -182,7 +91,7 @@ class MessageRouter extends MessageRouterSegment3 {
         messageId: pending.messageId,
         acknowledged: false,
         error: ROUTER_ERROR_MSG.SHUTDOWN,
-        shutdown: true
+        shutdown: true,
       });
     }
     this.pendingMessages.clear();
@@ -266,13 +175,13 @@ class MessageRouter extends MessageRouterSegment3 {
     this.handlers.clear();
     this.initialized = false;
     this.emit(TRANSPORT_EVENT.SHUTDOWN, {
-      routerId: this.routerId
+      routerId: this.routerId,
     });
   }
 }
 export {
   ConnectionState,
   MessageRouter,
-  RouterMessageType
+  RouterMessageType,
 };
 

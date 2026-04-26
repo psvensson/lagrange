@@ -1,7 +1,7 @@
-import { TABLE_DISTRIBUTION_HELPERS_SEGMENT_1 } from "./table-distribution-helpers-segment-1.js";
+import {TABLE_DISTRIBUTION_HELPERS_SEGMENT_1} from './table-distribution-helpers-segment-1.js';
 
 const TABLE_DISTRIBUTION_HELPERS_SEGMENT_4_MODULE_PATH =
-  "./table-distribution-helpers-segment-4.js";
+  './table-distribution-helpers-segment-4.js';
 
 const {
   BENCHMARK_DEFAULTS,
@@ -190,7 +190,7 @@ function preserveNodeOrder(
   const nextNodeById = new Map();
   const anonymousNodes = [];
   for (const node of nextNodes) {
-    const nodeId = String(node?.id || "");
+    const nodeId = String(node?.id || '');
     if (nodeId.length > ZERO) {
       nextNodeById.set(nodeId, node);
       continue;
@@ -200,7 +200,7 @@ function preserveNodeOrder(
   const orderedNodes = [];
   const seenNodeIds = new Set();
   for (const node of currentNodes) {
-    const nodeId = String(node?.id || "");
+    const nodeId = String(node?.id || '');
     if (nodeId.length === ZERO) {
       continue;
     }
@@ -215,7 +215,7 @@ function preserveNodeOrder(
     }
   }
   for (const node of nextNodes) {
-    const nodeId = String(node?.id || "");
+    const nodeId = String(node?.id || '');
     if (nodeId.length > ZERO) {
       if (seenNodeIds.has(nodeId)) {
         continue;
@@ -242,28 +242,28 @@ function resolvePartitioningDispatchNodes(
   bootstrapRequiredNodeCount = ZERO,
 ) {
   const normalizedTargetCount =
-    Number.isInteger(targetNodeCount) && targetNodeCount > ZERO
-      ? targetNodeCount
-      : Number.POSITIVE_INFINITY;
+    Number.isInteger(targetNodeCount) && targetNodeCount > ZERO ?
+      targetNodeCount :
+      Number.POSITIVE_INFINITY;
   const normalizedBootstrapRequiredNodeCount =
     Number.isInteger(bootstrapRequiredNodeCount) &&
-    bootstrapRequiredNodeCount > ZERO
-      ? bootstrapRequiredNodeCount
-      : ONE;
-  const selectedNodes = Array.isArray(selected?.selectedNodes)
-    ? selected.selectedNodes
-    : [];
-  const admissionReadyNodes = Array.isArray(selected?.admissionReadyNodes)
-    ? selected.admissionReadyNodes
-    : [];
-  const readyReplicaNodes = Array.isArray(selected?.readyReplicaNodes)
-    ? selected.readyReplicaNodes
-    : [];
+    bootstrapRequiredNodeCount > ZERO ?
+      bootstrapRequiredNodeCount :
+      ONE;
+  const selectedNodes = Array.isArray(selected?.selectedNodes) ?
+    selected.selectedNodes :
+    [];
+  const admissionReadyNodes = Array.isArray(selected?.admissionReadyNodes) ?
+    selected.admissionReadyNodes :
+    [];
+  const readyReplicaNodes = Array.isArray(selected?.readyReplicaNodes) ?
+    selected.readyReplicaNodes :
+    [];
   const criticalControlPlaneStability =
     selected?.criticalControlPlaneStability &&
-    typeof selected.criticalControlPlaneStability === "object"
-      ? selected.criticalControlPlaneStability
-      : null;
+    typeof selected.criticalControlPlaneStability === 'object' ?
+      selected.criticalControlPlaneStability :
+      null;
   if (!supportsBenchmarkAdmission) {
     if (selectedNodes.length === ZERO) {
       return preserveNodeOrder(currentNodes, currentNodes, targetNodeCount);
@@ -275,7 +275,7 @@ function resolvePartitioningDispatchNodes(
   const currentSelectedNodes = [];
   const orderedNodeIds = new Set();
   const pushNodeIfNeeded = (bucket, node) => {
-    const nodeId = String(node?.id || "");
+    const nodeId = String(node?.id || '');
     if (nodeId.length > ZERO) {
       if (orderedNodeIds.has(nodeId)) {
         return;
@@ -286,36 +286,36 @@ function resolvePartitioningDispatchNodes(
   };
   const readyNodeById = new Map(
     readyReplicaNodes
-      .map((node) => [String(node?.id || ""), node])
+      .map((node) => [String(node?.id || ''), node])
       .filter(([nodeId]) => nodeId.length > ZERO),
   );
   const admissionReadyNodeById = new Map(
     admissionReadyNodes
-      .map((node) => [String(node?.id || ""), node])
+      .map((node) => [String(node?.id || ''), node])
       .filter(([nodeId]) => nodeId.length > ZERO),
   );
   const selectedNodeById = new Map(
     selectedNodes
-      .map((node) => [String(node?.id || ""), node])
+      .map((node) => [String(node?.id || ''), node])
       .filter(([nodeId]) => nodeId.length > ZERO),
   );
   const dispatchMode = resolveBenchmarkPartitionDispatchMode({
     criticalControlPlaneStability,
-    localPrimaryNodeCount: Array.isArray(selected?.localPrimaryNodes)
-      ? selected.localPrimaryNodes.length
-      : readyReplicaNodes.length,
+    localPrimaryNodeCount: Array.isArray(selected?.localPrimaryNodes) ?
+      selected.localPrimaryNodes.length :
+      readyReplicaNodes.length,
     readyReplicaNodeCount: readyReplicaNodes.length,
     bootstrapRequiredNodeCount: normalizedBootstrapRequiredNodeCount,
     targetNodeCount:
-      Number.isInteger(targetNodeCount) && targetNodeCount > ZERO
-        ? targetNodeCount
-        : normalizedBootstrapRequiredNodeCount,
+      Number.isInteger(targetNodeCount) && targetNodeCount > ZERO ?
+        targetNodeCount :
+        normalizedBootstrapRequiredNodeCount,
   });
   const criticalControlPlaneStable = isBenchmarkCriticalControlPlaneStable(
     criticalControlPlaneStability,
   );
   for (const node of currentNodes) {
-    const nodeId = String(node?.id || "");
+    const nodeId = String(node?.id || '');
     if (nodeId.length === ZERO) {
       continue;
     }
@@ -339,15 +339,15 @@ function resolvePartitioningDispatchNodes(
       selectedNodes.length > readyReplicaNodes.length;
     const bootstrapContributorNodes =
       admissionReadyNodes.length >= normalizedBootstrapRequiredNodeCount &&
-      selectedNodes.length > ZERO
-        ? selectedNodes
-        : blockedReplicaBackfillRequired
-          ? selectedNodes
-          : readyReplicaNodes.length > ZERO
-            ? readyReplicaNodes
-            : admissionReadyNodes.length > ZERO
-              ? admissionReadyNodes
-              : selectedNodes;
+      selectedNodes.length > ZERO ?
+        selectedNodes :
+        blockedReplicaBackfillRequired ?
+          selectedNodes :
+          readyReplicaNodes.length > ZERO ?
+            readyReplicaNodes :
+            admissionReadyNodes.length > ZERO ?
+              admissionReadyNodes :
+              selectedNodes;
     const bootstrapContributorCount = Math.max(
       normalizedBootstrapRequiredNodeCount,
       bootstrapContributorNodes.length,
@@ -412,7 +412,7 @@ async function admitBenchmarkLoadNodes(cluster, options = {}) {
 
   if (
     enforceBenchmarkLoadAdmission &&
-    typeof cluster?.waitForBenchmarkReadyLoadNodes === "function"
+    typeof cluster?.waitForBenchmarkReadyLoadNodes === 'function'
   ) {
     return cluster.waitForBenchmarkReadyLoadNodes({
       tableName: options.tableName,
@@ -427,7 +427,7 @@ async function admitBenchmarkLoadNodes(cluster, options = {}) {
 
   if (
     enforceBenchmarkLoadAdmission &&
-    typeof cluster?.resolveBenchmarkReadyLoadNodes === "function"
+    typeof cluster?.resolveBenchmarkReadyLoadNodes === 'function'
   ) {
     const readyNodes = await cluster.resolveBenchmarkReadyLoadNodes({
       tableName: options.tableName,
@@ -436,20 +436,20 @@ async function admitBenchmarkLoadNodes(cluster, options = {}) {
     });
     assert.ok(
       readyNodes.length >= requiredNodeCount,
-      "Expected at least " +
+      'Expected at least ' +
         requiredNodeCount +
-        " benchmark-ready load nodes before starting load" +
-        (typeof options.tableName === "string" &&
-        options.tableName.length > ZERO
-          ? ' for table "' + options.tableName + '"'
-          : "") +
-        ", got " +
+        ' benchmark-ready load nodes before starting load' +
+        (typeof options.tableName === 'string' &&
+        options.tableName.length > ZERO ?
+          ' for table "' + options.tableName + '"' :
+          '') +
+        ', got ' +
         readyNodes.length,
     );
     return readyNodes;
   }
 
-  if (typeof cluster?.waitForLoadReadinessStability === "function") {
+  if (typeof cluster?.waitForLoadReadinessStability === 'function') {
     await cluster.waitForLoadReadinessStability({
       timeoutMs: resolveBenchmarkAdmissionTimeoutMs(cluster, options),
       stableWindowMs: resolveBenchmarkAdmissionStableWindowMs(cluster, options),
@@ -469,7 +469,7 @@ async function resolveBenchmarkPartitionConvergenceSnapshot(
     tableId: options.tableId,
     timeoutMs: options.queryTimeoutMs,
   };
-  if (typeof cluster?.resolveBenchmarkLoadAdmissionSnapshot === "function") {
+  if (typeof cluster?.resolveBenchmarkLoadAdmissionSnapshot === 'function') {
     const admissionSnapshot =
       await cluster.resolveBenchmarkLoadAdmissionSnapshot(snapshotOptions);
     return buildBenchmarkPartitionConvergenceSnapshot({
@@ -477,14 +477,14 @@ async function resolveBenchmarkPartitionConvergenceSnapshot(
       replicaBearingNodeIds: Array.from(distribution.replicaNodeIds),
     });
   }
-  if (typeof cluster?.resolveBenchmarkReadyLoadNodes === "function") {
+  if (typeof cluster?.resolveBenchmarkReadyLoadNodes === 'function') {
     const admissionReadyNodeIds = new Set(
       (await cluster.resolveBenchmarkReadyLoadNodes(snapshotOptions))
-        .map((node) => String(node?.id || ""))
+        .map((node) => String(node?.id || ''))
         .filter((nodeId) => nodeId.length > ZERO),
     );
     const evaluations = clusterNodes.map((node) => {
-      const nodeId = String(node?.id || "");
+      const nodeId = String(node?.id || '');
       const replicaBearing = distribution.replicaNodeIds.has(nodeId);
       const admissionReady = admissionReadyNodeIds.has(nodeId);
       return {
@@ -543,8 +543,8 @@ async function createPartitioningBenchmarkLoadNodePlan(
     };
   }
   const samplesBenchmarkAdmission =
-    typeof cluster?.resolveBenchmarkLoadAdmissionSnapshot === "function" ||
-    typeof cluster?.resolveBenchmarkReadyLoadNodes === "function";
+    typeof cluster?.resolveBenchmarkLoadAdmissionSnapshot === 'function' ||
+    typeof cluster?.resolveBenchmarkReadyLoadNodes === 'function';
 
   const selectLoadNodes = async () => {
     const distribution = await queryTableDistribution(seedNode, {
@@ -553,9 +553,9 @@ async function createPartitioningBenchmarkLoadNodePlan(
       fallbackNodes: options.fallbackNodes,
     });
     let effectiveReplicaBearingNodeIds =
-      distribution.replicaNodeIds instanceof Set
-        ? new Set(distribution.replicaNodeIds)
-        : new Set();
+      distribution.replicaNodeIds instanceof Set ?
+        new Set(distribution.replicaNodeIds) :
+        new Set();
     let admissionReadyNodes = [];
     let localPrimaryNodes = [];
     let routedSupportNodes = [];
@@ -576,65 +576,65 @@ async function createPartitioningBenchmarkLoadNodePlan(
             options,
           );
         readyReplicaNodeIds = new Set(
-          Array.isArray(convergenceSnapshot?.readyReplicaNodeIds)
-            ? convergenceSnapshot.readyReplicaNodeIds
-            : [],
+          Array.isArray(convergenceSnapshot?.readyReplicaNodeIds) ?
+            convergenceSnapshot.readyReplicaNodeIds :
+            [],
         );
         const admissionReadyNodeIds = new Set(
-          Array.isArray(convergenceSnapshot?.admissionReadyNodeIds)
-            ? convergenceSnapshot.admissionReadyNodeIds
-            : [],
+          Array.isArray(convergenceSnapshot?.admissionReadyNodeIds) ?
+            convergenceSnapshot.admissionReadyNodeIds :
+            [],
         );
         readinessReasonHistogram =
           convergenceSnapshot?.readinessReasonHistogram &&
-          typeof convergenceSnapshot.readinessReasonHistogram === "object"
-            ? convergenceSnapshot.readinessReasonHistogram
-            : null;
+          typeof convergenceSnapshot.readinessReasonHistogram === 'object' ?
+            convergenceSnapshot.readinessReasonHistogram :
+            null;
         convergenceStateHistogram =
           convergenceSnapshot?.convergenceStateHistogram &&
-          typeof convergenceSnapshot.convergenceStateHistogram === "object"
-            ? convergenceSnapshot.convergenceStateHistogram
-            : null;
+          typeof convergenceSnapshot.convergenceStateHistogram === 'object' ?
+            convergenceSnapshot.convergenceStateHistogram :
+            null;
         dispatchContributionHistogram =
           convergenceSnapshot?.dispatchContributionHistogram &&
-          typeof convergenceSnapshot.dispatchContributionHistogram === "object"
-            ? convergenceSnapshot.dispatchContributionHistogram
-            : null;
+          typeof convergenceSnapshot.dispatchContributionHistogram === 'object' ?
+            convergenceSnapshot.dispatchContributionHistogram :
+            null;
         degradationStateHistogram =
           convergenceSnapshot?.degradationStateHistogram &&
-          typeof convergenceSnapshot.degradationStateHistogram === "object"
-            ? convergenceSnapshot.degradationStateHistogram
-            : null;
+          typeof convergenceSnapshot.degradationStateHistogram === 'object' ?
+            convergenceSnapshot.degradationStateHistogram :
+            null;
         convergenceEvaluations =
           buildBenchmarkConvergenceEvaluationSummaries(convergenceSnapshot);
         criticalControlPlaneStability =
           convergenceSnapshot?.criticalControlPlaneStability &&
-          typeof convergenceSnapshot.criticalControlPlaneStability === "object"
-            ? convergenceSnapshot.criticalControlPlaneStability
-            : null;
+          typeof convergenceSnapshot.criticalControlPlaneStability === 'object' ?
+            convergenceSnapshot.criticalControlPlaneStability :
+            null;
         localPrimaryNodes = Array.isArray(
           convergenceSnapshot?.localPrimaryNodes,
-        )
-          ? convergenceSnapshot.localPrimaryNodes
-          : [];
+        ) ?
+          convergenceSnapshot.localPrimaryNodes :
+          [];
         routedSupportNodes = Array.isArray(
           convergenceSnapshot?.routedSupportNodes,
-        )
-          ? convergenceSnapshot.routedSupportNodes
-          : [];
+        ) ?
+          convergenceSnapshot.routedSupportNodes :
+          [];
         effectiveReplicaBearingNodeIds = new Set(
-          Array.isArray(convergenceSnapshot?.replicaBearingNodeIds)
-            ? convergenceSnapshot.replicaBearingNodeIds
-            : Array.from(effectiveReplicaBearingNodeIds),
+          Array.isArray(convergenceSnapshot?.replicaBearingNodeIds) ?
+            convergenceSnapshot.replicaBearingNodeIds :
+            Array.from(effectiveReplicaBearingNodeIds),
         );
         const readyNonSeedNodes = [];
         const readySeedNodes = [];
         for (const node of clusterNodes) {
-          const nodeId = String(node?.id || "");
+          const nodeId = String(node?.id || '');
           if (!admissionReadyNodeIds.has(nodeId)) {
             continue;
           }
-          if (nodeId === String(seedNode?.id || "")) {
+          if (nodeId === String(seedNode?.id || '')) {
             readySeedNodes.push(node);
             continue;
           }
@@ -658,11 +658,11 @@ async function createPartitioningBenchmarkLoadNodePlan(
     const fallbackNodes = [];
     const deferredSeedNodes = [];
     for (const node of clusterNodes) {
-      const nodeId = String(node?.id || "");
+      const nodeId = String(node?.id || '');
       if (!effectiveReplicaBearingNodeIds.has(nodeId)) {
         continue;
       }
-      if (nodeId === String(seedNode?.id || "")) {
+      if (nodeId === String(seedNode?.id || '')) {
         deferredSeedNodes.push(node);
         continue;
       }
@@ -676,7 +676,7 @@ async function createPartitioningBenchmarkLoadNodePlan(
       fallbackNodes.push(node);
     }
     for (const node of deferredSeedNodes) {
-      const nodeId = String(node?.id || "");
+      const nodeId = String(node?.id || '');
       if (
         readyReplicaNodeIds instanceof Set &&
         readyReplicaNodeIds.has(nodeId)
@@ -787,20 +787,20 @@ async function createPartitioningBenchmarkLoadNodePlan(
 
     if (Date.now() > deadlineAtMs && readySinceMs === null) {
       throw buildPartitioningPlannerTimeoutError(
-        "Timed out after " +
+        'Timed out after ' +
           timeoutMs +
-          "ms waiting for partitioning bootstrap quorum for table " +
-          String(options.tableName || "unknown") +
-          "; lastReadyReplicaCount=" +
+          'ms waiting for partitioning bootstrap quorum for table ' +
+          String(options.tableName || 'unknown') +
+          '; lastReadyReplicaCount=' +
           lastReadyReplicaNodes.length +
-          "; lastReplicaBearingCount=" +
+          '; lastReplicaBearingCount=' +
           lastSelectedNodes.length +
-          "; lastReplicaSpread=" +
+          '; lastReplicaSpread=' +
           String(lastDistribution?.replicaNodeCount || ZERO) +
-          "; selectedNodeIds=" +
-          mapNodeIds(lastSelectedNodes).join(",") +
-          "; readyReplicaNodeIds=" +
-          mapNodeIds(lastReadyReplicaNodes).join(","),
+          '; selectedNodeIds=' +
+          mapNodeIds(lastSelectedNodes).join(',') +
+          '; readyReplicaNodeIds=' +
+          mapNodeIds(lastReadyReplicaNodes).join(','),
         lastSelectionDiagnostics,
       );
     }
@@ -814,9 +814,9 @@ async function createPartitioningBenchmarkLoadNodePlan(
       selectedNodes: lastSelectedNodes,
       admissionReadyNodes: isBenchmarkCriticalControlPlaneStable(
         lastSelectionDiagnostics.criticalControlPlaneStability,
-      )
-        ? []
-        : lastAdmissionReadyNodes,
+      ) ?
+        [] :
+        lastAdmissionReadyNodes,
       readyReplicaNodes: lastReadyReplicaNodes,
       criticalControlPlaneStability:
         lastSelectionDiagnostics.criticalControlPlaneStability,
@@ -877,7 +877,7 @@ async function createPartitioningBenchmarkLoadNodePlan(
     refreshTimer = setInterval(() => {
       void refreshNodes();
     }, pollIntervalMs);
-    if (typeof refreshTimer.unref === "function") {
+    if (typeof refreshTimer.unref === 'function') {
       refreshTimer.unref();
     }
     void refreshNodes();
@@ -913,17 +913,17 @@ function resolvePartitioningBenchmarkLoadOpsPerSec(
   clusterNodeCount,
 ) {
   const normalizedRequestedOpsPerSec =
-    Number.isFinite(requestedOpsPerSec) && requestedOpsPerSec > ZERO
-      ? Number(requestedOpsPerSec)
-      : BENCHMARK_DEFAULTS.loadOpsPerSec;
+    Number.isFinite(requestedOpsPerSec) && requestedOpsPerSec > ZERO ?
+      Number(requestedOpsPerSec) :
+      BENCHMARK_DEFAULTS.loadOpsPerSec;
   const normalizedAdmittedNodeCount =
-    Number.isInteger(admittedNodeCount) && admittedNodeCount > ZERO
-      ? admittedNodeCount
-      : ONE;
+    Number.isInteger(admittedNodeCount) && admittedNodeCount > ZERO ?
+      admittedNodeCount :
+      ONE;
   const normalizedClusterNodeCount =
-    Number.isInteger(clusterNodeCount) && clusterNodeCount > ZERO
-      ? clusterNodeCount
-      : normalizedAdmittedNodeCount;
+    Number.isInteger(clusterNodeCount) && clusterNodeCount > ZERO ?
+      clusterNodeCount :
+      normalizedAdmittedNodeCount;
   return Math.max(
     1,
     Math.round(
@@ -948,7 +948,7 @@ function createPartitioningAdaptiveDispatchGuardrail() {
 function firstTableId(rows) {
   for (const row of rows) {
     const value = row?.table_id || row?.tableId;
-    if (typeof value === "string" && value.length > ZERO) {
+    if (typeof value === 'string' && value.length > ZERO) {
       return value;
     }
   }
@@ -958,11 +958,11 @@ function firstTableId(rows) {
 function firstStringField(row, ...fieldNames) {
   for (const fieldName of fieldNames) {
     const value = row?.[fieldName];
-    if (typeof value === "string" && value.length > ZERO) {
+    if (typeof value === 'string' && value.length > ZERO) {
       return value;
     }
   }
-  return "";
+  return '';
 }
 
 function firstPositiveIntegerField(row, ...fieldNames) {
@@ -986,15 +986,15 @@ function firstTablePolicies(rows) {
     if (rawValue === null || rawValue === undefined) {
       continue;
     }
-    if (typeof rawValue === "object") {
+    if (typeof rawValue === 'object') {
       return rawValue;
     }
-    if (typeof rawValue !== "string" || rawValue.length === ZERO) {
+    if (typeof rawValue !== 'string' || rawValue.length === ZERO) {
       continue;
     }
     try {
       const parsed = JSON.parse(rawValue);
-      if (parsed && typeof parsed === "object") {
+      if (parsed && typeof parsed === 'object') {
         return parsed;
       }
     } catch (_error) {
@@ -1047,15 +1047,15 @@ function normalizeMutationVisibilityState(value) {
 }
 
 function summarizeMutationVisibility(result) {
-  const reasonCodes = Array.isArray(result?.reasonCodes)
-    ? [
-        ...new Set(
-          result.reasonCodes
-            .map((value) => String(value || "").trim())
-            .filter((value) => value.length > ZERO),
-        ),
-      ]
-    : [];
+  const reasonCodes = Array.isArray(result?.reasonCodes) ?
+    [
+      ...new Set(
+        result.reasonCodes
+          .map((value) => String(value || '').trim())
+          .filter((value) => value.length > ZERO),
+      ),
+    ] :
+    [];
   return {
     visibilityState: normalizeMutationVisibilityState(result?.visibilityState),
     contractState: normalizeOwnerContractState(result?.contractState, null),
@@ -1063,27 +1063,27 @@ function summarizeMutationVisibility(result) {
     authoritativeVisibilityConfirmed:
       result?.authoritativeVisibilityConfirmed === true,
     retryAfterMs:
-      Number.isFinite(result?.retryAfterMs) && result.retryAfterMs > ZERO
-        ? Math.floor(result.retryAfterMs)
-        : null,
+      Number.isFinite(result?.retryAfterMs) && result.retryAfterMs > ZERO ?
+        Math.floor(result.retryAfterMs) :
+        null,
     outcome:
-      typeof result?.outcome === "string" && result.outcome.length > ZERO
-        ? result.outcome
-        : null,
+      typeof result?.outcome === 'string' && result.outcome.length > ZERO ?
+        result.outcome :
+        null,
     reasonCodes,
     runtimeAuthorityState:
-      typeof result?.runtimeAuthority?.state === "string" &&
-      result.runtimeAuthority.state.length > ZERO
-        ? result.runtimeAuthority.state
-        : null,
+      typeof result?.runtimeAuthority?.state === 'string' &&
+      result.runtimeAuthority.state.length > ZERO ?
+        result.runtimeAuthority.state :
+        null,
   };
 }
 
 function advanceMutationVisibilitySummary(previous, result) {
   const current =
-    previous && typeof previous === "object"
-      ? previous
-      : summarizeMutationVisibility(null);
+    previous && typeof previous === 'object' ?
+      previous :
+      summarizeMutationVisibility(null);
   const next = summarizeMutationVisibility(result);
   if (
     next.visibilityState !== null ||
@@ -1108,17 +1108,17 @@ function shouldDeferAuthoritativeRepair(visibilitySummary) {
     visibilitySummary?.contractState,
     null,
   );
-  const reasonCodes = Array.isArray(visibilitySummary?.reasonCodes)
-    ? visibilitySummary.reasonCodes
-    : [];
+  const reasonCodes = Array.isArray(visibilitySummary?.reasonCodes) ?
+    visibilitySummary.reasonCodes :
+    [];
   return (
     contractState === OWNER_CONTRACT_STATE.PENDING ||
     contractState === OWNER_CONTRACT_STATE.DEFERRED ||
     isPendingControlPlaneSystemTableVisibilityState(visibilityState) ||
-    (visibilitySummary?.outcome === "deferred" &&
-      (reasonCodes.includes("control_plane_publication_pending") ||
-        reasonCodes.includes("publication_epoch_pending") ||
-        visibilitySummary?.runtimeAuthorityState === "establishing"))
+    (visibilitySummary?.outcome === 'deferred' &&
+      (reasonCodes.includes('control_plane_publication_pending') ||
+        reasonCodes.includes('publication_epoch_pending') ||
+        visibilitySummary?.runtimeAuthorityState === 'establishing'))
   );
 }
 

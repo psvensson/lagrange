@@ -19,7 +19,6 @@ import {
   PLAN_FIELD,
   PLAN_ERROR_MSG,
   OUT_ERROR_MSG,
-  OUT_TELEMETRY_EVENT,
   OUT_TELEMETRY_FIELD,
   DEFAULT_EXCHANGE_MODE,
   EXCHANGE_ERROR_MSG,
@@ -296,18 +295,18 @@ class ExecutionContext {
 
     // Resolve dedupe key: explicit from meta or
     // auto-generated via lineage tracker.
-    const explicitDedupeKey = meta !== undefined
-      ? meta[EMIT_META_FIELD.DEDUPE_KEY]
-      : undefined;
+    const explicitDedupeKey = meta !== undefined ?
+      meta[EMIT_META_FIELD.DEDUPE_KEY] :
+      undefined;
 
     const seq = this._emitSequence++;
     const lineageId = this._lineageTracker.generateLineageId(
       NUM.ZERO, EMIT_PRIMITIVE_TYPE, seq,
     );
 
-    const dedupeKey = explicitDedupeKey !== undefined
-      ? String(explicitDedupeKey)
-      : lineageId;
+    const dedupeKey = explicitDedupeKey !== undefined ?
+      String(explicitDedupeKey) :
+      lineageId;
 
     // Check dedupe registry: skip if already seen.
     if (this._dedupeRegistry.isDuplicate(

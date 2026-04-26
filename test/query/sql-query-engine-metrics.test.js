@@ -101,7 +101,7 @@ test('executeQuery emits metrics.query.lifecycle on successful SELECT',
     await engine.executeQuery('SELECT * FROM users');
 
     const metric = infoCalls.find(
-      (c) => c.tag === METRICS_LOG_TAG.QUERY_LIFECYCLE
+      (c) => c.tag === METRICS_LOG_TAG.QUERY_LIFECYCLE,
     );
     t.ok(metric, 'metrics.query.lifecycle log emitted');
     t.equal(metric.data.statementType, 'SELECT');
@@ -112,7 +112,7 @@ test('executeQuery emits metrics.query.lifecycle on successful SELECT',
     t.ok(metric.data.parseDurationMs >= 0, 'parseDurationMs non-negative');
     t.ok(
       metric.data.executionDurationMs >= 0,
-      'executionDurationMs non-negative'
+      'executionDurationMs non-negative',
     );
     t.ok(metric.data.totalDurationMs >= 0, 'totalDurationMs non-negative');
     t.equal(typeof metric.data.partitionCount, 'number');
@@ -131,7 +131,7 @@ test('executeQuery emits metrics.query.lifecycle on execution failure',
     await engine.executeQuery('SELECT * FROM nonexistent');
 
     const metric = infoCalls.find(
-      (c) => c.tag === METRICS_LOG_TAG.QUERY_LIFECYCLE
+      (c) => c.tag === METRICS_LOG_TAG.QUERY_LIFECYCLE,
     );
     t.ok(metric, 'metrics.query.lifecycle emitted on failure');
     t.equal(metric.data.success, false);
@@ -147,7 +147,7 @@ test('executeQuery does not emit lifecycle metric for parse errors',
     await engine.executeQuery('INVALID SQL STATEMENT');
 
     const metric = infoCalls.find(
-      (c) => c.tag === METRICS_LOG_TAG.QUERY_LIFECYCLE
+      (c) => c.tag === METRICS_LOG_TAG.QUERY_LIFECYCLE,
     );
     t.notOk(metric, 'no lifecycle metric on parse error');
   });
@@ -174,7 +174,7 @@ test('executeQuery metrics use info level, not debug', async (t) => {
   await engine.executeQuery('SELECT * FROM items');
 
   const debugMetric = debugCalls.find(
-    (c) => c.tag === METRICS_LOG_TAG.QUERY_LIFECYCLE
+    (c) => c.tag === METRICS_LOG_TAG.QUERY_LIFECYCLE,
   );
   t.notOk(debugMetric, 'no metrics log at debug level');
 
@@ -196,11 +196,11 @@ test('executeQuery emits lifecycle metric for INSERT', async (t) => {
   const infoCalls = collectInfoCalls(engine);
 
   await engine.executeQuery(
-    'INSERT INTO users (id, name) VALUES (\'a\', \'Alice\')'
+    'INSERT INTO users (id, name) VALUES (\'a\', \'Alice\')',
   );
 
   const metric = infoCalls.find(
-    (c) => c.tag === METRICS_LOG_TAG.QUERY_LIFECYCLE
+    (c) => c.tag === METRICS_LOG_TAG.QUERY_LIFECYCLE,
   );
   t.ok(metric, 'lifecycle metric emitted for INSERT');
   t.equal(metric.data.statementType, 'INSERT');

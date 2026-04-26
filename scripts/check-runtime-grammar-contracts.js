@@ -61,7 +61,8 @@ const RUNTIME_GRAMMAR_HOTSPOT_CONTRACTS = Object.freeze({
         requiredFragments: Object.freeze([
           'hasPriorityRecoverySpreadGap',
           'PUBLICATION_PRIORITY_SPREAD_DECISION_SOURCE.PRIORITY_PARTITION_SUMMARY',
-          'PUBLICATION_PRIORITY_SPREAD_DECISION_SOURCE.LEGACY_SIGNALS',
+          'PUBLICATION_PRIORITY_SPREAD_DECISION_SOURCE.OWNER_EVIDENCE_UNAVAILABLE',
+          'prioritySpreadEvidenceUnavailable',
           'prioritySpreadPending',
         ]),
       }),

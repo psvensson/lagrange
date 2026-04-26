@@ -47,6 +47,30 @@ logic.
 
 ------------------------------------------------------------------------
 
+# AGPL Scope Boundary
+
+This document defines the AGPL-owned service-platform substrate, not the
+implementation plan for every example service named here.
+
+Examples such as `backup-manager`, `tenant-manager`, RBAC, tenant isolation,
+KMS, secrets, PITR, and commercial entitlement flows are external consumer
+examples unless the roadmap and edition matrix explicitly map the work to the
+AGPL repo.
+
+For this repository:
+
+-   in scope: manifest registration, lifecycle hooks, service-owned replicated
+    state, CDC subscriptions, admin-surface registration, capability checks,
+    topology/snapshot/event substrate when backed by `roadmap.md`
+-   out of scope: backup/PITR behavior, tenant isolation, RBAC policy,
+    commercial license activation, entitlement checks, KMS integration, and
+    secret-provider implementations
+-   extension-point only: policy-provider and secrets/external-reference
+    shapes may be documented as future integration seams, but must not become
+    AGPL implementation tasks without an edition-matrix change
+
+------------------------------------------------------------------------
+
 # Artifact Packaging Model
 
 All installable services are packaged and distributed as **OCI
@@ -250,11 +274,13 @@ Kernel enforces capability access:
 
     ctx.capabilities.require("snapshot.read")
 
-This ensures security and edition control.
+This ensures kernel capability isolation. Edition and entitlement control live
+outside the AGPL implementation unless explicitly reclassified in
+`edition-matrix.md`.
 
 ------------------------------------------------------------------------
 
-## 9. Policy Provider API
+## 9. Policy Provider API (External Extension Point)
 
 Some services define policies that the kernel enforces.
 
@@ -270,6 +296,10 @@ Example:
     registerPolicyProvider("authz", provider)
 
 The kernel queries policy providers when enforcing actions.
+
+This is an external extension point in this repository. RBAC, tenant isolation,
+and enterprise policy-provider implementations are not AGPL implementation
+tasks.
 
 ------------------------------------------------------------------------
 
@@ -312,7 +342,7 @@ This prevents unsafe cluster-wide upgrades.
 
 ------------------------------------------------------------------------
 
-## 12. Secrets and External References
+## 12. Secrets and External References (External Extension Point)
 
 Services may reference external credentials or systems.
 
@@ -323,6 +353,9 @@ Example:
 
 Secrets are resolved by the cluster rather than embedded directly in
 service configuration.
+
+This is an external extension point in this repository. Secret-provider, KMS,
+and credential-management implementations are not AGPL implementation tasks.
 
 ------------------------------------------------------------------------
 
@@ -343,7 +376,7 @@ This enables early services such as:
 
 -   observability-pack
 -   audit-service
--   backup-manager prototype
+-   external backup-manager prototype as a consumer example only
 
 ------------------------------------------------------------------------
 
@@ -364,7 +397,7 @@ Enables:
 
 ------------------------------------------------------------------------
 
-## Phase C (enterprise platform)
+## Phase C (external/commercial platform extensions)
 
 Add:
 
@@ -377,6 +410,8 @@ Enables:
 -   tenant isolation
 -   KMS integration
 -   compliance tooling
+
+Phase C is not AGPL implementation scope under the current edition matrix.
 
 ------------------------------------------------------------------------
 

@@ -196,9 +196,9 @@ class SQLParser {
     }
 
     try {
-      const dbMode = this.dialect === PARSER_DIALECT.POSTGRESQL
-        ? PARSER_CONFIG.DATABASE_PG
-        : PARSER_CONFIG.DATABASE;
+      const dbMode = this.dialect === PARSER_DIALECT.POSTGRESQL ?
+        PARSER_CONFIG.DATABASE_PG :
+        PARSER_CONFIG.DATABASE;
       const externalAst = this.parser.astify(this.sql, {database: dbMode});
       const ast = this.convertAst(externalAst);
       ast.rawSql = this.sql;
@@ -259,9 +259,9 @@ class SQLParser {
   }
   convertSelect(ast) {
     // PG mode: distinct is {type: 'DISTINCT'|null} vs SQLite string
-    const distinct = typeof ast.distinct === 'object'
-      ? ast.distinct?.type === 'DISTINCT'
-      : ast.distinct === 'DISTINCT';
+    const distinct = typeof ast.distinct === 'object' ?
+      ast.distinct?.type === 'DISTINCT' :
+      ast.distinct === 'DISTINCT';
 
     const ctes = this.convertCtes(ast.with);
     const recursive = ast.with ?
@@ -840,9 +840,9 @@ class SQLParser {
    */
   convertPgFunction(expr) {
     const nameParts = expr.name?.name || [];
-    const funcName = nameParts.length > NUM.ZERO
-      ? nameParts[NUM.ZERO].value
-      : '';
+    const funcName = nameParts.length > NUM.ZERO ?
+      nameParts[NUM.ZERO].value :
+      '';
     const argValues = expr.args?.value || [];
 
     // EXISTS is parsed as a function with a subquery argument
@@ -964,9 +964,9 @@ class SQLParser {
 
   convertColumnRef(expr) {
     // PG mode wraps column name in {expr: {type: 'default', value: name}}
-    const column = (typeof expr.column === 'object' && expr.column?.expr)
-      ? expr.column.expr.value
-      : expr.column;
+    const column = (typeof expr.column === 'object' && expr.column?.expr) ?
+      expr.column.expr.value :
+      expr.column;
     return {
       type: EXPR_TYPE.COLUMN_REF,
       table: expr.table || null,

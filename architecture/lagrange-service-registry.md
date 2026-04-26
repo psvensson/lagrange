@@ -30,6 +30,20 @@ The installation model must support:
 
 ------------------------------------------------------------------------
 
+# AGPL Scope Boundary
+
+This document defines the open installation substrate: registries, catalog
+state, reconciliation, artifact fetch/verification, and service lifecycle
+convergence.
+
+Commercial services and enterprise controls may consume this substrate, but
+their behavior is not implemented here. In this repository, backup/PITR,
+tenant isolation, RBAC, KMS/secrets providers, commercial license activation,
+and entitlement checks are external extension points unless `edition-matrix.md`
+is changed.
+
+------------------------------------------------------------------------
+
 # Core Concepts
 
 ## 1. Artifact Registry
@@ -196,10 +210,13 @@ The cluster validates:
 
 -   manifest schema
 -   kernel API compatibility
--   edition/license constraints
+-   declared edition compatibility metadata
 -   capability permissions
 -   configuration schema
 -   dependency satisfaction
+
+Commercial entitlement evaluation is an external extension point, not an AGPL
+kernel requirement.
 
 ## 4. Record desired state
 
@@ -302,7 +319,7 @@ This is especially important once third-party services exist.
 
 ------------------------------------------------------------------------
 
-# Licensing Hooks
+# External Licensing Extension Point
 
 The installation platform itself belongs in the open-source kernel.
 
@@ -312,11 +329,14 @@ However, services may still declare edition requirements such as:
 -   `pro`
 -   `enterprise`
 
-The cluster may then require a valid license token or entitlement before
-activating certain packages.
+An external commercial layer may require a valid license token or entitlement
+before activating certain packages.
 
 This keeps the **mechanism open** while allowing **content and
 entitlement** to remain commercial.
+
+The AGPL repo must not implement commercial license activation or entitlement
+checks from this document alone.
 
 ------------------------------------------------------------------------
 
@@ -366,8 +386,8 @@ The service platform likely needs a small number of core tables:
 Optional later additions:
 
 -   `sys_service_dependencies`
--   `sys_service_entitlements`
--   `sys_service_secrets_refs`
+-   external commercial entitlement references
+-   external secret-provider references
 
 ------------------------------------------------------------------------
 
@@ -380,6 +400,8 @@ Open-source kernel provides:
 -   system catalog
 -   reconciliation
 -   capability enforcement
+-   extension-point metadata for commercial consumers when required by the
+    AGPL substrate
 
 Commercial layers provide:
 
@@ -387,6 +409,8 @@ Commercial layers provide:
 -   commercial registries
 -   commercial entitlements
 -   premium service implementations
+-   license-token activation
+-   RBAC, tenancy, KMS, and secret-provider behavior
 
 This is the clean platform boundary.
 

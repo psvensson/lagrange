@@ -11,8 +11,6 @@ import {
   OCI_POLICY_ERROR,
   OCI_POLICY_DECISION,
   validateRegistryPolicy,
-  checkRegistryAllowed,
-  checkRepositoryAllowed,
   enforceImagePolicy,
 } from '../../src/runtime/oci-registry-policy.js';
 import {NativeJsDriver} from '../../src/runtime/native-js-driver.js';
@@ -22,7 +20,6 @@ import {
 import {
   OciContainerDriver,
 } from '../../src/runtime/oci-container-driver.js';
-import {RUNTIME_KIND} from '../../src/constants/runtime.js';
 
 // --- OCI policy gate tests ---
 

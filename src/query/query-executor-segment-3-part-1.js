@@ -12,6 +12,7 @@ const {
   QUERY_LOG_MSG,
   QUERY_ROUTING_DIAGNOSTIC_REASON,
   QUERY_ROUTING_REPAIR_REASON,
+  READINESS_SNAPSHOT_KEY,
   SERVICE_TYPE,
   SYSTEM_TABLE_NAMES,
   TABLES,
@@ -353,7 +354,10 @@ class QueryExecutorSegment3Part1 extends QueryExecutorSegment2 {
           };
         }
         if (recoveryRoutingContract.recoveryCandidateWidening === true) {
-          orderedServices.forEach(addService);
+          this.orderRecoveryCandidateServices(
+            orderedServices,
+            routingOptions,
+          ).forEach(addService);
           if (candidates.length > NUM.ZERO) {
             return {
               candidates,
@@ -373,7 +377,10 @@ class QueryExecutorSegment3Part1 extends QueryExecutorSegment2 {
       }
       if (canonicalLeaderServices.length === NUM.ZERO) {
         if (recoveryRoutingContract.recoveryCandidateWidening === true) {
-          orderedServices.forEach(addService);
+          this.orderRecoveryCandidateServices(
+            orderedServices,
+            routingOptions,
+          ).forEach(addService);
           if (candidates.length > NUM.ZERO) {
             return {
               candidates,
@@ -483,6 +490,8 @@ class QueryExecutorSegment3Part1 extends QueryExecutorSegment2 {
         canonicalLeaderIdentity?.state || null,
       canonicalLeaderIdentitySource:
         canonicalLeaderIdentity?.source || null,
+      bootstrapLeaderStabilizationState:
+        canonicalLeaderIdentity?.bootstrapLeaderStabilizationState || null,
       canonicalLeaderObservationState:
         canonicalLeaderObservation?.state || null,
       canonicalLeaderObservationReasonCode:
@@ -549,6 +558,40 @@ class QueryExecutorSegment3Part1 extends QueryExecutorSegment2 {
       }
       return NUM.ZERO;
     });
+  }
+
+  resolveRecoveryCandidateSelectionOffset(services = [], selectionKey = null) {
+    const serviceCount = Array.isArray(services) ? services.length : NUM.ZERO;
+    if (
+      serviceCount <= NUM.ONE ||
+      typeof selectionKey !== QUERY_EXECUTOR_LITERAL.STRING_STRING ||
+      selectionKey.length === NUM.ZERO
+    ) {
+      return NUM.ZERO;
+    }
+    let hash = NUM.ZERO;
+    for (
+      let index = Math.min(NUM.ONE, selectionKey.length);
+      index < selectionKey.length;
+      index += NUM.ONE
+    ) {
+      hash += selectionKey.charCodeAt(index);
+    }
+    return hash % serviceCount;
+  }
+
+  orderRecoveryCandidateServices(services = [], routingOptions = {}) {
+    const offset = this.resolveRecoveryCandidateSelectionOffset(
+      services,
+      routingOptions?.recoveryCandidateSelectionKey || null,
+    );
+    if (offset === NUM.ZERO) {
+      return services;
+    }
+    return [
+      ...services.slice(offset),
+      ...services.slice(NUM.ZERO, offset),
+    ];
   }
 
   /**
@@ -673,6 +716,15 @@ class QueryExecutorSegment3Part1 extends QueryExecutorSegment2 {
         reasonCodes: [],
         failedDimensions: [],
       };
+      const runtimeAuthority =
+        routing.readinessSummary[READINESS_SNAPSHOT_KEY.RUNTIME_AUTHORITY] ||
+        null;
+      if (
+        runtimeAuthority &&
+        typeof runtimeAuthority === QUERY_EXECUTOR_LITERAL.STRING_OBJECT
+      ) {
+        existing[READINESS_SNAPSHOT_KEY.RUNTIME_AUTHORITY] = runtimeAuthority;
+      }
       for (const reasonCode of routing.readinessSummary.reasonCodes) {
         if (!existing.reasonCodes.includes(reasonCode)) {
           existing.reasonCodes.push(reasonCode);

@@ -65,7 +65,7 @@ test('executeQuery emits metrics.partition.sqlite on SELECT',
     await partition.executeQuery('SELECT * FROM test_table');
 
     const metric = infoCalls.find(
-      (c) => c.tag === METRICS_LOG_TAG.PARTITION_SQLITE
+      (c) => c.tag === METRICS_LOG_TAG.PARTITION_SQLITE,
     );
     t.ok(metric, 'metrics.partition.sqlite log emitted');
     t.equal(metric.data.partitionId, 'sqlite-metrics-1');
@@ -88,7 +88,7 @@ test('executeQuery emits correct rowCount for empty result',
     await partition.executeQuery('SELECT * FROM test_table');
 
     const metric = infoCalls.find(
-      (c) => c.tag === METRICS_LOG_TAG.PARTITION_SQLITE
+      (c) => c.tag === METRICS_LOG_TAG.PARTITION_SQLITE,
     );
     t.ok(metric, 'metric emitted for empty result');
     t.equal(metric.data.rowCount, 0);
@@ -113,7 +113,7 @@ test('executeQuery sqlite metric uses info level, not debug',
     await partition.executeQuery('SELECT * FROM test_table');
 
     const debugMetric = debugCalls.find(
-      (c) => c.tag === METRICS_LOG_TAG.PARTITION_SQLITE
+      (c) => c.tag === METRICS_LOG_TAG.PARTITION_SQLITE,
     );
     t.notOk(debugMetric, 'no sqlite metric at debug level');
 
@@ -130,15 +130,15 @@ test('executeQuery sqlite metric does not break query on logger failure',
 
     // Replace logger.info with a function that throws only for metrics
     const originalInfo = partition.logger.info.bind(partition.logger);
-    partition.logger.info = function(tag) {
+    partition.logger.info = function(tag, ...args) {
       if (tag === METRICS_LOG_TAG.PARTITION_SQLITE) {
         throw new Error('logger broken');
       }
-      return originalInfo(...arguments);
+      return originalInfo(tag, ...args);
     };
 
     const result = await partition.executeQuery(
-      'SELECT * FROM test_table'
+      'SELECT * FROM test_table',
     );
 
     t.equal(result.success, true);

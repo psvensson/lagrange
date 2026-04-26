@@ -55,7 +55,7 @@ describe('handlePublishModule', () => {
     });
     assert.equal(result.success, false);
     assert.ok(result.errors.includes(
-      MODULE_MANIFEST_ERROR_MSG.NAMESPACE_REQUIRED
+      MODULE_MANIFEST_ERROR_MSG.NAMESPACE_REQUIRED,
     ));
   });
 
@@ -63,7 +63,7 @@ describe('handlePublishModule', () => {
     const result = handlePublishModule({});
     assert.equal(result.success, false);
     assert.ok(result.errors.includes(
-      META_COMMAND_ERROR_MSG.MANIFEST_REQUIRED
+      META_COMMAND_ERROR_MSG.MANIFEST_REQUIRED,
     ));
   });
 
@@ -102,7 +102,7 @@ describe('handleGetModule', () => {
     });
     assert.equal(result.success, false);
     assert.ok(result.errors.includes(
-      META_COMMAND_ERROR_MSG.NAMESPACE_REQUIRED
+      META_COMMAND_ERROR_MSG.NAMESPACE_REQUIRED,
     ));
   });
 
@@ -113,7 +113,7 @@ describe('handleGetModule', () => {
     });
     assert.equal(result.success, false);
     assert.ok(result.errors.includes(
-      META_COMMAND_ERROR_MSG.NAME_REQUIRED
+      META_COMMAND_ERROR_MSG.NAME_REQUIRED,
     ));
   });
 
@@ -124,7 +124,7 @@ describe('handleGetModule', () => {
     });
     assert.equal(result.success, false);
     assert.ok(result.errors.includes(
-      META_COMMAND_ERROR_MSG.VERSION_REQUIRED
+      META_COMMAND_ERROR_MSG.VERSION_REQUIRED,
     ));
   });
 
@@ -206,31 +206,31 @@ describe('handleCreateService', () => {
 
   it('returns failure when serviceId is missing', () => {
     const result = handleCreateService(
-      makeValidServiceParams({serviceId: undefined})
+      makeValidServiceParams({serviceId: undefined}),
     );
     assert.equal(result.success, false);
     assert.ok(result.errors.includes(
-      META_COMMAND_ERROR_MSG.SERVICE_ID_REQUIRED
+      META_COMMAND_ERROR_MSG.SERVICE_ID_REQUIRED,
     ));
   });
 
   it('returns failure when serviceName is missing', () => {
     const result = handleCreateService(
-      makeValidServiceParams({serviceName: undefined})
+      makeValidServiceParams({serviceName: undefined}),
     );
     assert.equal(result.success, false);
     assert.ok(result.errors.includes(
-      META_COMMAND_ERROR_MSG.SERVICE_NAME_REQUIRED
+      META_COMMAND_ERROR_MSG.SERVICE_NAME_REQUIRED,
     ));
   });
 
   it('returns failure when handlerFunctionId is missing', () => {
     const result = handleCreateService(
-      makeValidServiceParams({handlerFunctionId: undefined})
+      makeValidServiceParams({handlerFunctionId: undefined}),
     );
     assert.equal(result.success, false);
     assert.ok(result.errors.includes(
-      META_COMMAND_ERROR_MSG.HANDLER_FUNCTION_REQUIRED
+      META_COMMAND_ERROR_MSG.HANDLER_FUNCTION_REQUIRED,
     ));
   });
 
@@ -244,11 +244,11 @@ describe('handleCreateService', () => {
 
   it('returns failure when replicaCount is even', () => {
     const result = handleCreateService(
-      makeValidServiceParams({replicaCount: 4})
+      makeValidServiceParams({replicaCount: 4}),
     );
     assert.equal(result.success, false);
     assert.ok(result.errors.includes(
-      META_COMMAND_ERROR_MSG.REPLICA_COUNT_ODD
+      META_COMMAND_ERROR_MSG.REPLICA_COUNT_ODD,
     ));
   });
 
@@ -275,7 +275,7 @@ describe('handleUpdateService', () => {
     });
     assert.equal(result.success, false);
     assert.ok(result.errors.includes(
-      META_COMMAND_ERROR_MSG.SERVICE_ID_REQUIRED
+      META_COMMAND_ERROR_MSG.SERVICE_ID_REQUIRED,
     ));
   });
 
@@ -285,7 +285,7 @@ describe('handleUpdateService', () => {
     });
     assert.equal(result.success, false);
     assert.ok(result.errors.includes(
-      META_COMMAND_ERROR_MSG.NO_FIELDS_TO_UPDATE
+      META_COMMAND_ERROR_MSG.NO_FIELDS_TO_UPDATE,
     ));
   });
 
@@ -316,7 +316,7 @@ describe('handleScaleService', () => {
     const result = handleScaleService({replicaCount: 5});
     assert.equal(result.success, false);
     assert.ok(result.errors.includes(
-      META_COMMAND_ERROR_MSG.SERVICE_ID_REQUIRED
+      META_COMMAND_ERROR_MSG.SERVICE_ID_REQUIRED,
     ));
   });
 
@@ -324,7 +324,7 @@ describe('handleScaleService', () => {
     const result = handleScaleService({serviceId: 'svc-test-1'});
     assert.equal(result.success, false);
     assert.ok(result.errors.includes(
-      META_COMMAND_ERROR_MSG.REPLICA_COUNT_REQUIRED
+      META_COMMAND_ERROR_MSG.REPLICA_COUNT_REQUIRED,
     ));
   });
 
@@ -335,7 +335,7 @@ describe('handleScaleService', () => {
     });
     assert.equal(result.success, false);
     assert.ok(result.errors.includes(
-      META_COMMAND_ERROR_MSG.REPLICA_COUNT_ODD
+      META_COMMAND_ERROR_MSG.REPLICA_COUNT_ODD,
     ));
   });
 });
@@ -352,7 +352,7 @@ describe('handleDeleteService', () => {
     const result = handleDeleteService({});
     assert.equal(result.success, false);
     assert.ok(result.errors.includes(
-      META_COMMAND_ERROR_MSG.SERVICE_ID_REQUIRED
+      META_COMMAND_ERROR_MSG.SERVICE_ID_REQUIRED,
     ));
   });
 
@@ -360,7 +360,7 @@ describe('handleDeleteService', () => {
     const result = handleDeleteService({serviceId: 'svc-test-1'});
     assert.ok(result.sql.includes(SD_COL.STATUS));
     assert.ok(result.params.includes(
-      WASM_SERVICE_DEFINITION_STATUS.INACTIVE
+      WASM_SERVICE_DEFINITION_STATUS.INACTIVE,
     ));
   });
 });

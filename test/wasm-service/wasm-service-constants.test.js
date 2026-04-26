@@ -26,7 +26,7 @@ describe('wasm-service-constants', () => {
     it('should have REPLICA subsystem name', () => {
       assert.equal(
         WASM_SERVICE_SUBSYSTEM.REPLICA,
-        'wasm-service-replica'
+        'wasm-service-replica',
       );
     });
   });
@@ -98,13 +98,13 @@ describe('wasm-service-constants', () => {
     it('should have correct default values', () => {
       assert.equal(DEFAULT_RESOURCE_BUDGET.CPU_TIME_LIMIT_MS, 5000);
       assert.equal(
-        DEFAULT_RESOURCE_BUDGET.MEMORY_LIMIT_BYTES, 67108864
+        DEFAULT_RESOURCE_BUDGET.MEMORY_LIMIT_BYTES, 67108864,
       );
       assert.equal(
-        DEFAULT_RESOURCE_BUDGET.SESSION_SIZE_LIMIT_BYTES, 1048576
+        DEFAULT_RESOURCE_BUDGET.SESSION_SIZE_LIMIT_BYTES, 1048576,
       );
       assert.equal(
-        DEFAULT_RESOURCE_BUDGET.SERVICE_SIZE_LIMIT_BYTES, 104857600
+        DEFAULT_RESOURCE_BUDGET.SERVICE_SIZE_LIMIT_BYTES, 104857600,
       );
     });
   });
@@ -130,7 +130,7 @@ describe('wasm-service-constants', () => {
       for (const key of requiredKeys) {
         assert.ok(
           key in WASM_SERVICE_ERROR_MSG,
-          `Missing error message: ${key}`
+          `Missing error message: ${key}`,
         );
         assert.equal(typeof WASM_SERVICE_ERROR_MSG[key], 'string');
       }
@@ -146,7 +146,7 @@ describe('wasm-service-constants', () => {
       for (const [key, value] of Object.entries(WASM_SERVICE_LOG_MSG)) {
         assert.equal(
           typeof value, 'string',
-          `Log message ${key} should be a string`
+          `Log message ${key} should be a string`,
         );
       }
     });
@@ -166,11 +166,11 @@ describe('wasm-service-constants', () => {
     it('should reference consistency mode constants', () => {
       assert.equal(
         WASM_SERVICE_DEFAULT.READ_CONSISTENCY,
-        READ_CONSISTENCY_MODE.STRONG
+        READ_CONSISTENCY_MODE.STRONG,
       );
       assert.equal(
         WASM_SERVICE_DEFAULT.WRITE_CONSISTENCY,
-        WRITE_CONSISTENCY_MODE.STRONG
+        WRITE_CONSISTENCY_MODE.STRONG,
       );
     });
 
@@ -181,14 +181,14 @@ describe('wasm-service-constants', () => {
     it('should have correct default safety interval', () => {
       assert.equal(
         WASM_SERVICE_DEFAULT.SAFETY_INTERVAL_MS,
-        DEFAULT_SAFETY_INTERVAL_MS
+        DEFAULT_SAFETY_INTERVAL_MS,
       );
     });
 
     it('should have correct default protocol', () => {
       assert.equal(
         WASM_SERVICE_DEFAULT.PROTOCOL,
-        WASM_SERVICE_PROTOCOL.WEBSOCKET
+        WASM_SERVICE_PROTOCOL.WEBSOCKET,
       );
     });
   });
@@ -221,10 +221,10 @@ describe('wasm-service-constants', () => {
 
     it('should have active and inactive statuses', () => {
       assert.equal(
-        WASM_SERVICE_DEFINITION_STATUS.ACTIVE, 'active'
+        WASM_SERVICE_DEFINITION_STATUS.ACTIVE, 'active',
       );
       assert.equal(
-        WASM_SERVICE_DEFINITION_STATUS.INACTIVE, 'inactive'
+        WASM_SERVICE_DEFINITION_STATUS.INACTIVE, 'inactive',
       );
     });
   });

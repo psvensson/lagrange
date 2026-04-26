@@ -26,6 +26,19 @@ import {
 import {
   evaluateJoinPromotionState,
 } from './join-promotion-state-owner.js';
+import {
+  OperationType,
+} from '../rebalancer/replica-status.js';
+
+const JOIN_READINESS_REPLICA_OPERATION_ENTITY_TYPE = Object.freeze({
+  PARTITION: 'partition',
+});
+const JOIN_READINESS_PRIORITY_OPERATION_EXCLUSION_KIND = Object.freeze({
+  NONE: 'none',
+  REMOTE_ACTIVE_PEER_RECOVERY: 'remote_active_peer_recovery',
+  SELF_SOURCE_ACTIVE_TARGET_REPLACEMENT:
+    'self_source_active_target_replacement',
+});
 
 function createJoinReadinessEvaluatorTailMethods(options = {}) {
   const joinReadinessReasonPrecedence =
@@ -237,6 +250,8 @@ function createJoinReadinessEvaluatorTailMethods(options = {}) {
           excludedNonDiscoveryPartitionCount: NUM.ZERO,
           excludedRemotePriorityControlPlaneCount: NUM.ZERO,
           excludedRemotePriorityControlPlaneOperationDetails: [],
+          excludedSelfSourcePriorityControlPlaneCount: NUM.ZERO,
+          excludedSelfSourcePriorityControlPlaneOperationDetails: [],
         };
       }
 
@@ -252,10 +267,19 @@ function createJoinReadinessEvaluatorTailMethods(options = {}) {
         systemTableCache.getAll(TABLES.SERVICES) || [];
       const inFlightOperations = [];
       const excludedRemotePriorityControlPlaneOperationDetails = [];
+      const excludedSelfSourcePriorityControlPlaneOperationDetails = [];
+      const excludedPriorityControlPlaneOperationDetailsByKind =
+        Object.freeze({
+          [JOIN_READINESS_PRIORITY_OPERATION_EXCLUSION_KIND
+            .REMOTE_ACTIVE_PEER_RECOVERY]:
+            excludedRemotePriorityControlPlaneOperationDetails,
+          [JOIN_READINESS_PRIORITY_OPERATION_EXCLUSION_KIND
+            .SELF_SOURCE_ACTIVE_TARGET_REPLACEMENT]:
+            excludedSelfSourcePriorityControlPlaneOperationDetails,
+        });
       let excludedSelfTargetedCount = NUM.ZERO;
       let excludedWarmingTargetCount = NUM.ZERO;
       let excludedNonDiscoveryPartitionCount = NUM.ZERO;
-      let excludedRemotePriorityControlPlaneCount = NUM.ZERO;
       for (const row of rows) {
         const normalizedOperation = normalizeReplicaOperationRecord(row);
         if (isReplicaOperationInFlight(normalizedOperation, {serviceRows})) {
@@ -268,7 +292,8 @@ function createJoinReadinessEvaluatorTailMethods(options = {}) {
             continue;
           }
           if (
-            normalizedOperation.entityType === 'partition' &&
+            normalizedOperation.entityType ===
+              JOIN_READINESS_REPLICA_OPERATION_ENTITY_TYPE.PARTITION &&
             discoveryCriticalPartitionIds.size > NUM.ZERO &&
             normalizedOperation.partitionGroupId.length > NUM.ZERO &&
             !discoveryCriticalPartitionIds.has(
@@ -283,15 +308,18 @@ function createJoinReadinessEvaluatorTailMethods(options = {}) {
               normalizedOperation,
               row,
             );
-          if (this.isRemotePriorityControlPlaneRecoveryOperation(
-            normalizedOperation,
-            activeNodeIds,
-            discoveryCriticalPartitionIds,
-          )) {
-            excludedRemotePriorityControlPlaneCount++;
-            excludedRemotePriorityControlPlaneOperationDetails.push(
-              operationDetail,
+          const priorityControlPlaneExclusion =
+            this.classifyPriorityControlPlaneJoinOperationExclusion(
+              normalizedOperation,
+              activeNodeIds,
+              discoveryCriticalPartitionIds,
             );
+          const excludedPriorityControlPlaneOperationDetails =
+            excludedPriorityControlPlaneOperationDetailsByKind[
+              priorityControlPlaneExclusion.kind
+            ];
+          if (excludedPriorityControlPlaneOperationDetails) {
+            excludedPriorityControlPlaneOperationDetails.push(operationDetail);
             continue;
           }
           inFlightOperations.push(operationDetail);
@@ -302,9 +330,126 @@ function createJoinReadinessEvaluatorTailMethods(options = {}) {
         excludedSelfTargetedCount,
         excludedWarmingTargetCount,
         excludedNonDiscoveryPartitionCount,
-        excludedRemotePriorityControlPlaneCount,
+        excludedRemotePriorityControlPlaneCount:
+          excludedRemotePriorityControlPlaneOperationDetails.length,
         excludedRemotePriorityControlPlaneOperationDetails,
+        excludedSelfSourcePriorityControlPlaneCount:
+          excludedSelfSourcePriorityControlPlaneOperationDetails.length,
+        excludedSelfSourcePriorityControlPlaneOperationDetails,
       };
+    },
+
+    /**
+     * @param {Object} normalizedOperation
+     * @param {Set<string>} activeNodeIds
+     * @param {Set<string>} discoveryCriticalPartitionIds
+     * @return {Object}
+     */
+    buildPriorityControlPlaneJoinOperationEvidence(
+      normalizedOperation,
+      activeNodeIds,
+      discoveryCriticalPartitionIds,
+    ) {
+      const partitionId = String(
+        normalizedOperation?.partitionGroupId || '',
+      );
+      const sourceNodeId = String(
+        normalizedOperation?.sourceNodeId || '',
+      );
+      const targetNodeId = String(
+        normalizedOperation?.targetNodeId || '',
+      );
+      return Object.freeze({
+        isPartitionOperation:
+          normalizedOperation?.entityType ===
+            JOIN_READINESS_REPLICA_OPERATION_ENTITY_TYPE.PARTITION,
+        isReplaceOperation:
+          normalizedOperation?.type === OperationType.REPLACE,
+        partitionId,
+        sourceNodeId,
+        targetNodeId,
+        discoveryCriticalPartition:
+          partitionId.length > NUM.ZERO &&
+          discoveryCriticalPartitionIds.has(partitionId),
+        priorityControlPlanePartition:
+          partitionId.length > NUM.ZERO &&
+          isPriorityControlPlanePartition({partitionId}),
+        sourceIsSelf: sourceNodeId === this.nodeId,
+        targetIsSelf: targetNodeId === this.nodeId,
+        sourceActive: activeNodeIds.has(sourceNodeId),
+        targetActive: activeNodeIds.has(targetNodeId),
+      });
+    },
+
+    /**
+     * @param {Object} normalizedOperation
+     * @param {Set<string>} activeNodeIds
+     * @param {Set<string>} discoveryCriticalPartitionIds
+     * @return {Object}
+     */
+    classifyPriorityControlPlaneJoinOperationExclusion(
+      normalizedOperation,
+      activeNodeIds,
+      discoveryCriticalPartitionIds,
+    ) {
+      const evidence = this.buildPriorityControlPlaneJoinOperationEvidence(
+        normalizedOperation,
+        activeNodeIds,
+        discoveryCriticalPartitionIds,
+      );
+      const priorityControlPlaneBase =
+        evidence.isPartitionOperation &&
+        evidence.discoveryCriticalPartition &&
+        evidence.priorityControlPlanePartition;
+      const decisions = Object.freeze([{
+        kind:
+          JOIN_READINESS_PRIORITY_OPERATION_EXCLUSION_KIND
+            .REMOTE_ACTIVE_PEER_RECOVERY,
+        matched:
+          priorityControlPlaneBase &&
+          evidence.sourceActive &&
+          evidence.targetActive &&
+          evidence.sourceIsSelf === false &&
+          evidence.targetIsSelf === false,
+      }, {
+        kind:
+          JOIN_READINESS_PRIORITY_OPERATION_EXCLUSION_KIND
+            .SELF_SOURCE_ACTIVE_TARGET_REPLACEMENT,
+        matched:
+          priorityControlPlaneBase &&
+          evidence.isReplaceOperation &&
+          evidence.sourceIsSelf === true &&
+          evidence.targetIsSelf === false &&
+          evidence.targetActive,
+      }]);
+      const matchedDecision =
+        decisions.find((decision) => decision.matched === true);
+      return Object.freeze({
+        kind: matchedDecision ?
+          matchedDecision.kind :
+          JOIN_READINESS_PRIORITY_OPERATION_EXCLUSION_KIND.NONE,
+        evidence,
+      });
+    },
+
+    /**
+     * @param {Object} normalizedOperation
+     * @param {Set<string>} activeNodeIds
+     * @param {Set<string>} discoveryCriticalPartitionIds
+     * @return {boolean}
+     */
+    isRemotePriorityControlPlaneRecoveryOperation(
+      normalizedOperation,
+      activeNodeIds,
+      discoveryCriticalPartitionIds,
+    ) {
+      return this.classifyPriorityControlPlaneJoinOperationExclusion(
+        normalizedOperation,
+        activeNodeIds,
+        discoveryCriticalPartitionIds,
+      ).kind ===
+          JOIN_READINESS_PRIORITY_OPERATION_EXCLUSION_KIND
+            .REMOTE_ACTIVE_PEER_RECOVERY;
     },
 
     /**
@@ -330,41 +475,6 @@ function createJoinReadinessEvaluatorTailMethods(options = {}) {
         completedAt: normalizedOperation.completedAt,
         ageMs: normalizedOperation.ageMs,
       };
-    },
-
-    /**
-     * @param {Object} normalizedOperation
-     * @param {Set<string>} activeNodeIds
-     * @param {Set<string>} discoveryCriticalPartitionIds
-     * @return {boolean}
-     */
-    isRemotePriorityControlPlaneRecoveryOperation(
-      normalizedOperation,
-      activeNodeIds,
-      discoveryCriticalPartitionIds,
-    ) {
-      if (
-        !normalizedOperation ||
-        normalizedOperation.entityType !== 'partition'
-      ) {
-        return false;
-      }
-      const partitionId = normalizedOperation.partitionGroupId;
-      if (
-        !partitionId ||
-        !discoveryCriticalPartitionIds.has(partitionId) ||
-        !isPriorityControlPlanePartition({partitionId})
-      ) {
-        return false;
-      }
-      if (
-        normalizedOperation.sourceNodeId === this.nodeId ||
-        normalizedOperation.targetNodeId === this.nodeId
-      ) {
-        return false;
-      }
-      return activeNodeIds.has(normalizedOperation.sourceNodeId) &&
-        activeNodeIds.has(normalizedOperation.targetNodeId);
     },
 
     /**
@@ -591,6 +701,23 @@ function createJoinReadinessEvaluatorTailMethods(options = {}) {
           ) ?
             source.excludedRemotePriorityControlPlaneOperationDetails :
             [],
+        excludedSelfSourcePriorityControlPlaneCount:
+          Number.isFinite(
+            source.excludedSelfSourcePriorityControlPlaneCount,
+          ) ?
+            Math.max(
+              NUM.ZERO,
+              Math.floor(
+                source.excludedSelfSourcePriorityControlPlaneCount,
+              ),
+            ) :
+            NUM.ZERO,
+        excludedSelfSourcePriorityControlPlaneOperationDetails:
+          Array.isArray(
+            source.excludedSelfSourcePriorityControlPlaneOperationDetails,
+          ) ?
+            source.excludedSelfSourcePriorityControlPlaneOperationDetails :
+            [],
         missingNodeEndpointNodeIds:
           Array.isArray(source.missingNodeEndpointNodeIds) ?
             source.missingNodeEndpointNodeIds.filter((value) =>
@@ -758,6 +885,10 @@ function createJoinReadinessEvaluatorTailMethods(options = {}) {
             evaluation.excludedRemotePriorityControlPlaneCount,
           excludedRemotePriorityControlPlaneOperationDetails:
             evaluation.excludedRemotePriorityControlPlaneOperationDetails,
+          excludedSelfSourcePriorityControlPlaneCount:
+            evaluation.excludedSelfSourcePriorityControlPlaneCount,
+          excludedSelfSourcePriorityControlPlaneOperationDetails:
+            evaluation.excludedSelfSourcePriorityControlPlaneOperationDetails,
           missingNodeEndpointNodeIds:
             evaluation.missingNodeEndpointNodeIds,
           missingPostgresWireNodeIds:

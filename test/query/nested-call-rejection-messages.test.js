@@ -11,7 +11,7 @@
 
 import {describe, it} from 'node:test';
 import assert from 'node:assert/strict';
-import {executeStage, buildStageContext} from
+import {executeStage} from
   '../../src/query/call-stage.js';
 import {classifyNestedCall} from
   '../../src/query/nested-call-classifier.js';

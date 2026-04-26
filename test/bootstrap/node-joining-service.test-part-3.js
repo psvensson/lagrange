@@ -8,31 +8,20 @@ import {
   NodeJoiningService,
   JoiningPhase,
 } from '../../src/bootstrap/node-joining-service.js';
-import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
 import {
   MESSAGE_GROUP_ASSIGNMENT_STRATEGY as AssignmentStrategy,
 } from '../../src/bootstrap/message-group-assignment.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {NodeService} from '../../src/node/node-service.js';
-import {PartitionService} from '../../src/partition/partition-service.js';
-import {CACHE_HYDRATION_TABLES} from '../../src/cache/cache-constants.js';
-import {SystemTableCache} from '../../src/cache/system-table-cache.js';
-import {ReplicaHandlerSetup} from '../../src/bootstrap/shared/replica-handler-setup.js';
-import {ControlPlaneSetup} from '../../src/bootstrap/shared/control-plane-setup.js';
 import {
-  PARTITION_SERVICE_ACTIVATION_ERROR,
 } from '../../src/bootstrap/shared/partition-service-activation.js';
 import {
   ControlPlaneKernelIngress,
 } from '../../src/control-plane/control-plane-kernel-ingress.js';
 import {
-  JOIN_CHECKPOINT,
-  JoinSessionStore,
 } from '../../src/bootstrap/join-session-store.js';
 import {
-  JOINING_ERROR_MSG,
-  JOINING_LOG_MSG,
 } from '../../src/bootstrap/node-joining-constants.js';
 import {
   MEMBERSHIP_LIFECYCLE_INTENT,
@@ -51,40 +40,22 @@ import {
   QUERY_ROUTING_DIAGNOSTIC_REASON,
 } from '../../src/query/query-constants.js';
 import {
-  JOIN_PLAN_SEGMENT,
 } from '../../src/bootstrap/bootstrap-constants.js';
 import {STARTUP_JOIN_MODE} from '../../src/bootstrap/rejoin-hints-constants.js';
 import {
-  JOIN_PROMOTION_STATE,
-  JOIN_REJOIN_PROMOTION_RESTORE_STATE,
 } from '../../src/bootstrap/join-promotion-state-owner.js';
-import {WORK_CLASS} from '../../src/runtime/work-class-scheduler.js';
-import {ENTRYPOINT_DEFAULT} from '../../src/constants/entrypoint.js';
 import {
   CDC_OPERATION,
-  COLUMN,
   ENDPOINT_STATUS,
-  SERVICE_TYPE,
-  SERVICE_STATUS,
   STATE,
   TABLES,
   TRANSPORT_TYPE,
 } from '../../src/constants/index.js';
 import {CDC_EVENT} from '../../src/cdc/cdc-constants.js';
-import {META_SERVICE_ID} from '../../src/constants/wasm-meta.js';
-import {URL} from 'url';
 import {EventEmitter} from 'events';
 
-const DEFAULT_SEED_WS_ADDRESS =
-  `ws://localhost:${8080 + ENTRYPOINT_DEFAULT.WS_PORT_OFFSET}`;
 const NODES_ROUTING_PARTITION_ID = 'nodes-p1';
 const REMOTE_CANONICAL_LEADER_NODE_ID = 'seed-node-1';
-const REPORTER_FORWARD_NODE_ID = 'joiner-reporter-publication-mode';
-const REPORTER_FORWARD_NODE_ADDRESS = 'ws://localhost:19103';
-const REPORTER_FORWARD_SEED_ADDRESS = 'http://localhost:8080';
-const REPORTER_FORWARD_HEARTBEAT_AT = 4242;
-const REPORTER_FORWARD_READY_LEASE_AT = 8484;
-const REPORTER_FORWARD_TARGET_ADDRESS = 'seed-node-1/message-group/mg-1-r3';
 
 // Initialize configuration and logging for tests
 function initializeTestEnvironment() {
@@ -923,7 +894,7 @@ test('NodeJoiningService - ready state update triggers mesh reconciliation witho
     const callOrder = [];
     service.controlPlaneKernelIngress.resolveNodeStateUpdateTargetCandidates =
       () => [
-      'seed-node/message-group/mg-1-r1',
+        'seed-node/message-group/mg-1-r1',
       ];
     service.messageRouter = {
       nodeConnections: new Map([
@@ -1055,7 +1026,7 @@ test('NodeJoiningService - steady ready heartbeats skip redundant mesh reconcili
     const callOrder = [];
     service.controlPlaneKernelIngress.resolveNodeStateUpdateTargetCandidates =
       () => [
-      'seed-node/message-group/mg-1-r1',
+        'seed-node/message-group/mg-1-r1',
       ];
     service.messageRouter = {
       nodeConnections: new Map([
@@ -1123,7 +1094,7 @@ test('NodeJoiningService - steady ready heartbeats ignore stopped peers in mesh 
     const callOrder = [];
     service.controlPlaneKernelIngress.resolveNodeStateUpdateTargetCandidates =
       () => [
-      'seed-node/message-group/mg-1-r1',
+        'seed-node/message-group/mg-1-r1',
       ];
     service.messageRouter = {
       nodeConnections: new Map([

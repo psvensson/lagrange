@@ -1,87 +1,25 @@
-import { REBALANCE_COORDINATOR_SHARED } from "./rebalance-coordinator-shared.js";
-import { RebalanceCoordinatorSegment2 } from "./rebalance-coordinator-segment-2.js";
+import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
+import {RebalanceCoordinatorSegment2} from './rebalance-coordinator-segment-2.js';
 
 const {
   CONCURRENT_CREATE_BUDGET_SCOPE,
-  CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
-  CONTROL_PLANE_QUERY_OPTIONS,
-  CONTROL_PLANE_READINESS_DIMENSION,
-  CONTROL_PLANE_WORKLOAD_CLASS,
-  COORDINATOR_OWNED_OPERATION_TYPES_SQL_CLAUSE,
-  ConfigurationManager,
   ControlPlaneReadinessService,
-  DEFAULT_AMPLIFICATION_FACTOR,
-  DEFAULT_PRIORITY_RECOVERY_ACTIVITY_STALE_GRACE_MS,
-  DurableWorkflowCoordinator,
-  EventEmitter,
-  ExecutorOutcomeEmitter,
-  INCOMPLETE_OPERATION_EMPTY_QUERY_BACKOFF_MS,
-  INCOMPLETE_OPERATION_OBSERVATION_STATE,
-  LoggingService,
   NUM,
   OPERATION_METADATA_KEY,
-  OUTCOME_EVENT_NAME,
-  OperationLane,
   OperationType,
-  OperationWorkflowOwner,
-  PRESSURE_GOVERNOR_ACTION,
-  PRESSURE_WORK_CLASS,
-  PRIORITY_RECENT_INTENT_TTL_MS,
-  PressureGovernor,
-  ProvisioningAdmissionPolicy,
   REBALANCER_CONCURRENT_BUDGET_READ_MODE,
-  REBALANCER_CONFIG_KEY,
-  REBALANCER_DEFAULT,
   REBALANCER_SKIP_REASON,
-  REBALANCER_SUBSYSTEM,
-  REBALANCE_COORDINATOR_ERROR_MSG,
   REBALANCE_COORDINATOR_EVENT,
   REBALANCE_COORDINATOR_LOG_MSG,
-  RECENT_INTENT_TTL_MS,
-  RECENT_OPERATION_INTENT_VISIBILITY_STATE,
-  REPLICA_ID_SEPARATOR,
-  REPLICA_ID_START_INDEX,
-  REPLICA_OPERATION_VISIBILITY_READ_MODE,
-  RESERVATION_REASON,
-  RESERVATION_STATUS,
   ReplicaOperationField,
-  ReplicaOperationRepository,
   SERVICE_TYPE,
-  SQL,
-  STORAGE_ADMISSION_DECISION_TYPE,
-  STORAGE_CAPACITY_CONFIG_KEY,
-  STORAGE_CAPACITY_DEFAULT,
-  STORAGE_RESERVATION_READ_QUERY_OPTIONS,
   STRICT_CREATE_DEDUPE_REPOSITORY_QUERY_OPTIONS,
-  SYSTEM_TABLE_NAME,
-  StartupRecoveryCoordinator,
-  TIMEOUT_BUDGET_CLASSIFICATION,
-  TIMEOUT_BUDGET_DEFAULT,
-  TIME_MS,
-  TOPOLOGY_GUARD_DEFAULT_PARTITION_TARGET_REPLICA_COUNT,
-  TOPOLOGY_GUARD_ERROR_MSG,
-  TOPOLOGY_GUARD_REASON,
-  TOPOLOGY_GUARD_STATE,
-  UNIFIED_SERVICE_TYPE,
   WORKFLOW_STEP,
-  assertCritical,
-  buildControlPlaneQueryOptions,
-  buildControlPlaneWorkloadProfile,
   buildPriorityRecoveryOperationAssessment,
-  buildPriorityRecoveryOperationContextFromRecord,
-  buildPriorityRecoveryPartitionAssessment,
   buildReplicatedServiceBootstrapTopology,
-  buildTimeoutClassification,
-  createChildTimeoutBudget,
-  createControlPlaneRuntimeBundle,
   createOperationRecord,
-  createTopLevelOperationBudget,
-  getControlPlaneErrorCode,
-  getControlPlaneRetryAfterMs,
   isPriorityRecoveryEmergencyPartition,
   isPriorityControlPlanePartitionTable,
-  isRetryableControlPlaneError,
-  readAuthoritativeControlPlaneRows,
   resolvePriorityRecoveryActiveNodeCohort,
   resolveTrackedPriorityRecoveryAdmissionPlan,
   shouldPriorityRecoveryOperationBlockPlanning,
@@ -92,6 +30,34 @@ const ENTITY_SERIALIZED_ADD_LIKE_OPERATION_TYPES = Object.freeze([
   OperationType.ADD,
   OperationType.REPLACE,
 ]);
+const PRIORITY_CONTROL_PLANE_REMOVE_LANE_WORKFLOW_STEPS_BY_TYPE =
+  Object.freeze(
+    new Map([
+      [
+        OperationType.REMOVE,
+        new Set([
+          WORKFLOW_STEP.PENDING,
+          WORKFLOW_STEP.SENDING,
+          WORKFLOW_STEP.STOPPING,
+        ]),
+      ],
+      [
+        OperationType.REPLACE,
+        new Set([
+          WORKFLOW_STEP.PENDING,
+          WORKFLOW_STEP.SENDING,
+          WORKFLOW_STEP.CREATING,
+          WORKFLOW_STEP.SYNCING,
+          WORKFLOW_STEP.ACTIVE,
+          WORKFLOW_STEP.STOPPING,
+        ]),
+      ],
+    ]),
+  );
+const PRIORITY_CONTROL_PLANE_REMOVE_LANE_CONFLICT_MESSAGE_PREFIX =
+  'Priority control-plane partition ';
+const PRIORITY_CONTROL_PLANE_REMOVE_LANE_CONFLICT_MESSAGE_SUFFIX =
+  ' already has a remove-like operation in flight';
 
 class RebalanceCoordinatorSegment3 extends RebalanceCoordinatorSegment2 {
   assertMembershipPublicationEpoch(move) {
@@ -135,7 +101,7 @@ class RebalanceCoordinatorSegment3 extends RebalanceCoordinatorSegment2 {
    */
   async createOperation(move) {
     if (this.isShuttingDown || !this.initialized) {
-      throw new Error("RebalanceCoordinator is shutting down");
+      throw new Error('RebalanceCoordinator is shutting down');
     }
 
     this.assertLocalControlPlaneMutationReady(move);
@@ -222,12 +188,12 @@ class RebalanceCoordinatorSegment3 extends RebalanceCoordinatorSegment2 {
     const entityType = move.entityType || SERVICE_TYPE.PARTITION;
     const entityId = move.entityId || move.partitionId;
     const partitionId = move.partitionId || entityId;
-    const normalizedMove = normalizedMoveType
-      ? {
-          ...move,
-          type: normalizedMoveType,
-        }
-      : move;
+    const normalizedMove = normalizedMoveType ?
+      {
+        ...move,
+        type: normalizedMoveType,
+      } :
+      move;
     const dedupeKey = this.buildOperationIntentKey(move, entityType, entityId);
     const criticalAddLikeIntentKey = this.buildCriticalAddLikeIntentKey(
       move,
@@ -237,9 +203,9 @@ class RebalanceCoordinatorSegment3 extends RebalanceCoordinatorSegment2 {
       entityId,
     );
     const sourceNodeId =
-      normalizedMoveType === OperationType.REPLACE
-        ? move.sourceNodeId || this.nodeId
-        : this.nodeId;
+      normalizedMoveType === OperationType.REPLACE ?
+        move.sourceNodeId || this.nodeId :
+        this.nodeId;
 
     // Deduplication: check for existing in-flight operation
     const existing = await this.queryExistingInFlightOperation(
@@ -285,6 +251,13 @@ class RebalanceCoordinatorSegment3 extends RebalanceCoordinatorSegment2 {
     }
 
     await this.ensureNoConflictingInFlightReplaceForRemove({
+      move,
+      normalizedMoveType,
+      entityType,
+      entityId,
+      partitionId,
+    });
+    await this.ensurePriorityControlPlaneRemoveLaneAvailable({
       move,
       normalizedMoveType,
       entityType,
@@ -446,9 +419,9 @@ class RebalanceCoordinatorSegment3 extends RebalanceCoordinatorSegment2 {
 
     const operationId = uuidv4();
     const sourceReplicaId =
-      normalizedMoveType === OperationType.REPLACE
-        ? move.replicaId || null
-        : null;
+      normalizedMoveType === OperationType.REPLACE ?
+        move.replicaId || null :
+        null;
     let operationReplicaId = move.replicaId || null;
 
     if (move?.skipProvisioningAdmissionRecheck !== true) {
@@ -498,10 +471,10 @@ class RebalanceCoordinatorSegment3 extends RebalanceCoordinatorSegment2 {
       entityId,
       excludeReplicaIds:
         normalizedMoveType === OperationType.REPLACE &&
-        typeof sourceReplicaId === "string" &&
-        sourceReplicaId.length > NUM.ZERO
-          ? [sourceReplicaId]
-          : [],
+        typeof sourceReplicaId === 'string' &&
+        sourceReplicaId.length > NUM.ZERO ?
+          [sourceReplicaId] :
+          [],
       partitionId,
       targetNodeId: move.nodeId,
       targetReplicaId: operationReplicaId,
@@ -577,7 +550,7 @@ class RebalanceCoordinatorSegment3 extends RebalanceCoordinatorSegment2 {
     await this.createReservationForOperation(operation);
 
     if (shouldEmitOperationCreated) {
-      this.emit(REBALANCE_COORDINATOR_EVENT.OPERATION_CREATED, { operation });
+      this.emit(REBALANCE_COORDINATOR_EVENT.OPERATION_CREATED, {operation});
       await this.armCoordinatorCreatedOperationProgress(operation);
     }
 
@@ -597,7 +570,7 @@ class RebalanceCoordinatorSegment3 extends RebalanceCoordinatorSegment2 {
   async armCoordinatorCreatedOperationProgress(operation) {
     if (
       !operation?.operationId ||
-      typeof this.workflowOwner?.armCoordinatorCreatedOperation !== "function"
+      typeof this.workflowOwner?.armCoordinatorCreatedOperation !== 'function'
     ) {
       return false;
     }
@@ -605,7 +578,7 @@ class RebalanceCoordinatorSegment3 extends RebalanceCoordinatorSegment2 {
       return await this.workflowOwner.armCoordinatorCreatedOperation(operation);
     } catch (error) {
       this.logger.warn(
-        "Failed to prime coordinator-created operation progress",
+        'Failed to prime coordinator-created operation progress',
         {
           operationId: operation.operationId,
           partitionId: operation.partitionId || null,
@@ -664,9 +637,9 @@ class RebalanceCoordinatorSegment3 extends RebalanceCoordinatorSegment2 {
         context?.entityType || SERVICE_TYPE.PARTITION,
         context?.entityId || context?.partitionId,
       );
-    const existingOperations = Array.isArray(operationObservation?.operations)
-      ? operationObservation.operations
-      : [];
+    const existingOperations = Array.isArray(operationObservation?.operations) ?
+      operationObservation.operations :
+      [];
     let conflictingOperation = null;
     for (const operation of existingOperations) {
       if (!operation || this.isOperationTerminal(operation)) {
@@ -706,11 +679,45 @@ class RebalanceCoordinatorSegment3 extends RebalanceCoordinatorSegment2 {
 
     throw this.createConcurrentOperationBudgetError(normalizedMoveType, 1, {
       message:
-        "Critical partition " +
+        'Critical partition ' +
         `${context.partitionId} already has an add-like operation ` +
-        "in flight",
+        'in flight',
       conflictingOperationId: conflictingOperation.operationId,
     });
+  }
+
+  /**
+   * @param {Array<Object>} operations
+   * @return {Object|null}
+   * @private
+   */
+  findEntityAddLikeConflictingOperation(operations = []) {
+    return (
+      (Array.isArray(operations) ? operations : []).find((operation) => {
+        if (
+          !operation ||
+          this.isOperationTerminal(operation) ||
+          operation.type !== OperationType.REPLACE
+        ) {
+          return false;
+        }
+        return this.isReplaceRemoveDispatchPhase(operation);
+      }) || null
+    );
+  }
+
+  /**
+   * @param {Object} context
+   * @return {Array<Object>}
+   * @private
+   */
+  getCacheVisibleEntityOperations(context) {
+    return this.getEntityInFlightOperationRows({
+      entityType: context?.entityType || SERVICE_TYPE.PARTITION,
+      entityId: context?.entityId || context?.partitionId,
+    })
+      .map((operationRow) => this.rowToOperation(operationRow))
+      .filter(Boolean);
   }
 
   /**
@@ -736,19 +743,16 @@ class RebalanceCoordinatorSegment3 extends RebalanceCoordinatorSegment2 {
         context?.entityType || SERVICE_TYPE.PARTITION,
         context?.entityId || context?.partitionId,
       );
-    const operations = Array.isArray(operationObservation?.operations)
-      ? operationObservation.operations
-      : [];
-    const conflictingOperation = operations.find((operation) => {
-      if (
-        !operation ||
-        this.isOperationTerminal(operation) ||
-        operation.type !== OperationType.REPLACE
-      ) {
-        return false;
-      }
-      return this.isReplaceRemoveDispatchPhase(operation);
-    });
+    const operations = Array.isArray(operationObservation?.operations) ?
+      operationObservation.operations :
+      [];
+    let conflictingOperation =
+      this.findEntityAddLikeConflictingOperation(operations);
+    if (!conflictingOperation && operationObservation?.deferredOutcome) {
+      conflictingOperation = this.findEntityAddLikeConflictingOperation(
+        this.getCacheVisibleEntityOperations(context),
+      );
+    }
     if (!conflictingOperation && operationObservation?.deferredOutcome) {
       if (
         this.shouldAllowPriorityRecoveryDeferredObservation(
@@ -798,19 +802,19 @@ class RebalanceCoordinatorSegment3 extends RebalanceCoordinatorSegment2 {
     }
     if (
       typeof this.workflowOwner
-        ?.getPriorityRecoveryDecisionSnapshotForOperation === "function"
+        ?.getPriorityRecoveryDecisionSnapshotForOperation === 'function'
     ) {
       const decisionSnapshot =
         await this.workflowOwner.getPriorityRecoveryDecisionSnapshotForOperation(
           operation,
         );
-      if (decisionSnapshot && typeof decisionSnapshot === "object") {
+      if (decisionSnapshot && typeof decisionSnapshot === 'object') {
         return !shouldPriorityRecoveryOperationBlockPlanning(decisionSnapshot);
       }
     }
     if (
       typeof this.workflowOwner
-        ?.getPriorityRecoveryPlanningSnapshotForOperation !== "function"
+        ?.getPriorityRecoveryPlanningSnapshotForOperation !== 'function'
     ) {
       return false;
     }
@@ -818,7 +822,7 @@ class RebalanceCoordinatorSegment3 extends RebalanceCoordinatorSegment2 {
       await this.workflowOwner.getPriorityRecoveryPlanningSnapshotForOperation(
         operation,
       );
-    if (!planningSnapshot || typeof planningSnapshot !== "object") {
+    if (!planningSnapshot || typeof planningSnapshot !== 'object') {
       return false;
     }
     const assessment = buildPriorityRecoveryOperationAssessment({
@@ -846,7 +850,7 @@ class RebalanceCoordinatorSegment3 extends RebalanceCoordinatorSegment2 {
     if (context?.normalizedMoveType !== OperationType.REMOVE) {
       return;
     }
-    const replicaId = String(context?.move?.replicaId || "").trim();
+    const replicaId = String(context?.move?.replicaId || '').trim();
     if (replicaId.length === NUM.ZERO) {
       return;
     }
@@ -856,9 +860,9 @@ class RebalanceCoordinatorSegment3 extends RebalanceCoordinatorSegment2 {
         context?.entityType || SERVICE_TYPE.PARTITION,
         context?.entityId || context?.partitionId,
       );
-    const operations = Array.isArray(operationObservation?.operations)
-      ? operationObservation.operations
-      : [];
+    const operations = Array.isArray(operationObservation?.operations) ?
+      operationObservation.operations :
+      [];
     const conflictingOperation = operations.find((operation) => {
       if (
         !operation ||
@@ -906,6 +910,123 @@ class RebalanceCoordinatorSegment3 extends RebalanceCoordinatorSegment2 {
       replicaId,
       conflictingOperation,
     );
+  }
+
+  /**
+   * Priority control-plane partitions cannot safely trim a second voter while
+   * any earlier remove-like lifecycle is unresolved for that same partition.
+   * @param {Object} operation
+   * @return {boolean}
+   * @private
+   */
+  isPriorityControlPlaneRemoveLaneOperation(operation) {
+    if (!operation || this.isOperationTerminal(operation)) {
+      return false;
+    }
+    const workflowSteps =
+      PRIORITY_CONTROL_PLANE_REMOVE_LANE_WORKFLOW_STEPS_BY_TYPE.get(
+        operation.type,
+      );
+    return workflowSteps?.has(operation.workflowStep) === true;
+  }
+
+  /**
+   * @param {Array<Object>} operations
+   * @param {Object} context
+   * @return {Object|null}
+   * @private
+   */
+  findPriorityControlPlaneRemoveLaneConflict(operations = [], context = {}) {
+    const currentOperationId = String(
+      context?.move?.operationId || '',
+    ).trim();
+    return (
+      (Array.isArray(operations) ? operations : []).find((operation) => {
+        if (operation?.operationId === currentOperationId) {
+          return false;
+        }
+        return this.isPriorityControlPlaneRemoveLaneOperation(operation);
+      }) || null
+    );
+  }
+
+  /**
+   * Serialize priority control-plane trim with existing remove-like lifecycles.
+   *
+   * @param {Object} context
+   * @return {Promise<void>}
+   * @private
+   */
+  async ensurePriorityControlPlaneRemoveLaneAvailable(context) {
+    const normalizedMoveType = context?.normalizedMoveType;
+    if (normalizedMoveType !== OperationType.REMOVE) {
+      return;
+    }
+    if (!this.isPriorityControlPlanePartition(context?.partitionId)) {
+      return;
+    }
+
+    const operationObservation =
+      await this.getEntityAuthoritativeOperationObservation(
+        context?.entityType || SERVICE_TYPE.PARTITION,
+        context?.entityId || context?.partitionId,
+      );
+    const operations = Array.isArray(operationObservation?.operations) ?
+      operationObservation.operations :
+      [];
+    let conflictingOperation =
+      this.findPriorityControlPlaneRemoveLaneConflict(operations, context);
+    if (!conflictingOperation && operationObservation?.deferredOutcome) {
+      conflictingOperation =
+        this.findPriorityControlPlaneRemoveLaneConflict(
+          this.getCacheVisibleEntityOperations(context),
+          context,
+        );
+    }
+    if (!conflictingOperation && operationObservation?.deferredOutcome) {
+      if (
+        this.shouldAllowPriorityRecoveryDeferredObservation(
+          context?.partitionId,
+          operationObservation,
+        )
+      ) {
+        return;
+      }
+      throw this.createDeferredOperationVisibilityError(
+        normalizedMoveType,
+        operationObservation,
+        {
+          partitionId: context?.partitionId || null,
+          entityType: context?.entityType || SERVICE_TYPE.PARTITION,
+          entityId: context?.entityId || context?.partitionId || null,
+          replicaId: context?.move?.replicaId || null,
+        },
+      );
+    }
+    if (!conflictingOperation) {
+      return;
+    }
+
+    throw this.createConcurrentOperationBudgetError(
+      normalizedMoveType,
+      NUM.ONE,
+      {
+        message:
+          PRIORITY_CONTROL_PLANE_REMOVE_LANE_CONFLICT_MESSAGE_PREFIX +
+          String(context.partitionId) +
+          PRIORITY_CONTROL_PLANE_REMOVE_LANE_CONFLICT_MESSAGE_SUFFIX,
+        conflictingOperationId: conflictingOperation.operationId,
+      },
+    );
+  }
+
+  /**
+   * @param {Object} context
+   * @return {Promise<void>}
+   * @private
+   */
+  async ensureCriticalPartitionRemoveLaneAvailable(context) {
+    return this.ensurePriorityControlPlaneRemoveLaneAvailable(context);
   }
 
   /**
@@ -988,7 +1109,7 @@ class RebalanceCoordinatorSegment3 extends RebalanceCoordinatorSegment2 {
     ) {
       return false;
     }
-    const partitionId = String(options.partitionId || "").trim();
+    const partitionId = String(options.partitionId || '').trim();
     if (partitionId.length === NUM.ZERO) {
       return false;
     }
@@ -1018,13 +1139,13 @@ class RebalanceCoordinatorSegment3 extends RebalanceCoordinatorSegment2 {
     ) {
       return REBALANCER_CONCURRENT_BUDGET_READ_MODE.CACHE_ONLY;
     }
-    const partitionId = String(options.partitionId || "").trim();
+    const partitionId = String(options.partitionId || '').trim();
     if (partitionId.length === NUM.ZERO) {
       return REBALANCER_CONCURRENT_BUDGET_READ_MODE.CACHE_ONLY;
     }
-    return this.isPriorityControlPlanePartition(partitionId)
-      ? REBALANCER_CONCURRENT_BUDGET_READ_MODE.OWNER_RPC_RECHECK_ON_SATURATION
-      : REBALANCER_CONCURRENT_BUDGET_READ_MODE.CACHE_ONLY;
+    return this.isPriorityControlPlanePartition(partitionId) ?
+      REBALANCER_CONCURRENT_BUDGET_READ_MODE.OWNER_RPC_RECHECK_ON_SATURATION :
+      REBALANCER_CONCURRENT_BUDGET_READ_MODE.CACHE_ONLY;
   }
 
   /**
@@ -1043,7 +1164,7 @@ class RebalanceCoordinatorSegment3 extends RebalanceCoordinatorSegment2 {
     ) {
       return false;
     }
-    const partitionId = String(options.partitionId || "").trim();
+    const partitionId = String(options.partitionId || '').trim();
     if (partitionId.length === NUM.ZERO) {
       return false;
     }
@@ -1075,18 +1196,18 @@ class RebalanceCoordinatorSegment3 extends RebalanceCoordinatorSegment2 {
     let publicationRow = null;
     if (
       publicationService &&
-      typeof publicationService.getLatestClusterPublicationSync === "function"
+      typeof publicationService.getLatestClusterPublicationSync === 'function'
     ) {
       publicationRow = publicationService.getLatestClusterPublicationSync();
     } else if (
       publicationService &&
-      typeof publicationService.getLatestPublicationRowSync === "function"
+      typeof publicationService.getLatestPublicationRowSync === 'function'
     ) {
       publicationRow = publicationService.getLatestPublicationRowSync();
     }
-    return publicationRow && typeof publicationRow === "object"
-      ? publicationRow
-      : null;
+    return publicationRow && typeof publicationRow === 'object' ?
+      publicationRow :
+      null;
   }
 
   /**
@@ -1143,7 +1264,7 @@ class RebalanceCoordinatorSegment3 extends RebalanceCoordinatorSegment2 {
   getReservedPriorityRecoveryAddSlots(options = {}) {
     return this.getPriorityRecoveryAdmissionPlan().getReservedNonPrioritySlots(
       options.partitionId,
-      "add",
+      'add',
     );
   }
 
@@ -1165,8 +1286,9 @@ class RebalanceCoordinatorSegment3 extends RebalanceCoordinatorSegment2 {
   /**
    * Resolve the effective priority-lane add budget.
    * During active recovery, emergency transport partitions may use one extra
-   * slot above the ordinary priority limit, while ordinary priority tables
-   * preserve that slot instead of consuming it first.
+   * bounded emergency-owner slots above the ordinary priority limit, while
+   * ordinary priority tables preserve those slots instead of consuming them
+   * first.
    *
    * @param {Object} [options={}]
    * @return {number}
@@ -1188,4 +1310,4 @@ class RebalanceCoordinatorSegment3 extends RebalanceCoordinatorSegment2 {
    */
 }
 
-export { RebalanceCoordinatorSegment3 };
+export {RebalanceCoordinatorSegment3};

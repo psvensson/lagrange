@@ -474,8 +474,12 @@ describe('node-join-under-load scenario', () => {
             return {rows: []};
           },
         },
-        {id: 'peer-1', async queryWithTimeout() { return {rows: []}; }},
-        {id: 'peer-2', async queryWithTimeout() { return {rows: []}; }},
+        {id: 'peer-1', async queryWithTimeout() {
+          return {rows: []};
+        }},
+        {id: 'peer-2', async queryWithTimeout() {
+          return {rows: []};
+        }},
       ];
 
       const cluster = {
@@ -541,10 +545,18 @@ describe('node-join-under-load scenario', () => {
             return {rows: []};
           },
         },
-        {id: 'peer-1', async queryWithTimeout() { return {rows: []}; }},
-        {id: 'peer-2', async queryWithTimeout() { return {rows: []}; }},
-        {id: 'peer-3', async queryWithTimeout() { return {rows: []}; }},
-        {id: 'peer-4', async queryWithTimeout() { return {rows: []}; }},
+        {id: 'peer-1', async queryWithTimeout() {
+          return {rows: []};
+        }},
+        {id: 'peer-2', async queryWithTimeout() {
+          return {rows: []};
+        }},
+        {id: 'peer-3', async queryWithTimeout() {
+          return {rows: []};
+        }},
+        {id: 'peer-4', async queryWithTimeout() {
+          return {rows: []};
+        }},
       ];
 
       const cluster = {
@@ -608,10 +620,18 @@ describe('node-join-under-load scenario', () => {
           return {rows: []};
         },
       },
-      {id: 'peer-1', async queryWithTimeout() { return {rows: []}; }},
-      {id: 'peer-2', async queryWithTimeout() { return {rows: []}; }},
-      {id: 'peer-3', async queryWithTimeout() { return {rows: []}; }},
-      {id: 'peer-4', async queryWithTimeout() { return {rows: []}; }},
+      {id: 'peer-1', async queryWithTimeout() {
+        return {rows: []};
+      }},
+      {id: 'peer-2', async queryWithTimeout() {
+        return {rows: []};
+      }},
+      {id: 'peer-3', async queryWithTimeout() {
+        return {rows: []};
+      }},
+      {id: 'peer-4', async queryWithTimeout() {
+        return {rows: []};
+      }},
     ];
 
     const cluster = {
@@ -819,6 +839,90 @@ describe('node-join-under-load scenario', () => {
 
     assert.equal(result.newNodeId, 'joiner-3');
     assert.equal(result.loadMetrics.undispatchedOperations, 7);
+  });
+
+  it('allows admission-dominant under-dispatch within the integer dispatch tolerance', async () => {
+    const cluster = {
+      startLoad: () => ({
+        waitComplete: async () => ({
+          total: 8,
+          success: 8,
+          failed: 0,
+          errors: 0,
+          attemptErrors: 18,
+          nonAdmissionAttemptErrors: 0,
+          admissionSignals: 18,
+          targetOperations: 450,
+          dispatchedOperations: 20,
+          undispatchedOperations: 430,
+          queueDelay: {p95: 20},
+          waitReasons: {
+            nodeAdmissionBlocked: 12078,
+            retryableControlPlanePressure: 18,
+            timeoutWaits: 0,
+          },
+        }),
+      }),
+      addNode: async () => ({id: 'joiner-3'}),
+      nodes: () => [{id: 'seed'}, {id: 'joiner-1'}, {id: 'joiner-2'}, {id: 'joiner-3'}],
+      waitForConvergence: async () => ({
+        settledAfterMs: 1,
+      }),
+      waitForConsistencyConvergence: async () => {},
+    };
+
+    const result = await run(cluster, {
+      preJoinSettleMs: 0,
+    });
+
+    assert.equal(result.newNodeId, 'joiner-3');
+    assert.equal(result.loadMetrics.dispatchedOperations, 20);
+  });
+
+  it('fails admission-dominant under-dispatch beyond the integer dispatch tolerance', async () => {
+    const cluster = {
+      startLoad: () => ({
+        waitComplete: async () => ({
+          total: 8,
+          success: 8,
+          failed: 0,
+          errors: 0,
+          attemptErrors: 18,
+          nonAdmissionAttemptErrors: 0,
+          admissionSignals: 18,
+          targetOperations: 450,
+          dispatchedOperations: 19,
+          undispatchedOperations: 431,
+          queueDelay: {p95: 20},
+          waitReasons: {
+            nodeAdmissionBlocked: 12078,
+            retryableControlPlanePressure: 18,
+            timeoutWaits: 0,
+          },
+        }),
+      }),
+      addNode: async () => ({id: 'joiner-3'}),
+      nodes: () => [{id: 'seed'}, {id: 'joiner-1'}, {id: 'joiner-2'}, {id: 'joiner-3'}],
+      waitForConvergence: async () => ({
+        settledAfterMs: 1,
+      }),
+      waitForConsistencyConvergence: async () => {},
+    };
+
+    await assert.rejects(async () => {
+      try {
+        await run(cluster, {
+          preJoinSettleMs: 0,
+        });
+      } catch (error) {
+        assert.match(error.message, /dispatch backlog/i);
+        assert.equal(
+          error.diagnostics?.partialResult?.dominantAssertion,
+          'dispatch_backlog',
+        );
+        throw error;
+      }
+    }, /dispatch backlog/i);
   });
 
   it('copies retained-object diagnostics from control snapshots into failures',

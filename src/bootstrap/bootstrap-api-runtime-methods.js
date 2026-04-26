@@ -251,9 +251,9 @@ function createBootstrapApiRuntimeMethods(options = {}) {
         .validateBootstrapRequest(nodeId, nodeAddress);
     },
 
-    async checkForConflicts(nodeId, nodeAddress) {
+    async checkForConflicts(nodeId, nodeAddress, options) {
       return this.bootstrapJoinAdmissionOwner
-        .checkForConflicts(nodeId, nodeAddress);
+        .checkForConflicts(nodeId, nodeAddress, options);
     },
 
     _isNodeDead(nodeRecord) {

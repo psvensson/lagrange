@@ -11,32 +11,23 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 import {
   ControlPlaneField,
   ControlPlaneMessageType,
-  CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE,
 } from '../../src/control-plane/control-plane-constants.js';
 import {
-  SYSTEM_TABLE_NAME,
 } from '../../src/bootstrap/system-table-schemas-constants.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {RECONCILE_REASON} from '../../src/workflow/reconcile-queue-constants.js';
 import {
-  NODE_STATE_UPDATE_RETRY_CLASS,
-  NODE_STATE_UPDATE_RETRY_POLICY,
 } from '../../src/control-plane/replica-dispatch-service-constants.js';
 import {
-  CONTROL_PLANE_WORKLOAD_CLASS,
 } from '../../src/control-plane/control-plane-workload-profile.js';
 import {
   MESSAGE_GROUP_CDC_INGRESS_ACTION,
 } from '../../src/message-group/message-group-forwarding-owner.js';
 import {
-  REPLICA_OPERATION_VISIBILITY_READ_MODE,
 } from '../../src/rebalancer/replica-operation-repository.js';
 import {
-  COLUMN,
-  NUM,
-  TYPEOF,
   SERVICE_STATUS,
   STATE,
   WORKFLOW_STEP,
@@ -134,11 +125,6 @@ function createService(options = {}) {
   return service;
 }
 
-const TEST_MEMBERSHIP_PUBLICATION_STATUS = Object.freeze({
-  ACK_PENDING: 'ACK_PENDING',
-  OPEN: 'OPEN',
-  PUBLISHED: 'PUBLISHED',
-});
 
 test('ReplicaDispatchService dispatches direct wake-up payload rows before ' +
   'cache visibility converges', async (t) => {

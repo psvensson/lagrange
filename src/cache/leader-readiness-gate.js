@@ -92,11 +92,11 @@ const getOwnerRecord = (cache, serviceType, entityId) => {
 };
 
 const findCanonicalLeaderService = (
-    services,
-    serviceType,
-    entityId,
-    leaderNodeId,
-    options = {},
+  services,
+  serviceType,
+  entityId,
+  leaderNodeId,
+  options = {},
 ) => {
   if (!leaderNodeId) {
     return null;
@@ -144,10 +144,10 @@ const findCanonicalLeaderService = (
 };
 
 const findObservableLeaderService = (
-    services,
-    serviceType,
-    entityId,
-    options = {},
+  services,
+  serviceType,
+  entityId,
+  options = {},
 ) => {
   const idColumn = getOwnerIdColumn(serviceType);
   const requireAddress = options.requireAddress === true;
@@ -162,10 +162,10 @@ const findObservableLeaderService = (
 };
 
 const resolveCanonicalLeaderService = (
-    cache,
-    serviceType,
-    entityId,
-    options = {},
+  cache,
+  serviceType,
+  entityId,
+  options = {},
 ) => {
   if (!cache || !serviceType || !entityId) {
     return {
@@ -360,9 +360,9 @@ const getMissingSystemServiceLeaders = (systemTableCache, options = {}) => {
 };
 
 const getBlockingSystemServiceLeaders = (
-    systemTableCache,
-    requiredTables = [],
-    options = {},
+  systemTableCache,
+  requiredTables = [],
+  options = {},
 ) => {
   const isTableWriteSatisfied =
     typeof options.isTableWriteSatisfied === TYPEOF.FUNCTION ?

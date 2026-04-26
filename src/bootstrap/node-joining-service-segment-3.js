@@ -1,5 +1,5 @@
-import { NODE_JOINING_SERVICE_SHARED } from "./node-joining-service-shared.js";
-import { NodeJoiningServiceSegment2 } from "./node-joining-service-segment-2.js";
+import {NODE_JOINING_SERVICE_SHARED} from './node-joining-service-shared.js';
+import {NodeJoiningServiceSegment2} from './node-joining-service-segment-2.js';
 
 const {
   COLUMN,
@@ -33,13 +33,13 @@ class NodeJoiningServiceSegment3 extends NodeJoiningServiceSegment2 {
       directOptions ||
       this.resolveJoinReplicaOptions(serviceId, UNIFIED_SERVICE_TYPE.PARTITION);
     if (this.partitionServices.has(options.replicaId)) {
-      return { status: SERVICE_LIFECYCLE_STATE.CREATED };
+      return {status: SERVICE_LIFECYCLE_STATE.CREATED};
     }
     if (options.createDelayMs > NUM.ZERO) {
       await this.sleep(options.createDelayMs);
     }
     await this.createJoinLocalPartitionService(options);
-    return { status: SERVICE_LIFECYCLE_STATE.CREATED };
+    return {status: SERVICE_LIFECYCLE_STATE.CREATED};
   }
   /**
    * Unified lifecycle start hook for join partition replicas.
@@ -91,24 +91,24 @@ class NodeJoiningServiceSegment3 extends NodeJoiningServiceSegment2 {
       this.resolveJoinReplicaOptions(serviceId, UNIFIED_SERVICE_TYPE.PARTITION);
     const partition = this.partitionServices.get(options.replicaId);
     if (!partition) {
-      return { status: SERVICE_LIFECYCLE_STATE.STOPPED };
+      return {status: SERVICE_LIFECYCLE_STATE.STOPPED};
     }
     if (typeof partition.shutdown === TYPEOF.FUNCTION) {
       await partition.shutdown();
     }
     const unifiedAddress =
-      typeof partition.getUnifiedAddress === TYPEOF.FUNCTION
-        ? partition.getUnifiedAddress()
-        : formatReplicatedServiceAddress(
-            SERVICE_TYPE.PARTITION,
-            this.nodeId,
-            options.replicaId,
-          );
+      typeof partition.getUnifiedAddress === TYPEOF.FUNCTION ?
+        partition.getUnifiedAddress() :
+        formatReplicatedServiceAddress(
+          SERVICE_TYPE.PARTITION,
+          this.nodeId,
+          options.replicaId,
+        );
     this.messageRouter?.unregister?.(unifiedAddress);
     this.partitionServices.delete(options.replicaId);
     this.replicaHandler?.localServices?.delete?.(options.replicaId);
     this.replicaHandler?.localReplicas?.delete?.(options.replicaId);
-    return { status: SERVICE_LIFECYCLE_STATE.STOPPED };
+    return {status: SERVICE_LIFECYCLE_STATE.STOPPED};
   }
   /**
    * Unified lifecycle start hook for join message-group replicas.
@@ -169,13 +169,13 @@ class NodeJoiningServiceSegment3 extends NodeJoiningServiceSegment2 {
    */
   resolveOperationalMessageGroupSelection(options = {}) {
     const requiredTables =
-      Array.isArray(options.requiredTables) && options.requiredTables.length > 0
-        ? options.requiredTables
-        : getControlPlaneMessageRequiredTables(
-            ControlPlaneMessageType.NODE_STATE_UPDATE,
-          );
+      Array.isArray(options.requiredTables) && options.requiredTables.length > 0 ?
+        options.requiredTables :
+        getControlPlaneMessageRequiredTables(
+          ControlPlaneMessageType.NODE_STATE_UPDATE,
+        );
     return this.messageGroupSelectionOwner.resolveOperationalMessageGroupSelection(
-      { ...options, requiredTables },
+      {...options, requiredTables},
     );
   }
   /**
@@ -198,13 +198,13 @@ class NodeJoiningServiceSegment3 extends NodeJoiningServiceSegment2 {
    */
   async resolveOperationalMessageGroupSelectionAsync(options = {}) {
     const requiredTables =
-      Array.isArray(options.requiredTables) && options.requiredTables.length > 0
-        ? options.requiredTables
-        : getControlPlaneMessageRequiredTables(
-            ControlPlaneMessageType.NODE_STATE_UPDATE,
-          );
+      Array.isArray(options.requiredTables) && options.requiredTables.length > 0 ?
+        options.requiredTables :
+        getControlPlaneMessageRequiredTables(
+          ControlPlaneMessageType.NODE_STATE_UPDATE,
+        );
     return this.messageGroupSelectionOwner.resolveOperationalMessageGroupSelectionAsync(
-      { ...options, requiredTables },
+      {...options, requiredTables},
     );
   }
   /**
@@ -239,9 +239,9 @@ class NodeJoiningServiceSegment3 extends NodeJoiningServiceSegment2 {
     options = {},
   ) {
     const selection = await this.resolveOperationalMessageGroupSelectionAsync({
-      requiredTables: Array.isArray(options.requiredTables)
-        ? options.requiredTables
-        : [],
+      requiredTables: Array.isArray(options.requiredTables) ?
+        options.requiredTables :
+        [],
       preferredService: preferredMessageGroupService,
       reuseCapturedIngress: true,
     });
@@ -308,7 +308,7 @@ class NodeJoiningServiceSegment3 extends NodeJoiningServiceSegment2 {
   async activateMessageGroupServiceRows() {
     return activateMessageGroupServiceRows({
       nodeId: this.nodeId,
-      activateReplica: async ({ groupId, replicaId, service }) => {
+      activateReplica: async ({groupId, replicaId, service}) => {
         await this.registerMessageGroupService(groupId, replicaId, service, {
           status: SERVICE_STATUS.ACTIVE,
         });
@@ -321,22 +321,22 @@ class NodeJoiningServiceSegment3 extends NodeJoiningServiceSegment2 {
   }
   async activateJoinPartitionServiceRows(replicaIds = null) {
     const partitionServices =
-      replicaIds == null
-        ? this.partitionServices
-        : new Map(
-            replicaIds
-              .map((replicaId) => [
-                replicaId,
-                this.partitionServices.get(replicaId),
-              ])
-              .filter(([, service]) => service != null),
-          );
+      replicaIds == null ?
+        this.partitionServices :
+        new Map(
+          replicaIds
+            .map((replicaId) => [
+              replicaId,
+              this.partitionServices.get(replicaId),
+            ])
+            .filter(([, service]) => service != null),
+        );
     return activatePartitionServiceRows({
       nodeId: this.nodeId,
       systemTableWriter: this.createCdcIntegrationService(),
       messageRouter: this.messageRouter,
       deferTransientFailures: true,
-      onDeferredActivation: ({ partitionId, replicaId, error }) => {
+      onDeferredActivation: ({partitionId, replicaId, error}) => {
         this.logger.warn(
           NODE_JOINING_SERVICE_LITERAL.DEFERRING_JOIN_PARTITION_SERVICE_ROW_ACTIVATION,
           {
@@ -441,4 +441,4 @@ class NodeJoiningServiceSegment3 extends NodeJoiningServiceSegment2 {
    */
 }
 
-export { NodeJoiningServiceSegment3 };
+export {NodeJoiningServiceSegment3};

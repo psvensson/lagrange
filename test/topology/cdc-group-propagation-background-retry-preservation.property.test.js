@@ -178,10 +178,10 @@ test('Property 3 Preservation A: scheduleBackgroundRetry SHALL schedule ' +
           assert.equal(
             timerCountAfter,
             timerCountBefore + NUM.ONE,
-            `scheduleBackgroundRetry should schedule a timer ` +
+            'scheduleBackgroundRetry should schedule a timer ' +
             `when attempt=${attempt} < MAX_ATTEMPTS=` +
             `${CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS}, ` +
-            `but backgroundRetryTimers went from ` +
+            'but backgroundRetryTimers went from ' +
             `${timerCountBefore} to ${timerCountAfter}`,
           );
         } finally {
@@ -208,13 +208,11 @@ test('Property 3 Preservation A: successful delivery SHALL NOT trigger ' +
       async (attempt) => {
         setupConfig();
         const cache = createTopologyCache();
-        let deliverCallCount = NUM.ZERO;
         const service = new CDCGroupPropagationService({
           nodeId: TEST_NODE_ID,
           systemTableCache: cache,
           messageRouter: {
             async deliver() {
-              deliverCallCount++;
               return {acknowledged: true};
             },
           },

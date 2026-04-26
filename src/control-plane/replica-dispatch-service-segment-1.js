@@ -1,76 +1,40 @@
-import { REPLICA_DISPATCH_SERVICE_SHARED } from "./replica-dispatch-service-shared.js";
+import {REPLICA_DISPATCH_SERVICE_SHARED} from './replica-dispatch-service-shared.js';
 
 const {
   COLUMN,
   CONTROL_PLANE_ALLOWED_STATES,
   CONTROL_PLANE_CONFIG_KEY,
   CONTROL_PLANE_EVENT,
-  CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE,
-  CONTROL_PLANE_NODE_STATE_REPLAY_CONTEXT,
-  CONTROL_PLANE_READINESS_DIMENSION,
   ConfigurationManager,
   ControlPlaneField,
   ControlPlaneMessageType,
   ControlPlaneReadinessService,
   DEFAULT_READY_LEASE_MS,
-  DISPATCH_DEFAULT,
   DISPATCH_ERROR_MSG,
-  DISPATCH_EVENT,
   DISPATCH_LOG_MSG,
   DISPATCH_QUEUE_NAME,
-  DISPATCH_READINESS_ERROR_CODE,
   DISPATCH_READINESS_ERROR_REASON,
-  DISPATCH_READINESS_MESSAGE,
-  DISPATCH_READINESS_REASON,
   DISPATCH_STATE,
   DISPATCH_SUBSYSTEM,
   EventEmitter,
   LoggingService,
-  MEMBERSHIP_PUBLICATION_STATUS,
   MESSAGE_GROUP_CDC_INGRESS_ACTION,
-  NODE_STATE_UPDATE_RETRY_ACTION,
-  NODE_STATE_UPDATE_RETRY_CLASS,
-  NODE_STATE_UPDATE_RETRY_POLICY,
   NUM,
-  OPERATION_METADATA_KEY,
-  OperationType,
   OwnerKeyReconcileQueue,
-  QUERY_ERROR_CODE,
-  QUERY_ERROR_MSG,
-  READY_NODE_PUBLICATION_ADVANCEMENT_STATE,
   REBALANCE_COORDINATOR_EVENT,
   RECONCILE_REASON,
   REPLICA_DISPATCH_SERVICE_LITERAL,
-  REPLICA_OPERATION_VISIBILITY_READ_MODE,
-  ReplicaOperationField,
   SERVICE_STATUS,
-  SERVICE_TYPE,
   STATE,
   STRING,
   SYSTEM_TABLE_NAME,
   TYPEOF,
   WORKFLOW_STEP,
   assertCritical,
-  compareNodeHeartbeatWatermarks,
   createControlPlaneRuntimeBundle,
-  getControlPlaneErrorCode,
-  getControlPlaneErrorMessage,
   getControlPlaneMessageRequiredTables,
-  getControlPlaneNodeStatePublicationProfile,
-  getControlPlaneRetryAfterMs,
   getNodeHeartbeatWatermark,
-  getOperationMetadataObject,
-  getOperationMetadataString,
-  getOperationMetadataStringArray,
-  isCoordinatorOwnedOperationType,
-  isHeartbeatEscalatedControlPlaneNodeStatePublicationMode,
   isRetryableControlPlaneError,
-  isTerminalMembershipPublicationStatus,
-  resolveControlPlaneNodeStatePublicationMode,
-  resolveReadyNodePublicationAdvancementState,
-  resolveReplayControlPlaneNodeStatePublicationMode,
-  shouldUseAuthoritativePriorityRecoveryRediscovery,
-  unwrapRowReadResult,
   wasNodeRecordReadyWhenWritten,
 } = REPLICA_DISPATCH_SERVICE_SHARED;
 
@@ -86,15 +50,15 @@ class ReplicaDispatchServiceSegment1 extends EventEmitter {
       (this.cdcIntegrationService ||
       options.sqlQueryEngine ||
       options.systemTableCache ||
-      this.messageRouter
-        ? createControlPlaneRuntimeBundle({
-            nodeId: this.nodeId,
-            cdcIntegrationService: this.cdcIntegrationService,
-            sqlQueryEngine: options.sqlQueryEngine || null,
-            systemTableCache: options.systemTableCache || null,
-            messageRouter: this.messageRouter,
-          }).controlPlaneSystemTableGateway
-        : null);
+      this.messageRouter ?
+        createControlPlaneRuntimeBundle({
+          nodeId: this.nodeId,
+          cdcIntegrationService: this.cdcIntegrationService,
+          sqlQueryEngine: options.sqlQueryEngine || null,
+          systemTableCache: options.systemTableCache || null,
+          messageRouter: this.messageRouter,
+        }).controlPlaneSystemTableGateway :
+        null);
     this.systemTableCache = options.systemTableCache || null;
     this.nodesOwner = options.nodesOwner || null;
     this.servicesOwner = options.servicesOwner || null;
@@ -132,6 +96,7 @@ class ReplicaDispatchServiceSegment1 extends EventEmitter {
     this.dispatchFailureSignaturesByOperationId = new Map();
     this.operationDispatchDeferredRetries = new Map();
     this.nodeStateUpdateDeferredRetries = new Map();
+    this.membershipPublicationAckDeferredRetries = new Map();
     this.nodeStateUpdateRetryStateByNodeId = new Map();
     this.nodeStateUpdateQueueAssignments = new Map();
     this.nextNodeStateUpdateQueueIndex = NUM.ZERO;
@@ -139,13 +104,13 @@ class ReplicaDispatchServiceSegment1 extends EventEmitter {
     this.coordinatorOperationCreatedListener = null;
     this.state = DISPATCH_STATE.CREATED;
     this.setTimeoutFn =
-      typeof options.setTimeoutFn === TYPEOF.FUNCTION
-        ? options.setTimeoutFn
-        : setTimeout;
+      typeof options.setTimeoutFn === TYPEOF.FUNCTION ?
+        options.setTimeoutFn :
+        setTimeout;
     this.clearTimeoutFn =
-      typeof options.clearTimeoutFn === TYPEOF.FUNCTION
-        ? options.clearTimeoutFn
-        : clearTimeout;
+      typeof options.clearTimeoutFn === TYPEOF.FUNCTION ?
+        options.clearTimeoutFn :
+        clearTimeout;
     const config = ConfigurationManager.getInstance();
     this.readyLeaseMs =
       config.get(CONTROL_PLANE_CONFIG_KEY.READY_LEASE_MS) ||
@@ -172,12 +137,12 @@ class ReplicaDispatchServiceSegment1 extends EventEmitter {
       );
 
     const loggingService = LoggingService.getInstance();
-    this.logger = loggingService.isInitialized()
-      ? loggingService.forSubsystem(DISPATCH_SUBSYSTEM)
-      : console;
+    this.logger = loggingService.isInitialized() ?
+      loggingService.forSubsystem(DISPATCH_SUBSYSTEM) :
+      console;
 
     this.operationDispatchQueues = Array.from(
-      { length: this.operationDispatchQueueShardCount },
+      {length: this.operationDispatchQueueShardCount},
       (_unused, shardIndex) => {
         return new OwnerKeyReconcileQueue({
           name: this.buildOperationDispatchQueueName(shardIndex),
@@ -193,7 +158,7 @@ class ReplicaDispatchServiceSegment1 extends EventEmitter {
         options.nodeStateUpdateQueueShardCount,
       );
     this.nodeStateUpdateQueues = Array.from(
-      { length: this.nodeStateUpdateQueueShardCount },
+      {length: this.nodeStateUpdateQueueShardCount},
       (_unused, shardIndex) => {
         return new OwnerKeyReconcileQueue({
           name: this.buildNodeStateUpdateQueueName(shardIndex),
@@ -268,7 +233,7 @@ class ReplicaDispatchServiceSegment1 extends EventEmitter {
             };
           }
           await this.handleReplicaOperationDispatch(payload);
-          return { acknowledged: true };
+          return {acknowledged: true};
         };
         this.messageRouter.register(
           this.directDispatchServiceAddress,
@@ -418,7 +383,7 @@ class ReplicaDispatchServiceSegment1 extends EventEmitter {
           REPLICA_DISPATCH_SERVICE_LITERAL.MESSAGE_DASH_GROUP_INGRESS_READINESS_UNAVAILABLE,
       };
     }
-    return mgService.getMetadataIngressReadiness({ requiredTables });
+    return mgService.getMetadataIngressReadiness({requiredTables});
   }
 
   buildMessageGroupIngressDecision(action, readiness = {}, extra = {}) {
@@ -427,14 +392,14 @@ class ReplicaDispatchServiceSegment1 extends EventEmitter {
       ready: readiness?.ready === true,
       reason:
         typeof readiness?.reason === TYPEOF.STRING &&
-        readiness.reason.length > NUM.ZERO
-          ? readiness.reason
-          : null,
+        readiness.reason.length > NUM.ZERO ?
+          readiness.reason :
+          null,
       retryAfterMs:
         Number.isFinite(readiness?.retryAfterMs) &&
-        readiness.retryAfterMs > NUM.ZERO
-          ? Math.floor(readiness.retryAfterMs)
-          : null,
+        readiness.retryAfterMs > NUM.ZERO ?
+          Math.floor(readiness.retryAfterMs) :
+          null,
       ...extra,
     });
   }
@@ -491,28 +456,28 @@ class ReplicaDispatchServiceSegment1 extends EventEmitter {
     const selectionAction =
       selection?.action === MESSAGE_GROUP_CDC_INGRESS_ACTION.APPLY_LOCAL ||
       selection?.action === MESSAGE_GROUP_CDC_INGRESS_ACTION.FORWARD ||
-      selection?.action === MESSAGE_GROUP_CDC_INGRESS_ACTION.DEFER
-        ? selection.action
-        : MESSAGE_GROUP_CDC_INGRESS_ACTION.DEFER;
+      selection?.action === MESSAGE_GROUP_CDC_INGRESS_ACTION.DEFER ?
+        selection.action :
+        MESSAGE_GROUP_CDC_INGRESS_ACTION.DEFER;
     const retryAfterMs =
       Number.isFinite(selection?.retryAfterMs) &&
-      selection.retryAfterMs > NUM.ZERO
-        ? selection.retryAfterMs
-        : Number.isFinite(selection?.strictForwardRetryAfterMs) &&
-            selection.strictForwardRetryAfterMs > NUM.ZERO
-          ? selection.strictForwardRetryAfterMs
-          : null;
+      selection.retryAfterMs > NUM.ZERO ?
+        selection.retryAfterMs :
+        Number.isFinite(selection?.strictForwardRetryAfterMs) &&
+            selection.strictForwardRetryAfterMs > NUM.ZERO ?
+          selection.strictForwardRetryAfterMs :
+          null;
     return this.buildMessageGroupIngressDecision(
       selectionAction,
       {
         ready: selection?.ready === true,
         reason:
-          typeof selection?.reason === TYPEOF.STRING
-            ? selection.reason
-            : REPLICA_DISPATCH_SERVICE_LITERAL.MESSAGE_DASH_GROUP_INGRESS_SELECTION_UNAVAILABLE,
+          typeof selection?.reason === TYPEOF.STRING ?
+            selection.reason :
+            REPLICA_DISPATCH_SERVICE_LITERAL.MESSAGE_DASH_GROUP_INGRESS_SELECTION_UNAVAILABLE,
         retryAfterMs,
       },
-      { selection },
+      {selection},
     );
   }
 
@@ -530,9 +495,17 @@ class ReplicaDispatchServiceSegment1 extends EventEmitter {
         this.nodeReadyRetryQueue.enqueue(
           nodeId,
           RECONCILE_REASON.NODES_CDC_READY,
-          { nodeRow },
+          {nodeRow},
         );
       }
+      return;
+    }
+
+    if (event?.tableName === SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS) {
+      this.scheduleLocalReadyNodeMembershipPublicationAdvance(
+        RECONCILE_REASON.CONTROL_PLANE_PUBLICATION_CDC_UPDATE,
+        event?.data,
+      );
       return;
     }
 
@@ -570,7 +543,7 @@ class ReplicaDispatchServiceSegment1 extends EventEmitter {
     this.operationDispatchQueue.enqueue(
       operation.operationId,
       RECONCILE_REASON.COORDINATOR_OPERATION_CREATED,
-      { row: this.buildOperationRowFromCoordinator(operation) },
+      {row: this.buildOperationRowFromCoordinator(operation)},
     );
   }
 
@@ -581,7 +554,7 @@ class ReplicaDispatchServiceSegment1 extends EventEmitter {
    * @private
    */
   buildDirectDispatchServiceAddress(nodeId) {
-    const normalizedNodeId = String(nodeId || "").trim();
+    const normalizedNodeId = String(nodeId || '').trim();
     if (normalizedNodeId.length === NUM.ZERO) {
       return null;
     }
@@ -685,7 +658,7 @@ class ReplicaDispatchServiceSegment1 extends EventEmitter {
     const enqueued = nodeStateUpdateQueue.enqueue(
       nodeId,
       RECONCILE_REASON.NODE_STATE_UPDATE_MESSAGE,
-      { payload },
+      {payload},
     );
     this.logger.debug(DISPATCH_LOG_MSG.ENQUEUE_NODE_STATE_UPDATE, {
       nodeId,
@@ -705,9 +678,9 @@ class ReplicaDispatchServiceSegment1 extends EventEmitter {
     const payloadNodeRow = payload[ControlPlaneField.NODE_ROW];
     const isHeartbeatOnly = this.isHeartbeatOnlyNodeStateUpdate(payload);
     const nodeRow =
-      payloadNodeRow && typeof payloadNodeRow === TYPEOF.OBJECT
-        ? payloadNodeRow
-        : null;
+      payloadNodeRow && typeof payloadNodeRow === TYPEOF.OBJECT ?
+        payloadNodeRow :
+        null;
 
     if (!nodeId || !state) {
       return;
@@ -721,7 +694,7 @@ class ReplicaDispatchServiceSegment1 extends EventEmitter {
     const payloadWatermark = this.getNodeStateUpdateWatermark(payload);
     const now = Date.now();
     const existingConnectionState = String(
-      existing?.[COLUMN.CONNECTION_STATE] || "",
+      existing?.[COLUMN.CONNECTION_STATE] || '',
     ).toLowerCase();
     const existingReadyLeaseExpiresAt = Number(
       existing?.[COLUMN.READY_LEASE_EXPIRES_AT],
@@ -731,9 +704,9 @@ class ReplicaDispatchServiceSegment1 extends EventEmitter {
     );
     // Apply-time liveness timestamp prevents delayed messages from
     // immediately writing an already-stale heartbeat.
-    const heartbeatAt = Number.isFinite(requestedHeartbeatAt)
-      ? Math.max(requestedHeartbeatAt, now)
-      : now;
+    const heartbeatAt = Number.isFinite(requestedHeartbeatAt) ?
+      Math.max(requestedHeartbeatAt, now) :
+      now;
     const requestedLeaseExpiry =
       payload[ControlPlaneField.READY_LEASE_EXPIRES_AT];
     const promotedToReadyFromConnected =
@@ -743,12 +716,12 @@ class ReplicaDispatchServiceSegment1 extends EventEmitter {
       existingReadyLeaseExpiresAt > now;
     const nextState = promotedToReadyFromConnected ? STATE.READY : state;
     const readyLeaseExpiresAt =
-      nextState === STATE.READY
-        ? Number.isFinite(requestedLeaseExpiry) &&
-          requestedLeaseExpiry > heartbeatAt
-          ? requestedLeaseExpiry
-          : heartbeatAt + this.readyLeaseMs
-        : null;
+      nextState === STATE.READY ?
+        Number.isFinite(requestedLeaseExpiry) &&
+          requestedLeaseExpiry > heartbeatAt ?
+          requestedLeaseExpiry :
+          heartbeatAt + this.readyLeaseMs :
+        null;
     const existingWatermark = getNodeHeartbeatWatermark(existing);
     const effectiveReadyWatermark = {
       lastHeartbeat: heartbeatAt,
@@ -790,7 +763,7 @@ class ReplicaDispatchServiceSegment1 extends EventEmitter {
         this.nodeReadyRetryQueue.enqueue(
           nodeId,
           RECONCILE_REASON.NODE_STATE_UPDATE_READY,
-          { nodeRow: existing },
+          {nodeRow: existing},
         );
         await this.acknowledgeMembershipPublicationForNode(nodeId);
       }
@@ -815,7 +788,7 @@ class ReplicaDispatchServiceSegment1 extends EventEmitter {
     const updateResult =
       await this.getControlPlaneSystemTableGateway().updateSystemTableRow(
         SYSTEM_TABLE_NAME.NODES,
-        { [COLUMN.NODE_ID]: nodeId },
+        {[COLUMN.NODE_ID]: nodeId},
         baseRow,
         this.buildNodeStateUpdateWriteOptions(
           nodeId,
@@ -927,46 +900,46 @@ class ReplicaDispatchServiceSegment1 extends EventEmitter {
     }
 
     const payloadCapabilities = payload?.[ControlPlaneField.CAPABILITIES];
-    const capabilities = Array.isArray(payloadCapabilities)
-      ? JSON.stringify(payloadCapabilities)
-      : typeof payloadCapabilities === TYPEOF.STRING
-        ? payloadCapabilities
-        : existing?.[COLUMN.CAPABILITIES] || STRING.EMPTY_JSON_ARRAY;
+    const capabilities = Array.isArray(payloadCapabilities) ?
+      JSON.stringify(payloadCapabilities) :
+      typeof payloadCapabilities === TYPEOF.STRING ?
+        payloadCapabilities :
+        existing?.[COLUMN.CAPABILITIES] || STRING.EMPTY_JSON_ARRAY;
 
     return {
       [COLUMN.NODE_ID]: nodeId,
       [COLUMN.NODE_ADDRESS]: baseNodeAddress,
-      [COLUMN.CPU_CORES]: Number.isFinite(nodeRow?.[COLUMN.CPU_CORES])
-        ? nodeRow[COLUMN.CPU_CORES]
-        : existing?.[COLUMN.CPU_CORES] || NUM.ZERO,
-      [COLUMN.MEMORY_MB]: Number.isFinite(nodeRow?.[COLUMN.MEMORY_MB])
-        ? nodeRow[COLUMN.MEMORY_MB]
-        : existing?.[COLUMN.MEMORY_MB] || NUM.ZERO,
-      [COLUMN.DISK_GB]: Number.isFinite(nodeRow?.[COLUMN.DISK_GB])
-        ? nodeRow[COLUMN.DISK_GB]
-        : existing?.[COLUMN.DISK_GB] || NUM.ZERO,
+      [COLUMN.CPU_CORES]: Number.isFinite(nodeRow?.[COLUMN.CPU_CORES]) ?
+        nodeRow[COLUMN.CPU_CORES] :
+        existing?.[COLUMN.CPU_CORES] || NUM.ZERO,
+      [COLUMN.MEMORY_MB]: Number.isFinite(nodeRow?.[COLUMN.MEMORY_MB]) ?
+        nodeRow[COLUMN.MEMORY_MB] :
+        existing?.[COLUMN.MEMORY_MB] || NUM.ZERO,
+      [COLUMN.DISK_GB]: Number.isFinite(nodeRow?.[COLUMN.DISK_GB]) ?
+        nodeRow[COLUMN.DISK_GB] :
+        existing?.[COLUMN.DISK_GB] || NUM.ZERO,
       [COLUMN.CPU_USAGE_PERCENT]: Number.isFinite(
         nodeRow?.[COLUMN.CPU_USAGE_PERCENT],
-      )
-        ? nodeRow[COLUMN.CPU_USAGE_PERCENT]
-        : existing?.[COLUMN.CPU_USAGE_PERCENT] || NUM.ZERO,
+      ) ?
+        nodeRow[COLUMN.CPU_USAGE_PERCENT] :
+        existing?.[COLUMN.CPU_USAGE_PERCENT] || NUM.ZERO,
       [COLUMN.MEMORY_USAGE_PERCENT]: Number.isFinite(
         nodeRow?.[COLUMN.MEMORY_USAGE_PERCENT],
-      )
-        ? nodeRow[COLUMN.MEMORY_USAGE_PERCENT]
-        : existing?.[COLUMN.MEMORY_USAGE_PERCENT] || NUM.ZERO,
+      ) ?
+        nodeRow[COLUMN.MEMORY_USAGE_PERCENT] :
+        existing?.[COLUMN.MEMORY_USAGE_PERCENT] || NUM.ZERO,
       [COLUMN.DISK_USAGE_PERCENT]: Number.isFinite(
         nodeRow?.[COLUMN.DISK_USAGE_PERCENT],
-      )
-        ? nodeRow[COLUMN.DISK_USAGE_PERCENT]
-        : existing?.[COLUMN.DISK_USAGE_PERCENT] || NUM.ZERO,
+      ) ?
+        nodeRow[COLUMN.DISK_USAGE_PERCENT] :
+        existing?.[COLUMN.DISK_USAGE_PERCENT] || NUM.ZERO,
       [COLUMN.STATUS]:
-        nextState === STATE.READY
-          ? SERVICE_STATUS.ACTIVE
-          : typeof nodeRow?.[COLUMN.STATUS] === TYPEOF.STRING &&
-              nodeRow[COLUMN.STATUS].length > NUM.ZERO
-            ? nodeRow[COLUMN.STATUS]
-            : existing?.[COLUMN.STATUS] || SERVICE_STATUS.ACTIVE,
+        nextState === STATE.READY ?
+          SERVICE_STATUS.ACTIVE :
+          typeof nodeRow?.[COLUMN.STATUS] === TYPEOF.STRING &&
+              nodeRow[COLUMN.STATUS].length > NUM.ZERO ?
+            nodeRow[COLUMN.STATUS] :
+            existing?.[COLUMN.STATUS] || SERVICE_STATUS.ACTIVE,
       [COLUMN.CONNECTION_STATE]: nextState,
       [COLUMN.CAPABILITIES]: capabilities,
       [COLUMN.LAST_HEARTBEAT]: heartbeatAt,
@@ -1014,7 +987,7 @@ class ReplicaDispatchServiceSegment1 extends EventEmitter {
     if (nextState !== STATE.CONNECTED && nextState !== STATE.READY) {
       return false;
     }
-    const nodeAddress = String(baseRow?.[COLUMN.NODE_ADDRESS] || "").trim();
+    const nodeAddress = String(baseRow?.[COLUMN.NODE_ADDRESS] || '').trim();
     if (nodeAddress.length === NUM.ZERO || nodeAddress === STRING.UNKNOWN) {
       return false;
     }
@@ -1037,7 +1010,7 @@ class ReplicaDispatchServiceSegment1 extends EventEmitter {
       );
       if (upsertResult?.success === false) {
         const upsertError = new Error(
-          `Failed to bootstrap missing node row from NODE_STATE_UPDATE: ` +
+          'Failed to bootstrap missing node row from NODE_STATE_UPDATE: ' +
             String(
               upsertResult.error || DISPATCH_READINESS_ERROR_REASON.UNKNOWN,
             ),
@@ -1047,9 +1020,9 @@ class ReplicaDispatchServiceSegment1 extends EventEmitter {
           REPLICA_DISPATCH_SERVICE_LITERAL.NODE_STATE_UPDATE_BOOTSTRAP_UPSERT_FAILED;
         if (upsertResult.deferRetry === true) {
           upsertError.deferRetry = true;
-          upsertError.retryAfterMs = Number.isFinite(upsertResult.retryAfterMs)
-            ? upsertResult.retryAfterMs
-            : this.nodeStateUpdateRetryAfterMs;
+          upsertError.retryAfterMs = Number.isFinite(upsertResult.retryAfterMs) ?
+            upsertResult.retryAfterMs :
+            this.nodeStateUpdateRetryAfterMs;
         }
         throw upsertError;
       }
@@ -1061,9 +1034,9 @@ class ReplicaDispatchServiceSegment1 extends EventEmitter {
     } catch (error) {
       if (error?.deferRetry === true || isRetryableControlPlaneError(error)) {
         error.deferRetry = true;
-        error.retryAfterMs = Number.isFinite(error?.retryAfterMs)
-          ? error.retryAfterMs
-          : this.nodeStateUpdateRetryAfterMs;
+        error.retryAfterMs = Number.isFinite(error?.retryAfterMs) ?
+          error.retryAfterMs :
+          this.nodeStateUpdateRetryAfterMs;
       }
       throw error;
     }
@@ -1079,4 +1052,4 @@ class ReplicaDispatchServiceSegment1 extends EventEmitter {
    */
 }
 
-export { ReplicaDispatchServiceSegment1 };
+export {ReplicaDispatchServiceSegment1};

@@ -67,7 +67,7 @@ describe('Property 6: Function Registry Translation', () => {
     fc.assert(
       fc.property(fnNameArb, argCountArb, (fnName, argCount) => {
         const args = Array.from(
-          {length: argCount}, (_, i) => makeColRef(`c${i}`)
+          {length: argCount}, (_, i) => makeColRef(`c${i}`),
         );
         const result = translateFunctionCall(fnName, args, identity);
 
@@ -105,7 +105,7 @@ describe('Property 6: Function Registry Translation', () => {
           assert.equal(result.name, 'time');
         }
       }),
-      {numRuns: 10}
+      {numRuns: 10},
     );
   });
 });
@@ -133,7 +133,7 @@ describe('Property 7: Unknown Function Pass-Through', () => {
         // Pass the name with original casing (mixed case)
         const mixedName = fnName.charAt(0).toUpperCase() + fnName.slice(1);
         const result = translateFunctionCall(
-          mixedName, args, identity
+          mixedName, args, identity,
         );
 
         // Must be a function_call node
@@ -143,7 +143,7 @@ describe('Property 7: Unknown Function Pass-Through', () => {
         // Args are converted
         assert.equal(result.args.length, 1);
       }),
-      {numRuns: 10}
+      {numRuns: 10},
     );
   });
 });
@@ -170,7 +170,7 @@ describe('Property 8: EXTRACT Translation', () => {
         const args = [fieldNode, exprNode];
 
         const result = translateFunctionCall(
-          'extract', args, identity
+          'extract', args, identity,
         );
 
         // Result is a CAST node
@@ -190,7 +190,7 @@ describe('Property 8: EXTRACT Translation', () => {
         assert.equal(inner.args[1].type, EXPR_TYPE.COLUMN_REF);
         assert.equal(inner.args[1].column, colName);
       }),
-      {numRuns: 10}
+      {numRuns: 10},
     );
   });
 });
@@ -208,7 +208,7 @@ describe('Property 8: EXTRACT Translation', () => {
 describe('Property 9: DATE_TRUNC Translation', () => {
   it('produces strftime(format, expr) for any precision', () => {
     const precisionArb = fc.constantFrom(
-      ...Object.keys(PG_DATE_TRUNC_FORMAT)
+      ...Object.keys(PG_DATE_TRUNC_FORMAT),
     );
     const colArb = fc.stringMatching(/^[a-z][a-z0-9_]{0,9}$/);
 
@@ -219,7 +219,7 @@ describe('Property 9: DATE_TRUNC Translation', () => {
         const args = [precisionNode, exprNode];
 
         const result = translateFunctionCall(
-          'date_trunc', args, identity
+          'date_trunc', args, identity,
         );
 
         // Result is a function_call for strftime
@@ -229,14 +229,14 @@ describe('Property 9: DATE_TRUNC Translation', () => {
         // First arg is the format literal matching PG_DATE_TRUNC_FORMAT
         assert.equal(result.args[0].type, EXPR_TYPE.LITERAL);
         assert.equal(
-          result.args[0].value, PG_DATE_TRUNC_FORMAT[precision]
+          result.args[0].value, PG_DATE_TRUNC_FORMAT[precision],
         );
 
         // Second arg is the converted expression
         assert.equal(result.args[1].type, EXPR_TYPE.COLUMN_REF);
         assert.equal(result.args[1].column, colName);
       }),
-      {numRuns: 10}
+      {numRuns: 10},
     );
   });
 });

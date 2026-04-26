@@ -397,6 +397,12 @@ describe('RuntimeServiceHandler handleRemoveReplica', () => {
       entityId: 'sys-postgres-wire',
       status: ReplicaStatus.REMOVING,
     });
+    handler.inProgressOperations.set('op-1', {
+      type: ReplicaOperationMessageType.REMOVE_REPLICA,
+      replicaId: 'sys-postgres-wire-r1',
+      entityId: 'sys-postgres-wire',
+      startedAt: Date.now(),
+    });
     const response = await handler.handleRemoveReplica({
       [ReplicaOperationField.OPERATION_ID]: 'op-1',
       [ReplicaOperationField.ENTITY_ID]: 'sys-postgres-wire',
@@ -407,6 +413,38 @@ describe('RuntimeServiceHandler handleRemoveReplica', () => {
       ReplicaOperationResponseStatus.IN_PROGRESS,
     );
   });
+
+  it('resumes stalled removing replica when no removal task is active',
+    async () => {
+      const {handler, lifecycle} = createHandler();
+      handler.localReplicas.set('sys-postgres-wire-r1', {
+        replicaId: 'sys-postgres-wire-r1',
+        entityId: 'sys-postgres-wire',
+        status: ReplicaStatus.REMOVING,
+      });
+
+      const response = await handler.handleRemoveReplica({
+        [ReplicaOperationField.OPERATION_ID]: 'op-resume-remove',
+        [ReplicaOperationField.ENTITY_ID]: 'sys-postgres-wire',
+        [ReplicaOperationField.REPLICA_ID]: 'sys-postgres-wire-r1',
+      });
+
+      assert.equal(
+        response.status,
+        ReplicaOperationResponseStatus.IN_PROGRESS,
+      );
+
+      await flushImmediate();
+      await flushImmediate();
+
+      assert.equal(lifecycle.calls.length, 1);
+      assert.equal(lifecycle.calls[0].method, 'stopReplica');
+      assert.equal(
+        handler.localReplicas.get('sys-postgres-wire-r1')?.status,
+        ReplicaStatus.REMOVED,
+      );
+      assert.equal(handler.inProgressOperations.size, 0);
+    });
 
   it('returns COMPLETED for already removed replica', async () => {
     const {handler} = createHandler();

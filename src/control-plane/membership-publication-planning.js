@@ -20,7 +20,10 @@ import {
   buildPriorityRecoveryDecisionSnapshots,
   hasPriorityRecoverySpreadGap,
 } from './priority-recovery-snapshot.js';
-import {CONTROL_PLANE_READINESS_DIMENSION} from './control-plane-readiness-constants.js';
+import {
+  CONTROL_PLANE_READINESS_DIMENSION,
+  CONTROL_PLANE_READINESS_REASON,
+} from './control-plane-readiness-constants.js';
 import {buildRecoveryProtocolSnapshot} from './recovery-protocol-snapshot.js';
 import {
   PRIORITY_CONTROL_PLANE_TABLE_IDS,
@@ -33,6 +36,26 @@ import {RAFT_ROLE} from '../raft/constants.js';
 const MEMBERSHIP_PUBLICATION_STATUS = CONTROL_PLANE_PUBLICATION_STATUS;
 const PRIORITY_SPREAD_REQUIRED_DISTINCT_NODE_COUNT = 3;
 const AUTHORITATIVE_MEMBERSHIP_CHANGED_REASON = 'authoritative_membership_changed';
+const MEMBERSHIP_PUBLICATION_TARGET_STATE = Object.freeze({
+  EXPLICIT_PUBLICATION: 'explicit_publication',
+  OBSERVED_ACTIVE: 'observed_active',
+  PROJECTED_STEADY_TRIM: 'projected_steady_trim',
+  RECOVERY_COHORT: 'recovery_cohort',
+});
+const MEMBERSHIP_PUBLICATION_TARGET_DECISION_ORDER = Object.freeze([
+  MEMBERSHIP_PUBLICATION_TARGET_STATE.EXPLICIT_PUBLICATION,
+  MEMBERSHIP_PUBLICATION_TARGET_STATE.PROJECTED_STEADY_TRIM,
+  MEMBERSHIP_PUBLICATION_TARGET_STATE.RECOVERY_COHORT,
+  MEMBERSHIP_PUBLICATION_TARGET_STATE.OBSERVED_ACTIVE,
+]);
+const MEMBERSHIP_PUBLICATION_ACK_COMPLETION_STATE = Object.freeze({
+  COMPLETE: 'complete',
+  PENDING: 'pending',
+});
+const MEMBERSHIP_PUBLICATION_ACK_READINESS_STATE = Object.freeze({
+  ELIGIBLE: 'eligible',
+  DEFERRED: 'deferred',
+});
 
 function normalizePartitionIdList(values = []) {
   return [
@@ -272,19 +295,27 @@ function buildPriorityRecoveryClosureEvidence(options = {}, helperFns = {}) {
     normalizePriorityRecoveryClosureWitness(
       options.priorityRecoveryPlanningSnapshot?.priorityRecoveryClosureWitness,
     );
-  if (retainedPriorityRecoveryClosureWitness) {
-    return {
-      priorityRecoveryClosureWitness: retainedPriorityRecoveryClosureWitness,
-      priorityRecoveryDecisionSnapshots: null,
-    };
-  }
   const replicaOperationRows = Array.isArray(options.replicaOperationRows) ?
     options.replicaOperationRows :
     [];
-  if (replicaOperationRows.length === NUM.ZERO) {
-    return {
+  const closureShortcut = [
+    {
+      matches: Boolean(retainedPriorityRecoveryClosureWitness),
+      priorityRecoveryClosureWitness: retainedPriorityRecoveryClosureWitness,
+      priorityRecoveryDecisionSnapshots: null,
+    },
+    {
+      matches: replicaOperationRows.length === NUM.ZERO,
       priorityRecoveryClosureWitness: null,
       priorityRecoveryDecisionSnapshots: null,
+    },
+  ].find((entry) => entry.matches === true);
+  if (closureShortcut) {
+    return {
+      priorityRecoveryClosureWitness:
+        closureShortcut.priorityRecoveryClosureWitness,
+      priorityRecoveryDecisionSnapshots:
+        closureShortcut.priorityRecoveryDecisionSnapshots,
     };
   }
   const priorityRecoveryDecisionSnapshots = buildPriorityRecoveryDecisionSnapshots({
@@ -688,6 +719,238 @@ function buildProjectionDiagnosticsSummary(activeNodeViews = null, helperFns = {
   };
 }
 
+function buildMembershipPublicationTargetEvidence(options = {}, helperFns = {}) {
+  const explicitPublishedNodeIds = helperFns.normalizeNodeIdList(
+    options.explicitPublishedNodeIds,
+  );
+  const publishedBaselineNodeIds = helperFns.normalizeNodeIdList(
+    options.publishedBaselineNodeIds,
+  );
+  const projectedServingNodeIds = helperFns.normalizeNodeIdList(
+    options.projectedServingNodeIds,
+  );
+  const recoveryActiveNodeIds = helperFns.normalizeNodeIdList(
+    options.recoveryActiveNodeIds,
+  );
+  const observedActiveNodeIds = helperFns.normalizeNodeIdList(
+    options.observedActiveNodeIds,
+  );
+  const projectedServingNodeIdSet = new Set(projectedServingNodeIds);
+  const publishedTrimDebt =
+    publishedBaselineNodeIds.length > NUM.ZERO &&
+    projectedServingNodeIds.length > NUM.ZERO &&
+    publishedBaselineNodeIds.some(
+      (nodeId) => !projectedServingNodeIdSet.has(nodeId),
+    );
+  const canPublishSteadyTrim =
+    publishedTrimDebt &&
+    options.priorityRecoverySpreadGapPending !== true &&
+    options.observedRecoveryProjectionGap !== true &&
+    options.membershipFreezeActive !== true;
+  return {
+    decisions: Object.freeze({
+      [MEMBERSHIP_PUBLICATION_TARGET_STATE.EXPLICIT_PUBLICATION]:
+        explicitPublishedNodeIds.length > NUM.ZERO,
+      [MEMBERSHIP_PUBLICATION_TARGET_STATE.PROJECTED_STEADY_TRIM]:
+        canPublishSteadyTrim,
+      [MEMBERSHIP_PUBLICATION_TARGET_STATE.RECOVERY_COHORT]:
+        publishedBaselineNodeIds.length > NUM.ZERO,
+      [MEMBERSHIP_PUBLICATION_TARGET_STATE.OBSERVED_ACTIVE]: true,
+    }),
+    nodeIdsByState: Object.freeze({
+      [MEMBERSHIP_PUBLICATION_TARGET_STATE.EXPLICIT_PUBLICATION]:
+        explicitPublishedNodeIds,
+      [MEMBERSHIP_PUBLICATION_TARGET_STATE.PROJECTED_STEADY_TRIM]:
+        projectedServingNodeIds,
+      [MEMBERSHIP_PUBLICATION_TARGET_STATE.RECOVERY_COHORT]:
+        recoveryActiveNodeIds,
+      [MEMBERSHIP_PUBLICATION_TARGET_STATE.OBSERVED_ACTIVE]:
+        observedActiveNodeIds,
+    }),
+  };
+}
+
+function resolveMembershipPublicationTargetState(evidence = {}) {
+  return MEMBERSHIP_PUBLICATION_TARGET_DECISION_ORDER.find(
+    (state) => evidence.decisions?.[state] === true,
+  ) || MEMBERSHIP_PUBLICATION_TARGET_STATE.OBSERVED_ACTIVE;
+}
+
+function buildMembershipPublicationTargetSnapshot(options = {}, helperFns = {}) {
+  const evidence = buildMembershipPublicationTargetEvidence(options, helperFns);
+  const state = resolveMembershipPublicationTargetState(evidence);
+  return {
+    state,
+    nodeIds: evidence.nodeIdsByState[state] || [],
+  };
+}
+
+function buildPublicationAcknowledgementReadinessDecision(readinessEntry = null) {
+  const dimensions =
+    readinessEntry?.dimensions && typeof readinessEntry.dimensions === TYPEOF.OBJECT ?
+      readinessEntry.dimensions :
+      null;
+  if (!dimensions) {
+    return {
+      state: MEMBERSHIP_PUBLICATION_ACK_READINESS_STATE.ELIGIBLE,
+      eligible: true,
+      reasonCodes: [],
+    };
+  }
+  const evidence = [
+    {
+      blocked:
+        dimensions[CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE] === false,
+      reasonCode: CONTROL_PLANE_READINESS_REASON.PROCESS_NOT_ALIVE,
+    },
+  ];
+  const reasonCodes = normalizePartitionIdList(
+    evidence
+      .filter((entry) => entry.blocked === true)
+      .map((entry) => entry.reasonCode),
+  );
+  const eligible = reasonCodes.length === NUM.ZERO;
+  return {
+    state:
+      eligible ?
+        MEMBERSHIP_PUBLICATION_ACK_READINESS_STATE.ELIGIBLE :
+        MEMBERSHIP_PUBLICATION_ACK_READINESS_STATE.DEFERRED,
+    eligible,
+    reasonCodes,
+  };
+}
+
+function buildPublicationAckTargetSnapshot(options = {}, helperFns = {}) {
+  const publishedBaselineNodeIds = helperFns.normalizeNodeIdList(
+    options.publishedBaselineNodeIds,
+  );
+  const recoveryActiveNodeIds = helperFns.normalizeNodeIdList(
+    options.recoveryActiveNodeIds,
+  );
+  const recoveryEligibleIncludedNodeIds = helperFns.normalizeNodeIdList(
+    options.recoveryEligibleIncludedNodeIds,
+  );
+  const readinessByNodeId =
+    options.readinessByNodeId && typeof options.readinessByNodeId === TYPEOF.OBJECT ?
+      options.readinessByNodeId :
+      {};
+  const publishedBaselineNodeIdSet = new Set(publishedBaselineNodeIds);
+  const recoveryEligibleIncludedNodeIdSet = new Set(recoveryEligibleIncludedNodeIds);
+  const deferredNodeIds = [];
+  const deferralReasonCodesByNodeId = {};
+  const publishableRecoveryActiveNodeIds = [];
+
+  for (const nodeId of recoveryActiveNodeIds) {
+    const needsAcknowledgementReadiness =
+      !publishedBaselineNodeIdSet.has(nodeId) &&
+      recoveryEligibleIncludedNodeIdSet.has(nodeId);
+    const readinessDecision = needsAcknowledgementReadiness ?
+      buildPublicationAcknowledgementReadinessDecision(
+        readinessByNodeId[nodeId] || null,
+      ) :
+      {
+        state: MEMBERSHIP_PUBLICATION_ACK_READINESS_STATE.ELIGIBLE,
+        eligible: true,
+        reasonCodes: [],
+      };
+    if (readinessDecision.eligible === true) {
+      publishableRecoveryActiveNodeIds.push(nodeId);
+      continue;
+    }
+    deferredNodeIds.push(nodeId);
+    deferralReasonCodesByNodeId[nodeId] = readinessDecision.reasonCodes;
+  }
+
+  return {
+    publishableRecoveryActiveNodeIds:
+      helperFns.normalizeNodeIdList(publishableRecoveryActiveNodeIds),
+    deferredNodeIds: helperFns.normalizeNodeIdList(deferredNodeIds),
+    deferralReasonCodesByNodeId: Object.keys(deferralReasonCodesByNodeId)
+      .sort()
+      .reduce((accumulator, nodeId) => {
+        accumulator[nodeId] = deferralReasonCodesByNodeId[nodeId];
+        return accumulator;
+      }, {}),
+  };
+}
+
+function buildPublicationAckProjectionDiagnostics(
+  projectionDiagnostics,
+  publicationAckTargetSnapshot,
+) {
+  const normalizedProjectionDiagnostics =
+    projectionDiagnostics && typeof projectionDiagnostics === TYPEOF.OBJECT ?
+      projectionDiagnostics :
+      {};
+  return {
+    ...normalizedProjectionDiagnostics,
+    publicationAckDeferredNodeIds:
+      publicationAckTargetSnapshot.deferredNodeIds,
+    publicationAckDeferralReasonCodesByNodeId:
+      publicationAckTargetSnapshot.deferralReasonCodesByNodeId,
+  };
+}
+
+function buildMembershipPublicationAckCompletionSnapshot(options = {}, helperFns = {}) {
+  const requiredAckNodeIds = helperFns.normalizeNodeIdList(
+    options.requiredAckNodeIds,
+  );
+  const acknowledgedNodeIds = helperFns.normalizeNodeIdList(
+    options.acknowledgedNodeIds,
+  );
+  const pendingAckNodeIds = requiredAckNodeIds.filter(
+    (nodeId) => !acknowledgedNodeIds.includes(nodeId),
+  );
+  const state =
+    requiredAckNodeIds.length > NUM.ZERO &&
+      pendingAckNodeIds.length === NUM.ZERO ?
+      MEMBERSHIP_PUBLICATION_ACK_COMPLETION_STATE.COMPLETE :
+      MEMBERSHIP_PUBLICATION_ACK_COMPLETION_STATE.PENDING;
+
+  return {
+    state,
+    complete:
+      state === MEMBERSHIP_PUBLICATION_ACK_COMPLETION_STATE.COMPLETE,
+    requiredAckNodeIds,
+    acknowledgedNodeIds,
+    pendingAckNodeIds,
+  };
+}
+
+function resolveCandidatePublicationStatus(options = {}) {
+  if (options.ackCompletionSnapshot?.complete === true) {
+    return MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED;
+  }
+  if (options.changed === true) {
+    return MEMBERSHIP_PUBLICATION_STATUS.OPEN;
+  }
+  return String(
+    options.latestPublicationRow?.status || MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED,
+  ).toUpperCase();
+}
+
+function resolveCandidatePublicationLifecycleState(publicationStatus) {
+  return publicationStatus === MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED ?
+    MEMBERSHIP_LIFECYCLE_STATE.PUBLISHED_ACTIVE :
+    MEMBERSHIP_LIFECYCLE_STATE.PUBLISH_PENDING;
+}
+
+function buildMembershipPublicationRecoveryCohortSnapshot(options = {}, helperFns = {}) {
+  const publishedActiveNodeIds = helperFns.normalizeNodeIdList(
+    options.publishedActiveNodeIds,
+  );
+  const recoveryActiveNodeIds = helperFns.normalizeNodeIdList(
+    options.recoveryActiveNodeIds,
+  );
+  const targetState = options.publicationTargetSnapshot?.state;
+  const steadyTrimTarget =
+    targetState === MEMBERSHIP_PUBLICATION_TARGET_STATE.PROJECTED_STEADY_TRIM;
+  return {
+    activeNodeIds: steadyTrimTarget ? publishedActiveNodeIds : recoveryActiveNodeIds,
+    source: steadyTrimTarget ? targetState : options.recoveryActiveNodeSource,
+  };
+}
+
 function deriveMembershipPublicationCandidate(options = {}, helperFns = {}) {
   const planningSnapshot =
     options.planningSnapshot && typeof options.planningSnapshot === TYPEOF.OBJECT ?
@@ -773,7 +1036,8 @@ function deriveMembershipPublicationCandidate(options = {}, helperFns = {}) {
     allowControlPlaneRecoveryEligibleProjection: allowRecoveryEligibleProjection,
     allowLivenessFallbackProjection: allowPrioritySpreadLivenessFallbackProjection,
   });
-  const projectionDiagnostics = buildProjectionDiagnosticsSummary(activeNodeViews, helperFns);
+  const initialProjectionDiagnostics =
+    buildProjectionDiagnosticsSummary(activeNodeViews, helperFns);
   const projectedServingNodeIds = helperFns.normalizeNodeIdList(
     activeNodeViews.projectedServingNodeIds || activeNodeViews.projectedActiveNodeIds,
   );
@@ -790,24 +1054,73 @@ function deriveMembershipPublicationCandidate(options = {}, helperFns = {}) {
       publishedActiveNodeIds: publishedBaselineNodeIds,
       projectedServingNodeIds,
       locallyEligibleNodeIds,
-      projectionDiagnostics,
+      projectionDiagnostics: initialProjectionDiagnostics,
       participationByNodeId:
         planningSnapshot.membershipLifecycleSummary?.participationByNodeId,
     },
   });
+  const publicationAckTargetSnapshot = buildPublicationAckTargetSnapshot(
+    {
+      publishedBaselineNodeIds,
+      recoveryActiveNodeIds: recoveryActiveNodeCohort.activeNodeIds,
+      recoveryEligibleIncludedNodeIds:
+        initialProjectionDiagnostics?.recoveryEligibleIncludedNodeIds,
+      readinessByNodeId,
+    },
+    helperFns,
+  );
+  const projectionDiagnostics = buildPublicationAckProjectionDiagnostics(
+    initialProjectionDiagnostics,
+    publicationAckTargetSnapshot,
+  );
+  const publicationProjectedServingNodeIds = helperFns.normalizeNodeIdList(
+    projectedServingNodeIds.filter((nodeId) =>
+      !publicationAckTargetSnapshot.deferredNodeIds.includes(nodeId),
+    ),
+  );
+  const publicationLocallyEligibleNodeIds = helperFns.normalizeNodeIdList(
+    locallyEligibleNodeIds.filter((nodeId) =>
+      !publicationAckTargetSnapshot.deferredNodeIds.includes(nodeId),
+    ),
+  );
   const recoveryEpochByNodeId = helperFns.buildLatestRecoveryEpochByNodeId(
     options.recoveryEpochsByNodeId,
   );
-  const publishedActiveNodeIds = helperFns.normalizeNodeIdList(
-    Array.isArray(planningSnapshot.publishedActiveNodeIds) ?
-      planningSnapshot.publishedActiveNodeIds :
-      publishedBaselineNodeIds.length > NUM.ZERO ?
-        recoveryActiveNodeCohort.activeNodeIds :
-        helperFns.resolveObservedActiveNodeIds({
-          ...planningSnapshot,
-          readinessByNodeId,
-        }),
+  const observedActiveNodeIds = helperFns.resolveObservedActiveNodeIds({
+    ...planningSnapshot,
+    readinessByNodeId,
+  });
+  const publicationTargetSnapshot = buildMembershipPublicationTargetSnapshot(
+    {
+      explicitPublishedNodeIds:
+        Array.isArray(planningSnapshot.publishedActiveNodeIds) ?
+        planningSnapshot.publishedActiveNodeIds :
+        [],
+      publishedBaselineNodeIds,
+      projectedServingNodeIds: publicationProjectedServingNodeIds,
+      recoveryActiveNodeIds:
+        publicationAckTargetSnapshot.publishableRecoveryActiveNodeIds,
+      observedActiveNodeIds,
+      priorityRecoverySpreadGapPending,
+      observedRecoveryProjectionGap,
+      membershipFreezeActive: activeNodeViews.membershipFreeze?.active === true,
+    },
+    helperFns,
   );
+  const publishedActiveNodeIds = helperFns.normalizeNodeIdList(
+    publicationTargetSnapshot.nodeIds,
+  );
+  const publicationRecoveryCohortSnapshot =
+    buildMembershipPublicationRecoveryCohortSnapshot(
+      {
+        publicationTargetSnapshot,
+        publishedActiveNodeIds,
+        recoveryActiveNodeIds:
+          publicationAckTargetSnapshot.publishableRecoveryActiveNodeIds,
+        recoveryActiveNodeSource: recoveryActiveNodeCohort.source,
+      },
+      helperFns,
+    );
   const priorityRecoveryPublicationContext = buildActiveMembershipSnapshot({
     publishedActiveNodeIds,
     targetNodeId: planningSnapshot.targetNodeId,
@@ -816,12 +1129,12 @@ function deriveMembershipPublicationCandidate(options = {}, helperFns = {}) {
     clusterIncarnationFence: planningSnapshot.clusterIncarnationFence,
     membershipLifecycleSummary: {
       publishedActiveNodeIds,
-      projectedServingNodeIds,
-      locallyEligibleNodeIds,
+      projectedServingNodeIds: publicationProjectedServingNodeIds,
+      locallyEligibleNodeIds: publicationLocallyEligibleNodeIds,
       projectionDiagnostics,
     },
-    recoveryActiveNodeIds: recoveryActiveNodeCohort.activeNodeIds,
-    recoveryActiveNodeSource: recoveryActiveNodeCohort.source,
+    recoveryActiveNodeIds: publicationRecoveryCohortSnapshot.activeNodeIds,
+    recoveryActiveNodeSource: publicationRecoveryCohortSnapshot.source,
   });
   const requiredAckNodeIds = helperFns.normalizeNodeIdList(
     Array.isArray(planningSnapshot.requiredAckNodeIds) ?
@@ -838,6 +1151,13 @@ function deriveMembershipPublicationCandidate(options = {}, helperFns = {}) {
       planningSnapshot.acknowledgedNodeIds :
       []),
   ]);
+  const ackCompletionSnapshot = buildMembershipPublicationAckCompletionSnapshot(
+    {
+      requiredAckNodeIds,
+      acknowledgedNodeIds,
+    },
+    helperFns,
+  );
   const sourceTopologyEpoch = helperFns.normalizePositiveInteger(
     planningSnapshot.sourceTopologyEpoch,
     null,
@@ -846,15 +1166,46 @@ function deriveMembershipPublicationCandidate(options = {}, helperFns = {}) {
     planningSnapshot.sourceSnapshotVersion,
     null,
   );
+  const baselineEpoch = helperFns.normalizePositiveInteger(
+    latestPublicationRow?.publicationEpoch,
+    NUM.ZERO,
+  );
+  const changed =
+    !latestPublicationRow ||
+    !helperFns.listEquals(latestPublicationRow.publishedActiveNodeIds, publishedActiveNodeIds) ||
+    helperFns.didOptionalSourceVersionChange(
+      latestPublicationRow.sourceTopologyEpoch,
+      sourceTopologyEpoch,
+    ) ||
+    helperFns.didOptionalSourceVersionChange(
+      latestPublicationRow.sourceSnapshotVersion,
+      sourceSnapshotVersion,
+    );
+  const candidatePublicationEpoch =
+    changed ?
+      baselineEpoch + NUM.ONE :
+      Math.max(baselineEpoch, NUM.ONE);
+  const candidatePublicationStatus = resolveCandidatePublicationStatus({
+    changed,
+    latestPublicationRow,
+    ackCompletionSnapshot,
+  });
+  const candidateLifecycleState = resolveCandidatePublicationLifecycleState(
+    candidatePublicationStatus,
+  );
+  const durablePublishedActiveNodeIds =
+    candidatePublicationStatus === MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED ?
+      publishedActiveNodeIds :
+      publishedBaselineNodeIds;
   const normalizedPriorityPartitionSummary = normalizePriorityPartitionSummary(
     planningSnapshot.priorityPartitionSummary ||
       planningSnapshot.priorityRecoveryPlanningSnapshot?.priorityPartitionSummary,
     {
       requiredDistinctNodeCount: Math.min(
         PRIORITY_SPREAD_REQUIRED_DISTINCT_NODE_COUNT,
-        locallyEligibleNodeIds.length,
+        publicationLocallyEligibleNodeIds.length,
       ),
-      readyEligibleNodeCount: locallyEligibleNodeIds.length,
+      readyEligibleNodeCount: publicationLocallyEligibleNodeIds.length,
     },
     helperFns,
   );
@@ -863,8 +1214,8 @@ function deriveMembershipPublicationCandidate(options = {}, helperFns = {}) {
       serviceRows: planningSnapshot.serviceRows,
       partitionRows: planningSnapshot.partitionRows,
       readinessByNodeId,
-      projectedServingNodeIds,
-      locallyEligibleNodeIds,
+      projectedServingNodeIds: publicationProjectedServingNodeIds,
+      locallyEligibleNodeIds: publicationLocallyEligibleNodeIds,
       publishedActiveNodeIds,
     },
     helperFns,
@@ -883,10 +1234,10 @@ function deriveMembershipPublicationCandidate(options = {}, helperFns = {}) {
     typeof planningSnapshot.membershipLifecycleSummary === TYPEOF.OBJECT ?
       buildMembershipLifecycleSummary(planningSnapshot.membershipLifecycleSummary) :
       buildMembershipLifecycleSummary({
-        lifecycleState: MEMBERSHIP_LIFECYCLE_STATE.PUBLISH_PENDING,
+        lifecycleState: candidateLifecycleState,
         publishedActiveNodeIds,
         projectedServingNodeIds,
-        locallyEligibleNodeIds,
+        locallyEligibleNodeIds: publicationLocallyEligibleNodeIds,
         suspectedOrTransitioningNodeIds: activeNodeViews.suspectedOrTransitioningNodeIds,
         memberStatesByNodeId: buildPublishedMemberStates(
           {
@@ -912,9 +1263,7 @@ function deriveMembershipPublicationCandidate(options = {}, helperFns = {}) {
         missingPublishedRecoveryActiveNodeIds:
           priorityRecoveryPublicationContext.missingPublishedRecoveryActiveNodeIds,
       });
-  const pendingAckNodeIds = requiredAckNodeIds.filter(
-    (nodeId) => !acknowledgedNodeIds.includes(nodeId),
-  );
+  const pendingAckNodeIds = ackCompletionSnapshot.pendingAckNodeIds;
   const {
     priorityRecoveryClosureWitness,
   } = buildPriorityRecoveryClosureEvidence(
@@ -945,45 +1294,20 @@ function deriveMembershipPublicationCandidate(options = {}, helperFns = {}) {
     priorityRecoveryClosureWitness?.refreshedPriorityPartitionSummary,
     helperFns,
   );
-  const baselineEpoch = helperFns.normalizePositiveInteger(
-    latestPublicationRow?.publicationEpoch,
-    NUM.ZERO,
-  );
-  const changed =
-    !latestPublicationRow ||
-    !helperFns.listEquals(latestPublicationRow.publishedActiveNodeIds, publishedActiveNodeIds) ||
-    helperFns.didOptionalSourceVersionChange(
-      latestPublicationRow.sourceTopologyEpoch,
-      sourceTopologyEpoch,
-    ) ||
-    helperFns.didOptionalSourceVersionChange(
-      latestPublicationRow.sourceSnapshotVersion,
-      sourceSnapshotVersion,
-    );
   const priorityPartitionSummaryChanged = !arePriorityPartitionSummariesEqual(
     latestPublicationRow?.priorityPartitionSummary,
     priorityPartitionSummary,
     helperFns,
   );
-  const candidatePublicationEpoch =
-    changed ?
-      baselineEpoch + NUM.ONE :
-      Math.max(baselineEpoch, NUM.ONE);
-  const candidatePublicationStatus =
-    changed === true ?
-      MEMBERSHIP_PUBLICATION_STATUS.OPEN :
-      String(
-        latestPublicationRow?.status || MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED,
-      ).toUpperCase();
   const recoveryProtocolSnapshot = buildRecoveryProtocolSnapshot({
     publicationEpoch: candidatePublicationEpoch,
     publicationStatus: candidatePublicationStatus,
-    targetNodeId: planningSnapshot.targetNodeId || planningSnapshot.publisherNodeId,
+    targetNodeId: planningSnapshot.targetNodeId,
     admissionState: planningSnapshot.admissionState,
     admissionReasonCodes: planningSnapshot.admissionReasonCodes,
     clusterIncarnationFence: planningSnapshot.clusterIncarnationFence,
     publishedActiveNodeIdsPresent: true,
-    durablePublishedActiveNodeIds: publishedBaselineNodeIds,
+    durablePublishedActiveNodeIds,
     publishedActiveNodeIds,
     requiredAckNodeIds,
     acknowledgedNodeIds,
@@ -996,6 +1320,7 @@ function deriveMembershipPublicationCandidate(options = {}, helperFns = {}) {
   });
   const membershipLifecycleSummary = buildMembershipLifecycleSummary({
     ...membershipLifecycleSummaryBase,
+    lifecycleState: candidateLifecycleState,
     participationByNodeId: recoveryProtocolSnapshot.participationByNodeId,
     participationStateCounts: recoveryProtocolSnapshot.participationStateCounts,
     recoveryProtocolState: recoveryProtocolSnapshot.recoveryProtocolState,
@@ -1017,7 +1342,7 @@ function deriveMembershipPublicationCandidate(options = {}, helperFns = {}) {
     priorityPartitionSummary,
     membershipLifecycleSummary,
     projectedServingNodeIds,
-    locallyEligibleNodeIds,
+    locallyEligibleNodeIds: publicationLocallyEligibleNodeIds,
     recoveryEligibleIncludedNodeIds: recoveryProtocolSnapshot.recoveryEligibleIncludedNodeIds,
     recoveryActiveNodeIds: recoveryProtocolSnapshot.recoveryActiveNodeIds,
     recoveryActiveNodeSource: recoveryProtocolSnapshot.recoveryActiveNodeSource,
@@ -1028,8 +1353,7 @@ function deriveMembershipPublicationCandidate(options = {}, helperFns = {}) {
     recoveryProtocolState: recoveryProtocolSnapshot.recoveryProtocolState,
     targetParticipation: recoveryProtocolSnapshot.targetParticipation,
     priorityRecoveryReasonCodes: recoveryProtocolSnapshot.priorityRecoveryReasonCodes,
-    targetNodeId:
-      planningSnapshot.targetNodeId || planningSnapshot.publisherNodeId || null,
+    targetNodeId: planningSnapshot.targetNodeId,
     admissionState: planningSnapshot.admissionState || null,
     admissionReasonCodes: Array.isArray(planningSnapshot.admissionReasonCodes) ?
       planningSnapshot.admissionReasonCodes :

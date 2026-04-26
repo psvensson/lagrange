@@ -2,7 +2,7 @@ export function registerAdminControlSnapshotTailTests({
   test,
   TABLES,
   AdminControlSnapshot,
-  CONTROL_PLANE_READINESS_DIMENSION
+  CONTROL_PLANE_READINESS_DIMENSION,
 }) {
   test('AdminControlSnapshot default snapshots recover published membership after a cache miss on a pending publication',
     async (t) => {
@@ -867,7 +867,6 @@ export function registerAdminControlSnapshotTailTests({
         ['node-b'],
         'decision snapshots should surface recovery-eligible nodes excluded by coordinator admission',
       );
-
     });
 
   test('AdminControlSnapshot classifies spread-gap partitions with only terminal operations as eligible/no-operation blockers',
@@ -1465,14 +1464,29 @@ export function registerAdminControlSnapshotTailTests({
         1,
         'non-forced snapshots should still attempt one authoritative repair before degrading',
       );
-      t.same(
+      t.match(
         result,
-        localSnapshot,
-        'backpressure-shaped repair failures should degrade to the local snapshot instead of failing the control snapshot outright',
+        {
+          nodes: localSnapshot.nodes,
+          controlPlaneDiagnostics: localSnapshot.controlPlaneDiagnostics,
+          observationMode: 'repair_deferred',
+          adminObservation: {
+            mode: 'repair_deferred',
+            sharedOwnerResolved: false,
+            repair: {
+              applied: false,
+              forced: false,
+              deferred: true,
+              failed: false,
+              triggerCodes: ['replica_operations_stale'],
+            },
+          },
+        },
+        'backpressure-shaped repair failures should degrade to the local snapshot with explicit observation metadata',
       );
     });
 
-  test('AdminControlSnapshot routes shared snapshot resolution through the injected control-plane snapshot owner',
+  test('AdminControlSnapshot routes shared snapshot resolution through the injected control-plane snapshot owner with observation metadata',
     async (t) => {
       const ownerResult = {
         nodes: ['node-1'],
@@ -1519,10 +1533,25 @@ export function registerAdminControlSnapshotTailTests({
         },
         'control snapshot should preserve resolution options when delegating',
       );
-      t.equal(
+      t.match(
         result,
-        ownerResult,
-        'control snapshot should return the shared owner result verbatim',
+        {
+          nodes: ownerResult.nodes,
+          snapshotObservation: ownerResult.snapshotObservation,
+          observationMode: 'fresh_owner',
+          adminObservation: {
+            mode: 'fresh_owner',
+            sharedOwnerResolved: true,
+            repair: {
+              applied: false,
+              forced: false,
+              deferred: false,
+              failed: false,
+              triggerCodes: [],
+            },
+          },
+        },
+        'control snapshot should return the shared owner result with explicit observation metadata',
       );
     });
 }

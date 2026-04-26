@@ -26,34 +26,34 @@ const PG_SSL_REQUEST_CODE = (1234 << 16) | 5679;
 // --- Frontend (client -> server) message type bytes ---
 
 const PG_FRONTEND_MSG = Object.freeze({
-  QUERY: 0x51,           // 'Q'
-  PARSE: 0x50,           // 'P'
-  BIND: 0x42,            // 'B'
-  DESCRIBE: 0x44,        // 'D'
-  EXECUTE: 0x45,         // 'E'
-  SYNC: 0x53,            // 'S'
-  CLOSE: 0x43,           // 'C'
-  TERMINATE: 0x58,       // 'X'
-  FLUSH: 0x48,           // 'H'
+  QUERY: 0x51, // 'Q'
+  PARSE: 0x50, // 'P'
+  BIND: 0x42, // 'B'
+  DESCRIBE: 0x44, // 'D'
+  EXECUTE: 0x45, // 'E'
+  SYNC: 0x53, // 'S'
+  CLOSE: 0x43, // 'C'
+  TERMINATE: 0x58, // 'X'
+  FLUSH: 0x48, // 'H'
 });
 
 // --- Backend (server -> client) message type bytes ---
 
 const PG_BACKEND_MSG = Object.freeze({
-  AUTH: 0x52,             // 'R'
+  AUTH: 0x52, // 'R'
   PARAMETER_STATUS: 0x53, // 'S'
   BACKEND_KEY_DATA: 0x4B, // 'K'
-  READY_FOR_QUERY: 0x5A,  // 'Z'
-  ROW_DESCRIPTION: 0x54,  // 'T'
-  DATA_ROW: 0x44,         // 'D'
-  COMMAND_COMPLETE: 0x43,  // 'C'
-  ERROR_RESPONSE: 0x45,   // 'E'
-  NOTICE_RESPONSE: 0x4E,  // 'N'
-  PARSE_COMPLETE: 0x31,   // '1'
-  BIND_COMPLETE: 0x32,    // '2'
-  CLOSE_COMPLETE: 0x33,   // '3'
-  NO_DATA: 0x6E,          // 'n'
-  EMPTY_QUERY: 0x49,      // 'I'
+  READY_FOR_QUERY: 0x5A, // 'Z'
+  ROW_DESCRIPTION: 0x54, // 'T'
+  DATA_ROW: 0x44, // 'D'
+  COMMAND_COMPLETE: 0x43, // 'C'
+  ERROR_RESPONSE: 0x45, // 'E'
+  NOTICE_RESPONSE: 0x4E, // 'N'
+  PARSE_COMPLETE: 0x31, // '1'
+  BIND_COMPLETE: 0x32, // '2'
+  CLOSE_COMPLETE: 0x33, // '3'
+  NO_DATA: 0x6E, // 'n'
+  EMPTY_QUERY: 0x49, // 'I'
 });
 
 // --- Authentication types ---
@@ -68,20 +68,20 @@ const PG_AUTH_TYPE = Object.freeze({
 // --- Transaction state indicators for ReadyForQuery ---
 
 const PG_TRANSACTION_STATE = Object.freeze({
-  IDLE: 0x49,             // 'I' - not in transaction
-  IN_TRANSACTION: 0x54,   // 'T' - in transaction block
-  FAILED: 0x45,           // 'E' - in failed transaction block
+  IDLE: 0x49, // 'I' - not in transaction
+  IN_TRANSACTION: 0x54, // 'T' - in transaction block
+  FAILED: 0x45, // 'E' - in failed transaction block
 });
 
 // --- Error/Notice field identifiers ---
 
 const PG_ERROR_FIELD = Object.freeze({
-  SEVERITY: 0x53,         // 'S'
-  CODE: 0x43,             // 'C'
-  MESSAGE: 0x4D,          // 'M'
-  DETAIL: 0x44,           // 'D'
-  HINT: 0x48,             // 'H'
-  POSITION: 0x50,         // 'P'
+  SEVERITY: 0x53, // 'S'
+  CODE: 0x43, // 'C'
+  MESSAGE: 0x4D, // 'M'
+  DETAIL: 0x44, // 'D'
+  HINT: 0x48, // 'H'
+  POSITION: 0x50, // 'P'
 });
 
 // --- Error severity values ---
@@ -109,15 +109,15 @@ const PG_ERROR_CODE = Object.freeze({
 // --- Describe target types ---
 
 const PG_DESCRIBE_TYPE = Object.freeze({
-  STATEMENT: 0x53,        // 'S'
-  PORTAL: 0x50,           // 'P'
+  STATEMENT: 0x53, // 'S'
+  PORTAL: 0x50, // 'P'
 });
 
 // --- Close target types ---
 
 const PG_CLOSE_TYPE = Object.freeze({
-  STATEMENT: 0x53,        // 'S'
-  PORTAL: 0x50,           // 'P'
+  STATEMENT: 0x53, // 'S'
+  PORTAL: 0x50, // 'P'
 });
 
 // --- Default server parameters sent during startup ---

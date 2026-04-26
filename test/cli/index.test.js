@@ -379,9 +379,9 @@ test('AdminCLI node management commands', async (t) => {
 
     t.equal(sendCalls, 0, 'should not send mutation in read-only mode');
     t.match(
-        shownError,
-        /read-only mode/,
-        'should explain why node management command was rejected',
+      shownError,
+      /read-only mode/,
+      'should explain why node management command was rejected',
     );
   });
 });

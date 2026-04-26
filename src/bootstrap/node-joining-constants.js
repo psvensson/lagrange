@@ -300,6 +300,10 @@ const JOINING_CLEANUP_STEP = Object.freeze({
   CONNECTING_WEBSOCKET: 'connecting_websocket',
 });
 
+const JOIN_CLEANUP_LIFECYCLE_TRANSITION_ERROR = Object.freeze({
+  TARGET_FAILED_PREFIX: 'failed lifecycle transition to ',
+});
+
 const JOINING_ERROR_NAME = Object.freeze({
   ABORT: 'AbortError',
 });
@@ -341,6 +345,7 @@ export {
   CDC_SUBSCRIPTION_STATUS,
   JOIN_BACKFILL_QUERY,
   JOIN_BACKFILL_SCOPE,
+  JOIN_CLEANUP_LIFECYCLE_TRANSITION_ERROR,
   JOIN_REPLICA_DEFAULT,
   JOINING_CLEANUP_STEP,
   JOINING_DEFAULT,

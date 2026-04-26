@@ -10,7 +10,6 @@ import {
   ResultStream,
   estimateRowBytes,
   STREAM_STATE,
-  STREAM_ERROR_MSG,
 } from '../../src/query/result-stream.js';
 import {
   QUERY_BUDGET_ERROR_MSG,

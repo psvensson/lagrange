@@ -14,22 +14,7 @@ function createDistributedRunRuntimeBundle(deps = {}) {
     LEVEL_DEBUG,
     CONTROL_CHAR_MAX_CODE,
     DELETE_CHAR_CODE,
-    RUNNER_STAGE_CONFIG_LOADING,
-    RUNNER_STAGE_CONFIG_LOADED,
-    RUNNER_STAGE_SCENARIO_DISCOVERY,
-    RUNNER_STAGE_SCENARIO_FILTER_ALL,
-    RUNNER_STAGE_SCENARIO_FILTER_PREFIX,
-    RUNNER_STAGE_DOCKER_MODE_PREFIX,
-    RUNNER_STAGE_CLUSTER_SIZE_PREFIX,
-    RUNNER_STAGE_REMOTE_HOSTS,
-    RUNNER_STAGE_LOCAL_SOCKET,
-    RUNNER_STAGE_SCENARIO_COUNT_PREFIX,
-    RUNNER_STAGE_SCENARIO_COUNT_SUFFIX,
-    RUNNER_STAGE_ARTIFACTS_DIR_PREFIX,
-    RUNNER_STAGE_DETERMINISTIC_DEBUG_PREFIX,
-    BUILD_PROGRESS_LOG_PREFIX,
     DOCKER_COMMAND_LOG_PREFIX,
-    SCENARIO_PHASE_LOG_PREFIX,
     BUILD_PROGRESS_ID_KEY,
     BUILD_PROGRESS_STATUS_KEY,
     BUILD_PROGRESS_PROGRESS_KEY,
@@ -46,24 +31,6 @@ function createDistributedRunRuntimeBundle(deps = {}) {
     DOCKER_OP_NETWORK_CONNECT,
     DOCKER_OP_NETWORK_DISCONNECT,
     DOCKER_LINE_EMPTY,
-    GIT_HASH_COMMAND,
-    GIT_HASH_ARGS,
-    GIT_STATUS_COMMAND,
-    GIT_STATUS_ARGS,
-    GIT_HASH_FALLBACK,
-    IMAGE_LABEL_GIT_HASH,
-    IMAGE_REUSE_LOG_PREFIX,
-    IMAGE_REBUILD_DIRTY_PREFIX,
-    IMAGE_BUILD_LOG_PREFIX,
-    IMAGE_BUILD_LOG_SUFFIX,
-    IMAGE_BUILD_WITH_COMMIT_PREFIX,
-    IMAGE_SKIP_DIRTY_REBUILD_PREFIX,
-    IMAGE_SKIP_DIRTY_REBUILD_MISSING_SUFFIX,
-    RUN_OUTPUT_DIRNAME,
-    REPORT_JSON_EXTENSION,
-    FALLBACK_OUTPUT_BASENAME,
-    HISTORICAL_REPORT_SCAN_LIMIT,
-    UTF8_ENCODING,
     TRACE_ASSERTION_ERROR_PREFIX,
     TRACE_ASSERTION_MISSING_ARTIFACT,
     TRACE_ASSERTION_NO_EVENTS,
@@ -76,26 +43,8 @@ function createDistributedRunRuntimeBundle(deps = {}) {
     MEMORY_ANALYSIS_WARNING_SAMPLES_PATH_MISSING,
     MEMORY_ANALYSIS_WARNING_SAMPLES_READ_FAILED,
     SCENARIO_ASSERTION_POLICY,
-    SCENARIO_FILTER_ALL,
     BENCHMARK_GATE_DEFAULTS,
-    BENCHMARK_GATE_STATUS,
-    BENCHMARK_GATE_SKIP_REASON,
-    BENCHMARK_GATE_FAIL_REASON,
     BENCHMARK_GATE_PARITY_POLICY,
-    FAST_LOCAL_SOURCE_RELATIVE_PATH,
-    FAST_LOCAL_SOURCE_CONTAINER_PATH,
-    FAST_LOCAL_BIND_READ_ONLY_SUFFIX,
-    FAST_LOCAL_LOG_PREFIX,
-    SEEDED_PRNG_MULTIPLIER,
-    SEEDED_PRNG_INCREMENT,
-    SEEDED_PRNG_MODULUS,
-    SCENARIO_PHASE_EVENT_TYPE_START,
-    SCENARIO_PHASE_EVENT_TYPE_END,
-    SCENARIO_PHASE_EVENT_TYPE_PROGRESS,
-    SCENARIO_PHASE_EVENT_TYPE_LAST_MEANINGFUL_CHANGE,
-    SCENARIO_PHASE_EVENT_TYPE_NO_PROGRESS_WARNING,
-    SCENARIO_PHASE_EVENT_TYPE_FAILED_NO_PROGRESS,
-    SUMMARY_SEPARATOR,
     SUMMARY_HEADER,
     SUMMARY_FOOTER,
     SUMMARY_RESULT_PASS,
@@ -137,57 +86,58 @@ function createDistributedRunRuntimeBundle(deps = {}) {
     formatLogEntry,
     installScenarioPhaseEventSink,
     resolveClusterSize,
+    dirname,
     pathToFileURL,
     resolve,
     normalizeFiniteNumber,
   } = deps;
 
-function resolveBenchmarkGateConfig(config) {
-  const configuredGate = config?.benchmarkGate &&
+  function resolveBenchmarkGateConfig(config) {
+    const configuredGate = config?.benchmarkGate &&
     typeof config.benchmarkGate === 'object' ?
-    config.benchmarkGate :
-    {};
-  const configuredMaxRegression = normalizeFiniteNumber(
-    configuredGate.maxThroughputRegressionRatio,
-  );
-  const configuredBaselineProvider = String(
-    configuredGate.baselineProvider || '',
-  ).trim().toLowerCase();
-  const configuredMitigationId = String(
-    configuredGate.approvedMitigationId || '',
-  ).trim();
-  const configuredMinimumThroughputRatio = normalizeFiniteNumber(
-    configuredGate.minimumThroughputRatioSutToBaseline,
-  );
-  const configuredParityPolicy = String(
-    configuredGate.parityMismatchPolicy || '',
-  ).trim().toLowerCase();
-  const defaultMinimumThroughputRatio = normalizeFiniteNumber(
-    BENCHMARK_GATE_DEFAULTS.minimumThroughputRatioSutToBaseline,
-  );
-  const defaultParityPolicy = String(
-    BENCHMARK_GATE_DEFAULTS.parityMismatchPolicy ||
+      config.benchmarkGate :
+      {};
+    const configuredMaxRegression = normalizeFiniteNumber(
+      configuredGate.maxThroughputRegressionRatio,
+    );
+    const configuredBaselineProvider = String(
+      configuredGate.baselineProvider || '',
+    ).trim().toLowerCase();
+    const configuredMitigationId = String(
+      configuredGate.approvedMitigationId || '',
+    ).trim();
+    const configuredMinimumThroughputRatio = normalizeFiniteNumber(
+      configuredGate.minimumThroughputRatioSutToBaseline,
+    );
+    const configuredParityPolicy = String(
+      configuredGate.parityMismatchPolicy || '',
+    ).trim().toLowerCase();
+    const defaultMinimumThroughputRatio = normalizeFiniteNumber(
+      BENCHMARK_GATE_DEFAULTS.minimumThroughputRatioSutToBaseline,
+    );
+    const defaultParityPolicy = String(
+      BENCHMARK_GATE_DEFAULTS.parityMismatchPolicy ||
       BENCHMARK_GATE_PARITY_POLICY.WARN,
-  ).trim().toLowerCase();
-  const parityMismatchPolicy = configuredParityPolicy ===
+    ).trim().toLowerCase();
+    const parityMismatchPolicy = configuredParityPolicy ===
     BENCHMARK_GATE_PARITY_POLICY.FAIL ||
     configuredParityPolicy === BENCHMARK_GATE_PARITY_POLICY.WARN ||
     configuredParityPolicy === BENCHMARK_GATE_PARITY_POLICY.IGNORE ?
-    configuredParityPolicy :
-    (defaultParityPolicy === BENCHMARK_GATE_PARITY_POLICY.FAIL ||
+      configuredParityPolicy :
+      (defaultParityPolicy === BENCHMARK_GATE_PARITY_POLICY.FAIL ||
       defaultParityPolicy === BENCHMARK_GATE_PARITY_POLICY.WARN ||
       defaultParityPolicy === BENCHMARK_GATE_PARITY_POLICY.IGNORE ?
-      defaultParityPolicy :
-      BENCHMARK_GATE_PARITY_POLICY.WARN);
+        defaultParityPolicy :
+        BENCHMARK_GATE_PARITY_POLICY.WARN);
 
-  return {
-    enabled: configuredGate.enabled === true,
-    maxThroughputRegressionRatio:
+    return {
+      enabled: configuredGate.enabled === true,
+      maxThroughputRegressionRatio:
       configuredMaxRegression !== null &&
       configuredMaxRegression >= 0 ?
         configuredMaxRegression :
         BENCHMARK_GATE_DEFAULTS.maxThroughputRegressionRatio,
-    minimumThroughputRatioSutToBaseline:
+      minimumThroughputRatioSutToBaseline:
       configuredMinimumThroughputRatio !== null &&
       configuredMinimumThroughputRatio >= 0 ?
         configuredMinimumThroughputRatio :
@@ -195,65 +145,65 @@ function resolveBenchmarkGateConfig(config) {
           defaultMinimumThroughputRatio >= 0 ?
           defaultMinimumThroughputRatio :
           null),
-    baselineProvider: configuredBaselineProvider ||
+      baselineProvider: configuredBaselineProvider ||
       BENCHMARK_GATE_DEFAULTS.baselineProvider,
-    failIfBaselineMissing: configuredGate.failIfBaselineMissing === true ||
+      failIfBaselineMissing: configuredGate.failIfBaselineMissing === true ||
       BENCHMARK_GATE_DEFAULTS.failIfBaselineMissing === true,
-    approvedMitigationId: configuredMitigationId || null,
-    parityMismatchPolicy,
-  };
-}
-
-function buildHistoricalBaselineIndex(historyReports, baselineProvider) {
-  const bySimilarityKey = new Map();
-
-  for (const historicalReport of historyReports) {
-    const reportProvider = String(
-      historicalReport?.metadata?.raftProvider || '',
-    ).trim().toLowerCase();
-    if (reportProvider !== baselineProvider) {
-      continue;
-    }
-
-    const scenarioSummaries = Array.isArray(
-      historicalReport?.standardSummary?.scenarios,
-    ) ?
-      historicalReport.standardSummary.scenarios :
-      [];
-
-    for (const scenarioSummary of scenarioSummaries) {
-      const similarityKey = String(
-        scenarioSummary?.similarityKey || '',
-      ).trim();
-      if (!similarityKey || bySimilarityKey.has(similarityKey)) {
-        continue;
-      }
-
-      const baselineOpsPerSec = normalizeFiniteNumber(
-        scenarioSummary?.current?.opsPerSec,
-      );
-      if (baselineOpsPerSec === null || baselineOpsPerSec <= 0) {
-        continue;
-      }
-
-      bySimilarityKey.set(similarityKey, {
-        provider: reportProvider,
-        reportPath: historicalReport?.path || null,
-        reportTimestamp: historicalReport?.timestamp || null,
-        scenario: scenarioSummary?.scenario || null,
-        opsPerSec: baselineOpsPerSec,
-      });
-    }
+      approvedMitigationId: configuredMitigationId || null,
+      parityMismatchPolicy,
+    };
   }
 
-  return bySimilarityKey;
-}
+  function buildHistoricalBaselineIndex(historyReports, baselineProvider) {
+    const bySimilarityKey = new Map();
+
+    for (const historicalReport of historyReports) {
+      const reportProvider = String(
+        historicalReport?.metadata?.raftProvider || '',
+      ).trim().toLowerCase();
+      if (reportProvider !== baselineProvider) {
+        continue;
+      }
+
+      const scenarioSummaries = Array.isArray(
+        historicalReport?.standardSummary?.scenarios,
+      ) ?
+        historicalReport.standardSummary.scenarios :
+        [];
+
+      for (const scenarioSummary of scenarioSummaries) {
+        const similarityKey = String(
+          scenarioSummary?.similarityKey || '',
+        ).trim();
+        if (!similarityKey || bySimilarityKey.has(similarityKey)) {
+          continue;
+        }
+
+        const baselineOpsPerSec = normalizeFiniteNumber(
+          scenarioSummary?.current?.opsPerSec,
+        );
+        if (baselineOpsPerSec === null || baselineOpsPerSec <= 0) {
+          continue;
+        }
+
+        bySimilarityKey.set(similarityKey, {
+          provider: reportProvider,
+          reportPath: historicalReport?.path || null,
+          reportTimestamp: historicalReport?.timestamp || null,
+          scenario: scenarioSummary?.scenario || null,
+          opsPerSec: baselineOpsPerSec,
+        });
+      }
+    }
+
+    return bySimilarityKey;
+  }
 
 
   function dockerActionLine(action, details) {
     return `${action} ${details}`.trim();
   }
-  
+
   function formatDockerOperationEvent(event) {
     const operation = String(event?.operation || DOCKER_OP_UNKNOWN);
     const stage = String(event?.stage || DOCKER_LINE_EMPTY);
@@ -320,7 +270,7 @@ function buildHistoricalBaselineIndex(historyReports, baselineProvider) {
     }
     }
   }
-  
+
   function createDockerOperationSink(verbose) {
     if (!verbose) {
       return null;
@@ -333,7 +283,7 @@ function buildHistoricalBaselineIndex(historyReports, baselineProvider) {
       process.stdout.write(DOCKER_COMMAND_LOG_PREFIX + line + '\n');
     };
   }
-  
+
   function extractBuildProgressLine(event) {
     if (!event || typeof event !== 'object') {
       return '';
@@ -350,7 +300,7 @@ function buildHistoricalBaselineIndex(historyReports, baselineProvider) {
     const parts = [id, status, progress].filter((part) => Boolean(part));
     return parts.join(' ').trim();
   }
-  
+
   function extractScenarioFailurePartialResult(errorDiagnostics) {
     const partialResult = errorDiagnostics?.partialResult;
     if (!partialResult || typeof partialResult !== 'object' ||
@@ -359,7 +309,7 @@ function buildHistoricalBaselineIndex(historyReports, baselineProvider) {
     }
     return partialResult;
   }
-  
+
   function mergeFailedScenarioDetails(errorDiagnostics, partialResult) {
     const diagnostics = errorDiagnostics && typeof errorDiagnostics === 'object' ?
       {...errorDiagnostics} :
@@ -378,7 +328,7 @@ function buildHistoricalBaselineIndex(historyReports, baselineProvider) {
     }
     return Object.keys(details).length > 0 ? details : null;
   }
-  
+
   /**
    * Run discovered scenarios sequentially.
    * Each scenario runs in isolation: createCluster → run → teardown.
@@ -411,18 +361,18 @@ function buildHistoricalBaselineIndex(historyReports, baselineProvider) {
     const clusterFactory = typeof options?.clusterFactory === 'function' ?
       options.clusterFactory :
       createCluster;
-  
+
     for (const scenario of scenarios) {
       const startedAt = new Date().toISOString();
       const startMs = Date.now();
       let scenarioResult = null;
-  
+
       if (options.verbose) {
         process.stdout.write(
           'Running scenario: ' + scenario.name + '\n',
         );
       }
-  
+
       let cluster = null;
       try {
         const clusterConfig = dockerOperationSink ?
@@ -438,7 +388,7 @@ function buildHistoricalBaselineIndex(historyReports, baselineProvider) {
           scenario.name,
           createScenarioPhaseEventSink(options.verbose, scenario.name),
         );
-  
+
         if (options.verbose) {
           const collector = cluster.getLogCollector();
           collector.setEntrySink((entry) => {
@@ -450,12 +400,12 @@ function buildHistoricalBaselineIndex(historyReports, baselineProvider) {
             );
           });
         }
-  
+
         const scenarioModule = await loadScenarioModule(scenario.path);
         const scenarioPayload = normalizeScenarioPayload(
           await scenarioModule.run(cluster),
         );
-  
+
         // Run log analysis before teardown
         const analyzer = cluster.getLogAnalyzer();
         const collector = cluster.getLogCollector();
@@ -483,7 +433,7 @@ function buildHistoricalBaselineIndex(historyReports, baselineProvider) {
         } catch (_analysisErr) {
           // Analysis is best-effort
         }
-  
+
         const duration = Date.now() - startMs;
         scenarioResult = {
           ...(scenarioPayload || {}),
@@ -497,7 +447,7 @@ function buildHistoricalBaselineIndex(historyReports, baselineProvider) {
         if (scenarioPayload) {
           scenarioResult.details = scenarioPayload;
         }
-  
+
         if (options.verbose) {
           process.stdout.write(
             'Scenario passed: ' + scenario.name +
@@ -515,7 +465,7 @@ function buildHistoricalBaselineIndex(historyReports, baselineProvider) {
           null;
         const partialResult = extractScenarioFailurePartialResult(errorDiagnostics);
         let performanceDiagnostics = null;
-  
+
         // Attempt fallback log collection on failure
         const analysisSummary = null;
         if (cluster) {
@@ -540,7 +490,7 @@ function buildHistoricalBaselineIndex(historyReports, baselineProvider) {
             // Best-effort fallback
           }
         }
-  
+
         scenarioResult = {
           passed: false,
           duration,
@@ -554,7 +504,7 @@ function buildHistoricalBaselineIndex(historyReports, baselineProvider) {
           clusterSize: resolveClusterSize(config),
           performanceDiagnostics,
         };
-  
+
         if (options.verbose) {
           process.stderr.write(
             'Scenario failed: ' + scenario.name +
@@ -586,7 +536,7 @@ function buildHistoricalBaselineIndex(historyReports, baselineProvider) {
             trace = {warning: 'Unable to read trace manifest'};
           }
         }
-  
+
         if (!scenarioResult) {
           scenarioResult = {
             passed: false,
@@ -599,7 +549,7 @@ function buildHistoricalBaselineIndex(historyReports, baselineProvider) {
             performanceDiagnostics: null,
           };
         }
-  
+
         if (playbackWarning) {
           scenarioResult.playback = {
             warning: playbackWarning,
@@ -608,7 +558,7 @@ function buildHistoricalBaselineIndex(historyReports, baselineProvider) {
           scenarioResult.playback = playback;
         }
         scenarioResult.trace = trace;
-  
+
         if (scenarioResult?.details?.diagnostics?.rootCauseBundle &&
             playback && typeof playback === 'object') {
           const files = playback.files && typeof playback.files === 'object' ?
@@ -634,7 +584,7 @@ function buildHistoricalBaselineIndex(historyReports, baselineProvider) {
             ...(viewerPath ? {viewerPath} : {}),
           };
         }
-  
+
         const scenarioMemoryLeakConfig = resolveScenarioMemoryLeakConfig(
           scenario.name,
           config,
@@ -643,7 +593,7 @@ function buildHistoricalBaselineIndex(historyReports, baselineProvider) {
           scenarioResult.playback,
           scenarioMemoryLeakConfig,
         );
-  
+
         const traceAssertion = evaluateTraceAssertions(
           trace,
           config.debugTrace,
@@ -656,7 +606,7 @@ function buildHistoricalBaselineIndex(historyReports, baselineProvider) {
             hasFailures = true;
           }
         }
-  
+
         const memoryLeakAssertion = evaluateMemoryLeakAssertions(
           scenarioResult.memoryLeak,
           scenarioMemoryLeakConfig,
@@ -686,21 +636,21 @@ function buildHistoricalBaselineIndex(historyReports, baselineProvider) {
         report.addResult(scenario.name, scenarioResult);
       }
     }
-  
+
     return {report, hasFailures};
   }
-  
+
   function shouldPrintLiveLogEntry(entry) {
     const nodeId = String(entry?.node_id || '').toLowerCase();
     if (nodeId === LIVE_LOG_NODE_EXCLUDED) {
       return false;
     }
-  
+
     const topLevel = normalizeSeverity(entry?.level);
     if (topLevel >= EMBEDDED_LEVEL_WARN) {
       return true;
     }
-  
+
     const embedded = parseEmbeddedLogPayload(entry?.message);
     if (embedded) {
       const embeddedLevel = normalizeSeverity(embedded.level);
@@ -712,11 +662,11 @@ function buildHistoricalBaselineIndex(historyReports, baselineProvider) {
       ).toLowerCase();
       return hasProblemPattern(embeddedMsg);
     }
-  
+
     const message = String(entry?.message || '').toLowerCase();
     return hasProblemPattern(message);
   }
-  
+
   /**
    * Normalize scenario payload returned by run(cluster).
    * Non-object payloads are ignored.
@@ -729,7 +679,7 @@ function buildHistoricalBaselineIndex(historyReports, baselineProvider) {
     }
     return payload;
   }
-  
+
   /**
    * Evaluate required trace assertions for a scenario run.
    * @param {Object|null} traceArtifact
@@ -742,7 +692,7 @@ function buildHistoricalBaselineIndex(historyReports, baselineProvider) {
       debugTraceConfig.required !== true) {
       return null;
     }
-  
+
     const assertion = {
       required: true,
       passed: true,
@@ -751,14 +701,14 @@ function buildHistoricalBaselineIndex(historyReports, baselineProvider) {
       matchedRequiredLineagePrefix: true,
       error: null,
     };
-  
+
     if (!traceArtifact || typeof traceArtifact !== 'object') {
       assertion.passed = false;
       assertion.matchedRequiredLineagePrefix = false;
       assertion.error = TRACE_ASSERTION_MISSING_ARTIFACT;
       return assertion;
     }
-  
+
     if (!Number.isInteger(assertion.eventCount) ||
       assertion.eventCount <= 0) {
       assertion.passed = false;
@@ -766,7 +716,7 @@ function buildHistoricalBaselineIndex(historyReports, baselineProvider) {
       assertion.error = TRACE_ASSERTION_NO_EVENTS;
       return assertion;
     }
-  
+
     const requiredPrefix = assertion.requiredLineagePrefix;
     if (requiredPrefix) {
       const lineageIds = Array.isArray(traceArtifact.lineageIds) ?
@@ -782,10 +732,10 @@ function buildHistoricalBaselineIndex(historyReports, baselineProvider) {
           TRACE_ASSERTION_LINEAGE_PREFIX_MISSING + requiredPrefix;
       }
     }
-  
+
     return assertion;
   }
-  
+
   function resolveScenarioAssertionPolicy(scenarioName) {
     const normalizedScenarioName = String(scenarioName || '').trim();
     if (!normalizedScenarioName) {
@@ -793,7 +743,7 @@ function buildHistoricalBaselineIndex(historyReports, baselineProvider) {
     }
     return SCENARIO_ASSERTION_POLICY[normalizedScenarioName] || null;
   }
-  
+
   function resolveScenarioMemoryLeakConfig(scenarioName, config = {}) {
     const scenarioPolicy = resolveScenarioAssertionPolicy(scenarioName);
     const baseConfig = config?.memoryLeak &&
@@ -809,7 +759,7 @@ function buildHistoricalBaselineIndex(historyReports, baselineProvider) {
       ...scenarioPolicy.memoryLeak,
     };
   }
-  
+
   function collectPlaybackWarningMessages(playbackArtifact) {
     if (!playbackArtifact || typeof playbackArtifact !== 'object') {
       return [];
@@ -831,7 +781,7 @@ function buildHistoricalBaselineIndex(historyReports, baselineProvider) {
     }
     return [...new Set(warnings)];
   }
-  
+
   function evaluateScenarioCleanlinessAssertions(
     scenarioName,
     scenarioResult,
@@ -840,7 +790,7 @@ function buildHistoricalBaselineIndex(historyReports, baselineProvider) {
     if (!scenarioPolicy) {
       return null;
     }
-  
+
     const playbackWarnings = collectPlaybackWarningMessages(
       scenarioResult?.playback,
     );
@@ -851,17 +801,17 @@ function buildHistoricalBaselineIndex(historyReports, baselineProvider) {
       passed: true,
       error: null,
     };
-  
+
     if (scenarioPolicy.failOnPlaybackWarnings === true &&
         playbackWarnings.length > 0) {
       assertion.passed = false;
       assertion.error = 'playback warnings present: ' +
         playbackWarnings.join('; ');
     }
-  
+
     return assertion;
   }
-  
+
   /**
    * Evaluate required memory leak assertions for a scenario run.
    * @param {Object|null} memoryLeakAnalysis
@@ -872,7 +822,7 @@ function buildHistoricalBaselineIndex(historyReports, baselineProvider) {
     if (!memoryLeakConfig || memoryLeakConfig.enabled !== true) {
       return null;
     }
-  
+
     const leakingNodes = Array.isArray(memoryLeakAnalysis?.leakingNodes) ?
       memoryLeakAnalysis.leakingNodes :
       [];
@@ -895,7 +845,7 @@ function buildHistoricalBaselineIndex(historyReports, baselineProvider) {
       passed: true,
       error: null,
     };
-  
+
     if (memoryLeakConfig.requireSamples === true &&
         assertion.analyzed !== true) {
       if (samplesUnavailable) {
@@ -908,17 +858,17 @@ function buildHistoricalBaselineIndex(historyReports, baselineProvider) {
       assertion.warning = MEMORY_ASSERTION_ANALYSIS_INSUFFICIENT;
       return assertion;
     }
-  
+
     if (memoryLeakConfig.failOnDetection === true &&
         assertion.leakDetected === true) {
       assertion.passed = false;
       assertion.error = MEMORY_ASSERTION_LEAK_DETECTED_PREFIX +
         leakingNodes.join(',');
     }
-  
+
     return assertion;
   }
-  
+
   function formatLiveLogEntry(entry) {
     const embedded = parseEmbeddedLogPayload(entry?.message);
     if (embedded) {
@@ -930,14 +880,14 @@ function buildHistoricalBaselineIndex(historyReports, baselineProvider) {
       );
       return `${timestamp} [${nodeId}] ${level}: ${message}`;
     }
-  
+
     const sanitized = {
       ...entry,
       message: sanitizeMessage(String(entry?.message || '')),
     };
     return formatLogEntry(sanitized);
   }
-  
+
   function parseEmbeddedLogPayload(message) {
     if (typeof message !== 'string') {
       return null;
@@ -957,12 +907,12 @@ function buildHistoricalBaselineIndex(historyReports, baselineProvider) {
       return null;
     }
   }
-  
+
   function normalizeSeverity(level) {
     if (typeof level === 'number' && Number.isFinite(level)) {
       return level;
     }
-  
+
     const normalized = String(level || '').toLowerCase();
     if (normalized === LEVEL_FATAL) {
       return 60;
@@ -981,7 +931,7 @@ function buildHistoricalBaselineIndex(historyReports, baselineProvider) {
     }
     return 0;
   }
-  
+
   function severityLabel(level) {
     if (typeof level === 'number' && Number.isFinite(level)) {
       if (level >= 60) return LEVEL_FATAL;
@@ -993,7 +943,7 @@ function buildHistoricalBaselineIndex(historyReports, baselineProvider) {
     const normalized = String(level || '').toLowerCase();
     return normalized || LEVEL_INFO;
   }
-  
+
   function sanitizeMessage(message) {
     let sanitized = '';
     for (let i = 0; i < message.length; i++) {
@@ -1007,7 +957,7 @@ function buildHistoricalBaselineIndex(historyReports, baselineProvider) {
     }
     return sanitized;
   }
-  
+
   function hasProblemPattern(message) {
     if (!message) {
       return false;
@@ -1016,7 +966,7 @@ function buildHistoricalBaselineIndex(historyReports, baselineProvider) {
       message.includes(FAIL_PATTERN) ||
       message.includes(TIMEOUT_PATTERN);
   }
-  
+
   /**
    * Load a scenario module path as a file URL so both absolute and
    * workspace-relative paths resolve correctly.
@@ -1027,7 +977,7 @@ function buildHistoricalBaselineIndex(historyReports, baselineProvider) {
     const scenarioUrl = pathToFileURL(resolve(scenarioPath)).href;
     return import(scenarioUrl);
   }
-  
+
   /**
    * Format a signed delta string with + or - prefix.
    * @param {number|null} value
@@ -1041,7 +991,7 @@ function buildHistoricalBaselineIndex(historyReports, baselineProvider) {
     const sign = value >= 0 ? '+' : '';
     return sign + value.toFixed(SUMMARY_FIXED_DECIMALS_OPS) + suffix;
   }
-  
+
   /**
    * Print a concise run summary to stdout after the report is
    * written. Shows per-scenario metrics, delta vs previous run,
@@ -1056,7 +1006,7 @@ function buildHistoricalBaselineIndex(historyReports, baselineProvider) {
     const stdScenarios = Array.isArray(
       reportPreview.standardSummary?.scenarios,
     ) ? reportPreview.standardSummary.scenarios : [];
-  
+
     lines.push(
       'Run: ' + summary.passed + '/' + summary.total +
       ' passed, ' + summary.failed + ' failed' +
@@ -1064,14 +1014,14 @@ function buildHistoricalBaselineIndex(historyReports, baselineProvider) {
         SUMMARY_FIXED_DECIMALS_OPS,
       ) + 's)\n',
     );
-  
+
     for (let i = 0; i < stdScenarios.length; i++) {
       const std = stdScenarios[i];
       const entry = scenarioEntries[i] || null;
       const current = std.current;
       const result = current.passed ?
         SUMMARY_RESULT_PASS : SUMMARY_RESULT_FAIL;
-  
+
       lines.push('\n' + result + ' ' + std.scenario + '\n');
       lines.push(
         SUMMARY_LABEL_DURATION +
@@ -1083,7 +1033,7 @@ function buildHistoricalBaselineIndex(historyReports, baselineProvider) {
         SUMMARY_LABEL_CLUSTER + current.clusterSize +
         SUMMARY_NODES_SUFFIX + '\n',
       );
-  
+
       const loadMetrics = entry?.loadMetrics;
       if (loadMetrics && typeof loadMetrics === 'object') {
         const total = Number(loadMetrics.total || 0);
@@ -1113,7 +1063,7 @@ function buildHistoricalBaselineIndex(historyReports, baselineProvider) {
           );
         }
       }
-  
+
       const delta = std.deltaVsPrevious;
       const prev = std.previousSimilarRun;
       if (prev) {
@@ -1135,7 +1085,7 @@ function buildHistoricalBaselineIndex(historyReports, baselineProvider) {
       } else {
         lines.push(SUMMARY_NO_PREV);
       }
-  
+
       const pg = std.postgresBaseline;
       if (pg && pg.throughputRatioSutToBaseline !== null) {
         const ratio = pg.throughputRatioSutToBaseline
@@ -1157,11 +1107,11 @@ function buildHistoricalBaselineIndex(historyReports, baselineProvider) {
         lines.push(SUMMARY_NO_PG);
       }
     }
-  
+
     lines.push('\n' + SUMMARY_FOOTER);
     return lines.join('');
   }
-  
+
   /**
    * Main entry point. Parses args, loads config, discovers
    * scenarios, runs them, writes report, and exits.

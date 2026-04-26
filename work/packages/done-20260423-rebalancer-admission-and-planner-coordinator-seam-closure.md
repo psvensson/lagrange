@@ -110,7 +110,7 @@ Representative scenario confirmation was completed at sprint level through the
 fresh `node-join-under-load` rerun.
 That rerun exposed a later leader-identity divergence after the touched gate
 logic, now split to
-[Publication-scoped consistency and node-join closure](./active-20260423-publication-scoped-consistency-and-node-join-closure.md).
+[Publication-scoped consistency and node-join closure](./done-20260423-publication-scoped-consistency-and-node-join-closure.md).
 
 ## Validation
 

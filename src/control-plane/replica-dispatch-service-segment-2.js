@@ -1,77 +1,27 @@
-import { REPLICA_DISPATCH_SERVICE_SHARED } from "./replica-dispatch-service-shared.js";
-import { ReplicaDispatchServiceSegment1 } from "./replica-dispatch-service-segment-1.js";
+import {REPLICA_DISPATCH_SERVICE_SHARED} from './replica-dispatch-service-shared.js';
+import {ReplicaDispatchServiceSegment1} from './replica-dispatch-service-segment-1.js';
 
 const {
   COLUMN,
-  CONTROL_PLANE_ALLOWED_STATES,
-  CONTROL_PLANE_CONFIG_KEY,
-  CONTROL_PLANE_EVENT,
-  CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE,
-  CONTROL_PLANE_NODE_STATE_REPLAY_CONTEXT,
-  CONTROL_PLANE_READINESS_DIMENSION,
-  ConfigurationManager,
   ControlPlaneField,
-  ControlPlaneMessageType,
-  ControlPlaneReadinessService,
-  DEFAULT_READY_LEASE_MS,
-  DISPATCH_DEFAULT,
-  DISPATCH_ERROR_MSG,
   DISPATCH_EVENT,
   DISPATCH_LOG_MSG,
-  DISPATCH_QUEUE_NAME,
   DISPATCH_READINESS_ERROR_CODE,
   DISPATCH_READINESS_ERROR_REASON,
-  DISPATCH_READINESS_MESSAGE,
-  DISPATCH_READINESS_REASON,
-  DISPATCH_STATE,
-  DISPATCH_SUBSYSTEM,
-  EventEmitter,
-  LoggingService,
-  MEMBERSHIP_PUBLICATION_STATUS,
-  MESSAGE_GROUP_CDC_INGRESS_ACTION,
-  NODE_STATE_UPDATE_RETRY_ACTION,
-  NODE_STATE_UPDATE_RETRY_CLASS,
-  NODE_STATE_UPDATE_RETRY_POLICY,
   NUM,
-  OPERATION_METADATA_KEY,
   OperationType,
-  OwnerKeyReconcileQueue,
-  QUERY_ERROR_CODE,
-  QUERY_ERROR_MSG,
-  READY_NODE_PUBLICATION_ADVANCEMENT_STATE,
-  REBALANCE_COORDINATOR_EVENT,
   RECONCILE_REASON,
   REPLICA_DISPATCH_SERVICE_LITERAL,
   REPLICA_OPERATION_VISIBILITY_READ_MODE,
   ReplicaOperationField,
   SERVICE_STATUS,
-  SERVICE_TYPE,
-  STATE,
-  STRING,
   SYSTEM_TABLE_NAME,
   TYPEOF,
   WORKFLOW_STEP,
   assertCritical,
-  compareNodeHeartbeatWatermarks,
-  createControlPlaneRuntimeBundle,
-  getControlPlaneErrorCode,
   getControlPlaneErrorMessage,
-  getControlPlaneMessageRequiredTables,
-  getControlPlaneNodeStatePublicationProfile,
-  getControlPlaneRetryAfterMs,
-  getNodeHeartbeatWatermark,
-  getOperationMetadataObject,
-  getOperationMetadataString,
-  getOperationMetadataStringArray,
   isCoordinatorOwnedOperationType,
-  isHeartbeatEscalatedControlPlaneNodeStatePublicationMode,
-  isRetryableControlPlaneError,
-  isTerminalMembershipPublicationStatus,
-  resolveControlPlaneNodeStatePublicationMode,
-  resolveReadyNodePublicationAdvancementState,
-  resolveReplayControlPlaneNodeStatePublicationMode,
   shouldUseAuthoritativePriorityRecoveryRediscovery,
-  unwrapRowReadResult,
   wasNodeRecordReadyWhenWritten,
 } = REPLICA_DISPATCH_SERVICE_SHARED;
 
@@ -132,9 +82,9 @@ class ReplicaDispatchServiceSegment2 extends ReplicaDispatchServiceSegment1 {
   async handleReplicaOperationDispatch(payload) {
     const operationRow =
       payload?.[ControlPlaneField.OPERATION_ROW] &&
-      typeof payload[ControlPlaneField.OPERATION_ROW] === TYPEOF.OBJECT
-        ? payload[ControlPlaneField.OPERATION_ROW]
-        : null;
+      typeof payload[ControlPlaneField.OPERATION_ROW] === TYPEOF.OBJECT ?
+        payload[ControlPlaneField.OPERATION_ROW] :
+        null;
     const operationId =
       payload[ControlPlaneField.OPERATION_ID] ||
       operationRow?.operation_id ||
@@ -146,7 +96,7 @@ class ReplicaDispatchServiceSegment2 extends ReplicaDispatchServiceSegment1 {
     this.operationDispatchQueue.enqueue(
       operationId,
       RECONCILE_REASON.MESSAGE_DISPATCH_REQUEST,
-      operationRow ? { row: operationRow } : undefined,
+      operationRow ? {row: operationRow} : undefined,
     );
   }
 
@@ -344,11 +294,10 @@ class ReplicaDispatchServiceSegment2 extends ReplicaDispatchServiceSegment1 {
       return true;
     }
 
-    const visibilityLagError =
-      this.buildReplicaOperationVisibilityLagError(
-        operationId,
-        visibilityObservation?.deferredOutcome || null,
-      );
+    const visibilityLagError = this.buildReplicaOperationVisibilityLagError(
+      operationId,
+      visibilityObservation?.deferredOutcome || null,
+    );
     if (
       this.deferOperationDispatchRetry(
         operationId,
@@ -423,10 +372,7 @@ class ReplicaDispatchServiceSegment2 extends ReplicaDispatchServiceSegment1 {
    * @return {Error}
    * @private
    */
-  buildReplicaOperationVisibilityLagError(
-    operationId,
-    deferredOutcome = null,
-  ) {
+  buildReplicaOperationVisibilityLagError(operationId, deferredOutcome = null) {
     const error = new Error(
       `${REPLICA_DISPATCH_SERVICE_LITERAL.CACHE_UPDATE_NOT_OBSERVED_FOR_REPLICA_OPERATION} ${operationId}`,
     );
@@ -434,10 +380,9 @@ class ReplicaDispatchServiceSegment2 extends ReplicaDispatchServiceSegment1 {
       REPLICA_DISPATCH_SERVICE_LITERAL.REPLICA_OPERATION_VISIBILITY_LAG;
     error.operationId = operationId;
     error.deferRetry = true;
-    error.retryAfterMs =
-      Number.isFinite(deferredOutcome?.retryAfterMs) ?
-        deferredOutcome.retryAfterMs :
-        this.operationDispatchRetryAfterMs;
+    error.retryAfterMs = Number.isFinite(deferredOutcome?.retryAfterMs) ?
+      deferredOutcome.retryAfterMs :
+      this.operationDispatchRetryAfterMs;
     if (
       typeof deferredOutcome?.reasonCode === TYPEOF.STRING &&
       deferredOutcome.reasonCode.length > NUM.ZERO
@@ -475,9 +420,9 @@ class ReplicaDispatchServiceSegment2 extends ReplicaDispatchServiceSegment1 {
     error.targetNodeId = targetNodeId || null;
     error.deferRetry = true;
     error.retryAfterMs =
-      Number.isFinite(retryAfterMs) && retryAfterMs > NUM.ZERO
-        ? retryAfterMs
-        : this.operationDispatchRetryAfterMs;
+      Number.isFinite(retryAfterMs) && retryAfterMs > NUM.ZERO ?
+        retryAfterMs :
+        this.operationDispatchRetryAfterMs;
     if (cause) {
       error.cause = cause;
     }
@@ -495,14 +440,14 @@ class ReplicaDispatchServiceSegment2 extends ReplicaDispatchServiceSegment1 {
     const originalError = dispatchReadiness?.error;
     const originalMessage =
       typeof originalError?.message === TYPEOF.STRING &&
-      originalError.message.length > NUM.ZERO
-        ? originalError.message
-        : String(originalError || DISPATCH_READINESS_ERROR_REASON.UNKNOWN);
+      originalError.message.length > NUM.ZERO ?
+        originalError.message :
+        String(originalError || DISPATCH_READINESS_ERROR_REASON.UNKNOWN);
     const code =
       typeof originalError?.code === TYPEOF.STRING &&
-      originalError.code.length > NUM.ZERO
-        ? originalError.code
-        : DISPATCH_READINESS_ERROR_CODE.TARGET_NODE_READINESS_REFRESH_FAILED;
+      originalError.code.length > NUM.ZERO ?
+        originalError.code :
+        DISPATCH_READINESS_ERROR_CODE.TARGET_NODE_READINESS_REFRESH_FAILED;
     return this.buildDispatchReadinessGateError(
       targetNodeId,
       `Target node ${targetNodeId || REPLICA_DISPATCH_SERVICE_LITERAL.UNKNOWN} readiness refresh failed: ` +
@@ -565,9 +510,10 @@ class ReplicaDispatchServiceSegment2 extends ReplicaDispatchServiceSegment1 {
             row,
             readyNodeId: nodeId,
             readyNodeRow:
-              options?.readyNodeRow && typeof options.readyNodeRow === TYPEOF.OBJECT
-                ? { ...options.readyNodeRow }
-                : null,
+              options?.readyNodeRow &&
+              typeof options.readyNodeRow === TYPEOF.OBJECT ?
+                {...options.readyNodeRow} :
+                null,
           },
         );
       }
@@ -658,12 +604,12 @@ class ReplicaDispatchServiceSegment2 extends ReplicaDispatchServiceSegment1 {
     const cacheRows =
       this.replicaOperationsOwner &&
       typeof this.replicaOperationsOwner.listReplicaOperationsFromCache ===
-        TYPEOF.FUNCTION
-        ? (await this.replicaOperationsOwner.listReplicaOperationsFromCache())
-            .rows || []
-        : this.getSystemTableRowsFromCache(
-            SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
-          );
+        TYPEOF.FUNCTION ?
+        (await this.replicaOperationsOwner.listReplicaOperationsFromCache())
+          .rows || [] :
+        this.getSystemTableRowsFromCache(
+          SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+        );
     const dispatchRows = cacheRows.filter((row) => {
       return (
         isCoordinatorOwnedOperationType(row?.type) &&
@@ -874,9 +820,9 @@ class ReplicaDispatchServiceSegment2 extends ReplicaDispatchServiceSegment1 {
     }
 
     const nodeRow =
-      options.nodeRow && typeof options.nodeRow === TYPEOF.OBJECT
-        ? options.nodeRow
-        : await this.getNodeRow(nodeId);
+      options.nodeRow && typeof options.nodeRow === TYPEOF.OBJECT ?
+        options.nodeRow :
+        await this.getNodeRow(nodeId);
     if (
       nodeRow &&
       !wasNodeRecordReadyWhenWritten(nodeRow, {
@@ -956,13 +902,13 @@ class ReplicaDispatchServiceSegment2 extends ReplicaDispatchServiceSegment1 {
       await this.dispatchOperationRow(row, {
         readyNodeId:
           typeof context?.readyNodeId === TYPEOF.STRING &&
-          context.readyNodeId.length > NUM.ZERO
-            ? context.readyNodeId
-            : null,
+          context.readyNodeId.length > NUM.ZERO ?
+            context.readyNodeId :
+            null,
         readyNodeRow:
-          context?.readyNodeRow && typeof context.readyNodeRow === TYPEOF.OBJECT
-            ? context.readyNodeRow
-            : null,
+          context?.readyNodeRow && typeof context.readyNodeRow === TYPEOF.OBJECT ?
+            context.readyNodeRow :
+            null,
       });
     } catch (error) {
       if (this.deferOperationDispatchRetry(operationId, error, row)) {
@@ -1041,6 +987,14 @@ class ReplicaDispatchServiceSegment2 extends ReplicaDispatchServiceSegment1 {
       return;
     }
 
+    if (tableName === SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS) {
+      this.scheduleLocalReadyNodeMembershipPublicationAdvance(
+        RECONCILE_REASON.CONTROL_PLANE_PUBLICATION_CACHE_UPDATE,
+        record,
+      );
+      return;
+    }
+
     if (tableName === SYSTEM_TABLE_NAME.NODES) {
       const nodeId = this.getNodeIdFromRecord(record);
       if (!nodeId) {
@@ -1060,7 +1014,7 @@ class ReplicaDispatchServiceSegment2 extends ReplicaDispatchServiceSegment1 {
       this.nodeReadyRetryQueue.enqueue(
         nodeId,
         RECONCILE_REASON.NODES_CACHE_READY,
-        { nodeRow: record },
+        {nodeRow: record},
       );
       return;
     }
@@ -1112,4 +1066,4 @@ class ReplicaDispatchServiceSegment2 extends ReplicaDispatchServiceSegment1 {
    */
 }
 
-export { ReplicaDispatchServiceSegment2 };
+export {ReplicaDispatchServiceSegment2};

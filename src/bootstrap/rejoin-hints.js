@@ -523,88 +523,88 @@ function resolveAutoRejoinDecisionState(context = {}) {
 
 function buildAutoRejoinStartupDecision(context = {}, state) {
   switch (state) {
-    case AUTO_REJOIN_DECISION_STATE.IDENTITY_MISMATCH:
-      return {
-        state,
-        mode: STARTUP_MODE_FAIL,
-        peerAddressState: PEER_ADDRESS_STATE.UNAVAILABLE,
-        peerAddress: null,
-        source: REJOIN_SOURCE.DURABLE_NODES_TABLE,
-        startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
-        durableStateDetected: true,
-        identityMismatch: true,
-        clusterIncarnationFence: context.clusterIncarnationFence,
-        error: IDENTITY_MISMATCH_ERROR_MESSAGE,
-      };
-    case AUTO_REJOIN_DECISION_STATE.DURABLE_SEED:
-      return {
-        state,
-        mode: STARTUP_MODE_SEED,
-        peerAddressState: PEER_ADDRESS_STATE.UNAVAILABLE,
-        peerAddress: null,
-        source: resolveDurableStartupSource(context),
-        startupMode: STARTUP_JOIN_MODE.SEED,
-        durableStateDetected: context.durableStateDetected,
-        identityMismatch: false,
-        clusterIncarnationFence: context.clusterIncarnationFence,
-      };
-    case AUTO_REJOIN_DECISION_STATE.JOIN_PROBED_PEER:
-      return {
-        state,
-        mode: STARTUP_MODE_JOIN,
-        peerAddressState: PEER_ADDRESS_STATE.SELECTED,
-        peerAddress: context.selectedPeerAddress,
-        source: resolveDurableJoinSource(context),
-        startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
-        durableStateDetected: true,
-        identityMismatch: false,
-        clusterIncarnationFence: context.clusterIncarnationFence,
-      };
-    case AUTO_REJOIN_DECISION_STATE.JOIN_RECOVERED_PEER:
-      return {
-        state,
-        mode: STARTUP_MODE_JOIN,
-        peerAddressState: PEER_ADDRESS_STATE.SELECTED,
-        peerAddress: context.preferredPeerAddress,
-        source: context.hintPeerAddresses.length > NUM.ZERO ?
-          REJOIN_SOURCE.REJOIN_HINTS :
-          REJOIN_SOURCE.DURABLE_NODES_TABLE,
-        startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
-        durableStateDetected: true,
-        identityMismatch: false,
-        clusterIncarnationFence: context.clusterIncarnationFence,
-      };
-    case AUTO_REJOIN_DECISION_STATE.PEER_REQUIRED_BUT_MISSING:
-      return {
-        state,
-        mode: STARTUP_MODE_FAIL,
-        peerAddressState: PEER_ADDRESS_STATE.UNAVAILABLE,
-        peerAddress: null,
-        source: context.durableSnapshot.hasDurableNodesTable ?
-          REJOIN_SOURCE.DURABLE_NODES_TABLE :
-          REJOIN_SOURCE.REJOIN_HINTS,
-        startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
-        durableStateDetected: true,
-        identityMismatch: false,
-        clusterIncarnationFence: context.clusterIncarnationFence,
-        error: DURABLE_STATE_REJOIN_REQUIRED_ERROR_MESSAGE,
-      };
-    case AUTO_REJOIN_DECISION_STATE.FRESH_SEED:
-      return {
-        state,
-        mode: STARTUP_MODE_SEED,
-        peerAddressState: PEER_ADDRESS_STATE.UNAVAILABLE,
-        peerAddress: null,
-        source: REJOIN_SOURCE.NONE,
-        startupMode: STARTUP_JOIN_MODE.SEED,
-        durableStateDetected: false,
-        identityMismatch: false,
-        clusterIncarnationFence: context.clusterIncarnationFence,
-      };
-    default:
-      throw new Error(
-        UNKNOWN_AUTO_REJOIN_DECISION_STATE_ERROR_PREFIX + String(state),
-      );
+  case AUTO_REJOIN_DECISION_STATE.IDENTITY_MISMATCH:
+    return {
+      state,
+      mode: STARTUP_MODE_FAIL,
+      peerAddressState: PEER_ADDRESS_STATE.UNAVAILABLE,
+      peerAddress: null,
+      source: REJOIN_SOURCE.DURABLE_NODES_TABLE,
+      startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
+      durableStateDetected: true,
+      identityMismatch: true,
+      clusterIncarnationFence: context.clusterIncarnationFence,
+      error: IDENTITY_MISMATCH_ERROR_MESSAGE,
+    };
+  case AUTO_REJOIN_DECISION_STATE.DURABLE_SEED:
+    return {
+      state,
+      mode: STARTUP_MODE_SEED,
+      peerAddressState: PEER_ADDRESS_STATE.UNAVAILABLE,
+      peerAddress: null,
+      source: resolveDurableStartupSource(context),
+      startupMode: STARTUP_JOIN_MODE.SEED,
+      durableStateDetected: context.durableStateDetected,
+      identityMismatch: false,
+      clusterIncarnationFence: context.clusterIncarnationFence,
+    };
+  case AUTO_REJOIN_DECISION_STATE.JOIN_PROBED_PEER:
+    return {
+      state,
+      mode: STARTUP_MODE_JOIN,
+      peerAddressState: PEER_ADDRESS_STATE.SELECTED,
+      peerAddress: context.selectedPeerAddress,
+      source: resolveDurableJoinSource(context),
+      startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
+      durableStateDetected: true,
+      identityMismatch: false,
+      clusterIncarnationFence: context.clusterIncarnationFence,
+    };
+  case AUTO_REJOIN_DECISION_STATE.JOIN_RECOVERED_PEER:
+    return {
+      state,
+      mode: STARTUP_MODE_JOIN,
+      peerAddressState: PEER_ADDRESS_STATE.SELECTED,
+      peerAddress: context.preferredPeerAddress,
+      source: context.hintPeerAddresses.length > NUM.ZERO ?
+        REJOIN_SOURCE.REJOIN_HINTS :
+        REJOIN_SOURCE.DURABLE_NODES_TABLE,
+      startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
+      durableStateDetected: true,
+      identityMismatch: false,
+      clusterIncarnationFence: context.clusterIncarnationFence,
+    };
+  case AUTO_REJOIN_DECISION_STATE.PEER_REQUIRED_BUT_MISSING:
+    return {
+      state,
+      mode: STARTUP_MODE_FAIL,
+      peerAddressState: PEER_ADDRESS_STATE.UNAVAILABLE,
+      peerAddress: null,
+      source: context.durableSnapshot.hasDurableNodesTable ?
+        REJOIN_SOURCE.DURABLE_NODES_TABLE :
+        REJOIN_SOURCE.REJOIN_HINTS,
+      startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
+      durableStateDetected: true,
+      identityMismatch: false,
+      clusterIncarnationFence: context.clusterIncarnationFence,
+      error: DURABLE_STATE_REJOIN_REQUIRED_ERROR_MESSAGE,
+    };
+  case AUTO_REJOIN_DECISION_STATE.FRESH_SEED:
+    return {
+      state,
+      mode: STARTUP_MODE_SEED,
+      peerAddressState: PEER_ADDRESS_STATE.UNAVAILABLE,
+      peerAddress: null,
+      source: REJOIN_SOURCE.NONE,
+      startupMode: STARTUP_JOIN_MODE.SEED,
+      durableStateDetected: false,
+      identityMismatch: false,
+      clusterIncarnationFence: context.clusterIncarnationFence,
+    };
+  default:
+    throw new Error(
+      UNKNOWN_AUTO_REJOIN_DECISION_STATE_ERROR_PREFIX + String(state),
+    );
   }
 }
 
@@ -713,6 +713,7 @@ class RejoinHintsPersistenceService {
 }
 
 export {
+  AUTO_REJOIN_DECISION_STATE,
   buildBootstrapRejoinHintsSnapshot,
   buildRejoinHintsSnapshot,
   persistBootstrapRejoinHints,

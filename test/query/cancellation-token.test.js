@@ -30,7 +30,9 @@ describe('CancellationToken', () => {
   it('should fire onCancel callbacks', () => {
     const token = new CancellationToken();
     let fired = false;
-    token.onCancel(() => { fired = true; });
+    token.onCancel(() => {
+      fired = true;
+    });
     token.cancel();
     assert.equal(fired, true);
   });
@@ -40,14 +42,18 @@ describe('CancellationToken', () => {
     const token = new CancellationToken();
     token.cancel('early');
     let reason = null;
-    token.onCancel((r) => { reason = r; });
+    token.onCancel((r) => {
+      reason = r;
+    });
     assert.equal(reason, 'early');
   });
 
   it('should not cancel twice', () => {
     const token = new CancellationToken();
     let count = 0;
-    token.onCancel(() => { count++; });
+    token.onCancel(() => {
+      count++;
+    });
     token.cancel('first');
     token.cancel('second');
     assert.equal(count, 1);
@@ -57,8 +63,12 @@ describe('CancellationToken', () => {
   it('should fire multiple onCancel callbacks', () => {
     const token = new CancellationToken();
     const reasons = [];
-    token.onCancel((r) => { reasons.push(r); });
-    token.onCancel((r) => { reasons.push(r); });
+    token.onCancel((r) => {
+      reasons.push(r);
+    });
+    token.onCancel((r) => {
+      reasons.push(r);
+    });
     token.cancel('multi');
     assert.equal(reasons.length, 2);
     assert.equal(reasons[0], 'multi');

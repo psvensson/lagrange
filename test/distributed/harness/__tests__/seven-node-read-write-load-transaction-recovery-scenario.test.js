@@ -702,7 +702,7 @@ describe('seven-node-read-write-load-transaction-recovery scenario', () => {
       const seedNode = {
         id: 'seed-1',
         role: 'seed',
-        getControlSnapshot: async (options = {}) => {
+        getControlSnapshot: async (_options = {}) => {
           recoverySnapshotAttemptCount += 1;
           if (restarted && recoverySnapshotAttemptCount < 3) {
             throw new Error(

@@ -70,8 +70,8 @@ function buildWorkflow(options = {}) {
         }
         return {success: true, affectedRows: 1};
       },
-      async insertSystemTableRow(tableName, row) {
-        insertCalls.push({tableName, row, options: arguments[2]});
+      async insertSystemTableRow(tableName, row, options) {
+        insertCalls.push({tableName, row, options});
         return {success: true};
       },
     },

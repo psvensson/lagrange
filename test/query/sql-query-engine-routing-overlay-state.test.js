@@ -232,9 +232,9 @@ test('SQLQueryEngine marks bootstrap overlays superseded when cache leader servi
       partition: {partition_id: 'partition-1'},
       services: [{service_id: 'svc-1'}],
       expiresAtMs: 2000,
-  });
+    });
 
-  const state = engine.getBootstrapRoutingOverlayEntryState('partition-1');
+    const state = engine.getBootstrapRoutingOverlayEntryState('partition-1');
 
     t.same(
       state,

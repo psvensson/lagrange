@@ -7,47 +7,29 @@
 
 import {test} from '../../src/test-helpers/tap.js';
 import {QueryExecutor} from '../../src/query/query-executor.js';
-import {SQLParser} from '../../src/query/sql-parser.js';
-import {NodeService} from '../../src/node/node-service.js';
 import {ERRORS} from '../../src/constants/index.js';
 import {
-  COLUMN,
-  STATE,
   SERVICE_STATUS,
   SERVICE_TYPE,
   TABLES,
 } from '../../src/constants/index.js';
-import {MIGRATION_PARTITION_OPERATION} from '../../src/migration/migration-constants.js';
 import {
-  CONTROL_PLANE_PARTICIPATION_KIND,
   CONTROL_PLANE_READINESS_DIMENSION,
-  CONTROL_PLANE_PUBLICATION_MODE,
   CONTROL_PLANE_READINESS_REASON,
-  READINESS_SNAPSHOT_KEY,
-  RUNTIME_AUTHORITY_STATE,
-  RUNTIME_AUTHORITY_VISIBILITY_STATE,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {
-  ControlPlaneReadinessService,
 } from '../../src/control-plane/control-plane-readiness-service.js';
 import {
-  QUERY_DEFAULTS,
   QUERY_LOG_MSG,
-  QUERY_RESPONSE_TYPE,
   QUERY_ROUTING_DIAGNOSTIC_REASON,
-  QUERY_ROUTING_REPAIR_REASON,
 } from '../../src/query/query-constants.js';
 import {
-  CANONICAL_LEADER_IDENTITY_SOURCE,
   CANONICAL_LEADER_IDENTITY_STATE,
   CANONICAL_LEADER_ROUTING_GAP_STATE,
 } from '../../src/query/canonical-leader-routing.js';
 import {
-  PARTITION_SERVICE_ERROR_MSG,
 } from '../../src/partition/partition-service-constants.js';
 import {
-  assertNoHandlerRepairConverged,
-  createStaleOverlayOwnerHandoffFixture,
 } from './routing-repair-test-helpers.js';
 
 // Initialize configuration for tests
@@ -81,138 +63,9 @@ function createMockMessageRouter() {
 }
 
 // Mock system cache with services for routing
-function createMockSystemCache(partitionIds) {
-  const services = partitionIds.map((pid) => ({
-    service_id: pid,
-    service_type: 'partition',
-    partition_id: pid,
-    node_id: 'test-node',
-    raft_role: 'leader',
-    address: `test-node/partition/${pid}`,
-    status: 'active',
-  }));
-  const partitions = partitionIds.map((partitionId) => ({
-    partition_id: partitionId,
-    leader_node_id: 'test-node',
-  }));
-
-  return {
-    services,
-    partitions,
-    get: function(type, key) {
-      if (type === 'partitions') {
-        return this.partitions.find((partition) => partition.partition_id === key) || null;
-      }
-      return null;
-    },
-    filter: function(type, predicate) {
-      if (type === 'services') {
-        return this.services.filter(predicate);
-      }
-      if (type === 'partitions') {
-        return this.partitions.filter(predicate);
-      }
-      return [];
-    },
-  };
-}
 
 // Helper to parse SQL
-function parseSQL(sql) {
-  const parser = new SQLParser(sql);
-  return parser.parse();
-}
 
-function createReadinessCache({nodes = [], services = []} = {}) {
-  const nodeRows = new Map(nodes.map((row) => [row[COLUMN.NODE_ID], row]));
-  const serviceRows = new Map(
-    services.map((row) => [row[COLUMN.SERVICE_ID], row]),
-  );
-  const listeners = new Set();
-
-  function notify(tableName, operation, row) {
-    for (const listener of listeners) {
-      listener(tableName, operation, row, null);
-    }
-  }
-
-  return {
-    get(tableName, key) {
-      if (tableName === TABLES.NODES) {
-        return nodeRows.get(key) || null;
-      }
-      return null;
-    },
-    filter(tableName, predicate) {
-      if (tableName === TABLES.SERVICES) {
-        return [...serviceRows.values()].filter(predicate);
-      }
-      return [];
-    },
-    getAll(tableName) {
-      if (tableName === TABLES.NODES) {
-        return [...nodeRows.values()];
-      }
-      if (tableName === TABLES.SERVICES) {
-        return [...serviceRows.values()];
-      }
-      return [];
-    },
-    applySystemTableChange(tableName, operation, row) {
-      const normalizedOperation = String(operation || '').toUpperCase();
-      if (tableName === TABLES.NODES) {
-        const key = row?.[COLUMN.NODE_ID];
-        if (!key) {
-          return;
-        }
-        if (normalizedOperation === 'DELETE') {
-          nodeRows.delete(key);
-          notify(tableName, normalizedOperation, row);
-          return;
-        }
-        const existing = nodeRows.get(key) || {};
-        nodeRows.set(
-          key,
-          normalizedOperation === 'UPDATE' ?
-            {...existing, ...row} :
-            {...row},
-        );
-        notify(tableName, normalizedOperation, nodeRows.get(key));
-        return;
-      }
-      if (tableName === TABLES.SERVICES) {
-        const key = row?.[COLUMN.SERVICE_ID];
-        if (!key) {
-          return;
-        }
-        if (normalizedOperation === 'DELETE') {
-          serviceRows.delete(key);
-          notify(tableName, normalizedOperation, row);
-          return;
-        }
-        const existing = serviceRows.get(key) || {};
-        serviceRows.set(
-          key,
-          normalizedOperation === 'UPDATE' ?
-            {...existing, ...row} :
-            {...row},
-        );
-        notify(tableName, normalizedOperation, serviceRows.get(key));
-      }
-    },
-    onCacheChange(listener) {
-      listeners.add(listener);
-    },
-  };
-}
-
-function createReadinessPublicationService(snapshot) {
-  return {
-    getPublicationModeDiagnostics() {
-      return snapshot;
-    },
-  };
-}
 
 test('QueryExecutor - getRoutablePartitionServices excludes services on ' +
   'non-serve-eligible nodes', (t) => {
@@ -984,6 +837,128 @@ test('QueryExecutor - denied routing repair refreshes authoritative overlay ' +
     ).length,
     1,
     'read candidates should recover after the overlay refresh',
+  );
+  t.end();
+});
+
+test('QueryExecutor - priority recovery writes widen when the canonical ' +
+  'leader is filtered by readiness but peer replicas are routable',
+(t) => {
+  const partitionId = 'replica_operations-p1';
+  const leaderNodeId = 'node-restarting';
+  const peerNodeId = 'node-peer-ready';
+  const tableName = TABLES.REPLICA_OPERATIONS;
+  const observedAt = '2026-04-25T22:15:00.000Z';
+  const leaderServiceId = `${partitionId}-r1`;
+  const peerServiceId = `${partitionId}-r2`;
+  const leaderAddress = `${leaderNodeId}/partition/${leaderServiceId}`;
+  const peerAddress = `${peerNodeId}/partition/${peerServiceId}`;
+  const systemCache = {
+    get(tableNameArg, key) {
+      if (tableNameArg === TABLES.PARTITIONS && key === partitionId) {
+        return {
+          partition_id: partitionId,
+          table_name: tableName,
+          leader_node_id: leaderNodeId,
+        };
+      }
+      return null;
+    },
+    filter(tableNameArg, predicate) {
+      if (tableNameArg !== TABLES.SERVICES) {
+        return [];
+      }
+      return [
+        {
+          service_id: leaderServiceId,
+          service_type: SERVICE_TYPE.PARTITION,
+          partition_id: partitionId,
+          node_id: leaderNodeId,
+          address: leaderAddress,
+          status: SERVICE_STATUS.ACTIVE,
+        },
+        {
+          service_id: peerServiceId,
+          service_type: SERVICE_TYPE.PARTITION,
+          partition_id: partitionId,
+          node_id: peerNodeId,
+          address: peerAddress,
+          status: SERVICE_STATUS.ACTIVE,
+        },
+      ].filter(predicate);
+    },
+  };
+  const readinessService = {
+    getNodeReadinessSync(nodeId) {
+      const recoveryEligible = nodeId !== leaderNodeId;
+      return {
+        nodeId,
+        observedAt,
+        lifecycleState: SERVICE_STATUS.ACTIVE,
+        dimensions: {
+          [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE]:
+            recoveryEligible,
+        },
+        reasons: recoveryEligible ?
+          [] :
+          [
+            {
+              code:
+                CONTROL_PLANE_READINESS_REASON
+                  .PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
+            },
+          ],
+      };
+    },
+  };
+  const executor = new QueryExecutor({
+    messageRouter: createMockMessageRouter(),
+    systemCache,
+    controlPlaneReadinessService: readinessService,
+  });
+
+  const routingSnapshot = executor.getPartitionRoutingSnapshot(
+    partitionId,
+    CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+  );
+  const recoveryContract =
+    executor.resolveCanonicalLeaderGapRecoveryRoutingContract(
+      partitionId,
+      routingSnapshot,
+      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+    );
+  const candidates = executor.getPartitionServiceCandidates(
+    partitionId,
+    false,
+    false,
+    false,
+    CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+  );
+
+  t.equal(
+    routingSnapshot.canonicalLeaderServiceCount,
+    1,
+    'fixture should keep the stale canonical leader service row visible',
+  );
+  t.equal(
+    routingSnapshot.routableServiceCount,
+    1,
+    'fixture should keep one recovery-eligible peer replica routable',
+  );
+  t.equal(
+    recoveryContract.canonicalLeaderFilteredByReadiness,
+    true,
+    'contract should classify the canonical leader as readiness-filtered',
+  );
+  t.equal(
+    recoveryContract.recoveryCandidateWidening,
+    true,
+    'priority recovery routing should widen to available peer replicas',
+  );
+  t.same(
+    candidates.map((candidate) => candidate.nodeId),
+    [peerNodeId],
+    'write routing should use the recovery-eligible peer replica',
   );
   t.end();
 });

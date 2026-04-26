@@ -77,6 +77,7 @@ import {
 } from './replica-status.js';
 import {
   ReplicaOperationMessageType,
+  ReplicaOperationReason,
   ReplicaOperationField,
   ReplicaOperationResponseStatus,
 } from './replica-operation-constants.js';
@@ -94,6 +95,7 @@ import {
   OPERATION_TRANSITION_REASON,
 } from './rebalancer-constants.js';
 import {
+  EXECUTOR_OUTCOME_TYPE,
   EXECUTOR_OUTCOME_FIELD,
   EXECUTOR_OUTCOME_ACTION,
   EXECUTOR_OUTCOME_ACTION_MAP,
@@ -197,6 +199,8 @@ const OPERATION_WORKFLOW_OWNER_LITERAL = Object.freeze({
   SAFE_REMOVAL_UNAVAILABLE_SUFFIX: ' is unavailable for safe removal',
   SOURCE_LEADER: ' source leader ',
   STRING: 'string',
+  STOPPING_SOURCE_REMOVAL_OBSERVATION_DEFERRED:
+    'control_plane_pressure_degraded while observing STOPPING source removal',
   SYNTHETIC_UPSERT: 'UPSERT',
   TRANSACTION: 'transaction',
   TRANSITION_RETRY_RESUME: 'transition_retry_resume',
@@ -231,6 +235,7 @@ const OPERATION_OWNER_ACTION = Object.freeze({
 });
 
 const OPERATION_LIFECYCLE_ACTION = Object.freeze({
+  COMPLETE_PRIORITY_RECOVERY_DRAIN: 'complete_priority_recovery_drain',
   FAIL_PRE_SYNC_RECOVERY: 'fail_pre_sync_recovery',
   FAIL_STOPPING_RECOVERY: 'fail_stopping_recovery',
   EXECUTE_ACTIVE_REPLACE: 'execute_active_replace',
@@ -262,7 +267,14 @@ const OPERATION_HANDLER = Object.freeze({
 });
 
 const OBSERVED_PROGRESS_RELEVANT_SERVICE_STATUSES = Object.freeze(
-  new Set([ReplicaStatus.SYNCING, ReplicaStatus.ACTIVE, ReplicaStatus.FAILED]),
+  new Set([
+    ReplicaStatus.PENDING,
+    ReplicaStatus.CREATING,
+    ReplicaStatus.SYNCING,
+    ReplicaStatus.ACTIVE,
+    ReplicaStatus.REMOVING,
+    ReplicaStatus.FAILED,
+  ]),
 );
 
 const OBSERVED_PROGRESS_RELEVANT_WORKFLOW_STEPS = Object.freeze(
@@ -313,6 +325,7 @@ const PRIORITY_REMOVE_SAFETY_MEMBERSHIP_SOURCE = Object.freeze({
 });
 const REPLACE_SOURCE_LEADER_HANDOFF_REQUIRED_PARTITION_IDS = new Set([
   INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS],
+  INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.REPLICA_OPERATIONS],
   INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SQL_TRANSACTIONS],
   INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SQL_TRANSACTION_PARTICIPANTS],
   INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SQL_WRITE_OPERATIONS],
@@ -323,6 +336,7 @@ const PRIORITY_PUBLICATION_LEADER_REMOVE_SAFETY_STATE = Object.freeze({
   PUBLICATION_STATUS_UNAVAILABLE: 'publication_status_unavailable',
   WAIT_PUBLICATION_PUBLISHED: 'wait_publication_published',
   REQUEST_SOURCE_LEADER_HANDOFF: 'request_source_leader_handoff',
+  REQUEST_REPLACEMENT_LEADER_ELECTION: 'request_replacement_leader_election',
   WAIT_REPLACEMENT_LEADER_OWNERSHIP: 'wait_replacement_leader_ownership',
 });
 const PRIORITY_PUBLICATION_SOURCE_ROLE_STATE = Object.freeze({
@@ -411,6 +425,7 @@ export const OPERATION_WORKFLOW_OWNER_SHARED = {
   EXECUTOR_OUTCOME_ACTION,
   EXECUTOR_OUTCOME_ACTION_MAP,
   EXECUTOR_OUTCOME_FIELD,
+  EXECUTOR_OUTCOME_TYPE,
   FAILURE_LOG_LEVEL,
   INCOMPLETE_OPERATION_OBSERVATION_STATE,
   INITIAL_PARTITION_IDS,
@@ -455,6 +470,7 @@ export const OPERATION_WORKFLOW_OWNER_SHARED = {
   REPLICA_OPERATION_VISIBILITY_READ_MODE,
   ReplicaOperationField,
   ReplicaOperationMessageType,
+  ReplicaOperationReason,
   ReplicaOperationResponseStatus,
   ReplicaStatus,
   SAFETY_DEFERRED_LOG_THROTTLE_MS,

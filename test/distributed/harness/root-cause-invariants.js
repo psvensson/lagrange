@@ -101,9 +101,9 @@ function evaluateSnapshotMissing(entries) {
     }
   }
   const details = {
-      missingCount: missingNodeIds.length,
-      missingNodeIds: missingNodeIds.slice(0, MAX_DETAIL_ENTRIES),
-    };
+    missingCount: missingNodeIds.length,
+    missingNodeIds: missingNodeIds.slice(0, MAX_DETAIL_ENTRIES),
+  };
   return buildInvariantResult({
     invariantId: INVARIANT_ID.CONTROL_PLANE_SNAPSHOT_AVAILABLE,
     passed: missingNodeIds.length === 0,
@@ -143,9 +143,9 @@ function evaluateLeadershipUnknown(entries) {
     }
   }
   const details = {
-      violationCount: violations.length,
-      violations: violations.slice(0, MAX_DETAIL_ENTRIES),
-    };
+    violationCount: violations.length,
+    violations: violations.slice(0, MAX_DETAIL_ENTRIES),
+  };
   return buildInvariantResult({
     invariantId: INVARIANT_ID.CONTROL_PLANE_PARTITION_LEADER_DISCOVERABLE,
     passed: violations.length === 0,
@@ -170,10 +170,10 @@ function evaluateCdcRetryStorm(entries) {
     }
   }
   const details = {
-      threshold: CDC_RETRY_STORM_THRESHOLD,
-      maxRetryCount,
-      violatingNodeIds: violatingNodeIds.slice(0, MAX_DETAIL_ENTRIES),
-    };
+    threshold: CDC_RETRY_STORM_THRESHOLD,
+    maxRetryCount,
+    violatingNodeIds: violatingNodeIds.slice(0, MAX_DETAIL_ENTRIES),
+  };
   return buildInvariantResult({
     invariantId: INVARIANT_ID.CDC_RETRY_BUDGET_HEALTHY,
     passed: violatingNodeIds.length === 0,
@@ -199,10 +199,10 @@ function evaluateCacheStaleWatermark(entries) {
     }
   }
   const details = {
-      thresholdMs: CACHE_STALE_THRESHOLD_MS,
-      maxStalenessMs,
-      violatingNodeIds: violatingNodeIds.slice(0, MAX_DETAIL_ENTRIES),
-    };
+    thresholdMs: CACHE_STALE_THRESHOLD_MS,
+    maxStalenessMs,
+    violatingNodeIds: violatingNodeIds.slice(0, MAX_DETAIL_ENTRIES),
+  };
   return buildInvariantResult({
     invariantId: INVARIANT_ID.CACHE_FRESHNESS_WITHIN_WATERMARK,
     passed: violatingNodeIds.length === 0,
@@ -223,8 +223,8 @@ function evaluateServicesMissingSysPostgresWire(entries) {
     }
   }
   const details = {
-      violatingNodeIds: violatingNodeIds.slice(0, MAX_DETAIL_ENTRIES),
-    };
+    violatingNodeIds: violatingNodeIds.slice(0, MAX_DETAIL_ENTRIES),
+  };
   return buildInvariantResult({
     invariantId: INVARIANT_ID.DISCOVERY_SYS_POSTGRES_WIRE_VISIBLE,
     passed: violatingNodeIds.length === 0,
@@ -251,8 +251,8 @@ function evaluateDiscoveryEmptyWithServicesPresent(entries) {
     }
   }
   const details = {
-      violatingNodeIds: violatingNodeIds.slice(0, MAX_DETAIL_ENTRIES),
-    };
+    violatingNodeIds: violatingNodeIds.slice(0, MAX_DETAIL_ENTRIES),
+  };
   return buildInvariantResult({
     invariantId: INVARIANT_ID.DISCOVERY_NON_EMPTY_WITH_SERVICES_PRESENT,
     passed: violatingNodeIds.length === 0,

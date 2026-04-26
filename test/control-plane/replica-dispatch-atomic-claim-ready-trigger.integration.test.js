@@ -632,7 +632,7 @@ test(
       ready_lease_expires_at: now + 30000,
       last_heartbeat: now,
     };
-    let serviceRows = [];
+    const serviceRows = [];
     let executeCount = 0;
 
     const service = new ReplicaDispatchService({

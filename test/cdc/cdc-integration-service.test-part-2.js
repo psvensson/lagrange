@@ -7,7 +7,6 @@ import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import {
   CDCIntegrationService,
   CDCOperationType,
-  VALID_SYSTEM_TABLES,
 } from '../../src/cdc/cdc-integration-service.js';
 import {
   INITIAL_PARTITION_IDS,
@@ -19,25 +18,17 @@ import {
 } from '../../src/query/query-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
-import {SystemTableCache} from '../../src/cache/system-table-cache.js';
-import {createReadOnlyCache} from '../../src/cache/read-only-system-table-cache.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {
-  CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE,
 } from '../../src/control-plane/control-plane-system-table-visibility-constants.js';
 import {
-  OWNER_CONTRACT_NEXT_ACTION,
-  OWNER_CONTRACT_STATE,
 } from '../../src/control-plane/owner-contract-outcome.js';
 import {
-  TIMEOUT_BUDGET_CLASSIFICATION,
 } from '../../src/control-plane/timeout-budget.js';
 import {CDC_EVENT} from '../../src/cdc/cdc-constants.js';
 import {
-  READ_MODEL_DIVERGENCE_TYPE,
-  SQL_RECONCILIATION_REASON,
 } from '../../src/control-plane/read-model-contract.js';
 
 // Initialize configuration and logging for tests
@@ -58,7 +49,6 @@ afterEach(() => {
   LoggingService.resetInstance();
 });
 
-const TEST_RETRY_AFTER_MS = 125;
 const LOCAL_AUTHORITATIVE_REPLICA_OPERATION_ID =
   'op-local-authoritative-read';
 const LOCAL_AUTHORITATIVE_REPLICA_OPERATION_SQL =
@@ -121,38 +111,6 @@ function createMockSqlQueryEngine() {
  * and emits a matching table change so waiters resolve immediately.
  * @return {{cache: Object, state: Object}}
  */
-function createCacheWaitProbe() {
-  const state = {
-    present: false,
-    row: null,
-    onCacheChangeCalls: 0,
-    offCacheChangeCalls: 0,
-  };
-
-  const cache = {
-    has() {
-      return state.present;
-    },
-    get() {
-      return state.row;
-    },
-    onCacheChange(listener) {
-      state.onCacheChangeCalls++;
-      state.present = true;
-      state.row = {
-        node_id: 'node-1',
-        node_address: 'localhost:8080',
-      };
-      listener(SYSTEM_TABLE_NAME.NODES);
-      listener(SYSTEM_TABLE_NAME.LOGS);
-    },
-    offCacheChange() {
-      state.offCacheChangeCalls++;
-    },
-  };
-
-  return {cache, state};
-}
 
 /**
  * Create a local partition-service map for authoritative system-table tests.
@@ -820,82 +778,82 @@ async (t) => {
 
 test('CDCIntegrationService - authoritative reads can prefer owner RPC over ' +
   'available local replicas',
-  async (t) => {
-    let localReadCount = 0;
-    let ownerRpcReadCount = 0;
-    const service = new CDCIntegrationService({
-      nodeId: 'test-node',
-      sqlQueryEngine: {
-        queryExecutor: {
-          async executeOnPartition() {
-            ownerRpcReadCount += 1;
-            return {
-              success: true,
-              participantNodeId: 'node-sql-leader',
-              rows: [{
-                operation_id: 'op-owner-rpc-preferred',
-                workflow_step: 'OWNER_RPC',
-              }],
-            };
-          },
-          getPartitionRoutingSnapshot() {
-            return {
-              canonicalLeaderNodeId: 'node-sql-leader',
-              serviceRowCount: 2,
-              routableServiceCount: 2,
-              deniedByNodeId: {},
-            };
-          },
-        },
-        async executeQuery() {
+async (t) => {
+  let localReadCount = 0;
+  let ownerRpcReadCount = 0;
+  const service = new CDCIntegrationService({
+    nodeId: 'test-node',
+    sqlQueryEngine: {
+      queryExecutor: {
+        async executeOnPartition() {
+          ownerRpcReadCount += 1;
           return {
             success: true,
-            rows: [],
+            participantNodeId: 'node-sql-leader',
+            rows: [{
+              operation_id: 'op-owner-rpc-preferred',
+              workflow_step: 'OWNER_RPC',
+            }],
+          };
+        },
+        getPartitionRoutingSnapshot() {
+          return {
+            canonicalLeaderNodeId: 'node-sql-leader',
+            serviceRowCount: 2,
+            routableServiceCount: 2,
+            deniedByNodeId: {},
           };
         },
       },
-      partitionServicesProvider: () => createLocalSystemTablePartitionServices(
-        SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
-        {
-          isLeader: true,
-          async executeQuery() {
-            localReadCount += 1;
-            return {
-              success: true,
-              rows: [{
-                operation_id: 'op-owner-rpc-preferred',
-                workflow_step: 'LOCAL_REPLICA',
-              }],
-            };
-          },
-        },
-      ),
-    });
-    service.initialize();
-
-    const result = await service.executeAuthoritativeSystemTableRead(
-      SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
-      'SELECT * FROM replica_operations WHERE operation_id = ?',
-      ['op-owner-rpc-preferred'],
-      {
-        localReadConsistency: 'local_leader',
-        preferOwnerRpcRead: true,
+      async executeQuery() {
+        return {
+          success: true,
+          rows: [],
+        };
       },
-    );
-
-    t.equal(localReadCount, 1,
-      'owner-rpc preference should keep one local read available as a fallback');
-    t.equal(ownerRpcReadCount, 1,
-      'owner-rpc preference should query the owner lane even when a local replica is available');
-    t.equal(result.source, 'owner_rpc_lane',
-      'owner-rpc preference should select the owner lane result');
-    t.equal(result.localReadHit, false,
-      'owner-rpc preference should not report a local authoritative hit when owner RPC wins');
-    t.same(result.rows, [{
-      operation_id: 'op-owner-rpc-preferred',
-      workflow_step: 'OWNER_RPC',
-    }], 'owner-rpc preference should return the owner lane rows');
+    },
+    partitionServicesProvider: () => createLocalSystemTablePartitionServices(
+      SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+      {
+        isLeader: true,
+        async executeQuery() {
+          localReadCount += 1;
+          return {
+            success: true,
+            rows: [{
+              operation_id: 'op-owner-rpc-preferred',
+              workflow_step: 'LOCAL_REPLICA',
+            }],
+          };
+        },
+      },
+    ),
   });
+  service.initialize();
+
+  const result = await service.executeAuthoritativeSystemTableRead(
+    SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+    'SELECT * FROM replica_operations WHERE operation_id = ?',
+    ['op-owner-rpc-preferred'],
+    {
+      localReadConsistency: 'local_leader',
+      preferOwnerRpcRead: true,
+    },
+  );
+
+  t.equal(localReadCount, 1,
+    'owner-rpc preference should keep one local read available as a fallback');
+  t.equal(ownerRpcReadCount, 1,
+    'owner-rpc preference should query the owner lane even when a local replica is available');
+  t.equal(result.source, 'owner_rpc_lane',
+    'owner-rpc preference should select the owner lane result');
+  t.equal(result.localReadHit, false,
+    'owner-rpc preference should not report a local authoritative hit when owner RPC wins');
+  t.same(result.rows, [{
+    operation_id: 'op-owner-rpc-preferred',
+    workflow_step: 'OWNER_RPC',
+  }], 'owner-rpc preference should return the owner lane rows');
+});
 
 test('CDCIntegrationService - strict owner-RPC authoritative reads fail ' +
   'closed instead of falling back to local replicas',

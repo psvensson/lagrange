@@ -56,13 +56,13 @@ function buildVisiblePartitionRow(partitionId, options = {}) {
     replica_count:
       Number.isInteger(options.replicaCount) &&
         options.replicaCount > 0 ?
-          options.replicaCount :
-          TEST_DEFAULT_PARTITION_REPLICA_COUNT,
+        options.replicaCount :
+        TEST_DEFAULT_PARTITION_REPLICA_COUNT,
     leader_node_id:
       typeof options.leaderNodeId === 'string' &&
         options.leaderNodeId.length > 0 ?
-          options.leaderNodeId :
-          TEST_DEFAULT_LEADER_NODE_ID,
+        options.leaderNodeId :
+        TEST_DEFAULT_LEADER_NODE_ID,
   };
 }
 
@@ -72,8 +72,8 @@ function buildActiveLeaderServiceRow(partitionId, options = {}) {
     node_id:
       typeof options.nodeId === 'string' &&
         options.nodeId.length > 0 ?
-          options.nodeId :
-          TEST_DEFAULT_LEADER_NODE_ID,
+        options.nodeId :
+        TEST_DEFAULT_LEADER_NODE_ID,
     status: TEST_SERVICE_STATUS_ACTIVE,
     raft_role: TEST_RAFT_ROLE_LEADER,
   };
@@ -1076,7 +1076,7 @@ test('table-distribution-helpers repairs table visibility from authoritative ' +
   let partitionLookupAttempts = 0;
   const seedNode = {
     id: 'seed-1',
-    async queryWithTimeout(sql, _params, options = {}) {
+    async queryWithTimeout(sql, _params, _options = {}) {
       if (sql.includes('CREATE TABLE IF NOT EXISTS')) {
         const error = new Error(
           'Admin API query timed out for node seed-1 on lane control after 15000ms',

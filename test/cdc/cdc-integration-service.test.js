@@ -7,22 +7,16 @@ import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import {
   CDCIntegrationService,
   CDCOperationType,
-  VALID_SYSTEM_TABLES,
 } from '../../src/cdc/cdc-integration-service.js';
 import {
   INITIAL_PARTITION_IDS,
   SYSTEM_TABLE_NAME,
 } from '../../src/bootstrap/system-table-schemas-constants.js';
 import {
-  QUERY_ERROR_CODE,
-  QUERY_ERROR_MSG,
 } from '../../src/query/query-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
-import {SystemTableCache} from '../../src/cache/system-table-cache.js';
-import {createReadOnlyCache} from '../../src/cache/read-only-system-table-cache.js';
 import {
-  CONTROL_PLANE_READINESS_DIMENSION,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {
   PressureGovernor,
@@ -39,7 +33,6 @@ import {
   OWNER_CONTRACT_STATE,
 } from '../../src/control-plane/owner-contract-outcome.js';
 import {
-  TIMEOUT_BUDGET_CLASSIFICATION,
 } from '../../src/control-plane/timeout-budget.js';
 import {CDC_EVENT} from '../../src/cdc/cdc-constants.js';
 import {
@@ -66,14 +59,6 @@ afterEach(() => {
 });
 
 const TEST_RETRY_AFTER_MS = 125;
-const LOCAL_AUTHORITATIVE_REPLICA_OPERATION_ID =
-  'op-local-authoritative-read';
-const LOCAL_AUTHORITATIVE_REPLICA_OPERATION_SQL =
-  'SELECT * FROM replica_operations WHERE operation_id = ?';
-const LOCAL_AUTHORITATIVE_REPLICA_OPERATION_ROW = Object.freeze({
-  operation_id: LOCAL_AUTHORITATIVE_REPLICA_OPERATION_ID,
-  workflow_step: 'LOCAL_ONLY_QUERY',
-});
 
 /**
  * Create a mock SQL query engine for testing.

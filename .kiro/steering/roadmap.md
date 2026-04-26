@@ -90,6 +90,12 @@ following are true:
 3. The work remains consistent with `../../roadmap.md` and
    `../../edition-matrix.md`.
 
+Architecture documents may mention Pro or Enterprise services only as examples
+of external consumers of AGPL substrate. Such examples must not define
+implementation tasks in this repository unless the active package explicitly
+limits the work to AGPL-owned substrate and excludes paid-only behavior,
+operator flows, and control surfaces.
+
 ## Readiness To Start Work
 
 Before implementation tasks begin from a roadmap row:
@@ -106,6 +112,33 @@ Before implementation tasks begin from a roadmap row:
 5. Direct work packages must cite the roadmap row they belong to, or the
    already-approved maintenance/refactor scope that makes them valid without a
    roadmap change.
+
+## Roadmap Status Truth Policy
+
+Roadmap status must be reconciled with current work-tracker and representative
+scenario evidence.
+
+Required workflow:
+
+1. A roadmap row may be treated as complete only when no active package or
+   active sprint is still fixing the same declared exit criterion.
+2. For resilience, topology, failure-simulation, production-guarantee, or
+   distributed-harness rows, completion requires named representative evidence,
+   not only focused unit or integration proof.
+3. If a package discovers that a completed roadmap row still has an active
+   representative blocker, the package must classify the mismatch as one of:
+   - capability-complete but gate-open
+   - status-overstated and requiring roadmap correction
+   - new maintenance concern outside the original row
+4. A sprint may not close while `../../roadmap.md` says a relevant exit
+   criterion is complete and the sprint's current package says that same
+   criterion still fails.
+5. Roadmap corrections discovered during implementation should land with the
+   package or sprint closure that discovered them. Do not leave truth repair as
+   an out-of-band memory item.
+6. If a broad row is marked complete but still has known guardrail failures in
+   the owner path it claims to close, the row must either name the remaining
+   guardrail package or be downgraded to a capability-only status.
 
 ## Audit Procedure
 

@@ -187,13 +187,13 @@ test('Property 1 Bug Condition A: scheduleBackgroundRetry SHALL NOT ' +
           assert.equal(
             timerCountAfter,
             timerCountBefore,
-            `scheduleBackgroundRetry should NOT schedule a ` +
+            'scheduleBackgroundRetry should NOT schedule a ' +
             `timer when attempt=${attempt} >= ` +
             `maxTotalAttempts=${maxTotalAttempts} ` +
             `(MAX_ATTEMPTS=${CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS}` +
-            ` + BACKGROUND_MAX_ATTEMPTS=` +
+            ' + BACKGROUND_MAX_ATTEMPTS=' +
             `${CDC_GROUP_PROPAGATION_RETRY.BACKGROUND_MAX_ATTEMPTS}) ` +
-            `but backgroundRetryTimers grew from ` +
+            'but backgroundRetryTimers grew from ' +
             `${timerCountBefore} to ${timerCountAfter}`,
           );
 

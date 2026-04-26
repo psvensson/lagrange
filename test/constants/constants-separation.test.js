@@ -38,7 +38,7 @@ describe('STATE enum after reduction', () => {
     for (const key of REMOVED_STATE_KEYS) {
       assert.equal(
         STATE[key], undefined,
-        `STATE should not contain ${key}`
+        `STATE should not contain ${key}`,
       );
     }
   });
@@ -71,7 +71,7 @@ describe('STATE and SERVICE_STATUS have no overlapping keys', () => {
     const overlap = serviceKeys.filter((k) => stateKeys.has(k));
     assert.equal(
       overlap.length, 0,
-      `Overlapping keys: ${overlap.join(', ')}`
+      `Overlapping keys: ${overlap.join(', ')}`,
     );
   });
 });

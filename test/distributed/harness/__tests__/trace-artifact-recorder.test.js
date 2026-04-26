@@ -20,7 +20,7 @@ const JSON_CONTENT_TYPE = 'application/json';
 const STATUS_OK = 200;
 
 test('TraceArtifactRecorder captures trace stream and writes artifacts',
-  async (t) => {
+  async (_t) => {
     const tempDir = await mkdtemp(
       join(tmpdir(), 'trace-recorder-test-'),
     );

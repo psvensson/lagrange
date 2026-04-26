@@ -1,8 +1,5 @@
 import {NodeService} from '../../src/node/node-service.js';
-import {ConfigurationManager} from '../../src/config/configuration-manager.js';
-import {LoggingService} from '../../src/logging/logging-service.js';
 import {
-  SYSTEM_TABLE_NAME,
 } from '../../src/bootstrap/system-table-schemas-constants.js';
 import {
   CDC_OPERATION,
@@ -12,7 +9,6 @@ import {
   TABLES,
 } from '../../src/constants/index.js';
 import {
-  ROUTER_ERROR_MSG,
   TRANSPORT_ERROR_MSG,
 } from '../../src/constants/transport.js';
 import LifeRaft from '@markwylde/liferaft';
@@ -20,7 +16,6 @@ import {
   MessageGroupService,
 } from '../../src/message-group/message-group-service.js';
 import {
-  MESSAGE_GROUP_APPLICATION_MESSAGE_TYPE,
   MESSAGE_GROUP_CDC_ERROR_MSG,
 } from '../../src/message-group/constants.js';
 import {MessageRouter} from '../../src/transport/message-router.js';
@@ -29,16 +24,6 @@ import {registerCdcNonLeaderPropagationTailMoreTests} from './cdc-non-leader-pro
 let testPortCounter = 27200;
 const NON_SYSTEM_CDC_TABLE = 'runtime_forward_events';
 
-async function waitForCondition(predicate, timeoutMs = 1000, intervalMs = 20) {
-  const startedAtMs = Date.now();
-  while (Date.now() - startedAtMs < timeoutMs) {
-    if (predicate()) {
-      return true;
-    }
-    await new Promise((resolve) => setTimeout(resolve, intervalMs));
-  }
-  return predicate();
-}
 
 function seedLiveRaftPeersFromPeerAddresses(service) {
   if (!service?.raft || !Array.isArray(service.peerAddresses)) {

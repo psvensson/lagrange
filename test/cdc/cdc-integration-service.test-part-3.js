@@ -10,12 +10,9 @@ import {
   VALID_SYSTEM_TABLES,
 } from '../../src/cdc/cdc-integration-service.js';
 import {
-  INITIAL_PARTITION_IDS,
   SYSTEM_TABLE_NAME,
 } from '../../src/bootstrap/system-table-schemas-constants.js';
 import {
-  QUERY_ERROR_CODE,
-  QUERY_ERROR_MSG,
 } from '../../src/query/query-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
@@ -25,11 +22,8 @@ import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {
-  CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE,
 } from '../../src/control-plane/control-plane-system-table-visibility-constants.js';
 import {
-  OWNER_CONTRACT_NEXT_ACTION,
-  OWNER_CONTRACT_STATE,
 } from '../../src/control-plane/owner-contract-outcome.js';
 import {
   TIMEOUT_BUDGET_CLASSIFICATION,
@@ -37,7 +31,6 @@ import {
 import {CDC_EVENT} from '../../src/cdc/cdc-constants.js';
 import {
   READ_MODEL_DIVERGENCE_TYPE,
-  SQL_RECONCILIATION_REASON,
 } from '../../src/control-plane/read-model-contract.js';
 
 // Initialize configuration and logging for tests
@@ -58,15 +51,6 @@ afterEach(() => {
   LoggingService.resetInstance();
 });
 
-const TEST_RETRY_AFTER_MS = 125;
-const LOCAL_AUTHORITATIVE_REPLICA_OPERATION_ID =
-  'op-local-authoritative-read';
-const LOCAL_AUTHORITATIVE_REPLICA_OPERATION_SQL =
-  'SELECT * FROM replica_operations WHERE operation_id = ?';
-const LOCAL_AUTHORITATIVE_REPLICA_OPERATION_ROW = Object.freeze({
-  operation_id: LOCAL_AUTHORITATIVE_REPLICA_OPERATION_ID,
-  workflow_step: 'LOCAL_ONLY_QUERY',
-});
 
 /**
  * Create a mock SQL query engine for testing.
@@ -160,35 +144,6 @@ function createCacheWaitProbe() {
  * @param {Object} handlers
  * @return {Map<string, Object>}
  */
-function createLocalSystemTablePartitionServices(
-  tableName,
-  handlers = {},
-) {
-  const partitionId = INITIAL_PARTITION_IDS[tableName] || `${tableName}-p1`;
-  const partitionService = {
-    partitionId,
-    replicaId: `${partitionId}-r1`,
-    initialized: true,
-    isLeader: handlers.isLeader !== false,
-    async executeQuery(sql, params = []) {
-      if (typeof handlers.executeQuery === 'function') {
-        return handlers.executeQuery(sql, params);
-      }
-      return {
-        success: true,
-        rows: [],
-      };
-    },
-  };
-  if (typeof handlers.executeLocalQuery === 'function') {
-    partitionService.executeLocalQuery = async (sql, params = []) => {
-      return handlers.executeLocalQuery(sql, params);
-    };
-  }
-  return new Map([
-    [partitionId, partitionService],
-  ]);
-}
 
 test('CDCIntegrationService - updateSystemTableRow forwards query timeout to SQL engine',
   async (t) => {

@@ -102,6 +102,8 @@ const BOOTSTRAP_CONTROL_PLANE_MUTATION_PROFILE =
   buildControlPlaneWorkloadProfile(
     CONTROL_PLANE_WORKLOAD_CLASS.BOOTSTRAP_CONTROL_PLANE_MUTATION,
   );
+const BOOTSTRAP_ADMISSION_ID_PREFIX = 'bootstrap-admission';
+const BOOTSTRAP_ADMISSION_ID_SEPARATOR = ':';
 /**
  * BootstrapAPI provides REST endpoints for node bootstrap and discovery.
  */
@@ -185,7 +187,14 @@ class BootstrapAPI {
         options.bootstrapAdmissionRetryAfterMs > NUM.ZERO ?
         Math.floor(options.bootstrapAdmissionRetryAfterMs) :
         BOOTSTRAP_API_DEFAULT.BOOTSTRAP_ADMISSION_RETRY_AFTER_MS;
+    this.bootstrapAdmissionLeaseMs =
+      Number.isFinite(options.bootstrapAdmissionLeaseMs) &&
+        options.bootstrapAdmissionLeaseMs > NUM.ZERO ?
+        Math.floor(options.bootstrapAdmissionLeaseMs) :
+        BOOTSTRAP_API_DEFAULT.BOOTSTRAP_ADMISSION_LEASE_MS;
     this.inFlightBootstrapRequestCount = NUM.ZERO;
+    this.bootstrapAdmissionLeases = new Map();
+    this.bootstrapAdmissionSequence = NUM.ZERO;
     this.moveReplicaAssignmentLeaseMs = Number.isFinite(options.moveReplicaAssignmentLeaseMs) ?
       Math.max(NUM.ONE, Math.floor(options.moveReplicaAssignmentLeaseMs)) :
       BOOTSTRAP_API_DEFAULT.MOVE_REPLICA_ASSIGNMENT_LEASE_MS;
@@ -415,7 +424,11 @@ class BootstrapAPI {
           getSeedNodeId: () => this.seedNodeId,
           getReadinessState: () => this.readinessState,
           getBootstrapService: () => this.bootstrapStartupAdapter,
-          getMessageRouter: () => this.messageRouter,
+          getMessageRouter: () =>
+            this.messageRouter ||
+            this.runtimeOwner?.messageRouter ||
+            this.bootstrapStartupAdapter?.messageRouter ||
+            null,
           getSqlQueryEngine: () => this.getSqlQueryEngine(),
           getControlPlaneReadinessService: () =>
             this.getControlPlaneReadinessService(),
@@ -441,6 +454,14 @@ class BootstrapAPI {
             this.maxConcurrentBootstrapRequests,
           getBootstrapAdmissionRetryAfterMs: () =>
             this.bootstrapAdmissionRetryAfterMs,
+          getBootstrapAdmissionLeaseMs: () =>
+            this.bootstrapAdmissionLeaseMs,
+          expireStaleBootstrapAdmissions: (now) =>
+            this.expireStaleBootstrapAdmissions(now),
+          acquireBootstrapAdmission: (snapshot) =>
+            this.acquireBootstrapAdmission(snapshot),
+          releaseBootstrapAdmission: (admission) =>
+            this.releaseBootstrapAdmission(admission),
           getInFlightBootstrapRequestCount: () =>
             this.inFlightBootstrapRequestCount,
           setInFlightBootstrapRequestCount: (count) => {
@@ -448,8 +469,8 @@ class BootstrapAPI {
           },
           validateBootstrapRequest: (nodeId, nodeAddress) =>
             this.validateBootstrapRequest(nodeId, nodeAddress),
-          checkForConflicts: (nodeId, nodeAddress) =>
-            this.checkForConflicts(nodeId, nodeAddress),
+          checkForConflicts: (nodeId, nodeAddress, options) =>
+            this.checkForConflicts(nodeId, nodeAddress, options),
           getBlockingMoveReplicaBootstrapAdmissions: (now) =>
             this.getBlockingMoveReplicaBootstrapAdmissions(now),
           resolveMoveReplicaBootstrapAdmissionRetryAfterMs:
@@ -471,6 +492,8 @@ class BootstrapAPI {
           getTablePolicies: () => this.getTablePolicies(),
           getLatencyTopologyHints: (nodeId) =>
             this.getLatencyTopologyHints(nodeId),
+          getStartupAuthoritySnapshotForBootstrapResponse: (observedAt) =>
+            this.getStartupAuthoritySnapshotForBootstrapResponse(observedAt),
         },
       });
     this.bootstrapClusterViewOwner =
@@ -995,6 +1018,108 @@ class BootstrapAPI {
         ?.controlPlaneReadinessService ||
       this.bootstrapStartupAdapter?.controlPlaneReadinessService ||
       null;
+  }
+
+  /**
+   * Resolve the seed-owned startup authority snapshot advertised to joiners.
+   * @param {number} [observedAt=Date.now()]
+   * @return {Object|null}
+   */
+  getStartupAuthoritySnapshotForBootstrapResponse(observedAt = Date.now()) {
+    const service = this.getControlPlaneReadinessService();
+    if (!service || typeof service !== TYPEOF.OBJECT) {
+      return null;
+    }
+    try {
+      if (typeof service.getStartupAuthoritySnapshotSync === TYPEOF.FUNCTION) {
+        return service.getStartupAuthoritySnapshotSync(
+          this.seedNodeId,
+          observedAt,
+        );
+      }
+      if (typeof service.getStartupAuthoritySnapshot !== TYPEOF.FUNCTION) {
+        return null;
+      }
+      const startupAuthority = service.getStartupAuthoritySnapshot(
+        this.seedNodeId,
+        observedAt,
+      );
+      if (
+        startupAuthority &&
+        typeof startupAuthority.then === TYPEOF.FUNCTION
+      ) {
+        return null;
+      }
+      return startupAuthority && typeof startupAuthority === TYPEOF.OBJECT ?
+        startupAuthority :
+        null;
+    } catch (_error) {
+      return null;
+    }
+  }
+
+  synchronizeBootstrapAdmissionCount() {
+    this.inFlightBootstrapRequestCount = this.bootstrapAdmissionLeases.size;
+    return this.inFlightBootstrapRequestCount;
+  }
+
+  expireStaleBootstrapAdmissions(now = Date.now()) {
+    const expiredAdmissions = [];
+    for (const [admissionId, admission] of this.bootstrapAdmissionLeases) {
+      if (admission.leaseExpiresAt > now) {
+        continue;
+      }
+      this.bootstrapAdmissionLeases.delete(admissionId);
+      expiredAdmissions.push(admission);
+    }
+    this.synchronizeBootstrapAdmissionCount();
+    if (expiredAdmissions.length > NUM.ZERO) {
+      this.logger.warn(BOOTSTRAP_API_LOG_MSG.BOOTSTRAP_ADMISSION_EXPIRED, {
+        seedNodeId: this.seedNodeId,
+        expiredAdmissionCount: expiredAdmissions.length,
+        inFlightBootstrapRequests: this.inFlightBootstrapRequestCount,
+        maxConcurrentBootstrapRequests: this.maxConcurrentBootstrapRequests,
+        bootstrapAdmissionLeaseMs: this.bootstrapAdmissionLeaseMs,
+        expiredAdmissions: expiredAdmissions.map((admission) => ({
+          admissionId: admission.admissionId,
+          nodeId: admission.nodeId,
+          nodeAddress: admission.nodeAddress,
+          startedAt: admission.startedAt,
+          leaseExpiresAt: admission.leaseExpiresAt,
+        })),
+      });
+    }
+    return expiredAdmissions;
+  }
+
+  acquireBootstrapAdmission(snapshot = {}) {
+    const now = Number.isFinite(snapshot.now) ?
+      Math.floor(snapshot.now) :
+      Date.now();
+    const admissionId = [
+      BOOTSTRAP_ADMISSION_ID_PREFIX,
+      String(this.bootstrapAdmissionSequence),
+      String(now),
+    ].join(BOOTSTRAP_ADMISSION_ID_SEPARATOR);
+    this.bootstrapAdmissionSequence += NUM.ONE;
+    const admission = {
+      admissionId,
+      nodeId: snapshot.nodeId || BOOTSTRAP_API_SUBSYSTEM,
+      nodeAddress: snapshot.nodeAddress || HOST.LOCALHOST,
+      startedAt: now,
+      leaseExpiresAt: now + this.bootstrapAdmissionLeaseMs,
+    };
+    this.bootstrapAdmissionLeases.set(admissionId, admission);
+    this.synchronizeBootstrapAdmissionCount();
+    return admission;
+  }
+
+  releaseBootstrapAdmission(admission) {
+    const admissionId = admission?.admissionId;
+    if (typeof admissionId === TYPEOF.STRING) {
+      this.bootstrapAdmissionLeases.delete(admissionId);
+    }
+    this.synchronizeBootstrapAdmissionCount();
   }
 
   /**

@@ -1,6 +1,6 @@
-import { mkdir, rm, writeFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
-import { FAILURE_BUNDLE_SEGMENT_6 } from "./failure-bundle-segment-6.js";
+import {mkdir, rm, writeFile} from 'node:fs/promises';
+import {join, resolve} from 'node:path';
+import {FAILURE_BUNDLE_SEGMENT_6} from './failure-bundle-segment-6.js';
 const {
   FAILURE_BUNDLE_SCHEMA_VERSION,
   FAILURE_BUNDLE_RUN_DIRNAME,
@@ -237,14 +237,14 @@ function applyBundleDiagnosticsToScenarioEntry(entry, bundleJson) {
   }
 
   if (
-    typeof bundleJson.summary?.rootCauseClass === "string" &&
+    typeof bundleJson.summary?.rootCauseClass === 'string' &&
     bundleJson.summary.rootCauseClass.length > ZERO
   ) {
     entry.rootCauseClass = bundleJson.summary.rootCauseClass;
   }
 
   if (
-    typeof bundleJson.summary?.dominantReason === "string" &&
+    typeof bundleJson.summary?.dominantReason === 'string' &&
     bundleJson.summary.dominantReason.length > ZERO
   ) {
     entry.dominantReason = bundleJson.summary.dominantReason;
@@ -256,7 +256,7 @@ function applyBundleDiagnosticsToScenarioEntry(entry, bundleJson) {
   }
 
   if (
-    typeof bundleJson.summary?.failureAction === "string" &&
+    typeof bundleJson.summary?.failureAction === 'string' &&
     bundleJson.summary.failureAction.length > ZERO
   ) {
     diagnostics.failureAction = bundleJson.summary.failureAction;
@@ -264,7 +264,7 @@ function applyBundleDiagnosticsToScenarioEntry(entry, bundleJson) {
   }
 
   if (
-    typeof bundleJson.summary?.operatorRecommendation === "string" &&
+    typeof bundleJson.summary?.operatorRecommendation === 'string' &&
     bundleJson.summary.operatorRecommendation.length > ZERO
   ) {
     diagnostics.operatorRecommendation =
@@ -305,7 +305,7 @@ function applyBundleDiagnosticsToScenarioEntry(entry, bundleJson) {
 
   if (
     bundleJson.decisionArtifactsByNodeId &&
-    typeof bundleJson.decisionArtifactsByNodeId === "object"
+    typeof bundleJson.decisionArtifactsByNodeId === 'object'
   ) {
     diagnostics.decisionArtifactsByNodeId =
       bundleJson.decisionArtifactsByNodeId;
@@ -342,7 +342,7 @@ const SCENARIO_FAILURE_ARTIFACT_FILENAMES = Object.freeze([
 
 async function removeScenarioFailureArtifacts(scenarioDir) {
   for (const filename of SCENARIO_FAILURE_ARTIFACT_FILENAMES) {
-    await rm(join(scenarioDir, filename), { force: true });
+    await rm(join(scenarioDir, filename), {force: true});
   }
 }
 
@@ -356,22 +356,22 @@ async function writeFailureBundlesForReport({
   workspaceRoot = process.cwd(),
 }) {
   const scenarioEntries = Array.isArray(scenarios) ? scenarios : [];
-  const absoluteOutputDir = resolve(String(outputDir || "."));
-  const absoluteReportPath = resolve(String(reportOutputPath || ""));
+  const absoluteOutputDir = resolve(String(outputDir || '.'));
+  const absoluteReportPath = resolve(String(reportOutputPath || ''));
   const scenarioBundles = [];
 
   for (const entry of scenarioEntries) {
     if (!entry) {
       continue;
     }
-    const scenarioName = sanitizePathSegment(entry.scenario, "scenario");
+    const scenarioName = sanitizePathSegment(entry.scenario, 'scenario');
     const scenarioDir = join(absoluteOutputDir, scenarioName);
     if (entry.passed === true) {
       await removeScenarioFailureArtifacts(scenarioDir);
       delete entry.failureBundle;
       continue;
     }
-    await mkdir(scenarioDir, { recursive: true });
+    await mkdir(scenarioDir, {recursive: true});
     const logs = await collectScenarioLogArtifacts(
       scenarioDir,
       resolveRelevantNodeIds(entry),
@@ -449,11 +449,11 @@ async function writeFailureBundlesForReport({
       recursive: true,
       force: true,
     });
-    return { runBundle: null, scenarioBundles: [] };
+    return {runBundle: null, scenarioBundles: []};
   }
 
   const runBundleDir = join(absoluteOutputDir, FAILURE_BUNDLE_RUN_DIRNAME);
-  await mkdir(runBundleDir, { recursive: true });
+  await mkdir(runBundleDir, {recursive: true});
   const runBundleJson = buildRunFailureBundle({
     reportOutputPath: toWorkspaceRelative(absoluteReportPath, workspaceRoot),
     reportSummary,

@@ -59,8 +59,8 @@ describe('DedupeRegistry', () => {
     assert.equal(reg.size(), 1);
   });
 
-  it('should distinguish same lineage with different '
-    + 'stage ids', () => {
+  it('should distinguish same lineage with different ' +
+    'stage ids', () => {
     const reg = new DedupeRegistry();
     reg.register('lid-5', '0', 'result-stage-0');
     reg.register('lid-5', '1', 'result-stage-1');
@@ -74,8 +74,8 @@ describe('DedupeRegistry', () => {
     assert.equal(reg.isDuplicate('lid-5', '2'), false);
   });
 
-  it('should distinguish same stage with different '
-    + 'lineage ids', () => {
+  it('should distinguish same stage with different ' +
+    'lineage ids', () => {
     const reg = new DedupeRegistry();
     reg.register('lid-a', '0', 'result-a');
     reg.register('lid-b', '0', 'result-b');

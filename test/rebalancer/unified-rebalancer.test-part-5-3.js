@@ -6,56 +6,39 @@
 
 import {test} from '../../src/test-helpers/tap.js';
 import {
-  LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY,
 } from '../../src/cdc/cdc-integration-service.js';
 import {
-  CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
 } from '../../src/control-plane/control-plane-system-table-gateway.js';
 import {
-  REPLICA_OPERATION_VISIBILITY_READ_MODE,
 } from '../../src/rebalancer/replica-operation-repository.js';
 import {
   UnifiedRebalancer,
   EntityType,
-  TriggerType,
-  MoveType,
-  ReplicaStatus,
   NodeStatus,
   DEFAULT_TABLE_POLICY,
   DEFAULT_MESSAGE_GROUP_POLICY,
 } from '../../src/rebalancer/unified-rebalancer.js';
 import {
-  REPLICA_OPERATION_SEMANTIC_PHASE,
 } from '../../src/rebalancer/replica-status.js';
 import {
-  REBALANCER_CONCURRENT_BUDGET_READ_MODE,
-  REBALANCER_LOG_MSG,
-  REBALANCER_SKIP_REASON,
 } from '../../src/rebalancer/rebalancer-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
-import {SERVICE_TYPE} from '../../src/constants/service.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {
-  CONTROL_PLANE_WORKLOAD_CLASS,
 } from '../../src/control-plane/control-plane-workload-profile.js';
 import {
-  LIFECYCLE_PHASE,
 } from '../../src/bootstrap/lifecycle-controller-constants.js';
 import {
-  PRESSURE_BEHAVIOR_DECISION,
-  PRESSURE_STATE,
 } from '../../src/rebalancer/storage-capacity-constants.js';
 import {
-  SYSTEM_TABLE_NAME,
 } from '../../src/bootstrap/system-table-schemas-constants.js';
 import {
   ENDPOINT_STATUS,
   META_SERVICE_ID,
   TRANSPORT_TYPE,
-  WORKFLOW_STEP,
 } from '../../src/constants/index.js';
 import {ENDPOINT_SYNC_HEALTH} from '../../src/runtime/endpoint-sync-constants.js';
 
@@ -748,12 +731,12 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
 
       await rebalancer.checkRebalance();
 
-    t.equal(
-      evaluateCalls,
-      1,
-      'failed nodes should remain actionable and must not be blocked by the settling gate',
-    );
-  });
+      t.equal(
+        evaluateCalls,
+        1,
+        'failed nodes should remain actionable and must not be blocked by the settling gate',
+      );
+    });
 
   await t.test(
     'checkRebalance defers critical system partitions while connected membership exceeds nodes cache',
@@ -1428,5 +1411,4 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
       );
     },
   );
-
 });

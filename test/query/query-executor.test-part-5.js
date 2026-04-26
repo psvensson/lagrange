@@ -8,8 +8,6 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {QueryExecutor} from '../../src/query/query-executor.js';
 import {SQLParser} from '../../src/query/sql-parser.js';
-import {NodeService} from '../../src/node/node-service.js';
-import {ERRORS} from '../../src/constants/index.js';
 import {
   COLUMN,
   STATE,
@@ -17,7 +15,6 @@ import {
   SERVICE_TYPE,
   TABLES,
 } from '../../src/constants/index.js';
-import {MIGRATION_PARTITION_OPERATION} from '../../src/migration/migration-constants.js';
 import {
   CONTROL_PLANE_PARTICIPATION_KIND,
   CONTROL_PLANE_READINESS_DIMENSION,
@@ -31,23 +28,13 @@ import {
   ControlPlaneReadinessService,
 } from '../../src/control-plane/control-plane-readiness-service.js';
 import {
-  QUERY_DEFAULTS,
-  QUERY_LOG_MSG,
-  QUERY_RESPONSE_TYPE,
   QUERY_ROUTING_DIAGNOSTIC_REASON,
-  QUERY_ROUTING_REPAIR_REASON,
 } from '../../src/query/query-constants.js';
 import {
-  CANONICAL_LEADER_IDENTITY_SOURCE,
-  CANONICAL_LEADER_IDENTITY_STATE,
-  CANONICAL_LEADER_ROUTING_GAP_STATE,
 } from '../../src/query/canonical-leader-routing.js';
 import {
-  PARTITION_SERVICE_ERROR_MSG,
 } from '../../src/partition/partition-service-constants.js';
 import {
-  assertNoHandlerRepairConverged,
-  createStaleOverlayOwnerHandoffFixture,
 } from './routing-repair-test-helpers.js';
 
 // Initialize configuration for tests

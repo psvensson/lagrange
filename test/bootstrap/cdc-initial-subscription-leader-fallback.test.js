@@ -452,10 +452,10 @@ test(
 
     await service.seedCacheHydrationPhase.subscribeToCDC(
       'tables', 'tables-p1', [
-      'tables-p1-r1',
-      'tables-p1-r2',
-      'tables-p1-r3',
-    ]);
+        'tables-p1-r1',
+        'tables-p1-r2',
+        'tables-p1-r3',
+      ]);
 
     assert.equal(
       mgSubscribeCalls,

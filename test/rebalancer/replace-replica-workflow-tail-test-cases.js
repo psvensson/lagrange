@@ -768,6 +768,517 @@ export async function registerReplaceReplicaWorkflowTailTests({
       }
     });
 
+  await t.test(
+    'observed REPLACE source removing progress advances ACTIVE rows to STOPPING',
+    async (t) => {
+      const TEST_SERVICES_TABLE = 'services';
+      const TEST_CACHE_UPSERT = 'UPSERT';
+      const TEST_OBSERVATION_OBSERVED = 'observed';
+      const TEST_PARTITION_ENTITY_TYPE = 'partition';
+      const TEST_PARTITION_ID = 'control_plane_publications-p1';
+      const TEST_OPERATION_ID = 'replace-source-removing-observed';
+      const TEST_SOURCE_NODE_ID = 'node-source';
+      const TEST_TARGET_NODE_ID = 'node-target';
+      const TEST_SOURCE_REPLICA_ID = TEST_PARTITION_ID + '-r1';
+      const TEST_TARGET_REPLICA_ID = TEST_PARTITION_ID + '-r4';
+      const nowMs = Date.now();
+      const deliveries = [];
+      const sourceServiceRow = {
+        service_id: TEST_SOURCE_REPLICA_ID,
+        replica_id: TEST_SOURCE_REPLICA_ID,
+        service_type: TEST_PARTITION_ENTITY_TYPE,
+        partition_id: TEST_PARTITION_ID,
+        node_id: TEST_SOURCE_NODE_ID,
+        status: ReplicaStatus.REMOVING,
+        raft_role: 'follower',
+        address: TEST_SOURCE_NODE_ID + '/partition/' + TEST_SOURCE_REPLICA_ID,
+      };
+      const operationRow = {
+        operation_id: TEST_OPERATION_ID,
+        type: OperationType.REPLACE,
+        partition_id: TEST_PARTITION_ID,
+        replica_id: TEST_TARGET_REPLICA_ID,
+        source_node_id: TEST_SOURCE_NODE_ID,
+        target_node_id: TEST_TARGET_NODE_ID,
+        status: ReplicaStatus.ACTIVE,
+        workflow_step: WORKFLOW_STEP.ACTIVE,
+        created_at: nowMs,
+        updated_at: nowMs,
+        completed_at: null,
+        error_message: null,
+        entity_type: TEST_PARTITION_ENTITY_TYPE,
+        entity_id: TEST_PARTITION_ID,
+        steps_history: JSON.stringify([
+          {
+            step: WORKFLOW_STEP.PENDING,
+            timestamp: nowMs,
+            sourceReplicaId: TEST_SOURCE_REPLICA_ID,
+          },
+          {
+            step: WORKFLOW_STEP.ACTIVE,
+            timestamp: nowMs,
+            previousStep: WORKFLOW_STEP.SYNCING,
+          },
+        ]),
+      };
+      const coordinator = createTestCoordinator({
+        nodeId: TEST_TARGET_NODE_ID,
+        enableTimeouts: false,
+        cacheData: {
+          services: [sourceServiceRow],
+          replicaOperations: [operationRow],
+        },
+        messageRouter: {
+          async deliver(target, payload, options) {
+            deliveries.push({target, payload, options});
+            return {
+              acknowledged: true,
+              status: ReplicaOperationResponseStatus.INITIATED,
+            };
+          },
+        },
+      });
+      const baseGetActualReplicaObservation =
+        coordinator.repository.getActualReplicaObservation.bind(
+          coordinator.repository,
+        );
+      coordinator.repository.getActualReplicaObservation =
+        async (replicaId, partitionId, targetNodeId, readOptions = {}) => {
+          if (
+            replicaId === TEST_SOURCE_REPLICA_ID &&
+            partitionId === TEST_PARTITION_ID &&
+            targetNodeId === TEST_SOURCE_NODE_ID
+          ) {
+            return Object.freeze({
+              state: TEST_OBSERVATION_OBSERVED,
+              lifecycleStatus: ReplicaStatus.REMOVING,
+            });
+          }
+          return baseGetActualReplicaObservation(
+            replicaId,
+            partitionId,
+            targetNodeId,
+            readOptions,
+          );
+        };
+
+      try {
+        coordinator.handleObservedReplicaStateChange(
+          TEST_SERVICES_TABLE,
+          TEST_CACHE_UPSERT,
+          sourceServiceRow,
+        );
+        await new Promise((resolve) => setImmediate(resolve));
+        await new Promise((resolve) => setImmediate(resolve));
+
+        const persistedOperation =
+          await coordinator.queryOperationById(TEST_OPERATION_ID);
+        t.equal(
+          deliveries.length,
+          0,
+          'source-side observed progress should not redispatch removal',
+        );
+        t.equal(
+          persistedOperation.workflowStep,
+          WORKFLOW_STEP.STOPPING,
+          'source-side removing evidence should advance the workflow step',
+        );
+        t.equal(
+          persistedOperation.status,
+          ReplicaStatus.REMOVING,
+          'source-side removing evidence should persist the removing status',
+        );
+      } finally {
+        await coordinator.shutdown();
+      }
+    },
+  );
+
+  await t.test(
+    'observed REPLACE source deletion completes STOPPING rows without redispatch',
+    async (t) => {
+      const TEST_SERVICES_TABLE = 'services';
+      const TEST_CACHE_DELETE = 'DELETE';
+      const TEST_OBSERVATION_ABSENT = 'absent';
+      const TEST_PARTITION_ENTITY_TYPE = 'partition';
+      const TEST_PARTITION_ID = 'replica_operations-p1';
+      const TEST_OPERATION_ID = 'replace-source-delete-observed';
+      const TEST_SOURCE_NODE_ID = 'node-source';
+      const TEST_TARGET_NODE_ID = 'node-target';
+      const TEST_SOURCE_REPLICA_ID = TEST_PARTITION_ID + '-r1';
+      const TEST_TARGET_REPLICA_ID = TEST_PARTITION_ID + '-r4';
+      const nowMs = Date.now();
+      const deliveries = [];
+      const sourceServiceRow = {
+        service_id: TEST_SOURCE_REPLICA_ID,
+        replica_id: TEST_SOURCE_REPLICA_ID,
+        service_type: TEST_PARTITION_ENTITY_TYPE,
+        partition_id: TEST_PARTITION_ID,
+        node_id: TEST_SOURCE_NODE_ID,
+        status: ReplicaStatus.REMOVING,
+        raft_role: 'follower',
+        address: TEST_SOURCE_NODE_ID + '/partition/' + TEST_SOURCE_REPLICA_ID,
+      };
+      const operationRow = {
+        operation_id: TEST_OPERATION_ID,
+        type: OperationType.REPLACE,
+        partition_id: TEST_PARTITION_ID,
+        replica_id: TEST_TARGET_REPLICA_ID,
+        source_node_id: TEST_SOURCE_NODE_ID,
+        target_node_id: TEST_TARGET_NODE_ID,
+        status: ReplicaStatus.REMOVING,
+        workflow_step: WORKFLOW_STEP.STOPPING,
+        created_at: nowMs,
+        updated_at: nowMs,
+        completed_at: null,
+        error_message: null,
+        entity_type: TEST_PARTITION_ENTITY_TYPE,
+        entity_id: TEST_PARTITION_ID,
+        steps_history: JSON.stringify([
+          {
+            step: WORKFLOW_STEP.PENDING,
+            timestamp: nowMs,
+            sourceReplicaId: TEST_SOURCE_REPLICA_ID,
+          },
+          {
+            step: WORKFLOW_STEP.STOPPING,
+            timestamp: nowMs,
+            previousStep: WORKFLOW_STEP.ACTIVE,
+          },
+        ]),
+      };
+      const coordinator = createTestCoordinator({
+        nodeId: TEST_TARGET_NODE_ID,
+        enableTimeouts: false,
+        cacheData: {
+          services: [sourceServiceRow],
+          replicaOperations: [operationRow],
+        },
+        messageRouter: {
+          async deliver(target, payload, options) {
+            deliveries.push({target, payload, options});
+            return {
+              acknowledged: true,
+              status: ReplicaOperationResponseStatus.INITIATED,
+            };
+          },
+        },
+      });
+      const baseGetActualReplicaObservation =
+        coordinator.repository.getActualReplicaObservation.bind(
+          coordinator.repository,
+        );
+      coordinator.repository.getActualReplicaObservation =
+        async (replicaId, partitionId, targetNodeId, readOptions = {}) => {
+          if (
+            replicaId === TEST_SOURCE_REPLICA_ID &&
+            partitionId === TEST_PARTITION_ID &&
+            targetNodeId === TEST_SOURCE_NODE_ID
+          ) {
+            return Object.freeze({
+              state: TEST_OBSERVATION_ABSENT,
+            });
+          }
+          return baseGetActualReplicaObservation(
+            replicaId,
+            partitionId,
+            targetNodeId,
+            readOptions,
+          );
+        };
+
+      try {
+        coordinator.handleObservedReplicaStateChange(
+          TEST_SERVICES_TABLE,
+          TEST_CACHE_DELETE,
+          sourceServiceRow,
+        );
+        await new Promise((resolve) => setImmediate(resolve));
+        await new Promise((resolve) => setImmediate(resolve));
+
+        const persistedOperation =
+          await coordinator.queryOperationById(TEST_OPERATION_ID);
+        t.equal(
+          deliveries.length,
+          0,
+          'source-side deletion should not redispatch removal',
+        );
+        t.equal(
+          persistedOperation.workflowStep,
+          WORKFLOW_STEP.REMOVED,
+          'source-side deletion should complete the replacement',
+        );
+        t.equal(
+          persistedOperation.status,
+          ReplicaStatus.REMOVED,
+          'source-side deletion should persist the removed status',
+        );
+        t.ok(
+          persistedOperation.completedAt !== null,
+          'source-side deletion should record completion time',
+        );
+      } finally {
+        await coordinator.shutdown();
+      }
+    },
+  );
+
+  await t.test(
+    'observed target pending progress advances admitted REPLACE creates to CREATING',
+    async (t) => {
+      const TEST_SERVICES_TABLE = 'services';
+      const TEST_CACHE_UPSERT = 'UPSERT';
+      const TEST_OBSERVATION_OBSERVED = 'observed';
+      const TEST_PARTITION_ENTITY_TYPE = 'partition';
+      const TEST_PARTITION_ID = 'sql_transactions-p1';
+      const TEST_OPERATION_ID = 'replace-target-pending-observed';
+      const TEST_SOURCE_NODE_ID = 'node-source';
+      const TEST_TARGET_NODE_ID = 'node-target';
+      const TEST_SOURCE_REPLICA_ID = TEST_PARTITION_ID + '-r1';
+      const TEST_TARGET_REPLICA_ID = TEST_PARTITION_ID + '-r5';
+      const TEST_TARGET_ADDRESS =
+        TEST_TARGET_NODE_ID + '/partition/' + TEST_TARGET_REPLICA_ID;
+      const nowMs = Date.now();
+      const deliveries = [];
+      const targetServiceRow = {
+        service_id: TEST_TARGET_REPLICA_ID,
+        replica_id: TEST_TARGET_REPLICA_ID,
+        service_type: TEST_PARTITION_ENTITY_TYPE,
+        partition_id: TEST_PARTITION_ID,
+        node_id: TEST_TARGET_NODE_ID,
+        status: ReplicaStatus.PENDING,
+        raft_role: null,
+        address: TEST_TARGET_ADDRESS,
+      };
+      const operationRow = {
+        operation_id: TEST_OPERATION_ID,
+        type: OperationType.REPLACE,
+        partition_id: TEST_PARTITION_ID,
+        replica_id: TEST_TARGET_REPLICA_ID,
+        source_node_id: TEST_SOURCE_NODE_ID,
+        target_node_id: TEST_TARGET_NODE_ID,
+        status: ReplicaStatus.PENDING,
+        workflow_step: WORKFLOW_STEP.SENDING,
+        created_at: nowMs,
+        updated_at: nowMs,
+        completed_at: null,
+        error_message: null,
+        entity_type: TEST_PARTITION_ENTITY_TYPE,
+        entity_id: TEST_PARTITION_ID,
+        steps_history: JSON.stringify([
+          {
+            step: WORKFLOW_STEP.PENDING,
+            timestamp: nowMs,
+            sourceReplicaId: TEST_SOURCE_REPLICA_ID,
+          },
+          {
+            step: WORKFLOW_STEP.SENDING,
+            timestamp: nowMs,
+            previousStep: WORKFLOW_STEP.PENDING,
+          },
+        ]),
+      };
+      const coordinator = createTestCoordinator({
+        nodeId: TEST_TARGET_NODE_ID,
+        enableTimeouts: false,
+        cacheData: {
+          services: [targetServiceRow],
+          replicaOperations: [operationRow],
+        },
+        messageRouter: {
+          async deliver(target, payload, options) {
+            deliveries.push({target, payload, options});
+            return {
+              acknowledged: true,
+              status: ReplicaOperationResponseStatus.INITIATED,
+            };
+          },
+        },
+      });
+      const baseGetActualReplicaObservation =
+        coordinator.repository.getActualReplicaObservation.bind(
+          coordinator.repository,
+        );
+      coordinator.repository.getActualReplicaObservation =
+        async (replicaId, partitionId, targetNodeId, readOptions = {}) => {
+          if (
+            replicaId === TEST_TARGET_REPLICA_ID &&
+            partitionId === TEST_PARTITION_ID &&
+            targetNodeId === TEST_TARGET_NODE_ID
+          ) {
+            return Object.freeze({
+              state: TEST_OBSERVATION_OBSERVED,
+              lifecycleStatus: ReplicaStatus.PENDING,
+            });
+          }
+          return baseGetActualReplicaObservation(
+            replicaId,
+            partitionId,
+            targetNodeId,
+            readOptions,
+          );
+        };
+
+      try {
+        coordinator.handleObservedReplicaStateChange(
+          TEST_SERVICES_TABLE,
+          TEST_CACHE_UPSERT,
+          targetServiceRow,
+        );
+        await new Promise((resolve) => setImmediate(resolve));
+        await new Promise((resolve) => setImmediate(resolve));
+
+        const persistedOperation =
+          await coordinator.queryOperationById(TEST_OPERATION_ID);
+        t.equal(
+          deliveries.length,
+          0,
+          'target admission evidence should not redispatch create',
+        );
+        t.equal(
+          persistedOperation.workflowStep,
+          WORKFLOW_STEP.CREATING,
+          'target pending evidence should advance admitted create workflow',
+        );
+        t.equal(
+          persistedOperation.status,
+          ReplicaStatus.CREATING,
+          'target pending evidence should persist create-admitted status',
+        );
+      } finally {
+        await coordinator.shutdown();
+      }
+    },
+  );
+
+  await t.test(
+    'observed target creating progress advances admitted REPLACE creates to CREATING',
+    async (t) => {
+      const TEST_SERVICES_TABLE = 'services';
+      const TEST_CACHE_UPSERT = 'UPSERT';
+      const TEST_OBSERVATION_OBSERVED = 'observed';
+      const TEST_PARTITION_ENTITY_TYPE = 'partition';
+      const TEST_PARTITION_ID = 'sql_write_operations-p1';
+      const TEST_OPERATION_ID = 'replace-target-creating-observed';
+      const TEST_SOURCE_NODE_ID = 'node-source';
+      const TEST_TARGET_NODE_ID = 'node-target';
+      const TEST_SOURCE_REPLICA_ID = TEST_PARTITION_ID + '-r1';
+      const TEST_TARGET_REPLICA_ID = TEST_PARTITION_ID + '-r4';
+      const TEST_TARGET_ADDRESS =
+        TEST_TARGET_NODE_ID + '/partition/' + TEST_TARGET_REPLICA_ID;
+      const nowMs = Date.now();
+      const deliveries = [];
+      const targetServiceRow = {
+        service_id: TEST_TARGET_REPLICA_ID,
+        replica_id: TEST_TARGET_REPLICA_ID,
+        service_type: TEST_PARTITION_ENTITY_TYPE,
+        partition_id: TEST_PARTITION_ID,
+        node_id: TEST_TARGET_NODE_ID,
+        status: ReplicaStatus.CREATING,
+        raft_role: null,
+        address: TEST_TARGET_ADDRESS,
+      };
+      const operationRow = {
+        operation_id: TEST_OPERATION_ID,
+        type: OperationType.REPLACE,
+        partition_id: TEST_PARTITION_ID,
+        replica_id: TEST_TARGET_REPLICA_ID,
+        source_node_id: TEST_SOURCE_NODE_ID,
+        target_node_id: TEST_TARGET_NODE_ID,
+        status: ReplicaStatus.PENDING,
+        workflow_step: WORKFLOW_STEP.SENDING,
+        created_at: nowMs,
+        updated_at: nowMs,
+        completed_at: null,
+        error_message: null,
+        entity_type: TEST_PARTITION_ENTITY_TYPE,
+        entity_id: TEST_PARTITION_ID,
+        steps_history: JSON.stringify([
+          {
+            step: WORKFLOW_STEP.PENDING,
+            timestamp: nowMs,
+            sourceReplicaId: TEST_SOURCE_REPLICA_ID,
+          },
+          {
+            step: WORKFLOW_STEP.SENDING,
+            timestamp: nowMs,
+            previousStep: WORKFLOW_STEP.PENDING,
+          },
+        ]),
+      };
+      const coordinator = createTestCoordinator({
+        nodeId: TEST_TARGET_NODE_ID,
+        enableTimeouts: false,
+        cacheData: {
+          services: [targetServiceRow],
+          replicaOperations: [operationRow],
+        },
+        messageRouter: {
+          async deliver(target, payload, options) {
+            deliveries.push({target, payload, options});
+            return {
+              acknowledged: true,
+              status: ReplicaOperationResponseStatus.INITIATED,
+            };
+          },
+        },
+      });
+      const baseGetActualReplicaObservation =
+        coordinator.repository.getActualReplicaObservation.bind(
+          coordinator.repository,
+        );
+      coordinator.repository.getActualReplicaObservation =
+        async (replicaId, partitionId, targetNodeId, readOptions = {}) => {
+          if (
+            replicaId === TEST_TARGET_REPLICA_ID &&
+            partitionId === TEST_PARTITION_ID &&
+            targetNodeId === TEST_TARGET_NODE_ID
+          ) {
+            return Object.freeze({
+              state: TEST_OBSERVATION_OBSERVED,
+              lifecycleStatus: ReplicaStatus.CREATING,
+            });
+          }
+          return baseGetActualReplicaObservation(
+            replicaId,
+            partitionId,
+            targetNodeId,
+            readOptions,
+          );
+        };
+
+      try {
+        coordinator.handleObservedReplicaStateChange(
+          TEST_SERVICES_TABLE,
+          TEST_CACHE_UPSERT,
+          targetServiceRow,
+        );
+        await new Promise((resolve) => setImmediate(resolve));
+        await new Promise((resolve) => setImmediate(resolve));
+
+        const persistedOperation =
+          await coordinator.queryOperationById(TEST_OPERATION_ID);
+        t.equal(
+          deliveries.length,
+          0,
+          'target creating evidence should not redispatch create',
+        );
+        t.equal(
+          persistedOperation.workflowStep,
+          WORKFLOW_STEP.CREATING,
+          'target creating evidence should advance admitted create workflow',
+        );
+        t.equal(
+          persistedOperation.status,
+          ReplicaStatus.CREATING,
+          'target creating evidence should persist create-admitted status',
+        );
+      } finally {
+        await coordinator.shutdown();
+      }
+    },
+  );
+
 
   await registerReplaceReplicaWorkflowTailMoreTests({
     t,

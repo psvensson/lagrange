@@ -382,7 +382,7 @@ function buildMembershipLifecycleSummary(options = {}) {
         )),
         clusterMemberUnhealthyExcludedNodeIds:
           Object.freeze(normalizeNodeIdList(
-          options.projectionDiagnostics
+            options.projectionDiagnostics
               .clusterMemberUnhealthyExcludedNodeIds,
           )),
       }) :

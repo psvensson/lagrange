@@ -4,58 +4,58 @@
  * Requirements: 20.1, 20.2, 20.3, 20.10
  */
 
-import { v4 as uuidv4 } from "uuid";
-import { LoggingService } from "../logging/logging-service.js";
-import { ConfigurationManager } from "../config/configuration-manager.js";
-import { CONFIG_KEY } from "../config/config-constants.js";
-import { NUM, STATE, TABLES } from "../constants/index.js";
-import { CONTROL_PLANE_MUTATION_OPERATION } from "../control-plane/control-plane-system-table-gateway.js";
-import { createControlPlaneRuntimeBundle } from "../control-plane/control-plane-runtime-bundle.js";
-import { resolveControlPlaneSystemTableVisibilityState } from "../control-plane/control-plane-system-table-visibility-constants.js";
+import {v4 as uuidv4} from 'uuid';
+import {LoggingService} from '../logging/logging-service.js';
+import {ConfigurationManager} from '../config/configuration-manager.js';
+import {CONFIG_KEY} from '../config/config-constants.js';
+import {NUM, STATE, TABLES} from '../constants/index.js';
+import {CONTROL_PLANE_MUTATION_OPERATION} from '../control-plane/control-plane-system-table-gateway.js';
+import {createControlPlaneRuntimeBundle} from '../control-plane/control-plane-runtime-bundle.js';
+import {resolveControlPlaneSystemTableVisibilityState} from '../control-plane/control-plane-system-table-visibility-constants.js';
 import {
   OWNER_CONTRACT_NEXT_ACTION,
   OWNER_CONTRACT_STATE,
   buildOwnerContractOutcome,
-} from "../control-plane/owner-contract-outcome.js";
-import { PRESSURE_WORK_CLASS } from "../control-plane/pressure-governor.js";
+} from '../control-plane/owner-contract-outcome.js';
+import {PRESSURE_WORK_CLASS} from '../control-plane/pressure-governor.js';
 import {
   QUERY_ERROR_CODE,
   QUERY_ERROR_MSG,
   QUERY_LOG_MSG,
   QUERY_OPERATION,
   QUERY_SUBSYSTEM,
-} from "./query-constants.js";
+} from './query-constants.js';
 const TABLE_CREATION_SERVICE_LITERAL = Object.freeze({
-  BOOLEAN: "boolean",
-  FUNCTION: "function",
-  OBJECT: "object",
-  STRING: "string",
-  UPDATE: "UPDATE",
-  INSERT: "INSERT",
-  TABLE_POLICY_CHANGED: "table_policy_changed",
-  PARTITION_SIZE_CHANGED: "partition_size_changed",
-  VISIBLE: "visible",
-  EMPTY: ",",
+  BOOLEAN: 'boolean',
+  FUNCTION: 'function',
+  OBJECT: 'object',
+  STRING: 'string',
+  UPDATE: 'UPDATE',
+  INSERT: 'INSERT',
+  TABLE_POLICY_CHANGED: 'table_policy_changed',
+  PARTITION_SIZE_CHANGED: 'partition_size_changed',
+  VISIBLE: 'visible',
+  EMPTY: ',',
   UNABLE_TO_RESTORE_MISSING_INITIAL_PARTITION_METADATA_FOR_TABLE:
-    "Unable to restore missing initial partition metadata for table ",
-  TABLE_CONSTRAINT: "table_constraint",
-  COLUMN_CONSTRAINT: "column_constraint",
+    'Unable to restore missing initial partition metadata for table ',
+  TABLE_CONSTRAINT: 'table_constraint',
+  COLUMN_CONSTRAINT: 'column_constraint',
 });
 const TABLE_CREATION_SQL = Object.freeze({
   SELECT_TABLE_BY_NAME: `SELECT * FROM ${TABLES.TABLES} WHERE table_name = ? LIMIT 1`,
   SELECT_PARTITION_BY_ID: `SELECT * FROM ${TABLES.PARTITIONS} WHERE partition_id = ? LIMIT 1`,
 });
 const TABLE_CREATION_COMPLETION_STATE = Object.freeze({
-  ACTIVE: "active",
-  PENDING_CREATION: "pending_creation",
+  ACTIVE: 'active',
+  PENDING_CREATION: 'pending_creation',
 });
 const TABLE_CREATION_COMPLETION_REASON = Object.freeze({
-  METADATA_VISIBILITY_PENDING: "metadata_visibility_pending",
-  REPLICA_CONVERGENCE_PENDING: "replica_convergence_pending",
+  METADATA_VISIBILITY_PENDING: 'metadata_visibility_pending',
+  REPLICA_CONVERGENCE_PENDING: 'replica_convergence_pending',
 });
 const TABLE_CREATION_VISIBILITY_STATE = Object.freeze({
-  VISIBLE: "visible",
-  DEFERRED_BY_PRESSURE: "deferred_by_pressure",
+  VISIBLE: 'visible',
+  DEFERRED_BY_PRESSURE: 'deferred_by_pressure',
 });
 const TABLE_CREATION_CONTRACT_PRIORITY = Object.freeze({
   [OWNER_CONTRACT_STATE.READY]: NUM.ZERO,
@@ -66,47 +66,47 @@ const TABLE_CREATION_CONTRACT_PRIORITY = Object.freeze({
 });
 function normalizeProvisioningSummary(provisioningResult = null, context = {}) {
   const requestedReplicaCount =
-    Number.isInteger(context?.replicaCount) && context.replicaCount > 0
-      ? context.replicaCount
-      : null;
+    Number.isInteger(context?.replicaCount) && context.replicaCount > 0 ?
+      context.replicaCount :
+      null;
   const minimumRoutableReplicaCount =
     Number.isInteger(context?.minimumRoutableReplicaCount) &&
-    context.minimumRoutableReplicaCount > 0
-      ? context.minimumRoutableReplicaCount
-      : null;
+    context.minimumRoutableReplicaCount > 0 ?
+      context.minimumRoutableReplicaCount :
+      null;
   const normalized =
-    provisioningResult && typeof provisioningResult === "object"
-      ? provisioningResult
-      : {};
+    provisioningResult && typeof provisioningResult === 'object' ?
+      provisioningResult :
+      {};
   const resolvedReplicaCount =
     Number.isInteger(normalized?.resolvedReplicaCount) &&
-    normalized.resolvedReplicaCount > 0
-      ? normalized.resolvedReplicaCount
-      : requestedReplicaCount;
+    normalized.resolvedReplicaCount > 0 ?
+      normalized.resolvedReplicaCount :
+      requestedReplicaCount;
   const fallbackRoutableReplicaCount =
     Number.isInteger(minimumRoutableReplicaCount) &&
-    minimumRoutableReplicaCount > 0
-      ? minimumRoutableReplicaCount
-      : NUM.ZERO;
+    minimumRoutableReplicaCount > 0 ?
+      minimumRoutableReplicaCount :
+      NUM.ZERO;
   const routableReplicaCount =
     Number.isInteger(normalized?.routableReplicaCount) &&
-    normalized.routableReplicaCount >= 0
-      ? normalized.routableReplicaCount
-      : fallbackRoutableReplicaCount;
+    normalized.routableReplicaCount >= 0 ?
+      normalized.routableReplicaCount :
+      fallbackRoutableReplicaCount;
   const fullReplicaCountConverged =
     typeof normalized?.fullReplicaCountConverged ===
-    TABLE_CREATION_SERVICE_LITERAL.BOOLEAN
-      ? normalized.fullReplicaCountConverged
-      : !Number.isInteger(requestedReplicaCount) ||
+    TABLE_CREATION_SERVICE_LITERAL.BOOLEAN ?
+      normalized.fullReplicaCountConverged :
+      !Number.isInteger(requestedReplicaCount) ||
         requestedReplicaCount <= NUM.ZERO ||
         routableReplicaCount >= requestedReplicaCount;
   const defaultProvisioningContractOutcome = buildOwnerContractOutcome({
-    contractState: fullReplicaCountConverged
-      ? OWNER_CONTRACT_STATE.READY
-      : OWNER_CONTRACT_STATE.PENDING,
-    nextAction: fullReplicaCountConverged
-      ? OWNER_CONTRACT_NEXT_ACTION.PROCEED
-      : OWNER_CONTRACT_NEXT_ACTION.WAIT,
+    contractState: fullReplicaCountConverged ?
+      OWNER_CONTRACT_STATE.READY :
+      OWNER_CONTRACT_STATE.PENDING,
+    nextAction: fullReplicaCountConverged ?
+      OWNER_CONTRACT_NEXT_ACTION.PROCEED :
+      OWNER_CONTRACT_NEXT_ACTION.WAIT,
   });
   const requestedProvisioningContractOutcome = buildOwnerContractOutcome({
     contractState:
@@ -120,29 +120,29 @@ function normalizeProvisioningSummary(provisioningResult = null, context = {}) {
     requestedProvisioningContractOutcome.contractState ===
       OWNER_CONTRACT_STATE.READY &&
     requestedProvisioningContractOutcome.nextAction ===
-      OWNER_CONTRACT_NEXT_ACTION.PROCEED
-      ? defaultProvisioningContractOutcome
-      : requestedProvisioningContractOutcome;
+      OWNER_CONTRACT_NEXT_ACTION.PROCEED ?
+      defaultProvisioningContractOutcome :
+      requestedProvisioningContractOutcome;
   return {
     requestedReplicaCount,
     resolvedReplicaCount,
     minimumRoutableReplicaCount:
       Number.isInteger(normalized?.minimumRoutableReplicaCount) &&
-      normalized.minimumRoutableReplicaCount > NUM.ZERO
-        ? normalized.minimumRoutableReplicaCount
-        : minimumRoutableReplicaCount,
+      normalized.minimumRoutableReplicaCount > NUM.ZERO ?
+        normalized.minimumRoutableReplicaCount :
+        minimumRoutableReplicaCount,
     routableReplicaCount,
     fullReplicaCountConverged,
     contractState: provisioningContractOutcome.contractState,
     nextAction: provisioningContractOutcome.nextAction,
-    reasonCodes: Array.isArray(normalized?.reasonCodes)
-      ? [...normalized.reasonCodes]
-      : [],
+    reasonCodes: Array.isArray(normalized?.reasonCodes) ?
+      [...normalized.reasonCodes] :
+      [],
     retryAfterMs:
       Number.isFinite(normalized?.retryAfterMs) &&
-      normalized.retryAfterMs > NUM.ZERO
-        ? Math.floor(normalized.retryAfterMs)
-        : NUM.ZERO,
+      normalized.retryAfterMs > NUM.ZERO ?
+        Math.floor(normalized.retryAfterMs) :
+        NUM.ZERO,
   };
 }
 function resolveTableCreationVisibilityContractOutcome(visibilityState) {
@@ -187,26 +187,26 @@ function resolveTableCreationMutationContractOutcome(
   let strongestOutcome = resolveTableCreationVisibilityContractOutcome(
     fallbackVisibilityState,
   );
-  for (const mutationResult of Array.isArray(mutationResults)
-    ? mutationResults
-    : []) {
-    if (!mutationResult || typeof mutationResult !== "object") {
+  for (const mutationResult of Array.isArray(mutationResults) ?
+    mutationResults :
+    []) {
+    if (!mutationResult || typeof mutationResult !== 'object') {
       continue;
     }
     const mutationOutcome =
       typeof mutationResult.contractState ===
         TABLE_CREATION_SERVICE_LITERAL.STRING &&
-      mutationResult.contractState.length > NUM.ZERO
-        ? buildOwnerContractOutcome({
-            contractState: mutationResult.contractState,
-            nextAction: mutationResult.nextAction,
-          })
-        : resolveTableCreationVisibilityContractOutcome(
-            String(
-              mutationResult.visibilityState ||
+      mutationResult.contractState.length > NUM.ZERO ?
+        buildOwnerContractOutcome({
+          contractState: mutationResult.contractState,
+          nextAction: mutationResult.nextAction,
+        }) :
+        resolveTableCreationVisibilityContractOutcome(
+          String(
+            mutationResult.visibilityState ||
                 TABLE_CREATION_VISIBILITY_STATE.VISIBLE,
-            ),
-          );
+          ),
+        );
     strongestOutcome = pickStrongerTableCreationContractOutcome(
       strongestOutcome,
       mutationOutcome,
@@ -221,20 +221,20 @@ function resolveTableCreationCompletion(options = {}) {
   const provisioningSummary = options?.provisioningSummary || null;
   const provisioningContractOutcome =
     provisioningSummary &&
-    typeof provisioningSummary === TABLE_CREATION_SERVICE_LITERAL.OBJECT
-      ? buildOwnerContractOutcome({
-          contractState: provisioningSummary.contractState,
-          nextAction: provisioningSummary.nextAction,
-        })
-      : null;
+    typeof provisioningSummary === TABLE_CREATION_SERVICE_LITERAL.OBJECT ?
+      buildOwnerContractOutcome({
+        contractState: provisioningSummary.contractState,
+        nextAction: provisioningSummary.nextAction,
+      }) :
+      null;
   let contractOutcome =
     options?.metadataContractOutcome &&
-    typeof options.metadataContractOutcome === "object"
-      ? buildOwnerContractOutcome({
-          contractState: options.metadataContractOutcome.contractState,
-          nextAction: options.metadataContractOutcome.nextAction,
-        })
-      : resolveTableCreationVisibilityContractOutcome(visibilityState);
+    typeof options.metadataContractOutcome === 'object' ?
+      buildOwnerContractOutcome({
+        contractState: options.metadataContractOutcome.contractState,
+        nextAction: options.metadataContractOutcome.nextAction,
+      }) :
+      resolveTableCreationVisibilityContractOutcome(visibilityState);
   let completionState = TABLE_CREATION_COMPLETION_STATE.ACTIVE;
   let completionReason = null;
   if (visibilityState !== TABLE_CREATION_VISIBILITY_STATE.VISIBLE) {
@@ -304,14 +304,14 @@ class TableCreationServicePart1 {
     this.cachePolicyChangeListener = null;
     this.calculateQuorumReplicaCount =
       typeof options.calculateQuorumReplicaCount ===
-      TABLE_CREATION_SERVICE_LITERAL.FUNCTION
-        ? options.calculateQuorumReplicaCount
-        : null;
+      TABLE_CREATION_SERVICE_LITERAL.FUNCTION ?
+        options.calculateQuorumReplicaCount :
+        null;
     this.partitionProvisioner =
       typeof options.partitionProvisioner ===
-      TABLE_CREATION_SERVICE_LITERAL.FUNCTION
-        ? options.partitionProvisioner
-        : null;
+      TABLE_CREATION_SERVICE_LITERAL.FUNCTION ?
+        options.partitionProvisioner :
+        null;
 
     // Configuration
     const config = ConfigurationManager.getInstance();
@@ -482,9 +482,9 @@ class TableCreationServicePart1 {
   resolveTableId(row) {
     const tableId = row?.table_id ?? row?.tableId ?? null;
     return typeof tableId === TABLE_CREATION_SERVICE_LITERAL.STRING &&
-      tableId.length > NUM.ZERO
-      ? tableId
-      : null;
+      tableId.length > NUM.ZERO ?
+      tableId :
+      null;
   }
 
   /**
@@ -517,9 +517,9 @@ class TableCreationServicePart1 {
   resolvePartitionId(row) {
     const partitionId = row?.partition_id ?? row?.partitionId ?? null;
     return typeof partitionId === TABLE_CREATION_SERVICE_LITERAL.STRING &&
-      partitionId.length > NUM.ZERO
-      ? partitionId
-      : null;
+      partitionId.length > NUM.ZERO ?
+      partitionId :
+      null;
   }
 
   /**
@@ -530,9 +530,9 @@ class TableCreationServicePart1 {
    */
   resolvePartitionSizeValue(row) {
     const sizeBytes = Number(row?.size_bytes ?? row?.sizeBytes);
-    return Number.isFinite(sizeBytes) && sizeBytes >= NUM.ZERO
-      ? sizeBytes
-      : null;
+    return Number.isFinite(sizeBytes) && sizeBytes >= NUM.ZERO ?
+      sizeBytes :
+      null;
   }
 
   /**
@@ -645,9 +645,9 @@ class TableCreationServicePart1 {
    */
   setPartitionProvisioner(provisioner) {
     this.partitionProvisioner =
-      typeof provisioner === TABLE_CREATION_SERVICE_LITERAL.FUNCTION
-        ? provisioner
-        : null;
+      typeof provisioner === TABLE_CREATION_SERVICE_LITERAL.FUNCTION ?
+        provisioner :
+        null;
   }
 
   /**
@@ -658,7 +658,7 @@ class TableCreationServicePart1 {
    * @return {Promise<Object>} Creation result.
    */
   async createTable(ast, options = {}) {
-    const { tableName, columns, primaryKey, ifNotExists } = ast;
+    const {tableName, columns, primaryKey, ifNotExists} = ast;
     this.logger.info(QUERY_LOG_MSG.TABLE_CREATE_START, {
       tableName,
       columnCount: columns.length,
@@ -782,7 +782,7 @@ class TableCreationServicePart1 {
           {
             allowPendingVisibility: true,
             workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
-            deliveryPriority: "critical",
+            deliveryPriority: 'critical',
           },
         );
       const partitionMetadataMutation =
@@ -795,7 +795,7 @@ class TableCreationServicePart1 {
           {
             allowPendingVisibility: true,
             workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
-            deliveryPriority: "critical",
+            deliveryPriority: 'critical',
           },
         );
       const metadataVisibilityState =
@@ -904,9 +904,9 @@ class TableCreationServicePart1 {
   async provisionInitialPartition(context) {
     const minimumRoutableReplicaCount =
       Number.isInteger(context?.minimumRoutableReplicaCount) &&
-      context.minimumRoutableReplicaCount > 0
-        ? context.minimumRoutableReplicaCount
-        : this.resolveDefaultMinimumRoutableReplicaCount(context?.replicaCount);
+      context.minimumRoutableReplicaCount > 0 ?
+        context.minimumRoutableReplicaCount :
+        this.resolveDefaultMinimumRoutableReplicaCount(context?.replicaCount);
     if (
       typeof this.partitionProvisioner !==
       TABLE_CREATION_SERVICE_LITERAL.FUNCTION
@@ -916,7 +916,7 @@ class TableCreationServicePart1 {
         minimumRoutableReplicaCount,
       });
     }
-    const { tableId, tableName, partitionId, replicaCount } = context;
+    const {tableId, tableName, partitionId, replicaCount} = context;
     this.logger.debug(QUERY_LOG_MSG.TABLE_PARTITION_PROVISION_START, {
       tableId,
       tableName,
@@ -968,13 +968,13 @@ class TableCreationServicePart1 {
       return null;
     }
     const minimumRoutableReplicaCount =
-      typeof this.calculateQuorumReplicaCount === "function"
-        ? this.calculateQuorumReplicaCount(normalizedReplicaCount)
-        : Math.floor(normalizedReplicaCount / 2) + 1;
+      typeof this.calculateQuorumReplicaCount === 'function' ?
+        this.calculateQuorumReplicaCount(normalizedReplicaCount) :
+        Math.floor(normalizedReplicaCount / 2) + 1;
     return Number.isInteger(minimumRoutableReplicaCount) &&
-      minimumRoutableReplicaCount > NUM.ZERO
-      ? minimumRoutableReplicaCount
-      : null;
+      minimumRoutableReplicaCount > NUM.ZERO ?
+      minimumRoutableReplicaCount :
+      null;
   }
 
   /**
@@ -1063,9 +1063,9 @@ class TableCreationServicePart1 {
       partition_key_start: null,
       partition_key_end: null,
       partition_version:
-        Number.isInteger(partitionVersion) && partitionVersion > NUM.ZERO
-          ? partitionVersion
-          : NUM.ONE,
+        Number.isInteger(partitionVersion) && partitionVersion > NUM.ZERO ?
+          partitionVersion :
+          NUM.ONE,
       replica_count: this.defaultReplicaCount,
       size_bytes: NUM.ZERO,
       leader_node_id: null,
@@ -1121,25 +1121,25 @@ class TableCreationServicePart1 {
 
     // Map common SQL types to SQLite types
     const typeMap = {
-      INT: "INTEGER",
-      BIGINT: "INTEGER",
-      SMALLINT: "INTEGER",
-      TINYINT: "INTEGER",
-      VARCHAR: "TEXT",
-      CHAR: "TEXT",
-      NVARCHAR: "TEXT",
-      NCHAR: "TEXT",
-      CLOB: "TEXT",
-      FLOAT: "REAL",
-      DOUBLE: "REAL",
-      DECIMAL: "REAL",
-      NUMERIC: "REAL",
-      BOOLEAN: "INTEGER",
-      BOOL: "INTEGER",
-      DATETIME: "TEXT",
-      TIMESTAMP: "TEXT",
-      DATE: "TEXT",
-      TIME: "TEXT",
+      INT: 'INTEGER',
+      BIGINT: 'INTEGER',
+      SMALLINT: 'INTEGER',
+      TINYINT: 'INTEGER',
+      VARCHAR: 'TEXT',
+      CHAR: 'TEXT',
+      NVARCHAR: 'TEXT',
+      NCHAR: 'TEXT',
+      CLOB: 'TEXT',
+      FLOAT: 'REAL',
+      DOUBLE: 'REAL',
+      DECIMAL: 'REAL',
+      NUMERIC: 'REAL',
+      BOOLEAN: 'INTEGER',
+      BOOL: 'INTEGER',
+      DATETIME: 'TEXT',
+      TIMESTAMP: 'TEXT',
+      DATE: 'TEXT',
+      TIME: 'TEXT',
     };
     return typeMap[typeName] || typeName;
   }
@@ -1180,15 +1180,15 @@ class TableCreationServicePart1 {
         TABLE_CREATION_SQL.SELECT_TABLE_BY_NAME,
         [tableName],
         {
-          readProfile: "table_lifecycle",
+          readProfile: 'table_lifecycle',
         },
       );
-      return Array.isArray(result?.rows) && result.rows.length > NUM.ZERO
-        ? result.rows[NUM.ZERO]
-        : null;
+      return Array.isArray(result?.rows) && result.rows.length > NUM.ZERO ?
+        result.rows[NUM.ZERO] :
+        null;
     } catch {
       return null;
     }
   }
 }
-export { TableCreationServicePart1 };
+export {TableCreationServicePart1};

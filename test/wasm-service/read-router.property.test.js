@@ -56,9 +56,9 @@ const safetyIntervalStateArb = fc.record({
     const now = Date.now();
     // When withinTime is true, set timestamp to be recent
     // (within interval). When false, set it far in the past.
-    const leaderTimestamp = withinTime
-      ? now - Math.floor(intervalMs / 2)
-      : now - intervalMs - 1000;
+    const leaderTimestamp = withinTime ?
+      now - Math.floor(intervalMs / 2) :
+      now - intervalMs - 1000;
 
     const expectedCanServe = indexOk && withinTime;
 

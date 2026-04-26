@@ -19,8 +19,6 @@
  * @module runtime/runtime-driver-registry
  */
 
-import {ALLOWED_RUNTIME_KINDS} from '../constants/runtime.js';
-import {TYPEOF} from '../constants/types.js';
 import {RuntimeDriver} from './runtime-driver.js';
 import {
   UnknownRuntimeKindError,
@@ -70,7 +68,7 @@ class RuntimeDriverRegistry {
     }
     if (!(driver instanceof RuntimeDriver)) {
       throw new TypeError(
-        'driver must be an instance of RuntimeDriver'
+        'driver must be an instance of RuntimeDriver',
       );
     }
     if (this._drivers.has(driver.kind)) {

@@ -1,91 +1,25 @@
-import { REBALANCE_COORDINATOR_SHARED } from "./rebalance-coordinator-shared.js";
-import { RebalanceCoordinatorSegment3 } from "./rebalance-coordinator-segment-3.js";
+import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
+import {RebalanceCoordinatorSegment3} from './rebalance-coordinator-segment-3.js';
 
 const {
-  CONCURRENT_CREATE_BUDGET_SCOPE,
-  CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
-  CONTROL_PLANE_QUERY_OPTIONS,
   CONTROL_PLANE_READINESS_DIMENSION,
-  CONTROL_PLANE_WORKLOAD_CLASS,
-  COORDINATOR_OWNED_OPERATION_TYPES_SQL_CLAUSE,
-  ConfigurationManager,
-  ControlPlaneReadinessService,
   DEFAULT_AMPLIFICATION_FACTOR,
-  DEFAULT_PRIORITY_RECOVERY_ACTIVITY_STALE_GRACE_MS,
-  DurableWorkflowCoordinator,
-  EventEmitter,
-  ExecutorOutcomeEmitter,
-  INCOMPLETE_OPERATION_EMPTY_QUERY_BACKOFF_MS,
-  INCOMPLETE_OPERATION_OBSERVATION_STATE,
-  LoggingService,
   NUM,
-  OPERATION_METADATA_KEY,
-  OUTCOME_EVENT_NAME,
-  OperationLane,
   OperationType,
-  OperationWorkflowOwner,
-  PRESSURE_GOVERNOR_ACTION,
-  PRESSURE_WORK_CLASS,
-  PRIORITY_RECENT_INTENT_TTL_MS,
-  PressureGovernor,
-  ProvisioningAdmissionPolicy,
-  REBALANCER_CONCURRENT_BUDGET_READ_MODE,
-  REBALANCER_CONFIG_KEY,
-  REBALANCER_DEFAULT,
   REBALANCER_SKIP_REASON,
-  REBALANCER_SUBSYSTEM,
   REBALANCE_COORDINATOR_ERROR_MSG,
   REBALANCE_COORDINATOR_EVENT,
   REBALANCE_COORDINATOR_LOG_MSG,
-  RECENT_INTENT_TTL_MS,
-  RECENT_OPERATION_INTENT_VISIBILITY_STATE,
-  REPLICA_ID_SEPARATOR,
-  REPLICA_ID_START_INDEX,
-  REPLICA_OPERATION_VISIBILITY_READ_MODE,
   RESERVATION_REASON,
   RESERVATION_STATUS,
-  ReplicaOperationField,
-  ReplicaOperationRepository,
   SERVICE_TYPE,
   SQL,
-  STORAGE_ADMISSION_DECISION_TYPE,
-  STORAGE_CAPACITY_CONFIG_KEY,
-  STORAGE_CAPACITY_DEFAULT,
   STORAGE_RESERVATION_READ_QUERY_OPTIONS,
-  STRICT_CREATE_DEDUPE_REPOSITORY_QUERY_OPTIONS,
   SYSTEM_TABLE_NAME,
-  StartupRecoveryCoordinator,
-  TIMEOUT_BUDGET_CLASSIFICATION,
-  TIMEOUT_BUDGET_DEFAULT,
-  TIME_MS,
-  TOPOLOGY_GUARD_DEFAULT_PARTITION_TARGET_REPLICA_COUNT,
   TOPOLOGY_GUARD_ERROR_MSG,
-  TOPOLOGY_GUARD_REASON,
-  TOPOLOGY_GUARD_STATE,
-  UNIFIED_SERVICE_TYPE,
-  WORKFLOW_STEP,
   assertCritical,
-  buildControlPlaneQueryOptions,
-  buildControlPlaneWorkloadProfile,
-  buildPriorityRecoveryOperationAssessment,
-  buildPriorityRecoveryOperationContextFromRecord,
-  buildPriorityRecoveryPartitionAssessment,
-  buildReplicatedServiceBootstrapTopology,
-  buildTimeoutClassification,
-  createChildTimeoutBudget,
-  createControlPlaneRuntimeBundle,
-  createOperationRecord,
-  createTopLevelOperationBudget,
-  getControlPlaneErrorCode,
-  getControlPlaneRetryAfterMs,
-  isCriticalTransportControlPlanePartitionTable,
   isPriorityControlPlanePartitionTable,
-  isRetryableControlPlaneError,
   readAuthoritativeControlPlaneRows,
-  resolvePriorityRecoveryActiveNodeCohort,
-  resolveTrackedPriorityRecoveryAdmissionPlan,
-  shouldPriorityRecoveryOperationBlockPlanning,
-  uuidv4,
 } = REBALANCE_COORDINATOR_SHARED;
 
 class RebalanceCoordinatorSegment4 extends RebalanceCoordinatorSegment3 {
@@ -107,20 +41,20 @@ class RebalanceCoordinatorSegment4 extends RebalanceCoordinatorSegment3 {
     ) {
       const usePriorityConcurrentAddLane =
         this.shouldUsePriorityConcurrentAddLane(normalizedMoveType, options);
-      const concurrentAddLimit = usePriorityConcurrentAddLane
-        ? this.getPriorityConcurrentAddBudgetLimit(options)
-        : this.getConcurrentAddBudgetLimit(options);
-      const canStart = usePriorityConcurrentAddLane
-        ? await this.canStartPriorityAddOperation({
-            bypassEmptyQueryDelay,
-            concurrentBudgetReadMode,
-            partitionId: options.partitionId,
-          })
-        : await this.canStartAddOperation({
-            bypassEmptyQueryDelay,
-            concurrentBudgetReadMode,
-            partitionId: options.partitionId,
-          });
+      const concurrentAddLimit = usePriorityConcurrentAddLane ?
+        this.getPriorityConcurrentAddBudgetLimit(options) :
+        this.getConcurrentAddBudgetLimit(options);
+      const canStart = usePriorityConcurrentAddLane ?
+        await this.canStartPriorityAddOperation({
+          bypassEmptyQueryDelay,
+          concurrentBudgetReadMode,
+          partitionId: options.partitionId,
+        }) :
+        await this.canStartAddOperation({
+          bypassEmptyQueryDelay,
+          concurrentBudgetReadMode,
+          partitionId: options.partitionId,
+        });
       if (canStart) {
         return;
       }
@@ -160,7 +94,7 @@ class RebalanceCoordinatorSegment4 extends RebalanceCoordinatorSegment3 {
   ) {
     const error = new Error(
       options.message ||
-        `Concurrent ${String(normalizedMoveType || "operation").toLowerCase()} ` +
+        `Concurrent ${String(normalizedMoveType || 'operation').toLowerCase()} ` +
           `budget exceeded at limit ${limit}`,
     );
     error.rebalanceSkipReason = REBALANCER_SKIP_REASON.BUDGET_EXCEEDED;
@@ -186,30 +120,30 @@ class RebalanceCoordinatorSegment4 extends RebalanceCoordinatorSegment3 {
     observation,
     options = {},
   ) {
-    const entityType = String(options?.entityType || "entity");
+    const entityType = String(options?.entityType || 'entity');
     const entityId = String(
       options?.entityId ||
         options?.partitionId ||
         options?.replicaId ||
-        "unknown",
+        'unknown',
     );
     const deferredOutcome =
       observation?.deferredOutcome &&
-      typeof observation.deferredOutcome === "object"
-        ? observation.deferredOutcome
-        : null;
+      typeof observation.deferredOutcome === 'object' ?
+        observation.deferredOutcome :
+        null;
     const reasonCode =
-      typeof deferredOutcome?.reasonCode === "string"
-        ? deferredOutcome.reasonCode
-        : "authoritative_operation_visibility_deferred";
+      typeof deferredOutcome?.reasonCode === 'string' ?
+        deferredOutcome.reasonCode :
+        'authoritative_operation_visibility_deferred';
     const error = new Error(
-      "Authoritative operation visibility deferred for " +
+      'Authoritative operation visibility deferred for ' +
         entityType +
-        ":" +
+        ':' +
         entityId +
-        " (" +
+        ' (' +
         reasonCode +
-        ")",
+        ')',
     );
     error.rebalanceSkipReason = REBALANCER_SKIP_REASON.DEFERRED_RETRY_PENDING;
     error.operationType = normalizedMoveType || null;
@@ -220,9 +154,9 @@ class RebalanceCoordinatorSegment4 extends RebalanceCoordinatorSegment3 {
     error.operationVisibilityState = observation?.state || null;
     error.completionState = deferredOutcome?.completionState || null;
     error.reasonCode = reasonCode;
-    error.retryAfterMs = Number.isFinite(deferredOutcome?.retryAfterMs)
-      ? deferredOutcome.retryAfterMs
-      : null;
+    error.retryAfterMs = Number.isFinite(deferredOutcome?.retryAfterMs) ?
+      deferredOutcome.retryAfterMs :
+      null;
     return error;
   }
 
@@ -240,13 +174,13 @@ class RebalanceCoordinatorSegment4 extends RebalanceCoordinatorSegment3 {
     conflictingOperation,
   ) {
     const operationTypeText = String(
-      normalizedMoveType || "operation",
+      normalizedMoveType || 'operation',
     ).toLowerCase();
     const error = new Error(
       `${REBALANCE_COORDINATOR_ERROR_MSG.CONFLICTING_OPERATION_IN_FLIGHT} ` +
         `${replicaId}: ${operationTypeText} conflicts with ` +
-        `${String(conflictingOperation?.type || "unknown")} ` +
-        `${String(conflictingOperation?.operationId || "unknown")}`,
+        `${String(conflictingOperation?.type || 'unknown')} ` +
+        `${String(conflictingOperation?.operationId || 'unknown')}`,
     );
     error.rebalanceSkipReason =
       REBALANCER_SKIP_REASON.CONFLICTING_OPERATION_IN_FLIGHT;
@@ -272,13 +206,13 @@ class RebalanceCoordinatorSegment4 extends RebalanceCoordinatorSegment3 {
     conflictingOperation,
   ) {
     const operationTypeText = String(
-      normalizedMoveType || "operation",
+      normalizedMoveType || 'operation',
     ).toLowerCase();
     const error = new Error(
       `${REBALANCE_COORDINATOR_ERROR_MSG.CONFLICTING_OPERATION_IN_FLIGHT} ` +
-        `${String(entityId || "unknown")}: ${operationTypeText} conflicts with ` +
-        `${String(conflictingOperation?.type || "unknown")} ` +
-        `${String(conflictingOperation?.operationId || "unknown")}`,
+        `${String(entityId || 'unknown')}: ${operationTypeText} conflicts with ` +
+        `${String(conflictingOperation?.type || 'unknown')} ` +
+        `${String(conflictingOperation?.operationId || 'unknown')}`,
     );
     error.rebalanceSkipReason =
       REBALANCER_SKIP_REASON.CONFLICTING_OPERATION_IN_FLIGHT;
@@ -362,17 +296,17 @@ class RebalanceCoordinatorSegment4 extends RebalanceCoordinatorSegment3 {
   createTopologyGuardAdmissionError(move, admissionResult) {
     const blockingReason =
       Array.isArray(admissionResult?.blockingReasons) &&
-      admissionResult.blockingReasons.length > NUM.ZERO
-        ? String(admissionResult.blockingReasons[NUM.ZERO] || "")
-        : String(admissionResult?.reason || "");
+      admissionResult.blockingReasons.length > NUM.ZERO ?
+        String(admissionResult.blockingReasons[NUM.ZERO] || '') :
+        String(admissionResult?.reason || '');
     const error = new Error(
       TOPOLOGY_GUARD_ERROR_MSG.BLOCKED_PREFIX +
-        " " +
-        "for " +
-        String(move?.type || "operation") +
-        " on " +
-        String(move?.nodeId || "unknown") +
-        (blockingReason ? ": " + blockingReason : ""),
+        ' ' +
+        'for ' +
+        String(move?.type || 'operation') +
+        ' on ' +
+        String(move?.nodeId || 'unknown') +
+        (blockingReason ? ': ' + blockingReason : ''),
     );
     error.admissionResult = admissionResult;
     return error;
@@ -408,7 +342,7 @@ class RebalanceCoordinatorSegment4 extends RebalanceCoordinatorSegment3 {
   async persistOperationUpdate(operation, options = {}) {
     return this.runReplicaOperationTransitionExclusive(
       () => this.repository.persistOperationUpdate(operation, options),
-      { operation },
+      {operation},
     );
   }
 
@@ -571,7 +505,7 @@ class RebalanceCoordinatorSegment4 extends RebalanceCoordinatorSegment3 {
     assertCritical(
       this.storageAccountingService &&
         typeof this.storageAccountingService.estimateReplicaBytes ===
-          "function",
+          'function',
       REBALANCE_COORDINATOR_ERROR_MSG.STORAGE_ACCOUNTING_REQUIRED,
     );
 
@@ -769,7 +703,7 @@ class RebalanceCoordinatorSegment4 extends RebalanceCoordinatorSegment3 {
     if (expired > NUM.ZERO) {
       this.logger.info(
         REBALANCE_COORDINATOR_LOG_MSG.RESERVATION_RECONCILE_EXPIRED,
-        { count: expired },
+        {count: expired},
       );
     }
 
@@ -821,7 +755,7 @@ class RebalanceCoordinatorSegment4 extends RebalanceCoordinatorSegment3 {
 
     this.logger.info(
       REBALANCE_COORDINATOR_LOG_MSG.RESERVATION_RECONCILE_COMPLETED,
-      { expired, orphansReleased },
+      {expired, orphansReleased},
     );
 
     this.emit(REBALANCE_COORDINATOR_EVENT.RESERVATION_RECONCILED, {
@@ -829,7 +763,7 @@ class RebalanceCoordinatorSegment4 extends RebalanceCoordinatorSegment3 {
       orphansReleased,
     });
 
-    return { expired, orphansReleased };
+    return {expired, orphansReleased};
   }
 
   /**
@@ -1100,4 +1034,4 @@ class RebalanceCoordinatorSegment4 extends RebalanceCoordinatorSegment3 {
    */
 }
 
-export { RebalanceCoordinatorSegment4 };
+export {RebalanceCoordinatorSegment4};

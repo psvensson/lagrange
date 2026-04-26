@@ -4,21 +4,13 @@
  */
 
 import {test} from '../../src/test-helpers/tap.js';
-import {BootstrapAPI, BootstrapStrategy} from '../../src/bootstrap/bootstrap-api.js';
-import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
+import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
 import {
-  BOOTSTRAP_API_HANDOFF_STATUS,
-  BOOTSTRAP_API_ERROR,
-  BOOTSTRAP_API_LOG_MSG,
-  BOOTSTRAP_API_PROBE_REASON,
 } from '../../src/bootstrap/bootstrap-api-constants.js';
 import {
-  BOOTSTRAP_PHASE,
-  BOOTSTRAP_PIPELINE_ERROR_CODE,
 } from '../../src/bootstrap/bootstrap-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
-import {CACHE_HYDRATION_TABLES} from '../../src/cache/cache-constants.js';
 import {
   ENDPOINT_STATUS,
   SERVICE_STATUS,
@@ -28,16 +20,7 @@ import {
   TRANSPORT_TYPE,
 } from '../../src/constants/index.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
-import {BootstrapReadinessState} from '../../src/bootstrap/bootstrap-readiness-state.js';
-import {BOOTSTRAP_READINESS_STAGE} from '../../src/bootstrap/bootstrap-readiness-ladder.js';
-import {LIFECYCLE_REASON} from '../../src/bootstrap/lifecycle-controller-constants.js';
-import {STARTUP_JOIN_MODE} from '../../src/bootstrap/rejoin-hints-constants.js';
-import {STARTUP_RECOVERY_STAGE} from '../../src/bootstrap/startup-recovery-coordinator.js';
 import {
-  CONTROL_PLANE_PRIORITY_RECOVERY_REASON,
-} from '../../src/control-plane/control-plane-readiness-constants.js';
-import {
-  CONTROL_PLANE_WORKLOAD_CLASS,
 } from '../../src/control-plane/control-plane-workload-profile.js';
 
 // Initialize configuration and logging for tests
@@ -57,128 +40,6 @@ function initializeTestEnvironment() {
   }
 }
 
-function createEmptySystemTableCache() {
-  return {
-    get() {
-      return null;
-    },
-    getAll() {
-      return [];
-    },
-    filter() {
-      return [];
-    },
-    find() {
-      return null;
-    },
-    getReadyNodes() {
-      return [];
-    },
-  };
-}
-
-function createSatisfiedControlPlaneReadinessService() {
-  const diagnostics = Object.freeze({
-    publicationEpoch: 1,
-    status: 'PUBLISHED',
-    priorityPartitionSummary: Object.freeze({
-      satisfied: true,
-      requiredDistinctNodeCount: 3,
-      readyEligibleNodeCount: 3,
-      totalPriorityPartitionCount: 5,
-      missingPartitionIds: Object.freeze([]),
-      blockedPartitions: Object.freeze([]),
-    }),
-  });
-  return {
-    async getMembershipPublicationDiagnostics() {
-      return diagnostics;
-    },
-    getMembershipPublicationDiagnosticsSync() {
-      return diagnostics;
-    },
-  };
-}
-
-function createMutableControlPlaneReadinessService(initialDiagnostics) {
-  let diagnostics = initialDiagnostics;
-  return {
-    setDiagnostics(nextDiagnostics) {
-      diagnostics = nextDiagnostics;
-    },
-    async getMembershipPublicationDiagnostics() {
-      return diagnostics;
-    },
-    getMembershipPublicationDiagnosticsSync() {
-      return diagnostics;
-    },
-  };
-}
-
-function createPriorityRecoveryAuthorityControlPlaneReadinessService() {
-  return {
-    getPriorityControlPlaneRecoveryHealthSync() {
-      return {
-        healthy: false,
-        reasonCode: LIFECYCLE_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
-        details: {
-          recoveryProtocolState: 'publication_pending',
-          priorityRecoveryReasonCodes: [
-            CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PUBLICATION_EPOCH_PENDING,
-            CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PRIORITY_PARTITIONS_NOT_SPREAD,
-          ],
-          targetParticipation: {
-            nodeId: 'seed-node-1',
-            state: 'recovery_pending_publish',
-          },
-        },
-      };
-    },
-    getStartupAuthoritySnapshotSync() {
-      return {
-        state: 'seed_locally_ready_unpublished',
-        ready: false,
-        authorityAvailable: true,
-        publication: {
-          observationState: 'unpublished',
-        },
-        priorityPartition: {
-          state: 'available',
-          summary: {
-            satisfied: false,
-            missingPartitionIds: ['replica_operations-p1'],
-          },
-        },
-        recoveryProtocol: {
-          state: 'known',
-          value: 'publication_pending',
-        },
-        targetParticipationDetail: {
-          state: 'available',
-          participation: {
-            nodeId: 'seed-node-1',
-            state: 'recovery_pending_publish',
-          },
-        },
-        priorityRecoveryReasonCodes: [
-          CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PUBLICATION_EPOCH_PENDING,
-          CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PRIORITY_PARTITIONS_NOT_SPREAD,
-        ],
-        canonicalStartupNodeIds: ['seed-node-1'],
-        failure: {
-          state: 'none',
-        },
-        publicationObservationState: 'unpublished',
-      };
-    },
-    getMembershipPublicationDiagnosticsSync() {
-      return {
-        publicationEpoch: 14,
-        status: 'ACK_PENDING',
-      };
-    },
-  };
-}
 
 test('BootstrapAPI - getReadyNodes does not duplicate seed node', async (t) => {
   initializeTestEnvironment();
@@ -241,35 +102,35 @@ test('BootstrapAPI - getReadyNodes does not duplicate seed node', async (t) => {
 
 test('BootstrapAPI - getReadyNodes does not synthesize seed readiness from empty cache alone',
   async (t) => {
-  initializeTestEnvironment();
+    initializeTestEnvironment();
 
-  // Create cache with no nodes
-  const mockCache = {
-    get: () => null,
-    getAll: () => [],
-    filter: () => [],
-    find: () => null,
-    getReadyNodes: () => [],
-  };
+    // Create cache with no nodes
+    const mockCache = {
+      get: () => null,
+      getAll: () => [],
+      filter: () => [],
+      find: () => null,
+      getReadyNodes: () => [],
+    };
 
-  const api = new BootstrapAPI({
-    seedNodeId: 'seed-node-1',
-    seedNodeAddress: 'ws://localhost:8080',
-    systemTableCache: mockCache,
+    const api = new BootstrapAPI({
+      seedNodeId: 'seed-node-1',
+      seedNodeAddress: 'ws://localhost:8080',
+      systemTableCache: mockCache,
+    });
+
+    await api.initialize(0, {listen: false});
+
+    const readyNodes = api.getReadyNodes();
+
+    t.same(
+      readyNodes,
+      [],
+      'bootstrap should not advertise the seed as ready without explicit readiness evidence',
+    );
+
+    await api.shutdown();
   });
-
-  await api.initialize(0, {listen: false});
-
-  const readyNodes = api.getReadyNodes();
-
-  t.same(
-    readyNodes,
-    [],
-    'bootstrap should not advertise the seed as ready without explicit readiness evidence',
-  );
-
-  await api.shutdown();
-});
 
 test('BootstrapAPI - getReadyNodes does not treat repair-only seed readiness as bootstrap-ready',
   async (t) => {

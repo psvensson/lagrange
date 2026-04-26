@@ -570,42 +570,42 @@ function createTestCoordinator(options = {}) {
 
   async function submitReplicaOperationMutation(mutation) {
     switch (mutation?.operation) {
-      case 'insert': {
-        const result = typeof mockCdcService.insertSystemTableRow === 'function' ?
-          await mockCdcService.insertSystemTableRow(
-            mutation.tableName,
-            mutation.row,
-          ) :
-          {success: true, partitionResult: {affectedRows: 1}};
-        if (isSuccessfulMutationResult(result)) {
-          syncReplicaOperationRow(mutation.row);
-        }
-        return result;
+    case 'insert': {
+      const result = typeof mockCdcService.insertSystemTableRow === 'function' ?
+        await mockCdcService.insertSystemTableRow(
+          mutation.tableName,
+          mutation.row,
+        ) :
+        {success: true, partitionResult: {affectedRows: 1}};
+      if (isSuccessfulMutationResult(result)) {
+        syncReplicaOperationRow(mutation.row);
       }
-      case 'update': {
-        const whereClause = mutation.whereClause || mutation.where || {};
-        const operationId = whereClause.operation_id ?? whereClause.operationId ??
+      return result;
+    }
+    case 'update': {
+      const whereClause = mutation.whereClause || mutation.where || {};
+      const operationId = whereClause.operation_id ?? whereClause.operationId ??
           mutation.data?.operation_id ?? mutation.data?.operationId ?? null;
-        const result = typeof mockCdcService.updateSystemTableRow === 'function' ?
-          await mockCdcService.updateSystemTableRow(
-            mutation.tableName,
-            whereClause,
-            mutation.data,
-          ) :
-          {success: true, partitionResult: {affectedRows: 1}};
-        if (isSuccessfulMutationResult(result) && operationId) {
-          mergeReplicaOperationRow(operationId, mutation.data);
-        }
-        return result;
+      const result = typeof mockCdcService.updateSystemTableRow === 'function' ?
+        await mockCdcService.updateSystemTableRow(
+          mutation.tableName,
+          whereClause,
+          mutation.data,
+        ) :
+        {success: true, partitionResult: {affectedRows: 1}};
+      if (isSuccessfulMutationResult(result) && operationId) {
+        mergeReplicaOperationRow(operationId, mutation.data);
       }
-      case 'delete': {
-        const whereClause = mutation.whereClause || mutation.where || {};
-        const operationId = whereClause.operation_id ?? whereClause.operationId ?? null;
-        deleteReplicaOperationRow(operationId);
-        return {success: true, partitionResult: {affectedRows: 1}};
-      }
-      default:
-        return {success: true, partitionResult: {affectedRows: 1}};
+      return result;
+    }
+    case 'delete': {
+      const whereClause = mutation.whereClause || mutation.where || {};
+      const operationId = whereClause.operation_id ?? whereClause.operationId ?? null;
+      deleteReplicaOperationRow(operationId);
+      return {success: true, partitionResult: {affectedRows: 1}};
+    }
+    default:
+      return {success: true, partitionResult: {affectedRows: 1}};
     }
   }
 
@@ -727,19 +727,19 @@ function createTestCoordinator(options = {}) {
         }
 
         switch (mutation?.operation) {
-          case 'insert':
-            return mockCdcService.insertSystemTableRow(
-              mutation.tableName,
-              mutation.row,
-            );
-          case 'update':
-            return mockCdcService.updateSystemTableRow(
-              mutation.tableName,
-              mutation.whereClause,
-              mutation.data,
-            );
-          default:
-            return {success: true, partitionResult: {affectedRows: 1}};
+        case 'insert':
+          return mockCdcService.insertSystemTableRow(
+            mutation.tableName,
+            mutation.row,
+          );
+        case 'update':
+          return mockCdcService.updateSystemTableRow(
+            mutation.tableName,
+            mutation.whereClause,
+            mutation.data,
+          );
+        default:
+          return {success: true, partitionResult: {affectedRows: 1}};
         }
       },
     };
@@ -831,14 +831,14 @@ function createTestRebalancer(options = {}) {
   const mockCoordinator = options.rebalanceCoordinator || createMockCoordinator();
   const storageAdmissionService = options.storageAdmissionService ||
     mockCoordinator.storageAdmissionService || {
-      checkAdd: async () => ({allowed: true, decisionType: 'admitted'}),
-      checkReplace: async () => ({allowed: true, decisionType: 'admitted'}),
-      checkSplit: async () => ({allowed: true, decisionType: 'admitted'}),
-    };
+    checkAdd: async () => ({allowed: true, decisionType: 'admitted'}),
+    checkReplace: async () => ({allowed: true, decisionType: 'admitted'}),
+    checkSplit: async () => ({allowed: true, decisionType: 'admitted'}),
+  };
   const storageAccountingService = options.storageAccountingService ||
     mockCoordinator.storageAccountingService || {
-      estimateReplicaBytes: () => 1,
-    };
+    estimateReplicaBytes: () => 1,
+  };
   const controlPlaneReadinessService = options.controlPlaneReadinessService ||
     mockCoordinator.controlPlaneReadinessService ||
     createMockControlPlaneReadinessService({

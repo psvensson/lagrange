@@ -6,55 +6,13 @@ import {
   rm,
   join,
   tmpdir,
-  run as scenarioRun,
   runWithVirtualScenarioTiming as run,
-  installVirtualScenarioTiming,
-  resolveBenchmarkConfig,
-  buildComparison,
-  probeLoadLaneReadiness,
-  NODE_CLIENT_CONTROL_SNAPSHOT_SQL,
-  NODE_CLIENT_SERVICE_DISCOVERY_SCHEMA_VERSION,
-  NODE_CLIENT_SERVICE_DISCOVERY_SQL,
-  NODE_CLIENT_SERVICE_ID_POSTGRES_WIRE,
-  NODE_CLIENT_SERVICE_PROTOCOL_POSTGRESQL,
-  SCENARIO_PHASE_SEQUENCE,
-  PROBE_SQL,
-  DEFAULT_PROBE_TIMEOUT_MS,
-  DEFAULT_DISCOVERY_HEALTH,
-  DEFAULT_DISCOVERY_REPLICA_PORT,
-  DISCOVERY_ADMIN_META_SERVICE_ID,
-  DISCOVERY_ADMIN_META_PROTOCOL,
-  SERVICE_DISCOVERY_SQL_PREFIX,
-  DEFAULT_DISCOVERY_TABLE_NAME,
-  PREFLIGHT_CRITICAL_PATH_SNAPSHOT_SQL,
-  PREFLIGHT_CRITICAL_PATH_SNAPSHOT_SCHEMA_VERSION,
-  PREFLIGHT_CRITICAL_PATH_SNAPSHOT_ADDRESS_FALLBACK,
-  QUIET_MODE_ACTION_ENTER,
-  QUIET_MODE_ACTION_EXIT,
-  QUIET_MODE_PHASE_PRE_FLIGHT,
-  QUIET_MODE_PHASE_TEARDOWN,
-  isRecord,
-  buildControlSnapshotPayload,
-  hasValidControlSnapshotResult,
-  hasValidServiceDiscoveryResult,
-  buildServiceDiscoverySnapshot,
-  buildPreflightCriticalPathSnapshotPayload,
-  asNodeHandle,
   asNodeHandles,
 } from './postgres-baseline-comparison-test-helpers.js';
 import {
-  SUT_LOAD_NODE_ADMISSION_STATE,
-  hasLoadLaneConfirmableLocalReadinessBlock,
-  normalizeSutLoadNodeAdmissionEvidence,
-  adjudicateSutLoadNodeAdmission,
-  buildSutLoadNodeAdmissionDecisionTrace,
-  shouldPreserveTopologyDeferredAdmission,
-  shouldConfirmLocalReadinessViaLoadLane,
 } from '../../scenarios/postgres-baseline-node-admission.js';
 import {
-  RERUN_20260403T102148Z_NODE_ADMISSION_CASES,
 } from '../__fixtures__/postgres-baseline-node-admission-replay-fixtures.js';
-import {QUERY_DEFAULTS} from '../../../../src/query/query-constants.js';
 
 
 describe('postgres-baseline-comparison scenario', () => {
@@ -374,5 +332,4 @@ describe('postgres-baseline-comparison scenario', () => {
         await rm(outputRoot, {recursive: true, force: true});
       }
     });
-
 });

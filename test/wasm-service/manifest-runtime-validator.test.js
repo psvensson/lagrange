@@ -102,7 +102,7 @@ test('validateRunExportExists - empty runExportName', (t) => {
 test('validateRunExportExists - missing export', (t) => {
   const exports_ = makeModuleExports();
   const result = validateRunExportExists(
-    exports_, 'nonexistent_fn'
+    exports_, 'nonexistent_fn',
   );
   t.notOk(result.valid);
   t.ok(result.errors.includes(ERR.RUN_EXPORT_MISSING_IN_MODULE));
@@ -201,7 +201,7 @@ test('validateManifestRuntime - run_export missing in module',
     const result = validateManifestRuntime(manifest, exports_);
     t.notOk(result.valid);
     t.ok(
-      result.errors.includes(ERR.RUN_EXPORT_MISSING_IN_MODULE)
+      result.errors.includes(ERR.RUN_EXPORT_MISSING_IN_MODULE),
     );
     t.end();
   });
@@ -214,7 +214,7 @@ test('validateManifestRuntime - run_export bad signature', (t) => {
   const result = validateManifestRuntime(manifest, exports_);
   t.notOk(result.valid);
   t.ok(
-    result.errors.includes(ERR.RUN_EXPORT_SIGNATURE_MISMATCH)
+    result.errors.includes(ERR.RUN_EXPORT_SIGNATURE_MISMATCH),
   );
   t.end();
 });
@@ -350,11 +350,8 @@ test('PBT: invalid param counts fail signature check', (t) => {
    * **Validates: Requirements 7.3**
    */
   const makeFn = (paramCount) => {
-    const params = Array.from(
-      {length: paramCount}, (_, i) => `_p${i}`
-    ).join(',');
     return new Function(...Array.from(
-      {length: paramCount}, (_, i) => `_p${i}`
+      {length: paramCount}, (_, i) => `_p${i}`,
     ), 'return;');
   };
   fc.assert(
@@ -369,7 +366,7 @@ test('PBT: invalid param counts fail signature check', (t) => {
         const result = validateRunExportSignature(fn);
         return result.valid === false &&
           result.errors.includes(
-            ERR.RUN_EXPORT_SIGNATURE_MISMATCH
+            ERR.RUN_EXPORT_SIGNATURE_MISMATCH,
           );
       },
     ),
@@ -387,7 +384,7 @@ test('PBT: full pipeline rejects missing run_export', (t) => {
     fc.property(
       fc.string({minLength: 1, maxLength: 20}).filter(
         (s) => s !== 'run_batch' && s !== 'init' &&
-          s !== 'teardown'
+          s !== 'teardown',
       ),
       (badExportName) => {
         const manifest = makeValidManifest({
@@ -396,7 +393,7 @@ test('PBT: full pipeline rejects missing run_export', (t) => {
         });
         const exports_ = makeModuleExports();
         const result = validateManifestRuntime(
-          manifest, exports_
+          manifest, exports_,
         );
         return result.valid === false;
       },

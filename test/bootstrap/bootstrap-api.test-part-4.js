@@ -5,39 +5,23 @@
 
 import {test} from '../../src/test-helpers/tap.js';
 import {BootstrapAPI, BootstrapStrategy} from '../../src/bootstrap/bootstrap-api.js';
-import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {
   BOOTSTRAP_API_HANDOFF_STATUS,
-  BOOTSTRAP_API_ERROR,
-  BOOTSTRAP_API_LOG_MSG,
-  BOOTSTRAP_API_PROBE_REASON,
 } from '../../src/bootstrap/bootstrap-api-constants.js';
 import {
-  BOOTSTRAP_PHASE,
-  BOOTSTRAP_PIPELINE_ERROR_CODE,
 } from '../../src/bootstrap/bootstrap-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {CACHE_HYDRATION_TABLES} from '../../src/cache/cache-constants.js';
 import {
-  ENDPOINT_STATUS,
   SERVICE_STATUS,
   SERVICE_TYPE,
   STATE,
   TABLES,
-  TRANSPORT_TYPE,
 } from '../../src/constants/index.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
-import {BootstrapReadinessState} from '../../src/bootstrap/bootstrap-readiness-state.js';
-import {BOOTSTRAP_READINESS_STAGE} from '../../src/bootstrap/bootstrap-readiness-ladder.js';
-import {LIFECYCLE_REASON} from '../../src/bootstrap/lifecycle-controller-constants.js';
 import {STARTUP_JOIN_MODE} from '../../src/bootstrap/rejoin-hints-constants.js';
-import {STARTUP_RECOVERY_STAGE} from '../../src/bootstrap/startup-recovery-coordinator.js';
 import {
-  CONTROL_PLANE_PRIORITY_RECOVERY_REASON,
-} from '../../src/control-plane/control-plane-readiness-constants.js';
-import {
-  CONTROL_PLANE_WORKLOAD_CLASS,
 } from '../../src/control-plane/control-plane-workload-profile.js';
 
 // Initialize configuration and logging for tests
@@ -77,108 +61,6 @@ function createEmptySystemTableCache() {
   };
 }
 
-function createSatisfiedControlPlaneReadinessService() {
-  const diagnostics = Object.freeze({
-    publicationEpoch: 1,
-    status: 'PUBLISHED',
-    priorityPartitionSummary: Object.freeze({
-      satisfied: true,
-      requiredDistinctNodeCount: 3,
-      readyEligibleNodeCount: 3,
-      totalPriorityPartitionCount: 5,
-      missingPartitionIds: Object.freeze([]),
-      blockedPartitions: Object.freeze([]),
-    }),
-  });
-  return {
-    async getMembershipPublicationDiagnostics() {
-      return diagnostics;
-    },
-    getMembershipPublicationDiagnosticsSync() {
-      return diagnostics;
-    },
-  };
-}
-
-function createMutableControlPlaneReadinessService(initialDiagnostics) {
-  let diagnostics = initialDiagnostics;
-  return {
-    setDiagnostics(nextDiagnostics) {
-      diagnostics = nextDiagnostics;
-    },
-    async getMembershipPublicationDiagnostics() {
-      return diagnostics;
-    },
-    getMembershipPublicationDiagnosticsSync() {
-      return diagnostics;
-    },
-  };
-}
-
-function createPriorityRecoveryAuthorityControlPlaneReadinessService() {
-  return {
-    getPriorityControlPlaneRecoveryHealthSync() {
-      return {
-        healthy: false,
-        reasonCode: LIFECYCLE_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
-        details: {
-          recoveryProtocolState: 'publication_pending',
-          priorityRecoveryReasonCodes: [
-            CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PUBLICATION_EPOCH_PENDING,
-            CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PRIORITY_PARTITIONS_NOT_SPREAD,
-          ],
-          targetParticipation: {
-            nodeId: 'seed-node-1',
-            state: 'recovery_pending_publish',
-          },
-        },
-      };
-    },
-    getStartupAuthoritySnapshotSync() {
-      return {
-        state: 'seed_locally_ready_unpublished',
-        ready: false,
-        authorityAvailable: true,
-        publication: {
-          observationState: 'unpublished',
-        },
-        priorityPartition: {
-          state: 'available',
-          summary: {
-            satisfied: false,
-            missingPartitionIds: ['replica_operations-p1'],
-          },
-        },
-        recoveryProtocol: {
-          state: 'known',
-          value: 'publication_pending',
-        },
-        targetParticipationDetail: {
-          state: 'available',
-          participation: {
-            nodeId: 'seed-node-1',
-            state: 'recovery_pending_publish',
-          },
-        },
-        priorityRecoveryReasonCodes: [
-          CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PUBLICATION_EPOCH_PENDING,
-          CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PRIORITY_PARTITIONS_NOT_SPREAD,
-        ],
-        canonicalStartupNodeIds: ['seed-node-1'],
-        failure: {
-          state: 'none',
-        },
-        publicationObservationState: 'unpublished',
-      };
-    },
-    getMembershipPublicationDiagnosticsSync() {
-      return {
-        publicationEpoch: 14,
-        status: 'ACK_PENDING',
-      };
-    },
-  };
-}
 
 test('BootstrapAPI - allows bootstrap when only message-group leaders are missing',
   async (t) => {
@@ -1320,70 +1202,70 @@ test('BootstrapAPI - handleBootstrapRequest includes systemTableSnapshots', asyn
 
 test('BootstrapAPI - getReadyNodes includes seed node when lease expired only with explicit readiness evidence',
   async (t) => {
-  initializeTestEnvironment();
+    initializeTestEnvironment();
 
-  const now = Date.now();
-  const expiredLease = now - 1000; // Expired 1 second ago
+    const now = Date.now();
+    const expiredLease = now - 1000; // Expired 1 second ago
 
-  // Create cache where seed node has expired lease
-  const mockCache = {
-    get: () => null,
-    getAll: (tableName) => {
-      if (tableName === TABLES.NODES) {
-        return [
-          {
-            node_id: 'seed-node-1',
-            status: 'active',
-            connection_state: STATE.READY,
-            ready_lease_expires_at: expiredLease, // Expired
-          },
-          {
-            node_id: 'other-node',
-            status: 'active',
-            connection_state: STATE.READY,
-            ready_lease_expires_at: now + 10000, // Valid
-          },
-        ];
-      }
-      return [];
-    },
-    filter: (tableName, predicate) => {
-      const all = mockCache.getAll(tableName);
-      return all.filter(predicate);
-    },
-    find: () => null,
-    getReadyNodes: function() {
+    // Create cache where seed node has expired lease
+    const mockCache = {
+      get: () => null,
+      getAll: (tableName) => {
+        if (tableName === TABLES.NODES) {
+          return [
+            {
+              node_id: 'seed-node-1',
+              status: 'active',
+              connection_state: STATE.READY,
+              ready_lease_expires_at: expiredLease, // Expired
+            },
+            {
+              node_id: 'other-node',
+              status: 'active',
+              connection_state: STATE.READY,
+              ready_lease_expires_at: now + 10000, // Valid
+            },
+          ];
+        }
+        return [];
+      },
+      filter: (tableName, predicate) => {
+        const all = mockCache.getAll(tableName);
+        return all.filter(predicate);
+      },
+      find: () => null,
+      getReadyNodes: function() {
       // Simulate the real getReadyNodes which filters by lease
-      const currentTime = Date.now();
-      return this.filter(TABLES.NODES, (node) => {
-        return node.connection_state === STATE.READY &&
+        const currentTime = Date.now();
+        return this.filter(TABLES.NODES, (node) => {
+          return node.connection_state === STATE.READY &&
           node.ready_lease_expires_at &&
           node.ready_lease_expires_at > currentTime;
-      }).map((n) => n.node_id);
-    },
-  };
-
-  const api = new BootstrapAPI({
-    seedNodeId: 'seed-node-1',
-    seedNodeAddress: 'ws://localhost:8080',
-    systemTableCache: mockCache,
-    controlPlaneReadinessService: {
-      getNodeReadinessSync(nodeId) {
-        return nodeId === 'seed-node-1' ? {ready: true} : null;
+        }).map((n) => n.node_id);
       },
-    },
+    };
+
+    const api = new BootstrapAPI({
+      seedNodeId: 'seed-node-1',
+      seedNodeAddress: 'ws://localhost:8080',
+      systemTableCache: mockCache,
+      controlPlaneReadinessService: {
+        getNodeReadinessSync(nodeId) {
+          return nodeId === 'seed-node-1' ? {ready: true} : null;
+        },
+      },
+    });
+
+    await api.initialize(0, {listen: false});
+
+    const readyNodes = api.getReadyNodes();
+
+    // Should include seed node only because readiness explicitly confirms it.
+    t.ok(readyNodes.includes('seed-node-1'),
+      'should include seed node when readiness explicitly confirms bootstrap readiness');
+    t.ok(readyNodes.includes('other-node'),
+      'should include other ready nodes');
+    t.equal(readyNodes.length, 2, 'should have 2 ready nodes');
+
+    await api.shutdown();
   });
-
-  await api.initialize(0, {listen: false});
-
-  const readyNodes = api.getReadyNodes();
-
-  // Should include seed node only because readiness explicitly confirms it.
-  t.ok(readyNodes.includes('seed-node-1'),
-    'should include seed node when readiness explicitly confirms bootstrap readiness');
-  t.ok(readyNodes.includes('other-node'),
-    'should include other ready nodes');
-  t.equal(readyNodes.length, 2, 'should have 2 ready nodes');
-
-  await api.shutdown();
-});

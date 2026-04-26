@@ -228,9 +228,9 @@ async (t) => {
   });
 
   t.equal(
-      result.allowed,
-      true,
-      'provisioning-eligible node must be admitted for split provisioning',
+    result.allowed,
+    true,
+    'provisioning-eligible node must be admitted for split provisioning',
   );
 });
 
@@ -285,10 +285,10 @@ async (t) => {
   });
 
   t.equal(
-      result.allowed,
-      false,
-      'not-provisioning-eligible node must be blocked',
-    );
+    result.allowed,
+    false,
+    'not-provisioning-eligible node must be blocked',
+  );
 
   const ineligible = result.ineligibleNodes || [];
   t.ok(

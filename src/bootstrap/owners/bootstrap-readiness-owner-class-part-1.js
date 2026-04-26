@@ -1,60 +1,60 @@
-import { HTTP_STATUS, NUM, TYPEOF } from "../../constants/index.js";
+import {HTTP_STATUS, NUM, TYPEOF} from '../../constants/index.js';
 import {
   BOOTSTRAP_PHASE,
   BOOTSTRAP_PIPELINE_ERROR_CODE,
-} from "../bootstrap-constants.js";
+} from '../bootstrap-constants.js';
 import {
   BOOTSTRAP_API_LIVENESS,
   BOOTSTRAP_API_LOG_MSG,
   BOOTSTRAP_API_PROBE_REASON,
   BOOTSTRAP_API_PROBE_SCOPE,
+  BOOTSTRAP_API_READINESS_FIELD,
+  BOOTSTRAP_API_RESPONSE_FIELD,
   BOOTSTRAP_API_ROUTE,
-} from "../bootstrap-api-constants.js";
-import { READINESS_DEPENDENCY } from "../bootstrap-readiness-state-constants.js";
+} from '../bootstrap-api-constants.js';
+import {READINESS_DEPENDENCY} from '../bootstrap-readiness-state-constants.js';
 import {
   LIFECYCLE_DEPENDENCY_CLASS,
   LIFECYCLE_DEPENDENCY_DEMOTION_POLICY,
   LIFECYCLE_PHASE,
   LIFECYCLE_REASON,
-} from "../lifecycle-controller-constants.js";
+} from '../lifecycle-controller-constants.js';
 import {
-  getLocalQueryTransportReadiness,
   isLocalQueryTransportReady,
-} from "../shared/local-query-transport-readiness.js";
-import { buildBootstrapReadinessStage } from "../bootstrap-readiness-ladder.js";
-import { buildPublicationRecoveryProtocolSnapshot } from "../../control-plane/recovery-protocol-snapshot.js";
-import { hasTransitionalStartupAuthorityEvidence } from "../../control-plane/startup-authority-snapshot-owner.js";
-import { CONTROL_PLANE_WRITE_HEALTH_STATE } from "../control-plane-write-health-owner.js";
-import { canBypassBootstrapInitPriorityReasons } from "../startup-recovery-coordinator.js";
+} from '../shared/local-query-transport-readiness.js';
+import {buildBootstrapReadinessStage} from '../bootstrap-readiness-ladder.js';
+import {buildPublicationRecoveryProtocolSnapshot} from '../../control-plane/recovery-protocol-snapshot.js';
+import {hasTransitionalStartupAuthorityEvidence} from '../../control-plane/startup-authority-snapshot-owner.js';
+import {canBypassBootstrapInitPriorityReasons} from '../startup-recovery-coordinator.js';
 const BOOTSTRAP_READINESS_OWNER_LITERAL = Object.freeze({
-  STARTING: "starting",
-  BOOTSTRAPPING: "bootstrapping",
-  WARMING: "warming",
-  JOIN_READY: "join_ready",
-  DEGRADED: "degraded",
+  STARTING: 'starting',
+  BOOTSTRAPPING: 'bootstrapping',
+  WARMING: 'warming',
+  JOIN_READY: 'join_ready',
+  DEGRADED: 'degraded',
   READINESS_PROBE_ASYNC_DIAGNOSTICS_TIMED_OUT_USING:
-    "Readiness probe async diagnostics timed out; using ",
+    'Readiness probe async diagnostics timed out; using ',
   SYNCHRONOUS_READINESS_SNAPSHOT_FALLBACK:
-    "synchronous readiness snapshot fallback",
-  AUTHORITY_UNAVAILABLE: "authority_unavailable",
-  NONE: "none",
-  PRESENT: "present",
-  OBSERVATION_UNAVAILABLE: "observation_unavailable",
-  DEGRADED_2: "DEGRADED",
-  MISSINGPARTITIONLEADERS: "missingPartitionLeaders",
-  MISSINGPARTITIONLEADERNODES: "missingPartitionLeaderNodes",
-  MISSINGPARTITIONLEADERADDRESSES: "missingPartitionLeaderAddresses",
-  MISSINGMESSAGEGROUPLEADERS: "missingMessageGroupLeaders",
-  MISSINGMESSAGEGROUPLEADERNODES: "missingMessageGroupLeaderNodes",
-  MISSINGMESSAGEGROUPLEADERADDRESSES: "missingMessageGroupLeaderAddresses",
+    'synchronous readiness snapshot fallback',
+  AUTHORITY_UNAVAILABLE: 'authority_unavailable',
+  NONE: 'none',
+  PRESENT: 'present',
+  OBSERVATION_UNAVAILABLE: 'observation_unavailable',
+  DEGRADED_2: 'DEGRADED',
+  MISSINGPARTITIONLEADERS: 'missingPartitionLeaders',
+  MISSINGPARTITIONLEADERNODES: 'missingPartitionLeaderNodes',
+  MISSINGPARTITIONLEADERADDRESSES: 'missingPartitionLeaderAddresses',
+  MISSINGMESSAGEGROUPLEADERS: 'missingMessageGroupLeaders',
+  MISSINGMESSAGEGROUPLEADERNODES: 'missingMessageGroupLeaderNodes',
+  MISSINGMESSAGEGROUPLEADERADDRESSES: 'missingMessageGroupLeaderAddresses',
 });
 const BOOTSTRAP_READINESS_DEPENDENCY = Object.freeze({
-  SQL_ENGINE_READY: "sql_engine_ready",
-  LEADER_METADATA_READY: "leader_metadata_ready",
-  RUNTIME_WIRING_READY: "runtime_wiring_ready",
-  LOCAL_QUERY_TRANSPORT_READY: "local_query_transport_ready",
-  CONTROL_PLANE_WRITE_HEALTH: "control_plane_write_health",
-  PRIORITY_CONTROL_PLANE_RECOVERY: "priority_control_plane_recovery",
+  SQL_ENGINE_READY: 'sql_engine_ready',
+  LEADER_METADATA_READY: 'leader_metadata_ready',
+  RUNTIME_WIRING_READY: 'runtime_wiring_ready',
+  LOCAL_QUERY_TRANSPORT_READY: 'local_query_transport_ready',
+  CONTROL_PLANE_WRITE_HEALTH: 'control_plane_write_health',
+  PRIORITY_CONTROL_PLANE_RECOVERY: 'priority_control_plane_recovery',
 });
 const BOOTSTRAP_JOIN_NON_BLOCKING_REASONS = Object.freeze([
   BOOTSTRAP_PIPELINE_ERROR_CODE.LEADER_METADATA_INCOMPLETE,
@@ -65,20 +65,20 @@ const BOOTSTRAP_JOIN_NON_BLOCKING_REASON_SET = new Set(
   BOOTSTRAP_JOIN_NON_BLOCKING_REASONS,
 );
 const BOOTSTRAP_JOIN_PROJECTION_RULE = Object.freeze({
-  ALREADY_READY: "already_ready",
-  JOIN_STABLE_WINDOW: "join_stable_window",
-  INIT_PRIORITY_BYPASS: "init_priority_bypass",
-  CONTROL_DEGRADED_NON_BLOCKING: "control_degraded_non_blocking",
+  ALREADY_READY: 'already_ready',
+  JOIN_STABLE_WINDOW: 'join_stable_window',
+  INIT_PRIORITY_BYPASS: 'init_priority_bypass',
+  CONTROL_DEGRADED_NON_BLOCKING: 'control_degraded_non_blocking',
 });
 const BOOTSTRAP_JOIN_PROJECTION_BLOCKER = Object.freeze({
-  DRAINING: "draining",
-  PHASE_NOT_ELIGIBLE: "phase_not_eligible",
+  DRAINING: 'draining',
+  PHASE_NOT_ELIGIBLE: 'phase_not_eligible',
   CONTROL_SNAPSHOT_AUTHORITY_UNAVAILABLE:
-    "control_snapshot_authority_unavailable",
-  JOIN_STABLE_WINDOW_REASONS: "join_stable_window_reasons",
-  INIT_PRIORITY_BYPASS_REJECTED: "init_priority_bypass_rejected",
-  CONTROL_DEGRADED_NO_REASONS: "control_degraded_no_reasons",
-  CONTROL_DEGRADED_BLOCKING_REASONS: "control_degraded_blocking_reasons",
+    'control_snapshot_authority_unavailable',
+  JOIN_STABLE_WINDOW_REASONS: 'join_stable_window_reasons',
+  INIT_PRIORITY_BYPASS_REJECTED: 'init_priority_bypass_rejected',
+  CONTROL_DEGRADED_NO_REASONS: 'control_degraded_no_reasons',
+  CONTROL_DEGRADED_BLOCKING_REASONS: 'control_degraded_blocking_reasons',
 });
 function normalizeReasonCode(reason) {
   if (typeof reason !== TYPEOF.STRING) {
@@ -101,28 +101,28 @@ function normalizeReasonCodeArray(reasonCodes) {
 }
 function normalizeLifecyclePhaseFromSnapshot(snapshot) {
   const phase =
-    typeof snapshot?.phase === TYPEOF.STRING
-      ? snapshot.phase.trim().toUpperCase()
-      : "";
+    typeof snapshot?.phase === TYPEOF.STRING ?
+      snapshot.phase.trim().toUpperCase() :
+      '';
   if (Object.values(LIFECYCLE_PHASE).includes(phase)) {
     return phase;
   }
   const legacyState =
-    typeof snapshot?.state === TYPEOF.STRING
-      ? snapshot.state.trim().toLowerCase()
-      : "";
+    typeof snapshot?.state === TYPEOF.STRING ?
+      snapshot.state.trim().toLowerCase() :
+      '';
   switch (legacyState) {
-    case BOOTSTRAP_READINESS_OWNER_LITERAL.STARTING:
-    case BOOTSTRAP_READINESS_OWNER_LITERAL.BOOTSTRAPPING:
-      return LIFECYCLE_PHASE.INIT;
-    case BOOTSTRAP_READINESS_OWNER_LITERAL.WARMING:
-      return LIFECYCLE_PHASE.CONTROL_READY;
-    case BOOTSTRAP_READINESS_OWNER_LITERAL.JOIN_READY:
-      return LIFECYCLE_PHASE.JOIN_READY;
-    case BOOTSTRAP_READINESS_OWNER_LITERAL.DEGRADED:
-      return LIFECYCLE_PHASE.DEGRADED;
-    default:
-      return null;
+  case BOOTSTRAP_READINESS_OWNER_LITERAL.STARTING:
+  case BOOTSTRAP_READINESS_OWNER_LITERAL.BOOTSTRAPPING:
+    return LIFECYCLE_PHASE.INIT;
+  case BOOTSTRAP_READINESS_OWNER_LITERAL.WARMING:
+    return LIFECYCLE_PHASE.CONTROL_READY;
+  case BOOTSTRAP_READINESS_OWNER_LITERAL.JOIN_READY:
+    return LIFECYCLE_PHASE.JOIN_READY;
+  case BOOTSTRAP_READINESS_OWNER_LITERAL.DEGRADED:
+    return LIFECYCLE_PHASE.DEGRADED;
+  default:
+    return null;
   }
 }
 function hasBootstrapJoinAuthority(priorityRecoveryHealth) {
@@ -137,9 +137,9 @@ function hasBootstrapJoinAuthority(priorityRecoveryHealth) {
   }
   const details =
     priorityRecoveryHealth.details &&
-    typeof priorityRecoveryHealth.details === TYPEOF.OBJECT
-      ? priorityRecoveryHealth.details
-      : null;
+    typeof priorityRecoveryHealth.details === TYPEOF.OBJECT ?
+      priorityRecoveryHealth.details :
+      null;
   if (details && hasTransitionalStartupAuthorityEvidence(details)) {
     return true;
   }
@@ -149,16 +149,8 @@ function hasBootstrapJoinAuthority(priorityRecoveryHealth) {
     details.failureReason.length === NUM.ZERO
   );
 }
-const PRIORITY_CONTROL_PLANE_RECOVERY_HEALTH_FAILURE = Object.freeze({
-  SERVICE_UNAVAILABLE: "control_plane_recovery_service_unavailable",
-  DIAGNOSTICS_PROVIDER_UNAVAILABLE:
-    "control_plane_recovery_diagnostics_provider_unavailable",
-  DIAGNOSTICS_READ_FAILED: "control_plane_recovery_diagnostics_read_failed",
-  DIAGNOSTICS_UNAVAILABLE: "control_plane_recovery_diagnostics_unavailable",
-  DIAGNOSTICS_INCOMPLETE: "control_plane_recovery_diagnostics_incomplete",
-});
 const READINESS_PROBE_ASYNC_TIMEOUT_ERROR_CODE =
-  "READINESS_PROBE_ASYNC_TIMEOUT";
+  'READINESS_PROBE_ASYNC_TIMEOUT';
 const READINESS_PROBE_ASYNC_TIMEOUT_MS = 250;
 function buildBootstrapJoinProjectionResult(options = {}) {
   return {
@@ -167,10 +159,27 @@ function buildBootstrapJoinProjectionResult(options = {}) {
     blockerReason: options.blockerReason || null,
     normalizedPhase: options.normalizedPhase || null,
     reasons: Array.isArray(options.reasons) ? options.reasons : [],
-    blockingReasons: Array.isArray(options.blockingReasons)
-      ? options.blockingReasons
-      : [],
+    blockingReasons: Array.isArray(options.blockingReasons) ?
+      options.blockingReasons :
+      [],
   };
+}
+function isStartupAuthoritySnapshot(value) {
+  return Boolean(value && typeof value === TYPEOF.OBJECT);
+}
+function isUsableStartupAuthoritySnapshot(value) {
+  return isStartupAuthoritySnapshot(value) && value.authorityAvailable === true;
+}
+function selectStartupAuthoritySnapshot(localStartupAuthority, seedContact) {
+  if (isUsableStartupAuthoritySnapshot(localStartupAuthority)) {
+    return localStartupAuthority;
+  }
+  if (isStartupAuthoritySnapshot(seedContact)) {
+    return seedContact;
+  }
+  return isStartupAuthoritySnapshot(localStartupAuthority) ?
+    localStartupAuthority :
+    null;
 }
 function resolveControlPhaseBootstrapJoinProjection(
   normalizedReasons,
@@ -185,12 +194,12 @@ function resolveControlPhaseBootstrapJoinProjection(
   const canProjectFromControlPhase = blockingReasons.length === NUM.ZERO;
   return buildBootstrapJoinProjectionResult({
     canProjectReady: canProjectFromControlPhase,
-    projectionRule: canProjectFromControlPhase
-      ? BOOTSTRAP_JOIN_PROJECTION_RULE.CONTROL_DEGRADED_NON_BLOCKING
-      : null,
-    blockerReason: canProjectFromControlPhase
-      ? null
-      : BOOTSTRAP_JOIN_PROJECTION_BLOCKER.CONTROL_DEGRADED_BLOCKING_REASONS,
+    projectionRule: canProjectFromControlPhase ?
+      BOOTSTRAP_JOIN_PROJECTION_RULE.CONTROL_DEGRADED_NON_BLOCKING :
+      null,
+    blockerReason: canProjectFromControlPhase ?
+      null :
+      BOOTSTRAP_JOIN_PROJECTION_BLOCKER.CONTROL_DEGRADED_BLOCKING_REASONS,
   });
 }
 class BootstrapReadinessOwnerPart1 {
@@ -216,6 +225,18 @@ class BootstrapReadinessOwnerPart1 {
   }
   getControlPlaneReadinessService() {
     return this.delegates.getControlPlaneReadinessService?.() || null;
+  }
+  getSeedContactStartupAuthoritySnapshot() {
+    const bootstrapService = this.getBootstrapService();
+    const bootstrapResponse = bootstrapService?.bootstrapResponse || null;
+    const startupAuthority =
+      bootstrapResponse?.[BOOTSTRAP_API_RESPONSE_FIELD.STARTUP_AUTHORITY] ||
+      bootstrapService?.getSeedContactStartupAuthoritySnapshot?.() ||
+      bootstrapService?.seedContactStartupAuthority ||
+      null;
+    return isStartupAuthoritySnapshot(startupAuthority) ?
+      startupAuthority :
+      null;
   }
   getControlPlaneWriteHealthProvider() {
     return this.delegates.getControlPlaneWriteHealthProvider?.() || null;
@@ -248,16 +269,16 @@ class BootstrapReadinessOwnerPart1 {
   handleStartupProbeRequest(reply) {
     const snapshot = this.evaluateReadinessSnapshot();
     const started = this.isStartupComplete();
-    const statusCode = started
-      ? HTTP_STATUS.OK
-      : HTTP_STATUS.SERVICE_UNAVAILABLE;
+    const statusCode = started ?
+      HTTP_STATUS.OK :
+      HTTP_STATUS.SERVICE_UNAVAILABLE;
     const reasons = this.getStartupProbeReasons(snapshot, started);
     const response = {
       started,
       phase:
-        typeof snapshot.phase === TYPEOF.STRING
-          ? snapshot.phase
-          : LIFECYCLE_PHASE.INIT,
+        typeof snapshot.phase === TYPEOF.STRING ?
+          snapshot.phase :
+          LIFECYCLE_PHASE.INIT,
       state: snapshot.state,
       reasons,
       timestamp: snapshot.timestamp,
@@ -272,9 +293,9 @@ class BootstrapReadinessOwnerPart1 {
   }
   async handleReadinessProbeRequest(reply) {
     const snapshot = await this.evaluateReadinessSnapshotForProbe();
-    const statusCode = snapshot.ready
-      ? HTTP_STATUS.OK
-      : HTTP_STATUS.SERVICE_UNAVAILABLE;
+    const statusCode = snapshot.ready ?
+      HTTP_STATUS.OK :
+      HTTP_STATUS.SERVICE_UNAVAILABLE;
     const response = this.buildReadinessProbeResponse(snapshot);
     this.recordReadinessProbeResult(BOOTSTRAP_API_ROUTE.READYZ, statusCode);
     reply.code(statusCode);
@@ -285,9 +306,9 @@ class BootstrapReadinessOwnerPart1 {
       await this.evaluateReadinessSnapshotForProbe(),
       BOOTSTRAP_API_PROBE_SCOPE.BOOTSTRAP_JOIN,
     );
-    const statusCode = snapshot.ready
-      ? HTTP_STATUS.OK
-      : HTTP_STATUS.SERVICE_UNAVAILABLE;
+    const statusCode = snapshot.ready ?
+      HTTP_STATUS.OK :
+      HTTP_STATUS.SERVICE_UNAVAILABLE;
     const response = this.buildReadinessProbeResponse(snapshot, {
       scope: BOOTSTRAP_API_PROBE_SCOPE.BOOTSTRAP_JOIN,
     });
@@ -312,20 +333,24 @@ class BootstrapReadinessOwnerPart1 {
         canProjectReady: false,
         projectionRule: BOOTSTRAP_JOIN_PROJECTION_RULE.ALREADY_READY,
         blockerReason:
-          snapshot.ready === true
-            ? BOOTSTRAP_JOIN_PROJECTION_RULE.ALREADY_READY
-            : BOOTSTRAP_JOIN_PROJECTION_BLOCKER.PHASE_NOT_ELIGIBLE,
+          snapshot.ready === true ?
+            BOOTSTRAP_JOIN_PROJECTION_RULE.ALREADY_READY :
+            BOOTSTRAP_JOIN_PROJECTION_BLOCKER.PHASE_NOT_ELIGIBLE,
         normalizedPhase: normalizeLifecyclePhaseFromSnapshot(snapshot),
         reasons: normalizeReasonCodeArray(snapshot?.reasons),
         blockingReasons: [],
       };
       return snapshot;
     }
+    const startupAuthority = this.getStartupAuthoritySnapshot(
+      snapshot?.timestamp || Date.now(),
+    );
     const projectionEvaluation = this.evaluateBootstrapJoinProjection(
       snapshot,
       {
         bootstrapJoinAuthorityAvailable:
           snapshot?.bootstrapJoinAuthorityAvailable === true ||
+          isUsableStartupAuthoritySnapshot(startupAuthority) ||
           hasBootstrapJoinAuthority(
             this.getPriorityControlPlaneRecoveryHealth(),
           ),
@@ -343,14 +368,14 @@ class BootstrapReadinessOwnerPart1 {
     };
   }
   evaluateBootstrapJoinProjection(snapshot, options = {}) {
-    const normalizedReasons = Array.isArray(options.reasons)
-      ? normalizeReasonCodeArray(options.reasons)
-      : normalizeReasonCodeArray(snapshot?.reasons);
-    const blockingReasons = Array.isArray(options.blockingReasons)
-      ? normalizeReasonCodeArray(options.blockingReasons)
-      : normalizedReasons.filter(
-          (reason) => !BOOTSTRAP_JOIN_NON_BLOCKING_REASON_SET.has(reason),
-        );
+    const normalizedReasons = Array.isArray(options.reasons) ?
+      normalizeReasonCodeArray(options.reasons) :
+      normalizeReasonCodeArray(snapshot?.reasons);
+    const blockingReasons = Array.isArray(options.blockingReasons) ?
+      normalizeReasonCodeArray(options.blockingReasons) :
+      normalizedReasons.filter(
+        (reason) => !BOOTSTRAP_JOIN_NON_BLOCKING_REASON_SET.has(reason),
+      );
     const normalizedPhase = normalizeLifecyclePhaseFromSnapshot(snapshot);
     const draining = snapshot?.draining === true;
     const bootstrapJoinAuthorityAvailable =
@@ -370,12 +395,12 @@ class BootstrapReadinessOwnerPart1 {
         normalizedReasons[NUM.ZERO] ===
           LIFECYCLE_REASON.READINESS_STABLE_WINDOW_PENDING;
       canProjectReady = joinStableWindowOnly;
-      projectionRule = joinStableWindowOnly
-        ? BOOTSTRAP_JOIN_PROJECTION_RULE.JOIN_STABLE_WINDOW
-        : null;
-      blockerReason = joinStableWindowOnly
-        ? null
-        : BOOTSTRAP_JOIN_PROJECTION_BLOCKER.JOIN_STABLE_WINDOW_REASONS;
+      projectionRule = joinStableWindowOnly ?
+        BOOTSTRAP_JOIN_PROJECTION_RULE.JOIN_STABLE_WINDOW :
+        null;
+      blockerReason = joinStableWindowOnly ?
+        null :
+        BOOTSTRAP_JOIN_PROJECTION_BLOCKER.JOIN_STABLE_WINDOW_REASONS;
     } else if (normalizedPhase === LIFECYCLE_PHASE.INIT) {
       const bootstrapInitPriorityBypass = canBypassBootstrapInitPriorityReasons(
         normalizedReasons,
@@ -385,12 +410,12 @@ class BootstrapReadinessOwnerPart1 {
         },
       );
       canProjectReady = bootstrapInitPriorityBypass;
-      projectionRule = bootstrapInitPriorityBypass
-        ? BOOTSTRAP_JOIN_PROJECTION_RULE.INIT_PRIORITY_BYPASS
-        : null;
-      blockerReason = bootstrapInitPriorityBypass
-        ? null
-        : BOOTSTRAP_JOIN_PROJECTION_BLOCKER.INIT_PRIORITY_BYPASS_REJECTED;
+      projectionRule = bootstrapInitPriorityBypass ?
+        BOOTSTRAP_JOIN_PROJECTION_RULE.INIT_PRIORITY_BYPASS :
+        null;
+      blockerReason = bootstrapInitPriorityBypass ?
+        null :
+        BOOTSTRAP_JOIN_PROJECTION_BLOCKER.INIT_PRIORITY_BYPASS_REJECTED;
     } else if (
       normalizedPhase === LIFECYCLE_PHASE.CONTROL_READY ||
       normalizedPhase === LIFECYCLE_PHASE.DEGRADED
@@ -422,9 +447,9 @@ class BootstrapReadinessOwnerPart1 {
     const response = {
       ready: snapshot.ready === true,
       phase:
-        typeof snapshot.phase === TYPEOF.STRING
-          ? snapshot.phase
-          : LIFECYCLE_PHASE.INIT,
+        typeof snapshot.phase === TYPEOF.STRING ?
+          snapshot.phase :
+          LIFECYCLE_PHASE.INIT,
       state: snapshot.state,
       reasons: Array.isArray(snapshot.reasons) ? snapshot.reasons : [],
       timestamp: snapshot.timestamp,
@@ -439,7 +464,7 @@ class BootstrapReadinessOwnerPart1 {
       response.retryAfterMs = snapshot.retryAfterMs;
     }
     this.appendReadinessProgressFields(response, snapshot);
-    this.appendStartupRecoveryFields(response, snapshot);
+    this.appendStartupRecoveryFields(response, snapshot, options);
     this.appendMembershipPublicationFields(response, snapshot);
     this.appendReadinessStageFields(response);
     if (
@@ -448,6 +473,21 @@ class BootstrapReadinessOwnerPart1 {
     ) {
       response.scope = options.scope;
     }
+    this.appendBootstrapJoinProjectionFields(response, options);
+    return response;
+  }
+  appendBootstrapJoinProjectionFields(response, options = {}) {
+    if (
+      options.scope !== BOOTSTRAP_API_PROBE_SCOPE.BOOTSTRAP_JOIN ||
+      !response ||
+      typeof response !== TYPEOF.OBJECT ||
+      !this.lastBootstrapJoinProjectionEvaluation ||
+      typeof this.lastBootstrapJoinProjectionEvaluation !== TYPEOF.OBJECT
+    ) {
+      return response;
+    }
+    response[BOOTSTRAP_API_READINESS_FIELD.BOOTSTRAP_JOIN_PROJECTION] =
+      this.lastBootstrapJoinProjectionEvaluation;
     return response;
   }
   appendReadinessProgressFields(response, snapshot) {
@@ -485,7 +525,7 @@ class BootstrapReadinessOwnerPart1 {
     }
     return response;
   }
-  appendStartupRecoveryFields(response, snapshot) {
+  appendStartupRecoveryFields(response, snapshot, options = {}) {
     if (
       !response ||
       typeof response !== TYPEOF.OBJECT ||
@@ -500,11 +540,13 @@ class BootstrapReadinessOwnerPart1 {
     const priorityRecoveryHealth = this.getPriorityControlPlaneRecoveryHealth();
     const priorityRecoveryDetails =
       priorityRecoveryHealth?.details &&
-      typeof priorityRecoveryHealth.details === TYPEOF.OBJECT
-        ? priorityRecoveryHealth.details
-        : null;
+      typeof priorityRecoveryHealth.details === TYPEOF.OBJECT ?
+        priorityRecoveryHealth.details :
+        null;
+    const startupRecoverySnapshot =
+      this.resolveStartupRecoveryEvaluationSnapshot(snapshot, options);
     const startupRecovery = this.evaluateStartupRecovery({
-      snapshot,
+      snapshot: startupRecoverySnapshot,
       priorityRecoveryHealth,
       startupAuthority,
     });
@@ -524,6 +566,22 @@ class BootstrapReadinessOwnerPart1 {
       ),
     );
     return response;
+  }
+  resolveStartupRecoveryEvaluationSnapshot(snapshot, options = {}) {
+    if (
+      options.scope !== BOOTSTRAP_API_PROBE_SCOPE.BOOTSTRAP_JOIN ||
+      !this.lastBootstrapJoinProjectionEvaluation ||
+      typeof this.lastBootstrapJoinProjectionEvaluation !== TYPEOF.OBJECT ||
+      this.lastBootstrapJoinProjectionEvaluation.canProjectReady !== true ||
+      !Array.isArray(this.lastBootstrapJoinProjectionEvaluation.reasons) ||
+      this.lastBootstrapJoinProjectionEvaluation.reasons.length === NUM.ZERO
+    ) {
+      return snapshot;
+    }
+    return {
+      ...snapshot,
+      reasons: this.lastBootstrapJoinProjectionEvaluation.reasons,
+    };
   }
   evaluateStartupRecovery(options) {
     const coordinator = this.getStartupRecoveryCoordinator();
@@ -621,33 +679,39 @@ class BootstrapReadinessOwnerPart1 {
     };
   }
   getStartupAuthoritySnapshot(observedAt = Date.now()) {
+    const seedContactStartupAuthority =
+      this.getSeedContactStartupAuthoritySnapshot();
     const service = this.getControlPlaneReadinessService();
     if (!service || typeof service !== TYPEOF.OBJECT) {
-      return null;
+      return seedContactStartupAuthority;
     }
     try {
+      let localStartupAuthority = null;
       if (typeof service.getStartupAuthoritySnapshotSync === TYPEOF.FUNCTION) {
-        return service.getStartupAuthoritySnapshotSync(
+        localStartupAuthority = service.getStartupAuthoritySnapshotSync(
           this.getSeedNodeId(),
           observedAt,
         );
-      }
-      if (typeof service.getStartupAuthoritySnapshot !== TYPEOF.FUNCTION) {
-        return null;
-      }
-      const startupAuthority = service.getStartupAuthoritySnapshot(
-        this.getSeedNodeId(),
-        observedAt,
-      );
-      if (
-        startupAuthority &&
-        typeof startupAuthority.then === TYPEOF.FUNCTION
+      } else if (
+        typeof service.getStartupAuthoritySnapshot === TYPEOF.FUNCTION
       ) {
-        return null;
+        localStartupAuthority = service.getStartupAuthoritySnapshot(
+          this.getSeedNodeId(),
+          observedAt,
+        );
+        if (
+          localStartupAuthority &&
+          typeof localStartupAuthority.then === TYPEOF.FUNCTION
+        ) {
+          localStartupAuthority = null;
+        }
       }
-      return startupAuthority;
+      return selectStartupAuthoritySnapshot(
+        localStartupAuthority,
+        seedContactStartupAuthority,
+      );
     } catch (_error) {
-      return null;
+      return seedContactStartupAuthority;
     }
   }
   appendPriorityRecoveryProtocolFields(response, details) {
@@ -713,9 +777,9 @@ class BootstrapReadinessOwnerPart1 {
     }
     const publicationRecoveryGate =
       membershipPublication.publicationRecoveryGate &&
-      typeof membershipPublication.publicationRecoveryGate === TYPEOF.OBJECT
-        ? membershipPublication.publicationRecoveryGate
-        : null;
+      typeof membershipPublication.publicationRecoveryGate === TYPEOF.OBJECT ?
+        membershipPublication.publicationRecoveryGate :
+        null;
     if (publicationRecoveryGate) {
       this.appendPublicationRecoveryGateFields(
         response,
@@ -898,30 +962,30 @@ class BootstrapReadinessOwnerPart1 {
     );
     const projectionEvaluation =
       this.lastBootstrapJoinProjectionEvaluation &&
-      typeof this.lastBootstrapJoinProjectionEvaluation === TYPEOF.OBJECT
-        ? {
-            canProjectReady:
+      typeof this.lastBootstrapJoinProjectionEvaluation === TYPEOF.OBJECT ?
+        {
+          canProjectReady:
               this.lastBootstrapJoinProjectionEvaluation.canProjectReady ===
               true,
-            projectionRule:
+          projectionRule:
               this.lastBootstrapJoinProjectionEvaluation.projectionRule || null,
-            blockerReason:
+          blockerReason:
               this.lastBootstrapJoinProjectionEvaluation.blockerReason || null,
-            normalizedPhase:
+          normalizedPhase:
               this.lastBootstrapJoinProjectionEvaluation.normalizedPhase ||
               null,
-            reasons: Array.isArray(
-              this.lastBootstrapJoinProjectionEvaluation.reasons,
-            )
-              ? this.lastBootstrapJoinProjectionEvaluation.reasons
-              : [],
-            blockingReasons: Array.isArray(
-              this.lastBootstrapJoinProjectionEvaluation.blockingReasons,
-            )
-              ? this.lastBootstrapJoinProjectionEvaluation.blockingReasons
-              : [],
-          }
-        : null;
+          reasons: Array.isArray(
+            this.lastBootstrapJoinProjectionEvaluation.reasons,
+          ) ?
+            this.lastBootstrapJoinProjectionEvaluation.reasons :
+            [],
+          blockingReasons: Array.isArray(
+            this.lastBootstrapJoinProjectionEvaluation.blockingReasons,
+          ) ?
+            this.lastBootstrapJoinProjectionEvaluation.blockingReasons :
+            [],
+        } :
+        null;
     const messageRouter =
       this.getMessageRouter() || bootstrapService?.messageRouter || null;
     const logPayload = {
@@ -1049,7 +1113,7 @@ class BootstrapReadinessOwnerPart1 {
     const timeoutPromise = new Promise((_, reject) => {
       timeoutHandle = setTimeout(() => {
         const timeoutError = new Error(
-          "Readiness probe async diagnostics timed out after " +
+          'Readiness probe async diagnostics timed out after ' +
             `${timeoutMs}ms`,
         );
         timeoutError.code = READINESS_PROBE_ASYNC_TIMEOUT_ERROR_CODE;
@@ -1135,9 +1199,9 @@ class BootstrapReadinessOwnerPart1 {
         details: controlPlaneWriteHealth.details,
         classification:
           controlPlaneWriteHealth.classification ===
-          LIFECYCLE_DEPENDENCY_CLASS.SOFT
-            ? LIFECYCLE_DEPENDENCY_CLASS.SOFT
-            : LIFECYCLE_DEPENDENCY_CLASS.HARD,
+          LIFECYCLE_DEPENDENCY_CLASS.SOFT ?
+            LIFECYCLE_DEPENDENCY_CLASS.SOFT :
+            LIFECYCLE_DEPENDENCY_CLASS.HARD,
       },
     );
     readinessState.setDependency(
@@ -1163,11 +1227,11 @@ class BootstrapReadinessOwnerPart1 {
           state: BOOTSTRAP_READINESS_OWNER_LITERAL.NONE,
         }),
       ...(startupAuthority?.failure?.state ===
-      BOOTSTRAP_READINESS_OWNER_LITERAL.PRESENT
-        ? {
-            startupAuthorityFailureReason: startupAuthority.failure.reason,
-          }
-        : {}),
+      BOOTSTRAP_READINESS_OWNER_LITERAL.PRESENT ?
+        {
+          startupAuthorityFailureReason: startupAuthority.failure.reason,
+        } :
+        {}),
       startupAuthorityPublication:
         startupAuthority?.publication ||
         Object.freeze({
@@ -1183,16 +1247,16 @@ class BootstrapReadinessOwnerPart1 {
       ...(startupAuthority?.failure?.state ===
         BOOTSTRAP_READINESS_OWNER_LITERAL.PRESENT ||
       typeof priorityControlPlaneRecoveryHealth?.details?.failureReason ===
-        TYPEOF.STRING
-        ? {
-            bootstrapJoinAuthorityFailureReason:
+        TYPEOF.STRING ?
+        {
+          bootstrapJoinAuthorityFailureReason:
               startupAuthority?.failure?.state ===
-              BOOTSTRAP_READINESS_OWNER_LITERAL.PRESENT
-                ? startupAuthority.failure.reason
-                : priorityControlPlaneRecoveryHealth.details.failureReason,
-          }
-        : {}),
+              BOOTSTRAP_READINESS_OWNER_LITERAL.PRESENT ?
+                startupAuthority.failure.reason :
+                priorityControlPlaneRecoveryHealth.details.failureReason,
+        } :
+        {}),
     };
   }
 }
-export { BootstrapReadinessOwnerPart1 };
+export {BootstrapReadinessOwnerPart1};

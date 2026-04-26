@@ -1,4 +1,7 @@
-function assignAdminServiceDiscoveryRepairMethods(AdminServiceDiscovery, options = {}) {
+function assignAdminServiceDiscoveryRepairMethods(
+  AdminServiceDiscovery,
+  options = {},
+) {
   const {
     ADMIN_CACHE_DUMP,
     ADMIN_SERVICE_DISCOVERY,
@@ -38,7 +41,8 @@ function assignAdminServiceDiscoveryRepairMethods(AdminServiceDiscovery, options
       if (
         !this.systemTableCache ||
         !this.cacheMutationTarget ||
-        typeof this.cacheMutationTarget.applySystemTableChange !== TYPEOF.FUNCTION
+        typeof this.cacheMutationTarget.applySystemTableChange !==
+          TYPEOF.FUNCTION
       ) {
         return {
           applied: false,
@@ -54,7 +58,8 @@ function assignAdminServiceDiscoveryRepairMethods(AdminServiceDiscovery, options
         };
       }
       const now = this.nowFn();
-      const repairTableNames = this.resolveAuthoritativeDiscoveryRepairTables(options);
+      const repairTableNames =
+        this.resolveAuthoritativeDiscoveryRepairTables(options);
       if (repairTableNames.length === NUM.ZERO) {
         return {
           applied: false,
@@ -75,19 +80,21 @@ function assignAdminServiceDiscoveryRepairMethods(AdminServiceDiscovery, options
       if (recentRepairResult) {
         return recentRepairResult;
       }
-      const recentRepairFailure = this.resolveRecentAuthoritativeDiscoveryRepairFailure(
-        {
-          ...options,
-          repairTables: repairTableNames,
-        },
-        now,
-      );
+      const recentRepairFailure =
+        this.resolveRecentAuthoritativeDiscoveryRepairFailure(
+          {
+            ...options,
+            repairTables: repairTableNames,
+          },
+          now,
+        );
       if (recentRepairFailure) {
         return recentRepairFailure;
       }
       if (
         options?.bypassReuse !== true &&
-        now - this.lastAuthoritativeDiscoveryRepairAtMs < AUTHORITATIVE_DISCOVERY_REPAIR.COOLDOWN_MS &&
+        now - this.lastAuthoritativeDiscoveryRepairAtMs <
+          AUTHORITATIVE_DISCOVERY_REPAIR.COOLDOWN_MS &&
         this.lastAuthoritativeDiscoveryRepairCoversTables(repairTableNames)
       ) {
         return {
@@ -96,22 +103,45 @@ function assignAdminServiceDiscoveryRepairMethods(AdminServiceDiscovery, options
           tableCount: NUM.ZERO,
         };
       }
-      this.authoritativeDiscoveryRepairPromise = this.executeAuthoritativeDiscoveryCacheRepairRun(repairTableNames, options, now).finally(
-        () => {
+      this.authoritativeDiscoveryRepairPromise =
+        this.executeAuthoritativeDiscoveryCacheRepairRun(
+          repairTableNames,
+          options,
+          now,
+        ).finally(() => {
           this.authoritativeDiscoveryRepairPromise = null;
-        },
-      );
+        });
       return this.authoritativeDiscoveryRepairPromise;
     }
 
-    async executeAuthoritativeDiscoveryCacheRepairRun(repairTableNames, options, now) {
+    async executeAuthoritativeDiscoveryCacheRepairRun(
+      repairTableNames,
+      options,
+      now,
+    ) {
       const repairState = this.createAuthoritativeDiscoveryRepairState();
-      const causeId = this.buildAuthoritativeDiscoveryRepairCauseId(options, now);
-      await this.readAuthoritativeDiscoveryRepairRowsIntoState(repairState, repairTableNames, options, now);
+      const causeId = this.buildAuthoritativeDiscoveryRepairCauseId(
+        options,
+        now,
+      );
+      await this.readAuthoritativeDiscoveryRepairRowsIntoState(
+        repairState,
+        repairTableNames,
+        options,
+        now,
+      );
       if (repairState.failedTables.length === NUM.ZERO) {
-        await this.applyAuthoritativeDiscoveryRepairRowsIntoState(repairState, repairTableNames, causeId);
+        await this.applyAuthoritativeDiscoveryRepairRowsIntoState(
+          repairState,
+          repairTableNames,
+          causeId,
+        );
       }
-      return this.finalizeAuthoritativeDiscoveryCacheRepairRun(repairState, repairTableNames, options);
+      return this.finalizeAuthoritativeDiscoveryCacheRepairRun(
+        repairState,
+        repairTableNames,
+        options,
+      );
     }
 
     createAuthoritativeDiscoveryRepairState() {
@@ -134,21 +164,34 @@ function assignAdminServiceDiscoveryRepairMethods(AdminServiceDiscovery, options
       ].join(SERVICE_DISCOVERY_REASON_DETAIL_SEPARATOR);
     }
 
-    async readAuthoritativeDiscoveryRepairRowsIntoState(repairState, repairTableNames, options, now) {
+    async readAuthoritativeDiscoveryRepairRowsIntoState(
+      repairState,
+      repairTableNames,
+      options,
+      now,
+    ) {
       for (const tableName of repairTableNames) {
         try {
-          const result = await this.readAuthoritativeSystemTableRows(tableName, {
-            nowMs: now,
-            reason: options.reason || AUTHORITATIVE_DISCOVERY_REPAIR_DEFAULT_REASON,
-            tableName: options.tableName || null,
-            tableId: options.tableId || null,
-          });
+          const result = await this.readAuthoritativeSystemTableRows(
+            tableName,
+            {
+              nowMs: now,
+              reason:
+                options.reason || AUTHORITATIVE_DISCOVERY_REPAIR_DEFAULT_REASON,
+              tableName: options.tableName || null,
+              tableId: options.tableId || null,
+            },
+          );
           repairState.authoritativeRowsByTable.set(tableName, {
             tableName: result.tableName,
             rows: result.rows,
           });
         } catch (error) {
-          const errorSummary = this.recordAuthoritativeDiscoveryRepairFailure(repairState, tableName, error);
+          const errorSummary = this.recordAuthoritativeDiscoveryRepairFailure(
+            repairState,
+            tableName,
+            error,
+          );
           if (shouldAbortAuthoritativeRepairTableReads(errorSummary)) {
             break;
           }
@@ -156,19 +199,28 @@ function assignAdminServiceDiscoveryRepairMethods(AdminServiceDiscovery, options
       }
     }
 
-    async applyAuthoritativeDiscoveryRepairRowsIntoState(repairState, repairTableNames, causeId) {
+    async applyAuthoritativeDiscoveryRepairRowsIntoState(
+      repairState,
+      repairTableNames,
+      causeId,
+    ) {
       for (const tableName of repairTableNames) {
         const result = repairState.authoritativeRowsByTable.get(tableName);
         try {
-          repairState.repairedRowCount += await this.applyAuthoritativeSystemTableRows(
-            result?.tableName || tableName,
-            result?.rows || ADMIN_CACHE_DUMP.EMPTY,
-            causeId,
-          );
+          repairState.repairedRowCount +=
+            await this.applyAuthoritativeSystemTableRows(
+              result?.tableName || tableName,
+              result?.rows || ADMIN_CACHE_DUMP.EMPTY,
+              causeId,
+            );
           repairState.repairedTableCount += NUM.ONE;
           repairState.repairedTableNames.push(tableName);
         } catch (error) {
-          this.recordAuthoritativeDiscoveryRepairFailure(repairState, tableName, error);
+          this.recordAuthoritativeDiscoveryRepairFailure(
+            repairState,
+            tableName,
+            error,
+          );
           break;
         }
       }
@@ -180,39 +232,101 @@ function assignAdminServiceDiscoveryRepairMethods(AdminServiceDiscovery, options
       repairState.errorSummaries.push(errorSummary);
       repairState.errors.push(
         `${tableName}${SERVICE_DISCOVERY_REASON_DETAIL_SEPARATOR}` +
-          String(error?.message || error || ADMIN_SERVICE_DISCOVERY_LITERAL.UNKNOWN_ERROR),
+          String(
+            error?.message ||
+              error ||
+              ADMIN_SERVICE_DISCOVERY_LITERAL.UNKNOWN_ERROR,
+          ),
       );
       return errorSummary;
     }
 
-    finalizeAuthoritativeDiscoveryCacheRepairRun(repairState, repairTableNames, options) {
+    finalizeAuthoritativeDiscoveryCacheRepairRun(
+      repairState,
+      repairTableNames,
+      options,
+    ) {
       const completedAtMs = this.nowFn();
       this.lastAuthoritativeDiscoveryRepairAtMs = completedAtMs;
-      const outcome = this.resolveAuthoritativeDiscoveryRepairOutcome(repairState, repairTableNames);
-      const result = outcome.repairApplied
-        ? this.storeSuccessfulAuthoritativeDiscoveryRepair(repairState, completedAtMs)
-        : this.storeFailedAuthoritativeDiscoveryRepair(repairState, repairTableNames, outcome, completedAtMs);
-      this.logAuthoritativeDiscoveryCacheRepairResult(result, repairState, repairTableNames, options, outcome);
+      const outcome = this.resolveAuthoritativeDiscoveryRepairOutcome(
+        repairState,
+        repairTableNames,
+      );
+      const result = outcome.repairApplied ?
+        this.storeSuccessfulAuthoritativeDiscoveryRepair(
+          repairState,
+          completedAtMs,
+        ) :
+        this.storeFailedAuthoritativeDiscoveryRepair(
+          repairState,
+          repairTableNames,
+          outcome,
+          completedAtMs,
+        );
+      this.logAuthoritativeDiscoveryCacheRepairResult(
+        result,
+        repairState,
+        repairTableNames,
+        options,
+        outcome,
+      );
       return result;
     }
 
     resolveAuthoritativeDiscoveryRepairOutcome(repairState, repairTableNames) {
-      const repairApplied = repairState.failedTables.length === NUM.ZERO && repairState.repairedTableCount === repairTableNames.length;
+      const repairApplied =
+        repairState.failedTables.length === NUM.ZERO &&
+        repairState.repairedTableCount === repairTableNames.length;
       const causeChain = repairState.errorSummaries
-        .flatMap((summary) => (Array.isArray(summary?.causeChain) ? summary.causeChain : ADMIN_CACHE_DUMP.EMPTY))
+        .flatMap((summary) =>
+          Array.isArray(summary?.causeChain) ?
+            summary.causeChain :
+            ADMIN_CACHE_DUMP.EMPTY,
+        )
         .filter((value, index, values) => values.indexOf(value) === index);
-      const readSource = repairState.errorSummaries.find((summary) => summary?.readSource)?.readSource || null;
-      const localQueryTransport = repairState.errorSummaries.find((summary) => summary?.localQueryTransport)?.localQueryTransport || null;
+      const readSource =
+        repairState.errorSummaries.find((summary) => summary?.readSource)
+          ?.readSource || null;
+      const localQueryTransport =
+        repairState.errorSummaries.find(
+          (summary) => summary?.localQueryTransport,
+        )?.localQueryTransport || null;
       const firstFailedParticipant =
-        repairState.errorSummaries.find((summary) => summary?.firstFailedParticipant)?.firstFailedParticipant || null;
-      const errorCodes = this.buildAuthoritativeDiscoveryRepairErrorCodes(repairState.errorSummaries, repairState.errors);
-      const failureClass = repairApplied ? null : resolveAuthoritativeRepairFailureClass(causeChain);
-      const failureCount = repairApplied ? NUM.ZERO : this.resolveAuthoritativeDiscoveryRepairFailureCount(repairTableNames, failureClass);
-      const baseRetryAfterMs = repairApplied ? null : resolveAuthoritativeRepairFailureBaseRetryAfterMs(repairState.errorSummaries);
-      const maxRetryAfterMs = repairApplied ? null : resolveAuthoritativeRepairFailureMaxRetryAfterMs(failureClass, baseRetryAfterMs);
-      const retryAfterMs = repairApplied
-        ? null
-        : computeAuthoritativeRepairFailureRetryAfterMs(failureClass, failureCount, baseRetryAfterMs, maxRetryAfterMs);
+        repairState.errorSummaries.find(
+          (summary) => summary?.firstFailedParticipant,
+        )?.firstFailedParticipant || null;
+      const errorCodes = this.buildAuthoritativeDiscoveryRepairErrorCodes(
+        repairState.errorSummaries,
+        repairState.errors,
+      );
+      const failureClass = repairApplied ?
+        null :
+        resolveAuthoritativeRepairFailureClass(causeChain);
+      const failureCount = repairApplied ?
+        NUM.ZERO :
+        this.resolveAuthoritativeDiscoveryRepairFailureCount(
+          repairTableNames,
+          failureClass,
+        );
+      const baseRetryAfterMs = repairApplied ?
+        null :
+        resolveAuthoritativeRepairFailureBaseRetryAfterMs(
+          repairState.errorSummaries,
+        );
+      const maxRetryAfterMs = repairApplied ?
+        null :
+        resolveAuthoritativeRepairFailureMaxRetryAfterMs(
+          failureClass,
+          baseRetryAfterMs,
+        );
+      const retryAfterMs = repairApplied ?
+        null :
+        computeAuthoritativeRepairFailureRetryAfterMs(
+          failureClass,
+          failureCount,
+          baseRetryAfterMs,
+          maxRetryAfterMs,
+        );
       return {
         repairApplied,
         causeChain,
@@ -228,13 +342,18 @@ function assignAdminServiceDiscoveryRepairMethods(AdminServiceDiscovery, options
 
     buildAuthoritativeDiscoveryRepairErrorCodes(errorSummaries, errors) {
       const errorCodeSet = new Set();
-      for (const summary of Array.isArray(errorSummaries) ? errorSummaries : ADMIN_CACHE_DUMP.EMPTY) {
+      for (const summary of Array.isArray(errorSummaries) ?
+        errorSummaries :
+        ADMIN_CACHE_DUMP.EMPTY) {
         if (summary?.errorCode) {
           errorCodeSet.add(summary.errorCode);
         }
       }
-      for (const error of Array.isArray(errors) ? errors : ADMIN_CACHE_DUMP.EMPTY) {
-        const errorCode = this.extractAuthoritativeDiscoveryRepairErrorCode(error);
+      for (const error of Array.isArray(errors) ?
+        errors :
+        ADMIN_CACHE_DUMP.EMPTY) {
+        const errorCode =
+          this.extractAuthoritativeDiscoveryRepairErrorCode(error);
         if (errorCode) {
           errorCodeSet.add(errorCode);
         }
@@ -244,8 +363,13 @@ function assignAdminServiceDiscoveryRepairMethods(AdminServiceDiscovery, options
 
     extractAuthoritativeDiscoveryRepairErrorCode(errorValue) {
       const message = String(errorValue || EMPTY_STRING);
-      const separatorIndex = message.indexOf(SERVICE_DISCOVERY_REASON_DETAIL_SEPARATOR);
-      const summary = separatorIndex >= NUM.ZERO ? message.slice(separatorIndex + NUM.ONE).trim() : message.trim();
+      const separatorIndex = message.indexOf(
+        SERVICE_DISCOVERY_REASON_DETAIL_SEPARATOR,
+      );
+      const summary =
+        separatorIndex >= NUM.ZERO ?
+          message.slice(separatorIndex + NUM.ONE).trim() :
+          message.trim();
       return summary.length > NUM.ZERO ? summary : null;
     }
 
@@ -265,13 +389,21 @@ function assignAdminServiceDiscoveryRepairMethods(AdminServiceDiscovery, options
       return result;
     }
 
-    storeFailedAuthoritativeDiscoveryRepair(repairState, repairTableNames, outcome, completedAtMs) {
+    storeFailedAuthoritativeDiscoveryRepair(
+      repairState,
+      repairTableNames,
+      outcome,
+      completedAtMs,
+    ) {
       this.lastAuthoritativeDiscoveryRepairCompletedAtMs = NUM.ZERO;
       this.lastAuthoritativeDiscoveryRepairResult = null;
       this.lastAuthoritativeDiscoveryRepairFailureState = {
         action: AUTHORITATIVE_REPAIR_FAILURE_ACTION.DEFER_REPAIR,
-        requestedTableNames: normalizeAuthoritativeRepairTableNames(repairTableNames),
-        failedTables: normalizeAuthoritativeRepairTableNames(repairState.failedTables),
+        requestedTableNames:
+          normalizeAuthoritativeRepairTableNames(repairTableNames),
+        failedTables: normalizeAuthoritativeRepairTableNames(
+          repairState.failedTables,
+        ),
         errors: [...repairState.errors],
         errorCodes: [...outcome.errorCodes],
         causeChain: [...outcome.causeChain],
@@ -307,7 +439,13 @@ function assignAdminServiceDiscoveryRepairMethods(AdminServiceDiscovery, options
       };
     }
 
-    logAuthoritativeDiscoveryCacheRepairResult(result, repairState, repairTableNames, options, outcome) {
+    logAuthoritativeDiscoveryCacheRepairResult(
+      result,
+      repairState,
+      repairTableNames,
+      options,
+      outcome,
+    ) {
       if (outcome.repairApplied !== true) {
         this.logger?.warn?.('Authoritative discovery cache repair failed', {
           nodeId: this.nodeId,
@@ -354,30 +492,35 @@ function assignAdminServiceDiscoveryRepairMethods(AdminServiceDiscovery, options
       const hasCacheMutationTarget = Boolean(
         this.systemTableCache &&
           this.cacheMutationTarget &&
-          typeof this.cacheMutationTarget.applySystemTableChange === TYPEOF.FUNCTION &&
+          typeof this.cacheMutationTarget.applySystemTableChange ===
+            TYPEOF.FUNCTION &&
           this.canReadAuthoritativeDiscoveryRows(),
       );
-      const repairTableNames = hasCacheMutationTarget ? this.resolveAuthoritativeDiscoveryRepairTables(options) : [];
+      const repairTableNames = hasCacheMutationTarget ?
+        this.resolveAuthoritativeDiscoveryRepairTables(options) :
+        [];
       const hasRepairTables = repairTableNames.length > NUM.ZERO;
-      const hasInFlightRepair = Boolean(hasRepairTables && this.authoritativeDiscoveryRepairPromise);
+      const hasInFlightRepair = Boolean(
+        hasRepairTables && this.authoritativeDiscoveryRepairPromise,
+      );
       const recentRepairFailure =
-        !hasInFlightRepair && hasRepairTables
-          ? this.resolveRecentAuthoritativeDiscoveryRepairFailure(
-              {
-                ...options,
-                repairTables: repairTableNames,
-              },
-              now,
-            )
-          : null;
+        !hasInFlightRepair && hasRepairTables ?
+          this.resolveRecentAuthoritativeDiscoveryRepairFailure(
+            {
+              ...options,
+              repairTables: repairTableNames,
+            },
+            now,
+          ) :
+          null;
       const state =
-        !hasCacheMutationTarget || !hasRepairTables
-          ? CONTROL_PLANE_SNAPSHOT_REFRESH_STATE.IDLE
-          : hasInFlightRepair
-            ? CONTROL_PLANE_SNAPSHOT_REFRESH_STATE.IN_FLIGHT
-            : recentRepairFailure
-              ? CONTROL_PLANE_SNAPSHOT_REFRESH_STATE.DEFERRED
-              : CONTROL_PLANE_SNAPSHOT_REFRESH_STATE.SCHEDULED;
+        !hasCacheMutationTarget || !hasRepairTables ?
+          CONTROL_PLANE_SNAPSHOT_REFRESH_STATE.IDLE :
+          hasInFlightRepair ?
+            CONTROL_PLANE_SNAPSHOT_REFRESH_STATE.IN_FLIGHT :
+            recentRepairFailure ?
+              CONTROL_PLANE_SNAPSHOT_REFRESH_STATE.DEFERRED :
+              CONTROL_PLANE_SNAPSHOT_REFRESH_STATE.SCHEDULED;
       return {
         state,
         repair: recentRepairFailure,
@@ -391,11 +534,16 @@ function assignAdminServiceDiscoveryRepairMethods(AdminServiceDiscovery, options
      * @return {Object}
      */
     scheduleAuthoritativeDiscoveryCacheRepair(options = {}) {
-      const repairDecision = this.buildAuthoritativeDiscoveryRepairScheduleDecision(options);
-      if (repairDecision.state !== CONTROL_PLANE_SNAPSHOT_REFRESH_STATE.SCHEDULED) {
+      const repairDecision =
+        this.buildAuthoritativeDiscoveryRepairScheduleDecision(options);
+      if (
+        repairDecision.state !== CONTROL_PLANE_SNAPSHOT_REFRESH_STATE.SCHEDULED
+      ) {
         return repairDecision;
       }
-      const repairPromise = this.ensureAuthoritativeDiscoveryCacheRepair(options).catch(() => null);
+      const repairPromise = this.ensureAuthoritativeDiscoveryCacheRepair(
+        options,
+      ).catch(() => null);
       return {
         state: CONTROL_PLANE_SNAPSHOT_REFRESH_STATE.SCHEDULED,
         repair: null,
@@ -416,14 +564,17 @@ function assignAdminServiceDiscoveryRepairMethods(AdminServiceDiscovery, options
       if (options?.bypassReuse === true) {
         return null;
       }
-      const completedAtMs = Number(this.lastAuthoritativeDiscoveryRepairCompletedAtMs);
+      const completedAtMs = Number(
+        this.lastAuthoritativeDiscoveryRepairCompletedAtMs,
+      );
       if (!Number.isFinite(completedAtMs) || completedAtMs <= NUM.ZERO) {
         return null;
       }
       const reuseWindowMs =
-        Number.isFinite(options?.reuseWindowMs) && options.reuseWindowMs > NUM.ZERO
-          ? Math.floor(options.reuseWindowMs)
-          : AUTHORITATIVE_DISCOVERY_REPAIR.REUSE_WINDOW_MS;
+        Number.isFinite(options?.reuseWindowMs) &&
+        options.reuseWindowMs > NUM.ZERO ?
+          Math.floor(options.reuseWindowMs) :
+          AUTHORITATIVE_DISCOVERY_REPAIR.REUSE_WINDOW_MS;
       if (!Number.isFinite(reuseWindowMs) || reuseWindowMs <= NUM.ZERO) {
         return null;
       }
@@ -431,13 +582,20 @@ function assignAdminServiceDiscoveryRepairMethods(AdminServiceDiscovery, options
       if (effectiveNowMs - completedAtMs > reuseWindowMs) {
         return null;
       }
-      if (!this.lastAuthoritativeDiscoveryRepairResult || this.lastAuthoritativeDiscoveryRepairResult.applied !== true) {
+      if (
+        !this.lastAuthoritativeDiscoveryRepairResult ||
+        this.lastAuthoritativeDiscoveryRepairResult.applied !== true
+      ) {
         return null;
       }
-      const requestedRepairTables = Array.isArray(options?.repairTables)
-        ? options.repairTables
-        : this.resolveAuthoritativeDiscoveryRepairTables(options);
-      if (!this.lastAuthoritativeDiscoveryRepairCoversTables(requestedRepairTables)) {
+      const requestedRepairTables = Array.isArray(options?.repairTables) ?
+        options.repairTables :
+        this.resolveAuthoritativeDiscoveryRepairTables(options);
+      if (
+        !this.lastAuthoritativeDiscoveryRepairCoversTables(
+          requestedRepairTables,
+        )
+      ) {
         return null;
       }
       return {
@@ -456,9 +614,15 @@ function assignAdminServiceDiscoveryRepairMethods(AdminServiceDiscovery, options
      * @return {Object|null}
      * @private
      */
-    resolveRecentAuthoritativeDiscoveryRepairFailure(options = {}, nowMs = null) {
+    resolveRecentAuthoritativeDiscoveryRepairFailure(
+      options = {},
+      nowMs = null,
+    ) {
       const failureState = this.lastAuthoritativeDiscoveryRepairFailureState;
-      if (!failureState || failureState.action !== AUTHORITATIVE_REPAIR_FAILURE_ACTION.DEFER_REPAIR) {
+      if (
+        !failureState ||
+        failureState.action !== AUTHORITATIVE_REPAIR_FAILURE_ACTION.DEFER_REPAIR
+      ) {
         return null;
       }
       const effectiveNowMs = Number.isFinite(nowMs) ? nowMs : this.nowFn();
@@ -466,10 +630,14 @@ function assignAdminServiceDiscoveryRepairMethods(AdminServiceDiscovery, options
       if (!Number.isFinite(retryAtMs) || retryAtMs <= effectiveNowMs) {
         return null;
       }
-      const requestedRepairTables = Array.isArray(options?.repairTables)
-        ? options.repairTables
-        : this.resolveAuthoritativeDiscoveryRepairTables(options);
-      if (!this.lastAuthoritativeDiscoveryRepairFailureCoversTables(requestedRepairTables)) {
+      const requestedRepairTables = Array.isArray(options?.repairTables) ?
+        options.repairTables :
+        this.resolveAuthoritativeDiscoveryRepairTables(options);
+      if (
+        !this.lastAuthoritativeDiscoveryRepairFailureCoversTables(
+          requestedRepairTables,
+        )
+      ) {
         return null;
       }
       return {
@@ -479,17 +647,32 @@ function assignAdminServiceDiscoveryRepairMethods(AdminServiceDiscovery, options
         tableCount: NUM.ZERO,
         requestedTableCount: requestedRepairTables.length,
         requestedTableNames: [...requestedRepairTables],
-        failedTables: Array.isArray(failureState.failedTables) ? [...failureState.failedTables] : ADMIN_CACHE_DUMP.EMPTY,
-        errorCount: Array.isArray(failureState.errors) ? failureState.errors.length : NUM.ZERO,
-        errors: Array.isArray(failureState.errors) ? [...failureState.errors] : ADMIN_CACHE_DUMP.EMPTY,
-        errorCodes: Array.isArray(failureState.errorCodes) ? [...failureState.errorCodes] : ADMIN_CACHE_DUMP.EMPTY,
-        causeChain: Array.isArray(failureState.causeChain) ? [...failureState.causeChain] : ADMIN_CACHE_DUMP.EMPTY,
+        failedTables: Array.isArray(failureState.failedTables) ?
+          [...failureState.failedTables] :
+          ADMIN_CACHE_DUMP.EMPTY,
+        errorCount: Array.isArray(failureState.errors) ?
+          failureState.errors.length :
+          NUM.ZERO,
+        errors: Array.isArray(failureState.errors) ?
+          [...failureState.errors] :
+          ADMIN_CACHE_DUMP.EMPTY,
+        errorCodes: Array.isArray(failureState.errorCodes) ?
+          [...failureState.errorCodes] :
+          ADMIN_CACHE_DUMP.EMPTY,
+        causeChain: Array.isArray(failureState.causeChain) ?
+          [...failureState.causeChain] :
+          ADMIN_CACHE_DUMP.EMPTY,
         readSource: failureState.readSource || null,
         localQueryTransport: failureState.localQueryTransport || null,
         firstFailedParticipant: failureState.firstFailedParticipant || null,
         failureClass: failureState.failureClass || null,
-        failureCount: Number.isFinite(failureState.failureCount) ? Math.floor(failureState.failureCount) : NUM.ZERO,
-        retryAfterMs: Math.max(NUM.ZERO, Math.floor(retryAtMs - effectiveNowMs)),
+        failureCount: Number.isFinite(failureState.failureCount) ?
+          Math.floor(failureState.failureCount) :
+          NUM.ZERO,
+        retryAfterMs: Math.max(
+          NUM.ZERO,
+          Math.floor(retryAtMs - effectiveNowMs),
+        ),
         completedAtMs: failureState.completedAtMs || null,
         reused: true,
       };
@@ -518,20 +701,28 @@ function assignAdminServiceDiscoveryRepairMethods(AdminServiceDiscovery, options
      * @param {string[]} requestedRepairTables
      * @return {boolean}
      */
-    lastAuthoritativeDiscoveryRepairCoversTables(requestedRepairTables = ADMIN_CACHE_DUMP.EMPTY) {
-      if (!this.lastAuthoritativeDiscoveryRepairResult || this.lastAuthoritativeDiscoveryRepairResult.applied !== true) {
+    lastAuthoritativeDiscoveryRepairCoversTables(
+      requestedRepairTables = ADMIN_CACHE_DUMP.EMPTY,
+    ) {
+      if (
+        !this.lastAuthoritativeDiscoveryRepairResult ||
+        this.lastAuthoritativeDiscoveryRepairResult.applied !== true
+      ) {
         return false;
       }
       const repairedTables = new Set(
-        Array.isArray(this.lastAuthoritativeDiscoveryRepairResult.tableNames)
-          ? this.lastAuthoritativeDiscoveryRepairResult.tableNames
-          : AUTHORITATIVE_DISCOVERY_REPAIR.TABLES,
+        Array.isArray(this.lastAuthoritativeDiscoveryRepairResult.tableNames) ?
+          this.lastAuthoritativeDiscoveryRepairResult.tableNames :
+          AUTHORITATIVE_DISCOVERY_REPAIR.TABLES,
       );
       const normalizedRequestedRepairTables =
-        Array.isArray(requestedRepairTables) && requestedRepairTables.length > NUM.ZERO
-          ? requestedRepairTables
-          : AUTHORITATIVE_DISCOVERY_REPAIR.TABLES;
-      return normalizedRequestedRepairTables.every((tableName) => repairedTables.has(tableName));
+        Array.isArray(requestedRepairTables) &&
+        requestedRepairTables.length > NUM.ZERO ?
+          requestedRepairTables :
+          AUTHORITATIVE_DISCOVERY_REPAIR.TABLES;
+      return normalizedRequestedRepairTables.every((tableName) =>
+        repairedTables.has(tableName),
+      );
     }
 
     /**
@@ -540,17 +731,29 @@ function assignAdminServiceDiscoveryRepairMethods(AdminServiceDiscovery, options
      * @param {string[]} requestedRepairTables
      * @return {boolean}
      */
-    lastAuthoritativeDiscoveryRepairFailureCoversTables(requestedRepairTables = ADMIN_CACHE_DUMP.EMPTY) {
+    lastAuthoritativeDiscoveryRepairFailureCoversTables(
+      requestedRepairTables = ADMIN_CACHE_DUMP.EMPTY,
+    ) {
       const failureState = this.lastAuthoritativeDiscoveryRepairFailureState;
-      if (!failureState || failureState.action !== AUTHORITATIVE_REPAIR_FAILURE_ACTION.DEFER_REPAIR) {
+      if (
+        !failureState ||
+        failureState.action !== AUTHORITATIVE_REPAIR_FAILURE_ACTION.DEFER_REPAIR
+      ) {
         return false;
       }
-      const deferredTables = new Set(normalizeAuthoritativeRepairTableNames(failureState.requestedTableNames));
+      const deferredTables = new Set(
+        normalizeAuthoritativeRepairTableNames(
+          failureState.requestedTableNames,
+        ),
+      );
       const normalizedRequestedRepairTables =
-        Array.isArray(requestedRepairTables) && requestedRepairTables.length > NUM.ZERO
-          ? requestedRepairTables
-          : AUTHORITATIVE_DISCOVERY_REPAIR.TABLES;
-      return normalizedRequestedRepairTables.every((tableName) => deferredTables.has(tableName));
+        Array.isArray(requestedRepairTables) &&
+        requestedRepairTables.length > NUM.ZERO ?
+          requestedRepairTables :
+          AUTHORITATIVE_DISCOVERY_REPAIR.TABLES;
+      return normalizedRequestedRepairTables.every((tableName) =>
+        deferredTables.has(tableName),
+      );
     }
 
     /**
@@ -563,15 +766,21 @@ function assignAdminServiceDiscoveryRepairMethods(AdminServiceDiscovery, options
       requestedRepairTables = ADMIN_CACHE_DUMP.EMPTY,
       failureClass = AUTHORITATIVE_REPAIR_FAILURE_CLASS.TRANSIENT,
     ) {
-      const lastFailureState = this.lastAuthoritativeDiscoveryRepairFailureState;
+      const lastFailureState =
+        this.lastAuthoritativeDiscoveryRepairFailureState;
       if (
         !lastFailureState ||
         lastFailureState.failureClass !== failureClass ||
-        !this.lastAuthoritativeDiscoveryRepairFailureCoversTables(requestedRepairTables)
+        !this.lastAuthoritativeDiscoveryRepairFailureCoversTables(
+          requestedRepairTables,
+        )
       ) {
         return NUM.ONE;
       }
-      return Math.max(NUM.ONE, Math.floor(Number(lastFailureState.failureCount) || NUM.ZERO) + NUM.ONE);
+      return Math.max(
+        NUM.ONE,
+        Math.floor(Number(lastFailureState.failureCount) || NUM.ZERO) + NUM.ONE,
+      );
     }
 
     /**
@@ -583,17 +792,25 @@ function assignAdminServiceDiscoveryRepairMethods(AdminServiceDiscovery, options
      * @return {number}
      */
     async applyAuthoritativeSystemTableRows(tableName, rows, causeId) {
-      const authoritativeRows = Array.isArray(rows) ? rows : ADMIN_CACHE_DUMP.EMPTY;
+      const authoritativeRows = Array.isArray(rows) ?
+        rows :
+        ADMIN_CACHE_DUMP.EMPTY;
       const primaryKeyField = getSystemCachePrimaryKeyField(tableName);
       const cachedRows = this.systemTableCache.getAll(tableName);
-      const result = await this.controlPlaneSystemTableGateway.reconcileAuthoritativeCacheRows(tableName, authoritativeRows, {
-        causeId,
-        primaryKeyField,
-        reconcileIntent: CONTROL_PLANE_CACHE_RECONCILE_INTENT.REFRESH_EVIDENCE,
-        cachedRows,
-        cacheMutationTarget: this.cacheMutationTarget,
-        systemTableCache: this.systemTableCache,
-      });
+      const result =
+        await this.controlPlaneSystemTableGateway.reconcileAuthoritativeCacheRows(
+          tableName,
+          authoritativeRows,
+          {
+            causeId,
+            primaryKeyField,
+            reconcileIntent:
+              CONTROL_PLANE_CACHE_RECONCILE_INTENT.REFRESH_EVIDENCE,
+            cachedRows,
+            cacheMutationTarget: this.cacheMutationTarget,
+            systemTableCache: this.systemTableCache,
+          },
+        );
       return result?.mutationCount || NUM.ZERO;
     }
 
@@ -615,16 +832,21 @@ function assignAdminServiceDiscoveryRepairMethods(AdminServiceDiscovery, options
     }
   }
 
-  for (const methodName of Object.getOwnPropertyNames(AdminServiceDiscoveryRepairMethods.prototype)) {
+  for (const methodName of Object.getOwnPropertyNames(
+    AdminServiceDiscoveryRepairMethods.prototype,
+  )) {
     if (methodName === 'constructor') {
       continue;
     }
     Object.defineProperty(
       AdminServiceDiscovery.prototype,
       methodName,
-      Object.getOwnPropertyDescriptor(AdminServiceDiscoveryRepairMethods.prototype, methodName),
+      Object.getOwnPropertyDescriptor(
+        AdminServiceDiscoveryRepairMethods.prototype,
+        methodName,
+      ),
     );
   }
 }
 
-export { assignAdminServiceDiscoveryRepairMethods };
+export {assignAdminServiceDiscoveryRepairMethods};

@@ -1,6 +1,5 @@
 function createLoadGeneratorRuntimeBundle(deps = {}) {
   const {
-    ADMISSION_AWARE_QUEUE_MULTIPLIER_DEFAULT,
     ADMIN_LANE_LOAD,
     DISPATCH_STOP_REASON_CANCELLED,
     DISPATCH_STOP_REASON_DURATION,
@@ -54,7 +53,7 @@ function createLoadGeneratorRuntimeBundle(deps = {}) {
     }
     return value;
   }
-  
+
   function normalizeTableName(tableName, fallback = LOAD_TABLE_NAME) {
     const candidate = String(tableName || fallback).trim();
     if (!IDENTIFIER_PATTERN.test(candidate)) {
@@ -62,7 +61,7 @@ function createLoadGeneratorRuntimeBundle(deps = {}) {
     }
     return candidate;
   }
-  
+
   function createWaitReasonCounters() {
     return {
       [WAIT_REASON_NODE_SLOT_UNAVAILABLE]: ZERO,
@@ -72,7 +71,7 @@ function createLoadGeneratorRuntimeBundle(deps = {}) {
       [WAIT_REASON_QUEUE_CAPACITY_REJECTED]: ZERO,
     };
   }
-  
+
   function normalizePositiveInteger(value, fallback) {
     const numericValue = Number(value);
     if (!Number.isFinite(numericValue)) {
@@ -81,7 +80,7 @@ function createLoadGeneratorRuntimeBundle(deps = {}) {
     const boundedValue = Math.floor(numericValue);
     return boundedValue > ZERO ? boundedValue : fallback;
   }
-  
+
   function normalizeRatio(value, fallback) {
     const numericValue = Number(value);
     if (!Number.isFinite(numericValue)) {
@@ -91,14 +90,14 @@ function createLoadGeneratorRuntimeBundle(deps = {}) {
   }
 
   function percentile(sorted, percentile) {
-      if (sorted.length === ZERO) {
-        return ZERO;
-      }
-      const index = Math.floor(percentile * sorted.length);
-      return sorted[Math.min(index, sorted.length - ONE)];
+    if (sorted.length === ZERO) {
+      return ZERO;
     }
-    
-    /**
+    const index = Math.floor(percentile * sorted.length);
+    return sorted[Math.min(index, sorted.length - ONE)];
+  }
+
+  /**
      * Compute metrics from raw data. Exported for independent testing.
      * @param {Array<number>} latencies - Raw latency values in ms
      * @param {number} successCount
@@ -109,152 +108,152 @@ function createLoadGeneratorRuntimeBundle(deps = {}) {
      * @param {number} [attemptErrorCount] - Transient per-attempt failures
      * @returns {Object} Metrics snapshot
      */
-    function computeMetrics(
-      latencies, successCount, failedCount, operationErrorCount, durationMs,
-      distinctErrors, attemptErrorCount = ZERO, queueDelays = [],
-      dispatchAccounting = null, perNodeMetrics = null, rejectedAccounting = null,
-      queuePressure = null, waitReasons = null, dispatchGuardrail = null,
-    ) {
-      const sorted = [...latencies].sort((a, b) => a - b);
-      const total = successCount + failedCount;
-      const elapsed = durationMs > ZERO ? durationMs : ONE;
-      const metrics = {
-        total,
-        success: successCount,
-        failed: failedCount,
-        errors: operationErrorCount,
-        latency: {
-          avg: sorted.length > ZERO ?
-            sorted.reduce((sum, value) => sum + value, ZERO) / sorted.length :
-            ZERO,
-          p50: percentile(sorted, PERCENTILE_P50),
-          p95: percentile(sorted, PERCENTILE_P95),
-          p99: percentile(sorted, PERCENTILE_P99),
-        },
-        opsPerSec: (total / elapsed) * MS_PER_SECOND,
-      };
-      if (attemptErrorCount > ZERO) {
-        metrics.attemptErrors = attemptErrorCount;
-      }
-      if (Array.isArray(queueDelays) && queueDelays.length > ZERO) {
-        const sortedQueueDelays = [...queueDelays].sort((a, b) => a - b);
-        metrics.queueDelay = {
-          avg: sortedQueueDelays.reduce((sum, value) => sum + value, ZERO) /
+  function computeMetrics(
+    latencies, successCount, failedCount, operationErrorCount, durationMs,
+    distinctErrors, attemptErrorCount = ZERO, queueDelays = [],
+    dispatchAccounting = null, perNodeMetrics = null, rejectedAccounting = null,
+    queuePressure = null, waitReasons = null, dispatchGuardrail = null,
+  ) {
+    const sorted = [...latencies].sort((a, b) => a - b);
+    const total = successCount + failedCount;
+    const elapsed = durationMs > ZERO ? durationMs : ONE;
+    const metrics = {
+      total,
+      success: successCount,
+      failed: failedCount,
+      errors: operationErrorCount,
+      latency: {
+        avg: sorted.length > ZERO ?
+          sorted.reduce((sum, value) => sum + value, ZERO) / sorted.length :
+          ZERO,
+        p50: percentile(sorted, PERCENTILE_P50),
+        p95: percentile(sorted, PERCENTILE_P95),
+        p99: percentile(sorted, PERCENTILE_P99),
+      },
+      opsPerSec: (total / elapsed) * MS_PER_SECOND,
+    };
+    if (attemptErrorCount > ZERO) {
+      metrics.attemptErrors = attemptErrorCount;
+    }
+    if (Array.isArray(queueDelays) && queueDelays.length > ZERO) {
+      const sortedQueueDelays = [...queueDelays].sort((a, b) => a - b);
+      metrics.queueDelay = {
+        avg: sortedQueueDelays.reduce((sum, value) => sum + value, ZERO) /
             sortedQueueDelays.length,
-          p50: percentile(sortedQueueDelays, PERCENTILE_P50),
-          p95: percentile(sortedQueueDelays, PERCENTILE_P95),
-          p99: percentile(sortedQueueDelays, PERCENTILE_P99),
-          max: sortedQueueDelays[sortedQueueDelays.length - ONE],
-        };
-      }
-      if (Array.isArray(distinctErrors) && distinctErrors.length > ZERO) {
-        metrics.distinctErrors = distinctErrors;
-      }
-      if (dispatchAccounting && typeof dispatchAccounting === 'object') {
-        const targetOperations = Number(dispatchAccounting.targetOperations);
-        const dispatchedOperations = Number(dispatchAccounting.dispatchedOperations);
-        const undispatchedOperations = Number(
-          dispatchAccounting.undispatchedOperations,
-        );
-        const normalizedUndispatchedByReason =
+        p50: percentile(sortedQueueDelays, PERCENTILE_P50),
+        p95: percentile(sortedQueueDelays, PERCENTILE_P95),
+        p99: percentile(sortedQueueDelays, PERCENTILE_P99),
+        max: sortedQueueDelays[sortedQueueDelays.length - ONE],
+      };
+    }
+    if (Array.isArray(distinctErrors) && distinctErrors.length > ZERO) {
+      metrics.distinctErrors = distinctErrors;
+    }
+    if (dispatchAccounting && typeof dispatchAccounting === 'object') {
+      const targetOperations = Number(dispatchAccounting.targetOperations);
+      const dispatchedOperations = Number(dispatchAccounting.dispatchedOperations);
+      const undispatchedOperations = Number(
+        dispatchAccounting.undispatchedOperations,
+      );
+      const normalizedUndispatchedByReason =
           dispatchAccounting.undispatchedByReason &&
           typeof dispatchAccounting.undispatchedByReason === 'object' ?
             dispatchAccounting.undispatchedByReason :
             null;
-        metrics.targetOperations = Number.isFinite(targetOperations) ?
-          Math.max(ZERO, Math.floor(targetOperations)) :
-          ZERO;
-        metrics.dispatchedOperations = Number.isFinite(dispatchedOperations) ?
-          Math.max(ZERO, Math.floor(dispatchedOperations)) :
-          ZERO;
-        metrics.undispatchedOperations = Number.isFinite(undispatchedOperations) ?
-          Math.max(ZERO, Math.floor(undispatchedOperations)) :
-          ZERO;
-        metrics.undispatchedByReason = normalizedUndispatchedByReason || {
-          [UNDISPATCHED_REASON_CAPACITY]: ZERO,
-          [UNDISPATCHED_REASON_DURATION_TIMEOUT]: ZERO,
-          [UNDISPATCHED_REASON_CANCELLED]: ZERO,
-        };
-      }
-      if (perNodeMetrics && typeof perNodeMetrics === 'object') {
-        metrics.perNode = perNodeMetrics;
-        let admissionSignalCount = ZERO;
-        let nonAdmissionAttemptErrorCount = ZERO;
-        for (const nodeMetrics of Object.values(perNodeMetrics)) {
-          const nodeAttemptErrors = Number(nodeMetrics?.attemptErrors || ZERO);
-          const nodeAdmissionSignals = Math.min(
-            nodeAttemptErrors,
-            Number(nodeMetrics?.admissionSignals || ZERO),
-          );
-          admissionSignalCount += nodeAdmissionSignals;
-          nonAdmissionAttemptErrorCount += Math.max(
-            ZERO,
-            nodeAttemptErrors - nodeAdmissionSignals,
-          );
-        }
-        metrics.admissionSignals = admissionSignalCount;
-        metrics.nonAdmissionAttemptErrors = nonAdmissionAttemptErrorCount;
-      }
-      if (rejectedAccounting && typeof rejectedAccounting === 'object') {
-        const rejectedOperations = Number(rejectedAccounting.rejectedOperations);
-        metrics.rejectedOperations = Number.isFinite(rejectedOperations) ?
-          Math.max(ZERO, Math.floor(rejectedOperations)) :
-          ZERO;
-        metrics.rejectedByReason = rejectedAccounting.rejectedByReason &&
-          typeof rejectedAccounting.rejectedByReason === 'object' ?
-          {...rejectedAccounting.rejectedByReason} :
-          {
-            [REJECTED_REASON_QUEUE_FULL]: ZERO,
-            [REJECTED_REASON_FLOW_CONTROL]: ZERO,
-          };
-      }
-      if (queuePressure && typeof queuePressure === 'object') {
-        const pendingQueueDepth = queuePressure.pendingQueueDepth &&
-          typeof queuePressure.pendingQueueDepth === 'object' ?
-          queuePressure.pendingQueueDepth :
-          {};
-        metrics.queuePressure = {
-          samples: Number.isFinite(queuePressure.samples) ?
-            Math.max(ZERO, Math.floor(queuePressure.samples)) :
-            ZERO,
-          pendingQueueDepth: {
-            avg: Number.isFinite(pendingQueueDepth.avg) ?
-              Math.max(ZERO, pendingQueueDepth.avg) :
-              ZERO,
-            p95: Number.isFinite(pendingQueueDepth.p95) ?
-              Math.max(ZERO, pendingQueueDepth.p95) :
-              ZERO,
-            p99: Number.isFinite(pendingQueueDepth.p99) ?
-              Math.max(ZERO, pendingQueueDepth.p99) :
-              ZERO,
-            max: Number.isFinite(pendingQueueDepth.max) ?
-              Math.max(ZERO, pendingQueueDepth.max) :
-              ZERO,
-          },
-        };
-      }
-      metrics.waitReasons = {
-        ...createWaitReasonCounters(),
-        ...(waitReasons && typeof waitReasons === 'object' ? waitReasons : {}),
+      metrics.targetOperations = Number.isFinite(targetOperations) ?
+        Math.max(ZERO, Math.floor(targetOperations)) :
+        ZERO;
+      metrics.dispatchedOperations = Number.isFinite(dispatchedOperations) ?
+        Math.max(ZERO, Math.floor(dispatchedOperations)) :
+        ZERO;
+      metrics.undispatchedOperations = Number.isFinite(undispatchedOperations) ?
+        Math.max(ZERO, Math.floor(undispatchedOperations)) :
+        ZERO;
+      metrics.undispatchedByReason = normalizedUndispatchedByReason || {
+        [UNDISPATCHED_REASON_CAPACITY]: ZERO,
+        [UNDISPATCHED_REASON_DURATION_TIMEOUT]: ZERO,
+        [UNDISPATCHED_REASON_CANCELLED]: ZERO,
       };
-      if (dispatchGuardrail && typeof dispatchGuardrail === 'object') {
-        metrics.dispatchGuardrail = {
-          ...dispatchGuardrail,
-        };
-      }
-      return metrics;
     }
+    if (perNodeMetrics && typeof perNodeMetrics === 'object') {
+      metrics.perNode = perNodeMetrics;
+      let admissionSignalCount = ZERO;
+      let nonAdmissionAttemptErrorCount = ZERO;
+      for (const nodeMetrics of Object.values(perNodeMetrics)) {
+        const nodeAttemptErrors = Number(nodeMetrics?.attemptErrors || ZERO);
+        const nodeAdmissionSignals = Math.min(
+          nodeAttemptErrors,
+          Number(nodeMetrics?.admissionSignals || ZERO),
+        );
+        admissionSignalCount += nodeAdmissionSignals;
+        nonAdmissionAttemptErrorCount += Math.max(
+          ZERO,
+          nodeAttemptErrors - nodeAdmissionSignals,
+        );
+      }
+      metrics.admissionSignals = admissionSignalCount;
+      metrics.nonAdmissionAttemptErrors = nonAdmissionAttemptErrorCount;
+    }
+    if (rejectedAccounting && typeof rejectedAccounting === 'object') {
+      const rejectedOperations = Number(rejectedAccounting.rejectedOperations);
+      metrics.rejectedOperations = Number.isFinite(rejectedOperations) ?
+        Math.max(ZERO, Math.floor(rejectedOperations)) :
+        ZERO;
+      metrics.rejectedByReason = rejectedAccounting.rejectedByReason &&
+          typeof rejectedAccounting.rejectedByReason === 'object' ?
+        {...rejectedAccounting.rejectedByReason} :
+        {
+          [REJECTED_REASON_QUEUE_FULL]: ZERO,
+          [REJECTED_REASON_FLOW_CONTROL]: ZERO,
+        };
+    }
+    if (queuePressure && typeof queuePressure === 'object') {
+      const pendingQueueDepth = queuePressure.pendingQueueDepth &&
+          typeof queuePressure.pendingQueueDepth === 'object' ?
+        queuePressure.pendingQueueDepth :
+        {};
+      metrics.queuePressure = {
+        samples: Number.isFinite(queuePressure.samples) ?
+          Math.max(ZERO, Math.floor(queuePressure.samples)) :
+          ZERO,
+        pendingQueueDepth: {
+          avg: Number.isFinite(pendingQueueDepth.avg) ?
+            Math.max(ZERO, pendingQueueDepth.avg) :
+            ZERO,
+          p95: Number.isFinite(pendingQueueDepth.p95) ?
+            Math.max(ZERO, pendingQueueDepth.p95) :
+            ZERO,
+          p99: Number.isFinite(pendingQueueDepth.p99) ?
+            Math.max(ZERO, pendingQueueDepth.p99) :
+            ZERO,
+          max: Number.isFinite(pendingQueueDepth.max) ?
+            Math.max(ZERO, pendingQueueDepth.max) :
+            ZERO,
+        },
+      };
+    }
+    metrics.waitReasons = {
+      ...createWaitReasonCounters(),
+      ...(waitReasons && typeof waitReasons === 'object' ? waitReasons : {}),
+    };
+    if (dispatchGuardrail && typeof dispatchGuardrail === 'object') {
+      metrics.dispatchGuardrail = {
+        ...dispatchGuardrail,
+      };
+    }
+    return metrics;
+  }
 
   class LoadRunRuntimeMethods {
     _getNodeInFlight(healthKey) {
       return Number(this._nodeInFlightByKey.get(healthKey) || ZERO);
     }
-    
+
     _getNodeInFlightTokens(healthKey) {
       const tokens = this._nodeInFlightTokensByKey.get(healthKey);
       return Array.isArray(tokens) ? tokens : [];
     }
-    
+
     _getOldestNodeInFlightStartedAtMs(healthKey) {
       let oldestStartedAtMs = null;
       const tokens = this._getNodeInFlightTokens(healthKey);
@@ -269,7 +268,7 @@ function createLoadGeneratorRuntimeBundle(deps = {}) {
       }
       return oldestStartedAtMs;
     }
-    
+
     _resolveNodeAvailability(node, healthKey, nowMs, dispatchMaxInFlight) {
       const state = this._nodeHealthByKey.get(healthKey);
       return resolveLoadNodeAvailabilityState(
@@ -287,7 +286,7 @@ function createLoadGeneratorRuntimeBundle(deps = {}) {
         }),
       );
     }
-    
+
     _resolveAvailabilityWaitReason(availability) {
       switch (availability?.state) {
       case LOAD_NODE_AVAILABILITY_STATE.LOCAL_BLOCKED:
@@ -300,7 +299,7 @@ function createLoadGeneratorRuntimeBundle(deps = {}) {
         return null;
       }
     }
-    
+
     _resolveEffectiveNodeMaxInFlight(nowMs) {
       const availableNodeCount = this._availableNodes.length;
       if (availableNodeCount <= ZERO) {
@@ -318,7 +317,7 @@ function createLoadGeneratorRuntimeBundle(deps = {}) {
       );
       return Math.max(this._nodeMaxInFlight, dynamicCap);
     }
-    
+
     _tryAcquireNodeSlot(healthKey, nowMs = Date.now()) {
       const current = this._getNodeInFlight(healthKey);
       const effectiveNodeMaxInFlight =
@@ -343,7 +342,7 @@ function createLoadGeneratorRuntimeBundle(deps = {}) {
         tokenId: nextTokenId,
       };
     }
-    
+
     _releaseNodeSlot(slotReservation) {
       const healthKey = String(slotReservation?.healthKey || '');
       if (healthKey.length <= ZERO) {
@@ -363,7 +362,7 @@ function createLoadGeneratorRuntimeBundle(deps = {}) {
       this._nodeInFlightTokensByKey.set(healthKey, nextTokens);
       this._nodeInFlightByKey.set(healthKey, current - ONE);
     }
-    
+
     _recordNodeDispatchAttempt(healthKey) {
       const nodeMetrics = this._nodeMetricsByKey.get(healthKey);
       if (!nodeMetrics) {
@@ -371,7 +370,7 @@ function createLoadGeneratorRuntimeBundle(deps = {}) {
       }
       nodeMetrics.dispatched += ONE;
     }
-    
+
     _recordNodeQueuePressure(healthKey) {
       const nodeMetrics = this._nodeMetricsByKey.get(healthKey);
       if (!nodeMetrics) {
@@ -379,7 +378,7 @@ function createLoadGeneratorRuntimeBundle(deps = {}) {
       }
       nodeMetrics.queuePressureSignals += ONE;
     }
-    
+
     _recordNodeAttemptFailure(healthKey, error) {
       const nodeMetrics = this._nodeMetricsByKey.get(healthKey);
       if (!nodeMetrics) {
@@ -390,7 +389,7 @@ function createLoadGeneratorRuntimeBundle(deps = {}) {
         nodeMetrics.admissionSignals += ONE;
       }
     }
-    
+
     _recordNodeSuccess(healthKey) {
       const state = this._nodeHealthByKey.get(healthKey);
       if (!state) {
@@ -407,7 +406,7 @@ function createLoadGeneratorRuntimeBundle(deps = {}) {
       state.consecutiveFailures = ZERO;
       state.openUntilMs = ZERO;
     }
-    
+
     _recordAcknowledgedWrite(idValue) {
       if (this._trackAcknowledgedWrites !== true) {
         return;
@@ -422,7 +421,7 @@ function createLoadGeneratorRuntimeBundle(deps = {}) {
       this._acknowledgedWriteIdSet.add(normalizedId);
       this._acknowledgedWriteIds.push(normalizedId);
     }
-    
+
     _recordNodeFailure(healthKey, error) {
       const state = this._nodeHealthByKey.get(healthKey);
       if (!state) {
@@ -442,7 +441,7 @@ function createLoadGeneratorRuntimeBundle(deps = {}) {
       state.consecutiveFailures = ZERO;
       state.openUntilMs = Date.now() + this._nodeFailureCooldownMs;
     }
-    
+
     _recordWaitReason(reason, healthKey = null, count = ONE) {
       const increment = Number.isFinite(count) ?
         Math.max(ZERO, Math.floor(count)) :
@@ -470,7 +469,7 @@ function createLoadGeneratorRuntimeBundle(deps = {}) {
       }
       nodeMetrics.waitReasons[reason] += increment;
     }
-    
+
     _resolveAdmissionBackoffMs(state, error) {
       let backoffMs = this._admissionBackoffMs;
       if (this._isRetryableControlPlanePressureError(error)) {
@@ -488,11 +487,11 @@ function createLoadGeneratorRuntimeBundle(deps = {}) {
       }
       return backoffMs;
     }
-    
+
     _shouldBackoffNodeAfterTransientFailure(error) {
       return this._isAdmissionSignalError(error) || isTimeoutShapedError(error);
     }
-    
+
     _isNodeExternallyAdmissionReady(node) {
       if (!node || typeof node !== 'object') {
         return true;
@@ -525,7 +524,7 @@ function createLoadGeneratorRuntimeBundle(deps = {}) {
       }
       return node.loadAdmissionReady !== false;
     }
-    
+
     _isAdmissionSignalError(error) {
       const code = String(error?.code || '').toLowerCase();
       if (code === NODE_CLIENT_ADMISSION_ERROR_CIRCUIT_OPEN ||
@@ -551,7 +550,7 @@ function createLoadGeneratorRuntimeBundle(deps = {}) {
           )
         );
     }
-    
+
     _isRetryableControlPlanePressureError(error) {
       if (error?.deferRetry === true) {
         return true;
@@ -561,7 +560,7 @@ function createLoadGeneratorRuntimeBundle(deps = {}) {
       }
       return isRetryableControlPlaneError(error);
     }
-    
+
     _isCircuitOpenAdmissionError(error) {
       const code = String(error?.code || '').toLowerCase();
       if (code === NODE_CLIENT_ADMISSION_ERROR_CIRCUIT_OPEN) {
@@ -570,7 +569,7 @@ function createLoadGeneratorRuntimeBundle(deps = {}) {
       const message = String(error?.message || '').toLowerCase();
       return message.includes('circuit breaker is open');
     }
-    
+
     _resolveNodeBlockedUntilMs(state) {
       if (!state) {
         return ZERO;
@@ -583,11 +582,11 @@ function createLoadGeneratorRuntimeBundle(deps = {}) {
         Number(state.admissionBlockedUntilMs || ZERO),
       );
     }
-    
+
     _isNodeDispatchReady(state, nowMs) {
       return this._resolveNodeBlockedUntilMs(state) <= nowMs;
     }
-    
+
     /**
      * Capture a distinct error message for diagnostics.
      * @param {Error} err
@@ -604,7 +603,7 @@ function createLoadGeneratorRuntimeBundle(deps = {}) {
       this._distinctErrorSet.add(message);
       this._distinctErrors.push(message);
     }
-    
+
     /**
      * Finish the load run.
      */
@@ -621,16 +620,16 @@ function createLoadGeneratorRuntimeBundle(deps = {}) {
         this._scheduleDrainCheck();
         return;
       }
-    
+
       this._clearDrainTimer();
       this._completedMetrics = this._computeCurrentMetrics();
-    
+
       if (this._resolveComplete) {
         this._resolveComplete(this._completedMetrics);
         this._resolveComplete = null;
       }
     }
-    
+
     /**
      * Schedule the next in-flight drain check.
      * @private
@@ -647,7 +646,7 @@ function createLoadGeneratorRuntimeBundle(deps = {}) {
         this._drainTimerId.unref();
       }
     }
-    
+
     /**
      * Clear pending in-flight drain checks.
      * @private
@@ -658,7 +657,7 @@ function createLoadGeneratorRuntimeBundle(deps = {}) {
         this._drainTimerId = null;
       }
     }
-    
+
     /**
      * Build current metrics snapshot.
      * @returns {Object}
@@ -697,7 +696,7 @@ function createLoadGeneratorRuntimeBundle(deps = {}) {
         undispatchedByReason,
       };
     }
-    
+
     _buildPerNodeMetricsSummary() {
       const summary = {};
       for (const nodeMetrics of this._nodeMetricsByKey.values()) {
@@ -753,7 +752,7 @@ function createLoadGeneratorRuntimeBundle(deps = {}) {
       }
       return summary;
     }
-    
+
     _buildQueuePressureSummary() {
       const sampleCount = this._pendingQueueDepthSamples.length;
       if (sampleCount === ZERO) {
@@ -778,14 +777,14 @@ function createLoadGeneratorRuntimeBundle(deps = {}) {
         },
       };
     }
-    
+
     _buildWaitReasonSummary() {
       return {
         ...createWaitReasonCounters(),
         ...this._waitReasons,
       };
     }
-    
+
     _buildDispatchGuardrailSummary() {
       const state = this._adaptiveDispatchGuardrail;
       if (!state || state.enabled !== true) {
@@ -816,7 +815,7 @@ function createLoadGeneratorRuntimeBundle(deps = {}) {
         maxPendingQueueDepth: Number(state.maxPendingQueueDepth || ZERO),
       };
     }
-    
+
     _computeCurrentMetrics() {
       const elapsed = this._startTime ?
         Date.now() - this._startTime :
@@ -868,7 +867,7 @@ function createLoadGeneratorRuntimeBundle(deps = {}) {
       );
       return metrics;
     }
-    
+
     /**
      * Wait for the load run to complete. Req 6.4
      * @returns {Promise<Object>} Final metrics
@@ -879,7 +878,7 @@ function createLoadGeneratorRuntimeBundle(deps = {}) {
       }
       return this._completePromise;
     }
-    
+
     /**
      * Get current metrics snapshot. Req 6.3
      * @returns {Object} Metrics
@@ -890,7 +889,7 @@ function createLoadGeneratorRuntimeBundle(deps = {}) {
       }
       return this._computeCurrentMetrics();
     }
-    
+
     /**
      * Return acknowledged INSERT identifiers captured during this run.
      * @returns {{tableName: string, idColumn: string, ids: string[]}|null}
@@ -905,7 +904,7 @@ function createLoadGeneratorRuntimeBundle(deps = {}) {
         ids: [...this._acknowledgedWriteIds],
       };
     }
-    
+
     /**
      * Cancel the load run early.
      */
@@ -915,7 +914,6 @@ function createLoadGeneratorRuntimeBundle(deps = {}) {
       this._dispatchStoppedBy = DISPATCH_STOP_REASON_CANCELLED;
       this._finish(true);
     }
-    
   }
 
   const loadRunRuntimeMethods = Object.getOwnPropertyNames(

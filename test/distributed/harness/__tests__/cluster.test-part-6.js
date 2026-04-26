@@ -8,47 +8,20 @@
  */
 
 import {test} from '../../../../src/test-helpers/tap.js';
-import http from 'node:http';
 import assert from 'node:assert';
-import {promises as fs} from 'node:fs';
-import {resolve as resolvePath} from 'node:path';
-import fc from 'fast-check';
 import {validate as uuidValidate} from 'uuid';
-import {WebSocketServer} from 'ws';
 import {CLUSTER_SEGMENT_2} from '../cluster-segment-2.js';
 import {
   ACTIVE_WAIT_HANG_TEST_TIMEOUT_MS,
-  ADMIN_QUERY_TRACE_TIMEOUT_TEST_MS,
-  BENCHMARK_CRITICAL_CONTROL_PLANE_STABILITY_REASON_SNAPSHOT_UNAVAILABLE,
-  BENCHMARK_CRITICAL_CONTROL_PLANE_STABILITY_STATE,
-  BENCHMARK_DEGRADATION_STATE,
-  BENCHMARK_LOAD_ADMISSION_STATE,
   buildCriticalSystemDiscoverySnapshot,
-  Cluster,
-  CONTAINER_ALREADY_STOPPED_ERROR_MESSAGE,
   CONTAINER_ENV_KEYS,
   createCluster,
-  distributeNodes,
-  ENTRYPOINT_ENV,
-  LABELS,
-  LOAD_STOP_DISPATCH_SETTLE_MS,
-  LOAD_STOP_WAIT_TIMEOUT_MS,
   NodeHandle,
-  NODE_CLIENT_CONTROL_SNAPSHOT_SQL,
-  NODE_CLIENT_SERVICE_DISCOVERY_SQL,
-  NODE_CLIENT_SERVICE_ID_ADMIN_META,
-  NODE_CLIENT_SERVICE_ID_POSTGRES_WIRE,
-  NODE_CLIENT_SERVICE_PROTOCOL_POSTGRESQL,
   NODE_ROLES,
-  PLAYBACK_EVENT_TYPE,
   PORTS,
   RAFT_PROVIDER_DEFAULTS,
 } from './cluster-test-helpers.js';
 
-const REUSE_START_COMMAND =
-  'if [ -f /harness-control/reset-data-on-start ]; then rm -rf /data/* && ' +
-  'rm -f /harness-control/reset-data-on-start; fi; ' +
-  'exec node --max-old-space-size=1536 /app/src/index.js';
 const {
   summarizePriorityRecoveryProgressClasses,
 } = CLUSTER_SEGMENT_2;

@@ -12,7 +12,9 @@ import {
 import {ControlPlaneReadinessService} from
   '../../src/control-plane/control-plane-readiness-service.js';
 import {
+  CONTROL_PLANE_READINESS_DIMENSION,
   CONTROL_PLANE_PRIORITY_RECOVERY_REASON,
+  CONTROL_PLANE_READINESS_REASON,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
@@ -34,14 +36,113 @@ const MEMBERSHIP_PUBLICATION_BLOCKED_FENCE = Object.freeze({
     MEMBERSHIP_PUBLICATION_ADMISSION_REASON_CLUSTER_INTEGRITY,
   ]),
 });
-const MEMBERSHIP_PUBLICATION_PRIORITY_PARTITION_ID =
-  'control_plane_publications-p1';
 const MEMBERSHIP_PUBLICATION_CLOSURE_RECORD_ID_PRIORITY_SPREAD =
   'CL-003';
 const MEMBERSHIP_PUBLICATION_CLOSURE_WITNESS_CLASS_PRIORITY_SPREAD =
   'publication_converged_priority_spread_pending';
 const MEMBERSHIP_PUBLICATION_RECOVERY_PROTOCOL_STATE_STEADY_PUBLISHED =
   'steady_published';
+const MEMBERSHIP_PUBLICATION_TRIM_PUBLISHER_NODE_ID = 'seed-node';
+const MEMBERSHIP_PUBLICATION_TRIM_NODE_ONE_ID = 'node-1';
+const MEMBERSHIP_PUBLICATION_TRIM_NODE_TWO_ID = 'node-2';
+const MEMBERSHIP_PUBLICATION_TRIM_NODE_THREE_ID = 'node-3';
+const MEMBERSHIP_PUBLICATION_TRIM_STALE_NODE_FOUR_ID = 'node-4';
+const MEMBERSHIP_PUBLICATION_TRIM_STALE_NODE_FIVE_ID = 'node-5';
+const MEMBERSHIP_PUBLICATION_TRIM_ENDPOINT_SUFFIX = '-ws';
+const MEMBERSHIP_PUBLICATION_TRIM_SERVICE_PREFIX = 'svc-';
+const MEMBERSHIP_PUBLICATION_TRIM_WS_ADDRESS_PREFIX = 'ws://';
+const MEMBERSHIP_PUBLICATION_TRIM_WS_ADDRESS_SUFFIX = ':8082';
+const MEMBERSHIP_PUBLICATION_TRIM_STATUS_PUBLISHED = 'PUBLISHED';
+const MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_STATUS_ACK_PENDING = 'ACK_PENDING';
+const MEMBERSHIP_PUBLICATION_TRIM_NODE_STATUS_ACTIVE = 'active';
+const MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_CONNECTION_STATE_CONNECTED =
+  'connected';
+const MEMBERSHIP_PUBLICATION_TRIM_CONNECTION_STATE_READY = 'ready';
+const MEMBERSHIP_PUBLICATION_TRIM_TRANSPORT_WS = 'ws';
+const MEMBERSHIP_PUBLICATION_TRIM_PUBLICATION_EPOCH = 7;
+const MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_PUBLICATION_EPOCH = 17;
+const MEMBERSHIP_PUBLICATION_TRIM_NEXT_PUBLICATION_EPOCH = 8;
+const MEMBERSHIP_PUBLICATION_TRIM_READY_LEASE_EXPIRES_AT = 5000;
+const MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_READY_LEASE_EXPIRES_AT = 0;
+const MEMBERSHIP_PUBLICATION_TRIM_NOW_MS = 1000;
+const MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_NOW_MS = 1000;
+const MEMBERSHIP_PUBLICATION_TRIM_READY_DISTINCT_NODE_COUNT = 3;
+const MEMBERSHIP_PUBLICATION_TRIM_TOTAL_PRIORITY_PARTITION_COUNT = 5;
+const MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_PUBLISHER_NODE_ID = 'seed-node';
+const MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_PUBLISHED_NODE_ID = 'node-1';
+const MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_PROCESS_DEAD_NODE_ID = 'node-2';
+const MEMBERSHIP_PUBLICATION_TRIM_CANDIDATE_NODE_IDS = Object.freeze([
+  MEMBERSHIP_PUBLICATION_TRIM_NODE_ONE_ID,
+  MEMBERSHIP_PUBLICATION_TRIM_NODE_TWO_ID,
+  MEMBERSHIP_PUBLICATION_TRIM_NODE_THREE_ID,
+]);
+const MEMBERSHIP_PUBLICATION_TRIM_STALE_PUBLISHED_NODE_IDS = Object.freeze([
+  ...MEMBERSHIP_PUBLICATION_TRIM_CANDIDATE_NODE_IDS,
+  MEMBERSHIP_PUBLICATION_TRIM_STALE_NODE_FOUR_ID,
+  MEMBERSHIP_PUBLICATION_TRIM_STALE_NODE_FIVE_ID,
+]);
+
+function buildMembershipPublicationTrimPriorityPartitionSummary() {
+  return {
+    satisfied: true,
+    requiredDistinctNodeCount:
+      MEMBERSHIP_PUBLICATION_TRIM_READY_DISTINCT_NODE_COUNT,
+    readyEligibleNodeCount:
+      MEMBERSHIP_PUBLICATION_TRIM_READY_DISTINCT_NODE_COUNT,
+    totalPriorityPartitionCount:
+      MEMBERSHIP_PUBLICATION_TRIM_TOTAL_PRIORITY_PARTITION_COUNT,
+    missingPartitionIds: [],
+    blockedPartitions: [],
+  };
+}
+
+function buildMembershipPublicationTrimNodeRow(nodeId) {
+  return {
+    node_id: nodeId,
+    status: MEMBERSHIP_PUBLICATION_TRIM_NODE_STATUS_ACTIVE,
+    connection_state: MEMBERSHIP_PUBLICATION_TRIM_CONNECTION_STATE_READY,
+    ready_lease_expires_at:
+      MEMBERSHIP_PUBLICATION_TRIM_READY_LEASE_EXPIRES_AT,
+  };
+}
+
+function buildMembershipPublicationTrimReadinessEntry(nodeId) {
+  return {
+    nodeId,
+    dimensions: {clusterMemberHealthy: true},
+  };
+}
+
+function buildMembershipPublicationTrimEndpointRow(nodeId) {
+  return {
+    endpoint_id: nodeId + MEMBERSHIP_PUBLICATION_TRIM_ENDPOINT_SUFFIX,
+    node_id: nodeId,
+    transport_type: MEMBERSHIP_PUBLICATION_TRIM_TRANSPORT_WS,
+    status: MEMBERSHIP_PUBLICATION_TRIM_NODE_STATUS_ACTIVE,
+    address:
+      MEMBERSHIP_PUBLICATION_TRIM_WS_ADDRESS_PREFIX +
+      nodeId +
+      MEMBERSHIP_PUBLICATION_TRIM_WS_ADDRESS_SUFFIX,
+  };
+}
+
+function buildMembershipPublicationTrimServiceRow(nodeId) {
+  return {
+    service_id: MEMBERSHIP_PUBLICATION_TRIM_SERVICE_PREFIX + nodeId,
+    node_id: nodeId,
+    status: MEMBERSHIP_PUBLICATION_TRIM_NODE_STATUS_ACTIVE,
+  };
+}
+
+function buildMembershipPublicationAckDeferralNodeRow(nodeId, connectionState) {
+  return {
+    node_id: nodeId,
+    status: MEMBERSHIP_PUBLICATION_TRIM_NODE_STATUS_ACTIVE,
+    connection_state: connectionState,
+    ready_lease_expires_at:
+      MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_READY_LEASE_EXPIRES_AT,
+  };
+}
 
 test('membership lifecycle model encodes the hard-cutover publication transitions',
   async (t) => {
@@ -164,6 +265,97 @@ test('MembershipPublicationCoordinator resolves control-plane publications owner
       coordinator.controlPlanePublicationsOwner,
       publicationsOwner,
       'steady-state publication paths should reuse the membership runtime owner surface when provided',
+    );
+  });
+
+test('deriveMembershipPublicationCandidate trims stale published members after recovery projection settles',
+  async (t) => {
+    const candidate = deriveMembershipPublicationCandidate({
+      publisherNodeId: MEMBERSHIP_PUBLICATION_TRIM_PUBLISHER_NODE_ID,
+      latestPublicationRow: {
+        publication_epoch: MEMBERSHIP_PUBLICATION_TRIM_PUBLICATION_EPOCH,
+        status: MEMBERSHIP_PUBLICATION_TRIM_STATUS_PUBLISHED,
+        published_active_node_ids: [
+          ...MEMBERSHIP_PUBLICATION_TRIM_STALE_PUBLISHED_NODE_IDS,
+        ],
+        required_ack_node_ids: [
+          ...MEMBERSHIP_PUBLICATION_TRIM_STALE_PUBLISHED_NODE_IDS,
+        ],
+        acknowledged_node_ids: [
+          ...MEMBERSHIP_PUBLICATION_TRIM_STALE_PUBLISHED_NODE_IDS,
+        ],
+        priority_partition_summary:
+          buildMembershipPublicationTrimPriorityPartitionSummary(),
+      },
+      latestPublishedPublicationRow: {
+        publication_epoch: MEMBERSHIP_PUBLICATION_TRIM_PUBLICATION_EPOCH,
+        status: MEMBERSHIP_PUBLICATION_TRIM_STATUS_PUBLISHED,
+        published_active_node_ids: [
+          ...MEMBERSHIP_PUBLICATION_TRIM_STALE_PUBLISHED_NODE_IDS,
+        ],
+        required_ack_node_ids: [
+          ...MEMBERSHIP_PUBLICATION_TRIM_STALE_PUBLISHED_NODE_IDS,
+        ],
+        acknowledged_node_ids: [
+          ...MEMBERSHIP_PUBLICATION_TRIM_STALE_PUBLISHED_NODE_IDS,
+        ],
+        priority_partition_summary:
+          buildMembershipPublicationTrimPriorityPartitionSummary(),
+      },
+      nodeRows: MEMBERSHIP_PUBLICATION_TRIM_CANDIDATE_NODE_IDS.map(
+        buildMembershipPublicationTrimNodeRow,
+      ),
+      readinessEntries: MEMBERSHIP_PUBLICATION_TRIM_CANDIDATE_NODE_IDS.map(
+        buildMembershipPublicationTrimReadinessEntry,
+      ),
+      nodeEndpointRows: MEMBERSHIP_PUBLICATION_TRIM_CANDIDATE_NODE_IDS.map(
+        buildMembershipPublicationTrimEndpointRow,
+      ),
+      serviceRows: MEMBERSHIP_PUBLICATION_TRIM_CANDIDATE_NODE_IDS.map(
+        buildMembershipPublicationTrimServiceRow,
+      ),
+      nowMs: MEMBERSHIP_PUBLICATION_TRIM_NOW_MS,
+    });
+
+    t.equal(
+      candidate.publicationEpoch,
+      MEMBERSHIP_PUBLICATION_TRIM_NEXT_PUBLICATION_EPOCH,
+      'trimming stale published members should open a new publication epoch',
+    );
+    t.same(
+      candidate.publishedActiveNodeIds,
+      [...MEMBERSHIP_PUBLICATION_TRIM_CANDIDATE_NODE_IDS],
+      'the next publication should use the settled serving projection',
+    );
+    t.same(
+      candidate.requiredAckNodeIds,
+      [...MEMBERSHIP_PUBLICATION_TRIM_CANDIDATE_NODE_IDS],
+      'the trim publication should only require acknowledgements from serving members',
+    );
+    t.same(
+      candidate.acknowledgedNodeIds,
+      [...MEMBERSHIP_PUBLICATION_TRIM_CANDIDATE_NODE_IDS],
+      'the trim publication should carry forward completed acknowledgements for retained members',
+    );
+    t.equal(
+      candidate.publicationStatus,
+      MEMBERSHIP_PUBLICATION_TRIM_STATUS_PUBLISHED,
+      'a trim publication with no pending acknowledgement debt should close immediately',
+    );
+    t.equal(
+      candidate.recoveryProtocolState,
+      MEMBERSHIP_PUBLICATION_RECOVERY_PROTOCOL_STATE_STEADY_PUBLISHED,
+      'the recovery protocol should not keep a fully acknowledged trim epoch pending',
+    );
+    t.same(
+      candidate.recoveryActiveNodeIds,
+      [...MEMBERSHIP_PUBLICATION_TRIM_CANDIDATE_NODE_IDS],
+      'a settled trim target should replace the stale published recovery cohort',
+    );
+    t.equal(
+      candidate.membershipLifecycleSummary.lifecycleState,
+      MEMBERSHIP_LIFECYCLE_STATE.PUBLISHED_ACTIVE,
+      'the persisted lifecycle summary should match the immediately closed publication',
     );
   });
 
@@ -1029,6 +1221,134 @@ test('deriveMembershipPublicationCandidate promotes recovery-eligible joiners wh
         clusterMemberUnhealthyExcludedNodeIds: [],
       },
       'membership lifecycle diagnostics should capture that projection included the joiner via recovery eligibility',
+    );
+  });
+
+test('deriveMembershipPublicationCandidate defers process-dead recovery joiners from publication acknowledgements',
+  async (t) => {
+    const candidate = deriveMembershipPublicationCandidate({
+      publisherNodeId: MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_PUBLISHER_NODE_ID,
+      latestPublicationRow: {
+        publication_epoch: MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_PUBLICATION_EPOCH,
+        status: MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_STATUS_ACK_PENDING,
+        published_active_node_ids: [
+          MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_PUBLISHED_NODE_ID,
+        ],
+        required_ack_node_ids: [
+          MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_PUBLISHED_NODE_ID,
+        ],
+        acknowledged_node_ids: [
+          MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_PUBLISHED_NODE_ID,
+        ],
+      },
+      latestPublishedPublicationRow: {
+        publication_epoch: MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_PUBLICATION_EPOCH,
+        status: MEMBERSHIP_PUBLICATION_TRIM_STATUS_PUBLISHED,
+        published_active_node_ids: [
+          MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_PUBLISHED_NODE_ID,
+        ],
+        required_ack_node_ids: [
+          MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_PUBLISHED_NODE_ID,
+        ],
+        acknowledged_node_ids: [
+          MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_PUBLISHED_NODE_ID,
+        ],
+      },
+      nodeRows: [
+        buildMembershipPublicationAckDeferralNodeRow(
+          MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_PUBLISHED_NODE_ID,
+          MEMBERSHIP_PUBLICATION_TRIM_CONNECTION_STATE_READY,
+        ),
+        buildMembershipPublicationAckDeferralNodeRow(
+          MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_PROCESS_DEAD_NODE_ID,
+          MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_CONNECTION_STATE_CONNECTED,
+        ),
+      ],
+      readinessEntries: [
+        {
+          nodeId: MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_PUBLISHED_NODE_ID,
+          dimensions: {
+            [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: true,
+            [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: true,
+          },
+        },
+        {
+          nodeId: MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_PROCESS_DEAD_NODE_ID,
+          dimensions: {
+            [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: false,
+            [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: false,
+            [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_PUBLISHED]: false,
+            [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE]:
+              true,
+            [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]: false,
+            [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: false,
+            [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: false,
+          },
+        },
+      ],
+      nodeEndpointRows: [
+        buildMembershipPublicationTrimEndpointRow(
+          MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_PUBLISHED_NODE_ID,
+        ),
+        buildMembershipPublicationTrimEndpointRow(
+          MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_PROCESS_DEAD_NODE_ID,
+        ),
+      ],
+      serviceRows: [
+        buildMembershipPublicationTrimServiceRow(
+          MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_PUBLISHED_NODE_ID,
+        ),
+        buildMembershipPublicationTrimServiceRow(
+          MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_PROCESS_DEAD_NODE_ID,
+        ),
+      ],
+      nowMs: MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_NOW_MS,
+    });
+
+    t.same(
+      candidate.projectedServingNodeIds,
+      [
+        MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_PUBLISHED_NODE_ID,
+        MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_PROCESS_DEAD_NODE_ID,
+      ],
+      'the recovery-only node should remain visible in the observed projection',
+    );
+    t.same(
+      candidate.publishedActiveNodeIds,
+      [MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_PUBLISHED_NODE_ID],
+      'process-dead recovery-only nodes must not enter the ack-required publication set',
+    );
+    t.same(
+      candidate.requiredAckNodeIds,
+      [MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_PUBLISHED_NODE_ID],
+      'the publication should not require acknowledgement from the deferred node',
+    );
+    t.match(
+      candidate.projectionDiagnostics,
+      {
+        recoveryEligibleIncludedNodeIds: [
+          MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_PROCESS_DEAD_NODE_ID,
+        ],
+        publicationAckDeferredNodeIds: [
+          MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_PROCESS_DEAD_NODE_ID,
+        ],
+        publicationAckDeferralReasonCodesByNodeId: {
+          [MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_PROCESS_DEAD_NODE_ID]: [
+            CONTROL_PLANE_READINESS_REASON.PROCESS_NOT_ALIVE,
+          ],
+        },
+      },
+      'publication diagnostics should retain the recovery projection and the ack deferral reason',
+    );
+    t.same(
+      candidate.recoveryActiveNodeIds,
+      [MEMBERSHIP_PUBLICATION_ACK_DEFERRAL_PUBLISHED_NODE_ID],
+      'deferred recovery projections should not hold the publication recovery gate open as missing published members',
+    );
+    t.same(
+      candidate.missingPublishedRecoveryActiveNodeIds,
+      [],
+      'deferred recovery projections should not create publication trim debt',
     );
   });
 

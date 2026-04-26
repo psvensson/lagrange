@@ -24,9 +24,9 @@ function assignAdminControlSnapshotLocalDiagnosticsMethods(
   } = options;
   class AdminControlSnapshotLocalDiagnosticsMethods {
     buildLocalCdcTelemetry() {
-      const partitionServices = this.resolveLocalPartitionServices
-        ? this.resolveLocalPartitionServices()
-        : null;
+      const partitionServices = this.resolveLocalPartitionServices ?
+        this.resolveLocalPartitionServices() :
+        null;
       let subscriberCount = NUM.ZERO;
       let bufferedEvents = NUM.ZERO;
       let catchupLagEvents = NUM.ZERO;
@@ -67,50 +67,50 @@ function assignAdminControlSnapshotLocalDiagnosticsMethods(
       }
       const authoritativeFallback =
         typeof this.cdcIntegrationService
-          ?.getAuthoritativeFallbackDiagnostics === TYPEOF.FUNCTION
-          ? this.cdcIntegrationService.getAuthoritativeFallbackDiagnostics()
-          : {
-              schemaVersion: NUM.ONE,
-              nodeId: this.nodeId,
-              windowMs: TIME_MS.MINUTE,
-              totalCount: NUM.ZERO,
-              windowCount: NUM.ZERO,
-              windowRatePerMinute: NUM.ZERO,
-              phases: {
-                bootstrap: {
-                  windowCount: NUM.ZERO,
-                  totalCount: NUM.ZERO,
-                },
-                recovery: {
-                  windowCount: NUM.ZERO,
-                  totalCount: NUM.ZERO,
-                },
-                steady_state: {
-                  windowCount: NUM.ZERO,
-                  totalCount: NUM.ZERO,
-                },
+          ?.getAuthoritativeFallbackDiagnostics === TYPEOF.FUNCTION ?
+          this.cdcIntegrationService.getAuthoritativeFallbackDiagnostics() :
+          {
+            schemaVersion: NUM.ONE,
+            nodeId: this.nodeId,
+            windowMs: TIME_MS.MINUTE,
+            totalCount: NUM.ZERO,
+            windowCount: NUM.ZERO,
+            windowRatePerMinute: NUM.ZERO,
+            phases: {
+              bootstrap: {
+                windowCount: NUM.ZERO,
+                totalCount: NUM.ZERO,
               },
-              outcomes: {
-                recovered: {
-                  windowCount: NUM.ZERO,
-                  totalCount: NUM.ZERO,
-                },
-                failed: {
-                  windowCount: NUM.ZERO,
-                  totalCount: NUM.ZERO,
-                },
+              recovery: {
+                windowCount: NUM.ZERO,
+                totalCount: NUM.ZERO,
               },
-              byTable: {},
-              recentEvents: ADMIN_CACHE_DUMP.EMPTY,
-            };
+              steady_state: {
+                windowCount: NUM.ZERO,
+                totalCount: NUM.ZERO,
+              },
+            },
+            outcomes: {
+              recovered: {
+                windowCount: NUM.ZERO,
+                totalCount: NUM.ZERO,
+              },
+              failed: {
+                windowCount: NUM.ZERO,
+                totalCount: NUM.ZERO,
+              },
+            },
+            byTable: {},
+            recentEvents: ADMIN_CACHE_DUMP.EMPTY,
+          };
       return {
         subscriberCount,
         bufferedEvents,
         catchupLagEvents,
         catchupThroughputEventsPerSec,
-        mode: catchupDetected
-          ? CDC_TELEMETRY_MODE.CATCHUP
-          : CDC_TELEMETRY_MODE.STEADY,
+        mode: catchupDetected ?
+          CDC_TELEMETRY_MODE.CATCHUP :
+          CDC_TELEMETRY_MODE.STEADY,
         authoritativeFallback,
       };
     }
@@ -130,7 +130,7 @@ function assignAdminControlSnapshotLocalDiagnosticsMethods(
       const clusterPartitionIds = uniqueSorted(
         partitionRows
           .map((row) =>
-            firstStringField(row, COLUMN.PARTITION_ID, "partitionId", "id"),
+            firstStringField(row, COLUMN.PARTITION_ID, 'partitionId', 'id'),
           )
           .filter(Boolean),
       );
@@ -138,9 +138,9 @@ function assignAdminControlSnapshotLocalDiagnosticsMethods(
       const missingDiagnosticsPartitionIds = [];
       const noSubscriberPartitionIds = [];
       const bufferedPartitionIds = [];
-      const partitionServices = this.resolveLocalPartitionServices
-        ? this.resolveLocalPartitionServices()
-        : null;
+      const partitionServices = this.resolveLocalPartitionServices ?
+        this.resolveLocalPartitionServices() :
+        null;
       if (partitionServices instanceof Map) {
         for (const [
           partitionServiceKey,
@@ -150,9 +150,9 @@ function assignAdminControlSnapshotLocalDiagnosticsMethods(
             firstStringField(
               partitionService,
               COLUMN.PARTITION_ID,
-              "partitionId",
-              "id",
-            ) || String(partitionServiceKey || "");
+              'partitionId',
+              'id',
+            ) || String(partitionServiceKey || '');
           if (!partitionId) {
             continue;
           }
@@ -268,8 +268,8 @@ function assignAdminControlSnapshotLocalDiagnosticsMethods(
         const partitionId = firstStringField(
           partitionRow,
           COLUMN.PARTITION_ID,
-          "partitionId",
-          "id",
+          'partitionId',
+          'id',
         );
         if (!partitionId) {
           continue;
@@ -297,8 +297,8 @@ function assignAdminControlSnapshotLocalDiagnosticsMethods(
         const serviceType = firstStringField(
           serviceRow,
           COLUMN.SERVICE_TYPE,
-          "type",
-          "serviceType",
+          'type',
+          'serviceType',
         );
         if (serviceType !== SERVICE_TYPE_PARTITION) {
           continue;
@@ -306,8 +306,8 @@ function assignAdminControlSnapshotLocalDiagnosticsMethods(
         const partitionId = firstStringField(
           serviceRow,
           COLUMN.PARTITION_ID,
-          "partitionId",
-          "id",
+          'partitionId',
+          'id',
         );
         if (!partitionId) {
           continue;
@@ -355,7 +355,7 @@ function assignAdminControlSnapshotLocalDiagnosticsMethods(
           replicasByPartitionId[partitionId] || ADMIN_CACHE_DUMP.EMPTY;
         const activeReplicaCount = replicas.filter(
           (replica) =>
-            String(replica?.status || "").toLowerCase() === STATUS_ACTIVE,
+            String(replica?.status || '').toLowerCase() === STATUS_ACTIVE,
         ).length;
         partitionsById[partitionId] = {
           partitionId,
@@ -414,9 +414,9 @@ function assignAdminControlSnapshotLocalDiagnosticsMethods(
       const queryExecutor = sqlQueryEngine?.queryExecutor || null;
       const lastCoordinatorMetrics =
         queryExecutor &&
-        typeof queryExecutor.getLastCoordinatorMetrics === TYPEOF.FUNCTION
-          ? queryExecutor.getLastCoordinatorMetrics()
-          : null;
+        typeof queryExecutor.getLastCoordinatorMetrics === TYPEOF.FUNCTION ?
+          queryExecutor.getLastCoordinatorMetrics() :
+          null;
       let provisionTargetDiagnostics = null;
       if (
         sqlQueryEngine &&
@@ -446,7 +446,7 @@ function assignAdminControlSnapshotLocalDiagnosticsMethods(
       const activeNodeCount = nodeRows.filter(
         (row) =>
           String(
-            firstStringField(row, COLUMN.STATUS, "state") || "",
+            firstStringField(row, COLUMN.STATUS, 'state') || '',
           ).toLowerCase() === STATUS_ACTIVE,
       ).length;
       return {
@@ -461,22 +461,22 @@ function assignAdminControlSnapshotLocalDiagnosticsMethods(
           tableCount: tableRows.length,
         },
         queryEngine: {
-          timeoutMs: Number.isFinite(Number(sqlQueryEngine?.queryTimeoutMs))
-            ? Number(sqlQueryEngine.queryTimeoutMs)
-            : null,
+          timeoutMs: Number.isFinite(Number(sqlQueryEngine?.queryTimeoutMs)) ?
+            Number(sqlQueryEngine.queryTimeoutMs) :
+            null,
           fanoutMetricsAvailable: lastCoordinatorMetrics !== null,
           lastCoordinatorMetrics,
           provisionTargetDiagnostics,
           transactionRecovery:
             sqlQueryEngine?.lastTransactionRecoveryReplayResult &&
             typeof sqlQueryEngine.lastTransactionRecoveryReplayResult ===
-              TYPEOF.OBJECT
-              ? sqlQueryEngine.lastTransactionRecoveryReplayResult
-              : null,
+              TYPEOF.OBJECT ?
+              sqlQueryEngine.lastTransactionRecoveryReplayResult :
+              null,
           trackedWriteSplitEvaluations:
-            sqlQueryEngine?.lastWriteSplitEvaluationByTable instanceof Map
-              ? sqlQueryEngine.lastWriteSplitEvaluationByTable.size
-              : NUM.ZERO,
+            sqlQueryEngine?.lastWriteSplitEvaluationByTable instanceof Map ?
+              sqlQueryEngine.lastWriteSplitEvaluationByTable.size :
+              NUM.ZERO,
         },
         splitEvaluation: this.resolveSplitEvaluationDiagnostics(),
       };
@@ -491,22 +491,22 @@ function assignAdminControlSnapshotLocalDiagnosticsMethods(
       const forceAuthoritativeRepair =
         options.forceAuthoritativeRepair === true;
       const snapshot = await this.resolveLocalControlSnapshot(
-        forceAuthoritativeRepair
-          ? {
-              forceAuthoritativeRepair: true,
-              allowAuthoritativeRepair: options.allowAuthoritativeRepair,
-              allowAuthoritativeReadinessRefresh:
+        forceAuthoritativeRepair ?
+          {
+            forceAuthoritativeRepair: true,
+            allowAuthoritativeRepair: options.allowAuthoritativeRepair,
+            allowAuthoritativeReadinessRefresh:
                 options.allowAuthoritativeReadinessRefresh,
-              allowStaleReadinessOnCacheChange:
+            allowStaleReadinessOnCacheChange:
                 options.allowStaleReadinessOnCacheChange,
-            }
-          : {
-              allowAuthoritativeRepair: options.allowAuthoritativeRepair,
-              allowAuthoritativeReadinessRefresh:
+          } :
+          {
+            allowAuthoritativeRepair: options.allowAuthoritativeRepair,
+            allowAuthoritativeReadinessRefresh:
                 options.allowAuthoritativeReadinessRefresh,
-              allowStaleReadinessOnCacheChange:
+            allowStaleReadinessOnCacheChange:
                 options.allowStaleReadinessOnCacheChange,
-            },
+          },
       );
       return {
         success: true,
@@ -520,7 +520,7 @@ function assignAdminControlSnapshotLocalDiagnosticsMethods(
   for (const methodName of Object.getOwnPropertyNames(
     AdminControlSnapshotLocalDiagnosticsMethods.prototype,
   )) {
-    if (methodName === "constructor") {
+    if (methodName === 'constructor') {
       continue;
     }
     Object.defineProperty(
@@ -533,4 +533,4 @@ function assignAdminControlSnapshotLocalDiagnosticsMethods(
     );
   }
 }
-export { assignAdminControlSnapshotLocalDiagnosticsMethods };
+export {assignAdminControlSnapshotLocalDiagnosticsMethods};

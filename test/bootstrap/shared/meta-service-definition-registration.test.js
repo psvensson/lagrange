@@ -58,7 +58,7 @@ describe('registerBuiltInMetaServiceDefinitions', () => {
     });
 
     const pgRow = rows.find(
-      (r) => r.service_id === META_SERVICE_ID.POSTGRES_WIRE
+      (r) => r.service_id === META_SERVICE_ID.POSTGRES_WIRE,
     );
     assert.ok(pgRow, 'sys-postgres-wire row must be present');
     assert.equal(pgRow.runtime_kind, RUNTIME_KIND.NATIVE_JS);

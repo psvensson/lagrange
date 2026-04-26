@@ -9,36 +9,36 @@
  * Requirements: 2.1, 3.2, 4.4, 11.2
  */
 
-import { EventEmitter } from 'events';
-import { LoggingService } from '../logging/logging-service.js';
-import { SYSTEM_TABLE_NAME } from '../bootstrap/system-table-schemas-constants.js';
+import {EventEmitter} from 'events';
+import {LoggingService} from '../logging/logging-service.js';
+import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {
   TYPEOF,
   UNIFIED_SERVICE_TYPE,
-  WORKFLOW_STEP } from
-'../constants/index.js';
+  WORKFLOW_STEP} from
+  '../constants/index.js';
 import {
   ReplicaOperationMessageType,
   ReplicaOperationField,
-  ReplicaOperationResponseStatus } from
-'../rebalancer/replica-operation-constants.js';
+  ReplicaOperationResponseStatus} from
+  '../rebalancer/replica-operation-constants.js';
 import {
-  ReplicaStatus } from
-'../rebalancer/replica-status.js';
+  ReplicaStatus} from
+  '../rebalancer/replica-status.js';
 import {
-  EXECUTOR_OUTCOME_TYPE } from
-'../rebalancer/executor-outcome-constants.js';
+  EXECUTOR_OUTCOME_TYPE} from
+  '../rebalancer/executor-outcome-constants.js';
 import {
   RUNTIME_SERVICE_HANDLER_ADDRESS,
   RUNTIME_SERVICE_HANDLER_ERROR_MSG,
   RUNTIME_SERVICE_HANDLER_LOG_MSG,
-  RUNTIME_SERVICE_HANDLER_SUBSYSTEM } from
-'./runtime-service-handler-constants.js';
+  RUNTIME_SERVICE_HANDLER_SUBSYSTEM} from
+  './runtime-service-handler-constants.js';
 
 function buildReplicaOperationResponse(status, fields = {}) {
   return {
     status,
-    ...fields
+    ...fields,
   };
 }
 
@@ -69,9 +69,9 @@ class RuntimeServiceHandler extends EventEmitter {
 
     const loggingService = LoggingService.getInstance();
     this.logger = loggingService.isInitialized() ?
-    loggingService.forSubsystem(
-      RUNTIME_SERVICE_HANDLER_SUBSYSTEM
-    ) : console;
+      loggingService.forSubsystem(
+        RUNTIME_SERVICE_HANDLER_SUBSYSTEM,
+      ) : console;
   }
 
   /**
@@ -80,22 +80,22 @@ class RuntimeServiceHandler extends EventEmitter {
   initialize() {
     this.logger.debug(
       RUNTIME_SERVICE_HANDLER_LOG_MSG.INITIALIZING,
-      { nodeId: this.nodeId }
+      {nodeId: this.nodeId},
     );
 
     if (!this.serviceLifecycleManager) {
       throw new Error(
-        RUNTIME_SERVICE_HANDLER_ERROR_MSG.LIFECYCLE_MANAGER_REQUIRED
+        RUNTIME_SERVICE_HANDLER_ERROR_MSG.LIFECYCLE_MANAGER_REQUIRED,
       );
     }
     if (!this.cdcIntegrationService) {
       throw new Error(
-        RUNTIME_SERVICE_HANDLER_ERROR_MSG.CDC_REQUIRED
+        RUNTIME_SERVICE_HANDLER_ERROR_MSG.CDC_REQUIRED,
       );
     }
     if (!this.systemTableCache) {
       throw new Error(
-        RUNTIME_SERVICE_HANDLER_ERROR_MSG.CACHE_REQUIRED
+        RUNTIME_SERVICE_HANDLER_ERROR_MSG.CACHE_REQUIRED,
       );
     }
   }
@@ -106,12 +106,12 @@ class RuntimeServiceHandler extends EventEmitter {
    * @return {Promise<Object>} Response.
    */
   async handleMessage(envelope) {
-    const { payload, correlationId } = envelope;
+    const {payload, correlationId} = envelope;
     const type = payload?.[ReplicaOperationField.TYPE];
 
     this.logger.debug(
       RUNTIME_SERVICE_HANDLER_LOG_MSG.MESSAGE_RECEIVED,
-      { type, correlationId, operationId: payload?.operationId }
+      {type, correlationId, operationId: payload?.operationId},
     );
 
     let response;
@@ -125,12 +125,12 @@ class RuntimeServiceHandler extends EventEmitter {
       response = buildReplicaOperationResponse(
         ReplicaOperationResponseStatus.ERROR,
         {
-          error: unknownType(type)
-        }
+          error: unknownType(type),
+        },
       );
     }
 
-    return { ...response, correlationId };
+    return {...response, correlationId};
   }
 
   /**
@@ -146,21 +146,21 @@ class RuntimeServiceHandler extends EventEmitter {
 
     this.logger.info(
       RUNTIME_SERVICE_HANDLER_LOG_MSG.CREATE_REQUEST,
-      { operationId, entityId, replicaId, nodeId: this.nodeId }
+      {operationId, entityId, replicaId, nodeId: this.nodeId},
     );
 
     if (!operationId || !entityId || !replicaId) {
       this.logger.warn(
         RUNTIME_SERVICE_HANDLER_LOG_MSG.CREATE_MISSING_FIELDS,
-        { operationId, entityId, replicaId, nodeId: this.nodeId }
+        {operationId, entityId, replicaId, nodeId: this.nodeId},
       );
       return buildReplicaOperationResponse(
         ReplicaOperationResponseStatus.ERROR,
         {
           error:
           RUNTIME_SERVICE_HANDLER_ERROR_MSG.CREATE_REQUIRED_FIELDS,
-          nodeId: this.nodeId
-        }
+          nodeId: this.nodeId,
+        },
       );
     }
 
@@ -170,33 +170,33 @@ class RuntimeServiceHandler extends EventEmitter {
       if (existing.status === ReplicaStatus.ACTIVE) {
         this.logger.info(
           RUNTIME_SERVICE_HANDLER_LOG_MSG.CREATE_ALREADY_ACTIVE,
-          { replicaId, nodeId: this.nodeId }
+          {replicaId, nodeId: this.nodeId},
         );
         this.emitExecutorOutcome(
           EXECUTOR_OUTCOME_TYPE.RUNTIME_SERVICE_CREATE_ACTIVE,
           operationId,
           WORKFLOW_STEP.ACTIVE,
-          { replicaId }
+          {replicaId},
         );
         return buildReplicaOperationResponse(
           ReplicaOperationResponseStatus.ALREADY_EXISTS,
           {
             replicaId,
-            nodeId: this.nodeId
-          }
+            nodeId: this.nodeId,
+          },
         );
       }
       if (existing.status === ReplicaStatus.CREATING) {
         this.logger.info(
           RUNTIME_SERVICE_HANDLER_LOG_MSG.CREATE_IN_PROGRESS,
-          { replicaId, nodeId: this.nodeId }
+          {replicaId, nodeId: this.nodeId},
         );
         return buildReplicaOperationResponse(
           ReplicaOperationResponseStatus.IN_PROGRESS,
           {
             replicaId,
-            nodeId: this.nodeId
-          }
+            nodeId: this.nodeId,
+          },
         );
       }
     }
@@ -205,14 +205,14 @@ class RuntimeServiceHandler extends EventEmitter {
     if (this.inProgressOperations.has(operationId)) {
       this.logger.info(
         RUNTIME_SERVICE_HANDLER_LOG_MSG.OPERATION_IN_PROGRESS,
-        { operationId, nodeId: this.nodeId }
+        {operationId, nodeId: this.nodeId},
       );
       return buildReplicaOperationResponse(
         ReplicaOperationResponseStatus.IN_PROGRESS,
         {
           operationId,
-          nodeId: this.nodeId
-        }
+          nodeId: this.nodeId,
+        },
       );
     }
 
@@ -220,26 +220,26 @@ class RuntimeServiceHandler extends EventEmitter {
     this.localReplicas.set(replicaId, {
       replicaId,
       entityId,
-      status: ReplicaStatus.CREATING
+      status: ReplicaStatus.CREATING,
     });
     this.inProgressOperations.set(operationId, {
       type: ReplicaOperationMessageType.CREATE_REPLICA,
       replicaId,
       entityId,
-      startedAt: Date.now()
+      startedAt: Date.now(),
     });
 
     // Async creation after ACK
     setImmediate(() => {
       this.createReplicaAsync({
-        operationId, entityId, replicaId
+        operationId, entityId, replicaId,
       }).catch((error) => {
         this.logger.error(
           RUNTIME_SERVICE_HANDLER_LOG_MSG.ASYNC_CREATE_FAILED,
           {
             operationId, replicaId,
-            error: error.message, stack: error.stack
-          }
+            error: error.message, stack: error.stack,
+          },
         );
       });
     });
@@ -249,8 +249,8 @@ class RuntimeServiceHandler extends EventEmitter {
       {
         operationId,
         replicaId,
-        nodeId: this.nodeId
-      }
+        nodeId: this.nodeId,
+      },
     );
   }
 
@@ -263,7 +263,7 @@ class RuntimeServiceHandler extends EventEmitter {
    * @param {string} params.replicaId
    * @return {Promise<void>}
    */
-  async createReplicaAsync({ operationId, entityId, replicaId }) {
+  async createReplicaAsync({operationId, entityId, replicaId}) {
     try {
       const definition = this.resolveServiceDefinition(entityId);
       if (!definition) {
@@ -276,18 +276,18 @@ class RuntimeServiceHandler extends EventEmitter {
         serviceId: replicaId,
         serviceType: UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE,
         replicaId,
-        ...definition
+        ...definition,
       };
 
       await this.serviceLifecycleManager.createReplica(
-        replicaHandle, { nodeId: this.nodeId }
+        replicaHandle, {nodeId: this.nodeId},
       );
       await this.serviceLifecycleManager.startReplica(
-        replicaHandle, { nodeId: this.nodeId }
+        replicaHandle, {nodeId: this.nodeId},
       );
 
       this.localReplicas.set(replicaId, {
-        replicaId, entityId, status: ReplicaStatus.ACTIVE
+        replicaId, entityId, status: ReplicaStatus.ACTIVE,
       });
 
       // Emit active outcome — coordinator will transition workflow.
@@ -295,16 +295,16 @@ class RuntimeServiceHandler extends EventEmitter {
         EXECUTOR_OUTCOME_TYPE.RUNTIME_SERVICE_CREATE_ACTIVE,
         operationId,
         WORKFLOW_STEP.ACTIVE,
-        { replicaId }
+        {replicaId},
       );
 
       this.logger.info(
         RUNTIME_SERVICE_HANDLER_LOG_MSG.CREATE_COMPLETED,
-        { operationId, replicaId, entityId, nodeId: this.nodeId }
+        {operationId, replicaId, entityId, nodeId: this.nodeId},
       );
     } catch (error) {
       this.localReplicas.set(replicaId, {
-        replicaId, entityId, status: ReplicaStatus.FAILED
+        replicaId, entityId, status: ReplicaStatus.FAILED,
       });
 
       // Emit failed outcome — coordinator will transition workflow.
@@ -312,19 +312,56 @@ class RuntimeServiceHandler extends EventEmitter {
         EXECUTOR_OUTCOME_TYPE.RUNTIME_SERVICE_CREATE_FAILED,
         operationId,
         WORKFLOW_STEP.FAILED,
-        { replicaId, errorMessage: error.message }
+        {replicaId, errorMessage: error.message},
       );
 
       this.logger.error(
         RUNTIME_SERVICE_HANDLER_LOG_MSG.CREATE_FAILED,
         {
           operationId, replicaId, entityId,
-          error: error.message, nodeId: this.nodeId
-        }
+          error: error.message, nodeId: this.nodeId,
+        },
       );
     } finally {
       this.inProgressOperations.delete(operationId);
     }
+  }
+
+  hasInProgressReplicaRemoval(replicaId) {
+    for (const operation of this.inProgressOperations.values()) {
+      if (
+        operation?.type === ReplicaOperationMessageType.REMOVE_REPLICA &&
+        operation?.replicaId === replicaId
+      ) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  trackReplicaRemovalOperation(operationId, entityId, replicaId) {
+    this.inProgressOperations.set(operationId, {
+      type: ReplicaOperationMessageType.REMOVE_REPLICA,
+      replicaId,
+      entityId,
+      startedAt: Date.now(),
+    });
+  }
+
+  startRemoveReplicaAsync({operationId, entityId, replicaId, reason}) {
+    setImmediate(() => {
+      this.removeReplicaAsync({
+        operationId, entityId, replicaId, reason,
+      }).catch((error) => {
+        this.logger.error(
+          RUNTIME_SERVICE_HANDLER_LOG_MSG.ASYNC_REMOVE_FAILED,
+          {
+            operationId, replicaId,
+            error: error.message, stack: error.stack,
+          },
+        );
+      });
+    });
   }
 
   /**
@@ -343,22 +380,22 @@ class RuntimeServiceHandler extends EventEmitter {
       RUNTIME_SERVICE_HANDLER_LOG_MSG.REMOVE_REQUEST,
       {
         operationId, entityId, replicaId,
-        reason, nodeId: this.nodeId
-      }
+        reason, nodeId: this.nodeId,
+      },
     );
 
     if (!operationId || !entityId || !replicaId) {
       this.logger.warn(
         RUNTIME_SERVICE_HANDLER_LOG_MSG.REMOVE_MISSING_FIELDS,
-        { operationId, entityId, replicaId, nodeId: this.nodeId }
+        {operationId, entityId, replicaId, nodeId: this.nodeId},
       );
       return buildReplicaOperationResponse(
         ReplicaOperationResponseStatus.ERROR,
         {
           error:
           RUNTIME_SERVICE_HANDLER_ERROR_MSG.REMOVE_REQUIRED_FIELDS,
-          nodeId: this.nodeId
-        }
+          nodeId: this.nodeId,
+        },
       );
     }
 
@@ -366,83 +403,74 @@ class RuntimeServiceHandler extends EventEmitter {
     if (!replica) {
       this.logger.warn(
         RUNTIME_SERVICE_HANDLER_LOG_MSG.REMOVE_NOT_FOUND,
-        { replicaId, nodeId: this.nodeId }
+        {replicaId, nodeId: this.nodeId},
       );
       return buildReplicaOperationResponse(
         ReplicaOperationResponseStatus.NOT_FOUND,
         {
           replicaId,
-          nodeId: this.nodeId
-        }
+          nodeId: this.nodeId,
+        },
       );
     }
 
     if (replica.status === ReplicaStatus.REMOVING) {
+      if (!this.hasInProgressReplicaRemoval(replicaId)) {
+        this.trackReplicaRemovalOperation(operationId, entityId, replicaId);
+        this.startRemoveReplicaAsync({
+          operationId, entityId, replicaId, reason,
+        });
+      }
       this.logger.info(
         RUNTIME_SERVICE_HANDLER_LOG_MSG.REMOVE_IN_PROGRESS,
-        { replicaId, nodeId: this.nodeId }
+        {replicaId, nodeId: this.nodeId},
       );
       return buildReplicaOperationResponse(
         ReplicaOperationResponseStatus.IN_PROGRESS,
         {
           replicaId,
-          nodeId: this.nodeId
-        }
+          nodeId: this.nodeId,
+        },
       );
     }
 
     if (replica.status === ReplicaStatus.REMOVED) {
       this.logger.info(
         RUNTIME_SERVICE_HANDLER_LOG_MSG.REMOVE_ALREADY_REMOVED,
-        { replicaId, nodeId: this.nodeId }
+        {replicaId, nodeId: this.nodeId},
       );
       return buildReplicaOperationResponse(
         ReplicaOperationResponseStatus.COMPLETED,
         {
           replicaId,
-          nodeId: this.nodeId
-        }
+          nodeId: this.nodeId,
+        },
       );
     }
 
     if (this.inProgressOperations.has(operationId)) {
       this.logger.info(
         RUNTIME_SERVICE_HANDLER_LOG_MSG.OPERATION_IN_PROGRESS,
-        { operationId, nodeId: this.nodeId }
+        {operationId, nodeId: this.nodeId},
       );
       return buildReplicaOperationResponse(
         ReplicaOperationResponseStatus.IN_PROGRESS,
         {
           operationId,
-          nodeId: this.nodeId
-        }
+          nodeId: this.nodeId,
+        },
       );
     }
 
-    this.inProgressOperations.set(operationId, {
-      type: ReplicaOperationMessageType.REMOVE_REPLICA,
-      replicaId,
-      entityId,
-      startedAt: Date.now()
-    });
+    this.trackReplicaRemovalOperation(operationId, entityId, replicaId);
     this.localReplicas.set(replicaId, {
       ...replica,
-      status: ReplicaStatus.REMOVING
+      status: ReplicaStatus.REMOVING,
     });
 
     // Async removal after ACK
-    setImmediate(() => {
-      this.removeReplicaAsync({
-        operationId, entityId, replicaId, reason
-      }).catch((error) => {
-        this.logger.error(
-          RUNTIME_SERVICE_HANDLER_LOG_MSG.ASYNC_REMOVE_FAILED,
-          {
-            operationId, replicaId,
-            error: error.message, stack: error.stack
-          }
-        );
-      });
+    this.startRemoveReplicaAsync({
+      operationId, entityId, replicaId, reason,
     });
 
     return buildReplicaOperationResponse(
@@ -450,8 +478,8 @@ class RuntimeServiceHandler extends EventEmitter {
       {
         operationId,
         replicaId,
-        nodeId: this.nodeId
-      }
+        nodeId: this.nodeId,
+      },
     );
   }
 
@@ -466,7 +494,7 @@ class RuntimeServiceHandler extends EventEmitter {
    * @return {Promise<void>}
    */
   async removeReplicaAsync({
-    operationId, entityId, replicaId, reason
+    operationId, entityId, replicaId, reason,
   }) {
     try {
       const definition = this.resolveServiceDefinition(entityId);
@@ -474,15 +502,15 @@ class RuntimeServiceHandler extends EventEmitter {
         serviceId: replicaId,
         serviceType: UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE,
         replicaId,
-        ...(definition || {})
+        ...(definition || {}),
       };
 
       await this.serviceLifecycleManager.stopReplica(
-        replicaHandle, { nodeId: this.nodeId, reason }
+        replicaHandle, {nodeId: this.nodeId, reason},
       );
 
       this.localReplicas.set(replicaId, {
-        replicaId, entityId, status: ReplicaStatus.REMOVED
+        replicaId, entityId, status: ReplicaStatus.REMOVED,
       });
 
       // Emit removed outcome — coordinator will transition workflow.
@@ -490,16 +518,16 @@ class RuntimeServiceHandler extends EventEmitter {
         EXECUTOR_OUTCOME_TYPE.RUNTIME_SERVICE_REMOVE_COMPLETED,
         operationId,
         WORKFLOW_STEP.REMOVED,
-        { replicaId }
+        {replicaId},
       );
 
       this.logger.info(
         RUNTIME_SERVICE_HANDLER_LOG_MSG.REMOVE_COMPLETED,
-        { operationId, replicaId, entityId, nodeId: this.nodeId }
+        {operationId, replicaId, entityId, nodeId: this.nodeId},
       );
     } catch (error) {
       this.localReplicas.set(replicaId, {
-        replicaId, entityId, status: ReplicaStatus.FAILED
+        replicaId, entityId, status: ReplicaStatus.FAILED,
       });
 
       // Emit failed outcome — coordinator will transition workflow.
@@ -507,15 +535,15 @@ class RuntimeServiceHandler extends EventEmitter {
         EXECUTOR_OUTCOME_TYPE.RUNTIME_SERVICE_REMOVE_FAILED,
         operationId,
         WORKFLOW_STEP.FAILED,
-        { replicaId, errorMessage: error.message }
+        {replicaId, errorMessage: error.message},
       );
 
       this.logger.error(
         RUNTIME_SERVICE_HANDLER_LOG_MSG.REMOVE_FAILED,
         {
           operationId, replicaId, entityId,
-          error: error.message, nodeId: this.nodeId
-        }
+          error: error.message, nodeId: this.nodeId,
+        },
       );
     } finally {
       this.inProgressOperations.delete(operationId);
@@ -533,12 +561,12 @@ class RuntimeServiceHandler extends EventEmitter {
       return null;
     }
     const row = this.systemTableCache.get(
-      SYSTEM_TABLE_NAME.SERVICE_DEFINITIONS, entityId
+      SYSTEM_TABLE_NAME.SERVICE_DEFINITIONS, entityId,
     );
     if (!row) {
       this.logger.warn(
         RUNTIME_SERVICE_HANDLER_LOG_MSG.DEFINITION_NOT_FOUND,
-        { entityId, nodeId: this.nodeId }
+        {entityId, nodeId: this.nodeId},
       );
       return null;
     }
@@ -568,7 +596,7 @@ class RuntimeServiceHandler extends EventEmitter {
         outcomeType,
         operationId,
         workflowStep,
-        options
+        options,
       );
     }
   }
@@ -581,7 +609,7 @@ class RuntimeServiceHandler extends EventEmitter {
   registerWithRouter(messageRouter, options = {}) {
     if (!messageRouter) {
       this.logger.warn(
-        RUNTIME_SERVICE_HANDLER_LOG_MSG.NO_MESSAGE_ROUTER
+        RUNTIME_SERVICE_HANDLER_LOG_MSG.NO_MESSAGE_ROUTER,
       );
       return;
     }
@@ -599,17 +627,17 @@ class RuntimeServiceHandler extends EventEmitter {
       const response = await this.handleMessage(envelope);
       if (this.rpcClient && response.correlationId) {
         this.rpcClient.handleResponse(
-          response.correlationId, response
+          response.correlationId, response,
         );
       }
-      return { acknowledged: true, ...response };
+      return {acknowledged: true, ...response};
     };
 
     messageRouter.register(handlerAddress, routerHandler);
 
     this.logger.info(
       RUNTIME_SERVICE_HANDLER_LOG_MSG.REGISTERED_ROUTER,
-      { address: handlerAddress, nodeId: this.nodeId }
+      {address: handlerAddress, nodeId: this.nodeId},
     );
   }
 
@@ -633,7 +661,7 @@ class RuntimeServiceHandler extends EventEmitter {
 
     this.logger.info(
       RUNTIME_SERVICE_HANDLER_LOG_MSG.UNREGISTERED_ROUTER,
-      { address: handlerAddress, nodeId: this.nodeId }
+      {address: handlerAddress, nodeId: this.nodeId},
     );
   }
 
@@ -662,7 +690,7 @@ class RuntimeServiceHandler extends EventEmitter {
   shutdown() {
     this.logger.info(
       RUNTIME_SERVICE_HANDLER_LOG_MSG.SHUTTING_DOWN,
-      { nodeId: this.nodeId }
+      {nodeId: this.nodeId},
     );
     this.inProgressOperations.clear();
     this.localReplicas.clear();
@@ -670,4 +698,4 @@ class RuntimeServiceHandler extends EventEmitter {
   }
 }
 
-export { RuntimeServiceHandler };
+export {RuntimeServiceHandler};

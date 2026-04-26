@@ -22,6 +22,16 @@ support:
 
 ------------------------------------------------------------------------
 
+# AGPL Scope Boundary
+
+This document defines the manifest substrate for installable services. Example
+services such as `backup-manager` and example edition metadata such as `pro`
+show how external services may consume the substrate; they do not authorize
+AGPL implementation of backup/PITR, commercial licensing, entitlement checks,
+RBAC, tenancy, KMS, or secret-provider behavior.
+
+------------------------------------------------------------------------
+
 # Goals
 
 The manifest should let the kernel answer these questions before
@@ -363,6 +373,9 @@ Example:
 ------------------------------------------------------------------------
 
 # Full Example Manifest
+
+The example below uses a backup service to exercise the manifest shape. It is a
+commercial consumer example only under the current edition matrix.
 
 ``` json
 {

@@ -125,7 +125,7 @@ Implemented:
 Representative harness confirmation was completed at sprint level.
 `node-join-under-load` no longer failed on stale-artifact or presentation-local
 semantic drift; it exposed a new leader-identity divergence that is split to
-[Publication-scoped consistency and node-join closure](./active-20260423-publication-scoped-consistency-and-node-join-closure.md).
+[Publication-scoped consistency and node-join closure](./done-20260423-publication-scoped-consistency-and-node-join-closure.md).
 
 ## Validation
 

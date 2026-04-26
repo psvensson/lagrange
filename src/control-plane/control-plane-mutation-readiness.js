@@ -116,9 +116,9 @@ function isPublishedConvergencePending(readiness = null) {
   const publicationRecoveryGate =
     readiness?.priorityControlPlaneRecovery?.publicationRecoveryGate &&
     typeof readiness.priorityControlPlaneRecovery.publicationRecoveryGate ===
-      TYPEOF.OBJECT
-      ? readiness.priorityControlPlaneRecovery.publicationRecoveryGate
-      : null;
+      TYPEOF.OBJECT ?
+      readiness.priorityControlPlaneRecovery.publicationRecoveryGate :
+      null;
   if (publicationRecoveryGate) {
     return publicationRecoveryGate.ready !== true;
   }

@@ -1079,9 +1079,9 @@ test('CDCGroupPropagationService continues retries in background after retry bud
       'background retry loop should continue until delivery succeeds',
     );
 
-  service.stop();
-  teardownConfig();
-  t.end();
+    service.stop();
+    teardownConfig();
+    t.end();
   });
 
 test('CDCGroupPropagationService defers immediate propagation while the local router is backpressured',

@@ -63,9 +63,6 @@ function createMockStoragePressureBehavior() {
  * @param {string[]} replicaIds - Replica identifiers.
  * @return {string[]} Unified addresses.
  */
-function createPeerAddresses(replicaIds) {
-  return replicaIds.map((replicaId, index) => `node-${index + 1}/partition/${replicaId}`);
-}
 
 async function createStandaloneLocalPartition({
   partitionId,

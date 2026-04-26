@@ -353,7 +353,6 @@ test('Property 5: Dispatch handler verification', async (t) => {
           removeOperationRowArb,
           async (row) => {
             const targetNodeId = row.target_node_id;
-            const entityType = row[COLUMN.ENTITY_TYPE];
             const nodeRows = new Map();
             nodeRows.set(targetNodeId, buildReadyNodeRow(targetNodeId));
 

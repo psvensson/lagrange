@@ -231,6 +231,8 @@ function createMockReadinessService(mockCache) {
             [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]:
               false,
             [CONTROL_PLANE_READINESS_DIMENSION
+              .CONTROL_PLANE_RECOVERY_ELIGIBLE]: false,
+            [CONTROL_PLANE_READINESS_DIMENSION
               .METADATA_PUBLICATION_HEALTHY]: true,
             [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: false,
             [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: false,
@@ -256,6 +258,8 @@ function createMockReadinessService(mockCache) {
             healthy,
           [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]:
             healthy,
+          [CONTROL_PLANE_READINESS_DIMENSION
+            .CONTROL_PLANE_RECOVERY_ELIGIBLE]: healthy,
           [CONTROL_PLANE_READINESS_DIMENSION
             .METADATA_PUBLICATION_HEALTHY]: true,
           [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]:
@@ -493,6 +497,8 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
               .CLUSTER_MEMBER_HEALTHY]: true,
             [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]: true,
             [CONTROL_PLANE_READINESS_DIMENSION
+              .CONTROL_PLANE_RECOVERY_ELIGIBLE]: true,
+            [CONTROL_PLANE_READINESS_DIMENSION
               .METADATA_PUBLICATION_HEALTHY]: true,
             [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
             [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: true,
@@ -635,7 +641,6 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
     },
   );
 
-});
   await t.test(
     'checkRebalance allows non-system entities once priority control-plane partitions reach quorum spread',
     async (t) => {

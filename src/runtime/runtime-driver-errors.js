@@ -105,9 +105,9 @@ class UnknownRuntimeKindError extends BaseError {
    * @param {string[]} [availableKinds] - Registered kinds for diagnostics.
    */
   constructor(kind, availableKinds = []) {
-    const available = availableKinds.length > 0
-      ? availableKinds.join(', ')
-      : 'none';
+    const available = availableKinds.length > 0 ?
+      availableKinds.join(', ') :
+      'none';
     super(
       `No driver registered for runtime kind '${kind}'` +
       ` (available: ${available})`,

@@ -114,7 +114,7 @@ function buildParameterStatus(name, value) {
   const nameLen = Buffer.byteLength(name, 'utf8') + 1;
   const valLen = Buffer.byteLength(value, 'utf8') + 1;
   const payload = Buffer.allocUnsafe(nameLen + valLen);
-  let off = writeCString(payload, name, 0);
+  const off = writeCString(payload, name, 0);
   writeCString(payload, value, off);
   return buildMessage(PG_BACKEND_MSG.PARAMETER_STATUS, payload);
 }
@@ -188,12 +188,12 @@ function buildRowDescription(columns) {
   let off = 2;
   for (const col of columns) {
     off = writeCString(payload, col.name, off);
-    payload.writeInt32BE(0, off); off += 4;  // table OID
-    payload.writeInt16BE(0, off); off += 2;  // column attr
+    payload.writeInt32BE(0, off); off += 4; // table OID
+    payload.writeInt16BE(0, off); off += 2; // column attr
     payload.writeInt32BE(25, off); off += 4; // type OID (text=25)
     payload.writeInt16BE(-1, off); off += 2; // type length
     payload.writeInt32BE(-1, off); off += 4; // type modifier
-    payload.writeInt16BE(0, off); off += 2;  // format (text=0)
+    payload.writeInt16BE(0, off); off += 2; // format (text=0)
   }
   return buildMessage(PG_BACKEND_MSG.ROW_DESCRIPTION, payload);
 }
@@ -433,8 +433,8 @@ function parseCloseMessage(payload) {
 function deriveCommandTag(result, query) {
   const upper = query.trimStart().toUpperCase();
   if (upper.startsWith('SELECT')) {
-    const count = Array.isArray(result?.rows)
-      ? result.rows.length : 0;
+    const count = Array.isArray(result?.rows) ?
+      result.rows.length : 0;
     return `SELECT ${count}`;
   }
   if (upper.startsWith('INSERT')) {
@@ -733,44 +733,44 @@ class PgWireProtocolHandler {
    */
   _dispatchMessage(type, payload) {
     switch (type) {
-      case PG_FRONTEND_MSG.QUERY:
-        this._handleSimpleQuery(payload);
-        break;
-      case PG_FRONTEND_MSG.PARSE:
-        this._handleParse(payload);
-        break;
-      case PG_FRONTEND_MSG.BIND:
-        this._handleBind(payload);
-        break;
-      case PG_FRONTEND_MSG.DESCRIBE:
-        this._handleDescribe(payload);
-        break;
-      case PG_FRONTEND_MSG.EXECUTE:
-        this._handleExecute(payload);
-        break;
-      case PG_FRONTEND_MSG.SYNC:
-        this._handleSync();
-        break;
-      case PG_FRONTEND_MSG.CLOSE:
-        this._handleClose(payload);
-        break;
-      case PG_FRONTEND_MSG.TERMINATE:
-        this._handleTerminate();
-        break;
-      case PG_FRONTEND_MSG.FLUSH:
-        // Flush is a no-op for us (we write immediately)
-        break;
-      default:
-        this._logger.debug(PG_HANDLER_LOG.UNSUPPORTED_MSG, {
-          type: `0x${type.toString(16)}`,
-        });
-        this._sendError(
-          PG_SEVERITY.ERROR,
-          PG_ERROR_CODE.FEATURE_NOT_SUPPORTED,
-          `${PG_HANDLER_ERROR.UNKNOWN_MESSAGE_TYPE}: ` +
+    case PG_FRONTEND_MSG.QUERY:
+      this._handleSimpleQuery(payload);
+      break;
+    case PG_FRONTEND_MSG.PARSE:
+      this._handleParse(payload);
+      break;
+    case PG_FRONTEND_MSG.BIND:
+      this._handleBind(payload);
+      break;
+    case PG_FRONTEND_MSG.DESCRIBE:
+      this._handleDescribe(payload);
+      break;
+    case PG_FRONTEND_MSG.EXECUTE:
+      this._handleExecute(payload);
+      break;
+    case PG_FRONTEND_MSG.SYNC:
+      this._handleSync();
+      break;
+    case PG_FRONTEND_MSG.CLOSE:
+      this._handleClose(payload);
+      break;
+    case PG_FRONTEND_MSG.TERMINATE:
+      this._handleTerminate();
+      break;
+    case PG_FRONTEND_MSG.FLUSH:
+      // Flush is a no-op for us (we write immediately)
+      break;
+    default:
+      this._logger.debug(PG_HANDLER_LOG.UNSUPPORTED_MSG, {
+        type: `0x${type.toString(16)}`,
+      });
+      this._sendError(
+        PG_SEVERITY.ERROR,
+        PG_ERROR_CODE.FEATURE_NOT_SUPPORTED,
+        `${PG_HANDLER_ERROR.UNKNOWN_MESSAGE_TYPE}: ` +
             `0x${type.toString(16)}`,
-        );
-        break;
+      );
+      break;
     }
   }
 

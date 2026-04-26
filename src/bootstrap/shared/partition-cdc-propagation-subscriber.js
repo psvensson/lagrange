@@ -59,8 +59,8 @@ function normalizePropagationSubscriberReadiness(
       null :
       (typeof readiness.reason === TYPEOF.STRING &&
       readiness.reason.length > NUM.ZERO ?
-      readiness.reason :
-      fallbackReason),
+        readiness.reason :
+        fallbackReason),
   );
 }
 
@@ -148,7 +148,7 @@ function buildPropagationSelectionOptions(
 }
 
 function buildPropagationOwnerNotReadyMessage(tableName) {
-  return `Operational message-group ingress not ready ` +
+  return 'Operational message-group ingress not ready ' +
     `for ${tableName} ${CDC_PROPAGATION_SUBSCRIBER_MESSAGE.PROPAGATION}`;
 }
 

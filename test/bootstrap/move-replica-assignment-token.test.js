@@ -2,9 +2,18 @@ import {test} from '../../src/test-helpers/tap.js';
 import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
 import {
   BOOTSTRAP_API_CACHE_VISIBILITY,
+  BOOTSTRAP_API_HANDOFF_PHASE,
   BOOTSTRAP_API_HANDOFF_STATUS,
+  BOOTSTRAP_API_MOVE_REPLICA_ASSIGNMENT_ERROR,
+  BOOTSTRAP_API_MOVE_REPLICA_ASSIGNMENT_HISTORY_PHASE as
+    MOVE_REPLICA_ASSIGNMENT_HISTORY_PHASE,
 } from '../../src/bootstrap/bootstrap-api-constants.js';
-import {SERVICE_STATUS, SERVICE_TYPE} from '../../src/constants/index.js';
+import {
+  SERVICE_STATUS,
+  SERVICE_TYPE,
+  STATE,
+  WORKFLOW_STEP,
+} from '../../src/constants/index.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {
   bootstrapMoveReplicaAssignment,
@@ -13,6 +22,12 @@ import {
   createCdcIntegrationServiceFixture,
   initializeTestEnvironment,
 } from './move-replica-assignment-token-test-helpers.js';
+
+const MOVE_REPLICA_LONG_ASSIGNMENT_LEASE_MS = 60_000;
+const MOVE_REPLICA_SHORT_ASSIGNMENT_LEASE_MS = 5;
+const MOVE_REPLICA_SWEEP_INTERVAL_MS = 5;
+const MOVE_REPLICA_SWEEP_WAIT_MS = 30;
+const EXPIRED_LEASE_OFFSET_MS = 1;
 
 test('BootstrapAPI register-service rejects missing and unknown assignment token', async (t) => {
   const fixture = await bootstrapMoveReplicaAssignment(t);
@@ -137,7 +152,9 @@ test('BootstrapAPI register-service renews near-expiry reservation before it exp
       row.operation_id === assignment.assignmentId,
     );
     const stepsHistory = JSON.parse(reservationRowAfter?.steps_history || '[]');
-    const validatedStep = stepsHistory.find((step) => step.phase === 'validated');
+    const validatedStep = stepsHistory.find((step) =>
+      step.phase === MOVE_REPLICA_ASSIGNMENT_HISTORY_PHASE.VALIDATED,
+    );
     t.ok(
       Number(validatedStep?.leaseExpiresAt) > nearExpiry,
       'renewal should persist a later lease expiry in replica_operations history',
@@ -152,7 +169,7 @@ test('BootstrapAPI register-service renews near-expiry reservation before it exp
     );
     t.equal(
       stepsHistory.at(-1)?.phase,
-      'commit_metadata',
+      BOOTSTRAP_API_HANDOFF_PHASE.COMMIT_METADATA,
       'successful handoff should continue from lease validation into metadata commit',
     );
   });
@@ -190,11 +207,11 @@ test('BootstrapAPI register-service still rejects expired reservation after sour
   );
 });
 
-test('BootstrapAPI expires MOVE_REPLICA reservation when source node loses readiness before lease expiry',
+test('BootstrapAPI preserves MOVE_REPLICA reservation after source readiness loss until lease expiry',
   async (t) => {
     const fixture = await bootstrapMoveReplicaAssignment(t, {
       joiningNodeId: '550e8400-e29b-41d4-a716-446655440327',
-      assignmentLeaseMs: 60_000,
+      assignmentLeaseMs: MOVE_REPLICA_LONG_ASSIGNMENT_LEASE_MS,
     });
 
     const sourceNode = fixture.rows.nodes.find((row) =>
@@ -202,8 +219,8 @@ test('BootstrapAPI expires MOVE_REPLICA reservation when source node loses readi
     );
     t.ok(sourceNode, 'fixture should include source node readiness row');
 
-    sourceNode.ready_lease_expires_at = Date.now() - 1;
-    sourceNode.connection_state = 'disconnected';
+    sourceNode.ready_lease_expires_at = Date.now() - EXPIRED_LEASE_OFFSET_MS;
+    sourceNode.connection_state = STATE.DISCONNECTED;
 
     await fixture.api.expireMoveReplicaAssignmentReservations();
 
@@ -212,17 +229,39 @@ test('BootstrapAPI expires MOVE_REPLICA reservation when source node loses readi
     );
     t.equal(
       reservationRow?.status,
-      'failed',
-      'reservation should fail fast when its recorded source node is no longer ready',
+      BOOTSTRAP_API_HANDOFF_STATUS.PREPARING,
+      'reservation should stay open while its assignment lease is still active',
     );
     t.equal(
       reservationRow?.workflow_step,
-      'FAILED',
-      'reservation should persist FAILED workflow step when source ownership is lost',
+      WORKFLOW_STEP.PENDING,
+      'reservation should remain pending while source visibility can still recover',
+    );
+
+    const expiredAt = Date.now() - EXPIRED_LEASE_OFFSET_MS;
+    reservationRow.lease_expires_at = expiredAt;
+    reservationRow.completed_at = expiredAt;
+    const cachedReservation = fixture.api.moveReplicaAssignmentReservations.get(
+      fixture.assignment.assignmentId,
+    );
+    cachedReservation.leaseExpiresAt = expiredAt;
+    cachedReservation.updatedAt = expiredAt;
+
+    await fixture.api.expireMoveReplicaAssignmentReservations();
+
+    t.equal(
+      reservationRow?.status,
+      BOOTSTRAP_API_HANDOFF_STATUS.FAILED,
+      'reservation should fail after the assignment lease expires without source readiness',
+    );
+    t.equal(
+      reservationRow?.workflow_step,
+      WORKFLOW_STEP.FAILED,
+      'reservation should persist FAILED workflow step after lease-expired source loss',
     );
     t.equal(
       reservationRow?.error_message,
-      'assignment source owner unavailable',
+      BOOTSTRAP_API_MOVE_REPLICA_ASSIGNMENT_ERROR.SOURCE_OWNER_UNAVAILABLE,
       'reservation failure should preserve the source-owner invalidation reason',
     );
   });
@@ -231,8 +270,8 @@ test('BootstrapAPI background sweep clears stranded MOVE_REPLICA reservation wit
   async (t) => {
     const fixture = await bootstrapMoveReplicaAssignment(t, {
       joiningNodeId: '550e8400-e29b-41d4-a716-446655440328',
-      assignmentLeaseMs: 60_000,
-      assignmentSweepIntervalMs: 5,
+      assignmentLeaseMs: MOVE_REPLICA_SHORT_ASSIGNMENT_LEASE_MS,
+      assignmentSweepIntervalMs: MOVE_REPLICA_SWEEP_INTERVAL_MS,
       ownsMoveReplicaAssignmentLifecycle: true,
     });
 
@@ -241,18 +280,20 @@ test('BootstrapAPI background sweep clears stranded MOVE_REPLICA reservation wit
     );
     t.ok(sourceNode, 'fixture should include source node readiness row');
 
-    sourceNode.ready_lease_expires_at = Date.now() - 1;
-    sourceNode.connection_state = 'disconnected';
+    sourceNode.ready_lease_expires_at = Date.now() - EXPIRED_LEASE_OFFSET_MS;
+    sourceNode.connection_state = STATE.DISCONNECTED;
 
-    await new Promise((resolve) => setTimeout(resolve, 30));
+    await new Promise((resolve) =>
+      setTimeout(resolve, MOVE_REPLICA_SWEEP_WAIT_MS),
+    );
 
     const reservationRow = fixture.rows.replica_operations.find((row) =>
       row.operation_id === fixture.assignment.assignmentId,
     );
     t.equal(
       reservationRow?.status,
-      'failed',
-      'background sweep should fail stranded reservation after source readiness loss',
+      BOOTSTRAP_API_HANDOFF_STATUS.FAILED,
+      'background sweep should fail stranded reservation after source readiness loss and lease expiry',
     );
   });
 
@@ -260,19 +301,21 @@ test('BootstrapAPI background sweep preserves expired but revivable MOVE_REPLICA
   async (t) => {
     const fixture = await bootstrapMoveReplicaAssignment(t, {
       joiningNodeId: '550e8400-e29b-41d4-a716-446655440329',
-      assignmentLeaseMs: 5,
-      assignmentSweepIntervalMs: 5,
+      assignmentLeaseMs: MOVE_REPLICA_SHORT_ASSIGNMENT_LEASE_MS,
+      assignmentSweepIntervalMs: MOVE_REPLICA_SWEEP_INTERVAL_MS,
       ownsMoveReplicaAssignmentLifecycle: true,
     });
 
-    await new Promise((resolve) => setTimeout(resolve, 30));
+    await new Promise((resolve) =>
+      setTimeout(resolve, MOVE_REPLICA_SWEEP_WAIT_MS),
+    );
 
     const reservationRow = fixture.rows.replica_operations.find((row) =>
       row.operation_id === fixture.assignment.assignmentId,
     );
     t.equal(
       reservationRow?.status,
-      'creating',
+      BOOTSTRAP_API_HANDOFF_STATUS.PREPARING,
       'background sweep should not terminalize a merely expired reservation',
     );
 
@@ -296,12 +339,14 @@ test('BootstrapAPI defers subsequent bootstrap while an expired non-terminal MOV
   async (t) => {
     const fixture = await bootstrapMoveReplicaAssignment(t, {
       joiningNodeId: '550e8400-e29b-41d4-a716-446655440332',
-      assignmentLeaseMs: 5,
-      assignmentSweepIntervalMs: 5,
+      assignmentLeaseMs: MOVE_REPLICA_SHORT_ASSIGNMENT_LEASE_MS,
+      assignmentSweepIntervalMs: MOVE_REPLICA_SWEEP_INTERVAL_MS,
       ownsMoveReplicaAssignmentLifecycle: true,
     });
 
-    await new Promise((resolve) => setTimeout(resolve, 30));
+    await new Promise((resolve) =>
+      setTimeout(resolve, MOVE_REPLICA_SWEEP_WAIT_MS),
+    );
 
     const secondBootstrap = await fixture.api.getFastify().inject({
       method: 'POST',

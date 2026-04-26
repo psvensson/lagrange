@@ -8,19 +8,10 @@
  */
 
 import {test} from '../../../../src/test-helpers/tap.js';
-import http from 'node:http';
 import assert from 'node:assert';
-import {promises as fs} from 'node:fs';
-import {resolve as resolvePath} from 'node:path';
 import fc from 'fast-check';
-import {validate as uuidValidate} from 'uuid';
-import {WebSocketServer} from 'ws';
 import {distributeNodes} from '../cluster.js';
 
-const REUSE_START_COMMAND =
-  'if [ -f /harness-control/reset-data-on-start ]; then rm -rf /data/* && ' +
-  'rm -f /harness-control/reset-data-on-start; fi; ' +
-  'exec node --max-old-space-size=1536 /app/src/index.js';
 
 /**
  * Feature: distributed-testing-framework
@@ -92,7 +83,7 @@ test('Property 5: Multi-Host Container Distribution', async (t) => {
 
 // --- Unit Tests for Cluster ---
 
-import {createCluster, Cluster, NodeHandle} from '../cluster.js';
+import {createCluster, Cluster} from '../cluster.js';
 import {
   BENCHMARK_CRITICAL_CONTROL_PLANE_STABILITY_REASON_SNAPSHOT_UNAVAILABLE,
   BENCHMARK_CRITICAL_CONTROL_PLANE_STABILITY_STATE,
@@ -100,43 +91,15 @@ import {
   BENCHMARK_LOAD_ADMISSION_STATE,
 } from '../benchmark-partition-convergence.js';
 import {
-  LABELS,
   NODE_ROLES,
-  CONTAINER_ENV_KEYS,
-  PORTS,
   PLAYBACK_EVENT_TYPE,
-  RAFT_PROVIDER_DEFAULTS,
-  NODE_CLIENT_CONTROL_SNAPSHOT_SQL,
-  NODE_CLIENT_SERVICE_DISCOVERY_SQL,
-  NODE_CLIENT_SERVICE_ID_ADMIN_META,
   NODE_CLIENT_SERVICE_ID_POSTGRES_WIRE,
   NODE_CLIENT_SERVICE_PROTOCOL_POSTGRESQL,
 } from '../constants.js';
-import {ENTRYPOINT_ENV} from '../../../../src/constants/entrypoint.js';
 
-const LOAD_STOP_DISPATCH_SETTLE_MS = 25;
-const LOAD_STOP_WAIT_TIMEOUT_MS = 250;
-const ACTIVE_WAIT_HANG_TEST_TIMEOUT_MS = 150;
-const ADMIN_QUERY_TRACE_TIMEOUT_TEST_MS = 80;
 const CONTAINER_ALREADY_STOPPED_ERROR_MESSAGE =
   '(HTTP code 304) container already stopped -  ';
 
-function buildCriticalSystemDiscoverySnapshot(nodeIds, capturedAt = 1) {
-  return {
-    rows: [{
-      capturedAt,
-      services: [{
-        replicas: nodeIds.map((nodeId, index) => ({
-          nodeId,
-          serviceId: `svc-${nodeId}-${index + 1}`,
-          readiness: {
-            routingReady: true,
-          },
-        })),
-      }],
-    }],
-  };
-}
 
 /**
  * Unit: createCluster returns object with all required methods (Req 2.4)
@@ -1067,85 +1030,85 @@ async () => {
 });
 
 test('Unit: resolveBenchmarkCriticalControlPlaneStabilitySnapshot preserves pending pressure signals from the selected control snapshot',
-async () => {
-  const cluster = createCluster({
-    size: 2,
-    docker: {socketPath: '/var/run/docker.sock'},
-    image: 'distributed-db:test',
-  });
+  async () => {
+    const cluster = createCluster({
+      size: 2,
+      docker: {socketPath: '/var/run/docker.sock'},
+      image: 'distributed-db:test',
+    });
 
-  cluster._nodes.set('node-a', {id: 'node-a'});
-  cluster._nodes.set('node-b', {id: 'node-b'});
-  cluster._probeControlSnapshotCoverage = async (_deadline, expectedNodeIds, options = {}) => {
-    assert.deepStrictEqual(expectedNodeIds, ['node-a', 'node-b']);
-    assert.equal(options.readinessMode, 'load');
-    return {
-      completeCoverage: false,
-      bestCoverageNodeCount: 2,
-      selectedSnapshotNodeId: 'node-a',
-      selectedControlPlaneDiagnosticsAvailable: true,
-      selectedPublicationConvergence: {
-        publicationStatus: 'OPEN',
-        publishedActiveNodeIds: ['node-a'],
-        pendingAckNodeIds: ['node-b'],
-        recoveryActiveNodeIds: ['node-a', 'node-b'],
-        recoveryProtocolState: 'publication_pending',
-        priorityRecoveryReasonCodes: [],
-      },
-      selectedControlPlaneOwnerQueueDepth: {
-        pendingWrites: 5,
-        pendingWriteGrowthCount: 2,
-        retainedBacklogGrowthCount: 1,
-        sharedPressureBackpressured: true,
-      },
-      selectedCdcReplayLag: {
-        bufferedEvents: 4,
-        replayBufferGrowthCount: 1,
-        replayRetryDepth: 2,
-      },
-      selectedError: null,
+    cluster._nodes.set('node-a', {id: 'node-a'});
+    cluster._nodes.set('node-b', {id: 'node-b'});
+    cluster._probeControlSnapshotCoverage = async (_deadline, expectedNodeIds, options = {}) => {
+      assert.deepStrictEqual(expectedNodeIds, ['node-a', 'node-b']);
+      assert.equal(options.readinessMode, 'load');
+      return {
+        completeCoverage: false,
+        bestCoverageNodeCount: 2,
+        selectedSnapshotNodeId: 'node-a',
+        selectedControlPlaneDiagnosticsAvailable: true,
+        selectedPublicationConvergence: {
+          publicationStatus: 'OPEN',
+          publishedActiveNodeIds: ['node-a'],
+          pendingAckNodeIds: ['node-b'],
+          recoveryActiveNodeIds: ['node-a', 'node-b'],
+          recoveryProtocolState: 'publication_pending',
+          priorityRecoveryReasonCodes: [],
+        },
+        selectedControlPlaneOwnerQueueDepth: {
+          pendingWrites: 5,
+          pendingWriteGrowthCount: 2,
+          retainedBacklogGrowthCount: 1,
+          sharedPressureBackpressured: true,
+        },
+        selectedCdcReplayLag: {
+          bufferedEvents: 4,
+          replayBufferGrowthCount: 1,
+          replayRetryDepth: 2,
+        },
+        selectedError: null,
+      };
     };
-  };
 
-  const snapshot = await cluster.resolveBenchmarkCriticalControlPlaneStabilitySnapshot();
+    const snapshot = await cluster.resolveBenchmarkCriticalControlPlaneStabilitySnapshot();
 
-  assert.equal(
-    snapshot.state,
-    BENCHMARK_CRITICAL_CONTROL_PLANE_STABILITY_STATE.PENDING,
-  );
-  assert.equal(snapshot.selectedNodeId, 'node-a');
-  assert.equal(snapshot.controlPlaneDiagnosticsAvailable, true);
-  assert.ok(snapshot.reasonCodes.includes('critical_control_owner_backpressured'));
-  assert.ok(snapshot.reasonCodes.includes('critical_control_pending_write_growth'));
-  assert.ok(snapshot.reasonCodes.includes('critical_control_retained_backlog_growth'));
-  assert.ok(snapshot.reasonCodes.includes('critical_control_replay_buffer_growth'));
-  assert.ok(snapshot.reasonCodes.includes('critical_control_replay_retry_depth'));
-});
+    assert.equal(
+      snapshot.state,
+      BENCHMARK_CRITICAL_CONTROL_PLANE_STABILITY_STATE.PENDING,
+    );
+    assert.equal(snapshot.selectedNodeId, 'node-a');
+    assert.equal(snapshot.controlPlaneDiagnosticsAvailable, true);
+    assert.ok(snapshot.reasonCodes.includes('critical_control_owner_backpressured'));
+    assert.ok(snapshot.reasonCodes.includes('critical_control_pending_write_growth'));
+    assert.ok(snapshot.reasonCodes.includes('critical_control_retained_backlog_growth'));
+    assert.ok(snapshot.reasonCodes.includes('critical_control_replay_buffer_growth'));
+    assert.ok(snapshot.reasonCodes.includes('critical_control_replay_retry_depth'));
+  });
 
 test('Unit: resolveBenchmarkCriticalControlPlaneStabilitySnapshot preserves probe failures as unavailable outcomes',
-async () => {
-  const cluster = createCluster({
-    size: 1,
-    docker: {socketPath: '/var/run/docker.sock'},
-    image: 'distributed-db:test',
+  async () => {
+    const cluster = createCluster({
+      size: 1,
+      docker: {socketPath: '/var/run/docker.sock'},
+      image: 'distributed-db:test',
+    });
+
+    cluster._nodes.set('node-a', {id: 'node-a'});
+    cluster._probeControlSnapshotCoverage = async () => {
+      throw new Error('snapshot probe failed');
+    };
+
+    const snapshot = await cluster.resolveBenchmarkCriticalControlPlaneStabilitySnapshot();
+
+    assert.equal(
+      snapshot.state,
+      BENCHMARK_CRITICAL_CONTROL_PLANE_STABILITY_STATE.UNAVAILABLE,
+    );
+    assert.deepStrictEqual(snapshot.reasonCodes, [
+      BENCHMARK_CRITICAL_CONTROL_PLANE_STABILITY_REASON_SNAPSHOT_UNAVAILABLE,
+    ]);
+    assert.equal(snapshot.selectedError, 'snapshot probe failed');
   });
-
-  cluster._nodes.set('node-a', {id: 'node-a'});
-  cluster._probeControlSnapshotCoverage = async () => {
-    throw new Error('snapshot probe failed');
-  };
-
-  const snapshot = await cluster.resolveBenchmarkCriticalControlPlaneStabilitySnapshot();
-
-  assert.equal(
-    snapshot.state,
-    BENCHMARK_CRITICAL_CONTROL_PLANE_STABILITY_STATE.UNAVAILABLE,
-  );
-  assert.deepStrictEqual(snapshot.reasonCodes, [
-    BENCHMARK_CRITICAL_CONTROL_PLANE_STABILITY_REASON_SNAPSHOT_UNAVAILABLE,
-  ]);
-  assert.equal(snapshot.selectedError, 'snapshot probe failed');
-});
 
 test('Unit: resolveBenchmarkLoadAdmissionSnapshot preserves routed-ready ' +
   'versus local-ready admission states',

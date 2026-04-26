@@ -1,4 +1,4 @@
-import { CLUSTER_SEGMENT_2 } from "./cluster-segment-2.js";
+import {CLUSTER_SEGMENT_2} from './cluster-segment-2.js';
 const {
   ACTIVE_WAIT_BLOCKER_HISTORY_MAX_ENTRIES,
   ACTIVE_WAIT_BLOCKER_NONE,
@@ -27,15 +27,18 @@ const {
   ZERO,
 } = CLUSTER_SEGMENT_2;
 
+const BOOTSTRAP_JOIN_PROJECTION_READINESS_FIELD =
+  'bootstrapJoinProjection';
+
 function scoreActiveWaitProgress(progressSnapshot) {
-  if (!progressSnapshot || typeof progressSnapshot !== "object") {
+  if (!progressSnapshot || typeof progressSnapshot !== 'object') {
     return Number.NEGATIVE_INFINITY;
   }
   const expectedNodeCount =
     Number.isInteger(progressSnapshot.expectedNodeCount) &&
-    progressSnapshot.expectedNodeCount > ZERO
-      ? progressSnapshot.expectedNodeCount
-      : ZERO;
+    progressSnapshot.expectedNodeCount > ZERO ?
+      progressSnapshot.expectedNodeCount :
+      ZERO;
   const pendingAckResolved = Math.max(
     ZERO,
     expectedNodeCount -
@@ -51,24 +54,24 @@ function scoreActiveWaitProgress(progressSnapshot) {
     progressSnapshot.gateReasonCount || ZERO,
   );
   const prioritySpreadRank =
-    progressSnapshot.prioritySpreadSatisfied === true
-      ? 2
-      : progressSnapshot.prioritySpreadSatisfied === false
-        ? ZERO
-        : ONE;
+    progressSnapshot.prioritySpreadSatisfied === true ?
+      2 :
+      progressSnapshot.prioritySpreadSatisfied === false ?
+        ZERO :
+        ONE;
   const prioritySpreadGapScore =
     Number.isInteger(progressSnapshot.prioritySpreadGap) &&
-    progressSnapshot.prioritySpreadGap >= ZERO
-      ? Math.max(ZERO, 100 - Math.min(100, progressSnapshot.prioritySpreadGap))
-      : 50;
+    progressSnapshot.prioritySpreadGap >= ZERO ?
+      Math.max(ZERO, 100 - Math.min(100, progressSnapshot.prioritySpreadGap)) :
+      50;
   const unresolvedSemanticStateCount = Number(
     progressSnapshot.priorityRecoveryUnresolvedSemanticStateCount,
   );
   const unresolvedPriorityRecoveryCount = Number.isFinite(
     unresolvedSemanticStateCount,
-  )
-    ? unresolvedSemanticStateCount
-    : Number(progressSnapshot.priorityRecoveryUnresolvedClassCount) || ZERO;
+  ) ?
+    unresolvedSemanticStateCount :
+    Number(progressSnapshot.priorityRecoveryUnresolvedClassCount) || ZERO;
   const priorityRecoveryProgressBonus = Math.max(
     ZERO,
     8 - Math.min(8, unresolvedPriorityRecoveryCount),
@@ -99,125 +102,125 @@ function scoreActiveWaitProgress(progressSnapshot) {
 }
 
 function formatActiveWaitProgressSnapshot(progressSnapshot) {
-  if (!progressSnapshot || typeof progressSnapshot !== "object") {
-    return "none";
+  if (!progressSnapshot || typeof progressSnapshot !== 'object') {
+    return 'none';
   }
-  const gateReasons = Array.isArray(progressSnapshot.gateReasons)
-    ? progressSnapshot.gateReasons
-    : [];
+  const gateReasons = Array.isArray(progressSnapshot.gateReasons) ?
+    progressSnapshot.gateReasons :
+    [];
   const priorityRecoveryProgressClasses = Array.isArray(
     progressSnapshot?.priorityRecoveryProgressClasses?.unresolvedClassIds,
-  )
-    ? progressSnapshot.priorityRecoveryProgressClasses.unresolvedClassIds
-    : [];
+  ) ?
+    progressSnapshot.priorityRecoveryProgressClasses.unresolvedClassIds :
+    [];
   const priorityRecoverySemanticStates = Array.isArray(
     progressSnapshot?.priorityRecoveryProgressClasses
       ?.unresolvedSemanticStateIds,
-  )
-    ? progressSnapshot.priorityRecoveryProgressClasses
-        .unresolvedSemanticStateIds
-    : [];
+  ) ?
+    progressSnapshot.priorityRecoveryProgressClasses
+      .unresolvedSemanticStateIds :
+    [];
   const selectedMissingPublishedNodeIds = Array.isArray(
     progressSnapshot?.selectedMissingPublishedNodeIds,
-  )
-    ? progressSnapshot.selectedMissingPublishedNodeIds
-    : [];
+  ) ?
+    progressSnapshot.selectedMissingPublishedNodeIds :
+    [];
   const ownerQueuePendingWrites = Number.isFinite(
     progressSnapshot?.selectedControlPlaneOwnerQueueDepth?.pendingWrites,
-  )
-    ? Math.max(
-        ZERO,
-        Math.floor(
-          progressSnapshot.selectedControlPlaneOwnerQueueDepth.pendingWrites,
-        ),
-      )
-    : null;
+  ) ?
+    Math.max(
+      ZERO,
+      Math.floor(
+        progressSnapshot.selectedControlPlaneOwnerQueueDepth.pendingWrites,
+      ),
+    ) :
+    null;
   const cdcBufferedEvents = Number.isFinite(
     progressSnapshot?.selectedCdcReplayLag?.bufferedEvents,
-  )
-    ? Math.max(
-        ZERO,
-        Math.floor(progressSnapshot.selectedCdcReplayLag.bufferedEvents),
-      )
-    : null;
+  ) ?
+    Math.max(
+      ZERO,
+      Math.floor(progressSnapshot.selectedCdcReplayLag.bufferedEvents),
+    ) :
+    null;
   const perNodePublicationDisagreementSet =
     progressSnapshot?.perNodePublicationDisagreementSet &&
-    typeof progressSnapshot.perNodePublicationDisagreementSet === "object"
-      ? progressSnapshot.perNodePublicationDisagreementSet
-      : {};
+    typeof progressSnapshot.perNodePublicationDisagreementSet === 'object' ?
+      progressSnapshot.perNodePublicationDisagreementSet :
+      {};
   const disagreementNodeCount = Object.values(
     perNodePublicationDisagreementSet,
   ).filter((missingNodeIds) => {
     return Array.isArray(missingNodeIds) && missingNodeIds.length > ZERO;
   }).length;
   return (
-    "active=" +
+    'active=' +
     String(progressSnapshot.activeNodeCount ?? ZERO) +
-    "/" +
+    '/' +
     String(progressSnapshot.expectedNodeCount ?? ZERO) +
-    ",coverage=" +
+    ',coverage=' +
     String(progressSnapshot.snapshotCoverageNodeCount ?? ZERO) +
-    "/" +
+    '/' +
     String(progressSnapshot.expectedNodeCount ?? ZERO) +
-    (progressSnapshot.snapshotCoverageComplete === true ? "#complete" : "") +
-    ",publication=" +
-    String(progressSnapshot.publicationStatus || "unknown") +
-    ",snapshotNode=" +
-    String(progressSnapshot.selectedSnapshotNodeId || "none") +
-    (progressSnapshot.selectedSnapshotAdminReady === true
-      ? "#adminReady=true"
-      : progressSnapshot.selectedSnapshotAdminReady === false
-        ? "#adminReady=false"
-        : "") +
-    (progressSnapshot.selectedSnapshotReachableBy
-      ? "#via=" + progressSnapshot.selectedSnapshotReachableBy
-      : "") +
-    (progressSnapshot.selectedSnapshotError ? "#snapshotError" : "") +
-    (progressSnapshot.selectedSnapshotReachabilityError ? "#adminError" : "") +
-    ",epoch=" +
-    String(progressSnapshot.publicationEpoch ?? "unknown") +
-    ",publishedActive=" +
+    (progressSnapshot.snapshotCoverageComplete === true ? '#complete' : '') +
+    ',publication=' +
+    String(progressSnapshot.publicationStatus || 'unknown') +
+    ',snapshotNode=' +
+    String(progressSnapshot.selectedSnapshotNodeId || 'none') +
+    (progressSnapshot.selectedSnapshotAdminReady === true ?
+      '#adminReady=true' :
+      progressSnapshot.selectedSnapshotAdminReady === false ?
+        '#adminReady=false' :
+        '') +
+    (progressSnapshot.selectedSnapshotReachableBy ?
+      '#via=' + progressSnapshot.selectedSnapshotReachableBy :
+      '') +
+    (progressSnapshot.selectedSnapshotError ? '#snapshotError' : '') +
+    (progressSnapshot.selectedSnapshotReachabilityError ? '#adminError' : '') +
+    ',epoch=' +
+    String(progressSnapshot.publicationEpoch ?? 'unknown') +
+    ',publishedActive=' +
     String(progressSnapshot.selectedPublishedActiveCount ?? ZERO) +
-    "/" +
+    '/' +
     String(progressSnapshot.expectedNodeCount ?? ZERO) +
-    ",pendingAck=" +
+    ',pendingAck=' +
     String(progressSnapshot.pendingAckCount ?? ZERO) +
-    ",missingPublished=" +
+    ',missingPublished=' +
     String(progressSnapshot.missingPublishedCount ?? ZERO) +
-    ",missingPublishedIds=" +
-    (selectedMissingPublishedNodeIds.length > ZERO
-      ? selectedMissingPublishedNodeIds.join("|")
-      : "none") +
-    ",ownerQueue=" +
-    String(ownerQueuePendingWrites ?? "unknown") +
-    ",cdcLag=" +
-    String(cdcBufferedEvents ?? "unknown") +
-    ",disagreementNodes=" +
+    ',missingPublishedIds=' +
+    (selectedMissingPublishedNodeIds.length > ZERO ?
+      selectedMissingPublishedNodeIds.join('|') :
+      'none') +
+    ',ownerQueue=' +
+    String(ownerQueuePendingWrites ?? 'unknown') +
+    ',cdcLag=' +
+    String(cdcBufferedEvents ?? 'unknown') +
+    ',disagreementNodes=' +
     String(disagreementNodeCount) +
-    ",prioritySpread=" +
-    (progressSnapshot.prioritySpreadSatisfied === true
-      ? "ready"
-      : progressSnapshot.prioritySpreadSatisfied === false
-        ? "pending"
-        : "unknown") +
-    (Number.isInteger(progressSnapshot.prioritySpreadGap)
-      ? "#gap=" + String(progressSnapshot.prioritySpreadGap)
-      : "") +
-    ",priorityRecovery=" +
-    (priorityRecoveryProgressClasses.length > ZERO
-      ? priorityRecoveryProgressClasses.join("|")
-      : "none") +
-    ",priorityRecoveryState=" +
-    (priorityRecoverySemanticStates.length > ZERO
-      ? priorityRecoverySemanticStates.join("|")
-      : "none") +
-    ",closure=" +
-    String(progressSnapshot.closureRecordId || "none") +
-    (progressSnapshot.closureWitnessClass
-      ? "#" + progressSnapshot.closureWitnessClass
-      : "") +
-    ",gateReasons=" +
-    (gateReasons.length > ZERO ? gateReasons.join("|") : "none")
+    ',prioritySpread=' +
+    (progressSnapshot.prioritySpreadSatisfied === true ?
+      'ready' :
+      progressSnapshot.prioritySpreadSatisfied === false ?
+        'pending' :
+        'unknown') +
+    (Number.isInteger(progressSnapshot.prioritySpreadGap) ?
+      '#gap=' + String(progressSnapshot.prioritySpreadGap) :
+      '') +
+    ',priorityRecovery=' +
+    (priorityRecoveryProgressClasses.length > ZERO ?
+      priorityRecoveryProgressClasses.join('|') :
+      'none') +
+    ',priorityRecoveryState=' +
+    (priorityRecoverySemanticStates.length > ZERO ?
+      priorityRecoverySemanticStates.join('|') :
+      'none') +
+    ',closure=' +
+    String(progressSnapshot.closureRecordId || 'none') +
+    (progressSnapshot.closureWitnessClass ?
+      '#' + progressSnapshot.closureWitnessClass :
+      '') +
+    ',gateReasons=' +
+    (gateReasons.length > ZERO ? gateReasons.join('|') : 'none')
   );
 }
 
@@ -232,10 +235,10 @@ function upsertActiveWaitBlockerHistory(
   }
   const blockers =
     Array.isArray(progressSnapshot?.blockers) &&
-    progressSnapshot.blockers.length > ZERO
-      ? progressSnapshot.blockers
-      : [ACTIVE_WAIT_BLOCKER_NONE];
-  const signature = blockers.join("|");
+    progressSnapshot.blockers.length > ZERO ?
+      progressSnapshot.blockers :
+      [ACTIVE_WAIT_BLOCKER_NONE];
+  const signature = blockers.join('|');
   let entry = blockerHistoryBySignature.get(signature) || null;
   if (!entry) {
     if (
@@ -308,7 +311,7 @@ function summarizeActiveWaitBlockerHistory(blockerHistoryBySignature) {
 }
 
 function normalizeReplicaOperationPartitionGroupInFlight(value) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return {};
   }
   const normalized = {};
@@ -325,48 +328,48 @@ function normalizeReplicaOperationPartitionGroupInFlight(value) {
 function buildReplicaOperationTimelineSignature(operationTimelineById = {}) {
   if (
     !operationTimelineById ||
-    typeof operationTimelineById !== "object" ||
+    typeof operationTimelineById !== 'object' ||
     Array.isArray(operationTimelineById)
   ) {
     return null;
   }
   const signatures = [];
   for (const operationId of Object.keys(operationTimelineById).sort()) {
-    const timeline = Array.isArray(operationTimelineById[operationId])
-      ? operationTimelineById[operationId]
-      : [];
+    const timeline = Array.isArray(operationTimelineById[operationId]) ?
+      operationTimelineById[operationId] :
+      [];
     const lastEntry =
       timeline.length > ZERO ? timeline[timeline.length - 1] : null;
     signatures.push(
       String(operationId) +
-        "=" +
+        '=' +
         String(timeline.length) +
-        ":" +
-        String(lastEntry?.eventType || "") +
-        ":" +
-        String(lastEntry?.step || "") +
-        ":" +
-        String(lastEntry?.status || "") +
-        ":" +
-        (lastEntry?.inFlight === true ? "1" : "0"),
+        ':' +
+        String(lastEntry?.eventType || '') +
+        ':' +
+        String(lastEntry?.step || '') +
+        ':' +
+        String(lastEntry?.status || '') +
+        ':' +
+        (lastEntry?.inFlight === true ? '1' : '0'),
     );
   }
   if (signatures.length === ZERO) {
     return null;
   }
-  return signatures.join("|");
+  return signatures.join('|');
 }
 
 function isBetterControlSnapshotCandidate(candidate, selected) {
   if (!selected) {
     return true;
   }
-  const candidateCapturedAtMs = Number.isFinite(candidate?.capturedAtMs)
-    ? candidate.capturedAtMs
-    : null;
-  const selectedCapturedAtMs = Number.isFinite(selected?.capturedAtMs)
-    ? selected.capturedAtMs
-    : null;
+  const candidateCapturedAtMs = Number.isFinite(candidate?.capturedAtMs) ?
+    candidate.capturedAtMs :
+    null;
+  const selectedCapturedAtMs = Number.isFinite(selected?.capturedAtMs) ?
+    selected.capturedAtMs :
+    null;
   if (
     candidateCapturedAtMs !== null &&
     selectedCapturedAtMs !== null &&
@@ -384,8 +387,8 @@ function isBetterControlSnapshotCandidate(candidate, selected) {
     return Number(candidate?.inFlightCount) < Number(selected?.inFlightCount);
   }
   return (
-    String(candidate?.nodeId || "").localeCompare(
-      String(selected?.nodeId || ""),
+    String(candidate?.nodeId || '').localeCompare(
+      String(selected?.nodeId || ''),
     ) < ZERO
   );
 }
@@ -397,7 +400,7 @@ function normalizeDistinctStringArray(values) {
   return [
     ...new Set(
       values
-        .map((value) => String(value || "").trim())
+        .map((value) => String(value || '').trim())
         .filter((value) => value.length > ZERO),
     ),
   ].sort((left, right) => left.localeCompare(right));
@@ -407,7 +410,7 @@ function parseJsonArrayField(value) {
   if (Array.isArray(value)) {
     return value;
   }
-  if (typeof value !== "string") {
+  if (typeof value !== 'string') {
     return [];
   }
   try {
@@ -419,17 +422,17 @@ function parseJsonArrayField(value) {
 }
 
 function parseJsonObjectField(value) {
-  if (value && typeof value === "object" && !Array.isArray(value)) {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
     return value;
   }
-  if (typeof value !== "string") {
+  if (typeof value !== 'string') {
     return null;
   }
   try {
     const parsed = JSON.parse(value);
-    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
-      ? parsed
-      : null;
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ?
+      parsed :
+      null;
   } catch {
     return null;
   }
@@ -439,7 +442,7 @@ function parseFiniteNumberField(value) {
   if (Number.isFinite(value)) {
     return Math.floor(value);
   }
-  if (typeof value !== "string" || value.trim().length === ZERO) {
+  if (typeof value !== 'string' || value.trim().length === ZERO) {
     return null;
   }
   const numericValue = Number(value);
@@ -447,13 +450,13 @@ function parseFiniteNumberField(value) {
 }
 
 function extractCriticalSystemDiscoverySummary(discoverySnapshot) {
-  const rows = Array.isArray(discoverySnapshot?.rows)
-    ? discoverySnapshot.rows
-    : [];
+  const rows = Array.isArray(discoverySnapshot?.rows) ?
+    discoverySnapshot.rows :
+    [];
   const firstRow =
-    rows.length > ZERO && rows[ZERO] && typeof rows[ZERO] === "object"
-      ? rows[ZERO]
-      : null;
+    rows.length > ZERO && rows[ZERO] && typeof rows[ZERO] === 'object' ?
+      rows[ZERO] :
+      null;
   if (!firstRow) {
     return {
       capturedAtMs: null,
@@ -463,27 +466,27 @@ function extractCriticalSystemDiscoverySummary(discoverySnapshot) {
       totalReplicaCount: ZERO,
     };
   }
-  const services = Array.isArray(firstRow[SERVICE_DISCOVERY_SERVICES_FIELD])
-    ? firstRow[SERVICE_DISCOVERY_SERVICES_FIELD]
-    : [];
+  const services = Array.isArray(firstRow[SERVICE_DISCOVERY_SERVICES_FIELD]) ?
+    firstRow[SERVICE_DISCOVERY_SERVICES_FIELD] :
+    [];
   const readyNodeIds = [];
   let readyReplicaCount = ZERO;
   let totalReplicaCount = ZERO;
 
   for (const service of services) {
-    if (!service || typeof service !== "object") {
+    if (!service || typeof service !== 'object') {
       continue;
     }
-    const replicas = Array.isArray(service[SERVICE_DISCOVERY_REPLICAS_FIELD])
-      ? service[SERVICE_DISCOVERY_REPLICAS_FIELD]
-      : [];
+    const replicas = Array.isArray(service[SERVICE_DISCOVERY_REPLICAS_FIELD]) ?
+      service[SERVICE_DISCOVERY_REPLICAS_FIELD] :
+      [];
     for (const replica of replicas) {
-      if (!replica || typeof replica !== "object") {
+      if (!replica || typeof replica !== 'object') {
         continue;
       }
       totalReplicaCount += ONE;
       const nodeId = String(
-        replica[SERVICE_DISCOVERY_REPLICA_NODE_ID_FIELD] || "",
+        replica[SERVICE_DISCOVERY_REPLICA_NODE_ID_FIELD] || '',
       ).trim();
       if (nodeId.length === ZERO) {
         continue;
@@ -491,7 +494,7 @@ function extractCriticalSystemDiscoverySummary(discoverySnapshot) {
       const readiness = replica[SERVICE_DISCOVERY_REPLICA_READINESS_FIELD];
       if (
         !readiness ||
-        typeof readiness !== "object" ||
+        typeof readiness !== 'object' ||
         readiness[SERVICE_DISCOVERY_READINESS_ROUTING_READY_FIELD] !== true
       ) {
         continue;
@@ -503,9 +506,9 @@ function extractCriticalSystemDiscoverySummary(discoverySnapshot) {
 
   const distinctReadyNodeIds = normalizeDistinctStringArray(readyNodeIds);
   return {
-    capturedAtMs: Number.isFinite(firstRow?.capturedAt)
-      ? Math.floor(firstRow.capturedAt)
-      : null,
+    capturedAtMs: Number.isFinite(firstRow?.capturedAt) ?
+      Math.floor(firstRow.capturedAt) :
+      null,
     readyNodeIds: distinctReadyNodeIds,
     readyDistinctNodeCount: distinctReadyNodeIds.length,
     readyReplicaCount,
@@ -523,12 +526,12 @@ function isBetterCriticalSystemDiscoveryCandidate(candidate, selected) {
   if (candidate.readyReplicaCount !== selected.readyReplicaCount) {
     return candidate.readyReplicaCount > selected.readyReplicaCount;
   }
-  const candidateCapturedAtMs = Number.isFinite(candidate?.selectedCapturedAtMs)
-    ? candidate.selectedCapturedAtMs
-    : null;
-  const selectedCapturedAtMs = Number.isFinite(selected?.selectedCapturedAtMs)
-    ? selected.selectedCapturedAtMs
-    : null;
+  const candidateCapturedAtMs = Number.isFinite(candidate?.selectedCapturedAtMs) ?
+    candidate.selectedCapturedAtMs :
+    null;
+  const selectedCapturedAtMs = Number.isFinite(selected?.selectedCapturedAtMs) ?
+    selected.selectedCapturedAtMs :
+    null;
   if (
     candidateCapturedAtMs !== null &&
     selectedCapturedAtMs !== null &&
@@ -546,48 +549,48 @@ function isBetterCriticalSystemDiscoveryCandidate(candidate, selected) {
     return candidate.totalReplicaCount > selected.totalReplicaCount;
   }
   return (
-    String(candidate?.selectedNodeId || "").localeCompare(
-      String(selected?.selectedNodeId || ""),
+    String(candidate?.selectedNodeId || '').localeCompare(
+      String(selected?.selectedNodeId || ''),
     ) < ZERO
   );
 }
 
 function formatCriticalSystemDistributionSummary(summary) {
-  if (!summary || typeof summary !== "object" || summary.enabled !== true) {
-    return "disabled";
+  if (!summary || typeof summary !== 'object' || summary.enabled !== true) {
+    return 'disabled';
   }
   const tables = Array.isArray(summary.tables) ? summary.tables : [];
   if (tables.length === ZERO) {
-    return "none";
+    return 'none';
   }
   return tables
     .map((table) => {
-      const tableName = String(table?.tableName || "unknown_table");
+      const tableName = String(table?.tableName || 'unknown_table');
       const readyDistinctNodeCount = Number.isInteger(
         table?.readyDistinctNodeCount,
-      )
-        ? table.readyDistinctNodeCount
-        : ZERO;
+      ) ?
+        table.readyDistinctNodeCount :
+        ZERO;
       const requiredDistinctNodeCount = Number.isInteger(
         table?.requiredDistinctNodeCount,
-      )
-        ? table.requiredDistinctNodeCount
-        : ZERO;
+      ) ?
+        table.requiredDistinctNodeCount :
+        ZERO;
       const readyNodeIds = normalizeDistinctStringArray(table?.readyNodeIds);
-      const selectedNodeId = String(table?.selectedNodeId || "").trim();
-      const error = String(table?.error || "").trim();
+      const selectedNodeId = String(table?.selectedNodeId || '').trim();
+      const error = String(table?.error || '').trim();
       return (
         tableName +
-        ":" +
+        ':' +
         String(readyDistinctNodeCount) +
-        "/" +
+        '/' +
         String(requiredDistinctNodeCount) +
-        (readyNodeIds.length > ZERO ? "@" + readyNodeIds.join("|") : "") +
-        (selectedNodeId.length > ZERO ? "#src=" + selectedNodeId : "") +
-        (error.length > ZERO ? "#err=" + error : "")
+        (readyNodeIds.length > ZERO ? '@' + readyNodeIds.join('|') : '') +
+        (selectedNodeId.length > ZERO ? '#src=' + selectedNodeId : '') +
+        (error.length > ZERO ? '#err=' + error : '')
       );
     })
-    .join(", ");
+    .join(', ');
 }
 
 /**
@@ -607,9 +610,9 @@ async function pollUntilCondition(options = {}) {
   const probe = options.probe;
   const isSuccess = options.isSuccess;
   const sleep =
-    typeof options.sleep === "function" ? options.sleep : async () => {};
+    typeof options.sleep === 'function' ? options.sleep : async () => {};
   const onAttempt =
-    typeof options.onAttempt === "function" ? options.onAttempt : null;
+    typeof options.onAttempt === 'function' ? options.onAttempt : null;
 
   const startedAt = Date.now();
   let attempts = 0;
@@ -653,11 +656,11 @@ async function pollUntilCondition(options = {}) {
  * @param {Object|null} socket
  */
 function closeWebSocketSafely(socket) {
-  if (!socket || typeof socket.close !== "function") {
+  if (!socket || typeof socket.close !== 'function') {
     return;
   }
   try {
-    socket.once("error", () => {});
+    socket.once('error', () => {});
   } catch (_onceErr) {
     // Ignore
   }
@@ -684,13 +687,13 @@ function createProbeResult(options = {}) {
   return {
     attempted: options.attempted === true,
     ok: options.ok === true,
-    statusCode: Number.isInteger(options.statusCode)
-      ? options.statusCode
-      : null,
-    error: typeof options.error === "string" ? options.error : null,
-    url: typeof options.url === "string" ? options.url : null,
-    endpoint: typeof options.endpoint === "string" ? options.endpoint : null,
-    query: typeof options.query === "string" ? options.query : null,
+    statusCode: Number.isInteger(options.statusCode) ?
+      options.statusCode :
+      null,
+    error: typeof options.error === 'string' ? options.error : null,
+    url: typeof options.url === 'string' ? options.url : null,
+    endpoint: typeof options.endpoint === 'string' ? options.endpoint : null,
+    query: typeof options.query === 'string' ? options.query : null,
   };
 }
 
@@ -700,10 +703,10 @@ function createProbeResult(options = {}) {
  * @returns {string}
  */
 function normalizeProbeError(error) {
-  if (error && typeof error.message === "string" && error.message.length > 0) {
+  if (error && typeof error.message === 'string' && error.message.length > 0) {
     return error.message;
   }
-  if (typeof error === "string" && error.length > 0) {
+  if (typeof error === 'string' && error.length > 0) {
     return error;
   }
   return REACHABILITY_ERROR_UNKNOWN;
@@ -717,9 +720,9 @@ function normalizeProbeError(error) {
  */
 function readContainerInspectEnvValue(inspect, key) {
   const envList = Array.isArray(inspect?.Config?.Env) ? inspect.Config.Env : [];
-  const prefix = String(key || "") + "=";
+  const prefix = String(key || '') + '=';
   for (const entry of envList) {
-    if (typeof entry === "string" && entry.startsWith(prefix)) {
+    if (typeof entry === 'string' && entry.startsWith(prefix)) {
       return entry.slice(prefix.length);
     }
   }
@@ -734,15 +737,15 @@ function readContainerInspectEnvValue(inspect, key) {
  * @returns {boolean}
  */
 function hasDockerNetworkAlias(endpointSettings, expectedAlias) {
-  if (!endpointSettings || typeof endpointSettings !== "object") {
+  if (!endpointSettings || typeof endpointSettings !== 'object') {
     return false;
   }
-  if (typeof expectedAlias !== "string" || expectedAlias.length === ZERO) {
+  if (typeof expectedAlias !== 'string' || expectedAlias.length === ZERO) {
     return true;
   }
-  const aliases = Array.isArray(endpointSettings.Aliases)
-    ? endpointSettings.Aliases
-    : [];
+  const aliases = Array.isArray(endpointSettings.Aliases) ?
+    endpointSettings.Aliases :
+    [];
   return aliases.includes(expectedAlias);
 }
 
@@ -752,7 +755,7 @@ function hasDockerNetworkAlias(endpointSettings, expectedAlias) {
  * @returns {boolean}
  */
 function isIgnorableContainerStopError(error) {
-  const message = String(error?.message || "").toLowerCase();
+  const message = String(error?.message || '').toLowerCase();
   return (
     message.includes(CONTAINER_STOP_ALREADY_STOPPED_PATTERN) ||
     message.includes(CONTAINER_STOP_NOT_RUNNING_PATTERN) ||
@@ -778,7 +781,7 @@ function buildHealthProbeResult(url, statusCode) {
 }
 
 function resolveReadinessPhaseRank(phase) {
-  const normalizedPhase = typeof phase === "string" ? phase.toUpperCase() : "";
+  const normalizedPhase = typeof phase === 'string' ? phase.toUpperCase() : '';
   return READINESS_PHASE_RANK[normalizedPhase] || ZERO;
 }
 
@@ -804,83 +807,91 @@ function normalizeReadinessProbeResult(probeResponse) {
     recoveryStage: null,
     recoveryStageRank: null,
     publishedControlPlaneEpoch: null,
+    [BOOTSTRAP_JOIN_PROJECTION_READINESS_FIELD]: null,
   };
 
-  if (typeof probeResponse === "number") {
+  if (typeof probeResponse === 'number') {
     normalized.status = probeResponse;
     return normalized;
   }
 
-  if (!probeResponse || typeof probeResponse !== "object") {
+  if (!probeResponse || typeof probeResponse !== 'object') {
     return normalized;
   }
 
-  normalized.status = Number.isFinite(probeResponse.status)
-    ? Math.floor(probeResponse.status)
-    : HTTP_ERROR_STATUS;
+  normalized.status = Number.isFinite(probeResponse.status) ?
+    Math.floor(probeResponse.status) :
+    HTTP_ERROR_STATUS;
 
   const body = probeResponse.body;
-  if (!body || typeof body !== "object") {
+  if (!body || typeof body !== 'object') {
     return normalized;
   }
 
-  normalized.phase = typeof body.phase === "string" ? body.phase : null;
-  normalized.phaseRank = Number.isFinite(body.phaseRank)
-    ? Math.max(ZERO, Math.floor(body.phaseRank))
-    : resolveReadinessPhaseRank(normalized.phase);
-  normalized.state = typeof body.state === "string" ? body.state : null;
+  normalized.phase = typeof body.phase === 'string' ? body.phase : null;
+  normalized.phaseRank = Number.isFinite(body.phaseRank) ?
+    Math.max(ZERO, Math.floor(body.phaseRank)) :
+    resolveReadinessPhaseRank(normalized.phase);
+  normalized.state = typeof body.state === 'string' ? body.state : null;
   normalized.readinessStage =
-    typeof body.readinessStage === "string" ? body.readinessStage : null;
-  normalized.readinessStageRank = Number.isFinite(body.readinessStageRank)
-    ? Math.max(ZERO, Math.floor(body.readinessStageRank))
-    : null;
-  normalized.reasons = Array.isArray(body.reasons)
-    ? body.reasons.map((reason) => String(reason))
-    : [];
-  normalized.retryAfterMs = Number.isFinite(body.retryAfterMs)
-    ? Math.floor(body.retryAfterMs)
-    : null;
-  normalized.stableWindowMs = Number.isFinite(body.stableWindowMs)
-    ? Math.max(ZERO, Math.floor(body.stableWindowMs))
-    : null;
-  normalized.stableElapsedMs = Number.isFinite(body.stableElapsedMs)
-    ? Math.max(ZERO, Math.floor(body.stableElapsedMs))
-    : ZERO;
-  normalized.stableSinceMs = Number.isFinite(body.stableSinceMs)
-    ? Math.floor(body.stableSinceMs)
-    : null;
-  normalized.readinessEpoch = Number.isFinite(body.readinessEpoch)
-    ? Math.max(ZERO, Math.floor(body.readinessEpoch))
-    : Number.isFinite(body.transitionCount)
-      ? Math.max(ZERO, Math.floor(body.transitionCount))
-      : null;
-  normalized.timestamp = Number.isFinite(body.timestamp)
-    ? Math.floor(body.timestamp)
-    : null;
+    typeof body.readinessStage === 'string' ? body.readinessStage : null;
+  normalized.readinessStageRank = Number.isFinite(body.readinessStageRank) ?
+    Math.max(ZERO, Math.floor(body.readinessStageRank)) :
+    null;
+  normalized.reasons = Array.isArray(body.reasons) ?
+    body.reasons.map((reason) => String(reason)) :
+    [];
+  normalized.retryAfterMs = Number.isFinite(body.retryAfterMs) ?
+    Math.floor(body.retryAfterMs) :
+    null;
+  normalized.stableWindowMs = Number.isFinite(body.stableWindowMs) ?
+    Math.max(ZERO, Math.floor(body.stableWindowMs)) :
+    null;
+  normalized.stableElapsedMs = Number.isFinite(body.stableElapsedMs) ?
+    Math.max(ZERO, Math.floor(body.stableElapsedMs)) :
+    ZERO;
+  normalized.stableSinceMs = Number.isFinite(body.stableSinceMs) ?
+    Math.floor(body.stableSinceMs) :
+    null;
+  normalized.readinessEpoch = Number.isFinite(body.readinessEpoch) ?
+    Math.max(ZERO, Math.floor(body.readinessEpoch)) :
+    Number.isFinite(body.transitionCount) ?
+      Math.max(ZERO, Math.floor(body.transitionCount)) :
+      null;
+  normalized.timestamp = Number.isFinite(body.timestamp) ?
+    Math.floor(body.timestamp) :
+    null;
   normalized.controlPlaneRecoveryReady =
-    typeof body.controlPlaneRecoveryReady === "boolean"
-      ? body.controlPlaneRecoveryReady
-      : null;
+    typeof body.controlPlaneRecoveryReady === 'boolean' ?
+      body.controlPlaneRecoveryReady :
+      null;
   normalized.metadataPublicationReady =
-    typeof body.metadataPublicationReady === "boolean"
-      ? body.metadataPublicationReady
-      : null;
+    typeof body.metadataPublicationReady === 'boolean' ?
+      body.metadataPublicationReady :
+      null;
   normalized.backgroundWorkReady =
-    typeof body.backgroundWorkReady === "boolean"
-      ? body.backgroundWorkReady
-      : null;
+    typeof body.backgroundWorkReady === 'boolean' ?
+      body.backgroundWorkReady :
+      null;
   normalized.recoveryBlocked =
-    typeof body.recoveryBlocked === "boolean" ? body.recoveryBlocked : null;
+    typeof body.recoveryBlocked === 'boolean' ? body.recoveryBlocked : null;
   normalized.recoveryStage =
-    typeof body.recoveryStage === "string" ? body.recoveryStage : null;
-  normalized.recoveryStageRank = Number.isFinite(body.recoveryStageRank)
-    ? Math.max(ZERO, Math.floor(body.recoveryStageRank))
-    : null;
+    typeof body.recoveryStage === 'string' ? body.recoveryStage : null;
+  normalized.recoveryStageRank = Number.isFinite(body.recoveryStageRank) ?
+    Math.max(ZERO, Math.floor(body.recoveryStageRank)) :
+    null;
   normalized.publishedControlPlaneEpoch = Number.isFinite(
     body.publishedControlPlaneEpoch,
-  )
-    ? Math.max(ZERO, Math.floor(body.publishedControlPlaneEpoch))
-    : null;
+  ) ?
+    Math.max(ZERO, Math.floor(body.publishedControlPlaneEpoch)) :
+    null;
+  normalized[BOOTSTRAP_JOIN_PROJECTION_READINESS_FIELD] =
+    body[BOOTSTRAP_JOIN_PROJECTION_READINESS_FIELD] &&
+    typeof body[BOOTSTRAP_JOIN_PROJECTION_READINESS_FIELD] === 'object' ?
+      JSON.parse(
+        JSON.stringify(body[BOOTSTRAP_JOIN_PROJECTION_READINESS_FIELD]),
+      ) :
+      null;
   return normalized;
 }
 
@@ -888,38 +899,38 @@ function buildBootstrapProgressSnapshot(probeResult) {
   const success =
     probeResult?.status >= HTTP_OK_LOWER &&
     probeResult?.status <= HTTP_OK_UPPER;
-  const reasons = Array.isArray(probeResult?.reasons)
-    ? probeResult.reasons
-    : [];
+  const reasons = Array.isArray(probeResult?.reasons) ?
+    probeResult.reasons :
+    [];
   return {
     success,
-    status: Number.isFinite(probeResult?.status)
-      ? Math.floor(probeResult.status)
-      : HTTP_ERROR_STATUS,
-    statusRank: success
-      ? 2
-      : Number.isFinite(probeResult?.status) &&
-          probeResult.status > HTTP_ERROR_STATUS
-        ? 1
-        : ZERO,
+    status: Number.isFinite(probeResult?.status) ?
+      Math.floor(probeResult.status) :
+      HTTP_ERROR_STATUS,
+    statusRank: success ?
+      2 :
+      Number.isFinite(probeResult?.status) &&
+          probeResult.status > HTTP_ERROR_STATUS ?
+        1 :
+        ZERO,
     phase:
-      typeof probeResult?.phase === "string"
-        ? probeResult.phase
-        : UNKNOWN_PHASE,
-    phaseRank: Number.isFinite(probeResult?.phaseRank)
-      ? Math.max(ZERO, Math.floor(probeResult.phaseRank))
-      : resolveReadinessPhaseRank(probeResult?.phase),
+      typeof probeResult?.phase === 'string' ?
+        probeResult.phase :
+        UNKNOWN_PHASE,
+    phaseRank: Number.isFinite(probeResult?.phaseRank) ?
+      Math.max(ZERO, Math.floor(probeResult.phaseRank)) :
+      resolveReadinessPhaseRank(probeResult?.phase),
     reasons,
     reasonCount: reasons.length,
-    stableElapsedMs: Number.isFinite(probeResult?.stableElapsedMs)
-      ? Math.max(ZERO, Math.floor(probeResult.stableElapsedMs))
-      : ZERO,
-    stableWindowMs: Number.isFinite(probeResult?.stableWindowMs)
-      ? Math.max(ZERO, Math.floor(probeResult.stableWindowMs))
-      : null,
-    readinessEpoch: Number.isFinite(probeResult?.readinessEpoch)
-      ? Math.max(ZERO, Math.floor(probeResult.readinessEpoch))
-      : null,
+    stableElapsedMs: Number.isFinite(probeResult?.stableElapsedMs) ?
+      Math.max(ZERO, Math.floor(probeResult.stableElapsedMs)) :
+      ZERO,
+    stableWindowMs: Number.isFinite(probeResult?.stableWindowMs) ?
+      Math.max(ZERO, Math.floor(probeResult.stableWindowMs)) :
+      null,
+    readinessEpoch: Number.isFinite(probeResult?.readinessEpoch) ?
+      Math.max(ZERO, Math.floor(probeResult.readinessEpoch)) :
+      null,
   };
 }
 
@@ -949,7 +960,7 @@ function compareBootstrapProgress(left, right) {
 }
 
 function summarizeBootstrapProgress(progress) {
-  if (!progress || typeof progress !== "object") {
+  if (!progress || typeof progress !== 'object') {
     return {
       phase: UNKNOWN_PHASE,
       status: HTTP_ERROR_STATUS,
@@ -957,22 +968,22 @@ function summarizeBootstrapProgress(progress) {
     };
   }
   const reasons =
-    Array.isArray(progress.reasons) && progress.reasons.length > ZERO
-      ? progress.reasons.join(",")
-      : "none";
+    Array.isArray(progress.reasons) && progress.reasons.length > ZERO ?
+      progress.reasons.join(',') :
+      'none';
   return {
-    phase: typeof progress.phase === "string" ? progress.phase : UNKNOWN_PHASE,
-    status: Number.isFinite(progress.status)
-      ? Math.floor(progress.status)
-      : HTTP_ERROR_STATUS,
+    phase: typeof progress.phase === 'string' ? progress.phase : UNKNOWN_PHASE,
+    status: Number.isFinite(progress.status) ?
+      Math.floor(progress.status) :
+      HTTP_ERROR_STATUS,
     reasons,
   };
 }
 
 function resolveBootstrapProbeSleepMs(probeResult, defaultIntervalMs) {
-  const retryAfterMs = Number.isFinite(probeResult?.retryAfterMs)
-    ? Math.max(ZERO, Math.floor(probeResult.retryAfterMs))
-    : null;
+  const retryAfterMs = Number.isFinite(probeResult?.retryAfterMs) ?
+    Math.max(ZERO, Math.floor(probeResult.retryAfterMs)) :
+    null;
   if (retryAfterMs === null || retryAfterMs <= ZERO) {
     return defaultIntervalMs;
   }
@@ -980,7 +991,7 @@ function resolveBootstrapProbeSleepMs(probeResult, defaultIntervalMs) {
 }
 
 function isControlPlaneRecoveryReadyProbe(readiness) {
-  if (!readiness || typeof readiness !== "object") {
+  if (!readiness || typeof readiness !== 'object') {
     return false;
   }
   if (readiness.controlPlaneRecoveryReady === true) {
@@ -1009,8 +1020,8 @@ function isControlPlaneRecoveryReadyProbe(readiness) {
  * @returns {string}
  */
 function normalizeAdminStatement(statement) {
-  return String(statement || "")
-    .replace(ADMIN_QUERY_TRACE_NORMALIZE_PATTERN, " ")
+  return String(statement || '')
+    .replace(ADMIN_QUERY_TRACE_NORMALIZE_PATTERN, ' ')
     .trim();
 }
 
@@ -1024,9 +1035,9 @@ function buildAdminStatementPreview(statement) {
   if (normalized.length === ZERO) {
     return null;
   }
-  return normalized.length > ADMIN_QUERY_TRACE_SQL_PREVIEW_MAX_LENGTH
-    ? normalized.slice(ZERO, ADMIN_QUERY_TRACE_SQL_PREVIEW_MAX_LENGTH)
-    : normalized;
+  return normalized.length > ADMIN_QUERY_TRACE_SQL_PREVIEW_MAX_LENGTH ?
+    normalized.slice(ZERO, ADMIN_QUERY_TRACE_SQL_PREVIEW_MAX_LENGTH) :
+    normalized;
 }
 
 /**
@@ -1039,9 +1050,9 @@ function buildAdminStatementFingerprint(statement) {
   if (normalized.length === ZERO) {
     return null;
   }
-  return createHash("sha1")
+  return createHash('sha1')
     .update(normalized)
-    .digest("hex")
+    .digest('hex')
     .slice(ZERO, ADMIN_QUERY_TRACE_SQL_FINGERPRINT_LENGTH);
 }
 

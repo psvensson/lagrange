@@ -46,8 +46,8 @@ class MessageGroupOperationLedger {
       MESSAGE_GROUP_OPERATION_LEDGER_NOW;
     this.maxEntries = Number.isInteger(options.maxEntries) &&
       options.maxEntries > NUM.ZERO ?
-        options.maxEntries :
-        MESSAGE_GROUP_OPERATION_LEDGER.DEFAULT_MAX_ENTRIES;
+      options.maxEntries :
+      MESSAGE_GROUP_OPERATION_LEDGER.DEFAULT_MAX_ENTRIES;
     this.log = [];
     this.currentTerm = MESSAGE_GROUP_OPERATION_LEDGER_NUM.INITIAL_TERM;
     this.votedFor = MESSAGE_GROUP_OPERATION_LEDGER.DEFAULT_VOTED_FOR;

@@ -21,7 +21,7 @@ export function registerLoadGeneratorTailTests({
   SLOT_STALLED_FRESH_STARTED_AT_OFFSET_MS,
   SLOT_STALLED_EXPECTED_BORROWED_NODE_CAP,
   SLOT_STALLED_EXPECTED_DISPATCH_NODE_IDS,
-  SLOT_STALLED_EXPECTED_EMPTY_CANDIDATE_IDS
+  SLOT_STALLED_EXPECTED_EMPTY_CANDIDATE_IDS,
 }) {
   test('wait-reason metrics capture per-node slot saturation', async () => {
     const nodes = [{
@@ -797,95 +797,95 @@ export function registerLoadGeneratorTailTests({
 
   test('adaptive dispatch guardrail preserves healthy-node slot budget when ' +
     'only one node is admission-blocked',
-    async () => {
-      const nodes = [
-        {
-          id: 'isolated-blocked-node',
-          breakerOwner: BREAKER_OWNER_NODE_CLIENT,
-          async query(_sql) {
-            const error = new Error('query_admission_deferred');
-            error.code = NODE_CLIENT_ERROR_CODE_OPERATION;
-            error.deferRetry = true;
-            error.retryAfterMs = 200;
-            throw error;
-          },
+  async () => {
+    const nodes = [
+      {
+        id: 'isolated-blocked-node',
+        breakerOwner: BREAKER_OWNER_NODE_CLIENT,
+        async query(_sql) {
+          const error = new Error('query_admission_deferred');
+          error.code = NODE_CLIENT_ERROR_CODE_OPERATION;
+          error.deferRetry = true;
+          error.retryAfterMs = 200;
+          throw error;
         },
-        {
-          id: 'healthy-node-a',
-          async query(_sql) {
-            await new Promise((resolve) => setTimeout(resolve, 20));
-            return {rows: []};
-          },
+      },
+      {
+        id: 'healthy-node-a',
+        async query(_sql) {
+          await new Promise((resolve) => setTimeout(resolve, 20));
+          return {rows: []};
         },
-        {
-          id: 'healthy-node-b',
-          async query(_sql) {
-            await new Promise((resolve) => setTimeout(resolve, 20));
-            return {rows: []};
-          },
+      },
+      {
+        id: 'healthy-node-b',
+        async query(_sql) {
+          await new Promise((resolve) => setTimeout(resolve, 20));
+          return {rows: []};
         },
-        {
-          id: 'healthy-node-c',
-          async query(_sql) {
-            await new Promise((resolve) => setTimeout(resolve, 20));
-            return {rows: []};
-          },
+      },
+      {
+        id: 'healthy-node-c',
+        async query(_sql) {
+          await new Promise((resolve) => setTimeout(resolve, 20));
+          return {rows: []};
         },
-        {
-          id: 'healthy-node-d',
-          async query(_sql) {
-            await new Promise((resolve) => setTimeout(resolve, 20));
-            return {rows: []};
-          },
+      },
+      {
+        id: 'healthy-node-d',
+        async query(_sql) {
+          await new Promise((resolve) => setTimeout(resolve, 20));
+          return {rows: []};
         },
-      ];
+      },
+    ];
 
-      const configuredMaxInFlight = 20;
-      const configuredNodeMaxInFlight = 4;
-      const dispatchReadyNodeCount = 4;
-      const gen = new LoadGenerator(nodes, {
-        opsPerSec: 900,
-        duration: 260,
-        maxInFlight: configuredMaxInFlight,
-        nodeMaxInFlight: configuredNodeMaxInFlight,
-        admissionBackoffMs: 10,
-        adaptiveDispatchGuardrail: {
-          enabled: true,
-          pressureSignalThreshold: 2,
-          queueDepthThreshold: 4,
-          reductionStepRatio: 0.25,
-          minMaxInFlight: 2,
-          recoveryQuietTicks: 4,
-        },
-      });
-      const run = gen.start();
-      try {
-        await new Promise((resolve) => setTimeout(resolve, 160));
-        run.cancel();
-        const metrics = await run.waitComplete();
-        assert.ok(
-          Number(metrics?.waitReasons?.nodeAdmissionBlocked || ZERO) > ZERO,
-          'expected isolated admission stress to be observed',
-        );
-        assert.ok(
-          metrics.dispatchGuardrail,
-          'expected dispatch guardrail diagnostics to be present',
-        );
-        assert.ok(
-          Number(metrics.dispatchGuardrail.engagedTransitions || ZERO) > ZERO,
-          'expected adaptive guardrail to still observe the blocked node',
-        );
-        assert.ok(
-          Number(
-            metrics.dispatchGuardrail.minEffectiveMaxInFlight || ZERO,
-          ) >= dispatchReadyNodeCount * configuredNodeMaxInFlight,
-          'expected global guardrail to preserve the aggregate slot budget of ' +
-            'dispatch-ready nodes instead of collapsing healthy-node throughput',
-        );
-      } finally {
-        run.cancel();
-      }
+    const configuredMaxInFlight = 20;
+    const configuredNodeMaxInFlight = 4;
+    const dispatchReadyNodeCount = 4;
+    const gen = new LoadGenerator(nodes, {
+      opsPerSec: 900,
+      duration: 260,
+      maxInFlight: configuredMaxInFlight,
+      nodeMaxInFlight: configuredNodeMaxInFlight,
+      admissionBackoffMs: 10,
+      adaptiveDispatchGuardrail: {
+        enabled: true,
+        pressureSignalThreshold: 2,
+        queueDepthThreshold: 4,
+        reductionStepRatio: 0.25,
+        minMaxInFlight: 2,
+        recoveryQuietTicks: 4,
+      },
     });
+    const run = gen.start();
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 160));
+      run.cancel();
+      const metrics = await run.waitComplete();
+      assert.ok(
+        Number(metrics?.waitReasons?.nodeAdmissionBlocked || ZERO) > ZERO,
+        'expected isolated admission stress to be observed',
+      );
+      assert.ok(
+        metrics.dispatchGuardrail,
+        'expected dispatch guardrail diagnostics to be present',
+      );
+      assert.ok(
+        Number(metrics.dispatchGuardrail.engagedTransitions || ZERO) > ZERO,
+        'expected adaptive guardrail to still observe the blocked node',
+      );
+      assert.ok(
+        Number(
+          metrics.dispatchGuardrail.minEffectiveMaxInFlight || ZERO,
+        ) >= dispatchReadyNodeCount * configuredNodeMaxInFlight,
+        'expected global guardrail to preserve the aggregate slot budget of ' +
+            'dispatch-ready nodes instead of collapsing healthy-node throughput',
+      );
+    } finally {
+      run.cancel();
+    }
+  });
 
   test('cancel stops the load run immediately', async () => {
     const nodes = [createMockNode('n1')];

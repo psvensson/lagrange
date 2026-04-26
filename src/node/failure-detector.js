@@ -514,8 +514,8 @@ class FailureDetector extends EventEmitter {
         this.logger.debug(
           FAILURE_DETECTOR_LOG_MSG.STALE_PARTITION_REPLICA_FAILURE_UPDATE,
           {
-          serviceId: replica.service_id,
-          nodeId,
+            serviceId: replica.service_id,
+            nodeId,
           },
         );
         return;
@@ -571,8 +571,8 @@ class FailureDetector extends EventEmitter {
         this.logger.debug(
           FAILURE_DETECTOR_LOG_MSG.STALE_MESSAGE_GROUP_REPLICA_FAILURE_UPDATE,
           {
-          serviceId: replica.service_id,
-          nodeId,
+            serviceId: replica.service_id,
+            nodeId,
           },
         );
         return;

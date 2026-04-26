@@ -1,4 +1,4 @@
-import { CLUSTER_SEGMENT_7_CLASS_SHARED } from './cluster-segment-7-class-shared.js';
+import {CLUSTER_SEGMENT_7_CLASS_SHARED} from './cluster-segment-7-class-shared.js';
 
 const {
   ACTIVE_POLL_INTERVAL_MS,
@@ -37,7 +37,7 @@ const {
   resolveSequentialProbeTimeoutMs,
   withTimeout,
 } = CLUSTER_SEGMENT_7_CLASS_SHARED;
-import { Cluster4 } from "./cluster-segment-7-class-4.js";
+import {Cluster4} from './cluster-segment-7-class-4.js';
 
 class Cluster5 extends Cluster4 {
   async _probeControlSnapshotCoverage(
@@ -46,9 +46,9 @@ class Cluster5 extends Cluster4 {
     options = {},
   ) {
     const readinessMode =
-      options.readinessMode === CLUSTER_READINESS_MODE_LOAD
-        ? CLUSTER_READINESS_MODE_LOAD
-        : CLUSTER_READINESS_MODE_STARTUP;
+      options.readinessMode === CLUSTER_READINESS_MODE_LOAD ?
+        CLUSTER_READINESS_MODE_LOAD :
+        CLUSTER_READINESS_MODE_STARTUP;
     const startupProbeTimeoutScale =
       readinessMode === CLUSTER_READINESS_MODE_STARTUP ? 2 : 1;
     const expectedNodeSet = new Set(
@@ -88,7 +88,7 @@ class Cluster5 extends Cluster4 {
       let reachabilityDiagnostics = null;
       let reachabilityError = null;
       const probeReachabilityDiagnostics = async () => {
-        if (typeof node.getReachabilityDiagnostics !== "function") {
+        if (typeof node.getReachabilityDiagnostics !== 'function') {
           return;
         }
         try {
@@ -97,7 +97,7 @@ class Cluster5 extends Cluster4 {
               timeoutMs: reachabilityTimeoutMs,
             }),
             reachabilityTimeoutMs,
-            "Control snapshot reachability probe timed out for " + node.id,
+            'Control snapshot reachability probe timed out for ' + node.id,
           );
         } catch (error) {
           reachabilityError = normalizeProbeError(error);
@@ -121,9 +121,9 @@ class Cluster5 extends Cluster4 {
           } catch (fallbackLaneError) {
             throw new Error(
               normalizeProbeError(snapshotLaneError) +
-                "; fallback lane " +
+                '; fallback lane ' +
                 ADMIN_SOCKET_LANE_DEFAULT +
-                " failed: " +
+                ' failed: ' +
                 normalizeProbeError(fallbackLaneError),
             );
           }
@@ -165,15 +165,15 @@ class Cluster5 extends Cluster4 {
           adminReady: reachabilityDiagnostics?.adminReady === true,
           reachable: reachabilityDiagnostics?.reachable === true,
           reachableBy:
-            typeof reachabilityDiagnostics?.reachableBy === "string" &&
-            reachabilityDiagnostics.reachableBy.length > ZERO
-              ? reachabilityDiagnostics.reachableBy
-              : null,
+            typeof reachabilityDiagnostics?.reachableBy === 'string' &&
+            reachabilityDiagnostics.reachableBy.length > ZERO ?
+              reachabilityDiagnostics.reachableBy :
+              null,
           reachabilityError:
-            typeof reachabilityDiagnostics?.lastError === "string" &&
-            reachabilityDiagnostics.lastError.length > ZERO
-              ? reachabilityDiagnostics.lastError
-              : reachabilityError,
+            typeof reachabilityDiagnostics?.lastError === 'string' &&
+            reachabilityDiagnostics.lastError.length > ZERO ?
+              reachabilityDiagnostics.lastError :
+              reachabilityError,
           observedNodeCount: observedNodeSet.size,
           missingExpectedNodeCount,
           capturedAtMs: snapshotSummary.capturedAtMs,
@@ -212,15 +212,15 @@ class Cluster5 extends Cluster4 {
           adminReady: reachabilityDiagnostics?.adminReady === true,
           reachable: reachabilityDiagnostics?.reachable === true,
           reachableBy:
-            typeof reachabilityDiagnostics?.reachableBy === "string" &&
-            reachabilityDiagnostics.reachableBy.length > ZERO
-              ? reachabilityDiagnostics.reachableBy
-              : null,
+            typeof reachabilityDiagnostics?.reachableBy === 'string' &&
+            reachabilityDiagnostics.reachableBy.length > ZERO ?
+              reachabilityDiagnostics.reachableBy :
+              null,
           reachabilityError:
-            typeof reachabilityDiagnostics?.lastError === "string" &&
-            reachabilityDiagnostics.lastError.length > ZERO
-              ? reachabilityDiagnostics.lastError
-              : reachabilityError,
+            typeof reachabilityDiagnostics?.lastError === 'string' &&
+            reachabilityDiagnostics.lastError.length > ZERO ?
+              reachabilityDiagnostics.lastError :
+              reachabilityError,
           observedNodeCount: 0,
           missingExpectedNodeCount: expectedNodeSet.size,
           capturedAtMs: null,
@@ -333,14 +333,14 @@ class Cluster5 extends Cluster4 {
       }
       const resultHealthyReadinessCount = Array.isArray(
         result.healthyReadinessNodeIds,
-      )
-        ? result.healthyReadinessNodeIds.length
-        : ZERO;
+      ) ?
+        result.healthyReadinessNodeIds.length :
+        ZERO;
       const selectedHealthyReadinessCount = Array.isArray(
         selectedResult.healthyReadinessNodeIds,
-      )
-        ? selectedResult.healthyReadinessNodeIds.length
-        : ZERO;
+      ) ?
+        selectedResult.healthyReadinessNodeIds.length :
+        ZERO;
       if (resultHealthyReadinessCount !== selectedHealthyReadinessCount) {
         if (resultHealthyReadinessCount > selectedHealthyReadinessCount) {
           selectedResult = result;
@@ -349,28 +349,28 @@ class Cluster5 extends Cluster4 {
       }
       const resultMissingPublishedCount = Array.isArray(
         result.missingPublishedNodeIds,
-      )
-        ? result.missingPublishedNodeIds.length
-        : expectedNodeSet.size;
+      ) ?
+        result.missingPublishedNodeIds.length :
+        expectedNodeSet.size;
       const selectedMissingPublishedCount = Array.isArray(
         selectedResult.missingPublishedNodeIds,
-      )
-        ? selectedResult.missingPublishedNodeIds.length
-        : expectedNodeSet.size;
+      ) ?
+        selectedResult.missingPublishedNodeIds.length :
+        expectedNodeSet.size;
       if (resultMissingPublishedCount !== selectedMissingPublishedCount) {
         if (resultMissingPublishedCount < selectedMissingPublishedCount) {
           selectedResult = result;
         }
         continue;
       }
-      const resultPendingAckCount = Array.isArray(result.pendingAckNodeIds)
-        ? result.pendingAckNodeIds.length
-        : expectedNodeSet.size;
+      const resultPendingAckCount = Array.isArray(result.pendingAckNodeIds) ?
+        result.pendingAckNodeIds.length :
+        expectedNodeSet.size;
       const selectedPendingAckCount = Array.isArray(
         selectedResult.pendingAckNodeIds,
-      )
-        ? selectedResult.pendingAckNodeIds.length
-        : expectedNodeSet.size;
+      ) ?
+        selectedResult.pendingAckNodeIds.length :
+        expectedNodeSet.size;
       if (resultPendingAckCount !== selectedPendingAckCount) {
         if (resultPendingAckCount < selectedPendingAckCount) {
           selectedResult = result;
@@ -379,14 +379,14 @@ class Cluster5 extends Cluster4 {
       }
       const resultPublishedActiveCount = Array.isArray(
         result.publishedActiveNodeIds,
-      )
-        ? result.publishedActiveNodeIds.length
-        : ZERO;
+      ) ?
+        result.publishedActiveNodeIds.length :
+        ZERO;
       const selectedPublishedActiveCount = Array.isArray(
         selectedResult.publishedActiveNodeIds,
-      )
-        ? selectedResult.publishedActiveNodeIds.length
-        : ZERO;
+      ) ?
+        selectedResult.publishedActiveNodeIds.length :
+        ZERO;
       if (resultPublishedActiveCount !== selectedPublishedActiveCount) {
         if (resultPublishedActiveCount > selectedPublishedActiveCount) {
           selectedResult = result;
@@ -405,9 +405,9 @@ class Cluster5 extends Cluster4 {
     for (const result of snapshotProbeResults) {
       publicationDisagreementByNodeId[result.nodeId] = Array.isArray(
         result.missingPublishedNodeIds,
-      )
-        ? [...result.missingPublishedNodeIds]
-        : [];
+      ) ?
+        [...result.missingPublishedNodeIds] :
+        [];
     }
     return {
       completeCoverage,
@@ -426,63 +426,63 @@ class Cluster5 extends Cluster4 {
         selectedResult?.reachabilityError || null,
       selectedSnapshotTimeoutMs: Number.isFinite(
         selectedResult?.snapshotTimeoutMs,
-      )
-        ? Math.max(MIN_TIMEOUT_MS, Math.floor(selectedResult.snapshotTimeoutMs))
-        : null,
+      ) ?
+        Math.max(MIN_TIMEOUT_MS, Math.floor(selectedResult.snapshotTimeoutMs)) :
+        null,
       selectedReachabilityTimeoutMs: Number.isFinite(
         selectedResult?.reachabilityTimeoutMs,
-      )
-        ? Math.max(
-            MIN_TIMEOUT_MS,
-            Math.floor(selectedResult.reachabilityTimeoutMs),
-          )
-        : null,
-      selectedCapturedAtMs: Number.isFinite(selectedResult?.capturedAtMs)
-        ? selectedResult.capturedAtMs
-        : null,
+      ) ?
+        Math.max(
+          MIN_TIMEOUT_MS,
+          Math.floor(selectedResult.reachabilityTimeoutMs),
+        ) :
+        null,
+      selectedCapturedAtMs: Number.isFinite(selectedResult?.capturedAtMs) ?
+        selectedResult.capturedAtMs :
+        null,
       selectedSnapshotRevision: Number.isFinite(
         selectedResult?.snapshotRevision,
-      )
-        ? Math.floor(selectedResult.snapshotRevision)
-        : null,
+      ) ?
+        Math.floor(selectedResult.snapshotRevision) :
+        null,
       selectedSnapshotRevisionState:
-        typeof selectedResult?.snapshotRevisionState === "string" &&
-        selectedResult.snapshotRevisionState.length > ZERO
-          ? selectedResult.snapshotRevisionState
-          : null,
+        typeof selectedResult?.snapshotRevisionState === 'string' &&
+        selectedResult.snapshotRevisionState.length > ZERO ?
+          selectedResult.snapshotRevisionState :
+          null,
       selectedSnapshotExpectedMinimumRevision: Number.isFinite(
         selectedResult?.snapshotExpectedMinimumRevision,
-      )
-        ? Math.floor(selectedResult.snapshotExpectedMinimumRevision)
-        : null,
+      ) ?
+        Math.floor(selectedResult.snapshotExpectedMinimumRevision) :
+        null,
       selectedSnapshotRevisionGap: Number.isFinite(
         selectedResult?.snapshotRevisionGap,
-      )
-        ? Math.floor(selectedResult.snapshotRevisionGap)
-        : null,
+      ) ?
+        Math.floor(selectedResult.snapshotRevisionGap) :
+        null,
       selectedSnapshotResumeToken:
-        typeof selectedResult?.snapshotResumeToken === "string" &&
-        selectedResult.snapshotResumeToken.length > ZERO
-          ? selectedResult.snapshotResumeToken
-          : null,
-      selectedObservedNodeIds: Array.isArray(selectedResult?.observedNodeIds)
-        ? [...selectedResult.observedNodeIds]
-        : [],
+        typeof selectedResult?.snapshotResumeToken === 'string' &&
+        selectedResult.snapshotResumeToken.length > ZERO ?
+          selectedResult.snapshotResumeToken :
+          null,
+      selectedObservedNodeIds: Array.isArray(selectedResult?.observedNodeIds) ?
+        [...selectedResult.observedNodeIds] :
+        [],
       selectedPublishedActiveNodeIds: Array.isArray(
         selectedResult?.publishedActiveNodeIds,
-      )
-        ? [...selectedResult.publishedActiveNodeIds]
-        : [],
+      ) ?
+        [...selectedResult.publishedActiveNodeIds] :
+        [],
       selectedPendingAckNodeIds: Array.isArray(
         selectedResult?.pendingAckNodeIds,
-      )
-        ? [...selectedResult.pendingAckNodeIds]
-        : [],
+      ) ?
+        [...selectedResult.pendingAckNodeIds] :
+        [],
       selectedMissingPublishedNodeIds: Array.isArray(
         selectedResult?.missingPublishedNodeIds,
-      )
-        ? [...selectedResult.missingPublishedNodeIds]
-        : [],
+      ) ?
+        [...selectedResult.missingPublishedNodeIds] :
+        [],
       selectedControlPlaneDiagnosticsAvailable:
         selectedResult?.controlPlaneDiagnosticsAvailable === true,
       selectedPublicationConvergence:
@@ -501,9 +501,9 @@ class Cluster5 extends Cluster4 {
       publicationDisagreementByNodeId,
       selectedHealthyReadinessNodeIds: Array.isArray(
         selectedResult?.healthyReadinessNodeIds,
-      )
-        ? [...selectedResult.healthyReadinessNodeIds]
-        : [],
+      ) ?
+        [...selectedResult.healthyReadinessNodeIds] :
+        [],
       probeWitnesses: snapshotProbeResults.map((result) => {
         return {
           nodeId: result.nodeId,
@@ -515,40 +515,40 @@ class Cluster5 extends Cluster4 {
           error: result.error || null,
           observedNodeCount: result.observedNodeCount,
           missingExpectedNodeCount: result.missingExpectedNodeCount,
-          capturedAtMs: Number.isFinite(result.capturedAtMs)
-            ? result.capturedAtMs
-            : null,
-          snapshotRevision: Number.isFinite(result.snapshotRevision)
-            ? Math.floor(result.snapshotRevision)
-            : null,
+          capturedAtMs: Number.isFinite(result.capturedAtMs) ?
+            result.capturedAtMs :
+            null,
+          snapshotRevision: Number.isFinite(result.snapshotRevision) ?
+            Math.floor(result.snapshotRevision) :
+            null,
           snapshotRevisionState:
-            typeof result.snapshotRevisionState === "string" &&
-            result.snapshotRevisionState.length > ZERO
-              ? result.snapshotRevisionState
-              : null,
-          snapshotRevisionGap: Number.isFinite(result.snapshotRevisionGap)
-            ? Math.floor(result.snapshotRevisionGap)
-            : null,
+            typeof result.snapshotRevisionState === 'string' &&
+            result.snapshotRevisionState.length > ZERO ?
+              result.snapshotRevisionState :
+              null,
+          snapshotRevisionGap: Number.isFinite(result.snapshotRevisionGap) ?
+            Math.floor(result.snapshotRevisionGap) :
+            null,
           publicationEpoch: Number.isFinite(
             result?.publicationConvergence?.publicationEpoch,
-          )
-            ? Math.floor(result.publicationConvergence.publicationEpoch)
-            : null,
+          ) ?
+            Math.floor(result.publicationConvergence.publicationEpoch) :
+            null,
           publicationStatus:
             typeof result?.publicationConvergence?.publicationStatus ===
-              "string" &&
-            result.publicationConvergence.publicationStatus.length > ZERO
-              ? result.publicationConvergence.publicationStatus
-              : null,
-          publishedActiveNodeIds: Array.isArray(result.publishedActiveNodeIds)
-            ? [...result.publishedActiveNodeIds]
-            : [],
-          pendingAckNodeIds: Array.isArray(result.pendingAckNodeIds)
-            ? [...result.pendingAckNodeIds]
-            : [],
-          missingPublishedNodeIds: Array.isArray(result.missingPublishedNodeIds)
-            ? [...result.missingPublishedNodeIds]
-            : [],
+              'string' &&
+            result.publicationConvergence.publicationStatus.length > ZERO ?
+              result.publicationConvergence.publicationStatus :
+              null,
+          publishedActiveNodeIds: Array.isArray(result.publishedActiveNodeIds) ?
+            [...result.publishedActiveNodeIds] :
+            [],
+          pendingAckNodeIds: Array.isArray(result.pendingAckNodeIds) ?
+            [...result.pendingAckNodeIds] :
+            [],
+          missingPublishedNodeIds: Array.isArray(result.missingPublishedNodeIds) ?
+            [...result.missingPublishedNodeIds] :
+            [],
         };
       }),
       selectedError: selectedResult?.error || null,
@@ -581,30 +581,30 @@ class Cluster5 extends Cluster4 {
         });
         const payload = this._extractControlSnapshotPayload(snapshotResult);
         if (!payload) {
-          throw new Error("control snapshot missing rows");
+          throw new Error('control snapshot missing rows');
         }
         const replicaOperations =
           payload.replicaOperations &&
-          typeof payload.replicaOperations === "object"
-            ? payload.replicaOperations
-            : {};
+          typeof payload.replicaOperations === 'object' ?
+            payload.replicaOperations :
+            {};
         const leaders =
-          payload.leaders && typeof payload.leaders === "object"
-            ? payload.leaders
-            : {};
+          payload.leaders && typeof payload.leaders === 'object' ?
+            payload.leaders :
+            {};
         const leaderEntries = Object.entries(leaders).sort((left, right) =>
           left[0].localeCompare(right[0]),
         );
         const candidateSnapshot = {
           nodeId: node.id,
-          capturedAtMs: Number.isFinite(payload.capturedAt)
-            ? Math.floor(payload.capturedAt)
-            : null,
+          capturedAtMs: Number.isFinite(payload.capturedAt) ?
+            Math.floor(payload.capturedAt) :
+            null,
           inFlightCount:
             Number.isInteger(replicaOperations.inFlightCount) &&
-            replicaOperations.inFlightCount >= ZERO
-              ? replicaOperations.inFlightCount
-              : ZERO,
+            replicaOperations.inFlightCount >= ZERO ?
+              replicaOperations.inFlightCount :
+              ZERO,
           partitionGroupInFlight:
             normalizeReplicaOperationPartitionGroupInFlight(
               replicaOperations.partitionGroupInFlight,
@@ -637,7 +637,7 @@ class Cluster5 extends Cluster4 {
       leaderSignature: null,
       leaderCount: ZERO,
       operationTimelineSignature: null,
-      error: lastError || "no_control_snapshot_candidates",
+      error: lastError || 'no_control_snapshot_candidates',
     };
   }
 
@@ -674,9 +674,9 @@ class Cluster5 extends Cluster4 {
       (table) => table.ready === true,
     ).length;
     const totalSpreadGap = tables.reduce((sum, table) => {
-      const spreadGap = Number.isInteger(table?.spreadGap)
-        ? table.spreadGap
-        : requiredDistinctNodeCount;
+      const spreadGap = Number.isInteger(table?.spreadGap) ?
+        table.spreadGap :
+        requiredDistinctNodeCount;
       return sum + spreadGap;
     }, ZERO);
     return {
@@ -704,7 +704,7 @@ class Cluster5 extends Cluster4 {
       return String(left.id).localeCompare(String(right.id));
     });
 
-    const discoverySql = buildServiceDiscoverySql({ tableName });
+    const discoverySql = buildServiceDiscoverySql({tableName});
     let selectedSummary = null;
     let lastError = null;
     for (const [index, node] of nodes.entries()) {
@@ -715,12 +715,12 @@ class Cluster5 extends Cluster4 {
       );
       try {
         const discoverySnapshot =
-          typeof node.queryWithTimeout === "function"
-            ? await node.queryWithTimeout(discoverySql, [], {
-                lane: ADMIN_SOCKET_LANE_SNAPSHOT,
-                timeoutMs,
-              })
-            : await node.query(discoverySql, []);
+          typeof node.queryWithTimeout === 'function' ?
+            await node.queryWithTimeout(discoverySql, [], {
+              lane: ADMIN_SOCKET_LANE_SNAPSHOT,
+              timeoutMs,
+            }) :
+            await node.query(discoverySql, []);
         const discoverySummary =
           extractCriticalSystemDiscoverySummary(discoverySnapshot);
         const candidateSummary = {
@@ -768,16 +768,16 @@ class Cluster5 extends Cluster4 {
       requiredDistinctNodeCount,
       spreadGap: requiredDistinctNodeCount,
       ready: false,
-      error: lastError || "no_service_discovery_candidates",
+      error: lastError || 'no_service_discovery_candidates',
     };
   }
 
   _resolveActiveWaitTimeoutMs() {
     const baseTimeout =
       this._config.timeouts?.convergence || TIMEOUTS.CONVERGENCE;
-    const configuredClusterSize = Number.isInteger(this._config?.size)
-      ? this._config.size
-      : 0;
+    const configuredClusterSize = Number.isInteger(this._config?.size) ?
+      this._config.size :
+      0;
     const expectedNodeCount = Math.max(
       ACTIVE_WAIT_MIN_CLUSTER_SIZE,
       configuredClusterSize,
@@ -816,21 +816,21 @@ class Cluster5 extends Cluster4 {
 
   _resolveActiveWaitNoProgressMaxAttempts(options = {}, timeoutMs = null) {
     if (Number.isInteger(options.noProgressMaxAttempts)) {
-      return options.noProgressMaxAttempts > ZERO
-        ? options.noProgressMaxAttempts
-        : null;
+      return options.noProgressMaxAttempts > ZERO ?
+        options.noProgressMaxAttempts :
+        null;
     }
     if (
       Number.isInteger(this._config?.timeouts?.activeWaitNoProgressMaxAttempts)
     ) {
-      return this._config.timeouts.activeWaitNoProgressMaxAttempts > ZERO
-        ? this._config.timeouts.activeWaitNoProgressMaxAttempts
-        : null;
+      return this._config.timeouts.activeWaitNoProgressMaxAttempts > ZERO ?
+        this._config.timeouts.activeWaitNoProgressMaxAttempts :
+        null;
     }
     const resolvedTimeoutMs =
-      Number.isInteger(timeoutMs) && timeoutMs > ZERO
-        ? timeoutMs
-        : this._resolveActiveWaitTimeoutMs();
+      Number.isInteger(timeoutMs) && timeoutMs > ZERO ?
+        timeoutMs :
+        this._resolveActiveWaitTimeoutMs();
     const estimatedAttempts = Math.max(
       ONE,
       Math.floor(resolvedTimeoutMs / ACTIVE_POLL_INTERVAL_MS),
@@ -946,7 +946,7 @@ class Cluster5 extends Cluster4 {
   }
 
   _resolveControlPlaneQuiescenceRequireCriticalSystemSpread(options = {}) {
-    if (typeof options.requireCriticalSystemSpread === "boolean") {
+    if (typeof options.requireCriticalSystemSpread === 'boolean') {
       return options.requireCriticalSystemSpread;
     }
     return this._config?.benchmark?.strictPreloadReadiness === true;
@@ -975,12 +975,12 @@ class Cluster5 extends Cluster4 {
     }
     const configuredReplicaCount =
       Number.isInteger(this._config?.benchmark?.replicationFactor) &&
-      this._config.benchmark.replicationFactor > ZERO
-        ? this._config.benchmark.replicationFactor
-        : 3;
+      this._config.benchmark.replicationFactor > ZERO ?
+        this._config.benchmark.replicationFactor :
+        3;
     const clusterNodeCount = Math.max(ONE, this._nodes.size || ONE);
     return Math.max(ONE, Math.min(configuredReplicaCount, clusterNodeCount));
   }
 }
 
-export { Cluster5 };
+export {Cluster5};

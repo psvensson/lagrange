@@ -189,7 +189,6 @@ test('Multi-node Raft replication', {timeout: 45000}, async (t) => {
     let bootstrapResult;
     let seedApi;
     let joiningService;
-    let cdcConfirmationTracker;
     let seedSqlEngine;
     let seedConfirmationTracker;
     let joiningConfirmationTracker;
@@ -215,11 +214,6 @@ test('Multi-node Raft replication', {timeout: 45000}, async (t) => {
       // PHASE 2: Start Bootstrap API for joining nodes
       // =========================================================================
       const systemTableCache = NodeService.getInstance().getSystemTableCache();
-
-      cdcConfirmationTracker = new CDCConfirmationTracker({
-        systemTableCache,
-        timeoutMs: 5000,
-      });
 
       seedConfirmationTracker = new CDCConfirmationTracker({
         systemTableCache,

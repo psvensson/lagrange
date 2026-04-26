@@ -1,79 +1,44 @@
-import { REPLICA_DISPATCH_SERVICE_SHARED } from "./replica-dispatch-service-shared.js";
-import { ReplicaDispatchServiceSegment2 } from "./replica-dispatch-service-segment-2.js";
+import {REPLICA_DISPATCH_SERVICE_SHARED} from './replica-dispatch-service-shared.js';
+import {ReplicaDispatchServiceSegment2} from './replica-dispatch-service-segment-2.js';
 
 const {
   COLUMN,
-  CONTROL_PLANE_ALLOWED_STATES,
-  CONTROL_PLANE_CONFIG_KEY,
-  CONTROL_PLANE_EVENT,
-  CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE,
   CONTROL_PLANE_NODE_STATE_REPLAY_CONTEXT,
-  CONTROL_PLANE_READINESS_DIMENSION,
-  ConfigurationManager,
   ControlPlaneField,
-  ControlPlaneMessageType,
-  ControlPlaneReadinessService,
-  DEFAULT_READY_LEASE_MS,
   DISPATCH_DEFAULT,
-  DISPATCH_ERROR_MSG,
-  DISPATCH_EVENT,
   DISPATCH_LOG_MSG,
-  DISPATCH_QUEUE_NAME,
-  DISPATCH_READINESS_ERROR_CODE,
-  DISPATCH_READINESS_ERROR_REASON,
-  DISPATCH_READINESS_MESSAGE,
-  DISPATCH_READINESS_REASON,
-  DISPATCH_STATE,
-  DISPATCH_SUBSYSTEM,
-  EventEmitter,
-  LoggingService,
   MEMBERSHIP_PUBLICATION_STATUS,
-  MESSAGE_GROUP_CDC_INGRESS_ACTION,
   NODE_STATE_UPDATE_RETRY_ACTION,
   NODE_STATE_UPDATE_RETRY_CLASS,
   NODE_STATE_UPDATE_RETRY_POLICY,
   NUM,
-  OPERATION_METADATA_KEY,
   OperationType,
-  OwnerKeyReconcileQueue,
   QUERY_ERROR_CODE,
   QUERY_ERROR_MSG,
   READY_NODE_PUBLICATION_ADVANCEMENT_STATE,
-  REBALANCE_COORDINATOR_EVENT,
   RECONCILE_REASON,
   REPLICA_DISPATCH_SERVICE_LITERAL,
-  REPLICA_OPERATION_VISIBILITY_READ_MODE,
-  ReplicaOperationField,
-  SERVICE_STATUS,
-  SERVICE_TYPE,
   STATE,
-  STRING,
-  SYSTEM_TABLE_NAME,
   TYPEOF,
   WORKFLOW_STEP,
-  assertCritical,
   compareNodeHeartbeatWatermarks,
-  createControlPlaneRuntimeBundle,
   getControlPlaneErrorCode,
   getControlPlaneErrorMessage,
-  getControlPlaneMessageRequiredTables,
   getControlPlaneNodeStatePublicationProfile,
   getControlPlaneRetryAfterMs,
   getNodeHeartbeatWatermark,
-  getOperationMetadataObject,
-  getOperationMetadataString,
-  getOperationMetadataStringArray,
   isCoordinatorOwnedOperationType,
-  isHeartbeatEscalatedControlPlaneNodeStatePublicationMode,
   isRetryableControlPlaneError,
-  isTerminalMembershipPublicationStatus,
   resolveControlPlaneNodeStatePublicationMode,
   resolveReadyNodePublicationAdvancementState,
   resolveReplayControlPlaneNodeStatePublicationMode,
-  shouldUseAuthoritativePriorityRecoveryRediscovery,
-  unwrapRowReadResult,
-  wasNodeRecordReadyWhenWritten,
 } = REPLICA_DISPATCH_SERVICE_SHARED;
+
+const READY_NODE_PUBLICATION_ADVANCEMENT_EMPTY_OPTIONS = Object.freeze({});
+const READY_NODE_PUBLICATION_ADVANCEMENT_NODE_ROW_UNAVAILABLE = null;
+const READY_NODE_PUBLICATION_ADVANCEMENT_OPTION = Object.freeze({
+  PUBLICATION_ROWS: 'publicationRows',
+});
 
 class ReplicaDispatchServiceSegment3 extends ReplicaDispatchServiceSegment2 {
   enqueueReplicaOperationRow(row, reasons) {
@@ -94,7 +59,7 @@ class ReplicaDispatchServiceSegment3 extends ReplicaDispatchServiceSegment2 {
       this.operationDispatchQueue.enqueue(
         row.operation_id,
         reasons.replaceActiveReason,
-        { row },
+        {row},
       );
       return true;
     }
@@ -109,7 +74,7 @@ class ReplicaDispatchServiceSegment3 extends ReplicaDispatchServiceSegment2 {
     this.operationDispatchQueue.enqueue(
       row.operation_id,
       reasons.pendingReason,
-      { row },
+      {row},
     );
     return true;
   }
@@ -156,7 +121,7 @@ class ReplicaDispatchServiceSegment3 extends ReplicaDispatchServiceSegment2 {
     ) {
       return null;
     }
-    return { heartbeatAt, readyLeaseExpiresAt };
+    return {heartbeatAt, readyLeaseExpiresAt};
   }
 
   /**
@@ -221,9 +186,9 @@ class ReplicaDispatchServiceSegment3 extends ReplicaDispatchServiceSegment2 {
 
     const payloadNodeRow = payload[ControlPlaneField.NODE_ROW];
     const watermarkRow =
-      payloadNodeRow && typeof payloadNodeRow === TYPEOF.OBJECT
-        ? { ...payloadNodeRow }
-        : {};
+      payloadNodeRow && typeof payloadNodeRow === TYPEOF.OBJECT ?
+        {...payloadNodeRow} :
+        {};
     const heartbeatAt = Number(payload[ControlPlaneField.HEARTBEAT_AT]);
     const readyLeaseExpiresAt = Number(
       payload[ControlPlaneField.READY_LEASE_EXPIRES_AT],
@@ -389,11 +354,11 @@ class ReplicaDispatchServiceSegment3 extends ReplicaDispatchServiceSegment2 {
    */
   buildDispatchReadinessRefreshTimeoutError(nodeId, timeoutMs) {
     const error = new Error(
-      "Message timeout while refreshing readiness for dispatch target " +
-        String(nodeId || "unknown") +
-        " after " +
+      'Message timeout while refreshing readiness for dispatch target ' +
+        String(nodeId || 'unknown') +
+        ' after ' +
         String(timeoutMs) +
-        "ms",
+        'ms',
     );
     error.code =
       REPLICA_DISPATCH_SERVICE_LITERAL.CONTROL_PLANE_READINESS_REFRESH_TIMEOUT;
@@ -519,13 +484,13 @@ class ReplicaDispatchServiceSegment3 extends ReplicaDispatchServiceSegment2 {
         return;
       }
       this.operationDispatchDeferredRetries.delete(operationId);
-      const row = deferredRetry?.row
-        ? this.cloneDeferredOperationDispatchRow(deferredRetry.row)
-        : null;
+      const row = deferredRetry?.row ?
+        this.cloneDeferredOperationDispatchRow(deferredRetry.row) :
+        null;
       this.operationDispatchQueue.enqueue(
         operationId,
         RECONCILE_REASON.RETRYABLE_OPERATION_DISPATCH,
-        row ? { row } : undefined,
+        row ? {row} : undefined,
       );
       this.logger.debug(DISPATCH_LOG_MSG.OPERATION_DISPATCH_DEFERRED_RETRY, {
         nodeId: this.nodeId,
@@ -651,16 +616,29 @@ class ReplicaDispatchServiceSegment3 extends ReplicaDispatchServiceSegment2 {
     const membershipPublicationService =
       readinessService.membershipPublicationService;
     return membershipPublicationService &&
-      typeof membershipPublicationService === TYPEOF.OBJECT
-      ? membershipPublicationService
-      : null;
+      typeof membershipPublicationService === TYPEOF.OBJECT ?
+      membershipPublicationService :
+      null;
   }
 
   normalizeMembershipPublicationStatus(status) {
     return typeof status === TYPEOF.STRING ? status.toUpperCase() : null;
   }
 
-  resolveReadyNodePublicationAdvancement(nodeId) {
+  buildReadyNodePublicationAdvancementOptions(publicationRow) {
+    if (!publicationRow || typeof publicationRow !== TYPEOF.OBJECT) {
+      return READY_NODE_PUBLICATION_ADVANCEMENT_EMPTY_OPTIONS;
+    }
+    return Object.freeze({
+      [READY_NODE_PUBLICATION_ADVANCEMENT_OPTION.PUBLICATION_ROWS]:
+        Object.freeze([publicationRow]),
+    });
+  }
+
+  resolveReadyNodePublicationAdvancement(
+    nodeId,
+    options = READY_NODE_PUBLICATION_ADVANCEMENT_EMPTY_OPTIONS,
+  ) {
     const membershipPublicationService =
       this.resolveMembershipPublicationService();
     if (
@@ -678,9 +656,12 @@ class ReplicaDispatchServiceSegment3 extends ReplicaDispatchServiceSegment2 {
       });
     }
     const latestPublicationRow =
-      membershipPublicationService.getLatestPublicationRowSync();
+      membershipPublicationService.getLatestPublicationRowSync(options);
     const latestPublicationForNode =
-      membershipPublicationService.getLatestPublicationForNodeSync(nodeId);
+      membershipPublicationService.getLatestPublicationForNodeSync(
+        nodeId,
+        options,
+      );
     const latestPublicationStatus = this.normalizeMembershipPublicationStatus(
       latestPublicationRow?.status,
     );
@@ -714,9 +695,10 @@ class ReplicaDispatchServiceSegment3 extends ReplicaDispatchServiceSegment2 {
     nodeId,
     nodeRow,
     reason = RECONCILE_REASON.NODE_STATE_UPDATE_READY,
+    options = READY_NODE_PUBLICATION_ADVANCEMENT_EMPTY_OPTIONS,
   ) {
     const publicationAdvancement =
-      this.resolveReadyNodePublicationAdvancement(nodeId);
+      this.resolveReadyNodePublicationAdvancement(nodeId, options);
     if (publicationAdvancement.needsReconcile !== true) {
       return false;
     }
@@ -726,7 +708,7 @@ class ReplicaDispatchServiceSegment3 extends ReplicaDispatchServiceSegment2 {
       nodeRow,
     });
     if (publicationAdvancement.needsAcknowledgement === true) {
-      await this.acknowledgeMembershipPublicationForNode(nodeId);
+      await this.acknowledgeMembershipPublicationForNode(nodeId, options);
     }
     return true;
   }
@@ -735,6 +717,7 @@ class ReplicaDispatchServiceSegment3 extends ReplicaDispatchServiceSegment2 {
     nodeId,
     nodeRow,
     reason = RECONCILE_REASON.NODE_STATE_UPDATE_READY,
+    options = READY_NODE_PUBLICATION_ADVANCEMENT_EMPTY_OPTIONS,
   ) {
     Promise.resolve()
       .then(() =>
@@ -742,6 +725,7 @@ class ReplicaDispatchServiceSegment3 extends ReplicaDispatchServiceSegment2 {
           nodeId,
           nodeRow,
           reason,
+          options,
         ),
       )
       .catch((error) => {
@@ -750,6 +734,85 @@ class ReplicaDispatchServiceSegment3 extends ReplicaDispatchServiceSegment2 {
           error: error?.message || String(error),
         });
       });
+  }
+
+  scheduleLocalReadyNodeMembershipPublicationAdvance(
+    reason = RECONCILE_REASON.CONTROL_PLANE_PUBLICATION_CACHE_UPDATE,
+    publicationRow = READY_NODE_PUBLICATION_ADVANCEMENT_NODE_ROW_UNAVAILABLE,
+  ) {
+    const nodeId = this.nodeId;
+    if (!nodeId || !this.isNodeReady(nodeId)) {
+      return false;
+    }
+    this.scheduleReadyNodeMembershipPublicationAdvance(
+      nodeId,
+      READY_NODE_PUBLICATION_ADVANCEMENT_NODE_ROW_UNAVAILABLE,
+      reason,
+      this.buildReadyNodePublicationAdvancementOptions(publicationRow),
+    );
+    return true;
+  }
+
+  resolveMembershipPublicationAckRetryAfterMs(error) {
+    const retryAfterMs = getControlPlaneRetryAfterMs(error);
+    if (Number.isFinite(retryAfterMs) && retryAfterMs > NUM.ZERO) {
+      return Math.max(NUM.ONE, Math.floor(retryAfterMs));
+    }
+    return this.nodeStateUpdateRetryAfterMs;
+  }
+
+  armDeferredMembershipPublicationAckRetry(nodeId, retryAfterMs) {
+    return this.setTimeoutFn(() => {
+      this.membershipPublicationAckDeferredRetries.delete(nodeId);
+      if (!this.isNodeReady(nodeId)) {
+        return;
+      }
+      this.scheduleReadyNodeMembershipPublicationAdvance(
+        nodeId,
+        READY_NODE_PUBLICATION_ADVANCEMENT_NODE_ROW_UNAVAILABLE,
+        RECONCILE_REASON.CONTROL_PLANE_PUBLICATION_ACK_RETRY,
+      );
+    }, retryAfterMs);
+  }
+
+  deferMembershipPublicationAckRetry(nodeId, error) {
+    if (!nodeId || !isRetryableControlPlaneError(error)) {
+      return false;
+    }
+    const retryAfterMs =
+      this.resolveMembershipPublicationAckRetryAfterMs(error);
+    const desiredAttemptAt = Date.now() + retryAfterMs;
+    const existing =
+      this.membershipPublicationAckDeferredRetries.get(nodeId);
+    if (existing) {
+      existing.error = getControlPlaneErrorMessage(error);
+      if (desiredAttemptAt < existing.nextAttemptAt) {
+        if (existing.timeoutHandle) {
+          this.clearTimeoutFn(existing.timeoutHandle);
+        }
+        existing.nextAttemptAt = desiredAttemptAt;
+        existing.timeoutHandle = this.armDeferredMembershipPublicationAckRetry(
+          nodeId,
+          retryAfterMs,
+        );
+      }
+      return true;
+    }
+
+    this.membershipPublicationAckDeferredRetries.set(nodeId, {
+      error: getControlPlaneErrorMessage(error),
+      nextAttemptAt: desiredAttemptAt,
+      timeoutHandle: this.armDeferredMembershipPublicationAckRetry(
+        nodeId,
+        retryAfterMs,
+      ),
+    });
+    this.logger.info(DISPATCH_LOG_MSG.MEMBERSHIP_PUBLICATION_ACK_DEFERRED, {
+      nodeId,
+      retryAfterMs,
+      error: getControlPlaneErrorMessage(error),
+    });
+    return true;
   }
 
   /**
@@ -779,7 +842,10 @@ class ReplicaDispatchServiceSegment3 extends ReplicaDispatchServiceSegment2 {
     return true;
   }
 
-  async acknowledgeMembershipPublicationForNode(nodeId) {
+  async acknowledgeMembershipPublicationForNode(
+    nodeId,
+    options = READY_NODE_PUBLICATION_ADVANCEMENT_EMPTY_OPTIONS,
+  ) {
     const membershipPublicationService =
       this.resolveMembershipPublicationService();
     if (
@@ -791,14 +857,21 @@ class ReplicaDispatchServiceSegment3 extends ReplicaDispatchServiceSegment2 {
     }
 
     try {
+      if (options === READY_NODE_PUBLICATION_ADVANCEMENT_EMPTY_OPTIONS) {
+        return await membershipPublicationService.acknowledgeMembershipPublicationForNode(
+          nodeId,
+        );
+      }
       return await membershipPublicationService.acknowledgeMembershipPublicationForNode(
         nodeId,
+        options,
       );
     } catch (error) {
       this.logger.warn(DISPATCH_LOG_MSG.MEMBERSHIP_PUBLICATION_ACK_FAILED, {
         nodeId,
         error: error?.message || String(error),
       });
+      this.deferMembershipPublicationAckRetry(nodeId, error);
       return null;
     }
   }
@@ -1068,7 +1141,7 @@ class ReplicaDispatchServiceSegment3 extends ReplicaDispatchServiceSegment2 {
       this.resolveNodeStateUpdateQueue(nodeId).enqueue(
         nodeId,
         RECONCILE_REASON.NODE_STATE_UPDATE_MESSAGE,
-        { payload: deferredRetry.payload },
+        {payload: deferredRetry.payload},
       );
       this.logger.debug(DISPATCH_LOG_MSG.NODE_STATE_UPDATE_DEFERRED_RETRY, {
         nodeId,
@@ -1087,4 +1160,4 @@ class ReplicaDispatchServiceSegment3 extends ReplicaDispatchServiceSegment2 {
    */
 }
 
-export { ReplicaDispatchServiceSegment3 };
+export {ReplicaDispatchServiceSegment3};

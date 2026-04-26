@@ -54,14 +54,14 @@ describe('meta-service-factory', () => {
     it('should use strong write consistency', () => {
       const def = createWasmMetaDefinition();
       assert.equal(
-        def.writeConsistency, WRITE_CONSISTENCY_MODE.STRONG
+        def.writeConsistency, WRITE_CONSISTENCY_MODE.STRONG,
       );
     });
 
     it('should use default replica count', () => {
       const def = createWasmMetaDefinition();
       assert.equal(
-        def.replicaCount, WASM_SERVICE_DEFAULT.REPLICA_COUNT
+        def.replicaCount, WASM_SERVICE_DEFAULT.REPLICA_COUNT,
       );
     });
 
@@ -74,7 +74,7 @@ describe('meta-service-factory', () => {
       const def = createWasmMetaDefinition();
       assert.equal(
         def.safetyIntervalMs,
-        WASM_SERVICE_DEFAULT.SAFETY_INTERVAL_MS
+        WASM_SERVICE_DEFAULT.SAFETY_INTERVAL_MS,
       );
     });
 
@@ -109,7 +109,7 @@ describe('meta-service-factory', () => {
       const def = createAdminMetaDefinition();
       assert.equal(
         def.runtimeRef,
-        META_SERVICE_RUNTIME_REF.ADMIN_META
+        META_SERVICE_RUNTIME_REF.ADMIN_META,
       );
     });
 
@@ -128,11 +128,11 @@ describe('meta-service-factory', () => {
       const row = serializeServiceDefinition(def);
       assert.equal(
         row[RUNTIME_FIELD.RUNTIME_KIND],
-        RUNTIME_KIND.NATIVE_JS
+        RUNTIME_KIND.NATIVE_JS,
       );
       assert.equal(
         row[RUNTIME_FIELD.RUNTIME_REF],
-        META_SERVICE_RUNTIME_REF.ADMIN_META
+        META_SERVICE_RUNTIME_REF.ADMIN_META,
       );
       assert.equal(row[RUNTIME_FIELD.RUNTIME_CONFIG], null);
     });
@@ -157,7 +157,7 @@ describe('meta-service-factory', () => {
     it('should use runtime_service service type', () => {
       const def = createPostgresWireDefinition();
       assert.equal(
-        def.serviceType, UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE
+        def.serviceType, UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE,
       );
     });
 
@@ -174,7 +174,7 @@ describe('meta-service-factory', () => {
     it('should use postgres wire runtime ref', () => {
       const def = createPostgresWireDefinition();
       assert.equal(
-        def.runtimeRef, META_SERVICE_RUNTIME_REF.POSTGRES_WIRE
+        def.runtimeRef, META_SERVICE_RUNTIME_REF.POSTGRES_WIRE,
       );
     });
 
@@ -186,14 +186,14 @@ describe('meta-service-factory', () => {
     it('should use postgresql protocol', () => {
       const def = createPostgresWireDefinition();
       assert.equal(
-        def.protocol, WASM_SERVICE_PROTOCOL.POSTGRESQL
+        def.protocol, WASM_SERVICE_PROTOCOL.POSTGRESQL,
       );
     });
 
     it('should use default replica count', () => {
       const def = createPostgresWireDefinition();
       assert.equal(
-        def.replicaCount, WASM_SERVICE_DEFAULT.REPLICA_COUNT
+        def.replicaCount, WASM_SERVICE_DEFAULT.REPLICA_COUNT,
       );
     });
 
@@ -207,11 +207,11 @@ describe('meta-service-factory', () => {
       const row = serializeServiceDefinition(def);
       assert.equal(
         row[RUNTIME_FIELD.RUNTIME_KIND],
-        RUNTIME_KIND.NATIVE_JS
+        RUNTIME_KIND.NATIVE_JS,
       );
       assert.equal(
         row[RUNTIME_FIELD.RUNTIME_REF],
-        META_SERVICE_RUNTIME_REF.POSTGRES_WIRE
+        META_SERVICE_RUNTIME_REF.POSTGRES_WIRE,
       );
       assert.equal(row[RUNTIME_FIELD.RUNTIME_CONFIG], null);
     });
@@ -226,7 +226,7 @@ describe('meta-service-factory', () => {
   describe('constants', () => {
     it('should export subsystem name', () => {
       assert.equal(
-        META_FACTORY_SUBSYSTEM, 'meta-service-factory'
+        META_FACTORY_SUBSYSTEM, 'meta-service-factory',
       );
     });
 

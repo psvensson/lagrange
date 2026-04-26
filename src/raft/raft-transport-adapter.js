@@ -9,7 +9,6 @@ import {ADDRESS, TABLES} from '../constants/index.js';
 import {
   RAFT_PACKET_MESSAGE_TYPE,
   RAFT_TRANSPORT_ERROR_MSG,
-  RAFT_TRANSPORT_LOG_MSG,
   resolveRaftTransportDeliveryOptions,
 } from './constants.js';
 

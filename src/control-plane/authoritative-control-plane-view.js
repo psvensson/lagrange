@@ -25,7 +25,6 @@ import {
 } from './control-plane-system-table-gateway.js';
 import {
   buildControlPlaneWorkloadProfile,
-  CONTROL_PLANE_WORKLOAD_CLASS,
   resolveControlPlaneWorkloadClass,
 } from './control-plane-workload-profile.js';
 import {

@@ -158,9 +158,9 @@ async function executeStage(deps) {
 
   const stageCtx = buildStageContext(
     executionContext,
-    executionContext.getPlanDiagnostics
-      ? executionContext.getPlanDiagnostics()
-      : undefined,
+    executionContext.getPlanDiagnostics ?
+      executionContext.getPlanDiagnostics() :
+      undefined,
   );
   const results = [];
 

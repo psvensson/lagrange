@@ -1,7 +1,7 @@
-import { NUM, TYPEOF } from "../constants/index.js";
+import {NUM, TYPEOF} from '../constants/index.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
-} from "./control-plane-readiness-constants.js";
+} from './control-plane-readiness-constants.js';
 
 function normalizeIsoTimestamp(nowValue) {
   return new Date(nowValue).toISOString();
@@ -16,7 +16,7 @@ export function buildReadinessTransitionState(context = {}, nowValue = Date.now(
   const reasonCodes = Array.isArray(context.reasons) ?
     [...new Set(
       context.reasons
-        .map((reason) => String(reason?.code || ""))
+        .map((reason) => String(reason?.code || ''))
         .filter(Boolean),
     )].sort() :
     [];

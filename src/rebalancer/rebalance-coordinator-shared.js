@@ -10,22 +10,22 @@
  * Requirements: 2.1, 2.2, 2.3, 2.4, 6.1, 6.2
  */
 
-import { EventEmitter } from "events";
-import { v4 as uuidv4 } from "uuid";
-import { LoggingService } from "../logging/logging-service.js";
-import { ConfigurationManager } from "../config/configuration-manager.js";
-import { SYSTEM_TABLE_NAME } from "../bootstrap/system-table-schemas-constants.js";
+import {EventEmitter} from 'events';
+import {v4 as uuidv4} from 'uuid';
+import {LoggingService} from '../logging/logging-service.js';
+import {ConfigurationManager} from '../config/configuration-manager.js';
+import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {
   isCriticalTransportControlPlanePartition as isCriticalTransportControlPlanePartitionTable,
   isPriorityControlPlanePartition as isPriorityControlPlanePartitionTable,
-} from "../bootstrap/system-partition-classification.js";
-import { CONTROL_PLANE_READINESS_DIMENSION } from "../control-plane/control-plane-readiness-constants.js";
-import { ControlPlaneReadinessService } from "../control-plane/control-plane-readiness-service.js";
-import { createControlPlaneRuntimeBundle } from "../control-plane/control-plane-runtime-bundle.js";
+} from '../bootstrap/system-partition-classification.js';
+import {CONTROL_PLANE_READINESS_DIMENSION} from '../control-plane/control-plane-readiness-constants.js';
+import {ControlPlaneReadinessService} from '../control-plane/control-plane-readiness-service.js';
+import {createControlPlaneRuntimeBundle} from '../control-plane/control-plane-runtime-bundle.js';
 import {
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
   readAuthoritativeControlPlaneRows,
-} from "../control-plane/control-plane-system-table-gateway.js";
+} from '../control-plane/control-plane-system-table-gateway.js';
 import {
   buildPriorityRecoveryOperationContextFromRecord,
   buildPriorityRecoveryOperationAssessment,
@@ -35,32 +35,33 @@ import {
   resolvePriorityRecoveryActiveNodeCohort,
   resolveTrackedPriorityRecoveryAdmissionPlan,
   shouldPriorityRecoveryOperationBlockPlanning,
-} from "../control-plane/priority-recovery-snapshot.js";
-import { StartupRecoveryCoordinator } from "../bootstrap/startup-recovery-coordinator.js";
+} from '../control-plane/priority-recovery-snapshot.js';
+import {StartupRecoveryCoordinator} from '../bootstrap/startup-recovery-coordinator.js';
 import {
   PRESSURE_GOVERNOR_ACTION,
   PRESSURE_WORK_CLASS,
   PressureGovernor,
-} from "../control-plane/pressure-governor.js";
+} from '../control-plane/pressure-governor.js';
 import {
   buildControlPlaneWorkloadProfile,
   CONTROL_PLANE_WORKLOAD_CLASS,
-} from "../control-plane/control-plane-workload-profile.js";
+} from '../control-plane/control-plane-workload-profile.js';
 import {
   getControlPlaneErrorCode,
   getControlPlaneRetryAfterMs,
   isRetryableControlPlaneError,
-} from "../control-plane/control-plane-error-classification.js";
-import { DurableWorkflowCoordinator } from "../workflow/durable-workflow-coordinator.js";
-import { OperationLane } from "../workflow/operation-lane.js";
+} from '../control-plane/control-plane-error-classification.js';
+import {DurableWorkflowCoordinator} from '../workflow/durable-workflow-coordinator.js';
+import {OperationLane} from '../workflow/operation-lane.js';
 import {
   WORKFLOW_STEP,
   NUM,
+  STRING,
   TIME_MS,
   UNIFIED_SERVICE_TYPE,
-} from "../constants/index.js";
-import { SERVICE_TYPE } from "../constants/service.js";
-import { assertCritical } from "../utils/assert.js";
+} from '../constants/index.js';
+import {SERVICE_TYPE} from '../constants/service.js';
+import {assertCritical} from '../utils/assert.js';
 import {
   buildControlPlaneQueryOptions,
   TIMEOUT_BUDGET_CLASSIFICATION,
@@ -68,14 +69,15 @@ import {
   buildTimeoutClassification,
   createChildTimeoutBudget,
   createTopLevelOperationBudget,
-} from "../control-plane/timeout-budget.js";
+} from '../control-plane/timeout-budget.js';
 import {
   COORDINATOR_OWNED_OPERATION_TYPES_SQL_CLAUSE,
   OPERATION_METADATA_KEY,
   OperationType,
+  ReplicaStatus,
   createOperation as createOperationRecord,
-} from "./replica-status.js";
-import { ReplicaOperationField } from "./replica-operation-constants.js";
+} from './replica-status.js';
+import {ReplicaOperationField} from './replica-operation-constants.js';
 import {
   REBALANCE_COORDINATOR_ERROR_MSG,
   REBALANCE_COORDINATOR_EVENT,
@@ -85,27 +87,27 @@ import {
   REBALANCER_DEFAULT,
   REBALANCER_SKIP_REASON,
   REBALANCER_SUBSYSTEM,
-} from "./rebalancer-constants.js";
+} from './rebalancer-constants.js';
 import {
   RESERVATION_REASON,
   RESERVATION_STATUS,
   STORAGE_CAPACITY_CONFIG_KEY,
   STORAGE_CAPACITY_DEFAULT,
-} from "./storage-capacity-constants.js";
-import { STORAGE_ADMISSION_DECISION_TYPE } from "./storage-admission-constants.js";
-import {} from "./executor-outcome-constants.js";
+} from './storage-capacity-constants.js';
+import {STORAGE_ADMISSION_DECISION_TYPE} from './storage-admission-constants.js';
+import {} from './executor-outcome-constants.js';
 import {
   ExecutorOutcomeEmitter,
   OUTCOME_EVENT_NAME,
-} from "./executor-outcome-emitter.js";
+} from './executor-outcome-emitter.js';
 import {
   INCOMPLETE_OPERATION_OBSERVATION_STATE,
   REPLICA_OPERATION_VISIBILITY_READ_MODE,
   ReplicaOperationRepository,
-} from "./replica-operation-repository.js";
-import { OperationWorkflowOwner } from "./operation-workflow-owner.js";
-import { ProvisioningAdmissionPolicy } from "./provisioning-admission-policy.js";
-import { buildReplicatedServiceBootstrapTopology } from "../service/replicated-service-topology.js";
+} from './replica-operation-repository.js';
+import {OperationWorkflowOwner} from './operation-workflow-owner.js';
+import {ProvisioningAdmissionPolicy} from './provisioning-admission-policy.js';
+import {buildReplicatedServiceBootstrapTopology} from '../service/replicated-service-topology.js';
 
 /**
  * SQL queries for replica_operations table access.
@@ -113,7 +115,7 @@ import { buildReplicatedServiceBootstrapTopology } from "../service/replicated-s
  */
 const SQL = Object.freeze({
   SELECT_OPERATION_BY_ID:
-    "SELECT * FROM replica_operations WHERE operation_id = ?",
+    'SELECT * FROM replica_operations WHERE operation_id = ?',
   SELECT_INCOMPLETE_OPERATIONS: `SELECT * FROM replica_operations
     WHERE source_node_id = ?
     AND type IN (${COORDINATOR_OWNED_OPERATION_TYPES_SQL_CLAUSE})
@@ -122,7 +124,7 @@ const SQL = Object.freeze({
       OR (workflow_step = ? AND type = ?)
     )`,
   SELECT_OPERATIONS_BY_PARTITION:
-    "SELECT * FROM replica_operations WHERE partition_id = ?",
+    'SELECT * FROM replica_operations WHERE partition_id = ?',
   SELECT_OPERATIONS_BY_ENTITY: `SELECT * FROM replica_operations
     WHERE (
       (entity_type = ? AND entity_id = ?)
@@ -145,7 +147,7 @@ const SQL = Object.freeze({
     status = ?, workflow_step = ?, updated_at = ?, completed_at = ?, 
     error_message = ?, steps_history = ?, replica_id = ?
     WHERE operation_id = ?`,
-  SELECT_REPLICA_STATUS: "SELECT status FROM services WHERE service_id = ?",
+  SELECT_REPLICA_STATUS: 'SELECT status FROM services WHERE service_id = ?',
   SELECT_REPLICA_BY_PARTITION_NODE: `SELECT status FROM services 
     WHERE partition_id = ? AND node_id = ?`,
   SELECT_PARTITION_SERVICES_BY_ENTITY: `SELECT * FROM services
@@ -164,24 +166,24 @@ const SQL = Object.freeze({
     SET status = ?, updated_at = ?, released_at = ?
     WHERE reservation_id = ? AND status = ?`,
   SELECT_ACTIVE_RESERVATIONS_BY_OPERATION:
-    "SELECT * FROM storage_reservations WHERE operation_id = ? AND status = ?",
+    'SELECT * FROM storage_reservations WHERE operation_id = ? AND status = ?',
   SELECT_ACTIVE_RESERVATIONS:
-    "SELECT * FROM storage_reservations WHERE status = ?",
+    'SELECT * FROM storage_reservations WHERE status = ?',
   SELECT_EXPIRED_ACTIVE_RESERVATIONS:
-    "SELECT * FROM storage_reservations WHERE status = ? AND expires_at <= ?",
+    'SELECT * FROM storage_reservations WHERE status = ? AND expires_at <= ?',
 });
 
 const RECENT_INTENT_TTL_MS = 15000;
 const INCOMPLETE_OPERATION_EMPTY_QUERY_BACKOFF_MS = TIME_MS.SECOND * NUM.FIVE;
-const REPLICA_ID_SEPARATOR = "-r";
+const REPLICA_ID_SEPARATOR = '-r';
 const REPLICA_ID_START_INDEX = NUM.ONE;
 const DEFAULT_AMPLIFICATION_FACTOR = NUM.ONE;
 
 const CONCURRENT_CREATE_BUDGET_SCOPE = Object.freeze({
-  ADD: "add",
-  PRIORITY_ADD: "priority_add",
-  EMERGENCY_PRIORITY_ADD: "emergency_priority_add",
-  REMOVE: "remove",
+  ADD: 'add',
+  PRIORITY_ADD: 'priority_add',
+  EMERGENCY_PRIORITY_ADD: 'emergency_priority_add',
+  REMOVE: 'remove',
 });
 const CONTROL_PLANE_QUERY_OPTIONS = Object.freeze({
   ...buildControlPlaneQueryOptions(),
@@ -203,23 +205,23 @@ const STRICT_CREATE_DEDUPE_REPOSITORY_QUERY_OPTIONS = Object.freeze({
 });
 const PRIORITY_RECENT_INTENT_TTL_MS = TIME_MS.MINUTE * NUM.TWO;
 const RECENT_OPERATION_INTENT_VISIBILITY_STATE = Object.freeze({
-  DEFERRED: "deferred",
-  MATCHING: "matching",
-  MISSING: "missing",
+  DEFERRED: 'deferred',
+  MATCHING: 'matching',
+  MISSING: 'missing',
 });
 const TOPOLOGY_GUARD_DEFAULT_PARTITION_TARGET_REPLICA_COUNT = NUM.THREE;
 const TOPOLOGY_GUARD_STATE = Object.freeze({
-  ALLOWED: "allowed",
-  TARGET_NODE_OCCUPIED: "target_node_occupied",
-  TARGET_REPLICA_COUNT_SATISFIED: "target_replica_count_satisfied",
+  ALLOWED: 'allowed',
+  TARGET_NODE_OCCUPIED: 'target_node_occupied',
+  TARGET_REPLICA_COUNT_SATISFIED: 'target_replica_count_satisfied',
 });
 const TOPOLOGY_GUARD_REASON = Object.freeze({
-  TARGET_NODE_ALREADY_OCCUPIED: "target_node_already_occupied",
+  TARGET_NODE_ALREADY_OCCUPIED: 'target_node_already_occupied',
   TARGET_REPLICA_COUNT_ALREADY_SATISFIED:
-    "target_replica_count_already_satisfied",
+    'target_replica_count_already_satisfied',
 });
 const TOPOLOGY_GUARD_ERROR_MSG = Object.freeze({
-  BLOCKED_PREFIX: "Topology guard blocked",
+  BLOCKED_PREFIX: 'Topology guard blocked',
 });
 
 /**
@@ -249,6 +251,7 @@ export const REBALANCE_COORDINATOR_SHARED = {
   OUTCOME_EVENT_NAME,
   OperationLane,
   OperationType,
+  ReplicaStatus,
   OperationWorkflowOwner,
   PRESSURE_GOVERNOR_ACTION,
   PRESSURE_WORK_CLASS,
@@ -273,6 +276,7 @@ export const REBALANCE_COORDINATOR_SHARED = {
   ReplicaOperationField,
   ReplicaOperationRepository,
   SERVICE_TYPE,
+  STRING,
   SQL,
   STORAGE_ADMISSION_DECISION_TYPE,
   STORAGE_CAPACITY_CONFIG_KEY,

@@ -45,6 +45,8 @@ const DISPATCH_LOG_MSG = Object.freeze({
     'Membership publication refresh failed for ready node-state',
   MEMBERSHIP_PUBLICATION_ACK_FAILED:
     'Membership publication acknowledgement failed for ready node-state',
+  MEMBERSHIP_PUBLICATION_ACK_DEFERRED:
+    'Deferred membership publication acknowledgement retry',
   ENQUEUE_OPERATION_DISPATCH:
     'Enqueued operation for dispatch reconcile',
   ENQUEUE_NODE_STATE_UPDATE:

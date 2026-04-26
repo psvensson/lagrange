@@ -31,7 +31,6 @@ const ON_CONFLICT_ACTION = Object.freeze({
 /**
  * ILIKE operator name used in the PG AST.
  */
-const ILIKE_OPERATOR = 'ILIKE';
 const NOT_ILIKE_OPERATOR = 'NOT ILIKE';
 
 /**
@@ -176,7 +175,7 @@ function validateParamMapping(mapping, paramsLength) {
   // Check out-of-bounds
   if (maxIndex > paramsLength) {
     throw new Error(
-      PG_TRANSLATE_ERROR.MISSING_PARAM_INDEX + maxIndex
+      PG_TRANSLATE_ERROR.MISSING_PARAM_INDEX + maxIndex,
     );
   }
 
@@ -185,7 +184,7 @@ function validateParamMapping(mapping, paramsLength) {
   for (let i = MIN_PARAM_INDEX; i <= maxIndex; i++) {
     if (!seen.has(i)) {
       throw new Error(
-        PG_TRANSLATE_ERROR.PARAM_GAP + i
+        PG_TRANSLATE_ERROR.PARAM_GAP + i,
       );
     }
   }

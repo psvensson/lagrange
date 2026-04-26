@@ -92,11 +92,11 @@ test(
             ({cdcPipelineReady, nodesRegistered, cacheHydrated}) => {
               const signal = new ClusterReadinessSignal({
                 cdcPipelineReadinessGate: createGateStub(
-                  cdcPipelineReady
+                  cdcPipelineReady,
                 ),
                 systemTableCache: createCacheStub(
                   nodesRegistered,
-                  cacheHydrated
+                  cacheHydrated,
                 ),
                 expectedNodeCount: EXPECTED_NODE_COUNT,
               });
@@ -117,17 +117,17 @@ test(
               const expectedUnmet = new Set();
               if (!cdcPipelineReady) {
                 expectedUnmet.add(
-                  CLUSTER_READINESS_CONDITION.CDC_PIPELINE_READY
+                  CLUSTER_READINESS_CONDITION.CDC_PIPELINE_READY,
                 );
               }
               if (!nodesRegistered) {
                 expectedUnmet.add(
-                  CLUSTER_READINESS_CONDITION.NODES_REGISTERED
+                  CLUSTER_READINESS_CONDITION.NODES_REGISTERED,
                 );
               }
               if (!cacheHydrated) {
                 expectedUnmet.add(
-                  CLUSTER_READINESS_CONDITION.CACHE_HYDRATED
+                  CLUSTER_READINESS_CONDITION.CACHE_HYDRATED,
                 );
               }
 

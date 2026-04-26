@@ -72,7 +72,7 @@ function auditManifestValidation(moduleId, valid, errors, logger) {
  * @return {Object} Audit record.
  */
 function auditRunExportVerification(
-  moduleId, runExport, found, logger
+  moduleId, runExport, found, logger,
 ) {
   const decision = found ? DECISION.RESOLVED : DECISION.REJECTED;
 
@@ -81,7 +81,7 @@ function auditRunExportVerification(
       moduleId,
       runExport,
       found,
-    }
+    },
   );
 
   if (typeof logger === 'function') {
@@ -102,7 +102,7 @@ function auditRunExportVerification(
  * @return {Object} Audit record.
  */
 function auditDependencyResolution(
-  moduleId, depModuleId, resolved, errors, logger
+  moduleId, depModuleId, resolved, errors, logger,
 ) {
   const message = resolved ?
     MSG.DEPENDENCY_RESOLVED :
@@ -136,7 +136,7 @@ function auditDependencyResolution(
  * @return {Object} Audit record.
  */
 function auditCapabilityDecision(
-  moduleId, capability, allowed, logger
+  moduleId, capability, allowed, logger,
 ) {
   const message = allowed ?
     MSG.CAPABILITY_ALLOWED :
@@ -168,7 +168,7 @@ function auditCapabilityDecision(
  * @return {Object} Audit record.
  */
 function auditModuleActivation(
-  moduleId, activated, errors, logger
+  moduleId, activated, errors, logger,
 ) {
   const message = activated ?
     MSG.MODULE_ACTIVATED :

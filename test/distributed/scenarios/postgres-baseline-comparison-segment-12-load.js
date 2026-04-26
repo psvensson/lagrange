@@ -1,23 +1,11 @@
-import { POSTGRES_BASELINE_COMPARISON_SEGMENT_11 } from "./postgres-baseline-comparison-segment-11.js";
+import {POSTGRES_BASELINE_COMPARISON_SEGMENT_11} from './postgres-baseline-comparison-segment-11.js';
 const {
-  AUTHORITATIVE_FALLBACK_THRESHOLD_EXCEEDED_REASON,
   BASELINE_SKIP_REASON_SUT_HARD_LOAD_FAILURE,
   BASELINE_STATUS_SKIPPED,
-  BENCHMARK_EVENT_TABLE_FALLBACK,
-  BENCHMARK_METADATA_STAGE_CREATE_COMMITTED,
-  BENCHMARK_TABLE_CREATE_LARGE_CLUSTER_RETRY_TIMEOUT_MS,
-  BENCHMARK_WORKLOAD_OPERATIONS,
-  BENCHMARK_WORKLOAD_PROFILE,
-  CDC_TELEMETRY_SCHEMA_MISSING_REASON,
-  CDC_TELEMETRY_SCHEMA_VERSION,
-  DISCOVERY_GATE_REASON_INSUFFICIENT_REACHABLE_NODES,
   DISCOVERY_GATE_STATUS_FAILED,
-  DISCOVERY_GATE_STATUS_PASSED,
   HEARTBEAT_FRESHNESS_INVARIANT_FAILED_REASON,
   HEARTBEAT_FRESHNESS_LARGE_CLUSTER_MAX_STALL_MS,
-  INTERNAL_SIGNAL_THRESHOLD_BREACH_REASON,
   LOAD_PARITY_STATUS_MISMATCHED,
-  NODE_CLIENT_TRANSIENT_CONTEXT,
   NO_PROGRESS_REASON_CODE,
   ONE,
   OVERLOAD_POLICY_VIOLATION_REASON,
@@ -25,29 +13,8 @@ const {
   POST_LOAD_DRAIN_STATUS_FAILED,
   POST_LOAD_DRAIN_STATUS_OK,
   PREFLIGHT_CONVERGENCE_LARGE_CLUSTER_NODE_THRESHOLD,
-  PRELOAD_QUIESCENCE_LARGE_CLUSTER_MAX_REPLICA_OPS_IN_FLIGHT,
-  PRELOAD_QUIESCENCE_LARGE_CLUSTER_STABLE_WINDOW_MS,
-  QUIESCENCE_REASON_IN_FLIGHT_QUERY_ERROR_PREFIX,
-  QUIESCENCE_REASON_LEADERSHIP_UNSTABLE_PREFIX,
-  QUIESCENCE_REASON_NODE_PROBE_ERROR_PREFIX,
-  QUIESCENCE_REASON_STALLED_NO_PROGRESS_PREFIX,
-  QUIET_MODE_ACTIVE_PHASES,
-  QUIET_MODE_REASON_RUN_FINALIZE,
-  QUIET_MODE_REASON_STRICT_BENCHMARK_MODE,
-  REBALANCING_PRESSURE_SCHEMA_VERSION,
   REBALANCING_WINDOW_PINNING_VIOLATION_REASON,
-  REQUIRED_SCHEMA_VERSION_UNAVAILABLE_REASON,
-  ROOT_CAUSE_SNAPSHOT_KIND_CONTROL_SNAPSHOT,
-  ROOT_CAUSE_SNAPSHOT_KIND_PREFLIGHT_CRITICAL_PATH,
-  SNAPSHOT_REFRESH_WARNING_PREFIX,
-  SNAPSHOT_REFRESH_WARNING_SKIPPED,
-  SNAPSHOT_REFRESH_WARNING_UNRESOLVED,
-  SNAPSHOT_WARNING_PREFIX,
-  STRICT_INVARIANT_RETRY_MIN_POLL_INTERVAL_MS,
   STRICT_PARITY_REASON_MISMATCH,
-  STRICT_PRELOAD_READINESS_NODE_REASONS_PREFIX,
-  STRICT_PRELOAD_READINESS_REASON_FAILED,
-  SYSTEM_TABLE_READ_PATH_MODE_CANONICAL,
   WRITE_PRESSURE_THRESHOLD_EXCEEDED_REASON,
   ZERO,
   assert,
@@ -55,87 +22,26 @@ const {
   CONSISTENCY_VERDICT,
   PHASE_STATUS,
   SCENARIO_PHASE,
-  aggregateDiscoveryReadinessExclusionsByNodeId,
-  buildAdmissionRuntimeOwnershipSummary,
-  buildBenchmarkMetadataFlow,
-  buildCdcTelemetryState,
-  buildComparison,
-  buildEffectiveAdmissionPolicy,
-  buildFailedPhaseDiagnostics,
-  buildInternalSignalCounts,
   buildLoadParity,
-  buildNoProgressDiagnostics,
-  buildPhaseDecisions,
-  buildPhaseReasonSummary,
   buildPostLoadDrainRebalancingPressure,
-  buildPreLoadRebalancingPressure,
   buildSaturationCounters,
-  buildStartupDecisionRecord,
-  buildStrictDiscoveryGate,
   buildStrictParityGate,
-  buildUnifiedFailureArtifact,
-  buildVerificationArtifacts,
-  collectAdminQueryTraceByNodeId,
-  collectBenchmarkMetadataSnapshot,
-  collectCdcTelemetryByNode,
-  collectControlSnapshotsFromNodes,
   collectLoadMetricHardFailures,
-  createAdmissionRuntimeOwnershipAudit,
-  createEmptyInternalSignalClassCounts,
-  createEmptySaturationCounters,
-  createInitialPostLoadDrain,
-  createVerificationSnapshotRefreshResult,
   emitPhaseMeaningfulChange,
   emitPhaseNoProgressFailure,
   emitPhaseProgress,
-  emitScenarioPhaseEvent,
-  ensureSutBenchmarkTable,
-  evaluateAuthoritativeFallbackPolicy,
-  evaluateInternalSignalThresholds,
   evaluateOverloadPolicy,
-  evaluateStrictPreloadInvariantsFromSnapshots,
   evaluateWritePressure,
-  formatAuthoritativeFallbackViolations,
-  formatCdcTelemetrySchemaErrors,
   formatHeartbeatFreshnessFailures,
-  formatInternalSignalBreaches,
   formatLoadParityReasons,
   formatLoadRebalancingPinningReasons,
   formatOverloadPolicyViolations,
-  formatReadinessReasonsByNodeId,
-  formatSutLoadDiscoveryDiagnostics,
   formatWritePressureViolations,
-  isLoadNodeCandidate,
-  isStrictBenchmarkMode,
   markQuietModePhase,
-  mapPhaseArtifacts,
-  mapPhaseTimeline,
   normalizeLoadMetrics,
-  parseDurationToMs,
-  replaceSnapshotsByNodeId,
   resolveBaselineLoadNodeCountForRun,
   resolveBaselineMetrics,
-  resolveBenchmarkConfig,
-  resolveBenchmarkTableCreateAttempt,
-  resolveCanonicalSystemTableWriteNode,
-  resolveDiagnosticsCoverage,
-  resolveFirstMismatchKind,
-  resolveMismatchRefreshNodeIds,
-  resolveNodeClientChannelPolicyOverrides,
-  resolvePreflightConvergenceOptions,
-  resolvePrimaryProvider,
-  resolveScenarioOverrides,
-  resolveStrictInvariantRetryWindowMs,
-  resolveSutLoadNodes,
-  resolveSystemTableReadPath,
-  revalidateDegradedPreloadLoadNodes,
   runSutSharedLoad,
-  selectFailureDiagnosticNodes,
-  selectStrictInvariantGateEntries,
-  selectVerificationNodes,
-  shouldRetryStrictInvariantBreaches,
-  uniqueSorted,
-  waitForSutBenchmarkTableReady,
   waitForSutLoadQuiescence,
 } = POSTGRES_BASELINE_COMPARISON_SEGMENT_11;
 
@@ -150,30 +56,28 @@ export function buildLoadPhaseHandlers(context) {
     nodeClient,
     state,
     targetSutLoadNodeCount,
-    effectiveSutLoadDiscoveryTimeoutMs,
     provider,
     networkName,
     nodeClientPolicySnapshot,
-    strictBenchmarkMode,
   } = context;
 
   return {
     [SCENARIO_PHASE.LOAD]: async (phaseContext) => {
       markQuietModePhase(state.quietMode, SCENARIO_PHASE.LOAD);
-      emitPhaseProgress(phaseContext, "starting system-under-test load run", {
+      emitPhaseProgress(phaseContext, 'starting system-under-test load run', {
         admittedNodeIds: state.effectiveSutLoadNodes.map((node) => node.id),
         loadOpsPerSec: benchmarkConfig.loadOpsPerSec,
       });
       const effectiveLoadBenchmarkConfig =
-        nodes.length >= PREFLIGHT_CONVERGENCE_LARGE_CLUSTER_NODE_THRESHOLD
-          ? {
-              ...benchmarkConfig,
-              heartbeatFreshnessMaxStallMs: Math.max(
-                Number(benchmarkConfig.heartbeatFreshnessMaxStallMs || ZERO),
-                HEARTBEAT_FRESHNESS_LARGE_CLUSTER_MAX_STALL_MS,
-              ),
-            }
-          : benchmarkConfig;
+        nodes.length >= PREFLIGHT_CONVERGENCE_LARGE_CLUSTER_NODE_THRESHOLD ?
+          {
+            ...benchmarkConfig,
+            heartbeatFreshnessMaxStallMs: Math.max(
+              Number(benchmarkConfig.heartbeatFreshnessMaxStallMs || ZERO),
+              HEARTBEAT_FRESHNESS_LARGE_CLUSTER_MAX_STALL_MS,
+            ),
+          } :
+          benchmarkConfig;
       const sutLoadResult = await runSutSharedLoad({
         nodeClient,
         seedNode,
@@ -201,16 +105,16 @@ export function buildLoadPhaseHandlers(context) {
       state.rebalancingPressure.load = sutLoadResult.rebalancingPressure;
       state.runtimeInternalSignalMessages = Array.isArray(
         sutLoadResult.internalSignalMessages,
-      )
-        ? [...sutLoadResult.internalSignalMessages]
-        : [];
+      ) ?
+        [...sutLoadResult.internalSignalMessages] :
+        [];
       state.saturation = buildSaturationCounters({
         loadMetrics: state.loadMetrics,
         internalSignalMessages: state.runtimeInternalSignalMessages,
       });
       emitPhaseMeaningfulChange(
         phaseContext,
-        "system-under-test load completed",
+        'system-under-test load completed',
         {
           total: state.loadMetrics.total,
           failed: state.loadMetrics.failed,
@@ -225,7 +129,7 @@ export function buildLoadPhaseHandlers(context) {
       ) {
         throw new Error(
           REBALANCING_WINDOW_PINNING_VIOLATION_REASON +
-            ": " +
+            ': ' +
             formatLoadRebalancingPinningReasons(loadPinning.violationReasons),
         );
       }
@@ -235,21 +139,21 @@ export function buildLoadPhaseHandlers(context) {
         state.heartbeatFreshnessResult;
       const allowSoftHeartbeatFreshnessFallback =
         benchmarkConfig.allowPreloadStallSoftFallback === true &&
-        state.quiescenceResult?.mode === "degraded_soft_stall_fallback";
+        state.quiescenceResult?.mode === 'degraded_soft_stall_fallback';
       if (state.heartbeatFreshnessResult?.failed === true) {
         if (allowSoftHeartbeatFreshnessFallback) {
           state.runtimeInternalSignalMessages.push(
-            "heartbeat_freshness_degraded_soft_fallback",
+            'heartbeat_freshness_degraded_soft_fallback',
           );
           emitPhaseProgress(
             phaseContext,
-            "continuing despite heartbeat freshness degradation under soft preload fallback",
+            'continuing despite heartbeat freshness degradation under soft preload fallback',
             {
               failureCount: Array.isArray(
                 state.heartbeatFreshnessResult?.failures,
-              )
-                ? state.heartbeatFreshnessResult.failures.length
-                : ONE,
+              ) ?
+                state.heartbeatFreshnessResult.failures.length :
+                ONE,
             },
           );
         } else {
@@ -267,7 +171,7 @@ export function buildLoadPhaseHandlers(context) {
             },
             errors: [
               HEARTBEAT_FRESHNESS_INVARIANT_FAILED_REASON +
-                ": " +
+                ': ' +
                 formatHeartbeatFreshnessFailures(
                   state.heartbeatFreshnessResult,
                 ),
@@ -288,7 +192,7 @@ export function buildLoadPhaseHandlers(context) {
               status: BASELINE_STATUS_SKIPPED,
               reason: BASELINE_SKIP_REASON_SUT_HARD_LOAD_FAILURE,
               hardFailureCodes: hardLoadFailures.map((failure) =>
-                String(failure.code || "unknown"),
+                String(failure.code || 'unknown'),
               ),
             },
           },
@@ -308,7 +212,7 @@ export function buildLoadPhaseHandlers(context) {
       ) {
         throw new Error(
           OVERLOAD_POLICY_VIOLATION_REASON +
-            ": " +
+            ': ' +
             formatOverloadPolicyViolations(state.overloadPolicyResult),
         );
       }
@@ -335,7 +239,7 @@ export function buildLoadPhaseHandlers(context) {
           },
           errors: [
             WRITE_PRESSURE_THRESHOLD_EXCEEDED_REASON +
-              ": " +
+              ': ' +
               formatWritePressureViolations(state.writePressureResult),
           ],
         };
@@ -368,7 +272,7 @@ export function buildLoadPhaseHandlers(context) {
       state.baselinePoolMaxConnections = baseline.baselinePoolMaxConnections;
       emitPhaseMeaningfulChange(
         phaseContext,
-        "baseline load comparison ready",
+        'baseline load comparison ready',
         {
           baselineOpsPerSec: Number(state.baselineMetrics?.opsPerSec || ZERO),
         },
@@ -393,21 +297,21 @@ export function buildLoadPhaseHandlers(context) {
         (benchmarkConfig.failOnLoadParityMismatch &&
           state.loadParity.status === LOAD_PARITY_STATUS_MISMATCHED);
       if (shouldFailOnParityMismatch) {
-        const mismatchPrefix = strictParityMismatch
-          ? STRICT_PARITY_REASON_MISMATCH
-          : "load_parity_mismatch";
+        const mismatchPrefix = strictParityMismatch ?
+          STRICT_PARITY_REASON_MISMATCH :
+          'load_parity_mismatch';
         throw new Error(
-          mismatchPrefix + ": " + formatLoadParityReasons(state.loadParity),
+          mismatchPrefix + ': ' + formatLoadParityReasons(state.loadParity),
         );
       }
 
       assert.ok(
         state.loadMetrics.total > ZERO,
-        "System-under-test load run produced no operations",
+        'System-under-test load run produced no operations',
       );
       assert.ok(
         Number(state.baselineMetrics?.opsPerSec || ZERO) > ZERO,
-        "Postgres baseline load run produced zero throughput",
+        'Postgres baseline load run produced zero throughput',
       );
 
       return {
@@ -427,7 +331,7 @@ export function buildLoadPhaseHandlers(context) {
       };
     },
     [SCENARIO_PHASE.POST_LOAD_DRAIN]: async (phaseContext) => {
-      emitPhaseProgress(phaseContext, "waiting for post-load drain", {
+      emitPhaseProgress(phaseContext, 'waiting for post-load drain', {
         admittedNodeIds: state.effectiveSutLoadNodes.map((node) => node.id),
       });
       try {
@@ -463,7 +367,7 @@ export function buildLoadPhaseHandlers(context) {
             state.postLoadDrain,
             benchmarkConfig,
           );
-        emitPhaseMeaningfulChange(phaseContext, "post-load drain complete", {
+        emitPhaseMeaningfulChange(phaseContext, 'post-load drain complete', {
           includedNodeIds: state.postLoadDrain.includedNodeIds,
           excludedNodeIds: state.postLoadDrain.excludedNodeIds,
         });
@@ -478,12 +382,12 @@ export function buildLoadPhaseHandlers(context) {
         const gateResult = error?.gateResult || {};
         const stalledReason =
           Object.keys(gateResult.reasonHistogram || {}).find((reason) =>
-            String(reason || "").includes(NO_PROGRESS_REASON_CODE),
+            String(reason || '').includes(NO_PROGRESS_REASON_CODE),
           ) || null;
         if (stalledReason) {
           emitPhaseNoProgressFailure(
             phaseContext,
-            "post-load drain aborted for no progress",
+            'post-load drain aborted for no progress',
             {
               reason: stalledReason,
               attempts: Number(gateResult.attempts || ZERO),
@@ -519,7 +423,7 @@ export function buildLoadPhaseHandlers(context) {
               rebalancingPressure: state.rebalancingPressure.postLoadDrain,
             },
             errors: [
-              "Post-load drain gate failed and policy requires hard failure: " +
+              'Post-load drain gate failed and policy requires hard failure: ' +
                 state.postLoadDrain.error,
             ],
           };
@@ -531,7 +435,7 @@ export function buildLoadPhaseHandlers(context) {
             rebalancingPressure: state.rebalancingPressure.postLoadDrain,
           },
           warnings: [
-            "Post-load drain gate failed: " + state.postLoadDrain.error,
+            'Post-load drain gate failed: ' + state.postLoadDrain.error,
           ],
         };
       }

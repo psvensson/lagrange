@@ -887,6 +887,59 @@ test('seed and join cleanup both transition lifecycle to STOPPED ' +
   t.end();
 });
 
+test('join cleanup drains READY lifecycle before STOPPED', async (t) => {
+  const joinService = createJoinService({
+    messageRouter: {shutdown: async () => {}, unregister: noop},
+    transport: null,
+  });
+  const lifecycleTransitionPath = [];
+  const originalTransition =
+    joinService.lifecycleStateMachine.transition.bind(
+      joinService.lifecycleStateMachine,
+    );
+  joinService.lifecycleStateMachine.transition = (targetState) => {
+    const transitioned = originalTransition(targetState);
+    if (transitioned === true) {
+      lifecycleTransitionPath.push(targetState);
+    }
+    return transitioned;
+  };
+
+  for (const targetState of [
+    NodeState.CONNECTING,
+    NodeState.DISCOVERING,
+    NodeState.JOINING,
+    NodeState.READY,
+  ]) {
+    t.equal(
+      joinService.lifecycleStateMachine.transition(targetState),
+      true,
+      'fixture lifecycle should reach READY through valid transitions',
+    );
+  }
+  lifecycleTransitionPath.length = 0;
+
+  await joinService.cleanupFailedJoin(
+    JOINING_PHASE.QUERYING_STATE, {
+      registeredNodeId: null,
+      createdServiceIds: [],
+      createdMessageGroupIds: [],
+    },
+  );
+
+  t.same(
+    lifecycleTransitionPath,
+    [NodeState.DRAINING, NodeState.STOPPED],
+    'join cleanup should use the READY -> DRAINING -> STOPPED lifecycle path',
+  );
+  t.equal(
+    joinService.lifecycleStateMachine.getState(),
+    NodeState.STOPPED,
+    'join cleanup from READY should finish at STOPPED',
+  );
+  t.end();
+});
+
 // ── 6. Single cleanup execution path (D3.2) ───────────────────────
 
 test('single cleanup execution path — StartupPipelineRunner does ' +

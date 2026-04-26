@@ -83,9 +83,9 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
      */
     isTransientMetadataResolutionError(error) {
       const message =
-        typeof error?.message === REPLICA_HANDLER_TYPEOF.STRING
-          ? error.message
-          : "";
+        typeof error?.message === REPLICA_HANDLER_TYPEOF.STRING ?
+          error.message :
+          '';
       return (
         message.startsWith(PARTITION_METADATA_MISSING_PREFIX) ||
         message.startsWith(TABLE_METADATA_MISSING_PREFIX)
@@ -142,9 +142,9 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
       let schema = null;
       try {
         schema =
-          typeof table.schema_definition === REPLICA_HANDLER_TYPEOF.STRING
-            ? JSON.parse(table.schema_definition)
-            : table.schema_definition;
+          typeof table.schema_definition === REPLICA_HANDLER_TYPEOF.STRING ?
+            JSON.parse(table.schema_definition) :
+            table.schema_definition;
       } catch (error) {
         const schemaParseFailed = REPLICA_HANDLER_ERROR_MSG.SCHEMA_PARSE_FAILED;
         throw new Error(schemaParseFailed(error.message));
@@ -168,22 +168,22 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
       const replicaIds = [];
       const peerAddresses = [];
       const seenReplicaIds = new Set();
-      const requestedReplicaIds = Array.isArray(options.bootstrapReplicaIds)
-        ? options.bootstrapReplicaIds.filter(
-            (value) =>
-              typeof value === REPLICA_HANDLER_TYPEOF.STRING &&
+      const requestedReplicaIds = Array.isArray(options.bootstrapReplicaIds) ?
+        options.bootstrapReplicaIds.filter(
+          (value) =>
+            typeof value === REPLICA_HANDLER_TYPEOF.STRING &&
               value.length > NUM.ZERO,
-          )
-        : [];
+        ) :
+        [];
       const requestedPeerAddresses = Array.isArray(
         options.bootstrapPeerAddresses,
-      )
-        ? options.bootstrapPeerAddresses.filter(
-            (value) =>
-              typeof value === REPLICA_HANDLER_TYPEOF.STRING &&
+      ) ?
+        options.bootstrapPeerAddresses.filter(
+          (value) =>
+            typeof value === REPLICA_HANDLER_TYPEOF.STRING &&
               value.length > NUM.ZERO,
-          )
-        : [];
+        ) :
+        [];
       // Count only established voters from sibling services. Freshly staged
       // rows in pending/creating/syncing states do not imply an existing group.
       const establishedExistingReplicaIds = new Set();
@@ -196,7 +196,7 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
         }
         return isReplicaJoinNodeViable(
           this.systemTableCache.get(SYSTEM_TABLE_NAME.NODES, service.node_id),
-          { now },
+          {now},
         );
       };
       for (const service of services) {
@@ -243,18 +243,18 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
       }
       let leaderAddress = null;
       const canonicalLeaderNodeId =
-        typeof partition.leader_node_id === "string" &&
-        partition.leader_node_id.length > 0
-          ? partition.leader_node_id
-          : null;
-      const leaderService = canonicalLeaderNodeId
-        ? services.find(
-            (service) =>
-              service.node_id === canonicalLeaderNodeId &&
+        typeof partition.leader_node_id === 'string' &&
+        partition.leader_node_id.length > 0 ?
+          partition.leader_node_id :
+          null;
+      const leaderService = canonicalLeaderNodeId ?
+        services.find(
+          (service) =>
+            service.node_id === canonicalLeaderNodeId &&
               service.status === ReplicaStatus.ACTIVE &&
               isViableJoinService(service),
-          )
-        : null;
+        ) :
+        null;
       const isFreshBootstrapPartition =
         isFreshPartitionBootstrapWindow(partition);
       if (isFreshBootstrapPartition) {
@@ -292,11 +292,11 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
         leaderAddress,
         replicaIds,
         peerAddresses,
-        existingReplicaCount: isFreshBootstrapPartition
-          ? NUM.ZERO
-          : hasViableLeader
-            ? Math.max(NUM.ONE, establishedExistingReplicaIds.size)
-            : NUM.ZERO,
+        existingReplicaCount: isFreshBootstrapPartition ?
+          NUM.ZERO :
+          hasViableLeader ?
+            Math.max(NUM.ONE, establishedExistingReplicaIds.size) :
+            NUM.ZERO,
       };
     }
     /**
@@ -557,11 +557,11 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
       }
       const existingSnapshot =
         this.getHydratedMetadataSnapshot(partitionId) || {};
-      const serviceRows = Array.isArray(snapshot.serviceRows)
-        ? snapshot.serviceRows.filter(
-            (row) => row && typeof row === REPLICA_HANDLER_TYPEOF.OBJECT,
-          )
-        : existingSnapshot.serviceRows || [];
+      const serviceRows = Array.isArray(snapshot.serviceRows) ?
+        snapshot.serviceRows.filter(
+          (row) => row && typeof row === REPLICA_HANDLER_TYPEOF.OBJECT,
+        ) :
+        existingSnapshot.serviceRows || [];
       this.hydratedMetadataByPartitionId.set(partitionId, {
         partitionRow:
           snapshot.partitionRow || existingSnapshot.partitionRow || null,
@@ -759,9 +759,9 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
           const compatibilityService =
             service.service ||
             (typeof service.shutdown === REPLICA_HANDLER_TYPEOF.FUNCTION ||
-            typeof service.syncFromLeader === REPLICA_HANDLER_TYPEOF.FUNCTION
-              ? service
-              : null);
+            typeof service.syncFromLeader === REPLICA_HANDLER_TYPEOF.FUNCTION ?
+              service :
+              null);
           return {
             replicaId: service.replicaId || replicaId,
             partitionId: service.partitionId || null,
@@ -829,7 +829,7 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
      * @param {Object} [replicaInfo.service] - Partition service instance.
      */
     registerExistingReplica(replicaInfo) {
-      const { replicaId, service } = replicaInfo;
+      const {replicaId, service} = replicaInfo;
       // Idempotent: no error on duplicate registration
       if (this.localReplicas.has(replicaId)) {
         this.logger.debug(REPLICA_HANDLER_LOG_MSG.ALREADY_REGISTERED, {
@@ -894,46 +894,46 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
           continue;
         }
         aggregate.replicaCountWithTracker += NUM.ONE;
-        aggregate.pendingCount += Number.isFinite(tracker.pendingCount)
-          ? tracker.pendingCount
-          : NUM.ZERO;
+        aggregate.pendingCount += Number.isFinite(tracker.pendingCount) ?
+          tracker.pendingCount :
+          NUM.ZERO;
         aggregate.maxPendingRequests += Number.isFinite(
           tracker.maxPendingRequests,
-        )
-          ? tracker.maxPendingRequests
-          : NUM.ZERO;
+        ) ?
+          tracker.maxPendingRequests :
+          NUM.ZERO;
         aggregate.availableCapacity += Number.isFinite(
           tracker.availableCapacity,
-        )
-          ? tracker.availableCapacity
-          : NUM.ZERO;
-        aggregate.trackedTotal += Number.isFinite(tracker.trackedTotal)
-          ? tracker.trackedTotal
-          : NUM.ZERO;
-        aggregate.resolvedTotal += Number.isFinite(tracker.resolvedTotal)
-          ? tracker.resolvedTotal
-          : NUM.ZERO;
-        aggregate.rejectedTotal += Number.isFinite(tracker.rejectedTotal)
-          ? tracker.rejectedTotal
-          : NUM.ZERO;
-        aggregate.timedOutTotal += Number.isFinite(tracker.timedOutTotal)
-          ? tracker.timedOutTotal
-          : NUM.ZERO;
+        ) ?
+          tracker.availableCapacity :
+          NUM.ZERO;
+        aggregate.trackedTotal += Number.isFinite(tracker.trackedTotal) ?
+          tracker.trackedTotal :
+          NUM.ZERO;
+        aggregate.resolvedTotal += Number.isFinite(tracker.resolvedTotal) ?
+          tracker.resolvedTotal :
+          NUM.ZERO;
+        aggregate.rejectedTotal += Number.isFinite(tracker.rejectedTotal) ?
+          tracker.rejectedTotal :
+          NUM.ZERO;
+        aggregate.timedOutTotal += Number.isFinite(tracker.timedOutTotal) ?
+          tracker.timedOutTotal :
+          NUM.ZERO;
         aggregate.staleCleanedTotal += Number.isFinite(
           tracker.staleCleanedTotal,
-        )
-          ? tracker.staleCleanedTotal
-          : NUM.ZERO;
+        ) ?
+          tracker.staleCleanedTotal :
+          NUM.ZERO;
         aggregate.backpressureRejectTotal += Number.isFinite(
           tracker.backpressureRejectTotal,
-        )
-          ? tracker.backpressureRejectTotal
-          : NUM.ZERO;
+        ) ?
+          tracker.backpressureRejectTotal :
+          NUM.ZERO;
         aggregate.maxPendingObserved = Math.max(
           aggregate.maxPendingObserved,
-          Number.isFinite(tracker.maxPendingObserved)
-            ? tracker.maxPendingObserved
-            : NUM.ZERO,
+          Number.isFinite(tracker.maxPendingObserved) ?
+            tracker.maxPendingObserved :
+            NUM.ZERO,
         );
       }
       if (aggregate.maxPendingRequests > NUM.ZERO) {
@@ -1029,7 +1029,7 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
           this.creationProgressReporter.fail(
             progress,
             REPLICA_HANDLER_LOG_MSG.SHUTTING_DOWN,
-            { stage: ReplicaStatus.FAILED },
+            {stage: ReplicaStatus.FAILED},
           );
         }
         await Promise.allSettled([...this.operationTasks]);
@@ -1056,7 +1056,7 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
         this.localServices.clear();
         this.localReplicas.clear();
         this.initialized = false;
-        this.emit(REPLICA_HANDLER_EVENT.SHUTDOWN, { nodeId: this.nodeId });
+        this.emit(REPLICA_HANDLER_EVENT.SHUTDOWN, {nodeId: this.nodeId});
       })();
       return this.shutdownPromise;
     }
@@ -1114,12 +1114,12 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
         return null;
       }
       const role =
-        typeof service.getRole === REPLICA_HANDLER_TYPEOF.FUNCTION
-          ? service.getRole()
-          : service.role;
-      return typeof role === REPLICA_HANDLER_TYPEOF.STRING
-        ? role.toLowerCase()
-        : null;
+        typeof service.getRole === REPLICA_HANDLER_TYPEOF.FUNCTION ?
+          service.getRole() :
+          service.role;
+      return typeof role === REPLICA_HANDLER_TYPEOF.STRING ?
+        role.toLowerCase() :
+        null;
     }
     /**
      * Build the canonical service address for a tracked replica.
@@ -1156,7 +1156,7 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
   for (const methodName of Object.getOwnPropertyNames(
     ReplicaHandlerRuntimeMethods.prototype,
   )) {
-    if (methodName === "constructor") {
+    if (methodName === 'constructor') {
       continue;
     }
     Object.defineProperty(
@@ -1169,4 +1169,4 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
     );
   }
 }
-export { assignReplicaHandlerRuntimeMethods };
+export {assignReplicaHandlerRuntimeMethods};

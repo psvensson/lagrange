@@ -12,7 +12,6 @@ import {
   CONFIG_SEED_SOURCE,
   CONFIG_VALUE_TYPE,
 } from '../../config/config-constants.js';
-import {assertCritical} from '../../utils/assert.js';
 import {EPOCH_CONFIG_KEY} from '../../cdc/cdc-integration-service.js';
 import {
   BootstrapSystemTableWriter,
@@ -30,7 +29,6 @@ import {
 } from '../shared/meta-service-definition-registration.js';
 import {
   BOOTSTRAP_EPOCH,
-  BOOTSTRAP_ERROR,
   BOOTSTRAP_LOG_MSG,
   BOOTSTRAP_MESSAGE_GROUP,
   BOOTSTRAP_SQL,
@@ -40,14 +38,10 @@ import {
   SYSTEM_TABLE_SCHEMAS,
   INITIAL_MESSAGE_GROUP_ID,
   INITIAL_PARTITION_IDS,
-  INITIAL_REPLICA_IDS,
 } from '../system-table-schemas-constants.js';
 import {PARTITION_STATE} from '../../partition/partition-constants.js';
-import {RAFT_ROLE} from '../../raft/constants.js';
 import {
-  ADDRESS,
   COLUMN,
-  ENTITY_TYPE,
   NUM,
   SERVICE_STATUS,
   SERVICE_TYPE,

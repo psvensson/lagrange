@@ -16,6 +16,7 @@ import {
   REBALANCE_COORDINATOR_DEFER_REASON,
 } from '../../src/rebalancer/rebalancer-constants.js';
 import {
+  ReplicaOperationReason,
   ReplicaOperationMessageType,
   ReplicaOperationResponseStatus,
 } from '../../src/rebalancer/replica-operation-constants.js';
@@ -532,7 +533,7 @@ test('RebalanceCoordinator - defers REPLACE remove until replacement is voter-re
 
     const deliveries = [];
     const coordinator = createTestCoordinator({
-      nodeId: 'node-a',
+      nodeId: 'node-d',
       enableTimeouts: false,
       messageRouter: {
         deliver: async () => {
@@ -988,7 +989,7 @@ test('RebalanceCoordinator - dispatches priority REPLACE source removal while ex
             partitionId: PARTITION_ID,
             replicaId: SOURCE_REPLICA_ID,
             nodeId: SOURCE_NODE_ID,
-            raftRole: 'leader',
+            raftRole: 'follower',
           }),
           createCriticalPartitionServiceRow({
             partitionId: PARTITION_ID,
@@ -1006,7 +1007,7 @@ test('RebalanceCoordinator - dispatches priority REPLACE source removal while ex
             partitionId: PARTITION_ID,
             replicaId: TARGET_REPLICA_ID,
             nodeId: TARGET_NODE_ID,
-            raftRole: 'follower',
+            raftRole: 'leader',
           }),
         ],
       },
@@ -1050,125 +1051,135 @@ test('RebalanceCoordinator - dispatches priority REPLACE source removal while ex
     }
   });
 
-test('RebalanceCoordinator - keeps REPLACE source removal deferred when cache lags behind follower promotion despite authoritative voter-ready evidence',
-async (t) => {
-  ConfigurationManager.resetInstance();
-  LoggingService.resetInstance();
-  ConfigurationManager.getInstance().initialize({});
-  LoggingService.getInstance().initialize({level: 'error'});
-
-  const deliveries = [];
-  const authoritativeRows = [
-    createCriticalPartitionServiceRow({
-      partitionId: 'nodes-p1',
-      replicaId: 'nodes-p1-r1',
-      nodeId: 'node-a',
-      raftRole: 'leader',
-    }),
-    createCriticalPartitionServiceRow({
-      partitionId: 'nodes-p1',
-      replicaId: 'nodes-p1-r2',
-      nodeId: 'node-b',
-      raftRole: 'follower',
-    }),
-    createCriticalPartitionServiceRow({
-      partitionId: 'nodes-p1',
-      replicaId: 'nodes-p1-r3',
-      nodeId: 'node-c',
-      raftRole: 'follower',
-    }),
-    createCriticalPartitionServiceRow({
-      partitionId: 'nodes-p1',
-      replicaId: 'nodes-p1-r4',
-      nodeId: 'node-d',
-      raftRole: 'follower',
-    }),
-  ];
-  const coordinator = createTestCoordinator({
-    nodeId: 'node-d',
-    enableTimeouts: false,
-    messageRouter: {
-      deliver: async () => {
-        deliveries.push('deliver');
-        return {acknowledged: true, status: 'initiated'};
-      },
-      getConnectionState: () => 'connected',
-      pingNode: async () => true,
-      isOutboundQueueAvailable: () => true,
-    },
-    tablePolicyService: {
-      getPolicyForPartition: () => ({minReplicaCount: 3}),
-    },
-    cacheData: {
-      nodes: [
-        createReadyNode('node-a'),
-        createReadyNode('node-b'),
-        createReadyNode('node-c'),
-        createReadyNode('node-d'),
-      ],
-      services: [
-        createCriticalPartitionServiceRow({
-          partitionId: 'nodes-p1',
-          replicaId: 'nodes-p1-r1',
-          nodeId: 'node-a',
-          raftRole: 'leader',
-        }),
-        createCriticalPartitionServiceRow({
-          partitionId: 'nodes-p1',
-          replicaId: 'nodes-p1-r2',
-          nodeId: 'node-b',
-          raftRole: 'follower',
-        }),
-        createCriticalPartitionServiceRow({
-          partitionId: 'nodes-p1',
-          replicaId: 'nodes-p1-r3',
-          nodeId: 'node-c',
-          raftRole: 'follower',
-        }),
-        createCriticalPartitionServiceRow({
-          partitionId: 'nodes-p1',
-          replicaId: 'nodes-p1-r4',
-          nodeId: 'node-d',
-          raftRole: 'learner',
-        }),
-      ],
-    },
-  });
-
-  installAuthoritativeServicesRead(
-    coordinator,
-    () => authoritativeRows,
-  );
-
-  try {
-    const operation = await coordinator.createOperation({
-      type: OperationType.REPLACE,
-      partitionId: 'nodes-p1',
-      nodeId: 'node-d',
-      sourceNodeId: 'node-a',
-      replicaId: 'nodes-p1-r1',
-    });
-
-    operation.replicaId = 'nodes-p1-r4';
-    operation.workflowStep = WORKFLOW_STEP.ACTIVE;
-    operation.status = 'active';
-    await coordinator.repository.persistOperationUpdate(
-      operation,
-    );
-
-    await coordinator.executeOperation(operation);
-
-    t.equal(
-      deliveries.length,
-      0,
-      'authoritative follower evidence alone should not bypass the deferred source-removal gate',
-    );
-  } finally {
-    await coordinator.shutdown();
+test('RebalanceCoordinator - dispatches REPLACE source removal when authoritative follower evidence outruns cache lag',
+  async (t) => {
     ConfigurationManager.resetInstance();
     LoggingService.resetInstance();
-  }
-});
+    ConfigurationManager.getInstance().initialize({});
+    LoggingService.getInstance().initialize({level: 'error'});
+
+    const deliveries = [];
+    const authoritativeRows = [
+      createCriticalPartitionServiceRow({
+        partitionId: 'nodes-p1',
+        replicaId: 'nodes-p1-r1',
+        nodeId: 'node-a',
+        raftRole: 'leader',
+      }),
+      createCriticalPartitionServiceRow({
+        partitionId: 'nodes-p1',
+        replicaId: 'nodes-p1-r2',
+        nodeId: 'node-b',
+        raftRole: 'follower',
+      }),
+      createCriticalPartitionServiceRow({
+        partitionId: 'nodes-p1',
+        replicaId: 'nodes-p1-r3',
+        nodeId: 'node-c',
+        raftRole: 'follower',
+      }),
+      createCriticalPartitionServiceRow({
+        partitionId: 'nodes-p1',
+        replicaId: 'nodes-p1-r4',
+        nodeId: 'node-d',
+        raftRole: 'follower',
+      }),
+    ];
+    const coordinator = createTestCoordinator({
+      nodeId: 'node-d',
+      enableTimeouts: false,
+      messageRouter: {
+        deliver: async () => {
+          deliveries.push('deliver');
+          return {acknowledged: true, status: 'initiated'};
+        },
+        getConnectionState: () => 'connected',
+        pingNode: async () => true,
+        isOutboundQueueAvailable: () => true,
+      },
+      tablePolicyService: {
+        getPolicyForPartition: () => ({minReplicaCount: 3}),
+      },
+      cacheData: {
+        nodes: [
+          createReadyNode('node-a'),
+          createReadyNode('node-b'),
+          createReadyNode('node-c'),
+          createReadyNode('node-d'),
+        ],
+        services: [
+          createCriticalPartitionServiceRow({
+            partitionId: 'nodes-p1',
+            replicaId: 'nodes-p1-r1',
+            nodeId: 'node-a',
+            raftRole: 'leader',
+          }),
+          createCriticalPartitionServiceRow({
+            partitionId: 'nodes-p1',
+            replicaId: 'nodes-p1-r2',
+            nodeId: 'node-b',
+            raftRole: 'follower',
+          }),
+          createCriticalPartitionServiceRow({
+            partitionId: 'nodes-p1',
+            replicaId: 'nodes-p1-r3',
+            nodeId: 'node-c',
+            raftRole: 'follower',
+          }),
+          createCriticalPartitionServiceRow({
+            partitionId: 'nodes-p1',
+            replicaId: 'nodes-p1-r4',
+            nodeId: 'node-d',
+            raftRole: 'learner',
+          }),
+        ],
+      },
+    });
+
+    installAuthoritativeServicesRead(
+      coordinator,
+      () => authoritativeRows,
+    );
+
+    try {
+      const operation = await coordinator.createOperation({
+        type: OperationType.REPLACE,
+        partitionId: 'nodes-p1',
+        nodeId: 'node-d',
+        sourceNodeId: 'node-a',
+        replicaId: 'nodes-p1-r1',
+      });
+
+      operation.replicaId = 'nodes-p1-r4';
+      operation.workflowStep = WORKFLOW_STEP.ACTIVE;
+      operation.status = 'active';
+      await coordinator.repository.persistOperationUpdate(
+        operation,
+      );
+
+      const result = await coordinator.executeOperation(operation);
+
+      t.equal(
+        result.success,
+        true,
+        'authoritative follower evidence should allow source-removal dispatch when cache observation lags',
+      );
+      t.equal(
+        deliveries.length,
+        1,
+        'authoritative follower evidence should bypass stale learner cache state',
+      );
+      t.equal(
+        operation.workflowStep,
+        WORKFLOW_STEP.STOPPING,
+        'source removal should advance to STOPPING after authoritative replacement promotion is visible',
+      );
+    } finally {
+      await coordinator.shutdown();
+      ConfigurationManager.resetInstance();
+      LoggingService.resetInstance();
+    }
+  });
 
 test('RebalanceCoordinator - safety-deferred REMOVE re-enters the canonical ' +
   'dispatch lane instead of completing from active source status',
@@ -1357,6 +1368,7 @@ test('RebalanceCoordinator - continues deferring priority REPLACE source removal
           return {
             nodeId,
             dimensions: {
+              controlPlaneRecoveryEligible: true,
               repairEligible: true,
               serveEligible: true,
             },
@@ -1478,6 +1490,7 @@ registerQuorumConditionedRemoveSafetyTailTests({
   OperationType,
   REBALANCER_SKIP_REASON,
   REBALANCE_COORDINATOR_DEFER_REASON,
+  ReplicaOperationReason,
   ReplicaOperationMessageType,
   ReplicaOperationResponseStatus,
   createTestCoordinator,

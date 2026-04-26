@@ -12,7 +12,6 @@ import {HeartbeatService} from '../../src/control-plane/heartbeat-service.js';
 import {LeaseService} from '../../src/control-plane/lease-service.js';
 import {EndpointService} from '../../src/control-plane/endpoint-service.js';
 import {
-  ControlPlaneSystemTableGateway,
 } from '../../src/control-plane/control-plane-system-table-gateway.js';
 import {
   createSystemMetadataOwners,

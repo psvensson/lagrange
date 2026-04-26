@@ -432,7 +432,6 @@ test('Cross-Worker CDC Integration', {timeout: 120000}, async (t) => {
       t.equal(finalCacheResponse.rows.length, NUM.ONE, 'Exactly one record in cache');
       t.equal(finalCacheResponse.rows[NUM.ZERO].id, testId, 'Record ID matches');
       t.equal(finalCacheResponse.rows[NUM.ZERO].value, testValue, 'Record value matches');
-
     } finally {
       // =====================================================================
       // CLEANUP
@@ -689,7 +688,6 @@ test('Cross-Worker CDC Integration', {timeout: 120000}, async (t) => {
             `Replica ${handle.replicaId} has correct record value`);
         }
       }
-
     } finally {
       // =====================================================================
       // CLEANUP
@@ -896,7 +894,6 @@ test('Cross-Worker CDC Integration', {timeout: 120000}, async (t) => {
 
       t.ok(followerReplication.complete,
         'Followers received data via Raft replication');
-
     } finally {
       for (const handle of [...partitionHandles, ...messageGroupHandles]) {
         await workerManager.stopReplica(handle.replicaId).catch(() => {});

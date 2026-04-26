@@ -79,7 +79,7 @@ function lookupNamespaceMapping(namespace, mappings) {
  *   source?: string, auditInfo?: Object, errors?: string[]}}
  */
 function resolveRegistryMapping(
-  namespace, mappings, overrides, defaultMapping
+  namespace, mappings, overrides, defaultMapping,
 ) {
   if (!namespace) {
     return {
@@ -94,7 +94,7 @@ function resolveRegistryMapping(
       overrides[RM.REGISTRY_URL],
       RESOLUTION_SOURCE.OVERRIDE,
       namespace,
-      overrides
+      overrides,
     );
   }
 
@@ -105,7 +105,7 @@ function resolveRegistryMapping(
       nsMapping[RM.REGISTRY_URL],
       RESOLUTION_SOURCE.NAMESPACE,
       namespace,
-      nsMapping
+      nsMapping,
     );
   }
 
@@ -115,7 +115,7 @@ function resolveRegistryMapping(
       defaultMapping[RM.REGISTRY_URL],
       RESOLUTION_SOURCE.DEFAULT,
       namespace,
-      defaultMapping
+      defaultMapping,
     );
   }
 
@@ -216,7 +216,7 @@ function lookupPackageOverride(namespace, name, overrides) {
  *   source?: string, auditInfo?: Object, errors?: string[]}}
  */
 function resolvePackageSource(
-  namespace, name, overrides, mappings, defaultMapping
+  namespace, name, overrides, mappings, defaultMapping,
 ) {
   if (!namespace) {
     return {
@@ -231,10 +231,10 @@ function resolvePackageSource(
     };
   }
   const override = lookupPackageOverride(
-    namespace, name, overrides
+    namespace, name, overrides,
   );
   return resolveRegistryMapping(
-    namespace, mappings, override, defaultMapping
+    namespace, mappings, override, defaultMapping,
   );
 }
 

@@ -5,24 +5,15 @@
  */
 
 import {EventEmitter} from 'node:events';
-import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
 import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
-import LifeRaft from '@markwylde/liferaft';
 import {
   PartitionService,
-  PartitionState,
   RaftRole,
-  CDCOperation,
 } from '../../src/partition/partition-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {
-  PARTITION_SERVICE_INIT_STAGE,
   PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON,
-  PARTITION_SERVICE_LOG_MSG,
-  PARTITION_SERVICE_OPERATION,
 } from '../../src/partition/partition-service-constants.js';
 import {
   SYSTEM_TABLE_NAME,
@@ -32,15 +23,12 @@ import {
   LIFECYCLE_PHASE,
   LIFECYCLE_REASON,
 } from '../../src/bootstrap/lifecycle-controller-constants.js';
-import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {
-  RAFT_TRANSPORT_BACKGROUND_DELIVERY_OPTIONS,
 } from '../../src/raft/constants.js';
 import {
   COLUMN,
   SERVICE_TYPE,
   SERVICE_STATUS,
-  STATE,
   TABLES,
 } from '../../src/constants/index.js';
 import {
@@ -48,23 +36,26 @@ import {
   ReplicaStatus,
 } from '../../src/rebalancer/replica-status.js';
 import {
-  PARTITION_SPLIT_MIRROR_ORIGIN,
-  PARTITION_TRANSITION_METADATA_FIELD,
-  PARTITION_TRANSITION_STATE,
 } from '../../src/partition/partition-constants.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {
-  PRESSURE_WORK_CLASS,
 } from '../../src/control-plane/pressure-governor.js';
 
-const TEST_PARTITION_ID = 'partition-1';
 const TEST_OWNER_NODE_ID = 'node-owner';
-const TEST_STALE_OWNER_NODE_ID = 'node-stale-owner';
 const TEST_LIVE_LEADER_NODE_ID = 'node-live-leader';
-const TEST_OWNER_REPLICA_ID = 'replica-owner-row';
-const TEST_LIVE_LEADER_REPLICA_ID = 'replica-live-leader';
+const TEST_STALE_LOCAL_PROMOTION_PARTITION_ID =
+  INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SQL_WRITE_OPERATIONS];
+const TEST_STALE_LOCAL_PROMOTION_LEADER_REPLICA_ID =
+  'replica-stale-local-leader';
+const TEST_STALE_LOCAL_PROMOTION_FOLLOWER_REPLICA_ID =
+  'replica-stale-local-follower';
+const TEST_STALE_LOCAL_PROMOTION_LOCAL_REPLICA_ID =
+  'replica-stale-local-learner';
+const TEST_STALE_LOCAL_PROMOTION_LOCAL_NODE_ID = 'node-stale-local-learner';
+const TEST_STALE_LOCAL_PROMOTION_REPLICA_COUNT = 3;
+const TEST_STALE_LOCAL_PROMOTION_DB_PATH = ':memory:';
 
 beforeEach(() => {
   ConfigurationManager.resetInstance();
@@ -99,20 +90,6 @@ function createLoopbackTransport() {
   };
 }
 
-async function waitForCondition(
-  predicate,
-  timeoutMs = 1000,
-  intervalMs = 10,
-) {
-  const start = Date.now();
-  while (Date.now() - start < timeoutMs) {
-    if (await Promise.resolve(predicate())) {
-      return true;
-    }
-    await new Promise((resolve) => setTimeout(resolve, intervalMs));
-  }
-  return false;
-}
 
 function createTrafficReadinessState() {
   const emitter = new EventEmitter();
@@ -383,6 +360,104 @@ test('PartitionService - learner promotes one temporary replacement voter above 
     partition.learnerPromotionTimer = null;
   }
 });
+
+test('PartitionService - learner promotion discounts stale local voter row',
+  async (t) => {
+    const mockCache = {
+      get: (tableName, key) => {
+        if (
+          tableName === TABLES.PARTITIONS &&
+          key === TEST_STALE_LOCAL_PROMOTION_PARTITION_ID
+        ) {
+          return {
+            [COLUMN.PARTITION_ID]: TEST_STALE_LOCAL_PROMOTION_PARTITION_ID,
+            replica_count: TEST_STALE_LOCAL_PROMOTION_REPLICA_COUNT,
+          };
+        }
+        return null;
+      },
+      filter: (tableName, predicate) => {
+        if (tableName === TABLES.PARTITIONS) {
+          return [{
+            [COLUMN.PARTITION_ID]: TEST_STALE_LOCAL_PROMOTION_PARTITION_ID,
+            replica_count: TEST_STALE_LOCAL_PROMOTION_REPLICA_COUNT,
+          }].filter(predicate);
+        }
+        if (tableName === TABLES.SERVICES) {
+          const services = [
+            {
+              [COLUMN.SERVICE_ID]:
+                TEST_STALE_LOCAL_PROMOTION_LEADER_REPLICA_ID,
+              [COLUMN.REPLICA_ID]:
+                TEST_STALE_LOCAL_PROMOTION_LEADER_REPLICA_ID,
+              [COLUMN.PARTITION_ID]:
+                TEST_STALE_LOCAL_PROMOTION_PARTITION_ID,
+              [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
+              [COLUMN.NODE_ID]: TEST_LIVE_LEADER_NODE_ID,
+              [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+              [COLUMN.RAFT_ROLE]: RaftRole.LEADER,
+            },
+            {
+              [COLUMN.SERVICE_ID]:
+                TEST_STALE_LOCAL_PROMOTION_FOLLOWER_REPLICA_ID,
+              [COLUMN.REPLICA_ID]:
+                TEST_STALE_LOCAL_PROMOTION_FOLLOWER_REPLICA_ID,
+              [COLUMN.PARTITION_ID]:
+                TEST_STALE_LOCAL_PROMOTION_PARTITION_ID,
+              [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
+              [COLUMN.NODE_ID]: TEST_OWNER_NODE_ID,
+              [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+              [COLUMN.RAFT_ROLE]: RaftRole.FOLLOWER,
+            },
+            {
+              [COLUMN.SERVICE_ID]: TEST_STALE_LOCAL_PROMOTION_LOCAL_REPLICA_ID,
+              [COLUMN.REPLICA_ID]: TEST_STALE_LOCAL_PROMOTION_LOCAL_REPLICA_ID,
+              [COLUMN.PARTITION_ID]:
+                TEST_STALE_LOCAL_PROMOTION_PARTITION_ID,
+              [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
+              [COLUMN.NODE_ID]: TEST_STALE_LOCAL_PROMOTION_LOCAL_NODE_ID,
+              [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+              [COLUMN.RAFT_ROLE]: RaftRole.FOLLOWER,
+            },
+          ];
+          return services.filter(predicate);
+        }
+        return [];
+      },
+    };
+
+    const partition = new PartitionService({
+      partitionId: TEST_STALE_LOCAL_PROMOTION_PARTITION_ID,
+      tableId: SYSTEM_TABLE_NAME.SQL_WRITE_OPERATIONS,
+      replicaId: TEST_STALE_LOCAL_PROMOTION_LOCAL_REPLICA_ID,
+      replicaIds: [TEST_STALE_LOCAL_PROMOTION_LOCAL_REPLICA_ID],
+      nodeId: TEST_STALE_LOCAL_PROMOTION_LOCAL_NODE_ID,
+      dbPath: TEST_STALE_LOCAL_PROMOTION_DB_PATH,
+      isJoiningExistingGroup: true,
+      systemTableCache: mockCache,
+    });
+
+    partition.role = RaftRole.LEARNER;
+    partition.leaderId = TEST_STALE_LOCAL_PROMOTION_LEADER_REPLICA_ID;
+
+    partition.checkLearnerPromotion();
+
+    t.equal(
+      partition.role,
+      RaftRole.FOLLOWER,
+      'local learner state should override a stale voter row during promotion',
+    );
+    t.equal(
+      partition.learnerPromotionTimer,
+      null,
+      'promotion should not reschedule after local learner normalization',
+    );
+
+    if (partition.learnerPromotionTimer) {
+      clearTimeout(partition.learnerPromotionTimer);
+      partition.learnerPromotionTimer = null;
+    }
+  });
 
 test('PartitionService - learner promotes when voter count would be odd', async (t) => {
   // Create a mock system table cache with 2 active voters (one was removed)
@@ -1171,17 +1246,17 @@ test(
       'replica-1',
       'startup leader hint should seed leader identity for learner promotion',
     );
-  t.equal(
-    partition.role,
-    RaftRole.FOLLOWER,
-    'learner should promote once leader identity is known and voter count stays odd',
-  );
-  t.equal(
-    partition.isJoiningExistingGroup,
-    false,
-    'Promotion should clear join-mode gating before elections restart',
-  );
-  t.equal(electionStarted, true, 'promotion should start elections as a voter');
+    t.equal(
+      partition.role,
+      RaftRole.FOLLOWER,
+      'learner should promote once leader identity is known and voter count stays odd',
+    );
+    t.equal(
+      partition.isJoiningExistingGroup,
+      false,
+      'Promotion should clear join-mode gating before elections restart',
+    );
+    t.equal(electionStarted, true, 'promotion should start elections as a voter');
 
     if (partition.learnerPromotionTimer) {
       clearTimeout(partition.learnerPromotionTimer);

@@ -1,5 +1,5 @@
 import {EventEmitter} from 'events';
-import {SystemTableCache, CDC_OPERATIONS} from '../../src/cache/system-table-cache.js';
+import {CDC_OPERATIONS} from '../../src/cache/system-table-cache.js';
 import {CDCHandler} from '../../src/message-group/cdc-handler.js';
 import {DEFAULT_TABLE_POLICY} from '../../src/policy/policy-constants.js';
 import {NODE_STATUS} from '../../src/node/node-constants.js';

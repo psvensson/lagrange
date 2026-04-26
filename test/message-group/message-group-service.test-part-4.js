@@ -6,20 +6,15 @@
 import {EventEmitter} from 'node:events';
 import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import {
-  MessageGroupOperationLedger,
   MessageGroupService,
   MessageStatus,
   RaftRole,
 } from '../../src/message-group/message-group-service.js';
 import {
-  MESSAGE_GROUP_CDC_INGRESS_ACTION,
-  MESSAGE_GROUP_CDC_INGRESS_STATE,
   MESSAGE_GROUP_LEADER_IDENTITY_SOURCE,
   MESSAGE_GROUP_LEADER_IDENTITY_STATE,
 } from '../../src/message-group/message-group-forwarding-owner.js';
 import {
-  MESSAGE_GROUP_APPLICATION_MESSAGE_TYPE,
-  MESSAGE_GROUP_CDC_ERROR_MSG,
 } from '../../src/message-group/constants.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
@@ -42,136 +37,24 @@ import {
   STATE,
   TABLES,
 } from '../../src/constants/index.js';
-import LifeRaft from '@markwylde/liferaft';
 import {
-  RAFT_EVENT,
-  RAFT_PACKET_TYPE,
 } from '../../src/raft/constants.js';
-import {LiferaftProvider} from '../../src/raft/liferaft-provider.js';
 import {
-  ControlPlaneField,
   ControlPlaneMessageType,
 } from '../../src/control-plane/control-plane-constants.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {
-  CONTROL_PLANE_WORKLOAD_CLASS,
 } from '../../src/control-plane/control-plane-workload-profile.js';
 import {
-  PRESSURE_WORK_CLASS,
 } from '../../src/control-plane/pressure-governor.js';
 
 // Port counter for unique ports per test
 let testPortCounter = 24000;
 
-const TEST_SEMANTIC_LOCAL_LEADER_GROUP_ID =
-  'mg-semantic-local-propose';
-const TEST_SEMANTIC_LOCAL_LEADER_REPLICA_ID =
-  'mg-semantic-local-propose-r1';
-const TEST_SEMANTIC_LOCAL_LEADER_NODE_ID =
-  'node-semantic-local-propose';
-const TEST_SEMANTIC_LOCAL_LEADER_CAUSE_ID =
-  'cause-semantic-local-propose';
-const TEST_SEMANTIC_LOCAL_LEADER_TIMESTAMP =
-  '1234567890:1:test-node';
-const TEST_NON_SYSTEM_CDC_TABLE = 'runtime_forward_events';
-const TEST_STALE_FORWARD_GROUP_ID = 'mg-stale-forward';
-const TEST_STALE_FORWARD_LOCAL_REPLICA_ID = 'mg-stale-forward-r1';
-const TEST_STALE_FORWARD_REMOTE_REPLICA_ID = 'mg-stale-forward-r2';
-const TEST_STALE_FORWARD_REMOTE_ADDRESS =
-  'remote-node/message-group/mg-stale-forward-r2';
-const TEST_STALE_FORWARD_TIMESTAMP = '1234567890:77:test-node';
 const TEST_CRITICAL_TRANSPORT_PARTITION_ADDRESS =
   'seed-node/partition/control_plane_publications-p1-r1';
-const TEST_NON_CRITICAL_TRANSPORT_PARTITION_ADDRESS =
-  'seed-node/partition/sql_write_operations-p1-r1';
-const TEST_DELIVERY_PRIORITY = Object.freeze({
-  BACKGROUND: 'background',
-  CRITICAL: 'critical',
-});
-const TEST_RETRYABLE_FORWARD_RETRY_AFTER_MS = 11;
-const TEST_RETRYABLE_FORWARD_ERROR_CODE = 'ROUTER_CONNECTION_CLOSED';
-const TEST_RETRYABLE_FORWARD_ERROR_MSG =
-  'Connection to node seed closed';
-const TEST_RETRYABLE_FORWARD_GROUP_ID = 'mg-retryable-forward';
-const TEST_RETRYABLE_FORWARD_REPLICA_ID = 'mg-retryable-forward-r2';
-const TEST_RETRYABLE_FORWARD_NODE_RUNTIME_ID =
-  'node-retryable-forward-r2';
-const TEST_RETRYABLE_FORWARD_TARGET_SERVICE_ID =
-  'mg-retryable-forward-r1';
-const TEST_RETRYABLE_FORWARD_TARGET_ADDRESS =
-  'seed-node/message-group/mg-retryable-forward-r1';
-const TEST_RETRYABLE_FORWARD_ROW_NODE_ID = 'node-retryable-forward';
-const TEST_RETRYABLE_FORWARD_PROPOSE_GROUP_ID =
-  'mg-retryable-forward-propose';
-const TEST_RETRYABLE_FORWARD_PROPOSE_REPLICA_ID =
-  'mg-retryable-forward-propose-r2';
-const TEST_RETRYABLE_FORWARD_PROPOSE_NODE_RUNTIME_ID =
-  'node-retryable-forward-propose-r2';
-const TEST_RETRYABLE_FORWARD_PROPOSE_ROW_NODE_ID =
-  'node-retryable-forward-propose';
-const TEST_RETRYABLE_FORWARD_PROPOSE_TIMESTAMP = '123';
-const TEST_RETRYABLE_FORWARD_PROPOSE_CAUSE_ID =
-  'cause-retryable-forward-propose';
-const TEST_STRICT_RECOVERY_FORWARD_GROUP_ID =
-  'mg-strict-recovery-forward';
-const TEST_STRICT_RECOVERY_FORWARD_LOCAL_REPLICA_ID =
-  'mg-strict-recovery-forward-r3';
-const TEST_STRICT_RECOVERY_FORWARD_REMOTE_REPLICA_ID =
-  'mg-strict-recovery-forward-r2';
-const TEST_STRICT_RECOVERY_FORWARD_LEADER_REPLICA_ID =
-  'mg-strict-recovery-forward-r1';
-const TEST_STRICT_RECOVERY_FORWARD_LOCAL_NODE_ID =
-  'node-strict-recovery-forward-local';
-const TEST_STRICT_RECOVERY_FORWARD_REMOTE_NODE_ID =
-  'node-strict-recovery-forward-remote';
-const TEST_STRICT_RECOVERY_FORWARD_LEADER_NODE_ID =
-  'node-strict-recovery-forward-leader';
-const TEST_ADDRESSED_STRICT_CONVERGENCE_GROUP_ID =
-  'mg-addressed-strict-forward-convergence';
-const TEST_ADDRESSED_STRICT_CONVERGENCE_LOCAL_REPLICA_ID =
-  'mg-addressed-strict-forward-convergence-r3';
-const TEST_ADDRESSED_STRICT_CONVERGENCE_REMOTE_REPLICA_ID =
-  'mg-addressed-strict-forward-convergence-r1';
-const TEST_ADDRESSED_STRICT_CONVERGENCE_REMOTE_NODE_ID =
-  'peer-node-addressed-strict-forward';
-const TEST_ADDRESSED_STRICT_CONVERGENCE_REMOTE_ADDRESS =
-  'peer-node-addressed-strict-forward/message-group/mg-addressed-strict-forward-convergence-r1';
-const TEST_ADDRESSED_STRICT_CONVERGENCE_PARTITION_ID = 'partitions-p1';
-const TEST_ADDRESSED_STRICT_CONVERGENCE_CAUSE_ID =
-  'cause-addressed-strict-forward-convergence';
-const TEST_ADDRESSED_STRICT_CONVERGENCE_TIMESTAMP =
-  '1234567890:41:test-node';
-const TEST_STRICT_RECOVERY_FORWARD_REMOTE_ADDRESS =
-  'node-strict-recovery-forward-remote/message-group/mg-strict-recovery-forward-r2';
-const TEST_STRICT_RECOVERY_ROUTING_STATE_LOCAL_ONLY = 'local_only';
-const TEST_STRICT_RECOVERY_ROUTING_STATE_REMOTE_TARGETS =
-  'remote_targets_available';
-const TEST_RELAYED_STRICT_STALE_COMPETING_GROUP_ID =
-  'mg-relayed-strict-stale-competing';
-const TEST_RELAYED_STRICT_STALE_COMPETING_LOCAL_REPLICA_ID =
-  'mg-relayed-strict-stale-competing-r1';
-const TEST_RELAYED_STRICT_STALE_COMPETING_REMOTE_REPLICA_ID =
-  'mg-relayed-strict-stale-competing-r2';
-const TEST_RELAYED_STRICT_STALE_COMPETING_REMOTE_NODE_ID =
-  'node-relayed-strict-stale-competing-remote';
-const TEST_RELAYED_STRICT_STALE_COMPETING_REMOTE_ADDRESS =
-  'node-relayed-strict-stale-competing-remote/message-group/' +
-  'mg-relayed-strict-stale-competing-r2';
-const TEST_RELAYED_STRICT_STALE_COMPETING_NODE_ROW_ID =
-  'node-relayed-strict-stale-competing';
-const TEST_SEMANTIC_LOCAL_LEADER_COMMAND = Object.freeze({
-  type: 'CDC',
-  tableName: TABLES.NODES,
-  operation: CDC_OPERATION.UPDATE,
-  data: Object.freeze({
-    node_id: TEST_SEMANTIC_LOCAL_LEADER_NODE_ID,
-    status: SERVICE_STATUS.ACTIVE,
-  }),
-  timestamp: TEST_SEMANTIC_LOCAL_LEADER_TIMESTAMP,
-  causeId: TEST_SEMANTIC_LOCAL_LEADER_CAUSE_ID,
-});
 
 function createTrafficReadinessState() {
   const emitter = new EventEmitter();
@@ -1243,14 +1126,14 @@ test('MessageGroupService - QUERY payload forwards transport delivery options',
     const result = await service.sendMessage(
       TEST_CRITICAL_TRANSPORT_PARTITION_ADDRESS,
       {
-      type: 'QUERY',
-      sql: 'SELECT 1',
-      params: [],
+        type: 'QUERY',
+        sql: 'SELECT 1',
+        params: [],
       },
       {
-      transportDeliveryOptions: {
-        timeoutMs: 4321,
-      },
+        transportDeliveryOptions: {
+          timeoutMs: 4321,
+        },
       },
     );
 

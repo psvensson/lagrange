@@ -41,9 +41,9 @@ const KV_SQL = Object.freeze({
     `${KV_COL.VALUE} BLOB NOT NULL, ` +
     `${KV_COL.UPDATED_AT} INTEGER NOT NULL, ` +
     `PRIMARY KEY (${KV_COL.SESSION_ID}, ${KV_COL.KEY})` +
-    `)`,
+    ')',
   CREATE_INDEX:
-    `CREATE INDEX IF NOT EXISTS idx_kv_session ` +
+    'CREATE INDEX IF NOT EXISTS idx_kv_session ' +
     `ON ${KV_TABLE_NAME}(${KV_COL.SESSION_ID})`,
   GET:
     `SELECT ${KV_COL.VALUE} FROM ${KV_TABLE_NAME} ` +
@@ -55,7 +55,7 @@ const KV_SQL = Object.freeze({
     `INSERT OR REPLACE INTO ${KV_TABLE_NAME} ` +
     `(${KV_COL.SESSION_ID}, ${KV_COL.KEY}, ` +
     `${KV_COL.VALUE}, ${KV_COL.UPDATED_AT}) ` +
-    `VALUES (?, ?, ?, ?)`,
+    'VALUES (?, ?, ?, ?)',
   DELETE_KEY:
     `DELETE FROM ${KV_TABLE_NAME} ` +
     `WHERE ${KV_COL.SESSION_ID} = ? AND ${KV_COL.KEY} = ?`,

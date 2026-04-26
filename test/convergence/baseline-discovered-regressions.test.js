@@ -62,27 +62,27 @@ test('Convergence regression - authoritative lease sweep ignores stale observed 
       nodeId: 'control-node',
       now: () => harness.getCurrentTime(),
       nodeLeaseOwner: createNodeLeaseOwner(async (observedNode, nowArg) => {
-          attemptedDisconnectWhereClause = {
-            node_id: observedNode.node_id,
-            ready_lease_expires_at: observedNode.ready_lease_expires_at,
-            last_heartbeat: observedNode.last_heartbeat || nowArg,
-          };
-          if (attemptedDisconnectWhereClause.ready_lease_expires_at !==
+        attemptedDisconnectWhereClause = {
+          node_id: observedNode.node_id,
+          ready_lease_expires_at: observedNode.ready_lease_expires_at,
+          last_heartbeat: observedNode.last_heartbeat || nowArg,
+        };
+        if (attemptedDisconnectWhereClause.ready_lease_expires_at !==
               authoritativeNodeRow.ready_lease_expires_at ||
               attemptedDisconnectWhereClause.last_heartbeat !==
                 authoritativeNodeRow.last_heartbeat) {
-            return {
-              success: true,
-              partitionResult: {affectedRows: 0},
-            };
-          }
-          authoritativeNodeRow.connection_state = STATE.DISCONNECTED;
-          authoritativeNodeRow.ready_lease_expires_at = null;
           return {
             success: true,
-            partitionResult: {affectedRows: 1},
+            partitionResult: {affectedRows: 0},
           };
-        }),
+        }
+        authoritativeNodeRow.connection_state = STATE.DISCONNECTED;
+        authoritativeNodeRow.ready_lease_expires_at = null;
+        return {
+          success: true,
+          partitionResult: {affectedRows: 1},
+        };
+      }),
       systemTableCache: {
         getAll: () => [authoritativeNodeRow],
       },

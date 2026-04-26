@@ -26,9 +26,16 @@ import {
 } from '../../src/rebalancer/executor-outcome-constants.js';
 import {
   REBALANCE_COORDINATOR_EVENT,
-  OPERATION_TRANSITION_REASON,
 } from '../../src/rebalancer/rebalancer-constants.js';
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
+import {
+  OperationType,
+  ReplicaStatus,
+} from '../../src/rebalancer/replica-status.js';
+import {
+  ReplicaOperationMessageType,
+  ReplicaOperationResponseStatus,
+} from '../../src/rebalancer/replica-operation-constants.js';
 import {DurableWorkflowCoordinator} from
   '../../src/workflow/durable-workflow-coordinator.js';
 import {createMockControlPlaneSystemTableGateway} from './test-helpers.js';
@@ -37,6 +44,9 @@ const TEST_NODE_ID = 'node-local';
 const TEST_OPERATION_ID = 'op-outcome-1';
 const TEST_PARTITION_ID = 'partition-1';
 const TEST_REPLICA_ID = 'partition-1-r1';
+const TEST_REPLACE_PARTITION_ID = 'users-p1';
+const TEST_REPLACE_SOURCE_REPLICA_ID = 'users-p1-r1';
+const TEST_REPLACE_TARGET_REPLICA_ID = 'users-p1-r2';
 
 /**
  * Build a minimal operation record for testing.
@@ -126,7 +136,9 @@ function createTestCoordinator(options = {}) {
   const coordinator = new RebalanceCoordinator({
     nodeId: TEST_NODE_ID,
     transactionCoordinator: createTransactionCoordinator(),
-    systemTableCache: {get() { return null; }},
+    systemTableCache: {get() {
+      return null;
+    }},
     cdcIntegrationService: {
       async waitForCacheUpdate() {},
     },
@@ -154,7 +166,9 @@ function createTestCoordinator(options = {}) {
       },
     },
     controlPlaneReadinessService: {
-      getNodeReadinessSync() { return null; },
+      getNodeReadinessSync() {
+        return null;
+      },
     },
     operationWorkflowCoordinator: workflowCoordinator,
     executorOutcomeEmitter: emitter,
@@ -242,6 +256,165 @@ test('Executor outcome routing through owner-key reconcile path',
             routedEvent.outcomeType,
             EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_SYNCING,
             'outcomeType should match',
+          );
+        } finally {
+          await coordinator.shutdown();
+        }
+      },
+    );
+
+    await t.test(
+      'REPLICA_CREATE_SYNCING reconciles already-active REPLACE target',
+      async (t) => {
+        const deliveries = [];
+        const operation = buildTestOperation({
+          type: OperationType.REPLACE,
+          partitionId: TEST_REPLACE_PARTITION_ID,
+          entityId: TEST_REPLACE_PARTITION_ID,
+          replicaId: TEST_REPLACE_TARGET_REPLICA_ID,
+          sourceNodeId: TEST_NODE_ID,
+          sourceReplicaId: TEST_REPLACE_SOURCE_REPLICA_ID,
+          targetNodeId: TEST_NODE_ID,
+          workflowStep: WORKFLOW_STEP.CREATING,
+          status: ReplicaStatus.CREATING,
+          stepsHistory: [
+            {
+              step: WORKFLOW_STEP.PENDING,
+              timestamp: Date.now(),
+              sourceReplicaId: TEST_REPLACE_SOURCE_REPLICA_ID,
+            },
+            {
+              step: WORKFLOW_STEP.CREATING,
+              timestamp: Date.now(),
+            },
+          ],
+        });
+        const {coordinator, emitter} = createTestCoordinator({operation});
+        coordinator.messageRouter = {
+          async deliver(target, payload, options) {
+            deliveries.push({target, payload, options});
+            return {
+              acknowledged: true,
+              status: ReplicaOperationResponseStatus.INITIATED,
+            };
+          },
+        };
+        coordinator.workflowOwner.messageRouter = coordinator.messageRouter;
+        coordinator.workflowOwner.getReconciledReplicaStatus = async () =>
+          ReplicaStatus.ACTIVE;
+
+        try {
+          const routedEventPromise = waitForCoordinatorEvent(
+            coordinator,
+            REBALANCE_COORDINATOR_EVENT.OUTCOME_ROUTED,
+          );
+          emitter.emitOutcome(
+            EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_SYNCING,
+            TEST_OPERATION_ID,
+            WORKFLOW_STEP.SYNCING,
+          );
+          await routedEventPromise;
+
+          t.equal(
+            deliveries.length,
+            1,
+            'active target reconciliation should resume source removal',
+          );
+          t.equal(
+            deliveries[0]?.payload?.type,
+            ReplicaOperationMessageType.REMOVE_REPLICA,
+            'source removal should be dispatched after the active resample',
+          );
+          t.equal(
+            deliveries[0]?.payload?.replicaId,
+            TEST_REPLACE_SOURCE_REPLICA_ID,
+            'source removal should target the retained source replica',
+          );
+          t.equal(
+            operation.workflowStep,
+            WORKFLOW_STEP.STOPPING,
+            'operation should not remain pinned in SYNCING',
+          );
+        } finally {
+          await coordinator.shutdown();
+        }
+      },
+    );
+
+    await t.test(
+      'REPLICA_CREATE_SYNCING does not regress REPLACE source removal',
+      async (t) => {
+        const deliveries = [];
+        const operation = buildTestOperation({
+          type: OperationType.REPLACE,
+          partitionId: TEST_REPLACE_PARTITION_ID,
+          entityId: TEST_REPLACE_PARTITION_ID,
+          replicaId: TEST_REPLACE_TARGET_REPLICA_ID,
+          sourceNodeId: TEST_NODE_ID,
+          sourceReplicaId: TEST_REPLACE_SOURCE_REPLICA_ID,
+          targetNodeId: TEST_NODE_ID,
+          workflowStep: WORKFLOW_STEP.STOPPING,
+          status: ReplicaStatus.REMOVING,
+          stepsHistory: [
+            {
+              step: WORKFLOW_STEP.PENDING,
+              timestamp: Date.now(),
+              sourceReplicaId: TEST_REPLACE_SOURCE_REPLICA_ID,
+            },
+            {
+              step: WORKFLOW_STEP.SYNCING,
+              timestamp: Date.now(),
+            },
+            {
+              step: WORKFLOW_STEP.ACTIVE,
+              timestamp: Date.now(),
+            },
+            {
+              step: WORKFLOW_STEP.STOPPING,
+              timestamp: Date.now(),
+            },
+          ],
+        });
+        const {coordinator, emitter} = createTestCoordinator({operation});
+        coordinator.messageRouter = {
+          async deliver(target, payload, options) {
+            deliveries.push({target, payload, options});
+            return {
+              acknowledged: true,
+              status: ReplicaOperationResponseStatus.INITIATED,
+            };
+          },
+        };
+        coordinator.workflowOwner.messageRouter = coordinator.messageRouter;
+        coordinator.workflowOwner.getReconciledReplicaStatus = async () =>
+          ReplicaStatus.ACTIVE;
+
+        try {
+          const routedEventPromise = waitForCoordinatorEvent(
+            coordinator,
+            REBALANCE_COORDINATOR_EVENT.OUTCOME_ROUTED,
+          );
+          emitter.emitOutcome(
+            EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_SYNCING,
+            TEST_OPERATION_ID,
+            WORKFLOW_STEP.SYNCING,
+          );
+          await routedEventPromise;
+
+          t.equal(
+            operation.workflowStep,
+            WORKFLOW_STEP.STOPPING,
+            'delayed SYNCING outcome should not rewind source removal',
+          );
+          t.equal(
+            operation.status,
+            ReplicaStatus.REMOVING,
+            'operation status should remain in the remove phase',
+          );
+          t.equal(
+            deliveries.length,
+            0,
+            'stale create progress should not dispatch another removal',
           );
         } finally {
           await coordinator.shutdown();
@@ -398,7 +571,7 @@ test('Executor outcome routing through owner-key reconcile path',
 
     await t.test(
       'REPLICA_REMOVE_COMPLETED calls completeOperation',
-      async (t) => {
+      async (_t) => {
         const operation = buildTestOperation({
           type: 'REMOVE',
           workflowStep: WORKFLOW_STEP.STOPPING,
@@ -425,7 +598,7 @@ test('Executor outcome routing through owner-key reconcile path',
 
     await t.test(
       'MESSAGE_GROUP_CREATE_ACTIVE calls completeOperation',
-      async (t) => {
+      async (_t) => {
         const operation = buildTestOperation({
           entityType: 'message_group',
           entityId: 'mg-1',
@@ -453,7 +626,7 @@ test('Executor outcome routing through owner-key reconcile path',
 
     await t.test(
       'RUNTIME_SERVICE_CREATE_FAILED calls failOperation',
-      async (t) => {
+      async (_t) => {
         const operation = buildTestOperation({
           entityType: 'runtime_service',
           entityId: 'rs-1',

@@ -70,7 +70,7 @@ Predecessor closure status:
 3. Closed: [Canonical readiness ladder and admission closure](../packages/archived/done-20260419-canonical-readiness-ladder-and-admission-closure.md)
 4. Closed: [Shadow-grammar deletion across readiness, bootstrap, and rebalancer](../packages/archived/done-20260419-shadow-grammar-deletion-across-readiness-bootstrap-and-rebalancer.md)
 5. Remaining predecessor structural blockers:
-   [Priority-recovery operation-scheduling pressure and follow-up creation closure](../packages/archived/done-20260423-priority-recovery-operation-scheduling-pressure-and-followup-creation-closure.md)
+   [Priority-recovery operation-scheduling pressure and follow-up creation closure](../packages/done-20260423-priority-recovery-operation-scheduling-pressure-and-followup-creation-closure.md)
 6. Remaining predecessor structural blockers:
    [Priority-recovery workflow-owner progress state-machine and timeout-reconcile closure](../packages/archived/done-20260422-priority-recovery-workflow-owner-progress-state-machine-and-timeout-reconcile-closure.md)
 

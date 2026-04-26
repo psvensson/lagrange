@@ -3,7 +3,6 @@ import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {NodeService} from '../../src/node/node-service.js';
-import {CACHE_HYDRATION_TABLES} from '../../src/cache/cache-constants.js';
 import {EventEmitter} from 'events';
 
 test('constructor works', async (t) => {

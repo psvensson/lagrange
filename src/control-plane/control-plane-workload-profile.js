@@ -91,9 +91,9 @@ const CONTROL_PLANE_WORKLOAD_PROFILE = Object.freeze({
   }),
   [CONTROL_PLANE_WORKLOAD_CLASS.CONTROL_SNAPSHOT_REPAIR]: Object.freeze({
     workloadClass: CONTROL_PLANE_WORKLOAD_CLASS.CONTROL_SNAPSHOT_REPAIR,
-    workClass: PRESSURE_WORK_CLASS.CRITICAL,
+    workClass: PRESSURE_WORK_CLASS.BACKGROUND,
     allowPressureDegrade: false,
-    allowPressureDefer: false,
+    allowPressureDefer: true,
     resourceKeys: Object.freeze(['control-plane:snapshot:repair']),
   }),
   [CONTROL_PLANE_WORKLOAD_CLASS.MESSAGE_GROUP_FORWARD_TOPOLOGY_REPAIR]:

@@ -86,7 +86,7 @@ describe('admin-meta-command-handlers', () => {
       for (const table of CDC_NON_PROPAGATED_TABLES) {
         assert.ok(
           !CACHE_DUMP_TABLES.includes(table),
-          `CACHE_DUMP_TABLES must not include non-propagated table` +
+          'CACHE_DUMP_TABLES must not include non-propagated table' +
           ` "${table}" — it is never hydrated into SystemTableCache`,
         );
       }

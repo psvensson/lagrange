@@ -37,6 +37,7 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 import {SERVICE_TYPE} from '../../src/constants/service.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
+  CONTROL_PLANE_READINESS_REASON,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {
   CONTROL_PLANE_WORKLOAD_CLASS,
@@ -231,6 +232,8 @@ function createMockReadinessService(mockCache) {
             [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]:
               false,
             [CONTROL_PLANE_READINESS_DIMENSION
+              .CONTROL_PLANE_RECOVERY_ELIGIBLE]: false,
+            [CONTROL_PLANE_READINESS_DIMENSION
               .METADATA_PUBLICATION_HEALTHY]: true,
             [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: false,
             [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: false,
@@ -256,6 +259,8 @@ function createMockReadinessService(mockCache) {
             healthy,
           [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]:
             healthy,
+          [CONTROL_PLANE_READINESS_DIMENSION
+            .CONTROL_PLANE_RECOVERY_ELIGIBLE]: healthy,
           [CONTROL_PLANE_READINESS_DIMENSION
             .METADATA_PUBLICATION_HEALTHY]: true,
           [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]:
@@ -325,7 +330,6 @@ function createTestRebalancer(options = {}) {
     serviceEndpoints,
   );
 
-});
   const mockCdcService = cdcIntegrationService || createMockCdcService();
   const mockPolicyService = createMockPolicyService(
     partitions, tables,
@@ -368,17 +372,20 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
     async (t) => {
       const readinessService = {
         getNodeReadinessSync(nodeId) {
+          const clusterMemberHealthy = nodeId !== 'node-3';
           return {
             nodeId,
             dimensions: {
               [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: true,
               [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]:
-                true,
+                clusterMemberHealthy,
               [CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY]: true,
               [CONTROL_PLANE_READINESS_DIMENSION.LOAD_READY]: true,
               [CONTROL_PLANE_READINESS_DIMENSION.PLACEMENT_ELIGIBLE]: true,
               [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]:
                 true,
+              [CONTROL_PLANE_READINESS_DIMENSION
+                .CONTROL_PLANE_RECOVERY_ELIGIBLE]: true,
               [CONTROL_PLANE_READINESS_DIMENSION
                 .METADATA_PUBLICATION_HEALTHY]: true,
               [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
@@ -556,6 +563,8 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
               [CONTROL_PLANE_READINESS_DIMENSION.PLACEMENT_ELIGIBLE]: true,
               [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]:
                 true,
+              [CONTROL_PLANE_READINESS_DIMENSION
+                .CONTROL_PLANE_RECOVERY_ELIGIBLE]: true,
               [CONTROL_PLANE_READINESS_DIMENSION
                 .METADATA_PUBLICATION_HEALTHY]: true,
               [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
@@ -817,6 +826,8 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
         getNodeReadinessSync: () => ({
           nodeId: 'node-1',
           dimensions: {
+            [CONTROL_PLANE_READINESS_DIMENSION
+              .CONTROL_PLANE_RECOVERY_ELIGIBLE]: true,
             [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
             [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: false,
           },
@@ -869,6 +880,93 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
         scheduledDelayMs,
         rebalancer.criticalCheckDelayMs,
         'priority control-plane partitions should retry serve-readiness checks on the short critical cadence',
+      );
+    });
+
+  await t.test(
+    'checkRebalance allows priority control-plane partitions when local ' +
+    'serve readiness is blocked only by priority recovery publication',
+    async (t) => {
+      const TEST_PRIORITY_PARTITION_ID = 'replica_operations-p1';
+      const TEST_LOCAL_NODE_ID = 'node-1';
+      const TEST_PEER_NODE_ID = 'node-2';
+      const TEST_SECOND_PEER_NODE_ID = 'node-3';
+      const TEST_UNSET_SCHEDULE_DELAY = Symbol('unset');
+      const readinessService = {
+        getNodeReadinessSync: () => ({
+          nodeId: TEST_LOCAL_NODE_ID,
+          dimensions: {
+            [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: true,
+            [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]: true,
+            [CONTROL_PLANE_READINESS_DIMENSION
+              .CONTROL_PLANE_RECOVERY_ELIGIBLE]: true,
+            [CONTROL_PLANE_READINESS_DIMENSION
+              .METADATA_PUBLICATION_HEALTHY]: true,
+            [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
+            [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: false,
+          },
+          reasons: [
+            {
+              code:
+                CONTROL_PLANE_READINESS_REASON
+                  .CONTROL_PLANE_PUBLICATION_PENDING,
+            },
+            {
+              code:
+                CONTROL_PLANE_READINESS_REASON
+                  .PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
+            },
+          ],
+        }),
+      };
+      const rebalancer = createTestRebalancer({
+        entityId: TEST_PRIORITY_PARTITION_ID,
+        entityType: EntityType.PARTITION,
+        nodeId: TEST_LOCAL_NODE_ID,
+        nodes: [
+          {node_id: TEST_LOCAL_NODE_ID, status: NodeStatus.ACTIVE},
+          {node_id: TEST_PEER_NODE_ID, status: NodeStatus.ACTIVE},
+          {node_id: TEST_SECOND_PEER_NODE_ID, status: NodeStatus.ACTIVE},
+        ],
+        nodeEndpoints: [
+          createNodeEndpoint(TEST_LOCAL_NODE_ID),
+          createNodeEndpoint(TEST_PEER_NODE_ID),
+          createNodeEndpoint(TEST_SECOND_PEER_NODE_ID),
+        ],
+        serviceEndpoints: [
+          createPostgresWireEndpoint(TEST_LOCAL_NODE_ID),
+          createPostgresWireEndpoint(TEST_PEER_NODE_ID),
+          createPostgresWireEndpoint(TEST_SECOND_PEER_NODE_ID),
+        ],
+        controlPlaneReadinessService: readinessService,
+      });
+
+      rebalancer.initialize();
+      rebalancer.isLeader = true;
+      rebalancer.isStabilized = () => true;
+
+      let evaluateCalls = 0;
+      rebalancer.evaluateState = async () => {
+        evaluateCalls++;
+        return false;
+      };
+
+      let scheduledDelayMs = TEST_UNSET_SCHEDULE_DELAY;
+      rebalancer.scheduleNextCheck = (overrideDelayMs = null) => {
+        scheduledDelayMs = overrideDelayMs;
+      };
+
+      await rebalancer.checkRebalance();
+
+      t.equal(
+        evaluateCalls,
+        1,
+        'priority recovery should not self-defer behind its own publication-pending serve blocker',
+      );
+      t.equal(
+        scheduledDelayMs,
+        null,
+        'priority recovery publication-only serve blockers should use the normal scheduling path',
       );
     });
 
@@ -960,6 +1058,8 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
                 [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]:
                   true,
                 [CONTROL_PLANE_READINESS_DIMENSION
+                  .CONTROL_PLANE_RECOVERY_ELIGIBLE]: true,
+                [CONTROL_PLANE_READINESS_DIMENSION
                   .METADATA_PUBLICATION_HEALTHY]: true,
                 [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
                 [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: true,
@@ -975,6 +1075,8 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
                 false,
               [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]:
                 false,
+              [CONTROL_PLANE_READINESS_DIMENSION
+                .CONTROL_PLANE_RECOVERY_ELIGIBLE]: false,
               [CONTROL_PLANE_READINESS_DIMENSION
                 .METADATA_PUBLICATION_HEALTHY]: true,
               [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: false,
@@ -1071,6 +1173,8 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
                 [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]:
                   true,
                 [CONTROL_PLANE_READINESS_DIMENSION
+                  .CONTROL_PLANE_RECOVERY_ELIGIBLE]: true,
+                [CONTROL_PLANE_READINESS_DIMENSION
                   .METADATA_PUBLICATION_HEALTHY]: true,
                 [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
                 [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: true,
@@ -1089,6 +1193,8 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
               [CONTROL_PLANE_READINESS_DIMENSION.PLACEMENT_ELIGIBLE]: false,
               [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]:
                 false,
+              [CONTROL_PLANE_READINESS_DIMENSION
+                .CONTROL_PLANE_RECOVERY_ELIGIBLE]: false,
               [CONTROL_PLANE_READINESS_DIMENSION
                 .METADATA_PUBLICATION_HEALTHY]: true,
               [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: false,
@@ -1192,6 +1298,8 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
                 [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]:
                   true,
                 [CONTROL_PLANE_READINESS_DIMENSION
+                  .CONTROL_PLANE_RECOVERY_ELIGIBLE]: true,
+                [CONTROL_PLANE_READINESS_DIMENSION
                   .METADATA_PUBLICATION_HEALTHY]: true,
                 [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
                 [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: true,
@@ -1210,6 +1318,8 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
               [CONTROL_PLANE_READINESS_DIMENSION.PLACEMENT_ELIGIBLE]: false,
               [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]:
                 false,
+              [CONTROL_PLANE_READINESS_DIMENSION
+                .CONTROL_PLANE_RECOVERY_ELIGIBLE]: false,
               [CONTROL_PLANE_READINESS_DIMENSION
                 .METADATA_PUBLICATION_HEALTHY]: true,
               [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: false,
@@ -1283,4 +1393,4 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
         'priority control-plane recovery should retry on the short priority cadence while remote readiness republishes',
       );
     });
-
+});

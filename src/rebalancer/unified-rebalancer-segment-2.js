@@ -1,119 +1,31 @@
-import { UNIFIED_REBALANCER_SHARED } from "./unified-rebalancer-shared.js";
-import { UnifiedRebalancerSegment1 } from "./unified-rebalancer-segment-1.js";
+import {UNIFIED_REBALANCER_SHARED} from './unified-rebalancer-shared.js';
+import {UnifiedRebalancerSegment1} from './unified-rebalancer-segment-1.js';
 
 const {
-  CLUSTER_READINESS_TIMEOUT_MS,
   COLUMN,
-  CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
-  CONTROL_PLANE_PUBLICATION_STATUS,
   CONTROL_PLANE_READINESS_DIMENSION,
-  CONTROL_PLANE_WORKLOAD_CLASS,
-  COORDINATOR_OWNED_OPERATION_TYPES_SQL_CLAUSE,
   CRITICAL_SYSTEM_ENDPOINT_VISIBILITY_AUTHORITATIVE_READ,
   CRITICAL_SYSTEM_TOPOLOGY_SETTLING_BLOCKER_REASON,
-  ConfigurationManager,
-  ControlPlaneReadinessService,
-  DEFAULT_MESSAGE_GROUP_POLICY,
-  DEFAULT_PRIORITY_RECOVERY_ACTIVITY_STALE_GRACE_MS,
-  DEFAULT_TABLE_POLICY,
   ENDPOINT_STATUS,
   ENDPOINT_SYNC_HEALTH,
-  EntityType,
-  EventEmitter,
-  LIFECYCLE_PHASE,
-  LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY,
-  LoggingService,
   META_SERVICE_ID,
-  MovePlanner,
-  MoveType,
   NUM,
   NodeStatus,
-  OperationType,
-  OwnerKeyReconcileQueue,
-  PRESSURE_WORK_CLASS,
-  PRIORITY_BUDGET_BYPASS_COORDINATOR_OPTIONS,
-  PRIORITY_CONTROL_PLANE_RECOVERY_FALLBACK_REPLICA_COUNT,
-  PressureGovernor,
-  RAFT_ROLE,
-  READINESS_SKIP_DETAIL,
-  REBALANCER_BUDGET_READ_OPTIONS,
-  REBALANCER_CONCURRENT_BUDGET_READ_MODE,
-  REBALANCER_CONFIG_KEY,
-  REBALANCER_DEFAULT,
-  REBALANCER_DEFAULT_POLICY,
-  REBALANCER_ENTITY_TYPE,
-  REBALANCER_ERROR_MSG,
-  REBALANCER_EVENT,
   REBALANCER_LOG_MSG,
-  REBALANCER_MOVE_TYPE,
-  REBALANCER_NODE_STATUS,
-  REBALANCER_QUEUE_NAME,
-  REBALANCER_RUNTIME_REASON,
-  REBALANCER_SKIP_REASON,
-  REBALANCER_SUBSYSTEM,
-  REBALANCER_TRIGGER,
-  RECONCILE_REASON,
-  REPLICA_OPERATION_SEMANTIC_PHASE,
   REPLICA_OPERATION_VISIBILITY_READ_MODE,
-  ReplicaStatus,
-  SERVICE_STATUS,
-  SQL_BUDGET,
-  STABILIZATION_RESET_TRIGGER,
-  STATE,
   SYSTEM_TABLE_NAME,
-  StartupRecoveryCoordinator,
-  StoragePressureBehavior,
   TABLES,
-  TERMINAL_STATUSES,
-  TERMINAL_STATUS_SQL_CLAUSE,
   TOPOLOGY_IN_FLIGHT_REPLICA_OPERATION_SOURCE,
   TRANSPORT_TYPE,
   TYPEOF,
-  TriggerType,
   UNIFIED_REBALANCER_LITERAL,
-  WORKFLOW_STEP,
-  adjustToOddCount,
-  assertCritical,
-  buildControlPlaneWorkloadProfile,
-  buildPriorityRecoveryBlockedPartitions,
   buildPriorityRecoveryOperationAssessment,
-  buildPriorityRecoveryOperationContextFromRecord,
-  buildPriorityRecoveryPartitionAssessment,
-  buildPublicationRecoveryGateSnapshot,
-  createControlPlaneRuntimeBundle,
-  getControlPlaneRetryAfterMs,
-  getLocalControlPlaneMutationReadinessBlocker,
-  getNextOddCount,
-  getPartitionRowFromCache,
-  getPreviousOddCount,
-  hasPriorityRecoverySpreadGap,
-  isBackgroundWorkLifecycleReadySnapshot,
-  isCoordinatorOwnedOperationType,
-  isCriticalTransportControlPlanePartitionTable,
   isNodeReadyLeaseExplicitlyCleared,
-  isNodeReadyWithConnection,
-  isNodeReadyWithTransport,
-  isNodeRecordReady,
-  isOddReplicaCount,
   isPriorityControlPlanePartition,
-  isReplaceRemoveDispatchPhase,
-  isReplicaOperationInFlight,
-  isReplicaOperationStale,
-  isRetryableControlPlaneError,
-  isSystemTablePartition,
-  isTerminalReplicaOperationSemanticPhase,
-  isTerminalStep,
-  isValidWorkflowStep,
   normalizeNodeEndpointRow,
   normalizeNodeRow,
-  normalizeReplicaOperationRecord,
   normalizeServiceEndpointRow,
-  normalizeServiceRow,
   resolvePriorityRecoveryActiveNodeCohort,
-  resolveReplicaOperationSemanticPhase,
-  resolveTrackedPriorityRecoveryAdmissionPlan,
-  shouldPriorityRecoveryOperationBlockPlanning,
-  wasNodeRecordReadyWhenWritten,
 } = UNIFIED_REBALANCER_SHARED;
 
 class UnifiedRebalancerSegment2 extends UnifiedRebalancerSegment1 {
@@ -156,11 +68,11 @@ class UnifiedRebalancerSegment2 extends UnifiedRebalancerSegment1 {
       return null;
     }
 
-    const nodeIds = Array.isArray(publicationRow.publishedActiveNodeIds)
-      ? publicationRow.publishedActiveNodeIds
-      : Array.isArray(publicationRow.published_active_node_ids)
-        ? publicationRow.published_active_node_ids
-        : [];
+    const nodeIds = Array.isArray(publicationRow.publishedActiveNodeIds) ?
+      publicationRow.publishedActiveNodeIds :
+      Array.isArray(publicationRow.published_active_node_ids) ?
+        publicationRow.published_active_node_ids :
+        [];
     return new Set(
       nodeIds.filter(
         (nodeId) =>
@@ -242,12 +154,12 @@ class UnifiedRebalancerSegment2 extends UnifiedRebalancerSegment1 {
         this.nodeId,
         Date.now(),
       );
-      const nodeIds = Array.isArray(startupAuthority?.canonicalStartupNodeIds)
-        ? startupAuthority.canonicalStartupNodeIds.filter(
-            (nodeId) =>
-              typeof nodeId === TYPEOF.STRING && nodeId.length > NUM.ZERO,
-          )
-        : [];
+      const nodeIds = Array.isArray(startupAuthority?.canonicalStartupNodeIds) ?
+        startupAuthority.canonicalStartupNodeIds.filter(
+          (nodeId) =>
+            typeof nodeId === TYPEOF.STRING && nodeId.length > NUM.ZERO,
+        ) :
+        [];
       return nodeIds.length > NUM.ZERO ? new Set(nodeIds) : null;
     } catch (_error) {
       return null;
@@ -270,9 +182,9 @@ class UnifiedRebalancerSegment2 extends UnifiedRebalancerSegment1 {
    */
   getAvailableNodes() {
     const publishedActiveNodeIds =
-      this.shouldConstrainAvailableNodesToPublishedMembership()
-        ? this.getPublishedActiveNodeIdSet()
-        : null;
+      this.shouldConstrainAvailableNodesToPublishedMembership() ?
+        this.getPublishedActiveNodeIdSet() :
+        null;
     return this.getAvailableNodesConstrainedToNodeIds(publishedActiveNodeIds);
   }
 
@@ -294,9 +206,9 @@ class UnifiedRebalancerSegment2 extends UnifiedRebalancerSegment1 {
       return null;
     }
     const nodeRows =
-      typeof this.systemTableCache?.getAll === TYPEOF.FUNCTION
-        ? this.systemTableCache.getAll(SYSTEM_TABLE_NAME.NODES)
-        : [];
+      typeof this.systemTableCache?.getAll === TYPEOF.FUNCTION ?
+        this.systemTableCache.getAll(SYSTEM_TABLE_NAME.NODES) :
+        [];
     if (
       !Array.isArray(nodeRows) ||
       nodeRows.length === UNIFIED_REBALANCER_LITERAL.ZERO
@@ -315,7 +227,7 @@ class UnifiedRebalancerSegment2 extends UnifiedRebalancerSegment1 {
     const unreadyNodeIds = [];
     for (const nodeRow of nodeRows) {
       const normalizedNode = normalizeNodeRow(nodeRow);
-      const { status, nodeId } = normalizedNode;
+      const {status, nodeId} = normalizedNode;
       if (!status) {
         continue;
       }
@@ -337,11 +249,11 @@ class UnifiedRebalancerSegment2 extends UnifiedRebalancerSegment1 {
       const readiness =
         this.controlPlaneReadinessService &&
         typeof this.controlPlaneReadinessService.getNodeReadinessSync ===
-          TYPEOF.FUNCTION
-          ? this.controlPlaneReadinessService.getNodeReadinessSync(nodeId, {
-              allowStaleOnCacheChange: false,
-            })
-          : null;
+          TYPEOF.FUNCTION ?
+          this.controlPlaneReadinessService.getNodeReadinessSync(nodeId, {
+            allowStaleOnCacheChange: false,
+          }) :
+          null;
       const nodeMembershipReady = this.isReadinessDimensionSatisfied(
         readiness,
         readinessDecisionDimension,
@@ -371,15 +283,19 @@ class UnifiedRebalancerSegment2 extends UnifiedRebalancerSegment1 {
         );
       const hasRequiredHealthyNodes =
         activeNodeIds.length >= requiredHealthyNodeCount;
-      if (this.isControlPlanePriorityPartition() && hasRequiredHealthyNodes) {
+      const priorityRecoveryMayProceedOnQuorum =
+        this.isControlPlanePriorityPartition() &&
+        !this.isControlPlanePublicationPriorityPartition() &&
+        hasRequiredHealthyNodes;
+      if (priorityRecoveryMayProceedOnQuorum) {
         // Priority spread may proceed once quorum is ready; additional ACTIVE
         // nodes can still be converging without stalling every priority table.
       } else {
         return Object.freeze({
           reason:
-            unreadyNodeIds.length > UNIFIED_REBALANCER_LITERAL.ZERO
-              ? CRITICAL_SYSTEM_TOPOLOGY_SETTLING_BLOCKER_REASON.NODE_READY_LEASE_INCOMPLETE
-              : CRITICAL_SYSTEM_TOPOLOGY_SETTLING_BLOCKER_REASON.TRANSITIONAL_NODE_MEMBERSHIP,
+            unreadyNodeIds.length > UNIFIED_REBALANCER_LITERAL.ZERO ?
+              CRITICAL_SYSTEM_TOPOLOGY_SETTLING_BLOCKER_REASON.NODE_READY_LEASE_INCOMPLETE :
+              CRITICAL_SYSTEM_TOPOLOGY_SETTLING_BLOCKER_REASON.TRANSITIONAL_NODE_MEMBERSHIP,
           unreadyNodeIds: Object.freeze([...unreadyNodeIds]),
           requiredHealthyNodeCount,
           healthyNodeCount: activeNodeIds.length,
@@ -407,9 +323,9 @@ class UnifiedRebalancerSegment2 extends UnifiedRebalancerSegment1 {
       const hasRequiredHealthyNodes =
         activeNodeIds.length >= requiredHealthyNodeCount;
       const publishedActiveNodeIds =
-        this.isControlPlanePriorityPartition() && hasRequiredHealthyNodes
-          ? this.getPublishedActiveNodeIdSet()
-          : null;
+        this.isControlPlanePriorityPartition() && hasRequiredHealthyNodes ?
+          this.getPublishedActiveNodeIdSet() :
+          null;
       for (const connectedNodeId of connectedNodeIds) {
         if (knownNodeIds.has(connectedNodeId)) {
           continue;
@@ -487,15 +403,15 @@ class UnifiedRebalancerSegment2 extends UnifiedRebalancerSegment1 {
     return [
       ...new Set(
         [
-          ...(Array.isArray(blocker?.endpointReadyNodeIds)
-            ? blocker.endpointReadyNodeIds
-            : []),
-          ...(Array.isArray(blocker?.missingNodeEndpointNodeIds)
-            ? blocker.missingNodeEndpointNodeIds
-            : []),
-          ...(Array.isArray(blocker?.missingPostgresWireNodeIds)
-            ? blocker.missingPostgresWireNodeIds
-            : []),
+          ...(Array.isArray(blocker?.endpointReadyNodeIds) ?
+            blocker.endpointReadyNodeIds :
+            []),
+          ...(Array.isArray(blocker?.missingNodeEndpointNodeIds) ?
+            blocker.missingNodeEndpointNodeIds :
+            []),
+          ...(Array.isArray(blocker?.missingPostgresWireNodeIds) ?
+            blocker.missingPostgresWireNodeIds :
+            []),
         ].filter(
           (nodeId) =>
             typeof nodeId === TYPEOF.STRING && nodeId.length > NUM.ZERO,
@@ -538,7 +454,7 @@ class UnifiedRebalancerSegment2 extends UnifiedRebalancerSegment1 {
       return null;
     }
 
-    const placeholders = normalizedNodeIds.map(() => "?").join(", ");
+    const placeholders = normalizedNodeIds.map(() => '?').join(', ');
     const params = [...normalizedNodeIds];
     let sql =
       `SELECT * FROM ${tableName} ` +
@@ -582,32 +498,32 @@ class UnifiedRebalancerSegment2 extends UnifiedRebalancerSegment1 {
     serviceEndpointRows,
     options = {},
   ) {
-    const normalizedRequiredNodeIds = Array.isArray(requiredNodeIds)
-      ? [
-          ...new Set(
-            requiredNodeIds.filter(
-              (nodeId) =>
-                typeof nodeId === TYPEOF.STRING && nodeId.length > NUM.ZERO,
-            ),
+    const normalizedRequiredNodeIds = Array.isArray(requiredNodeIds) ?
+      [
+        ...new Set(
+          requiredNodeIds.filter(
+            (nodeId) =>
+              typeof nodeId === TYPEOF.STRING && nodeId.length > NUM.ZERO,
           ),
-        ]
-      : [];
+        ),
+      ] :
+      [];
     const allowReadinessBackfill = options?.allowReadinessBackfill !== false;
     const configuredRequiredReadyNodeCount =
       Number.isInteger(options?.requiredReadyNodeCount) &&
-      options.requiredReadyNodeCount > NUM.ZERO
-        ? options.requiredReadyNodeCount
-        : normalizedRequiredNodeIds.length;
+      options.requiredReadyNodeCount > NUM.ZERO ?
+        options.requiredReadyNodeCount :
+        normalizedRequiredNodeIds.length;
     const requiredReadyNodeCount =
-      normalizedRequiredNodeIds.length > NUM.ZERO
-        ? Math.max(
-            NUM.ONE,
-            Math.min(
-              normalizedRequiredNodeIds.length,
-              configuredRequiredReadyNodeCount,
-            ),
-          )
-        : NUM.ZERO;
+      normalizedRequiredNodeIds.length > NUM.ZERO ?
+        Math.max(
+          NUM.ONE,
+          Math.min(
+            normalizedRequiredNodeIds.length,
+            configuredRequiredReadyNodeCount,
+          ),
+        ) :
+        NUM.ZERO;
     if (normalizedRequiredNodeIds.length === NUM.ZERO) {
       return Object.freeze({
         ready: false,
@@ -626,7 +542,7 @@ class UnifiedRebalancerSegment2 extends UnifiedRebalancerSegment1 {
 
     for (const row of Array.isArray(nodeEndpointRows) ? nodeEndpointRows : []) {
       const normalizedRow = normalizeNodeEndpointRow(row);
-      const { nodeId, status, transportType } = normalizedRow;
+      const {nodeId, status, transportType} = normalizedRow;
       if (
         !nodeId ||
         status !== String(ENDPOINT_STATUS.ACTIVE).toLowerCase() ||
@@ -637,11 +553,11 @@ class UnifiedRebalancerSegment2 extends UnifiedRebalancerSegment1 {
       visibleNodeEndpointNodeIds.add(nodeId);
     }
 
-    for (const row of Array.isArray(serviceEndpointRows)
-      ? serviceEndpointRows
-      : []) {
+    for (const row of Array.isArray(serviceEndpointRows) ?
+      serviceEndpointRows :
+      []) {
       const normalizedRow = normalizeServiceEndpointRow(row);
-      const { nodeId, serviceId, healthStatus } = normalizedRow;
+      const {nodeId, serviceId, healthStatus} = normalizedRow;
       if (
         !nodeId ||
         serviceId !== META_SERVICE_ID.POSTGRES_WIRE ||
@@ -696,14 +612,14 @@ class UnifiedRebalancerSegment2 extends UnifiedRebalancerSegment1 {
       ),
     );
     const effectiveNodeEndpointNodeIds = new Set(
-      allowReadinessBackfill
-        ? [...visibleNodeEndpointNodeIds, ...readinessBackedNodeEndpointNodeIds]
-        : [...visibleNodeEndpointNodeIds],
+      allowReadinessBackfill ?
+        [...visibleNodeEndpointNodeIds, ...readinessBackedNodeEndpointNodeIds] :
+        [...visibleNodeEndpointNodeIds],
     );
     const effectivePostgresWireNodeIds = new Set(
-      allowReadinessBackfill
-        ? [...visiblePostgresWireNodeIds, ...readinessBackedPostgresWireNodeIds]
-        : [...visiblePostgresWireNodeIds],
+      allowReadinessBackfill ?
+        [...visiblePostgresWireNodeIds, ...readinessBackedPostgresWireNodeIds] :
+        [...visiblePostgresWireNodeIds],
     );
     const missingNodeEndpointNodeIds = normalizedRequiredNodeIds.filter(
       (nodeId) => !effectiveNodeEndpointNodeIds.has(nodeId),
@@ -766,31 +682,31 @@ class UnifiedRebalancerSegment2 extends UnifiedRebalancerSegment1 {
           this.readCriticalSystemEndpointVisibilityAuthoritativeRows(
             TABLES.SERVICE_ENDPOINTS,
             requiredNodeIds,
-            { serviceId: META_SERVICE_ID.POSTGRES_WIRE },
+            {serviceId: META_SERVICE_ID.POSTGRES_WIRE},
           ),
         ]);
         const nodeEndpointRows =
-          typeof this.systemTableCache?.getAll === TYPEOF.FUNCTION
-            ? [
-                ...this.systemTableCache.getAll(TABLES.NODE_ENDPOINTS),
-                ...(authoritativeNodeEndpointRead?.success === true
-                  ? authoritativeNodeEndpointRead.rows || []
-                  : []),
-              ]
-            : authoritativeNodeEndpointRead?.success === true
-              ? authoritativeNodeEndpointRead.rows || []
-              : [];
+          typeof this.systemTableCache?.getAll === TYPEOF.FUNCTION ?
+            [
+              ...this.systemTableCache.getAll(TABLES.NODE_ENDPOINTS),
+              ...(authoritativeNodeEndpointRead?.success === true ?
+                authoritativeNodeEndpointRead.rows || [] :
+                []),
+            ] :
+            authoritativeNodeEndpointRead?.success === true ?
+              authoritativeNodeEndpointRead.rows || [] :
+              [];
         const serviceEndpointRows =
-          typeof this.systemTableCache?.getAll === TYPEOF.FUNCTION
-            ? [
-                ...this.systemTableCache.getAll(TABLES.SERVICE_ENDPOINTS),
-                ...(authoritativeServiceEndpointRead?.success === true
-                  ? authoritativeServiceEndpointRead.rows || []
-                  : []),
-              ]
-            : authoritativeServiceEndpointRead?.success === true
-              ? authoritativeServiceEndpointRead.rows || []
-              : [];
+          typeof this.systemTableCache?.getAll === TYPEOF.FUNCTION ?
+            [
+              ...this.systemTableCache.getAll(TABLES.SERVICE_ENDPOINTS),
+              ...(authoritativeServiceEndpointRead?.success === true ?
+                authoritativeServiceEndpointRead.rows || [] :
+                []),
+            ] :
+            authoritativeServiceEndpointRead?.success === true ?
+              authoritativeServiceEndpointRead.rows || [] :
+              [];
         const endpointVisibility =
           this.summarizeCriticalSystemEndpointVisibility(
             requiredNodeIds,
@@ -801,12 +717,12 @@ class UnifiedRebalancerSegment2 extends UnifiedRebalancerSegment1 {
               requiredReadyNodeCount: blocker.requiredReadyNodeCount,
             },
           );
-        return endpointVisibility.ready === true
-          ? null
-          : Object.freeze({
-              ...blocker,
-              ...endpointVisibility,
-            });
+        return endpointVisibility.ready === true ?
+          null :
+          Object.freeze({
+            ...blocker,
+            ...endpointVisibility,
+          });
       } catch (error) {
         this.logger.warn(
           REBALANCER_LOG_MSG.REVALIDATE_TOPOLOGY_BLOCKER_FAILED,
@@ -854,9 +770,9 @@ class UnifiedRebalancerSegment2 extends UnifiedRebalancerSegment1 {
     }
 
     const activeNodeIds = new Set(
-      (Array.isArray(blocker.activeNodeIds)
-        ? blocker.activeNodeIds
-        : []
+      (Array.isArray(blocker.activeNodeIds) ?
+        blocker.activeNodeIds :
+        []
       ).filter(
         (nodeId) => typeof nodeId === TYPEOF.STRING && nodeId.length > NUM.ZERO,
       ),
@@ -867,13 +783,13 @@ class UnifiedRebalancerSegment2 extends UnifiedRebalancerSegment1 {
       await this.buildNonBlockingPriorityOperationIdSet(entityOperations);
     for (const operation of entityOperations) {
       if (
-        !this.isTopologySettlingInFlightOperation(operation, { nowMs }) ||
+        !this.isTopologySettlingInFlightOperation(operation, {nowMs}) ||
         !this.isOperationForEntity(operation)
       ) {
         continue;
       }
       const operationId = String(
-        operation?.operationId || operation?.operation_id || "",
+        operation?.operationId || operation?.operation_id || '',
       ).trim();
       if (
         operationId.length > NUM.ZERO &&
@@ -920,7 +836,7 @@ class UnifiedRebalancerSegment2 extends UnifiedRebalancerSegment1 {
   async getPriorityRecoveryPlanningSnapshot(operation) {
     const partitionId =
       operation?.partitionId || operation?.partition_id || null;
-    if (!isPriorityControlPlanePartition({ partitionId })) {
+    if (!isPriorityControlPlanePartition({partitionId})) {
       return null;
     }
     const readinessService = this.controlPlaneReadinessService;
@@ -985,9 +901,9 @@ class UnifiedRebalancerSegment2 extends UnifiedRebalancerSegment1 {
           observedAt,
         );
     }
-    return planningSnapshot && typeof planningSnapshot === TYPEOF.OBJECT
-      ? planningSnapshot
-      : null;
+    return planningSnapshot && typeof planningSnapshot === TYPEOF.OBJECT ?
+      planningSnapshot :
+      null;
   }
 
   /**
@@ -1026,7 +942,7 @@ class UnifiedRebalancerSegment2 extends UnifiedRebalancerSegment1 {
   getPriorityRecoveryPlanningSnapshotSync(operation, options = {}) {
     const partitionId =
       operation?.partitionId || operation?.partition_id || null;
-    if (!isPriorityControlPlanePartition({ partitionId })) {
+    if (!isPriorityControlPlanePartition({partitionId})) {
       return null;
     }
     const readinessService = this.controlPlaneReadinessService;
@@ -1044,9 +960,9 @@ class UnifiedRebalancerSegment2 extends UnifiedRebalancerSegment1 {
       return null;
     }
     const publicationNodeId = this.nodeId;
-    const observedAt = Number.isFinite(options.observedAt)
-      ? Math.floor(options.observedAt)
-      : Date.now();
+    const observedAt = Number.isFinite(options.observedAt) ?
+      Math.floor(options.observedAt) :
+      Date.now();
 
     let planningSnapshot = null;
     if (
@@ -1085,9 +1001,9 @@ class UnifiedRebalancerSegment2 extends UnifiedRebalancerSegment1 {
           observedAt,
         );
     }
-    return planningSnapshot && typeof planningSnapshot === TYPEOF.OBJECT
-      ? planningSnapshot
-      : null;
+    return planningSnapshot && typeof planningSnapshot === TYPEOF.OBJECT ?
+      planningSnapshot :
+      null;
   }
 
   /**
@@ -1128,4 +1044,4 @@ class UnifiedRebalancerSegment2 extends UnifiedRebalancerSegment1 {
    */
 }
 
-export { UnifiedRebalancerSegment2 };
+export {UnifiedRebalancerSegment2};

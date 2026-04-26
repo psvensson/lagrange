@@ -1,104 +1,21 @@
-import { OPERATION_WORKFLOW_OWNER_SHARED } from "./operation-workflow-owner-shared.js";
+import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
 
 const {
-  AUTHORITATIVE_TRANSITION_RECOVERY_STATUS,
-  CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
-  CONTROL_PLANE_PARTICIPATION_KIND,
-  CONTROL_PLANE_PUBLICATION_STATUS,
-  CONTROL_PLANE_READINESS_DIMENSION,
-  COORDINATOR_CREATED_REMOTE_HANDOFF_VERIFICATION_DELAY_MS,
-  ControlPlaneField,
-  ControlPlaneMessageType,
-  ControlPlaneReadinessService,
-  DEFAULT_MIN_REPLICA_COUNT,
   DISPATCH_RETRY_DELAY_MS,
-  EXECUTOR_OUTCOME_ACTION,
-  EXECUTOR_OUTCOME_ACTION_MAP,
-  EXECUTOR_OUTCOME_FIELD,
-  FAILURE_LOG_LEVEL,
-  INCOMPLETE_OPERATION_OBSERVATION_STATE,
-  INITIAL_PARTITION_IDS,
-  METRICS_LOG_TAG,
   NUM,
-  OBSERVED_PROGRESS_RELEVANT_SERVICE_STATUSES,
-  OBSERVED_PROGRESS_RELEVANT_WORKFLOW_STEPS,
-  OBSERVED_PROGRESS_RETRY_DELAY_MS,
-  OPERATION_HANDLER,
-  OPERATION_LIFECYCLE_ACTION,
-  OPERATION_METADATA_KEY,
   OPERATION_OWNER_ACTION,
-  OPERATION_SINGLE_FLIGHT_KEY_SEPARATOR,
-  OPERATION_SINGLE_FLIGHT_SCOPE,
-  OPERATION_TRANSITION_REASON,
-  OPERATION_TRANSITION_SESSION_ATTEMPT_PREFIX,
   OPERATION_WORKFLOW_OWNER_LITERAL,
-  OPERATION_WORKFLOW_OWNER_REASON,
   OperationType,
-  PARTITION_SERVICE_ERROR_MSG,
-  PRIORITY_CONTROL_PLANE_SYNCING_TIMEOUT_CAP_MS,
-  PRIORITY_PUBLICATION_LEADER_HANDOFF_EVIDENCE,
-  PRIORITY_PUBLICATION_LEADER_REMOVE_SAFETY_STATE,
-  PRIORITY_PUBLICATION_SOURCE_ROLE_STATE,
-  PRIORITY_RECOVERY_COMPLETION_STATE,
-  PRIORITY_REMOVE_SAFETY_MEMBERSHIP_SOURCE,
-  QUERY_ERROR_MSG,
-  RAFT_ROLE,
-  REBALANCER_SKIP_REASON,
-  REBALANCE_COORDINATOR_DEFER_REASON,
   REBALANCE_COORDINATOR_ERROR_MSG,
-  REBALANCE_COORDINATOR_EVENT,
   REBALANCE_COORDINATOR_LOG_MSG,
-  RECOVERABLE_TRANSITION_COMMIT_STATUS,
-  RECOVERABLE_TRANSITION_ROLLBACK_STATUS,
-  REMOVE_SAFETY_EVALUATION_CLASSIFICATION,
-  REMOVE_SAFETY_OWNER_PARTICIPATION_KIND,
-  REMOVE_SAFETY_READINESS_DIMENSION,
-  REMOVE_SAFETY_READ_QUERY_OPTIONS,
-  REMOVE_SAFETY_SQL,
-  REPLACE_SOURCE_LEADER_HANDOFF_REQUIRED_PARTITION_IDS,
-  REPLICA_OPERATION_VISIBILITY_READ_MODE,
-  ReplicaOperationField,
-  ReplicaOperationMessageType,
-  ReplicaOperationResponseStatus,
   ReplicaStatus,
-  SAFETY_DEFERRED_LOG_THROTTLE_MS,
   SAFETY_DEFERRED_RETRY_DELAY_MS,
-  SERVICE_TYPE,
-  SQL_RECONCILIATION_REASON,
-  SYSTEM_TABLE_NAME,
-  TIMEOUT_BUDGET_CLASSIFICATION,
   TIMEOUT_BUDGET_DEFAULT,
-  TIME_MS,
-  TRANSACTION_STATUS,
-  TRANSITION_RECOVERY_READ_OPTIONS,
-  TRANSITION_RECOVERY_SQL,
   TRANSITION_RETRY_DELAY_MS,
-  TRANSITION_STEP_OPTIONS,
   TYPEOF,
-  UNIFIED_SERVICE_TYPE,
   WORKFLOW_STEP,
-  WORKFLOW_STEP_TO_STATUS,
-  buildControlPlaneQueryOptions,
-  buildPriorityRecoveryBlockedPartitionIds,
-  buildPriorityRecoveryCompletion,
-  buildPriorityRecoveryOperationAssessment,
-  buildSelectRowsByTransactionIdsSql,
-  buildTimeoutClassification,
-  classifyTransportDeliveryOutcome,
-  createChildTimeoutBudget,
-  createTopLevelOperationBudget,
   getControlPlaneRetryAfterMs,
-  getWorkflowSteps,
-  hasPriorityRecoverySpreadGap,
-  isCoordinatorOwnedOperationType,
-  isDeliveredTransportDeliveryOutcome,
-  isPriorityControlPlanePartition,
   isRetryableControlPlaneError,
-  isSystemTablePartition,
-  normalizeNodeIdList,
-  normalizeReplicaRowNodeIds,
-  readAuthoritativeControlPlaneRows,
-  resolvePriorityRecoveryActiveNodeCohort,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
 
 class OperationWorkflowOwnerSegment1 {
@@ -134,13 +51,13 @@ class OperationWorkflowOwnerSegment1 {
     this.allocateCanonicalReplicaId = options.allocateCanonicalReplicaId;
     this.getActualReplicaStatus = options.getActualReplicaStatus;
     this.setTimeoutFn =
-      typeof options.setTimeoutFn === TYPEOF.FUNCTION
-        ? options.setTimeoutFn
-        : setTimeout;
+      typeof options.setTimeoutFn === TYPEOF.FUNCTION ?
+        options.setTimeoutFn :
+        setTimeout;
     this.clearTimeoutFn =
-      typeof options.clearTimeoutFn === TYPEOF.FUNCTION
-        ? options.clearTimeoutFn
-        : clearTimeout;
+      typeof options.clearTimeoutFn === TYPEOF.FUNCTION ?
+        options.clearTimeoutFn :
+        clearTimeout;
     this.lastEmptyIncompleteOperationQueryAtMs = NUM.ZERO;
     this.incompleteOperationQueryEmptyBackoffMs =
       options.incompleteOperationQueryEmptyBackoffMs || NUM.ZERO;
@@ -331,44 +248,44 @@ class OperationWorkflowOwnerSegment1 {
     }
     const workflowStep =
       typeof context.workflowStep === TYPEOF.STRING &&
-      context.workflowStep.length > NUM.ZERO
-        ? context.workflowStep
-        : WORKFLOW_STEP.PENDING;
+      context.workflowStep.length > NUM.ZERO ?
+        context.workflowStep :
+        WORKFLOW_STEP.PENDING;
     const partitionId = context.partitionId || null;
     const stepTimeout = this.getTimeoutForStep(
       workflowStep,
-      partitionId ? { partitionId } : null,
+      partitionId ? {partitionId} : null,
     );
     const retryDelayMs =
       Number.isFinite(delayMs) && delayMs > NUM.ZERO ? delayMs : NUM.ZERO;
     const requestedGraceDeadlineMs = Date.now() + retryDelayMs;
-    const durableProgressAtMs = Number.isFinite(context.updatedAt)
-      ? context.updatedAt
-      : Number.isFinite(context.createdAt)
-        ? context.createdAt
-        : null;
+    const durableProgressAtMs = Number.isFinite(context.updatedAt) ?
+      context.updatedAt :
+      Number.isFinite(context.createdAt) ?
+        context.createdAt :
+        null;
     const timeoutCeilingMs = this.resolveTransitionRetryGraceTimeoutCeilingMs(
       context,
       workflowStep,
       durableProgressAtMs,
       stepTimeout,
     );
-    const graceDeadlineMs = Number.isFinite(timeoutCeilingMs)
-      ? Math.min(timeoutCeilingMs, requestedGraceDeadlineMs)
-      : requestedGraceDeadlineMs;
+    const graceDeadlineMs = Number.isFinite(timeoutCeilingMs) ?
+      Math.min(timeoutCeilingMs, requestedGraceDeadlineMs) :
+      requestedGraceDeadlineMs;
     const existingDeadlineMs = Number(
       this.transitionRetryGraceDeadlineByOperationId.get(operationId),
     );
     this.transitionRetryGraceDeadlineByOperationId.set(
       operationId,
-      Number.isFinite(timeoutCeilingMs) && Number.isFinite(existingDeadlineMs)
-        ? Math.min(
-            timeoutCeilingMs,
-            Math.max(existingDeadlineMs, graceDeadlineMs),
-          )
-        : Number.isFinite(existingDeadlineMs)
-          ? Math.max(existingDeadlineMs, graceDeadlineMs)
-          : graceDeadlineMs,
+      Number.isFinite(timeoutCeilingMs) && Number.isFinite(existingDeadlineMs) ?
+        Math.min(
+          timeoutCeilingMs,
+          Math.max(existingDeadlineMs, graceDeadlineMs),
+        ) :
+        Number.isFinite(existingDeadlineMs) ?
+          Math.max(existingDeadlineMs, graceDeadlineMs) :
+          graceDeadlineMs,
     );
   }
 
@@ -396,19 +313,18 @@ class OperationWorkflowOwnerSegment1 {
       return null;
     }
     if (
-      !this.shouldUseOperationBudgetTransitionRetryGrace(
-        context,
-        workflowStep,
-      )
+      !this.shouldUseOperationBudgetTransitionRetryGrace(context, workflowStep)
     ) {
       return durableProgressAtMs + stepTimeout;
     }
 
-    const operationStartedAtMs = Number.isFinite(context.createdAt)
-      ? context.createdAt
-      : durableProgressAtMs;
-    return operationStartedAtMs +
-      TIMEOUT_BUDGET_DEFAULT.REBALANCE_OPERATION_BUDGET_MS;
+    const operationStartedAtMs = Number.isFinite(context.createdAt) ?
+      context.createdAt :
+      durableProgressAtMs;
+    return (
+      operationStartedAtMs +
+      TIMEOUT_BUDGET_DEFAULT.REBALANCE_OPERATION_BUDGET_MS
+    );
   }
 
   /**
@@ -424,9 +340,9 @@ class OperationWorkflowOwnerSegment1 {
   shouldUseOperationBudgetTransitionRetryGrace(context, workflowStep) {
     const partitionId =
       typeof context?.partitionId === TYPEOF.STRING &&
-      context.partitionId.length > NUM.ZERO
-        ? context.partitionId
-        : null;
+      context.partitionId.length > NUM.ZERO ?
+        context.partitionId :
+        null;
     if (!this.isCriticalSystemPartition(partitionId)) {
       return false;
     }
@@ -580,9 +496,9 @@ class OperationWorkflowOwnerSegment1 {
       return false;
     }
     const normalizedActualStatus =
-      typeof actualStatus === TYPEOF.STRING
-        ? actualStatus.toLowerCase()
-        : actualStatus;
+      typeof actualStatus === TYPEOF.STRING ?
+        actualStatus.toLowerCase() :
+        actualStatus;
     const createRearmPhase = this.isCreateRearmDispatchPhase(operation);
     if (
       normalizedActualStatus === ReplicaStatus.CREATING &&
@@ -625,9 +541,9 @@ class OperationWorkflowOwnerSegment1 {
     }
     const retryAfterMs = getControlPlaneRetryAfterMs(errorLike);
     const delayMs =
-      Number.isFinite(retryAfterMs) && retryAfterMs > NUM.ZERO
-        ? retryAfterMs
-        : DISPATCH_RETRY_DELAY_MS;
+      Number.isFinite(retryAfterMs) && retryAfterMs > NUM.ZERO ?
+        retryAfterMs :
+        DISPATCH_RETRY_DELAY_MS;
     const errorMessage = this.normalizeErrorMessage(
       errorLike,
       REBALANCE_COORDINATOR_ERROR_MSG.MESSAGE_NOT_ACKED,
@@ -667,7 +583,7 @@ class OperationWorkflowOwnerSegment1 {
             OPERATION_OWNER_ACTION.DISPATCH,
             currentOperation,
             {
-              boundary: "dispatch_retry",
+              boundary: 'dispatch_retry',
               workflowStep: currentOperation.workflowStep || null,
               partitionId: currentOperation.partitionId || null,
               runInlineWhenOwnerLaneHeld: true,
@@ -792,7 +708,7 @@ class OperationWorkflowOwnerSegment1 {
             OPERATION_OWNER_ACTION.EXECUTE,
             currentOperation,
             {
-              boundary: "safety_retry",
+              boundary: 'safety_retry',
               workflowStep: currentOperation.workflowStep || null,
               partitionId: currentOperation.partitionId || null,
               runInlineWhenOwnerLaneHeld: true,
@@ -802,7 +718,7 @@ class OperationWorkflowOwnerSegment1 {
       ).catch((retryError) => {
         if (
           this.deferTransitionRetry(operationId, retryError, {
-            boundary: "safety_retry",
+            boundary: 'safety_retry',
             partitionId: operation?.partitionId || null,
             workflowStep: operation?.workflowStep || null,
             updatedAt: operation?.updatedAt,
@@ -913,16 +829,16 @@ class OperationWorkflowOwnerSegment1 {
     );
     const retryAfterMs = getControlPlaneRetryAfterMs(errorLike);
     const delayMs =
-      Number.isFinite(retryAfterMs) && retryAfterMs > NUM.ZERO
-        ? retryAfterMs
-        : TRANSITION_RETRY_DELAY_MS;
+      Number.isFinite(retryAfterMs) && retryAfterMs > NUM.ZERO ?
+        retryAfterMs :
+        TRANSITION_RETRY_DELAY_MS;
     this.recordTransitionRetryGrace(operationId, context, delayMs);
     if (this.transitionRetryTimerByOperationId.has(operationId)) {
       return true;
     }
     const errorMessage = this.normalizeErrorMessage(
       errorLike,
-      "Retryable control-plane transition failure",
+      'Retryable control-plane transition failure',
     );
 
     this.logger.warn(
@@ -991,9 +907,9 @@ class OperationWorkflowOwnerSegment1 {
     }
     return {
       ...operation,
-      stepsHistory: Array.isArray(operation.stepsHistory)
-        ? [...operation.stepsHistory]
-        : [],
+      stepsHistory: Array.isArray(operation.stepsHistory) ?
+        [...operation.stepsHistory] :
+        [],
     };
   }
 
@@ -1033,7 +949,7 @@ class OperationWorkflowOwnerSegment1 {
    * @private
    */
   buildCoordinatorCreatedDispatchIngress(nodeId) {
-    const normalizedNodeId = String(nodeId || "").trim();
+    const normalizedNodeId = String(nodeId || '').trim();
     if (normalizedNodeId.length === NUM.ZERO) {
       return null;
     }
@@ -1048,9 +964,9 @@ class OperationWorkflowOwnerSegment1 {
   buildCoordinatorCreatedDispatchRow(operation) {
     let stepsHistory = operation?.stepsHistory;
     if (typeof stepsHistory !== TYPEOF.STRING) {
-      stepsHistory = Array.isArray(stepsHistory)
-        ? JSON.stringify(stepsHistory)
-        : OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_JSON_ARRAY;
+      stepsHistory = Array.isArray(stepsHistory) ?
+        JSON.stringify(stepsHistory) :
+        OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_JSON_ARRAY;
     }
 
     return {
@@ -1078,7 +994,59 @@ class OperationWorkflowOwnerSegment1 {
    * @private
    */
   shouldRetryCoordinatorCreatedRemoteHandoff(operation) {
-    return this.isCriticalSystemPartition(operation?.partitionId || null);
+    const partitionId = operation?.partitionId || null;
+    return (
+      this.isCriticalSystemPartition(partitionId) ||
+      isPriorityControlPlanePartition({partitionId})
+    );
+  }
+
+  /**
+   * @param {Object|null} operation
+   * @param {number} [now=Date.now()]
+   * @return {Object}
+   * @private
+   */
+  buildCoordinatorCreatedRemoteHandoffTimeoutDecision(
+    operation,
+    now = Date.now(),
+  ) {
+    const workflowStep = operation?.workflowStep || WORKFLOW_STEP.PENDING;
+    const stepTimedOut =
+      this.isDispatchRetryableWorkflowStep(operation) &&
+      this.isOperationStepTimedOut(operation, now);
+    const operationStartedAtMs = Number.isFinite(operation?.createdAt) ?
+      operation.createdAt :
+      Number.isFinite(operation?.updatedAt) ?
+        operation.updatedAt :
+        null;
+    const usesOperationBudget =
+      this.shouldUseOperationBudgetTransitionRetryGrace(
+        {
+          partitionId: operation?.partitionId || null,
+          workflowStep,
+          updatedAt: operation?.updatedAt,
+          createdAt: operation?.createdAt,
+        },
+        workflowStep,
+      );
+    const operationBudgetDeadlineMs =
+      Number.isFinite(operationStartedAtMs) ?
+        operationStartedAtMs +
+          TIMEOUT_BUDGET_DEFAULT.REBALANCE_OPERATION_BUDGET_MS :
+        null;
+    const operationBudgetActive =
+      usesOperationBudget &&
+      Number.isFinite(operationBudgetDeadlineMs) &&
+      now < operationBudgetDeadlineMs;
+
+    return Object.freeze({
+      shouldStop: stepTimedOut && !operationBudgetActive,
+      stepTimedOut,
+      operationBudgetActive,
+      operationBudgetDeadlineMs,
+      workflowStep,
+    });
   }
 
   /**
@@ -1163,4 +1131,4 @@ class OperationWorkflowOwnerSegment1 {
   }
 }
 
-export { OperationWorkflowOwnerSegment1 };
+export {OperationWorkflowOwnerSegment1};

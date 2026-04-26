@@ -2,11 +2,9 @@ import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.j
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {
-  CONTROL_PLANE_READINESS_DIMENSION,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {
   OPERATION_TRANSITION_REASON,
-  REBALANCER_SKIP_REASON,
 } from '../../src/rebalancer/rebalancer-constants.js';
 import {
   QUERY_ERROR_MSG,
@@ -22,7 +20,6 @@ import {DurableWorkflowCoordinator} from
   '../../src/workflow/durable-workflow-coordinator.js';
 import {
   DistributedTransactionCoordinator,
-  TRANSACTION_STATUS,
 } from '../../src/query/distributed/distributed-transaction-coordinator.js';
 import {
   REBALANCE_COORDINATOR_ERROR_MSG,

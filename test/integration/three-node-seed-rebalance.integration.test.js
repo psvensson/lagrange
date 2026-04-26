@@ -196,232 +196,232 @@ test('Three-node seed rebalance', {timeout: TEST_TIMEOUT_MS}, async (t) => {
     'moves at least one partition replica off seed node',
     {timeout: TEST_TIMEOUT_MS},
     async (t) => {
-    const seedNodeId = '550e8400-e29b-41d4-a716-446655440401';
-    const node2Id = '550e8400-e29b-41d4-a716-446655440402';
-    const node3Id = '550e8400-e29b-41d4-a716-446655440403';
-    const seedWsPort = getUniquePort();
-    const node2WsPort = getUniquePort();
-    const node3WsPort = getUniquePort();
+      const seedNodeId = '550e8400-e29b-41d4-a716-446655440401';
+      const node2Id = '550e8400-e29b-41d4-a716-446655440402';
+      const node3Id = '550e8400-e29b-41d4-a716-446655440403';
+      const seedWsPort = getUniquePort();
+      const node2WsPort = getUniquePort();
+      const node3WsPort = getUniquePort();
 
-    const bootstrapService = new BootstrapService({
-      nodeId: seedNodeId,
-      nodeAddress: `ws://localhost:${seedWsPort}`,
-      wsPort: seedWsPort,
-      config: {
-        ...TEST_CONFIG.bootstrap,
-        leadershipWaitTimeoutMs: 2000,
-      },
-    });
-
-    let bootstrapResult = null;
-    let seedApi = null;
-    let node2JoinService = null;
-    let node3JoinService = null;
-
-    try {
-      bootstrapResult = await withTimeout(
-        () => bootstrapService.bootstrap(),
-        READY_TIMEOUT_MS,
-        'seed bootstrap',
-      );
-      t.equal(bootstrapResult.success, true, 'seed bootstrap should succeed');
-
-      const systemTableCache = NodeService.getInstance().getSystemTableCache();
-      t.ok(systemTableCache, 'system table cache should be available');
-
-      const queryEngine = new SQLQueryEngine({
-        systemCache: systemTableCache,
-        messageRouter: bootstrapResult.messageRouter,
+      const bootstrapService = new BootstrapService({
         nodeId: seedNodeId,
-      });
-
-      seedApi = new BootstrapAPI({
-        seedNodeId,
-        seedNodeAddress: `ws://localhost:${seedWsPort}`,
-        seedNodeWsAddress: `ws://localhost:${seedWsPort}`,
-        messageGroupServices: bootstrapResult.messageGroupServices,
-        partitionServices: bootstrapResult.partitionServices,
-        systemTableCache,
-        messageRouter: bootstrapResult.messageRouter,
-        epochManager: bootstrapResult.epochManager,
-        bootstrapService,
-      });
-      await withTimeout(
-        () => seedApi.initialize(0, {listen: false}),
-        READY_TIMEOUT_MS,
-        'seed API initialize',
-      );
-      seedApi.setSqlQueryEngine(queryEngine);
-      const httpPost = createInProcHttpPost(seedApi);
-
-      const initialRows = getPartitionReplicaRows(systemTableCache);
-      const baselinePartitionIds = new Set(
-        initialRows.map((row) => row.partition_id),
-      );
-      const baselineNonSeedRows = initialRows.filter(
-        (row) => row.node_id !== seedNodeId,
-      );
-
-      t.ok(
-        baselinePartitionIds.size > 0,
-        'seed bootstrap should create baseline partitions',
-      );
-      t.equal(
-        baselineNonSeedRows.length,
-        0,
-        'before joins, baseline partition replicas should be on seed only',
-      );
-
-      node2JoinService = new NodeJoiningService({
-        nodeId: node2Id,
-        nodeAddress: `ws://localhost:${node2WsPort}`,
-        seedNodeAddress: 'http://localhost:0',
-        seedNodeWsAddress: `ws://localhost:${seedWsPort}`,
-        wsPort: node2WsPort,
+        nodeAddress: `ws://localhost:${seedWsPort}`,
+        wsPort: seedWsPort,
         config: {
           ...TEST_CONFIG.bootstrap,
-          httpTimeoutMs: 5000,
-          leadershipWaitTimeoutMs: 12000,
+          leadershipWaitTimeoutMs: 2000,
         },
-        httpPost,
       });
 
-      node3JoinService = new NodeJoiningService({
-        nodeId: node3Id,
-        nodeAddress: `ws://localhost:${node3WsPort}`,
-        seedNodeAddress: 'http://localhost:0',
-        seedNodeWsAddress: `ws://localhost:${seedWsPort}`,
-        wsPort: node3WsPort,
-        config: {
-          ...TEST_CONFIG.bootstrap,
-          httpTimeoutMs: 5000,
-          leadershipWaitTimeoutMs: 12000,
-        },
-        httpPost,
-      });
+      let bootstrapResult = null;
+      let seedApi = null;
+      let node2JoinService = null;
+      let node3JoinService = null;
 
-      const node2Result = await withTimeout(
-        () => node2JoinService.join(),
-        READY_TIMEOUT_MS,
-        'node2 join',
-      );
-      t.equal(node2Result.success, true, 'second node should join');
+      try {
+        bootstrapResult = await withTimeout(
+          () => bootstrapService.bootstrap(),
+          READY_TIMEOUT_MS,
+          'seed bootstrap',
+        );
+        t.equal(bootstrapResult.success, true, 'seed bootstrap should succeed');
 
-      const node3Result = await withTimeout(
-        () => node3JoinService.join(),
-        READY_TIMEOUT_MS,
-        'node3 join',
-      );
-      t.equal(node3Result.success, true, 'third node should join');
+        const systemTableCache = NodeService.getInstance().getSystemTableCache();
+        t.ok(systemTableCache, 'system table cache should be available');
 
-      const nodesReady = await waitFor(() => {
-        const now = Date.now();
-        const readyNodes = systemTableCache.filter(
-          SYSTEM_TABLE_NAME.NODES,
-          (row) => isNodeRecordReady(row, {now, requireActiveStatus: true}),
-        ) || [];
-        const readyNodeIds = new Set(readyNodes.map((row) => row.node_id));
-        return readyNodeIds.has(seedNodeId) &&
+        const queryEngine = new SQLQueryEngine({
+          systemCache: systemTableCache,
+          messageRouter: bootstrapResult.messageRouter,
+          nodeId: seedNodeId,
+        });
+
+        seedApi = new BootstrapAPI({
+          seedNodeId,
+          seedNodeAddress: `ws://localhost:${seedWsPort}`,
+          seedNodeWsAddress: `ws://localhost:${seedWsPort}`,
+          messageGroupServices: bootstrapResult.messageGroupServices,
+          partitionServices: bootstrapResult.partitionServices,
+          systemTableCache,
+          messageRouter: bootstrapResult.messageRouter,
+          epochManager: bootstrapResult.epochManager,
+          bootstrapService,
+        });
+        await withTimeout(
+          () => seedApi.initialize(0, {listen: false}),
+          READY_TIMEOUT_MS,
+          'seed API initialize',
+        );
+        seedApi.setSqlQueryEngine(queryEngine);
+        const httpPost = createInProcHttpPost(seedApi);
+
+        const initialRows = getPartitionReplicaRows(systemTableCache);
+        const baselinePartitionIds = new Set(
+          initialRows.map((row) => row.partition_id),
+        );
+        const baselineNonSeedRows = initialRows.filter(
+          (row) => row.node_id !== seedNodeId,
+        );
+
+        t.ok(
+          baselinePartitionIds.size > 0,
+          'seed bootstrap should create baseline partitions',
+        );
+        t.equal(
+          baselineNonSeedRows.length,
+          0,
+          'before joins, baseline partition replicas should be on seed only',
+        );
+
+        node2JoinService = new NodeJoiningService({
+          nodeId: node2Id,
+          nodeAddress: `ws://localhost:${node2WsPort}`,
+          seedNodeAddress: 'http://localhost:0',
+          seedNodeWsAddress: `ws://localhost:${seedWsPort}`,
+          wsPort: node2WsPort,
+          config: {
+            ...TEST_CONFIG.bootstrap,
+            httpTimeoutMs: 5000,
+            leadershipWaitTimeoutMs: 12000,
+          },
+          httpPost,
+        });
+
+        node3JoinService = new NodeJoiningService({
+          nodeId: node3Id,
+          nodeAddress: `ws://localhost:${node3WsPort}`,
+          seedNodeAddress: 'http://localhost:0',
+          seedNodeWsAddress: `ws://localhost:${seedWsPort}`,
+          wsPort: node3WsPort,
+          config: {
+            ...TEST_CONFIG.bootstrap,
+            httpTimeoutMs: 5000,
+            leadershipWaitTimeoutMs: 12000,
+          },
+          httpPost,
+        });
+
+        const node2Result = await withTimeout(
+          () => node2JoinService.join(),
+          READY_TIMEOUT_MS,
+          'node2 join',
+        );
+        t.equal(node2Result.success, true, 'second node should join');
+
+        const node3Result = await withTimeout(
+          () => node3JoinService.join(),
+          READY_TIMEOUT_MS,
+          'node3 join',
+        );
+        t.equal(node3Result.success, true, 'third node should join');
+
+        const nodesReady = await waitFor(() => {
+          const now = Date.now();
+          const readyNodes = systemTableCache.filter(
+            SYSTEM_TABLE_NAME.NODES,
+            (row) => isNodeRecordReady(row, {now, requireActiveStatus: true}),
+          ) || [];
+          const readyNodeIds = new Set(readyNodes.map((row) => row.node_id));
+          return readyNodeIds.has(seedNodeId) &&
           readyNodeIds.has(node2Id) &&
           readyNodeIds.has(node3Id) &&
           readyNodeIds.size >= EXPECTED_NODE_COUNT;
-      }, READY_TIMEOUT_MS, POLL_INTERVAL_MS);
+        }, READY_TIMEOUT_MS, POLL_INTERVAL_MS);
 
-      t.equal(nodesReady, true, 'all three nodes should become ready');
+        t.equal(nodesReady, true, 'all three nodes should become ready');
 
-      let rebalancedPartitionIds = [];
-      const rebalanceObserved = await waitFor(() => {
-        const currentRows = getPartitionReplicaRows(systemTableCache);
-        rebalancedPartitionIds = findRebalancedBaselinePartitions(
-          currentRows,
-          baselinePartitionIds,
-          seedNodeId,
-        );
-        return rebalancedPartitionIds.length >= REQUIRED_REBALANCED_PARTITIONS;
-      }, REBALANCE_TIMEOUT_MS, POLL_INTERVAL_MS);
+        let rebalancedPartitionIds = [];
+        const rebalanceObserved = await waitFor(() => {
+          const currentRows = getPartitionReplicaRows(systemTableCache);
+          rebalancedPartitionIds = findRebalancedBaselinePartitions(
+            currentRows,
+            baselinePartitionIds,
+            seedNodeId,
+          );
+          return rebalancedPartitionIds.length >= REQUIRED_REBALANCED_PARTITIONS;
+        }, REBALANCE_TIMEOUT_MS, POLL_INTERVAL_MS);
 
-      if (!rebalanceObserved) {
-        const finalRows = getPartitionReplicaRows(systemTableCache).map((row) => ({
-          partition_id: row.partition_id,
-          node_id: row.node_id,
-          status: row.status,
-          raft_role: row.raft_role,
-        }));
-        t.comment(`Final partition placements: ${JSON.stringify(finalRows)}`);
-      }
+        if (!rebalanceObserved) {
+          const finalRows = getPartitionReplicaRows(systemTableCache).map((row) => ({
+            partition_id: row.partition_id,
+            node_id: row.node_id,
+            status: row.status,
+            raft_role: row.raft_role,
+          }));
+          t.comment(`Final partition placements: ${JSON.stringify(finalRows)}`);
+        }
 
-      let plannedMoves = [];
-      if (!rebalanceObserved) {
-        const baselineProbeIds = [...baselinePartitionIds].slice(0, 5);
-        for (const probePartitionId of baselineProbeIds) {
-          const probeRebalancer = new UnifiedRebalancer({
-            entityId: probePartitionId,
-            entityType: EntityType.PARTITION,
-            nodeId: seedNodeId,
-            systemTableCache,
-            cdcIntegrationService: bootstrapService.cdcIntegrationService,
-            tablePolicyService: bootstrapService.tablePolicyService,
-            messageRouter: bootstrapResult.messageRouter,
-            rebalanceCoordinator: createMockProbeRebalanceCoordinator(),
-            controlPlaneReadinessService:
+        let plannedMoves = [];
+        if (!rebalanceObserved) {
+          const baselineProbeIds = [...baselinePartitionIds].slice(0, 5);
+          for (const probePartitionId of baselineProbeIds) {
+            const probeRebalancer = new UnifiedRebalancer({
+              entityId: probePartitionId,
+              entityType: EntityType.PARTITION,
+              nodeId: seedNodeId,
+              systemTableCache,
+              cdcIntegrationService: bootstrapService.cdcIntegrationService,
+              tablePolicyService: bootstrapService.tablePolicyService,
+              messageRouter: bootstrapResult.messageRouter,
+              rebalanceCoordinator: createMockProbeRebalanceCoordinator(),
+              controlPlaneReadinessService:
               createAlwaysReadyControlPlaneReadinessService(),
-            storageAdmissionService: createMockStorageAdmissionService(),
-            storageAccountingService: createMockStorageAccountingService(),
-            storagePressureBehavior: createMockStoragePressureBehavior(),
-            sqlQueryEngine: createMockSqlQueryEngine(),
-          });
+              storageAdmissionService: createMockStorageAdmissionService(),
+              storageAccountingService: createMockStorageAccountingService(),
+              storagePressureBehavior: createMockStoragePressureBehavior(),
+              sqlQueryEngine: createMockSqlQueryEngine(),
+            });
 
-          try {
-            probeRebalancer.initialize();
-            probeRebalancer.setLeader(true);
-            const probeResult = await probeRebalancer.rebalance('probe_node_join');
-            plannedMoves = (probeResult?.moves || []).filter((move) => {
-              const operation = String(move?.operation || '').toLowerCase();
-              return (operation === 'add' || operation === 'replace') &&
+            try {
+              probeRebalancer.initialize();
+              probeRebalancer.setLeader(true);
+              const probeResult = await probeRebalancer.rebalance('probe_node_join');
+              plannedMoves = (probeResult?.moves || []).filter((move) => {
+                const operation = String(move?.operation || '').toLowerCase();
+                return (operation === 'add' || operation === 'replace') &&
                 typeof move?.nodeId === 'string' &&
                 move.nodeId !== seedNodeId;
-            });
-            if (plannedMoves.length >= REQUIRED_REBALANCED_PARTITIONS) {
-              break;
+              });
+              if (plannedMoves.length >= REQUIRED_REBALANCED_PARTITIONS) {
+                break;
+              }
+            } finally {
+              probeRebalancer.shutdown();
             }
-          } finally {
-            probeRebalancer.shutdown();
           }
         }
-      }
 
-      const observedOrPlanned =
+        const observedOrPlanned =
         rebalanceObserved ||
         rebalancedPartitionIds.length >= REQUIRED_REBALANCED_PARTITIONS ||
         plannedMoves.length >= REQUIRED_REBALANCED_PARTITIONS;
 
-      t.equal(
-        observedOrPlanned,
-        true,
-        'at least one baseline partition should gain a non-seed replica or emit a non-seed rebalance plan',
-      );
-      t.ok(
-        rebalancedPartitionIds.length >= REQUIRED_REBALANCED_PARTITIONS ||
+        t.equal(
+          observedOrPlanned,
+          true,
+          'at least one baseline partition should gain a non-seed replica or emit a non-seed rebalance plan',
+        );
+        t.ok(
+          rebalancedPartitionIds.length >= REQUIRED_REBALANCED_PARTITIONS ||
           plannedMoves.length >= REQUIRED_REBALANCED_PARTITIONS,
-        'should observe or plan baseline partitions rebalanced off seed',
-      );
-    } finally {
-      await runWithCleanupTimeout(
-        () => gracefulJoiningShutdown(node3JoinService),
-        'node3 joining shutdown',
-        t,
-      );
-      await runWithCleanupTimeout(
-        () => gracefulJoiningShutdown(node2JoinService),
-        'node2 joining shutdown',
-        t,
-      );
-      await runWithCleanupTimeout(
-        () => gracefulShutdown(bootstrapService, bootstrapResult, seedApi),
-        'cluster graceful shutdown',
-        t,
-      );
-    }
+          'should observe or plan baseline partitions rebalanced off seed',
+        );
+      } finally {
+        await runWithCleanupTimeout(
+          () => gracefulJoiningShutdown(node3JoinService),
+          'node3 joining shutdown',
+          t,
+        );
+        await runWithCleanupTimeout(
+          () => gracefulJoiningShutdown(node2JoinService),
+          'node2 joining shutdown',
+          t,
+        );
+        await runWithCleanupTimeout(
+          () => gracefulShutdown(bootstrapService, bootstrapResult, seedApi),
+          'cluster graceful shutdown',
+          t,
+        );
+      }
     },
   );
 });

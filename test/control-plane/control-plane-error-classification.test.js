@@ -7,6 +7,10 @@ import {
   getControlPlaneRetryAfterMs,
   isRetryableControlPlaneError,
 } from '../../src/control-plane/control-plane-error-classification.js';
+import {ROUTER_ERROR_MSG} from '../../src/constants/transport.js';
+
+const PENDING_RESPONSE_TIMEOUT_RETRYABLE_TEST_NAME =
+  'isRetryableControlPlaneError treats pending response timeouts as retryable';
 
 test('isRetryableControlPlaneError detects typed pressure deferrals', async (t) => {
   const result = {
@@ -42,6 +46,12 @@ test('isRetryableControlPlaneError treats stale no-handler ingress targets as re
 test('isRetryableControlPlaneError detects explicit deferRetry marker', async (t) => {
   const error = new Error('validation deferred');
   error.deferRetry = true;
+
+  t.equal(isRetryableControlPlaneError(error), true);
+});
+
+test(PENDING_RESPONSE_TIMEOUT_RETRYABLE_TEST_NAME, async (t) => {
+  const error = new Error(ROUTER_ERROR_MSG.PENDING_RESPONSE_TIMEOUT);
 
   t.equal(isRetryableControlPlaneError(error), true);
 });

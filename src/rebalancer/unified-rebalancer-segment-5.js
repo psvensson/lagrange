@@ -1,154 +1,141 @@
-import { UNIFIED_REBALANCER_SHARED } from "./unified-rebalancer-shared.js";
-import { UnifiedRebalancerSegment4 } from "./unified-rebalancer-segment-4.js";
+import {UNIFIED_REBALANCER_SHARED} from './unified-rebalancer-shared.js';
+import {UnifiedRebalancerSegment4} from './unified-rebalancer-segment-4.js';
 
 const {
-  CLUSTER_READINESS_TIMEOUT_MS,
-  COLUMN,
-  CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
-  CONTROL_PLANE_PUBLICATION_STATUS,
-  CONTROL_PLANE_READINESS_DIMENSION,
   CONTROL_PLANE_WORKLOAD_CLASS,
-  COORDINATOR_OWNED_OPERATION_TYPES_SQL_CLAUSE,
-  CRITICAL_SYSTEM_ENDPOINT_VISIBILITY_AUTHORITATIVE_READ,
-  CRITICAL_SYSTEM_TOPOLOGY_SETTLING_BLOCKER_REASON,
-  ConfigurationManager,
-  ControlPlaneReadinessService,
-  DEFAULT_MESSAGE_GROUP_POLICY,
-  DEFAULT_PRIORITY_RECOVERY_ACTIVITY_STALE_GRACE_MS,
-  DEFAULT_TABLE_POLICY,
-  ENDPOINT_STATUS,
-  ENDPOINT_SYNC_HEALTH,
   EntityType,
-  EventEmitter,
-  LIFECYCLE_PHASE,
-  LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY,
-  LoggingService,
-  META_SERVICE_ID,
-  MovePlanner,
-  MoveType,
   NUM,
   NodeStatus,
-  OperationType,
-  OwnerKeyReconcileQueue,
   PRESSURE_WORK_CLASS,
-  PRIORITY_BUDGET_BYPASS_COORDINATOR_OPTIONS,
-  PRIORITY_CONTROL_PLANE_RECOVERY_FALLBACK_REPLICA_COUNT,
   PressureGovernor,
-  RAFT_ROLE,
-  READINESS_SKIP_DETAIL,
-  REBALANCER_BUDGET_READ_OPTIONS,
-  REBALANCER_CONCURRENT_BUDGET_READ_MODE,
-  REBALANCER_CONFIG_KEY,
-  REBALANCER_DEFAULT,
-  REBALANCER_DEFAULT_POLICY,
-  REBALANCER_ENTITY_TYPE,
-  REBALANCER_ERROR_MSG,
   REBALANCER_EVENT,
   REBALANCER_LOG_MSG,
-  REBALANCER_MOVE_TYPE,
-  REBALANCER_NODE_STATUS,
-  REBALANCER_QUEUE_NAME,
   REBALANCER_RUNTIME_REASON,
-  REBALANCER_SKIP_REASON,
-  REBALANCER_SUBSYSTEM,
-  REBALANCER_TRIGGER,
   RECONCILE_REASON,
-  REPLICA_OPERATION_SEMANTIC_PHASE,
-  REPLICA_OPERATION_VISIBILITY_READ_MODE,
   ReplicaStatus,
-  SERVICE_STATUS,
-  SQL_BUDGET,
   STABILIZATION_RESET_TRIGGER,
-  STATE,
-  SYSTEM_TABLE_NAME,
-  StartupRecoveryCoordinator,
-  StoragePressureBehavior,
-  TABLES,
-  TERMINAL_STATUSES,
-  TERMINAL_STATUS_SQL_CLAUSE,
-  TOPOLOGY_IN_FLIGHT_REPLICA_OPERATION_SOURCE,
-  TRANSPORT_TYPE,
   TYPEOF,
   TriggerType,
   UNIFIED_REBALANCER_LITERAL,
-  WORKFLOW_STEP,
-  adjustToOddCount,
-  assertCritical,
   buildControlPlaneWorkloadProfile,
-  buildPriorityRecoveryBlockedPartitions,
-  buildPriorityRecoveryOperationAssessment,
-  buildPriorityRecoveryOperationContextFromRecord,
-  buildPriorityRecoveryPartitionAssessment,
-  buildPublicationRecoveryGateSnapshot,
-  createControlPlaneRuntimeBundle,
   getControlPlaneRetryAfterMs,
-  getLocalControlPlaneMutationReadinessBlocker,
-  getNextOddCount,
-  getPartitionRowFromCache,
-  getPreviousOddCount,
-  hasPriorityRecoverySpreadGap,
-  isBackgroundWorkLifecycleReadySnapshot,
-  isCoordinatorOwnedOperationType,
-  isCriticalTransportControlPlanePartitionTable,
-  isNodeReadyLeaseExplicitlyCleared,
-  isNodeReadyWithConnection,
-  isNodeReadyWithTransport,
-  isNodeRecordReady,
-  isOddReplicaCount,
-  isPriorityControlPlanePartition,
-  isReplaceRemoveDispatchPhase,
-  isReplicaOperationInFlight,
-  isReplicaOperationStale,
   isRetryableControlPlaneError,
-  isSystemTablePartition,
-  isTerminalReplicaOperationSemanticPhase,
-  isTerminalStep,
-  isValidWorkflowStep,
-  normalizeNodeEndpointRow,
-  normalizeNodeRow,
-  normalizeReplicaOperationRecord,
-  normalizeServiceEndpointRow,
-  normalizeServiceRow,
-  resolvePriorityRecoveryActiveNodeCohort,
-  resolveReplicaOperationSemanticPhase,
-  resolveTrackedPriorityRecoveryAdmissionPlan,
-  shouldPriorityRecoveryOperationBlockPlanning,
-  wasNodeRecordReadyWhenWritten,
 } = UNIFIED_REBALANCER_SHARED;
 
 const REBALANCE_PLANNING_GATE = Object.freeze({
-  CLUSTER_READINESS: "cluster_readiness",
-  START_DELAY: "start_delay",
-  STABILIZATION: "stabilization",
-  TOPOLOGY_SETTLING: "topology_settling",
-  TRAFFIC_READINESS: "traffic_readiness",
-  LOCAL_SERVE_READINESS: "local_serve_readiness",
-  LOCAL_MUTATION_READINESS: "local_mutation_readiness",
-  CONTROL_PLANE_PRIORITY_SPREAD: "control_plane_priority_spread",
-  TRANSPORT_BACKPRESSURE: "transport_backpressure",
+  CLUSTER_READINESS: 'cluster_readiness',
+  START_DELAY: 'start_delay',
+  STABILIZATION: 'stabilization',
+  TOPOLOGY_SETTLING: 'topology_settling',
+  TRAFFIC_READINESS: 'traffic_readiness',
+  LOCAL_SERVE_READINESS: 'local_serve_readiness',
+  LOCAL_MUTATION_READINESS: 'local_mutation_readiness',
+  CONTROL_PLANE_PRIORITY_SPREAD: 'control_plane_priority_spread',
+  TRANSPORT_BACKPRESSURE: 'transport_backpressure',
 });
 
 const REBALANCE_PLANNING_GATE_DECISION = Object.freeze({
-  DEFER_PLANNING: "defer_planning",
+  DEFER_PLANNING: 'defer_planning',
 });
 
 const REBALANCE_PLANNING_GATE_ACTION = Object.freeze({
-  SCHEDULE_RETRY: "schedule_retry",
+  SCHEDULE_RETRY: 'schedule_retry',
 });
 
 const REBALANCE_PLANNING_GATE_LOG_LEVEL = Object.freeze({
-  DEBUG: "debug",
-  INFO: "info",
+  DEBUG: 'debug',
+  INFO: 'info',
 });
 
 const REBALANCE_PLANNING_GATE_SCHEDULE_MODE = Object.freeze({
-  NEXT: "next",
-  PRIORITY_AWARE: "priority_aware",
+  NEXT: 'next',
+  PRIORITY_AWARE: 'priority_aware',
 });
 
 const REBALANCE_PLANNING_GATE_DELAY_MULTIPLIER = Object.freeze({
   WAIT: 1.25,
   BACKPRESSURE: 1.5,
+});
+
+const REBALANCER_SCHEDULE_PRESSURE_RESOURCE_KEYS = Object.freeze([
+  UNIFIED_REBALANCER_LITERAL.REBALANCER_COLON_SCHEDULE,
+]);
+
+const PRIORITY_RECOVERY_PLANNING_GATE_FIELD = Object.freeze({
+  PARTITION_ID: 'partitionId',
+  PARTITION_ID_SNAKE: 'partition_id',
+  PRIORITY_RECOVERY_DECISION_SNAPSHOTS:
+    'priorityRecoveryDecisionSnapshots',
+  SNAPSHOTS: 'snapshots',
+});
+
+const PRIORITY_RECOVERY_PLANNING_GATE_SCOPE = Object.freeze({
+  CURRENT_PARTITION: 'current_partition',
+  SURROGATE_PARTITION: 'surrogate_partition',
+});
+
+const TRANSPORT_BACKPRESSURE_PLANNING_STATE = Object.freeze({
+  CLEAR: 'clear',
+  PRIORITY_RECOVERY_OPERATION_CREATION_REQUIRED:
+    'priority_recovery_operation_creation_required',
+  PRIORITY_RECOVERY_CONTAINED: 'priority_recovery_contained',
+  PRIORITY_RECOVERY_CRITICAL_RESERVE_EXHAUSTED:
+    'priority_recovery_critical_reserve_exhausted',
+  GENERAL_BACKPRESSURE: 'general_backpressure',
+});
+
+const TRANSPORT_BACKPRESSURE_PLANNING_ACTION = Object.freeze({
+  ALLOW_PLANNING: 'allow_planning',
+  DEFER_PLANNING: 'defer_planning',
+});
+
+const TRANSPORT_BACKPRESSURE_PLANNING_STATE_TABLE = Object.freeze([
+  Object.freeze({
+    state: TRANSPORT_BACKPRESSURE_PLANNING_STATE.CLEAR,
+    matches: (evidence) => evidence.backpressured !== true,
+  }),
+  Object.freeze({
+    state:
+      TRANSPORT_BACKPRESSURE_PLANNING_STATE
+        .PRIORITY_RECOVERY_OPERATION_CREATION_REQUIRED,
+    matches: (evidence) =>
+      evidence.priorityRecoveryOperationCreationRequired === true,
+  }),
+  Object.freeze({
+    state: TRANSPORT_BACKPRESSURE_PLANNING_STATE.PRIORITY_RECOVERY_CONTAINED,
+    matches: (evidence) =>
+      evidence.currentPriorityRecoveryPartitionBlocked === true &&
+      evidence.criticalReserveExhausted !== true,
+  }),
+  Object.freeze({
+    state:
+      TRANSPORT_BACKPRESSURE_PLANNING_STATE
+        .PRIORITY_RECOVERY_CRITICAL_RESERVE_EXHAUSTED,
+    matches: (evidence) =>
+      evidence.currentPriorityRecoveryPartitionBlocked === true &&
+      evidence.criticalReserveExhausted === true,
+  }),
+  Object.freeze({
+    state: TRANSPORT_BACKPRESSURE_PLANNING_STATE.GENERAL_BACKPRESSURE,
+    matches: () => true,
+  }),
+]);
+
+const TRANSPORT_BACKPRESSURE_PLANNING_ACTION_BY_STATE = Object.freeze({
+  [TRANSPORT_BACKPRESSURE_PLANNING_STATE.CLEAR]:
+    TRANSPORT_BACKPRESSURE_PLANNING_ACTION.ALLOW_PLANNING,
+  [
+    TRANSPORT_BACKPRESSURE_PLANNING_STATE
+      .PRIORITY_RECOVERY_OPERATION_CREATION_REQUIRED
+  ]: TRANSPORT_BACKPRESSURE_PLANNING_ACTION.ALLOW_PLANNING,
+  [TRANSPORT_BACKPRESSURE_PLANNING_STATE.PRIORITY_RECOVERY_CONTAINED]:
+    TRANSPORT_BACKPRESSURE_PLANNING_ACTION.ALLOW_PLANNING,
+  [
+    TRANSPORT_BACKPRESSURE_PLANNING_STATE
+      .PRIORITY_RECOVERY_CRITICAL_RESERVE_EXHAUSTED
+  ]: TRANSPORT_BACKPRESSURE_PLANNING_ACTION.DEFER_PLANNING,
+  [TRANSPORT_BACKPRESSURE_PLANNING_STATE.GENERAL_BACKPRESSURE]:
+    TRANSPORT_BACKPRESSURE_PLANNING_ACTION.DEFER_PLANNING,
 });
 
 class UnifiedRebalancerSegment5 extends UnifiedRebalancerSegment4 {
@@ -266,9 +253,9 @@ class UnifiedRebalancerSegment5 extends UnifiedRebalancerSegment4 {
       return Math.max(
         this.getPriorityRetryDelayMs(),
         Number.isFinite(retryAfterMs) &&
-          retryAfterMs > UNIFIED_REBALANCER_LITERAL.ZERO
-          ? Math.floor(retryAfterMs)
-          : UNIFIED_REBALANCER_LITERAL.ZERO,
+          retryAfterMs > UNIFIED_REBALANCER_LITERAL.ZERO ?
+          Math.floor(retryAfterMs) :
+          UNIFIED_REBALANCER_LITERAL.ZERO,
       );
     }
     if (
@@ -315,9 +302,9 @@ class UnifiedRebalancerSegment5 extends UnifiedRebalancerSegment4 {
   } = {}) {
     const normalizedScheduleDelayMs =
       Number.isFinite(scheduleDelayMs) &&
-      scheduleDelayMs > UNIFIED_REBALANCER_LITERAL.ZERO
-        ? Math.floor(scheduleDelayMs)
-        : null;
+      scheduleDelayMs > UNIFIED_REBALANCER_LITERAL.ZERO ?
+        Math.floor(scheduleDelayMs) :
+        null;
     return Object.freeze({
       decision: REBALANCE_PLANNING_GATE_DECISION.DEFER_PLANNING,
       nextAction: REBALANCE_PLANNING_GATE_ACTION.SCHEDULE_RETRY,
@@ -325,7 +312,7 @@ class UnifiedRebalancerSegment5 extends UnifiedRebalancerSegment4 {
       blocker,
       logLevel,
       logMessage,
-      logContext: Object.freeze({ ...logContext }),
+      logContext: Object.freeze({...logContext}),
       scheduleMode,
       scheduleDelayMs: normalizedScheduleDelayMs,
     });
@@ -336,9 +323,9 @@ class UnifiedRebalancerSegment5 extends UnifiedRebalancerSegment4 {
       return;
     }
     const logMethod =
-      decision.logLevel === REBALANCE_PLANNING_GATE_LOG_LEVEL.DEBUG
-        ? this.logger.debug
-        : this.logger.info;
+      decision.logLevel === REBALANCE_PLANNING_GATE_LOG_LEVEL.DEBUG ?
+        this.logger.debug :
+        this.logger.info;
     logMethod.call(this.logger, decision.logMessage, {
       entityId: this.entityId,
       ...decision.logContext,
@@ -475,37 +462,37 @@ class UnifiedRebalancerSegment5 extends UnifiedRebalancerSegment4 {
         blockerReason: topologySettlingBlocker.reason || null,
         connectedNodeId:
           typeof topologySettlingBlocker.connectedNodeId === TYPEOF.STRING &&
-          topologySettlingBlocker.connectedNodeId.length > NUM.ZERO
-            ? topologySettlingBlocker.connectedNodeId
-            : null,
-        unreadyNodeIds: Array.isArray(topologySettlingBlocker.unreadyNodeIds)
-          ? [...topologySettlingBlocker.unreadyNodeIds]
-          : [],
+          topologySettlingBlocker.connectedNodeId.length > NUM.ZERO ?
+            topologySettlingBlocker.connectedNodeId :
+            null,
+        unreadyNodeIds: Array.isArray(topologySettlingBlocker.unreadyNodeIds) ?
+          [...topologySettlingBlocker.unreadyNodeIds] :
+          [],
         missingNodeEndpointNodeIds: Array.isArray(
           topologySettlingBlocker.missingNodeEndpointNodeIds,
-        )
-          ? [...topologySettlingBlocker.missingNodeEndpointNodeIds]
-          : [],
+        ) ?
+          [...topologySettlingBlocker.missingNodeEndpointNodeIds] :
+          [],
         missingPostgresWireNodeIds: Array.isArray(
           topologySettlingBlocker.missingPostgresWireNodeIds,
-        )
-          ? [...topologySettlingBlocker.missingPostgresWireNodeIds]
-          : [],
+        ) ?
+          [...topologySettlingBlocker.missingPostgresWireNodeIds] :
+          [],
         endpointReadyNodeCount: Number.isFinite(
           topologySettlingBlocker.endpointReadyNodeCount,
-        )
-          ? topologySettlingBlocker.endpointReadyNodeCount
-          : null,
+        ) ?
+          topologySettlingBlocker.endpointReadyNodeCount :
+          null,
         requiredReadyNodeCount: Number.isFinite(
           topologySettlingBlocker.requiredReadyNodeCount,
-        )
-          ? topologySettlingBlocker.requiredReadyNodeCount
-          : null,
+        ) ?
+          topologySettlingBlocker.requiredReadyNodeCount :
+          null,
         inFlightReplicaOperations: Number.isFinite(
           topologySettlingBlocker.inFlightReplicaOperations,
-        )
-          ? topologySettlingBlocker.inFlightReplicaOperations
-          : null,
+        ) ?
+          topologySettlingBlocker.inFlightReplicaOperations :
+          null,
         inFlightReplicaOperationsSource:
           topologySettlingBlocker.inFlightReplicaOperationsSource || null,
       },
@@ -534,15 +521,15 @@ class UnifiedRebalancerSegment5 extends UnifiedRebalancerSegment4 {
         delayMs,
         readinessPhase: trafficReadinessBlocker.phase || null,
         readinessReady: trafficReadinessBlocker.ready === true,
-        reasonCodes: Array.isArray(trafficReadinessBlocker.reasons)
-          ? [...trafficReadinessBlocker.reasons]
-          : [],
-        stableElapsedMs: Number.isFinite(trafficReadinessBlocker.stableElapsedMs)
-          ? trafficReadinessBlocker.stableElapsedMs
-          : null,
-        stableWindowMs: Number.isFinite(trafficReadinessBlocker.stableWindowMs)
-          ? trafficReadinessBlocker.stableWindowMs
-          : null,
+        reasonCodes: Array.isArray(trafficReadinessBlocker.reasons) ?
+          [...trafficReadinessBlocker.reasons] :
+          [],
+        stableElapsedMs: Number.isFinite(trafficReadinessBlocker.stableElapsedMs) ?
+          trafficReadinessBlocker.stableElapsedMs :
+          null,
+        stableWindowMs: Number.isFinite(trafficReadinessBlocker.stableWindowMs) ?
+          trafficReadinessBlocker.stableWindowMs :
+          null,
       },
       scheduleMode: REBALANCE_PLANNING_GATE_SCHEDULE_MODE.PRIORITY_AWARE,
       scheduleDelayMs,
@@ -567,15 +554,15 @@ class UnifiedRebalancerSegment5 extends UnifiedRebalancerSegment4 {
         entityType: this.entityType,
         nodeId: this.nodeId,
         delayMs,
-        reasonCodes: Array.isArray(localServeReadinessBlocker.reasons)
-          ? localServeReadinessBlocker.reasons
-              .map((reason) =>
-                String(
-                  reason?.code || UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
-                ),
-              )
-              .filter(Boolean)
-          : [],
+        reasonCodes: Array.isArray(localServeReadinessBlocker.reasons) ?
+          localServeReadinessBlocker.reasons
+            .map((reason) =>
+              String(
+                reason?.code || UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
+              ),
+            )
+            .filter(Boolean) :
+          [],
       },
       scheduleMode: REBALANCE_PLANNING_GATE_SCHEDULE_MODE.PRIORITY_AWARE,
       scheduleDelayMs,
@@ -602,12 +589,12 @@ class UnifiedRebalancerSegment5 extends UnifiedRebalancerSegment4 {
         delayMs,
         failedDimensions: Array.isArray(
           localMutationReadinessBlocker.failedDimensions,
-        )
-          ? [...localMutationReadinessBlocker.failedDimensions]
-          : [],
-        reasonCodes: Array.isArray(localMutationReadinessBlocker.reasonCodes)
-          ? [...localMutationReadinessBlocker.reasonCodes]
-          : [],
+        ) ?
+          [...localMutationReadinessBlocker.failedDimensions] :
+          [],
+        reasonCodes: Array.isArray(localMutationReadinessBlocker.reasonCodes) ?
+          [...localMutationReadinessBlocker.reasonCodes] :
+          [],
       },
       scheduleMode: REBALANCE_PLANNING_GATE_SCHEDULE_MODE.PRIORITY_AWARE,
       scheduleDelayMs,
@@ -627,7 +614,14 @@ class UnifiedRebalancerSegment5 extends UnifiedRebalancerSegment4 {
       blockedPartitions.some(
         (partition) => partition?.partitionId === this.entityId,
       );
-    if (currentPriorityPartitionStillBlocked) {
+    const operationCreationGate =
+      this.buildPriorityRecoveryOperationCreationPlanningGateSnapshot(
+        this.entityId,
+      );
+    if (
+      currentPriorityPartitionStillBlocked ||
+      operationCreationGate?.operationCreationRequired === true
+    ) {
       return null;
     }
     const largestSpreadGap = blockedPartitions.reduce(
@@ -661,21 +655,199 @@ class UnifiedRebalancerSegment5 extends UnifiedRebalancerSegment4 {
   buildTransportBackpressurePlanningGateSnapshot() {
     const transportPressure = this.getTransportPressureSummary();
     const isPriorityPartition = this.isControlPlanePriorityPartition();
-    const priorityRecoveryAdmissionPlan = isPriorityPartition
-      ? this.getPriorityRecoveryAdmissionPlan()
-      : null;
+    const priorityRecoveryAdmissionPlan = isPriorityPartition ?
+      this.getPriorityRecoveryAdmissionPlan() :
+      null;
     const currentPriorityRecoveryPartitionBlocked =
       typeof priorityRecoveryAdmissionPlan?.hasBlockedPartition ===
         TYPEOF.FUNCTION &&
       priorityRecoveryAdmissionPlan.hasBlockedPartition(this.entityId) === true;
+    const operationCreationGate = isPriorityPartition ?
+      this.buildPriorityRecoveryOperationCreationPlanningGateSnapshot(
+        this.entityId,
+      ) :
+      null;
+    const priorityRecoveryOperationCreationRequired =
+      operationCreationGate?.operationCreationRequired === true;
+    const evidence = this.buildTransportBackpressurePlanningEvidence({
+      transportPressure,
+      currentPriorityRecoveryPartitionBlocked,
+      priorityRecoveryOperationCreationRequired,
+    });
+    const pressureState = this.resolveTransportBackpressurePlanningState(
+      evidence,
+    );
+    const planningAction =
+      TRANSPORT_BACKPRESSURE_PLANNING_ACTION_BY_STATE[pressureState] ||
+      TRANSPORT_BACKPRESSURE_PLANNING_ACTION.DEFER_PLANNING;
     return Object.freeze({
       transportPressure,
       isPriorityPartition,
       currentPriorityRecoveryPartitionBlocked,
+      priorityRecoveryOperationCreationRequired,
+      priorityRecoveryOperationCreationPartitionId:
+        operationCreationGate?.operationCreationPartitionId || null,
+      priorityRecoveryOperationCreationScope:
+        operationCreationGate?.operationCreationScope || null,
+      evidence,
+      pressureState,
+      planningAction,
       shouldDefer:
-        transportPressure?.backpressured === true &&
-        currentPriorityRecoveryPartitionBlocked !== true,
+        planningAction ===
+        TRANSPORT_BACKPRESSURE_PLANNING_ACTION.DEFER_PLANNING,
     });
+  }
+
+  /**
+   * Normalize local transport pressure evidence before the planning decision.
+   * @param {Object} options
+   * @param {Object|null} options.transportPressure
+   * @param {boolean} options.currentPriorityRecoveryPartitionBlocked
+   * @param {boolean} options.priorityRecoveryOperationCreationRequired
+   * @return {Object}
+   * @private
+   */
+  buildTransportBackpressurePlanningEvidence({
+    transportPressure,
+    currentPriorityRecoveryPartitionBlocked,
+    priorityRecoveryOperationCreationRequired,
+  }) {
+    return Object.freeze({
+      backpressured: transportPressure?.backpressured === true,
+      criticalReserveExhausted:
+        transportPressure?.criticalReserveExhausted === true,
+      currentPriorityRecoveryPartitionBlocked:
+        currentPriorityRecoveryPartitionBlocked === true,
+      priorityRecoveryOperationCreationRequired:
+        priorityRecoveryOperationCreationRequired === true,
+    });
+  }
+
+  /**
+   * Return true when cached publication-planning evidence says the blocked
+   * priority partition has reached the canonical no-operation follow-up lane.
+   *
+   * @param {string} partitionId
+   * @return {boolean}
+   * @private
+   */
+  isPriorityRecoveryOperationCreationRequiredForPlanningGate(partitionId) {
+    const normalizedPartitionId = String(
+      partitionId || UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
+    ).trim();
+    if (normalizedPartitionId.length === NUM.ZERO) {
+      return false;
+    }
+    const planningSnapshot = this.getPriorityRecoveryPlanningSnapshotSync(
+      {partitionId: normalizedPartitionId},
+    );
+    if (!planningSnapshot || typeof planningSnapshot !== TYPEOF.OBJECT) {
+      return false;
+    }
+    const snapshots = Array.isArray(
+      planningSnapshot[
+        PRIORITY_RECOVERY_PLANNING_GATE_FIELD
+          .PRIORITY_RECOVERY_DECISION_SNAPSHOTS
+      ]?.[PRIORITY_RECOVERY_PLANNING_GATE_FIELD.SNAPSHOTS],
+    ) ?
+      planningSnapshot[
+        PRIORITY_RECOVERY_PLANNING_GATE_FIELD
+          .PRIORITY_RECOVERY_DECISION_SNAPSHOTS
+      ][PRIORITY_RECOVERY_PLANNING_GATE_FIELD.SNAPSHOTS] :
+      [];
+    const decisionSnapshot =
+      snapshots.find((snapshot) => {
+        const snapshotPartitionId = String(
+          snapshot?.[PRIORITY_RECOVERY_PLANNING_GATE_FIELD.PARTITION_ID] ||
+            snapshot?.[
+              PRIORITY_RECOVERY_PLANNING_GATE_FIELD.PARTITION_ID_SNAKE
+            ] ||
+            UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
+        ).trim();
+        return snapshotPartitionId === normalizedPartitionId;
+      }) ||
+      this.buildPriorityRecoveryFollowUpDecisionSnapshotFromPlanning(
+        planningSnapshot,
+        {partitionId: normalizedPartitionId},
+      );
+    return this.isPriorityRecoveryFollowUpOperationRequired(decisionSnapshot);
+  }
+
+  /**
+   * Return one synchronous planning-gate snapshot for priority recovery work
+   * that must create an operation before priority spread can close.
+   *
+   * @param {string} partitionId
+   * @return {Object|null}
+   * @private
+   */
+  buildPriorityRecoveryOperationCreationPlanningGateSnapshot(partitionId) {
+    const normalizedPartitionId = String(
+      partitionId || UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
+    ).trim();
+    if (
+      normalizedPartitionId.length === NUM.ZERO ||
+      !this.isControlPlanePriorityPartition()
+    ) {
+      return null;
+    }
+    const planningSnapshot = this.getPriorityRecoveryPlanningSnapshotSync(
+      {partitionId: normalizedPartitionId},
+    );
+    if (!planningSnapshot || typeof planningSnapshot !== TYPEOF.OBJECT) {
+      return null;
+    }
+
+    const currentOperationCreationRequired =
+      this.isPriorityRecoveryOperationCreationRequiredForPlanningGate(
+        normalizedPartitionId,
+      );
+    if (currentOperationCreationRequired) {
+      return Object.freeze({
+        operationCreationRequired: true,
+        operationCreationPartitionId: normalizedPartitionId,
+        operationCreationScope:
+          PRIORITY_RECOVERY_PLANNING_GATE_SCOPE.CURRENT_PARTITION,
+      });
+    }
+
+    const surrogateDecision =
+      this.buildPriorityRecoverySurrogateFollowUpDecision(planningSnapshot);
+    if (
+      !this.isPriorityRecoveryFollowUpOperationRequired(
+        surrogateDecision?.decisionSnapshot || null,
+      )
+    ) {
+      return Object.freeze({
+        operationCreationRequired: false,
+        operationCreationPartitionId: null,
+        operationCreationScope: null,
+      });
+    }
+
+    return Object.freeze({
+      operationCreationRequired: true,
+      operationCreationPartitionId:
+        this.resolvePriorityRecoveryFollowUpPartitionId(surrogateDecision),
+      operationCreationScope:
+        PRIORITY_RECOVERY_PLANNING_GATE_SCOPE.SURROGATE_PARTITION,
+    });
+  }
+
+  /**
+   * Resolve transport pressure into one state before deciding whether a
+   * priority recovery partition may continue planning.
+   * @param {Object} evidence
+   * @return {string}
+   * @private
+   */
+  resolveTransportBackpressurePlanningState(evidence) {
+    const tableEntry = TRANSPORT_BACKPRESSURE_PLANNING_STATE_TABLE.find(
+      (entry) => entry.matches(evidence),
+    );
+    return tableEntry ?
+      tableEntry.state :
+      TRANSPORT_BACKPRESSURE_PLANNING_STATE.GENERAL_BACKPRESSURE;
   }
 
   resolveTransportBackpressurePlanningGateDecision() {
@@ -685,14 +857,14 @@ class UnifiedRebalancerSegment5 extends UnifiedRebalancerSegment4 {
     }
     const transportPressure = gateSnapshot.transportPressure;
     const isPriorityPartition = gateSnapshot.isPriorityPartition;
-    const scheduleDelayMs = isPriorityPartition
-      ? this.currentInterval
-      : this.increaseCurrentInterval(
-          REBALANCE_PLANNING_GATE_DELAY_MULTIPLIER.BACKPRESSURE,
-        );
-    const delayMs = isPriorityPartition
-      ? this.getPriorityRetryDelayMs()
-      : scheduleDelayMs;
+    const scheduleDelayMs = isPriorityPartition ?
+      this.currentInterval :
+      this.increaseCurrentInterval(
+        REBALANCE_PLANNING_GATE_DELAY_MULTIPLIER.BACKPRESSURE,
+      );
+    const delayMs = isPriorityPartition ?
+      this.getPriorityRetryDelayMs() :
+      scheduleDelayMs;
     return this.buildRebalancePlanningGateDecision({
       gate: REBALANCE_PLANNING_GATE.TRANSPORT_BACKPRESSURE,
       blocker: transportPressure,
@@ -702,6 +874,17 @@ class UnifiedRebalancerSegment5 extends UnifiedRebalancerSegment4 {
         saturatedNodeCount: transportPressure.saturatedNodeCount,
         totalPending: transportPressure.totalPending,
         maxPendingUtilization: transportPressure.maxPendingUtilization,
+        criticalReserveExhausted:
+          transportPressure.criticalReserveExhausted === true,
+        pressureState: gateSnapshot.pressureState,
+        currentPriorityRecoveryPartitionBlocked:
+          gateSnapshot.currentPriorityRecoveryPartitionBlocked,
+        priorityRecoveryOperationCreationRequired:
+          gateSnapshot.priorityRecoveryOperationCreationRequired,
+        priorityRecoveryOperationCreationPartitionId:
+          gateSnapshot.priorityRecoveryOperationCreationPartitionId,
+        priorityRecoveryOperationCreationScope:
+          gateSnapshot.priorityRecoveryOperationCreationScope,
         delayMs,
       },
       scheduleMode: REBALANCE_PLANNING_GATE_SCHEDULE_MODE.PRIORITY_AWARE,
@@ -726,9 +909,9 @@ class UnifiedRebalancerSegment5 extends UnifiedRebalancerSegment4 {
   async resolveCheckRebalanceGateDecision() {
     const planningGateDecisions =
       await this.collectRebalancePlanningGateDecisions();
-    return planningGateDecisions.length > NUM.ZERO
-      ? planningGateDecisions[NUM.ZERO]
-      : null;
+    return planningGateDecisions.length > NUM.ZERO ?
+      planningGateDecisions[NUM.ZERO] :
+      null;
   }
 
   /**
@@ -764,9 +947,9 @@ class UnifiedRebalancerSegment5 extends UnifiedRebalancerSegment4 {
       const executedMoveCount = this.countExecutedMoves(rebalanceResult);
 
       if (executedMoveCount > UNIFIED_REBALANCER_LITERAL.ZERO) {
-        this.currentInterval = this.isControlPlanePriorityPartition()
-          ? this.getPriorityRetryDelayMs()
-          : this.periodicCheckIntervalMs;
+        this.currentInterval = this.isControlPlanePriorityPartition() ?
+          this.getPriorityRetryDelayMs() :
+          this.periodicCheckIntervalMs;
       } else if (this.isControlPlanePriorityPartition()) {
         this.currentInterval = this.getPriorityRetryDelayMs();
         forcePriorityRetry = true;
@@ -833,12 +1016,37 @@ class UnifiedRebalancerSegment5 extends UnifiedRebalancerSegment4 {
    * @private
    */
   getTransportPressureSummary() {
+    const pressureProfile = this.buildTransportPressureProfile();
     return PressureGovernor.getShared({
       nodeId: this.nodeId,
       messageRouter: this.messageRouter,
-    }).getPressureSummary([
-      UNIFIED_REBALANCER_LITERAL.REBALANCER_COLON_SCHEDULE,
-    ]);
+    }).getPressureSummary(
+      pressureProfile.resourceKeys,
+      pressureProfile.workClass,
+    );
+  }
+
+  /**
+   * Priority control-plane partitions must observe control-plane pressure,
+   * not the generic scheduler lane, because critical-reserve exhaustion is
+   * the signal that was starving seed readiness probes during recovery.
+   * @return {Object}
+   * @private
+   */
+  buildTransportPressureProfile() {
+    if (this.isControlPlanePriorityPartition()) {
+      const workloadProfile = buildControlPlaneWorkloadProfile(
+        CONTROL_PLANE_WORKLOAD_CLASS.REBALANCER_PRIORITY_VISIBILITY,
+      );
+      return Object.freeze({
+        resourceKeys: workloadProfile.resourceKeys,
+        workClass: workloadProfile.workClass || PRESSURE_WORK_CLASS.CRITICAL,
+      });
+    }
+    return Object.freeze({
+      resourceKeys: REBALANCER_SCHEDULE_PRESSURE_RESOURCE_KEYS,
+      workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
+    });
   }
 
   /**
@@ -902,6 +1110,14 @@ class UnifiedRebalancerSegment5 extends UnifiedRebalancerSegment4 {
       });
       this.lastSuboptimalSignal = null;
       return false;
+    }
+
+    if (
+      await this.hasPriorityRecoveryFollowUpOperationRequired() ||
+      await this.hasPriorityRecoverySurrogateFollowUpOperationRequired()
+    ) {
+      this.lastSuboptimalSignal = null;
+      return true;
     }
 
     if (
@@ -982,10 +1198,10 @@ class UnifiedRebalancerSegment5 extends UnifiedRebalancerSegment4 {
     healthyReplicaCount,
   ) {
     const nodeSignature = availableNodes
-      .map((node) => node?.node_id || node?.id || "")
+      .map((node) => node?.node_id || node?.id || '')
       .filter(Boolean)
       .sort()
-      .join(",");
+      .join(',');
     return (
       `${nodeSignature}|${desiredTarget}|${actionableTarget}|` +
       `${healthyReplicaCount}`
@@ -1008,10 +1224,10 @@ class UnifiedRebalancerSegment5 extends UnifiedRebalancerSegment4 {
     healthyReplicaCount,
   ) {
     const nodeSignature = availableNodes
-      .map((node) => node?.node_id || node?.id || "")
+      .map((node) => node?.node_id || node?.id || '')
       .filter(Boolean)
       .sort()
-      .join(",");
+      .join(',');
     return (
       `${nodeSignature}|${desiredTarget}|${actionableTarget}|` +
       `${healthyReplicaCount}`
@@ -1093,14 +1309,14 @@ class UnifiedRebalancerSegment5 extends UnifiedRebalancerSegment4 {
    */
   mapTriggerReason(reason) {
     switch (reason) {
-      case REBALANCER_RUNTIME_REASON.NODE_BECAME_READY:
-        return RECONCILE_REASON.NODE_BECAME_READY;
-      case REBALANCER_RUNTIME_REASON.NODE_LEFT_READY:
-        return RECONCILE_REASON.NODE_LEFT_READY;
-      case REBALANCER_RUNTIME_REASON.NODE_FAILED:
-        return RECONCILE_REASON.NODE_FAILED;
-      default:
-        return RECONCILE_REASON.PERIODIC_CHECK;
+    case REBALANCER_RUNTIME_REASON.NODE_BECAME_READY:
+      return RECONCILE_REASON.NODE_BECAME_READY;
+    case REBALANCER_RUNTIME_REASON.NODE_LEFT_READY:
+      return RECONCILE_REASON.NODE_LEFT_READY;
+    case REBALANCER_RUNTIME_REASON.NODE_FAILED:
+      return RECONCILE_REASON.NODE_FAILED;
+    default:
+      return RECONCILE_REASON.PERIODIC_CHECK;
     }
   }
 
@@ -1221,7 +1437,7 @@ class UnifiedRebalancerSegment5 extends UnifiedRebalancerSegment4 {
     if (
       this.buildPriorityRecoveryVisibilityRebalanceDecision(
         event,
-        { requireLeader: false },
+        {requireLeader: false},
       ).visibilityProgress === true
     ) {
       return true;
@@ -1333,4 +1549,4 @@ class UnifiedRebalancerSegment5 extends UnifiedRebalancerSegment4 {
   }
 }
 
-export { UnifiedRebalancerSegment5 };
+export {UnifiedRebalancerSegment5};

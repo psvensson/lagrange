@@ -13,7 +13,7 @@
  * @module query/exchange-manager
  */
 
-import {NUM, TYPEOF} from '../../constants/index.js';
+import {TYPEOF} from '../../constants/index.js';
 import {
   EXCHANGE_MODE,
   EXCHANGE_ERROR_MSG,

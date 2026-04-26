@@ -220,8 +220,8 @@ test('Property 3: Uniform WebSocket Delivery', async (t) => {
 
           await router.shutdown();
 
-             // Self-addressed delivery should succeed through the local path.
-             return result.acknowledged === true &&
+          // Self-addressed delivery should succeed through the local path.
+          return result.acknowledged === true &&
                result.error === undefined;
         },
       ),

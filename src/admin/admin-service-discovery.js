@@ -11,52 +11,52 @@
  * admin-helpers.js.
  */
 
-import { COLUMN, NUM, TABLES, TYPEOF } from "../constants/index.js";
+import {COLUMN, NUM, TABLES, TYPEOF} from '../constants/index.js';
 import {
   ENDPOINT_SYNC_BOOLEAN,
   ENDPOINT_SYNC_HEALTH,
-} from "../runtime/endpoint-sync-constants.js";
-import { buildServiceDiscoveryCatalog } from "../runtime/service-discovery-catalog.js";
-import { isLoadReadyReplicaRaftRole } from "../node/replica-state-machine-constants.js";
+} from '../runtime/endpoint-sync-constants.js';
+import {buildServiceDiscoveryCatalog} from '../runtime/service-discovery-catalog.js';
+import {isLoadReadyReplicaRaftRole} from '../node/replica-state-machine-constants.js';
 import {
   DEFAULT_STEP_TIMEOUT_MS_BY_WORKFLOW_STEP,
   isReplicaOperationInFlight,
   isReplicaOperationStale,
   isReplicaOperationTerminalSuccess,
   normalizeReplicaOperationRecord,
-} from "../rebalancer/replica-operation-liveness.js";
-import { getSystemCachePrimaryKeyField } from "../cache/system-cache-key-descriptor.js";
-import { isTableCdcReadinessRelevant } from "../cache/cdc-table-policy.js";
+} from '../rebalancer/replica-operation-liveness.js';
+import {getSystemCachePrimaryKeyField} from '../cache/system-cache-key-descriptor.js';
+import {isTableCdcReadinessRelevant} from '../cache/cdc-table-policy.js';
 import {
   CANONICAL_LEADER_ROUTING_GAP_STATE,
   resolveCanonicalLeaderRoutingGapState,
-} from "../query/canonical-leader-routing.js";
-import { CONTROL_PLANE_READINESS_DIMENSION } from "../control-plane/control-plane-readiness-constants.js";
-import { CONTROL_PLANE_DELIVERY_PRIORITY } from "../control-plane/control-plane-constants.js";
+} from '../query/canonical-leader-routing.js';
+import {CONTROL_PLANE_READINESS_DIMENSION} from '../control-plane/control-plane-readiness-constants.js';
+import {CONTROL_PLANE_DELIVERY_PRIORITY} from '../control-plane/control-plane-constants.js';
 import {
   buildControlPlaneWorkloadProfile,
   CONTROL_PLANE_WORKLOAD_CLASS,
-} from "../control-plane/control-plane-workload-profile.js";
-import { CONTROL_PLANE_CACHE_RECONCILE_INTENT } from "../control-plane/control-plane-cache-reconcile-constants.js";
-import { CONTROL_PLANE_READ_STRATEGY } from "../control-plane/control-plane-system-table-gateway.js";
-import { CONTROL_PLANE_SNAPSHOT_REFRESH_STATE } from "../control-plane/control-plane-snapshot-owner.js";
+} from '../control-plane/control-plane-workload-profile.js';
+import {CONTROL_PLANE_CACHE_RECONCILE_INTENT} from '../control-plane/control-plane-cache-reconcile-constants.js';
+import {CONTROL_PLANE_READ_STRATEGY} from '../control-plane/control-plane-system-table-gateway.js';
+import {CONTROL_PLANE_SNAPSHOT_REFRESH_STATE} from '../control-plane/control-plane-snapshot-owner.js';
 import {
   getControlPlaneErrorCode,
   getControlPlaneErrorMessage,
   getControlPlaneRetryAfterMs,
   isRetryableControlPlaneError,
-} from "../control-plane/control-plane-error-classification.js";
-import { getRegisteredControlPlaneSystemTableGateway } from "../control-plane/control-plane-gateway-registry.js";
+} from '../control-plane/control-plane-error-classification.js';
+import {getRegisteredControlPlaneSystemTableGateway} from '../control-plane/control-plane-gateway-registry.js';
 import {
   DEFAULT_AUTHORITATIVE_REPAIR_TABLES,
   deriveAuthoritativeRepairTables,
   evaluateAuthoritativeRepairPolicy,
-} from "./admin-authoritative-repair-policy.js";
+} from './admin-authoritative-repair-policy.js';
 import {
   ADMIN_CACHE_DUMP,
   ADMIN_ERROR_MESSAGE,
   ADMIN_SERVICE_DISCOVERY,
-} from "./admin-constants.js";
+} from './admin-constants.js';
 import {
   filterActiveServingPartitionRows,
   firstStringField,
@@ -65,20 +65,20 @@ import {
   normalizeSchemaVersionValue,
   normalizeSql,
   uniqueSorted,
-} from "./admin-helpers.js";
-import { evaluateSharedMetadataNodeCoverage } from "./admin-shared-metadata-consistency.js";
-import { shouldAttemptAuthoritativeRepair } from "./admin-authoritative-repair-evaluation.js";
-import { assignAdminServiceDiscoveryReadinessMethods } from "./admin-service-discovery-readiness-methods.js";
-import { assignAdminServiceDiscoveryRepairMethods } from "./admin-service-discovery-repair-methods.js";
+} from './admin-helpers.js';
+import {evaluateSharedMetadataNodeCoverage} from './admin-shared-metadata-consistency.js';
+import {shouldAttemptAuthoritativeRepair} from './admin-authoritative-repair-evaluation.js';
+import {assignAdminServiceDiscoveryReadinessMethods} from './admin-service-discovery-readiness-methods.js';
+import {assignAdminServiceDiscoveryRepairMethods} from './admin-service-discovery-repair-methods.js';
 
 // ── file-local constants ────────────────────────────────────────────────────
 const AUTHORITATIVE_REPAIR_FAILURE_ACTION = Object.freeze({
-  RUN_REPAIR: "run_repair",
-  DEFER_REPAIR: "defer_repair",
+  RUN_REPAIR: 'run_repair',
+  DEFER_REPAIR: 'defer_repair',
 });
 const AUTHORITATIVE_REPAIR_FAILURE_CLASS = Object.freeze({
-  TRANSIENT: "transient",
-  PRESSURE_OR_TIMEOUT: "pressure_or_timeout",
+  TRANSIENT: 'transient',
+  PRESSURE_OR_TIMEOUT: 'pressure_or_timeout',
 });
 const AUTHORITATIVE_REPAIR_FAILURE_RETRY_POLICY = Object.freeze({
   BACKOFF_MULTIPLIER: 2,
@@ -87,50 +87,50 @@ const AUTHORITATIVE_REPAIR_FAILURE_RETRY_POLICY = Object.freeze({
   PRESSURE_MAX_DELAY_MULTIPLIER: 32,
 });
 const ADMIN_SERVICE_DISCOVERY_LITERAL = Object.freeze({
-  BOOLEAN: "boolean",
-  READY: "ready",
-  DEFERRED: "deferred",
-  UNKNOWN: "unknown",
-  DISTRIBUTED_PARTICIPANT_FAILURE: "DISTRIBUTED_PARTICIPANT_FAILURE",
-  PARTICIPANT_FAILURES: "participant failures",
-  UNKNOWN_ERROR: "unknown_error",
-  VALUE: "",
+  BOOLEAN: 'boolean',
+  READY: 'ready',
+  DEFERRED: 'deferred',
+  UNKNOWN: 'unknown',
+  DISTRIBUTED_PARTICIPANT_FAILURE: 'DISTRIBUTED_PARTICIPANT_FAILURE',
+  PARTICIPANT_FAILURES: 'participant failures',
+  UNKNOWN_ERROR: 'unknown_error',
+  VALUE: '',
   VALUE_2: 2,
-  AUTHORITATIVE_ROW_SOURCE_UNAVAILABLE: "authoritative_row_source_unavailable",
+  AUTHORITATIVE_ROW_SOURCE_UNAVAILABLE: 'authoritative_row_source_unavailable',
   ENDPOINT_UNHEALTHY_OR_NODE_NOT_ACTIVE:
-    "endpoint unhealthy or node not ACTIVE",
+    'endpoint unhealthy or node not ACTIVE',
   TABLE: 'table "',
   NOT_FOUND: '" not found',
   NOT_QUERY_READY_ON_NODE: '" not query-ready on node',
   LEADER_COVERAGE_INCOMPLETE_FOR_READINESS_SCOPE:
-    "leader coverage incomplete for readiness scope",
-  VALUE_3: ",",
-  MIXED: "mixed",
+    'leader coverage incomplete for readiness scope',
+  VALUE_3: ',',
+  MIXED: 'mixed',
 });
-const EMPTY_STRING = "";
-const LEADER_RAFT_ROLE = "leader";
-const SERVICE_TYPE_PARTITION = "partition";
-const STATUS_ACTIVE = "active";
-const SERVICE_DISCOVERY_REASON_DETAIL_SEPARATOR = ":";
+const EMPTY_STRING = '';
+const LEADER_RAFT_ROLE = 'leader';
+const SERVICE_TYPE_PARTITION = 'partition';
+const STATUS_ACTIVE = 'active';
+const SERVICE_DISCOVERY_REASON_DETAIL_SEPARATOR = ':';
 const DISCOVERY_ROUTING_SNAPSHOT_FIELD = Object.freeze({
-  CANONICAL_LEADER_NODE_ID: "canonicalLeaderNodeId",
-  CANONICAL_LEADER_ROUTING_GAP_STATE: "canonicalLeaderRoutingGapState",
+  CANONICAL_LEADER_NODE_ID: 'canonicalLeaderNodeId',
+  CANONICAL_LEADER_ROUTING_GAP_STATE: 'canonicalLeaderRoutingGapState',
 });
 const AUTHORITATIVE_REPAIR_CAUSE = Object.freeze({
-  QUERY_PARTICIPANT_FAILURE: "query_participant_failure",
-  QUERY_TIMEOUT: "query_timeout",
-  CONTROL_PLANE_BACKPRESSURE: "control_plane_backpressure",
-  LEADER_RESOLUTION_GAP: "leader_resolution_gap",
-  REPLAY_BACKLOG: "replay_backlog",
+  QUERY_PARTICIPANT_FAILURE: 'query_participant_failure',
+  QUERY_TIMEOUT: 'query_timeout',
+  CONTROL_PLANE_BACKPRESSURE: 'control_plane_backpressure',
+  LEADER_RESOLUTION_GAP: 'leader_resolution_gap',
+  REPLAY_BACKLOG: 'replay_backlog',
 });
 const AUTHORITATIVE_DISCOVERY_REPAIR_REASON_CONTROL_SNAPSHOT =
-  "control_snapshot";
+  'control_snapshot';
 const AUTHORITATIVE_DISCOVERY_REPAIR_REASON_SERVICE_DISCOVERY_SNAPSHOT =
-  "service_discovery_snapshot";
+  'service_discovery_snapshot';
 const AUTHORITATIVE_DISCOVERY_REPAIR_CAUSE_ID_PREFIX =
-  "admin-authoritative-discovery-repair";
-const AUTHORITATIVE_DISCOVERY_REPAIR_DEFAULT_REASON = "repair";
-const AUTHORITATIVE_DISCOVERY_REPAIR_UNKNOWN_REASON = "unknown";
+  'admin-authoritative-discovery-repair';
+const AUTHORITATIVE_DISCOVERY_REPAIR_DEFAULT_REASON = 'repair';
+const AUTHORITATIVE_DISCOVERY_REPAIR_UNKNOWN_REASON = 'unknown';
 function markDiscoveryLocalPartitionCdcDiagnosticsMissing(state, partitionId) {
   state.ready = false;
   state.diagnosticsAvailable = false;
@@ -145,30 +145,30 @@ function markDiscoveryLocalPartitionCdcBuffered(state, partitionId) {
   state.bufferedPartitionIds.push(partitionId);
 }
 const SERVICE_DISCOVERY_READINESS_REASON = Object.freeze({
-  ROUTING_NOT_READY: "routing_not_ready",
-  SCHEMA_TABLE_MISSING: "schema_table_missing",
-  SCHEMA_PARTITION_UNAVAILABLE: "schema_partition_unavailable",
-  REPLICA_OPERATIONS_IN_FLIGHT: "replica_operations_in_flight",
-  REPLICA_OPERATION_IN_FLIGHT: "replica_operation_in_flight",
-  REPLICA_OPERATION_FAILED: "replica_operation_failed",
-  REPLICA_OPERATION_STALE_TIMEOUT: "replica_operation_stale_timeout",
-  LEADERSHIP_UNSTABLE: "leadership_unstable",
-  LOCAL_REPLICA_NOT_VOTER_READY: "local_replica_not_voter_ready",
-  LOCAL_CDC_DIAGNOSTICS_UNAVAILABLE: "local_cdc_diagnostics_unavailable",
-  LOCAL_CDC_SUBSCRIBER_MISSING: "local_cdc_subscriber_missing",
-  LOCAL_CDC_BUFFER_NOT_DRAINED: "local_cdc_buffer_not_drained",
+  ROUTING_NOT_READY: 'routing_not_ready',
+  SCHEMA_TABLE_MISSING: 'schema_table_missing',
+  SCHEMA_PARTITION_UNAVAILABLE: 'schema_partition_unavailable',
+  REPLICA_OPERATIONS_IN_FLIGHT: 'replica_operations_in_flight',
+  REPLICA_OPERATION_IN_FLIGHT: 'replica_operation_in_flight',
+  REPLICA_OPERATION_FAILED: 'replica_operation_failed',
+  REPLICA_OPERATION_STALE_TIMEOUT: 'replica_operation_stale_timeout',
+  LEADERSHIP_UNSTABLE: 'leadership_unstable',
+  LOCAL_REPLICA_NOT_VOTER_READY: 'local_replica_not_voter_ready',
+  LOCAL_CDC_DIAGNOSTICS_UNAVAILABLE: 'local_cdc_diagnostics_unavailable',
+  LOCAL_CDC_SUBSCRIBER_MISSING: 'local_cdc_subscriber_missing',
+  LOCAL_CDC_BUFFER_NOT_DRAINED: 'local_cdc_buffer_not_drained',
 });
 const BENCHMARK_ADMISSION_STATE = Object.freeze({
-  READY: "ready",
-  BLOCKED: "blocked",
+  READY: 'ready',
+  BLOCKED: 'blocked',
 });
 const BENCHMARK_DEGRADATION_STATE = Object.freeze({
-  HEALTHY: "healthy",
-  MOVE_PENDING: "move_pending",
-  MOVE_FAILED: "move_failed",
-  PROMOTION_PENDING: "promotion_pending",
-  PROMOTION_FAILED: "promotion_failed",
-  DRAIN_BLOCKED: "drain_blocked",
+  HEALTHY: 'healthy',
+  MOVE_PENDING: 'move_pending',
+  MOVE_FAILED: 'move_failed',
+  PROMOTION_PENDING: 'promotion_pending',
+  PROMOTION_FAILED: 'promotion_failed',
+  DRAIN_BLOCKED: 'drain_blocked',
 });
 const BENCHMARK_DEGRADATION_PRIORITY = Object.freeze({
   [BENCHMARK_DEGRADATION_STATE.HEALTHY]: NUM.ZERO,
@@ -179,37 +179,37 @@ const BENCHMARK_DEGRADATION_PRIORITY = Object.freeze({
   [BENCHMARK_DEGRADATION_STATE.MOVE_FAILED]: NUM.FIVE,
 });
 const REPLICA_OPERATION_TYPE = Object.freeze({
-  ADD: "ADD",
-  REMOVE: "REMOVE",
-  REPLACE: "REPLACE",
+  ADD: 'ADD',
+  REMOVE: 'REMOVE',
+  REPLACE: 'REPLACE',
 });
 const SERVICE_DISCOVERY_SCHEMA_VERSION_FIELD_CANDIDATES = Object.freeze([
-  "updated_at_hlc",
-  "updatedAtHlc",
-  "schema_version",
-  "schemaVersion",
-  "updated_at",
-  "updatedAt",
-  "created_at",
-  "createdAt",
+  'updated_at_hlc',
+  'updatedAtHlc',
+  'schema_version',
+  'schemaVersion',
+  'updated_at',
+  'updatedAt',
+  'created_at',
+  'createdAt',
 ]);
 const AUTHORITATIVE_REPAIR_COOLDOWN_MS = 1000;
 const AUTHORITATIVE_REPAIR_QUERY_TIMEOUT_MS = 1500;
 const AUTHORITATIVE_REPAIR_STALE_THRESHOLD_MS = 5000;
-const AUTHORITATIVE_REPAIR_TIMEOUT_FRAGMENT = "timeout";
+const AUTHORITATIVE_REPAIR_TIMEOUT_FRAGMENT = 'timeout';
 const AUTHORITATIVE_REPAIR_LEADER_GAP_FRAGMENTS = Object.freeze([
-  "leader is unknown",
-  "leader unknown",
-  "no handler",
-  "no leader",
-  "partition_service_not_found",
-  "partition service not found",
+  'leader is unknown',
+  'leader unknown',
+  'no handler',
+  'no leader',
+  'partition_service_not_found',
+  'partition service not found',
 ]);
 const AUTHORITATIVE_REPAIR_REPLAY_BACKLOG_FRAGMENTS = Object.freeze([
-  "buffered cdc replay",
-  "replay backlog",
-  "replay buffer",
-  "buffered backlog",
+  'buffered cdc replay',
+  'replay backlog',
+  'replay buffer',
+  'buffered backlog',
 ]);
 const AUTHORITATIVE_REPAIR_REUSE_WINDOW_MS =
   AUTHORITATIVE_REPAIR_STALE_THRESHOLD_MS;
@@ -262,32 +262,32 @@ function normalizeFirstFailedParticipant(participant, tableName = null) {
   }
   return {
     partitionId:
-      typeof participant.partitionId === TYPEOF.STRING
-        ? participant.partitionId
-        : null,
+      typeof participant.partitionId === TYPEOF.STRING ?
+        participant.partitionId :
+        null,
     participantNodeId:
-      typeof participant.participantNodeId === TYPEOF.STRING
-        ? participant.participantNodeId
-        : null,
+      typeof participant.participantNodeId === TYPEOF.STRING ?
+        participant.participantNodeId :
+        null,
     participantAddress:
-      typeof participant.participantAddress === TYPEOF.STRING
-        ? participant.participantAddress
-        : null,
+      typeof participant.participantAddress === TYPEOF.STRING ?
+        participant.participantAddress :
+        null,
     errorCode: getControlPlaneErrorCode(participant) || null,
     error: getControlPlaneErrorMessage(participant) || null,
-    durationMs: Number.isFinite(participant.durationMs)
-      ? Math.max(NUM.ZERO, Math.floor(participant.durationMs))
-      : null,
+    durationMs: Number.isFinite(participant.durationMs) ?
+      Math.max(NUM.ZERO, Math.floor(participant.durationMs)) :
+      null,
     retryAfterMs: getControlPlaneRetryAfterMs(participant) || null,
     backpressured:
       typeof participant.backpressured ===
-      ADMIN_SERVICE_DISCOVERY_LITERAL.BOOLEAN
-        ? participant.backpressured
-        : isRetryableControlPlaneError(participant),
+      ADMIN_SERVICE_DISCOVERY_LITERAL.BOOLEAN ?
+        participant.backpressured :
+        isRetryableControlPlaneError(participant),
     failedTable:
-      typeof participant.failedTable === TYPEOF.STRING
-        ? participant.failedTable
-        : tableName,
+      typeof participant.failedTable === TYPEOF.STRING ?
+        participant.failedTable :
+        tableName,
   };
 }
 function normalizeLocalQueryTransportDiagnostic(localQueryTransport) {
@@ -295,25 +295,25 @@ function normalizeLocalQueryTransportDiagnostic(localQueryTransport) {
     return null;
   }
   const ready =
-    typeof localQueryTransport.ready === "boolean"
-      ? localQueryTransport.ready
-      : null;
+    typeof localQueryTransport.ready === 'boolean' ?
+      localQueryTransport.ready :
+      null;
   return {
     state:
       typeof localQueryTransport.state === TYPEOF.STRING &&
-      localQueryTransport.state.length > NUM.ZERO
-        ? localQueryTransport.state
-        : ready === true
-          ? ADMIN_SERVICE_DISCOVERY_LITERAL.READY
-          : ready === false
-            ? ADMIN_SERVICE_DISCOVERY_LITERAL.DEFERRED
-            : ADMIN_SERVICE_DISCOVERY_LITERAL.UNKNOWN,
+      localQueryTransport.state.length > NUM.ZERO ?
+        localQueryTransport.state :
+        ready === true ?
+          ADMIN_SERVICE_DISCOVERY_LITERAL.READY :
+          ready === false ?
+            ADMIN_SERVICE_DISCOVERY_LITERAL.DEFERRED :
+            ADMIN_SERVICE_DISCOVERY_LITERAL.UNKNOWN,
     ready,
     reason:
       typeof localQueryTransport.reason === TYPEOF.STRING &&
-      localQueryTransport.reason.length > NUM.ZERO
-        ? localQueryTransport.reason
-        : null,
+      localQueryTransport.reason.length > NUM.ZERO ?
+        localQueryTransport.reason :
+        null,
     retryAfterMs: getControlPlaneRetryAfterMs(localQueryTransport) || null,
   };
 }
@@ -377,9 +377,9 @@ function deriveAuthoritativeRepairCauseChain(error, firstFailedParticipant) {
 function summarizeAuthoritativeRepairError(tableName, error) {
   const firstFailedParticipant = normalizeFirstFailedParticipant(
     error?.firstFailedParticipant ||
-      (Array.isArray(error?.participantFailures)
-        ? error.participantFailures[NUM.ZERO]
-        : null),
+      (Array.isArray(error?.participantFailures) ?
+        error.participantFailures[NUM.ZERO] :
+        null),
     tableName,
   );
   return {
@@ -402,11 +402,11 @@ function summarizeAuthoritativeRepairError(tableName, error) {
   };
 }
 function shouldAbortAuthoritativeRepairTableReads(errorSummary = null) {
-  const causeChain = Array.isArray(errorSummary?.causeChain)
-    ? errorSummary.causeChain.filter(
-        (value) => typeof value === TYPEOF.STRING && value.length > NUM.ZERO,
-      )
-    : ADMIN_CACHE_DUMP.EMPTY;
+  const causeChain = Array.isArray(errorSummary?.causeChain) ?
+    errorSummary.causeChain.filter(
+      (value) => typeof value === TYPEOF.STRING && value.length > NUM.ZERO,
+    ) :
+    ADMIN_CACHE_DUMP.EMPTY;
   return (
     causeChain.includes(AUTHORITATIVE_REPAIR_CAUSE.QUERY_TIMEOUT) ||
     causeChain.includes(AUTHORITATIVE_REPAIR_CAUSE.CONTROL_PLANE_BACKPRESSURE)
@@ -416,9 +416,9 @@ function normalizeAuthoritativeRepairTableNames(tableNames = []) {
   return uniqueSorted(
     (Array.isArray(tableNames) ? tableNames : ADMIN_CACHE_DUMP.EMPTY)
       .map((tableName) =>
-        typeof tableName === TYPEOF.STRING
-          ? tableName.trim()
-          : ADMIN_SERVICE_DISCOVERY_LITERAL.VALUE,
+        typeof tableName === TYPEOF.STRING ?
+          tableName.trim() :
+          ADMIN_SERVICE_DISCOVERY_LITERAL.VALUE,
       )
       .filter((tableName) => tableName.length > NUM.ZERO),
   );
@@ -427,9 +427,9 @@ function normalizeAuthoritativeRepairCauseChain(causeChain = []) {
   return uniqueSorted(
     (Array.isArray(causeChain) ? causeChain : ADMIN_CACHE_DUMP.EMPTY)
       .map((cause) =>
-        typeof cause === TYPEOF.STRING
-          ? cause.trim()
-          : ADMIN_SERVICE_DISCOVERY_LITERAL.VALUE,
+        typeof cause === TYPEOF.STRING ?
+          cause.trim() :
+          ADMIN_SERVICE_DISCOVERY_LITERAL.VALUE,
       )
       .filter((cause) => cause.length > NUM.ZERO),
   );
@@ -451,9 +451,9 @@ function resolveAuthoritativeRepairFailureBaseRetryAfterMs(
   errorSummaries = [],
 ) {
   const retryHints = [];
-  for (const errorSummary of Array.isArray(errorSummaries)
-    ? errorSummaries
-    : ADMIN_CACHE_DUMP.EMPTY) {
+  for (const errorSummary of Array.isArray(errorSummaries) ?
+    errorSummaries :
+    ADMIN_CACHE_DUMP.EMPTY) {
     const retryAfterMs = Number(errorSummary?.retryAfterMs);
     if (Number.isFinite(retryAfterMs) && retryAfterMs > NUM.ZERO) {
       retryHints.push(Math.floor(retryAfterMs));
@@ -484,9 +484,9 @@ function resolveAuthoritativeRepairFailureMaxRetryAfterMs(
   baseRetryAfterMs,
 ) {
   const normalizedBaseRetryAfterMs =
-    Number.isFinite(baseRetryAfterMs) && baseRetryAfterMs > NUM.ZERO
-      ? Math.floor(baseRetryAfterMs)
-      : AUTHORITATIVE_DISCOVERY_REPAIR.COOLDOWN_MS;
+    Number.isFinite(baseRetryAfterMs) && baseRetryAfterMs > NUM.ZERO ?
+      Math.floor(baseRetryAfterMs) :
+      AUTHORITATIVE_DISCOVERY_REPAIR.COOLDOWN_MS;
   if (failureClass === AUTHORITATIVE_REPAIR_FAILURE_CLASS.PRESSURE_OR_TIMEOUT) {
     return (
       normalizedBaseRetryAfterMs *
@@ -505,20 +505,20 @@ function computeAuthoritativeRepairFailureRetryAfterMs(
   maxRetryAfterMs,
 ) {
   const normalizedFailureCount =
-    Number.isFinite(failureCount) && failureCount > NUM.ZERO
-      ? Math.floor(failureCount)
-      : NUM.ONE;
+    Number.isFinite(failureCount) && failureCount > NUM.ZERO ?
+      Math.floor(failureCount) :
+      NUM.ONE;
   const normalizedBaseRetryAfterMs =
-    Number.isFinite(baseRetryAfterMs) && baseRetryAfterMs > NUM.ZERO
-      ? Math.floor(baseRetryAfterMs)
-      : AUTHORITATIVE_DISCOVERY_REPAIR.COOLDOWN_MS;
+    Number.isFinite(baseRetryAfterMs) && baseRetryAfterMs > NUM.ZERO ?
+      Math.floor(baseRetryAfterMs) :
+      AUTHORITATIVE_DISCOVERY_REPAIR.COOLDOWN_MS;
   const normalizedMaxRetryAfterMs =
-    Number.isFinite(maxRetryAfterMs) && maxRetryAfterMs > NUM.ZERO
-      ? Math.floor(maxRetryAfterMs)
-      : resolveAuthoritativeRepairFailureMaxRetryAfterMs(
-          failureClass,
-          normalizedBaseRetryAfterMs,
-        );
+    Number.isFinite(maxRetryAfterMs) && maxRetryAfterMs > NUM.ZERO ?
+      Math.floor(maxRetryAfterMs) :
+      resolveAuthoritativeRepairFailureMaxRetryAfterMs(
+        failureClass,
+        normalizedBaseRetryAfterMs,
+      );
   if (failureClass === AUTHORITATIVE_REPAIR_FAILURE_CLASS.PRESSURE_OR_TIMEOUT) {
     const minimumRetryAfterMs =
       normalizedBaseRetryAfterMs *
@@ -546,14 +546,14 @@ function isActiveVoterReadyPartitionReplica(serviceRow) {
   const serviceType = firstStringField(
     serviceRow,
     COLUMN.SERVICE_TYPE,
-    "service_type",
-    "serviceType",
-    "type",
+    'service_type',
+    'serviceType',
+    'type',
   );
   if (serviceType !== SERVICE_TYPE_PARTITION) {
     return false;
   }
-  const status = firstStringField(serviceRow, COLUMN.STATUS, "status");
+  const status = firstStringField(serviceRow, COLUMN.STATUS, 'status');
   if (
     String(status || ADMIN_SERVICE_DISCOVERY_LITERAL.VALUE).toLowerCase() !==
     STATUS_ACTIVE
@@ -563,13 +563,13 @@ function isActiveVoterReadyPartitionReplica(serviceRow) {
   const raftRole = firstStringField(
     serviceRow,
     COLUMN.RAFT_ROLE,
-    "raft_role",
-    "raftRole",
+    'raft_role',
+    'raftRole',
   );
   if (!isLoadReadyReplicaRaftRole(raftRole)) {
     return false;
   }
-  const address = firstStringField(serviceRow, COLUMN.ADDRESS, "address");
+  const address = firstStringField(serviceRow, COLUMN.ADDRESS, 'address');
   return Boolean(address);
 } /**
  * Select the newest of two schema version values.
@@ -584,9 +584,9 @@ function selectNewestSchemaVersion(current, candidate) {
   if (!current) {
     return candidate;
   }
-  return compareSchemaVersionValues(candidate, current) >= NUM.ZERO
-    ? candidate
-    : current;
+  return compareSchemaVersionValues(candidate, current) >= NUM.ZERO ?
+    candidate :
+    current;
 } /**
  * Extract the best schema version value from a record.
  * @param {Object} record
@@ -620,7 +620,7 @@ function parseDiscoveryListQuery(rawValue) {
     if (typeof inputValue !== TYPEOF.STRING) {
       return;
     }
-    for (const value of inputValue.split(",")) {
+    for (const value of inputValue.split(',')) {
       const trimmedValue = value.trim();
       if (trimmedValue.length > NUM.ZERO) {
         values.push(trimmedValue);
@@ -723,9 +723,9 @@ class AdminServiceDiscovery {
     this.sqlQueryEngine = deps.sqlQueryEngine || null;
     this.cacheMutationTarget = deps.cacheMutationTarget || null;
     this.partitionServicesProvider =
-      typeof deps.partitionServicesProvider === TYPEOF.FUNCTION
-        ? deps.partitionServicesProvider
-        : null;
+      typeof deps.partitionServicesProvider === TYPEOF.FUNCTION ?
+        deps.partitionServicesProvider :
+        null;
     this.partitionServices =
       deps.partitionServices instanceof Map ? deps.partitionServices : null;
     this.controlPlaneSystemTableGateway =
@@ -734,14 +734,14 @@ class AdminServiceDiscovery {
       null;
     this.controlPlaneSnapshotOwner = deps.controlPlaneSnapshotOwner || null;
     this.buildPreflightCacheFreshnessSummary =
-      typeof deps.buildPreflightCacheFreshnessSummary === TYPEOF.FUNCTION
-        ? deps.buildPreflightCacheFreshnessSummary
-        : null;
+      typeof deps.buildPreflightCacheFreshnessSummary === TYPEOF.FUNCTION ?
+        deps.buildPreflightCacheFreshnessSummary :
+        null;
     this.buildControlSnapshotReplicaOperationSummary =
       typeof deps.buildControlSnapshotReplicaOperationSummary ===
-      TYPEOF.FUNCTION
-        ? deps.buildControlSnapshotReplicaOperationSummary
-        : null;
+      TYPEOF.FUNCTION ?
+        deps.buildControlSnapshotReplicaOperationSummary :
+        null;
     this.nowFn =
       typeof deps.nowFn === TYPEOF.FUNCTION ? deps.nowFn : () => Date.now();
     this.authoritativeDiscoveryRepairPromise = null;
@@ -806,9 +806,9 @@ class AdminServiceDiscovery {
       replicaCount,
       replicaOperations:
         readinessContext.replicaOperationSummary &&
-        typeof readinessContext.replicaOperationSummary === TYPEOF.OBJECT
-          ? readinessContext.replicaOperationSummary
-          : null,
+        typeof readinessContext.replicaOperationSummary === TYPEOF.OBJECT ?
+          readinessContext.replicaOperationSummary :
+          null,
       services,
     };
   } /**

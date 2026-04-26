@@ -48,6 +48,8 @@ const TEST_PRIORITY_RECENT_INTENT_TARGET_REPLICA_ID =
 const TEST_PRIORITY_RECENT_INTENT_OPERATION_ID = 'priority-source-removal-op';
 const TEST_PRIORITY_RECENT_INTENT_REPLACEMENT_OPERATION_ID =
   'replacement-op';
+const TEST_CACHE_VISIBLE_SOURCE_REMOVAL_OPERATION_ID =
+  'cache-visible-source-removal-op';
 
 test('Bug: coordinator dedup gap on sequential calls', async (t) => {
   t.beforeEach(async () => {
@@ -785,6 +787,77 @@ test('Bug: coordinator dedup gap on sequential calls', async (t) => {
           originalQueryExistingInFlightOperation;
         coordinator.armCoordinatorCreatedOperationProgress =
           originalArmCoordinatorCreatedOperationProgress;
+        await coordinator.shutdown();
+      }
+    },
+  );
+
+  t.test(
+    'deferred priority entity visibility still blocks duplicate add-like ' +
+      'create when cache shows source removal in flight',
+    async (t) => {
+      const coordinator = createTestCoordinator({
+        nodeId: TEST_PRIORITY_RECENT_INTENT_SOURCE_NODE_ID,
+        enableTimeouts: false,
+        cacheData: {
+          replicaOperations: [{
+            operationId: TEST_CACHE_VISIBLE_SOURCE_REMOVAL_OPERATION_ID,
+            type: OperationType.REPLACE,
+            partitionId: TEST_PRIORITY_RECENT_INTENT_PARTITION_ID,
+            entityType: TEST_PRIORITY_RECENT_INTENT_ENTITY_TYPE,
+            entityId: TEST_PRIORITY_RECENT_INTENT_PARTITION_ID,
+            sourceNodeId: TEST_PRIORITY_RECENT_INTENT_SOURCE_NODE_ID,
+            targetNodeId: TEST_PRIORITY_RECENT_INTENT_TARGET_NODE_A,
+            replicaId: TEST_PRIORITY_RECENT_INTENT_TARGET_REPLICA_ID,
+            status: ReplicaStatus.ACTIVE,
+            workflowStep: WORKFLOW_STEP.ACTIVE,
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+          }],
+        },
+      });
+      coordinator.initialize();
+
+      const originalGetOperationsByEntityAuthoritativeObservation =
+        coordinator.repository.getOperationsByEntityAuthoritativeObservation;
+      coordinator.repository.getOperationsByEntityAuthoritativeObservation =
+        async () => DEFERRED_PRIORITY_ENTITY_OBSERVATION;
+
+      try {
+        let createError = null;
+        try {
+          await coordinator.createOperation({
+            type: OperationType.REPLACE,
+            partitionId: TEST_PRIORITY_RECENT_INTENT_PARTITION_ID,
+            entityType: TEST_PRIORITY_RECENT_INTENT_ENTITY_TYPE,
+            entityId: TEST_PRIORITY_RECENT_INTENT_PARTITION_ID,
+            nodeId: TEST_PRIORITY_RECENT_INTENT_TARGET_NODE_B,
+            sourceNodeId: TEST_PRIORITY_RECENT_INTENT_SOURCE_NODE_ID,
+            replicaId: TEST_PRIORITY_RECENT_INTENT_SOURCE_REPLICA_ID,
+            enforceConcurrentOperationBudget: true,
+          });
+        } catch (error) {
+          createError = error;
+        }
+
+        t.equal(
+          createError?.rebalanceSkipReason,
+          REBALANCER_SKIP_REASON.CONFLICTING_OPERATION_IN_FLIGHT,
+          'cache-visible source-removal work should keep the entity create lane exclusive',
+        );
+        t.equal(
+          createError?.conflictingOperationId,
+          TEST_CACHE_VISIBLE_SOURCE_REMOVAL_OPERATION_ID,
+          'the conflicting cache-visible operation should be named',
+        );
+        t.equal(
+          coordinator.stats.operationsCreated,
+          0,
+          'no duplicate replacement should be created under deferred visibility',
+        );
+      } finally {
+        coordinator.repository.getOperationsByEntityAuthoritativeObservation =
+          originalGetOperationsByEntityAuthoritativeObservation;
         await coordinator.shutdown();
       }
     },

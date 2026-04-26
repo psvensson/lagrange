@@ -18,7 +18,6 @@ import {
 } from './helpers/cluster-test-helpers.js';
 import {SERVICE_TYPE, TABLES, NUM} from '../../src/constants/index.js';
 import {BOOTSTRAP_EVENT} from '../../src/bootstrap/bootstrap-constants.js';
-import {RAFT_ROLE} from '../../src/raft/constants.js';
 
 const HTTP_METHOD = Object.freeze({
   POST: 'POST',

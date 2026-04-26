@@ -1,3 +1,12 @@
+const OBSERVED_REPLICA_ROW_FIELD = Object.freeze({
+  ADDRESS: 'address',
+  RAFT_ROLE: 'raft_role',
+  RAFT_ROLE_CAMEL: 'raftRole',
+  SERVICE_TYPE: 'service_type',
+  SERVICE_TYPE_CAMEL: 'serviceType',
+  STATUS: 'status',
+});
+
 function assignReplicaOperationRepositoryObservationMethods(
   ReplicaOperationRepository,
   options = {},
@@ -24,43 +33,76 @@ function assignReplicaOperationRepositoryObservationMethods(
 
   class ReplicaOperationRepositoryObservationMethods {
   /**
+   * @param {Object} row
+   * @param {...string} fieldNames
+   * @return {string|null}
+   * @private
+   */
+    readObservedReplicaRowString(row, ...fieldNames) {
+      for (const fieldName of fieldNames) {
+        const value = row?.[fieldName];
+        if (typeof value !== TYPEOF.STRING) {
+          continue;
+        }
+        const normalizedValue = value.trim();
+        if (normalizedValue.length > NUM.ZERO) {
+          return normalizedValue.toLowerCase();
+        }
+      }
+      return null;
+    }
+
+    /**
    * Normalize one observed services row into workflow replica lifecycle.
    *
    * Partition replicas that report `status=active` but still carry a learner
    * role are not fully operational for REPLACE progression yet; they remain in
-   * the syncing phase until promotion.
+   * the syncing phase until promotion. Conversely, a `syncing` partition row
+   * with a non-learner role and routable address has crossed the same
+   * voter-ready boundary used before the replica handler emits ACTIVE, so the
+   * coordinator treats it as active even when the status write is lagging.
    *
    * @param {Object} row
    * @return {string|null}
    */
     normalizeObservedReplicaLifecycle(row) {
-      const status =
-      typeof row?.status === 'string' && row.status.length > NUM.ZERO ?
-        row.status.toLowerCase() :
-        null;
+      const status = this.readObservedReplicaRowString(
+        row,
+        OBSERVED_REPLICA_ROW_FIELD.STATUS,
+      );
       if (!status) {
         return null;
       }
-      if (status !== ReplicaStatus.ACTIVE) {
-        return status;
-      }
-      const serviceType =
-      typeof row?.service_type === 'string' ?
-        row.service_type.toLowerCase() :
-        typeof row?.serviceType === 'string' ?
-          row.serviceType.toLowerCase() :
-          null;
+      const serviceType = this.readObservedReplicaRowString(
+        row,
+        OBSERVED_REPLICA_ROW_FIELD.SERVICE_TYPE,
+        OBSERVED_REPLICA_ROW_FIELD.SERVICE_TYPE_CAMEL,
+      );
       if (serviceType !== SERVICE_TYPE.PARTITION) {
         return status;
       }
-      const raftRole =
-      typeof row?.raft_role === 'string' ?
-        row.raft_role.toLowerCase() :
-        typeof row?.raftRole === 'string' ?
-          row.raftRole.toLowerCase() :
-          null;
-      if (!raftRole || raftRole === RAFT_ROLE.LEARNER) {
-        return ReplicaStatus.SYNCING;
+      const raftRole = this.readObservedReplicaRowString(
+        row,
+        OBSERVED_REPLICA_ROW_FIELD.RAFT_ROLE,
+        OBSERVED_REPLICA_ROW_FIELD.RAFT_ROLE_CAMEL,
+      );
+      const address = this.readObservedReplicaRowString(
+        row,
+        OBSERVED_REPLICA_ROW_FIELD.ADDRESS,
+      );
+      if (status === ReplicaStatus.ACTIVE) {
+        if (!raftRole || raftRole === RAFT_ROLE.LEARNER) {
+          return ReplicaStatus.SYNCING;
+        }
+        return status;
+      }
+      if (
+        status === ReplicaStatus.SYNCING &&
+        raftRole &&
+        raftRole !== RAFT_ROLE.LEARNER &&
+        address
+      ) {
+        return ReplicaStatus.ACTIVE;
       }
       return status;
     }
@@ -71,10 +113,17 @@ function assignReplicaOperationRepositoryObservationMethods(
    * @param {string} targetNodeId
    * @return {Object|null}
    */
-    getObservedReplicaRowFromCache(replicaId, partitionId, targetNodeId) {
+    getObservedReplicaRowFromCache(
+      replicaId,
+      partitionId,
+      targetNodeId,
+      options = {},
+    ) {
       if (!this.systemTableCache) {
         return null;
       }
+      const allowPartitionNodeFallback =
+        options?.allowPartitionNodeFallback !== false;
       const normalizedReplicaId = typeof replicaId === 'string' ? replicaId : '';
       const normalizedPartitionId = typeof partitionId === 'string' ? partitionId : '';
       const normalizedTargetNodeId = typeof targetNodeId === 'string' ? targetNodeId : '';
@@ -133,6 +182,9 @@ function assignReplicaOperationRepositoryObservationMethods(
           return exactReplicaRow;
         }
       }
+      if (!allowPartitionNodeFallback) {
+        return null;
+      }
       return (
         serviceRows.find((row) => {
           const rowNodeId = String(row?.node_id || row?.nodeId || '');
@@ -185,6 +237,8 @@ function assignReplicaOperationRepositoryObservationMethods(
       const statusReadQueryOptions =
         this.resolveActualReplicaStatusReadQueryOptions(readOptions);
       const allowCacheFallback = readOptions?.allowCacheFallback !== false;
+      const allowPartitionNodeFallback =
+        readOptions?.allowPartitionNodeFallback !== false;
       let observedRow = null;
       let authoritativeReadAttempted = false;
       let authoritativeReadFailed = false;
@@ -211,7 +265,7 @@ function assignReplicaOperationRepositoryObservationMethods(
         );
         recordAuthoritativeResult(result);
       }
-      if (!observedRow) {
+      if (!observedRow && allowPartitionNodeFallback) {
       // Secondary lookup by partition + node when replicaId
       // yields no row
         const result = await readAuthoritativeControlPlaneRows(
@@ -228,7 +282,12 @@ function assignReplicaOperationRepositoryObservationMethods(
         allowCacheFallback &&
         (!authoritativeReadAttempted || authoritativeReadFailed)
       ) {
-        observedRow = this.getObservedReplicaRowFromCache(replicaId, partitionId, targetNodeId);
+        observedRow = this.getObservedReplicaRowFromCache(
+          replicaId,
+          partitionId,
+          targetNodeId,
+          readOptions,
+        );
         if (observedRow) {
           return Object.freeze({
             state: REPLICA_OPERATION_REPOSITORY_LITERAL.OBSERVED,
@@ -251,15 +310,15 @@ function assignReplicaOperationRepositoryObservationMethods(
         state:
         authoritativeReadFailed === true ?
           REPLICA_OPERATION_REPOSITORY_LITERAL.UNAVAILABLE :
-        authoritativeReadAttempted === true ?
-          REPLICA_OPERATION_REPOSITORY_LITERAL.ABSENT :
-          REPLICA_OPERATION_REPOSITORY_LITERAL.UNAVAILABLE,
+          authoritativeReadAttempted === true ?
+            REPLICA_OPERATION_REPOSITORY_LITERAL.ABSENT :
+            REPLICA_OPERATION_REPOSITORY_LITERAL.UNAVAILABLE,
         source:
         authoritativeReadFailed === true ?
           REPLICA_OPERATION_REPOSITORY_LITERAL.UNAVAILABLE :
-        authoritativeReadAttempted === true ?
-          REPLICA_OPERATION_REPOSITORY_LITERAL.AUTHORITATIVE :
-          REPLICA_OPERATION_REPOSITORY_LITERAL.UNAVAILABLE,
+          authoritativeReadAttempted === true ?
+            REPLICA_OPERATION_REPOSITORY_LITERAL.AUTHORITATIVE :
+            REPLICA_OPERATION_REPOSITORY_LITERAL.UNAVAILABLE,
       });
     }
     /**

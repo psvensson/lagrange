@@ -6,7 +6,7 @@
  * before delegation to SqlCore (SQLQueryEngine).
  */
 
-import {NUM, TYPEOF} from '../constants/index.js';
+import {TYPEOF} from '../constants/index.js';
 import {DEFAULT_QUERY_BUDGET} from '../wasm-service/query-budget-constants.js';
 import {
   EXECUTION_MODE,

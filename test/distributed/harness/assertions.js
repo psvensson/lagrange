@@ -1,4 +1,4 @@
-import { ASSERTIONS_SEGMENT_3 } from './assertions-segment-3.js';
+import {ASSERTIONS_SEGMENT_3} from './assertions-segment-3.js';
 
 const {
   waitForConvergence,

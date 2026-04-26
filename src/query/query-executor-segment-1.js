@@ -1,27 +1,16 @@
-import { QUERY_EXECUTOR_SHARED } from "./query-executor-shared.js";
+import {QUERY_EXECUTOR_SHARED} from './query-executor-shared.js';
 
 const {
-  COLUMN,
-  CONTROL_PLANE_PARTICIPATION_KIND,
   CONTROL_PLANE_READINESS_DIMENSION,
-  CONTROL_PLANE_WRITE_RETRY_DECISION_STATE,
   ConfigurationManager,
   DISTRIBUTED_JOIN_STRATEGY,
   DistributedMergeEngine,
-  ERRORS,
   HLCClockService,
-  LEADER_GAP_REASON_OWNER_MISSING,
-  LEADER_GAP_REASON_SERVICE_MISSING,
-  LOG_MSG,
   LoggingService,
   METRICS_LOG_TAG,
-  MIGRATION_PARTITION_OPERATION,
   NUM,
-  PARTITION_SERVICE_ERROR_MSG,
-  PG_EXPR_TYPE,
   ParallelQueryCoordinator,
   QUERY_AST_NODE,
-  QUERY_AST_TYPE,
   QUERY_CONFIG_KEY,
   QUERY_DEFAULTS,
   QUERY_ERROR_CODE,
@@ -29,34 +18,10 @@ const {
   QUERY_EXECUTOR_LITERAL,
   QUERY_JOIN_TYPE,
   QUERY_LOG_MSG,
-  QUERY_MESSAGE_FIELD_MIGRATION_ID,
-  QUERY_MESSAGE_FIELD_MIGRATION_OPERATION,
-  QUERY_MESSAGE_FIELD_SESSION_ID,
-  QUERY_MESSAGE_FIELD_SPLIT_MIRROR_ORIGIN,
-  QUERY_MESSAGE_TYPE,
   QUERY_OPERATOR,
-  QUERY_RESPONSE_TYPE,
-  QUERY_ROUTING_DIAGNOSTIC_REASON,
-  QUERY_ROUTING_REPAIR_REASON,
   QUERY_SQL,
   QUERY_SUBSYSTEM,
-  RAFT_ROLE,
-  SERVICE_STATUS,
-  SERVICE_TYPE,
-  SQL,
-  SYSTEM_TABLE_NAMES,
-  TABLES,
-  TRANSPORT_ERROR_MSG,
   buildDistributedFailureSummary,
-  buildParticipantFailureEntry,
-  buildPartitionServiceWitnessFingerprint,
-  compactEligibilitySnapshot,
-  evaluateEligibilityDecision,
-  isRetryableControlPlaneError,
-  normalizeParticipantFailureString,
-  normalizeParticipantRetryAfterMs,
-  resolveBootstrapLeaderSelection,
-  resolveParticipantBackpressureState,
 } = QUERY_EXECUTOR_SHARED;
 
 class QueryExecutorSegment1 {
@@ -122,11 +87,12 @@ class QueryExecutorSegment1 {
       Number.isFinite(options.noHandlerAddressQuarantineMs) &&
       options.noHandlerAddressQuarantineMs > NUM.ZERO;
     this.noHandlerAddressQuarantineMs = this
-      .noHandlerAddressQuarantineMsExplicit
-      ? Math.floor(options.noHandlerAddressQuarantineMs)
-      : this.noServiceWarnThrottleMs;
+      .noHandlerAddressQuarantineMsExplicit ?
+      Math.floor(options.noHandlerAddressQuarantineMs) :
+      this.noServiceWarnThrottleMs;
     this.temporarilyUnroutableAddressesByPartition = new Map();
     this.sessionPartitionAddresses = new Map();
+    this.retainedCanonicalLeaderNodeIdsByPartition = new Map();
   }
 
   /**
@@ -196,9 +162,9 @@ class QueryExecutorSegment1 {
       sessionId,
       partitionId,
     );
-    return pinState.state === QUERY_EXECUTOR_LITERAL.STRING_PINNED
-      ? pinState.address
-      : null;
+    return pinState.state === QUERY_EXECUTOR_LITERAL.STRING_PINNED ?
+      pinState.address :
+      null;
   }
 
   /**
@@ -297,11 +263,11 @@ class QueryExecutorSegment1 {
       if (preferredCandidateIndex === NUM.ZERO) {
         return candidates;
       }
-      const preferredService = Array.isArray(routingSnapshot?.routableServices)
-        ? routingSnapshot.routableServices.find(
-            (service) => service?.address === preferredAddress,
-          )
-        : null;
+      const preferredService = Array.isArray(routingSnapshot?.routableServices) ?
+        routingSnapshot.routableServices.find(
+          (service) => service?.address === preferredAddress,
+        ) :
+        null;
       if (
         !preferredService ||
         this.isTemporarilyUnroutableAddress(partitionId, preferredAddress)
@@ -521,9 +487,9 @@ class QueryExecutorSegment1 {
       }
       let partitionIds = [];
       if (tablePlans) {
-        const planned = tablePlans.get
-          ? tablePlans.get(joinAlias) || tablePlans.get(joinTableName)
-          : tablePlans[joinAlias] || tablePlans[joinTableName];
+        const planned = tablePlans.get ?
+          tablePlans.get(joinAlias) || tablePlans.get(joinTableName) :
+          tablePlans[joinAlias] || tablePlans[joinTableName];
         if (planned?.partitions) {
           partitionIds = planned.partitions;
         }
@@ -553,7 +519,7 @@ class QueryExecutorSegment1 {
     options,
     queryTimestamp,
   ) {
-    const { joinPartitions } = options;
+    const {joinPartitions} = options;
     const fanoutMetrics = [];
     this.logger.debug(QUERY_LOG_MSG.EXECUTING_CROSS_PARTITION_JOIN, {
       mainTable: ast.from.name,
@@ -722,7 +688,7 @@ class QueryExecutorSegment1 {
     const condition = join.condition;
 
     // Extract join columns from condition
-    const { leftColumn, rightColumn } = this.extractJoinColumns(
+    const {leftColumn, rightColumn} = this.extractJoinColumns(
       condition,
       leftTableName,
       rightTableName,
@@ -973,39 +939,39 @@ class QueryExecutorSegment1 {
     strategy,
   ) {
     switch (strategy) {
-      case DISTRIBUTED_JOIN_STRATEGY.BROADCAST:
-        return this.performJoin(
-          leftRows,
-          rightRows,
-          join,
-          leftTableRef,
-          rightTableRef,
-        );
-      case DISTRIBUTED_JOIN_STRATEGY.REPARTITION:
-        return this.performJoin(
-          leftRows,
-          rightRows,
-          join,
-          leftTableRef,
-          rightTableRef,
-        );
-      case DISTRIBUTED_JOIN_STRATEGY.NESTED_LOOP:
-        return this.nestedLoopJoin(
-          leftRows,
-          rightRows,
-          join.condition,
-          (join.joinType || QUERY_JOIN_TYPE.INNER).toUpperCase(),
-          leftTableRef,
-          rightTableRef,
-        );
-      default:
-        return this.performJoin(
-          leftRows,
-          rightRows,
-          join,
-          leftTableRef,
-          rightTableRef,
-        );
+    case DISTRIBUTED_JOIN_STRATEGY.BROADCAST:
+      return this.performJoin(
+        leftRows,
+        rightRows,
+        join,
+        leftTableRef,
+        rightTableRef,
+      );
+    case DISTRIBUTED_JOIN_STRATEGY.REPARTITION:
+      return this.performJoin(
+        leftRows,
+        rightRows,
+        join,
+        leftTableRef,
+        rightTableRef,
+      );
+    case DISTRIBUTED_JOIN_STRATEGY.NESTED_LOOP:
+      return this.nestedLoopJoin(
+        leftRows,
+        rightRows,
+        join.condition,
+        (join.joinType || QUERY_JOIN_TYPE.INNER).toUpperCase(),
+        leftTableRef,
+        rightTableRef,
+      );
+    default:
+      return this.performJoin(
+        leftRows,
+        rightRows,
+        join,
+        leftTableRef,
+        rightTableRef,
+      );
     }
   }
 
@@ -1176,4 +1142,4 @@ class QueryExecutorSegment1 {
    */
 }
 
-export { QueryExecutorSegment1 };
+export {QueryExecutorSegment1};

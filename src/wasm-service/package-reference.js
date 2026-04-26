@@ -39,21 +39,21 @@ const PKG_REF_ERROR = Object.freeze({
   NAMESPACE_EMPTY:
     'Namespace must not be empty',
   NAMESPACE_INVALID_FORMAT:
-    'Namespace must start with a lowercase letter and contain'
-    + ' only lowercase alphanumeric characters and hyphens'
-    + ` (max ${PACKAGE_ID_MAX_LENGTH.NAMESPACE} chars)`,
+    'Namespace must start with a lowercase letter and contain' +
+    ' only lowercase alphanumeric characters and hyphens' +
+    ` (max ${PACKAGE_ID_MAX_LENGTH.NAMESPACE} chars)`,
   NAME_EMPTY:
     'Name must not be empty',
   NAME_INVALID_FORMAT:
-    'Name must start with a lowercase letter and contain'
-    + ' only lowercase alphanumeric characters and hyphens'
-    + ` (max ${PACKAGE_ID_MAX_LENGTH.NAME} chars)`,
+    'Name must start with a lowercase letter and contain' +
+    ' only lowercase alphanumeric characters and hyphens' +
+    ` (max ${PACKAGE_ID_MAX_LENGTH.NAME} chars)`,
   VERSION_EMPTY:
     'Version must not be empty',
   VERSION_INVALID_FORMAT:
-    'Version must start with a digit and contain'
-    + ' only alphanumeric characters, dots, hyphens, and plus'
-    + ` (max ${PACKAGE_ID_MAX_LENGTH.VERSION} chars)`,
+    'Version must start with a digit and contain' +
+    ' only alphanumeric characters, dots, hyphens, and plus' +
+    ` (max ${PACKAGE_ID_MAX_LENGTH.VERSION} chars)`,
 });
 
 /**
@@ -84,11 +84,11 @@ function parsePackageReference(ref) {
  * @return {string} Canonical reference (namespace:name@version).
  */
 function formatPackageReference(parts) {
-  return parts.namespace
-    + PACKAGE_ID_SEPARATOR
-    + parts.name
-    + PACKAGE_VERSION_SEPARATOR
-    + parts.version;
+  return parts.namespace +
+    PACKAGE_ID_SEPARATOR +
+    parts.name +
+    PACKAGE_VERSION_SEPARATOR +
+    parts.version;
 }
 
 /**

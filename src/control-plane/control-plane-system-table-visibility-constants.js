@@ -39,11 +39,11 @@ function isPendingControlPlaneSystemTableVisibilityState(value) {
 function resolveControlPlaneSystemTableVisibilityState(
   visibilityStates,
   fallback =
-    CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE.VISIBLE,
+  CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE.VISIBLE,
 ) {
   const normalizedStates = Array.isArray(visibilityStates) ?
     visibilityStates.map((value) =>
-      normalizeControlPlaneSystemTableVisibilityState(value, null)
+      normalizeControlPlaneSystemTableVisibilityState(value, null),
     ) :
     [];
   for (const visibilityState of

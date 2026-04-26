@@ -24,6 +24,7 @@ function createMoveStateProvider(options = {}) {
     currentReplicas = [],
     inFlightOperations = [],
     globalInFlightOperations = inFlightOperations,
+    terminalFailedReplaceTargetReplicaIds = new Set(),
   } = options;
   return {
     getAvailableNodes: () => availableNodes,
@@ -36,6 +37,8 @@ function createMoveStateProvider(options = {}) {
     getInFlightOperations: () => inFlightOperations,
     getGlobalTopologyBlockingInFlightOperations: () =>
       globalInFlightOperations,
+    getTerminalFailedReplaceTargetReplicaIds: () =>
+      terminalFailedReplaceTargetReplicaIds,
     hasPendingMove: () => false,
     hasPendingAddForNode: () => false,
   };
@@ -185,6 +188,144 @@ test('MovePlanner in-flight cleanup semantics', async (t) => {
         moves,
         [],
         'planner should not remove a misplaced active replica when it cannot also schedule the replacement add',
+      );
+    },
+  );
+
+  await t.test(
+    'removes terminal failed replace targets that still occupy placement',
+    async (t) => {
+      const TEST_ENTITY_ID = 'sql_transaction_participants-p1';
+      const TEST_TARGET_REPLICA_COUNT = 3;
+      const TEST_STALE_TARGET_REPLICA_ID =
+        'sql_transaction_participants-p1-r4';
+      const TEST_NODE_ID_A = 'node-1';
+      const TEST_NODE_ID_B = 'node-2';
+      const TEST_NODE_ID_C = 'node-3';
+      const TEST_STALE_TARGET_NODE_ID = 'node-4';
+      const currentReplicas = [
+        {
+          replica_id: 'sql_transaction_participants-p1-r1',
+          node_id: TEST_NODE_ID_A,
+          status: ReplicaStatus.ACTIVE,
+        },
+        {
+          replica_id: 'sql_transaction_participants-p1-r2',
+          node_id: TEST_NODE_ID_B,
+          status: ReplicaStatus.ACTIVE,
+        },
+        {
+          replica_id: 'sql_transaction_participants-p1-r3',
+          node_id: TEST_NODE_ID_C,
+          status: ReplicaStatus.ACTIVE,
+        },
+        {
+          replica_id: TEST_STALE_TARGET_REPLICA_ID,
+          node_id: TEST_STALE_TARGET_NODE_ID,
+          status: ReplicaStatus.SYNCING,
+        },
+      ];
+      const planner = new MovePlanner({
+        entityId: TEST_ENTITY_ID,
+        entityType: REBALANCER_ENTITY_TYPE.PARTITION,
+        moveStateProvider: createMoveStateProvider({
+          currentReplicas,
+          terminalFailedReplaceTargetReplicaIds: new Set([
+            TEST_STALE_TARGET_REPLICA_ID,
+          ]),
+        }),
+      });
+
+      const moves = planner.calculateMoves(currentReplicas, {
+        targetReplicaCount: TEST_TARGET_REPLICA_COUNT,
+        targetNodes: [
+          TEST_NODE_ID_A,
+          TEST_NODE_ID_B,
+          TEST_NODE_ID_C,
+        ],
+        degraded: false,
+      });
+
+      t.same(
+        moves,
+        [
+          {
+            type: REBALANCER_MOVE_TYPE.REMOVE,
+            replicaId: TEST_STALE_TARGET_REPLICA_ID,
+            nodeId: TEST_STALE_TARGET_NODE_ID,
+            reason: MOVE_REASON.REPLICA_FAILED,
+          },
+        ],
+        'failed replace target cleanup should not require a failed service status',
+      );
+    },
+  );
+
+  await t.test(
+    'does not duplicate terminal failed target cleanup for active off-target replicas',
+    async (t) => {
+      const TEST_ENTITY_ID = 'sql_transaction_participants-p1';
+      const TEST_TARGET_REPLICA_COUNT = 3;
+      const TEST_STALE_TARGET_REPLICA_ID =
+        'sql_transaction_participants-p1-r4';
+      const TEST_NODE_ID_A = 'node-1';
+      const TEST_NODE_ID_B = 'node-2';
+      const TEST_NODE_ID_C = 'node-3';
+      const TEST_STALE_TARGET_NODE_ID = 'node-4';
+      const currentReplicas = [
+        {
+          replica_id: 'sql_transaction_participants-p1-r1',
+          node_id: TEST_NODE_ID_A,
+          status: ReplicaStatus.ACTIVE,
+        },
+        {
+          replica_id: 'sql_transaction_participants-p1-r2',
+          node_id: TEST_NODE_ID_B,
+          status: ReplicaStatus.ACTIVE,
+        },
+        {
+          replica_id: 'sql_transaction_participants-p1-r3',
+          node_id: TEST_NODE_ID_C,
+          status: ReplicaStatus.ACTIVE,
+        },
+        {
+          replica_id: TEST_STALE_TARGET_REPLICA_ID,
+          node_id: TEST_STALE_TARGET_NODE_ID,
+          status: ReplicaStatus.ACTIVE,
+        },
+      ];
+      const planner = new MovePlanner({
+        entityId: TEST_ENTITY_ID,
+        entityType: REBALANCER_ENTITY_TYPE.PARTITION,
+        moveStateProvider: createMoveStateProvider({
+          currentReplicas,
+          terminalFailedReplaceTargetReplicaIds: new Set([
+            TEST_STALE_TARGET_REPLICA_ID,
+          ]),
+        }),
+      });
+
+      const moves = planner.calculateMoves(currentReplicas, {
+        targetReplicaCount: TEST_TARGET_REPLICA_COUNT,
+        targetNodes: [
+          TEST_NODE_ID_A,
+          TEST_NODE_ID_B,
+          TEST_NODE_ID_C,
+        ],
+        degraded: false,
+      });
+
+      t.same(
+        moves,
+        [
+          {
+            type: REBALANCER_MOVE_TYPE.REMOVE,
+            replicaId: TEST_STALE_TARGET_REPLICA_ID,
+            nodeId: TEST_STALE_TARGET_NODE_ID,
+            reason: MOVE_REASON.REPLICA_FAILED,
+          },
+        ],
+        'active stale replace targets should only produce one canonical failed cleanup remove',
       );
     },
   );
@@ -379,5 +520,4 @@ test('MovePlanner in-flight cleanup semantics', async (t) => {
       );
     },
   );
-
 });

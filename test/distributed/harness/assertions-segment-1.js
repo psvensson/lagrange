@@ -9,104 +9,121 @@
  *   - leader change tracking with quiet window
  */
 
-import { CONVERGENCE_DEFAULTS, TIMEOUTS } from "./constants.js";
-import { normalizeReplicaOperationRecord } from "../../../src/rebalancer/replica-operation-liveness.js";
+import {CONVERGENCE_DEFAULTS} from './constants.js';
 
 // --- SQL Queries ---
 const SERVICES_QUERY =
-  "SELECT * FROM services WHERE service_type = 'partition'";
-const NODES_QUERY = "SELECT * FROM nodes WHERE status = 'active'";
-const PARTITIONS_QUERY = "SELECT * FROM partitions";
+  'SELECT * FROM services WHERE service_type = \'partition\'';
+const NODES_QUERY = 'SELECT * FROM nodes WHERE status = \'active\'';
+const PARTITIONS_QUERY = 'SELECT * FROM partitions';
 const CONTROL_SNAPSHOT_REQUIRED_ERROR_PREFIX =
-  "Control snapshot API is required for convergence assertions on node ";
+  'Control snapshot API is required for convergence assertions on node ';
 const CONVERGENCE_REACHABILITY_TIMEOUT_MS = 1000;
 const CONVERGENCE_CONTROL_SNAPSHOT_TIMEOUT_MS = 10000;
-const ADMIN_SOCKET_LANE_DEFAULT = "default";
-const ADMIN_SOCKET_LANE_SNAPSHOT = "snapshot";
+const ADMIN_SOCKET_LANE_DEFAULT = 'default';
+const ADMIN_SOCKET_LANE_SNAPSHOT = 'snapshot';
 
 // --- Service row field values ---
-const RAFT_ROLE_LEARNER = "learner";
-const REACHABILITY_SUMMARY_SEPARATOR = ", ";
-const REACHABILITY_SUMMARY_SOURCE_UNKNOWN = "unknown";
-const REACHABILITY_SUMMARY_ERROR_NONE = "none";
-const STATUS_LEADER = "leader";
-const STATUS_UNKNOWN = "unknown";
-const VALUE_UNKNOWN = "unknown";
-const VALUE_NONE = "none";
-const VALUE_UNAVAILABLE = "unavailable";
-const REPLICA_MEMBERSHIP_SEPARATOR = "; ";
-const REPLICA_MEMBER_SEPARATOR = ",";
-const MEMBER_SNIPPET_PREFIX = "[";
-const MEMBER_SNIPPET_SUFFIX = "]";
-const MEMBER_REPLICA_PREFIX = " replicas=";
-const MEMBER_LEADER_PREFIX = " leader=";
-const MEMBER_VOTER_PREFIX = " voters=";
-const MEMBER_VOTER_SEPARATOR = "/";
-const SNIPPET_EXTRA_PREFIX = "+";
-const SNIPPET_EXTRA_SUFFIX = " more";
+const RAFT_ROLE_LEARNER = 'learner';
+const REACHABILITY_SUMMARY_SEPARATOR = ', ';
+const REACHABILITY_SUMMARY_SOURCE_UNKNOWN = 'unknown';
+const REACHABILITY_SUMMARY_ERROR_NONE = 'none';
+const STATUS_LEADER = 'leader';
+const STATUS_UNKNOWN = 'unknown';
+const VALUE_UNKNOWN = 'unknown';
+const VALUE_NONE = 'none';
+const VALUE_UNAVAILABLE = 'unavailable';
+const REPLICA_MEMBERSHIP_SEPARATOR = '; ';
+const REPLICA_MEMBER_SEPARATOR = ',';
+const MEMBER_SNIPPET_PREFIX = '[';
+const MEMBER_SNIPPET_SUFFIX = ']';
+const MEMBER_REPLICA_PREFIX = ' replicas=';
+const MEMBER_LEADER_PREFIX = ' leader=';
+const MEMBER_VOTER_PREFIX = ' voters=';
+const MEMBER_VOTER_SEPARATOR = '/';
+const SNIPPET_EXTRA_PREFIX = '+';
+const SNIPPET_EXTRA_SUFFIX = ' more';
 const PARTITION_MEMBERSHIP_SNIPPET_LIMIT = 12;
 const PARTITION_REPLICA_SNIPPET_LIMIT = 6;
 const OPERATION_HISTORY_LIMIT = 20;
 const OPERATION_HISTORY_SNIPPET_LIMIT = 8;
-const OPERATION_HISTORY_SEPARATOR = " | ";
-const OPERATION_HISTORY_AT_PREFIX = "@";
+const OPERATION_HISTORY_SEPARATOR = ' | ';
+const OPERATION_HISTORY_AT_PREFIX = '@';
 const OPERATION_FIELD_CANDIDATE_IDS = Object.freeze([
-  "operation_id",
-  "operationId",
-  "id",
+  'operation_id',
+  'operationId',
+  'id',
 ]);
 const OPERATION_FIELD_CANDIDATE_PARTITION_IDS = Object.freeze([
-  "partition_id",
-  "partitionId",
+  'partition_id',
+  'partitionId',
 ]);
 const OPERATION_FIELD_CANDIDATE_TYPES = Object.freeze([
-  "operation",
-  "operation_type",
-  "type",
-  "action",
+  'operation',
+  'operation_type',
+  'type',
+  'action',
 ]);
-const OPERATION_FIELD_CANDIDATE_STATUSES = Object.freeze(["status", "state"]);
+const OPERATION_FIELD_CANDIDATE_STATUSES = Object.freeze(['status', 'state']);
 const OPERATION_FIELD_CANDIDATE_FROM_NODE_IDS = Object.freeze([
-  "from_node_id",
-  "source_node_id",
-  "sourceNodeId",
+  'from_node_id',
+  'source_node_id',
+  'sourceNodeId',
 ]);
 const OPERATION_FIELD_CANDIDATE_TO_NODE_IDS = Object.freeze([
-  "to_node_id",
-  "target_node_id",
-  "targetNodeId",
+  'to_node_id',
+  'target_node_id',
+  'targetNodeId',
 ]);
 const OPERATION_FIELD_CANDIDATE_TIMESTAMPS = Object.freeze([
-  "updated_at",
-  "completed_at",
-  "started_at",
-  "created_at",
-  "timestamp",
+  'updated_at',
+  'completed_at',
+  'started_at',
+  'created_at',
+  'timestamp',
 ]);
-const CONTROL_SNAPSHOT_FIELD_NODES = "nodes";
-const CONTROL_SNAPSHOT_FIELD_PUBLISHED_NODES = "publishedNodes";
-const CONTROL_SNAPSHOT_FIELD_PROJECTED_NODES = "projectedNodes";
-const CONTROL_SNAPSHOT_FIELD_PARTITIONS = "partitions";
-const CONTROL_SNAPSHOT_FIELD_LEADERS = "leaders";
-const CONTROL_SNAPSHOT_FIELD_VOTER_COUNTS = "voterCounts";
-const CONTROL_SNAPSHOT_FIELD_SNAPSHOT_REVISION = "snapshotRevision";
-const CONTROL_SNAPSHOT_FIELD_SNAPSHOT_REVISION_STATE = "snapshotRevisionState";
+const CONTROL_SNAPSHOT_FIELD_NODES = 'nodes';
+const CONTROL_SNAPSHOT_FIELD_PUBLISHED_NODES = 'publishedNodes';
+const CONTROL_SNAPSHOT_FIELD_PROJECTED_NODES = 'projectedNodes';
+const CONTROL_SNAPSHOT_FIELD_PARTITIONS = 'partitions';
+const CONTROL_SNAPSHOT_FIELD_LEADERS = 'leaders';
+const CONTROL_SNAPSHOT_FIELD_PARTITION_LEADER_AUTHORITY =
+  'partitionLeaderAuthority';
+const CONTROL_SNAPSHOT_FIELD_OBSERVATION_MODE = 'observationMode';
+const CONTROL_SNAPSHOT_FIELD_ADMIN_OBSERVATION = 'adminObservation';
+const CONTROL_SNAPSHOT_FIELD_VOTER_COUNTS = 'voterCounts';
+const CONTROL_SNAPSHOT_FIELD_SNAPSHOT_REVISION = 'snapshotRevision';
+const CONTROL_SNAPSHOT_FIELD_SNAPSHOT_REVISION_STATE = 'snapshotRevisionState';
 const CONTROL_SNAPSHOT_FIELD_SNAPSHOT_EXPECTED_MINIMUM_REVISION =
-  "snapshotExpectedMinimumRevision";
-const CONTROL_SNAPSHOT_FIELD_SNAPSHOT_REVISION_GAP = "snapshotRevisionGap";
-const CONTROL_SNAPSHOT_FIELD_SNAPSHOT_RESUME_TOKEN = "snapshotResumeToken";
-const CONTROL_SNAPSHOT_FIELD_REPLICA_OPERATIONS = "replicaOperations";
-const CONTROL_SNAPSHOT_FIELD_IN_FLIGHT_COUNT = "inFlightCount";
-const CONTROL_SNAPSHOT_FIELD_STATUS_HISTOGRAM = "statusHistogram";
-const CONTROL_SNAPSHOT_FIELD_ROWS = "rows";
-const CONTROL_SNAPSHOT_FIELD_PARTITION_MEMBERSHIP = "partitionMembership";
+  'snapshotExpectedMinimumRevision';
+const CONTROL_SNAPSHOT_FIELD_SNAPSHOT_REVISION_GAP = 'snapshotRevisionGap';
+const CONTROL_SNAPSHOT_FIELD_SNAPSHOT_RESUME_TOKEN = 'snapshotResumeToken';
+const CONTROL_SNAPSHOT_FIELD_REPLICA_OPERATIONS = 'replicaOperations';
+const CONTROL_SNAPSHOT_FIELD_IN_FLIGHT_COUNT = 'inFlightCount';
+const CONTROL_SNAPSHOT_FIELD_STATUS_HISTOGRAM = 'statusHistogram';
+const CONTROL_SNAPSHOT_FIELD_ROWS = 'rows';
+const CONTROL_SNAPSHOT_FIELD_PARTITION_MEMBERSHIP = 'partitionMembership';
 const CONTROL_SNAPSHOT_FIELD_REPLICA_ROLE_DIAGNOSTICS =
-  "replicaRoleDiagnostics";
-const CONTROL_SNAPSHOT_FIELD_ACTIVE_NODE_VIEWS = "activeNodeViews";
-const REPLICA_ROLE_DIAGNOSTICS_LEADER_NODE_IDS = "replicaLeaderNodeIds";
-const CONTROL_SNAPSHOT_FIELD_REPLICA_ROLES = "replicaRoles";
-const REPLICA_ROLE_LEADER = "leader";
-const LEADER_ADDRESS_PATH_SEPARATOR = "/";
+  'replicaRoleDiagnostics';
+const CONTROL_SNAPSHOT_FIELD_ACTIVE_NODE_VIEWS = 'activeNodeViews';
+const REPLICA_ROLE_DIAGNOSTICS_LEADER_NODE_IDS = 'replicaLeaderNodeIds';
+const CONTROL_SNAPSHOT_FIELD_REPLICA_ROLES = 'replicaRoles';
+const REPLICA_ROLE_LEADER = 'leader';
+const PARTITION_LEADER_AUTHORITY_FIELD_SCHEMA_VERSION = 'schemaVersion';
+const PARTITION_LEADER_AUTHORITY_FIELD_PARTITION_ID = 'partitionId';
+const PARTITION_LEADER_AUTHORITY_FIELD_LEADER_NODE_ID = 'leaderNodeId';
+const PARTITION_LEADER_AUTHORITY_FIELD_LEADER_SOURCE = 'leaderSource';
+const PARTITION_LEADER_AUTHORITY_FIELD_TOPOLOGY_EPOCH = 'topologyEpoch';
+const PARTITION_LEADER_AUTHORITY_FIELD_MEMBERSHIP_EPOCH = 'membershipEpoch';
+const PARTITION_LEADER_AUTHORITY_FIELD_SNAPSHOT_REVISION = 'snapshotRevision';
+const PARTITION_LEADER_AUTHORITY_FIELD_REPLICA_ROLE_CONSISTENT =
+  'replicaRoleConsistent';
+const PARTITION_LEADER_AUTHORITY_FIELD_REPLICA_LEADER_NODE_IDS =
+  'replicaLeaderNodeIds';
+const CONTROL_SNAPSHOT_ADMIN_OBSERVATION_FIELD_MODE = 'mode';
+const PARTITION_LEADER_AUTHORITY_INTEGER_AVAILABLE = 'available';
+const PARTITION_LEADER_AUTHORITY_INTEGER_UNAVAILABLE = 'unavailable';
+const LEADER_ADDRESS_PATH_SEPARATOR = '/';
 // Matches a UUID-style prefix (8-4-4-4-12 hex) at the start of
 // an address, used to detect bare-node-ID-prefixed replica paths
 // like `7493b0ab-1234-5678-9abc-def012345678/partition/p1-r1`.
@@ -130,7 +147,7 @@ const UUID_PREFIX_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-/i;
  * @returns {string}
  */
 function normalizeLeaderAddress(address) {
-  const str = String(address || "");
+  const str = String(address || '');
   if (!UUID_PREFIX_PATTERN.test(str)) {
     return str;
   }
@@ -191,9 +208,9 @@ function isTolerableActiveNodeSkew(activeNodesA, activeNodesB, maxSkew) {
   if (!Array.isArray(activeNodesA) || !Array.isArray(activeNodesB)) {
     return false;
   }
-  const allowedSkew = Number.isFinite(maxSkew)
-    ? Math.max(0, Math.floor(maxSkew))
-    : 0;
+  const allowedSkew = Number.isFinite(maxSkew) ?
+    Math.max(0, Math.floor(maxSkew)) :
+    0;
   if (allowedSkew <= 0) {
     return false;
   }
@@ -234,9 +251,9 @@ function isTolerablePartitionSkew(partitionsA, partitionsB, maxSkew) {
   if (!Array.isArray(partitionsA) || !Array.isArray(partitionsB)) {
     return false;
   }
-  const allowedSkew = Number.isFinite(maxSkew)
-    ? Math.max(0, Math.floor(maxSkew))
-    : 0;
+  const allowedSkew = Number.isFinite(maxSkew) ?
+    Math.max(0, Math.floor(maxSkew)) :
+    0;
   if (allowedSkew <= 0) {
     return false;
   }
@@ -272,15 +289,15 @@ function isTolerablePartitionSkew(partitionsA, partitionsB, maxSkew) {
  */
 async function probeNodeReachability(node, options = {}) {
   const timeoutMs =
-    Number.isFinite(options?.timeoutMs) && options.timeoutMs > 0
-      ? Math.floor(options.timeoutMs)
-      : CONVERGENCE_REACHABILITY_TIMEOUT_MS;
-  if (typeof node?.getReachabilityDiagnostics === "function") {
+    Number.isFinite(options?.timeoutMs) && options.timeoutMs > 0 ?
+      Math.floor(options.timeoutMs) :
+      CONVERGENCE_REACHABILITY_TIMEOUT_MS;
+  if (typeof node?.getReachabilityDiagnostics === 'function') {
     const diagnostics = await node.getReachabilityDiagnostics({
       timeoutMs,
     });
     return {
-      nodeId: String(diagnostics?.nodeId || node?.id || "unknown"),
+      nodeId: String(diagnostics?.nodeId || node?.id || 'unknown'),
       reachable: diagnostics?.reachable === true,
       adminReady: diagnostics?.adminReady === true,
       reachableBy: diagnostics?.reachableBy || null,
@@ -289,15 +306,15 @@ async function probeNodeReachability(node, options = {}) {
     };
   }
 
-  if (typeof node?.isReachable === "function") {
+  if (typeof node?.isReachable === 'function') {
     const result = await node.isReachable();
     if (
       result &&
-      typeof result === "object" &&
-      Object.prototype.hasOwnProperty.call(result, "reachable")
+      typeof result === 'object' &&
+      Object.prototype.hasOwnProperty.call(result, 'reachable')
     ) {
       return {
-        nodeId: String(result?.nodeId || node?.id || "unknown"),
+        nodeId: String(result?.nodeId || node?.id || 'unknown'),
         reachable: result?.reachable === true,
         adminReady: result?.adminReady === true,
         reachableBy: result?.reachableBy || null,
@@ -307,21 +324,21 @@ async function probeNodeReachability(node, options = {}) {
     }
 
     return {
-      nodeId: String(node?.id || "unknown"),
+      nodeId: String(node?.id || 'unknown'),
       reachable: result === true,
       adminReady: result === true,
       reachableBy: null,
-      lastError: result === true ? null : "reachability probe failed",
+      lastError: result === true ? null : 'reachability probe failed',
       diagnostics: null,
     };
   }
 
   return {
-    nodeId: String(node?.id || "unknown"),
+    nodeId: String(node?.id || 'unknown'),
     reachable: false,
     adminReady: false,
     reachableBy: null,
-    lastError: "node does not expose reachability probe",
+    lastError: 'node does not expose reachability probe',
     diagnostics: null,
   };
 }
@@ -333,22 +350,22 @@ async function probeNodeReachability(node, options = {}) {
  */
 function summarizeReachabilityReports(reports) {
   if (!Array.isArray(reports) || reports.length === 0) {
-    return "";
+    return '';
   }
   const parts = [];
   for (const report of reports) {
     const source = report?.reachableBy || REACHABILITY_SUMMARY_SOURCE_UNKNOWN;
     const error = report?.lastError || REACHABILITY_SUMMARY_ERROR_NONE;
-    const state = report?.reachable === true ? "reachable" : "unreachable";
+    const state = report?.reachable === true ? 'reachable' : 'unreachable';
     parts.push(
-      String(report?.nodeId || "unknown") +
-        "[" +
+      String(report?.nodeId || 'unknown') +
+        '[' +
         state +
-        ",source=" +
+        ',source=' +
         source +
-        ",error=" +
+        ',error=' +
         error +
-        "]",
+        ']',
     );
   }
   return parts.join(REACHABILITY_SUMMARY_SEPARATOR);
@@ -368,11 +385,11 @@ function summarizeReachabilityReports(reports) {
  */
 function isVoterReady(row) {
   if (!row) return false;
-  if (row.service_type !== "partition") return false;
-  const status = typeof row.status === "string" ? row.status.toLowerCase() : "";
-  if (status !== "active") return false;
+  if (row.service_type !== 'partition') return false;
+  const status = typeof row.status === 'string' ? row.status.toLowerCase() : '';
+  if (status !== 'active') return false;
   const role =
-    typeof row.raft_role === "string" ? row.raft_role.toLowerCase() : null;
+    typeof row.raft_role === 'string' ? row.raft_role.toLowerCase() : null;
   if (!role || role === RAFT_ROLE_LEARNER) return false;
   if (!row.address) return false;
   return true;
@@ -409,7 +426,7 @@ function extractLeaders(rows) {
   for (const row of rows) {
     if (!isVoterReady(row)) continue;
     const role = row.raft_role.toLowerCase();
-    if (role === "leader") {
+    if (role === 'leader') {
       leaders.set(row.partition_id, row.address);
     }
   }
@@ -440,7 +457,7 @@ function supplementPartitionIdsFromServiceTopology(
 
   if (leaders instanceof Map) {
     for (const partitionId of leaders.keys()) {
-      if (typeof partitionId === "string" && partitionId.length > 0) {
+      if (typeof partitionId === 'string' && partitionId.length > 0) {
         partitionIds.add(partitionId);
       }
     }
@@ -451,7 +468,7 @@ function supplementPartitionIdsFromServiceTopology(
   }
 
   for (const [partitionId, voterCount] of voterCounts.entries()) {
-    if (typeof partitionId !== "string" || partitionId.length === 0) {
+    if (typeof partitionId !== 'string' || partitionId.length === 0) {
       continue;
     }
     if (voterCount >= CONVERGENCE_DEFAULTS.targetVoterCount) {
@@ -514,7 +531,7 @@ function normalizeStatusCountMap(statusHistogram) {
   const statusCounts = new Map();
   if (
     !statusHistogram ||
-    typeof statusHistogram !== "object" ||
+    typeof statusHistogram !== 'object' ||
     Array.isArray(statusHistogram)
   ) {
     return statusCounts;
@@ -532,7 +549,7 @@ function normalizeVoterCountMap(voterCounts) {
   const counts = new Map();
   if (
     !voterCounts ||
-    typeof voterCounts !== "object" ||
+    typeof voterCounts !== 'object' ||
     Array.isArray(voterCounts)
   ) {
     return counts;
@@ -551,24 +568,41 @@ function extractControlSnapshotPayload(result, nodeId) {
   if (
     rows.length === 0 ||
     !rows[0] ||
-    typeof rows[0] !== "object" ||
+    typeof rows[0] !== 'object' ||
     Array.isArray(rows[0])
   ) {
     throw new Error(
-      "Control snapshot query returned no rows for node " +
+      'Control snapshot query returned no rows for node ' +
         String(nodeId || VALUE_UNKNOWN),
     );
   }
   return rows[0];
 }
 
+function extractControlSnapshotObservationMode(snapshot) {
+  const explicitMode = String(
+    snapshot?.[CONTROL_SNAPSHOT_FIELD_OBSERVATION_MODE] || '',
+  ).trim();
+  if (explicitMode.length > 0) {
+    return explicitMode;
+  }
+  const adminObservationMode = String(
+    snapshot?.[CONTROL_SNAPSHOT_FIELD_ADMIN_OBSERVATION]?.[
+      CONTROL_SNAPSHOT_ADMIN_OBSERVATION_FIELD_MODE
+    ] || '',
+  ).trim();
+  return adminObservationMode.length > 0 ?
+    adminObservationMode :
+    VALUE_UNKNOWN;
+}
+
 function extractControlSnapshotNodeIds(snapshot) {
   const nodeIds = new Set();
-  const nodes = Array.isArray(snapshot?.[CONTROL_SNAPSHOT_FIELD_NODES])
-    ? snapshot[CONTROL_SNAPSHOT_FIELD_NODES]
-    : [];
+  const nodes = Array.isArray(snapshot?.[CONTROL_SNAPSHOT_FIELD_NODES]) ?
+    snapshot[CONTROL_SNAPSHOT_FIELD_NODES] :
+    [];
   for (const nodeId of nodes) {
-    const normalizedNodeId = String(nodeId || "").trim();
+    const normalizedNodeId = String(nodeId || '').trim();
     if (normalizedNodeId.length === 0) {
       continue;
     }
@@ -584,7 +618,7 @@ function extractControlSnapshotPublishedNodeIds(snapshot) {
     ];
   const hasActiveNodeViews =
     activeNodeViews &&
-    typeof activeNodeViews === "object" &&
+    typeof activeNodeViews === 'object' &&
     !Array.isArray(activeNodeViews);
   if (
     hasActiveNodeViews &&
@@ -595,15 +629,15 @@ function extractControlSnapshotPublishedNodeIds(snapshot) {
 
   const explicitPublishedNodes = Array.isArray(
     snapshot?.[CONTROL_SNAPSHOT_FIELD_PUBLISHED_NODES],
-  )
-    ? snapshot[CONTROL_SNAPSHOT_FIELD_PUBLISHED_NODES]
-    : Array.isArray(activeNodeViews?.publishedNodeIds)
-      ? activeNodeViews.publishedNodeIds
-      : null;
+  ) ?
+    snapshot[CONTROL_SNAPSHOT_FIELD_PUBLISHED_NODES] :
+    Array.isArray(activeNodeViews?.publishedNodeIds) ?
+      activeNodeViews.publishedNodeIds :
+      null;
   if (Array.isArray(explicitPublishedNodes)) {
     const nodeIds = new Set();
     for (const nodeId of explicitPublishedNodes) {
-      const normalizedNodeId = String(nodeId || "").trim();
+      const normalizedNodeId = String(nodeId || '').trim();
       if (normalizedNodeId.length === 0) {
         continue;
       }
@@ -619,7 +653,7 @@ function extractControlSnapshotPublishedNodeIds(snapshot) {
   }
   const nodeIds = new Set();
   for (const nodeId of publicationConvergence.publishedActiveNodeIds) {
-    const normalizedNodeId = String(nodeId || "").trim();
+    const normalizedNodeId = String(nodeId || '').trim();
     if (normalizedNodeId.length === 0) {
       continue;
     }
@@ -635,17 +669,17 @@ function extractControlSnapshotProjectedNodeIds(snapshot) {
     ];
   const projectedNodes = Array.isArray(
     snapshot?.[CONTROL_SNAPSHOT_FIELD_PROJECTED_NODES],
-  )
-    ? snapshot[CONTROL_SNAPSHOT_FIELD_PROJECTED_NODES]
-    : Array.isArray(activeNodeViews?.projectedNodeIds)
-      ? activeNodeViews.projectedNodeIds
-      : null;
+  ) ?
+    snapshot[CONTROL_SNAPSHOT_FIELD_PROJECTED_NODES] :
+    Array.isArray(activeNodeViews?.projectedNodeIds) ?
+      activeNodeViews.projectedNodeIds :
+      null;
   if (!Array.isArray(projectedNodes)) {
     return extractControlSnapshotNodeIds(snapshot);
   }
   const nodeIds = new Set();
   for (const nodeId of projectedNodes) {
-    const normalizedNodeId = String(nodeId || "").trim();
+    const normalizedNodeId = String(nodeId || '').trim();
     if (normalizedNodeId.length === 0) {
       continue;
     }
@@ -658,11 +692,11 @@ function extractControlSnapshotPartitionIds(snapshot) {
   const partitionIds = new Set();
   const partitions = Array.isArray(
     snapshot?.[CONTROL_SNAPSHOT_FIELD_PARTITIONS],
-  )
-    ? snapshot[CONTROL_SNAPSHOT_FIELD_PARTITIONS]
-    : [];
+  ) ?
+    snapshot[CONTROL_SNAPSHOT_FIELD_PARTITIONS] :
+    [];
   for (const partitionId of partitions) {
-    const normalizedPartitionId = String(partitionId || "").trim();
+    const normalizedPartitionId = String(partitionId || '').trim();
     if (normalizedPartitionId.length === 0) {
       continue;
     }
@@ -674,16 +708,123 @@ function extractControlSnapshotPartitionIds(snapshot) {
 function extractControlSnapshotLeaders(snapshot) {
   const leaders = new Map();
   const leaderMap = snapshot?.[CONTROL_SNAPSHOT_FIELD_LEADERS];
-  if (leaderMap && typeof leaderMap === "object" && !Array.isArray(leaderMap)) {
+  if (leaderMap && typeof leaderMap === 'object' && !Array.isArray(leaderMap)) {
     for (const [partitionId, leaderAddress] of Object.entries(leaderMap)) {
-      const pid = String(partitionId || "").trim();
-      const addr = String(leaderAddress || "").trim();
+      const pid = String(partitionId || '').trim();
+      const addr = String(leaderAddress || '').trim();
       if (pid.length > 0 && addr.length > 0) {
         leaders.set(pid, addr);
       }
     }
   }
   return leaders;
+}
+
+function normalizeControlSnapshotAuthorityString(value) {
+  return String(value || '').trim();
+}
+
+function normalizeControlSnapshotAuthorityInteger(value) {
+  return Number.isInteger(value) && value >= 0 ?
+    {
+      state: PARTITION_LEADER_AUTHORITY_INTEGER_AVAILABLE,
+      value,
+    } :
+    {
+      state: PARTITION_LEADER_AUTHORITY_INTEGER_UNAVAILABLE,
+    };
+}
+
+function normalizeControlSnapshotAuthorityNodeIds(values) {
+  if (!Array.isArray(values)) {
+    return [];
+  }
+  return values
+    .map((value) => normalizeLeaderAddress(
+      normalizeControlSnapshotAuthorityString(value),
+    ))
+    .filter((value) => value.length > 0)
+    .sort();
+}
+
+function extractControlSnapshotPartitionLeaderAuthority(snapshot) {
+  const authorityByPartitionId = new Map();
+  const authority =
+    snapshot?.[CONTROL_SNAPSHOT_FIELD_PARTITION_LEADER_AUTHORITY];
+  if (!authority || typeof authority !== 'object' || Array.isArray(authority)) {
+    return authorityByPartitionId;
+  }
+  const snapshotRevisionMetadata = extractControlSnapshotRevisionMetadata(
+    snapshot,
+  );
+  for (const [fallbackPartitionId, certificate] of Object.entries(authority)) {
+    if (
+      !certificate ||
+      typeof certificate !== 'object' ||
+      Array.isArray(certificate)
+    ) {
+      continue;
+    }
+    const partitionId =
+      normalizeControlSnapshotAuthorityString(
+        certificate[PARTITION_LEADER_AUTHORITY_FIELD_PARTITION_ID],
+      ) || normalizeControlSnapshotAuthorityString(fallbackPartitionId);
+    const leaderNodeId = normalizeLeaderAddress(
+      normalizeControlSnapshotAuthorityString(
+        certificate[PARTITION_LEADER_AUTHORITY_FIELD_LEADER_NODE_ID],
+      ),
+    );
+    if (partitionId.length === 0 || leaderNodeId.length === 0) {
+      continue;
+    }
+    const normalizedCertificate = {
+      partitionId,
+      leaderNodeId,
+      leaderSource:
+        normalizeControlSnapshotAuthorityString(
+          certificate[PARTITION_LEADER_AUTHORITY_FIELD_LEADER_SOURCE],
+        ) || VALUE_UNKNOWN,
+      replicaRoleConsistent:
+        certificate[
+          PARTITION_LEADER_AUTHORITY_FIELD_REPLICA_ROLE_CONSISTENT
+        ] === true,
+      replicaLeaderNodeIds: normalizeControlSnapshotAuthorityNodeIds(
+        certificate[
+          PARTITION_LEADER_AUTHORITY_FIELD_REPLICA_LEADER_NODE_IDS
+        ],
+      ),
+    };
+    const schemaVersion = normalizeControlSnapshotAuthorityInteger(
+      certificate[PARTITION_LEADER_AUTHORITY_FIELD_SCHEMA_VERSION],
+    );
+    if (schemaVersion.state === PARTITION_LEADER_AUTHORITY_INTEGER_AVAILABLE) {
+      normalizedCertificate.schemaVersion = schemaVersion.value;
+    }
+    const topologyEpoch = normalizeControlSnapshotAuthorityInteger(
+      certificate[PARTITION_LEADER_AUTHORITY_FIELD_TOPOLOGY_EPOCH],
+    );
+    if (topologyEpoch.state === PARTITION_LEADER_AUTHORITY_INTEGER_AVAILABLE) {
+      normalizedCertificate.topologyEpoch = topologyEpoch.value;
+    }
+    const membershipEpoch = normalizeControlSnapshotAuthorityInteger(
+      certificate[PARTITION_LEADER_AUTHORITY_FIELD_MEMBERSHIP_EPOCH],
+    );
+    if (membershipEpoch.state === PARTITION_LEADER_AUTHORITY_INTEGER_AVAILABLE) {
+      normalizedCertificate.membershipEpoch = membershipEpoch.value;
+    }
+    const snapshotRevision = normalizeControlSnapshotAuthorityInteger(
+      certificate[PARTITION_LEADER_AUTHORITY_FIELD_SNAPSHOT_REVISION],
+    );
+    const topLevelSnapshotRevision =
+      snapshotRevisionMetadata.snapshotRevision;
+    if (snapshotRevision.state === PARTITION_LEADER_AUTHORITY_INTEGER_AVAILABLE) {
+      normalizedCertificate.snapshotRevision = snapshotRevision.value;
+    } else if (Number.isInteger(topLevelSnapshotRevision)) {
+      normalizedCertificate.snapshotRevision = topLevelSnapshotRevision;
+    }
+    authorityByPartitionId.set(partitionId, normalizedCertificate);
+  }
+  return authorityByPartitionId;
 }
 
 function extractControlSnapshotVoterCounts(snapshot) {
@@ -698,14 +839,14 @@ function extractControlSnapshotVoterCounts(snapshot) {
     snapshot?.[CONTROL_SNAPSHOT_FIELD_PARTITION_MEMBERSHIP];
   if (
     !partitionMembership ||
-    typeof partitionMembership !== "object" ||
+    typeof partitionMembership !== 'object' ||
     Array.isArray(partitionMembership)
   ) {
     return voterCounts;
   }
 
   for (const [partitionId, membership] of Object.entries(partitionMembership)) {
-    const normalizedPartitionId = String(partitionId || "").trim();
+    const normalizedPartitionId = String(partitionId || '').trim();
     const voterCount = membership?.voterCount;
     if (
       normalizedPartitionId.length === 0 ||
@@ -725,9 +866,9 @@ function extractControlSnapshotInFlightSummary(snapshot) {
   const inFlightCount =
     Number.isInteger(
       replicaOperations?.[CONTROL_SNAPSHOT_FIELD_IN_FLIGHT_COUNT],
-    ) && replicaOperations[CONTROL_SNAPSHOT_FIELD_IN_FLIGHT_COUNT] >= 0
-      ? replicaOperations[CONTROL_SNAPSHOT_FIELD_IN_FLIGHT_COUNT]
-      : 0;
+    ) && replicaOperations[CONTROL_SNAPSHOT_FIELD_IN_FLIGHT_COUNT] >= 0 ?
+      replicaOperations[CONTROL_SNAPSHOT_FIELD_IN_FLIGHT_COUNT] :
+      0;
 
   const statusCounts = normalizeStatusCountMap(
     replicaOperations?.[CONTROL_SNAPSHOT_FIELD_STATUS_HISTOGRAM],
@@ -743,10 +884,10 @@ function extractControlSnapshotOperationRows(snapshot) {
     snapshot?.[CONTROL_SNAPSHOT_FIELD_REPLICA_OPERATIONS];
   const operationRows = Array.isArray(
     replicaOperations?.[CONTROL_SNAPSHOT_FIELD_ROWS],
-  )
-    ? replicaOperations[CONTROL_SNAPSHOT_FIELD_ROWS]
-    : [];
-  return operationRows.filter((row) => row && typeof row === "object");
+  ) ?
+    replicaOperations[CONTROL_SNAPSHOT_FIELD_ROWS] :
+    [];
+  return operationRows.filter((row) => row && typeof row === 'object');
 }
 
 function extractControlSnapshotPartitionMembership(snapshot) {
@@ -754,7 +895,7 @@ function extractControlSnapshotPartitionMembership(snapshot) {
     snapshot?.[CONTROL_SNAPSHOT_FIELD_PARTITION_MEMBERSHIP];
   if (
     !partitionMembership ||
-    typeof partitionMembership !== "object" ||
+    typeof partitionMembership !== 'object' ||
     Array.isArray(partitionMembership)
   ) {
     return null;
@@ -764,11 +905,11 @@ function extractControlSnapshotPartitionMembership(snapshot) {
 
 function extractControlSnapshotPublicationConvergence(snapshot) {
   const controlPlaneDiagnostics = snapshot?.controlPlaneDiagnostics;
-  if (!controlPlaneDiagnostics || typeof controlPlaneDiagnostics !== "object") {
+  if (!controlPlaneDiagnostics || typeof controlPlaneDiagnostics !== 'object') {
     return null;
   }
   const publicationConvergence = controlPlaneDiagnostics.publicationConvergence;
-  if (!publicationConvergence || typeof publicationConvergence !== "object") {
+  if (!publicationConvergence || typeof publicationConvergence !== 'object') {
     return null;
   }
   return publicationConvergence;
@@ -778,7 +919,7 @@ function extractControlSnapshotControlPlaneDiagnostics(snapshot) {
   const controlPlaneDiagnostics = snapshot?.controlPlaneDiagnostics;
   if (
     !controlPlaneDiagnostics ||
-    typeof controlPlaneDiagnostics !== "object" ||
+    typeof controlPlaneDiagnostics !== 'object' ||
     Array.isArray(controlPlaneDiagnostics)
   ) {
     return null;
@@ -793,34 +934,34 @@ function extractControlSnapshotControlPlaneDiagnostics(snapshot) {
 function extractControlSnapshotRevisionMetadata(snapshot) {
   const snapshotRevision =
     Number.isInteger(snapshot?.[CONTROL_SNAPSHOT_FIELD_SNAPSHOT_REVISION]) &&
-    snapshot[CONTROL_SNAPSHOT_FIELD_SNAPSHOT_REVISION] >= 0
-      ? snapshot[CONTROL_SNAPSHOT_FIELD_SNAPSHOT_REVISION]
-      : null;
+    snapshot[CONTROL_SNAPSHOT_FIELD_SNAPSHOT_REVISION] >= 0 ?
+      snapshot[CONTROL_SNAPSHOT_FIELD_SNAPSHOT_REVISION] :
+      null;
   const snapshotRevisionState =
     typeof snapshot?.[CONTROL_SNAPSHOT_FIELD_SNAPSHOT_REVISION_STATE] ===
-      "string" &&
-    snapshot[CONTROL_SNAPSHOT_FIELD_SNAPSHOT_REVISION_STATE].length > 0
-      ? snapshot[CONTROL_SNAPSHOT_FIELD_SNAPSHOT_REVISION_STATE]
-      : null;
+      'string' &&
+    snapshot[CONTROL_SNAPSHOT_FIELD_SNAPSHOT_REVISION_STATE].length > 0 ?
+      snapshot[CONTROL_SNAPSHOT_FIELD_SNAPSHOT_REVISION_STATE] :
+      null;
   const snapshotExpectedMinimumRevision =
     Number.isInteger(
       snapshot?.[CONTROL_SNAPSHOT_FIELD_SNAPSHOT_EXPECTED_MINIMUM_REVISION],
     ) &&
-    snapshot[CONTROL_SNAPSHOT_FIELD_SNAPSHOT_EXPECTED_MINIMUM_REVISION] >= 0
-      ? snapshot[CONTROL_SNAPSHOT_FIELD_SNAPSHOT_EXPECTED_MINIMUM_REVISION]
-      : null;
+    snapshot[CONTROL_SNAPSHOT_FIELD_SNAPSHOT_EXPECTED_MINIMUM_REVISION] >= 0 ?
+      snapshot[CONTROL_SNAPSHOT_FIELD_SNAPSHOT_EXPECTED_MINIMUM_REVISION] :
+      null;
   const snapshotRevisionGap =
     Number.isInteger(
       snapshot?.[CONTROL_SNAPSHOT_FIELD_SNAPSHOT_REVISION_GAP],
-    ) && snapshot[CONTROL_SNAPSHOT_FIELD_SNAPSHOT_REVISION_GAP] >= 0
-      ? snapshot[CONTROL_SNAPSHOT_FIELD_SNAPSHOT_REVISION_GAP]
-      : null;
+    ) && snapshot[CONTROL_SNAPSHOT_FIELD_SNAPSHOT_REVISION_GAP] >= 0 ?
+      snapshot[CONTROL_SNAPSHOT_FIELD_SNAPSHOT_REVISION_GAP] :
+      null;
   const snapshotResumeToken =
     typeof snapshot?.[CONTROL_SNAPSHOT_FIELD_SNAPSHOT_RESUME_TOKEN] ===
-      "string" &&
-    snapshot[CONTROL_SNAPSHOT_FIELD_SNAPSHOT_RESUME_TOKEN].length > 0
-      ? snapshot[CONTROL_SNAPSHOT_FIELD_SNAPSHOT_RESUME_TOKEN]
-      : null;
+      'string' &&
+    snapshot[CONTROL_SNAPSHOT_FIELD_SNAPSHOT_RESUME_TOKEN].length > 0 ?
+      snapshot[CONTROL_SNAPSHOT_FIELD_SNAPSHOT_RESUME_TOKEN] :
+      null;
   return {
     snapshotRevision,
     snapshotRevisionState,
@@ -831,7 +972,7 @@ function extractControlSnapshotRevisionMetadata(snapshot) {
 }
 
 async function queryControlSnapshot(node, options = {}) {
-  if (typeof node?.getControlSnapshot !== "function") {
+  if (typeof node?.getControlSnapshot !== 'function') {
     throw new Error(
       CONTROL_SNAPSHOT_REQUIRED_ERROR_PREFIX +
         String(node?.id || VALUE_UNKNOWN),
@@ -839,18 +980,19 @@ async function queryControlSnapshot(node, options = {}) {
   }
 
   const timeoutMs =
-    Number.isFinite(options?.timeoutMs) && options.timeoutMs > 0
-      ? Math.floor(options.timeoutMs)
-      : CONVERGENCE_CONTROL_SNAPSHOT_TIMEOUT_MS;
+    Number.isFinite(options?.timeoutMs) && options.timeoutMs > 0 ?
+      Math.floor(options.timeoutMs) :
+      CONVERGENCE_CONTROL_SNAPSHOT_TIMEOUT_MS;
   const lane =
-    typeof options?.lane === "string" && options.lane.length > 0
-      ? options.lane
-      : ADMIN_SOCKET_LANE_SNAPSHOT;
+    typeof options?.lane === 'string' && options.lane.length > 0 ?
+      options.lane :
+      ADMIN_SOCKET_LANE_SNAPSHOT;
   const allowLaneFallback = options?.allowLaneFallback !== false;
 
   const queryForLane = async (targetLane) => {
     const result = await node.getControlSnapshot({
       forceRepair: options.forceRepair === true,
+      forceAuthoritativeRepair: options.forceAuthoritativeRepair === true,
       timeoutMs,
       lane: targetLane,
     });
@@ -875,21 +1017,23 @@ async function queryControlSnapshot(node, options = {}) {
       error: null,
       voterCounts: extractControlSnapshotVoterCounts(snapshot),
       leaders: extractControlSnapshotLeaders(snapshot),
+      partitionLeaderAuthority:
+        extractControlSnapshotPartitionLeaderAuthority(snapshot),
       publicationEpoch: Number.isInteger(
         publicationConvergence?.publicationEpoch,
-      )
-        ? publicationConvergence.publicationEpoch
-        : null,
+      ) ?
+        publicationConvergence.publicationEpoch :
+        null,
       sourceSnapshotVersion: Number.isInteger(
         publicationConvergence?.sourceSnapshotVersion,
-      )
-        ? publicationConvergence.sourceSnapshotVersion
-        : null,
+      ) ?
+        publicationConvergence.sourceSnapshotVersion :
+        null,
       publishedActiveNodeIds: Array.isArray(
         publicationConvergence?.publishedActiveNodeIds,
-      )
-        ? [...publicationConvergence.publishedActiveNodeIds].sort()
-        : null,
+      ) ?
+        [...publicationConvergence.publishedActiveNodeIds].sort() :
+        null,
       inFlightReplicaOperationCount: inFlightSummary.inFlightCount,
       inFlightReplicaOperationStatuses: inFlightSummary.statusCounts,
       partitionMembership: extractControlSnapshotPartitionMembership(snapshot),
@@ -900,6 +1044,7 @@ async function queryControlSnapshot(node, options = {}) {
         snapshotRevisionMetadata.snapshotExpectedMinimumRevision,
       snapshotRevisionGap: snapshotRevisionMetadata.snapshotRevisionGap,
       snapshotResumeToken: snapshotRevisionMetadata.snapshotResumeToken,
+      observationMode: extractControlSnapshotObservationMode(snapshot),
     };
   };
 
@@ -914,9 +1059,9 @@ async function queryControlSnapshot(node, options = {}) {
     } catch (fallbackError) {
       throw new Error(
         String(primaryError?.message || primaryError) +
-          "; fallback lane " +
+          '; fallback lane ' +
           ADMIN_SOCKET_LANE_DEFAULT +
-          " failed: " +
+          ' failed: ' +
           String(fallbackError?.message || fallbackError),
       );
     }
@@ -969,6 +1114,9 @@ export const ASSERTIONS_SEGMENT_1 = {
   CONTROL_SNAPSHOT_FIELD_PROJECTED_NODES,
   CONTROL_SNAPSHOT_FIELD_PARTITIONS,
   CONTROL_SNAPSHOT_FIELD_LEADERS,
+  CONTROL_SNAPSHOT_FIELD_PARTITION_LEADER_AUTHORITY,
+  CONTROL_SNAPSHOT_FIELD_OBSERVATION_MODE,
+  CONTROL_SNAPSHOT_FIELD_ADMIN_OBSERVATION,
   CONTROL_SNAPSHOT_FIELD_VOTER_COUNTS,
   CONTROL_SNAPSHOT_FIELD_SNAPSHOT_REVISION,
   CONTROL_SNAPSHOT_FIELD_SNAPSHOT_REVISION_STATE,
@@ -985,6 +1133,7 @@ export const ASSERTIONS_SEGMENT_1 = {
   REPLICA_ROLE_DIAGNOSTICS_LEADER_NODE_IDS,
   CONTROL_SNAPSHOT_FIELD_REPLICA_ROLES,
   REPLICA_ROLE_LEADER,
+  CONTROL_SNAPSHOT_ADMIN_OBSERVATION_FIELD_MODE,
   LEADER_ADDRESS_PATH_SEPARATOR,
   UUID_PREFIX_PATTERN,
   normalizeLeaderAddress,
@@ -1003,11 +1152,13 @@ export const ASSERTIONS_SEGMENT_1 = {
   normalizeStatusCountMap,
   normalizeVoterCountMap,
   extractControlSnapshotPayload,
+  extractControlSnapshotObservationMode,
   extractControlSnapshotNodeIds,
   extractControlSnapshotPublishedNodeIds,
   extractControlSnapshotProjectedNodeIds,
   extractControlSnapshotPartitionIds,
   extractControlSnapshotLeaders,
+  extractControlSnapshotPartitionLeaderAuthority,
   extractControlSnapshotVoterCounts,
   extractControlSnapshotInFlightSummary,
   extractControlSnapshotOperationRows,

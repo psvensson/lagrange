@@ -10,6 +10,12 @@ const ReplicaOperationMessageType = Object.freeze({
   STEP_DOWN_REPLICA: MESSAGE_TYPE.STEP_DOWN_REPLICA,
 });
 
+const ReplicaOperationReason = Object.freeze({
+  REPLACE_SOURCE_LEADER_HANDOFF: 'replace_source_leader_handoff',
+  REPLACE_TARGET_LEADER_ELECTION: 'replace_target_leader_election',
+  REPLACE_SOURCE_REMOVAL: 'replace_source_removal',
+});
+
 const ReplicaOperationField = Object.freeze({
   TYPE: FIELD.TYPE,
   OPERATION_ID: FIELD.OPERATION_ID,
@@ -37,6 +43,7 @@ const ReplicaOperationResponseStatus = Object.freeze({
 
 export {
   ReplicaOperationMessageType,
+  ReplicaOperationReason,
   ReplicaOperationField,
   ReplicaOperationResponseStatus,
 };

@@ -11,6 +11,9 @@ import {
   BOOTSTRAP_PIPELINE_ERROR_CODE,
 } from '../bootstrap-constants.js';
 import {
+  BOOTSTRAP_API_RESPONSE_FIELD,
+} from '../bootstrap-api-constants.js';
+import {
   JOINING_DEFAULT,
   JOINING_ERROR_MSG,
   JOINING_HTTP,
@@ -26,6 +29,14 @@ import {
 const SEED_READINESS_TIMEOUT_MSG = (ms) =>
   `seed readiness timeout after ${ms}ms`;
 const HTTP_ERROR_MESSAGE_PATTERN = /^HTTP (\d+):\s*(.*)$/s;
+
+function extractSeedContactStartupAuthority(value) {
+  const startupAuthority =
+    value?.[BOOTSTRAP_API_RESPONSE_FIELD.STARTUP_AUTHORITY] || null;
+  return startupAuthority && typeof startupAuthority === TYPEOF.OBJECT ?
+    startupAuthority :
+    null;
+}
 
 /**
  * Handles the contact-seed phase of the join process.
@@ -110,6 +121,13 @@ class ContactSeedPhase {
           bootstrapRequest.startupMode = startupMode;
         }
         const response = await httpPostImpl(bootstrapUrl, bootstrapRequest);
+        const responseStartupAuthority =
+          extractSeedContactStartupAuthority(response);
+        if (responseStartupAuthority) {
+          this.delegates.setSeedContactStartupAuthority?.(
+            responseStartupAuthority,
+          );
+        }
 
         if (!response.success) {
           const bootstrapError = new Error(
@@ -140,6 +158,13 @@ class ContactSeedPhase {
           retryableTimeoutErrorMessage,
         );
         const parsedError = classification.parsedError;
+        const parsedStartupAuthority =
+          extractSeedContactStartupAuthority(parsedError);
+        if (parsedStartupAuthority) {
+          this.delegates.setSeedContactStartupAuthority?.(
+            parsedStartupAuthority,
+          );
+        }
         const elapsedMs = now() - startTime;
         if (classification.retryable && elapsedMs < retryTimeoutMs) {
           if (classification.retryableCode) {

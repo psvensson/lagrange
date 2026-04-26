@@ -57,12 +57,15 @@ const TEST_OPERATION_ID = 'op-1';
 const TEST_PARTITION_ID = 'partition-1';
 const TEST_REPLICA_ID = 'partition-1-r1';
 const TEST_TARGET_NODE_ID = 'node-2';
+const TEST_SOURCE_OWNER_NODE_ID = 'src-node';
+const TEST_TARGET_OWNER_NODE_ID = 'tgt-node';
+const TEST_NON_PRIORITY_SYSTEM_PARTITION_ID = 'service_timers-p1';
+const TEST_USER_REPLACE_PARTITION_ID = 'user_partition-p1';
 const TEST_ENTITY_TYPE = SERVICE_TYPE.PARTITION;
 const TEST_CREATING_STATUS = 'creating';
 const VISIBILITY_CONFIRMATION_STATE_DEFERRED = 'deferred';
 const TEST_CACHE_BACKED_VISIBILITY_OPERATION_ID = 'op-cache-backed-visibility';
 const TEST_PENDING_STATUS = 'pending';
-const REPLICA_OPERATION_CRITICAL_RECOVERY_QUERY_TIMEOUT_MS = 15_000;
 const PRIORITY_RECOVERY_AUTHORITATIVE_OPERATION_VISIBILITY_FAILURE_SOURCE =
   'priority_recovery_authoritative_operation_visibility_failure';
 const PRIORITY_RECOVERY_AUTHORITATIVE_OPERATION_VISIBILITY_EMPTY_READ_SOURCE =
@@ -1487,6 +1490,36 @@ test('resolveOperationOwnerNodeId keeps critical REPLACE PENDING on target owner
     workflowStep: WORKFLOW_STEP.PENDING,
   };
   t.equal(repo.resolveOperationOwnerNodeId(operation), 'tgt-node');
+});
+
+test('resolveOperationOwnerNodeId keeps system-table REPLACE CREATING on target owner', async (t) => {
+  const repo = createTestRepository();
+  const operation = {
+    type: OperationType.REPLACE,
+    partitionId: TEST_NON_PRIORITY_SYSTEM_PARTITION_ID,
+    sourceNodeId: TEST_SOURCE_OWNER_NODE_ID,
+    targetNodeId: TEST_TARGET_OWNER_NODE_ID,
+    workflowStep: WORKFLOW_STEP.CREATING,
+  };
+  t.equal(
+    repo.resolveOperationOwnerNodeId(operation),
+    TEST_TARGET_OWNER_NODE_ID,
+  );
+});
+
+test('resolveOperationOwnerNodeId keeps user REPLACE CREATING on source owner', async (t) => {
+  const repo = createTestRepository();
+  const operation = {
+    type: OperationType.REPLACE,
+    partitionId: TEST_USER_REPLACE_PARTITION_ID,
+    sourceNodeId: TEST_SOURCE_OWNER_NODE_ID,
+    targetNodeId: TEST_TARGET_OWNER_NODE_ID,
+    workflowStep: WORKFLOW_STEP.CREATING,
+  };
+  t.equal(
+    repo.resolveOperationOwnerNodeId(operation),
+    TEST_SOURCE_OWNER_NODE_ID,
+  );
 });
 
 // ── isOperationLocallyOwned ─────────────────────────────────────

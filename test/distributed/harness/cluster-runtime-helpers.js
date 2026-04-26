@@ -1,6 +1,6 @@
-import { promises as fs } from 'node:fs';
-import { dirname } from 'node:path';
-import { CLUSTER_SEGMENT_6 } from './cluster-segment-6.js';
+import {promises as fs} from 'node:fs';
+import {dirname} from 'node:path';
+import {CLUSTER_SEGMENT_6} from './cluster-segment-6.js';
 
 const {
   LABELS,
@@ -97,15 +97,15 @@ async function acquireReusableClusterLease(options = {}) {
     Math.floor(Number(options.pollIntervalMs) || REUSE_LEASE_POLL_INTERVAL_MS),
   );
   const sleep =
-    typeof options.sleep === 'function'
-      ? options.sleep
-      : (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+    typeof options.sleep === 'function' ?
+      options.sleep :
+      (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   const metadata =
-    options.metadata && typeof options.metadata === 'object'
-      ? options.metadata
-      : {};
+    options.metadata && typeof options.metadata === 'object' ?
+      options.metadata :
+      {};
   const deadlineAtMs = Date.now() + timeoutMs;
-  await fs.mkdir(dirname(lockPath), { recursive: true });
+  await fs.mkdir(dirname(lockPath), {recursive: true});
 
   while (true) {
     let handle = null;
@@ -159,9 +159,9 @@ async function acquireReusableClusterLease(options = {}) {
 
       const holderScenario =
         typeof existingLease?.scenarioName === 'string' &&
-        existingLease.scenarioName.length > ZERO
-          ? existingLease.scenarioName
-          : UNKNOWN_SCENARIO;
+        existingLease.scenarioName.length > ZERO ?
+          existingLease.scenarioName :
+          UNKNOWN_SCENARIO;
       if (holderPid === process.pid) {
         const reentryError = new Error(
           'Reusable cluster lease already held in this process ' +

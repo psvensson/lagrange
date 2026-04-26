@@ -129,7 +129,7 @@ strict leader disagreement to runtime priority-recovery convergence:
 
 The follow-on package is:
 
-1. [Priority recovery readiness and workflow convergence closure](./active-20260423-priority-recovery-readiness-and-workflow-convergence-closure.md)
+1. [Priority recovery readiness and workflow convergence closure](./done-20260423-priority-recovery-readiness-and-workflow-convergence-closure.md)
 
 The current April 23 rerun still confirms this package remains closed:
 publication gate readiness is `true`, there is no strict leader-mismatch

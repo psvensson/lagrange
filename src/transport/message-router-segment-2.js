@@ -1,113 +1,34 @@
-import { MESSAGE_ROUTER_SHARED } from "./message-router-shared.js";
-import { MessageRouterSegment1 } from "./message-router-segment-1.js";
+import {MESSAGE_ROUTER_SHARED} from './message-router-shared.js';
+import {MessageRouterSegment1} from './message-router-segment-1.js';
 
 const {
   CONNECTION_CLOSE_DISPOSITION,
-  CONNECTION_STATE,
-  ConfigurationManager,
   ConnectionState,
-  EMPTY_ROUTER_REASON,
-  EventEmitter,
-  HOST,
-  INCOMING_CONNECTION_ADOPTION,
   INLINE_ACK_PASSTHROUGH_KEYS,
-  INLINE_ACK_RESULT_FIELD,
-  INPROC,
-  IPV6_ANY_HOST,
-  IPV6_HOST_PREFIX,
-  IPV6_HOST_SUFFIX,
-  InProcWebSocket,
-  LoggingService,
   MESSAGE_ROUTER_LITERAL,
-  METRICS_LOG_TAG,
-  OUTBOUND_DELIVERY_PRIORITY,
-  OUTBOUND_QUEUE_BACKPRESSURE_ERROR_CODE,
-  OUTBOUND_QUEUE_BACKPRESSURE_SCOPE,
-  OUTBOUND_QUEUE_PENDING_SOURCE_LIMIT_DIVISOR,
-  OUTBOUND_QUEUE_PENDING_SOURCE_LIMIT_MINIMUM,
-  OutboundDeliveryPriority,
-  OutboundDeliveryRegistryOwner,
   QUERY_DATA_PLANE_MESSAGE_TYPE,
   QUERY_TRANSPORT_DELIVERY_STATE,
   QUERY_TRANSPORT_SELECTION,
-  QUEUE_WAIT_BUCKETS,
-  QUEUE_WAIT_BUCKET_OVERFLOW,
-  RECONNECT_ADDRESS_SUPPRESSION_DEFAULT_MS,
   RECONNECT_DISPOSITION,
   RETIRED_PENDING_RESPONSE_REASON,
   ROUTER_ADDRESS,
-  ROUTER_CONNECTION_CLOSED_ERROR_CODE,
   ROUTER_ERROR_MSG,
   ROUTER_LOG_MSG,
-  ROUTER_MESSAGE_TIMEOUT_ERROR_CODE,
-  ROUTER_MESSAGE_TYPE,
-  ROUTER_NO_CONNECTION_ERROR_CODE,
   ROUTER_QUERY_TRANSPORT_NOT_READY_ERROR_CODE,
   ROUTER_VALID_ENTITY_TYPES,
-  RouterConnectionAuthorityOwner,
   RouterMessageType,
   SERVICE_RESPONSE_DISPOSITION_KIND,
-  TRANSPORT_CONFIG_KEY,
-  TRANSPORT_DEFAULT,
-  TRANSPORT_DELIVERY_OUTCOME_METADATA_FIELDS,
   TRANSPORT_ERROR_MSG,
   TRANSPORT_EVENT,
-  TRANSPORT_FORMAT,
   TRANSPORT_METRIC,
   TRANSPORT_METRIC_TRIGGER,
   TRANSPORT_NUM,
-  TRANSPORT_PRESSURE_SUMMARY_FIELD,
-  TRANSPORT_SUBSYSTEM,
   TRANSPORT_TYPEOF,
-  UNMATCHED_SERVICE_RESPONSE_WARN_INTERVAL_MS,
-  URL,
-  WEBSOCKET_CONNECT_TIMEOUT_CONFIG_KEY,
-  WEBSOCKET_CONNECT_TIMEOUT_ERROR_CODE,
   WebSocket,
-  WebSocketServer,
-  adjustInFlightPriorityCount,
-  buildDerivedDeliverySource,
-  buildPendingSourceSummary,
   buildQueryTransportSemanticOutcome,
-  buildQueueWaitSummary,
   buildRetiredPendingClassification,
   buildServiceResponseDisposition,
-  buildSupersededPendingResult,
-  buildTransportDeliveryOutcome,
-  canDispatchPendingItem,
-  countInFlightByPriority,
-  countPendingByPriority,
-  countPendingBySource,
-  createInProcWebSocketPair,
-  createQueueWaitHistogram,
-  dequeueNextPendingItem,
-  extractSqlOperationKind,
-  extractSqlTableName,
-  isRaftPacket,
-  isSupersedableHeartbeatNodeStateUpdate,
-  isSupersedableRaftAppendFail,
-  isSupersedableRaftHeartbeatAppend,
-  normalizeDeliveryOutcome,
   normalizeIdentifier,
-  normalizeOutboundDeliveryPriority,
-  normalizeRetryAfterMs,
-  normalizeToWebSocketAddress,
-  peekNextPendingItem,
-  queueMicrotaskFn,
-  recordQueueWaitDuration,
-  resolveBackgroundInFlightLimit,
-  resolveBackgroundPendingLimit,
-  resolveBoundedCriticalReserve,
-  resolveDeliverySource,
-  resolveNextPendingItemIndex,
-  resolveNodeStateUpdateReplacementNodeId,
-  resolveOperationIdFromMessage,
-  resolvePendingReplacementKey,
-  resolvePendingSourceLimit,
-  resolveQueueWaitBucket,
-  resolveRequestIdFromMessage,
-  summarizeRaftAppendCommand,
-  uuidv4,
 } = MESSAGE_ROUTER_SHARED;
 
 class MessageRouterSegment2 extends MessageRouterSegment1 {
@@ -135,13 +56,13 @@ class MessageRouterSegment2 extends MessageRouterSegment1 {
     const suppressedSinceLastWarn =
       this.unmatchedServiceResponseWarnSuppressedCount;
     this.unmatchedServiceResponseWarnSuppressedCount = TRANSPORT_NUM.ZERO;
-    this.lastUnmatchedServiceResponseWarnAtMs = Number.isFinite(nowMs)
-      ? nowMs
-      : null;
+    this.lastUnmatchedServiceResponseWarnAtMs = Number.isFinite(nowMs) ?
+      nowMs :
+      null;
     const context = {
       messageId,
       unmatchedClassification:
-        unmatchedResponseClassification?.classification || "orphaned",
+        unmatchedResponseClassification?.classification || 'orphaned',
     };
     if (
       typeof unmatchedResponseClassification?.retiredReason ===
@@ -176,7 +97,7 @@ class MessageRouterSegment2 extends MessageRouterSegment1 {
    */
   recordServiceResponseDisposition(disposition) {
     const classification =
-      normalizeIdentifier(disposition?.classification) || "orphaned";
+      normalizeIdentifier(disposition?.classification) || 'orphaned';
     this.serviceResponseDispositionCounts.set(
       classification,
       (this.serviceResponseDispositionCounts.get(classification) ||
@@ -263,9 +184,9 @@ class MessageRouterSegment2 extends MessageRouterSegment1 {
    * @private
    */
   pruneRetiredPendingResponses(nowMs = null) {
-    const effectiveNowMs = Number.isFinite(nowMs)
-      ? nowMs
-      : Number(this.nowFn());
+    const effectiveNowMs = Number.isFinite(nowMs) ?
+      nowMs :
+      Number(this.nowFn());
     for (const [messageId, entry] of this.retiredPendingResponses.entries()) {
       if (
         !entry ||
@@ -299,9 +220,9 @@ class MessageRouterSegment2 extends MessageRouterSegment1 {
     this.retiredPendingResponses.set(normalizedMessageId, {
       reason:
         typeof reason === TRANSPORT_TYPEOF.STRING &&
-        reason.length > TRANSPORT_NUM.ZERO
-          ? reason
-          : RETIRED_PENDING_RESPONSE_REASON.UNKNOWN,
+        reason.length > TRANSPORT_NUM.ZERO ?
+          reason :
+          RETIRED_PENDING_RESPONSE_REASON.UNKNOWN,
       deliverySource: normalizeIdentifier(pending?.deliverySource) || null,
       targetNodeId: normalizeIdentifier(pending?.targetNodeId) || null,
       expiresAtMs: effectiveNowMs + this.getRetiredPendingResponseGraceMs(),
@@ -383,7 +304,7 @@ class MessageRouterSegment2 extends MessageRouterSegment1 {
    * @return {boolean} True when pending waiter was found.
    * @private
    */
-  settlePendingResponse(messageId, { result, error }) {
+  settlePendingResponse(messageId, {result, error}) {
     const pending = this.pendingResponses.get(messageId);
     if (!pending) {
       return false;
@@ -473,7 +394,7 @@ class MessageRouterSegment2 extends MessageRouterSegment1 {
     if (!result || typeof result !== TRANSPORT_TYPEOF.OBJECT) {
       return {};
     }
-    const { acknowledged: _ack, type: handlerType, ...rest } = result;
+    const {acknowledged: _ack, type: handlerType, ...rest} = result;
     if (
       handlerType &&
       !Object.prototype.hasOwnProperty.call(
@@ -492,7 +413,7 @@ class MessageRouterSegment2 extends MessageRouterSegment1 {
    * @private
    */
   handleAcknowledgment(message) {
-    const { messageId, acknowledged, error, type: _type, ...rest } = message;
+    const {messageId, acknowledged, error, type: _type, ...rest} = message;
     const pending = this.pendingMessages.get(messageId);
     if (pending) {
       clearTimeout(pending.timeout);
@@ -938,24 +859,24 @@ class MessageRouterSegment2 extends MessageRouterSegment1 {
         service: selection.service,
         retryAfterMs:
           Number.isFinite(selection.retryAfterMs) &&
-          selection.retryAfterMs > TRANSPORT_NUM.ZERO
-            ? Math.floor(selection.retryAfterMs)
-            : TRANSPORT_NUM.ZERO,
+          selection.retryAfterMs > TRANSPORT_NUM.ZERO ?
+            Math.floor(selection.retryAfterMs) :
+            TRANSPORT_NUM.ZERO,
       });
     }
     return buildQueryTransportSemanticOutcome(
       {
         reason:
           typeof selection?.reason === TRANSPORT_TYPEOF.STRING &&
-          selection.reason.length > TRANSPORT_NUM.ZERO
-            ? selection.reason
-            : ROUTER_ERROR_MSG.QUERY_MESSAGE_GROUP_TRANSPORT_REQUIRED,
+          selection.reason.length > TRANSPORT_NUM.ZERO ?
+            selection.reason :
+            ROUTER_ERROR_MSG.QUERY_MESSAGE_GROUP_TRANSPORT_REQUIRED,
         errorCode: ROUTER_QUERY_TRANSPORT_NOT_READY_ERROR_CODE,
         retryAfterMs:
           Number.isFinite(selection?.retryAfterMs) &&
-          selection.retryAfterMs > TRANSPORT_NUM.ZERO
-            ? Math.floor(selection.retryAfterMs)
-            : this.reconnectIntervalMs,
+          selection.retryAfterMs > TRANSPORT_NUM.ZERO ?
+            Math.floor(selection.retryAfterMs) :
+            this.reconnectIntervalMs,
         deferRetry: true,
       },
       {
@@ -972,9 +893,9 @@ class MessageRouterSegment2 extends MessageRouterSegment1 {
   buildDeferredQueryTransportOutcome(selection = {}) {
     const retryAfterMs =
       Number.isFinite(selection.retryAfterMs) &&
-      selection.retryAfterMs > TRANSPORT_NUM.ZERO
-        ? Math.floor(selection.retryAfterMs)
-        : this.reconnectIntervalMs;
+      selection.retryAfterMs > TRANSPORT_NUM.ZERO ?
+        Math.floor(selection.retryAfterMs) :
+        this.reconnectIntervalMs;
     return {
       acknowledged: false,
       error:
@@ -999,27 +920,27 @@ class MessageRouterSegment2 extends MessageRouterSegment1 {
       {
         errorCode:
           typeof failure?.errorCode === TRANSPORT_TYPEOF.STRING &&
-          failure.errorCode.length > TRANSPORT_NUM.ZERO
-            ? failure.errorCode
-            : typeof failure?.code === TRANSPORT_TYPEOF.STRING &&
-                failure.code.length > TRANSPORT_NUM.ZERO
-              ? failure.code
-              : null,
-        retryAfterMs: Number.isFinite(failure?.retryAfterMs)
-          ? failure.retryAfterMs
-          : this.reconnectIntervalMs,
+          failure.errorCode.length > TRANSPORT_NUM.ZERO ?
+            failure.errorCode :
+            typeof failure?.code === TRANSPORT_TYPEOF.STRING &&
+                failure.code.length > TRANSPORT_NUM.ZERO ?
+              failure.code :
+              null,
+        retryAfterMs: Number.isFinite(failure?.retryAfterMs) ?
+          failure.retryAfterMs :
+          this.reconnectIntervalMs,
       },
     );
   }
-  buildQueryTransportFailureError(failure, targetNodeId) {
+  buildQueryTransportFailureError(failure, _targetNodeId) {
     const normalizedMessage =
       typeof failure?.error === TRANSPORT_TYPEOF.STRING &&
-      failure.error.length > TRANSPORT_NUM.ZERO
-        ? failure.error
-        : typeof failure?.message === TRANSPORT_TYPEOF.STRING &&
-            failure.message.length > TRANSPORT_NUM.ZERO
-          ? failure.message
-          : ROUTER_ERROR_MSG.QUERY_MESSAGE_GROUP_TRANSPORT_REQUIRED;
+      failure.error.length > TRANSPORT_NUM.ZERO ?
+        failure.error :
+        typeof failure?.message === TRANSPORT_TYPEOF.STRING &&
+            failure.message.length > TRANSPORT_NUM.ZERO ?
+          failure.message :
+          ROUTER_ERROR_MSG.QUERY_MESSAGE_GROUP_TRANSPORT_REQUIRED;
     const error =
       failure instanceof Error ? failure : new Error(normalizedMessage);
     error.message = normalizedMessage;
@@ -1350,4 +1271,4 @@ class MessageRouterSegment2 extends MessageRouterSegment1 {
    */
 }
 
-export { MessageRouterSegment2 };
+export {MessageRouterSegment2};

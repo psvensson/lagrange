@@ -257,7 +257,7 @@ test('BootstrapService node-ready rebalance trigger ownership', async (t) => {
 
     await new Promise((resolve) => setTimeout(resolve, WAIT_FOR_TIMER_FLUSH_MS));
 
-      t.equal(triggerCount, 0, 'invalid transitions should not trigger rebalancing');
+    t.equal(triggerCount, 0, 'invalid transitions should not trigger rebalancing');
   });
 
   await t.test(

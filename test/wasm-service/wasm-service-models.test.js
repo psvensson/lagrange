@@ -33,7 +33,7 @@ describe('wasm-service-models', () => {
       assert.equal(SD_COL.SERVICE_NAME, 'service_name');
       assert.equal(SD_COL.SERVICE_PROFILE, 'service_profile');
       assert.equal(
-        SD_COL.HANDLER_FUNCTION_ID, 'handler_function_id'
+        SD_COL.HANDLER_FUNCTION_ID, 'handler_function_id',
       );
       assert.equal(SD_COL.READ_CONSISTENCY, 'read_consistency');
       assert.equal(SD_COL.WRITE_CONSISTENCY, 'write_consistency');
@@ -42,13 +42,13 @@ describe('wasm-service-models', () => {
       assert.equal(SD_COL.RESOURCE_BUDGET, 'resource_budget');
       assert.equal(SD_COL.SAFETY_INTERVAL_MS, 'safety_interval_ms');
       assert.equal(
-        SD_COL.RUNTIME_KIND, RUNTIME_FIELD.RUNTIME_KIND
+        SD_COL.RUNTIME_KIND, RUNTIME_FIELD.RUNTIME_KIND,
       );
       assert.equal(
-        SD_COL.RUNTIME_REF, RUNTIME_FIELD.RUNTIME_REF
+        SD_COL.RUNTIME_REF, RUNTIME_FIELD.RUNTIME_REF,
       );
       assert.equal(
-        SD_COL.RUNTIME_CONFIG, RUNTIME_FIELD.RUNTIME_CONFIG
+        SD_COL.RUNTIME_CONFIG, RUNTIME_FIELD.RUNTIME_CONFIG,
       );
       assert.equal(SD_COL.STATUS, 'status');
       assert.equal(SD_COL.CREATED_AT, 'created_at');
@@ -64,15 +64,15 @@ describe('wasm-service-models', () => {
     it('should have all resource budget field names', () => {
       assert.equal(RB_FIELD.CPU_TIME_LIMIT_MS, 'cpuTimeLimitMs');
       assert.equal(
-        RB_FIELD.MEMORY_LIMIT_BYTES, 'memoryLimitBytes'
+        RB_FIELD.MEMORY_LIMIT_BYTES, 'memoryLimitBytes',
       );
       assert.equal(
         RB_FIELD.SESSION_SIZE_LIMIT_BYTES,
-        'sessionSizeLimitBytes'
+        'sessionSizeLimitBytes',
       );
       assert.equal(
         RB_FIELD.SERVICE_SIZE_LIMIT_BYTES,
-        'serviceSizeLimitBytes'
+        'serviceSizeLimitBytes',
       );
     });
   });
@@ -111,19 +111,19 @@ describe('wasm-service-models', () => {
       const result = deserializeResourceBudget(json);
       assert.equal(
         result.cpuTimeLimitMs,
-        DEFAULT_RESOURCE_BUDGET.CPU_TIME_LIMIT_MS
+        DEFAULT_RESOURCE_BUDGET.CPU_TIME_LIMIT_MS,
       );
       assert.equal(
         result.memoryLimitBytes,
-        DEFAULT_RESOURCE_BUDGET.MEMORY_LIMIT_BYTES
+        DEFAULT_RESOURCE_BUDGET.MEMORY_LIMIT_BYTES,
       );
       assert.equal(
         result.sessionSizeLimitBytes,
-        DEFAULT_RESOURCE_BUDGET.SESSION_SIZE_LIMIT_BYTES
+        DEFAULT_RESOURCE_BUDGET.SESSION_SIZE_LIMIT_BYTES,
       );
       assert.equal(
         result.serviceSizeLimitBytes,
-        DEFAULT_RESOURCE_BUDGET.SERVICE_SIZE_LIMIT_BYTES
+        DEFAULT_RESOURCE_BUDGET.SERVICE_SIZE_LIMIT_BYTES,
       );
     });
 
@@ -222,27 +222,27 @@ describe('wasm-service-models', () => {
       });
       assert.equal(
         row[SD_COL.READ_CONSISTENCY],
-        WASM_SERVICE_DEFAULT.READ_CONSISTENCY
+        WASM_SERVICE_DEFAULT.READ_CONSISTENCY,
       );
       assert.equal(
         row[SD_COL.WRITE_CONSISTENCY],
-        WASM_SERVICE_DEFAULT.WRITE_CONSISTENCY
+        WASM_SERVICE_DEFAULT.WRITE_CONSISTENCY,
       );
       assert.equal(
         row[SD_COL.REPLICA_COUNT],
-        WASM_SERVICE_DEFAULT.REPLICA_COUNT
+        WASM_SERVICE_DEFAULT.REPLICA_COUNT,
       );
       assert.equal(
         row[SD_COL.PROTOCOL],
-        WASM_SERVICE_DEFAULT.PROTOCOL
+        WASM_SERVICE_DEFAULT.PROTOCOL,
       );
       assert.equal(
         row[SD_COL.SAFETY_INTERVAL_MS],
-        WASM_SERVICE_DEFAULT.SAFETY_INTERVAL_MS
+        WASM_SERVICE_DEFAULT.SAFETY_INTERVAL_MS,
       );
       assert.equal(
         row[SD_COL.STATUS],
-        WASM_SERVICE_DEFINITION_STATUS.ACTIVE
+        WASM_SERVICE_DEFINITION_STATUS.ACTIVE,
       );
     });
 
@@ -264,7 +264,7 @@ describe('wasm-service-models', () => {
       const def = deserializeServiceDefinition(row);
       assert.equal(
         def.resourceBudget.cpuTimeLimitMs,
-        DEFAULT_RESOURCE_BUDGET.CPU_TIME_LIMIT_MS
+        DEFAULT_RESOURCE_BUDGET.CPU_TIME_LIMIT_MS,
       );
     });
 
@@ -296,7 +296,7 @@ describe('wasm-service-models', () => {
         handlerFunctionId: 'func-1',
       });
       assert.equal(
-        row[SD_COL.RUNTIME_KIND], RUNTIME_KIND.WASM_COMPONENT
+        row[SD_COL.RUNTIME_KIND], RUNTIME_KIND.WASM_COMPONENT,
       );
       assert.equal(row[SD_COL.RUNTIME_REF], 'func-1');
       assert.equal(row[SD_COL.RUNTIME_CONFIG], null);
@@ -312,16 +312,16 @@ describe('wasm-service-models', () => {
         runtimeConfig: '{"memory":64}',
       });
       assert.equal(
-        row[SD_COL.RUNTIME_KIND], RUNTIME_KIND.WASM_COMPONENT
+        row[SD_COL.RUNTIME_KIND], RUNTIME_KIND.WASM_COMPONENT,
       );
       assert.equal(
-        row[SD_COL.RUNTIME_REF], 'module-abc@sha256:deadbeef'
+        row[SD_COL.RUNTIME_REF], 'module-abc@sha256:deadbeef',
       );
       assert.equal(row[SD_COL.RUNTIME_CONFIG], '{"memory":64}');
       const def = deserializeServiceDefinition(row);
       assert.equal(def.runtimeKind, RUNTIME_KIND.WASM_COMPONENT);
       assert.equal(
-        def.runtimeRef, 'module-abc@sha256:deadbeef'
+        def.runtimeRef, 'module-abc@sha256:deadbeef',
       );
       assert.equal(def.runtimeConfig, '{"memory":64}');
     });
@@ -399,7 +399,7 @@ describe('wasm-service-models', () => {
       const result = deserializeTimerEntry(json);
       assert.deepStrictEqual(
         result.payload,
-        {nested: {key: 'value'}, arr: [1, 2, 3]}
+        {nested: {key: 'value'}, arr: [1, 2, 3]},
       );
     });
   });

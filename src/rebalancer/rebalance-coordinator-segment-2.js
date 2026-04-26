@@ -1,101 +1,62 @@
-import { REBALANCE_COORDINATOR_SHARED } from "./rebalance-coordinator-shared.js";
-import { RebalanceCoordinatorSegment1 } from "./rebalance-coordinator-segment-1.js";
+import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
+import {RebalanceCoordinatorSegment1} from './rebalance-coordinator-segment-1.js';
 
 const {
-  CONCURRENT_CREATE_BUDGET_SCOPE,
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
-  CONTROL_PLANE_QUERY_OPTIONS,
-  CONTROL_PLANE_READINESS_DIMENSION,
-  CONTROL_PLANE_WORKLOAD_CLASS,
-  COORDINATOR_OWNED_OPERATION_TYPES_SQL_CLAUSE,
-  ConfigurationManager,
-  ControlPlaneReadinessService,
-  DEFAULT_AMPLIFICATION_FACTOR,
-  DEFAULT_PRIORITY_RECOVERY_ACTIVITY_STALE_GRACE_MS,
-  DurableWorkflowCoordinator,
-  EventEmitter,
-  ExecutorOutcomeEmitter,
-  INCOMPLETE_OPERATION_EMPTY_QUERY_BACKOFF_MS,
   INCOMPLETE_OPERATION_OBSERVATION_STATE,
-  LoggingService,
   NUM,
-  OPERATION_METADATA_KEY,
-  OUTCOME_EVENT_NAME,
-  OperationLane,
   OperationType,
-  OperationWorkflowOwner,
-  PRESSURE_GOVERNOR_ACTION,
-  PRESSURE_WORK_CLASS,
+  ReplicaStatus,
   PRIORITY_RECENT_INTENT_TTL_MS,
-  PressureGovernor,
-  ProvisioningAdmissionPolicy,
-  REBALANCER_CONCURRENT_BUDGET_READ_MODE,
-  REBALANCER_CONFIG_KEY,
-  REBALANCER_DEFAULT,
-  REBALANCER_SKIP_REASON,
-  REBALANCER_SUBSYSTEM,
-  REBALANCE_COORDINATOR_ERROR_MSG,
-  REBALANCE_COORDINATOR_EVENT,
-  REBALANCE_COORDINATOR_LOG_MSG,
   RECENT_INTENT_TTL_MS,
   RECENT_OPERATION_INTENT_VISIBILITY_STATE,
   REPLICA_ID_SEPARATOR,
   REPLICA_ID_START_INDEX,
-  REPLICA_OPERATION_VISIBILITY_READ_MODE,
-  RESERVATION_REASON,
-  RESERVATION_STATUS,
-  ReplicaOperationField,
-  ReplicaOperationRepository,
   SERVICE_TYPE,
-  SQL,
+  STRING,
   STORAGE_ADMISSION_DECISION_TYPE,
-  STORAGE_CAPACITY_CONFIG_KEY,
-  STORAGE_CAPACITY_DEFAULT,
-  STORAGE_RESERVATION_READ_QUERY_OPTIONS,
-  STRICT_CREATE_DEDUPE_REPOSITORY_QUERY_OPTIONS,
-  SYSTEM_TABLE_NAME,
-  StartupRecoveryCoordinator,
-  TIMEOUT_BUDGET_CLASSIFICATION,
-  TIMEOUT_BUDGET_DEFAULT,
-  TIME_MS,
   TOPOLOGY_GUARD_DEFAULT_PARTITION_TARGET_REPLICA_COUNT,
-  TOPOLOGY_GUARD_ERROR_MSG,
   TOPOLOGY_GUARD_REASON,
   TOPOLOGY_GUARD_STATE,
   UNIFIED_SERVICE_TYPE,
   WORKFLOW_STEP,
-  assertCritical,
-  buildControlPlaneQueryOptions,
-  buildControlPlaneWorkloadProfile,
-  buildPriorityRecoveryOperationAssessment,
-  buildPriorityRecoveryOperationContextFromRecord,
-  buildPriorityRecoveryPartitionAssessment,
-  buildReplicatedServiceBootstrapTopology,
-  buildTimeoutClassification,
-  createChildTimeoutBudget,
-  createControlPlaneRuntimeBundle,
-  createOperationRecord,
-  createTopLevelOperationBudget,
-  getControlPlaneErrorCode,
-  getControlPlaneRetryAfterMs,
-  isCriticalTransportControlPlanePartitionTable,
-  isPriorityControlPlanePartitionTable,
-  isRetryableControlPlaneError,
-  readAuthoritativeControlPlaneRows,
-  resolvePriorityRecoveryActiveNodeCohort,
-  resolveTrackedPriorityRecoveryAdmissionPlan,
-  shouldPriorityRecoveryOperationBlockPlanning,
-  uuidv4,
 } = REBALANCE_COORDINATOR_SHARED;
 
 const CANONICAL_REPLICA_ID_DECIMAL_RADIX = 10;
+const TOPOLOGY_GUARD_ENTITY_TYPES = new Set([
+  SERVICE_TYPE.PARTITION,
+  SERVICE_TYPE.MESSAGE_GROUP,
+  UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE,
+]);
+const TOPOLOGY_INCREASING_CREATE_OPERATION_TYPES = new Set([
+  OperationType.ADD,
+  OperationType.REPLACE,
+]);
+const TOPOLOGY_GUARD_TARGET_COUNT_OPERATION_TYPES = new Set([
+  OperationType.ADD,
+]);
+const TOPOLOGY_GUARD_DEFAULT_SERVICE_STATUS = ReplicaStatus.ACTIVE;
+const TOPOLOGY_GUARD_IGNORED_SERVICE_STATUSES = new Set([
+  ReplicaStatus.REMOVED,
+]);
+const PRIORITY_RECENT_INTENT_MISS_REUSE_EXTENDED_OPERATION_TYPES = new Set([
+  OperationType.ADD,
+  OperationType.REPLACE,
+]);
+const PRIORITY_RECENT_INTENT_MISS_REUSE_EXTENDED_WORKFLOW_STEPS = new Set([
+  WORKFLOW_STEP.PENDING,
+  WORKFLOW_STEP.SENDING,
+]);
+const TOPOLOGY_GUARD_ALLOWED_DECISION = Object.freeze({
+  state: TOPOLOGY_GUARD_STATE.ALLOWED,
+});
 
 function extractCanonicalReplicaIndex(replicaId, canonicalPrefix) {
-  if (typeof replicaId !== "string" || replicaId.length === NUM.ZERO) {
+  if (typeof replicaId !== 'string' || replicaId.length === NUM.ZERO) {
     return null;
   }
   if (
-    typeof canonicalPrefix !== "string" ||
+    typeof canonicalPrefix !== 'string' ||
     canonicalPrefix.length === NUM.ZERO ||
     !replicaId.startsWith(canonicalPrefix)
   ) {
@@ -121,7 +82,28 @@ function extractCanonicalReplicaIndex(replicaId, canonicalPrefix) {
 }
 
 class RebalanceCoordinatorSegment2 extends RebalanceCoordinatorSegment1 {
-  async resolveTopologyGuardTargetReplicaCount({ partitionId, entityType }) {
+  isTopologyGuardEntityType(entityType) {
+    return TOPOLOGY_GUARD_ENTITY_TYPES.has(entityType);
+  }
+
+  isTopologyIncreasingCreateOperationType(normalizedMoveType) {
+    return TOPOLOGY_INCREASING_CREATE_OPERATION_TYPES.has(normalizedMoveType);
+  }
+
+  isTopologyGuardTargetCountOperationType(normalizedMoveType) {
+    return TOPOLOGY_GUARD_TARGET_COUNT_OPERATION_TYPES.has(
+      normalizedMoveType,
+    );
+  }
+
+  isTopologyGuardBlockingServiceRow(row) {
+    const normalizedStatus = String(
+      row?.status ?? TOPOLOGY_GUARD_DEFAULT_SERVICE_STATUS,
+    ).toLowerCase();
+    return !TOPOLOGY_GUARD_IGNORED_SERVICE_STATUSES.has(normalizedStatus);
+  }
+
+  async resolveTopologyGuardTargetReplicaCount({partitionId, entityType}) {
     if (entityType !== SERVICE_TYPE.PARTITION) {
       return null;
     }
@@ -129,7 +111,7 @@ class RebalanceCoordinatorSegment2 extends RebalanceCoordinatorSegment1 {
     try {
       if (
         this.tablePolicyService &&
-        typeof this.tablePolicyService.getPolicyForPartition === "function"
+        typeof this.tablePolicyService.getPolicyForPartition === 'function'
       ) {
         policy =
           await this.tablePolicyService.getPolicyForPartition(partitionId);
@@ -162,10 +144,10 @@ class RebalanceCoordinatorSegment2 extends RebalanceCoordinatorSegment1 {
     const entityType = context?.entityType || SERVICE_TYPE.PARTITION;
     const entityId = context?.entityId || context?.partitionId || null;
     const partitionId = context?.partitionId || entityId;
-    const targetNodeId = String(context?.move?.nodeId || "").trim();
+    const targetNodeId = String(context?.move?.nodeId || '').trim();
     if (
-      entityType !== SERVICE_TYPE.PARTITION ||
-      normalizedMoveType !== OperationType.ADD ||
+      !this.isTopologyGuardEntityType(entityType) ||
+      !this.isTopologyIncreasingCreateOperationType(normalizedMoveType) ||
       context?.move?.enforceConcurrentOperationBudget !== true ||
       targetNodeId.length === NUM.ZERO
     ) {
@@ -190,10 +172,13 @@ class RebalanceCoordinatorSegment2 extends RebalanceCoordinatorSegment1 {
       cacheServiceRows,
       authoritativeObservation.rows,
     );
+    const topologyBlockingServiceRows = mergedServiceRows.filter((row) =>
+      this.isTopologyGuardBlockingServiceRow(row),
+    );
     const observedDistinctNodeIds = [
       ...new Set(
-        mergedServiceRows
-          .map((row) => String(row?.node_id || row?.nodeId || "").trim())
+        topologyBlockingServiceRows
+          .map((row) => String(row?.node_id || row?.nodeId || '').trim())
           .filter((nodeId) => nodeId.length > NUM.ZERO),
       ),
     ];
@@ -202,21 +187,26 @@ class RebalanceCoordinatorSegment2 extends RebalanceCoordinatorSegment1 {
         partitionId,
         entityType,
       });
-    let state = TOPOLOGY_GUARD_STATE.ALLOWED;
-    let blockingReason = null;
-
-    if (observedDistinctNodeIds.includes(targetNodeId)) {
-      state = TOPOLOGY_GUARD_STATE.TARGET_NODE_OCCUPIED;
-      blockingReason = TOPOLOGY_GUARD_REASON.TARGET_NODE_ALREADY_OCCUPIED;
-    } else if (
-      normalizedMoveType === OperationType.ADD &&
-      Number.isFinite(targetReplicaCount) &&
-      observedDistinctNodeIds.length >= targetReplicaCount
-    ) {
-      state = TOPOLOGY_GUARD_STATE.TARGET_REPLICA_COUNT_SATISFIED;
-      blockingReason =
-        TOPOLOGY_GUARD_REASON.TARGET_REPLICA_COUNT_ALREADY_SATISFIED;
-    }
+    const topologyGuardDecisionTable = Object.freeze([
+      Object.freeze({
+        matches: observedDistinctNodeIds.includes(targetNodeId),
+        state: TOPOLOGY_GUARD_STATE.TARGET_NODE_OCCUPIED,
+        blockingReason: TOPOLOGY_GUARD_REASON.TARGET_NODE_ALREADY_OCCUPIED,
+      }),
+      Object.freeze({
+        matches:
+          this.isTopologyGuardTargetCountOperationType(normalizedMoveType) &&
+          Number.isFinite(targetReplicaCount) &&
+          observedDistinctNodeIds.length >= targetReplicaCount,
+        state: TOPOLOGY_GUARD_STATE.TARGET_REPLICA_COUNT_SATISFIED,
+        blockingReason:
+          TOPOLOGY_GUARD_REASON.TARGET_REPLICA_COUNT_ALREADY_SATISFIED,
+      }),
+    ]);
+    const topologyGuardDecision =
+      topologyGuardDecisionTable.find((decision) => decision.matches) ||
+      TOPOLOGY_GUARD_ALLOWED_DECISION;
+    const state = topologyGuardDecision.state;
 
     if (state === TOPOLOGY_GUARD_STATE.ALLOWED) {
       return Object.freeze({
@@ -225,6 +215,7 @@ class RebalanceCoordinatorSegment2 extends RebalanceCoordinatorSegment1 {
       });
     }
 
+    const blockingReason = topologyGuardDecision.blockingReason;
     return Object.freeze({
       state,
       admissionResult: Object.freeze({
@@ -237,7 +228,7 @@ class RebalanceCoordinatorSegment2 extends RebalanceCoordinatorSegment1 {
         topologySnapshot: Object.freeze({
           observedDistinctNodeIds: Object.freeze(observedDistinctNodeIds),
           observedDistinctNodeCount: observedDistinctNodeIds.length,
-          observedServiceRowCount: mergedServiceRows.length,
+          observedServiceRowCount: topologyBlockingServiceRows.length,
           targetNodeId,
           targetReplicaCount,
           authoritativeAvailable: authoritativeObservation.available === true,
@@ -278,7 +269,7 @@ class RebalanceCoordinatorSegment2 extends RebalanceCoordinatorSegment1 {
    * @return {Array<Object>} Matching in-flight operations.
    * @private
    */
-  getEntityInFlightOperationRows({ entityType, entityId }) {
+  getEntityInFlightOperationRows({entityType, entityId}) {
     return this.repository.getEntityInFlightOperationRows({
       entityType,
       entityId,
@@ -345,7 +336,7 @@ class RebalanceCoordinatorSegment2 extends RebalanceCoordinatorSegment1 {
   }
 
   /**
-   * Observe services cache progress and re-enter the owner lane.
+   * Observe cache progress and re-enter the owner lane.
    * Delegates to workflow owner (D7.1).
    * @param {string} tableName
    * @param {string} cacheOperation
@@ -373,7 +364,7 @@ class RebalanceCoordinatorSegment2 extends RebalanceCoordinatorSegment1 {
    * @return {Promise<Set<string>>} In-flight replica IDs.
    * @private
    */
-  async getEntityInFlightReplicaIds({ partitionId, entityType, entityId }) {
+  async getEntityInFlightReplicaIds({partitionId, entityType, entityId}) {
     return this.repository.getEntityInFlightReplicaIds({
       partitionId,
       entityType,
@@ -419,14 +410,14 @@ class RebalanceCoordinatorSegment2 extends RebalanceCoordinatorSegment1 {
 
     for (const row of serviceRows) {
       const replicaId = row?.service_id || row?.replica_id;
-      if (typeof replicaId === "string" && replicaId.length > 0) {
+      if (typeof replicaId === 'string' && replicaId.length > 0) {
         usedReplicaIds.add(replicaId);
       }
     }
 
     for (const row of authoritativeServiceRows) {
       const replicaId = row?.service_id || row?.replica_id;
-      if (typeof replicaId === "string" && replicaId.length > 0) {
+      if (typeof replicaId === 'string' && replicaId.length > 0) {
         usedReplicaIds.add(replicaId);
       }
     }
@@ -436,7 +427,7 @@ class RebalanceCoordinatorSegment2 extends RebalanceCoordinatorSegment1 {
     }
 
     for (const replicaId of excludeReplicaIds) {
-      if (typeof replicaId === "string" && replicaId.length > 0) {
+      if (typeof replicaId === 'string' && replicaId.length > 0) {
         usedReplicaIds.add(replicaId);
       }
     }
@@ -467,7 +458,7 @@ class RebalanceCoordinatorSegment2 extends RebalanceCoordinatorSegment1 {
    * @private
    */
   normalizeMoveType(moveType) {
-    if (typeof moveType !== "string") {
+    if (typeof moveType !== 'string') {
       return null;
     }
     const normalized = moveType.toUpperCase();
@@ -486,13 +477,13 @@ class RebalanceCoordinatorSegment2 extends RebalanceCoordinatorSegment1 {
    * @private
    */
   buildOperationIntentKey(move, entityType, entityId) {
-    const normalizedType = this.normalizeMoveType(move?.type) || "";
-    const targetNodeId = move?.nodeId || "";
+    const normalizedType = this.normalizeMoveType(move?.type) || '';
+    const targetNodeId = move?.nodeId || '';
     const replicaIntent =
       normalizedType === OperationType.REMOVE ||
-      normalizedType === OperationType.REPLACE
-        ? move?.replicaId || ""
-        : "";
+      normalizedType === OperationType.REPLACE ?
+        move?.replicaId || '' :
+        '';
     return `${entityType}:${entityId}:${normalizedType}:${targetNodeId}:${replicaIntent}`;
   }
 
@@ -540,8 +531,8 @@ class RebalanceCoordinatorSegment2 extends RebalanceCoordinatorSegment1 {
       return false;
     }
 
-    const operationType = this.normalizeMoveType(operation.type) || "";
-    const moveType = this.normalizeMoveType(move.type) || "";
+    const operationType = this.normalizeMoveType(operation.type) || '';
+    const moveType = this.normalizeMoveType(move.type) || '';
     if (operationType !== moveType) {
       return false;
     }
@@ -592,7 +583,7 @@ class RebalanceCoordinatorSegment2 extends RebalanceCoordinatorSegment1 {
 
     const cachedOperationId = cachedOperation.operationId;
     if (
-      typeof cachedOperationId !== "string" ||
+      typeof cachedOperationId !== 'string' ||
       cachedOperationId.length === NUM.ZERO
     ) {
       this.recentOperationIntents.delete(dedupeKey);
@@ -604,7 +595,7 @@ class RebalanceCoordinatorSegment2 extends RebalanceCoordinatorSegment1 {
       cacheVisibleOperation = await this.queryOperationById(cachedOperationId);
     } catch (error) {
       this.logger.debug(
-        "Failed to refresh recent operation intent from cache-visible state",
+        'Failed to refresh recent operation intent from cache-visible state',
         {
           operationId: cachedOperationId,
           dedupeKey,
@@ -620,9 +611,9 @@ class RebalanceCoordinatorSegment2 extends RebalanceCoordinatorSegment1 {
       return null;
     }
     const operationForMissReuse =
-      cacheVisibleOperation && !this.isOperationTerminal(cacheVisibleOperation)
-        ? cacheVisibleOperation
-        : cachedOperation;
+      cacheVisibleOperation && !this.isOperationTerminal(cacheVisibleOperation) ?
+        cacheVisibleOperation :
+        cachedOperation;
 
     const authoritativeOperation =
       await this.repository.queryAuthoritativeOperationById(cachedOperationId, {
@@ -696,7 +687,7 @@ class RebalanceCoordinatorSegment2 extends RebalanceCoordinatorSegment1 {
       });
     }
     const partitionId = String(
-      operation.partitionId || operation.entityId || "",
+      operation.partitionId || operation.entityId || '',
     ).trim();
     if (
       partitionId.length === NUM.ZERO ||
@@ -711,7 +702,7 @@ class RebalanceCoordinatorSegment2 extends RebalanceCoordinatorSegment1 {
       operation.entityType || SERVICE_TYPE.PARTITION,
     ).trim();
     const entityId = String(
-      operation.entityId || operation.partitionId || "",
+      operation.entityId || operation.partitionId || '',
     ).trim();
     if (entityId.length === NUM.ZERO) {
       return Object.freeze({
@@ -732,12 +723,12 @@ class RebalanceCoordinatorSegment2 extends RebalanceCoordinatorSegment1 {
         operation: null,
       });
     }
-    const operationId = String(operation?.operationId || "").trim();
-    const matchingOperation = Array.isArray(observation?.operations)
-      ? observation.operations.find(
-          (entry) => String(entry?.operationId || "").trim() === operationId,
-        ) || null
-      : null;
+    const operationId = String(operation?.operationId || '').trim();
+    const matchingOperation = Array.isArray(observation?.operations) ?
+      observation.operations.find(
+        (entry) => String(entry?.operationId || '').trim() === operationId,
+      ) || null :
+      null;
     if (matchingOperation) {
       return Object.freeze({
         state: RECENT_OPERATION_INTENT_VISIBILITY_STATE.MATCHING,
@@ -791,11 +782,11 @@ class RebalanceCoordinatorSegment2 extends RebalanceCoordinatorSegment1 {
    * @private
    */
   rememberOperationIntents(intentKeys, operation) {
-    const keys = Array.isArray(intentKeys)
-      ? intentKeys
-      : Array.from(intentKeys || []);
+    const keys = Array.isArray(intentKeys) ?
+      intentKeys :
+      Array.from(intentKeys || []);
     for (const key of keys) {
-      if (typeof key !== "string" || key.length === NUM.ZERO) {
+      if (typeof key !== 'string' || key.length === NUM.ZERO) {
         continue;
       }
       this.rememberOperationIntent(key, operation);
@@ -814,9 +805,9 @@ class RebalanceCoordinatorSegment2 extends RebalanceCoordinatorSegment1 {
    * @return {Promise<Object|null>}
    * @private
    */
-  async maybeRearmReusedPendingOperation(operation, options = {}) {
+  async maybeRearmReusedPendingOperation(operation, _options = {}) {
     const workflowStep = String(
-      operation?.workflowStep || operation?.workflow_step || "",
+      operation?.workflowStep || operation?.workflow_step || '',
     ).trim();
     if (
       !operation ||
@@ -839,13 +830,13 @@ class RebalanceCoordinatorSegment2 extends RebalanceCoordinatorSegment1 {
    */
   pruneRecentOperationIntentsForOperation(operation) {
     const operationId = String(
-      operation?.operationId || operation?.operation_id || "",
+      operation?.operationId || operation?.operation_id || '',
     ).trim();
     if (operationId.length === NUM.ZERO) {
       return;
     }
     for (const [dedupeKey, entry] of this.recentOperationIntents.entries()) {
-      if (String(entry?.operation?.operationId || "").trim() !== operationId) {
+      if (String(entry?.operation?.operationId || '').trim() !== operationId) {
         continue;
       }
       this.recentOperationIntents.delete(dedupeKey);
@@ -862,16 +853,16 @@ class RebalanceCoordinatorSegment2 extends RebalanceCoordinatorSegment1 {
    */
   getRecentOperationIntentTtlMs(operation) {
     const partitionId = String(
-      operation?.partitionId || operation?.entityId || "",
+      operation?.partitionId || operation?.entityId || STRING.EMPTY,
     ).trim();
     if (!partitionId || !this.isPriorityControlPlanePartition(partitionId)) {
       return RECENT_INTENT_TTL_MS;
     }
     const configuredPendingTimeoutMs =
       Number.isFinite(this.config?.pendingTimeoutMs) &&
-      this.config.pendingTimeoutMs > NUM.ZERO
-        ? Math.floor(this.config.pendingTimeoutMs)
-        : RECENT_INTENT_TTL_MS;
+      this.config.pendingTimeoutMs > NUM.ZERO ?
+        Math.floor(this.config.pendingTimeoutMs) :
+        RECENT_INTENT_TTL_MS;
     return Math.max(
       RECENT_INTENT_TTL_MS,
       PRIORITY_RECENT_INTENT_TTL_MS,
@@ -880,17 +871,58 @@ class RebalanceCoordinatorSegment2 extends RebalanceCoordinatorSegment1 {
   }
 
   /**
+   * Resolve the authoritative-miss reuse policy from one normalized operation
+   * snapshot.
+   * @param {Object|null} operation
+   * @return {Object}
+   * @private
+   */
+  resolveRecentOperationMissReuseSnapshot(operation) {
+    const partitionId = String(
+      operation?.partitionId || operation?.entityId || STRING.EMPTY,
+    ).trim();
+    const workflowStep = String(
+      operation?.workflowStep || STRING.EMPTY,
+    ).trim();
+    const operationType = this.normalizeMoveType(operation?.type);
+    const priorityPartition =
+      partitionId.length > NUM.ZERO &&
+      this.isPriorityControlPlanePartition(partitionId);
+    const usePriorityCreatePhaseBudget =
+      priorityPartition &&
+      PRIORITY_RECENT_INTENT_MISS_REUSE_EXTENDED_OPERATION_TYPES.has(
+        operationType,
+      ) &&
+      PRIORITY_RECENT_INTENT_MISS_REUSE_EXTENDED_WORKFLOW_STEPS.has(
+        workflowStep,
+      );
+
+    return Object.freeze({
+      operationType,
+      partitionId,
+      priorityPartition,
+      usePriorityCreatePhaseBudget,
+      workflowStep,
+    });
+  }
+
+  /**
    * Resolve the workflow-timeout window that defines how long a missing
    * recent intent is still credible as an in-flight recovery operation.
-   * Once a cached priority operation has aged past its own step timeout,
-   * reusing it on authoritative misses suppresses the fresh recovery op that
-   * the planner now needs to mint.
+   * Priority ADD/REPLACE create-phase work keeps the longer recent-intent TTL
+   * because deferred owner reads should not mint duplicate PENDING operations.
    * @param {Object|null} operation
    * @return {number}
    * @private
    */
   getRecentOperationMissReuseBudgetMs(operation) {
-    const workflowStep = String(operation?.workflowStep || "").trim();
+    const missReuseSnapshot =
+      this.resolveRecentOperationMissReuseSnapshot(operation);
+    if (missReuseSnapshot.usePriorityCreatePhaseBudget) {
+      return this.getRecentOperationIntentTtlMs(operation);
+    }
+
+    const workflowStep = missReuseSnapshot.workflowStep;
     if (workflowStep === WORKFLOW_STEP.CREATING) {
       return this.config.creatingTimeoutMs;
     }
@@ -915,9 +947,9 @@ class RebalanceCoordinatorSegment2 extends RebalanceCoordinatorSegment1 {
     const updatedAt = Number(operation?.updatedAt);
     const createdAt = Number(operation?.createdAt);
     const startedAt =
-      Number.isFinite(updatedAt) && updatedAt > NUM.ZERO
-        ? updatedAt
-        : createdAt;
+      Number.isFinite(updatedAt) && updatedAt > NUM.ZERO ?
+        updatedAt :
+        createdAt;
     if (!Number.isFinite(startedAt) || startedAt <= NUM.ZERO) {
       return NUM.ZERO;
     }
@@ -933,13 +965,9 @@ class RebalanceCoordinatorSegment2 extends RebalanceCoordinatorSegment1 {
     if (!operation || this.isOperationTerminal(operation)) {
       return false;
     }
-    const partitionId = String(
-      operation.partitionId || operation.entityId || "",
-    ).trim();
-    if (
-      partitionId.length === NUM.ZERO ||
-      !this.isPriorityControlPlanePartition(partitionId)
-    ) {
+    const missReuseSnapshot =
+      this.resolveRecentOperationMissReuseSnapshot(operation);
+    if (!missReuseSnapshot.priorityPartition) {
       return false;
     }
 
@@ -948,7 +976,7 @@ class RebalanceCoordinatorSegment2 extends RebalanceCoordinatorSegment1 {
     // intent on a deferred read admits a second replacement and can multiply
     // active replicas for the same critical partition.
     const keepSourceRemovalIntentExclusive =
-      operation.type === OperationType.REPLACE &&
+      missReuseSnapshot.operationType === OperationType.REPLACE &&
       this.isReplaceRemoveDispatchPhase(operation);
     if (keepSourceRemovalIntentExclusive) {
       return true;
@@ -1112,7 +1140,7 @@ class RebalanceCoordinatorSegment2 extends RebalanceCoordinatorSegment1 {
     if (
       !this.controlPlaneReadinessService ||
       typeof this.controlPlaneReadinessService
-        .getCurrentPublishedMembershipEpochSync !== "function"
+        .getCurrentPublishedMembershipEpochSync !== 'function'
     ) {
       return null;
     }
@@ -1130,4 +1158,4 @@ class RebalanceCoordinatorSegment2 extends RebalanceCoordinatorSegment1 {
    */
 }
 
-export { RebalanceCoordinatorSegment2 };
+export {RebalanceCoordinatorSegment2};

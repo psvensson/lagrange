@@ -16,6 +16,7 @@ const {
   QUERY_LOG_MSG,
   QUERY_ROUTING_DIAGNOSTIC_REASON,
   RAFT_ROLE,
+  READINESS_SNAPSHOT_KEY,
   SERVICE_STATUS,
   SQL,
   TABLES,
@@ -252,6 +253,8 @@ class QueryExecutorSegment3 extends QueryExecutorSegment3Part1 {
           lifecycleState: compactSnapshot.lifecycleState || null,
           reasonCodes: compactSnapshot.reasonCodes || Object.freeze([]),
           failedDimensions: decision.failedDimensions || Object.freeze([]),
+          [READINESS_SNAPSHOT_KEY.RUNTIME_AUTHORITY]:
+            compactSnapshot[READINESS_SNAPSHOT_KEY.RUNTIME_AUTHORITY] || null,
         } :
         null,
     };

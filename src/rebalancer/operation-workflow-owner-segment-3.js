@@ -1,105 +1,36 @@
-import { OPERATION_WORKFLOW_OWNER_SHARED } from "./operation-workflow-owner-shared.js";
-import { OperationWorkflowOwnerSegment2 } from "./operation-workflow-owner-segment-2.js";
+import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
+import {OperationWorkflowOwnerSegment2} from './operation-workflow-owner-segment-2.js';
 
 const {
   AUTHORITATIVE_TRANSITION_RECOVERY_STATUS,
-  CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
-  CONTROL_PLANE_PARTICIPATION_KIND,
-  CONTROL_PLANE_PUBLICATION_STATUS,
-  CONTROL_PLANE_READINESS_DIMENSION,
-  COORDINATOR_CREATED_REMOTE_HANDOFF_VERIFICATION_DELAY_MS,
-  ControlPlaneField,
-  ControlPlaneMessageType,
   ControlPlaneReadinessService,
-  DEFAULT_MIN_REPLICA_COUNT,
   DISPATCH_RETRY_DELAY_MS,
-  EXECUTOR_OUTCOME_ACTION,
-  EXECUTOR_OUTCOME_ACTION_MAP,
-  EXECUTOR_OUTCOME_FIELD,
   FAILURE_LOG_LEVEL,
-  INCOMPLETE_OPERATION_OBSERVATION_STATE,
-  INITIAL_PARTITION_IDS,
   METRICS_LOG_TAG,
   NUM,
-  OBSERVED_PROGRESS_RELEVANT_SERVICE_STATUSES,
-  OBSERVED_PROGRESS_RELEVANT_WORKFLOW_STEPS,
-  OBSERVED_PROGRESS_RETRY_DELAY_MS,
-  OPERATION_HANDLER,
-  OPERATION_LIFECYCLE_ACTION,
   OPERATION_METADATA_KEY,
-  OPERATION_OWNER_ACTION,
-  OPERATION_SINGLE_FLIGHT_KEY_SEPARATOR,
-  OPERATION_SINGLE_FLIGHT_SCOPE,
   OPERATION_TRANSITION_REASON,
-  OPERATION_TRANSITION_SESSION_ATTEMPT_PREFIX,
   OPERATION_WORKFLOW_OWNER_LITERAL,
-  OPERATION_WORKFLOW_OWNER_REASON,
   OperationType,
-  PARTITION_SERVICE_ERROR_MSG,
-  PRIORITY_CONTROL_PLANE_SYNCING_TIMEOUT_CAP_MS,
-  PRIORITY_PUBLICATION_LEADER_HANDOFF_EVIDENCE,
-  PRIORITY_PUBLICATION_LEADER_REMOVE_SAFETY_STATE,
-  PRIORITY_PUBLICATION_SOURCE_ROLE_STATE,
-  PRIORITY_RECOVERY_COMPLETION_STATE,
-  PRIORITY_REMOVE_SAFETY_MEMBERSHIP_SOURCE,
-  QUERY_ERROR_MSG,
-  RAFT_ROLE,
-  REBALANCER_SKIP_REASON,
-  REBALANCE_COORDINATOR_DEFER_REASON,
   REBALANCE_COORDINATOR_ERROR_MSG,
   REBALANCE_COORDINATOR_EVENT,
   REBALANCE_COORDINATOR_LOG_MSG,
   RECOVERABLE_TRANSITION_COMMIT_STATUS,
   RECOVERABLE_TRANSITION_ROLLBACK_STATUS,
-  REMOVE_SAFETY_EVALUATION_CLASSIFICATION,
-  REMOVE_SAFETY_OWNER_PARTICIPATION_KIND,
-  REMOVE_SAFETY_READINESS_DIMENSION,
-  REMOVE_SAFETY_READ_QUERY_OPTIONS,
-  REMOVE_SAFETY_SQL,
-  REPLACE_SOURCE_LEADER_HANDOFF_REQUIRED_PARTITION_IDS,
-  REPLICA_OPERATION_VISIBILITY_READ_MODE,
-  ReplicaOperationField,
-  ReplicaOperationMessageType,
-  ReplicaOperationResponseStatus,
   ReplicaStatus,
-  SAFETY_DEFERRED_LOG_THROTTLE_MS,
-  SAFETY_DEFERRED_RETRY_DELAY_MS,
-  SERVICE_TYPE,
-  SQL_RECONCILIATION_REASON,
   SYSTEM_TABLE_NAME,
-  TIMEOUT_BUDGET_CLASSIFICATION,
   TIMEOUT_BUDGET_DEFAULT,
-  TIME_MS,
-  TRANSACTION_STATUS,
   TRANSITION_RECOVERY_READ_OPTIONS,
   TRANSITION_RECOVERY_SQL,
-  TRANSITION_RETRY_DELAY_MS,
   TRANSITION_STEP_OPTIONS,
   TYPEOF,
-  UNIFIED_SERVICE_TYPE,
   WORKFLOW_STEP,
   WORKFLOW_STEP_TO_STATUS,
-  buildControlPlaneQueryOptions,
-  buildPriorityRecoveryBlockedPartitionIds,
-  buildPriorityRecoveryCompletion,
-  buildPriorityRecoveryOperationAssessment,
   buildSelectRowsByTransactionIdsSql,
-  buildTimeoutClassification,
-  classifyTransportDeliveryOutcome,
-  createChildTimeoutBudget,
   createTopLevelOperationBudget,
-  getControlPlaneRetryAfterMs,
-  getWorkflowSteps,
-  hasPriorityRecoverySpreadGap,
   isCoordinatorOwnedOperationType,
-  isDeliveredTransportDeliveryOutcome,
   isPriorityControlPlanePartition,
-  isRetryableControlPlaneError,
-  isSystemTablePartition,
-  normalizeNodeIdList,
-  normalizeReplicaRowNodeIds,
   readAuthoritativeControlPlaneRows,
-  resolvePriorityRecoveryActiveNodeCohort,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
 
 class OperationWorkflowOwnerSegment3 extends OperationWorkflowOwnerSegment2 {
@@ -122,7 +53,7 @@ class OperationWorkflowOwnerSegment3 extends OperationWorkflowOwnerSegment2 {
       {
         ...TRANSITION_RECOVERY_READ_OPTIONS,
         controlPlaneTableName: SYSTEM_TABLE_NAME.SQL_TRANSACTIONS,
-        controlPlaneOperationKind: "read",
+        controlPlaneOperationKind: 'read',
       },
     );
     if (transactionResult?.success === false) {
@@ -163,7 +94,7 @@ class OperationWorkflowOwnerSegment3 extends OperationWorkflowOwnerSegment2 {
         {
           ...TRANSITION_RECOVERY_READ_OPTIONS,
           controlPlaneTableName: SYSTEM_TABLE_NAME.SQL_TRANSACTION_PARTICIPANTS,
-          controlPlaneOperationKind: "read",
+          controlPlaneOperationKind: 'read',
         },
       );
       if (participantResult?.success === false) {
@@ -275,13 +206,13 @@ class OperationWorkflowOwnerSegment3 extends OperationWorkflowOwnerSegment2 {
         }
 
         const afterCommit =
-          typeof options.afterCommit === TYPEOF.FUNCTION
-            ? options.afterCommit
-            : null;
+          typeof options.afterCommit === TYPEOF.FUNCTION ?
+            options.afterCommit :
+            null;
         if (options?.bypassExecutionTransaction === true) {
           await this.operationWorkflowCoordinator.transitionStep(
             operation.operationId,
-            { nextStep: step, reason },
+            {nextStep: step, reason},
             {},
             TRANSITION_STEP_OPTIONS.DEFER_COMMITTED_MARK,
           );
@@ -347,7 +278,7 @@ class OperationWorkflowOwnerSegment3 extends OperationWorkflowOwnerSegment2 {
         try {
           await this.operationWorkflowCoordinator.transitionStep(
             operation.operationId,
-            { nextStep: step, reason },
+            {nextStep: step, reason},
             {},
             TRANSITION_STEP_OPTIONS.DEFER_COMMITTED_MARK,
           );
@@ -373,9 +304,9 @@ class OperationWorkflowOwnerSegment3 extends OperationWorkflowOwnerSegment2 {
             this.isTransitionPartitionContention(error);
           if (!committed) {
             const activeTransaction =
-              typeof txCoordinator.getTransaction === TYPEOF.FUNCTION
-                ? txCoordinator.getTransaction(sessionId)
-                : null;
+              typeof txCoordinator.getTransaction === TYPEOF.FUNCTION ?
+                txCoordinator.getTransaction(sessionId) :
+                null;
             if (!activeTransaction) {
               if (
                 staleTransitionSessionConflict ||
@@ -435,7 +366,7 @@ class OperationWorkflowOwnerSegment3 extends OperationWorkflowOwnerSegment2 {
           throw error;
         }
       },
-      { operation },
+      {operation},
     );
   }
 
@@ -458,11 +389,11 @@ class OperationWorkflowOwnerSegment3 extends OperationWorkflowOwnerSegment2 {
       this.resolveOperationReadinessDecisionDimension(operation);
 
     const targetNodeId = operation.targetNodeId;
-    const targetReadiness = targetNodeId
-      ? this.controlPlaneReadinessService.getNodeReadinessSync(targetNodeId, {
-          decisionDimension: readinessDecisionDimension,
-        })
-      : null;
+    const targetReadiness = targetNodeId ?
+      this.controlPlaneReadinessService.getNodeReadinessSync(targetNodeId, {
+        decisionDimension: readinessDecisionDimension,
+      }) :
+      null;
     const readinessSnapshot =
       ControlPlaneReadinessService.compactSnapshotSummary(
         targetReadiness,
@@ -485,9 +416,9 @@ class OperationWorkflowOwnerSegment3 extends OperationWorkflowOwnerSegment2 {
       updatedAt: now,
       status: persistedStatus,
       stepsHistory: [
-        ...(Array.isArray(operation.stepsHistory)
-          ? operation.stepsHistory
-          : []),
+        ...(Array.isArray(operation.stepsHistory) ?
+          operation.stepsHistory :
+          []),
         stepEntry,
       ],
     };
@@ -495,9 +426,9 @@ class OperationWorkflowOwnerSegment3 extends OperationWorkflowOwnerSegment2 {
       operation.workflowStep = step;
       operation.status = persistedStatus;
       const previousUpdatedAt = Number(operation.updatedAt);
-      operation.updatedAt = Number.isFinite(previousUpdatedAt)
-        ? Math.max(previousUpdatedAt, now)
-        : now;
+      operation.updatedAt = Number.isFinite(previousUpdatedAt) ?
+        Math.max(previousUpdatedAt, now) :
+        now;
     };
 
     const persistFn = async (sessionId) => {
@@ -568,11 +499,11 @@ class OperationWorkflowOwnerSegment3 extends OperationWorkflowOwnerSegment2 {
    * @private
    */
   shouldUsePriorityDispatchClaimNarrowPath(operation) {
-    const partitionId = String(operation?.partitionId || "").trim();
+    const partitionId = String(operation?.partitionId || '').trim();
     return (
       partitionId.length > NUM.ZERO &&
       operation?.workflowStep === WORKFLOW_STEP.PENDING &&
-      isPriorityControlPlanePartition({ partitionId })
+      isPriorityControlPlanePartition({partitionId})
     );
   }
 
@@ -589,8 +520,8 @@ class OperationWorkflowOwnerSegment3 extends OperationWorkflowOwnerSegment2 {
    */
   buildPriorityDispatchClaimRetryableError(operation) {
     const error = new Error(
-      "control_plane_pressure_degraded while claiming priority " +
-        "dispatch transition",
+      'control_plane_pressure_degraded while claiming priority ' +
+        'dispatch transition',
     );
     error.code =
       OPERATION_WORKFLOW_OWNER_LITERAL.CONTROL_PLANE_PRESSURE_DEGRADED;
@@ -630,14 +561,14 @@ class OperationWorkflowOwnerSegment3 extends OperationWorkflowOwnerSegment2 {
         const readinessDecisionDimension =
           this.resolveOperationReadinessDecisionDimension(operation);
         const targetNodeId = operation.targetNodeId;
-        const targetReadiness = targetNodeId
-          ? this.controlPlaneReadinessService.getNodeReadinessSync(
-              targetNodeId,
-              {
-                decisionDimension: readinessDecisionDimension,
-              },
-            )
-          : null;
+        const targetReadiness = targetNodeId ?
+          this.controlPlaneReadinessService.getNodeReadinessSync(
+            targetNodeId,
+            {
+              decisionDimension: readinessDecisionDimension,
+            },
+          ) :
+          null;
         const readinessSnapshot =
           ControlPlaneReadinessService.compactSnapshotSummary(
             targetReadiness,
@@ -662,9 +593,9 @@ class OperationWorkflowOwnerSegment3 extends OperationWorkflowOwnerSegment2 {
           updatedAt: now,
           status: persistedStatus,
           stepsHistory: [
-            ...(Array.isArray(operation.stepsHistory)
-              ? operation.stepsHistory
-              : []),
+            ...(Array.isArray(operation.stepsHistory) ?
+              operation.stepsHistory :
+              []),
             stepEntry,
           ],
         };
@@ -688,15 +619,23 @@ class OperationWorkflowOwnerSegment3 extends OperationWorkflowOwnerSegment2 {
 
         await this.operationWorkflowCoordinator.transitionStep(
           operation.operationId,
-          { nextStep: step, reason: transitionReason },
+          {nextStep: step, reason: transitionReason},
           {},
           TRANSITION_STEP_OPTIONS.DEFER_COMMITTED_MARK,
         );
 
+        const operationBudget = createTopLevelOperationBudget({
+          configuredBudgetMs:
+            TIMEOUT_BUDGET_DEFAULT.REBALANCE_OPERATION_BUDGET_MS,
+          startedAtMs: Number.isFinite(operation.createdAt) ?
+            operation.createdAt :
+            now,
+        });
         const transitionCommitted =
           await this.repository.persistOperationUpdate(projectedOperation, {
             confirmPersistence: true,
             expectedWorkflowStep: WORKFLOW_STEP.PENDING,
+            timeoutBudget: operationBudget,
           });
 
         if (!transitionCommitted) {
@@ -748,7 +687,7 @@ class OperationWorkflowOwnerSegment3 extends OperationWorkflowOwnerSegment2 {
 
         return operation;
       },
-      { operation },
+      {operation},
     );
   }
 
@@ -762,9 +701,9 @@ class OperationWorkflowOwnerSegment3 extends OperationWorkflowOwnerSegment2 {
     this.clearPriorityActiveReplaceRetry(operation?.operationId || null);
     const now = Date.now();
     const finalStep =
-      operation.type === OperationType.ADD
-        ? WORKFLOW_STEP.ACTIVE
-        : WORKFLOW_STEP.REMOVED;
+      operation.type === OperationType.ADD ?
+        WORKFLOW_STEP.ACTIVE :
+        WORKFLOW_STEP.REMOVED;
     if (
       operation.workflowStep === finalStep &&
       operation.completedAt !== null &&
@@ -777,11 +716,11 @@ class OperationWorkflowOwnerSegment3 extends OperationWorkflowOwnerSegment2 {
       this.resolveOperationReadinessDecisionDimension(operation);
 
     const targetNodeId = operation.targetNodeId;
-    const targetReadiness = targetNodeId
-      ? this.controlPlaneReadinessService.getNodeReadinessSync(targetNodeId, {
-          decisionDimension: readinessDecisionDimension,
-        })
-      : null;
+    const targetReadiness = targetNodeId ?
+      this.controlPlaneReadinessService.getNodeReadinessSync(targetNodeId, {
+        decisionDimension: readinessDecisionDimension,
+      }) :
+      null;
     const readinessSnapshot =
       ControlPlaneReadinessService.compactSnapshotSummary(
         targetReadiness,
@@ -804,9 +743,9 @@ class OperationWorkflowOwnerSegment3 extends OperationWorkflowOwnerSegment2 {
       updatedAt: now,
       completedAt: now,
       stepsHistory: [
-        ...(Array.isArray(operation.stepsHistory)
-          ? operation.stepsHistory
-          : []),
+        ...(Array.isArray(operation.stepsHistory) ?
+          operation.stepsHistory :
+          []),
         stepEntry,
       ],
     };
@@ -814,13 +753,13 @@ class OperationWorkflowOwnerSegment3 extends OperationWorkflowOwnerSegment2 {
       operation.workflowStep = finalStep;
       operation.status = WORKFLOW_STEP_TO_STATUS[finalStep];
       const previousUpdatedAt = Number(operation.updatedAt);
-      operation.updatedAt = Number.isFinite(previousUpdatedAt)
-        ? Math.max(previousUpdatedAt, now)
-        : now;
+      operation.updatedAt = Number.isFinite(previousUpdatedAt) ?
+        Math.max(previousUpdatedAt, now) :
+        now;
       const previousCompletedAt = Number(operation.completedAt);
-      operation.completedAt = Number.isFinite(previousCompletedAt)
-        ? Math.max(previousCompletedAt, now)
-        : now;
+      operation.completedAt = Number.isFinite(previousCompletedAt) ?
+        Math.max(previousCompletedAt, now) :
+        now;
     };
 
     const persistFn = async (sessionId) => {
@@ -908,7 +847,7 @@ class OperationWorkflowOwnerSegment3 extends OperationWorkflowOwnerSegment2 {
     }
     const normalizedError = this.normalizeErrorMessage(
       errorMessage,
-      "Unknown error",
+      'Unknown error',
     );
     const isSafetyBlocked = this.isSafetyPolicyFailure(normalizedError);
     const logLevel =
@@ -916,22 +855,22 @@ class OperationWorkflowOwnerSegment3 extends OperationWorkflowOwnerSegment2 {
       (isSafetyBlocked ? FAILURE_LOG_LEVEL.WARN : FAILURE_LOG_LEVEL.ERROR);
     const logMessage =
       options.logMessage ||
-      (isSafetyBlocked
-        ? REBALANCE_COORDINATOR_LOG_MSG.OPERATION_BLOCKED_BY_SAFETY_POLICY
-        : REBALANCE_COORDINATOR_LOG_MSG.OPERATION_FAILED);
+      (isSafetyBlocked ?
+        REBALANCE_COORDINATOR_LOG_MSG.OPERATION_BLOCKED_BY_SAFETY_POLICY :
+        REBALANCE_COORDINATOR_LOG_MSG.OPERATION_FAILED);
     const previousStep = operation.workflowStep;
-    const transitionReason = isSafetyBlocked
-      ? OPERATION_TRANSITION_REASON.SAFETY_POLICY_BLOCKED
-      : OPERATION_TRANSITION_REASON.OPERATION_FAILED;
+    const transitionReason = isSafetyBlocked ?
+      OPERATION_TRANSITION_REASON.SAFETY_POLICY_BLOCKED :
+      OPERATION_TRANSITION_REASON.OPERATION_FAILED;
     const readinessDecisionDimension =
       this.resolveOperationReadinessDecisionDimension(operation);
 
     const targetNodeId = operation.targetNodeId;
-    const targetReadiness = targetNodeId
-      ? this.controlPlaneReadinessService.getNodeReadinessSync(targetNodeId, {
-          decisionDimension: readinessDecisionDimension,
-        })
-      : null;
+    const targetReadiness = targetNodeId ?
+      this.controlPlaneReadinessService.getNodeReadinessSync(targetNodeId, {
+        decisionDimension: readinessDecisionDimension,
+      }) :
+      null;
     const readinessSnapshot =
       ControlPlaneReadinessService.compactSnapshotSummary(
         targetReadiness,
@@ -962,9 +901,9 @@ class OperationWorkflowOwnerSegment3 extends OperationWorkflowOwnerSegment2 {
       completedAt: now,
       errorMessage: normalizedError,
       stepsHistory: [
-        ...(Array.isArray(operation.stepsHistory)
-          ? operation.stepsHistory
-          : []),
+        ...(Array.isArray(operation.stepsHistory) ?
+          operation.stepsHistory :
+          []),
         failedStepEntry,
       ],
     };
@@ -972,13 +911,13 @@ class OperationWorkflowOwnerSegment3 extends OperationWorkflowOwnerSegment2 {
       operation.workflowStep = WORKFLOW_STEP.FAILED;
       operation.status = ReplicaStatus.FAILED;
       const previousUpdatedAt = Number(operation.updatedAt);
-      operation.updatedAt = Number.isFinite(previousUpdatedAt)
-        ? Math.max(previousUpdatedAt, now)
-        : now;
+      operation.updatedAt = Number.isFinite(previousUpdatedAt) ?
+        Math.max(previousUpdatedAt, now) :
+        now;
       const previousCompletedAt = Number(operation.completedAt);
-      operation.completedAt = Number.isFinite(previousCompletedAt)
-        ? Math.max(previousCompletedAt, now)
-        : now;
+      operation.completedAt = Number.isFinite(previousCompletedAt) ?
+        Math.max(previousCompletedAt, now) :
+        now;
       operation.errorMessage = normalizedError;
     };
 
@@ -1035,9 +974,9 @@ class OperationWorkflowOwnerSegment3 extends OperationWorkflowOwnerSegment2 {
 
     const logMethod =
       logLevel === FAILURE_LOG_LEVEL.WARN &&
-      typeof this.logger.warn === "function"
-        ? this.logger.warn.bind(this.logger)
-        : this.logger.error.bind(this.logger);
+      typeof this.logger.warn === 'function' ?
+        this.logger.warn.bind(this.logger) :
+        this.logger.error.bind(this.logger);
 
     logMethod(logMessage, logPayload);
 
@@ -1071,4 +1010,4 @@ class OperationWorkflowOwnerSegment3 extends OperationWorkflowOwnerSegment2 {
    */
 }
 
-export { OperationWorkflowOwnerSegment3 };
+export {OperationWorkflowOwnerSegment3};

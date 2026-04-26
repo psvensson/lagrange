@@ -23,18 +23,15 @@ import {
 } from '../shared/startup-convergence-gate.js';
 import {
   CDC_PIPELINE_READINESS_TIMEOUT_MS,
-  CDC_LIFECYCLE_LOG_MSG,
 } from '../../constants/cdc-lifecycle-constants.js';
 import {createSystemLeaderReadinessSnapshot} from '../system-readiness-snapshot.js';
 import {
   CACHE_HYDRATION_TABLES,
-  CDC_PROPAGATED_TABLES,
 } from '../../cache/cache-constants.js';
 import {
   BOOTSTRAP_DEFAULT,
   BOOTSTRAP_ERROR,
   BOOTSTRAP_LOG_MSG,
-  BOOTSTRAP_PHASE,
 } from '../bootstrap-constants.js';
 import {
   SYSTEM_TABLE_NAME,
@@ -98,9 +95,6 @@ const CDC_APPLY_OPTIONS = Object.freeze({
   skipSubscriptionCheck: true,
 });
 
-const LOG_REPAIR_FAILED =
-  'Failed to repair propagated cache tables after ' +
-  'ready-node cache timeout';
 const LOG_REPAIRED =
   'Repaired propagated cache tables from local partitions';
 const LOG_REPAIR_ERROR_PREFIX =

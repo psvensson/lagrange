@@ -667,11 +667,15 @@ test('Branch-specific - seed shutdown calls bootstrapService.shutdown(), ' +
   let joinOwnerCleanupCalled = false;
 
   const seedOwner = {
-    async shutdown() { seedOwnerCleanupCalled = true; },
+    async shutdown() {
+      seedOwnerCleanupCalled = true;
+    },
   };
 
   const joinOwner = {
-    async cleanup() { joinOwnerCleanupCalled = true; },
+    async cleanup() {
+      joinOwnerCleanupCalled = true;
+    },
   };
 
   // Seed shutdown calls .shutdown()

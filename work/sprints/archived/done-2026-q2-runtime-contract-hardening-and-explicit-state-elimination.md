@@ -78,18 +78,18 @@ logic.
 
 ## Sprint Umbrella
 
-1. [Benchmark usable-spread owner collapse](../packages/archived/done-20260417-benchmark-usable-spread-owner-collapse.md)
-2. [Canonical convergence diagnostics emission](../packages/archived/done-20260417-canonical-convergence-diagnostics-emission.md)
+1. [Benchmark usable-spread owner collapse](../../packages/archived/done-20260417-benchmark-usable-spread-owner-collapse.md)
+2. [Canonical convergence diagnostics emission](../../packages/archived/done-20260417-canonical-convergence-diagnostics-emission.md)
 3. [Distributed boundary-transition scenario layer](../packages/active-20260415-distributed-boundary-transition-scenario-layer.md)
-4. [Owner-map and architecture boundary catalog](../packages/archived/done-20260417-owner-map-and-architecture-boundary-catalog.md)
-5. [Structured deferred-outcome doctrine and audit](../packages/archived/done-20260417-structured-deferred-outcome-doctrine-and-audit.md)
+4. [Owner-map and architecture boundary catalog](../../packages/archived/done-20260417-owner-map-and-architecture-boundary-catalog.md)
+5. [Structured deferred-outcome doctrine and audit](../../packages/archived/done-20260417-structured-deferred-outcome-doctrine-and-audit.md)
 6. [Startup and control-plane contract hardening](../packages/active-20260412-startup-and-control-plane-contract-hardening.md)
 7. [Partition and query runtime explicit-state hardening](../packages/active-20260412-partition-and-query-runtime-explicit-state-hardening.md)
 8. [Rebalancer and workflow coordination contract hardening](../packages/active-20260412-rebalancer-and-workflow-coordination-contract-hardening.md)
 9. [Admin and bootstrap response contract hardening](../packages/active-20260412-admin-and-bootstrap-response-contract-hardening.md)
 10. [Boundary normalizer hardening for null and undefined ingress](../packages/active-20260412-boundary-normalizer-hardening-for-null-and-undefined-ingress.md)
 11. [Message-group Raft runtime owner collapse](../packages/active-20260413-message-group-raft-runtime-owner-collapse.md)
-12. [Benchmark partition convergence owner collapse](../packages/archived/done-20260417-benchmark-partition-convergence-owner-collapse.md)
+12. [Benchmark partition convergence owner collapse](../../packages/archived/done-20260417-benchmark-partition-convergence-owner-collapse.md)
 13. [Benchmark load-node availability and dispatch owner collapse](../packages/active-20260415-benchmark-load-node-availability-and-dispatch-owner-collapse.md)
 14. [Benchmark partitioning dispatch contribution owner collapse](../packages/active-20260415-benchmark-partitioning-dispatch-contribution-owner-collapse.md)
 15. [Priority recovery completion owner collapse](../packages/active-20260415-priority-recovery-completion-owner-collapse.md)
@@ -100,14 +100,14 @@ logic.
 20. [Node lifecycle transition-outcome owner collapse](../packages/active-20260415-node-lifecycle-transition-outcome-owner-collapse.md)
 21. [Benchmark table bootstrap timeout-budget owner collapse](../packages/active-20260415-benchmark-table-bootstrap-timeout-budget-owner-collapse.md)
 22. [TAP worker code-cache stability](../packages/active-20260415-tap-worker-code-cache-stability.md)
-23. [Constants-owner and magic-literal guideline violation detection](../packages/archived/done-20260412-constants-owner-and-magic-literal-guideline-violation-detection.md)
-24. [Query magic-literal cleanup batch 1](../packages/archived/done-20260412-query-magic-literal-cleanup-batch-1.md)
-25. [Query magic-literal cleanup batch 2](../packages/archived/done-20260412-query-magic-literal-cleanup-batch-2.md)
-26. [Steering hardening for generation contracts](../packages/archived/done-20260412-steering-hardening-for-generation-contracts.md)
-27. [Decision-boundary guideline violation detection](../packages/archived/done-20260412-decision-boundary-guideline-violation-detection.md)
-28. [Bootstrap and runtime guideline cleanup batch 1](../packages/archived/done-20260412-bootstrap-and-runtime-guideline-cleanup-batch-1.md)
-29. [Query and partition decision-boundary follow-on cleanup](../packages/archived/done-20260412-query-and-partition-decision-boundary-follow-on-cleanup.md)
-30. [Repo-wide decision-boundary zero-out pass](../packages/archived/done-20260413-repo-wide-decision-boundary-zero-out-pass.md)
+23. [Constants-owner and magic-literal guideline violation detection](../../packages/archived/done-20260412-constants-owner-and-magic-literal-guideline-violation-detection.md)
+24. [Query magic-literal cleanup batch 1](../../packages/archived/done-20260412-query-magic-literal-cleanup-batch-1.md)
+25. [Query magic-literal cleanup batch 2](../../packages/archived/done-20260412-query-magic-literal-cleanup-batch-2.md)
+26. [Steering hardening for generation contracts](../../packages/archived/done-20260412-steering-hardening-for-generation-contracts.md)
+27. [Decision-boundary guideline violation detection](../../packages/archived/done-20260412-decision-boundary-guideline-violation-detection.md)
+28. [Bootstrap and runtime guideline cleanup batch 1](../../packages/archived/done-20260412-bootstrap-and-runtime-guideline-cleanup-batch-1.md)
+29. [Query and partition decision-boundary follow-on cleanup](../../packages/archived/done-20260412-query-and-partition-decision-boundary-follow-on-cleanup.md)
+30. [Repo-wide decision-boundary zero-out pass](../../packages/archived/done-20260413-repo-wide-decision-boundary-zero-out-pass.md)
 
 ## Priority Order
 
@@ -149,21 +149,21 @@ At sprint exit:
 
 ## Recently Archived Packages
 
-1. [Control-Plane Critical Traffic Isolation And Observability Backlog Containment](../packages/archived/done-20260416-control-plane-critical-traffic-isolation-and-observability-backlog-containment.md)
-2. [Control-Plane Snapshot Owner And Repair-Lane Separation](../packages/archived/done-20260416-control-plane-snapshot-owner-and-repair-lane-separation.md)
-3. [Control-Plane Pressure Amplification Boundary-Transition Scenarios](../packages/archived/done-20260416-control-plane-pressure-amplification-boundary-transition-scenarios.md)
-4. [Message-Group Leader Identity And Strict CDC Forwarding Convergence](../packages/archived/done-20260416-message-group-leader-identity-and-strict-cdc-forwarding-convergence.md)
-5. [Revisioned Control-Plane Snapshot And Watch-Resume Contract](../packages/archived/done-20260416-revisioned-control-plane-snapshot-and-watch-resume-contract.md)
-6. [Join And Rejoin Promotion State Machine](../packages/archived/done-20260416-join-and-rejoin-promotion-state-machine.md)
-7. [Canonical Leader Identity Owner Unification](../packages/archived/done-20260416-canonical-leader-identity-owner-unification.md)
-8. [Control-Plane Priority And Fairness Contract Unification](../packages/archived/done-20260416-control-plane-priority-and-fairness-contract-unification.md)
-9. [Benchmark partition convergence owner collapse](../packages/archived/done-20260417-benchmark-partition-convergence-owner-collapse.md)
-10. [Benchmark usable-spread owner collapse](../packages/archived/done-20260417-benchmark-usable-spread-owner-collapse.md)
-11. [Canonical convergence diagnostics emission](../packages/archived/done-20260417-canonical-convergence-diagnostics-emission.md)
-12. [Owner-map and architecture boundary catalog](../packages/archived/done-20260417-owner-map-and-architecture-boundary-catalog.md)
-13. [Structured deferred-outcome doctrine and audit](../packages/archived/done-20260417-structured-deferred-outcome-doctrine-and-audit.md)
-14. [Contract Inversion Boundary Taxonomy](../packages/archived/done-20260417-contract-inversion-boundary-taxonomy.md)
-15. [Contract Inversion Shared Outcome Kernel](../packages/archived/done-20260417-contract-inversion-shared-outcome-kernel.md)
+1. [Control-Plane Critical Traffic Isolation And Observability Backlog Containment](../../packages/archived/done-20260416-control-plane-critical-traffic-isolation-and-observability-backlog-containment.md)
+2. [Control-Plane Snapshot Owner And Repair-Lane Separation](../../packages/archived/done-20260416-control-plane-snapshot-owner-and-repair-lane-separation.md)
+3. [Control-Plane Pressure Amplification Boundary-Transition Scenarios](../../packages/archived/done-20260416-control-plane-pressure-amplification-boundary-transition-scenarios.md)
+4. [Message-Group Leader Identity And Strict CDC Forwarding Convergence](../../packages/archived/done-20260416-message-group-leader-identity-and-strict-cdc-forwarding-convergence.md)
+5. [Revisioned Control-Plane Snapshot And Watch-Resume Contract](../../packages/archived/done-20260416-revisioned-control-plane-snapshot-and-watch-resume-contract.md)
+6. [Join And Rejoin Promotion State Machine](../../packages/archived/done-20260416-join-and-rejoin-promotion-state-machine.md)
+7. [Canonical Leader Identity Owner Unification](../../packages/archived/done-20260416-canonical-leader-identity-owner-unification.md)
+8. [Control-Plane Priority And Fairness Contract Unification](../../packages/archived/done-20260416-control-plane-priority-and-fairness-contract-unification.md)
+9. [Benchmark partition convergence owner collapse](../../packages/archived/done-20260417-benchmark-partition-convergence-owner-collapse.md)
+10. [Benchmark usable-spread owner collapse](../../packages/archived/done-20260417-benchmark-usable-spread-owner-collapse.md)
+11. [Canonical convergence diagnostics emission](../../packages/archived/done-20260417-canonical-convergence-diagnostics-emission.md)
+12. [Owner-map and architecture boundary catalog](../../packages/archived/done-20260417-owner-map-and-architecture-boundary-catalog.md)
+13. [Structured deferred-outcome doctrine and audit](../../packages/archived/done-20260417-structured-deferred-outcome-doctrine-and-audit.md)
+14. [Contract Inversion Boundary Taxonomy](../../packages/archived/done-20260417-contract-inversion-boundary-taxonomy.md)
+15. [Contract Inversion Shared Outcome Kernel](../../packages/archived/done-20260417-contract-inversion-shared-outcome-kernel.md)
 
 ## Active Queue
 
@@ -259,8 +259,8 @@ states instead of a small promise-shaped contract.
 The sprint is therefore explicitly extended with eight contract-inversion
 packages that define the system from the caller-action side first:
 
-1. [Contract Inversion Boundary Taxonomy](../packages/archived/done-20260417-contract-inversion-boundary-taxonomy.md)
-2. [Contract Inversion Shared Outcome Kernel](../packages/archived/done-20260417-contract-inversion-shared-outcome-kernel.md)
+1. [Contract Inversion Boundary Taxonomy](../../packages/archived/done-20260417-contract-inversion-boundary-taxonomy.md)
+2. [Contract Inversion Shared Outcome Kernel](../../packages/archived/done-20260417-contract-inversion-shared-outcome-kernel.md)
 3. [Contract Inversion Control-Plane Mutation And Visibility Cutover](../packages/active-20260416-contract-inversion-control-plane-mutation-and-visibility-cutover.md)
 4. [Contract Inversion Readiness Admission And Load Cutover](../packages/active-20260416-contract-inversion-readiness-admission-and-load-cutover.md)
 5. [Contract Inversion Protocol Phase Containment](../packages/active-20260416-contract-inversion-protocol-phase-containment.md)

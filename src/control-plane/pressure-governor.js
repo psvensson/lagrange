@@ -4,6 +4,9 @@ const PRESSURE_GOVERNOR_LITERAL = Object.freeze({
   NONE: 'none',
   TRANSPORT_OUTBOUND: 'transport:outbound',
   CONTROL_PLANE: 'control-plane:',
+  CONTROL_PLANE_BOOTSTRAP: 'control-plane:bootstrap:',
+  CONTROL_PLANE_READ: 'control-plane:read',
+  CONTROL_PLANE_WRITE: 'control-plane:write',
   QUERY_PLANE: 'query-plane:',
   QUERY: 'query:',
   CONTROL_PLANE_PRESSURE_DEGRADED: 'control_plane_pressure_degraded',
@@ -24,6 +27,7 @@ const PRESSURE_GOVERNOR_ACTION = Object.freeze({
 const PRESSURE_GOVERNOR_REASON = Object.freeze({
   NONE: 'none',
   CRITICAL_BYPASS: 'critical_bypass',
+  CRITICAL_RESERVE_EXHAUSTED: 'critical_reserve_exhausted',
   TRANSPORT_BACKPRESSURE: 'transport_backpressure',
 });
 const PRESSURE_GOVERNOR_ERROR_CODE = Object.freeze({
@@ -33,6 +37,7 @@ const PRESSURE_GOVERNOR_DEFAULT = Object.freeze({RETRY_AFTER_MS: 250});
 const SHARED_GOVERNORS = new Map();
 const PRESSURE_CAPACITY_PARTITION = Object.freeze({
   SHARED: 'shared',
+  BACKGROUND: 'background',
   CONTROL_PLANE: 'control-plane',
   QUERY_PLANE: 'query-plane',
 });
@@ -88,6 +93,7 @@ function buildNoPressureSummary(sensor = PRESSURE_GOVERNOR_LITERAL.NONE) {
     totalPending: NUM.ZERO,
     totalPendingCritical: NUM.ZERO,
     totalPendingBackground: NUM.ZERO,
+    criticalReserveExhausted: false,
     maxPendingUtilization: NUM.ZERO,
   });
 }
@@ -109,47 +115,83 @@ function buildTransportPressureSummary(
     totalPendingBackground: Number.isFinite(summary?.totalPendingBackground) ?
       summary.totalPendingBackground :
       NUM.ZERO,
+    criticalReserveExhausted: summary?.criticalReserveExhausted === true,
     maxPendingUtilization: Number.isFinite(summary?.maxPendingUtilization) ?
       summary.maxPendingUtilization :
       NUM.ZERO,
   });
 }
-function resolveCapacityPartition(resourceKeys = []) {
+function resolveCapacityPartition(
+  resourceKeys = [],
+  workClass = PRESSURE_WORK_CLASS.INTERACTIVE,
+) {
   if (!Array.isArray(resourceKeys)) {
     return PRESSURE_CAPACITY_PARTITION.SHARED;
   }
-  if (
-    resourceKeys.some((resourceKey) => {
-      return (
-        typeof resourceKey === TYPEOF.STRING &&
-        resourceKey.startsWith(PRESSURE_GOVERNOR_LITERAL.CONTROL_PLANE)
-      );
-    })
-  ) {
-    return PRESSURE_CAPACITY_PARTITION.CONTROL_PLANE;
-  }
-  if (
+  const hasQueryPlaneResource =
     resourceKeys.some((resourceKey) => {
       return (
         typeof resourceKey === TYPEOF.STRING &&
         (resourceKey.startsWith(PRESSURE_GOVERNOR_LITERAL.QUERY_PLANE) ||
           resourceKey.startsWith(PRESSURE_GOVERNOR_LITERAL.QUERY))
       );
-    })
-  ) {
+    });
+  const hasControlPlaneResource =
+    resourceKeys.some((resourceKey) => {
+      return (
+        typeof resourceKey === TYPEOF.STRING &&
+        resourceKey.startsWith(PRESSURE_GOVERNOR_LITERAL.CONTROL_PLANE)
+      );
+    });
+  const hasControlPlaneIngressResource =
+    resourceKeys.some((resourceKey) => {
+      return (
+        resourceKey === PRESSURE_GOVERNOR_LITERAL.CONTROL_PLANE_READ ||
+        resourceKey === PRESSURE_GOVERNOR_LITERAL.CONTROL_PLANE_WRITE
+      );
+    });
+  const pressurePartitionEvidence = Object.freeze({
+    hasQueryPlaneResource,
+    hasControlPlaneIngressResource,
+    isBackgroundWork: workClass === PRESSURE_WORK_CLASS.BACKGROUND,
+    hasControlPlaneResource,
+  });
+  if (pressurePartitionEvidence.hasQueryPlaneResource) {
     return PRESSURE_CAPACITY_PARTITION.QUERY_PLANE;
+  }
+  if (pressurePartitionEvidence.hasControlPlaneIngressResource) {
+    return PRESSURE_CAPACITY_PARTITION.CONTROL_PLANE;
+  }
+  if (pressurePartitionEvidence.isBackgroundWork) {
+    return PRESSURE_CAPACITY_PARTITION.BACKGROUND;
+  }
+  if (pressurePartitionEvidence.hasControlPlaneResource) {
+    return PRESSURE_CAPACITY_PARTITION.CONTROL_PLANE;
   }
   return PRESSURE_CAPACITY_PARTITION.SHARED;
 }
 function normalizeQueueStat(value) {
   return Number.isFinite(value) && value > NUM.ZERO ? value : NUM.ZERO;
 }
+function hasBootstrapControlPlaneResource(resourceKeys = []) {
+  return normalizeResourceKeys(resourceKeys).some((resourceKey) => {
+    return resourceKey.startsWith(
+      PRESSURE_GOVERNOR_LITERAL.CONTROL_PLANE_BOOTSTRAP,
+    );
+  });
+}
+function isCriticalReserveExhausted(queue = {}, capacityPartition) {
+  if (capacityPartition !== PRESSURE_CAPACITY_PARTITION.CONTROL_PLANE) {
+    return false;
+  }
+  const pendingCritical = normalizeQueueStat(queue.pendingCritical);
+  const criticalReserve = normalizeQueueStat(queue.criticalReserve);
+  return criticalReserve > NUM.ZERO && pendingCritical >= criticalReserve;
+}
 function isPartitionBackpressured(queue = {}, capacityPartition) {
   const pending = normalizeQueueStat(queue.pending);
   const maxPending = normalizeQueueStat(queue.maxPending);
-  const pendingCritical = normalizeQueueStat(queue.pendingCritical);
   const pendingBackground = normalizeQueueStat(queue.pendingBackground);
-  const criticalReserve = normalizeQueueStat(queue.criticalReserve);
   const backgroundPendingLimit = normalizeQueueStat(queue.backgroundPendingLimit);
   if (maxPending > NUM.ZERO && pending >= maxPending) {
     return true;
@@ -161,8 +203,15 @@ function isPartitionBackpressured(queue = {}, capacityPartition) {
       pendingBackground >= backgroundPendingLimit
     );
   }
+  if (capacityPartition === PRESSURE_CAPACITY_PARTITION.BACKGROUND) {
+    return (
+      pending > NUM.ZERO &&
+      backgroundPendingLimit > NUM.ZERO &&
+      pendingBackground >= backgroundPendingLimit
+    );
+  }
   if (capacityPartition === PRESSURE_CAPACITY_PARTITION.CONTROL_PLANE) {
-    return criticalReserve > NUM.ZERO && pendingCritical >= criticalReserve;
+    return isCriticalReserveExhausted(queue, capacityPartition);
   }
   return false;
 }
@@ -172,14 +221,22 @@ function buildPartitionedTransportPressureSummary(routerStats = {}, capacityPart
   let totalPending = NUM.ZERO;
   let totalPendingCritical = NUM.ZERO;
   let totalPendingBackground = NUM.ZERO;
+  let criticalReserveExhausted = false;
   let maxPendingUtilization = NUM.ZERO;
   for (const queue of Object.values(outboundQueues)) {
     const pending = normalizeQueueStat(queue.pending);
     const pendingCritical = normalizeQueueStat(queue.pendingCritical);
     const pendingBackground = normalizeQueueStat(queue.pendingBackground);
     const maxPending = normalizeQueueStat(queue.maxPending);
+    const queueCriticalReserveExhausted = isCriticalReserveExhausted(
+      queue,
+      capacityPartition,
+    );
     if (isPartitionBackpressured(queue, capacityPartition)) {
       saturatedNodeCount += NUM.ONE;
+    }
+    if (queueCriticalReserveExhausted) {
+      criticalReserveExhausted = true;
     }
     totalPending += pending;
     totalPendingCritical += pendingCritical;
@@ -195,6 +252,7 @@ function buildPartitionedTransportPressureSummary(routerStats = {}, capacityPart
       totalPending,
       totalPendingCritical,
       totalPendingBackground,
+      criticalReserveExhausted,
       maxPendingUtilization,
     },
     capacityPartition,
@@ -217,6 +275,67 @@ function buildDecision(action, reason, summary, retryAfterMs = NUM.ZERO) {
     retryAfterMs: normalizeRetryAfterMs(retryAfterMs),
     summary,
   });
+}
+function normalizePressureAdmissionEvidence(request = {}, workClass, summary) {
+  const criticalWork = workClass === PRESSURE_WORK_CLASS.CRITICAL;
+  return Object.freeze({
+    backpressured: summary?.backpressured === true,
+    criticalWork,
+    bootstrapCriticalWork:
+      criticalWork && hasBootstrapControlPlaneResource(request.resourceKeys),
+    criticalReserveExhausted: summary?.criticalReserveExhausted === true,
+    allowDegrade: request.allowDegrade !== false,
+    allowDefer: request.allowDefer === true,
+  });
+}
+const PRESSURE_ADMISSION_DECISION_TABLE = Object.freeze([
+  Object.freeze({
+    matches: (evidence) => evidence.backpressured !== true,
+    action: PRESSURE_GOVERNOR_ACTION.ALLOW,
+    reason: PRESSURE_GOVERNOR_REASON.NONE,
+  }),
+  Object.freeze({
+    matches: (evidence) =>
+      evidence.criticalWork === true &&
+      evidence.bootstrapCriticalWork !== true &&
+      evidence.criticalReserveExhausted === true &&
+      evidence.allowDefer === true,
+    action: PRESSURE_GOVERNOR_ACTION.DEFER,
+    reason: PRESSURE_GOVERNOR_REASON.CRITICAL_RESERVE_EXHAUSTED,
+  }),
+  Object.freeze({
+    matches: (evidence) =>
+      evidence.criticalWork === true &&
+      evidence.bootstrapCriticalWork !== true &&
+      evidence.criticalReserveExhausted === true,
+    action: PRESSURE_GOVERNOR_ACTION.REJECT,
+    reason: PRESSURE_GOVERNOR_REASON.CRITICAL_RESERVE_EXHAUSTED,
+  }),
+  Object.freeze({
+    matches: (evidence) => evidence.criticalWork === true,
+    action: PRESSURE_GOVERNOR_ACTION.ALLOW,
+    reason: PRESSURE_GOVERNOR_REASON.CRITICAL_BYPASS,
+  }),
+  Object.freeze({
+    matches: (evidence) => evidence.allowDegrade === true,
+    action: PRESSURE_GOVERNOR_ACTION.DEGRADE,
+    reason: PRESSURE_GOVERNOR_REASON.TRANSPORT_BACKPRESSURE,
+  }),
+  Object.freeze({
+    matches: (evidence) => evidence.allowDefer === true,
+    action: PRESSURE_GOVERNOR_ACTION.DEFER,
+    reason: PRESSURE_GOVERNOR_REASON.TRANSPORT_BACKPRESSURE,
+  }),
+  Object.freeze({
+    matches: () => true,
+    action: PRESSURE_GOVERNOR_ACTION.REJECT,
+    reason: PRESSURE_GOVERNOR_REASON.TRANSPORT_BACKPRESSURE,
+  }),
+]);
+function decidePressureAdmission(evidence) {
+  return PRESSURE_ADMISSION_DECISION_TABLE.find((entry) =>
+    entry.matches(evidence),
+  );
 }
 function buildPressureAdmissionFailure(decision, overrides = {}) {
   const summary = decision?.summary || buildNoPressureSummary();
@@ -287,6 +406,7 @@ class PressureGovernor {
         totalPending: normalizeQueueStat(summary.totalPending),
         totalPendingCritical: normalizeQueueStat(summary.totalPendingCritical),
         totalPendingBackground: normalizeQueueStat(summary.totalPendingBackground),
+        criticalReserveExhausted: summary.criticalReserveExhausted === true,
         maxPendingUtilization: Number.isFinite(summary.maxPendingUtilization) ?
           summary.maxPendingUtilization :
           NUM.ZERO,
@@ -296,9 +416,15 @@ class PressureGovernor {
     }
   }
 
-  getPressureSummary(resourceKeys = []) {
+  getPressureSummary(
+    resourceKeys = [],
+    workClass = PRESSURE_WORK_CLASS.INTERACTIVE,
+  ) {
     const normalizedKeys = normalizeResourceKeys(resourceKeys);
-    const capacityPartition = resolveCapacityPartition(normalizedKeys);
+    const capacityPartition = resolveCapacityPartition(
+      normalizedKeys,
+      normalizeWorkClass(workClass),
+    );
     if (!shouldUseTransportSensor(normalizedKeys)) {
       return buildNoPressureSummary();
     }
@@ -321,7 +447,10 @@ class PressureGovernor {
   }
 
   isBackpressured(request = {}) {
-    return this.getPressureSummary(request.resourceKeys).backpressured === true;
+    return this.getPressureSummary(
+      request.resourceKeys,
+      request.workClass,
+    ).backpressured === true;
   }
 
   emitDecision(request, decision) {
@@ -331,58 +460,22 @@ class PressureGovernor {
 
   evaluate(request = {}) {
     const workClass = normalizeWorkClass(request.workClass);
-    const summary = this.getPressureSummary(request.resourceKeys);
-    if (summary.backpressured !== true) {
-      return this.emitDecision(
-        request,
-        buildDecision(
-          PRESSURE_GOVERNOR_ACTION.ALLOW,
-          PRESSURE_GOVERNOR_REASON.NONE,
-          summary,
-          NUM.ZERO,
-        ),
-      );
-    }
-    if (workClass === PRESSURE_WORK_CLASS.CRITICAL) {
-      return this.emitDecision(
-        request,
-        buildDecision(
-          PRESSURE_GOVERNOR_ACTION.ALLOW,
-          PRESSURE_GOVERNOR_REASON.CRITICAL_BYPASS,
-          summary,
-          NUM.ZERO,
-        ),
-      );
-    }
-    if (request.allowDegrade !== false) {
-      return this.emitDecision(
-        request,
-        buildDecision(
-          PRESSURE_GOVERNOR_ACTION.DEGRADE,
-          PRESSURE_GOVERNOR_REASON.TRANSPORT_BACKPRESSURE,
-          summary,
-          request.retryAfterMs,
-        ),
-      );
-    }
-    if (request.allowDefer === true) {
-      return this.emitDecision(
-        request,
-        buildDecision(
-          PRESSURE_GOVERNOR_ACTION.DEFER,
-          PRESSURE_GOVERNOR_REASON.TRANSPORT_BACKPRESSURE,
-          summary,
-          request.retryAfterMs,
-        ),
-      );
-    }
+    const summary = this.getPressureSummary(request.resourceKeys, workClass);
+    const evidence = normalizePressureAdmissionEvidence(
+      request,
+      workClass,
+      summary,
+    );
+    const outcome = decidePressureAdmission(evidence);
     return this.emitDecision(
       request,
       buildDecision(
-        PRESSURE_GOVERNOR_ACTION.REJECT,
-        PRESSURE_GOVERNOR_REASON.TRANSPORT_BACKPRESSURE,
+        outcome.action,
+        outcome.reason,
         summary,
-        request.retryAfterMs,
+        outcome.action === PRESSURE_GOVERNOR_ACTION.ALLOW ?
+          NUM.ZERO :
+          request.retryAfterMs,
       ),
     );
   }

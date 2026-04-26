@@ -10,16 +10,13 @@
  */
 
 import {describe, it} from 'node:test';
-import assert from 'node:assert/strict';
 import fc from 'fast-check';
 import {NativeJsDriver} from
   '../../src/runtime/native-js-driver.js';
 import {
-  PREPARE_STATUS,
   START_STATUS,
   HEALTH_STATUS,
 } from '../../src/runtime/runtime-driver.js';
-import {RUNTIME_KIND} from '../../src/constants/runtime.js';
 
 // --- Generators ---
 

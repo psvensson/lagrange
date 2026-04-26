@@ -59,9 +59,9 @@ Roadmap Phase `0.1 — Internal Coherence` maintenance/refactoring scope.
 
 ## Execution Split
 
-1. [Control-plane publication and provisioning contract reuse cutover](archived/done-20260419-control-plane-publication-and-provisioning-contract-reuse-cutover.md)
-2. [Message router connection authority and outbound registry owner split](archived/done-20260418-message-router-connection-authority-and-outbound-registry-owner-split.md)
-3. [Control-plane readiness startup authority and transition owner extraction](archived/done-20260418-control-plane-readiness-startup-authority-and-transition-owner-extraction.md)
+1. [Control-plane publication and provisioning contract reuse cutover](done-20260419-control-plane-publication-and-provisioning-contract-reuse-cutover.md)
+2. [Message router connection authority and outbound registry owner split](done-20260418-message-router-connection-authority-and-outbound-registry-owner-split.md)
+3. [Control-plane readiness startup authority and transition owner extraction](done-20260418-control-plane-readiness-startup-authority-and-transition-owner-extraction.md)
 
 ## Residual Closure Inventory
 

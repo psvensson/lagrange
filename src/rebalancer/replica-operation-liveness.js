@@ -14,6 +14,7 @@ const UNKNOWN_PARTITION_GROUP_ID = 'unknown';
 const UNKNOWN_WORKFLOW_STEP = 'UNKNOWN';
 const REPLICA_OPERATION_STATUS_FAILED = 'failed';
 const REPLICA_OPERATION_STATUS_ACTIVE = 'active';
+const REPLICA_OPERATION_STATUS_REMOVING = 'removing';
 const WORKFLOW_STEP_FAILED = 'FAILED';
 const OPERATION_TIMELINE_EVENT_STEP = 'step';
 const OPERATION_TIMELINE_EVENT_STATE = 'state';
@@ -31,6 +32,10 @@ const STALE_TIMEOUT_CLASSIFICATION_LOOKBACK_MS =
 const REPLICA_OPERATION_IN_FLIGHT_EXCLUDED_STATUSES = new Set([
   'removed',
   REPLICA_OPERATION_STATUS_FAILED,
+]);
+const REPLACE_SOURCE_RETIREMENT_BLOCKING_STATUSES = new Set([
+  REPLICA_OPERATION_STATUS_ACTIVE,
+  REPLICA_OPERATION_STATUS_REMOVING,
 ]);
 
 const DEFAULT_STEP_TIMEOUT_MS_BY_WORKFLOW_STEP = Object.freeze({
@@ -206,6 +211,23 @@ function inferOperationTypeFromStepsHistory(
   return null;
 }
 
+function inferSourceReplicaIdFromStepsHistory(stepsHistory) {
+  const normalizedStepsHistory = Array.isArray(stepsHistory) ?
+    stepsHistory :
+    [];
+  for (const entry of normalizedStepsHistory) {
+    const sourceReplicaId = firstStringField(
+      entry,
+      'sourceReplicaId',
+      'source_replica_id',
+    );
+    if (sourceReplicaId) {
+      return sourceReplicaId;
+    }
+  }
+  return null;
+}
+
 function resolveAgeMs(record, nowMs) {
   const referenceAtMs = normalizeEpochMillis(
     record?.updatedAt ?? record?.createdAt,
@@ -274,6 +296,8 @@ function normalizeReplicaOperationRecord(row, options = {}) {
     stepsHistory,
     replicaId,
   );
+  const inferredSourceReplicaId =
+    inferSourceReplicaIdFromStepsHistory(stepsHistory);
   const semanticPhase = resolveReplicaOperationSemanticPhase(
     type || inferredType || '',
     workflowStep,
@@ -315,6 +339,11 @@ function normalizeReplicaOperationRecord(row, options = {}) {
       'source_node_id',
       'sourceNodeId',
     ) || ''),
+    sourceReplicaId: String(firstStringField(
+      row,
+      'source_replica_id',
+      'sourceReplicaId',
+    ) || inferredSourceReplicaId || ''),
     replicaId,
     targetNodeId: String(firstStringField(
       row,
@@ -358,7 +387,10 @@ function isReplicaOperationTerminalSuccess(record) {
 }
 
 function hasObservedActiveTargetReplica(record, options = {}) {
-  if (record?.type !== OperationType.ADD) {
+  if (
+    record?.type !== OperationType.ADD &&
+    record?.type !== OperationType.REPLACE
+  ) {
     return hasObservedActiveTargetServiceOwnership(record, options);
   }
 
@@ -446,6 +478,95 @@ function doesObservedActiveTargetReplicaServiceRowMatch(
   return true;
 }
 
+function doesObservedSourceReplicaServiceRowBlockRetirement(
+  serviceRow,
+  entityType,
+  entityId,
+  sourceReplicaId,
+) {
+  const serviceType = String(firstStringField(
+    serviceRow,
+    'service_type',
+    'serviceType',
+    'type',
+  ) || '').toLowerCase();
+  if (serviceType && serviceType !== entityType) {
+    return false;
+  }
+  const status = String(firstStringField(
+    serviceRow,
+    'status',
+  ) || '').toLowerCase();
+  if (!REPLACE_SOURCE_RETIREMENT_BLOCKING_STATUSES.has(status)) {
+    return false;
+  }
+  const serviceReplicaId = firstStringField(
+    serviceRow,
+    'replica_id',
+    'replicaId',
+    'service_id',
+    'serviceId',
+    'id',
+  );
+  if (serviceReplicaId !== sourceReplicaId) {
+    return false;
+  }
+  if (entityType === SERVICE_TYPE_PARTITION) {
+    return String(firstStringField(
+      serviceRow,
+      'partition_id',
+      'partitionId',
+      'id',
+    ) || '') === entityId;
+  }
+  if (entityType === SERVICE_TYPE_MESSAGE_GROUP) {
+    return String(firstStringField(
+      serviceRow,
+      'group_id',
+      'groupId',
+      'id',
+    ) || '') === entityId;
+  }
+  return true;
+}
+
+function hasObservedRetiredReplaceSourceReplica(record, options = {}) {
+  if (record?.type !== OperationType.REPLACE) {
+    return false;
+  }
+  const sourceReplicaId = String(record?.sourceReplicaId || '');
+  const entityType = String(
+    record?.entityType || SERVICE_TYPE_PARTITION,
+  ).toLowerCase();
+  const entityId = String(
+    record?.entityId || record?.partitionGroupId || '',
+  );
+  if (!sourceReplicaId || !entityId) {
+    return false;
+  }
+  const serviceRows = Array.isArray(options.serviceRows) ?
+    options.serviceRows :
+    [];
+  return !serviceRows.some((serviceRow) =>
+    doesObservedSourceReplicaServiceRowBlockRetirement(
+      serviceRow,
+      entityType,
+      entityId,
+      sourceReplicaId,
+    ),
+  );
+}
+
+function hasObservedCompletedReplicaOperation(record, options = {}) {
+  if (record?.type === OperationType.REPLACE) {
+    return (
+      hasObservedActiveTargetReplica(record, options) &&
+      hasObservedRetiredReplaceSourceReplica(record, options)
+    );
+  }
+  return hasObservedActiveTargetReplica(record, options);
+}
+
 function hasObservedActiveTargetServiceOwnership(record, options = {}) {
   if (record?.type !== BOOTSTRAP_MOVE_ASSIGNMENT_OPERATION_TYPE) {
     return false;
@@ -515,7 +636,7 @@ function isReplicaOperationInFlight(record, options = {}) {
   if (isReplicaOperationTerminalSuccess(record)) {
     return false;
   }
-  return !hasObservedActiveTargetReplica(record, options);
+  return !hasObservedCompletedReplicaOperation(record, options);
 }
 
 function resolveStepTimeoutMs(workflowStep, options = {}) {

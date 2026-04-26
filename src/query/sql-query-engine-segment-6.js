@@ -1,137 +1,28 @@
-import { SQL_QUERY_ENGINE_SHARED } from "./sql-query-engine-shared.js";
-import { SQLQueryEngineSegment5 } from "./sql-query-engine-segment-5.js";
+import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
+import {SQLQueryEngineSegment5} from './sql-query-engine-segment-5.js';
 
 const {
-  ACTIVE_PARTITION_STATE,
-  ADAPTER_ERROR_MSG,
-  ADAPTER_LOG_MSG,
-  AddressManager,
   AuthoritativeControlPlaneView,
-  BACKGROUND_SYSTEM_TABLE_DELIVERY_PRIORITY_TABLES,
-  BOOTSTRAP_ROUTING_OVERLAY_ENTRY_STATE,
-  BOOTSTRAP_ROUTING_OVERLAY_INSTALL_STATE,
-  BOOTSTRAP_ROUTING_OVERLAY_NO_EXPIRY_MS,
-  BOOTSTRAP_ROUTING_OVERLAY_PARTITION_STATE,
-  BOOTSTRAP_ROUTING_OVERLAY_REASON,
-  BOOTSTRAP_ROUTING_OVERLAY_RETENTION_MODE,
-  BOOTSTRAP_ROUTING_OVERLAY_REUSE_STATE,
-  BudgetEnforcer,
-  CALLBACK_RUNTIME_KIND,
-  CODE_LOOKUP_BY_FUNCTION_ID_SQL,
-  CODE_LOOKUP_BY_FUNCTION_NAME_SQL,
-  COLUMN,
   CONNECTION_STATE_CONNECTED,
   CONNECTION_STATE_READY,
-  CONTROL_PLANE_MUTATION_MERGE_POLICY,
-  CONTROL_PLANE_MUTATION_OPERATION,
-  CONTROL_PLANE_MUTATION_WORK_CLASS,
-  CONTROL_PLANE_READINESS_DIMENSION,
-  CallbackExecutionHost,
-  CancellationToken,
   ConfigurationManager,
-  DEFAULT_CODE_VERSION,
-  DEFAULT_PARTITION_VERSION,
-  DEFAULT_SNAPSHOT_MODE,
-  DUAL_WRITE_ACTIVE_STATUSES,
-  DistributedQueryPlanner,
-  DistributedTransactionCoordinator,
-  DistributedWriteCoordinator,
-  ENTITY_TYPE,
-  EXECUTION_MODE,
-  EXPLAIN_DISTRIBUTED_PREFIX_REGEX,
-  ExecutionContext,
   LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY,
-  LineageTracker,
-  LoggingService,
-  METRICS_LOG_TAG,
-  MIGRATION_STATUS,
-  MODULE_MANIFEST_LOOKUP_BY_ARTIFACT_POINTER_SQL,
-  ManagedSplitTopologyAdapter,
-  ManagedSplitWorkflow,
-  MigrationCoordinator,
-  MigrationPipeline,
-  NATIVE_CALLBACK_EXPORTS_ARG,
-  NATIVE_CALLBACK_MODULE_ARG,
-  NATIVE_CALLBACK_RETURN_LINE,
-  NUM,
-  OPERATION_METADATA_KEY,
-  OWNER_CONTRACT_NEXT_ACTION,
-  OWNER_CONTRACT_STATE,
-  OperationType,
-  PARTITION_SERVICE_MESSAGE_TYPE,
-  PARTITION_SPLIT_MIRROR_ORIGIN,
-  PARTITION_TRANSITION_METADATA_FIELD,
-  PARTITION_TRANSITION_STATE,
-  PRESSURE_GOVERNOR_ACTION,
-  PRESSURE_WORK_CLASS,
-  PROVISIONING_REJECTION_DETAIL_LIMIT,
-  PROVISIONING_REJECTION_REASON_UNKNOWN,
-  PROVISIONING_REJECTION_SUMMARY_NONE,
-  PartitionCallbackDispatcher,
-  PartitionResolver,
-  PressureGovernor,
-  QUERY_AST_TYPE,
-  QUERY_CONFIG_KEY,
-  QUERY_DEFAULTS,
   QUERY_ERROR_CODE,
   QUERY_ERROR_MSG,
   QUERY_LOG_MSG,
-  QUERY_OPERATION,
-  QUERY_SESSION,
-  QUERY_SUBSYSTEM,
-  QueryExecutor,
-  RETRYABLE_CONTROL_PLANE_MUTATION_DEFER_STATE,
   RETRYABLE_CONTROL_PLANE_TIMEOUT_CLASSIFICATIONS,
-  ReplicaOperationField,
   SERVICE_TYPE,
-  SQLParser,
-  SQL_PARSE_CACHE,
-  STATE,
   STATUS_ACTIVE,
   STORAGE_CAPACITY_CONFIG_KEY,
   STORAGE_CAPACITY_DEFAULT,
-  SYSTEM_TABLE_NAME,
-  SqlParseCache,
   TABLES,
-  TABLE_PARTITION_ADMISSION_CONVERGENCE_WAIT_MS,
-  TABLE_PARTITION_TARGET_NODE_CONVERGENCE_REASON,
-  TABLE_PARTITION_TARGET_NODE_WAIT,
   TIMEOUT_BUDGET_CLASSIFICATION,
   TIMEOUT_BUDGET_DEFAULT,
-  TableCreationService,
-  TimeoutPolicy,
-  WRITE_ACTIVITY_SPLIT_EVALUATION_MIN_INTERVAL_MS,
-  WRITE_OPERATION_STATUS,
-  WRITE_TRACKING_EXCLUDED_TABLES,
-  ZERO_SHA256_DIGEST,
-  buildBootstrapRoutingOverlayEntry,
-  buildBootstrapRoutingOverlayEntryState,
-  buildLocalControlPlaneMutationReadinessFailure,
-  buildOwnerContractOutcome,
-  buildPressureAdmissionFailure,
-  buildSystemTableMutationRoutingGapFailure,
-  createCallbackDriverRegistry,
-  createControlPlaneRuntimeBundle,
-  createEmptyTransactionRecoveryReplaySummary,
-  createHash,
   createTimeoutBudgetError,
-  executePlan,
-  executeStage,
-  getLocalControlPlaneMutationReadinessBlocker,
   getRemainingBudgetMs,
   getSchemaByTableName,
-  getSystemTableMutationRoutingGapBlocker,
-  hasActiveAddressedPartitionService,
   isNodeRecordReady,
-  isPriorityControlPlanePartition,
   isRetryableControlPlaneError,
-  isRetryableManagedSplitTransition,
-  isSqlRequest,
-  normalizeControlPlaneMutationWorkClass,
-  parseCallbackModuleArtifact,
-  reorderParams,
-  resolveBootstrapLeaderSelection,
-  resolveRetryableControlPlaneMutationDeferState,
 } = SQL_QUERY_ENGINE_SHARED;
 
 class SQLQueryEngineSegment6 extends SQLQueryEngineSegment5 {
@@ -141,12 +32,12 @@ class SQLQueryEngineSegment6 extends SQLQueryEngineSegment5 {
   ) {
     const currentServices = this.getPartitionServiceRows(partitionId);
     const currentLeaderService = currentServices.find(
-      (service) => String(service?.raft_role || "").toLowerCase() === "leader",
+      (service) => String(service?.raft_role || '').toLowerCase() === 'leader',
     );
     const currentLeaderNodeId =
       currentLeaderService?.node_id || currentLeaderService?.nodeId || null;
     if (
-      typeof currentLeaderNodeId === "string" &&
+      typeof currentLeaderNodeId === 'string' &&
       currentLeaderNodeId.length > 0
     ) {
       return currentLeaderNodeId;
@@ -154,39 +45,39 @@ class SQLQueryEngineSegment6 extends SQLQueryEngineSegment5 {
 
     const currentR1Service = currentServices.find((service) => {
       const replicaId = String(
-        service?.service_id || service?.replica_id || "",
+        service?.service_id || service?.replica_id || '',
       );
       return /-r1$/.test(replicaId);
     });
     const currentR1NodeId =
       currentR1Service?.node_id || currentR1Service?.nodeId || null;
-    if (typeof currentR1NodeId === "string" && currentR1NodeId.length > 0) {
+    if (typeof currentR1NodeId === 'string' && currentR1NodeId.length > 0) {
       return currentR1NodeId;
     }
 
     const plannedR1Operation =
       plannedOperations.find((operation) => {
-        const replicaId = String(operation?.replicaId || "");
+        const replicaId = String(operation?.replicaId || '');
         return /-r1$/.test(replicaId);
       }) || null;
     const plannedR1NodeId =
       plannedR1Operation?.targetNodeId || plannedR1Operation?.nodeId || null;
-    if (typeof plannedR1NodeId === "string" && plannedR1NodeId.length > 0) {
+    if (typeof plannedR1NodeId === 'string' && plannedR1NodeId.length > 0) {
       return plannedR1NodeId;
     }
 
     const firstCurrentNodeId =
       currentServices.find((service) => {
         const nodeId = service?.node_id || service?.nodeId || null;
-        return typeof nodeId === "string" && nodeId.length > 0;
+        return typeof nodeId === 'string' && nodeId.length > 0;
       })?.node_id ||
       currentServices.find((service) => {
         const nodeId = service?.node_id || service?.nodeId || null;
-        return typeof nodeId === "string" && nodeId.length > 0;
+        return typeof nodeId === 'string' && nodeId.length > 0;
       })?.nodeId ||
       null;
     if (
-      typeof firstCurrentNodeId === "string" &&
+      typeof firstCurrentNodeId === 'string' &&
       firstCurrentNodeId.length > 0
     ) {
       return firstCurrentNodeId;
@@ -195,17 +86,17 @@ class SQLQueryEngineSegment6 extends SQLQueryEngineSegment5 {
     const firstPlannedNodeId =
       plannedOperations.find((operation) => {
         const nodeId = operation?.targetNodeId || operation?.nodeId || null;
-        return typeof nodeId === "string" && nodeId.length > 0;
+        return typeof nodeId === 'string' && nodeId.length > 0;
       })?.targetNodeId ||
       plannedOperations.find((operation) => {
         const nodeId = operation?.targetNodeId || operation?.nodeId || null;
-        return typeof nodeId === "string" && nodeId.length > 0;
+        return typeof nodeId === 'string' && nodeId.length > 0;
       })?.nodeId ||
       null;
-    return typeof firstPlannedNodeId === "string" &&
-      firstPlannedNodeId.length > 0
-      ? firstPlannedNodeId
-      : null;
+    return typeof firstPlannedNodeId === 'string' &&
+      firstPlannedNodeId.length > 0 ?
+      firstPlannedNodeId :
+      null;
   }
 
   /**
@@ -229,9 +120,9 @@ class SQLQueryEngineSegment6 extends SQLQueryEngineSegment5 {
    */
   resolveProvisionTargetNodeIdsWithDiagnostics(requestedReplicaCount) {
     const desiredReplicaCount =
-      Number.isInteger(requestedReplicaCount) && requestedReplicaCount > 0
-        ? requestedReplicaCount
-        : 1;
+      Number.isInteger(requestedReplicaCount) && requestedReplicaCount > 0 ?
+        requestedReplicaCount :
+        1;
 
     const diagnostics =
       this.resolveProvisionTargetNodeDiagnostics(desiredReplicaCount);
@@ -282,9 +173,9 @@ class SQLQueryEngineSegment6 extends SQLQueryEngineSegment5 {
    */
   resolveProvisionTargetNodeDiagnostics(requestedReplicaCount) {
     const desiredReplicaCount =
-      Number.isInteger(requestedReplicaCount) && requestedReplicaCount > 0
-        ? requestedReplicaCount
-        : 1;
+      Number.isInteger(requestedReplicaCount) && requestedReplicaCount > 0 ?
+        requestedReplicaCount :
+        1;
     if (!this.systemCache) {
       return {
         requestedReplicaCount: desiredReplicaCount,
@@ -299,10 +190,10 @@ class SQLQueryEngineSegment6 extends SQLQueryEngineSegment5 {
 
     const activeNodeRows = [];
     const serviceRows = [];
-    if (typeof this.systemCache.filter === "function") {
+    if (typeof this.systemCache.filter === 'function') {
       const filteredRows = this.systemCache.filter(TABLES.NODES, (nodeRow) => {
         const status = String(
-          nodeRow?.status || nodeRow?.state || "",
+          nodeRow?.status || nodeRow?.state || '',
         ).toLowerCase();
         return status === STATUS_ACTIVE;
       });
@@ -312,11 +203,11 @@ class SQLQueryEngineSegment6 extends SQLQueryEngineSegment5 {
       const filteredServiceRows = this.systemCache.filter(
         TABLES.SERVICES,
         (serviceRow) => {
-          const status = String(serviceRow?.status || "").toLowerCase();
+          const status = String(serviceRow?.status || '').toLowerCase();
           const nodeId = serviceRow?.node_id || serviceRow?.nodeId || null;
           return (
             status === STATUS_ACTIVE &&
-            typeof nodeId === "string" &&
+            typeof nodeId === 'string' &&
             nodeId.length > 0
           );
         },
@@ -324,12 +215,12 @@ class SQLQueryEngineSegment6 extends SQLQueryEngineSegment5 {
       if (Array.isArray(filteredServiceRows)) {
         serviceRows.push(...filteredServiceRows);
       }
-    } else if (typeof this.systemCache.getAll === "function") {
+    } else if (typeof this.systemCache.getAll === 'function') {
       const allRows = this.systemCache.getAll(TABLES.NODES);
       if (Array.isArray(allRows)) {
         for (const nodeRow of allRows) {
           const status = String(
-            nodeRow?.status || nodeRow?.state || "",
+            nodeRow?.status || nodeRow?.state || '',
           ).toLowerCase();
           if (status === STATUS_ACTIVE) {
             activeNodeRows.push(nodeRow);
@@ -339,11 +230,11 @@ class SQLQueryEngineSegment6 extends SQLQueryEngineSegment5 {
       const allServiceRows = this.systemCache.getAll(TABLES.SERVICES);
       if (Array.isArray(allServiceRows)) {
         for (const serviceRow of allServiceRows) {
-          const status = String(serviceRow?.status || "").toLowerCase();
+          const status = String(serviceRow?.status || '').toLowerCase();
           const nodeId = serviceRow?.node_id || serviceRow?.nodeId || null;
           if (
             status === STATUS_ACTIVE &&
-            typeof nodeId === "string" &&
+            typeof nodeId === 'string' &&
             nodeId.length > 0
           ) {
             serviceRows.push(serviceRow);
@@ -357,7 +248,7 @@ class SQLQueryEngineSegment6 extends SQLQueryEngineSegment5 {
     const activeNodeConnectionById = new Map();
     for (const row of activeNodeRows) {
       const nodeId = row?.node_id || row?.nodeId || row?.id || null;
-      if (typeof nodeId !== "string" || nodeId.length === 0) {
+      if (typeof nodeId !== 'string' || nodeId.length === 0) {
         continue;
       }
       activeNodeSeenById.add(nodeId);
@@ -366,16 +257,16 @@ class SQLQueryEngineSegment6 extends SQLQueryEngineSegment5 {
       );
       const hasReadyLease = Number.isFinite(leaseExpiry);
       const connectionState = String(
-        row?.connection_state || row?.connectionState || "",
+        row?.connection_state || row?.connectionState || '',
       ).toLowerCase();
       const hasConnectionState = connectionState.length > 0;
       const isConnectionReady =
         connectionState === CONNECTION_STATE_CONNECTED ||
         connectionState === CONNECTION_STATE_READY;
       const connectionEligible = !hasConnectionState || isConnectionReady;
-      const isNodeReady = hasReadyLease
-        ? isNodeRecordReady(row, { requireActiveStatus: true })
-        : true;
+      const isNodeReady = hasReadyLease ?
+        isNodeRecordReady(row, {requireActiveStatus: true}) :
+        true;
       activeNodeReadinessById.set(nodeId, isNodeReady);
       activeNodeConnectionById.set(nodeId, connectionEligible);
     }
@@ -395,7 +286,7 @@ class SQLQueryEngineSegment6 extends SQLQueryEngineSegment5 {
     for (const row of serviceRows) {
       const nodeId = row?.node_id || row?.nodeId || null;
       if (
-        typeof nodeId !== "string" ||
+        typeof nodeId !== 'string' ||
         nodeId.length === 0 ||
         seenServiceNodeIds.has(nodeId)
       ) {
@@ -465,14 +356,14 @@ class SQLQueryEngineSegment6 extends SQLQueryEngineSegment5 {
     if (explicitTargets.length === 0) {
       const diagnostics =
         provisionTargetDiagnostics &&
-        typeof provisionTargetDiagnostics === "object"
-          ? provisionTargetDiagnostics
-          : this.resolveProvisionTargetNodeIdsWithDiagnostics(
-              requestedReplicaCount,
-            ).diagnostics;
-      const selectedNodeIds = Array.isArray(diagnostics?.selectedNodeIds)
-        ? diagnostics.selectedNodeIds
-        : [];
+        typeof provisionTargetDiagnostics === 'object' ?
+          provisionTargetDiagnostics :
+          this.resolveProvisionTargetNodeIdsWithDiagnostics(
+            requestedReplicaCount,
+          ).diagnostics;
+      const selectedNodeIds = Array.isArray(diagnostics?.selectedNodeIds) ?
+        diagnostics.selectedNodeIds :
+        [];
       if (selectedNodeIds.length > 0) {
         return selectedNodeIds;
       }
@@ -496,7 +387,7 @@ class SQLQueryEngineSegment6 extends SQLQueryEngineSegment5 {
     const normalizedNodeIds = [];
     const seenNodeIds = new Set();
     for (const nodeId of targetNodeIds) {
-      const normalizedNodeId = String(nodeId || "");
+      const normalizedNodeId = String(nodeId || '');
       if (normalizedNodeId.length === 0 || seenNodeIds.has(normalizedNodeId)) {
         continue;
       }
@@ -518,9 +409,9 @@ class SQLQueryEngineSegment6 extends SQLQueryEngineSegment5 {
   captureManagedSplitTopologySnapshot(options = {}) {
     const requiredReplicaCount =
       Number.isInteger(options.requiredReplicaCount) &&
-      options.requiredReplicaCount > 0
-        ? options.requiredReplicaCount
-        : 1;
+      options.requiredReplicaCount > 0 ?
+        options.requiredReplicaCount :
+        1;
     const provisionTargetDiagnostics =
       this.resolveProvisionTargetNodeDiagnostics(requiredReplicaCount);
     return {
@@ -567,7 +458,7 @@ class SQLQueryEngineSegment6 extends SQLQueryEngineSegment5 {
 
     if (
       accountingService &&
-      typeof accountingService.estimateReplicaBytes === "function"
+      typeof accountingService.estimateReplicaBytes === 'function'
     ) {
       const splitAmplificationFactor =
         ConfigurationManager.getInstance().get(
@@ -660,21 +551,21 @@ class SQLQueryEngineSegment6 extends SQLQueryEngineSegment5 {
       return;
     }
 
-    const effectiveBudget = timeoutOptions?.timeoutBudget
-      ? this.allocateControlPlaneTimeoutBudget({
-          timeoutBudget: timeoutOptions.timeoutBudget,
-          requestedBudgetMs: timeoutMs,
-          minimumBudgetMs:
+    const effectiveBudget = timeoutOptions?.timeoutBudget ?
+      this.allocateControlPlaneTimeoutBudget({
+        timeoutBudget: timeoutOptions.timeoutBudget,
+        requestedBudgetMs: timeoutMs,
+        minimumBudgetMs:
             timeoutOptions.minimumBudgetMs ||
             TIMEOUT_BUDGET_DEFAULT.MINIMUM_OPERATION_BUDGET_MS,
-          classification:
+        classification:
             timeoutOptions.classification ||
             TIMEOUT_BUDGET_CLASSIFICATION.ABSOLUTE_DEADLINE_EXHAUSTED,
-          nestedOperation:
-            timeoutOptions.nestedOperation || "wait_for_condition",
-          timeoutError,
-        })
-      : this.createControlPlaneTimeoutBudget(timeoutMs);
+        nestedOperation:
+            timeoutOptions.nestedOperation || 'wait_for_condition',
+        timeoutError,
+      }) :
+      this.createControlPlaneTimeoutBudget(timeoutMs);
 
     while (true) {
       if (await predicate()) {
@@ -698,7 +589,7 @@ class SQLQueryEngineSegment6 extends SQLQueryEngineSegment5 {
       classification:
         timeoutOptions.classification ||
         TIMEOUT_BUDGET_CLASSIFICATION.ABSOLUTE_DEADLINE_EXHAUSTED,
-      nestedOperation: timeoutOptions.nestedOperation || "wait_for_condition",
+      nestedOperation: timeoutOptions.nestedOperation || 'wait_for_condition',
       now: this.nowFn,
     });
   }
@@ -753,7 +644,7 @@ class SQLQueryEngineSegment6 extends SQLQueryEngineSegment5 {
     const distributedPlan = this.distributedQueryPlanner.planSelect(
       ast,
       params,
-      { sessionId },
+      {sessionId},
     );
     const planningDurationMs = Date.now() - planningStartTimeMs;
     const rootAlias = ast.from.alias || tableName;
@@ -888,7 +779,7 @@ class SQLQueryEngineSegment6 extends SQLQueryEngineSegment5 {
 
     const partitions = this.getTablePartitions(tableName)
       .map((partition) => partition?.partition_id)
-      .filter((partitionId) => typeof partitionId === "string");
+      .filter((partitionId) => typeof partitionId === 'string');
 
     return {
       ...localResult,
@@ -921,10 +812,10 @@ class SQLQueryEngineSegment6 extends SQLQueryEngineSegment5 {
     const primaryKeyColumn = primaryKeyColumns[0];
     const tableAlias = ast?.from?.alias || null;
     const whereClause = ast?.where || null;
-    if (!whereClause || typeof whereClause !== "object") {
+    if (!whereClause || typeof whereClause !== 'object') {
       return false;
     }
-    if (whereClause.type === "binary" && whereClause.operator === "=") {
+    if (whereClause.type === 'binary' && whereClause.operator === '=') {
       return (
         this.isSystemTablePrimaryKeyColumnReference(
           whereClause.left,
@@ -934,7 +825,7 @@ class SQLQueryEngineSegment6 extends SQLQueryEngineSegment5 {
         ) && this.isBoundSystemTableLookupValue(whereClause.right)
       );
     }
-    if (whereClause.type === "in" && whereClause.negated !== true) {
+    if (whereClause.type === 'in' && whereClause.negated !== true) {
       return (
         this.isSystemTablePrimaryKeyColumnReference(
           whereClause.expression,
@@ -965,7 +856,7 @@ class SQLQueryEngineSegment6 extends SQLQueryEngineSegment5 {
     }
     if (Array.isArray(schema.primaryKey) && schema.primaryKey.length > 0) {
       return schema.primaryKey.filter(
-        (columnName) => typeof columnName === "string" && columnName.length > 0,
+        (columnName) => typeof columnName === 'string' && columnName.length > 0,
       );
     }
     if (!Array.isArray(schema.columns)) {
@@ -975,7 +866,7 @@ class SQLQueryEngineSegment6 extends SQLQueryEngineSegment5 {
       .filter((column) => column?.primaryKey === true)
       .map((column) => column.name)
       .filter(
-        (columnName) => typeof columnName === "string" && columnName.length > 0,
+        (columnName) => typeof columnName === 'string' && columnName.length > 0,
       );
   }
 
@@ -986,7 +877,7 @@ class SQLQueryEngineSegment6 extends SQLQueryEngineSegment5 {
    * @private
    */
   isBoundSystemTableLookupValue(expression) {
-    return expression?.type === "literal" || expression?.type === "parameter";
+    return expression?.type === 'literal' || expression?.type === 'parameter';
   }
 
   /**
@@ -1005,7 +896,7 @@ class SQLQueryEngineSegment6 extends SQLQueryEngineSegment5 {
     tableAlias,
     primaryKeyColumn,
   ) {
-    if (!expression || expression.type !== "column_ref") {
+    if (!expression || expression.type !== 'column_ref') {
       return false;
     }
     if (expression.column !== primaryKeyColumn) {
@@ -1064,7 +955,7 @@ class SQLQueryEngineSegment6 extends SQLQueryEngineSegment5 {
     const cols = ast.columns.map((col) =>
       this.queryExecutor.buildColumnSQL(col),
     );
-    const sql = `SELECT ${cols.join(", ")}`;
+    const sql = `SELECT ${cols.join(', ')}`;
 
     const results = await this.queryExecutor.executeOnPartitions(
       [targetPartitionId],
@@ -1111,16 +1002,16 @@ class SQLQueryEngineSegment6 extends SQLQueryEngineSegment5 {
     }
     const timeoutClassification =
       error?.timeoutClassification &&
-      typeof error.timeoutClassification === "object"
-        ? error.timeoutClassification
-        : null;
+      typeof error.timeoutClassification === 'object' ?
+        error.timeoutClassification :
+        null;
     const classifications = [
       timeoutClassification?.classification,
       timeoutClassification?.originalClassification,
     ];
     return classifications.some((classification) => {
       return (
-        typeof classification === "string" &&
+        typeof classification === 'string' &&
         RETRYABLE_CONTROL_PLANE_TIMEOUT_CLASSIFICATIONS.has(classification)
       );
     });
@@ -1138,4 +1029,4 @@ class SQLQueryEngineSegment6 extends SQLQueryEngineSegment5 {
    */
 }
 
-export { SQLQueryEngineSegment6 };
+export {SQLQueryEngineSegment6};

@@ -4,24 +4,24 @@
  * Requirements: 8.5, 8.6
  */
 
-import { EventEmitter } from "events";
-import { LoggingService } from "../logging/logging-service.js";
-import { ConfigurationManager } from "../config/configuration-manager.js";
-import { SYSTEM_TABLE_NAME } from "../bootstrap/system-table-schemas-constants.js";
+import {EventEmitter} from 'events';
+import {LoggingService} from '../logging/logging-service.js';
+import {ConfigurationManager} from '../config/configuration-manager.js';
+import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {
   compareNodeHeartbeatWatermarks,
   getNodeHeartbeatWatermark,
   wasNodeRecordReadyWhenWritten,
-} from "../node/node-readiness-policy.js";
-import { CONTROL_PLANE_READINESS_DIMENSION } from "./control-plane-readiness-constants.js";
-import { ControlPlaneReadinessService } from "./control-plane-readiness-service.js";
+} from '../node/node-readiness-policy.js';
+import {CONTROL_PLANE_READINESS_DIMENSION} from './control-plane-readiness-constants.js';
+import {ControlPlaneReadinessService} from './control-plane-readiness-service.js';
 import {
   getControlPlaneErrorCode,
   getControlPlaneErrorMessage,
   getControlPlaneRetryAfterMs,
   isRetryableControlPlaneError,
-} from "./control-plane-error-classification.js";
-import { createControlPlaneRuntimeBundle } from "./control-plane-runtime-bundle.js";
+} from './control-plane-error-classification.js';
+import {createControlPlaneRuntimeBundle} from './control-plane-runtime-bundle.js';
 import {
   OperationType,
   OPERATION_METADATA_KEY,
@@ -29,10 +29,10 @@ import {
   getOperationMetadataString,
   getOperationMetadataStringArray,
   isCoordinatorOwnedOperationType,
-} from "../rebalancer/replica-status.js";
-import { ReplicaOperationField } from "../rebalancer/replica-operation-constants.js";
-import { REPLICA_OPERATION_VISIBILITY_READ_MODE } from "../rebalancer/replica-operation-repository.js";
-import { REBALANCE_COORDINATOR_EVENT } from "../rebalancer/rebalancer-constants.js";
+} from '../rebalancer/replica-status.js';
+import {ReplicaOperationField} from '../rebalancer/replica-operation-constants.js';
+import {REPLICA_OPERATION_VISIBILITY_READ_MODE} from '../rebalancer/replica-operation-repository.js';
+import {REBALANCE_COORDINATOR_EVENT} from '../rebalancer/rebalancer-constants.js';
 import {
   COLUMN,
   NUM,
@@ -42,8 +42,8 @@ import {
   STRING,
   TYPEOF,
   WORKFLOW_STEP,
-} from "../constants/index.js";
-import { assertCritical } from "../utils/assert.js";
+} from '../constants/index.js';
+import {assertCritical} from '../utils/assert.js';
 import {
   CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE,
   CONTROL_PLANE_NODE_STATE_REPLAY_CONTEXT,
@@ -58,7 +58,7 @@ import {
   isHeartbeatEscalatedControlPlaneNodeStatePublicationMode,
   resolveControlPlaneNodeStatePublicationMode,
   resolveReplayControlPlaneNodeStatePublicationMode,
-} from "./control-plane-constants.js";
+} from './control-plane-constants.js';
 import {
   DISPATCH_ERROR_MSG,
   DISPATCH_DEFAULT,
@@ -70,69 +70,70 @@ import {
   DISPATCH_QUEUE_NAME,
   DISPATCH_STATE,
   DISPATCH_SUBSYSTEM,
-} from "./replica-dispatch-service-constants.js";
-import { QUERY_ERROR_CODE, QUERY_ERROR_MSG } from "../query/query-constants.js";
-import { unwrapRowReadResult } from "./owners/system-metadata-owner-base.js";
-import { shouldUseAuthoritativePriorityRecoveryRediscovery } from "./priority-recovery-snapshot.js";
-import { MESSAGE_GROUP_CDC_INGRESS_ACTION } from "../message-group/message-group-forwarding-owner.js";
-import { MEMBERSHIP_PUBLICATION_STATUS } from "./membership-publication-coordinator.js";
-import { OwnerKeyReconcileQueue } from "../workflow/owner-key-reconcile-queue.js";
-import { RECONCILE_REASON } from "../workflow/reconcile-queue-constants.js";
+} from './replica-dispatch-service-constants.js';
+import {QUERY_ERROR_CODE, QUERY_ERROR_MSG} from '../query/query-constants.js';
+import {unwrapRowReadResult} from './owners/system-metadata-owner-base.js';
+import {shouldUseAuthoritativePriorityRecoveryRediscovery} from './priority-recovery-snapshot.js';
+import {isSystemTablePartition} from '../bootstrap/system-partition-classification.js';
+import {MESSAGE_GROUP_CDC_INGRESS_ACTION} from '../message-group/message-group-forwarding-owner.js';
+import {MEMBERSHIP_PUBLICATION_STATUS} from './membership-publication-coordinator.js';
+import {OwnerKeyReconcileQueue} from '../workflow/owner-key-reconcile-queue.js';
+import {RECONCILE_REASON} from '../workflow/reconcile-queue-constants.js';
 const REPLICA_DISPATCH_SERVICE_LITERAL = Object.freeze({
-  AUTHORITATIVE: "authoritative",
+  AUTHORITATIVE: 'authoritative',
   AUTHORITATIVE_PRIORITY_RECOVERY_RETRY:
-    "authoritative_priority_recovery_retry",
-  BACKGROUND: "background",
+    'authoritative_priority_recovery_retry',
+  BACKGROUND: 'background',
   CACHE_UPDATE_NOT_OBSERVED_FOR_REPLICA_OPERATION:
-    "Cache update not observed for replica operation",
-  CLOSED: "closed",
-  CONNECTION_TO_NODE: "Connection to node",
+    'Cache update not observed for replica operation',
+  CLOSED: 'closed',
+  CONNECTION_TO_NODE: 'Connection to node',
   CONTROL_PLANE_READINESS_REFRESH_TIMEOUT:
-    "CONTROL_PLANE_READINESS_REFRESH_TIMEOUT",
-  COORDINATOR_DOT_EVENT: "coordinator.event",
-  CRITICAL: "critical",
-  DEFERRED_RETRY_PENDING: "deferred_retry_pending",
-  DELETE: "DELETE",
-  DISPATCH_UNSUCCESSFUL: "dispatch_unsuccessful",
-  DUPLICATE_READY_TRIGGER: "duplicate_ready_trigger",
-  EMPTY_STRING: "",
-  ERROR: "error",
-  FAILED_TO_FORWARD_WRITE_TO_LEADER: "Failed to forward write to leader",
+    'CONTROL_PLANE_READINESS_REFRESH_TIMEOUT',
+  COORDINATOR_DOT_EVENT: 'coordinator.event',
+  CRITICAL: 'critical',
+  DEFERRED_RETRY_PENDING: 'deferred_retry_pending',
+  DELETE: 'DELETE',
+  DISPATCH_UNSUCCESSFUL: 'dispatch_unsuccessful',
+  DUPLICATE_READY_TRIGGER: 'duplicate_ready_trigger',
+  EMPTY_STRING: '',
+  ERROR: 'error',
+  FAILED_TO_FORWARD_WRITE_TO_LEADER: 'Failed to forward write to leader',
   FOUR: 4,
   MEMBERSHIP_PUBLICATION_OWNER_DISPATCH_RETRY:
-    "membership_publication_owner_dispatch_retry",
+    'membership_publication_owner_dispatch_retry',
   MESSAGE_DASH_GROUP_INGRESS_READINESS_UNAVAILABLE:
-    "message-group ingress readiness unavailable",
+    'message-group ingress readiness unavailable',
   MESSAGE_DASH_GROUP_INGRESS_SELECTION_UNAVAILABLE:
-    "message-group ingress selection unavailable",
-  MESSAGE_TIMEOUT: "Message timeout",
-  NO_CONNECTION_TO_NODE: "No connection to node",
-  NODE_ROW_MISSING: "NODE_ROW_MISSING",
+    'message-group ingress selection unavailable',
+  MESSAGE_TIMEOUT: 'Message timeout',
+  NO_CONNECTION_TO_NODE: 'No connection to node',
+  NODE_ROW_MISSING: 'NODE_ROW_MISSING',
   NODE_STATE_UPDATE_BOOTSTRAP_UPSERT_FAILED:
-    "NODE_STATE_UPDATE_BOOTSTRAP_UPSERT_FAILED",
-  QUERY_ROUTING_FAILED: "Query routing failed",
+    'NODE_STATE_UPDATE_BOOTSTRAP_UPSERT_FAILED',
+  QUERY_ROUTING_FAILED: 'Query routing failed',
   REPLICADISPATCHSERVICE_REQUIRES_CONTROLPLANESYSTEMTABLEGATEWAY:
-    "ReplicaDispatchService requires controlPlaneSystemTableGateway",
-  REPLICA_OPERATION_VISIBILITY_LAG: "REPLICA_OPERATION_VISIBILITY_LAG",
+    'ReplicaDispatchService requires controlPlaneSystemTableGateway',
+  REPLICA_OPERATION_VISIBILITY_LAG: 'REPLICA_OPERATION_VISIBILITY_LAG',
   SELECT_STAR_FROM_NODES_WHERE_NODE_ID_EQUALS_QUESTION_MARK:
-    "SELECT * FROM nodes WHERE node_id = ?",
+    'SELECT * FROM nodes WHERE node_id = ?',
   SELECT_STAR_FROM_REPLICA_OPERATIONS_WHERE_OPERATION_ID_EQUALS_QUESTION_MARK:
-    "SELECT * FROM replica_operations WHERE operation_id = ?",
-  STALE_AGAINST_EXISTING_ROW: "stale_against_existing_row",
-  STALE_OR_DUPLICATE_ENQUEUE: "stale_or_duplicate_enqueue",
-  TARGET_NODE_NOT_READY: "target_node_not_ready",
+    'SELECT * FROM replica_operations WHERE operation_id = ?',
+  STALE_AGAINST_EXISTING_ROW: 'stale_against_existing_row',
+  STALE_OR_DUPLICATE_ENQUEUE: 'stale_or_duplicate_enqueue',
+  TARGET_NODE_NOT_READY: 'target_node_not_ready',
   THIRTY_ONE: 31,
-  UNKNOWN: "unknown",
-  UNSUPPORTED_DISPATCH_CONTROL_MESSAGE: "unsupported_dispatch_control_message",
+  UNKNOWN: 'unknown',
+  UNSUPPORTED_DISPATCH_CONTROL_MESSAGE: 'unsupported_dispatch_control_message',
   ZERO: 0,
 });
 
 const READY_NODE_PUBLICATION_ADVANCEMENT_STATE = Object.freeze({
-  NO_PUBLICATION: "no_publication",
-  PUBLISHED_NODE_VISIBLE: "published_node_visible",
-  PUBLISHED_NODE_MISSING: "published_node_missing",
-  IN_FLIGHT_NODE_VISIBLE: "in_flight_node_visible",
-  IN_FLIGHT_NODE_UNRESOLVED: "in_flight_node_unresolved",
+  NO_PUBLICATION: 'no_publication',
+  PUBLISHED_NODE_VISIBLE: 'published_node_visible',
+  PUBLISHED_NODE_MISSING: 'published_node_missing',
+  IN_FLIGHT_NODE_VISIBLE: 'in_flight_node_visible',
+  IN_FLIGHT_NODE_UNRESOLVED: 'in_flight_node_unresolved',
 });
 
 function isTerminalMembershipPublicationStatus(status) {
@@ -154,34 +155,34 @@ function resolveReadyNodePublicationAdvancementState({
     return READY_NODE_PUBLICATION_ADVANCEMENT_STATE.NO_PUBLICATION;
   }
   if (isTerminalMembershipPublicationStatus(latestPublicationStatus)) {
-    return nodeIncluded === true
-      ? READY_NODE_PUBLICATION_ADVANCEMENT_STATE.PUBLISHED_NODE_VISIBLE
-      : READY_NODE_PUBLICATION_ADVANCEMENT_STATE.PUBLISHED_NODE_MISSING;
+    return nodeIncluded === true ?
+      READY_NODE_PUBLICATION_ADVANCEMENT_STATE.PUBLISHED_NODE_VISIBLE :
+      READY_NODE_PUBLICATION_ADVANCEMENT_STATE.PUBLISHED_NODE_MISSING;
   }
-  return nodeIncluded === true
-    ? READY_NODE_PUBLICATION_ADVANCEMENT_STATE.IN_FLIGHT_NODE_VISIBLE
-    : READY_NODE_PUBLICATION_ADVANCEMENT_STATE.IN_FLIGHT_NODE_UNRESOLVED;
+  return nodeIncluded === true ?
+    READY_NODE_PUBLICATION_ADVANCEMENT_STATE.IN_FLIGHT_NODE_VISIBLE :
+    READY_NODE_PUBLICATION_ADVANCEMENT_STATE.IN_FLIGHT_NODE_UNRESOLVED;
 }
 
 const DISPATCH_READINESS_ERROR_CODE = Object.freeze({
-  TARGET_NODE_NOT_READY: "TARGET_NODE_NOT_READY",
-  TARGET_NODE_READINESS_REFRESH_FAILED: "TARGET_NODE_READINESS_REFRESH_FAILED",
+  TARGET_NODE_NOT_READY: 'TARGET_NODE_NOT_READY',
+  TARGET_NODE_READINESS_REFRESH_FAILED: 'TARGET_NODE_READINESS_REFRESH_FAILED',
 });
 
 const DISPATCH_READINESS_ERROR_REASON = Object.freeze({
   AUTHORITATIVE_NODE_ROW_VISIBILITY_LAG:
-    "authoritative_node_row_visibility_lag",
-  AUTHORITATIVE_ROW_SOURCE_UNAVAILABLE: "authoritative_row_source_unavailable",
-  TARGET_NODE_READINESS_REFRESH_FAILED: "target_node_readiness_refresh_failed",
-  UNKNOWN: "unknown_error",
+    'authoritative_node_row_visibility_lag',
+  AUTHORITATIVE_ROW_SOURCE_UNAVAILABLE: 'authoritative_row_source_unavailable',
+  TARGET_NODE_READINESS_REFRESH_FAILED: 'target_node_readiness_refresh_failed',
+  UNKNOWN: 'unknown_error',
 });
 
 const DISPATCH_READINESS_MESSAGE = Object.freeze({
-  CONTROL_PLANE_LEADER_NOT_READY: "Control-plane leader is not ready",
+  CONTROL_PLANE_LEADER_NOT_READY: 'Control-plane leader is not ready',
 });
 
 const DISPATCH_READINESS_REASON = Object.freeze({
-  LOCAL_HANDLER_AVAILABLE: "local_dispatch_handler_available",
+  LOCAL_HANDLER_AVAILABLE: 'local_dispatch_handler_available',
 });
 
 export const REPLICA_DISPATCH_SERVICE_SHARED = {
@@ -249,6 +250,7 @@ export const REPLICA_DISPATCH_SERVICE_SHARED = {
   isCoordinatorOwnedOperationType,
   isHeartbeatEscalatedControlPlaneNodeStatePublicationMode,
   isRetryableControlPlaneError,
+  isSystemTablePartition,
   isTerminalMembershipPublicationStatus,
   resolveControlPlaneNodeStatePublicationMode,
   resolveReadyNodePublicationAdvancementState,

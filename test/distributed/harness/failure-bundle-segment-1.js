@@ -1,9 +1,11 @@
-import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
-import { join, relative, resolve } from "node:path";
-import { ENTRYPOINT_LOG_MSG } from "../../../src/constants/entrypoint.js";
-import { buildPriorityRecoveryClosureWitness } from "../../../src/control-plane/priority-recovery-snapshot.js";
-import { classifyActiveGateClosureWitness } from "./active-gate-closure-classification.js";
-import { normalizePriorityRecoveryActiveGateSnapshot } from './active-gate-contract.js';
+import {relative, resolve} from 'node:path';
+import {ENTRYPOINT_LOG_MSG} from '../../../src/constants/entrypoint.js';
+import {
+  RECOVERY_PROTOCOL_STATE,
+} from '../../../src/control-plane/membership-lifecycle-constants.js';
+import {buildPriorityRecoveryClosureWitness} from '../../../src/control-plane/priority-recovery-snapshot.js';
+import {classifyActiveGateClosureWitness} from './active-gate-closure-classification.js';
+import {normalizePriorityRecoveryActiveGateSnapshot} from './active-gate-contract.js';
 import {buildCanonicalPublicationEvidenceFromControlPlane} from
   './publication-evidence-contract.js';
 import {
@@ -11,121 +13,126 @@ import {
   hasMeaningfulPriorityRecoveryProgressWitness,
   normalizePriorityPartitionSummaryForDiagnostics,
   normalizePriorityRecoveryPartitionWitnessesForDiagnostics,
-} from "./priority-recovery-summary-normalization.js";
+} from './priority-recovery-summary-normalization.js';
 import {
   ACTIVE_GATE_READINESS_DELAY_CAUSE_NONE,
   ACTIVE_GATE_READINESS_DELAY_CAUSE_REACHABILITY_TIMEOUT,
   ACTIVE_GATE_READINESS_DELAY_CAUSE_SNAPSHOT_TIMEOUT,
   ACTIVE_GATE_READINESS_DELAY_RECOVERABILITY_RECOVERABLE,
-  ACTIVE_GATE_READINESS_DELAY_RECOVERABILITY_TERMINAL,
-  STARTUP_READINESS_MODE_STARTUP,
-} from "./startup-readiness-evidence.js";
+} from './startup-readiness-evidence.js';
 import {
-  PRIORITY_RECOVERY_BLOCKER_REASON_FALLBACK,
   PRIORITY_RECOVERY_BLOCKER_REASON_PRECEDENCE,
   PRIORITY_RECOVERY_BLOCKER_TO_SEMANTIC_STATE,
   PRIORITY_RECOVERY_CORRELATION_KEY,
-  PRIORITY_RECOVERY_INVARIANT_FALLBACK,
   PRIORITY_RECOVERY_PROGRESS_CLASS_IDS,
   PRIORITY_RECOVERY_SEMANTIC_STATE,
   PRIORITY_RECOVERY_SEMANTIC_STATE_IDS,
-  PRIORITY_RECOVERY_UNRESOLVED_SEMANTIC_STATE_IDS,
-} from "../../../src/control-plane/priority-recovery-diagnostics-constants.js";
+} from '../../../src/control-plane/priority-recovery-diagnostics-constants.js';
 
 const FAILURE_BUNDLE_SCHEMA_VERSION = 1;
-const FAILURE_BUNDLE_RUN_DIRNAME = "failure-bundles";
-const FAILURE_BUNDLE_JSON_FILENAME = "failure-bundle.json";
-const FAILURE_BUNDLE_MARKDOWN_FILENAME = "failure-bundle.md";
-const TRIAGE_SUMMARY_JSON_FILENAME = "triage-summary.json";
-const TRIAGE_SUMMARY_MARKDOWN_FILENAME = "triage-summary.md";
-const RUN_FAILURE_BUNDLE_JSON_FILENAME = "run-failure-bundle.json";
-const RUN_FAILURE_BUNDLE_MARKDOWN_FILENAME = "run-failure-bundle.md";
-const LOG_FILE_EXTENSION = ".log";
-const TIMELINE_FILENAME = "_timeline.log";
-const ANALYSIS_FILENAME = "_analysis.json";
-const UTF8_ENCODING = "utf8";
+const FAILURE_BUNDLE_RUN_DIRNAME = 'failure-bundles';
+const FAILURE_BUNDLE_JSON_FILENAME = 'failure-bundle.json';
+const FAILURE_BUNDLE_MARKDOWN_FILENAME = 'failure-bundle.md';
+const TRIAGE_SUMMARY_JSON_FILENAME = 'triage-summary.json';
+const TRIAGE_SUMMARY_MARKDOWN_FILENAME = 'triage-summary.md';
+const RUN_FAILURE_BUNDLE_JSON_FILENAME = 'run-failure-bundle.json';
+const RUN_FAILURE_BUNDLE_MARKDOWN_FILENAME = 'run-failure-bundle.md';
+const LOG_FILE_EXTENSION = '.log';
+const TIMELINE_FILENAME = '_timeline.log';
+const ANALYSIS_FILENAME = '_analysis.json';
+const UTF8_ENCODING = 'utf8';
 const ZERO = 0;
 const LOG_TAIL_LINE_COUNT = 20;
-const MARKDOWN_SECTION_BREAK = "\n\n";
-const UNKNOWN_VALUE = "unknown";
-const NO_PROGRESS_REASON_CODE = "stalled_no_progress";
-const READINESS_FAILURE_CLASS_NO_PROGRESS = "no_progress_terminal";
+const MARKDOWN_SECTION_BREAK = '\n\n';
+const UNKNOWN_VALUE = 'unknown';
+const NO_PROGRESS_REASON_CODE = 'stalled_no_progress';
+const READINESS_FAILURE_CLASS_NO_PROGRESS = 'no_progress_terminal';
 const NODE_DIAGNOSTICS_TRACE_LIMIT = 5;
 const NODE_ID_ERROR_PATTERN = /\bnode=([a-z0-9._:-]+)\b/gi;
-const PLAYBACK_EVENTS_FILENAME = "events.ndjson";
-const PLAYBACK_SNAPSHOTS_FILENAME = "snapshots.ndjson";
-const PLAYBACK_EVENT_TYPE_CLUSTER_STAGE = "cluster.stage";
-const PLAYBACK_EVENT_TYPE_LOAD_STARTED = "load.started";
-const PLAYBACK_EVENT_TYPE_LOAD_PROGRESS = "load.progress";
-const PLAYBACK_EVENT_TYPE_LOAD_COMPLETED = "load.completed";
-const PLAYBACK_EVENT_TYPE_NODE_RESTART_BOUNDARY = "node.restart.boundary";
-const PLAYBACK_EVENT_TYPE_PARTITION_CREATED = "partition.created";
-const PLAYBACK_EVENT_TYPE_REPLICA_CREATED = "replica.created";
-const PLAYBACK_EVENT_TYPE_REPLICA_REMOVED = "replica.removed";
+const PLAYBACK_EVENTS_FILENAME = 'events.ndjson';
+const PLAYBACK_SNAPSHOTS_FILENAME = 'snapshots.ndjson';
+const PLAYBACK_EVENT_TYPE_CLUSTER_STAGE = 'cluster.stage';
+const PLAYBACK_EVENT_TYPE_LOAD_STARTED = 'load.started';
+const PLAYBACK_EVENT_TYPE_LOAD_PROGRESS = 'load.progress';
+const PLAYBACK_EVENT_TYPE_LOAD_COMPLETED = 'load.completed';
+const PLAYBACK_EVENT_TYPE_NODE_RESTART_BOUNDARY = 'node.restart.boundary';
+const PLAYBACK_EVENT_TYPE_PARTITION_CREATED = 'partition.created';
+const PLAYBACK_EVENT_TYPE_REPLICA_CREATED = 'replica.created';
+const PLAYBACK_EVENT_TYPE_REPLICA_REMOVED = 'replica.removed';
 const PLAYBACK_STAGE_SETUP_CLUSTER_WAITING_ACTIVE =
-  "setup.cluster.waiting-active";
-const ROOT_CAUSE_CLASS_UNKNOWN = "unknown";
-const ROOT_CAUSE_CLASS_STARTUP = "startup";
-const ROOT_CAUSE_CLASS_DISCOVERY = "discovery";
-const ROOT_CAUSE_CLASS_TOPOLOGY = "topology";
-const ROOT_CAUSE_CLASS_LOAD = "load";
-const ROOT_CAUSE_CLASS_CDC = "cdc";
-const ROOT_CAUSE_CLASS_CACHE = "cache";
-const FIRST_FAULT_MARKER_QUEUE_PRESSURE = "queuePressureOnset";
-const FIRST_FAULT_MARKER_ATTEMPT_ERRORS = "attemptErrorOnset";
-const FIRST_FAULT_MARKER_HARD_FAILURE = "hardFailureOnset";
-const LOAD_WAIT_REASON_NODE_SLOT_UNAVAILABLE = "nodeSlotUnavailable";
-const LOAD_WAIT_REASON_NODE_ADMISSION_BLOCKED = "nodeAdmissionBlocked";
+  'setup.cluster.waiting-active';
+const PLAYBACK_STAGE_LOAD_READINESS_WAITING =
+  'scenario.load-readiness.waiting';
+const PLAYBACK_STAGE_LOAD_READINESS_STABLE =
+  'scenario.load-readiness.stable';
+const ROOT_CAUSE_CLASS_UNKNOWN = 'unknown';
+const ROOT_CAUSE_CLASS_STARTUP = 'startup';
+const ROOT_CAUSE_CLASS_DISCOVERY = 'discovery';
+const ROOT_CAUSE_CLASS_TOPOLOGY = 'topology';
+const ROOT_CAUSE_CLASS_LOAD = 'load';
+const ROOT_CAUSE_CLASS_CDC = 'cdc';
+const ROOT_CAUSE_CLASS_CACHE = 'cache';
+const FIRST_FAULT_MARKER_QUEUE_PRESSURE = 'queuePressureOnset';
+const FIRST_FAULT_MARKER_ATTEMPT_ERRORS = 'attemptErrorOnset';
+const FIRST_FAULT_MARKER_HARD_FAILURE = 'hardFailureOnset';
+const LOAD_WAIT_REASON_NODE_SLOT_UNAVAILABLE = 'nodeSlotUnavailable';
+const LOAD_WAIT_REASON_NODE_ADMISSION_BLOCKED = 'nodeAdmissionBlocked';
 const LOAD_WAIT_REASON_RETRYABLE_CONTROL_PLANE_PRESSURE =
-  "retryableControlPlanePressure";
-const LOAD_WAIT_REASON_TIMEOUT_WAITS = "timeoutWaits";
-const LOAD_WAIT_REASON_QUEUE_CAPACITY_REJECTED = "queueCapacityRejected";
-const PRIORITY_RECOVERY_PROGRESS_NONE = "none";
-const PRIORITY_RECOVERY_PROGRESS_REASON_PREFIX = "priority_recovery";
+  'retryableControlPlanePressure';
+const LOAD_WAIT_REASON_TIMEOUT_WAITS = 'timeoutWaits';
+const LOAD_WAIT_REASON_QUEUE_CAPACITY_REJECTED = 'queueCapacityRejected';
+const PRIORITY_RECOVERY_PROGRESS_NONE = 'none';
+const PRIORITY_RECOVERY_PROGRESS_REASON_PREFIX = 'priority_recovery';
 const PRIORITY_RECOVERY_PROGRESS_REASON_FALLBACK =
-  "priority_recovery_progress_blocked";
+  'priority_recovery_progress_blocked';
+const PRIORITY_RECOVERY_REASON_PRIORITY_PARTITIONS_NOT_SPREAD =
+  'priority_partitions_not_spread';
+const PRIORITY_RECOVERY_REASON_PRIORITY_SPREAD_EVIDENCE_UNAVAILABLE =
+  'priority_spread_evidence_unavailable';
+const PRIORITY_RECOVERY_CLOSURE_WITNESS_PRIORITY_SPREAD_PENDING =
+  'publication_converged_priority_spread_pending';
 const PRIORITY_RECOVERY_SYNTHETIC_NO_OPERATION_BLOCKER_REASON =
-  "eligible_but_no_operation_created";
+  'eligible_but_no_operation_created';
 const PRIORITY_RECOVERY_SPECIFIC_ACTUATION_STATES = Object.freeze([
-  "persist_blocked_by_pressure",
-  "persist_failed_retryable",
-  "reconcile_due",
-  "awaiting_observation",
+  'persist_blocked_by_pressure',
+  'persist_failed_retryable',
+  'reconcile_due',
+  'awaiting_observation',
 ]);
 const READINESS_REASON_MAX_NODES = 25;
 const READINESS_REASON_MAX_PER_NODE = 5;
 const AFFECTED_NODE_ID_LIMIT = 25;
 const FAILURE_CLASS_PUBLICATION_CONVERGENCE_BLOCKED =
-  "publication_convergence_blocked";
-const FAILURE_CLASS_STARTUP_RECOVERY_BLOCKED = "startup_recovery_blocked";
-const FAILURE_CLASS_DISCOVERY_UNAVAILABLE = "discovery_unavailable";
-const FAILURE_CLASS_TOPOLOGY_UNSTABLE = "topology_unstable";
-const FAILURE_CLASS_LOAD_PRESSURE = "load_pressure";
-const FAILURE_CLASS_CDC_DEGRADED = "cdc_degraded";
-const FAILURE_CLASS_CACHE_STALE = "cache_stale";
-const FAILURE_CLASS_VERIFICATION_MISMATCH = "verification_mismatch";
-const FAILURE_CLASS_UNKNOWN = "unknown";
-const FAILURE_CLASS_CONFIDENCE_HIGH = "high";
-const FAILURE_CLASS_CONFIDENCE_MEDIUM = "medium";
-const FAILURE_CLASS_CONFIDENCE_LOW = "low";
+  'publication_convergence_blocked';
+const FAILURE_CLASS_STARTUP_RECOVERY_BLOCKED = 'startup_recovery_blocked';
+const FAILURE_CLASS_DISCOVERY_UNAVAILABLE = 'discovery_unavailable';
+const FAILURE_CLASS_TOPOLOGY_UNSTABLE = 'topology_unstable';
+const FAILURE_CLASS_LOAD_PRESSURE = 'load_pressure';
+const FAILURE_CLASS_CDC_DEGRADED = 'cdc_degraded';
+const FAILURE_CLASS_CACHE_STALE = 'cache_stale';
+const FAILURE_CLASS_VERIFICATION_MISMATCH = 'verification_mismatch';
+const FAILURE_CLASS_UNKNOWN = 'unknown';
+const FAILURE_CLASS_CONFIDENCE_HIGH = 'high';
+const FAILURE_CLASS_CONFIDENCE_MEDIUM = 'medium';
+const FAILURE_CLASS_CONFIDENCE_LOW = 'low';
 const TRIAGE_CLUSTER_STAGE_LIMIT = 12;
 const TRIAGE_RECENT_TOPOLOGY_EVENT_LIMIT = 10;
 const TRIAGE_TOP_LOAD_NODE_LIMIT = 5;
-const STABILITY_GATE_STATUS_OPEN = "open";
-const STABILITY_GATE_STATUS_CLOSED = "closed";
-const STABILITY_GATE_STATUS_NOT_APPLICABLE = "not_applicable";
-const STABILITY_GATE_STATUS_UNKNOWN = "unknown";
-const STABILITY_GATE_TYPE_FAILOVER = "failover";
-const STABILITY_GATE_TYPE_CONVERGENCE = "convergence";
-const STABILITY_GATE_TYPE_RESTART_RECOVERY = "restart_recovery";
-const STABILITY_GATE_BLOCKER_PUBLICATION_PENDING = "publication_pending";
+const STABILITY_GATE_STATUS_OPEN = 'open';
+const STABILITY_GATE_STATUS_CLOSED = 'closed';
+const STABILITY_GATE_STATUS_NOT_APPLICABLE = 'not_applicable';
+const STABILITY_GATE_STATUS_UNKNOWN = 'unknown';
+const STABILITY_GATE_TYPE_FAILOVER = 'failover';
+const STABILITY_GATE_TYPE_CONVERGENCE = 'convergence';
+const STABILITY_GATE_TYPE_RESTART_RECOVERY = 'restart_recovery';
+const STABILITY_GATE_BLOCKER_PUBLICATION_PENDING = 'publication_pending';
 const STABILITY_GATE_BLOCKER_PRIORITY_SPREAD_PENDING =
-  "priority_spread_pending";
-const STABILITY_GATE_BLOCKER_PENDING_ACK_NODES = "pending_ack_nodes";
-const STABILITY_GATE_BLOCKER_BLOCKED_NODES = "publication_blocked_nodes";
-const STABILITY_GATE_BLOCKER_CLOSURE_RECORD = "closure_record";
-const STABILITY_GATE_BLOCKER_STARTUP_READINESS = "startup_readiness_blocked";
-const SCENARIO_NAME_FRAGMENT_RESTART = "restart";
+  'priority_spread_pending';
+const STABILITY_GATE_BLOCKER_PENDING_ACK_NODES = 'pending_ack_nodes';
+const STABILITY_GATE_BLOCKER_BLOCKED_NODES = 'publication_blocked_nodes';
+const STABILITY_GATE_BLOCKER_CLOSURE_RECORD = 'closure_record';
+const STABILITY_GATE_BLOCKER_STARTUP_READINESS = 'startup_readiness_blocked';
+const SCENARIO_NAME_FRAGMENT_RESTART = 'restart';
 
 const LOAD_WAIT_REASON_KEYS = Object.freeze([
   LOAD_WAIT_REASON_NODE_SLOT_UNAVAILABLE,
@@ -145,65 +152,65 @@ const LOAD_REASON_ROOT_CAUSE_CLASS_BY_REASON = Object.freeze({
 });
 
 function toWorkspaceRelative(targetPath, workspaceRoot = process.cwd()) {
-  if (typeof targetPath !== "string" || targetPath.length === ZERO) {
+  if (typeof targetPath !== 'string' || targetPath.length === ZERO) {
     return null;
   }
   return relative(workspaceRoot, resolve(targetPath));
 }
 
 function sanitizePathSegment(value, fallback = UNKNOWN_VALUE) {
-  const normalized = String(value || "")
+  const normalized = String(value || '')
     .trim()
-    .replace(/[^a-z0-9._-]+/gi, "-")
-    .replace(/^-+|-+$/g, "");
+    .replace(/[^a-z0-9._-]+/gi, '-')
+    .replace(/^-+|-+$/g, '');
   return normalized.length > ZERO ? normalized : fallback;
 }
 
 function sliceLogTail(logContent, maxLines = LOG_TAIL_LINE_COUNT) {
-  const lines = String(logContent || "")
-    .split("\n")
+  const lines = String(logContent || '')
+    .split('\n')
     .filter((line) => line.length > ZERO);
   return lines.slice(-Math.max(1, maxLines));
 }
 
 function parseStructuredLogLine(line) {
-  const jsonStart = String(line || "").indexOf("{");
+  const jsonStart = String(line || '').indexOf('{');
   if (jsonStart < ZERO) {
     return null;
   }
   try {
     const parsed = JSON.parse(String(line).slice(jsonStart));
-    return parsed && typeof parsed === "object" ? parsed : null;
+    return parsed && typeof parsed === 'object' ? parsed : null;
   } catch (_error) {
     return null;
   }
 }
 
 function resolveStructuredLogMessage(parsed) {
-  if (!parsed || typeof parsed !== "object") {
-    return "";
+  if (!parsed || typeof parsed !== 'object') {
+    return '';
   }
-  if (typeof parsed.msg === "string") {
+  if (typeof parsed.msg === 'string') {
     return parsed.msg;
   }
-  if (typeof parsed.message === "string") {
+  if (typeof parsed.message === 'string') {
     return parsed.message;
   }
-  return "";
+  return '';
 }
 
 function resolveStructuredLogTimestamp(parsed) {
-  if (typeof parsed?.time === "string" && parsed.time.length > ZERO) {
+  if (typeof parsed?.time === 'string' && parsed.time.length > ZERO) {
     return parsed.time;
   }
-  if (typeof parsed?.timestamp === "string" && parsed.timestamp.length > ZERO) {
+  if (typeof parsed?.timestamp === 'string' && parsed.timestamp.length > ZERO) {
     return parsed.timestamp;
   }
   return null;
 }
 
 function sanitizeStructuredDecisionArtifact(parsed, fields) {
-  if (!parsed || typeof parsed !== "object") {
+  if (!parsed || typeof parsed !== 'object') {
     return null;
   }
   const artifact = {
@@ -221,7 +228,7 @@ function sanitizeStructuredDecisionArtifact(parsed, fields) {
 function extractDecisionArtifactsFromLogContent(content) {
   const startupDecisions = [];
   const runtimeHandoffs = [];
-  const lines = String(content || "").split("\n");
+  const lines = String(content || '').split('\n');
   for (const line of lines) {
     const parsed = parseStructuredLogLine(line);
     if (!parsed) {
@@ -231,11 +238,11 @@ function extractDecisionArtifactsFromLogContent(content) {
     if (message === ENTRYPOINT_LOG_MSG.AUTO_REJOIN_DECISION) {
       startupDecisions.push(
         sanitizeStructuredDecisionArtifact(parsed, [
-          "nodeId",
-          "mode",
-          "source",
-          "startupMode",
-          "peerAddress",
+          'nodeId',
+          'mode',
+          'source',
+          'startupMode',
+          'peerAddress',
         ]),
       );
       continue;
@@ -243,14 +250,14 @@ function extractDecisionArtifactsFromLogContent(content) {
     if (message === ENTRYPOINT_LOG_MSG.STARTUP_RUNTIME_HANDOFF) {
       runtimeHandoffs.push(
         sanitizeStructuredDecisionArtifact(parsed, [
-          "nodeId",
-          "startupBranch",
-          "startupPhase",
-          "bootstrapApiHasSqlQueryEngine",
-          "bootstrapApiHasMessageRouter",
-          "bootstrapApiHasStartupRecoveryCoordinator",
-          "adminRuntimeStarted",
-          "adminPort",
+          'nodeId',
+          'startupBranch',
+          'startupPhase',
+          'bootstrapApiHasSqlQueryEngine',
+          'bootstrapApiHasMessageRouter',
+          'bootstrapApiHasStartupRecoveryCoordinator',
+          'adminRuntimeStarted',
+          'adminPort',
         ]),
       );
     }
@@ -262,13 +269,13 @@ function extractDecisionArtifactsFromLogContent(content) {
     startupDecisions: startupDecisions.filter(Boolean),
     runtimeHandoffs: runtimeHandoffs.filter(Boolean),
     latestStartupDecision:
-      startupDecisions.length > ZERO
-        ? startupDecisions[startupDecisions.length - 1]
-        : null,
+      startupDecisions.length > ZERO ?
+        startupDecisions[startupDecisions.length - 1] :
+        null,
     latestRuntimeHandoff:
-      runtimeHandoffs.length > ZERO
-        ? runtimeHandoffs[runtimeHandoffs.length - 1]
-        : null,
+      runtimeHandoffs.length > ZERO ?
+        runtimeHandoffs[runtimeHandoffs.length - 1] :
+        null,
   };
 }
 
@@ -279,9 +286,9 @@ function resolveRoutingDiagnostics(logExcerpt) {
     const parsed = parseStructuredLogLine(line);
     if (
       !parsed ||
-      parsed.subsystem !== "query-executor" ||
+      parsed.subsystem !== 'query-executor' ||
       !parsed.routingSnapshot ||
-      typeof parsed.routingSnapshot !== "object"
+      typeof parsed.routingSnapshot !== 'object'
     ) {
       continue;
     }
@@ -292,11 +299,11 @@ function resolveRoutingDiagnostics(logExcerpt) {
 
 function resolveFailureDiagnostics(entry) {
   const diagnostics = entry?.details?.diagnostics;
-  return diagnostics && typeof diagnostics === "object" ? diagnostics : {};
+  return diagnostics && typeof diagnostics === 'object' ? diagnostics : {};
 }
 
 function addNormalizedReasonCount(reasonCounts, reason, count = 1) {
-  const normalizedReason = String(reason || "").trim();
+  const normalizedReason = String(reason || '').trim();
   const normalizedCount = normalizeNonNegativeCount(count);
   if (
     normalizedReason.length === ZERO ||
@@ -312,14 +319,47 @@ function addNormalizedReasonCount(reasonCounts, reason, count = 1) {
 function resolvePublicationConvergenceGateReasonCodes(
   publicationConvergenceGate = null,
 ) {
-  const rawReasonCodes = Array.isArray(publicationConvergenceGate?.reasonCodes)
-    ? publicationConvergenceGate.reasonCodes
-    : Array.isArray(publicationConvergenceGate?.reasons)
-      ? publicationConvergenceGate.reasons
-      : [];
+  const rawReasonCodes = Array.isArray(publicationConvergenceGate?.reasonCodes) ?
+    publicationConvergenceGate.reasonCodes :
+    Array.isArray(publicationConvergenceGate?.reasons) ?
+      publicationConvergenceGate.reasons :
+      [];
   return rawReasonCodes
-    .map((reason) => String(reason || "").trim())
+    .map((reason) => String(reason || '').trim())
     .filter((reason) => reason.length > ZERO);
+}
+
+function shouldSuppressGateReasonForActivePrioritySpread({
+  reason,
+  priorityRecoveryReasonCodes,
+  prioritySpreadPending,
+}) {
+  return (
+    prioritySpreadPending === true &&
+    reason === PRIORITY_RECOVERY_REASON_PRIORITY_SPREAD_EVIDENCE_UNAVAILABLE &&
+    priorityRecoveryReasonCodes.includes(
+      PRIORITY_RECOVERY_REASON_PRIORITY_PARTITIONS_NOT_SPREAD,
+    )
+  );
+}
+
+function resolveDominantPublicationConvergenceGateReasons({
+  publicationConvergenceGateReasons,
+  priorityRecoveryReasonCodes,
+  prioritySpreadPending,
+}) {
+  return normalizeDistinctStringArray(publicationConvergenceGateReasons).filter(
+    (reason) =>
+      !shouldSuppressGateReasonForActivePrioritySpread({
+        reason,
+        priorityRecoveryReasonCodes,
+        prioritySpreadPending,
+      }),
+  );
+}
+
+function isPrioritySpreadSummarySatisfied(summary) {
+  return isRecord(summary) && summary.satisfied === true;
 }
 
 function resolvePublicationConvergencePendingAckNodeIds(
@@ -337,7 +377,7 @@ function resolvePublicationConvergencePendingAckNodeIds(
 
 function isMeaningfulPriorityRecoveryProgressValue(value) {
   return (
-    typeof value === "string" &&
+    typeof value === 'string' &&
     value.length > ZERO &&
     value !== PRIORITY_RECOVERY_PROGRESS_NONE
   );
@@ -346,9 +386,9 @@ function isMeaningfulPriorityRecoveryProgressValue(value) {
 function buildPriorityRecoveryProgressDominantReason(progressSummary = null) {
   const dominantWitness =
     progressSummary?.dominantWitness &&
-    typeof progressSummary.dominantWitness === "object"
-      ? progressSummary.dominantWitness
-      : null;
+    typeof progressSummary.dominantWitness === 'object' ?
+      progressSummary.dominantWitness :
+      null;
   if (!hasMeaningfulPriorityRecoveryProgressWitness(dominantWitness)) {
     return null;
   }
@@ -376,9 +416,9 @@ function buildPriorityRecoveryProgressDominantReason(progressSummary = null) {
   ) {
     reasonParts.push(dominantWitness.nextRequiredAction);
   }
-  return reasonParts.length > 1
-    ? reasonParts.join("_")
-    : PRIORITY_RECOVERY_PROGRESS_REASON_FALLBACK;
+  return reasonParts.length > 1 ?
+    reasonParts.join('_') :
+    PRIORITY_RECOVERY_PROGRESS_REASON_FALLBACK;
 }
 
 function addPriorityRecoveryProgressReasonCounts(
@@ -395,13 +435,13 @@ function addPriorityRecoveryProgressReasonCounts(
   }
   addNormalizedReasonCount(reasonCounts, dominantReason, 1);
   const countMaps = [
-    ["actuation_state", progressSummary.actuationStateCounts],
-    ["owner", progressSummary.currentOwnerCounts],
-    ["blocking_boundary", progressSummary.blockingBoundaryCounts],
-    ["wait_mode", progressSummary.waitModeCounts],
-    ["next_action", progressSummary.nextRequiredActionCounts],
-    ["contract_state", progressSummary.progressContractStateCounts],
-    ["pressure_state", progressSummary.pressureStateCounts],
+    ['actuation_state', progressSummary.actuationStateCounts],
+    ['owner', progressSummary.currentOwnerCounts],
+    ['blocking_boundary', progressSummary.blockingBoundaryCounts],
+    ['wait_mode', progressSummary.waitModeCounts],
+    ['next_action', progressSummary.nextRequiredActionCounts],
+    ['contract_state', progressSummary.progressContractStateCounts],
+    ['pressure_state', progressSummary.pressureStateCounts],
   ];
   for (const [prefix, counts] of countMaps) {
     if (!isRecord(counts)) {
@@ -417,7 +457,7 @@ function addPriorityRecoveryProgressReasonCounts(
   }
   addNormalizedReasonCount(
     reasonCounts,
-    "priority_recovery_progress_partition",
+    'priority_recovery_progress_partition',
     progressSummary.partitionCount || ZERO,
   );
   return dominantReason;
@@ -442,13 +482,13 @@ function deriveReasonCountsFromPublicationConvergence(controlPlane = null) {
   )) {
     const reasons = Array.isArray(readiness?.reasons) ? readiness.reasons : [];
     const reasonCodes = reasons
-      .map((reason) => String(reason?.code || "").trim())
+      .map((reason) => String(reason?.code || '').trim())
       .filter((reason) => reason.length > ZERO);
     const publicationReasons = reasonCodes.filter(
       (reason) =>
-        reason === "control_plane_publication_pending" ||
-        reason === "publishedConvergencePending" ||
-        reason === "recovery_eligibility_pending",
+        reason === 'control_plane_publication_pending' ||
+        reason === 'publishedConvergencePending' ||
+        reason === 'recovery_eligibility_pending',
     );
     if (publicationReasons.length === ZERO) {
       continue;
@@ -461,14 +501,14 @@ function deriveReasonCountsFromPublicationConvergence(controlPlane = null) {
   const publicationConvergenceGateReasons =
     resolvePublicationConvergenceGateReasonCodes(publicationConvergenceGate);
   const recoveryProtocolState =
-    typeof priorityRecoveryObservation?.recoveryProtocolState === "string" ?
+    typeof priorityRecoveryObservation?.recoveryProtocolState === 'string' ?
       priorityRecoveryObservation.recoveryProtocolState :
-      typeof publicationConvergenceGate?.recoveryProtocolState === "string" ?
+      typeof publicationConvergenceGate?.recoveryProtocolState === 'string' ?
         publicationConvergenceGate.recoveryProtocolState :
-        typeof publicationDetails?.recoveryProtocolState === "string" ?
+        typeof publicationDetails?.recoveryProtocolState === 'string' ?
           publicationDetails.recoveryProtocolState :
           typeof publicationDetails?.membershipLifecycleSummary
-                ?.recoveryProtocolState === "string" ?
+            ?.recoveryProtocolState === 'string' ?
             publicationDetails.membershipLifecycleSummary.recoveryProtocolState :
             null;
   const priorityRecoveryReasonCodes = normalizeDistinctStringArray(
@@ -487,10 +527,25 @@ function deriveReasonCountsFromPublicationConvergence(controlPlane = null) {
       publicationConvergenceGate?.priorityPartitionSummary ??
       null,
   );
+  const prioritySpreadSatisfied = isPrioritySpreadSummarySatisfied(
+    priorityPartitionSummary,
+  );
+  const hasPrioritySpreadReason =
+    priorityRecoveryReasonCodes.includes(
+      PRIORITY_RECOVERY_REASON_PRIORITY_PARTITIONS_NOT_SPREAD,
+    );
   const prioritySpreadPending =
-    priorityRecoveryObservation?.prioritySpreadPending === true ||
-    publicationConvergenceGate?.prioritySpreadPending === true ||
-    publicationDetails?.prioritySpreadPending === true;
+    prioritySpreadSatisfied !== true &&
+    (
+      priorityRecoveryObservation?.prioritySpreadPending === true ||
+      publicationConvergenceGate?.prioritySpreadPending === true ||
+      publicationDetails?.prioritySpreadPending === true ||
+      (
+        recoveryProtocolState ===
+          RECOVERY_PROTOCOL_STATE.PRIORITY_SPREAD_PENDING &&
+        hasPrioritySpreadReason
+      )
+    );
   const publicationPending =
     priorityRecoveryObservation?.publicationPending === true ||
     publicationConvergenceGate?.publicationPending === true ||
@@ -506,34 +561,34 @@ function deriveReasonCountsFromPublicationConvergence(controlPlane = null) {
   const activeGateProgress =
     activeGate?.progress ||
     (controlPlane?.activeGateProgress &&
-    typeof controlPlane.activeGateProgress === "object"
-      ? controlPlane.activeGateProgress
-      : null);
+    typeof controlPlane.activeGateProgress === 'object' ?
+      controlPlane.activeGateProgress :
+      null);
   const activeGateBestProgress =
     activeGate?.bestProgress ||
     (controlPlane?.activeGateBestProgress &&
-    typeof controlPlane.activeGateBestProgress === "object"
-      ? controlPlane.activeGateBestProgress
-      : null);
+    typeof controlPlane.activeGateBestProgress === 'object' ?
+      controlPlane.activeGateBestProgress :
+      null);
   const activeGateNoProgress =
     controlPlane?.activeGateNoProgress &&
-    typeof controlPlane.activeGateNoProgress === "object"
-      ? controlPlane.activeGateNoProgress
-      : null;
+    typeof controlPlane.activeGateNoProgress === 'object' ?
+      controlPlane.activeGateNoProgress :
+      null;
   const activeGateSnapshotCoverage =
     controlPlane?.activeGateSnapshotCoverage &&
-    typeof controlPlane.activeGateSnapshotCoverage === "object"
-      ? controlPlane.activeGateSnapshotCoverage
-      : null;
+    typeof controlPlane.activeGateSnapshotCoverage === 'object' ?
+      controlPlane.activeGateSnapshotCoverage :
+      null;
   const closureProgressSnapshot =
     activeGateProgress ||
     activeGateBestProgress ||
     activeGateNoProgress?.currentProgress ||
-    (activeGateSnapshotCoverage
-      ? {
-          snapshotCoverageComplete:
+    (activeGateSnapshotCoverage ?
+      {
+        snapshotCoverageComplete:
             activeGateSnapshotCoverage.completeCoverage === true,
-          publicationStatus:
+        publicationStatus:
             publicationDetails?.publicationStatus ||
             publicationConvergenceGate?.publicationStatus ||
             activeGateSnapshotCoverage?.selectedPublicationConvergence
@@ -541,23 +596,23 @@ function deriveReasonCountsFromPublicationConvergence(controlPlane = null) {
             activeGateSnapshotCoverage?.selectedPublishedMembershipObservation
               ?.publicationStatus ||
             null,
-          pendingAckCount: pendingAckNodeIds.length,
-          missingPublishedCount: Array.isArray(
-            publicationConvergenceGate?.missingPublishedNodeIds,
-          )
-            ? publicationConvergenceGate.missingPublishedNodeIds.length
-            : ZERO,
-          recoveryProtocolState,
-          priorityRecoveryReasonCodes,
-          gateReasons: publicationConvergenceGateReasons,
-          prioritySpreadSatisfied:
-            priorityPartitionSummary?.satisfied === true
-              ? true
-              : priorityPartitionSummary?.satisfied === false
-                ? false
-                : null,
-        }
-      : null);
+        pendingAckCount: pendingAckNodeIds.length,
+        missingPublishedCount: Array.isArray(
+          publicationConvergenceGate?.missingPublishedNodeIds,
+        ) ?
+          publicationConvergenceGate.missingPublishedNodeIds.length :
+          ZERO,
+        recoveryProtocolState,
+        priorityRecoveryReasonCodes,
+        gateReasons: publicationConvergenceGateReasons,
+        prioritySpreadSatisfied:
+            priorityPartitionSummary?.satisfied === true ?
+              true :
+              priorityPartitionSummary?.satisfied === false ?
+                false :
+                null,
+      } :
+      null);
   const activeGateClosureWitness = classifyActiveGateClosureWitness({
     progressSnapshot: closureProgressSnapshot,
     publicationConvergence: publicationDetails,
@@ -588,14 +643,14 @@ function deriveReasonCountsFromPublicationConvergence(controlPlane = null) {
       Array.isArray(witness?.progressClassIds) ? witness.progressClassIds : [],
     )).size;
   const failingInvariantIds = normalizeDistinctStringArray([
-    ...(Array.isArray(controlPlane?.priorityRecoveryInvariants?.failingInvariantIds)
-      ? controlPlane.priorityRecoveryInvariants.failingInvariantIds
-      : []),
-    ...(Array.isArray(controlPlane?.priorityRecoveryInvariants?.invariants)
-      ? controlPlane.priorityRecoveryInvariants.invariants
-          .filter((invariant) => invariant?.passed !== true)
-          .map((invariant) => invariant?.id)
-      : []),
+    ...(Array.isArray(controlPlane?.priorityRecoveryInvariants?.failingInvariantIds) ?
+      controlPlane.priorityRecoveryInvariants.failingInvariantIds :
+      []),
+    ...(Array.isArray(controlPlane?.priorityRecoveryInvariants?.invariants) ?
+      controlPlane.priorityRecoveryInvariants.invariants
+        .filter((invariant) => invariant?.passed !== true)
+        .map((invariant) => invariant?.id) :
+      []),
   ]);
   const publicationConvergence = !publicationDetails &&
     !publicationConvergenceGate &&
@@ -604,29 +659,29 @@ function deriveReasonCountsFromPublicationConvergence(controlPlane = null) {
     !activeGateBestProgress &&
     !activeGateNoProgress &&
     priorityRecoveryProgressClassCount === ZERO &&
-    failingInvariantIds.length === ZERO
-      ? null
-      : {
-          blockingReasonCounts,
-          publicationConvergenceGateReasons,
-          priorityRecoveryReasonCodes,
-          pendingAckCount: pendingAckNodeIds.length,
-          blockedNodeCount: blockedNodeIds.length,
-          publicationPending,
-          prioritySpreadPending,
-          ...(activeGate ? {activeGate} : {}),
-          closureWitnessClass:
+    failingInvariantIds.length === ZERO ?
+    null :
+    {
+      blockingReasonCounts,
+      publicationConvergenceGateReasons,
+      priorityRecoveryReasonCodes,
+      pendingAckCount: pendingAckNodeIds.length,
+      blockedNodeCount: blockedNodeIds.length,
+      publicationPending,
+      prioritySpreadPending,
+      ...(activeGate ? {activeGate} : {}),
+      closureWitnessClass:
             activeGate?.closureWitnessClass ||
             activeGateProgress?.closureWitnessClass ||
             activeGateBestProgress?.closureWitnessClass ||
             activeGateNoProgress?.closureWitnessClass ||
             activeGateClosureWitness?.closureWitnessClass ||
             null,
-          priorityRecoveryProgressClassCount,
-          priorityRecoveryProgressSummary,
-          priorityRecoveryInvariantFailingIds: failingInvariantIds,
-        };
-  if (!publicationConvergence || typeof publicationConvergence !== "object") {
+      priorityRecoveryProgressClassCount,
+      priorityRecoveryProgressSummary,
+      priorityRecoveryInvariantFailingIds: failingInvariantIds,
+    };
+  if (!publicationConvergence || typeof publicationConvergence !== 'object') {
     return {};
   }
   const reasonCounts = {};
@@ -637,9 +692,15 @@ function deriveReasonCountsFromPublicationConvergence(controlPlane = null) {
       addNormalizedReasonCount(reasonCounts, reason, count);
     }
   }
-  for (const reason of normalizeDistinctStringArray(
-    publicationConvergence.publicationConvergenceGateReasons,
-  )) {
+  const dominantPublicationConvergenceGateReasons =
+    resolveDominantPublicationConvergenceGateReasons({
+      publicationConvergenceGateReasons:
+        publicationConvergence.publicationConvergenceGateReasons,
+      priorityRecoveryReasonCodes:
+        publicationConvergence.priorityRecoveryReasonCodes,
+      prioritySpreadPending: publicationConvergence.prioritySpreadPending,
+    });
+  for (const reason of dominantPublicationConvergenceGateReasons) {
     addNormalizedReasonCount(reasonCounts, reason, 1);
   }
   for (const reason of normalizeDistinctStringArray(
@@ -649,30 +710,45 @@ function deriveReasonCountsFromPublicationConvergence(controlPlane = null) {
   }
   addNormalizedReasonCount(
     reasonCounts,
-    "publication_pending_ack",
+    'publication_pending_ack',
     publicationConvergence.pendingAckCount || ZERO,
   );
   addNormalizedReasonCount(
     reasonCounts,
-    "publication_blocked_nodes",
+    'publication_blocked_nodes',
     publicationConvergence.blockedNodeCount || ZERO,
   );
   if (publicationConvergence.publicationPending === true) {
-    addNormalizedReasonCount(reasonCounts, "publication_pending", 1);
+    addNormalizedReasonCount(reasonCounts, 'publication_pending', 1);
   }
   if (publicationConvergence.prioritySpreadPending === true) {
-    addNormalizedReasonCount(reasonCounts, "priority_spread_pending", 1);
+    addNormalizedReasonCount(reasonCounts, 'priority_spread_pending', 1);
   }
   if (
     publicationConvergence.closureWitnessClass &&
-    typeof publicationConvergence.closureWitnessClass === "string"
+    typeof publicationConvergence.closureWitnessClass === 'string'
   ) {
     const normalizedClosureWitness =
       publicationConvergence.closureWitnessClass.trim();
-    if (normalizedClosureWitness.length > ZERO) {
+    const closureWitnessHasOpenPublicationEvidence =
+      publicationConvergence.publicationPending === true ||
+      publicationConvergence.prioritySpreadPending === true ||
+      normalizeNonNegativeCount(publicationConvergence.pendingAckCount) >
+        ZERO ||
+      normalizeNonNegativeCount(
+        publicationConvergence.priorityRecoveryProgressClassCount,
+      ) > ZERO;
+    const closureWitnessIsStalePrioritySpread =
+      normalizedClosureWitness ===
+        PRIORITY_RECOVERY_CLOSURE_WITNESS_PRIORITY_SPREAD_PENDING &&
+      closureWitnessHasOpenPublicationEvidence !== true;
+    if (
+      normalizedClosureWitness.length > ZERO &&
+      closureWitnessIsStalePrioritySpread !== true
+    ) {
       addNormalizedReasonCount(
         reasonCounts,
-        "closure_witness_" + normalizedClosureWitness,
+        'closure_witness_' + normalizedClosureWitness,
         1,
       );
     }
@@ -680,7 +756,7 @@ function deriveReasonCountsFromPublicationConvergence(controlPlane = null) {
   if (publicationConvergence.priorityRecoveryProgressClassCount > ZERO) {
     addNormalizedReasonCount(
       reasonCounts,
-      "priority_recovery_progress_class",
+      'priority_recovery_progress_class',
       publicationConvergence.priorityRecoveryProgressClassCount,
     );
   }
@@ -694,7 +770,7 @@ function deriveReasonCountsFromPublicationConvergence(controlPlane = null) {
   ) {
     addNormalizedReasonCount(
       reasonCounts,
-      "priority_recovery_invariant_failure",
+      'priority_recovery_invariant_failure',
       publicationConvergence.priorityRecoveryInvariantFailingIds.length,
     );
   }
@@ -708,7 +784,7 @@ function cloneJsonValue(value) {
   if (Array.isArray(value)) {
     return value.map((entry) => cloneJsonValue(entry));
   }
-  if (typeof value !== "object") {
+  if (typeof value !== 'object') {
     return value;
   }
   const cloned = {};
@@ -719,7 +795,7 @@ function cloneJsonValue(value) {
 }
 
 function isRecord(value) {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
 function normalizeActiveGateReadinessDelay(rawDelay = null) {
@@ -728,13 +804,13 @@ function normalizeActiveGateReadinessDelay(rawDelay = null) {
   }
   const normalized = {
     timedOut: rawDelay.timedOut === true,
-    cause: typeof rawDelay.cause === "string" ? rawDelay.cause.trim() : null,
-    source: typeof rawDelay.source === "string" ? rawDelay.source.trim() : null,
+    cause: typeof rawDelay.cause === 'string' ? rawDelay.cause.trim() : null,
+    source: typeof rawDelay.source === 'string' ? rawDelay.source.trim() : null,
     recoverability:
-      typeof rawDelay.recoverability === "string"
-        ? rawDelay.recoverability.trim()
-        : null,
-    error: typeof rawDelay.error === "string" ? rawDelay.error.trim() : null,
+      typeof rawDelay.recoverability === 'string' ?
+        rawDelay.recoverability.trim() :
+        null,
+    error: typeof rawDelay.error === 'string' ? rawDelay.error.trim() : null,
   };
   if (
     normalized.timedOut === false &&
@@ -757,22 +833,22 @@ function appendActiveGateReadinessDelaySignals(signals = [], delay = null) {
     return signals;
   }
   signals.push(
-    "activeGateReadinessDelay=" +
-      (normalized.timedOut === true ? "timeout" : "none"),
+    'activeGateReadinessDelay=' +
+      (normalized.timedOut === true ? 'timeout' : 'none'),
   );
   if (
     normalized.cause &&
     normalized.cause !== ACTIVE_GATE_READINESS_DELAY_CAUSE_NONE
   ) {
-    signals.push("activeGateReadinessCause=" + normalized.cause);
+    signals.push('activeGateReadinessCause=' + normalized.cause);
   }
   if (normalized.recoverability) {
     signals.push(
-      "activeGateReadinessRecoverability=" + normalized.recoverability,
+      'activeGateReadinessRecoverability=' + normalized.recoverability,
     );
   }
   if (normalized.source) {
-    signals.push("activeGateReadinessDelaySource=" + normalized.source);
+    signals.push('activeGateReadinessDelaySource=' + normalized.source);
   }
   return signals;
 }
@@ -783,31 +859,31 @@ function appendReadinessFailureSignals(signals = [], readinessFailure = null) {
     return signals;
   }
   if (normalized.classCode) {
-    signals.push("activeGateReadinessClass=" + normalized.classCode);
+    signals.push('activeGateReadinessClass=' + normalized.classCode);
   }
   if (normalized.recoverability) {
     signals.push(
-      "activeGateReadinessRecoverability=" + normalized.recoverability,
+      'activeGateReadinessRecoverability=' + normalized.recoverability,
     );
   }
   if (normalized.mode) {
-    signals.push("activeGateReadinessMode=" + normalized.mode);
+    signals.push('activeGateReadinessMode=' + normalized.mode);
   }
   if (Number.isInteger(normalized.progressSignal?.attemptsSinceProgress)) {
     signals.push(
-      "activeGateReadinessProgressAttemptsSince=" +
+      'activeGateReadinessProgressAttemptsSince=' +
         String(normalized.progressSignal.attemptsSinceProgress),
     );
   }
   if (Number.isInteger(normalized.progressSignal?.maxAttempts)) {
     signals.push(
-      "activeGateReadinessProgressMaxAttempts=" +
+      'activeGateReadinessProgressMaxAttempts=' +
         String(normalized.progressSignal.maxAttempts),
     );
   }
   if (normalized.terminalReason) {
     signals.push(
-      "activeGateReadinessTerminalReason=" + normalized.terminalReason,
+      'activeGateReadinessTerminalReason=' + normalized.terminalReason,
     );
   }
   return signals;
@@ -817,60 +893,60 @@ function normalizeReadinessFailure(rawReadinessFailure = null) {
   if (!isRecord(rawReadinessFailure)) {
     return null;
   }
-  const progressSignal = isRecord(rawReadinessFailure.progressSignal)
-    ? rawReadinessFailure.progressSignal
-    : null;
+  const progressSignal = isRecord(rawReadinessFailure.progressSignal) ?
+    rawReadinessFailure.progressSignal :
+    null;
   const normalized = {
     mode:
-      typeof rawReadinessFailure.mode === "string" &&
-      rawReadinessFailure.mode.length > ZERO
-        ? rawReadinessFailure.mode
-        : null,
+      typeof rawReadinessFailure.mode === 'string' &&
+      rawReadinessFailure.mode.length > ZERO ?
+        rawReadinessFailure.mode :
+        null,
     classCode:
-      typeof rawReadinessFailure.classCode === "string" &&
-      rawReadinessFailure.classCode.length > ZERO
-        ? rawReadinessFailure.classCode
-        : null,
+      typeof rawReadinessFailure.classCode === 'string' &&
+      rawReadinessFailure.classCode.length > ZERO ?
+        rawReadinessFailure.classCode :
+        null,
     recoverability:
-      typeof rawReadinessFailure.recoverability === "string" &&
-      rawReadinessFailure.recoverability.length > ZERO
-        ? rawReadinessFailure.recoverability
-        : null,
-    progressSignal: isRecord(progressSignal)
-      ? {
-          attemptsSinceProgress: Number.isInteger(
-            progressSignal.attemptsSinceProgress,
-          )
-            ? Math.max(ZERO, progressSignal.attemptsSinceProgress)
-            : null,
-          maxAttempts:
+      typeof rawReadinessFailure.recoverability === 'string' &&
+      rawReadinessFailure.recoverability.length > ZERO ?
+        rawReadinessFailure.recoverability :
+        null,
+    progressSignal: isRecord(progressSignal) ?
+      {
+        attemptsSinceProgress: Number.isInteger(
+          progressSignal.attemptsSinceProgress,
+        ) ?
+          Math.max(ZERO, progressSignal.attemptsSinceProgress) :
+          null,
+        maxAttempts:
             Number.isInteger(progressSignal.maxAttempts) &&
-            progressSignal.maxAttempts > ZERO
-              ? Math.max(ZERO, progressSignal.maxAttempts)
-              : null,
-          stalled: progressSignal.stalled === true,
-        }
-      : null,
+            progressSignal.maxAttempts > ZERO ?
+              Math.max(ZERO, progressSignal.maxAttempts) :
+              null,
+        stalled: progressSignal.stalled === true,
+      } :
+      null,
     terminalReason:
-      typeof rawReadinessFailure.terminalReason === "string" &&
-      rawReadinessFailure.terminalReason.length > ZERO
-        ? rawReadinessFailure.terminalReason
-        : null,
+      typeof rawReadinessFailure.terminalReason === 'string' &&
+      rawReadinessFailure.terminalReason.length > ZERO ?
+        rawReadinessFailure.terminalReason :
+        null,
     source:
-      typeof rawReadinessFailure.source === "string" &&
-      rawReadinessFailure.source.length > ZERO
-        ? rawReadinessFailure.source
-        : null,
+      typeof rawReadinessFailure.source === 'string' &&
+      rawReadinessFailure.source.length > ZERO ?
+        rawReadinessFailure.source :
+        null,
     cause:
-      typeof rawReadinessFailure.cause === "string" &&
-      rawReadinessFailure.cause.length > ZERO
-        ? rawReadinessFailure.cause
-        : null,
+      typeof rawReadinessFailure.cause === 'string' &&
+      rawReadinessFailure.cause.length > ZERO ?
+        rawReadinessFailure.cause :
+        null,
     error:
-      typeof rawReadinessFailure.error === "string" &&
-      rawReadinessFailure.error.length > ZERO
-        ? rawReadinessFailure.error
-        : null,
+      typeof rawReadinessFailure.error === 'string' &&
+      rawReadinessFailure.error.length > ZERO ?
+        rawReadinessFailure.error :
+        null,
   };
   if (
     normalized.classCode === null &&
@@ -891,7 +967,7 @@ function hasBlockingReadinessFailure(readinessFailure = null) {
     return false;
   }
   const readinessDelayCause =
-    typeof normalized.cause === "string" ? normalized.cause : null;
+    typeof normalized.cause === 'string' ? normalized.cause : null;
   return (
     normalized.classCode !== null ||
     normalized.terminalReason !== null ||
@@ -904,9 +980,9 @@ function hasBlockingReadinessFailure(readinessFailure = null) {
 function resolveReadinessFailure(controlPlane = {}) {
   const activeGateNoProgress =
     controlPlane?.activeGateNoProgress &&
-    typeof controlPlane.activeGateNoProgress === "object"
-      ? controlPlane.activeGateNoProgress
-      : null;
+    typeof controlPlane.activeGateNoProgress === 'object' ?
+      controlPlane.activeGateNoProgress :
+      null;
   const explicit = normalizeReadinessFailure(
     activeGateNoProgress?.readinessFailure || null,
   );
@@ -925,24 +1001,24 @@ function resolveReadinessFailure(controlPlane = {}) {
   }
   const attemptsSinceProgress = Number.isInteger(
     activeGateNoProgress?.attemptsSinceProgress,
-  )
-    ? Math.max(ZERO, activeGateNoProgress.attemptsSinceProgress)
-    : null;
+  ) ?
+    Math.max(ZERO, activeGateNoProgress.attemptsSinceProgress) :
+    null;
   const maxAttempts =
     Number.isInteger(activeGateNoProgress?.maxAttempts) &&
-    activeGateNoProgress.maxAttempts > ZERO
-      ? Math.max(ZERO, activeGateNoProgress.maxAttempts)
-      : null;
+    activeGateNoProgress.maxAttempts > ZERO ?
+      Math.max(ZERO, activeGateNoProgress.maxAttempts) :
+      null;
   const stalled = activeGateNoProgress?.stalled === true;
   const reasonCode = activeGateNoProgress?.reasonCode;
   const classCode =
     readinessDelay &&
     readinessDelay.timedOut === true &&
-    readinessDelay.cause !== ACTIVE_GATE_READINESS_DELAY_CAUSE_NONE
-      ? readinessDelay.cause
-      : stalled || reasonCode === NO_PROGRESS_REASON_CODE
-        ? READINESS_FAILURE_CLASS_NO_PROGRESS
-        : null;
+    readinessDelay.cause !== ACTIVE_GATE_READINESS_DELAY_CAUSE_NONE ?
+      readinessDelay.cause :
+      stalled || reasonCode === NO_PROGRESS_REASON_CODE ?
+        READINESS_FAILURE_CLASS_NO_PROGRESS :
+        null;
   return normalizeReadinessFailure({
     mode: activeGateNoProgress?.mode || null,
     classCode,
@@ -953,9 +1029,9 @@ function resolveReadinessFailure(controlPlane = {}) {
       stalled,
     },
     terminalReason:
-      typeof reasonCode === "string" && reasonCode.length > ZERO
-        ? reasonCode
-        : null,
+      typeof reasonCode === 'string' && reasonCode.length > ZERO ?
+        reasonCode :
+        null,
     source: readinessDelay?.source || null,
     cause: readinessDelay?.cause || null,
     error: readinessDelay?.error || null,
@@ -981,29 +1057,29 @@ function resolveReadinessFailureGuidance(readinessFailure = null) {
     ) {
       return {
         failureAction:
-          "Probe delay is recoverable in this path; allow bounded retry.",
+          'Probe delay is recoverable in this path; allow bounded retry.',
         operatorRecommendation:
-          "Re-run with reduced startup concurrency and watch snapshot probe latencies.",
+          'Re-run with reduced startup concurrency and watch snapshot probe latencies.',
       };
     }
     return {
-      failureAction: "Snapshot/reachability timeout is blocking convergence.",
+      failureAction: 'Snapshot/reachability timeout is blocking convergence.',
       operatorRecommendation:
-        "Inspect snapshot query latency, admin readiness, and host/network stability before rerun.",
+        'Inspect snapshot query latency, admin readiness, and host/network stability before rerun.',
     };
   }
   if (readinessFailure.classCode === READINESS_FAILURE_CLASS_NO_PROGRESS) {
     return {
       failureAction:
-        "Convergence has stopped progressing within configured guarantees.",
+        'Convergence has stopped progressing within configured guarantees.',
       operatorRecommendation:
-        "Inspect publication convergence blockers and topology readiness evidence before retry.",
+        'Inspect publication convergence blockers and topology readiness evidence before retry.',
     };
   }
   return {
-    failureAction: "Readiness convergence issue requires triage.",
+    failureAction: 'Readiness convergence issue requires triage.',
     operatorRecommendation:
-      "Collect active-gate diagnostics and follow triage priorities before rerun.",
+      'Collect active-gate diagnostics and follow triage priorities before rerun.',
   };
 }
 
@@ -1032,10 +1108,10 @@ function resolveCanonicalFailedOperationCount(metrics) {
 
 function resolveFailureReasonCounts(entry, fallbackReasonCounts = null) {
   const reasonCounts = resolveFailureDiagnostics(entry)?.failure?.reasonCounts;
-  if (reasonCounts && typeof reasonCounts === "object") {
+  if (reasonCounts && typeof reasonCounts === 'object') {
     return reasonCounts;
   }
-  if (fallbackReasonCounts && typeof fallbackReasonCounts === "object") {
+  if (fallbackReasonCounts && typeof fallbackReasonCounts === 'object') {
     return fallbackReasonCounts;
   }
   return {};
@@ -1081,7 +1157,7 @@ function normalizeDistinctStringArray(values) {
   const result = [];
   const seen = new Set();
   for (const value of Array.isArray(values) ? values : []) {
-    const normalized = String(value || "").trim();
+    const normalized = String(value || '').trim();
     if (normalized.length === ZERO || seen.has(normalized)) {
       continue;
     }
@@ -1097,31 +1173,31 @@ function buildPriorityRecoveryCorrelationKey({
   operationId = null,
   fallback = null,
 }) {
-  const normalizedPartitionId = String(partitionId || "").trim();
+  const normalizedPartitionId = String(partitionId || '').trim();
   if (normalizedPartitionId.length === ZERO) {
     return String(fallback || PRIORITY_RECOVERY_CORRELATION_KEY.UNKNOWN);
   }
-  const normalizedEpoch = Number.isFinite(epoch)
-    ? String(Math.floor(epoch))
-    : PRIORITY_RECOVERY_CORRELATION_KEY.EPOCH_UNKNOWN;
-  const normalizedOperationId = String(operationId || "").trim();
+  const normalizedEpoch = Number.isFinite(epoch) ?
+    String(Math.floor(epoch)) :
+    PRIORITY_RECOVERY_CORRELATION_KEY.EPOCH_UNKNOWN;
+  const normalizedOperationId = String(operationId || '').trim();
   return [
     normalizedPartitionId,
     normalizedEpoch,
-    normalizedOperationId.length > ZERO
-      ? normalizedOperationId
-      : PRIORITY_RECOVERY_CORRELATION_KEY.OPERATION_UNKNOWN,
+    normalizedOperationId.length > ZERO ?
+      normalizedOperationId :
+      PRIORITY_RECOVERY_CORRELATION_KEY.OPERATION_UNKNOWN,
   ].join(PRIORITY_RECOVERY_CORRELATION_KEY.SEPARATOR);
 }
 
 function normalizePriorityRecoverySemanticStateId(semanticState) {
-  const normalizedSemanticState = String(semanticState || "").trim();
+  const normalizedSemanticState = String(semanticState || '').trim();
   if (normalizedSemanticState.length === ZERO) {
     return null;
   }
-  return PRIORITY_RECOVERY_SEMANTIC_STATE_IDS.includes(normalizedSemanticState)
-    ? normalizedSemanticState
-    : null;
+  return PRIORITY_RECOVERY_SEMANTIC_STATE_IDS.includes(normalizedSemanticState) ?
+    normalizedSemanticState :
+    null;
 }
 
 function inferPriorityRecoverySemanticState(snapshot, blockerReasons = []) {
@@ -1142,7 +1218,7 @@ function inferPriorityRecoverySemanticState(snapshot, blockerReasons = []) {
   }
   if (
     Number(snapshot?.coordinator?.operationCount) > ZERO ||
-    (typeof snapshot?.operationId === "string" &&
+    (typeof snapshot?.operationId === 'string' &&
       snapshot.operationId.length > ZERO)
   ) {
     return PRIORITY_RECOVERY_SEMANTIC_STATE.RECOVERING_IN_FLIGHT;
@@ -1203,14 +1279,14 @@ function filterPriorityRecoverySyntheticNoOperationConflicts(snapshots) {
       .filter((snapshot) =>
         hasPriorityRecoveryDecisionSnapshotProgress(snapshot),
       )
-      .map((snapshot) => String(snapshot?.partitionId || "").trim())
+      .map((snapshot) => String(snapshot?.partitionId || '').trim())
       .filter((partitionId) => partitionId.length > ZERO),
   );
   if (partitionIdsWithProgress.size === ZERO) {
     return normalizedSnapshots;
   }
   return normalizedSnapshots.filter((snapshot) => {
-    const partitionId = String(snapshot?.partitionId || "").trim();
+    const partitionId = String(snapshot?.partitionId || '').trim();
     if (partitionId.length === ZERO) {
       return false;
     }
@@ -1248,11 +1324,6 @@ function buildPriorityRecoveryExplicitSemanticStateByPartitionId(
   return explicitSemanticStateByPartitionId;
 }
 
-function shouldAllowLegacyPriorityRecoverySemanticStateInference(
-  partitionIdsBySemanticState,
-) {
-  return !isRecord(partitionIdsBySemanticState);
-}
 
 function resolvePriorityRecoveryExplicitSemanticState(
   snapshot,
@@ -1264,7 +1335,7 @@ function resolvePriorityRecoveryExplicitSemanticState(
   if (explicitSemanticState) {
     return explicitSemanticState;
   }
-  const partitionId = String(snapshot?.partitionId || "").trim();
+  const partitionId = String(snapshot?.partitionId || '').trim();
   if (
     partitionId.length === ZERO ||
     !(explicitSemanticStateByPartitionId instanceof Map)
@@ -1298,8 +1369,8 @@ function comparePriorityRecoveryDecisionSummarySnapshots(left, right) {
   if (leftTimestamp !== rightTimestamp) {
     return leftTimestamp - rightTimestamp;
   }
-  return String(left?.correlationKey || "").localeCompare(
-    String(right?.correlationKey || ""),
+  return String(left?.correlationKey || '').localeCompare(
+    String(right?.correlationKey || ''),
   );
 }
 
@@ -1309,7 +1380,7 @@ function selectPriorityRecoveryDecisionSummarySnapshots(snapshots) {
     if (!isRecord(snapshot)) {
       continue;
     }
-    const partitionId = String(snapshot.partitionId || "").trim();
+    const partitionId = String(snapshot.partitionId || '').trim();
     if (partitionId.length === ZERO) {
       continue;
     }
@@ -1325,8 +1396,8 @@ function selectPriorityRecoveryDecisionSummarySnapshots(snapshots) {
     }
   }
   return [...latestSnapshotByPartitionId.values()].sort((left, right) =>
-    String(left?.partitionId || "").localeCompare(
-      String(right?.partitionId || ""),
+    String(left?.partitionId || '').localeCompare(
+      String(right?.partitionId || ''),
     ),
   );
 }
@@ -1374,7 +1445,7 @@ function collectPriorityRecoveryDecisionSummarySets({
     hasExplicitSemanticStateContract !== true;
 
   for (const snapshot of summarySnapshots) {
-    const partitionId = String(snapshot.partitionId || "").trim();
+    const partitionId = String(snapshot.partitionId || '').trim();
     if (partitionId.length === ZERO) {
       continue;
     }
@@ -1451,21 +1522,21 @@ function normalizePriorityRecoveryDecisionSnapshots(value) {
     value.partitionIdsBySemanticState,
   );
 
-  for (const snapshot of Array.isArray(value.snapshots)
-    ? value.snapshots
-    : []) {
+  for (const snapshot of Array.isArray(value.snapshots) ?
+    value.snapshots :
+    []) {
     if (!isRecord(snapshot)) {
       continue;
     }
-    const partitionId = String(snapshot.partitionId || "").trim();
+    const partitionId = String(snapshot.partitionId || '').trim();
     if (partitionId.length === ZERO) {
       continue;
     }
     partitionIdSet.add(partitionId);
-    const epoch = Number.isFinite(snapshot.epoch)
-      ? Math.floor(snapshot.epoch)
-      : null;
-    const operationId = String(snapshot.operationId || "").trim() || null;
+    const epoch = Number.isFinite(snapshot.epoch) ?
+      Math.floor(snapshot.epoch) :
+      null;
+    const operationId = String(snapshot.operationId || '').trim() || null;
     const blockerReasons = normalizeDistinctStringArray(
       snapshot.blockerReasons,
     );
@@ -1479,30 +1550,30 @@ function normalizePriorityRecoveryDecisionSnapshots(value) {
         operationId,
         fallback: snapshot.correlationKey,
       }),
-      planner: isRecord(snapshot.planner)
-        ? cloneJsonValue(snapshot.planner)
-        : null,
-      spreadCompletion: isRecord(snapshot.spreadCompletion)
-        ? cloneJsonValue(snapshot.spreadCompletion)
-        : null,
-      completion: isRecord(snapshot.completion)
-        ? cloneJsonValue(snapshot.completion)
-        : null,
-      observation: isRecord(snapshot.observation)
-        ? cloneJsonValue(snapshot.observation)
-        : null,
-      admission: isRecord(snapshot.admission)
-        ? cloneJsonValue(snapshot.admission)
-        : null,
-      coordinator: isRecord(snapshot.coordinator)
-        ? cloneJsonValue(snapshot.coordinator)
-        : null,
-      publication: isRecord(snapshot.publication)
-        ? cloneJsonValue(snapshot.publication)
-        : null,
-      readiness: isRecord(snapshot.readiness)
-        ? cloneJsonValue(snapshot.readiness)
-        : null,
+      planner: isRecord(snapshot.planner) ?
+        cloneJsonValue(snapshot.planner) :
+        null,
+      spreadCompletion: isRecord(snapshot.spreadCompletion) ?
+        cloneJsonValue(snapshot.spreadCompletion) :
+        null,
+      completion: isRecord(snapshot.completion) ?
+        cloneJsonValue(snapshot.completion) :
+        null,
+      observation: isRecord(snapshot.observation) ?
+        cloneJsonValue(snapshot.observation) :
+        null,
+      admission: isRecord(snapshot.admission) ?
+        cloneJsonValue(snapshot.admission) :
+        null,
+      coordinator: isRecord(snapshot.coordinator) ?
+        cloneJsonValue(snapshot.coordinator) :
+        null,
+      publication: isRecord(snapshot.publication) ?
+        cloneJsonValue(snapshot.publication) :
+        null,
+      readiness: isRecord(snapshot.readiness) ?
+        cloneJsonValue(snapshot.readiness) :
+        null,
       blockerReasons,
       semanticState:
         normalizePriorityRecoverySemanticStateId(snapshot.semanticState) ||
@@ -1528,20 +1599,20 @@ function normalizePriorityRecoveryDecisionSnapshots(value) {
     normalizePriorityRecoveryDecisionSummarySetMap(
       summarySets.partitionIdsBySemanticState,
     );
-  const publicationEpoch = Number.isFinite(value.publicationEpoch)
-    ? Math.floor(value.publicationEpoch)
-    : null;
+  const publicationEpoch = Number.isFinite(value.publicationEpoch) ?
+    Math.floor(value.publicationEpoch) :
+    null;
   const priorityPartitionSummary = isRecord(
     value.priorityPartitionSummary ?? value.priority_partition_summary,
-  )
-    ? cloneJsonValue(
-        value.priorityPartitionSummary ?? value.priority_partition_summary,
-      )
-    : null;
+  ) ?
+    cloneJsonValue(
+      value.priorityPartitionSummary ?? value.priority_partition_summary,
+    ) :
+    null;
   const normalizedDecisionSnapshots = {
-    schemaVersion: Number.isFinite(value.schemaVersion)
-      ? Math.floor(value.schemaVersion)
-      : null,
+    schemaVersion: Number.isFinite(value.schemaVersion) ?
+      Math.floor(value.schemaVersion) :
+      null,
     capturedAt: value.capturedAt || null,
     publicationEpoch,
     snapshots: snapshots.sort((left, right) => {
@@ -1608,21 +1679,21 @@ function mergePriorityRecoveryDecisionSnapshots(primary, fallback) {
   const mergedSnapshots = filterPriorityRecoverySyntheticNoOperationConflicts(
     [...snapshotsByCorrelationKey.values()],
   ).sort((left, right) => {
-      const partitionDelta = String(left.partitionId || "").localeCompare(
-        String(right.partitionId || ""),
-      );
-      if (partitionDelta !== ZERO) {
-        return partitionDelta;
-      }
-      const leftEpoch = Number.isFinite(left.epoch) ? left.epoch : -1;
-      const rightEpoch = Number.isFinite(right.epoch) ? right.epoch : -1;
-      if (leftEpoch !== rightEpoch) {
-        return leftEpoch - rightEpoch;
-      }
-      return String(left.correlationKey || "").localeCompare(
-        String(right.correlationKey || ""),
-      );
-    });
+    const partitionDelta = String(left.partitionId || '').localeCompare(
+      String(right.partitionId || ''),
+    );
+    if (partitionDelta !== ZERO) {
+      return partitionDelta;
+    }
+    const leftEpoch = Number.isFinite(left.epoch) ? left.epoch : -1;
+    const rightEpoch = Number.isFinite(right.epoch) ? right.epoch : -1;
+    if (leftEpoch !== rightEpoch) {
+      return leftEpoch - rightEpoch;
+    }
+    return String(left.correlationKey || '').localeCompare(
+      String(right.correlationKey || ''),
+    );
+  });
   const mergedPartitionIdSet = new Set(
     mergedSnapshots.map((snapshot) => snapshot.partitionId),
   );
@@ -1731,6 +1802,8 @@ export const FAILURE_BUNDLE_SEGMENT_1 = {
   PLAYBACK_EVENT_TYPE_REPLICA_CREATED,
   PLAYBACK_EVENT_TYPE_REPLICA_REMOVED,
   PLAYBACK_STAGE_SETUP_CLUSTER_WAITING_ACTIVE,
+  PLAYBACK_STAGE_LOAD_READINESS_WAITING,
+  PLAYBACK_STAGE_LOAD_READINESS_STABLE,
   ROOT_CAUSE_CLASS_UNKNOWN,
   ROOT_CAUSE_CLASS_STARTUP,
   ROOT_CAUSE_CLASS_DISCOVERY,
@@ -1746,6 +1819,7 @@ export const FAILURE_BUNDLE_SEGMENT_1 = {
   LOAD_WAIT_REASON_RETRYABLE_CONTROL_PLANE_PRESSURE,
   LOAD_WAIT_REASON_TIMEOUT_WAITS,
   LOAD_WAIT_REASON_QUEUE_CAPACITY_REJECTED,
+  PRIORITY_RECOVERY_PROGRESS_REASON_FALLBACK,
   READINESS_REASON_MAX_NODES,
   READINESS_REASON_MAX_PER_NODE,
   AFFECTED_NODE_ID_LIMIT,

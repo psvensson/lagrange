@@ -360,37 +360,25 @@ const DISTRIBUTED_RUN_RUNTIME_BUNDLE = createDistributedRunRuntimeBundle({
   formatLogEntry,
   installScenarioPhaseEventSink,
   resolveClusterSize,
+  dirname,
   pathToFileURL,
   resolve,
   normalizeFiniteNumber,
 });
 
 const {
-  dockerActionLine,
-  formatDockerOperationEvent,
   createDockerOperationSink,
   extractBuildProgressLine,
-  extractScenarioFailurePartialResult,
-  mergeFailedScenarioDetails,
   runScenarios,
   shouldPrintLiveLogEntry,
   normalizeScenarioPayload,
   evaluateTraceAssertions,
-  resolveScenarioAssertionPolicy,
   resolveScenarioMemoryLeakConfig,
-  collectPlaybackWarningMessages,
   evaluateScenarioCleanlinessAssertions,
   evaluateMemoryLeakAssertions,
-  formatLiveLogEntry,
-  parseEmbeddedLogPayload,
-  normalizeSeverity,
-  severityLabel,
-  sanitizeMessage,
-  hasProblemPattern,
   loadScenarioModule,
   resolveBenchmarkGateConfig,
   buildHistoricalBaselineIndex,
-  formatSignedDelta,
   formatRunSummary,
 } = DISTRIBUTED_RUN_RUNTIME_BUNDLE;
 
@@ -1323,7 +1311,6 @@ async function main() {
     );
   };
   try {
-
     if (args.verbose) {
       process.stdout.write(
         RUNNER_STAGE_CONFIG_LOADING + String(args.config) + '\n',

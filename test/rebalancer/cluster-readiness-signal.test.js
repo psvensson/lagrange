@@ -102,13 +102,13 @@ test('ClusterReadinessSignal — no conditions met returns all unmet',
     t.equal(result.ready, false);
     t.equal(result.unmetConditions.length, 3);
     t.ok(result.unmetConditions.includes(
-      CLUSTER_READINESS_CONDITION.CDC_PIPELINE_READY
+      CLUSTER_READINESS_CONDITION.CDC_PIPELINE_READY,
     ));
     t.ok(result.unmetConditions.includes(
-      CLUSTER_READINESS_CONDITION.NODES_REGISTERED
+      CLUSTER_READINESS_CONDITION.NODES_REGISTERED,
     ));
     t.ok(result.unmetConditions.includes(
-      CLUSTER_READINESS_CONDITION.CACHE_HYDRATED
+      CLUSTER_READINESS_CONDITION.CACHE_HYDRATED,
     ));
     t.end();
   });
@@ -129,13 +129,13 @@ test('ClusterReadinessSignal — CDC pipeline not ready', (t) => {
   const result = signal.evaluate(createContext());
   t.equal(result.ready, false);
   t.ok(result.unmetConditions.includes(
-    CLUSTER_READINESS_CONDITION.CDC_PIPELINE_READY
+    CLUSTER_READINESS_CONDITION.CDC_PIPELINE_READY,
   ));
   t.notOk(result.unmetConditions.includes(
-    CLUSTER_READINESS_CONDITION.NODES_REGISTERED
+    CLUSTER_READINESS_CONDITION.NODES_REGISTERED,
   ));
   t.notOk(result.unmetConditions.includes(
-    CLUSTER_READINESS_CONDITION.CACHE_HYDRATED
+    CLUSTER_READINESS_CONDITION.CACHE_HYDRATED,
   ));
   t.end();
 });
@@ -157,10 +157,10 @@ test('ClusterReadinessSignal — not enough active nodes', (t) => {
   const result = signal.evaluate(createContext());
   t.equal(result.ready, false);
   t.ok(result.unmetConditions.includes(
-    CLUSTER_READINESS_CONDITION.NODES_REGISTERED
+    CLUSTER_READINESS_CONDITION.NODES_REGISTERED,
   ));
   t.notOk(result.unmetConditions.includes(
-    CLUSTER_READINESS_CONDITION.CDC_PIPELINE_READY
+    CLUSTER_READINESS_CONDITION.CDC_PIPELINE_READY,
   ));
   t.end();
 });
@@ -181,7 +181,7 @@ test('ClusterReadinessSignal — cache not hydrated for all tables', (t) => {
   const result = signal.evaluate(createContext());
   t.equal(result.ready, false);
   t.ok(result.unmetConditions.includes(
-    CLUSTER_READINESS_CONDITION.CACHE_HYDRATED
+    CLUSTER_READINESS_CONDITION.CACHE_HYDRATED,
   ));
   t.end();
 });
@@ -202,7 +202,7 @@ test('ClusterReadinessSignal — zero expected nodes always passes node check',
 
     const result = signal.evaluate(createContext());
     t.notOk(result.unmetConditions.includes(
-      CLUSTER_READINESS_CONDITION.NODES_REGISTERED
+      CLUSTER_READINESS_CONDITION.NODES_REGISTERED,
     ));
     t.end();
   });
@@ -220,7 +220,7 @@ test('ClusterReadinessSignal — no gate instance fails CDC pipeline check',
 
     const result = signal.evaluate(createContext());
     t.ok(result.unmetConditions.includes(
-      CLUSTER_READINESS_CONDITION.CDC_PIPELINE_READY
+      CLUSTER_READINESS_CONDITION.CDC_PIPELINE_READY,
     ));
     t.end();
   });
@@ -234,10 +234,10 @@ test('ClusterReadinessSignal — no cache instance fails node and hydration',
 
     const result = signal.evaluate(createContext());
     t.ok(result.unmetConditions.includes(
-      CLUSTER_READINESS_CONDITION.NODES_REGISTERED
+      CLUSTER_READINESS_CONDITION.NODES_REGISTERED,
     ));
     t.ok(result.unmetConditions.includes(
-      CLUSTER_READINESS_CONDITION.CACHE_HYDRATED
+      CLUSTER_READINESS_CONDITION.CACHE_HYDRATED,
     ));
     t.end();
   });
@@ -262,7 +262,7 @@ test('ClusterReadinessSignal — nodes with non-ACTIVE status not counted',
     const result = signal.evaluate(createContext());
     t.equal(result.ready, false);
     t.ok(result.unmetConditions.includes(
-      CLUSTER_READINESS_CONDITION.NODES_REGISTERED
+      CLUSTER_READINESS_CONDITION.NODES_REGISTERED,
     ));
     t.end();
   });
@@ -286,7 +286,7 @@ test('ClusterReadinessSignal — cache getAll throwing returns not hydrated',
 
     const result = signal.evaluate(createContext());
     t.ok(result.unmetConditions.includes(
-      CLUSTER_READINESS_CONDITION.CACHE_HYDRATED
+      CLUSTER_READINESS_CONDITION.CACHE_HYDRATED,
     ));
     t.end();
   });

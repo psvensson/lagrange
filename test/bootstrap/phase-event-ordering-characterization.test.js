@@ -18,7 +18,6 @@ import {
   BOOTSTRAP_PHASE,
   BOOTSTRAP_EVENT,
   JOINING_PHASE,
-  JOINING_PHASE_TO_SUB_PHASE,
 } from '../../src/bootstrap/bootstrap-constants.js';
 import {
   NodeState,

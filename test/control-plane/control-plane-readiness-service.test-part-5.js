@@ -1,61 +1,28 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {
   COLUMN,
-  NUM,
   STATE,
   SERVICE_STATUS,
   SERVICE_TYPE,
   TABLES,
 } from '../../src/constants/index.js';
 import {
-  CONTROL_PLANE_PARTICIPATION_KIND,
-  CONTROL_PLANE_PRIORITY_RECOVERY_REASON,
   CONTROL_PLANE_READINESS_DIMENSION,
   CONTROL_PLANE_PUBLICATION_MODE,
   CONTROL_PLANE_READINESS_REASON,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {
-  CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE,
 } from '../../src/control-plane/control-plane-constants.js';
 import {
   ControlPlaneReadinessService,
 } from '../../src/control-plane/control-plane-readiness-service.js';
 import {
-  CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
 } from '../../src/control-plane/control-plane-system-table-gateway.js';
 import {
-  LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY,
 } from '../../src/cdc/cdc-integration-service.js';
 import {
-  DEFAULT_PRIORITY_RECOVERY_ACTIVITY_STALE_GRACE_MS,
 } from '../../src/control-plane/priority-recovery-snapshot.js';
 
-const TEST_DESCRIPTOR_STATE = Object.freeze({
-  NONE: 'none',
-});
-const TEST_MISSING_NODE_READINESS_STATE = Object.freeze({
-  SELF_RUNTIME_GRACE: 'self_runtime_grace',
-});
-const TEST_PROVISIONING_STATE = Object.freeze({
-  CONVERGENCE_GRACE: 'convergence_grace',
-  STEADY: 'steady',
-});
-const TEST_RUNTIME_AUTHORITY_PUBLICATION_STATE = Object.freeze({
-  HEALTHY: 'healthy',
-});
-const TEST_RUNTIME_AUTHORITY_REPAIR_STATE = Object.freeze({
-  NOT_ATTEMPTED: 'not_attempted',
-});
-const TEST_RUNTIME_AUTHORITY_STATE = Object.freeze({
-  CONFIRMED: 'confirmed',
-  ESTABLISHING: 'establishing',
-  RETAINED: 'retained',
-});
-const TEST_RUNTIME_AUTHORITY_VISIBILITY_STATE = Object.freeze({
-  CONFIRMED: 'confirmed',
-  PENDING_PUBLICATION: 'pending_publication',
-  RETAINED_LOCAL_RUNTIME: 'retained_local_runtime',
-});
 
 function createCache({nodes = [], services = []} = {}) {
   const nodeRows = new Map(nodes.map((row) => [row[COLUMN.NODE_ID], row]));
@@ -1079,7 +1046,7 @@ test('priority recovery sync readiness reuses the last active planning answer ' 
   const nowAtStart = 215000;
   let now = nowAtStart;
   const joiningNodeId = 'node-priority-recovery-sync-stale-grace';
-  let diagnosticsPublicationRow = {
+  const diagnosticsPublicationRow = {
     publicationEpoch: 41,
     status: 'ACK_PENDING',
     publishedActiveNodeIds: ['seed-node'],

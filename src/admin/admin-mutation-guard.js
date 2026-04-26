@@ -18,8 +18,8 @@ const MUTATION_GUARD_MODE = Object.freeze({
 });
 
 const MUTATION_GUARD_ERROR_MSG = Object.freeze({
-  BYPASS_REJECTED: 'Direct mutation path is rejected.'
-    + ' Use meta-service commands.',
+  BYPASS_REJECTED: 'Direct mutation path is rejected.' +
+    ' Use meta-service commands.',
   MODE_REQUIRED: 'Guard mode is required',
   ACTION_REQUIRED: 'Action is required',
 });

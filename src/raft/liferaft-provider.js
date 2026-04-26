@@ -14,6 +14,7 @@ const LIFERAFT_ROUTE_MODE = Object.freeze({
 });
 
 const LIFERAFT_PROPOSE_TIMEOUT_DEFAULT_MS = 1200;
+const LIFERAFT_IMMEDIATE_ELECTION_TIMEOUT_MS = NUM.ONE;
 
 function resolveProposeTimeoutMs(options = {}) {
   const timeoutMs = Number.isFinite(options.proposeTimeoutMs) &&
@@ -265,6 +266,19 @@ class LiferaftProvider {
       return;
     }
     raftNode.heartbeat(raftNode.timeout());
+  }
+
+  /**
+   * Request the next follower election without waiting for the randomized
+   * election timeout. Replacement leader handoff uses this when safe source
+   * removal is blocked on explicit replacement ownership.
+   * @param {Object} raftNode
+   */
+  requestElectionNow(raftNode) {
+    if (!raftNode || typeof raftNode.heartbeat !== TYPEOF.FUNCTION) {
+      return;
+    }
+    raftNode.heartbeat(LIFERAFT_IMMEDIATE_ELECTION_TIMEOUT_MS);
   }
 
   /**

@@ -1,48 +1,29 @@
-import { createMessageGroupServiceRuntimeMethodsClassPart1 } from './message-group-service-runtime-methods-class-part-1.js';
+import {createMessageGroupServiceRuntimeMethodsClassPart1} from './message-group-service-runtime-methods-class-part-1.js';
 
 function createMessageGroupServiceRuntimeMethodsClassPart2(deps = {}) {
   const {
     CDC_BATCH_COMMAND_TYPE,
-    CDC_FORWARD_MAX_RELAY_DEPTH,
     CONTROL_PLANE_READINESS_DIMENSION,
-    DIRECT_ONLY_MESSAGE_TYPES,
-    HLCTimestamp,
     INITIAL_MESSAGE_GROUP_ID,
     LifeRaft,
-    MESSAGE_DELIVERY_MODE,
-    MESSAGE_GROUP_APPLICATION_ERROR_MSG,
-    MESSAGE_GROUP_APPLICATION_MESSAGE_TYPE,
-    MESSAGE_GROUP_APPLICATION_STATUS,
     MESSAGE_GROUP_CDC_ERROR_MSG,
-    MESSAGE_GROUP_CDC_INGRESS_ACTION,
     MESSAGE_GROUP_CDC_LOG_CONTEXT_FIELD,
     MESSAGE_GROUP_SERVICE_ERROR_MSG,
     MESSAGE_GROUP_SERVICE_LITERAL,
     MESSAGE_GROUP_SERVICE_LOG_MSG,
     METRICS_LOG_TAG,
-    MessageStatus,
     NUM,
-    QUERY_MESSAGE_TYPE,
-    RAFT_PACKET_TYPE,
     RebalancerEntityType,
     SYSTEM_TABLE_NAME,
     TIME_MS,
     TYPEOF,
     UnifiedRebalancer,
     boundCdcForwardErrorDetail,
-    buildDeferredDeliveryError,
     buildDeferredCdcForwardError,
-    buildLatencyCdcPropagationResult,
     getOrCreateCauseId,
-    isRaftPacket,
     isSystemTableWriteReady,
     normalizeCauseId,
-    normalizeMessageDeliveryMode,
     normalizePublishedRaftRole,
-    resolveRaftTransportDeliveryOptions,
-    resolveTransportDeliveryOptions,
-    shouldDeferImmediateDeliveryRetry,
-    uuidv4,
     wrapCdcProposeError,
     RaftRole,
   } = deps;
@@ -70,7 +51,9 @@ function createMessageGroupServiceRuntimeMethodsClassPart2(deps = {}) {
             metricsData.eventAgeMs = this.now() - event.timestamp;
           }
           this.logger.info(METRICS_LOG_TAG.CDC_PROPAGATION, metricsData);
-        } catch (_metricsErr) {}
+        } catch (_metricsErr) {
+          void _metricsErr;
+        }
       }
     }
     /**
@@ -86,9 +69,9 @@ function createMessageGroupServiceRuntimeMethodsClassPart2(deps = {}) {
       const skipSubscriptionCheck = options.skipSubscriptionCheck === true;
       const skipReplication = options.skipReplication === true;
       const relayDepth =
-        Number.isInteger(options.relayDepth) && options.relayDepth >= NUM.ZERO
-          ? options.relayDepth
-          : NUM.ZERO;
+        Number.isInteger(options.relayDepth) && options.relayDepth >= NUM.ZERO ?
+          options.relayDepth :
+          NUM.ZERO;
       const addressedStrictConvergence =
         options[
           MESSAGE_GROUP_CDC_LOG_CONTEXT_FIELD.ADDRESSED_STRICT_CONVERGENCE
@@ -109,15 +92,15 @@ function createMessageGroupServiceRuntimeMethodsClassPart2(deps = {}) {
           operation: event.operation,
         });
       });
-      const strictIngressDecision = strictEvent
-        ? this.resolveCdcIngressDecision({
-            tableName: strictEvent.tableName,
-            operation: strictEvent.operation,
-            relayDepth,
-            [MESSAGE_GROUP_CDC_LOG_CONTEXT_FIELD.ADDRESSED_STRICT_CONVERGENCE]:
+      const strictIngressDecision = strictEvent ?
+        this.resolveCdcIngressDecision({
+          tableName: strictEvent.tableName,
+          operation: strictEvent.operation,
+          relayDepth,
+          [MESSAGE_GROUP_CDC_LOG_CONTEXT_FIELD.ADDRESSED_STRICT_CONVERGENCE]:
               addressedStrictConvergence,
-          })
-        : null;
+        }) :
+        null;
       const useCanonicalLocalStrictIngress =
         strictIngressDecision?.localIngress === true;
       const isSingleReplicaGroup =
@@ -133,9 +116,9 @@ function createMessageGroupServiceRuntimeMethodsClassPart2(deps = {}) {
           throw buildDeferredCdcForwardError(
             strictIngressDecision.reason ||
               MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_LEADER_UNKNOWN,
-            Number.isFinite(strictIngressDecision.strictForwardRetryAfterMs)
-              ? strictIngressDecision.strictForwardRetryAfterMs
-              : this.resolveStrictCdcForwardRetryAfterMs(),
+            Number.isFinite(strictIngressDecision.strictForwardRetryAfterMs) ?
+              strictIngressDecision.strictForwardRetryAfterMs :
+              this.resolveStrictCdcForwardRetryAfterMs(),
           );
         }
       }
@@ -150,7 +133,7 @@ function createMessageGroupServiceRuntimeMethodsClassPart2(deps = {}) {
               timestamp: event.timestamp,
               causeId: event.causeId,
             },
-            { skipSubscriptionCheck },
+            {skipSubscriptionCheck},
           );
           if (applied) {
             appliedEvents.push(event);
@@ -159,39 +142,39 @@ function createMessageGroupServiceRuntimeMethodsClassPart2(deps = {}) {
       }
       if (requiresRaftReplication) {
         const cdcCommand =
-          normalizedEvents.length === NUM.ONE
-            ? {
-                type: "CDC",
-                tableName: normalizedEvents[0].tableName,
-                operation: normalizedEvents[0].operation,
-                data: normalizedEvents[0].data,
-                timestamp: normalizedEvents[0].timestamp,
-                causeId: normalizedEvents[0].causeId,
-                replayOnly: normalizedEvents[0].replayOnly === true,
-              }
-            : {
-                type: CDC_BATCH_COMMAND_TYPE,
-                events: normalizedEvents,
-              };
+          normalizedEvents.length === NUM.ONE ?
+            {
+              type: 'CDC',
+              tableName: normalizedEvents[0].tableName,
+              operation: normalizedEvents[0].operation,
+              data: normalizedEvents[0].data,
+              timestamp: normalizedEvents[0].timestamp,
+              causeId: normalizedEvents[0].causeId,
+              replayOnly: normalizedEvents[0].replayOnly === true,
+            } :
+            {
+              type: CDC_BATCH_COMMAND_TYPE,
+              events: normalizedEvents,
+            };
         // Replicate via Raft so all message group replicas (and their
         // co-located system caches) receive this CDC event. Cache updates
         // are applied only from committed CDC entries.
         await this.proposeCDCCommand(cdcCommand);
         // Retain only successfully proposed commands in the bounded local
         // diagnostic ledger so failed relays do not accumulate indefinitely.
-        const entry = this.operationLedger.appendEntry({ ...cdcCommand });
+        const entry = this.operationLedger.appendEntry({...cdcCommand});
         this.recordCDCPropagationMetrics(normalizedEvents, applyStartMs);
         this.logger.debug(
           MESSAGE_GROUP_SERVICE_LITERAL.CDC_EVENT_PROPOSED_FOR_REPLICATION_AWAITING_COMMIT_APPLY,
           {
             tableName:
-              normalizedEvents.length === NUM.ONE
-                ? normalizedEvents[NUM.ZERO].tableName
-                : MESSAGE_GROUP_SERVICE_LITERAL.BATCH,
+              normalizedEvents.length === NUM.ONE ?
+                normalizedEvents[NUM.ZERO].tableName :
+                MESSAGE_GROUP_SERVICE_LITERAL.BATCH,
             operation:
-              normalizedEvents.length === NUM.ONE
-                ? normalizedEvents[NUM.ZERO].operation
-                : `batch:${normalizedEvents.length}`,
+              normalizedEvents.length === NUM.ONE ?
+                normalizedEvents[NUM.ZERO].operation :
+                `batch:${normalizedEvents.length}`,
             logIndex: entry.index,
             groupId: this.groupId,
             replicaId: this.replicaId,
@@ -213,20 +196,20 @@ function createMessageGroupServiceRuntimeMethodsClassPart2(deps = {}) {
       }
       if (!skipReplication) {
         const entry = this.operationLedger.appendEntry({
-          ...(normalizedEvents.length === NUM.ONE
-            ? {
-                type: "CDC",
-                tableName: normalizedEvents[0].tableName,
-                operation: normalizedEvents[0].operation,
-                data: normalizedEvents[0].data,
-                timestamp: normalizedEvents[0].timestamp,
-                causeId: normalizedEvents[0].causeId,
-                replayOnly: normalizedEvents[0].replayOnly === true,
-              }
-            : {
-                type: CDC_BATCH_COMMAND_TYPE,
-                events: normalizedEvents,
-              }),
+          ...(normalizedEvents.length === NUM.ONE ?
+            {
+              type: 'CDC',
+              tableName: normalizedEvents[0].tableName,
+              operation: normalizedEvents[0].operation,
+              data: normalizedEvents[0].data,
+              timestamp: normalizedEvents[0].timestamp,
+              causeId: normalizedEvents[0].causeId,
+              replayOnly: normalizedEvents[0].replayOnly === true,
+            } :
+            {
+              type: CDC_BATCH_COMMAND_TYPE,
+              events: normalizedEvents,
+            }),
         });
         this.recordCDCPropagationMetrics(normalizedEvents, applyStartMs);
         this.emitCDCAppliedEvents(appliedEvents, entry.index);
@@ -244,16 +227,16 @@ function createMessageGroupServiceRuntimeMethodsClassPart2(deps = {}) {
     async proposeCDCCommand(cdcCommand) {
       const configuredRetryBudget =
         Number.isInteger(this.retryMaxAttempts) &&
-        this.retryMaxAttempts > NUM.ZERO
-          ? this.retryMaxAttempts
-          : NUM.ONE;
+        this.retryMaxAttempts > NUM.ZERO ?
+          this.retryMaxAttempts :
+          NUM.ONE;
       const proposeTimeoutMs = this.computeCdcProposeTimeoutMs(
         configuredRetryBudget,
       );
       const leaderTargetSource =
-        typeof this.raftProvider?.proposeWithLeaderRouting === "function"
-          ? "forward_to_leader"
-          : "local_raft_propose";
+        typeof this.raftProvider?.proposeWithLeaderRouting === 'function' ?
+          'forward_to_leader' :
+          'local_raft_propose';
       try {
         if (
           typeof this.raftProvider.proposeWithLeaderRouting === TYPEOF.FUNCTION
@@ -268,9 +251,9 @@ function createMessageGroupServiceRuntimeMethodsClassPart2(deps = {}) {
               forwardToLeader: async (command, routeContext = {}) => {
                 const relayDepth =
                   Number.isInteger(routeContext?.attempt) &&
-                  routeContext.attempt >= NUM.ONE
-                    ? routeContext.attempt
-                    : NUM.ONE;
+                  routeContext.attempt >= NUM.ONE ?
+                    routeContext.attempt :
+                    NUM.ONE;
                 if (command?.type === CDC_BATCH_COMMAND_TYPE) {
                   await this.forwardCDCBatchToLeader(
                     Array.isArray(command?.events) ? command.events : [],
@@ -295,7 +278,7 @@ function createMessageGroupServiceRuntimeMethodsClassPart2(deps = {}) {
               },
               computeRetryDelayMs: (attempt) =>
                 this.computeCdcForwardRetryDelayMs(attempt),
-              onRetry: ({ attempt, mode, retryDelayMs, error }) => {
+              onRetry: ({attempt, mode, retryDelayMs, error}) => {
                 this.logger.warn(
                   MESSAGE_GROUP_SERVICE_LITERAL.RETRYING_RAFT_CDC_COMMAND,
                   {
@@ -523,18 +506,18 @@ function createMessageGroupServiceRuntimeMethodsClassPart2(deps = {}) {
     computeCdcForwardRetryDelayMs(attempt) {
       const retryInitialDelayMs =
         Number.isFinite(this.retryInitialDelayMs) &&
-        this.retryInitialDelayMs > NUM.ZERO
-          ? this.retryInitialDelayMs
-          : NUM.HUNDRED;
+        this.retryInitialDelayMs > NUM.ZERO ?
+          this.retryInitialDelayMs :
+          NUM.HUNDRED;
       const retryBackoffMultiplier =
         Number.isFinite(this.retryBackoffMultiplier) &&
-        this.retryBackoffMultiplier >= NUM.ONE
-          ? this.retryBackoffMultiplier
-          : NUM.TWO;
+        this.retryBackoffMultiplier >= NUM.ONE ?
+          this.retryBackoffMultiplier :
+          NUM.TWO;
       const retryMaxDelayMs =
-        Number.isFinite(this.retryMaxDelayMs) && this.retryMaxDelayMs > NUM.ZERO
-          ? this.retryMaxDelayMs
-          : TIME_MS.SECOND * NUM.TEN;
+        Number.isFinite(this.retryMaxDelayMs) && this.retryMaxDelayMs > NUM.ZERO ?
+          this.retryMaxDelayMs :
+          TIME_MS.SECOND * NUM.TEN;
       return Math.min(
         retryMaxDelayMs,
         Math.floor(
@@ -547,12 +530,12 @@ function createMessageGroupServiceRuntimeMethodsClassPart2(deps = {}) {
       return Math.max(
         NUM.ONE,
         this.computeCdcForwardRetryDelayMs(NUM.ONE),
-        Number.isFinite(this.forwardTargetSuppressionMs)
-          ? this.forwardTargetSuppressionMs
-          : NUM.ZERO,
-        Number.isFinite(this.forwardTopologyRepairCooldownMs)
-          ? this.forwardTopologyRepairCooldownMs
-          : NUM.ZERO,
+        Number.isFinite(this.forwardTargetSuppressionMs) ?
+          this.forwardTargetSuppressionMs :
+          NUM.ZERO,
+        Number.isFinite(this.forwardTopologyRepairCooldownMs) ?
+          this.forwardTopologyRepairCooldownMs :
+          NUM.ZERO,
       );
     }
     /**
@@ -564,14 +547,14 @@ function createMessageGroupServiceRuntimeMethodsClassPart2(deps = {}) {
      */
     computeCdcProposeTimeoutMs(attemptBudget) {
       const retryBudget =
-        Number.isInteger(attemptBudget) && attemptBudget > NUM.ZERO
-          ? attemptBudget
-          : NUM.ONE;
+        Number.isInteger(attemptBudget) && attemptBudget > NUM.ZERO ?
+          attemptBudget :
+          NUM.ONE;
       const deliveryTimeoutMs =
         Number.isFinite(this.deliveryTimeoutMs) &&
-        this.deliveryTimeoutMs > NUM.ZERO
-          ? Math.floor(this.deliveryTimeoutMs)
-          : TIME_MS.SECOND * NUM.FIVE;
+        this.deliveryTimeoutMs > NUM.ZERO ?
+          Math.floor(this.deliveryTimeoutMs) :
+          TIME_MS.SECOND * NUM.FIVE;
       const safetyBufferMs = NUM.TWO * NUM.HUNDRED;
       const perAttemptBudgetMs = Math.floor(
         Math.max(NUM.HUNDRED, deliveryTimeoutMs - safetyBufferMs) / retryBudget,
@@ -729,7 +712,7 @@ function createMessageGroupServiceRuntimeMethodsClassPart2(deps = {}) {
       this.maybeInitializeRebalancer();
     }
     cancelLeaderOwnedActivation() {
-      this.leaderActivationGate.cancel({ clearActivatedTerm: true });
+      this.leaderActivationGate.cancel({clearActivatedTerm: true});
     }
     scheduleLeaderOwnedActivation(term) {
       this.leaderActivationGate.schedule(
@@ -791,7 +774,7 @@ function createMessageGroupServiceRuntimeMethodsClassPart2(deps = {}) {
      */
     queueRoleUpdate(role) {
       this.roleMutationHelper.queue(
-        normalizePublishedRaftRole(role, { collapseLeaderToFollower: true }),
+        normalizePublishedRaftRole(role, {collapseLeaderToFollower: true}),
       );
     }
     /**
@@ -860,9 +843,9 @@ function createMessageGroupServiceRuntimeMethodsClassPart2(deps = {}) {
       );
     }
     getMetadataPublicationDeliveryPriority() {
-      return this.groupId === INITIAL_MESSAGE_GROUP_ID
-        ? MESSAGE_GROUP_SERVICE_LITERAL.CRITICAL
-        : MESSAGE_GROUP_SERVICE_LITERAL.BACKGROUND;
+      return this.groupId === INITIAL_MESSAGE_GROUP_ID ?
+        MESSAGE_GROUP_SERVICE_LITERAL.CRITICAL :
+        MESSAGE_GROUP_SERVICE_LITERAL.BACKGROUND;
     }
     getMetadataPublicationReadinessDimension() {
       return CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE;
@@ -896,9 +879,9 @@ function createMessageGroupServiceRuntimeMethodsClassPart2(deps = {}) {
      * @return {number} Current term.
      */
     getCurrentTerm() {
-      return this.raft
-        ? this.raftProvider.getCurrentTerm(this.raft)
-        : this.operationLedger.currentTerm;
+      return this.raft ?
+        this.raftProvider.getCurrentTerm(this.raft) :
+        this.operationLedger.currentTerm;
     }
     /**
      * Get pending message count.
@@ -919,9 +902,9 @@ function createMessageGroupServiceRuntimeMethodsClassPart2(deps = {}) {
         role: this.role,
         isLeader: this.isLeader,
         leaderId: this.leaderId,
-        term: this.raft
-          ? this.raftProvider.getCurrentTerm(this.raft)
-          : this.operationLedger.currentTerm,
+        term: this.raft ?
+          this.raftProvider.getCurrentTerm(this.raft) :
+          this.operationLedger.currentTerm,
         logLength: this.operationLedger.getLogLength(),
         pendingMessages: this.pendingMessages.size,
         acknowledgedMessages: this.acknowledgedMessages.size,
@@ -1003,4 +986,4 @@ function createMessageGroupServiceRuntimeMethodsClassPart2(deps = {}) {
   return MessageGroupServiceRuntimeMethods;
 }
 
-export { createMessageGroupServiceRuntimeMethodsClassPart2 };
+export {createMessageGroupServiceRuntimeMethodsClassPart2};

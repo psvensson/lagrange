@@ -1,121 +1,55 @@
-import { ADMIN_WEBSOCKET_API_SHARED } from "./admin-websocket-api-shared.js";
-import { AdminWebSocketAPISegment2 } from "./admin-websocket-api-segment-2.js";
+import {ADMIN_WEBSOCKET_API_SHARED} from './admin-websocket-api-shared.js';
+import {AdminWebSocketAPISegment2} from './admin-websocket-api-segment-2.js';
 
 const {
   ADMIN_CACHE_DUMP,
-  ADMIN_CACHE_OBSERVATION_TABLES,
-  ADMIN_CLIENT,
-  ADMIN_CONFIG_KEY,
-  ADMIN_CONTENT_TYPE,
   ADMIN_CONTROL_SNAPSHOT,
-  ADMIN_DEFAULT,
   ADMIN_ENFORCEMENT_MODE,
-  ADMIN_ERROR_CODE,
-  ADMIN_ERROR_DETAIL_KEY,
   ADMIN_ERROR_HINT,
   ADMIN_ERROR_MATCH,
   ADMIN_ERROR_MESSAGE,
   ADMIN_LIMIT,
-  ADMIN_LOCAL_DISPATCH,
   ADMIN_LOG_MSG,
-  ADMIN_MESSAGE_TYPE,
   ADMIN_META_ACTION,
   ADMIN_PREFLIGHT_CRITICAL_PATH_SNAPSHOT,
   ADMIN_QUERY_RESULT,
-  ADMIN_ROUTE,
   ADMIN_SERVICE_DISCOVERY,
   ADMIN_SERVICE_OPERATION,
-  ADMIN_STATUS,
-  ADMIN_STREAM_LANE_DEFAULT,
-  ADMIN_STREAM_LANE_LOAD,
-  ADMIN_STREAM_LANE_PROBE,
-  ADMIN_STREAM_LANE_SNAPSHOT,
-  ADMIN_SUBSYSTEM,
-  ADMIN_TEST_DEFAULT,
-  ADMIN_TEST_ERROR_MSG,
-  ADMIN_TEST_STREAM_EVENT,
-  AST_TYPE,
-  AdminControlSnapshot,
-  AdminDebugHandlers,
-  AdminPreflightSnapshot,
-  AdminServiceDiscovery,
-  AdminTestRunService,
-  CACHE_DUMP_TABLES,
-  CONTROL_PLANE_READINESS_DIMENSION,
-  CONTROL_PLANE_SNAPSHOT_OBSERVATION_STATE,
-  CONTROL_PLANE_WORKLOAD_CLASS,
   CancellationToken,
-  ConfigurationManager,
-  ControlPlaneSnapshotOwner,
   DebugMetadataStore,
   EMPTY_STRING,
   ENDPOINT_SYNC_UNHEALTHY_POLICY,
   ERRNO,
   EXECUTION_MODE,
-  EXPR_TYPE,
   ErrorCode,
-  Fastify,
-  HTTP_HEADER,
-  HTTP_HEADER_VALUE,
   HTTP_STATUS,
-  LOAD_LANE_ADMISSION_REASON_FALLBACK,
-  LOAD_LANE_QUERY_ADMISSION_STATE,
-  LOAD_LANE_QUERY_TIMEOUT_CAP_MS,
-  LOAD_LANE_READINESS_CACHE_MAX_AGE_MS,
-  LOAD_LANE_SOFT_ADMISSION_REASON_CODES,
-  LOAD_LANE_TABLE_ADMISSION_CACHE_MAX_AGE_MS,
-  LOAD_LANE_TABLE_ADMISSION_RETRY_AFTER_MS,
-  LOAD_LANE_TABLE_ADMISSION_STATE,
-  LOAD_LANE_VOTER_READY_REPLICA_ROLES,
-  LoggingService,
-  META_SERVICE_ID,
   MUTATION_GUARD_MODE,
   MessageType,
   NUM,
-  PRESSURE_GOVERNOR_ACTION,
-  PressureGovernor,
   QUERY_RESULT_MESSAGE_KIND,
   QUERY_RESULT_WRITE_OPERATIONS,
-  READINESS_SNAPSHOT_KEY,
   SQLParser,
-  SQL_REQUEST_TIMEOUT_BUDGET_COMPLETION_MARGIN_MS,
-  SSE_FRAME_PREFIX,
-  SSE_FRAME_SUFFIX,
   TABLES,
   TIMEOUT_BUDGET_CLASSIFICATION,
-  TRANSPORT_EVENT,
   TYPEOF,
-  TraceCollector,
-  WASM_SERVICE_PROTOCOL,
   adaptAdminMessageToServiceMessage,
   appendStructuredQueryMetadata,
-  buildControlPlaneWorkloadProfile,
-  buildLoadLaneAdmissionErrorDetails,
-  buildLoadLaneQueryAdmissionResult,
-  buildLoadLaneQueryAdmissionSnapshot,
-  buildLoadLaneRuntimeAuthoritySummary,
   createAdminOperationError,
   createRetryableAdminOperationError,
   createSqlRequest,
   createTimeoutBudget,
   createTimeoutBudgetError,
-  evaluateSharedMetadataNodeCoverage,
-  getControlPlaneRetryAfterMs,
-  getRegisteredControlPlaneSystemTableGateway,
   guardedAdaptAdminAction,
   isAdminMessageDispatchable,
-  isRetryableControlPlaneError,
   normalizeIdentifier,
   normalizeSql,
   parseDiscoveryBooleanQuery,
   parseDiscoveryListQuery,
   parseLiveSelect,
   parseServiceDiscoverySqlQuery,
-  resolveLoadLaneQueryAdmissionState,
   resolveRequestedQueryTimeoutMs,
   resolveSqlEngineControlPlaneReadinessService,
   resolveSqlRequestTimeoutBudgetMs,
-  websocket,
 } = ADMIN_WEBSOCKET_API_SHARED;
 
 class AdminWebSocketAPISegment3 extends AdminWebSocketAPISegment2 {
@@ -178,10 +112,10 @@ class AdminWebSocketAPISegment3 extends AdminWebSocketAPISegment2 {
   matchesLocalSystemTableObservationLike(value, pattern) {
     const normalizedValue = String(value ?? EMPTY_STRING);
     const normalizedPattern = String(pattern ?? EMPTY_STRING)
-      .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-      .replace(/%/g, ".*")
-      .replace(/_/g, ".");
-    return new RegExp(`^${normalizedPattern}$`, "i").test(normalizedValue);
+      .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      .replace(/%/g, '.*')
+      .replace(/_/g, '.');
+    return new RegExp(`^${normalizedPattern}$`, 'i').test(normalizedValue);
   }
 
   /**
@@ -259,7 +193,7 @@ class AdminWebSocketAPISegment3 extends AdminWebSocketAPISegment2 {
 
     const routed = guardedAdaptAdminAction(
       ADMIN_META_ACTION.EXECUTE_QUERY,
-      { sql, queryParams: params },
+      {sql, queryParams: params},
       this.systemTableCache,
       this.resolveMutationGuardMode(),
     );
@@ -440,33 +374,33 @@ class AdminWebSocketAPISegment3 extends AdminWebSocketAPISegment2 {
     });
 
     switch (message.type) {
-      case MessageType.QUERY:
-        this.handleDispatchableAdminMessage(clientInfo, message);
-        break;
+    case MessageType.QUERY:
+      this.handleDispatchableAdminMessage(clientInfo, message);
+      break;
 
-      case MessageType.PARTITION_CALLBACK:
-        this.handleDispatchableAdminMessage(clientInfo, message);
-        break;
+    case MessageType.PARTITION_CALLBACK:
+      this.handleDispatchableAdminMessage(clientInfo, message);
+      break;
 
-      case MessageType.REFRESH:
-        this.handleDispatchableAdminMessage(clientInfo, message);
-        break;
+    case MessageType.REFRESH:
+      this.handleDispatchableAdminMessage(clientInfo, message);
+      break;
 
-      case MessageType.LIVE_QUERY_SUBSCRIBE:
-        this.handleLiveQuerySubscribe(clientInfo, message);
-        break;
+    case MessageType.LIVE_QUERY_SUBSCRIBE:
+      this.handleLiveQuerySubscribe(clientInfo, message);
+      break;
 
-      case MessageType.LIVE_QUERY_UNSUBSCRIBE:
-        this.handleLiveQueryUnsubscribe(clientInfo, message);
-        break;
+    case MessageType.LIVE_QUERY_UNSUBSCRIBE:
+      this.handleLiveQueryUnsubscribe(clientInfo, message);
+      break;
 
-      default:
-        // Ignore unknown message types (Requirement 32.38)
-        this.logger.debug(ADMIN_LOG_MSG.UNKNOWN_MESSAGE, {
-          clientId: clientInfo.id,
-          type: message.type,
-        });
-        break;
+    default:
+      // Ignore unknown message types (Requirement 32.38)
+      this.logger.debug(ADMIN_LOG_MSG.UNKNOWN_MESSAGE, {
+        clientId: clientInfo.id,
+        type: message.type,
+      });
+      break;
     }
   }
 
@@ -518,7 +452,7 @@ class AdminWebSocketAPISegment3 extends AdminWebSocketAPISegment2 {
       const parser = new SQLParser(selectSql);
       const ast = parser.parse();
 
-      const registrationResult = { partitions: [] };
+      const registrationResult = {partitions: []};
       const liveClient = {
         id: clientInfo.id,
         send: (data) => {
@@ -683,9 +617,9 @@ class AdminWebSocketAPISegment3 extends AdminWebSocketAPISegment2 {
         return;
       }
 
-      const deliveryResults = Array.isArray(deliveryPayload.results)
-        ? deliveryPayload.results
-        : [];
+      const deliveryResults = Array.isArray(deliveryPayload.results) ?
+        deliveryPayload.results :
+        [];
       this.sendQueryResult(clientInfo, queryId || envelope.messageId, {
         operation,
         results: deliveryResults,
@@ -735,7 +669,7 @@ class AdminWebSocketAPISegment3 extends AdminWebSocketAPISegment2 {
     if (!report) {
       reply
         .code(HTTP_STATUS.SERVICE_UNAVAILABLE)
-        .send({ error: ADMIN_ERROR_MESSAGE.SERVICE_DIAGNOSTICS_UNAVAILABLE });
+        .send({error: ADMIN_ERROR_MESSAGE.SERVICE_DIAGNOSTICS_UNAVAILABLE});
       return;
     }
 
@@ -876,9 +810,9 @@ class AdminWebSocketAPISegment3 extends AdminWebSocketAPISegment2 {
       request?.query?.[ADMIN_SERVICE_DISCOVERY.QUERY_TABLE_NAME_KEY],
     );
     const resolvedUnhealthyPolicy =
-      unhealthyPolicy === ENDPOINT_SYNC_UNHEALTHY_POLICY.EXCLUDE
-        ? ENDPOINT_SYNC_UNHEALTHY_POLICY.EXCLUDE
-        : ENDPOINT_SYNC_UNHEALTHY_POLICY.NOT_READY;
+      unhealthyPolicy === ENDPOINT_SYNC_UNHEALTHY_POLICY.EXCLUDE ?
+        ENDPOINT_SYNC_UNHEALTHY_POLICY.EXCLUDE :
+        ENDPOINT_SYNC_UNHEALTHY_POLICY.NOT_READY;
 
     try {
       const snapshot =
@@ -1366,24 +1300,24 @@ class AdminWebSocketAPISegment3 extends AdminWebSocketAPISegment2 {
 
   applyQueryResultMessagePayload(message, result, payloadContext) {
     switch (payloadContext.kind) {
-      case QUERY_RESULT_MESSAGE_KIND.ERROR:
-        this.applyErrorQueryResultMessagePayload(message, result);
-        return;
-      case QUERY_RESULT_MESSAGE_KIND.HOST_CALLBACK:
-        this.applyHostCallbackQueryResultMessagePayload(message, result);
-        return;
-      case QUERY_RESULT_MESSAGE_KIND.WRITE:
-        this.applyWriteQueryResultMessagePayload(
-          message,
-          result,
-          payloadContext,
-        );
-        return;
-      case QUERY_RESULT_MESSAGE_KIND.ROWS:
-        this.applyRowsQueryResultMessagePayload(message, result);
-        return;
-      default:
-        this.applyDefaultWriteQueryResultMessagePayload(message, result);
+    case QUERY_RESULT_MESSAGE_KIND.ERROR:
+      this.applyErrorQueryResultMessagePayload(message, result);
+      return;
+    case QUERY_RESULT_MESSAGE_KIND.HOST_CALLBACK:
+      this.applyHostCallbackQueryResultMessagePayload(message, result);
+      return;
+    case QUERY_RESULT_MESSAGE_KIND.WRITE:
+      this.applyWriteQueryResultMessagePayload(
+        message,
+        result,
+        payloadContext,
+      );
+      return;
+    case QUERY_RESULT_MESSAGE_KIND.ROWS:
+      this.applyRowsQueryResultMessagePayload(message, result);
+      return;
+    default:
+      this.applyDefaultWriteQueryResultMessagePayload(message, result);
     }
   }
 

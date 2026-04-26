@@ -88,7 +88,9 @@ function createInProcHttpPost(seedApi) {
       let parsedPayload = null;
       try {
         parsedPayload = res.json();
-      } catch (_error) {}
+      } catch (_error) {
+        void _error;
+      }
 
       const isLeaderMetadataRetry =
         res.statusCode === 503 &&

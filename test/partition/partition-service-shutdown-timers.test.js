@@ -17,7 +17,6 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 import {CDC_OPERATION} from '../../src/constants/cdc.js';
 import {NUM} from '../../src/constants/index.js';
 import {
-  PARTITION_SERVICE_DEFAULT,
 } from '../../src/partition/partition-service-constants.js';
 import {
   SYSTEM_TABLE_NAME,

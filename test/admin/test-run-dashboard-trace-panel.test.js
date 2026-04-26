@@ -20,7 +20,7 @@ describe('test-run dashboard trace panel', () => {
   it('wires websocket endpoint and bounded rendering logic', async () => {
     const html = await readFile(DASHBOARD_PATH, 'utf8');
 
-    assert.ok(html.includes("traceWs: '/api/admin/debug/trace'"));
+    assert.ok(html.includes('traceWs: \'/api/admin/debug/trace\''));
     assert.ok(html.includes('const TRACE_DISPLAY_LIMIT = 2000;'));
     assert.ok(html.includes('function connectTraceStream()'));
     assert.ok(html.includes('function disconnectTraceStream()'));

@@ -11,32 +11,24 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 import {
   ControlPlaneField,
   ControlPlaneMessageType,
-  CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE,
 } from '../../src/control-plane/control-plane-constants.js';
 import {
-  SYSTEM_TABLE_NAME,
 } from '../../src/bootstrap/system-table-schemas-constants.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {RECONCILE_REASON} from '../../src/workflow/reconcile-queue-constants.js';
 import {
-  NODE_STATE_UPDATE_RETRY_CLASS,
-  NODE_STATE_UPDATE_RETRY_POLICY,
 } from '../../src/control-plane/replica-dispatch-service-constants.js';
 import {
-  CONTROL_PLANE_WORKLOAD_CLASS,
 } from '../../src/control-plane/control-plane-workload-profile.js';
 import {
-  MESSAGE_GROUP_CDC_INGRESS_ACTION,
 } from '../../src/message-group/message-group-forwarding-owner.js';
 import {
   REPLICA_OPERATION_VISIBILITY_READ_MODE,
 } from '../../src/rebalancer/replica-operation-repository.js';
 import {
-  COLUMN,
   NUM,
-  TYPEOF,
   SERVICE_STATUS,
   STATE,
   WORKFLOW_STEP,
@@ -134,133 +126,127 @@ function createService(options = {}) {
   return service;
 }
 
-const TEST_MEMBERSHIP_PUBLICATION_STATUS = Object.freeze({
-  ACK_PENDING: 'ACK_PENDING',
-  OPEN: 'OPEN',
-  PUBLISHED: 'PUBLISHED',
-});
 
 test('ReplicaDispatchService rehydrates retry dispatches through the ' +
   'coordinator repository authoritative operation owner path',
-  async (t) => {
-    initEnv();
+async (t) => {
+  initEnv();
 
-    const now = Date.now();
-    let repositoryReadCalls = 0;
-    let gatewayReadCalls = 0;
-    let dispatchCalls = 0;
-    const authoritativeOperation = {
-      operationId: 'op-repository-authoritative-retry-1',
-      type: OperationType.REPLACE,
-      partitionId: 'control_plane_publications-p1',
-      entityType: 'partition',
-      entityId: 'control_plane_publications-p1',
-      replicaId: 'control_plane_publications-p1-r4',
-      sourceNodeId: 'node-source',
-      targetNodeId: 'node-2',
-      status: 'pending',
-      workflowStep: WORKFLOW_STEP.PENDING,
-      createdAt: now,
-      updatedAt: now,
-      completedAt: null,
-      errorMessage: null,
-      stepsHistory: [],
-    };
+  const now = Date.now();
+  let repositoryReadCalls = 0;
+  let gatewayReadCalls = 0;
+  let dispatchCalls = 0;
+  const authoritativeOperation = {
+    operationId: 'op-repository-authoritative-retry-1',
+    type: OperationType.REPLACE,
+    partitionId: 'control_plane_publications-p1',
+    entityType: 'partition',
+    entityId: 'control_plane_publications-p1',
+    replicaId: 'control_plane_publications-p1-r4',
+    sourceNodeId: 'node-source',
+    targetNodeId: 'node-2',
+    status: 'pending',
+    workflowStep: WORKFLOW_STEP.PENDING,
+    createdAt: now,
+    updatedAt: now,
+    completedAt: null,
+    errorMessage: null,
+    stepsHistory: [],
+  };
 
-    const service = new ReplicaDispatchService({
-      nodeId: 'node-1',
-      messageRouter: {},
-      cdcIntegrationService: {
-        updateSystemTableRow: async () => ({success: true}),
-        upsertSystemTableRow: async () => ({success: true}),
+  const service = new ReplicaDispatchService({
+    nodeId: 'node-1',
+    messageRouter: {},
+    cdcIntegrationService: {
+      updateSystemTableRow: async () => ({success: true}),
+      upsertSystemTableRow: async () => ({success: true}),
+    },
+    controlPlaneSystemTableGateway: {
+      async readAuthoritativeRows() {
+        gatewayReadCalls += 1;
+        return {
+          success: true,
+          rows: [],
+        };
       },
-      controlPlaneSystemTableGateway: {
-        async readAuthoritativeRows() {
-          gatewayReadCalls += 1;
-          return {
-            success: true,
-            rows: [],
-          };
-        },
-      },
-      controlPlaneReadinessService: {
-        getNodeReadinessSync(nodeId) {
-          return {
-            nodeId,
-            observedAt: new Date(now).toISOString(),
-            dimensions: {
-              [CONTROL_PLANE_READINESS_DIMENSION
-                .CONTROL_PLANE_RECOVERY_ELIGIBLE]: true,
-            },
-            reasons: [],
-          };
-        },
-      },
-      systemTableCache: {
-        get() {
-          return null;
-        },
-        getAll() {
-          return [];
-        },
-      },
-      rebalanceCoordinator: {
-        repository: {
-          async queryAuthoritativeOperationById(operationId, options = {}) {
-            repositoryReadCalls += 1;
-            t.equal(
-              operationId,
-              authoritativeOperation.operationId,
-              'the canonical repository read should target the deferred operation id',
-            );
-            t.equal(
-              options.requireOwnerRpcRead,
-              false,
-              'dispatch retry rehydration should reuse the repository owner read contract',
-            );
-            return {...authoritativeOperation};
+    },
+    controlPlaneReadinessService: {
+      getNodeReadinessSync(nodeId) {
+        return {
+          nodeId,
+          observedAt: new Date(now).toISOString(),
+          dimensions: {
+            [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
           },
-        },
-        async dispatchOperation(operation) {
-          dispatchCalls += 1;
+          reasons: [],
+        };
+      },
+    },
+    systemTableCache: {
+      get() {
+        return null;
+      },
+      getAll() {
+        return [];
+      },
+    },
+    rebalanceCoordinator: {
+      repository: {
+        async queryAuthoritativeOperationById(operationId, options = {}) {
+          repositoryReadCalls += 1;
           t.equal(
-            operation.operationId,
+            operationId,
             authoritativeOperation.operationId,
-            'dispatch should receive the operation rehydrated from the repository owner path',
+            'the canonical repository read should target the deferred operation id',
           );
-          return {success: true};
-        },
-        isOperationLocallyOwned() {
-          return true;
+          t.equal(
+            options.requireOwnerRpcRead,
+            false,
+            'dispatch retry rehydration should reuse the repository owner read contract',
+          );
+          return {...authoritativeOperation};
         },
       },
-    });
-    service.initialize();
-
-    try {
-      await service.reconcileOperationDispatch(
-        authoritativeOperation.operationId,
-      );
-
-      t.equal(
-        repositoryReadCalls,
-        1,
-        'retry dispatch lookup should consult the canonical repository owner path once',
-      );
-      t.equal(
-        gatewayReadCalls,
-        0,
-        'gateway row reads should be bypassed when the coordinator repository owner is available',
-      );
-      t.equal(
-        dispatchCalls,
-        1,
-        'retry dispatch should continue once the authoritative owner row is rehydrated',
-      );
-    } finally {
-      service.stop();
-    }
+      async dispatchOperation(operation) {
+        dispatchCalls += 1;
+        t.equal(
+          operation.operationId,
+          authoritativeOperation.operationId,
+          'dispatch should receive the operation rehydrated from the repository owner path',
+        );
+        return {success: true};
+      },
+      isOperationLocallyOwned() {
+        return true;
+      },
+    },
   });
+  service.initialize();
+
+  try {
+    await service.reconcileOperationDispatch(
+      authoritativeOperation.operationId,
+    );
+
+    t.equal(
+      repositoryReadCalls,
+      1,
+      'retry dispatch lookup should consult the canonical repository owner path once',
+    );
+    t.equal(
+      gatewayReadCalls,
+      0,
+      'gateway row reads should be bypassed when the coordinator repository owner is available',
+    );
+    t.equal(
+      dispatchCalls,
+      1,
+      'retry dispatch should continue once the authoritative owner row is rehydrated',
+    );
+  } finally {
+    service.stop();
+  }
+});
 
 test('ReplicaDispatchService demotes non-ready node-state churn to the ' +
   'background lane', async (t) => {

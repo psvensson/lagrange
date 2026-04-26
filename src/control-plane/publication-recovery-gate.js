@@ -18,7 +18,7 @@ const PUBLICATION_OBSERVATION_STATE_UNPUBLISHED = 'unpublished';
 
 const PUBLICATION_PRIORITY_SPREAD_DECISION_SOURCE = Object.freeze({
   CLOSURE_WITNESS: 'closure_witness',
-  LEGACY_SIGNALS: 'legacy_signals',
+  OWNER_EVIDENCE_UNAVAILABLE: 'owner_evidence_unavailable',
   PRIORITY_PARTITION_SUMMARY: 'priority_partition_summary',
 });
 
@@ -26,6 +26,8 @@ const PUBLICATION_RECOVERY_GATE_STATE = Object.freeze({
   UNPUBLISHED_OBSERVATION: 'unpublished_observation',
   PUBLICATION_PENDING: 'publication_pending',
   ACK_PENDING: 'ack_pending',
+  PRIORITY_SPREAD_EVIDENCE_UNAVAILABLE:
+    'priority_spread_evidence_unavailable',
   PRIORITY_SPREAD_PENDING: 'priority_spread_pending',
   READY: 'ready',
 });
@@ -78,13 +80,42 @@ function normalizePriorityRecoveryClosureWitness(value) {
     null;
 }
 
+function readPriorityRecoveryDecisionClosureWitness(
+  priorityRecoveryDecisionSnapshots,
+) {
+  return normalizePriorityRecoveryClosureWitness(
+    priorityRecoveryDecisionSnapshots?.closureWitness,
+  );
+}
+
+function requiresPrioritySpreadOwnerEvidence(options = {}) {
+  const recoveryProtocolState = normalizeOptionalString(
+    options.recoveryProtocolState,
+  );
+  if (
+    recoveryProtocolState === RECOVERY_PROTOCOL_STATE.PRIORITY_SPREAD_PENDING
+  ) {
+    return true;
+  }
+  const reasonCodes = Array.isArray(options.reasonCodes) ?
+    options.reasonCodes :
+    [];
+  return reasonCodes.includes(
+    CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PRIORITY_PARTITIONS_NOT_SPREAD,
+  );
+}
+
 function buildPrioritySpreadDecision(options = {}) {
   const durablePriorityPartitionSummary = normalizePriorityPartitionSummary(
     options.priorityPartitionSummary,
   );
+  const decisionSnapshotClosureWitness =
+    readPriorityRecoveryDecisionClosureWitness(
+      options.priorityRecoveryDecisionSnapshots,
+    );
   const priorityRecoveryClosureWitness = normalizePriorityRecoveryClosureWitness(
     options.priorityRecoveryClosureWitness,
-  ) || buildPriorityRecoveryClosureWitness({
+  ) || decisionSnapshotClosureWitness || buildPriorityRecoveryClosureWitness({
     decisionSnapshots: options.priorityRecoveryDecisionSnapshots,
     priorityPartitionSummary: durablePriorityPartitionSummary,
   });
@@ -98,11 +129,11 @@ function buildPrioritySpreadDecision(options = {}) {
   const reasonCodes = Array.isArray(options.reasonCodes) ?
     options.reasonCodes :
     [];
-  const legacyPrioritySpreadPending =
-    recoveryProtocolState === RECOVERY_PROTOCOL_STATE.PRIORITY_SPREAD_PENDING ||
-    reasonCodes.includes(
-      CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PRIORITY_PARTITIONS_NOT_SPREAD,
-    );
+  const prioritySpreadOwnerEvidenceRequired =
+    requiresPrioritySpreadOwnerEvidence({
+      recoveryProtocolState,
+      reasonCodes,
+    });
   const closureWitnessPrioritySpreadPending =
     typeof priorityRecoveryClosureWitness?.prioritySpreadPending === TYPEOF.BOOLEAN ?
       priorityRecoveryClosureWitness.prioritySpreadPending :
@@ -111,43 +142,63 @@ function buildPrioritySpreadDecision(options = {}) {
     priorityPartitionSummary ?
       hasPriorityRecoverySpreadGap(priorityPartitionSummary) :
       null;
+  const prioritySpreadEvidenceUnavailable =
+    !priorityRecoveryClosureWitness &&
+    !priorityPartitionSummary &&
+    prioritySpreadOwnerEvidenceRequired === true;
   const decisionSource = priorityRecoveryClosureWitness ?
     PUBLICATION_PRIORITY_SPREAD_DECISION_SOURCE.CLOSURE_WITNESS :
     priorityPartitionSummary ?
       PUBLICATION_PRIORITY_SPREAD_DECISION_SOURCE.PRIORITY_PARTITION_SUMMARY :
-      PUBLICATION_PRIORITY_SPREAD_DECISION_SOURCE.LEGACY_SIGNALS;
+      PUBLICATION_PRIORITY_SPREAD_DECISION_SOURCE.OWNER_EVIDENCE_UNAVAILABLE;
 
   return Object.freeze({
     decisionSource,
     priorityPartitionSummary,
     durablePriorityPartitionSummary,
     priorityRecoveryClosureWitness,
+    prioritySpreadEvidenceUnavailable,
     prioritySpreadPending:
       priorityRecoveryClosureWitness ?
         closureWitnessPrioritySpreadPending :
-      priorityPartitionSummary ?
-        summaryPrioritySpreadPending :
-        legacyPrioritySpreadPending,
+        priorityPartitionSummary ?
+          summaryPrioritySpreadPending :
+          false,
   });
 }
 
-function shouldRetainPriorityRecoveryReasonCode(reasonCode, prioritySpreadDecision) {
+function shouldRetainPriorityRecoveryReasonCode(
+  reasonCode,
+  prioritySpreadDecision,
+  prioritySpreadEvidenceUnavailableReasonActive,
+) {
   if (
     reasonCode !==
     CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PRIORITY_PARTITIONS_NOT_SPREAD
   ) {
     return true;
   }
-  return prioritySpreadDecision.prioritySpreadPending === true;
+  if (prioritySpreadEvidenceUnavailableReasonActive === true) {
+    return false;
+  }
+  return (
+    prioritySpreadDecision.prioritySpreadPending === true ||
+    prioritySpreadDecision.prioritySpreadEvidenceUnavailable === true
+  );
 }
 
 function filterProvidedPriorityRecoveryReasonCodes(
   providedReasonCodes,
   prioritySpreadDecision,
+  prioritySpreadEvidenceUnavailableReasonActive,
 ) {
   return Object.freeze(
     providedReasonCodes.filter((reasonCode) =>
-      shouldRetainPriorityRecoveryReasonCode(reasonCode, prioritySpreadDecision),
+      shouldRetainPriorityRecoveryReasonCode(
+        reasonCode,
+        prioritySpreadDecision,
+        prioritySpreadEvidenceUnavailableReasonActive,
+      ),
     ),
   );
 }
@@ -206,6 +257,9 @@ function resolvePublicationRecoveryGateState(context = {}) {
   if (context.publicationPending === true) {
     return PUBLICATION_RECOVERY_GATE_STATE.PUBLICATION_PENDING;
   }
+  if (context.prioritySpreadEvidenceUnavailable === true) {
+    return PUBLICATION_RECOVERY_GATE_STATE.PRIORITY_SPREAD_EVIDENCE_UNAVAILABLE;
+  }
   if (context.prioritySpreadPending === true) {
     return PUBLICATION_RECOVERY_GATE_STATE.PRIORITY_SPREAD_PENDING;
   }
@@ -246,10 +300,28 @@ function buildPublicationRecoveryGateSnapshot(options = {}) {
     reasonCodes: providedReasonCodes,
   });
   const prioritySpreadPending = prioritySpreadDecision.prioritySpreadPending;
+  const prioritySpreadEvidenceUnavailable =
+    prioritySpreadDecision.prioritySpreadEvidenceUnavailable === true;
+  const initialPublicationPending = resolvePublicationPending({
+    publicationStatus: options.publicationStatus,
+    recoveryProtocolState: options.recoveryProtocolState,
+    reasonCodes: providedReasonCodes,
+    missingPublishedCount: missingPublishedNodeIds.length,
+  });
+  const prioritySpreadEvidenceUnavailableReasonActive =
+    prioritySpreadEvidenceUnavailable === true &&
+    initialPublicationPending !== true &&
+    effectivePendingAckNodeIds.length === NUM.ZERO;
   const retainedProvidedReasonCodes = filterProvidedPriorityRecoveryReasonCodes(
     providedReasonCodes,
     prioritySpreadDecision,
+    prioritySpreadEvidenceUnavailableReasonActive,
   );
+  const appendPrioritySpreadEvidenceUnavailableReason =
+    prioritySpreadEvidenceUnavailableReasonActive === true &&
+    !retainedProvidedReasonCodes.includes(
+      CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PRIORITY_PARTITIONS_NOT_SPREAD,
+    );
   const publicationPending = resolvePublicationPending({
     publicationStatus: options.publicationStatus,
     recoveryProtocolState: options.recoveryProtocolState,
@@ -260,9 +332,13 @@ function buildPublicationRecoveryGateSnapshot(options = {}) {
     options.publicationStatus,
   );
   const reasonCodes = [
-    ...retainedProvidedReasonCodes,
     ...(publicationPending || effectivePendingAckNodeIds.length > NUM.ZERO ? [
       CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PUBLICATION_EPOCH_PENDING,
+    ] : []),
+    ...retainedProvidedReasonCodes,
+    ...(appendPrioritySpreadEvidenceUnavailableReason ? [
+      CONTROL_PLANE_PRIORITY_RECOVERY_REASON
+        .PRIORITY_SPREAD_EVIDENCE_UNAVAILABLE,
     ] : []),
     ...(prioritySpreadPending ? [
       CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PRIORITY_PARTITIONS_NOT_SPREAD,
@@ -275,6 +351,7 @@ function buildPublicationRecoveryGateSnapshot(options = {}) {
     publicationStatusNormalized,
     publicationPending,
     prioritySpreadPending,
+    prioritySpreadEvidenceUnavailable,
     pendingAckCount: effectivePendingAckNodeIds.length,
   });
 
@@ -302,6 +379,8 @@ function buildPublicationRecoveryGateSnapshot(options = {}) {
       prioritySpreadDecision.priorityRecoveryClosureWitness ?
         Object.freeze({...prioritySpreadDecision.priorityRecoveryClosureWitness}) :
         null,
+    prioritySpreadDecisionSource: prioritySpreadDecision.decisionSource,
+    prioritySpreadEvidenceUnavailable,
     closureRecordId:
       prioritySpreadDecision.priorityRecoveryClosureWitness?.closureRecordId ||
       null,

@@ -65,26 +65,26 @@ function normalizePriorityRecoveryBlockedPartitions(blockedPartitions) {
         return null;
       }
       const spreadGap = normalizeNonNegativeInteger(
-        Number.isFinite(blockedPartition?.spreadGap)
-          ? blockedPartition.spreadGap
-          : blockedPartition?.spread_gap,
+        Number.isFinite(blockedPartition?.spreadGap) ?
+          blockedPartition.spreadGap :
+          blockedPartition?.spread_gap,
       );
       const requiredDistinctNodeCount = normalizeNonNegativeInteger(
-        Number.isFinite(blockedPartition?.requiredDistinctNodeCount)
-          ? blockedPartition.requiredDistinctNodeCount
-          : blockedPartition?.required_distinct_node_count,
+        Number.isFinite(blockedPartition?.requiredDistinctNodeCount) ?
+          blockedPartition.requiredDistinctNodeCount :
+          blockedPartition?.required_distinct_node_count,
       );
       const readyDistinctNodeCount = normalizeNonNegativeInteger(
-        Number.isFinite(blockedPartition?.readyDistinctNodeCount)
-          ? blockedPartition.readyDistinctNodeCount
-          : blockedPartition?.ready_distinct_node_count,
+        Number.isFinite(blockedPartition?.readyDistinctNodeCount) ?
+          blockedPartition.readyDistinctNodeCount :
+          blockedPartition?.ready_distinct_node_count,
       );
       return {
         partitionId,
         ...(spreadGap !== null ? {spreadGap} : {}),
-        ...(requiredDistinctNodeCount !== null
-          ? {requiredDistinctNodeCount}
-          : {}),
+        ...(requiredDistinctNodeCount !== null ?
+          {requiredDistinctNodeCount} :
+          {}),
         ...(readyDistinctNodeCount !== null ? {readyDistinctNodeCount} : {}),
         reasons: normalizeDistinctStringArray(
           blockedPartition?.reasons || blockedPartition?.reason_codes,
@@ -142,253 +142,253 @@ function normalizePriorityRecoveryPartitionWitnessesForDiagnostics(witnesses) {
         partitionId,
         ...(normalizeStringField(
           witness?.semanticStateId ?? witness?.semantic_state_id,
-        )
-          ? {
-              semanticStateId: normalizeStringField(
-                witness?.semanticStateId ?? witness?.semantic_state_id,
-              ),
-            }
-          : {}),
+        ) ?
+          {
+            semanticStateId: normalizeStringField(
+              witness?.semanticStateId ?? witness?.semantic_state_id,
+            ),
+          } :
+          {}),
         ...(normalizeNonNegativeInteger(
           witness?.spreadGap ?? witness?.spread_gap,
-        ) !== null
-          ? {
-              spreadGap: normalizeNonNegativeInteger(
-                witness?.spreadGap ?? witness?.spread_gap,
-              ),
-            }
-          : {}),
+        ) !== null ?
+          {
+            spreadGap: normalizeNonNegativeInteger(
+              witness?.spreadGap ?? witness?.spread_gap,
+            ),
+          } :
+          {}),
         ...(normalizeNonNegativeInteger(
           witness?.readyDistinctNodeCount ?? witness?.ready_distinct_node_count,
-        ) !== null
-          ? {
-              readyDistinctNodeCount: normalizeNonNegativeInteger(
-                witness?.readyDistinctNodeCount ??
+        ) !== null ?
+          {
+            readyDistinctNodeCount: normalizeNonNegativeInteger(
+              witness?.readyDistinctNodeCount ??
                   witness?.ready_distinct_node_count,
-              ),
-            }
-          : {}),
+            ),
+          } :
+          {}),
         ...(normalizeNonNegativeInteger(
           witness?.requiredDistinctNodeCount ??
             witness?.required_distinct_node_count,
-        ) !== null
-          ? {
-              requiredDistinctNodeCount: normalizeNonNegativeInteger(
-                witness?.requiredDistinctNodeCount ??
+        ) !== null ?
+          {
+            requiredDistinctNodeCount: normalizeNonNegativeInteger(
+              witness?.requiredDistinctNodeCount ??
                   witness?.required_distinct_node_count,
-              ),
-            }
-          : {}),
+            ),
+          } :
+          {}),
         ...(progressClassIds.length > ZERO ? {progressClassIds} : {}),
         ...(blockerReasonCodes.length > ZERO ? {blockerReasonCodes} : {}),
         ...(normalizeStringField(
           witness?.authoritativeVisibilityState ??
             witness?.authoritative_visibility_state,
-        )
-          ? {
-              authoritativeVisibilityState: normalizeStringField(
-                witness?.authoritativeVisibilityState ??
+        ) ?
+          {
+            authoritativeVisibilityState: normalizeStringField(
+              witness?.authoritativeVisibilityState ??
                   witness?.authoritative_visibility_state,
-              ),
-            }
-          : {}),
+            ),
+          } :
+          {}),
         ...(normalizeStringField(
           witness?.removeSafetyState ?? witness?.remove_safety_state,
-        )
-          ? {
-              removeSafetyState: normalizeStringField(
-                witness?.removeSafetyState ?? witness?.remove_safety_state,
-              ),
-            }
-          : {}),
+        ) ?
+          {
+            removeSafetyState: normalizeStringField(
+              witness?.removeSafetyState ?? witness?.remove_safety_state,
+            ),
+          } :
+          {}),
         ...(normalizeStringField(
           witness?.transportPressureState ??
             witness?.transport_pressure_state,
-        )
-          ? {
-              transportPressureState: normalizeStringField(
-                witness?.transportPressureState ??
+        ) ?
+          {
+            transportPressureState: normalizeStringField(
+              witness?.transportPressureState ??
                   witness?.transport_pressure_state,
-              ),
-            }
-          : {}),
+            ),
+          } :
+          {}),
         ...(normalizeStringField(
           witness?.progressContractState ?? witness?.progress_contract_state,
-        )
-          ? {
-              progressContractState: normalizeStringField(
-                witness?.progressContractState ??
+        ) ?
+          {
+            progressContractState: normalizeStringField(
+              witness?.progressContractState ??
                   witness?.progress_contract_state,
-              ),
-            }
-          : {}),
+            ),
+          } :
+          {}),
         ...(normalizeStringField(
           witness?.progressNextAction ?? witness?.progress_next_action,
-        )
-          ? {
-              progressNextAction: normalizeStringField(
-                witness?.progressNextAction ?? witness?.progress_next_action,
-              ),
-            }
-          : {}),
+        ) ?
+          {
+            progressNextAction: normalizeStringField(
+              witness?.progressNextAction ?? witness?.progress_next_action,
+            ),
+          } :
+          {}),
         ...(normalizeStringField(
           witness?.actuationState ?? witness?.actuation_state,
-        )
-          ? {
-              actuationState: normalizeStringField(
-                witness?.actuationState ?? witness?.actuation_state,
-              ),
-            }
-          : {}),
+        ) ?
+          {
+            actuationState: normalizeStringField(
+              witness?.actuationState ?? witness?.actuation_state,
+            ),
+          } :
+          {}),
         ...(normalizeStringField(
           witness?.actuationOwner ?? witness?.actuation_owner,
-        )
-          ? {
-              actuationOwner: normalizeStringField(
-                witness?.actuationOwner ?? witness?.actuation_owner,
-              ),
-            }
-          : {}),
-        ...(normalizeStringField(witness?.currentOwner ?? witness?.current_owner)
-          ? {
-              currentOwner: normalizeStringField(
-                witness?.currentOwner ?? witness?.current_owner,
-              ),
-            }
-          : {}),
+        ) ?
+          {
+            actuationOwner: normalizeStringField(
+              witness?.actuationOwner ?? witness?.actuation_owner,
+            ),
+          } :
+          {}),
+        ...(normalizeStringField(witness?.currentOwner ?? witness?.current_owner) ?
+          {
+            currentOwner: normalizeStringField(
+              witness?.currentOwner ?? witness?.current_owner,
+            ),
+          } :
+          {}),
         ...(normalizeStringField(
           witness?.nextRequiredAction ?? witness?.next_required_action,
-        )
-          ? {
-              nextRequiredAction: normalizeStringField(
-                witness?.nextRequiredAction ?? witness?.next_required_action,
-              ),
-            }
-          : {}),
+        ) ?
+          {
+            nextRequiredAction: normalizeStringField(
+              witness?.nextRequiredAction ?? witness?.next_required_action,
+            ),
+          } :
+          {}),
         ...(normalizeStringField(
           witness?.blockingBoundary ?? witness?.blocking_boundary,
-        )
-          ? {
-              blockingBoundary: normalizeStringField(
-                witness?.blockingBoundary ?? witness?.blocking_boundary,
-              ),
-            }
-          : {}),
-        ...(normalizeStringField(witness?.waitMode ?? witness?.wait_mode)
-          ? {
-              waitMode: normalizeStringField(
-                witness?.waitMode ?? witness?.wait_mode,
-              ),
-            }
-          : {}),
+        ) ?
+          {
+            blockingBoundary: normalizeStringField(
+              witness?.blockingBoundary ?? witness?.blocking_boundary,
+            ),
+          } :
+          {}),
+        ...(normalizeStringField(witness?.waitMode ?? witness?.wait_mode) ?
+          {
+            waitMode: normalizeStringField(
+              witness?.waitMode ?? witness?.wait_mode,
+            ),
+          } :
+          {}),
         ...(normalizeStringField(
           witness?.workflowProgressPhaseId ??
             witness?.workflow_progress_phase_id,
-        )
-          ? {
-              workflowProgressPhaseId: normalizeStringField(
-                witness?.workflowProgressPhaseId ??
+        ) ?
+          {
+            workflowProgressPhaseId: normalizeStringField(
+              witness?.workflowProgressPhaseId ??
                   witness?.workflow_progress_phase_id,
-              ),
-            }
-          : {}),
+            ),
+          } :
+          {}),
         ...(normalizeNonNegativeInteger(
           witness?.stepAgeMs ?? witness?.step_age_ms,
-        ) !== null
-          ? {
-              stepAgeMs: normalizeNonNegativeInteger(
-                witness?.stepAgeMs ?? witness?.step_age_ms,
-              ),
-            }
-          : {}),
+        ) !== null ?
+          {
+            stepAgeMs: normalizeNonNegativeInteger(
+              witness?.stepAgeMs ?? witness?.step_age_ms,
+            ),
+          } :
+          {}),
         ...(normalizeNonNegativeInteger(
           witness?.stepTimeoutMs ?? witness?.step_timeout_ms,
-        ) !== null
-          ? {
-              stepTimeoutMs: normalizeNonNegativeInteger(
-                witness?.stepTimeoutMs ?? witness?.step_timeout_ms,
-              ),
-            }
-          : {}),
+        ) !== null ?
+          {
+            stepTimeoutMs: normalizeNonNegativeInteger(
+              witness?.stepTimeoutMs ?? witness?.step_timeout_ms,
+            ),
+          } :
+          {}),
         ...(normalizeStringField(
           witness?.pressureState ?? witness?.pressure_state,
-        )
-          ? {
-              pressureState: normalizeStringField(
-                witness?.pressureState ?? witness?.pressure_state,
-              ),
-            }
-          : {}),
+        ) ?
+          {
+            pressureState: normalizeStringField(
+              witness?.pressureState ?? witness?.pressure_state,
+            ),
+          } :
+          {}),
         ...(normalizeNonNegativeInteger(
           witness?.pendingWrites ?? witness?.pending_writes,
-        ) !== null
-          ? {
-              pendingWrites: normalizeNonNegativeInteger(
-                witness?.pendingWrites ?? witness?.pending_writes,
-              ),
-            }
-          : {}),
+        ) !== null ?
+          {
+            pendingWrites: normalizeNonNegativeInteger(
+              witness?.pendingWrites ?? witness?.pending_writes,
+            ),
+          } :
+          {}),
         ...(normalizeNonNegativeInteger(
           witness?.pendingWriteGrowthCount ??
             witness?.pending_write_growth_count,
-        ) !== null
-          ? {
-              pendingWriteGrowthCount: normalizeNonNegativeInteger(
-                witness?.pendingWriteGrowthCount ??
+        ) !== null ?
+          {
+            pendingWriteGrowthCount: normalizeNonNegativeInteger(
+              witness?.pendingWriteGrowthCount ??
                   witness?.pending_write_growth_count,
-              ),
-            }
-          : {}),
+            ),
+          } :
+          {}),
         ...(normalizeNonNegativeInteger(
           witness?.retainedBacklogGrowthCount ??
             witness?.retained_backlog_growth_count,
-        ) !== null
-          ? {
-              retainedBacklogGrowthCount: normalizeNonNegativeInteger(
-                witness?.retainedBacklogGrowthCount ??
+        ) !== null ?
+          {
+            retainedBacklogGrowthCount: normalizeNonNegativeInteger(
+              witness?.retainedBacklogGrowthCount ??
                   witness?.retained_backlog_growth_count,
-              ),
-            }
-          : {}),
+            ),
+          } :
+          {}),
         ...(normalizeNonNegativeInteger(
           witness?.retryAfterMs ?? witness?.retry_after_ms,
-        ) !== null
-          ? {
-              retryAfterMs: normalizeNonNegativeInteger(
-                witness?.retryAfterMs ?? witness?.retry_after_ms,
-              ),
-            }
-          : {}),
+        ) !== null ?
+          {
+            retryAfterMs: normalizeNonNegativeInteger(
+              witness?.retryAfterMs ?? witness?.retry_after_ms,
+            ),
+          } :
+          {}),
         ...(normalizeNonNegativeInteger(
           witness?.lastProgressAtMs ?? witness?.last_progress_at_ms,
-        ) !== null
-          ? {
-              lastProgressAtMs: normalizeNonNegativeInteger(
-                witness?.lastProgressAtMs ?? witness?.last_progress_at_ms,
-              ),
-            }
-          : {}),
+        ) !== null ?
+          {
+            lastProgressAtMs: normalizeNonNegativeInteger(
+              witness?.lastProgressAtMs ?? witness?.last_progress_at_ms,
+            ),
+          } :
+          {}),
         ...(normalizeStringField(
           witness?.correlationKey ?? witness?.correlation_key,
-        )
-          ? {
-              correlationKey: normalizeStringField(
-                witness?.correlationKey ?? witness?.correlation_key,
-              ),
-            }
-          : {}),
+        ) ?
+          {
+            correlationKey: normalizeStringField(
+              witness?.correlationKey ?? witness?.correlation_key,
+            ),
+          } :
+          {}),
         ...(normalizeStringField(
           witness?.decisionDimension ?? witness?.decision_dimension,
-        )
-          ? {
-              decisionDimension: normalizeStringField(
-                witness?.decisionDimension ?? witness?.decision_dimension,
-              ),
-            }
-          : {}),
-        ...(progressEvidenceSourceIds.length > ZERO
-          ? {progressEvidenceSourceIds}
-          : {}),
+        ) ?
+          {
+            decisionDimension: normalizeStringField(
+              witness?.decisionDimension ?? witness?.decision_dimension,
+            ),
+          } :
+          {}),
+        ...(progressEvidenceSourceIds.length > ZERO ?
+          {progressEvidenceSourceIds} :
+          {}),
         witnessIds,
         eligibleNodeIds,
         recoveryEligibleExcludedNodeIds,
@@ -561,25 +561,25 @@ function buildPriorityRecoveryProgressSummary(priorityRecoveryObservation) {
     dominantWitness: selectDominantPriorityRecoveryPartitionWitness(
       partitionWitnesses,
     ),
-    ...(Object.keys(actuationStateCounts).length > ZERO
-      ? {actuationStateCounts}
-      : {}),
-    ...(Object.keys(currentOwnerCounts).length > ZERO
-      ? {currentOwnerCounts}
-      : {}),
-    ...(Object.keys(blockingBoundaryCounts).length > ZERO
-      ? {blockingBoundaryCounts}
-      : {}),
+    ...(Object.keys(actuationStateCounts).length > ZERO ?
+      {actuationStateCounts} :
+      {}),
+    ...(Object.keys(currentOwnerCounts).length > ZERO ?
+      {currentOwnerCounts} :
+      {}),
+    ...(Object.keys(blockingBoundaryCounts).length > ZERO ?
+      {blockingBoundaryCounts} :
+      {}),
     ...(Object.keys(waitModeCounts).length > ZERO ? {waitModeCounts} : {}),
-    ...(Object.keys(nextRequiredActionCounts).length > ZERO
-      ? {nextRequiredActionCounts}
-      : {}),
-    ...(Object.keys(progressContractStateCounts).length > ZERO
-      ? {progressContractStateCounts}
-      : {}),
-    ...(Object.keys(pressureStateCounts).length > ZERO
-      ? {pressureStateCounts}
-      : {}),
+    ...(Object.keys(nextRequiredActionCounts).length > ZERO ?
+      {nextRequiredActionCounts} :
+      {}),
+    ...(Object.keys(progressContractStateCounts).length > ZERO ?
+      {progressContractStateCounts} :
+      {}),
+    ...(Object.keys(pressureStateCounts).length > ZERO ?
+      {pressureStateCounts} :
+      {}),
   };
 }
 
@@ -594,19 +594,19 @@ function normalizePriorityPartitionSummaryForDiagnostics(summary) {
     summary.missingPartitionIds ?? summary.missing_partition_ids,
   );
   const blockedPartitionCount = normalizeNonNegativeInteger(
-    Number.isFinite(summary.blockedPartitionCount)
-      ? summary.blockedPartitionCount
-      : summary?.blocked_partition_count,
+    Number.isFinite(summary.blockedPartitionCount) ?
+      summary.blockedPartitionCount :
+      summary?.blocked_partition_count,
   );
   const totalSpreadGap = normalizeNonNegativeInteger(
-    Number.isFinite(summary.totalSpreadGap)
-      ? summary.totalSpreadGap
-      : summary?.total_spread_gap,
+    Number.isFinite(summary.totalSpreadGap) ?
+      summary.totalSpreadGap :
+      summary?.total_spread_gap,
   );
   const largestSpreadGap = normalizeNonNegativeInteger(
-    Number.isFinite(summary.largestSpreadGap)
-      ? summary.largestSpreadGap
-      : summary?.largest_spread_gap,
+    Number.isFinite(summary.largestSpreadGap) ?
+      summary.largestSpreadGap :
+      summary?.largest_spread_gap,
   );
   const computedTotalSpreadGap = blockedPartitions.reduce(
     (sum, blockedPartition) => sum + (blockedPartition?.spreadGap || ZERO),
@@ -618,47 +618,47 @@ function normalizePriorityPartitionSummaryForDiagnostics(summary) {
     ZERO,
   );
   const requiredDistinctNodeCount = normalizeNonNegativeInteger(
-    Number.isFinite(summary.requiredDistinctNodeCount)
-      ? summary.requiredDistinctNodeCount
-      : summary?.required_distinct_node_count,
+    Number.isFinite(summary.requiredDistinctNodeCount) ?
+      summary.requiredDistinctNodeCount :
+      summary?.required_distinct_node_count,
   );
   const readyEligibleNodeCount = normalizeNonNegativeInteger(
-    Number.isFinite(summary.readyEligibleNodeCount)
-      ? summary.readyEligibleNodeCount
-      : summary?.ready_eligible_node_count,
+    Number.isFinite(summary.readyEligibleNodeCount) ?
+      summary.readyEligibleNodeCount :
+      summary?.ready_eligible_node_count,
   );
   const totalPriorityPartitionCount = normalizeNonNegativeInteger(
-    Number.isFinite(summary.totalPriorityPartitionCount)
-      ? summary.totalPriorityPartitionCount
-      : summary?.total_priority_partition_count,
+    Number.isFinite(summary.totalPriorityPartitionCount) ?
+      summary.totalPriorityPartitionCount :
+      summary?.total_priority_partition_count,
   );
   const normalizedSummary = {
     ...(summary.satisfied === true ? {satisfied: true} : {}),
     ...(summary.satisfied === false ? {satisfied: false} : {}),
-    ...(requiredDistinctNodeCount !== null
-      ? {requiredDistinctNodeCount}
-      : {}),
+    ...(requiredDistinctNodeCount !== null ?
+      {requiredDistinctNodeCount} :
+      {}),
     ...(readyEligibleNodeCount !== null ? {readyEligibleNodeCount} : {}),
-    ...(totalPriorityPartitionCount !== null
-      ? {totalPriorityPartitionCount}
-      : {}),
+    ...(totalPriorityPartitionCount !== null ?
+      {totalPriorityPartitionCount} :
+      {}),
     ...(missingPartitionIds.length > ZERO ? {missingPartitionIds} : {}),
     ...(blockedPartitions.length > ZERO ? {blockedPartitions} : {}),
-    ...(blockedPartitionCount !== null
-      ? {blockedPartitionCount}
-      : blockedPartitions.length > ZERO
-        ? {blockedPartitionCount: blockedPartitions.length}
-        : {}),
-    ...(largestSpreadGap !== null
-      ? {largestSpreadGap}
-      : blockedPartitions.length > ZERO
-        ? {largestSpreadGap: computedLargestSpreadGap}
-        : {}),
-    ...(totalSpreadGap !== null
-      ? {totalSpreadGap}
-      : blockedPartitions.length > ZERO
-        ? {totalSpreadGap: computedTotalSpreadGap}
-        : {}),
+    ...(blockedPartitionCount !== null ?
+      {blockedPartitionCount} :
+      blockedPartitions.length > ZERO ?
+        {blockedPartitionCount: blockedPartitions.length} :
+        {}),
+    ...(largestSpreadGap !== null ?
+      {largestSpreadGap} :
+      blockedPartitions.length > ZERO ?
+        {largestSpreadGap: computedLargestSpreadGap} :
+        {}),
+    ...(totalSpreadGap !== null ?
+      {totalSpreadGap} :
+      blockedPartitions.length > ZERO ?
+        {totalSpreadGap: computedTotalSpreadGap} :
+        {}),
   };
   return Object.keys(normalizedSummary).length > ZERO ? normalizedSummary : null;
 }

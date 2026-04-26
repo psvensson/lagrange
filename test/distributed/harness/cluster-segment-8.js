@@ -1,5 +1,5 @@
-import { DockerProvider } from './docker-provider.js';
-import { CLUSTER_SEGMENT_7 } from './cluster-segment-7.js';
+import {DockerProvider} from './docker-provider.js';
+import {CLUSTER_SEGMENT_7} from './cluster-segment-7.js';
 import {
   acquireReusableClusterLease,
   bestEffortCleanup,
@@ -26,9 +26,9 @@ function createCluster(config) {
   let providers;
   let hostAssignment;
   const dockerOperationSink =
-    typeof config?.[CLUSTER_CONFIG_DOCKER_OPERATION_SINK] === 'function'
-      ? config[CLUSTER_CONFIG_DOCKER_OPERATION_SINK]
-      : null;
+    typeof config?.[CLUSTER_CONFIG_DOCKER_OPERATION_SINK] === 'function' ?
+      config[CLUSTER_CONFIG_DOCKER_OPERATION_SINK] :
+      null;
 
   if (config.docker.hosts && config.docker.hosts.length > 0) {
     providers = config.docker.hosts.map(

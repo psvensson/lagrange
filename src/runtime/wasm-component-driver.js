@@ -99,14 +99,6 @@ function buildDriverStatusResult(status, error, detailKey, detailValue) {
   return result;
 }
 
-function buildDriverLifecycleActionError(action, message, cause) {
-  return new DriverLifecycleError(
-    RUNTIME_KIND.WASM_COMPONENT,
-    action,
-    message,
-    cause ? {cause} : undefined,
-  );
-}
 
 function buildDriverServiceScopedError(baseMessage, serviceId) {
   return `${baseMessage}${DRIVER_SEPARATOR.DETAIL}'${serviceId}'`;

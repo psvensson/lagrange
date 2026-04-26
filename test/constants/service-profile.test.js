@@ -32,19 +32,19 @@ describe('SQL_ENGINE_PROFILE', () => {
 
   it('should have subsystem name', () => {
     assert.equal(
-      SQL_ENGINE_PROFILE.SUBSYSTEM, 'sql-engine-profile'
+      SQL_ENGINE_PROFILE.SUBSYSTEM, 'sql-engine-profile',
     );
   });
 
   it('should have leader_only default read consistency', () => {
     assert.equal(
-      SQL_ENGINE_PROFILE.DEFAULT_READ_CONSISTENCY, 'leader_only'
+      SQL_ENGINE_PROFILE.DEFAULT_READ_CONSISTENCY, 'leader_only',
     );
   });
 
   it('should have strong default write consistency', () => {
     assert.equal(
-      SQL_ENGINE_PROFILE.DEFAULT_WRITE_CONSISTENCY, 'strong'
+      SQL_ENGINE_PROFILE.DEFAULT_WRITE_CONSISTENCY, 'strong',
     );
   });
 });

@@ -1,112 +1,32 @@
-import { MESSAGE_ROUTER_SHARED } from "./message-router-shared.js";
-import { MessageRouterSegment2 } from "./message-router-segment-2.js";
+import {MESSAGE_ROUTER_SHARED} from './message-router-shared.js';
+import {MessageRouterSegment2} from './message-router-segment-2.js';
 
 const {
-  CONNECTION_CLOSE_DISPOSITION,
-  CONNECTION_STATE,
-  ConfigurationManager,
   ConnectionState,
-  EMPTY_ROUTER_REASON,
-  EventEmitter,
-  HOST,
-  INCOMING_CONNECTION_ADOPTION,
-  INLINE_ACK_PASSTHROUGH_KEYS,
-  INLINE_ACK_RESULT_FIELD,
-  INPROC,
-  IPV6_ANY_HOST,
-  IPV6_HOST_PREFIX,
-  IPV6_HOST_SUFFIX,
-  InProcWebSocket,
-  LoggingService,
   MESSAGE_ROUTER_LITERAL,
   METRICS_LOG_TAG,
-  OUTBOUND_DELIVERY_PRIORITY,
   OUTBOUND_QUEUE_BACKPRESSURE_ERROR_CODE,
-  OUTBOUND_QUEUE_BACKPRESSURE_SCOPE,
-  OUTBOUND_QUEUE_PENDING_SOURCE_LIMIT_DIVISOR,
-  OUTBOUND_QUEUE_PENDING_SOURCE_LIMIT_MINIMUM,
-  OutboundDeliveryPriority,
-  OutboundDeliveryRegistryOwner,
-  QUERY_DATA_PLANE_MESSAGE_TYPE,
-  QUERY_TRANSPORT_DELIVERY_STATE,
-  QUERY_TRANSPORT_SELECTION,
-  QUEUE_WAIT_BUCKETS,
-  QUEUE_WAIT_BUCKET_OVERFLOW,
-  RECONNECT_ADDRESS_SUPPRESSION_DEFAULT_MS,
-  RECONNECT_DISPOSITION,
   RETIRED_PENDING_RESPONSE_REASON,
   ROUTER_ADDRESS,
   ROUTER_CONNECTION_CLOSED_ERROR_CODE,
   ROUTER_ERROR_MSG,
   ROUTER_LOG_MSG,
   ROUTER_MESSAGE_TIMEOUT_ERROR_CODE,
-  ROUTER_MESSAGE_TYPE,
   ROUTER_NO_CONNECTION_ERROR_CODE,
-  ROUTER_QUERY_TRANSPORT_NOT_READY_ERROR_CODE,
-  ROUTER_VALID_ENTITY_TYPES,
-  RouterConnectionAuthorityOwner,
   RouterMessageType,
-  SERVICE_RESPONSE_DISPOSITION_KIND,
-  TRANSPORT_CONFIG_KEY,
-  TRANSPORT_DEFAULT,
-  TRANSPORT_DELIVERY_OUTCOME_METADATA_FIELDS,
   TRANSPORT_ERROR_MSG,
-  TRANSPORT_EVENT,
-  TRANSPORT_FORMAT,
-  TRANSPORT_METRIC,
   TRANSPORT_METRIC_TRIGGER,
   TRANSPORT_NUM,
   TRANSPORT_PRESSURE_SUMMARY_FIELD,
-  TRANSPORT_SUBSYSTEM,
   TRANSPORT_TYPEOF,
-  UNMATCHED_SERVICE_RESPONSE_WARN_INTERVAL_MS,
-  URL,
-  WEBSOCKET_CONNECT_TIMEOUT_CONFIG_KEY,
-  WEBSOCKET_CONNECT_TIMEOUT_ERROR_CODE,
   WebSocket,
-  WebSocketServer,
-  adjustInFlightPriorityCount,
-  buildDerivedDeliverySource,
-  buildPendingSourceSummary,
-  buildQueryTransportSemanticOutcome,
   buildQueueWaitSummary,
-  buildRetiredPendingClassification,
-  buildServiceResponseDisposition,
-  buildSupersededPendingResult,
-  buildTransportDeliveryOutcome,
-  canDispatchPendingItem,
-  countInFlightByPriority,
-  countPendingByPriority,
-  countPendingBySource,
-  createInProcWebSocketPair,
-  createQueueWaitHistogram,
-  dequeueNextPendingItem,
-  extractSqlOperationKind,
-  extractSqlTableName,
   isRaftPacket,
-  isSupersedableHeartbeatNodeStateUpdate,
-  isSupersedableRaftAppendFail,
-  isSupersedableRaftHeartbeatAppend,
   normalizeDeliveryOutcome,
-  normalizeIdentifier,
-  normalizeOutboundDeliveryPriority,
   normalizeRetryAfterMs,
-  normalizeToWebSocketAddress,
-  peekNextPendingItem,
-  queueMicrotaskFn,
-  recordQueueWaitDuration,
-  resolveBackgroundInFlightLimit,
-  resolveBackgroundPendingLimit,
-  resolveBoundedCriticalReserve,
   resolveDeliverySource,
-  resolveNextPendingItemIndex,
-  resolveNodeStateUpdateReplacementNodeId,
   resolveOperationIdFromMessage,
-  resolvePendingReplacementKey,
-  resolvePendingSourceLimit,
-  resolveQueueWaitBucket,
   resolveRequestIdFromMessage,
-  summarizeRaftAppendCommand,
   uuidv4,
 } = MESSAGE_ROUTER_SHARED;
 
@@ -137,20 +57,20 @@ class MessageRouterSegment3 extends MessageRouterSegment2 {
           messageId,
           correlationId,
           acknowledged: true,
-          ...(result && typeof result === TRANSPORT_TYPEOF.OBJECT
-            ? (() => {
-                const {
-                  acknowledged: _ack,
-                  type: handlerType,
-                  ...rest
-                } = result;
-                const merged = {
-                  ...rest,
-                };
-                if (handlerType) merged.responseType = handlerType;
-                return merged;
-              })()
-            : {}),
+          ...(result && typeof result === TRANSPORT_TYPEOF.OBJECT ?
+            (() => {
+              const {
+                acknowledged: _ack,
+                type: handlerType,
+                ...rest
+              } = result;
+              const merged = {
+                ...rest,
+              };
+              if (handlerType) merged.responseType = handlerType;
+              return merged;
+            })() :
+            {}),
         },
         queueWaitMs: TRANSPORT_NUM.ZERO,
       };
@@ -181,9 +101,9 @@ class MessageRouterSegment3 extends MessageRouterSegment2 {
     }
     const deliveryTimeoutMs =
       Number.isFinite(options.timeoutMs) &&
-      options.timeoutMs > TRANSPORT_NUM.ZERO
-        ? Math.floor(options.timeoutMs)
-        : this.messageTimeoutMs;
+      options.timeoutMs > TRANSPORT_NUM.ZERO ?
+        Math.floor(options.timeoutMs) :
+        this.messageTimeoutMs;
     const messageId = message.messageId || uuidv4();
     const correlationId = message.correlationId || messageId;
     const requestId = resolveRequestIdFromMessage(message);
@@ -258,7 +178,9 @@ class MessageRouterSegment3 extends MessageRouterSegment2 {
           error: acknowledged ? null : result?.error || null,
         });
       }
-    } catch (_metricsErr) {}
+    } catch (_metricsErr) {
+      void _metricsErr;
+    }
     return result;
   }
   /**
@@ -337,9 +259,9 @@ class MessageRouterSegment3 extends MessageRouterSegment2 {
     }
     const deliveryTimeoutMs =
       Number.isFinite(options.timeoutMs) &&
-      options.timeoutMs > TRANSPORT_NUM.ZERO
-        ? Math.floor(options.timeoutMs)
-        : this.messageTimeoutMs;
+      options.timeoutMs > TRANSPORT_NUM.ZERO ?
+        Math.floor(options.timeoutMs) :
+        this.messageTimeoutMs;
     const responsePromise = this.registerPendingResponse(
       messageId,
       targetNodeId,
@@ -645,11 +567,11 @@ class MessageRouterSegment3 extends MessageRouterSegment2 {
     if (!error || this.isShuttingDown) {
       return null;
     }
-    const retryAfterMs = Number.isFinite(error?.retryAfterMs)
-      ? Math.max(TRANSPORT_NUM.ZERO, Math.floor(error.retryAfterMs))
-      : this.resolveReconnectRetryAfterMs(
-          this.nodeConnections.get(targetNodeId) || null,
-        );
+    const retryAfterMs = Number.isFinite(error?.retryAfterMs) ?
+      Math.max(TRANSPORT_NUM.ZERO, Math.floor(error.retryAfterMs)) :
+      this.resolveReconnectRetryAfterMs(
+        this.nodeConnections.get(targetNodeId) || null,
+      );
     if (
       error.code === ROUTER_CONNECTION_CLOSED_ERROR_CODE &&
       error.recoverableBeforeSend === true
@@ -684,9 +606,9 @@ class MessageRouterSegment3 extends MessageRouterSegment2 {
             {
               errorCode:
                 reconnectError?.code || ROUTER_CONNECTION_CLOSED_ERROR_CODE,
-              retryAfterMs: Number.isFinite(reconnectError?.retryAfterMs)
-                ? reconnectError.retryAfterMs
-                : retryAfterMs,
+              retryAfterMs: Number.isFinite(reconnectError?.retryAfterMs) ?
+                reconnectError.retryAfterMs :
+                retryAfterMs,
             },
           );
         }
@@ -931,7 +853,7 @@ class MessageRouterSegment3 extends MessageRouterSegment2 {
               TRANSPORT_PRESSURE_SUMMARY_FIELD.RECONNECT_BEFORE_DELIVERY_FAILURE_COUNT
             ] += TRANSPORT_NUM.ONE;
             this.logger.warn(
-              "Failed to reconnect target node before delivery",
+              'Failed to reconnect target node before delivery',
               {
                 targetNodeId,
                 address: reconnectAddress,
@@ -956,7 +878,7 @@ class MessageRouterSegment3 extends MessageRouterSegment2 {
           this.transportPressureMetrics[
             TRANSPORT_PRESSURE_SUMMARY_FIELD.RECONNECT_BEFORE_DELIVERY_FAILURE_COUNT
           ] += TRANSPORT_NUM.ONE;
-          this.logger.warn("Failed to reconnect target node before delivery", {
+          this.logger.warn('Failed to reconnect target node before delivery', {
             targetNodeId,
             address: null,
             localNodeId: this.nodeId,
@@ -964,9 +886,9 @@ class MessageRouterSegment3 extends MessageRouterSegment2 {
           });
         }
       }
-      return connection && connection.state === ConnectionState.CONNECTED
-        ? connection
-        : null;
+      return connection && connection.state === ConnectionState.CONNECTED ?
+        connection :
+        null;
     })();
     this.pendingNodeConnections.set(targetNodeId, connectionPromise);
     this.recordPendingNodeConnectionSnapshot();
@@ -1060,7 +982,9 @@ class MessageRouterSegment3 extends MessageRouterSegment2 {
         } else if (typeof staleWs.close === TRANSPORT_TYPEOF.FUNCTION) {
           staleWs.close();
         }
-      } catch (_closeErr) {}
+      } catch (_closeErr) {
+        void _closeErr;
+      }
     }, graceMs);
     if (typeof timeout?.unref === TRANSPORT_TYPEOF.FUNCTION) {
       timeout.unref();
@@ -1222,9 +1146,9 @@ class MessageRouterSegment3 extends MessageRouterSegment2 {
         timestamp: Date.now(),
       };
       const deliveryTimeoutMs =
-        Number.isFinite(timeoutMs) && timeoutMs > TRANSPORT_NUM.ZERO
-          ? Math.floor(timeoutMs)
-          : this.messageTimeoutMs;
+        Number.isFinite(timeoutMs) && timeoutMs > TRANSPORT_NUM.ZERO ?
+          Math.floor(timeoutMs) :
+          this.messageTimeoutMs;
       const failBeforeSend = () => {
         const activeConnection =
           this.nodeConnections.get(targetNodeId) || connection;
@@ -1246,7 +1170,9 @@ class MessageRouterSegment3 extends MessageRouterSegment2 {
             } else if (typeof staleWs?.close === TRANSPORT_TYPEOF.FUNCTION) {
               staleWs.close();
             }
-          } catch (_closeErr) {}
+          } catch (_closeErr) {
+            void _closeErr;
+          }
         }
         reject(
           this.buildConnectionClosedError(targetNodeId, {
@@ -1397,4 +1323,4 @@ class MessageRouterSegment3 extends MessageRouterSegment2 {
    */
 }
 
-export { MessageRouterSegment3 };
+export {MessageRouterSegment3};

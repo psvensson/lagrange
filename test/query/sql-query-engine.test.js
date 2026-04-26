@@ -7,34 +7,24 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {
-  ControlPlaneSystemTableGateway,
 } from '../../src/control-plane/control-plane-system-table-gateway.js';
 import {
-  QUERY_ROUTING_DIAGNOSTIC_REASON,
   QUERY_ROUTING_REPAIR_REASON,
 } from '../../src/query/query-constants.js';
 import {
   COLUMN,
-  METRICS_LOG_TAG,
   SERVICE_STATUS,
   SERVICE_TYPE,
-  STATE,
   TABLES,
 } from '../../src/constants/index.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
-  CONTROL_PLANE_PUBLICATION_MODE,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {
-  ControlPlaneReadinessService,
 } from '../../src/control-plane/control-plane-readiness-service.js';
 import {
-  PARTITION_TRANSITION_METADATA_FIELD,
-  PARTITION_TRANSITION_STATE,
 } from '../../src/partition/partition-constants.js';
 import {
-  TIMEOUT_BUDGET_CLASSIFICATION,
-  createTimeoutBudget,
 } from '../../src/control-plane/timeout-budget.js';
 import {
   PRESSURE_WORK_CLASS,
@@ -43,11 +33,8 @@ import {
   CONTROL_PLANE_WORKLOAD_CLASS,
 } from '../../src/control-plane/control-plane-workload-profile.js';
 import {
-  CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE,
 } from '../../src/control-plane/control-plane-system-table-visibility-constants.js';
 import {
-  OWNER_CONTRACT_NEXT_ACTION,
-  OWNER_CONTRACT_STATE,
 } from '../../src/control-plane/owner-contract-outcome.js';
 import {
   LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY,
@@ -56,7 +43,6 @@ import {
   assertNoHandlerRepairConverged,
   createStaleOverlayOwnerHandoffFixture,
 } from './routing-repair-test-helpers.js';
-import {createSqlRequest} from '../../src/query/sql-request.js';
 
 // Initialize configuration for tests
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
@@ -155,34 +141,6 @@ function createMockSystemCache(tables, partitions, services, nodes = []) {
   };
 }
 
-function uniqueNodeIds(nodeIds) {
-  return [...new Set(nodeIds)];
-}
-
-const TABLE_PARTITION_METADATA_WAIT_TIMEOUT_DRIFT_MS = 1;
-
-function createAdmittedSplitAdmissionService() {
-  return {
-    async checkSplit(options = {}) {
-      return {
-        allowed: true,
-        decisionType: 'admitted',
-        decision: 'admitted',
-        operationType: 'partition_split',
-        requiredReplicaCount: options.requiredReplicaCount || 1,
-        candidateTargetNodeIds: Array.isArray(options.targetNodeIds) ?
-          [...options.targetNodeIds] :
-          [],
-        eligibleNodeIds: Array.isArray(options.targetNodeIds) ?
-          [...options.targetNodeIds] :
-          [],
-        sourceRoutableNodeIds: Array.isArray(options.sourceRoutableNodeIds) ?
-          [...options.sourceRoutableNodeIds] :
-          [],
-      };
-    },
-  };
-}
 
 test('SQLQueryEngine - seeds bootstrap routing overlay snapshots for ' +
   'system-table partition lookup during restart cache gaps', async (t) => {
@@ -1265,7 +1223,7 @@ test('SQLQueryEngine - defaults system-table selects to recovery routing', async
   };
 
   const result = await engine.executeQuery(
-    "SELECT * FROM logs WHERE log_id = 'log-1'",
+    'SELECT * FROM logs WHERE log_id = \'log-1\'',
   );
 
   t.equal(result.success, true, 'system-table select should still succeed');
@@ -1357,7 +1315,7 @@ test('SQLQueryEngine - defaults system-table writes to recovery routing', async 
   });
 
   const result = await engine.executeQuery(
-    "UPDATE nodes SET status = 'active' WHERE node_id = 'node-a'",
+    'UPDATE nodes SET status = \'active\' WHERE node_id = \'node-a\'',
   );
 
   t.equal(result.success, true, 'system-table write should still succeed');

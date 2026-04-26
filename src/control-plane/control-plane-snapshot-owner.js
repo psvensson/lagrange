@@ -70,8 +70,8 @@ function buildSnapshotObservation(snapshot, options = {}) {
     ...(Array.isArray(options.reasonCodes) ? options.reasonCodes : []),
     ...(revisionMetadata.revisionState ===
       CONTROL_PLANE_SNAPSHOT_REVISION_STATE.BEHIND ?
-        [CONTROL_PLANE_SNAPSHOT_REASON_CODE.REVISION_BEHIND] :
-        []),
+      [CONTROL_PLANE_SNAPSHOT_REASON_CODE.REVISION_BEHIND] :
+      []),
   ]);
   return Object.freeze({
     state: options.state,

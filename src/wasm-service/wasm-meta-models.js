@@ -11,7 +11,7 @@
  */
 
 import {
-  NUM, STRING, TYPEOF, WASM_OPERATION_STATE,
+  NUM, STRING, WASM_OPERATION_STATE,
 } from '../constants/index.js';
 import {
   REGISTRY_MAPPING_COL as RM_COL,
@@ -31,7 +31,7 @@ import {
 } from './wasm-meta-models-constants.js';
 
 const VALID_OP_STATES = new Set(
-  Object.values(WASM_OPERATION_STATE)
+  Object.values(WASM_OPERATION_STATE),
 );
 
 // ---- Registry Mapping ----
@@ -65,7 +65,7 @@ function serializeRegistryMapping(mapping) {
     [RM_COL.NAMESPACE]: mapping[RM.NAMESPACE],
     [RM_COL.REGISTRY_URL]: mapping[RM.REGISTRY_URL],
     [RM_COL.POLICY_METADATA]: JSON.stringify(
-      mapping[RM.POLICY_METADATA] || {}
+      mapping[RM.POLICY_METADATA] || {},
     ),
     [RM_COL.CREATED_AT]: mapping.createdAt ?? now,
     [RM_COL.UPDATED_AT]: mapping.updatedAt ?? now,
@@ -82,7 +82,7 @@ function deserializeRegistryMapping(row) {
     [RM.NAMESPACE]: row[RM_COL.NAMESPACE],
     [RM.REGISTRY_URL]: row[RM_COL.REGISTRY_URL],
     [RM.POLICY_METADATA]: JSON.parse(
-      row[RM_COL.POLICY_METADATA] || STRING.EMPTY_JSON_OBJECT
+      row[RM_COL.POLICY_METADATA] || STRING.EMPTY_JSON_OBJECT,
     ),
     createdAt: row[RM_COL.CREATED_AT] ?? NUM.ZERO,
     updatedAt: row[RM_COL.UPDATED_AT] ?? NUM.ZERO,
@@ -126,7 +126,7 @@ function serializeRegistryOverride(override) {
     [RO_COL.NAME]: override[RO.NAME],
     [RO_COL.REGISTRY_URL]: override[RO.REGISTRY_URL],
     [RO_COL.POLICY_METADATA]: JSON.stringify(
-      override[RO.POLICY_METADATA] || {}
+      override[RO.POLICY_METADATA] || {},
     ),
     [RO_COL.CREATED_AT]: override.createdAt ?? now,
     [RO_COL.UPDATED_AT]: override.updatedAt ?? now,
@@ -144,7 +144,7 @@ function deserializeRegistryOverride(row) {
     [RO.NAME]: row[RO_COL.NAME],
     [RO.REGISTRY_URL]: row[RO_COL.REGISTRY_URL],
     [RO.POLICY_METADATA]: JSON.parse(
-      row[RO_COL.POLICY_METADATA] || STRING.EMPTY_JSON_OBJECT
+      row[RO_COL.POLICY_METADATA] || STRING.EMPTY_JSON_OBJECT,
     ),
     createdAt: row[RO_COL.CREATED_AT] ?? NUM.ZERO,
     updatedAt: row[RO_COL.UPDATED_AT] ?? NUM.ZERO,
@@ -197,7 +197,7 @@ function serializeDependencyLock(lock) {
     [DL_COL.TARGET_SERVICE_ID]:
       lock[DL.TARGET_SERVICE_ID] ?? null,
     [DL_COL.RESOLVED_DEPENDENCIES]: JSON.stringify(
-      lock[DL.RESOLVED_DEPENDENCIES] || []
+      lock[DL.RESOLVED_DEPENDENCIES] || [],
     ),
     [DL_COL.CREATED_AT]: lock.createdAt ?? now,
   };
@@ -221,7 +221,7 @@ function deserializeDependencyLock(row) {
       row[DL_COL.TARGET_SERVICE_ID] ?? null,
     [DL.RESOLVED_DEPENDENCIES]: JSON.parse(
       row[DL_COL.RESOLVED_DEPENDENCIES] ||
-        STRING.EMPTY_JSON_ARRAY
+        STRING.EMPTY_JSON_ARRAY,
     ),
     createdAt: row[DL_COL.CREATED_AT] ?? NUM.ZERO,
   };
@@ -268,10 +268,10 @@ function serializeWasmOperation(operation) {
     [WO_COL.STATE]:
       operation[WO.STATE] ?? WASM_OPERATION_STATE.PENDING,
     [WO_COL.RESULT]: JSON.stringify(
-      operation[WO.RESULT] || {}
+      operation[WO.RESULT] || {},
     ),
     [WO_COL.ERROR]: JSON.stringify(
-      operation[WO.ERROR] || {}
+      operation[WO.ERROR] || {},
     ),
     [WO_COL.CREATED_AT]: operation.createdAt ?? now,
     [WO_COL.UPDATED_AT]: operation.updatedAt ?? now,
@@ -293,10 +293,10 @@ function deserializeWasmOperation(row) {
     [WO.STATE]:
       row[WO_COL.STATE] ?? WASM_OPERATION_STATE.PENDING,
     [WO.RESULT]: JSON.parse(
-      row[WO_COL.RESULT] || STRING.EMPTY_JSON_OBJECT
+      row[WO_COL.RESULT] || STRING.EMPTY_JSON_OBJECT,
     ),
     [WO.ERROR]: JSON.parse(
-      row[WO_COL.ERROR] || STRING.EMPTY_JSON_OBJECT
+      row[WO_COL.ERROR] || STRING.EMPTY_JSON_OBJECT,
     ),
     createdAt: row[WO_COL.CREATED_AT] ?? NUM.ZERO,
     updatedAt: row[WO_COL.UPDATED_AT] ?? NUM.ZERO,

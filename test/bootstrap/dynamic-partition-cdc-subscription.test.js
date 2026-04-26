@@ -58,17 +58,17 @@ async function withCapturedReplicaFactory(service, t, assertFactory) {
     service.systemCacheHydrated = true;
     service.tablePolicyService = {};
     service.rebalanceCoordinator = {};
-      service.messageGroupServices = new Map([
-        ['mg-1', {
-          groupId: 'mg-1',
-          initialized: true,
-          isLeaderReplica: () => true,
-          getMetadataIngressReadiness: () => ({ready: true}),
-          getLeaderId: () => null,
-          subscribeToCDC: async (tableName) => {
-            subscribedTables.push(tableName);
-          },
-        }],
+    service.messageGroupServices = new Map([
+      ['mg-1', {
+        groupId: 'mg-1',
+        initialized: true,
+        isLeaderReplica: () => true,
+        getMetadataIngressReadiness: () => ({ready: true}),
+        getLeaderId: () => null,
+        subscribeToCDC: async (tableName) => {
+          subscribedTables.push(tableName);
+        },
+      }],
     ]);
     if (typeof service.createCdcIntegrationService === 'function' &&
         hasCustomCreateCdcIntegrationService) {

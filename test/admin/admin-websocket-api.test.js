@@ -7,98 +7,24 @@ import {test} from '../../src/test-helpers/tap.js';
 import {AdminWebSocketAPI, MessageType, ErrorCode} from
   '../../src/admin/admin-websocket-api.js';
 import {
-  ADMIN_CONTROL_SNAPSHOT,
-  ADMIN_ERROR_MESSAGE,
-  ADMIN_OPERATIONAL_DIAGNOSTICS,
-  ADMIN_ROUTE,
-  CONSISTENCY_MISMATCH_KIND,
 } from '../../src/admin/admin-constants.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
-import {createReadOnlyCache} from '../../src/cache/read-only-system-table-cache.js';
-import {getSystemCachePrimaryKeyField} from
-  '../../src/cache/system-cache-key-descriptor.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
-import {LogsTableService} from '../../src/logging/logs-table-service.js';
 import {createSqlRequest} from '../../src/query/sql-request.js';
 import {createInProcWebSocketPair} from '../../src/test-helpers/inproc-ws.js';
-import {TraceCollector} from '../../src/debug/trace-collector.js';
-import {COLUMN, TABLES, SERVICE_TYPE} from '../../src/constants/index.js';
 import {
-  CONTROL_PLANE_READINESS_DIMENSION,
   READINESS_SNAPSHOT_KEY,
   RUNTIME_AUTHORITY_STATE,
   RUNTIME_AUTHORITY_VISIBILITY_STATE,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {
-  CONTROL_PLANE_SNAPSHOT_OBSERVATION_STATE,
-  CONTROL_PLANE_SNAPSHOT_REFRESH_STATE,
 } from '../../src/control-plane/control-plane-snapshot-owner.js';
 
 // Initialize services for tests
 ConfigurationManager.getInstance().initialize();
 LoggingService.getInstance().initialize({level: 'error'});
 
-const AUTHORITATIVE_REPAIR_TABLES = Object.freeze([
-  TABLES.NODES,
-  TABLES.PARTITIONS,
-  TABLES.SERVICES,
-  TABLES.TABLES,
-  TABLES.NODE_ENDPOINTS,
-  TABLES.SERVICE_DEFINITIONS,
-  TABLES.SERVICE_ENDPOINTS,
-  TABLES.REPLICA_OPERATIONS,
-]);
-const ERROR_UNEXPECTED_AUTHORITATIVE_PUBLISHED_MEMBERSHIP_READ =
-  'unexpected_authoritative_published_membership_read';
-const TEST_LOCAL_SYSTEM_OBSERVATION_QUERY_ID =
-  'q-snapshot-local-services-observation';
-const TEST_LOCAL_SYSTEM_OBSERVATION_SQL =
-  'SELECT * FROM services WHERE service_type = \'partition\'';
-const TEST_LOCAL_SYSTEM_OBSERVATION_GAP_SERVICE_ID =
-  'svc-gap-partition-node-2';
-const TEST_LOCAL_SYSTEM_OBSERVATION_GAP_NODE_ID =
-  'node-gap-partition-2';
-const TEST_LOCAL_SYSTEM_OBSERVATION_LOCAL_NODE_ID =
-  'node-1';
-const TEST_LOCAL_SYSTEM_OBSERVATION_GAP_PARTITION_ID =
-  'partition-1';
-const TEST_LOCAL_SYSTEM_OBSERVATION_GAP_REPLICA_ID =
-  'partition-gap-r1';
-const TEST_LOCAL_SYSTEM_OBSERVATION_GAP_ADDRESS =
-  'node-gap-partition-2/partition/partition-1-r4';
-const TEST_LOCAL_SYSTEM_OBSERVATION_ACTIVE_STATUS =
-  'active';
-const TEST_LOCAL_SYSTEM_OBSERVATION_LANE =
-  'snapshot';
-const BACKGROUND_REPAIR_SETTLE_TURNS = 8;
-const BACKGROUND_REPAIR_SETTLE_DELAY_MS = 0;
-const BACKGROUND_REPAIR_WAIT_ATTEMPTS = 40;
-
-async function waitForBackgroundRepairToSettle(
-  turnCount = BACKGROUND_REPAIR_SETTLE_TURNS,
-)
-{
-  for (let index = 0; index < turnCount; index += 1) {
-    await new Promise((resolve) => {
-      setTimeout(resolve, BACKGROUND_REPAIR_SETTLE_DELAY_MS);
-    });
-  }
-}
-
-async function waitForBackgroundRepairCondition(
-  conditionFn,
-  attemptCount = BACKGROUND_REPAIR_WAIT_ATTEMPTS,
-)
-{
-  for (let index = 0; index < attemptCount; index += 1) {
-    if (conditionFn()) {
-      return true;
-    }
-    await waitForBackgroundRepairToSettle(1);
-  }
-  return conditionFn();
-}
 
 /**
  * Create a mock SQL query engine.
@@ -162,31 +88,6 @@ function createMockQueryEngine() {
  * @param {Object<string, Array<Object>|Function>} rowsByTable
  * @return {Object}
  */
-function createSystemTableRepairQueryEngine(rowsByTable = {}) {
-  const fallback = createMockQueryEngine();
-  const executeRequestCalls = [];
-  return {
-    executeRequestCalls,
-    async executeRequest(request) {
-      const statement = String(request?.statement || '').trim();
-      executeRequestCalls.push(statement);
-      const match = statement.match(/^select \* from ([a-z_]+)$/i);
-      if (!match) {
-        return fallback.executeRequest(request);
-      }
-      const tableName = match[1].toLowerCase();
-      const value = rowsByTable[tableName];
-      const rows = typeof value === 'function' ? value(tableName) : value;
-      return {
-        success: true,
-        rows: Array.isArray(rows) ? rows.map((row) => ({...row})) : [],
-        count: Array.isArray(rows) ? rows.length : 0,
-        partitions: [`partition-${tableName}`],
-        tableName,
-      };
-    },
-  };
-}
 
 test('AdminWebSocketAPI - sendError preserves structured deferred query ' +
   'metadata', async (t) => {
@@ -289,15 +190,6 @@ test('AdminWebSocketAPI - executeSqlRequestWithTimeout forwards an inner ' +
  * @param {string[]} statements
  * @return {string[]}
  */
-function getAuthoritativeRepairReadTables(statements = []) {
-  return [...new Set((Array.isArray(statements) ? statements : [])
-    .map((statement) => {
-      const match = String(statement || '').match(/^SELECT \* FROM ([a-z_]+)$/i);
-      return match ? match[1].toLowerCase() : null;
-    })
-    .filter(Boolean))]
-    .sort();
-}
 
 /**
  * Create a deterministic authoritative-cache reconcile gateway for tests.
@@ -307,168 +199,12 @@ function getAuthoritativeRepairReadTables(statements = []) {
  * @param {Object<string, Array<Object>|Function>} [options.readRowsByTable]
  * @return {Object}
  */
-function createAuthoritativeCacheGateway(writableCache, options = {}) {
-  const queryEngine = options.queryEngine || null;
-  const readRowsByTable = options.readRowsByTable || {};
-  const executeReadCalls = [];
-  const cloneRows = (rows) => Array.isArray(rows) ? rows.map((row) => ({...row})) : [];
-  const resolveAuthoritativeRows = async (tableName, readIntent = {}) => {
-    const tableOverride = readRowsByTable[tableName];
-    if (typeof tableOverride === 'function') {
-      return cloneRows(await tableOverride(tableName, readIntent));
-    }
-    if (Array.isArray(tableOverride)) {
-      return cloneRows(tableOverride);
-    }
-
-    if (queryEngine && typeof queryEngine.executeRequest === 'function') {
-      const queryResult = await queryEngine.executeRequest({
-        statement: readIntent?.sql || `SELECT * FROM ${tableName}`,
-        params: Array.isArray(readIntent?.params) ? readIntent.params : [],
-      });
-      if (queryResult?.success !== true) {
-        return null;
-      }
-      return cloneRows(queryResult?.rows);
-    }
-
-    return cloneRows(writableCache?.getAll(tableName));
-  };
-
-  return {
-    executeReadCalls,
-    async executeRead(readIntent = {}, readOptions = {}) {
-      const statement = String(readIntent?.sql || '').trim();
-      const statementMatch = statement.match(/^select \* from ([a-z_]+)$/i);
-      const tableName = String(
-        readIntent?.tableName ||
-          statementMatch?.[1] ||
-          '',
-      )
-        .trim()
-        .toLowerCase();
-      executeReadCalls.push({
-        tableName,
-        sql: statement,
-        strategy: readIntent?.strategy || null,
-        owner: readIntent?.owner || null,
-        options: {...readOptions},
-      });
-      if (tableName.length === 0) {
-        return {
-          success: false,
-          tableName: null,
-          rows: [],
-          error: 'table_name_required',
-        };
-      }
-      const rows = await resolveAuthoritativeRows(tableName, readIntent);
-      if (!rows) {
-        return {
-          success: false,
-          tableName,
-          rows: [],
-          error: 'authoritative_query_failed',
-        };
-      }
-      return {
-        success: true,
-        tableName,
-        rows,
-      };
-    },
-    async reconcileAuthoritativeCacheRows(
-      tableName,
-      authoritativeRows,
-      options = {},
-    ) {
-      const cacheTarget = options.cacheMutationTarget || writableCache;
-      const keyField =
-        options.primaryKeyField || getSystemCachePrimaryKeyField(tableName);
-      const cachedRows = Array.isArray(options.cachedRows) ?
-        options.cachedRows :
-        cacheTarget.getAll(tableName);
-      const cachedByKey = new Map(
-        cachedRows
-          .map((row) => [String(row?.[keyField] || ''), row])
-          .filter(([key]) => key.length > 0),
-      );
-      const authoritativeByKey = new Map(
-        (Array.isArray(authoritativeRows) ? authoritativeRows : [])
-          .map((row) => [String(row?.[keyField] || ''), row])
-          .filter(([key]) => key.length > 0),
-      );
-      let mutationCount = 0;
-
-      for (const [key, row] of authoritativeByKey.entries()) {
-        cacheTarget.applySystemTableChange(
-          tableName,
-          cachedByKey.has(key) ? 'UPDATE' : 'INSERT',
-          {...row},
-        );
-        mutationCount += 1;
-      }
-
-      for (const [key, row] of cachedByKey.entries()) {
-        if (authoritativeByKey.has(key)) {
-          continue;
-        }
-        cacheTarget.applySystemTableChange(tableName, 'DELETE', {...row});
-        mutationCount += 1;
-      }
-
-      return {
-        success: true,
-        mutationCount,
-      };
-    },
-  };
-}
 
 /**
  * Create a realistic system-table cache for authoritative discovery repair.
  * @param {string} [nodeId='test-node']
  * @return {SystemTableCache}
  */
-function createAuthoritativeRepairCache(nodeId = 'test-node') {
-  const cache = new SystemTableCache();
-
-  cache.applySystemTableChange(TABLES.NODES, 'INSERT', {
-    id: nodeId,
-    node_id: nodeId,
-    address: 'localhost:8080',
-    status: 'active',
-  });
-
-  for (const tableName of AUTHORITATIVE_REPAIR_TABLES) {
-    cache.applySystemTableChange(TABLES.TABLES, 'INSERT', {
-      id: tableName,
-      table_id: tableName,
-      name: tableName,
-      table_name: tableName,
-    });
-    cache.applySystemTableChange(TABLES.PARTITIONS, 'INSERT', {
-      id: `${tableName}-p1`,
-      partition_id: `${tableName}-p1`,
-      table_id: tableName,
-      table_name: tableName,
-      partition_version: 1,
-      state: 'NORMAL',
-    });
-    cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
-      service_id: `${tableName}-p1-r1`,
-      service_type: 'partition',
-      node_id: nodeId,
-      partition_id: `${tableName}-p1`,
-      replica_id: `${tableName}-p1-r1`,
-      raft_role: 'leader',
-      status: 'active',
-      address: `${nodeId}/partition/${tableName}-p1-r1`,
-    });
-  }
-
-  return cache;
-}
 
 /**
  * Create local partition-service replicas that answer direct table reads.
@@ -476,40 +212,6 @@ function createAuthoritativeRepairCache(nodeId = 'test-node') {
  * @param {Object<string, Array<Object>>} [overrides={}]
  * @return {Map<string, Object>}
  */
-function createAuthoritativeRepairPartitionServices(
-  cache, overrides = {},
-) {
-  const services = new Map();
-  for (const tableName of AUTHORITATIVE_REPAIR_TABLES) {
-    const rows = Array.isArray(overrides[tableName]) ?
-      overrides[tableName] :
-      cache.getAll(tableName);
-    const partitionId = `${tableName}-p1`;
-    services.set(partitionId, {
-      partitionId,
-      replicaId: `${partitionId}-r1`,
-      initialized: true,
-      db: {
-        prepare(sql) {
-          const statement = String(sql || '').trim();
-          return {
-            all() {
-              const match = statement.match(/^SELECT \* FROM ([a-z_]+)$/i);
-              if (!match) {
-                throw new Error(`Unsupported local authoritative query: ${statement}`);
-              }
-              if (match[1].toLowerCase() !== tableName) {
-                return [];
-              }
-              return rows.map((row) => ({...row}));
-            },
-          };
-        },
-      },
-    });
-  }
-  return services;
-}
 
 /**
  * Create a populated system table cache.
@@ -560,46 +262,6 @@ function createPopulatedCache() {
  * Add runtime service-definition and service-endpoint rows for discovery tests.
  * @param {SystemTableCache} cache
  */
-function seedServiceDiscoveryRows(cache) {
-  cache.applySystemTableChange(TABLES.SERVICE_DEFINITIONS, 'INSERT', {
-    service_id: 'sys-postgres-wire',
-    service_name: 'sys-postgres-wire',
-    replica_count: 3,
-    runtime_kind: 'native_js',
-  });
-
-  cache.applySystemTableChange(TABLES.SERVICE_ENDPOINTS, 'INSERT', {
-    endpoint_id: 'sys-postgres-wire-ep-node-1',
-    service_id: 'sys-postgres-wire',
-    node_id: 'node-1',
-    protocol: 'postgresql',
-    address: '10.0.0.1',
-    port: 5432,
-    health_status: 'healthy',
-    metadata: JSON.stringify({
-      service_name: 'sys-postgres-wire',
-      protocol: 'postgresql',
-      version: '1.0.0',
-    }),
-    updated_at: Date.now(),
-  });
-
-  cache.applySystemTableChange(TABLES.SERVICE_ENDPOINTS, 'INSERT', {
-    endpoint_id: 'sys-postgres-wire-ep-node-2',
-    service_id: 'sys-postgres-wire',
-    node_id: 'node-2',
-    protocol: 'postgresql',
-    address: '10.0.0.2',
-    port: 5432,
-    health_status: 'unhealthy',
-    metadata: JSON.stringify({
-      service_name: 'sys-postgres-wire',
-      protocol: 'postgresql',
-      version: '1.0.0',
-    }),
-    updated_at: Date.now(),
-  });
-}
 
 /**
  * Seed table-scoped discovery rows where only one node hosts partition replicas.
@@ -608,80 +270,6 @@ function seedServiceDiscoveryRows(cache) {
  *
  * @param {SystemTableCache} cache
  */
-function seedRoutedTableDiscoveryRows(cache) {
-  const updatedAt = Date.now();
-
-  cache.applySystemTableChange(TABLES.NODES, 'INSERT', {
-    id: 'node-2',
-    address: 'localhost:8081',
-    status: 'active',
-  });
-
-  cache.applySystemTableChange(TABLES.SERVICE_DEFINITIONS, 'INSERT', {
-    service_id: 'sys-postgres-wire',
-    service_name: 'sys-postgres-wire',
-    replica_count: 2,
-    runtime_kind: 'native_js',
-  });
-
-  cache.applySystemTableChange(TABLES.SERVICE_ENDPOINTS, 'INSERT', {
-    endpoint_id: 'sys-postgres-wire-ep-node-1',
-    service_id: 'sys-postgres-wire',
-    node_id: 'node-1',
-    protocol: 'postgresql',
-    address: '10.0.0.1',
-    port: 5432,
-    health_status: 'healthy',
-    metadata: JSON.stringify({
-      service_name: 'sys-postgres-wire',
-      protocol: 'postgresql',
-      version: '1.0.0',
-    }),
-    updated_at: updatedAt,
-  });
-
-  cache.applySystemTableChange(TABLES.SERVICE_ENDPOINTS, 'INSERT', {
-    endpoint_id: 'sys-postgres-wire-ep-node-2',
-    service_id: 'sys-postgres-wire',
-    node_id: 'node-2',
-    protocol: 'postgresql',
-    address: '10.0.0.2',
-    port: 5432,
-    health_status: 'healthy',
-    metadata: JSON.stringify({
-      service_name: 'sys-postgres-wire',
-      protocol: 'postgresql',
-      version: '1.0.0',
-    }),
-    updated_at: updatedAt,
-  });
-
-  cache.applySystemTableChange(TABLES.TABLES, 'INSERT', {
-    id: 'table-benchmark-events',
-    table_id: 'table-benchmark-events',
-    name: 'benchmark_events',
-    table_name: 'benchmark_events',
-  });
-
-  cache.applySystemTableChange(TABLES.PARTITIONS, 'INSERT', {
-    id: 'partition-benchmark-events-1',
-    partition_id: 'partition-benchmark-events-1',
-    table_id: 'table-benchmark-events',
-    table_name: 'benchmark_events',
-    keyStart: null,
-    keyEnd: null,
-  });
-
-  cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
-    id: 'service-benchmark-events-node-1',
-    service_type: 'partition',
-    partition_id: 'partition-benchmark-events-1',
-    node_id: 'node-1',
-    status: 'active',
-    raft_role: 'leader',
-    address: '10.0.0.1:7001',
-  });
-}
 
 /**
  * Seed table-scoped discovery rows where a second node hosts a local learner
@@ -691,19 +279,6 @@ function seedRoutedTableDiscoveryRows(cache) {
  *
  * @param {SystemTableCache} cache
  */
-function seedTableDiscoveryRowsWithLocalLearner(cache) {
-  seedRoutedTableDiscoveryRows(cache);
-
-  cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
-    id: 'service-benchmark-events-node-2',
-    service_type: 'partition',
-    partition_id: 'partition-benchmark-events-1',
-    node_id: 'node-2',
-    status: 'active',
-    raft_role: 'learner',
-    address: '10.0.0.2:7001',
-  });
-}
 
 /**
  * Seed table-scoped discovery rows where a second node hosts a local candidate
@@ -713,19 +288,6 @@ function seedTableDiscoveryRowsWithLocalLearner(cache) {
  *
  * @param {SystemTableCache} cache
  */
-function seedTableDiscoveryRowsWithLocalCandidate(cache) {
-  seedRoutedTableDiscoveryRows(cache);
-
-  cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
-    id: 'service-benchmark-events-node-2',
-    service_type: 'partition',
-    partition_id: 'partition-benchmark-events-1',
-    node_id: 'node-2',
-    status: 'active',
-    raft_role: 'candidate',
-    address: '10.0.0.2:7001',
-  });
-}
 
 /**
  * Seed table-scoped discovery rows where a second node hosts a stable local
@@ -733,19 +295,6 @@ function seedTableDiscoveryRowsWithLocalCandidate(cache) {
  *
  * @param {SystemTableCache} cache
  */
-function seedTableDiscoveryRowsWithLocalFollower(cache) {
-  seedRoutedTableDiscoveryRows(cache);
-
-  cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
-    id: 'service-benchmark-events-node-2',
-    service_type: 'partition',
-    partition_id: 'partition-benchmark-events-1',
-    node_id: 'node-2',
-    status: 'active',
-    raft_role: 'follower',
-    address: '10.0.0.2:7001',
-  });
-}
 
 /**
  * Stage split-child partition metadata for benchmark_events without
@@ -757,71 +306,6 @@ function seedTableDiscoveryRowsWithLocalFollower(cache) {
  * @param {number} [options.partitionCount=1]
  * @return {Object}
  */
-function stageFutureBenchmarkSplitChildren(
-  cache, options = {},
-) {
-  const tableId = 'table-benchmark-events';
-  const sourcePartitionId = 'partition-benchmark-events-1';
-  const leftPartitionId = 'partition-benchmark-events-left';
-  const rightPartitionId = 'partition-benchmark-events-right';
-  const activePartitionVersion = Number.isInteger(
-    options.activePartitionVersion,
-  ) ?
-    options.activePartitionVersion :
-    1;
-  const partitionCount = Number.isInteger(options.partitionCount) ?
-    options.partitionCount :
-    1;
-
-  cache.applySystemTableChange(TABLES.TABLES, 'UPDATE', {
-    id: tableId,
-    table_id: tableId,
-    name: 'benchmark_events',
-    table_name: 'benchmark_events',
-    active_partition_version: activePartitionVersion,
-    partition_count: partitionCount,
-    partition_transition_state: 'split_backfilling',
-    partition_transition_metadata: JSON.stringify({
-      workflowId: 'split-table-benchmark-events-v2',
-      sourcePartitionId,
-      targetPartitionVersion: 2,
-      targetPartitionIds: [leftPartitionId, rightPartitionId],
-    }),
-  });
-  cache.applySystemTableChange(TABLES.PARTITIONS, 'UPDATE', {
-    id: sourcePartitionId,
-    partition_id: sourcePartitionId,
-    table_id: tableId,
-    table_name: 'benchmark_events',
-    partition_version: 1,
-    state: 'NORMAL',
-    leader_node_id: 'node-1',
-  });
-  cache.applySystemTableChange(TABLES.PARTITIONS, 'INSERT', {
-    id: leftPartitionId,
-    partition_id: leftPartitionId,
-    table_id: tableId,
-    table_name: 'benchmark_events',
-    partition_version: 2,
-    state: 'NORMAL',
-    leader_node_id: null,
-  });
-  cache.applySystemTableChange(TABLES.PARTITIONS, 'INSERT', {
-    id: rightPartitionId,
-    partition_id: rightPartitionId,
-    table_id: tableId,
-    table_name: 'benchmark_events',
-    partition_version: 2,
-    state: 'NORMAL',
-    leader_node_id: null,
-  });
-
-  return {
-    sourcePartitionId,
-    leftPartitionId,
-    rightPartitionId,
-  };
-}
 
 /**
  * Seed table-scoped discovery rows without a local TABLES row.
@@ -830,50 +314,6 @@ function stageFutureBenchmarkSplitChildren(
  * @param {SystemTableCache} cache
  * @param {number} updatedAt
  */
-function seedPartitionScopedDiscoveryRowsWithoutTableRecord(cache, updatedAt) {
-  cache.applySystemTableChange(TABLES.SERVICE_DEFINITIONS, 'INSERT', {
-    service_id: 'sys-postgres-wire',
-    service_name: 'sys-postgres-wire',
-    replica_count: 1,
-    runtime_kind: 'native_js',
-  });
-
-  cache.applySystemTableChange(TABLES.SERVICE_ENDPOINTS, 'INSERT', {
-    endpoint_id: 'sys-postgres-wire-ep-node-1',
-    service_id: 'sys-postgres-wire',
-    node_id: 'node-1',
-    protocol: 'postgresql',
-    address: '10.0.0.1',
-    port: 5432,
-    health_status: 'healthy',
-    metadata: JSON.stringify({
-      service_name: 'sys-postgres-wire',
-      protocol: 'postgresql',
-      version: '1.0.0',
-    }),
-    updated_at: updatedAt,
-  });
-
-  cache.applySystemTableChange(TABLES.PARTITIONS, 'INSERT', {
-    id: 'partition-benchmark-events-1',
-    partition_id: 'partition-benchmark-events-1',
-    table_id: 'table-benchmark-events',
-    table_name: 'benchmark_events',
-    keyStart: null,
-    keyEnd: null,
-    updated_at: updatedAt,
-  });
-
-  cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
-    id: 'service-benchmark-events-node-1',
-    service_type: 'partition',
-    partition_id: 'partition-benchmark-events-1',
-    node_id: 'node-1',
-    status: 'active',
-    raft_role: 'leader',
-    address: '10.0.0.1:7001',
-  });
-}
 
 /**
  * Seed table-scoped discovery rows without local TABLES row and without
@@ -882,49 +322,6 @@ function seedPartitionScopedDiscoveryRowsWithoutTableRecord(cache, updatedAt) {
  * @param {SystemTableCache} cache
  * @param {number} updatedAt
  */
-function seedPartitionScopedDiscoveryRowsWithoutTableName(cache, updatedAt) {
-  cache.applySystemTableChange(TABLES.SERVICE_DEFINITIONS, 'INSERT', {
-    service_id: 'sys-postgres-wire',
-    service_name: 'sys-postgres-wire',
-    replica_count: 1,
-    runtime_kind: 'native_js',
-  });
-
-  cache.applySystemTableChange(TABLES.SERVICE_ENDPOINTS, 'INSERT', {
-    endpoint_id: 'sys-postgres-wire-ep-node-1',
-    service_id: 'sys-postgres-wire',
-    node_id: 'node-1',
-    protocol: 'postgresql',
-    address: '10.0.0.1',
-    port: 5432,
-    health_status: 'healthy',
-    metadata: JSON.stringify({
-      service_name: 'sys-postgres-wire',
-      protocol: 'postgresql',
-      version: '1.0.0',
-    }),
-    updated_at: updatedAt,
-  });
-
-  cache.applySystemTableChange(TABLES.PARTITIONS, 'INSERT', {
-    id: 'partition-benchmark-events-1',
-    partition_id: 'partition-benchmark-events-1',
-    table_id: 'table-benchmark-events',
-    keyStart: null,
-    keyEnd: null,
-    updated_at: updatedAt,
-  });
-
-  cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
-    id: 'service-benchmark-events-node-1',
-    service_type: 'partition',
-    partition_id: 'partition-benchmark-events-1',
-    node_id: 'node-1',
-    status: 'active',
-    raft_role: 'leader',
-    address: '10.0.0.1:7001',
-  });
-}
 
 /**
  * Connect to AdminWebSocketAPI in-process and wait for first message.
@@ -970,142 +367,18 @@ function waitForMessage(ws, timeout = 2000) {
  * @param {number} timeout
  * @return {Promise<void>}
  */
-function waitForNoMessage(ws, timeout = 50) {
-  return new Promise((resolve, reject) => {
-    const onMessage = () => {
-      clearTimeout(timer);
-      reject(new Error('Unexpected message received'));
-    };
-    const timer = setTimeout(() => {
-      ws.off('message', onMessage);
-      resolve();
-    }, timeout);
-    ws.once('message', onMessage);
-  });
-}
 
 /**
  * Create a mock test-run service for HTTP route tests.
  * @param {Object} [overrides]
  * @return {Object}
  */
-function createMockTestRunService(overrides = {}) {
-  return {
-    readDashboardPage: async () => '<html><body>dashboard</body></html>',
-    readPlaybackViewer: async () => '<html><body>viewer</body></html>',
-    listAvailableTests: async () => [],
-    listAvailableConfigs: async () => [],
-    listSavedRuns: async () => [],
-    getRun: async (_runId) => null,
-    startRun: async (_payload) => {
-      throw new Error('startRun not mocked');
-    },
-    stopRun: async (_runId) => {
-      throw new Error('stopRun not mocked');
-    },
-    deleteRun: async (_runId) => {
-      throw new Error('deleteRun not mocked');
-    },
-    subscribeToRun: (_runId, _listener) => null,
-    readOutputAsset: async (_path) => null,
-    ...overrides,
-  };
-}
 
 /**
  * Create a mock debug metadata store for debug ingress route tests.
  * @param {Object} [overrides]
  * @return {Object}
  */
-function createMockDebugMetadataStore(overrides = {}) {
-  return {
-    createSession: async (request) => ({
-      sessionId: request.sessionId || 'session-1',
-      tenantId: request.securityContext.tenantId,
-      serviceName: request.serviceName || 'svc-debug',
-      status: 'active',
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    }),
-    getSession: async (request) => ({
-      sessionId: request.sessionId,
-      tenantId: request.securityContext.tenantId,
-      serviceName: 'svc-debug',
-      status: 'active',
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    }),
-    attachSession: async (request) => ({
-      sessionId: request.sessionId,
-      tenantId: request.securityContext.tenantId,
-      serviceName: 'svc-debug',
-      status: 'active',
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    }),
-    updateSession: async (request) => ({
-      sessionId: request.sessionId,
-      tenantId: request.securityContext.tenantId,
-      serviceName: request.serviceName || 'svc-debug',
-      lineageId: request.lineageId || null,
-      stageId: request.stageId || null,
-      endpoint: request.endpoint || null,
-      nodeId: request.nodeId || null,
-      status: request.status || 'active',
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    }),
-    detachSession: async (request) => ({
-      sessionId: request.sessionId,
-      tenantId: request.securityContext.tenantId,
-      serviceName: 'svc-debug',
-      lineageId: null,
-      stageId: null,
-      endpoint: null,
-      nodeId: null,
-      status: 'detached',
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    }),
-    writeBreakpoints: async (_request) => ([
-      {
-        breakpointId: 'bp-1',
-        lineNumber: 10,
-        resolved: true,
-      },
-    ]),
-    listBreakpoints: async (_request) => ([
-      {
-        breakpointId: 'bp-1',
-        lineNumber: 10,
-        resolved: true,
-      },
-    ]),
-    writeSnapshot: async (_request) => ({
-      snapshotId: 'snapshot-1',
-      sessionId: 'session-1',
-      frameCount: 2,
-      hostCallCount: 1,
-      envelope: Buffer.from([1, 2, 3]),
-    }),
-    listSnapshots: async (_request) => ([
-      {
-        snapshotId: 'snapshot-1',
-        sessionId: 'session-1',
-        frameCount: 2,
-        hostCallCount: 1,
-      },
-    ]),
-    getSnapshot: async (_request) => ({
-      snapshotId: 'snapshot-1',
-      sessionId: 'session-1',
-      frameCount: 2,
-      hostCallCount: 1,
-      envelope: Buffer.from([1, 2, 3]),
-    }),
-    ...overrides,
-  };
-}
 
 test('AdminWebSocketAPI - initialization', async (t) => {
   const api = new AdminWebSocketAPI({nodeId: 'test-node'});
@@ -1229,20 +502,20 @@ test('AdminWebSocketAPI - load lane sheds queries when routing is not ready',
       controlPlaneReadinessService: {
         getNodeReadinessSync: () => ({
           nodeId: 'test-node',
-        dimensions: {
-          routingReady: false,
-          clusterMemberHealthy: false,
-          serveEligible: false,
-        },
-        runtimeAuthority: {
-          state: RUNTIME_AUTHORITY_STATE.ESTABLISHING,
-          visibility: {
-            state: RUNTIME_AUTHORITY_VISIBILITY_STATE.PENDING_PUBLICATION,
+          dimensions: {
+            routingReady: false,
+            clusterMemberHealthy: false,
+            serveEligible: false,
           },
-        },
-        reasons: [
-          {code: 'routing_not_ready'},
-          {code: 'cluster_member_unhealthy'},
+          runtimeAuthority: {
+            state: RUNTIME_AUTHORITY_STATE.ESTABLISHING,
+            visibility: {
+              state: RUNTIME_AUTHORITY_VISIBILITY_STATE.PENDING_PUBLICATION,
+            },
+          },
+          reasons: [
+            {code: 'routing_not_ready'},
+            {code: 'cluster_member_unhealthy'},
           ],
         }),
       },

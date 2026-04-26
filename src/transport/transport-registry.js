@@ -55,12 +55,12 @@ class TransportRegistry {
    * @param {Object} systemCacheClient - Read-only cache client for endpoint lookups.
    * @throws {Error} If systemCacheClient is not provided.
    */
-    constructor(systemCacheClient) {
-      if (!systemCacheClient) {
+  constructor(systemCacheClient) {
+    if (!systemCacheClient) {
       throw new Error(REGISTRY_ERROR_MSG.SYSTEM_CACHE_REQUIRED);
     }
 
-      this.systemCacheClient = systemCacheClient;
+    this.systemCacheClient = systemCacheClient;
     this.providers = new Map();
     this.logger = LoggingService.getInstance().forSubsystem(REGISTRY_SUBSYSTEM);
   }

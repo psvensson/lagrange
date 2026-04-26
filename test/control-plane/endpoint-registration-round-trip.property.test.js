@@ -166,57 +166,57 @@ test('Property 15: Endpoint registration round-trip',
 
 test('EndpointService uses injected serviceEndpointsOwner for reads and writes',
   async (t) => {
-  initEnv();
+    initEnv();
 
-  const calls = [];
-  const rows = new Map();
-  const gateway = {
-    async readRows(tableName, _sql, params) {
-      calls.push({kind: 'read', tableName, params});
-      const row = rows.get(params?.[0]) || null;
-      return {
-        success: true,
-        rows: row ? [row] : [],
-      };
-    },
-    async insertSystemTableRow(tableName, row) {
-      calls.push({kind: 'insert', tableName, row});
-      rows.set(row[COLUMN.ENDPOINT_ID], {...row});
-      return {success: true};
-    },
-    async deleteSystemTableRow(tableName, whereClause) {
-      calls.push({kind: 'delete', tableName, whereClause});
-      rows.delete(whereClause[COLUMN.ENDPOINT_ID]);
-      return {success: true};
-    },
-  };
+    const calls = [];
+    const rows = new Map();
+    const gateway = {
+      async readRows(tableName, _sql, params) {
+        calls.push({kind: 'read', tableName, params});
+        const row = rows.get(params?.[0]) || null;
+        return {
+          success: true,
+          rows: row ? [row] : [],
+        };
+      },
+      async insertSystemTableRow(tableName, row) {
+        calls.push({kind: 'insert', tableName, row});
+        rows.set(row[COLUMN.ENDPOINT_ID], {...row});
+        return {success: true};
+      },
+      async deleteSystemTableRow(tableName, whereClause) {
+        calls.push({kind: 'delete', tableName, whereClause});
+        rows.delete(whereClause[COLUMN.ENDPOINT_ID]);
+        return {success: true};
+      },
+    };
 
-  const service = new EndpointService({
-    nodeId: 'local-node',
-    serviceEndpointsOwner: createSystemMetadataOwners({
-      controlPlaneSystemTableGateway: gateway,
-    }).serviceEndpointsOwner,
+    const service = new EndpointService({
+      nodeId: 'local-node',
+      serviceEndpointsOwner: createSystemMetadataOwners({
+        controlPlaneSystemTableGateway: gateway,
+      }).serviceEndpointsOwner,
+    });
+    service.initialize();
+
+    await service.registerEndpoint({
+      endpointId: 'ep-gateway',
+      nodeId: 'node-gateway',
+      address: 'ws://127.0.0.1:8081',
+      transportType: TRANSPORT_TYPE.WEBSOCKET,
+      priority: 1,
+    });
+    const endpoint = await service.getEndpoint('ep-gateway');
+    await service.removeEndpoint('ep-gateway');
+
+    t.ok(endpoint, 'registered endpoint should be readable');
+    t.same(
+      calls.map((entry) => entry.kind),
+      ['read', 'insert', 'read', 'delete'],
+      'endpoint service should route through the injected owner boundary',
+    );
+    service.stop();
   });
-  service.initialize();
-
-  await service.registerEndpoint({
-    endpointId: 'ep-gateway',
-    nodeId: 'node-gateway',
-    address: 'ws://127.0.0.1:8081',
-    transportType: TRANSPORT_TYPE.WEBSOCKET,
-    priority: 1,
-  });
-  const endpoint = await service.getEndpoint('ep-gateway');
-  await service.removeEndpoint('ep-gateway');
-
-  t.ok(endpoint, 'registered endpoint should be readable');
-  t.same(
-    calls.map((entry) => entry.kind),
-    ['read', 'insert', 'read', 'delete'],
-    'endpoint service should route through the injected owner boundary',
-  );
-  service.stop();
-});
 
 test('EndpointService requires the owner path and does not fall back to the gateway',
   async (t) => {

@@ -1,4 +1,4 @@
-import { CLUSTER_SEGMENT_8 } from './cluster-segment-8.js';
+import {CLUSTER_SEGMENT_8} from './cluster-segment-8.js';
 
 const {
   createCluster,

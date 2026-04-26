@@ -1,7 +1,6 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {
   COLUMN,
-  NUM,
   STATE,
   SERVICE_STATUS,
   SERVICE_TYPE,
@@ -15,19 +14,15 @@ import {
   CONTROL_PLANE_READINESS_REASON,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {
-  CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE,
 } from '../../src/control-plane/control-plane-constants.js';
 import {
   ControlPlaneReadinessService,
 } from '../../src/control-plane/control-plane-readiness-service.js';
 import {
-  CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
 } from '../../src/control-plane/control-plane-system-table-gateway.js';
 import {
-  LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY,
 } from '../../src/cdc/cdc-integration-service.js';
 import {
-  DEFAULT_PRIORITY_RECOVERY_ACTIVITY_STALE_GRACE_MS,
 } from '../../src/control-plane/priority-recovery-snapshot.js';
 
 const TEST_DESCRIPTOR_STATE = Object.freeze({
@@ -178,15 +173,6 @@ function createMessageGroupService(nodeId) {
   };
 }
 
-function createPartitionService(nodeId, serviceId = `part-${nodeId}`) {
-  return {
-    [COLUMN.SERVICE_ID]: serviceId,
-    [COLUMN.NODE_ID]: nodeId,
-    [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
-    [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
-    [COLUMN.ADDRESS]: `${nodeId}/partition/${serviceId}`,
-  };
-}
 
 test('ControlPlaneReadinessService classifies a fully ready node', async (t) => {
   const cache = createCache({
@@ -268,7 +254,7 @@ test('ControlPlaneReadinessService builds establishing runtime authority ' +
       publicationStatus: 'ACK_PENDING',
       publicationObservationState: 'establishing',
       priorityPartitionSummary: {
-        satisfied: false,
+        satisfied: true,
       },
       priorityRecoveryReasonCodes: [
         CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PUBLICATION_EPOCH_PENDING,
@@ -640,58 +626,58 @@ test('ControlPlaneReadinessService uses injected owners for async shared metadat
 
 test('ControlPlaneReadinessService accepts single-row owner reads that return ' +
   'plain rows instead of envelopes', async (t) => {
-    const nodeRow = createActiveNode('node-1');
-    const serviceRow = createMessageGroupService('node-1');
-    const readinessService = new ControlPlaneReadinessService({
-      nodeId: 'node-1',
-      systemTableCache: {
-        get() {
-          throw new Error('direct cache get should not be used');
-        },
-        getAll() {
-          throw new Error('direct cache getAll should not be used');
-        },
-        filter() {
-          throw new Error('direct cache filter should not be used');
-        },
-        onCacheChange() {},
+  const nodeRow = createActiveNode('node-1');
+  const serviceRow = createMessageGroupService('node-1');
+  const readinessService = new ControlPlaneReadinessService({
+    nodeId: 'node-1',
+    systemTableCache: {
+      get() {
+        throw new Error('direct cache get should not be used');
       },
-      nodesOwner: {
-        async getNode(_nodeId) {
-          return nodeRow;
-        },
+      getAll() {
+        throw new Error('direct cache getAll should not be used');
       },
-      servicesOwner: {
-        async listServices() {
-          return {
-            success: true,
-            rows: [serviceRow],
-          };
-        },
+      filter() {
+        throw new Error('direct cache filter should not be used');
       },
-      storageAccountingService: createAccountingService({
-        'node-1': {
-          nodeId: 'node-1',
-          budgetBytes: 1000,
-          pressureState: 'normal',
-        },
-      }),
-      cdcGroupPropagationService: createPublicationService({
-        currentMode: CONTROL_PLANE_PUBLICATION_MODE.GROUPED,
-        reasonCode: null,
-        enteredAt: '2026-03-04T00:00:00.000Z',
-        recentTransitions: [],
-      }),
-      now: () => 1500,
-    });
-
-    const readiness = await readinessService.getNodeReadiness('node-1', {
-      allowAuthoritativeRefresh: true,
-    });
-
-    t.equal(readiness.dimensions.routingReady, true);
-    t.equal(readiness.dimensions.controlPlaneWritable, true);
+      onCacheChange() {},
+    },
+    nodesOwner: {
+      async getNode(_nodeId) {
+        return nodeRow;
+      },
+    },
+    servicesOwner: {
+      async listServices() {
+        return {
+          success: true,
+          rows: [serviceRow],
+        };
+      },
+    },
+    storageAccountingService: createAccountingService({
+      'node-1': {
+        nodeId: 'node-1',
+        budgetBytes: 1000,
+        pressureState: 'normal',
+      },
+    }),
+    cdcGroupPropagationService: createPublicationService({
+      currentMode: CONTROL_PLANE_PUBLICATION_MODE.GROUPED,
+      reasonCode: null,
+      enteredAt: '2026-03-04T00:00:00.000Z',
+      recentTransitions: [],
+    }),
+    now: () => 1500,
   });
+
+  const readiness = await readinessService.getNodeReadiness('node-1', {
+    allowAuthoritativeRefresh: true,
+  });
+
+  t.equal(readiness.dimensions.routingReady, true);
+  t.equal(readiness.dimensions.controlPlaneWritable, true);
+});
 
 test('ControlPlaneReadinessService reuses one owner-key evaluation for ' +
   'concurrent readiness reads', async (t) => {

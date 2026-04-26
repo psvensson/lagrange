@@ -8,46 +8,12 @@
  */
 
 import {test} from '../../../../src/test-helpers/tap.js';
-import http from 'node:http';
 import assert from 'node:assert';
-import {promises as fs} from 'node:fs';
-import {resolve as resolvePath} from 'node:path';
-import fc from 'fast-check';
-import {validate as uuidValidate} from 'uuid';
-import {WebSocketServer} from 'ws';
 import {
-  ACTIVE_WAIT_HANG_TEST_TIMEOUT_MS,
-  ADMIN_QUERY_TRACE_TIMEOUT_TEST_MS,
-  BENCHMARK_CRITICAL_CONTROL_PLANE_STABILITY_REASON_SNAPSHOT_UNAVAILABLE,
-  BENCHMARK_CRITICAL_CONTROL_PLANE_STABILITY_STATE,
-  BENCHMARK_DEGRADATION_STATE,
-  BENCHMARK_LOAD_ADMISSION_STATE,
-  buildCriticalSystemDiscoverySnapshot,
-  Cluster,
-  CONTAINER_ALREADY_STOPPED_ERROR_MESSAGE,
-  CONTAINER_ENV_KEYS,
   createCluster,
-  distributeNodes,
-  ENTRYPOINT_ENV,
-  LABELS,
-  LOAD_STOP_DISPATCH_SETTLE_MS,
-  LOAD_STOP_WAIT_TIMEOUT_MS,
-  NodeHandle,
-  NODE_CLIENT_CONTROL_SNAPSHOT_SQL,
-  NODE_CLIENT_SERVICE_DISCOVERY_SQL,
-  NODE_CLIENT_SERVICE_ID_ADMIN_META,
-  NODE_CLIENT_SERVICE_ID_POSTGRES_WIRE,
-  NODE_CLIENT_SERVICE_PROTOCOL_POSTGRESQL,
   NODE_ROLES,
-  PLAYBACK_EVENT_TYPE,
-  PORTS,
-  RAFT_PROVIDER_DEFAULTS,
 } from './cluster-test-helpers.js';
 
-const REUSE_START_COMMAND =
-  'if [ -f /harness-control/reset-data-on-start ]; then rm -rf /data/* && ' +
-  'rm -f /harness-control/reset-data-on-start; fi; ' +
-  'exec node --max-old-space-size=1536 /app/src/index.js';
 
 /**
  * Feature: distributed-testing-framework
@@ -62,79 +28,79 @@ const REUSE_START_COMMAND =
  */
 test('Unit: _probeControlSnapshotCoverage preserves a meaningful timeout floor ' +
   'for late active-wait probes',
-  async () => {
-    const cluster = createCluster({
-      size: 2,
-      docker: {socketPath: '/var/run/docker.sock'},
-      image: 'distributed-db:test',
-    });
-
-    const snapshotProbeCalls = [];
-    const reachabilityProbeCalls = [];
-    for (const [index, nodeId] of ['node-a', 'node-b'].entries()) {
-      cluster._nodes.set(nodeId, {
-        id: nodeId,
-        role: index === 0 ? NODE_ROLES.SEED : NODE_ROLES.JOINER,
-        async getStatus() {
-          return {rows: [{status: 'active'}]};
-        },
-        async getReachabilityDiagnostics(options = {}) {
-          reachabilityProbeCalls.push({
-            nodeId,
-            timeoutMs: options.timeoutMs,
-          });
-          return {
-            reachable: true,
-            adminReady: true,
-            reachableBy: 'admin_health',
-            lastError: null,
-          };
-        },
-        async getControlSnapshot(options = {}) {
-          snapshotProbeCalls.push({
-            nodeId,
-            timeoutMs: options.timeoutMs,
-          });
-          return {
-            rows: [{
-              nodes: [nodeId],
-              capturedAtMs: 100 + index,
-            }],
-          };
-        },
-        async getLogs(_options) {
-          return '';
-        },
-      });
-    }
-
-    const coverage = await cluster._probeControlSnapshotCoverage(
-      Date.now() + 1,
-      ['node-a', 'node-b'],
-    );
-
-    assert.strictEqual(
-      snapshotProbeCalls.length,
-      2,
-      'late coverage probes should still inspect the remaining nodes when the first witness is partial',
-    );
-    assert.ok(
-      snapshotProbeCalls.every((call) => call.timeoutMs >= 100),
-      'snapshot coverage probes should preserve a meaningful timeout floor instead of collapsing to 1ms near the deadline',
-    );
-    assert.ok(
-      reachabilityProbeCalls.every((call) => call.timeoutMs >= 100),
-      'reachability probes should preserve the same meaningful timeout floor for late coverage attempts',
-    );
-    assert.ok(
-      coverage.selectedSnapshotTimeoutMs >= 100,
-      'coverage summary should report the preserved late snapshot timeout floor',
-    );
-    assert.ok(
-      coverage.selectedReachabilityTimeoutMs >= 100,
-      'coverage summary should report the preserved late reachability timeout floor',
-    );
+async () => {
+  const cluster = createCluster({
+    size: 2,
+    docker: {socketPath: '/var/run/docker.sock'},
+    image: 'distributed-db:test',
   });
+
+  const snapshotProbeCalls = [];
+  const reachabilityProbeCalls = [];
+  for (const [index, nodeId] of ['node-a', 'node-b'].entries()) {
+    cluster._nodes.set(nodeId, {
+      id: nodeId,
+      role: index === 0 ? NODE_ROLES.SEED : NODE_ROLES.JOINER,
+      async getStatus() {
+        return {rows: [{status: 'active'}]};
+      },
+      async getReachabilityDiagnostics(options = {}) {
+        reachabilityProbeCalls.push({
+          nodeId,
+          timeoutMs: options.timeoutMs,
+        });
+        return {
+          reachable: true,
+          adminReady: true,
+          reachableBy: 'admin_health',
+          lastError: null,
+        };
+      },
+      async getControlSnapshot(options = {}) {
+        snapshotProbeCalls.push({
+          nodeId,
+          timeoutMs: options.timeoutMs,
+        });
+        return {
+          rows: [{
+            nodes: [nodeId],
+            capturedAtMs: 100 + index,
+          }],
+        };
+      },
+      async getLogs(_options) {
+        return '';
+      },
+    });
+  }
+
+  const coverage = await cluster._probeControlSnapshotCoverage(
+    Date.now() + 1,
+    ['node-a', 'node-b'],
+  );
+
+  assert.strictEqual(
+    snapshotProbeCalls.length,
+    2,
+    'late coverage probes should still inspect the remaining nodes when the first witness is partial',
+  );
+  assert.ok(
+    snapshotProbeCalls.every((call) => call.timeoutMs >= 100),
+    'snapshot coverage probes should preserve a meaningful timeout floor instead of collapsing to 1ms near the deadline',
+  );
+  assert.ok(
+    reachabilityProbeCalls.every((call) => call.timeoutMs >= 100),
+    'reachability probes should preserve the same meaningful timeout floor for late coverage attempts',
+  );
+  assert.ok(
+    coverage.selectedSnapshotTimeoutMs >= 100,
+    'coverage summary should report the preserved late snapshot timeout floor',
+  );
+  assert.ok(
+    coverage.selectedReachabilityTimeoutMs >= 100,
+    'coverage summary should report the preserved late reachability timeout floor',
+  );
+});
 
 test('Unit: _probeControlSnapshotCoverage falls back to default lane after snapshot-lane failure',
   async () => {

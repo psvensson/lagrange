@@ -30,7 +30,6 @@ import {
   buildEventIdentity,
 } from '../../src/partition/cdc-event-buffer.js';
 import {
-  PARTITION_SERVICE_CDC,
 } from '../../src/partition/partition-service-constants.js';
 import {
   SYSTEM_TABLE_NAME,

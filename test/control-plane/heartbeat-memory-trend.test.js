@@ -2,7 +2,6 @@ import {test} from '../../src/test-helpers/tap.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {
-  HeartbeatService as RawHeartbeatService,
   calculateUsageSlopePerMinute,
 } from '../../src/control-plane/heartbeat-service.js';
 import {HEARTBEAT_EVENT} from
@@ -13,7 +12,6 @@ import {
 import {SERVICE_STATUS, STATE} from '../../src/constants/index.js';
 import {TRANSPORT_DEFAULT} from '../../src/constants/transport.js';
 import {
-  createMockControlPlaneSystemTableGateway,
 } from './test-helpers.js';
 import {
   createHeartbeatUpdateRow,
@@ -742,7 +740,7 @@ test('HeartbeatService prefers node-state reporter for node heartbeats', async (
     ConfigurationManager.resetInstance();
     LoggingService.resetInstance();
   }
-  });
+});
 
 test('HeartbeatService promotes stopped rows back to active in reporter heartbeats',
   async (t) => {

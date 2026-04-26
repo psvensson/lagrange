@@ -1,18 +1,14 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {
   COLUMN,
-  NUM,
   STATE,
   SERVICE_STATUS,
   SERVICE_TYPE,
   TABLES,
 } from '../../src/constants/index.js';
 import {
-  CONTROL_PLANE_PARTICIPATION_KIND,
-  CONTROL_PLANE_PRIORITY_RECOVERY_REASON,
   CONTROL_PLANE_READINESS_DIMENSION,
   CONTROL_PLANE_PUBLICATION_MODE,
-  CONTROL_PLANE_READINESS_REASON,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {
   CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE,
@@ -21,41 +17,12 @@ import {
   ControlPlaneReadinessService,
 } from '../../src/control-plane/control-plane-readiness-service.js';
 import {
-  CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
 } from '../../src/control-plane/control-plane-system-table-gateway.js';
 import {
-  LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY,
 } from '../../src/cdc/cdc-integration-service.js';
 import {
-  DEFAULT_PRIORITY_RECOVERY_ACTIVITY_STALE_GRACE_MS,
 } from '../../src/control-plane/priority-recovery-snapshot.js';
 
-const TEST_DESCRIPTOR_STATE = Object.freeze({
-  NONE: 'none',
-});
-const TEST_MISSING_NODE_READINESS_STATE = Object.freeze({
-  SELF_RUNTIME_GRACE: 'self_runtime_grace',
-});
-const TEST_PROVISIONING_STATE = Object.freeze({
-  CONVERGENCE_GRACE: 'convergence_grace',
-  STEADY: 'steady',
-});
-const TEST_RUNTIME_AUTHORITY_PUBLICATION_STATE = Object.freeze({
-  HEALTHY: 'healthy',
-});
-const TEST_RUNTIME_AUTHORITY_REPAIR_STATE = Object.freeze({
-  NOT_ATTEMPTED: 'not_attempted',
-});
-const TEST_RUNTIME_AUTHORITY_STATE = Object.freeze({
-  CONFIRMED: 'confirmed',
-  ESTABLISHING: 'establishing',
-  RETAINED: 'retained',
-});
-const TEST_RUNTIME_AUTHORITY_VISIBILITY_STATE = Object.freeze({
-  CONFIRMED: 'confirmed',
-  PENDING_PUBLICATION: 'pending_publication',
-  RETAINED_LOCAL_RUNTIME: 'retained_local_runtime',
-});
 
 function createCache({nodes = [], services = []} = {}) {
   const nodeRows = new Map(nodes.map((row) => [row[COLUMN.NODE_ID], row]));
@@ -178,15 +145,6 @@ function createMessageGroupService(nodeId) {
   };
 }
 
-function createPartitionService(nodeId, serviceId = `part-${nodeId}`) {
-  return {
-    [COLUMN.SERVICE_ID]: serviceId,
-    [COLUMN.NODE_ID]: nodeId,
-    [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
-    [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
-    [COLUMN.ADDRESS]: `${nodeId}/partition/${serviceId}`,
-  };
-}
 
 test('ControlPlaneReadinessService getAllNodeReadiness propagates ' +
   'authoritative refresh for stale connected rows',
@@ -274,217 +232,217 @@ async (t) => {
 });
 
 test('ControlPlaneReadinessService getAllNodeReadiness retains fresh stored readiness for service-visible nodes whose node row lags cache',
-async (t) => {
-  const now = 360000;
-  const cache = createCache({
-    nodes: [
-      {
-        ...createActiveNode('node-visible'),
-        [COLUMN.CONNECTION_STATE]: STATE.READY,
-        [COLUMN.LAST_HEARTBEAT]: now - 1000,
-        [COLUMN.READY_LEASE_EXPIRES_AT]: now + 60000,
+  async (t) => {
+    const now = 360000;
+    const cache = createCache({
+      nodes: [
+        {
+          ...createActiveNode('node-visible'),
+          [COLUMN.CONNECTION_STATE]: STATE.READY,
+          [COLUMN.LAST_HEARTBEAT]: now - 1000,
+          [COLUMN.READY_LEASE_EXPIRES_AT]: now + 60000,
+        },
+        {
+          ...createActiveNode('node-lagged'),
+          [COLUMN.CONNECTION_STATE]: STATE.READY,
+          [COLUMN.LAST_HEARTBEAT]: now - 1000,
+          [COLUMN.READY_LEASE_EXPIRES_AT]: now + 60000,
+        },
+      ],
+      services: [
+        createMessageGroupService('node-visible'),
+        createMessageGroupService('node-lagged'),
+      ],
+    });
+    const readinessService = new ControlPlaneReadinessService({
+      nodeId: 'seed-node',
+      systemTableCache: cache,
+      cacheMutationTarget: cache,
+      messageRouter: {
+        getConnectionState() {
+          return STATE.CONNECTED;
+        },
       },
-      {
-        ...createActiveNode('node-lagged'),
-        [COLUMN.CONNECTION_STATE]: STATE.READY,
-        [COLUMN.LAST_HEARTBEAT]: now - 1000,
-        [COLUMN.READY_LEASE_EXPIRES_AT]: now + 60000,
+      storageAccountingService: createAccountingService({
+        'node-visible': {
+          nodeId: 'node-visible',
+          budgetBytes: 1000,
+          pressureState: 'normal',
+        },
+        'node-lagged': {
+          nodeId: 'node-lagged',
+          budgetBytes: 1000,
+          pressureState: 'normal',
+        },
+      }),
+      cdcIntegrationService: {
+        async executeAuthoritativeSystemTableRead() {
+          return {success: false, rows: []};
+        },
       },
-    ],
-    services: [
-      createMessageGroupService('node-visible'),
-      createMessageGroupService('node-lagged'),
-    ],
-  });
-  const readinessService = new ControlPlaneReadinessService({
-    nodeId: 'seed-node',
-    systemTableCache: cache,
-    cacheMutationTarget: cache,
-    messageRouter: {
-      getConnectionState() {
-        return STATE.CONNECTED;
-      },
-    },
-    storageAccountingService: createAccountingService({
-      'node-visible': {
-        nodeId: 'node-visible',
-        budgetBytes: 1000,
-        pressureState: 'normal',
-      },
-      'node-lagged': {
-        nodeId: 'node-lagged',
-        budgetBytes: 1000,
-        pressureState: 'normal',
-      },
-    }),
-    cdcIntegrationService: {
-      async executeAuthoritativeSystemTableRead() {
-        return {success: false, rows: []};
-      },
-    },
-    cdcGroupPropagationService: createPublicationService({
-      currentMode: CONTROL_PLANE_PUBLICATION_MODE.GROUPED,
-      reasonCode: null,
-      enteredAt: '2026-03-04T00:00:00.000Z',
-      recentTransitions: [],
-    }),
-    now: () => now,
-  });
+      cdcGroupPropagationService: createPublicationService({
+        currentMode: CONTROL_PLANE_PUBLICATION_MODE.GROUPED,
+        reasonCode: null,
+        enteredAt: '2026-03-04T00:00:00.000Z',
+        recentTransitions: [],
+      }),
+      now: () => now,
+    });
 
-  const initialLaggedReadiness =
+    const initialLaggedReadiness =
     await readinessService.getNodeReadiness('node-lagged', {
       allowAuthoritativeRefresh: false,
     });
-  t.equal(
-    initialLaggedReadiness.dimensions.clusterMemberHealthy,
-    true,
-    'fixture should capture a healthy readiness snapshot before the node row lags',
-  );
+    t.equal(
+      initialLaggedReadiness.dimensions.clusterMemberHealthy,
+      true,
+      'fixture should capture a healthy readiness snapshot before the node row lags',
+    );
 
-  cache.applySystemTableChange(TABLES.NODES, 'DELETE', {
-    [COLUMN.NODE_ID]: 'node-lagged',
+    cache.applySystemTableChange(TABLES.NODES, 'DELETE', {
+      [COLUMN.NODE_ID]: 'node-lagged',
+    });
+
+    const readinessEntries = await readinessService.getAllNodeReadiness({
+      allowAuthoritativeRefresh: false,
+    });
+    const readinessByNodeId = Object.fromEntries(
+      readinessEntries.map((entry) => [entry.nodeId, entry]),
+    );
+
+    t.ok(
+      readinessByNodeId['node-lagged'],
+      'bulk readiness should still enumerate service-visible nodes when a fresh stored snapshot exists',
+    );
+    t.equal(
+      readinessByNodeId['node-lagged'].dimensions.clusterMemberHealthy,
+      true,
+      'bulk readiness should reuse the fresh stored snapshot for the lagged node',
+    );
   });
-
-  const readinessEntries = await readinessService.getAllNodeReadiness({
-    allowAuthoritativeRefresh: false,
-  });
-  const readinessByNodeId = Object.fromEntries(
-    readinessEntries.map((entry) => [entry.nodeId, entry]),
-  );
-
-  t.ok(
-    readinessByNodeId['node-lagged'],
-    'bulk readiness should still enumerate service-visible nodes when a fresh stored snapshot exists',
-  );
-  t.equal(
-    readinessByNodeId['node-lagged'].dimensions.clusterMemberHealthy,
-    true,
-    'bulk readiness should reuse the fresh stored snapshot for the lagged node',
-  );
-});
 
 test('ControlPlaneReadinessService getAllNodeReadiness includes authoritative-only nodes during bulk refresh',
-async (t) => {
-  const now = 365000;
-  const cacheVisibleNode = {
-    ...createActiveNode('node-cache-visible'),
-    [COLUMN.CONNECTION_STATE]: STATE.READY,
-    [COLUMN.LAST_HEARTBEAT]: now - 250,
-    [COLUMN.READY_LEASE_EXPIRES_AT]: now + 60000,
-  };
-  const authoritativeOnlyNode = {
-    ...createActiveNode('node-authoritative-only'),
-    [COLUMN.CONNECTION_STATE]: STATE.READY,
-    [COLUMN.LAST_HEARTBEAT]: now - 250,
-    [COLUMN.READY_LEASE_EXPIRES_AT]: now + 60000,
-  };
-  let authoritativeNodeListCalls = 0;
-  let cachedNodeListCalls = 0;
-  let authoritativeServiceListCalls = 0;
-  let cachedServiceListCalls = 0;
-  const readinessService = new ControlPlaneReadinessService({
-    nodeId: 'seed-node',
-    systemTableCache: createCache({
-      nodes: [cacheVisibleNode],
-      services: [createMessageGroupService('node-cache-visible')],
-    }),
-    nodesOwner: {
-      async listNodes() {
-        authoritativeNodeListCalls += 1;
-        return {
-          success: true,
-          rows: [cacheVisibleNode, authoritativeOnlyNode],
-        };
+  async (t) => {
+    const now = 365000;
+    const cacheVisibleNode = {
+      ...createActiveNode('node-cache-visible'),
+      [COLUMN.CONNECTION_STATE]: STATE.READY,
+      [COLUMN.LAST_HEARTBEAT]: now - 250,
+      [COLUMN.READY_LEASE_EXPIRES_AT]: now + 60000,
+    };
+    const authoritativeOnlyNode = {
+      ...createActiveNode('node-authoritative-only'),
+      [COLUMN.CONNECTION_STATE]: STATE.READY,
+      [COLUMN.LAST_HEARTBEAT]: now - 250,
+      [COLUMN.READY_LEASE_EXPIRES_AT]: now + 60000,
+    };
+    let authoritativeNodeListCalls = 0;
+    let cachedNodeListCalls = 0;
+    let authoritativeServiceListCalls = 0;
+    let cachedServiceListCalls = 0;
+    const readinessService = new ControlPlaneReadinessService({
+      nodeId: 'seed-node',
+      systemTableCache: createCache({
+        nodes: [cacheVisibleNode],
+        services: [createMessageGroupService('node-cache-visible')],
+      }),
+      nodesOwner: {
+        async listNodes() {
+          authoritativeNodeListCalls += 1;
+          return {
+            success: true,
+            rows: [cacheVisibleNode, authoritativeOnlyNode],
+          };
+        },
+        async listNodesFromCache() {
+          cachedNodeListCalls += 1;
+          return {
+            success: true,
+            rows: [cacheVisibleNode],
+          };
+        },
       },
-      async listNodesFromCache() {
-        cachedNodeListCalls += 1;
-        return {
-          success: true,
-          rows: [cacheVisibleNode],
-        };
+      servicesOwner: {
+        async listServices() {
+          authoritativeServiceListCalls += 1;
+          return {
+            success: true,
+            rows: [
+              createMessageGroupService('node-cache-visible'),
+              createMessageGroupService('node-authoritative-only'),
+            ],
+          };
+        },
+        async listServicesFromCache() {
+          cachedServiceListCalls += 1;
+          return {
+            success: true,
+            rows: [createMessageGroupService('node-cache-visible')],
+          };
+        },
       },
-    },
-    servicesOwner: {
-      async listServices() {
-        authoritativeServiceListCalls += 1;
-        return {
-          success: true,
-          rows: [
-            createMessageGroupService('node-cache-visible'),
-            createMessageGroupService('node-authoritative-only'),
-          ],
-        };
+      messageRouter: {
+        getConnectionState() {
+          return STATE.CONNECTED;
+        },
       },
-      async listServicesFromCache() {
-        cachedServiceListCalls += 1;
-        return {
-          success: true,
-          rows: [createMessageGroupService('node-cache-visible')],
-        };
-      },
-    },
-    messageRouter: {
-      getConnectionState() {
-        return STATE.CONNECTED;
-      },
-    },
-    storageAccountingService: createAccountingService({
-      'node-cache-visible': {
-        nodeId: 'node-cache-visible',
-        budgetBytes: 1000,
-        pressureState: 'normal',
-      },
-      'node-authoritative-only': {
-        nodeId: 'node-authoritative-only',
-        budgetBytes: 1000,
-        pressureState: 'normal',
-      },
-    }),
-    cdcGroupPropagationService: createPublicationService({
-      currentMode: CONTROL_PLANE_PUBLICATION_MODE.GROUPED,
-      reasonCode: null,
-      enteredAt: '2026-03-04T00:00:00.000Z',
-      recentTransitions: [],
-    }),
-    now: () => now,
-  });
+      storageAccountingService: createAccountingService({
+        'node-cache-visible': {
+          nodeId: 'node-cache-visible',
+          budgetBytes: 1000,
+          pressureState: 'normal',
+        },
+        'node-authoritative-only': {
+          nodeId: 'node-authoritative-only',
+          budgetBytes: 1000,
+          pressureState: 'normal',
+        },
+      }),
+      cdcGroupPropagationService: createPublicationService({
+        currentMode: CONTROL_PLANE_PUBLICATION_MODE.GROUPED,
+        reasonCode: null,
+        enteredAt: '2026-03-04T00:00:00.000Z',
+        recentTransitions: [],
+      }),
+      now: () => now,
+    });
 
-  const readinessEntries = await readinessService.getAllNodeReadiness({
-    allowAuthoritativeRefresh: true,
-  });
+    const readinessEntries = await readinessService.getAllNodeReadiness({
+      allowAuthoritativeRefresh: true,
+    });
 
-  t.same(
-    readinessEntries.map((entry) => entry.nodeId).sort(),
-    ['node-authoritative-only', 'node-cache-visible'],
-    'bulk readiness should include nodes that are only visible on the authoritative owner path',
-  );
-  t.equal(
-    authoritativeNodeListCalls,
-    1,
-    'bulk readiness should enumerate nodes from the authoritative owner path',
-  );
-  t.equal(
-    authoritativeServiceListCalls,
-    1,
-    'bulk readiness should enumerate services from the authoritative owner path',
-  );
-  t.equal(
-    cachedNodeListCalls,
-    0,
-    'bulk readiness should not fall back to cached node enumeration during authoritative refresh',
-  );
-  t.equal(
-    cachedServiceListCalls,
-    0,
-    'bulk readiness should not fall back to cached service enumeration during authoritative refresh',
-  );
-  t.equal(
-    readinessEntries.find((entry) => entry.nodeId === 'node-authoritative-only')
-      ?.dimensions.clusterMemberHealthy,
-    true,
-    'the authoritative-only node should be evaluated as healthy once it is discovered',
-  );
-});
+    t.same(
+      readinessEntries.map((entry) => entry.nodeId).sort(),
+      ['node-authoritative-only', 'node-cache-visible'],
+      'bulk readiness should include nodes that are only visible on the authoritative owner path',
+    );
+    t.equal(
+      authoritativeNodeListCalls,
+      1,
+      'bulk readiness should enumerate nodes from the authoritative owner path',
+    );
+    t.equal(
+      authoritativeServiceListCalls,
+      1,
+      'bulk readiness should enumerate services from the authoritative owner path',
+    );
+    t.equal(
+      cachedNodeListCalls,
+      0,
+      'bulk readiness should not fall back to cached node enumeration during authoritative refresh',
+    );
+    t.equal(
+      cachedServiceListCalls,
+      0,
+      'bulk readiness should not fall back to cached service enumeration during authoritative refresh',
+    );
+    t.equal(
+      readinessEntries.find((entry) => entry.nodeId === 'node-authoritative-only')
+        ?.dimensions.clusterMemberHealthy,
+      true,
+      'the authoritative-only node should be evaluated as healthy once it is discovered',
+    );
+  });
 
 test('ControlPlaneReadinessService repairs medium-stale connected heartbeats ' +
   'before the node becomes unhealthy',
@@ -1153,7 +1111,7 @@ async (t) => {
 test('ControlPlaneReadinessService can reuse last-known-good readiness on ' +
   'cache invalidation while refreshing in the background',
 async (t) => {
-  let now = 520000;
+  const now = 520000;
   const cache = createCache({
     nodes: [{
       ...createActiveNode('node-stale-on-change'),

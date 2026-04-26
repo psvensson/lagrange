@@ -29,56 +29,56 @@
  * Requirements: 2.4, 13.2
  */
 
-import Fastify from "fastify";
-import websocket from "@fastify/websocket";
-import { LoggingService } from "../logging/logging-service.js";
-import { ConfigurationManager } from "../config/configuration-manager.js";
+import Fastify from 'fastify';
+import websocket from '@fastify/websocket';
+import {LoggingService} from '../logging/logging-service.js';
+import {ConfigurationManager} from '../config/configuration-manager.js';
 import {
   TIMEOUT_BUDGET_CLASSIFICATION,
   createTimeoutBudget,
   createTimeoutBudgetError,
-} from "../control-plane/timeout-budget.js";
+} from '../control-plane/timeout-budget.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
   READINESS_SNAPSHOT_KEY,
-} from "../control-plane/control-plane-readiness-constants.js";
+} from '../control-plane/control-plane-readiness-constants.js';
 import {
   getControlPlaneRetryAfterMs,
   isRetryableControlPlaneError,
-} from "../control-plane/control-plane-error-classification.js";
-import { getRegisteredControlPlaneSystemTableGateway } from "../control-plane/control-plane-gateway-registry.js";
+} from '../control-plane/control-plane-error-classification.js';
+import {getRegisteredControlPlaneSystemTableGateway} from '../control-plane/control-plane-gateway-registry.js';
 import {
   PRESSURE_GOVERNOR_ACTION,
   PressureGovernor,
-} from "../control-plane/pressure-governor.js";
+} from '../control-plane/pressure-governor.js';
 import {
   buildControlPlaneWorkloadProfile,
   CONTROL_PLANE_WORKLOAD_CLASS,
-} from "../control-plane/control-plane-workload-profile.js";
-import { ERRNO, HTTP_STATUS, NUM, TABLES, TYPEOF } from "../constants/index.js";
-import { META_SERVICE_ID } from "../constants/wasm-meta.js";
-import { TRANSPORT_EVENT } from "../constants/transport.js";
-import { CancellationToken } from "../query/cancellation-token.js";
-import { createSqlRequest } from "../query/sql-request.js";
-import { EXECUTION_MODE } from "../query/sql-adapter-constants.js";
-import { guardedAdaptAdminAction } from "./admin-api-adapter.js";
+} from '../control-plane/control-plane-workload-profile.js';
+import {ERRNO, HTTP_STATUS, NUM, TABLES, TYPEOF} from '../constants/index.js';
+import {META_SERVICE_ID} from '../constants/wasm-meta.js';
+import {TRANSPORT_EVENT} from '../constants/transport.js';
+import {CancellationToken} from '../query/cancellation-token.js';
+import {createSqlRequest} from '../query/sql-request.js';
+import {EXECUTION_MODE} from '../query/sql-adapter-constants.js';
+import {guardedAdaptAdminAction} from './admin-api-adapter.js';
 import {
   ADMIN_META_ACTION,
   CACHE_DUMP_TABLES,
-} from "./admin-meta-command-handlers.js";
-import { parseLiveSelect } from "../live-query/live-query-service.js";
-import { AST_TYPE, EXPR_TYPE, SQLParser } from "../query/sql-parser.js";
-import { MUTATION_GUARD_MODE } from "./admin-mutation-guard.js";
+} from './admin-meta-command-handlers.js';
+import {parseLiveSelect} from '../live-query/live-query-service.js';
+import {AST_TYPE, EXPR_TYPE, SQLParser} from '../query/sql-parser.js';
+import {MUTATION_GUARD_MODE} from './admin-mutation-guard.js';
 import {
   ADMIN_SERVICE_OPERATION,
   adaptAdminMessageToServiceMessage,
   isAdminMessageDispatchable,
-} from "./admin-service-message-adapter.js";
-import { AdminTestRunService } from "./admin-test-run-service.js";
-import { DebugMetadataStore } from "../debug-runtime/debug-metadata-service.js";
-import { TraceCollector } from "../debug/trace-collector.js";
-import { ENDPOINT_SYNC_UNHEALTHY_POLICY } from "../runtime/endpoint-sync-constants.js";
-import { WASM_SERVICE_PROTOCOL } from "../wasm-service/wasm-service-constants.js";
+} from './admin-service-message-adapter.js';
+import {AdminTestRunService} from './admin-test-run-service.js';
+import {DebugMetadataStore} from '../debug-runtime/debug-metadata-service.js';
+import {TraceCollector} from '../debug/trace-collector.js';
+import {ENDPOINT_SYNC_UNHEALTHY_POLICY} from '../runtime/endpoint-sync-constants.js';
+import {WASM_SERVICE_PROTOCOL} from '../wasm-service/wasm-service-constants.js';
 
 import {
   ADMIN_CACHE_DUMP,
@@ -104,83 +104,83 @@ import {
   ADMIN_TEST_DEFAULT,
   ADMIN_TEST_ERROR_MSG,
   ADMIN_TEST_STREAM_EVENT,
-} from "./admin-constants.js";
-import { normalizeIdentifier, normalizeSql } from "./admin-helpers.js";
-import { evaluateSharedMetadataNodeCoverage } from "./admin-shared-metadata-consistency.js";
-import { ControlPlaneSnapshotOwner } from "../control-plane/control-plane-snapshot-owner.js";
-import { CONTROL_PLANE_SNAPSHOT_OBSERVATION_STATE } from "../control-plane/control-plane-snapshot-owner.js";
+} from './admin-constants.js';
+import {normalizeIdentifier, normalizeSql} from './admin-helpers.js';
+import {evaluateSharedMetadataNodeCoverage} from './admin-shared-metadata-consistency.js';
+import {ControlPlaneSnapshotOwner} from '../control-plane/control-plane-snapshot-owner.js';
+import {CONTROL_PLANE_SNAPSHOT_OBSERVATION_STATE} from '../control-plane/control-plane-snapshot-owner.js';
 import {
   AdminServiceDiscovery,
   parseDiscoveryBooleanQuery,
   parseDiscoveryListQuery,
   parseServiceDiscoverySqlQuery,
-} from "./admin-service-discovery.js";
-import { AdminPreflightSnapshot } from "./admin-preflight-snapshot.js";
-import { AdminControlSnapshot } from "./admin-control-snapshot.js";
-import { AdminDebugHandlers } from "./admin-debug-handlers.js";
+} from './admin-service-discovery.js';
+import {AdminPreflightSnapshot} from './admin-preflight-snapshot.js';
+import {AdminControlSnapshot} from './admin-control-snapshot.js';
+import {AdminDebugHandlers} from './admin-debug-handlers.js';
 
 const MessageType = ADMIN_MESSAGE_TYPE;
 const ErrorCode = ADMIN_ERROR_CODE;
 const HTTP_HEADER = Object.freeze({
-  CACHE_CONTROL: "Cache-Control",
-  CONNECTION: "Connection",
-  CONTENT_TYPE: "Content-Type",
+  CACHE_CONTROL: 'Cache-Control',
+  CONNECTION: 'Connection',
+  CONTENT_TYPE: 'Content-Type',
 });
 const HTTP_HEADER_VALUE = Object.freeze({
-  NO_CACHE: "no-cache",
-  NO_STORE: "no-store",
-  KEEP_ALIVE: "keep-alive",
+  NO_CACHE: 'no-cache',
+  NO_STORE: 'no-store',
+  KEEP_ALIVE: 'keep-alive',
 });
-const ADMIN_STREAM_LANE_DEFAULT = "default";
-const ADMIN_STREAM_LANE_LOAD = "load";
-const ADMIN_STREAM_LANE_PROBE = "probe";
-const ADMIN_STREAM_LANE_SNAPSHOT = "snapshot";
+const ADMIN_STREAM_LANE_DEFAULT = 'default';
+const ADMIN_STREAM_LANE_LOAD = 'load';
+const ADMIN_STREAM_LANE_PROBE = 'probe';
+const ADMIN_STREAM_LANE_SNAPSHOT = 'snapshot';
 const LOAD_LANE_READINESS_CACHE_MAX_AGE_MS = 5000;
 const LOAD_LANE_TABLE_ADMISSION_CACHE_MAX_AGE_MS = 250;
 const LOAD_LANE_TABLE_ADMISSION_RETRY_AFTER_MS = 250;
 const LOAD_LANE_QUERY_TIMEOUT_CAP_MS = 3000;
 const LOAD_LANE_SOFT_ADMISSION_REASON_CODES = new Set([
-  "schema_partition_unavailable",
-  "leadership_unstable",
+  'schema_partition_unavailable',
+  'leadership_unstable',
 ]);
 const LOAD_LANE_QUERY_ADMISSION_STATE = Object.freeze({
-  ADMITTED: "admitted",
-  BLOCKED: "blocked",
-  SNAPSHOT_UNAVAILABLE: "snapshot_unavailable",
+  ADMITTED: 'admitted',
+  BLOCKED: 'blocked',
+  SNAPSHOT_UNAVAILABLE: 'snapshot_unavailable',
 });
 const LOAD_LANE_TABLE_ADMISSION_STATE = Object.freeze({
-  BENCHMARK_BLOCKED: "benchmark_blocked",
-  DISCOVERY_MISSING: "local_benchmark_discovery_missing",
-  READINESS_BLOCKED: "readiness_blocked",
-  READY: "ready",
-  SOFT_BLOCKER_ADMITTED: "soft_blocker_admitted",
+  BENCHMARK_BLOCKED: 'benchmark_blocked',
+  DISCOVERY_MISSING: 'local_benchmark_discovery_missing',
+  READINESS_BLOCKED: 'readiness_blocked',
+  READY: 'ready',
+  SOFT_BLOCKER_ADMITTED: 'soft_blocker_admitted',
 });
 const LOAD_LANE_ADMISSION_REASON_FALLBACK = Object.freeze({
-  BENCHMARK_ADMISSION_BLOCKED: "benchmark_admission_blocked",
-  BENCHMARK_READINESS_BLOCKED: "benchmark_readiness_blocked",
+  BENCHMARK_ADMISSION_BLOCKED: 'benchmark_admission_blocked',
+  BENCHMARK_READINESS_BLOCKED: 'benchmark_readiness_blocked',
 });
-const LOAD_LANE_VOTER_READY_REPLICA_ROLES = new Set(["leader", "follower"]);
-const SSE_FRAME_PREFIX = "data: ";
-const SSE_FRAME_SUFFIX = "\n\n";
-const EMPTY_STRING = "";
+const LOAD_LANE_VOTER_READY_REPLICA_ROLES = new Set(['leader', 'follower']);
+const SSE_FRAME_PREFIX = 'data: ';
+const SSE_FRAME_SUFFIX = '\n\n';
+const EMPTY_STRING = '';
 const ADMIN_CACHE_OBSERVATION_TABLES = new Set([
   ...CACHE_DUMP_TABLES,
   TABLES.NODE_ENDPOINTS,
 ]);
 
 const ADMIN_LOCAL_DISPATCH = Object.freeze({
-  TARGET_ADDRESS: "local/admin-websocket-api",
+  TARGET_ADDRESS: 'local/admin-websocket-api',
 });
 const QUERY_RESULT_MESSAGE_KIND = Object.freeze({
-  DEFAULT_WRITE: "default_write",
-  ERROR: "error",
-  HOST_CALLBACK: "host_callback",
-  ROWS: "rows",
-  WRITE: "write",
+  DEFAULT_WRITE: 'default_write',
+  ERROR: 'error',
+  HOST_CALLBACK: 'host_callback',
+  ROWS: 'rows',
+  WRITE: 'write',
 });
-const QUERY_RESULT_WRITE_OPERATIONS = new Set(["delete", "insert", "update"]);
+const QUERY_RESULT_WRITE_OPERATIONS = new Set(['delete', 'insert', 'update']);
 const ADMIN_ERROR_DETAIL_KEY = Object.freeze({
-  LOAD_LANE_ADMISSION: "loadLaneAdmission",
+  LOAD_LANE_ADMISSION: 'loadLaneAdmission',
 });
 
 function buildLoadLaneRuntimeAuthoritySummary(runtimeAuthority) {
@@ -189,30 +189,30 @@ function buildLoadLaneRuntimeAuthoritySummary(runtimeAuthority) {
   }
   return Object.freeze({
     state:
-      typeof runtimeAuthority.state === TYPEOF.STRING
-        ? runtimeAuthority.state
-        : null,
+      typeof runtimeAuthority.state === TYPEOF.STRING ?
+        runtimeAuthority.state :
+        null,
     ready: runtimeAuthority.ready === true,
     authorityAvailable: runtimeAuthority.authorityAvailable === true,
     visibilityState:
-      typeof runtimeAuthority.visibility?.state === TYPEOF.STRING
-        ? runtimeAuthority.visibility.state
-        : null,
+      typeof runtimeAuthority.visibility?.state === TYPEOF.STRING ?
+        runtimeAuthority.visibility.state :
+        null,
     provisioningState:
-      typeof runtimeAuthority.provisioning?.state === TYPEOF.STRING
-        ? runtimeAuthority.provisioning.state
-        : null,
+      typeof runtimeAuthority.provisioning?.state === TYPEOF.STRING ?
+        runtimeAuthority.provisioning.state :
+        null,
     failureReason:
-      typeof runtimeAuthority.failure?.reason === TYPEOF.STRING
-        ? runtimeAuthority.failure.reason
-        : null,
-    reasonCodes: Array.isArray(runtimeAuthority.reasonCodes)
-      ? Object.freeze(
-          runtimeAuthority.reasonCodes
-            .map((value) => String(value || EMPTY_STRING).trim())
-            .filter((value) => value.length > NUM.ZERO),
-        )
-      : Object.freeze([]),
+      typeof runtimeAuthority.failure?.reason === TYPEOF.STRING ?
+        runtimeAuthority.failure.reason :
+        null,
+    reasonCodes: Array.isArray(runtimeAuthority.reasonCodes) ?
+      Object.freeze(
+        runtimeAuthority.reasonCodes
+          .map((value) => String(value || EMPTY_STRING).trim())
+          .filter((value) => value.length > NUM.ZERO),
+      ) :
+      Object.freeze([]),
   });
 }
 
@@ -223,11 +223,11 @@ function buildLoadLaneQueryAdmissionSnapshot(readiness) {
     readiness.dimensions &&
     typeof readiness.dimensions === TYPEOF.OBJECT,
   );
-  const reasonCodes = Array.isArray(readiness?.reasons)
-    ? readiness.reasons
-        .map((reason) => String(reason?.code || EMPTY_STRING).trim())
-        .filter((code) => code.length > NUM.ZERO)
-    : [];
+  const reasonCodes = Array.isArray(readiness?.reasons) ?
+    readiness.reasons
+      .map((reason) => String(reason?.code || EMPTY_STRING).trim())
+      .filter((code) => code.length > NUM.ZERO) :
+    [];
   return Object.freeze({
     serveEligible:
       hasDimensions &&
@@ -244,9 +244,9 @@ function resolveLoadLaneQueryAdmissionState(snapshot) {
   if (!snapshot.hasDimensions) {
     return LOAD_LANE_QUERY_ADMISSION_STATE.SNAPSHOT_UNAVAILABLE;
   }
-  return snapshot.serveEligible
-    ? LOAD_LANE_QUERY_ADMISSION_STATE.ADMITTED
-    : LOAD_LANE_QUERY_ADMISSION_STATE.BLOCKED;
+  return snapshot.serveEligible ?
+    LOAD_LANE_QUERY_ADMISSION_STATE.ADMITTED :
+    LOAD_LANE_QUERY_ADMISSION_STATE.BLOCKED;
 }
 
 function buildLoadLaneQueryAdmissionResult(snapshot, state) {
@@ -254,13 +254,13 @@ function buildLoadLaneQueryAdmissionResult(snapshot, state) {
     state,
     serveEligible: snapshot.serveEligible,
     reasonCodes:
-      state === LOAD_LANE_QUERY_ADMISSION_STATE.BLOCKED
-        ? snapshot.reasonCodes
-        : [],
+      state === LOAD_LANE_QUERY_ADMISSION_STATE.BLOCKED ?
+        snapshot.reasonCodes :
+        [],
     [READINESS_SNAPSHOT_KEY.RUNTIME_AUTHORITY]:
-      state === LOAD_LANE_QUERY_ADMISSION_STATE.BLOCKED
-        ? snapshot[READINESS_SNAPSHOT_KEY.RUNTIME_AUTHORITY]
-        : null,
+      state === LOAD_LANE_QUERY_ADMISSION_STATE.BLOCKED ?
+        snapshot[READINESS_SNAPSHOT_KEY.RUNTIME_AUTHORITY] :
+        null,
   });
 }
 
@@ -271,9 +271,9 @@ function buildLoadLaneAdmissionErrorDetails(admission) {
   return Object.freeze({
     [ADMIN_ERROR_DETAIL_KEY.LOAD_LANE_ADMISSION]: Object.freeze({
       serveEligible: admission.serveEligible === true,
-      reasonCodes: Array.isArray(admission.reasonCodes)
-        ? Object.freeze([...admission.reasonCodes])
-        : Object.freeze([]),
+      reasonCodes: Array.isArray(admission.reasonCodes) ?
+        Object.freeze([...admission.reasonCodes]) :
+        Object.freeze([]),
       [READINESS_SNAPSHOT_KEY.RUNTIME_AUTHORITY]:
         admission[READINESS_SNAPSHOT_KEY.RUNTIME_AUTHORITY] || null,
     }),
@@ -323,9 +323,9 @@ function createRetryableAdminOperationError(errorCode, message, options = {}) {
   );
   error.deferRetry = true;
   error.retryAfterMs =
-    Number.isFinite(options?.retryAfterMs) && options.retryAfterMs > NUM.ZERO
-      ? Math.floor(options.retryAfterMs)
-      : LOAD_LANE_TABLE_ADMISSION_RETRY_AFTER_MS;
+    Number.isFinite(options?.retryAfterMs) && options.retryAfterMs > NUM.ZERO ?
+      Math.floor(options.retryAfterMs) :
+      LOAD_LANE_TABLE_ADMISSION_RETRY_AFTER_MS;
   if (options?.details && typeof options.details === TYPEOF.OBJECT) {
     error.adminDetails = options.details;
   }
@@ -353,9 +353,9 @@ function resolveRequestedQueryTimeoutMs(value) {
 
 function resolveSqlRequestTimeoutBudgetMs(timeoutMs) {
   const normalizedTimeoutMs =
-    Number.isFinite(timeoutMs) && timeoutMs > NUM.ZERO
-      ? Math.floor(timeoutMs)
-      : ADMIN_DEFAULT.QUERY_TIMEOUT_MS;
+    Number.isFinite(timeoutMs) && timeoutMs > NUM.ZERO ?
+      Math.floor(timeoutMs) :
+      ADMIN_DEFAULT.QUERY_TIMEOUT_MS;
   const trimmedTimeoutMs =
     normalizedTimeoutMs - SQL_REQUEST_TIMEOUT_BUDGET_COMPLETION_MARGIN_MS;
   return trimmedTimeoutMs > NUM.ZERO ? trimmedTimeoutMs : normalizedTimeoutMs;

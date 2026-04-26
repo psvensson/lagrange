@@ -5,12 +5,11 @@
 
 import {test} from '../../src/test-helpers/tap.js';
 import {BootstrapAPI, BootstrapStrategy} from '../../src/bootstrap/bootstrap-api.js';
-import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {
-  BOOTSTRAP_API_HANDOFF_STATUS,
-  BOOTSTRAP_API_ERROR,
   BOOTSTRAP_API_LOG_MSG,
-  BOOTSTRAP_API_PROBE_REASON,
+  BOOTSTRAP_API_READINESS_FIELD,
+  BOOTSTRAP_API_RESPONSE_FIELD,
+  BOOTSTRAP_API_ROUTE,
 } from '../../src/bootstrap/bootstrap-api-constants.js';
 import {
   BOOTSTRAP_PHASE,
@@ -18,21 +17,19 @@ import {
 } from '../../src/bootstrap/bootstrap-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
-import {CACHE_HYDRATION_TABLES} from '../../src/cache/cache-constants.js';
 import {
-  ENDPOINT_STATUS,
+  HTTP_STATUS,
   SERVICE_STATUS,
   SERVICE_TYPE,
-  STATE,
   TABLES,
-  TRANSPORT_TYPE,
 } from '../../src/constants/index.js';
-import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {BootstrapReadinessState} from '../../src/bootstrap/bootstrap-readiness-state.js';
-import {BOOTSTRAP_READINESS_STAGE} from '../../src/bootstrap/bootstrap-readiness-ladder.js';
 import {LIFECYCLE_REASON} from '../../src/bootstrap/lifecycle-controller-constants.js';
 import {STARTUP_JOIN_MODE} from '../../src/bootstrap/rejoin-hints-constants.js';
-import {STARTUP_RECOVERY_STAGE} from '../../src/bootstrap/startup-recovery-coordinator.js';
+import {
+  STARTUP_RECOVERY_STAGE,
+  StartupRecoveryCoordinator,
+} from '../../src/bootstrap/startup-recovery-coordinator.js';
 import {
   CONTROL_PLANE_PRIORITY_RECOVERY_REASON,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
@@ -42,6 +39,55 @@ import {
 import {
   PRIORITY_CONTROL_PLANE_RECOVERY_HEALTH_FAILURE,
 } from '../../src/control-plane/startup-authority-snapshot-owner.js';
+
+const TEST_BOOTSTRAP_JOIN_AUTHORITY_BLOCKER =
+  'control_snapshot_authority_unavailable';
+const TEST_HTTP_METHOD_GET = 'GET';
+const TEST_HTTP_METHOD_POST = 'POST';
+const TEST_SEED_NODE_ID = 'seed-node-1';
+const TEST_SEED_NODE_ADDRESS = 'ws://localhost:8080';
+const TEST_BOOTSTRAP_REQUEST_NODE_ID =
+  '550e8400-e29b-41d4-a716-446655440210';
+const TEST_BOOTSTRAP_REQUEST_NODE_ADDRESS = 'ws://localhost:9210';
+const TEST_BOOTSTRAP_RESPONSE_GROUP_ID = 'mg-seed-authority';
+const TEST_READY_STABLE_WINDOW_MS = 0;
+const TEST_REGISTER_SERVICE_RETRY_AFTER_MS = 1000;
+const TEST_SQL_ENGINE_UNAVAILABLE_ERROR = 'SQL query engine not available';
+const TEST_REGISTER_SERVICE_NODE_ID = 'joiner-node-1';
+const TEST_REGISTER_SERVICE_GROUP_ID = 'mg-1';
+const TEST_REGISTER_SERVICE_REPLICA_ID = 'mg-1-r1';
+const TEST_DURABLE_REJOIN_GROUP_ID = 'mg-durable';
+const TEST_DURABLE_REJOIN_REPLICA_ID = 'mg-durable-r1';
+const TEST_DURABLE_REJOIN_PEER_REPLICA_ID = 'mg-durable-r2';
+const TEST_DURABLE_REJOIN_SECOND_PEER_REPLICA_ID = 'mg-durable-r3';
+const TEST_DURABLE_REJOIN_PEER_NODE_ID = 'peer-node-1';
+const TEST_DURABLE_REJOIN_SECOND_PEER_NODE_ID = 'peer-node-2';
+const TEST_DURABLE_REJOIN_MESSAGE_GROUP_ADDRESS =
+  'joiner-node-1/message-group/mg-durable-r1';
+const TEST_DURABLE_REJOIN_PEER_MESSAGE_GROUP_ADDRESS =
+  'peer-node-1/message-group/mg-durable-r2';
+const TEST_DURABLE_REJOIN_SECOND_PEER_MESSAGE_GROUP_ADDRESS =
+  'peer-node-2/message-group/mg-durable-r3';
+const TEST_STARTUP_AUTHORITY_STATE = 'seed_locally_ready_unpublished';
+const TEST_STARTUP_AUTHORITY_PUBLICATION_STATE = 'unpublished';
+const TEST_STARTUP_AUTHORITY_FAILURE_STATE = 'none';
+const TEST_STARTUP_AUTHORITY_OBSERVATION_PENDING =
+  'startup_authority_observation_pending';
+const TEST_STARTUP_AUTHORITY_NODE_IDS = Object.freeze([
+  TEST_SEED_NODE_ID,
+]);
+const TEST_SEED_CONTACT_STARTUP_AUTHORITY = Object.freeze({
+  state: TEST_STARTUP_AUTHORITY_STATE,
+  ready: false,
+  authorityAvailable: true,
+  publication: Object.freeze({
+    observationState: TEST_STARTUP_AUTHORITY_PUBLICATION_STATE,
+  }),
+  canonicalStartupNodeIds: TEST_STARTUP_AUTHORITY_NODE_IDS,
+  failure: Object.freeze({
+    state: TEST_STARTUP_AUTHORITY_FAILURE_STATE,
+  }),
+});
 
 // Initialize configuration and logging for tests
 function initializeTestEnvironment() {
@@ -103,85 +149,6 @@ function createSatisfiedControlPlaneReadinessService() {
   };
 }
 
-function createMutableControlPlaneReadinessService(initialDiagnostics) {
-  let diagnostics = initialDiagnostics;
-  return {
-    setDiagnostics(nextDiagnostics) {
-      diagnostics = nextDiagnostics;
-    },
-    async getMembershipPublicationDiagnostics() {
-      return diagnostics;
-    },
-    getMembershipPublicationDiagnosticsSync() {
-      return diagnostics;
-    },
-  };
-}
-
-function createPriorityRecoveryAuthorityControlPlaneReadinessService() {
-  return {
-    getPriorityControlPlaneRecoveryHealthSync() {
-      return {
-        healthy: false,
-        reasonCode: LIFECYCLE_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
-        details: {
-          recoveryProtocolState: 'publication_pending',
-          priorityRecoveryReasonCodes: [
-            CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PUBLICATION_EPOCH_PENDING,
-            CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PRIORITY_PARTITIONS_NOT_SPREAD,
-          ],
-          targetParticipation: {
-            nodeId: 'seed-node-1',
-            state: 'recovery_pending_publish',
-          },
-        },
-      };
-    },
-    getStartupAuthoritySnapshotSync() {
-      return {
-        state: 'seed_locally_ready_unpublished',
-        ready: false,
-        authorityAvailable: true,
-        publication: {
-          observationState: 'unpublished',
-        },
-        priorityPartition: {
-          state: 'available',
-          summary: {
-            satisfied: false,
-            missingPartitionIds: ['replica_operations-p1'],
-          },
-        },
-        recoveryProtocol: {
-          state: 'known',
-          value: 'publication_pending',
-        },
-        targetParticipationDetail: {
-          state: 'available',
-          participation: {
-            nodeId: 'seed-node-1',
-            state: 'recovery_pending_publish',
-          },
-        },
-        priorityRecoveryReasonCodes: [
-          CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PUBLICATION_EPOCH_PENDING,
-          CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PRIORITY_PARTITIONS_NOT_SPREAD,
-        ],
-        canonicalStartupNodeIds: ['seed-node-1'],
-        failure: {
-          state: 'none',
-        },
-        publicationObservationState: 'unpublished',
-      };
-    },
-    getMembershipPublicationDiagnosticsSync() {
-      return {
-        publicationEpoch: 14,
-        status: 'ACK_PENDING',
-      };
-    },
-  };
-}
 
 const TRANSITIONAL_PRIORITY_RECOVERY_FAILURE_REASON =
   PRIORITY_CONTROL_PLANE_RECOVERY_HEALTH_FAILURE.PLANNING_INCOMPLETE;
@@ -577,7 +544,7 @@ test('BootstrapAPI - bootstrap control-plane mutations use runtime-owner CDC whe
       contractState: 'ready',
       nextAction: 'proceed',
     },
-      'runtime-owner CDC should satisfy bootstrap mutation ingress');
+    'runtime-owner CDC should satisfy bootstrap mutation ingress');
     t.same(capturedRow, {
       tableName: TABLES.SERVICES,
       row: {
@@ -741,11 +708,11 @@ test('BootstrapAPI - register-service returns retryable 503 when the control-pla
       method: 'POST',
       url: '/register-service',
       payload: {
-        service_id: 'mg-1-r1',
+        service_id: TEST_REGISTER_SERVICE_REPLICA_ID,
         service_type: SERVICE_TYPE.MESSAGE_GROUP,
-        node_id: 'joiner-node-1',
-        group_id: 'mg-1',
-        replica_id: 'mg-1-r1',
+        node_id: TEST_REGISTER_SERVICE_NODE_ID,
+        group_id: TEST_REGISTER_SERVICE_GROUP_ID,
+        replica_id: TEST_REGISTER_SERVICE_REPLICA_ID,
       },
     });
 
@@ -775,6 +742,56 @@ test('BootstrapAPI - register-service returns retryable 503 when the control-pla
           BOOTSTRAP_API_LOG_MSG.MOVE_REPLICA_ASSIGNMENT_VALIDATION_FAILED,
       ),
       'retryable services publication defer should not be mislabeled as assignment validation',
+    );
+
+    await api.shutdown();
+  });
+
+test('BootstrapAPI - register-service returns typed retryable 503 while SQL engine is unavailable',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const api = new BootstrapAPI({
+      seedNodeId: 'seed-node-1',
+      seedNodeAddress: 'ws://localhost:8080',
+      systemTableCache: createEmptySystemTableCache(),
+      sqlQueryEngine: null,
+      runtimeOwner: {
+        getSqlQueryEngine() {
+          return null;
+        },
+      },
+    });
+
+    await api.initialize(0, {listen: false});
+
+    const response = await api.getFastify().inject({
+      method: 'POST',
+      url: '/register-service',
+      payload: {
+        service_id: 'mg-1-r1',
+        service_type: SERVICE_TYPE.MESSAGE_GROUP,
+        node_id: 'joiner-node-1',
+        group_id: 'mg-1',
+        replica_id: 'mg-1-r1',
+      },
+    });
+
+    t.equal(
+      response.statusCode,
+      HTTP_STATUS.SERVICE_UNAVAILABLE,
+      'register-service should fail closed while startup SQL runtime is not wired',
+    );
+    const body = JSON.parse(response.body);
+    t.same(
+      body,
+      {
+        success: false,
+        error: TEST_SQL_ENGINE_UNAVAILABLE_ERROR,
+        code: BOOTSTRAP_PIPELINE_ERROR_CODE.SQL_ENGINE_UNAVAILABLE,
+        retryAfterMs: TEST_REGISTER_SERVICE_RETRY_AFTER_MS,
+      },
+      'register-service should expose a typed retryable startup dependency response',
     );
 
     await api.shutdown();
@@ -861,121 +878,121 @@ test('BootstrapAPI - register-service retries deferred services publication befo
 
 test('BootstrapAPI - register-service falls back to bootstrap-scoped SQL ' +
   'mutation routing when CDC mutation helpers are not ready yet',
-  async (t) => {
-    initializeTestEnvironment();
+async (t) => {
+  initializeTestEnvironment();
 
-    const sqlCalls = [];
-    const api = new BootstrapAPI({
-      seedNodeId: 'seed-node-1',
-      seedNodeAddress: 'ws://localhost:8080',
-      systemTableCache: createEmptySystemTableCache(),
-      sqlQueryEngine: {
-        async executeQuery(sql, params, options) {
-          sqlCalls.push({sql, params, options});
-          return {success: true, affectedRows: 1};
-        },
+  const sqlCalls = [];
+  const api = new BootstrapAPI({
+    seedNodeId: 'seed-node-1',
+    seedNodeAddress: 'ws://localhost:8080',
+    systemTableCache: createEmptySystemTableCache(),
+    sqlQueryEngine: {
+      async executeQuery(sql, params, options) {
+        sqlCalls.push({sql, params, options});
+        return {success: true, affectedRows: 1};
       },
-      cdcIntegrationService: null,
-    });
-
-    await api.initialize(0, {listen: false});
-    api.waitForRegisteredServiceCacheVisibility = async () => {};
-
-    const response = await api.getFastify().inject({
-      method: 'POST',
-      url: '/register-service',
-      payload: {
-        service_id: 'mg-1-r1',
-        service_type: SERVICE_TYPE.MESSAGE_GROUP,
-        node_id: 'joiner-node-1',
-        group_id: 'mg-1',
-        replica_id: 'mg-1-r1',
-        status: SERVICE_STATUS.STOPPED,
-      },
-    });
-
-    t.equal(response.statusCode, 200,
-      'register-service should not fail just because the bootstrap seed has not wired CDC mutations yet');
-    t.equal(sqlCalls.length, 1,
-      'bootstrap register-service should route through the SQL fallback once');
-    t.match(
-      sqlCalls[0].sql,
-      /^INSERT OR REPLACE INTO services \(/,
-      'register-service should persist through the canonical services table',
-    );
-    t.equal(
-      sqlCalls[0].options.phaseScope,
-      'bootstrap',
-      'bootstrap writes should opt into the explicit startup fallback scope',
-    );
-    t.equal(
-      sqlCalls[0].options.skipCacheWait,
-      true,
-      'bootstrap SQL fallback should rely on the later visibility gate instead of inline cache waits',
-    );
-
-    await api.shutdown();
+    },
+    cdcIntegrationService: null,
   });
+
+  await api.initialize(0, {listen: false});
+  api.waitForRegisteredServiceCacheVisibility = async () => {};
+
+  const response = await api.getFastify().inject({
+    method: 'POST',
+    url: '/register-service',
+    payload: {
+      service_id: 'mg-1-r1',
+      service_type: SERVICE_TYPE.MESSAGE_GROUP,
+      node_id: 'joiner-node-1',
+      group_id: 'mg-1',
+      replica_id: 'mg-1-r1',
+      status: SERVICE_STATUS.STOPPED,
+    },
+  });
+
+  t.equal(response.statusCode, 200,
+    'register-service should not fail just because the bootstrap seed has not wired CDC mutations yet');
+  t.equal(sqlCalls.length, 1,
+    'bootstrap register-service should route through the SQL fallback once');
+  t.match(
+    sqlCalls[0].sql,
+    /^INSERT OR REPLACE INTO services \(/,
+    'register-service should persist through the canonical services table',
+  );
+  t.equal(
+    sqlCalls[0].options.phaseScope,
+    'bootstrap',
+    'bootstrap writes should opt into the explicit startup fallback scope',
+  );
+  t.equal(
+    sqlCalls[0].options.skipCacheWait,
+    true,
+    'bootstrap SQL fallback should rely on the later visibility gate instead of inline cache waits',
+  );
+
+  await api.shutdown();
+});
 
 test('BootstrapAPI - register-service reuses runtime owner SQL engine ' +
   'when bootstrap wiring has not attached one yet',
-  async (t) => {
-    initializeTestEnvironment();
+async (t) => {
+  initializeTestEnvironment();
 
-    const submittedMutations = [];
-    const runtimeOwnerSqlQueryEngine = {
-      async executeQuery() {
+  const submittedMutations = [];
+  const runtimeOwnerSqlQueryEngine = {
+    async executeQuery() {
+      return {success: true, affectedRows: 1};
+    },
+  };
+  const api = new BootstrapAPI({
+    seedNodeId: 'joiner-node-1',
+    seedNodeAddress: 'ws://localhost:8081',
+    systemTableCache: createEmptySystemTableCache(),
+    sqlQueryEngine: null,
+    cdcIntegrationService: null,
+    runtimeOwner: {
+      getSqlQueryEngine() {
+        return runtimeOwnerSqlQueryEngine;
+      },
+    },
+    controlPlaneSystemTableGateway: {
+      async submitMutation(mutation) {
+        submittedMutations.push(mutation);
         return {success: true, affectedRows: 1};
       },
-    };
-    const api = new BootstrapAPI({
-      seedNodeId: 'joiner-node-1',
-      seedNodeAddress: 'ws://localhost:8081',
-      systemTableCache: createEmptySystemTableCache(),
-      sqlQueryEngine: null,
-      cdcIntegrationService: null,
-      runtimeOwner: {
-        getSqlQueryEngine() {
-          return runtimeOwnerSqlQueryEngine;
-        },
-      },
-      controlPlaneSystemTableGateway: {
-        async submitMutation(mutation) {
-          submittedMutations.push(mutation);
-          return {success: true, affectedRows: 1};
-        },
-      },
-    });
-
-    await api.initialize(0, {listen: false});
-    api.waitForRegisteredServiceCacheVisibility = async () => {};
-
-    const response = await api.getFastify().inject({
-      method: 'POST',
-      url: '/register-service',
-      payload: {
-        service_id: 'mg-1-r1',
-        service_type: SERVICE_TYPE.MESSAGE_GROUP,
-        node_id: 'joiner-node-1',
-        group_id: 'mg-1',
-        replica_id: 'mg-1-r1',
-        status: SERVICE_STATUS.ACTIVE,
-        address: 'joiner-node-1/message-group/mg-1-r1',
-      },
-    });
-
-    t.equal(response.statusCode, 200,
-      'register-service should succeed when the runtime owner already exposes the SQL engine');
-    t.equal(submittedMutations.length, 1,
-      'register-service should continue into canonical mutation ingress once the runtime owner exposes the engine');
-    t.equal(
-      submittedMutations[0].tableName,
-      TABLES.SERVICES,
-      'runtime owner SQL fallback should preserve the canonical services-table target',
-    );
-
-    await api.shutdown();
+    },
   });
+
+  await api.initialize(0, {listen: false});
+  api.waitForRegisteredServiceCacheVisibility = async () => {};
+
+  const response = await api.getFastify().inject({
+    method: 'POST',
+    url: '/register-service',
+    payload: {
+      service_id: 'mg-1-r1',
+      service_type: SERVICE_TYPE.MESSAGE_GROUP,
+      node_id: 'joiner-node-1',
+      group_id: 'mg-1',
+      replica_id: 'mg-1-r1',
+      status: SERVICE_STATUS.ACTIVE,
+      address: 'joiner-node-1/message-group/mg-1-r1',
+    },
+  });
+
+  t.equal(response.statusCode, 200,
+    'register-service should succeed when the runtime owner already exposes the SQL engine');
+  t.equal(submittedMutations.length, 1,
+    'register-service should continue into canonical mutation ingress once the runtime owner exposes the engine');
+  t.equal(
+    submittedMutations[0].tableName,
+    TABLES.SERVICES,
+    'runtime owner SQL fallback should preserve the canonical services-table target',
+  );
+
+  await api.shutdown();
+});
 
 test('BootstrapAPI - register-service acknowledges plain self-hosted registration without waiting for cache visibility',
   async (t) => {
@@ -1018,6 +1035,154 @@ test('BootstrapAPI - register-service acknowledges plain self-hosted registratio
       'plain self-hosted register-service should return as soon as the durable write succeeds');
     t.equal(visibilityChecks, 0,
       'plain self-hosted register-service should skip the cache visibility gate');
+
+    await api.shutdown();
+  });
+
+test('BootstrapAPI - durable rejoin reuses existing message group without assignment reservation sweep',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const cacheData = {
+      [TABLES.SERVICES]: [
+        {
+          service_id: TEST_DURABLE_REJOIN_REPLICA_ID,
+          service_type: SERVICE_TYPE.MESSAGE_GROUP,
+          node_id: TEST_REGISTER_SERVICE_NODE_ID,
+          group_id: TEST_DURABLE_REJOIN_GROUP_ID,
+          replica_id: TEST_DURABLE_REJOIN_REPLICA_ID,
+          address: TEST_DURABLE_REJOIN_MESSAGE_GROUP_ADDRESS,
+          status: SERVICE_STATUS.ACTIVE,
+        },
+        {
+          service_id: TEST_DURABLE_REJOIN_PEER_REPLICA_ID,
+          service_type: SERVICE_TYPE.MESSAGE_GROUP,
+          node_id: TEST_DURABLE_REJOIN_PEER_NODE_ID,
+          group_id: TEST_DURABLE_REJOIN_GROUP_ID,
+          replica_id: TEST_DURABLE_REJOIN_PEER_REPLICA_ID,
+          address: TEST_DURABLE_REJOIN_PEER_MESSAGE_GROUP_ADDRESS,
+          status: SERVICE_STATUS.ACTIVE,
+        },
+        {
+          service_id: TEST_DURABLE_REJOIN_SECOND_PEER_REPLICA_ID,
+          service_type: SERVICE_TYPE.MESSAGE_GROUP,
+          node_id: TEST_DURABLE_REJOIN_SECOND_PEER_NODE_ID,
+          group_id: TEST_DURABLE_REJOIN_GROUP_ID,
+          replica_id: TEST_DURABLE_REJOIN_SECOND_PEER_REPLICA_ID,
+          address: TEST_DURABLE_REJOIN_SECOND_PEER_MESSAGE_GROUP_ADDRESS,
+          status: SERVICE_STATUS.ACTIVE,
+        },
+      ],
+      [TABLES.MESSAGE_GROUPS]: [],
+    };
+    const api = new BootstrapAPI({
+      seedNodeId: 'seed-node-1',
+      seedNodeAddress: 'ws://localhost:8080',
+      systemTableCache: {
+        get() {
+          return null;
+        },
+        getAll(tableName) {
+          return cacheData[tableName] || [];
+        },
+        filter(tableName, predicate) {
+          return (cacheData[tableName] || []).filter(predicate);
+        },
+      },
+    });
+
+    await api.initialize(0, {listen: false});
+    let reservationSweepCalled = false;
+    api.expireMoveReplicaAssignmentReservations = async () => {
+      reservationSweepCalled = true;
+      throw new Error('durable rejoin should not sweep move-replica reservations');
+    };
+
+    const assignment = await api.determineAndReserveMessageGroupAssignment(
+      TEST_REGISTER_SERVICE_NODE_ID,
+      {startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN},
+    );
+
+    t.equal(
+      assignment.reuseExistingGroup,
+      true,
+      'durable rejoin should reuse its known message group',
+    );
+    t.equal(
+      assignment.groupId,
+      TEST_DURABLE_REJOIN_GROUP_ID,
+      'durable rejoin should return the existing group assignment',
+    );
+    t.same(
+      assignment.startupReplicaIds,
+      [TEST_DURABLE_REJOIN_REPLICA_ID],
+      'durable rejoin should preserve the local startup replica IDs',
+    );
+    t.equal(
+      reservationSweepCalled,
+      false,
+      'durable rejoin should bypass move-replica reservation sweep when reuse is known',
+    );
+
+    await api.shutdown();
+  });
+
+test('BootstrapAPI - handleBootstrapRequest includes seed startup authority',
+  async (t) => {
+    initializeTestEnvironment();
+
+    let observedStartupAuthorityNodeId =
+      TEST_STARTUP_AUTHORITY_OBSERVATION_PENDING;
+    const api = new BootstrapAPI({
+      seedNodeId: TEST_SEED_NODE_ID,
+      seedNodeAddress: TEST_SEED_NODE_ADDRESS,
+      systemTableCache: createEmptySystemTableCache(),
+      controlPlaneReadinessService: {
+        getStartupAuthoritySnapshotSync(seedNodeId) {
+          observedStartupAuthorityNodeId = seedNodeId;
+          return TEST_SEED_CONTACT_STARTUP_AUTHORITY;
+        },
+      },
+    });
+
+    api.waitForServiceLeaders = async () => ({ready: true});
+    api.determineAndReserveMessageGroupAssignment = async () => ({
+      strategy: BootstrapStrategy.CREATE_SELF_HOSTED,
+      groupId: TEST_BOOTSTRAP_RESPONSE_GROUP_ID,
+    });
+    api.buildBootstrapResponseTopologySnapshotEnvelope = () => ({
+      systemTableSnapshots: {},
+      topologySnapshotMeta: null,
+    });
+    api.getClusterConfiguration = () => ({});
+    api.getReadyNodes = () => [];
+    api.getTablePolicies = () => ({});
+    api.getLatencyTopologyHints = () => null;
+
+    await api.initialize(TEST_READY_STABLE_WINDOW_MS, {listen: false});
+
+    const response = await api.getFastify().inject({
+      method: TEST_HTTP_METHOD_POST,
+      url: BOOTSTRAP_API_ROUTE.BOOTSTRAP,
+      payload: {
+        nodeId: TEST_BOOTSTRAP_REQUEST_NODE_ID,
+        nodeAddress: TEST_BOOTSTRAP_REQUEST_NODE_ADDRESS,
+      },
+    });
+
+    t.equal(response.statusCode, HTTP_STATUS.OK,
+      'bootstrap request should succeed');
+    t.equal(
+      observedStartupAuthorityNodeId,
+      TEST_SEED_NODE_ID,
+      'bootstrap response authority should be resolved for the seed node',
+    );
+    const body = JSON.parse(response.body);
+    t.same(
+      body[BOOTSTRAP_API_RESPONSE_FIELD.STARTUP_AUTHORITY],
+      TEST_SEED_CONTACT_STARTUP_AUTHORITY,
+      'bootstrap response should include the seed startup authority snapshot',
+    );
 
     await api.shutdown();
   });
@@ -1205,8 +1370,8 @@ test('BootstrapAPI - bootstrap join readiness tolerates isolated leader metadata
     t.same(bootstrapReadyBody.reasons, [],
       'bootstrap join readiness should clear tolerated blocker reasons');
 
-  await api.shutdown();
-});
+    await api.shutdown();
+  });
 
 test('BootstrapAPI - bootstrap join readiness tolerates isolated local query transport blockers',
   async (t) => {
@@ -1315,6 +1480,189 @@ test('BootstrapAPI - bootstrap join readiness keeps transitional recovery author
       'bootstrap join readiness should project ready=true from transitional recovery authority');
     t.same(bootstrapReadyBody.reasons, [],
       'bootstrap join readiness should clear tolerated transitional recovery blockers');
+
+    await api.shutdown();
+  });
+
+test('BootstrapAPI - bootstrap join readiness uses seed-contact startup authority when local control-plane service is absent',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const readinessState = new BootstrapReadinessState({
+      readyStableWindowMs: TEST_READY_STABLE_WINDOW_MS,
+    });
+    const api = new BootstrapAPI({
+      seedNodeId: TEST_SEED_NODE_ID,
+      seedNodeAddress: TEST_SEED_NODE_ADDRESS,
+      systemTableCache: createEmptySystemTableCache(),
+      bootstrapStartupAdapter: {
+        phase: BOOTSTRAP_PHASE.COMPLETE,
+        messageRouter: {},
+        bootstrapResponse: {
+          [BOOTSTRAP_API_RESPONSE_FIELD.STARTUP_AUTHORITY]:
+            TEST_SEED_CONTACT_STARTUP_AUTHORITY,
+        },
+      },
+      readinessState,
+      sqlQueryEngine: {},
+    });
+
+    api.getLeaderReadinessStatusForProbe = () => ({ready: true});
+
+    await api.initialize(TEST_READY_STABLE_WINDOW_MS, {listen: false});
+
+    const bootstrapReadyResponse = await api.getFastify().inject({
+      method: TEST_HTTP_METHOD_GET,
+      url: BOOTSTRAP_API_ROUTE.BOOTSTRAP_READY,
+    });
+    t.equal(
+      bootstrapReadyResponse.statusCode,
+      HTTP_STATUS.OK,
+      'bootstrap join readiness should open from seed-contact authority',
+    );
+    const bootstrapReadyBody = JSON.parse(bootstrapReadyResponse.body);
+    t.equal(
+      bootstrapReadyBody.ready,
+      true,
+      'bootstrap join readiness should project ready=true',
+    );
+    t.same(
+      bootstrapReadyBody.reasons,
+      [],
+      'bootstrap join readiness should clear tolerated recovery blockers',
+    );
+    t.equal(
+      bootstrapReadyBody[
+        BOOTSTRAP_API_READINESS_FIELD.BOOTSTRAP_JOIN_PROJECTION
+      ]?.canProjectReady,
+      true,
+      'bootstrap join projection should record the seed-authorized decision',
+    );
+
+    await api.shutdown();
+  });
+
+test('BootstrapAPI - bootstrap join readiness uses startup-adapter seed-contact authority during retryable join contact',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const readinessSnapshot = {
+      ready: false,
+      phase: 'DEGRADED',
+      state: 'degraded',
+      reasons: [
+        BOOTSTRAP_PIPELINE_ERROR_CODE.LEADER_METADATA_INCOMPLETE,
+        LIFECYCLE_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
+      ],
+      retryAfterMs: 250,
+      timestamp: Date.now(),
+    };
+    const readinessState = {
+      evaluate() {
+        return readinessSnapshot;
+      },
+      getSnapshot() {
+        return readinessSnapshot;
+      },
+      recordProbeResult() {},
+    };
+    const startupAdapter = {
+      phase: 'contacting_seed',
+      bootstrapResponse: null,
+      getSeedContactStartupAuthoritySnapshot() {
+        return TEST_SEED_CONTACT_STARTUP_AUTHORITY;
+      },
+    };
+
+    const api = new BootstrapAPI({
+      seedNodeId: TEST_SEED_NODE_ID,
+      seedNodeAddress: TEST_SEED_NODE_ADDRESS,
+      systemTableCache: createEmptySystemTableCache(),
+      bootstrapStartupAdapter: startupAdapter,
+      readinessState,
+      startupRecoveryCoordinator: new StartupRecoveryCoordinator({
+        readinessState,
+      }),
+    });
+
+    await api.initialize(TEST_READY_STABLE_WINDOW_MS, {listen: false});
+
+    const bootstrapReadyResponse = await api.getFastify().inject({
+      method: TEST_HTTP_METHOD_GET,
+      url: BOOTSTRAP_API_ROUTE.BOOTSTRAP_READY,
+    });
+    t.equal(
+      bootstrapReadyResponse.statusCode,
+      HTTP_STATUS.OK,
+      'bootstrap join readiness should open from retryable seed-contact authority',
+    );
+    const bootstrapReadyBody = JSON.parse(bootstrapReadyResponse.body);
+    t.equal(
+      bootstrapReadyBody.controlPlaneRecoveryReady,
+      true,
+      'startup recovery should classify the degraded metadata phase as recovery-ready',
+    );
+    t.equal(
+      bootstrapReadyBody.startupAuthorityAvailable,
+      true,
+      'readiness should expose the retained startup authority',
+    );
+    t.same(
+      bootstrapReadyBody.reasons,
+      [],
+      'bootstrap join readiness should clear tolerated retryable contact blockers',
+    );
+
+    await api.shutdown();
+  });
+
+test('BootstrapAPI - bootstrap join readiness surfaces projection blocker',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const readinessSnapshot = {
+      ready: false,
+      phase: 'DEGRADED',
+      state: 'degraded',
+      reasons: [
+        BOOTSTRAP_PIPELINE_ERROR_CODE.LEADER_METADATA_INCOMPLETE,
+        LIFECYCLE_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
+      ],
+      retryAfterMs: 250,
+      timestamp: Date.now(),
+    };
+    const readinessState = {
+      evaluate() {
+        return readinessSnapshot;
+      },
+      getSnapshot() {
+        return readinessSnapshot;
+      },
+      recordProbeResult() {},
+    };
+
+    const api = new BootstrapAPI({
+      seedNodeAddress: 'ws://localhost:8080',
+      systemTableCache: createEmptySystemTableCache(),
+      readinessState,
+    });
+
+    await api.initialize(0, {listen: false});
+
+    const bootstrapReadyResponse = await api.getFastify().inject({
+      method: 'GET',
+      url: '/bootstrap/ready',
+    });
+    t.equal(bootstrapReadyResponse.statusCode, 503,
+      'bootstrap join readiness should remain closed when authority is unavailable');
+    const bootstrapReadyBody = JSON.parse(bootstrapReadyResponse.body);
+    t.equal(
+      bootstrapReadyBody[
+        BOOTSTRAP_API_READINESS_FIELD.BOOTSTRAP_JOIN_PROJECTION
+      ]?.blockerReason,
+      TEST_BOOTSTRAP_JOIN_AUTHORITY_BLOCKER,
+      'bootstrap readiness should expose the join projection blocker',
+    );
 
     await api.shutdown();
   });

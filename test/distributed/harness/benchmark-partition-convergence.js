@@ -489,8 +489,8 @@ function resolveBenchmarkDispatchContributionState(evaluation) {
 function buildBenchmarkPartitionConvergenceSnapshot(options = {}) {
   const admissionSnapshot = options.admissionSnapshot &&
     typeof options.admissionSnapshot === 'object' ?
-      options.admissionSnapshot :
-      buildBenchmarkLoadAdmissionSnapshot();
+    options.admissionSnapshot :
+    buildBenchmarkLoadAdmissionSnapshot();
   const criticalControlPlaneStability =
     options.criticalControlPlaneStability &&
       typeof options.criticalControlPlaneStability === 'object' ?
@@ -630,8 +630,8 @@ function buildBenchmarkConvergenceEvaluationSummaries(snapshot) {
 function resolveBenchmarkPartitionDispatchMode(options = {}) {
   const convergenceSnapshot = options.convergenceSnapshot &&
     typeof options.convergenceSnapshot === 'object' ?
-      options.convergenceSnapshot :
-      null;
+    options.convergenceSnapshot :
+    null;
   const criticalControlPlaneStability =
     options.criticalControlPlaneStability &&
       typeof options.criticalControlPlaneStability === 'object' ?

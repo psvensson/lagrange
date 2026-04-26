@@ -20,6 +20,9 @@ import {TABLES} from '../../constants/index.js';
 import {runRetryableControlPlaneWrite} from
   '../shared/retryable-control-plane-write.js';
 
+const REGISTER_SERVICE_SQL_ENGINE_UNAVAILABLE_RETRY_AFTER_MS =
+  BOOTSTRAP_API_DEFAULT.BOOTSTRAP_ADMISSION_RETRY_AFTER_MS;
+
 class ServiceRegistrationHandoffOwner {
   constructor(options = {}) {
     this.delegates = options.delegates || {};
@@ -144,9 +147,14 @@ class ServiceRegistrationHandoffOwner {
     let sourceRemovalCompleted = false;
     try {
       if (!this.getSqlQueryEngine()) {
-        this.getLogger().error(BOOTSTRAP_API_LOG_MSG.SQL_ENGINE_MISSING);
+        this.getLogger().warn(BOOTSTRAP_API_LOG_MSG.SQL_ENGINE_MISSING);
         reply.code(HTTP_STATUS.SERVICE_UNAVAILABLE);
-        return {success: false, error: BOOTSTRAP_API_ERROR.SQL_ENGINE_UNAVAILABLE};
+        return {
+          success: false,
+          error: BOOTSTRAP_API_ERROR.SQL_ENGINE_UNAVAILABLE,
+          code: BOOTSTRAP_PIPELINE_ERROR_CODE.SQL_ENGINE_UNAVAILABLE,
+          retryAfterMs: REGISTER_SERVICE_SQL_ENGINE_UNAVAILABLE_RETRY_AFTER_MS,
+        };
       }
 
       assignmentContext =

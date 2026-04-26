@@ -11,14 +11,14 @@ import {ADMIN_META_ACTION} from './admin-meta-command-handlers.js';
 import {WASM_META_ACTION} from '../constants/index.js';
 
 const DEPRECATION_WARNING = Object.freeze({
-  DIRECT_MUTATION: 'Direct node-local mutation is deprecated.'
-    + ' Use sys-admin-meta or sys-wasm-meta service'
-    + ' commands instead.',
-  DIRECT_CACHE_WRITE: 'Direct cache writes are deprecated.'
-    + ' All mutations must flow through SQL/CDC paths.',
-  LEGACY_ADMIN_HANDLER: 'Legacy admin handler is deprecated.'
-    + ' Use the adapter layer forwarding to'
-    + ' meta-service commands.',
+  DIRECT_MUTATION: 'Direct node-local mutation is deprecated.' +
+    ' Use sys-admin-meta or sys-wasm-meta service' +
+    ' commands instead.',
+  DIRECT_CACHE_WRITE: 'Direct cache writes are deprecated.' +
+    ' All mutations must flow through SQL/CDC paths.',
+  LEGACY_ADMIN_HANDLER: 'Legacy admin handler is deprecated.' +
+    ' Use the adapter layer forwarding to' +
+    ' meta-service commands.',
 });
 
 const DEPRECATION_ERROR_MSG = Object.freeze({

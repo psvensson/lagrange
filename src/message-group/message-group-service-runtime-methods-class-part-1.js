@@ -1,48 +1,29 @@
 function createMessageGroupServiceRuntimeMethodsClassPart1(deps = {}) {
   const {
-    CDC_BATCH_COMMAND_TYPE,
     CDC_FORWARD_MAX_RELAY_DEPTH,
-    CONTROL_PLANE_READINESS_DIMENSION,
     DIRECT_ONLY_MESSAGE_TYPES,
     HLCTimestamp,
-    INITIAL_MESSAGE_GROUP_ID,
-    LifeRaft,
     MESSAGE_DELIVERY_MODE,
     MESSAGE_GROUP_APPLICATION_ERROR_MSG,
     MESSAGE_GROUP_APPLICATION_MESSAGE_TYPE,
     MESSAGE_GROUP_APPLICATION_STATUS,
     MESSAGE_GROUP_CDC_ERROR_MSG,
     MESSAGE_GROUP_CDC_INGRESS_ACTION,
-    MESSAGE_GROUP_CDC_LOG_CONTEXT_FIELD,
-    MESSAGE_GROUP_SERVICE_ERROR_MSG,
     MESSAGE_GROUP_SERVICE_LITERAL,
-    MESSAGE_GROUP_SERVICE_LOG_MSG,
-    METRICS_LOG_TAG,
     MessageStatus,
     NUM,
     QUERY_MESSAGE_TYPE,
     RAFT_PACKET_TYPE,
-    RebalancerEntityType,
-    SYSTEM_TABLE_NAME,
-    TIME_MS,
     TYPEOF,
-    UnifiedRebalancer,
-    boundCdcForwardErrorDetail,
     buildDeferredDeliveryError,
-    buildDeferredCdcForwardError,
     buildLatencyCdcPropagationResult,
-    getOrCreateCauseId,
     isRaftPacket,
-    isSystemTableWriteReady,
     normalizeCauseId,
     normalizeMessageDeliveryMode,
-    normalizePublishedRaftRole,
     resolveRaftTransportDeliveryOptions,
     resolveTransportDeliveryOptions,
     shouldDeferImmediateDeliveryRetry,
     uuidv4,
-    wrapCdcProposeError,
-    RaftRole,
   } = deps;
 
   class MessageGroupServiceRuntimeMethodsPart1 {
@@ -157,7 +138,7 @@ function createMessageGroupServiceRuntimeMethodsClassPart1(deps = {}) {
      * @private
      */
     async attemptDirectDelivery(messageEnvelope, options = {}) {
-      const { id: messageId, targetService, payload } = messageEnvelope;
+      const {id: messageId, targetService, payload} = messageEnvelope;
       // Transport is guaranteed to exist (validated in constructor)
       // but we still check at runtime for defense in depth
       if (!this.transport) {
@@ -175,9 +156,9 @@ function createMessageGroupServiceRuntimeMethodsClassPart1(deps = {}) {
       }
       let lastError = null;
       const maxAttempts =
-        Number.isInteger(options?.maxAttempts) && options.maxAttempts > NUM.ZERO
-          ? options.maxAttempts
-          : this.retryMaxAttempts;
+        Number.isInteger(options?.maxAttempts) && options.maxAttempts > NUM.ZERO ?
+          options.maxAttempts :
+          this.retryMaxAttempts;
       const disableRetryDelay = options?.disableRetryDelay === true;
       for (let attempt = NUM.ZERO; attempt < maxAttempts; attempt++) {
         messageEnvelope.attempts++;
@@ -252,9 +233,9 @@ function createMessageGroupServiceRuntimeMethodsClassPart1(deps = {}) {
             lastError.message ||
             MESSAGE_GROUP_SERVICE_LITERAL.MESSAGE_DELIVERY_DEFERRED,
           deferRetry: true,
-          retryAfterMs: Number.isFinite(lastError.retryAfterMs)
-            ? Math.max(NUM.ZERO, Math.floor(lastError.retryAfterMs))
-            : NUM.ZERO,
+          retryAfterMs: Number.isFinite(lastError.retryAfterMs) ?
+            Math.max(NUM.ZERO, Math.floor(lastError.retryAfterMs)) :
+            NUM.ZERO,
           errorCode:
             typeof lastError.code === TYPEOF.STRING ? lastError.code : null,
         };
@@ -321,10 +302,10 @@ function createMessageGroupServiceRuntimeMethodsClassPart1(deps = {}) {
      * @private
      */
     async deliverDirectOnlyMessage(messageEnvelope, options = {}) {
-      const { id: messageId, targetService, payload } = messageEnvelope;
-      const failureDescription = this.isQueryDeliveryPayload(payload)
-        ? "Query message delivery failed"
-        : "Message delivery failed";
+      const {id: messageId, targetService, payload} = messageEnvelope;
+      const failureDescription = this.isQueryDeliveryPayload(payload) ?
+        'Query message delivery failed' :
+        'Message delivery failed';
       try {
         const deliveryResult = await this.attemptDirectDelivery(
           messageEnvelope,
@@ -335,9 +316,9 @@ function createMessageGroupServiceRuntimeMethodsClassPart1(deps = {}) {
           },
         );
         if (!deliveryResult.delivered) {
-          throw shouldDeferImmediateDeliveryRetry(deliveryResult)
-            ? buildDeferredDeliveryError(deliveryResult)
-            : new Error(deliveryResult.error || failureDescription);
+          throw shouldDeferImmediateDeliveryRetry(deliveryResult) ?
+            buildDeferredDeliveryError(deliveryResult) :
+            new Error(deliveryResult.error || failureDescription);
         }
         messageEnvelope.status = MessageStatus.DELIVERED;
         this.pendingMessages.delete(messageId);
@@ -353,7 +334,7 @@ function createMessageGroupServiceRuntimeMethodsClassPart1(deps = {}) {
           ...transportResult,
         };
       } catch (error) {
-        const logLevel = error?.deferRetry === true ? "debug" : "error";
+        const logLevel = error?.deferRetry === true ? 'debug' : 'error';
         this.logger[logLevel](
           MESSAGE_GROUP_SERVICE_LITERAL.FAILED_TO_SEND_MESSAGE,
           {
@@ -361,9 +342,9 @@ function createMessageGroupServiceRuntimeMethodsClassPart1(deps = {}) {
             targetService,
             error: error.message,
             deferRetry: error?.deferRetry === true,
-            retryAfterMs: Number.isFinite(error?.retryAfterMs)
-              ? error.retryAfterMs
-              : null,
+            retryAfterMs: Number.isFinite(error?.retryAfterMs) ?
+              error.retryAfterMs :
+              null,
           },
         );
         messageEnvelope.status = MessageStatus.FAILED;
@@ -381,7 +362,7 @@ function createMessageGroupServiceRuntimeMethodsClassPart1(deps = {}) {
      */
     async persistToRaftLog(messageEnvelope) {
       const entry = this.operationLedger.appendEntry({
-        type: "MESSAGE",
+        type: 'MESSAGE',
         message: messageEnvelope,
       });
       // Only use the live raft owner for command ingress.
@@ -469,20 +450,20 @@ function createMessageGroupServiceRuntimeMethodsClassPart1(deps = {}) {
                   !result?.acknowledged &&
                   shouldDeferImmediateDeliveryRetry(result)
                 ) {
-                  this.logger.debug("Deferred Raft response delivery", {
+                  this.logger.debug('Deferred Raft response delivery', {
                     destination: senderAddress,
                     retryAfterMs: result.retryAfterMs,
                     errorCode: result?.errorCode || null,
                   });
                 }
               } catch (err) {
-                this.logger.error("Failed to send Raft response", {
+                this.logger.error('Failed to send Raft response', {
                   error: err.message,
                   destination: senderAddress,
                 });
               }
             }
-            return { acknowledged: true };
+            return {acknowledged: true};
           }
           if (this.raftRuntime) {
             return (
@@ -492,7 +473,7 @@ function createMessageGroupServiceRuntimeMethodsClassPart1(deps = {}) {
             );
           }
         }
-        return { acknowledged: true };
+        return {acknowledged: true};
       }
       // Handle application messages (non-Raft)
       // Requirements: 2.3, 5.3
@@ -505,7 +486,7 @@ function createMessageGroupServiceRuntimeMethodsClassPart1(deps = {}) {
      * @return {Promise<Object>} Processing result
      */
     async handleApplicationMessage(message) {
-      const { messageId, payload, sourceGroup, sourceReplica } = message;
+      const {messageId, payload, sourceGroup, sourceReplica} = message;
       this.logger.debug(
         MESSAGE_GROUP_SERVICE_LITERAL.RECEIVED_APPLICATION_MESSAGE,
         {
@@ -519,7 +500,7 @@ function createMessageGroupServiceRuntimeMethodsClassPart1(deps = {}) {
       if (this.acknowledgedMessages.has(messageId)) {
         this.logger.debug(
           MESSAGE_GROUP_SERVICE_LITERAL.DUPLICATE_MESSAGE_IGNORED,
-          { messageId },
+          {messageId},
         );
         return {
           messageId,
@@ -597,16 +578,16 @@ function createMessageGroupServiceRuntimeMethodsClassPart1(deps = {}) {
       const operation = payload.operation;
       const data = payload.data;
       const eventTimestamp =
-        typeof payload.timestamp === "string" &&
-        payload.timestamp.length > NUM.ZERO
-          ? payload.timestamp
-          : null;
+        typeof payload.timestamp === 'string' &&
+        payload.timestamp.length > NUM.ZERO ?
+          payload.timestamp :
+          null;
       const causeId = normalizeCauseId(payload.causeId);
       const replayOnly = payload?.replayOnly === true;
       const relayDepth =
-        Number.isInteger(payload.relayDepth) && payload.relayDepth >= NUM.ZERO
-          ? payload.relayDepth
-          : NUM.ZERO;
+        Number.isInteger(payload.relayDepth) && payload.relayDepth >= NUM.ZERO ?
+          payload.relayDepth :
+          NUM.ZERO;
       if (!tableName || !operation || !data) {
         throw new Error(
           MESSAGE_GROUP_APPLICATION_ERROR_MSG.INVALID_LATENCY_CDC_PAYLOAD,
@@ -641,9 +622,9 @@ function createMessageGroupServiceRuntimeMethodsClassPart1(deps = {}) {
               deferRetry: true,
               retryAfterMs: Number.isFinite(
                 ingressDecision.strictForwardRetryAfterMs,
-              )
-                ? ingressDecision.strictForwardRetryAfterMs
-                : this.resolveStrictCdcForwardRetryAfterMs(),
+              ) ?
+                ingressDecision.strictForwardRetryAfterMs :
+                this.resolveStrictCdcForwardRetryAfterMs(),
               tableName,
               operation,
             });
@@ -692,7 +673,7 @@ function createMessageGroupServiceRuntimeMethodsClassPart1(deps = {}) {
           operation,
         });
       }
-      const applyOptions = { skipSubscriptionCheck: true };
+      const applyOptions = {skipSubscriptionCheck: true};
       if (eventTimestamp) {
         applyOptions.timestamp = eventTimestamp;
       }
@@ -719,9 +700,9 @@ function createMessageGroupServiceRuntimeMethodsClassPart1(deps = {}) {
       const events = Array.isArray(payload.events) ? payload.events : [];
       const replayOnly = payload?.replayOnly === true;
       const relayDepth =
-        Number.isInteger(payload.relayDepth) && payload.relayDepth >= NUM.ZERO
-          ? payload.relayDepth
-          : NUM.ZERO;
+        Number.isInteger(payload.relayDepth) && payload.relayDepth >= NUM.ZERO ?
+          payload.relayDepth :
+          NUM.ZERO;
       if (
         events.length === NUM.ZERO ||
         events.some(
@@ -760,9 +741,9 @@ function createMessageGroupServiceRuntimeMethodsClassPart1(deps = {}) {
               deferRetry: true,
               retryAfterMs: Number.isFinite(
                 ingressDecision.strictForwardRetryAfterMs,
-              )
-                ? ingressDecision.strictForwardRetryAfterMs
-                : this.resolveStrictCdcForwardRetryAfterMs(),
+              ) ?
+                ingressDecision.strictForwardRetryAfterMs :
+                this.resolveStrictCdcForwardRetryAfterMs(),
               eventCount: events.length,
             });
           }
@@ -798,7 +779,7 @@ function createMessageGroupServiceRuntimeMethodsClassPart1(deps = {}) {
           eventCount: events.length,
         });
       }
-      await this.applyCDCBatch(events, { skipSubscriptionCheck: true });
+      await this.applyCDCBatch(events, {skipSubscriptionCheck: true});
       return {
         messageId,
         status: MESSAGE_GROUP_APPLICATION_STATUS.LATENCY_CDC_BATCH_PROPAGATED,
@@ -831,7 +812,7 @@ function createMessageGroupServiceRuntimeMethodsClassPart1(deps = {}) {
       }
       // Persist acknowledgment to Raft log
       const entry = this.operationLedger.appendEntry({
-        type: "ACK",
+        type: 'ACK',
         messageId,
         timestamp: this.hlcClock.now().toString(),
       });
@@ -900,13 +881,13 @@ function createMessageGroupServiceRuntimeMethodsClassPart1(deps = {}) {
         .filter((event) => event?.tableName && event?.operation && event?.data)
         .map((event) => {
           const timestamp =
-            typeof event.timestamp === "string" &&
-            event.timestamp.length > NUM.ZERO
-              ? event.timestamp
-              : typeof options.timestamp === "string" &&
-                  options.timestamp.length > NUM.ZERO
-                ? options.timestamp
-                : this.hlcClock.now().toString();
+            typeof event.timestamp === 'string' &&
+            event.timestamp.length > NUM.ZERO ?
+              event.timestamp :
+              typeof options.timestamp === 'string' &&
+                  options.timestamp.length > NUM.ZERO ?
+                options.timestamp :
+                this.hlcClock.now().toString();
           const causeId = normalizeCauseId(event.causeId ?? options.causeId);
           return {
             tableName: event.tableName,
@@ -950,4 +931,4 @@ function createMessageGroupServiceRuntimeMethodsClassPart1(deps = {}) {
   return MessageGroupServiceRuntimeMethodsPart1;
 }
 
-export { createMessageGroupServiceRuntimeMethodsClassPart1 };
+export {createMessageGroupServiceRuntimeMethodsClassPart1};

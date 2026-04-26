@@ -170,26 +170,26 @@ test('Seed owner-read diagnosis integration', async (t) => {
 
   await t.test('local leader query and owner-read both stay available ' +
     'through the local-safe path while query transport is deferred',
-    async (t) => {
-      let fixture = null;
-      let transportOverride = null;
+  async (t) => {
+    let fixture = null;
+    let transportOverride = null;
 
-      try {
-        fixture = await createSeedFixture();
-        transportOverride = installLocalQueryTransportOverride(
-          fixture.bootstrapResult.messageRouter,
-        );
-        transportOverride.setReady(false);
+    try {
+      fixture = await createSeedFixture();
+      transportOverride = installLocalQueryTransportOverride(
+        fixture.bootstrapResult.messageRouter,
+      );
+      transportOverride.setReady(false);
 
-        const leaderPartition =
+      const leaderPartition =
           await waitForLocalReplicaOperationsLeader(fixture.bootstrapService);
-        t.ok(leaderPartition,
-          'seed should expose a local leader for replica_operations');
-        if (!leaderPartition) {
-          return;
-        }
+      t.ok(leaderPartition,
+        'seed should expose a local leader for replica_operations');
+      if (!leaderPartition) {
+        return;
+      }
 
-        const participation =
+      const participation =
           fixture.coordinator.controlPlaneReadinessService
             .getControlPlaneParticipationSync(
               fixture.seedNodeId,
@@ -200,31 +200,31 @@ test('Seed owner-read diagnosis integration', async (t) => {
                   CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
               },
             );
-        t.equal(participation.decision, 'defer',
-          'canonical participation should still report the transport defer');
-        t.equal(participation.localExecutionAllowed, true,
-          'canonical participation should expose the local-safe execution bypass');
+      t.equal(participation.decision, 'defer',
+        'canonical participation should still report the transport defer');
+      t.equal(participation.localExecutionAllowed, true,
+        'canonical participation should expose the local-safe execution bypass');
 
-        const ownerRead = await fixture.coordinator.executeReplicaOperationsRead(
-          REPLICA_OPERATIONS_PROBE_SQL,
-        );
-        t.equal(ownerRead.success, true,
-          'owner-read should succeed through the local-safe path while transport is deferred');
-        t.ok(Array.isArray(ownerRead.rows),
-          'owner-read should still return a row array');
+      const ownerRead = await fixture.coordinator.executeReplicaOperationsRead(
+        REPLICA_OPERATIONS_PROBE_SQL,
+      );
+      t.equal(ownerRead.success, true,
+        'owner-read should succeed through the local-safe path while transport is deferred');
+      t.ok(Array.isArray(ownerRead.rows),
+        'owner-read should still return a row array');
 
-        const localRead = await leaderPartition.executeQuery(
-          REPLICA_OPERATIONS_PROBE_SQL,
-        );
-        t.equal(localRead.success, true,
-          'direct local leader query should still succeed');
-        t.ok(Array.isArray(localRead.rows),
-          'direct local leader query should return rows');
-      } finally {
-        transportOverride?.restore();
-        await cleanupSeedFixture(fixture);
-      }
-    });
+      const localRead = await leaderPartition.executeQuery(
+        REPLICA_OPERATIONS_PROBE_SQL,
+      );
+      t.equal(localRead.success, true,
+        'direct local leader query should still succeed');
+      t.ok(Array.isArray(localRead.rows),
+        'direct local leader query should return rows');
+    } finally {
+      transportOverride?.restore();
+      await cleanupSeedFixture(fixture);
+    }
+  });
 
   await t.test('seed readiness and owner-read recover immediately after transport-ready flip',
     async (t) => {

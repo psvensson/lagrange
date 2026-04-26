@@ -55,14 +55,14 @@ describe('Property 3: Positional Parameter Round-Trip', () => {
           assert.equal(
             reordered[i],
             params[shuffled[i] - 1],
-            `Position ${i}: expected v${shuffled[i]}`
+            `Position ${i}: expected v${shuffled[i]}`,
           );
         }
 
         // Verify tracker matches the shuffled order
         assert.deepStrictEqual(tracker, shuffled);
       }),
-      {numRuns: 10}
+      {numRuns: 10},
     );
   });
 });
@@ -85,7 +85,7 @@ describe('Property 4: Boolean Literal Normalization', () => {
         assert.equal(result.type, EXPR_TYPE.LITERAL);
         assert.equal(result.value, boolVal ? 1 : 0);
       }),
-      {numRuns: 10}
+      {numRuns: 10},
     );
   });
 });
@@ -119,7 +119,7 @@ describe('Property 10: ON CONFLICT Translation', () => {
           assert.equal(insertAst.orIgnore, false);
         }
       }),
-      {numRuns: 10}
+      {numRuns: 10},
     );
   });
 });
@@ -166,20 +166,20 @@ describe('Property 11: ILIKE Translation', () => {
 
           // Left operand wrapped in LOWER
           assert.equal(
-            result.expression.type, PG_EXPR_TYPE.FUNCTION_CALL
+            result.expression.type, PG_EXPR_TYPE.FUNCTION_CALL,
           );
           assert.equal(result.expression.name, 'lower');
           assert.deepStrictEqual(result.expression.args, [leftNode]);
 
           // Right operand wrapped in LOWER
           assert.equal(
-            result.pattern.type, PG_EXPR_TYPE.FUNCTION_CALL
+            result.pattern.type, PG_EXPR_TYPE.FUNCTION_CALL,
           );
           assert.equal(result.pattern.name, 'lower');
           assert.deepStrictEqual(result.pattern.args, [rightNode]);
-        }
+        },
       ),
-      {numRuns: 10}
+      {numRuns: 10},
     );
   });
 });

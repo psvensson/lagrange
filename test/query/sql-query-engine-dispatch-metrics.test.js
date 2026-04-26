@@ -107,7 +107,7 @@ test('executeRequest emits metrics.query.dispatch on successful SQL_STATEMENT',
     await engine.executeRequest(request);
 
     const metric = infoCalls.find(
-      (c) => c.tag === METRICS_LOG_TAG.QUERY_DISPATCH
+      (c) => c.tag === METRICS_LOG_TAG.QUERY_DISPATCH,
     );
     t.ok(metric, 'metrics.query.dispatch log emitted');
     t.equal(metric.data.executionMode, EXECUTION_MODE.SQL_STATEMENT);
@@ -132,7 +132,7 @@ test('executeRequest emits metrics.query.dispatch on failure',
     await engine.executeRequest(request);
 
     const metric = infoCalls.find(
-      (c) => c.tag === METRICS_LOG_TAG.QUERY_DISPATCH
+      (c) => c.tag === METRICS_LOG_TAG.QUERY_DISPATCH,
     );
     t.ok(metric, 'metrics.query.dispatch emitted on failure');
     t.equal(metric.data.success, false);
@@ -155,7 +155,7 @@ test('executeRequest emits dispatch metric with success=false on throw',
     await engine.executeRequest(request);
 
     const metric = infoCalls.find(
-      (c) => c.tag === METRICS_LOG_TAG.QUERY_DISPATCH
+      (c) => c.tag === METRICS_LOG_TAG.QUERY_DISPATCH,
     );
     t.ok(metric, 'dispatch metric emitted even on error');
     t.equal(typeof metric.data.totalDurationMs, 'number');
@@ -189,7 +189,7 @@ test('executeRequest dispatch metric uses info level, not debug',
     await engine.executeRequest(request);
 
     const debugMetric = debugCalls.find(
-      (c) => c.tag === METRICS_LOG_TAG.QUERY_DISPATCH
+      (c) => c.tag === METRICS_LOG_TAG.QUERY_DISPATCH,
     );
     t.notOk(debugMetric, 'no dispatch metric at debug level');
 

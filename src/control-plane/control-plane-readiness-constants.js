@@ -59,6 +59,8 @@ const CONTROL_PLANE_READINESS_REASON = Object.freeze({
 const CONTROL_PLANE_PRIORITY_RECOVERY_REASON = Object.freeze({
   PUBLICATION_EPOCH_PENDING: 'publication_epoch_pending',
   PRIORITY_PARTITIONS_NOT_SPREAD: 'priority_partitions_not_spread',
+  PRIORITY_SPREAD_EVIDENCE_UNAVAILABLE:
+    'priority_spread_evidence_unavailable',
   CONTROL_PLANE_NOT_WRITABLE: 'control_plane_not_writable',
   RECOVERY_ELIGIBILITY_PENDING: 'recovery_eligibility_pending',
 });

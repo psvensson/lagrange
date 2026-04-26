@@ -20,11 +20,6 @@ import {TABLES, COLUMN, CDC_OPERATION} from '../../src/constants/index.js';
 /**
  * CDC operations to test.
  */
-const CDC_OPERATIONS = [
-  CDC_OPERATION.INSERT,
-  CDC_OPERATION.UPDATE,
-  CDC_OPERATION.DELETE,
-];
 
 /**
  * Initialize test environment.

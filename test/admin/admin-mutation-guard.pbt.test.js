@@ -98,8 +98,8 @@ describe('admin-mutation-guard property-based tests', () => {
       );
     });
 
-  it('P3: unknown actions in warn mode are allowed with'
-    + ' deprecation warning', () => {
+  it('P3: unknown actions in warn mode are allowed with' +
+    ' deprecation warning', () => {
     fc.assert(
       fc.property(
         unknownActionArb,
@@ -116,8 +116,8 @@ describe('admin-mutation-guard property-based tests', () => {
     );
   });
 
-  it('P4: guardedAdaptAdminAction blocks unknown actions in'
-    + ' reject mode before adapter dispatch', () => {
+  it('P4: guardedAdaptAdminAction blocks unknown actions in' +
+    ' reject mode before adapter dispatch', () => {
     fc.assert(
       fc.property(
         unknownActionArb,

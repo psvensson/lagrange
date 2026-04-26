@@ -819,23 +819,28 @@ class ControlPlaneSystemTableGatewaySegment2 extends ControlPlaneSystemTableGate
     }
     const isWrite =
       descriptor.operationKind === CONTROL_PLANE_SQL_OPERATION.WRITE;
+    const defaultResourceKeys = [
+      `control-plane:${
+        isWrite ?
+          CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.WRITE :
+          CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.READ
+      }`,
+      `control-plane:table:${
+        descriptor.tableName ||
+          CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.UNKNOWN
+      }`,
+    ];
+    const resourceKeys = normalizeDistinctStringArray([
+      ...defaultResourceKeys,
+      ...(Array.isArray(options?.resourceKeys) ? options.resourceKeys : []),
+    ]);
     return this.getPressureGovernor().evaluate({
       workClass:
         options?.workClass ||
         (isWrite ?
           PRESSURE_WORK_CLASS.CRITICAL :
           PRESSURE_WORK_CLASS.INTERACTIVE),
-      resourceKeys: [
-        `control-plane:${
-          isWrite ?
-            CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.WRITE :
-            CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.READ
-        }`,
-        `control-plane:table:${
-          descriptor.tableName ||
-          CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.UNKNOWN
-        }`,
-      ],
+      resourceKeys,
       allowDegrade: isWrite ? false : options?.allowPressureDegrade === true,
       allowDefer: options?.allowPressureDefer === true,
       retryAfterMs: options?.pressureRetryAfterMs,

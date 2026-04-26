@@ -26,15 +26,12 @@ import {
   TABLES,
 } from '../../src/constants/index.js';
 import {
-  ROUTER_ERROR_MSG,
-  TRANSPORT_ERROR_MSG,
 } from '../../src/constants/transport.js';
 import LifeRaft from '@markwylde/liferaft';
 import {
   MessageGroupService,
 } from '../../src/message-group/message-group-service.js';
 import {
-  MESSAGE_GROUP_APPLICATION_MESSAGE_TYPE,
   MESSAGE_GROUP_CDC_ERROR_MSG,
 } from '../../src/message-group/constants.js';
 import {MessageRouter} from '../../src/transport/message-router.js';

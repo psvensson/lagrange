@@ -143,9 +143,9 @@ function stubJoinServiceForCheckpointTests(service) {
   };
   service.joinReadinessEvaluator
     .waitForCanonicalJoinReadinessConvergence = async () => {
-    tracking.executedPhases.push(READINESS_CONVERGENCE_PHASE);
-    tracking.readinessConverged = true;
-  };
+      tracking.executedPhases.push(READINESS_CONVERGENCE_PHASE);
+      tracking.readinessConverged = true;
+    };
   service.signalReadyForReplicas = async () => {
     tracking.readySignaled = true;
   };

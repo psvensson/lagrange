@@ -6,6 +6,36 @@ import {
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {registerAdminControlSnapshotTailTests} from './admin-control-snapshot-tail-test-cases.js';
 
+const COMPLETED_REPLACE_CONTROL_SNAPSHOT_FIXTURE = Object.freeze({
+  nodeId: 'node-1',
+  nowMs: 200,
+  operation: Object.freeze({
+    operation_id: 'replace-source-retired',
+    operation_type: 'REPLACE',
+    partition_id: 'nodes-p1',
+    entity_type: 'partition',
+    entity_id: 'nodes-p1',
+    source_node_id: 'seed-node',
+    source_replica_id: 'nodes-p1-r1',
+    target_node_id: 'node-2',
+    replica_id: 'nodes-p1-r4',
+    status: 'active',
+    workflow_step: 'ACTIVE',
+    created_at: 100,
+    updated_at: 150,
+  }),
+  serviceRows: Object.freeze([
+    Object.freeze({
+      service_id: 'nodes-p1-r4',
+      replica_id: 'nodes-p1-r4',
+      service_type: 'partition',
+      partition_id: 'nodes-p1',
+      node_id: 'node-2',
+      status: 'active',
+    }),
+  ]),
+});
+
 test('AdminControlSnapshot routes publication convergence through the shared recovery protocol snapshot',
   async (t) => {
     const snapshot = new AdminControlSnapshot({
@@ -181,10 +211,10 @@ test('AdminControlSnapshot exports publication convergence gate from live priori
     const priorityRecoveryWitnesses = Array.isArray(
       result.controlPlaneDiagnostics.priorityRecoveryObservation
         ?.priorityRecoveryPartitionWitnesses,
-    )
-      ? result.controlPlaneDiagnostics.priorityRecoveryObservation
-          .priorityRecoveryPartitionWitnesses
-      : [];
+    ) ?
+      result.controlPlaneDiagnostics.priorityRecoveryObservation
+        .priorityRecoveryPartitionWitnesses :
+      [];
     t.ok(
       priorityRecoveryWitnesses.length > 0,
       'control snapshot should export priority-recovery partition witnesses',
@@ -599,6 +629,42 @@ test('AdminControlSnapshot includes canonical replica operation rows in the cont
         replicaId: 'nodes-p1-r4',
       },
       'control snapshot summaries should expose one normalized operation record per visible row',
+    );
+  });
+
+test('AdminControlSnapshot excludes topology-completed REPLACE rows from in-flight counts',
+  async (t) => {
+    const snapshot = new AdminControlSnapshot({
+      nodeId: COMPLETED_REPLACE_CONTROL_SNAPSHOT_FIXTURE.nodeId,
+      nowFn: () => COMPLETED_REPLACE_CONTROL_SNAPSHOT_FIXTURE.nowMs,
+    });
+
+    const summary = snapshot.buildControlSnapshotReplicaOperationSummary([
+      COMPLETED_REPLACE_CONTROL_SNAPSHOT_FIXTURE.operation,
+    ], {
+      serviceRows: COMPLETED_REPLACE_CONTROL_SNAPSHOT_FIXTURE.serviceRows,
+    });
+
+    t.equal(
+      summary.inFlightCount,
+      0,
+      'admin control snapshots should not count completed REPLACE rows as live work',
+    );
+    t.equal(
+      summary.rows.length,
+      1,
+      'admin control snapshots should keep completed rows visible for diagnostics',
+    );
+    t.match(
+      summary.rows[0],
+      {
+        operationId:
+          COMPLETED_REPLACE_CONTROL_SNAPSHOT_FIXTURE.operation.operation_id,
+        sourceReplicaId:
+          COMPLETED_REPLACE_CONTROL_SNAPSHOT_FIXTURE
+            .operation.source_replica_id,
+      },
+      'admin control snapshots should expose retired-source evidence on the row',
     );
   });
 

@@ -420,7 +420,9 @@ test('createOperation - emits reservationCreated event', async (t) => {
 
   coordinator.on(
     REBALANCE_COORDINATOR_EVENT.RESERVATION_CREATED,
-    (data) => { emitted = data; },
+    (data) => {
+      emitted = data;
+    },
   );
 
   await coordinator.createOperation({
@@ -552,7 +554,9 @@ test('completeOperation - emits reservationReleased event',
 
     coordinator.on(
       REBALANCE_COORDINATOR_EVENT.RESERVATION_RELEASED,
-      (data) => { emitted = data; },
+      (data) => {
+        emitted = data;
+      },
     );
 
     await coordinator.completeOperation(op);
@@ -762,7 +766,9 @@ test('reconcileReservations - emits reconciled event', async (t) => {
 
   coordinator.on(
     REBALANCE_COORDINATOR_EVENT.RESERVATION_RECONCILED,
-    (data) => { emitted = data; },
+    (data) => {
+      emitted = data;
+    },
   );
 
   await coordinator.reconcileReservations();

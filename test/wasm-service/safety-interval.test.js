@@ -69,8 +69,8 @@ describe('SafetyInterval', () => {
       assert.equal(si.canServeRead(), false);
     });
 
-    it('should return true when applied >= leader index and within'
-      + ' interval', () => {
+    it('should return true when applied >= leader index and within' +
+      ' interval', () => {
       const si = new SafetyInterval(500);
       const now = Date.now();
       si.updateLeaderState(10, now);
@@ -78,8 +78,8 @@ describe('SafetyInterval', () => {
       assert.equal(si.canServeRead(), true);
     });
 
-    it('should return true when applied > leader index and within'
-      + ' interval', () => {
+    it('should return true when applied > leader index and within' +
+      ' interval', () => {
       const si = new SafetyInterval(500);
       const now = Date.now();
       si.updateLeaderState(10, now);

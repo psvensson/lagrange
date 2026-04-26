@@ -1,5 +1,5 @@
-import { LoggingService } from "../logging/logging-service.js";
-import { assertCritical } from "../utils/assert.js";
+import {LoggingService} from '../logging/logging-service.js';
+import {assertCritical} from '../utils/assert.js';
 import {
   COLUMN,
   NUM,
@@ -9,17 +9,17 @@ import {
   TABLES,
   TIME_MS,
   TYPEOF,
-} from "../constants/index.js";
+} from '../constants/index.js';
 import {
   compareNodeHeartbeatWatermarks,
   isNodeRecordReady,
   isNodeReadyLeaseExplicitlyCleared,
   wasNodeRecordReadyWhenWritten,
-} from "../node/node-readiness-policy.js";
-import { PRESSURE_STATE } from "../rebalancer/storage-capacity-constants.js";
-import { AuthoritativeControlPlaneView } from "./authoritative-control-plane-view.js";
-import { LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY } from "../cdc/cdc-integration-service.js";
-import { createControlPlaneRuntimeBundle } from "./control-plane-runtime-bundle.js";
+} from '../node/node-readiness-policy.js';
+import {PRESSURE_STATE} from '../rebalancer/storage-capacity-constants.js';
+import {AuthoritativeControlPlaneView} from './authoritative-control-plane-view.js';
+import {LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY} from '../cdc/cdc-integration-service.js';
+import {createControlPlaneRuntimeBundle} from './control-plane-runtime-bundle.js';
 import {
   AUTHORITY_DESCRIPTOR_STATE,
   AUTHORITY_PUBLICATION_OBSERVATION_STATE,
@@ -37,28 +37,28 @@ import {
   RUNTIME_AUTHORITY_REPAIR_STATE,
   RUNTIME_AUTHORITY_STATE,
   RUNTIME_AUTHORITY_VISIBILITY_STATE,
-} from "./control-plane-readiness-constants.js";
+} from './control-plane-readiness-constants.js';
 import {
   compactEligibilitySnapshot,
   createEligibilitySnapshot,
   evaluateEligibilityDecision,
-} from "./eligibility-snapshot.js";
-import { CONTROL_PLANE_PUBLICATION_STATUS } from "./control-plane-publication-merge.js";
+} from './eligibility-snapshot.js';
+import {CONTROL_PLANE_PUBLICATION_STATUS} from './control-plane-publication-merge.js';
 import {
   resolvePriorityRecoveryActiveNodeCohort,
   DEFAULT_PRIORITY_RECOVERY_ACTIVITY_STALE_GRACE_MS,
-} from "./priority-recovery-snapshot.js";
-import { unwrapRowReadResult } from "./owners/system-metadata-owner-base.js";
-import { buildPublicationRecoveryProtocolSnapshot } from "./recovery-protocol-snapshot.js";
-import { buildControlPlanePublicationStory } from "./control-plane-publication-story.js";
-import { buildPublicationRecoveryGateSnapshot } from "./publication-recovery-gate.js";
-import { buildCanonicalPublicationRecoveryEvidence } from "./publication-recovery-evidence.js";
-import { RECOVERY_PROTOCOL_STATE } from "./membership-lifecycle-constants.js";
-import { ControlPlaneDiagnosticsLedger } from "./control-plane-diagnostics-ledger.js";
-import { DurableWorkflowCoordinator } from "../workflow/durable-workflow-coordinator.js";
-import { OperationLane } from "../workflow/operation-lane.js";
-import { AuthoritativeNodeEvidenceReconciler } from "./authoritative-node-evidence-reconciler.js";
-import { buildReadinessTransitionState as buildReadinessTransitionOwnerState } from "./readiness-transition-state.js";
+} from './priority-recovery-snapshot.js';
+import {unwrapRowReadResult} from './owners/system-metadata-owner-base.js';
+import {buildPublicationRecoveryProtocolSnapshot} from './recovery-protocol-snapshot.js';
+import {buildControlPlanePublicationStory} from './control-plane-publication-story.js';
+import {buildPublicationRecoveryGateSnapshot} from './publication-recovery-gate.js';
+import {buildCanonicalPublicationRecoveryEvidence} from './publication-recovery-evidence.js';
+import {RECOVERY_PROTOCOL_STATE} from './membership-lifecycle-constants.js';
+import {ControlPlaneDiagnosticsLedger} from './control-plane-diagnostics-ledger.js';
+import {DurableWorkflowCoordinator} from '../workflow/durable-workflow-coordinator.js';
+import {OperationLane} from '../workflow/operation-lane.js';
+import {AuthoritativeNodeEvidenceReconciler} from './authoritative-node-evidence-reconciler.js';
+import {buildReadinessTransitionState as buildReadinessTransitionOwnerState} from './readiness-transition-state.js';
 import {
   buildPriorityRecoveryHealthDetailsFromStartupAuthority as buildStartupAuthorityHealthDetails,
   STARTUP_AUTHORITY_ADMISSION_STATE,
@@ -72,9 +72,9 @@ import {
   buildStartupAuthorityUnavailableSnapshot as buildStartupAuthorityOwnerUnavailableSnapshot,
   PRIORITY_CONTROL_PLANE_RECOVERY_HEALTH_FAILURE,
   STARTUP_AUTHORITY_STATE,
-} from "./startup-authority-snapshot-owner.js";
+} from './startup-authority-snapshot-owner.js';
 
-const PUBLICATION_REASON_CONFIG_SAFE_MODE = "config_safe_mode";
+const PUBLICATION_REASON_CONFIG_SAFE_MODE = 'config_safe_mode';
 const AUTHORITATIVE_READINESS_REPAIR = Object.freeze({
   COOLDOWN_MS: 5000,
   FAILURE_COOLDOWN_MS: 30000,
@@ -87,62 +87,62 @@ const MEMBERSHIP_PUBLICATION_PLANNING = Object.freeze({
   REFRESH_TIMEOUT_MS: TIME_MS.SECOND,
 });
 const MEMBERSHIP_PUBLICATION_PLANNING_SOURCE = Object.freeze({
-  OWNER_ANSWER: "owner_answer",
-  DIRECT_PUBLICATION_ROW: "direct_publication_row",
+  OWNER_ANSWER: 'owner_answer',
+  DIRECT_PUBLICATION_ROW: 'direct_publication_row',
 });
 const MEMBERSHIP_PUBLICATION_READ_LANE = Object.freeze({
-  DIAGNOSTICS: "diagnostics",
-  PLANNING: "planning",
+  DIAGNOSTICS: 'diagnostics',
+  PLANNING: 'planning',
 });
 const MEMBERSHIP_PUBLICATION_READ_SCOPE = Object.freeze({
-  CLUSTER: "cluster",
-  TARGET_NODE: "target_node",
+  CLUSTER: 'cluster',
+  TARGET_NODE: 'target_node',
 });
 const READINESS_TRANSITION_HISTORY_LIMIT = 32;
 const READINESS_DIAGNOSTICS_LEDGER_LIMIT = 128;
 const RECOVERY_EPOCH_HISTORY_LIMIT = 8;
 const RECOVERY_EPOCH_EVENT_LIMIT = 32;
 const MISSING_NODE_READINESS_STATE = Object.freeze({
-  FAIL_CLOSED: "fail_closed",
-  SELF_RUNTIME_GRACE: "self_runtime_grace",
+  FAIL_CLOSED: 'fail_closed',
+  SELF_RUNTIME_GRACE: 'self_runtime_grace',
 });
 const MISSING_NODE_READINESS_REASON = Object.freeze({
-  CONTROL_PLANE_SERVICE_UNAVAILABLE: "control_plane_service_unavailable",
-  PROCESS_NOT_ALIVE: "process_not_alive",
-  REMOTE_NODE: "remote_node",
-  SELF_RUNTIME_GRACE: "self_runtime_grace",
+  CONTROL_PLANE_SERVICE_UNAVAILABLE: 'control_plane_service_unavailable',
+  PROCESS_NOT_ALIVE: 'process_not_alive',
+  REMOTE_NODE: 'remote_node',
+  SELF_RUNTIME_GRACE: 'self_runtime_grace',
 });
 const RECOVERY_GRACE_MESSAGE_GROUP_SERVICE_STATUSES = Object.freeze([
-  "starting",
-  "syncing",
+  'starting',
+  'syncing',
 ]);
 const READINESS_ERROR_MSG = Object.freeze({
   STORAGE_ACCOUNTING_OWNER_REQUIRED:
-    "ControlPlaneReadinessService requires " +
-    "storageAccountingService for strict readiness evaluation",
+    'ControlPlaneReadinessService requires ' +
+    'storageAccountingService for strict readiness evaluation',
   PUBLICATION_OWNER_REQUIRED:
-    "ControlPlaneReadinessService requires " +
-    "cdcGroupPropagationService for strict readiness evaluation",
+    'ControlPlaneReadinessService requires ' +
+    'cdcGroupPropagationService for strict readiness evaluation',
 });
 const MEMBERSHIP_PUBLICATION_AUTHORITATIVE_READ_MODE = Object.freeze({
-  DIAGNOSTICS: "owner_rpc_required",
-  PLANNING: "owner_rpc_preferred_sql_fallback",
+  DIAGNOSTICS: 'owner_rpc_required',
+  PLANNING: 'owner_rpc_preferred_sql_fallback',
 });
 const MEMBERSHIP_PUBLICATION_READ_OPTIONS = Object.freeze({
   authoritativeReadMode:
     MEMBERSHIP_PUBLICATION_AUTHORITATIVE_READ_MODE.DIAGNOSTICS,
-  readProfile: "diagnostics",
+  readProfile: 'diagnostics',
   localReadConsistency: LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.LOCAL_LEADER,
   replicaFallbackConsistency: LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.LOCAL_LEADER,
-  workClass: "control-plane-readiness",
+  workClass: 'control-plane-readiness',
 });
 const MEMBERSHIP_PUBLICATION_PLANNING_READ_OPTIONS = Object.freeze({
   authoritativeReadMode:
     MEMBERSHIP_PUBLICATION_AUTHORITATIVE_READ_MODE.PLANNING,
-  readProfile: "planning",
+  readProfile: 'planning',
   localReadConsistency: LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.LOCAL_LEADER,
   replicaFallbackConsistency: LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.ANY_REPLICA,
-  workClass: "control-plane-planning",
+  workClass: 'control-plane-planning',
 });
 
 function resolveMembershipPublicationReadOptions({
@@ -150,17 +150,17 @@ function resolveMembershipPublicationReadOptions({
   queryTimeoutMs = null,
 } = {}) {
   const normalizedLane =
-    lane === MEMBERSHIP_PUBLICATION_READ_LANE.PLANNING
-      ? MEMBERSHIP_PUBLICATION_READ_LANE.PLANNING
-      : MEMBERSHIP_PUBLICATION_READ_LANE.DIAGNOSTICS;
+    lane === MEMBERSHIP_PUBLICATION_READ_LANE.PLANNING ?
+      MEMBERSHIP_PUBLICATION_READ_LANE.PLANNING :
+      MEMBERSHIP_PUBLICATION_READ_LANE.DIAGNOSTICS;
   const baseOptions =
-    normalizedLane === MEMBERSHIP_PUBLICATION_READ_LANE.PLANNING
-      ? MEMBERSHIP_PUBLICATION_PLANNING_READ_OPTIONS
-      : MEMBERSHIP_PUBLICATION_READ_OPTIONS;
+    normalizedLane === MEMBERSHIP_PUBLICATION_READ_LANE.PLANNING ?
+      MEMBERSHIP_PUBLICATION_PLANNING_READ_OPTIONS :
+      MEMBERSHIP_PUBLICATION_READ_OPTIONS;
   const normalizedQueryTimeoutMs =
-    Number.isFinite(queryTimeoutMs) && queryTimeoutMs > NUM.ZERO
-      ? Math.floor(queryTimeoutMs)
-      : null;
+    Number.isFinite(queryTimeoutMs) && queryTimeoutMs > NUM.ZERO ?
+      Math.floor(queryTimeoutMs) :
+      null;
   return Object.freeze({
     ...baseOptions,
     queryTimeoutMs: normalizedQueryTimeoutMs,
@@ -197,7 +197,7 @@ function buildReason(code, dimension, sourceOwner, observedAt, details = null) {
     sourceOwner,
     observedAt,
   };
-  if (details && typeof details === "object") {
+  if (details && typeof details === 'object') {
     reason.details = details;
   }
   return Object.freeze(reason);
@@ -208,9 +208,9 @@ function normalizeIsoTimestamp(nowValue) {
 }
 
 function normalizePositiveInteger(value, fallback = NUM.ZERO) {
-  return Number.isFinite(value) && value > NUM.ZERO
-    ? Math.floor(value)
-    : fallback;
+  return Number.isFinite(value) && value > NUM.ZERO ?
+    Math.floor(value) :
+    fallback;
 }
 
 function normalizeDiagnosticTimestampMs(value) {
@@ -228,7 +228,7 @@ function normalizeNodeIdList(values = []) {
   return [
     ...new Set(
       (Array.isArray(values) ? values : [])
-        .map((value) => String(value || "").trim())
+        .map((value) => String(value || '').trim())
         .filter((value) => value.length > NUM.ZERO),
     ),
   ];
@@ -237,7 +237,7 @@ function normalizeNodeIdList(values = []) {
 function normalizeLocalQueryTransportEvidence(readiness) {
   if (!readiness || typeof readiness !== TYPEOF.OBJECT) {
     return Object.freeze({
-      state: "unknown",
+      state: 'unknown',
       ready: null,
       reason: null,
       reasonCode: null,
@@ -245,30 +245,30 @@ function normalizeLocalQueryTransportEvidence(readiness) {
       retryAfterMs: null,
     });
   }
-  const ready = typeof readiness.ready === "boolean" ? readiness.ready : null;
+  const ready = typeof readiness.ready === 'boolean' ? readiness.ready : null;
   return Object.freeze({
-    state: ready === true ? "ready" : ready === false ? "deferred" : "unknown",
+    state: ready === true ? 'ready' : ready === false ? 'deferred' : 'unknown',
     ready,
     reason:
       typeof readiness.reason === TYPEOF.STRING &&
-      readiness.reason.length > NUM.ZERO
-        ? readiness.reason
-        : null,
+      readiness.reason.length > NUM.ZERO ?
+        readiness.reason :
+        null,
     reasonCode:
       typeof readiness.reasonCode === TYPEOF.STRING &&
-      readiness.reasonCode.length > NUM.ZERO
-        ? readiness.reasonCode
-        : null,
+      readiness.reasonCode.length > NUM.ZERO ?
+        readiness.reasonCode :
+        null,
     errorCode:
       typeof readiness.errorCode === TYPEOF.STRING &&
-      readiness.errorCode.length > NUM.ZERO
-        ? readiness.errorCode
-        : null,
+      readiness.errorCode.length > NUM.ZERO ?
+        readiness.errorCode :
+        null,
     retryAfterMs:
       Number.isFinite(readiness.retryAfterMs) &&
-      readiness.retryAfterMs > NUM.ZERO
-        ? Math.floor(readiness.retryAfterMs)
-        : null,
+      readiness.retryAfterMs > NUM.ZERO ?
+        Math.floor(readiness.retryAfterMs) :
+        null,
   });
 }
 
@@ -293,12 +293,12 @@ function resolveParticipationDecisionDimension(
     return decisionDimension;
   }
   switch (participationKind) {
-    case CONTROL_PLANE_PARTICIPATION_KIND.CONTROL_PLANE_RECOVERY:
-      return CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE;
-    case CONTROL_PLANE_PARTICIPATION_KIND.REPLICA_OPERATION_OWNER_READ:
-    case CONTROL_PLANE_PARTICIPATION_KIND.ROUTED_READ:
-    default:
-      return CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE;
+  case CONTROL_PLANE_PARTICIPATION_KIND.CONTROL_PLANE_RECOVERY:
+    return CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE;
+  case CONTROL_PLANE_PARTICIPATION_KIND.REPLICA_OPERATION_OWNER_READ:
+  case CONTROL_PLANE_PARTICIPATION_KIND.ROUTED_READ:
+  default:
+    return CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE;
   }
 }
 
@@ -307,11 +307,11 @@ function buildParticipationErrorCode(participation) {
     participation?.reasonCode ===
     CONTROL_PLANE_READINESS_REASON.LOCAL_QUERY_TRANSPORT_NOT_READY
   ) {
-    return "ROUTER_QUERY_TRANSPORT_NOT_READY";
+    return 'ROUTER_QUERY_TRANSPORT_NOT_READY';
   }
-  return participation?.decision === CONTROL_PLANE_PARTICIPATION_DECISION.DEFER
-    ? "CONTROL_PLANE_PARTICIPATION_DEFERRED"
-    : "CONTROL_PLANE_PARTICIPATION_BLOCKED";
+  return participation?.decision === CONTROL_PLANE_PARTICIPATION_DECISION.DEFER ?
+    'CONTROL_PLANE_PARTICIPATION_DEFERRED' :
+    'CONTROL_PLANE_PARTICIPATION_BLOCKED';
 }
 
 function buildParticipationErrorMessage(participation) {
@@ -323,9 +323,9 @@ function buildParticipationErrorMessage(participation) {
   ) {
     return participation.localQueryTransport.reason;
   }
-  return participation?.decision === CONTROL_PLANE_PARTICIPATION_DECISION.DEFER
-    ? "Control-plane participation deferred by canonical readiness"
-    : "Control-plane participation blocked by canonical readiness";
+  return participation?.decision === CONTROL_PLANE_PARTICIPATION_DECISION.DEFER ?
+    'Control-plane participation deferred by canonical readiness' :
+    'Control-plane participation blocked by canonical readiness';
 }
 
 function shouldAllowLocalExecutionForParticipation({

@@ -137,8 +137,8 @@ function buildNodeStateUpdateDeliveryError(deliveryResult, targetAddress) {
   const defaultErrorMessage =
     deliveryOutcome?.reasonCode ===
       TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.NO_HANDLER ?
-    `${NODE_STATE_PUBLICATION_OWNER_LITERAL.NO_HANDLER_REGISTERED_FOR_ADDRESS} ${targetAddress}` :
-    JOINING_ERROR_MSG.CONTROL_PLANE_MESSAGE_WAS_NOT_ACKNOWLEDGED;
+      `${NODE_STATE_PUBLICATION_OWNER_LITERAL.NO_HANDLER_REGISTERED_FOR_ADDRESS} ${targetAddress}` :
+      JOINING_ERROR_MSG.CONTROL_PLANE_MESSAGE_WAS_NOT_ACKNOWLEDGED;
   const deliveryError = new Error(
     deliveryOutcome?.error || defaultErrorMessage,
   );
@@ -684,35 +684,35 @@ class NodeStatePublicationOwner {
             error,
             publicationProfile,
           ) ?
-          buildNodeStateUpdatePublicationFailureAction({
-            contractState: OWNER_CONTRACT_STATE.DEFERRED,
-            nextAction: OWNER_CONTRACT_NEXT_ACTION.RETRY,
-            retryTarget:
-              NODE_STATE_UPDATE_PUBLICATION_RETRY_TARGET.DEFERRED_SLOT,
-            retryAfterMs,
-          }) :
-          shouldRetrySameTarget ?
             buildNodeStateUpdatePublicationFailureAction({
-              contractState: OWNER_CONTRACT_STATE.PENDING,
+              contractState: OWNER_CONTRACT_STATE.DEFERRED,
               nextAction: OWNER_CONTRACT_NEXT_ACTION.RETRY,
               retryTarget:
-                NODE_STATE_UPDATE_PUBLICATION_RETRY_TARGET.SAME_TARGET,
+              NODE_STATE_UPDATE_PUBLICATION_RETRY_TARGET.DEFERRED_SLOT,
               retryAfterMs,
             }) :
-            shouldRetryAlternateTarget ?
+            shouldRetrySameTarget ?
               buildNodeStateUpdatePublicationFailureAction({
                 contractState: OWNER_CONTRACT_STATE.PENDING,
                 nextAction: OWNER_CONTRACT_NEXT_ACTION.RETRY,
                 retryTarget:
-                  NODE_STATE_UPDATE_PUBLICATION_RETRY_TARGET
-                    .ALTERNATE_TARGET,
+                NODE_STATE_UPDATE_PUBLICATION_RETRY_TARGET.SAME_TARGET,
                 retryAfterMs,
               }) :
-              buildNodeStateUpdatePublicationFailureAction({
-                contractState: OWNER_CONTRACT_STATE.FAILED,
-                nextAction: OWNER_CONTRACT_NEXT_ACTION.STOP,
-                retryAfterMs,
-              });
+              shouldRetryAlternateTarget ?
+                buildNodeStateUpdatePublicationFailureAction({
+                  contractState: OWNER_CONTRACT_STATE.PENDING,
+                  nextAction: OWNER_CONTRACT_NEXT_ACTION.RETRY,
+                  retryTarget:
+                  NODE_STATE_UPDATE_PUBLICATION_RETRY_TARGET
+                    .ALTERNATE_TARGET,
+                  retryAfterMs,
+                }) :
+                buildNodeStateUpdatePublicationFailureAction({
+                  contractState: OWNER_CONTRACT_STATE.FAILED,
+                  nextAction: OWNER_CONTRACT_NEXT_ACTION.STOP,
+                  retryAfterMs,
+                });
 
         if (failureAction.retryTarget ===
             NODE_STATE_UPDATE_PUBLICATION_RETRY_TARGET.DEFERRED_SLOT) {

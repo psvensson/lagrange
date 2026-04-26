@@ -391,47 +391,47 @@ test('nodeResolver refreshes the tracked node set with stable per-node keys',
 
 test('nodeResolver can withdraw all active nodes without reverting to stale ' +
   'dispatch targets', async () => {
-    const initialNode = {
-      id: 'initial-node',
-      async query() {
-        return {rows: []};
-      },
-    };
-    let dynamicNodes = [initialNode];
+  const initialNode = {
+    id: 'initial-node',
+    async query() {
+      return {rows: []};
+    },
+  };
+  let dynamicNodes = [initialNode];
 
-    const gen = new LoadGenerator([initialNode], {
-      opsPerSec: 10,
-      duration: 100,
-      maxInFlight: 2,
-      nodeMaxInFlight: 1,
-      nodeResolver: () => dynamicNodes,
-    });
-    const run = gen.start();
-    try {
-      const initialNodeKey = 'node-initial-node';
-      run._nodeMetricsByKey.get(initialNodeKey).dispatched = 3;
-      dynamicNodes = [];
-      run._syncAvailableNodesFromResolver();
-      assert.deepEqual(
-        run._availableNodes.map((node) => node.id),
-        [],
-        'resolver refresh should allow the active dispatch set to become empty',
-      );
-      assert.deepEqual(
-        run._nodeHealthKeys,
-        [],
-        'no active node keys should remain after the resolver withdraws all nodes',
-      );
-      assert.equal(
-        run._nodeMetricsByKey.get(initialNodeKey).dispatched,
-        3,
-        'historical metrics should survive temporary admission withdrawal',
-      );
-    } finally {
-      run.cancel();
-      await run.waitComplete();
-    }
+  const gen = new LoadGenerator([initialNode], {
+    opsPerSec: 10,
+    duration: 100,
+    maxInFlight: 2,
+    nodeMaxInFlight: 1,
+    nodeResolver: () => dynamicNodes,
   });
+  const run = gen.start();
+  try {
+    const initialNodeKey = 'node-initial-node';
+    run._nodeMetricsByKey.get(initialNodeKey).dispatched = 3;
+    dynamicNodes = [];
+    run._syncAvailableNodesFromResolver();
+    assert.deepEqual(
+      run._availableNodes.map((node) => node.id),
+      [],
+      'resolver refresh should allow the active dispatch set to become empty',
+    );
+    assert.deepEqual(
+      run._nodeHealthKeys,
+      [],
+      'no active node keys should remain after the resolver withdraws all nodes',
+    );
+    assert.equal(
+      run._nodeMetricsByKey.get(initialNodeKey).dispatched,
+      3,
+      'historical metrics should survive temporary admission withdrawal',
+    );
+  } finally {
+    run.cancel();
+    await run.waitComplete();
+  }
+});
 
 test('benchmark workload uses a unique event-id prefix for each run', async () => {
   const recordedSql = [];

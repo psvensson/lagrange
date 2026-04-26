@@ -8,46 +8,26 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {QueryExecutor} from '../../src/query/query-executor.js';
 import {SQLParser} from '../../src/query/sql-parser.js';
-import {NodeService} from '../../src/node/node-service.js';
-import {ERRORS} from '../../src/constants/index.js';
 import {
   COLUMN,
   STATE,
   SERVICE_STATUS,
-  SERVICE_TYPE,
   TABLES,
 } from '../../src/constants/index.js';
-import {MIGRATION_PARTITION_OPERATION} from '../../src/migration/migration-constants.js';
 import {
-  CONTROL_PLANE_PARTICIPATION_KIND,
   CONTROL_PLANE_READINESS_DIMENSION,
   CONTROL_PLANE_PUBLICATION_MODE,
-  CONTROL_PLANE_READINESS_REASON,
-  READINESS_SNAPSHOT_KEY,
-  RUNTIME_AUTHORITY_STATE,
-  RUNTIME_AUTHORITY_VISIBILITY_STATE,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {
   ControlPlaneReadinessService,
 } from '../../src/control-plane/control-plane-readiness-service.js';
 import {
-  QUERY_DEFAULTS,
-  QUERY_LOG_MSG,
-  QUERY_RESPONSE_TYPE,
-  QUERY_ROUTING_DIAGNOSTIC_REASON,
-  QUERY_ROUTING_REPAIR_REASON,
 } from '../../src/query/query-constants.js';
 import {
-  CANONICAL_LEADER_IDENTITY_SOURCE,
-  CANONICAL_LEADER_IDENTITY_STATE,
-  CANONICAL_LEADER_ROUTING_GAP_STATE,
 } from '../../src/query/canonical-leader-routing.js';
 import {
-  PARTITION_SERVICE_ERROR_MSG,
 } from '../../src/partition/partition-service-constants.js';
 import {
-  assertNoHandlerRepairConverged,
-  createStaleOverlayOwnerHandoffFixture,
 } from './routing-repair-test-helpers.js';
 
 // Initialize configuration for tests
@@ -123,96 +103,6 @@ function parseSQL(sql) {
   return parser.parse();
 }
 
-function createReadinessCache({nodes = [], services = []} = {}) {
-  const nodeRows = new Map(nodes.map((row) => [row[COLUMN.NODE_ID], row]));
-  const serviceRows = new Map(
-    services.map((row) => [row[COLUMN.SERVICE_ID], row]),
-  );
-  const listeners = new Set();
-
-  function notify(tableName, operation, row) {
-    for (const listener of listeners) {
-      listener(tableName, operation, row, null);
-    }
-  }
-
-  return {
-    get(tableName, key) {
-      if (tableName === TABLES.NODES) {
-        return nodeRows.get(key) || null;
-      }
-      return null;
-    },
-    filter(tableName, predicate) {
-      if (tableName === TABLES.SERVICES) {
-        return [...serviceRows.values()].filter(predicate);
-      }
-      return [];
-    },
-    getAll(tableName) {
-      if (tableName === TABLES.NODES) {
-        return [...nodeRows.values()];
-      }
-      if (tableName === TABLES.SERVICES) {
-        return [...serviceRows.values()];
-      }
-      return [];
-    },
-    applySystemTableChange(tableName, operation, row) {
-      const normalizedOperation = String(operation || '').toUpperCase();
-      if (tableName === TABLES.NODES) {
-        const key = row?.[COLUMN.NODE_ID];
-        if (!key) {
-          return;
-        }
-        if (normalizedOperation === 'DELETE') {
-          nodeRows.delete(key);
-          notify(tableName, normalizedOperation, row);
-          return;
-        }
-        const existing = nodeRows.get(key) || {};
-        nodeRows.set(
-          key,
-          normalizedOperation === 'UPDATE' ?
-            {...existing, ...row} :
-            {...row},
-        );
-        notify(tableName, normalizedOperation, nodeRows.get(key));
-        return;
-      }
-      if (tableName === TABLES.SERVICES) {
-        const key = row?.[COLUMN.SERVICE_ID];
-        if (!key) {
-          return;
-        }
-        if (normalizedOperation === 'DELETE') {
-          serviceRows.delete(key);
-          notify(tableName, normalizedOperation, row);
-          return;
-        }
-        const existing = serviceRows.get(key) || {};
-        serviceRows.set(
-          key,
-          normalizedOperation === 'UPDATE' ?
-            {...existing, ...row} :
-            {...row},
-        );
-        notify(tableName, normalizedOperation, serviceRows.get(key));
-      }
-    },
-    onCacheChange(listener) {
-      listeners.add(listener);
-    },
-  };
-}
-
-function createReadinessPublicationService(snapshot) {
-  return {
-    getPublicationModeDiagnostics() {
-      return snapshot;
-    },
-  };
-}
 
 test('QueryExecutor - executes SELECT on single partition', async (t) => {
   mockPartitionData.set('p1', [
@@ -598,28 +488,28 @@ test('QueryExecutor - throws for INSERT on missing partition', async (t) => {
 
 test('QueryExecutor - routes writes when canonical owner is present but raft role is stale',
   async (t) => {
-  mockPartitionData.set('p1', [{id: 1}]);
+    mockPartitionData.set('p1', [{id: 1}]);
 
-  const router = createMockMessageRouter();
-  const systemCache = createMockSystemCache(['p1']);
-  systemCache.services = systemCache.services.map((service) => ({
-    ...service,
-    raft_role: 'follower',
-  }));
+    const router = createMockMessageRouter();
+    const systemCache = createMockSystemCache(['p1']);
+    systemCache.services = systemCache.services.map((service) => ({
+      ...service,
+      raft_role: 'follower',
+    }));
 
-  const executor = new QueryExecutor({
-    messageRouter: router,
-    systemCache,
+    const executor = new QueryExecutor({
+      messageRouter: router,
+      systemCache,
+    });
+
+    const ast = parseSQL('UPDATE users SET status = \'active\' WHERE id = 1');
+    const result = await executor.executeUpdate(ast, ['p1']);
+
+    t.equal(result.success, true, 'update should route through canonical leader owner');
+    t.equal(result.partitions.length, 1, 'should target the partition');
+
+    mockPartitionData.clear();
   });
-
-  const ast = parseSQL('UPDATE users SET status = \'active\' WHERE id = 1');
-  const result = await executor.executeUpdate(ast, ['p1']);
-
-  t.equal(result.success, true, 'update should route through canonical leader owner');
-  t.equal(result.partitions.length, 1, 'should target the partition');
-
-  mockPartitionData.clear();
-});
 
 test('QueryExecutor - builds correct SELECT SQL', async (t) => {
   const executor = new QueryExecutor({
@@ -792,60 +682,60 @@ test('QueryExecutor - findPartitionLeaderAddress returns null when cache unavail
 
 test('QueryExecutor - findPartitionLeaderAddress uses canonical partition leader owner',
   (t) => {
-  const systemCache = {
-    partitions: [
-      {
-        partition_id: 'p1',
-        leader_node_id: 'node2',
+    const systemCache = {
+      partitions: [
+        {
+          partition_id: 'p1',
+          leader_node_id: 'node2',
+        },
+      ],
+      services: [
+        {
+          service_id: 'p1-follower',
+          service_type: 'partition',
+          partition_id: 'p1',
+          node_id: 'node1',
+          raft_role: 'follower',
+          address: 'node1/partition/p1',
+          status: 'active',
+        },
+        {
+          service_id: 'p1-leader',
+          service_type: 'partition',
+          partition_id: 'p1',
+          node_id: 'node2',
+          raft_role: 'leader',
+          address: 'node2/partition/p1',
+          status: 'active',
+        },
+      ],
+      get: function(type, key) {
+        if (type === 'partitions') {
+          return this.partitions.find((partition) => partition.partition_id === key) || null;
+        }
+        return null;
       },
-    ],
-    services: [
-      {
-        service_id: 'p1-follower',
-        service_type: 'partition',
-        partition_id: 'p1',
-        node_id: 'node1',
-        raft_role: 'follower',
-        address: 'node1/partition/p1',
-        status: 'active',
+      filter: function(type, predicate) {
+        if (type === 'services') {
+          return this.services.filter(predicate);
+        }
+        if (type === 'partitions') {
+          return this.partitions.filter(predicate);
+        }
+        return [];
       },
-      {
-        service_id: 'p1-leader',
-        service_type: 'partition',
-        partition_id: 'p1',
-        node_id: 'node2',
-        raft_role: 'leader',
-        address: 'node2/partition/p1',
-        status: 'active',
-      },
-    ],
-    get: function(type, key) {
-      if (type === 'partitions') {
-        return this.partitions.find((partition) => partition.partition_id === key) || null;
-      }
-      return null;
-    },
-    filter: function(type, predicate) {
-      if (type === 'services') {
-        return this.services.filter(predicate);
-      }
-      if (type === 'partitions') {
-        return this.partitions.filter(predicate);
-      }
-      return [];
-    },
-  };
+    };
 
-  const executor = new QueryExecutor({
-    messageRouter: createMockMessageRouter(),
-    systemCache,
+    const executor = new QueryExecutor({
+      messageRouter: createMockMessageRouter(),
+      systemCache,
+    });
+
+    const address = executor.findPartitionLeaderAddress('p1');
+
+    t.equal(address, 'node2/partition/p1');
+    t.end();
   });
-
-  const address = executor.findPartitionLeaderAddress('p1');
-
-  t.equal(address, 'node2/partition/p1');
-  t.end();
-});
 
 test('QueryExecutor - findPartitionLeaderAddress filters by active status', (t) => {
   const systemCache = {

@@ -1,4 +1,4 @@
-import { CLUSTER_SEGMENT_4 } from "./cluster-segment-4.js";
+import {CLUSTER_SEGMENT_4} from './cluster-segment-4.js';
 const {
   ADMIN_HEALTH_PATH,
   ADMIN_QUERY_TIMEOUT_MS,
@@ -66,6 +66,21 @@ const {
   shouldFallbackToForcedControlSnapshot,
   withTimeout,
 } = CLUSTER_SEGMENT_4;
+
+const REACHABILITY_HTTP_PROBE_TIMEOUT_MS = FETCH_TIMEOUT_MS;
+const REACHABILITY_ADMIN_PROBE_TIMEOUT_MS = FETCH_TIMEOUT_MS;
+
+function resolveReachabilityProbeTimeoutMs(remainingBudgetMs, maxTimeoutMs) {
+  const remainingMs = resolvePositiveTimeoutMs(
+    remainingBudgetMs,
+    MIN_TIMEOUT_MS,
+  );
+  const boundedMaxMs = resolvePositiveTimeoutMs(
+    maxTimeoutMs,
+    remainingMs,
+  );
+  return Math.min(remainingMs, boundedMaxMs);
+}
 
 /**
  * Lightweight handle for interacting with a single cluster node.
@@ -135,7 +150,7 @@ class NodeHandle {
         params: Array.isArray(params) ? params : [],
         timeoutMs,
       },
-      "query",
+      'query',
       {
         ...options,
         timeoutMs,
@@ -155,9 +170,9 @@ class NodeHandle {
    * @returns {Promise<Object>} Callback execution result payload.
    */
   async partitionCallback(payload) {
-    if (!payload || typeof payload !== "object") {
+    if (!payload || typeof payload !== 'object') {
       throw new Error(
-        "Partition callback payload must be an object for node " + this.id,
+        'Partition callback payload must be an object for node ' + this.id,
       );
     }
     return this._sendAdminRequest(
@@ -169,12 +184,12 @@ class NodeHandle {
         callbackExport: payload.callbackExport,
         runtimeKind: payload.runtimeKind,
       },
-      "partition callback",
+      'partition callback',
     );
   }
 
   _resolveAdminLane(options = {}) {
-    const lane = typeof options?.lane === "string" ? options.lane.trim() : "";
+    const lane = typeof options?.lane === 'string' ? options.lane.trim() : '';
     return lane.length > 0 ? lane : ADMIN_SOCKET_LANE_DEFAULT;
   }
 
@@ -226,15 +241,15 @@ class NodeHandle {
     const lane = this._resolveAdminLane(options);
     const queryId = this._nextQueryId();
     const timeoutMessage =
-      "Admin API " +
+      'Admin API ' +
       operationLabel +
-      " timed out for node " +
+      ' timed out for node ' +
       this.id +
-      " on lane " +
+      ' on lane ' +
       lane +
-      " after " +
+      ' after ' +
       requestTimeoutMs +
-      "ms";
+      'ms';
     const traceEntry = this._createAdminQueryTraceEntry({
       queryId,
       lane,
@@ -252,9 +267,9 @@ class NodeHandle {
       traceEntry.socketReadyAtMs = Date.now();
     } catch (error) {
       const errorMessage = normalizeAdminQueryError(error);
-      const outcome = isTimeoutErrorMessage(errorMessage)
-        ? ADMIN_QUERY_TRACE_OUTCOME_TIMEOUT
-        : ADMIN_QUERY_TRACE_OUTCOME_ERROR;
+      const outcome = isTimeoutErrorMessage(errorMessage) ?
+        ADMIN_QUERY_TRACE_OUTCOME_TIMEOUT :
+        ADMIN_QUERY_TRACE_OUTCOME_ERROR;
       this._finalizeAdminQueryTrace(traceEntry, outcome, {
         error: errorMessage,
       });
@@ -268,18 +283,18 @@ class NodeHandle {
         outcome = ADMIN_QUERY_TRACE_OUTCOME_ERROR,
       ) => {
         const normalizedError =
-          error instanceof Error
-            ? error
-            : new Error(normalizeAdminQueryError(error));
+          error instanceof Error ?
+            error :
+            new Error(normalizeAdminQueryError(error));
         this._finalizeAdminQueryTrace(traceEntry, outcome, {
           error: normalizeAdminQueryError(normalizedError),
         });
         reject(normalizedError);
       };
       const resolveWithTrace = (result) => {
-        const rowCount = Array.isArray(result?.rows)
-          ? result.rows.length
-          : null;
+        const rowCount = Array.isArray(result?.rows) ?
+          result.rows.length :
+          null;
         this._finalizeAdminQueryTrace(
           traceEntry,
           ADMIN_QUERY_TRACE_OUTCOME_OK,
@@ -324,13 +339,13 @@ class NodeHandle {
         }
         rejectWithOutcome(
           new Error(
-            "Admin API " +
+            'Admin API ' +
               operationLabel +
-              " failed for node " +
+              ' failed for node ' +
               this.id +
-              " on lane " +
+              ' on lane ' +
               lane +
-              ": " +
+              ': ' +
               err.message,
           ),
         );
@@ -344,32 +359,32 @@ class NodeHandle {
    * @private
    */
   _nextQueryId() {
-    return "q-" + Date.now() + "-" + Math.random().toString(36).slice(2);
+    return 'q-' + Date.now() + '-' + Math.random().toString(36).slice(2);
   }
 
   _createAdminQueryTraceEntry(options = {}) {
     const requestPayload = options.requestPayload;
     const statement = resolveAdminRequestStatement(requestPayload);
     const requestType =
-      typeof requestPayload?.type === "string" &&
-      requestPayload.type.length > ZERO
-        ? requestPayload.type
-        : ADMIN_QUERY_TRACE_UNKNOWN;
+      typeof requestPayload?.type === 'string' &&
+      requestPayload.type.length > ZERO ?
+        requestPayload.type :
+        ADMIN_QUERY_TRACE_UNKNOWN;
     return {
       nodeId: this.id,
       queryId: options.queryId,
       lane: options.lane,
       requestType,
       operation:
-        typeof options.operationLabel === "string" &&
-        options.operationLabel.length > ZERO
-          ? options.operationLabel
-          : ADMIN_QUERY_TRACE_UNKNOWN,
+        typeof options.operationLabel === 'string' &&
+        options.operationLabel.length > ZERO ?
+          options.operationLabel :
+          ADMIN_QUERY_TRACE_UNKNOWN,
       statementPreview: buildAdminStatementPreview(statement),
       statementFingerprint: buildAdminStatementFingerprint(statement),
-      timeoutMs: Number.isFinite(options.timeoutMs)
-        ? Math.floor(options.timeoutMs)
-        : null,
+      timeoutMs: Number.isFinite(options.timeoutMs) ?
+        Math.floor(options.timeoutMs) :
+        null,
       startedAtMs: Date.now(),
       socketReadyAtMs: null,
       sentAtMs: null,
@@ -393,9 +408,9 @@ class NodeHandle {
     traceEntry.outcome = outcome;
     traceEntry.durationMs = finalizedAtMs - traceEntry.startedAtMs;
     traceEntry.error =
-      typeof details.error === "string" && details.error.length > ZERO
-        ? details.error
-        : null;
+      typeof details.error === 'string' && details.error.length > ZERO ?
+        details.error :
+        null;
     if (Number.isInteger(details.rowCount) && details.rowCount >= ZERO) {
       traceEntry.rowCount = details.rowCount;
     }
@@ -423,7 +438,7 @@ class NodeHandle {
    */
   closeQueryConnection() {
     this._rejectPendingQueries(
-      "Admin API query connection closed for node " + this.id,
+      'Admin API query connection closed for node ' + this.id,
     );
     this._logStreamListeners.clear();
     for (const socket of this._adminSocketByLane.values()) {
@@ -452,9 +467,9 @@ class NodeHandle {
    * @returns {Promise<Function>}
    */
   async subscribeLogStream(listener) {
-    if (typeof listener !== "function") {
+    if (typeof listener !== 'function') {
       throw new Error(
-        "Log stream listener must be a function for node " + this.id,
+        'Log stream listener must be a function for node ' + this.id,
       );
     }
     this._logStreamListeners.add(listener);
@@ -492,17 +507,17 @@ class NodeHandle {
       return pendingReadyPromise;
     }
 
-    const { default: WebSocket } = await import("ws");
+    const {default: WebSocket} = await import('ws');
     const laneQuery = encodeURIComponent(
       String(lane || ADMIN_SOCKET_LANE_DEFAULT),
     );
     const url =
-      "ws://" +
+      'ws://' +
       this.ip +
-      ":" +
+      ':' +
       this._adminApiPort +
       ADMIN_STREAM_PATH +
-      "?lane=" +
+      '?lane=' +
       laneQuery;
 
     const readyPromise = new Promise((resolve, reject) => {
@@ -514,21 +529,21 @@ class NodeHandle {
           return;
         }
         settled = true;
-        ws.off("open", onOpen);
-        ws.off("error", onOpenError);
+        ws.off('open', onOpen);
+        ws.off('error', onOpenError);
         closeWebSocketSafely(ws);
         this._resetAdminSocket(lane);
         reject(
           new Error(
-            "Admin API query failed for node " +
+            'Admin API query failed for node ' +
               this.id +
-              " on lane " +
+              ' on lane ' +
               lane +
-              ": connection timed out",
+              ': connection timed out',
           ),
         );
       }, ADMIN_QUERY_TIMEOUT_MS);
-      if (typeof connectTimeout.unref === "function") {
+      if (typeof connectTimeout.unref === 'function') {
         connectTimeout.unref();
       }
 
@@ -538,7 +553,7 @@ class NodeHandle {
         }
         settled = true;
         clearTimeout(connectTimeout);
-        ws.off("error", onOpenError);
+        ws.off('error', onOpenError);
         this._pendingAdminSocketByLane.delete(lane);
         this._bindAdminSocketHandlers(ws, lane);
         this._adminSocketByLane.set(lane, ws);
@@ -551,23 +566,23 @@ class NodeHandle {
         }
         settled = true;
         clearTimeout(connectTimeout);
-        ws.off("open", onOpen);
+        ws.off('open', onOpen);
         this._pendingAdminSocketByLane.delete(lane);
         this._resetAdminSocket(lane);
         reject(
           new Error(
-            "Admin API query failed for node " +
+            'Admin API query failed for node ' +
               this.id +
-              " on lane " +
+              ' on lane ' +
               lane +
-              ": " +
+              ': ' +
               err.message,
           ),
         );
       };
 
-      ws.once("open", onOpen);
-      ws.once("error", onOpenError);
+      ws.once('open', onOpen);
+      ws.once('error', onOpenError);
     });
     this._adminSocketReadyByLane.set(lane, readyPromise);
 
@@ -580,7 +595,7 @@ class NodeHandle {
   }
 
   _bindAdminSocketHandlers(ws, lane) {
-    ws.on("message", (data) => {
+    ws.on('message', (data) => {
       try {
         const parsed = JSON.parse(data.toString());
         this._handleAdminSocketMessage(parsed, lane);
@@ -589,25 +604,25 @@ class NodeHandle {
       }
     });
 
-    ws.on("error", (err) => {
+    ws.on('error', (err) => {
       this._rejectPendingQueries(
-        "Admin API query failed for node " +
+        'Admin API query failed for node ' +
           this.id +
-          " on lane " +
+          ' on lane ' +
           lane +
-          ": " +
+          ': ' +
           err.message,
         lane,
       );
       this._resetAdminSocket(lane);
     });
 
-    ws.on("close", () => {
+    ws.on('close', () => {
       this._rejectPendingQueries(
-        "Admin API query connection closed before response " +
-          "for node " +
+        'Admin API query connection closed before response ' +
+          'for node ' +
           this.id +
-          " on lane " +
+          ' on lane ' +
           lane,
         lane,
       );
@@ -616,7 +631,7 @@ class NodeHandle {
   }
 
   _handleAdminSocketMessage(parsed, lane) {
-    if (!parsed || typeof parsed !== "object") {
+    if (!parsed || typeof parsed !== 'object') {
       return;
     }
     if (parsed.type === QUERY_RESULT_MESSAGE_TYPE) {
@@ -642,22 +657,22 @@ class NodeHandle {
 
     if (parsed.error) {
       const error = new Error(
-        "Admin API " +
-          (pending.operationLabel || "request") +
-          " failed for node " +
+        'Admin API ' +
+          (pending.operationLabel || 'request') +
+          ' failed for node ' +
           this.id +
-          " on lane " +
+          ' on lane ' +
           lane +
-          ": " +
+          ': ' +
           parsed.error,
       );
       if (
-        typeof parsed.errorCode === "string" &&
+        typeof parsed.errorCode === 'string' &&
         parsed.errorCode.length > ZERO
       ) {
         error.code = parsed.errorCode.toLowerCase();
       }
-      if (typeof parsed.hint === "string" && parsed.hint.length > ZERO) {
+      if (typeof parsed.hint === 'string' && parsed.hint.length > ZERO) {
         error.hint = parsed.hint;
       }
       if (parsed.deferRetry === true) {
@@ -666,23 +681,23 @@ class NodeHandle {
       if (Number.isFinite(parsed.retryAfterMs)) {
         error.retryAfterMs = Math.max(ZERO, Math.floor(parsed.retryAfterMs));
       }
-      if (typeof parsed.outcome === "string" && parsed.outcome.length > ZERO) {
+      if (typeof parsed.outcome === 'string' && parsed.outcome.length > ZERO) {
         error.outcome = parsed.outcome;
       }
       if (
-        typeof parsed.visibilityState === "string" &&
+        typeof parsed.visibilityState === 'string' &&
         parsed.visibilityState.length > ZERO
       ) {
         error.visibilityState = parsed.visibilityState;
       }
       if (
-        typeof parsed.contractState === "string" &&
+        typeof parsed.contractState === 'string' &&
         parsed.contractState.length > ZERO
       ) {
         error.contractState = parsed.contractState;
       }
       if (
-        typeof parsed.nextAction === "string" &&
+        typeof parsed.nextAction === 'string' &&
         parsed.nextAction.length > ZERO
       ) {
         error.nextAction = parsed.nextAction;
@@ -691,7 +706,7 @@ class NodeHandle {
         error.authoritativeVisibilityConfirmed = true;
       }
       if (
-        typeof parsed.reasonCode === "string" &&
+        typeof parsed.reasonCode === 'string' &&
         parsed.reasonCode.length > ZERO
       ) {
         error.reasonCode = parsed.reasonCode;
@@ -704,7 +719,7 @@ class NodeHandle {
       }
       if (
         parsed.runtimeAuthority &&
-        typeof parsed.runtimeAuthority === "object"
+        typeof parsed.runtimeAuthority === 'object'
       ) {
         error.runtimeAuthority = parsed.runtimeAuthority;
       }
@@ -723,31 +738,31 @@ class NodeHandle {
       callbackModuleRef: parsed.callbackModuleRef,
       callbackExport: parsed.callbackExport,
       warning: parsed.warning,
-      outcome: typeof parsed.outcome === "string" ? parsed.outcome : undefined,
+      outcome: typeof parsed.outcome === 'string' ? parsed.outcome : undefined,
       visibilityState:
-        typeof parsed.visibilityState === "string"
-          ? parsed.visibilityState
-          : undefined,
+        typeof parsed.visibilityState === 'string' ?
+          parsed.visibilityState :
+          undefined,
       contractState:
-        typeof parsed.contractState === "string"
-          ? parsed.contractState
-          : undefined,
+        typeof parsed.contractState === 'string' ?
+          parsed.contractState :
+          undefined,
       nextAction:
-        typeof parsed.nextAction === "string" ? parsed.nextAction : undefined,
+        typeof parsed.nextAction === 'string' ? parsed.nextAction : undefined,
       authoritativeVisibilityConfirmed:
         parsed.authoritativeVisibilityConfirmed === true,
       reasonCode:
-        typeof parsed.reasonCode === "string" ? parsed.reasonCode : undefined,
-      reasonCodes: Array.isArray(parsed.reasonCodes)
-        ? [...parsed.reasonCodes]
-        : undefined,
-      failedDimensions: Array.isArray(parsed.failedDimensions)
-        ? [...parsed.failedDimensions]
-        : undefined,
+        typeof parsed.reasonCode === 'string' ? parsed.reasonCode : undefined,
+      reasonCodes: Array.isArray(parsed.reasonCodes) ?
+        [...parsed.reasonCodes] :
+        undefined,
+      failedDimensions: Array.isArray(parsed.failedDimensions) ?
+        [...parsed.failedDimensions] :
+        undefined,
       runtimeAuthority:
-        parsed.runtimeAuthority && typeof parsed.runtimeAuthority === "object"
-          ? parsed.runtimeAuthority
-          : undefined,
+        parsed.runtimeAuthority && typeof parsed.runtimeAuthority === 'object' ?
+          parsed.runtimeAuthority :
+          undefined,
     });
   }
 
@@ -795,7 +810,7 @@ class NodeHandle {
   }
 
   _emitLogStreamEntry(entry) {
-    if (!entry || typeof entry !== "object") {
+    if (!entry || typeof entry !== 'object') {
       return;
     }
     for (const listener of this._logStreamListeners) {
@@ -845,9 +860,9 @@ class NodeHandle {
   /** Get node status from Admin API. */
   async getStatus(options = {}) {
     const lane =
-      typeof options?.lane === "string"
-        ? options.lane
-        : ADMIN_SOCKET_LANE_PROBE;
+      typeof options?.lane === 'string' ?
+        options.lane :
+        ADMIN_SOCKET_LANE_PROBE;
     const timeoutMs = this._resolveAdminQueryTimeoutMs(options?.timeoutMs);
     const discoverySnapshot = await this.queryWithTimeout(
       NODE_CLIENT_SERVICE_DISCOVERY_SQL,
@@ -870,15 +885,18 @@ class NodeHandle {
   /** Get local control snapshot from Admin API cache projection. */
   async getControlSnapshot(options = {}) {
     const lane =
-      typeof options?.lane === "string"
-        ? options.lane
-        : ADMIN_SOCKET_LANE_SNAPSHOT;
+      typeof options?.lane === 'string' ?
+        options.lane :
+        ADMIN_SOCKET_LANE_SNAPSHOT;
     const timeoutMs = this._resolveAdminQueryTimeoutMs(options?.timeoutMs);
     const querySnapshot = (sql) =>
       this.queryWithTimeout(sql, [], {
         lane,
         timeoutMs,
       });
+    if (options?.forceAuthoritativeRepair === true) {
+      return querySnapshot(NODE_CLIENT_CONTROL_SNAPSHOT_FORCE_REPAIR_SQL);
+    }
     if (options?.forceRepair !== true) {
       return querySnapshot(NODE_CLIENT_CONTROL_SNAPSHOT_SQL);
     }
@@ -903,7 +921,7 @@ class NodeHandle {
       }
       throw new Error(
         String(localSnapshotError?.message || localSnapshotError) +
-          "; forced repair snapshot failed: " +
+          '; forced repair snapshot failed: ' +
           String(forcedSnapshotError?.message || forcedSnapshotError),
       );
     }
@@ -914,23 +932,23 @@ class NodeHandle {
     const result = await this.getControlSnapshot(options);
     const rows = Array.isArray(result?.rows) ? result.rows : [];
     const firstRow =
-      rows.length > 0 && rows[0] && typeof rows[0] === "object"
-        ? rows[0]
-        : null;
+      rows.length > 0 && rows[0] && typeof rows[0] === 'object' ?
+        rows[0] :
+        null;
     const controlPlaneDiagnostics =
       firstRow?.controlPlaneDiagnostics &&
-      typeof firstRow.controlPlaneDiagnostics === "object"
-        ? JSON.parse(JSON.stringify(firstRow.controlPlaneDiagnostics))
-        : null;
+      typeof firstRow.controlPlaneDiagnostics === 'object' ?
+        JSON.parse(JSON.stringify(firstRow.controlPlaneDiagnostics)) :
+        null;
     return {
       nodeId: this.id,
       capturedAt:
-        typeof firstRow?.capturedAt === "string" ? firstRow.capturedAt : null,
-      capturedAtMs: Number.isFinite(firstRow?.capturedAtMs)
-        ? firstRow.capturedAtMs
-        : Number.isFinite(firstRow?.capturedAt)
-          ? firstRow.capturedAt
-          : null,
+        typeof firstRow?.capturedAt === 'string' ? firstRow.capturedAt : null,
+      capturedAtMs: Number.isFinite(firstRow?.capturedAtMs) ?
+        firstRow.capturedAtMs :
+        Number.isFinite(firstRow?.capturedAt) ?
+          firstRow.capturedAt :
+          null,
       controlPlaneDiagnostics,
     };
   }
@@ -947,7 +965,7 @@ class NodeHandle {
       BOOTSTRAP_WAIT_REQUEST_TIMEOUT_MS,
     );
     const bootstrapJoinReadyUrl =
-      "http://" + this.ip + ":" + PORTS.REST + BOOTSTRAP_JOIN_READY_PATH;
+      'http://' + this.ip + ':' + PORTS.REST + BOOTSTRAP_JOIN_READY_PATH;
     const probeResponse = await httpRequest({
       url: bootstrapJoinReadyUrl,
       timeoutMs,
@@ -969,7 +987,7 @@ class NodeHandle {
       BOOTSTRAP_WAIT_REQUEST_TIMEOUT_MS,
     );
     const trafficReadyUrl =
-      "http://" + this.ip + ":" + PORTS.REST + BOOTSTRAP_TRAFFIC_READY_PATH;
+      'http://' + this.ip + ':' + PORTS.REST + BOOTSTRAP_TRAFFIC_READY_PATH;
     const probeResponse = await httpRequest({
       url: trafficReadyUrl,
       timeoutMs,
@@ -980,43 +998,43 @@ class NodeHandle {
   }
 
   _resolveAdminRoutingReadiness(discoverySnapshot) {
-    const rows = Array.isArray(discoverySnapshot?.rows)
-      ? discoverySnapshot.rows
-      : [];
+    const rows = Array.isArray(discoverySnapshot?.rows) ?
+      discoverySnapshot.rows :
+      [];
     const firstRow =
-      rows.length > 0 && rows[0] && typeof rows[0] === "object"
-        ? rows[0]
-        : null;
+      rows.length > 0 && rows[0] && typeof rows[0] === 'object' ?
+        rows[0] :
+        null;
     if (!firstRow) {
       return false;
     }
-    const services = Array.isArray(firstRow[SERVICE_DISCOVERY_SERVICES_FIELD])
-      ? firstRow[SERVICE_DISCOVERY_SERVICES_FIELD]
-      : [];
+    const services = Array.isArray(firstRow[SERVICE_DISCOVERY_SERVICES_FIELD]) ?
+      firstRow[SERVICE_DISCOVERY_SERVICES_FIELD] :
+      [];
     for (const service of services) {
-      if (!service || typeof service !== "object") {
+      if (!service || typeof service !== 'object') {
         continue;
       }
       const serviceIds = Array.isArray(
         service[SERVICE_DISCOVERY_SERVICE_IDS_FIELD],
-      )
-        ? service[SERVICE_DISCOVERY_SERVICE_IDS_FIELD]
-        : [];
+      ) ?
+        service[SERVICE_DISCOVERY_SERVICE_IDS_FIELD] :
+        [];
       if (!serviceIds.includes(NODE_CLIENT_SERVICE_ID_ADMIN_META)) {
         continue;
       }
-      const replicas = Array.isArray(service[SERVICE_DISCOVERY_REPLICAS_FIELD])
-        ? service[SERVICE_DISCOVERY_REPLICAS_FIELD]
-        : [];
+      const replicas = Array.isArray(service[SERVICE_DISCOVERY_REPLICAS_FIELD]) ?
+        service[SERVICE_DISCOVERY_REPLICAS_FIELD] :
+        [];
       for (const replica of replicas) {
-        if (!replica || typeof replica !== "object") {
+        if (!replica || typeof replica !== 'object') {
           continue;
         }
         const replicaNodeId = String(
-          replica[SERVICE_DISCOVERY_REPLICA_NODE_ID_FIELD] || "",
+          replica[SERVICE_DISCOVERY_REPLICA_NODE_ID_FIELD] || '',
         );
         const replicaServiceId = String(
-          replica[SERVICE_DISCOVERY_REPLICA_SERVICE_ID_FIELD] || "",
+          replica[SERVICE_DISCOVERY_REPLICA_SERVICE_ID_FIELD] || '',
         );
         if (
           replicaNodeId !== this.id ||
@@ -1025,7 +1043,7 @@ class NodeHandle {
           continue;
         }
         const readiness = replica[SERVICE_DISCOVERY_REPLICA_READINESS_FIELD];
-        if (!readiness || typeof readiness !== "object") {
+        if (!readiness || typeof readiness !== 'object') {
           return false;
         }
         return (
@@ -1054,12 +1072,22 @@ class NodeHandle {
     const remainingProbeBudgetMs = () => {
       return Math.max(MIN_TIMEOUT_MS, deadlineMs - Date.now());
     };
+    const reachabilityHttpProbeTimeoutMs = () =>
+      resolveReachabilityProbeTimeoutMs(
+        remainingProbeBudgetMs(),
+        REACHABILITY_HTTP_PROBE_TIMEOUT_MS,
+      );
+    const reachabilityAdminProbeTimeoutMs = () =>
+      resolveReachabilityProbeTimeoutMs(
+        remainingProbeBudgetMs(),
+        REACHABILITY_ADMIN_PROBE_TIMEOUT_MS,
+      );
     const bootstrapUrl =
-      "http://" + this.ip + ":" + PORTS.REST + BOOTSTRAP_HEALTH_PATH;
+      'http://' + this.ip + ':' + PORTS.REST + BOOTSTRAP_HEALTH_PATH;
     const adminUrl =
-      "http://" + this.ip + ":" + this._adminApiPort + ADMIN_HEALTH_PATH;
+      'http://' + this.ip + ':' + this._adminApiPort + ADMIN_HEALTH_PATH;
     const adminEndpoint =
-      "ws://" + this.ip + ":" + this._adminApiPort + ADMIN_STREAM_PATH;
+      'ws://' + this.ip + ':' + this._adminApiPort + ADMIN_STREAM_PATH;
 
     const diagnostics = {
       nodeId: this.id,
@@ -1092,7 +1120,7 @@ class NodeHandle {
 
     const bootstrapStatus = await httpGet(
       bootstrapUrl,
-      remainingProbeBudgetMs(),
+      reachabilityHttpProbeTimeoutMs(),
     );
     diagnostics.bootstrapHealth = buildHealthProbeResult(
       bootstrapUrl,
@@ -1108,42 +1136,45 @@ class NodeHandle {
 
     try {
       const bootstrapReadiness = await this.probeBootstrapReadiness({
-        timeoutMs: remainingProbeBudgetMs(),
+        timeoutMs: reachabilityHttpProbeTimeoutMs(),
       });
       diagnostics.bootstrapReadiness = bootstrapReadiness;
       diagnostics.controlPlaneRecoveryReady =
         isControlPlaneRecoveryReadyProbe(bootstrapReadiness);
       diagnostics.publishedControlPlaneEpoch = Number.isFinite(
         bootstrapReadiness?.publishedControlPlaneEpoch,
-      )
-        ? Math.max(
-            ZERO,
-            Math.floor(bootstrapReadiness.publishedControlPlaneEpoch),
-          )
-        : null;
+      ) ?
+        Math.max(
+          ZERO,
+          Math.floor(bootstrapReadiness.publishedControlPlaneEpoch),
+        ) :
+        null;
       diagnostics.readinessStage =
-        typeof bootstrapReadiness?.readinessStage === "string"
-          ? bootstrapReadiness.readinessStage
-          : null;
+        typeof bootstrapReadiness?.readinessStage === 'string' ?
+          bootstrapReadiness.readinessStage :
+          null;
       diagnostics.readinessStageRank = Number.isFinite(
         bootstrapReadiness?.readinessStageRank,
-      )
-        ? Math.max(ZERO, Math.floor(bootstrapReadiness.readinessStageRank))
-        : null;
+      ) ?
+        Math.max(ZERO, Math.floor(bootstrapReadiness.readinessStageRank)) :
+        null;
       diagnostics.recoveryStage =
-        typeof bootstrapReadiness?.recoveryStage === "string"
-          ? bootstrapReadiness.recoveryStage
-          : null;
+        typeof bootstrapReadiness?.recoveryStage === 'string' ?
+          bootstrapReadiness.recoveryStage :
+          null;
       diagnostics.recoveryStageRank = Number.isFinite(
         bootstrapReadiness?.recoveryStageRank,
-      )
-        ? Math.max(ZERO, Math.floor(bootstrapReadiness.recoveryStageRank))
-        : null;
+      ) ?
+        Math.max(ZERO, Math.floor(bootstrapReadiness.recoveryStageRank)) :
+        null;
     } catch (_error) {
       diagnostics.bootstrapReadiness = null;
     }
 
-    const adminStatus = await httpGet(adminUrl, remainingProbeBudgetMs());
+    const adminStatus = await httpGet(
+      adminUrl,
+      reachabilityHttpProbeTimeoutMs(),
+    );
     diagnostics.adminHealth = buildHealthProbeResult(adminUrl, adminStatus);
     if (diagnostics.adminHealth.ok) {
       diagnostics.reachable = true;
@@ -1158,8 +1189,8 @@ class NodeHandle {
     try {
       await withTimeout(
         this._getAdminSocket(),
-        remainingProbeBudgetMs(),
-        "Admin WebSocket probe timed out for node " + this.id,
+        reachabilityAdminProbeTimeoutMs(),
+        'Admin WebSocket probe timed out for node ' + this.id,
       );
       diagnostics.adminWs = createProbeResult({
         attempted: true,
@@ -1184,7 +1215,7 @@ class NodeHandle {
 
     try {
       await this.queryWithTimeout(REACHABILITY_PROBE_SQL, [], {
-        timeoutMs: remainingProbeBudgetMs(),
+        timeoutMs: reachabilityAdminProbeTimeoutMs(),
         lane: ADMIN_SOCKET_LANE_PROBE,
       });
       diagnostics.sqlProbe = createProbeResult({

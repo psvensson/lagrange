@@ -1,4 +1,4 @@
-import { CLUSTER_SEGMENT_5 } from "./cluster-segment-5.js";
+import {CLUSTER_SEGMENT_5} from './cluster-segment-5.js';
 const {
   CLUSTER_READINESS_MODE_STARTUP,
   CLUSTER_STAGE_SETUP_CLUSTER_ACTIVE,
@@ -91,9 +91,9 @@ class StartupGate {
   async waitForClusterActive(expectedNodeCount) {
     if (this._state !== STARTUP_GATE_STATE.SEED_JOIN_READY) {
       throw new Error(
-        "Startup gate state violation: expected " +
+        'Startup gate state violation: expected ' +
           STARTUP_GATE_STATE.SEED_JOIN_READY +
-          " before cluster-active wait, got " +
+          ' before cluster-active wait, got ' +
           this._state,
       );
     }

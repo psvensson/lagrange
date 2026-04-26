@@ -19,7 +19,7 @@ const PARTITION_SERVICE_ACTIVATION_ERROR = Object.freeze({
   runtimeRequired: (replicaId) =>
     `Partition service activation requires initialized runtime for ${replicaId}`,
   replicaHandlerRequired: (replicaId) =>
-    `Partition service activation requires replica handler ` +
+    'Partition service activation requires replica handler ' +
     `registration for ${replicaId}`,
 });
 function resolveReplicaUnifiedAddress(nodeId, replicaId, service) {

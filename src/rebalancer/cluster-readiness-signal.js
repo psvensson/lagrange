@@ -113,7 +113,7 @@ class ClusterReadinessSignal {
     try {
       const activeNodes = this.systemTableCache.filter(
         TABLES.NODES,
-        (node) => node[COLUMN.STATUS] === NODE_STATE.ACTIVE
+        (node) => node[COLUMN.STATUS] === NODE_STATE.ACTIVE,
       );
       return activeNodes.length >= this.expectedNodeCount;
     } catch (_err) {

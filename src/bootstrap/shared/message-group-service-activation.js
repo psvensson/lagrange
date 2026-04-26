@@ -23,7 +23,7 @@ const MESSAGE_GROUP_SERVICE_ACTIVATION_ERROR = Object.freeze({
   ENDPOINTS_REQUIRED:
     'Message-group service activation requires endpoint publication',
   replicaHandlerRequired: (replicaId) =>
-    `Message-group service activation requires replica handler ` +
+    'Message-group service activation requires replica handler ' +
     `registration for ${replicaId}`,
 });
 function resolveReplicaUnifiedAddress(nodeId, replicaId, service) {

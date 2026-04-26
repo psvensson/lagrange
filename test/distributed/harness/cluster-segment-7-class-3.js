@@ -1,4 +1,4 @@
-import { CLUSTER_SEGMENT_7_CLASS_SHARED } from './cluster-segment-7-class-shared.js';
+import {CLUSTER_SEGMENT_7_CLASS_SHARED} from './cluster-segment-7-class-shared.js';
 
 const {
   ACTIVE_POLL_INTERVAL_MS,
@@ -50,7 +50,7 @@ const {
   resolveChaosFaultStatus,
   summarizeBootstrapProgress,
 } = CLUSTER_SEGMENT_7_CLASS_SHARED;
-import { Cluster2 } from "./cluster-segment-7-class-2.js";
+import {Cluster2} from './cluster-segment-7-class-2.js';
 
 class Cluster3 extends Cluster2 {
   async waitForControlPlaneQuiescence(options = {}) {
@@ -192,31 +192,31 @@ class Cluster3 extends Cluster2 {
             nowMs - lastProgressAtMs >= noProgressTimeoutMs
           ) {
             const stalledError = new Error(
-              "Control plane quiescence stalled for " +
+              'Control plane quiescence stalled for ' +
                 String(nowMs - lastProgressAtMs) +
-                "ms (inFlightCount=" +
+                'ms (inFlightCount=' +
                 String(snapshotProbe.inFlightCount) +
-                ", leaderQuietElapsedMs=" +
+                ', leaderQuietElapsedMs=' +
                 String(leaderQuietElapsedMs) +
-                ", nodeId=" +
-                String(snapshotProbe.nodeId || "unknown") +
-                ")",
+                ', nodeId=' +
+                String(snapshotProbe.nodeId || 'unknown') +
+                ')',
             );
             stalledError.quiescence = {
               nodeId: snapshotProbe.nodeId || null,
               inFlightCount: snapshotProbe.inFlightCount,
               reasons,
               stableElapsedMs:
-                stableWindowStartedAtMs === null
-                  ? ZERO
-                  : nowMs - stableWindowStartedAtMs,
+                stableWindowStartedAtMs === null ?
+                  ZERO :
+                  nowMs - stableWindowStartedAtMs,
               leaderQuietElapsedMs,
               criticalSystemDistribution:
-                criticalSystemTopology.enabled === true
-                  ? formatCriticalSystemDistributionSummary(
-                      criticalSystemTopology,
-                    )
-                  : null,
+                criticalSystemTopology.enabled === true ?
+                  formatCriticalSystemDistributionSummary(
+                    criticalSystemTopology,
+                  ) :
+                  null,
             };
             throw stalledError;
           }
@@ -227,15 +227,15 @@ class Cluster3 extends Cluster2 {
             ready,
             reasons,
             stableElapsedMs:
-              stableWindowStartedAtMs === null
-                ? ZERO
-                : nowMs - stableWindowStartedAtMs,
+              stableWindowStartedAtMs === null ?
+                ZERO :
+                nowMs - stableWindowStartedAtMs,
             leaderQuietElapsedMs,
           };
         },
         isSuccess: (result) =>
           result.ready === true && result.stableElapsedMs >= stableWindowMs,
-        onAttempt: ({ lastResult }) => {
+        onAttempt: ({lastResult}) => {
           for (const reason of lastResult?.reasons || []) {
             instabilitySummaryCounts.set(
               reason,
@@ -269,46 +269,46 @@ class Cluster3 extends Cluster2 {
     await this._collectFailureLogs();
     const instabilitySummary = formatCountSummary(instabilitySummaryCounts);
     throw new Error(
-      "Control plane did not quiesce within " +
+      'Control plane did not quiesce within ' +
         timeoutMs +
-        "ms (attempts=" +
+        'ms (attempts=' +
         pollResult.attempts +
-        ", elapsedMs=" +
+        ', elapsedMs=' +
         pollResult.elapsedMs +
-        ", stableWindowMs=" +
+        ', stableWindowMs=' +
         stableWindowMs +
-        ", stableElapsedMs=" +
+        ', stableElapsedMs=' +
         (pollResult.lastResult?.stableElapsedMs ?? ZERO) +
-        ", inFlightCount=" +
-        String(pollResult.lastResult?.inFlightCount ?? "unknown") +
-        ", leaderQuietElapsedMs=" +
+        ', inFlightCount=' +
+        String(pollResult.lastResult?.inFlightCount ?? 'unknown') +
+        ', leaderQuietElapsedMs=' +
         String(pollResult.lastResult?.leaderQuietElapsedMs ?? ZERO) +
-        ", selectedNodeId=" +
-        String(pollResult.lastResult?.nodeId || "unknown") +
-        ", criticalSystemDistribution=" +
+        ', selectedNodeId=' +
+        String(pollResult.lastResult?.nodeId || 'unknown') +
+        ', criticalSystemDistribution=' +
         formatCriticalSystemDistributionSummary(
           pollResult.lastResult?.criticalSystemTopology || null,
         ) +
-        ", instabilitySummary=" +
-        (instabilitySummary || "none") +
-        ")",
+        ', instabilitySummary=' +
+        (instabilitySummary || 'none') +
+        ')',
     );
   }
 
   startLoad(options) {
     const requestedOptions =
-      options && typeof options === "object" ? options : {};
-    const explicitNodes = Array.isArray(requestedOptions.nodes)
-      ? requestedOptions.nodes
-      : null;
+      options && typeof options === 'object' ? options : {};
+    const explicitNodes = Array.isArray(requestedOptions.nodes) ?
+      requestedOptions.nodes :
+      null;
     const nodes =
-      explicitNodes !== null
-        ? explicitNodes.filter((node) => node && typeof node === "object")
-        : Array.from(this._nodes.values());
+      explicitNodes !== null ?
+        explicitNodes.filter((node) => node && typeof node === 'object') :
+        Array.from(this._nodes.values());
     const benchmarkConfig =
-      this._config?.benchmark && typeof this._config.benchmark === "object"
-        ? this._config.benchmark
-        : null;
+      this._config?.benchmark && typeof this._config.benchmark === 'object' ?
+        this._config.benchmark :
+        null;
     const resolvedOptions = {
       ...requestedOptions,
     };
@@ -377,7 +377,7 @@ class Cluster3 extends Cluster2 {
     };
 
     const recordProgress = () => {
-      if (stopped || typeof run.getMetrics !== "function") {
+      if (stopped || typeof run.getMetrics !== 'function') {
         return;
       }
       this._recordPlaybackEvent(
@@ -421,14 +421,14 @@ class Cluster3 extends Cluster2 {
       .catch((error) => {
         finalize({
           cancelled,
-          error: error?.message || "load-run-failed",
+          error: error?.message || 'load-run-failed',
         });
         throw error;
       });
 
     run.waitComplete = async () => completionPromise;
 
-    if (typeof run.cancel === "function") {
+    if (typeof run.cancel === 'function') {
       const cancel = run.cancel.bind(run);
       run.cancel = () => {
         cancelled = true;
@@ -465,7 +465,7 @@ class Cluster3 extends Cluster2 {
    * @param {string} scenarioName
    */
   setScenarioName(scenarioName) {
-    if (typeof scenarioName !== "string" || scenarioName.length === 0) {
+    if (typeof scenarioName !== 'string' || scenarioName.length === 0) {
       return;
     }
     this._scenarioName = scenarioName;
@@ -488,7 +488,7 @@ class Cluster3 extends Cluster2 {
       return this._traceManifest;
     }
     if (this._traceStartWarning) {
-      return { warning: this._traceStartWarning };
+      return {warning: this._traceStartWarning};
     }
     return null;
   }
@@ -521,55 +521,55 @@ class Cluster3 extends Cluster2 {
   }
 
   _summarizeRestartBoundaryLedgerSnapshot(snapshot, nodeId) {
-    if (!snapshot || typeof snapshot !== "object") {
+    if (!snapshot || typeof snapshot !== 'object') {
       return null;
     }
     const controlPlaneDiagnostics =
       snapshot.controlPlaneDiagnostics &&
-      typeof snapshot.controlPlaneDiagnostics === "object"
-        ? snapshot.controlPlaneDiagnostics
-        : null;
+      typeof snapshot.controlPlaneDiagnostics === 'object' ?
+        snapshot.controlPlaneDiagnostics :
+        null;
     const localReadiness =
       controlPlaneDiagnostics?.readinessByNodeId &&
-      typeof controlPlaneDiagnostics.readinessByNodeId === "object"
-        ? controlPlaneDiagnostics.readinessByNodeId[nodeId] || null
-        : null;
+      typeof controlPlaneDiagnostics.readinessByNodeId === 'object' ?
+        controlPlaneDiagnostics.readinessByNodeId[nodeId] || null :
+        null;
     return {
       nodeId,
       capturedAt:
-        typeof snapshot.capturedAt === "string" ? snapshot.capturedAt : null,
-      capturedAtMs: Number.isFinite(snapshot.capturedAtMs)
-        ? snapshot.capturedAtMs
-        : null,
+        typeof snapshot.capturedAt === 'string' ? snapshot.capturedAt : null,
+      capturedAtMs: Number.isFinite(snapshot.capturedAtMs) ?
+        snapshot.capturedAtMs :
+        null,
       publicationConvergence:
         controlPlaneDiagnostics?.publicationConvergence || null,
       startupRecovery: controlPlaneDiagnostics?.startupRecovery || null,
       publicationMode: controlPlaneDiagnostics?.publicationMode || null,
       heartbeatPublication:
         controlPlaneDiagnostics?.heartbeatPublication || null,
-      localReadiness: localReadiness
-        ? {
-            nodeId: localReadiness.nodeId || nodeId,
-            dimensions:
+      localReadiness: localReadiness ?
+        {
+          nodeId: localReadiness.nodeId || nodeId,
+          dimensions:
               localReadiness.dimensions &&
-              typeof localReadiness.dimensions === "object"
-                ? localReadiness.dimensions
-                : null,
-            reasonCodes: Array.isArray(localReadiness.reasonCodes)
-              ? localReadiness.reasonCodes
-              : Array.isArray(localReadiness.reasons)
-                ? localReadiness.reasons
-                    .map((reason) => String(reason?.code || "").trim())
-                    .filter((reason) => reason.length > ZERO)
-                : [],
-          }
-        : null,
+              typeof localReadiness.dimensions === 'object' ?
+                localReadiness.dimensions :
+                null,
+          reasonCodes: Array.isArray(localReadiness.reasonCodes) ?
+            localReadiness.reasonCodes :
+            Array.isArray(localReadiness.reasons) ?
+              localReadiness.reasons
+                .map((reason) => String(reason?.code || '').trim())
+                .filter((reason) => reason.length > ZERO) :
+              [],
+        } :
+        null,
     };
   }
 
   async _recordRestartBoundarySnapshot(nodeId, phase) {
     const node = this._nodes.get(nodeId) || null;
-    if (typeof node?.getControlPlaneLedgerSnapshot !== "function") {
+    if (typeof node?.getControlPlaneLedgerSnapshot !== 'function') {
       return;
     }
     try {
@@ -595,7 +595,7 @@ class Cluster3 extends Cluster2 {
         nodeId,
         {
           phase,
-          error: error?.message || "restart-boundary-snapshot-failed",
+          error: error?.message || 'restart-boundary-snapshot-failed',
         },
       );
     }
@@ -637,9 +637,9 @@ class Cluster3 extends Cluster2 {
         },
       );
       this._recordPlaybackEvent(
-        faultStatus === CHAOS_FAULT_STATUS_RECOVERED
-          ? PLAYBACK_EVENT_TYPE.CHAOS_FAULT_RECOVERED
-          : PLAYBACK_EVENT_TYPE.CHAOS_FAULT_INJECTED,
+        faultStatus === CHAOS_FAULT_STATUS_RECOVERED ?
+          PLAYBACK_EVENT_TYPE.CHAOS_FAULT_RECOVERED :
+          PLAYBACK_EVENT_TYPE.CHAOS_FAULT_INJECTED,
         PLAYBACK_SCOPE_CHAOS,
         entityId,
         {
@@ -676,7 +676,7 @@ class Cluster3 extends Cluster2 {
     }
 
     if (this._providers.length <= 0) {
-      throw new Error("No Docker providers configured for cluster");
+      throw new Error('No Docker providers configured for cluster');
     }
 
     const fallbackProviderIndex = nodeIndex % this._providers.length;
@@ -700,18 +700,18 @@ class Cluster3 extends Cluster2 {
       [LABELS.NODE_ID]: nodeId,
       [LABELS.ROLE]: role,
     };
-    const dockerBinds = Array.isArray(this._config?.docker?.binds)
-      ? this._config.docker.binds.filter(
-          (entry) => typeof entry === "string" && entry.length > 0,
-        )
-      : [];
+    const dockerBinds = Array.isArray(this._config?.docker?.binds) ?
+      this._config.docker.binds.filter(
+        (entry) => typeof entry === 'string' && entry.length > 0,
+      ) :
+      [];
     if (reuseContainers) {
       dockerBinds.push(this._getReusableControlBind(containerName));
     }
     const hostConfigExtras =
-      dockerBinds.length > 0
-        ? { [DOCKER_HOST_CONFIG_BINDS_KEY]: dockerBinds }
-        : null;
+      dockerBinds.length > 0 ?
+        {[DOCKER_HOST_CONFIG_BINDS_KEY]: dockerBinds} :
+        null;
     const startTimeout =
       this._config.timeouts?.nodeStartup || TIMEOUTS.NODE_STARTUP;
 
@@ -734,7 +734,7 @@ class Cluster3 extends Cluster2 {
               nodeId +
               '" (' +
               role +
-              ") failed to reset reusable container: " +
+              ') failed to reset reusable container: ' +
               err.message,
           );
         }
@@ -743,7 +743,7 @@ class Cluster3 extends Cluster2 {
       if (existing) {
         const containerId = existing.Id || existing.id || containerName;
         try {
-          const status = String(existing?.State?.Status || "").toLowerCase();
+          const status = String(existing?.State?.Status || '').toLowerCase();
           if (status === CONTAINER_RUNNING_STATUS) {
             try {
               await provider.stopContainer(containerId);
@@ -781,7 +781,7 @@ class Cluster3 extends Cluster2 {
 
           const ip =
             refreshed?.NetworkSettings?.Networks?.[this._networkName]
-              ?.IPAddress || "";
+              ?.IPAddress || '';
           return new NodeHandle(
             nodeId,
             containerId,
@@ -800,7 +800,7 @@ class Cluster3 extends Cluster2 {
               nodeId +
               '" (' +
               role +
-              ") failed to reuse container: " +
+              ') failed to reuse container: ' +
               err.message,
           );
         }
@@ -818,17 +818,17 @@ class Cluster3 extends Cluster2 {
         resourceLimits: this._config.resourceLimits || {},
         startTimeout,
         hostConfigExtras,
-        ...(reuseContainers
-          ? {
-              entrypoint: REUSE_ENTRYPOINT,
-              command: REUSE_START_COMMAND_ARGS,
-            }
-          : {}),
+        ...(reuseContainers ?
+          {
+            entrypoint: REUSE_ENTRYPOINT,
+            command: REUSE_START_COMMAND_ARGS,
+          } :
+          {}),
       });
     } catch (err) {
       await this._collectFailureLogs();
       throw new Error(
-        'Node "' + nodeId + '" (' + role + ") failed to start: " + err.message,
+        'Node "' + nodeId + '" (' + role + ') failed to start: ' + err.message,
       );
     }
 
@@ -858,7 +858,7 @@ class Cluster3 extends Cluster2 {
     const startedAt = Date.now();
     const hardDeadline = startedAt + hardTimeoutMs;
     const bootstrapJoinReadyUrl =
-      "http://" + seedNode.ip + ":" + PORTS.REST + BOOTSTRAP_JOIN_READY_PATH;
+      'http://' + seedNode.ip + ':' + PORTS.REST + BOOTSTRAP_JOIN_READY_PATH;
     const statusCounts = new Map();
     const phaseCounts = new Map();
     const reasonCounts = new Map();
@@ -866,7 +866,7 @@ class Cluster3 extends Cluster2 {
     let lastResult = null;
     let bestProgress = null;
     let lastProgressAt = startedAt;
-    let timeoutReason = "hard_deadline";
+    let timeoutReason = 'hard_deadline';
 
     while (Date.now() <= hardDeadline) {
       attempts += 1;
@@ -931,7 +931,7 @@ class Cluster3 extends Cluster2 {
 
       const now = Date.now();
       if (now - lastProgressAt >= startupTimeout) {
-        timeoutReason = "no_progress";
+        timeoutReason = 'no_progress';
         break;
       }
 
@@ -940,7 +940,7 @@ class Cluster3 extends Cluster2 {
         Math.min(hardDeadline, lastProgressAt + startupTimeout) - now,
       );
       if (sleepBudgetMs <= ZERO) {
-        timeoutReason = "no_progress";
+        timeoutReason = 'no_progress';
         break;
       }
 
@@ -959,56 +959,56 @@ class Cluster3 extends Cluster2 {
     const lastPhase = lastResult?.phase || UNKNOWN_PHASE;
     const lastState = lastResult?.state || UNKNOWN_STATE;
     const lastReasons =
-      Array.isArray(lastResult?.reasons) && lastResult.reasons.length > ZERO
-        ? lastResult.reasons.join(",")
-        : "none";
+      Array.isArray(lastResult?.reasons) && lastResult.reasons.length > ZERO ?
+        lastResult.reasons.join(',') :
+        'none';
     const bestProgressSummary = summarizeBootstrapProgress(bestProgress);
     const elapsedMs = Date.now() - startedAt;
     const lastProgressElapsedMs = Math.max(ZERO, Date.now() - lastProgressAt);
     throw new Error(
-      "Seed node bootstrap API did not become join-ready " +
-        "within " +
+      'Seed node bootstrap API did not become join-ready ' +
+        'within ' +
         elapsedMs +
-        "ms" +
-        " (attempts=" +
+        'ms' +
+        ' (attempts=' +
         attempts +
-        ", timeoutReason=" +
+        ', timeoutReason=' +
         timeoutReason +
-        ", noProgressTimeoutMs=" +
+        ', noProgressTimeoutMs=' +
         startupTimeout +
-        ", hardTimeoutMs=" +
+        ', hardTimeoutMs=' +
         hardTimeoutMs +
-        ", lastStatus=" +
+        ', lastStatus=' +
         String(lastStatus) +
-        ", lastPhase=" +
+        ', lastPhase=' +
         lastPhase +
-        ", lastState=" +
+        ', lastState=' +
         lastState +
-        ", lastReasons=" +
+        ', lastReasons=' +
         lastReasons +
-        ", bestStatus=" +
+        ', bestStatus=' +
         String(bestProgressSummary.status) +
-        ", bestPhase=" +
+        ', bestPhase=' +
         bestProgressSummary.phase +
-        ", bestReasons=" +
+        ', bestReasons=' +
         bestProgressSummary.reasons +
-        ", stableWindowMs=" +
+        ', stableWindowMs=' +
         (lastResult?.stableWindowMs ?? configuredStableWindowMs) +
-        ", stableElapsedMs=" +
+        ', stableElapsedMs=' +
         (lastResult?.stableElapsedMs ?? ZERO) +
-        ", readinessEpoch=" +
-        String(lastResult?.readinessEpoch ?? "none") +
-        ", lastProgressElapsedMs=" +
+        ', readinessEpoch=' +
+        String(lastResult?.readinessEpoch ?? 'none') +
+        ', lastProgressElapsedMs=' +
         lastProgressElapsedMs +
-        ", elapsedMs=" +
+        ', elapsedMs=' +
         elapsedMs +
-        ", statusCounts=" +
-        (statusSummary || "none") +
-        ", phaseCounts=" +
-        (phaseSummary || "none") +
-        ", reasonCounts=" +
-        (reasonSummary || "none") +
-        ")",
+        ', statusCounts=' +
+        (statusSummary || 'none') +
+        ', phaseCounts=' +
+        (phaseSummary || 'none') +
+        ', reasonCounts=' +
+        (reasonSummary || 'none') +
+        ')',
     );
   }
 
@@ -1017,4 +1017,4 @@ class Cluster3 extends Cluster2 {
   }
 }
 
-export { Cluster3 };
+export {Cluster3};

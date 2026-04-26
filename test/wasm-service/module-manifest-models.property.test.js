@@ -33,12 +33,12 @@ const digestArb = fc.hexaString({
 
 /** Generates a semver-like version string. */
 const versionArb = fc.tuple(
-  fc.nat({max: 99}), fc.nat({max: 99}), fc.nat({max: 99})
+  fc.nat({max: 99}), fc.nat({max: 99}), fc.nat({max: 99}),
 ).map(([a, b, c]) => `${a}.${b}.${c}`);
 
 /** Generates a capability string like "sql.read". */
 const capabilityArb = fc.tuple(identifierArb, identifierArb).map(
-  ([ns, name]) => `${ns}.${name}`
+  ([ns, name]) => `${ns}.${name}`,
 );
 
 /** Generates a valid dependency object. */
@@ -63,10 +63,10 @@ const moduleManifestArb = fc.record({
   createdAt: fc.nat(),
   sourceReference: fc.option(
     fc.stringMatching(/^oci:\/\/[a-z0-9./-]{1,60}$/),
-    {nil: null}
+    {nil: null},
   ),
   artifactPointer: fc.option(
-    identifierArb, {nil: null}
+    identifierArb, {nil: null},
   ),
 }).map((r) => ({
   namespace: r.namespace,

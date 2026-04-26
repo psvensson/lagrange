@@ -424,7 +424,7 @@ test(
     });
 
     const mockSqlQueryEngine = {
-      async executeQuery(sql, params) {
+      async executeQuery(_sql, _params) {
         return {success: true};
       },
     };

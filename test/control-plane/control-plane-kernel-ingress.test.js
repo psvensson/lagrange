@@ -526,8 +526,8 @@ test('ControlPlaneKernelIngress - READY heartbeats can keep optimistic remote in
         'joining-node-ready-2/message-group/mg-1-r2',
       ],
       'READY heartbeat routing should still expose optimistic remote ingress before falling back to local self delivery',
-  );
-});
+    );
+  });
 
 test('ControlPlaneKernelIngress - READY heartbeats evaluate local routing on ' +
   'the recovery-eligible dimension', async (t) => {

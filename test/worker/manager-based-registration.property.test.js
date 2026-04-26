@@ -433,7 +433,7 @@ describe('Property 20: Manager-Based Registration', () => {
                 replicaId,
               });
               assert.fail('Should have thrown an error');
-            } catch (error) {
+            } catch (_error) {
               // Expected
             }
 

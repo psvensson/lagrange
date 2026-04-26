@@ -1093,7 +1093,7 @@ class BootstrapService extends EventEmitter {
         this.messageGroupServiceHandler &&
         this.heartbeatService &&
         this.localAdminRuntimeReadyNotified === true &&
-        localServiceEndpointsPublished
+        localServiceEndpointsPublished,
       ),
       runtimeServiceHandlerReady:
         Boolean(this.runtimeServiceHandler),
@@ -1101,13 +1101,13 @@ class BootstrapService extends EventEmitter {
         isExternalAdmissionOpen(this.messageRouter),
       runtimeReady: Boolean(
         this.runtimeServiceHandler &&
-        isExternalAdmissionOpen(this.messageRouter)
+        isExternalAdmissionOpen(this.messageRouter),
       ),
       bootstrapComplete: this.phase === BootstrapPhase.COMPLETE,
       controlPlaneBackgroundWritersActive,
       finalized: Boolean(
         this.phase === BootstrapPhase.COMPLETE &&
-        controlPlaneBackgroundWritersActive
+        controlPlaneBackgroundWritersActive,
       ),
     });
   }

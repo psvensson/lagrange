@@ -31,7 +31,6 @@ import {
   SERVICE_DESCRIPTOR_FIELD,
   SERVICE_LIFECYCLE_STATE,
   SERVICE_STATUS,
-  SERVICE_TYPE,
   TABLES,
   UNIFIED_SERVICE_TYPE,
 } from '../../constants/index.js';
@@ -542,11 +541,11 @@ class CreateMessageGroupPhase {
             .JOIN_METADATA_SHORTCUT;
       const shortcutResult =
         await this.delegates.upsertJoinServiceRowWithRetry(
-        serviceData,
-        {
-          admissionTarget,
-        },
-      );
+          serviceData,
+          {
+            admissionTarget,
+          },
+        );
       if (shortcutResult?.success === false) {
         logger.error(
           JOINING_LOG_MSG

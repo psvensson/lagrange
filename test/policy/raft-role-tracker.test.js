@@ -20,23 +20,6 @@ function createMockCDCService() {
 }
 
 // Mock SQL query engine
-function createMockSqlEngine(services = {}) {
-  return {
-    executeQuery: async (sql, params) => {
-      if (sql.includes('WHERE service_id = ?') && params?.[0]) {
-        const svc = services[params[0]] || null;
-        return {rows: svc ? [svc] : []};
-      }
-      if (sql.includes('WHERE raft_role = ?') && params?.[0]) {
-        const matching = Object.values(services).filter(
-          (s) => s.raft_role === params[0],
-        );
-        return {rows: matching};
-      }
-      return {rows: []};
-    },
-  };
-}
 
 // Mock SystemTableCache for read-path tests
 function createMockSystemTableCache(services = {}) {

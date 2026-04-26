@@ -84,12 +84,12 @@ test(
     MessageRouterSetup.create = async (options) => {
       createOptions = options;
       return {
-      hasSelfConnection() {
-        return true;
-      },
-      setQueryMessageGroupServiceResolver(resolver) {
-        installedResolver = resolver;
-      },
+        hasSelfConnection() {
+          return true;
+        },
+        setQueryMessageGroupServiceResolver(resolver) {
+          installedResolver = resolver;
+        },
       };
     };
 

@@ -202,24 +202,24 @@ function createSqlQueryEngineFixture(rows) {
 
 function getPrimaryKeyFieldForSystemTable(tableName, row = null) {
   switch (tableName) {
-    case 'services':
-      return 'service_id';
-    case 'nodes':
-    case 'node_endpoints':
-    case 'logs':
-      return 'node_id';
-    case 'replica_operations':
-      return 'operation_id';
-    case 'message_groups':
-      return 'group_id';
-    case 'partitions':
-      return 'partition_id';
-    case 'service_endpoints':
-      return 'endpoint_id';
-    case 'service_definitions':
-      return 'service_id';
-    default:
-      break;
+  case 'services':
+    return 'service_id';
+  case 'nodes':
+  case 'node_endpoints':
+  case 'logs':
+    return 'node_id';
+  case 'replica_operations':
+    return 'operation_id';
+  case 'message_groups':
+    return 'group_id';
+  case 'partitions':
+    return 'partition_id';
+  case 'service_endpoints':
+    return 'endpoint_id';
+  case 'service_definitions':
+    return 'service_id';
+  default:
+    break;
   }
   for (const candidate of ['service_id', 'node_id', 'operation_id', 'id']) {
     if (typeof row?.[candidate] !== 'undefined' && row?.[candidate] !== null) {

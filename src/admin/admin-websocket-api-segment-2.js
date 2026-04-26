@@ -1,121 +1,36 @@
-import { ADMIN_WEBSOCKET_API_SHARED } from "./admin-websocket-api-shared.js";
-import { AdminWebSocketAPISegment1 } from "./admin-websocket-api-segment-1.js";
+import {ADMIN_WEBSOCKET_API_SHARED} from './admin-websocket-api-shared.js';
+import {AdminWebSocketAPISegment1} from './admin-websocket-api-segment-1.js';
 
 const {
   ADMIN_CACHE_DUMP,
   ADMIN_CACHE_OBSERVATION_TABLES,
-  ADMIN_CLIENT,
-  ADMIN_CONFIG_KEY,
-  ADMIN_CONTENT_TYPE,
-  ADMIN_CONTROL_SNAPSHOT,
-  ADMIN_DEFAULT,
-  ADMIN_ENFORCEMENT_MODE,
-  ADMIN_ERROR_CODE,
-  ADMIN_ERROR_DETAIL_KEY,
-  ADMIN_ERROR_HINT,
-  ADMIN_ERROR_MATCH,
-  ADMIN_ERROR_MESSAGE,
-  ADMIN_LIMIT,
-  ADMIN_LOCAL_DISPATCH,
-  ADMIN_LOG_MSG,
-  ADMIN_MESSAGE_TYPE,
-  ADMIN_META_ACTION,
-  ADMIN_PREFLIGHT_CRITICAL_PATH_SNAPSHOT,
-  ADMIN_QUERY_RESULT,
-  ADMIN_ROUTE,
-  ADMIN_SERVICE_DISCOVERY,
-  ADMIN_SERVICE_OPERATION,
-  ADMIN_STATUS,
-  ADMIN_STREAM_LANE_DEFAULT,
-  ADMIN_STREAM_LANE_LOAD,
-  ADMIN_STREAM_LANE_PROBE,
-  ADMIN_STREAM_LANE_SNAPSHOT,
-  ADMIN_SUBSYSTEM,
-  ADMIN_TEST_DEFAULT,
-  ADMIN_TEST_ERROR_MSG,
-  ADMIN_TEST_STREAM_EVENT,
   AST_TYPE,
-  AdminControlSnapshot,
-  AdminDebugHandlers,
-  AdminPreflightSnapshot,
-  AdminServiceDiscovery,
-  AdminTestRunService,
-  CACHE_DUMP_TABLES,
   CONTROL_PLANE_READINESS_DIMENSION,
   CONTROL_PLANE_SNAPSHOT_OBSERVATION_STATE,
-  CONTROL_PLANE_WORKLOAD_CLASS,
-  CancellationToken,
-  ConfigurationManager,
-  ControlPlaneSnapshotOwner,
-  DebugMetadataStore,
   EMPTY_STRING,
-  ENDPOINT_SYNC_UNHEALTHY_POLICY,
-  ERRNO,
-  EXECUTION_MODE,
   EXPR_TYPE,
   ErrorCode,
-  Fastify,
-  HTTP_HEADER,
-  HTTP_HEADER_VALUE,
-  HTTP_STATUS,
   LOAD_LANE_ADMISSION_REASON_FALLBACK,
   LOAD_LANE_QUERY_ADMISSION_STATE,
   LOAD_LANE_QUERY_TIMEOUT_CAP_MS,
-  LOAD_LANE_READINESS_CACHE_MAX_AGE_MS,
   LOAD_LANE_SOFT_ADMISSION_REASON_CODES,
-  LOAD_LANE_TABLE_ADMISSION_CACHE_MAX_AGE_MS,
   LOAD_LANE_TABLE_ADMISSION_RETRY_AFTER_MS,
   LOAD_LANE_TABLE_ADMISSION_STATE,
   LOAD_LANE_VOTER_READY_REPLICA_ROLES,
-  LoggingService,
   META_SERVICE_ID,
-  MUTATION_GUARD_MODE,
-  MessageType,
   NUM,
-  PRESSURE_GOVERNOR_ACTION,
-  PressureGovernor,
-  QUERY_RESULT_MESSAGE_KIND,
-  QUERY_RESULT_WRITE_OPERATIONS,
-  READINESS_SNAPSHOT_KEY,
   SQLParser,
-  SQL_REQUEST_TIMEOUT_BUDGET_COMPLETION_MARGIN_MS,
-  SSE_FRAME_PREFIX,
-  SSE_FRAME_SUFFIX,
-  TABLES,
-  TIMEOUT_BUDGET_CLASSIFICATION,
-  TRANSPORT_EVENT,
   TYPEOF,
-  TraceCollector,
   WASM_SERVICE_PROTOCOL,
-  adaptAdminMessageToServiceMessage,
-  appendStructuredQueryMetadata,
-  buildControlPlaneWorkloadProfile,
   buildLoadLaneAdmissionErrorDetails,
   buildLoadLaneQueryAdmissionResult,
   buildLoadLaneQueryAdmissionSnapshot,
-  buildLoadLaneRuntimeAuthoritySummary,
-  createAdminOperationError,
   createRetryableAdminOperationError,
-  createSqlRequest,
-  createTimeoutBudget,
-  createTimeoutBudgetError,
-  evaluateSharedMetadataNodeCoverage,
   getControlPlaneRetryAfterMs,
-  getRegisteredControlPlaneSystemTableGateway,
-  guardedAdaptAdminAction,
-  isAdminMessageDispatchable,
   isRetryableControlPlaneError,
   normalizeIdentifier,
-  normalizeSql,
-  parseDiscoveryBooleanQuery,
-  parseDiscoveryListQuery,
-  parseLiveSelect,
-  parseServiceDiscoverySqlQuery,
   resolveLoadLaneQueryAdmissionState,
   resolveRequestedQueryTimeoutMs,
-  resolveSqlEngineControlPlaneReadinessService,
-  resolveSqlRequestTimeoutBudgetMs,
-  websocket,
 } = ADMIN_WEBSOCKET_API_SHARED;
 
 class AdminWebSocketAPISegment2 extends AdminWebSocketAPISegment1 {
@@ -171,15 +86,15 @@ class AdminWebSocketAPISegment2 extends AdminWebSocketAPISegment1 {
     }
     throw createRetryableAdminOperationError(
       ErrorCode.INTERNAL_ERROR,
-      "serve not ready: load lane admission denied on node " +
+      'serve not ready: load lane admission denied on node ' +
         this.nodeId +
-        " (serveEligible=" +
+        ' (serveEligible=' +
         String(admission.serveEligible) +
-        ", reasons=" +
-        (admission.reasonCodes.length > NUM.ZERO
-          ? admission.reasonCodes.join(",")
-          : "none") +
-        ")",
+        ', reasons=' +
+        (admission.reasonCodes.length > NUM.ZERO ?
+          admission.reasonCodes.join(',') :
+          'none') +
+        ')',
       {
         details: buildLoadLaneAdmissionErrorDetails(admission),
       },
@@ -229,11 +144,11 @@ class AdminWebSocketAPISegment2 extends AdminWebSocketAPISegment1 {
    * @private
    */
   normalizeLoadLaneAdmissionReasonCodes(reasons, fallbackCode) {
-    const normalized = Array.isArray(reasons)
-      ? reasons
-          .map((reason) => String(reason?.code || EMPTY_STRING).trim())
-          .filter((code) => code.length > NUM.ZERO)
-      : [];
+    const normalized = Array.isArray(reasons) ?
+      reasons
+        .map((reason) => String(reason?.code || EMPTY_STRING).trim())
+        .filter((code) => code.length > NUM.ZERO) :
+      [];
     if (normalized.length > NUM.ZERO) {
       return [...new Set(normalized)];
     }
@@ -277,9 +192,9 @@ class AdminWebSocketAPISegment2 extends AdminWebSocketAPISegment1 {
       LOAD_LANE_VOTER_READY_REPLICA_ROLES.has(localReplicaRole);
     const degradedByOperationIds = Array.isArray(
       benchmarkAdmission.degradedByOperationIds,
-    )
-      ? benchmarkAdmission.degradedByOperationIds
-      : ADMIN_CACHE_DUMP.EMPTY;
+    ) ?
+      benchmarkAdmission.degradedByOperationIds :
+      ADMIN_CACHE_DUMP.EMPTY;
 
     return (
       routingReady &&
@@ -365,27 +280,27 @@ class AdminWebSocketAPISegment2 extends AdminWebSocketAPISegment1 {
 
   resolveLoadLaneReplicaBenchmarkAdmission(replica) {
     return replica?.benchmarkAdmission &&
-      typeof replica.benchmarkAdmission === TYPEOF.OBJECT
-      ? replica.benchmarkAdmission
-      : null;
+      typeof replica.benchmarkAdmission === TYPEOF.OBJECT ?
+      replica.benchmarkAdmission :
+      null;
   }
 
   resolveLoadLaneReplicaReadiness(replica) {
-    return replica?.readiness && typeof replica.readiness === TYPEOF.OBJECT
-      ? replica.readiness
-      : null;
+    return replica?.readiness && typeof replica.readiness === TYPEOF.OBJECT ?
+      replica.readiness :
+      null;
   }
 
   buildLoadLaneBenchmarkAdmissionResult(tableName, benchmarkAdmission) {
     const benchmarkAdmissionReady =
       String(benchmarkAdmission.state || EMPTY_STRING).toLowerCase() ===
       LOAD_LANE_TABLE_ADMISSION_STATE.READY;
-    const reasonCodes = benchmarkAdmissionReady
-      ? []
-      : this.normalizeLoadLaneAdmissionReasonCodes(
-          benchmarkAdmission.reasons,
-          LOAD_LANE_ADMISSION_REASON_FALLBACK.BENCHMARK_ADMISSION_BLOCKED,
-        );
+    const reasonCodes = benchmarkAdmissionReady ?
+      [] :
+      this.normalizeLoadLaneAdmissionReasonCodes(
+        benchmarkAdmission.reasons,
+        LOAD_LANE_ADMISSION_REASON_FALLBACK.BENCHMARK_ADMISSION_BLOCKED,
+      );
     const softBlockerAdmitted =
       !benchmarkAdmissionReady &&
       this.shouldAdmitLoadLaneSoftBenchmarkBlockers(
@@ -406,12 +321,12 @@ class AdminWebSocketAPISegment2 extends AdminWebSocketAPISegment1 {
 
   buildLoadLaneReadinessAdmissionResult(tableName, readiness) {
     const benchmarkReady = readiness.benchmarkReady === true;
-    const reasonCodes = benchmarkReady
-      ? []
-      : this.normalizeLoadLaneAdmissionReasonCodes(
-          readiness.reasons,
-          LOAD_LANE_ADMISSION_REASON_FALLBACK.BENCHMARK_READINESS_BLOCKED,
-        );
+    const reasonCodes = benchmarkReady ?
+      [] :
+      this.normalizeLoadLaneAdmissionReasonCodes(
+        readiness.reasons,
+        LOAD_LANE_ADMISSION_REASON_FALLBACK.BENCHMARK_READINESS_BLOCKED,
+      );
     const softBlockerAdmitted =
       !benchmarkReady &&
       this.shouldAdmitLoadLaneSoftReadinessBlockers(readiness, reasonCodes);
@@ -472,9 +387,9 @@ class AdminWebSocketAPISegment2 extends AdminWebSocketAPISegment1 {
         protocolAllowlist: [WASM_SERVICE_PROTOCOL.POSTGRESQL],
         allowAuthoritativeRepair: true,
       });
-    const services = Array.isArray(snapshot?.services)
-      ? snapshot.services
-      : ADMIN_CACHE_DUMP.EMPTY;
+    const services = Array.isArray(snapshot?.services) ?
+      snapshot.services :
+      ADMIN_CACHE_DUMP.EMPTY;
 
     let resolvedState = this.buildLoadLaneTableAdmissionResult(
       normalizedTableName,
@@ -483,9 +398,9 @@ class AdminWebSocketAPISegment2 extends AdminWebSocketAPISegment1 {
     );
 
     for (const service of services) {
-      const replicas = Array.isArray(service?.replicas)
-        ? service.replicas
-        : ADMIN_CACHE_DUMP.EMPTY;
+      const replicas = Array.isArray(service?.replicas) ?
+        service.replicas :
+        ADMIN_CACHE_DUMP.EMPTY;
       for (const replica of replicas) {
         if (String(replica?.nodeId || EMPTY_STRING) !== this.nodeId) {
           continue;
@@ -530,9 +445,9 @@ class AdminWebSocketAPISegment2 extends AdminWebSocketAPISegment1 {
     }
     const snapshotObservation =
       snapshot?.snapshotObservation &&
-      typeof snapshot.snapshotObservation === TYPEOF.OBJECT
-        ? snapshot.snapshotObservation
-        : null;
+      typeof snapshot.snapshotObservation === TYPEOF.OBJECT ?
+        snapshot.snapshotObservation :
+        null;
     if (!snapshotObservation) {
       return true;
     }
@@ -564,18 +479,18 @@ class AdminWebSocketAPISegment2 extends AdminWebSocketAPISegment1 {
     }
     const reasonCodes =
       Array.isArray(admissionState?.reasonCodes) &&
-      admissionState.reasonCodes.length > NUM.ZERO
-        ? admissionState.reasonCodes
-        : ["benchmark_admission_blocked"];
+      admissionState.reasonCodes.length > NUM.ZERO ?
+        admissionState.reasonCodes :
+        ['benchmark_admission_blocked'];
     throw createRetryableAdminOperationError(
       ErrorCode.INTERNAL_ERROR,
-      "serve not ready: load lane admission denied on node " +
+      'serve not ready: load lane admission denied on node ' +
         this.nodeId +
-        " (tableName=" +
+        ' (tableName=' +
         tableName +
-        ", benchmarkReady=false, reasons=" +
-        reasonCodes.join(",") +
-        ")",
+        ', benchmarkReady=false, reasons=' +
+        reasonCodes.join(',') +
+        ')',
     );
   }
 
@@ -597,9 +512,9 @@ class AdminWebSocketAPISegment2 extends AdminWebSocketAPISegment1 {
 
     const boundedTimeoutMs =
       Number.isFinite(this.loadLaneQueryTimeoutCapMs) &&
-      this.loadLaneQueryTimeoutCapMs > NUM.ZERO
-        ? Math.floor(this.loadLaneQueryTimeoutCapMs)
-        : LOAD_LANE_QUERY_TIMEOUT_CAP_MS;
+      this.loadLaneQueryTimeoutCapMs > NUM.ZERO ?
+        Math.floor(this.loadLaneQueryTimeoutCapMs) :
+        LOAD_LANE_QUERY_TIMEOUT_CAP_MS;
     if (normalizedTimeoutMs === null) {
       return boundedTimeoutMs;
     }
@@ -655,9 +570,9 @@ class AdminWebSocketAPISegment2 extends AdminWebSocketAPISegment1 {
       value?.message || value?.error || EMPTY_STRING,
     ).toLowerCase();
     return (
-      message.includes("timeout") ||
-      message.includes("timed out") ||
-      message.includes("deadline exceeded")
+      message.includes('timeout') ||
+      message.includes('timed out') ||
+      message.includes('deadline exceeded')
     );
   }
 
@@ -713,7 +628,7 @@ class AdminWebSocketAPISegment2 extends AdminWebSocketAPISegment1 {
 
     try {
       let rows = this.systemTableCache.getAll(tableName);
-      rows = Array.isArray(rows) ? rows.map((row) => ({ ...row })) : [];
+      rows = Array.isArray(rows) ? rows.map((row) => ({...row})) : [];
       rows = rows.filter((row) =>
         this.evaluateLocalSystemTableObservationExpression(
           ast.where,
@@ -764,7 +679,7 @@ class AdminWebSocketAPISegment2 extends AdminWebSocketAPISegment1 {
     }
 
     if (expr.type === EXPR_TYPE.BINARY) {
-      if (expr.operator === "AND") {
+      if (expr.operator === 'AND') {
         return (
           this.evaluateLocalSystemTableObservationExpression(
             expr.left,
@@ -778,7 +693,7 @@ class AdminWebSocketAPISegment2 extends AdminWebSocketAPISegment1 {
           )
         );
       }
-      if (expr.operator === "OR") {
+      if (expr.operator === 'OR') {
         return (
           this.evaluateLocalSystemTableObservationExpression(
             expr.left,
@@ -809,26 +724,26 @@ class AdminWebSocketAPISegment2 extends AdminWebSocketAPISegment1 {
       );
 
       switch (expr.operator) {
-        case "=":
-          return comparison === NUM.ZERO;
-        case "<>":
-          return comparison !== NUM.ZERO;
-        case ">":
-          return comparison > NUM.ZERO;
-        case ">=":
-          return comparison >= NUM.ZERO;
-        case "<":
-          return comparison < NUM.ZERO;
-        case "<=":
-          return comparison <= NUM.ZERO;
-        case "IS NULL":
-          return leftValue === null || leftValue === undefined;
-        case "IS NOT NULL":
-          return leftValue !== null && leftValue !== undefined;
-        default:
-          throw new Error(
-            `Unsupported local admin cache operator: ${expr.operator}`,
-          );
+      case '=':
+        return comparison === NUM.ZERO;
+      case '<>':
+        return comparison !== NUM.ZERO;
+      case '>':
+        return comparison > NUM.ZERO;
+      case '>=':
+        return comparison >= NUM.ZERO;
+      case '<':
+        return comparison < NUM.ZERO;
+      case '<=':
+        return comparison <= NUM.ZERO;
+      case 'IS NULL':
+        return leftValue === null || leftValue === undefined;
+      case 'IS NOT NULL':
+        return leftValue !== null && leftValue !== undefined;
+      default:
+        throw new Error(
+          `Unsupported local admin cache operator: ${expr.operator}`,
+        );
       }
     }
 
@@ -871,7 +786,7 @@ class AdminWebSocketAPISegment2 extends AdminWebSocketAPISegment1 {
       return expr.negated === true ? !matched : matched;
     }
 
-    if (expr.type === EXPR_TYPE.UNARY && expr.operator === "NOT") {
+    if (expr.type === EXPR_TYPE.UNARY && expr.operator === 'NOT') {
       return !this.evaluateLocalSystemTableObservationExpression(
         expr.operand,
         row,
@@ -898,52 +813,52 @@ class AdminWebSocketAPISegment2 extends AdminWebSocketAPISegment1 {
     }
 
     switch (expr.type) {
-      case EXPR_TYPE.LITERAL:
-        return expr.value;
-      case EXPR_TYPE.PARAMETER:
-        return params[expr.index];
-      case EXPR_TYPE.COLUMN:
-        return this.resolveLocalSystemTableObservationValue(
-          expr.expression,
-          row,
-          params,
-        );
-      case EXPR_TYPE.COLUMN_REF: {
-        const directValue = row?.[expr.column];
-        if (directValue !== undefined) {
-          return directValue;
-        }
-        const normalizedColumn = normalizeIdentifier(expr.column);
-        if (!normalizedColumn) {
-          return undefined;
-        }
-        for (const [key, value] of Object.entries(row || {})) {
-          if (normalizeIdentifier(key) === normalizedColumn) {
-            return value;
-          }
-        }
+    case EXPR_TYPE.LITERAL:
+      return expr.value;
+    case EXPR_TYPE.PARAMETER:
+      return params[expr.index];
+    case EXPR_TYPE.COLUMN:
+      return this.resolveLocalSystemTableObservationValue(
+        expr.expression,
+        row,
+        params,
+      );
+    case EXPR_TYPE.COLUMN_REF: {
+      const directValue = row?.[expr.column];
+      if (directValue !== undefined) {
+        return directValue;
+      }
+      const normalizedColumn = normalizeIdentifier(expr.column);
+      if (!normalizedColumn) {
         return undefined;
       }
-      case EXPR_TYPE.UNARY:
-        if (expr.operator === "-") {
-          const value = Number(
-            this.resolveLocalSystemTableObservationValue(
-              expr.operand,
-              row,
-              params,
-            ),
-          );
-          return Number.isFinite(value) ? -value : null;
+      for (const [key, value] of Object.entries(row || {})) {
+        if (normalizeIdentifier(key) === normalizedColumn) {
+          return value;
         }
-        return this.resolveLocalSystemTableObservationValue(
-          expr.operand,
-          row,
-          params,
+      }
+      return undefined;
+    }
+    case EXPR_TYPE.UNARY:
+      if (expr.operator === '-') {
+        const value = Number(
+          this.resolveLocalSystemTableObservationValue(
+            expr.operand,
+            row,
+            params,
+          ),
         );
-      default:
-        throw new Error(
-          `Unsupported local admin cache expression: ${expr.type}`,
-        );
+        return Number.isFinite(value) ? -value : null;
+      }
+      return this.resolveLocalSystemTableObservationValue(
+        expr.operand,
+        row,
+        params,
+      );
+    default:
+      throw new Error(
+        `Unsupported local admin cache expression: ${expr.type}`,
+      );
     }
   }
 
@@ -993,7 +908,7 @@ class AdminWebSocketAPISegment2 extends AdminWebSocketAPISegment1 {
       columns.length === NUM.ZERO ||
       columns.some((column) => column?.type === EXPR_TYPE.STAR)
     ) {
-      return rows.map((row) => ({ ...row }));
+      return rows.map((row) => ({...row}));
     }
 
     const projectedRows = [];
@@ -1008,9 +923,9 @@ class AdminWebSocketAPISegment2 extends AdminWebSocketAPISegment1 {
         }
         const key =
           typeof column.alias === TYPEOF.STRING &&
-          column.alias.length > NUM.ZERO
-            ? column.alias
-            : column.expression.column;
+          column.alias.length > NUM.ZERO ?
+            column.alias :
+            column.expression.column;
         projected[key] = this.resolveLocalSystemTableObservationValue(
           column.expression,
           row,
@@ -1053,9 +968,9 @@ class AdminWebSocketAPISegment2 extends AdminWebSocketAPISegment1 {
           rightValue,
         );
         if (comparison !== NUM.ZERO) {
-          return String(ordering.direction || "ASC").toUpperCase() === "DESC"
-            ? -comparison
-            : comparison;
+          return String(ordering.direction || 'ASC').toUpperCase() === 'DESC' ?
+            -comparison :
+            comparison;
         }
       }
       return NUM.ZERO;
@@ -1077,9 +992,9 @@ class AdminWebSocketAPISegment2 extends AdminWebSocketAPISegment1 {
     const count = Number(limit.count);
     const offset = Number(limit.offset);
     const normalizedOffset =
-      Number.isFinite(offset) && offset > NUM.ZERO
-        ? Math.floor(offset)
-        : NUM.ZERO;
+      Number.isFinite(offset) && offset > NUM.ZERO ?
+        Math.floor(offset) :
+        NUM.ZERO;
     const normalizedCount =
       Number.isFinite(count) && count >= NUM.ZERO ? Math.floor(count) : null;
 
@@ -1099,4 +1014,4 @@ class AdminWebSocketAPISegment2 extends AdminWebSocketAPISegment1 {
    */
 }
 
-export { AdminWebSocketAPISegment2 };
+export {AdminWebSocketAPISegment2};

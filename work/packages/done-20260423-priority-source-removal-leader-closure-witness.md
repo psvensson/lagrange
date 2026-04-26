@@ -117,7 +117,7 @@ Sprint:
    follower-only while the canonical partition row never names a non-source
    replacement leader.
 5. The next blocker is split into
-   [Priority leader handoff re-election closure](./active-20260423-priority-leader-handoff-reelection-closure.md).
+   [Priority leader handoff re-election closure](./done-20260423-priority-leader-handoff-reelection-closure.md).
 
 ## Validation
 

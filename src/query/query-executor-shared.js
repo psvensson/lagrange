@@ -46,6 +46,7 @@ import {MIGRATION_PARTITION_OPERATION} from '../migration/migration-constants.js
 import {
   CONTROL_PLANE_PARTICIPATION_KIND,
   CONTROL_PLANE_READINESS_DIMENSION,
+  READINESS_SNAPSHOT_KEY,
 } from '../control-plane/control-plane-readiness-constants.js';
 import {
   compactEligibilitySnapshot,
@@ -287,6 +288,7 @@ export const QUERY_EXECUTOR_SHARED = {
   QUERY_ROUTING_REPAIR_REASON,
   QUERY_SQL,
   QUERY_SUBSYSTEM,
+  READINESS_SNAPSHOT_KEY,
   RAFT_ROLE,
   SERVICE_STATUS,
   SERVICE_TYPE,

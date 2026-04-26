@@ -1,92 +1,50 @@
-import { REBALANCE_COORDINATOR_SHARED } from "./rebalance-coordinator-shared.js";
-import { RebalanceCoordinatorSegment4 } from "./rebalance-coordinator-segment-4.js";
+import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
+import {RebalanceCoordinatorSegment4} from './rebalance-coordinator-segment-4.js';
 
 const {
-  CONCURRENT_CREATE_BUDGET_SCOPE,
-  CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
-  CONTROL_PLANE_QUERY_OPTIONS,
-  CONTROL_PLANE_READINESS_DIMENSION,
-  CONTROL_PLANE_WORKLOAD_CLASS,
-  COORDINATOR_OWNED_OPERATION_TYPES_SQL_CLAUSE,
-  ConfigurationManager,
-  ControlPlaneReadinessService,
-  DEFAULT_AMPLIFICATION_FACTOR,
-  DEFAULT_PRIORITY_RECOVERY_ACTIVITY_STALE_GRACE_MS,
-  DurableWorkflowCoordinator,
-  EventEmitter,
-  ExecutorOutcomeEmitter,
-  INCOMPLETE_OPERATION_EMPTY_QUERY_BACKOFF_MS,
   INCOMPLETE_OPERATION_OBSERVATION_STATE,
-  LoggingService,
   NUM,
-  OPERATION_METADATA_KEY,
-  OUTCOME_EVENT_NAME,
-  OperationLane,
   OperationType,
-  OperationWorkflowOwner,
   PRESSURE_GOVERNOR_ACTION,
-  PRESSURE_WORK_CLASS,
-  PRIORITY_RECENT_INTENT_TTL_MS,
-  PressureGovernor,
-  ProvisioningAdmissionPolicy,
   REBALANCER_CONCURRENT_BUDGET_READ_MODE,
-  REBALANCER_CONFIG_KEY,
-  REBALANCER_DEFAULT,
-  REBALANCER_SKIP_REASON,
-  REBALANCER_SUBSYSTEM,
-  REBALANCE_COORDINATOR_ERROR_MSG,
   REBALANCE_COORDINATOR_EVENT,
   REBALANCE_COORDINATOR_LOG_MSG,
-  RECENT_INTENT_TTL_MS,
-  RECENT_OPERATION_INTENT_VISIBILITY_STATE,
-  REPLICA_ID_SEPARATOR,
-  REPLICA_ID_START_INDEX,
   REPLICA_OPERATION_VISIBILITY_READ_MODE,
-  RESERVATION_REASON,
-  RESERVATION_STATUS,
-  ReplicaOperationField,
-  ReplicaOperationRepository,
   SERVICE_TYPE,
-  SQL,
-  STORAGE_ADMISSION_DECISION_TYPE,
-  STORAGE_CAPACITY_CONFIG_KEY,
-  STORAGE_CAPACITY_DEFAULT,
-  STORAGE_RESERVATION_READ_QUERY_OPTIONS,
-  STRICT_CREATE_DEDUPE_REPOSITORY_QUERY_OPTIONS,
-  SYSTEM_TABLE_NAME,
-  StartupRecoveryCoordinator,
-  TIMEOUT_BUDGET_CLASSIFICATION,
-  TIMEOUT_BUDGET_DEFAULT,
-  TIME_MS,
-  TOPOLOGY_GUARD_DEFAULT_PARTITION_TARGET_REPLICA_COUNT,
-  TOPOLOGY_GUARD_ERROR_MSG,
-  TOPOLOGY_GUARD_REASON,
-  TOPOLOGY_GUARD_STATE,
-  UNIFIED_SERVICE_TYPE,
   WORKFLOW_STEP,
-  assertCritical,
-  buildControlPlaneQueryOptions,
-  buildControlPlaneWorkloadProfile,
-  buildPriorityRecoveryOperationAssessment,
   buildPriorityRecoveryOperationContextFromRecord,
   buildPriorityRecoveryPartitionAssessment,
-  buildReplicatedServiceBootstrapTopology,
-  buildTimeoutClassification,
-  createChildTimeoutBudget,
-  createControlPlaneRuntimeBundle,
-  createOperationRecord,
-  createTopLevelOperationBudget,
-  getControlPlaneErrorCode,
-  getControlPlaneRetryAfterMs,
-  isCriticalTransportControlPlanePartitionTable,
-  isPriorityControlPlanePartitionTable,
-  isRetryableControlPlaneError,
-  readAuthoritativeControlPlaneRows,
   resolvePriorityRecoveryActiveNodeCohort,
-  resolveTrackedPriorityRecoveryAdmissionPlan,
   shouldPriorityRecoveryOperationBlockPlanning,
-  uuidv4,
 } = REBALANCE_COORDINATOR_SHARED;
+
+const REBALANCE_COORDINATOR_OPERATION_FIELD = Object.freeze({
+  CREATED_AT: 'createdAt',
+  CREATED_AT_SNAKE: 'created_at',
+  ENTITY_ID: 'entityId',
+  ENTITY_ID_SNAKE: 'entity_id',
+  PARTITION_ID: 'partitionId',
+  PARTITION_ID_SNAKE: 'partition_id',
+  UPDATED_AT: 'updatedAt',
+  UPDATED_AT_SNAKE: 'updated_at',
+  WORKFLOW_STEP: 'workflowStep',
+  WORKFLOW_STEP_SNAKE: 'workflow_step',
+});
+
+const PRIORITY_RECOVERY_ADMISSION_PLAN_FIELD = Object.freeze({
+  BLOCKED_PARTITION_DETAIL_UNAVAILABLE: 'blockedPartitionDetailUnavailable',
+  HAS_BLOCKED_PARTITION: 'hasBlockedPartition',
+  PARTITION_ID: 'partitionId',
+  RECOVERY_ACTIVE: 'recoveryActive',
+});
+
+const REBALANCE_COORDINATOR_TYPE = Object.freeze({
+  FUNCTION: 'function',
+});
+
+const REBALANCE_COORDINATOR_SEGMENT_5_LITERAL = Object.freeze({
+  EMPTY_STRING: '',
+});
 
 class RebalanceCoordinatorSegment5 extends RebalanceCoordinatorSegment4 {
   async checkTimeouts() {
@@ -171,9 +129,9 @@ class RebalanceCoordinatorSegment5 extends RebalanceCoordinatorSegment4 {
 
     const canUseCacheObservationBoundary =
       this.repository.hasReplicaOperationCacheObservationBoundary();
-    const cachedIncompleteOps = canUseCacheObservationBoundary
-      ? await this.queryCachedIncompleteOperations()
-      : [];
+    const cachedIncompleteOps = canUseCacheObservationBoundary ?
+      await this.queryCachedIncompleteOperations() :
+      [];
     const incompleteOperationObservation =
       await this.repository.getIncompleteOperationVisibilityObservation({
         cachedOperations: cachedIncompleteOps,
@@ -182,9 +140,9 @@ class RebalanceCoordinatorSegment5 extends RebalanceCoordinatorSegment4 {
       });
     const incompleteOps = Array.isArray(
       incompleteOperationObservation?.operations,
-    )
-      ? incompleteOperationObservation.operations
-      : [];
+    ) ?
+      incompleteOperationObservation.operations :
+      [];
     result.totalIncomplete = incompleteOps.length;
 
     this.logger.info(REBALANCE_COORDINATOR_LOG_MSG.RECOVERY_FOUND, {
@@ -367,7 +325,7 @@ class RebalanceCoordinatorSegment5 extends RebalanceCoordinatorSegment4 {
     if (
       options?.visibilityReadMode ===
         REPLICA_OPERATION_VISIBILITY_READ_MODE.OWNER_RPC_REQUIRED &&
-      typeof this.repository?.getOperationsByEntityAuthoritative === "function"
+      typeof this.repository?.getOperationsByEntityAuthoritative === 'function'
     ) {
       return this.repository.getOperationsByEntityAuthoritative(
         entityType,
@@ -393,7 +351,27 @@ class RebalanceCoordinatorSegment5 extends RebalanceCoordinatorSegment4 {
    */
   async getConcurrentAddCount(options = {}) {
     const inFlight = await this.queryIncompleteOperations(options);
-    return (await this.filterConcurrentAddBudgetOperations(inFlight)).length;
+    return (await this.filterConcurrentAddBudgetOperations(
+      inFlight,
+      options,
+    )).length;
+  }
+
+  /**
+   * Resolve one partition id from either normalized operation records or raw
+   * replica_operations rows.
+   * @param {Object|null} operation
+   * @return {string}
+   * @private
+   */
+  getAddBudgetOperationPartitionId(operation = null) {
+    return String(
+      operation?.[REBALANCE_COORDINATOR_OPERATION_FIELD.PARTITION_ID] ||
+        operation?.[REBALANCE_COORDINATOR_OPERATION_FIELD.PARTITION_ID_SNAKE] ||
+        operation?.[REBALANCE_COORDINATOR_OPERATION_FIELD.ENTITY_ID] ||
+        operation?.[REBALANCE_COORDINATOR_OPERATION_FIELD.ENTITY_ID_SNAKE] ||
+        '',
+    ).trim();
   }
 
   /**
@@ -416,9 +394,7 @@ class RebalanceCoordinatorSegment5 extends RebalanceCoordinatorSegment4 {
       if (!this.isConcurrentAddBudgetOperation(operation)) {
         continue;
       }
-      const partitionId = String(
-        operation.partitionId || operation.entityId || "",
-      ).trim();
+      const partitionId = this.getAddBudgetOperationPartitionId(operation);
       if (
         partitionId.length > NUM.ZERO &&
         this.isPriorityControlPlanePartition(partitionId)
@@ -450,9 +426,7 @@ class RebalanceCoordinatorSegment5 extends RebalanceCoordinatorSegment4 {
     priorityOperationsByPartitionId,
     operation,
   ) {
-    const partitionId = String(
-      operation?.partitionId || operation?.entityId || "",
-    ).trim();
+    const partitionId = this.getAddBudgetOperationPartitionId(operation);
     if (
       partitionId.length === NUM.ZERO ||
       !this.isPriorityControlPlanePartition(partitionId)
@@ -477,6 +451,7 @@ class RebalanceCoordinatorSegment5 extends RebalanceCoordinatorSegment4 {
     filteredOperations,
     partitionId,
     partitionOperations,
+    options = {},
   ) {
     const partitionAssessment =
       await this.buildPriorityPartitionAddBudgetAssessment(
@@ -491,6 +466,15 @@ class RebalanceCoordinatorSegment5 extends RebalanceCoordinatorSegment4 {
     }
     if (partitionAssessment) {
       filteredOperations.push(...partitionOperations);
+      return;
+    }
+    if (
+      this.shouldIgnorePriorityPartitionAddBudgetByAdmissionPlan(
+        partitionId,
+        partitionOperations,
+        options,
+      )
+    ) {
       return;
     }
     for (const operation of partitionOperations) {
@@ -512,7 +496,7 @@ class RebalanceCoordinatorSegment5 extends RebalanceCoordinatorSegment4 {
    * @return {Promise<Array<Object>>}
    * @private
    */
-  async filterConcurrentAddBudgetOperations(operations = []) {
+  async filterConcurrentAddBudgetOperations(operations = [], options = {}) {
     const filteredOperations = [];
     const priorityOperationsByPartitionId = new Map();
     for (const operation of Array.isArray(operations) ? operations : []) {
@@ -540,6 +524,7 @@ class RebalanceCoordinatorSegment5 extends RebalanceCoordinatorSegment4 {
         filteredOperations,
         partitionId,
         partitionOperations,
+        options,
       );
     }
     return filteredOperations;
@@ -562,18 +547,17 @@ class RebalanceCoordinatorSegment5 extends RebalanceCoordinatorSegment4 {
     partitionId,
     operations = [],
   ) {
-    const normalizedPartitionId = String(partitionId || "").trim();
+    const normalizedPartitionId = String(partitionId || '').trim();
     if (normalizedPartitionId.length === NUM.ZERO) {
       return null;
     }
-    const partitionOperations = Array.isArray(operations)
-      ? operations.filter((operation) => {
-          const operationPartitionId = String(
-            operation?.partitionId || operation?.entityId || "",
-          ).trim();
-          return operationPartitionId === normalizedPartitionId;
-        })
-      : [];
+    const partitionOperations = Array.isArray(operations) ?
+      operations.filter((operation) => {
+        const operationPartitionId =
+          this.getAddBudgetOperationPartitionId(operation);
+        return operationPartitionId === normalizedPartitionId;
+      }) :
+      [];
     if (partitionOperations.length === NUM.ZERO) {
       return null;
     }
@@ -584,20 +568,20 @@ class RebalanceCoordinatorSegment5 extends RebalanceCoordinatorSegment4 {
     if (
       typeof this.workflowOwner
         ?.getPriorityRecoveryDecisionSnapshotForPartitionOperations ===
-      "function"
+      'function'
     ) {
       const decisionSnapshot =
         await this.workflowOwner.getPriorityRecoveryDecisionSnapshotForPartitionOperations(
           normalizedPartitionId,
           partitionOperations,
         );
-      if (decisionSnapshot && typeof decisionSnapshot === "object") {
+      if (decisionSnapshot && typeof decisionSnapshot === 'object') {
         return decisionSnapshot;
       }
     }
     if (
       typeof this.workflowOwner
-        ?.getPriorityRecoveryPlanningSnapshotForOperation !== "function"
+        ?.getPriorityRecoveryPlanningSnapshotForOperation !== 'function'
     ) {
       return null;
     }
@@ -605,7 +589,7 @@ class RebalanceCoordinatorSegment5 extends RebalanceCoordinatorSegment4 {
       await this.workflowOwner.getPriorityRecoveryPlanningSnapshotForOperation(
         representativeOperation,
       );
-    if (!planningSnapshot || typeof planningSnapshot !== "object") {
+    if (!planningSnapshot || typeof planningSnapshot !== 'object') {
       return null;
     }
     const effectiveEligibleNodeIds =
@@ -629,6 +613,123 @@ class RebalanceCoordinatorSegment5 extends RebalanceCoordinatorSegment4 {
   }
 
   /**
+   * Admission planning already owns the current blocked-priority partition set.
+   * When runtime workflow evidence is unavailable, use that canonical set to
+   * avoid letting stale spread-satisfied rows monopolize the add lane.
+   * @param {string} partitionId
+   * @param {Array<Object>} partitionOperations
+   * @return {boolean}
+   * @private
+   */
+  shouldIgnorePriorityPartitionAddBudgetByAdmissionPlan(
+    partitionId,
+    partitionOperations = [],
+    options = {},
+  ) {
+    const normalizedPartitionId = String(partitionId || '').trim();
+    if (normalizedPartitionId.length === NUM.ZERO) {
+      return false;
+    }
+    if (
+      !this.arePriorityPartitionAddBudgetOperationsPastWorkflowTimeout(
+        partitionOperations,
+      )
+    ) {
+      return false;
+    }
+    const admissionPlan = this.getPriorityRecoveryAdmissionPlan();
+    if (
+      admissionPlan?.[
+        PRIORITY_RECOVERY_ADMISSION_PLAN_FIELD.RECOVERY_ACTIVE
+      ] !== true ||
+      admissionPlan?.[
+        PRIORITY_RECOVERY_ADMISSION_PLAN_FIELD
+          .BLOCKED_PARTITION_DETAIL_UNAVAILABLE
+      ] === true ||
+      typeof admissionPlan?.[
+        PRIORITY_RECOVERY_ADMISSION_PLAN_FIELD.HAS_BLOCKED_PARTITION
+      ] !== REBALANCE_COORDINATOR_TYPE.FUNCTION
+    ) {
+      return false;
+    }
+    const requestedPartitionId =
+      this.resolveRequestedPriorityAddBudgetPartitionId(options);
+    const requestedDifferentBlockedPartition =
+      requestedPartitionId.length > NUM.ZERO &&
+      requestedPartitionId !== normalizedPartitionId &&
+      admissionPlan[
+        PRIORITY_RECOVERY_ADMISSION_PLAN_FIELD.HAS_BLOCKED_PARTITION
+      ](requestedPartitionId) === true;
+    const currentPartitionStillBlocked =
+      admissionPlan[
+        PRIORITY_RECOVERY_ADMISSION_PLAN_FIELD.HAS_BLOCKED_PARTITION
+      ](normalizedPartitionId) === true;
+    return (
+      requestedDifferentBlockedPartition ||
+      currentPartitionStillBlocked !== true
+    );
+  }
+
+  /**
+   * @param {Object} options
+   * @return {string}
+   * @private
+   */
+  resolveRequestedPriorityAddBudgetPartitionId(options = {}) {
+    return String(
+      options?.[PRIORITY_RECOVERY_ADMISSION_PLAN_FIELD.PARTITION_ID] ||
+        REBALANCE_COORDINATOR_SEGMENT_5_LITERAL.EMPTY_STRING,
+    ).trim();
+  }
+
+  /**
+   * @param {Array<Object>} operations
+   * @return {boolean}
+   * @private
+   */
+  arePriorityPartitionAddBudgetOperationsPastWorkflowTimeout(operations = []) {
+    const partitionOperations = Array.isArray(operations) ? operations : [];
+    if (partitionOperations.length === NUM.ZERO) {
+      return false;
+    }
+    return partitionOperations.every((operation) =>
+      this.isAddBudgetOperationPastWorkflowTimeout(operation),
+    );
+  }
+
+  /**
+   * @param {Object|null} operation
+   * @return {boolean}
+   * @private
+   */
+  isAddBudgetOperationPastWorkflowTimeout(operation = null) {
+    const workflowStep = String(
+      operation?.[REBALANCE_COORDINATOR_OPERATION_FIELD.WORKFLOW_STEP] ||
+        operation?.[
+          REBALANCE_COORDINATOR_OPERATION_FIELD.WORKFLOW_STEP_SNAKE
+        ] ||
+        '',
+    ).trim();
+    if (workflowStep.length === NUM.ZERO) {
+      return false;
+    }
+    const observedAtMs = Number(
+      operation?.[REBALANCE_COORDINATOR_OPERATION_FIELD.UPDATED_AT] ??
+        operation?.[REBALANCE_COORDINATOR_OPERATION_FIELD.UPDATED_AT_SNAKE] ??
+        operation?.[REBALANCE_COORDINATOR_OPERATION_FIELD.CREATED_AT] ??
+        operation?.[REBALANCE_COORDINATOR_OPERATION_FIELD.CREATED_AT_SNAKE],
+    );
+    if (!Number.isFinite(observedAtMs)) {
+      return false;
+    }
+    const timeoutMs = this.getTimeoutForStep(workflowStep, operation);
+    if (!Number.isFinite(timeoutMs) || timeoutMs <= NUM.ZERO) {
+      return false;
+    }
+    return this.nowFn() - observedAtMs >= timeoutMs;
+  }
+
+  /**
    * Resolve add/replace in-flight counts grouped by priority lane.
    * @param {Object} [options={}]
    * @return {Promise<{priorityCount:number, nonPriorityCount:number}>}
@@ -637,7 +738,7 @@ class RebalanceCoordinatorSegment5 extends RebalanceCoordinatorSegment4 {
   async getConcurrentAddCountByPriorityClass(options = {}) {
     const inFlight = await this.queryIncompleteOperations(options);
     return this.buildConcurrentAddCountByPriorityClass(
-      await this.filterConcurrentAddBudgetOperations(inFlight),
+      await this.filterConcurrentAddBudgetOperations(inFlight, options),
     );
   }
 
@@ -651,10 +752,10 @@ class RebalanceCoordinatorSegment5 extends RebalanceCoordinatorSegment4 {
    * @private
    */
   isConcurrentAddBudgetOperation(operation) {
-    if (!operation || typeof operation !== "object") {
+    if (!operation || typeof operation !== 'object') {
       return false;
     }
-    const type = String(operation.type || "").toUpperCase();
+    const type = String(operation.type || '').toUpperCase();
     if (type === OperationType.ADD) {
       return true;
     }
@@ -706,11 +807,14 @@ class RebalanceCoordinatorSegment5 extends RebalanceCoordinatorSegment4 {
     }
     const cachedIncompleteOperations =
       await this.queryCachedIncompleteOperations();
-    const cachedOperationCount = Array.isArray(cachedIncompleteOperations)
-      ? cachedIncompleteOperations.length
-      : NUM.ZERO;
+    const cachedOperationCount = Array.isArray(cachedIncompleteOperations) ?
+      cachedIncompleteOperations.length :
+      NUM.ZERO;
     const cachedCount = (
-      await this.filterConcurrentAddBudgetOperations(cachedIncompleteOperations)
+      await this.filterConcurrentAddBudgetOperations(
+        cachedIncompleteOperations,
+        options,
+      )
     ).length;
     if (cachedOperationCount > NUM.ZERO) {
       this.clearEmptyIncompleteOperationQueryDelay();
@@ -808,12 +912,13 @@ class RebalanceCoordinatorSegment5 extends RebalanceCoordinatorSegment4 {
     };
     const cachedIncompleteOperations =
       await this.queryCachedIncompleteOperations();
-    const cachedOperationCount = Array.isArray(cachedIncompleteOperations)
-      ? cachedIncompleteOperations.length
-      : NUM.ZERO;
+    const cachedOperationCount = Array.isArray(cachedIncompleteOperations) ?
+      cachedIncompleteOperations.length :
+      NUM.ZERO;
     const cachedCounts = this.buildConcurrentAddCountByPriorityClass(
       await this.filterConcurrentAddBudgetOperations(
         cachedIncompleteOperations,
+        options,
       ),
     );
     const cachedTotalCount =
@@ -906,9 +1011,9 @@ class RebalanceCoordinatorSegment5 extends RebalanceCoordinatorSegment4 {
     }
     const cachedIncompleteOperations =
       await this.queryCachedIncompleteOperations();
-    const cachedOperationCount = Array.isArray(cachedIncompleteOperations)
-      ? cachedIncompleteOperations.length
-      : NUM.ZERO;
+    const cachedOperationCount = Array.isArray(cachedIncompleteOperations) ?
+      cachedIncompleteOperations.length :
+      NUM.ZERO;
     const cachedCount = cachedIncompleteOperations.filter(
       (operation) => operation?.type === OperationType.REMOVE,
     ).length;
@@ -1073,7 +1178,7 @@ class RebalanceCoordinatorSegment5 extends RebalanceCoordinatorSegment4 {
    * @private
    */
   hasContainedPriorityRecoveryPressure(partitionId = null) {
-    const normalizedPartitionId = String(partitionId || "").trim();
+    const normalizedPartitionId = String(partitionId || '').trim();
     if (normalizedPartitionId.length === NUM.ZERO) {
       return false;
     }
@@ -1092,7 +1197,7 @@ class RebalanceCoordinatorSegment5 extends RebalanceCoordinatorSegment4 {
     ) {
       return false;
     }
-    const decision = this.getLocalRouterPressureDecision({ partitionId });
+    const decision = this.getLocalRouterPressureDecision({partitionId});
     return (
       decision?.action === PRESSURE_GOVERNOR_ACTION.ALLOW &&
       decision?.summary?.backpressured === true
@@ -1118,11 +1223,11 @@ class RebalanceCoordinatorSegment5 extends RebalanceCoordinatorSegment4 {
     ) {
       return false;
     }
-    const operationCount = Number.isFinite(observation?.operationCount)
-      ? Math.max(NUM.ZERO, Math.floor(observation.operationCount))
-      : Array.isArray(observation?.operations)
-        ? observation.operations.length
-        : NUM.ZERO;
+    const operationCount = Number.isFinite(observation?.operationCount) ?
+      Math.max(NUM.ZERO, Math.floor(observation.operationCount)) :
+      Array.isArray(observation?.operations) ?
+        observation.operations.length :
+        NUM.ZERO;
     if (operationCount > NUM.ZERO || !observation?.deferredOutcome) {
       return false;
     }
@@ -1138,4 +1243,4 @@ class RebalanceCoordinatorSegment5 extends RebalanceCoordinatorSegment4 {
    */
 }
 
-export { RebalanceCoordinatorSegment5 };
+export {RebalanceCoordinatorSegment5};

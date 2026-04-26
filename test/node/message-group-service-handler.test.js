@@ -432,4 +432,37 @@ describe('MessageGroupServiceHandler', () => {
       assert.equal(cdc.operations[0].type, 'update');
       assert.equal(cdc.operations[1].type, 'delete');
     });
+
+  it('resumes stalled removing message-group replicas',
+    async () => {
+      const {handler, cdc, calls} = createHandler();
+      handler.localReplicas.set('mg-1-r1', {
+        replicaId: 'mg-1-r1',
+        entityId: 'mg-1',
+        status: ReplicaStatus.REMOVING,
+      });
+
+      const response = await handler.handleRemoveReplica({
+        [ReplicaOperationField.OPERATION_ID]: 'op-remove-resume',
+        [ReplicaOperationField.ENTITY_ID]: 'mg-1',
+        [ReplicaOperationField.REPLICA_ID]: 'mg-1-r1',
+      });
+
+      assert.equal(
+        response.status,
+        ReplicaOperationResponseStatus.IN_PROGRESS,
+      );
+
+      await flushImmediate();
+      await flushImmediate();
+
+      assert.equal(calls.length, 1);
+      assert.equal(calls[0].method, 'stop');
+      assert.equal(
+        handler.localReplicas.get('mg-1-r1')?.status,
+        ReplicaStatus.REMOVED,
+      );
+      assert.equal(cdc.deletes.length, 1);
+      assert.equal(handler.inProgressOperations.size, 0);
+    });
 });

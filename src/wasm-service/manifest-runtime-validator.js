@@ -122,7 +122,7 @@ function validateManifestRuntime(manifest, moduleExports) {
 
   const runExportName = manifest[MF.RUN_EXPORT];
   const existResult = validateRunExportExists(
-    moduleExports, runExportName
+    moduleExports, runExportName,
   );
   allErrors.push(...existResult.errors);
   if (!existResult.valid) {

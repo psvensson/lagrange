@@ -12,7 +12,7 @@ import {test} from '../../src/test-helpers/tap.js';
 import {strict as assert} from 'node:assert';
 import {EventEmitter} from 'events';
 
-test('CDC subscription - only leader replicates events', async (t) => {
+test('CDC subscription - only leader replicates events', async (_t) => {
   let leaderApplyCalled = false;
   let followerApplyCalled = false;
 
@@ -79,7 +79,7 @@ test('CDC subscription - only leader replicates events', async (t) => {
   assert.ok(!followerApplyCalled, 'Follower should NOT have applied CDC event');
 });
 
-test('CDC subscription - follower does not replicate', async (t) => {
+test('CDC subscription - follower does not replicate', async (_t) => {
   let applyCalled = false;
 
   // Mock message group follower

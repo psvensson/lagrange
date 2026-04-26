@@ -13,11 +13,10 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 import {
   COLUMN,
   SERVICE_STATUS,
-  SERVICE_TYPE,
   TABLES,
 } from '../../src/constants/index.js';
 import {NODE_STATE} from '../../src/constants/node-state.js';
-import {RAFT_ROLE} from '../../src/raft/constants.js';
+import {STARTUP_JOIN_MODE} from '../../src/bootstrap/rejoin-hints-constants.js';
 
 function initializeTestEnvironment() {
   ConfigurationManager.resetInstance();
@@ -88,6 +87,8 @@ const REJOIN_NODE_ID = '550e8400-e29b-41d4-a716-446655440000';
 const REJOIN_NODE_ADDRESS = 'ws://localhost:9090';
 const SEED_NODE_ID = 'seed-node-1';
 const SEED_NODE_ADDRESS = 'ws://localhost:8080';
+const AUTHORITATIVE_READ_UNEXPECTED =
+  'durable rejoin same-address evidence should not require authoritative read';
 
 test('checkForConflicts allows re-registration when ' +
   'existing node has expired lease', async (t) => {
@@ -235,6 +236,53 @@ test('checkForConflicts allows idempotent re-registration when ' +
     'same-node restarts should be treated as idempotent re-registration',
   );
 });
+
+test('checkForConflicts admits durable same-address rejoin without authoritative read',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const liveNode = {
+      [COLUMN.NODE_ID]: REJOIN_NODE_ID,
+      [COLUMN.NODE_ADDRESS]: REJOIN_NODE_ADDRESS,
+      [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+      [COLUMN.READY_LEASE_EXPIRES_AT]: Date.now() + 60000,
+    };
+
+    const cache = createCacheWithExistingNode(liveNode);
+    let authoritativeReadCalled = false;
+    const api = new BootstrapAPI({
+      seedNodeId: SEED_NODE_ID,
+      seedNodeAddress: SEED_NODE_ADDRESS,
+      systemTableCache: cache,
+      authoritativeControlPlaneView: {
+        canRead() {
+          return true;
+        },
+        async readRows() {
+          authoritativeReadCalled = true;
+          throw new Error(AUTHORITATIVE_READ_UNEXPECTED);
+        },
+      },
+    });
+
+    const result = await api.checkForConflicts(
+      REJOIN_NODE_ID,
+      REJOIN_NODE_ADDRESS,
+      {
+        startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
+      },
+    );
+    t.equal(
+      result,
+      null,
+      'durable same-address rejoin should be admitted from cache evidence',
+    );
+    t.equal(
+      authoritativeReadCalled,
+      false,
+      'durable same-address rejoin should not wait on authoritative reads',
+    );
+  });
 
 test('checkForConflicts still rejects address conflict ' +
   'from a different live node', async (t) => {

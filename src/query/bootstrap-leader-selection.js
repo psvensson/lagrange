@@ -31,8 +31,8 @@ function resolveBootstrapLeaderSelection(options = {}) {
       selectedService: leaderServices[NUM.ZERO],
       ...(typeof leaderServiceNodeId === TYPEOF.STRING &&
         leaderServiceNodeId.length > NUM.ZERO ? {
-        leaderNodeId: leaderServiceNodeId,
-      } : {}),
+          leaderNodeId: leaderServiceNodeId,
+        } : {}),
       selectionSource: 'leader_role',
     };
   }
@@ -60,8 +60,8 @@ function resolveBootstrapLeaderSelection(options = {}) {
       selectedService: visibleServices[NUM.ZERO],
       ...(typeof singleReplicaNodeId === TYPEOF.STRING &&
         singleReplicaNodeId.length > NUM.ZERO ? {
-        leaderNodeId: singleReplicaNodeId,
-      } : {}),
+          leaderNodeId: singleReplicaNodeId,
+        } : {}),
       selectionSource: 'single_service',
     };
   }

@@ -9,7 +9,6 @@
  * Requirements: 6.5, 10.3
  */
 
-import {TYPEOF} from '../constants/index.js';
 import {STRATEGY_DECISION_FIELD as SDF} from './strategy-constants.js';
 import {formatExplainDiagnostic} from './strategy-selector.js';
 import {

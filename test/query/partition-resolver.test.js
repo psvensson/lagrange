@@ -295,11 +295,11 @@ test('PartitionResolver - supports composite key pruning with equality', async (
     {
       partition_id: 'p1',
       partition_key_start: null,
-      partition_key_end: '[\"n\"',
+      partition_key_end: '["n"',
     },
     {
       partition_id: 'p2',
-      partition_key_start: '[\"n\"',
+      partition_key_start: '["n"',
       partition_key_end: null,
     },
   ];
@@ -324,11 +324,11 @@ test('PartitionResolver - scatters when composite key predicate is incomplete', 
     {
       partition_id: 'p1',
       partition_key_start: null,
-      partition_key_end: '[\"n\"',
+      partition_key_end: '["n"',
     },
     {
       partition_id: 'p2',
-      partition_key_start: '[\"n\"',
+      partition_key_start: '["n"',
       partition_key_end: null,
     },
   ];

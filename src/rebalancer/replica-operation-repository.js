@@ -19,7 +19,10 @@ import {
   INITIAL_PARTITION_IDS,
   SYSTEM_TABLE_NAME,
 } from '../bootstrap/system-table-schemas-constants.js';
-import {isPriorityControlPlanePartition} from '../bootstrap/system-partition-classification.js';
+import {
+  isPriorityControlPlanePartition,
+  isSystemTablePartition,
+} from '../bootstrap/system-partition-classification.js';
 import {
   CONTROL_PLANE_PARTICIPATION_KIND,
   CONTROL_PLANE_READINESS_DIMENSION,
@@ -1328,16 +1331,21 @@ class ReplicaOperationRepository {
         operation?.workflowStep || operation?.workflow_step || null,
         operation?.status || null,
       );
-    if (
+    const isUnsettledReplace =
       operation?.type === OperationType.REPLACE &&
-      isPriorityControlPlanePartition({partitionId}) &&
       targetNodeId.length > NUM.ZERO &&
       semanticPhase !== REPLICA_OPERATION_SEMANTIC_PHASE.SETTLED &&
-      semanticPhase !== REPLICA_OPERATION_SEMANTIC_PHASE.FAILED
-    ) {
+      semanticPhase !== REPLICA_OPERATION_SEMANTIC_PHASE.FAILED;
+    const isSystemReplace =
+      isUnsettledReplace &&
+      isSystemTablePartition({partitionId});
+    const isPriorityReplace =
+      isUnsettledReplace &&
+      isPriorityControlPlanePartition({partitionId});
+    if (isSystemReplace || isPriorityReplace) {
       // Keep canonical ownership on the target from initial dispatch through
-      // source removal so the replacement host can survive transient dispatch
-      // failures without handing ownership back to a degraded source.
+      // source removal so the replacement host can survive transient source
+      // loss without handing ownership back to a degraded source.
       return targetNodeId;
     }
     if (sourceNodeId.length > NUM.ZERO) {
@@ -1496,6 +1504,7 @@ assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository, {
   buildControlPlaneFailurePayload,
   buildReplicaOperationVisibilityReadOptions,
   getControlPlaneRetryAfterMs,
+  isPriorityControlPlanePartition,
   isCoordinatorOwnedOperationType,
   isRetryableControlPlaneError,
   readAuthoritativeControlPlaneRows,

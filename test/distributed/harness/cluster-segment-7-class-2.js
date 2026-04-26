@@ -1,4 +1,4 @@
-import { CLUSTER_SEGMENT_7_CLASS_SHARED } from './cluster-segment-7-class-shared.js';
+import {CLUSTER_SEGMENT_7_CLASS_SHARED} from './cluster-segment-7-class-shared.js';
 
 const {
   ACTIVE_POLL_INTERVAL_MS,
@@ -35,74 +35,81 @@ const {
   resolvePositiveTimeoutMs,
   verifyBenchmarkLoadLaneAdmission,
 } = CLUSTER_SEGMENT_7_CLASS_SHARED;
-import { Cluster1 } from "./cluster-segment-7-class-1.js";
+import {Cluster1} from './cluster-segment-7-class-1.js';
+
+const RESTART_RECOVERY_FIELD_NONE = 'none';
+const RESTART_RECOVERY_REASON_SEPARATOR = '|';
+const RESTART_RECOVERY_FIELD_BOOTSTRAP_JOIN_PROJECTION_BLOCKER =
+  'bootstrapJoinProjectionBlocker';
+const RESTART_RECOVERY_FIELD_BOOTSTRAP_JOIN_PROJECTION_RULE =
+  'bootstrapJoinProjectionRule';
 
 class Cluster2 extends Cluster1 {
   _formatRestartShutdownBoundary(observation) {
     if (!observation) {
-      return "none";
+      return 'none';
     }
     const activeNodeIds =
       Array.isArray(observation.peerActiveNodeIds) &&
-      observation.peerActiveNodeIds.length > ZERO
-        ? observation.peerActiveNodeIds.join("|")
-        : "none";
+      observation.peerActiveNodeIds.length > ZERO ?
+        observation.peerActiveNodeIds.join('|') :
+        'none';
     return (
-      "containerState=" +
-      String(observation.containerState || "unknown") +
-      ", containerRunning=" +
-      String(observation.containerRunning ?? "unknown") +
-      ", reachable=" +
-      String(observation.reachable ?? "unknown") +
-      ", adminReady=" +
-      String(observation.adminReady ?? "unknown") +
-      ", reachableBy=" +
-      String(observation.reachableBy || "none") +
-      ", peerObserved=" +
-      String(observation.peerObserved ?? "unknown") +
-      ", peerObserver=" +
-      String(observation.peerObserverNodeId || "none") +
-      ", peerCapturedAtMs=" +
-      String(observation.peerCapturedAtMs ?? "none") +
-      ", peerActiveNodeIds=" +
+      'containerState=' +
+      String(observation.containerState || 'unknown') +
+      ', containerRunning=' +
+      String(observation.containerRunning ?? 'unknown') +
+      ', reachable=' +
+      String(observation.reachable ?? 'unknown') +
+      ', adminReady=' +
+      String(observation.adminReady ?? 'unknown') +
+      ', reachableBy=' +
+      String(observation.reachableBy || 'none') +
+      ', peerObserved=' +
+      String(observation.peerObserved ?? 'unknown') +
+      ', peerObserver=' +
+      String(observation.peerObserverNodeId || 'none') +
+      ', peerCapturedAtMs=' +
+      String(observation.peerCapturedAtMs ?? 'none') +
+      ', peerActiveNodeIds=' +
       activeNodeIds +
-      ", peerServeEligible=" +
-      String(observation.peerServeEligible ?? "unknown") +
-      ", peerRepairEligible=" +
-      String(observation.peerRepairEligible ?? "unknown") +
-      ", error=" +
-      String(observation.error || "none") +
-      ", peerError=" +
-      String(observation.peerError || "none")
+      ', peerServeEligible=' +
+      String(observation.peerServeEligible ?? 'unknown') +
+      ', peerRepairEligible=' +
+      String(observation.peerRepairEligible ?? 'unknown') +
+      ', error=' +
+      String(observation.error || 'none') +
+      ', peerError=' +
+      String(observation.peerError || 'none')
     );
   }
 
   _formatRestartShutdownObservation(observation) {
     if (!observation) {
-      return "none";
+      return 'none';
     }
     const activeNodeIds =
       Array.isArray(observation.activeNodeIds) &&
-      observation.activeNodeIds.length > ZERO
-        ? observation.activeNodeIds.join("|")
-        : "none";
+      observation.activeNodeIds.length > ZERO ?
+        observation.activeNodeIds.join('|') :
+        'none';
     return (
-      "observer=" +
-      String(observation.observerNodeId || "none") +
-      ", capturedAtMs=" +
-      String(observation.capturedAtMs ?? "none") +
-      ", activeNodeIds=" +
+      'observer=' +
+      String(observation.observerNodeId || 'none') +
+      ', capturedAtMs=' +
+      String(observation.capturedAtMs ?? 'none') +
+      ', activeNodeIds=' +
       activeNodeIds +
-      ", serveEligible=" +
-      String(observation.serveEligible ?? "unknown") +
-      ", repairEligible=" +
-      String(observation.repairEligible ?? "unknown") +
-      ", reachable=" +
-      String(observation.reachable ?? "unknown") +
-      ", reachableBy=" +
-      String(observation.reachableBy || "none") +
-      ", error=" +
-      String(observation.error || "none")
+      ', serveEligible=' +
+      String(observation.serveEligible ?? 'unknown') +
+      ', repairEligible=' +
+      String(observation.repairEligible ?? 'unknown') +
+      ', reachable=' +
+      String(observation.reachable ?? 'unknown') +
+      ', reachableBy=' +
+      String(observation.reachableBy || 'none') +
+      ', error=' +
+      String(observation.error || 'none')
     );
   }
 
@@ -113,12 +120,12 @@ class Cluster2 extends Cluster1 {
     if (!current) {
       return true;
     }
-    const candidateCapturedAtMs = Number.isFinite(candidate.capturedAtMs)
-      ? candidate.capturedAtMs
-      : -1;
-    const currentCapturedAtMs = Number.isFinite(current.capturedAtMs)
-      ? current.capturedAtMs
-      : -1;
+    const candidateCapturedAtMs = Number.isFinite(candidate.capturedAtMs) ?
+      candidate.capturedAtMs :
+      -1;
+    const currentCapturedAtMs = Number.isFinite(current.capturedAtMs) ?
+      current.capturedAtMs :
+      -1;
     if (candidateCapturedAtMs !== currentCapturedAtMs) {
       return candidateCapturedAtMs > currentCapturedAtMs;
     }
@@ -158,8 +165,8 @@ class Cluster2 extends Cluster1 {
 
     if (
       this._dockerProvider &&
-      typeof this._dockerProvider.inspectContainer === "function" &&
-      typeof targetNode.containerId === "string" &&
+      typeof this._dockerProvider.inspectContainer === 'function' &&
+      typeof targetNode.containerId === 'string' &&
       targetNode.containerId.length > ZERO
     ) {
       try {
@@ -167,14 +174,14 @@ class Cluster2 extends Cluster1 {
           targetNode.containerId,
         );
         containerState =
-          typeof inspect?.State?.Status === "string" &&
-          inspect.State.Status.length > ZERO
-            ? inspect.State.Status
-            : UNKNOWN_STATE;
+          typeof inspect?.State?.Status === 'string' &&
+          inspect.State.Status.length > ZERO ?
+            inspect.State.Status :
+            UNKNOWN_STATE;
         containerRunning = containerState === CONTAINER_RUNNING_STATUS;
       } catch (inspectError) {
         error = normalizeProbeError(inspectError);
-        containerState = "inspect_error";
+        containerState = 'inspect_error';
       }
     }
 
@@ -240,13 +247,13 @@ class Cluster2 extends Cluster1 {
         const readinessByNodeId =
           snapshotPayload?.controlPlaneDiagnostics?.readinessByNodeId &&
           typeof snapshotPayload.controlPlaneDiagnostics.readinessByNodeId ===
-            "object"
-            ? snapshotPayload.controlPlaneDiagnostics.readinessByNodeId
-            : {};
+            'object' ?
+            snapshotPayload.controlPlaneDiagnostics.readinessByNodeId :
+            {};
         const readiness = readinessByNodeId[targetNodeId] || null;
-        const activeNodeIds = Array.isArray(snapshotSummary.nodes)
-          ? snapshotSummary.nodes
-          : [];
+        const activeNodeIds = Array.isArray(snapshotSummary.nodes) ?
+          snapshotSummary.nodes :
+          [];
         const observed =
           !activeNodeIds.includes(targetNodeId) ||
           (readiness && readiness.serveEligible !== true);
@@ -276,7 +283,7 @@ class Cluster2 extends Cluster1 {
     if (
       peerNodes.length === ZERO &&
       targetNode &&
-      typeof targetNode.getReachabilityDiagnostics === "function"
+      typeof targetNode.getReachabilityDiagnostics === 'function'
     ) {
       try {
         const diagnostics = await targetNode.getReachabilityDiagnostics({
@@ -308,7 +315,7 @@ class Cluster2 extends Cluster1 {
         repairEligible: null,
         reachable: null,
         reachableBy: null,
-        error: lastError || "restart_shutdown_not_observed",
+        error: lastError || 'restart_shutdown_not_observed',
       }
     );
   }
@@ -351,9 +358,9 @@ class Cluster2 extends Cluster1 {
       peerObserved: peerObservation?.observed === true,
       peerObserverNodeId: peerObservation?.observerNodeId || null,
       peerCapturedAtMs: peerObservation?.capturedAtMs ?? null,
-      peerActiveNodeIds: Array.isArray(peerObservation?.activeNodeIds)
-        ? peerObservation.activeNodeIds
-        : [],
+      peerActiveNodeIds: Array.isArray(peerObservation?.activeNodeIds) ?
+        peerObservation.activeNodeIds :
+        [],
       peerServeEligible: peerObservation?.serveEligible ?? null,
       peerRepairEligible: peerObservation?.repairEligible ?? null,
       peerError: peerObservation?.error || null,
@@ -361,13 +368,13 @@ class Cluster2 extends Cluster1 {
 
     await this._collectFailureLogs();
     throw new Error(
-      "Restart shutdown boundary was not observed within " +
+      'Restart shutdown boundary was not observed within ' +
         timeoutMs +
-        "ms for node " +
+        'ms for node ' +
         targetNodeId +
-        " (" +
+        ' (' +
         this._formatRestartShutdownBoundary(lastResult) +
-        ")",
+        ')',
     );
   }
 
@@ -378,14 +385,15 @@ class Cluster2 extends Cluster1 {
     }
     const timeoutOverrideMs = Number(options?.readinessTimeoutMs);
     const timeoutMs =
-      Number.isFinite(timeoutOverrideMs) && timeoutOverrideMs > ZERO
-        ? Math.max(MIN_TIMEOUT_MS, Math.floor(timeoutOverrideMs))
-        : this._resolveRestartAdminReadinessTimeoutMs();
+      Number.isFinite(timeoutOverrideMs) && timeoutOverrideMs > ZERO ?
+        Math.max(MIN_TIMEOUT_MS, Math.floor(timeoutOverrideMs)) :
+        this._resolveRestartAdminReadinessTimeoutMs();
     const expectedPublicationEpoch =
       Number.isInteger(options?.expectedPublicationEpoch) &&
-      options.expectedPublicationEpoch > ZERO
-        ? options.expectedPublicationEpoch
-        : null;
+      options.expectedPublicationEpoch > ZERO ?
+        options.expectedPublicationEpoch :
+        null;
+    const requireAdminReady = options?.requireAdminReady === true;
     const deadline = Date.now() + timeoutMs;
     const pollResult = await pollUntilCondition({
       deadline,
@@ -399,8 +407,10 @@ class Cluster2 extends Cluster1 {
           return {
             ...diagnostics,
             ready:
-              (diagnostics?.adminReady === true ||
-                diagnostics?.controlPlaneRecoveryReady === true) &&
+              (requireAdminReady === true ?
+                diagnostics?.adminReady === true :
+                diagnostics?.adminReady === true ||
+                  diagnostics?.controlPlaneRecoveryReady === true) &&
               (expectedPublicationEpoch === null ||
                 Number(diagnostics?.publishedControlPlaneEpoch) ===
                   expectedPublicationEpoch),
@@ -429,73 +439,123 @@ class Cluster2 extends Cluster1 {
     await this._collectFailureLogs();
     const lastResult = pollResult.lastResult || {};
     throw new Error(
-      "Restarted node did not become recovery-ready within " +
+      'Restarted node did not become recovery-ready within ' +
         timeoutMs +
-        "ms for node " +
+        'ms for node ' +
         targetNodeId +
-        " (reachable=" +
-        String(lastResult.reachable === true) +
-        ", ready=" +
-        String(lastResult.ready === true) +
-        ", adminReady=" +
-        String(lastResult.adminReady === true) +
-        ", controlPlaneRecoveryReady=" +
-        String(lastResult.controlPlaneRecoveryReady === true) +
-        ", publishedControlPlaneEpoch=" +
-        String(lastResult.publishedControlPlaneEpoch ?? "unknown") +
-        ", expectedPublicationEpoch=" +
-        String(expectedPublicationEpoch ?? "none") +
-        ", recoveryStage=" +
-        String(lastResult.recoveryStage || "unknown") +
-        ", reachableBy=" +
-        String(lastResult.reachableBy || "none") +
-        ", lastError=" +
-        String(lastResult.lastError || "none") +
-        ")",
+        ' (' +
+        this._formatRestartRecoveryReadinessObservation(
+          lastResult,
+          expectedPublicationEpoch,
+        ) +
+        ')',
+    );
+  }
+
+  _formatRestartRecoveryReadinessObservation(
+    observation,
+    expectedPublicationEpoch,
+  ) {
+    const bootstrapReadiness =
+      observation?.bootstrapReadiness &&
+      typeof observation.bootstrapReadiness === 'object' ?
+        observation.bootstrapReadiness :
+        null;
+    const readinessReasons =
+      Array.isArray(bootstrapReadiness?.reasons) &&
+      bootstrapReadiness.reasons.length > ZERO ?
+        bootstrapReadiness.reasons.join(RESTART_RECOVERY_REASON_SEPARATOR) :
+        RESTART_RECOVERY_FIELD_NONE;
+    const bootstrapJoinProjection =
+      bootstrapReadiness?.bootstrapJoinProjection &&
+      typeof bootstrapReadiness.bootstrapJoinProjection === 'object' ?
+        bootstrapReadiness.bootstrapJoinProjection :
+        null;
+    return (
+      'reachable=' +
+      String(observation.reachable === true) +
+      ', ready=' +
+      String(observation.ready === true) +
+      ', adminReady=' +
+      String(observation.adminReady === true) +
+      ', controlPlaneRecoveryReady=' +
+      String(observation.controlPlaneRecoveryReady === true) +
+      ', publishedControlPlaneEpoch=' +
+      String(observation.publishedControlPlaneEpoch ?? UNKNOWN_STATE) +
+      ', expectedPublicationEpoch=' +
+      String(expectedPublicationEpoch ?? RESTART_RECOVERY_FIELD_NONE) +
+      ', readinessPhase=' +
+      String(bootstrapReadiness?.phase || UNKNOWN_STATE) +
+      ', readinessStage=' +
+      String(observation.readinessStage || UNKNOWN_STATE) +
+      ', readinessStageRank=' +
+      String(observation.readinessStageRank ?? UNKNOWN_STATE) +
+      ', readinessReasons=' +
+      readinessReasons +
+      ', recoveryStage=' +
+      String(observation.recoveryStage || UNKNOWN_STATE) +
+      ', ' +
+      RESTART_RECOVERY_FIELD_BOOTSTRAP_JOIN_PROJECTION_BLOCKER +
+      '=' +
+      String(
+        bootstrapJoinProjection?.blockerReason ||
+          RESTART_RECOVERY_FIELD_NONE,
+      ) +
+      ', ' +
+      RESTART_RECOVERY_FIELD_BOOTSTRAP_JOIN_PROJECTION_RULE +
+      '=' +
+      String(
+        bootstrapJoinProjection?.projectionRule ||
+          RESTART_RECOVERY_FIELD_NONE,
+      ) +
+      ', reachableBy=' +
+      String(observation.reachableBy || RESTART_RECOVERY_FIELD_NONE) +
+      ', lastError=' +
+      String(observation.lastError || RESTART_RECOVERY_FIELD_NONE)
     );
   }
 
   async partitionNetwork(groupA, groupB) {
     return this._runChaosAction(
-      "partitionNetwork",
-      "network",
-      { groupA, groupB },
+      'partitionNetwork',
+      'network',
+      {groupA, groupB},
       () => this._chaos.partitionNetwork(groupA, groupB),
     );
   }
 
   async healPartition() {
-    return this._runChaosAction("healPartition", "network", null, () =>
+    return this._runChaosAction('healPartition', 'network', null, () =>
       this._chaos.healPartition(),
     );
   }
 
   async slowNetwork(nodeId, options) {
-    return this._runChaosAction("slowNetwork", nodeId, options, () =>
+    return this._runChaosAction('slowNetwork', nodeId, options, () =>
       this._chaos.slowNetwork(nodeId, options),
     );
   }
 
   async clearNetworkSlowdown(nodeId) {
-    return this._runChaosAction("clearNetworkSlowdown", nodeId, null, () =>
+    return this._runChaosAction('clearNetworkSlowdown', nodeId, null, () =>
       this._chaos.clearNetworkSlowdown(nodeId),
     );
   }
 
   async corruptDisk(nodeId, path) {
-    return this._runChaosAction("corruptDisk", nodeId, { path }, () =>
+    return this._runChaosAction('corruptDisk', nodeId, {path}, () =>
       this._chaos.corruptDisk(nodeId, path),
     );
   }
 
   async fillDisk(nodeId, options = {}) {
-    return this._runChaosAction("fillDisk", nodeId, options, () =>
+    return this._runChaosAction('fillDisk', nodeId, options, () =>
       this._chaos.fillDisk(nodeId, options),
     );
   }
 
   async releaseDiskPressure(nodeId, options = {}) {
-    return this._runChaosAction("releaseDiskPressure", nodeId, options, () =>
+    return this._runChaosAction('releaseDiskPressure', nodeId, options, () =>
       this._chaos.releaseDiskPressure(nodeId, options),
     );
   }
@@ -518,9 +578,9 @@ class Cluster2 extends Cluster1 {
     );
     const requiredPublicationEpoch =
       Number.isInteger(options?.requiredPublicationEpoch) &&
-      options.requiredPublicationEpoch > ZERO
-        ? options.requiredPublicationEpoch
-        : null;
+      options.requiredPublicationEpoch > ZERO ?
+        options.requiredPublicationEpoch :
+        null;
     const allowRoutedNodeLoadLaneFallback =
       this._config?.benchmark?.strictDiscovery === false;
     const criticalControlPlaneStability =
@@ -531,7 +591,7 @@ class Cluster2 extends Cluster1 {
     const evaluations = [];
 
     for (const node of nodes) {
-      if (!node || typeof node !== "object") {
+      if (!node || typeof node !== 'object') {
         continue;
       }
       try {
@@ -539,38 +599,38 @@ class Cluster2 extends Cluster1 {
         let discoveryError = null;
         try {
           discoverySnapshot =
-            typeof node.queryWithTimeout === "function"
-              ? await node.queryWithTimeout(discoverySql, [], {
-                  lane: ADMIN_SOCKET_LANE_SNAPSHOT,
-                  timeoutMs,
-                })
-              : await node.query(discoverySql, []);
+            typeof node.queryWithTimeout === 'function' ?
+              await node.queryWithTimeout(discoverySql, [], {
+                lane: ADMIN_SOCKET_LANE_SNAPSHOT,
+                timeoutMs,
+              }) :
+              await node.query(discoverySql, []);
         } catch (error) {
           discoveryError = error;
         }
-        const localDiscoveryAdmission = discoverySnapshot
-          ? inspectLocalBenchmarkAdmissionFromDiscovery(
-              discoverySnapshot,
-              node.id,
-            )
-          : {
-              localReplicaSeen: false,
-              localAdmissionReady: false,
-              loadLaneProbeEligible: false,
-              readyNodeId: "",
-              routingReady: false,
-              schemaReady: false,
-              topologyReady: false,
-              localReplicaRole: BENCHMARK_ADMISSION_LOCAL_REPLICA_ROLE_UNKNOWN,
-              localReplicaVoterReady: false,
-              leadershipStable: false,
-              degradationState: BENCHMARK_ADMISSION_DEGRADATION_STATE_HEALTHY,
-              degradedByOperationIds: [],
-              discoveryReasonDetails: [],
-              discoveryReasonCodes: [],
-            };
+        const localDiscoveryAdmission = discoverySnapshot ?
+          inspectLocalBenchmarkAdmissionFromDiscovery(
+            discoverySnapshot,
+            node.id,
+          ) :
+          {
+            localReplicaSeen: false,
+            localAdmissionReady: false,
+            loadLaneProbeEligible: false,
+            readyNodeId: '',
+            routingReady: false,
+            schemaReady: false,
+            topologyReady: false,
+            localReplicaRole: BENCHMARK_ADMISSION_LOCAL_REPLICA_ROLE_UNKNOWN,
+            localReplicaVoterReady: false,
+            leadershipStable: false,
+            degradationState: BENCHMARK_ADMISSION_DEGRADATION_STATE_HEALTHY,
+            degradedByOperationIds: [],
+            discoveryReasonDetails: [],
+            discoveryReasonCodes: [],
+          };
         let diagnostics = null;
-        if (typeof node.getReachabilityDiagnostics === "function") {
+        if (typeof node.getReachabilityDiagnostics === 'function') {
           try {
             diagnostics = await node.getReachabilityDiagnostics({
               timeoutMs,
@@ -622,9 +682,9 @@ class Cluster2 extends Cluster1 {
           retryAfterMs: discoveryRetryAfterMs,
           reasonCodes: collectBenchmarkAdmissionReasonCodes(
             localDiscoveryAdmission.discoveryReasonCodes,
-            discoveryPressured
-              ? BENCHMARK_LOAD_ADMISSION_REASON_DISCOVERY_PRESSURED
-              : "",
+            discoveryPressured ?
+              BENCHMARK_LOAD_ADMISSION_REASON_DISCOVERY_PRESSURED :
+              '',
           ),
         };
         if (!admissionCheckEligible) {
@@ -682,12 +742,12 @@ class Cluster2 extends Cluster1 {
               loadLaneAdmission.retryAfterMs,
             ),
             reasonCodes:
-              loadLaneAdmission.admissionReady === true
-                ? evaluationOptions.reasonCodes
-                : collectBenchmarkAdmissionReasonCodes(
-                    evaluationOptions.reasonCodes,
-                    loadLaneAdmission.reasonCodes,
-                  ),
+              loadLaneAdmission.admissionReady === true ?
+                evaluationOptions.reasonCodes :
+                collectBenchmarkAdmissionReasonCodes(
+                  evaluationOptions.reasonCodes,
+                  loadLaneAdmission.reasonCodes,
+                ),
           }),
         );
       } catch (error) {
@@ -707,9 +767,9 @@ class Cluster2 extends Cluster1 {
               extractBenchmarkAdmissionReasonCodesFromError(error),
             reasonCodes: collectBenchmarkAdmissionReasonCodes(
               extractBenchmarkAdmissionReasonCodesFromError(error),
-              isRetryableBenchmarkAdmissionError(error)
-                ? BENCHMARK_LOAD_ADMISSION_REASON_DISCOVERY_PRESSURED
-                : "",
+              isRetryableBenchmarkAdmissionError(error) ?
+                BENCHMARK_LOAD_ADMISSION_REASON_DISCOVERY_PRESSURED :
+                '',
             ),
           }),
         );
@@ -724,7 +784,7 @@ class Cluster2 extends Cluster1 {
 
   async resolveBenchmarkCriticalControlPlaneStabilitySnapshot(options = {}) {
     const expectedNodeIds = Array.from(this._nodes.keys())
-      .map((nodeId) => String(nodeId || "").trim())
+      .map((nodeId) => String(nodeId || '').trim())
       .filter((nodeId) => nodeId.length > ZERO);
     if (expectedNodeIds.length === ZERO) {
       return buildBenchmarkCriticalControlPlaneStabilitySnapshot();
@@ -750,10 +810,10 @@ class Cluster2 extends Cluster1 {
         Number.isInteger(snapshotCoverage?.bestCoverageNodeCount) &&
         snapshotCoverage.bestCoverageNodeCount > ZERO;
       const selectedError =
-        typeof snapshotCoverage?.selectedError === "string" &&
-        snapshotCoverage.selectedError.length > ZERO
-          ? snapshotCoverage.selectedError
-          : null;
+        typeof snapshotCoverage?.selectedError === 'string' &&
+        snapshotCoverage.selectedError.length > ZERO ?
+          snapshotCoverage.selectedError :
+          null;
       return buildBenchmarkCriticalControlPlaneStabilitySnapshot({
         publicationConvergenceGate,
         controlPlaneOwnerQueueDepth:
@@ -773,23 +833,23 @@ class Cluster2 extends Cluster1 {
       return buildBenchmarkCriticalControlPlaneStabilitySnapshot({
         snapshotUnavailable: true,
         expectedNodeCount: expectedNodeIds.length,
-        selectedError: String(error?.message || error || ""),
+        selectedError: String(error?.message || error || ''),
       });
     }
   }
 
   async resolveBenchmarkReadyLoadNodes(options = {}) {
     const snapshot = await this.resolveBenchmarkLoadAdmissionSnapshot(options);
-    return Array.isArray(snapshot?.admissionReadyNodes)
-      ? snapshot.admissionReadyNodes
-      : [];
+    return Array.isArray(snapshot?.admissionReadyNodes) ?
+      snapshot.admissionReadyNodes :
+      [];
   }
 
   async waitForBenchmarkReadyLoadNodes(options = {}) {
     const minNodeCount =
-      Number.isInteger(options?.minNodeCount) && options.minNodeCount > ZERO
-        ? options.minNodeCount
-        : ONE;
+      Number.isInteger(options?.minNodeCount) && options.minNodeCount > ZERO ?
+        options.minNodeCount :
+        ONE;
     const stableWindowMs = resolvePositiveTimeoutMs(
       options?.stableWindowMs,
       LOAD_READINESS_STABLE_WINDOW_MS,
@@ -803,17 +863,17 @@ class Cluster2 extends Cluster1 {
       ACTIVE_POLL_INTERVAL_MS,
     );
     const tableName =
-      typeof options?.tableName === "string" ? options.tableName.trim() : "";
+      typeof options?.tableName === 'string' ? options.tableName.trim() : '';
     const deadlineAtMs = Date.now() + timeoutMs;
     let readySinceMs = null;
     let lastReadyNodes = [];
     const sleep =
-      typeof this._sleep === "function"
-        ? (ms) => this._sleep(ms)
-        : (ms) =>
-            new Promise((resolve) => {
-              setTimeout(resolve, ms);
-            });
+      typeof this._sleep === 'function' ?
+        (ms) => this._sleep(ms) :
+        (ms) =>
+          new Promise((resolve) => {
+            setTimeout(resolve, ms);
+          });
 
     while (true) {
       const readyNodes = await this.resolveBenchmarkReadyLoadNodes({
@@ -847,16 +907,16 @@ class Cluster2 extends Cluster1 {
     }
 
     throw new Error(
-      "Timed out after " +
+      'Timed out after ' +
         timeoutMs +
-        "ms waiting for at least " +
+        'ms waiting for at least ' +
         minNodeCount +
-        " benchmark-ready load nodes" +
-        (tableName.length > ZERO ? " for table " + tableName : "") +
-        "; lastReadyNodeCount=" +
+        ' benchmark-ready load nodes' +
+        (tableName.length > ZERO ? ' for table ' + tableName : '') +
+        '; lastReadyNodeCount=' +
         lastReadyNodes.length,
     );
   }
 }
 
-export { Cluster2 };
+export {Cluster2};

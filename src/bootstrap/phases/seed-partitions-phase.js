@@ -546,7 +546,7 @@ class SeedPartitionsPhase {
         d.getSystemTableCacheRef() :
         typeof d.getSystemTableCacheSafe === 'function' ?
           d.getSystemTableCacheSafe() :
-        null;
+          null;
     if (!systemTableCache) {
       return false;
     }

@@ -21,7 +21,6 @@ import {SERVICE_TYPE} from '../../src/constants/service.js';
 import {
   ADMISSION_DECISION,
   PRESSURE_STATE,
-  STORAGE_CAPACITY_DEFAULT,
 } from '../../src/rebalancer/storage-capacity-constants.js';
 import {
   MOVE_PLANNER_ERROR_MSG,

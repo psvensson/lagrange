@@ -1,100 +1,33 @@
-import { CONTROL_PLANE_READINESS_SERVICE_SHARED } from "./control-plane-readiness-service-shared.js";
-import { ControlPlaneReadinessServiceSegment2 } from "./control-plane-readiness-service-segment-2.js";
+import {CONTROL_PLANE_READINESS_SERVICE_SHARED} from './control-plane-readiness-service-shared.js';
+import {ControlPlaneReadinessServiceSegment2} from './control-plane-readiness-service-segment-2.js';
 
 const {
-  AUTHORITATIVE_READINESS_REPAIR,
   AUTHORITY_DESCRIPTOR_STATE,
   AUTHORITY_PUBLICATION_OBSERVATION_STATE,
   AuthoritativeControlPlaneView,
-  AuthoritativeNodeEvidenceReconciler,
-  COLUMN,
-  CONTROL_PLANE_PARTICIPATION_DECISION,
-  CONTROL_PLANE_PARTICIPATION_KIND,
-  CONTROL_PLANE_PRIORITY_RECOVERY_REASON,
   CONTROL_PLANE_PUBLICATION_MODE,
-  CONTROL_PLANE_PUBLICATION_STATUS,
   CONTROL_PLANE_READINESS_DEFAULT,
   CONTROL_PLANE_READINESS_DIMENSION,
   CONTROL_PLANE_READINESS_OWNER,
   CONTROL_PLANE_READINESS_REASON,
-  CONTROL_PLANE_READINESS_SUBSYSTEM,
-  ControlPlaneDiagnosticsLedger,
-  DEFAULT_PRIORITY_RECOVERY_ACTIVITY_STALE_GRACE_MS,
-  DurableWorkflowCoordinator,
-  LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY,
-  LoggingService,
-  MEMBERSHIP_PUBLICATION_AUTHORITATIVE_READ_MODE,
-  MEMBERSHIP_PUBLICATION_PLANNING,
-  MEMBERSHIP_PUBLICATION_PLANNING_READ_OPTIONS,
-  MEMBERSHIP_PUBLICATION_PLANNING_SOURCE,
   MEMBERSHIP_PUBLICATION_READ_LANE,
-  MEMBERSHIP_PUBLICATION_READ_OPTIONS,
   MEMBERSHIP_PUBLICATION_READ_SCOPE,
   MISSING_NODE_READINESS_REASON,
   MISSING_NODE_READINESS_STATE,
   NUM,
-  OperationLane,
-  PRESSURE_STATE,
-  PRIORITY_CONTROL_PLANE_RECOVERY_HEALTH_FAILURE,
   PROVISIONING_ELIGIBILITY_STATE,
   PUBLICATION_REASON_CONFIG_SAFE_MODE,
-  READINESS_DIAGNOSTICS_LEDGER_LIMIT,
-  READINESS_ERROR_MSG,
-  READINESS_TRANSITION_HISTORY_LIMIT,
-  RECOVERY_EPOCH_EVENT_LIMIT,
-  RECOVERY_EPOCH_HISTORY_LIMIT,
-  RECOVERY_GRACE_MESSAGE_GROUP_SERVICE_STATUSES,
-  RECOVERY_PROTOCOL_STATE,
   RUNTIME_AUTHORITY_PUBLICATION_STATE,
   RUNTIME_AUTHORITY_REPAIR_STATE,
   RUNTIME_AUTHORITY_STATE,
   RUNTIME_AUTHORITY_VISIBILITY_STATE,
-  SERVICE_STATUS,
-  SERVICE_TYPE,
-  STARTUP_AUTHORITY_STATE,
-  STATE,
-  TABLES,
-  TIME_MS,
   TYPEOF,
-  assertCritical,
   buildControlPlanePublicationStory,
-  buildParticipationErrorCode,
-  buildParticipationErrorMessage,
-  buildPublicationRecoveryGateSnapshot,
-  buildPublicationRecoveryProtocolSnapshot,
   buildReadinessTransitionOwnerState,
   buildReason,
-  buildStartupAuthorityFailureOwnerDescriptor,
-  buildStartupAuthorityHealthDetails,
-  buildStartupAuthorityOwnerContract,
-  buildStartupAuthorityOwnerSnapshotFromPlanningAnswer,
-  buildStartupAuthorityOwnerUnavailableSnapshot,
-  buildStartupAuthorityPriorityPartitionOwnerDescriptor,
-  buildStartupAuthorityPublicationOwnerDescriptor,
-  buildStartupAuthorityRecoveryProtocolOwnerDescriptor,
-  buildStartupAuthorityTargetParticipationOwnerDescriptor,
-  compactEligibilitySnapshot,
-  compareNodeHeartbeatWatermarks,
-  createControlPlaneRuntimeBundle,
   createEligibilitySnapshot,
-  evaluateEligibilityDecision,
-  isNodeReadyLeaseExplicitlyCleared,
-  isNodeRecordReady,
-  normalizeControlPlaneParticipationKind,
-  normalizeDiagnosticTimestampMs,
-  normalizeIsoTimestamp,
-  normalizeLocalQueryTransportEvidence,
-  normalizeNodeIdList,
-  normalizePositiveInteger,
-  resolveMembershipPublicationPlanningSource,
   resolveMembershipPublicationReadLane,
   resolveMembershipPublicationReadOptions,
-  resolveMembershipPublicationReadScope,
-  resolveParticipationDecisionDimension,
-  resolvePriorityRecoveryActiveNodeCohort,
-  shouldAllowLocalExecutionForParticipation,
-  unwrapRowReadResult,
-  wasNodeRecordReadyWhenWritten,
 } = CONTROL_PLANE_READINESS_SERVICE_SHARED;
 
 class ControlPlaneReadinessServiceSegment3 extends ControlPlaneReadinessServiceSegment2 {
@@ -147,9 +80,9 @@ class ControlPlaneReadinessServiceSegment3 extends ControlPlaneReadinessServiceS
                 context.nodeEvidence?.localQueryTransportErrorCode || null,
               localQueryTransportRetryAfterMs: Number.isFinite(
                 context.nodeEvidence?.localQueryTransportRetryAfterMs,
-              )
-                ? context.nodeEvidence.localQueryTransportRetryAfterMs
-                : null,
+              ) ?
+                context.nodeEvidence.localQueryTransportRetryAfterMs :
+                null,
             },
           ),
         );
@@ -178,9 +111,9 @@ class ControlPlaneReadinessServiceSegment3 extends ControlPlaneReadinessServiceS
       reasons.push(
         buildReason(
           context.publication.currentMode ===
-            CONTROL_PLANE_PUBLICATION_MODE.REPAIR_ONLY
-            ? CONTROL_PLANE_READINESS_REASON.METADATA_PUBLICATION_REPAIR_ONLY
-            : CONTROL_PLANE_READINESS_REASON.METADATA_PUBLICATION_DEGRADED,
+            CONTROL_PLANE_PUBLICATION_MODE.REPAIR_ONLY ?
+            CONTROL_PLANE_READINESS_REASON.METADATA_PUBLICATION_REPAIR_ONLY :
+            CONTROL_PLANE_READINESS_REASON.METADATA_PUBLICATION_DEGRADED,
           CONTROL_PLANE_READINESS_DIMENSION.METADATA_PUBLICATION_HEALTHY,
           CONTROL_PLANE_READINESS_OWNER.CDC_GROUP_PROPAGATION,
           context.observedAt,
@@ -272,40 +205,40 @@ class ControlPlaneReadinessServiceSegment3 extends ControlPlaneReadinessServiceS
 
   buildRuntimeAuthorityFailureDescriptor(failureReason) {
     return typeof failureReason === TYPEOF.STRING &&
-      failureReason.length > NUM.ZERO
-      ? Object.freeze({
-          state: AUTHORITY_DESCRIPTOR_STATE.PRESENT,
-          reason: failureReason,
-        })
-      : Object.freeze({
-          state: AUTHORITY_DESCRIPTOR_STATE.NONE,
-        });
+      failureReason.length > NUM.ZERO ?
+      Object.freeze({
+        state: AUTHORITY_DESCRIPTOR_STATE.PRESENT,
+        reason: failureReason,
+      }) :
+      Object.freeze({
+        state: AUTHORITY_DESCRIPTOR_STATE.NONE,
+      });
   }
 
   buildRuntimeAuthorityPublicationDescriptor(publication = null) {
     const mode =
       typeof publication?.currentMode === TYPEOF.STRING &&
-      publication.currentMode.length > NUM.ZERO
-        ? publication.currentMode
-        : null;
+      publication.currentMode.length > NUM.ZERO ?
+        publication.currentMode :
+        null;
     const reasonCode =
       typeof publication?.reasonCode === TYPEOF.STRING &&
-      publication.reasonCode.length > NUM.ZERO
-        ? publication.reasonCode
-        : null;
+      publication.reasonCode.length > NUM.ZERO ?
+        publication.reasonCode :
+        null;
     const enteredAt =
       typeof publication?.enteredAt === TYPEOF.STRING &&
-      publication.enteredAt.length > NUM.ZERO
-        ? publication.enteredAt
-        : null;
+      publication.enteredAt.length > NUM.ZERO ?
+        publication.enteredAt :
+        null;
     const healthy =
       mode === CONTROL_PLANE_PUBLICATION_MODE.GROUPED ||
       (mode === CONTROL_PLANE_PUBLICATION_MODE.REPAIR_ONLY &&
         reasonCode === PUBLICATION_REASON_CONFIG_SAFE_MODE);
     return Object.freeze({
-      state: healthy
-        ? RUNTIME_AUTHORITY_PUBLICATION_STATE.HEALTHY
-        : RUNTIME_AUTHORITY_PUBLICATION_STATE.DEGRADED,
+      state: healthy ?
+        RUNTIME_AUTHORITY_PUBLICATION_STATE.HEALTHY :
+        RUNTIME_AUTHORITY_PUBLICATION_STATE.DEGRADED,
       healthy,
       mode,
       reasonCode,
@@ -316,25 +249,25 @@ class ControlPlaneReadinessServiceSegment3 extends ControlPlaneReadinessServiceS
   buildRuntimeAuthorityVisibilityDescriptor(details = {}) {
     const observationState =
       typeof details.publicationObservationState === TYPEOF.STRING &&
-      details.publicationObservationState.length > NUM.ZERO
-        ? details.publicationObservationState
-        : AUTHORITY_PUBLICATION_OBSERVATION_STATE.OBSERVATION_UNAVAILABLE;
+      details.publicationObservationState.length > NUM.ZERO ?
+        details.publicationObservationState :
+        AUTHORITY_PUBLICATION_OBSERVATION_STATE.OBSERVATION_UNAVAILABLE;
     const publicationStatus =
       typeof details.publicationStatus === TYPEOF.STRING &&
-      details.publicationStatus.length > NUM.ZERO
-        ? details.publicationStatus
-        : null;
+      details.publicationStatus.length > NUM.ZERO ?
+        details.publicationStatus :
+        null;
     const state =
       details.missingNodeReadinessState ===
-      MISSING_NODE_READINESS_STATE.SELF_RUNTIME_GRACE
-        ? RUNTIME_AUTHORITY_VISIBILITY_STATE.RETAINED_LOCAL_RUNTIME
-        : details.controlPlanePublished === true
-          ? RUNTIME_AUTHORITY_VISIBILITY_STATE.CONFIRMED
-          : details.repairEligible === true ||
+      MISSING_NODE_READINESS_STATE.SELF_RUNTIME_GRACE ?
+        RUNTIME_AUTHORITY_VISIBILITY_STATE.RETAINED_LOCAL_RUNTIME :
+        details.controlPlanePublished === true ?
+          RUNTIME_AUTHORITY_VISIBILITY_STATE.CONFIRMED :
+          details.repairEligible === true ||
               details.recoveryEligible === true ||
-              details.priorityRecoveryActive === true
-            ? RUNTIME_AUTHORITY_VISIBILITY_STATE.PENDING_PUBLICATION
-            : RUNTIME_AUTHORITY_VISIBILITY_STATE.UNAVAILABLE;
+              details.priorityRecoveryActive === true ?
+            RUNTIME_AUTHORITY_VISIBILITY_STATE.PENDING_PUBLICATION :
+            RUNTIME_AUTHORITY_VISIBILITY_STATE.UNAVAILABLE;
     return Object.freeze({
       state,
       published: details.controlPlanePublished === true,
@@ -343,9 +276,9 @@ class ControlPlaneReadinessServiceSegment3 extends ControlPlaneReadinessServiceS
       publicationStatus,
       enteredAt:
         typeof details.enteredAt === TYPEOF.STRING &&
-        details.enteredAt.length > NUM.ZERO
-          ? details.enteredAt
-          : null,
+        details.enteredAt.length > NUM.ZERO ?
+          details.enteredAt :
+          null,
     });
   }
 
@@ -357,55 +290,55 @@ class ControlPlaneReadinessServiceSegment3 extends ControlPlaneReadinessServiceS
     }
     const outcome =
       typeof latestRepair.outcome === TYPEOF.STRING &&
-      latestRepair.outcome.length > NUM.ZERO
-        ? latestRepair.outcome
-        : null;
+      latestRepair.outcome.length > NUM.ZERO ?
+        latestRepair.outcome :
+        null;
     const state =
-      outcome === RUNTIME_AUTHORITY_REPAIR_STATE.REPAIRED
-        ? RUNTIME_AUTHORITY_REPAIR_STATE.REPAIRED
-        : outcome === RUNTIME_AUTHORITY_REPAIR_STATE.FAILED
-          ? RUNTIME_AUTHORITY_REPAIR_STATE.FAILED
-          : outcome === RUNTIME_AUTHORITY_REPAIR_STATE.UNCHANGED
-            ? RUNTIME_AUTHORITY_REPAIR_STATE.UNCHANGED
-            : RUNTIME_AUTHORITY_REPAIR_STATE.NOT_ATTEMPTED;
+      outcome === RUNTIME_AUTHORITY_REPAIR_STATE.REPAIRED ?
+        RUNTIME_AUTHORITY_REPAIR_STATE.REPAIRED :
+        outcome === RUNTIME_AUTHORITY_REPAIR_STATE.FAILED ?
+          RUNTIME_AUTHORITY_REPAIR_STATE.FAILED :
+          outcome === RUNTIME_AUTHORITY_REPAIR_STATE.UNCHANGED ?
+            RUNTIME_AUTHORITY_REPAIR_STATE.UNCHANGED :
+            RUNTIME_AUTHORITY_REPAIR_STATE.NOT_ATTEMPTED;
     return Object.freeze({
       state,
       outcome,
       repaired: latestRepair.repaired === true,
       repairIntent:
         typeof latestRepair.repairIntent === TYPEOF.STRING &&
-        latestRepair.repairIntent.length > NUM.ZERO
-          ? latestRepair.repairIntent
-          : null,
+        latestRepair.repairIntent.length > NUM.ZERO ?
+          latestRepair.repairIntent :
+          null,
       nodeEvidenceState:
         typeof latestRepair.nodeEvidenceState === TYPEOF.STRING &&
-        latestRepair.nodeEvidenceState.length > NUM.ZERO
-          ? latestRepair.nodeEvidenceState
-          : null,
+        latestRepair.nodeEvidenceState.length > NUM.ZERO ?
+          latestRepair.nodeEvidenceState :
+          null,
       serviceEvidenceState:
         typeof latestRepair.serviceEvidenceState === TYPEOF.STRING &&
-        latestRepair.serviceEvidenceState.length > NUM.ZERO
-          ? latestRepair.serviceEvidenceState
-          : null,
+        latestRepair.serviceEvidenceState.length > NUM.ZERO ?
+          latestRepair.serviceEvidenceState :
+          null,
       partitionEvidenceState:
         typeof latestRepair.partitionEvidenceState === TYPEOF.STRING &&
-        latestRepair.partitionEvidenceState.length > NUM.ZERO
-          ? latestRepair.partitionEvidenceState
-          : null,
-      nodeRowCount: Number.isFinite(latestRepair.nodeRowCount)
-        ? latestRepair.nodeRowCount
-        : null,
-      serviceRowCount: Number.isFinite(latestRepair.serviceRowCount)
-        ? latestRepair.serviceRowCount
-        : null,
-      partitionRowCount: Number.isFinite(latestRepair.partitionRowCount)
-        ? latestRepair.partitionRowCount
-        : null,
+        latestRepair.partitionEvidenceState.length > NUM.ZERO ?
+          latestRepair.partitionEvidenceState :
+          null,
+      nodeRowCount: Number.isFinite(latestRepair.nodeRowCount) ?
+        latestRepair.nodeRowCount :
+        null,
+      serviceRowCount: Number.isFinite(latestRepair.serviceRowCount) ?
+        latestRepair.serviceRowCount :
+        null,
+      partitionRowCount: Number.isFinite(latestRepair.partitionRowCount) ?
+        latestRepair.partitionRowCount :
+        null,
       recordedAt:
         typeof latestRepair.recordedAt === TYPEOF.STRING &&
-        latestRepair.recordedAt.length > NUM.ZERO
-          ? latestRepair.recordedAt
-          : null,
+        latestRepair.recordedAt.length > NUM.ZERO ?
+          latestRepair.recordedAt :
+          null,
     });
   }
 
@@ -426,9 +359,9 @@ class ControlPlaneReadinessServiceSegment3 extends ControlPlaneReadinessServiceS
     }
     if (details.publicationHealthy !== true) {
       return details.publicationMode ===
-        CONTROL_PLANE_PUBLICATION_MODE.REPAIR_ONLY
-        ? CONTROL_PLANE_READINESS_REASON.METADATA_PUBLICATION_REPAIR_ONLY
-        : CONTROL_PLANE_READINESS_REASON.METADATA_PUBLICATION_DEGRADED;
+        CONTROL_PLANE_PUBLICATION_MODE.REPAIR_ONLY ?
+        CONTROL_PLANE_READINESS_REASON.METADATA_PUBLICATION_REPAIR_ONLY :
+        CONTROL_PLANE_READINESS_REASON.METADATA_PUBLICATION_DEGRADED;
     }
     if (details.clusterMemberHealthy !== true) {
       return CONTROL_PLANE_READINESS_REASON.CLUSTER_MEMBER_UNHEALTHY;
@@ -468,12 +401,12 @@ class ControlPlaneReadinessServiceSegment3 extends ControlPlaneReadinessServiceS
   buildRuntimeAuthoritySnapshot(context = {}) {
     const missingNodeReadinessState =
       context?.missingNodeReadinessState ===
-      MISSING_NODE_READINESS_STATE.SELF_RUNTIME_GRACE
-        ? MISSING_NODE_READINESS_STATE.SELF_RUNTIME_GRACE
-        : MISSING_NODE_READINESS_STATE.FAIL_CLOSED;
+      MISSING_NODE_READINESS_STATE.SELF_RUNTIME_GRACE ?
+        MISSING_NODE_READINESS_STATE.SELF_RUNTIME_GRACE :
+        MISSING_NODE_READINESS_STATE.FAIL_CLOSED;
     const processAlive =
       !CONTROL_PLANE_READINESS_DEFAULT.NON_RUNNING_PROCESS_STATES.includes(
-        String(context.lifecycleState || ""),
+        String(context.lifecycleState || ''),
       );
     const localQueryTransportBlocked = this.isLocalQueryTransportBlockedForNode(
       context.nodeId,
@@ -550,9 +483,9 @@ class ControlPlaneReadinessServiceSegment3 extends ControlPlaneReadinessServiceS
     });
     const provisioningState =
       visibility.state ===
-      RUNTIME_AUTHORITY_VISIBILITY_STATE.PENDING_PUBLICATION
-        ? PROVISIONING_ELIGIBILITY_STATE.CONVERGENCE_GRACE
-        : resolvedProvisioning.state;
+      RUNTIME_AUTHORITY_VISIBILITY_STATE.PENDING_PUBLICATION ?
+        PROVISIONING_ELIGIBILITY_STATE.CONVERGENCE_GRACE :
+        resolvedProvisioning.state;
     const repair = this.buildRuntimeAuthorityRepairDescriptor(
       this.getLatestAuthoritativeReadinessRepair(context.nodeId || null),
     );
@@ -585,13 +518,11 @@ class ControlPlaneReadinessServiceSegment3 extends ControlPlaneReadinessServiceS
     }
     if (
       Array.isArray(
-        context.membershipPublicationPlanningSnapshot
-          ?.priorityRecoveryReasonCodes,
+        membershipPublicationPlanningSnapshot?.priorityRecoveryReasonCodes,
       )
     ) {
       reasonCodes.push(
-        ...context.membershipPublicationPlanningSnapshot
-          .priorityRecoveryReasonCodes,
+        ...membershipPublicationPlanningSnapshot.priorityRecoveryReasonCodes,
       );
     }
     return Object.freeze({
@@ -705,19 +636,19 @@ class ControlPlaneReadinessServiceSegment3 extends ControlPlaneReadinessServiceS
       dimensions,
       priorityControlPlaneRecovery,
     });
-    const recentTransitions = persistSnapshot
-      ? this.recordReadinessTransition({
-          nodeId: context.nodeId,
-          observedAt: context.observedAt,
-          publication: context.publication,
-          membershipPublication: context.membershipPublication,
-          nodeEvidence: context.nodeEvidence,
-          dimensions,
-          reasons,
-          priorityControlPlaneRecovery,
-          runtimeAuthority,
-        })
-      : this.getReadinessTransitionHistory(context.nodeId);
+    const recentTransitions = persistSnapshot ?
+      this.recordReadinessTransition({
+        nodeId: context.nodeId,
+        observedAt: context.observedAt,
+        publication: context.publication,
+        membershipPublication: context.membershipPublication,
+        nodeEvidence: context.nodeEvidence,
+        dimensions,
+        reasons,
+        priorityControlPlaneRecovery,
+        runtimeAuthority,
+      }) :
+      this.getReadinessTransitionHistory(context.nodeId);
 
     const snapshot = Object.freeze({
       ...createEligibilitySnapshot({
@@ -744,12 +675,12 @@ class ControlPlaneReadinessServiceSegment3 extends ControlPlaneReadinessServiceS
   resolveMissingNodeReadinessState(context = {}) {
     const nodeId = context?.nodeId || null;
     const lifecycleState =
-      typeof context?.lifecycleState === TYPEOF.STRING
-        ? context.lifecycleState
-        : null;
-    const serviceRows = Array.isArray(context?.serviceRows)
-      ? context.serviceRows
-      : [];
+      typeof context?.lifecycleState === TYPEOF.STRING ?
+        context.lifecycleState :
+        null;
+    const serviceRows = Array.isArray(context?.serviceRows) ?
+      context.serviceRows :
+      [];
     if (nodeId !== this.nodeId) {
       return Object.freeze({
         state: MISSING_NODE_READINESS_STATE.FAIL_CLOSED,
@@ -758,7 +689,7 @@ class ControlPlaneReadinessServiceSegment3 extends ControlPlaneReadinessServiceS
     }
     const processAlive =
       !CONTROL_PLANE_READINESS_DEFAULT.NON_RUNNING_PROCESS_STATES.includes(
-        String(lifecycleState || ""),
+        String(lifecycleState || ''),
       );
     if (!processAlive) {
       return Object.freeze({
@@ -831,17 +762,17 @@ class ControlPlaneReadinessServiceSegment3 extends ControlPlaneReadinessServiceS
       transportConnected: transportState.connected,
       localQueryTransportState: localQueryTransport?.state || null,
       localQueryTransportReady:
-        typeof localQueryTransport?.ready === "boolean"
-          ? localQueryTransport.ready
-          : null,
+        typeof localQueryTransport?.ready === 'boolean' ?
+          localQueryTransport.ready :
+          null,
       localQueryTransportReason: localQueryTransport?.reason || null,
       localQueryTransportReasonCode: localQueryTransport?.reasonCode || null,
       localQueryTransportErrorCode: localQueryTransport?.errorCode || null,
       localQueryTransportRetryAfterMs: Number.isFinite(
         localQueryTransport?.retryAfterMs,
-      )
-        ? localQueryTransport.retryAfterMs
-        : null,
+      ) ?
+        localQueryTransport.retryAfterMs :
+        null,
     });
   }
 
@@ -883,7 +814,7 @@ class ControlPlaneReadinessServiceSegment3 extends ControlPlaneReadinessServiceS
       previousReasonCodes: Object.freeze([...previousState.reasonCodes]),
       reasonCodes: Object.freeze([...currentState.reasonCodes]),
       flippedDimensions: Object.freeze(flippedDimensions),
-      rawInputs: Object.freeze({ ...currentState.rawInputs }),
+      rawInputs: Object.freeze({...currentState.rawInputs}),
     });
     const history =
       this.readinessTransitionHistoryByNodeId.get(context.nodeId) || [];
@@ -909,19 +840,19 @@ class ControlPlaneReadinessServiceSegment3 extends ControlPlaneReadinessServiceS
       history.map((entry) =>
         Object.freeze({
           ...entry,
-          previousReasonCodes: Array.isArray(entry.previousReasonCodes)
-            ? Object.freeze([...entry.previousReasonCodes])
-            : Object.freeze([]),
-          reasonCodes: Array.isArray(entry.reasonCodes)
-            ? Object.freeze([...entry.reasonCodes])
-            : Object.freeze([]),
-          flippedDimensions: Array.isArray(entry.flippedDimensions)
-            ? Object.freeze([...entry.flippedDimensions])
-            : Object.freeze([]),
+          previousReasonCodes: Array.isArray(entry.previousReasonCodes) ?
+            Object.freeze([...entry.previousReasonCodes]) :
+            Object.freeze([]),
+          reasonCodes: Array.isArray(entry.reasonCodes) ?
+            Object.freeze([...entry.reasonCodes]) :
+            Object.freeze([]),
+          flippedDimensions: Array.isArray(entry.flippedDimensions) ?
+            Object.freeze([...entry.flippedDimensions]) :
+            Object.freeze([]),
           rawInputs:
-            entry.rawInputs && typeof entry.rawInputs === TYPEOF.OBJECT
-              ? Object.freeze({ ...entry.rawInputs })
-              : Object.freeze({}),
+            entry.rawInputs && typeof entry.rawInputs === TYPEOF.OBJECT ?
+              Object.freeze({...entry.rawInputs}) :
+              Object.freeze({}),
         }),
       ),
     );
@@ -962,9 +893,9 @@ class ControlPlaneReadinessServiceSegment3 extends ControlPlaneReadinessServiceS
       lane: resolveMembershipPublicationReadLane(readOptions?.lane),
       queryTimeoutMs:
         Number.isFinite(readOptions?.queryTimeoutMs) &&
-        readOptions.queryTimeoutMs > NUM.ZERO
-          ? readOptions.queryTimeoutMs
-          : this.membershipPublicationDiagnosticsQueryTimeoutMs,
+        readOptions.queryTimeoutMs > NUM.ZERO ?
+          readOptions.queryTimeoutMs :
+          this.membershipPublicationDiagnosticsQueryTimeoutMs,
     });
     let row = null;
     if (typeof service.getLatestPublicationForNode === TYPEOF.FUNCTION) {
@@ -1107,4 +1038,4 @@ class ControlPlaneReadinessServiceSegment3 extends ControlPlaneReadinessServiceS
   }
 }
 
-export { ControlPlaneReadinessServiceSegment3 };
+export {ControlPlaneReadinessServiceSegment3};

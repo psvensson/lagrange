@@ -1,5 +1,5 @@
-import assert from "node:assert/strict";
-import { TABLE_DISTRIBUTION_HELPERS_SEGMENT_2 } from "./table-distribution-helpers-segment-2.js";
+import assert from 'node:assert/strict';
+import {TABLE_DISTRIBUTION_HELPERS_SEGMENT_2} from './table-distribution-helpers-segment-2.js';
 const {
   TABLE_NAME_LOGS,
   TABLE_NAME_BENCHMARK_EVENTS,
@@ -71,11 +71,9 @@ const {
   CONTROL_SNAPSHOT_OBSERVATION_CONTRACT_STATE_FIELD,
   CONTROL_SNAPSHOT_OBSERVATION_STATE_FAILED,
   CONTROL_SNAPSHOT_OBSERVATION_CONTRACT_STATE_FAILED,
-  normalizeControlPlaneSystemTableVisibilityState,
   isPendingControlPlaneSystemTableVisibilityState,
   CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE,
   OWNER_CONTRACT_STATE,
-  normalizeOwnerContractNextAction,
   normalizeOwnerContractState,
   sleep,
   mapNodeIds,
@@ -156,13 +154,13 @@ function shouldForceAuthoritativeRepairAfterTimedOutCreate(options = {}) {
     return false;
   }
   const requiredBootstrapVisibilityState =
-    typeof options.requiredBootstrapVisibilityState === "string"
-      ? options.requiredBootstrapVisibilityState
-      : TABLE_BOOTSTRAP_VISIBILITY_STATE.NONE;
+    typeof options.requiredBootstrapVisibilityState === 'string' ?
+      options.requiredBootstrapVisibilityState :
+      TABLE_BOOTSTRAP_VISIBILITY_STATE.NONE;
   const observedBootstrapVisibilityState =
-    typeof options?.bootstrapVisibilitySnapshot?.state === "string"
-      ? options.bootstrapVisibilitySnapshot.state
-      : TABLE_BOOTSTRAP_VISIBILITY_STATE.NONE;
+    typeof options?.bootstrapVisibilitySnapshot?.state === 'string' ?
+      options.bootstrapVisibilitySnapshot.state :
+      TABLE_BOOTSTRAP_VISIBILITY_STATE.NONE;
   return !tableBootstrapVisibilityStateSatisfiesRequirement(
     requiredBootstrapVisibilityState,
     observedBootstrapVisibilityState,
@@ -172,9 +170,9 @@ function shouldForceAuthoritativeRepairAfterTimedOutCreate(options = {}) {
 function resolveMutationVisibilityDelayMs(visibilitySummary, fallbackMs) {
   return Math.max(
     fallbackMs,
-    Number.isFinite(visibilitySummary?.retryAfterMs)
-      ? visibilitySummary.retryAfterMs
-      : ZERO,
+    Number.isFinite(visibilitySummary?.retryAfterMs) ?
+      visibilitySummary.retryAfterMs :
+      ZERO,
   );
 }
 
@@ -240,16 +238,16 @@ function shouldAdvanceTimedOutCreateMutationPrimary(options = {}) {
 function resolveTableBootstrapRepairQueryNodes(options = {}) {
   const attemptedCreateQueryNodes = Array.isArray(
     options.attemptedCreateQueryNodes,
-  )
-    ? options.attemptedCreateQueryNodes
-    : [];
-  const visibilityQueryNodes = Array.isArray(options.visibilityQueryNodes)
-    ? options.visibilityQueryNodes
-    : attemptedCreateQueryNodes;
+  ) ?
+    options.attemptedCreateQueryNodes :
+    [];
+  const visibilityQueryNodes = Array.isArray(options.visibilityQueryNodes) ?
+    options.visibilityQueryNodes :
+    attemptedCreateQueryNodes;
   const observedBootstrapVisibilityState =
-    typeof options.observedBootstrapVisibilityState === "string"
-      ? options.observedBootstrapVisibilityState
-      : TABLE_BOOTSTRAP_VISIBILITY_STATE.NONE;
+    typeof options.observedBootstrapVisibilityState === 'string' ?
+      options.observedBootstrapVisibilityState :
+      TABLE_BOOTSTRAP_VISIBILITY_STATE.NONE;
   if (
     observedBootstrapVisibilityState ===
       TABLE_BOOTSTRAP_VISIBILITY_STATE.TABLE_ID_VISIBLE &&
@@ -262,9 +260,9 @@ function resolveTableBootstrapRepairQueryNodes(options = {}) {
 
 function resolveRequiredTableBootstrapVisibilityState(options = {}) {
   const requestedState =
-    typeof options.requiredBootstrapVisibilityState === "string"
-      ? options.requiredBootstrapVisibilityState
-      : TABLE_BOOTSTRAP_VISIBILITY_STATE.NONE;
+    typeof options.requiredBootstrapVisibilityState === 'string' ?
+      options.requiredBootstrapVisibilityState :
+      TABLE_BOOTSTRAP_VISIBILITY_STATE.NONE;
   if (TABLE_BOOTSTRAP_VISIBILITY_STATE_ORDER[requestedState] >= ONE) {
     return requestedState;
   }
@@ -279,12 +277,12 @@ function resolveTableBootstrapCreateTimeoutMs(options = {}) {
     options.deadlineAtMs,
   );
   const requiredBootstrapVisibilityState =
-    typeof options.requiredBootstrapVisibilityState === "string"
-      ? options.requiredBootstrapVisibilityState
-      : TABLE_BOOTSTRAP_VISIBILITY_STATE.NONE;
-  const createQueryNodeCount = Array.isArray(options.createQueryNodes)
-    ? options.createQueryNodes.length
-    : ZERO;
+    typeof options.requiredBootstrapVisibilityState === 'string' ?
+      options.requiredBootstrapVisibilityState :
+      TABLE_BOOTSTRAP_VISIBILITY_STATE.NONE;
+  const createQueryNodeCount = Array.isArray(options.createQueryNodes) ?
+    options.createQueryNodes.length :
+    ZERO;
   const requiresExtendedBootstrapVisibility =
     tableBootstrapVisibilityStateSatisfiesRequirement(
       TABLE_BOOTSTRAP_VISIBILITY_STATE.PARTITIONS_VISIBLE,
@@ -307,21 +305,21 @@ function resolveTableBootstrapCreateTimeoutMs(options = {}) {
 }
 
 function resolveObservedTableBootstrapVisibilityState(options = {}) {
-  const tableId = String(options.tableId || "");
+  const tableId = String(options.tableId || '');
   if (tableId.length <= ZERO) {
     return TABLE_BOOTSTRAP_VISIBILITY_STATE.NONE;
   }
-  const partitionIds = Array.isArray(options.partitionIds)
-    ? options.partitionIds.filter(
-        (partitionId) =>
-          typeof partitionId === "string" && partitionId.length > ZERO,
-      )
-    : [];
+  const partitionIds = Array.isArray(options.partitionIds) ?
+    options.partitionIds.filter(
+      (partitionId) =>
+        typeof partitionId === 'string' && partitionId.length > ZERO,
+    ) :
+    [];
   if (partitionIds.length <= ZERO) {
     return TABLE_BOOTSTRAP_VISIBILITY_STATE.TABLE_ID_VISIBLE;
   }
   if (
-    String(options.distribution?.topologyState || "") ===
+    String(options.distribution?.topologyState || '') ===
     TOPOLOGY_STATE_ROUTABLE
   ) {
     return TABLE_BOOTSTRAP_VISIBILITY_STATE.ROUTABLE_DISTRIBUTION;
@@ -340,17 +338,17 @@ function tableBootstrapVisibilityStateSatisfiesRequirement(
 }
 
 function buildTableBootstrapVisibilitySnapshot(options = {}) {
-  const tableId = String(options.tableId || "");
-  const partitionIds = Array.isArray(options.partitionIds)
-    ? options.partitionIds.filter(
-        (partitionId) =>
-          typeof partitionId === "string" && partitionId.length > ZERO,
-      )
-    : [];
+  const tableId = String(options.tableId || '');
+  const partitionIds = Array.isArray(options.partitionIds) ?
+    options.partitionIds.filter(
+      (partitionId) =>
+        typeof partitionId === 'string' && partitionId.length > ZERO,
+    ) :
+    [];
   const distribution =
-    options.distribution && typeof options.distribution === "object"
-      ? options.distribution
-      : null;
+    options.distribution && typeof options.distribution === 'object' ?
+      options.distribution :
+      null;
   const state = resolveObservedTableBootstrapVisibilityState({
     tableId,
     partitionIds,
@@ -366,18 +364,18 @@ function buildTableBootstrapVisibilitySnapshot(options = {}) {
 
 function buildBenchmarkTableBootstrapResult(options = {}) {
   const visibilitySummary =
-    options.visibilitySummary && typeof options.visibilitySummary === "object"
-      ? options.visibilitySummary
-      : summarizeMutationVisibility(null);
+    options.visibilitySummary && typeof options.visibilitySummary === 'object' ?
+      options.visibilitySummary :
+      summarizeMutationVisibility(null);
   const snapshot =
     options.bootstrapVisibilitySnapshot &&
-    typeof options.bootstrapVisibilitySnapshot === "object"
-      ? options.bootstrapVisibilitySnapshot
-      : buildTableBootstrapVisibilitySnapshot();
+    typeof options.bootstrapVisibilitySnapshot === 'object' ?
+      options.bootstrapVisibilitySnapshot :
+      buildTableBootstrapVisibilitySnapshot();
   const distribution =
-    snapshot.distribution && typeof snapshot.distribution === "object"
-      ? snapshot.distribution
-      : null;
+    snapshot.distribution && typeof snapshot.distribution === 'object' ?
+      snapshot.distribution :
+      null;
   const result = {
     tableName: options.tableName,
     tableId: snapshot.tableId,
@@ -392,10 +390,10 @@ function buildBenchmarkTableBootstrapResult(options = {}) {
     tableVisibilityWarning: resolveMutationVisibilityWarning({
       visibilitySummary,
       repairApplied: options.tableVisibilityRepairApplied,
-      pendingWarning: "table_id_visibility_pending_after_authoritative_commit",
-      deferredWarning: "table_id_visibility_deferred_by_pressure",
+      pendingWarning: 'table_id_visibility_pending_after_authoritative_commit',
+      deferredWarning: 'table_id_visibility_deferred_by_pressure',
       repairedWarning:
-        "table_id_visibility_repaired_from_authoritative_snapshot",
+        'table_id_visibility_repaired_from_authoritative_snapshot',
     }),
     tableBootstrapVisibilityRequirementState:
       options.requiredBootstrapVisibilityState,
@@ -417,7 +415,7 @@ function buildBenchmarkTableBootstrapResult(options = {}) {
 function isEmptyObject(value) {
   return (
     value &&
-    typeof value === "object" &&
+    typeof value === 'object' &&
     !Array.isArray(value) &&
     Object.keys(value).length === ZERO
   );
@@ -432,9 +430,9 @@ function isEmptyObject(value) {
 function policyContainsExpected(expected, observed) {
   if (
     !expected ||
-    typeof expected !== "object" ||
+    typeof expected !== 'object' ||
     !observed ||
-    typeof observed !== "object"
+    typeof observed !== 'object'
   ) {
     return false;
   }
@@ -443,7 +441,7 @@ function policyContainsExpected(expected, observed) {
     const observedValue = observed[key];
     if (
       expectedValue &&
-      typeof expectedValue === "object" &&
+      typeof expectedValue === 'object' &&
       !Array.isArray(expectedValue)
     ) {
       if (!policyContainsExpected(expectedValue, observedValue)) {
@@ -526,7 +524,7 @@ async function queryPartitionIdsByTableId(seedNode, tableId, options = {}) {
       );
       successfulQueryObserved = true;
       const partitionIds = rowsFromResult(result)
-        .map((row) => String(row?.partition_id || row?.partitionId || ""))
+        .map((row) => String(row?.partition_id || row?.partitionId || ''))
         .filter((partitionId) => partitionId.length > ZERO);
       if (partitionIds.length > ZERO) {
         return partitionIds;
@@ -550,9 +548,9 @@ async function queryPartitionIdsByTableId(seedNode, tableId, options = {}) {
  */
 async function queryTablePolicies(seedNode, tableId, options = {}) {
   const tableName =
-    typeof options.tableName === "string" && options.tableName.length > ZERO
-      ? options.tableName
-      : null;
+    typeof options.tableName === 'string' && options.tableName.length > ZERO ?
+      options.tableName :
+      null;
   const lookupSql = [];
   if (tableName) {
     lookupSql.push(
@@ -607,7 +605,7 @@ async function waitForTableId(seedNode, tableName, options = {}) {
     'Timed out waiting for table_id visibility for "' +
       tableName +
       '"' +
-      (lastQueryError ? " (lastQueryError=" + lastQueryError + ")" : ""),
+      (lastQueryError ? ' (lastQueryError=' + lastQueryError + ')' : ''),
   );
   return tableId;
 }
@@ -622,14 +620,14 @@ async function waitForTableId(seedNode, tableName, options = {}) {
 async function ensureBenchmarkPartitioningTable(seedNode, options = {}) {
   assert.ok(
     seedNode &&
-      (typeof seedNode.query === "function" ||
-        typeof seedNode.queryWithTimeout === "function"),
-    "ensureBenchmarkPartitioningTable requires seed node query capability",
+      (typeof seedNode.query === 'function' ||
+        typeof seedNode.queryWithTimeout === 'function'),
+    'ensureBenchmarkPartitioningTable requires seed node query capability',
   );
   const resolvedTableName = resolveBenchmarkTableName(options.tableName);
   assert.ok(
     IDENTIFIER_PATTERN.test(resolvedTableName),
-    "Invalid benchmark table identifier: " + resolvedTableName,
+    'Invalid benchmark table identifier: ' + resolvedTableName,
   );
   const requiredBootstrapVisibilityState =
     resolveRequiredTableBootstrapVisibilityState(options);
@@ -642,9 +640,9 @@ async function ensureBenchmarkPartitioningTable(seedNode, options = {}) {
     (tableBootstrapVisibilityStateSatisfiesRequirement(
       TABLE_BOOTSTRAP_VISIBILITY_STATE.PARTITIONS_VISIBLE,
       requiredBootstrapVisibilityState,
-    )
-      ? TABLE_BOOTSTRAP_TIMEOUT_MS
-      : TABLE_ID_VISIBILITY_TIMEOUT_MS);
+    ) ?
+      TABLE_BOOTSTRAP_TIMEOUT_MS :
+      TABLE_ID_VISIBILITY_TIMEOUT_MS);
   let createTimeoutError = null;
   let lastCreateError = null;
   let lastCreateErrorObject = null;
@@ -792,10 +790,10 @@ async function ensureBenchmarkPartitioningTable(seedNode, options = {}) {
             }
             lastTopologyVisibilityError =
               TABLE_BOOTSTRAP_TOPOLOGY_NOT_ROUTABLE_PREFIX +
-              ":" +
+              ':' +
               distribution.topologyState +
-              ":" +
-              String(distribution.topologySignature || "none");
+              ':' +
+              String(distribution.topologySignature || 'none');
           }
         } catch (error) {
           lastPartitionVisibilityError = String(error?.message || error);
@@ -862,37 +860,37 @@ async function ensureBenchmarkPartitioningTable(seedNode, options = {}) {
   }
 
   assert.fail(
-    "Timed out waiting for " +
+    'Timed out waiting for ' +
       TABLE_BOOTSTRAP_VISIBILITY_STATE_LABEL[requiredBootstrapVisibilityState] +
       ' for "' +
       resolvedTableName +
       '" (lastCreateError=' +
-      String(lastCreateError || "none") +
-      ", lastCreateVisibilityState=" +
-      String(createVisibilitySummary.visibilityState || "none") +
-      ", lastCreateVisibilityRetryAfterMs=" +
-      String(createVisibilitySummary.retryAfterMs || "none") +
-      ", lastVisibilityError=" +
-      String(lastVisibilityError || "none") +
-      ", lastPartitionVisibilityError=" +
-      String(lastPartitionVisibilityError || "none") +
-      ", lastTopologyVisibilityError=" +
-      String(lastTopologyVisibilityError || "none") +
-      ", requiredBootstrapVisibilityState=" +
+      String(lastCreateError || 'none') +
+      ', lastCreateVisibilityState=' +
+      String(createVisibilitySummary.visibilityState || 'none') +
+      ', lastCreateVisibilityRetryAfterMs=' +
+      String(createVisibilitySummary.retryAfterMs || 'none') +
+      ', lastVisibilityError=' +
+      String(lastVisibilityError || 'none') +
+      ', lastPartitionVisibilityError=' +
+      String(lastPartitionVisibilityError || 'none') +
+      ', lastTopologyVisibilityError=' +
+      String(lastTopologyVisibilityError || 'none') +
+      ', requiredBootstrapVisibilityState=' +
       String(
         requiredBootstrapVisibilityState ||
           TABLE_BOOTSTRAP_VISIBILITY_STATE.NONE,
       ) +
-      ", observedBootstrapVisibilityState=" +
+      ', observedBootstrapVisibilityState=' +
       String(
         bootstrapVisibilitySnapshot.state ||
           TABLE_BOOTSTRAP_VISIBILITY_STATE.NONE,
       ) +
-      ", authoritativeRepairAttempted=" +
+      ', authoritativeRepairAttempted=' +
       String(tableVisibilityRepairAttempted) +
-      ", authoritativeRepairApplied=" +
+      ', authoritativeRepairApplied=' +
       String(tableVisibilityRepairApplied) +
-      ")",
+      ')',
   );
 }
 
@@ -913,9 +911,9 @@ async function prepareBenchmarkPartitioningTable(seedNode, options = {}) {
     fallbackNodes: options.fallbackNodes,
   });
   const tablePolicies =
-    options.tablePolicies && typeof options.tablePolicies === "object"
-      ? options.tablePolicies
-      : DEFAULT_TABLE_SPLIT_POLICIES;
+    options.tablePolicies && typeof options.tablePolicies === 'object' ?
+      options.tablePolicies :
+      DEFAULT_TABLE_SPLIT_POLICIES;
   const policySql =
     SQL_UPDATE_TABLE_POLICIES_PREFIX +
     escapeSql(JSON.stringify(tablePolicies)) +
@@ -1030,7 +1028,7 @@ async function prepareBenchmarkPartitioningTable(seedNode, options = {}) {
       ...ensured,
       tablePolicies,
       tablePoliciesApplied: false,
-      tablePoliciesApplyWarning: "sql_system_table_update_noop_detected",
+      tablePoliciesApplyWarning: 'sql_system_table_update_noop_detected',
       tablePoliciesApplyVisibilityState:
         policyApplyVisibilitySummary.visibilityState,
       tablePoliciesApplyVisibilityAuthoritativeConfirmed:
@@ -1053,9 +1051,9 @@ async function prepareBenchmarkPartitioningTable(seedNode, options = {}) {
         resolveMutationVisibilityWarning({
           visibilitySummary: policyApplyVisibilitySummary,
           pendingWarning:
-            "table_policy_visibility_pending_after_authoritative_commit",
-          deferredWarning: "table_policy_visibility_deferred_by_pressure",
-        }) || "table_policy_visibility_timeout_assumed_applied",
+            'table_policy_visibility_pending_after_authoritative_commit',
+          deferredWarning: 'table_policy_visibility_deferred_by_pressure',
+        }) || 'table_policy_visibility_timeout_assumed_applied',
       tablePoliciesApplyVisibilityState:
         policyApplyVisibilitySummary.visibilityState,
       tablePoliciesApplyVisibilityAuthoritativeConfirmed:
@@ -1075,25 +1073,25 @@ async function prepareBenchmarkPartitioningTable(seedNode, options = {}) {
       ensured.tableName +
       '" (observed=' +
       JSON.stringify(observedPolicy) +
-      ", expected=" +
+      ', expected=' +
       JSON.stringify(tablePolicies) +
-      ", lastError=" +
-      String(lastPolicyVisibilityError || "none") +
-      ", lastApplyError=" +
-      String(lastPolicyApplyError || "none") +
-      ", lastApplyVisibilityState=" +
-      String(policyApplyVisibilitySummary.visibilityState || "none") +
-      ", lastApplyVisibilityRetryAfterMs=" +
-      String(policyApplyVisibilitySummary.retryAfterMs || "none") +
-      ", authoritativeRepairAttempted=" +
+      ', lastError=' +
+      String(lastPolicyVisibilityError || 'none') +
+      ', lastApplyError=' +
+      String(lastPolicyApplyError || 'none') +
+      ', lastApplyVisibilityState=' +
+      String(policyApplyVisibilitySummary.visibilityState || 'none') +
+      ', lastApplyVisibilityRetryAfterMs=' +
+      String(policyApplyVisibilitySummary.retryAfterMs || 'none') +
+      ', authoritativeRepairAttempted=' +
       String(policyVisibilityRepairAttempted) +
-      ", authoritativeRepairApplied=" +
+      ', authoritativeRepairApplied=' +
       String(policyVisibilityRepairApplied) +
-      ", applyAttempts=" +
+      ', applyAttempts=' +
       applyAttemptCount +
-      ", lastApplySummary=" +
+      ', lastApplySummary=' +
       JSON.stringify(lastPolicyApplySummary) +
-      ")",
+      ')',
   );
   return {
     ...ensured,
@@ -1119,20 +1117,20 @@ async function prepareBenchmarkPartitioningTable(seedNode, options = {}) {
  */
 function assertSplitPolicyPrecondition(tablePreparation, options = {}) {
   const preparation =
-    tablePreparation && typeof tablePreparation === "object"
-      ? tablePreparation
-      : {};
+    tablePreparation && typeof tablePreparation === 'object' ?
+      tablePreparation :
+      {};
   if (preparation.tablePoliciesApplied !== false) {
     return;
   }
   const scenarioName =
-    typeof options.scenarioName === "string" &&
-    options.scenarioName.length > ZERO
-      ? options.scenarioName
-      : TABLE_POLICY_PRECONDITION_SCENARIO_DEFAULT;
-  const tableName = String(preparation.tableName || "unknown-table");
+    typeof options.scenarioName === 'string' &&
+    options.scenarioName.length > ZERO ?
+      options.scenarioName :
+      TABLE_POLICY_PRECONDITION_SCENARIO_DEFAULT;
+  const tableName = String(preparation.tableName || 'unknown-table');
   const warningCode = String(
-    preparation.tablePoliciesApplyWarning || "table_policy_apply_failed",
+    preparation.tablePoliciesApplyWarning || 'table_policy_apply_failed',
   );
   throw new Error(
     'Split-policy precondition failed for "' +

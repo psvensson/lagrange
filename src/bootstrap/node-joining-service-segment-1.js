@@ -1,163 +1,67 @@
-import { NODE_JOINING_SERVICE_SHARED } from "./node-joining-service-shared.js";
+import {NODE_JOINING_SERVICE_SHARED} from './node-joining-service-shared.js';
 
 const {
-  BOOTSTRAP_EVENT,
   BOOTSTRAP_SUBSYSTEM,
   BootstrapMessageGroupSelectionOwner,
-  BootstrapTopologySnapshotOwner,
-  CACHE_DEFAULT,
-  CACHE_HYDRATION_TABLES,
-  CDCIntegrationSetup,
-  CDCPipelineReadinessGate,
-  CDC_EVENT,
-  CDC_LIFECYCLE_LOG_MSG,
-  CDC_PROPAGATED_TABLES,
-  CDC_REESTABLISHMENT,
-  CDC_SUBSCRIPTION_STATUS,
-  COLUMN,
-  CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE,
-  CONTROL_PLANE_NODE_STATE_REPLAY_CONTEXT,
-  CONTROL_PLANE_READINESS_DIMENSION,
   CONTROL_PLANE_ROLLOUT_REQUIRED,
-  CONTROL_PLANE_WORKLOAD_CLASS,
   ConnectWebSocketPhase,
   ContactSeedPhase,
-  ControlPlaneField,
   ControlPlaneKernelIngress,
-  ControlPlaneMessageType,
-  ControlPlaneSetup,
   CreateMessageGroupPhase,
-  DEFAULT_NODE_CAPABILITIES,
   EventEmitter,
   HEARTBEAT_STATE,
   JOINING_DEFAULT,
   JOINING_ERROR_MSG,
-  JOINING_ERROR_NAME,
-  JOINING_HTTP,
   JOINING_LOG_MSG,
-  JOINING_PHASE,
-  JOINING_PHASE_TO_SUB_PHASE,
   JOINING_UNIFIED_RECONCILE,
-  JOIN_BACKFILL_QUERY,
-  JOIN_CHECKPOINT,
   JOIN_DELEGATE_BUNDLE,
-  JOIN_PLAN_SEGMENT,
-  JOIN_READINESS_REPAIR,
   JOIN_REJOIN_PROMOTION_RESTORE_STATE,
-  JOIN_SESSION_PHASE,
   JoinCleanupHandler,
   JoinCoordinator,
   JoinMessageGroupRuntimeOwner,
   JoinReadinessEvaluator,
   JoinSessionStore,
-  JoiningEvent,
   JoiningPhase,
   LEASE_STATE,
   LatencyTopologySetup,
   LoggingService,
   MembershipLifecycleController,
-  MessageGroupServiceHandlerSetup,
   NODE_JOINING_SERVICE_LITERAL,
-  NODE_STATE_UPDATE_PUBLICATION_DEFER_REASON,
-  NODE_STATE_UPDATE_PUBLICATION_DEFER_STATE,
-  NODE_STATE_UPDATE_PUBLICATION_PATH,
-  NODE_STATE_UPDATE_PUBLICATION_RETRY_TARGET,
-  NODE_STATE_UPDATE_RETRY_CLASS,
   NUM,
   NodeLifecycleStateMachine,
   NodeService,
   NodeState,
   NodeStatePublicationOwner,
-  NodeStorageBudgetSetup,
-  OWNER_CONTRACT_NEXT_ACTION,
-  OWNER_CONTRACT_STATE,
-  PRESSURE_GOVERNOR_ACTION,
-  PRESSURE_WORK_CLASS,
-  PartitionService,
-  PgWireStartupSafetyGate,
-  PressureGovernor,
-  QUERY_ERROR_CODE,
-  QUERY_ERROR_MSG,
   QuerySystemStatePhase,
-  RAFT_ROLE,
-  RPCClient,
-  ReplicaHandlerSetup,
-  ReplicaStatus,
-  RuntimeServiceHandlerSetup,
-  SERVICE_DESCRIPTOR_FIELD,
-  SERVICE_LIFECYCLE_STATE,
-  SERVICE_STATUS,
-  SERVICE_TYPE,
-  SQLQueryEngine,
   STARTUP_JOIN_MODE,
-  STATE,
   STORAGE_DEFAULT,
-  STRING,
-  StartupPipelineRunner,
   StartupRuntimeHandoffOwner,
   StartupRuntimeSurfaceOwner,
   StartupServiceLifecycleOwner,
   TABLES,
-  TIME_MS,
   TYPEOF,
   TablePolicyService,
-  UNIFIED_SERVICE_TYPE,
-  WORK_CLASS,
   WaitForLeadershipPhase,
   WorkClassScheduler,
   _deriveWsAddressFromNodeAddress,
   _formatLeaderMetadataDetails,
   _parseBootstrapError,
   _resolveSeedContactRetryAfterMs,
-  activateMessageGroupServiceRows,
-  activatePartitionServiceRows,
-  activateSteadyStateRuntimeHandoff,
   assertCritical,
-  assertJoinPlanSegments,
   assertRequiredControlPlaneRollout,
-  buildControlPlaneWorkloadProfile,
-  buildDurableRejoinPartitionRestorePlans,
-  buildNodeStateUpdateDeliveryError,
-  buildNodeStateUpdatePublicationDiagnostics,
-  buildNodeStateUpdatePublicationFailureAction,
-  buildNodeStateUpdatePublicationFailureError,
-  buildNodeStateUpdatePublicationOutcome,
-  buildOwnerContractOutcome,
-  buildPartitionCdcPropagationSubscriber,
-  canonicalizeSystemTableRow,
-  classifyTransportDeliveryOutcome,
-  compareJoinSchemaVersions,
-  createJoinStartupPlan,
   createJoiningPhaseOwners,
-  createNodeStateUpdateDeferredPublicationState,
   createRuntimeStartupWiring,
-  extractJoinSchemaVersionFromRecord,
-  formatReplicatedServiceAddress,
-  getControlPlaneErrorCode,
-  getControlPlaneErrorMessage,
-  getControlPlaneMessageRequiredTables,
-  getControlPlaneNodeStatePublicationProfile,
-  getControlPlaneRetryAfterMs,
-  getSystemCachePrimaryKeyFieldOrFallback,
-  isDeliveredTransportDeliveryOutcome,
-  isHeartbeatEscalatedControlPlaneNodeStatePublicationMode,
-  isRetryableControlPlaneError,
-  resolveCanonicalLeaderIdentitySnapshot,
-  resolveControlPlaneNodeStatePublicationMode,
   resolveMembershipJoinIntentType,
-  resolveReplayControlPlaneNodeStatePublicationMode,
-  shouldAttachPartitionCdcPropagation,
   uuidv4,
-  waitForLocalQueryTransportReadiness,
-  waitForMetadataPublicationReadiness,
-  wireMigrationWorkflowOwners,
 } = NODE_JOINING_SERVICE_SHARED;
 
 class NodeJoiningServiceSegment1 extends EventEmitter {
   constructor(options = {}) {
     super();
-    const explicitDataDirProvided =
-      Object.prototype.hasOwnProperty.call(options, 'dataDir');
+    const explicitDataDirProvided = Object.prototype.hasOwnProperty.call(
+      options,
+      'dataDir',
+    );
     this.rolloutControls = assertRequiredControlPlaneRollout({
       owner: NODE_JOINING_SERVICE_LITERAL.NODEJOININGSERVICE,
       controls: options.rolloutControls,
@@ -171,25 +75,25 @@ class NodeJoiningServiceSegment1 extends EventEmitter {
     this.seedNodeId = null; // Allow explicit 0 to mean "do not start a WebSocket server" (useful in tests/sandboxes).
     this.wsPort = options.wsPort ?? null;
     this.dataDir = options.dataDir || STORAGE_DEFAULT.DATA_DIR;
-    this.config = { ...JOINING_DEFAULT, ...options.config };
+    this.config = {...JOINING_DEFAULT, ...options.config};
     this.config.replicaStaggerDelayMs = Number.isFinite(
       this.config.replicaStaggerDelayMs,
-    )
-      ? Math.max(NUM.ZERO, this.config.replicaStaggerDelayMs)
-      : JOINING_DEFAULT.replicaStaggerDelayMs;
+    ) ?
+      Math.max(NUM.ZERO, this.config.replicaStaggerDelayMs) :
+      JOINING_DEFAULT.replicaStaggerDelayMs;
     this.config.heartbeatIntervalMs = Number.isFinite(
       this.config.heartbeatIntervalMs,
-    )
-      ? Math.max(NUM.HUNDRED, this.config.heartbeatIntervalMs)
-      : JOINING_DEFAULT.heartbeatIntervalMs;
+    ) ?
+      Math.max(NUM.HUNDRED, this.config.heartbeatIntervalMs) :
+      JOINING_DEFAULT.heartbeatIntervalMs;
     this.config.leadershipWaitJitterRatio = Number.isFinite(
       this.config.leadershipWaitJitterRatio,
-    )
-      ? Math.min(
-          NUM.ONE,
-          Math.max(NUM.ZERO, this.config.leadershipWaitJitterRatio),
-        )
-      : JOINING_DEFAULT.leadershipWaitJitterRatio;
+    ) ?
+      Math.min(
+        NUM.ONE,
+        Math.max(NUM.ZERO, this.config.leadershipWaitJitterRatio),
+      ) :
+      JOINING_DEFAULT.leadershipWaitJitterRatio;
     this.workClassScheduler =
       options.workClassScheduler || new WorkClassScheduler();
     this.random =
@@ -197,9 +101,9 @@ class NodeJoiningServiceSegment1 extends EventEmitter {
     this.now =
       typeof options.now === TYPEOF.FUNCTION ? options.now : () => Date.now();
     this.sleep =
-      typeof options.sleep === TYPEOF.FUNCTION
-        ? options.sleep
-        : (delayMs) => new Promise((resolve) => setTimeout(resolve, delayMs));
+      typeof options.sleep === TYPEOF.FUNCTION ?
+        options.sleep :
+        (delayMs) => new Promise((resolve) => setTimeout(resolve, delayMs));
     this.joinSessionIdProvided =
       typeof options.joinSessionId === TYPEOF.STRING &&
       options.joinSessionId.length > NUM.ZERO;
@@ -207,56 +111,54 @@ class NodeJoiningServiceSegment1 extends EventEmitter {
       options.joinSessionId :
       uuidv4();
     const defaultJoinSessionStore =
-      options.joinSessionStore instanceof JoinSessionStore
-        ? options.joinSessionStore
-        : new JoinSessionStore({
-            now: this.now,
-            dataDir: explicitDataDirProvided ?
-              this.dataDir :
-              null,
-          });
+      options.joinSessionStore instanceof JoinSessionStore ?
+        options.joinSessionStore :
+        new JoinSessionStore({
+          now: this.now,
+          dataDir: explicitDataDirProvided ? this.dataDir : null,
+        });
     this.joinCoordinator =
-      options.joinCoordinator instanceof JoinCoordinator
-        ? options.joinCoordinator
-        : new JoinCoordinator({ joinSessionStore: defaultJoinSessionStore });
+      options.joinCoordinator instanceof JoinCoordinator ?
+        options.joinCoordinator :
+        new JoinCoordinator({joinSessionStore: defaultJoinSessionStore});
     this.onLocalAdminRuntimeReady =
-      typeof options.onLocalAdminRuntimeReady === TYPEOF.FUNCTION
-        ? options.onLocalAdminRuntimeReady
-        : null;
+      typeof options.onLocalAdminRuntimeReady === TYPEOF.FUNCTION ?
+        options.onLocalAdminRuntimeReady :
+        null;
     this.localAdminRuntimeReadyNotified = false;
     this.joinSessionStore = this.joinCoordinator.joinSessionStore;
     this.joinReadinessSnapshotProvider =
-      typeof options.joinReadinessSnapshotProvider === TYPEOF.FUNCTION
-        ? options.joinReadinessSnapshotProvider
-        : null;
+      typeof options.joinReadinessSnapshotProvider === TYPEOF.FUNCTION ?
+        options.joinReadinessSnapshotProvider :
+        null;
     this.bootstrapReadinessState = options.readinessState || null;
     this.startupMode =
       typeof options.startupMode === TYPEOF.STRING &&
-      options.startupMode.length > NUM.ZERO
-        ? options.startupMode
-        : STARTUP_JOIN_MODE.FRESH_JOIN;
+      options.startupMode.length > NUM.ZERO ?
+        options.startupMode :
+        STARTUP_JOIN_MODE.FRESH_JOIN;
     this.clusterIncarnationFence =
       options.clusterIncarnationFence &&
-        typeof options.clusterIncarnationFence === TYPEOF.OBJECT ?
+      typeof options.clusterIncarnationFence === TYPEOF.OBJECT ?
         options.clusterIncarnationFence :
         null;
     this.membershipLifecycleController =
       options.membershipLifecycleController &&
       typeof options.membershipLifecycleController.submitJoinIntent ===
-        TYPEOF.FUNCTION
-        ? options.membershipLifecycleController
-        : new MembershipLifecycleController({
-            nodeId: this.nodeId,
-            startupMode: this.startupMode,
-            now: this.now,
-          }); // Allow tests to bypass real network I/O by providing an in-process HTTP POST.
+        TYPEOF.FUNCTION ?
+        options.membershipLifecycleController :
+        new MembershipLifecycleController({
+          nodeId: this.nodeId,
+          startupMode: this.startupMode,
+          now: this.now,
+        }); // Allow tests to bypass real network I/O by providing an in-process HTTP POST.
     this.httpPostImpl =
-      typeof options.httpPost === TYPEOF.FUNCTION
-        ? options.httpPost
-        : this.httpPost.bind(this); // Services created during joining
+      typeof options.httpPost === TYPEOF.FUNCTION ?
+        options.httpPost :
+        this.httpPost.bind(this); // Services created during joining
     this.messageGroupServices = new Map();
     this.messageGroupSelectionOwner = new BootstrapMessageGroupSelectionOwner({
-      delegates: { getMessageGroupServices: () => this.messageGroupServices },
+      delegates: {getMessageGroupServices: () => this.messageGroupServices},
     });
     this.partitionServices = new Map();
     this.transport = null; // MessageRouter for unified local/remote message routing
@@ -321,9 +223,11 @@ class NodeJoiningServiceSegment1 extends EventEmitter {
         return self.tablePolicyService;
       },
       getSqlQueryEngine() {
-        return self.sqlQueryEngine ||
+        return (
+          self.sqlQueryEngine ||
           self.cdcIntegrationService?.sqlQueryEngine ||
-          null;
+          null
+        );
       },
       get latencyTopology() {
         return self.latencyTopology;
@@ -369,23 +273,23 @@ class NodeJoiningServiceSegment1 extends EventEmitter {
     this.bootstrapTopologySnapshotMeta = null;
     this.bootstrapTopologySnapshotHydratedAtMs = null;
     this.durableRejoinRestoreState =
-      this.startupMode === STARTUP_JOIN_MODE.DURABLE_REJOIN
-        ? JOIN_REJOIN_PROMOTION_RESTORE_STATE.PENDING
-        : JOIN_REJOIN_PROMOTION_RESTORE_STATE.NOT_APPLICABLE; // Track CDC subscription status
+      this.startupMode === STARTUP_JOIN_MODE.DURABLE_REJOIN ?
+        JOIN_REJOIN_PROMOTION_RESTORE_STATE.PENDING :
+        JOIN_REJOIN_PROMOTION_RESTORE_STATE.NOT_APPLICABLE; // Track CDC subscription status
     this.cdcSubscriptionsActive = false;
     this.messageGroupServiceHandler = null;
     this.controlPlaneKernelIngress =
-      options.controlPlaneKernelIngress instanceof ControlPlaneKernelIngress
-        ? options.controlPlaneKernelIngress
-        : new ControlPlaneKernelIngress({
-            nodeId: this.nodeId,
-            getBootstrapResponse: () => this.bootstrapResponse,
-            getSeedNodeId: () => this.seedNodeId,
-            getMessageRouter: () => this.messageRouter,
-            getMessageGroupServices: () => this.messageGroupServices,
-            getSqlQueryEngine: () =>
-              this.cdcIntegrationService?.sqlQueryEngine || null,
-          });
+      options.controlPlaneKernelIngress instanceof ControlPlaneKernelIngress ?
+        options.controlPlaneKernelIngress :
+        new ControlPlaneKernelIngress({
+          nodeId: this.nodeId,
+          getBootstrapResponse: () => this.bootstrapResponse,
+          getSeedNodeId: () => this.seedNodeId,
+          getMessageRouter: () => this.messageRouter,
+          getMessageGroupServices: () => this.messageGroupServices,
+          getSqlQueryEngine: () =>
+            this.cdcIntegrationService?.sqlQueryEngine || null,
+        });
     this.nodeStatePublicationOwner = new NodeStatePublicationOwner({
       nodeId: this.nodeId,
       nodeAddress: this.nodeAddress,
@@ -399,11 +303,11 @@ class NodeJoiningServiceSegment1 extends EventEmitter {
         getControlPlaneKernelIngress: () => this.controlPlaneKernelIngress,
         resolveLegacyTargetCandidates: (publicationOptions = {}) =>
           typeof this.resolveControlPlaneTargetAddressCandidates ===
-          TYPEOF.FUNCTION
-            ? this.resolveControlPlaneTargetAddressCandidates(
-                publicationOptions,
-              )
-            : [],
+          TYPEOF.FUNCTION ?
+            this.resolveControlPlaneTargetAddressCandidates(
+              publicationOptions,
+            ) :
+            [],
         resolveNodeStateUpdateTimeoutMs: (publicationOptions = {}) =>
           this.resolveControlPlaneNodeStateUpdateTimeoutMs(publicationOptions),
         shouldReconnectClusterMesh: () =>
@@ -470,30 +374,29 @@ class NodeJoiningServiceSegment1 extends EventEmitter {
         publicationProfile,
       );
     this.resolveNodeStateUpdatePublicationRetryAfterMs = (error) =>
-      this.nodeStatePublicationOwner
-        .resolveNodeStateUpdatePublicationRetryAfterMs(error);
+      this.nodeStatePublicationOwner.resolveNodeStateUpdatePublicationRetryAfterMs(
+        error,
+      );
     this.clearDeferredNodeStateUpdatePublication = () =>
       this.nodeStatePublicationOwner.clearDeferredNodeStateUpdatePublication();
     this.buildDeferredNodeStateUpdatePublicationOutcome = (
       deferredPublication,
       nowMs,
     ) =>
-      this.nodeStatePublicationOwner
-        .buildDeferredNodeStateUpdatePublicationOutcome(
-          deferredPublication,
-          nowMs,
-        );
+      this.nodeStatePublicationOwner.buildDeferredNodeStateUpdatePublicationOutcome(
+        deferredPublication,
+        nowMs,
+      );
     this.resolveDeferredNodeStateUpdatePublicationOutcome = (
       message,
       publicationMode,
       publicationProfile,
     ) =>
-      this.nodeStatePublicationOwner
-        .resolveDeferredNodeStateUpdatePublicationOutcome(
-          message,
-          publicationMode,
-          publicationProfile,
-        );
+      this.nodeStatePublicationOwner.resolveDeferredNodeStateUpdatePublicationOutcome(
+        message,
+        publicationMode,
+        publicationProfile,
+      );
     this.deferNodeStateUpdatePublication = (publicationOptions = {}) =>
       this.nodeStatePublicationOwner.deferNodeStateUpdatePublication(
         publicationOptions,
@@ -508,6 +411,7 @@ class NodeJoiningServiceSegment1 extends EventEmitter {
       initialState: NodeState.STARTING,
     }); // Bootstrap response from seed node
     this.bootstrapResponse = null; // Joining state
+    this.seedContactStartupAuthority = null;
     this.phase = JoiningPhase.NOT_STARTED;
     this.startTime = null;
     this.phaseStartTime = null; // Logging
@@ -554,7 +458,7 @@ class NodeJoiningServiceSegment1 extends EventEmitter {
             .catch((error) => {
               this.logger.warn(
                 NODE_JOINING_SERVICE_LITERAL.DEFERRED_CREATE_SELF_HOSTED_MESSAGE_GROUP_METADATA_PUBLICATION_FAILED,
-                { nodeId: this.nodeId, error: error?.message || String(error) },
+                {nodeId: this.nodeId, error: error?.message || String(error)},
               );
             });
         },
@@ -572,7 +476,7 @@ class NodeJoiningServiceSegment1 extends EventEmitter {
         onControlPlaneBackgroundWritersActivated: () => {
           this.logger.info(
             JOINING_LOG_MSG.CONTROL_PLANE_BACKGROUND_WRITERS_ACTIVE,
-            { nodeId: this.nodeId },
+            {nodeId: this.nodeId},
           );
         },
       },
@@ -608,9 +512,9 @@ class NodeJoiningServiceSegment1 extends EventEmitter {
             this.bootstrapTopologySnapshotMeta ||
             this.bootstrapResponse?.topologySnapshotMeta ||
             null;
-          return Array.isArray(topologySnapshotMeta?.activeNodeIds)
-            ? topologySnapshotMeta.activeNodeIds
-            : [];
+          return Array.isArray(topologySnapshotMeta?.activeNodeIds) ?
+            topologySnapshotMeta.activeNodeIds :
+            [];
         },
         getBootstrapTopologySnapshotEpoch: () => {
           const topologySnapshotMeta =
@@ -656,6 +560,9 @@ class NodeJoiningServiceSegment1 extends EventEmitter {
         getBootstrapResponse: () => this.bootstrapResponse,
         setBootstrapResponse: (v) => {
           this.bootstrapResponse = v;
+        },
+        setSeedContactStartupAuthority: (v) => {
+          this.seedContactStartupAuthority = v || null;
         },
         getSeedNodeId: () => this.seedNodeId,
         setSeedNodeId: (v) => {
@@ -750,9 +657,9 @@ class NodeJoiningServiceSegment1 extends EventEmitter {
             value && typeof value === TYPEOF.OBJECT ? value : null;
         },
         setBootstrapTopologySnapshotHydratedAtMs: (value) => {
-          this.bootstrapTopologySnapshotHydratedAtMs = Number.isFinite(value)
-            ? value
-            : null;
+          this.bootstrapTopologySnapshotHydratedAtMs = Number.isFinite(value) ?
+            value :
+            null;
         },
         getLifecycleStateMachine: () => this.lifecycleStateMachine,
         getSeedNodeId: () => this.seedNodeId,
@@ -1126,9 +1033,9 @@ class NodeJoiningServiceSegment1 extends EventEmitter {
       }
     }
     const nodeService = NodeService.getInstance();
-    return nodeService?._readOnlyCache ||
-      nodeService?._systemTableCache ||
-      null;
+    return (
+      nodeService?._readOnlyCache || nodeService?._systemTableCache || null
+    );
   }
   /**
    * Readiness delegates for join bootstrap.
@@ -1238,4 +1145,4 @@ class NodeJoiningServiceSegment1 extends EventEmitter {
    */
 }
 
-export { NodeJoiningServiceSegment1 };
+export {NodeJoiningServiceSegment1};

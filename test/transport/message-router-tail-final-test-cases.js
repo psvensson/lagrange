@@ -1,13 +1,9 @@
 export async function registerMessageRouterTailFinalTests({
   t,
-  net,
-  EventEmitter,
   MessageRouter,
   ConnectionState,
-  RouterMessageType,
   ConfigurationManager,
   LoggingService,
-  initializeTestEnvironment,
   cleanupTestEnvironment,
 }) {
   t.test('delivery timeout override bounds ACK waits per call', async (t) => {

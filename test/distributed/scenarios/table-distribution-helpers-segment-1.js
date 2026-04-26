@@ -3,45 +3,40 @@
  * growth and replica spread.
  */
 
-import assert from "node:assert/strict";
 import {
-  resolvePartitionGrowthAndSpreadScenarioConfig,
-  resolveTableDistributionQueryConfig,
-} from "../harness/scenario-config.js";
-import { BENCHMARK_DEFAULTS, TIMEOUTS } from "../harness/constants.js";
+} from '../harness/scenario-config.js';
+import {BENCHMARK_DEFAULTS} from '../harness/constants.js';
 import {
   getControlPlaneRetryAfterMs,
   isRetryableControlPlaneError,
-} from "../../../src/control-plane/control-plane-error-classification.js";
-import { evaluatePartitionReplicaTopology } from "../../../src/admin/admin-shared-metadata-consistency.js";
+} from '../../../src/control-plane/control-plane-error-classification.js';
 import {
   BENCHMARK_PARTITION_DISPATCH_MODE,
-  buildBenchmarkConvergenceEvaluationSummaries,
   buildBenchmarkLoadAdmissionSnapshot,
   buildBenchmarkPartitionConvergenceSnapshot,
   isBenchmarkCriticalControlPlaneStable,
   resolveBenchmarkPartitionDispatchMode,
-} from "../harness/benchmark-partition-convergence.js";
-import { isStartupAdminReachabilityTransientError } from "../harness/startup-readiness-evidence.js";
-import { hasControlPlaneMutationRoutingGapFailureSignature } from "../../../src/control-plane/control-plane-mutation-readiness-constants.js";
+} from '../harness/benchmark-partition-convergence.js';
+import {isStartupAdminReachabilityTransientError} from '../harness/startup-readiness-evidence.js';
+import {hasControlPlaneMutationRoutingGapFailureSignature} from '../../../src/control-plane/control-plane-mutation-readiness-constants.js';
 import {
   CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE,
   isPendingControlPlaneSystemTableVisibilityState,
   normalizeControlPlaneSystemTableVisibilityState,
-} from "../../../src/control-plane/control-plane-system-table-visibility-constants.js";
+} from '../../../src/control-plane/control-plane-system-table-visibility-constants.js';
 import {
   OWNER_CONTRACT_STATE,
   normalizeOwnerContractNextAction,
   normalizeOwnerContractState,
-} from "../../../src/control-plane/owner-contract-outcome.js";
+} from '../../../src/control-plane/owner-contract-outcome.js';
 
-const TABLE_NAME_LOGS = "logs";
-const TABLE_NAME_BENCHMARK_EVENTS = "benchmark_events";
-const SERVICE_TYPE_PARTITION = "partition";
-const STATUS_ACTIVE = "active";
+const TABLE_NAME_LOGS = 'logs';
+const TABLE_NAME_BENCHMARK_EVENTS = 'benchmark_events';
+const SERVICE_TYPE_PARTITION = 'partition';
+const STATUS_ACTIVE = 'active';
 const ZERO = 0;
 const ONE = 1;
-const BENCHMARK_WORKLOAD_PROFILE = "benchmark_events_mixed";
+const BENCHMARK_WORKLOAD_PROFILE = 'benchmark_events_mixed';
 const IDENTIFIER_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const TABLE_ID_VISIBILITY_TIMEOUT_MS = 10000;
 const TABLE_BOOTSTRAP_TIMEOUT_MS = 30000;
@@ -53,34 +48,34 @@ const POLICY_APPLY_TIMEOUT_MS = 60000;
 const POLICY_APPLY_ATTEMPT_TIMEOUT_MS = 15000;
 const POLICY_VISIBILITY_POLL_INTERVAL_MS = 250;
 const POLICY_APPLY_RETRY_DELAY_MS = 250;
-const CONTROL_QUERY_LANE_CONTROL = "control";
-const CONTROL_QUERY_LANE_SNAPSHOT = "snapshot";
+const CONTROL_QUERY_LANE_CONTROL = 'control';
+const CONTROL_QUERY_LANE_SNAPSHOT = 'snapshot';
 const CONTROL_QUERY_PROGRESS_RETRY_DELAY_MS = 100;
 const CONTROL_QUERY_MIN_CANDIDATE_TIMEOUT_MS = 1000;
 const CONTROL_QUERY_MUTATION_FALLBACK_ERROR_FRAGMENTS = Object.freeze([
-  "failed to reconnect target node before delivery",
-  "socket is not open",
-  "websocket transport required but not available",
-  "channel closed",
+  'failed to reconnect target node before delivery',
+  'socket is not open',
+  'websocket transport required but not available',
+  'channel closed',
 ]);
 const CONTROL_QUERY_EXECUTION_MODE = Object.freeze({
-  READ_FANOUT: "read_fanout",
-  MUTATION_SINGLE_FLIGHT: "mutation_single_flight",
+  READ_FANOUT: 'read_fanout',
+  MUTATION_SINGLE_FLIGHT: 'mutation_single_flight',
 });
-const CONTROL_QUERY_OUTCOME_DEFERRED = "deferred";
-const TABLE_POLICY_PRECONDITION_SCENARIO_DEFAULT = "unknown-scenario";
+const CONTROL_QUERY_OUTCOME_DEFERRED = 'deferred';
+const TABLE_POLICY_PRECONDITION_SCENARIO_DEFAULT = 'unknown-scenario';
 const DEFAULT_BENCHMARK_READY_NODE_COUNT = 3;
 const PARTITIONING_LOAD_HEADROOM_RATIO = 0.5;
 const TABLE_DISTRIBUTION_TOPOLOGY_STALL_TIMEOUT_MS = 15000;
 const TABLE_BOOTSTRAP_PARTITION_VISIBILITY_MISSING =
-  "table_id_visible_without_partitions";
+  'table_id_visible_without_partitions';
 const TABLE_BOOTSTRAP_TOPOLOGY_NOT_ROUTABLE_PREFIX =
-  "table_distribution_not_routable";
+  'table_distribution_not_routable';
 const TABLE_BOOTSTRAP_VISIBILITY_STATE = Object.freeze({
-  NONE: "none",
-  TABLE_ID_VISIBLE: "table_id_visible",
-  PARTITIONS_VISIBLE: "partitions_visible",
-  ROUTABLE_DISTRIBUTION: "routable_distribution",
+  NONE: 'none',
+  TABLE_ID_VISIBLE: 'table_id_visible',
+  PARTITIONS_VISIBLE: 'partitions_visible',
+  ROUTABLE_DISTRIBUTION: 'routable_distribution',
 });
 const TABLE_BOOTSTRAP_VISIBILITY_STATE_ORDER = Object.freeze({
   [TABLE_BOOTSTRAP_VISIBILITY_STATE.NONE]: ZERO,
@@ -89,19 +84,19 @@ const TABLE_BOOTSTRAP_VISIBILITY_STATE_ORDER = Object.freeze({
   [TABLE_BOOTSTRAP_VISIBILITY_STATE.ROUTABLE_DISTRIBUTION]: 3,
 });
 const TABLE_BOOTSTRAP_VISIBILITY_STATE_LABEL = Object.freeze({
-  [TABLE_BOOTSTRAP_VISIBILITY_STATE.NONE]: "benchmark table visibility",
-  [TABLE_BOOTSTRAP_VISIBILITY_STATE.TABLE_ID_VISIBLE]: "table_id visibility",
+  [TABLE_BOOTSTRAP_VISIBILITY_STATE.NONE]: 'benchmark table visibility',
+  [TABLE_BOOTSTRAP_VISIBILITY_STATE.TABLE_ID_VISIBLE]: 'table_id visibility',
   [TABLE_BOOTSTRAP_VISIBILITY_STATE.PARTITIONS_VISIBLE]:
-    "table partition visibility",
+    'table partition visibility',
   [TABLE_BOOTSTRAP_VISIBILITY_STATE.ROUTABLE_DISTRIBUTION]:
-    "routable table distribution visibility",
+    'routable table distribution visibility',
 });
-const TOPOLOGY_STATE_ROUTABLE = "routable";
-const TOPOLOGY_STATE_OPAQUE = "opaque";
-const TOPOLOGY_STATE_INVALID = "invalid";
-const TOPOLOGY_REASON_LEADER_SERVICE_MISSING = "leader_service_missing";
-const TOPOLOGY_REASON_ABOVE_TARGET_REPLICA_COUNT = "above_target_replica_count";
-const RAFT_ROLE_LEADER = "leader";
+const TOPOLOGY_STATE_ROUTABLE = 'routable';
+const TOPOLOGY_STATE_OPAQUE = 'opaque';
+const TOPOLOGY_STATE_INVALID = 'invalid';
+const TOPOLOGY_REASON_LEADER_SERVICE_MISSING = 'leader_service_missing';
+const TOPOLOGY_REASON_ABOVE_TARGET_REPLICA_COUNT = 'above_target_replica_count';
+const RAFT_ROLE_LEADER = 'leader';
 const PARTITIONING_ADAPTIVE_DISPATCH_GUARDRAIL = Object.freeze({
   enabled: true,
   pressureSignalThreshold: 2,
@@ -120,50 +115,50 @@ const DEFAULT_TABLE_SPLIT_POLICIES = Object.freeze({
 });
 
 const SQL_SELECT_TABLE_PARTITIONS_PREFIX =
-  "SELECT partition_id, replica_count, leader_node_id FROM partitions WHERE table_name = '";
-const SQL_SELECT_TABLE_PARTITIONS_SUFFIX = "'";
+  'SELECT partition_id, replica_count, leader_node_id FROM partitions WHERE table_name = \'';
+const SQL_SELECT_TABLE_PARTITIONS_SUFFIX = '\'';
 const SQL_SELECT_TABLE_ID_PREFIX =
-  "SELECT table_id FROM tables WHERE table_name = '";
-const SQL_SELECT_TABLE_ID_SUFFIX = "'";
+  'SELECT table_id FROM tables WHERE table_name = \'';
+const SQL_SELECT_TABLE_ID_SUFFIX = '\'';
 const SQL_SELECT_TABLE_POLICIES_BY_TABLE_ID_PREFIX =
-  "SELECT table_policies FROM tables WHERE table_id = '";
-const SQL_SELECT_TABLE_POLICIES_BY_TABLE_ID_SUFFIX = "'";
+  'SELECT table_policies FROM tables WHERE table_id = \'';
+const SQL_SELECT_TABLE_POLICIES_BY_TABLE_ID_SUFFIX = '\'';
 const SQL_SELECT_TABLE_POLICIES_BY_TABLE_NAME_PREFIX =
-  "SELECT table_policies FROM tables WHERE table_name = '";
-const SQL_SELECT_TABLE_POLICIES_BY_TABLE_NAME_SUFFIX = "'";
+  'SELECT table_policies FROM tables WHERE table_name = \'';
+const SQL_SELECT_TABLE_POLICIES_BY_TABLE_NAME_SUFFIX = '\'';
 const SQL_SELECT_PARTITIONS_BY_TABLE_ID_PREFIX =
-  "SELECT partition_id, replica_count, leader_node_id FROM partitions WHERE table_id = '";
-const SQL_SELECT_PARTITIONS_BY_TABLE_ID_SUFFIX = "'";
-const SQL_CREATE_TABLE_PREFIX = "CREATE TABLE IF NOT EXISTS ";
+  'SELECT partition_id, replica_count, leader_node_id FROM partitions WHERE table_id = \'';
+const SQL_SELECT_PARTITIONS_BY_TABLE_ID_SUFFIX = '\'';
+const SQL_CREATE_TABLE_PREFIX = 'CREATE TABLE IF NOT EXISTS ';
 const SQL_CREATE_TABLE_SUFFIX =
-  " (event_id TEXT PRIMARY KEY, payload INTEGER NOT NULL, created_at INTEGER NOT NULL)";
-const SQL_UPDATE_TABLE_POLICIES_PREFIX = "UPDATE tables SET table_policies = '";
-const SQL_UPDATE_TABLE_POLICIES_MID = "' WHERE table_id = '";
-const SQL_UPDATE_TABLE_POLICIES_SUFFIX = "'";
-const SQL_CONTROL_SNAPSHOT = "SELECT * FROM control_snapshot_local()";
+  ' (event_id TEXT PRIMARY KEY, payload INTEGER NOT NULL, created_at INTEGER NOT NULL)';
+const SQL_UPDATE_TABLE_POLICIES_PREFIX = 'UPDATE tables SET table_policies = \'';
+const SQL_UPDATE_TABLE_POLICIES_MID = '\' WHERE table_id = \'';
+const SQL_UPDATE_TABLE_POLICIES_SUFFIX = '\'';
+const SQL_CONTROL_SNAPSHOT = 'SELECT * FROM control_snapshot_local()';
 const SQL_CONTROL_SNAPSHOT_FORCE_REPAIR =
-  "SELECT * FROM control_snapshot_local(true)";
+  'SELECT * FROM control_snapshot_local(true)';
 const SQL_SELECT_ACTIVE_PARTITION_SERVICES_PREFIX =
-  "SELECT partition_id, node_id, status, raft_role FROM services " +
-  "WHERE service_type = '" +
+  'SELECT partition_id, node_id, status, raft_role FROM services ' +
+  'WHERE service_type = \'' +
   SERVICE_TYPE_PARTITION +
-  "' " +
-  "AND status = '" +
+  '\' ' +
+  'AND status = \'' +
   STATUS_ACTIVE +
-  "'";
+  '\'';
 
 const TIMEOUT_ERROR_PATTERN = /timeout|timed out|deadline exceeded|etimedout/i;
-const TABLE_DISTRIBUTION_OBSERVATION_STATE_OBSERVED = "observed";
-const TABLE_DISTRIBUTION_OBSERVATION_STATE_DEFERRED = "deferred";
-const TABLE_DISTRIBUTION_OBSERVATION_STATE_UNAVAILABLE = "unavailable";
-const TABLE_DISTRIBUTION_OBSERVATION_SIGNATURE_DEFERRED = "query:deferred";
+const TABLE_DISTRIBUTION_OBSERVATION_STATE_OBSERVED = 'observed';
+const TABLE_DISTRIBUTION_OBSERVATION_STATE_DEFERRED = 'deferred';
+const TABLE_DISTRIBUTION_OBSERVATION_STATE_UNAVAILABLE = 'unavailable';
+const TABLE_DISTRIBUTION_OBSERVATION_SIGNATURE_DEFERRED = 'query:deferred';
 const TABLE_DISTRIBUTION_OBSERVATION_SIGNATURE_UNAVAILABLE =
-  "query:unavailable";
-const CONTROL_SNAPSHOT_OBSERVATION_FIELD = "snapshotObservation";
-const CONTROL_SNAPSHOT_OBSERVATION_STATE_FIELD = "state";
-const CONTROL_SNAPSHOT_OBSERVATION_CONTRACT_STATE_FIELD = "contractState";
-const CONTROL_SNAPSHOT_OBSERVATION_STATE_FAILED = "failed";
-const CONTROL_SNAPSHOT_OBSERVATION_CONTRACT_STATE_FAILED = "failed";
+  'query:unavailable';
+const CONTROL_SNAPSHOT_OBSERVATION_FIELD = 'snapshotObservation';
+const CONTROL_SNAPSHOT_OBSERVATION_STATE_FIELD = 'state';
+const CONTROL_SNAPSHOT_OBSERVATION_CONTRACT_STATE_FIELD = 'contractState';
+const CONTROL_SNAPSHOT_OBSERVATION_STATE_FAILED = 'failed';
+const CONTROL_SNAPSHOT_OBSERVATION_CONTRACT_STATE_FAILED = 'failed';
 
 /**
  * Sleep helper for polling loops.
@@ -178,36 +173,36 @@ function sleep(delayMs) {
 
 function mapNodeIds(nodes) {
   return (Array.isArray(nodes) ? nodes : [])
-    .map((node) => String(node?.id || ""))
+    .map((node) => String(node?.id || ''))
     .filter((nodeId) => nodeId.length > ZERO);
 }
 
 function normalizePlannerObservationReasonCodes(reasonCodes) {
-  return Array.isArray(reasonCodes)
-    ? [
-        ...new Set(
-          reasonCodes
-            .map((reasonCode) => String(reasonCode || "").trim())
-            .filter((reasonCode) => reasonCode.length > ZERO),
-        ),
-      ]
-    : [];
+  return Array.isArray(reasonCodes) ?
+    [
+      ...new Set(
+        reasonCodes
+          .map((reasonCode) => String(reasonCode || '').trim())
+          .filter((reasonCode) => reasonCode.length > ZERO),
+      ),
+    ] :
+    [];
 }
 
 function resolveTableDistributionObservationState(error) {
   return isRetryableControlPlaneProgressError(error) ||
-    isTimeoutShapedError(error)
-    ? TABLE_DISTRIBUTION_OBSERVATION_STATE_DEFERRED
-    : TABLE_DISTRIBUTION_OBSERVATION_STATE_UNAVAILABLE;
+    isTimeoutShapedError(error) ?
+    TABLE_DISTRIBUTION_OBSERVATION_STATE_DEFERRED :
+    TABLE_DISTRIBUTION_OBSERVATION_STATE_UNAVAILABLE;
 }
 
 function buildTableDistributionObservationReasonCodes(error) {
   return normalizePlannerObservationReasonCodes(
-    Array.isArray(error?.reasonCodes)
-      ? error.reasonCodes
-      : typeof error?.reasonCode === "string"
-        ? [error.reasonCode]
-        : [],
+    Array.isArray(error?.reasonCodes) ?
+      error.reasonCodes :
+      typeof error?.reasonCode === 'string' ?
+        [error.reasonCode] :
+        [],
   );
 }
 
@@ -216,14 +211,14 @@ function extractControlSnapshotObservation(result = null) {
   const firstRow =
     rows.length > ZERO &&
     rows[ZERO] &&
-    typeof rows[ZERO] === "object" &&
-    !Array.isArray(rows[ZERO])
-      ? rows[ZERO]
-      : null;
+    typeof rows[ZERO] === 'object' &&
+    !Array.isArray(rows[ZERO]) ?
+      rows[ZERO] :
+      null;
   const observation = firstRow?.[CONTROL_SNAPSHOT_OBSERVATION_FIELD];
   if (
     !observation ||
-    typeof observation !== "object" ||
+    typeof observation !== 'object' ||
     Array.isArray(observation)
   ) {
     return null;
@@ -237,12 +232,12 @@ function shouldFallbackToForcedControlSnapshot(result = null) {
     return true;
   }
   const observationState = String(
-    observation[CONTROL_SNAPSHOT_OBSERVATION_STATE_FIELD] || "",
+    observation[CONTROL_SNAPSHOT_OBSERVATION_STATE_FIELD] || '',
   )
     .trim()
     .toLowerCase();
   const contractState = String(
-    observation[CONTROL_SNAPSHOT_OBSERVATION_CONTRACT_STATE_FIELD] || "",
+    observation[CONTROL_SNAPSHOT_OBSERVATION_CONTRACT_STATE_FIELD] || '',
   )
     .trim()
     .toLowerCase();
@@ -253,7 +248,7 @@ function shouldFallbackToForcedControlSnapshot(result = null) {
 }
 
 function cloneCriticalControlPlaneStabilitySnapshot(snapshot) {
-  if (!snapshot || typeof snapshot !== "object") {
+  if (!snapshot || typeof snapshot !== 'object') {
     return null;
   }
   return {
@@ -270,13 +265,13 @@ function cloneCriticalControlPlaneStabilitySnapshot(snapshot) {
     ),
     controlPlaneOwnerQueueDepth:
       snapshot.controlPlaneOwnerQueueDepth &&
-      typeof snapshot.controlPlaneOwnerQueueDepth === "object"
-        ? { ...snapshot.controlPlaneOwnerQueueDepth }
-        : null,
+      typeof snapshot.controlPlaneOwnerQueueDepth === 'object' ?
+        {...snapshot.controlPlaneOwnerQueueDepth} :
+        null,
     cdcReplayLag:
-      snapshot.cdcReplayLag && typeof snapshot.cdcReplayLag === "object"
-        ? { ...snapshot.cdcReplayLag }
-        : null,
+      snapshot.cdcReplayLag && typeof snapshot.cdcReplayLag === 'object' ?
+        {...snapshot.cdcReplayLag} :
+        null,
   };
 }
 
@@ -289,58 +284,58 @@ function buildPartitioningPlannerDiagnostics(options = {}) {
     readyReplicaNodeCount: mapNodeIds(options.readyReplicaNodes).length,
     readyReplicaNodeIds: mapNodeIds(options.readyReplicaNodes),
     replicaBearingNodeCount: Number(options.replicaBearingNodeCount || ZERO),
-    replicaBearingNodeIds: Array.isArray(options.replicaBearingNodeIds)
-      ? options.replicaBearingNodeIds.map((nodeId) => String(nodeId)).sort()
-      : [],
+    replicaBearingNodeIds: Array.isArray(options.replicaBearingNodeIds) ?
+      options.replicaBearingNodeIds.map((nodeId) => String(nodeId)).sort() :
+      [],
     partitionCount: Number(options.partitionCount || ZERO),
     readinessReasonHistogram:
       options.readinessReasonHistogram &&
-      typeof options.readinessReasonHistogram === "object"
-        ? { ...options.readinessReasonHistogram }
-        : null,
+      typeof options.readinessReasonHistogram === 'object' ?
+        {...options.readinessReasonHistogram} :
+        null,
     convergenceStateHistogram:
       options.convergenceStateHistogram &&
-      typeof options.convergenceStateHistogram === "object"
-        ? { ...options.convergenceStateHistogram }
-        : null,
+      typeof options.convergenceStateHistogram === 'object' ?
+        {...options.convergenceStateHistogram} :
+        null,
     localPrimaryNodeCount: mapNodeIds(options.localPrimaryNodes).length,
     localPrimaryNodeIds: mapNodeIds(options.localPrimaryNodes),
     routedSupportNodeCount: mapNodeIds(options.routedSupportNodes).length,
     routedSupportNodeIds: mapNodeIds(options.routedSupportNodes),
     dispatchContributionHistogram:
       options.dispatchContributionHistogram &&
-      typeof options.dispatchContributionHistogram === "object"
-        ? { ...options.dispatchContributionHistogram }
-        : null,
+      typeof options.dispatchContributionHistogram === 'object' ?
+        {...options.dispatchContributionHistogram} :
+        null,
     degradationStateHistogram:
       options.degradationStateHistogram &&
-      typeof options.degradationStateHistogram === "object"
-        ? { ...options.degradationStateHistogram }
-        : null,
+      typeof options.degradationStateHistogram === 'object' ?
+        {...options.degradationStateHistogram} :
+        null,
     selectionObservationState:
-      typeof options.selectionObservationState === "string" &&
-      options.selectionObservationState.length > ZERO
-        ? options.selectionObservationState
-        : TABLE_DISTRIBUTION_OBSERVATION_STATE_OBSERVED,
+      typeof options.selectionObservationState === 'string' &&
+      options.selectionObservationState.length > ZERO ?
+        options.selectionObservationState :
+        TABLE_DISTRIBUTION_OBSERVATION_STATE_OBSERVED,
     selectionObservationRetryAfterMs:
       Number.isFinite(options.selectionObservationRetryAfterMs) &&
-      options.selectionObservationRetryAfterMs > ZERO
-        ? Math.floor(options.selectionObservationRetryAfterMs)
-        : ZERO,
+      options.selectionObservationRetryAfterMs > ZERO ?
+        Math.floor(options.selectionObservationRetryAfterMs) :
+        ZERO,
     selectionObservationError:
-      typeof options.selectionObservationError === "string" &&
-      options.selectionObservationError.length > ZERO
-        ? options.selectionObservationError
-        : null,
+      typeof options.selectionObservationError === 'string' &&
+      options.selectionObservationError.length > ZERO ?
+        options.selectionObservationError :
+        null,
     selectionObservationReasonCodes: normalizePlannerObservationReasonCodes(
       options.selectionObservationReasonCodes,
     ),
     criticalControlPlaneStability: cloneCriticalControlPlaneStabilitySnapshot(
       options.criticalControlPlaneStability,
     ),
-    convergenceEvaluations: Array.isArray(options.convergenceEvaluations)
-      ? options.convergenceEvaluations.map((evaluation) => ({ ...evaluation }))
-      : [],
+    convergenceEvaluations: Array.isArray(options.convergenceEvaluations) ?
+      options.convergenceEvaluations.map((evaluation) => ({...evaluation})) :
+      [],
   };
 }
 
@@ -351,34 +346,34 @@ function buildPartitioningPlannerTimeoutError(message, diagnostics) {
   );
   const observationRetryAfterMs =
     Number.isFinite(diagnostics?.selectionObservationRetryAfterMs) &&
-    diagnostics.selectionObservationRetryAfterMs > ZERO
-      ? Math.floor(diagnostics.selectionObservationRetryAfterMs)
-      : ZERO;
+    diagnostics.selectionObservationRetryAfterMs > ZERO ?
+      Math.floor(diagnostics.selectionObservationRetryAfterMs) :
+      ZERO;
   const observationError =
-    typeof diagnostics?.selectionObservationError === "string"
-      ? diagnostics.selectionObservationError
-      : "none";
+    typeof diagnostics?.selectionObservationError === 'string' ?
+      diagnostics.selectionObservationError :
+      'none';
   const criticalControlPlaneState =
-    typeof diagnostics?.criticalControlPlaneStability?.state === "string"
-      ? diagnostics.criticalControlPlaneStability.state
-      : "none";
+    typeof diagnostics?.criticalControlPlaneStability?.state === 'string' ?
+      diagnostics.criticalControlPlaneStability.state :
+      'none';
   const criticalControlPlaneReasons = normalizePlannerObservationReasonCodes(
     diagnostics?.criticalControlPlaneStability?.reasonCodes,
   );
   const error = new Error(
     message +
-      "; lastSelectionObservationState=" +
+      '; lastSelectionObservationState=' +
       observationState +
-      "; lastSelectionObservationRetryAfterMs=" +
+      '; lastSelectionObservationRetryAfterMs=' +
       observationRetryAfterMs +
-      "; lastSelectionObservationError=" +
+      '; lastSelectionObservationError=' +
       observationError +
-      "; lastCriticalControlPlaneState=" +
+      '; lastCriticalControlPlaneState=' +
       criticalControlPlaneState +
-      "; lastCriticalControlPlaneReasons=" +
-      (criticalControlPlaneReasons.length > ZERO
-        ? criticalControlPlaneReasons.join(",")
-        : "none"),
+      '; lastCriticalControlPlaneReasons=' +
+      (criticalControlPlaneReasons.length > ZERO ?
+        criticalControlPlaneReasons.join(',') :
+        'none'),
   );
   error.diagnostics = {
     partitioningPlanner: diagnostics,
@@ -388,9 +383,9 @@ function buildPartitioningPlannerTimeoutError(message, diagnostics) {
 
 function buildPartitioningDispatchPlannerDiagnostics(selected, dispatchNodes) {
   const baseDiagnostics =
-    selected?.diagnostics && typeof selected.diagnostics === "object"
-      ? selected.diagnostics
-      : {};
+    selected?.diagnostics && typeof selected.diagnostics === 'object' ?
+      selected.diagnostics :
+      {};
   return buildPartitioningPlannerDiagnostics({
     selectedNodes: dispatchNodes,
     admissionReadyNodes: selected?.admissionReadyNodes,
@@ -418,12 +413,12 @@ function buildPartitioningDispatchPlannerDiagnostics(selected, dispatchNodes) {
 }
 
 function resolvePartitioningPlannerDiagnosticsSnapshot(resolver) {
-  if (typeof resolver !== "function") {
+  if (typeof resolver !== 'function') {
     return null;
   }
   try {
     const diagnostics = resolver();
-    return diagnostics && typeof diagnostics === "object" ? diagnostics : null;
+    return diagnostics && typeof diagnostics === 'object' ? diagnostics : null;
   } catch (_error) {
     return null;
   }
@@ -441,16 +436,16 @@ function buildDeferredTableDistributionSnapshot(tableName, error) {
     serviceCount: ZERO,
     topologyState: TOPOLOGY_STATE_OPAQUE,
     topologySignature:
-      observationState === TABLE_DISTRIBUTION_OBSERVATION_STATE_DEFERRED
-        ? TABLE_DISTRIBUTION_OBSERVATION_SIGNATURE_DEFERRED
-        : TABLE_DISTRIBUTION_OBSERVATION_SIGNATURE_UNAVAILABLE,
+      observationState === TABLE_DISTRIBUTION_OBSERVATION_STATE_DEFERRED ?
+        TABLE_DISTRIBUTION_OBSERVATION_SIGNATURE_DEFERRED :
+        TABLE_DISTRIBUTION_OBSERVATION_SIGNATURE_UNAVAILABLE,
     opaquePartitionCount: ZERO,
     invalidPartitionCount: ZERO,
     leaderServiceMissingPartitionCount: ZERO,
     overReplicatedPartitionCount: ZERO,
     observationState,
     observationRetryAfterMs: Math.max(ZERO, getControlPlaneRetryAfterMs(error)),
-    observationError: String(error?.message || error || ""),
+    observationError: String(error?.message || error || ''),
     observationReasonCodes: buildTableDistributionObservationReasonCodes(error),
   };
 }
@@ -466,16 +461,16 @@ function buildPartitioningPlannerDiagnosticsFromPreviousState(
   error,
 ) {
   const previousDiagnostics =
-    diagnostics && typeof diagnostics === "object" ? diagnostics : {};
+    diagnostics && typeof diagnostics === 'object' ? diagnostics : {};
   return buildPartitioningPlannerDiagnostics({
     selectedNodes,
     admissionReadyNodes,
     readyReplicaNodes,
     replicaBearingNodeCount: Number(distribution?.replicaNodeCount || ZERO),
     replicaBearingNodeIds:
-      distribution?.replicaNodeIds instanceof Set
-        ? Array.from(distribution.replicaNodeIds)
-        : [],
+      distribution?.replicaNodeIds instanceof Set ?
+        Array.from(distribution.replicaNodeIds) :
+        [],
     partitionCount: Number(distribution?.partitionCount || ZERO),
     readinessReasonHistogram: previousDiagnostics.readinessReasonHistogram,
     convergenceStateHistogram: previousDiagnostics.convergenceStateHistogram,
@@ -486,7 +481,7 @@ function buildPartitioningPlannerDiagnosticsFromPreviousState(
     degradationStateHistogram: previousDiagnostics.degradationStateHistogram,
     selectionObservationState: resolveTableDistributionObservationState(error),
     selectionObservationRetryAfterMs: getControlPlaneRetryAfterMs(error),
-    selectionObservationError: String(error?.message || error || ""),
+    selectionObservationError: String(error?.message || error || ''),
     selectionObservationReasonCodes:
       buildTableDistributionObservationReasonCodes(error),
     criticalControlPlaneStability:
@@ -496,14 +491,14 @@ function buildPartitioningPlannerDiagnosticsFromPreviousState(
 }
 
 function formatPlannerNodeIds(nodeIds) {
-  return Array.isArray(nodeIds)
-    ? nodeIds.map((nodeId) => String(nodeId)).join(",")
-    : "";
+  return Array.isArray(nodeIds) ?
+    nodeIds.map((nodeId) => String(nodeId)).join(',') :
+    '';
 }
 
 function formatPlannerHistogram(histogram) {
-  if (!histogram || typeof histogram !== "object") {
-    return "none";
+  if (!histogram || typeof histogram !== 'object') {
+    return 'none';
   }
   const entries = Object.entries(histogram)
     .map(([reason, count]) => [String(reason), Number(count)])
@@ -512,9 +507,9 @@ function formatPlannerHistogram(histogram) {
       leftReason.localeCompare(rightReason),
     );
   if (entries.length === ZERO) {
-    return "none";
+    return 'none';
   }
-  return entries.map(([reason, count]) => reason + ":" + count).join("|");
+  return entries.map(([reason, count]) => reason + ':' + count).join('|');
 }
 
 function resolvePartitionGrowthFailureMode(options = {}) {
@@ -528,7 +523,7 @@ function resolvePartitionGrowthFailureMode(options = {}) {
   const minDistinctReplicaNodes = Number(
     options.minDistinctReplicaNodes || ZERO,
   );
-  const topologyState = String(options.topologyState || "");
+  const topologyState = String(options.topologyState || '');
   const leaderServiceMissingPartitionCount = Number(
     options.leaderServiceMissingPartitionCount || ZERO,
   );
@@ -551,7 +546,7 @@ function resolvePartitionGrowthFailureMode(options = {}) {
     if (overReplicatedPartitionCount > ZERO) {
       return TOPOLOGY_REASON_ABOVE_TARGET_REPLICA_COUNT;
     }
-    return "routable_visibility_stalled";
+    return 'routable_visibility_stalled';
   }
   if (
     additionalPartitionCount < minAdditionalPartitions &&
@@ -559,15 +554,15 @@ function resolvePartitionGrowthFailureMode(options = {}) {
     (selectedNodeCount === ZERO ||
       (admissionReadyNodeCount === ZERO && readyReplicaNodeCount === ZERO))
   ) {
-    return "planner_not_runnable";
+    return 'planner_not_runnable';
   }
   if (additionalPartitionCount < minAdditionalPartitions) {
-    return "partition_growth_stalled";
+    return 'partition_growth_stalled';
   }
   if (replicaNodeCount < minDistinctReplicaNodes) {
-    return "replica_spread_stalled";
+    return 'replica_spread_stalled';
   }
-  return "partitioning_timeout";
+  return 'partitioning_timeout';
 }
 
 /**
@@ -576,7 +571,7 @@ function resolvePartitionGrowthFailureMode(options = {}) {
  * @return {boolean}
  */
 function isTimeoutShapedError(error) {
-  const message = String(error?.message || error || "");
+  const message = String(error?.message || error || '');
   return TIMEOUT_ERROR_PATTERN.test(message);
 }
 
@@ -587,11 +582,11 @@ function isRetryableControlPlaneProgressError(error) {
   if (isRetryableControlPlaneError(error)) {
     return true;
   }
-  const message = String(error?.message || error || "").toLowerCase();
+  const message = String(error?.message || error || '').toLowerCase();
   return (
-    message.includes("participant failures") ||
-    message.includes("query_admission_deferred") ||
-    message.includes("query_admission_rejected")
+    message.includes('participant failures') ||
+    message.includes('query_admission_deferred') ||
+    message.includes('query_admission_rejected')
   );
 }
 
@@ -600,9 +595,9 @@ function resolveControlPlaneRetryDelayMs(error, fallbackMs) {
 }
 
 function resolveControlQueryTimeoutMs(timeoutMs) {
-  return Number.isFinite(timeoutMs) && timeoutMs > ZERO
-    ? Math.floor(timeoutMs)
-    : CONTROL_QUERY_TIMEOUT_MS;
+  return Number.isFinite(timeoutMs) && timeoutMs > ZERO ?
+    Math.floor(timeoutMs) :
+    CONTROL_QUERY_TIMEOUT_MS;
 }
 
 function resolveRemainingControlQueryTimeoutMs(deadlineAtMs) {
@@ -628,20 +623,20 @@ function selectMeaningfulControlQueryNodes(queryNodes, timeoutMs) {
 function resolveControlQueryCandidateTimeoutMs(timeoutMs, candidateCount) {
   const totalTimeoutMs = resolveControlQueryTimeoutMs(timeoutMs);
   const normalizedCandidateCount =
-    Number.isInteger(candidateCount) && candidateCount > ZERO
-      ? candidateCount
-      : ONE;
+    Number.isInteger(candidateCount) && candidateCount > ZERO ?
+      candidateCount :
+      ONE;
   return Math.max(ONE, Math.floor(totalTimeoutMs / normalizedCandidateCount));
 }
 
 function resolveControlQueryExecutionMode(options = {}) {
   const executionMode =
-    typeof options.executionMode === "string"
-      ? options.executionMode
-      : CONTROL_QUERY_EXECUTION_MODE.READ_FANOUT;
-  return executionMode === CONTROL_QUERY_EXECUTION_MODE.MUTATION_SINGLE_FLIGHT
-    ? executionMode
-    : CONTROL_QUERY_EXECUTION_MODE.READ_FANOUT;
+    typeof options.executionMode === 'string' ?
+      options.executionMode :
+      CONTROL_QUERY_EXECUTION_MODE.READ_FANOUT;
+  return executionMode === CONTROL_QUERY_EXECUTION_MODE.MUTATION_SINGLE_FLIGHT ?
+    executionMode :
+    CONTROL_QUERY_EXECUTION_MODE.READ_FANOUT;
 }
 
 function selectControlQueryExecutionNodes(
@@ -657,7 +652,7 @@ function selectControlQueryExecutionNodes(
 
 function hasControlQueryMutationVisibilityEvidence(error) {
   return (
-    (typeof error?.visibilityState === "string" &&
+    (typeof error?.visibilityState === 'string' &&
       error.visibilityState.length > ZERO) ||
     error?.authoritativeVisibilityConfirmed === true
   );
@@ -687,7 +682,7 @@ function isControlQueryMutationFallbackEligibleError(error) {
   if (isStartupAdminReachabilityTransientError(error)) {
     return true;
   }
-  const message = String(error?.message || error || "").toLowerCase();
+  const message = String(error?.message || error || '').toLowerCase();
   return CONTROL_QUERY_MUTATION_FALLBACK_ERROR_FRAGMENTS.some((fragment) =>
     message.includes(fragment),
   );
@@ -717,18 +712,18 @@ async function queryControl(node, sql, params = [], options = {}) {
   );
   const deadlineAtMs = Date.now() + totalTimeoutMs;
   const candidateTimeoutMs =
-    executionMode === CONTROL_QUERY_EXECUTION_MODE.MUTATION_SINGLE_FLIGHT
-      ? null
-      : resolveControlQueryCandidateTimeoutMs(
-          totalTimeoutMs,
-          queryNodes.length,
-        );
+    executionMode === CONTROL_QUERY_EXECUTION_MODE.MUTATION_SINGLE_FLIGHT ?
+      null :
+      resolveControlQueryCandidateTimeoutMs(
+        totalTimeoutMs,
+        queryNodes.length,
+      );
   let lastError = null;
   for (const candidateNode of queryNodes) {
     const effectiveTimeoutMs =
-      executionMode === CONTROL_QUERY_EXECUTION_MODE.MUTATION_SINGLE_FLIGHT
-        ? resolveRemainingControlQueryTimeoutMs(deadlineAtMs)
-        : candidateTimeoutMs;
+      executionMode === CONTROL_QUERY_EXECUTION_MODE.MUTATION_SINGLE_FLIGHT ?
+        resolveRemainingControlQueryTimeoutMs(deadlineAtMs) :
+        candidateTimeoutMs;
     try {
       return await queryControlSingle(candidateNode, sql, params, {
         ...options,
@@ -744,27 +739,27 @@ async function queryControl(node, sql, params = [], options = {}) {
       }
     }
   }
-  throw lastError || new Error("no_control_query_nodes_available");
+  throw lastError || new Error('no_control_query_nodes_available');
 }
 
 function resolveControlQueryNodes(primaryNode, options = {}) {
   const hasControlQueryCapability = (node) => {
     return (
       node &&
-      typeof node === "object" &&
-      (typeof node.query === "function" ||
-        typeof node.queryWithTimeout === "function")
+      typeof node === 'object' &&
+      (typeof node.query === 'function' ||
+        typeof node.queryWithTimeout === 'function')
     );
   };
   const candidates = [];
   if (hasControlQueryCapability(primaryNode)) {
     candidates.push(primaryNode);
   }
-  const extraNodes = Array.isArray(options.queryNodes)
-    ? options.queryNodes
-    : Array.isArray(options.fallbackNodes)
-      ? options.fallbackNodes
-      : [];
+  const extraNodes = Array.isArray(options.queryNodes) ?
+    options.queryNodes :
+    Array.isArray(options.fallbackNodes) ?
+      options.fallbackNodes :
+      [];
   for (const node of extraNodes) {
     if (hasControlQueryCapability(node)) {
       candidates.push(node);
@@ -773,7 +768,7 @@ function resolveControlQueryNodes(primaryNode, options = {}) {
   const uniqueCandidates = [];
   const seenNodeIds = new Set();
   for (const node of candidates) {
-    const nodeId = String(node?.id || "").trim();
+    const nodeId = String(node?.id || '').trim();
     const dedupeKey = nodeId.length > ZERO ? nodeId : null;
     if (dedupeKey && seenNodeIds.has(dedupeKey)) {
       continue;
@@ -834,10 +829,10 @@ async function forceRepairControlSnapshotAcrossQueryNodes(
 async function queryControlSingle(node, sql, params = [], options = {}) {
   const timeoutMs = resolveControlQueryTimeoutMs(options.timeoutMs);
   const lane =
-    typeof options.lane === "string" && options.lane.length > ZERO
-      ? options.lane
-      : CONTROL_QUERY_LANE_CONTROL;
-  if (node && typeof node.queryWithTimeout === "function") {
+    typeof options.lane === 'string' && options.lane.length > ZERO ?
+      options.lane :
+      CONTROL_QUERY_LANE_CONTROL;
+  if (node && typeof node.queryWithTimeout === 'function') {
     return node.queryWithTimeout(sql, params, {
       timeoutMs,
       lane,
@@ -908,7 +903,7 @@ function rowsFromResult(result) {
  * @return {string}
  */
 function escapeSql(value) {
-  return String(value).replace(/'/g, "''");
+  return String(value).replace(/'/g, '\'\'');
 }
 
 /**
@@ -917,7 +912,7 @@ function escapeSql(value) {
  * @return {string}
  */
 function resolveBenchmarkTableName(tableName) {
-  const candidate = String(tableName || "").trim();
+  const candidate = String(tableName || '').trim();
   if (!IDENTIFIER_PATTERN.test(candidate)) {
     return TABLE_NAME_BENCHMARK_EVENTS;
   }
@@ -940,11 +935,11 @@ function resolvePartitioningLoadTableName(
 ) {
   const explicitTableName = options.explicitTableName === true;
   const benchmarkTableName = String(
-    cluster?._config?.benchmark?.tableName || "",
+    cluster?._config?.benchmark?.tableName || '',
   ).trim();
-  const candidate = explicitTableName
-    ? scenarioTableName
-    : benchmarkTableName || scenarioTableName;
+  const candidate = explicitTableName ?
+    scenarioTableName :
+    benchmarkTableName || scenarioTableName;
   const resolved = resolveBenchmarkTableName(candidate);
   if (!explicitTableName && resolved === TABLE_NAME_LOGS) {
     return TABLE_NAME_BENCHMARK_EVENTS;
@@ -953,10 +948,10 @@ function resolvePartitioningLoadTableName(
 }
 
 function resolveClusterNodes(cluster) {
-  if (typeof cluster?.getNodes === "function") {
+  if (typeof cluster?.getNodes === 'function') {
     return cluster.getNodes();
   }
-  if (typeof cluster?.nodes === "function") {
+  if (typeof cluster?.nodes === 'function') {
     return cluster.nodes();
   }
   return [];
@@ -972,9 +967,9 @@ function resolveBenchmarkAdmissionRequiredNodeCount(cluster, options = {}) {
   }
   const replicationFactor =
     Number.isInteger(cluster?._config?.benchmark?.replicationFactor) &&
-    cluster._config.benchmark.replicationFactor > ZERO
-      ? cluster._config.benchmark.replicationFactor
-      : BENCHMARK_DEFAULTS.replicationFactor;
+    cluster._config.benchmark.replicationFactor > ZERO ?
+      cluster._config.benchmark.replicationFactor :
+      BENCHMARK_DEFAULTS.replicationFactor;
   return Math.max(
     1,
     Math.min(
@@ -1006,9 +1001,9 @@ function resolveBenchmarkBootstrapRequiredNodeCount(cluster, options = {}) {
   }
   const replicationFactor =
     Number.isInteger(cluster?._config?.benchmark?.replicationFactor) &&
-    cluster._config.benchmark.replicationFactor > ZERO
-      ? cluster._config.benchmark.replicationFactor
-      : BENCHMARK_DEFAULTS.replicationFactor;
+    cluster._config.benchmark.replicationFactor > ZERO ?
+      cluster._config.benchmark.replicationFactor :
+      BENCHMARK_DEFAULTS.replicationFactor;
   const bootstrapQuorumNodeCount = Math.floor(replicationFactor / 2) + ONE;
   return Math.max(
     1,

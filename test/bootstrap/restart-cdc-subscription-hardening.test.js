@@ -294,7 +294,6 @@ test('timeout path emits diagnostic summary when ' +
 
   // CDC mock that always fails
   const alwaysFailCDC = new EventEmitter();
-  const originalOn = alwaysFailCDC.on.bind(alwaysFailCDC);
   alwaysFailCDC.on = (_event, _handler) => {
     throw new Error('Persistent subscription failure');
   };

@@ -85,7 +85,6 @@ export async function collectPreflightCriticalPathSnapshots({
 }) {
   const snapshotNodes = Array.isArray(nodes) ? nodes : [];
   const snapshotsByNodeId = {};
-  const controlPlaneLedgerSnapshotsByNodeId = {};
 
   await Promise.all(snapshotNodes.map(async (node) => {
     const nodeId = normalizeNodeId(node);

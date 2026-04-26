@@ -1,158 +1,40 @@
-import { SQL_QUERY_ENGINE_SHARED } from "./sql-query-engine-shared.js";
-import { SQLQueryEngineSegment3 } from "./sql-query-engine-segment-3.js";
+import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
+import {SQLQueryEngineSegment3} from './sql-query-engine-segment-3.js';
 
 const {
-  ACTIVE_PARTITION_STATE,
-  ADAPTER_ERROR_MSG,
-  ADAPTER_LOG_MSG,
-  AddressManager,
-  AuthoritativeControlPlaneView,
-  BACKGROUND_SYSTEM_TABLE_DELIVERY_PRIORITY_TABLES,
-  BOOTSTRAP_ROUTING_OVERLAY_ENTRY_STATE,
-  BOOTSTRAP_ROUTING_OVERLAY_INSTALL_STATE,
-  BOOTSTRAP_ROUTING_OVERLAY_NO_EXPIRY_MS,
-  BOOTSTRAP_ROUTING_OVERLAY_PARTITION_STATE,
-  BOOTSTRAP_ROUTING_OVERLAY_REASON,
-  BOOTSTRAP_ROUTING_OVERLAY_RETENTION_MODE,
-  BOOTSTRAP_ROUTING_OVERLAY_REUSE_STATE,
-  BudgetEnforcer,
-  CALLBACK_RUNTIME_KIND,
-  CODE_LOOKUP_BY_FUNCTION_ID_SQL,
-  CODE_LOOKUP_BY_FUNCTION_NAME_SQL,
   COLUMN,
-  CONNECTION_STATE_CONNECTED,
-  CONNECTION_STATE_READY,
-  CONTROL_PLANE_MUTATION_MERGE_POLICY,
-  CONTROL_PLANE_MUTATION_OPERATION,
-  CONTROL_PLANE_MUTATION_WORK_CLASS,
-  CONTROL_PLANE_READINESS_DIMENSION,
-  CallbackExecutionHost,
-  CancellationToken,
-  ConfigurationManager,
-  DEFAULT_CODE_VERSION,
   DEFAULT_PARTITION_VERSION,
-  DEFAULT_SNAPSHOT_MODE,
-  DUAL_WRITE_ACTIVE_STATUSES,
-  DistributedQueryPlanner,
-  DistributedTransactionCoordinator,
-  DistributedWriteCoordinator,
-  ENTITY_TYPE,
-  EXECUTION_MODE,
-  EXPLAIN_DISTRIBUTED_PREFIX_REGEX,
-  ExecutionContext,
   LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY,
-  LineageTracker,
-  LoggingService,
-  METRICS_LOG_TAG,
-  MIGRATION_STATUS,
-  MODULE_MANIFEST_LOOKUP_BY_ARTIFACT_POINTER_SQL,
-  ManagedSplitTopologyAdapter,
-  ManagedSplitWorkflow,
-  MigrationCoordinator,
-  MigrationPipeline,
-  NATIVE_CALLBACK_EXPORTS_ARG,
-  NATIVE_CALLBACK_MODULE_ARG,
-  NATIVE_CALLBACK_RETURN_LINE,
-  NUM,
-  OPERATION_METADATA_KEY,
-  OWNER_CONTRACT_NEXT_ACTION,
-  OWNER_CONTRACT_STATE,
-  OperationType,
   PARTITION_SERVICE_MESSAGE_TYPE,
-  PARTITION_SPLIT_MIRROR_ORIGIN,
   PARTITION_TRANSITION_METADATA_FIELD,
-  PARTITION_TRANSITION_STATE,
-  PRESSURE_GOVERNOR_ACTION,
-  PRESSURE_WORK_CLASS,
-  PROVISIONING_REJECTION_DETAIL_LIMIT,
-  PROVISIONING_REJECTION_REASON_UNKNOWN,
-  PROVISIONING_REJECTION_SUMMARY_NONE,
-  PartitionCallbackDispatcher,
-  PartitionResolver,
-  PressureGovernor,
-  QUERY_AST_TYPE,
-  QUERY_CONFIG_KEY,
-  QUERY_DEFAULTS,
-  QUERY_ERROR_CODE,
   QUERY_ERROR_MSG,
-  QUERY_LOG_MSG,
-  QUERY_OPERATION,
-  QUERY_SESSION,
-  QUERY_SUBSYSTEM,
-  QueryExecutor,
-  RETRYABLE_CONTROL_PLANE_MUTATION_DEFER_STATE,
-  RETRYABLE_CONTROL_PLANE_TIMEOUT_CLASSIFICATIONS,
-  ReplicaOperationField,
   SERVICE_TYPE,
-  SQLParser,
-  SQL_PARSE_CACHE,
-  STATE,
-  STATUS_ACTIVE,
-  STORAGE_CAPACITY_CONFIG_KEY,
-  STORAGE_CAPACITY_DEFAULT,
-  SYSTEM_TABLE_NAME,
-  SqlParseCache,
   TABLES,
-  TABLE_PARTITION_ADMISSION_CONVERGENCE_WAIT_MS,
-  TABLE_PARTITION_TARGET_NODE_CONVERGENCE_REASON,
-  TABLE_PARTITION_TARGET_NODE_WAIT,
   TIMEOUT_BUDGET_CLASSIFICATION,
   TIMEOUT_BUDGET_DEFAULT,
-  TableCreationService,
-  TimeoutPolicy,
-  WRITE_ACTIVITY_SPLIT_EVALUATION_MIN_INTERVAL_MS,
-  WRITE_OPERATION_STATUS,
-  WRITE_TRACKING_EXCLUDED_TABLES,
-  ZERO_SHA256_DIGEST,
-  buildBootstrapRoutingOverlayEntry,
-  buildBootstrapRoutingOverlayEntryState,
-  buildLocalControlPlaneMutationReadinessFailure,
-  buildOwnerContractOutcome,
-  buildPressureAdmissionFailure,
-  buildSystemTableMutationRoutingGapFailure,
-  createCallbackDriverRegistry,
-  createControlPlaneRuntimeBundle,
-  createEmptyTransactionRecoveryReplaySummary,
-  createHash,
-  createTimeoutBudgetError,
-  executePlan,
-  executeStage,
-  getLocalControlPlaneMutationReadinessBlocker,
   getRemainingBudgetMs,
-  getSchemaByTableName,
-  getSystemTableMutationRoutingGapBlocker,
-  hasActiveAddressedPartitionService,
-  isNodeRecordReady,
-  isPriorityControlPlanePartition,
-  isRetryableControlPlaneError,
   isRetryableManagedSplitTransition,
-  isSqlRequest,
-  normalizeControlPlaneMutationWorkClass,
-  parseCallbackModuleArtifact,
-  reorderParams,
-  resolveBootstrapLeaderSelection,
-  resolveRetryableControlPlaneMutationDeferState,
 } = SQL_QUERY_ENGINE_SHARED;
 
 const AUTHORITATIVE_ROUTING_OVERLAY_STATE = Object.freeze({
-  AVAILABLE: "available",
-  AUTHORITATIVE_MISSING: "authoritative_missing",
-  MISSING: "missing",
+  AVAILABLE: 'available',
+  AUTHORITATIVE_MISSING: 'authoritative_missing',
+  MISSING: 'missing',
 });
 
 const AUTHORITATIVE_ROUTING_OVERLAY_PARTITION_STATE = Object.freeze({
-  AVAILABLE: "available",
-  UNAVAILABLE: "unavailable",
+  AVAILABLE: 'available',
+  UNAVAILABLE: 'unavailable',
 });
 
 const AUTHORITATIVE_ROUTING_OVERLAY_CACHE_SERVICE_STATE = Object.freeze({
-  ELIGIBLE: "eligible",
-  MASKED: "masked",
+  ELIGIBLE: 'eligible',
+  MASKED: 'masked',
 });
 
 class SQLQueryEngineSegment4 extends SQLQueryEngineSegment3 {
   listManagedSplitPartitions() {
-    if (!this.systemCache || typeof this.systemCache.getAll !== "function") {
+    if (!this.systemCache || typeof this.systemCache.getAll !== 'function') {
       return [];
     }
 
@@ -230,7 +112,7 @@ class SQLQueryEngineSegment4 extends SQLQueryEngineSegment3 {
   async executeManagedSplit(partitionId, executionOptions = {}) {
     if (
       !this.managedSplitWorkflow ||
-      typeof this.managedSplitWorkflow.execute !== "function"
+      typeof this.managedSplitWorkflow.execute !== 'function'
     ) {
       throw new Error(QUERY_ERROR_MSG.TABLE_SPLIT_START_FAILED);
     }
@@ -253,7 +135,7 @@ class SQLQueryEngineSegment4 extends SQLQueryEngineSegment3 {
     primaryKeyColumn,
   ) {
     const manager = this.partitionSplitMergeManager;
-    if (!manager || typeof manager.splitPartition !== "function") {
+    if (!manager || typeof manager.splitPartition !== 'function') {
       throw new Error(QUERY_ERROR_MSG.TABLE_SPLIT_START_FAILED);
     }
 
@@ -337,9 +219,9 @@ class SQLQueryEngineSegment4 extends SQLQueryEngineSegment3 {
     const hasTableAndPartitionMetadata = () => {
       const hasPartitionRecord =
         this.queryExecutor &&
-        typeof this.queryExecutor.hasPartitionRecord === "function"
-          ? this.queryExecutor.hasPartitionRecord(partitionId)
-          : false;
+        typeof this.queryExecutor.hasPartitionRecord === 'function' ?
+          this.queryExecutor.hasPartitionRecord(partitionId) :
+          false;
       const hasTableRecord = tableId ? this.hasTableMetadata(tableId) : true;
       return hasPartitionRecord && hasTableRecord;
     };
@@ -349,17 +231,17 @@ class SQLQueryEngineSegment4 extends SQLQueryEngineSegment3 {
 
     const usesCacheRepairWaits =
       this.cdcIntegrationService &&
-      typeof this.cdcIntegrationService.waitForCacheUpdate === "function" &&
+      typeof this.cdcIntegrationService.waitForCacheUpdate === 'function' &&
       this.systemCache &&
-      typeof this.systemCache.onCacheChange === "function";
+      typeof this.systemCache.onCacheChange === 'function';
     const effectiveBudget = this.allocateControlPlaneTimeoutBudget({
       timeoutBudget,
       requestedBudgetMs: this.tablePartitionProvisioningTimeoutMs,
-      minimumBudgetMs: usesCacheRepairWaits
-        ? TIMEOUT_BUDGET_DEFAULT.MINIMUM_OPERATION_BUDGET_MS
-        : this.tablePartitionProvisioningPollIntervalMs,
+      minimumBudgetMs: usesCacheRepairWaits ?
+        TIMEOUT_BUDGET_DEFAULT.MINIMUM_OPERATION_BUDGET_MS :
+        this.tablePartitionProvisioningPollIntervalMs,
       classification: TIMEOUT_BUDGET_CLASSIFICATION.CACHE_VISIBILITY_TIMEOUT,
-      nestedOperation: "table_partition_metadata_wait",
+      nestedOperation: 'table_partition_metadata_wait',
       timeoutError:
         QUERY_ERROR_MSG.TABLE_PARTITION_METADATA_TIMEOUT_PREFIX + partitionId,
     });
@@ -374,7 +256,7 @@ class SQLQueryEngineSegment4 extends SQLQueryEngineSegment3 {
           partitionId,
           true,
           {
-            fallbackPhase: "steady_state",
+            fallbackPhase: 'steady_state',
             timeoutMs: waitBudgetMs,
           },
         ),
@@ -386,7 +268,7 @@ class SQLQueryEngineSegment4 extends SQLQueryEngineSegment3 {
             tableId,
             true,
             {
-              fallbackPhase: "steady_state",
+              fallbackPhase: 'steady_state',
               timeoutMs: waitBudgetMs,
             },
           ),
@@ -404,7 +286,7 @@ class SQLQueryEngineSegment4 extends SQLQueryEngineSegment3 {
       {
         timeoutBudget: effectiveBudget,
         classification: TIMEOUT_BUDGET_CLASSIFICATION.CACHE_VISIBILITY_TIMEOUT,
-        nestedOperation: "table_partition_metadata_wait",
+        nestedOperation: 'table_partition_metadata_wait',
       },
     );
   }
@@ -438,16 +320,16 @@ class SQLQueryEngineSegment4 extends SQLQueryEngineSegment3 {
 
     const usesCacheRepairWaits =
       this.cdcIntegrationService &&
-      typeof this.cdcIntegrationService.waitForCacheUpdate === "function" &&
+      typeof this.cdcIntegrationService.waitForCacheUpdate === 'function' &&
       this.systemCache &&
-      typeof this.systemCache.onCacheChange === "function";
-    const nestedOperation = "partition_service_metadata_wait";
+      typeof this.systemCache.onCacheChange === 'function';
+    const nestedOperation = 'partition_service_metadata_wait';
     const effectiveBudget = this.allocateControlPlaneTimeoutBudget({
       timeoutBudget,
       requestedBudgetMs: this.tablePartitionProvisioningTimeoutMs,
-      minimumBudgetMs: usesCacheRepairWaits
-        ? TIMEOUT_BUDGET_DEFAULT.MINIMUM_OPERATION_BUDGET_MS
-        : this.tablePartitionProvisioningPollIntervalMs,
+      minimumBudgetMs: usesCacheRepairWaits ?
+        TIMEOUT_BUDGET_DEFAULT.MINIMUM_OPERATION_BUDGET_MS :
+        this.tablePartitionProvisioningPollIntervalMs,
       classification: TIMEOUT_BUDGET_CLASSIFICATION.CACHE_VISIBILITY_TIMEOUT,
       nestedOperation,
       timeoutError:
@@ -464,7 +346,7 @@ class SQLQueryEngineSegment4 extends SQLQueryEngineSegment3 {
         replicaId,
         true,
         {
-          fallbackPhase: "steady_state",
+          fallbackPhase: 'steady_state',
           timeoutMs: waitBudgetMs,
         },
       );
@@ -507,7 +389,7 @@ class SQLQueryEngineSegment4 extends SQLQueryEngineSegment3 {
     const uniqueReplicaIds = [
       ...new Set(
         (Array.isArray(replicaIds) ? replicaIds : []).filter(
-          (replicaId) => typeof replicaId === "string" && replicaId.length > 0,
+          (replicaId) => typeof replicaId === 'string' && replicaId.length > 0,
         ),
       ),
     ];
@@ -573,19 +455,19 @@ class SQLQueryEngineSegment4 extends SQLQueryEngineSegment3 {
       requestedBudgetMs: this.tablePartitionProvisioningTimeoutMs,
       minimumBudgetMs: this.tablePartitionProvisioningPollIntervalMs,
       classification: TIMEOUT_BUDGET_CLASSIFICATION.PUBLICATION_WAIT_TIMEOUT,
-      nestedOperation: "partition_routing_wait",
+      nestedOperation: 'partition_routing_wait',
       timeoutError:
         QUERY_ERROR_MSG.TABLE_PARTITION_ROUTING_TIMEOUT_PREFIX + partitionId,
     });
     await this.waitForCondition(
       checkRoutableCountWithRepair,
-      getRemainingBudgetMs(effectiveBudget, { now: this.nowFn }),
+      getRemainingBudgetMs(effectiveBudget, {now: this.nowFn}),
       this.tablePartitionProvisioningPollIntervalMs,
       QUERY_ERROR_MSG.TABLE_PARTITION_ROUTING_TIMEOUT_PREFIX + partitionId,
       {
         timeoutBudget: effectiveBudget,
         classification: TIMEOUT_BUDGET_CLASSIFICATION.PUBLICATION_WAIT_TIMEOUT,
-        nestedOperation: "partition_routing_wait",
+        nestedOperation: 'partition_routing_wait',
       },
     );
   }
@@ -605,9 +487,9 @@ class SQLQueryEngineSegment4 extends SQLQueryEngineSegment3 {
     if (
       !partitionId ||
       !this.queryExecutor ||
-      typeof this.queryExecutor.getPartitionRoutingSnapshot !== "function" ||
+      typeof this.queryExecutor.getPartitionRoutingSnapshot !== 'function' ||
       typeof this.queryExecutor.maybeAwaitDeniedPartitionRoutingRepair !==
-        "function"
+        'function'
     ) {
       return false;
     }
@@ -643,15 +525,15 @@ class SQLQueryEngineSegment4 extends SQLQueryEngineSegment3 {
     options = {},
   ) {
     const routingReadinessDimension =
-      typeof options?.routingReadinessDimension === "string" &&
-      options.routingReadinessDimension.length > 0
-        ? options.routingReadinessDimension
-        : this.queryExecutor?.defaultRoutingReadinessDimension;
+      typeof options?.routingReadinessDimension === 'string' &&
+      options.routingReadinessDimension.length > 0 ?
+        options.routingReadinessDimension :
+        this.queryExecutor?.defaultRoutingReadinessDimension;
     const hasLeaderRoute = () => {
       this.maybeInstallBootstrapLeaderOverlay(partitionId, options);
       if (
         !this.queryExecutor ||
-        typeof this.queryExecutor.findPartitionLeaderAddress !== "function"
+        typeof this.queryExecutor.findPartitionLeaderAddress !== 'function'
       ) {
         return false;
       }
@@ -659,7 +541,7 @@ class SQLQueryEngineSegment4 extends SQLQueryEngineSegment3 {
         partitionId,
         routingReadinessDimension,
       );
-      return typeof address === "string" && address.length > 0;
+      return typeof address === 'string' && address.length > 0;
     };
     if (hasLeaderRoute()) {
       return;
@@ -670,19 +552,19 @@ class SQLQueryEngineSegment4 extends SQLQueryEngineSegment3 {
       requestedBudgetMs: this.tablePartitionProvisioningTimeoutMs,
       minimumBudgetMs: this.tablePartitionProvisioningPollIntervalMs,
       classification: TIMEOUT_BUDGET_CLASSIFICATION.PUBLICATION_WAIT_TIMEOUT,
-      nestedOperation: "partition_leader_wait",
+      nestedOperation: 'partition_leader_wait',
       timeoutError:
         QUERY_ERROR_MSG.TABLE_PARTITION_LEADER_TIMEOUT_PREFIX + partitionId,
     });
     await this.waitForCondition(
       hasLeaderRoute,
-      getRemainingBudgetMs(effectiveBudget, { now: this.nowFn }),
+      getRemainingBudgetMs(effectiveBudget, {now: this.nowFn}),
       this.tablePartitionProvisioningPollIntervalMs,
       QUERY_ERROR_MSG.TABLE_PARTITION_LEADER_TIMEOUT_PREFIX + partitionId,
       {
         timeoutBudget: effectiveBudget,
         classification: TIMEOUT_BUDGET_CLASSIFICATION.PUBLICATION_WAIT_TIMEOUT,
-        nestedOperation: "partition_leader_wait",
+        nestedOperation: 'partition_leader_wait',
       },
     );
   }
@@ -698,15 +580,15 @@ class SQLQueryEngineSegment4 extends SQLQueryEngineSegment3 {
       return false;
     }
 
-    if (typeof this.systemCache.has === "function") {
+    if (typeof this.systemCache.has === 'function') {
       return this.systemCache.has(TABLES.TABLES, tableId);
     }
 
-    if (typeof this.systemCache.get === "function") {
+    if (typeof this.systemCache.get === 'function') {
       return Boolean(this.systemCache.get(TABLES.TABLES, tableId));
     }
 
-    if (typeof this.systemCache.filter === "function") {
+    if (typeof this.systemCache.filter === 'function') {
       const matches = this.systemCache.filter(
         TABLES.TABLES,
         (row) => row.table_id === tableId,
@@ -728,19 +610,19 @@ class SQLQueryEngineSegment4 extends SQLQueryEngineSegment3 {
       return false;
     }
 
-    if (typeof this.systemCache.has === "function") {
+    if (typeof this.systemCache.has === 'function') {
       if (this.systemCache.has(TABLES.SERVICES, replicaId)) {
         return true;
       }
     }
 
-    if (typeof this.systemCache.get === "function") {
+    if (typeof this.systemCache.get === 'function') {
       if (this.systemCache.get(TABLES.SERVICES, replicaId)) {
         return true;
       }
     }
 
-    if (typeof this.systemCache.filter === "function") {
+    if (typeof this.systemCache.filter === 'function') {
       const matches = this.systemCache.filter(
         TABLES.SERVICES,
         (row) => row.service_id === replicaId || row.replica_id === replicaId,
@@ -765,12 +647,12 @@ class SQLQueryEngineSegment4 extends SQLQueryEngineSegment3 {
     }
 
     const isRoutableService = (service) => {
-      if (!service || typeof service !== "object") {
+      if (!service || typeof service !== 'object') {
         return false;
       }
       if (
         this.queryExecutor &&
-        typeof this.queryExecutor.isRoutablePartitionService === "function"
+        typeof this.queryExecutor.isRoutablePartitionService === 'function'
       ) {
         return this.queryExecutor.isRoutablePartitionService(service);
       }
@@ -779,14 +661,14 @@ class SQLQueryEngineSegment4 extends SQLQueryEngineSegment3 {
     const matchesReplicaId = (row) =>
       row?.service_id === replicaId || row?.replica_id === replicaId;
 
-    if (typeof this.systemCache.get === "function") {
+    if (typeof this.systemCache.get === 'function') {
       const row = this.systemCache.get(TABLES.SERVICES, replicaId);
       if (isRoutableService(row)) {
         return true;
       }
     }
 
-    if (typeof this.systemCache.filter === "function") {
+    if (typeof this.systemCache.filter === 'function') {
       const matches = this.systemCache.filter(
         TABLES.SERVICES,
         (row) => matchesReplicaId(row) && isRoutableService(row),
@@ -794,7 +676,7 @@ class SQLQueryEngineSegment4 extends SQLQueryEngineSegment3 {
       return Array.isArray(matches) && matches.length > 0;
     }
 
-    if (typeof this.systemCache.getAll === "function") {
+    if (typeof this.systemCache.getAll === 'function') {
       const rows = this.systemCache.getAll(TABLES.SERVICES);
       if (!Array.isArray(rows)) {
         return false;
@@ -829,7 +711,7 @@ class SQLQueryEngineSegment4 extends SQLQueryEngineSegment3 {
   ) {
     if (
       !this.queryExecutor ||
-      typeof this.queryExecutor.getRoutablePartitionServices !== "function"
+      typeof this.queryExecutor.getRoutablePartitionServices !== 'function'
     ) {
       return [];
     }
@@ -840,7 +722,7 @@ class SQLQueryEngineSegment4 extends SQLQueryEngineSegment3 {
     const nodeIds = new Set();
     for (const service of services) {
       const nodeId = service?.node_id || service?.nodeId || null;
-      if (typeof nodeId === "string" && nodeId.length > 0) {
+      if (typeof nodeId === 'string' && nodeId.length > 0) {
         nodeIds.add(nodeId);
       }
     }
@@ -871,7 +753,7 @@ class SQLQueryEngineSegment4 extends SQLQueryEngineSegment3 {
       const mergedServices = [];
       const seenServiceKeys = new Set();
       for (const overlay of [primaryOverlay, secondaryOverlay]) {
-        if (!overlay || typeof overlay.getServicesForPartition !== "function") {
+        if (!overlay || typeof overlay.getServicesForPartition !== 'function') {
           continue;
         }
         const services = overlay.getServicesForPartition(partitionId);
@@ -885,7 +767,7 @@ class SQLQueryEngineSegment4 extends SQLQueryEngineSegment3 {
             service?.address ||
             null;
           if (
-            typeof serviceKey !== "string" ||
+            typeof serviceKey !== 'string' ||
             serviceKey.length === 0 ||
             seenServiceKeys.has(serviceKey)
           ) {
@@ -901,22 +783,22 @@ class SQLQueryEngineSegment4 extends SQLQueryEngineSegment3 {
     return {
       getPartitionById: (partitionId) => {
         const primaryPartition =
-          typeof primaryOverlay.getPartitionById === "function"
-            ? primaryOverlay.getPartitionById(partitionId)
-            : null;
+          typeof primaryOverlay.getPartitionById === 'function' ?
+            primaryOverlay.getPartitionById(partitionId) :
+            null;
         if (primaryPartition) {
           return primaryPartition;
         }
-        return typeof secondaryOverlay.getPartitionById === "function"
-          ? secondaryOverlay.getPartitionById(partitionId)
-          : null;
+        return typeof secondaryOverlay.getPartitionById === 'function' ?
+          secondaryOverlay.getPartitionById(partitionId) :
+          null;
       },
       getServicesForPartition: (partitionId) => mergeServices(partitionId),
       shouldMaskCacheServicesForPartition: (partitionId) => {
         for (const overlay of [primaryOverlay, secondaryOverlay]) {
           if (
             !overlay ||
-            typeof overlay.shouldMaskCacheServicesForPartition !== "function"
+            typeof overlay.shouldMaskCacheServicesForPartition !== 'function'
           ) {
             continue;
           }
@@ -930,7 +812,7 @@ class SQLQueryEngineSegment4 extends SQLQueryEngineSegment3 {
         for (const overlay of [primaryOverlay, secondaryOverlay]) {
           if (
             !overlay ||
-            typeof overlay.refreshPartitionRouting !== "function"
+            typeof overlay.refreshPartitionRouting !== 'function'
           ) {
             continue;
           }
@@ -956,9 +838,9 @@ class SQLQueryEngineSegment4 extends SQLQueryEngineSegment3 {
   getAuthoritativeRoutingOverlayPartition(partitionId) {
     const overlayState =
       this.getAuthoritativeRoutingOverlayEntryState(partitionId);
-    return overlayState.partitionState === "available"
-      ? overlayState.partition
-      : null;
+    return overlayState.partitionState === 'available' ?
+      overlayState.partition :
+      null;
   }
 
   /**
@@ -994,7 +876,7 @@ class SQLQueryEngineSegment4 extends SQLQueryEngineSegment3 {
    */
   getAuthoritativeRoutingOverlayEntryState(partitionId) {
     const entry = this.authoritativeRoutingOverlayEntries.get(partitionId);
-    if (!entry || typeof entry !== "object") {
+    if (!entry || typeof entry !== 'object') {
       return Object.freeze({
         state: AUTHORITATIVE_ROUTING_OVERLAY_STATE.MISSING,
         partitionState:
@@ -1017,7 +899,7 @@ class SQLQueryEngineSegment4 extends SQLQueryEngineSegment3 {
         services,
       });
     }
-    if (entry.partition && typeof entry.partition === "object") {
+    if (entry.partition && typeof entry.partition === 'object') {
       return Object.freeze({
         state: AUTHORITATIVE_ROUTING_OVERLAY_STATE.AVAILABLE,
         partitionState:
@@ -1048,7 +930,7 @@ class SQLQueryEngineSegment4 extends SQLQueryEngineSegment3 {
    * @private
    */
   async refreshAuthoritativeRoutingOverlay(partitionId, options = {}) {
-    if (typeof partitionId !== "string" || partitionId.length === 0) {
+    if (typeof partitionId !== 'string' || partitionId.length === 0) {
       return false;
     }
 
@@ -1059,9 +941,9 @@ class SQLQueryEngineSegment4 extends SQLQueryEngineSegment3 {
     }
 
     const queryTimeoutMs =
-      Number.isFinite(options.queryTimeoutMs) && options.queryTimeoutMs > 0
-        ? options.queryTimeoutMs
-        : this.queryTimeoutMs;
+      Number.isFinite(options.queryTimeoutMs) && options.queryTimeoutMs > 0 ?
+        options.queryTimeoutMs :
+        this.queryTimeoutMs;
 
     const [partitionResult, serviceResult] = await Promise.all([
       authoritativeControlPlaneView.readRows(
@@ -1089,15 +971,15 @@ class SQLQueryEngineSegment4 extends SQLQueryEngineSegment3 {
       ),
     ]);
 
-    const partitionRows = Array.isArray(partitionResult?.rows)
-      ? partitionResult.rows
-      : [];
+    const partitionRows = Array.isArray(partitionResult?.rows) ?
+      partitionResult.rows :
+      [];
     const partitionReadAvailable = partitionResult?.success !== false;
-    const serviceRows = Array.isArray(serviceResult?.rows)
-      ? serviceResult.rows.filter(
-          (service) => service?.service_type === SERVICE_TYPE.PARTITION,
-        )
-      : [];
+    const serviceRows = Array.isArray(serviceResult?.rows) ?
+      serviceResult.rows.filter(
+        (service) => service?.service_type === SERVICE_TYPE.PARTITION,
+      ) :
+      [];
     const serviceReadAvailable = serviceResult?.success !== false;
 
     if (!partitionReadAvailable || !serviceReadAvailable) {
@@ -1105,18 +987,18 @@ class SQLQueryEngineSegment4 extends SQLQueryEngineSegment3 {
     }
 
     const overlayEntry =
-      partitionRows.length === 0 && serviceRows.length === 0
-        ? {
-            state:
+      partitionRows.length === 0 && serviceRows.length === 0 ?
+        {
+          state:
               AUTHORITATIVE_ROUTING_OVERLAY_STATE.AUTHORITATIVE_MISSING,
-            partition: null,
-            services: Object.freeze([]),
-          }
-        : {
-            state: AUTHORITATIVE_ROUTING_OVERLAY_STATE.AVAILABLE,
-            partition: partitionRows[0] || null,
-            services: serviceRows,
-          };
+          partition: null,
+          services: Object.freeze([]),
+        } :
+        {
+          state: AUTHORITATIVE_ROUTING_OVERLAY_STATE.AVAILABLE,
+          partition: partitionRows[0] || null,
+          services: serviceRows,
+        };
 
     this.authoritativeRoutingOverlayEntries.set(partitionId, overlayEntry);
 
@@ -1133,7 +1015,7 @@ class SQLQueryEngineSegment4 extends SQLQueryEngineSegment3 {
     if (!partitionId || !this.systemCache) {
       return [];
     }
-    if (typeof this.systemCache.filter === "function") {
+    if (typeof this.systemCache.filter === 'function') {
       const rows = this.systemCache.filter(
         TABLES.SERVICES,
         (service) =>
@@ -1142,7 +1024,7 @@ class SQLQueryEngineSegment4 extends SQLQueryEngineSegment3 {
       );
       return Array.isArray(rows) ? rows : [];
     }
-    if (typeof this.systemCache.getAll === "function") {
+    if (typeof this.systemCache.getAll === 'function') {
       const rows = this.systemCache.getAll(TABLES.SERVICES);
       if (!Array.isArray(rows)) {
         return [];
@@ -1167,13 +1049,13 @@ class SQLQueryEngineSegment4 extends SQLQueryEngineSegment3 {
     if (!partitionId || !this.systemCache) {
       return null;
     }
-    if (typeof this.systemCache.get === "function") {
+    if (typeof this.systemCache.get === 'function') {
       const record = this.systemCache.get(TABLES.PARTITIONS, partitionId);
       if (record) {
         return record;
       }
     }
-    if (typeof this.systemCache.filter === "function") {
+    if (typeof this.systemCache.filter === 'function') {
       const records = this.systemCache.filter(
         TABLES.PARTITIONS,
         (partition) =>
@@ -1184,7 +1066,7 @@ class SQLQueryEngineSegment4 extends SQLQueryEngineSegment3 {
         return records[0];
       }
     }
-    if (typeof this.systemCache.getAll === "function") {
+    if (typeof this.systemCache.getAll === 'function') {
       const records = this.systemCache.getAll(TABLES.PARTITIONS) || [];
       return (
         records.find(
@@ -1198,4 +1080,4 @@ class SQLQueryEngineSegment4 extends SQLQueryEngineSegment3 {
   }
 }
 
-export { SQLQueryEngineSegment4 };
+export {SQLQueryEngineSegment4};

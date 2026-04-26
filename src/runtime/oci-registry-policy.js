@@ -151,7 +151,7 @@ function checkRepositoryAllowed(repository, policy) {
   }
   const repositoryAllowed = repos.some((entry) =>
     repository === entry ||
-    (entry.endsWith(IMAGE_REF_DELIMITER) && repository.startsWith(entry))
+    (entry.endsWith(IMAGE_REF_DELIMITER) && repository.startsWith(entry)),
   );
   if (repositoryAllowed) {
     return buildPolicyDecision(OCI_POLICY_DECISION.ALLOWED);
@@ -185,35 +185,35 @@ function enforceImagePolicy(imageRef, policy) {
       [OCI_POLICY_ERROR.DENY_BY_DEFAULT],
     );
   } else {
-  const slashIdx = imageRef.indexOf(IMAGE_REF_DELIMITER);
-  const hasRepositoryDelimiter = slashIdx > NOT_FOUND_INDEX;
-  const registry = hasRepositoryDelimiter ?
-    imageRef.slice(0, slashIdx) :
-    imageRef;
-  const repository = hasRepositoryDelimiter ?
-    imageRef.slice(slashIdx + 1) :
-    EMPTY_REPOSITORY;
-  const errors = [];
-  const regResult = checkRegistryAllowed(registry, policy);
-  if (regResult.decision === OCI_POLICY_DECISION.DENIED) {
-    errors.push(regResult.reason || OCI_POLICY_ERROR.REGISTRY_DENIED);
-  }
-  const repoResult = checkRepositoryAllowed(repository, policy);
-  if (repoResult.decision === OCI_POLICY_DECISION.DENIED) {
-    errors.push(repoResult.reason || OCI_POLICY_ERROR.REPOSITORY_DENIED);
-  }
-  if (errors.length > NO_POLICY_ERRORS) {
-    result = buildImagePolicyResult(
-      false,
-      OCI_POLICY_DECISION.DENIED,
-      errors,
-    );
-  } else {
-    result = buildImagePolicyResult(
-      true,
-      OCI_POLICY_DECISION.ALLOWED,
-    );
-  }
+    const slashIdx = imageRef.indexOf(IMAGE_REF_DELIMITER);
+    const hasRepositoryDelimiter = slashIdx > NOT_FOUND_INDEX;
+    const registry = hasRepositoryDelimiter ?
+      imageRef.slice(0, slashIdx) :
+      imageRef;
+    const repository = hasRepositoryDelimiter ?
+      imageRef.slice(slashIdx + 1) :
+      EMPTY_REPOSITORY;
+    const errors = [];
+    const regResult = checkRegistryAllowed(registry, policy);
+    if (regResult.decision === OCI_POLICY_DECISION.DENIED) {
+      errors.push(regResult.reason || OCI_POLICY_ERROR.REGISTRY_DENIED);
+    }
+    const repoResult = checkRepositoryAllowed(repository, policy);
+    if (repoResult.decision === OCI_POLICY_DECISION.DENIED) {
+      errors.push(repoResult.reason || OCI_POLICY_ERROR.REPOSITORY_DENIED);
+    }
+    if (errors.length > NO_POLICY_ERRORS) {
+      result = buildImagePolicyResult(
+        false,
+        OCI_POLICY_DECISION.DENIED,
+        errors,
+      );
+    } else {
+      result = buildImagePolicyResult(
+        true,
+        OCI_POLICY_DECISION.ALLOWED,
+      );
+    }
   }
   return result;
 }

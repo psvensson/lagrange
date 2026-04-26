@@ -4,101 +4,32 @@
  */
 
 import {test} from '../../src/test-helpers/tap.js';
-import {AdminWebSocketAPI, MessageType, ErrorCode} from
+import {AdminWebSocketAPI} from
   '../../src/admin/admin-websocket-api.js';
 import {
-  ADMIN_CONTROL_SNAPSHOT,
   ADMIN_ERROR_MESSAGE,
   ADMIN_OPERATIONAL_DIAGNOSTICS,
   ADMIN_ROUTE,
   CONSISTENCY_MISMATCH_KIND,
 } from '../../src/admin/admin-constants.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
-import {createReadOnlyCache} from '../../src/cache/read-only-system-table-cache.js';
-import {getSystemCachePrimaryKeyField} from
-  '../../src/cache/system-cache-key-descriptor.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {LogsTableService} from '../../src/logging/logs-table-service.js';
-import {createSqlRequest} from '../../src/query/sql-request.js';
-import {createInProcWebSocketPair} from '../../src/test-helpers/inproc-ws.js';
-import {TraceCollector} from '../../src/debug/trace-collector.js';
 import {COLUMN, TABLES, SERVICE_TYPE} from '../../src/constants/index.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
-  READINESS_SNAPSHOT_KEY,
-  RUNTIME_AUTHORITY_STATE,
-  RUNTIME_AUTHORITY_VISIBILITY_STATE,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {
-  CONTROL_PLANE_SNAPSHOT_OBSERVATION_STATE,
-  CONTROL_PLANE_SNAPSHOT_REFRESH_STATE,
 } from '../../src/control-plane/control-plane-snapshot-owner.js';
 
 // Initialize services for tests
 ConfigurationManager.getInstance().initialize();
 LoggingService.getInstance().initialize({level: 'error'});
 
-const AUTHORITATIVE_REPAIR_TABLES = Object.freeze([
-  TABLES.NODES,
-  TABLES.PARTITIONS,
-  TABLES.SERVICES,
-  TABLES.TABLES,
-  TABLES.NODE_ENDPOINTS,
-  TABLES.SERVICE_DEFINITIONS,
-  TABLES.SERVICE_ENDPOINTS,
-  TABLES.REPLICA_OPERATIONS,
-]);
-const ERROR_UNEXPECTED_AUTHORITATIVE_PUBLISHED_MEMBERSHIP_READ =
-  'unexpected_authoritative_published_membership_read';
-const TEST_LOCAL_SYSTEM_OBSERVATION_QUERY_ID =
-  'q-snapshot-local-services-observation';
-const TEST_LOCAL_SYSTEM_OBSERVATION_SQL =
-  'SELECT * FROM services WHERE service_type = \'partition\'';
-const TEST_LOCAL_SYSTEM_OBSERVATION_GAP_SERVICE_ID =
-  'svc-gap-partition-node-2';
-const TEST_LOCAL_SYSTEM_OBSERVATION_GAP_NODE_ID =
-  'node-gap-partition-2';
-const TEST_LOCAL_SYSTEM_OBSERVATION_LOCAL_NODE_ID =
-  'node-1';
-const TEST_LOCAL_SYSTEM_OBSERVATION_GAP_PARTITION_ID =
-  'partition-1';
-const TEST_LOCAL_SYSTEM_OBSERVATION_GAP_REPLICA_ID =
-  'partition-gap-r1';
-const TEST_LOCAL_SYSTEM_OBSERVATION_GAP_ADDRESS =
-  'node-gap-partition-2/partition/partition-1-r4';
-const TEST_LOCAL_SYSTEM_OBSERVATION_ACTIVE_STATUS =
-  'active';
-const TEST_LOCAL_SYSTEM_OBSERVATION_LANE =
-  'snapshot';
 const BACKGROUND_REPAIR_SETTLE_TURNS = 8;
 const BACKGROUND_REPAIR_SETTLE_DELAY_MS = 0;
-const BACKGROUND_REPAIR_WAIT_ATTEMPTS = 40;
 
-async function waitForBackgroundRepairToSettle(
-  turnCount = BACKGROUND_REPAIR_SETTLE_TURNS,
-)
-{
-  for (let index = 0; index < turnCount; index += 1) {
-    await new Promise((resolve) => {
-      setTimeout(resolve, BACKGROUND_REPAIR_SETTLE_DELAY_MS);
-    });
-  }
-}
-
-async function waitForBackgroundRepairCondition(
-  conditionFn,
-  attemptCount = BACKGROUND_REPAIR_WAIT_ATTEMPTS,
-)
-{
-  for (let index = 0; index < attemptCount; index += 1) {
-    if (conditionFn()) {
-      return true;
-    }
-    await waitForBackgroundRepairToSettle(1);
-  }
-  return conditionFn();
-}
 
 /**
  * Create a mock SQL query engine.
@@ -162,31 +93,6 @@ function createMockQueryEngine() {
  * @param {Object<string, Array<Object>|Function>} rowsByTable
  * @return {Object}
  */
-function createSystemTableRepairQueryEngine(rowsByTable = {}) {
-  const fallback = createMockQueryEngine();
-  const executeRequestCalls = [];
-  return {
-    executeRequestCalls,
-    async executeRequest(request) {
-      const statement = String(request?.statement || '').trim();
-      executeRequestCalls.push(statement);
-      const match = statement.match(/^select \* from ([a-z_]+)$/i);
-      if (!match) {
-        return fallback.executeRequest(request);
-      }
-      const tableName = match[1].toLowerCase();
-      const value = rowsByTable[tableName];
-      const rows = typeof value === 'function' ? value(tableName) : value;
-      return {
-        success: true,
-        rows: Array.isArray(rows) ? rows.map((row) => ({...row})) : [],
-        count: Array.isArray(rows) ? rows.length : 0,
-        partitions: [`partition-${tableName}`],
-        tableName,
-      };
-    },
-  };
-}
 
 test('AdminWebSocketAPI - local CDC diagnostics endpoint shape and readiness',
   async (t) => {
@@ -599,65 +505,65 @@ test('AdminWebSocketAPI - local control snapshot exports authoritative fallback 
 
 test('AdminWebSocketAPI - local control snapshot derives canonical leaders ' +
   'from partition owner rows', async (t) => {
-    const cache = new SystemTableCache();
-    cache.applySystemTableChange(TABLES.PARTITIONS, 'INSERT', {
-      [COLUMN.PARTITION_ID]: 'partition-1',
-      [COLUMN.TABLE_ID]: 'table-1',
-      [COLUMN.LEADER_NODE_ID]: 'node-owner',
-    });
-    cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
-      [COLUMN.SERVICE_ID]: 'partition-1-r1',
-      [COLUMN.SERVICE_TYPE]: 'partition',
-      [COLUMN.PARTITION_ID]: 'partition-1',
-      [COLUMN.REPLICA_ID]: 'partition-1-r1',
-      [COLUMN.NODE_ID]: 'node-stale-a',
-      [COLUMN.RAFT_ROLE]: 'leader',
-      [COLUMN.STATUS]: 'active',
-      [COLUMN.ADDRESS]: 'node-stale-a/partition/partition-1-r1',
-    });
-    cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
-      [COLUMN.SERVICE_ID]: 'partition-1-r2',
-      [COLUMN.SERVICE_TYPE]: 'partition',
-      [COLUMN.PARTITION_ID]: 'partition-1',
-      [COLUMN.REPLICA_ID]: 'partition-1-r2',
-      [COLUMN.NODE_ID]: 'node-stale-b',
-      [COLUMN.RAFT_ROLE]: 'leader',
-      [COLUMN.STATUS]: 'active',
-      [COLUMN.ADDRESS]: 'node-stale-b/partition/partition-1-r2',
-    });
-
-    const api = new AdminWebSocketAPI({
-      nodeId: 'test-node',
-      systemTableCache: cache,
-      sqlQueryEngine: {
-        executeRequest: async () => ({success: true, rows: []}),
-      },
-    });
-
-    await api.initialize(0, {listen: false});
-
-    const response = await api.getFastify().inject({
-      method: 'GET',
-      url: '/api/admin/control-snapshot?scope=local',
-    });
-    const payload = response.json();
-
-    t.equal(payload.leaders['partition-1'], 'node-owner',
-      'canonical leader should come from partitions.leader_node_id');
-    t.same(payload.replicaRoles['partition-1'], {
-      'partition-1-r1': 'leader',
-      'partition-1-r2': 'leader',
-    }, 'replica-role detail should remain available separately');
-    t.same(payload.replicaRoleDiagnostics['partition-1'], {
-      canonicalLeaderNodeId: 'node-owner',
-      source: 'partitions',
-      inconsistentReplicaRoles: true,
-      replicaLeaderNodeIds: ['node-stale-a', 'node-stale-b'],
-      issues: [CONSISTENCY_MISMATCH_KIND.REPLICA_ROLE],
-    }, 'snapshot should surface replica-role inconsistency without changing canonical leader');
-
-    await api.shutdown();
+  const cache = new SystemTableCache();
+  cache.applySystemTableChange(TABLES.PARTITIONS, 'INSERT', {
+    [COLUMN.PARTITION_ID]: 'partition-1',
+    [COLUMN.TABLE_ID]: 'table-1',
+    [COLUMN.LEADER_NODE_ID]: 'node-owner',
   });
+  cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
+    [COLUMN.SERVICE_ID]: 'partition-1-r1',
+    [COLUMN.SERVICE_TYPE]: 'partition',
+    [COLUMN.PARTITION_ID]: 'partition-1',
+    [COLUMN.REPLICA_ID]: 'partition-1-r1',
+    [COLUMN.NODE_ID]: 'node-stale-a',
+    [COLUMN.RAFT_ROLE]: 'leader',
+    [COLUMN.STATUS]: 'active',
+    [COLUMN.ADDRESS]: 'node-stale-a/partition/partition-1-r1',
+  });
+  cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
+    [COLUMN.SERVICE_ID]: 'partition-1-r2',
+    [COLUMN.SERVICE_TYPE]: 'partition',
+    [COLUMN.PARTITION_ID]: 'partition-1',
+    [COLUMN.REPLICA_ID]: 'partition-1-r2',
+    [COLUMN.NODE_ID]: 'node-stale-b',
+    [COLUMN.RAFT_ROLE]: 'leader',
+    [COLUMN.STATUS]: 'active',
+    [COLUMN.ADDRESS]: 'node-stale-b/partition/partition-1-r2',
+  });
+
+  const api = new AdminWebSocketAPI({
+    nodeId: 'test-node',
+    systemTableCache: cache,
+    sqlQueryEngine: {
+      executeRequest: async () => ({success: true, rows: []}),
+    },
+  });
+
+  await api.initialize(0, {listen: false});
+
+  const response = await api.getFastify().inject({
+    method: 'GET',
+    url: '/api/admin/control-snapshot?scope=local',
+  });
+  const payload = response.json();
+
+  t.equal(payload.leaders['partition-1'], 'node-owner',
+    'canonical leader should come from partitions.leader_node_id');
+  t.same(payload.replicaRoles['partition-1'], {
+    'partition-1-r1': 'leader',
+    'partition-1-r2': 'leader',
+  }, 'replica-role detail should remain available separately');
+  t.same(payload.replicaRoleDiagnostics['partition-1'], {
+    canonicalLeaderNodeId: 'node-owner',
+    source: 'partitions',
+    inconsistentReplicaRoles: true,
+    replicaLeaderNodeIds: ['node-stale-a', 'node-stale-b'],
+    issues: [CONSISTENCY_MISMATCH_KIND.REPLICA_ROLE],
+  }, 'snapshot should surface replica-role inconsistency without changing canonical leader');
+
+  await api.shutdown();
+});
 
 test(
   'AdminWebSocketAPI - local control snapshot ignores stale ADD rows once exact target replica services are active',

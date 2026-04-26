@@ -5,7 +5,6 @@
  */
 import {describe, it} from 'node:test';
 import assert from 'node:assert/strict';
-import fc from 'fast-check';
 import {
   runtime,
   run,
@@ -204,8 +203,8 @@ describe('runtime.run', () => {
         captured = ctx;
       });
       assert.ok(
-        captured.getCancellationToken()
-          instanceof CancellationToken,
+        captured.getCancellationToken() instanceof
+          CancellationToken,
       );
     });
 
@@ -293,22 +292,22 @@ describe('runtime.run', () => {
   describe('ctx.out integration', () => {
     it('should return {result, output, telemetry} when ' +
       'ctx.out used', async () => {
-        const res = await run(async (ctx) => {
-          await ctx.out({id: 1});
-          await ctx.out({id: 2});
-          return 'done';
-        });
-        assert.deepEqual(res.result, 'done');
-        assert.deepEqual(
-          res.output, [{id: 1}, {id: 2}],
-        );
-        assert.equal(res.telemetry.rowCount, 2);
-        assert.equal(res.telemetry.writeCount, 2);
-        assert.ok(res.telemetry.byteCount > 0);
-        assert.equal(
-          res.telemetry.budgetExceededCount, 0,
-        );
+      const res = await run(async (ctx) => {
+        await ctx.out({id: 1});
+        await ctx.out({id: 2});
+        return 'done';
       });
+      assert.deepEqual(res.result, 'done');
+      assert.deepEqual(
+        res.output, [{id: 1}, {id: 2}],
+      );
+      assert.equal(res.telemetry.rowCount, 2);
+      assert.equal(res.telemetry.writeCount, 2);
+      assert.ok(res.telemetry.byteCount > 0);
+      assert.equal(
+        res.telemetry.budgetExceededCount, 0,
+      );
+    });
 
     it('should return raw result when ctx.out not used',
       async () => {

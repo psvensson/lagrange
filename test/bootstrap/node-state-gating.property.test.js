@@ -15,7 +15,6 @@ import fc from 'fast-check';
 import {CDCPipelineReadinessGate} from
   '../../src/cdc/cdc-pipeline-readiness-gate.js';
 import {
-  CDC_PIPELINE_READINESS_CONDITION,
 } from '../../src/constants/cdc-lifecycle-constants.js';
 import {NODE_STATE} from '../../src/constants/node-state.js';
 

@@ -1,4 +1,4 @@
-import { NUM, TYPEOF } from "../constants/index.js";
+import {NUM, TYPEOF} from '../constants/index.js';
 
 export function createPartitionDeliveryAttemptState({
   initialCandidates = [],

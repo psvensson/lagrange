@@ -39,11 +39,11 @@ import {
  * @return {string} Deterministic hex lock ID.
  */
 function generateLockId(
-  namespace, name, version, resolvedDependencies
+  namespace, name, version, resolvedDependencies,
 ) {
   const sorted = [...(resolvedDependencies || [])]
     .sort((a, b) => (a.moduleId || '').localeCompare(
-      b.moduleId || ''
+      b.moduleId || '',
     ));
   const payload = JSON.stringify({
     namespace, name, version, deps: sorted,
@@ -64,7 +64,7 @@ function generateLockId(
  * @return {{valid: boolean, lock?: Object, errors?: string[]}}
  */
 function createDependencyLock(
-  manifest, resolvedDependencies, serviceId
+  manifest, resolvedDependencies, serviceId,
 ) {
   const namespace = manifest[MF.NAMESPACE];
   const name = manifest[MF.NAME];
@@ -72,7 +72,7 @@ function createDependencyLock(
   const deps = resolvedDependencies || [];
 
   const lockId = generateLockId(
-    namespace, name, version, deps
+    namespace, name, version, deps,
   );
 
   const lock = {
@@ -124,7 +124,7 @@ function buildInsertLockSQL(lock) {
     DL_COL.CREATED_AT,
   ];
   const placeholders = columns.map(
-    (_c, i) => `$${i + 1}`
+    (_c, i) => `$${i + 1}`,
   ).join(', ');
   const params = columns.map((col) => row[col]);
   const sql = `INSERT INTO ${TABLES.MODULE_DEPENDENCY_LOCKS}` +
@@ -152,12 +152,12 @@ function buildInsertLockSQL(lock) {
  *   driftedDependencies?: Array<Object>}}
  */
 function validateLockConsistency(
-  currentLock, newResolvedDependencies
+  currentLock, newResolvedDependencies,
 ) {
-  const lockedDeps = currentLock[DL.RESOLVED_DEPENDENCIES]
-    || [];
+  const lockedDeps = currentLock[DL.RESOLVED_DEPENDENCIES] ||
+    [];
   const lockedMap = new Map(
-    lockedDeps.map((d) => [d.moduleId, d.digest])
+    lockedDeps.map((d) => [d.moduleId, d.digest]),
   );
   const newDeps = newResolvedDependencies || [];
 
@@ -168,7 +168,7 @@ function validateLockConsistency(
     const lockedDigest = lockedMap.get(dep.moduleId);
     if (lockedDigest === undefined) {
       errors.push(
-        `${ERR.UNDECLARED_IMPORT}: ${dep.moduleId}`
+        `${ERR.UNDECLARED_IMPORT}: ${dep.moduleId}`,
       );
       driftedDependencies.push({
         moduleId: dep.moduleId,
@@ -176,7 +176,7 @@ function validateLockConsistency(
       });
     } else if (lockedDigest !== dep.digest) {
       errors.push(
-        `${ERR.DEPENDENCY_VERSION_MUTABLE}: ${dep.moduleId}`
+        `${ERR.DEPENDENCY_VERSION_MUTABLE}: ${dep.moduleId}`,
       );
       driftedDependencies.push({
         moduleId: dep.moduleId,
@@ -213,14 +213,14 @@ function validateLockConsistency(
  */
 function validateActivationLock(
   _manifest, existingLock, resolvedDependencies,
-  isExplicitRollout
+  isExplicitRollout,
 ) {
   if (isExplicitRollout) {
     return {valid: true};
   }
 
   return validateLockConsistency(
-    existingLock, resolvedDependencies
+    existingLock, resolvedDependencies,
   );
 }
 
@@ -248,7 +248,7 @@ function buildSelectLockSQL(lockId) {
  *   parameter array.
  */
 function buildSelectLocksByModuleSQL(
-  namespace, name, version
+  namespace, name, version,
 ) {
   const sql = `SELECT * FROM ${TABLES.MODULE_DEPENDENCY_LOCKS}` +
     ` WHERE ${DL_COL.TARGET_MODULE_NAMESPACE} = $1` +

@@ -15,7 +15,6 @@ import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {
-  ReplicaOperationMessageType,
   ReplicaOperationResponseStatus,
 } from '../../src/rebalancer/replica-operation-constants.js';
 

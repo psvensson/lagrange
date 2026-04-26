@@ -39,8 +39,8 @@ const PROJECTION_READINESS_DECISION_MODE = Object.freeze({
 });
 const PROJECTION_AUTHORITY_SOURCE = Object.freeze({
   CLUSTER_MEMBER_HEALTHY: 'cluster_member_healthy',
-  LEGACY_RECOVERY_ELIGIBLE: 'legacy_recovery_eligible',
   NONE: 'none',
+  RECOVERY_ELIGIBLE_DIMENSION: 'recovery_eligible_dimension',
   RUNTIME_AUTHORITY_CONFIRMED: 'runtime_authority_confirmed',
   RUNTIME_AUTHORITY_ESTABLISHING: 'runtime_authority_establishing',
 });
@@ -479,7 +479,7 @@ function evaluateProjectionReadinessDimensions(
     projectedByRuntimeAuthority: false,
     clusterMemberHealthyMissing: true,
     authoritySource: projectedByRecoveryEligibility ?
-      PROJECTION_AUTHORITY_SOURCE.LEGACY_RECOVERY_ELIGIBLE :
+      PROJECTION_AUTHORITY_SOURCE.RECOVERY_ELIGIBLE_DIMENSION :
       PROJECTION_AUTHORITY_SOURCE.NONE,
   };
 }

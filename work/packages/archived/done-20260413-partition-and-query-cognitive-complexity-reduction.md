@@ -59,12 +59,12 @@ Roadmap Phase `0.1 — Internal Coherence` maintenance/refactoring scope.
 
 ## Execution Split
 
-1. [Canonical leader routing reuse cutover](archived/done-20260419-canonical-leader-routing-reuse-cutover.md)
-2. [Partition CDC owner cutover](archived/done-20260419-partition-cdc-owner-cutover.md)
-3. [Query executor boundary decompression and formatting](archived/done-20260418-query-executor-boundary-decompression-and-formatting.md)
-4. [Partition service boundary decompression and formatting](archived/done-20260418-partition-service-boundary-decompression-and-formatting.md)
-5. [Query executor routing and delivery owner split](archived/done-20260418-query-executor-routing-and-delivery-owner-split.md)
-6. [Partition split-routing extraction from partition service](archived/done-20260418-partition-split-routing-extraction-from-partition-service.md)
+1. [Canonical leader routing reuse cutover](done-20260419-canonical-leader-routing-reuse-cutover.md)
+2. [Partition CDC owner cutover](done-20260419-partition-cdc-owner-cutover.md)
+3. [Query executor boundary decompression and formatting](done-20260418-query-executor-boundary-decompression-and-formatting.md)
+4. [Partition service boundary decompression and formatting](done-20260418-partition-service-boundary-decompression-and-formatting.md)
+5. [Query executor routing and delivery owner split](done-20260418-query-executor-routing-and-delivery-owner-split.md)
+6. [Partition split-routing extraction from partition service](done-20260418-partition-split-routing-extraction-from-partition-service.md)
 
 ## Residual Closure Inventory
 

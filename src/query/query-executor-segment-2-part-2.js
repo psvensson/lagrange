@@ -12,6 +12,7 @@ const {
   PARTITION_SERVICE_ERROR_MSG,
   QUERY_EXECUTOR_LITERAL,
   QUERY_ROUTING_REPAIR_REASON,
+  SERVICE_STATUS,
   SYSTEM_TABLE_NAMES,
   TRANSPORT_ERROR_MSG,
   isPriorityControlPlanePartition,
@@ -49,13 +50,131 @@ class QueryExecutorSegment2 extends QueryExecutorSegment2Part1 {
         return ownerIdentity;
       }
     }
-    return resolveCanonicalLeaderIdentitySnapshot({
+    const bootstrapOwnerLeaderNodeId =
+      this.resolveBootstrapCanonicalLeaderNodeId(partitionId);
+    const retainedLeaderNodeId =
+      bootstrapOwnerLeaderNodeId === null ?
+        this.resolveRetainedCanonicalLeaderNodeId(
+          partitionId,
+          resolvedPartitionRow,
+          resolvedServiceRows,
+        ) :
+        null;
+    const identity = resolveCanonicalLeaderIdentitySnapshot({
       partition: resolvedPartitionRow,
       partitionPresent:
         resolvedPartitionRow &&
         typeof resolvedPartitionRow === QUERY_EXECUTOR_LITERAL.STRING_OBJECT,
+      ownerLeaderNodeId: bootstrapOwnerLeaderNodeId,
+      retainedLeaderNodeId,
       serviceRows: resolvedServiceRows,
     });
+    this.rememberCanonicalLeaderIdentity(
+      partitionId,
+      resolvedPartitionRow,
+      resolvedServiceRows,
+      identity,
+    );
+    return identity;
+  }
+
+  resolveBootstrapCanonicalLeaderNodeId(partitionId) {
+    if (
+      typeof this.bootstrapTopologySnapshotOwner
+        ?.resolveCanonicalPartitionLeaderNodeId !==
+      QUERY_EXECUTOR_LITERAL.STRING_FUNCTION
+    ) {
+      return null;
+    }
+    const leaderNodeId =
+      this.bootstrapTopologySnapshotOwner.resolveCanonicalPartitionLeaderNodeId(
+        partitionId,
+      );
+    return typeof leaderNodeId === QUERY_EXECUTOR_LITERAL.STRING_STRING &&
+      leaderNodeId.length > NUM.ZERO ?
+      leaderNodeId :
+      null;
+  }
+
+  shouldRetainCanonicalLeaderIdentity(partitionId, partitionRow = null) {
+    return isPriorityControlPlanePartition({
+      partitionId,
+      partitionRow,
+    });
+  }
+
+  hasActiveCanonicalLeaderService(serviceRows = [], leaderNodeId = null) {
+    if (
+      typeof leaderNodeId !== QUERY_EXECUTOR_LITERAL.STRING_STRING ||
+      leaderNodeId.length === NUM.ZERO
+    ) {
+      return false;
+    }
+    return (Array.isArray(serviceRows) ? serviceRows : []).some((service) => {
+      const serviceNodeId =
+        service?.[COLUMN.NODE_ID] ??
+        service?.node_id ??
+        service?.nodeId ??
+        null;
+      const serviceStatus =
+        service?.[COLUMN.STATUS] ??
+        service?.status ??
+        null;
+      return serviceNodeId === leaderNodeId &&
+        serviceStatus === SERVICE_STATUS.ACTIVE;
+    });
+  }
+
+  resolveRetainedCanonicalLeaderNodeId(
+    partitionId,
+    partitionRow = null,
+    serviceRows = [],
+  ) {
+    if (!this.shouldRetainCanonicalLeaderIdentity(partitionId, partitionRow)) {
+      this.retainedCanonicalLeaderNodeIdsByPartition.delete(partitionId);
+      return null;
+    }
+    const retainedLeaderNodeId =
+      this.retainedCanonicalLeaderNodeIdsByPartition.get(partitionId);
+    if (
+      typeof retainedLeaderNodeId !== QUERY_EXECUTOR_LITERAL.STRING_STRING ||
+      retainedLeaderNodeId.length === NUM.ZERO
+    ) {
+      return null;
+    }
+    if (
+      this.hasActiveCanonicalLeaderService(serviceRows, retainedLeaderNodeId)
+    ) {
+      return retainedLeaderNodeId;
+    }
+    this.retainedCanonicalLeaderNodeIdsByPartition.delete(partitionId);
+    return null;
+  }
+
+  rememberCanonicalLeaderIdentity(
+    partitionId,
+    partitionRow = null,
+    serviceRows = [],
+    identity = null,
+  ) {
+    if (!this.shouldRetainCanonicalLeaderIdentity(partitionId, partitionRow)) {
+      this.retainedCanonicalLeaderNodeIdsByPartition.delete(partitionId);
+      return;
+    }
+    if (
+      identity?.state !== CANONICAL_LEADER_IDENTITY_STATE.OWNER_CONFIRMED ||
+      typeof identity?.leaderNodeId !== QUERY_EXECUTOR_LITERAL.STRING_STRING ||
+      identity.leaderNodeId.length === NUM.ZERO
+    ) {
+      return;
+    }
+    if (!this.hasActiveCanonicalLeaderService(serviceRows, identity.leaderNodeId)) {
+      return;
+    }
+    this.retainedCanonicalLeaderNodeIdsByPartition.set(
+      partitionId,
+      identity.leaderNodeId,
+    );
   }
 
   resolveCanonicalLeaderGapRecoveryRoutingContract(
@@ -101,15 +220,55 @@ class QueryExecutorSegment2 extends QueryExecutorSegment2Part1 {
         partitionRow,
       }) &&
       Number(resolvedRoutingSnapshot?.routableServiceCount) > NUM.ZERO;
+    const partitionTableName =
+      resolvedPartitionId !== null ?
+        this.resolvePartitionTableName(resolvedPartitionId) :
+        null;
+    const systemTableRecoveryRouting =
+      resolvedRoutingReadinessDimension ===
+        CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE &&
+      SYSTEM_TABLE_NAMES.has(
+        String(partitionTableName || QUERY_EXECUTOR_LITERAL.STRING_VALUE),
+      ) &&
+      Number(resolvedRoutingSnapshot?.routableServiceCount) > NUM.ZERO;
+    const canonicalLeaderNodeId =
+      typeof resolvedRoutingSnapshot?.canonicalLeaderNodeId ===
+        QUERY_EXECUTOR_LITERAL.STRING_STRING &&
+      resolvedRoutingSnapshot.canonicalLeaderNodeId.length > NUM.ZERO ?
+        resolvedRoutingSnapshot.canonicalLeaderNodeId :
+        null;
+    const deniedByNodeId =
+      resolvedRoutingSnapshot?.deniedByNodeId &&
+      typeof resolvedRoutingSnapshot.deniedByNodeId ===
+        QUERY_EXECUTOR_LITERAL.STRING_OBJECT ?
+        resolvedRoutingSnapshot.deniedByNodeId :
+        Object.freeze({});
+    const canonicalLeaderFilteredByReadiness =
+      canonicalLeaderNodeId !== null &&
+      Number(resolvedRoutingSnapshot?.canonicalLeaderServiceCount) > NUM.ZERO &&
+      Number(resolvedRoutingSnapshot?.routableServiceCount) > NUM.ZERO &&
+      Boolean(deniedByNodeId[canonicalLeaderNodeId]);
     const preferDifferentNodeAfterRuntimeWitness = priorityRecoveryRouting;
+    const systemTableRecoveryServiceGap =
+      systemTableRecoveryRouting &&
+      canonicalLeaderRoutingGapState ===
+        CANONICAL_LEADER_ROUTING_GAP_STATE.SERVICE_MISSING;
+    const priorityRecoveryOwnerGap =
+      priorityRecoveryRouting &&
+      canonicalLeaderRoutingGapState ===
+        CANONICAL_LEADER_ROUTING_GAP_STATE.OWNER_MISSING;
     const recoveryCandidateWidening =
-      preferDifferentNodeAfterRuntimeWitness &&
-      canonicalLeaderRoutingGapState !==
-        CANONICAL_LEADER_ROUTING_GAP_STATE.NONE;
+      systemTableRecoveryServiceGap ||
+      priorityRecoveryOwnerGap ||
+      (
+        priorityRecoveryRouting &&
+        canonicalLeaderFilteredByReadiness
+      );
     return Object.freeze({
       partitionId: resolvedPartitionId,
       routingReadinessDimension: resolvedRoutingReadinessDimension,
       canonicalLeaderRoutingGapState,
+      canonicalLeaderFilteredByReadiness,
       priorityRecoveryRouting,
       preferDifferentNodeAfterRuntimeWitness,
       recoveryCandidateWidening,
@@ -612,18 +771,6 @@ class QueryExecutorSegment2 extends QueryExecutorSegment2Part1 {
         partitionId,
         partitionRow: this.getPartitionRecord(partitionId),
       });
-    const failureMessage =
-      typeof failure?.message === QUERY_EXECUTOR_LITERAL.STRING_STRING ?
-        failure.message :
-        typeof failure?.error === QUERY_EXECUTOR_LITERAL.STRING_STRING ?
-          failure.error :
-          QUERY_EXECUTOR_LITERAL.STRING_VALUE;
-    const failureCode =
-      typeof failure?.errorCode === QUERY_EXECUTOR_LITERAL.STRING_STRING ?
-        failure.errorCode :
-        typeof failure?.code === QUERY_EXECUTOR_LITERAL.STRING_STRING ?
-          failure.code :
-          null;
     if (systemTableWrite && deferredFailure) {
       if (priorityControlPlaneWrite && retryable) {
         return {

@@ -14,14 +14,47 @@ import {
 const PUBLICATION_EVIDENCE_EMPTY_LIST = Object.freeze([]);
 const PUBLICATION_EVIDENCE_ZERO = 0;
 const PUBLICATION_EVIDENCE_READY_BLOCKER = 'ready';
+const PUBLICATION_EVIDENCE_PUBLICATION_STATUS_PUBLISHED = 'PUBLISHED';
+const PUBLICATION_EVIDENCE_RECOVERY_PROTOCOL_STATE_STEADY_PUBLISHED =
+  'steady_published';
 const PUBLICATION_EVIDENCE_ACTIVE_GATE_BLOCKER_PREFIX = Object.freeze({
   PUBLICATION_GATE: 'publication_gate=',
   PRIORITY_RECOVERY_PROGRESS_CLASS: 'priority_recovery_progress_class=',
+});
+const PUBLICATION_EVIDENCE_SOURCE_SELECTION = Object.freeze({
+  OBSERVED: 'observed',
+  BEST_PROGRESS_CLOSED_PUBLICATION: 'best_progress_closed_publication',
 });
 const PUBLICATION_EVIDENCE_TYPEOF = Object.freeze({
   OBJECT: 'object',
   STRING: 'string',
 });
+const PUBLICATION_EVIDENCE_EMPTY_RECORD = Object.freeze({});
+const PUBLICATION_EVIDENCE_STALE_PUBLICATION_FIELD_NAMES = Object.freeze(
+  new Set([
+    'closureRecordId',
+    'closureWitnessClass',
+    'priorityRecoveryClosureState',
+    'priorityRecoveryClosureWitness',
+    'publicationRecoveryGate',
+  ]),
+);
+const PUBLICATION_EVIDENCE_CLOSED_PRIORITY_RECOVERY_CURRENT_SUMMARY =
+  Object.freeze({
+    unresolvedClassIds: PUBLICATION_EVIDENCE_EMPTY_LIST,
+    unresolvedClassCount: PUBLICATION_EVIDENCE_ZERO,
+    unresolvedSemanticStateIds: PUBLICATION_EVIDENCE_EMPTY_LIST,
+    unresolvedSemanticStateCount: PUBLICATION_EVIDENCE_ZERO,
+    blockedPartitionIds: PUBLICATION_EVIDENCE_EMPTY_LIST,
+    blockedPartitionCount: PUBLICATION_EVIDENCE_ZERO,
+    blockerPartitionIdsByReason: PUBLICATION_EVIDENCE_EMPTY_RECORD,
+    partitionIdsBySemanticState: PUBLICATION_EVIDENCE_EMPTY_RECORD,
+    partitionBlockerHistory: PUBLICATION_EVIDENCE_EMPTY_LIST,
+  });
+const PUBLICATION_EVIDENCE_CLOSED_PRIORITY_RECOVERY_DECISION_SNAPSHOTS =
+  Object.freeze({
+    snapshots: PUBLICATION_EVIDENCE_EMPTY_LIST,
+  });
 
 function isRecord(value) {
   return Boolean(value) &&
@@ -58,6 +91,364 @@ function normalizeNonNegativeInteger(value) {
   return Number.isInteger(value) && value >= PUBLICATION_EVIDENCE_ZERO ?
     value :
     null;
+}
+
+function normalizePositiveInteger(value) {
+  return Number.isInteger(value) && value > PUBLICATION_EVIDENCE_ZERO ?
+    value :
+    null;
+}
+
+function omitStalePublicationFields(record = null) {
+  if (!isRecord(record)) {
+    return {};
+  }
+  const filteredRecord = {};
+  for (const [fieldName, fieldValue] of Object.entries(record)) {
+    if (PUBLICATION_EVIDENCE_STALE_PUBLICATION_FIELD_NAMES.has(fieldName)) {
+      continue;
+    }
+    filteredRecord[fieldName] = fieldValue;
+  }
+  return filteredRecord;
+}
+
+function hasProbeObservationGap(progress = null) {
+  const snapshotCoverageNodeCount = normalizeNonNegativeInteger(
+    progress?.snapshotCoverageNodeCount,
+  ) ?? PUBLICATION_EVIDENCE_ZERO;
+  return isRecord(progress) && (
+    Boolean(normalizeOptionalString(progress.selectedSnapshotError)) ||
+    Boolean(normalizeOptionalString(progress.selectedSnapshotReachabilityError)) ||
+    (
+      progress.snapshotCoverageComplete !== true &&
+      snapshotCoverageNodeCount === PUBLICATION_EVIDENCE_ZERO
+    )
+  );
+}
+
+function hasClosedPublicationBestProgress(progress = null) {
+  const publicationStatus = normalizeOptionalString(progress?.publicationStatus);
+  const recoveryProtocolState = normalizeOptionalString(
+    progress?.recoveryProtocolState,
+  );
+  const pendingAckCount =
+    normalizeNonNegativeInteger(progress?.pendingAckCount) ??
+    PUBLICATION_EVIDENCE_ZERO;
+  const missingPublishedCount =
+    normalizeNonNegativeInteger(progress?.missingPublishedCount) ??
+    PUBLICATION_EVIDENCE_ZERO;
+  const gateReasons = normalizeDistinctStringArray(progress?.gateReasons);
+  const snapshotCoverageNodeCount = normalizePositiveInteger(
+    progress?.snapshotCoverageNodeCount,
+  );
+  return isRecord(progress) &&
+    publicationStatus === PUBLICATION_EVIDENCE_PUBLICATION_STATUS_PUBLISHED &&
+    pendingAckCount === PUBLICATION_EVIDENCE_ZERO &&
+    missingPublishedCount === PUBLICATION_EVIDENCE_ZERO &&
+    gateReasons.length === PUBLICATION_EVIDENCE_ZERO &&
+    progress.snapshotCoverageComplete === true &&
+    snapshotCoverageNodeCount !== null &&
+    (
+      progress.prioritySpreadSatisfied === true ||
+      recoveryProtocolState ===
+        PUBLICATION_EVIDENCE_RECOVERY_PROTOCOL_STATE_STEADY_PUBLISHED
+    );
+}
+
+function hasOpenPublicationEvidence({
+  publicationConvergence = null,
+  publicationConvergenceGate = null,
+  priorityRecoveryObservation = null,
+  priorityRecoveryDecisionSnapshots = null,
+} = {}) {
+  const pendingAckNodeIds = normalizeDistinctStringArray(
+    priorityRecoveryObservation?.pendingAckNodeIds ??
+      publicationConvergenceGate?.pendingAckNodeIds ??
+      publicationConvergence?.pendingAckNodeIds ??
+      PUBLICATION_EVIDENCE_EMPTY_LIST,
+  );
+  const pendingAckCount =
+    normalizeNonNegativeInteger(priorityRecoveryObservation?.pendingAckCount) ??
+    normalizeNonNegativeInteger(publicationConvergenceGate?.pendingAckCount) ??
+    normalizeNonNegativeInteger(publicationConvergence?.pendingAckCount) ??
+    pendingAckNodeIds.length;
+  const publicationStatus =
+    normalizeOptionalString(priorityRecoveryObservation?.publicationStatus) ||
+    normalizeOptionalString(publicationConvergenceGate?.publicationStatus) ||
+    normalizeOptionalString(publicationConvergence?.publicationStatus) ||
+    normalizeOptionalString(publicationConvergence?.status);
+  const priorityPartitionSummary =
+    priorityRecoveryObservation?.priorityPartitionSummary ??
+    publicationConvergenceGate?.priorityPartitionSummary ??
+    publicationConvergence?.priorityPartitionSummary ??
+    null;
+  const gateReasons = normalizeDistinctStringArray(
+    publicationConvergenceGate?.reasonCodes ??
+      publicationConvergenceGate?.reasons ??
+      priorityRecoveryObservation?.publicationConvergenceGateReasons ??
+      PUBLICATION_EVIDENCE_EMPTY_LIST,
+  );
+  const priorityRecoveryReasonCodes = normalizeDistinctStringArray(
+    priorityRecoveryObservation?.priorityRecoveryReasonCodes ??
+      publicationConvergenceGate?.reasonCodes ??
+      publicationConvergenceGate?.reasons ??
+      publicationConvergence?.priorityRecoveryReasonCodes ??
+      PUBLICATION_EVIDENCE_EMPTY_LIST,
+  );
+  const decisionPriorityPartitionSummary =
+    priorityRecoveryDecisionSnapshots?.priorityPartitionSummary &&
+    isRecord(priorityRecoveryDecisionSnapshots.priorityPartitionSummary) ?
+      priorityRecoveryDecisionSnapshots.priorityPartitionSummary :
+      null;
+  const openEvidence = Object.freeze({
+    pendingAckOpen: pendingAckCount > PUBLICATION_EVIDENCE_ZERO,
+    publicationPending:
+      priorityRecoveryObservation?.publicationPending === true ||
+      publicationConvergenceGate?.publicationPending === true ||
+      publicationConvergence?.publicationPending === true,
+    publicationStatusOpen:
+      Boolean(publicationStatus) &&
+      publicationStatus !== PUBLICATION_EVIDENCE_PUBLICATION_STATUS_PUBLISHED,
+    prioritySpreadPending:
+      priorityRecoveryObservation?.prioritySpreadPending === true ||
+      publicationConvergenceGate?.prioritySpreadPending === true ||
+      publicationConvergence?.prioritySpreadPending === true ||
+      priorityPartitionSummary?.satisfied === false,
+    gateReasonOpen: gateReasons.length > PUBLICATION_EVIDENCE_ZERO,
+    priorityRecoveryReasonOpen:
+      priorityRecoveryReasonCodes.length > PUBLICATION_EVIDENCE_ZERO,
+    priorityRecoveryDecisionOpen:
+      decisionPriorityPartitionSummary?.satisfied === false,
+  });
+  return Object.values(openEvidence).some(Boolean);
+}
+
+function resolvePublicationEvidenceSourceSelection({
+  activeGate = null,
+  publicationConvergence = null,
+  publicationConvergenceGate = null,
+  priorityRecoveryObservation = null,
+  priorityRecoveryDecisionSnapshots = null,
+} = {}) {
+  const evidence = Object.freeze({
+    terminalProbeDegraded: hasProbeObservationGap(activeGate?.progress),
+    bestProgressClosed: hasClosedPublicationBestProgress(
+      activeGate?.bestProgress,
+    ),
+    observedPublicationOpen: hasOpenPublicationEvidence({
+      publicationConvergence,
+      publicationConvergenceGate,
+      priorityRecoveryObservation,
+      priorityRecoveryDecisionSnapshots,
+    }),
+  });
+  const state =
+    evidence.terminalProbeDegraded &&
+    evidence.bestProgressClosed &&
+    evidence.observedPublicationOpen ?
+      PUBLICATION_EVIDENCE_SOURCE_SELECTION.BEST_PROGRESS_CLOSED_PUBLICATION :
+      PUBLICATION_EVIDENCE_SOURCE_SELECTION.OBSERVED;
+  return Object.freeze({state, evidence});
+}
+
+function buildClosedPriorityPartitionSummary(baseSummary = null) {
+  return Object.freeze({
+    ...(isRecord(baseSummary) ? baseSummary : {}),
+    satisfied: true,
+    missingPartitionIds: PUBLICATION_EVIDENCE_EMPTY_LIST,
+    blockedPartitions: PUBLICATION_EVIDENCE_EMPTY_LIST,
+    blockedPartitionCount: PUBLICATION_EVIDENCE_ZERO,
+    largestSpreadGap: PUBLICATION_EVIDENCE_ZERO,
+    totalSpreadGap: PUBLICATION_EVIDENCE_ZERO,
+  });
+}
+
+function buildClosedPublicationProgressProjection(
+  progress = null,
+  bestProgress = null,
+  priorityPartitionSummary = null,
+) {
+  if (!isRecord(progress)) {
+    return null;
+  }
+  const blockers = filterPublicationDerivedBlockers(progress.blockers);
+  return Object.freeze({
+    ...omitStalePublicationFields(progress),
+    publicationStatus: bestProgress.publicationStatus,
+    recoveryProtocolState: bestProgress.recoveryProtocolState,
+    pendingAckCount: PUBLICATION_EVIDENCE_ZERO,
+    missingPublishedCount: PUBLICATION_EVIDENCE_ZERO,
+    gateReasonCount: PUBLICATION_EVIDENCE_ZERO,
+    gateReasons: PUBLICATION_EVIDENCE_EMPTY_LIST,
+    prioritySpreadSatisfied: true,
+    prioritySpreadGap: PUBLICATION_EVIDENCE_ZERO,
+    priorityBlockedPartitionCount: PUBLICATION_EVIDENCE_ZERO,
+    priorityRecoveryProgressClasses:
+      PUBLICATION_EVIDENCE_CLOSED_PRIORITY_RECOVERY_CURRENT_SUMMARY,
+    priorityRecoveryUnresolvedClassCount: PUBLICATION_EVIDENCE_ZERO,
+    priorityRecoveryUnresolvedSemanticStateCount: PUBLICATION_EVIDENCE_ZERO,
+    priorityRecoveryBlockedPartitionCount: PUBLICATION_EVIDENCE_ZERO,
+    priorityPartitionSummary,
+    blockers,
+    blockerSignature: blockers.join('|'),
+  });
+}
+
+function buildBestProgressPublicationClosedControlPlane(
+  controlPlane = null,
+  activeGate = null,
+) {
+  const bestProgress = activeGate?.bestProgress;
+  const priorityPartitionSummary = buildClosedPriorityPartitionSummary(
+    controlPlane?.priorityRecoveryObservation?.priorityPartitionSummary ??
+      controlPlane?.publicationConvergenceGate?.priorityPartitionSummary ??
+      controlPlane?.publicationConvergence?.priorityPartitionSummary ??
+      null,
+  );
+  const activeGateProgress = buildClosedPublicationProgressProjection(
+    activeGate?.progress,
+    bestProgress,
+    priorityPartitionSummary,
+  );
+  const activeGateBestProgress = buildClosedPublicationProgressProjection(
+    activeGate?.bestProgress,
+    bestProgress,
+    priorityPartitionSummary,
+  );
+  const projectedActiveGate = isRecord(activeGate) ?
+    normalizePriorityRecoveryActiveGateSnapshot({
+      activeGate: {
+        ...omitStalePublicationFields(activeGate),
+        progress: activeGateProgress || activeGate.progress,
+        bestProgress: activeGateBestProgress || activeGate.bestProgress,
+      },
+    }) :
+    null;
+  const activeGateFields = projectedActiveGate ?
+    deriveLegacyPriorityRecoveryActiveGateFields(projectedActiveGate) :
+    {};
+  const projectedActiveGateBestProgress = projectedActiveGate?.bestProgress ||
+    activeGateBestProgress ||
+    null;
+  const closedPublicationFields = Object.freeze({
+    publicationStatus: bestProgress.publicationStatus,
+    status: bestProgress.publicationStatus,
+    recoveryProtocolState: bestProgress.recoveryProtocolState,
+    priorityRecoveryReasonCodes: PUBLICATION_EVIDENCE_EMPTY_LIST,
+    priorityPartitionSummary,
+    pendingAckNodeIds: PUBLICATION_EVIDENCE_EMPTY_LIST,
+    pendingAckCount: PUBLICATION_EVIDENCE_ZERO,
+    missingPublishedNodeIds: PUBLICATION_EVIDENCE_EMPTY_LIST,
+    missingPublishedCount: PUBLICATION_EVIDENCE_ZERO,
+    publicationPending: false,
+    prioritySpreadPending: false,
+  });
+  const publicationConvergence = Object.freeze({
+    ...omitStalePublicationFields(controlPlane?.publicationConvergence),
+    ...closedPublicationFields,
+    publishedActiveNodeIds: normalizeDistinctStringArray(
+      bestProgress.selectedPublishedActiveNodeIds ??
+        controlPlane?.publicationConvergence?.publishedActiveNodeIds ??
+        PUBLICATION_EVIDENCE_EMPTY_LIST,
+    ),
+  });
+  const publicationConvergenceGate = Object.freeze({
+    ...omitStalePublicationFields(
+      resolveRawPublicationConvergenceGate(controlPlane),
+    ),
+    ...closedPublicationFields,
+    ready: true,
+    reasons: PUBLICATION_EVIDENCE_EMPTY_LIST,
+    reasonCodes: PUBLICATION_EVIDENCE_EMPTY_LIST,
+  });
+  const priorityRecoveryObservation = Object.freeze({
+    ...omitStalePublicationFields(controlPlane?.priorityRecoveryObservation),
+    ...closedPublicationFields,
+    publicationConvergenceGateReasons: PUBLICATION_EVIDENCE_EMPTY_LIST,
+    priorityRecoveryCurrentSummary:
+      PUBLICATION_EVIDENCE_CLOSED_PRIORITY_RECOVERY_CURRENT_SUMMARY,
+    priorityRecoveryProgressClassIds: PUBLICATION_EVIDENCE_EMPTY_LIST,
+    priorityRecoveryProgressClassCount: PUBLICATION_EVIDENCE_ZERO,
+    priorityRecoverySemanticStateIds: PUBLICATION_EVIDENCE_EMPTY_LIST,
+    priorityRecoverySemanticStateCount: PUBLICATION_EVIDENCE_ZERO,
+    priorityRecoveryBlockedPartitionIds: PUBLICATION_EVIDENCE_EMPTY_LIST,
+    priorityRecoveryBlockedPartitionCount: PUBLICATION_EVIDENCE_ZERO,
+    priorityRecoveryUnresolvedPartitionIds: PUBLICATION_EVIDENCE_EMPTY_LIST,
+    priorityRecoveryUnresolvedPartitionCount: PUBLICATION_EVIDENCE_ZERO,
+    priorityRecoveryBlockerPartitionIdsByReason:
+      PUBLICATION_EVIDENCE_EMPTY_RECORD,
+    priorityRecoveryPartitionIdsBySemanticState:
+      PUBLICATION_EVIDENCE_EMPTY_RECORD,
+    priorityRecoveryPartitionBlockerHistory:
+      PUBLICATION_EVIDENCE_EMPTY_LIST,
+    ...(activeGateFields.activeGateProgress ?
+      {activeGateProgress: activeGateFields.activeGateProgress} :
+      {}),
+    ...(projectedActiveGateBestProgress ?
+      {activeGateBestProgress: projectedActiveGateBestProgress} :
+      {}),
+    ...(activeGateFields.activeGateNoProgress ?
+      {activeGateNoProgress: activeGateFields.activeGateNoProgress} :
+      {}),
+    ...(activeGateFields.activeGateBlockerHistory ?
+      {activeGateBlockerHistory: activeGateFields.activeGateBlockerHistory} :
+      {}),
+  });
+  return {
+    ...controlPlane,
+    publicationConvergence,
+    publicationConvergenceGate,
+    priorityRecoveryObservation,
+    priorityRecoveryDecisionSnapshots:
+      PUBLICATION_EVIDENCE_CLOSED_PRIORITY_RECOVERY_DECISION_SNAPSHOTS,
+    ...(projectedActiveGate ? {activeGate: projectedActiveGate} : {}),
+    ...(activeGateFields || {}),
+  };
+}
+
+function buildPublicationEvidenceControlPlane(controlPlane = null) {
+  const activeGate = normalizePriorityRecoveryActiveGateSnapshot({
+    activeGate:
+      controlPlane?.activeGate ||
+      controlPlane?.priorityRecoveryObservation?.activeGate ||
+      null,
+    activeGateProgress:
+      controlPlane?.activeGateProgress ||
+      controlPlane?.priorityRecoveryObservation?.activeGateProgress ||
+      null,
+    activeGateBestProgress:
+      controlPlane?.activeGateBestProgress ||
+      controlPlane?.priorityRecoveryObservation?.activeGateBestProgress ||
+      null,
+    activeGateNoProgress:
+      controlPlane?.activeGateNoProgress ||
+      controlPlane?.priorityRecoveryObservation?.activeGateNoProgress ||
+      null,
+    activeGateBlockerHistory:
+      controlPlane?.activeGateBlockerHistory ||
+      controlPlane?.priorityRecoveryObservation?.activeGateBlockerHistory ||
+      null,
+    activeGateAdmissionState:
+      controlPlane?.activeGateAdmissionState ||
+      controlPlane?.priorityRecoveryObservation?.activeGateAdmissionState ||
+      null,
+  });
+  const sourceSelection = resolvePublicationEvidenceSourceSelection({
+    activeGate,
+    publicationConvergence: controlPlane?.publicationConvergence || null,
+    publicationConvergenceGate: resolveRawPublicationConvergenceGate(
+      controlPlane,
+    ),
+    priorityRecoveryObservation:
+      controlPlane?.priorityRecoveryObservation || null,
+    priorityRecoveryDecisionSnapshots:
+      controlPlane?.priorityRecoveryDecisionSnapshots || null,
+  });
+  return sourceSelection.state ===
+    PUBLICATION_EVIDENCE_SOURCE_SELECTION.BEST_PROGRESS_CLOSED_PUBLICATION ?
+    buildBestProgressPublicationClosedControlPlane(controlPlane, activeGate) :
+    controlPlane;
 }
 
 function buildCanonicalPriorityRecoveryProgressClasses(
@@ -214,9 +605,9 @@ function buildCanonicalPriorityRecoveryActiveGateProgress(
   const prioritySpreadSatisfied =
     priorityPartitionSummary?.satisfied === true ?
       true :
-    priorityPartitionSummary?.satisfied === false ?
-      false :
-      progress?.prioritySpreadSatisfied ?? null;
+      priorityPartitionSummary?.satisfied === false ?
+        false :
+        progress?.prioritySpreadSatisfied ?? null;
   const blockers = [
     ...filterPublicationDerivedBlockers(progress?.blockers),
     ...gateReasons.map((reason) =>
@@ -342,9 +733,9 @@ function buildActiveGatePublicationContract(priorityRecoveryObservation = null) 
     prioritySpreadSatisfied:
       activeGateProgress.prioritySpreadSatisfied === true ?
         true :
-      activeGateProgress.prioritySpreadSatisfied === false ?
-        false :
-        null,
+        activeGateProgress.prioritySpreadSatisfied === false ?
+          false :
+          null,
     priorityBlockedPartitionCount:
       normalizeNonNegativeInteger(
         activeGateProgress.priorityBlockedPartitionCount,
@@ -606,9 +997,9 @@ function buildCanonicalPriorityRecoveryObservation(
   const existingPriorityRecoveryObservation =
     isRecord(basePriorityRecoveryObservation) ?
       basePriorityRecoveryObservation :
-    isRecord(controlPlane?.priorityRecoveryObservation) ?
-      controlPlane.priorityRecoveryObservation :
-      null;
+      isRecord(controlPlane?.priorityRecoveryObservation) ?
+        controlPlane.priorityRecoveryObservation :
+        null;
   const priorityRecoveryDecisionSnapshots =
     isRecord(controlPlane?.priorityRecoveryDecisionSnapshots) ?
       controlPlane.priorityRecoveryDecisionSnapshots :
@@ -679,20 +1070,20 @@ function buildCanonicalPriorityRecoveryObservation(
 
   const baseDerivedPriorityRecoveryObservation =
     buildPriorityRecoveryObservationSnapshot({
-    publicationConvergence,
-    publicationConvergenceGate,
-    priorityRecoveryDecisionSnapshots,
-    priorityRecoveryInvariants,
-    activeGate: rawActiveGate,
-    activeGateProgress,
-    activeGateBestProgress,
-    activeGateNoProgress,
-    activeGateBlockerHistory,
-    logsTable,
-    closureRecordId: existingPriorityRecoveryObservation?.closureRecordId ?? null,
-    closureWitnessClass:
+      publicationConvergence,
+      publicationConvergenceGate,
+      priorityRecoveryDecisionSnapshots,
+      priorityRecoveryInvariants,
+      activeGate: rawActiveGate,
+      activeGateProgress,
+      activeGateBestProgress,
+      activeGateNoProgress,
+      activeGateBlockerHistory,
+      logsTable,
+      closureRecordId: existingPriorityRecoveryObservation?.closureRecordId ?? null,
+      closureWitnessClass:
       existingPriorityRecoveryObservation?.closureWitnessClass ?? null,
-  });
+    });
   const canonicalActiveGate = buildCanonicalPriorityRecoveryActiveGate(
     rawActiveGate,
     baseDerivedPriorityRecoveryObservation,
@@ -896,33 +1287,37 @@ function buildCanonicalPublicationEvidenceFromControlPlane(controlPlane = null) 
       priorityRecoveryObservation: null,
     });
   }
+  const evidenceControlPlane =
+    buildPublicationEvidenceControlPlane(controlPlane);
   const basePublicationEvidence =
     buildCanonicalPublicationRecoveryEvidence({
-      publicationConvergence: controlPlane.publicationConvergence,
+      publicationConvergence: evidenceControlPlane.publicationConvergence,
       publicationConvergenceGate:
-        resolveRawPublicationConvergenceGate(controlPlane),
-      priorityRecoveryObservation: controlPlane.priorityRecoveryObservation,
+        resolveRawPublicationConvergenceGate(evidenceControlPlane),
+      priorityRecoveryObservation:
+        evidenceControlPlane.priorityRecoveryObservation,
       priorityRecoveryDecisionSnapshots:
-        controlPlane.priorityRecoveryDecisionSnapshots,
-      priorityRecoveryInvariants: controlPlane.priorityRecoveryInvariants,
-      logsTable: controlPlane.logsTable,
+        evidenceControlPlane.priorityRecoveryDecisionSnapshots,
+      priorityRecoveryInvariants:
+        evidenceControlPlane.priorityRecoveryInvariants,
+      logsTable: evidenceControlPlane.logsTable,
     });
   const publicationConvergenceGate =
     basePublicationEvidence.publicationConvergenceGate ||
-    buildCanonicalPublicationConvergenceGate(controlPlane);
+    buildCanonicalPublicationConvergenceGate(evidenceControlPlane);
   const hasExplicitPublicationConvergenceGate = isRecord(
-    resolveRawPublicationConvergenceGate(controlPlane),
+    resolveRawPublicationConvergenceGate(evidenceControlPlane),
   );
   const priorityRecoveryObservation =
     buildCanonicalPriorityRecoveryObservation(
-      controlPlane,
+      evidenceControlPlane,
       publicationConvergenceGate,
       basePublicationEvidence.priorityRecoveryObservation,
       hasExplicitPublicationConvergenceGate,
     );
   const publicationConvergence =
     buildCanonicalPublicationConvergence(
-      controlPlane,
+      evidenceControlPlane,
       publicationConvergenceGate,
       priorityRecoveryObservation,
     );

@@ -1071,9 +1071,9 @@ class SQLQueryEngineSegment7 extends SQLQueryEngineSegment6 {
       typeof options?.workloadClass === 'string' &&
       options.workloadClass.length > 0 ?
         options.workloadClass :
-      TRANSACTION_CONTROL_MUTATION_WORKLOAD_TABLES.has(tableName) ?
-        CONTROL_PLANE_WORKLOAD_CLASS.TRANSACTION_CONTROL_MUTATION :
-        null;
+        TRANSACTION_CONTROL_MUTATION_WORKLOAD_TABLES.has(tableName) ?
+          CONTROL_PLANE_WORKLOAD_CLASS.TRANSACTION_CONTROL_MUTATION :
+          null;
     const workloadProfile = workloadClass ?
       buildControlPlaneWorkloadProfile(workloadClass, {
         workClass: requestedWorkClass,

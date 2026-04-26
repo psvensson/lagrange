@@ -66,8 +66,6 @@ class WaitForLeadershipPhase {
     let delay = config.leadershipWaitInitialDelayMs;
     const maxDelay = config.leadershipWaitMaxDelayMs;
     const backoffMultiplier = config.leadershipWaitBackoffMultiplier;
-    const systemTableCache =
-      this.delegates.getSystemTableCache();
     const requiredTables = this.getRequiredSystemWriteTables();
 
     logger.debug(JOINING_LOG_MSG.WAITING_LEADERSHIP, {

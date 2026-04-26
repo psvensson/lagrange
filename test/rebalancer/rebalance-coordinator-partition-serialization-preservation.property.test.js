@@ -129,7 +129,7 @@ async (t) => {
           keyA,
           keyA2,
           `Single-flight key for '${opIdA}' should be ` +
-          `deterministic`,
+          'deterministic',
         );
       },
     ),

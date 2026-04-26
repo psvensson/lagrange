@@ -62,24 +62,24 @@ function createMockMutationGateway(sqlQueryEngine = null, cdcIntegrationService 
       operations.push({...mutation, options});
       if (cdcIntegrationService) {
         switch (mutation?.operation) {
-          case 'update':
-            return cdcIntegrationService.updateSystemTableRow(
-              mutation.tableName,
-              mutation.whereClause,
-              mutation.data,
-            );
-          case 'insert':
-            return cdcIntegrationService.insertSystemTableRow(
-              mutation.tableName,
-              mutation.row,
-            );
-          case 'delete':
-            return cdcIntegrationService.deleteSystemTableRow(
-              mutation.tableName,
-              mutation.whereClause,
-            );
-          default:
-            break;
+        case 'update':
+          return cdcIntegrationService.updateSystemTableRow(
+            mutation.tableName,
+            mutation.whereClause,
+            mutation.data,
+          );
+        case 'insert':
+          return cdcIntegrationService.insertSystemTableRow(
+            mutation.tableName,
+            mutation.row,
+          );
+        case 'delete':
+          return cdcIntegrationService.deleteSystemTableRow(
+            mutation.tableName,
+            mutation.whereClause,
+          );
+        default:
+          break;
         }
       }
       return {

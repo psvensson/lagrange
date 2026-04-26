@@ -56,6 +56,7 @@ Keep the filename state model intentionally small:
 2. `todo-YYYYMMDD-slug.md`
 3. `active-YYYYMMDD-slug.md`
 4. `done-YYYYMMDD-slug.md`
+5. `superseded-YYYYMMDD-slug.md`
 
 Use rename, not copy, when state changes.
 
@@ -65,6 +66,7 @@ Examples:
 - `todo-20260409-control-plane-simplification.md`
 - `active-20260409-control-plane-simplification.md`
 - `done-20260409-control-plane-simplification.md`
+- `superseded-20260409-control-plane-simplification.md`
 
 Do not create parallel status systems in both directory names and filenames.
 The filename is the status.
@@ -100,6 +102,12 @@ Every work package should answer:
    - what the shared progress grammar is
    - what blocked, deferred, retryable, terminal, and ready mean
    - which surfaces are allowed to expose that grammar directly
+13. If the package touches runtime, control-plane, harness, diagnostics, admin,
+    shared test infrastructure, or broad refactor boundaries:
+   - which static guardrails apply
+   - what the preflight baseline is
+   - what inherited touched-file debt is in or out of scope
+   - what after-state proves no drift increased
 
 Package closure also requires one final deep dive across the affected area:
 
@@ -109,6 +117,8 @@ Package closure also requires one final deep dive across the affected area:
    the package to `done-...`
 4. if the package was driven by a failing scenario, rerun the reference
    scenario or blocker probe and record any blocker migration before closure
+5. rerun the same static guardrails recorded in the package preflight and
+   confirm no relevant count increased
 
 If the work package cannot answer those clearly, it is still an idea, not a
 package.

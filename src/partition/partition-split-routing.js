@@ -1,20 +1,20 @@
-import { NUM, SQL } from "../constants/index.js";
-import { PARTITION_SPLIT_MIRROR_ORIGIN } from "./partition-constants.js";
+import {NUM, SQL} from '../constants/index.js';
+import {PARTITION_SPLIT_MIRROR_ORIGIN} from './partition-constants.js';
 import {
   PARTITION_SERVICE_ERROR_MSG,
   PARTITION_SERVICE_OPERATION,
   PARTITION_SERVICE_SQL_FRAGMENT,
   PARTITION_SERVICE_TYPE,
-} from "./partition-service-constants.js";
+} from './partition-service-constants.js';
 import {
   extractDataFromParameterizedSQL,
   extractDeleteDataFromSQL,
   extractInsertDataFromSQL,
   extractUpdateDataFromSQL,
-} from "./partition-sql-parser.js";
+} from './partition-sql-parser.js';
 
 const SPLIT_ROUTING_LITERAL = Object.freeze({
-  OBJECT: "object",
+  OBJECT: 'object',
 });
 
 function hasOwnedProperty(record, propertyName) {
@@ -25,7 +25,7 @@ function hasOwnedProperty(record, propertyName) {
 }
 
 function resolveSplitOperationType(entry) {
-  let operationType = entry?.type || PARTITION_SERVICE_OPERATION.QUERY;
+  const operationType = entry?.type || PARTITION_SERVICE_OPERATION.QUERY;
   if (operationType !== PARTITION_SERVICE_OPERATION.QUERY || !entry?.sql) {
     return operationType;
   }
@@ -84,12 +84,12 @@ export function cloneSplitEntry(entry) {
     params: Array.isArray(entry?.params) ? [...entry.params] : [],
     data:
       entry?.data && typeof entry.data === SPLIT_ROUTING_LITERAL.OBJECT ?
-        { ...entry.data } :
+        {...entry.data} :
         entry?.data,
     whereClause:
       entry?.whereClause &&
       typeof entry.whereClause === SPLIT_ROUTING_LITERAL.OBJECT ?
-        { ...entry.whereClause } :
+        {...entry.whereClause} :
         entry?.whereClause,
   };
 }
@@ -130,7 +130,7 @@ export async function routeSplitMirroredWrite(
     false,
     true,
     false,
-    { splitMirrorOrigin: PARTITION_SPLIT_MIRROR_ORIGIN.SOURCE },
+    {splitMirrorOrigin: PARTITION_SPLIT_MIRROR_ORIGIN.SOURCE},
   );
   if (!result?.success) {
     throw new Error(

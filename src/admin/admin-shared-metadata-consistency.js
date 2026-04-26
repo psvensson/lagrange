@@ -80,8 +80,8 @@ function isPartitionServiceRow(row) {
 function evaluatePartitionReplicaTopology(options = {}) {
   const partitionRow = options.partitionRow &&
     typeof options.partitionRow === TYPEOF.OBJECT ?
-      options.partitionRow :
-      null;
+    options.partitionRow :
+    null;
   const partitionId = normalizeNonEmptyString(
     partitionRow?.[COLUMN.PARTITION_ID] ??
       partitionRow?.partition_id ??

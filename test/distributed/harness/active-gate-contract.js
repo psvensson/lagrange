@@ -261,7 +261,7 @@ export function normalizePriorityRecoveryActiveGateSnapshot(options = {}) {
   const legacyState =
     activeGateNoProgress?.stalled === true ?
       PRIORITY_RECOVERY_ACTIVE_GATE_STATE.STALLED :
-    activeGateProgress?.blockerSignature === 'ready' ||
+      activeGateProgress?.blockerSignature === 'ready' ||
       (
         activeGateProgress?.activeNodeCount === activeGateProgress?.expectedNodeCount &&
         activeGateProgress?.gateReasonCount === ZERO &&
@@ -269,8 +269,8 @@ export function normalizePriorityRecoveryActiveGateSnapshot(options = {}) {
         activeGateProgress?.missingPublishedCount === ZERO &&
         activeGateProgress?.snapshotCoverageComplete === true
       ) ?
-      PRIORITY_RECOVERY_ACTIVE_GATE_STATE.READY :
-      PRIORITY_RECOVERY_ACTIVE_GATE_STATE.WAITING;
+        PRIORITY_RECOVERY_ACTIVE_GATE_STATE.READY :
+        PRIORITY_RECOVERY_ACTIVE_GATE_STATE.WAITING;
   return buildPriorityRecoveryActiveGateSnapshot({
     mode:
       activeGateNoProgress?.mode ||

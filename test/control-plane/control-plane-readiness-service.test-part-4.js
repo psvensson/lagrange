@@ -8,14 +8,12 @@ import {
   TABLES,
 } from '../../src/constants/index.js';
 import {
-  CONTROL_PLANE_PARTICIPATION_KIND,
   CONTROL_PLANE_PRIORITY_RECOVERY_REASON,
   CONTROL_PLANE_READINESS_DIMENSION,
   CONTROL_PLANE_PUBLICATION_MODE,
   CONTROL_PLANE_READINESS_REASON,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {
-  CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE,
 } from '../../src/control-plane/control-plane-constants.js';
 import {
   CONTROL_PLANE_PUBLICATION_STATUS,
@@ -39,32 +37,6 @@ import {
   DEFAULT_PRIORITY_RECOVERY_ACTIVITY_STALE_GRACE_MS,
 } from '../../src/control-plane/priority-recovery-snapshot.js';
 
-const TEST_DESCRIPTOR_STATE = Object.freeze({
-  NONE: 'none',
-});
-const TEST_MISSING_NODE_READINESS_STATE = Object.freeze({
-  SELF_RUNTIME_GRACE: 'self_runtime_grace',
-});
-const TEST_PROVISIONING_STATE = Object.freeze({
-  CONVERGENCE_GRACE: 'convergence_grace',
-  STEADY: 'steady',
-});
-const TEST_RUNTIME_AUTHORITY_PUBLICATION_STATE = Object.freeze({
-  HEALTHY: 'healthy',
-});
-const TEST_RUNTIME_AUTHORITY_REPAIR_STATE = Object.freeze({
-  NOT_ATTEMPTED: 'not_attempted',
-});
-const TEST_RUNTIME_AUTHORITY_STATE = Object.freeze({
-  CONFIRMED: 'confirmed',
-  ESTABLISHING: 'establishing',
-  RETAINED: 'retained',
-});
-const TEST_RUNTIME_AUTHORITY_VISIBILITY_STATE = Object.freeze({
-  CONFIRMED: 'confirmed',
-  PENDING_PUBLICATION: 'pending_publication',
-  RETAINED_LOCAL_RUNTIME: 'retained_local_runtime',
-});
 const TEST_STARTUP_ADMISSION_STATE_BLOCKED = 'blocked';
 const TEST_STARTUP_ADMISSION_REASON_CLUSTER_INTEGRITY =
   'cluster_incarnation_identity_mismatch';
@@ -211,15 +183,6 @@ function createMessageGroupService(nodeId) {
   };
 }
 
-function createPartitionService(nodeId, serviceId = `part-${nodeId}`) {
-  return {
-    [COLUMN.SERVICE_ID]: serviceId,
-    [COLUMN.NODE_ID]: nodeId,
-    [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
-    [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
-    [COLUMN.ADDRESS]: `${nodeId}/partition/${serviceId}`,
-  };
-}
 
 test('ControlPlaneReadinessService prefers the async planning snapshot when it arrives within the best-effort budget',
   async (t) => {
@@ -348,7 +311,7 @@ test('ControlPlaneReadinessService falls back to the sync planning snapshot when
     );
   });
 
-  test('ControlPlaneReadinessService exposes canonical priority-recovery planning answer sync surface',
+test('ControlPlaneReadinessService exposes canonical priority-recovery planning answer sync surface',
   (t) => {
     const readinessService = new ControlPlaneReadinessService({
       nodeId: 'node-priority-sync-contract',
@@ -1261,6 +1224,267 @@ test('ControlPlaneReadinessService prefers the direct membership publication row
         CONTROL_PLANE_READINESS_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING),
       false,
       'serve readiness should not emit the recovery-pending reason once the direct row is ready',
+    );
+    t.end();
+  });
+
+test('ControlPlaneReadinessService priority recovery health uses the direct ready publication row over stale sync planning',
+  (t) => {
+    const TEST_NODE_ID = 'node-priority-health-direct-ready';
+    const TEST_OBSERVED_AT = 2100;
+    const TEST_PUBLICATION_EPOCH = 47;
+    const TEST_READY_PRIORITY_PARTITION_SUMMARY = Object.freeze({
+      satisfied: true,
+      requiredDistinctNodeCount: 3,
+      readyEligibleNodeCount: 3,
+      totalPriorityPartitionCount: 1,
+      missingPartitionIds: Object.freeze([]),
+      blockedPartitions: Object.freeze([]),
+    });
+    const TEST_STALE_PRIORITY_PARTITION_SUMMARY = Object.freeze({
+      satisfied: false,
+      requiredDistinctNodeCount: 3,
+      readyEligibleNodeCount: 2,
+      totalPriorityPartitionCount: 1,
+      missingPartitionIds: Object.freeze([TEST_PRIORITY_SERVE_PARTITION_ID]),
+      blockedPartitions: Object.freeze([
+        Object.freeze({
+          partitionId: TEST_PRIORITY_SERVE_PARTITION_ID,
+          requiredDistinctNodeCount: 3,
+          readyDistinctNodeCount: 2,
+          spreadGap: 1,
+        }),
+      ]),
+    });
+    const TEST_STALE_PLANNING_GATE = Object.freeze({
+      state: RECOVERY_PROTOCOL_STATE.PRIORITY_SPREAD_PENDING,
+      ready: false,
+      active: true,
+      publicationEpoch: TEST_PUBLICATION_EPOCH,
+      publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+      publicationObservationState: 'authoritative',
+      recoveryProtocolState: RECOVERY_PROTOCOL_STATE.PRIORITY_SPREAD_PENDING,
+      reasonCodes: Object.freeze([
+        CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PRIORITY_PARTITIONS_NOT_SPREAD,
+      ]),
+      priorityPartitionSummary: TEST_STALE_PRIORITY_PARTITION_SUMMARY,
+      pendingAckNodeIds: Object.freeze([]),
+      missingPublishedNodeIds: Object.freeze([]),
+      prioritySpreadPending: true,
+      publicationPending: false,
+      ackPending: false,
+    });
+    const readinessService = new ControlPlaneReadinessService({
+      nodeId: TEST_NODE_ID,
+      systemTableCache: createCache(),
+      membershipPublicationService: {
+        getLatestPublicationForNodeSync(targetNodeId) {
+          if (targetNodeId !== TEST_NODE_ID) {
+            return null;
+          }
+          return {
+            publicationEpoch: TEST_PUBLICATION_EPOCH,
+            status: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+            createdAt: TEST_PRIORITY_SERVE_PUBLICATION_CREATED_AT,
+            publishedActiveNodeIds: [TEST_NODE_ID],
+            requiredAckNodeIds: [TEST_NODE_ID],
+            acknowledgedNodeIds: [TEST_NODE_ID],
+            priorityPartitionSummary: TEST_READY_PRIORITY_PARTITION_SUMMARY,
+          };
+        },
+        deriveClusterMembershipCandidateSync() {
+          return {
+            targetNodeId: TEST_NODE_ID,
+            publicationEpoch: TEST_PUBLICATION_EPOCH,
+            publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+            publicationObservationState: 'authoritative',
+            recoveryProtocolState:
+              RECOVERY_PROTOCOL_STATE.PRIORITY_SPREAD_PENDING,
+            priorityRecoveryReasonCodes: [
+              CONTROL_PLANE_PRIORITY_RECOVERY_REASON
+                .PRIORITY_PARTITIONS_NOT_SPREAD,
+            ],
+            priorityPartitionSummary: TEST_STALE_PRIORITY_PARTITION_SUMMARY,
+            publicationRecoveryGate: TEST_STALE_PLANNING_GATE,
+          };
+        },
+      },
+      now: () => TEST_OBSERVED_AT,
+    });
+
+    const health = readinessService.getPriorityControlPlaneRecoveryHealthSync(
+      TEST_NODE_ID,
+      TEST_OBSERVED_AT,
+    );
+
+    t.equal(
+      health.healthy,
+      true,
+      'priority recovery health should follow the current direct publication row',
+    );
+    t.equal(
+      health.details,
+      undefined,
+      'stale planning details should not keep health degraded after the direct row is ready',
+    );
+    t.end();
+  });
+
+test('ControlPlaneReadinessService keeps same-epoch planning closure witnesses diagnostics-only when the direct membership publication row is already ready',
+  async (t) => {
+    const TEST_NODE_ID = 'node-priority-direct-ready-closure-witness';
+    const TEST_OBSERVED_AT = '2026-04-24T10:15:00.000Z';
+    const TEST_PUBLICATION_EPOCH = 46;
+    const TEST_CLOSURE_PENDING_STATE = 'closure_pending';
+    const TEST_PRIORITY_RECOVERY_NEEDS_OPERATION = 'needs_operation';
+    const TEST_PRIORITY_PARTITION_ID = 'replica_operations-p1';
+    const TEST_READY_PRIORITY_PARTITION_SUMMARY = Object.freeze({
+      satisfied: true,
+      requiredDistinctNodeCount: 3,
+      readyEligibleNodeCount: 3,
+      totalPriorityPartitionCount: 1,
+      missingPartitionIds: Object.freeze([]),
+      blockedPartitions: Object.freeze([]),
+    });
+    const TEST_ACTIVE_CLOSURE_WITNESS = Object.freeze({
+      state: TEST_CLOSURE_PENDING_STATE,
+      prioritySpreadPending: true,
+      publicationRefreshRequired: false,
+      closureRecordId: null,
+      closureWitnessClass: null,
+      blockedPartitionIds: Object.freeze([TEST_PRIORITY_PARTITION_ID]),
+      blockedPartitionCount: 1,
+      unresolvedSemanticStateIds: Object.freeze([
+        TEST_PRIORITY_RECOVERY_NEEDS_OPERATION,
+      ]),
+      satisfiedPartitionIds: Object.freeze([]),
+      decisionPartitionIds: Object.freeze([TEST_PRIORITY_PARTITION_ID]),
+      refreshedPriorityPartitionSummary: null,
+      summarySpreadPending: true,
+      publicationEpoch: TEST_PUBLICATION_EPOCH,
+    });
+    const TEST_ACTIVE_PLANNING_GATE = Object.freeze({
+      state: RECOVERY_PROTOCOL_STATE.PRIORITY_SPREAD_PENDING,
+      ready: false,
+      active: true,
+      publicationEpoch: TEST_PUBLICATION_EPOCH,
+      publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+      publicationObservationState: 'authoritative',
+      recoveryProtocolState: RECOVERY_PROTOCOL_STATE.STEADY_PUBLISHED,
+      reasonCodes: Object.freeze([
+        CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PRIORITY_PARTITIONS_NOT_SPREAD,
+      ]),
+      priorityPartitionSummary: TEST_READY_PRIORITY_PARTITION_SUMMARY,
+      priorityRecoveryClosureWitness: TEST_ACTIVE_CLOSURE_WITNESS,
+      pendingAckNodeIds: Object.freeze([]),
+      missingPublishedNodeIds: Object.freeze([]),
+      prioritySpreadPending: true,
+      publicationPending: false,
+      ackPending: false,
+    });
+    const readinessService = new ControlPlaneReadinessService({
+      nodeId: TEST_NODE_ID,
+      systemTableCache: createCache({
+        nodes: [createActiveNode(TEST_NODE_ID)],
+        services: [createMessageGroupService(TEST_NODE_ID)],
+      }),
+      storageAccountingService: createAccountingService({
+        [TEST_NODE_ID]: {
+          nodeId: TEST_NODE_ID,
+          budgetBytes: TEST_PRIORITY_SERVE_BUDGET_BYTES,
+          pressureState: PRESSURE_STATE.NORMAL,
+        },
+      }),
+      cdcGroupPropagationService: createPublicationService({
+        currentMode: CONTROL_PLANE_PUBLICATION_MODE.GROUPED,
+        reasonCode: null,
+        enteredAt: TEST_PRIORITY_SERVE_PUBLICATION_CREATED_AT,
+        recentTransitions: [],
+      }),
+      membershipPublicationService: {
+        async getLatestPublicationForNode(targetNodeId) {
+          if (targetNodeId !== TEST_NODE_ID) {
+            return null;
+          }
+          return {
+            publicationEpoch: TEST_PUBLICATION_EPOCH,
+            status: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+            createdAt: TEST_PRIORITY_SERVE_PUBLICATION_CREATED_AT,
+            publishedActiveNodeIds: [TEST_NODE_ID],
+            requiredAckNodeIds: [TEST_NODE_ID],
+            acknowledgedNodeIds: [TEST_NODE_ID],
+            priorityPartitionSummary: TEST_READY_PRIORITY_PARTITION_SUMMARY,
+          };
+        },
+        async deriveClusterMembershipCandidate(options = {}) {
+          if (options.publisherNodeId !== TEST_NODE_ID) {
+            return null;
+          }
+          return {
+            targetNodeId: TEST_NODE_ID,
+            publicationEpoch: TEST_PUBLICATION_EPOCH,
+            publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+            publicationObservationState: 'authoritative',
+            recoveryProtocolState: RECOVERY_PROTOCOL_STATE.STEADY_PUBLISHED,
+            priorityRecoveryReasonCodes: [
+              CONTROL_PLANE_PRIORITY_RECOVERY_REASON
+                .PRIORITY_PARTITIONS_NOT_SPREAD,
+            ],
+            priorityPartitionSummary: TEST_READY_PRIORITY_PARTITION_SUMMARY,
+            priorityRecoveryClosureWitness: TEST_ACTIVE_CLOSURE_WITNESS,
+            publicationRecoveryGate: TEST_ACTIVE_PLANNING_GATE,
+          };
+        },
+      },
+      now: () => TEST_PRIORITY_SERVE_LAST_HEARTBEAT,
+    });
+
+    const readiness = await readinessService.getNodeReadiness(TEST_NODE_ID, {
+      now: TEST_OBSERVED_AT,
+    });
+
+    t.equal(
+      readiness.priorityControlPlaneRecovery.active,
+      false,
+      'same-epoch planning closure witnesses should not reopen the direct ready publication gate',
+    );
+    t.same(
+      readiness.priorityControlPlaneRecovery.reasonCodes,
+      [],
+      'the ready direct row should clear publication-gate blocker reasons',
+    );
+    t.equal(
+      readiness.runtimeAuthority.visibility?.priorityRecoveryActive,
+      false,
+      'runtime authority visibility should follow the resolved ready gate instead of the raw planning witness',
+    );
+    t.same(
+      readiness.runtimeAuthority.reasonCodes,
+      [],
+      'runtime authority reason codes should come from the resolved planning answer',
+    );
+    t.equal(
+      readiness.dimensions[CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE],
+      true,
+      'serve admission should stay open once the direct ready row closes the gate',
+    );
+    t.equal(
+      readiness.reasons.some((reason) =>
+        reason.code ===
+        CONTROL_PLANE_READINESS_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING),
+      false,
+      'the stale planning witness should not emit the priority recovery pending readiness reason',
+    );
+    t.match(
+      readiness.priorityControlPlaneRecovery.priorityRecoveryObservation,
+      {
+        priorityRecoveryClosureState: TEST_CLOSURE_PENDING_STATE,
+        priorityRecoveryReasonCodes: [
+          CONTROL_PLANE_PRIORITY_RECOVERY_REASON
+            .PRIORITY_PARTITIONS_NOT_SPREAD,
+        ],
+      },
+      'the planning closure witness should remain visible as diagnostics-only observation',
     );
     t.end();
   });

@@ -6,13 +6,48 @@ import {
   JOIN_READINESS_REASON,
   JOIN_READINESS_REPAIR,
 } from '../../src/bootstrap/node-joining-constants.js';
+import {
+  CONTROL_PLANE_READINESS_DIMENSION,
+} from '../../src/control-plane/control-plane-readiness-constants.js';
 
 const JOIN_READINESS_BLOCKED_ACTION_NONE = 'none';
 const JOIN_READINESS_BLOCKED_ACTION_REPAIR_TOPOLOGY_VISIBILITY =
   'repair_topology_visibility';
+const JOIN_READINESS_TEST_NODE_ID = 'joining-node-readiness-evaluator';
+const JOIN_READINESS_TEST_SEED_NODE_ID = 'seed-node';
+const JOIN_READINESS_TEST_TARGET_NODE_ID = 'target-node';
+const JOIN_READINESS_TEST_PRIORITY_OPERATION_ID = 'priority-self-source-op-1';
+const JOIN_READINESS_TEST_PRIORITY_PARTITION_ID = 'replica_operations-p1';
+const JOIN_READINESS_TEST_PRIORITY_REPLICA_ID = 'replica_operations-p1-r6';
+const JOIN_READINESS_TEST_PRIORITY_TABLE_NAME = 'replica_operations';
+const JOIN_READINESS_TEST_OPERATION_UPDATED_AT_MS = 1234;
+const JOIN_READINESS_TEST_NO_BLOCKERS = 0;
+const JOIN_READINESS_TEST_ONE_EXCLUSION = 1;
+const JOIN_READINESS_TEST_OPERATION_TYPE = Object.freeze({
+  REPLACE: 'REPLACE',
+});
+const JOIN_READINESS_TEST_OPERATION_STATUS = Object.freeze({
+  SYNCING: 'syncing',
+});
+const JOIN_READINESS_TEST_WORKFLOW_STEP = Object.freeze({
+  SYNCING: 'SYNCING',
+});
+const JOIN_READINESS_TEST_NODE_STATUS = Object.freeze({
+  ACTIVE: 'active',
+  JOINING: 'joining',
+});
+const JOIN_READINESS_TEST_TABLE = Object.freeze({
+  NODES: 'nodes',
+  PARTITIONS: 'partitions',
+  REPLICA_OPERATIONS: 'replica_operations',
+  SERVICES: 'services',
+});
 
 function createEvaluatorHarness(options = {}) {
   let nowMs = options.nowMs ?? 10000;
+  const readinessEligibleNodeIds = new Set(
+    options.readinessEligibleNodeIds || [],
+  );
   const backfillCalls = [];
   const warningEvents = [];
   const routerPressure = {
@@ -41,6 +76,16 @@ function createEvaluatorHarness(options = {}) {
         });
       },
       getCdcIntegrationService: () => ({sqlQueryEngine: {}}),
+      getControlPlaneReadinessService: () => ({
+        getNodeReadinessSync: (nodeId) => ({
+          dimensions: {
+            [CONTROL_PLANE_READINESS_DIMENSION
+              .CONTROL_PLANE_RECOVERY_ELIGIBLE]:
+              readinessEligibleNodeIds.size === 0 ||
+              readinessEligibleNodeIds.has(nodeId),
+          },
+        }),
+      }),
       getBootstrapResponse: () => null,
       getLogger: () => logger,
       getMessageRouter: () => ({
@@ -269,35 +314,35 @@ test(
     const cache = {
       getAll(tableName) {
         switch (tableName) {
-          case 'nodes':
-            return [{
-              node_id: 'seed-node',
-              status: 'active',
-            }, {
-              node_id: 'target-node',
-              status: 'active',
-            }];
-          case 'services':
-            return [{
-              service_id: 'mg-1-r2',
-              replica_id: 'mg-1-r2',
-              service_type: 'message_group',
-              node_id: 'target-node',
-              status: 'active',
-            }];
-          case 'replica_operations':
-            return [{
-              operation_id: 'assignment-1',
-              type: 'MOVE_ASSIGNMENT',
-              replica_id: 'mg-1-r2',
-              source_node_id: 'seed-node',
-              target_node_id: 'target-node',
-              status: 'creating',
-              workflow_step: 'PENDING',
-              updated_at: 1234,
-            }];
-          default:
-            return [];
+        case 'nodes':
+          return [{
+            node_id: 'seed-node',
+            status: 'active',
+          }, {
+            node_id: 'target-node',
+            status: 'active',
+          }];
+        case 'services':
+          return [{
+            service_id: 'mg-1-r2',
+            replica_id: 'mg-1-r2',
+            service_type: 'message_group',
+            node_id: 'target-node',
+            status: 'active',
+          }];
+        case 'replica_operations':
+          return [{
+            operation_id: 'assignment-1',
+            type: 'MOVE_ASSIGNMENT',
+            replica_id: 'mg-1-r2',
+            source_node_id: 'seed-node',
+            target_node_id: 'target-node',
+            status: 'creating',
+            workflow_step: 'PENDING',
+            updated_at: 1234,
+          }];
+        default:
+          return [];
         }
       },
     };
@@ -330,38 +375,38 @@ test(
     const cache = {
       getAll(tableName) {
         switch (tableName) {
-          case 'nodes':
-            return [{
-              node_id: 'seed-node',
-              status: 'active',
-            }, {
-              node_id: 'target-node',
-              status: 'active',
-            }];
-          case 'services':
-            return [{
-              service_id: 'mg-1-r2',
-              replica_id: 'mg-1-r2',
-              service_type: 'message_group',
-              group_id: 'mg-1',
-              node_id: 'target-node',
-              status: 'active',
-            }];
-          case 'replica_operations':
-            return [{
-              operation_id: 'add-mg-1',
-              type: 'ADD',
-              entity_type: 'message_group',
-              entity_id: 'mg-1',
-              replica_id: 'mg-1-r2',
-              source_node_id: 'seed-node',
-              target_node_id: 'target-node',
-              status: 'creating',
-              workflow_step: 'CREATING',
-              updated_at: 1234,
-            }];
-          default:
-            return [];
+        case 'nodes':
+          return [{
+            node_id: 'seed-node',
+            status: 'active',
+          }, {
+            node_id: 'target-node',
+            status: 'active',
+          }];
+        case 'services':
+          return [{
+            service_id: 'mg-1-r2',
+            replica_id: 'mg-1-r2',
+            service_type: 'message_group',
+            group_id: 'mg-1',
+            node_id: 'target-node',
+            status: 'active',
+          }];
+        case 'replica_operations':
+          return [{
+            operation_id: 'add-mg-1',
+            type: 'ADD',
+            entity_type: 'message_group',
+            entity_id: 'mg-1',
+            replica_id: 'mg-1-r2',
+            source_node_id: 'seed-node',
+            target_node_id: 'target-node',
+            status: 'creating',
+            workflow_step: 'CREATING',
+            updated_at: 1234,
+          }];
+        default:
+          return [];
         }
       },
     };
@@ -394,48 +439,48 @@ test(
     const cache = {
       getAll(tableName) {
         switch (tableName) {
-          case 'nodes':
-            return [{
-              node_id: 'seed-node',
-              status: 'active',
-            }, {
-              node_id: 'target-node',
-              status: 'active',
-            }];
-          case 'partitions':
-            return [{
-              partition_id: 'services-p1',
-              table_name: 'services',
-            }, {
-              partition_id: 'sql_transactions-p1',
-              table_name: 'sql_transactions',
-            }];
-          case 'services':
-            return [];
-          case 'replica_operations':
-            return [{
-              operation_id: 'svc-op-1',
-              type: 'MOVE_REPLICA',
-              partition_id: 'services-p1',
-              replica_id: 'services-p1-r2',
-              source_node_id: 'seed-node',
-              target_node_id: 'target-node',
-              status: 'creating',
-              workflow_step: 'PENDING',
-              updated_at: 1234,
-            }, {
-              operation_id: 'tx-op-1',
-              type: 'MOVE_REPLICA',
-              partition_id: 'sql_transactions-p1',
-              replica_id: 'sql_transactions-p1-r2',
-              source_node_id: 'seed-node',
-              target_node_id: 'target-node',
-              status: 'creating',
-              workflow_step: 'PENDING',
-              updated_at: 1235,
-            }];
-          default:
-            return [];
+        case 'nodes':
+          return [{
+            node_id: 'seed-node',
+            status: 'active',
+          }, {
+            node_id: 'target-node',
+            status: 'active',
+          }];
+        case 'partitions':
+          return [{
+            partition_id: 'services-p1',
+            table_name: 'services',
+          }, {
+            partition_id: 'sql_transactions-p1',
+            table_name: 'sql_transactions',
+          }];
+        case 'services':
+          return [];
+        case 'replica_operations':
+          return [{
+            operation_id: 'svc-op-1',
+            type: 'MOVE_REPLICA',
+            partition_id: 'services-p1',
+            replica_id: 'services-p1-r2',
+            source_node_id: 'seed-node',
+            target_node_id: 'target-node',
+            status: 'creating',
+            workflow_step: 'PENDING',
+            updated_at: 1234,
+          }, {
+            operation_id: 'tx-op-1',
+            type: 'MOVE_REPLICA',
+            partition_id: 'sql_transactions-p1',
+            replica_id: 'sql_transactions-p1-r2',
+            source_node_id: 'seed-node',
+            target_node_id: 'target-node',
+            status: 'creating',
+            workflow_step: 'PENDING',
+            updated_at: 1235,
+          }];
+        default:
+          return [];
         }
       },
     };
@@ -478,35 +523,35 @@ test(
     const cache = {
       getAll(tableName) {
         switch (tableName) {
-          case 'nodes':
-            return [{
-              node_id: 'seed-node',
-              status: 'active',
-            }, {
-              node_id: 'target-node',
-              status: 'active',
-            }];
-          case 'partitions':
-            return [{
-              partition_id: 'sql_transactions-p1',
-              table_name: 'sql_transactions',
-            }];
-          case 'services':
-            return [];
-          case 'replica_operations':
-            return [{
-              operation_id: 'tx-op-1',
-              type: 'MOVE_REPLICA',
-              partition_id: 'sql_transactions-p1',
-              replica_id: 'sql_transactions-p1-r2',
-              source_node_id: 'seed-node',
-              target_node_id: 'target-node',
-              status: 'creating',
-              workflow_step: 'PENDING',
-              updated_at: 1234,
-            }];
-          default:
-            return [];
+        case 'nodes':
+          return [{
+            node_id: 'seed-node',
+            status: 'active',
+          }, {
+            node_id: 'target-node',
+            status: 'active',
+          }];
+        case 'partitions':
+          return [{
+            partition_id: 'sql_transactions-p1',
+            table_name: 'sql_transactions',
+          }];
+        case 'services':
+          return [];
+        case 'replica_operations':
+          return [{
+            operation_id: 'tx-op-1',
+            type: 'MOVE_REPLICA',
+            partition_id: 'sql_transactions-p1',
+            replica_id: 'sql_transactions-p1-r2',
+            source_node_id: 'seed-node',
+            target_node_id: 'target-node',
+            status: 'creating',
+            workflow_step: 'PENDING',
+            updated_at: 1234,
+          }];
+        default:
+          return [];
         }
       },
     };
@@ -549,38 +594,38 @@ test(
     const cache = {
       getAll(tableName) {
         switch (tableName) {
-          case 'nodes':
-            return [{
-              node_id: 'joining-node-readiness-evaluator',
-              status: 'joining',
-            }, {
-              node_id: 'seed-node',
-              status: 'active',
-            }, {
-              node_id: 'target-node',
-              status: 'active',
-            }];
-          case 'partitions':
-            return [{
-              partition_id: 'replica_operations-p1',
-              table_name: 'replica_operations',
-            }];
-          case 'services':
-            return [];
-          case 'replica_operations':
-            return [{
-              operation_id: 'priority-op-1',
-              type: 'REPLACE',
-              partition_id: 'replica_operations-p1',
-              replica_id: 'replica_operations-p1-r4',
-              source_node_id: 'seed-node',
-              target_node_id: 'target-node',
-              status: 'syncing',
-              workflow_step: 'SYNCING',
-              updated_at: 1234,
-            }];
-          default:
-            return [];
+        case 'nodes':
+          return [{
+            node_id: 'joining-node-readiness-evaluator',
+            status: 'joining',
+          }, {
+            node_id: 'seed-node',
+            status: 'active',
+          }, {
+            node_id: 'target-node',
+            status: 'active',
+          }];
+        case 'partitions':
+          return [{
+            partition_id: 'replica_operations-p1',
+            table_name: 'replica_operations',
+          }];
+        case 'services':
+          return [];
+        case 'replica_operations':
+          return [{
+            operation_id: 'priority-op-1',
+            type: 'REPLACE',
+            partition_id: 'replica_operations-p1',
+            replica_id: 'replica_operations-p1-r4',
+            source_node_id: 'seed-node',
+            target_node_id: 'target-node',
+            status: 'syncing',
+            workflow_step: 'SYNCING',
+            updated_at: 1234,
+          }];
+        default:
+          return [];
         }
       },
     };
@@ -643,6 +688,110 @@ test(
       result.excludedRemotePriorityControlPlaneCount,
       1,
       'topology diagnostics should surface the tolerated remote priority control-plane recovery count',
+    );
+  },
+);
+
+test(
+  'JoinReadinessEvaluator - topology can converge while self-source priority control-plane replacement drains to an active target',
+  async (t) => {
+    const harness = createEvaluatorHarness();
+    const cache = {
+      getAll(tableName) {
+        switch (tableName) {
+        case JOIN_READINESS_TEST_TABLE.NODES:
+          return [{
+            node_id: JOIN_READINESS_TEST_NODE_ID,
+            status: JOIN_READINESS_TEST_NODE_STATUS.JOINING,
+          }, {
+            node_id: JOIN_READINESS_TEST_SEED_NODE_ID,
+            status: JOIN_READINESS_TEST_NODE_STATUS.ACTIVE,
+          }, {
+            node_id: JOIN_READINESS_TEST_TARGET_NODE_ID,
+            status: JOIN_READINESS_TEST_NODE_STATUS.ACTIVE,
+          }];
+        case JOIN_READINESS_TEST_TABLE.PARTITIONS:
+          return [{
+            partition_id: JOIN_READINESS_TEST_PRIORITY_PARTITION_ID,
+            table_name: JOIN_READINESS_TEST_PRIORITY_TABLE_NAME,
+          }];
+        case JOIN_READINESS_TEST_TABLE.SERVICES:
+          return [];
+        case JOIN_READINESS_TEST_TABLE.REPLICA_OPERATIONS:
+          return [{
+            operation_id: JOIN_READINESS_TEST_PRIORITY_OPERATION_ID,
+            type: JOIN_READINESS_TEST_OPERATION_TYPE.REPLACE,
+            partition_id: JOIN_READINESS_TEST_PRIORITY_PARTITION_ID,
+            replica_id: JOIN_READINESS_TEST_PRIORITY_REPLICA_ID,
+            source_node_id: JOIN_READINESS_TEST_NODE_ID,
+            target_node_id: JOIN_READINESS_TEST_TARGET_NODE_ID,
+            status: JOIN_READINESS_TEST_OPERATION_STATUS.SYNCING,
+            workflow_step: JOIN_READINESS_TEST_WORKFLOW_STEP.SYNCING,
+            updated_at: JOIN_READINESS_TEST_OPERATION_UPDATED_AT_MS,
+          }];
+        default:
+          return [];
+        }
+      },
+    };
+    harness.evaluator.delegates.getMissingSystemServiceLeaders = () => ({
+      partitions: [],
+      messageGroups: [],
+    });
+    harness.evaluator.delegates.getBlockingSystemServiceLeaders = () => ({
+      partitions: [],
+      messageGroups: [],
+    });
+
+    const operationDetails =
+      harness.evaluator.collectCanonicalInFlightReplicaOperationDetails(
+        cache,
+      );
+    t.equal(
+      operationDetails.inFlightOperations.length,
+      JOIN_READINESS_TEST_NO_BLOCKERS,
+      'join topology blockers should exclude self-source priority control-plane replacement once the target is active',
+    );
+    t.equal(
+      operationDetails.excludedSelfSourcePriorityControlPlaneCount,
+      JOIN_READINESS_TEST_ONE_EXCLUSION,
+      'diagnostics should report tolerated self-source priority control-plane replacement',
+    );
+    t.match(
+      operationDetails.excludedSelfSourcePriorityControlPlaneOperationDetails,
+      [{
+        operationId: JOIN_READINESS_TEST_PRIORITY_OPERATION_ID,
+        type: JOIN_READINESS_TEST_OPERATION_TYPE.REPLACE,
+        partitionId: JOIN_READINESS_TEST_PRIORITY_PARTITION_ID,
+        replicaId: JOIN_READINESS_TEST_PRIORITY_REPLICA_ID,
+        sourceNodeId: JOIN_READINESS_TEST_NODE_ID,
+        targetNodeId: JOIN_READINESS_TEST_TARGET_NODE_ID,
+        status: JOIN_READINESS_TEST_OPERATION_STATUS.SYNCING,
+        workflowStep: JOIN_READINESS_TEST_WORKFLOW_STEP.SYNCING,
+        ageMs: Number,
+      }],
+      'diagnostics should preserve the tolerated self-source priority replacement details',
+    );
+
+    const result =
+      harness.evaluator.evaluateCanonicalJoinTopologyReadiness(
+        cache,
+      );
+
+    t.equal(
+      result.ready,
+      true,
+      'join topology should stay open while self-source priority control-plane replacement drains to an active target',
+    );
+    t.equal(
+      result.inFlightReplicaOperations,
+      JOIN_READINESS_TEST_NO_BLOCKERS,
+      'tolerated self-source priority control-plane replacement should not count as a blocking in-flight operation',
+    );
+    t.equal(
+      result.excludedSelfSourcePriorityControlPlaneCount,
+      JOIN_READINESS_TEST_ONE_EXCLUSION,
+      'topology diagnostics should surface the tolerated self-source priority control-plane replacement count',
     );
   },
 );

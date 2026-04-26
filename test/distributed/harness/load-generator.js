@@ -1342,7 +1342,6 @@ class LoadRun {
       healthKey: this._nodeHealthKeys[selectedIndex],
     }];
   }
-
 }
 
 Object.assign(LoadRun.prototype, LOAD_RUN_RUNTIME_METHODS);

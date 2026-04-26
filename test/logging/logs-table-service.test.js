@@ -678,9 +678,9 @@ test('LogsTableService defers transient control-plane write failures instead ' +
   transientError.retryAfterMs = 75;
   const service = new LogsTableService({
     logsOwner: createLogsOwner(async () => {
-        writeAttempts++;
-        throw transientError;
-      }),
+      writeAttempts++;
+      throw transientError;
+    }),
     maxRetries: 3,
     retryDelayMs: 10,
     maxPendingWrites: 2,
@@ -979,7 +979,7 @@ test('LogsTableService only admits unique error-level logs once the deferred ' +
 test('LogsTableService arms a shared-pressure defer window before the local ' +
   'queue saturates', async (t) => {
   LogsTableService.resetInstance();
-  let currentNow = 5000;
+  const currentNow = 5000;
   const pressureGovernor = {
     evaluate(request) {
       t.equal(

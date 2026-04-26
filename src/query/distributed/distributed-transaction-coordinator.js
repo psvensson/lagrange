@@ -60,50 +60,55 @@ class DistributedTransactionCoordinator {
     this.rollbackParticipant = options.rollbackParticipant || (async () => {});
     this.persistTransaction = options.persistTransaction || (async () => {});
     this.persistParticipant = options.persistParticipant || (async () => {});
-    this.persistWriteOperation = options.persistWriteOperation || (async () => {});
+    this.persistWriteOperation =
+      options.persistWriteOperation || (async () => {});
     this.now = options.now || (() => Date.now());
     this.nextEpoch = Number.isFinite(options.initialEpoch) ?
       Math.floor(options.initialEpoch) :
       this.now();
-    this.epochSource = options.epochSource || (() => {
-      this.nextEpoch += 1;
-      return this.nextEpoch;
-    });
-    this.transactionBudgetMs = Number.isFinite(options.transactionBudgetMs) &&
+    this.epochSource =
+      options.epochSource ||
+      (() => {
+        this.nextEpoch += 1;
+        return this.nextEpoch;
+      });
+    this.transactionBudgetMs =
+      Number.isFinite(options.transactionBudgetMs) &&
       options.transactionBudgetMs > 0 ?
-      Math.floor(options.transactionBudgetMs) :
-      TIMEOUT_BUDGET_DEFAULT.TRANSACTION_BUDGET_MS;
-    this.participantRetryMaxRetries = Number.isFinite(
-      options.participantRetryMaxRetries,
-    ) && options.participantRetryMaxRetries >= 0 ?
-      Math.floor(options.participantRetryMaxRetries) :
-      PARTICIPANT_RETRY_DEFAULT.MAX_RETRIES;
-    this.participantRetryBaseDelayMs = Number.isFinite(
-      options.participantRetryBaseDelayMs,
-    ) && options.participantRetryBaseDelayMs > 0 ?
-      Math.floor(options.participantRetryBaseDelayMs) :
-      PARTICIPANT_RETRY_DEFAULT.BASE_DELAY_MS;
-    this.participantRetryMaxDelayMs = Number.isFinite(
-      options.participantRetryMaxDelayMs,
-    ) && options.participantRetryMaxDelayMs > 0 ?
-      Math.floor(options.participantRetryMaxDelayMs) :
-      PARTICIPANT_RETRY_DEFAULT.MAX_DELAY_MS;
-    this.sleep = options.sleep || ((delayMs) =>
-      new Promise((resolve) => setTimeout(resolve, delayMs)));
+        Math.floor(options.transactionBudgetMs) :
+        TIMEOUT_BUDGET_DEFAULT.TRANSACTION_BUDGET_MS;
+    this.participantRetryMaxRetries =
+      Number.isFinite(options.participantRetryMaxRetries) &&
+      options.participantRetryMaxRetries >= 0 ?
+        Math.floor(options.participantRetryMaxRetries) :
+        PARTICIPANT_RETRY_DEFAULT.MAX_RETRIES;
+    this.participantRetryBaseDelayMs =
+      Number.isFinite(options.participantRetryBaseDelayMs) &&
+      options.participantRetryBaseDelayMs > 0 ?
+        Math.floor(options.participantRetryBaseDelayMs) :
+        PARTICIPANT_RETRY_DEFAULT.BASE_DELAY_MS;
+    this.participantRetryMaxDelayMs =
+      Number.isFinite(options.participantRetryMaxDelayMs) &&
+      options.participantRetryMaxDelayMs > 0 ?
+        Math.floor(options.participantRetryMaxDelayMs) :
+        PARTICIPANT_RETRY_DEFAULT.MAX_DELAY_MS;
+    this.sleep =
+      options.sleep ||
+      ((delayMs) => new Promise((resolve) => setTimeout(resolve, delayMs)));
     this.onParticipantRetry = options.onParticipantRetry || null;
     this.logger = options.logger || console;
-    this.loadRecoveryStateForSweep =
-      options.loadRecoveryStateForSweep || null;
-    this.recoverySweepIntervalMs = Number.isFinite(
-      options.recoverySweepIntervalMs,
-    ) && options.recoverySweepIntervalMs > 0 ?
-      Math.floor(options.recoverySweepIntervalMs) :
-      RECOVERY_SWEEP_DEFAULT_INTERVAL_MS;
+    this.loadRecoveryStateForSweep = options.loadRecoveryStateForSweep || null;
+    this.recoverySweepIntervalMs =
+      Number.isFinite(options.recoverySweepIntervalMs) &&
+      options.recoverySweepIntervalMs > 0 ?
+        Math.floor(options.recoverySweepIntervalMs) :
+        RECOVERY_SWEEP_DEFAULT_INTERVAL_MS;
     this.recoverySweepTimer = null;
     this.recoverySweepInFlight = false;
     this.recoverySweepDeferredUntilMs = 0;
     this.recoverySweepDeferredAttempts = 0;
-    this.workflowCoordinator = options.workflowCoordinator ||
+    this.workflowCoordinator =
+      options.workflowCoordinator ||
       new DurableWorkflowCoordinator({
         persistWorkflow: async (workflow) => {
           await this.persistTransaction({
@@ -264,7 +269,8 @@ class DistributedTransactionCoordinator {
         [...operation.partitionIds] :
         [],
       idempotencyKey: operation.idempotencyKey || operation.operationId,
-      payloadHash: operation.payloadHash || this.createWritePayloadHash(operation),
+      payloadHash:
+        operation.payloadHash || this.createWritePayloadHash(operation),
       status: WRITE_OPERATION_STATUS.PENDING,
       retryCount: 0,
       lastError: null,
@@ -291,21 +297,24 @@ class DistributedTransactionCoordinator {
       return;
     }
 
-    const operation = tx.writeOperations.find((entry) =>
-      entry.operationId === operationId);
+    const operation = tx.writeOperations.find(
+      (entry) => entry.operationId === operationId,
+    );
     if (!operation) {
       return;
     }
 
-    operation.status = result?.success === true ?
-      WRITE_OPERATION_STATUS.SUCCEEDED :
-      WRITE_OPERATION_STATUS.FAILED;
+    operation.status =
+      result?.success === true ?
+        WRITE_OPERATION_STATUS.SUCCEEDED :
+        WRITE_OPERATION_STATUS.FAILED;
     operation.retryCount = Number.isInteger(result?.retryCount) ?
       result.retryCount :
       0;
-    operation.lastError = result?.success === true ?
-      null :
-      result?.error || QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE;
+    operation.lastError =
+      result?.success === true ?
+        null :
+        result?.error || QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE;
     operation.updatedAt = this.now();
     tx.updatedAt = operation.updatedAt;
 
@@ -396,7 +405,9 @@ class DistributedTransactionCoordinator {
       transactions: rows,
       participants: rows.flatMap((row) => {
         const transactionId = row.transaction_id || row.transactionId;
-        const participants = Array.isArray(row.participants) ? row.participants : [];
+        const participants = Array.isArray(row.participants) ?
+          row.participants :
+          [];
         return participants.map((partitionId) => ({
           transaction_id: transactionId,
           partition_id: partitionId,
@@ -501,8 +512,9 @@ class DistributedTransactionCoordinator {
       this.recoveredTransactionIds.delete(workflowId);
     }
 
-    const resumed = results.filter((entry) =>
-      entry.success && !entry.skipped).length;
+    const resumed = results.filter(
+      (entry) => entry.success && !entry.skipped,
+    ).length;
     const failed = results.filter((entry) => !entry.success).length;
     return {
       totalRecovered: recoveredWorkflowIds.length,
@@ -555,12 +567,14 @@ class DistributedTransactionCoordinator {
         }
       }
 
-      const stuckTransactions = Array.from(this.transactionsBySession.values())
-        .filter((tx) =>
+      const stuckTransactions = Array.from(
+        this.transactionsBySession.values(),
+      ).filter(
+        (tx) =>
           !TERMINAL_TRANSACTION_STATUS.has(tx.status) &&
           tx.status !== TRANSACTION_STATUS.FAILED &&
           this.isTransactionBudgetExceeded(tx),
-        );
+      );
       const results = [];
       let deferred = 0;
 
@@ -586,15 +600,17 @@ class DistributedTransactionCoordinator {
               error,
               {
                 swept: stuckTransactions.length,
-                results: [{
-                  transactionId: tx.transactionId,
-                  sessionId: tx.sessionId,
-                  sweepPath,
-                  statusAfter: tx.status,
-                  success: false,
-                  deferred: true,
-                  error: error?.message || String(error),
-                }],
+                results: [
+                  {
+                    transactionId: tx.transactionId,
+                    sessionId: tx.sessionId,
+                    sweepPath,
+                    statusAfter: tx.status,
+                    success: false,
+                    deferred: true,
+                    error: error?.message || String(error),
+                  },
+                ],
               },
             );
             results.push(...deferredResult.results);
@@ -603,8 +619,10 @@ class DistributedTransactionCoordinator {
           throw error;
         }
 
-        if (protocolResult?.success !== true &&
-          this.shouldDeferRecoverySweepError(protocolResult)) {
+        if (
+          protocolResult?.success !== true &&
+          this.shouldDeferRecoverySweepError(protocolResult)
+        ) {
           deferred += 1;
           this.deferRecoverySweep(protocolResult);
           results.push({
@@ -630,8 +648,8 @@ class DistributedTransactionCoordinator {
       }
 
       const resolved = results.filter((entry) => entry.success).length;
-      const failed = results.filter((entry) =>
-        entry.success !== true && entry.deferred !== true,
+      const failed = results.filter(
+        (entry) => entry.success !== true && entry.deferred !== true,
       ).length;
       if (deferred === 0) {
         this.clearRecoverySweepDeferState();
@@ -641,9 +659,7 @@ class DistributedTransactionCoordinator {
         resolved,
         failed,
         deferred,
-        deferredUntilMs: deferred > 0 ?
-          this.recoverySweepDeferredUntilMs :
-          0,
+        deferredUntilMs: deferred > 0 ? this.recoverySweepDeferredUntilMs : 0,
         skipped: false,
         results,
       };
@@ -685,8 +701,10 @@ class DistributedTransactionCoordinator {
    * @private
    */
   isRecoverySweepDeferred() {
-    return Number.isFinite(this.recoverySweepDeferredUntilMs) &&
-      this.recoverySweepDeferredUntilMs > this.now();
+    return (
+      Number.isFinite(this.recoverySweepDeferredUntilMs) &&
+      this.recoverySweepDeferredUntilMs > this.now()
+    );
   }
 
   /**
@@ -705,15 +723,17 @@ class DistributedTransactionCoordinator {
    */
   deferRecoverySweep(errorLike) {
     const retryAfterMs = getControlPlaneRetryAfterMs(errorLike);
-    const backoffMs = retryAfterMs > 0 ?
-      retryAfterMs :
-      Math.min(
-        RECOVERY_SWEEP_DEFER_MAX_MS,
-        Math.max(
-          this.recoverySweepIntervalMs,
-          RECOVERY_SWEEP_DEFER_BASE_MS * (2 ** this.recoverySweepDeferredAttempts),
-        ),
-      );
+    const backoffMs =
+      retryAfterMs > 0 ?
+        retryAfterMs :
+        Math.min(
+          RECOVERY_SWEEP_DEFER_MAX_MS,
+          Math.max(
+            this.recoverySweepIntervalMs,
+            RECOVERY_SWEEP_DEFER_BASE_MS *
+                2 ** this.recoverySweepDeferredAttempts,
+          ),
+        );
     this.recoverySweepDeferredAttempts += 1;
     this.recoverySweepDeferredUntilMs = this.now() + backoffMs;
     return {
@@ -810,7 +830,8 @@ class DistributedTransactionCoordinator {
         return {
           workflowId: transactionId,
           transactionId,
-          participantId: row.participant_id ||
+          participantId:
+            row.participant_id ||
             row.participantId ||
             this.createParticipantId(transactionId, partitionId),
           participantKey: partitionId,
@@ -849,7 +870,9 @@ class DistributedTransactionCoordinator {
       tx.writeOperations.push({
         operationId: row.operation_id || row.operationId,
         statementType: row.statement_type || row.statementType,
-        partitionIds: this.parseJsonArrayField(row.partition_ids || row.partitionIds),
+        partitionIds: this.parseJsonArrayField(
+          row.partition_ids || row.partitionIds,
+        ),
         idempotencyKey: row.idempotency_key || row.idempotencyKey,
         payloadHash: row.payload_hash || row.payloadHash,
         status: row.status || WRITE_OPERATION_STATUS.PENDING,
@@ -949,16 +972,19 @@ class DistributedTransactionCoordinator {
    * @private
    */
   async runCommitProtocol(tx, options = {}) {
-    const commitStatusAllowsTimeout = options.allowTimedOutCommitStatuses === true &&
+    const commitStatusAllowsTimeout =
+      options.allowTimedOutCommitStatuses === true &&
       (tx.status === TRANSACTION_STATUS.PREPARED ||
-      tx.status === TRANSACTION_STATUS.COMMITTING);
+        tx.status === TRANSACTION_STATUS.COMMITTING);
 
     if (!commitStatusAllowsTimeout && this.isTransactionBudgetExceeded(tx)) {
       return this.abortTimedOutTransaction(tx, tx.status);
     }
 
-    if (tx.status === TRANSACTION_STATUS.ACTIVE ||
-      tx.status === TRANSACTION_STATUS.FAILED) {
+    if (
+      tx.status === TRANSACTION_STATUS.ACTIVE ||
+      tx.status === TRANSACTION_STATUS.FAILED
+    ) {
       await this.setTransactionStatus(tx, TRANSACTION_STATUS.PREPARING);
     }
 
@@ -975,7 +1001,10 @@ class DistributedTransactionCoordinator {
       );
       if (prepareFailures.length > 0) {
         if (this.hasTimeoutFailure(prepareFailures)) {
-          return this.abortTimedOutTransaction(tx, TRANSACTION_STATUS.PREPARING);
+          return this.abortTimedOutTransaction(
+            tx,
+            TRANSACTION_STATUS.PREPARING,
+          );
         }
         await this.setTransactionStatus(tx, TRANSACTION_STATUS.ROLLING_BACK);
         const rollbackResult = await this.runRollbackProtocol(tx);
@@ -1027,7 +1056,10 @@ class DistributedTransactionCoordinator {
       },
     );
     if (commitFailures.length > 0) {
-      if (!commitStatusAllowsTimeout && this.hasTimeoutFailure(commitFailures)) {
+      if (
+        !commitStatusAllowsTimeout &&
+        this.hasTimeoutFailure(commitFailures)
+      ) {
         return this.abortTimedOutTransaction(tx, TRANSACTION_STATUS.COMMITTING);
       }
       await this.setTransactionStatus(tx, TRANSACTION_STATUS.FAILED);
@@ -1083,12 +1115,14 @@ class DistributedTransactionCoordinator {
       transactionId: tx.transactionId,
       participants: this.getOrderedParticipantIds(tx),
       failedParticipants: rollbackFailures,
-      errorCode: rollbackFailures.length > 0 ?
-        QUERY_ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE :
-        undefined,
-      error: rollbackFailures.length > 0 ?
-        QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE :
-        undefined,
+      errorCode:
+        rollbackFailures.length > 0 ?
+          QUERY_ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE :
+          undefined,
+      error:
+        rollbackFailures.length > 0 ?
+          QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE :
+          undefined,
     };
   }
 
@@ -1123,9 +1157,11 @@ class DistributedTransactionCoordinator {
    */
   getPrepareParticipantKeys(tx) {
     return Array.from(tx.participants.values())
-      .filter((participant) =>
-        participant.status !== PARTICIPANT_STATUS.PREPARED &&
-        participant.status !== PARTICIPANT_STATUS.COMMITTED)
+      .filter(
+        (participant) =>
+          participant.status !== PARTICIPANT_STATUS.PREPARED &&
+          participant.status !== PARTICIPANT_STATUS.COMMITTED,
+      )
       .map((participant) => participant.partitionId)
       .sort();
   }
@@ -1138,8 +1174,9 @@ class DistributedTransactionCoordinator {
    */
   getCommitParticipantKeys(tx) {
     return Array.from(tx.participants.values())
-      .filter((participant) =>
-        participant.status !== PARTICIPANT_STATUS.COMMITTED)
+      .filter(
+        (participant) => participant.status !== PARTICIPANT_STATUS.COMMITTED,
+      )
       .map((participant) => participant.partitionId)
       .sort();
   }
@@ -1152,8 +1189,9 @@ class DistributedTransactionCoordinator {
    */
   getRollbackParticipantKeys(tx) {
     return Array.from(tx.participants.values())
-      .filter((participant) =>
-        participant.status !== PARTICIPANT_STATUS.ROLLED_BACK)
+      .filter(
+        (participant) => participant.status !== PARTICIPANT_STATUS.ROLLED_BACK,
+      )
       .map((participant) => participant.partitionId)
       .sort();
   }
@@ -1185,21 +1223,23 @@ class DistributedTransactionCoordinator {
     if (Array.isArray(options.participantKeys)) {
       stageOptions.participantKeys = options.participantKeys;
     }
-    const failedParticipants = await this.workflowCoordinator.executeParticipantStage(
-      tx.workflowId,
-      transientStatus,
-      successStatus,
-      (partitionId) => this.executeParticipantOperationWithRetry(
-        tx,
+    const failedParticipants =
+      await this.workflowCoordinator.executeParticipantStage(
+        tx.workflowId,
         transientStatus,
-        partitionId,
-        operation,
-        {
-          skipBudgetEnforcement: options.skipBudgetEnforcement === true,
-        },
-      ),
-      stageOptions,
-    );
+        successStatus,
+        (partitionId) =>
+          this.executeParticipantOperationWithRetry(
+            tx,
+            transientStatus,
+            partitionId,
+            operation,
+            {
+              skipBudgetEnforcement: options.skipBudgetEnforcement === true,
+            },
+          ),
+        stageOptions,
+      );
     return failedParticipants.map((entry) => ({
       partitionId: entry.participantKey,
       error: entry.error,
@@ -1229,9 +1269,11 @@ class DistributedTransactionCoordinator {
     let attempt = 0;
     const skipBudgetEnforcement = options.skipBudgetEnforcement === true;
     while (true) {
-      if (!skipBudgetEnforcement &&
+      if (
+        !skipBudgetEnforcement &&
         stage !== PARTICIPANT_STATUS.ROLLING_BACK &&
-        this.isTransactionBudgetExceeded(tx)) {
+        this.isTransactionBudgetExceeded(tx)
+      ) {
         throw this.createTransactionTimeoutError();
       }
       try {
@@ -1257,9 +1299,11 @@ class DistributedTransactionCoordinator {
           retryDelayMs,
           error: error.message,
         });
-        if (!skipBudgetEnforcement &&
+        if (
+          !skipBudgetEnforcement &&
           stage !== PARTICIPANT_STATUS.ROLLING_BACK &&
-          this.isTransactionBudgetExceeded(tx)) {
+          this.isTransactionBudgetExceeded(tx)
+        ) {
           throw this.createTransactionTimeoutError();
         }
         await this.sleep(retryDelayMs);
@@ -1323,8 +1367,8 @@ class DistributedTransactionCoordinator {
    * @private
    */
   calculateParticipantRetryDelay(attempt) {
-    const exponentialDelay = this.participantRetryBaseDelayMs *
-      (2 ** Math.max(attempt - 1, 0));
+    const exponentialDelay =
+      this.participantRetryBaseDelayMs * 2 ** Math.max(attempt - 1, 0);
     return Math.min(this.participantRetryMaxDelayMs, exponentialDelay);
   }
 
@@ -1425,9 +1469,7 @@ class DistributedTransactionCoordinator {
       statementType: operation.statementType,
       partitionIds: operation.partitionIds || [],
     });
-    return createHash('sha1')
-      .update(payload)
-      .digest('hex');
+    return createHash('sha1').update(payload).digest('hex');
   }
 
   /**
@@ -1492,4 +1534,9 @@ class DistributedTransactionCoordinator {
   }
 }
 
-export {DistributedTransactionCoordinator, PARTICIPANT_STATUS, TRANSACTION_STATUS, WRITE_OPERATION_STATUS};
+export {
+  DistributedTransactionCoordinator,
+  PARTICIPANT_STATUS,
+  TRANSACTION_STATUS,
+  WRITE_OPERATION_STATUS,
+};

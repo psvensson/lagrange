@@ -570,57 +570,57 @@ class AuthoritativeNodeEvidenceReconciler {
 
   buildRepairNodeEvidenceOutcome(nodeId, repairContext = {}) {
     switch (repairContext.state) {
-      case AUTHORITATIVE_REPAIR_STATE.VIEW_UNAVAILABLE:
-      case AUTHORITATIVE_REPAIR_STATE.SNAPSHOT_UNAVAILABLE:
-        return buildRepairOutcome({
-          outcome: REPAIR_OUTCOME_FAILED,
+    case AUTHORITATIVE_REPAIR_STATE.VIEW_UNAVAILABLE:
+    case AUTHORITATIVE_REPAIR_STATE.SNAPSHOT_UNAVAILABLE:
+      return buildRepairOutcome({
+        outcome: REPAIR_OUTCOME_FAILED,
+        repairIntent: repairContext.repairIntent,
+        nodeEvidenceState: repairContext.nodeEvidenceState,
+        serviceEvidenceState: repairContext.serviceEvidenceState,
+        partitionEvidenceState: repairContext.partitionEvidenceState,
+      });
+    case AUTHORITATIVE_REPAIR_STATE.REPAIRED:
+      this.logger.warn(
+        REPAIR_APPLIED_LOG_MESSAGE,
+        {
+          nodeId,
           repairIntent: repairContext.repairIntent,
+          repairedRowCount: repairContext.repairedRowCount,
+          repairedNodeRowCount: repairContext.nodeRowCount,
+          repairedServiceRowCount: repairContext.serviceRowCount,
+          repairedPartitionRowCount: repairContext.partitionRowCount,
           nodeEvidenceState: repairContext.nodeEvidenceState,
           serviceEvidenceState: repairContext.serviceEvidenceState,
           partitionEvidenceState: repairContext.partitionEvidenceState,
-        });
-      case AUTHORITATIVE_REPAIR_STATE.REPAIRED:
-        this.logger.warn(
-          REPAIR_APPLIED_LOG_MESSAGE,
-          {
-            nodeId,
-            repairIntent: repairContext.repairIntent,
-            repairedRowCount: repairContext.repairedRowCount,
-            repairedNodeRowCount: repairContext.nodeRowCount,
-            repairedServiceRowCount: repairContext.serviceRowCount,
-            repairedPartitionRowCount: repairContext.partitionRowCount,
-            nodeEvidenceState: repairContext.nodeEvidenceState,
-            serviceEvidenceState: repairContext.serviceEvidenceState,
-            partitionEvidenceState: repairContext.partitionEvidenceState,
-          },
-        );
-        return buildRepairOutcome({
-          repaired: true,
-          outcome: REPAIR_OUTCOME_REPAIRED,
-          repairIntent: repairContext.repairIntent,
-          nodeRowCount: repairContext.nodeRowCount,
-          serviceRowCount: repairContext.serviceRowCount,
-          partitionRowCount: repairContext.partitionRowCount,
-          nodeEvidenceState: repairContext.nodeEvidenceState,
-          serviceEvidenceState: repairContext.serviceEvidenceState,
-          partitionEvidenceState: repairContext.partitionEvidenceState,
-        });
-      case AUTHORITATIVE_REPAIR_STATE.UNCHANGED:
-        return buildRepairOutcome({
-          outcome: REPAIR_OUTCOME_UNCHANGED,
-          repairIntent: repairContext.repairIntent,
-          nodeRowCount: repairContext.nodeRowCount,
-          serviceRowCount: repairContext.serviceRowCount,
-          partitionRowCount: repairContext.partitionRowCount,
-          nodeEvidenceState: repairContext.nodeEvidenceState,
-          serviceEvidenceState: repairContext.serviceEvidenceState,
-          partitionEvidenceState: repairContext.partitionEvidenceState,
-        });
-      default:
-        throw new Error(
-          UNKNOWN_AUTHORITATIVE_REPAIR_STATE_ERROR_PREFIX +
+        },
+      );
+      return buildRepairOutcome({
+        repaired: true,
+        outcome: REPAIR_OUTCOME_REPAIRED,
+        repairIntent: repairContext.repairIntent,
+        nodeRowCount: repairContext.nodeRowCount,
+        serviceRowCount: repairContext.serviceRowCount,
+        partitionRowCount: repairContext.partitionRowCount,
+        nodeEvidenceState: repairContext.nodeEvidenceState,
+        serviceEvidenceState: repairContext.serviceEvidenceState,
+        partitionEvidenceState: repairContext.partitionEvidenceState,
+      });
+    case AUTHORITATIVE_REPAIR_STATE.UNCHANGED:
+      return buildRepairOutcome({
+        outcome: REPAIR_OUTCOME_UNCHANGED,
+        repairIntent: repairContext.repairIntent,
+        nodeRowCount: repairContext.nodeRowCount,
+        serviceRowCount: repairContext.serviceRowCount,
+        partitionRowCount: repairContext.partitionRowCount,
+        nodeEvidenceState: repairContext.nodeEvidenceState,
+        serviceEvidenceState: repairContext.serviceEvidenceState,
+        partitionEvidenceState: repairContext.partitionEvidenceState,
+      });
+    default:
+      throw new Error(
+        UNKNOWN_AUTHORITATIVE_REPAIR_STATE_ERROR_PREFIX +
           String(repairContext.state),
-        );
+      );
     }
   }
 

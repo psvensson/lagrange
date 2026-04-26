@@ -10,44 +10,43 @@
 import {test} from '../../../../src/test-helpers/tap.js';
 import http from 'node:http';
 import assert from 'node:assert';
-import {promises as fs} from 'node:fs';
-import {resolve as resolvePath} from 'node:path';
-import fc from 'fast-check';
-import {validate as uuidValidate} from 'uuid';
-import {WebSocketServer} from 'ws';
 import {
-  ACTIVE_WAIT_HANG_TEST_TIMEOUT_MS,
-  ADMIN_QUERY_TRACE_TIMEOUT_TEST_MS,
-  BENCHMARK_CRITICAL_CONTROL_PLANE_STABILITY_REASON_SNAPSHOT_UNAVAILABLE,
-  BENCHMARK_CRITICAL_CONTROL_PLANE_STABILITY_STATE,
-  BENCHMARK_DEGRADATION_STATE,
-  BENCHMARK_LOAD_ADMISSION_STATE,
-  buildCriticalSystemDiscoverySnapshot,
-  Cluster,
-  CONTAINER_ALREADY_STOPPED_ERROR_MESSAGE,
-  CONTAINER_ENV_KEYS,
   createCluster,
-  distributeNodes,
-  ENTRYPOINT_ENV,
-  LABELS,
   LOAD_STOP_DISPATCH_SETTLE_MS,
   LOAD_STOP_WAIT_TIMEOUT_MS,
   NodeHandle,
-  NODE_CLIENT_CONTROL_SNAPSHOT_SQL,
-  NODE_CLIENT_SERVICE_DISCOVERY_SQL,
-  NODE_CLIENT_SERVICE_ID_ADMIN_META,
   NODE_CLIENT_SERVICE_ID_POSTGRES_WIRE,
   NODE_CLIENT_SERVICE_PROTOCOL_POSTGRESQL,
   NODE_ROLES,
-  PLAYBACK_EVENT_TYPE,
-  PORTS,
-  RAFT_PROVIDER_DEFAULTS,
 } from './cluster-test-helpers.js';
 
-const REUSE_START_COMMAND =
-  'if [ -f /harness-control/reset-data-on-start ]; then rm -rf /data/* && ' +
-  'rm -f /harness-control/reset-data-on-start; fi; ' +
-  'exec node --max-old-space-size=1536 /app/src/index.js';
+const LARGE_RESTART_READINESS_TIMEOUT_MS = 120000;
+const REACHABILITY_HTTP_STAGE_TIMEOUT_CAP_MS = 1000;
+const RESTART_RECOVERY_DIAGNOSTIC_TEST_NODE_ID = 'node-recovery-blocked';
+const RESTART_RECOVERY_DIAGNOSTIC_TEST_REACHABLE_BY = 'bootstrap_health';
+const RESTART_RECOVERY_DIAGNOSTIC_TEST_READINESS_PHASE = 'CONTROL_READY';
+const RESTART_RECOVERY_DIAGNOSTIC_TEST_READINESS_STAGE =
+  'publication_epoch_pending';
+const RESTART_RECOVERY_DIAGNOSTIC_TEST_READINESS_STAGE_RANK = 1;
+const RESTART_RECOVERY_DIAGNOSTIC_TEST_REASON_LEADER =
+  'LEADER_METADATA_INCOMPLETE';
+const RESTART_RECOVERY_DIAGNOSTIC_TEST_REASON_PRIORITY =
+  'PRIORITY_CONTROL_PLANE_RECOVERY_PENDING';
+const RESTART_RECOVERY_DIAGNOSTIC_TEST_LAST_ERROR = 'admin still closed';
+const RESTART_RECOVERY_DIAGNOSTIC_TEST_TIMEOUT_MS = 1;
+const RESTART_RECOVERY_DIAGNOSTIC_TEST_PROJECTION_BLOCKER =
+  'control_snapshot_authority_unavailable';
+const STRICT_RESTART_READINESS_TEST_NODE_ID = 'node-strict-admin';
+const STRICT_RESTART_READINESS_TEST_TIMEOUT_MS = 50;
+const STRICT_RESTART_READINESS_READY_ATTEMPT = 3;
+const RESTART_RECOVERY_DIAGNOSTIC_TEST_PHASE_PATTERN =
+  /readinessPhase=CONTROL_READY/;
+const RESTART_RECOVERY_DIAGNOSTIC_TEST_STAGE_PATTERN =
+  /readinessStage=publication_epoch_pending/;
+const RESTART_RECOVERY_DIAGNOSTIC_TEST_REASONS_PATTERN =
+  /readinessReasons=LEADER_METADATA_INCOMPLETE\|PRIORITY_CONTROL_PLANE_RECOVERY_PENDING/;
+const RESTART_RECOVERY_DIAGNOSTIC_TEST_PROJECTION_PATTERN =
+  /bootstrapJoinProjectionBlocker=control_snapshot_authority_unavailable/;
 
 /**
  * Feature: distributed-testing-framework
@@ -515,6 +514,55 @@ test('Unit: _waitForNodeAdminReadiness accepts bootstrap recovery readiness befo
     );
   });
 
+test('Unit: _waitForNodeAdminReadiness can require admin readiness',
+  async () => {
+    const cluster = createCluster({
+      size: 1,
+      docker: {socketPath: '/var/run/docker.sock'},
+      image: 'distributed-db:test',
+      timeouts: {
+        nodeStartup: STRICT_RESTART_READINESS_TEST_TIMEOUT_MS,
+      },
+    });
+
+    let attempts = 0;
+    cluster._nodes.set(STRICT_RESTART_READINESS_TEST_NODE_ID, {
+      id: STRICT_RESTART_READINESS_TEST_NODE_ID,
+      async getReachabilityDiagnostics() {
+        attempts += 1;
+        return {
+          nodeId: STRICT_RESTART_READINESS_TEST_NODE_ID,
+          reachable: true,
+          reachableBy: 'bootstrap_health',
+          adminReady: attempts >= STRICT_RESTART_READINESS_READY_ATTEMPT,
+          controlPlaneRecoveryReady: true,
+          recoveryStage: 'control_plane_recovery_ready',
+          recoveryStageRank: 2,
+          lastError:
+            attempts >= STRICT_RESTART_READINESS_READY_ATTEMPT ?
+              null :
+              'admin still warming',
+        };
+      },
+    });
+    cluster._sleep = async () => {};
+    cluster._collectFailureLogs = async () => {
+      throw new Error('should not collect failure logs on success');
+    };
+
+    await cluster._waitForNodeAdminReadiness(
+      STRICT_RESTART_READINESS_TEST_NODE_ID,
+      {
+        requireAdminReady: true,
+      },
+    );
+
+    assert.ok(
+      attempts >= STRICT_RESTART_READINESS_READY_ATTEMPT,
+      'strict restart readiness should keep polling until admin is ready',
+    );
+  });
+
 test('Unit: _waitForNodeAdminReadiness waits until the expected published control-plane epoch is visible',
   async () => {
     const cluster = createCluster({
@@ -554,6 +602,79 @@ test('Unit: _waitForNodeAdminReadiness waits until the expected published contro
     assert.ok(
       attempts >= 3,
       'restart readiness should keep polling until the node reports the expected published control-plane epoch',
+    );
+  });
+
+test(
+  'Unit: _waitForNodeAdminReadiness timeout reports bootstrap readiness ' +
+    'owner blocker',
+  async () => {
+    const cluster = createCluster({
+      size: 1,
+      docker: {socketPath: '/var/run/docker.sock'},
+      image: 'distributed-db:test',
+      timeouts: {
+        nodeStartup: RESTART_RECOVERY_DIAGNOSTIC_TEST_TIMEOUT_MS,
+      },
+    });
+
+    cluster._nodes.set(RESTART_RECOVERY_DIAGNOSTIC_TEST_NODE_ID, {
+      id: RESTART_RECOVERY_DIAGNOSTIC_TEST_NODE_ID,
+      async getReachabilityDiagnostics() {
+        return {
+          nodeId: RESTART_RECOVERY_DIAGNOSTIC_TEST_NODE_ID,
+          reachable: true,
+          reachableBy: RESTART_RECOVERY_DIAGNOSTIC_TEST_REACHABLE_BY,
+          adminReady: false,
+          controlPlaneRecoveryReady: false,
+          readinessStage: RESTART_RECOVERY_DIAGNOSTIC_TEST_READINESS_STAGE,
+          readinessStageRank:
+            RESTART_RECOVERY_DIAGNOSTIC_TEST_READINESS_STAGE_RANK,
+          bootstrapReadiness: {
+            phase: RESTART_RECOVERY_DIAGNOSTIC_TEST_READINESS_PHASE,
+            reasons: [
+              RESTART_RECOVERY_DIAGNOSTIC_TEST_REASON_LEADER,
+              RESTART_RECOVERY_DIAGNOSTIC_TEST_REASON_PRIORITY,
+            ],
+            bootstrapJoinProjection: {
+              canProjectReady: false,
+              blockerReason:
+                RESTART_RECOVERY_DIAGNOSTIC_TEST_PROJECTION_BLOCKER,
+            },
+          },
+          lastError: RESTART_RECOVERY_DIAGNOSTIC_TEST_LAST_ERROR,
+        };
+      },
+    });
+    cluster._sleep = async () => {};
+    cluster._collectFailureLogs = async () => {};
+
+    await assert.rejects(
+      () => cluster._waitForNodeAdminReadiness(
+        RESTART_RECOVERY_DIAGNOSTIC_TEST_NODE_ID,
+        {
+          readinessTimeoutMs: RESTART_RECOVERY_DIAGNOSTIC_TEST_TIMEOUT_MS,
+        },
+      ),
+      (error) => {
+        assert.match(
+          error.message,
+          RESTART_RECOVERY_DIAGNOSTIC_TEST_PHASE_PATTERN,
+        );
+        assert.match(
+          error.message,
+          RESTART_RECOVERY_DIAGNOSTIC_TEST_STAGE_PATTERN,
+        );
+        assert.match(
+          error.message,
+          RESTART_RECOVERY_DIAGNOSTIC_TEST_REASONS_PATTERN,
+        );
+        assert.match(
+          error.message,
+          RESTART_RECOVERY_DIAGNOSTIC_TEST_PROJECTION_PATTERN,
+        );
+        return true;
+      },
     );
   });
 
@@ -1180,6 +1301,11 @@ test(
                 recoveryStage: 'control_plane_recovery_ready',
                 recoveryStageRank: 2,
                 publishedControlPlaneEpoch: 14,
+                bootstrapJoinProjection: {
+                  canProjectReady: false,
+                  blockerReason:
+                    RESTART_RECOVERY_DIAGNOSTIC_TEST_PROJECTION_BLOCKER,
+                },
               }));
             });
           }
@@ -1213,6 +1339,10 @@ test(
       assert.strictEqual(
         diagnostics.bootstrapReadiness?.publishedControlPlaneEpoch,
         14,
+      );
+      assert.strictEqual(
+        diagnostics.bootstrapReadiness?.bootstrapJoinProjection?.blockerReason,
+        RESTART_RECOVERY_DIAGNOSTIC_TEST_PROJECTION_BLOCKER,
       );
     } finally {
       http.get = originalGet;
@@ -1280,6 +1410,67 @@ test(
         observedTimeouts[1] < observedTimeouts[0],
         true,
         'admin probe should receive remaining timeout budget',
+      );
+    } finally {
+      http.get = originalGet;
+      node.queryWithTimeout = originalQueryWithTimeout;
+      node._getAdminSocket = originalGetAdminSocket;
+    }
+  },
+);
+
+test(
+  'Unit: NodeHandle.getReachabilityDiagnostics caps per-stage timeouts when ' +
+    'called with a large restart readiness deadline',
+  async () => {
+    const node = new NodeHandle(
+      'node-1',
+      'container-1',
+      '127.0.0.1',
+      NODE_ROLES.JOINER,
+      {getContainerLogs: async () => ''},
+    );
+
+    const originalGet = http.get;
+    const originalQueryWithTimeout = node.queryWithTimeout;
+    const originalGetAdminSocket = node._getAdminSocket;
+    const observedTimeouts = [];
+    http.get = (url, options, callback) => {
+      observedTimeouts.push(Number(options?.timeout));
+      const req = {
+        on: () => req,
+        destroy: () => {},
+      };
+      process.nextTick(() => {
+        callback({
+          statusCode: String(url).includes(':8080/health') ? 200 : 503,
+          resume: () => {},
+        });
+      });
+      return req;
+    };
+    node._getAdminSocket = async () => {
+      throw new Error('admin ws unavailable');
+    };
+    node.queryWithTimeout = async () => {
+      throw new Error('sql probe failed');
+    };
+
+    try {
+      await node.getReachabilityDiagnostics({
+        timeoutMs: LARGE_RESTART_READINESS_TIMEOUT_MS,
+      });
+      assert.strictEqual(
+        observedTimeouts.length >= 3,
+        true,
+        'should issue bootstrap health, bootstrap readiness, and admin HTTP probes',
+      );
+      assert.deepStrictEqual(
+        observedTimeouts.map((timeoutMs) =>
+          timeoutMs <= REACHABILITY_HTTP_STAGE_TIMEOUT_CAP_MS,
+        ),
+        observedTimeouts.map(() => true),
+        'large restart deadline must not become a single HTTP probe timeout',
       );
     } finally {
       http.get = originalGet;

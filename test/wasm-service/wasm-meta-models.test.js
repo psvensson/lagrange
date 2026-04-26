@@ -16,16 +16,12 @@ import {
 } from '../../src/wasm-service/wasm-meta-models.js';
 import {
   REGISTRY_MAPPING_COL,
-  REGISTRY_MAPPING_FIELD,
   REGISTRY_MAPPING_ERROR_MSG,
   REGISTRY_OVERRIDE_COL,
-  REGISTRY_OVERRIDE_FIELD,
   REGISTRY_OVERRIDE_ERROR_MSG,
   DEPENDENCY_LOCK_COL,
-  DEPENDENCY_LOCK_FIELD,
   DEPENDENCY_LOCK_ERROR_MSG,
   WASM_OPERATION_COL,
-  WASM_OPERATION_FIELD,
   WASM_OPERATION_ERROR_MSG,
 } from '../../src/wasm-service/wasm-meta-models-constants.js';
 import {WASM_OPERATION_STATE} from '../../src/constants/index.js';
@@ -49,7 +45,7 @@ describe('validateRegistryMapping', () => {
     });
     assert.equal(result.valid, false);
     assert.ok(result.errors.includes(
-      REGISTRY_MAPPING_ERROR_MSG.NAMESPACE_REQUIRED
+      REGISTRY_MAPPING_ERROR_MSG.NAMESPACE_REQUIRED,
     ));
   });
 
@@ -60,7 +56,7 @@ describe('validateRegistryMapping', () => {
     });
     assert.equal(result.valid, false);
     assert.ok(result.errors.includes(
-      REGISTRY_MAPPING_ERROR_MSG.NAMESPACE_INVALID_FORMAT
+      REGISTRY_MAPPING_ERROR_MSG.NAMESPACE_INVALID_FORMAT,
     ));
   });
 
@@ -71,7 +67,7 @@ describe('validateRegistryMapping', () => {
     });
     assert.equal(result.valid, false);
     assert.ok(result.errors.includes(
-      REGISTRY_MAPPING_ERROR_MSG.REGISTRY_URL_REQUIRED
+      REGISTRY_MAPPING_ERROR_MSG.REGISTRY_URL_REQUIRED,
     ));
   });
 });
@@ -135,7 +131,7 @@ describe('validateRegistryOverride', () => {
     });
     assert.equal(result.valid, false);
     assert.ok(result.errors.includes(
-      REGISTRY_OVERRIDE_ERROR_MSG.NAMESPACE_REQUIRED
+      REGISTRY_OVERRIDE_ERROR_MSG.NAMESPACE_REQUIRED,
     ));
   });
 
@@ -147,7 +143,7 @@ describe('validateRegistryOverride', () => {
     });
     assert.equal(result.valid, false);
     assert.ok(result.errors.includes(
-      REGISTRY_OVERRIDE_ERROR_MSG.NAMESPACE_INVALID_FORMAT
+      REGISTRY_OVERRIDE_ERROR_MSG.NAMESPACE_INVALID_FORMAT,
     ));
   });
 
@@ -159,7 +155,7 @@ describe('validateRegistryOverride', () => {
     });
     assert.equal(result.valid, false);
     assert.ok(result.errors.includes(
-      REGISTRY_OVERRIDE_ERROR_MSG.NAME_REQUIRED
+      REGISTRY_OVERRIDE_ERROR_MSG.NAME_REQUIRED,
     ));
   });
 
@@ -171,7 +167,7 @@ describe('validateRegistryOverride', () => {
     });
     assert.equal(result.valid, false);
     assert.ok(result.errors.includes(
-      REGISTRY_OVERRIDE_ERROR_MSG.NAME_INVALID_FORMAT
+      REGISTRY_OVERRIDE_ERROR_MSG.NAME_INVALID_FORMAT,
     ));
   });
 
@@ -183,7 +179,7 @@ describe('validateRegistryOverride', () => {
     });
     assert.equal(result.valid, false);
     assert.ok(result.errors.includes(
-      REGISTRY_OVERRIDE_ERROR_MSG.REGISTRY_URL_REQUIRED
+      REGISTRY_OVERRIDE_ERROR_MSG.REGISTRY_URL_REQUIRED,
     ));
   });
 });
@@ -253,7 +249,7 @@ describe('validateDependencyLock', () => {
     });
     assert.equal(result.valid, false);
     assert.ok(result.errors.includes(
-      DEPENDENCY_LOCK_ERROR_MSG.LOCK_ID_REQUIRED
+      DEPENDENCY_LOCK_ERROR_MSG.LOCK_ID_REQUIRED,
     ));
   });
 
@@ -266,13 +262,13 @@ describe('validateDependencyLock', () => {
     });
     assert.equal(result.valid, false);
     assert.ok(result.errors.includes(
-      DEPENDENCY_LOCK_ERROR_MSG.TARGET_NAMESPACE_REQUIRED
+      DEPENDENCY_LOCK_ERROR_MSG.TARGET_NAMESPACE_REQUIRED,
     ));
     assert.ok(result.errors.includes(
-      DEPENDENCY_LOCK_ERROR_MSG.TARGET_NAME_REQUIRED
+      DEPENDENCY_LOCK_ERROR_MSG.TARGET_NAME_REQUIRED,
     ));
     assert.ok(result.errors.includes(
-      DEPENDENCY_LOCK_ERROR_MSG.TARGET_VERSION_REQUIRED
+      DEPENDENCY_LOCK_ERROR_MSG.TARGET_VERSION_REQUIRED,
     ));
   });
 
@@ -286,7 +282,7 @@ describe('validateDependencyLock', () => {
     });
     assert.equal(result.valid, false);
     assert.ok(result.errors.includes(
-      DEPENDENCY_LOCK_ERROR_MSG.RESOLVED_DEPS_NOT_ARRAY
+      DEPENDENCY_LOCK_ERROR_MSG.RESOLVED_DEPS_NOT_ARRAY,
     ));
   });
 
@@ -332,7 +328,7 @@ describe(
       const result = deserializeDependencyLock(row);
       assert.equal(result.targetServiceId, null);
       assert.deepStrictEqual(
-        result.resolvedDependencies, []
+        result.resolvedDependencies, [],
       );
     });
 
@@ -345,10 +341,10 @@ describe(
       });
       assert.ok(DEPENDENCY_LOCK_COL.LOCK_ID in row);
       assert.ok(
-        DEPENDENCY_LOCK_COL.TARGET_MODULE_NAMESPACE in row
+        DEPENDENCY_LOCK_COL.TARGET_MODULE_NAMESPACE in row,
       );
       assert.ok(
-        DEPENDENCY_LOCK_COL.RESOLVED_DEPENDENCIES in row
+        DEPENDENCY_LOCK_COL.RESOLVED_DEPENDENCIES in row,
       );
       assert.ok(DEPENDENCY_LOCK_COL.CREATED_AT in row);
     });
@@ -376,7 +372,7 @@ describe('validateWasmOperation', () => {
     });
     assert.equal(result.valid, false);
     assert.ok(result.errors.includes(
-      WASM_OPERATION_ERROR_MSG.OPERATION_ID_REQUIRED
+      WASM_OPERATION_ERROR_MSG.OPERATION_ID_REQUIRED,
     ));
   });
 
@@ -388,7 +384,7 @@ describe('validateWasmOperation', () => {
     });
     assert.equal(result.valid, false);
     assert.ok(result.errors.includes(
-      WASM_OPERATION_ERROR_MSG.TENANT_ID_REQUIRED
+      WASM_OPERATION_ERROR_MSG.TENANT_ID_REQUIRED,
     ));
   });
 
@@ -400,7 +396,7 @@ describe('validateWasmOperation', () => {
     });
     assert.equal(result.valid, false);
     assert.ok(result.errors.includes(
-      WASM_OPERATION_ERROR_MSG.COMMAND_REQUIRED
+      WASM_OPERATION_ERROR_MSG.COMMAND_REQUIRED,
     ));
   });
 
@@ -413,7 +409,7 @@ describe('validateWasmOperation', () => {
     });
     assert.equal(result.valid, false);
     assert.ok(result.errors.includes(
-      WASM_OPERATION_ERROR_MSG.STATE_INVALID
+      WASM_OPERATION_ERROR_MSG.STATE_INVALID,
     ));
   });
 
@@ -456,7 +452,7 @@ describe(
       });
       assert.equal(
         row[WASM_OPERATION_COL.STATE],
-        WASM_OPERATION_STATE.PENDING
+        WASM_OPERATION_STATE.PENDING,
       );
     });
 

@@ -1,140 +1,111 @@
-import { CDC_INTEGRATION_SERVICE_SHARED } from "./cdc-integration-service-shared.js";
+import {CDC_INTEGRATION_SERVICE_SHARED} from './cdc-integration-service-shared.js';
 import {
   resolveControlPlaneSystemTableDeliverySource,
-} from "../control-plane/control-plane-system-table-gateway-shared.js";
+} from '../control-plane/control-plane-system-table-gateway-shared.js';
 import {
   buildControlPlaneWorkloadProfile,
-} from "../control-plane/control-plane-workload-profile.js";
-import { CDCIntegrationServiceSegment1 } from "./cdc-integration-service-segment-1.js";
+} from '../control-plane/control-plane-workload-profile.js';
+import {CDCIntegrationServiceSegment1} from './cdc-integration-service-segment-1.js';
 
 const {
-  ADDRESS,
+  AUTHORITATIVE_ROW_VERSION_FIELD_CANDIDATES,
   AUTHORITATIVE_FALLBACK_OUTCOME,
   AUTHORITATIVE_FALLBACK_PHASE,
-  AUTHORITATIVE_FALLBACK_RECENT_LIMIT,
-  AUTHORITATIVE_FALLBACK_REPAIR_BUDGET_MS,
-  AUTHORITATIVE_FALLBACK_RETRY_DELAY_MS,
-  AUTHORITATIVE_FALLBACK_WINDOW_MS,
-  AUTHORITATIVE_READ_SOURCE,
-  AUTHORITATIVE_ROW_VERSION_FIELD_CANDIDATES,
-  CDCEventHandler,
-  CDCOperationType,
-  CDC_CONFIG_KEY,
   CDC_DEFAULTS,
-  CDC_EPOCH_CONFIG_KEY,
   CDC_ERROR_MSG,
-  CDC_EVENT,
-  CDC_INTEGRATION_SERVICE_ERROR,
   CDC_INTEGRATION_SERVICE_LITERAL,
   CDC_LOG_MSG,
   CDC_OPERATION,
-  CDC_OPERATION_LABEL,
-  CDC_OWNER_HANDOFF_CLOSED_FRAGMENT,
-  CDC_OWNER_HANDOFF_CONNECTION_TO_NODE_FRAGMENT,
-  CDC_OWNER_HANDOFF_ROUTING_ERROR_FRAGMENTS,
-  CDC_PRIMARY_KEY,
   CDC_RETRY,
   CDC_SESSION,
-  CDC_SKIP_REASON,
-  CDC_SOURCE,
   CDC_SQL,
-  CDC_STATS_DEFAULT,
-  CDC_SUBSYSTEM,
   CDC_SYSTEM_WRITE_RECOVERY_CANDIDATE_SELECTION_KIND,
-  COLUMN,
   CONTROL_PLANE_MUTATION_READINESS_ERROR,
   CONTROL_PLANE_READINESS_DIMENSION,
-  CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE,
-  ConfigurationManager,
-  ENTITY_TYPE,
-  ENTRYPOINT_DEFAULT,
-  EPOCH_CONFIG_KEY,
   ERRORS,
-  EventEmitter,
-  HLCClockService,
   INITIAL_PARTITION_IDS,
   LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY,
-  LoggingService,
   METRICS_LOG_TAG,
-  NODE_WEBSOCKET_ADDRESS_RESOLUTION_STATE,
   NUM,
-  OWNER_CONTRACT_NEXT_ACTION,
-  OWNER_CONTRACT_STATE,
   PRESSURE_GOVERNOR_ACTION,
   PRESSURE_WORK_CLASS,
-  PROTOCOL,
   PressureGovernor,
-  QUERY_ERROR_CODE,
   QUERY_ERROR_MSG,
-  QUERY_TRANSPORT_NOT_READY_ERROR_CODE,
   READ_MODEL_DIVERGENCE_TYPE,
-  SERVICE_STATUS,
-  SERVICE_TYPE,
-  SQL,
-  SQL_RECONCILIATION_REASON,
-  STATE,
-  STRING,
-  SYSTEM_TABLE_NAME,
   SYSTEM_TABLE_VISIBILITY_STATE,
-  TABLE_WRITE_FAILURE_LOG_SUPPRESSED_TABLES,
-  TABLE_WRITE_METRIC_SUPPRESSED_TABLES,
   TIMEOUT_BUDGET_CLASSIFICATION,
-  TIME_MS,
   TYPEOF,
   VALID_SYSTEM_TABLES,
   WRITE_ROUTER_MODE,
   annotateSystemTableMutationError,
-  buildCDCNodeJoinedResult,
-  buildDivergenceEvent,
-  buildOwnerContractOutcome,
   buildPendingVisibilityTimeoutResult,
   buildPressureAdmissionFailure,
   buildSystemTableMutationError,
   buildSystemTableVisibilityResult,
   canonicalizeSystemTableRow,
-  createBootstrapDirectWriteRouter,
-  createSqlWriteRouter,
   createTimeoutBudget,
   createTimeoutBudgetError,
   delay,
-  getControlPlaneErrorCode,
-  getControlPlaneErrorMessage,
   getControlPlaneRetryAfterMs,
   getRemainingBudgetMs,
-  getSchemaByTableName,
-  getSystemCachePrimaryKeyFieldOrFallback,
   hasControlPlaneMutationRoutingGapFailureSignature,
   hasSystemTableOwnerHandoffFailureSignature,
-  isCacheVisibilityTimeoutError,
   isRetryableControlPlaneError,
-  isSystemTableOwnerHandoffFailure,
   isTableInternalCachePropagationEnabled,
-  logSystemTableWriteFailure,
-  materializeNormalizedDefaultValue,
-  normalizeAuthoritativeFallbackOutcome,
   normalizeAuthoritativeFallbackPhase,
-  normalizeControlPlaneSystemTableVisibilityState,
   normalizeDeliveryPriority,
-  normalizeLocalQueryTransportReadiness,
   normalizeSystemTableVisibilityResult,
-  normalizeSystemTableVisibilityState,
-  normalizeSystemTableWriteMode,
   normalizeSystemWriteRecoveryCandidateSelectionKeyValue,
   resolveAuthoritativeFallbackOutcome,
-  resolveNodeWebSocketAddress,
   resolveSystemTableMutationDeliveryPriority,
-  resolveSystemTableOwnerHandoffFailureTableName,
-  resolveSystemTableVisibilityContractOutcome,
   shouldEmitTableWriteMetric,
-  shouldLogTableWriteFailure,
-  sortMutationKeyObject,
   stableSerializeMutationKey,
   uuidv4,
 } = CDC_INTEGRATION_SERVICE_SHARED;
 
-const CDC_CONTROL_PLANE_WRITE_RESOURCE_KEY = "control-plane:write";
-const CDC_CONTROL_PLANE_TABLE_RESOURCE_KEY_PREFIX = "control-plane:table:";
-const CDC_UNKNOWN_TABLE_RESOURCE_KEY = "unknown";
+const CDC_CONTROL_PLANE_WRITE_RESOURCE_KEY = 'control-plane:write';
+const CDC_CONTROL_PLANE_TABLE_RESOURCE_KEY_PREFIX = 'control-plane:table:';
+const CDC_UNKNOWN_TABLE_RESOURCE_KEY = 'unknown';
+const CDC_INSERT_COLUMN_LIST_PATTERN =
+  /\binsert\s+(?:or\s+\w+\s+)?into\s+\S+\s*\(([^)]*)\)/i;
+const CDC_SQL_COLUMN_SEPARATOR = ',';
+const CDC_IDENTIFIER_QUOTE_PATTERN = /^[`"']|[`"']$/g;
+const CDC_VOLATILE_SELECTION_PARAM_VALUE = '<volatile-row-version>';
+
+function normalizeMutationSelectionColumnName(columnName) {
+  return String(columnName || CDC_INTEGRATION_SERVICE_LITERAL.EMPTY)
+    .trim()
+    .replace(CDC_IDENTIFIER_QUOTE_PATTERN, CDC_INTEGRATION_SERVICE_LITERAL.EMPTY);
+}
+
+function resolveInsertMutationColumnNames(sql) {
+  if (typeof sql !== TYPEOF.STRING || sql.length === NUM.ZERO) {
+    return [];
+  }
+  const match = sql.match(CDC_INSERT_COLUMN_LIST_PATTERN);
+  if (!match || typeof match[NUM.ONE] !== TYPEOF.STRING) {
+    return [];
+  }
+  return match[NUM.ONE]
+    .split(CDC_SQL_COLUMN_SEPARATOR)
+    .map((columnName) => normalizeMutationSelectionColumnName(columnName));
+}
+
+function normalizeSystemWriteSelectionParams(sql, params = []) {
+  if (!Array.isArray(params) || params.length === NUM.ZERO) {
+    return [];
+  }
+  const columnNames = resolveInsertMutationColumnNames(sql);
+  if (columnNames.length !== params.length) {
+    return params;
+  }
+  const volatileColumns = new Set(AUTHORITATIVE_ROW_VERSION_FIELD_CANDIDATES);
+  return params.map((param, index) => {
+    return volatileColumns.has(columnNames[index]) ?
+      CDC_VOLATILE_SELECTION_PARAM_VALUE :
+      param;
+  });
+}
 
 class CDCIntegrationServiceSegment2 extends CDCIntegrationServiceSegment1 {
   async tryExecuteLocalSystemTableWrite(sql, params = []) {
@@ -156,9 +127,9 @@ class CDCIntegrationServiceSegment2 extends CDCIntegrationServiceSegment1 {
     const tableNameResult = this.extractTableNameFromSQL(sql);
     const tableName =
       tableNameResult.state ===
-      CDC_INTEGRATION_SERVICE_LITERAL.TABLE_NAME_EXTRACTION_STATE_FOUND
-        ? tableNameResult.tableName
-        : null;
+      CDC_INTEGRATION_SERVICE_LITERAL.TABLE_NAME_EXTRACTION_STATE_FOUND ?
+        tableNameResult.tableName :
+        null;
     if (!tableName || !VALID_SYSTEM_TABLES.includes(tableName)) {
       return {
         handled: false,
@@ -180,7 +151,7 @@ class CDCIntegrationServiceSegment2 extends CDCIntegrationServiceSegment1 {
         const localResult = await partitionService.executeQuery(sql, params);
         const result = this.normalizeLocalSystemTableWriteResult(localResult);
         if (!result || result.success === false) {
-          const message = result?.error || "";
+          const message = result?.error || '';
           if (this.isTransientCdcError(message)) {
             continue;
           }
@@ -294,7 +265,7 @@ class CDCIntegrationServiceSegment2 extends CDCIntegrationServiceSegment1 {
       const partitionIds = candidates
         .map((service) => service?.partitionId)
         .filter(Boolean)
-        .join(", ");
+        .join(', ');
       throw new Error(
         `Partition services not initialized for table: ${tableName}. ` +
           `Partitions: ${partitionIds}`,
@@ -325,7 +296,7 @@ class CDCIntegrationServiceSegment2 extends CDCIntegrationServiceSegment1 {
         sql: sql.substring(NUM.ZERO, Math.min(sql.length, NUM.HUNDRED)),
       },
     );
-    const isSelect = sql.trim().toUpperCase().startsWith("SELECT");
+    const isSelect = sql.trim().toUpperCase().startsWith('SELECT');
 
     // Execute SQL directly on local partition(s) without raft during bootstrap.
     if (isSelect) {
@@ -473,11 +444,11 @@ class CDCIntegrationServiceSegment2 extends CDCIntegrationServiceSegment1 {
       kind: CDC_SYSTEM_WRITE_RECOVERY_CANDIDATE_SELECTION_KIND,
       tableName,
       sql,
-      params: Array.isArray(params) ? params : [],
+      params: normalizeSystemWriteSelectionParams(sql, params),
       workClass: options?.workClass || null,
       deliveryPriority: normalizeDeliveryPriority(
         options?.deliveryPriority,
-        resolveSystemTableMutationDeliveryPriority({ tableName }),
+        resolveSystemTableMutationDeliveryPriority({tableName}),
       ),
       routingReadinessDimension:
         options?.routingReadinessDimension ||
@@ -525,9 +496,9 @@ class CDCIntegrationServiceSegment2 extends CDCIntegrationServiceSegment1 {
     const tableNameResult = this.extractTableNameFromSQL(sql);
     const tableName =
       tableNameResult.state ===
-      CDC_INTEGRATION_SERVICE_LITERAL.TABLE_NAME_EXTRACTION_STATE_FOUND
-        ? tableNameResult.tableName
-        : null;
+      CDC_INTEGRATION_SERVICE_LITERAL.TABLE_NAME_EXTRACTION_STATE_FOUND ?
+        tableNameResult.tableName :
+        null;
     const tableResourceKey =
       CDC_CONTROL_PLANE_TABLE_RESOURCE_KEY_PREFIX +
       (tableName || CDC_UNKNOWN_TABLE_RESOURCE_KEY);
@@ -553,13 +524,13 @@ class CDCIntegrationServiceSegment2 extends CDCIntegrationServiceSegment1 {
     });
     const queryTimeoutMs = Number(options?.queryTimeoutMs);
     const queryExecutionBudgetMs =
-      Number.isFinite(queryTimeoutMs) && queryTimeoutMs > NUM.ZERO
-        ? Math.floor(queryTimeoutMs)
-        : null;
+      Number.isFinite(queryTimeoutMs) && queryTimeoutMs > NUM.ZERO ?
+        Math.floor(queryTimeoutMs) :
+        null;
     const queryExecutionDeadlineMs =
-      queryExecutionBudgetMs === null
-        ? null
-        : Date.now() + queryExecutionBudgetMs;
+      queryExecutionBudgetMs === null ?
+        null :
+        Date.now() + queryExecutionBudgetMs;
     const getRemainingQueryExecutionBudgetMs = () => {
       if (queryExecutionDeadlineMs === null) {
         return null;
@@ -568,9 +539,9 @@ class CDCIntegrationServiceSegment2 extends CDCIntegrationServiceSegment1 {
     };
     const waitForRetryBudget = async (delayMs) => {
       const normalizedDelayMs =
-        Number.isFinite(delayMs) && delayMs > NUM.ZERO
-          ? Math.floor(delayMs)
-          : NUM.ZERO;
+        Number.isFinite(delayMs) && delayMs > NUM.ZERO ?
+          Math.floor(delayMs) :
+          NUM.ZERO;
       const remainingBudgetMs = getRemainingQueryExecutionBudgetMs();
       if (remainingBudgetMs === null) {
         if (normalizedDelayMs > NUM.ZERO) {
@@ -622,7 +593,7 @@ class CDCIntegrationServiceSegment2 extends CDCIntegrationServiceSegment1 {
       pressureRetryAfterMs: options?.pressureRetryAfterMs,
       deliveryPriority: normalizeDeliveryPriority(
         options?.deliveryPriority,
-        resolveSystemTableMutationDeliveryPriority({ tableName }),
+        resolveSystemTableMutationDeliveryPriority({tableName}),
       ),
       deliverySource,
       routingReadinessDimension:
@@ -642,9 +613,9 @@ class CDCIntegrationServiceSegment2 extends CDCIntegrationServiceSegment1 {
           throw buildSystemTableMutationError(
             {
               success: false,
-              error: tableName
-                ? `${tableName}_mutation_retry_timeout_exhausted`
-                : ERRORS.QUERY_FAILED,
+              error: tableName ?
+                `${tableName}_mutation_retry_timeout_exhausted` :
+                ERRORS.QUERY_FAILED,
               errorCode: null,
             },
             ERRORS.QUERY_FAILED,
@@ -732,9 +703,9 @@ class CDCIntegrationServiceSegment2 extends CDCIntegrationServiceSegment1 {
           annotateSystemTableMutationError(error, {
             attempt,
             writeMode:
-              this.writeRouter?.mode === WRITE_ROUTER_MODE.BOOTSTRAP_DIRECT
-                ? WRITE_ROUTER_MODE.BOOTSTRAP_DIRECT
-                : WRITE_ROUTER_MODE.SQL_ROUTED,
+              this.writeRouter?.mode === WRITE_ROUTER_MODE.BOOTSTRAP_DIRECT ?
+                WRITE_ROUTER_MODE.BOOTSTRAP_DIRECT :
+                WRITE_ROUTER_MODE.SQL_ROUTED,
           });
           throw error;
         }
@@ -753,9 +724,9 @@ class CDCIntegrationServiceSegment2 extends CDCIntegrationServiceSegment1 {
           annotateSystemTableMutationError(error, {
             attempt,
             writeMode:
-              this.writeRouter?.mode === WRITE_ROUTER_MODE.BOOTSTRAP_DIRECT
-                ? WRITE_ROUTER_MODE.BOOTSTRAP_DIRECT
-                : WRITE_ROUTER_MODE.SQL_ROUTED,
+              this.writeRouter?.mode === WRITE_ROUTER_MODE.BOOTSTRAP_DIRECT ?
+                WRITE_ROUTER_MODE.BOOTSTRAP_DIRECT :
+                WRITE_ROUTER_MODE.SQL_ROUTED,
           });
           throw error;
         }
@@ -794,9 +765,9 @@ class CDCIntegrationServiceSegment2 extends CDCIntegrationServiceSegment1 {
    */
   isTransientCdcError(errorLike) {
     const message =
-      typeof errorLike === TYPEOF.STRING
-        ? errorLike
-        : errorLike?.message || errorLike?.error || "";
+      typeof errorLike === TYPEOF.STRING ?
+        errorLike :
+        errorLike?.message || errorLike?.error || '';
     return (
       isRetryableControlPlaneError(errorLike) ||
       message.includes(ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE) ||
@@ -830,11 +801,11 @@ class CDCIntegrationServiceSegment2 extends CDCIntegrationServiceSegment1 {
       return false;
     }
     const errorText =
-      typeof result?.error === TYPEOF.STRING
-        ? result.error
-        : typeof result?.message === TYPEOF.STRING
-          ? result.message
-          : "";
+      typeof result?.error === TYPEOF.STRING ?
+        result.error :
+        typeof result?.message === TYPEOF.STRING ?
+          result.message :
+          '';
     return !(
       errorText === CONTROL_PLANE_MUTATION_READINESS_ERROR &&
       hasControlPlaneMutationRoutingGapFailureSignature(result)
@@ -942,21 +913,21 @@ class CDCIntegrationServiceSegment2 extends CDCIntegrationServiceSegment1 {
       return buildSystemTableVisibilityResult();
     }
     const expectedFields =
-      options?.expectedFields && typeof options.expectedFields === TYPEOF.OBJECT
-        ? options.expectedFields
-        : null;
+      options?.expectedFields && typeof options.expectedFields === TYPEOF.OBJECT ?
+        options.expectedFields :
+        null;
     const minimumFields =
-      options?.minimumFields && typeof options.minimumFields === TYPEOF.OBJECT
-        ? options.minimumFields
-        : null;
+      options?.minimumFields && typeof options.minimumFields === TYPEOF.OBJECT ?
+        options.minimumFields :
+        null;
     const normalizedExpectedFields = this.normalizeExpectedFieldsForMinimums(
       expectedFields,
       minimumFields,
     );
     const timeoutMs =
-      Number.isFinite(options?.timeoutMs) && options.timeoutMs > 0
-        ? Math.floor(options.timeoutMs)
-        : this.cacheWaitTimeoutMs;
+      Number.isFinite(options?.timeoutMs) && options.timeoutMs > 0 ?
+        Math.floor(options.timeoutMs) :
+        this.cacheWaitTimeoutMs;
     const fallbackPhase = this.resolveAuthoritativeFallbackPhase(
       options?.fallbackPhase,
     );
@@ -1081,7 +1052,7 @@ class CDCIntegrationServiceSegment2 extends CDCIntegrationServiceSegment1 {
               outcome: AUTHORITATIVE_FALLBACK_OUTCOME.FAILED,
             });
             this.logger.warn(
-              "Authoritative cache repair failed after cache wait timeout",
+              'Authoritative cache repair failed after cache wait timeout',
               {
                 tableName,
                 key,
@@ -1358,9 +1329,9 @@ class CDCIntegrationServiceSegment2 extends CDCIntegrationServiceSegment1 {
         expectedFields,
         minimumFields,
       );
-      const visibilityState = cacheExpectationSatisfied
-        ? SYSTEM_TABLE_VISIBILITY_STATE.VISIBLE
-        : SYSTEM_TABLE_VISIBILITY_STATE.PENDING_VISIBILITY;
+      const visibilityState = cacheExpectationSatisfied ?
+        SYSTEM_TABLE_VISIBILITY_STATE.VISIBLE :
+        SYSTEM_TABLE_VISIBILITY_STATE.PENDING_VISIBILITY;
       this.recordAuthoritativeFallbackSignal({
         tableName,
         key,
@@ -1413,9 +1384,9 @@ class CDCIntegrationServiceSegment2 extends CDCIntegrationServiceSegment1 {
       ),
     });
     return buildSystemTableVisibilityResult({
-      visibilityState: this.hasCacheRecord(tableName, key)
-        ? SYSTEM_TABLE_VISIBILITY_STATE.PENDING_VISIBILITY
-        : SYSTEM_TABLE_VISIBILITY_STATE.VISIBLE,
+      visibilityState: this.hasCacheRecord(tableName, key) ?
+        SYSTEM_TABLE_VISIBILITY_STATE.PENDING_VISIBILITY :
+        SYSTEM_TABLE_VISIBILITY_STATE.VISIBLE,
       authoritativeVisibilityConfirmed: true,
       cacheRepaired,
     });
@@ -1476,4 +1447,4 @@ class CDCIntegrationServiceSegment2 extends CDCIntegrationServiceSegment1 {
    */
 }
 
-export { CDCIntegrationServiceSegment2 };
+export {CDCIntegrationServiceSegment2};

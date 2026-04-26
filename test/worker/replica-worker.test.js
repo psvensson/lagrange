@@ -60,7 +60,6 @@ const mockLogger = {
 
 const TEST_PARTITION_REPLICA_ID = 'created-partition-replica-1';
 const TEST_MESSAGE_GROUP_REPLICA_ID = 'created-message-group-replica-1';
-const TEST_HEALTH_REPLICA_ID = 'health-replica-1';
 const TEST_STATS_ERROR_REPLICA_ID = 'stats-error-replica-1';
 const TEST_NOT_READY_REPLICA_ID = 'not-ready-replica-1';
 const TEST_STATS_COLLECTION_FAILED = 'stats collection failed';

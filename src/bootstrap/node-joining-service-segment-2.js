@@ -1,157 +1,54 @@
-import { NODE_JOINING_SERVICE_SHARED } from "./node-joining-service-shared.js";
-import { NodeJoiningServiceSegment1 } from "./node-joining-service-segment-1.js";
+import {NODE_JOINING_SERVICE_SHARED} from './node-joining-service-shared.js';
+import {NodeJoiningServiceSegment1} from './node-joining-service-segment-1.js';
+import {
+  BOOTSTRAP_API_PROBE_REASON,
+} from './bootstrap-api-constants.js';
+import {
+  LIFECYCLE_PHASE,
+} from './lifecycle-controller-constants.js';
+import {
+  isMetadataPublicationReadySnapshot,
+} from './traffic-readiness-utils.js';
 
 const {
-  BOOTSTRAP_EVENT,
-  BOOTSTRAP_SUBSYSTEM,
-  BootstrapMessageGroupSelectionOwner,
-  BootstrapTopologySnapshotOwner,
-  CACHE_DEFAULT,
-  CACHE_HYDRATION_TABLES,
-  CDCIntegrationSetup,
-  CDCPipelineReadinessGate,
-  CDC_EVENT,
-  CDC_LIFECYCLE_LOG_MSG,
-  CDC_PROPAGATED_TABLES,
   CDC_REESTABLISHMENT,
-  CDC_SUBSCRIPTION_STATUS,
-  COLUMN,
-  CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE,
-  CONTROL_PLANE_NODE_STATE_REPLAY_CONTEXT,
-  CONTROL_PLANE_READINESS_DIMENSION,
-  CONTROL_PLANE_ROLLOUT_REQUIRED,
-  CONTROL_PLANE_WORKLOAD_CLASS,
-  ConnectWebSocketPhase,
-  ContactSeedPhase,
-  ControlPlaneField,
-  ControlPlaneKernelIngress,
-  ControlPlaneMessageType,
-  ControlPlaneSetup,
-  CreateMessageGroupPhase,
-  DEFAULT_NODE_CAPABILITIES,
-  EventEmitter,
-  HEARTBEAT_STATE,
   JOINING_DEFAULT,
   JOINING_ERROR_MSG,
   JOINING_ERROR_NAME,
-  JOINING_HTTP,
   JOINING_LOG_MSG,
-  JOINING_PHASE,
   JOINING_PHASE_TO_SUB_PHASE,
   JOINING_UNIFIED_RECONCILE,
-  JOIN_BACKFILL_QUERY,
   JOIN_CHECKPOINT,
-  JOIN_DELEGATE_BUNDLE,
   JOIN_PLAN_SEGMENT,
-  JOIN_READINESS_REPAIR,
-  JOIN_REJOIN_PROMOTION_RESTORE_STATE,
   JOIN_SESSION_PHASE,
-  JoinCleanupHandler,
-  JoinCoordinator,
-  JoinMessageGroupRuntimeOwner,
-  JoinReadinessEvaluator,
-  JoinSessionStore,
   JoiningEvent,
   JoiningPhase,
-  LEASE_STATE,
-  LatencyTopologySetup,
-  LoggingService,
-  MembershipLifecycleController,
-  MessageGroupServiceHandlerSetup,
   NODE_JOINING_SERVICE_LITERAL,
-  NODE_STATE_UPDATE_PUBLICATION_DEFER_REASON,
-  NODE_STATE_UPDATE_PUBLICATION_DEFER_STATE,
-  NODE_STATE_UPDATE_PUBLICATION_PATH,
-  NODE_STATE_UPDATE_PUBLICATION_RETRY_TARGET,
-  NODE_STATE_UPDATE_RETRY_CLASS,
   NUM,
   NodeLifecycleStateMachine,
   NodeService,
   NodeState,
-  NodeStatePublicationOwner,
-  NodeStorageBudgetSetup,
-  OWNER_CONTRACT_NEXT_ACTION,
-  OWNER_CONTRACT_STATE,
-  PRESSURE_GOVERNOR_ACTION,
-  PRESSURE_WORK_CLASS,
-  PartitionService,
-  PgWireStartupSafetyGate,
-  PressureGovernor,
-  QUERY_ERROR_CODE,
-  QUERY_ERROR_MSG,
-  QuerySystemStatePhase,
-  RAFT_ROLE,
   RPCClient,
-  ReplicaHandlerSetup,
-  ReplicaStatus,
-  RuntimeServiceHandlerSetup,
   SERVICE_DESCRIPTOR_FIELD,
-  SERVICE_LIFECYCLE_STATE,
-  SERVICE_STATUS,
-  SERVICE_TYPE,
-  SQLQueryEngine,
   STARTUP_JOIN_MODE,
-  STATE,
-  STORAGE_DEFAULT,
   STRING,
   StartupPipelineRunner,
-  StartupRuntimeHandoffOwner,
-  StartupRuntimeSurfaceOwner,
-  StartupServiceLifecycleOwner,
-  TABLES,
-  TIME_MS,
   TYPEOF,
-  TablePolicyService,
   UNIFIED_SERVICE_TYPE,
   WORK_CLASS,
-  WaitForLeadershipPhase,
-  WorkClassScheduler,
   _deriveWsAddressFromNodeAddress,
   _formatLeaderMetadataDetails,
   _parseBootstrapError,
   _resolveSeedContactRetryAfterMs,
-  activateMessageGroupServiceRows,
-  activatePartitionServiceRows,
   activateSteadyStateRuntimeHandoff,
   assertCritical,
   assertJoinPlanSegments,
-  assertRequiredControlPlaneRollout,
-  buildControlPlaneWorkloadProfile,
-  buildDurableRejoinPartitionRestorePlans,
-  buildNodeStateUpdateDeliveryError,
-  buildNodeStateUpdatePublicationDiagnostics,
-  buildNodeStateUpdatePublicationFailureAction,
-  buildNodeStateUpdatePublicationFailureError,
-  buildNodeStateUpdatePublicationOutcome,
-  buildOwnerContractOutcome,
-  buildPartitionCdcPropagationSubscriber,
-  canonicalizeSystemTableRow,
-  classifyTransportDeliveryOutcome,
-  compareJoinSchemaVersions,
   createJoinStartupPlan,
-  createJoiningPhaseOwners,
-  createNodeStateUpdateDeferredPublicationState,
-  createRuntimeStartupWiring,
-  extractJoinSchemaVersionFromRecord,
-  formatReplicatedServiceAddress,
-  getControlPlaneErrorCode,
-  getControlPlaneErrorMessage,
-  getControlPlaneMessageRequiredTables,
-  getControlPlaneNodeStatePublicationProfile,
   getControlPlaneRetryAfterMs,
-  getSystemCachePrimaryKeyFieldOrFallback,
-  isDeliveredTransportDeliveryOutcome,
-  isHeartbeatEscalatedControlPlaneNodeStatePublicationMode,
   isRetryableControlPlaneError,
-  resolveCanonicalLeaderIdentitySnapshot,
-  resolveControlPlaneNodeStatePublicationMode,
   resolveMembershipJoinIntentType,
-  resolveReplayControlPlaneNodeStatePublicationMode,
-  shouldAttachPartitionCdcPropagation,
-  uuidv4,
   waitForLocalQueryTransportReadiness,
   waitForMetadataPublicationReadiness,
-  wireMigrationWorkflowOwners,
 } = NODE_JOINING_SERVICE_SHARED;
 
 const JOIN_WORKFLOW_PLAN_VERSION = 'join-startup-plan/v1';
@@ -181,7 +78,7 @@ class NodeJoiningServiceSegment2 extends NodeJoiningServiceSegment1 {
       phases: infraPhases.slice(NUM.ZERO, NUM.ONE),
     });
     this.lifecycleStateMachine.transition(NodeState.DISCOVERING);
-    await startupPipelineRunner.run({ phases: infraPhases.slice(NUM.ONE) });
+    await startupPipelineRunner.run({phases: infraPhases.slice(NUM.ONE)});
     await this.initializeJoinInfrastructure();
     await this.notifyLocalAdminRuntimeReady();
     this.lifecycleStateMachine.transition(NodeState.JOINING);
@@ -266,6 +163,17 @@ class NodeJoiningServiceSegment2 extends NodeJoiningServiceSegment1 {
       this.cdcIntegrationService &&
       this.heartbeatService,
     );
+  }
+  /**
+   * Expose the join-local startup completion contract to BootstrapAPI.
+   *
+   * Join completion itself depends on signaling ready, so the local bootstrap
+   * startup probe must switch to infrastructure readiness instead of waiting
+   * for the final join phase.
+   * @return {boolean}
+   */
+  isBootstrapStartupComplete() {
+    return this.hasJoinInfrastructureReady();
   }
   /**
    * Complete successful join finalization and emit the completion event.
@@ -528,9 +436,9 @@ class NodeJoiningServiceSegment2 extends NodeJoiningServiceSegment1 {
   }
   resolveRetryableJoinResumePolicy() {
     const joinRetryPolicy = this.resolveJoinRetryPolicy();
-    const joinHttpTimeoutMs = Number.isFinite(this.config.httpTimeoutMs)
-      ? Math.max(NUM.ZERO, Math.floor(this.config.httpTimeoutMs))
-      : JOINING_DEFAULT.httpTimeoutMs;
+    const joinHttpTimeoutMs = Number.isFinite(this.config.httpTimeoutMs) ?
+      Math.max(NUM.ZERO, Math.floor(this.config.httpTimeoutMs)) :
+      JOINING_DEFAULT.httpTimeoutMs;
     const minimumMaxElapsedMs = Math.max(
       NUM.ZERO,
       joinRetryPolicy.retryTimeoutMs + joinHttpTimeoutMs,
@@ -539,37 +447,37 @@ class NodeJoiningServiceSegment2 extends NodeJoiningServiceSegment1 {
       enabled: this.config.autoResumeRetryableFailures === true,
       maxAttempts: Number.isFinite(
         this.config.retryableFailureResumeMaxAttempts,
-      )
-        ? Math.max(
-            NUM.ONE,
-            Math.floor(this.config.retryableFailureResumeMaxAttempts),
-          )
-        : JOINING_DEFAULT.retryableFailureResumeMaxAttempts,
+      ) ?
+        Math.max(
+          NUM.ONE,
+          Math.floor(this.config.retryableFailureResumeMaxAttempts),
+        ) :
+        JOINING_DEFAULT.retryableFailureResumeMaxAttempts,
       baseDelayMs: Number.isFinite(
         this.config.retryableFailureResumeBaseDelayMs,
-      )
-        ? Math.max(
-            NUM.ONE,
-            Math.floor(this.config.retryableFailureResumeBaseDelayMs),
-          )
-        : JOINING_DEFAULT.retryableFailureResumeBaseDelayMs,
-      maxDelayMs: Number.isFinite(this.config.retryableFailureResumeMaxDelayMs)
-        ? Math.max(
-            NUM.ONE,
-            Math.floor(this.config.retryableFailureResumeMaxDelayMs),
-          )
-        : JOINING_DEFAULT.retryableFailureResumeMaxDelayMs,
+      ) ?
+        Math.max(
+          NUM.ONE,
+          Math.floor(this.config.retryableFailureResumeBaseDelayMs),
+        ) :
+        JOINING_DEFAULT.retryableFailureResumeBaseDelayMs,
+      maxDelayMs: Number.isFinite(this.config.retryableFailureResumeMaxDelayMs) ?
+        Math.max(
+          NUM.ONE,
+          Math.floor(this.config.retryableFailureResumeMaxDelayMs),
+        ) :
+        JOINING_DEFAULT.retryableFailureResumeMaxDelayMs,
       maxElapsedMs: Number.isFinite(
         this.config.retryableFailureResumeMaxElapsedMs,
-      )
-        ? Math.max(
-            minimumMaxElapsedMs,
-            Math.floor(this.config.retryableFailureResumeMaxElapsedMs),
-          )
-        : Math.max(
-            JOINING_DEFAULT.retryableFailureResumeMaxElapsedMs,
-            minimumMaxElapsedMs,
-          ),
+      ) ?
+        Math.max(
+          minimumMaxElapsedMs,
+          Math.floor(this.config.retryableFailureResumeMaxElapsedMs),
+        ) :
+        Math.max(
+          JOINING_DEFAULT.retryableFailureResumeMaxElapsedMs,
+          minimumMaxElapsedMs,
+        ),
     };
   }
   shouldAutoResumeRetryableJoinFailure(error, failureResult, attempt, policy) {
@@ -618,7 +526,7 @@ class NodeJoiningServiceSegment2 extends NodeJoiningServiceSegment1 {
       initialDelayMs: this.config.readySignalRetryDelayMs,
       maxDelayMs: this.config.readySignalRetryMaxDelayMs,
       backoffMultiplier: this.config.readySignalRetryBackoffMultiplier,
-      onRetry: ({ attempt, maxAttempts, delayMs, readiness }) => {
+      onRetry: ({attempt, maxAttempts, delayMs, readiness}) => {
         this.logger.warn(JOINING_LOG_MSG.READY_SIGNAL_RETRYING, {
           nodeId: this.nodeId,
           attempt,
@@ -642,12 +550,14 @@ class NodeJoiningServiceSegment2 extends NodeJoiningServiceSegment1 {
   async awaitMetadataPublicationReadinessForReadySignal() {
     await waitForMetadataPublicationReadiness({
       readinessState: this.bootstrapReadinessState,
+      readinessSnapshotProvider: () =>
+        this.getReadySignalMetadataPublicationReadinessSnapshot(),
       sleep: (delayMs) => this.sleep(delayMs),
       maxAttempts: this.config.readySignalMaxAttempts,
       initialDelayMs: this.config.readySignalRetryDelayMs,
       maxDelayMs: this.config.readySignalRetryMaxDelayMs,
       backoffMultiplier: this.config.readySignalRetryBackoffMultiplier,
-      onRetry: ({ attempt, maxAttempts, delayMs, snapshot }) => {
+      onRetry: ({attempt, maxAttempts, delayMs, snapshot}) => {
         this.logger.warn(JOINING_LOG_MSG.READY_SIGNAL_RETRYING, {
           nodeId: this.nodeId,
           attempt,
@@ -660,6 +570,42 @@ class NodeJoiningServiceSegment2 extends NodeJoiningServiceSegment1 {
         });
       },
     });
+  }
+  getReadySignalMetadataPublicationReadinessSnapshot() {
+    const readinessState = this.bootstrapReadinessState;
+    const snapshot =
+      typeof readinessState?.evaluate === TYPEOF.FUNCTION ?
+        readinessState.evaluate() :
+        typeof readinessState?.getSnapshot === TYPEOF.FUNCTION ?
+          readinessState.getSnapshot() :
+          null;
+    return this.resolveReadySignalMetadataPublicationReadinessSnapshot(
+      snapshot,
+    );
+  }
+  resolveReadySignalMetadataPublicationReadinessSnapshot(snapshot) {
+    if (
+      isMetadataPublicationReadySnapshot(snapshot) ||
+      !snapshot ||
+      typeof snapshot !== TYPEOF.OBJECT ||
+      this.isBootstrapStartupComplete() !== true ||
+      this.getSeedContactStartupAuthoritySnapshot()?.authorityAvailable !== true
+    ) {
+      return snapshot;
+    }
+    const reasons = Array.isArray(snapshot.reasons) ?
+      snapshot.reasons.filter((reason) =>
+        reason !== BOOTSTRAP_API_PROBE_REASON.BOOTSTRAP_PHASE_INCOMPLETE,
+      ) :
+      [];
+    const candidate = {
+      ...snapshot,
+      phase: LIFECYCLE_PHASE.DEGRADED,
+      reasons,
+    };
+    return isMetadataPublicationReadySnapshot(candidate) ?
+      candidate :
+      snapshot;
   }
   /**
    * Signal readiness to accept replica assignments.
@@ -705,7 +651,7 @@ class NodeJoiningServiceSegment2 extends NodeJoiningServiceSegment1 {
     const capabilities = this.getNodeCapabilities();
     const stats = await nodeService.getNodeStats();
     const heartbeatPayload = {
-      cpu: { count: stats.cpu?.count, usagePercent: stats.cpu?.usagePercent },
+      cpu: {count: stats.cpu?.count, usagePercent: stats.cpu?.usagePercent},
       memory: {
         totalBytes: stats.memory?.totalBytes,
         usagePercent: stats.memory?.usagePercent,
@@ -713,20 +659,20 @@ class NodeJoiningServiceSegment2 extends NodeJoiningServiceSegment1 {
       diskGb: stats.diskGb,
       diskUsagePercent: stats.diskUsagePercent,
     };
-    const maxAttempts = Number.isFinite(this.config.readySignalMaxAttempts)
-      ? Math.max(NUM.ONE, Math.floor(this.config.readySignalMaxAttempts))
-      : JOINING_DEFAULT.readySignalMaxAttempts;
-    const maxDelayMs = Number.isFinite(this.config.readySignalRetryMaxDelayMs)
-      ? Math.max(NUM.ONE, Math.floor(this.config.readySignalRetryMaxDelayMs))
-      : JOINING_DEFAULT.readySignalRetryMaxDelayMs;
+    const maxAttempts = Number.isFinite(this.config.readySignalMaxAttempts) ?
+      Math.max(NUM.ONE, Math.floor(this.config.readySignalMaxAttempts)) :
+      JOINING_DEFAULT.readySignalMaxAttempts;
+    const maxDelayMs = Number.isFinite(this.config.readySignalRetryMaxDelayMs) ?
+      Math.max(NUM.ONE, Math.floor(this.config.readySignalRetryMaxDelayMs)) :
+      JOINING_DEFAULT.readySignalRetryMaxDelayMs;
     const backoffMultiplier =
       Number.isFinite(this.config.readySignalRetryBackoffMultiplier) &&
-      this.config.readySignalRetryBackoffMultiplier > NUM.ZERO
-        ? this.config.readySignalRetryBackoffMultiplier
-        : JOINING_DEFAULT.readySignalRetryBackoffMultiplier;
-    let delayMs = Number.isFinite(this.config.readySignalRetryDelayMs)
-      ? Math.max(NUM.ONE, Math.floor(this.config.readySignalRetryDelayMs))
-      : JOINING_DEFAULT.readySignalRetryDelayMs;
+      this.config.readySignalRetryBackoffMultiplier > NUM.ZERO ?
+        this.config.readySignalRetryBackoffMultiplier :
+        JOINING_DEFAULT.readySignalRetryBackoffMultiplier;
+    let delayMs = Number.isFinite(this.config.readySignalRetryDelayMs) ?
+      Math.max(NUM.ONE, Math.floor(this.config.readySignalRetryDelayMs)) :
+      JOINING_DEFAULT.readySignalRetryDelayMs;
     let lastError = null;
     for (let attempt = NUM.ONE; attempt <= maxAttempts; attempt++) {
       try {
@@ -1167,4 +1113,4 @@ class NodeJoiningServiceSegment2 extends NodeJoiningServiceSegment1 {
    */
 }
 
-export { NodeJoiningServiceSegment2 };
+export {NodeJoiningServiceSegment2};

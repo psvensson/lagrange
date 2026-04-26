@@ -16,23 +16,23 @@ describe('lifecycle unification — dead file removal', () => {
 
   it('service-lifecycle-constants.js does not exist', () => {
     const filePath = join(
-      srcRoot, 'bootstrap', 'service-lifecycle-constants.js'
+      srcRoot, 'bootstrap', 'service-lifecycle-constants.js',
     );
     assert.equal(
       existsSync(filePath),
       false,
-      'service-lifecycle-constants.js should have been deleted'
+      'service-lifecycle-constants.js should have been deleted',
     );
   });
 
   it('service-lifecycle-mixin.js does not exist', () => {
     const filePath = join(
-      srcRoot, 'bootstrap', 'service-lifecycle-mixin.js'
+      srcRoot, 'bootstrap', 'service-lifecycle-mixin.js',
     );
     assert.equal(
       existsSync(filePath),
       false,
-      'service-lifecycle-mixin.js should have been deleted'
+      'service-lifecycle-mixin.js should have been deleted',
     );
   });
 });

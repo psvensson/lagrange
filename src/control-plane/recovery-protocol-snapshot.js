@@ -494,9 +494,9 @@ function buildParticipationByNodeId(context) {
       null :
       context.recoveryEligibleIncludedNodeIds.includes(nodeId) ?
         'recovery_eligible_projection' :
-      context.livenessFallbackIncludedNodeIds.includes(nodeId) ?
-        'liveness_fallback_projection' :
-        context.recoveryActiveNodeSource;
+        context.livenessFallbackIncludedNodeIds.includes(nodeId) ?
+          'liveness_fallback_projection' :
+          context.recoveryActiveNodeSource;
     participationByNodeId[nodeId] = Object.freeze({
       nodeId,
       state,
@@ -546,16 +546,13 @@ function buildRecoveryProtocolSnapshot(options = {}) {
     null;
   const effectiveMissingPublishedRecoveryActiveNodeIds =
     resolveEffectiveMissingPublishedRecoveryActiveNodeIds(context);
-  const publicationPending = context.publicationStatusNormalized.length > NUM.ZERO &&
-    context.publicationStatusNormalized !==
-      CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED;
   const publicationObservationState =
     context.publicationStatusNormalized.length === NUM.ZERO ?
       'unpublished' :
-    context.publicationStatusNormalized ===
+      context.publicationStatusNormalized ===
       CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED ?
-      'authoritative' :
-      'establishing';
+        'authoritative' :
+        'establishing';
   const publicationExcludesTargetNode =
     context.publicationStatusNormalized ===
       CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED &&

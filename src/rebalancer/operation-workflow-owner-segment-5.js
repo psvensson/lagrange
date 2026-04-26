@@ -1,107 +1,38 @@
-import { OPERATION_WORKFLOW_OWNER_SHARED } from "./operation-workflow-owner-shared.js";
-import { OperationWorkflowOwnerSegment4 } from "./operation-workflow-owner-segment-4.js";
+import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
+import {OperationWorkflowOwnerSegment4} from './operation-workflow-owner-segment-4.js';
 
 const {
-  AUTHORITATIVE_TRANSITION_RECOVERY_STATUS,
-  CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
-  CONTROL_PLANE_PARTICIPATION_KIND,
   CONTROL_PLANE_PUBLICATION_STATUS,
   CONTROL_PLANE_READINESS_DIMENSION,
-  COORDINATOR_CREATED_REMOTE_HANDOFF_VERIFICATION_DELAY_MS,
-  ControlPlaneField,
-  ControlPlaneMessageType,
-  ControlPlaneReadinessService,
   DEFAULT_MIN_REPLICA_COUNT,
-  DISPATCH_RETRY_DELAY_MS,
-  EXECUTOR_OUTCOME_ACTION,
-  EXECUTOR_OUTCOME_ACTION_MAP,
-  EXECUTOR_OUTCOME_FIELD,
-  FAILURE_LOG_LEVEL,
   INCOMPLETE_OPERATION_OBSERVATION_STATE,
   INITIAL_PARTITION_IDS,
-  METRICS_LOG_TAG,
   NUM,
-  OBSERVED_PROGRESS_RELEVANT_SERVICE_STATUSES,
-  OBSERVED_PROGRESS_RELEVANT_WORKFLOW_STEPS,
-  OBSERVED_PROGRESS_RETRY_DELAY_MS,
   OPERATION_HANDLER,
-  OPERATION_LIFECYCLE_ACTION,
-  OPERATION_METADATA_KEY,
-  OPERATION_OWNER_ACTION,
-  OPERATION_SINGLE_FLIGHT_KEY_SEPARATOR,
-  OPERATION_SINGLE_FLIGHT_SCOPE,
-  OPERATION_TRANSITION_REASON,
-  OPERATION_TRANSITION_SESSION_ATTEMPT_PREFIX,
   OPERATION_WORKFLOW_OWNER_LITERAL,
-  OPERATION_WORKFLOW_OWNER_REASON,
   OperationType,
-  PARTITION_SERVICE_ERROR_MSG,
-  PRIORITY_CONTROL_PLANE_SYNCING_TIMEOUT_CAP_MS,
   PRIORITY_PUBLICATION_LEADER_HANDOFF_EVIDENCE,
   PRIORITY_PUBLICATION_LEADER_REMOVE_SAFETY_STATE,
   PRIORITY_PUBLICATION_SOURCE_ROLE_STATE,
   PRIORITY_RECOVERY_COMPLETION_STATE,
-  PRIORITY_REMOVE_SAFETY_MEMBERSHIP_SOURCE,
-  QUERY_ERROR_MSG,
   RAFT_ROLE,
   REBALANCER_SKIP_REASON,
-  REBALANCE_COORDINATOR_DEFER_REASON,
-  REBALANCE_COORDINATOR_ERROR_MSG,
-  REBALANCE_COORDINATOR_EVENT,
-  REBALANCE_COORDINATOR_LOG_MSG,
-  RECOVERABLE_TRANSITION_COMMIT_STATUS,
-  RECOVERABLE_TRANSITION_ROLLBACK_STATUS,
-  REMOVE_SAFETY_EVALUATION_CLASSIFICATION,
-  REMOVE_SAFETY_OWNER_PARTICIPATION_KIND,
-  REMOVE_SAFETY_READINESS_DIMENSION,
   REMOVE_SAFETY_READ_QUERY_OPTIONS,
   REMOVE_SAFETY_SQL,
-  REPLACE_SOURCE_LEADER_HANDOFF_REQUIRED_PARTITION_IDS,
-  REPLICA_OPERATION_VISIBILITY_READ_MODE,
   ReplicaOperationField,
   ReplicaOperationMessageType,
+  ReplicaOperationReason,
   ReplicaOperationResponseStatus,
   ReplicaStatus,
-  SAFETY_DEFERRED_LOG_THROTTLE_MS,
-  SAFETY_DEFERRED_RETRY_DELAY_MS,
   SERVICE_TYPE,
-  SQL_RECONCILIATION_REASON,
   SYSTEM_TABLE_NAME,
-  TIMEOUT_BUDGET_CLASSIFICATION,
-  TIMEOUT_BUDGET_DEFAULT,
-  TIME_MS,
-  TRANSACTION_STATUS,
-  TRANSITION_RECOVERY_READ_OPTIONS,
-  TRANSITION_RECOVERY_SQL,
-  TRANSITION_RETRY_DELAY_MS,
-  TRANSITION_STEP_OPTIONS,
   TYPEOF,
-  UNIFIED_SERVICE_TYPE,
   WORKFLOW_STEP,
-  WORKFLOW_STEP_TO_STATUS,
-  buildControlPlaneQueryOptions,
-  buildPriorityRecoveryBlockedPartitionIds,
-  buildPriorityRecoveryCompletion,
   buildPriorityRecoveryDecisionSnapshot,
-  buildPriorityRecoveryOperationAssessment,
   buildPriorityRecoveryOperationContextFromRecord,
-  buildSelectRowsByTransactionIdsSql,
-  buildTimeoutClassification,
-  classifyTransportDeliveryOutcome,
-  createChildTimeoutBudget,
-  createTopLevelOperationBudget,
-  getControlPlaneRetryAfterMs,
-  getWorkflowSteps,
-  hasPriorityRecoverySpreadGap,
-  isCoordinatorOwnedOperationType,
-  isDeliveredTransportDeliveryOutcome,
   isPriorityControlPlanePartition,
-  isRetryableControlPlaneError,
   isSystemTablePartition,
-  normalizeNodeIdList,
-  normalizeReplicaRowNodeIds,
   readAuthoritativeControlPlaneRows,
-  resolvePriorityRecoveryActiveNodeCohort,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
 
 const PRIORITY_RECOVERY_WORKFLOW_TIMEOUT_STEPS = Object.freeze([
@@ -165,7 +96,7 @@ class OperationWorkflowOwnerSegment5 extends OperationWorkflowOwnerSegment4 {
    * @return {boolean}
    */
   isCriticalSystemPartition(partitionId) {
-    return isSystemTablePartition({ partitionId });
+    return isSystemTablePartition({partitionId});
   }
 
   /**
@@ -178,9 +109,9 @@ class OperationWorkflowOwnerSegment5 extends OperationWorkflowOwnerSegment4 {
    */
   resolveOperationReadinessDecisionDimension(operationOrPartitionId = null) {
     const partitionId =
-      typeof operationOrPartitionId === "string"
-        ? operationOrPartitionId
-        : operationOrPartitionId?.partitionId || null;
+      typeof operationOrPartitionId === 'string' ?
+        operationOrPartitionId :
+        operationOrPartitionId?.partitionId || null;
     if (this.isCriticalSystemPartition(partitionId)) {
       return CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE;
     }
@@ -188,9 +119,7 @@ class OperationWorkflowOwnerSegment5 extends OperationWorkflowOwnerSegment4 {
   }
 
   /**
-   * Check decision dimension readiness with compatibility fallback.
-   * Fallback applies only when older snapshots omit
-   * controlPlaneRecoveryEligible explicitly.
+   * Check decision dimension readiness from explicit canonical evidence.
    *
    * @param {Object|null} readiness
    * @param {string} decisionDimension
@@ -198,9 +127,9 @@ class OperationWorkflowOwnerSegment5 extends OperationWorkflowOwnerSegment4 {
    */
   isReadinessDimensionSatisfied(readiness, decisionDimension) {
     const dimensions =
-      readiness?.dimensions && typeof readiness.dimensions === "object"
-        ? readiness.dimensions
-        : null;
+      readiness?.dimensions && typeof readiness.dimensions === 'object' ?
+        readiness.dimensions :
+        null;
     if (!dimensions) {
       return false;
     }
@@ -213,19 +142,14 @@ class OperationWorkflowOwnerSegment5 extends OperationWorkflowOwnerSegment4 {
     ) {
       return false;
     }
-    if (Object.hasOwn(dimensions, decisionDimension)) {
-      return false;
-    }
-    return (
-      dimensions[CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE] === true
-    );
+    return false;
   }
 
   /**
    * @param {Object} replicaRow
    * @return {boolean}
    */
-  isVoterReadyRoutableReplica(replicaRow, options = {}) {
+  isVoterReadyReplicaTopology(replicaRow) {
     if (!replicaRow) {
       return false;
     }
@@ -236,10 +160,21 @@ class OperationWorkflowOwnerSegment5 extends OperationWorkflowOwnerSegment4 {
       return false;
     }
     const raftRole =
-      typeof replicaRow.raft_role === "string"
-        ? replicaRow.raft_role.toLowerCase()
-        : null;
+      typeof replicaRow.raft_role === 'string' ?
+        replicaRow.raft_role.toLowerCase() :
+        null;
     if (!raftRole || raftRole === RAFT_ROLE.LEARNER) {
+      return false;
+    }
+    return true;
+  }
+
+  /**
+   * @param {Object} replicaRow
+   * @return {boolean}
+   */
+  isVoterReadyRoutableReplica(replicaRow, options = {}) {
+    if (!this.isVoterReadyReplicaTopology(replicaRow)) {
       return false;
     }
     const partitionId =
@@ -279,20 +214,20 @@ class OperationWorkflowOwnerSegment5 extends OperationWorkflowOwnerSegment4 {
    */
   getReplicaRowIdentity(replicaRow) {
     const serviceId =
-      typeof replicaRow?.service_id === TYPEOF.STRING
-        ? replicaRow.service_id.trim()
-        : typeof replicaRow?.serviceId === TYPEOF.STRING
-          ? replicaRow.serviceId.trim()
-          : "";
+      typeof replicaRow?.service_id === TYPEOF.STRING ?
+        replicaRow.service_id.trim() :
+        typeof replicaRow?.serviceId === TYPEOF.STRING ?
+          replicaRow.serviceId.trim() :
+          '';
     if (serviceId.length > NUM.ZERO) {
       return serviceId;
     }
     const replicaId =
-      typeof replicaRow?.replica_id === TYPEOF.STRING
-        ? replicaRow.replica_id.trim()
-        : typeof replicaRow?.replicaId === TYPEOF.STRING
-          ? replicaRow.replicaId.trim()
-          : "";
+      typeof replicaRow?.replica_id === TYPEOF.STRING ?
+        replicaRow.replica_id.trim() :
+        typeof replicaRow?.replicaId === TYPEOF.STRING ?
+          replicaRow.replicaId.trim() :
+          '';
     return replicaId.length > NUM.ZERO ? replicaId : null;
   }
 
@@ -302,9 +237,9 @@ class OperationWorkflowOwnerSegment5 extends OperationWorkflowOwnerSegment4 {
    * @private
    */
   normalizeReplicaRowRaftRole(replicaRow) {
-    return typeof replicaRow?.raft_role === TYPEOF.STRING
-      ? replicaRow.raft_role.trim().toLowerCase()
-      : null;
+    return typeof replicaRow?.raft_role === TYPEOF.STRING ?
+      replicaRow.raft_role.trim().toLowerCase() :
+      null;
   }
 
   /**
@@ -333,15 +268,31 @@ class OperationWorkflowOwnerSegment5 extends OperationWorkflowOwnerSegment4 {
   }
 
   /**
+   * @param {Object|null} replicaRow
+   * @return {string}
+   * @private
+   */
+  getPriorityPublicationReplacementRoleState(replicaRow) {
+    const normalizedRaftRole = this.normalizeReplicaRowRaftRole(replicaRow);
+    if (normalizedRaftRole === RAFT_ROLE.LEADER) {
+      return PRIORITY_PUBLICATION_SOURCE_ROLE_STATE.LEADER;
+    }
+    if (normalizedRaftRole === RAFT_ROLE.FOLLOWER) {
+      return PRIORITY_PUBLICATION_SOURCE_ROLE_STATE.FOLLOWER;
+    }
+    return PRIORITY_PUBLICATION_SOURCE_ROLE_STATE.UNKNOWN;
+  }
+
+  /**
    * @param {Object|null} partitionRow
    * @return {string|null}
    * @private
    */
   getCriticalPartitionLeaderNodeIdForSafety(partitionRow) {
     const leaderNodeId =
-      typeof partitionRow?.leader_node_id === TYPEOF.STRING
-        ? partitionRow.leader_node_id.trim()
-        : null;
+      typeof partitionRow?.leader_node_id === TYPEOF.STRING ?
+        partitionRow.leader_node_id.trim() :
+        null;
     return leaderNodeId && leaderNodeId.length > NUM.ZERO ? leaderNodeId : null;
   }
 
@@ -369,9 +320,9 @@ class OperationWorkflowOwnerSegment5 extends OperationWorkflowOwnerSegment4 {
    */
   getPriorityPublicationLeaderHandoffEvidence(operation, sourceReplicaId) {
     const operationId =
-      typeof operation?.operationId === TYPEOF.STRING
-        ? operation.operationId.trim()
-        : null;
+      typeof operation?.operationId === TYPEOF.STRING ?
+        operation.operationId.trim() :
+        null;
     if (!operationId) {
       return null;
     }
@@ -397,6 +348,97 @@ class OperationWorkflowOwnerSegment5 extends OperationWorkflowOwnerSegment4 {
   }
 
   /**
+   * @return {Map<string, Object>}
+   * @private
+   */
+  getPriorityPublicationReplacementLeaderElectionEvidenceMap() {
+    if (
+      !(
+        this.priorityPublicationReplacementLeaderElectionEvidenceByOperationId instanceof
+        Map
+      )
+    ) {
+      this.priorityPublicationReplacementLeaderElectionEvidenceByOperationId =
+        new Map();
+    }
+    return this.priorityPublicationReplacementLeaderElectionEvidenceByOperationId;
+  }
+
+  /**
+   * @param {Object} operation
+   * @param {string|null} replacementReplicaId
+   * @return {Object|null}
+   * @private
+   */
+  getPriorityPublicationReplacementLeaderElectionEvidence(
+    operation,
+    replacementReplicaId,
+  ) {
+    const operationId =
+      typeof operation?.operationId === TYPEOF.STRING ?
+        operation.operationId.trim() :
+        null;
+    if (!operationId) {
+      return null;
+    }
+    const evidence =
+      this.getPriorityPublicationReplacementLeaderElectionEvidenceMap().get(
+        operationId,
+      ) || null;
+    if (!evidence) {
+      return null;
+    }
+    const evidenceExpired =
+      !Number.isFinite(evidence.observedAt) ||
+      Date.now() - evidence.observedAt >
+        PRIORITY_PUBLICATION_LEADER_HANDOFF_EVIDENCE.STALE_AFTER_MS;
+    const evidenceMismatch =
+      typeof replacementReplicaId === TYPEOF.STRING &&
+      replacementReplicaId.length > NUM.ZERO &&
+      evidence.replacementReplicaId !== replacementReplicaId;
+    if (evidenceExpired || evidenceMismatch) {
+      this.getPriorityPublicationReplacementLeaderElectionEvidenceMap().delete(
+        operationId,
+      );
+      return null;
+    }
+    return evidence;
+  }
+
+  /**
+   * @param {Object} operation
+   * @return {Object|null}
+   * @private
+   */
+  getFreshPriorityPublicationReplacementLeaderElectionEvidence(operation) {
+    const operationId =
+      typeof operation?.operationId === TYPEOF.STRING ?
+        operation.operationId.trim() :
+        null;
+    if (!operationId) {
+      return null;
+    }
+    const evidence =
+      this.getPriorityPublicationReplacementLeaderElectionEvidenceMap().get(
+        operationId,
+      ) || null;
+    if (!evidence) {
+      return null;
+    }
+    const evidenceExpired =
+      !Number.isFinite(evidence.observedAt) ||
+      Date.now() - evidence.observedAt >
+        PRIORITY_PUBLICATION_LEADER_HANDOFF_EVIDENCE.STALE_AFTER_MS;
+    if (evidenceExpired) {
+      this.getPriorityPublicationReplacementLeaderElectionEvidenceMap().delete(
+        operationId,
+      );
+      return null;
+    }
+    return evidence;
+  }
+
+  /**
    * @param {Object} operation
    * @param {Object|null} handoffRequest
    * @param {Object|null} response
@@ -413,19 +455,21 @@ class OperationWorkflowOwnerSegment5 extends OperationWorkflowOwnerSegment4 {
       !handoffRequest ||
       handoffRequest.messageType !==
         ReplicaOperationMessageType.STEP_DOWN_REPLICA ||
+      handoffRequest.requestReason !==
+        ReplicaOperationReason.REPLACE_SOURCE_LEADER_HANDOFF ||
       (response?.status !== ReplicaOperationResponseStatus.COMPLETED &&
         response?.status !== ReplicaOperationResponseStatus.NOT_FOUND)
     ) {
       return;
     }
     const operationId =
-      typeof operation.operationId === TYPEOF.STRING
-        ? operation.operationId.trim()
-        : null;
+      typeof operation.operationId === TYPEOF.STRING ?
+        operation.operationId.trim() :
+        null;
     const sourceReplicaId =
-      typeof handoffRequest.requestReplicaId === TYPEOF.STRING
-        ? handoffRequest.requestReplicaId.trim()
-        : null;
+      typeof handoffRequest.requestReplicaId === TYPEOF.STRING ?
+        handoffRequest.requestReplicaId.trim() :
+        null;
     if (!operationId || !sourceReplicaId) {
       return;
     }
@@ -434,6 +478,69 @@ class OperationWorkflowOwnerSegment5 extends OperationWorkflowOwnerSegment4 {
       Object.freeze({
         observedAt: Date.now(),
         sourceReplicaId,
+      }),
+    );
+  }
+
+  /**
+   * @param {Object} operation
+   * @param {Object|null} handoffRequest
+   * @param {Object|null} response
+   * @return {void}
+   * @private
+   */
+  recordPriorityPublicationReplacementLeaderElectionEvidence(
+    operation,
+    handoffRequest,
+    response,
+  ) {
+    if (
+      !operation ||
+      !handoffRequest ||
+      handoffRequest.messageType !==
+        ReplicaOperationMessageType.STEP_DOWN_REPLICA ||
+      handoffRequest.requestReason !==
+        ReplicaOperationReason.REPLACE_TARGET_LEADER_ELECTION ||
+      (response?.status !== ReplicaOperationResponseStatus.COMPLETED &&
+        response?.status !== ReplicaOperationResponseStatus.NOT_FOUND)
+    ) {
+      return;
+    }
+    const operationId =
+      typeof operation.operationId === TYPEOF.STRING ?
+        operation.operationId.trim() :
+        null;
+    const replacementReplicaId =
+      typeof handoffRequest.requestReplicaId === TYPEOF.STRING ?
+        handoffRequest.requestReplicaId.trim() :
+        null;
+    if (!operationId || !replacementReplicaId) {
+      return;
+    }
+    const previousEvidence =
+      this.getPriorityPublicationReplacementLeaderElectionEvidenceMap().get(
+        operationId,
+      ) || null;
+    const previousNotFoundReplicaIds = Array.isArray(
+      previousEvidence?.notFoundReplicaIds,
+    ) ?
+      previousEvidence.notFoundReplicaIds :
+      [];
+    const nextNotFoundReplicaIds = new Set(
+      previousNotFoundReplicaIds.filter(
+        (replicaId) => replicaId !== replacementReplicaId,
+      ),
+    );
+    if (response.status === ReplicaOperationResponseStatus.NOT_FOUND) {
+      nextNotFoundReplicaIds.add(replacementReplicaId);
+    }
+    this.getPriorityPublicationReplacementLeaderElectionEvidenceMap().set(
+      operationId,
+      Object.freeze({
+        notFoundReplicaIds: Object.freeze([...nextNotFoundReplicaIds]),
+        observedAt: Date.now(),
+        replacementReplicaId,
+        responseStatus: response.status,
       }),
     );
   }
@@ -464,26 +571,25 @@ class OperationWorkflowOwnerSegment5 extends OperationWorkflowOwnerSegment4 {
     operation,
     sourceRoleState,
     partitionRow,
-    sourceReplicaId,
   ) {
     if (sourceRoleState === PRIORITY_PUBLICATION_SOURCE_ROLE_STATE.FOLLOWER) {
       return PRIORITY_PUBLICATION_SOURCE_ROLE_STATE.FOLLOWER;
     }
 
     const rawSourceNodeId =
-      typeof operation?.sourceNodeId === TYPEOF.STRING
-        ? operation.sourceNodeId.trim()
-        : null;
+      typeof operation?.sourceNodeId === TYPEOF.STRING ?
+        operation.sourceNodeId.trim() :
+        null;
     const sourceNodeId =
-      rawSourceNodeId && rawSourceNodeId.length > NUM.ZERO
-        ? rawSourceNodeId
-        : null;
+      rawSourceNodeId && rawSourceNodeId.length > NUM.ZERO ?
+        rawSourceNodeId :
+        null;
     const partitionLeaderNodeId =
       this.getCriticalPartitionLeaderNodeIdForSafety(partitionRow);
     if (sourceNodeId && partitionLeaderNodeId) {
-      return partitionLeaderNodeId === sourceNodeId
-        ? PRIORITY_PUBLICATION_SOURCE_ROLE_STATE.LEADER
-        : PRIORITY_PUBLICATION_SOURCE_ROLE_STATE.FOLLOWER;
+      return partitionLeaderNodeId === sourceNodeId ?
+        PRIORITY_PUBLICATION_SOURCE_ROLE_STATE.LEADER :
+        PRIORITY_PUBLICATION_SOURCE_ROLE_STATE.FOLLOWER;
     }
     return sourceRoleState;
   }
@@ -537,11 +643,11 @@ class OperationWorkflowOwnerSegment5 extends OperationWorkflowOwnerSegment4 {
       }
       const rowId = this.getReplicaRowIdentity(row);
       if (!rowId) {
-        mergedRowsById.set(Symbol("service_row"), { ...row });
+        mergedRowsById.set(Symbol('service_row'), {...row});
         return;
       }
       if (!preferIncoming || !mergedRowsById.has(rowId)) {
-        mergedRowsById.set(rowId, { ...row });
+        mergedRowsById.set(rowId, {...row});
         return;
       }
       mergedRowsById.set(
@@ -705,11 +811,11 @@ class OperationWorkflowOwnerSegment5 extends OperationWorkflowOwnerSegment4 {
     }
     const decisionDimension =
       typeof options?.decisionDimension === TYPEOF.STRING &&
-      options.decisionDimension.length > NUM.ZERO
-        ? options.decisionDimension
-        : this.resolveOperationReadinessDecisionDimension(
-            options?.partitionId || null,
-          );
+      options.decisionDimension.length > NUM.ZERO ?
+        options.decisionDimension :
+        this.resolveOperationReadinessDecisionDimension(
+          options?.partitionId || null,
+        );
     const participationKind = options?.participationKind || null;
     if (
       participationKind &&
@@ -767,7 +873,7 @@ class OperationWorkflowOwnerSegment5 extends OperationWorkflowOwnerSegment4 {
       return null;
     }
 
-    const publicationNodeId = String(this.nodeId || "").trim();
+    const publicationNodeId = String(this.nodeId || '').trim();
     const observedAt = Date.now();
     if (
       typeof readinessService.getPriorityRecoveryPlanningAnswerBestEffort ===
@@ -819,12 +925,12 @@ class OperationWorkflowOwnerSegment5 extends OperationWorkflowOwnerSegment4 {
     }
     const publicationStatus =
       typeof planningSnapshot.publicationStatus === TYPEOF.STRING &&
-      planningSnapshot.publicationStatus.length > NUM.ZERO
-        ? planningSnapshot.publicationStatus
-        : typeof planningSnapshot.status === TYPEOF.STRING &&
-            planningSnapshot.status.length > NUM.ZERO
-          ? planningSnapshot.status
-          : null;
+      planningSnapshot.publicationStatus.length > NUM.ZERO ?
+        planningSnapshot.publicationStatus :
+        typeof planningSnapshot.status === TYPEOF.STRING &&
+            planningSnapshot.status.length > NUM.ZERO ?
+          planningSnapshot.status :
+          null;
     return publicationStatus ? publicationStatus.trim().toUpperCase() : null;
   }
 
@@ -838,13 +944,14 @@ class OperationWorkflowOwnerSegment5 extends OperationWorkflowOwnerSegment4 {
   buildPriorityPublicationLeaderRemoveSafetySnapshot(
     operation,
     sourceReplicaRow,
+    replacementReplicaRow,
     partitionRow,
     planningSnapshot,
   ) {
     const partitionId =
-      typeof operation?.partitionId === TYPEOF.STRING
-        ? operation.partitionId
-        : null;
+      typeof operation?.partitionId === TYPEOF.STRING ?
+        operation.partitionId :
+        null;
     const publicationPartitionId =
       INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS];
     const sourceReplicaId =
@@ -862,13 +969,34 @@ class OperationWorkflowOwnerSegment5 extends OperationWorkflowOwnerSegment4 {
     const partitionLeaderNodeId =
       this.getCriticalPartitionLeaderNodeIdForSafety(partitionRow);
     const rawSourceNodeId =
-      typeof operation?.sourceNodeId === TYPEOF.STRING
-        ? operation.sourceNodeId.trim()
-        : null;
+      typeof sourceReplicaRow?.node_id === TYPEOF.STRING ?
+        sourceReplicaRow.node_id.trim() :
+        typeof operation?.sourceNodeId === TYPEOF.STRING ?
+          operation.sourceNodeId.trim() :
+          null;
     const sourceNodeId =
-      rawSourceNodeId && rawSourceNodeId.length > NUM.ZERO
-        ? rawSourceNodeId
-        : null;
+      rawSourceNodeId && rawSourceNodeId.length > NUM.ZERO ?
+        rawSourceNodeId :
+        null;
+    const replacementReplicaId =
+      this.getReplicaRowIdentity(replacementReplicaRow) ||
+      this.repository.getReplaceTargetReplicaId(operation) ||
+      (typeof operation?.replicaId === TYPEOF.STRING &&
+      operation.replicaId.length > NUM.ZERO ?
+        operation.replicaId :
+        null);
+    const replacementRoleState =
+      this.getPriorityPublicationReplacementRoleState(replacementReplicaRow);
+    const rawReplacementNodeId =
+      typeof replacementReplicaRow?.node_id === TYPEOF.STRING ?
+        replacementReplicaRow.node_id.trim() :
+        typeof operation?.targetNodeId === TYPEOF.STRING ?
+          operation.targetNodeId.trim() :
+          null;
+    const replacementNodeId =
+      rawReplacementNodeId && rawReplacementNodeId.length > NUM.ZERO ?
+        rawReplacementNodeId :
+        null;
     const completedLeaderHandoffEvidence =
       this.getPriorityPublicationLeaderHandoffEvidence(
         operation,
@@ -878,10 +1006,30 @@ class OperationWorkflowOwnerSegment5 extends OperationWorkflowOwnerSegment4 {
       this.isPriorityPublicationLeaderHandoffRetrySuppressed(
         completedLeaderHandoffEvidence,
       );
-    const replacementLeaderOwnershipObserved =
-      sourceNodeId !== null &&
+    const replacementLeaderElectionEvidence =
+      this.getPriorityPublicationReplacementLeaderElectionEvidence(
+        operation,
+        replacementReplicaId,
+      );
+    const replacementLeaderElectionRetrySuppressed =
+      this.isPriorityPublicationLeaderHandoffRetrySuppressed(
+        replacementLeaderElectionEvidence,
+      );
+    const sourceLeaderHandoffSatisfied =
+      sourceRoleState === PRIORITY_PUBLICATION_SOURCE_ROLE_STATE.FOLLOWER ||
+      completedLeaderHandoffEvidence !== null;
+    const sourceLeadershipReleaseObserved =
+      sourceRoleState === PRIORITY_PUBLICATION_SOURCE_ROLE_STATE.FOLLOWER;
+    const partitionLeaderMovedAwayFromSource =
       partitionLeaderNodeId !== null &&
-      partitionLeaderNodeId !== sourceNodeId;
+      (sourceNodeId === null || partitionLeaderNodeId !== sourceNodeId);
+    const replacementLeaderOwnershipObserved =
+      replacementRoleState === PRIORITY_PUBLICATION_SOURCE_ROLE_STATE.LEADER ||
+      (replacementNodeId !== null &&
+        partitionLeaderMovedAwayFromSource &&
+        partitionLeaderNodeId === replacementNodeId);
+    const sourceRemovalLeadershipSafe =
+      sourceLeadershipReleaseObserved || replacementLeaderOwnershipObserved;
     const publicationStatus =
       this.normalizePriorityPublicationStatus(planningSnapshot);
 
@@ -897,8 +1045,14 @@ class OperationWorkflowOwnerSegment5 extends OperationWorkflowOwnerSegment4 {
         sourceReplicaId,
         sourceNodeId,
         partitionLeaderNodeId,
+        replacementReplicaId,
+        replacementNodeId,
+        replacementRoleState,
+        sourceLeadershipReleaseObserved,
         replacementLeaderOwnershipObserved,
+        sourceRemovalLeadershipSafe,
         completedLeaderHandoffEvidence,
+        replacementLeaderElectionEvidence,
         publicationPartitionId,
         publicationStatus,
       });
@@ -914,8 +1068,14 @@ class OperationWorkflowOwnerSegment5 extends OperationWorkflowOwnerSegment4 {
         sourceReplicaId,
         sourceNodeId,
         partitionLeaderNodeId,
+        replacementReplicaId,
+        replacementNodeId,
+        replacementRoleState,
+        sourceLeadershipReleaseObserved,
         replacementLeaderOwnershipObserved,
+        sourceRemovalLeadershipSafe,
         completedLeaderHandoffEvidence,
+        replacementLeaderElectionEvidence,
         publicationPartitionId,
         publicationStatus: null,
       });
@@ -934,14 +1094,20 @@ class OperationWorkflowOwnerSegment5 extends OperationWorkflowOwnerSegment4 {
         sourceReplicaId,
         sourceNodeId,
         partitionLeaderNodeId,
+        replacementReplicaId,
+        replacementNodeId,
+        replacementRoleState,
+        sourceLeadershipReleaseObserved,
         replacementLeaderOwnershipObserved,
+        sourceRemovalLeadershipSafe,
         completedLeaderHandoffEvidence,
+        replacementLeaderElectionEvidence,
         publicationPartitionId,
         publicationStatus,
       });
     }
 
-    if (replacementLeaderOwnershipObserved) {
+    if (sourceRemovalLeadershipSafe) {
       return Object.freeze({
         state: PRIORITY_PUBLICATION_LEADER_REMOVE_SAFETY_STATE.SAFE,
         partitionId,
@@ -950,8 +1116,14 @@ class OperationWorkflowOwnerSegment5 extends OperationWorkflowOwnerSegment4 {
         sourceReplicaId,
         sourceNodeId,
         partitionLeaderNodeId,
+        replacementReplicaId,
+        replacementNodeId,
+        replacementRoleState,
+        sourceLeadershipReleaseObserved,
         replacementLeaderOwnershipObserved,
+        sourceRemovalLeadershipSafe,
         completedLeaderHandoffEvidence,
+        replacementLeaderElectionEvidence,
         publicationPartitionId,
         publicationStatus,
       });
@@ -970,9 +1142,47 @@ class OperationWorkflowOwnerSegment5 extends OperationWorkflowOwnerSegment4 {
         sourceReplicaId,
         sourceNodeId,
         partitionLeaderNodeId,
+        replacementReplicaId,
+        replacementNodeId,
+        replacementRoleState,
+        sourceLeadershipReleaseObserved,
         replacementLeaderOwnershipObserved,
+        sourceRemovalLeadershipSafe,
         completedLeaderHandoffEvidence,
         handoffRequestRetrySuppressed,
+        replacementLeaderElectionEvidence,
+        replacementLeaderElectionRetrySuppressed,
+        publicationPartitionId,
+        publicationStatus,
+      });
+    }
+
+    if (
+      sourceLeaderHandoffSatisfied &&
+      replacementRoleState === PRIORITY_PUBLICATION_SOURCE_ROLE_STATE.FOLLOWER &&
+      replacementReplicaId !== null &&
+      replacementNodeId !== null &&
+      !replacementLeaderElectionRetrySuppressed
+    ) {
+      return Object.freeze({
+        state:
+          PRIORITY_PUBLICATION_LEADER_REMOVE_SAFETY_STATE.REQUEST_REPLACEMENT_LEADER_ELECTION,
+        partitionId,
+        sourceRoleState,
+        observedSourceRoleState,
+        sourceReplicaId,
+        sourceNodeId,
+        partitionLeaderNodeId,
+        replacementReplicaId,
+        replacementNodeId,
+        replacementRoleState,
+        sourceLeadershipReleaseObserved,
+        replacementLeaderOwnershipObserved,
+        sourceRemovalLeadershipSafe,
+        completedLeaderHandoffEvidence,
+        handoffRequestRetrySuppressed,
+        replacementLeaderElectionEvidence,
+        replacementLeaderElectionRetrySuppressed,
         publicationPartitionId,
         publicationStatus,
       });
@@ -987,9 +1197,16 @@ class OperationWorkflowOwnerSegment5 extends OperationWorkflowOwnerSegment4 {
       sourceReplicaId,
       sourceNodeId,
       partitionLeaderNodeId,
+      replacementReplicaId,
+      replacementNodeId,
+      replacementRoleState,
+      sourceLeadershipReleaseObserved,
       replacementLeaderOwnershipObserved,
+      sourceRemovalLeadershipSafe,
       completedLeaderHandoffEvidence,
       handoffRequestRetrySuppressed,
+      replacementLeaderElectionEvidence,
+      replacementLeaderElectionRetrySuppressed,
       publicationPartitionId,
       publicationStatus,
     });
@@ -998,12 +1215,14 @@ class OperationWorkflowOwnerSegment5 extends OperationWorkflowOwnerSegment4 {
   /**
    * @param {Object} operation
    * @param {Object|null} sourceReplicaRow
+   * @param {Object|null} replacementReplicaRow
    * @return {Promise<Object|null>}
    * @private
    */
   async evaluatePriorityPublicationLeaderRemoveSafety(
     operation,
     sourceReplicaRow,
+    replacementReplicaRow,
   ) {
     const partitionRow = await this.getCriticalPartitionRowForSafety(
       operation?.partitionId || null,
@@ -1014,6 +1233,7 @@ class OperationWorkflowOwnerSegment5 extends OperationWorkflowOwnerSegment4 {
       this.buildPriorityPublicationLeaderRemoveSafetySnapshot(
         operation,
         sourceReplicaRow,
+        replacementReplicaRow,
         partitionRow,
         planningSnapshot,
       );
@@ -1065,6 +1285,30 @@ class OperationWorkflowOwnerSegment5 extends OperationWorkflowOwnerSegment4 {
 
     if (
       safetySnapshot.state ===
+      PRIORITY_PUBLICATION_LEADER_REMOVE_SAFETY_STATE
+        .REQUEST_REPLACEMENT_LEADER_ELECTION
+    ) {
+      return this.buildDeferredRemoveSafetyEvaluationForOperation(
+        operation,
+        OPERATION_WORKFLOW_OWNER_LITERAL.CRITICAL_PARTITION +
+          safetySnapshot.partitionId +
+          OPERATION_WORKFLOW_OWNER_LITERAL.SOURCE_LEADER +
+          safetySnapshot.sourceReplicaId +
+          OPERATION_WORKFLOW_OWNER_LITERAL.REPLACEMENT_LEADER_OWNERSHIP_PENDING_BEFORE_SAFE_REMOVAL,
+        {
+          handoffRequest: Object.freeze({
+            dispatchNodeId: safetySnapshot.replacementNodeId,
+            messageType: ReplicaOperationMessageType.STEP_DOWN_REPLICA,
+            requestReason:
+              ReplicaOperationReason.REPLACE_TARGET_LEADER_ELECTION,
+            requestReplicaId: safetySnapshot.replacementReplicaId,
+          }),
+        },
+      );
+    }
+
+    if (
+      safetySnapshot.state ===
       PRIORITY_PUBLICATION_LEADER_REMOVE_SAFETY_STATE.WAIT_REPLACEMENT_LEADER_OWNERSHIP
     ) {
       return this.buildDeferredRemoveSafetyEvaluationForOperation(
@@ -1086,10 +1330,9 @@ class OperationWorkflowOwnerSegment5 extends OperationWorkflowOwnerSegment4 {
         OPERATION_WORKFLOW_OWNER_LITERAL.HANDOFF_PENDING_BEFORE_SAFE_REMOVAL,
       {
         handoffRequest: Object.freeze({
-          dispatchNodeId: operation.sourceNodeId,
+          dispatchNodeId: safetySnapshot.sourceNodeId,
           messageType: ReplicaOperationMessageType.STEP_DOWN_REPLICA,
-          requestReason:
-            OPERATION_WORKFLOW_OWNER_LITERAL.REPLACE_SOURCE_LEADER_HANDOFF,
+          requestReason: ReplicaOperationReason.REPLACE_SOURCE_LEADER_HANDOFF,
           requestReplicaId: safetySnapshot.sourceReplicaId,
         }),
       },
@@ -1138,9 +1381,14 @@ class OperationWorkflowOwnerSegment5 extends OperationWorkflowOwnerSegment4 {
     try {
       const response = await this.messageRouter.deliver(target, request, {
         targetNodeId: handoffRequest.dispatchNodeId,
-        deliveryPriority: "critical",
+        deliveryPriority: 'critical',
       });
       this.recordPriorityPublicationLeaderHandoffEvidence(
+        operation,
+        handoffRequest,
+        response,
+      );
+      this.recordPriorityPublicationReplacementLeaderElectionEvidence(
         operation,
         handoffRequest,
         response,
@@ -1189,6 +1437,123 @@ class OperationWorkflowOwnerSegment5 extends OperationWorkflowOwnerSegment4 {
     );
   }
 
+  normalizePriorityRecoveryOperationId(value) {
+    return String(
+      value || OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_STRING,
+    ).trim();
+  }
+
+  addPriorityRecoveryOperationId(operationIds, value) {
+    const operationId = this.normalizePriorityRecoveryOperationId(value);
+    if (operationId.length === NUM.ZERO) {
+      return;
+    }
+    operationIds.add(operationId);
+  }
+
+  addPriorityRecoveryOperationIds(operationIds, values = []) {
+    if (!Array.isArray(values)) {
+      return;
+    }
+    for (const value of values) {
+      this.addPriorityRecoveryOperationId(operationIds, value);
+    }
+  }
+
+  collectPriorityRecoveryOperationIds(operations = []) {
+    const operationIds = new Set();
+    for (const operation of Array.isArray(operations) ? operations : []) {
+      this.addPriorityRecoveryOperationId(
+        operationIds,
+        operation?.operationId || operation?.operation_id,
+      );
+    }
+    return operationIds;
+  }
+
+  collectPriorityRecoveryDecisionSnapshotOperationIds(snapshot) {
+    const operationIds = new Set();
+    if (!snapshot || typeof snapshot !== TYPEOF.OBJECT) {
+      return operationIds;
+    }
+    this.addPriorityRecoveryOperationId(operationIds, snapshot.operationId);
+    this.addPriorityRecoveryOperationIds(operationIds, snapshot.operationIds);
+    this.addPriorityRecoveryOperationIds(
+      operationIds,
+      snapshot.coordinator?.operationIds,
+    );
+    this.addPriorityRecoveryOperationIds(
+      operationIds,
+      snapshot.spreadCompletion?.satisfyingOperationIds,
+    );
+    this.addPriorityRecoveryOperationIds(
+      operationIds,
+      snapshot.spreadCompletion?.blockingOperationIds,
+    );
+    const operationContexts = Array.isArray(snapshot.operationContexts) ?
+      snapshot.operationContexts :
+      [];
+    for (const operationContext of operationContexts) {
+      this.addPriorityRecoveryOperationId(
+        operationIds,
+        operationContext?.operationId,
+      );
+    }
+    return operationIds;
+  }
+
+  hasPriorityRecoveryDecisionSnapshotOperationMatch(
+    snapshot,
+    operationIds,
+  ) {
+    if (!(operationIds instanceof Set) || operationIds.size === NUM.ZERO) {
+      return false;
+    }
+    const snapshotOperationIds =
+      this.collectPriorityRecoveryDecisionSnapshotOperationIds(snapshot);
+    for (const operationId of operationIds) {
+      if (snapshotOperationIds.has(operationId)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  resolvePriorityRecoveryDecisionSnapshotFromPlanning(
+    partitionId,
+    operations = [],
+    planningSnapshot = null,
+  ) {
+    const normalizedPartitionId = String(
+      partitionId || OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_STRING,
+    ).trim();
+    const snapshots = Array.isArray(
+      planningSnapshot?.priorityRecoveryDecisionSnapshots?.snapshots,
+    ) ?
+      planningSnapshot.priorityRecoveryDecisionSnapshots.snapshots :
+      [];
+    if (
+      normalizedPartitionId.length === NUM.ZERO ||
+      snapshots.length === NUM.ZERO
+    ) {
+      return null;
+    }
+    const operationIds = this.collectPriorityRecoveryOperationIds(operations);
+    return snapshots.find((snapshot) => {
+      const snapshotPartitionId = String(
+        snapshot?.partitionId ||
+          OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_STRING,
+      ).trim();
+      return (
+        snapshotPartitionId === normalizedPartitionId &&
+        this.hasPriorityRecoveryDecisionSnapshotOperationMatch(
+          snapshot,
+          operationIds,
+        )
+      );
+    }) || null;
+  }
+
   /**
    * Build one canonical decision snapshot for the given priority partition
    * using the shared snapshot grammar and the repository-owned visibility
@@ -1205,7 +1570,7 @@ class OperationWorkflowOwnerSegment5 extends OperationWorkflowOwnerSegment4 {
     operations = [],
     planningSnapshot = null,
   ) {
-    const normalizedPartitionId = String(partitionId || "").trim();
+    const normalizedPartitionId = String(partitionId || '').trim();
     if (
       normalizedPartitionId.length === NUM.ZERO ||
       !planningSnapshot ||
@@ -1217,6 +1582,15 @@ class OperationWorkflowOwnerSegment5 extends OperationWorkflowOwnerSegment4 {
       .filter((operation) => {
         return operation && typeof operation === TYPEOF.OBJECT;
       });
+    const planningDecisionSnapshot =
+      this.resolvePriorityRecoveryDecisionSnapshotFromPlanning(
+        normalizedPartitionId,
+        operationRecords,
+        planningSnapshot,
+      );
+    if (planningDecisionSnapshot) {
+      return planningDecisionSnapshot;
+    }
     const representativeOperationRecord =
       operationRecords.find((operation) =>
         operation && typeof operation === TYPEOF.OBJECT,
@@ -1277,7 +1651,7 @@ class OperationWorkflowOwnerSegment5 extends OperationWorkflowOwnerSegment4 {
    */
   async getPriorityRecoveryDecisionSnapshotForOperation(operation) {
     const partitionId = String(
-      operation?.partitionId || operation?.entityId || "",
+      operation?.partitionId || operation?.entityId || '',
     ).trim();
     if (partitionId.length === NUM.ZERO) {
       return null;
@@ -1327,4 +1701,4 @@ class OperationWorkflowOwnerSegment5 extends OperationWorkflowOwnerSegment4 {
    */
 }
 
-export { OperationWorkflowOwnerSegment5 };
+export {OperationWorkflowOwnerSegment5};

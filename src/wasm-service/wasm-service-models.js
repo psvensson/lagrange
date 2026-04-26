@@ -160,7 +160,7 @@ function serializeServiceDefinition(definition) {
       compat.protocol ??
       WASM_SERVICE_DEFAULT.PROTOCOL,
     [SD_COL.RESOURCE_BUDGET]: serializeResourceBudget(
-      compat.resourceBudget || {}
+      compat.resourceBudget || {},
     ),
     [SD_COL.SAFETY_INTERVAL_MS]:
       compat.safetyIntervalMs ??

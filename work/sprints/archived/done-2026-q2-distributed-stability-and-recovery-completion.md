@@ -166,15 +166,15 @@ The stable target state for this repo is:
 
 ## Sprint Umbrella
 
-1. [Distributed stability architecture baseline and gap matrix](../packages/archived/done-20260417-distributed-stability-architecture-baseline-and-gap-matrix.md)
-2. [Critical partition quorum-neutral catch-up lane](../packages/archived/done-20260417-critical-partition-quorum-neutral-catch-up-lane.md)
-3. [Priority recovery operator controller and step witnesses](../packages/archived/done-20260417-priority-recovery-operator-controller-and-step-witnesses.md)
-4. [Critical visibility and authority convergence](../packages/archived/done-20260417-critical-visibility-and-authority-convergence.md)
-5. [System partition placement and spread policy hardening](../packages/archived/done-20260417-system-partition-placement-and-spread-policy-hardening.md)
-6. [Recovery ratekeeping and load shedding](../packages/archived/done-20260417-recovery-ratekeeping-and-load-shedding.md)
-7. [Restart-safe recovery generations and resume](../packages/archived/done-20260417-restart-safe-recovery-generations-and-resume.md)
-8. [Stability diagnostics and production gates](../packages/archived/done-20260417-stability-diagnostics-and-production-gates.md)
-9. [Boundary scenario matrix and seven-node acceptance](../packages/archived/done-20260417-boundary-scenario-matrix-and-seven-node-acceptance.md)
+1. [Distributed stability architecture baseline and gap matrix](../../packages/archived/done-20260417-distributed-stability-architecture-baseline-and-gap-matrix.md)
+2. [Critical partition quorum-neutral catch-up lane](../../packages/archived/done-20260417-critical-partition-quorum-neutral-catch-up-lane.md)
+3. [Priority recovery operator controller and step witnesses](../../packages/archived/done-20260417-priority-recovery-operator-controller-and-step-witnesses.md)
+4. [Critical visibility and authority convergence](../../packages/archived/done-20260417-critical-visibility-and-authority-convergence.md)
+5. [System partition placement and spread policy hardening](../../packages/archived/done-20260417-system-partition-placement-and-spread-policy-hardening.md)
+6. [Recovery ratekeeping and load shedding](../../packages/archived/done-20260417-recovery-ratekeeping-and-load-shedding.md)
+7. [Restart-safe recovery generations and resume](../../packages/archived/done-20260417-restart-safe-recovery-generations-and-resume.md)
+8. [Stability diagnostics and production gates](../../packages/archived/done-20260417-stability-diagnostics-and-production-gates.md)
+9. [Boundary scenario matrix and seven-node acceptance](../../packages/archived/done-20260417-boundary-scenario-matrix-and-seven-node-acceptance.md)
 
 ## Rollout Order
 

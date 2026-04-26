@@ -11,13 +11,38 @@ const CONTROL_PLANE_PUBLICATION_STATUS = Object.freeze({
   ABANDONED: 'ABANDONED',
   SUPERSEDED: 'SUPERSEDED',
 });
+const PUBLICATION_ROW_MERGE_MODE = Object.freeze({
+  SAME_REVISION: 'same_revision',
+  NEW_REVISION: 'new_revision',
+});
+const PUBLICATION_NODE_LIST_FIELD = Object.freeze({
+  ACKNOWLEDGED_NODE_IDS: 'acknowledgedNodeIds',
+  PUBLISHED_ACTIVE_NODE_IDS: 'publishedActiveNodeIds',
+  REQUIRED_ACK_NODE_IDS: 'requiredAckNodeIds',
+});
+const PUBLICATION_NODE_LIST_FIELD_KEYS = Object.freeze({
+  [PUBLICATION_NODE_LIST_FIELD.ACKNOWLEDGED_NODE_IDS]: Object.freeze([
+    'acknowledged_node_ids',
+    'acknowledgedNodeIds',
+  ]),
+  [PUBLICATION_NODE_LIST_FIELD.PUBLISHED_ACTIVE_NODE_IDS]: Object.freeze([
+    'published_active_node_ids',
+    'publishedActiveNodeIds',
+  ]),
+  [PUBLICATION_NODE_LIST_FIELD.REQUIRED_ACK_NODE_IDS]: Object.freeze([
+    'required_ack_node_ids',
+    'requiredAckNodeIds',
+  ]),
+});
 
 function normalizePublicationNodeIdList(values = []) {
-  return [...new Set(
-    (Array.isArray(values) ? values : [])
-      .map((value) => String(value || '').trim())
-      .filter((value) => value.length > NUM.ZERO),
-  )].sort();
+  return [
+    ...new Set(
+      (Array.isArray(values) ? values : [])
+        .map((value) => String(value || '').trim())
+        .filter((value) => value.length > NUM.ZERO),
+    ),
+  ].sort();
 }
 
 function normalizePublicationPositiveInteger(value, fallback = null) {
@@ -44,19 +69,25 @@ function arePublicationNodeListsEqual(left = [], right = []) {
   if (normalizedLeft.length !== normalizedRight.length) {
     return false;
   }
-  return normalizedLeft.every((value, index) => value === normalizedRight[index]);
+  return normalizedLeft.every(
+    (value, index) => value === normalizedRight[index],
+  );
 }
 
 function doesPublicationNodeListCover(actual = [], expected = []) {
   const actualSet = new Set(normalizePublicationNodeIdList(actual));
-  return normalizePublicationNodeIdList(expected)
-    .every((value) => actualSet.has(value));
+  return normalizePublicationNodeIdList(expected).every((value) =>
+    actualSet.has(value),
+  );
 }
 
 function selectLatestRow(primaryRow, secondaryRow) {
   const primaryTimestamp = getPublicationRowTimestamp(primaryRow);
   const secondaryTimestamp = getPublicationRowTimestamp(secondaryRow);
-  if (!Number.isFinite(primaryTimestamp) && !Number.isFinite(secondaryTimestamp)) {
+  if (
+    !Number.isFinite(primaryTimestamp) &&
+    !Number.isFinite(secondaryTimestamp)
+  ) {
     return primaryRow || secondaryRow || null;
   }
   if (!Number.isFinite(primaryTimestamp)) {
@@ -68,7 +99,12 @@ function selectLatestRow(primaryRow, secondaryRow) {
   return primaryTimestamp >= secondaryTimestamp ? primaryRow : secondaryRow;
 }
 
-function readPreferredPublicationField(latestRow, fallbackRow, snakeField, camelField) {
+function readPreferredPublicationField(
+  latestRow,
+  fallbackRow,
+  snakeField,
+  camelField,
+) {
   const latestValue = latestRow?.[snakeField] ?? latestRow?.[camelField];
   if (latestValue !== null && typeof latestValue !== TYPEOF.UNDEFINED) {
     return latestValue;
@@ -82,25 +118,126 @@ function deriveMergedPublicationStatus(
   acknowledgedNodeIds,
   requiredAckNodeIds,
 ) {
-  if (primaryStatus === CONTROL_PLANE_PUBLICATION_STATUS.SUPERSEDED ||
-      secondaryStatus === CONTROL_PLANE_PUBLICATION_STATUS.SUPERSEDED) {
+  if (
+    primaryStatus === CONTROL_PLANE_PUBLICATION_STATUS.SUPERSEDED ||
+    secondaryStatus === CONTROL_PLANE_PUBLICATION_STATUS.SUPERSEDED
+  ) {
     return CONTROL_PLANE_PUBLICATION_STATUS.SUPERSEDED;
   }
-  if (primaryStatus === CONTROL_PLANE_PUBLICATION_STATUS.ABANDONED ||
-      secondaryStatus === CONTROL_PLANE_PUBLICATION_STATUS.ABANDONED) {
+  if (
+    primaryStatus === CONTROL_PLANE_PUBLICATION_STATUS.ABANDONED ||
+    secondaryStatus === CONTROL_PLANE_PUBLICATION_STATUS.ABANDONED
+  ) {
     return CONTROL_PLANE_PUBLICATION_STATUS.ABANDONED;
   }
-  if (primaryStatus === CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED ||
-      secondaryStatus === CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED ||
-      arePublicationNodeListsEqual(acknowledgedNodeIds, requiredAckNodeIds)) {
+  if (
+    primaryStatus === CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED ||
+    secondaryStatus === CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED ||
+    arePublicationNodeListsEqual(acknowledgedNodeIds, requiredAckNodeIds)
+  ) {
     return CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED;
   }
-  if (primaryStatus === CONTROL_PLANE_PUBLICATION_STATUS.ACK_PENDING ||
-      secondaryStatus === CONTROL_PLANE_PUBLICATION_STATUS.ACK_PENDING ||
-      acknowledgedNodeIds.length > NUM.ZERO) {
+  if (
+    primaryStatus === CONTROL_PLANE_PUBLICATION_STATUS.ACK_PENDING ||
+    secondaryStatus === CONTROL_PLANE_PUBLICATION_STATUS.ACK_PENDING ||
+    acknowledgedNodeIds.length > NUM.ZERO
+  ) {
     return CONTROL_PLANE_PUBLICATION_STATUS.ACK_PENDING;
   }
   return CONTROL_PLANE_PUBLICATION_STATUS.OPEN;
+}
+
+function deriveRevisionPublicationStatus(
+  status,
+  acknowledgedNodeIds,
+  requiredAckNodeIds,
+) {
+  if (
+    status === CONTROL_PLANE_PUBLICATION_STATUS.SUPERSEDED ||
+    status === CONTROL_PLANE_PUBLICATION_STATUS.ABANDONED ||
+    status === CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED
+  ) {
+    return status;
+  }
+  if (arePublicationNodeListsEqual(acknowledgedNodeIds, requiredAckNodeIds)) {
+    return CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED;
+  }
+  if (
+    status === CONTROL_PLANE_PUBLICATION_STATUS.ACK_PENDING ||
+    acknowledgedNodeIds.length > NUM.ZERO
+  ) {
+    return CONTROL_PLANE_PUBLICATION_STATUS.ACK_PENDING;
+  }
+  return CONTROL_PLANE_PUBLICATION_STATUS.OPEN;
+}
+
+function hasExplicitPublicationNodeList(row, fieldName) {
+  const fieldKeys = PUBLICATION_NODE_LIST_FIELD_KEYS[fieldName] || [];
+  return fieldKeys.some((fieldKey) => Array.isArray(row?.[fieldKey]));
+}
+
+function getPublicationNodeList(row, normalizedRow, fieldName) {
+  if (!hasExplicitPublicationNodeList(row, fieldName)) {
+    return [];
+  }
+  return normalizePublicationNodeIdList(normalizedRow[fieldName]);
+}
+
+function resolvePublicationMergeMode(
+  latestRow,
+  fallbackRow,
+  normalizedLatest,
+  normalizedFallback,
+) {
+  const latestEpoch = normalizedLatest.publicationEpoch;
+  const fallbackEpoch = normalizedFallback.publicationEpoch;
+  if (
+    Number.isFinite(latestEpoch) &&
+    latestEpoch > NUM.ZERO &&
+    Number.isFinite(fallbackEpoch) &&
+    fallbackEpoch > NUM.ZERO &&
+    latestEpoch !== fallbackEpoch
+  ) {
+    return PUBLICATION_ROW_MERGE_MODE.NEW_REVISION;
+  }
+
+  for (const fieldName of [
+    PUBLICATION_NODE_LIST_FIELD.PUBLISHED_ACTIVE_NODE_IDS,
+    PUBLICATION_NODE_LIST_FIELD.REQUIRED_ACK_NODE_IDS,
+  ]) {
+    if (
+      hasExplicitPublicationNodeList(latestRow, fieldName) &&
+      hasExplicitPublicationNodeList(fallbackRow, fieldName) &&
+      !arePublicationNodeListsEqual(
+        getPublicationNodeList(latestRow, normalizedLatest, fieldName),
+        getPublicationNodeList(fallbackRow, normalizedFallback, fieldName),
+      )
+    ) {
+      return PUBLICATION_ROW_MERGE_MODE.NEW_REVISION;
+    }
+  }
+
+  return PUBLICATION_ROW_MERGE_MODE.SAME_REVISION;
+}
+
+function resolveMergedRevisionNodeIds(
+  mergeMode,
+  latestRow,
+  fallbackRow,
+  normalizedLatest,
+  normalizedFallback,
+  fieldName,
+) {
+  if (mergeMode === PUBLICATION_ROW_MERGE_MODE.NEW_REVISION) {
+    if (hasExplicitPublicationNodeList(latestRow, fieldName)) {
+      return getPublicationNodeList(latestRow, normalizedLatest, fieldName);
+    }
+    return getPublicationNodeList(fallbackRow, normalizedFallback, fieldName);
+  }
+  return normalizePublicationNodeIdList([
+    ...normalizedLatest[fieldName],
+    ...normalizedFallback[fieldName],
+  ]);
 }
 
 function mergeControlPlanePublicationRows(primaryRow, secondaryRow) {
@@ -117,55 +254,114 @@ function mergeControlPlanePublicationRows(primaryRow, secondaryRow) {
   const normalizedSecondary = normalizeControlPlanePublicationRow(secondaryRow);
   const latestRow = selectLatestRow(primaryRow, secondaryRow);
   const fallbackRow = latestRow === primaryRow ? secondaryRow : primaryRow;
-  const publishedActiveNodeIds = normalizePublicationNodeIdList([
-    ...normalizedPrimary.publishedActiveNodeIds,
-    ...normalizedSecondary.publishedActiveNodeIds,
-  ]);
-  const requiredAckNodeIds = normalizePublicationNodeIdList([
-    ...normalizedPrimary.requiredAckNodeIds,
-    ...normalizedSecondary.requiredAckNodeIds,
-  ]);
-  const acknowledgedNodeIds = normalizePublicationNodeIdList([
-    ...normalizedPrimary.acknowledgedNodeIds,
-    ...normalizedSecondary.acknowledgedNodeIds,
-  ]);
-  const status = deriveMergedPublicationStatus(
-    normalizedPrimary.status,
-    normalizedSecondary.status,
-    acknowledgedNodeIds,
-    requiredAckNodeIds,
+  const normalizedLatest =
+    latestRow === primaryRow ? normalizedPrimary : normalizedSecondary;
+  const normalizedFallback =
+    latestRow === primaryRow ? normalizedSecondary : normalizedPrimary;
+  const mergeMode = resolvePublicationMergeMode(
+    latestRow,
+    fallbackRow,
+    normalizedLatest,
+    normalizedFallback,
   );
+  const publishedActiveNodeIds = resolveMergedRevisionNodeIds(
+    mergeMode,
+    latestRow,
+    fallbackRow,
+    normalizedLatest,
+    normalizedFallback,
+    PUBLICATION_NODE_LIST_FIELD.PUBLISHED_ACTIVE_NODE_IDS,
+  );
+  const requiredAckNodeIds = resolveMergedRevisionNodeIds(
+    mergeMode,
+    latestRow,
+    fallbackRow,
+    normalizedLatest,
+    normalizedFallback,
+    PUBLICATION_NODE_LIST_FIELD.REQUIRED_ACK_NODE_IDS,
+  );
+  const acknowledgedNodeIds = resolveMergedRevisionNodeIds(
+    mergeMode,
+    latestRow,
+    fallbackRow,
+    normalizedLatest,
+    normalizedFallback,
+    PUBLICATION_NODE_LIST_FIELD.ACKNOWLEDGED_NODE_IDS,
+  );
+  const status =
+    mergeMode === PUBLICATION_ROW_MERGE_MODE.NEW_REVISION ?
+      deriveRevisionPublicationStatus(
+        normalizedLatest.status,
+        acknowledgedNodeIds,
+        requiredAckNodeIds,
+      ) :
+      deriveMergedPublicationStatus(
+        normalizedPrimary.status,
+        normalizedSecondary.status,
+        acknowledgedNodeIds,
+        requiredAckNodeIds,
+      );
   const updatedAtCandidates = [
-    normalizePublicationPositiveInteger(primaryRow?.updated_at ?? primaryRow?.updatedAt, null),
-    normalizePublicationPositiveInteger(secondaryRow?.updated_at ?? secondaryRow?.updatedAt, null),
+    normalizePublicationPositiveInteger(
+      primaryRow?.updated_at ?? primaryRow?.updatedAt,
+      null,
+    ),
+    normalizePublicationPositiveInteger(
+      secondaryRow?.updated_at ?? secondaryRow?.updatedAt,
+      null,
+    ),
   ].filter((value) => Number.isFinite(value));
-  const updatedAt = updatedAtCandidates.length > NUM.ZERO ?
-    Math.max(...updatedAtCandidates) :
-    null;
+  const updatedAt =
+    updatedAtCandidates.length > NUM.ZERO ?
+      Math.max(...updatedAtCandidates) :
+      null;
   const createdAtCandidates = [
-    normalizePublicationPositiveInteger(primaryRow?.created_at ?? primaryRow?.createdAt, null),
-    normalizePublicationPositiveInteger(secondaryRow?.created_at ?? secondaryRow?.createdAt, null),
+    normalizePublicationPositiveInteger(
+      primaryRow?.created_at ?? primaryRow?.createdAt,
+      null,
+    ),
+    normalizePublicationPositiveInteger(
+      secondaryRow?.created_at ?? secondaryRow?.createdAt,
+      null,
+    ),
   ].filter((value) => Number.isFinite(value));
-  const createdAt = createdAtCandidates.length > NUM.ZERO ?
-    Math.min(...createdAtCandidates) :
-    null;
+  const createdAt =
+    createdAtCandidates.length > NUM.ZERO ?
+      Math.min(...createdAtCandidates) :
+      null;
   const publishedAtCandidates = [
-    normalizePublicationPositiveInteger(primaryRow?.published_at ?? primaryRow?.publishedAt, null),
-    normalizePublicationPositiveInteger(secondaryRow?.published_at ?? secondaryRow?.publishedAt, null),
+    normalizePublicationPositiveInteger(
+      primaryRow?.published_at ?? primaryRow?.publishedAt,
+      null,
+    ),
+    normalizePublicationPositiveInteger(
+      secondaryRow?.published_at ?? secondaryRow?.publishedAt,
+      null,
+    ),
   ].filter((value) => Number.isFinite(value));
   const closedAtCandidates = [
-    normalizePublicationPositiveInteger(primaryRow?.closed_at ?? primaryRow?.closedAt, null),
-    normalizePublicationPositiveInteger(secondaryRow?.closed_at ?? secondaryRow?.closedAt, null),
+    normalizePublicationPositiveInteger(
+      primaryRow?.closed_at ?? primaryRow?.closedAt,
+      null,
+    ),
+    normalizePublicationPositiveInteger(
+      secondaryRow?.closed_at ?? secondaryRow?.closedAt,
+      null,
+    ),
   ].filter((value) => Number.isFinite(value));
-  const publishedAt = status === CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED ?
-    (publishedAtCandidates.length > NUM.ZERO ? Math.max(...publishedAtCandidates) : updatedAt) :
-    null;
+  const publishedAt =
+    status === CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED ?
+      publishedAtCandidates.length > NUM.ZERO ?
+        Math.max(...publishedAtCandidates) :
+        updatedAt :
+      null;
   const closedAt =
     status === CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED ||
-      status === CONTROL_PLANE_PUBLICATION_STATUS.ABANDONED ||
-      status === CONTROL_PLANE_PUBLICATION_STATUS.SUPERSEDED ?
-      (closedAtCandidates.length > NUM.ZERO ? Math.max(...closedAtCandidates) :
-        (publishedAt || updatedAt)) :
+    status === CONTROL_PLANE_PUBLICATION_STATUS.ABANDONED ||
+    status === CONTROL_PLANE_PUBLICATION_STATUS.SUPERSEDED ?
+      closedAtCandidates.length > NUM.ZERO ?
+        Math.max(...closedAtCandidates) :
+        publishedAt || updatedAt :
       null;
 
   return serializeControlPlanePublicationRow({
@@ -183,10 +379,12 @@ function mergeControlPlanePublicationRows(primaryRow, secondaryRow) {
       null,
     publication_epoch:
       normalizePublicationPositiveInteger(
-        primaryRow?.publication_epoch ?? primaryRow?.publicationEpoch,
-        null,
-      ) ?? normalizePublicationPositiveInteger(
-        secondaryRow?.publication_epoch ?? secondaryRow?.publicationEpoch,
+        readPreferredPublicationField(
+          latestRow,
+          fallbackRow,
+          'publication_epoch',
+          'publicationEpoch',
+        ),
         1,
       ),
     publisher_node_id: readPreferredPublicationField(
@@ -223,22 +421,24 @@ function mergeControlPlanePublicationRows(primaryRow, secondaryRow) {
       'membershipLifecycleSummary',
     ),
     status,
-    reason_code: readPreferredPublicationField(
-      latestRow,
-      fallbackRow,
-      'reason_code',
-      'reasonCode',
-    ) || '',
+    reason_code:
+      readPreferredPublicationField(
+        latestRow,
+        fallbackRow,
+        'reason_code',
+        'reasonCode',
+      ) || '',
     created_at: createdAt,
     updated_at: updatedAt,
     published_at: publishedAt,
     closed_at: closedAt,
-    transition_history: readPreferredPublicationField(
-      latestRow,
-      fallbackRow,
-      'transition_history',
-      'transitionHistory',
-    ) || [],
+    transition_history:
+      readPreferredPublicationField(
+        latestRow,
+        fallbackRow,
+        'transition_history',
+        'transitionHistory',
+      ) || [],
   });
 }
 
@@ -251,27 +451,35 @@ function publicationRowSatisfiesDesiredState(actualRow, desiredRow) {
   if (actual.publicationId !== desired.publicationId) {
     return false;
   }
-  if (!doesPublicationNodeListCover(
-    actual.publishedActiveNodeIds,
-    desired.publishedActiveNodeIds,
-  )) {
+  if (
+    !arePublicationNodeListsEqual(
+      actual.publishedActiveNodeIds,
+      desired.publishedActiveNodeIds,
+    )
+  ) {
     return false;
   }
-  if (!doesPublicationNodeListCover(
-    actual.requiredAckNodeIds,
-    desired.requiredAckNodeIds,
-  )) {
+  if (
+    !arePublicationNodeListsEqual(
+      actual.requiredAckNodeIds,
+      desired.requiredAckNodeIds,
+    )
+  ) {
     return false;
   }
-  if (!doesPublicationNodeListCover(
-    actual.acknowledgedNodeIds,
-    desired.acknowledgedNodeIds,
-  )) {
+  if (
+    !doesPublicationNodeListCover(
+      actual.acknowledgedNodeIds,
+      desired.acknowledgedNodeIds,
+    )
+  ) {
     return false;
   }
-  if (desired.priorityPartitionSummary &&
-      JSON.stringify(actual.priorityPartitionSummary || null) !==
-        JSON.stringify(desired.priorityPartitionSummary)) {
+  if (
+    desired.priorityPartitionSummary &&
+    JSON.stringify(actual.priorityPartitionSummary || null) !==
+      JSON.stringify(desired.priorityPartitionSummary)
+  ) {
     return false;
   }
   if (desired.status === CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED) {

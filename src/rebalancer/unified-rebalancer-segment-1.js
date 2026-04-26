@@ -1,119 +1,45 @@
-import { UNIFIED_REBALANCER_SHARED } from "./unified-rebalancer-shared.js";
+import {UNIFIED_REBALANCER_SHARED} from './unified-rebalancer-shared.js';
 
 const {
   CLUSTER_READINESS_TIMEOUT_MS,
-  COLUMN,
-  CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
   CONTROL_PLANE_PUBLICATION_STATUS,
   CONTROL_PLANE_READINESS_DIMENSION,
-  CONTROL_PLANE_WORKLOAD_CLASS,
-  COORDINATOR_OWNED_OPERATION_TYPES_SQL_CLAUSE,
-  CRITICAL_SYSTEM_ENDPOINT_VISIBILITY_AUTHORITATIVE_READ,
-  CRITICAL_SYSTEM_TOPOLOGY_SETTLING_BLOCKER_REASON,
   ConfigurationManager,
   ControlPlaneReadinessService,
-  DEFAULT_MESSAGE_GROUP_POLICY,
   DEFAULT_PRIORITY_RECOVERY_ACTIVITY_STALE_GRACE_MS,
-  DEFAULT_TABLE_POLICY,
-  ENDPOINT_STATUS,
-  ENDPOINT_SYNC_HEALTH,
   EntityType,
   EventEmitter,
-  LIFECYCLE_PHASE,
-  LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY,
   LoggingService,
-  META_SERVICE_ID,
   MovePlanner,
-  MoveType,
   NUM,
-  NodeStatus,
-  OperationType,
   OwnerKeyReconcileQueue,
-  PRESSURE_WORK_CLASS,
-  PRIORITY_BUDGET_BYPASS_COORDINATOR_OPTIONS,
   PRIORITY_CONTROL_PLANE_RECOVERY_FALLBACK_REPLICA_COUNT,
-  PressureGovernor,
-  RAFT_ROLE,
-  READINESS_SKIP_DETAIL,
-  REBALANCER_BUDGET_READ_OPTIONS,
-  REBALANCER_CONCURRENT_BUDGET_READ_MODE,
   REBALANCE_COORDINATOR_EVENT,
   REBALANCER_CONFIG_KEY,
   REBALANCER_DEFAULT,
   REBALANCER_DEFAULT_POLICY,
-  REBALANCER_ENTITY_TYPE,
   REBALANCER_ERROR_MSG,
-  REBALANCER_EVENT,
   REBALANCER_LOG_MSG,
-  REBALANCER_MOVE_TYPE,
-  REBALANCER_NODE_STATUS,
   REBALANCER_QUEUE_NAME,
-  REBALANCER_RUNTIME_REASON,
-  REBALANCER_SKIP_REASON,
   REBALANCER_SUBSYSTEM,
-  REBALANCER_TRIGGER,
   RECONCILE_REASON,
-  REPLICA_OPERATION_SEMANTIC_PHASE,
-  REPLICA_OPERATION_VISIBILITY_READ_MODE,
-  ReplicaStatus,
   SERVICE_STATUS,
-  SQL_BUDGET,
-  STABILIZATION_RESET_TRIGGER,
-  STATE,
   SYSTEM_TABLE_NAME,
   StartupRecoveryCoordinator,
   StoragePressureBehavior,
-  TABLES,
   TERMINAL_STATUSES,
-  TERMINAL_STATUS_SQL_CLAUSE,
-  TOPOLOGY_IN_FLIGHT_REPLICA_OPERATION_SOURCE,
-  TRANSPORT_TYPE,
   TYPEOF,
-  TriggerType,
   UNIFIED_REBALANCER_LITERAL,
   WORKFLOW_STEP,
-  adjustToOddCount,
   assertCritical,
-  buildControlPlaneWorkloadProfile,
-  buildPriorityRecoveryBlockedPartitions,
-  buildPriorityRecoveryOperationAssessment,
-  buildPriorityRecoveryOperationContextFromRecord,
-  buildPriorityRecoveryPartitionAssessment,
-  buildPublicationRecoveryGateSnapshot,
   createControlPlaneRuntimeBundle,
-  getControlPlaneRetryAfterMs,
-  getLocalControlPlaneMutationReadinessBlocker,
-  getNextOddCount,
   getPartitionRowFromCache,
-  getPreviousOddCount,
-  hasPriorityRecoverySpreadGap,
-  isBackgroundWorkLifecycleReadySnapshot,
   isCoordinatorOwnedOperationType,
   isPriorityRecoveryEmergencyPartition,
-  isNodeReadyLeaseExplicitlyCleared,
-  isNodeReadyWithConnection,
-  isNodeReadyWithTransport,
-  isNodeRecordReady,
-  isOddReplicaCount,
   isPriorityControlPlanePartition,
-  isReplaceRemoveDispatchPhase,
-  isReplicaOperationInFlight,
-  isReplicaOperationStale,
-  isRetryableControlPlaneError,
   isSystemTablePartition,
-  isTerminalReplicaOperationSemanticPhase,
   isTerminalStep,
-  isValidWorkflowStep,
-  normalizeNodeEndpointRow,
-  normalizeNodeRow,
-  normalizeReplicaOperationRecord,
-  normalizeServiceEndpointRow,
-  normalizeServiceRow,
-  resolvePriorityRecoveryActiveNodeCohort,
-  resolveReplicaOperationSemanticPhase,
   resolveTrackedPriorityRecoveryAdmissionPlan,
-  shouldPriorityRecoveryOperationBlockPlanning,
-  wasNodeRecordReadyWhenWritten,
 } = UNIFIED_REBALANCER_SHARED;
 
 const PRIORITY_RECOVERY_COORDINATOR_STEP_PROGRESS_SET = new Set([
@@ -125,16 +51,26 @@ const PRIORITY_RECOVERY_COORDINATOR_TERMINAL_EVENT_SET = new Set([
   REBALANCE_COORDINATOR_EVENT.OPERATION_FAILED,
 ]);
 const PRIORITY_RECOVERY_VISIBILITY_SERVICE_FIELD = Object.freeze({
-  ENTITY_ID: "entityId",
-  ENTITY_ID_SNAKE: "entity_id",
-  PARTITION_ID: "partitionId",
-  PARTITION_ID_SNAKE: "partition_id",
-  SERVICE_TYPE: "serviceType",
-  SERVICE_TYPE_SNAKE: "service_type",
-  STATUS: "status",
+  ENTITY_ID: 'entityId',
+  ENTITY_ID_SNAKE: 'entity_id',
+  PARTITION_ID: 'partitionId',
+  PARTITION_ID_SNAKE: 'partition_id',
+  SERVICE_TYPE: 'serviceType',
+  SERVICE_TYPE_SNAKE: 'service_type',
+  STATUS: 'status',
+});
+const PRIORITY_RECOVERY_VISIBILITY_OPERATION_FIELD = Object.freeze({
+  ENTITY_ID: 'entityId',
+  ENTITY_ID_SNAKE: 'entity_id',
+  PARTITION_ID: 'partitionId',
+  PARTITION_ID_SNAKE: 'partition_id',
+  STATUS: 'status',
+  TYPE: 'type',
+  WORKFLOW_STEP: 'workflowStep',
+  WORKFLOW_STEP_SNAKE: 'workflow_step',
 });
 const PRIORITY_RECOVERY_VISIBILITY_SERVICE_TYPE = Object.freeze({
-  PARTITION: "partition",
+  PARTITION: 'partition',
 });
 
 class UnifiedRebalancerSegment1 extends EventEmitter {
@@ -186,9 +122,9 @@ class UnifiedRebalancerSegment1 extends EventEmitter {
       REBALANCER_ERROR_MSG.COORDINATOR_REQUIRED,
     );
     this.nowFn =
-      typeof options.nowFn === UNIFIED_REBALANCER_LITERAL.FUNCTION
-        ? options.nowFn
-        : Date.now;
+      typeof options.nowFn === UNIFIED_REBALANCER_LITERAL.FUNCTION ?
+        options.nowFn :
+        Date.now;
 
     // Leadership state
     this.isLeader = false;
@@ -232,12 +168,12 @@ class UnifiedRebalancerSegment1 extends EventEmitter {
       REBALANCER_DEFAULT.UNIFIED.NODE_DISK_THRESHOLD;
     this.priorityRecoveryActivityStaleGraceMs = Number.isFinite(
       options.priorityRecoveryActivityStaleGraceMs,
-    )
-      ? Math.max(
-          NUM.ZERO,
-          Math.floor(options.priorityRecoveryActivityStaleGraceMs),
-        )
-      : DEFAULT_PRIORITY_RECOVERY_ACTIVITY_STALE_GRACE_MS;
+    ) ?
+      Math.max(
+        NUM.ZERO,
+        Math.floor(options.priorityRecoveryActivityStaleGraceMs),
+      ) :
+      DEFAULT_PRIORITY_RECOVERY_ACTIVITY_STALE_GRACE_MS;
     this.priorityRecoveryAdmissionTracker = {
       lastObservedAdmissionPlan: null,
       lastObservedAdmissionPlanAtMs: null,
@@ -283,9 +219,9 @@ class UnifiedRebalancerSegment1 extends EventEmitter {
 
     // Logging
     const loggingService = LoggingService.getInstance();
-    this.logger = loggingService.isInitialized()
-      ? loggingService.forSubsystem(REBALANCER_SUBSYSTEM.UNIFIED)
-      : console;
+    this.logger = loggingService.isInitialized() ?
+      loggingService.forSubsystem(REBALANCER_SUBSYSTEM.UNIFIED) :
+      console;
 
     // State
     this.lastRebalanceTime = null;
@@ -311,11 +247,11 @@ class UnifiedRebalancerSegment1 extends EventEmitter {
     this.managesStoragePressureBehavior = !options.storagePressureBehavior;
     this.storagePressureBehavior =
       options.storagePressureBehavior ||
-      (this.storageAccountingService
-        ? new StoragePressureBehavior({
-            accountingService: this.storageAccountingService,
-          })
-        : null);
+      (this.storageAccountingService ?
+        new StoragePressureBehavior({
+          accountingService: this.storageAccountingService,
+        }) :
+        null);
     this.cdcGroupPropagationService =
       options.cdcGroupPropagationService ||
       this.rebalanceCoordinator?.cdcGroupPropagationService ||
@@ -411,6 +347,7 @@ class UnifiedRebalancerSegment1 extends EventEmitter {
       entityType: this.entityType,
       hasCoordinator: !!coordinator,
     });
+    this.handleCoordinatorRebindProgress(coordinator);
   }
 
   bindCoordinatorProgressListeners(coordinator) {
@@ -461,11 +398,11 @@ class UnifiedRebalancerSegment1 extends EventEmitter {
       return;
     }
     const unsubscribe =
-      typeof bindings.coordinator.off === TYPEOF.FUNCTION
-        ? bindings.coordinator.off.bind(bindings.coordinator)
-        : typeof bindings.coordinator.removeListener === TYPEOF.FUNCTION
-          ? bindings.coordinator.removeListener.bind(bindings.coordinator)
-          : null;
+      typeof bindings.coordinator.off === TYPEOF.FUNCTION ?
+        bindings.coordinator.off.bind(bindings.coordinator) :
+        typeof bindings.coordinator.removeListener === TYPEOF.FUNCTION ?
+          bindings.coordinator.removeListener.bind(bindings.coordinator) :
+          null;
     if (unsubscribe) {
       unsubscribe(
         REBALANCE_COORDINATOR_EVENT.STEP_CHANGED,
@@ -522,9 +459,9 @@ class UnifiedRebalancerSegment1 extends EventEmitter {
 
   buildCoordinatorProgressRebalanceDecision(eventName, payload = {}) {
     const operation =
-      payload?.operation && typeof payload.operation === TYPEOF.OBJECT
-        ? payload.operation
-        : {};
+      payload?.operation && typeof payload.operation === TYPEOF.OBJECT ?
+        payload.operation :
+        {};
     const operationPartitionId = String(
       operation.partitionId ||
         operation.partition_id ||
@@ -585,39 +522,108 @@ class UnifiedRebalancerSegment1 extends EventEmitter {
     return true;
   }
 
-  buildPriorityRecoveryVisibilityRebalanceDecision(event = {}, options = {}) {
-    const serviceRow =
-      event?.data && typeof event.data === TYPEOF.OBJECT ? event.data : {};
-    const servicePartitionId = String(
-      serviceRow[PRIORITY_RECOVERY_VISIBILITY_SERVICE_FIELD.PARTITION_ID] ||
-        serviceRow[PRIORITY_RECOVERY_VISIBILITY_SERVICE_FIELD.PARTITION_ID_SNAKE] ||
-        serviceRow[PRIORITY_RECOVERY_VISIBILITY_SERVICE_FIELD.ENTITY_ID] ||
-        serviceRow[PRIORITY_RECOVERY_VISIBILITY_SERVICE_FIELD.ENTITY_ID_SNAKE] ||
-        UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
-    ).trim();
-    const serviceType = String(
-      serviceRow[PRIORITY_RECOVERY_VISIBILITY_SERVICE_FIELD.SERVICE_TYPE] ||
-        serviceRow[PRIORITY_RECOVERY_VISIBILITY_SERVICE_FIELD.SERVICE_TYPE_SNAKE] ||
-        UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
-    ).toLowerCase();
-    const serviceStatus = String(
-      serviceRow[PRIORITY_RECOVERY_VISIBILITY_SERVICE_FIELD.STATUS] ||
-        UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
-    ).toLowerCase();
+  buildCoordinatorRebindRebalanceDecision(coordinator) {
     const evidence = {
       isLeader: this.isLeader === true,
       priorityPartition: this.isControlPlanePriorityPartition() === true,
-      tableMatches: event?.tableName === UNIFIED_REBALANCER_LITERAL.SERVICES,
-      partitionMatches: servicePartitionId === this.entityId,
-      activePartitionService:
-        serviceType === PRIORITY_RECOVERY_VISIBILITY_SERVICE_TYPE.PARTITION &&
-        serviceStatus === SERVICE_STATUS.ACTIVE,
+      hasCoordinator: !!coordinator,
+    };
+    return {
+      shouldEnqueue:
+        evidence.isLeader &&
+        evidence.priorityPartition &&
+        evidence.hasCoordinator,
+      reconcileReason: RECONCILE_REASON.PRIORITY_RECOVERY_PROGRESS,
+      evidence,
+    };
+  }
+
+  handleCoordinatorRebindProgress(coordinator) {
+    const decision =
+      this.buildCoordinatorRebindRebalanceDecision(coordinator);
+    if (decision.shouldEnqueue !== true) {
+      return false;
+    }
+    this.enqueueRebalanceCheck(decision.reconcileReason);
+    this.enqueueMembershipPublicationReconcile(decision.reconcileReason);
+    return true;
+  }
+
+  buildPriorityRecoveryVisibilityRebalanceDecision(event = {}, options = {}) {
+    const visibilityRow =
+      event?.data && typeof event.data === TYPEOF.OBJECT ? event.data : {};
+    const servicePartitionId = String(
+      visibilityRow[PRIORITY_RECOVERY_VISIBILITY_SERVICE_FIELD.PARTITION_ID] ||
+        visibilityRow[PRIORITY_RECOVERY_VISIBILITY_SERVICE_FIELD.PARTITION_ID_SNAKE] ||
+        visibilityRow[PRIORITY_RECOVERY_VISIBILITY_SERVICE_FIELD.ENTITY_ID] ||
+        visibilityRow[PRIORITY_RECOVERY_VISIBILITY_SERVICE_FIELD.ENTITY_ID_SNAKE] ||
+        UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
+    ).trim();
+    const serviceType = String(
+      visibilityRow[PRIORITY_RECOVERY_VISIBILITY_SERVICE_FIELD.SERVICE_TYPE] ||
+        visibilityRow[PRIORITY_RECOVERY_VISIBILITY_SERVICE_FIELD.SERVICE_TYPE_SNAKE] ||
+        UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
+    ).toLowerCase();
+    const serviceStatus = String(
+      visibilityRow[PRIORITY_RECOVERY_VISIBILITY_SERVICE_FIELD.STATUS] ||
+        UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
+    ).toLowerCase();
+    const operationPartitionId = String(
+      visibilityRow[PRIORITY_RECOVERY_VISIBILITY_OPERATION_FIELD.PARTITION_ID] ||
+        visibilityRow[PRIORITY_RECOVERY_VISIBILITY_OPERATION_FIELD.PARTITION_ID_SNAKE] ||
+        visibilityRow[PRIORITY_RECOVERY_VISIBILITY_OPERATION_FIELD.ENTITY_ID] ||
+        visibilityRow[PRIORITY_RECOVERY_VISIBILITY_OPERATION_FIELD.ENTITY_ID_SNAKE] ||
+        UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
+    ).trim();
+    const operationStatus = String(
+      visibilityRow[PRIORITY_RECOVERY_VISIBILITY_OPERATION_FIELD.STATUS] ||
+        UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
+    ).toLowerCase();
+    const operationType = String(
+      visibilityRow[PRIORITY_RECOVERY_VISIBILITY_OPERATION_FIELD.TYPE] ||
+        UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
+    ).toUpperCase();
+    const operationWorkflowStep = String(
+      visibilityRow[PRIORITY_RECOVERY_VISIBILITY_OPERATION_FIELD.WORKFLOW_STEP] ||
+        visibilityRow[PRIORITY_RECOVERY_VISIBILITY_OPERATION_FIELD.WORKFLOW_STEP_SNAKE] ||
+        UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
+    ).toUpperCase();
+    const serviceTableMatches = event?.tableName === SYSTEM_TABLE_NAME.SERVICES;
+    const servicePartitionMatches = servicePartitionId === this.entityId;
+    const activePartitionService =
+      serviceType === PRIORITY_RECOVERY_VISIBILITY_SERVICE_TYPE.PARTITION &&
+      serviceStatus === SERVICE_STATUS.ACTIVE;
+    const operationTableMatches =
+      event?.tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS;
+    const operationPartitionMatches = operationPartitionId === this.entityId;
+    const coordinatorOwnedOperation =
+      isCoordinatorOwnedOperationType(operationType);
+    const terminalReplicaOperation =
+      coordinatorOwnedOperation &&
+      operationPartitionMatches &&
+      (TERMINAL_STATUSES.includes(operationStatus) ||
+        isTerminalStep(operationType, operationWorkflowStep));
+    const serviceVisibilityProgress =
+      serviceTableMatches &&
+      servicePartitionMatches &&
+      activePartitionService;
+    const operationVisibilityProgress =
+      operationTableMatches &&
+      terminalReplicaOperation;
+    const evidence = {
+      isLeader: this.isLeader === true,
+      priorityPartition: this.isControlPlanePriorityPartition() === true,
+      tableMatches: serviceTableMatches,
+      partitionMatches: servicePartitionMatches,
+      activePartitionService,
+      operationTableMatches,
+      operationPartitionMatches,
+      coordinatorOwnedOperation,
+      terminalReplicaOperation,
     };
     const visibilityProgress =
       evidence.priorityPartition &&
-      evidence.tableMatches &&
-      evidence.partitionMatches &&
-      evidence.activePartitionService;
+      (serviceVisibilityProgress || operationVisibilityProgress);
     return {
       shouldEnqueue:
         visibilityProgress &&
@@ -861,7 +867,7 @@ class UnifiedRebalancerSegment1 extends EventEmitter {
    * @return {Object} Runtime service policy.
    */
   getRuntimeServicePolicy() {
-    return { ...REBALANCER_DEFAULT_POLICY.RUNTIME_SERVICE };
+    return {...REBALANCER_DEFAULT_POLICY.RUNTIME_SERVICE};
   }
 
   /**
@@ -930,9 +936,7 @@ class UnifiedRebalancerSegment1 extends EventEmitter {
   }
 
   /**
-   * Evaluate readiness eligibility for one decision dimension.
-   * Falls back to repairEligible only when older snapshots do not yet expose
-   * controlPlaneRecoveryEligible explicitly.
+   * Evaluate readiness eligibility from explicit canonical evidence.
    *
    * @param {Object|null} readiness
    * @param {string} decisionDimension
@@ -941,27 +945,47 @@ class UnifiedRebalancerSegment1 extends EventEmitter {
    */
   isReadinessDimensionSatisfied(readiness, decisionDimension) {
     const dimensions =
-      readiness?.dimensions && typeof readiness.dimensions === TYPEOF.OBJECT
-        ? readiness.dimensions
-        : null;
+      readiness?.dimensions && typeof readiness.dimensions === TYPEOF.OBJECT ?
+        readiness.dimensions :
+        null;
     if (!dimensions) {
       return false;
     }
-    if (dimensions[decisionDimension] === true) {
+    const readinessEvidence = Object.freeze({
+      explicitDecisionDimensionPresent:
+        Object.hasOwn(dimensions, decisionDimension),
+      explicitDecisionDimensionSatisfied:
+        dimensions[decisionDimension] === true,
+      recoveryEligibilityRequested:
+        decisionDimension ===
+        CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+      legacyRecoveryEligibilitySatisfied:
+        dimensions[CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE] !== false &&
+        dimensions[
+          CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY
+        ] === true &&
+        dimensions[CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY] !== false &&
+        dimensions[CONTROL_PLANE_READINESS_DIMENSION.LOAD_READY] !== false &&
+        dimensions[
+          CONTROL_PLANE_READINESS_DIMENSION.PLACEMENT_ELIGIBLE
+        ] !== false &&
+        dimensions[
+          CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE
+        ] !== false &&
+        dimensions[CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE] !==
+          false &&
+        dimensions[CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE] !== false,
+    });
+    if (readinessEvidence.explicitDecisionDimensionSatisfied) {
       return true;
     }
     if (
-      decisionDimension !==
-      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE
+      !readinessEvidence.recoveryEligibilityRequested ||
+      readinessEvidence.explicitDecisionDimensionPresent
     ) {
       return false;
     }
-    if (Object.hasOwn(dimensions, decisionDimension)) {
-      return false;
-    }
-    return (
-      dimensions[CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE] === true
-    );
+    return readinessEvidence.legacyRecoveryEligibilitySatisfied;
   }
 
   /**
@@ -996,9 +1020,9 @@ class UnifiedRebalancerSegment1 extends EventEmitter {
    */
   resolveCriticalSystemRequiredHealthyNodeCount(activeNodeCount) {
     const normalizedActiveNodeCount =
-      Number.isInteger(activeNodeCount) && activeNodeCount > NUM.ZERO
-        ? activeNodeCount
-        : NUM.ZERO;
+      Number.isInteger(activeNodeCount) && activeNodeCount > NUM.ZERO ?
+        activeNodeCount :
+        NUM.ZERO;
     if (normalizedActiveNodeCount === NUM.ZERO) {
       return NUM.ZERO;
     }
@@ -1025,9 +1049,9 @@ class UnifiedRebalancerSegment1 extends EventEmitter {
    */
   resolvePriorityControlPlaneQuorumDistinctNodeCount(readyNodeCount) {
     const normalizedReadyNodeCount =
-      Number.isInteger(readyNodeCount) && readyNodeCount > NUM.ZERO
-        ? readyNodeCount
-        : NUM.ZERO;
+      Number.isInteger(readyNodeCount) && readyNodeCount > NUM.ZERO ?
+        readyNodeCount :
+        NUM.ZERO;
     if (normalizedReadyNodeCount === NUM.ZERO) {
       return NUM.ZERO;
     }
@@ -1087,9 +1111,9 @@ class UnifiedRebalancerSegment1 extends EventEmitter {
       this.entityId,
     );
     const tableId =
-      typeof partitionRow?.table_id === TYPEOF.STRING
-        ? partitionRow.table_id
-        : partitionRow?.tableId;
+      typeof partitionRow?.table_id === TYPEOF.STRING ?
+        partitionRow.table_id :
+        partitionRow?.tableId;
     return tableId === SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS;
   }
 
@@ -1102,26 +1126,26 @@ class UnifiedRebalancerSegment1 extends EventEmitter {
    * @private
    */
   getCriticalSystemEndpointVisibilityPolicy(activeNodeIds = []) {
-    const activeNodeCount = Array.isArray(activeNodeIds)
-      ? activeNodeIds.filter(
-          (nodeId) => typeof nodeId === TYPEOF.STRING && nodeId.length > NUM.ZERO,
-        ).length
-      : NUM.ZERO;
+    const activeNodeCount = Array.isArray(activeNodeIds) ?
+      activeNodeIds.filter(
+        (nodeId) => typeof nodeId === TYPEOF.STRING && nodeId.length > NUM.ZERO,
+      ).length :
+      NUM.ZERO;
     const isPriorityPartition = this.isControlPlanePriorityPartition();
     const requireEveryActiveNode =
       this.isControlPlanePublicationPriorityPartition();
     const requiredReadyNodeCount =
       isPriorityPartition &&
       !requireEveryActiveNode &&
-      activeNodeCount > NUM.ZERO
-        ? Math.max(
-            NUM.ONE,
-            Math.min(
-              activeNodeCount,
-              this.getPriorityControlPlaneTargetReplicaCount(),
-            ),
-          )
-        : activeNodeCount;
+      activeNodeCount > NUM.ZERO ?
+        Math.max(
+          NUM.ONE,
+          Math.min(
+            activeNodeCount,
+            this.getPriorityControlPlaneTargetReplicaCount(),
+          ),
+        ) :
+        activeNodeCount;
     return Object.freeze({
       allowReadinessBackfill: isPriorityPartition,
       requiredReadyNodeCount,
@@ -1136,9 +1160,9 @@ class UnifiedRebalancerSegment1 extends EventEmitter {
   getPriorityRetryDelayMs() {
     const configuredDelayMs =
       Number.isFinite(this.criticalCheckDelayMs) &&
-      this.criticalCheckDelayMs > NUM.ZERO
-        ? Math.floor(this.criticalCheckDelayMs)
-        : REBALANCER_DEFAULT.UNIFIED.CRITICAL_CHECK_DELAY_MS;
+      this.criticalCheckDelayMs > NUM.ZERO ?
+        Math.floor(this.criticalCheckDelayMs) :
+        REBALANCER_DEFAULT.UNIFIED.CRITICAL_CHECK_DELAY_MS;
     return Math.max(UNIFIED_REBALANCER_LITERAL.THOUSAND, configuredDelayMs);
   }
 
@@ -1203,9 +1227,9 @@ class UnifiedRebalancerSegment1 extends EventEmitter {
     }
     const elapsed = nowMs - this.rebalanceStartAtMs;
     const remaining = delayMs - elapsed;
-    return remaining > UNIFIED_REBALANCER_LITERAL.ZERO
-      ? remaining
-      : UNIFIED_REBALANCER_LITERAL.ZERO;
+    return remaining > UNIFIED_REBALANCER_LITERAL.ZERO ?
+      remaining :
+      UNIFIED_REBALANCER_LITERAL.ZERO;
   }
 
   /**
@@ -1341,9 +1365,9 @@ class UnifiedRebalancerSegment1 extends EventEmitter {
     ) {
       publicationRow = publicationService.getLatestPublicationRowSync();
     }
-    return publicationRow && typeof publicationRow === TYPEOF.OBJECT
-      ? publicationRow
-      : null;
+    return publicationRow && typeof publicationRow === TYPEOF.OBJECT ?
+      publicationRow :
+      null;
   }
 
   /**
@@ -1396,15 +1420,15 @@ class UnifiedRebalancerSegment1 extends EventEmitter {
    */
   selectPublishedMembershipRow(latestPublicationRow, publishedPublicationRow) {
     const candidateRow =
-      String(latestPublicationRow?.status || "").toUpperCase() ===
-      CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED
-        ? latestPublicationRow
-        : publishedPublicationRow;
+      String(latestPublicationRow?.status || '').toUpperCase() ===
+      CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED ?
+        latestPublicationRow :
+        publishedPublicationRow;
     return String(
       candidateRow?.status || UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
-    ).toUpperCase() === CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED
-      ? candidateRow
-      : null;
+    ).toUpperCase() === CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED ?
+      candidateRow :
+      null;
   }
 
   /**
@@ -1474,4 +1498,4 @@ class UnifiedRebalancerSegment1 extends EventEmitter {
    */
 }
 
-export { UnifiedRebalancerSegment1 };
+export {UnifiedRebalancerSegment1};

@@ -35,6 +35,12 @@ const REJOIN_TERMINAL_STATES = Object.freeze(new Set([
   NODE_STATE.FAILED,
   NODE_STATE.SHUTTING_DOWN,
 ]));
+const NODE_ROW_FIELD = Object.freeze({
+  NODE_ADDRESS: 'node_address',
+});
+const REJOIN_AUTHORITY_SOURCE = Object.freeze({
+  LOCAL_CACHE_RESTART_REENTRY: 'local_cache_restart_reentry',
+});
 
 class BootstrapJoinAdmissionOwner {
   constructor(options = {}) {
@@ -121,7 +127,7 @@ class BootstrapJoinAdmissionOwner {
     return null;
   }
 
-  async checkForConflicts(nodeId, nodeAddress) {
+  async checkForConflicts(nodeId, nodeAddress, options = {}) {
     const nodeIdAlreadyRegistered = BOOTSTRAP_API_ERROR.NODE_ID_ALREADY_REGISTERED;
     const nodeAddressInUse = BOOTSTRAP_API_ERROR.NODE_ADDRESS_IN_USE;
     const systemTableCache = assertCritical(
@@ -139,6 +145,22 @@ class BootstrapJoinAdmissionOwner {
 
     const existingNode = systemTableCache.get(TABLES.NODES, nodeId);
     if (existingNode) {
+      if (this.isDurableRejoinSameAddressEvidence(
+        existingNode,
+        nodeAddress,
+        options,
+      )) {
+        this.getLogger().info(
+          BOOTSTRAP_API_LOG_MSG.IDEMPOTENT_NODE_REJOIN_ALLOWED,
+          {
+            nodeId,
+            nodeAddress,
+            authoritativeOverride:
+              REJOIN_AUTHORITY_SOURCE.LOCAL_CACHE_RESTART_REENTRY,
+          },
+        );
+        return null;
+      }
       const authoritativeExistingNode =
         await this.readAuthoritativeNodeRow(nodeId);
       const effectiveExistingNode =
@@ -146,9 +168,7 @@ class BootstrapJoinAdmissionOwner {
           authoritativeExistingNode.row :
           existingNode;
       const existingNodeAddress =
-        effectiveExistingNode?.[COLUMN.NODE_ADDRESS] ??
-        effectiveExistingNode?.node_address ??
-        null;
+        this.getNodeAddressFromRecord(effectiveExistingNode);
       if (existingNodeAddress === nodeAddress) {
         this.getLogger().info(
           BOOTSTRAP_API_LOG_MSG.IDEMPOTENT_NODE_REJOIN_ALLOWED,
@@ -177,7 +197,7 @@ class BootstrapJoinAdmissionOwner {
 
     const allNodes = systemTableCache.getAll(TABLES.NODES) || [];
     for (const node of allNodes) {
-      if (node[COLUMN.NODE_ADDRESS] === nodeAddress &&
+      if (this.getNodeAddressFromRecord(node) === nodeAddress &&
           node[COLUMN.NODE_ID] !== nodeId &&
           !this.isNodeDead(node)) {
         return nodeAddressInUse(nodeAddress);
@@ -185,6 +205,22 @@ class BootstrapJoinAdmissionOwner {
     }
 
     return null;
+  }
+
+  isDurableRejoinSameAddressEvidence(existingNode, nodeAddress, options = {}) {
+    if (
+      resolveMembershipJoinIntentType(options.startupMode) !==
+        MEMBERSHIP_LIFECYCLE_INTENT.RESTART_REENTRY
+    ) {
+      return false;
+    }
+    return this.getNodeAddressFromRecord(existingNode) === nodeAddress;
+  }
+
+  getNodeAddressFromRecord(nodeRecord) {
+    return nodeRecord?.[COLUMN.NODE_ADDRESS] ??
+      nodeRecord?.[NODE_ROW_FIELD.NODE_ADDRESS] ??
+      null;
   }
 
   isNodeDead(nodeRecord) {
@@ -328,6 +364,15 @@ class BootstrapJoinAdmissionOwner {
 
   async determineAndReserveMessageGroupAssignment(newNodeId, options = {}) {
     return this.withMoveReplicaAssignmentReservationLock(async () => {
+      const durableRejoinAssignment =
+        this.tryResolveDurableRejoinExistingMessageGroupAssignment(
+          newNodeId,
+          options,
+        );
+      if (durableRejoinAssignment) {
+        return durableRejoinAssignment;
+      }
+
       await this.expireMoveReplicaAssignmentReservations();
       const activeReservations =
         await this.getActiveMoveReplicaAssignmentReservations();
@@ -359,6 +404,29 @@ class BootstrapJoinAdmissionOwner {
         assignmentLeaseExpiresAt: reservation.leaseExpiresAt,
       };
     });
+  }
+
+  tryResolveDurableRejoinExistingMessageGroupAssignment(
+    newNodeId,
+    options = {},
+  ) {
+    if (
+      resolveMembershipJoinIntentType(options.startupMode) !==
+        MEMBERSHIP_LIFECYCLE_INTENT.RESTART_REENTRY
+    ) {
+      return null;
+    }
+
+    const assignment = this.determineMessageGroupAssignment(newNodeId, {
+      startupMode: options.startupMode,
+    });
+    if (
+      assignment?.strategy === BootstrapStrategy.MOVE_REPLICA ||
+      assignment?.reuseExistingGroup !== true
+    ) {
+      return null;
+    }
+    return assignment;
   }
 
   augmentAssignmentWithPeerAddresses(assignment, messageGroups) {

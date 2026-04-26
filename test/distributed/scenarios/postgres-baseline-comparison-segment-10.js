@@ -1,4 +1,4 @@
-import { POSTGRES_BASELINE_COMPARISON_SEGMENT_9 } from "./postgres-baseline-comparison-segment-9.js";
+import {POSTGRES_BASELINE_COMPARISON_SEGMENT_9} from './postgres-baseline-comparison-segment-9.js';
 const {
   BASELINE_CACHE_HIT_REASON,
   BASELINE_CACHE_INVALID_REASON,
@@ -69,16 +69,16 @@ async function resolveBaselineMetrics({
 }) {
   const effectiveBaselineLoadNodeCount =
     Number.isInteger(baselineLoadNodeCountOverride) &&
-    baselineLoadNodeCountOverride > ZERO
-      ? baselineLoadNodeCountOverride
-      : benchmarkConfig.baselineLoadNodeCount;
+    baselineLoadNodeCountOverride > ZERO ?
+      baselineLoadNodeCountOverride :
+      benchmarkConfig.baselineLoadNodeCount;
   const baselineBenchmarkConfig =
-    effectiveBaselineLoadNodeCount === benchmarkConfig.baselineLoadNodeCount
-      ? benchmarkConfig
-      : {
-          ...benchmarkConfig,
-          baselineLoadNodeCount: effectiveBaselineLoadNodeCount,
-        };
+    effectiveBaselineLoadNodeCount === benchmarkConfig.baselineLoadNodeCount ?
+      benchmarkConfig :
+      {
+        ...benchmarkConfig,
+        baselineLoadNodeCount: effectiveBaselineLoadNodeCount,
+      };
   const cacheBaseDir = resolveCacheBaseDir(cluster);
   const baselineCacheIdentity = buildBaselineCacheIdentity(
     baselineBenchmarkConfig,
@@ -102,7 +102,7 @@ async function resolveBaselineMetrics({
   let baselinePoolMaxConnections = baselineBenchmarkConfig.loadMaxInFlight;
 
   if (baselineMetrics) {
-    onProgress?.("reusing cached baseline metrics", {
+    onProgress?.('reusing cached baseline metrics', {
       cacheHit: true,
       cacheReason: cacheMetadata.reason || BASELINE_CACHE_HIT_REASON,
     });
@@ -111,7 +111,7 @@ async function resolveBaselineMetrics({
   if (!baselineMetrics) {
     let baselinePool = null;
     try {
-      onProgress?.("preparing baseline comparison environment", {
+      onProgress?.('preparing baseline comparison environment', {
         cacheHit: false,
         replicationFactor: baselineBenchmarkConfig.replicationFactor,
       });
@@ -145,7 +145,7 @@ async function resolveBaselineMetrics({
         timeoutMs: baselineBenchmarkConfig.readyTimeoutMs,
         pollIntervalMs: baselineBenchmarkConfig.readyPollIntervalMs,
       });
-      onProgress?.("baseline primary ready", {
+      onProgress?.('baseline primary ready', {
         replicationFactor: baselineBenchmarkConfig.replicationFactor,
       });
       await configurePrimaryReplication(
@@ -201,7 +201,7 @@ async function resolveBaselineMetrics({
         baselinePrimaryContainerId,
         baselineBenchmarkConfig,
       );
-      onProgress?.("baseline replicas synchronized", {
+      onProgress?.('baseline replicas synchronized', {
         replicaCount: Math.max(
           ZERO,
           baselineBenchmarkConfig.replicationFactor - ONE,
@@ -229,7 +229,7 @@ async function resolveBaselineMetrics({
       });
 
       await ensurePostgresBenchmarkTable(baselinePool, benchmarkTableName);
-      onProgress?.("starting baseline load run", {
+      onProgress?.('starting baseline load run', {
         baselineLoadNodeCount: loadNodeCount,
         loadOpsPerSec: baselineBenchmarkConfig.loadOpsPerSec,
       });
@@ -259,7 +259,7 @@ async function resolveBaselineMetrics({
         cacheMetadata.reason = BASELINE_CACHE_INVALID_REASON;
       }
     } finally {
-      if (baselinePool && typeof baselinePool.end === "function") {
+      if (baselinePool && typeof baselinePool.end === 'function') {
         try {
           await baselinePool.end();
         } catch (_poolEndErr) {
@@ -320,12 +320,12 @@ function mapPhaseTimeline(phaseResults) {
 }
 
 function buildFailedPhaseDiagnostics(phaseResult) {
-  if (!phaseResult || typeof phaseResult !== "object") {
+  if (!phaseResult || typeof phaseResult !== 'object') {
     return null;
   }
   return {
-    phase: String(phaseResult.phase || "unknown"),
-    status: String(phaseResult.status || "unknown"),
+    phase: String(phaseResult.phase || 'unknown'),
+    status: String(phaseResult.status || 'unknown'),
     durationMs: Number(phaseResult.durationMs || ZERO),
     startedAtMs: Number(phaseResult.startedAtMs || ZERO),
     endedAtMs: Number(phaseResult.endedAtMs || ZERO),
@@ -336,60 +336,60 @@ function buildFailedPhaseDiagnostics(phaseResult) {
 }
 
 function emitPhaseProgress(phaseContext, message, details = null) {
-  if (typeof phaseContext?.emitPhaseProgress !== "function") {
+  if (typeof phaseContext?.emitPhaseProgress !== 'function') {
     return;
   }
   phaseContext.emitPhaseProgress({
     message,
-    ...(details && typeof details === "object" ? { details } : {}),
+    ...(details && typeof details === 'object' ? {details} : {}),
   });
 }
 
 function emitPhaseMeaningfulChange(phaseContext, message, details = null) {
-  if (typeof phaseContext?.emitPhaseLastMeaningfulChange !== "function") {
+  if (typeof phaseContext?.emitPhaseLastMeaningfulChange !== 'function') {
     return;
   }
   phaseContext.emitPhaseLastMeaningfulChange({
     message,
-    ...(details && typeof details === "object" ? { details } : {}),
+    ...(details && typeof details === 'object' ? {details} : {}),
   });
 }
 
 function emitPhaseNoProgressFailure(phaseContext, message, details = null) {
-  if (typeof phaseContext?.emitPhaseFailedNoProgress !== "function") {
+  if (typeof phaseContext?.emitPhaseFailedNoProgress !== 'function') {
     return;
   }
   phaseContext.emitPhaseFailedNoProgress({
     message,
-    ...(details && typeof details === "object" ? { details } : {}),
+    ...(details && typeof details === 'object' ? {details} : {}),
   });
 }
 
 function buildNoProgressDiagnostics(phaseResult) {
   const phaseProgress = phaseResult?.artifacts?.[PHASE_PROGRESS_ARTIFACT_KEY];
-  if (!phaseProgress || typeof phaseProgress !== "object") {
+  if (!phaseProgress || typeof phaseProgress !== 'object') {
     return null;
   }
   const failedNoProgress =
     phaseProgress.failedNoProgress &&
-    typeof phaseProgress.failedNoProgress === "object"
-      ? phaseProgress.failedNoProgress
-      : null;
+    typeof phaseProgress.failedNoProgress === 'object' ?
+      phaseProgress.failedNoProgress :
+      null;
   const reasonHistogram =
     phaseResult?.artifacts?.reasonHistogram &&
-    typeof phaseResult.artifacts.reasonHistogram === "object"
-      ? phaseResult.artifacts.reasonHistogram
-      : {};
+    typeof phaseResult.artifacts.reasonHistogram === 'object' ?
+      phaseResult.artifacts.reasonHistogram :
+      {};
   const stalledReason =
     Object.keys(reasonHistogram).find((reason) =>
-      String(reason || "").includes(NO_PROGRESS_REASON_CODE),
+      String(reason || '').includes(NO_PROGRESS_REASON_CODE),
     ) || null;
   if (!failedNoProgress && !stalledReason) {
     return null;
   }
   return {
     reasonCode: NO_PROGRESS_REASON_CODE,
-    phase: String(phaseResult?.phase || "unknown"),
+    phase: String(phaseResult?.phase || 'unknown'),
     stalledReason,
     lastProgressEvent: phaseProgress.lastProgressEvent || null,
     lastMeaningfulChange: phaseProgress.lastMeaningfulChange || null,
@@ -401,17 +401,17 @@ function buildNoProgressDiagnostics(phaseResult) {
 
 function createAdmissionRuntimeOwnershipAudit() {
   return {
-    selection: { byNodeId: {} },
-    localReplicaConfirmation: { byNodeId: {} },
-    readinessGate: { byNodeId: {} },
+    selection: {byNodeId: {}},
+    localReplicaConfirmation: {byNodeId: {}},
+    readinessGate: {byNodeId: {}},
   };
 }
 
 function recordAdmissionRuntimeOwnership(audit, stage, nodeId, source) {
-  if (!audit || typeof audit !== "object") {
+  if (!audit || typeof audit !== 'object') {
     return;
   }
-  if (typeof nodeId !== "string" || nodeId.length === ZERO) {
+  if (typeof nodeId !== 'string' || nodeId.length === ZERO) {
     return;
   }
   if (!Object.prototype.hasOwnProperty.call(audit, stage)) {
@@ -425,7 +425,7 @@ function recordAdmissionRuntimeOwnership(audit, stage, nodeId, source) {
 
 function buildAdmissionRuntimeOwnershipStageSummary(stage = {}) {
   const byNodeId =
-    stage?.byNodeId && typeof stage.byNodeId === "object" ? stage.byNodeId : {};
+    stage?.byNodeId && typeof stage.byNodeId === 'object' ? stage.byNodeId : {};
   const counts = {
     [DISCOVERY_ADMISSION_SOURCE.RUNTIME]: ZERO,
     [DISCOVERY_ADMISSION_SOURCE.LEGACY]: ZERO,
@@ -445,7 +445,7 @@ function buildAdmissionRuntimeOwnershipStageSummary(stage = {}) {
     }
   }
   return {
-    byNodeId: { ...byNodeId },
+    byNodeId: {...byNodeId},
     counts,
     legacyFallbackNodeIds: legacyFallbackNodeIds.sort(),
     missingAdmissionNodeIds: missingAdmissionNodeIds.sort(),
@@ -489,61 +489,61 @@ function summarizeReasons(reasonHistogram) {
 
 function resolvePhaseClass(phase) {
   switch (phase) {
-    case SCENARIO_PHASE.PRE_FLIGHT:
-      return PHASE_CLASS_STARTUP;
-    case SCENARIO_PHASE.CONVERGE:
-      return PHASE_CLASS_DISCOVERY;
-    case SCENARIO_PHASE.PRE_LOAD_GATE:
-    case SCENARIO_PHASE.POST_LOAD_DRAIN:
-      return PHASE_CLASS_TOPOLOGY;
-    case SCENARIO_PHASE.LOAD:
-      return PHASE_CLASS_LOAD;
-    case SCENARIO_PHASE.VERIFY:
-      return PHASE_CLASS_VERIFY;
-    case SCENARIO_PHASE.TEARDOWN:
-      return PHASE_CLASS_TEARDOWN;
-    default:
-      return PHASE_CLASS_UNKNOWN;
+  case SCENARIO_PHASE.PRE_FLIGHT:
+    return PHASE_CLASS_STARTUP;
+  case SCENARIO_PHASE.CONVERGE:
+    return PHASE_CLASS_DISCOVERY;
+  case SCENARIO_PHASE.PRE_LOAD_GATE:
+  case SCENARIO_PHASE.POST_LOAD_DRAIN:
+    return PHASE_CLASS_TOPOLOGY;
+  case SCENARIO_PHASE.LOAD:
+    return PHASE_CLASS_LOAD;
+  case SCENARIO_PHASE.VERIFY:
+    return PHASE_CLASS_VERIFY;
+  case SCENARIO_PHASE.TEARDOWN:
+    return PHASE_CLASS_TEARDOWN;
+  default:
+    return PHASE_CLASS_UNKNOWN;
   }
 }
 
 function classifyReason(reason) {
-  const normalizedReason = String(reason || "").toLowerCase();
+  const normalizedReason = String(reason || '').toLowerCase();
   if (
-    normalizedReason.includes("bootstrap") ||
-    normalizedReason.includes("startup") ||
-    normalizedReason.includes("active state")
+    normalizedReason.includes('bootstrap') ||
+    normalizedReason.includes('startup') ||
+    normalizedReason.includes('active state')
   ) {
     return REASON_CLASS_STARTUP;
   }
   if (
-    normalizedReason.includes("discovery") ||
-    normalizedReason.includes("schema") ||
-    normalizedReason.includes("readiness")
+    normalizedReason.includes('discovery') ||
+    normalizedReason.includes('schema') ||
+    normalizedReason.includes('readiness')
   ) {
     return REASON_CLASS_DISCOVERY;
   }
   if (
-    normalizedReason.includes("in_flight") ||
-    normalizedReason.includes("leadership") ||
-    normalizedReason.includes("topology") ||
-    normalizedReason.includes("stalled_no_progress")
+    normalizedReason.includes('in_flight') ||
+    normalizedReason.includes('leadership') ||
+    normalizedReason.includes('topology') ||
+    normalizedReason.includes('stalled_no_progress')
   ) {
     return REASON_CLASS_TOPOLOGY;
   }
   if (
-    normalizedReason.includes("load") ||
-    normalizedReason.includes("circuit") ||
-    normalizedReason.includes("budget_exhausted") ||
-    normalizedReason.includes("operation") ||
-    normalizedReason.includes("write_pressure")
+    normalizedReason.includes('load') ||
+    normalizedReason.includes('circuit') ||
+    normalizedReason.includes('budget_exhausted') ||
+    normalizedReason.includes('operation') ||
+    normalizedReason.includes('write_pressure')
   ) {
     return REASON_CLASS_LOAD;
   }
   if (
-    normalizedReason.includes("consistency") ||
-    normalizedReason.includes("fallback") ||
-    normalizedReason.includes("verification")
+    normalizedReason.includes('consistency') ||
+    normalizedReason.includes('fallback') ||
+    normalizedReason.includes('verification')
   ) {
     return REASON_CLASS_VERIFY;
   }
@@ -560,7 +560,7 @@ function buildReasonClassHistogram(reasons = []) {
 }
 
 function mergeReasonClassHistograms(target = {}, source = {}) {
-  const merged = { ...target };
+  const merged = {...target};
   for (const [reasonClass, count] of Object.entries(source)) {
     merged[reasonClass] = (merged[reasonClass] || ZERO) + Number(count || ZERO);
   }
@@ -587,7 +587,7 @@ function buildPhaseReasonSummary(phaseResults) {
   const warningHistogram = {};
   const errorHistogram = {};
   for (const phaseResult of phaseResults) {
-    const phase = String(phaseResult.phase || "unknown");
+    const phase = String(phaseResult.phase || 'unknown');
     for (const warning of phaseResult.warnings || []) {
       incrementReasonHistogram(warningHistogram, String(warning), phase);
     }
@@ -618,7 +618,7 @@ function buildVerificationArtifacts(state, options = {}) {
     artifacts.loadMetrics = state.loadMetrics;
   }
   if (
-    typeof state.assertionPolicyResult?.status === "string" &&
+    typeof state.assertionPolicyResult?.status === 'string' &&
     state.assertionPolicyResult.status.length > ZERO
   ) {
     artifacts.assertionStatus = state.assertionPolicyResult.status;
@@ -637,49 +637,49 @@ function buildVerificationArtifacts(state, options = {}) {
 
 function resolvePhasePolicy(phase, benchmarkConfig) {
   switch (phase) {
-    case SCENARIO_PHASE.PRE_LOAD_GATE:
-      return {
-        timeoutMs: benchmarkConfig.quiescentTimeoutMs,
-        pollIntervalMs: benchmarkConfig.quiescentPollIntervalMs,
-        stableWindowMs: benchmarkConfig.quiescentStableWindowMs,
-      };
-    case SCENARIO_PHASE.POST_LOAD_DRAIN:
-      return {
-        timeoutMs: benchmarkConfig.postLoadDrainTimeoutMs,
-        pollIntervalMs: benchmarkConfig.postLoadDrainPollIntervalMs,
-        stableWindowMs: benchmarkConfig.postLoadDrainStableWindowMs,
-        insufficientEvidencePolicy: benchmarkConfig.insufficientEvidencePolicy,
-      };
-    case SCENARIO_PHASE.LOAD:
-      return {
-        loadOpsPerSec: benchmarkConfig.loadOpsPerSec,
-        loadDuration: benchmarkConfig.loadDuration,
-        loadMaxInFlight: benchmarkConfig.loadMaxInFlight,
-        loadQueryTimeoutMs: benchmarkConfig.loadQueryTimeoutMs,
-        loadNodeMaxInFlight: benchmarkConfig.loadNodeMaxInFlight,
-        pinRebalancingDuringLoad:
+  case SCENARIO_PHASE.PRE_LOAD_GATE:
+    return {
+      timeoutMs: benchmarkConfig.quiescentTimeoutMs,
+      pollIntervalMs: benchmarkConfig.quiescentPollIntervalMs,
+      stableWindowMs: benchmarkConfig.quiescentStableWindowMs,
+    };
+  case SCENARIO_PHASE.POST_LOAD_DRAIN:
+    return {
+      timeoutMs: benchmarkConfig.postLoadDrainTimeoutMs,
+      pollIntervalMs: benchmarkConfig.postLoadDrainPollIntervalMs,
+      stableWindowMs: benchmarkConfig.postLoadDrainStableWindowMs,
+      insufficientEvidencePolicy: benchmarkConfig.insufficientEvidencePolicy,
+    };
+  case SCENARIO_PHASE.LOAD:
+    return {
+      loadOpsPerSec: benchmarkConfig.loadOpsPerSec,
+      loadDuration: benchmarkConfig.loadDuration,
+      loadMaxInFlight: benchmarkConfig.loadMaxInFlight,
+      loadQueryTimeoutMs: benchmarkConfig.loadQueryTimeoutMs,
+      loadNodeMaxInFlight: benchmarkConfig.loadNodeMaxInFlight,
+      pinRebalancingDuringLoad:
           benchmarkConfig.pinRebalancingDuringLoad === true,
-        allowLoadRebalancePinningBypass:
+      allowLoadRebalancePinningBypass:
           benchmarkConfig.allowLoadRebalancePinningBypass === true,
-        rebalanceHysteresisCooldownMs:
+      rebalanceHysteresisCooldownMs:
           benchmarkConfig.rebalanceHysteresisCooldownMs,
-        rebalanceHysteresisMinDelta:
+      rebalanceHysteresisMinDelta:
           benchmarkConfig.rebalanceHysteresisMinDelta,
-        loadRebalanceMonitorPollIntervalMs:
+      loadRebalanceMonitorPollIntervalMs:
           benchmarkConfig.loadRebalanceMonitorPollIntervalMs,
-        loadRebalanceMaxReplicaOpsInFlight:
+      loadRebalanceMaxReplicaOpsInFlight:
           benchmarkConfig.loadRebalanceMaxReplicaOpsInFlight,
-      };
-    case SCENARIO_PHASE.VERIFY:
-      return {
-        consistencyAssertMaxAttempts:
+    };
+  case SCENARIO_PHASE.VERIFY:
+    return {
+      consistencyAssertMaxAttempts:
           benchmarkConfig.consistencyAssertMaxAttempts,
-        consistencyAssertRetryDelayMs:
+      consistencyAssertRetryDelayMs:
           benchmarkConfig.consistencyAssertRetryDelayMs,
-        insufficientEvidencePolicy: benchmarkConfig.insufficientEvidencePolicy,
-      };
-    default:
-      return {};
+      insufficientEvidencePolicy: benchmarkConfig.insufficientEvidencePolicy,
+    };
+  default:
+    return {};
   }
 }
 
@@ -718,27 +718,27 @@ function buildPhaseDecisions(phaseResults, benchmarkConfig) {
 
 function resolveReasonClassFromPhaseClass(phaseClass) {
   switch (phaseClass) {
-    case PHASE_CLASS_STARTUP:
-      return REASON_CLASS_STARTUP;
-    case PHASE_CLASS_DISCOVERY:
-      return REASON_CLASS_DISCOVERY;
-    case PHASE_CLASS_TOPOLOGY:
-      return REASON_CLASS_TOPOLOGY;
-    case PHASE_CLASS_LOAD:
-      return REASON_CLASS_LOAD;
-    case PHASE_CLASS_VERIFY:
-      return REASON_CLASS_VERIFY;
-    default:
-      return REASON_CLASS_UNKNOWN;
+  case PHASE_CLASS_STARTUP:
+    return REASON_CLASS_STARTUP;
+  case PHASE_CLASS_DISCOVERY:
+    return REASON_CLASS_DISCOVERY;
+  case PHASE_CLASS_TOPOLOGY:
+    return REASON_CLASS_TOPOLOGY;
+  case PHASE_CLASS_LOAD:
+    return REASON_CLASS_LOAD;
+  case PHASE_CLASS_VERIFY:
+    return REASON_CLASS_VERIFY;
+  default:
+    return REASON_CLASS_UNKNOWN;
   }
 }
 
 function buildFailureReasonCounts(phaseResult) {
   const reasonCounts = {};
   const artifactReasonHistogram = phaseResult?.artifacts?.reasonHistogram;
-  if (artifactReasonHistogram && typeof artifactReasonHistogram === "object") {
+  if (artifactReasonHistogram && typeof artifactReasonHistogram === 'object') {
     for (const [reason, count] of Object.entries(artifactReasonHistogram)) {
-      const normalizedReason = String(reason || "");
+      const normalizedReason = String(reason || '');
       const normalizedCount = Number(count);
       if (
         !normalizedReason ||
@@ -766,7 +766,7 @@ function buildFailureReasonCounts(phaseResult) {
 }
 
 function collectCanonicalStrictReasonsFromText(reasonText) {
-  const normalizedReasonText = String(reasonText || "").toLowerCase();
+  const normalizedReasonText = String(reasonText || '').toLowerCase();
   if (normalizedReasonText.length === ZERO) {
     return [];
   }
@@ -781,16 +781,16 @@ function collectCanonicalStrictReasonsFromText(reasonText) {
 
 function resolveFailureNodeReasonsByNodeId(phaseResult) {
   const artifactNodeReasons = phaseResult?.artifacts?.nodeReasonsByNodeId;
-  if (artifactNodeReasons && typeof artifactNodeReasons === "object") {
+  if (artifactNodeReasons && typeof artifactNodeReasons === 'object') {
     return artifactNodeReasons;
   }
   const versionNodes = phaseResult?.artifacts?.versionConvergence?.nodes;
-  if (versionNodes && typeof versionNodes === "object") {
+  if (versionNodes && typeof versionNodes === 'object') {
     const derived = {};
     for (const [nodeId, snapshot] of Object.entries(versionNodes)) {
-      const unmetReasons = Array.isArray(snapshot?.unmetReasons)
-        ? [...snapshot.unmetReasons]
-        : [];
+      const unmetReasons = Array.isArray(snapshot?.unmetReasons) ?
+        [...snapshot.unmetReasons] :
+        [];
       if (unmetReasons.length > ZERO) {
         derived[String(nodeId)] = unmetReasons;
       }
@@ -849,9 +849,9 @@ function resolveDominantStrictReason(reasonCounts) {
     const precedenceIndex =
       STRICT_DOMINANT_REASON_PRECEDENCE.indexOf(reasonCode);
     const precedenceRank =
-      precedenceIndex >= ZERO
-        ? precedenceIndex
-        : STRICT_DOMINANT_REASON_PRECEDENCE.length;
+      precedenceIndex >= ZERO ?
+        precedenceIndex :
+        STRICT_DOMINANT_REASON_PRECEDENCE.length;
     const normalizedCount = normalizeNonNegativeInteger(count);
     if (
       dominantReason === null ||
@@ -871,10 +871,10 @@ function resolveDominantStrictReason(reasonCounts) {
 }
 
 function parseNodeIdFromNodeProbeReason(reason) {
-  const detail = String(reason || "").slice(
+  const detail = String(reason || '').slice(
     QUIESCENCE_REASON_NODE_PROBE_ERROR_PREFIX.length,
   );
-  const separatorIndex = detail.indexOf("=");
+  const separatorIndex = detail.indexOf('=');
   if (separatorIndex <= ZERO) {
     return null;
   }
@@ -885,11 +885,11 @@ function parseNodeIdFromNodeProbeReason(reason) {
 function extractNodeIdsFromFailureErrorMessage(errorMessage) {
   const nodeIds = [];
   const seenNodeIds = new Set();
-  const text = String(errorMessage || "");
+  const text = String(errorMessage || '');
   FAILURE_NODE_ID_PATTERN.lastIndex = ZERO;
   const discoveredNodeIdMatches = text.matchAll(FAILURE_NODE_ID_PATTERN);
   for (const nodeIdMatch of discoveredNodeIdMatches) {
-    const nodeId = String(nodeIdMatch?.[1] || "");
+    const nodeId = String(nodeIdMatch?.[1] || '');
     if (!nodeId || seenNodeIds.has(nodeId)) {
       continue;
     }
@@ -907,17 +907,17 @@ function extractNodeIdsFromFailureErrorMessage(errorMessage) {
     STRICT_PRELOAD_NODE_REASON_ENTRY_SEPARATOR,
   );
   for (const entry of entries) {
-    const trimmedEntry = String(entry || "").trim();
-    if (!trimmedEntry || trimmedEntry === "none") {
+    const trimmedEntry = String(entry || '').trim();
+    if (!trimmedEntry || trimmedEntry === 'none') {
       continue;
     }
     const separatorIndex = trimmedEntry.indexOf(
       STRICT_PRELOAD_NODE_REASON_VALUE_SEPARATOR,
     );
     const nodeId =
-      separatorIndex >= ZERO
-        ? trimmedEntry.slice(ZERO, separatorIndex)
-        : trimmedEntry;
+      separatorIndex >= ZERO ?
+        trimmedEntry.slice(ZERO, separatorIndex) :
+        trimmedEntry;
     if (nodeId.length > ZERO && !seenNodeIds.has(nodeId)) {
       seenNodeIds.add(nodeId);
       nodeIds.push(nodeId);
@@ -927,15 +927,15 @@ function extractNodeIdsFromFailureErrorMessage(errorMessage) {
 }
 
 function collectAffectedNodeIdsFromLoadMetrics(loadMetrics, targetSet) {
-  if (!loadMetrics || typeof loadMetrics !== "object" || !targetSet) {
+  if (!loadMetrics || typeof loadMetrics !== 'object' || !targetSet) {
     return;
   }
   const perNodeMetrics =
     loadMetrics?.perNode &&
-    typeof loadMetrics.perNode === "object" &&
-    !Array.isArray(loadMetrics.perNode)
-      ? loadMetrics.perNode
-      : {};
+    typeof loadMetrics.perNode === 'object' &&
+    !Array.isArray(loadMetrics.perNode) ?
+      loadMetrics.perNode :
+      {};
   for (const [nodeId, nodeMetrics] of Object.entries(perNodeMetrics)) {
     const attemptErrors = Number(nodeMetrics?.attemptErrors || ZERO);
     const dispatched = Number(nodeMetrics?.dispatched || ZERO);
@@ -945,9 +945,9 @@ function collectAffectedNodeIdsFromLoadMetrics(loadMetrics, targetSet) {
       targetSet.add(nodeId);
     }
   }
-  const distinctErrors = Array.isArray(loadMetrics?.distinctErrors)
-    ? loadMetrics.distinctErrors
-    : [];
+  const distinctErrors = Array.isArray(loadMetrics?.distinctErrors) ?
+    loadMetrics.distinctErrors :
+    [];
   for (const errorText of distinctErrors) {
     for (const nodeId of extractNodeIdsFromFailureErrorMessage(errorText)) {
       targetSet.add(nodeId);
@@ -959,10 +959,10 @@ function buildFailureAffectedNodeIds(phaseResult, loadMetrics = null) {
   const affectedNodeIds = new Set();
   const artifacts = phaseResult?.artifacts || {};
   const artifactNodeIdFields = [
-    "includedNodeIds",
-    "excludedNodeIds",
-    "verificationNodeIds",
-    "verificationExcludedNodeIds",
+    'includedNodeIds',
+    'excludedNodeIds',
+    'verificationNodeIds',
+    'verificationExcludedNodeIds',
   ];
   for (const field of artifactNodeIdFields) {
     const nodeIds = artifacts[field];
@@ -970,14 +970,14 @@ function buildFailureAffectedNodeIds(phaseResult, loadMetrics = null) {
       continue;
     }
     for (const nodeId of nodeIds) {
-      if (typeof nodeId === "string" && nodeId.length > ZERO) {
+      if (typeof nodeId === 'string' && nodeId.length > ZERO) {
         affectedNodeIds.add(nodeId);
       }
     }
   }
 
   const reasonHistogram = artifacts.reasonHistogram;
-  if (reasonHistogram && typeof reasonHistogram === "object") {
+  if (reasonHistogram && typeof reasonHistogram === 'object') {
     for (const reason of Object.keys(reasonHistogram)) {
       if (!reason.startsWith(QUIESCENCE_REASON_NODE_PROBE_ERROR_PREFIX)) {
         continue;
@@ -1033,7 +1033,7 @@ function isStrictBenchmarkMode(benchmarkConfig) {
 function resolveReplicaOperationTimelineByOperationId(phaseResult) {
   const timelineByOperationId = {};
   const appendTimeline = (candidate) => {
-    if (!candidate || typeof candidate !== "object") {
+    if (!candidate || typeof candidate !== 'object') {
       return;
     }
     for (const [operationId, entries] of Object.entries(candidate)) {
@@ -1053,7 +1053,7 @@ function resolveReplicaOperationTimelineByOperationId(phaseResult) {
 
   const preflightSnapshots =
     phaseResult?.artifacts?.preflightCriticalPathSnapshots;
-  if (preflightSnapshots && typeof preflightSnapshots === "object") {
+  if (preflightSnapshots && typeof preflightSnapshots === 'object') {
     for (const snapshot of Object.values(preflightSnapshots)) {
       appendTimeline(
         snapshot?.controlPlaneDiagnostics?.replicaOperations

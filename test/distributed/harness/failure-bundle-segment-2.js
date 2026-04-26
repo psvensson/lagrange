@@ -8,7 +8,7 @@ import {
   normalizePriorityRecoveryActiveGateSnapshot,
   PRIORITY_RECOVERY_ACTIVE_GATE_STATE,
 } from './active-gate-contract.js';
-import { FAILURE_BUNDLE_SEGMENT_1 } from "./failure-bundle-segment-1.js";
+import {FAILURE_BUNDLE_SEGMENT_1} from './failure-bundle-segment-1.js';
 const {
   FAILURE_BUNDLE_SCHEMA_VERSION,
   FAILURE_BUNDLE_RUN_DIRNAME,
@@ -41,6 +41,8 @@ const {
   PLAYBACK_EVENT_TYPE_REPLICA_CREATED,
   PLAYBACK_EVENT_TYPE_REPLICA_REMOVED,
   PLAYBACK_STAGE_SETUP_CLUSTER_WAITING_ACTIVE,
+  PLAYBACK_STAGE_LOAD_READINESS_WAITING,
+  PLAYBACK_STAGE_LOAD_READINESS_STABLE,
   ROOT_CAUSE_CLASS_UNKNOWN,
   ROOT_CAUSE_CLASS_STARTUP,
   ROOT_CAUSE_CLASS_DISCOVERY,
@@ -56,6 +58,7 @@ const {
   LOAD_WAIT_REASON_RETRYABLE_CONTROL_PLANE_PRESSURE,
   LOAD_WAIT_REASON_TIMEOUT_WAITS,
   LOAD_WAIT_REASON_QUEUE_CAPACITY_REJECTED,
+  PRIORITY_RECOVERY_PROGRESS_REASON_FALLBACK,
   READINESS_REASON_MAX_NODES,
   READINESS_REASON_MAX_PER_NODE,
   AFFECTED_NODE_ID_LIMIT,
@@ -126,8 +129,8 @@ const {
 } = FAILURE_BUNDLE_SEGMENT_1;
 
 const PRIORITY_RECOVERY_OPERATION_ID_FIELD = Object.freeze({
-  CAMEL: "operationId",
-  SNAKE: "operation_id",
+  CAMEL: 'operationId',
+  SNAKE: 'operation_id',
 });
 
 function normalizePriorityRecoveryInvariants(value) {
@@ -135,48 +138,48 @@ function normalizePriorityRecoveryInvariants(value) {
     return null;
   }
   const invariantsById = new Map();
-  for (const invariant of Array.isArray(value.invariants)
-    ? value.invariants
-    : []) {
+  for (const invariant of Array.isArray(value.invariants) ?
+    value.invariants :
+    []) {
     if (!isRecord(invariant)) {
       continue;
     }
-    const invariantId = String(invariant.id || "").trim();
+    const invariantId = String(invariant.id || '').trim();
     if (invariantId.length === ZERO) {
       continue;
     }
     invariantsById.set(invariantId, {
       id: invariantId,
       invariantId:
-        typeof invariant.invariantId === "string" &&
-        invariant.invariantId.length > ZERO
-          ? invariant.invariantId
-          : invariantId,
+        typeof invariant.invariantId === 'string' &&
+        invariant.invariantId.length > ZERO ?
+          invariant.invariantId :
+          invariantId,
       reasonCode:
-        typeof invariant.reasonCode === "string" &&
-        invariant.reasonCode.length > ZERO
-          ? invariant.reasonCode
-          : typeof invariant.code === "string" && invariant.code.length > ZERO
-            ? invariant.code
-            : PRIORITY_RECOVERY_INVARIANT_FALLBACK,
+        typeof invariant.reasonCode === 'string' &&
+        invariant.reasonCode.length > ZERO ?
+          invariant.reasonCode :
+          typeof invariant.code === 'string' && invariant.code.length > ZERO ?
+            invariant.code :
+            PRIORITY_RECOVERY_INVARIANT_FALLBACK,
       severity:
-        typeof invariant.severity === "string" &&
-        invariant.severity.length > ZERO
-          ? invariant.severity
-          : null,
+        typeof invariant.severity === 'string' &&
+        invariant.severity.length > ZERO ?
+          invariant.severity :
+          null,
       scope:
-        typeof invariant.scope === "string" && invariant.scope.length > ZERO
-          ? invariant.scope
-          : null,
+        typeof invariant.scope === 'string' && invariant.scope.length > ZERO ?
+          invariant.scope :
+          null,
       owningSubsystem:
-        typeof invariant.owningSubsystem === "string" &&
-        invariant.owningSubsystem.length > ZERO
-          ? invariant.owningSubsystem
-          : null,
+        typeof invariant.owningSubsystem === 'string' &&
+        invariant.owningSubsystem.length > ZERO ?
+          invariant.owningSubsystem :
+          null,
       passed: invariant.passed === true,
-      details: isRecord(invariant.details)
-        ? cloneJsonValue(invariant.details)
-        : null,
+      details: isRecord(invariant.details) ?
+        cloneJsonValue(invariant.details) :
+        null,
     });
   }
   const failingInvariantIds = normalizeDistinctStringArray([
@@ -273,7 +276,7 @@ function summarizePriorityRecoveryDecisionSnapshots(value) {
   }
 
   for (const snapshot of decisionSnapshots.snapshots) {
-    const partitionId = String(snapshot.partitionId || "").trim();
+    const partitionId = String(snapshot.partitionId || '').trim();
     if (partitionId.length === ZERO) {
       continue;
     }
@@ -293,7 +296,7 @@ function summarizePriorityRecoveryDecisionSnapshots(value) {
     );
     semanticStateHistoryByPartitionId[partitionId].push(semanticState);
     const decisionDimension = String(
-      snapshot?.admission?.decisionDimension || "",
+      snapshot?.admission?.decisionDimension || '',
     ).trim();
     if (decisionDimension.length > ZERO) {
       decisionDimensions.add(decisionDimension);
@@ -385,15 +388,15 @@ function summarizePriorityRecoveryDecisionSnapshots(value) {
         if (leftEpoch !== rightEpoch) {
           return rightEpoch - leftEpoch;
         }
-        return String(right?.correlationKey || "").localeCompare(
-          String(left?.correlationKey || ""),
+        return String(right?.correlationKey || '').localeCompare(
+          String(left?.correlationKey || ''),
         );
       })[0] || null;
   const partitionWitnesses = witnessPartitionIds
     .map((partitionId) => {
       const partitionSnapshots = decisionSnapshots.snapshots.filter(
         (snapshot) =>
-          String(snapshot?.partitionId || "").trim() === partitionId,
+          String(snapshot?.partitionId || '').trim() === partitionId,
       );
       const latestPartitionSnapshot =
         selectLatestPriorityRecoveryPartitionSnapshot(partitionSnapshots);
@@ -413,13 +416,13 @@ function summarizePriorityRecoveryDecisionSnapshots(value) {
           null);
       const decisionDimension =
         String(
-          latestPartitionSnapshot?.admission?.decisionDimension || "",
+          latestPartitionSnapshot?.admission?.decisionDimension || '',
         ).trim() || null;
       const effectiveEligibleNodeIds = Array.isArray(
         latestPartitionSnapshot?.admission?.effectiveEligibleNodeIds,
-      )
-        ? latestPartitionSnapshot.admission.effectiveEligibleNodeIds
-        : [];
+      ) ?
+        latestPartitionSnapshot.admission.effectiveEligibleNodeIds :
+        [];
       const eligibleNodeIds =
         effectiveEligibleNodeIds.length > ZERO ?
           normalizeDistinctStringArray(effectiveEligibleNodeIds) :
@@ -439,9 +442,9 @@ function summarizePriorityRecoveryDecisionSnapshots(value) {
       );
       const operationIds = normalizeDistinctStringArray(
         partitionSnapshots.flatMap((snapshot) => [
-          ...(Array.isArray(snapshot?.coordinator?.operationIds)
-            ? snapshot.coordinator.operationIds
-            : []),
+          ...(Array.isArray(snapshot?.coordinator?.operationIds) ?
+            snapshot.coordinator.operationIds :
+            []),
           snapshot?.[PRIORITY_RECOVERY_OPERATION_ID_FIELD.CAMEL],
           snapshot?.[PRIORITY_RECOVERY_OPERATION_ID_FIELD.SNAKE],
           snapshot?.coordinator?.operation?.[
@@ -485,21 +488,21 @@ function summarizePriorityRecoveryDecisionSnapshots(value) {
         promotableLearnerNodeIds,
         operationIds,
         completionState:
-          String(latestPartitionSnapshot?.completion?.state || "").trim() ||
+          String(latestPartitionSnapshot?.completion?.state || '').trim() ||
           null,
         workflowState:
-          String(latestPartitionSnapshot?.observation?.workflowState || "")
+          String(latestPartitionSnapshot?.observation?.workflowState || '')
             .trim() || null,
         visibilityState:
-          String(latestPartitionSnapshot?.observation?.visibilityState || "")
+          String(latestPartitionSnapshot?.observation?.visibilityState || '')
             .trim() || null,
         convergenceState:
-          String(latestPartitionSnapshot?.observation?.convergenceState || "")
+          String(latestPartitionSnapshot?.observation?.convergenceState || '')
             .trim() || null,
         workflowSource:
           String(
             latestPartitionSnapshot?.observation?.provenance?.workflowSource ||
-              "",
+              '',
           ).trim() || null,
         snapshotCapturedAt: Number.isFinite(
           latestPartitionSnapshot?.observation?.provenance?.capturedAt,
@@ -509,13 +512,13 @@ function summarizePriorityRecoveryDecisionSnapshots(value) {
           ) :
           Number.isFinite(decisionSnapshots?.capturedAt) ?
             Math.floor(decisionSnapshots.capturedAt) :
-          null,
+            null,
         latestOperationWorkflowStep:
-          String(latestOperation?.workflowStep || "").trim() || null,
+          String(latestOperation?.workflowStep || '').trim() || null,
         latestOperationStatus:
-          String(latestOperation?.status || "").trim() || null,
+          String(latestOperation?.status || '').trim() || null,
         latestOperationTimelineStep:
-          String(latestOperation?.latestTimelineStep || "").trim() || null,
+          String(latestOperation?.latestTimelineStep || '').trim() || null,
       };
     })
     .sort((left, right) => left.partitionId.localeCompare(right.partitionId));
@@ -550,7 +553,7 @@ function resolvePriorityRecoveryExplicitSemanticState(
   if (explicitSemanticState) {
     return explicitSemanticState;
   }
-  const partitionId = String(snapshot?.partitionId || "").trim();
+  const partitionId = String(snapshot?.partitionId || '').trim();
   if (
     partitionId.length === ZERO ||
     !(explicitSemanticStateByPartitionId instanceof Map)
@@ -606,9 +609,9 @@ function deriveReasonCountsFromLoadMetrics(loadMetrics) {
   if (!isRecord(loadMetrics)) {
     return {};
   }
-  const waitReasons = isRecord(loadMetrics.waitReasons)
-    ? loadMetrics.waitReasons
-    : {};
+  const waitReasons = isRecord(loadMetrics.waitReasons) ?
+    loadMetrics.waitReasons :
+    {};
   const reasonCounts = {};
   for (const key of LOAD_WAIT_REASON_KEYS) {
     const count = normalizeNonNegativeCount(waitReasons[key]);
@@ -630,7 +633,7 @@ function deriveReasonCountsFromReadiness(nodeReasonsByNodeId) {
   const reasonCounts = {};
   for (const reasons of Object.values(nodeReasonsByNodeId)) {
     for (const reason of Array.isArray(reasons) ? reasons : []) {
-      const normalizedReason = String(reason || "").trim();
+      const normalizedReason = String(reason || '').trim();
       if (normalizedReason.length === ZERO) {
         continue;
       }
@@ -644,69 +647,69 @@ function deriveReasonCountsFromReadiness(nodeReasonsByNodeId) {
 }
 
 function resolveRootCauseClassFromReason(reason) {
-  const normalizedReason = String(reason || "").trim();
+  const normalizedReason = String(reason || '').trim();
   if (normalizedReason.length === ZERO) {
     return null;
   }
-  if (normalizedReason.startsWith("closure_witness_")) {
+  if (normalizedReason.startsWith('closure_witness_')) {
     return ROOT_CAUSE_CLASS_TOPOLOGY;
   }
   if (Object.hasOwn(LOAD_REASON_ROOT_CAUSE_CLASS_BY_REASON, normalizedReason)) {
     return LOAD_REASON_ROOT_CAUSE_CLASS_BY_REASON[normalizedReason];
   }
-  if (normalizedReason === "hardLoadFailures") {
+  if (normalizedReason === 'hardLoadFailures') {
     return ROOT_CAUSE_CLASS_LOAD;
   }
 
   const lowered = normalizedReason.toLowerCase();
-  if (lowered.includes("cdc")) {
+  if (lowered.includes('cdc')) {
     return ROOT_CAUSE_CLASS_CDC;
   }
-  if (lowered.includes("cache")) {
+  if (lowered.includes('cache')) {
     return ROOT_CAUSE_CLASS_CACHE;
   }
   if (
-    lowered.includes("query_transport") ||
-    lowered.includes("readiness") ||
-    lowered.includes("bootstrap") ||
-    lowered.includes("join_ready") ||
-    lowered.includes("metadata_publication")
+    lowered.includes('query_transport') ||
+    lowered.includes('readiness') ||
+    lowered.includes('bootstrap') ||
+    lowered.includes('join_ready') ||
+    lowered.includes('metadata_publication')
   ) {
     return ROOT_CAUSE_CLASS_STARTUP;
   }
   if (
-    lowered.includes("topology") ||
-    lowered.includes("leader") ||
-    lowered.includes("partition") ||
-    lowered.includes("replica")
+    lowered.includes('topology') ||
+    lowered.includes('leader') ||
+    lowered.includes('partition') ||
+    lowered.includes('replica')
   ) {
     return ROOT_CAUSE_CLASS_TOPOLOGY;
   }
   if (
-    lowered.includes("routing") ||
-    lowered.includes("discovery") ||
-    lowered.includes("service") ||
-    lowered.includes("schema")
+    lowered.includes('routing') ||
+    lowered.includes('discovery') ||
+    lowered.includes('service') ||
+    lowered.includes('schema')
   ) {
     return ROOT_CAUSE_CLASS_DISCOVERY;
   }
   if (
-    lowered.includes("publication") ||
-    lowered.includes("priority_recovery") ||
-    lowered.includes("priority_spread") ||
-    lowered.includes("operation_created_but_no_step_transitions") ||
-    lowered.includes("replica_operations") ||
-    lowered.includes("recovery_protocol")
+    lowered.includes('publication') ||
+    lowered.includes('priority_recovery') ||
+    lowered.includes('priority_spread') ||
+    lowered.includes('operation_created_but_no_step_transitions') ||
+    lowered.includes('replica_operations') ||
+    lowered.includes('recovery_protocol')
   ) {
     return ROOT_CAUSE_CLASS_TOPOLOGY;
   }
   if (
-    lowered.includes("load") ||
-    lowered.includes("queue") ||
-    lowered.includes("dispatch") ||
-    lowered.includes("timeout") ||
-    lowered.includes("admission") ||
-    lowered.includes("failed")
+    lowered.includes('load') ||
+    lowered.includes('queue') ||
+    lowered.includes('dispatch') ||
+    lowered.includes('timeout') ||
+    lowered.includes('admission') ||
+    lowered.includes('failed')
   ) {
     return ROOT_CAUSE_CLASS_LOAD;
   }
@@ -722,7 +725,7 @@ function resolveRootCauseClass({
   readiness,
   controlPlane,
 }) {
-  if (typeof rootCauseClass === "string" && rootCauseClass.length > ZERO) {
+  if (typeof rootCauseClass === 'string' && rootCauseClass.length > ZERO) {
     return rootCauseClass;
   }
 
@@ -739,9 +742,9 @@ function resolveRootCauseClass({
   if (resolveCanonicalFailedOperationCount(loadMetrics) > ZERO) {
     return ROOT_CAUSE_CLASS_LOAD;
   }
-  const orderedMarkers = Array.isArray(firstFaultTimeline?.orderedMarkers)
-    ? firstFaultTimeline.orderedMarkers
-    : [];
+  const orderedMarkers = Array.isArray(firstFaultTimeline?.orderedMarkers) ?
+    firstFaultTimeline.orderedMarkers :
+    [];
   const earliestMarker =
     orderedMarkers.length > ZERO ? orderedMarkers[ZERO].marker : null;
   if (
@@ -767,9 +770,9 @@ function resolveRootCauseClass({
 }
 
 function resolveSummaryRootCauseClass(failure, failureClassification) {
-  const failureRootCauseClass = String(failure?.rootCauseClass || "").trim();
+  const failureRootCauseClass = String(failure?.rootCauseClass || '').trim();
   const classificationRootCauseClass = String(
-    failureClassification?.rootCauseClass || "",
+    failureClassification?.rootCauseClass || '',
   ).trim();
   if (
     failureRootCauseClass.length > ZERO &&
@@ -795,21 +798,21 @@ function resolveSummaryRootCauseClass(failure, failureClassification) {
 function normalizeAffectedNodeIds(entry, fallbackNodeIds = []) {
   const explicitNodeIds = Array.isArray(
     resolveFailureDiagnostics(entry)?.failure?.affectedNodeIds,
-  )
-    ? resolveFailureDiagnostics(entry).failure.affectedNodeIds
-    : [];
+  ) ?
+    resolveFailureDiagnostics(entry).failure.affectedNodeIds :
+    [];
   const sourceNodeIds =
     explicitNodeIds.length > ZERO ? explicitNodeIds : fallbackNodeIds;
   return sourceNodeIds
-    .map((value) => String(value || "").trim())
+    .map((value) => String(value || '').trim())
     .filter((value) => value.length > ZERO)
     .slice(ZERO, AFFECTED_NODE_ID_LIMIT);
 }
 
 function toIsoTimestamp(timestampMs) {
-  return Number.isFinite(timestampMs)
-    ? new Date(timestampMs).toISOString()
-    : null;
+  return Number.isFinite(timestampMs) ?
+    new Date(timestampMs).toISOString() :
+    null;
 }
 
 function buildMarker(timestampMs, loadStartAtMs) {
@@ -819,9 +822,9 @@ function buildMarker(timestampMs, loadStartAtMs) {
   return {
     atMs: timestampMs,
     at: toIsoTimestamp(timestampMs),
-    deltaFromLoadStartMs: Number.isFinite(loadStartAtMs)
-      ? Math.max(ZERO, Math.floor(timestampMs - loadStartAtMs))
-      : null,
+    deltaFromLoadStartMs: Number.isFinite(loadStartAtMs) ?
+      Math.max(ZERO, Math.floor(timestampMs - loadStartAtMs)) :
+      null,
   };
 }
 
@@ -834,9 +837,9 @@ function resolveLoadQueuePressureSignalCount(loadMetrics) {
   if (!isRecord(loadMetrics)) {
     return ZERO;
   }
-  const waitReasons = isRecord(loadMetrics.waitReasons)
-    ? loadMetrics.waitReasons
-    : {};
+  const waitReasons = isRecord(loadMetrics.waitReasons) ?
+    loadMetrics.waitReasons :
+    {};
   let signalCount = ZERO;
   for (const key of [
     LOAD_WAIT_REASON_NODE_SLOT_UNAVAILABLE,
@@ -963,8 +966,8 @@ function buildPlaybackEventSummary(events) {
         timestampMs,
         timestamp: toIsoTimestamp(timestampMs),
         stage:
-          typeof details.stage === "string" ? details.stage : UNKNOWN_VALUE,
-        nodeId: typeof details.nodeId === "string" ? details.nodeId : null,
+          typeof details.stage === 'string' ? details.stage : UNKNOWN_VALUE,
+        nodeId: typeof details.nodeId === 'string' ? details.nodeId : null,
         attempts: normalizeNonNegativeCount(details.attempts),
         elapsedMs: normalizeNonNegativeCount(details.elapsedMs),
       });
@@ -1004,19 +1007,19 @@ function buildPlaybackEventSummary(events) {
       type: event.type,
       timestampMs,
       timestamp: toIsoTimestamp(timestampMs),
-      entityId: typeof event?.entityId === "string" ? event.entityId : null,
+      entityId: typeof event?.entityId === 'string' ? event.entityId : null,
       partitionId:
-        typeof details.partitionId === "string" ? details.partitionId : null,
+        typeof details.partitionId === 'string' ? details.partitionId : null,
       nodeId:
-        typeof details.nodeId === "string"
-          ? details.nodeId
-          : typeof details.targetNodeId === "string"
-            ? details.targetNodeId
-            : null,
-      status: typeof details.status === "string" ? details.status : null,
+        typeof details.nodeId === 'string' ?
+          details.nodeId :
+          typeof details.targetNodeId === 'string' ?
+            details.targetNodeId :
+            null,
+      status: typeof details.status === 'string' ? details.status : null,
       tableName:
-        typeof details.tableName === "string" ? details.tableName : null,
-      tableId: typeof details.tableId === "string" ? details.tableId : null,
+        typeof details.tableName === 'string' ? details.tableName : null,
+      tableId: typeof details.tableId === 'string' ? details.tableId : null,
     });
   }
 
@@ -1056,23 +1059,23 @@ function buildReadinessFromPlaybackEvents(events) {
     if (event.type !== PLAYBACK_EVENT_TYPE_CLUSTER_STAGE) {
       continue;
     }
-    const nodeDiagnostics = Array.isArray(event?.details?.nodeDiagnostics)
-      ? event.details.nodeDiagnostics
-      : [];
+    const nodeDiagnostics = Array.isArray(event?.details?.nodeDiagnostics) ?
+      event.details.nodeDiagnostics :
+      [];
     if (nodeDiagnostics.length === ZERO) {
       continue;
     }
     const nodeReasonCountsByNodeId = {};
     for (const nodeDiagnostic of nodeDiagnostics) {
-      const nodeId = String(nodeDiagnostic?.nodeId || "").trim();
+      const nodeId = String(nodeDiagnostic?.nodeId || '').trim();
       if (nodeId.length === ZERO) {
         continue;
       }
-      const reasons = Array.isArray(nodeDiagnostic?.reasons)
-        ? nodeDiagnostic.reasons
-            .map((reason) => String(reason || "").trim())
-            .filter((reason) => reason.length > ZERO)
-        : [];
+      const reasons = Array.isArray(nodeDiagnostic?.reasons) ?
+        nodeDiagnostic.reasons
+          .map((reason) => String(reason || '').trim())
+          .filter((reason) => reason.length > ZERO) :
+        [];
       nodeReasonCountsByNodeId[nodeId] = reasons.length;
       if (reasons.length === ZERO) {
         continue;
@@ -1100,7 +1103,7 @@ function buildReadinessFromPlaybackEvents(events) {
     lastReadinessTimelineEntry = {
       timestampMs: normalizeNonNegativeCount(event?.timestamp),
       timestamp: toIsoTimestamp(normalizeNonNegativeCount(event?.timestamp)),
-      stage: String(event?.details?.stage || ""),
+      stage: String(event?.details?.stage || ''),
       nodeReasonCountsByNodeId,
     };
   }
@@ -1113,9 +1116,9 @@ function buildReadinessFromPlaybackEvents(events) {
   }
   return {
     nodeReasonsByNodeId:
-      Object.keys(nodeReasonsByNodeId).length > ZERO
-        ? nodeReasonsByNodeId
-        : null,
+      Object.keys(nodeReasonsByNodeId).length > ZERO ?
+        nodeReasonsByNodeId :
+        null,
     lastReadinessTimelineEntry,
   };
 }
@@ -1127,7 +1130,7 @@ function cloneJsonValue(value) {
   if (Array.isArray(value)) {
     return value.map((entry) => cloneJsonValue(entry));
   }
-  if (typeof value !== "object") {
+  if (typeof value !== 'object') {
     return value;
   }
   const cloned = {};
@@ -1139,21 +1142,21 @@ function cloneJsonValue(value) {
 
 function resolvePlaybackPublicationConvergence(details) {
   const snapshotCoverage =
-    details?.snapshotCoverage && typeof details.snapshotCoverage === "object"
-      ? details.snapshotCoverage
-      : null;
+    details?.snapshotCoverage && typeof details.snapshotCoverage === 'object' ?
+      details.snapshotCoverage :
+      null;
   if (!snapshotCoverage) {
     return null;
   }
   if (
     snapshotCoverage.selectedPublicationConvergence &&
-    typeof snapshotCoverage.selectedPublicationConvergence === "object"
+    typeof snapshotCoverage.selectedPublicationConvergence === 'object'
   ) {
     return cloneJsonValue(snapshotCoverage.selectedPublicationConvergence);
   }
   if (
     snapshotCoverage.selectedPublishedMembershipObservation &&
-    typeof snapshotCoverage.selectedPublishedMembershipObservation === "object"
+    typeof snapshotCoverage.selectedPublishedMembershipObservation === 'object'
   ) {
     return cloneJsonValue(
       snapshotCoverage.selectedPublishedMembershipObservation,
@@ -1164,13 +1167,13 @@ function resolvePlaybackPublicationConvergence(details) {
 
 function resolvePlaybackPublishedMembershipObservation(details) {
   const snapshotCoverage =
-    details?.snapshotCoverage && typeof details.snapshotCoverage === "object"
-      ? details.snapshotCoverage
-      : null;
+    details?.snapshotCoverage && typeof details.snapshotCoverage === 'object' ?
+      details.snapshotCoverage :
+      null;
   if (
     !snapshotCoverage ||
     !snapshotCoverage.selectedPublishedMembershipObservation ||
-    typeof snapshotCoverage.selectedPublishedMembershipObservation !== "object"
+    typeof snapshotCoverage.selectedPublishedMembershipObservation !== 'object'
   ) {
     return null;
   }
@@ -1180,47 +1183,50 @@ function resolvePlaybackPublishedMembershipObservation(details) {
 }
 
 const PLAYBACK_STAGE_SETUP_CLUSTER_ACTIVE = 'setup.cluster.active';
+const PLAYBACK_STAGE_SCORE_SETUP_CLUSTER_ACTIVE = 100000;
+const PLAYBACK_STAGE_SCORE_LOAD_READINESS_WAITING = 500000;
+const PLAYBACK_STAGE_SCORE_LOAD_READINESS_STABLE = 700000;
 
 function scorePlaybackActiveGateDetails(details) {
-  if (!details || typeof details !== "object") {
+  if (!details || typeof details !== 'object') {
     return Number.NEGATIVE_INFINITY;
   }
   const snapshotCoverage =
-    details.snapshotCoverage && typeof details.snapshotCoverage === "object"
-      ? details.snapshotCoverage
-      : null;
+    details.snapshotCoverage && typeof details.snapshotCoverage === 'object' ?
+      details.snapshotCoverage :
+      null;
   const publicationConvergenceGate =
     details.publicationConvergenceGate &&
-    typeof details.publicationConvergenceGate === "object"
-      ? details.publicationConvergenceGate
-      : null;
+    typeof details.publicationConvergenceGate === 'object' ?
+      details.publicationConvergenceGate :
+      null;
   const bestCoverageNodeCount = Number.isFinite(
     snapshotCoverage?.bestCoverageNodeCount,
-  )
-    ? Math.max(ZERO, Math.floor(snapshotCoverage.bestCoverageNodeCount))
-    : ZERO;
+  ) ?
+    Math.max(ZERO, Math.floor(snapshotCoverage.bestCoverageNodeCount)) :
+    ZERO;
   const hasPublicationConvergence =
     snapshotCoverage?.selectedPublicationConvergence &&
-    typeof snapshotCoverage.selectedPublicationConvergence === "object";
+    typeof snapshotCoverage.selectedPublicationConvergence === 'object';
   const hasPublishedMembershipObservation =
     snapshotCoverage?.selectedPublishedMembershipObservation &&
-    typeof snapshotCoverage.selectedPublishedMembershipObservation === "object";
+    typeof snapshotCoverage.selectedPublishedMembershipObservation === 'object';
   const hasPriorityPartitionSummary =
     (snapshotCoverage?.selectedPublicationConvergence
       ?.priorityPartitionSummary &&
       typeof snapshotCoverage.selectedPublicationConvergence
-        .priorityPartitionSummary === "object") ||
+        .priorityPartitionSummary === 'object') ||
     (publicationConvergenceGate?.priorityPartitionSummary &&
-      typeof publicationConvergenceGate.priorityPartitionSummary === "object");
+      typeof publicationConvergenceGate.priorityPartitionSummary === 'object');
   const hasSelectedError =
-    typeof snapshotCoverage?.selectedError === "string" &&
+    typeof snapshotCoverage?.selectedError === 'string' &&
     snapshotCoverage.selectedError.length > ZERO;
   const hasActiveGateProgress =
     details.activeGateProgress &&
-    typeof details.activeGateProgress === "object";
+    typeof details.activeGateProgress === 'object';
   const hasActiveGateNoProgress =
     details.activeGateNoProgress &&
-    typeof details.activeGateNoProgress === "object";
+    typeof details.activeGateNoProgress === 'object';
   const activeGate = normalizePriorityRecoveryActiveGateSnapshot(details);
   const activeGateState = activeGate?.state || null;
   const hasActiveGateBlockerHistory =
@@ -1229,10 +1235,10 @@ function scorePlaybackActiveGateDetails(details) {
   const hasPriorityRecoveryDecisionSnapshots =
     details?.snapshotCoverage?.selectedPriorityRecoveryDecisionSnapshots &&
     typeof details.snapshotCoverage
-      .selectedPriorityRecoveryDecisionSnapshots === "object";
+      .selectedPriorityRecoveryDecisionSnapshots === 'object';
   const hasPriorityRecoveryInvariants =
     details.priorityRecoveryInvariants &&
-    typeof details.priorityRecoveryInvariants === "object";
+    typeof details.priorityRecoveryInvariants === 'object';
   return (
     (
       (
@@ -1240,13 +1246,27 @@ function scorePlaybackActiveGateDetails(details) {
         activeGateState === PRIORITY_RECOVERY_ACTIVE_GATE_STATE.SOFT_READY
       ) ?
         200000 :
-      activeGateState === PRIORITY_RECOVERY_ACTIVE_GATE_STATE.TIMED_OUT ?
-        400 :
-      activeGateState === PRIORITY_RECOVERY_ACTIVE_GATE_STATE.STALLED ?
-        200 :
+        activeGateState === PRIORITY_RECOVERY_ACTIVE_GATE_STATE.TIMED_OUT ?
+          400 :
+          activeGateState === PRIORITY_RECOVERY_ACTIVE_GATE_STATE.STALLED ?
+            200 :
+            ZERO
+    ) +
+    (
+      details.stage === PLAYBACK_STAGE_SETUP_CLUSTER_ACTIVE ?
+        PLAYBACK_STAGE_SCORE_SETUP_CLUSTER_ACTIVE :
         ZERO
     ) +
-    (details.stage === PLAYBACK_STAGE_SETUP_CLUSTER_ACTIVE ? 100000 : ZERO) +
+    (
+      details.stage === PLAYBACK_STAGE_LOAD_READINESS_WAITING ?
+        PLAYBACK_STAGE_SCORE_LOAD_READINESS_WAITING :
+        ZERO
+    ) +
+    (
+      details.stage === PLAYBACK_STAGE_LOAD_READINESS_STABLE ?
+        PLAYBACK_STAGE_SCORE_LOAD_READINESS_STABLE :
+        ZERO
+    ) +
     (snapshotCoverage?.completeCoverage === true ? 100000 : ZERO) +
     bestCoverageNodeCount * 1000 +
     (hasPublicationConvergence ? 400 : ZERO) +
@@ -1294,6 +1314,8 @@ export const FAILURE_BUNDLE_SEGMENT_2 = {
   PLAYBACK_EVENT_TYPE_REPLICA_CREATED,
   PLAYBACK_EVENT_TYPE_REPLICA_REMOVED,
   PLAYBACK_STAGE_SETUP_CLUSTER_WAITING_ACTIVE,
+  PLAYBACK_STAGE_LOAD_READINESS_WAITING,
+  PLAYBACK_STAGE_LOAD_READINESS_STABLE,
   ROOT_CAUSE_CLASS_UNKNOWN,
   ROOT_CAUSE_CLASS_STARTUP,
   ROOT_CAUSE_CLASS_DISCOVERY,
@@ -1309,6 +1331,7 @@ export const FAILURE_BUNDLE_SEGMENT_2 = {
   LOAD_WAIT_REASON_RETRYABLE_CONTROL_PLANE_PRESSURE,
   LOAD_WAIT_REASON_TIMEOUT_WAITS,
   LOAD_WAIT_REASON_QUEUE_CAPACITY_REJECTED,
+  PRIORITY_RECOVERY_PROGRESS_REASON_FALLBACK,
   READINESS_REASON_MAX_NODES,
   READINESS_REASON_MAX_PER_NODE,
   AFFECTED_NODE_ID_LIMIT,

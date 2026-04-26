@@ -355,7 +355,7 @@ test('boundary-transition scenario defers critical partition create admission ' 
       },
     },
     cdcIntegrationService: {
-      async waitForCacheUpdate() {}
+      async waitForCacheUpdate() {},
     },
     tablePolicyService: {
       async getPolicyForPartition() {

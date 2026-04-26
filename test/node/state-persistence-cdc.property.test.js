@@ -88,47 +88,47 @@ test('Property 6: State Persistence via CDC', async (t) => {
    */
   t.test('CDC persistence emits the canonical mutation bundle for every transition',
     async (t) => {
-    await fc.assert(
-      fc.asyncProperty(
-        fc.constantFrom(...VALID_TRANSITION_SEQUENCES),
-        fc.uuid(),
-        fc.uuid(),
-        async (transitionSequence, replicaId, partitionId) => {
-          const mockCdc = createMockCdcService();
+      await fc.assert(
+        fc.asyncProperty(
+          fc.constantFrom(...VALID_TRANSITION_SEQUENCES),
+          fc.uuid(),
+          fc.uuid(),
+          async (transitionSequence, replicaId, partitionId) => {
+            const mockCdc = createMockCdcService();
 
-          const stateMachine = new ReplicaStateMachine({
-            nodeId: 'test-node',
-            cdcIntegrationService: mockCdc,
-          });
+            const stateMachine = new ReplicaStateMachine({
+              nodeId: 'test-node',
+              cdcIntegrationService: mockCdc,
+            });
 
-          // Execute transition sequence
-          for (const state of transitionSequence) {
-            const result = await stateMachine.transition(
-              replicaId,
-              state,
-              buildReplicaStatePropertyContext(
-                partitionId,
-                `transition to ${state}`,
-              ),
-            );
-            if (!result) {
-              stateMachine.clear();
-              return false;
+            // Execute transition sequence
+            for (const state of transitionSequence) {
+              const result = await stateMachine.transition(
+                replicaId,
+                state,
+                buildReplicaStatePropertyContext(
+                  partitionId,
+                  `transition to ${state}`,
+                ),
+              );
+              if (!result) {
+                stateMachine.clear();
+                return false;
+              }
             }
-          }
 
-          stateMachine.clear();
+            stateMachine.clear();
 
-          const serviceCalls = getServiceMutationCalls(mockCdc.calls);
-          return serviceCalls.length === transitionSequence.length &&
+            const serviceCalls = getServiceMutationCalls(mockCdc.calls);
+            return serviceCalls.length === transitionSequence.length &&
             mockCdc.calls.length ===
               getExpectedReplicaStateMutationBundleCount(
                 transitionSequence,
               );
-        },
-      ),
-      {numRuns: 10},
-    );
+          },
+        ),
+        {numRuns: 10},
+      );
 
       t.pass(
         'CDC persistence emits the canonical mutation bundle for every transition',

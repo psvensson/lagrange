@@ -38,8 +38,8 @@ hours discovering avoidable grammar and evidence drift.
 
 This sprint follows:
 
-1. [System grammar whole and confirmation entry sprint](./archived/done-2026-q2-system-grammar-whole-and-confirmation-entry.md)
-2. [Runtime grammar hierarchy and actuation closure sprint](./archived/done-2026-q2-runtime-grammar-hierarchy-and-actuation-closure.md)
+1. [System grammar whole and confirmation entry sprint](./done-2026-q2-system-grammar-whole-and-confirmation-entry.md)
+2. [Runtime grammar hierarchy and actuation closure sprint](./done-2026-q2-runtime-grammar-hierarchy-and-actuation-closure.md)
 
 This sprint executes before:
 
@@ -79,9 +79,9 @@ Roadmap Phase `0.1 — Internal Coherence` maintenance/refactoring scope under:
 
 ## Sprint Packages
 
-1. [Harness artifact truth and priority-recovery presentation closure](../packages/done-20260423-harness-artifact-truth-and-priority-recovery-presentation-closure.md)
-2. [Seed checkpoint snapshot and join-readiness boundary closure](../packages/done-20260423-seed-checkpoint-snapshot-and-join-readiness-boundary-closure.md)
-3. [Rebalancer admission and planner-coordinator seam closure](../packages/done-20260423-rebalancer-admission-and-planner-coordinator-seam-closure.md)
+1. [Harness artifact truth and priority-recovery presentation closure](../../packages/done-20260423-harness-artifact-truth-and-priority-recovery-presentation-closure.md)
+2. [Seed checkpoint snapshot and join-readiness boundary closure](../../packages/done-20260423-seed-checkpoint-snapshot-and-join-readiness-boundary-closure.md)
+3. [Rebalancer admission and planner-coordinator seam closure](../../packages/done-20260423-rebalancer-admission-and-planner-coordinator-seam-closure.md)
 
 ## Execution Outcome
 
@@ -121,7 +121,7 @@ Instead it exposed a new blocker:
 2. active gate remained on publication/member convergence with one missing
    published node and open publication status on some observers
 3. the new blocker is split into
-   [Publication-scoped consistency and node-join closure](../packages/active-20260423-publication-scoped-consistency-and-node-join-closure.md)
+   [Publication-scoped consistency and node-join closure](../../packages/done-20260423-publication-scoped-consistency-and-node-join-closure.md)
    instead of being widened silently into this sprint
 
 ## Follow-On Split
@@ -176,5 +176,5 @@ This sprint stays active until all of the following are true:
 2. The touched runtime boundaries each have one clearer owner path than they
    had at sprint entry.
 3. The remaining matrix blocker is explicit and split into
-   [Publication-scoped consistency and node-join closure](../packages/active-20260423-publication-scoped-consistency-and-node-join-closure.md)
+   [Publication-scoped consistency and node-join closure](../../packages/done-20260423-publication-scoped-consistency-and-node-join-closure.md)
    rather than left as hidden drift.

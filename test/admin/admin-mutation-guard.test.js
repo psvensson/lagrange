@@ -29,8 +29,8 @@ describe('admin-mutation-guard', () => {
       assert.equal(result.error, undefined);
     });
 
-    it('returns allowed with warning for deprecated action'
-      + ' in WARN mode', () => {
+    it('returns allowed with warning for deprecated action' +
+      ' in WARN mode', () => {
       const result = guardMutation(
         'legacyDirectWrite',
         MUTATION_GUARD_MODE.WARN,
@@ -42,8 +42,8 @@ describe('admin-mutation-guard', () => {
       );
     });
 
-    it('returns not allowed with error for deprecated action'
-      + ' in REJECT mode', () => {
+    it('returns not allowed with error for deprecated action' +
+      ' in REJECT mode', () => {
       const result = guardMutation(
         'legacyDirectWrite',
         MUTATION_GUARD_MODE.REJECT,

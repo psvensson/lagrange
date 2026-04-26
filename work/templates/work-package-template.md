@@ -43,6 +43,26 @@ Required when adding or reshaping a shared runtime boundary.
 - Prohibited reinterpretations:
 - Primary diagnostics / proof surfaces:
 
+## Static Drift Ledger
+
+Required for runtime, control-plane, harness, diagnostics, admin, shared test
+infrastructure, and broad refactor packages.
+
+Preflight:
+
+- [ ] Relevant guardrails selected by boundary.
+- [ ] Inherited repo-wide debt classified.
+- [ ] Inherited touched-file debt classified.
+- [ ] File-scoped or boundary-scoped baseline recorded.
+
+Closure:
+
+- [ ] Same guardrails rerun after implementation.
+- [ ] No relevant guardrail count increased.
+- [ ] No new touched-file owner-path, decision-boundary, runtime-grammar, or
+      metadata-gateway violation remains.
+- [ ] Any out-of-scope inherited violation has a linked follow-on package.
+
 ## Detection / Analysis Tasks
 
 - [ ] Build the concern inventory.

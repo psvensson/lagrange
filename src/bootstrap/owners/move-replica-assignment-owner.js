@@ -17,6 +17,12 @@ import {
   BOOTSTRAP_API_ERROR,
   BOOTSTRAP_API_HANDOFF_STATUS,
   BOOTSTRAP_API_LOG_MSG,
+  BOOTSTRAP_API_MOVE_REPLICA_ASSIGNMENT_ERROR as
+    MOVE_REPLICA_ASSIGNMENT_ERROR,
+  BOOTSTRAP_API_MOVE_REPLICA_ASSIGNMENT_HISTORY_PHASE as
+    MOVE_REPLICA_ASSIGNMENT_HISTORY_PHASE,
+  BOOTSTRAP_API_MOVE_REPLICA_ASSIGNMENT_INVALIDATION_REASON as
+    MOVE_REPLICA_ASSIGNMENT_INVALIDATION_REASON,
   BOOTSTRAP_API_REGISTER_SERVICE_ERROR_CODE,
   BOOTSTRAP_API_SQL,
 } from '../bootstrap-api-constants.js';
@@ -468,7 +474,7 @@ class MoveReplicaAssignmentOwner {
         {
           now,
           force: true,
-          phase: 'lease_renewed',
+          phase: MOVE_REPLICA_ASSIGNMENT_HISTORY_PHASE.LEASE_RENEWED,
         },
       );
       if (renewedReservation) {
@@ -478,7 +484,7 @@ class MoveReplicaAssignmentOwner {
         assignmentId,
         BOOTSTRAP_API_HANDOFF_STATUS.FAILED,
         WORKFLOW_STEP.FAILED,
-        'assignment token expired',
+        MOVE_REPLICA_ASSIGNMENT_ERROR.ASSIGNMENT_TOKEN_EXPIRED,
       );
       throw this.buildRegisterServiceValidationError(
         HTTP_STATUS.CONFLICT,
@@ -492,7 +498,7 @@ class MoveReplicaAssignmentOwner {
       {
         now,
         force: false,
-        phase: 'validated',
+        phase: MOVE_REPLICA_ASSIGNMENT_HISTORY_PHASE.VALIDATED,
       },
     );
   }
@@ -521,7 +527,7 @@ class MoveReplicaAssignmentOwner {
     const phase = typeof options.phase === TYPEOF.STRING &&
       options.phase.length > NUM.ZERO ?
       options.phase :
-      'lease_renewed';
+      MOVE_REPLICA_ASSIGNMENT_HISTORY_PHASE.LEASE_RENEWED;
     if (force) {
       if (!this.canReviveExpiredMoveReplicaAssignmentReservation(reservation)) {
         return null;
@@ -730,7 +736,10 @@ class MoveReplicaAssignmentOwner {
     };
   }
 
-  canReviveExpiredMoveReplicaAssignmentReservation(reservation) {
+  canReviveExpiredMoveReplicaAssignmentReservation(
+    reservation,
+    now = Date.now(),
+  ) {
     if (!reservation?.replicaId || !reservation?.targetNodeId) {
       return false;
     }
@@ -742,7 +751,19 @@ class MoveReplicaAssignmentOwner {
     if (!ownership.hasActiveServiceOwner || ownership.observedCommitted) {
       return false;
     }
-    return ownership.sourceOwnsActiveReplica || ownership.continuingTargetAdoption;
+    if (!ownership.sourceOwnsActiveReplica &&
+        !ownership.continuingTargetAdoption) {
+      return false;
+    }
+    return this.hasViableMoveReplicaAssignmentSource(reservation, now);
+  }
+
+  shouldTolerateMoveReplicaAssignmentSourceUnavailable(
+    reservation,
+    now = Date.now(),
+  ) {
+    return Number.isFinite(reservation?.leaseExpiresAt) &&
+      reservation.leaseExpiresAt > now;
   }
 
   hasViableMoveReplicaAssignmentSource(reservation, now = Date.now()) {
@@ -782,18 +803,18 @@ class MoveReplicaAssignmentOwner {
     if (!reservation ||
         typeof reservation.assignmentId !== TYPEOF.STRING ||
         reservation.assignmentId.length === NUM.ZERO) {
-      return 'invalid_reservation';
+      return MOVE_REPLICA_ASSIGNMENT_INVALIDATION_REASON.INVALID_RESERVATION;
     }
     if (!reservation.replicaId || !reservation.targetNodeId) {
-      return 'missing_assignment_fields';
+      return MOVE_REPLICA_ASSIGNMENT_INVALIDATION_REASON.MISSING_ASSIGNMENT_FIELDS;
     }
     if (BOOTSTRAP_API_ASSIGNMENT.TERMINAL_STATUSES.includes(reservation.status)) {
-      return 'terminal';
+      return MOVE_REPLICA_ASSIGNMENT_INVALIDATION_REASON.TERMINAL;
     }
     if (!BOOTSTRAP_API_ASSIGNMENT.ACTIVE_RESERVATION_STATUSES.includes(
       reservation.status,
     )) {
-      return 'inactive_status';
+      return MOVE_REPLICA_ASSIGNMENT_INVALIDATION_REASON.INACTIVE_STATUS;
     }
     const ownership =
       this.evaluateMoveReplicaAssignmentReservationOwnership(reservation, now);
@@ -801,13 +822,22 @@ class MoveReplicaAssignmentOwner {
       return null;
     }
     if (!Number.isFinite(reservation.leaseExpiresAt)) {
-      return 'missing_lease';
+      return MOVE_REPLICA_ASSIGNMENT_INVALIDATION_REASON.MISSING_LEASE;
     }
     if (reservation.leaseExpiresAt <= now) {
-      return 'lease_expired';
+      return this.canReviveExpiredMoveReplicaAssignmentReservation(
+        reservation,
+        now,
+      ) ?
+        MOVE_REPLICA_ASSIGNMENT_INVALIDATION_REASON.LEASE_EXPIRED :
+        MOVE_REPLICA_ASSIGNMENT_INVALIDATION_REASON.SOURCE_OWNER_UNAVAILABLE;
     }
-    if (!this.hasViableMoveReplicaAssignmentSource(reservation, now)) {
-      return 'source_owner_unavailable';
+    if (!this.hasViableMoveReplicaAssignmentSource(reservation, now) &&
+        !this.shouldTolerateMoveReplicaAssignmentSourceUnavailable(
+          reservation,
+          now,
+        )) {
+      return MOVE_REPLICA_ASSIGNMENT_INVALIDATION_REASON.SOURCE_OWNER_UNAVAILABLE;
     }
     return null;
   }
@@ -1116,13 +1146,17 @@ class MoveReplicaAssignmentOwner {
       if (invalidationReason === null) {
         continue;
       }
-      if (invalidationReason === 'terminal' ||
-          invalidationReason === 'inactive_status' ||
-          invalidationReason === 'invalid_reservation') {
+      if (invalidationReason ===
+            MOVE_REPLICA_ASSIGNMENT_INVALIDATION_REASON.TERMINAL ||
+          invalidationReason ===
+            MOVE_REPLICA_ASSIGNMENT_INVALIDATION_REASON.INACTIVE_STATUS ||
+          invalidationReason ===
+            MOVE_REPLICA_ASSIGNMENT_INVALIDATION_REASON.INVALID_RESERVATION) {
         assignmentReservations?.delete(reservation.assignmentId);
         continue;
       }
-      if (invalidationReason === 'lease_expired') {
+      if (invalidationReason ===
+          MOVE_REPLICA_ASSIGNMENT_INVALIDATION_REASON.LEASE_EXPIRED) {
         assignmentReservations?.set(reservation.assignmentId, reservation);
         continue;
       }
@@ -1131,9 +1165,10 @@ class MoveReplicaAssignmentOwner {
         reservation.assignmentId,
         BOOTSTRAP_API_HANDOFF_STATUS.FAILED,
         WORKFLOW_STEP.FAILED,
-        invalidationReason === 'source_owner_unavailable' ?
-          'assignment source owner unavailable' :
-          'assignment reservation invalid',
+        invalidationReason ===
+            MOVE_REPLICA_ASSIGNMENT_INVALIDATION_REASON.SOURCE_OWNER_UNAVAILABLE ?
+          MOVE_REPLICA_ASSIGNMENT_ERROR.SOURCE_OWNER_UNAVAILABLE :
+          MOVE_REPLICA_ASSIGNMENT_ERROR.RESERVATION_INVALID,
       );
       this.getLogger().info(BOOTSTRAP_API_LOG_MSG.MOVE_REPLICA_ASSIGNMENT_EXPIRED, {
         assignmentId: reservation.assignmentId,
@@ -1147,7 +1182,9 @@ class MoveReplicaAssignmentOwner {
   async reserveMoveReplicaAssignment(targetNodeId, assignment) {
     const replicaId = assignment?.replicaToMove;
     if (!replicaId) {
-      throw new Error('MOVE_REPLICA reservation requires replicaToMove');
+      throw new Error(
+        MOVE_REPLICA_ASSIGNMENT_ERROR.RESERVATION_REPLICA_TO_MOVE_REQUIRED,
+      );
     }
 
     const activeReservations = await this.getActiveMoveReplicaAssignmentReservations();
@@ -1161,14 +1198,14 @@ class MoveReplicaAssignmentOwner {
         conflictingAssignmentId: conflictingReservation.assignmentId,
         conflictingTargetNodeId: conflictingReservation.targetNodeId,
       });
-      throw new Error('MOVE_REPLICA reservation conflict');
+      throw new Error(MOVE_REPLICA_ASSIGNMENT_ERROR.RESERVATION_CONFLICT);
     }
 
     const now = Date.now();
     const assignmentId = uuidv4();
     const leaseExpiresAt = now + this.getMoveReplicaAssignmentLeaseMs();
     const stepsHistory = [{
-      phase: 'reserved',
+      phase: MOVE_REPLICA_ASSIGNMENT_HISTORY_PHASE.RESERVED,
       step: WORKFLOW_STEP.PENDING,
       status: BOOTSTRAP_API_HANDOFF_STATUS.PREPARING,
       timestamp: now,

@@ -180,9 +180,9 @@ test('ReplicaStateMachine keeps stable-state persistence on the critical lane',
       'stable leader loss should also clear canonical partition leader');
 
     stateMachine.clear();
-  ConfigurationManager.resetInstance();
-  LoggingService.resetInstance();
-});
+    ConfigurationManager.resetInstance();
+    LoggingService.resetInstance();
+  });
 
 test('ReplicaStateMachine does not commit runtime state when persistence fails and allows the same transition to retry',
   async (t) => {
@@ -527,11 +527,11 @@ test('ReplicaStateMachine requires upsertSystemTableRow for initial persistence'
 
     await t.rejects(
       stateMachine.transition('svc-2', ReplicaState.PENDING, {
-      partitionId: 'partition-2',
-      nodeId: 'node-1',
-      reason: 'test',
-      serviceId: 'svc-2',
-      serviceAddress: 'node-1/partition/svc-2',
+        partitionId: 'partition-2',
+        nodeId: 'node-1',
+        reason: 'test',
+        serviceId: 'svc-2',
+        serviceAddress: 'node-1/partition/svc-2',
       }),
       /upsertSystemTableRow/,
       'initial persistence should fail loudly without canonical upsert support',

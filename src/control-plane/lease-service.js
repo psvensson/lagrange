@@ -9,9 +9,7 @@ import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {
   NUM,
-  SERVICE_STATUS,
   STATE,
-  STRING,
   TABLES,
   TYPEOF,
 } from '../constants/index.js';
@@ -209,7 +207,7 @@ class LeaseService extends EventEmitter {
         await this.nodeLeaseOwner.disconnectNodeDueToLeaseExpiry(
           node,
           now,
-      );
+        );
       const affectedRows = Number(updateResult?.partitionResult?.affectedRows);
       if (!(affectedRows > NUM.ZERO)) {
         emitInvariant(this, {

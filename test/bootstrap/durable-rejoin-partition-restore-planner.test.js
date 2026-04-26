@@ -17,7 +17,7 @@ function createCache(rowsByTable) {
       return rows.find((row) =>
         row.partition_id === key ||
         row.table_id === key ||
-        row.service_id === key
+        row.service_id === key,
       ) || null;
     },
   };

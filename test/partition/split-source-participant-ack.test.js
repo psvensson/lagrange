@@ -18,7 +18,6 @@ import {
 } from '../../src/partition/partition-constants.js';
 import {
   PARTITION_SERVICE_ERROR_MSG,
-  PARTITION_SERVICE_LOG_MSG,
 } from '../../src/partition/partition-service-constants.js';
 import {
   SPLIT_ACK_STATUS,

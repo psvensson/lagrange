@@ -91,7 +91,7 @@ class EndpointService extends EventEmitter {
     const now = Date.now();
     const existing = unwrapRowReadResult(
       await this.serviceEndpointsOwner.getEndpoint(
-      endpointData.endpointId,
+        endpointData.endpointId,
       ),
     );
 

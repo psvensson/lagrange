@@ -84,13 +84,13 @@ test('executeSelect emits metrics.select.distributed on success',
 
     const ast = parseSQL('SELECT * FROM users');
     const result = await executor.executeSelect(
-      ast, ['p1', 'p2']
+      ast, ['p1', 'p2'],
     );
 
     t.equal(result.success, true);
 
     const metric = infoCalls.find(
-      (c) => c.tag === METRICS_LOG_TAG.SELECT_DISTRIBUTED
+      (c) => c.tag === METRICS_LOG_TAG.SELECT_DISTRIBUTED,
     );
     t.ok(metric, 'metrics.select.distributed log emitted');
     t.equal(metric.data.partitionCount, 2);
@@ -99,18 +99,18 @@ test('executeSelect emits metrics.select.distributed on success',
     t.equal(typeof metric.data.mergeDurationMs, 'number');
     t.ok(
       metric.data.mergeDurationMs >= 0,
-      'mergeDurationMs non-negative'
+      'mergeDurationMs non-negative',
     );
     t.equal(metric.data.totalRows, 2);
     t.equal(typeof metric.data.stragglerCount, 'number');
     t.ok(
       metric.data.stragglerCount >= 0,
-      'stragglerCount non-negative'
+      'stragglerCount non-negative',
     );
     t.equal(typeof metric.data.speculativeExecutions, 'number');
     t.ok(
       metric.data.speculativeExecutions >= 0,
-      'speculativeExecutions non-negative'
+      'speculativeExecutions non-negative',
     );
 
     mockPartitionData.clear();
@@ -128,11 +128,11 @@ test('executeSelect does not emit distributed metric for empty partitions',
     await executor.executeSelect(ast, []);
 
     const metric = infoCalls.find(
-      (c) => c.tag === METRICS_LOG_TAG.SELECT_DISTRIBUTED
+      (c) => c.tag === METRICS_LOG_TAG.SELECT_DISTRIBUTED,
     );
     t.notOk(
       metric,
-      'no distributed metric when no partitions'
+      'no distributed metric when no partitions',
     );
   });
 
@@ -155,11 +155,11 @@ test('executeSelect distributed metric uses info level, not debug',
     await executor.executeSelect(ast, ['p1']);
 
     const debugMetric = debugCalls.find(
-      (c) => c.tag === METRICS_LOG_TAG.SELECT_DISTRIBUTED
+      (c) => c.tag === METRICS_LOG_TAG.SELECT_DISTRIBUTED,
     );
     t.notOk(
       debugMetric,
-      'no distributed metric at debug level'
+      'no distributed metric at debug level',
     );
 
     mockPartitionData.clear();
@@ -181,7 +181,7 @@ test('executeSelect distributed metric has structured object fields',
     await executor.executeSelect(ast, ['p1']);
 
     const metric = infoCalls.find(
-      (c) => c.tag === METRICS_LOG_TAG.SELECT_DISTRIBUTED
+      (c) => c.tag === METRICS_LOG_TAG.SELECT_DISTRIBUTED,
     );
     t.ok(metric, 'metric emitted');
     t.equal(metric.data.partitionCount, 1);
@@ -199,7 +199,7 @@ test('executeSelect distributed metric has structured object fields',
     for (const field of requiredFields) {
       t.ok(
         field in metric.data,
-        `field ${field} present`
+        `field ${field} present`,
       );
     }
 

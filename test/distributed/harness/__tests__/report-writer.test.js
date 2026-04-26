@@ -180,7 +180,7 @@ describe('ReportWriter', () => {
           observedOpsPerSec: 166.5,
           observedP99LatencyMs: 120,
         });
-    });
+      });
     it('defaults required optimization load fields when absent', () => {
       const writer = new ReportWriter(outputPath);
       writer.addResult('load-scenario', {

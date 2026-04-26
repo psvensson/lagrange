@@ -1,5 +1,5 @@
-import { CLUSTER_SEGMENT_7_CLASS_SHARED } from './cluster-segment-7-class-shared.js';
-import { acquireReusableClusterLease, isReusableClusterLeaseTimeoutError, registerClusterCleanup } from './cluster-runtime-helpers.js';
+import {CLUSTER_SEGMENT_7_CLASS_SHARED} from './cluster-segment-7-class-shared.js';
+import {acquireReusableClusterLease, isReusableClusterLeaseTimeoutError, registerClusterCleanup} from './cluster-runtime-helpers.js';
 
 const {
   ACTIVE_POLL_INTERVAL_MS,
@@ -83,7 +83,7 @@ class Cluster1 {
     this._providers = providers;
     this._hostAssignment = hostAssignment;
     this._clusterId = uuidv4();
-    this._scenarioName = config.scenarioName || "unknown-scenario";
+    this._scenarioName = config.scenarioName || 'unknown-scenario';
     this._networkId = null;
     this._networkName = null;
     this._nodes = new Map();
@@ -110,13 +110,13 @@ class Cluster1 {
   }
 
   _isContainerReuseEnabled() {
-    if (typeof this._reuseContainersEnabledOverride === "boolean") {
+    if (typeof this._reuseContainersEnabledOverride === 'boolean') {
       return this._reuseContainersEnabledOverride;
     }
     const dockerConfig =
-      this._config && typeof this._config.docker === "object"
-        ? this._config.docker
-        : {};
+      this._config && typeof this._config.docker === 'object' ?
+        this._config.docker :
+        {};
     const hasRemoteHosts =
       Array.isArray(dockerConfig.hosts) && dockerConfig.hosts.length > 0;
     return !hasRemoteHosts && dockerConfig.reuseContainers === true;
@@ -125,9 +125,9 @@ class Cluster1 {
   _buildReusableNetworkName() {
     return (
       NETWORK.NAME_PREFIX +
-      "-" +
+      '-' +
       REUSE_NETWORK_NAME_SUFFIX +
-      "-" +
+      '-' +
       String(this._config.size)
     );
   }
@@ -136,7 +136,7 @@ class Cluster1 {
     return resolvePath(
       process.cwd(),
       REUSE_LEASE_DIRNAME,
-      REUSE_LEASE_FILE_PREFIX + "-" + String(this._config.size) + ".lock",
+      REUSE_LEASE_FILE_PREFIX + '-' + String(this._config.size) + '.lock',
     );
   }
 
@@ -149,7 +149,7 @@ class Cluster1 {
   async _acquireReusableClusterLease() {
     if (
       !this._isContainerReuseEnabled() ||
-      typeof this._reuseLeaseRelease === "function"
+      typeof this._reuseLeaseRelease === 'function'
     ) {
       return;
     }
@@ -186,12 +186,12 @@ class Cluster1 {
       }
       this._reuseContainersEnabledOverride = false;
       this._reuseLeaseFallbackWarning =
-        error?.message || "Reusable cluster lease timeout";
+        error?.message || 'Reusable cluster lease timeout';
     }
   }
 
   async _releaseReusableClusterLease() {
-    if (typeof this._reuseLeaseRelease !== "function") {
+    if (typeof this._reuseLeaseRelease !== 'function') {
       this._reuseLeasePath = null;
       return;
     }
@@ -216,24 +216,24 @@ class Cluster1 {
     if (this._isContainerReuseEnabled()) {
       return (
         REUSE_CONTAINER_NAME_PREFIX +
-        "-" +
+        '-' +
         String(this._config.size) +
-        "-" +
+        '-' +
         String(nodeIndex + 1)
       );
     }
-    return "ddb-test-" + this._clusterId.slice(0, 8) + "-" + nodeId;
+    return 'ddb-test-' + this._clusterId.slice(0, 8) + '-' + nodeId;
   }
 
   _buildNodeEnv(nodeId, containerName, seedIp) {
     const env = {};
     const partitionConfig =
-      this._config?.partition && typeof this._config.partition === "object"
-        ? this._config.partition
-        : null;
+      this._config?.partition && typeof this._config.partition === 'object' ?
+        this._config.partition :
+        null;
     env[CONTAINER_ENV_KEYS.NODE_ID] = nodeId;
     env[CONTAINER_ENV_KEYS.DATA_DIR] = DATA_DIR_PATH;
-    env[CONTAINER_ENV_KEYS.NODE_ADDRESS] = containerName + ":" + PORTS.REST;
+    env[CONTAINER_ENV_KEYS.NODE_ADDRESS] = containerName + ':' + PORTS.REST;
     env[WS_HOST_ENV_KEY] = WS_BIND_ALL_HOST;
     env[RAFT_PROVIDER_ENV_KEY] = String(
       this._config.raftProvider || RAFT_PROVIDER_DEFAULTS.provider,
@@ -244,23 +244,23 @@ class Cluster1 {
           this._config?.memoryLeak?.heapSnapshotNearLimitCount,
         ) &&
         this._config.memoryLeak.heapSnapshotNearLimitCount >=
-          HEAP_SNAPSHOT_NEAR_LIMIT_MIN_COUNT
-          ? this._config.memoryLeak.heapSnapshotNearLimitCount
-          : HEAP_SNAPSHOT_NEAR_LIMIT_DEFAULT_COUNT;
+          HEAP_SNAPSHOT_NEAR_LIMIT_MIN_COUNT ?
+          this._config.memoryLeak.heapSnapshotNearLimitCount :
+          HEAP_SNAPSHOT_NEAR_LIMIT_DEFAULT_COUNT;
       const existingNodeOptions = String(
-        env[NODE_OPTIONS_ENV_KEY] || "",
+        env[NODE_OPTIONS_ENV_KEY] || '',
       ).trim();
       const leakNodeOptions = [
         NODE_OPTION_HEAP_PROF,
         NODE_OPTION_HEAP_SNAPSHOT_NEAR_LIMIT_PREFIX + nearLimitCount,
-      ].join(" ");
-      env[NODE_OPTIONS_ENV_KEY] = existingNodeOptions
-        ? existingNodeOptions + " " + leakNodeOptions
-        : leakNodeOptions;
+      ].join(' ');
+      env[NODE_OPTIONS_ENV_KEY] = existingNodeOptions ?
+        existingNodeOptions + ' ' + leakNodeOptions :
+        leakNodeOptions;
     }
 
     if (seedIp) {
-      env[CONTAINER_ENV_KEYS.SEED_NODE_ADDRESS] = seedIp + ":" + PORTS.REST;
+      env[CONTAINER_ENV_KEYS.SEED_NODE_ADDRESS] = seedIp + ':' + PORTS.REST;
       env[JOINING_HTTP_TIMEOUT_ENV_KEY] = String(
         resolvePositiveTimeoutMs(
           this._config?.timeouts?.joiningHttpTimeoutMs,
@@ -319,19 +319,19 @@ class Cluster1 {
   }
 
   _shouldRecreateReusableContainer(inspect, expectedEnv = {}) {
-    if (!inspect || typeof inspect !== "object") {
+    if (!inspect || typeof inspect !== 'object') {
       return true;
     }
     for (const [key, value] of Object.entries(expectedEnv)) {
       const currentValue = readContainerInspectEnvValue(inspect, key);
-      if (String(currentValue || "") !== String(value)) {
+      if (String(currentValue || '') !== String(value)) {
         return true;
       }
     }
 
-    const entrypoint = Array.isArray(inspect?.Config?.Entrypoint)
-      ? inspect.Config.Entrypoint
-      : [];
+    const entrypoint = Array.isArray(inspect?.Config?.Entrypoint) ?
+      inspect.Config.Entrypoint :
+      [];
     if (
       entrypoint.length !== REUSE_ENTRYPOINT.length ||
       entrypoint[0] !== REUSE_ENTRYPOINT[0] ||
@@ -362,18 +362,18 @@ class Cluster1 {
   _getReusableControlBind(containerName) {
     return (
       this._getReusableControlDir(containerName) +
-      ":" +
+      ':' +
       REUSE_CONTROL_MOUNT_PATH
     );
   }
 
   async _markReusableContainerForDataReset(containerName) {
     const controlDir = this._getReusableControlDir(containerName);
-    await fs.mkdir(controlDir, { recursive: true });
+    await fs.mkdir(controlDir, {recursive: true});
     await fs.writeFile(
       resolvePath(controlDir, REUSE_RESET_FLAG_FILENAME),
-      "",
-      "utf8",
+      '',
+      'utf8',
     );
   }
 
@@ -385,7 +385,7 @@ class Cluster1 {
     const reusableContainerNames = [];
     const reusableContainerNameSet = new Set();
     const addContainerName = (containerName) => {
-      if (typeof containerName !== "string" || containerName.length === 0) {
+      if (typeof containerName !== 'string' || containerName.length === 0) {
         return;
       }
       if (reusableContainerNameSet.has(containerName)) {
@@ -400,9 +400,9 @@ class Cluster1 {
       addContainerName(this._buildContainerName(nodeId, index));
     }
 
-    if (typeof provider.listContainers === "function") {
+    if (typeof provider.listContainers === 'function') {
       const reusePrefix =
-        REUSE_CONTAINER_NAME_PREFIX + "-" + String(this._config.size) + "-";
+        REUSE_CONTAINER_NAME_PREFIX + '-' + String(this._config.size) + '-';
       let containers = [];
       try {
         containers = await provider.listContainers();
@@ -413,7 +413,7 @@ class Cluster1 {
         const names = Array.isArray(container?.Names) ? container.Names : [];
         for (const rawName of names) {
           const normalizedName =
-            typeof rawName === "string" ? rawName.replace(/^\/+/, "") : "";
+            typeof rawName === 'string' ? rawName.replace(/^\/+/, '') : '';
           if (!normalizedName.startsWith(reusePrefix)) {
             continue;
           }
@@ -433,7 +433,7 @@ class Cluster1 {
         continue;
       }
       const containerId = inspect.Id || inspect.id || containerName;
-      const status = String(inspect?.State?.Status || "").toLowerCase();
+      const status = String(inspect?.State?.Status || '').toLowerCase();
       if (status !== CONTAINER_RUNNING_STATUS) {
         continue;
       }
@@ -469,23 +469,23 @@ class Cluster1 {
       this._playbackStartWarning = null;
     } catch (_err) {
       // Playback capture is best-effort.
-      this._playbackStartWarning = "Failed to initialize playback capture";
+      this._playbackStartWarning = 'Failed to initialize playback capture';
     }
 
     const provider = this._providers[this._hostAssignment[0]];
     const reuseContainers = this._isContainerReuseEnabled();
-    this._networkName = reuseContainers
-      ? this._buildReusableNetworkName()
-      : NETWORK.NAME_PREFIX + "-" + this._clusterId.slice(0, 8);
+    this._networkName = reuseContainers ?
+      this._buildReusableNetworkName() :
+      NETWORK.NAME_PREFIX + '-' + this._clusterId.slice(0, 8);
     this._recordClusterStage(CLUSTER_STAGE_SETUP_NETWORK_CREATING, {
       networkName: this._networkName,
     });
     const networkLabels = {
       [LABELS.CLUSTER]: this._clusterId,
     };
-    const net = reuseContainers
-      ? await provider.ensureNetwork(this._networkName, networkLabels)
-      : await provider.createNetwork(this._networkName, networkLabels);
+    const net = reuseContainers ?
+      await provider.ensureNetwork(this._networkName, networkLabels) :
+      await provider.createNetwork(this._networkName, networkLabels);
     this._networkId = net.id;
     this._recordClusterStage(CLUSTER_STAGE_SETUP_NETWORK_CREATED, {
       networkName: this._networkName,
@@ -586,7 +586,7 @@ class Cluster1 {
         this._traceStartWarning = null;
       } catch (error) {
         this._traceStartWarning =
-          "Failed to initialize trace capture: " + error.message;
+          'Failed to initialize trace capture: ' + error.message;
       }
     }
 
@@ -620,7 +620,7 @@ class Cluster1 {
     const errors = [];
     const reuseContainers = this._isContainerReuseEnabled();
     try {
-      if (typeof this._playbackRecorder.beginShutdown === "function") {
+      if (typeof this._playbackRecorder.beginShutdown === 'function') {
         await this._playbackRecorder.beginShutdown({
           awaitInFlightCaptures: true,
         });
@@ -653,7 +653,7 @@ class Cluster1 {
           this._traceManifest = await this._traceRecorder.stop();
         } catch (err) {
           this._traceManifest = {
-            warning: "Failed to finalize trace artifacts: " + err.message,
+            warning: 'Failed to finalize trace artifacts: ' + err.message,
           };
         }
       }
@@ -678,7 +678,7 @@ class Cluster1 {
             );
           } catch (err) {
             errors.push(
-              "Failed to remove container for " + nodeId + ": " + err.message,
+              'Failed to remove container for ' + nodeId + ': ' + err.message,
             );
           }
         }
@@ -697,7 +697,7 @@ class Cluster1 {
             networkName: this._networkName,
           });
         } catch (err) {
-          errors.push("Failed to remove network: " + err.message);
+          errors.push('Failed to remove network: ' + err.message);
         }
         this._networkId = null;
       } else if (this._networkId && reuseContainers) {
@@ -732,7 +732,7 @@ class Cluster1 {
           this._playbackManifest.traceWarning = this._traceStartWarning;
         }
       } catch (err) {
-        errors.push("Failed to finalize playback artifacts: " + err.message);
+        errors.push('Failed to finalize playback artifacts: ' + err.message);
       }
 
       this._nodes.clear();
@@ -744,13 +744,13 @@ class Cluster1 {
         await this._releaseReusableClusterLease();
       } catch (error) {
         errors.push(
-          "Failed to release reusable cluster lease: " +
+          'Failed to release reusable cluster lease: ' +
             String(error?.message || error),
         );
       }
       if (errors.length > 0) {
         process.stderr.write(
-          "Cluster stop warnings:\n" + errors.join("\n") + "\n",
+          'Cluster stop warnings:\n' + errors.join('\n') + '\n',
         );
       }
     }
@@ -761,7 +761,7 @@ class Cluster1 {
     const containerId = node?.containerId;
     if (
       !provider ||
-      typeof containerId !== "string" ||
+      typeof containerId !== 'string' ||
       containerId.length === ZERO
     ) {
       return;
@@ -774,7 +774,7 @@ class Cluster1 {
     } catch (error) {
       if (isIgnorableContainerStopError(error)) {
         stopped = true;
-      } else if (typeof provider.killContainer === "function") {
+      } else if (typeof provider.killContainer === 'function') {
         try {
           await provider.killContainer(containerId);
           stopped = true;
@@ -782,19 +782,19 @@ class Cluster1 {
           const stopMessage = String(error?.message || error);
           const killMessage = String(killError?.message || killError);
           errors.push(
-            "Failed to stop container for " +
+            'Failed to stop container for ' +
               nodeId +
-              ": " +
+              ': ' +
               stopMessage +
-              "; kill fallback failed: " +
+              '; kill fallback failed: ' +
               killMessage,
           );
         }
       } else {
         errors.push(
-          "Failed to stop container for " +
+          'Failed to stop container for ' +
             nodeId +
-            ": " +
+            ': ' +
             String(error?.message || error),
         );
       }
@@ -823,7 +823,7 @@ class Cluster1 {
     this._activeLoadRuns.clear();
 
     for (const run of activeRuns) {
-      if (typeof run?.cancel !== "function") {
+      if (typeof run?.cancel !== 'function') {
         continue;
       }
       try {
@@ -835,7 +835,7 @@ class Cluster1 {
 
     await Promise.all(
       activeRuns.map(async (run) => {
-        if (typeof run?.waitComplete !== "function") {
+        if (typeof run?.waitComplete !== 'function') {
           return;
         }
         try {
@@ -848,7 +848,7 @@ class Cluster1 {
   }
 
   _unregisterCleanup() {
-    if (typeof this._cleanupUnregister === "function") {
+    if (typeof this._cleanupUnregister === 'function') {
       this._cleanupUnregister();
       this._cleanupUnregister = null;
     }
@@ -871,14 +871,14 @@ class Cluster1 {
   /** Add one joiner node to an already running cluster. */
   async addNode(options = {}) {
     if (!this._started) {
-      throw new Error("Cluster must be started before adding nodes");
+      throw new Error('Cluster must be started before adding nodes');
     }
     const seedNode =
       Array.from(this._nodes.values()).find(
         (node) => node.role === NODE_ROLES.SEED,
       ) || this._nodes.values().next().value;
     if (!seedNode) {
-      throw new Error("Cannot add node: seed node is unavailable");
+      throw new Error('Cannot add node: seed node is unavailable');
     }
 
     const nodeIndex = this._nodes.size;
@@ -929,7 +929,7 @@ class Cluster1 {
       (n) => n.role === NODE_ROLES.JOINER,
     );
     if (joiners.length === 0) {
-      throw new Error("No non-seed nodes in cluster");
+      throw new Error('No non-seed nodes in cluster');
     }
     const idx = Math.floor(Math.random() * joiners.length);
     return joiners[idx].id;
@@ -965,41 +965,41 @@ class Cluster1 {
   }
 
   async killNode(id) {
-    return this._runChaosAction("killNode", id, null, () =>
+    return this._runChaosAction('killNode', id, null, () =>
       this._chaos.killNode(id),
     );
   }
 
   async stopNode(id) {
-    return this._runChaosAction("stopNode", id, null, () =>
+    return this._runChaosAction('stopNode', id, null, () =>
       this._chaos.stopNode(id),
     );
   }
 
   async pauseNode(id) {
-    return this._runChaosAction("pauseNode", id, null, () =>
+    return this._runChaosAction('pauseNode', id, null, () =>
       this._chaos.pauseNode(id),
     );
   }
 
   async unpauseNode(id) {
-    return this._runChaosAction("unpauseNode", id, null, () =>
+    return this._runChaosAction('unpauseNode', id, null, () =>
       this._chaos.unpauseNode(id),
     );
   }
 
   async restartNode(id, options = {}) {
-    return this._runChaosAction("restartNode", id, options, () =>
+    return this._runChaosAction('restartNode', id, options, () =>
       this._restartNodeWithObservation(id, options),
     );
   }
 
   async _restartNodeWithObservation(id, options = {}) {
     const node = this._nodes.get(id) || null;
-    if (typeof node?.closeQueryConnection === "function") {
+    if (typeof node?.closeQueryConnection === 'function') {
       node.closeQueryConnection();
     }
-    await this._recordRestartBoundarySnapshot(id, "before_stop");
+    await this._recordRestartBoundarySnapshot(id, 'before_stop');
     try {
       await this._chaos.stopNode(id);
     } catch (error) {
@@ -1009,11 +1009,11 @@ class Cluster1 {
     }
     await this._waitForRestartShutdownBoundary(id);
     await this._chaos.startNode(id);
-    if (typeof node?.closeQueryConnection === "function") {
+    if (typeof node?.closeQueryConnection === 'function') {
       node.closeQueryConnection();
     }
     await this._waitForNodeAdminReadiness(id, options);
-    await this._recordRestartBoundarySnapshot(id, "after_ready");
+    await this._recordRestartBoundarySnapshot(id, 'after_ready');
   }
 
   _resolveRestartShutdownObservationTimeoutMs() {
@@ -1027,4 +1027,4 @@ class Cluster1 {
   }
 }
 
-export { Cluster1 };
+export {Cluster1};

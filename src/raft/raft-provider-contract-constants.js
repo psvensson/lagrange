@@ -3,6 +3,7 @@ const RAFT_PROVIDER_CONTRACT_METHOD = Object.freeze({
   PROPOSE: 'propose',
   JOIN_PEER: 'joinPeer',
   START_ELECTION_TIMER: 'startElectionTimer',
+  REQUEST_ELECTION_NOW: 'requestElectionNow',
   CLEAR_TIMERS: 'clearTimers',
   SHUTDOWN_NODE: 'shutdownNode',
   GET_CURRENT_TERM: 'getCurrentTerm',

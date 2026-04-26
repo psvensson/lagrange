@@ -88,7 +88,6 @@ test('Property 9: Test Configuration Compliance', async (t) => {
     t.ok(propertyTestFiles.length > 0, 'should find property test files');
 
     let totalAsserts = 0;
-    let compliantAsserts = 0;
     const nonCompliantFiles = [];
 
     for (const filePath of propertyTestFiles) {
@@ -98,7 +97,7 @@ test('Property 9: Test Configuration Compliance', async (t) => {
       for (const result of results) {
         totalAsserts++;
         if (result.isCompliant) {
-          compliantAsserts++;
+          continue;
         } else if (result.hasNumRuns) {
           nonCompliantFiles.push({
             file: path.relative(process.cwd(), filePath),

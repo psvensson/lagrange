@@ -1,59 +1,28 @@
-import { MESSAGE_ROUTER_SHARED } from "./message-router-shared.js";
+import {MESSAGE_ROUTER_SHARED} from './message-router-shared.js';
 
 const {
-  CONNECTION_CLOSE_DISPOSITION,
-  CONNECTION_STATE,
   ConfigurationManager,
   ConnectionState,
-  EMPTY_ROUTER_REASON,
   EventEmitter,
   HOST,
   INCOMING_CONNECTION_ADOPTION,
-  INLINE_ACK_PASSTHROUGH_KEYS,
-  INLINE_ACK_RESULT_FIELD,
   INPROC,
   IPV6_ANY_HOST,
   IPV6_HOST_PREFIX,
   IPV6_HOST_SUFFIX,
-  InProcWebSocket,
   LoggingService,
   MESSAGE_ROUTER_LITERAL,
-  METRICS_LOG_TAG,
-  OUTBOUND_DELIVERY_PRIORITY,
-  OUTBOUND_QUEUE_BACKPRESSURE_ERROR_CODE,
-  OUTBOUND_QUEUE_BACKPRESSURE_SCOPE,
-  OUTBOUND_QUEUE_PENDING_SOURCE_LIMIT_DIVISOR,
-  OUTBOUND_QUEUE_PENDING_SOURCE_LIMIT_MINIMUM,
-  OutboundDeliveryPriority,
   OutboundDeliveryRegistryOwner,
-  QUERY_DATA_PLANE_MESSAGE_TYPE,
-  QUERY_TRANSPORT_DELIVERY_STATE,
-  QUERY_TRANSPORT_SELECTION,
-  QUEUE_WAIT_BUCKETS,
-  QUEUE_WAIT_BUCKET_OVERFLOW,
   RECONNECT_ADDRESS_SUPPRESSION_DEFAULT_MS,
-  RECONNECT_DISPOSITION,
-  RETIRED_PENDING_RESPONSE_REASON,
-  ROUTER_ADDRESS,
-  ROUTER_CONNECTION_CLOSED_ERROR_CODE,
   ROUTER_ERROR_MSG,
   ROUTER_LOG_MSG,
-  ROUTER_MESSAGE_TIMEOUT_ERROR_CODE,
-  ROUTER_MESSAGE_TYPE,
-  ROUTER_NO_CONNECTION_ERROR_CODE,
-  ROUTER_QUERY_TRANSPORT_NOT_READY_ERROR_CODE,
-  ROUTER_VALID_ENTITY_TYPES,
   RouterConnectionAuthorityOwner,
   RouterMessageType,
   SERVICE_RESPONSE_DISPOSITION_KIND,
   TRANSPORT_CONFIG_KEY,
   TRANSPORT_DEFAULT,
-  TRANSPORT_DELIVERY_OUTCOME_METADATA_FIELDS,
-  TRANSPORT_ERROR_MSG,
   TRANSPORT_EVENT,
   TRANSPORT_FORMAT,
-  TRANSPORT_METRIC,
-  TRANSPORT_METRIC_TRIGGER,
   TRANSPORT_NUM,
   TRANSPORT_PRESSURE_SUMMARY_FIELD,
   TRANSPORT_SUBSYSTEM,
@@ -64,48 +33,8 @@ const {
   WEBSOCKET_CONNECT_TIMEOUT_ERROR_CODE,
   WebSocket,
   WebSocketServer,
-  adjustInFlightPriorityCount,
-  buildDerivedDeliverySource,
-  buildPendingSourceSummary,
-  buildQueryTransportSemanticOutcome,
-  buildQueueWaitSummary,
-  buildRetiredPendingClassification,
-  buildServiceResponseDisposition,
-  buildSupersededPendingResult,
-  buildTransportDeliveryOutcome,
-  canDispatchPendingItem,
-  countInFlightByPriority,
-  countPendingByPriority,
-  countPendingBySource,
   createInProcWebSocketPair,
-  createQueueWaitHistogram,
-  dequeueNextPendingItem,
-  extractSqlOperationKind,
-  extractSqlTableName,
-  isRaftPacket,
-  isSupersedableHeartbeatNodeStateUpdate,
-  isSupersedableRaftAppendFail,
-  isSupersedableRaftHeartbeatAppend,
-  normalizeDeliveryOutcome,
-  normalizeIdentifier,
-  normalizeOutboundDeliveryPriority,
-  normalizeRetryAfterMs,
   normalizeToWebSocketAddress,
-  peekNextPendingItem,
-  queueMicrotaskFn,
-  recordQueueWaitDuration,
-  resolveBackgroundInFlightLimit,
-  resolveBackgroundPendingLimit,
-  resolveBoundedCriticalReserve,
-  resolveDeliverySource,
-  resolveNextPendingItemIndex,
-  resolveNodeStateUpdateReplacementNodeId,
-  resolveOperationIdFromMessage,
-  resolvePendingReplacementKey,
-  resolvePendingSourceLimit,
-  resolveQueueWaitBucket,
-  resolveRequestIdFromMessage,
-  summarizeRaftAppendCommand,
   uuidv4,
 } = MESSAGE_ROUTER_SHARED;
 
@@ -136,36 +65,36 @@ class MessageRouterSegment1 extends EventEmitter {
     this.wsHost =
       options.wsHost ||
       (typeof configuredWsHost === TRANSPORT_TYPEOF.STRING &&
-      configuredWsHost.length > TRANSPORT_NUM.ZERO
-        ? configuredWsHost
-        : TRANSPORT_DEFAULT.WS_HOST);
+      configuredWsHost.length > TRANSPORT_NUM.ZERO ?
+        configuredWsHost :
+        TRANSPORT_DEFAULT.WS_HOST);
     this.messageTimeoutMs =
       config.get(TRANSPORT_CONFIG_KEY.MESSAGE_TIMEOUT_MS) ||
       TRANSPORT_DEFAULT.MESSAGE_TIMEOUT_MS;
     this.ackTimeoutQuarantineThreshold =
       Number.isFinite(options.ackTimeoutQuarantineThreshold) &&
-      options.ackTimeoutQuarantineThreshold >= TRANSPORT_NUM.ONE
-        ? Math.floor(options.ackTimeoutQuarantineThreshold)
-        : Number.isFinite(
-              config.get(TRANSPORT_CONFIG_KEY.ACK_TIMEOUT_QUARANTINE_THRESHOLD),
-            ) &&
+      options.ackTimeoutQuarantineThreshold >= TRANSPORT_NUM.ONE ?
+        Math.floor(options.ackTimeoutQuarantineThreshold) :
+        Number.isFinite(
+          config.get(TRANSPORT_CONFIG_KEY.ACK_TIMEOUT_QUARANTINE_THRESHOLD),
+        ) &&
             config.get(TRANSPORT_CONFIG_KEY.ACK_TIMEOUT_QUARANTINE_THRESHOLD) >=
-              TRANSPORT_NUM.ONE
-          ? Math.floor(
-              config.get(TRANSPORT_CONFIG_KEY.ACK_TIMEOUT_QUARANTINE_THRESHOLD),
-            )
-          : TRANSPORT_DEFAULT.ACK_TIMEOUT_QUARANTINE_THRESHOLD;
+              TRANSPORT_NUM.ONE ?
+          Math.floor(
+            config.get(TRANSPORT_CONFIG_KEY.ACK_TIMEOUT_QUARANTINE_THRESHOLD),
+          ) :
+          TRANSPORT_DEFAULT.ACK_TIMEOUT_QUARANTINE_THRESHOLD;
     const configuredConnectTimeoutMs = config.get(
       WEBSOCKET_CONNECT_TIMEOUT_CONFIG_KEY,
     );
     this.connectTimeoutMs =
       Number.isFinite(options.connectTimeoutMs) &&
-      options.connectTimeoutMs > TRANSPORT_NUM.ZERO
-        ? Math.floor(options.connectTimeoutMs)
-        : Number.isFinite(configuredConnectTimeoutMs) &&
-            configuredConnectTimeoutMs > TRANSPORT_NUM.ZERO
-          ? Math.floor(configuredConnectTimeoutMs)
-          : this.messageTimeoutMs;
+      options.connectTimeoutMs > TRANSPORT_NUM.ZERO ?
+        Math.floor(options.connectTimeoutMs) :
+        Number.isFinite(configuredConnectTimeoutMs) &&
+            configuredConnectTimeoutMs > TRANSPORT_NUM.ZERO ?
+          Math.floor(configuredConnectTimeoutMs) :
+          this.messageTimeoutMs;
     this.pingTimeoutMs =
       config.get(TRANSPORT_CONFIG_KEY.PING_TIMEOUT_MS) ||
       TRANSPORT_DEFAULT.PING_TIMEOUT_MS;
@@ -183,54 +112,54 @@ class MessageRouterSegment1 extends EventEmitter {
       TRANSPORT_DEFAULT.RECONNECT_BACKOFF_MULTIPLIER;
     const configuredMaxConcurrent =
       Number.isFinite(options.outboundQueueMaxConcurrent) &&
-      options.outboundQueueMaxConcurrent > TRANSPORT_NUM.ZERO
-        ? options.outboundQueueMaxConcurrent
-        : config.get(TRANSPORT_CONFIG_KEY.OUTBOUND_QUEUE_MAX_CONCURRENT);
+      options.outboundQueueMaxConcurrent > TRANSPORT_NUM.ZERO ?
+        options.outboundQueueMaxConcurrent :
+        config.get(TRANSPORT_CONFIG_KEY.OUTBOUND_QUEUE_MAX_CONCURRENT);
     this.outboundQueueMaxConcurrent =
       Number.isFinite(configuredMaxConcurrent) &&
-      configuredMaxConcurrent > TRANSPORT_NUM.ZERO
-        ? Math.floor(configuredMaxConcurrent)
-        : TRANSPORT_DEFAULT.OUTBOUND_QUEUE_CONCURRENCY;
+      configuredMaxConcurrent > TRANSPORT_NUM.ZERO ?
+        Math.floor(configuredMaxConcurrent) :
+        TRANSPORT_DEFAULT.OUTBOUND_QUEUE_CONCURRENCY;
     const configuredMaxPending =
       Number.isFinite(options.outboundQueueMaxPending) &&
-      options.outboundQueueMaxPending >= TRANSPORT_NUM.ZERO
-        ? options.outboundQueueMaxPending
-        : config.get(TRANSPORT_CONFIG_KEY.OUTBOUND_QUEUE_MAX_PENDING);
+      options.outboundQueueMaxPending >= TRANSPORT_NUM.ZERO ?
+        options.outboundQueueMaxPending :
+        config.get(TRANSPORT_CONFIG_KEY.OUTBOUND_QUEUE_MAX_PENDING);
     this.outboundQueueMaxPending =
       Number.isFinite(configuredMaxPending) &&
-      configuredMaxPending >= TRANSPORT_NUM.ZERO
-        ? Math.floor(configuredMaxPending)
-        : TRANSPORT_DEFAULT.OUTBOUND_QUEUE_MAX_PENDING;
+      configuredMaxPending >= TRANSPORT_NUM.ZERO ?
+        Math.floor(configuredMaxPending) :
+        TRANSPORT_DEFAULT.OUTBOUND_QUEUE_MAX_PENDING;
     const configuredCriticalReserve =
       Number.isFinite(options.outboundQueueCriticalReserve) &&
-      options.outboundQueueCriticalReserve >= TRANSPORT_NUM.ZERO
-        ? options.outboundQueueCriticalReserve
-        : config.get(TRANSPORT_CONFIG_KEY.OUTBOUND_QUEUE_CRITICAL_RESERVE);
+      options.outboundQueueCriticalReserve >= TRANSPORT_NUM.ZERO ?
+        options.outboundQueueCriticalReserve :
+        config.get(TRANSPORT_CONFIG_KEY.OUTBOUND_QUEUE_CRITICAL_RESERVE);
     const maxCriticalReserve = Math.max(
       TRANSPORT_NUM.ZERO,
       this.outboundQueueMaxPending - TRANSPORT_NUM.ONE,
     );
     this.outboundQueueCriticalReserve =
       Number.isFinite(configuredCriticalReserve) &&
-      configuredCriticalReserve >= TRANSPORT_NUM.ZERO
-        ? Math.min(Math.floor(configuredCriticalReserve), maxCriticalReserve)
-        : Math.min(
-            TRANSPORT_DEFAULT.OUTBOUND_QUEUE_CRITICAL_RESERVE,
-            maxCriticalReserve,
-          );
+      configuredCriticalReserve >= TRANSPORT_NUM.ZERO ?
+        Math.min(Math.floor(configuredCriticalReserve), maxCriticalReserve) :
+        Math.min(
+          TRANSPORT_DEFAULT.OUTBOUND_QUEUE_CRITICAL_RESERVE,
+          maxCriticalReserve,
+        );
     const loggingService = LoggingService.getInstance();
-    this.logger = loggingService.isInitialized()
-      ? loggingService.forSubsystem(TRANSPORT_SUBSYSTEM.ROUTER)
-      : console;
+    this.logger = loggingService.isInitialized() ?
+      loggingService.forSubsystem(TRANSPORT_SUBSYSTEM.ROUTER) :
+      console;
     this.nowFn =
-      typeof options.nowFn === MESSAGE_ROUTER_LITERAL.STRING_FUNCTION
-        ? options.nowFn
-        : Date.now;
+      typeof options.nowFn === MESSAGE_ROUTER_LITERAL.STRING_FUNCTION ?
+        options.nowFn :
+        Date.now;
     this.unmatchedServiceResponseWarnIntervalMs =
       Number.isFinite(options.unmatchedServiceResponseWarnIntervalMs) &&
-      options.unmatchedServiceResponseWarnIntervalMs >= TRANSPORT_NUM.ZERO
-        ? Math.floor(options.unmatchedServiceResponseWarnIntervalMs)
-        : UNMATCHED_SERVICE_RESPONSE_WARN_INTERVAL_MS;
+      options.unmatchedServiceResponseWarnIntervalMs >= TRANSPORT_NUM.ZERO ?
+        Math.floor(options.unmatchedServiceResponseWarnIntervalMs) :
+        UNMATCHED_SERVICE_RESPONSE_WARN_INTERVAL_MS;
     this.lastUnmatchedServiceResponseWarnAtMs = null;
     this.unmatchedServiceResponseWarnSuppressedCount = TRANSPORT_NUM.ZERO;
     this.serviceResponseDispositionCounts = /* @__PURE__ */ new Map();
@@ -255,9 +184,9 @@ class MessageRouterSegment1 extends EventEmitter {
     };
     this.reconnectAddressSuppressionMs =
       Number.isFinite(options.reconnectAddressSuppressionMs) &&
-      options.reconnectAddressSuppressionMs > TRANSPORT_NUM.ZERO
-        ? Math.floor(options.reconnectAddressSuppressionMs)
-        : RECONNECT_ADDRESS_SUPPRESSION_DEFAULT_MS;
+      options.reconnectAddressSuppressionMs > TRANSPORT_NUM.ZERO ?
+        Math.floor(options.reconnectAddressSuppressionMs) :
+        RECONNECT_ADDRESS_SUPPRESSION_DEFAULT_MS;
     this.suppressedReconnectAddresses = /* @__PURE__ */ new Map();
     this.connectionAuthorityOwner = new RouterConnectionAuthorityOwner(this);
     this.outboundDeliveryRegistryOwner = new OutboundDeliveryRegistryOwner(
@@ -524,9 +453,9 @@ class MessageRouterSegment1 extends EventEmitter {
   resolveSelfConnectionHost() {
     const configuredHost = this.wsHost || TRANSPORT_DEFAULT.WS_HOST;
     const defaultHost =
-      configuredHost === HOST.ANY || configuredHost === IPV6_ANY_HOST
-        ? HOST.LOCALHOST
-        : configuredHost;
+      configuredHost === HOST.ANY || configuredHost === IPV6_ANY_HOST ?
+        HOST.LOCALHOST :
+        configuredHost;
     if (
       !this.server ||
       typeof this.server.address !== TRANSPORT_TYPEOF.FUNCTION
@@ -763,7 +692,9 @@ class MessageRouterSegment1 extends EventEmitter {
           rejectPendingConnection(error);
           try {
             ws.terminate();
-          } catch {}
+          } catch (_error) {
+            void _error;
+          }
         }, this.connectTimeoutMs);
         if (
           typeof connectTimeout?.unref ===
@@ -785,7 +716,9 @@ class MessageRouterSegment1 extends EventEmitter {
             connectionInfo.ws = null;
             try {
               ws.terminate();
-            } catch {}
+            } catch (_error) {
+              void _error;
+            }
             resolve();
             return;
           }
@@ -868,7 +801,7 @@ class MessageRouterSegment1 extends EventEmitter {
       err.code = MESSAGE_ROUTER_LITERAL.STRING_ECONNREFUSED;
       throw err;
     }
-    const { a: clientWs, b: serverWs } = createInProcWebSocketPair();
+    const {a: clientWs, b: serverWs} = createInProcWebSocketPair();
     if (this.server?.clients) {
       this.server.clients.add(serverWs);
     }
@@ -1134,7 +1067,7 @@ class MessageRouterSegment1 extends EventEmitter {
    * @private
    */
   handleServiceMessage(ws, message) {
-    const { targetAddress, messageId, payload } = message;
+    const {targetAddress, messageId, payload} = message;
     this.logger.debug(ROUTER_LOG_MSG.SERVICE_MESSAGE_HANDLING, {
       messageId,
       targetAddress,
@@ -1209,7 +1142,7 @@ class MessageRouterSegment1 extends EventEmitter {
    * @private
    */
   handleServiceResponse(message) {
-    const { messageId, result, error } = message;
+    const {messageId, result, error} = message;
     this.logger.debug(ROUTER_LOG_MSG.SERVICE_RESPONSE_RECEIVED, {
       messageId,
       hasError: Boolean(error),
@@ -1244,4 +1177,4 @@ class MessageRouterSegment1 extends EventEmitter {
    */
 }
 
-export { MessageRouterSegment1 };
+export {MessageRouterSegment1};

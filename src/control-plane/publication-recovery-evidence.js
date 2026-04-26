@@ -1,4 +1,4 @@
-import {NUM, TYPEOF} from '../constants/index.js';
+import {NUM} from '../constants/index.js';
 import {buildPriorityRecoveryObservationSnapshot} from
   './priority-recovery-observation-snapshot.js';
 import {buildPublicationRecoveryGateSnapshot} from
@@ -263,12 +263,6 @@ function buildCanonicalPriorityRecoveryObservation(options = {}) {
       existingPriorityRecoveryObservation;
   }
 
-  const existingObservationGate = buildObservationPublicationGate(
-    existingPriorityRecoveryObservation,
-  );
-  const derivedObservationGate = buildObservationPublicationGate(
-    derivedPriorityRecoveryObservation,
-  );
   return samePriorityRecoveryObservationContract(
     existingPriorityRecoveryObservation,
     derivedPriorityRecoveryObservation,
@@ -340,7 +334,7 @@ function isEmptyPriorityRecoveryCurrentSummary(currentSummary = null) {
     return true;
   }
   return normalizeDistinctStringArray(currentSummary.unresolvedClassIds)
-      .length === NUM.ZERO &&
+    .length === NUM.ZERO &&
     normalizeDistinctStringArray(currentSummary.unresolvedSemanticStateIds)
       .length === NUM.ZERO &&
     normalizeDistinctStringArray(currentSummary.blockedPartitionIds)

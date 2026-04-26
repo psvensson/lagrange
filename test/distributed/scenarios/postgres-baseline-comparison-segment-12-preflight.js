@@ -1,29 +1,11 @@
-import { POSTGRES_BASELINE_COMPARISON_SEGMENT_11 } from "./postgres-baseline-comparison-segment-11.js";
+import {POSTGRES_BASELINE_COMPARISON_SEGMENT_11} from './postgres-baseline-comparison-segment-11.js';
 const {
-  AUTHORITATIVE_FALLBACK_THRESHOLD_EXCEEDED_REASON,
-  BASELINE_SKIP_REASON_SUT_HARD_LOAD_FAILURE,
-  BASELINE_STATUS_SKIPPED,
-  BENCHMARK_EVENT_TABLE_FALLBACK,
   BENCHMARK_METADATA_STAGE_CREATE_COMMITTED,
   BENCHMARK_TABLE_CREATE_LARGE_CLUSTER_RETRY_TIMEOUT_MS,
-  BENCHMARK_WORKLOAD_OPERATIONS,
-  BENCHMARK_WORKLOAD_PROFILE,
-  CDC_TELEMETRY_SCHEMA_MISSING_REASON,
-  CDC_TELEMETRY_SCHEMA_VERSION,
   DISCOVERY_GATE_REASON_INSUFFICIENT_REACHABLE_NODES,
-  DISCOVERY_GATE_STATUS_FAILED,
-  DISCOVERY_GATE_STATUS_PASSED,
-  HEARTBEAT_FRESHNESS_INVARIANT_FAILED_REASON,
-  HEARTBEAT_FRESHNESS_LARGE_CLUSTER_MAX_STALL_MS,
-  INTERNAL_SIGNAL_THRESHOLD_BREACH_REASON,
-  LOAD_PARITY_STATUS_MISMATCHED,
-  NODE_CLIENT_TRANSIENT_CONTEXT,
   NO_PROGRESS_REASON_CODE,
   ONE,
-  OVERLOAD_POLICY_VIOLATION_REASON,
   POST_LOAD_DRAIN_MODE_FAILED,
-  POST_LOAD_DRAIN_STATUS_FAILED,
-  POST_LOAD_DRAIN_STATUS_OK,
   PREFLIGHT_CONVERGENCE_LARGE_CLUSTER_NODE_THRESHOLD,
   PRELOAD_QUIESCENCE_LARGE_CLUSTER_MAX_REPLICA_OPS_IN_FLIGHT,
   PRELOAD_QUIESCENCE_LARGE_CLUSTER_STABLE_WINDOW_MS,
@@ -32,108 +14,42 @@ const {
   QUIESCENCE_REASON_NODE_PROBE_ERROR_PREFIX,
   QUIESCENCE_REASON_STALLED_NO_PROGRESS_PREFIX,
   QUIET_MODE_ACTIVE_PHASES,
-  QUIET_MODE_REASON_RUN_FINALIZE,
   QUIET_MODE_REASON_STRICT_BENCHMARK_MODE,
-  REBALANCING_PRESSURE_SCHEMA_VERSION,
-  REBALANCING_WINDOW_PINNING_VIOLATION_REASON,
   REQUIRED_SCHEMA_VERSION_UNAVAILABLE_REASON,
-  ROOT_CAUSE_SNAPSHOT_KIND_CONTROL_SNAPSHOT,
-  ROOT_CAUSE_SNAPSHOT_KIND_PREFLIGHT_CRITICAL_PATH,
-  SNAPSHOT_REFRESH_WARNING_PREFIX,
-  SNAPSHOT_REFRESH_WARNING_SKIPPED,
-  SNAPSHOT_REFRESH_WARNING_UNRESOLVED,
-  SNAPSHOT_WARNING_PREFIX,
   STRICT_INVARIANT_RETRY_MIN_POLL_INTERVAL_MS,
-  STRICT_PARITY_REASON_MISMATCH,
   STRICT_PRELOAD_READINESS_NODE_REASONS_PREFIX,
   STRICT_PRELOAD_READINESS_REASON_FAILED,
-  SYSTEM_TABLE_READ_PATH_MODE_CANONICAL,
-  WRITE_PRESSURE_THRESHOLD_EXCEEDED_REASON,
   ZERO,
   assert,
   GATE_RESULT_MODE,
   PHASE_STATUS,
   SCENARIO_PHASE,
-  aggregateDiscoveryReadinessExclusionsByNodeId,
   buildAdmissionRuntimeOwnershipSummary,
   buildBenchmarkMetadataFlow,
-  buildCdcTelemetryState,
-  buildComparison,
-  buildEffectiveAdmissionPolicy,
-  buildFailedPhaseDiagnostics,
-  buildInternalSignalCounts,
-  buildLoadParity,
-  buildNoProgressDiagnostics,
-  buildPhaseDecisions,
-  buildPhaseReasonSummary,
   buildQuietModeDetails,
-  buildPostLoadDrainRebalancingPressure,
   buildPreLoadRebalancingPressure,
   buildSaturationCounters,
-  buildStartupDecisionRecord,
   buildStrictDiscoveryGate,
-  buildStrictParityGate,
-  buildUnifiedFailureArtifact,
-  buildVerificationArtifacts,
-  collectAdminQueryTraceByNodeId,
   collectBenchmarkMetadataSnapshot,
-  collectCdcTelemetryByNode,
   collectPreflightCriticalPathSnapshots,
-  collectControlSnapshotsFromNodes,
-  createAdmissionRuntimeOwnershipAudit,
-  createEmptyInternalSignalClassCounts,
-  createEmptySaturationCounters,
   createInitialPostLoadDrain,
-  createVerificationSnapshotRefreshResult,
   emitPhaseMeaningfulChange,
   emitPhaseNoProgressFailure,
   emitPhaseProgress,
-  emitScenarioPhaseEvent,
   enterQuietMode,
   ensureSutBenchmarkTable,
-  evaluateAuthoritativeFallbackPolicy,
-  evaluateInternalSignalThresholds,
-  evaluateOverloadPolicy,
   evaluateStrictPreloadInvariantsFromSnapshots,
-  evaluateWritePressure,
-  formatAuthoritativeFallbackViolations,
-  formatCdcTelemetrySchemaErrors,
-  formatHeartbeatFreshnessFailures,
-  formatInternalSignalBreaches,
-  formatLoadParityReasons,
-  formatLoadRebalancingPinningReasons,
   formatNodeProbeReasons,
-  formatOverloadPolicyViolations,
   formatReadinessReasonsByNodeId,
   formatSutLoadDiscoveryDiagnostics,
-  formatWritePressureViolations,
-  isLoadNodeCandidate,
-  isStrictBenchmarkMode,
-  mapPhaseArtifacts,
-  mapPhaseTimeline,
-  normalizeLoadMetrics,
-  parseDurationToMs,
-  replaceSnapshotsByNodeId,
-  resolveBaselineLoadNodeCountForRun,
-  resolveBaselineMetrics,
-  resolveBenchmarkConfig,
   resolveBenchmarkTableCreateAttempt,
   resolveCanonicalSystemTableWriteNode,
   resolveDiagnosticsCoverage,
-  resolveFirstMismatchKind,
-  resolveMismatchRefreshNodeIds,
-  resolveNodeClientChannelPolicyOverrides,
   resolvePreflightConvergenceOptions,
-  resolvePrimaryProvider,
-  resolveScenarioOverrides,
   resolveStrictInvariantRetryWindowMs,
   resolveSutLoadNodes,
   resolveSystemTableReadPath,
   revalidateDegradedPreloadLoadNodes,
-  runSutSharedLoad,
-  selectFailureDiagnosticNodes,
-  selectStrictInvariantGateEntries,
-  selectVerificationNodes,
   shouldRetryStrictInvariantBreaches,
   extractNodeProbeReasonsByNodeId,
   buildStrictPreloadNodeReasonSummary,
@@ -155,10 +71,6 @@ export function buildPreflightPhaseHandlers(context) {
     state,
     targetSutLoadNodeCount,
     effectiveSutLoadDiscoveryTimeoutMs,
-    provider,
-    networkName,
-    nodeClientPolicySnapshot,
-    strictBenchmarkMode,
     recordBenchmarkMetadataSnapshot,
     recordConvergenceEvent,
   } = context;
@@ -185,11 +97,11 @@ export function buildPreflightPhaseHandlers(context) {
         SCENARIO_PHASE.PRE_FLIGHT,
         QUIET_MODE_REASON_STRICT_BENCHMARK_MODE,
       );
-      emitPhaseProgress(phaseContext, "waiting for cluster convergence", {
+      emitPhaseProgress(phaseContext, 'waiting for cluster convergence', {
         tableName: benchmarkTableName,
       });
       await ensureConvergenceResolved();
-      emitPhaseMeaningfulChange(phaseContext, "cluster convergence resolved", {
+      emitPhaseMeaningfulChange(phaseContext, 'cluster convergence resolved', {
         diagnosticsCoverage: state.diagnosticsCoverage?.status || null,
       });
       const systemTableReadPath = resolveSystemTableReadPath(seedNode, nodes);
@@ -213,11 +125,11 @@ export function buildPreflightPhaseHandlers(context) {
         );
       } catch (error) {
         const createAttempt = resolveBenchmarkTableCreateAttempt(error);
-        if (createAttempt && typeof createAttempt === "object") {
+        if (createAttempt && typeof createAttempt === 'object') {
           state.benchmarkMetadataFlow.createAttempt = createAttempt;
           if (
             createAttempt.metadataSnapshot &&
-            typeof createAttempt.metadataSnapshot === "object"
+            typeof createAttempt.metadataSnapshot === 'object'
           ) {
             recordBenchmarkMetadataSnapshot(createAttempt.metadataSnapshot);
           }
@@ -246,7 +158,7 @@ export function buildPreflightPhaseHandlers(context) {
       state.requiredSchemaTableId = tableMetadata?.tableId || null;
       emitPhaseMeaningfulChange(
         phaseContext,
-        "benchmark table metadata resolved",
+        'benchmark table metadata resolved',
         {
           tableName: benchmarkTableName,
           tableId: state.requiredSchemaTableId,
@@ -255,14 +167,14 @@ export function buildPreflightPhaseHandlers(context) {
       );
       if (state.requiredSchemaVersion) {
         recordConvergenceEvent({
-          type: "table_create_committed",
+          type: 'table_create_committed',
           nodeId: state.requiredSchemaVersionMetadataNodeId || seedNode.id,
           tableId: state.requiredSchemaTableId,
           tableName: benchmarkTableName,
           requiredSchemaVersion: state.requiredSchemaVersion,
         });
         recordConvergenceEvent({
-          type: "cdc_emitted",
+          type: 'cdc_emitted',
           nodeId: state.requiredSchemaVersionMetadataNodeId || seedNode.id,
           tableId: state.requiredSchemaTableId,
           tableName: benchmarkTableName,
@@ -276,7 +188,7 @@ export function buildPreflightPhaseHandlers(context) {
       ) {
         throw new Error(
           REQUIRED_SCHEMA_VERSION_UNAVAILABLE_REASON +
-            ": table=" +
+            ': table=' +
             benchmarkTableName,
         );
       }
@@ -292,7 +204,7 @@ export function buildPreflightPhaseHandlers(context) {
       );
       emitPhaseMeaningfulChange(
         phaseContext,
-        "benchmark table ready on system-under-test",
+        'benchmark table ready on system-under-test',
         {
           tableName: benchmarkTableName,
           requiredSchemaVersion: state.requiredSchemaVersion,
@@ -372,29 +284,29 @@ export function buildPreflightPhaseHandlers(context) {
           defaultActivePhases: QUIET_MODE_ACTIVE_PHASES,
         }),
       };
-      emitPhaseProgress(phaseContext, "discovered benchmark load candidates", {
+      emitPhaseProgress(phaseContext, 'discovered benchmark load candidates', {
         reachableNodeCount: sutLoadNodes.length,
         requiredNodeCount: targetSutLoadNodeCount,
       });
       if (benchmarkConfig.strictDiscovery === true) {
         const strictDiscoveryErrorDetail =
           DISCOVERY_GATE_REASON_INSUFFICIENT_REACHABLE_NODES +
-          ": required=" +
+          ': required=' +
           String(targetSutLoadNodeCount) +
-          ", reachable=" +
+          ', reachable=' +
           String(sutLoadNodes.length);
         if (sutLoadNodes.length < targetSutLoadNodeCount) {
           return {
             status: PHASE_STATUS.FAIL,
             artifacts: preflightArtifacts,
             errors: [
-              "No discovered admin-ready load service nodes available for benchmark load" +
-                " (" +
+              'No discovered admin-ready load service nodes available for benchmark load' +
+                ' (' +
                 strictDiscoveryErrorDetail +
-                (discoveryDiagnostics.length > ZERO
-                  ? ", " + discoveryDiagnostics
-                  : "") +
-                ")",
+                (discoveryDiagnostics.length > ZERO ?
+                  ', ' + discoveryDiagnostics :
+                  '') +
+                ')',
             ],
           };
         }
@@ -404,10 +316,10 @@ export function buildPreflightPhaseHandlers(context) {
             status: PHASE_STATUS.FAIL,
             artifacts: preflightArtifacts,
             errors: [
-              "No discovered admin-ready load service nodes available for benchmark load" +
-                (discoveryDiagnostics.length > ZERO
-                  ? " (" + discoveryDiagnostics + ")"
-                  : ""),
+              'No discovered admin-ready load service nodes available for benchmark load' +
+                (discoveryDiagnostics.length > ZERO ?
+                  ' (' + discoveryDiagnostics + ')' :
+                  ''),
             ],
           };
         }
@@ -415,7 +327,7 @@ export function buildPreflightPhaseHandlers(context) {
       state.sutLoadNodes = sutLoadNodes;
       emitPhaseMeaningfulChange(
         phaseContext,
-        "benchmark load candidates admitted",
+        'benchmark load candidates admitted',
         {
           admittedNodeIds: sutLoadNodes.map((node) => node.id),
         },
@@ -426,11 +338,11 @@ export function buildPreflightPhaseHandlers(context) {
       };
     },
     [SCENARIO_PHASE.CONVERGE]: async (phaseContext) => {
-      emitPhaseProgress(phaseContext, "confirming converged control plane");
+      emitPhaseProgress(phaseContext, 'confirming converged control plane');
       await ensureConvergenceResolved();
       emitPhaseMeaningfulChange(
         phaseContext,
-        "convergence confirmation complete",
+        'convergence confirmation complete',
         {
           diagnosticsCoverage: state.diagnosticsCoverage?.status || null,
         },
@@ -447,38 +359,38 @@ export function buildPreflightPhaseHandlers(context) {
       markQuietModePhase(state.quietMode, SCENARIO_PHASE.PRE_LOAD_GATE);
       emitPhaseProgress(
         phaseContext,
-        "waiting for quiescent benchmark topology",
+        'waiting for quiescent benchmark topology',
         {
           candidateNodeCount: state.sutLoadNodes.length,
         },
       );
       const preLoadStableWindowMs =
-        benchmarkConfig.strictPreloadReadiness === true
-          ? benchmarkConfig.preloadRequiredStableMs
-          : benchmarkConfig.quiescentStableWindowMs;
+        benchmarkConfig.strictPreloadReadiness === true ?
+          benchmarkConfig.preloadRequiredStableMs :
+          benchmarkConfig.quiescentStableWindowMs;
       const effectivePreLoadStableWindowMs =
         benchmarkConfig.strictPreloadReadiness !== true &&
-        nodes.length >= PREFLIGHT_CONVERGENCE_LARGE_CLUSTER_NODE_THRESHOLD
-          ? Math.min(
-              preLoadStableWindowMs,
-              PRELOAD_QUIESCENCE_LARGE_CLUSTER_STABLE_WINDOW_MS,
-            )
-          : preLoadStableWindowMs;
+        nodes.length >= PREFLIGHT_CONVERGENCE_LARGE_CLUSTER_NODE_THRESHOLD ?
+          Math.min(
+            preLoadStableWindowMs,
+            PRELOAD_QUIESCENCE_LARGE_CLUSTER_STABLE_WINDOW_MS,
+          ) :
+          preLoadStableWindowMs;
       const preLoadQuiescentTimeoutMs =
-        nodes.length >= PREFLIGHT_CONVERGENCE_LARGE_CLUSTER_NODE_THRESHOLD
-          ? Math.max(
-              benchmarkConfig.quiescentTimeoutMs,
-              BENCHMARK_TABLE_CREATE_LARGE_CLUSTER_RETRY_TIMEOUT_MS,
-            )
-          : benchmarkConfig.quiescentTimeoutMs;
+        nodes.length >= PREFLIGHT_CONVERGENCE_LARGE_CLUSTER_NODE_THRESHOLD ?
+          Math.max(
+            benchmarkConfig.quiescentTimeoutMs,
+            BENCHMARK_TABLE_CREATE_LARGE_CLUSTER_RETRY_TIMEOUT_MS,
+          ) :
+          benchmarkConfig.quiescentTimeoutMs;
       const effectivePreloadMaxReplicaOpsInFlight =
         benchmarkConfig.strictPreloadReadiness !== true &&
-        nodes.length >= PREFLIGHT_CONVERGENCE_LARGE_CLUSTER_NODE_THRESHOLD
-          ? Math.max(
-              benchmarkConfig.preloadMaxReplicaOpsInFlight,
-              PRELOAD_QUIESCENCE_LARGE_CLUSTER_MAX_REPLICA_OPS_IN_FLIGHT,
-            )
-          : benchmarkConfig.preloadMaxReplicaOpsInFlight;
+        nodes.length >= PREFLIGHT_CONVERGENCE_LARGE_CLUSTER_NODE_THRESHOLD ?
+          Math.max(
+            benchmarkConfig.preloadMaxReplicaOpsInFlight,
+            PRELOAD_QUIESCENCE_LARGE_CLUSTER_MAX_REPLICA_OPS_IN_FLIGHT,
+          ) :
+          benchmarkConfig.preloadMaxReplicaOpsInFlight;
       let quiescenceResult;
       try {
         quiescenceResult = await waitForSutLoadQuiescence({
@@ -505,12 +417,12 @@ export function buildPreflightPhaseHandlers(context) {
         const gateResult = error?.gateResult || {};
         const gateReasonKeys = Object.keys(gateResult.reasonHistogram || {});
         const includedNodeIdSet = new Set(
-          Array.isArray(gateResult.includedNodeIds)
-            ? gateResult.includedNodeIds.map((nodeId) => String(nodeId))
-            : [],
+          Array.isArray(gateResult.includedNodeIds) ?
+            gateResult.includedNodeIds.map((nodeId) => String(nodeId)) :
+            [],
         );
         const partialReadyLoadNodes = state.sutLoadNodes.filter((node) =>
-          includedNodeIdSet.has(String(node?.id || "")),
+          includedNodeIdSet.has(String(node?.id || '')),
         );
         const canUsePartialReadyFallback =
           benchmarkConfig.strictPreloadReadiness !== true &&
@@ -518,7 +430,7 @@ export function buildPreflightPhaseHandlers(context) {
           partialReadyLoadNodes.length > ZERO &&
           gateReasonKeys.length > ZERO &&
           gateReasonKeys.every((reason) => {
-            const normalizedReason = String(reason || "");
+            const normalizedReason = String(reason || '');
             return (
               normalizedReason.startsWith(
                 QUIESCENCE_REASON_IN_FLIGHT_QUERY_ERROR_PREFIX,
@@ -538,7 +450,7 @@ export function buildPreflightPhaseHandlers(context) {
           state.sutLoadNodes.length > ZERO &&
           gateReasonKeys.length > ZERO &&
           gateReasonKeys.every((reason) => {
-            const normalizedReason = String(reason || "");
+            const normalizedReason = String(reason || '');
             return (
               normalizedReason.startsWith(
                 QUIESCENCE_REASON_NODE_PROBE_ERROR_PREFIX,
@@ -556,12 +468,12 @@ export function buildPreflightPhaseHandlers(context) {
           });
         const stalledReason =
           Object.keys(gateResult.reasonHistogram || {}).find((reason) =>
-            String(reason || "").includes(NO_PROGRESS_REASON_CODE),
+            String(reason || '').includes(NO_PROGRESS_REASON_CODE),
           ) || null;
         if (stalledReason) {
           emitPhaseNoProgressFailure(
             phaseContext,
-            "pre-load gate aborted for no progress",
+            'pre-load gate aborted for no progress',
             {
               reason: stalledReason,
               attempts: Number(gateResult.attempts || ZERO),
@@ -582,9 +494,9 @@ export function buildPreflightPhaseHandlers(context) {
           });
           const strictPreloadError =
             STRICT_PRELOAD_READINESS_REASON_FAILED +
-            ": " +
+            ': ' +
             String(error?.message || error) +
-            ", " +
+            ', ' +
             STRICT_PRELOAD_READINESS_NODE_REASONS_PREFIX +
             formattedNodeReasons;
           return {
@@ -633,7 +545,7 @@ export function buildPreflightPhaseHandlers(context) {
             .map((node) => String(node.id))
             .filter((nodeId) => !includedNodeIdSet.has(nodeId));
           quiescenceResult = {
-            mode: "degraded_partial_ready_timeout_fallback",
+            mode: 'degraded_partial_ready_timeout_fallback',
             attempts: Number(gateResult.attempts || ZERO),
             stableElapsedMs: Number(gateResult.stableElapsedMs || ZERO),
             inFlightCount: null,
@@ -650,7 +562,7 @@ export function buildPreflightPhaseHandlers(context) {
           };
           emitPhaseProgress(
             phaseContext,
-            "continuing with partial pre-load readiness after transient gate timeout",
+            'continuing with partial pre-load readiness after transient gate timeout',
             {
               includedNodeIds: partialReadyNodeIds,
               excludedNodeIds: excludedLoadNodeIds,
@@ -658,15 +570,15 @@ export function buildPreflightPhaseHandlers(context) {
           );
         } else if (canUseSoftStallFallback) {
           const fallbackReadyLoadNodes =
-            partialReadyLoadNodes.length > ZERO
-              ? partialReadyLoadNodes
-              : state.sutLoadNodes.slice(
-                  ZERO,
-                  Math.max(
-                    ONE,
-                    Math.min(state.sutLoadNodes.length, targetSutLoadNodeCount),
-                  ),
-                );
+            partialReadyLoadNodes.length > ZERO ?
+              partialReadyLoadNodes :
+              state.sutLoadNodes.slice(
+                ZERO,
+                Math.max(
+                  ONE,
+                  Math.min(state.sutLoadNodes.length, targetSutLoadNodeCount),
+                ),
+              );
           const fallbackReadyNodeIds = fallbackReadyLoadNodes.map((node) =>
             String(node.id),
           );
@@ -674,7 +586,7 @@ export function buildPreflightPhaseHandlers(context) {
             .map((node) => String(node.id))
             .filter((nodeId) => !fallbackReadyNodeIds.includes(nodeId));
           quiescenceResult = {
-            mode: "degraded_soft_stall_fallback",
+            mode: 'degraded_soft_stall_fallback',
             attempts: Number(gateResult.attempts || ZERO),
             stableElapsedMs: Number(gateResult.stableElapsedMs || ZERO),
             inFlightCount: null,
@@ -691,7 +603,7 @@ export function buildPreflightPhaseHandlers(context) {
           };
           emitPhaseProgress(
             phaseContext,
-            "continuing with non-strict pre-load readiness after soft stall fallback",
+            'continuing with non-strict pre-load readiness after soft stall fallback',
             {
               includedNodeIds: fallbackReadyNodeIds,
               excludedNodeIds: fallbackExcludedNodeIds,
@@ -708,7 +620,7 @@ export function buildPreflightPhaseHandlers(context) {
       if (shouldRevalidateDegradedPreloadNodes) {
         emitPhaseProgress(
           phaseContext,
-          "revalidating degraded pre-load fallback against load-lane admission",
+          'revalidating degraded pre-load fallback against load-lane admission',
           {
             candidateNodeIds: quiescenceResult.readyLoadNodes.map(
               (node) => node.id,
@@ -729,7 +641,7 @@ export function buildPreflightPhaseHandlers(context) {
         if (preloadFallbackLoadAdmission.excludedNodeIds.length > ZERO) {
           emitPhaseProgress(
             phaseContext,
-            "excluded degraded pre-load fallback nodes that the load lane will reject",
+            'excluded degraded pre-load fallback nodes that the load lane will reject',
             {
               admittedNodeIds: preloadFallbackLoadAdmission.admittedNodeIds,
               excludedNodeIds: preloadFallbackLoadAdmission.excludedNodeIds,
@@ -740,11 +652,11 @@ export function buildPreflightPhaseHandlers(context) {
           ...quiescenceResult,
           readyLoadNodes: preloadFallbackLoadAdmission.nodes,
           excludedLoadNodeIds: uniqueSorted([
-            ...(Array.isArray(quiescenceResult.excludedLoadNodeIds)
-              ? quiescenceResult.excludedLoadNodeIds.map((nodeId) =>
-                  String(nodeId),
-                )
-              : []),
+            ...(Array.isArray(quiescenceResult.excludedLoadNodeIds) ?
+              quiescenceResult.excludedLoadNodeIds.map((nodeId) =>
+                String(nodeId),
+              ) :
+              []),
             ...preloadFallbackLoadAdmission.excludedNodeIds,
           ]),
           preloadFallbackLoadAdmission: {
@@ -785,17 +697,17 @@ export function buildPreflightPhaseHandlers(context) {
               }),
             },
             errors: [
-              "degraded pre-load fallback produced no strict load-admissible nodes" +
+              'degraded pre-load fallback produced no strict load-admissible nodes' +
                 (Object.keys(
                   quiescenceResult.preloadFallbackLoadAdmission
                     ?.probeReadinessByNodeId || {},
-                ).length > ZERO
-                  ? ": " +
+                ).length > ZERO ?
+                  ': ' +
                     formatReadinessReasonsByNodeId(
                       quiescenceResult.preloadFallbackLoadAdmission
                         .probeReadinessByNodeId,
-                    )
-                  : ""),
+                    ) :
+                  ''),
             ],
           };
         }
@@ -803,15 +715,15 @@ export function buildPreflightPhaseHandlers(context) {
       state.quiescenceResult = quiescenceResult;
       state.effectiveSutLoadNodes = quiescenceResult.readyLoadNodes;
       state.excludedSutLoadNodeIds = quiescenceResult.excludedLoadNodeIds;
-      emitPhaseMeaningfulChange(phaseContext, "pre-load topology quiescent", {
+      emitPhaseMeaningfulChange(phaseContext, 'pre-load topology quiescent', {
         includedNodeIds: state.effectiveSutLoadNodes.map((node) => node.id),
         excludedNodeIds: state.excludedSutLoadNodeIds,
       });
       if (benchmarkConfig.strictPreloadReadiness === true) {
         const invariantSnapshotNodes =
-          state.effectiveSutLoadNodes.length > ZERO
-            ? state.effectiveSutLoadNodes
-            : state.sutLoadNodes;
+          state.effectiveSutLoadNodes.length > ZERO ?
+            state.effectiveSutLoadNodes :
+            state.sutLoadNodes;
         const strictInvariantRetryPollIntervalMs = Math.max(
           benchmarkConfig.quiescentPollIntervalMs,
           STRICT_INVARIANT_RETRY_MIN_POLL_INTERVAL_MS,
@@ -825,12 +737,12 @@ export function buildPreflightPhaseHandlers(context) {
           scenarioOverrides.timing.now() + strictInvariantRetryWindowMs;
         let strictInvariantRetryAttempts = ZERO;
         let preLoadSnapshotsByNodeId =
-          invariantSnapshotNodes.length > ZERO
-            ? await collectPreflightCriticalPathSnapshots({
-                nodeClient,
-                nodes: invariantSnapshotNodes,
-              })
-            : {};
+          invariantSnapshotNodes.length > ZERO ?
+            await collectPreflightCriticalPathSnapshots({
+              nodeClient,
+              nodes: invariantSnapshotNodes,
+            }) :
+            {};
         let strictInvariantEvaluation =
           evaluateStrictPreloadInvariantsFromSnapshots(
             preLoadSnapshotsByNodeId,
@@ -847,7 +759,7 @@ export function buildPreflightPhaseHandlers(context) {
           strictInvariantRetryAttempts += ONE;
           emitPhaseProgress(
             phaseContext,
-            "rechecking transient strict invariant breaches before hard fail",
+            'rechecking transient strict invariant breaches before hard fail',
             {
               retryAttempt: strictInvariantRetryAttempts,
               retryWindowMs: strictInvariantRetryWindowMs,
@@ -857,12 +769,12 @@ export function buildPreflightPhaseHandlers(context) {
             strictInvariantRetryPollIntervalMs,
           );
           preLoadSnapshotsByNodeId =
-            invariantSnapshotNodes.length > ZERO
-              ? await collectPreflightCriticalPathSnapshots({
-                  nodeClient,
-                  nodes: invariantSnapshotNodes,
-                })
-              : {};
+            invariantSnapshotNodes.length > ZERO ?
+              await collectPreflightCriticalPathSnapshots({
+                nodeClient,
+                nodes: invariantSnapshotNodes,
+              }) :
+              {};
           strictInvariantEvaluation =
             evaluateStrictPreloadInvariantsFromSnapshots(
               preLoadSnapshotsByNodeId,
@@ -874,9 +786,9 @@ export function buildPreflightPhaseHandlers(context) {
         }
         state.strictBenchmarkGate.invariants = {
           status:
-            strictInvariantBreaches.hardCount > ZERO
-              ? PHASE_STATUS.FAIL
-              : PHASE_STATUS.OK,
+            strictInvariantBreaches.hardCount > ZERO ?
+              PHASE_STATUS.FAIL :
+              PHASE_STATUS.OK,
           totalCount: strictInvariantBreaches.totalCount,
           hardCount: strictInvariantBreaches.hardCount,
           softCount: strictInvariantBreaches.softCount,
@@ -897,8 +809,8 @@ export function buildPreflightPhaseHandlers(context) {
             },
             errors: strictInvariantBreaches.hardBreaches.map(
               (breach) =>
-                "hard invariant breach: " +
-                String(breach.reasonCode || breach.invariantId || "unknown"),
+                'hard invariant breach: ' +
+                String(breach.reasonCode || breach.invariantId || 'unknown'),
             ),
           };
         }
@@ -913,7 +825,7 @@ export function buildPreflightPhaseHandlers(context) {
       );
       assert.ok(
         state.effectiveSutLoadNodes.length > ZERO,
-        "No quiescent system-under-test load nodes available for benchmark load",
+        'No quiescent system-under-test load nodes available for benchmark load',
       );
       return {
         status: PHASE_STATUS.OK,
@@ -934,12 +846,12 @@ export function buildPreflightPhaseHandlers(context) {
             state,
             benchmarkTableName,
           ),
-          ...(quiescenceResult.preloadFallbackLoadAdmission
-            ? {
-                preloadFallbackLoadAdmission:
+          ...(quiescenceResult.preloadFallbackLoadAdmission ?
+            {
+              preloadFallbackLoadAdmission:
                   quiescenceResult.preloadFallbackLoadAdmission,
-              }
-            : {}),
+            } :
+            {}),
           strictPreloadReadiness:
             benchmarkConfig.strictPreloadReadiness === true,
           preloadRequiredStableMs: preLoadStableWindowMs,

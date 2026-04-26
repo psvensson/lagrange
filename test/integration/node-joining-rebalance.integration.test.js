@@ -241,8 +241,6 @@ test('Node joining rebalancing integration', async (t) => {
       });
       rebalanceCoordinator.initialize();
 
-      const controlPlaneSystemTableGateway =
-        rebalanceCoordinator.controlPlaneSystemTableGateway;
 
       const partitionId = await waitForStablePartitionId(systemTableCache);
       t.ok(partitionId, 'should have a stable partition for rebalancing');

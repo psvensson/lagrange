@@ -215,10 +215,10 @@ test('liferaft append-fail recovery skips retry when recovered entry is null',
   async (t) => {
     const writes = [];
     const raft = new LifeRaft('node-1', {
-      heartbeat: '10s',
+      'heartbeat': '10s',
       'election min': '20s',
       'election max': '30s',
-      Log: NullRecoveredEntryLog,
+      'Log': NullRecoveredEntryLog,
     });
 
     try {
@@ -254,10 +254,10 @@ test('liferaft heartbeat append advances follower commit index',
   async (t) => {
     const commits = [];
     const raft = new LifeRaft('node-1', {
-      heartbeat: '10s',
+      'heartbeat': '10s',
       'election min': '20s',
       'election max': '30s',
-      Log: HeartbeatCommitAdvanceLog,
+      'Log': HeartbeatCommitAdvanceLog,
     });
 
     raft.on('commit', (command) => {
@@ -301,10 +301,10 @@ test('liferaft append ack immediately broadcasts committedIndex heartbeat',
   async (t) => {
     const outgoing = [];
     const raft = new LifeRaft('node-1', {
-      heartbeat: '10s',
+      'heartbeat': '10s',
       'election min': '20s',
       'election max': '30s',
-      Log: AppendAckCommitBroadcastLog,
+      'Log': AppendAckCommitBroadcastLog,
     });
 
     raft.change({

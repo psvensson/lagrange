@@ -58,8 +58,8 @@ system stopped failing first.
 ## Sprint Umbrella
 
 1. [Seed initial publication establishment state machine](../packages/active-20260412-seed-initial-publication-establishment-state-machine.md)
-2. [Startup authority and available-node contract unification](../packages/archived/done-20260412-startup-authority-and-available-node-contract-unification.md)
-3. [Publication observation ingress and bootstrap consumer collapse](../packages/archived/done-20260412-publication-observation-ingress-and-bootstrap-consumer-collapse.md)
+2. [Startup authority and available-node contract unification](../../packages/archived/done-20260412-startup-authority-and-available-node-contract-unification.md)
+3. [Publication observation ingress and bootstrap consumer collapse](../../packages/archived/done-20260412-publication-observation-ingress-and-bootstrap-consumer-collapse.md)
 
 ## Simplification Rules
 

@@ -10,7 +10,6 @@ import {test} from '../../src/test-helpers/tap.js';
 import {
   PostgresWireAdapter,
   PG_SESSION_STATE,
-  PG_WIRE_ERROR_MSG,
 } from '../../src/query/pg/postgres-wire-adapter.js';
 import {EXECUTION_MODE} from '../../src/query/sql-adapter-constants.js';
 

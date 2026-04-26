@@ -1,4 +1,4 @@
-import { POSTGRES_BASELINE_COMPARISON_SEGMENT_12 } from './postgres-baseline-comparison-segment-12.js';
+import {POSTGRES_BASELINE_COMPARISON_SEGMENT_12} from './postgres-baseline-comparison-segment-12.js';
 
 const {
   run,

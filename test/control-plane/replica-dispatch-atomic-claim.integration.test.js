@@ -107,14 +107,6 @@ test(
             whereClause?.nodeId ||
             null;
           if (nodeId) {
-            const existing = nodeStore.get(nodeId);
-            if (!existing) {
-              return {
-                success: true,
-                partitionResult: {affectedRows: 0},
-              };
-            }
-            nodeStore.set(nodeId, {...existing, ...updateData});
             return {
               success: true,
               partitionResult: {affectedRows: 1},
@@ -398,7 +390,7 @@ test(
             nodeId,
             dimensions: {
               [CONTROL_PLANE_READINESS_DIMENSION
-                .CONTROL_PLANE_RECOVERY_ELIGIBLE]: true,
+                .REPAIR_ELIGIBLE]: true,
             },
           };
         },
@@ -489,19 +481,6 @@ test(
             whereClause?.nodeId ||
             null;
           if (nodeId) {
-            const existing = nodeStore.get(nodeId);
-            if (!existing) {
-              return {
-                success: true,
-                partitionResult: {
-                  affectedRows: 0,
-                },
-              };
-            }
-            nodeStore.set(nodeId, {
-              ...existing,
-              ...(updateData || {}),
-            });
             return {
               success: true,
               partitionResult: {
@@ -655,6 +634,16 @@ test(
             whereClause?.nodeId ||
             null;
           if (nodeId) {
+            const existing = nodeStore.get(nodeId);
+            if (!existing) {
+              return {
+                success: true,
+                partitionResult: {
+                  affectedRows: 0,
+                },
+              };
+            }
+            Object.assign(existing, updateData || {});
             return {
               success: true,
               partitionResult: {
@@ -800,12 +789,6 @@ test(
             whereClause?.nodeId ||
             null;
           if (nodeId) {
-            readyNodeRow.last_heartbeat =
-              updateData?.[COLUMN.LAST_HEARTBEAT] ??
-              readyNodeRow.last_heartbeat;
-            readyNodeRow.ready_lease_expires_at =
-              updateData?.[COLUMN.READY_LEASE_EXPIRES_AT] ??
-              readyNodeRow.ready_lease_expires_at;
             return {
               success: true,
               partitionResult: {
@@ -969,7 +952,8 @@ test(
             whereClause?.nodeId ||
             null;
           if (nodeId) {
-            if (nodeId !== readyNodeRow.node_id) {
+            const existing = nodeStore.get(nodeId);
+            if (!existing) {
               return {
                 success: true,
                 partitionResult: {
@@ -977,7 +961,7 @@ test(
                 },
               };
             }
-            Object.assign(readyNodeRow, updateData);
+            Object.assign(existing, updateData);
             return {
               success: true,
               partitionResult: {
@@ -1130,7 +1114,7 @@ test(
     // Node-aware transport mock: node-2 starts without transport
     // connectivity (no ready lease yet). Per §1.4.12 transport
     // connectivity is the strongest evidence of node health.
-    let node2CacheTransportConnected = false;
+    const node2CacheTransportConnected = false;
     const systemTableCache = {
       onCacheChange: (listener) => {
         cacheListener = listener;
@@ -1175,7 +1159,8 @@ test(
             whereClause?.nodeId ||
             null;
           if (nodeId) {
-            if (nodeId !== readyNodeRow.node_id) {
+            const existing = nodeStore.get(nodeId);
+            if (!existing) {
               return {
                 success: true,
                 partitionResult: {
@@ -1183,7 +1168,7 @@ test(
                 },
               };
             }
-            Object.assign(readyNodeRow, updateData);
+            Object.assign(existing, updateData);
             return {
               success: true,
               partitionResult: {

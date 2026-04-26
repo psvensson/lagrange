@@ -16,6 +16,13 @@ const TEST_NODE_ID = 'node-1';
 const TEST_PARTITION_ID = 'partition-1';
 const TEST_TARGET_NODE_ID = 'node-4';
 const TEST_EXISTING_NODE_ID = 'node-2';
+const TEST_FAILED_REPLICA_ID = TEST_PARTITION_ID + '-r4';
+const TEST_SOURCE_REPLICA_ID = TEST_PARTITION_ID + '-r1';
+const TEST_MESSAGE_GROUP_ID = 'message-group-1';
+const TEST_MESSAGE_GROUP_REPLICA_ID = TEST_MESSAGE_GROUP_ID + '-r1';
+const TEST_REPLACE_OPERATION_TYPE = 'REPLACE';
+const TEST_ADD_OPERATION_TYPE = 'ADD';
+const TEST_FAILED_STATUS = 'failed';
 const TEST_TABLE_POLICY = Object.freeze({
   replicaCount: 3,
 });
@@ -32,14 +39,18 @@ function initializeTestEnvironment() {
   logging.initialize({level: 'error'});
 }
 
-function createServiceRow(replicaId, nodeId) {
+function createServiceRow(replicaId, nodeId, options = {}) {
+  const serviceType = options.serviceType || SERVICE_TYPE.PARTITION;
+  const partitionId = options.partitionId || TEST_PARTITION_ID;
+  const groupId = options.groupId || null;
   return {
     service_id: replicaId,
     replica_id: replicaId,
-    partition_id: TEST_PARTITION_ID,
+    partition_id: partitionId,
+    group_id: groupId,
     node_id: nodeId,
-    service_type: SERVICE_TYPE.PARTITION,
-    status: 'active',
+    service_type: serviceType,
+    status: options.status || 'active',
     raft_role: 'follower',
     address: 'ws://' + nodeId + ':7000',
   };
@@ -277,6 +288,96 @@ test('RebalanceCoordinator blocks stale ADD when authoritative topology already 
     sqlEngine.getOperations().length,
     0,
     'stale planner add should not persist a replica operation',
+  );
+
+  coordinator.shutdown();
+});
+
+test('RebalanceCoordinator blocks REPLACE when target node already has partition topology', async (t) => {
+  initializeTestEnvironment();
+
+  const cacheServices = [
+    createServiceRow(TEST_SOURCE_REPLICA_ID, TEST_NODE_ID),
+    createServiceRow(TEST_PARTITION_ID + '-r2', TEST_EXISTING_NODE_ID),
+    createServiceRow(TEST_FAILED_REPLICA_ID, TEST_TARGET_NODE_ID, {
+      status: TEST_FAILED_STATUS,
+    }),
+  ];
+  const {coordinator, sqlEngine} = createCoordinator({
+    cacheServices,
+  });
+
+  const error = await captureOperationCreateError(() => coordinator.createOperation({
+    type: TEST_REPLACE_OPERATION_TYPE,
+    partitionId: TEST_PARTITION_ID,
+    nodeId: TEST_TARGET_NODE_ID,
+    replicaId: TEST_SOURCE_REPLICA_ID,
+    sourceNodeId: TEST_NODE_ID,
+    emitOperationCreated: false,
+    enforceConcurrentOperationBudget: true,
+  }));
+
+  t.equal(
+    error?.admissionResult?.decisionType,
+    STORAGE_ADMISSION_DECISION_TYPE.BLOCKED,
+    'createOperation should fail closed when REPLACE targets an occupied partition node',
+  );
+  t.same(
+    error?.admissionResult?.blockingReasons,
+    ['target_node_already_occupied'],
+    'duplicate replacement target rows should surface the occupied-target reason',
+  );
+
+  t.equal(
+    sqlEngine.getOperations().length,
+    0,
+    'blocked replacement topology creation should not persist a replica operation',
+  );
+
+  coordinator.shutdown();
+});
+
+test('RebalanceCoordinator applies topology occupancy guard to message-group creates', async (t) => {
+  initializeTestEnvironment();
+
+  const existingReplica = createServiceRow(
+    TEST_MESSAGE_GROUP_REPLICA_ID,
+    TEST_EXISTING_NODE_ID,
+    {
+      groupId: TEST_MESSAGE_GROUP_ID,
+      partitionId: null,
+      serviceType: SERVICE_TYPE.MESSAGE_GROUP,
+    },
+  );
+  const {coordinator, sqlEngine} = createCoordinator({
+    cacheServices: [existingReplica],
+  });
+
+  const error = await captureOperationCreateError(() => coordinator.createOperation({
+    type: TEST_ADD_OPERATION_TYPE,
+    partitionId: TEST_MESSAGE_GROUP_ID,
+    entityType: SERVICE_TYPE.MESSAGE_GROUP,
+    entityId: TEST_MESSAGE_GROUP_ID,
+    nodeId: TEST_EXISTING_NODE_ID,
+    emitOperationCreated: false,
+    enforceConcurrentOperationBudget: true,
+  }));
+
+  t.equal(
+    error?.admissionResult?.decisionType,
+    STORAGE_ADMISSION_DECISION_TYPE.BLOCKED,
+    'message-group ADD should use the shared topology occupancy guard',
+  );
+  t.same(
+    error?.admissionResult?.blockingReasons,
+    ['target_node_already_occupied'],
+    'message-group duplicate topology should surface the occupied-target reason',
+  );
+
+  t.equal(
+    sqlEngine.getOperations().length,
+    0,
+    'blocked message-group topology creation should not persist a replica operation',
   );
 
   coordinator.shutdown();

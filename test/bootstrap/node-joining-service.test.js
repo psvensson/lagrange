@@ -15,40 +15,34 @@ import {
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {NodeService} from '../../src/node/node-service.js';
-import {PartitionService} from '../../src/partition/partition-service.js';
-import {CACHE_HYDRATION_TABLES} from '../../src/cache/cache-constants.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
-import {ReplicaHandlerSetup} from '../../src/bootstrap/shared/replica-handler-setup.js';
-import {ControlPlaneSetup} from '../../src/bootstrap/shared/control-plane-setup.js';
 import {
   PARTITION_SERVICE_ACTIVATION_ERROR,
 } from '../../src/bootstrap/shared/partition-service-activation.js';
 import {
-  ControlPlaneKernelIngress,
 } from '../../src/control-plane/control-plane-kernel-ingress.js';
 import {
-  JOIN_CHECKPOINT,
-  JoinSessionStore,
 } from '../../src/bootstrap/join-session-store.js';
 import {
   JOINING_ERROR_MSG,
-  JOINING_LOG_MSG,
 } from '../../src/bootstrap/node-joining-constants.js';
 import {
-  MEMBERSHIP_LIFECYCLE_INTENT,
+  BOOTSTRAP_API_PROBE_REASON,
+  BOOTSTRAP_API_RESPONSE_FIELD,
+} from '../../src/bootstrap/bootstrap-api-constants.js';
+import {
+  LIFECYCLE_PHASE,
+  LIFECYCLE_REASON,
+} from '../../src/bootstrap/lifecycle-controller-constants.js';
+import {
 } from '../../src/control-plane/membership-lifecycle-controller.js';
 import {
-  CONTROL_PLANE_READINESS_DIMENSION,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {
-  OWNER_CONTRACT_NEXT_ACTION,
-  OWNER_CONTRACT_STATE,
 } from '../../src/control-plane/owner-contract-outcome.js';
 import {
-  CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE,
 } from '../../src/control-plane/control-plane-constants.js';
 import {
-  QUERY_ROUTING_DIAGNOSTIC_REASON,
 } from '../../src/query/query-constants.js';
 import {
   JOIN_PLAN_SEGMENT,
@@ -56,39 +50,33 @@ import {
 import {STARTUP_JOIN_MODE} from '../../src/bootstrap/rejoin-hints-constants.js';
 import {
   JOIN_PROMOTION_STATE,
-  JOIN_REJOIN_PROMOTION_RESTORE_STATE,
 } from '../../src/bootstrap/join-promotion-state-owner.js';
 import {WORK_CLASS} from '../../src/runtime/work-class-scheduler.js';
 import {ENTRYPOINT_DEFAULT} from '../../src/constants/entrypoint.js';
 import {
-  CDC_OPERATION,
-  COLUMN,
-  ENDPOINT_STATUS,
   SERVICE_TYPE,
   SERVICE_STATUS,
-  STATE,
   TABLES,
-  TRANSPORT_TYPE,
 } from '../../src/constants/index.js';
-import {CDC_EVENT} from '../../src/cdc/cdc-constants.js';
-import {META_SERVICE_ID} from '../../src/constants/wasm-meta.js';
-import {URL} from 'url';
-import {EventEmitter} from 'events';
 
 const DEFAULT_SEED_WS_ADDRESS =
   `ws://localhost:${8080 + ENTRYPOINT_DEFAULT.WS_PORT_OFFSET}`;
-const NODES_ROUTING_PARTITION_ID = 'nodes-p1';
 const QUERY_STATE_SERVICE_REGISTRATION_SHORTCUT_OPTION =
   'preferControlPlaneUpsert';
 const QUERY_STATE_SERVICE_REGISTRATION_ADMISSION_TARGET =
   'create-self-hosted join metadata service registration';
-const REMOTE_CANONICAL_LEADER_NODE_ID = 'seed-node-1';
-const REPORTER_FORWARD_NODE_ID = 'joiner-reporter-publication-mode';
-const REPORTER_FORWARD_NODE_ADDRESS = 'ws://localhost:19103';
-const REPORTER_FORWARD_SEED_ADDRESS = 'http://localhost:8080';
-const REPORTER_FORWARD_HEARTBEAT_AT = 4242;
-const REPORTER_FORWARD_READY_LEASE_AT = 8484;
-const REPORTER_FORWARD_TARGET_ADDRESS = 'seed-node-1/message-group/mg-1-r3';
+const TEST_SEED_CONTACT_AUTHORITY = Object.freeze({
+  state: 'seed_locally_ready_unpublished',
+  ready: false,
+  authorityAvailable: true,
+  publication: Object.freeze({
+    observationState: 'unpublished',
+  }),
+  canonicalStartupNodeIds: Object.freeze(['seed-node-1']),
+  failure: Object.freeze({
+    state: 'none',
+  }),
+});
 
 // Initialize configuration and logging for tests
 function initializeTestEnvironment() {
@@ -258,6 +246,67 @@ test('NodeJoiningService - initializeJoinInfrastructure opens external transport
         ['setExternalAdmissionEnabled', true],
       ],
       'join infrastructure should only open external admission after runtime handlers are initialized',
+    );
+  });
+
+test('NodeJoiningService - ready signal metadata gate uses seed-contact authority after infrastructure readiness',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const readinessSnapshot = {
+      ready: false,
+      phase: LIFECYCLE_PHASE.INIT,
+      state: 'bootstrapping',
+      reasons: [
+        BOOTSTRAP_API_PROBE_REASON.BOOTSTRAP_PHASE_INCOMPLETE,
+        LIFECYCLE_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
+      ],
+      retryAfterMs: 500,
+      timestamp: Date.now(),
+    };
+    const service = new NodeJoiningService({
+      nodeId: 'joining-node-ready-signal-authority',
+      nodeAddress: 'ws://localhost:9090',
+      seedNodeAddress: 'http://localhost:8080',
+      readinessState: {
+        evaluate() {
+          return readinessSnapshot;
+        },
+      },
+    });
+
+    service.bootstrapResponse = {};
+    service.messageRouter = {};
+    service.rpcClient = {};
+    service.cdcIntegrationService = {};
+    service.heartbeatService = {};
+    service.getLeaderMessageGroupService = () => ({});
+    service.seedContactStartupAuthority = TEST_SEED_CONTACT_AUTHORITY;
+
+    const projectedSnapshot =
+      service.getReadySignalMetadataPublicationReadinessSnapshot();
+
+    t.equal(
+      service.isBootstrapStartupComplete(),
+      true,
+      'join-local bootstrap startup should complete when infrastructure is ready',
+    );
+    t.equal(
+      projectedSnapshot.phase,
+      LIFECYCLE_PHASE.DEGRADED,
+      'ready-signal projection should move INIT metadata evidence into a metadata-publication phase',
+    );
+    t.same(
+      projectedSnapshot.reasons,
+      [LIFECYCLE_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING],
+      'ready-signal projection should remove only the local bootstrap phase blocker',
+    );
+
+    service.seedContactStartupAuthority = null;
+    t.equal(
+      service.getReadySignalMetadataPublicationReadinessSnapshot().phase,
+      LIFECYCLE_PHASE.INIT,
+      'ready-signal projection should stay closed without seed-contact authority',
     );
   });
 
@@ -857,9 +906,16 @@ test('NodeJoiningService - retries bootstrap when seed responds BOOTSTRAP_NOT_RE
       httpPost: async () => {
         attempts++;
         if (attempts === 1) {
+          const notReadyBody = JSON.stringify({
+            success: false,
+            error: 'Bootstrap not ready',
+            code: 'BOOTSTRAP_NOT_READY',
+            phase: 'partitions',
+            [BOOTSTRAP_API_RESPONSE_FIELD.STARTUP_AUTHORITY]:
+              TEST_SEED_CONTACT_AUTHORITY,
+          });
           throw new Error(
-            'HTTP 503: {"success":false,"error":"Bootstrap not ready",' +
-            '"code":"BOOTSTRAP_NOT_READY","phase":"partitions"}',
+            `HTTP 503: ${notReadyBody}`,
           );
         }
         return {
@@ -883,6 +939,11 @@ test('NodeJoiningService - retries bootstrap when seed responds BOOTSTRAP_NOT_RE
       service.bootstrapResponse?.messageGroupAssignment?.strategy,
       AssignmentStrategy.CREATE_SELF_HOSTED,
       'should store bootstrap response after retry succeeds',
+    );
+    t.same(
+      service.getSeedContactStartupAuthoritySnapshot(),
+      TEST_SEED_CONTACT_AUTHORITY,
+      'should retain startup authority from the retryable seed response',
     );
   });
 

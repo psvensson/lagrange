@@ -6,13 +6,11 @@ import {
   SPLIT_MERGE_LOG_MSG,
 } from '../../src/partition/partition-constants.js';
 import {
-  QUERY_ERROR_MSG,
 } from '../../src/query/query-constants.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {
-  SPLIT_ACK_CHECKPOINT_FIELD,
   SPLIT_PARTICIPANT_PREFIX,
   SPLIT_ACK_STATUS,
 } from '../../src/partition/split-ack-constants.js';
@@ -31,7 +29,6 @@ import {
 import {
   buildWorkflow,
   createAdmissionResult,
-  createTransactionCoordinator,
 } from './managed-split-workflow-test-helpers.js';
 
 test('ManagedSplitWorkflow persists admission_pending before planning and ' +

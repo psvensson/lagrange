@@ -1088,7 +1088,7 @@ class BootstrapTopologySnapshotOwner {
             .slice(
               NUM.ZERO,
               BOOTSTRAP_TOPOLOGY_SNAPSHOT_PARTITION_STABILIZATION_MAX_IDS,
-          ),
+            ),
         },
       );
     }
@@ -1109,7 +1109,7 @@ class BootstrapTopologySnapshotOwner {
             .slice(
               NUM.ZERO,
               BOOTSTRAP_TOPOLOGY_SNAPSHOT_PARTITION_STABILIZATION_MAX_IDS,
-          ),
+            ),
         },
       );
     }

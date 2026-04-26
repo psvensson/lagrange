@@ -108,7 +108,7 @@ test(
                 PROPAGATED_TABLES.forEach((tbl, i) => {
                   partitions.set(
                     `p${i}`,
-                    createPartitionStub(tbl, 1)
+                    createPartitionStub(tbl, 1),
                   );
                 });
               }
@@ -118,7 +118,7 @@ test(
               if (propagationLeader) {
                 messageGroups.set(
                   'mg1',
-                  createMessageGroupStub(true)
+                  createMessageGroupStub(true),
                 );
               }
 
@@ -138,17 +138,17 @@ test(
               const expectedUnmet = new Set();
               if (!subscriptionsActive) {
                 expectedUnmet.add(
-                  CDC_PIPELINE_READINESS_CONDITION.SUBSCRIPTIONS_ACTIVE
+                  CDC_PIPELINE_READINESS_CONDITION.SUBSCRIPTIONS_ACTIVE,
                 );
               }
               if (!propagationLeader) {
                 expectedUnmet.add(
-                  CDC_PIPELINE_READINESS_CONDITION.PROPAGATION_LEADER
+                  CDC_PIPELINE_READINESS_CONDITION.PROPAGATION_LEADER,
                 );
               }
               if (!pipelineProven) {
                 expectedUnmet.add(
-                  CDC_PIPELINE_READINESS_CONDITION.PIPELINE_PROVEN
+                  CDC_PIPELINE_READINESS_CONDITION.PIPELINE_PROVEN,
                 );
               }
 

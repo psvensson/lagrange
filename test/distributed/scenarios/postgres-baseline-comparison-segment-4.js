@@ -1,5 +1,5 @@
-import { POSTGRES_BASELINE_COMPARISON_SEGMENT_3 } from "./postgres-baseline-comparison-segment-3.js";
-import { recordAdmissionRuntimeOwnership } from "./postgres-baseline-comparison-admission-runtime-helpers.js";
+import {POSTGRES_BASELINE_COMPARISON_SEGMENT_3} from './postgres-baseline-comparison-segment-3.js';
+import {recordAdmissionRuntimeOwnership} from './postgres-baseline-comparison-admission-runtime-helpers.js';
 
 const {
   CDC_TELEMETRY_FALLBACK_PHASE_BOOTSTRAP,
@@ -111,9 +111,9 @@ function resolveNodeReadinessFromServiceDiscovery(
       routingReady,
       topologyReady,
       schemaReady,
-      requireTopologyReady: enforceCanonicalVersionedReadiness
-        ? options.requireTopologyReady !== false
-        : options.requireTopologyReady === true,
+      requireTopologyReady: enforceCanonicalVersionedReadiness ?
+        options.requireTopologyReady !== false :
+        options.requireTopologyReady === true,
       allowSchemaReadyFallback: enforceCanonicalRouteReadiness === true,
       requiredSchemaVersion: options.requiredSchemaVersion,
       appliedSchemaVersion,
@@ -140,19 +140,19 @@ function resolveNodeReadinessFromServiceDiscovery(
     if (admissionEvaluation) {
       recordAdmissionRuntimeOwnership(
         options.admissionRuntimeOwnership,
-        "readinessGate",
-        String(nodeId || ""),
+        'readinessGate',
+        String(nodeId || ''),
         DISCOVERY_ADMISSION_SOURCE.RUNTIME,
       );
-      return admissionEvaluation.ready
-        ? {
-            ready: true,
-            reasons: [],
-          }
-        : {
-            ready: false,
-            reasons: admissionEvaluation.reasons,
-          };
+      return admissionEvaluation.ready ?
+        {
+          ready: true,
+          reasons: [],
+        } :
+        {
+          ready: false,
+          reasons: admissionEvaluation.reasons,
+        };
     }
     const readiness = findServiceReplicaReadinessFromDiscovery(
       snapshot,
@@ -162,11 +162,11 @@ function resolveNodeReadinessFromServiceDiscovery(
     );
     recordAdmissionRuntimeOwnership(
       options.admissionRuntimeOwnership,
-      "readinessGate",
-      String(nodeId || ""),
-      readiness && typeof readiness === "object"
-        ? DISCOVERY_ADMISSION_SOURCE.LEGACY
-        : DISCOVERY_ADMISSION_SOURCE.MISSING,
+      'readinessGate',
+      String(nodeId || ''),
+      readiness && typeof readiness === 'object' ?
+        DISCOVERY_ADMISSION_SOURCE.LEGACY :
+        DISCOVERY_ADMISSION_SOURCE.MISSING,
     );
     const readinessEvaluation = evaluateDiscoveryReplicaReadiness(readiness, {
       requireCanonicalBenchmarkReadiness: true,
@@ -211,7 +211,7 @@ function resolveNodeReadinessFromServiceDiscovery(
 }
 
 function truncateDiscoveryErrorMessage(errorMessage) {
-  const text = String(errorMessage || "");
+  const text = String(errorMessage || '');
   if (text.length <= DISCOVERY_ERROR_MESSAGE_MAX_CHARS) {
     return text;
   }
@@ -228,19 +228,19 @@ function extractDiscoveryErrorMessageChain(error) {
     depth < DISCOVERY_ERROR_CAUSE_CHAIN_MAX_DEPTH
   ) {
     const message =
-      typeof current === "string"
-        ? current
-        : typeof current?.message === "string"
-          ? current.message
-          : null;
+      typeof current === 'string' ?
+        current :
+        typeof current?.message === 'string' ?
+          current.message :
+          null;
     if (
-      typeof message === "string" &&
+      typeof message === 'string' &&
       message.length > ZERO &&
       !messages.includes(message)
     ) {
       messages.push(message);
     }
-    if (!current || typeof current !== "object") {
+    if (!current || typeof current !== 'object') {
       break;
     }
     current = current.cause;
@@ -251,7 +251,7 @@ function extractDiscoveryErrorMessageChain(error) {
 
 function isNodeClientCircuitOpenError(error) {
   if (
-    String(error?.code || "") === DISCOVERY_NODE_CLIENT_ERROR_CODE_CIRCUIT_OPEN
+    String(error?.code || '') === DISCOVERY_NODE_CLIENT_ERROR_CODE_CIRCUIT_OPEN
   ) {
     return true;
   }
@@ -259,43 +259,43 @@ function isNodeClientCircuitOpenError(error) {
   if (
     messageChain.some((message) =>
       String(message).includes(
-        "code=" + DISCOVERY_NODE_CLIENT_ERROR_CODE_CIRCUIT_OPEN,
+        'code=' + DISCOVERY_NODE_CLIENT_ERROR_CODE_CIRCUIT_OPEN,
       ),
     )
   ) {
     return true;
   }
   return messageChain.some((message) =>
-    String(message).includes("circuit breaker is open"),
+    String(message).includes('circuit breaker is open'),
   );
 }
 
 function buildDiscoveryNodeClientErrorContext(error) {
-  if (!error || typeof error !== "object") {
+  if (!error || typeof error !== 'object') {
     return null;
   }
   const fragments = [];
-  if (typeof error.operation === "string" && error.operation.length > ZERO) {
-    fragments.push("operation=" + error.operation);
+  if (typeof error.operation === 'string' && error.operation.length > ZERO) {
+    fragments.push('operation=' + error.operation);
   }
-  if (typeof error.channel === "string" && error.channel.length > ZERO) {
-    fragments.push("channel=" + error.channel);
+  if (typeof error.channel === 'string' && error.channel.length > ZERO) {
+    fragments.push('channel=' + error.channel);
   }
   if (
-    typeof error.timeoutClass === "string" &&
+    typeof error.timeoutClass === 'string' &&
     error.timeoutClass.length > ZERO
   ) {
-    fragments.push("timeoutClass=" + error.timeoutClass);
+    fragments.push('timeoutClass=' + error.timeoutClass);
   }
-  if (typeof error.code === "string" && error.code.length > ZERO) {
-    fragments.push("code=" + error.code);
+  if (typeof error.code === 'string' && error.code.length > ZERO) {
+    fragments.push('code=' + error.code);
   }
   if (fragments.length === ZERO) {
     return null;
   }
   return (
     DISCOVERY_ERROR_NODE_CLIENT_CONTEXT_PREFIX +
-    fragments.join(",") +
+    fragments.join(',') +
     DISCOVERY_ERROR_NODE_CLIENT_CONTEXT_SUFFIX
   );
 }
@@ -303,104 +303,104 @@ function buildDiscoveryNodeClientErrorContext(error) {
 function summarizeDiscoverySourceError(error) {
   const messageChain = extractDiscoveryErrorMessageChain(error);
   let primaryMessage =
-    messageChain.length > ZERO ? messageChain[ZERO] : String(error || "");
-  if (primaryMessage.startsWith("NodeClient ") && messageChain.length > ONE) {
+    messageChain.length > ZERO ? messageChain[ZERO] : String(error || '');
+  if (primaryMessage.startsWith('NodeClient ') && messageChain.length > ONE) {
     primaryMessage = messageChain[ONE];
   }
   const context = buildDiscoveryNodeClientErrorContext(error);
   const chainSummary =
-    messageChain.length > ONE
-      ? messageChain.join(DISCOVERY_ERROR_CHAIN_SEPARATOR)
-      : null;
+    messageChain.length > ONE ?
+      messageChain.join(DISCOVERY_ERROR_CHAIN_SEPARATOR) :
+      null;
   let summary = primaryMessage;
   if (context) {
-    summary += " (" + context + ")";
+    summary += ' (' + context + ')';
   }
   if (
     chainSummary &&
     chainSummary !== summary &&
     !summary.includes(chainSummary)
   ) {
-    summary += " | chain=" + chainSummary;
+    summary += ' | chain=' + chainSummary;
   }
   return truncateDiscoveryErrorMessage(summary);
 }
 
 function buildSutLoadDiscoveryDiagnostics(options = {}) {
   const gateReason =
-    typeof options.gateReason === "string" && options.gateReason.length > ZERO
-      ? options.gateReason
-      : null;
+    typeof options.gateReason === 'string' && options.gateReason.length > ZERO ?
+      options.gateReason :
+      null;
   const diagnostics = {
     attempts: Number.isInteger(options.attempts) ? options.attempts : ZERO,
     timedOut: options.timedOut === true,
     strictMinReachable: options.strictMinReachable === true,
     requiredReachableNodeCount:
       Number.isInteger(options.requiredReachableNodeCount) &&
-      options.requiredReachableNodeCount > ZERO
-        ? options.requiredReachableNodeCount
-        : ONE,
+      options.requiredReachableNodeCount > ZERO ?
+        options.requiredReachableNodeCount :
+        ONE,
     gateReason,
-    discoveredNodeIds: Array.isArray(options.discoveredNodeIds)
-      ? [...options.discoveredNodeIds]
-      : [],
-    candidateNodeIds: Array.isArray(options.candidateNodeIds)
-      ? [...options.candidateNodeIds]
-      : [],
-    reachableNodeIds: Array.isArray(options.reachableNodeIds)
-      ? [...options.reachableNodeIds]
-      : [],
-    sourceResults: Array.isArray(options.sourceResults)
-      ? options.sourceResults.map((sourceResult) => ({
-          ...sourceResult,
-          discoveredNodeIds: Array.isArray(sourceResult?.discoveredNodeIds)
-            ? [...sourceResult.discoveredNodeIds]
-            : [],
-          excludedReadinessByNodeId:
+    discoveredNodeIds: Array.isArray(options.discoveredNodeIds) ?
+      [...options.discoveredNodeIds] :
+      [],
+    candidateNodeIds: Array.isArray(options.candidateNodeIds) ?
+      [...options.candidateNodeIds] :
+      [],
+    reachableNodeIds: Array.isArray(options.reachableNodeIds) ?
+      [...options.reachableNodeIds] :
+      [],
+    sourceResults: Array.isArray(options.sourceResults) ?
+      options.sourceResults.map((sourceResult) => ({
+        ...sourceResult,
+        discoveredNodeIds: Array.isArray(sourceResult?.discoveredNodeIds) ?
+          [...sourceResult.discoveredNodeIds] :
+          [],
+        excludedReadinessByNodeId:
             sourceResult?.excludedReadinessByNodeId &&
-            typeof sourceResult.excludedReadinessByNodeId === "object"
-              ? Object.fromEntries(
-                  Object.entries(sourceResult.excludedReadinessByNodeId).map(
-                    ([nodeId, reasons]) => [
-                      String(nodeId),
-                      Array.isArray(reasons)
-                        ? reasons.map((reason) => String(reason))
-                        : [],
-                    ],
-                  ),
-                )
-              : {},
-        }))
-      : [],
+            typeof sourceResult.excludedReadinessByNodeId === 'object' ?
+              Object.fromEntries(
+                Object.entries(sourceResult.excludedReadinessByNodeId).map(
+                  ([nodeId, reasons]) => [
+                    String(nodeId),
+                    Array.isArray(reasons) ?
+                      reasons.map((reason) => String(reason)) :
+                      [],
+                  ],
+                ),
+              ) :
+              {},
+      })) :
+      [],
     [DISCOVERY_DIAGNOSTICS_FIELD_PROBE_READINESS_BY_NODE_ID]:
       options[DISCOVERY_DIAGNOSTICS_FIELD_PROBE_READINESS_BY_NODE_ID] &&
       typeof options[DISCOVERY_DIAGNOSTICS_FIELD_PROBE_READINESS_BY_NODE_ID] ===
-        "object"
-        ? Object.fromEntries(
-            Object.entries(
-              options[DISCOVERY_DIAGNOSTICS_FIELD_PROBE_READINESS_BY_NODE_ID],
-            ).map(([nodeId, reasons]) => [
-              String(nodeId),
-              Array.isArray(reasons)
-                ? reasons.map((reason) => String(reason))
-                : [],
-            ]),
-          )
-        : {},
+        'object' ?
+        Object.fromEntries(
+          Object.entries(
+            options[DISCOVERY_DIAGNOSTICS_FIELD_PROBE_READINESS_BY_NODE_ID],
+          ).map(([nodeId, reasons]) => [
+            String(nodeId),
+            Array.isArray(reasons) ?
+              reasons.map((reason) => String(reason)) :
+              [],
+          ]),
+        ) :
+        {},
     [DISCOVERY_DIAGNOSTICS_FIELD_NODE_ADMISSION_TRACE_BY_NODE_ID]:
       options[DISCOVERY_DIAGNOSTICS_FIELD_NODE_ADMISSION_TRACE_BY_NODE_ID] &&
       typeof options[
         DISCOVERY_DIAGNOSTICS_FIELD_NODE_ADMISSION_TRACE_BY_NODE_ID
-      ] === "object"
-        ? globalThis.structuredClone(
-            options[
-              DISCOVERY_DIAGNOSTICS_FIELD_NODE_ADMISSION_TRACE_BY_NODE_ID
-            ],
-          )
-        : {},
-    elapsedMs: Number.isFinite(options.elapsedMs)
-      ? Math.max(ZERO, Math.floor(options.elapsedMs))
-      : ZERO,
+      ] === 'object' ?
+        globalThis.structuredClone(
+          options[
+            DISCOVERY_DIAGNOSTICS_FIELD_NODE_ADMISSION_TRACE_BY_NODE_ID
+          ],
+        ) :
+        {},
+    elapsedMs: Number.isFinite(options.elapsedMs) ?
+      Math.max(ZERO, Math.floor(options.elapsedMs)) :
+      ZERO,
   };
   const excludedReadinessByNodeId =
     aggregateDiscoveryReadinessExclusionsByNodeId(diagnostics);
@@ -417,22 +417,22 @@ function buildSutLoadDiscoveryDiagnostics(options = {}) {
 
 function aggregateDiscoveryReadinessExclusionsByNodeId(diagnostics) {
   const aggregated = {};
-  const sourceResults = Array.isArray(diagnostics?.sourceResults)
-    ? diagnostics.sourceResults
-    : [];
+  const sourceResults = Array.isArray(diagnostics?.sourceResults) ?
+    diagnostics.sourceResults :
+    [];
   for (const sourceResult of sourceResults) {
     const exclusions =
       sourceResult?.excludedReadinessByNodeId &&
-      typeof sourceResult.excludedReadinessByNodeId === "object"
-        ? sourceResult.excludedReadinessByNodeId
-        : {};
+      typeof sourceResult.excludedReadinessByNodeId === 'object' ?
+        sourceResult.excludedReadinessByNodeId :
+        {};
     for (const [nodeId, reasons] of Object.entries(exclusions)) {
       if (!Object.prototype.hasOwnProperty.call(aggregated, nodeId)) {
         aggregated[nodeId] = [];
       }
-      const reasonList = Array.isArray(reasons)
-        ? reasons.map((reason) => String(reason))
-        : [];
+      const reasonList = Array.isArray(reasons) ?
+        reasons.map((reason) => String(reason)) :
+        [];
       for (const reason of reasonList) {
         if (!aggregated[nodeId].includes(reason)) {
           aggregated[nodeId].push(reason);
@@ -448,9 +448,9 @@ function aggregateDiscoveryReadinessExclusionReasonCountsByNodeId(
 ) {
   const reasonCounts = {};
   const entries =
-    exclusionsByNodeId && typeof exclusionsByNodeId === "object"
-      ? Object.entries(exclusionsByNodeId)
-      : [];
+    exclusionsByNodeId && typeof exclusionsByNodeId === 'object' ?
+      Object.entries(exclusionsByNodeId) :
+      [];
   for (const [_nodeId, reasons] of entries) {
     const uniqueReasons = new Set(
       Array.isArray(reasons) ? reasons.map((reason) => String(reason)) : [],
@@ -463,191 +463,191 @@ function aggregateDiscoveryReadinessExclusionReasonCountsByNodeId(
 }
 
 function formatSutLoadDiscoveryDiagnostics(diagnostics) {
-  if (!diagnostics || typeof diagnostics !== "object") {
-    return "";
+  if (!diagnostics || typeof diagnostics !== 'object') {
+    return '';
   }
-  const attempts = Number.isInteger(diagnostics.attempts)
-    ? diagnostics.attempts
-    : ZERO;
+  const attempts = Number.isInteger(diagnostics.attempts) ?
+    diagnostics.attempts :
+    ZERO;
   const requiredReachableNodeCount =
     Number.isInteger(diagnostics.requiredReachableNodeCount) &&
-    diagnostics.requiredReachableNodeCount > ZERO
-      ? diagnostics.requiredReachableNodeCount
-      : ONE;
-  const discoveredNodeIds = Array.isArray(diagnostics.discoveredNodeIds)
-    ? diagnostics.discoveredNodeIds
-    : [];
-  const sourceResults = Array.isArray(diagnostics.sourceResults)
-    ? diagnostics.sourceResults
-    : [];
+    diagnostics.requiredReachableNodeCount > ZERO ?
+      diagnostics.requiredReachableNodeCount :
+      ONE;
+  const discoveredNodeIds = Array.isArray(diagnostics.discoveredNodeIds) ?
+    diagnostics.discoveredNodeIds :
+    [];
+  const sourceResults = Array.isArray(diagnostics.sourceResults) ?
+    diagnostics.sourceResults :
+    [];
   const probeReadinessByNodeId =
     diagnostics[DISCOVERY_DIAGNOSTICS_FIELD_PROBE_READINESS_BY_NODE_ID] &&
     typeof diagnostics[
       DISCOVERY_DIAGNOSTICS_FIELD_PROBE_READINESS_BY_NODE_ID
-    ] === "object"
-      ? diagnostics[DISCOVERY_DIAGNOSTICS_FIELD_PROBE_READINESS_BY_NODE_ID]
-      : {};
+    ] === 'object' ?
+      diagnostics[DISCOVERY_DIAGNOSTICS_FIELD_PROBE_READINESS_BY_NODE_ID] :
+      {};
   const excludedReadinessByNodeId =
     diagnostics[DISCOVERY_DIAGNOSTICS_FIELD_EXCLUDED_READINESS_BY_NODE_ID] &&
     typeof diagnostics[
       DISCOVERY_DIAGNOSTICS_FIELD_EXCLUDED_READINESS_BY_NODE_ID
-    ] === "object"
-      ? diagnostics[DISCOVERY_DIAGNOSTICS_FIELD_EXCLUDED_READINESS_BY_NODE_ID]
-      : aggregateDiscoveryReadinessExclusionsByNodeId(diagnostics);
+    ] === 'object' ?
+      diagnostics[DISCOVERY_DIAGNOSTICS_FIELD_EXCLUDED_READINESS_BY_NODE_ID] :
+      aggregateDiscoveryReadinessExclusionsByNodeId(diagnostics);
   const exclusionReasonCountsByNode =
     diagnostics[DISCOVERY_DIAGNOSTICS_FIELD_EXCLUSION_REASON_COUNTS_BY_NODE] &&
     typeof diagnostics[
       DISCOVERY_DIAGNOSTICS_FIELD_EXCLUSION_REASON_COUNTS_BY_NODE
-    ] === "object"
-      ? diagnostics[DISCOVERY_DIAGNOSTICS_FIELD_EXCLUSION_REASON_COUNTS_BY_NODE]
-      : aggregateDiscoveryReadinessExclusionReasonCountsByNodeId(
-          excludedReadinessByNodeId,
-        );
+    ] === 'object' ?
+      diagnostics[DISCOVERY_DIAGNOSTICS_FIELD_EXCLUSION_REASON_COUNTS_BY_NODE] :
+      aggregateDiscoveryReadinessExclusionReasonCountsByNodeId(
+        excludedReadinessByNodeId,
+      );
   const nodeAdmissionTraceByNodeId =
     diagnostics[DISCOVERY_DIAGNOSTICS_FIELD_NODE_ADMISSION_TRACE_BY_NODE_ID] &&
     typeof diagnostics[
       DISCOVERY_DIAGNOSTICS_FIELD_NODE_ADMISSION_TRACE_BY_NODE_ID
-    ] === "object"
-      ? diagnostics[DISCOVERY_DIAGNOSTICS_FIELD_NODE_ADMISSION_TRACE_BY_NODE_ID]
-      : {};
+    ] === 'object' ?
+      diagnostics[DISCOVERY_DIAGNOSTICS_FIELD_NODE_ADMISSION_TRACE_BY_NODE_ID] :
+      {};
   const sourceSummary = sourceResults
     .map((sourceResult) => {
       const nodeId =
-        typeof sourceResult?.nodeId === "string" &&
-        sourceResult.nodeId.length > ZERO
-          ? sourceResult.nodeId
-          : DISCOVERY_UNKNOWN_NODE_ID;
+        typeof sourceResult?.nodeId === 'string' &&
+        sourceResult.nodeId.length > ZERO ?
+          sourceResult.nodeId :
+          DISCOVERY_UNKNOWN_NODE_ID;
       const status =
-        typeof sourceResult?.status === "string" &&
-        sourceResult.status.length > ZERO
-          ? sourceResult.status
-          : DISCOVERY_SOURCE_STATUS_EMPTY;
+        typeof sourceResult?.status === 'string' &&
+        sourceResult.status.length > ZERO ?
+          sourceResult.status :
+          DISCOVERY_SOURCE_STATUS_EMPTY;
       const scope =
-        typeof sourceResult?.scope === "string" &&
-        sourceResult.scope.length > ZERO
-          ? sourceResult.scope
-          : null;
-      const statusWithScope = scope ? status + "@" + scope : status;
+        typeof sourceResult?.scope === 'string' &&
+        sourceResult.scope.length > ZERO ?
+          sourceResult.scope :
+          null;
+      const statusWithScope = scope ? status + '@' + scope : status;
       const excludedReadiness =
         sourceResult?.excludedReadinessByNodeId &&
-        typeof sourceResult.excludedReadinessByNodeId === "object"
-          ? Object.entries(sourceResult.excludedReadinessByNodeId)
-              .map(([nodeId, reasons]) => {
-                const reasonList =
-                  Array.isArray(reasons) && reasons.length > ZERO
-                    ? reasons.join("|")
-                    : "unknown";
-                return String(nodeId) + ":" + reasonList;
-              })
-              .join(",")
-          : "";
+        typeof sourceResult.excludedReadinessByNodeId === 'object' ?
+          Object.entries(sourceResult.excludedReadinessByNodeId)
+            .map(([nodeId, reasons]) => {
+              const reasonList =
+                  Array.isArray(reasons) && reasons.length > ZERO ?
+                    reasons.join('|') :
+                    'unknown';
+              return String(nodeId) + ':' + reasonList;
+            })
+            .join(',') :
+          '';
       if (status === DISCOVERY_SOURCE_STATUS_ERROR) {
         return (
           nodeId +
-          ":" +
+          ':' +
           statusWithScope +
-          "=" +
-          String(sourceResult?.error || "unknown")
+          '=' +
+          String(sourceResult?.error || 'unknown')
         );
       }
-      const sourceNodeIds = Array.isArray(sourceResult?.discoveredNodeIds)
-        ? sourceResult.discoveredNodeIds
-        : [];
+      const sourceNodeIds = Array.isArray(sourceResult?.discoveredNodeIds) ?
+        sourceResult.discoveredNodeIds :
+        [];
       if (sourceNodeIds.length > ZERO) {
         const serviceId =
-          typeof sourceResult?.serviceId === "string" &&
-          sourceResult.serviceId.length > ZERO
-            ? sourceResult.serviceId
-            : "unknown-service";
+          typeof sourceResult?.serviceId === 'string' &&
+          sourceResult.serviceId.length > ZERO ?
+            sourceResult.serviceId :
+            'unknown-service';
         const protocol =
-          typeof sourceResult?.protocol === "string" &&
-          sourceResult.protocol.length > ZERO
-            ? sourceResult.protocol
-            : "unknown-protocol";
+          typeof sourceResult?.protocol === 'string' &&
+          sourceResult.protocol.length > ZERO ?
+            sourceResult.protocol :
+            'unknown-protocol';
         const baseSummary =
           nodeId +
-          ":" +
+          ':' +
           statusWithScope +
-          "=" +
+          '=' +
           serviceId +
-          "@" +
+          '@' +
           protocol +
-          ":" +
-          sourceNodeIds.join("|");
+          ':' +
+          sourceNodeIds.join('|');
         if (excludedReadiness.length > ZERO) {
-          return baseSummary + "[excluded=" + excludedReadiness + "]";
+          return baseSummary + '[excluded=' + excludedReadiness + ']';
         }
         return baseSummary;
       }
       if (excludedReadiness.length > ZERO) {
         return (
           nodeId +
-          ":" +
+          ':' +
           statusWithScope +
-          "[excluded=" +
+          '[excluded=' +
           excludedReadiness +
-          "]"
+          ']'
         );
       }
-      return nodeId + ":" + statusWithScope;
+      return nodeId + ':' + statusWithScope;
     })
-    .join(";");
+    .join(';');
   const probeSummary = Object.entries(probeReadinessByNodeId)
     .map(([nodeId, reasons]) => {
       const reasonList =
-        Array.isArray(reasons) && reasons.length > ZERO
-          ? reasons.join("|")
-          : DISCOVERY_PROBE_REASON_ADMIN_NOT_READY;
-      return String(nodeId) + ":" + reasonList;
+        Array.isArray(reasons) && reasons.length > ZERO ?
+          reasons.join('|') :
+          DISCOVERY_PROBE_REASON_ADMIN_NOT_READY;
+      return String(nodeId) + ':' + reasonList;
     })
-    .join(";");
+    .join(';');
   const excludedNodeSummary = Object.entries(excludedReadinessByNodeId)
     .map(([nodeId, reasons]) => {
       const reasonList =
-        Array.isArray(reasons) && reasons.length > ZERO
-          ? reasons.join("|")
-          : "unknown";
-      return String(nodeId) + ":" + reasonList;
+        Array.isArray(reasons) && reasons.length > ZERO ?
+          reasons.join('|') :
+          'unknown';
+      return String(nodeId) + ':' + reasonList;
     })
     .join(DISCOVERY_DIAGNOSTIC_NODE_REASON_SEPARATOR);
   const excludedReasonCountSummary = Object.entries(exclusionReasonCountsByNode)
-    .map(([reason, count]) => String(reason) + ":" + String(count))
+    .map(([reason, count]) => String(reason) + ':' + String(count))
     .join(DISCOVERY_DIAGNOSTIC_REASON_COUNT_SEPARATOR);
   const admissionStateSummary = Object.entries(nodeAdmissionTraceByNodeId)
     .map(([nodeId, trace]) => {
       const state =
-        typeof trace?.derivedState === "string" &&
-        trace.derivedState.length > ZERO
-          ? trace.derivedState
-          : "unknown";
-      return String(nodeId) + ":" + state;
+        typeof trace?.derivedState === 'string' &&
+        trace.derivedState.length > ZERO ?
+          trace.derivedState :
+          'unknown';
+      return String(nodeId) + ':' + state;
     })
     .join(DISCOVERY_DIAGNOSTIC_NODE_REASON_SEPARATOR);
   const diagnosticsSummary = [
-    "attempts=" + String(attempts),
-    "timedOut=" + String(diagnostics.timedOut === true),
-    "requiredReachable=" + String(requiredReachableNodeCount),
-    "strictMinReachable=" + String(diagnostics.strictMinReachable === true),
-    "discovered=" +
-      (discoveredNodeIds.length > ZERO ? discoveredNodeIds.join("|") : "none"),
+    'attempts=' + String(attempts),
+    'timedOut=' + String(diagnostics.timedOut === true),
+    'requiredReachable=' + String(requiredReachableNodeCount),
+    'strictMinReachable=' + String(diagnostics.strictMinReachable === true),
+    'discovered=' +
+      (discoveredNodeIds.length > ZERO ? discoveredNodeIds.join('|') : 'none'),
   ];
   if (
-    typeof diagnostics.gateReason === "string" &&
+    typeof diagnostics.gateReason === 'string' &&
     diagnostics.gateReason.length > ZERO
   ) {
-    diagnosticsSummary.push("gateReason=" + diagnostics.gateReason);
+    diagnosticsSummary.push('gateReason=' + diagnostics.gateReason);
   }
   if (sourceSummary.length > ZERO) {
-    diagnosticsSummary.push("sources=" + sourceSummary);
+    diagnosticsSummary.push('sources=' + sourceSummary);
   }
   if (probeSummary.length > ZERO) {
     diagnosticsSummary.push(DISCOVERY_DIAGNOSTIC_PREFIX_PROBES + probeSummary);
   }
   diagnosticsSummary.push(
     DISCOVERY_DIAGNOSTIC_PREFIX_EXCLUSION_COUNTS +
-      (excludedReasonCountSummary.length > ZERO
-        ? excludedReasonCountSummary
-        : "none"),
+      (excludedReasonCountSummary.length > ZERO ?
+        excludedReasonCountSummary :
+        'none'),
   );
   if (admissionStateSummary.length > ZERO) {
     diagnosticsSummary.push(
@@ -659,33 +659,33 @@ function formatSutLoadDiscoveryDiagnostics(diagnostics) {
       DISCOVERY_DIAGNOSTIC_PREFIX_EXCLUDED_NODES + excludedNodeSummary,
     );
   }
-  return diagnosticsSummary.join(", ");
+  return diagnosticsSummary.join(', ');
 }
 
 function buildStrictDiscoveryGate(options = {}) {
   const strictMinReachable = options.strictMinReachable === true;
   const requiredReachableNodeCount =
     Number.isInteger(options.requiredReachableNodeCount) &&
-    options.requiredReachableNodeCount > ZERO
-      ? options.requiredReachableNodeCount
-      : ONE;
-  const reachableNodeCount = Array.isArray(options.nodes)
-    ? options.nodes.length
-    : ZERO;
+    options.requiredReachableNodeCount > ZERO ?
+      options.requiredReachableNodeCount :
+      ONE;
+  const reachableNodeCount = Array.isArray(options.nodes) ?
+    options.nodes.length :
+    ZERO;
   const discoveredNodeCount = Array.isArray(
     options.diagnostics?.discoveredNodeIds,
-  )
-    ? options.diagnostics.discoveredNodeIds.length
-    : ZERO;
+  ) ?
+    options.diagnostics.discoveredNodeIds.length :
+    ZERO;
   const reachedTarget = reachableNodeCount >= requiredReachableNodeCount;
   const status =
-    !strictMinReachable || reachedTarget
-      ? DISCOVERY_GATE_STATUS_PASSED
-      : DISCOVERY_GATE_STATUS_FAILED;
+    !strictMinReachable || reachedTarget ?
+      DISCOVERY_GATE_STATUS_PASSED :
+      DISCOVERY_GATE_STATUS_FAILED;
   const reason =
-    status === DISCOVERY_GATE_STATUS_FAILED
-      ? DISCOVERY_GATE_REASON_INSUFFICIENT_REACHABLE_NODES
-      : null;
+    status === DISCOVERY_GATE_STATUS_FAILED ?
+      DISCOVERY_GATE_REASON_INSUFFICIENT_REACHABLE_NODES :
+      null;
 
   return {
     strictMinReachable,
@@ -700,21 +700,21 @@ function buildStrictDiscoveryGate(options = {}) {
 function buildStrictParityGate(options = {}) {
   const strictParity = options.strictParity === true;
   const parity =
-    options.parity && typeof options.parity === "object"
-      ? options.parity
-      : null;
+    options.parity && typeof options.parity === 'object' ?
+      options.parity :
+      null;
   const parityStatus =
-    typeof parity?.status === "string" && parity.status.length > ZERO
-      ? parity.status
-      : null;
-  const reasonCodes = Array.isArray(parity?.reasons)
-    ? parity.reasons.map((reason) => String(reason))
-    : [];
+    typeof parity?.status === 'string' && parity.status.length > ZERO ?
+      parity.status :
+      null;
+  const reasonCodes = Array.isArray(parity?.reasons) ?
+    parity.reasons.map((reason) => String(reason)) :
+    [];
   const mismatch = parityStatus === LOAD_PARITY_STATUS_MISMATCHED;
   const status =
-    strictParity && mismatch
-      ? DISCOVERY_GATE_STATUS_FAILED
-      : DISCOVERY_GATE_STATUS_PASSED;
+    strictParity && mismatch ?
+      DISCOVERY_GATE_STATUS_FAILED :
+      DISCOVERY_GATE_STATUS_PASSED;
   const reason =
     strictParity && mismatch ? STRICT_PARITY_REASON_MISMATCH : null;
 
@@ -729,7 +729,7 @@ function buildStrictParityGate(options = {}) {
 
 function selectStrictInvariantGateEntries(invariants) {
   return (Array.isArray(invariants) ? invariants : []).filter((invariant) =>
-    STRICT_INVARIANT_GATE_IDS.has(String(invariant?.invariantId || "")),
+    STRICT_INVARIANT_GATE_IDS.has(String(invariant?.invariantId || '')),
   );
 }
 
@@ -746,7 +746,7 @@ function resolveStrictInvariantViolationEntries(breach) {
 }
 
 function isRetryableStrictInvariantHardBreach(breach) {
-  const reasonCode = String(breach?.reasonCode || "");
+  const reasonCode = String(breach?.reasonCode || '');
   if (!STRICT_INVARIANT_RETRY_REASON_CODES.has(reasonCode)) {
     return false;
   }
@@ -756,7 +756,7 @@ function isRetryableStrictInvariantHardBreach(breach) {
   }
   return violations.every((violation) =>
     STRICT_INVARIANT_RETRY_LEADERSHIP_ERROR_CODES.has(
-      String(violation?.lastErrorCode || ""),
+      String(violation?.lastErrorCode || ''),
     ),
   );
 }
@@ -780,13 +780,13 @@ function resolveStrictInvariantRetryWindowMs(
 ) {
   const pollIntervalMs =
     Number.isInteger(benchmarkConfig?.quiescentPollIntervalMs) &&
-    benchmarkConfig.quiescentPollIntervalMs > ZERO
-      ? benchmarkConfig.quiescentPollIntervalMs
-      : STRICT_INVARIANT_RETRY_MIN_POLL_INTERVAL_MS;
+    benchmarkConfig.quiescentPollIntervalMs > ZERO ?
+      benchmarkConfig.quiescentPollIntervalMs :
+      STRICT_INVARIANT_RETRY_MIN_POLL_INTERVAL_MS;
   const stableWindowMs =
-    Number.isInteger(preLoadStableWindowMs) && preLoadStableWindowMs >= ZERO
-      ? preLoadStableWindowMs
-      : ZERO;
+    Number.isInteger(preLoadStableWindowMs) && preLoadStableWindowMs >= ZERO ?
+      preLoadStableWindowMs :
+      ZERO;
   const candidateWindowMs = Math.max(stableWindowMs, pollIntervalMs * 4);
   return Math.min(
     STRICT_INVARIANT_RETRY_MAX_WINDOW_MS,
@@ -818,7 +818,7 @@ function createEmptyInternalSignalClassCounts() {
 }
 
 function classifyInternalSignalMessage(message) {
-  const text = String(message || "");
+  const text = String(message || '');
   if (INTERNAL_SIGNAL_PATTERN_OPERATION_FAILED.test(text)) {
     return INTERNAL_SIGNAL_CLASS_OPERATION_FAILED;
   }
@@ -840,13 +840,13 @@ function collectInternalSignalMessages(
   runtimeMessages,
 ) {
   const messages = [];
-  const distinctErrors = Array.isArray(loadMetrics?.distinctErrors)
-    ? loadMetrics.distinctErrors
-    : [];
+  const distinctErrors = Array.isArray(loadMetrics?.distinctErrors) ?
+    loadMetrics.distinctErrors :
+    [];
   for (const errorMessage of distinctErrors) {
     messages.push(String(errorMessage));
   }
-  if (typeof scenarioOverrides.getInternalSignalMessages === "function") {
+  if (typeof scenarioOverrides.getInternalSignalMessages === 'function') {
     const overrideMessages = scenarioOverrides.getInternalSignalMessages();
     if (Array.isArray(overrideMessages)) {
       for (const overrideMessage of overrideMessages) {
@@ -875,15 +875,15 @@ function buildInternalSignalCounts(
     runtimeMessages,
   );
 
-  const failedCount = Number.isInteger(loadMetrics?.failed)
-    ? loadMetrics.failed
-    : ZERO;
-  const errorCount = Number.isInteger(loadMetrics?.errors)
-    ? loadMetrics.errors
-    : ZERO;
-  const attemptErrorCount = Number.isInteger(loadMetrics?.attemptErrors)
-    ? loadMetrics.attemptErrors
-    : ZERO;
+  const failedCount = Number.isInteger(loadMetrics?.failed) ?
+    loadMetrics.failed :
+    ZERO;
+  const errorCount = Number.isInteger(loadMetrics?.errors) ?
+    loadMetrics.errors :
+    ZERO;
+  const attemptErrorCount = Number.isInteger(loadMetrics?.attemptErrors) ?
+    loadMetrics.attemptErrors :
+    ZERO;
   errorsByClass[INTERNAL_SIGNAL_CLASS_OPERATION_FAILED] += Math.max(
     ZERO,
     failedCount + errorCount + attemptErrorCount,
@@ -910,9 +910,9 @@ function buildInternalSignalCounts(
 
 function evaluateInternalSignalThresholds(counts, thresholdPolicy) {
   const policy =
-    thresholdPolicy && typeof thresholdPolicy === "object"
-      ? thresholdPolicy
-      : resolveInternalSignalThresholds({});
+    thresholdPolicy && typeof thresholdPolicy === 'object' ?
+      thresholdPolicy :
+      resolveInternalSignalThresholds({});
   const breaches = [];
   for (const [signalClass, threshold] of Object.entries(
     policy.errorsByClass || {},
@@ -920,7 +920,7 @@ function evaluateInternalSignalThresholds(counts, thresholdPolicy) {
     const observedCount = Number(counts?.errorsByClass?.[signalClass] || ZERO);
     if (observedCount >= threshold) {
       breaches.push({
-        severity: "error",
+        severity: 'error',
         signalClass,
         threshold,
         observedCount,
@@ -935,7 +935,7 @@ function evaluateInternalSignalThresholds(counts, thresholdPolicy) {
     );
     if (observedCount >= threshold) {
       breaches.push({
-        severity: "warning",
+        severity: 'warning',
         signalClass,
         threshold,
         observedCount,
@@ -950,19 +950,19 @@ function evaluateInternalSignalThresholds(counts, thresholdPolicy) {
 }
 
 function formatInternalSignalBreaches(thresholdResult) {
-  const breaches = Array.isArray(thresholdResult?.breaches)
-    ? thresholdResult.breaches
-    : [];
+  const breaches = Array.isArray(thresholdResult?.breaches) ?
+    thresholdResult.breaches :
+    [];
   return breaches
     .map(
       (breach) =>
         String(breach.signalClass) +
-        "=" +
+        '=' +
         String(breach.observedCount) +
-        ">=" +
+        '>=' +
         String(breach.threshold),
     )
-    .join("|");
+    .join('|');
 }
 
 function createEmptySaturationCounters() {
@@ -977,15 +977,15 @@ function createEmptySaturationCounters() {
 function buildSaturationCounters(options = {}) {
   const counters = createEmptySaturationCounters();
   const messages = [];
-  const distinctErrors = Array.isArray(options?.loadMetrics?.distinctErrors)
-    ? options.loadMetrics.distinctErrors
-    : [];
+  const distinctErrors = Array.isArray(options?.loadMetrics?.distinctErrors) ?
+    options.loadMetrics.distinctErrors :
+    [];
   for (const errorMessage of distinctErrors) {
     messages.push(String(errorMessage));
   }
-  const internalSignalMessages = Array.isArray(options?.internalSignalMessages)
-    ? options.internalSignalMessages
-    : [];
+  const internalSignalMessages = Array.isArray(options?.internalSignalMessages) ?
+    options.internalSignalMessages :
+    [];
   for (const signalMessage of internalSignalMessages) {
     messages.push(String(signalMessage));
   }
@@ -1000,9 +1000,9 @@ function buildSaturationCounters(options = {}) {
   }
 
   const reasonHistogram =
-    options?.reasonHistogram && typeof options.reasonHistogram === "object"
-      ? options.reasonHistogram
-      : {};
+    options?.reasonHistogram && typeof options.reasonHistogram === 'object' ?
+      options.reasonHistogram :
+      {};
   for (const [reason, count] of Object.entries(reasonHistogram)) {
     const normalizedCount = Math.max(ONE, normalizeNonNegativeInteger(count));
     if (SATURATION_PATTERN_CDC_FORWARD_TIMEOUT.test(reason)) {
@@ -1013,7 +1013,7 @@ function buildSaturationCounters(options = {}) {
     }
     if (
       reason.includes(QUIESCENCE_REASON_SNAPSHOT_QUERY_ERROR_PREFIX) ||
-      reason.includes("|probe_error=")
+      reason.includes('|probe_error=')
     ) {
       counters.snapshotCollectionErrorCount += normalizedCount;
     }
@@ -1044,13 +1044,13 @@ function normalizeNonNegativeNumber(value) {
 }
 
 function normalizeCdcTelemetryMode(value) {
-  return value === CDC_TELEMETRY_MODE_CATCHUP
-    ? CDC_TELEMETRY_MODE_CATCHUP
-    : CDC_TELEMETRY_MODE_STEADY;
+  return value === CDC_TELEMETRY_MODE_CATCHUP ?
+    CDC_TELEMETRY_MODE_CATCHUP :
+    CDC_TELEMETRY_MODE_STEADY;
 }
 
 function normalizeAuthoritativeFallbackPhaseCounts(value) {
-  const source = value && typeof value === "object" ? value : {};
+  const source = value && typeof value === 'object' ? value : {};
   return {
     windowCount: normalizeNonNegativeInteger(source.windowCount),
     totalCount: normalizeNonNegativeInteger(source.totalCount),
@@ -1058,10 +1058,10 @@ function normalizeAuthoritativeFallbackPhaseCounts(value) {
 }
 
 function normalizeAuthoritativeFallbackTelemetry(value) {
-  const source = value && typeof value === "object" ? value : {};
+  const source = value && typeof value === 'object' ? value : {};
   return {
     schemaVersion: normalizeNonNegativeInteger(source.schemaVersion) || ONE,
-    nodeId: typeof source.nodeId === "string" ? source.nodeId : null,
+    nodeId: typeof source.nodeId === 'string' ? source.nodeId : null,
     windowMs: normalizeNonNegativeInteger(source.windowMs),
     totalCount: normalizeNonNegativeInteger(source.totalCount),
     windowCount: normalizeNonNegativeInteger(source.windowCount),
@@ -1084,7 +1084,7 @@ function normalizeAuthoritativeFallbackTelemetry(value) {
 }
 
 function normalizeCdcTelemetryNodeSample(nodeId, sample) {
-  const source = sample && typeof sample === "object" ? sample : {};
+  const source = sample && typeof sample === 'object' ? sample : {};
   const missingFields = [];
   const normalizedSample = {
     nodeId: String(nodeId),

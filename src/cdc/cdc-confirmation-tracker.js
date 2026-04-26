@@ -79,7 +79,7 @@ class CDCConfirmationTracker {
         const error = new Error(
           `${CDC_CONFIRMATION_ERROR_TYPE.TIMEOUT}: ` +
           `table=${tableName} key=${primaryKey} ` +
-          `timeout=${timeout}ms`
+          `timeout=${timeout}ms`,
         );
         error.name = CDC_CONFIRMATION_ERROR_TYPE.TIMEOUT;
         error.tableName = tableName;
@@ -158,7 +158,7 @@ class CDCConfirmationTracker {
   _shutdownError(tableName, primaryKey) {
     const error = new Error(
       `${CDC_CONFIRMATION_ERROR_TYPE.SHUTDOWN}: ` +
-      `table=${tableName} key=${primaryKey}`
+      `table=${tableName} key=${primaryKey}`,
     );
     error.name = CDC_CONFIRMATION_ERROR_TYPE.SHUTDOWN;
     error.tableName = tableName;

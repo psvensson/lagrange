@@ -1,106 +1,30 @@
-import { CONTROL_PLANE_READINESS_SERVICE_SHARED } from "./control-plane-readiness-service-shared.js";
-import { ControlPlaneReadinessServiceSegment1 } from "./control-plane-readiness-service-segment-1.js";
+import {CONTROL_PLANE_READINESS_SERVICE_SHARED} from './control-plane-readiness-service-shared.js';
+import {ControlPlaneReadinessServiceSegment1} from './control-plane-readiness-service-segment-1.js';
 
 const {
-  AUTHORITATIVE_READINESS_REPAIR,
-  AUTHORITY_DESCRIPTOR_STATE,
-  AUTHORITY_PUBLICATION_OBSERVATION_STATE,
-  AuthoritativeControlPlaneView,
-  AuthoritativeNodeEvidenceReconciler,
   COLUMN,
-  CONTROL_PLANE_PARTICIPATION_DECISION,
-  CONTROL_PLANE_PARTICIPATION_KIND,
-  CONTROL_PLANE_PRIORITY_RECOVERY_REASON,
   CONTROL_PLANE_PUBLICATION_MODE,
   CONTROL_PLANE_PUBLICATION_STATUS,
-  CONTROL_PLANE_READINESS_DEFAULT,
   CONTROL_PLANE_READINESS_DIMENSION,
   CONTROL_PLANE_READINESS_OWNER,
   CONTROL_PLANE_READINESS_REASON,
-  CONTROL_PLANE_READINESS_SUBSYSTEM,
-  ControlPlaneDiagnosticsLedger,
-  DEFAULT_PRIORITY_RECOVERY_ACTIVITY_STALE_GRACE_MS,
-  DurableWorkflowCoordinator,
-  LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY,
-  LoggingService,
-  MEMBERSHIP_PUBLICATION_AUTHORITATIVE_READ_MODE,
-  MEMBERSHIP_PUBLICATION_PLANNING,
-  MEMBERSHIP_PUBLICATION_PLANNING_READ_OPTIONS,
-  MEMBERSHIP_PUBLICATION_PLANNING_SOURCE,
-  MEMBERSHIP_PUBLICATION_READ_LANE,
-  MEMBERSHIP_PUBLICATION_READ_OPTIONS,
-  MEMBERSHIP_PUBLICATION_READ_SCOPE,
-  MISSING_NODE_READINESS_REASON,
-  MISSING_NODE_READINESS_STATE,
   NUM,
-  OperationLane,
-  PRESSURE_STATE,
-  PRIORITY_CONTROL_PLANE_RECOVERY_HEALTH_FAILURE,
   PROVISIONING_ELIGIBILITY_STATE,
   PUBLICATION_REASON_CONFIG_SAFE_MODE,
-  READINESS_DIAGNOSTICS_LEDGER_LIMIT,
   READINESS_ERROR_MSG,
-  READINESS_TRANSITION_HISTORY_LIMIT,
-  RECOVERY_EPOCH_EVENT_LIMIT,
-  RECOVERY_EPOCH_HISTORY_LIMIT,
-  RECOVERY_GRACE_MESSAGE_GROUP_SERVICE_STATUSES,
-  RECOVERY_PROTOCOL_STATE,
-  RUNTIME_AUTHORITY_PUBLICATION_STATE,
-  RUNTIME_AUTHORITY_REPAIR_STATE,
-  RUNTIME_AUTHORITY_STATE,
-  RUNTIME_AUTHORITY_VISIBILITY_STATE,
-  SERVICE_STATUS,
-  SERVICE_TYPE,
-  STARTUP_AUTHORITY_STATE,
   STATE,
   TABLES,
-  TIME_MS,
   TYPEOF,
-  assertCritical,
-  buildControlPlanePublicationStory,
-  buildParticipationErrorCode,
-  buildParticipationErrorMessage,
   buildPublicationRecoveryGateSnapshot,
-  buildPublicationRecoveryProtocolSnapshot,
-  buildReadinessTransitionOwnerState,
-  buildReason,
-  buildStartupAuthorityFailureOwnerDescriptor,
-  buildStartupAuthorityHealthDetails,
-  buildStartupAuthorityOwnerContract,
-  buildStartupAuthorityOwnerSnapshotFromPlanningAnswer,
-  buildStartupAuthorityOwnerUnavailableSnapshot,
-  buildStartupAuthorityPriorityPartitionOwnerDescriptor,
-  buildStartupAuthorityPublicationOwnerDescriptor,
-  buildStartupAuthorityRecoveryProtocolOwnerDescriptor,
-  buildStartupAuthorityTargetParticipationOwnerDescriptor,
-  compactEligibilitySnapshot,
   compareNodeHeartbeatWatermarks,
-  createControlPlaneRuntimeBundle,
-  createEligibilitySnapshot,
-  evaluateEligibilityDecision,
-  isNodeReadyLeaseExplicitlyCleared,
-  isNodeRecordReady,
-  normalizeControlPlaneParticipationKind,
   normalizeDiagnosticTimestampMs,
   normalizeIsoTimestamp,
-  normalizeLocalQueryTransportEvidence,
-  normalizeNodeIdList,
-  normalizePositiveInteger,
-  resolveMembershipPublicationPlanningSource,
-  resolveMembershipPublicationReadLane,
-  resolveMembershipPublicationReadOptions,
-  resolveMembershipPublicationReadScope,
-  resolveParticipationDecisionDimension,
-  resolvePriorityRecoveryActiveNodeCohort,
-  shouldAllowLocalExecutionForParticipation,
-  unwrapRowReadResult,
-  wasNodeRecordReadyWhenWritten,
 } = CONTROL_PLANE_READINESS_SERVICE_SHARED;
 
 const SERVE_ADMISSION_STATE = Object.freeze({
-  ADMITTED: "admitted",
-  BLOCKED_PRIORITY_RECOVERY: "blocked_priority_recovery",
-  BLOCKED_RUNTIME: "blocked_runtime",
+  ADMITTED: 'admitted',
+  BLOCKED_PRIORITY_RECOVERY: 'blocked_priority_recovery',
+  BLOCKED_RUNTIME: 'blocked_runtime',
 });
 
 class ControlPlaneReadinessServiceSegment2 extends ControlPlaneReadinessServiceSegment1 {
@@ -117,28 +41,28 @@ class ControlPlaneReadinessServiceSegment2 extends ControlPlaneReadinessServiceS
       decision: participation.decision || null,
       eligible: participation.eligible === true,
       reasonCode: participation.reasonCode || null,
-      reasonCodes: Array.isArray(participation.reasonCodes)
-        ? [...participation.reasonCodes]
-        : [],
-      failedDimensions: Array.isArray(participation.failedDimensions)
-        ? [...participation.failedDimensions]
-        : [],
+      reasonCodes: Array.isArray(participation.reasonCodes) ?
+        [...participation.reasonCodes] :
+        [],
+      failedDimensions: Array.isArray(participation.failedDimensions) ?
+        [...participation.failedDimensions] :
+        [],
       localExecutionAllowed: participation.localExecutionAllowed === true,
       cacheWatermark:
         participation.cacheWatermark &&
-        typeof participation.cacheWatermark === TYPEOF.OBJECT
-          ? { ...participation.cacheWatermark }
-          : null,
+        typeof participation.cacheWatermark === TYPEOF.OBJECT ?
+          {...participation.cacheWatermark} :
+          null,
       transportState:
         participation.transportState &&
-        typeof participation.transportState === TYPEOF.OBJECT
-          ? { ...participation.transportState }
-          : null,
+        typeof participation.transportState === TYPEOF.OBJECT ?
+          {...participation.transportState} :
+          null,
       authoritativeRepair:
         participation.authoritativeRepair &&
-        typeof participation.authoritativeRepair === TYPEOF.OBJECT
-          ? { ...participation.authoritativeRepair }
-          : null,
+        typeof participation.authoritativeRepair === TYPEOF.OBJECT ?
+          {...participation.authoritativeRepair} :
+          null,
       lifecyclePhase: participation.lifecyclePhase || null,
       lifecycleState: participation.summary?.lifecycleState || null,
       observedAt: participation.summary?.observedAt || null,
@@ -150,9 +74,9 @@ class ControlPlaneReadinessServiceSegment2 extends ControlPlaneReadinessServiceS
    * @return {Object[]}
    */
   getParticipationDecisionLedgerEntries(options = {}) {
-    return this.participationDecisionLedger
-      ? this.participationDecisionLedger.getEntries(options)
-      : Object.freeze([]);
+    return this.participationDecisionLedger ?
+      this.participationDecisionLedger.getEntries(options) :
+      Object.freeze([]);
   }
 
   /**
@@ -225,13 +149,13 @@ class ControlPlaneReadinessServiceSegment2 extends ControlPlaneReadinessServiceS
     return Object.freeze({
       ...storedSnapshot,
       publication:
-        publication && typeof publication === TYPEOF.OBJECT
-          ? Object.freeze({ ...publication })
-          : null,
+        publication && typeof publication === TYPEOF.OBJECT ?
+          Object.freeze({...publication}) :
+          null,
       membershipPublication:
-        membershipPublication && typeof membershipPublication === TYPEOF.OBJECT
-          ? Object.freeze({ ...membershipPublication })
-          : null,
+        membershipPublication && typeof membershipPublication === TYPEOF.OBJECT ?
+          Object.freeze({...membershipPublication}) :
+          null,
       recentTransitions: this.getReadinessTransitionHistory(nodeId),
     });
   }
@@ -292,9 +216,9 @@ class ControlPlaneReadinessServiceSegment2 extends ControlPlaneReadinessServiceS
       watermark.connectionState = nodeEvidence.rowConnectionState;
     }
 
-    return Object.keys(watermark).length > NUM.ZERO
-      ? Object.freeze(watermark)
-      : null;
+    return Object.keys(watermark).length > NUM.ZERO ?
+      Object.freeze(watermark) :
+      null;
   }
 
   /**
@@ -377,9 +301,9 @@ class ControlPlaneReadinessServiceSegment2 extends ControlPlaneReadinessServiceS
    */
   resolveReadinessDecisionDimension(options = {}) {
     return typeof options.decisionDimension === TYPEOF.STRING &&
-      options.decisionDimension.length > NUM.ZERO
-      ? options.decisionDimension
-      : CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE;
+      options.decisionDimension.length > NUM.ZERO ?
+      options.decisionDimension :
+      CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE;
   }
 
   /**
@@ -461,7 +385,7 @@ class ControlPlaneReadinessServiceSegment2 extends ControlPlaneReadinessServiceS
         Object.freeze({
           ...currentEpoch,
           events: Object.freeze(
-            currentEpoch.events.map((event) => Object.freeze({ ...event })),
+            currentEpoch.events.map((event) => Object.freeze({...event})),
           ),
         }),
       );
@@ -481,18 +405,18 @@ class ControlPlaneReadinessServiceSegment2 extends ControlPlaneReadinessServiceS
    */
   buildRecoveryEpochSummary(nodeId, snapshot, observedAtMs) {
     const dimensions =
-      snapshot?.dimensions && typeof snapshot.dimensions === TYPEOF.OBJECT
-        ? snapshot.dimensions
-        : {};
-    const reasonCodes = Array.isArray(snapshot?.reasons)
-      ? [
-          ...new Set(
-            snapshot.reasons
-              .map((reason) => String(reason?.code || ""))
-              .filter(Boolean),
-          ),
-        ]
-      : [];
+      snapshot?.dimensions && typeof snapshot.dimensions === TYPEOF.OBJECT ?
+        snapshot.dimensions :
+        {};
+    const reasonCodes = Array.isArray(snapshot?.reasons) ?
+      [
+        ...new Set(
+          snapshot.reasons
+            .map((reason) => String(reason?.code || ''))
+            .filter(Boolean),
+        ),
+      ] :
+      [];
     return Object.freeze({
       nodeId,
       observedAt: snapshot?.observedAt || normalizeIsoTimestamp(observedAtMs),
@@ -522,9 +446,9 @@ class ControlPlaneReadinessServiceSegment2 extends ControlPlaneReadinessServiceS
         snapshot?.priorityControlPlaneRecovery?.active === true,
       priorityControlPlaneRecoveryReasonCodes: Array.isArray(
         snapshot?.priorityControlPlaneRecovery?.reasonCodes,
-      )
-        ? Object.freeze([...snapshot.priorityControlPlaneRecovery.reasonCodes])
-        : Object.freeze([]),
+      ) ?
+        Object.freeze([...snapshot.priorityControlPlaneRecovery.reasonCodes]) :
+        Object.freeze([]),
       reasonCodes: Object.freeze(reasonCodes),
       recoveryActive: !(
         dimensions[
@@ -551,18 +475,18 @@ class ControlPlaneReadinessServiceSegment2 extends ControlPlaneReadinessServiceS
       nodeId,
       history,
     ] of this.recoveryEpochHistoryByNodeId.entries()) {
-      entries[nodeId] = Array.isArray(history)
-        ? history.map((epoch) =>
-            Object.freeze({
-              ...epoch,
-              events: Object.freeze(
-                (Array.isArray(epoch.events) ? epoch.events : []).map((event) =>
-                  Object.freeze({ ...event }),
-                ),
+      entries[nodeId] = Array.isArray(history) ?
+        history.map((epoch) =>
+          Object.freeze({
+            ...epoch,
+            events: Object.freeze(
+              (Array.isArray(epoch.events) ? epoch.events : []).map((event) =>
+                Object.freeze({...event}),
               ),
-            }),
-          )
-        : [];
+            ),
+          }),
+        ) :
+        [];
     }
     for (const [nodeId, epoch] of this.currentRecoveryEpochByNodeId.entries()) {
       entries[nodeId] = Object.freeze([
@@ -571,7 +495,7 @@ class ControlPlaneReadinessServiceSegment2 extends ControlPlaneReadinessServiceS
           ...epoch,
           events: Object.freeze(
             (Array.isArray(epoch.events) ? epoch.events : []).map((event) =>
-              Object.freeze({ ...event }),
+              Object.freeze({...event}),
             ),
           ),
         }),
@@ -589,12 +513,12 @@ class ControlPlaneReadinessServiceSegment2 extends ControlPlaneReadinessServiceS
    */
   buildReadinessEvaluationKey(nodeId, options = {}) {
     return (
-      String(nodeId || "") +
-      "::refresh=" +
+      String(nodeId || '') +
+      '::refresh=' +
       String(options.allowAuthoritativeRefresh === true) +
-      "::stale=" +
+      '::stale=' +
       String(options.allowStaleOnCacheChange === true) +
-      "::planning=" +
+      '::planning=' +
       this.resolveMembershipPublicationPlanningSource(options)
     );
   }
@@ -627,7 +551,7 @@ class ControlPlaneReadinessServiceSegment2 extends ControlPlaneReadinessServiceS
     if (tableName !== TABLES.NODES && tableName !== TABLES.SERVICES) {
       return;
     }
-    const nodeId = String(record?.[COLUMN.NODE_ID] ?? record?.node_id ?? "");
+    const nodeId = String(record?.[COLUMN.NODE_ID] ?? record?.node_id ?? '');
     if (!nodeId) {
       return;
     }
@@ -652,9 +576,9 @@ class ControlPlaneReadinessServiceSegment2 extends ControlPlaneReadinessServiceS
     if (!Number.isFinite(invalidatedAtMs) || invalidatedAtMs <= NUM.ZERO) {
       return false;
     }
-    const snapshotAtMs = Number.isFinite(capturedAtMs)
-      ? capturedAtMs
-      : Number(this.lastReadinessSnapshotAtMsByNodeId.get(nodeId));
+    const snapshotAtMs = Number.isFinite(capturedAtMs) ?
+      capturedAtMs :
+      Number(this.lastReadinessSnapshotAtMsByNodeId.get(nodeId));
     if (!Number.isFinite(snapshotAtMs) || snapshotAtMs <= NUM.ZERO) {
       return true;
     }
@@ -674,7 +598,7 @@ class ControlPlaneReadinessServiceSegment2 extends ControlPlaneReadinessServiceS
     }
     const evaluationKey = this.buildReadinessEvaluationKey(nodeId, options);
     this.readinessEvaluationLane
-      .run({ ownerKey: evaluationKey }, async () =>
+      .run({ownerKey: evaluationKey}, async () =>
         this.evaluateNodeReadiness(nodeId, options),
       )
       .catch((_error) => null);
@@ -716,9 +640,9 @@ class ControlPlaneReadinessServiceSegment2 extends ControlPlaneReadinessServiceS
     try {
       const diagnostics =
         this.heartbeatService.getHeartbeatPublicationDiagnostics();
-      return diagnostics && typeof diagnostics === TYPEOF.OBJECT
-        ? diagnostics
-        : null;
+      return diagnostics && typeof diagnostics === TYPEOF.OBJECT ?
+        diagnostics :
+        null;
     } catch (_error) {
       return null;
     }
@@ -728,9 +652,9 @@ class ControlPlaneReadinessServiceSegment2 extends ControlPlaneReadinessServiceS
     const publicationMode =
       this.heartbeatService?.lastHeartbeatPublicationDecision?.publicationMode;
     return typeof publicationMode === TYPEOF.STRING &&
-      publicationMode.length > NUM.ZERO
-      ? publicationMode
-      : null;
+      publicationMode.length > NUM.ZERO ?
+      publicationMode :
+      null;
   }
 
   /**
@@ -746,7 +670,7 @@ class ControlPlaneReadinessServiceSegment2 extends ControlPlaneReadinessServiceS
     }
 
     const diagnostics = this.getHeartbeatPublicationDiagnostics();
-    if (!diagnostics || diagnostics.publicationPath !== "node_state_reporter") {
+    if (!diagnostics || diagnostics.publicationPath !== 'node_state_reporter') {
       return false;
     }
 
@@ -810,7 +734,7 @@ class ControlPlaneReadinessServiceSegment2 extends ControlPlaneReadinessServiceS
       return false;
     }
 
-    if (String(diagnostics?.lastFailureStage || "") !== "attempt_timeout") {
+    if (String(diagnostics?.lastFailureStage || '') !== 'attempt_timeout') {
       return false;
     }
 
@@ -835,7 +759,7 @@ class ControlPlaneReadinessServiceSegment2 extends ControlPlaneReadinessServiceS
     if (!this.loggedMissingPublicationOwner) {
       this.loggedMissingPublicationOwner = true;
       this.logMissingOwner(
-        "ControlPlaneReadinessService missing CDC publication owner",
+        'ControlPlaneReadinessService missing CDC publication owner',
         CONTROL_PLANE_READINESS_OWNER.CDC_GROUP_PROPAGATION,
       );
     }
@@ -846,7 +770,7 @@ class ControlPlaneReadinessServiceSegment2 extends ControlPlaneReadinessServiceS
 
     return Object.freeze({
       currentMode: CONTROL_PLANE_PUBLICATION_MODE.REPAIR_ONLY,
-      reasonCode: "publication_owner_unavailable",
+      reasonCode: 'publication_owner_unavailable',
       enteredAt: observedAt,
       recentTransitions: Object.freeze([]),
     });
@@ -864,9 +788,9 @@ class ControlPlaneReadinessServiceSegment2 extends ControlPlaneReadinessServiceS
   buildServeAdmissionSnapshot(context = {}) {
     const runtimeAuthority =
       context?.runtimeAuthority &&
-      typeof context.runtimeAuthority === TYPEOF.OBJECT
-        ? context.runtimeAuthority
-        : this.buildRuntimeAuthoritySnapshot(context);
+      typeof context.runtimeAuthority === TYPEOF.OBJECT ?
+        context.runtimeAuthority :
+        this.buildRuntimeAuthoritySnapshot(context);
     const membershipPublicationPlanningSnapshot =
       this.resolveMembershipPublicationPlanningSnapshot(context);
     const priorityRecoveryActive =
@@ -888,18 +812,18 @@ class ControlPlaneReadinessServiceSegment2 extends ControlPlaneReadinessServiceS
       evidence.loadReady &&
       evidence.transportNotExplicitlyNegative &&
       evidence.serveEligibleControlPlaneService;
-    const state = priorityRecoveryActive
-      ? SERVE_ADMISSION_STATE.BLOCKED_PRIORITY_RECOVERY
-      : runtimeServeEligible
-        ? SERVE_ADMISSION_STATE.ADMITTED
-        : SERVE_ADMISSION_STATE.BLOCKED_RUNTIME;
+    const state = priorityRecoveryActive ?
+      SERVE_ADMISSION_STATE.BLOCKED_PRIORITY_RECOVERY :
+      runtimeServeEligible ?
+        SERVE_ADMISSION_STATE.ADMITTED :
+        SERVE_ADMISSION_STATE.BLOCKED_RUNTIME;
     const reasonCodes =
-      state === SERVE_ADMISSION_STATE.BLOCKED_PRIORITY_RECOVERY
-        ? Object.freeze([
-            CONTROL_PLANE_READINESS_REASON
-              .PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
-          ])
-        : Object.freeze([]);
+      state === SERVE_ADMISSION_STATE.BLOCKED_PRIORITY_RECOVERY ?
+        Object.freeze([
+          CONTROL_PLANE_READINESS_REASON
+            .PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
+        ]) :
+        Object.freeze([]);
 
     return Object.freeze({
       state,
@@ -918,9 +842,9 @@ class ControlPlaneReadinessServiceSegment2 extends ControlPlaneReadinessServiceS
   buildDimensions(context) {
     const runtimeAuthority =
       context?.runtimeAuthority &&
-      typeof context.runtimeAuthority === TYPEOF.OBJECT
-        ? context.runtimeAuthority
-        : this.buildRuntimeAuthoritySnapshot(context);
+      typeof context.runtimeAuthority === TYPEOF.OBJECT ?
+        context.runtimeAuthority :
+        this.buildRuntimeAuthoritySnapshot(context);
     const serveEligibleControlPlaneService =
       this.hasServeEligibleControlPlaneService(context.serviceRows);
     const loadReady = this.isLoadReady(context.nodeRow);
@@ -1016,9 +940,9 @@ class ControlPlaneReadinessServiceSegment2 extends ControlPlaneReadinessServiceS
     const providedPublicationRecoveryGate =
       membershipPublicationPlanningSnapshot.publicationRecoveryGate &&
       typeof membershipPublicationPlanningSnapshot.publicationRecoveryGate ===
-        TYPEOF.OBJECT
-        ? membershipPublicationPlanningSnapshot.publicationRecoveryGate
-        : null;
+        TYPEOF.OBJECT ?
+        membershipPublicationPlanningSnapshot.publicationRecoveryGate :
+        null;
     const publicationRecoveryGate = buildPublicationRecoveryGateSnapshot({
       ...(providedPublicationRecoveryGate || {}),
       publicationEpoch:
@@ -1041,9 +965,9 @@ class ControlPlaneReadinessServiceSegment2 extends ControlPlaneReadinessServiceS
       priorityRecoveryReasonCodes:
         Array.isArray(
           membershipPublicationPlanningSnapshot.priorityRecoveryReasonCodes,
-        )
-          ? membershipPublicationPlanningSnapshot.priorityRecoveryReasonCodes
-          : providedPublicationRecoveryGate?.reasonCodes,
+        ) ?
+          membershipPublicationPlanningSnapshot.priorityRecoveryReasonCodes :
+          providedPublicationRecoveryGate?.reasonCodes,
       priorityPartitionSummary:
         membershipPublicationPlanningSnapshot.priorityPartitionSummary ??
         providedPublicationRecoveryGate?.priorityPartitionSummary ??
@@ -1083,12 +1007,12 @@ class ControlPlaneReadinessServiceSegment2 extends ControlPlaneReadinessServiceS
    */
   shouldAllowTransportBackedRecoveryGrace(context = {}) {
     const nodeEvidence =
-      context.nodeEvidence && typeof context.nodeEvidence === TYPEOF.OBJECT
-        ? context.nodeEvidence
-        : null;
-    const serviceRows = Array.isArray(context.serviceRows)
-      ? context.serviceRows
-      : [];
+      context.nodeEvidence && typeof context.nodeEvidence === TYPEOF.OBJECT ?
+        context.nodeEvidence :
+        null;
+    const serviceRows = Array.isArray(context.serviceRows) ?
+      context.serviceRows :
+      [];
     if (nodeEvidence?.transportConnected !== true) {
       return false;
     }
@@ -1100,14 +1024,14 @@ class ControlPlaneReadinessServiceSegment2 extends ControlPlaneReadinessServiceS
 
   resolveProvisioningEligibility(context = {}) {
     const state =
-      context.processAlive !== true
-        ? PROVISIONING_ELIGIBILITY_STATE.BLOCKED
-        : context.repairEligible === true
-          ? PROVISIONING_ELIGIBILITY_STATE.STEADY
-          : context.controlPlaneRecoveryEligible === true &&
-              this.isProvisioningConvergenceGraceActive(context)
-            ? PROVISIONING_ELIGIBILITY_STATE.CONVERGENCE_GRACE
-            : PROVISIONING_ELIGIBILITY_STATE.BLOCKED;
+      context.processAlive !== true ?
+        PROVISIONING_ELIGIBILITY_STATE.BLOCKED :
+        context.repairEligible === true ?
+          PROVISIONING_ELIGIBILITY_STATE.STEADY :
+          context.controlPlaneRecoveryEligible === true &&
+              this.isProvisioningConvergenceGraceActive(context) ?
+            PROVISIONING_ELIGIBILITY_STATE.CONVERGENCE_GRACE :
+            PROVISIONING_ELIGIBILITY_STATE.BLOCKED;
     return Object.freeze({
       state,
       eligible: state !== PROVISIONING_ELIGIBILITY_STATE.BLOCKED,
@@ -1152,7 +1076,7 @@ class ControlPlaneReadinessServiceSegment2 extends ControlPlaneReadinessServiceS
       return true;
     }
     return (
-      String(membershipPublication.status || "").toUpperCase() ===
+      String(membershipPublication.status || '').toUpperCase() ===
       CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED
     );
   }
@@ -1165,4 +1089,4 @@ class ControlPlaneReadinessServiceSegment2 extends ControlPlaneReadinessServiceS
    */
 }
 
-export { ControlPlaneReadinessServiceSegment2 };
+export {ControlPlaneReadinessServiceSegment2};

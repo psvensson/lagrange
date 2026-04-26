@@ -24,9 +24,9 @@ test('resolvePackagedRuntimeFile prefers SEA executable sibling bundle', async (
   });
 
   t.equal(
-      resolved,
-      path.join(execDir, 'service-worker.bundle.cjs'),
-      'should prefer executable-adjacent bundle',
+    resolved,
+    path.join(execDir, 'service-worker.bundle.cjs'),
+    'should prefer executable-adjacent bundle',
   );
 
   fs.rmSync(tempRoot, {recursive: true, force: true});
@@ -47,9 +47,9 @@ test('resolvePackagedRuntimeFile falls back to source sibling when no bundle exi
   });
 
   t.equal(
-      resolved,
-      path.join(moduleDir, 'replica-worker.js'),
-      'should fall back to source sibling',
+    resolved,
+    path.join(moduleDir, 'replica-worker.js'),
+    'should fall back to source sibling',
   );
 
   fs.rmSync(tempRoot, {recursive: true, force: true});

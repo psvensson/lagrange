@@ -1,49 +1,20 @@
-import { SQL_QUERY_ENGINE_SHARED } from "./sql-query-engine-shared.js";
+import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
 
 const {
-  ACTIVE_PARTITION_STATE,
   ADAPTER_ERROR_MSG,
   ADAPTER_LOG_MSG,
-  AddressManager,
-  AuthoritativeControlPlaneView,
-  BACKGROUND_SYSTEM_TABLE_DELIVERY_PRIORITY_TABLES,
-  BOOTSTRAP_ROUTING_OVERLAY_ENTRY_STATE,
-  BOOTSTRAP_ROUTING_OVERLAY_INSTALL_STATE,
-  BOOTSTRAP_ROUTING_OVERLAY_NO_EXPIRY_MS,
-  BOOTSTRAP_ROUTING_OVERLAY_PARTITION_STATE,
-  BOOTSTRAP_ROUTING_OVERLAY_REASON,
-  BOOTSTRAP_ROUTING_OVERLAY_RETENTION_MODE,
-  BOOTSTRAP_ROUTING_OVERLAY_REUSE_STATE,
-  BudgetEnforcer,
   CALLBACK_RUNTIME_KIND,
   CODE_LOOKUP_BY_FUNCTION_ID_SQL,
   CODE_LOOKUP_BY_FUNCTION_NAME_SQL,
-  COLUMN,
-  CONNECTION_STATE_CONNECTED,
-  CONNECTION_STATE_READY,
-  CONTROL_PLANE_MUTATION_MERGE_POLICY,
-  CONTROL_PLANE_MUTATION_OPERATION,
-  CONTROL_PLANE_MUTATION_WORK_CLASS,
   CONTROL_PLANE_READINESS_DIMENSION,
   CallbackExecutionHost,
-  CancellationToken,
   ConfigurationManager,
-  DEFAULT_CODE_VERSION,
-  DEFAULT_PARTITION_VERSION,
-  DEFAULT_SNAPSHOT_MODE,
-  DUAL_WRITE_ACTIVE_STATUSES,
   DistributedQueryPlanner,
   DistributedTransactionCoordinator,
   DistributedWriteCoordinator,
-  ENTITY_TYPE,
   EXECUTION_MODE,
-  EXPLAIN_DISTRIBUTED_PREFIX_REGEX,
-  ExecutionContext,
-  LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY,
-  LineageTracker,
   LoggingService,
   METRICS_LOG_TAG,
-  MIGRATION_STATUS,
   MODULE_MANIFEST_LOOKUP_BY_ARTIFACT_POINTER_SQL,
   ManagedSplitTopologyAdapter,
   ManagedSplitWorkflow,
@@ -52,85 +23,25 @@ const {
   NATIVE_CALLBACK_EXPORTS_ARG,
   NATIVE_CALLBACK_MODULE_ARG,
   NATIVE_CALLBACK_RETURN_LINE,
-  NUM,
-  OPERATION_METADATA_KEY,
-  OWNER_CONTRACT_NEXT_ACTION,
-  OWNER_CONTRACT_STATE,
-  OperationType,
-  PARTITION_SERVICE_MESSAGE_TYPE,
-  PARTITION_SPLIT_MIRROR_ORIGIN,
-  PARTITION_TRANSITION_METADATA_FIELD,
-  PARTITION_TRANSITION_STATE,
-  PRESSURE_GOVERNOR_ACTION,
   PRESSURE_WORK_CLASS,
-  PROVISIONING_REJECTION_DETAIL_LIMIT,
-  PROVISIONING_REJECTION_REASON_UNKNOWN,
-  PROVISIONING_REJECTION_SUMMARY_NONE,
   PartitionCallbackDispatcher,
   PartitionResolver,
-  PressureGovernor,
-  QUERY_AST_TYPE,
   QUERY_CONFIG_KEY,
   QUERY_DEFAULTS,
-  QUERY_ERROR_CODE,
-  QUERY_ERROR_MSG,
   QUERY_LOG_MSG,
   QUERY_OPERATION,
   QUERY_SESSION,
   QUERY_SUBSYSTEM,
   QueryExecutor,
-  RETRYABLE_CONTROL_PLANE_MUTATION_DEFER_STATE,
-  RETRYABLE_CONTROL_PLANE_TIMEOUT_CLASSIFICATIONS,
-  ReplicaOperationField,
-  SERVICE_TYPE,
-  SQLParser,
   SQL_PARSE_CACHE,
-  STATE,
-  STATUS_ACTIVE,
-  STORAGE_CAPACITY_CONFIG_KEY,
-  STORAGE_CAPACITY_DEFAULT,
-  SYSTEM_TABLE_NAME,
   SqlParseCache,
-  TABLES,
-  TABLE_PARTITION_ADMISSION_CONVERGENCE_WAIT_MS,
-  TABLE_PARTITION_TARGET_NODE_CONVERGENCE_REASON,
-  TABLE_PARTITION_TARGET_NODE_WAIT,
-  TIMEOUT_BUDGET_CLASSIFICATION,
-  TIMEOUT_BUDGET_DEFAULT,
   TableCreationService,
   TimeoutPolicy,
-  WRITE_ACTIVITY_SPLIT_EVALUATION_MIN_INTERVAL_MS,
-  WRITE_OPERATION_STATUS,
-  WRITE_TRACKING_EXCLUDED_TABLES,
   ZERO_SHA256_DIGEST,
-  buildBootstrapRoutingOverlayEntry,
-  buildBootstrapRoutingOverlayEntryState,
-  buildLocalControlPlaneMutationReadinessFailure,
-  buildOwnerContractOutcome,
-  buildPressureAdmissionFailure,
-  buildSystemTableMutationRoutingGapFailure,
   createCallbackDriverRegistry,
   createControlPlaneRuntimeBundle,
   createEmptyTransactionRecoveryReplaySummary,
-  createHash,
-  createTimeoutBudgetError,
-  executePlan,
-  executeStage,
-  getLocalControlPlaneMutationReadinessBlocker,
-  getRemainingBudgetMs,
-  getSchemaByTableName,
-  getSystemTableMutationRoutingGapBlocker,
-  hasActiveAddressedPartitionService,
-  isNodeRecordReady,
-  isPriorityControlPlanePartition,
-  isRetryableControlPlaneError,
-  isRetryableManagedSplitTransition,
   isSqlRequest,
-  normalizeControlPlaneMutationWorkClass,
-  parseCallbackModuleArtifact,
-  reorderParams,
-  resolveBootstrapLeaderSelection,
-  resolveRetryableControlPlaneMutationDeferState,
 } = SQL_QUERY_ENGINE_SHARED;
 
 class SQLQueryEngineSegment1 {
@@ -184,24 +95,24 @@ class SQLQueryEngineSegment1 {
     this.controlPlaneTimeoutPolicy =
       options.controlPlaneTimeoutPolicy ||
       new TimeoutPolicy({
-        operationName: "sql_control_plane",
+        operationName: 'sql_control_plane',
         now: this.nowFn,
       });
     this.tablePartitionProvisioningTimeoutMs =
       Number.isFinite(options.tablePartitionProvisioningTimeoutMs) &&
-      options.tablePartitionProvisioningTimeoutMs > 0
-        ? Math.floor(options.tablePartitionProvisioningTimeoutMs)
-        : QUERY_DEFAULTS.TABLE_CREATE_PROVISION_TIMEOUT_MS;
+      options.tablePartitionProvisioningTimeoutMs > 0 ?
+        Math.floor(options.tablePartitionProvisioningTimeoutMs) :
+        QUERY_DEFAULTS.TABLE_CREATE_PROVISION_TIMEOUT_MS;
     this.tablePartitionProvisioningPollIntervalMs =
       Number.isFinite(options.tablePartitionProvisioningPollIntervalMs) &&
-      options.tablePartitionProvisioningPollIntervalMs > 0
-        ? Math.floor(options.tablePartitionProvisioningPollIntervalMs)
-        : QUERY_DEFAULTS.TABLE_CREATE_PROVISION_POLL_INTERVAL_MS;
+      options.tablePartitionProvisioningPollIntervalMs > 0 ?
+        Math.floor(options.tablePartitionProvisioningPollIntervalMs) :
+        QUERY_DEFAULTS.TABLE_CREATE_PROVISION_POLL_INTERVAL_MS;
     this.tablePartitionTargetNodeConvergenceTimeoutMs =
       Number.isFinite(options.tablePartitionTargetNodeConvergenceTimeoutMs) &&
-      options.tablePartitionTargetNodeConvergenceTimeoutMs > 0
-        ? Math.floor(options.tablePartitionTargetNodeConvergenceTimeoutMs)
-        : QUERY_DEFAULTS.TABLE_CREATE_TARGET_NODE_CONVERGENCE_TIMEOUT_MS;
+      options.tablePartitionTargetNodeConvergenceTimeoutMs > 0 ?
+        Math.floor(options.tablePartitionTargetNodeConvergenceTimeoutMs) :
+        QUERY_DEFAULTS.TABLE_CREATE_TARGET_NODE_CONVERGENCE_TIMEOUT_MS;
 
     this.partitionResolver = new PartitionResolver({
       systemCache: this.systemCache,
@@ -249,7 +160,7 @@ class SQLQueryEngineSegment1 {
             sessionId,
             partitionId,
             QUERY_OPERATION.BEGIN,
-            { transactionEpoch },
+            {transactionEpoch},
           ),
         prepareParticipant: async (sessionId, partitionId) =>
           this.deliverTransactionOperation(
@@ -285,11 +196,11 @@ class SQLQueryEngineSegment1 {
     this.managedSplitWorkflow = options.managedSplitWorkflow || null;
 
     const tablePartitionProvisioner =
-      typeof options.tablePartitionProvisioner === "function"
-        ? options.tablePartitionProvisioner
-        : this.rebalanceCoordinator
-          ? (context) => this.provisionInitialTablePartition(context)
-          : null;
+      typeof options.tablePartitionProvisioner === 'function' ?
+        options.tablePartitionProvisioner :
+        this.rebalanceCoordinator ?
+          (context) => this.provisionInitialTablePartition(context) :
+          null;
     this.partitionSplitMergeManager =
       options.partitionSplitMergeManager || null;
     this.tableCreationService = new TableCreationService({
@@ -303,7 +214,7 @@ class SQLQueryEngineSegment1 {
     });
 
     this.partitionCallbackDispatcher = new PartitionCallbackDispatcher({
-      sqlParser: { parse: (sql) => this.parse(sql) },
+      sqlParser: {parse: (sql) => this.parse(sql)},
       partitionResolver: this.partitionResolver,
       queryExecutor: this.queryExecutor,
       getTablePartitions: (name) => this.getTablePartitions(name),
@@ -445,7 +356,7 @@ class SQLQueryEngineSegment1 {
     }
     this.recoverDistributedTransactionStateFromCache();
     const replayPromise = this.resumeRecoveredDistributedTransactions();
-    if (typeof this.transactionCoordinator.startRecoverySweep === "function") {
+    if (typeof this.transactionCoordinator.startRecoverySweep === 'function') {
       this.transactionCoordinator.startRecoverySweep();
     }
     return replayPromise;
@@ -559,13 +470,13 @@ class SQLQueryEngineSegment1 {
   async shutdown() {
     if (
       this.transactionCoordinator &&
-      typeof this.transactionCoordinator.stopRecoverySweep === "function"
+      typeof this.transactionCoordinator.stopRecoverySweep === 'function'
     ) {
       this.transactionCoordinator.stopRecoverySweep();
     }
     if (
       this.tableCreationService &&
-      typeof this.tableCreationService.shutdown === "function"
+      typeof this.tableCreationService.shutdown === 'function'
     ) {
       await this.tableCreationService.shutdown();
     }
@@ -600,12 +511,12 @@ class SQLQueryEngineSegment1 {
    * @private
    */
   _wireQueryExecutorFactory(lifecycle) {
-    if (!lifecycle || typeof lifecycle.setQueryExecutorFactory !== "function") {
+    if (!lifecycle || typeof lifecycle.setQueryExecutorFactory !== 'function') {
       return;
     }
     lifecycle.setQueryExecutorFactory(
       (serviceId) => async (sql, params) =>
-        this.executeQuery(sql, params, { sessionId: serviceId }),
+        this.executeQuery(sql, params, {sessionId: serviceId}),
     );
   }
 
@@ -649,7 +560,7 @@ class SQLQueryEngineSegment1 {
       throw new Error(ADAPTER_ERROR_MSG.INVALID_SQL_REQUEST);
     }
 
-    const { executionMode, statement, parameters, sessionId } = sqlRequest;
+    const {executionMode, statement, parameters, sessionId} = sqlRequest;
 
     this.logger.debug(ADAPTER_LOG_MSG.EXECUTE_REQUEST_START, {
       executionMode,
@@ -662,32 +573,32 @@ class SQLQueryEngineSegment1 {
       let result;
 
       switch (executionMode) {
-        case EXECUTION_MODE.SQL_STATEMENT:
-          result = await this.executeQuery(statement, parameters, {
-            sessionId,
-            dialect: sqlRequest.dialect,
-            timeoutMs: sqlRequest.timeoutMs,
-            timeoutBudget: sqlRequest.timeoutBudget,
-            cancellationToken: sqlRequest.cancellationToken || null,
-          });
-          break;
+      case EXECUTION_MODE.SQL_STATEMENT:
+        result = await this.executeQuery(statement, parameters, {
+          sessionId,
+          dialect: sqlRequest.dialect,
+          timeoutMs: sqlRequest.timeoutMs,
+          timeoutBudget: sqlRequest.timeoutBudget,
+          cancellationToken: sqlRequest.cancellationToken || null,
+        });
+        break;
 
-        case EXECUTION_MODE.PARTITION_CALLBACK:
-          result = await this.executePartitionCallback(sqlRequest);
-          break;
+      case EXECUTION_MODE.PARTITION_CALLBACK:
+        result = await this.executePartitionCallback(sqlRequest);
+        break;
 
-        case EXECUTION_MODE.STAGE:
-          result = await this.executeStageRequest(sqlRequest);
-          break;
+      case EXECUTION_MODE.STAGE:
+        result = await this.executeStageRequest(sqlRequest);
+        break;
 
-        case EXECUTION_MODE.PLAN:
-          result = await this.executePlanRequest(sqlRequest);
-          break;
+      case EXECUTION_MODE.PLAN:
+        result = await this.executePlanRequest(sqlRequest);
+        break;
 
-        default:
-          throw new Error(
-            `${ADAPTER_ERROR_MSG.UNSUPPORTED_EXECUTION_MODE}${executionMode}`,
-          );
+      default:
+        throw new Error(
+          `${ADAPTER_ERROR_MSG.UNSUPPORTED_EXECUTION_MODE}${executionMode}`,
+        );
       }
 
       this.logger.debug(ADAPTER_LOG_MSG.EXECUTE_REQUEST_COMPLETE, {
@@ -806,7 +717,7 @@ class SQLQueryEngineSegment1 {
         ociFeatureGateEnabled: Boolean(sqlRequest.ociFeatureGateEnabled),
       });
     if (
-      typeof callbackRuntimeRegistry.hasRuntimeDriverRegistry !== "function" ||
+      typeof callbackRuntimeRegistry.hasRuntimeDriverRegistry !== 'function' ||
       !callbackRuntimeRegistry.hasRuntimeDriverRegistry()
     ) {
       throw new Error(ADAPTER_ERROR_MSG.CALLBACK_RUNTIME_REGISTRY_REQUIRED);
@@ -839,7 +750,7 @@ class SQLQueryEngineSegment1 {
     });
 
     this.logger.debug(ADAPTER_LOG_MSG.PARTITION_CALLBACK_COMPLETE, {
-      success: hostResult.state === "completed",
+      success: hostResult.state === 'completed',
       batchCount: dispatchResult.batches.length,
       processedPartitions: hostResult.processedPartitions,
       callbackModuleRef,
@@ -848,7 +759,7 @@ class SQLQueryEngineSegment1 {
 
     return {
       success:
-        hostResult.state === "completed" || hostResult.state === "failed",
+        hostResult.state === 'completed' || hostResult.state === 'failed',
       batches: dispatchResult.batches,
       callbackModuleRef,
       callbackExport,
@@ -869,7 +780,7 @@ class SQLQueryEngineSegment1 {
    * @private
    */
   async resolvePartitionCallbackHandler(sqlRequest, executionContext) {
-    if (typeof sqlRequest.handler === "function") {
+    if (typeof sqlRequest.handler === 'function') {
       return sqlRequest.handler;
     }
     if (sqlRequest.runtimeKind !== CALLBACK_RUNTIME_KIND.NATIVE_JS) {
@@ -915,7 +826,7 @@ class SQLQueryEngineSegment1 {
     }
 
     const source = codeRow.code_blob;
-    if (typeof source !== "string" || !source.trim()) {
+    if (typeof source !== 'string' || !source.trim()) {
       throw new Error(ADAPTER_ERROR_MSG.NATIVE_CALLBACK_SOURCE_INVALID);
     }
     const compiledExports = this.compileCallbackModuleSource(
@@ -923,7 +834,7 @@ class SQLQueryEngineSegment1 {
       ADAPTER_ERROR_MSG.NATIVE_CALLBACK_COMPILE_FAILED,
     );
     const rawHandler = compiledExports ? compiledExports[callbackExport] : null;
-    if (typeof rawHandler !== "function") {
+    if (typeof rawHandler !== 'function') {
       throw new Error(
         `${ADAPTER_ERROR_MSG.NATIVE_CALLBACK_EXPORT_NOT_FOUND}: ` +
           callbackExport,
@@ -946,7 +857,7 @@ class SQLQueryEngineSegment1 {
     const byFunctionId = await this.executeQuery(
       CODE_LOOKUP_BY_FUNCTION_ID_SQL,
       [callbackModuleRef],
-      { sessionId },
+      {sessionId},
     );
     if (byFunctionId.rows?.[0]) {
       return byFunctionId.rows[0];
@@ -955,7 +866,7 @@ class SQLQueryEngineSegment1 {
     const byFunctionName = await this.executeQuery(
       CODE_LOOKUP_BY_FUNCTION_NAME_SQL,
       [callbackModuleRef],
-      { sessionId },
+      {sessionId},
     );
     return byFunctionName.rows?.[0] || null;
   }
@@ -969,7 +880,7 @@ class SQLQueryEngineSegment1 {
    * @private
    */
   compileCallbackModuleSource(source, compileErrorPrefix) {
-    const module = { exports: {} };
+    const module = {exports: {}};
     let evaluated = null;
     try {
       const moduleFactory = new Function(
@@ -984,9 +895,9 @@ class SQLQueryEngineSegment1 {
       throw compileError;
     }
 
-    return evaluated && typeof evaluated === "object"
-      ? evaluated
-      : module.exports;
+    return evaluated && typeof evaluated === 'object' ?
+      evaluated :
+      module.exports;
   }
 
   /**
@@ -1001,7 +912,7 @@ class SQLQueryEngineSegment1 {
     const manifestLookup = await this.executeQuery(
       MODULE_MANIFEST_LOOKUP_BY_ARTIFACT_POINTER_SQL,
       [callbackModuleRef],
-      { sessionId },
+      {sessionId},
     );
     return manifestLookup.rows?.[0] || null;
   }
@@ -1016,16 +927,16 @@ class SQLQueryEngineSegment1 {
    */
   parseJsonArrayField(rawValue, fallback) {
     if (Array.isArray(rawValue)) {
-      return rawValue.filter((entry) => typeof entry === "string");
+      return rawValue.filter((entry) => typeof entry === 'string');
     }
-    if (typeof rawValue !== "string" || !rawValue.trim()) {
+    if (typeof rawValue !== 'string' || !rawValue.trim()) {
       return fallback;
     }
     try {
       const parsed = JSON.parse(rawValue);
-      return Array.isArray(parsed)
-        ? parsed.filter((entry) => typeof entry === "string")
-        : fallback;
+      return Array.isArray(parsed) ?
+        parsed.filter((entry) => typeof entry === 'string') :
+        fallback;
     } catch (_parseErr) {
       return fallback;
     }
@@ -1044,14 +955,14 @@ class SQLQueryEngineSegment1 {
     const declaredExports = this.parseJsonArrayField(manifestRow?.exports, [
       runExport,
     ]);
-    const exportsWithRun = declaredExports.includes(runExport)
-      ? declaredExports
-      : [...declaredExports, runExport];
+    const exportsWithRun = declaredExports.includes(runExport) ?
+      declaredExports :
+      [...declaredExports, runExport];
 
     return {
-      namespace: manifestRow?.namespace || "examples",
+      namespace: manifestRow?.namespace || 'examples',
       name: manifestRow?.name || callbackModuleRef,
-      version: String(manifestRow?.version || "1.0.0"),
+      version: String(manifestRow?.version || '1.0.0'),
       digest: manifestRow?.digest || ZERO_SHA256_DIGEST,
       runExport,
       exports: exportsWithRun,
@@ -1072,4 +983,4 @@ class SQLQueryEngineSegment1 {
    */
 }
 
-export { SQLQueryEngineSegment1 };
+export {SQLQueryEngineSegment1};

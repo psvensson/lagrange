@@ -7,7 +7,6 @@ import {describe, it} from 'node:test';
 import assert from 'node:assert/strict';
 import {
   translateFunctionCall,
-  PG_FUNCTION_MAP,
 } from '../../src/query/pg/pg-function-registry.js';
 import {EXPR_TYPE} from '../../src/query/sql-parser.js';
 import {
@@ -62,7 +61,7 @@ describe('pg-function-registry unit tests', () => {
     it('SUBSTRING(str, start, len) produces substr function_call', () => {
       const args = [makeColRef('str'), makeLiteral(1), makeLiteral(3)];
       const result = translateFunctionCall(
-        'substring', args, identity
+        'substring', args, identity,
       );
 
       assert.equal(result.type, PG_EXPR_TYPE.FUNCTION_CALL);
@@ -87,7 +86,7 @@ describe('pg-function-registry unit tests', () => {
 
     it('CURRENT_TIMESTAMP produces datetime(\'now\')', () => {
       const result = translateFunctionCall(
-        'current_timestamp', [], identity
+        'current_timestamp', [], identity,
       );
 
       assert.equal(result.type, PG_EXPR_TYPE.FUNCTION_CALL);
@@ -100,7 +99,7 @@ describe('pg-function-registry unit tests', () => {
   describe('CURRENT_DATE translation', () => {
     it('CURRENT_DATE produces date(\'now\')', () => {
       const result = translateFunctionCall(
-        'current_date', [], identity
+        'current_date', [], identity,
       );
 
       assert.equal(result.type, PG_EXPR_TYPE.FUNCTION_CALL);
@@ -113,7 +112,7 @@ describe('pg-function-registry unit tests', () => {
   describe('CURRENT_TIME translation', () => {
     it('CURRENT_TIME produces time(\'now\')', () => {
       const result = translateFunctionCall(
-        'current_time', [], identity
+        'current_time', [], identity,
       );
 
       assert.equal(result.type, PG_EXPR_TYPE.FUNCTION_CALL);
@@ -128,7 +127,7 @@ describe('pg-function-registry unit tests', () => {
       it(`EXTRACT(${field} FROM col) produces CAST(strftime('${format}', col) AS INTEGER)`, () => {
         const args = [makeLiteral(field), makeColRef('created_at')];
         const result = translateFunctionCall(
-          'extract', args, identity
+          'extract', args, identity,
         );
 
         assert.equal(result.type, PG_EXPR_TYPE.CAST);
@@ -139,7 +138,7 @@ describe('pg-function-registry unit tests', () => {
         assert.equal(inner.name, 'strftime');
         assert.equal(inner.args[0].value, format);
         assert.deepStrictEqual(
-          inner.args[1], makeColRef('created_at')
+          inner.args[1], makeColRef('created_at'),
         );
       });
     }
@@ -150,11 +149,11 @@ describe('pg-function-registry unit tests', () => {
         () => translateFunctionCall('extract', args, identity),
         (err) => {
           assert.ok(err.message.startsWith(
-            PG_TRANSLATE_ERROR.UNSUPPORTED_EXTRACT_FIELD
+            PG_TRANSLATE_ERROR.UNSUPPORTED_EXTRACT_FIELD,
           ));
           assert.ok(err.message.includes('quarter'));
           return true;
-        }
+        },
       );
     });
   });
@@ -164,7 +163,7 @@ describe('pg-function-registry unit tests', () => {
       it(`DATE_TRUNC('${precision}', col) produces strftime('${format}', col)`, () => {
         const args = [makeLiteral(precision), makeColRef('ts')];
         const result = translateFunctionCall(
-          'date_trunc', args, identity
+          'date_trunc', args, identity,
         );
 
         assert.equal(result.type, PG_EXPR_TYPE.FUNCTION_CALL);
@@ -180,11 +179,11 @@ describe('pg-function-registry unit tests', () => {
         () => translateFunctionCall('date_trunc', args, identity),
         (err) => {
           assert.ok(err.message.startsWith(
-            PG_TRANSLATE_ERROR.UNSUPPORTED_DATE_TRUNC_FIELD
+            PG_TRANSLATE_ERROR.UNSUPPORTED_DATE_TRUNC_FIELD,
           ));
           assert.ok(err.message.includes('week'));
           return true;
-        }
+        },
       );
     });
   });
@@ -212,7 +211,7 @@ describe('pg-function-registry unit tests', () => {
     it('unknown function passes through with original name', () => {
       const args = [makeColRef('x'), makeLiteral(42)];
       const result = translateFunctionCall(
-        'my_custom_fn', args, identity
+        'my_custom_fn', args, identity,
       );
 
       assert.equal(result.type, PG_EXPR_TYPE.FUNCTION_CALL);

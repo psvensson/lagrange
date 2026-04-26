@@ -7,7 +7,6 @@ import {
 } from './test-helpers.js';
 import {
   createMockCache,
-  createMockCdc,
   HeartbeatService,
   HEARTBEAT_REPORTER_PUBLICATION_PATH,
   initEnv,
@@ -815,8 +814,8 @@ test('HeartbeatService recovers from a hung heartbeat attempt after timeout',
       service.stop();
       ConfigurationManager.resetInstance();
       LoggingService.resetInstance();
-  }
-});
+    }
+  });
 
 test('HeartbeatService reportNodeShutdown publishes stopped state through node-state reporter',
   async (t) => {

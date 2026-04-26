@@ -35,7 +35,6 @@ import {
   executeReduceByKey,
   buildGroupedBatches,
 } from '../../src/query/call-plan.js';
-import {executeStage} from '../../src/query/call-stage.js';
 import {
   EMIT_META_FIELD,
   EXCHANGE_MODE,

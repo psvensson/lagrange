@@ -1,6 +1,9 @@
-import { CONVERGENCE_DEFAULTS, TIMEOUTS } from "./constants.js";
-import { normalizeReplicaOperationRecord } from "../../../src/rebalancer/replica-operation-liveness.js";
-import { ASSERTIONS_SEGMENT_1 } from "./assertions-segment-1.js";
+import {CONVERGENCE_DEFAULTS, TIMEOUTS} from './constants.js';
+import {normalizeReplicaOperationRecord} from '../../../src/rebalancer/replica-operation-liveness.js';
+import {ASSERTIONS_SEGMENT_1} from './assertions-segment-1.js';
+import {
+  buildPostRebalanceClosureSnapshot,
+} from './post-rebalance-closure-contract.js';
 const {
   SERVICES_QUERY,
   NODES_QUERY,
@@ -47,6 +50,9 @@ const {
   CONTROL_SNAPSHOT_FIELD_PROJECTED_NODES,
   CONTROL_SNAPSHOT_FIELD_PARTITIONS,
   CONTROL_SNAPSHOT_FIELD_LEADERS,
+  CONTROL_SNAPSHOT_FIELD_PARTITION_LEADER_AUTHORITY,
+  CONTROL_SNAPSHOT_FIELD_OBSERVATION_MODE,
+  CONTROL_SNAPSHOT_FIELD_ADMIN_OBSERVATION,
   CONTROL_SNAPSHOT_FIELD_VOTER_COUNTS,
   CONTROL_SNAPSHOT_FIELD_SNAPSHOT_REVISION,
   CONTROL_SNAPSHOT_FIELD_SNAPSHOT_REVISION_STATE,
@@ -63,6 +69,7 @@ const {
   REPLICA_ROLE_DIAGNOSTICS_LEADER_NODE_IDS,
   CONTROL_SNAPSHOT_FIELD_REPLICA_ROLES,
   REPLICA_ROLE_LEADER,
+  CONTROL_SNAPSHOT_ADMIN_OBSERVATION_FIELD_MODE,
   LEADER_ADDRESS_PATH_SEPARATOR,
   UUID_PREFIX_PATTERN,
   normalizeLeaderAddress,
@@ -81,11 +88,13 @@ const {
   normalizeStatusCountMap,
   normalizeVoterCountMap,
   extractControlSnapshotPayload,
+  extractControlSnapshotObservationMode,
   extractControlSnapshotNodeIds,
   extractControlSnapshotPublishedNodeIds,
   extractControlSnapshotProjectedNodeIds,
   extractControlSnapshotPartitionIds,
   extractControlSnapshotLeaders,
+  extractControlSnapshotPartitionLeaderAuthority,
   extractControlSnapshotVoterCounts,
   extractControlSnapshotInFlightSummary,
   extractControlSnapshotOperationRows,
@@ -96,10 +105,19 @@ const {
   queryControlSnapshot,
 } = ASSERTIONS_SEGMENT_1;
 const PRIORITY_RECOVERY_SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT =
-  "spread_satisfied_in_flight";
+  'spread_satisfied_in_flight';
 const PRIORITY_RECOVERY_COMPLETION_STATE_SPREAD_SATISFIED_IN_FLIGHT =
-  "spread_satisfied_in_flight";
-const PRIORITY_RECOVERY_VISIBILITY_STATE_CACHE_VISIBLE = "cache_visible";
+  'spread_satisfied_in_flight';
+const PRIORITY_RECOVERY_COMPLETION_STATE_CONVERGED = 'converged';
+const PRIORITY_RECOVERY_VISIBILITY_STATE_CACHE_VISIBLE = 'cache_visible';
+const OBSERVATION_SOURCE_SQL_FALLBACK = 'sql_fallback';
+const OBSERVATION_SOURCE_CONTROL_SNAPSHOT = 'control_snapshot';
+const OBSERVATION_MODE_SQL_FALLBACK = 'sql_fallback';
+const POST_REBALANCE_CLOSURE_MESSAGE_PREFIX = 'Post-rebalance closure: ';
+const PRIORITY_RECOVERY_SATISFIED_COMPLETION_STATES = Object.freeze([
+  PRIORITY_RECOVERY_COMPLETION_STATE_SPREAD_SATISFIED_IN_FLIGHT,
+  PRIORITY_RECOVERY_COMPLETION_STATE_CONVERGED,
+]);
 
 async function queryNodeConsistencyStateViaSql(node) {
   const [nodesResult, partResult, svcResult] = await Promise.all([
@@ -117,7 +135,7 @@ async function queryNodeConsistencyStateViaSql(node) {
   const leaderMap = extractLeaders(svcRows);
   const partitionIds = new Set(
     ((partResult && partResult.rows) || [])
-      .map((row) => String(row?.partition_id || ""))
+      .map((row) => String(row?.partition_id || ''))
       .filter((partitionId) => partitionId.length > 0),
   );
   supplementPartitionIdsFromServiceTopology(
@@ -139,7 +157,9 @@ async function queryNodeConsistencyStateViaSql(node) {
     projectedActiveNodes: null,
     partitions,
     leaders,
-    observationSource: "sql_fallback",
+    partitionLeaderAuthority: {},
+    observationSource: OBSERVATION_SOURCE_SQL_FALLBACK,
+    observationMode: OBSERVATION_MODE_SQL_FALLBACK,
     controlSnapshotError: null,
   };
 }
@@ -156,7 +176,7 @@ async function queryConvergenceSnapshotViaSql(node) {
   const leaders = extractLeaders(servicesRows);
   const expectedPartitionIds = new Set(
     partitionRows
-      .map((row) => String(row?.partition_id || ""))
+      .map((row) => String(row?.partition_id || ''))
       .filter((partitionId) => partitionId.length > 0),
   );
   supplementPartitionIdsFromServiceTopology(
@@ -168,12 +188,12 @@ async function queryConvergenceSnapshotViaSql(node) {
   // When services rows are follower-only on a recovering node,
   // supplement leader identity from persisted partition metadata.
   for (const row of partitionRows) {
-    const partitionId = String(row?.partition_id || "").trim();
+    const partitionId = String(row?.partition_id || '').trim();
     if (partitionId.length === 0 || leaders.has(partitionId)) {
       continue;
     }
     const partitionLeader = String(
-      row?.leader_node_id || row?.leaderNodeId || row?.leader || "",
+      row?.leader_node_id || row?.leaderNodeId || row?.leader || '',
     ).trim();
     if (partitionLeader.length > 0) {
       leaders.set(partitionId, partitionLeader);
@@ -191,6 +211,7 @@ async function queryConvergenceSnapshotViaSql(node) {
     error: null,
     voterCounts,
     leaders,
+    partitionLeaderAuthority: new Map(),
     publicationEpoch: null,
     sourceSnapshotVersion: null,
     publishedActiveNodeIds: null,
@@ -202,74 +223,66 @@ async function queryConvergenceSnapshotViaSql(node) {
 }
 
 async function queryNodeConsistencyState(node, options = {}) {
-  let controlSnapshotError = null;
-
-  if (typeof node?.getControlSnapshot === "function") {
-    try {
-      const snapshotState = await queryControlSnapshot(node, {
-        forceRepair: options.forceRepair === true,
-      });
-      return {
-        nodeId: String(node?.id || VALUE_UNKNOWN),
-        activeNodes: Array.from(snapshotState.activeNodeIds || []).sort(),
-        authoritativeActiveNodes:
-          snapshotState.authoritativeActiveNodeIds instanceof Set
-            ? Array.from(snapshotState.authoritativeActiveNodeIds).sort()
-            : null,
-        projectedActiveNodes:
-          snapshotState.projectedActiveNodeIds instanceof Set
-            ? Array.from(snapshotState.projectedActiveNodeIds).sort()
-            : null,
-        partitions: Array.from(snapshotState.expectedPartitionIds || []).sort(),
-        leaders: Object.fromEntries(
-          Array.from(snapshotState.leaders || []).sort(([left], [right]) =>
-            left.localeCompare(right),
-          ),
+  if (typeof node?.getControlSnapshot === 'function') {
+    const snapshotState = await queryControlSnapshot(node, {
+      forceRepair: options.forceRepair === true,
+      forceAuthoritativeRepair: options.forceAuthoritativeRepair === true,
+    });
+    return {
+      nodeId: String(node?.id || VALUE_UNKNOWN),
+      activeNodes: Array.from(snapshotState.activeNodeIds || []).sort(),
+      authoritativeActiveNodes:
+        snapshotState.authoritativeActiveNodeIds instanceof Set ?
+          Array.from(snapshotState.authoritativeActiveNodeIds).sort() :
+          null,
+      projectedActiveNodes:
+        snapshotState.projectedActiveNodeIds instanceof Set ?
+          Array.from(snapshotState.projectedActiveNodeIds).sort() :
+          null,
+      partitions: Array.from(snapshotState.expectedPartitionIds || []).sort(),
+      leaders: Object.fromEntries(
+        Array.from(snapshotState.leaders || []).sort(([left], [right]) =>
+          left.localeCompare(right),
         ),
-        publicationEpoch: snapshotState.publicationEpoch,
-        sourceSnapshotVersion: snapshotState.sourceSnapshotVersion,
-        publishedActiveNodeIds:
-          snapshotState.authoritativeActiveNodeIds instanceof Set
-            ? Array.from(snapshotState.authoritativeActiveNodeIds).sort()
-            : null,
-        observationSource: "control_snapshot",
-        controlPlaneDiagnostics: cloneDiagnostics(
-          snapshotState.controlPlaneDiagnostics,
+      ),
+      partitionLeaderAuthority: Object.fromEntries(
+        Array.from(snapshotState.partitionLeaderAuthority || []).sort(
+          ([left], [right]) => left.localeCompare(right),
         ),
-        controlSnapshotError: null,
-      };
-    } catch (error) {
-      controlSnapshotError = error;
-    }
+      ),
+      publicationEpoch: snapshotState.publicationEpoch,
+      sourceSnapshotVersion: snapshotState.sourceSnapshotVersion,
+      snapshotRevision: snapshotState.snapshotRevision,
+      snapshotRevisionState: snapshotState.snapshotRevisionState,
+      snapshotExpectedMinimumRevision:
+        snapshotState.snapshotExpectedMinimumRevision,
+      snapshotRevisionGap: snapshotState.snapshotRevisionGap,
+      snapshotResumeToken: snapshotState.snapshotResumeToken,
+      publishedActiveNodeIds:
+        snapshotState.authoritativeActiveNodeIds instanceof Set ?
+          Array.from(snapshotState.authoritativeActiveNodeIds).sort() :
+          null,
+      observationSource: OBSERVATION_SOURCE_CONTROL_SNAPSHOT,
+      observationMode: snapshotState.observationMode,
+      controlPlaneDiagnostics: cloneDiagnostics(
+        snapshotState.controlPlaneDiagnostics,
+      ),
+      controlSnapshotError: null,
+    };
   }
 
-  try {
-    const sqlState = await queryNodeConsistencyStateViaSql(node);
-    sqlState.controlSnapshotError = controlSnapshotError
-      ? String(controlSnapshotError?.message || controlSnapshotError)
-      : null;
-    return sqlState;
-  } catch (error) {
-    if (!controlSnapshotError) {
-      throw error;
-    }
-    throw new Error(
-      String(controlSnapshotError?.message || controlSnapshotError) +
-        "; raw consistency fallback failed: " +
-        String(error?.message || error),
-    );
-  }
+  return queryNodeConsistencyStateViaSql(node);
 }
 
 function isControlSnapshotObservation(state) {
-  return state?.observationSource === "control_snapshot";
+  return state?.observationSource === OBSERVATION_SOURCE_CONTROL_SNAPSHOT;
 }
 
 function resolveSnapshotExpectedPartitionIds(snapshot) {
   const expectedPartitionIds =
-    snapshot?.expectedPartitionIds instanceof Set
-      ? new Set(snapshot.expectedPartitionIds)
-      : new Set();
+    snapshot?.expectedPartitionIds instanceof Set ?
+      new Set(snapshot.expectedPartitionIds) :
+      new Set();
   if (
     snapshot?.voterCounts instanceof Map &&
     snapshot.voterCounts.size > expectedPartitionIds.size
@@ -313,10 +326,10 @@ function buildConvergenceSnapshotDebt(snapshot, targetVoterCount) {
 
 function compareConvergenceSnapshotDebt(left, right) {
   const keys = [
-    "missingLeaderCount",
-    "overTargetCount",
-    "inFlightReplicaOperationCount",
-    "overTargetExcess",
+    'missingLeaderCount',
+    'overTargetCount',
+    'inFlightReplicaOperationCount',
+    'overTargetExcess',
   ];
   for (const key of keys) {
     const delta = Number(left?.[key] || 0) - Number(right?.[key] || 0);
@@ -355,19 +368,19 @@ function isConvergedSnapshot(snapshot, targetVoterCount) {
  */
 async function queryReachableClusterSnapshot(nodes, options = {}) {
   const targetVoterCount =
-    Number.isInteger(options?.targetVoterCount) && options.targetVoterCount > 0
-      ? options.targetVoterCount
-      : CONVERGENCE_DEFAULTS.targetVoterCount;
+    Number.isInteger(options?.targetVoterCount) && options.targetVoterCount > 0 ?
+      options.targetVoterCount :
+      CONVERGENCE_DEFAULTS.targetVoterCount;
   const forceRepair = options?.forceRepair === true;
   const reachabilityTimeoutMs =
     Number.isFinite(options?.reachabilityTimeoutMs) &&
-    options.reachabilityTimeoutMs > 0
-      ? Math.floor(options.reachabilityTimeoutMs)
-      : CONVERGENCE_REACHABILITY_TIMEOUT_MS;
+    options.reachabilityTimeoutMs > 0 ?
+      Math.floor(options.reachabilityTimeoutMs) :
+      CONVERGENCE_REACHABILITY_TIMEOUT_MS;
   const snapshotTimeoutMs =
-    Number.isFinite(options?.snapshotTimeoutMs) && options.snapshotTimeoutMs > 0
-      ? Math.floor(options.snapshotTimeoutMs)
-      : CONVERGENCE_CONTROL_SNAPSHOT_TIMEOUT_MS;
+    Number.isFinite(options?.snapshotTimeoutMs) && options.snapshotTimeoutMs > 0 ?
+      Math.floor(options.snapshotTimeoutMs) :
+      CONVERGENCE_CONTROL_SNAPSHOT_TIMEOUT_MS;
   let lastError = null;
   let bestSnapshot = null;
   let bestSnapshotDebt = null;
@@ -379,34 +392,14 @@ async function queryReachableClusterSnapshot(nodes, options = {}) {
       if (!report.reachable) {
         continue;
       }
-      let snapshot = null;
-      let controlSnapshotError = null;
-      try {
-        snapshot = await queryControlSnapshot(node, {
-          forceRepair,
-          timeoutMs: snapshotTimeoutMs,
-          lane: ADMIN_SOCKET_LANE_SNAPSHOT,
-        });
-      } catch (error) {
-        controlSnapshotError = error;
-      }
-      if (!snapshot) {
-        try {
-          snapshot = await queryConvergenceSnapshotViaSql(node);
-          snapshot.error = controlSnapshotError
-            ? String(controlSnapshotError?.message || controlSnapshotError)
-            : null;
-        } catch (sqlFallbackError) {
-          if (!controlSnapshotError) {
-            throw sqlFallbackError;
-          }
-          throw new Error(
-            String(controlSnapshotError?.message || controlSnapshotError) +
-              "; raw convergence fallback failed: " +
-              String(sqlFallbackError?.message || sqlFallbackError),
-          );
-        }
-      }
+      const snapshot =
+        typeof node?.getControlSnapshot === 'function' ?
+          await queryControlSnapshot(node, {
+            forceRepair,
+            timeoutMs: snapshotTimeoutMs,
+            lane: ADMIN_SOCKET_LANE_SNAPSHOT,
+          }) :
+          await queryConvergenceSnapshotViaSql(node);
       // If the snapshot has no partition topology yet (e.g.
       // node just restarted and its cache is still hydrating),
       // try the next reachable node before accepting it.
@@ -421,14 +414,14 @@ async function queryReachableClusterSnapshot(nodes, options = {}) {
         snapshot.voterCounts.size > snapshot.expectedPartitionIds.size;
       if (hasEmptyTopology || hasPartialTopology) {
         lastError =
-          "Snapshot from " +
+          'Snapshot from ' +
           String(node?.id) +
-          " has incomplete partition topology" +
-          " (partitions=" +
+          ' has incomplete partition topology' +
+          ' (partitions=' +
           snapshot.expectedPartitionIds.size +
-          ", voterCounts=" +
+          ', voterCounts=' +
           snapshot.voterCounts.size +
-          ")";
+          ')';
         continue;
       }
       if (isConvergedSnapshot(snapshot, targetVoterCount)) {
@@ -463,27 +456,13 @@ async function queryReachableClusterSnapshot(nodes, options = {}) {
       if (!report.reachable) {
         continue;
       }
-      try {
-        return await queryControlSnapshot(node, {
-          timeoutMs: snapshotTimeoutMs,
-          lane: ADMIN_SOCKET_LANE_SNAPSHOT,
-        });
-      } catch (controlSnapshotError) {
-        try {
-          const sqlFallbackSnapshot =
-            await queryConvergenceSnapshotViaSql(node);
-          sqlFallbackSnapshot.error = String(
-            controlSnapshotError?.message || controlSnapshotError,
-          );
-          return sqlFallbackSnapshot;
-        } catch (sqlFallbackError) {
-          throw new Error(
-            String(controlSnapshotError?.message || controlSnapshotError) +
-              "; raw convergence fallback failed: " +
-              String(sqlFallbackError?.message || sqlFallbackError),
-          );
-        }
+      if (typeof node?.getControlSnapshot !== 'function') {
+        return await queryConvergenceSnapshotViaSql(node);
       }
+      return await queryControlSnapshot(node, {
+        timeoutMs: snapshotTimeoutMs,
+        lane: ADMIN_SOCKET_LANE_SNAPSHOT,
+      });
     } catch (err) {
       lastError = err?.message || String(err);
     }
@@ -505,47 +484,11 @@ async function queryReachableClusterSnapshot(nodes, options = {}) {
 function buildCacheVisibleSatisfiedPriorityRecoveryOperationIdSet(
   controlPlaneDiagnostics = null,
 ) {
-  const publicationConvergence =
-    controlPlaneDiagnostics?.publicationConvergence &&
-    typeof controlPlaneDiagnostics.publicationConvergence === "object"
-      ? controlPlaneDiagnostics.publicationConvergence
-      : null;
-  const partitionWitnesses = Array.isArray(
-    publicationConvergence?.priorityRecoveryPartitionWitnesses,
-  )
-    ? publicationConvergence.priorityRecoveryPartitionWitnesses
-    : [];
   const operationIds = new Set();
-  for (const partitionWitness of partitionWitnesses) {
-    const visibilityState = String(
-      partitionWitness?.visibilityState || "",
-    ).trim();
-    const semanticState = String(partitionWitness?.semanticState || "").trim();
-    const completionState = String(
-      partitionWitness?.completionState || "",
-    ).trim();
-    if (
-      visibilityState !== PRIORITY_RECOVERY_VISIBILITY_STATE_CACHE_VISIBLE
-    ) {
-      continue;
-    }
-    if (
-      semanticState !==
-        PRIORITY_RECOVERY_SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT &&
-      completionState !==
-        PRIORITY_RECOVERY_COMPLETION_STATE_SPREAD_SATISFIED_IN_FLIGHT
-    ) {
-      continue;
-    }
-    for (const operationId of Array.isArray(partitionWitness?.operationIds)
-      ? partitionWitness.operationIds
-      : []) {
-      const normalizedOperationId = String(operationId || "").trim();
-      if (normalizedOperationId.length === 0) {
-        continue;
-      }
-      operationIds.add(normalizedOperationId);
-    }
+  for (const evidence of collectCacheVisiblePriorityRecoveryEvidence(
+    controlPlaneDiagnostics,
+  )) {
+    addNormalizedIds(operationIds, evidence.operationIds);
   }
   return operationIds;
 }
@@ -553,44 +496,105 @@ function buildCacheVisibleSatisfiedPriorityRecoveryOperationIdSet(
 function buildCacheVisibleSatisfiedPriorityRecoveryPartitionIdSet(
   controlPlaneDiagnostics = null,
 ) {
-  const publicationConvergence =
-    controlPlaneDiagnostics?.publicationConvergence &&
-    typeof controlPlaneDiagnostics.publicationConvergence === "object"
-      ? controlPlaneDiagnostics.publicationConvergence
-      : null;
   const partitionIds = new Set();
-  const partitionIdsBySemanticState =
-    publicationConvergence?.priorityRecoveryPartitionIdsBySemanticState &&
-    typeof publicationConvergence.priorityRecoveryPartitionIdsBySemanticState ===
-      "object"
-      ? publicationConvergence.priorityRecoveryPartitionIdsBySemanticState
-      : null;
-  for (const partitionId of Array.isArray(
-    partitionIdsBySemanticState
-      ? partitionIdsBySemanticState[
-          PRIORITY_RECOVERY_SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT
-        ]
-      : null,
-  )
-    ? partitionIdsBySemanticState[
-        PRIORITY_RECOVERY_SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT
-      ]
-    : []) {
-    const normalizedPartitionId = String(partitionId || "").trim();
-    if (normalizedPartitionId.length === 0) {
+  for (const evidence of collectCacheVisiblePriorityRecoveryEvidence(
+    controlPlaneDiagnostics,
+  )) {
+    addNormalizedIds(partitionIds, evidence.partitionIds);
+  }
+  return partitionIds;
+}
+
+function collectCacheVisiblePriorityRecoveryEvidence(
+  controlPlaneDiagnostics = null,
+) {
+  const diagnosticsSources = collectPriorityRecoveryDiagnosticsSources(
+    controlPlaneDiagnostics,
+  );
+  const evidence = [];
+  for (const source of diagnosticsSources) {
+    evidence.push(...collectPriorityRecoveryWitnessEvidence(source));
+    evidence.push(...collectPriorityRecoverySummaryEvidence(source));
+    evidence.push(...collectPriorityRecoveryDecisionSnapshotEvidence(source));
+  }
+  return evidence;
+}
+
+function collectPriorityRecoveryDiagnosticsSources(
+  controlPlaneDiagnostics = null,
+) {
+  const sources = [];
+  for (const candidate of [
+    controlPlaneDiagnostics,
+    controlPlaneDiagnostics?.publicationConvergence,
+    controlPlaneDiagnostics?.priorityRecoveryObservation,
+    controlPlaneDiagnostics?.publicationConvergence
+      ?.priorityRecoveryCurrentSummary,
+    controlPlaneDiagnostics?.priorityRecoveryObservation
+      ?.priorityRecoveryCurrentSummary,
+  ]) {
+    if (candidate && typeof candidate === 'object' && !Array.isArray(candidate)) {
+      sources.push(candidate);
+    }
+  }
+  return sources;
+}
+
+function collectPriorityRecoveryWitnessEvidence(source) {
+  const witnesses = Array.isArray(source?.priorityRecoveryPartitionWitnesses) ?
+    source.priorityRecoveryPartitionWitnesses :
+    Array.isArray(source?.partitionWitnesses) ?
+      source.partitionWitnesses :
+      [];
+  const evidence = [];
+  for (const witness of witnesses) {
+    if (!isCacheVisibleSatisfiedPriorityRecoverySnapshot(witness)) {
       continue;
     }
-    partitionIds.add(normalizedPartitionId);
+    evidence.push({
+      operationIds: witness.operationIds,
+      partitionIds: [witness.partitionId],
+    });
   }
+  return evidence;
+}
+
+function collectPriorityRecoverySummaryEvidence(source) {
+  const evidence = [];
+  const partitionIdsBySemanticState =
+    source?.priorityRecoveryPartitionIdsBySemanticState &&
+    typeof source.priorityRecoveryPartitionIdsBySemanticState === 'object' ?
+      source.priorityRecoveryPartitionIdsBySemanticState :
+      source?.partitionIdsBySemanticState &&
+          typeof source.partitionIdsBySemanticState === 'object' ?
+        source.partitionIdsBySemanticState :
+        null;
+  evidence.push({
+    operationIds: [],
+    partitionIds: Array.isArray(
+      partitionIdsBySemanticState ?
+        partitionIdsBySemanticState[
+          PRIORITY_RECOVERY_SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT
+        ] :
+        null,
+    ) ?
+      partitionIdsBySemanticState[
+        PRIORITY_RECOVERY_SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT
+      ] :
+      [],
+  });
+
   const semanticStateHistory = Array.isArray(
-    publicationConvergence?.priorityRecoveryPartitionSemanticStateHistory,
-  )
-    ? publicationConvergence.priorityRecoveryPartitionSemanticStateHistory
-    : [];
+    source?.priorityRecoveryPartitionSemanticStateHistory,
+  ) ?
+    source.priorityRecoveryPartitionSemanticStateHistory :
+    Array.isArray(source?.partitionSemanticStateHistory) ?
+      source.partitionSemanticStateHistory :
+      [];
   for (const historyEntry of semanticStateHistory) {
-    const semanticStateIds = Array.isArray(historyEntry?.semanticStateIds)
-      ? historyEntry.semanticStateIds
-      : [];
+    const semanticStateIds = Array.isArray(historyEntry?.semanticStateIds) ?
+      historyEntry.semanticStateIds :
+      [];
     if (
       !semanticStateIds.includes(
         PRIORITY_RECOVERY_SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT,
@@ -598,13 +602,104 @@ function buildCacheVisibleSatisfiedPriorityRecoveryPartitionIdSet(
     ) {
       continue;
     }
-    const normalizedPartitionId = String(historyEntry?.partitionId || "").trim();
-    if (normalizedPartitionId.length === 0) {
+    evidence.push({
+      operationIds: [],
+      partitionIds: [historyEntry.partitionId],
+    });
+  }
+
+  const partitionSnapshots = Array.isArray(
+    source?.priorityRecoveryPartitionSnapshots,
+  ) ?
+    source.priorityRecoveryPartitionSnapshots :
+    Array.isArray(source?.partitionSnapshots) ?
+      source.partitionSnapshots :
+      [];
+  for (const partitionSnapshot of partitionSnapshots) {
+    if (!isCacheVisibleSatisfiedPriorityRecoverySnapshot(partitionSnapshot)) {
       continue;
     }
-    partitionIds.add(normalizedPartitionId);
+    evidence.push({
+      operationIds: partitionSnapshot.operationIds,
+      partitionIds: [partitionSnapshot.partitionId],
+    });
   }
-  return partitionIds;
+
+  return evidence;
+}
+
+function collectPriorityRecoveryDecisionSnapshotEvidence(source) {
+  const snapshots = Array.isArray(source?.priorityRecoveryDecisionSnapshots) ?
+    source.priorityRecoveryDecisionSnapshots :
+    Array.isArray(source?.priorityRecoveryDecisionSnapshots?.snapshots) ?
+      source.priorityRecoveryDecisionSnapshots.snapshots :
+      [];
+  const evidence = [];
+  for (const snapshot of snapshots) {
+    if (!isCacheVisibleSatisfiedPriorityRecoverySnapshot(snapshot)) {
+      continue;
+    }
+    evidence.push({
+      operationIds: collectPriorityRecoverySnapshotOperationIds(snapshot),
+      partitionIds: [snapshot.partitionId],
+    });
+  }
+  return evidence;
+}
+
+function collectPriorityRecoverySnapshotOperationIds(snapshot) {
+  const operationIds = [];
+  if (snapshot?.operationId) {
+    operationIds.push(snapshot.operationId);
+  }
+  if (snapshot?.coordinator?.operation?.operationId) {
+    operationIds.push(snapshot.coordinator.operation.operationId);
+  }
+  if (Array.isArray(snapshot?.coordinator?.operationIds)) {
+    operationIds.push(...snapshot.coordinator.operationIds);
+  }
+  if (Array.isArray(snapshot?.operationIds)) {
+    operationIds.push(...snapshot.operationIds);
+  }
+  return operationIds;
+}
+
+function isCacheVisibleSatisfiedPriorityRecoverySnapshot(snapshot) {
+  const visibilityState = String(
+    snapshot?.visibilityState ||
+      snapshot?.authoritativeVisibilityState ||
+      snapshot?.observation?.visibilityState ||
+      '',
+  ).trim();
+  const semanticState = String(
+    snapshot?.semanticState || snapshot?.semanticStateId || '',
+  ).trim();
+  const completionState = String(
+    snapshot?.completionState || snapshot?.completion?.state || '',
+  ).trim();
+  const spreadSatisfied = snapshot?.spreadCompletion?.satisfied === true;
+  const visibilitySatisfied =
+    visibilityState === PRIORITY_RECOVERY_VISIBILITY_STATE_CACHE_VISIBLE;
+  const semanticSatisfied =
+    semanticState ===
+    PRIORITY_RECOVERY_SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT;
+  const completionSatisfied =
+    PRIORITY_RECOVERY_SATISFIED_COMPLETION_STATES.includes(completionState);
+
+  return (
+    visibilitySatisfied &&
+    (semanticSatisfied || completionSatisfied || spreadSatisfied)
+  );
+}
+
+function addNormalizedIds(target, ids) {
+  for (const id of Array.isArray(ids) ? ids : []) {
+    const normalizedId = String(id || '').trim();
+    if (normalizedId.length === 0) {
+      continue;
+    }
+    target.add(normalizedId);
+  }
 }
 
 function countCacheVisibleSatisfiedPriorityRecoveryOperations(
@@ -625,8 +720,8 @@ function countCacheVisibleSatisfiedPriorityRecoveryOperations(
   let matchingOperationCount = 0;
   for (const operationRow of Array.isArray(operationRows) ? operationRows : []) {
     const normalizedOperation = normalizeReplicaOperationRecord(operationRow);
-    const operationId = String(normalizedOperation.operationId || "").trim();
-    const partitionId = String(normalizedOperation.partitionId || "").trim();
+    const operationId = String(normalizedOperation.operationId || '').trim();
+    const partitionId = String(normalizedOperation.partitionId || '').trim();
     const matchesByOperationId =
       operationId.length > 0 && operationIds.has(operationId);
     const matchesByPartitionId =
@@ -659,7 +754,7 @@ function countCacheVisibleSatisfiedPriorityRecoveryOperations(
  * @throws {Error} On timeout with diagnostic details.
  */
 async function waitForConvergence(nodes, options = {}) {
-  const opts = { ...CONVERGENCE_DEFAULTS, ...options };
+  const opts = {...CONVERGENCE_DEFAULTS, ...options};
   const {
     settleTimeoutMs,
     quietWindowMs,
@@ -669,9 +764,9 @@ async function waitForConvergence(nodes, options = {}) {
   } = opts;
   const ignoreStaleInFlightReplicaOperations =
     options?.ignoreStaleInFlightReplicaOperations === true;
-  const forceRepairAfterMs = Number.isFinite(options.forceRepairAfterMs)
-    ? options.forceRepairAfterMs
-    : TIMEOUTS.ACTIVE_WAIT_FORCE_REPAIR_AFTER;
+  const forceRepairAfterMs = Number.isFinite(options.forceRepairAfterMs) ?
+    options.forceRepairAfterMs :
+    TIMEOUTS.ACTIVE_WAIT_FORCE_REPAIR_AFTER;
 
   const overTargetState = new Map();
   const previousLeaders = new Map();
@@ -689,6 +784,8 @@ async function waitForConvergence(nodes, options = {}) {
   let latestInFlightReplicaOperationStatuses = new Map();
   let latestPartitionMembership = null;
   let latestControlPlaneDiagnostics = null;
+  let latestPublishedActiveNodeIds = [];
+  let latestProjectedActiveNodeIds = [];
   let latestSnapshotNodeId = null;
   let latestSnapshotError = null;
   let latestSnapshotRevision = null;
@@ -724,9 +821,16 @@ async function waitForConvergence(nodes, options = {}) {
     latestInFlightReplicaOperationStatuses =
       snapshot.inFlightReplicaOperationStatuses;
     latestPartitionMembership = snapshot.partitionMembership;
+    latestPublishedActiveNodeIds = Array.isArray(snapshot.publishedActiveNodeIds) ?
+      [...snapshot.publishedActiveNodeIds].sort() :
+      [];
+    latestProjectedActiveNodeIds =
+      snapshot.projectedActiveNodeIds instanceof Set ?
+        Array.from(snapshot.projectedActiveNodeIds).sort() :
+        [];
     if (
       snapshot.controlPlaneDiagnostics &&
-      typeof snapshot.controlPlaneDiagnostics === "object" &&
+      typeof snapshot.controlPlaneDiagnostics === 'object' &&
       !Array.isArray(snapshot.controlPlaneDiagnostics)
     ) {
       latestControlPlaneDiagnostics = snapshot.controlPlaneDiagnostics;
@@ -735,7 +839,7 @@ async function waitForConvergence(nodes, options = {}) {
       latestSnapshotRevision = snapshot.snapshotRevision;
     }
     if (
-      typeof snapshot.snapshotRevisionState === "string" &&
+      typeof snapshot.snapshotRevisionState === 'string' &&
       snapshot.snapshotRevisionState.length > 0
     ) {
       latestSnapshotRevisionState = snapshot.snapshotRevisionState;
@@ -748,7 +852,7 @@ async function waitForConvergence(nodes, options = {}) {
       latestSnapshotRevisionGap = snapshot.snapshotRevisionGap;
     }
     if (
-      typeof snapshot.snapshotResumeToken === "string" &&
+      typeof snapshot.snapshotResumeToken === 'string' &&
       snapshot.snapshotResumeToken.length > 0
     ) {
       latestSnapshotResumeToken = snapshot.snapshotResumeToken;
@@ -783,14 +887,14 @@ async function waitForConvergence(nodes, options = {}) {
     );
     const staleInFlightReplicaOperationCount = Number.isFinite(
       latestControlPlaneDiagnostics?.replicaOperations?.staleInFlightCount,
-    )
-      ? Math.max(
-          0,
-          Math.floor(
-            latestControlPlaneDiagnostics.replicaOperations.staleInFlightCount,
-          ),
-        )
-      : 0;
+    ) ?
+      Math.max(
+        0,
+        Math.floor(
+          latestControlPlaneDiagnostics.replicaOperations.staleInFlightCount,
+        ),
+      ) :
+      0;
     const cacheVisibleSatisfiedPriorityRecoveryOperationCount =
       countCacheVisibleSatisfiedPriorityRecoveryOperations(
         latestControlPlaneDiagnostics,
@@ -805,13 +909,13 @@ async function waitForConvergence(nodes, options = {}) {
       cacheVisibleSatisfiedPriorityRecoveryOperationCount,
     );
     const effectiveInFlightReplicaOperationCount =
-      ignoreStaleInFlightReplicaOperations
-        ? Math.max(
-            0,
-            latestInFlightReplicaOperationCount -
+      ignoreStaleInFlightReplicaOperations ?
+        Math.max(
+          0,
+          latestInFlightReplicaOperationCount -
               staleInFlightDiscountCount,
-          )
-        : latestInFlightReplicaOperationCount;
+        ) :
+        latestInFlightReplicaOperationCount;
     latestEffectiveInFlightReplicaOperationCount =
       effectiveInFlightReplicaOperationCount;
     const hasInFlightReplicaOperations =
@@ -876,6 +980,27 @@ async function waitForConvergence(nodes, options = {}) {
     inFlightReplicaOperationSummary[status] = count;
   }
   const expectedPartitions = [...latestExpectedPartitionIds].sort();
+  const postRebalanceClosure = buildPostRebalanceClosureSnapshot({
+    expectedPartitionIds: expectedPartitions,
+    leaders: latestLeaders,
+    voterCounts: latestCounts,
+    overTargetDurations: overTargetSummary,
+    maxOverTargetMs: maxOT,
+    maxSustainedOverTargetMs,
+    targetVoterCount,
+    inFlightReplicaOperationCount: latestInFlightReplicaOperationCount,
+    effectiveInFlightReplicaOperationCount:
+      latestEffectiveInFlightReplicaOperationCount,
+    staleInFlightReplicaOperationCount:
+      latestStaleInFlightReplicaOperationCount,
+    cacheVisibleSatisfiedPriorityRecoveryOperationCount:
+      latestCacheVisibleSatisfiedPriorityRecoveryOperationCount,
+    ignoreStaleInFlightReplicaOperations,
+    inFlightReplicaOperationStatuses: inFlightReplicaOperationSummary,
+    publishedActiveNodeIds: latestPublishedActiveNodeIds,
+    projectedActiveNodeIds: latestProjectedActiveNodeIds,
+    controlPlaneDiagnostics: latestControlPlaneDiagnostics,
+  });
 
   const partitionMembership =
     latestPartitionMembership ||
@@ -893,45 +1018,52 @@ async function waitForConvergence(nodes, options = {}) {
   );
 
   const msg =
-    "Convergence timeout after " +
+    'Convergence timeout after ' +
     settleTimeoutMs +
-    "ms. " +
-    "Leader changes: " +
+    'ms. ' +
+    'Leader changes: ' +
     leaderChanges +
-    ". " +
-    "Max over-target: " +
+    '. ' +
+    'Max over-target: ' +
     maxOT +
-    "ms. " +
-    "Snapshot node: " +
+    'ms. ' +
+    'Snapshot node: ' +
     (latestSnapshotNodeId || VALUE_UNKNOWN) +
-    ". " +
-    "Expected partitions: " +
+    '. ' +
+    'Expected partitions: ' +
     JSON.stringify(expectedPartitions) +
-    ". " +
-    "Voter counts: " +
+    '. ' +
+    'Voter counts: ' +
     JSON.stringify(voterSummary) +
-    ". " +
-    "Leaders: " +
+    '. ' +
+    'Leaders: ' +
     JSON.stringify(leaderSummary) +
-    ". " +
-    "In-flight replica operations: " +
+    '. ' +
+    'In-flight replica operations: ' +
     latestInFlightReplicaOperationCount +
-    ". " +
-    (ignoreStaleInFlightReplicaOperations
-      ? "Effective in-flight replica operations: " +
+    '. ' +
+    (ignoreStaleInFlightReplicaOperations ?
+      'Effective in-flight replica operations: ' +
         latestEffectiveInFlightReplicaOperationCount +
-        ". "
-      : "") +
-    "In-flight statuses: " +
+        '. ' :
+      '') +
+    'In-flight statuses: ' +
     JSON.stringify(inFlightReplicaOperationSummary) +
-    ". " +
-    "Over-target durations: " +
+    '. ' +
+    'Over-target durations: ' +
     JSON.stringify(overTargetSummary) +
-    ". " +
-    "Replica membership: " +
+    '. ' +
+    POST_REBALANCE_CLOSURE_MESSAGE_PREFIX +
+    JSON.stringify({
+      state: postRebalanceClosure.state,
+      blockers: postRebalanceClosure.blockers,
+      softClosures: postRebalanceClosure.softClosures,
+    }) +
+    '. ' +
+    'Replica membership: ' +
     membershipSnippet +
-    ". " +
-    "Operation history: " +
+    '. ' +
+    'Operation history: ' +
     operationHistorySnippet;
 
   const err = new Error(msg);
@@ -940,9 +1072,9 @@ async function waitForConvergence(nodes, options = {}) {
     leaders: leaderSummary,
     leaderChanges,
     inFlightReplicaOperationCount: latestInFlightReplicaOperationCount,
-    effectiveInFlightReplicaOperationCount: ignoreStaleInFlightReplicaOperations
-      ? latestEffectiveInFlightReplicaOperationCount
-      : latestInFlightReplicaOperationCount,
+    effectiveInFlightReplicaOperationCount: ignoreStaleInFlightReplicaOperations ?
+      latestEffectiveInFlightReplicaOperationCount :
+      latestInFlightReplicaOperationCount,
     staleInFlightReplicaOperationCount:
       latestStaleInFlightReplicaOperationCount,
     cacheVisibleSatisfiedPriorityRecoveryOperationCount:
@@ -962,6 +1094,7 @@ async function waitForConvergence(nodes, options = {}) {
     partitionMembership,
     operationHistory,
     operationHistoryError,
+    postRebalanceClosure,
     elapsedMs: Date.now() - startMs,
     controlPlaneDiagnostics: latestControlPlaneDiagnostics,
   };
@@ -971,7 +1104,7 @@ async function waitForConvergence(nodes, options = {}) {
 function buildPartitionMembership(rows, targetVoterCount) {
   const grouped = new Map();
   for (const row of rows) {
-    if (!row || row.service_type !== "partition" || !row.partition_id) {
+    if (!row || row.service_type !== 'partition' || !row.partition_id) {
       continue;
     }
     const partitionId = String(row.partition_id);
@@ -995,7 +1128,7 @@ function buildPartitionMembership(rows, targetVoterCount) {
     ).length;
     const leader = replicas.find(
       (replica) =>
-        String(replica.raftRole || "").toLowerCase() === STATUS_LEADER,
+        String(replica.raftRole || '').toLowerCase() === STATUS_LEADER,
     );
     membership[partitionId] = {
       targetVoterCount,
@@ -1053,18 +1186,18 @@ function formatSinglePartitionMembershipSnippet(partitionId, details) {
     .join(REPLICA_MEMBER_SEPARATOR);
   const replicaOverflow = replicas.length - visibleReplicas.length;
   const replicaSuffix =
-    replicaOverflow > 0
-      ? REPLICA_MEMBER_SEPARATOR +
+    replicaOverflow > 0 ?
+      REPLICA_MEMBER_SEPARATOR +
         SNIPPET_EXTRA_PREFIX +
         replicaOverflow +
-        SNIPPET_EXTRA_SUFFIX
-      : "";
-  const voterCount = Number.isFinite(details?.voterCount)
-    ? details.voterCount
-    : 0;
-  const targetVoterCount = Number.isFinite(details?.targetVoterCount)
-    ? details.targetVoterCount
-    : 0;
+        SNIPPET_EXTRA_SUFFIX :
+      '';
+  const voterCount = Number.isFinite(details?.voterCount) ?
+    details.voterCount :
+    0;
+  const targetVoterCount = Number.isFinite(details?.targetVoterCount) ?
+    details.targetVoterCount :
+    0;
   const leader = details?.leader || VALUE_NONE;
   return (
     partitionId +
@@ -1086,12 +1219,12 @@ function formatReplicaMembershipEntry(replica) {
   const node = replica?.nodeId || replica?.address || VALUE_UNKNOWN;
   const role = replica?.raftRole || STATUS_UNKNOWN;
   const status = replica?.status || STATUS_UNKNOWN;
-  return node + ":" + role + ":" + status;
+  return node + ':' + role + ':' + status;
 }
 
 function summarizeReplicaOperations(rows, limit) {
   const normalized = rows
-    .filter((row) => row && typeof row === "object")
+    .filter((row) => row && typeof row === 'object')
     .map((row) => normalizeReplicaOperationRow(row))
     .sort(
       (left, right) => parseTimestampMs(right.at) - parseTimestampMs(left.at),
@@ -1149,7 +1282,7 @@ function parseTimestampMs(value) {
   if (value === null || value === undefined) {
     return 0;
   }
-  if (typeof value === "number" && Number.isFinite(value)) {
+  if (typeof value === 'number' && Number.isFinite(value)) {
     return value;
   }
   const parsed = Date.parse(String(value));
@@ -1164,7 +1297,7 @@ function formatOperationHistorySnippet(
   operationHistoryError,
 ) {
   if (operationHistoryError) {
-    return VALUE_UNAVAILABLE + "(" + operationHistoryError + ")";
+    return VALUE_UNAVAILABLE + '(' + operationHistoryError + ')';
   }
   if (!Array.isArray(operationHistory) || operationHistory.length === 0) {
     return VALUE_NONE;
@@ -1196,15 +1329,15 @@ function formatOperationHistoryEntry(entry) {
   const at = entry?.at || VALUE_UNKNOWN;
   return (
     operationId +
-    ":" +
+    ':' +
     partitionId +
-    ":" +
+    ':' +
     type +
-    ":" +
+    ':' +
     status +
-    ":" +
+    ':' +
     fromNodeId +
-    "->" +
+    '->' +
     toNodeId +
     OPERATION_HISTORY_AT_PREFIX +
     at
@@ -1212,7 +1345,7 @@ function formatOperationHistoryEntry(entry) {
 }
 
 function cloneDiagnostics(value) {
-  if (!value || typeof value !== "object") {
+  if (!value || typeof value !== 'object') {
     return null;
   }
   try {
@@ -1226,7 +1359,7 @@ function buildPublicationConvergenceFromState(state) {
   const convergence = state?.controlPlaneDiagnostics?.publicationConvergence;
   if (
     convergence &&
-    typeof convergence === "object" &&
+    typeof convergence === 'object' &&
     !Array.isArray(convergence)
   ) {
     const clonedConvergence = cloneDiagnostics(convergence);
@@ -1234,22 +1367,22 @@ function buildPublicationConvergenceFromState(state) {
       ...clonedConvergence,
       sourceSnapshotVersion: Number.isInteger(
         clonedConvergence?.sourceSnapshotVersion,
-      )
-        ? clonedConvergence.sourceSnapshotVersion
-        : Number.isInteger(state?.sourceSnapshotVersion)
-          ? state.sourceSnapshotVersion
-          : null,
+      ) ?
+        clonedConvergence.sourceSnapshotVersion :
+        Number.isInteger(state?.sourceSnapshotVersion) ?
+          state.sourceSnapshotVersion :
+          null,
     };
   }
-  const publicationEpoch = Number.isInteger(state?.publicationEpoch)
-    ? state.publicationEpoch
-    : null;
-  const sourceSnapshotVersion = Number.isInteger(state?.sourceSnapshotVersion)
-    ? state.sourceSnapshotVersion
-    : null;
-  const publishedActiveNodeIds = Array.isArray(state?.publishedActiveNodeIds)
-    ? [...state.publishedActiveNodeIds].sort()
-    : null;
+  const publicationEpoch = Number.isInteger(state?.publicationEpoch) ?
+    state.publicationEpoch :
+    null;
+  const sourceSnapshotVersion = Number.isInteger(state?.sourceSnapshotVersion) ?
+    state.sourceSnapshotVersion :
+    null;
+  const publishedActiveNodeIds = Array.isArray(state?.publishedActiveNodeIds) ?
+    [...state.publishedActiveNodeIds].sort() :
+    null;
   if (
     !Number.isInteger(publicationEpoch) &&
     !Number.isInteger(sourceSnapshotVersion) &&
@@ -1260,9 +1393,9 @@ function buildPublicationConvergenceFromState(state) {
   return {
     publicationEpoch,
     sourceSnapshotVersion,
-    publishedActiveNodeIds: Array.isArray(publishedActiveNodeIds)
-      ? publishedActiveNodeIds
-      : [],
+    publishedActiveNodeIds: Array.isArray(publishedActiveNodeIds) ?
+      publishedActiveNodeIds :
+      [],
   };
 }
 
@@ -1313,6 +1446,9 @@ export const ASSERTIONS_SEGMENT_2 = {
   CONTROL_SNAPSHOT_FIELD_PROJECTED_NODES,
   CONTROL_SNAPSHOT_FIELD_PARTITIONS,
   CONTROL_SNAPSHOT_FIELD_LEADERS,
+  CONTROL_SNAPSHOT_FIELD_PARTITION_LEADER_AUTHORITY,
+  CONTROL_SNAPSHOT_FIELD_OBSERVATION_MODE,
+  CONTROL_SNAPSHOT_FIELD_ADMIN_OBSERVATION,
   CONTROL_SNAPSHOT_FIELD_VOTER_COUNTS,
   CONTROL_SNAPSHOT_FIELD_SNAPSHOT_REVISION,
   CONTROL_SNAPSHOT_FIELD_SNAPSHOT_REVISION_STATE,
@@ -1329,6 +1465,7 @@ export const ASSERTIONS_SEGMENT_2 = {
   REPLICA_ROLE_DIAGNOSTICS_LEADER_NODE_IDS,
   CONTROL_SNAPSHOT_FIELD_REPLICA_ROLES,
   REPLICA_ROLE_LEADER,
+  CONTROL_SNAPSHOT_ADMIN_OBSERVATION_FIELD_MODE,
   LEADER_ADDRESS_PATH_SEPARATOR,
   UUID_PREFIX_PATTERN,
   normalizeLeaderAddress,
@@ -1347,11 +1484,13 @@ export const ASSERTIONS_SEGMENT_2 = {
   normalizeStatusCountMap,
   normalizeVoterCountMap,
   extractControlSnapshotPayload,
+  extractControlSnapshotObservationMode,
   extractControlSnapshotNodeIds,
   extractControlSnapshotPublishedNodeIds,
   extractControlSnapshotProjectedNodeIds,
   extractControlSnapshotPartitionIds,
   extractControlSnapshotLeaders,
+  extractControlSnapshotPartitionLeaderAuthority,
   extractControlSnapshotVoterCounts,
   extractControlSnapshotInFlightSummary,
   extractControlSnapshotOperationRows,

@@ -151,9 +151,9 @@ test('phaseCacheHydration succeeds when CDC pipeline is ready',
     const systemTableCache = createFullyHydratedCache();
     const hydrationResult = createCompleteHydrationResult();
     applyCommonStubs(service, systemTableCache, hydrationResult);
-        service.getLeaderMessageGroupService = () => ({
-          applyCDCEvent: async () => {},
-        });
+    service.getLeaderMessageGroupService = () => ({
+      applyCDCEvent: async () => {},
+    });
     service.seedCacheHydrationPhase
       .subscribeToInitialSystemTableCDC = async () => {};
 

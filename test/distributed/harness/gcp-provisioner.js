@@ -62,7 +62,7 @@ async function loadPulumiDeps() {
     throw new Error(
       'Pulumi dependencies not installed. ' +
       'Run: npm install @pulumi/pulumi @pulumi/gcp\n' +
-      `Original error: ${err.message}`
+      `Original error: ${err.message}`,
     );
   }
 }
@@ -168,7 +168,7 @@ class GCPProvisioner {
         });
 
         const natIp = instance.networkInterfaces.apply(
-          (ifaces) => ifaces[0].accessConfigs[0].natIp
+          (ifaces) => ifaces[0].accessConfigs[0].natIp,
         );
         externalIps.push(natIp);
       }
@@ -192,7 +192,7 @@ class GCPProvisioner {
 
     const ips = result.outputs.externalIps.value;
     return ips.map(
-      (ip) => `${DOCKER_PORT_PROTOCOL}://${ip}:${DOCKER_PORT}`
+      (ip) => `${DOCKER_PORT_PROTOCOL}://${ip}:${DOCKER_PORT}`,
     );
   }
 
@@ -202,7 +202,7 @@ class GCPProvisioner {
   async destroy() {
     if (!this._stack) {
       throw new Error(
-        'No active Pulumi stack. Call provision() before destroy().'
+        'No active Pulumi stack. Call provision() before destroy().',
       );
     }
     await this._stack.destroy({onOutput: () => {}});

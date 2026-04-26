@@ -26,7 +26,6 @@ import {
 } from '../../src/query/runtime-constants.js';
 import {
   ResultStream,
-  STREAM_STATE,
 } from '../../src/query/result-stream.js';
 import {
   BudgetLimitError,
@@ -36,7 +35,6 @@ import {
   QB_FIELD,
 } from '../../src/wasm-service/query-budget-constants.js';
 import {
-  GUARDRAIL_ERROR_MSG,
 } from '../../src/query/guardrail-constants.js';
 import {
   ExchangeManager,

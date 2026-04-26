@@ -33,13 +33,38 @@ const PRIORITY_RECOVERY_SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT =
   'spread_satisfied_in_flight';
 const PRIORITY_RECOVERY_SEMANTIC_STATE_RECOVERING_IN_FLIGHT =
   'recovering_in_flight';
+const PRIORITY_RECOVERY_SEMANTIC_STATE_CONVERGED = 'converged';
+const PRIORITY_RECOVERY_SEMANTIC_STATE_OPERATION_STALLED =
+  'operation_stalled';
+const PRIORITY_RECOVERY_SEMANTIC_STATE_LEARNER_PROMOTION_BLOCKED =
+  'learner_promotion_blocked';
+const PRIORITY_RECOVERY_SEMANTIC_STATE_COORDINATION_MISMATCH =
+  'coordination_mismatch';
+const PRIORITY_RECOVERY_SEMANTIC_STATE_BLOCKED_UNCLASSIFIED =
+  'blocked_unclassified';
 const PRIORITY_RECOVERY_VISIBILITY_STATE_CACHE_VISIBLE = 'cache_visible';
+const PRIORITY_RECOVERY_WORKFLOW_STATE_REMOVE_PHASE = 'remove_phase';
+const PRIORITY_RECOVERY_CONVERGENCE_STATE_CONVERGED = 'converged';
+const PRIORITY_RECOVERY_CONVERGENCE_STATE_CONVERGING = 'converging';
+const PRIORITY_RECOVERY_PROTOCOL_STATE_PRIORITY_SPREAD_PENDING =
+  'priority_spread_pending';
+const PRIORITY_RECOVERY_REASON_PRIORITY_PARTITIONS_NOT_SPREAD =
+  'priority_partitions_not_spread';
 const PRIORITY_RECOVERY_WORKFLOW_STATE_IN_FLIGHT = 'in_flight';
 const PRIORITY_RECOVERY_NODE_ID_A = 'node-a';
 const PRIORITY_RECOVERY_NODE_ID_B = 'node-b';
 const PRIORITY_RECOVERY_NODE_ID_C = 'node-c';
 const PRIORITY_RECOVERY_SQL_TRANSACTION_PARTICIPANTS_PARTITION_ID =
   'sql_transaction_participants-p1';
+const PRIORITY_RECOVERY_PUBLICATION_STATUS_PUBLISHED = 'PUBLISHED';
+const PRIORITY_RECOVERY_ENTITY_TYPE_PARTITION = 'partition';
+const PRIORITY_RECOVERY_REASON_PLANNER_READY = 'planner_ready';
+const PRIORITY_RECOVERY_SAMPLE_PUBLICATION_EPOCH = 12;
+const PRIORITY_RECOVERY_SAMPLE_CAPTURED_AT_MS = 5000;
+const PRIORITY_RECOVERY_REQUIRED_DISTINCT_NODE_COUNT = 3;
+const PRIORITY_RECOVERY_READY_ELIGIBLE_NODE_COUNT = 6;
+const PRIORITY_RECOVERY_TOTAL_PRIORITY_PARTITION_COUNT = 5;
+const PRIORITY_RECOVERY_OPERATION_CREATED_AT_MS = 1000;
 const PRIORITY_RECOVERY_OPERATION_ID_SYNCING = 'op-replace-syncing';
 const PRIORITY_RECOVERY_OPERATION_ID_TERMINAL_REPLACE = 'op-terminal-replace';
 const PRIORITY_RECOVERY_REPLICA_ID_SYNCING =
@@ -61,9 +86,17 @@ const PRIORITY_RECOVERY_REASON_CONTROL_PLANE_WRITE_UNHEALTHY =
 const PRIORITY_RECOVERY_STATUS_ACTIVE = 'active';
 const PRIORITY_RECOVERY_STATUS_COMPLETED = 'completed';
 const PRIORITY_RECOVERY_STATUS_CREATING = 'creating';
+const PRIORITY_RECOVERY_STATUS_FAILED = 'failed';
+const PRIORITY_RECOVERY_STATUS_PENDING = 'pending';
+const PRIORITY_RECOVERY_STATUS_REMOVED = 'removed';
 const PRIORITY_RECOVERY_STATUS_SYNCING = 'syncing';
 const PRIORITY_RECOVERY_RAFT_ROLE_LEARNER = 'learner';
+const PRIORITY_RECOVERY_RAFT_ROLE_FOLLOWER = 'follower';
+const PRIORITY_RECOVERY_RAFT_ROLE_VOTER = 'voter';
+const PRIORITY_RECOVERY_OPERATION_TYPE_REPLACE = 'REPLACE';
+const PRIORITY_RECOVERY_WORKFLOW_STEP_PENDING = 'PENDING';
 const PRIORITY_RECOVERY_WORKFLOW_STEP_CREATING = 'CREATING';
+const PRIORITY_RECOVERY_WORKFLOW_STEP_FAILED = 'FAILED';
 const PRIORITY_RECOVERY_WORKFLOW_STEP_SYNCING = 'SYNCING';
 const PRIORITY_RECOVERY_WORKFLOW_STEP_ACTIVE = 'ACTIVE';
 const PRIORITY_RECOVERY_WORKFLOW_STEP_REMOVED = 'REMOVED';
@@ -101,8 +134,6 @@ const PRIORITY_RECOVERY_PROGRESS_WAIT_DEFERRED_VISIBILITY =
 const PRIORITY_RECOVERY_PROGRESS_WAIT_STALLED = 'stalled';
 const PRIORITY_RECOVERY_PROGRESS_PHASE_TARGET_CREATION = 'target_creation';
 const PRIORITY_RECOVERY_CREATING_TIMEOUT_MS = 60000;
-const PRIORITY_RECOVERY_ACTUATION_STATE_NO_ACTION_NEEDED =
-  'no_action_needed';
 const PRIORITY_RECOVERY_ACTUATION_STATE_ACTION_REQUIRED =
   'action_required';
 const PRIORITY_RECOVERY_ACTUATION_STATE_DISPATCHED = 'dispatched';
@@ -122,10 +153,55 @@ const PRIORITY_RECOVERY_PROGRESS_EVIDENCE_OPERATION_CONTEXT =
 const PRIORITY_RECOVERY_PROGRESS_EVIDENCE_WORKFLOW_STATE = 'workflow_state';
 const PRIORITY_RECOVERY_PROGRESS_EVIDENCE_LAST_PROGRESS =
   'last_progress_timestamp';
+const PRIORITY_RECOVERY_OPERATION_ID_SYNCING_FOLLOWER_TARGET =
+  'op-replace-syncing-follower-target';
+const PRIORITY_RECOVERY_PUBLICATION_REPLACEMENT_REPLICA_ID =
+  'control_plane_publications-p1-r4';
+const PRIORITY_RECOVERY_PUBLICATION_REPLACEMENT_ADDRESS =
+  'node-b/partition/control_plane_publications-p1-r4';
 const PRIORITY_RECOVERY_BLOCKER_REASON_OPERATION_NO_TRANSITIONS =
   'operation_created_but_no_step_transitions';
+const PRIORITY_RECOVERY_BLOCKER_REASON_ELIGIBLE_NO_OPERATION =
+  'eligible_but_no_operation_created';
+const PRIORITY_RECOVERY_SEMANTIC_STATE_NEEDS_OPERATION =
+  'needs_operation';
 const PRIORITY_RECOVERY_OPERATION_ID_OBJECT_ONLY =
   'op-visible-from-operation-object';
+const PRIORITY_RECOVERY_OPERATION_ID_PENDING_PLANNER_READY =
+  'op-pending-planner-ready';
+const PRIORITY_RECOVERY_OPERATION_ID_COMPLETED_REPLACE_VISIBLE =
+  'op-completed-replace-visible';
+const PRIORITY_RECOVERY_OPERATION_ID_PENDING_REPLACE_STALE =
+  'op-pending-replace-stale';
+const PRIORITY_RECOVERY_OPERATION_ID_SUPERSEDED_SYNCING =
+  'op-superseded-syncing';
+const PRIORITY_RECOVERY_OPERATION_ID_NEWER_FAILED_REPLACE =
+  'op-newer-failed-replace';
+const PRIORITY_RECOVERY_SQL_TRANSACTIONS_REPLICA_ID =
+  'sql_transactions-p1-r5';
+const PRIORITY_RECOVERY_SQL_TRANSACTIONS_REPLACEMENT_REPLICA_ID =
+  'sql_transactions-p1-r6';
+const PRIORITY_RECOVERY_SQL_TRANSACTION_PARTICIPANTS_REPLACEMENT_REPLICA_ID =
+  'sql_transaction_participants-p1-r7';
+const PRIORITY_RECOVERY_SQL_TRANSACTION_PARTICIPANTS_STALE_REPLICA_ID =
+  'sql_transaction_participants-p1-r8';
+const PRIORITY_RECOVERY_SQL_TRANSACTION_PARTICIPANTS_FAILED_REPLICA_ID =
+  'sql_transaction_participants-p1-r9';
+const PRIORITY_RECOVERY_OPERATION_UPDATED_AT_MS = 2000;
+const PRIORITY_RECOVERY_OPERATION_COMPLETED_AT_MS = 2500;
+const PRIORITY_RECOVERY_SUPERSEDED_OPERATION_UPDATED_AT_MS = 3000;
+const PRIORITY_RECOVERY_NEWER_OPERATION_CREATED_AT_MS = 4000;
+const PRIORITY_RECOVERY_NEWER_OPERATION_COMPLETED_AT_MS = 4500;
+const PRIORITY_RECOVERY_STALE_READY_DISTINCT_NODE_COUNT = 2;
+const PRIORITY_RECOVERY_SINGLE_SPREAD_GAP = 1;
+const PRIORITY_RECOVERY_EMPTY_COUNT = 0;
+const PRIORITY_RECOVERY_SINGLE_ADD_BUDGET_LIMIT = 1;
+const PRIORITY_RECOVERY_SINGLE_EMERGENCY_OVERFLOW_SLOT_COUNT = 1;
+const PRIORITY_RECOVERY_DUAL_EMERGENCY_OVERFLOW_SLOT_COUNT = 2;
+const PRIORITY_RECOVERY_SINGLE_EMERGENCY_BUDGET_LIMIT = 2;
+const PRIORITY_RECOVERY_DUAL_EMERGENCY_BUDGET_LIMIT = 3;
+const PRIORITY_RECOVERY_SINGLE_PRIORITY_IN_FLIGHT_COUNT = 1;
+const PRIORITY_RECOVERY_DUAL_PRIORITY_IN_FLIGHT_COUNT = 2;
 const PRIORITY_RECOVERY_TERMINAL_REPLACE_OPERATION_CONTEXT = Object.freeze({
   partitionId: PUBLICATION_PRIORITY_PARTITION_ID,
   operationId: PRIORITY_RECOVERY_OPERATION_ID_TERMINAL_REPLACE,
@@ -164,18 +240,18 @@ test('priority recovery emergency classification stays narrower than transport-c
 test('priority recovery admission plan reserves the emergency lane only for emergency blocked partitions',
   async (t) => {
     const ordinaryPlan = buildPriorityRecoveryAdmissionPlan({
-      maxConcurrentAdds: 1,
+      maxConcurrentAdds: PRIORITY_RECOVERY_SINGLE_ADD_BUDGET_LIMIT,
       priorityPartitionSummary: {
         satisfied: false,
         blockedPartitions: [{
-          partitionId: 'sql_transactions-p1',
-          spreadGap: 1,
+          partitionId: SQL_TRANSACTION_PRIORITY_PARTITION_ID,
+          spreadGap: PRIORITY_RECOVERY_SINGLE_SPREAD_GAP,
         }],
       },
       isPriorityPartition: (partitionId) =>
-        partitionId === 'sql_transactions-p1',
+        partitionId === SQL_TRANSACTION_PRIORITY_PARTITION_ID,
       isEmergencyPriorityPartition: (partitionId) =>
-        partitionId === 'control_plane_publications-p1',
+        partitionId === PUBLICATION_PRIORITY_PARTITION_ID,
     });
 
     t.equal(
@@ -184,39 +260,42 @@ test('priority recovery admission plan reserves the emergency lane only for emer
       'ordinary priority recovery should not consume the emergency reservation',
     );
     t.equal(
-      ordinaryPlan.getPartitionClass('sql_transactions-p1'),
+      ordinaryPlan.getPartitionClass(SQL_TRANSACTION_PRIORITY_PARTITION_ID),
       PRIORITY_RECOVERY_ADMISSION_PARTITION_CLASS.ORDINARY_PRIORITY,
       'the canonical plan should classify ordinary priority partitions explicitly',
     );
     t.equal(
       ordinaryPlan.ordinaryPriorityAddBudgetLimit,
-      1,
+      PRIORITY_RECOVERY_SINGLE_ADD_BUDGET_LIMIT,
       'ordinary priority partitions should keep the full configured lane when no emergency partitions are blocked',
     );
     t.equal(
       ordinaryPlan.evaluatePriorityAddAdmission(
-        'sql_transactions-p1',
-        {priorityCount: 0, ordinaryPriorityCount: 0},
+        SQL_TRANSACTION_PRIORITY_PARTITION_ID,
+        {
+          priorityCount: PRIORITY_RECOVERY_EMPTY_COUNT,
+          ordinaryPriorityCount: PRIORITY_RECOVERY_EMPTY_COUNT,
+        },
       ).reason,
       PRIORITY_RECOVERY_ADMISSION_DECISION_REASON.ADMITTED,
       'ordinary priority admission should flow through the canonical decision helper',
     );
 
     const emergencyPlan = buildPriorityRecoveryAdmissionPlan({
-      maxConcurrentAdds: 1,
+      maxConcurrentAdds: PRIORITY_RECOVERY_SINGLE_ADD_BUDGET_LIMIT,
       priorityPartitionSummary: {
         satisfied: false,
         blockedPartitions: [{
-          partitionId: 'control_plane_publications-p1',
-          spreadGap: 1,
+          partitionId: PUBLICATION_PRIORITY_PARTITION_ID,
+          spreadGap: PRIORITY_RECOVERY_SINGLE_SPREAD_GAP,
         }],
       },
       isPriorityPartition: (partitionId) => (
-        partitionId === 'control_plane_publications-p1' ||
-        partitionId === 'sql_transactions-p1'
+        partitionId === PUBLICATION_PRIORITY_PARTITION_ID ||
+        partitionId === SQL_TRANSACTION_PRIORITY_PARTITION_ID
       ),
       isEmergencyPriorityPartition: (partitionId) =>
-        partitionId === 'control_plane_publications-p1',
+        partitionId === PUBLICATION_PRIORITY_PARTITION_ID,
     });
 
     t.equal(
@@ -226,17 +305,22 @@ test('priority recovery admission plan reserves the emergency lane only for emer
     );
     t.equal(
       emergencyPlan.ordinaryPriorityAddBudgetLimit,
-      1,
+      PRIORITY_RECOVERY_SINGLE_ADD_BUDGET_LIMIT,
       'ordinary priority partitions should keep the configured lane while the emergency slot remains reserved as overflow',
     );
     t.equal(
+      emergencyPlan.emergencyPriorityOverflowSlotCount,
+      PRIORITY_RECOVERY_SINGLE_EMERGENCY_OVERFLOW_SLOT_COUNT,
+      'a single blocked emergency owner should reserve one emergency overflow slot',
+    );
+    t.equal(
       emergencyPlan.emergencyPriorityAddBudgetLimit,
-      2,
+      PRIORITY_RECOVERY_SINGLE_EMERGENCY_BUDGET_LIMIT,
       'emergency control-plane partitions should get one bounded overflow slot',
     );
     t.equal(
       emergencyPlan.usesEmergencyPriorityOverflow(
-        'control_plane_publications-p1',
+        PUBLICATION_PRIORITY_PARTITION_ID,
       ),
       true,
       'the canonical plan should answer emergency-overflow usage directly',
@@ -245,6 +329,63 @@ test('priority recovery admission plan reserves the emergency lane only for emer
       emergencyPlan.getReservedNonPrioritySlots('users-p1', 'add'),
       1,
       'non-priority reservations should also flow through the canonical plan contract',
+    );
+
+    const dualEmergencyPlan = buildPriorityRecoveryAdmissionPlan({
+      maxConcurrentAdds: PRIORITY_RECOVERY_SINGLE_ADD_BUDGET_LIMIT,
+      priorityPartitionSummary: {
+        satisfied: false,
+        blockedPartitions: [{
+          partitionId: PUBLICATION_PRIORITY_PARTITION_ID,
+          spreadGap: PRIORITY_RECOVERY_SINGLE_SPREAD_GAP,
+        }, {
+          partitionId: REPLICA_OPERATION_PRIORITY_PARTITION_ID,
+          spreadGap: PRIORITY_RECOVERY_SINGLE_SPREAD_GAP,
+        }],
+      },
+      isPriorityPartition: (partitionId) => (
+        partitionId === PUBLICATION_PRIORITY_PARTITION_ID ||
+        partitionId === REPLICA_OPERATION_PRIORITY_PARTITION_ID ||
+        partitionId === SQL_TRANSACTION_PRIORITY_PARTITION_ID
+      ),
+      isEmergencyPriorityPartition: (partitionId) => (
+        partitionId === PUBLICATION_PRIORITY_PARTITION_ID ||
+        partitionId === REPLICA_OPERATION_PRIORITY_PARTITION_ID
+      ),
+    });
+
+    t.equal(
+      dualEmergencyPlan.emergencyPriorityOverflowSlotCount,
+      PRIORITY_RECOVERY_DUAL_EMERGENCY_OVERFLOW_SLOT_COUNT,
+      'distinct emergency recovery owners should each contribute one overflow slot',
+    );
+    t.equal(
+      dualEmergencyPlan.emergencyPriorityAddBudgetLimit,
+      PRIORITY_RECOVERY_DUAL_EMERGENCY_BUDGET_LIMIT,
+      'dual emergency recovery should keep publication and replica-operation scheduling independent',
+    );
+    t.equal(
+      dualEmergencyPlan.evaluatePriorityAddAdmission(
+        REPLICA_OPERATION_PRIORITY_PARTITION_ID,
+        {
+          priorityCount: PRIORITY_RECOVERY_DUAL_PRIORITY_IN_FLIGHT_COUNT,
+          ordinaryPriorityCount: PRIORITY_RECOVERY_SINGLE_PRIORITY_IN_FLIGHT_COUNT,
+          emergencyPriorityCount: PRIORITY_RECOVERY_SINGLE_PRIORITY_IN_FLIGHT_COUNT,
+        },
+      ).reason,
+      PRIORITY_RECOVERY_ADMISSION_DECISION_REASON.ADMITTED,
+      'the second emergency owner should remain admitted after ordinary priority and the first emergency owner are already in flight',
+    );
+    t.equal(
+      dualEmergencyPlan.evaluatePriorityAddAdmission(
+        SQL_TRANSACTION_PRIORITY_PARTITION_ID,
+        {
+          priorityCount: PRIORITY_RECOVERY_SINGLE_PRIORITY_IN_FLIGHT_COUNT,
+          ordinaryPriorityCount: PRIORITY_RECOVERY_SINGLE_PRIORITY_IN_FLIGHT_COUNT,
+        },
+      ).reason,
+      PRIORITY_RECOVERY_ADMISSION_DECISION_REASON.ORDINARY_PRIORITY_LANE_EXHAUSTED,
+      'ordinary priority scheduling should still respect the configured lane while emergency overflow is reserved',
     );
   });
 
@@ -574,7 +715,7 @@ test('priority recovery decision snapshots classify eligible ACTIVE replace disp
       serviceRows: [{
         partition_id: 'control_plane_publications-p1',
         status: 'active',
-        raft_role: 'voter',
+        raft_role: PRIORITY_RECOVERY_RAFT_ROLE_VOTER,
         node_id: 'node-b',
       }],
     });
@@ -838,7 +979,7 @@ test('priority recovery decision snapshots keep ACTIVE replace dispatch blocking
       serviceRows: [{
         partition_id: 'control_plane_publications-p1',
         status: 'active',
-        raft_role: 'voter',
+        raft_role: PRIORITY_RECOVERY_RAFT_ROLE_VOTER,
         node_id: 'node-b',
       }],
     });
@@ -1166,74 +1307,74 @@ test('priority recovery observation snapshots preserve the rebalancer-owned acti
 
 test('priority recovery observation snapshots preserve operation ids from ' +
   'normalized operation objects',
-  async (t) => {
-    const observationSnapshot = buildPriorityRecoveryObservationSnapshot({
-      priorityRecoveryDecisionSnapshots: {
-        capturedAt: 2000,
-        publicationEpoch: 9,
-        snapshots: [{
-          partitionId: PUBLICATION_PRIORITY_PARTITION_ID,
-          semanticState: PRIORITY_RECOVERY_SEMANTIC_STATE_RECOVERING_IN_FLIGHT,
-          blockerReasons: [
-            PRIORITY_RECOVERY_BLOCKER_REASON_OPERATION_NO_TRANSITIONS,
+async (t) => {
+  const observationSnapshot = buildPriorityRecoveryObservationSnapshot({
+    priorityRecoveryDecisionSnapshots: {
+      capturedAt: 2000,
+      publicationEpoch: 9,
+      snapshots: [{
+        partitionId: PUBLICATION_PRIORITY_PARTITION_ID,
+        semanticState: PRIORITY_RECOVERY_SEMANTIC_STATE_RECOVERING_IN_FLIGHT,
+        blockerReasons: [
+          PRIORITY_RECOVERY_BLOCKER_REASON_OPERATION_NO_TRANSITIONS,
+        ],
+        planner: {
+          spreadGap: 1,
+        },
+        admission: {
+          effectiveEligibleNodeIds: [
+            PRIORITY_RECOVERY_NODE_ID_B,
+            PRIORITY_RECOVERY_NODE_ID_C,
           ],
-          planner: {
-            spreadGap: 1,
+        },
+        coordinator: {
+          operationCount: 1,
+          operation: {
+            operationId: PRIORITY_RECOVERY_OPERATION_ID_OBJECT_ONLY,
+            workflowStep: PRIORITY_RECOVERY_WORKFLOW_STEP_CREATING,
+            status: PRIORITY_RECOVERY_STATUS_CREATING,
+            updatedAtMs: 1500,
           },
-          admission: {
-            effectiveEligibleNodeIds: [
-              PRIORITY_RECOVERY_NODE_ID_B,
-              PRIORITY_RECOVERY_NODE_ID_C,
-            ],
-          },
-          coordinator: {
-            operationCount: 1,
-            operation: {
-              operationId: PRIORITY_RECOVERY_OPERATION_ID_OBJECT_ONLY,
-              workflowStep: PRIORITY_RECOVERY_WORKFLOW_STEP_CREATING,
-              status: PRIORITY_RECOVERY_STATUS_CREATING,
-              updatedAtMs: 1500,
-            },
-          },
-          progress: {
-            contractState: PRIORITY_RECOVERY_PROGRESS_CONTRACT_STATE_PENDING,
-            currentOwner: PRIORITY_RECOVERY_PROGRESS_OWNER_WORKFLOW,
-            nextRequiredAction:
+        },
+        progress: {
+          contractState: PRIORITY_RECOVERY_PROGRESS_CONTRACT_STATE_PENDING,
+          currentOwner: PRIORITY_RECOVERY_PROGRESS_OWNER_WORKFLOW,
+          nextRequiredAction:
               PRIORITY_RECOVERY_PROGRESS_ACTION_WAIT_FOR_PROGRESS,
-            blockingBoundary: PRIORITY_RECOVERY_PROGRESS_BOUNDARY_WORKFLOW,
-            waitMode: PRIORITY_RECOVERY_PROGRESS_WAIT_EVENT_DRIVEN,
-            lastProgressAtMs: 1500,
-          },
-          observation: {
-            workflowState: PRIORITY_RECOVERY_WORKFLOW_STATE_IN_FLIGHT,
-            visibilityState: PRIORITY_RECOVERY_VISIBILITY_STATE_CACHE_VISIBLE,
-          },
-        }],
-      },
-    });
-    const partitionSnapshot =
+          blockingBoundary: PRIORITY_RECOVERY_PROGRESS_BOUNDARY_WORKFLOW,
+          waitMode: PRIORITY_RECOVERY_PROGRESS_WAIT_EVENT_DRIVEN,
+          lastProgressAtMs: 1500,
+        },
+        observation: {
+          workflowState: PRIORITY_RECOVERY_WORKFLOW_STATE_IN_FLIGHT,
+          visibilityState: PRIORITY_RECOVERY_VISIBILITY_STATE_CACHE_VISIBLE,
+        },
+      }],
+    },
+  });
+  const partitionSnapshot =
       observationSnapshot.priorityRecoveryPartitionSnapshots[0];
-    const partitionWitness =
+  const partitionWitness =
       observationSnapshot.priorityRecoveryPartitionWitnesses[0];
 
-    t.same(
-      partitionSnapshot.operationIds,
-      [PRIORITY_RECOVERY_OPERATION_ID_OBJECT_ONLY],
-      'partition snapshots should retain operation id evidence from the ' +
+  t.same(
+    partitionSnapshot.operationIds,
+    [PRIORITY_RECOVERY_OPERATION_ID_OBJECT_ONLY],
+    'partition snapshots should retain operation id evidence from the ' +
         'normalized operation object',
-    );
-    t.same(
-      partitionWitness.operationIds,
-      [PRIORITY_RECOVERY_OPERATION_ID_OBJECT_ONLY],
-      'partition witnesses should not report operation absence when operation evidence exists',
-    );
-    t.ok(
-      partitionWitness.witnessIds.includes(
-        PRIORITY_RECOVERY_OPERATION_ID_OBJECT_ONLY,
-      ),
-      'operation ids should remain part of the witness id set for harness diagnostics',
-    );
-  });
+  );
+  t.same(
+    partitionWitness.operationIds,
+    [PRIORITY_RECOVERY_OPERATION_ID_OBJECT_ONLY],
+    'partition witnesses should not report operation absence when operation evidence exists',
+  );
+  t.ok(
+    partitionWitness.witnessIds.includes(
+      PRIORITY_RECOVERY_OPERATION_ID_OBJECT_ONLY,
+    ),
+    'operation ids should remain part of the witness id set for harness diagnostics',
+  );
+});
 
 test('priority recovery observation snapshots prefer explicit semantic-state indexes over local fallback inference',
   async (t) => {
@@ -1308,6 +1449,124 @@ test('priority recovery observation snapshots prefer explicit semantic-state ind
       observationSnapshot.priorityRecoveryUnresolvedPartitionIds,
       [],
       'explicit spread-satisfied mapping should keep the partition out of the unresolved set',
+    );
+  });
+
+test('priority recovery observation snapshots prefer current unresolved decision partitions over stale spread summary ids',
+  async (t) => {
+    const stalePriorityPartitionSummary = {
+      satisfied: false,
+      requiredDistinctNodeCount: 3,
+      readyEligibleNodeCount: 3,
+      totalPriorityPartitionCount: 2,
+      missingPartitionIds: [PUBLICATION_PRIORITY_PARTITION_ID],
+      blockedPartitions: [{
+        partitionId: PUBLICATION_PRIORITY_PARTITION_ID,
+        requiredDistinctNodeCount: 3,
+        readyDistinctNodeCount: 2,
+        spreadGap: 1,
+      }],
+      blockedPartitionCount: 1,
+      largestSpreadGap: 1,
+      totalSpreadGap: 1,
+    };
+    const partitionIdsBySemanticState = {
+      [PRIORITY_RECOVERY_SEMANTIC_STATE_CONVERGED]: [],
+      [PRIORITY_RECOVERY_SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT]: [
+        PUBLICATION_PRIORITY_PARTITION_ID,
+      ],
+      [PRIORITY_RECOVERY_SEMANTIC_STATE_NEEDS_OPERATION]: [
+        REPLICA_OPERATION_PRIORITY_PARTITION_ID,
+      ],
+      [PRIORITY_RECOVERY_SEMANTIC_STATE_OPERATION_STALLED]: [],
+      [PRIORITY_RECOVERY_SEMANTIC_STATE_LEARNER_PROMOTION_BLOCKED]: [],
+      [PRIORITY_RECOVERY_SEMANTIC_STATE_COORDINATION_MISMATCH]: [],
+      [PRIORITY_RECOVERY_SEMANTIC_STATE_RECOVERING_IN_FLIGHT]: [],
+      [PRIORITY_RECOVERY_SEMANTIC_STATE_BLOCKED_UNCLASSIFIED]: [],
+    };
+    const observationSnapshot = buildPriorityRecoveryObservationSnapshot({
+      publicationConvergence: {
+        publicationEpoch: 9,
+        publicationStatus: PRIORITY_RECOVERY_PUBLICATION_STATUS_PUBLISHED,
+        recoveryProtocolState:
+          PRIORITY_RECOVERY_PROTOCOL_STATE_PRIORITY_SPREAD_PENDING,
+        priorityRecoveryReasonCodes: [
+          PRIORITY_RECOVERY_REASON_PRIORITY_PARTITIONS_NOT_SPREAD,
+        ],
+        priorityPartitionSummary: stalePriorityPartitionSummary,
+      },
+      priorityRecoveryDecisionSnapshots: {
+        capturedAt: 3000,
+        publicationEpoch: 9,
+        priorityPartitionSummary: stalePriorityPartitionSummary,
+        partitionIdsBySemanticState,
+        snapshots: [{
+          partitionId: PUBLICATION_PRIORITY_PARTITION_ID,
+          blockerReasons: [],
+          planner: {
+            ready: true,
+            requiredDistinctNodeCount: 3,
+            spreadGap: 0,
+          },
+          completion: {
+            state:
+              PRIORITY_RECOVERY_COMPLETION_STATE
+                .SPREAD_SATISFIED_IN_FLIGHT,
+          },
+          observation: {
+            workflowState: PRIORITY_RECOVERY_WORKFLOW_STATE_REMOVE_PHASE,
+            visibilityState: PRIORITY_RECOVERY_VISIBILITY_STATE_CACHE_VISIBLE,
+            convergenceState: PRIORITY_RECOVERY_CONVERGENCE_STATE_CONVERGED,
+            provenance: {
+              capturedAt: 2000,
+            },
+          },
+        }, {
+          partitionId: REPLICA_OPERATION_PRIORITY_PARTITION_ID,
+          blockerReasons: [
+            PRIORITY_RECOVERY_BLOCKER_REASON_ELIGIBLE_NO_OPERATION,
+          ],
+          planner: {
+            ready: false,
+            requiredDistinctNodeCount: 3,
+            spreadGap: 1,
+          },
+          completion: {
+            state: PRIORITY_RECOVERY_SEMANTIC_STATE_NEEDS_OPERATION,
+          },
+          observation: {
+            workflowState: PRIORITY_RECOVERY_WORKFLOW_STATE_IN_FLIGHT,
+            visibilityState: PRIORITY_RECOVERY_VISIBILITY_STATE_CACHE_VISIBLE,
+            convergenceState: PRIORITY_RECOVERY_CONVERGENCE_STATE_CONVERGING,
+            provenance: {
+              capturedAt: 3000,
+            },
+          },
+        }],
+      },
+    });
+
+    t.same(
+      observationSnapshot.priorityRecoveryBlockedPartitionIds,
+      [REPLICA_OPERATION_PRIORITY_PARTITION_ID],
+      'current unresolved decision evidence should own the blocked partition id instead of the stale spread-summary partition',
+    );
+    t.same(
+      observationSnapshot.priorityRecoveryUnresolvedPartitionIds,
+      [REPLICA_OPERATION_PRIORITY_PARTITION_ID],
+    );
+    t.same(
+      observationSnapshot.priorityRecoveryPartitionIdsBySemanticState[
+        PRIORITY_RECOVERY_SEMANTIC_STATE_NEEDS_OPERATION
+      ],
+      [REPLICA_OPERATION_PRIORITY_PARTITION_ID],
+    );
+    t.same(
+      observationSnapshot.priorityRecoveryPartitionIdsBySemanticState[
+        PRIORITY_RECOVERY_SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT
+      ],
+      [PUBLICATION_PRIORITY_PARTITION_ID],
+      'the stale spread partition should remain visible only as non-blocking semantic evidence',
     );
   });
 
@@ -2108,6 +2367,100 @@ test('priority recovery decision snapshots treat non-blocked SYNCING replace wor
     );
   });
 
+test('priority recovery decision snapshots do not let planner-ready PENDING ' +
+  'work keep a spread-satisfied partition unresolved', async (t) => {
+  const decisionSnapshots = buildPriorityRecoveryDecisionSnapshots({
+    capturedAt: PRIORITY_RECOVERY_SAMPLE_CAPTURED_AT_MS,
+    publicationConvergence: {
+      publicationEpoch: PRIORITY_RECOVERY_SAMPLE_PUBLICATION_EPOCH,
+      publicationStatus: PRIORITY_RECOVERY_PUBLICATION_STATUS_PUBLISHED,
+      publishedActiveNodeIds: [
+        PRIORITY_RECOVERY_NODE_ID_A,
+        PRIORITY_RECOVERY_NODE_ID_B,
+      ],
+      priorityPartitionSummary: {
+        satisfied: true,
+        requiredDistinctNodeCount:
+          PRIORITY_RECOVERY_REQUIRED_DISTINCT_NODE_COUNT,
+        readyEligibleNodeCount: PRIORITY_RECOVERY_READY_ELIGIBLE_NODE_COUNT,
+        totalPriorityPartitionCount:
+          PRIORITY_RECOVERY_TOTAL_PRIORITY_PARTITION_COUNT,
+      },
+      membershipLifecycleSummary: {
+        projectedServingNodeIds: [
+          PRIORITY_RECOVERY_NODE_ID_A,
+          PRIORITY_RECOVERY_NODE_ID_B,
+        ],
+        locallyEligibleNodeIds: [
+          PRIORITY_RECOVERY_NODE_ID_A,
+          PRIORITY_RECOVERY_NODE_ID_B,
+        ],
+      },
+    },
+    readinessByNodeId: {},
+    workflowAdmissionsByWorkflowId: {},
+    replicaOperationRows: [{
+      operation_id: PRIORITY_RECOVERY_OPERATION_ID_PENDING_PLANNER_READY,
+      partition_id: SQL_TRANSACTION_PRIORITY_PARTITION_ID,
+      entity_type: PRIORITY_RECOVERY_ENTITY_TYPE_PARTITION,
+      operation_type: PRIORITY_RECOVERY_OPERATION_TYPE_REPLACE,
+      status: PRIORITY_RECOVERY_STATUS_PENDING,
+      workflow_step: PRIORITY_RECOVERY_WORKFLOW_STEP_PENDING,
+      source_node_id: PRIORITY_RECOVERY_NODE_ID_A,
+      target_node_id: PRIORITY_RECOVERY_NODE_ID_B,
+      replica_id: PRIORITY_RECOVERY_SQL_TRANSACTIONS_REPLICA_ID,
+      created_at: PRIORITY_RECOVERY_OPERATION_CREATED_AT_MS,
+      updated_at: PRIORITY_RECOVERY_OPERATION_CREATED_AT_MS,
+    }],
+    replicaOperations: {
+      operationTimelineById: {
+        [PRIORITY_RECOVERY_OPERATION_ID_PENDING_PLANNER_READY]: [{
+          step: PRIORITY_RECOVERY_WORKFLOW_STEP_PENDING,
+          status: PRIORITY_RECOVERY_STATUS_PENDING,
+          inFlight: true,
+        }],
+      },
+    },
+    serviceRows: [],
+  });
+
+  const targetSnapshot = decisionSnapshots.snapshots.find((entry) =>
+    entry.partitionId === SQL_TRANSACTION_PRIORITY_PARTITION_ID &&
+    entry.operationId ===
+      PRIORITY_RECOVERY_OPERATION_ID_PENDING_PLANNER_READY,
+  );
+  t.ok(targetSnapshot, 'target partition snapshot should exist');
+  t.same(
+    targetSnapshot.blockerReasons,
+    [],
+    'planner-ready PENDING work should not emit no-transition blockers',
+  );
+  t.same(
+    targetSnapshot.spreadCompletion,
+    {
+      satisfied: true,
+      reasonCode: PRIORITY_RECOVERY_REASON_PLANNER_READY,
+      satisfyingOperationIds: [],
+      satisfyingOperationCount: 0,
+      blockingOperationIds: [
+        PRIORITY_RECOVERY_OPERATION_ID_PENDING_PLANNER_READY,
+      ],
+      blockingOperationCount: 1,
+    },
+    'planner-ready partitions should preserve the blocking operation as non-blocking context',
+  );
+  t.equal(
+    targetSnapshot.semanticState,
+    PRIORITY_RECOVERY_SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT,
+    'planner-ready PENDING work should be spread-satisfied in flight',
+  );
+  t.same(
+    decisionSnapshots.unresolvedSemanticStateIds,
+    [],
+    'planner-ready PENDING work should not keep priority recovery unresolved',
+  );
+});
+
 test(
   'priority recovery decision snapshots treat cache-visible SYNCING replace work ' +
     'with an operational target on an eligible node as spread-satisfied in flight',
@@ -2165,7 +2518,7 @@ test(
         replica_id: 'control_plane_publications-p1-r4',
         service_type: 'partition',
         status: 'active',
-        raft_role: 'voter',
+        raft_role: PRIORITY_RECOVERY_RAFT_ROLE_VOTER,
         node_id: 'node-b',
       }],
     });
@@ -2218,6 +2571,110 @@ test(
         },
       },
       'observation should preserve cache visibility while still surfacing the canonical spread-satisfied convergence state',
+    );
+  },
+);
+
+test(
+  'priority recovery decision snapshots treat syncing follower target rows with address as operational target evidence',
+  async (t) => {
+    const decisionSnapshots = buildPriorityRecoveryDecisionSnapshots({
+      capturedAt: PRIORITY_RECOVERY_SAMPLE_CAPTURED_AT_MS,
+      publicationConvergence: {
+        publicationEpoch: PRIORITY_RECOVERY_SAMPLE_PUBLICATION_EPOCH,
+        publicationStatus: PRIORITY_RECOVERY_PUBLICATION_STATUS_PUBLISHED,
+        publishedActiveNodeIds: [
+          PRIORITY_RECOVERY_NODE_ID_A,
+          PRIORITY_RECOVERY_NODE_ID_B,
+        ],
+        pendingAckNodeIds: [],
+        priorityPartitionSummary: {
+          satisfied: false,
+          blockedPartitions: [{
+            partitionId: PUBLICATION_PRIORITY_PARTITION_ID,
+            requiredDistinctNodeCount:
+              PRIORITY_RECOVERY_REQUIRED_DISTINCT_NODE_COUNT,
+            readyDistinctNodeCount: 2,
+            spreadGap: 1,
+          }],
+          missingPartitionIds: [PUBLICATION_PRIORITY_PARTITION_ID],
+          requiredDistinctNodeCount:
+            PRIORITY_RECOVERY_REQUIRED_DISTINCT_NODE_COUNT,
+        },
+        membershipLifecycleSummary: {
+          projectedServingNodeIds: [
+            PRIORITY_RECOVERY_NODE_ID_A,
+            PRIORITY_RECOVERY_NODE_ID_B,
+          ],
+          locallyEligibleNodeIds: [
+            PRIORITY_RECOVERY_NODE_ID_A,
+            PRIORITY_RECOVERY_NODE_ID_B,
+          ],
+        },
+      },
+      readinessByNodeId: {},
+      workflowAdmissionsByWorkflowId: {},
+      replicaOperationRows: [{
+        operation_id: PRIORITY_RECOVERY_OPERATION_ID_SYNCING_FOLLOWER_TARGET,
+        partition_id: PUBLICATION_PRIORITY_PARTITION_ID,
+        entity_type: PRIORITY_RECOVERY_ENTITY_TYPE_PARTITION,
+        operation_type: PRIORITY_RECOVERY_OPERATION_TYPE_REPLACE,
+        status: PRIORITY_RECOVERY_STATUS_SYNCING,
+        workflow_step: PRIORITY_RECOVERY_WORKFLOW_STEP_SYNCING,
+        source_node_id: PRIORITY_RECOVERY_NODE_ID_A,
+        target_node_id: PRIORITY_RECOVERY_NODE_ID_B,
+        replica_id: PRIORITY_RECOVERY_PUBLICATION_REPLACEMENT_REPLICA_ID,
+        created_at: PRIORITY_RECOVERY_OPERATION_CREATED_AT_MS,
+        updated_at: PRIORITY_RECOVERY_OPERATION_CREATED_AT_MS,
+      }],
+      replicaOperations: {
+        operationTimelineById: {
+          [PRIORITY_RECOVERY_OPERATION_ID_SYNCING_FOLLOWER_TARGET]: [
+            {
+              step: PRIORITY_RECOVERY_WORKFLOW_STEP_SYNCING,
+              status: PRIORITY_RECOVERY_STATUS_SYNCING,
+              inFlight: true,
+            },
+          ],
+        },
+      },
+      serviceRows: [{
+        partition_id: PUBLICATION_PRIORITY_PARTITION_ID,
+        replica_id: PRIORITY_RECOVERY_PUBLICATION_REPLACEMENT_REPLICA_ID,
+        service_type: PRIORITY_RECOVERY_ENTITY_TYPE_PARTITION,
+        status: PRIORITY_RECOVERY_STATUS_SYNCING,
+        raft_role: PRIORITY_RECOVERY_RAFT_ROLE_FOLLOWER,
+        node_id: PRIORITY_RECOVERY_NODE_ID_B,
+        address: PRIORITY_RECOVERY_PUBLICATION_REPLACEMENT_ADDRESS,
+      }],
+    });
+
+    const targetSnapshot = decisionSnapshots.snapshots.find((entry) =>
+      entry.partitionId === PUBLICATION_PRIORITY_PARTITION_ID &&
+      entry.operationId ===
+        PRIORITY_RECOVERY_OPERATION_ID_SYNCING_FOLLOWER_TARGET,
+    );
+
+    t.ok(targetSnapshot, 'target partition snapshot should exist');
+    t.same(
+      targetSnapshot.spreadCompletion,
+      {
+        satisfied: true,
+        reasonCode:
+          PRIORITY_RECOVERY_REASON_OPERATIONAL_TARGET_VISIBLE_ON_ELIGIBLE_NODE,
+        satisfyingOperationIds: [
+          PRIORITY_RECOVERY_OPERATION_ID_SYNCING_FOLLOWER_TARGET,
+        ],
+        satisfyingOperationCount: 1,
+        blockingOperationIds: [],
+        blockingOperationCount: 0,
+      },
+      'voter-ready syncing rows should satisfy spread while status persistence lags',
+    );
+    t.equal(
+      targetSnapshot.semanticState,
+      PRIORITY_RECOVERY_SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT,
+      'syncing follower target evidence should not remain recovering in flight',
     );
   },
 );
@@ -2844,7 +3301,7 @@ test('priority recovery decision snapshots treat completed ADD follow-up handoff
       serviceRows: [{
         partition_id: REPLICA_OPERATION_PRIORITY_PARTITION_ID,
         status: 'active',
-        raft_role: 'voter',
+        raft_role: PRIORITY_RECOVERY_RAFT_ROLE_VOTER,
         node_id: PRIORITY_RECOVERY_NODE_ID_C,
         replica_id: 'replica_operations-p1-r5',
       }],
@@ -2911,6 +3368,409 @@ test('priority recovery decision snapshots treat completed ADD follow-up handoff
     );
   });
 
+test('priority recovery decision snapshots treat completed REPLACE on an eligible operational target as spread-satisfied',
+  async (t) => {
+    const decisionSnapshots = buildPriorityRecoveryDecisionSnapshots({
+      capturedAt: PRIORITY_RECOVERY_SAMPLE_CAPTURED_AT_MS,
+      publicationConvergence: {
+        publicationEpoch: PRIORITY_RECOVERY_SAMPLE_PUBLICATION_EPOCH,
+        publicationStatus: PRIORITY_RECOVERY_PUBLICATION_STATUS_PUBLISHED,
+        publishedActiveNodeIds: [
+          PRIORITY_RECOVERY_NODE_ID_A,
+          PRIORITY_RECOVERY_NODE_ID_B,
+          PRIORITY_RECOVERY_NODE_ID_C,
+        ],
+        pendingAckNodeIds: [],
+        priorityPartitionSummary: {
+          satisfied: false,
+          blockedPartitions: [{
+            partitionId: SQL_TRANSACTION_PRIORITY_PARTITION_ID,
+            requiredDistinctNodeCount:
+              PRIORITY_RECOVERY_REQUIRED_DISTINCT_NODE_COUNT,
+            readyDistinctNodeCount:
+              PRIORITY_RECOVERY_STALE_READY_DISTINCT_NODE_COUNT,
+            spreadGap: PRIORITY_RECOVERY_SINGLE_SPREAD_GAP,
+          }],
+          missingPartitionIds: [SQL_TRANSACTION_PRIORITY_PARTITION_ID],
+          requiredDistinctNodeCount:
+            PRIORITY_RECOVERY_REQUIRED_DISTINCT_NODE_COUNT,
+        },
+        membershipLifecycleSummary: {
+          projectedServingNodeIds: [
+            PRIORITY_RECOVERY_NODE_ID_A,
+            PRIORITY_RECOVERY_NODE_ID_B,
+            PRIORITY_RECOVERY_NODE_ID_C,
+          ],
+          locallyEligibleNodeIds: [
+            PRIORITY_RECOVERY_NODE_ID_A,
+            PRIORITY_RECOVERY_NODE_ID_B,
+            PRIORITY_RECOVERY_NODE_ID_C,
+          ],
+        },
+      },
+      readinessByNodeId: {},
+      workflowAdmissionsByWorkflowId: {},
+      replicaOperationRows: [{
+        operation_id: PRIORITY_RECOVERY_OPERATION_ID_COMPLETED_REPLACE_VISIBLE,
+        partition_id: SQL_TRANSACTION_PRIORITY_PARTITION_ID,
+        entity_type: PRIORITY_RECOVERY_ENTITY_TYPE_PARTITION,
+        operation_type: PRIORITY_RECOVERY_OPERATION_TYPE_REPLACE,
+        status: PRIORITY_RECOVERY_STATUS_REMOVED,
+        workflow_step: PRIORITY_RECOVERY_WORKFLOW_STEP_REMOVED,
+        source_node_id: PRIORITY_RECOVERY_NODE_ID_A,
+        target_node_id: PRIORITY_RECOVERY_NODE_ID_C,
+        replica_id: PRIORITY_RECOVERY_SQL_TRANSACTIONS_REPLACEMENT_REPLICA_ID,
+        created_at: PRIORITY_RECOVERY_OPERATION_CREATED_AT_MS,
+        updated_at: PRIORITY_RECOVERY_OPERATION_UPDATED_AT_MS,
+        completed_at: PRIORITY_RECOVERY_OPERATION_COMPLETED_AT_MS,
+      }],
+      replicaOperations: {
+        operationTimelineById: {
+          [PRIORITY_RECOVERY_OPERATION_ID_COMPLETED_REPLACE_VISIBLE]: [
+            {
+              step: PRIORITY_RECOVERY_WORKFLOW_STEP_ACTIVE,
+              status: PRIORITY_RECOVERY_STATUS_ACTIVE,
+              inFlight: true,
+            },
+            {
+              step: PRIORITY_RECOVERY_WORKFLOW_STEP_REMOVED,
+              status: PRIORITY_RECOVERY_STATUS_REMOVED,
+              inFlight: false,
+            },
+          ],
+        },
+      },
+      serviceRows: [{
+        partition_id: SQL_TRANSACTION_PRIORITY_PARTITION_ID,
+        status: PRIORITY_RECOVERY_STATUS_ACTIVE,
+        raft_role: PRIORITY_RECOVERY_RAFT_ROLE_VOTER,
+        node_id: PRIORITY_RECOVERY_NODE_ID_C,
+        replica_id: PRIORITY_RECOVERY_SQL_TRANSACTIONS_REPLACEMENT_REPLICA_ID,
+      }],
+    });
+
+    t.same(
+      decisionSnapshots.partitionIdsBySemanticState[
+        PRIORITY_RECOVERY_SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT
+      ],
+      [SQL_TRANSACTION_PRIORITY_PARTITION_ID],
+      'completed REPLACE placement should satisfy a stale priority spread summary when the target is active on an eligible node',
+    );
+    t.same(
+      decisionSnapshots.unresolvedSemanticStateIds,
+      [],
+      'completed REPLACE placement should not keep priority recovery unresolved',
+    );
+
+    const targetSnapshot = decisionSnapshots.snapshots.find((entry) =>
+      entry.partitionId === SQL_TRANSACTION_PRIORITY_PARTITION_ID &&
+      entry.operationId ===
+        PRIORITY_RECOVERY_OPERATION_ID_COMPLETED_REPLACE_VISIBLE,
+    );
+    t.ok(targetSnapshot, 'target partition snapshot should exist');
+    t.same(
+      targetSnapshot.spreadCompletion,
+      {
+        satisfied: true,
+        reasonCode:
+          PRIORITY_RECOVERY_REASON_OPERATIONAL_TARGET_VISIBLE_ON_ELIGIBLE_NODE,
+        satisfyingOperationIds: [
+          PRIORITY_RECOVERY_OPERATION_ID_COMPLETED_REPLACE_VISIBLE,
+        ],
+        satisfyingOperationCount: PRIORITY_RECOVERY_SINGLE_SPREAD_GAP,
+        blockingOperationIds: [],
+        blockingOperationCount: PRIORITY_RECOVERY_EMPTY_COUNT,
+      },
+      'terminal REPLACE rows should remain spread-relevant when they left an operational target',
+    );
+    t.equal(
+      targetSnapshot.semanticState,
+      PRIORITY_RECOVERY_SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT,
+      'completed REPLACE placement should leave the needs-operation state',
+    );
+  });
+
+test('priority recovery decision snapshots let completed REPLACE placement override stale pending no-transition blockers',
+  async (t) => {
+    const decisionSnapshots = buildPriorityRecoveryDecisionSnapshots({
+      capturedAt: PRIORITY_RECOVERY_SAMPLE_CAPTURED_AT_MS,
+      publicationConvergence: {
+        publicationEpoch: PRIORITY_RECOVERY_SAMPLE_PUBLICATION_EPOCH,
+        publicationStatus: PRIORITY_RECOVERY_PUBLICATION_STATUS_PUBLISHED,
+        publishedActiveNodeIds: [
+          PRIORITY_RECOVERY_NODE_ID_A,
+          PRIORITY_RECOVERY_NODE_ID_B,
+          PRIORITY_RECOVERY_NODE_ID_C,
+        ],
+        pendingAckNodeIds: [],
+        priorityPartitionSummary: {
+          satisfied: false,
+          blockedPartitions: [{
+            partitionId:
+              PRIORITY_RECOVERY_SQL_TRANSACTION_PARTICIPANTS_PARTITION_ID,
+            requiredDistinctNodeCount:
+              PRIORITY_RECOVERY_REQUIRED_DISTINCT_NODE_COUNT,
+            readyDistinctNodeCount:
+              PRIORITY_RECOVERY_STALE_READY_DISTINCT_NODE_COUNT,
+            spreadGap: PRIORITY_RECOVERY_SINGLE_SPREAD_GAP,
+          }],
+          missingPartitionIds: [
+            PRIORITY_RECOVERY_SQL_TRANSACTION_PARTICIPANTS_PARTITION_ID,
+          ],
+          requiredDistinctNodeCount:
+            PRIORITY_RECOVERY_REQUIRED_DISTINCT_NODE_COUNT,
+        },
+        membershipLifecycleSummary: {
+          projectedServingNodeIds: [
+            PRIORITY_RECOVERY_NODE_ID_A,
+            PRIORITY_RECOVERY_NODE_ID_B,
+            PRIORITY_RECOVERY_NODE_ID_C,
+          ],
+          locallyEligibleNodeIds: [
+            PRIORITY_RECOVERY_NODE_ID_A,
+            PRIORITY_RECOVERY_NODE_ID_B,
+            PRIORITY_RECOVERY_NODE_ID_C,
+          ],
+        },
+      },
+      readinessByNodeId: {},
+      workflowAdmissionsByWorkflowId: {},
+      replicaOperationRows: [{
+        operation_id: PRIORITY_RECOVERY_OPERATION_ID_COMPLETED_REPLACE_VISIBLE,
+        partition_id:
+          PRIORITY_RECOVERY_SQL_TRANSACTION_PARTICIPANTS_PARTITION_ID,
+        entity_type: PRIORITY_RECOVERY_ENTITY_TYPE_PARTITION,
+        operation_type: PRIORITY_RECOVERY_OPERATION_TYPE_REPLACE,
+        status: PRIORITY_RECOVERY_STATUS_REMOVED,
+        workflow_step: PRIORITY_RECOVERY_WORKFLOW_STEP_REMOVED,
+        source_node_id: PRIORITY_RECOVERY_NODE_ID_A,
+        target_node_id: PRIORITY_RECOVERY_NODE_ID_C,
+        replica_id:
+          PRIORITY_RECOVERY_SQL_TRANSACTION_PARTICIPANTS_REPLACEMENT_REPLICA_ID,
+        created_at: PRIORITY_RECOVERY_OPERATION_CREATED_AT_MS,
+        updated_at: PRIORITY_RECOVERY_OPERATION_UPDATED_AT_MS,
+        completed_at: PRIORITY_RECOVERY_OPERATION_COMPLETED_AT_MS,
+      }, {
+        operation_id: PRIORITY_RECOVERY_OPERATION_ID_PENDING_REPLACE_STALE,
+        partition_id:
+          PRIORITY_RECOVERY_SQL_TRANSACTION_PARTICIPANTS_PARTITION_ID,
+        entity_type: PRIORITY_RECOVERY_ENTITY_TYPE_PARTITION,
+        operation_type: PRIORITY_RECOVERY_OPERATION_TYPE_REPLACE,
+        status: PRIORITY_RECOVERY_STATUS_PENDING,
+        workflow_step: PRIORITY_RECOVERY_WORKFLOW_STEP_PENDING,
+        source_node_id: PRIORITY_RECOVERY_NODE_ID_A,
+        target_node_id: PRIORITY_RECOVERY_NODE_ID_B,
+        replica_id: PRIORITY_RECOVERY_REPLICA_ID_SYNCING,
+        created_at: PRIORITY_RECOVERY_OPERATION_CREATED_AT_MS,
+        updated_at: PRIORITY_RECOVERY_OPERATION_CREATED_AT_MS,
+      }],
+      replicaOperations: {
+        operationTimelineById: {
+          [PRIORITY_RECOVERY_OPERATION_ID_COMPLETED_REPLACE_VISIBLE]: [
+            {
+              step: PRIORITY_RECOVERY_WORKFLOW_STEP_ACTIVE,
+              status: PRIORITY_RECOVERY_STATUS_ACTIVE,
+              inFlight: true,
+            },
+            {
+              step: PRIORITY_RECOVERY_WORKFLOW_STEP_REMOVED,
+              status: PRIORITY_RECOVERY_STATUS_REMOVED,
+              inFlight: false,
+            },
+          ],
+          [PRIORITY_RECOVERY_OPERATION_ID_PENDING_REPLACE_STALE]: [{
+            step: PRIORITY_RECOVERY_WORKFLOW_STEP_PENDING,
+            status: PRIORITY_RECOVERY_STATUS_PENDING,
+            inFlight: true,
+          }],
+        },
+      },
+      serviceRows: [{
+        partition_id:
+          PRIORITY_RECOVERY_SQL_TRANSACTION_PARTICIPANTS_PARTITION_ID,
+        status: PRIORITY_RECOVERY_STATUS_ACTIVE,
+        raft_role: PRIORITY_RECOVERY_RAFT_ROLE_VOTER,
+        node_id: PRIORITY_RECOVERY_NODE_ID_C,
+        replica_id:
+          PRIORITY_RECOVERY_SQL_TRANSACTION_PARTICIPANTS_REPLACEMENT_REPLICA_ID,
+      }],
+    });
+
+    t.same(
+      decisionSnapshots.blockerPartitionIdsByReason[
+        PRIORITY_RECOVERY_BLOCKER_REASON_OPERATION_NO_TRANSITIONS
+      ],
+      [],
+      'a stale pending REPLACE must not remain a no-transition blocker once completed placement evidence already satisfies spread',
+    );
+    t.same(
+      decisionSnapshots.partitionIdsBySemanticState[
+        PRIORITY_RECOVERY_SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT
+      ],
+      [PRIORITY_RECOVERY_SQL_TRANSACTION_PARTICIPANTS_PARTITION_ID],
+      'completed placement evidence should be canonical for the partition-level state',
+    );
+    t.same(
+      decisionSnapshots.unresolvedSemanticStateIds,
+      [],
+      'completed placement evidence should close the unresolved priority state',
+    );
+
+    const pendingSnapshot = decisionSnapshots.snapshots.find((entry) =>
+      entry.partitionId ===
+        PRIORITY_RECOVERY_SQL_TRANSACTION_PARTICIPANTS_PARTITION_ID &&
+      entry.operationId ===
+        PRIORITY_RECOVERY_OPERATION_ID_PENDING_REPLACE_STALE,
+    );
+    t.ok(pendingSnapshot, 'pending partition snapshot should exist');
+    t.same(
+      pendingSnapshot.spreadCompletion,
+      {
+        satisfied: true,
+        reasonCode:
+          PRIORITY_RECOVERY_REASON_OPERATIONAL_TARGET_VISIBLE_ON_ELIGIBLE_NODE,
+        satisfyingOperationIds: [
+          PRIORITY_RECOVERY_OPERATION_ID_COMPLETED_REPLACE_VISIBLE,
+        ],
+        satisfyingOperationCount: PRIORITY_RECOVERY_SINGLE_SPREAD_GAP,
+        blockingOperationIds: [
+          PRIORITY_RECOVERY_OPERATION_ID_PENDING_REPLACE_STALE,
+        ],
+        blockingOperationCount: PRIORITY_RECOVERY_SINGLE_SPREAD_GAP,
+      },
+      'the stale pending row should remain visible as context without owning the partition outcome',
+    );
+    t.same(
+      pendingSnapshot.blockerReasons,
+      [],
+      'partition-level spread satisfaction should clear synthetic no-transition blockers',
+    );
+    t.equal(
+      pendingSnapshot.semanticState,
+      PRIORITY_RECOVERY_SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT,
+      'the stale pending row should inherit the partition-level spread-satisfied state',
+    );
+  });
+
+test(
+  'priority recovery decision snapshots let newer terminal operations supersede stale non-operational in-flight rows',
+  async (t) => {
+    const decisionSnapshots = buildPriorityRecoveryDecisionSnapshots({
+      capturedAt: PRIORITY_RECOVERY_SAMPLE_CAPTURED_AT_MS,
+      publicationConvergence: {
+        publicationEpoch: PRIORITY_RECOVERY_SAMPLE_PUBLICATION_EPOCH,
+        publicationStatus: PRIORITY_RECOVERY_PUBLICATION_STATUS_PUBLISHED,
+        publishedActiveNodeIds: [
+          PRIORITY_RECOVERY_NODE_ID_A,
+          PRIORITY_RECOVERY_NODE_ID_B,
+          PRIORITY_RECOVERY_NODE_ID_C,
+        ],
+        pendingAckNodeIds: [],
+        priorityPartitionSummary: {
+          satisfied: false,
+          blockedPartitions: [{
+            partitionId:
+              PRIORITY_RECOVERY_SQL_TRANSACTION_PARTICIPANTS_PARTITION_ID,
+            requiredDistinctNodeCount:
+              PRIORITY_RECOVERY_REQUIRED_DISTINCT_NODE_COUNT,
+            readyDistinctNodeCount:
+              PRIORITY_RECOVERY_SINGLE_SPREAD_GAP,
+            spreadGap: PRIORITY_RECOVERY_STALE_READY_DISTINCT_NODE_COUNT,
+          }],
+          missingPartitionIds: [
+            PRIORITY_RECOVERY_SQL_TRANSACTION_PARTICIPANTS_PARTITION_ID,
+          ],
+          requiredDistinctNodeCount:
+            PRIORITY_RECOVERY_REQUIRED_DISTINCT_NODE_COUNT,
+        },
+        membershipLifecycleSummary: {
+          projectedServingNodeIds: [
+            PRIORITY_RECOVERY_NODE_ID_A,
+            PRIORITY_RECOVERY_NODE_ID_B,
+            PRIORITY_RECOVERY_NODE_ID_C,
+          ],
+          locallyEligibleNodeIds: [
+            PRIORITY_RECOVERY_NODE_ID_A,
+            PRIORITY_RECOVERY_NODE_ID_B,
+            PRIORITY_RECOVERY_NODE_ID_C,
+          ],
+        },
+      },
+      readinessByNodeId: {},
+      workflowAdmissionsByWorkflowId: {},
+      replicaOperationRows: [
+        {
+          operation_id: PRIORITY_RECOVERY_OPERATION_ID_SUPERSEDED_SYNCING,
+          partition_id:
+            PRIORITY_RECOVERY_SQL_TRANSACTION_PARTICIPANTS_PARTITION_ID,
+          entity_type: PRIORITY_RECOVERY_ENTITY_TYPE_PARTITION,
+          operation_type: PRIORITY_RECOVERY_OPERATION_TYPE_REPLACE,
+          status: PRIORITY_RECOVERY_STATUS_SYNCING,
+          workflow_step: PRIORITY_RECOVERY_WORKFLOW_STEP_SYNCING,
+          source_node_id: PRIORITY_RECOVERY_NODE_ID_A,
+          target_node_id: PRIORITY_RECOVERY_NODE_ID_B,
+          replica_id:
+            PRIORITY_RECOVERY_SQL_TRANSACTION_PARTICIPANTS_STALE_REPLICA_ID,
+          created_at: PRIORITY_RECOVERY_OPERATION_CREATED_AT_MS,
+          updated_at: PRIORITY_RECOVERY_SUPERSEDED_OPERATION_UPDATED_AT_MS,
+        },
+        {
+          operation_id: PRIORITY_RECOVERY_OPERATION_ID_NEWER_FAILED_REPLACE,
+          partition_id:
+            PRIORITY_RECOVERY_SQL_TRANSACTION_PARTICIPANTS_PARTITION_ID,
+          entity_type: PRIORITY_RECOVERY_ENTITY_TYPE_PARTITION,
+          operation_type: PRIORITY_RECOVERY_OPERATION_TYPE_REPLACE,
+          status: PRIORITY_RECOVERY_STATUS_FAILED,
+          workflow_step: PRIORITY_RECOVERY_WORKFLOW_STEP_FAILED,
+          source_node_id: PRIORITY_RECOVERY_NODE_ID_A,
+          target_node_id: PRIORITY_RECOVERY_NODE_ID_C,
+          replica_id:
+            PRIORITY_RECOVERY_SQL_TRANSACTION_PARTICIPANTS_FAILED_REPLICA_ID,
+          created_at: PRIORITY_RECOVERY_NEWER_OPERATION_CREATED_AT_MS,
+          updated_at: PRIORITY_RECOVERY_NEWER_OPERATION_COMPLETED_AT_MS,
+          completed_at: PRIORITY_RECOVERY_NEWER_OPERATION_COMPLETED_AT_MS,
+        },
+      ],
+      replicaOperations: {
+        operationTimelineById: {
+          [PRIORITY_RECOVERY_OPERATION_ID_SUPERSEDED_SYNCING]: [{
+            step: PRIORITY_RECOVERY_WORKFLOW_STEP_SYNCING,
+            status: PRIORITY_RECOVERY_STATUS_SYNCING,
+            inFlight: true,
+          }],
+          [PRIORITY_RECOVERY_OPERATION_ID_NEWER_FAILED_REPLACE]: [{
+            step: PRIORITY_RECOVERY_WORKFLOW_STEP_FAILED,
+            status: PRIORITY_RECOVERY_STATUS_FAILED,
+            inFlight: false,
+          }],
+        },
+      },
+      serviceRows: [],
+    });
+
+    t.same(
+      decisionSnapshots.blockerPartitionIdsByReason[
+        PRIORITY_RECOVERY_BLOCKER_REASON_OPERATION_NO_TRANSITIONS
+      ],
+      [],
+      'a stale non-operational in-flight row should not keep owning the operation-stalled blocker after a newer terminal row exists',
+    );
+    t.same(
+      decisionSnapshots.blockerPartitionIdsByReason[
+        PRIORITY_RECOVERY_BLOCKER_REASON_ELIGIBLE_NO_OPERATION
+      ],
+      [PRIORITY_RECOVERY_SQL_TRANSACTION_PARTICIPANTS_PARTITION_ID],
+      'the partition should return to the explicit follow-up operation-needed lane',
+    );
+    t.same(
+      decisionSnapshots.partitionIdsBySemanticState[
+        PRIORITY_RECOVERY_SEMANTIC_STATE_NEEDS_OPERATION
+      ],
+      [PRIORITY_RECOVERY_SQL_TRANSACTION_PARTICIPANTS_PARTITION_ID],
+      'superseding stale in-flight rows should expose the actionable needs-operation state',
+    );
+  });
+
 test('priority recovery publication context excludes an admission-blocked target from the effective eligible cohort',
   async (t) => {
     const publicationContext = buildPriorityRecoveryPublicationContext({
@@ -2971,7 +3831,7 @@ test('priority recovery publication context excludes an admission-blocked target
       [PRIORITY_RECOVERY_NODE_ID_A, PRIORITY_RECOVERY_NODE_ID_B],
       'recovery-active publication context should exclude the blocked target node',
     );
-  t.same(
+    t.same(
       publicationContext.publishedActiveNodeIds,
       [PRIORITY_RECOVERY_NODE_ID_A, PRIORITY_RECOVERY_NODE_ID_B],
       'the effective published cohort used by recovery planning should be admission-aware',

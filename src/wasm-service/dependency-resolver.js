@@ -39,7 +39,7 @@ import {
  *   errors?: string[]}}
  */
 function resolveDependencies(
-  manifest, availableModules, _registryContext
+  manifest, availableModules, _registryContext,
 ) {
   const deps = manifest[MF.DEPENDENCIES];
   const auditLog = [];
@@ -59,7 +59,7 @@ function resolveDependencies(
     // Validate pinned digest format
     if (!pinnedDigest || !isValidDigest(pinnedDigest)) {
       errors.push(
-        `${ERR.DEPENDENCY_DIGEST_MISMATCH}: ${moduleId}`
+        `${ERR.DEPENDENCY_DIGEST_MISMATCH}: ${moduleId}`,
       );
       auditLog.push({
         moduleId,
@@ -70,13 +70,13 @@ function resolveDependencies(
     }
 
     // Look up module in available sources
-    const resolved = availableModules instanceof Map
-      ? availableModules.get(moduleId)
-      : null;
+    const resolved = availableModules instanceof Map ?
+      availableModules.get(moduleId) :
+      null;
 
     if (!resolved) {
       errors.push(
-        `${ERR.DEPENDENCY_NOT_FOUND}: ${moduleId}`
+        `${ERR.DEPENDENCY_NOT_FOUND}: ${moduleId}`,
       );
       auditLog.push({
         moduleId,
@@ -87,11 +87,11 @@ function resolveDependencies(
     }
 
     // Verify digest match
-    const resolvedDigest = resolved[DF.DIGEST]
-      ?? resolved.digest;
+    const resolvedDigest = resolved[DF.DIGEST] ??
+      resolved.digest;
     if (resolvedDigest !== pinnedDigest) {
       errors.push(
-        `${ERR.DEPENDENCY_DIGEST_MISMATCH}: ${moduleId}`
+        `${ERR.DEPENDENCY_DIGEST_MISMATCH}: ${moduleId}`,
       );
       auditLog.push({
         moduleId,
@@ -132,7 +132,7 @@ function resolveDependencies(
  * @return {{valid: boolean, errors?: string[]}}
  */
 function validateDependencyDigests(
-  dependencies, availableModules
+  dependencies, availableModules,
 ) {
   if (!dependencies || !Array.isArray(dependencies) ||
       dependencies.length === NUM.ZERO) {
@@ -147,27 +147,27 @@ function validateDependencyDigests(
 
     if (!pinnedDigest || !isValidDigest(pinnedDigest)) {
       errors.push(
-        `${ERR.DEPENDENCY_DIGEST_MISMATCH}: ${moduleId}`
+        `${ERR.DEPENDENCY_DIGEST_MISMATCH}: ${moduleId}`,
       );
       continue;
     }
 
-    const resolved = availableModules instanceof Map
-      ? availableModules.get(moduleId)
-      : null;
+    const resolved = availableModules instanceof Map ?
+      availableModules.get(moduleId) :
+      null;
 
     if (!resolved) {
       errors.push(
-        `${ERR.DEPENDENCY_NOT_FOUND}: ${moduleId}`
+        `${ERR.DEPENDENCY_NOT_FOUND}: ${moduleId}`,
       );
       continue;
     }
 
-    const resolvedDigest = resolved[DF.DIGEST]
-      ?? resolved.digest;
+    const resolvedDigest = resolved[DF.DIGEST] ??
+      resolved.digest;
     if (resolvedDigest !== pinnedDigest) {
       errors.push(
-        `${ERR.DEPENDENCY_DIGEST_MISMATCH}: ${moduleId}`
+        `${ERR.DEPENDENCY_DIGEST_MISMATCH}: ${moduleId}`,
       );
     }
   }
@@ -190,7 +190,7 @@ function validateDependencyDigests(
  * @return {{valid: boolean, errors?: string[]}}
  */
 function detectUndeclaredImports(
-  actualImports, declaredDependencies
+  actualImports, declaredDependencies,
 ) {
   if (!actualImports || !Array.isArray(actualImports) ||
       actualImports.length === NUM.ZERO) {
@@ -198,7 +198,7 @@ function detectUndeclaredImports(
   }
 
   const declaredIds = new Set(
-    (declaredDependencies || []).map((d) => d[DF.MODULE_ID])
+    (declaredDependencies || []).map((d) => d[DF.MODULE_ID]),
   );
 
   const errors = [];

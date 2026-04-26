@@ -144,7 +144,7 @@ class MessageGroupServiceHandler extends EventEmitter {
       response = buildReplicaOperationResponse(
         ReplicaOperationResponseStatus.ERROR,
         {
-        error:
+          error:
           MESSAGE_GROUP_SERVICE_HANDLER_ERROR_MSG.UNKNOWN_MESSAGE_TYPE(
             type,
           ),
@@ -174,9 +174,9 @@ class MessageGroupServiceHandler extends EventEmitter {
       return buildReplicaOperationResponse(
         ReplicaOperationResponseStatus.ERROR,
         {
-        error:
+          error:
           MESSAGE_GROUP_SERVICE_HANDLER_ERROR_MSG.CREATE_REQUIRED_FIELDS,
-        nodeId: this.nodeId,
+          nodeId: this.nodeId,
         },
       );
     }
@@ -198,8 +198,8 @@ class MessageGroupServiceHandler extends EventEmitter {
       return buildReplicaOperationResponse(
         ReplicaOperationResponseStatus.ALREADY_EXISTS,
         {
-        replicaId,
-        nodeId: this.nodeId,
+          replicaId,
+          nodeId: this.nodeId,
         },
       );
     }
@@ -213,8 +213,8 @@ class MessageGroupServiceHandler extends EventEmitter {
       return buildReplicaOperationResponse(
         ReplicaOperationResponseStatus.IN_PROGRESS,
         {
-        replicaId,
-        nodeId: this.nodeId,
+          replicaId,
+          nodeId: this.nodeId,
         },
       );
     }
@@ -227,8 +227,8 @@ class MessageGroupServiceHandler extends EventEmitter {
       return buildReplicaOperationResponse(
         ReplicaOperationResponseStatus.IN_PROGRESS,
         {
-        operationId,
-        nodeId: this.nodeId,
+          operationId,
+          nodeId: this.nodeId,
         },
       );
     }
@@ -250,8 +250,8 @@ class MessageGroupServiceHandler extends EventEmitter {
       return buildReplicaOperationResponse(
         ReplicaOperationResponseStatus.ERROR,
         {
-        error: error.message,
-        nodeId: this.nodeId,
+          error: error.message,
+          nodeId: this.nodeId,
         },
       );
     }
@@ -291,9 +291,9 @@ class MessageGroupServiceHandler extends EventEmitter {
     return buildReplicaOperationResponse(
       ReplicaOperationResponseStatus.INITIATED,
       {
-      operationId,
-      replicaId,
-      nodeId: this.nodeId,
+        operationId,
+        replicaId,
+        nodeId: this.nodeId,
       },
     );
   }
@@ -369,6 +369,48 @@ class MessageGroupServiceHandler extends EventEmitter {
     }
   }
 
+  hasInProgressReplicaRemoval(replicaId) {
+    for (const operation of this.inProgressOperations.values()) {
+      if (
+        operation?.type === ReplicaOperationMessageType.REMOVE_REPLICA &&
+        operation?.replicaId === replicaId
+      ) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  trackReplicaRemovalOperation(operationId, groupId, replicaId) {
+    this.inProgressOperations.set(operationId, {
+      type: ReplicaOperationMessageType.REMOVE_REPLICA,
+      replicaId,
+      entityId: groupId,
+      startedAt: Date.now(),
+    });
+  }
+
+  startRemoveReplicaAsync({operationId, groupId, replicaId, reason}) {
+    setImmediate(() => {
+      this.removeReplicaAsync({
+        operationId,
+        groupId,
+        replicaId,
+        reason,
+      }).catch((error) => {
+        this.logger.error(
+          MESSAGE_GROUP_SERVICE_HANDLER_LOG_MSG.ASYNC_REMOVE_FAILED,
+          {
+            operationId,
+            replicaId,
+            error: error.message,
+            stack: error.stack,
+          },
+        );
+      });
+    });
+  }
+
   async handleRemoveReplica(request) {
     const operationId =
       request?.[ReplicaOperationField.OPERATION_ID];
@@ -389,9 +431,9 @@ class MessageGroupServiceHandler extends EventEmitter {
       return buildReplicaOperationResponse(
         ReplicaOperationResponseStatus.ERROR,
         {
-        error:
+          error:
           MESSAGE_GROUP_SERVICE_HANDLER_ERROR_MSG.REMOVE_REQUIRED_FIELDS,
-        nodeId: this.nodeId,
+          nodeId: this.nodeId,
         },
       );
     }
@@ -405,13 +447,22 @@ class MessageGroupServiceHandler extends EventEmitter {
       return buildReplicaOperationResponse(
         ReplicaOperationResponseStatus.NOT_FOUND,
         {
-        replicaId,
-        nodeId: this.nodeId,
+          replicaId,
+          nodeId: this.nodeId,
         },
       );
     }
 
     if (replica.status === ReplicaStatus.REMOVING) {
+      if (!this.hasInProgressReplicaRemoval(replicaId)) {
+        this.trackReplicaRemovalOperation(operationId, groupId, replicaId);
+        this.startRemoveReplicaAsync({
+          operationId,
+          groupId,
+          replicaId,
+          reason,
+        });
+      }
       this.logger.info(
         MESSAGE_GROUP_SERVICE_HANDLER_LOG_MSG.REMOVE_IN_PROGRESS,
         {replicaId, nodeId: this.nodeId},
@@ -419,8 +470,8 @@ class MessageGroupServiceHandler extends EventEmitter {
       return buildReplicaOperationResponse(
         ReplicaOperationResponseStatus.IN_PROGRESS,
         {
-        replicaId,
-        nodeId: this.nodeId,
+          replicaId,
+          nodeId: this.nodeId,
         },
       );
     }
@@ -433,8 +484,8 @@ class MessageGroupServiceHandler extends EventEmitter {
       return buildReplicaOperationResponse(
         ReplicaOperationResponseStatus.COMPLETED,
         {
-        replicaId,
-        nodeId: this.nodeId,
+          replicaId,
+          nodeId: this.nodeId,
         },
       );
     }
@@ -447,48 +498,31 @@ class MessageGroupServiceHandler extends EventEmitter {
       return buildReplicaOperationResponse(
         ReplicaOperationResponseStatus.IN_PROGRESS,
         {
-        operationId,
-        nodeId: this.nodeId,
+          operationId,
+          nodeId: this.nodeId,
         },
       );
     }
 
-    this.inProgressOperations.set(operationId, {
-      type: ReplicaOperationMessageType.REMOVE_REPLICA,
-      replicaId,
-      entityId: groupId,
-      startedAt: Date.now(),
-    });
+    this.trackReplicaRemovalOperation(operationId, groupId, replicaId);
     this.localReplicas.set(replicaId, {
       ...replica,
       status: ReplicaStatus.REMOVING,
     });
 
-    setImmediate(() => {
-      this.removeReplicaAsync({
-        operationId,
-        groupId,
-        replicaId,
-        reason,
-      }).catch((error) => {
-        this.logger.error(
-          MESSAGE_GROUP_SERVICE_HANDLER_LOG_MSG.ASYNC_REMOVE_FAILED,
-          {
-            operationId,
-            replicaId,
-            error: error.message,
-            stack: error.stack,
-          },
-        );
-      });
+    this.startRemoveReplicaAsync({
+      operationId,
+      groupId,
+      replicaId,
+      reason,
     });
 
     return buildReplicaOperationResponse(
       ReplicaOperationResponseStatus.INITIATED,
       {
-      operationId,
-      replicaId,
-      nodeId: this.nodeId,
+        operationId,
+        replicaId,
+        nodeId: this.nodeId,
       },
     );
   }
@@ -575,13 +609,13 @@ class MessageGroupServiceHandler extends EventEmitter {
     const requestedReplicaIds = Array.isArray(
       request?.[ReplicaOperationField.REPLICA_IDS],
     ) ? request[ReplicaOperationField.REPLICA_IDS].filter((value) =>
-      typeof value === 'string' && value.length > 0,
-    ) : [];
+        typeof value === 'string' && value.length > 0,
+      ) : [];
     const requestedPeerAddresses = Array.isArray(
       request?.[ReplicaOperationField.PEER_ADDRESSES],
     ) ? request[ReplicaOperationField.PEER_ADDRESSES].filter((value) =>
-      typeof value === 'string' && value.length > 0,
-    ) : [];
+        typeof value === 'string' && value.length > 0,
+      ) : [];
 
     const addressManager = AddressManager.getInstance();
     const services = this.systemTableCache?.filter?.(
@@ -743,16 +777,16 @@ class MessageGroupServiceHandler extends EventEmitter {
      * @param {string} workflowStep - WORKFLOW_STEP the executor reached.
      * @param {Object} [options] - Optional replicaId, errorMessage.
      */
-    emitExecutorOutcome(outcomeType, operationId, workflowStep, options = {}) {
-      if (this.executorOutcomeEmitter) {
-        this.executorOutcomeEmitter.emitOutcome(
-          outcomeType,
-          operationId,
-          workflowStep,
-          options,
-        );
-      }
+  emitExecutorOutcome(outcomeType, operationId, workflowStep, options = {}) {
+    if (this.executorOutcomeEmitter) {
+      this.executorOutcomeEmitter.emitOutcome(
+        outcomeType,
+        operationId,
+        workflowStep,
+        options,
+      );
     }
+  }
 
   registerWithRouter(messageRouter, options = {}) {
     if (!messageRouter) {

@@ -12,8 +12,6 @@ export async function registerReplaceReplicaWorkflowTailMoreTests({
   createTestRebalancer,
   TEST_REPLACE_REMOVE_SAFETY_BLOCKED,
   TEST_PRIORITY_SPREAD_PENDING,
-  TEST_VISIBILITY_OBSERVATION_STATE_PRESENT,
-  TEST_AUTHORITATIVE_OPERATION_READ_DEFERRED,
 }) {
   await t.test('RebalanceCoordinator reconciles REPLACE creating phase from actual state',
     async (t) => {
@@ -135,7 +133,7 @@ export async function registerReplaceReplicaWorkflowTailMoreTests({
       };
 
       const coordinator = createTestCoordinator({
-        nodeId: SOURCE_NODE_ID,
+        nodeId: TARGET_NODE_ID,
         enableTimeouts: false,
         messageRouter,
         cacheData: {
@@ -272,7 +270,7 @@ export async function registerReplaceReplicaWorkflowTailMoreTests({
       };
 
       const coordinator = createTestCoordinator({
-        nodeId: SOURCE_NODE_ID,
+        nodeId: TARGET_NODE_ID,
         enableTimeouts: false,
         messageRouter,
         cacheData: {
@@ -487,7 +485,7 @@ export async function registerReplaceReplicaWorkflowTailMoreTests({
         address: 'node-d/partition/nodes-p1-r4',
       };
       const coordinator = createTestCoordinator({
-        nodeId: 'node-a',
+        nodeId: 'node-d',
         enableTimeouts: false,
         messageRouter,
         sqlQueryResults: {
@@ -729,7 +727,7 @@ export async function registerReplaceReplicaWorkflowTailMoreTests({
     async (t) => {
       const deliveries = [];
       const deferredTimers = [];
-      let sourceRemovalBlocked = true;
+      const sourceRemovalBlocked = true;
       const messageRouter = {
         async deliver(target, payload, options) {
           deliveries.push({target, payload, options});

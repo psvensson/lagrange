@@ -1,5 +1,5 @@
-import { NODE_JOINING_SERVICE_SHARED } from "./node-joining-service-shared.js";
-import { NodeJoiningServiceSegment3 } from "./node-joining-service-segment-3.js";
+import {NODE_JOINING_SERVICE_SHARED} from './node-joining-service-shared.js';
+import {NodeJoiningServiceSegment3} from './node-joining-service-segment-3.js';
 
 const {
   CACHE_HYDRATION_TABLES,
@@ -193,8 +193,8 @@ class NodeJoiningServiceSegment4 extends NodeJoiningServiceSegment3 {
     if (!this.cdcIntegrationService) {
       const error = new Error(
         JOINING_ERROR_MSG.controlPlaneCdcSubscribeFailed(
-          "default cache-sync tables",
-          "CDC integration service not available",
+          'default cache-sync tables',
+          'CDC integration service not available',
         ),
       );
       this.logger.error(JOINING_LOG_MSG.CDC_SUBSCRIPTION_FAILED, {
@@ -234,16 +234,16 @@ class NodeJoiningServiceSegment4 extends NodeJoiningServiceSegment3 {
     const diagnosticIntervalMs = CDC_REESTABLISHMENT.DIAGNOSTIC_INTERVAL_MS;
     const diagnosticInterval = setInterval(() => {
       const leaderService = this.getLeaderMessageGroupService();
-      const messageGroupLeader = leaderService
-        ? {
-            nodeId: leaderService.nodeId || null,
-            groupId: leaderService.groupId || null,
-            isLeader:
-              typeof leaderService.isLeaderReplica === TYPEOF.FUNCTION
-                ? leaderService.isLeaderReplica()
-                : null,
-          }
-        : null;
+      const messageGroupLeader = leaderService ?
+        {
+          nodeId: leaderService.nodeId || null,
+          groupId: leaderService.groupId || null,
+          isLeader:
+              typeof leaderService.isLeaderReplica === TYPEOF.FUNCTION ?
+                leaderService.isLeaderReplica() :
+                null,
+        } :
+        null;
       this.logger.info(JOINING_LOG_MSG.CDC_RECOVERY_DIAGNOSTICS, {
         nodeId: this.nodeId,
         subscriptionStatus: this.getCdcSubscriptionStatus(),
@@ -354,11 +354,11 @@ class NodeJoiningServiceSegment4 extends NodeJoiningServiceSegment3 {
    * @private
    */
   isMeshConnectivityCDCEvent(event) {
-    const tableName = String(event?.tableName || "");
+    const tableName = String(event?.tableName || '');
     if (tableName !== TABLES.NODES && tableName !== TABLES.NODE_ENDPOINTS) {
       return false;
     }
-    const operation = String(event?.operation || "").toLowerCase();
+    const operation = String(event?.operation || '').toLowerCase();
     return (
       operation === CDC_EVENT.INSERT ||
       operation === CDC_EVENT.UPDATE ||
@@ -413,9 +413,9 @@ class NodeJoiningServiceSegment4 extends NodeJoiningServiceSegment3 {
     // service (single source of truth — §1.4).
     const eventListenerCounts = {};
     for (const eventType of eventTypes) {
-      eventListenerCounts[eventType] = this.cdcIntegrationService
-        ? this.cdcIntegrationService.listenerCount(eventType)
-        : NUM.ZERO;
+      eventListenerCounts[eventType] = this.cdcIntegrationService ?
+        this.cdcIntegrationService.listenerCount(eventType) :
+        NUM.ZERO;
     } // Derive overall subscription health: at least one
     // listener on every event type means subscribed.
     const hasAllListeners = eventTypes.every(
@@ -433,9 +433,9 @@ class NodeJoiningServiceSegment4 extends NodeJoiningServiceSegment3 {
       } else {
         status = CDC_SUBSCRIPTION_STATUS.PENDING;
       }
-      return { tableName, status };
+      return {tableName, status};
     });
-    return { active, tables: tableStatuses, eventTypes: eventListenerCounts };
+    return {active, tables: tableStatuses, eventTypes: eventListenerCounts};
   }
   /**
    * Backfill propagated cache tables from authoritative routed reads.
@@ -495,7 +495,7 @@ class NodeJoiningServiceSegment4 extends NodeJoiningServiceSegment3 {
         }
       }
       this.logger.info(
-        "Backfilled propagated cache tables from authoritative state",
+        'Backfilled propagated cache tables from authoritative state',
         {
           nodeId: this.nodeId,
           tableCount: propagatedTables.length,
@@ -523,9 +523,9 @@ class NodeJoiningServiceSegment4 extends NodeJoiningServiceSegment3 {
    * @private
    */
   normalizeAuthoritativeBackfillTableNames(tableNames) {
-    return Array.isArray(tableNames) && tableNames.length > NUM.ZERO
-      ? [...new Set(tableNames)]
-      : [...CACHE_HYDRATION_TABLES];
+    return Array.isArray(tableNames) && tableNames.length > NUM.ZERO ?
+      [...new Set(tableNames)] :
+      [...CACHE_HYDRATION_TABLES];
   }
   /**
    * Build a canonical in-flight key for one authoritative backfill request.
@@ -546,13 +546,13 @@ class NodeJoiningServiceSegment4 extends NodeJoiningServiceSegment3 {
   evaluateAuthoritativeBackfillPressure(tableNames, options = {}) {
     const blockingTableSet = new Set(JOIN_READINESS_REPAIR.TABLES);
     const blocking =
-      typeof options.blocking === TYPEOF.BOOLEAN
-        ? options.blocking
-        : tableNames.some((tableName) => blockingTableSet.has(tableName));
+      typeof options.blocking === TYPEOF.BOOLEAN ?
+        options.blocking :
+        tableNames.some((tableName) => blockingTableSet.has(tableName));
     const workloadProfile = buildControlPlaneWorkloadProfile(
-      blocking
-        ? CONTROL_PLANE_WORKLOAD_CLASS.READINESS_CRITICAL_READ
-        : CONTROL_PLANE_WORKLOAD_CLASS.JOIN_REPAIR,
+      blocking ?
+        CONTROL_PLANE_WORKLOAD_CLASS.READINESS_CRITICAL_READ :
+        CONTROL_PLANE_WORKLOAD_CLASS.JOIN_REPAIR,
       {
         additionalResourceKeys: [
           NODE_JOINING_SERVICE_LITERAL.JOIN_BACKFILL,
@@ -582,9 +582,9 @@ class NodeJoiningServiceSegment4 extends NodeJoiningServiceSegment3 {
   resolveAuthoritativeBackfillOptions(tableNames, options = {}) {
     const blockingTableSet = new Set(JOIN_READINESS_REPAIR.TABLES);
     const blocking =
-      typeof options.blocking === TYPEOF.BOOLEAN
-        ? options.blocking
-        : tableNames.some((tableName) => blockingTableSet.has(tableName));
+      typeof options.blocking === TYPEOF.BOOLEAN ?
+        options.blocking :
+        tableNames.some((tableName) => blockingTableSet.has(tableName));
     const pressureDecision = this.evaluateAuthoritativeBackfillPressure(
       tableNames,
       options,
@@ -596,20 +596,20 @@ class NodeJoiningServiceSegment4 extends NodeJoiningServiceSegment3 {
       blocking,
       deliveryPriority:
         typeof options.deliveryPriority === TYPEOF.STRING &&
-        options.deliveryPriority.length > NUM.ZERO
-          ? options.deliveryPriority
-          : blocking
-            ? NODE_JOINING_SERVICE_LITERAL.CRITICAL
-            : NODE_JOINING_SERVICE_LITERAL.BACKGROUND,
+        options.deliveryPriority.length > NUM.ZERO ?
+          options.deliveryPriority :
+          blocking ?
+            NODE_JOINING_SERVICE_LITERAL.CRITICAL :
+            NODE_JOINING_SERVICE_LITERAL.BACKGROUND,
       queryTimeoutMs: this.resolveAuthoritativeBackfillQueryTimeoutMs(options),
       preferBootstrapSnapshot:
-        typeof options.preferBootstrapSnapshot === TYPEOF.BOOLEAN
-          ? options.preferBootstrapSnapshot
-          : blocking,
+        typeof options.preferBootstrapSnapshot === TYPEOF.BOOLEAN ?
+          options.preferBootstrapSnapshot :
+          blocking,
       allowReplicaFanout:
-        typeof options.allowReplicaFanout === TYPEOF.BOOLEAN
-          ? options.allowReplicaFanout
-          : !pressureDegraded,
+        typeof options.allowReplicaFanout === TYPEOF.BOOLEAN ?
+          options.allowReplicaFanout :
+          !pressureDegraded,
       pressureDegraded,
       pressureAction: pressureDecision?.action || null,
       pressureReason: pressureDecision?.reason || null,
@@ -657,4 +657,4 @@ class NodeJoiningServiceSegment4 extends NodeJoiningServiceSegment3 {
    */
 }
 
-export { NodeJoiningServiceSegment4 };
+export {NodeJoiningServiceSegment4};

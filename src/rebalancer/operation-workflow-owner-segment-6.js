@@ -1,109 +1,35 @@
-import { OPERATION_WORKFLOW_OWNER_SHARED } from "./operation-workflow-owner-shared.js";
-import { OperationWorkflowOwnerSegment5 } from "./operation-workflow-owner-segment-5.js";
+import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
+import {OperationWorkflowOwnerSegment5} from './operation-workflow-owner-segment-5.js';
 
 const {
-  AUTHORITATIVE_TRANSITION_RECOVERY_STATUS,
-  CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
-  CONTROL_PLANE_PARTICIPATION_KIND,
-  CONTROL_PLANE_PUBLICATION_STATUS,
-  CONTROL_PLANE_READINESS_DIMENSION,
-  COORDINATOR_CREATED_REMOTE_HANDOFF_VERIFICATION_DELAY_MS,
-  ControlPlaneField,
-  ControlPlaneMessageType,
-  ControlPlaneReadinessService,
-  DEFAULT_MIN_REPLICA_COUNT,
-  DISPATCH_RETRY_DELAY_MS,
-  EXECUTOR_OUTCOME_ACTION,
-  EXECUTOR_OUTCOME_ACTION_MAP,
-  EXECUTOR_OUTCOME_FIELD,
-  FAILURE_LOG_LEVEL,
-  INCOMPLETE_OPERATION_OBSERVATION_STATE,
-  INITIAL_PARTITION_IDS,
-  METRICS_LOG_TAG,
   NUM,
-  OBSERVED_PROGRESS_RELEVANT_SERVICE_STATUSES,
-  OBSERVED_PROGRESS_RELEVANT_WORKFLOW_STEPS,
-  OBSERVED_PROGRESS_RETRY_DELAY_MS,
-  OPERATION_HANDLER,
-  OPERATION_LIFECYCLE_ACTION,
   OPERATION_METADATA_KEY,
-  OPERATION_OWNER_ACTION,
-  OPERATION_SINGLE_FLIGHT_KEY_SEPARATOR,
-  OPERATION_SINGLE_FLIGHT_SCOPE,
-  OPERATION_TRANSITION_REASON,
-  OPERATION_TRANSITION_SESSION_ATTEMPT_PREFIX,
   OPERATION_WORKFLOW_OWNER_LITERAL,
-  OPERATION_WORKFLOW_OWNER_REASON,
   OperationType,
-  PARTITION_SERVICE_ERROR_MSG,
-  PRIORITY_CONTROL_PLANE_SYNCING_TIMEOUT_CAP_MS,
-  PRIORITY_PUBLICATION_LEADER_HANDOFF_EVIDENCE,
-  PRIORITY_PUBLICATION_LEADER_REMOVE_SAFETY_STATE,
   PRIORITY_PUBLICATION_SOURCE_ROLE_STATE,
   PRIORITY_RECOVERY_COMPLETION_STATE,
   PRIORITY_REMOVE_SAFETY_MEMBERSHIP_SOURCE,
-  QUERY_ERROR_MSG,
-  RAFT_ROLE,
-  REBALANCER_SKIP_REASON,
   REBALANCE_COORDINATOR_DEFER_REASON,
-  REBALANCE_COORDINATOR_ERROR_MSG,
-  REBALANCE_COORDINATOR_EVENT,
-  REBALANCE_COORDINATOR_LOG_MSG,
-  RECOVERABLE_TRANSITION_COMMIT_STATUS,
-  RECOVERABLE_TRANSITION_ROLLBACK_STATUS,
   REMOVE_SAFETY_EVALUATION_CLASSIFICATION,
   REMOVE_SAFETY_OWNER_PARTICIPATION_KIND,
   REMOVE_SAFETY_READINESS_DIMENSION,
-  REMOVE_SAFETY_READ_QUERY_OPTIONS,
-  REMOVE_SAFETY_SQL,
   REPLACE_SOURCE_LEADER_HANDOFF_REQUIRED_PARTITION_IDS,
-  REPLICA_OPERATION_VISIBILITY_READ_MODE,
-  ReplicaOperationField,
-  ReplicaOperationMessageType,
   ReplicaOperationResponseStatus,
-  ReplicaStatus,
-  SAFETY_DEFERRED_LOG_THROTTLE_MS,
-  SAFETY_DEFERRED_RETRY_DELAY_MS,
-  SERVICE_TYPE,
-  SQL_RECONCILIATION_REASON,
-  SYSTEM_TABLE_NAME,
-  TIMEOUT_BUDGET_CLASSIFICATION,
-  TIMEOUT_BUDGET_DEFAULT,
-  TIME_MS,
-  TRANSACTION_STATUS,
-  TRANSITION_RECOVERY_READ_OPTIONS,
-  TRANSITION_RECOVERY_SQL,
-  TRANSITION_RETRY_DELAY_MS,
-  TRANSITION_STEP_OPTIONS,
   TYPEOF,
-  UNIFIED_SERVICE_TYPE,
   WORKFLOW_STEP,
-  WORKFLOW_STEP_TO_STATUS,
-  buildControlPlaneQueryOptions,
   buildPriorityRecoveryBlockedPartitionIds,
   buildPriorityRecoveryCompletion,
   buildPriorityRecoveryOperationAssessment,
-  buildSelectRowsByTransactionIdsSql,
-  buildTimeoutClassification,
-  classifyTransportDeliveryOutcome,
-  createChildTimeoutBudget,
-  createTopLevelOperationBudget,
-  getControlPlaneRetryAfterMs,
   getWorkflowSteps,
   hasPriorityRecoverySpreadGap,
-  isCoordinatorOwnedOperationType,
-  isDeliveredTransportDeliveryOutcome,
   isPriorityControlPlanePartition,
-  isRetryableControlPlaneError,
-  isSystemTablePartition,
   normalizeNodeIdList,
   normalizeReplicaRowNodeIds,
-  readAuthoritativeControlPlaneRows,
   resolvePriorityRecoveryActiveNodeCohort,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
 
 const PRIORITY_OPERATION_VISIBILITY_DEFERRED_SAFE_REMOVAL_SUFFIX =
-  " operation visibility is deferred for safe removal";
+  ' operation visibility is deferred for safe removal';
 
 class OperationWorkflowOwnerSegment6 extends OperationWorkflowOwnerSegment5 {
   buildPriorityRecoveryAssessmentContextForOperation(
@@ -120,12 +46,12 @@ class OperationWorkflowOwnerSegment6 extends OperationWorkflowOwnerSegment5 {
 
     const priorityPartitionSummary =
       planningSnapshot.priorityPartitionSummary &&
-      typeof planningSnapshot.priorityPartitionSummary === TYPEOF.OBJECT
-        ? planningSnapshot.priorityPartitionSummary
-        : null;
+      typeof planningSnapshot.priorityPartitionSummary === TYPEOF.OBJECT ?
+        planningSnapshot.priorityPartitionSummary :
+        null;
     const decisionSnapshot =
       this.buildPriorityRecoveryDecisionSnapshotForOperations(
-        operation.partitionId || operation.entityId || "",
+        operation.partitionId || operation.entityId || '',
         [operation],
         planningSnapshot,
       );
@@ -236,15 +162,15 @@ class OperationWorkflowOwnerSegment6 extends OperationWorkflowOwnerSegment5 {
     const useRecoveryProjectionMembership =
       recoveryProjectionNodeIds.length > NUM.ZERO &&
       (spreadGapPending || recoveryProjectionCoversProjectedVoters);
-    const membershipNodeIds = useRecoveryProjectionMembership
-      ? recoveryProjectionNodeIds
-      : publishedActiveNodeIds;
-    const membershipSource = useRecoveryProjectionMembership
-      ? PRIORITY_REMOVE_SAFETY_MEMBERSHIP_SOURCE.RECOVERY_PROJECTION_MEMBERSHIP
-      : PRIORITY_REMOVE_SAFETY_MEMBERSHIP_SOURCE.PUBLISHED_MEMBERSHIP;
-    const membershipNodeIdSet = useRecoveryProjectionMembership
-      ? recoveryProjectionNodeIdSet
-      : publishedActiveNodeIdSet;
+    const membershipNodeIds = useRecoveryProjectionMembership ?
+      recoveryProjectionNodeIds :
+      publishedActiveNodeIds;
+    const membershipSource = useRecoveryProjectionMembership ?
+      PRIORITY_REMOVE_SAFETY_MEMBERSHIP_SOURCE.RECOVERY_PROJECTION_MEMBERSHIP :
+      PRIORITY_REMOVE_SAFETY_MEMBERSHIP_SOURCE.PUBLISHED_MEMBERSHIP;
+    const membershipNodeIdSet = useRecoveryProjectionMembership ?
+      recoveryProjectionNodeIdSet :
+      publishedActiveNodeIdSet;
     const missingMembershipNodeIds = projectedVoterReadyNodeIds.filter(
       (nodeId) => !membershipNodeIdSet.has(nodeId),
     );
@@ -268,12 +194,10 @@ class OperationWorkflowOwnerSegment6 extends OperationWorkflowOwnerSegment5 {
 
   /**
    * @param {Object} operation
-   * @param {boolean} replaceRemoveDispatchPhase
    * @return {boolean}
    */
   isPriorityRecoverySupersededTargetFailureApplicable(
     operation,
-    replaceRemoveDispatchPhase,
   ) {
     if (
       !operation ||
@@ -282,7 +206,7 @@ class OperationWorkflowOwnerSegment6 extends OperationWorkflowOwnerSegment5 {
     ) {
       return false;
     }
-    return replaceRemoveDispatchPhase !== true;
+    return true;
   }
 
   /**
@@ -346,10 +270,7 @@ class OperationWorkflowOwnerSegment6 extends OperationWorkflowOwnerSegment5 {
         priorityRecoveryContext,
       );
     if (supersededTargetError) {
-      return this.buildDeferredRemoveSafetyEvaluationForOperation(
-        operation,
-        supersededTargetError,
-      );
+      return this.buildFailedRemoveSafetyEvaluation(supersededTargetError);
     }
 
     if (
@@ -399,7 +320,7 @@ class OperationWorkflowOwnerSegment6 extends OperationWorkflowOwnerSegment5 {
       return null;
     }
 
-    const targetNodeId = String(operation.targetNodeId || "").trim();
+    const targetNodeId = String(operation.targetNodeId || '').trim();
     if (targetNodeId.length === NUM.ZERO) {
       return null;
     }
@@ -417,9 +338,9 @@ class OperationWorkflowOwnerSegment6 extends OperationWorkflowOwnerSegment5 {
       return null;
     }
 
-    const blockedPartitionIds = priorityPartitionSummary
-      ? buildPriorityRecoveryBlockedPartitionIds(priorityPartitionSummary)
-      : [];
+    const blockedPartitionIds = priorityPartitionSummary ?
+      buildPriorityRecoveryBlockedPartitionIds(priorityPartitionSummary) :
+      [];
     if (
       blockedPartitionIds.length > NUM.ZERO &&
       !blockedPartitionIds.includes(operation.partitionId)
@@ -486,18 +407,14 @@ class OperationWorkflowOwnerSegment6 extends OperationWorkflowOwnerSegment5 {
         priorityRecoveryContext,
       );
     if (supersededTargetError) {
-      return this.buildDeferredRemoveSafetyEvaluationForOperation(
-        operation,
-        supersededTargetError,
-      );
+      return this.buildFailedRemoveSafetyEvaluation(supersededTargetError);
     }
     if (
       priorityRecoveryCompletion?.state ===
       PRIORITY_RECOVERY_COMPLETION_STATE.AUTHORITATIVE_OPERATION_READ_DEFERRED
     ) {
-      const replaceRemovePhase = this.repository.isReplaceRemovePhase(
-        operation,
-      );
+      const replaceRemovePhase =
+        this.repository.isReplaceRemovePhase(operation);
       const deferReason = await this.resolveRemoveSafetyDeferredReason(
         operation,
         replaceRemovePhase,
@@ -507,9 +424,7 @@ class OperationWorkflowOwnerSegment6 extends OperationWorkflowOwnerSegment5 {
         operation.partitionId +
         PRIORITY_OPERATION_VISIBILITY_DEFERRED_SAFE_REMOVAL_SUFFIX;
       if (!deferReason) {
-        return this.buildFailedRemoveSafetyEvaluation(
-          deferredVisibilityError,
-        );
+        return this.buildFailedRemoveSafetyEvaluation(deferredVisibilityError);
       }
       return this.buildDeferredRemoveSafetyEvaluation(
         deferredVisibilityError,
@@ -704,6 +619,140 @@ class OperationWorkflowOwnerSegment6 extends OperationWorkflowOwnerSegment5 {
   }
 
   /**
+   * @param {Object} operation
+   * @param {Object|null} replacementReplicaRow
+   * @param {Object[]} currentVoterReadyRows
+   * @param {string|null} operationReplicaId
+   * @return {Promise<Object|null>}
+   * @private
+   */
+  async resolvePriorityPublicationReplacementLeaderCandidateRow(
+    operation,
+    replacementReplicaRow,
+    currentVoterReadyRows,
+    operationReplicaId,
+  ) {
+    const fallbackReplacementReplicaRow = replacementReplicaRow || null;
+    if (
+      !operation ||
+      operation.type !== OperationType.REPLACE ||
+      !this.isReplaceSourceLeaderHandoffRequiredPartition(operation.partitionId)
+    ) {
+      return fallbackReplacementReplicaRow;
+    }
+
+    const replacementReplicaId =
+      this.getReplicaRowIdentity(replacementReplicaRow) ||
+      this.repository.getReplaceTargetReplicaId(operation) ||
+      null;
+    if (!replacementReplicaId) {
+      return fallbackReplacementReplicaRow;
+    }
+
+    const electionEvidence =
+      this.getFreshPriorityPublicationReplacementLeaderElectionEvidence(
+        operation,
+      );
+    const electionRetrySuppressed =
+      this.isPriorityPublicationLeaderHandoffRetrySuppressed(electionEvidence);
+    if (!electionRetrySuppressed) {
+      return fallbackReplacementReplicaRow;
+    }
+
+    const sourceNodeId =
+      typeof operation.sourceNodeId === TYPEOF.STRING ?
+        operation.sourceNodeId.trim() :
+        null;
+    const normalizedOperationReplicaId =
+      typeof operationReplicaId === TYPEOF.STRING ?
+        operationReplicaId.trim() :
+        null;
+    const normalizedReplacementReplicaId = replacementReplicaId.trim();
+    const candidateRows = Array.isArray(currentVoterReadyRows) ?
+      currentVoterReadyRows :
+      [];
+    const notFoundReplicaIds = new Set(
+      Array.isArray(electionEvidence?.notFoundReplicaIds) ?
+        electionEvidence.notFoundReplicaIds :
+        [],
+    );
+    if (notFoundReplicaIds.has(normalizedReplacementReplicaId)) {
+      const replacementRoleState =
+        this.getPriorityPublicationReplacementRoleState(replacementReplicaRow);
+      const replacementNodeId =
+        typeof replacementReplicaRow?.node_id === TYPEOF.STRING ?
+          replacementReplicaRow.node_id.trim() :
+          typeof operation.targetNodeId === TYPEOF.STRING ?
+            operation.targetNodeId.trim() :
+            null;
+      const partitionRow = await this.getCriticalPartitionRowForSafety(
+        operation.partitionId,
+      );
+      const partitionLeaderNodeId =
+        this.getCriticalPartitionLeaderNodeIdForSafety(partitionRow);
+      const replacementOwnershipObserved =
+        replacementRoleState ===
+          PRIORITY_PUBLICATION_SOURCE_ROLE_STATE.LEADER ||
+        (replacementNodeId !== null &&
+          partitionLeaderNodeId === replacementNodeId);
+      if (replacementOwnershipObserved) {
+        return fallbackReplacementReplicaRow;
+      }
+    }
+    const evidenceReplicaId =
+      typeof electionEvidence?.replacementReplicaId === TYPEOF.STRING ?
+        electionEvidence.replacementReplicaId.trim() :
+        null;
+    const isEligibleCandidateRow = (row, blockedReplicaIds) => {
+      const rowReplicaId = this.getReplicaRowIdentity(row);
+      const rowNodeId =
+        typeof row?.node_id === TYPEOF.STRING ? row.node_id.trim() : null;
+      return (
+        rowReplicaId &&
+        rowNodeId &&
+        rowReplicaId !== normalizedOperationReplicaId &&
+        !blockedReplicaIds.has(rowReplicaId) &&
+        (!sourceNodeId || rowNodeId !== sourceNodeId)
+      );
+    };
+    const findEligibleCandidateRow = (blockedReplicaIds) =>
+      candidateRows.find((row) =>
+        isEligibleCandidateRow(row, blockedReplicaIds),
+      ) || null;
+    const evidenceCandidateBlockedReplicaIds = new Set(
+      [...notFoundReplicaIds].filter(
+        (replicaId) => replicaId !== evidenceReplicaId,
+      ),
+    );
+
+    const evidenceCandidateRow =
+      evidenceReplicaId === null ?
+        null :
+        candidateRows.find(
+          (row) =>
+            this.getReplicaRowIdentity(row) === evidenceReplicaId &&
+              isEligibleCandidateRow(row, evidenceCandidateBlockedReplicaIds),
+        ) || null;
+    if (
+      electionEvidence?.responseStatus ===
+        ReplicaOperationResponseStatus.COMPLETED &&
+      this.getReplicaRowIdentity(evidenceCandidateRow) === evidenceReplicaId
+    ) {
+      return evidenceCandidateRow;
+    }
+    if (notFoundReplicaIds.size === NUM.ZERO) {
+      return fallbackReplacementReplicaRow;
+    }
+    if (!notFoundReplicaIds.has(normalizedReplacementReplicaId)) {
+      return fallbackReplacementReplicaRow;
+    }
+    return (
+      findEligibleCandidateRow(notFoundReplicaIds) ||
+      fallbackReplacementReplicaRow
+    );
+  }
+
+  /**
    * Evaluate safety validation for REMOVE operations.
    * @param {Object} operation
    * @return {Promise<Object>}
@@ -748,9 +797,9 @@ class OperationWorkflowOwnerSegment6 extends OperationWorkflowOwnerSegment5 {
     );
 
     const operationReplicaId =
-      operation.type === OperationType.REPLACE
-        ? this.repository.getReplaceSourceReplicaId(operation)
-        : operation.replicaId;
+      operation.type === OperationType.REPLACE ?
+        this.repository.getReplaceSourceReplicaId(operation) :
+        operation.replicaId;
 
     if (!operationReplicaId) {
       return this.buildFailedRemoveSafetyEvaluation(
@@ -772,18 +821,45 @@ class OperationWorkflowOwnerSegment6 extends OperationWorkflowOwnerSegment5 {
           replicaId: operationReplicaId,
         }),
       ) || null;
+    const replacementReplicaId =
+      operation.type === OperationType.REPLACE ?
+        this.repository.getReplaceTargetReplicaId(operation) ||
+          (typeof operation.replicaId === TYPEOF.STRING &&
+          operation.replicaId.length > NUM.ZERO ?
+            operation.replicaId :
+            null) :
+        null;
+    const replacementReplicaRow =
+      replacementReplicaId === null ?
+        null :
+        criticalReplicaRows.find((row) =>
+          this.isOperationReplicaRow(row, {
+            ...operation,
+            replicaId: replacementReplicaId,
+          }),
+        ) || null;
+    const replacementLeaderCandidateRow =
+      await this.resolvePriorityPublicationReplacementLeaderCandidateRow(
+        operation,
+        replacementReplicaRow,
+        currentVoterReadyRows,
+        operationReplicaId,
+      );
 
     const requiresSourceLeaderHandoff =
       operation.type === OperationType.REPLACE &&
       this.isReplaceSourceLeaderHandoffRequiredPartition(operation.partitionId);
+    const priorityRecoveryCompletionEvaluation =
+      await this.evaluatePriorityRecoveryCompletionRemoveSafety(operation);
+    const priorityRecoveryCompletionSafe =
+      priorityRecoveryCompletionEvaluation?.classification ===
+      REMOVE_SAFETY_EVALUATION_CLASSIFICATION.SAFE;
 
     if (!removingVoterReady && !requiresSourceLeaderHandoff) {
       return this.buildSafeRemoveSafetyEvaluation();
     }
 
     if (isReplaceRemoveInitialDispatch) {
-      const replacementReplicaId =
-        this.repository.getReplaceTargetReplicaId(operation);
       if (!replacementReplicaId) {
         return this.buildDeferredRemoveSafetyEvaluationForOperation(
           operation,
@@ -793,18 +869,18 @@ class OperationWorkflowOwnerSegment6 extends OperationWorkflowOwnerSegment5 {
             OPERATION_WORKFLOW_OWNER_LITERAL.IS_UNAVAILABLE,
         );
       }
-      const replacementReplica = criticalReplicaRows.find((row) => {
-        return (
-          row?.service_id === replacementReplicaId ||
-          row?.replica_id === replacementReplicaId
-        );
-      });
-      if (
-        !this.isVoterReadyRoutableReplica(
-          replacementReplica,
-          removeSafetyReadiness,
-        )
-      ) {
+      const replacementReplicaVoterReady =
+        priorityRecoveryCompletionSafe === true ?
+          this.isVoterReadyReplicaTopology(replacementReplicaRow) :
+          this.isVoterReadyRoutableReplica(
+            replacementReplicaRow,
+            removeSafetyReadiness,
+          ) ||
+            this.isPriorityActiveReplaceTopologyVoterEvidenceSufficient(
+              operation,
+              replacementReplicaRow,
+            );
+      if (!replacementReplicaVoterReady) {
         return this.buildDeferredRemoveSafetyEvaluationForOperation(
           operation,
           OPERATION_WORKFLOW_OWNER_LITERAL.CRITICAL_PARTITION +
@@ -816,19 +892,10 @@ class OperationWorkflowOwnerSegment6 extends OperationWorkflowOwnerSegment5 {
       }
     }
 
-    const priorityPublicationLeaderRemoveSafetyEvaluation =
-      await this.evaluatePriorityPublicationLeaderRemoveSafety(
-        operation,
-        removingReplicaRow,
-      );
-    if (priorityPublicationLeaderRemoveSafetyEvaluation) {
-      return priorityPublicationLeaderRemoveSafetyEvaluation;
-    }
-
-    const priorityRecoveryCompletionEvaluation =
-      await this.evaluatePriorityRecoveryCompletionRemoveSafety(operation);
     if (priorityRecoveryCompletionEvaluation) {
-      return priorityRecoveryCompletionEvaluation;
+      if (!requiresSourceLeaderHandoff || !priorityRecoveryCompletionSafe) {
+        return priorityRecoveryCompletionEvaluation;
+      }
     }
 
     const minReplicaCount = await this.getCriticalMinReplicaCount(
@@ -842,7 +909,10 @@ class OperationWorkflowOwnerSegment6 extends OperationWorkflowOwnerSegment5 {
         }),
     );
     const projectedVoterReadyCount = projectedVoterReadyRows.length;
-    if (projectedVoterReadyCount < minReplicaCount) {
+    if (
+      !priorityRecoveryCompletionSafe &&
+      projectedVoterReadyCount < minReplicaCount
+    ) {
       return this.buildDeferredRemoveSafetyEvaluationForOperation(
         operation,
         `Critical partition ${operation.partitionId}` +
@@ -851,9 +921,50 @@ class OperationWorkflowOwnerSegment6 extends OperationWorkflowOwnerSegment5 {
       );
     }
 
-    return this.evaluatePriorityPublishedMembershipRemoveSafety(
-      operation,
-      projectedVoterReadyRows,
+    if (!priorityRecoveryCompletionSafe) {
+      const priorityPublishedMembershipRemoveSafetyEvaluation =
+        await this.evaluatePriorityPublishedMembershipRemoveSafety(
+          operation,
+          projectedVoterReadyRows,
+        );
+      if (
+        priorityPublishedMembershipRemoveSafetyEvaluation.classification !==
+        REMOVE_SAFETY_EVALUATION_CLASSIFICATION.SAFE
+      ) {
+        return priorityPublishedMembershipRemoveSafetyEvaluation;
+      }
+    }
+
+    const priorityPublicationLeaderRemoveSafetyEvaluation =
+      await this.evaluatePriorityPublicationLeaderRemoveSafety(
+        operation,
+        removingReplicaRow,
+        replacementLeaderCandidateRow,
+      );
+    if (priorityPublicationLeaderRemoveSafetyEvaluation) {
+      return priorityPublicationLeaderRemoveSafetyEvaluation;
+    }
+
+    return this.buildSafeRemoveSafetyEvaluation();
+  }
+
+  /**
+   * @param {Object} operation
+   * @param {Object|null} replacementReplicaRow
+   * @return {boolean}
+   * @private
+   */
+  isPriorityActiveReplaceTopologyVoterEvidenceSufficient(
+    operation,
+    replacementReplicaRow,
+  ) {
+    return (
+      operation?.type === OperationType.REPLACE &&
+      operation?.workflowStep === WORKFLOW_STEP.ACTIVE &&
+      isPriorityControlPlanePartition({
+        partitionId: operation?.partitionId,
+      }) &&
+      this.isVoterReadyReplicaTopology(replacementReplicaRow)
     );
   }
 
@@ -893,7 +1004,7 @@ class OperationWorkflowOwnerSegment6 extends OperationWorkflowOwnerSegment5 {
     const authoritativeOperation =
       await this.repository.queryAuthoritativeOperationById(
         operation.operationId,
-        { requireOwnerRpcRead: true },
+        {requireOwnerRpcRead: true},
       );
     if (
       !authoritativeOperation ||
@@ -936,20 +1047,18 @@ class OperationWorkflowOwnerSegment6 extends OperationWorkflowOwnerSegment5 {
       return;
     }
     const operationType = sourceOperation.type || targetOperation.type;
-    const retainedStepsHistory = Array.isArray(targetOperation.stepsHistory)
-      ? targetOperation.stepsHistory
-      : [];
-    const observedStepsHistory = Array.isArray(sourceOperation.stepsHistory)
-      ? sourceOperation.stepsHistory
-      : [];
+    const retainedStepsHistory = Array.isArray(targetOperation.stepsHistory) ?
+      targetOperation.stepsHistory :
+      [];
+    const observedStepsHistory = Array.isArray(sourceOperation.stepsHistory) ?
+      sourceOperation.stepsHistory :
+      [];
     const adoptedStepsHistory =
       observedStepsHistory.length > NUM.ZERO ?
         observedStepsHistory :
         retainedStepsHistory;
     const clonedStepsHistory = adoptedStepsHistory.map((entry) => {
-      return entry && typeof entry === TYPEOF.OBJECT ?
-        {...entry} :
-        entry;
+      return entry && typeof entry === TYPEOF.OBJECT ? {...entry} : entry;
     });
     if (operationType === OperationType.REPLACE) {
       const retainedSourceReplicaId =
@@ -967,17 +1076,17 @@ class OperationWorkflowOwnerSegment6 extends OperationWorkflowOwnerSegment5 {
       const observedReplicaId =
         typeof sourceOperation.replicaId ===
           OPERATION_WORKFLOW_OWNER_LITERAL.STRING &&
-        sourceOperation.replicaId.length > NUM.ZERO
-          ? sourceOperation.replicaId
-          : null;
+        sourceOperation.replicaId.length > NUM.ZERO ?
+          sourceOperation.replicaId :
+          null;
       const observedTargetReplicaId =
         typeof canonicalSourceReplicaId ===
           OPERATION_WORKFLOW_OWNER_LITERAL.STRING &&
         canonicalSourceReplicaId.length > NUM.ZERO &&
         typeof observedReplicaId === OPERATION_WORKFLOW_OWNER_LITERAL.STRING &&
-        observedReplicaId !== canonicalSourceReplicaId
-          ? observedReplicaId
-          : null;
+        observedReplicaId !== canonicalSourceReplicaId ?
+          observedReplicaId :
+          null;
       const canonicalTargetReplicaId =
         retainedTargetReplicaId || observedTargetReplicaId;
       if (
@@ -1072,7 +1181,7 @@ class OperationWorkflowOwnerSegment6 extends OperationWorkflowOwnerSegment5 {
     const authoritativeOperation =
       await this.repository.queryAuthoritativeOperationById(
         operation.operationId,
-        { requireOwnerRpcRead: true },
+        {requireOwnerRpcRead: true},
       );
     maybeSelectOperation(authoritativeOperation);
 
@@ -1138,7 +1247,7 @@ class OperationWorkflowOwnerSegment6 extends OperationWorkflowOwnerSegment5 {
       return null;
     }
     const normalizedType =
-      typeof move.type === "string" ? move.type.toUpperCase() : move.type;
+      typeof move.type === 'string' ? move.type.toUpperCase() : move.type;
     const operation = {
       type: normalizedType,
       partitionId: move.partitionId || move.entityId,
@@ -1157,4 +1266,4 @@ class OperationWorkflowOwnerSegment6 extends OperationWorkflowOwnerSegment5 {
    */
 }
 
-export { OperationWorkflowOwnerSegment6 };
+export {OperationWorkflowOwnerSegment6};

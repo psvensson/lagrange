@@ -1,4 +1,4 @@
-import { TABLE_DISTRIBUTION_HELPERS_SEGMENT_4 } from './table-distribution-helpers-segment-4.js';
+import {TABLE_DISTRIBUTION_HELPERS_SEGMENT_4} from './table-distribution-helpers-segment-4.js';
 
 const {
   admitBenchmarkLoadNodes,

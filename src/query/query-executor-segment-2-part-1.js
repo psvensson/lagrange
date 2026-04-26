@@ -1,62 +1,24 @@
-import { QUERY_EXECUTOR_SHARED } from "./query-executor-shared.js";
-import { QueryExecutorSegment1 } from "./query-executor-segment-1.js";
+import {QUERY_EXECUTOR_SHARED} from './query-executor-shared.js';
+import {QueryExecutorSegment1} from './query-executor-segment-1.js';
 
 const {
-  COLUMN,
-  CONTROL_PLANE_PARTICIPATION_KIND,
-  CONTROL_PLANE_READINESS_DIMENSION,
   CONTROL_PLANE_WRITE_RETRY_DECISION_STATE,
-  ConfigurationManager,
-  DISTRIBUTED_JOIN_STRATEGY,
-  DistributedMergeEngine,
   ERRORS,
-  HLCClockService,
-  LEADER_GAP_REASON_OWNER_MISSING,
-  LEADER_GAP_REASON_SERVICE_MISSING,
   LOG_MSG,
-  LoggingService,
-  METRICS_LOG_TAG,
   MIGRATION_PARTITION_OPERATION,
   NUM,
-  PARTITION_SERVICE_ERROR_MSG,
-  PG_EXPR_TYPE,
-  ParallelQueryCoordinator,
-  QUERY_AST_NODE,
-  QUERY_AST_TYPE,
-  QUERY_CONFIG_KEY,
-  QUERY_DEFAULTS,
-  QUERY_ERROR_CODE,
   QUERY_ERROR_MSG,
   QUERY_EXECUTOR_LITERAL,
-  QUERY_JOIN_TYPE,
   QUERY_LOG_MSG,
   QUERY_MESSAGE_FIELD_MIGRATION_ID,
   QUERY_MESSAGE_FIELD_MIGRATION_OPERATION,
   QUERY_MESSAGE_FIELD_SESSION_ID,
   QUERY_MESSAGE_FIELD_SPLIT_MIRROR_ORIGIN,
   QUERY_MESSAGE_TYPE,
-  QUERY_OPERATOR,
   QUERY_RESPONSE_TYPE,
-  QUERY_ROUTING_DIAGNOSTIC_REASON,
   QUERY_ROUTING_REPAIR_REASON,
-  QUERY_SQL,
-  QUERY_SUBSYSTEM,
-  RAFT_ROLE,
-  SERVICE_STATUS,
-  SERVICE_TYPE,
-  SQL,
-  SYSTEM_TABLE_NAMES,
-  TABLES,
-  TRANSPORT_ERROR_MSG,
-  buildDistributedFailureSummary,
-  buildParticipantFailureEntry,
-  buildPartitionServiceWitnessFingerprint,
-  compactEligibilitySnapshot,
-  evaluateEligibilityDecision,
-  isRetryableControlPlaneError,
   normalizeParticipantFailureString,
   normalizeParticipantRetryAfterMs,
-  resolveBootstrapLeaderSelection,
   resolveParticipantBackpressureState,
 } = QUERY_EXECUTOR_SHARED;
 
@@ -76,9 +38,9 @@ class QueryExecutorSegment2Part1 extends QueryExecutorSegment1 {
     );
     const executionTimeoutMs =
       Number.isFinite(executionOptions?.timeoutMs) &&
-      executionOptions.timeoutMs > NUM.ZERO
-        ? Math.floor(executionOptions.timeoutMs)
-        : null;
+      executionOptions.timeoutMs > NUM.ZERO ?
+        Math.floor(executionOptions.timeoutMs) :
+        null;
     const executionDeadlineMs =
       executionTimeoutMs === null ? null : Date.now() + executionTimeoutMs;
     const getRemainingExecutionBudgetMs = () => {
@@ -117,9 +79,9 @@ class QueryExecutorSegment2Part1 extends QueryExecutorSegment1 {
     };
     const waitForRetryBudget = async (retryDelayMs) => {
       const normalizedRetryDelayMs =
-        Number.isFinite(retryDelayMs) && retryDelayMs > NUM.ZERO
-          ? Math.floor(retryDelayMs)
-          : NUM.ZERO;
+        Number.isFinite(retryDelayMs) && retryDelayMs > NUM.ZERO ?
+          Math.floor(retryDelayMs) :
+          NUM.ZERO;
       const remainingBudgetMs = getRemainingExecutionBudgetMs();
       if (remainingBudgetMs === null) {
         if (normalizedRetryDelayMs > NUM.ZERO) {
@@ -181,17 +143,17 @@ class QueryExecutorSegment2Part1 extends QueryExecutorSegment1 {
         return null;
       }
       const errorMessage =
-        typeof failure?.error === QUERY_EXECUTOR_LITERAL.STRING_STRING
-          ? failure.error
-          : typeof failure?.message === QUERY_EXECUTOR_LITERAL.STRING_STRING
-            ? failure.message
-            : QUERY_EXECUTOR_LITERAL.STRING_VALUE;
+        typeof failure?.error === QUERY_EXECUTOR_LITERAL.STRING_STRING ?
+          failure.error :
+          typeof failure?.message === QUERY_EXECUTOR_LITERAL.STRING_STRING ?
+            failure.message :
+            QUERY_EXECUTOR_LITERAL.STRING_VALUE;
       const errorCode =
-        typeof failure?.errorCode === QUERY_EXECUTOR_LITERAL.STRING_STRING
-          ? failure.errorCode
-          : typeof failure?.code === QUERY_EXECUTOR_LITERAL.STRING_STRING
-            ? failure.code
-            : null;
+        typeof failure?.errorCode === QUERY_EXECUTOR_LITERAL.STRING_STRING ?
+          failure.errorCode :
+          typeof failure?.code === QUERY_EXECUTOR_LITERAL.STRING_STRING ?
+            failure.code :
+            null;
       if (!this.isLeaderUnavailable(errorMessage, errorCode)) {
         return null;
       }
@@ -232,9 +194,9 @@ class QueryExecutorSegment2Part1 extends QueryExecutorSegment1 {
         ...buildFailureResult(ERRORS.SYSTEM_CACHE_NOT_AVAILABLE),
       };
     }
-    const maxAttempts = forRead
-      ? this.getReadRetryAttemptLimit()
-      : this.getWriteRetryAttemptLimit(executionOptions);
+    const maxAttempts = forRead ?
+      this.getReadRetryAttemptLimit() :
+      this.getWriteRetryAttemptLimit(executionOptions);
     let lastError = null;
     let lastFailureDetails = null;
     let awaitedRoutingRepair = false;
@@ -245,51 +207,51 @@ class QueryExecutorSegment2Part1 extends QueryExecutorSegment1 {
     const allowReadinessAuthoritativeRefresh =
       this.shouldAllowRoutingAuthoritativeRefresh(executionOptions);
     const buildRequest =
-      typeof executionOptions.buildRequest === "function"
-        ? executionOptions.buildRequest
-        : () => {
-            const request = {
-              type: QUERY_MESSAGE_TYPE.QUERY,
-              sql,
-              params,
-            };
-            if (
-              typeof executionOptions.sessionId === "string" &&
-              executionOptions.sessionId.length > NUM.ZERO
-            ) {
-              request[QUERY_MESSAGE_FIELD_SESSION_ID] =
-                executionOptions.sessionId;
-            }
-            if (executionOptions.splitMirrorOrigin) {
-              request[QUERY_MESSAGE_FIELD_SPLIT_MIRROR_ORIGIN] =
-                executionOptions.splitMirrorOrigin;
-            }
-            if (
-              executionOptions.migrationOperation ===
-              MIGRATION_PARTITION_OPERATION.ALTER_TABLE
-            ) {
-              request[QUERY_MESSAGE_FIELD_MIGRATION_OPERATION] =
-                executionOptions.migrationOperation;
-              if (executionOptions.migrationId) {
-                request[QUERY_MESSAGE_FIELD_MIGRATION_ID] =
-                  executionOptions.migrationId;
-              }
-            }
-            return request;
+      typeof executionOptions.buildRequest === 'function' ?
+        executionOptions.buildRequest :
+        () => {
+          const request = {
+            type: QUERY_MESSAGE_TYPE.QUERY,
+            sql,
+            params,
           };
+          if (
+            typeof executionOptions.sessionId === 'string' &&
+              executionOptions.sessionId.length > NUM.ZERO
+          ) {
+            request[QUERY_MESSAGE_FIELD_SESSION_ID] =
+                executionOptions.sessionId;
+          }
+          if (executionOptions.splitMirrorOrigin) {
+            request[QUERY_MESSAGE_FIELD_SPLIT_MIRROR_ORIGIN] =
+                executionOptions.splitMirrorOrigin;
+          }
+          if (
+            executionOptions.migrationOperation ===
+              MIGRATION_PARTITION_OPERATION.ALTER_TABLE
+          ) {
+            request[QUERY_MESSAGE_FIELD_MIGRATION_OPERATION] =
+                executionOptions.migrationOperation;
+            if (executionOptions.migrationId) {
+              request[QUERY_MESSAGE_FIELD_MIGRATION_ID] =
+                  executionOptions.migrationId;
+            }
+          }
+          return request;
+        };
     const isSuccessfulResponse =
-      typeof executionOptions.isSuccessfulResponse === "function"
-        ? executionOptions.isSuccessfulResponse
-        : (response) => response?.acknowledged && response?.success;
+      typeof executionOptions.isSuccessfulResponse === 'function' ?
+        executionOptions.isSuccessfulResponse :
+        (response) => response?.acknowledged && response?.success;
     const buildSuccessResult =
-      typeof executionOptions.buildSuccessResult === "function"
-        ? executionOptions.buildSuccessResult
-        : (response) => ({
-            partitionId,
-            success: true,
-            rows: response.rows || [],
-            changes: response.changes,
-          });
+      typeof executionOptions.buildSuccessResult === 'function' ?
+        executionOptions.buildSuccessResult :
+        (response) => ({
+          partitionId,
+          success: true,
+          rows: response.rows || [],
+          changes: response.changes,
+        });
     for (let attempt = NUM.ONE; attempt <= maxAttempts; attempt++) {
       this.throwIfCancelled(cancellationToken);
       const attemptBudgetMs = getRemainingExecutionBudgetMs();
@@ -301,17 +263,19 @@ class QueryExecutorSegment2Part1 extends QueryExecutorSegment1 {
           ),
         };
       }
-      let { candidates: serviceCandidates, routingSnapshot } =
+      let {candidates: serviceCandidates, routingSnapshot} =
         this.resolvePartitionServiceCandidates(
           partitionId,
           forRead,
           preferLeader,
           preferSameLatencyGroup,
-          routingReadinessDimension,
-          {
-            allowReadinessAuthoritativeRefresh,
-          },
-        );
+            routingReadinessDimension,
+            {
+              allowReadinessAuthoritativeRefresh,
+              recoveryCandidateSelectionKey:
+                executionOptions.recoveryCandidateSelectionKey,
+            },
+          );
       if (
         !awaitedRoutingRepair &&
         serviceCandidates.length === NUM.ZERO &&
@@ -321,17 +285,19 @@ class QueryExecutorSegment2Part1 extends QueryExecutorSegment1 {
       ) {
         awaitedRoutingRepair = true;
         this.throwIfCancelled(cancellationToken);
-        ({ candidates: serviceCandidates, routingSnapshot } =
+        ({candidates: serviceCandidates, routingSnapshot} =
           this.resolvePartitionServiceCandidates(
             partitionId,
             forRead,
             preferLeader,
             preferSameLatencyGroup,
             routingReadinessDimension,
-            {
-              allowReadinessAuthoritativeRefresh,
-            },
-          ));
+              {
+                allowReadinessAuthoritativeRefresh,
+                recoveryCandidateSelectionKey:
+                  executionOptions.recoveryCandidateSelectionKey,
+              },
+            ));
       }
       serviceCandidates = this.prioritizeSessionPartitionAddress(
         serviceCandidates,
@@ -491,7 +457,7 @@ class QueryExecutorSegment2Part1 extends QueryExecutorSegment1 {
         candidateIndex += NUM.ONE
       ) {
         const serviceInfo = candidateQueue[candidateIndex];
-        const { address } = serviceInfo;
+        const {address} = serviceInfo;
         attemptedAddresses.add(address);
         this.logger.debug(QUERY_LOG_MSG.ROUTING_QUERY_TO_PARTITION, {
           partitionId,
@@ -694,6 +660,8 @@ class QueryExecutorSegment2Part1 extends QueryExecutorSegment1 {
                   routingReadinessDimension,
                   {
                     allowReadinessAuthoritativeRefresh,
+                    recoveryCandidateSelectionKey:
+                      executionOptions.recoveryCandidateSelectionKey,
                   },
                 );
               routingSnapshot = refreshedResolution.routingSnapshot;
@@ -823,10 +791,10 @@ class QueryExecutorSegment2Part1 extends QueryExecutorSegment1 {
           };
         } catch (error) {
           const errorMessage =
-            typeof error?.message === "string" &&
-            error.message.length > NUM.ZERO
-              ? error.message
-              : ERRORS.QUERY_FAILED;
+            typeof error?.message === 'string' &&
+            error.message.length > NUM.ZERO ?
+              error.message :
+              ERRORS.QUERY_FAILED;
           if (this.isNoHandlerFailure(errorMessage)) {
             const witnessedService = this.findRoutingSnapshotService(
               routingSnapshot,
@@ -874,6 +842,8 @@ class QueryExecutorSegment2Part1 extends QueryExecutorSegment1 {
                   routingReadinessDimension,
                   {
                     allowReadinessAuthoritativeRefresh,
+                    recoveryCandidateSelectionKey:
+                      executionOptions.recoveryCandidateSelectionKey,
                   },
                 );
               routingSnapshot = refreshedResolution.routingSnapshot;
@@ -1049,12 +1019,12 @@ class QueryExecutorSegment2Part1 extends QueryExecutorSegment1 {
         if (attempt < maxAttempts) {
           const retryDelayMs =
             Number.isFinite(lastFailureDetails?.retryAfterMs) &&
-            lastFailureDetails.retryAfterMs > NUM.ZERO
-              ? Math.max(
-                  this.leaderRetryDelayMs,
-                  lastFailureDetails.retryAfterMs,
-                )
-              : this.leaderRetryDelayMs;
+            lastFailureDetails.retryAfterMs > NUM.ZERO ?
+              Math.max(
+                this.leaderRetryDelayMs,
+                lastFailureDetails.retryAfterMs,
+              ) :
+              this.leaderRetryDelayMs;
           if (!(await waitForRetryBudget(retryDelayMs))) {
             return {
               ...buildFailureResult(
@@ -1076,12 +1046,12 @@ class QueryExecutorSegment2Part1 extends QueryExecutorSegment1 {
         if (attempt < maxAttempts) {
           const retryDelayMs =
             Number.isFinite(lastFailureDetails?.retryAfterMs) &&
-            lastFailureDetails.retryAfterMs > NUM.ZERO
-              ? Math.max(
-                  this.leaderRetryDelayMs,
-                  lastFailureDetails.retryAfterMs,
-                )
-              : this.leaderRetryDelayMs;
+            lastFailureDetails.retryAfterMs > NUM.ZERO ?
+              Math.max(
+                this.leaderRetryDelayMs,
+                lastFailureDetails.retryAfterMs,
+              ) :
+              this.leaderRetryDelayMs;
           if (!(await waitForRetryBudget(retryDelayMs))) {
             return {
               ...buildFailureResult(
@@ -1102,9 +1072,9 @@ class QueryExecutorSegment2Part1 extends QueryExecutorSegment1 {
       if (attempt < maxAttempts) {
         const retryDelayMs =
           Number.isFinite(lastFailureDetails?.retryAfterMs) &&
-          lastFailureDetails.retryAfterMs > NUM.ZERO
-            ? Math.max(this.leaderRetryDelayMs, lastFailureDetails.retryAfterMs)
-            : this.leaderRetryDelayMs;
+          lastFailureDetails.retryAfterMs > NUM.ZERO ?
+            Math.max(this.leaderRetryDelayMs, lastFailureDetails.retryAfterMs) :
+            this.leaderRetryDelayMs;
         if (!(await waitForRetryBudget(retryDelayMs))) {
           return {
             ...buildFailureResult(
@@ -1123,4 +1093,4 @@ class QueryExecutorSegment2Part1 extends QueryExecutorSegment1 {
     };
   }
 }
-export { QueryExecutorSegment2Part1 };
+export {QueryExecutorSegment2Part1};

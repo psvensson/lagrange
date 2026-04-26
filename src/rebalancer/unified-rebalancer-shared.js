@@ -5,22 +5,22 @@
  * Requirements: 8.1, 8.2, 8.3, 8.4, 8.5, 8.10
  */
 
-import { EventEmitter } from "events";
-import { LoggingService } from "../logging/logging-service.js";
-import { ConfigurationManager } from "../config/configuration-manager.js";
-import { LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY } from "../cdc/cdc-integration-service.js";
-import { SYSTEM_TABLE_NAME } from "../bootstrap/system-table-schemas-constants.js";
+import {EventEmitter} from 'events';
+import {LoggingService} from '../logging/logging-service.js';
+import {ConfigurationManager} from '../config/configuration-manager.js';
+import {LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY} from '../cdc/cdc-integration-service.js';
+import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {
   getPartitionRowFromCache,
   isCriticalTransportControlPlanePartition as isCriticalTransportControlPlanePartitionTable,
   isPriorityControlPlanePartition,
   isSystemTablePartition,
-} from "../bootstrap/system-partition-classification.js";
-import { isBackgroundWorkReadySnapshot as isBackgroundWorkLifecycleReadySnapshot } from "../bootstrap/traffic-readiness-utils.js";
-import { StartupRecoveryCoordinator } from "../bootstrap/startup-recovery-coordinator.js";
-import { CONTROL_PLANE_AUTHORITATIVE_READ_MODE } from "../control-plane/control-plane-system-table-gateway.js";
-import { MovePlanner } from "./move-planner.js";
-import { StoragePressureBehavior } from "./storage-pressure-behavior.js";
+} from '../bootstrap/system-partition-classification.js';
+import {isBackgroundWorkReadySnapshot as isBackgroundWorkLifecycleReadySnapshot} from '../bootstrap/traffic-readiness-utils.js';
+import {StartupRecoveryCoordinator} from '../bootstrap/startup-recovery-coordinator.js';
+import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE} from '../control-plane/control-plane-system-table-gateway.js';
+import {MovePlanner} from './move-planner.js';
+import {StoragePressureBehavior} from './storage-pressure-behavior.js';
 import {
   COORDINATOR_OWNED_OPERATION_TYPES_SQL_CLAUSE,
   OperationType,
@@ -34,32 +34,35 @@ import {
   isTerminalStep,
   isValidWorkflowStep,
   resolveReplicaOperationSemanticPhase,
-} from "./replica-status.js";
-import { REPLICA_OPERATION_VISIBILITY_READ_MODE } from "./replica-operation-repository.js";
-import { assertCritical } from "../utils/assert.js";
-import { CONTROL_PLANE_READINESS_DIMENSION } from "../control-plane/control-plane-readiness-constants.js";
-import { ControlPlaneReadinessService } from "../control-plane/control-plane-readiness-service.js";
-import { createControlPlaneRuntimeBundle } from "../control-plane/control-plane-runtime-bundle.js";
+} from './replica-status.js';
+import {REPLICA_OPERATION_VISIBILITY_READ_MODE} from './replica-operation-repository.js';
+import {assertCritical} from '../utils/assert.js';
+import {
+  CONTROL_PLANE_READINESS_DIMENSION,
+  CONTROL_PLANE_READINESS_REASON,
+} from '../control-plane/control-plane-readiness-constants.js';
+import {ControlPlaneReadinessService} from '../control-plane/control-plane-readiness-service.js';
+import {createControlPlaneRuntimeBundle} from '../control-plane/control-plane-runtime-bundle.js';
 import {
   isNodeReadyWithConnection,
   isNodeReadyWithTransport,
   isNodeReadyLeaseExplicitlyCleared,
   isNodeRecordReady,
   wasNodeRecordReadyWhenWritten,
-} from "../node/node-readiness-policy.js";
+} from '../node/node-readiness-policy.js';
 import {
   PRESSURE_WORK_CLASS,
   PressureGovernor,
-} from "../control-plane/pressure-governor.js";
+} from '../control-plane/pressure-governor.js';
 import {
   buildControlPlaneWorkloadProfile,
   CONTROL_PLANE_WORKLOAD_CLASS,
-} from "../control-plane/control-plane-workload-profile.js";
+} from '../control-plane/control-plane-workload-profile.js';
 import {
   getControlPlaneRetryAfterMs,
   isRetryableControlPlaneError,
-} from "../control-plane/control-plane-error-classification.js";
-import { getLocalControlPlaneMutationReadinessBlocker } from "../control-plane/control-plane-mutation-readiness.js";
+} from '../control-plane/control-plane-error-classification.js';
+import {getLocalControlPlaneMutationReadinessBlocker} from '../control-plane/control-plane-mutation-readiness.js';
 import {
   buildPriorityRecoveryOperationContextFromRecord,
   buildPriorityRecoveryOperationAssessment,
@@ -71,11 +74,11 @@ import {
   resolvePriorityRecoveryActiveNodeCohort,
   resolveTrackedPriorityRecoveryAdmissionPlan,
   shouldPriorityRecoveryOperationBlockPlanning,
-} from "../control-plane/priority-recovery-snapshot.js";
-import { buildPublicationRecoveryGateSnapshot } from "../control-plane/publication-recovery-gate.js";
-import { CONTROL_PLANE_PUBLICATION_STATUS } from "../control-plane/control-plane-publication-merge.js";
-import { RAFT_ROLE } from "../raft/constants.js";
-import { LIFECYCLE_PHASE } from "../bootstrap/lifecycle-controller-constants.js";
+} from '../control-plane/priority-recovery-snapshot.js';
+import {buildPublicationRecoveryGateSnapshot} from '../control-plane/publication-recovery-gate.js';
+import {CONTROL_PLANE_PUBLICATION_STATUS} from '../control-plane/control-plane-publication-merge.js';
+import {RAFT_ROLE} from '../raft/constants.js';
+import {LIFECYCLE_PHASE} from '../bootstrap/lifecycle-controller-constants.js';
 import {
   REBALANCER_CONFIG_KEY,
   REBALANCER_DEFAULT,
@@ -86,6 +89,7 @@ import {
   REBALANCER_ERROR_MSG,
   REBALANCER_EVENT,
   REBALANCER_LOG_MSG,
+  MOVE_REASON,
   REBALANCER_MOVE_TYPE,
   REBALANCER_NODE_STATUS,
   REBALANCER_QUEUE_NAME,
@@ -94,8 +98,8 @@ import {
   REBALANCER_TRIGGER,
   READINESS_SKIP_DETAIL,
   STABILIZATION_RESET_TRIGGER,
-} from "./rebalancer-constants.js";
-import { CLUSTER_READINESS_TIMEOUT_MS } from "../constants/cdc-lifecycle-constants.js";
+} from './rebalancer-constants.js';
+import {CLUSTER_READINESS_TIMEOUT_MS} from '../constants/cdc-lifecycle-constants.js';
 import {
   COLUMN,
   ENDPOINT_STATUS,
@@ -107,53 +111,53 @@ import {
   TRANSPORT_TYPE,
   TYPEOF,
   WORKFLOW_STEP,
-} from "../constants/index.js";
-import { ENDPOINT_SYNC_HEALTH } from "../runtime/endpoint-sync-constants.js";
+} from '../constants/index.js';
+import {ENDPOINT_SYNC_HEALTH} from '../runtime/endpoint-sync-constants.js';
 import {
   normalizeNodeRow,
   normalizeNodeEndpointRow,
   normalizeServiceEndpointRow,
   normalizeServiceRow,
-} from "../control-plane/system-row-normalizers.js";
-import { OwnerKeyReconcileQueue } from "../workflow/owner-key-reconcile-queue.js";
-import { RECONCILE_REASON } from "../workflow/reconcile-queue-constants.js";
+} from '../control-plane/system-row-normalizers.js';
+import {OwnerKeyReconcileQueue} from '../workflow/owner-key-reconcile-queue.js';
+import {RECONCILE_REASON} from '../workflow/reconcile-queue-constants.js';
 import {
   adjustToOddCount,
   getNextOddCount,
   getPreviousOddCount,
   isOddReplicaCount,
-} from "./odd-replica-count.js";
+} from './odd-replica-count.js';
 import {
   isReplicaOperationInFlight,
   isReplicaOperationStale,
   normalizeReplicaOperationRecord,
-} from "./replica-operation-liveness.js";
+} from './replica-operation-liveness.js';
 const UNIFIED_REBALANCER_LITERAL = Object.freeze({
-  ADMISSION_DENIED: "admission_denied",
-  BACKGROUND: "background",
-  BOOTSTRAPREADINESSSTATE: "bootstrapReadinessState",
-  CDCINTEGRATIONSERVICE: "cdcIntegrationService",
-  CRITICAL: "critical",
-  EMPTY_STRING: "",
-  FUNCTION: "function",
-  MESSAGEROUTER: "messageRouter",
-  MOVE: "move",
-  NODES: "nodes",
-  NUMBER: "number",
+  ADMISSION_DENIED: 'admission_denied',
+  BACKGROUND: 'background',
+  BOOTSTRAPREADINESSSTATE: 'bootstrapReadinessState',
+  CDCINTEGRATIONSERVICE: 'cdcIntegrationService',
+  CRITICAL: 'critical',
+  EMPTY_STRING: '',
+  FUNCTION: 'function',
+  MESSAGEROUTER: 'messageRouter',
+  MOVE: 'move',
+  NODES: 'nodes',
+  NUMBER: 'number',
   ONE: 1,
   ONE_POINT_FIVE: 1.5,
-  READ: "read",
-  REBALANCECOORDINATOR: "rebalanceCoordinator",
-  REBALANCER_COLON_SCHEDULE: "rebalancer:schedule",
-  SCHEDULED: "scheduled",
-  SERVICES: "services",
-  SQLQUERYENGINE: "sqlQueryEngine",
-  STARTUPRECOVERYCOORDINATOR: "startupRecoveryCoordinator",
-  SYSTEMTABLECACHE: "systemTableCache",
-  TABLEPOLICYSERVICE: "tablePolicyService",
+  READ: 'read',
+  REBALANCECOORDINATOR: 'rebalanceCoordinator',
+  REBALANCER_COLON_SCHEDULE: 'rebalancer:schedule',
+  SCHEDULED: 'scheduled',
+  SERVICES: 'services',
+  SQLQUERYENGINE: 'sqlQueryEngine',
+  STARTUPRECOVERYCOORDINATOR: 'startupRecoveryCoordinator',
+  SYSTEMTABLECACHE: 'systemTableCache',
+  TABLEPOLICYSERVICE: 'tablePolicyService',
   THOUSAND: 1000,
   TWO: 2,
-  UPDATE: "UPDATE",
+  UPDATE: 'UPDATE',
   ZERO: 0,
 });
 
@@ -171,7 +175,7 @@ const DEFAULT_MESSAGE_GROUP_POLICY = REBALANCER_DEFAULT_POLICY.MESSAGE_GROUP;
 
 const SQL_BUDGET = Object.freeze({
   SELECT_REBALANCE_BUDGET:
-    "SELECT config_value FROM config WHERE config_key = ? LIMIT 1",
+    'SELECT config_value FROM config WHERE config_key = ? LIMIT 1',
   SELECT_IN_FLIGHT_COUNT: `SELECT COUNT(*) AS total_count FROM replica_operations
      WHERE type IN (${COORDINATOR_OWNED_OPERATION_TYPES_SQL_CLAUSE})
      AND status NOT IN (${TERMINAL_STATUS_SQL_CLAUSE})`,
@@ -192,17 +196,17 @@ const REBALANCER_BUDGET_READ_OPTIONS = Object.freeze({
 const PRIORITY_CONTROL_PLANE_RECOVERY_FALLBACK_REPLICA_COUNT = 3;
 
 const CRITICAL_SYSTEM_TOPOLOGY_SETTLING_BLOCKER_REASON = Object.freeze({
-  NODE_READY_LEASE_INCOMPLETE: "node_ready_lease_incomplete",
-  TRANSITIONAL_NODE_MEMBERSHIP: "transitional_node_membership",
+  NODE_READY_LEASE_INCOMPLETE: 'node_ready_lease_incomplete',
+  TRANSITIONAL_NODE_MEMBERSHIP: 'transitional_node_membership',
   TRANSPORT_MEMBERSHIP_EXCEEDS_NODES_CACHE:
-    "transport_membership_exceeds_nodes_cache",
-  ENDPOINT_VISIBILITY_INCOMPLETE: "endpoint_visibility_incomplete",
-  TOPOLOGY_OPERATIONS_IN_FLIGHT: "topology_operations_in_flight",
+    'transport_membership_exceeds_nodes_cache',
+  ENDPOINT_VISIBILITY_INCOMPLETE: 'endpoint_visibility_incomplete',
+  TOPOLOGY_OPERATIONS_IN_FLIGHT: 'topology_operations_in_flight',
 });
 
 const TOPOLOGY_IN_FLIGHT_REPLICA_OPERATION_SOURCE = Object.freeze({
-  CACHE: "cache",
-  AUTHORITATIVE: "authoritative",
+  CACHE: 'cache',
+  AUTHORITATIVE: 'authoritative',
 });
 
 const CRITICAL_SYSTEM_ENDPOINT_VISIBILITY_AUTHORITATIVE_READ = Object.freeze({
@@ -210,13 +214,13 @@ const CRITICAL_SYSTEM_ENDPOINT_VISIBILITY_AUTHORITATIVE_READ = Object.freeze({
 });
 
 const REBALANCER_RUNTIME_REASON = Object.freeze({
-  NODE_BECAME_READY: "node_became_ready",
-  NODE_FAILED: "node_failed",
-  NODE_LEFT_READY: "node_left_ready",
-  NOT_LEADER: "not_leader",
-  NO_AVAILABLE_NODES: "no_available_nodes",
-  NO_CHANGES_NEEDED: "no_changes_needed",
-  SHUTDOWN_IN_PROGRESS: "shutdown_in_progress",
+  NODE_BECAME_READY: 'node_became_ready',
+  NODE_FAILED: 'node_failed',
+  NODE_LEFT_READY: 'node_left_ready',
+  NOT_LEADER: 'not_leader',
+  NO_AVAILABLE_NODES: 'no_available_nodes',
+  NO_CHANGES_NEEDED: 'no_changes_needed',
+  SHUTDOWN_IN_PROGRESS: 'shutdown_in_progress',
 });
 
 /**
@@ -233,6 +237,7 @@ export const UNIFIED_REBALANCER_SHARED = {
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
   CONTROL_PLANE_PUBLICATION_STATUS,
   CONTROL_PLANE_READINESS_DIMENSION,
+  CONTROL_PLANE_READINESS_REASON,
   CONTROL_PLANE_WORKLOAD_CLASS,
   COORDINATOR_OWNED_OPERATION_TYPES_SQL_CLAUSE,
   CRITICAL_SYSTEM_ENDPOINT_VISIBILITY_AUTHORITATIVE_READ,
@@ -272,6 +277,7 @@ export const UNIFIED_REBALANCER_SHARED = {
   REBALANCER_ERROR_MSG,
   REBALANCER_EVENT,
   REBALANCER_LOG_MSG,
+  MOVE_REASON,
   REBALANCER_MOVE_TYPE,
   REBALANCER_NODE_STATUS,
   REBALANCER_QUEUE_NAME,

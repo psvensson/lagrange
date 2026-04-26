@@ -113,7 +113,7 @@ function buildNodeRow(nodeId, status) {
   };
 }
 
-function createEvaluator(nodeId) {
+function createEvaluator(nodeId, activeNodeIds = [ACTIVE_NODE_ID]) {
   const emptyMissing = {
     missingPartitionLeaders: [],
     missingMessageGroupLeaders: [],
@@ -136,6 +136,12 @@ function createEvaluator(nodeId) {
       getSystemCacheHydrated: () => false,
       getJoinReadinessSnapshotProvider: () => null,
       getCdcIntegrationService: () => null,
+      getControlPlaneReadinessService: () => ({
+        getStartupAuthoritySnapshotSync: () => ({
+          authorityAvailable: activeNodeIds.length > NUM.ZERO,
+          canonicalStartupNodeIds: activeNodeIds,
+        }),
+      }),
       getLogger: () => console,
       getConfig: () => ({}),
     },

@@ -1,4 +1,4 @@
-import { POSTGRES_BASELINE_COMPARISON_SEGMENT_6 } from "./postgres-baseline-comparison-segment-6.js";
+import {POSTGRES_BASELINE_COMPARISON_SEGMENT_6} from './postgres-baseline-comparison-segment-6.js';
 const {
   assert,
   osArch,
@@ -96,18 +96,18 @@ async function waitForSutLoadQuiescence({
   const requireCanonicalReadiness = strictCanonicalReadiness === true;
   const effectiveStableWindowMs = Math.max(
     ZERO,
-    Number.isFinite(stableWindowMs)
-      ? Math.floor(stableWindowMs)
-      : QUIESCENCE_DEFAULT_STABLE_WINDOW_MS,
+    Number.isFinite(stableWindowMs) ?
+      Math.floor(stableWindowMs) :
+      QUIESCENCE_DEFAULT_STABLE_WINDOW_MS,
   );
   const effectiveNoProgressTimeoutMs =
-    Number.isInteger(noProgressTimeoutMs) && noProgressTimeoutMs > ZERO
-      ? noProgressTimeoutMs
-      : null;
+    Number.isInteger(noProgressTimeoutMs) && noProgressTimeoutMs > ZERO ?
+      noProgressTimeoutMs :
+      null;
   const effectiveMaxReplicaOpsInFlight =
-    Number.isInteger(maxReplicaOpsInFlight) && maxReplicaOpsInFlight >= ZERO
-      ? maxReplicaOpsInFlight
-      : BENCHMARK_PRELOAD_MAX_REPLICA_OPS_IN_FLIGHT_DEFAULT;
+    Number.isInteger(maxReplicaOpsInFlight) && maxReplicaOpsInFlight >= ZERO ?
+      maxReplicaOpsInFlight :
+      BENCHMARK_PRELOAD_MAX_REPLICA_OPS_IN_FLIGHT_DEFAULT;
   let lastLeaderSignature = null;
   let lastLeaderChangeAtMs = timing.now();
   let lastProgressAtMs = timing.now();
@@ -142,7 +142,7 @@ async function waitForSutLoadQuiescence({
     readinessState,
     probeError,
   ) {
-    if (typeof onBenchmarkMetadataSnapshot !== "function") {
+    if (typeof onBenchmarkMetadataSnapshot !== 'function') {
       return;
     }
     const nodeId = String(node?.id || DISCOVERY_UNKNOWN_NODE_ID);
@@ -153,16 +153,16 @@ async function waitForSutLoadQuiescence({
         readinessState?.requiredSchemaVersion ||
         normalizeRequiredSchemaVersion(requiredSchemaVersion),
       appliedSchemaVersion: readinessState?.appliedSchemaVersion || null,
-      reasons: Array.isArray(readinessState?.reasons)
-        ? [...readinessState.reasons]
-        : [],
-      discoveryReasons: Array.isArray(readinessState?.discoveryReasons)
-        ? [...readinessState.discoveryReasons]
-        : [],
+      reasons: Array.isArray(readinessState?.reasons) ?
+        [...readinessState.reasons] :
+        [],
+      discoveryReasons: Array.isArray(readinessState?.discoveryReasons) ?
+        [...readinessState.discoveryReasons] :
+        [],
       probeError:
-        typeof probeError === "string" && probeError.length > ZERO
-          ? probeError
-          : null,
+        typeof probeError === 'string' && probeError.length > ZERO ?
+          probeError :
+          null,
     });
     if (benchmarkMetadataSignatureByNodeId[nodeId] === signature) {
       return;
@@ -189,12 +189,12 @@ async function waitForSutLoadQuiescence({
         normalizeRequiredSchemaVersion(requiredSchemaVersion),
       appliedSchemaVersion: readinessState?.appliedSchemaVersion || null,
       ready: readinessState?.ready === true,
-      reasons: Array.isArray(readinessState?.reasons)
-        ? [...readinessState.reasons]
-        : [],
-      discoveryReasons: Array.isArray(readinessState?.discoveryReasons)
-        ? [...readinessState.discoveryReasons]
-        : [],
+      reasons: Array.isArray(readinessState?.reasons) ?
+        [...readinessState.reasons] :
+        [],
+      discoveryReasons: Array.isArray(readinessState?.discoveryReasons) ?
+        [...readinessState.discoveryReasons] :
+        [],
       readinessState: cloneDiscoveryReadinessState(
         readinessState?.readinessState,
       ),
@@ -205,20 +205,20 @@ async function waitForSutLoadQuiescence({
     if (!requireCanonicalReadiness) {
       return;
     }
-    const reasons = Array.isArray(readinessState?.reasons)
-      ? [...readinessState.reasons]
-      : [];
-    const reasonSignature = reasons.join("|");
+    const reasons = Array.isArray(readinessState?.reasons) ?
+      [...readinessState.reasons] :
+      [];
+    const reasonSignature = reasons.join('|');
     const hasPreviousReasonSignature = Object.prototype.hasOwnProperty.call(
       readinessReasonSignatureByNodeId,
       nodeId,
     );
-    const previousReasonSignature = hasPreviousReasonSignature
-      ? readinessReasonSignatureByNodeId[nodeId]
-      : null;
-    const discoveryReasons = Array.isArray(readinessState?.discoveryReasons)
-      ? [...readinessState.discoveryReasons]
-      : [];
+    const previousReasonSignature = hasPreviousReasonSignature ?
+      readinessReasonSignatureByNodeId[nodeId] :
+      null;
+    const discoveryReasons = Array.isArray(readinessState?.discoveryReasons) ?
+      [...readinessState.discoveryReasons] :
+      [];
     const readinessStateSnapshot = cloneDiscoveryReadinessState(
       readinessState?.readinessState,
     );
@@ -235,9 +235,9 @@ async function waitForSutLoadQuiescence({
         normalizeRequiredSchemaVersion(requiredSchemaVersion),
       observedSchemaVersion: readinessState?.appliedSchemaVersion || null,
       discoveryReasons,
-      ...(readinessStateSnapshot
-        ? { readinessState: readinessStateSnapshot }
-        : {}),
+      ...(readinessStateSnapshot ?
+        {readinessState: readinessStateSnapshot} :
+        {}),
       timestampMs: timing.now(),
     });
 
@@ -270,12 +270,12 @@ async function waitForSutLoadQuiescence({
           snapshot?.requiredSchemaVersion || requiredVersion,
         observedSchemaVersion: snapshot?.appliedSchemaVersion || null,
         ready: snapshot?.ready === true,
-        unmetReasons: Array.isArray(snapshot?.reasons)
-          ? [...snapshot.reasons]
-          : [DISCOVERY_READINESS_REASON_SCHEMA_VERSION_UNKNOWN],
-        discoveryReasons: Array.isArray(snapshot?.discoveryReasons)
-          ? [...snapshot.discoveryReasons]
-          : [],
+        unmetReasons: Array.isArray(snapshot?.reasons) ?
+          [...snapshot.reasons] :
+          [DISCOVERY_READINESS_REASON_SCHEMA_VERSION_UNKNOWN],
+        discoveryReasons: Array.isArray(snapshot?.discoveryReasons) ?
+          [...snapshot.discoveryReasons] :
+          [],
         readinessState: cloneDiscoveryReadinessState(snapshot?.readinessState),
       };
     }
@@ -305,18 +305,18 @@ async function waitForSutLoadQuiescence({
           const discoveryContext = {
             ...NODE_CLIENT_TRANSIENT_CONTEXT,
             requireReadiness: true,
-            ...(typeof tableName === "string" && tableName.length > ZERO
-              ? {
-                  [NODE_CLIENT_DISCOVERY_CONTEXT_TABLE_NAME]: tableName,
-                  ...(typeof requiredSchemaTableId === "string" &&
-                  requiredSchemaTableId.length > ZERO
-                    ? {
-                        [NODE_CLIENT_DISCOVERY_CONTEXT_TABLE_ID]:
+            ...(typeof tableName === 'string' && tableName.length > ZERO ?
+              {
+                [NODE_CLIENT_DISCOVERY_CONTEXT_TABLE_NAME]: tableName,
+                ...(typeof requiredSchemaTableId === 'string' &&
+                  requiredSchemaTableId.length > ZERO ?
+                  {
+                    [NODE_CLIENT_DISCOVERY_CONTEXT_TABLE_ID]:
                           requiredSchemaTableId,
-                      }
-                    : {}),
-                }
-              : {}),
+                  } :
+                  {}),
+              } :
+              {}),
           };
           const discoverySnapshot = await nodeClient.fetchServiceDiscovery(
             node,
@@ -340,9 +340,9 @@ async function waitForSutLoadQuiescence({
           );
           recordVersionedReadiness(nodeId, discoveryReadiness);
           recordReadinessObservation(nodeId, discoveryReadiness);
-          if (typeof onConvergenceEvent === "function") {
+          if (typeof onConvergenceEvent === 'function') {
             onConvergenceEvent({
-              type: "cdc_received",
+              type: 'cdc_received',
               nodeId,
               tableId: requiredSchemaTableId || null,
               tableName,
@@ -356,7 +356,7 @@ async function waitForSutLoadQuiescence({
             });
             if (discoveryReadiness.appliedSchemaVersion) {
               onConvergenceEvent({
-                type: "cache_applied_version",
+                type: 'cache_applied_version',
                 nodeId,
                 tableId: requiredSchemaTableId || null,
                 tableName,
@@ -370,7 +370,7 @@ async function waitForSutLoadQuiescence({
             }
             if (discoveryReadiness.ready) {
               onConvergenceEvent({
-                type: "readiness_predicate_pass",
+                type: 'readiness_predicate_pass',
                 nodeId,
                 tableId: requiredSchemaTableId || null,
                 tableName,
@@ -392,25 +392,25 @@ async function waitForSutLoadQuiescence({
           }
           const discoveryReasonDetails =
             Array.isArray(discoveryReadiness.discoveryReasons) &&
-            discoveryReadiness.discoveryReasons.length > ZERO
-              ? QUIESCENCE_REASON_DISCOVERY_REASON_DETAIL_PREFIX +
+            discoveryReadiness.discoveryReasons.length > ZERO ?
+              QUIESCENCE_REASON_DISCOVERY_REASON_DETAIL_PREFIX +
                 discoveryReadiness.discoveryReasons.join(
                   QUIESCENCE_REASON_DISCOVERY_REASON_DETAIL_SEPARATOR,
-                )
-              : null;
+                ) :
+              null;
           const discoveryReasonText =
-            discoveryReadiness.reasons.length > ZERO
-              ? discoveryReadiness.reasons.join("|")
-              : DISCOVERY_READINESS_REASON_SCHEMA_VERSION_UNKNOWN;
+            discoveryReadiness.reasons.length > ZERO ?
+              discoveryReadiness.reasons.join('|') :
+              DISCOVERY_READINESS_REASON_SCHEMA_VERSION_UNKNOWN;
           return {
             ready: false,
             reasons: [
               QUIESCENCE_REASON_NODE_PROBE_ERROR_PREFIX +
                 nodeId +
-                "=" +
+                '=' +
                 QUIESCENCE_REASON_DISCOVERY_NOT_READY_PREFIX +
                 discoveryReasonText +
-                (discoveryReasonDetails ? "|" + discoveryReasonDetails : ""),
+                (discoveryReasonDetails ? '|' + discoveryReasonDetails : ''),
             ],
           };
         } catch (error) {
@@ -427,18 +427,18 @@ async function waitForSutLoadQuiescence({
           recordVersionedReadiness(nodeId, canonicalReadiness);
           recordReadinessObservation(nodeId, canonicalReadiness);
           const canonicalReasonText =
-            canonicalReadiness.reasons.length > ZERO
-              ? canonicalReadiness.reasons.join("|")
-              : DISCOVERY_READINESS_REASON_ADMIN_NOT_QUERYABLE;
+            canonicalReadiness.reasons.length > ZERO ?
+              canonicalReadiness.reasons.join('|') :
+              DISCOVERY_READINESS_REASON_ADMIN_NOT_QUERYABLE;
           return {
             ready: false,
             reasons: [
               QUIESCENCE_REASON_NODE_PROBE_ERROR_PREFIX +
                 nodeId +
-                "=" +
+                '=' +
                 QUIESCENCE_REASON_DISCOVERY_NOT_READY_PREFIX +
                 canonicalReasonText +
-                "|probe_error=" +
+                '|probe_error=' +
                 String(error?.message || error),
             ],
           };
@@ -465,12 +465,12 @@ async function waitForSutLoadQuiescence({
               {
                 ...NODE_CLIENT_TRANSIENT_CONTEXT,
                 tableName,
-                ...(typeof requiredSchemaTableId === "string" &&
-                requiredSchemaTableId.length > ZERO
-                  ? {
-                      tableId: requiredSchemaTableId,
-                    }
-                  : {}),
+                ...(typeof requiredSchemaTableId === 'string' &&
+                requiredSchemaTableId.length > ZERO ?
+                  {
+                    tableId: requiredSchemaTableId,
+                  } :
+                  {}),
                 requireReadiness: true,
               },
             );
@@ -489,7 +489,7 @@ async function waitForSutLoadQuiescence({
                 reasons: [
                   QUIESCENCE_REASON_NODE_PROBE_ERROR_PREFIX +
                     nodeId +
-                    "=" +
+                    '=' +
                     probeErrorMessage,
                 ],
               };
@@ -499,10 +499,10 @@ async function waitForSutLoadQuiescence({
               reasons: [
                 QUIESCENCE_REASON_NODE_PROBE_ERROR_PREFIX +
                   nodeId +
-                  "=" +
+                  '=' +
                   QUIESCENCE_REASON_DISCOVERY_NOT_READY_PREFIX +
-                  discoveryReadiness.reasons.join("|") +
-                  "|probe_error=" +
+                  discoveryReadiness.reasons.join('|') +
+                  '|probe_error=' +
                   probeErrorMessage,
               ],
             };
@@ -515,7 +515,7 @@ async function waitForSutLoadQuiescence({
           reasons: [
             QUIESCENCE_REASON_NODE_PROBE_ERROR_PREFIX +
               nodeId +
-              "=" +
+              '=' +
               probeErrorMessage,
           ],
         };
@@ -529,28 +529,28 @@ async function waitForSutLoadQuiescence({
           NODE_CLIENT_TRANSIENT_CONTEXT,
         );
         const replicaOperations = controlSnapshot?.replicaOperations || {};
-        const inFlightCount = Number.isInteger(replicaOperations.inFlightCount)
-          ? replicaOperations.inFlightCount
-          : ZERO;
+        const inFlightCount = Number.isInteger(replicaOperations.inFlightCount) ?
+          replicaOperations.inFlightCount :
+          ZERO;
         const partitionGroupInFlight =
           replicaOperations.partitionGroupInFlight &&
-          typeof replicaOperations.partitionGroupInFlight === "object"
-            ? Object.fromEntries(
-                Object.entries(replicaOperations.partitionGroupInFlight)
-                  .filter(
-                    (entry) => Number.isInteger(entry[1]) && entry[1] >= ZERO,
-                  )
-                  .map(([partitionGroupId, count]) => [
-                    String(partitionGroupId),
-                    Number(count),
-                  ]),
-              )
-            : {};
+          typeof replicaOperations.partitionGroupInFlight === 'object' ?
+            Object.fromEntries(
+              Object.entries(replicaOperations.partitionGroupInFlight)
+                .filter(
+                  (entry) => Number.isInteger(entry[1]) && entry[1] >= ZERO,
+                )
+                .map(([partitionGroupId, count]) => [
+                  String(partitionGroupId),
+                  Number(count),
+                ]),
+            ) :
+            {};
         const operationTimelineByOperationId =
           replicaOperations.operationTimelineById &&
-          typeof replicaOperations.operationTimelineById === "object"
-            ? replicaOperations.operationTimelineById
-            : {};
+          typeof replicaOperations.operationTimelineById === 'object' ?
+            replicaOperations.operationTimelineById :
+            {};
         const operationTimelineSignature =
           buildReplicaOperationProgressSignature(
             operationTimelineByOperationId,
@@ -560,9 +560,9 @@ async function waitForSutLoadQuiescence({
         );
         const leaders =
           controlSnapshot?.leaders &&
-          typeof controlSnapshot.leaders === "object"
-            ? controlSnapshot.leaders
-            : {};
+          typeof controlSnapshot.leaders === 'object' ?
+            controlSnapshot.leaders :
+            {};
         const leaderEntries = Object.entries(leaders).sort((left, right) =>
           left[0].localeCompare(right[0]),
         );
@@ -621,7 +621,7 @@ async function waitForSutLoadQuiescence({
         };
       }
     },
-    abortIf: ({ nowMs, includedNodeIds }) => {
+    abortIf: ({nowMs, includedNodeIds}) => {
       if (effectiveNoProgressTimeoutMs === null) {
         return null;
       }
@@ -638,9 +638,9 @@ async function waitForSutLoadQuiescence({
 
       const leaderQuietElapsedMs = Number.isFinite(
         gateProgressState.leaderQuietElapsedMs,
-      )
-        ? gateProgressState.leaderQuietElapsedMs
-        : ZERO;
+      ) ?
+        gateProgressState.leaderQuietElapsedMs :
+        ZERO;
       if (
         inFlightCount === ZERO &&
         leaderQuietElapsedMs > maxLeaderQuietElapsedMs
@@ -649,18 +649,18 @@ async function waitForSutLoadQuiescence({
         progressObserved = true;
       }
 
-      const includedCount = Array.isArray(includedNodeIds)
-        ? includedNodeIds.length
-        : ZERO;
+      const includedCount = Array.isArray(includedNodeIds) ?
+        includedNodeIds.length :
+        ZERO;
       if (includedCount > maxIncludedNodeCount) {
         maxIncludedNodeCount = includedCount;
         progressObserved = true;
       }
 
       const operationTimelineSignature =
-        typeof gateProgressState.operationTimelineSignature === "string"
-          ? gateProgressState.operationTimelineSignature
-          : null;
+        typeof gateProgressState.operationTimelineSignature === 'string' ?
+          gateProgressState.operationTimelineSignature :
+          null;
       if (
         operationTimelineSignature !== null &&
         operationTimelineSignature !== lastOperationTimelineSignature
@@ -677,9 +677,9 @@ async function waitForSutLoadQuiescence({
       const stalledMs = nowMs - lastProgressAtMs;
       const operationLiveness =
         gateProgressState.operationLiveness &&
-        typeof gateProgressState.operationLiveness === "object"
-          ? gateProgressState.operationLiveness
-          : null;
+        typeof gateProgressState.operationLiveness === 'object' ?
+          gateProgressState.operationLiveness :
+          null;
       const suppressStallAbortForFreshInFlight =
         Number.isInteger(inFlightCount) &&
         inFlightCount > ZERO &&
@@ -712,9 +712,9 @@ async function waitForSutLoadQuiescence({
     .filter((nodeId) => !includedNodeIds.has(nodeId));
 
   if (gateResult.mode === GATE_RESULT_MODE.ALL_READY) {
-    const versionConvergence = requireCanonicalReadiness
-      ? buildVersionConvergenceSnapshot()
-      : null;
+    const versionConvergence = requireCanonicalReadiness ?
+      buildVersionConvergenceSnapshot() :
+      null;
     return {
       mode: gateResult.mode,
       attempts: gateResult.attempts,
@@ -730,10 +730,10 @@ async function waitForSutLoadQuiescence({
       },
       reasonHistogram: gateResult.reasonHistogram || {},
       includedNodeIds: gateResult.includedNodeIds || [],
-      ...(requireCanonicalReadiness
-        ? { readinessTimeline: [...readinessTimeline] }
-        : {}),
-      ...(versionConvergence ? { versionConvergence } : {}),
+      ...(requireCanonicalReadiness ?
+        {readinessTimeline: [...readinessTimeline]} :
+        {}),
+      ...(versionConvergence ? {versionConvergence} : {}),
     };
   }
 
@@ -763,19 +763,19 @@ async function waitForSutLoadQuiescence({
   }
   if (inFlightQueryReasons.length > ZERO) {
     details.push(
-      QUIESCENCE_IN_FLIGHT_ERROR_PREFIX + inFlightQueryReasons.join(","),
+      QUIESCENCE_IN_FLIGHT_ERROR_PREFIX + inFlightQueryReasons.join(','),
     );
   }
   if (inFlightCountReasons.length > ZERO) {
     details.push(
-      QUIESCENCE_IN_FLIGHT_COUNT_PREFIX + inFlightCountReasons.join(","),
+      QUIESCENCE_IN_FLIGHT_COUNT_PREFIX + inFlightCountReasons.join(','),
     );
   }
   if (leadershipReasons.length > ZERO) {
-    details.push("leadershipStability=" + leadershipReasons.join(","));
+    details.push('leadershipStability=' + leadershipReasons.join(','));
   }
   if (stallReasons.length > ZERO) {
-    details.push(QUIESCENCE_STALL_PREFIX + stallReasons.join(","));
+    details.push(QUIESCENCE_STALL_PREFIX + stallReasons.join(','));
   }
   if (readyLoadNodes.length > ZERO) {
     details.push(
@@ -784,15 +784,15 @@ async function waitForSutLoadQuiescence({
   }
 
   const errorPrefix =
-    gateResult.aborted === true
-      ? "SUT load nodes did not reach quiescent state; gate aborted due to " +
-        "stalled progress"
-      : "SUT load nodes did not reach quiescent state within " +
+    gateResult.aborted === true ?
+      'SUT load nodes did not reach quiescent state; gate aborted due to ' +
+        'stalled progress' :
+      'SUT load nodes did not reach quiescent state within ' +
         timeoutMs +
-        "ms";
+        'ms';
   const error = new Error(
     errorPrefix +
-      (details.length > ZERO ? " (" + details.join(", ") + ")" : ""),
+      (details.length > ZERO ? ' (' + details.join(', ') + ')' : ''),
   );
   error.gateResult = {
     ...gateResult,
@@ -805,30 +805,30 @@ async function waitForSutLoadQuiescence({
     includedNodeIds: gateResult.includedNodeIds || [],
     excludedNodeIds: gateResult.excludedNodeIds || [],
     reasonHistogram: gateResult.reasonHistogram || {},
-    ...(requireCanonicalReadiness
-      ? { readinessTimeline: [...readinessTimeline] }
-      : {}),
-    ...(requireCanonicalReadiness
-      ? { versionConvergence: buildVersionConvergenceSnapshot() }
-      : {}),
+    ...(requireCanonicalReadiness ?
+      {readinessTimeline: [...readinessTimeline]} :
+      {}),
+    ...(requireCanonicalReadiness ?
+      {versionConvergence: buildVersionConvergenceSnapshot()} :
+      {}),
   };
   throw error;
 }
 
 function buildPsqlCommand(options = {}) {
   const host = String(options.host || LOCALHOST);
-  const port = Number.isInteger(options.port)
-    ? options.port
-    : DEFAULT_REPLICATION_PORT;
-  const user = String(options.user || "postgres");
-  const password = String(options.password || "");
-  const database = String(options.database || "postgres");
-  const sql = String(options.sql || "");
-  const tuplesOnly = options.tuplesOnly === true ? PSQL_TUPLES_ONLY : "";
+  const port = Number.isInteger(options.port) ?
+    options.port :
+    DEFAULT_REPLICATION_PORT;
+  const user = String(options.user || 'postgres');
+  const password = String(options.password || '');
+  const database = String(options.database || 'postgres');
+  const sql = String(options.sql || '');
+  const tuplesOnly = options.tuplesOnly === true ? PSQL_TUPLES_ONLY : '';
 
   return [
     `PGPASSWORD='${shellQuote(password)}'`,
-    "psql",
+    'psql',
     PSQL_ON_ERROR_STOP,
     tuplesOnly,
     `-h '${shellQuote(host)}'`,
@@ -838,7 +838,7 @@ function buildPsqlCommand(options = {}) {
     `-c '${shellQuote(sql)}'`,
   ]
     .filter((part) => part.length > ZERO)
-    .join(" ");
+    .join(' ');
 }
 
 function buildSynchronousStandbySetting(syncReplicaAcks) {
@@ -861,22 +861,22 @@ function buildReplicaBootstrapCommand(
     `password=${benchmarkConfig.password}`,
     `dbname=${BOOTSTRAP_DB_NAME}`,
     `application_name=${replicaName}`,
-  ].join(" ");
+  ].join(' ');
 
   return [
-    "set -e",
+    'set -e',
     'if [ ! -s "$PGDATA/PG_VERSION" ]; then',
     '  rm -rf "$PGDATA"/*',
     `  until pg_isready -h '${shellQuote(primaryContainerName)}' ` +
       `-p ${benchmarkConfig.port} -U '${shellQuote(benchmarkConfig.user)}'; do`,
-    "    sleep 1",
-    "  done",
+    '    sleep 1',
+    '  done',
     `  pg_basebackup --dbname='${shellQuote(basebackupConnectionString)}' ` +
       '-D "$PGDATA" -Fp -Xs -P -R',
-    "fi",
+    'fi',
     POSTGRES_BINARY_PATH_EXPORT,
     `exec ${POSTGRES_ENTRYPOINT_COMMAND}`,
-  ].join("\n");
+  ].join('\n');
 }
 
 async function configurePrimaryReplication(
@@ -916,16 +916,16 @@ async function configurePrimaryReplication(
       user: benchmarkConfig.user,
       password: benchmarkConfig.password,
       database: benchmarkConfig.database,
-      sql: "SELECT pg_reload_conf()",
+      sql: 'SELECT pg_reload_conf()',
     }),
   ];
 
-  const shellCommand = commands.join(" && ");
+  const shellCommand = commands.join(' && ');
   await execShell(
     provider,
     containerId,
     shellCommand,
-    "configure postgres primary replication",
+    'configure postgres primary replication',
   );
 }
 
@@ -948,7 +948,7 @@ async function waitForStreamingReplicas(
       password: benchmarkConfig.password,
       database: benchmarkConfig.database,
       sql:
-        "SELECT count(*) FROM pg_stat_replication " +
+        'SELECT count(*) FROM pg_stat_replication ' +
         `WHERE state = '${REPLICATION_STATE_STREAMING}'`,
       tuplesOnly: true,
     });
@@ -957,7 +957,7 @@ async function waitForStreamingReplicas(
       provider,
       primaryContainerId,
       queryCommand,
-      "check postgres replication status",
+      'check postgres replication status',
     );
     const replicaCount = Number.parseInt(String(output).trim(), 10);
     if (
@@ -970,9 +970,9 @@ async function waitForStreamingReplicas(
   }
 
   throw new Error(
-    "Postgres replicas did not reach streaming state within " +
+    'Postgres replicas did not reach streaming state within ' +
       benchmarkConfig.readyTimeoutMs +
-      "ms",
+      'ms',
   );
 }
 
@@ -989,25 +989,25 @@ function resolvePreflightConvergenceOptions(
 ) {
   const configuredSettleTimeoutMs =
     Number.isFinite(cluster?._config?.convergence?.settleTimeoutMs) &&
-    cluster._config.convergence.settleTimeoutMs > ZERO
-      ? Math.floor(cluster._config.convergence.settleTimeoutMs)
-      : null;
+    cluster._config.convergence.settleTimeoutMs > ZERO ?
+      Math.floor(cluster._config.convergence.settleTimeoutMs) :
+      null;
   const readyTimeoutMs =
     Number.isFinite(benchmarkConfig?.readyTimeoutMs) &&
-    benchmarkConfig.readyTimeoutMs > ZERO
-      ? Math.floor(benchmarkConfig.readyTimeoutMs)
-      : null;
+    benchmarkConfig.readyTimeoutMs > ZERO ?
+      Math.floor(benchmarkConfig.readyTimeoutMs) :
+      null;
   const quiescentTimeoutMs =
     Number.isFinite(benchmarkConfig?.quiescentTimeoutMs) &&
-    benchmarkConfig.quiescentTimeoutMs > ZERO
-      ? Math.floor(benchmarkConfig.quiescentTimeoutMs)
-      : null;
+    benchmarkConfig.quiescentTimeoutMs > ZERO ?
+      Math.floor(benchmarkConfig.quiescentTimeoutMs) :
+      null;
 
   const configuredTargetVoterCount =
     Number.isFinite(cluster?._config?.convergence?.targetVoterCount) &&
-    cluster._config.convergence.targetVoterCount > ZERO
-      ? Math.floor(cluster._config.convergence.targetVoterCount)
-      : null;
+    cluster._config.convergence.targetVoterCount > ZERO ?
+      Math.floor(cluster._config.convergence.targetVoterCount) :
+      null;
 
   let settleTimeoutMs = Math.max(
     configuredSettleTimeoutMs || ZERO,
@@ -1048,19 +1048,19 @@ function resolvePrimaryProvider(cluster) {
   const hostAssignment = cluster?._hostAssignment;
   const providers = cluster?._providers;
   const primaryIndex =
-    Array.isArray(hostAssignment) && hostAssignment.length > ZERO
-      ? hostAssignment[ZERO]
-      : ZERO;
+    Array.isArray(hostAssignment) && hostAssignment.length > ZERO ?
+      hostAssignment[ZERO] :
+      ZERO;
 
   const provider = Array.isArray(providers) ? providers[primaryIndex] : null;
-  assert.ok(provider, "Primary Docker provider is not available on cluster");
+  assert.ok(provider, 'Primary Docker provider is not available on cluster');
   return provider;
 }
 
 function resolveCacheBaseDir(cluster) {
   const configuredOutputDir = cluster?._config?.outputDir;
   if (
-    typeof configuredOutputDir !== "string" ||
+    typeof configuredOutputDir !== 'string' ||
     configuredOutputDir.length === ZERO
   ) {
     return null;
@@ -1070,7 +1070,7 @@ function resolveCacheBaseDir(cluster) {
     return null;
   }
   const lowerPath = normalizedPath.toLowerCase();
-  if (lowerPath.endsWith(".json")) {
+  if (lowerPath.endsWith('.json')) {
     return dirname(normalizedPath);
   }
   return normalizedPath;
@@ -1084,7 +1084,7 @@ function resolveMachineProfile() {
     arch: osArch(),
     hostname: osHostname(),
     cpuCount: cpuList.length,
-    cpuModel: String(firstCpu.model || "unknown"),
+    cpuModel: String(firstCpu.model || 'unknown'),
   };
 }
 

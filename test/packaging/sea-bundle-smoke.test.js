@@ -32,9 +32,9 @@ test('SEA bundle smoke test', async (t) => {
   });
   t.equal(sourceDryRun.exitCode, 0, 'source entrypoint dry-run exits cleanly');
   t.notMatch(
-      sourceDryRun.stdout,
-      /Bootstrap API started/,
-      'source dry-run does not start services',
+    sourceDryRun.stdout,
+    /Bootstrap API started/,
+    'source dry-run does not start services',
   );
 
   const bundleDryRun = await runEntrypoint(mainBundle, {
@@ -44,8 +44,8 @@ test('SEA bundle smoke test', async (t) => {
   });
   t.equal(bundleDryRun.exitCode, 0, 'bundle dry-run exits cleanly');
   t.notMatch(
-      bundleDryRun.stdout,
-      /Bootstrap API started/,
-      'bundle dry-run does not start services',
+    bundleDryRun.stdout,
+    /Bootstrap API started/,
+    'bundle dry-run does not start services',
   );
 });

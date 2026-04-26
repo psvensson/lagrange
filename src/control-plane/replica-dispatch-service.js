@@ -1,78 +1,14 @@
-import { REPLICA_DISPATCH_SERVICE_SHARED } from './replica-dispatch-service-shared.js';
-import { ReplicaDispatchServiceSegment4 } from './replica-dispatch-service-segment-4.js';
+import {REPLICA_DISPATCH_SERVICE_SHARED} from './replica-dispatch-service-shared.js';
+import {ReplicaDispatchServiceSegment4} from './replica-dispatch-service-segment-4.js';
 
 const {
-  COLUMN,
-  CONTROL_PLANE_ALLOWED_STATES,
-  CONTROL_PLANE_CONFIG_KEY,
   CONTROL_PLANE_EVENT,
-  CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE,
-  CONTROL_PLANE_NODE_STATE_REPLAY_CONTEXT,
-  CONTROL_PLANE_READINESS_DIMENSION,
-  ConfigurationManager,
-  ControlPlaneField,
   ControlPlaneMessageType,
-  ControlPlaneReadinessService,
-  DEFAULT_READY_LEASE_MS,
-  DISPATCH_DEFAULT,
-  DISPATCH_ERROR_MSG,
-  DISPATCH_EVENT,
   DISPATCH_LOG_MSG,
-  DISPATCH_QUEUE_NAME,
-  DISPATCH_READINESS_ERROR_CODE,
-  DISPATCH_READINESS_ERROR_REASON,
-  DISPATCH_READINESS_MESSAGE,
-  DISPATCH_READINESS_REASON,
   DISPATCH_STATE,
-  DISPATCH_SUBSYSTEM,
-  EventEmitter,
-  LoggingService,
-  MEMBERSHIP_PUBLICATION_STATUS,
-  MESSAGE_GROUP_CDC_INGRESS_ACTION,
-  NODE_STATE_UPDATE_RETRY_ACTION,
-  NODE_STATE_UPDATE_RETRY_CLASS,
-  NODE_STATE_UPDATE_RETRY_POLICY,
   NUM,
-  OPERATION_METADATA_KEY,
-  OperationType,
-  OwnerKeyReconcileQueue,
-  QUERY_ERROR_CODE,
-  QUERY_ERROR_MSG,
-  READY_NODE_PUBLICATION_ADVANCEMENT_STATE,
   REBALANCE_COORDINATOR_EVENT,
-  RECONCILE_REASON,
-  REPLICA_DISPATCH_SERVICE_LITERAL,
-  REPLICA_OPERATION_VISIBILITY_READ_MODE,
-  ReplicaOperationField,
-  SERVICE_STATUS,
-  SERVICE_TYPE,
-  STATE,
-  STRING,
-  SYSTEM_TABLE_NAME,
   TYPEOF,
-  WORKFLOW_STEP,
-  assertCritical,
-  compareNodeHeartbeatWatermarks,
-  createControlPlaneRuntimeBundle,
-  getControlPlaneErrorCode,
-  getControlPlaneErrorMessage,
-  getControlPlaneMessageRequiredTables,
-  getControlPlaneNodeStatePublicationProfile,
-  getControlPlaneRetryAfterMs,
-  getNodeHeartbeatWatermark,
-  getOperationMetadataObject,
-  getOperationMetadataString,
-  getOperationMetadataStringArray,
-  isCoordinatorOwnedOperationType,
-  isHeartbeatEscalatedControlPlaneNodeStatePublicationMode,
-  isRetryableControlPlaneError,
-  isTerminalMembershipPublicationStatus,
-  resolveControlPlaneNodeStatePublicationMode,
-  resolveReadyNodePublicationAdvancementState,
-  resolveReplayControlPlaneNodeStatePublicationMode,
-  shouldUseAuthoritativePriorityRecoveryRediscovery,
-  unwrapRowReadResult,
-  wasNodeRecordReadyWhenWritten,
 } = REPLICA_DISPATCH_SERVICE_SHARED;
 
 class ReplicaDispatchService extends ReplicaDispatchServiceSegment4 {
@@ -131,6 +67,15 @@ class ReplicaDispatchService extends ReplicaDispatchServiceSegment4 {
     for (const nodeId of this.nodeStateUpdateDeferredRetries.keys()) {
       this.clearDeferredNodeStateUpdateRetry(nodeId);
     }
+    for (
+      const deferredAckRetry of
+      this.membershipPublicationAckDeferredRetries.values()
+    ) {
+      if (deferredAckRetry?.timeoutHandle) {
+        this.clearTimeoutFn(deferredAckRetry.timeoutHandle);
+      }
+    }
+    this.membershipPublicationAckDeferredRetries.clear();
     this.nodeStateUpdateRetryStateByNodeId.clear();
     this.nodeStateUpdateQueueAssignments.clear();
     this.nextNodeStateUpdateQueueIndex = NUM.ZERO;
@@ -161,4 +106,3 @@ class ReplicaDispatchService extends ReplicaDispatchServiceSegment4 {
   }
 }
 export {ReplicaDispatchService};
-

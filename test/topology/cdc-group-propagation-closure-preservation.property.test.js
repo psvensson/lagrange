@@ -269,9 +269,9 @@ test('Property 2 Preservation D: retries that eventually succeed ' +
           // deliverToTargets on the successful retry.
           assert.ok(
             deliveredPayloads.length >= NUM.ONE,
-            `deliverToTargets should have been called at least ` +
+            'deliverToTargets should have been called at least ' +
             `once, but was called ${deliveredPayloads.length} ` +
-            `time(s)`,
+            'time(s)',
           );
 
           // Verify the last successful delivery carried the

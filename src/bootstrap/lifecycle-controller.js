@@ -226,78 +226,78 @@ class LifecycleController extends EventEmitter {
     const evaluationDecision = this.resolveEvaluationDecision(context);
 
     switch (evaluationDecision.state) {
-      case LIFECYCLE_EVALUATION_STATE.DRAINING:
-        return this.buildEvaluationOutcome({
-          stableWindowStartedAt: null,
-          ready: false,
-          phase: LIFECYCLE_PHASE.DEGRADED,
-          consecutiveFailureCount: NO_FAILURE_COUNT,
-          reasons: this.uniqueReasons([
-            LIFECYCLE_REASON.NODE_DRAINING,
-            ...context.hardReasons,
-          ]),
-        });
-      case LIFECYCLE_EVALUATION_STATE.STARTUP_PENDING:
-        return this.buildEvaluationOutcome({
-          stableWindowStartedAt: null,
-          consecutiveFailureCount: NO_FAILURE_COUNT,
-          ready: false,
-          phase: LIFECYCLE_PHASE.INIT,
-          reasons: context.hardReasons,
-        });
-      case LIFECYCLE_EVALUATION_STATE.HARD_CONTROL_BLOCKED:
-        return this.buildEvaluationOutcome({
-          stableWindowStartedAt: null,
-          consecutiveFailureCount: NO_FAILURE_COUNT,
-          ready: false,
-          phase: LIFECYCLE_PHASE.CONTROL_READY,
-          reasons: context.hardReasons,
-        });
-      case LIFECYCLE_EVALUATION_STATE.HARD_DEGRADED_IMMEDIATE:
-        return this.buildEvaluationOutcome({
-          stableWindowStartedAt: null,
-          consecutiveFailureCount: NO_FAILURE_COUNT,
-          ready: false,
-          phase: LIFECYCLE_PHASE.DEGRADED,
-          reasons: context.hardReasons,
-        });
-      case LIFECYCLE_EVALUATION_STATE.HARD_DEGRADED_THRESHOLD:
-        return this.buildEvaluationOutcome({
-          stableWindowStartedAt: null,
-          consecutiveFailureCount: evaluationDecision.consecutiveFailureCount,
-          ready: false,
-          phase: LIFECYCLE_PHASE.DEGRADED,
-          reasons: context.hardReasons,
-        });
-      case LIFECYCLE_EVALUATION_STATE.HARD_TRAFFIC_GRACE:
-        return this.buildEvaluationOutcome({
-          stableWindowStartedAt: null,
-          consecutiveFailureCount: evaluationDecision.consecutiveFailureCount,
-          ready: true,
-          phase: LIFECYCLE_PHASE.TRAFFIC_READY,
-          reasons: EMPTY_REASONS,
-        });
-      case LIFECYCLE_EVALUATION_STATE.STABLE_WINDOW_PENDING:
-        return this.buildEvaluationOutcome({
-          stableWindowStartedAt: context.stableWindowStartedAt,
-          consecutiveFailureCount: NO_FAILURE_COUNT,
-          ready: false,
-          phase: LIFECYCLE_PHASE.JOIN_READY,
-          reasons: [LIFECYCLE_REASON.READINESS_STABLE_WINDOW_PENDING],
-        });
-      case LIFECYCLE_EVALUATION_STATE.TRAFFIC_READY:
-        return this.buildEvaluationOutcome({
-          stableWindowStartedAt: context.stableWindowStartedAt,
-          consecutiveFailureCount: NO_FAILURE_COUNT,
-          ready: true,
-          phase: LIFECYCLE_PHASE.TRAFFIC_READY,
-          reasons: EMPTY_REASONS,
-        });
-      default:
-        throw new Error(
-          UNKNOWN_EVALUATION_STATE_ERROR_PREFIX +
+    case LIFECYCLE_EVALUATION_STATE.DRAINING:
+      return this.buildEvaluationOutcome({
+        stableWindowStartedAt: null,
+        ready: false,
+        phase: LIFECYCLE_PHASE.DEGRADED,
+        consecutiveFailureCount: NO_FAILURE_COUNT,
+        reasons: this.uniqueReasons([
+          LIFECYCLE_REASON.NODE_DRAINING,
+          ...context.hardReasons,
+        ]),
+      });
+    case LIFECYCLE_EVALUATION_STATE.STARTUP_PENDING:
+      return this.buildEvaluationOutcome({
+        stableWindowStartedAt: null,
+        consecutiveFailureCount: NO_FAILURE_COUNT,
+        ready: false,
+        phase: LIFECYCLE_PHASE.INIT,
+        reasons: context.hardReasons,
+      });
+    case LIFECYCLE_EVALUATION_STATE.HARD_CONTROL_BLOCKED:
+      return this.buildEvaluationOutcome({
+        stableWindowStartedAt: null,
+        consecutiveFailureCount: NO_FAILURE_COUNT,
+        ready: false,
+        phase: LIFECYCLE_PHASE.CONTROL_READY,
+        reasons: context.hardReasons,
+      });
+    case LIFECYCLE_EVALUATION_STATE.HARD_DEGRADED_IMMEDIATE:
+      return this.buildEvaluationOutcome({
+        stableWindowStartedAt: null,
+        consecutiveFailureCount: NO_FAILURE_COUNT,
+        ready: false,
+        phase: LIFECYCLE_PHASE.DEGRADED,
+        reasons: context.hardReasons,
+      });
+    case LIFECYCLE_EVALUATION_STATE.HARD_DEGRADED_THRESHOLD:
+      return this.buildEvaluationOutcome({
+        stableWindowStartedAt: null,
+        consecutiveFailureCount: evaluationDecision.consecutiveFailureCount,
+        ready: false,
+        phase: LIFECYCLE_PHASE.DEGRADED,
+        reasons: context.hardReasons,
+      });
+    case LIFECYCLE_EVALUATION_STATE.HARD_TRAFFIC_GRACE:
+      return this.buildEvaluationOutcome({
+        stableWindowStartedAt: null,
+        consecutiveFailureCount: evaluationDecision.consecutiveFailureCount,
+        ready: true,
+        phase: LIFECYCLE_PHASE.TRAFFIC_READY,
+        reasons: EMPTY_REASONS,
+      });
+    case LIFECYCLE_EVALUATION_STATE.STABLE_WINDOW_PENDING:
+      return this.buildEvaluationOutcome({
+        stableWindowStartedAt: context.stableWindowStartedAt,
+        consecutiveFailureCount: NO_FAILURE_COUNT,
+        ready: false,
+        phase: LIFECYCLE_PHASE.JOIN_READY,
+        reasons: [LIFECYCLE_REASON.READINESS_STABLE_WINDOW_PENDING],
+      });
+    case LIFECYCLE_EVALUATION_STATE.TRAFFIC_READY:
+      return this.buildEvaluationOutcome({
+        stableWindowStartedAt: context.stableWindowStartedAt,
+        consecutiveFailureCount: NO_FAILURE_COUNT,
+        ready: true,
+        phase: LIFECYCLE_PHASE.TRAFFIC_READY,
+        reasons: EMPTY_REASONS,
+      });
+    default:
+      throw new Error(
+        UNKNOWN_EVALUATION_STATE_ERROR_PREFIX +
           String(evaluationDecision.state),
-        );
+      );
     }
   }
 

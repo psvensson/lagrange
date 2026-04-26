@@ -235,10 +235,10 @@ class SystemMetadataOwnerBase {
         options;
     return readProjectionControlPlaneRows(this.requireGateway(),
       this.getTableName(), {
-      ...cacheAwareOptions,
-      owner: this.getOwnerName(),
-      readFromCache,
-    });
+        ...cacheAwareOptions,
+        owner: this.getOwnerName(),
+        readFromCache,
+      });
   }
 
   async readCachedByPrimaryKey(primaryKeyValue, options = {}) {

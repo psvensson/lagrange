@@ -7,29 +7,18 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {
-  ControlPlaneSystemTableGateway,
 } from '../../src/control-plane/control-plane-system-table-gateway.js';
 import {
-  QUERY_ROUTING_DIAGNOSTIC_REASON,
-  QUERY_ROUTING_REPAIR_REASON,
 } from '../../src/query/query-constants.js';
 import {
   COLUMN,
-  METRICS_LOG_TAG,
-  SERVICE_STATUS,
-  SERVICE_TYPE,
-  STATE,
   TABLES,
 } from '../../src/constants/index.js';
 import {
-  CONTROL_PLANE_READINESS_DIMENSION,
-  CONTROL_PLANE_PUBLICATION_MODE,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {
-  ControlPlaneReadinessService,
 } from '../../src/control-plane/control-plane-readiness-service.js';
 import {
-  PARTITION_TRANSITION_METADATA_FIELD,
   PARTITION_TRANSITION_STATE,
 } from '../../src/partition/partition-constants.js';
 import {
@@ -37,20 +26,13 @@ import {
   createTimeoutBudget,
 } from '../../src/control-plane/timeout-budget.js';
 import {
-  PRESSURE_WORK_CLASS,
 } from '../../src/control-plane/pressure-governor.js';
 import {
-  CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE,
 } from '../../src/control-plane/control-plane-system-table-visibility-constants.js';
 import {
-  OWNER_CONTRACT_NEXT_ACTION,
-  OWNER_CONTRACT_STATE,
 } from '../../src/control-plane/owner-contract-outcome.js';
 import {
-  assertNoHandlerRepairConverged,
-  createStaleOverlayOwnerHandoffFixture,
 } from './routing-repair-test-helpers.js';
-import {createSqlRequest} from '../../src/query/sql-request.js';
 
 // Initialize configuration for tests
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
@@ -144,9 +126,6 @@ function createMockSystemCache(tables, partitions, services, nodes = []) {
   };
 }
 
-function uniqueNodeIds(nodeIds) {
-  return [...new Set(nodeIds)];
-}
 
 const TABLE_PARTITION_METADATA_WAIT_TIMEOUT_DRIFT_MS = 1;
 
@@ -175,118 +154,118 @@ function createAdmittedSplitAdmissionService() {
 
 test('SQLQueryEngine - provisionInitialTablePartition includes active-service ' +
   'nodes despite transient disconnected cache state', async (t) => {
-    const tableId = 'tbl-benchmark';
-    const partitionId = 'tbl-benchmark-p1';
-    const localNodeId = 'node-a';
-    const createdTargetNodeIds = [];
-    const nodes = [
-      {node_id: localNodeId, status: 'active', connection_state: 'ready'},
-      {node_id: 'node-b', status: 'active', connection_state: 'connected'},
-      {node_id: 'node-c', status: 'active', connection_state: 'disconnected'},
-    ];
-    const tables = [{table_id: tableId, table_name: 'benchmark_events'}];
-    const partitions = [{partition_id: partitionId, table_id: tableId}];
-    const services = [{
-      service_id: 'mg-1-r3',
-      service_type: 'message_group',
-      status: 'active',
-      node_id: 'node-c',
-      address: 'node-c/message-group/mg-1-r3',
-    }];
+  const tableId = 'tbl-benchmark';
+  const partitionId = 'tbl-benchmark-p1';
+  const localNodeId = 'node-a';
+  const createdTargetNodeIds = [];
+  const nodes = [
+    {node_id: localNodeId, status: 'active', connection_state: 'ready'},
+    {node_id: 'node-b', status: 'active', connection_state: 'connected'},
+    {node_id: 'node-c', status: 'active', connection_state: 'disconnected'},
+  ];
+  const tables = [{table_id: tableId, table_name: 'benchmark_events'}];
+  const partitions = [{partition_id: partitionId, table_id: tableId}];
+  const services = [{
+    service_id: 'mg-1-r3',
+    service_type: 'message_group',
+    status: 'active',
+    node_id: 'node-c',
+    address: 'node-c/message-group/mg-1-r3',
+  }];
 
-    const cache = {
-      has(type, key) {
-        if (type === TABLES.TABLES) {
-          return tables.some((row) => row.table_id === key);
-        }
-        if (type === TABLES.PARTITIONS) {
-          return partitions.some((row) => row.partition_id === key);
-        }
-        return false;
-      },
-      get(type, key) {
-        if (type !== TABLES.TABLES) {
-          return null;
-        }
-        return tables.find((row) =>
-          row.table_id === key || row.table_name === key,
-        ) || null;
-      },
-      filter(type, predicate) {
-        if (type === TABLES.NODES) {
-          return nodes.filter(predicate);
-        }
-        if (type === TABLES.TABLES) {
-          return tables.filter(predicate);
-        }
-        if (type === TABLES.PARTITIONS) {
-          return partitions.filter(predicate);
-        }
-        if (type === TABLES.SERVICES) {
-          return services.filter(predicate);
-        }
-        return [];
-      },
-      getAll(type) {
-        if (type === TABLES.NODES) {
-          return nodes;
-        }
-        if (type === TABLES.TABLES) {
-          return tables;
-        }
-        if (type === TABLES.PARTITIONS) {
-          return partitions;
-        }
-        if (type === TABLES.SERVICES) {
-          return services;
-        }
-        return [];
-      },
-    };
+  const cache = {
+    has(type, key) {
+      if (type === TABLES.TABLES) {
+        return tables.some((row) => row.table_id === key);
+      }
+      if (type === TABLES.PARTITIONS) {
+        return partitions.some((row) => row.partition_id === key);
+      }
+      return false;
+    },
+    get(type, key) {
+      if (type !== TABLES.TABLES) {
+        return null;
+      }
+      return tables.find((row) =>
+        row.table_id === key || row.table_name === key,
+      ) || null;
+    },
+    filter(type, predicate) {
+      if (type === TABLES.NODES) {
+        return nodes.filter(predicate);
+      }
+      if (type === TABLES.TABLES) {
+        return tables.filter(predicate);
+      }
+      if (type === TABLES.PARTITIONS) {
+        return partitions.filter(predicate);
+      }
+      if (type === TABLES.SERVICES) {
+        return services.filter(predicate);
+      }
+      return [];
+    },
+    getAll(type) {
+      if (type === TABLES.NODES) {
+        return nodes;
+      }
+      if (type === TABLES.TABLES) {
+        return tables;
+      }
+      if (type === TABLES.PARTITIONS) {
+        return partitions;
+      }
+      if (type === TABLES.SERVICES) {
+        return services;
+      }
+      return [];
+    },
+  };
 
-    const rebalanceCoordinator = {
-      async createOperation(move) {
-        createdTargetNodeIds.push(move.nodeId);
-        return {
-          operationId: `op-${move.nodeId}`,
-          ...move,
-        };
-      },
-      async executeOperation(operation) {
-        const targetNodeId = operation.targetNodeId || operation.nodeId;
-        services.push({
-          partition_id: operation.partitionId,
-          service_type: 'partition',
-          status: 'active',
-          node_id: targetNodeId,
-          raft_role: targetNodeId === localNodeId ? 'leader' : 'follower',
-          address: `${targetNodeId}/partition/${operation.partitionId}`,
-        });
-        return {success: true};
-      },
-    };
+  const rebalanceCoordinator = {
+    async createOperation(move) {
+      createdTargetNodeIds.push(move.nodeId);
+      return {
+        operationId: `op-${move.nodeId}`,
+        ...move,
+      };
+    },
+    async executeOperation(operation) {
+      const targetNodeId = operation.targetNodeId || operation.nodeId;
+      services.push({
+        partition_id: operation.partitionId,
+        service_type: 'partition',
+        status: 'active',
+        node_id: targetNodeId,
+        raft_role: targetNodeId === localNodeId ? 'leader' : 'follower',
+        address: `${targetNodeId}/partition/${operation.partitionId}`,
+      });
+      return {success: true};
+    },
+  };
 
-    const engine = new SQLQueryEngine({
-      nodeId: localNodeId,
-      systemCache: cache,
-      messageRouter: createMockMessageRouter(),
-      rebalanceCoordinator,
-      tablePartitionProvisioningTimeoutMs: 500,
-      tablePartitionProvisioningPollIntervalMs: 5,
-    });
-
-    await engine.provisionInitialTablePartition({
-      tableId,
-      partitionId,
-      replicaCount: 3,
-    });
-
-    t.same(
-      createdTargetNodeIds,
-      ['node-a', 'node-b', 'node-c'],
-      'provisioning should not silently drop active-service nodes',
-    );
+  const engine = new SQLQueryEngine({
+    nodeId: localNodeId,
+    systemCache: cache,
+    messageRouter: createMockMessageRouter(),
+    rebalanceCoordinator,
+    tablePartitionProvisioningTimeoutMs: 500,
+    tablePartitionProvisioningPollIntervalMs: 5,
   });
+
+  await engine.provisionInitialTablePartition({
+    tableId,
+    partitionId,
+    replicaCount: 3,
+  });
+
+  t.same(
+    createdTargetNodeIds,
+    ['node-a', 'node-b', 'node-c'],
+    'provisioning should not silently drop active-service nodes',
+  );
+});
 
 test('SQLQueryEngine - provisionInitialTablePartition excludes active-service ' +
   'nodes with expired ready leases', async (t) => {
@@ -972,35 +951,35 @@ test('SQLQueryEngine - waitForTablePartitionMetadata reuses CDC cache repair wai
 
 test('SQLQueryEngine - waitForTablePartitionMetadata uses remaining budget ' +
   'for nested cache waits', async (t) => {
-    const waitCalls = [];
-    let nowMs = 1012;
-    const parentBudget = createTimeoutBudget({
-      configuredBudgetMs: 30,
-      startedAtMs: 1000,
-      now: () => 1000,
-    });
-    const engine = new SQLQueryEngine({
-      systemCache: {
-        onCacheChange() {},
-      },
-      cdcIntegrationService: {
-        async waitForCacheUpdate(tableName, key, expectPresent, options) {
-          waitCalls.push({tableName, key, expectPresent, options});
-        },
-      },
-      nowFn: () => nowMs,
-    });
-
-    await engine.waitForTablePartitionMetadata(
-      'tbl-users',
-      'users-p-left',
-      parentBudget,
-    );
-
-    t.equal(waitCalls.length, 2);
-    t.equal(waitCalls[0].options.timeoutMs, 18);
-    t.equal(waitCalls[1].options.timeoutMs, 18);
+  const waitCalls = [];
+  const nowMs = 1012;
+  const parentBudget = createTimeoutBudget({
+    configuredBudgetMs: 30,
+    startedAtMs: 1000,
+    now: () => 1000,
   });
+  const engine = new SQLQueryEngine({
+    systemCache: {
+      onCacheChange() {},
+    },
+    cdcIntegrationService: {
+      async waitForCacheUpdate(tableName, key, expectPresent, options) {
+        waitCalls.push({tableName, key, expectPresent, options});
+      },
+    },
+    nowFn: () => nowMs,
+  });
+
+  await engine.waitForTablePartitionMetadata(
+    'tbl-users',
+    'users-p-left',
+    parentBudget,
+  );
+
+  t.equal(waitCalls.length, 2);
+  t.equal(waitCalls[0].options.timeoutMs, 18);
+  t.equal(waitCalls[1].options.timeoutMs, 18);
+});
 
 test('SQLQueryEngine - executeManagedSplit dispatches both child metadata writes ' +
   'before waiting for child visibility', async (t) => {

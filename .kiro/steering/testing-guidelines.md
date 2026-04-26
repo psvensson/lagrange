@@ -65,6 +65,43 @@ The package is not done merely because the named tests pass. Test closure and
 package closure both require the final affected-area deep dive required by
 `.kiro/steering/system guidelines.md`.
 
+## Static Guardrail Preflight And Closure Policy
+
+Every non-trivial package must prove that it did not increase architecture
+drift while fixing behavior.
+
+Required workflow:
+
+1. Before editing production code, record the relevant static guardrail status
+   in the active package's static drift ledger.
+2. Choose guardrails by boundary, not by convenience:
+   - decision-boundary audit for readiness, admission, lifecycle, retry,
+     status, phase, outcome, or reason-code logic
+   - runtime-grammar audit for runtime meaning, owner-contract, or
+     presentation/decision-layer changes
+   - metadata gateway audit for system-table read/write ingress
+   - scalar/literal audit for files with material runtime edits
+   - cycle and complexity ratchets for extraction or broad refactor packages
+3. If a repo-wide guard already fails, run the narrowest file-scoped or
+   boundary-scoped form that covers the touched files and record the inherited
+   count before the change.
+4. After implementation and focused tests, rerun the same guardrails and record
+   the after state.
+5. A package cannot close when:
+   - a relevant guardrail count increased
+   - a touched production file has a new decision-boundary, runtime-grammar,
+     metadata-gateway, or owner-ingress violation
+   - the package weakens a guard, expands an allowlist, or moves code out of
+     scan scope to make validation pass
+6. Existing violations in touched files must be fixed when they are part of the
+   same semantic boundary. If they are genuinely outside scope, the package must
+   name the excluded boundary and link a follow-on package before closure.
+7. Static guardrail proof is required even when focused unit and integration
+   tests pass. Green behavior tests do not override a failed owner-path guard.
+
+The intent is to make drift visible at package scale. A large inherited
+repo-wide count is not a reason to allow new local debt.
+
 ## Scenario-Driven Failure Migration Validation Policy
 
 When a package exists because a distributed, integration, load, or scenario

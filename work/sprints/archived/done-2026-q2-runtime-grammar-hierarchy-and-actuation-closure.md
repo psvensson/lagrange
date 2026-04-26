@@ -116,8 +116,8 @@ and admin/harness/reporting consumers of that path.
 
 ## Amendment Packages
 
-1. [Priority-recovery terminal follow-up actuation consistency closure](../../packages/archived/done-20260423-priority-recovery-terminal-followup-actuation-consistency-closure.md)
-2. [Priority-recovery harness progress-summary pressure dominant-reason closure](../../packages/archived/done-20260423-priority-recovery-harness-progress-summary-pressure-dominant-reason-closure.md)
+1. [Priority-recovery terminal follow-up actuation consistency closure](../../packages/done-20260423-priority-recovery-terminal-followup-actuation-consistency-closure.md)
+2. [Priority-recovery harness progress-summary pressure dominant-reason closure](../../packages/done-20260423-priority-recovery-harness-progress-summary-pressure-dominant-reason-closure.md)
 3. [Runtime-grammar pilot harness confirmation](../../packages/archived/done-20260422-runtime-grammar-pilot-harness-confirmation.md)
 
 ## Amendment Execution Order

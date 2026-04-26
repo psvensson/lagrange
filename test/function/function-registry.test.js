@@ -289,16 +289,16 @@ test('FunctionRegistry - getFunction returns function', async (t) => {
 
 test('FunctionRegistry - getFunction throws typed gateway error without engine',
   async (t) => {
-  const registry = new FunctionRegistry();
+    const registry = new FunctionRegistry();
 
-  try {
-    await registry.getFunction('func-1');
-    t.fail('Should throw typed gateway error when no metadata ingress exists');
-  } catch (error) {
-    t.equal(error.code, 'SYSTEM_METADATA_GATEWAY_REQUIRED');
-    t.equal(error.outcome, 'owner_not_ready');
-  }
-});
+    try {
+      await registry.getFunction('func-1');
+      t.fail('Should throw typed gateway error when no metadata ingress exists');
+    } catch (error) {
+      t.equal(error.code, 'SYSTEM_METADATA_GATEWAY_REQUIRED');
+      t.equal(error.outcome, 'owner_not_ready');
+    }
+  });
 
 test('FunctionRegistry - multiple executors', async (t) => {
   const store = createStore();

@@ -5,6 +5,7 @@ import {
 import {
   PRESSURE_GOVERNOR_ERROR_CODE,
 } from './pressure-governor.js';
+import {ROUTER_ERROR_MSG} from '../constants/transport.js';
 
 const RETRYABLE_CONTROL_PLANE_ERROR_FRAGMENTS = Object.freeze([
   'Distributed operation failed due to participant failures',
@@ -18,6 +19,7 @@ const RETRYABLE_CONTROL_PLANE_ERROR_FRAGMENTS = Object.freeze([
   'query_admission_deferred',
   'closed',
   'control_plane_pressure_degraded',
+  ROUTER_ERROR_MSG.PENDING_RESPONSE_TIMEOUT,
   'Transaction already active on this partition',
   'No active transaction to commit',
 ]);
@@ -48,6 +50,7 @@ const CONTROL_PLANE_FAILURE_FRAGMENT = Object.freeze({
     'Outbound queue for node',
   NO_HANDLER_REGISTERED_FOR_ADDRESS:
     'No handler registered for address',
+  PENDING_RESPONSE_TIMEOUT: ROUTER_ERROR_MSG.PENDING_RESPONSE_TIMEOUT,
   CONTROL_PLANE_PRESSURE_DEGRADED:
     'control_plane_pressure_degraded',
 });

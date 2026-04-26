@@ -67,7 +67,7 @@ function getHeartbeatPublicationDiagnostics(heartbeatService) {
 function getControlPlanePublicationStory(owner) {
   const observedAt = Date.now();
   if (typeof owner?.controlPlaneReadinessService
-      ?.getControlPlanePublicationStorySync === TYPEOF.FUNCTION) {
+    ?.getControlPlanePublicationStorySync === TYPEOF.FUNCTION) {
     const story = owner.controlPlaneReadinessService
       .getControlPlanePublicationStorySync(owner?.nodeId || null, observedAt);
     return story && typeof story === TYPEOF.OBJECT ?

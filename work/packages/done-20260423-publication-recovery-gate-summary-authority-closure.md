@@ -171,7 +171,7 @@ The representative rerun after this package still failed:
 That is not the gate summary-authority bug fixed here. It is the publication
 owner evidence-refresh blocker already owned by:
 
-1. [Membership publication planning evidence union closure](./active-20260423-membership-publication-planning-evidence-union-closure.md)
+1. [Membership publication planning evidence union closure](./done-20260423-membership-publication-planning-evidence-union-closure.md)
 
 ## Closure Deep Dive
 

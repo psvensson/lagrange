@@ -1,59 +1,24 @@
-import { POSTGRES_BASELINE_COMPARISON_SEGMENT_11 } from "./postgres-baseline-comparison-segment-11.js";
-import { buildPreflightPhaseHandlers } from "./postgres-baseline-comparison-segment-12-preflight.js";
-import { buildLoadPhaseHandlers } from "./postgres-baseline-comparison-segment-12-load.js";
-import { buildVerificationPhaseHandlers } from "./postgres-baseline-comparison-segment-12-verify.js";
+import {POSTGRES_BASELINE_COMPARISON_SEGMENT_11} from './postgres-baseline-comparison-segment-11.js';
+import {buildPreflightPhaseHandlers} from './postgres-baseline-comparison-segment-12-preflight.js';
+import {buildLoadPhaseHandlers} from './postgres-baseline-comparison-segment-12-load.js';
+import {buildVerificationPhaseHandlers} from './postgres-baseline-comparison-segment-12-verify.js';
 const {
   assert,
-  AUTHORITATIVE_FALLBACK_THRESHOLD_EXCEEDED_REASON,
-  BASELINE_SKIP_REASON_SUT_HARD_LOAD_FAILURE,
-  BASELINE_STATUS_SKIPPED,
   BENCHMARK_EVENT_TABLE_FALLBACK,
   BENCHMARK_METADATA_STAGE_CREATE_COMMITTED,
-  BENCHMARK_TABLE_CREATE_LARGE_CLUSTER_RETRY_TIMEOUT_MS,
   BENCHMARK_WORKLOAD_OPERATIONS,
   BENCHMARK_WORKLOAD_PROFILE,
-  CDC_TELEMETRY_SCHEMA_MISSING_REASON,
   CDC_TELEMETRY_SCHEMA_VERSION,
   CONSISTENCY_VERDICT,
-  DISCOVERY_GATE_REASON_INSUFFICIENT_REACHABLE_NODES,
-  DISCOVERY_GATE_STATUS_FAILED,
   DISCOVERY_GATE_STATUS_PASSED,
-  HEARTBEAT_FRESHNESS_INVARIANT_FAILED_REASON,
-  HEARTBEAT_FRESHNESS_LARGE_CLUSTER_MAX_STALL_MS,
-  INTERNAL_SIGNAL_THRESHOLD_BREACH_REASON,
-  LOAD_PARITY_STATUS_MISMATCHED,
   NODE_CLIENT_TRANSIENT_CONTEXT,
-  NO_PROGRESS_REASON_CODE,
   ONE,
-  OVERLOAD_POLICY_VIOLATION_REASON,
-  POST_LOAD_DRAIN_MODE_FAILED,
-  POST_LOAD_DRAIN_STATUS_FAILED,
-  POST_LOAD_DRAIN_STATUS_OK,
-  PREFLIGHT_CONVERGENCE_LARGE_CLUSTER_NODE_THRESHOLD,
-  PRELOAD_QUIESCENCE_LARGE_CLUSTER_MAX_REPLICA_OPS_IN_FLIGHT,
-  PRELOAD_QUIESCENCE_LARGE_CLUSTER_STABLE_WINDOW_MS,
-  QUIESCENCE_REASON_IN_FLIGHT_QUERY_ERROR_PREFIX,
-  QUIESCENCE_REASON_LEADERSHIP_UNSTABLE_PREFIX,
-  QUIESCENCE_REASON_NODE_PROBE_ERROR_PREFIX,
-  QUIESCENCE_REASON_STALLED_NO_PROGRESS_PREFIX,
   QUIET_MODE_ACTIVE_PHASES,
   QUIET_MODE_REASON_RUN_FINALIZE,
-  QUIET_MODE_REASON_STRICT_BENCHMARK_MODE,
   REBALANCING_PRESSURE_SCHEMA_VERSION,
-  REBALANCING_WINDOW_PINNING_VIOLATION_REASON,
-  REQUIRED_SCHEMA_VERSION_UNAVAILABLE_REASON,
   ROOT_CAUSE_SNAPSHOT_KIND_CONTROL_SNAPSHOT,
   ROOT_CAUSE_SNAPSHOT_KIND_PREFLIGHT_CRITICAL_PATH,
-  SNAPSHOT_REFRESH_WARNING_PREFIX,
-  SNAPSHOT_REFRESH_WARNING_SKIPPED,
-  SNAPSHOT_REFRESH_WARNING_UNRESOLVED,
-  SNAPSHOT_WARNING_PREFIX,
-  STRICT_INVARIANT_RETRY_MIN_POLL_INTERVAL_MS,
-  STRICT_PARITY_REASON_MISMATCH,
-  STRICT_PRELOAD_READINESS_NODE_REASONS_PREFIX,
-  STRICT_PRELOAD_READINESS_REASON_FAILED,
   SYSTEM_TABLE_READ_PATH_MODE_CANONICAL,
-  WRITE_PRESSURE_THRESHOLD_EXCEEDED_REASON,
   ZERO,
   NodeClient,
   ConsistencyEvaluatorV2,
@@ -63,127 +28,80 @@ const {
   aggregateDiscoveryReadinessExclusionsByNodeId,
   buildAdmissionRuntimeOwnershipSummary,
   buildBenchmarkMetadataFlow,
-  buildCdcTelemetryState,
   buildComparison,
   buildEffectiveAdmissionPolicy,
   buildFailedPhaseDiagnostics,
-  buildInternalSignalCounts,
-  buildLoadParity,
   buildNoProgressDiagnostics,
   buildPhaseDecisions,
   buildPhaseReasonSummary,
   buildQuietModeDetails,
-  buildPostLoadDrainRebalancingPressure,
-  buildPreLoadRebalancingPressure,
-  buildSaturationCounters,
   buildStartupDecisionRecord,
-  buildStrictDiscoveryGate,
-  buildStrictParityGate,
   buildRootCauseBundle,
   buildUnifiedFailureArtifact,
-  buildVerificationArtifacts,
   collectAdminQueryTraceByNodeId,
-  collectBenchmarkMetadataSnapshot,
-  collectCdcTelemetryByNode,
   collectFailureControlSnapshots,
   collectPreflightCriticalPathSnapshots,
-  collectControlSnapshotsFromNodes,
   createQuietModeState,
   createAdmissionRuntimeOwnershipAudit,
   createEmptyInternalSignalClassCounts,
   createEmptySaturationCounters,
   createInitialPostLoadDrain,
   createVerificationSnapshotRefreshResult,
-  emitPhaseMeaningfulChange,
-  emitPhaseNoProgressFailure,
-  emitPhaseProgress,
   emitScenarioPhaseEvent,
-  ensureSutBenchmarkTable,
   evaluateAssertionPolicy,
   evaluateAuthoritativeFallbackPolicy,
   exitQuietMode,
-  evaluateInternalSignalThresholds,
-  evaluateOverloadPolicy,
-  evaluateStrictPreloadInvariantsFromSnapshots,
   evaluateWritePressure,
-  formatAuthoritativeFallbackViolations,
-  formatCdcTelemetrySchemaErrors,
-  formatHeartbeatFreshnessFailures,
-  formatInternalSignalBreaches,
-  formatLoadParityReasons,
-  formatLoadRebalancingPinningReasons,
-  formatOverloadPolicyViolations,
-  formatReadinessReasonsByNodeId,
-  formatSutLoadDiscoveryDiagnostics,
-  formatWritePressureViolations,
   isLoadNodeCandidate,
   isStrictBenchmarkMode,
   mapPhaseArtifacts,
   mapPhaseTimeline,
-  normalizeLoadMetrics,
   normalizeRequiredSchemaVersion,
   normalizeTableName,
   parseDurationToMs,
-  replaceSnapshotsByNodeId,
   resolveBaselineLoadNodeCountForRun,
-  resolveBaselineMetrics,
   resolveBenchmarkConfig,
-  resolveBenchmarkTableCreateAttempt,
-  resolveCanonicalSystemTableWriteNode,
   resolveDiagnosticsCoverage,
-  resolveFirstMismatchKind,
-  resolveMismatchRefreshNodeIds,
   resolveNodeClientChannelPolicyOverrides,
   resolvePreflightConvergenceOptions,
   resolvePrimaryProvider,
   resolveScenarioOverrides,
-  resolveStrictInvariantRetryWindowMs,
-  resolveSutLoadNodes,
-  resolveSystemTableReadPath,
-  revalidateDegradedPreloadLoadNodes,
-  runSutSharedLoad,
   selectFailureDiagnosticNodes,
-  selectStrictInvariantGateEntries,
-  selectVerificationNodes,
-  shouldRetryStrictInvariantBreaches,
   summarizeInvariantBreaches,
-  uniqueSorted,
-  waitForSutBenchmarkTableReady,
-  waitForSutLoadQuiescence,
 } = POSTGRES_BASELINE_COMPARISON_SEGMENT_11;
 
 async function run(cluster) {
   const nodes = cluster.getNodes();
-  assert.ok(nodes.length >= ONE, "Scenario requires at least one node");
+  assert.ok(nodes.length >= ONE, 'Scenario requires at least one node');
 
   const benchmarkConfig = resolveBenchmarkConfig(cluster);
   const scenarioOverrides = resolveScenarioOverrides(cluster);
-  const seedNode = nodes.find((node) => node.role === "seed") || nodes[ZERO];
+  const seedNode = nodes.find((node) => node.role === 'seed') || nodes[ZERO];
   assert.equal(
     typeof seedNode?.queryWithTimeout,
-    "function",
-    "Seed node must provide queryWithTimeout for NodeClient control channel",
+    'function',
+    'Seed node must provide queryWithTimeout for NodeClient control channel',
   );
   assert.equal(
     typeof seedNode?.getReachabilityDiagnostics,
-    "function",
-    "Seed node must provide getReachabilityDiagnostics for probe channel",
+    'function',
+    'Seed node must provide getReachabilityDiagnostics for probe channel',
   );
   const benchmarkTableName = normalizeTableName(
     benchmarkConfig.tableName,
     BENCHMARK_EVENT_TABLE_FALLBACK,
   );
   const provider = resolvePrimaryProvider(cluster);
-  const networkName = String(cluster?._networkName || "");
-  assert.ok(networkName, "Cluster network name is not available");
+  const networkName = String(cluster?._networkName || '');
+  assert.ok(networkName, 'Cluster network name is not available');
   const nodeClientChannelPolicyOverrides =
     resolveNodeClientChannelPolicyOverrides(cluster);
 
   const nodeClient = new NodeClient({
     benchmarkConfig,
-    ...(nodeClientChannelPolicyOverrides
-      ? { channelPolicies: nodeClientChannelPolicyOverrides }
-      : {}),
+    ...(nodeClientChannelPolicyOverrides ?
+      {channelPolicies: nodeClientChannelPolicyOverrides} :
+      {}),
   });
   const nodeClientPolicySnapshot = nodeClient.getPolicySnapshot();
   const availableSutLoadCandidates = nodes.filter((node) =>
@@ -194,39 +112,39 @@ async function run(cluster) {
   const explicitRequiredSutLoadNodeCount =
     benchmarkConfig.hasExplicitRequiredSutLoadNodeCount === true &&
     Number.isInteger(benchmarkConfig.requiredSutLoadNodeCount) &&
-    benchmarkConfig.requiredSutLoadNodeCount > ZERO
-      ? benchmarkConfig.requiredSutLoadNodeCount
-      : null;
+    benchmarkConfig.requiredSutLoadNodeCount > ZERO ?
+      benchmarkConfig.requiredSutLoadNodeCount :
+      null;
   const strictDefaultRequiredSutLoadNodeCount = Math.max(
     ONE,
     clusterCandidateLoadNodeCount,
   );
   const requestedSutLoadNodeCount =
-    explicitRequiredSutLoadNodeCount !== null
-      ? explicitRequiredSutLoadNodeCount
-      : strictBenchmarkMode
-        ? strictDefaultRequiredSutLoadNodeCount
-        : Number.isInteger(benchmarkConfig.baselineLoadNodeCount) &&
-            benchmarkConfig.baselineLoadNodeCount > ZERO
-          ? benchmarkConfig.baselineLoadNodeCount
-          : ONE;
+    explicitRequiredSutLoadNodeCount !== null ?
+      explicitRequiredSutLoadNodeCount :
+      strictBenchmarkMode ?
+        strictDefaultRequiredSutLoadNodeCount :
+        Number.isInteger(benchmarkConfig.baselineLoadNodeCount) &&
+            benchmarkConfig.baselineLoadNodeCount > ZERO ?
+          benchmarkConfig.baselineLoadNodeCount :
+          ONE;
   const targetSutLoadNodeCount =
-    benchmarkConfig.strictDiscovery === true
-      ? Math.max(ONE, requestedSutLoadNodeCount)
-      : Math.max(
-          ONE,
-          Math.min(availableSutLoadCandidates, requestedSutLoadNodeCount),
-        );
+    benchmarkConfig.strictDiscovery === true ?
+      Math.max(ONE, requestedSutLoadNodeCount) :
+      Math.max(
+        ONE,
+        Math.min(availableSutLoadCandidates, requestedSutLoadNodeCount),
+      );
   const effectiveSutLoadDiscoveryTimeoutMs =
     benchmarkConfig.strictDiscovery === true &&
     benchmarkConfig.strictPreloadReadiness === true &&
     Number.isInteger(benchmarkConfig.quiescentTimeoutMs) &&
-    benchmarkConfig.quiescentTimeoutMs > ZERO
-      ? Math.max(
-          benchmarkConfig.readyTimeoutMs,
-          benchmarkConfig.quiescentTimeoutMs,
-        )
-      : benchmarkConfig.readyTimeoutMs;
+    benchmarkConfig.quiescentTimeoutMs > ZERO ?
+      Math.max(
+        benchmarkConfig.readyTimeoutMs,
+        benchmarkConfig.quiescentTimeoutMs,
+      ) :
+      benchmarkConfig.readyTimeoutMs;
   const baselineLoadNodeCountForRun = resolveBaselineLoadNodeCountForRun({
     benchmarkConfig,
     targetSutLoadNodeCount,
@@ -235,12 +153,12 @@ async function run(cluster) {
     strictBenchmarkMode &&
     explicitRequiredSutLoadNodeCount !== null &&
     explicitRequiredSutLoadNodeCount < strictDefaultRequiredSutLoadNodeCount;
-  const strictFanoutOptOutReason = strictFanoutOptOut
-    ? "requiredSutLoadNodeCount=" +
+  const strictFanoutOptOutReason = strictFanoutOptOut ?
+    'requiredSutLoadNodeCount=' +
       String(explicitRequiredSutLoadNodeCount) +
-      ",clusterCandidateLoadNodeCount=" +
-      String(clusterCandidateLoadNodeCount)
-    : null;
+      ',clusterCandidateLoadNodeCount=' +
+      String(clusterCandidateLoadNodeCount) :
+    null;
   const consistencyEvaluator = new ConsistencyEvaluatorV2();
   const phaseEvents = [];
   const state = {
@@ -360,7 +278,7 @@ async function run(cluster) {
     runtimeAdmissionOwnership: createAdmissionRuntimeOwnershipAudit(),
     postLoadDrain: createInitialPostLoadDrain([], []),
     consistencyVerdict: CONSISTENCY_VERDICT.CONSISTENT,
-    consistencyResult: { attempts: ZERO },
+    consistencyResult: {attempts: ZERO},
     consistencyEvaluation: {
       coverage: {
         reachableNodes: ZERO,
@@ -389,27 +307,27 @@ async function run(cluster) {
   };
 
   function recordConvergenceEvent(event) {
-    if (!event || typeof event !== "object") {
+    if (!event || typeof event !== 'object') {
       return;
     }
     const normalizedEvent = {
-      type: String(event.type || "unknown"),
-      nodeId: typeof event.nodeId === "string" ? event.nodeId : null,
-      tableId: typeof event.tableId === "string" ? event.tableId : null,
-      tableName: typeof event.tableName === "string" ? event.tableName : null,
+      type: String(event.type || 'unknown'),
+      nodeId: typeof event.nodeId === 'string' ? event.nodeId : null,
+      tableId: typeof event.tableId === 'string' ? event.tableId : null,
+      tableName: typeof event.tableName === 'string' ? event.tableName : null,
       requiredSchemaVersion: normalizeRequiredSchemaVersion(
         event.requiredSchemaVersion,
       ),
       observedSchemaVersion: normalizeRequiredSchemaVersion(
         event.observedSchemaVersion,
       ),
-      reasons: Array.isArray(event.reasons)
-        ? event.reasons.map((reason) => String(reason))
-        : [],
+      reasons: Array.isArray(event.reasons) ?
+        event.reasons.map((reason) => String(reason)) :
+        [],
       ready: event.ready === true,
-      timestampMs: Number.isFinite(event.timestampMs)
-        ? event.timestampMs
-        : Date.now(),
+      timestampMs: Number.isFinite(event.timestampMs) ?
+        event.timestampMs :
+        Date.now(),
     };
     const signature = JSON.stringify({
       type: normalizedEvent.type,
@@ -429,10 +347,10 @@ async function run(cluster) {
   }
 
   function recordBenchmarkMetadataSnapshot(snapshot) {
-    if (!snapshot || typeof snapshot !== "object") {
+    if (!snapshot || typeof snapshot !== 'object') {
       return;
     }
-    const nodeId = typeof snapshot.nodeId === "string" ? snapshot.nodeId : null;
+    const nodeId = typeof snapshot.nodeId === 'string' ? snapshot.nodeId : null;
     if (snapshot.stage === BENCHMARK_METADATA_STAGE_CREATE_COMMITTED) {
       state.benchmarkMetadataFlow.createCommitted = snapshot;
     }
@@ -442,20 +360,6 @@ async function run(cluster) {
     state.benchmarkMetadataFlow.nodeSnapshots[nodeId] = snapshot;
   }
 
-  async function ensureConvergenceResolved() {
-    if (state.convergence) {
-      return state.convergence;
-    }
-    state.convergence = await cluster.waitForConvergence(
-      resolvePreflightConvergenceOptions(
-        cluster,
-        benchmarkConfig,
-        nodes.length,
-      ),
-    );
-    state.diagnosticsCoverage = resolveDiagnosticsCoverage(state.convergence);
-    return state.convergence;
-  }
 
   const orchestrator = new PhaseOrchestrator({
     onEvent: (event) => {
@@ -505,10 +409,10 @@ async function run(cluster) {
   );
   if (failedPhase) {
     const error = new Error(
-      "postgres-baseline-comparison failed in phase " +
+      'postgres-baseline-comparison failed in phase ' +
         failedPhase.phase +
-        ": " +
-        failedPhase.errors.join("; "),
+        ': ' +
+        failedPhase.errors.join('; '),
     );
     const failureArtifact = buildUnifiedFailureArtifact(
       failedPhase,
@@ -528,40 +432,40 @@ async function run(cluster) {
         failureArtifact.phase === SCENARIO_PHASE.PRE_LOAD_GATE);
     const snapshotNodes = failureDiagnosticNodes;
     const failureSnapshots =
-      snapshotNodes.length > ZERO
-        ? shouldCapturePreflightSnapshots
-          ? {
-              snapshotsByNodeId: await collectPreflightCriticalPathSnapshots({
-                nodeClient,
-                nodes: snapshotNodes,
-                context: NODE_CLIENT_TRANSIENT_CONTEXT,
-              }),
-              controlPlaneLedgerSnapshotsByNodeId: null,
-            }
-          : await collectFailureControlSnapshots({
+      snapshotNodes.length > ZERO ?
+        shouldCapturePreflightSnapshots ?
+          {
+            snapshotsByNodeId: await collectPreflightCriticalPathSnapshots({
               nodeClient,
               nodes: snapshotNodes,
               context: NODE_CLIENT_TRANSIENT_CONTEXT,
-            })
-        : null;
+            }),
+            controlPlaneLedgerSnapshotsByNodeId: null,
+          } :
+          await collectFailureControlSnapshots({
+            nodeClient,
+            nodes: snapshotNodes,
+            context: NODE_CLIENT_TRANSIENT_CONTEXT,
+          }) :
+        null;
     const snapshotsByNodeId = failureSnapshots?.snapshotsByNodeId || null;
-    const snapshotKind = snapshotsByNodeId
-      ? shouldCapturePreflightSnapshots
-        ? ROOT_CAUSE_SNAPSHOT_KIND_PREFLIGHT_CRITICAL_PATH
-        : ROOT_CAUSE_SNAPSHOT_KIND_CONTROL_SNAPSHOT
-      : null;
+    const snapshotKind = snapshotsByNodeId ?
+      shouldCapturePreflightSnapshots ?
+        ROOT_CAUSE_SNAPSHOT_KIND_PREFLIGHT_CRITICAL_PATH :
+        ROOT_CAUSE_SNAPSHOT_KIND_CONTROL_SNAPSHOT :
+      null;
     const adminQueryTraceByNodeId =
-      failureDiagnosticNodes.length > ZERO
-        ? collectAdminQueryTraceByNodeId(failureDiagnosticNodes)
-        : null;
+      failureDiagnosticNodes.length > ZERO ?
+        collectAdminQueryTraceByNodeId(failureDiagnosticNodes) :
+        null;
     const channelMetrics =
-      typeof nodeClient?.getMetricsSnapshot === "function"
-        ? nodeClient.getMetricsSnapshot()
-        : null;
+      typeof nodeClient?.getMetricsSnapshot === 'function' ?
+        nodeClient.getMetricsSnapshot() :
+        null;
     const channelStateByChannel =
-      typeof nodeClient?.getChannelStateSnapshot === "function"
-        ? nodeClient.getChannelStateSnapshot()
-        : null;
+      typeof nodeClient?.getChannelStateSnapshot === 'function' ?
+        nodeClient.getChannelStateSnapshot() :
+        null;
     const rootCauseBundle = buildRootCauseBundle({
       failureArtifact,
       snapshotsByNodeId,
@@ -602,7 +506,7 @@ async function run(cluster) {
     loadMetrics: state.loadMetrics,
     details: {
       benchmark: {
-        tool: "shared-load-generator",
+        tool: 'shared-load-generator',
         workload: BENCHMARK_WORKLOAD_PROFILE,
         durationSeconds: parseDurationToMs(benchmarkConfig.loadDuration) / 1000,
         clients: benchmarkConfig.baselineLoadNodeCount,
@@ -720,7 +624,7 @@ async function run(cluster) {
       saturation: state.saturation,
       effectiveAdmissionPolicy: state.effectiveAdmissionPolicy,
       baseline: {
-        engine: "postgres",
+        engine: 'postgres',
         image: benchmarkConfig.baselineImage,
         containerIp: state.baselinePrimaryContainerIp,
         replicaContainerIps: state.baselineReplicaContainerIps,

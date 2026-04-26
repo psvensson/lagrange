@@ -96,6 +96,11 @@ const JOIN_READINESS_BLOCKED_ACTION = Object.freeze({
   NONE: 'none',
   REPAIR_TOPOLOGY_VISIBILITY: 'repair_topology_visibility',
 });
+const JOIN_READINESS_ACTIVE_NODE_AUTHORITY_KIND = Object.freeze({
+  READINESS_SERVICE: 'readiness_service',
+  STARTUP_AUTHORITY: 'startup_authority',
+  UNAVAILABLE: 'unavailable',
+});
 const JOIN_READINESS_TIMEOUT_FALLBACK_SNAPSHOT = Object.freeze({
   routingReady: false,
   topologyReady: false,
@@ -260,6 +265,8 @@ class JoinReadinessEvaluator {
         evaluation?.inFlightReplicaOperations || NUM.ZERO,
       excludedRemotePriorityControlPlaneCount:
         evaluation?.excludedRemotePriorityControlPlaneCount || NUM.ZERO,
+      excludedSelfSourcePriorityControlPlaneCount:
+        evaluation?.excludedSelfSourcePriorityControlPlaneCount || NUM.ZERO,
       missingNodeEndpointNodeIds:
         evaluation?.missingNodeEndpointNodeIds || [],
       missingPostgresWireNodeIds:
@@ -350,14 +357,14 @@ class JoinReadinessEvaluator {
    */
   async executeCanonicalJoinBlockedAction(action, evaluation) {
     switch (action?.actionId) {
-      case JOIN_READINESS_BLOCKED_ACTION
-        .REPAIR_TOPOLOGY_VISIBILITY:
-        return this.repairCanonicalJoinReadinessIfNeeded(
-          evaluation,
-          action.pollIntervalMs,
-        );
-      default:
-        return false;
+    case JOIN_READINESS_BLOCKED_ACTION
+      .REPAIR_TOPOLOGY_VISIBILITY:
+      return this.repairCanonicalJoinReadinessIfNeeded(
+        evaluation,
+        action.pollIntervalMs,
+      );
+    default:
+      return false;
     }
   }
 
@@ -414,6 +421,11 @@ class JoinReadinessEvaluator {
         terminalEvaluation.excludedRemotePriorityControlPlaneCount,
       excludedRemotePriorityControlPlaneOperationDetails:
         terminalEvaluation.excludedRemotePriorityControlPlaneOperationDetails,
+      excludedSelfSourcePriorityControlPlaneCount:
+        terminalEvaluation.excludedSelfSourcePriorityControlPlaneCount,
+      excludedSelfSourcePriorityControlPlaneOperationDetails:
+        terminalEvaluation
+          .excludedSelfSourcePriorityControlPlaneOperationDetails,
       missingNodeEndpointNodeIds:
         terminalEvaluation.missingNodeEndpointNodeIds,
       missingPostgresWireNodeIds:
@@ -476,6 +488,11 @@ class JoinReadinessEvaluator {
           terminalEvaluation.excludedRemotePriorityControlPlaneCount,
         excludedRemotePriorityControlPlaneOperationDetails:
           terminalEvaluation.excludedRemotePriorityControlPlaneOperationDetails,
+        excludedSelfSourcePriorityControlPlaneCount:
+          terminalEvaluation.excludedSelfSourcePriorityControlPlaneCount,
+        excludedSelfSourcePriorityControlPlaneOperationDetails:
+          terminalEvaluation
+            .excludedSelfSourcePriorityControlPlaneOperationDetails,
         missingNodeEndpointNodeIds:
           terminalEvaluation.missingNodeEndpointNodeIds,
         missingPostgresWireNodeIds:
@@ -857,6 +874,10 @@ class JoinReadinessEvaluator {
         topology.excludedRemotePriorityControlPlaneCount,
       excludedRemotePriorityControlPlaneOperationDetails:
         topology.excludedRemotePriorityControlPlaneOperationDetails,
+      excludedSelfSourcePriorityControlPlaneCount:
+        topology.excludedSelfSourcePriorityControlPlaneCount,
+      excludedSelfSourcePriorityControlPlaneOperationDetails:
+        topology.excludedSelfSourcePriorityControlPlaneOperationDetails,
       missingNodeEndpointNodeIds:
         endpointVisibility.missingNodeEndpointNodeIds,
       missingPostgresWireNodeIds:
@@ -1013,6 +1034,8 @@ class JoinReadinessEvaluator {
    *   excludedNonDiscoveryPartitionCount: number,
    *   excludedRemotePriorityControlPlaneCount: number,
    *   excludedRemotePriorityControlPlaneOperationDetails: Array<Object>,
+   *   excludedSelfSourcePriorityControlPlaneCount: number,
+   *   excludedSelfSourcePriorityControlPlaneOperationDetails: Array<Object>,
    * }}
    */
   evaluateCanonicalJoinTopologyReadiness(systemTableCache) {
@@ -1027,6 +1050,8 @@ class JoinReadinessEvaluator {
         excludedNonDiscoveryPartitionCount: NUM.ZERO,
         excludedRemotePriorityControlPlaneCount: NUM.ZERO,
         excludedRemotePriorityControlPlaneOperationDetails: [],
+        excludedSelfSourcePriorityControlPlaneCount: NUM.ZERO,
+        excludedSelfSourcePriorityControlPlaneOperationDetails: [],
         missingNodeEndpointNodeIds: [],
         missingPostgresWireNodeIds: [],
       };
@@ -1063,6 +1088,8 @@ class JoinReadinessEvaluator {
       operationDetails.excludedNonDiscoveryPartitionCount;
     const excludedRemotePriorityControlPlaneCount =
       operationDetails.excludedRemotePriorityControlPlaneCount;
+    const excludedSelfSourcePriorityControlPlaneCount =
+      operationDetails.excludedSelfSourcePriorityControlPlaneCount;
     return {
       ready: missingCount === NUM.ZERO &&
         inFlightReplicaOperations === NUM.ZERO,
@@ -1075,6 +1102,10 @@ class JoinReadinessEvaluator {
       excludedRemotePriorityControlPlaneCount,
       excludedRemotePriorityControlPlaneOperationDetails:
         operationDetails.excludedRemotePriorityControlPlaneOperationDetails,
+      excludedSelfSourcePriorityControlPlaneCount,
+      excludedSelfSourcePriorityControlPlaneOperationDetails:
+        operationDetails
+          .excludedSelfSourcePriorityControlPlaneOperationDetails,
       missingNodeEndpointNodeIds: [],
       missingPostgresWireNodeIds: [],
     };
@@ -1160,42 +1191,51 @@ class JoinReadinessEvaluator {
   }
 
   /**
-   * Return ACTIVE node ids visible in the local cache.
+   * Return node ids admitted by readiness-owned startup authority.
    * @param {Object|null} systemTableCache
    * @return {string[]}
    */
   getCanonicalJoinActiveNodeIds(systemTableCache) {
+    return this.resolveCanonicalJoinActiveNodeAuthority(
+      systemTableCache,
+    ).nodeIds;
+  }
+
+  /**
+   * Resolve the single authority that can identify active peers for canonical
+   * join readiness.
+   * @param {Object|null} systemTableCache
+   * @return {{kind: string, nodeIds: string[]}}
+   */
+  resolveCanonicalJoinActiveNodeAuthority(systemTableCache) {
     const readinessService =
       this.delegates.getControlPlaneReadinessService?.() || null;
-    const startupAuthorityNodeIds =
-      this.getStartupAuthorityActiveNodeIds(readinessService);
-    const cacheActiveNodeIds =
+    const cacheNodeRows =
       systemTableCache &&
       typeof systemTableCache.getAll === TYPEOF.FUNCTION ?
-        this.getCacheActiveNodeIds(
-          systemTableCache.getAll(TABLES.NODES) || [],
-        ) :
+        systemTableCache.getAll(TABLES.NODES) || [] :
         [];
-    if (!readinessService ||
-        !systemTableCache ||
-        typeof systemTableCache.getAll !== TYPEOF.FUNCTION) {
-      return cacheActiveNodeIds.length > NUM.ZERO ?
-        cacheActiveNodeIds :
-        startupAuthorityNodeIds;
-    }
-
     const readinessActiveNodeIds =
       this.getReadinessActiveNodeIds(
         readinessService,
-        systemTableCache.getAll(TABLES.NODES) || [],
+        cacheNodeRows,
       );
-    if (readinessActiveNodeIds.length > NUM.ZERO) {
-      return readinessActiveNodeIds;
-    }
-    if (cacheActiveNodeIds.length > NUM.ZERO) {
-      return cacheActiveNodeIds;
-    }
-    return startupAuthorityNodeIds;
+    const startupAuthorityNodeIds =
+      this.getStartupAuthorityActiveNodeIds(readinessService);
+    const candidates = Object.freeze([{
+      kind: JOIN_READINESS_ACTIVE_NODE_AUTHORITY_KIND.READINESS_SERVICE,
+      nodeIds: readinessActiveNodeIds,
+    }, {
+      kind: JOIN_READINESS_ACTIVE_NODE_AUTHORITY_KIND.STARTUP_AUTHORITY,
+      nodeIds: startupAuthorityNodeIds,
+    }]);
+    const selected = candidates.find((candidate) =>
+      candidate.nodeIds.length > NUM.ZERO,
+    );
+    return Object.freeze(selected || {
+      kind: JOIN_READINESS_ACTIVE_NODE_AUTHORITY_KIND.UNAVAILABLE,
+      nodeIds: [],
+    });
   }
 
   getCacheActiveNodeIds(nodeRows) {
@@ -1251,7 +1291,10 @@ class JoinReadinessEvaluator {
       this.nodeId,
       this.now(),
     );
-    if (!Array.isArray(startupAuthority?.canonicalStartupNodeIds)) {
+    if (
+      startupAuthority?.authorityAvailable !== true ||
+      !Array.isArray(startupAuthority?.canonicalStartupNodeIds)
+    ) {
       return [];
     }
     return [...new Set(

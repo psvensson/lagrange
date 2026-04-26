@@ -1,9 +1,9 @@
-import { EventEmitter } from "events";
-import { URL } from "url";
-import { v4 as uuidv4 } from "uuid";
-import WebSocket, { WebSocketServer } from "ws";
-import { ConfigurationManager } from "../config/configuration-manager.js";
-import { LoggingService } from "../logging/logging-service.js";
+import {EventEmitter} from 'events';
+import {URL} from 'url';
+import {v4 as uuidv4} from 'uuid';
+import WebSocket, {WebSocketServer} from 'ws';
+import {ConfigurationManager} from '../config/configuration-manager.js';
+import {LoggingService} from '../logging/logging-service.js';
 import {
   CONNECTION_STATE,
   OUTBOUND_DELIVERY_PRIORITY,
@@ -23,177 +23,177 @@ import {
   TRANSPORT_SUBSYSTEM,
   TRANSPORT_TYPEOF,
   normalizeToWebSocketAddress,
-} from "../constants/transport.js";
-import { HOST, METRICS_LOG_TAG } from "../constants/index.js";
-import { isRaftPacket } from "../raft/raft-packet-utils.js";
+} from '../constants/transport.js';
+import {HOST, METRICS_LOG_TAG} from '../constants/index.js';
+import {isRaftPacket} from '../raft/raft-packet-utils.js';
 import {
   ROUTER_QUERY_TRANSPORT_NOT_READY_ERROR_CODE,
   TRANSPORT_DELIVERY_OUTCOME_METADATA_FIELDS,
   buildTransportDeliveryOutcome,
   buildQueryTransportSemanticOutcome,
-} from "./transport-semantic-outcome.js";
+} from './transport-semantic-outcome.js';
 const MESSAGE_ROUTER_LITERAL = Object.freeze({
-  STRING_UNKNOWN: "unknown",
-  STRING_SELECT: "select",
-  STRING_INSERT: "insert",
-  STRING_UPDATE: "update",
-  STRING_DELETE: "delete",
-  STRING_RAFT_APPEND_UNKNOWN: "raft:append:unknown",
-  STRING_CDC: "cdc",
-  STRING_CDC_BATCH: "cdc_batch",
-  STRING_RAFT_APPEND_CDC_BATCH_UNKNOWN: "raft:append:cdc_batch:unknown",
-  STRING_MESSAGE: "message",
-  STRING_NODE_STATE_UPDATE: "node_state_update",
-  STRING_ACK: "ack",
-  STRING_RAFT_APPEND_ACK: "raft:append:ack",
-  STRING_APPEND: "append",
-  STRING_APPEND_FAIL: "append fail",
-  STRING_RAFT_APPEND_HEARTBEAT: "raft:append:heartbeat",
-  STRING_RAFT_APPEND_FAIL: "raft:append:fail",
-  STRING_LATE_AFTER_TIMEOUT: "late_after_timeout",
-  STRING_LATE_AFTER_NODE_FAILURE: "late_after_node_failure",
-  STRING_LATE_AFTER_DEFERRED_DELIVERY: "late_after_deferred_delivery",
-  STRING_LATE_AFTER_ACK_REJECTED: "late_after_ack_rejected",
-  STRING_LATE_AFTER_INLINE_ACK: "late_after_inline_ack",
-  STRING_LATE_AFTER_CANCELLED: "late_after_cancelled",
-  STRING_LATE_AFTER_RETIRED_WAITER: "late_after_retired_waiter",
-  STRING_RESULT: "result",
-  STRING_QUEUEWAITMS: "queueWaitMs",
-  STRING_FUNCTION: "function",
+  STRING_UNKNOWN: 'unknown',
+  STRING_SELECT: 'select',
+  STRING_INSERT: 'insert',
+  STRING_UPDATE: 'update',
+  STRING_DELETE: 'delete',
+  STRING_RAFT_APPEND_UNKNOWN: 'raft:append:unknown',
+  STRING_CDC: 'cdc',
+  STRING_CDC_BATCH: 'cdc_batch',
+  STRING_RAFT_APPEND_CDC_BATCH_UNKNOWN: 'raft:append:cdc_batch:unknown',
+  STRING_MESSAGE: 'message',
+  STRING_NODE_STATE_UPDATE: 'node_state_update',
+  STRING_ACK: 'ack',
+  STRING_RAFT_APPEND_ACK: 'raft:append:ack',
+  STRING_APPEND: 'append',
+  STRING_APPEND_FAIL: 'append fail',
+  STRING_RAFT_APPEND_HEARTBEAT: 'raft:append:heartbeat',
+  STRING_RAFT_APPEND_FAIL: 'raft:append:fail',
+  STRING_LATE_AFTER_TIMEOUT: 'late_after_timeout',
+  STRING_LATE_AFTER_NODE_FAILURE: 'late_after_node_failure',
+  STRING_LATE_AFTER_DEFERRED_DELIVERY: 'late_after_deferred_delivery',
+  STRING_LATE_AFTER_ACK_REJECTED: 'late_after_ack_rejected',
+  STRING_LATE_AFTER_INLINE_ACK: 'late_after_inline_ack',
+  STRING_LATE_AFTER_CANCELLED: 'late_after_cancelled',
+  STRING_LATE_AFTER_RETIRED_WAITER: 'late_after_retired_waiter',
+  STRING_RESULT: 'result',
+  STRING_QUEUEWAITMS: 'queueWaitMs',
+  STRING_FUNCTION: 'function',
   STRING_INVALID_WSPORT_FOR_IN_PROCESS_SERVER:
-    "Invalid wsPort for in-process server",
-  STRING_EADDRINUSE: "EADDRINUSE",
-  STRING_VALUE: ":",
+    'Invalid wsPort for in-process server',
+  STRING_EADDRINUSE: 'EADDRINUSE',
+  STRING_VALUE: ':',
   STRING_WEBSOCKET_CONNECTION_CLOSED_BEFORE_OPEN_FOR_NODE:
-    "WebSocket connection closed before open for node ",
-  STRING_ECONNREFUSED: "ECONNREFUSED",
+    'WebSocket connection closed before open for node ',
+  STRING_ECONNREFUSED: 'ECONNREFUSED',
   STRING_REJECTING_INCOMING_CONNECTION_WHILE_EXTERNAL_ADMISSION_IS_CLOSED:
-    "Rejecting incoming connection while external admission is closed",
-  STRING_EXISTING_CONNECTION_PREFERRED: "existing_connection_preferred",
-  STRING_ORPHANED: "orphaned",
-  STRING_RESPONSETYPE: "responseType",
+    'Rejecting incoming connection while external admission is closed',
+  STRING_EXISTING_CONNECTION_PREFERRED: 'existing_connection_preferred',
+  STRING_ORPHANED: 'orphaned',
+  STRING_RESPONSETYPE: 'responseType',
   STRING_IGNORING_STALE_CONNECTION_CLOSE_EVENT:
-    "Ignoring stale connection close event",
-  STRING_ROUTER_QUERY_TRANSPORT_NOT_READY: "ROUTER_QUERY_TRANSPORT_NOT_READY",
+    'Ignoring stale connection close event',
+  STRING_ROUTER_QUERY_TRANSPORT_NOT_READY: 'ROUTER_QUERY_TRANSPORT_NOT_READY',
   STRING_OUTBOUND_QUEUE_SATURATED_FOR_NODE_DELIVERY:
-    "Outbound queue saturated for node delivery",
+    'Outbound queue saturated for node delivery',
   STRING_FAILED_TO_RESOLVE_NODE_CONNECTION_ADDRESS_FOR_DELIVERY_RECOVERY:
-    "Failed to resolve node connection address for delivery recovery",
-  STRING_ENOTFOUND: "ENOTFOUND",
-  STRING_EAI_AGAIN: "EAI_AGAIN",
+    'Failed to resolve node connection address for delivery recovery',
+  STRING_ENOTFOUND: 'ENOTFOUND',
+  STRING_EAI_AGAIN: 'EAI_AGAIN',
   STRING_OBSERVED_ACK_TIMEOUT_BELOW_QUARANTINE_THRESHOLD:
-    "Observed ACK timeout below quarantine threshold",
+    'Observed ACK timeout below quarantine threshold',
   STRING_QUARANTINING_TARGET_CONNECTION_AFTER_ACK_TIMEOUT:
-    "Quarantining target connection after ACK timeout",
+    'Quarantining target connection after ACK timeout',
   NUMBER_5: 5,
 });
 const queueMicrotaskFn = globalThis.queueMicrotask;
 const ConnectionState = CONNECTION_STATE;
 const RouterMessageType = ROUTER_MESSAGE_TYPE;
-const IPV6_ANY_HOST = "::";
-const IPV6_HOST_PREFIX = "[";
-const IPV6_HOST_SUFFIX = "]";
-const WEBSOCKET_CONNECT_TIMEOUT_CONFIG_KEY = "timeout.websocketConnectMs";
-const WEBSOCKET_CONNECT_TIMEOUT_ERROR_CODE = "WS_CONNECT_TIMEOUT";
+const IPV6_ANY_HOST = '::';
+const IPV6_HOST_PREFIX = '[';
+const IPV6_HOST_SUFFIX = ']';
+const WEBSOCKET_CONNECT_TIMEOUT_CONFIG_KEY = 'timeout.websocketConnectMs';
+const WEBSOCKET_CONNECT_TIMEOUT_ERROR_CODE = 'WS_CONNECT_TIMEOUT';
 const RECONNECT_ADDRESS_SUPPRESSION_DEFAULT_MS = 5e3;
 const UNMATCHED_SERVICE_RESPONSE_WARN_INTERVAL_MS = 3e4;
 const DELIVERY_SOURCE_MESSAGE_UNWRAP_LIMIT = 4;
 const RETIRED_PENDING_RESPONSE_REASON = Object.freeze({
-  TIMEOUT: "timeout",
-  CANCELLED: "cancelled",
-  NODE_FAILURE: "node_failure",
-  DEFERRED_DELIVERY: "deferred_delivery",
-  ACK_REJECTED: "ack_rejected",
-  INLINE_ACK: "inline_ack_payload",
-  UNKNOWN: "unknown",
+  TIMEOUT: 'timeout',
+  CANCELLED: 'cancelled',
+  NODE_FAILURE: 'node_failure',
+  DEFERRED_DELIVERY: 'deferred_delivery',
+  ACK_REJECTED: 'ack_rejected',
+  INLINE_ACK: 'inline_ack_payload',
+  UNKNOWN: 'unknown',
 });
 const SERVICE_RESPONSE_DISPOSITION_KIND = Object.freeze({
-  SETTLED: "settled",
-  ABSORBED: "absorbed_late",
-  ORPHANED: "orphaned",
+  SETTLED: 'settled',
+  ABSORBED: 'absorbed_late',
+  ORPHANED: 'orphaned',
 });
-const ROUTER_NO_CONNECTION_ERROR_CODE = "ROUTER_NO_CONNECTION";
-const ROUTER_CONNECTION_CLOSED_ERROR_CODE = "ROUTER_CONNECTION_CLOSED";
-const ROUTER_MESSAGE_TIMEOUT_ERROR_CODE = "ROUTER_MESSAGE_TIMEOUT";
+const ROUTER_NO_CONNECTION_ERROR_CODE = 'ROUTER_NO_CONNECTION';
+const ROUTER_CONNECTION_CLOSED_ERROR_CODE = 'ROUTER_CONNECTION_CLOSED';
+const ROUTER_MESSAGE_TIMEOUT_ERROR_CODE = 'ROUTER_MESSAGE_TIMEOUT';
 const QUEUE_WAIT_BUCKETS = Object.freeze([
   {
     upperBoundMs: 1,
-    label: "le_1ms",
+    label: 'le_1ms',
   },
   {
     upperBoundMs: 5,
-    label: "le_5ms",
+    label: 'le_5ms',
   },
   {
     upperBoundMs: 10,
-    label: "le_10ms",
+    label: 'le_10ms',
   },
   {
     upperBoundMs: 25,
-    label: "le_25ms",
+    label: 'le_25ms',
   },
   {
     upperBoundMs: 50,
-    label: "le_50ms",
+    label: 'le_50ms',
   },
   {
     upperBoundMs: 100,
-    label: "le_100ms",
+    label: 'le_100ms',
   },
   {
     upperBoundMs: 500,
-    label: "le_500ms",
+    label: 'le_500ms',
   },
   {
     upperBoundMs: 1e3,
-    label: "le_1000ms",
+    label: 'le_1000ms',
   },
 ]);
-const QUEUE_WAIT_BUCKET_OVERFLOW = "gt_1000ms";
-const QUERY_DATA_PLANE_MESSAGE_TYPE = "QUERY";
+const QUEUE_WAIT_BUCKET_OVERFLOW = 'gt_1000ms';
+const QUERY_DATA_PLANE_MESSAGE_TYPE = 'QUERY';
 const OUTBOUND_QUEUE_BACKPRESSURE_ERROR_CODE =
-  "ROUTER_OUTBOUND_QUEUE_BACKPRESSURED";
+  'ROUTER_OUTBOUND_QUEUE_BACKPRESSURED';
 const OUTBOUND_QUEUE_PENDING_SOURCE_LIMIT_DIVISOR = TRANSPORT_NUM.FOUR;
 const OUTBOUND_QUEUE_PENDING_SOURCE_LIMIT_MINIMUM = TRANSPORT_NUM.FOUR;
 const OUTBOUND_QUEUE_BACKPRESSURE_SCOPE = Object.freeze({
-  NODE: "node",
-  DELIVERY_SOURCE: "delivery_source",
+  NODE: 'node',
+  DELIVERY_SOURCE: 'delivery_source',
 });
 const OutboundDeliveryPriority = OUTBOUND_DELIVERY_PRIORITY;
 const CONNECTION_CLOSE_DISPOSITION = Object.freeze({
-  SHUTDOWN: "shutdown",
-  RETIRED: "retired",
-  SELF_DISCONNECT: "self_disconnect",
-  RECONNECT: "reconnect",
-  NO_ACTION: "no_action",
+  SHUTDOWN: 'shutdown',
+  RETIRED: 'retired',
+  SELF_DISCONNECT: 'self_disconnect',
+  RECONNECT: 'reconnect',
+  NO_ACTION: 'no_action',
 });
 const RECONNECT_DISPOSITION = Object.freeze({
-  RETIRE: "retire",
-  PENDING: "pending",
-  MAX_ATTEMPTS_REACHED: "max_attempts_reached",
-  SCHEDULE: "schedule",
+  RETIRE: 'retire',
+  PENDING: 'pending',
+  MAX_ATTEMPTS_REACHED: 'max_attempts_reached',
+  SCHEDULE: 'schedule',
 });
 const TRANSPORT_PRESSURE_SUMMARY_FIELD = Object.freeze({
   MAX_OBSERVED_PENDING_NODE_CONNECTION_COUNT:
-    "maxObservedPendingNodeConnectionCount",
-  PENDING_NODE_CONNECTION_COUNT: "pendingNodeConnectionCount",
+    'maxObservedPendingNodeConnectionCount',
+  PENDING_NODE_CONNECTION_COUNT: 'pendingNodeConnectionCount',
   RECONNECT_BEFORE_DELIVERY_FAILURE_COUNT:
-    "reconnectBeforeDeliveryFailureCount",
+    'reconnectBeforeDeliveryFailureCount',
 });
 const QUERY_TRANSPORT_SELECTION = Object.freeze({
-  UNAVAILABLE: "unavailable",
-  DIRECT_SERVICE: "direct_service",
-  SELECTION_SERVICE: "selection_service",
+  UNAVAILABLE: 'unavailable',
+  DIRECT_SERVICE: 'direct_service',
+  SELECTION_SERVICE: 'selection_service',
 });
 const QUERY_TRANSPORT_DELIVERY_STATE = Object.freeze({
-  SUCCESS: "success",
-  DEFER_RETRY: "defer_retry",
-  HARD_FAILURE: "hard_failure",
+  SUCCESS: 'success',
+  DEFER_RETRY: 'defer_retry',
+  HARD_FAILURE: 'hard_failure',
 });
 const INLINE_ACK_RESULT_FIELD = Object.freeze({
-  ACKNOWLEDGED: "acknowledged",
-  CORRELATION_ID: "correlationId",
-  MESSAGE_ID: "messageId",
+  ACKNOWLEDGED: 'acknowledged',
+  CORRELATION_ID: 'correlationId',
+  MESSAGE_ID: 'messageId',
 });
 const INLINE_ACK_PASSTHROUGH_KEYS = /* @__PURE__ */ new Set([
   INLINE_ACK_RESULT_FIELD.MESSAGE_ID,
@@ -201,7 +201,7 @@ const INLINE_ACK_PASSTHROUGH_KEYS = /* @__PURE__ */ new Set([
   INLINE_ACK_RESULT_FIELD.CORRELATION_ID,
   ...TRANSPORT_DELIVERY_OUTCOME_METADATA_FIELDS,
 ]);
-const EMPTY_ROUTER_REASON = "";
+const EMPTY_ROUTER_REASON = '';
 const INPROC = (globalThis.__DDB_INPROC_MESSAGE_ROUTER__ ||= {
   serversByPort: /* @__PURE__ */ new Map(),
   // port -> {router, nodeId}
@@ -272,9 +272,9 @@ function createQueueWaitHistogram() {
   return histogram;
 }
 function resolveQueueWaitBucket(durationMs) {
-  const normalized = Number.isFinite(durationMs)
-    ? Math.max(TRANSPORT_NUM.ZERO, Math.floor(durationMs))
-    : TRANSPORT_NUM.ZERO;
+  const normalized = Number.isFinite(durationMs) ?
+    Math.max(TRANSPORT_NUM.ZERO, Math.floor(durationMs)) :
+    TRANSPORT_NUM.ZERO;
   for (const bucket of QUEUE_WAIT_BUCKETS) {
     if (normalized <= bucket.upperBoundMs) {
       return bucket.label;
@@ -286,9 +286,9 @@ function recordQueueWaitDuration(queue, durationMs) {
   if (!queue) {
     return;
   }
-  const normalized = Number.isFinite(durationMs)
-    ? Math.max(TRANSPORT_NUM.ZERO, Math.floor(durationMs))
-    : TRANSPORT_NUM.ZERO;
+  const normalized = Number.isFinite(durationMs) ?
+    Math.max(TRANSPORT_NUM.ZERO, Math.floor(durationMs)) :
+    TRANSPORT_NUM.ZERO;
   queue.queueWaitSampleCount =
     (queue.queueWaitSampleCount || TRANSPORT_NUM.ZERO) + TRANSPORT_NUM.ONE;
   queue.queueWaitTotalMs =
@@ -311,9 +311,9 @@ function buildQueueWaitSummary(queue) {
   return {
     sampleCount,
     avgMs:
-      sampleCount > TRANSPORT_NUM.ZERO
-        ? Math.round(totalMs / sampleCount)
-        : TRANSPORT_NUM.ZERO,
+      sampleCount > TRANSPORT_NUM.ZERO ?
+        Math.round(totalMs / sampleCount) :
+        TRANSPORT_NUM.ZERO,
     maxMs: queue?.queueWaitMaxMs || TRANSPORT_NUM.ZERO,
     histogram: {
       ...(queue?.queueWaitHistogram || createQueueWaitHistogram()),
@@ -418,10 +418,7 @@ function summarizeRaftAppendCommand(command) {
 function buildTypelessQueryDeliverySource(message) {
   const tableName = extractSqlTableName(message?.sql);
   const operationKind = extractSqlOperationKind(message?.sql);
-  if (
-    !tableName &&
-    operationKind === MESSAGE_ROUTER_LITERAL.STRING_UNKNOWN
-  ) {
+  if (!tableName && operationKind === MESSAGE_ROUTER_LITERAL.STRING_UNKNOWN) {
     return null;
   }
   return `query:${operationKind}:${tableName || MESSAGE_ROUTER_LITERAL.STRING_UNKNOWN}`;
@@ -571,20 +568,20 @@ function buildDerivedDeliverySource(targetAddress, message) {
 }
 function buildRetiredPendingClassification(reason) {
   switch (reason) {
-    case RETIRED_PENDING_RESPONSE_REASON.TIMEOUT:
-      return MESSAGE_ROUTER_LITERAL.STRING_LATE_AFTER_TIMEOUT;
-    case RETIRED_PENDING_RESPONSE_REASON.NODE_FAILURE:
-      return MESSAGE_ROUTER_LITERAL.STRING_LATE_AFTER_NODE_FAILURE;
-    case RETIRED_PENDING_RESPONSE_REASON.DEFERRED_DELIVERY:
-      return MESSAGE_ROUTER_LITERAL.STRING_LATE_AFTER_DEFERRED_DELIVERY;
-    case RETIRED_PENDING_RESPONSE_REASON.ACK_REJECTED:
-      return MESSAGE_ROUTER_LITERAL.STRING_LATE_AFTER_ACK_REJECTED;
-    case RETIRED_PENDING_RESPONSE_REASON.INLINE_ACK:
-      return MESSAGE_ROUTER_LITERAL.STRING_LATE_AFTER_INLINE_ACK;
-    case RETIRED_PENDING_RESPONSE_REASON.CANCELLED:
-      return MESSAGE_ROUTER_LITERAL.STRING_LATE_AFTER_CANCELLED;
-    default:
-      return MESSAGE_ROUTER_LITERAL.STRING_LATE_AFTER_RETIRED_WAITER;
+  case RETIRED_PENDING_RESPONSE_REASON.TIMEOUT:
+    return MESSAGE_ROUTER_LITERAL.STRING_LATE_AFTER_TIMEOUT;
+  case RETIRED_PENDING_RESPONSE_REASON.NODE_FAILURE:
+    return MESSAGE_ROUTER_LITERAL.STRING_LATE_AFTER_NODE_FAILURE;
+  case RETIRED_PENDING_RESPONSE_REASON.DEFERRED_DELIVERY:
+    return MESSAGE_ROUTER_LITERAL.STRING_LATE_AFTER_DEFERRED_DELIVERY;
+  case RETIRED_PENDING_RESPONSE_REASON.ACK_REJECTED:
+    return MESSAGE_ROUTER_LITERAL.STRING_LATE_AFTER_ACK_REJECTED;
+  case RETIRED_PENDING_RESPONSE_REASON.INLINE_ACK:
+    return MESSAGE_ROUTER_LITERAL.STRING_LATE_AFTER_INLINE_ACK;
+  case RETIRED_PENDING_RESPONSE_REASON.CANCELLED:
+    return MESSAGE_ROUTER_LITERAL.STRING_LATE_AFTER_CANCELLED;
+  default:
+    return MESSAGE_ROUTER_LITERAL.STRING_LATE_AFTER_RETIRED_WAITER;
   }
 }
 function buildServiceResponseDisposition(options = {}) {
@@ -622,7 +619,7 @@ function buildPendingSourceSummary(
   }
   const countsBySource = /* @__PURE__ */ new Map();
   for (const item of queue.pending) {
-    const source = normalizeIdentifier(item?.deliverySource) || "unknown";
+    const source = normalizeIdentifier(item?.deliverySource) || 'unknown';
     countsBySource.set(
       source,
       (countsBySource.get(source) || TRANSPORT_NUM.ZERO) + TRANSPORT_NUM.ONE,
@@ -655,9 +652,9 @@ function normalizeDeliveryOutcome(outcome) {
   ) {
     return {
       result: buildTransportDeliveryOutcome(outcome.result),
-      queueWaitMs: Number.isFinite(outcome.queueWaitMs)
-        ? Math.max(TRANSPORT_NUM.ZERO, Math.floor(outcome.queueWaitMs))
-        : TRANSPORT_NUM.ZERO,
+      queueWaitMs: Number.isFinite(outcome.queueWaitMs) ?
+        Math.max(TRANSPORT_NUM.ZERO, Math.floor(outcome.queueWaitMs)) :
+        TRANSPORT_NUM.ZERO,
     };
   }
   return {
@@ -686,9 +683,9 @@ function buildSupersededPendingResult(replacedItem) {
   };
 }
 function normalizeOutboundDeliveryPriority(priority) {
-  return priority === OutboundDeliveryPriority.CRITICAL
-    ? OutboundDeliveryPriority.CRITICAL
-    : OutboundDeliveryPriority.BACKGROUND;
+  return priority === OutboundDeliveryPriority.CRITICAL ?
+    OutboundDeliveryPriority.CRITICAL :
+    OutboundDeliveryPriority.BACKGROUND;
 }
 function countPendingByPriority(queue, priority) {
   if (!queue || !Array.isArray(queue.pending)) {
@@ -709,12 +706,12 @@ function countPendingBySource(queue, deliverySource) {
     const pendingSource =
       normalizeIdentifier(item?.deliverySource) ||
       MESSAGE_ROUTER_LITERAL.STRING_UNKNOWN;
-    return pendingSource === normalizedDeliverySource
-      ? count + TRANSPORT_NUM.ONE
-      : count;
+    return pendingSource === normalizedDeliverySource ?
+      count + TRANSPORT_NUM.ONE :
+      count;
   }, TRANSPORT_NUM.ZERO);
 }
-function buildPendingSourceAdmission(queue, deliverySource, deliveryPriority) {
+function buildPendingSourceAdmission(queue, deliverySource, _deliveryPriority) {
   const pendingForSource = countPendingBySource(queue, deliverySource);
   const pendingSourceLimit = resolvePendingSourceLimit(queue);
   const applySourceLimit = pendingSourceLimit > TRANSPORT_NUM.ZERO;
@@ -733,9 +730,9 @@ function resolvePendingSourceLimit(queue) {
     return TRANSPORT_NUM.ZERO;
   }
   const maxPending =
-    Number.isFinite(queue.maxPending) && queue.maxPending > TRANSPORT_NUM.ZERO
-      ? Math.floor(queue.maxPending)
-      : TRANSPORT_NUM.ZERO;
+    Number.isFinite(queue.maxPending) && queue.maxPending > TRANSPORT_NUM.ZERO ?
+      Math.floor(queue.maxPending) :
+      TRANSPORT_NUM.ZERO;
   if (maxPending <= TRANSPORT_NUM.ZERO) {
     return TRANSPORT_NUM.ZERO;
   }
@@ -752,25 +749,25 @@ function countInFlightByPriority(queue, priority) {
     return TRANSPORT_NUM.ZERO;
   }
   const rawCount =
-    priority === OutboundDeliveryPriority.CRITICAL
-      ? queue.inFlightCritical
-      : queue.inFlightBackground;
-  return Number.isFinite(rawCount) && rawCount > TRANSPORT_NUM.ZERO
-    ? Math.floor(rawCount)
-    : TRANSPORT_NUM.ZERO;
+    priority === OutboundDeliveryPriority.CRITICAL ?
+      queue.inFlightCritical :
+      queue.inFlightBackground;
+  return Number.isFinite(rawCount) && rawCount > TRANSPORT_NUM.ZERO ?
+    Math.floor(rawCount) :
+    TRANSPORT_NUM.ZERO;
 }
 function resolveBoundedCriticalReserve(rawReserve, maxReserve) {
   const normalizedMaxReserve =
-    Number.isFinite(maxReserve) && maxReserve > TRANSPORT_NUM.ZERO
-      ? Math.floor(maxReserve)
-      : TRANSPORT_NUM.ZERO;
+    Number.isFinite(maxReserve) && maxReserve > TRANSPORT_NUM.ZERO ?
+      Math.floor(maxReserve) :
+      TRANSPORT_NUM.ZERO;
   if (normalizedMaxReserve <= TRANSPORT_NUM.ZERO) {
     return TRANSPORT_NUM.ZERO;
   }
   const normalizedReserve =
-    Number.isFinite(rawReserve) && rawReserve > TRANSPORT_NUM.ZERO
-      ? Math.floor(rawReserve)
-      : TRANSPORT_NUM.ZERO;
+    Number.isFinite(rawReserve) && rawReserve > TRANSPORT_NUM.ZERO ?
+      Math.floor(rawReserve) :
+      TRANSPORT_NUM.ZERO;
   return Math.min(normalizedReserve, normalizedMaxReserve);
 }
 function resolveBackgroundPendingLimit(queue) {
@@ -789,9 +786,9 @@ function resolveBackgroundInFlightLimit(queue) {
   }
   const maxConcurrent =
     Number.isFinite(queue.maxConcurrent) &&
-    queue.maxConcurrent > TRANSPORT_NUM.ZERO
-      ? Math.floor(queue.maxConcurrent)
-      : TRANSPORT_NUM.ZERO;
+    queue.maxConcurrent > TRANSPORT_NUM.ZERO ?
+      Math.floor(queue.maxConcurrent) :
+      TRANSPORT_NUM.ZERO;
   if (maxConcurrent <= TRANSPORT_NUM.ZERO) {
     return TRANSPORT_NUM.ZERO;
   }
@@ -823,15 +820,15 @@ function resolveNextPendingItemIndex(queue) {
 }
 function peekNextPendingItem(queue) {
   const nextItemIndex = resolveNextPendingItemIndex(queue);
-  return nextItemIndex >= TRANSPORT_NUM.ZERO
-    ? queue.pending[nextItemIndex]
-    : null;
+  return nextItemIndex >= TRANSPORT_NUM.ZERO ?
+    queue.pending[nextItemIndex] :
+    null;
 }
 function dequeueNextPendingItem(queue) {
   const nextItemIndex = resolveNextPendingItemIndex(queue);
-  return nextItemIndex >= TRANSPORT_NUM.ZERO
-    ? queue.pending.splice(nextItemIndex, TRANSPORT_NUM.ONE)[TRANSPORT_NUM.ZERO]
-    : null;
+  return nextItemIndex >= TRANSPORT_NUM.ZERO ?
+    queue.pending.splice(nextItemIndex, TRANSPORT_NUM.ONE)[TRANSPORT_NUM.ZERO] :
+    null;
 }
 function canDispatchPendingItem(queue, item) {
   if (!queue || !item || queue.inFlight >= queue.maxConcurrent) {
@@ -943,9 +940,9 @@ class OutboundDeliveryRegistryOwner {
         deliveryPriority,
       );
       const isNodeBackpressured =
-        deliveryPriority === OutboundDeliveryPriority.CRITICAL
-          ? queue.pending.length >= queue.maxPending
-          : pendingBackground >= backgroundPendingLimit;
+        deliveryPriority === OutboundDeliveryPriority.CRITICAL ?
+          queue.pending.length >= queue.maxPending :
+          pendingBackground >= backgroundPendingLimit;
       const isSourceBackpressured =
         pendingSourceAdmission.sourceBackpressured === true;
       if (isNodeBackpressured || isSourceBackpressured) {
@@ -953,9 +950,9 @@ class OutboundDeliveryRegistryOwner {
           ROUTER_ERROR_MSG.outboundQueueBackpressured(nodeId, queue.maxPending),
         );
         error.code = OUTBOUND_QUEUE_BACKPRESSURE_ERROR_CODE;
-        error.backpressureScope = isSourceBackpressured
-          ? OUTBOUND_QUEUE_BACKPRESSURE_SCOPE.DELIVERY_SOURCE
-          : OUTBOUND_QUEUE_BACKPRESSURE_SCOPE.NODE;
+        error.backpressureScope = isSourceBackpressured ?
+          OUTBOUND_QUEUE_BACKPRESSURE_SCOPE.DELIVERY_SOURCE :
+          OUTBOUND_QUEUE_BACKPRESSURE_SCOPE.NODE;
         this.router.logger.warn(
           MESSAGE_ROUTER_LITERAL.STRING_OUTBOUND_QUEUE_SATURATED_FOR_NODE_DELIVERY,
           {
@@ -1120,9 +1117,9 @@ class OutboundDeliveryRegistryOwner {
   }
 }
 const INCOMING_CONNECTION_ADOPTION = Object.freeze({
-  ADOPT_INCOMING: "adopt_incoming",
-  KEEP_EXISTING: "keep_existing",
-  KEEP_SELF_CONNECTION: "keep_self_connection",
+  ADOPT_INCOMING: 'adopt_incoming',
+  KEEP_EXISTING: 'keep_existing',
+  KEEP_SELF_CONNECTION: 'keep_self_connection',
 });
 class RouterConnectionAuthorityOwner {
   constructor(router) {
@@ -1204,9 +1201,9 @@ class RouterConnectionAuthorityOwner {
       !existingConnected ||
       (preferIncomingConnection && !existingPreferredIncomingConnection);
     return {
-      state: shouldAdoptIncomingConnection
-        ? INCOMING_CONNECTION_ADOPTION.ADOPT_INCOMING
-        : INCOMING_CONNECTION_ADOPTION.KEEP_EXISTING,
+      state: shouldAdoptIncomingConnection ?
+        INCOMING_CONNECTION_ADOPTION.ADOPT_INCOMING :
+        INCOMING_CONNECTION_ADOPTION.KEEP_EXISTING,
       existing,
     };
   }
@@ -1217,9 +1214,9 @@ class RouterConnectionAuthorityOwner {
     try {
       const resolved = this.router.resolveNodeAddress(targetNodeId);
       return typeof resolved === TRANSPORT_TYPEOF.STRING &&
-        resolved.length > TRANSPORT_NUM.ZERO
-        ? resolved
-        : null;
+        resolved.length > TRANSPORT_NUM.ZERO ?
+        resolved :
+        null;
     } catch (error) {
       this.router.logger.warn(
         MESSAGE_ROUTER_LITERAL.STRING_FAILED_TO_RESOLVE_NODE_CONNECTION_ADDRESS_FOR_DELIVERY_RECOVERY,
@@ -1243,9 +1240,9 @@ class RouterConnectionAuthorityOwner {
     const normalizedFallback =
       normalizeToWebSocketAddress(fallbackAddress) || fallbackAddress;
     return typeof normalizedFallback === TRANSPORT_TYPEOF.STRING &&
-      normalizedFallback.length > TRANSPORT_NUM.ZERO
-      ? normalizedFallback
-      : null;
+      normalizedFallback.length > TRANSPORT_NUM.ZERO ?
+      normalizedFallback :
+      null;
   }
   refreshReconnectAuthority(connectionInfo, fallbackAddress = null) {
     if (!connectionInfo || typeof connectionInfo !== TRANSPORT_TYPEOF.OBJECT) {
@@ -1317,9 +1314,9 @@ class RouterConnectionAuthorityOwner {
     }
     const suppressionMs =
       Number.isFinite(this.router.reconnectAddressSuppressionMs) &&
-      this.router.reconnectAddressSuppressionMs > TRANSPORT_NUM.ZERO
-        ? this.router.reconnectAddressSuppressionMs
-        : TRANSPORT_NUM.ZERO;
+      this.router.reconnectAddressSuppressionMs > TRANSPORT_NUM.ZERO ?
+        this.router.reconnectAddressSuppressionMs :
+        TRANSPORT_NUM.ZERO;
     if (suppressionMs <= TRANSPORT_NUM.ZERO) {
       return;
     }
@@ -1362,9 +1359,9 @@ class RouterConnectionAuthorityOwner {
       addresses.push(candidate);
     };
     const existing = this.router.nodeConnections.get(targetNodeId) || null;
-    const canonicalAddress = existing
-      ? this.refreshReconnectAuthority(existing, preferredAddress)
-      : this.resolveCanonicalReconnectAddress(targetNodeId, preferredAddress);
+    const canonicalAddress = existing ?
+      this.refreshReconnectAuthority(existing, preferredAddress) :
+      this.resolveCanonicalReconnectAddress(targetNodeId, preferredAddress);
     pushUniqueAddress(canonicalAddress);
     pushUniqueAddress(
       normalizeToWebSocketAddress(existing?.configuredAddress) ||

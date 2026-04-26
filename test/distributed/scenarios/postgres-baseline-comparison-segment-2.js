@@ -1,17 +1,17 @@
-import { POSTGRES_BASELINE_COMPARISON_SEGMENT_1 } from "./postgres-baseline-comparison-segment-1.js";
+import {POSTGRES_BASELINE_COMPARISON_SEGMENT_1} from './postgres-baseline-comparison-segment-1.js';
 import {
   normalizeNonNegativeInteger,
   resolveControlSnapshotCandidates,
-} from "./postgres-baseline-comparison-admission-runtime-helpers.js";
-import { rowsFromQueryResult } from "./postgres-baseline-comparison-query-helpers.js";
+} from './postgres-baseline-comparison-admission-runtime-helpers.js';
+import {rowsFromQueryResult} from './postgres-baseline-comparison-query-helpers.js';
 
 let loadRebalancingHelpersPromise = null;
 
 async function loadRebalancingHelpers() {
   if (!loadRebalancingHelpersPromise) {
     loadRebalancingHelpersPromise = import(
-      "./postgres-baseline-comparison-segment-9.js"
-    ).then(({ POSTGRES_BASELINE_COMPARISON_SEGMENT_9 }) => {
+      './postgres-baseline-comparison-segment-9.js'
+    ).then(({POSTGRES_BASELINE_COMPARISON_SEGMENT_9}) => {
       const {
         buildLoadRebalancingPressureState,
         buildRebalancingCriticalState,
@@ -89,29 +89,29 @@ function normalizePositiveIntegerOrNull(value) {
 
 function isBenchmarkTableCreateTimeoutError(error) {
   if (
-    typeof error?.timeoutClass === "string" &&
-    error.timeoutClass.toLowerCase() === "timeout"
+    typeof error?.timeoutClass === 'string' &&
+    error.timeoutClass.toLowerCase() === 'timeout'
   ) {
     return true;
   }
   if (
-    typeof error?.code === "string" &&
-    error.code.toLowerCase() === "etimedout"
+    typeof error?.code === 'string' &&
+    error.code.toLowerCase() === 'etimedout'
   ) {
     return true;
   }
-  const message = String(error?.message || error || "").toLowerCase();
-  return message.includes("timed out") || message.includes("deadline exceeded");
+  const message = String(error?.message || error || '').toLowerCase();
+  return message.includes('timed out') || message.includes('deadline exceeded');
 }
 
 function isRetriableBenchmarkTableProgressError(error) {
-  const message = String(error?.message || error || "").toLowerCase();
+  const message = String(error?.message || error || '').toLowerCase();
   if (isBenchmarkTableCreateTimeoutError(error)) {
     return (
-      message.includes("timed out waiting for partition leader service") ||
-      message.includes("timed out waiting for routable partition service") ||
-      message.includes("admin api query timed out for node") ||
-      message.includes("timed out waiting for partition service metadata")
+      message.includes('timed out waiting for partition leader service') ||
+      message.includes('timed out waiting for routable partition service') ||
+      message.includes('admin api query timed out for node') ||
+      message.includes('timed out waiting for partition service metadata')
     );
   }
   if (!message) {
@@ -119,39 +119,39 @@ function isRetriableBenchmarkTableProgressError(error) {
   }
   return (
     message.includes(
-      "unable to satisfy minimum routable provisioning cohort",
+      'unable to satisfy minimum routable provisioning cohort',
     ) ||
-    message.includes("control_plane_write_unhealthy") ||
-    message.includes("cluster_member_unhealthy") ||
+    message.includes('control_plane_write_unhealthy') ||
+    message.includes('cluster_member_unhealthy') ||
     message.includes(
-      "distributed operation failed due to participant failures",
+      'distributed operation failed due to participant failures',
     ) ||
-    message.includes("cannot start a transaction within a transaction") ||
-    message.includes("cannot commit - no transaction is active") ||
-    message.includes("transaction already active on this partition") ||
-    message.includes("no active service found for partition") ||
-    message.includes("no partitions available for table") ||
-    (message.includes("table") && message.includes("not found")) ||
-    message.includes("connect econnrefused") ||
-    message.includes("connection refused")
+    message.includes('cannot start a transaction within a transaction') ||
+    message.includes('cannot commit - no transaction is active') ||
+    message.includes('transaction already active on this partition') ||
+    message.includes('no active service found for partition') ||
+    message.includes('no partitions available for table') ||
+    (message.includes('table') && message.includes('not found')) ||
+    message.includes('connect econnrefused') ||
+    message.includes('connection refused')
   );
 }
 
 function hasBenchmarkTableBootstrapProgress(metadataSnapshot) {
-  if (!metadataSnapshot || typeof metadataSnapshot !== "object") {
+  if (!metadataSnapshot || typeof metadataSnapshot !== 'object') {
     return false;
   }
   const tableRowCount = Number(metadataSnapshot?.tables?.rowCount || ZERO);
   const partitionRowCount = Number(
     metadataSnapshot?.partitions?.rowCount || ZERO,
   );
-  const tableId = String(metadataSnapshot?.tableId || "").trim();
-  const partitionIds = Array.isArray(metadataSnapshot?.partitions?.partitionIds)
-    ? metadataSnapshot.partitions.partitionIds.filter(
-        (partitionId) =>
-          typeof partitionId === "string" && partitionId.length > ZERO,
-      )
-    : [];
+  const tableId = String(metadataSnapshot?.tableId || '').trim();
+  const partitionIds = Array.isArray(metadataSnapshot?.partitions?.partitionIds) ?
+    metadataSnapshot.partitions.partitionIds.filter(
+      (partitionId) =>
+        typeof partitionId === 'string' && partitionId.length > ZERO,
+    ) :
+    [];
   return (
     (tableRowCount > ZERO || tableId.length > ZERO) &&
     (partitionRowCount > ZERO || partitionIds.length > ZERO)
@@ -191,7 +191,7 @@ async function refreshBenchmarkTableCreateReadModel(
 ) {
   if (
     !nodeClient ||
-    typeof nodeClient.fetchPreflightCriticalPathSnapshot !== "function"
+    typeof nodeClient.fetchPreflightCriticalPathSnapshot !== 'function'
   ) {
     return null;
   }
@@ -214,7 +214,7 @@ function createBenchmarkTableCreateAttempt(
   const innerTimeoutMs = normalizePositiveIntegerOrNull(context.innerTimeoutMs);
   return {
     tableName,
-    writeNodeId: String(writeNodeId || ""),
+    writeNodeId: String(writeNodeId || ''),
     outerTimeoutMs,
     innerTimeoutMs,
     timeoutBudgetMismatch:
@@ -245,14 +245,14 @@ function finalizeBenchmarkTableCreateAttempt(
     outcome,
     isTimeout: error ? isBenchmarkTableCreateTimeoutError(error) : false,
     error: error ? String(error?.message || error) : null,
-    errorCode: typeof error?.code === "string" ? error.code : null,
+    errorCode: typeof error?.code === 'string' ? error.code : null,
     timeoutClass:
-      typeof error?.timeoutClass === "string" ? error.timeoutClass : null,
+      typeof error?.timeoutClass === 'string' ? error.timeoutClass : null,
     timeoutClassification:
       error?.timeoutClassification &&
-      typeof error.timeoutClassification === "object"
-        ? error.timeoutClassification
-        : null,
+      typeof error.timeoutClassification === 'object' ?
+        error.timeoutClassification :
+        null,
     completedAt,
     durationMs: Math.max(
       ZERO,
@@ -263,19 +263,19 @@ function finalizeBenchmarkTableCreateAttempt(
 
 function attachBenchmarkTableCreateAttempt(error, createAttempt) {
   const normalizedError =
-    error instanceof Error
-      ? error
-      : new Error(String(error || "benchmark_table_create_failed"));
+    error instanceof Error ?
+      error :
+      new Error(String(error || 'benchmark_table_create_failed'));
   normalizedError.benchmarkTableCreateAttempt = createAttempt;
   return normalizedError;
 }
 
 function resolveBenchmarkTableCreateAttempt(error) {
-  if (!error || typeof error !== "object") {
+  if (!error || typeof error !== 'object') {
     return null;
   }
   const createAttempt = error.benchmarkTableCreateAttempt;
-  if (!createAttempt || typeof createAttempt !== "object") {
+  if (!createAttempt || typeof createAttempt !== 'object') {
     return null;
   }
   return createAttempt;
@@ -299,11 +299,11 @@ async function queryControlWithNodeFallback(
   params = [],
   context = NODE_CLIENT_TRANSIENT_CONTEXT,
 ) {
-  const candidates = Array.isArray(nodes)
-    ? nodes.filter((node) => node && typeof node.id === "string")
-    : [];
+  const candidates = Array.isArray(nodes) ?
+    nodes.filter((node) => node && typeof node.id === 'string') :
+    [];
   if (candidates.length === ZERO) {
-    throw new Error("no_system_table_read_nodes_available");
+    throw new Error('no_system_table_read_nodes_available');
   }
 
   const errors = [];
@@ -316,28 +316,28 @@ async function queryControlWithNodeFallback(
       };
     } catch (error) {
       errors.push({
-        nodeId: String(node?.id || "unknown"),
+        nodeId: String(node?.id || 'unknown'),
         error: String(error?.message || error),
       });
     }
   }
 
   const errorSummary = errors
-    .map((entry) => entry.nodeId + "=" + entry.error)
-    .join("|");
+    .map((entry) => entry.nodeId + '=' + entry.error)
+    .join('|');
   const aggregateError = new Error(
-    "all_system_table_read_nodes_failed:" + errorSummary,
+    'all_system_table_read_nodes_failed:' + errorSummary,
   );
   aggregateError.readPathErrors = errors;
   throw aggregateError;
 }
 
 function resolveCanonicalSystemTableWriteNode(nodes) {
-  const candidates = Array.isArray(nodes)
-    ? nodes.filter((node) => node && typeof node.id === "string")
-    : [];
+  const candidates = Array.isArray(nodes) ?
+    nodes.filter((node) => node && typeof node.id === 'string') :
+    [];
   if (candidates.length === ZERO) {
-    throw new Error("no_system_table_read_nodes_available");
+    throw new Error('no_system_table_read_nodes_available');
   }
   return candidates[ZERO];
 }
@@ -374,7 +374,7 @@ async function querySutTableMetadata(
   );
   const result = lookup.result;
   const rows = rowsFromQueryResult(result);
-  const tableId = firstStringField(rows, "table_id", "tableId");
+  const tableId = firstStringField(rows, 'table_id', 'tableId');
   const requiredSchemaVersion = extractRequiredSchemaVersionFromRows(rows);
   return {
     tableId,
@@ -396,21 +396,21 @@ async function querySutTableId(nodeClient, systemTableReadNodes, tableName) {
 function resolveScenarioOverrides(cluster) {
   const overrides = cluster?._scenarioOverrides?.postgresBaselineComparison;
   const createPostgresPool =
-    typeof overrides?.createPostgresPool === "function"
-      ? overrides.createPostgresPool
-      : (options) => new Pool(options);
+    typeof overrides?.createPostgresPool === 'function' ?
+      overrides.createPostgresPool :
+      (options) => new Pool(options);
   const createLoadGenerator =
-    typeof overrides?.createLoadGenerator === "function"
-      ? overrides.createLoadGenerator
-      : (nodes, options) => new LoadGenerator(nodes, options);
+    typeof overrides?.createLoadGenerator === 'function' ?
+      overrides.createLoadGenerator :
+      (nodes, options) => new LoadGenerator(nodes, options);
   const getCdcTelemetryByNode =
-    typeof overrides?.getCdcTelemetryByNode === "function"
-      ? overrides.getCdcTelemetryByNode
-      : null;
+    typeof overrides?.getCdcTelemetryByNode === 'function' ?
+      overrides.getCdcTelemetryByNode :
+      null;
   const phaseEventSink =
-    typeof overrides?.phaseEventSink === "function"
-      ? overrides.phaseEventSink
-      : null;
+    typeof overrides?.phaseEventSink === 'function' ?
+      overrides.phaseEventSink :
+      null;
   return {
     createPostgresPool,
     createLoadGenerator,
@@ -424,21 +424,21 @@ function resolveScenarioOverrides(cluster) {
 }
 
 function resolveProgressHeartbeatIntervalMs(value) {
-  return Number.isInteger(value) && value > ZERO
-    ? value
-    : LOAD_PROGRESS_HEARTBEAT_INTERVAL_MS;
+  return Number.isInteger(value) && value > ZERO ?
+    value :
+    LOAD_PROGRESS_HEARTBEAT_INTERVAL_MS;
 }
 
 function emitScenarioPhaseEvent(phaseEventSink, event) {
   if (
-    typeof phaseEventSink !== "function" ||
+    typeof phaseEventSink !== 'function' ||
     !event ||
-    typeof event !== "object"
+    typeof event !== 'object'
   ) {
     return;
   }
   try {
-    phaseEventSink({ ...event });
+    phaseEventSink({...event});
   } catch (_error) {
     // Progress sinks are observational only.
   }
@@ -465,10 +465,10 @@ function buildLoadProgressDetails(label, heartbeatCount, metrics = {}) {
   };
 }
 
-function startLoadProgressReporter({ loadRun, intervalMs, label, onProgress }) {
+function startLoadProgressReporter({loadRun, intervalMs, label, onProgress}) {
   if (
-    typeof onProgress !== "function" ||
-    typeof loadRun?.getMetrics !== "function"
+    typeof onProgress !== 'function' ||
+    typeof loadRun?.getMetrics !== 'function'
   ) {
     return {
       stop() {},
@@ -498,12 +498,12 @@ function startLoadProgressReporter({ loadRun, intervalMs, label, onProgress }) {
       }
       heartbeatCount += ONE;
       onProgress(
-        label + " heartbeat",
+        label + ' heartbeat',
         buildLoadProgressDetails(label, heartbeatCount, metrics),
       );
       scheduleNextHeartbeat();
     }, heartbeatIntervalMs);
-    if (typeof timerId.unref === "function") {
+    if (typeof timerId.unref === 'function') {
       timerId.unref();
     }
   };
@@ -523,7 +523,7 @@ function startLoadProgressReporter({ loadRun, intervalMs, label, onProgress }) {
 
 function resolveNodeClientChannelPolicyOverrides(cluster) {
   const channelPolicies = cluster?._config?.nodeClient?.channelPolicies;
-  if (!channelPolicies || typeof channelPolicies !== "object") {
+  if (!channelPolicies || typeof channelPolicies !== 'object') {
     return null;
   }
   return channelPolicies;
@@ -544,23 +544,23 @@ async function ensureSutBenchmarkTable(
     resolveCanonicalSystemTableWriteNode(systemTableReadNodes);
   const createRetryTimeoutMs =
     Number.isInteger(benchmarkConfig?.readyTimeoutMs) &&
-    benchmarkConfig.readyTimeoutMs > ZERO
-      ? benchmarkConfig.readyTimeoutMs
-      : BENCHMARK_DEFAULTS.readyTimeoutMs;
+    benchmarkConfig.readyTimeoutMs > ZERO ?
+      benchmarkConfig.readyTimeoutMs :
+      BENCHMARK_DEFAULTS.readyTimeoutMs;
   const effectiveCreateRetryTimeoutMs =
     Array.isArray(systemTableReadNodes) &&
     systemTableReadNodes.length >=
-      PREFLIGHT_CONVERGENCE_LARGE_CLUSTER_NODE_THRESHOLD
-      ? Math.max(
-          createRetryTimeoutMs,
-          BENCHMARK_TABLE_CREATE_LARGE_CLUSTER_RETRY_TIMEOUT_MS,
-        )
-      : createRetryTimeoutMs;
+      PREFLIGHT_CONVERGENCE_LARGE_CLUSTER_NODE_THRESHOLD ?
+      Math.max(
+        createRetryTimeoutMs,
+        BENCHMARK_TABLE_CREATE_LARGE_CLUSTER_RETRY_TIMEOUT_MS,
+      ) :
+      createRetryTimeoutMs;
   const createRetryPollIntervalMs =
     Number.isInteger(benchmarkConfig?.readyPollIntervalMs) &&
-    benchmarkConfig.readyPollIntervalMs > ZERO
-      ? benchmarkConfig.readyPollIntervalMs
-      : BENCHMARK_DEFAULTS.readyPollIntervalMs;
+    benchmarkConfig.readyPollIntervalMs > ZERO ?
+      benchmarkConfig.readyPollIntervalMs :
+      BENCHMARK_DEFAULTS.readyPollIntervalMs;
   const createRetryDeadlineMs = timing.now() + effectiveCreateRetryTimeoutMs;
   let createAttempt = null;
   let createResult;
@@ -692,17 +692,17 @@ async function ensurePostgresBenchmarkTable(pool, tableName) {
 }
 
 function isRetriableTableReadyError(error) {
-  const message = String(error?.message || "").toLowerCase();
+  const message = String(error?.message || '').toLowerCase();
   if (!message) {
     return false;
   }
   return (
-    message.includes("no partitions available for table") ||
-    (message.includes("table") && message.includes("not found")) ||
-    message.includes("timed out waiting for routable partition service") ||
-    message.includes("timed out waiting for partition leader service") ||
-    message.includes("timed out waiting for partition service metadata") ||
-    message.includes("connect econnrefused")
+    message.includes('no partitions available for table') ||
+    (message.includes('table') && message.includes('not found')) ||
+    message.includes('timed out waiting for routable partition service') ||
+    message.includes('timed out waiting for partition leader service') ||
+    message.includes('timed out waiting for partition service metadata') ||
+    message.includes('connect econnrefused')
   );
 }
 
@@ -713,12 +713,12 @@ async function waitForSutBenchmarkTableReady(
   options = {},
 ) {
   const timing = resolveScenarioTiming(options.timing);
-  const timeoutMs = Number.isInteger(options.timeoutMs)
-    ? options.timeoutMs
-    : BENCHMARK_DEFAULTS.readyTimeoutMs;
-  const pollIntervalMs = Number.isInteger(options.pollIntervalMs)
-    ? options.pollIntervalMs
-    : BENCHMARK_DEFAULTS.readyPollIntervalMs;
+  const timeoutMs = Number.isInteger(options.timeoutMs) ?
+    options.timeoutMs :
+    BENCHMARK_DEFAULTS.readyTimeoutMs;
+  const pollIntervalMs = Number.isInteger(options.pollIntervalMs) ?
+    options.pollIntervalMs :
+    BENCHMARK_DEFAULTS.readyPollIntervalMs;
   const deadline = timing.now() + timeoutMs;
   let lastError = null;
 
@@ -771,7 +771,7 @@ async function waitForSutBenchmarkTableReady(
         tableName +
         '" was not ready within ' +
         timeoutMs +
-        "ms: " +
+        'ms: ' +
         String(lastError.message || lastError),
     );
   }
@@ -780,7 +780,7 @@ async function waitForSutBenchmarkTableReady(
       tableName +
       '" was not ready within ' +
       timeoutMs +
-      "ms",
+      'ms',
   );
 }
 
@@ -821,27 +821,27 @@ async function runBaselineSharedLoad({
     tableName,
     workloadProfile: BENCHMARK_WORKLOAD_PROFILE,
     operations: BENCHMARK_WORKLOAD_OPERATIONS,
-    ...(Number.isInteger(nodeFailureThreshold) && nodeFailureThreshold > ZERO
-      ? { nodeFailureThreshold }
-      : {}),
-    ...(Number.isInteger(nodeFailureCooldownMs) && nodeFailureCooldownMs > ZERO
-      ? { nodeFailureCooldownMs }
-      : {}),
-    ...(Number.isInteger(loadNodeMaxInFlight) && loadNodeMaxInFlight > ZERO
-      ? { nodeMaxInFlight: loadNodeMaxInFlight }
-      : {}),
-    ...(Number.isInteger(maxPendingQueueDepth) && maxPendingQueueDepth >= ZERO
-      ? { maxPendingQueueDepth }
-      : {}),
-    ...(earlyRejectOnQueueFull === true
-      ? { earlyRejectOnQueueFull: true }
-      : {}),
+    ...(Number.isInteger(nodeFailureThreshold) && nodeFailureThreshold > ZERO ?
+      {nodeFailureThreshold} :
+      {}),
+    ...(Number.isInteger(nodeFailureCooldownMs) && nodeFailureCooldownMs > ZERO ?
+      {nodeFailureCooldownMs} :
+      {}),
+    ...(Number.isInteger(loadNodeMaxInFlight) && loadNodeMaxInFlight > ZERO ?
+      {nodeMaxInFlight: loadNodeMaxInFlight} :
+      {}),
+    ...(Number.isInteger(maxPendingQueueDepth) && maxPendingQueueDepth >= ZERO ?
+      {maxPendingQueueDepth} :
+      {}),
+    ...(earlyRejectOnQueueFull === true ?
+      {earlyRejectOnQueueFull: true} :
+      {}),
   });
   const baselineRun = loadGenerator.start();
   const progressReporter = startLoadProgressReporter({
     loadRun: baselineRun,
     intervalMs: progressHeartbeatIntervalMs,
-    label: "baseline load",
+    label: 'baseline load',
     onProgress,
   });
   try {
@@ -885,7 +885,7 @@ async function runSutSharedLoad({
     query: (sql) => {
       if (
         rebalancingPressureMonitor &&
-        typeof rebalancingPressureMonitor.assertLoadNodeAdmitted === "function"
+        typeof rebalancingPressureMonitor.assertLoadNodeAdmitted === 'function'
       ) {
         rebalancingPressureMonitor.assertLoadNodeAdmitted(node.id);
       }
@@ -893,9 +893,9 @@ async function runSutSharedLoad({
         node,
         sql,
         [],
-        Number.isInteger(loadQueryTimeoutMs) && loadQueryTimeoutMs > ZERO
-          ? { timeoutMs: loadQueryTimeoutMs }
-          : {},
+        Number.isInteger(loadQueryTimeoutMs) && loadQueryTimeoutMs > ZERO ?
+          {timeoutMs: loadQueryTimeoutMs} :
+          {},
       );
     },
   }));
@@ -906,30 +906,30 @@ async function runSutSharedLoad({
     tableName,
     workloadProfile: BENCHMARK_WORKLOAD_PROFILE,
     operations: BENCHMARK_WORKLOAD_OPERATIONS,
-    ...(Number.isInteger(nodeFailureThreshold) && nodeFailureThreshold > ZERO
-      ? { nodeFailureThreshold }
-      : {}),
-    ...(Number.isInteger(nodeFailureCooldownMs) && nodeFailureCooldownMs > ZERO
-      ? { nodeFailureCooldownMs }
-      : {}),
-    ...(Number.isInteger(loadQueryTimeoutMs) && loadQueryTimeoutMs > ZERO
-      ? { queryTimeoutMs: loadQueryTimeoutMs }
-      : {}),
-    ...(Number.isInteger(loadNodeMaxInFlight) && loadNodeMaxInFlight > ZERO
-      ? { nodeMaxInFlight: loadNodeMaxInFlight }
-      : {}),
-    ...(Number.isInteger(maxPendingQueueDepth) && maxPendingQueueDepth >= ZERO
-      ? { maxPendingQueueDepth }
-      : {}),
-    ...(earlyRejectOnQueueFull === true
-      ? { earlyRejectOnQueueFull: true }
-      : {}),
+    ...(Number.isInteger(nodeFailureThreshold) && nodeFailureThreshold > ZERO ?
+      {nodeFailureThreshold} :
+      {}),
+    ...(Number.isInteger(nodeFailureCooldownMs) && nodeFailureCooldownMs > ZERO ?
+      {nodeFailureCooldownMs} :
+      {}),
+    ...(Number.isInteger(loadQueryTimeoutMs) && loadQueryTimeoutMs > ZERO ?
+      {queryTimeoutMs: loadQueryTimeoutMs} :
+      {}),
+    ...(Number.isInteger(loadNodeMaxInFlight) && loadNodeMaxInFlight > ZERO ?
+      {nodeMaxInFlight: loadNodeMaxInFlight} :
+      {}),
+    ...(Number.isInteger(maxPendingQueueDepth) && maxPendingQueueDepth >= ZERO ?
+      {maxPendingQueueDepth} :
+      {}),
+    ...(earlyRejectOnQueueFull === true ?
+      {earlyRejectOnQueueFull: true} :
+      {}),
   });
   const loadRun = loadGenerator.start();
   const progressReporter = startLoadProgressReporter({
     loadRun,
     intervalMs: progressHeartbeatIntervalMs,
-    label: "system-under-test load",
+    label: 'system-under-test load',
     onProgress,
   });
   rebalancingPressureMonitor = startLoadRebalancingPressureMonitor({
@@ -952,12 +952,12 @@ async function runSutSharedLoad({
     loadError = error;
   } finally {
     progressReporter.stop();
-    rebalancingPressure = rebalancingPressureMonitor
-      ? await rebalancingPressureMonitor.stop()
-      : buildLoadRebalancingPressureState({
-          monitoredNodeIds: loadNodes.map((node) => String(node?.id || "")),
-          admittedNodeIds: loadNodes.map((node) => String(node?.id || "")),
-        });
+    rebalancingPressure = rebalancingPressureMonitor ?
+      await rebalancingPressureMonitor.stop() :
+      buildLoadRebalancingPressureState({
+        monitoredNodeIds: loadNodes.map((node) => String(node?.id || '')),
+        admittedNodeIds: loadNodes.map((node) => String(node?.id || '')),
+      });
   }
   const criticalRebalancingState = buildRebalancingCriticalState(
     rebalancingPressure,
@@ -975,15 +975,15 @@ async function runSutSharedLoad({
     rebalancingPressure,
     internalSignalMessages: [
       ...criticalRebalancingState.messages,
-      ...(Array.isArray(heartbeatFreshness?.messages)
-        ? heartbeatFreshness.messages
-        : []),
+      ...(Array.isArray(heartbeatFreshness?.messages) ?
+        heartbeatFreshness.messages :
+        []),
     ],
   };
 }
 
 function isNodeAdminReady(diagnostics) {
-  if (!diagnostics || typeof diagnostics !== "object") {
+  if (!diagnostics || typeof diagnostics !== 'object') {
     return false;
   }
   return (
@@ -994,8 +994,8 @@ function isNodeAdminReady(diagnostics) {
 
 function isLoadNodeCandidate(node) {
   return (
-    typeof node?.queryWithTimeout === "function" &&
-    typeof node?.getReachabilityDiagnostics === "function"
+    typeof node?.queryWithTimeout === 'function' &&
+    typeof node?.getReachabilityDiagnostics === 'function'
   );
 }
 
@@ -1005,39 +1005,39 @@ function normalizeAdminQueryTraceTimestamp(value) {
 
 function sanitizeAdminQueryTraceEntry(entry, fallbackNodeId) {
   const nodeId =
-    typeof entry?.nodeId === "string" && entry.nodeId.length > ZERO
-      ? entry.nodeId
-      : fallbackNodeId;
+    typeof entry?.nodeId === 'string' && entry.nodeId.length > ZERO ?
+      entry.nodeId :
+      fallbackNodeId;
   return {
     nodeId,
-    queryId: typeof entry?.queryId === "string" ? entry.queryId : null,
-    lane: typeof entry?.lane === "string" ? entry.lane : null,
+    queryId: typeof entry?.queryId === 'string' ? entry.queryId : null,
+    lane: typeof entry?.lane === 'string' ? entry.lane : null,
     requestType:
-      typeof entry?.requestType === "string" ? entry.requestType : null,
-    operation: typeof entry?.operation === "string" ? entry.operation : null,
+      typeof entry?.requestType === 'string' ? entry.requestType : null,
+    operation: typeof entry?.operation === 'string' ? entry.operation : null,
     statementPreview:
-      typeof entry?.statementPreview === "string"
-        ? entry.statementPreview
-        : null,
+      typeof entry?.statementPreview === 'string' ?
+        entry.statementPreview :
+        null,
     statementFingerprint:
-      typeof entry?.statementFingerprint === "string"
-        ? entry.statementFingerprint
-        : null,
-    timeoutMs: Number.isFinite(entry?.timeoutMs)
-      ? Math.floor(entry.timeoutMs)
-      : null,
+      typeof entry?.statementFingerprint === 'string' ?
+        entry.statementFingerprint :
+        null,
+    timeoutMs: Number.isFinite(entry?.timeoutMs) ?
+      Math.floor(entry.timeoutMs) :
+      null,
     startedAtMs: normalizeAdminQueryTraceTimestamp(entry?.startedAtMs),
     socketReadyAtMs: normalizeAdminQueryTraceTimestamp(entry?.socketReadyAtMs),
     sentAtMs: normalizeAdminQueryTraceTimestamp(entry?.sentAtMs),
     resolvedAtMs: normalizeAdminQueryTraceTimestamp(entry?.resolvedAtMs),
     timeoutAtMs: normalizeAdminQueryTraceTimestamp(entry?.timeoutAtMs),
     erroredAtMs: normalizeAdminQueryTraceTimestamp(entry?.erroredAtMs),
-    durationMs: Number.isFinite(entry?.durationMs)
-      ? Math.floor(entry.durationMs)
-      : null,
+    durationMs: Number.isFinite(entry?.durationMs) ?
+      Math.floor(entry.durationMs) :
+      null,
     rowCount: Number.isInteger(entry?.rowCount) ? entry.rowCount : null,
-    outcome: typeof entry?.outcome === "string" ? entry.outcome : null,
-    error: typeof entry?.error === "string" ? entry.error : null,
+    outcome: typeof entry?.outcome === 'string' ? entry.outcome : null,
+    error: typeof entry?.error === 'string' ? entry.error : null,
   };
 }
 

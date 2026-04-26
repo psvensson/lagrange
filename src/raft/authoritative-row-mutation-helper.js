@@ -79,7 +79,7 @@ class AuthoritativeRowMutationHelper {
       prepareFlush = () => ({skip: false}),
       retryDelayMs = TIME_MS.SECOND,
       retryBackoffMultiplier =
-        AUTHORITATIVE_ROW_MUTATION_RETRY.BACKOFF_MULTIPLIER,
+      AUTHORITATIVE_ROW_MUTATION_RETRY.BACKOFF_MULTIPLIER,
       maxRetryDelayMs = AUTHORITATIVE_ROW_MUTATION_RETRY.MAX_DELAY_MS,
       cdcIntegrationService = null,
       controlPlaneSystemTableGateway = null,

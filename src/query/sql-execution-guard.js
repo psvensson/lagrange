@@ -26,7 +26,7 @@ let sqlCoreRegistered = false;
  * @param {Object} sqlCore - The SQLQueryEngine instance.
  * @throws {Error} If a second SqlCore is registered.
  */
-function registerSqlCore(sqlCore) {
+function registerSqlCore(_sqlCore) {
   if (sqlCoreRegistered) {
     throw new Error(ADAPTER_ERROR_MSG.SECOND_ENGINE_REJECTED);
   }

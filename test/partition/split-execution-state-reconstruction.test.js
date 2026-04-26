@@ -17,7 +17,6 @@ import {
 } from '../../src/partition/partition-constants.js';
 
 const FIXTURE_PARTITION_ID = 'users-source';
-const FIXTURE_TABLE_ID = 'tbl-users';
 const FIXTURE_WORKFLOW_ID = 'split-tbl-users-users-source-v2';
 const FIXTURE_TARGET_VERSION = 2;
 const FIXTURE_TARGET_IDS = ['users-left', 'users-right'];

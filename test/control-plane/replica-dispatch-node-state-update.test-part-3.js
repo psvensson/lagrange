@@ -14,7 +14,6 @@ import {
   CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE,
 } from '../../src/control-plane/control-plane-constants.js';
 import {
-  SYSTEM_TABLE_NAME,
 } from '../../src/bootstrap/system-table-schemas-constants.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
@@ -25,18 +24,14 @@ import {
   NODE_STATE_UPDATE_RETRY_POLICY,
 } from '../../src/control-plane/replica-dispatch-service-constants.js';
 import {
-  CONTROL_PLANE_WORKLOAD_CLASS,
 } from '../../src/control-plane/control-plane-workload-profile.js';
 import {
-  MESSAGE_GROUP_CDC_INGRESS_ACTION,
 } from '../../src/message-group/message-group-forwarding-owner.js';
 import {
-  REPLICA_OPERATION_VISIBILITY_READ_MODE,
 } from '../../src/rebalancer/replica-operation-repository.js';
 import {
   COLUMN,
   NUM,
-  TYPEOF,
   SERVICE_STATUS,
   STATE,
   WORKFLOW_STEP,
@@ -134,15 +129,10 @@ function createService(options = {}) {
   return service;
 }
 
-const TEST_MEMBERSHIP_PUBLICATION_STATUS = Object.freeze({
-  ACK_PENDING: 'ACK_PENDING',
-  OPEN: 'OPEN',
-  PUBLISHED: 'PUBLISHED',
-});
 
 test('ReplicaDispatchService ignores non-owner replica_operations cache rows',
   async (t) => {
-  initEnv();
+    initEnv();
 
     const service = createService({
       cdcIntegrationService: {
@@ -1363,99 +1353,99 @@ test('ReplicaDispatchService retries SENDING operations for ready target nodes',
 
 test('ReplicaDispatchService retries ACTIVE priority REPLACE source-removal ' +
   'operations for ready source nodes',
-  async (t) => {
-    initEnv();
+async (t) => {
+  initEnv();
 
-    const READY_SOURCE_NODE_ID = 'node-2';
-    const OWNER_NODE_ID = 'node-1';
-    const OPERATION_ID = 'replace-op-ready-active-1';
-    const PARTITION_ID = 'control_plane_publications-p1';
-    const now = Date.now();
-    const enqueueCalls = [];
-    const readyNode = {
-      node_id: READY_SOURCE_NODE_ID,
-      node_address: 'localhost:8082',
-      status: SERVICE_STATUS.ACTIVE,
-      connection_state: STATE.READY,
-      capabilities: '[]',
-      last_heartbeat: now,
-      ready_lease_expires_at: now + 30000,
-      created_at: now - 5000,
-    };
-    const service = createService({
-      cacheNodes: [readyNode],
-      cacheReplicaOperations: [{
-        operation_id: OPERATION_ID,
-        partition_id: PARTITION_ID,
-        source_node_id: READY_SOURCE_NODE_ID,
-        target_node_id: OWNER_NODE_ID,
-        workflow_step: WORKFLOW_STEP.ACTIVE,
-        type: OperationType.REPLACE,
-      }],
-      cdcIntegrationService: {
-        updateSystemTableRow: async () => ({success: true}),
-        upsertSystemTableRow: async () => ({success: true}),
-      },
-      controlPlaneReadinessService: {
-        getNodeReadinessSync() {
-          return {
-            dimensions: {
-              [CONTROL_PLANE_READINESS_DIMENSION
-                .CONTROL_PLANE_RECOVERY_ELIGIBLE]: true,
-            },
-          };
-        },
-      },
-      rebalanceCoordinator: {
-        resolveOperationOwnerNodeId(operation) {
-          if (operation?.type === OperationType.REPLACE &&
-              operation?.partition_id === PARTITION_ID) {
-            return operation.target_node_id;
-          }
-          return operation?.source_node_id || null;
-        },
-      },
-    });
-    const originalQueue = service.operationDispatchQueue;
-    service.operationDispatchQueue = {
-      enqueue(...args) {
-        enqueueCalls.push(args);
-        return true;
-      },
-      shutdown() {},
-    };
-
-    try {
-      const retried = await service.retryPendingDispatchesForReadyNode({
-        nodeId: READY_SOURCE_NODE_ID,
-        nodeRow: readyNode,
-      });
-
-      t.equal(
-        retried,
-        true,
-        'ready-node retry should run for ready source-removal nodes',
-      );
-      t.same(
-        enqueueCalls,
-        [[
-          OPERATION_ID,
-          RECONCILE_REASON.NODE_READY_DISPATCH_RETRY,
-          {
-            row: {
-              operation_id: OPERATION_ID,
-              partition_id: PARTITION_ID,
-              source_node_id: READY_SOURCE_NODE_ID,
-              target_node_id: OWNER_NODE_ID,
-              workflow_step: WORKFLOW_STEP.ACTIVE,
-              type: OperationType.REPLACE,
-            },
+  const READY_SOURCE_NODE_ID = 'node-2';
+  const OWNER_NODE_ID = 'node-1';
+  const OPERATION_ID = 'replace-op-ready-active-1';
+  const PARTITION_ID = 'control_plane_publications-p1';
+  const now = Date.now();
+  const enqueueCalls = [];
+  const readyNode = {
+    node_id: READY_SOURCE_NODE_ID,
+    node_address: 'localhost:8082',
+    status: SERVICE_STATUS.ACTIVE,
+    connection_state: STATE.READY,
+    capabilities: '[]',
+    last_heartbeat: now,
+    ready_lease_expires_at: now + 30000,
+    created_at: now - 5000,
+  };
+  const service = createService({
+    cacheNodes: [readyNode],
+    cacheReplicaOperations: [{
+      operation_id: OPERATION_ID,
+      partition_id: PARTITION_ID,
+      source_node_id: READY_SOURCE_NODE_ID,
+      target_node_id: OWNER_NODE_ID,
+      workflow_step: WORKFLOW_STEP.ACTIVE,
+      type: OperationType.REPLACE,
+    }],
+    cdcIntegrationService: {
+      updateSystemTableRow: async () => ({success: true}),
+      upsertSystemTableRow: async () => ({success: true}),
+    },
+    controlPlaneReadinessService: {
+      getNodeReadinessSync() {
+        return {
+          dimensions: {
+            [CONTROL_PLANE_READINESS_DIMENSION
+              .CONTROL_PLANE_RECOVERY_ELIGIBLE]: true,
           },
-        ]],
-        'ready-node retries should re-enter locally owned ACTIVE source-removal operations',
-      );
-    } finally {
-      service.operationDispatchQueue = originalQueue;
-      service.stop();
-    }
+        };
+      },
+    },
+    rebalanceCoordinator: {
+      resolveOperationOwnerNodeId(operation) {
+        if (operation?.type === OperationType.REPLACE &&
+              operation?.partition_id === PARTITION_ID) {
+          return operation.target_node_id;
+        }
+        return operation?.source_node_id || null;
+      },
+    },
   });
+  const originalQueue = service.operationDispatchQueue;
+  service.operationDispatchQueue = {
+    enqueue(...args) {
+      enqueueCalls.push(args);
+      return true;
+    },
+    shutdown() {},
+  };
+
+  try {
+    const retried = await service.retryPendingDispatchesForReadyNode({
+      nodeId: READY_SOURCE_NODE_ID,
+      nodeRow: readyNode,
+    });
+
+    t.equal(
+      retried,
+      true,
+      'ready-node retry should run for ready source-removal nodes',
+    );
+    t.same(
+      enqueueCalls,
+      [[
+        OPERATION_ID,
+        RECONCILE_REASON.NODE_READY_DISPATCH_RETRY,
+        {
+          row: {
+            operation_id: OPERATION_ID,
+            partition_id: PARTITION_ID,
+            source_node_id: READY_SOURCE_NODE_ID,
+            target_node_id: OWNER_NODE_ID,
+            workflow_step: WORKFLOW_STEP.ACTIVE,
+            type: OperationType.REPLACE,
+          },
+        },
+      ]],
+      'ready-node retries should re-enter locally owned ACTIVE source-removal operations',
+    );
+  } finally {
+    service.operationDispatchQueue = originalQueue;
+    service.stop();
+  }
+});

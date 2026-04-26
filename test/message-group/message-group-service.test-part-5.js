@@ -3,10 +3,8 @@
  * Requirements: 4.1, 4.2, 4.3, 4.4, 4.5
  */
 
-import {EventEmitter} from 'node:events';
 import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import {
-  MessageGroupOperationLedger,
   MessageGroupService,
   MessageStatus,
   RaftRole,
@@ -14,52 +12,34 @@ import {
 import {
   MESSAGE_GROUP_CDC_INGRESS_ACTION,
   MESSAGE_GROUP_CDC_INGRESS_STATE,
-  MESSAGE_GROUP_LEADER_IDENTITY_SOURCE,
-  MESSAGE_GROUP_LEADER_IDENTITY_STATE,
 } from '../../src/message-group/message-group-forwarding-owner.js';
 import {
-  MESSAGE_GROUP_APPLICATION_MESSAGE_TYPE,
-  MESSAGE_GROUP_CDC_ERROR_MSG,
 } from '../../src/message-group/constants.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {NodeService} from '../../src/node/node-service.js';
 import {MessageRouter} from '../../src/transport/message-router.js';
 import {
-  SYSTEM_TABLE_NAME,
-  INITIAL_PARTITION_IDS,
 } from '../../src/bootstrap/system-table-schemas-constants.js';
-import {
-  LIFECYCLE_PHASE,
-  LIFECYCLE_REASON,
-} from '../../src/bootstrap/lifecycle-controller-constants.js';
-import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {
   COLUMN,
   CDC_OPERATION,
-  SERVICE_TYPE,
   SERVICE_STATUS,
   STATE,
   TABLES,
 } from '../../src/constants/index.js';
 import LifeRaft from '@markwylde/liferaft';
 import {
-  RAFT_EVENT,
   RAFT_PACKET_TYPE,
 } from '../../src/raft/constants.js';
 import {LiferaftProvider} from '../../src/raft/liferaft-provider.js';
 import {
-  ControlPlaneField,
-  ControlPlaneMessageType,
 } from '../../src/control-plane/control-plane-constants.js';
 import {
-  CONTROL_PLANE_READINESS_DIMENSION,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {
-  CONTROL_PLANE_WORKLOAD_CLASS,
 } from '../../src/control-plane/control-plane-workload-profile.js';
 import {
-  PRESSURE_WORK_CLASS,
 } from '../../src/control-plane/pressure-governor.js';
 
 // Port counter for unique ports per test
@@ -114,53 +94,6 @@ const TEST_RETRYABLE_FORWARD_PROPOSE_ROW_NODE_ID =
 const TEST_RETRYABLE_FORWARD_PROPOSE_TIMESTAMP = '123';
 const TEST_RETRYABLE_FORWARD_PROPOSE_CAUSE_ID =
   'cause-retryable-forward-propose';
-const TEST_STRICT_RECOVERY_FORWARD_GROUP_ID =
-  'mg-strict-recovery-forward';
-const TEST_STRICT_RECOVERY_FORWARD_LOCAL_REPLICA_ID =
-  'mg-strict-recovery-forward-r3';
-const TEST_STRICT_RECOVERY_FORWARD_REMOTE_REPLICA_ID =
-  'mg-strict-recovery-forward-r2';
-const TEST_STRICT_RECOVERY_FORWARD_LEADER_REPLICA_ID =
-  'mg-strict-recovery-forward-r1';
-const TEST_STRICT_RECOVERY_FORWARD_LOCAL_NODE_ID =
-  'node-strict-recovery-forward-local';
-const TEST_STRICT_RECOVERY_FORWARD_REMOTE_NODE_ID =
-  'node-strict-recovery-forward-remote';
-const TEST_STRICT_RECOVERY_FORWARD_LEADER_NODE_ID =
-  'node-strict-recovery-forward-leader';
-const TEST_ADDRESSED_STRICT_CONVERGENCE_GROUP_ID =
-  'mg-addressed-strict-forward-convergence';
-const TEST_ADDRESSED_STRICT_CONVERGENCE_LOCAL_REPLICA_ID =
-  'mg-addressed-strict-forward-convergence-r3';
-const TEST_ADDRESSED_STRICT_CONVERGENCE_REMOTE_REPLICA_ID =
-  'mg-addressed-strict-forward-convergence-r1';
-const TEST_ADDRESSED_STRICT_CONVERGENCE_REMOTE_NODE_ID =
-  'peer-node-addressed-strict-forward';
-const TEST_ADDRESSED_STRICT_CONVERGENCE_REMOTE_ADDRESS =
-  'peer-node-addressed-strict-forward/message-group/mg-addressed-strict-forward-convergence-r1';
-const TEST_ADDRESSED_STRICT_CONVERGENCE_PARTITION_ID = 'partitions-p1';
-const TEST_ADDRESSED_STRICT_CONVERGENCE_CAUSE_ID =
-  'cause-addressed-strict-forward-convergence';
-const TEST_ADDRESSED_STRICT_CONVERGENCE_TIMESTAMP =
-  '1234567890:41:test-node';
-const TEST_STRICT_RECOVERY_FORWARD_REMOTE_ADDRESS =
-  'node-strict-recovery-forward-remote/message-group/mg-strict-recovery-forward-r2';
-const TEST_STRICT_RECOVERY_ROUTING_STATE_LOCAL_ONLY = 'local_only';
-const TEST_STRICT_RECOVERY_ROUTING_STATE_REMOTE_TARGETS =
-  'remote_targets_available';
-const TEST_RELAYED_STRICT_STALE_COMPETING_GROUP_ID =
-  'mg-relayed-strict-stale-competing';
-const TEST_RELAYED_STRICT_STALE_COMPETING_LOCAL_REPLICA_ID =
-  'mg-relayed-strict-stale-competing-r1';
-const TEST_RELAYED_STRICT_STALE_COMPETING_REMOTE_REPLICA_ID =
-  'mg-relayed-strict-stale-competing-r2';
-const TEST_RELAYED_STRICT_STALE_COMPETING_REMOTE_NODE_ID =
-  'node-relayed-strict-stale-competing-remote';
-const TEST_RELAYED_STRICT_STALE_COMPETING_REMOTE_ADDRESS =
-  'node-relayed-strict-stale-competing-remote/message-group/' +
-  'mg-relayed-strict-stale-competing-r2';
-const TEST_RELAYED_STRICT_STALE_COMPETING_NODE_ROW_ID =
-  'node-relayed-strict-stale-competing';
 const TEST_SEMANTIC_LOCAL_LEADER_COMMAND = Object.freeze({
   type: 'CDC',
   tableName: TABLES.NODES,
@@ -173,35 +106,6 @@ const TEST_SEMANTIC_LOCAL_LEADER_COMMAND = Object.freeze({
   causeId: TEST_SEMANTIC_LOCAL_LEADER_CAUSE_ID,
 });
 
-function createTrafficReadinessState() {
-  const emitter = new EventEmitter();
-  let snapshot = {
-    phase: LIFECYCLE_PHASE.INIT,
-    ready: false,
-    reasons: [],
-  };
-
-  return {
-    getSnapshot() {
-      return {...snapshot};
-    },
-    on(eventName, listener) {
-      emitter.on(eventName, listener);
-    },
-    off(eventName, listener) {
-      emitter.off(eventName, listener);
-    },
-    transitionTo(phase, options = {}) {
-      snapshot = {
-        phase,
-        ready: options.ready === true,
-        reasons: Array.isArray(options.reasons) ? [...options.reasons] : [],
-      };
-      emitter.emit('transition', {...snapshot});
-      return {...snapshot};
-    },
-  };
-}
 
 /**
  * Create a real WebSocket transport for testing.

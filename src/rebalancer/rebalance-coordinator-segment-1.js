@@ -1,15 +1,9 @@
-import { REBALANCE_COORDINATOR_SHARED } from "./rebalance-coordinator-shared.js";
+import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
 
 const {
-  CONCURRENT_CREATE_BUDGET_SCOPE,
-  CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
   CONTROL_PLANE_QUERY_OPTIONS,
-  CONTROL_PLANE_READINESS_DIMENSION,
-  CONTROL_PLANE_WORKLOAD_CLASS,
-  COORDINATOR_OWNED_OPERATION_TYPES_SQL_CLAUSE,
   ConfigurationManager,
   ControlPlaneReadinessService,
-  DEFAULT_AMPLIFICATION_FACTOR,
   DEFAULT_PRIORITY_RECOVERY_ACTIVITY_STALE_GRACE_MS,
   DurableWorkflowCoordinator,
   EventEmitter,
@@ -18,73 +12,29 @@ const {
   INCOMPLETE_OPERATION_OBSERVATION_STATE,
   LoggingService,
   NUM,
-  OPERATION_METADATA_KEY,
   OUTCOME_EVENT_NAME,
   OperationLane,
-  OperationType,
   OperationWorkflowOwner,
-  PRESSURE_GOVERNOR_ACTION,
-  PRESSURE_WORK_CLASS,
-  PRIORITY_RECENT_INTENT_TTL_MS,
-  PressureGovernor,
   ProvisioningAdmissionPolicy,
-  REBALANCER_CONCURRENT_BUDGET_READ_MODE,
   REBALANCER_CONFIG_KEY,
   REBALANCER_DEFAULT,
-  REBALANCER_SKIP_REASON,
   REBALANCER_SUBSYSTEM,
   REBALANCE_COORDINATOR_ERROR_MSG,
   REBALANCE_COORDINATOR_EVENT,
   REBALANCE_COORDINATOR_LOG_MSG,
-  RECENT_INTENT_TTL_MS,
-  RECENT_OPERATION_INTENT_VISIBILITY_STATE,
-  REPLICA_ID_SEPARATOR,
-  REPLICA_ID_START_INDEX,
   REPLICA_OPERATION_VISIBILITY_READ_MODE,
-  RESERVATION_REASON,
-  RESERVATION_STATUS,
-  ReplicaOperationField,
   ReplicaOperationRepository,
   SERVICE_TYPE,
   SQL,
-  STORAGE_ADMISSION_DECISION_TYPE,
   STORAGE_CAPACITY_CONFIG_KEY,
   STORAGE_CAPACITY_DEFAULT,
-  STORAGE_RESERVATION_READ_QUERY_OPTIONS,
-  STRICT_CREATE_DEDUPE_REPOSITORY_QUERY_OPTIONS,
   SYSTEM_TABLE_NAME,
   StartupRecoveryCoordinator,
-  TIMEOUT_BUDGET_CLASSIFICATION,
-  TIMEOUT_BUDGET_DEFAULT,
-  TIME_MS,
-  TOPOLOGY_GUARD_DEFAULT_PARTITION_TARGET_REPLICA_COUNT,
-  TOPOLOGY_GUARD_ERROR_MSG,
-  TOPOLOGY_GUARD_REASON,
-  TOPOLOGY_GUARD_STATE,
   UNIFIED_SERVICE_TYPE,
-  WORKFLOW_STEP,
   assertCritical,
-  buildControlPlaneQueryOptions,
-  buildControlPlaneWorkloadProfile,
-  buildPriorityRecoveryOperationAssessment,
-  buildPriorityRecoveryOperationContextFromRecord,
-  buildPriorityRecoveryPartitionAssessment,
-  buildReplicatedServiceBootstrapTopology,
-  buildTimeoutClassification,
-  createChildTimeoutBudget,
   createControlPlaneRuntimeBundle,
-  createOperationRecord,
-  createTopLevelOperationBudget,
-  getControlPlaneErrorCode,
   getControlPlaneRetryAfterMs,
-  isCriticalTransportControlPlanePartitionTable,
-  isPriorityControlPlanePartitionTable,
-  isRetryableControlPlaneError,
   readAuthoritativeControlPlaneRows,
-  resolvePriorityRecoveryActiveNodeCohort,
-  resolveTrackedPriorityRecoveryAdmissionPlan,
-  shouldPriorityRecoveryOperationBlockPlanning,
-  uuidv4,
 } = REBALANCE_COORDINATOR_SHARED;
 
 class RebalanceCoordinatorSegment1 extends EventEmitter {
@@ -229,9 +179,9 @@ class RebalanceCoordinatorSegment1 extends EventEmitter {
 
     // Logging
     const loggingService = LoggingService.getInstance();
-    this.logger = loggingService.isInitialized()
-      ? loggingService.forSubsystem(REBALANCER_SUBSYSTEM.COORDINATOR)
-      : console;
+    this.logger = loggingService.isInitialized() ?
+      loggingService.forSubsystem(REBALANCER_SUBSYSTEM.COORDINATOR) :
+      console;
 
     // Statistics (local counters only, not cached state)
     this.stats = {
@@ -255,30 +205,30 @@ class RebalanceCoordinatorSegment1 extends EventEmitter {
         workflowCoordinator: this.operationWorkflowCoordinator,
       });
     this.operationWorkflowRunExclusive = assertCritical(
-      typeof this.operationLane.run === "function"
-        ? this.operationLane.run.bind(this.operationLane)
-        : null,
+      typeof this.operationLane.run === 'function' ?
+        this.operationLane.run.bind(this.operationLane) :
+        null,
       REBALANCE_COORDINATOR_ERROR_MSG.WORKFLOW_COORDINATOR_REQUIRED,
     );
     const workflowInFlightExecutions = assertCritical(
       this.operationWorkflowCoordinator.inFlightExecutionsByOwnerKey instanceof
-        Map
-        ? this.operationWorkflowCoordinator.inFlightExecutionsByOwnerKey
-        : null,
+        Map ?
+        this.operationWorkflowCoordinator.inFlightExecutionsByOwnerKey :
+        null,
       REBALANCE_COORDINATOR_ERROR_MSG.WORKFLOW_COORDINATOR_REGISTRY_REQUIRED,
     );
     this.operationsInCreation = workflowInFlightExecutions;
     this.operationsInExecution = workflowInFlightExecutions;
     this.transactionCoordinator = options.transactionCoordinator || null;
-    this.nowFn = typeof options.nowFn === "function" ? options.nowFn : Date.now;
+    this.nowFn = typeof options.nowFn === 'function' ? options.nowFn : Date.now;
     this.priorityRecoveryActivityStaleGraceMs = Number.isFinite(
       options.priorityRecoveryActivityStaleGraceMs,
-    )
-      ? Math.max(
-          NUM.ZERO,
-          Math.floor(options.priorityRecoveryActivityStaleGraceMs),
-        )
-      : DEFAULT_PRIORITY_RECOVERY_ACTIVITY_STALE_GRACE_MS;
+    ) ?
+      Math.max(
+        NUM.ZERO,
+        Math.floor(options.priorityRecoveryActivityStaleGraceMs),
+      ) :
+      DEFAULT_PRIORITY_RECOVERY_ACTIVITY_STALE_GRACE_MS;
     this.priorityRecoveryAdmissionTracker = {
       lastObservedAdmissionPlan: null,
       lastObservedAdmissionPlanAtMs: null,
@@ -288,7 +238,7 @@ class RebalanceCoordinatorSegment1 extends EventEmitter {
 
     this.executorOutcomeEmitter =
       options.executorOutcomeEmitter ||
-      new ExecutorOutcomeEmitter({ logger: this.logger });
+      new ExecutorOutcomeEmitter({logger: this.logger});
     this._boundOutcomeHandler = null;
     this.cacheChangeListener = null;
     this._boundTerminalOperationIntentPruner = null;
@@ -368,58 +318,58 @@ class RebalanceCoordinatorSegment1 extends EventEmitter {
   syncOwnerDependencies(options = {}) {
     const previousSystemTableCache = this.systemTableCache;
 
-    if (Object.hasOwn(options, "systemTableCache")) {
+    if (Object.hasOwn(options, 'systemTableCache')) {
       this.systemTableCache = options.systemTableCache || null;
     }
-    if (Object.hasOwn(options, "cdcIntegrationService")) {
+    if (Object.hasOwn(options, 'cdcIntegrationService')) {
       this.cdcIntegrationService = options.cdcIntegrationService || null;
     }
-    if (Object.hasOwn(options, "messageRouter")) {
+    if (Object.hasOwn(options, 'messageRouter')) {
       this.messageRouter = options.messageRouter || null;
     }
-    if (Object.hasOwn(options, "tablePolicyService")) {
+    if (Object.hasOwn(options, 'tablePolicyService')) {
       this.tablePolicyService = options.tablePolicyService || null;
     }
-    if (Object.hasOwn(options, "sqlQueryEngine")) {
+    if (Object.hasOwn(options, 'sqlQueryEngine')) {
       this.sqlQueryEngine = options.sqlQueryEngine || null;
     }
-    if (Object.hasOwn(options, "storageAccountingService")) {
+    if (Object.hasOwn(options, 'storageAccountingService')) {
       this.storageAccountingService = options.storageAccountingService || null;
     }
-    if (Object.hasOwn(options, "storageAdmissionService")) {
+    if (Object.hasOwn(options, 'storageAdmissionService')) {
       this.storageAdmissionService = options.storageAdmissionService || null;
     }
-    if (Object.hasOwn(options, "cdcGroupPropagationService")) {
+    if (Object.hasOwn(options, 'cdcGroupPropagationService')) {
       this.cdcGroupPropagationService =
         options.cdcGroupPropagationService || null;
     }
-    if (Object.hasOwn(options, "bootstrapReadinessState")) {
+    if (Object.hasOwn(options, 'bootstrapReadinessState')) {
       this.bootstrapReadinessState = options.bootstrapReadinessState || null;
       if (
         this.startupRecoveryCoordinator &&
         typeof this.startupRecoveryCoordinator.syncOwnerDependencies ===
-          "function"
+          'function'
       ) {
         this.startupRecoveryCoordinator.syncOwnerDependencies({
           readinessState: this.bootstrapReadinessState,
         });
       }
     }
-    if (Object.hasOwn(options, "startupRecoveryCoordinator")) {
+    if (Object.hasOwn(options, 'startupRecoveryCoordinator')) {
       this.startupRecoveryCoordinator =
         options.startupRecoveryCoordinator || null;
     }
-    if (Object.hasOwn(options, "controlPlaneReadinessService")) {
+    if (Object.hasOwn(options, 'controlPlaneReadinessService')) {
       this.controlPlaneReadinessService =
         options.controlPlaneReadinessService || null;
     }
-    if (Object.hasOwn(options, "transactionCoordinator")) {
+    if (Object.hasOwn(options, 'transactionCoordinator')) {
       this.transactionCoordinator = options.transactionCoordinator || null;
     }
 
     if (
       this.repository &&
-      typeof this.repository.syncOwnerDependencies === "function"
+      typeof this.repository.syncOwnerDependencies === 'function'
     ) {
       this.repository.syncOwnerDependencies({
         systemTableCache: this.systemTableCache,
@@ -441,7 +391,7 @@ class RebalanceCoordinatorSegment1 extends EventEmitter {
     if (
       this.controlPlaneReadinessService &&
       typeof this.controlPlaneReadinessService.syncOwnerDependencies ===
-        "function"
+        'function'
     ) {
       this.controlPlaneReadinessService.syncOwnerDependencies({
         systemTableCache: this.systemTableCache,
@@ -470,7 +420,7 @@ class RebalanceCoordinatorSegment1 extends EventEmitter {
   bindSystemTableCacheListener() {
     if (
       !this.systemTableCache ||
-      typeof this.systemTableCache.onCacheChange !== "function"
+      typeof this.systemTableCache.onCacheChange !== 'function'
     ) {
       return;
     }
@@ -491,7 +441,7 @@ class RebalanceCoordinatorSegment1 extends EventEmitter {
     if (
       !this.cacheChangeListener ||
       !systemTableCache ||
-      typeof systemTableCache.offCacheChange !== "function"
+      typeof systemTableCache.offCacheChange !== 'function'
     ) {
       return;
     }
@@ -682,7 +632,7 @@ class RebalanceCoordinatorSegment1 extends EventEmitter {
    */
   async queryCachedIncompleteOperations() {
     if (
-      typeof this.repository?.queryCachedIncompleteOperations === "function"
+      typeof this.repository?.queryCachedIncompleteOperations === 'function'
     ) {
       return this.repository.queryCachedIncompleteOperations();
     }
@@ -715,16 +665,16 @@ class RebalanceCoordinatorSegment1 extends EventEmitter {
   getIncompleteOperationObservation(operations = []) {
     if (
       typeof this.repository?.resolveIncompleteOperationObservation ===
-      "function"
+      'function'
     ) {
       return this.repository.resolveIncompleteOperationObservation(operations);
     }
     const operationCount = Array.isArray(operations) ? operations.length : 0;
     return Object.freeze({
       state:
-        operationCount > 0
-          ? INCOMPLETE_OPERATION_OBSERVATION_STATE.PRESENT
-          : INCOMPLETE_OPERATION_OBSERVATION_STATE.EMPTY,
+        operationCount > 0 ?
+          INCOMPLETE_OPERATION_OBSERVATION_STATE.PRESENT :
+          INCOMPLETE_OPERATION_OBSERVATION_STATE.EMPTY,
       operationCount,
       deferredOutcome: null,
       retryAfterMs: null,
@@ -743,7 +693,7 @@ class RebalanceCoordinatorSegment1 extends EventEmitter {
   async getEntityAuthoritativeOperationObservation(entityType, entityId) {
     const hasCustomObservationMethod =
       typeof this.repository?.getOperationsByEntityAuthoritativeObservation ===
-        "function" &&
+        'function' &&
       this.repository.getOperationsByEntityAuthoritativeObservation !==
         ReplicaOperationRepository.prototype
           .getOperationsByEntityAuthoritativeObservation;
@@ -755,32 +705,32 @@ class RebalanceCoordinatorSegment1 extends EventEmitter {
     }
     const hasCustomLegacyMethod =
       typeof this.repository?.getOperationsByEntityAuthoritative ===
-        "function" &&
+        'function' &&
       this.repository.getOperationsByEntityAuthoritative !==
         ReplicaOperationRepository.prototype.getOperationsByEntityAuthoritative;
-    const operations = hasCustomLegacyMethod
-      ? await this.repository.getOperationsByEntityAuthoritative(
-          entityType,
-          entityId,
-        )
-      : typeof this.repository
-            ?.getOperationsByEntityAuthoritativeObservation === "function"
-        ? (
-            await this.repository.getOperationsByEntityAuthoritativeObservation(
-              entityType,
-              entityId,
-            )
-          )?.operations
-        : await this.repository.getOperationsByEntityAuthoritative(
+    const operations = hasCustomLegacyMethod ?
+      await this.repository.getOperationsByEntityAuthoritative(
+        entityType,
+        entityId,
+      ) :
+      typeof this.repository
+        ?.getOperationsByEntityAuthoritativeObservation === 'function' ?
+        (
+          await this.repository.getOperationsByEntityAuthoritativeObservation(
             entityType,
             entityId,
-          );
+          )
+        )?.operations :
+        await this.repository.getOperationsByEntityAuthoritative(
+          entityType,
+          entityId,
+        );
     const operationCount = Array.isArray(operations) ? operations.length : 0;
     return Object.freeze({
       state:
-        operationCount > 0
-          ? INCOMPLETE_OPERATION_OBSERVATION_STATE.PRESENT
-          : INCOMPLETE_OPERATION_OBSERVATION_STATE.EMPTY,
+        operationCount > 0 ?
+          INCOMPLETE_OPERATION_OBSERVATION_STATE.PRESENT :
+          INCOMPLETE_OPERATION_OBSERVATION_STATE.EMPTY,
       operationCount,
       operations: Array.isArray(operations) ? operations : [],
       deferredOutcome: null,
@@ -940,7 +890,7 @@ class RebalanceCoordinatorSegment1 extends EventEmitter {
    * @return {Array<Object>} Matching services rows.
    * @private
    */
-  getEntityServiceRows({ partitionId, entityType, entityId }) {
+  getEntityServiceRows({partitionId, entityType, entityId}) {
     return this.repository.getEntityServiceRows({
       partitionId,
       entityType,
@@ -1015,9 +965,9 @@ class RebalanceCoordinatorSegment1 extends EventEmitter {
     return Object.freeze({
       available: result.success === true && Array.isArray(result.rows),
       rows:
-        result.success === true && Array.isArray(result.rows)
-          ? result.rows
-          : [],
+        result.success === true && Array.isArray(result.rows) ?
+          result.rows :
+          [],
       error: result?.error || null,
       reasonCode: result?.reasonCode || null,
       retryAfterMs: getControlPlaneRetryAfterMs(result),
@@ -1036,12 +986,12 @@ class RebalanceCoordinatorSegment1 extends EventEmitter {
     const mergedRowsByTopologyKey = new Map();
     const allRows = [
       ...(Array.isArray(cacheServiceRows) ? cacheServiceRows : []),
-      ...(Array.isArray(authoritativeServiceRows)
-        ? authoritativeServiceRows
-        : []),
+      ...(Array.isArray(authoritativeServiceRows) ?
+        authoritativeServiceRows :
+        []),
     ];
     for (const row of allRows) {
-      if (!row || typeof row !== "object") {
+      if (!row || typeof row !== 'object') {
         continue;
       }
       const serviceId = String(
@@ -1049,16 +999,16 @@ class RebalanceCoordinatorSegment1 extends EventEmitter {
           row.serviceId ||
           row.replica_id ||
           row.replicaId ||
-          "",
+          '',
       ).trim();
       const partitionKey = String(
-        row.partition_id || row.partitionId || "",
+        row.partition_id || row.partitionId || '',
       ).trim();
-      const nodeId = String(row.node_id || row.nodeId || "").trim();
+      const nodeId = String(row.node_id || row.nodeId || '').trim();
       const topologyKey =
-        serviceId.length > NUM.ZERO
-          ? serviceId
-          : [partitionKey, nodeId].join(":");
+        serviceId.length > NUM.ZERO ?
+          serviceId :
+          [partitionKey, nodeId].join(':');
       if (topologyKey.length === NUM.ZERO) {
         continue;
       }
@@ -1079,4 +1029,4 @@ class RebalanceCoordinatorSegment1 extends EventEmitter {
    */
 }
 
-export { RebalanceCoordinatorSegment1 };
+export {RebalanceCoordinatorSegment1};

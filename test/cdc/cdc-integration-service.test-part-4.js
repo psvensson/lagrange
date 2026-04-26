@@ -6,39 +6,27 @@
 import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import {
   CDCIntegrationService,
-  CDCOperationType,
-  VALID_SYSTEM_TABLES,
+  EPOCH_CONFIG_KEY,
 } from '../../src/cdc/cdc-integration-service.js';
 import {
-  INITIAL_PARTITION_IDS,
   SYSTEM_TABLE_NAME,
 } from '../../src/bootstrap/system-table-schemas-constants.js';
 import {
-  QUERY_ERROR_CODE,
-  QUERY_ERROR_MSG,
 } from '../../src/query/query-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
-import {SystemTableCache} from '../../src/cache/system-table-cache.js';
-import {createReadOnlyCache} from '../../src/cache/read-only-system-table-cache.js';
 import {
-  CONTROL_PLANE_READINESS_DIMENSION,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {
-  CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE,
 } from '../../src/control-plane/control-plane-system-table-visibility-constants.js';
 import {
-  OWNER_CONTRACT_NEXT_ACTION,
-  OWNER_CONTRACT_STATE,
 } from '../../src/control-plane/owner-contract-outcome.js';
 import {
-  TIMEOUT_BUDGET_CLASSIFICATION,
 } from '../../src/control-plane/timeout-budget.js';
-import {CDC_EVENT} from '../../src/cdc/cdc-constants.js';
 import {
-  READ_MODEL_DIVERGENCE_TYPE,
-  SQL_RECONCILIATION_REASON,
 } from '../../src/control-plane/read-model-contract.js';
+import {AssignmentEpochManager} from '../../src/rebalancer/assignment-epoch-manager.js';
+import {AssignmentEpoch} from '../../src/rebalancer/assignment-epoch.js';
 
 // Initialize configuration and logging for tests
 beforeEach(() => {
@@ -58,15 +46,6 @@ afterEach(() => {
   LoggingService.resetInstance();
 });
 
-const TEST_RETRY_AFTER_MS = 125;
-const LOCAL_AUTHORITATIVE_REPLICA_OPERATION_ID =
-  'op-local-authoritative-read';
-const LOCAL_AUTHORITATIVE_REPLICA_OPERATION_SQL =
-  'SELECT * FROM replica_operations WHERE operation_id = ?';
-const LOCAL_AUTHORITATIVE_REPLICA_OPERATION_ROW = Object.freeze({
-  operation_id: LOCAL_AUTHORITATIVE_REPLICA_OPERATION_ID,
-  workflow_step: 'LOCAL_ONLY_QUERY',
-});
 
 /**
  * Create a mock SQL query engine for testing.
@@ -121,38 +100,6 @@ function createMockSqlQueryEngine() {
  * and emits a matching table change so waiters resolve immediately.
  * @return {{cache: Object, state: Object}}
  */
-function createCacheWaitProbe() {
-  const state = {
-    present: false,
-    row: null,
-    onCacheChangeCalls: 0,
-    offCacheChangeCalls: 0,
-  };
-
-  const cache = {
-    has() {
-      return state.present;
-    },
-    get() {
-      return state.row;
-    },
-    onCacheChange(listener) {
-      state.onCacheChangeCalls++;
-      state.present = true;
-      state.row = {
-        node_id: 'node-1',
-        node_address: 'localhost:8080',
-      };
-      listener(SYSTEM_TABLE_NAME.NODES);
-      listener(SYSTEM_TABLE_NAME.LOGS);
-    },
-    offCacheChange() {
-      state.offCacheChangeCalls++;
-    },
-  };
-
-  return {cache, state};
-}
 
 /**
  * Create a local partition-service map for authoritative system-table tests.
@@ -160,35 +107,6 @@ function createCacheWaitProbe() {
  * @param {Object} handlers
  * @return {Map<string, Object>}
  */
-function createLocalSystemTablePartitionServices(
-  tableName,
-  handlers = {},
-) {
-  const partitionId = INITIAL_PARTITION_IDS[tableName] || `${tableName}-p1`;
-  const partitionService = {
-    partitionId,
-    replicaId: `${partitionId}-r1`,
-    initialized: true,
-    isLeader: handlers.isLeader !== false,
-    async executeQuery(sql, params = []) {
-      if (typeof handlers.executeQuery === 'function') {
-        return handlers.executeQuery(sql, params);
-      }
-      return {
-        success: true,
-        rows: [],
-      };
-    },
-  };
-  if (typeof handlers.executeLocalQuery === 'function') {
-    partitionService.executeLocalQuery = async (sql, params = []) => {
-      return handlers.executeLocalQuery(sql, params);
-    };
-  }
-  return new Map([
-    [partitionId, partitionService],
-  ]);
-}
 
 test('CDCIntegrationService - tracks epochChanges in stats', async (t) => {
   const service = new CDCIntegrationService({

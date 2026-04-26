@@ -31,9 +31,9 @@ class CacheHydrationService {
    * @param {Function} [options.cdcEventApplier] - CDC event applier.
    */
   constructor(
-      queryEngine,
-      systemTableCache,
-      options = CACHE_HYDRATION_DEFAULT_OPTIONS,
+    queryEngine,
+    systemTableCache,
+    options = CACHE_HYDRATION_DEFAULT_OPTIONS,
   ) {
     this.queryEngine = queryEngine;
     this.systemTableCache = systemTableCache;

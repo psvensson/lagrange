@@ -141,7 +141,7 @@ test(
       hasSelfConnection() {
         return true;
       },
-      setQueryMessageGroupServiceResolver() {}
+      setQueryMessageGroupServiceResolver() {},
     };
 
     MessageRouterSetup.create = async () => router;

@@ -24,6 +24,7 @@ export async function registerReplicaHandlerTailTests({
   TEST_STEP_DOWN_PARTITION_ID,
   TEST_STEP_DOWN_REPLICA_ID,
   TEST_STEP_DOWN_REASON,
+  TEST_STEP_DOWN_TARGET_ELECTION_REASON,
   TEST_STEP_DOWN_CORRELATION_ID,
   TEST_STEP_DOWN_EMPTY_LEADER_ID,
   TEST_STATUS_RETRY_PARTITION_ID,
@@ -394,6 +395,90 @@ export async function registerReplicaHandlerTailTests({
       handler.shutdown();
     });
 
+  t.test('handleRemoveReplica cleans service row when local replica is missing',
+    async (t) => {
+      const TEST_MISSING_CLEANUP_OPERATION_ID =
+        'missing-local-cleanup-op';
+      const TEST_MISSING_CLEANUP_PARTITION_ID =
+        'missing-local-cleanup-partition-1';
+      const TEST_MISSING_CLEANUP_REPLICA_ID =
+        'missing-local-cleanup-replica-1';
+      const TEST_MISSING_CLEANUP_NODE_ID = 'test-node';
+      const TEST_MISSING_CLEANUP_REASON = 'replace_source_removal';
+      const TEST_MISSING_CLEANUP_SERVICE_TYPE = 'partition';
+      const TEST_MISSING_CLEANUP_SERVICE_ADDRESS =
+        TEST_MISSING_CLEANUP_NODE_ID + '/partition/' +
+        TEST_MISSING_CLEANUP_REPLICA_ID;
+      const cache = createSeededCache();
+      cache.applySystemTableChange(SYSTEM_TABLE_NAME.SERVICES, 'INSERT', {
+        service_id: TEST_MISSING_CLEANUP_REPLICA_ID,
+        service_type: TEST_MISSING_CLEANUP_SERVICE_TYPE,
+        partition_id: TEST_MISSING_CLEANUP_PARTITION_ID,
+        node_id: TEST_MISSING_CLEANUP_NODE_ID,
+        replica_id: TEST_MISSING_CLEANUP_REPLICA_ID,
+        raft_role: RAFT_ROLE.FOLLOWER,
+        status: ReplicaStatus.ACTIVE,
+        address: TEST_MISSING_CLEANUP_SERVICE_ADDRESS,
+        created_at: Date.now(),
+        updated_at: Date.now(),
+      });
+      const mockCDC = createMockCDCService(cache);
+      const originalCacheGet = cache.get.bind(cache);
+      cache.get = (tableName, key) => {
+        if (
+          tableName === SYSTEM_TABLE_NAME.SERVICES &&
+          key === TEST_MISSING_CLEANUP_REPLICA_ID
+        ) {
+          return null;
+        }
+        return originalCacheGet(tableName, key);
+      };
+
+      const handler = new ReplicaHandler({
+        nodeId: TEST_MISSING_CLEANUP_NODE_ID,
+        dataDir: tempDir,
+        systemTableCache: cache,
+        cdcIntegrationService: mockCDC,
+        createPartitionService: createMockPartitionServiceFactory(),
+      });
+
+      handler.initialize();
+
+      const response = await handler.handleRemoveReplica({
+        operationId: TEST_MISSING_CLEANUP_OPERATION_ID,
+        partitionId: TEST_MISSING_CLEANUP_PARTITION_ID,
+        replicaId: TEST_MISSING_CLEANUP_REPLICA_ID,
+        reason: TEST_MISSING_CLEANUP_REASON,
+      });
+
+      t.equal(
+        response.status,
+        ReplicaOperationResponseStatus.NOT_FOUND,
+        'missing local replica should keep the existing response contract',
+      );
+      t.notOk(
+        originalCacheGet(
+          SYSTEM_TABLE_NAME.SERVICES,
+          TEST_MISSING_CLEANUP_REPLICA_ID,
+        ),
+        'missing local replica should still delete durable service truth',
+      );
+      t.ok(
+        mockCDC.operations.some((op) =>
+          op.type === 'delete' &&
+          op.tableName === SYSTEM_TABLE_NAME.SERVICES &&
+          op.whereClause?.service_id === TEST_MISSING_CLEANUP_REPLICA_ID &&
+          op.whereClause?.service_type === TEST_MISSING_CLEANUP_SERVICE_TYPE &&
+          op.whereClause?.partition_id ===
+            TEST_MISSING_CLEANUP_PARTITION_ID &&
+          op.whereClause?.node_id === TEST_MISSING_CLEANUP_NODE_ID,
+        ),
+        'missing local replica should route one authoritative services-row delete',
+      );
+
+      handler.shutdown();
+    });
+
   t.test('handleRemoveReplica - returns initiated for existing replica',
     async (t) => {
       const cache = createSeededCache();
@@ -621,6 +706,12 @@ export async function registerReplicaHandlerTailTests({
         partitionId: 'partition-1',
         status: ReplicaStatus.REMOVING,
       });
+      handler.inProgressOperations.set('op-1', {
+        type: ReplicaOperationMessageType.REMOVE_REPLICA,
+        replicaId: 'replica-1',
+        partitionId: 'partition-1',
+        startedAt: Date.now(),
+      });
 
       const request = {
         operationId: 'op-1',
@@ -634,6 +725,97 @@ export async function registerReplicaHandlerTailTests({
       t.equal(response.status, ReplicaOperationResponseStatus.IN_PROGRESS,
         'in_progress');
       t.equal(response.replicaId, 'replica-1', 'replicaId in response');
+
+      handler.shutdown();
+    });
+
+  t.test('handleRemoveReplica - resumes stalled removing replica',
+    async (t) => {
+      const TEST_STALLED_REMOVE_OPERATION_ID = 'op-resume-removing';
+      const TEST_STALLED_REMOVE_PARTITION_ID = 'partition-resume-removing';
+      const TEST_STALLED_REMOVE_REPLICA_ID = 'replica-resume-removing';
+      const TEST_STALLED_REMOVE_NODE_ID = 'test-node';
+      const TEST_STALLED_REMOVE_REASON = 'rebalancing';
+      const TEST_STALLED_REMOVE_ADDRESS =
+        TEST_STALLED_REMOVE_NODE_ID + '/partition/' +
+        TEST_STALLED_REMOVE_REPLICA_ID;
+      const cache = createSeededCache();
+      seedReplicaOperation(cache, TEST_STALLED_REMOVE_OPERATION_ID, {
+        type: OperationType.REMOVE,
+        partitionId: TEST_STALLED_REMOVE_PARTITION_ID,
+        replicaId: TEST_STALLED_REMOVE_REPLICA_ID,
+      });
+      cache.applySystemTableChange(SYSTEM_TABLE_NAME.SERVICES, 'INSERT', {
+        service_id: TEST_STALLED_REMOVE_REPLICA_ID,
+        service_type: 'partition',
+        partition_id: TEST_STALLED_REMOVE_PARTITION_ID,
+        node_id: TEST_STALLED_REMOVE_NODE_ID,
+        replica_id: TEST_STALLED_REMOVE_REPLICA_ID,
+        raft_role: RAFT_ROLE.FOLLOWER,
+        status: ReplicaStatus.REMOVING,
+        address: TEST_STALLED_REMOVE_ADDRESS,
+        created_at: Date.now(),
+        updated_at: Date.now(),
+      });
+      const mockCDC = createMockCDCService(cache);
+
+      const handler = new ReplicaHandler({
+        nodeId: TEST_STALLED_REMOVE_NODE_ID,
+        dataDir: tempDir,
+        systemTableCache: cache,
+        cdcIntegrationService: mockCDC,
+        createPartitionService: createMockPartitionServiceFactory(),
+      });
+
+      handler.initialize();
+      handler.localReplicas.set(TEST_STALLED_REMOVE_REPLICA_ID, {
+        replicaId: TEST_STALLED_REMOVE_REPLICA_ID,
+        partitionId: TEST_STALLED_REMOVE_PARTITION_ID,
+        status: ReplicaStatus.REMOVING,
+        service: {
+          async shutdown() {},
+        },
+      });
+
+      const removed = waitForReplicaEvent(
+        handler,
+        'replicaRemoved',
+        'replicaRemovalFailed',
+      );
+      const response = await handler.handleRemoveReplica({
+        operationId: TEST_STALLED_REMOVE_OPERATION_ID,
+        partitionId: TEST_STALLED_REMOVE_PARTITION_ID,
+        replicaId: TEST_STALLED_REMOVE_REPLICA_ID,
+        reason: TEST_STALLED_REMOVE_REASON,
+      });
+      await removed;
+
+      t.equal(
+        response.status,
+        ReplicaOperationResponseStatus.IN_PROGRESS,
+        'stalled removing replay should preserve idempotent response shape',
+      );
+      t.equal(
+        handler.inProgressOperations.size,
+        0,
+        'resumed removal should clear operation tracking after completion',
+      );
+      t.ok(
+        mockCDC.operations.some(
+          (operation) =>
+            operation.type === 'delete' &&
+            operation.tableName === SYSTEM_TABLE_NAME.SERVICES,
+        ),
+        'resumed removal should delete the durable service row',
+      );
+      t.notOk(
+        mockCDC.operations.some(
+          (operation) =>
+            operation.type === 'update' &&
+            operation.data.status === ReplicaStatus.REMOVING,
+        ),
+        'resumed removal should not replay an invalid removing transition',
+      );
 
       handler.shutdown();
     });
@@ -922,6 +1104,7 @@ export async function registerReplicaHandlerTailTests({
     TEST_STEP_DOWN_PARTITION_ID,
     TEST_STEP_DOWN_REPLICA_ID,
     TEST_STEP_DOWN_REASON,
+    TEST_STEP_DOWN_TARGET_ELECTION_REASON,
     TEST_STEP_DOWN_CORRELATION_ID,
     TEST_STEP_DOWN_EMPTY_LEADER_ID,
     TEST_STATUS_RETRY_PARTITION_ID,

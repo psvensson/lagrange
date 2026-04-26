@@ -79,7 +79,7 @@ test('createSystemMetadataOwners wires one shared gateway and cache into every o
       t.equal(owner.getSystemTableCache(), systemTableCache,
         'owner bundle should share one injected cache handle');
     }
-});
+  });
 
 test('ControlPlanePublicationsOwner marks publication mutations as ' +
   'critical non-deferrable writes', async (t) => {
@@ -403,53 +403,53 @@ test('System metadata owners route typed read and mutation methods through the g
 
 test('System metadata owners retry transient mutation failures and apply ' +
   'primary-key upsert coalescing by default', async (t) => {
-    let upsertCallCount = 0;
-    const observedOptions = [];
-    const owner = new NodesOwner({
-      controlPlaneSystemTableGateway: {
-        async upsertSystemTableRow(_tableName, _row, options) {
-          upsertCallCount += 1;
-          observedOptions.push(options);
-          if (upsertCallCount === 1) {
-            return {
-              success: false,
-              error: 'Transaction already active on this partition',
-            };
-          }
-          return {success: true};
-        },
+  let upsertCallCount = 0;
+  const observedOptions = [];
+  const owner = new NodesOwner({
+    controlPlaneSystemTableGateway: {
+      async upsertSystemTableRow(_tableName, _row, options) {
+        upsertCallCount += 1;
+        observedOptions.push(options);
+        if (upsertCallCount === 1) {
+          return {
+            success: false,
+            error: 'Transaction already active on this partition',
+          };
+        }
+        return {success: true};
       },
-      controlPlaneWriteRetrySleep: async () => {},
-      controlPlaneWriteRetryTimeoutMs: 50,
-      controlPlaneWriteRetryBaseDelayMs: 1,
-      controlPlaneWriteRetryMaxDelayMs: 1,
-    });
-
-    const result = await owner.upsertNode({
-      node_id: 'node-1',
-      status: 'active',
-    });
-
-    t.equal(result.success, true,
-      'upsert should recover after one retryable mutation failure');
-    t.equal(upsertCallCount, 2,
-      'owner writes should retry transient control-plane mutation failures');
-    t.equal(
-      observedOptions[0]?.owner,
-      'nodes-owner',
-      'owner writes should stamp the semantic owner name onto gateway mutations',
-    );
-    t.equal(
-      observedOptions[0]?.mergePolicy,
-      CONTROL_PLANE_MUTATION_MERGE_POLICY.REPLACE_PENDING,
-      'full-row upserts should replace older pending writes for the same primary key',
-    );
-    t.equal(
-      observedOptions[0]?.coalescingKey,
-      'system-metadata:nodes:node-1',
-      'full-row upserts should share one stable per-row coalescing key',
-    );
+    },
+    controlPlaneWriteRetrySleep: async () => {},
+    controlPlaneWriteRetryTimeoutMs: 50,
+    controlPlaneWriteRetryBaseDelayMs: 1,
+    controlPlaneWriteRetryMaxDelayMs: 1,
   });
+
+  const result = await owner.upsertNode({
+    node_id: 'node-1',
+    status: 'active',
+  });
+
+  t.equal(result.success, true,
+    'upsert should recover after one retryable mutation failure');
+  t.equal(upsertCallCount, 2,
+    'owner writes should retry transient control-plane mutation failures');
+  t.equal(
+    observedOptions[0]?.owner,
+    'nodes-owner',
+    'owner writes should stamp the semantic owner name onto gateway mutations',
+  );
+  t.equal(
+    observedOptions[0]?.mergePolicy,
+    CONTROL_PLANE_MUTATION_MERGE_POLICY.REPLACE_PENDING,
+    'full-row upserts should replace older pending writes for the same primary key',
+  );
+  t.equal(
+    observedOptions[0]?.coalescingKey,
+    'system-metadata:nodes:node-1',
+    'full-row upserts should share one stable per-row coalescing key',
+  );
+});
 
 test('System metadata owners throw typed errors when mutation retries still fail',
   async (t) => {

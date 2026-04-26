@@ -3,6 +3,7 @@ import {resolveAdvertisedWebSocketAddress} from
 import {
   HTTP_STATUS,
   NUM,
+  TYPEOF,
 } from '../../constants/index.js';
 import {
   BOOTSTRAP_PHASE,
@@ -13,6 +14,7 @@ import {
   BOOTSTRAP_API_ERROR,
   BOOTSTRAP_API_LOG_MSG,
   BOOTSTRAP_API_PROBE_REASON,
+  BOOTSTRAP_API_RESPONSE_FIELD,
 } from '../bootstrap-api-constants.js';
 import {
   getControlPlaneRetryAfterMs,
@@ -23,6 +25,9 @@ const RETRYABLE_BOOTSTRAP_DEPENDENCY_ERROR_FRAGMENTS = Object.freeze([
   'ControlPlaneSystemTableGateway requires cdcIntegrationService',
   'ControlPlaneSystemTableGateway requires sqlQueryEngine',
 ]);
+const BOOTSTRAP_REQUEST_ADMISSION_ID_UNTRACKED =
+  'bootstrap_request_admission_untracked';
+const BOOTSTRAP_REQUEST_ADMISSION_EMPTY_EXPIRATIONS = Object.freeze([]);
 
 class BootstrapRequestOwner {
   constructor(options = {}) {
@@ -53,12 +58,63 @@ class BootstrapRequestOwner {
     return this.delegates.getBootstrapService?.() || null;
   }
 
+  isBootstrapRequestStartupComplete(bootstrapService) {
+    if (!bootstrapService) {
+      return true;
+    }
+    if (
+      typeof bootstrapService.isBootstrapStartupComplete === TYPEOF.FUNCTION
+    ) {
+      return bootstrapService.isBootstrapStartupComplete() === true;
+    }
+    return bootstrapService.phase === BOOTSTRAP_PHASE.COMPLETE;
+  }
+
   getMaxConcurrentBootstrapRequests() {
     return this.delegates.getMaxConcurrentBootstrapRequests?.() || NUM.ZERO;
   }
 
   getBootstrapAdmissionRetryAfterMs() {
     return this.delegates.getBootstrapAdmissionRetryAfterMs?.() || NUM.ZERO;
+  }
+
+  getBootstrapAdmissionLeaseMs() {
+    return this.delegates.getBootstrapAdmissionLeaseMs?.() || NUM.ZERO;
+  }
+
+  expireStaleBootstrapAdmissions(now) {
+    return this.delegates.expireStaleBootstrapAdmissions?.(now) ||
+      BOOTSTRAP_REQUEST_ADMISSION_EMPTY_EXPIRATIONS;
+  }
+
+  acquireBootstrapAdmission(snapshot) {
+    const admission = this.delegates.acquireBootstrapAdmission?.(snapshot);
+    if (admission && typeof admission === TYPEOF.OBJECT) {
+      return admission;
+    }
+    this.setInFlightBootstrapRequestCount(
+      this.getInFlightBootstrapRequestCount() + NUM.ONE,
+    );
+    return {
+      admissionId: BOOTSTRAP_REQUEST_ADMISSION_ID_UNTRACKED,
+    };
+  }
+
+  releaseBootstrapAdmission(admission) {
+    if (
+      admission?.admissionId &&
+      admission.admissionId !== BOOTSTRAP_REQUEST_ADMISSION_ID_UNTRACKED &&
+      typeof this.delegates.releaseBootstrapAdmission === TYPEOF.FUNCTION
+    ) {
+      this.delegates.releaseBootstrapAdmission(admission);
+      return;
+    }
+    this.setInFlightBootstrapRequestCount(
+      Math.max(
+        NUM.ZERO,
+        this.getInFlightBootstrapRequestCount() - NUM.ONE,
+      ),
+    );
   }
 
   getInFlightBootstrapRequestCount() {
@@ -73,8 +129,12 @@ class BootstrapRequestOwner {
     return this.delegates.validateBootstrapRequest?.(nodeId, nodeAddress);
   }
 
-  async checkForConflicts(nodeId, nodeAddress) {
-    return this.delegates.checkForConflicts?.(nodeId, nodeAddress);
+  async checkForConflicts(nodeId, nodeAddress, options = {}) {
+    return this.delegates.checkForConflicts?.(
+      nodeId,
+      nodeAddress,
+      options,
+    );
   }
 
   async getBlockingMoveReplicaBootstrapAdmissions(now) {
@@ -140,6 +200,16 @@ class BootstrapRequestOwner {
     return this.delegates.getLatencyTopologyHints?.(nodeId) || null;
   }
 
+  getStartupAuthoritySnapshotForBootstrapResponse(observedAt) {
+    const startupAuthority =
+      this.delegates.getStartupAuthoritySnapshotForBootstrapResponse?.(
+        observedAt,
+      );
+    return startupAuthority && typeof startupAuthority === TYPEOF.OBJECT ?
+      startupAuthority :
+      null;
+  }
+
   isRetryableBootstrapDependencyError(error) {
     const message = typeof error?.message === 'string' ? error.message : '';
     return RETRYABLE_BOOTSTRAP_DEPENDENCY_ERROR_FRAGMENTS.some((fragment) =>
@@ -192,8 +262,7 @@ class BootstrapRequestOwner {
     }
 
     const bootstrapService = this.getBootstrapService();
-    if (bootstrapService &&
-        bootstrapService.phase !== BOOTSTRAP_PHASE.COMPLETE) {
+    if (!this.isBootstrapRequestStartupComplete(bootstrapService)) {
       reply.code(HTTP_STATUS.SERVICE_UNAVAILABLE);
       return this.buildBootstrapNotReadyResponse({
         error: BOOTSTRAP_API_ERROR.BOOTSTRAP_NOT_READY,
@@ -203,7 +272,13 @@ class BootstrapRequestOwner {
       });
     }
 
-    const conflictError = await this.checkForConflicts(nodeId, nodeAddress);
+    const conflictError = await this.checkForConflicts(
+      nodeId,
+      nodeAddress,
+      {
+        startupMode: request.body?.startupMode || null,
+      },
+    );
     if (conflictError) {
       this.getLogger().warn(BOOTSTRAP_API_LOG_MSG.CONFLICT_DETECTED, {
         nodeId,
@@ -215,6 +290,7 @@ class BootstrapRequestOwner {
     }
 
     const now = Date.now();
+    this.expireStaleBootstrapAdmissions(now);
     const blockingMoveReplicaAdmissions =
       await this.getBlockingMoveReplicaBootstrapAdmissions(now);
     if (blockingMoveReplicaAdmissions.length > NUM.ZERO) {
@@ -266,14 +342,21 @@ class BootstrapRequestOwner {
       });
     }
 
-    this.setInFlightBootstrapRequestCount(
-      this.getInFlightBootstrapRequestCount() + NUM.ONE,
-    );
+    const admission = this.acquireBootstrapAdmission({
+      nodeId,
+      nodeAddress,
+      now,
+    });
     try {
       const leaderStatus = await this.waitForServiceLeaders({
         startupMode: request.body?.startupMode || null,
       });
       if (!leaderStatus.ready) {
+        const responseTimestamp = Date.now();
+        const startupAuthority =
+          this.getStartupAuthoritySnapshotForBootstrapResponse(
+            responseTimestamp,
+          );
         this.getLogger().warn(BOOTSTRAP_API_LOG_MSG.LEADERS_NOT_READY, {
           nodeId,
           missingPartitionLeaders: leaderStatus.missingPartitionLeaders,
@@ -288,6 +371,7 @@ class BootstrapRequestOwner {
           code: BOOTSTRAP_PIPELINE_ERROR_CODE.LEADER_METADATA_INCOMPLETE,
           reasonCode: BOOTSTRAP_PIPELINE_ERROR_CODE.LEADER_METADATA_INCOMPLETE,
           leaderReadiness: leaderStatus,
+          startupAuthority,
         });
       }
 
@@ -316,6 +400,9 @@ class BootstrapRequestOwner {
 
       const tablePolicies = this.getTablePolicies();
       const latencyTopologyHints = this.getLatencyTopologyHints(nodeId);
+      const responseTimestamp = Date.now();
+      const startupAuthority =
+        this.getStartupAuthoritySnapshotForBootstrapResponse(responseTimestamp);
       const seedNodeWsAddress = resolveAdvertisedWebSocketAddress({
         advertisedAddress: this.getSeedNodeWsAddress(),
         nodeAddress: this.getSeedNodeAddress() ||
@@ -336,6 +423,12 @@ class BootstrapRequestOwner {
         currentEpoch,
         latencyTopologyHints,
         clusterConfig,
+        ...(startupAuthority ?
+          {
+            [BOOTSTRAP_API_RESPONSE_FIELD.STARTUP_AUTHORITY]:
+              startupAuthority,
+          } :
+          {}),
         leaderReadiness: {
           ready: leaderStatus.ready === true,
           missingPartitionLeaders: leaderStatus.missingPartitionLeaders || [],
@@ -350,7 +443,7 @@ class BootstrapRequestOwner {
           missingMessageGroupLeaderAddresses:
             leaderStatus.missingMessageGroupLeaderAddresses || [],
         },
-        timestamp: Date.now(),
+        timestamp: responseTimestamp,
       };
 
       this.getLogger().info(BOOTSTRAP_API_LOG_MSG.RESPONSE_PREPARED, {
@@ -391,12 +484,7 @@ class BootstrapRequestOwner {
       reply.code(HTTP_STATUS.INTERNAL_SERVER_ERROR);
       throw error;
     } finally {
-      this.setInFlightBootstrapRequestCount(
-        Math.max(
-          NUM.ZERO,
-          this.getInFlightBootstrapRequestCount() - NUM.ONE,
-        ),
-      );
+      this.releaseBootstrapAdmission(admission);
     }
   }
 }

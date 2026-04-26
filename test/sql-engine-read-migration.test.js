@@ -79,7 +79,7 @@ test('TablePolicyService uses SQL engine for getTablePolicy',
 
 test('TablePolicyService uses SQL engine for getPolicyForPartition',
   async (t) => {
-    const engine = createTrackingEngine((sql, params) => {
+    const engine = createTrackingEngine((sql, _params) => {
       if (sql.includes('FROM partitions')) {
         return {
           rows: [{partition_id: 'p1', table_id: 't1'}],
@@ -173,11 +173,6 @@ test('DynamicConfigService uses SQL engine for getConfigFromTable',
       return {rows: []};
     });
 
-    const service = new DynamicConfigService({
-      sqlQueryEngine: engine,
-    });
-
-    const value = await service.get('test.key');
 
     t.ok(engine.queries.length >= 1,
       'Should make at least 1 SQL query');

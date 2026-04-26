@@ -15,7 +15,6 @@ import {
   COLUMN,
   SERVICE_TYPE,
   SERVICE_STATUS,
-  STATE,
   TABLES,
 } from '../../src/constants/index.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';

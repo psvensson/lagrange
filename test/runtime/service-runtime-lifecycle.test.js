@@ -1093,7 +1093,9 @@ describe('ServiceRuntimeLifecycle query executor factory', () => {
     let emitted = false;
     lifecycle.on(
       QUERY_EXECUTOR_FACTORY_EVENT.FACTORY_SET,
-      () => { emitted = true; },
+      () => {
+        emitted = true;
+      },
     );
     lifecycle.setQueryExecutorFactory(
       (_serviceId) => async () => ({}),

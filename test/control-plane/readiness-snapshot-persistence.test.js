@@ -291,7 +291,7 @@ test('admission result includes readinessSnapshots per candidate node',
         READINESS_SNAPSHOT_KEY.DECISION_DIMENSION
       ],
       CONTROL_PLANE_READINESS_DIMENSION.PROVISIONING_ELIGIBLE,
-      );
+    );
     t.equal(
       result.readinessSnapshots[TEST_NODE_ID][
         READINESS_SNAPSHOT_KEY.OBSERVED_AT

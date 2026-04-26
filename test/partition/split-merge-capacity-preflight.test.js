@@ -19,13 +19,11 @@ import {CDC_OPERATION} from '../../src/constants/cdc.js';
 import {
   COLUMN,
   NUM,
-  SERVICE_TYPE,
   TABLES,
 } from '../../src/constants/index.js';
 import {
   ADMISSION_DECISION,
   ADMISSION_MODE,
-  ADMISSION_REASON,
   STORAGE_CAPACITY_DEFAULT,
 } from '../../src/rebalancer/storage-capacity-constants.js';
 import {

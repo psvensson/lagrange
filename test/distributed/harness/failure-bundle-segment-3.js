@@ -1,11 +1,11 @@
-import { readdir, readFile } from 'node:fs/promises';
-import { join } from 'node:path';
-import { buildPriorityRecoveryDecisionSnapshots as buildSharedPriorityRecoveryDecisionSnapshots } from '../../../src/control-plane/priority-recovery-snapshot.js';
+import {readdir, readFile} from 'node:fs/promises';
+import {join} from 'node:path';
+import {buildPriorityRecoveryDecisionSnapshots as buildSharedPriorityRecoveryDecisionSnapshots} from '../../../src/control-plane/priority-recovery-snapshot.js';
 import {
   deriveLegacyPriorityRecoveryActiveGateFields,
   normalizePriorityRecoveryActiveGateSnapshot,
 } from './active-gate-contract.js';
-import { FAILURE_BUNDLE_SEGMENT_2 } from "./failure-bundle-segment-2.js";
+import {FAILURE_BUNDLE_SEGMENT_2} from './failure-bundle-segment-2.js';
 const {
   FAILURE_BUNDLE_SCHEMA_VERSION,
   FAILURE_BUNDLE_RUN_DIRNAME,
@@ -38,6 +38,8 @@ const {
   PLAYBACK_EVENT_TYPE_REPLICA_CREATED,
   PLAYBACK_EVENT_TYPE_REPLICA_REMOVED,
   PLAYBACK_STAGE_SETUP_CLUSTER_WAITING_ACTIVE,
+  PLAYBACK_STAGE_LOAD_READINESS_WAITING,
+  PLAYBACK_STAGE_LOAD_READINESS_STABLE,
   ROOT_CAUSE_CLASS_UNKNOWN,
   ROOT_CAUSE_CLASS_STARTUP,
   ROOT_CAUSE_CLASS_DISCOVERY,
@@ -53,6 +55,7 @@ const {
   LOAD_WAIT_REASON_RETRYABLE_CONTROL_PLANE_PRESSURE,
   LOAD_WAIT_REASON_TIMEOUT_WAITS,
   LOAD_WAIT_REASON_QUEUE_CAPACITY_REJECTED,
+  PRIORITY_RECOVERY_PROGRESS_REASON_FALLBACK,
   READINESS_REASON_MAX_NODES,
   READINESS_REASON_MAX_PER_NODE,
   AFFECTED_NODE_ID_LIMIT,
@@ -148,6 +151,31 @@ const PLAYBACK_PRIORITY_RECOVERY_SNAPSHOT_FIELD = Object.freeze({
   TIMESTAMP: 'timestamp',
 });
 const PLAYBACK_STAGE_SETUP_CLUSTER_ACTIVE = 'setup.cluster.active';
+const PLAYBACK_CONTROL_PLANE_FALLBACK_STAGE_IDS = Object.freeze(new Set([
+  PLAYBACK_STAGE_SETUP_CLUSTER_WAITING_ACTIVE,
+  PLAYBACK_STAGE_SETUP_CLUSTER_ACTIVE,
+  PLAYBACK_STAGE_LOAD_READINESS_WAITING,
+  PLAYBACK_STAGE_LOAD_READINESS_STABLE,
+]));
+const DIRECT_ACTIVE_GATE_DIAGNOSTIC_FIELD = Object.freeze({
+  ACTIVE_GATE: 'activeGate',
+  ACTIVE_GATE_PROGRESS: 'activeGateProgress',
+  ACTIVE_GATE_BEST_PROGRESS: 'activeGateBestProgress',
+  ACTIVE_GATE_NO_PROGRESS: 'activeGateNoProgress',
+  ACTIVE_GATE_BLOCKER_HISTORY: 'activeGateBlockerHistory',
+  ACTIVE_GATE_ADMISSION_STATE: 'activeGateAdmissionState',
+  ACTIVE_GATE_SNAPSHOT_COVERAGE: 'activeGateSnapshotCoverage',
+  PRIORITY_RECOVERY_INVARIANTS: 'priorityRecoveryInvariants',
+});
+const DIRECT_CONTROL_PLANE_DIAGNOSTIC_FIELD = Object.freeze({
+  PUBLICATION_CONVERGENCE: 'publicationConvergence',
+  PUBLICATION_CONVERGENCE_GATE: 'publicationConvergenceGate',
+  PRIORITY_RECOVERY_OBSERVATION: 'priorityRecoveryObservation',
+  PRIORITY_RECOVERY_DECISION_SNAPSHOTS: 'priorityRecoveryDecisionSnapshots',
+  PRIORITY_RECOVERY_INVARIANTS: 'priorityRecoveryInvariants',
+  STARTUP_RECOVERY: 'startupRecovery',
+});
+const ACTIVE_GATE_PUBLICATION_GATE_READY_BLOCKER = 'ready';
 
 function buildPlaybackControlPlaneFallback(events) {
   const sortedEvents = [...(Array.isArray(events) ? events : [])]
@@ -165,23 +193,20 @@ function buildPlaybackControlPlaneFallback(events) {
       continue;
     }
     const details =
-      event?.details && typeof event.details === "object"
-        ? event.details
-        : null;
+      event?.details && typeof event.details === 'object' ?
+        event.details :
+        null;
     if (
       !details ||
-      (
-        details.stage !== PLAYBACK_STAGE_SETUP_CLUSTER_WAITING_ACTIVE &&
-        details.stage !== PLAYBACK_STAGE_SETUP_CLUSTER_ACTIVE
-      )
+      !PLAYBACK_CONTROL_PLANE_FALLBACK_STAGE_IDS.has(details.stage)
     ) {
       continue;
     }
     const hasSnapshotCoverage =
-      details.snapshotCoverage && typeof details.snapshotCoverage === "object";
+      details.snapshotCoverage && typeof details.snapshotCoverage === 'object';
     const hasPublicationGate =
       details.publicationConvergenceGate &&
-      typeof details.publicationConvergenceGate === "object";
+      typeof details.publicationConvergenceGate === 'object';
     if (!hasSnapshotCoverage && !hasPublicationGate) {
       continue;
     }
@@ -212,14 +237,14 @@ function buildPlaybackControlPlaneFallback(events) {
     resolvePlaybackPublishedMembershipObservation(selectedActiveGateDetails);
   const publicationConvergenceGate =
     selectedActiveGateDetails.publicationConvergenceGate &&
-    typeof selectedActiveGateDetails.publicationConvergenceGate === "object"
-      ? cloneJsonValue(selectedActiveGateDetails.publicationConvergenceGate)
-      : null;
+    typeof selectedActiveGateDetails.publicationConvergenceGate === 'object' ?
+      cloneJsonValue(selectedActiveGateDetails.publicationConvergenceGate) :
+      null;
   const snapshotCoverage =
     selectedActiveGateDetails.snapshotCoverage &&
-    typeof selectedActiveGateDetails.snapshotCoverage === "object"
-      ? cloneJsonValue(selectedActiveGateDetails.snapshotCoverage)
-      : null;
+    typeof selectedActiveGateDetails.snapshotCoverage === 'object' ?
+      cloneJsonValue(selectedActiveGateDetails.snapshotCoverage) :
+      null;
   const activeGate = normalizePriorityRecoveryActiveGateSnapshot(
     selectedActiveGateDetails,
   );
@@ -228,41 +253,41 @@ function buildPlaybackControlPlaneFallback(events) {
   );
   const priorityRecoveryDecisionSnapshots =
     selectedActiveGateDetails?.snapshotCoverage &&
-    typeof selectedActiveGateDetails.snapshotCoverage === "object" &&
+    typeof selectedActiveGateDetails.snapshotCoverage === 'object' &&
     isRecord(
       selectedActiveGateDetails.snapshotCoverage
         .selectedPriorityRecoveryDecisionSnapshots,
-    )
-      ? cloneJsonValue(
-          selectedActiveGateDetails.snapshotCoverage
-            .selectedPriorityRecoveryDecisionSnapshots,
-        )
-      : null;
+    ) ?
+      cloneJsonValue(
+        selectedActiveGateDetails.snapshotCoverage
+          .selectedPriorityRecoveryDecisionSnapshots,
+      ) :
+      null;
   const priorityRecoveryInvariants =
     selectedActiveGateDetails.priorityRecoveryInvariants &&
-    typeof selectedActiveGateDetails.priorityRecoveryInvariants === "object"
-      ? cloneJsonValue(selectedActiveGateDetails.priorityRecoveryInvariants)
-      : null;
+    typeof selectedActiveGateDetails.priorityRecoveryInvariants === 'object' ?
+      cloneJsonValue(selectedActiveGateDetails.priorityRecoveryInvariants) :
+      null;
 
   const readinessByNodeId = {};
   const nodeDiagnostics = Array.isArray(
     selectedActiveGateDetails.nodeDiagnostics,
-  )
-    ? selectedActiveGateDetails.nodeDiagnostics
-    : [];
+  ) ?
+    selectedActiveGateDetails.nodeDiagnostics :
+    [];
   for (const nodeDiagnostic of nodeDiagnostics) {
-    const nodeId = String(nodeDiagnostic?.nodeId || "").trim();
+    const nodeId = String(nodeDiagnostic?.nodeId || '').trim();
     if (nodeId.length === ZERO) {
       continue;
     }
-    const reasonCodes = Array.isArray(nodeDiagnostic?.reasons)
-      ? nodeDiagnostic.reasons
-          .map((reason) => String(reason || "").trim())
-          .filter((reason) => reason.length > ZERO)
-      : [];
+    const reasonCodes = Array.isArray(nodeDiagnostic?.reasons) ?
+      nodeDiagnostic.reasons
+        .map((reason) => String(reason || '').trim())
+        .filter((reason) => reason.length > ZERO) :
+      [];
     readinessByNodeId[nodeId] = {
       nodeId,
-      reasons: reasonCodes.map((code) => ({ code })),
+      reasons: reasonCodes.map((code) => ({code})),
     };
   }
 
@@ -282,36 +307,36 @@ function buildPlaybackControlPlaneFallback(events) {
   };
 
   const selectedSnapshotNodeId = String(
-    snapshotCoverage?.selectedNodeId || "",
+    snapshotCoverage?.selectedNodeId || '',
   ).trim();
   const selectedCapturedAtMs = normalizeNonNegativeCount(
     snapshotCoverage?.selectedCapturedAtMs,
   );
   const observedNodeIds = Array.isArray(
     snapshotCoverage?.selectedObservedNodeIds,
-  )
-    ? snapshotCoverage.selectedObservedNodeIds
-        .map((nodeId) => String(nodeId || "").trim())
-        .filter((nodeId) => nodeId.length > ZERO)
-    : [];
+  ) ?
+    snapshotCoverage.selectedObservedNodeIds
+      .map((nodeId) => String(nodeId || '').trim())
+      .filter((nodeId) => nodeId.length > ZERO) :
+    [];
   const controlSnapshotByNodeId =
-    selectedSnapshotNodeId.length > ZERO
-      ? {
-          [selectedSnapshotNodeId]: {
-            nodeId: selectedSnapshotNodeId,
-            capturedAtMs: selectedCapturedAtMs,
-            capturedAt: toIsoTimestamp(selectedCapturedAtMs),
-            observedNodeIds,
-            source: "playback_active_gate",
-            controlPlaneDiagnostics: {
-              publicationConvergence,
-              publishedMembershipObservation,
-              priorityRecoveryDecisionSnapshots,
-              priorityRecoveryInvariants,
-            },
+    selectedSnapshotNodeId.length > ZERO ?
+      {
+        [selectedSnapshotNodeId]: {
+          nodeId: selectedSnapshotNodeId,
+          capturedAtMs: selectedCapturedAtMs,
+          capturedAt: toIsoTimestamp(selectedCapturedAtMs),
+          observedNodeIds,
+          source: 'playback_active_gate',
+          controlPlaneDiagnostics: {
+            publicationConvergence,
+            publishedMembershipObservation,
+            priorityRecoveryDecisionSnapshots,
+            priorityRecoveryInvariants,
           },
-        }
-      : null;
+        },
+      } :
+      null;
 
   return {
     controlPlaneFallback,
@@ -329,7 +354,7 @@ function buildRestartBoundariesFromPlaybackEvents(events) {
       continue;
     }
     const nodeId = String(
-      event?.entityId || event?.details?.snapshot?.nodeId || "",
+      event?.entityId || event?.details?.snapshot?.nodeId || '',
     ).trim();
     if (nodeId.length === ZERO) {
       continue;
@@ -341,19 +366,19 @@ function buildRestartBoundariesFromPlaybackEvents(events) {
       timestampMs: normalizeNonNegativeCount(event?.timestamp),
       timestamp: toIsoTimestamp(normalizeNonNegativeCount(event?.timestamp)),
       phase:
-        typeof event?.details?.phase === "string"
-          ? event.details.phase
-          : UNKNOWN_VALUE,
-      snapshot: isRecord(event?.details?.snapshot)
-        ? event.details.snapshot
-        : null,
+        typeof event?.details?.phase === 'string' ?
+          event.details.phase :
+          UNKNOWN_VALUE,
+      snapshot: isRecord(event?.details?.snapshot) ?
+        event.details.snapshot :
+        null,
       error:
-        typeof event?.details?.error === "string" ? event.details.error : null,
+        typeof event?.details?.error === 'string' ? event.details.error : null,
     });
   }
-  return Object.keys(restartBoundariesByNodeId).length > ZERO
-    ? restartBoundariesByNodeId
-    : null;
+  return Object.keys(restartBoundariesByNodeId).length > ZERO ?
+    restartBoundariesByNodeId :
+    null;
 }
 
 async function collectPlaybackEventInsights(scenarioDir, workspaceRoot) {
@@ -363,9 +388,9 @@ async function collectPlaybackEventInsights(scenarioDir, workspaceRoot) {
   );
   try {
     const content = await readFile(playbackEventsAbsolutePath, UTF8_ENCODING);
-    const events = String(content || "")
-      .split("\n")
-      .map((line) => String(line || "").trim())
+    const events = String(content || '')
+      .split('\n')
+      .map((line) => String(line || '').trim())
       .filter((line) => line.length > ZERO)
       .map((line) => {
         try {
@@ -510,26 +535,26 @@ async function collectPlaybackSnapshotInsights(scenarioDir, entry) {
 function resolveReadinessSnapshot(entry, playbackReadiness = null) {
   const diagnostics = resolveFailureDiagnostics(entry);
   const failedArtifacts = diagnostics?.failedPhase?.artifacts || {};
-  const readinessTimeline = Array.isArray(failedArtifacts.readinessTimeline)
-    ? failedArtifacts.readinessTimeline
-    : Array.isArray(failedArtifacts?.gateResult?.readinessTimeline)
-      ? failedArtifacts.gateResult.readinessTimeline
-      : [];
+  const readinessTimeline = Array.isArray(failedArtifacts.readinessTimeline) ?
+    failedArtifacts.readinessTimeline :
+    Array.isArray(failedArtifacts?.gateResult?.readinessTimeline) ?
+      failedArtifacts.gateResult.readinessTimeline :
+      [];
   const artifactNodeReasonsByNodeId = isRecord(
     failedArtifacts.nodeReasonsByNodeId,
-  )
-    ? failedArtifacts.nodeReasonsByNodeId
-    : null;
+  ) ?
+    failedArtifacts.nodeReasonsByNodeId :
+    null;
   const failureNodeReasonsByNodeId = isRecord(
     diagnostics?.failure?.nodeReasonsByNodeId,
-  )
-    ? diagnostics.failure.nodeReasonsByNodeId
-    : null;
+  ) ?
+    diagnostics.failure.nodeReasonsByNodeId :
+    null;
   const playbackNodeReasonsByNodeId = isRecord(
     playbackReadiness?.nodeReasonsByNodeId,
-  )
-    ? playbackReadiness.nodeReasonsByNodeId
-    : null;
+  ) ?
+    playbackReadiness.nodeReasonsByNodeId :
+    null;
   const nodeReasonsByNodeId =
     failureNodeReasonsByNodeId ||
     artifactNodeReasonsByNodeId ||
@@ -540,63 +565,349 @@ function resolveReadinessSnapshot(entry, playbackReadiness = null) {
     strictDiscoveryGate: failedArtifacts.strictDiscoveryGate || null,
     sutLoadDiscovery: failedArtifacts.sutLoadDiscovery || null,
     lastReadinessTimelineEntry:
-      readinessTimeline.length > ZERO
-        ? readinessTimeline[readinessTimeline.length - 1]
-        : playbackReadiness?.lastReadinessTimelineEntry || null,
+      readinessTimeline.length > ZERO ?
+        readinessTimeline[readinessTimeline.length - 1] :
+        playbackReadiness?.lastReadinessTimelineEntry || null,
+  };
+}
+
+function resolveDirectActiveGateDiagnostics(diagnostics) {
+  if (!isRecord(diagnostics)) {
+    return null;
+  }
+  const activeGate = normalizePriorityRecoveryActiveGateSnapshot({
+    activeGate: isRecord(
+      diagnostics[DIRECT_ACTIVE_GATE_DIAGNOSTIC_FIELD.ACTIVE_GATE],
+    ) ?
+      diagnostics[DIRECT_ACTIVE_GATE_DIAGNOSTIC_FIELD.ACTIVE_GATE] :
+      null,
+    activeGateProgress: isRecord(
+      diagnostics[DIRECT_ACTIVE_GATE_DIAGNOSTIC_FIELD.ACTIVE_GATE_PROGRESS],
+    ) ?
+      diagnostics[DIRECT_ACTIVE_GATE_DIAGNOSTIC_FIELD.ACTIVE_GATE_PROGRESS] :
+      null,
+    activeGateBestProgress: isRecord(
+      diagnostics[
+        DIRECT_ACTIVE_GATE_DIAGNOSTIC_FIELD.ACTIVE_GATE_BEST_PROGRESS
+      ],
+    ) ?
+      diagnostics[
+        DIRECT_ACTIVE_GATE_DIAGNOSTIC_FIELD.ACTIVE_GATE_BEST_PROGRESS
+      ] :
+      null,
+    activeGateNoProgress: isRecord(
+      diagnostics[
+        DIRECT_ACTIVE_GATE_DIAGNOSTIC_FIELD.ACTIVE_GATE_NO_PROGRESS
+      ],
+    ) ?
+      diagnostics[DIRECT_ACTIVE_GATE_DIAGNOSTIC_FIELD.ACTIVE_GATE_NO_PROGRESS] :
+      null,
+    activeGateBlockerHistory: Array.isArray(
+      diagnostics[
+        DIRECT_ACTIVE_GATE_DIAGNOSTIC_FIELD.ACTIVE_GATE_BLOCKER_HISTORY
+      ],
+    ) ?
+      diagnostics[
+        DIRECT_ACTIVE_GATE_DIAGNOSTIC_FIELD.ACTIVE_GATE_BLOCKER_HISTORY
+      ] :
+      null,
+    activeGateAdmissionState: isRecord(
+      diagnostics[
+        DIRECT_ACTIVE_GATE_DIAGNOSTIC_FIELD.ACTIVE_GATE_ADMISSION_STATE
+      ],
+    ) ?
+      diagnostics[
+        DIRECT_ACTIVE_GATE_DIAGNOSTIC_FIELD.ACTIVE_GATE_ADMISSION_STATE
+      ] :
+      null,
+  });
+  const legacyActiveGateFields = deriveLegacyPriorityRecoveryActiveGateFields(
+    activeGate,
+  );
+  const directActiveGateDiagnostics = {
+    ...(activeGate ? {activeGate} : {}),
+    ...(legacyActiveGateFields || {}),
+  };
+  if (
+    isRecord(
+      diagnostics[
+        DIRECT_ACTIVE_GATE_DIAGNOSTIC_FIELD.ACTIVE_GATE_SNAPSHOT_COVERAGE
+      ],
+    )
+  ) {
+    directActiveGateDiagnostics.activeGateSnapshotCoverage =
+      diagnostics[
+        DIRECT_ACTIVE_GATE_DIAGNOSTIC_FIELD.ACTIVE_GATE_SNAPSHOT_COVERAGE
+      ];
+  }
+  if (
+    isRecord(
+      diagnostics[
+        DIRECT_ACTIVE_GATE_DIAGNOSTIC_FIELD.PRIORITY_RECOVERY_INVARIANTS
+      ],
+    )
+  ) {
+    directActiveGateDiagnostics.priorityRecoveryInvariants =
+      normalizePriorityRecoveryInvariants(
+        diagnostics[
+          DIRECT_ACTIVE_GATE_DIAGNOSTIC_FIELD.PRIORITY_RECOVERY_INVARIANTS
+        ],
+      );
+  }
+  return Object.values(directActiveGateDiagnostics).some((value) => {
+    if (Array.isArray(value)) {
+      return value.length > ZERO;
+    }
+    return value !== null && value !== undefined;
+  }) ?
+    directActiveGateDiagnostics :
+    null;
+}
+
+function resolveDirectControlPlaneDiagnostics(diagnostics) {
+  if (!isRecord(diagnostics)) {
+    return null;
+  }
+  const directDiagnostics = {};
+  if (
+    isRecord(
+      diagnostics[
+        DIRECT_CONTROL_PLANE_DIAGNOSTIC_FIELD.PUBLICATION_CONVERGENCE
+      ],
+    )
+  ) {
+    directDiagnostics.publicationConvergence =
+      diagnostics[
+        DIRECT_CONTROL_PLANE_DIAGNOSTIC_FIELD.PUBLICATION_CONVERGENCE
+      ];
+  }
+  if (
+    isRecord(
+      diagnostics[
+        DIRECT_CONTROL_PLANE_DIAGNOSTIC_FIELD.PUBLICATION_CONVERGENCE_GATE
+      ],
+    )
+  ) {
+    directDiagnostics.publicationConvergenceGate =
+      diagnostics[
+        DIRECT_CONTROL_PLANE_DIAGNOSTIC_FIELD.PUBLICATION_CONVERGENCE_GATE
+      ];
+  }
+  if (
+    isRecord(
+      diagnostics[
+        DIRECT_CONTROL_PLANE_DIAGNOSTIC_FIELD.PRIORITY_RECOVERY_OBSERVATION
+      ],
+    )
+  ) {
+    directDiagnostics.priorityRecoveryObservation =
+      diagnostics[
+        DIRECT_CONTROL_PLANE_DIAGNOSTIC_FIELD.PRIORITY_RECOVERY_OBSERVATION
+      ];
+  }
+  if (
+    isRecord(
+      diagnostics[
+        DIRECT_CONTROL_PLANE_DIAGNOSTIC_FIELD
+          .PRIORITY_RECOVERY_DECISION_SNAPSHOTS
+      ],
+    )
+  ) {
+    directDiagnostics.priorityRecoveryDecisionSnapshots =
+      normalizePriorityRecoveryDecisionSnapshots(
+        diagnostics[
+          DIRECT_CONTROL_PLANE_DIAGNOSTIC_FIELD
+            .PRIORITY_RECOVERY_DECISION_SNAPSHOTS
+        ],
+      );
+  }
+  if (
+    isRecord(
+      diagnostics[
+        DIRECT_CONTROL_PLANE_DIAGNOSTIC_FIELD.PRIORITY_RECOVERY_INVARIANTS
+      ],
+    )
+  ) {
+    directDiagnostics.priorityRecoveryInvariants =
+      normalizePriorityRecoveryInvariants(
+        diagnostics[
+          DIRECT_CONTROL_PLANE_DIAGNOSTIC_FIELD.PRIORITY_RECOVERY_INVARIANTS
+        ],
+      );
+  }
+  if (
+    isRecord(
+      diagnostics[DIRECT_CONTROL_PLANE_DIAGNOSTIC_FIELD.STARTUP_RECOVERY],
+    )
+  ) {
+    directDiagnostics.startupRecovery =
+      diagnostics[DIRECT_CONTROL_PLANE_DIAGNOSTIC_FIELD.STARTUP_RECOVERY];
+  }
+  return Object.keys(directDiagnostics).length > ZERO ?
+    directDiagnostics :
+    null;
+}
+
+function buildDirectActiveGatePublicationGate(activeGate) {
+  const progress = isRecord(activeGate?.progress) ?
+    activeGate.progress :
+    null;
+  if (!progress) {
+    return null;
+  }
+  const publicationStatus = String(progress.publicationStatus || '').trim();
+  const recoveryProtocolState = String(
+    progress.recoveryProtocolState || '',
+  ).trim();
+  if (
+    publicationStatus.length === ZERO &&
+    recoveryProtocolState.length === ZERO
+  ) {
+    return null;
+  }
+  const reasonCodes = normalizeDistinctStringArray(progress.gateReasons);
+  const pendingAckCount =
+    normalizeNonNegativeCount(progress.pendingAckCount) || ZERO;
+  const missingPublishedCount =
+    normalizeNonNegativeCount(progress.missingPublishedCount) || ZERO;
+  const priorityBlockedPartitionCount =
+    normalizeNonNegativeCount(progress.priorityBlockedPartitionCount) ||
+    normalizeNonNegativeCount(progress.priorityRecoveryBlockedPartitionCount) ||
+    ZERO;
+  const prioritySpreadGap =
+    normalizeNonNegativeCount(progress.prioritySpreadGap) || ZERO;
+  const prioritySpreadPending =
+    progress.prioritySpreadSatisfied === false ||
+    priorityBlockedPartitionCount > ZERO ||
+    prioritySpreadGap > ZERO;
+  const ready =
+    activeGate.ready === true ||
+    (
+      progress.blockerSignature === ACTIVE_GATE_PUBLICATION_GATE_READY_BLOCKER &&
+      pendingAckCount === ZERO &&
+      missingPublishedCount === ZERO &&
+      reasonCodes.length === ZERO &&
+      prioritySpreadPending === false
+    );
+  return {
+    publicationEpoch:
+      normalizeNonNegativeCount(progress.publicationEpoch) || null,
+    publicationStatus:
+      publicationStatus.length > ZERO ? publicationStatus : null,
+    recoveryProtocolState:
+      recoveryProtocolState.length > ZERO ? recoveryProtocolState : null,
+    reasonCodes,
+    pendingAckNodeIds: [],
+    pendingAckCount,
+    missingPublishedNodeIds: [],
+    missingPublishedCount,
+    publicationPending: pendingAckCount > ZERO,
+    prioritySpreadPending,
+    ready,
+    priorityPartitionSummary: {
+      satisfied: prioritySpreadPending === false,
+      blockedPartitionCount: priorityBlockedPartitionCount,
+      blockedPartitions: [],
+      largestSpreadGap: prioritySpreadGap,
+      totalSpreadGap: prioritySpreadGap,
+    },
+  };
+}
+
+function buildDirectActiveGatePublicationConvergence(
+  activeGate,
+  publicationGate,
+) {
+  if (!isRecord(publicationGate)) {
+    return null;
+  }
+  const progress = isRecord(activeGate?.progress) ?
+    activeGate.progress :
+    null;
+  return {
+    publicationEpoch: publicationGate.publicationEpoch,
+    status: publicationGate.publicationStatus,
+    publicationStatus: publicationGate.publicationStatus,
+    recoveryProtocolState: publicationGate.recoveryProtocolState,
+    priorityRecoveryReasonCodes: publicationGate.reasonCodes,
+    priorityPartitionSummary: publicationGate.priorityPartitionSummary,
+    publishedActiveNodeIds: normalizeDistinctStringArray(
+      progress?.selectedPublishedActiveNodeIds,
+    ),
+    pendingAckNodeIds: publicationGate.pendingAckNodeIds,
+    pendingAckCount: publicationGate.pendingAckCount,
+    missingPublishedNodeIds: publicationGate.missingPublishedNodeIds,
+    missingPublishedCount: publicationGate.missingPublishedCount,
+    publicationPending: publicationGate.publicationPending,
+    prioritySpreadPending: publicationGate.prioritySpreadPending,
+    publicationRecoveryGate: publicationGate,
   };
 }
 
 function resolveControlPlaneDiagnostics(entry) {
   const diagnostics = resolveFailureDiagnostics(entry);
+  const directActiveGateDiagnostics =
+    resolveDirectActiveGateDiagnostics(diagnostics);
+  const directActiveGatePublicationGate = buildDirectActiveGatePublicationGate(
+    directActiveGateDiagnostics?.activeGate,
+  );
+  const directActiveGatePublicationConvergence =
+    buildDirectActiveGatePublicationConvergence(
+      directActiveGateDiagnostics?.activeGate,
+      directActiveGatePublicationGate,
+    );
   const directLedgerSnapshotsByNodeId =
     diagnostics?.rootCauseBundle?.controlPlaneLedgerSnapshotsByNodeId &&
     typeof diagnostics.rootCauseBundle.controlPlaneLedgerSnapshotsByNodeId ===
-      "object"
-      ? diagnostics.rootCauseBundle.controlPlaneLedgerSnapshotsByNodeId
-      : null;
+      'object' ?
+      diagnostics.rootCauseBundle.controlPlaneLedgerSnapshotsByNodeId :
+      null;
   const snapshotsByNodeId = resolveControlSnapshot(entry);
   const directDiagnosticsFromEntry = isRecord(
     entry?.details?.diagnostics?.controlPlaneDiagnostics,
-  )
-    ? entry.details.diagnostics.controlPlaneDiagnostics
-    : null;
+  ) ?
+    entry.details.diagnostics.controlPlaneDiagnostics :
+    null;
   const directDiagnosticsFromRootCause = isRecord(
     diagnostics?.rootCauseBundle?.controlPlaneDiagnostics,
-  )
-    ? diagnostics.rootCauseBundle.controlPlaneDiagnostics
-    : null;
+  ) ?
+    diagnostics.rootCauseBundle.controlPlaneDiagnostics :
+    null;
+  const directDiagnosticsFromTopLevel =
+    resolveDirectControlPlaneDiagnostics(diagnostics);
   const directDiagnostics =
     directDiagnosticsFromEntry ||
     directDiagnosticsFromRootCause ||
-    (isRecord(diagnostics?.controlPlaneDiagnostics)
-      ? diagnostics.controlPlaneDiagnostics
-      : null);
+    (isRecord(diagnostics?.controlPlaneDiagnostics) ?
+      diagnostics.controlPlaneDiagnostics :
+      null) ||
+    directDiagnosticsFromTopLevel;
   const directDiagnosticSnapshotNodeIdCandidate = String(
-    diagnostics?.snapshotNodeId || directDiagnostics?.snapshotNodeId || "",
+    diagnostics?.snapshotNodeId || directDiagnostics?.snapshotNodeId || '',
   ).trim();
   const directDiagnosticSnapshotNodeId =
-    directDiagnosticSnapshotNodeIdCandidate.length > ZERO
-      ? directDiagnosticSnapshotNodeIdCandidate
-      : UNKNOWN_VALUE;
-  const directDiagnosticSources = directDiagnostics
-    ? {
-        [directDiagnosticSnapshotNodeId]: {
-          controlPlaneDiagnostics: directDiagnostics,
-        },
-      }
-    : null;
+    directDiagnosticSnapshotNodeIdCandidate.length > ZERO ?
+      directDiagnosticSnapshotNodeIdCandidate :
+      UNKNOWN_VALUE;
+  const directDiagnosticSources = directDiagnostics ?
+    {
+      [directDiagnosticSnapshotNodeId]: {
+        controlPlaneDiagnostics: directDiagnostics,
+      },
+    } :
+    null;
   const publicationModeByNodeId = {};
   const heartbeatPublicationByNodeId = {};
   let publicationConvergence =
     directDiagnostics?.publicationConvergence &&
-    typeof directDiagnostics.publicationConvergence === "object"
-      ? directDiagnostics.publicationConvergence
-      : null;
+    typeof directDiagnostics.publicationConvergence === 'object' ?
+      directDiagnostics.publicationConvergence :
+      null;
   let priorityRecoveryObservation =
     directDiagnostics?.priorityRecoveryObservation &&
-    typeof directDiagnostics.priorityRecoveryObservation === "object"
-      ? directDiagnostics.priorityRecoveryObservation
-      : null;
+    typeof directDiagnostics.priorityRecoveryObservation === 'object' ?
+      directDiagnostics.priorityRecoveryObservation :
+      null;
   let priorityRecoveryDecisionSnapshots =
     normalizePriorityRecoveryDecisionSnapshots(
       directDiagnostics?.priorityRecoveryDecisionSnapshots,
@@ -616,34 +927,34 @@ function resolveControlPlaneDiagnostics(entry) {
   const controlPlaneOperations = [];
   let startupRecovery =
     directDiagnostics?.startupRecovery &&
-    typeof directDiagnostics.startupRecovery === "object"
-      ? directDiagnostics.startupRecovery
-      : null;
+    typeof directDiagnostics.startupRecovery === 'object' ?
+      directDiagnostics.startupRecovery :
+      null;
 
   const diagnosticSources =
     directLedgerSnapshotsByNodeId &&
-    Object.keys(directLedgerSnapshotsByNodeId).length > ZERO
-      ? directLedgerSnapshotsByNodeId
-      : snapshotsByNodeId && Object.keys(snapshotsByNodeId).length > ZERO
-        ? snapshotsByNodeId
-        : directDiagnosticSources;
+    Object.keys(directLedgerSnapshotsByNodeId).length > ZERO ?
+      directLedgerSnapshotsByNodeId :
+      snapshotsByNodeId && Object.keys(snapshotsByNodeId).length > ZERO ?
+        snapshotsByNodeId :
+        directDiagnosticSources;
 
-  if (diagnosticSources && typeof diagnosticSources === "object") {
+  if (diagnosticSources && typeof diagnosticSources === 'object') {
     for (const [snapshotNodeId, snapshot] of Object.entries(
       diagnosticSources,
     )) {
       const controlPlaneDiagnostics =
         snapshot?.controlPlaneDiagnostics &&
-        typeof snapshot.controlPlaneDiagnostics === "object"
-          ? snapshot.controlPlaneDiagnostics
-          : null;
+        typeof snapshot.controlPlaneDiagnostics === 'object' ?
+          snapshot.controlPlaneDiagnostics :
+          null;
       if (!controlPlaneDiagnostics) {
         continue;
       }
 
       if (
         controlPlaneDiagnostics.publicationMode &&
-        typeof controlPlaneDiagnostics.publicationMode === "object"
+        typeof controlPlaneDiagnostics.publicationMode === 'object'
       ) {
         publicationModeByNodeId[snapshotNodeId] =
           controlPlaneDiagnostics.publicationMode;
@@ -651,14 +962,14 @@ function resolveControlPlaneDiagnostics(entry) {
       if (
         !publicationConvergence &&
         controlPlaneDiagnostics.publicationConvergence &&
-        typeof controlPlaneDiagnostics.publicationConvergence === "object"
+        typeof controlPlaneDiagnostics.publicationConvergence === 'object'
       ) {
         publicationConvergence = controlPlaneDiagnostics.publicationConvergence;
       }
       if (
         !priorityRecoveryObservation &&
         controlPlaneDiagnostics.priorityRecoveryObservation &&
-        typeof controlPlaneDiagnostics.priorityRecoveryObservation === "object"
+        typeof controlPlaneDiagnostics.priorityRecoveryObservation === 'object'
       ) {
         priorityRecoveryObservation =
           controlPlaneDiagnostics.priorityRecoveryObservation;
@@ -674,7 +985,7 @@ function resolveControlPlaneDiagnostics(entry) {
       );
       if (
         controlPlaneDiagnostics.heartbeatPublication &&
-        typeof controlPlaneDiagnostics.heartbeatPublication === "object"
+        typeof controlPlaneDiagnostics.heartbeatPublication === 'object'
       ) {
         heartbeatPublicationByNodeId[snapshotNodeId] =
           controlPlaneDiagnostics.heartbeatPublication;
@@ -682,30 +993,30 @@ function resolveControlPlaneDiagnostics(entry) {
       if (
         !startupRecovery &&
         controlPlaneDiagnostics.startupRecovery &&
-        typeof controlPlaneDiagnostics.startupRecovery === "object"
+        typeof controlPlaneDiagnostics.startupRecovery === 'object'
       ) {
         startupRecovery = controlPlaneDiagnostics.startupRecovery;
       }
 
       const readiness =
         controlPlaneDiagnostics.readinessByNodeId &&
-        typeof controlPlaneDiagnostics.readinessByNodeId === "object"
-          ? controlPlaneDiagnostics.readinessByNodeId
-          : {};
+        typeof controlPlaneDiagnostics.readinessByNodeId === 'object' ?
+          controlPlaneDiagnostics.readinessByNodeId :
+          {};
       Object.assign(readinessByNodeId, readiness);
 
       const nodeLiveness =
         controlPlaneDiagnostics.nodeLivenessByNodeId &&
-        typeof controlPlaneDiagnostics.nodeLivenessByNodeId === "object"
-          ? controlPlaneDiagnostics.nodeLivenessByNodeId
-          : {};
+        typeof controlPlaneDiagnostics.nodeLivenessByNodeId === 'object' ?
+          controlPlaneDiagnostics.nodeLivenessByNodeId :
+          {};
       Object.assign(nodeLivenessByNodeId, nodeLiveness);
 
       const readinessTransitions =
         controlPlaneDiagnostics.readinessTransitionsByNodeId &&
-        typeof controlPlaneDiagnostics.readinessTransitionsByNodeId === "object"
-          ? controlPlaneDiagnostics.readinessTransitionsByNodeId
-          : {};
+        typeof controlPlaneDiagnostics.readinessTransitionsByNodeId === 'object' ?
+          controlPlaneDiagnostics.readinessTransitionsByNodeId :
+          {};
       for (const [nodeId, transitions] of Object.entries(
         readinessTransitions,
       )) {
@@ -718,26 +1029,26 @@ function resolveControlPlaneDiagnostics(entry) {
 
       const placement =
         controlPlaneDiagnostics.placementEligibilityByNodeId &&
-        typeof controlPlaneDiagnostics.placementEligibilityByNodeId === "object"
-          ? controlPlaneDiagnostics.placementEligibilityByNodeId
-          : {};
+        typeof controlPlaneDiagnostics.placementEligibilityByNodeId === 'object' ?
+          controlPlaneDiagnostics.placementEligibilityByNodeId :
+          {};
       Object.assign(placementEligibilityByNodeId, placement);
 
       const workflows =
         controlPlaneDiagnostics.workflowAdmissionsByWorkflowId &&
         typeof controlPlaneDiagnostics.workflowAdmissionsByWorkflowId ===
-          "object"
-          ? controlPlaneDiagnostics.workflowAdmissionsByWorkflowId
-          : {};
+          'object' ?
+          controlPlaneDiagnostics.workflowAdmissionsByWorkflowId :
+          {};
       Object.assign(workflowAdmissionsByWorkflowId, workflows);
 
       const timeouts = Array.isArray(
         controlPlaneDiagnostics.timeoutClassifications,
-      )
-        ? controlPlaneDiagnostics.timeoutClassifications
-        : [];
+      ) ?
+        controlPlaneDiagnostics.timeoutClassifications :
+        [];
       for (const timeout of timeouts) {
-        if (!timeout || typeof timeout !== "object") {
+        if (!timeout || typeof timeout !== 'object') {
           continue;
         }
         timeoutClassifications.push({
@@ -748,11 +1059,11 @@ function resolveControlPlaneDiagnostics(entry) {
 
       const decisions = Array.isArray(
         controlPlaneDiagnostics.participationDecisions,
-      )
-        ? controlPlaneDiagnostics.participationDecisions
-        : [];
+      ) ?
+        controlPlaneDiagnostics.participationDecisions :
+        [];
       for (const decision of decisions) {
-        if (!decision || typeof decision !== "object") {
+        if (!decision || typeof decision !== 'object') {
           continue;
         }
         participationDecisions.push({
@@ -763,11 +1074,11 @@ function resolveControlPlaneDiagnostics(entry) {
 
       const repairs = Array.isArray(
         controlPlaneDiagnostics.authoritativeReadinessRepairs,
-      )
-        ? controlPlaneDiagnostics.authoritativeReadinessRepairs
-        : [];
+      ) ?
+        controlPlaneDiagnostics.authoritativeReadinessRepairs :
+        [];
       for (const repair of repairs) {
-        if (!repair || typeof repair !== "object") {
+        if (!repair || typeof repair !== 'object') {
           continue;
         }
         authoritativeReadinessRepairs.push({
@@ -778,31 +1089,31 @@ function resolveControlPlaneDiagnostics(entry) {
 
       const recoveryEpochs =
         controlPlaneDiagnostics.recoveryEpochsByNodeId &&
-        typeof controlPlaneDiagnostics.recoveryEpochsByNodeId === "object"
-          ? controlPlaneDiagnostics.recoveryEpochsByNodeId
-          : {};
+        typeof controlPlaneDiagnostics.recoveryEpochsByNodeId === 'object' ?
+          controlPlaneDiagnostics.recoveryEpochsByNodeId :
+          {};
       for (const [nodeId, epochs] of Object.entries(recoveryEpochs)) {
-        const existing = Array.isArray(recoveryEpochsByNodeId[nodeId])
-          ? recoveryEpochsByNodeId[nodeId]
-          : [];
+        const existing = Array.isArray(recoveryEpochsByNodeId[nodeId]) ?
+          recoveryEpochsByNodeId[nodeId] :
+          [];
         recoveryEpochsByNodeId[nodeId] = [
           ...existing,
-          ...(Array.isArray(epochs)
-            ? epochs.map((epoch) => ({
-                snapshotNodeId,
-                ...epoch,
-              }))
-            : []),
+          ...(Array.isArray(epochs) ?
+            epochs.map((epoch) => ({
+              snapshotNodeId,
+              ...epoch,
+            })) :
+            []),
         ];
       }
 
       const operations = Array.isArray(
         controlPlaneDiagnostics.controlPlaneOperations,
-      )
-        ? controlPlaneDiagnostics.controlPlaneOperations
-        : [];
+      ) ?
+        controlPlaneDiagnostics.controlPlaneOperations :
+        [];
       for (const operation of operations) {
-        if (!operation || typeof operation !== "object") {
+        if (!operation || typeof operation !== 'object') {
           continue;
         }
         controlPlaneOperations.push({
@@ -831,7 +1142,10 @@ function resolveControlPlaneDiagnostics(entry) {
     priorityRecoveryObservation === null &&
     priorityRecoveryDecisionSnapshots === null &&
     priorityRecoveryInvariants === null &&
-    directDiagnostics === null
+    directDiagnostics === null &&
+    directActiveGateDiagnostics === null &&
+    directActiveGatePublicationGate === null &&
+    directActiveGatePublicationConvergence === null
   ) {
     return null;
   }
@@ -855,6 +1169,13 @@ function resolveControlPlaneDiagnostics(entry) {
     priorityRecoveryDecisionSnapshots,
     priorityRecoveryInvariants,
     ...(directDiagnostics || {}),
+    ...(directActiveGatePublicationConvergence ?
+      {publicationConvergence: directActiveGatePublicationConvergence} :
+      {}),
+    ...(directActiveGatePublicationGate ?
+      {publicationConvergenceGate: directActiveGatePublicationGate} :
+      {}),
+    ...(directActiveGateDiagnostics || {}),
   };
 }
 
@@ -865,7 +1186,7 @@ function mergeTransitionHistory(existingEntries, nextEntries) {
     ...(Array.isArray(existingEntries) ? existingEntries : []),
     ...(Array.isArray(nextEntries) ? nextEntries : []),
   ]) {
-    if (!entry || typeof entry !== "object") {
+    if (!entry || typeof entry !== 'object') {
       continue;
     }
     const signature = JSON.stringify({
@@ -891,7 +1212,7 @@ function mergeTransitionHistory(existingEntries, nextEntries) {
 function resolveControlSnapshot(entry) {
   const diagnostics = resolveFailureDiagnostics(entry);
   const snapshotsByNodeId = diagnostics?.rootCauseBundle?.snapshotsByNodeId;
-  if (snapshotsByNodeId && typeof snapshotsByNodeId === "object") {
+  if (snapshotsByNodeId && typeof snapshotsByNodeId === 'object') {
     return snapshotsByNodeId;
   }
   return null;
@@ -900,7 +1221,7 @@ function resolveControlSnapshot(entry) {
 function resolveAdminQueryTraceByNodeId(entry) {
   const diagnostics = resolveFailureDiagnostics(entry);
   const traceByNodeId = diagnostics?.rootCauseBundle?.adminQueryTraceByNodeId;
-  if (traceByNodeId && typeof traceByNodeId === "object") {
+  if (traceByNodeId && typeof traceByNodeId === 'object') {
     return traceByNodeId;
   }
   return null;
@@ -910,14 +1231,14 @@ function resolveLoadMetrics(entry) {
   const diagnostics = resolveFailureDiagnostics(entry);
   if (
     diagnostics?.loadMetrics &&
-    typeof diagnostics.loadMetrics === "object" &&
+    typeof diagnostics.loadMetrics === 'object' &&
     !Array.isArray(diagnostics.loadMetrics)
   ) {
     return diagnostics.loadMetrics;
   }
   if (
     entry?.loadMetrics &&
-    typeof entry.loadMetrics === "object" &&
+    typeof entry.loadMetrics === 'object' &&
     !Array.isArray(entry.loadMetrics)
   ) {
     return entry.loadMetrics;
@@ -927,9 +1248,9 @@ function resolveLoadMetrics(entry) {
 
 function extractNodeIdsFromText(value) {
   const nodeIds = [];
-  const matches = String(value || "").matchAll(NODE_ID_ERROR_PATTERN);
+  const matches = String(value || '').matchAll(NODE_ID_ERROR_PATTERN);
   for (const match of matches) {
-    const nodeId = String(match?.[1] || "");
+    const nodeId = String(match?.[1] || '');
     if (nodeId.length > ZERO) {
       nodeIds.push(nodeId);
     }
@@ -940,9 +1261,9 @@ function extractNodeIdsFromText(value) {
 function resolveRelevantNodeIds(entry) {
   const diagnostics = resolveFailureDiagnostics(entry);
   const loadMetrics = resolveLoadMetrics(entry);
-  const affectedNodeIds = Array.isArray(diagnostics?.failure?.affectedNodeIds)
-    ? diagnostics.failure.affectedNodeIds
-    : [];
+  const affectedNodeIds = Array.isArray(diagnostics?.failure?.affectedNodeIds) ?
+    diagnostics.failure.affectedNodeIds :
+    [];
   const nodeIds = new Set(affectedNodeIds);
   for (const snapshotNodeId of Object.keys(
     resolveControlSnapshot(entry) || {},
@@ -956,10 +1277,10 @@ function resolveRelevantNodeIds(entry) {
   }
   const perNodeMetrics =
     loadMetrics?.perNode &&
-    typeof loadMetrics.perNode === "object" &&
-    !Array.isArray(loadMetrics.perNode)
-      ? loadMetrics.perNode
-      : {};
+    typeof loadMetrics.perNode === 'object' &&
+    !Array.isArray(loadMetrics.perNode) ?
+      loadMetrics.perNode :
+      {};
   for (const [nodeId, nodeMetrics] of Object.entries(perNodeMetrics)) {
     const attemptedErrors = Number(nodeMetrics?.attemptErrors || ZERO);
     const dispatched = Number(nodeMetrics?.dispatched || ZERO);
@@ -969,12 +1290,12 @@ function resolveRelevantNodeIds(entry) {
       nodeIds.add(nodeId);
     }
   }
-  const failedPhaseErrors = Array.isArray(diagnostics?.failedPhase?.errors)
-    ? diagnostics.failedPhase.errors
-    : [];
-  const distinctErrors = Array.isArray(loadMetrics?.distinctErrors)
-    ? loadMetrics.distinctErrors
-    : [];
+  const failedPhaseErrors = Array.isArray(diagnostics?.failedPhase?.errors) ?
+    diagnostics.failedPhase.errors :
+    [];
+  const distinctErrors = Array.isArray(loadMetrics?.distinctErrors) ?
+    loadMetrics.distinctErrors :
+    [];
   for (const errorText of [...failedPhaseErrors, ...distinctErrors]) {
     for (const nodeId of extractNodeIdsFromText(errorText)) {
       nodeIds.add(nodeId);
@@ -1000,16 +1321,16 @@ function resolveTraceFailureTimestampMs(entry) {
 }
 
 function toIsoTimestamp(timestampMs) {
-  return Number.isFinite(timestampMs)
-    ? new Date(timestampMs).toISOString()
-    : null;
+  return Number.isFinite(timestampMs) ?
+    new Date(timestampMs).toISOString() :
+    null;
 }
 
 function resolveWorkflowRelevantNodeIds(workflow) {
   const nodeIds = new Set();
   const addValues = (values) => {
     for (const value of Array.isArray(values) ? values : []) {
-      const normalized = String(value || "");
+      const normalized = String(value || '');
       if (normalized.length > ZERO) {
         nodeIds.add(normalized);
       }
@@ -1018,15 +1339,15 @@ function resolveWorkflowRelevantNodeIds(workflow) {
   addValues(workflow?.candidateTargetNodeIds);
   addValues(workflow?.sourceRoutableNodeIds);
   addValues(workflow?.eligibleNodeIds);
-  for (const entry of Array.isArray(workflow?.ineligibleNodes)
-    ? workflow.ineligibleNodes
-    : []) {
-    const nodeId = String(entry?.nodeId || "");
+  for (const entry of Array.isArray(workflow?.ineligibleNodes) ?
+    workflow.ineligibleNodes :
+    []) {
+    const nodeId = String(entry?.nodeId || '');
     if (nodeId.length > ZERO) {
       nodeIds.add(nodeId);
     }
   }
-  const sourceLeaderNodeId = String(workflow?.sourceLeaderNodeId || "");
+  const sourceLeaderNodeId = String(workflow?.sourceLeaderNodeId || '');
   if (sourceLeaderNodeId.length > ZERO) {
     nodeIds.add(sourceLeaderNodeId);
   }
@@ -1049,8 +1370,8 @@ function resolveWorkflowStartTimestampMs(workflow) {
 }
 
 function resolveWorkflowDeniedTimestampMs(workflow) {
-  const transitionState = String(workflow?.transitionState || "").toLowerCase();
-  if (transitionState !== "blocked" && transitionState !== "deferred") {
+  const transitionState = String(workflow?.transitionState || '').toLowerCase();
+  if (transitionState !== 'blocked' && transitionState !== 'deferred') {
     return null;
   }
   const timestampMs = Date.parse(workflow?.admissionDecisionAt);
@@ -1065,13 +1386,13 @@ function resolveWorkflowFailureTimestampMs(workflow) {
 function buildNodeTimelineCorrelation(entry, controlPlaneDiagnostics, nodeId) {
   const traceEntries = Array.isArray(
     resolveAdminQueryTraceByNodeId(entry)?.[nodeId],
-  )
-    ? resolveAdminQueryTraceByNodeId(entry)[nodeId]
-    : [];
+  ) ?
+    resolveAdminQueryTraceByNodeId(entry)[nodeId] :
+    [];
   const loadFailureEntries = traceEntries
     .filter(
       (traceEntry) =>
-        traceEntry?.lane === "load" && traceEntry?.outcome !== "success",
+        traceEntry?.lane === 'load' && traceEntry?.outcome !== 'success',
     )
     .map((traceEntry) => ({
       timestampMs: resolveTraceFailureTimestampMs(traceEntry),
@@ -1083,9 +1404,9 @@ function buildNodeTimelineCorrelation(entry, controlPlaneDiagnostics, nodeId) {
 
   const readinessTransitions = Array.isArray(
     controlPlaneDiagnostics?.readinessTransitionsByNodeId?.[nodeId],
-  )
-    ? [...controlPlaneDiagnostics.readinessTransitionsByNodeId[nodeId]]
-    : [];
+  ) ?
+    [...controlPlaneDiagnostics.readinessTransitionsByNodeId[nodeId]] :
+    [];
   readinessTransitions.sort(
     (left, right) =>
       Number(left?.observedAtMs || ZERO) - Number(right?.observedAtMs || ZERO),
@@ -1135,34 +1456,34 @@ function buildNodeTimelineCorrelation(entry, controlPlaneDiagnostics, nodeId) {
     firstReadinessFlipAt: firstReadinessFlip?.observedAt || null,
     heartbeatAgeMsAtFirstReadinessFlip: Number.isFinite(
       heartbeatAgeMsAtFirstReadinessFlip,
-    )
-      ? heartbeatAgeMsAtFirstReadinessFlip
-      : null,
+    ) ?
+      heartbeatAgeMsAtFirstReadinessFlip :
+      null,
     readyLeaseLagMsAtFirstReadinessFlip: Number.isFinite(
       readyLeaseLagMsAtFirstReadinessFlip,
-    )
-      ? readyLeaseLagMsAtFirstReadinessFlip
-      : null,
+    ) ?
+      readyLeaseLagMsAtFirstReadinessFlip :
+      null,
     firstSplitStartedAtMs:
       splitStartTimestamps.length > ZERO ? splitStartTimestamps[ZERO] : null,
     firstSplitStartedAt:
-      splitStartTimestamps.length > ZERO
-        ? toIsoTimestamp(splitStartTimestamps[ZERO])
-        : null,
+      splitStartTimestamps.length > ZERO ?
+        toIsoTimestamp(splitStartTimestamps[ZERO]) :
+        null,
     firstSplitRejectedAtMs:
       splitDeniedTimestamps.length > ZERO ? splitDeniedTimestamps[ZERO] : null,
     firstSplitRejectedAt:
-      splitDeniedTimestamps.length > ZERO
-        ? toIsoTimestamp(splitDeniedTimestamps[ZERO])
-        : null,
+      splitDeniedTimestamps.length > ZERO ?
+        toIsoTimestamp(splitDeniedTimestamps[ZERO]) :
+        null,
     firstSplitFailedAtMs:
-      splitFailureTimestamps.length > ZERO
-        ? splitFailureTimestamps[ZERO]
-        : null,
+      splitFailureTimestamps.length > ZERO ?
+        splitFailureTimestamps[ZERO] :
+        null,
     firstSplitFailedAt:
-      splitFailureTimestamps.length > ZERO
-        ? toIsoTimestamp(splitFailureTimestamps[ZERO])
-        : null,
+      splitFailureTimestamps.length > ZERO ?
+        toIsoTimestamp(splitFailureTimestamps[ZERO]) :
+        null,
     relatedWorkflowIds: relatedWorkflows.map((workflow) => workflow.workflowId),
   };
 }
@@ -1208,7 +1529,7 @@ async function collectScenarioLogArtifacts(
   };
   let entries = [];
   try {
-    entries = await readdir(scenarioDir, { withFileTypes: true });
+    entries = await readdir(scenarioDir, {withFileTypes: true});
   } catch (_error) {
     return result;
   }
@@ -1238,11 +1559,11 @@ async function collectScenarioLogArtifacts(
   }
 
   const preferredNodeIds =
-    relevantNodeIds.length > ZERO
-      ? relevantNodeIds
-      : nodeLogCandidates.map((entryName) =>
-          entryName.slice(ZERO, -LOG_FILE_EXTENSION.length),
-        );
+    relevantNodeIds.length > ZERO ?
+      relevantNodeIds :
+      nodeLogCandidates.map((entryName) =>
+        entryName.slice(ZERO, -LOG_FILE_EXTENSION.length),
+      );
 
   await Promise.all(
     preferredNodeIds.map(async (nodeId) => {
@@ -1344,6 +1665,7 @@ export const FAILURE_BUNDLE_SEGMENT_3 = {
   PLAYBACK_EVENT_TYPE_REPLICA_CREATED,
   PLAYBACK_EVENT_TYPE_REPLICA_REMOVED,
   PLAYBACK_STAGE_SETUP_CLUSTER_WAITING_ACTIVE,
+  PLAYBACK_STAGE_LOAD_READINESS_STABLE,
   ROOT_CAUSE_CLASS_UNKNOWN,
   ROOT_CAUSE_CLASS_STARTUP,
   ROOT_CAUSE_CLASS_DISCOVERY,
@@ -1359,6 +1681,7 @@ export const FAILURE_BUNDLE_SEGMENT_3 = {
   LOAD_WAIT_REASON_RETRYABLE_CONTROL_PLANE_PRESSURE,
   LOAD_WAIT_REASON_TIMEOUT_WAITS,
   LOAD_WAIT_REASON_QUEUE_CAPACITY_REJECTED,
+  PRIORITY_RECOVERY_PROGRESS_REASON_FALLBACK,
   READINESS_REASON_MAX_NODES,
   READINESS_REASON_MAX_PER_NODE,
   AFFECTED_NODE_ID_LIMIT,

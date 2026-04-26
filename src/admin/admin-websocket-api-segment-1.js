@@ -1,28 +1,15 @@
-import { ADMIN_WEBSOCKET_API_SHARED } from "./admin-websocket-api-shared.js";
+import {ADMIN_WEBSOCKET_API_SHARED} from './admin-websocket-api-shared.js';
 
 const {
   ADMIN_CACHE_DUMP,
-  ADMIN_CACHE_OBSERVATION_TABLES,
   ADMIN_CLIENT,
   ADMIN_CONFIG_KEY,
   ADMIN_CONTENT_TYPE,
-  ADMIN_CONTROL_SNAPSHOT,
   ADMIN_DEFAULT,
-  ADMIN_ENFORCEMENT_MODE,
-  ADMIN_ERROR_CODE,
-  ADMIN_ERROR_DETAIL_KEY,
-  ADMIN_ERROR_HINT,
-  ADMIN_ERROR_MATCH,
   ADMIN_ERROR_MESSAGE,
-  ADMIN_LIMIT,
   ADMIN_LOCAL_DISPATCH,
   ADMIN_LOG_MSG,
-  ADMIN_MESSAGE_TYPE,
-  ADMIN_META_ACTION,
-  ADMIN_PREFLIGHT_CRITICAL_PATH_SNAPSHOT,
-  ADMIN_QUERY_RESULT,
   ADMIN_ROUTE,
-  ADMIN_SERVICE_DISCOVERY,
   ADMIN_SERVICE_OPERATION,
   ADMIN_STATUS,
   ADMIN_STREAM_LANE_DEFAULT,
@@ -33,87 +20,39 @@ const {
   ADMIN_TEST_DEFAULT,
   ADMIN_TEST_ERROR_MSG,
   ADMIN_TEST_STREAM_EVENT,
-  AST_TYPE,
   AdminControlSnapshot,
   AdminDebugHandlers,
   AdminPreflightSnapshot,
   AdminServiceDiscovery,
   AdminTestRunService,
   CACHE_DUMP_TABLES,
-  CONTROL_PLANE_READINESS_DIMENSION,
-  CONTROL_PLANE_SNAPSHOT_OBSERVATION_STATE,
   CONTROL_PLANE_WORKLOAD_CLASS,
-  CancellationToken,
   ConfigurationManager,
   ControlPlaneSnapshotOwner,
   DebugMetadataStore,
   EMPTY_STRING,
-  ENDPOINT_SYNC_UNHEALTHY_POLICY,
   ERRNO,
-  EXECUTION_MODE,
-  EXPR_TYPE,
   ErrorCode,
   Fastify,
   HTTP_HEADER,
   HTTP_HEADER_VALUE,
   HTTP_STATUS,
-  LOAD_LANE_ADMISSION_REASON_FALLBACK,
-  LOAD_LANE_QUERY_ADMISSION_STATE,
   LOAD_LANE_QUERY_TIMEOUT_CAP_MS,
   LOAD_LANE_READINESS_CACHE_MAX_AGE_MS,
-  LOAD_LANE_SOFT_ADMISSION_REASON_CODES,
   LOAD_LANE_TABLE_ADMISSION_CACHE_MAX_AGE_MS,
-  LOAD_LANE_TABLE_ADMISSION_RETRY_AFTER_MS,
-  LOAD_LANE_TABLE_ADMISSION_STATE,
-  LOAD_LANE_VOTER_READY_REPLICA_ROLES,
   LoggingService,
-  META_SERVICE_ID,
-  MUTATION_GUARD_MODE,
   MessageType,
   NUM,
-  PRESSURE_GOVERNOR_ACTION,
   PressureGovernor,
-  QUERY_RESULT_MESSAGE_KIND,
-  QUERY_RESULT_WRITE_OPERATIONS,
-  READINESS_SNAPSHOT_KEY,
-  SQLParser,
-  SQL_REQUEST_TIMEOUT_BUDGET_COMPLETION_MARGIN_MS,
   SSE_FRAME_PREFIX,
   SSE_FRAME_SUFFIX,
-  TABLES,
-  TIMEOUT_BUDGET_CLASSIFICATION,
   TRANSPORT_EVENT,
   TYPEOF,
   TraceCollector,
-  WASM_SERVICE_PROTOCOL,
-  adaptAdminMessageToServiceMessage,
-  appendStructuredQueryMetadata,
   buildControlPlaneWorkloadProfile,
-  buildLoadLaneAdmissionErrorDetails,
-  buildLoadLaneQueryAdmissionResult,
-  buildLoadLaneQueryAdmissionSnapshot,
-  buildLoadLaneRuntimeAuthoritySummary,
   createAdminOperationError,
-  createRetryableAdminOperationError,
-  createSqlRequest,
-  createTimeoutBudget,
-  createTimeoutBudgetError,
-  evaluateSharedMetadataNodeCoverage,
-  getControlPlaneRetryAfterMs,
   getRegisteredControlPlaneSystemTableGateway,
-  guardedAdaptAdminAction,
-  isAdminMessageDispatchable,
-  isRetryableControlPlaneError,
-  normalizeIdentifier,
-  normalizeSql,
-  parseDiscoveryBooleanQuery,
-  parseDiscoveryListQuery,
-  parseLiveSelect,
-  parseServiceDiscoverySqlQuery,
-  resolveLoadLaneQueryAdmissionState,
-  resolveRequestedQueryTimeoutMs,
   resolveSqlEngineControlPlaneReadinessService,
-  resolveSqlRequestTimeoutBudgetMs,
   websocket,
 } = ADMIN_WEBSOCKET_API_SHARED;
 
@@ -134,9 +73,9 @@ class AdminWebSocketAPISegment1 {
     this.testRunService = options.testRunService || new AdminTestRunService();
     this.debugMetadataStore =
       options.debugMetadataStore ||
-      (this.sqlQueryEngine
-        ? new DebugMetadataStore({ sqlQueryEngine: this.sqlQueryEngine })
-        : null);
+      (this.sqlQueryEngine ?
+        new DebugMetadataStore({sqlQueryEngine: this.sqlQueryEngine}) :
+        null);
     this.debugDapRouter = options.debugDapRouter || null;
     this.traceCollector = options.traceCollector || new TraceCollector();
     this.serviceDispatcher =
@@ -144,13 +83,13 @@ class AdminWebSocketAPISegment1 {
     this.serviceDiagnosticsProvider =
       options.serviceDiagnosticsProvider || null;
     this.partitionServicesProvider =
-      typeof options.partitionServicesProvider === TYPEOF.FUNCTION
-        ? options.partitionServicesProvider
-        : null;
+      typeof options.partitionServicesProvider === TYPEOF.FUNCTION ?
+        options.partitionServicesProvider :
+        null;
     this.partitionServices =
-      options.partitionServices instanceof Map
-        ? options.partitionServices
-        : null;
+      options.partitionServices instanceof Map ?
+        options.partitionServices :
+        null;
     this.liveQueryManager = options.liveQueryManager || null;
     this.cdcIntegrationService = options.cdcIntegrationService || null;
     this.controlPlaneReadinessService =
@@ -160,22 +99,22 @@ class AdminWebSocketAPISegment1 {
     this.heartbeatService = options.heartbeatService || null;
     this.loadLaneReadinessCacheMaxAgeMs =
       Number.isFinite(options.loadLaneReadinessCacheMaxAgeMs) &&
-      options.loadLaneReadinessCacheMaxAgeMs > NUM.ZERO
-        ? Math.floor(options.loadLaneReadinessCacheMaxAgeMs)
-        : LOAD_LANE_READINESS_CACHE_MAX_AGE_MS;
+      options.loadLaneReadinessCacheMaxAgeMs > NUM.ZERO ?
+        Math.floor(options.loadLaneReadinessCacheMaxAgeMs) :
+        LOAD_LANE_READINESS_CACHE_MAX_AGE_MS;
     this.loadLaneTableAdmissionCacheMaxAgeMs =
       Number.isFinite(options.loadLaneTableAdmissionCacheMaxAgeMs) &&
-      options.loadLaneTableAdmissionCacheMaxAgeMs > NUM.ZERO
-        ? Math.floor(options.loadLaneTableAdmissionCacheMaxAgeMs)
-        : Math.min(
-            this.loadLaneReadinessCacheMaxAgeMs,
-            LOAD_LANE_TABLE_ADMISSION_CACHE_MAX_AGE_MS,
-          );
+      options.loadLaneTableAdmissionCacheMaxAgeMs > NUM.ZERO ?
+        Math.floor(options.loadLaneTableAdmissionCacheMaxAgeMs) :
+        Math.min(
+          this.loadLaneReadinessCacheMaxAgeMs,
+          LOAD_LANE_TABLE_ADMISSION_CACHE_MAX_AGE_MS,
+        );
     this.loadLaneQueryTimeoutCapMs =
       Number.isFinite(options.loadLaneQueryTimeoutCapMs) &&
-      options.loadLaneQueryTimeoutCapMs > NUM.ZERO
-        ? Math.floor(options.loadLaneQueryTimeoutCapMs)
-        : LOAD_LANE_QUERY_TIMEOUT_CAP_MS;
+      options.loadLaneQueryTimeoutCapMs > NUM.ZERO ?
+        Math.floor(options.loadLaneQueryTimeoutCapMs) :
+        LOAD_LANE_QUERY_TIMEOUT_CAP_MS;
     this.loadLaneTableAdmissionCache = new Map();
     this.enableAdminStream = options.enableAdminStream !== false;
 
@@ -341,7 +280,7 @@ class AdminWebSocketAPISegment1 {
 
     if (shouldListen) {
       try {
-        await this.fastify.listen({ port: listenPort, host: listenHost });
+        await this.fastify.listen({port: listenPort, host: listenHost});
         this.listening = true;
       } catch (err) {
         // Some environments disallow opening listening sockets (eg, unit-test sandboxes).
@@ -508,12 +447,12 @@ class AdminWebSocketAPISegment1 {
       // WebSocket endpoint for admin stream
       // Note: @fastify/websocket passes socket directly in newer versions
       this.fastify.register(async (fastify) => {
-        fastify.get(ADMIN_ROUTE.STREAM, { websocket: true }, (socket, req) => {
+        fastify.get(ADMIN_ROUTE.STREAM, {websocket: true}, (socket, req) => {
           this.handleConnection(socket, req);
         });
         fastify.get(
           ADMIN_ROUTE.DEBUG_TRACE_STREAM,
-          { websocket: true },
+          {websocket: true},
           (socket, request) => {
             this.debugHandlers.handleDebugTraceConnection(socket, request);
           },
@@ -564,7 +503,7 @@ class AdminWebSocketAPISegment1 {
     } catch (error) {
       reply
         .code(HTTP_STATUS.INTERNAL_SERVER_ERROR)
-        .send({ error: error.message });
+        .send({error: error.message});
     }
   }
 
@@ -577,11 +516,11 @@ class AdminWebSocketAPISegment1 {
   async handleListRuns(reply) {
     try {
       const runs = await this.testRunService.listSavedRuns();
-      reply.code(HTTP_STATUS.OK).send({ runs });
+      reply.code(HTTP_STATUS.OK).send({runs});
     } catch (error) {
       reply
         .code(HTTP_STATUS.INTERNAL_SERVER_ERROR)
-        .send({ error: error.message });
+        .send({error: error.message});
     }
   }
 
@@ -598,10 +537,10 @@ class AdminWebSocketAPISegment1 {
     if (!run) {
       reply
         .code(HTTP_STATUS.NOT_FOUND)
-        .send({ error: ADMIN_TEST_ERROR_MSG.RUN_NOT_FOUND });
+        .send({error: ADMIN_TEST_ERROR_MSG.RUN_NOT_FOUND});
       return;
     }
-    reply.code(HTTP_STATUS.OK).send({ run });
+    reply.code(HTTP_STATUS.OK).send({run});
   }
 
   /**
@@ -619,11 +558,11 @@ class AdminWebSocketAPISegment1 {
         scenario: run.scenario,
         gitHash: run.gitHash,
       });
-      reply.code(HTTP_STATUS.OK).send({ run });
+      reply.code(HTTP_STATUS.OK).send({run});
     } catch (error) {
       reply
         .code(this.resolveTestApiErrorStatus(error))
-        .send({ error: error.message });
+        .send({error: error.message});
     }
   }
 
@@ -641,11 +580,11 @@ class AdminWebSocketAPISegment1 {
         runId: run.runId,
         scenario: run.scenario,
       });
-      reply.code(HTTP_STATUS.OK).send({ run });
+      reply.code(HTTP_STATUS.OK).send({run});
     } catch (error) {
       reply
         .code(this.resolveTestApiErrorStatus(error))
-        .send({ error: error.message });
+        .send({error: error.message});
     }
   }
 
@@ -666,7 +605,7 @@ class AdminWebSocketAPISegment1 {
     } catch (error) {
       reply
         .code(this.resolveTestApiErrorStatus(error))
-        .send({ error: error.message });
+        .send({error: error.message});
     }
   }
 
@@ -683,7 +622,7 @@ class AdminWebSocketAPISegment1 {
     if (!existingRun) {
       reply
         .code(HTTP_STATUS.NOT_FOUND)
-        .send({ error: ADMIN_TEST_ERROR_MSG.RUN_NOT_FOUND });
+        .send({error: ADMIN_TEST_ERROR_MSG.RUN_NOT_FOUND});
       return;
     }
 
@@ -945,7 +884,7 @@ class AdminWebSocketAPISegment1 {
       !this.systemTableCache ||
       typeof this.systemTableCache.getAll !== TYPEOF.FUNCTION
     ) {
-      throw new Error("System table cache not initialized");
+      throw new Error('System table cache not initialized');
     }
 
     for (const tableName of targetTables) {
@@ -1064,7 +1003,7 @@ class AdminWebSocketAPISegment1 {
     const workloadProfile = buildControlPlaneWorkloadProfile(
       CONTROL_PLANE_WORKLOAD_CLASS.ADMIN_DIAGNOSTIC_READ,
       {
-        additionalResourceKeys: ["control-plane:admin-local-observation"],
+        additionalResourceKeys: ['control-plane:admin-local-observation'],
       },
     );
     return PressureGovernor.getShared({
@@ -1086,7 +1025,7 @@ class AdminWebSocketAPISegment1 {
    * @return {Object}
    * @private
    */
-  resolveLocalObservationExecutionPolicy(executionContext = {}, options = {}) {
+  resolveLocalObservationExecutionPolicy(_executionContext = {}, options = {}) {
     const forceAuthoritativeRepair = options.forceAuthoritativeRepair === true;
     if (forceAuthoritativeRepair) {
       return {
@@ -1112,4 +1051,4 @@ class AdminWebSocketAPISegment1 {
    */
 }
 
-export { AdminWebSocketAPISegment1 };
+export {AdminWebSocketAPISegment1};

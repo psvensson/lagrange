@@ -25,8 +25,6 @@ import {
 } from '../../src/constants/index.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {
-  BOOTSTRAP_API_ERROR,
-  BOOTSTRAP_API_REGISTER_SERVICE_ERROR_CODE,
 } from '../../src/bootstrap/bootstrap-api-constants.js';
 import {MessageGroupAssignment} from
   '../../src/bootstrap/message-group-assignment.js';
@@ -45,7 +43,6 @@ const RESTARTING_NODE_GROUP_ID =
   MG_ASSIGNMENT.generateGroupId(RESTARTING_NODE_ID);
 const REPLICA_R0 = `${RESTARTING_NODE_GROUP_ID}-r0`;
 const REPLICA_R1 = `${RESTARTING_NODE_GROUP_ID}-r1`;
-const REPLICA_R2 = `${RESTARTING_NODE_GROUP_ID}-r2`;
 
 function initializeTestEnvironment() {
   ConfigurationManager.resetInstance();

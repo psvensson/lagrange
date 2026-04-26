@@ -109,9 +109,6 @@ function installCanonicalAdmissionOwner(fixture) {
     systemTableCache: fixture.systemTableCache,
   });
 
-  const realPropagationService =
-    fixture.bootstrapService.latencyTopology
-      ?.cdcGroupPropagationService || null;
   // In a single-node bootstrap the real propagation service reports
   // degraded mode (missing_local_group).  Use a safe-mode stub so the
   // readiness evaluation treats publication as healthy during fixture
