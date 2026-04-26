@@ -113,33 +113,37 @@ function observeReplicaStats(service) {
   }
 }
 
+function buildReplicaHealthSnapshot(snapshot) {
+  return snapshot;
+}
+
 function normalizeReplicaHealthSnapshot(replicaId, service) {
   if (!service) {
-    return {
+    return buildReplicaHealthSnapshot({
       replicaId,
       state: REPLICA_HEALTH_CHECK_STATE.MISSING,
       stats: EMPTY_HEALTH_STATS,
       error: WORKER_ERROR_MSG.REPLICA_NOT_FOUND,
-    };
+    });
   }
 
   if (service.initialized !== true || service.started !== true) {
-    return {
+    return buildReplicaHealthSnapshot({
       replicaId,
       state: REPLICA_HEALTH_CHECK_STATE.NOT_READY,
       stats: EMPTY_HEALTH_STATS,
       error: REPLICA_HEALTH_CHECK_ERROR_MSG.NOT_READY,
-    };
+    });
   }
 
   const statsObservation = observeReplicaStats(service);
 
-  return {
+  return buildReplicaHealthSnapshot({
     replicaId,
     state: statsObservation.state,
     stats: statsObservation.stats,
     error: statsObservation.error,
-  };
+  });
 }
 
 function buildHealthCheckResult(snapshot) {

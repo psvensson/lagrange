@@ -890,13 +890,23 @@ class ReplicaDispatchServiceSegment1 extends EventEmitter {
       STRING.UNKNOWN;
 
     if (isHeartbeatOnly === true) {
-      return {
+      const heartbeatOnlyRow = {
         [COLUMN.NODE_ID]: nodeId,
         [COLUMN.NODE_ADDRESS]: baseNodeAddress,
         [COLUMN.CONNECTION_STATE]: nextState,
         [COLUMN.LAST_HEARTBEAT]: heartbeatAt,
         [COLUMN.READY_LEASE_EXPIRES_AT]: readyLeaseExpiresAt,
       };
+      if (
+        this.shouldReviveHeartbeatOnlyNodeStatus({
+          existing,
+          isHeartbeatOnly,
+          nextState,
+        })
+      ) {
+        heartbeatOnlyRow[COLUMN.STATUS] = SERVICE_STATUS.ACTIVE;
+      }
+      return heartbeatOnlyRow;
     }
 
     const payloadCapabilities = payload?.[ControlPlaneField.CAPABILITIES];
@@ -957,6 +967,20 @@ class ReplicaDispatchServiceSegment1 extends EventEmitter {
    */
   isHeartbeatOnlyNodeStateUpdate(payload) {
     return payload?.[ControlPlaneField.HEARTBEAT_ONLY] === true;
+  }
+
+  shouldReviveHeartbeatOnlyNodeStatus(options = {}) {
+    if (
+      options.isHeartbeatOnly !== true ||
+      options.nextState !== STATE.READY
+    ) {
+      return false;
+    }
+    const existingStatus =
+      typeof options.existing?.[COLUMN.STATUS] === TYPEOF.STRING ?
+        options.existing[COLUMN.STATUS].toLowerCase() :
+        options.existing?.[COLUMN.STATUS];
+    return existingStatus !== SERVICE_STATUS.ACTIVE;
   }
 
   /**

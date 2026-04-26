@@ -11,8 +11,6 @@ import {
   resolveCanonicalActiveNodeIds,
 } from '../../control-plane/active-node-projection.js';
 import {
-} from '../../control-plane/control-plane-readiness-constants.js';
-import {
   BOOTSTRAP_API_CLUSTER_STATE,
   BOOTSTRAP_API_ERROR,
 } from '../bootstrap-api-constants.js';

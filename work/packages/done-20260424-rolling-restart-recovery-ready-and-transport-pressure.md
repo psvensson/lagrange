@@ -1,7 +1,5 @@
 # Rolling Restart Recovery-Ready And Transport Pressure
 
-Status: done on April 24, 2026.
-
 ## Why
 
 The `rolling-restart` secondary re-entry has moved beyond the

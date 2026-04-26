@@ -9,6 +9,10 @@ import assert from 'node:assert';
 import {ReplicaHandlerSetup} from '../../../src/bootstrap/shared/replica-handler-setup.js';
 import {DependencyError} from '../../../src/bootstrap/bootstrap-errors.js';
 
+const TEST_NODE_ID = 'test-node';
+const TEST_FORWARDS_EXECUTOR_OUTCOME_EMITTER =
+  'should forward optional executorOutcomeEmitter to ReplicaHandler';
+
 describe('ReplicaHandlerSetup', () => {
   let mockMessageRouter;
   let mockCdcIntegrationService;
@@ -144,7 +148,7 @@ describe('ReplicaHandlerSetup', () => {
 
     it('should create replicaHandler and replicaStateMachine with valid options', () => {
       const result = ReplicaHandlerSetup.create({
-        nodeId: 'test-node',
+        nodeId: TEST_NODE_ID,
         messageRouter: mockMessageRouter,
         cdcIntegrationService: mockCdcIntegrationService,
         systemTableCache: mockSystemTableCache,
@@ -160,7 +164,7 @@ describe('ReplicaHandlerSetup', () => {
 
     it('should return initialized replicaHandler', () => {
       const result = ReplicaHandlerSetup.create({
-        nodeId: 'test-node',
+        nodeId: TEST_NODE_ID,
         messageRouter: mockMessageRouter,
         cdcIntegrationService: mockCdcIntegrationService,
         systemTableCache: mockSystemTableCache,
@@ -176,7 +180,7 @@ describe('ReplicaHandlerSetup', () => {
 
     it('should accept optional dataDir parameter', () => {
       const result = ReplicaHandlerSetup.create({
-        nodeId: 'test-node',
+        nodeId: TEST_NODE_ID,
         messageRouter: mockMessageRouter,
         cdcIntegrationService: mockCdcIntegrationService,
         systemTableCache: mockSystemTableCache,
@@ -195,7 +199,7 @@ describe('ReplicaHandlerSetup', () => {
       const mockRpcClient = {send: () => {}};
 
       const result = ReplicaHandlerSetup.create({
-        nodeId: 'test-node',
+        nodeId: TEST_NODE_ID,
         messageRouter: mockMessageRouter,
         cdcIntegrationService: mockCdcIntegrationService,
         systemTableCache: mockSystemTableCache,
@@ -218,7 +222,7 @@ describe('ReplicaHandlerSetup', () => {
       };
 
       const result = ReplicaHandlerSetup.create({
-        nodeId: 'test-node',
+        nodeId: TEST_NODE_ID,
         messageRouter: trackingRouter,
         cdcIntegrationService: mockCdcIntegrationService,
         systemTableCache: mockSystemTableCache,
@@ -229,6 +233,28 @@ describe('ReplicaHandlerSetup', () => {
       createdStateMachines.push(result.replicaStateMachine);
 
       assert.strictEqual(registerCalled, true, 'should register with message router');
+    });
+
+    it(TEST_FORWARDS_EXECUTOR_OUTCOME_EMITTER, () => {
+      const executorOutcomeEmitter = Object.freeze({
+        emitOutcome() {},
+      });
+
+      const result = ReplicaHandlerSetup.create({
+        nodeId: TEST_NODE_ID,
+        messageRouter: mockMessageRouter,
+        cdcIntegrationService: mockCdcIntegrationService,
+        systemTableCache: mockSystemTableCache,
+        createPartitionService: mockCreatePartitionService,
+        executorOutcomeEmitter,
+      });
+
+      createdStateMachines.push(result.replicaStateMachine);
+
+      assert.strictEqual(
+        result.replicaHandler.executorOutcomeEmitter,
+        executorOutcomeEmitter,
+      );
     });
   });
 });

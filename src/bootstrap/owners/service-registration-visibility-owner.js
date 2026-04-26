@@ -66,31 +66,34 @@ class ServiceRegistrationVisibilityOwner {
       [COLUMN.UPDATED_AT]: serviceRow[COLUMN.UPDATED_AT] || null,
     };
   }
+  buildRegisteredServiceCacheObservationResult(observation) {
+    return observation;
+  }
   buildRegisteredServiceCacheObservation(expectedService, diagnostics) {
     const cache = this.getSystemTableCache();
     if (!cache) {
-      return {
+      return this.buildRegisteredServiceCacheObservationResult({
         cachedService: null,
         cacheMismatchFields: [],
         cacheReason: BOOTSTRAP_API_CACHE_VISIBILITY.REASON_CACHE_UNAVAILABLE,
         visibleResult: null,
-      };
+      });
     }
     const cachedService = cache.get(TABLES.SERVICES, expectedService[COLUMN.SERVICE_ID]);
     if (!cachedService) {
-      return {
+      return this.buildRegisteredServiceCacheObservationResult({
         cachedService: null,
         cacheMismatchFields: [],
         cacheReason: BOOTSTRAP_API_CACHE_VISIBILITY.REASON_SERVICE_ROW_MISSING,
         visibleResult: null,
-      };
+      });
     }
     const cacheMismatchFields = this.getRegisteredServiceMismatchFields(
       cachedService,
       expectedService,
     );
     if (cacheMismatchFields.length === NUM.ZERO) {
-      return {
+      return this.buildRegisteredServiceCacheObservationResult({
         cachedService,
         cacheMismatchFields,
         cacheReason: BOOTSTRAP_API_CACHE_VISIBILITY.REASON_VISIBLE,
@@ -102,14 +105,14 @@ class ServiceRegistrationVisibilityOwner {
             observed: this.buildRegisteredServiceVisibilitySnapshot(cachedService),
           },
         },
-      };
+      });
     }
-    return {
+    return this.buildRegisteredServiceCacheObservationResult({
       cachedService,
       cacheMismatchFields,
       cacheReason: BOOTSTRAP_API_CACHE_VISIBILITY.REASON_FIELD_MISMATCH,
       visibleResult: null,
-    };
+    });
   }
   buildRegisteredServiceVisibilityExpectation(serviceRow) {
     if (!serviceRow || typeof serviceRow !== TYPEOF.OBJECT) {

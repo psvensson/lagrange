@@ -14,7 +14,13 @@ import {DistributedTransactionCoordinator} from
   '../../../src/query/distributed/distributed-transaction-coordinator.js';
 import {LEASE_STATE} from
   '../../../src/control-plane/lease-service-constants.js';
+import {ExecutorOutcomeEmitter} from
+  '../../../src/rebalancer/executor-outcome-emitter.js';
 
+const TEST_NODE_ID = 'test-node';
+const TEST_NODE_ADDRESS = 'localhost:8080';
+const TEST_FORWARDS_EXECUTOR_OUTCOME_EMITTER =
+  'should forward optional executorOutcomeEmitter to RebalanceCoordinator';
 const TEST_CLUSTER_INCARNATION_FENCE_BLOCKED = Object.freeze({
   state: 'identity_mismatch',
   allowed: false,
@@ -267,6 +273,28 @@ describe('ControlPlaneSetup', () => {
             );
             return true;
           },
+        );
+      });
+
+    it(TEST_FORWARDS_EXECUTOR_OUTCOME_EMITTER,
+      async () => {
+        const executorOutcomeEmitter = new ExecutorOutcomeEmitter();
+
+        const result = await ControlPlaneSetup.create({
+          nodeId: TEST_NODE_ID,
+          nodeAddress: TEST_NODE_ADDRESS,
+          messageRouter: mockMessageRouter,
+          cdcIntegrationService: mockCdcIntegrationService,
+          systemTableCache: mockSystemTableCache,
+          tablePolicyService: mockTablePolicyService,
+          executorOutcomeEmitter,
+        });
+
+        createdServices.push(result);
+
+        assert.strictEqual(
+          result.rebalanceCoordinator.executorOutcomeEmitter,
+          executorOutcomeEmitter,
         );
       });
 

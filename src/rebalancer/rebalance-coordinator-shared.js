@@ -95,7 +95,6 @@ import {
   STORAGE_CAPACITY_DEFAULT,
 } from './storage-capacity-constants.js';
 import {STORAGE_ADMISSION_DECISION_TYPE} from './storage-admission-constants.js';
-import {} from './executor-outcome-constants.js';
 import {
   ExecutorOutcomeEmitter,
   OUTCOME_EVENT_NAME,

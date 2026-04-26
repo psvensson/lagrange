@@ -25,6 +25,12 @@ import {
   mergeControlPlanePublicationRows,
   publicationRowSatisfiesDesiredState,
 } from './control-plane-publication-merge.js';
+import {
+  PUBLICATION_RECOVERY_MACHINE_ACTION,
+  PUBLICATION_RECOVERY_MACHINE_CONTEXT,
+  evaluatePublicationRecoveryMachine,
+  isTerminalPublicationRecoveryStatus,
+} from './publication-recovery-state-machine.js';
 import {shouldUseAuthoritativePriorityRecoveryRediscovery} from './priority-recovery-snapshot.js';
 import {
   buildPublicationMetadataRefreshRow as buildPublicationMetadataRefreshRowCore,
@@ -110,15 +116,9 @@ const MEMBERSHIP_PUBLICATION_TARGET_NODE_STATE = Object.freeze({
   AVAILABLE: 'available',
   UNAVAILABLE: 'unavailable',
 });
-const MEMBERSHIP_PUBLICATION_ACK_TRANSITION_STATE = Object.freeze({
-  NOOP: 'noop',
-  ACK_PENDING: 'ack_pending',
-  PUBLISHED: 'published',
-});
-const MEMBERSHIP_PUBLICATION_ACK_TRANSITION_REASON = Object.freeze({
-  ACKNOWLEDGEMENT_RECORDED: 'acknowledgement_recorded',
-  REQUIRED_ACKNOWLEDGEMENTS_COMPLETED:
-    'required_acknowledgements_completed',
+const MEMBERSHIP_PUBLICATION_ACK_REFRESH_STATE = Object.freeze({
+  CACHE_SUFFICIENT: 'cache_sufficient',
+  DURABLE_REQUIRED: 'durable_required',
 });
 const PUBLICATION_WORKFLOW_REASON = Object.freeze({
   DERIVE_MEMBERSHIP_PUBLICATION: 'derive-membership-publication',
@@ -234,9 +234,6 @@ function buildMembershipPublicationTargetNodeDecision(options = {}) {
     state: targetDecision.state,
   });
 }
-function resolveMembershipPublicationTargetNodeId(options = {}) {
-  return buildMembershipPublicationTargetNodeDecision(options).nodeId;
-}
 function resolveDispatchRetryNodeId(operation) {
   if (
     operation?.type === OperationType.REPLACE &&
@@ -281,6 +278,9 @@ function buildTransitionHistoryEntry({state, reasonCode, at, metadata} = {}) {
   }
   return entry;
 }
+function isTerminalMembershipPublicationStatus(publicationStatus) {
+  return isTerminalPublicationRecoveryStatus(publicationStatus);
+}
 function didOptionalSourceVersionChange(previousValue, nextValue) {
   if (nextValue === null || nextValue === undefined) {
     return false;
@@ -298,11 +298,7 @@ function hasPublicationTimedOut(publicationRow, options = {}) {
   if (!timeoutMs || !createdAt) {
     return false;
   }
-  if (
-    normalizedPublication.status === MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED ||
-    normalizedPublication.status === MEMBERSHIP_PUBLICATION_STATUS.ABANDONED ||
-    normalizedPublication.status === MEMBERSHIP_PUBLICATION_STATUS.SUPERSEDED
-  ) {
+  if (isTerminalMembershipPublicationStatus(normalizedPublication.status)) {
     return false;
   }
   return nowMs - createdAt >= timeoutMs;
@@ -368,6 +364,36 @@ function resolveCarriedAcknowledgedNodeIds(options = {}) {
     return [];
   }
   return baselineAcknowledgedNodeIds.filter((nodeId) => requiredAckNodeIds.includes(nodeId));
+}
+function buildMembershipPublicationAckRefreshDecision(options = {}) {
+  const normalizedPublication = options.normalizedPublication || {};
+  const normalizedNodeId = normalizeMembershipPublicationNodeId(options.nodeId);
+  const requiredAckNodeIds = normalizeNodeIdList(
+    normalizedPublication.requiredAckNodeIds,
+  );
+  const acknowledgedNodeIds = normalizeNodeIdList(
+    normalizedPublication.acknowledgedNodeIds,
+  );
+  const terminalPublication = isTerminalMembershipPublicationStatus(
+    normalizedPublication.status,
+  );
+  const nodeRequired = requiredAckNodeIds.includes(normalizedNodeId);
+  const nodeAlreadyAcknowledged = acknowledgedNodeIds.includes(
+    normalizedNodeId,
+  );
+  const state =
+    terminalPublication !== true &&
+    (nodeRequired !== true || nodeAlreadyAcknowledged === true) ?
+      MEMBERSHIP_PUBLICATION_ACK_REFRESH_STATE.DURABLE_REQUIRED :
+      MEMBERSHIP_PUBLICATION_ACK_REFRESH_STATE.CACHE_SUFFICIENT;
+  return Object.freeze({
+    state,
+    terminalPublication,
+    nodeRequired,
+    nodeAlreadyAcknowledged,
+    shouldRefresh:
+      state === MEMBERSHIP_PUBLICATION_ACK_REFRESH_STATE.DURABLE_REQUIRED,
+  });
 }
 async function safelyGetLatestMembershipPublicationRow(coordinator, options = {}) {
   if (!coordinator || typeof coordinator.getLatestPublicationRow !== TYPEOF.FUNCTION) {
@@ -712,10 +738,14 @@ const MEMBERSHIP_PUBLICATION_PLANNING_HELPERS = Object.freeze({
   resolveObservedActiveNodeIds,
 });
 function buildPublicationMetadataRefreshRow(options = {}) {
-  return buildPublicationMetadataRefreshRowCore(
+  const refreshedRow = buildPublicationMetadataRefreshRowCore(
     options,
     MEMBERSHIP_PUBLICATION_PLANNING_HELPERS,
   );
+  return closeAcknowledgedMetadataRefreshRow({
+    publicationRow: refreshedRow,
+    nowMs: options.nowMs,
+  });
 }
 function deriveMembershipPublicationCandidate(options = {}) {
   return deriveMembershipPublicationCandidateCore(
@@ -770,7 +800,11 @@ function deriveMembershipPublicationId(candidate = {}) {
 function buildMembershipPublicationRow(options = {}) {
   const candidate = options.candidate || {};
   const nowMs = normalizePositiveInteger(options.nowMs, Date.now());
-  const status = String(options.status || MEMBERSHIP_PUBLICATION_STATUS.OPEN).toUpperCase();
+  const status = String(
+    options.status ||
+      candidate.publicationStatus ||
+      MEMBERSHIP_PUBLICATION_STATUS.OPEN,
+  ).toUpperCase();
   const transitionHistory = Array.isArray(options.transitionHistory) ?
     options.transitionHistory.slice() :
     [
@@ -804,7 +838,10 @@ function buildMembershipPublicationRow(options = {}) {
       typeof candidate.membershipLifecycleSummary === TYPEOF.OBJECT ?
         candidate.membershipLifecycleSummary :
         buildMembershipLifecycleSummary({
-          lifecycleState: MEMBERSHIP_LIFECYCLE_STATE.PUBLISH_PENDING,
+          lifecycleState:
+            status === MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED ?
+              MEMBERSHIP_LIFECYCLE_STATE.PUBLISHED_ACTIVE :
+              MEMBERSHIP_LIFECYCLE_STATE.PUBLISH_PENDING,
           publishedActiveNodeIds: candidate.publishedActiveNodeIds,
         }),
     status,
@@ -827,42 +864,104 @@ function buildMembershipPublicationAcknowledgementDecision(options = {}) {
       acknowledgedNodeIds,
       normalizedPublication.acknowledgedNodeIds,
     );
-  const allAcknowledged = listEquals(
+  const machineDecision = evaluatePublicationRecoveryMachine({
+    context: PUBLICATION_RECOVERY_MACHINE_CONTEXT.ACK_WRITE,
+    status: normalizedPublication.status,
+    requiredAckNodeIds: normalizedPublication.requiredAckNodeIds,
     acknowledgedNodeIds,
-    normalizedPublication.requiredAckNodeIds,
-  );
-  const publicationAlreadyClosed =
-    normalizedPublication.status === MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED;
-  const state =
-    allAcknowledged && !publicationAlreadyClosed ?
-      MEMBERSHIP_PUBLICATION_ACK_TRANSITION_STATE.PUBLISHED :
-      acknowledgementChanged ?
-        MEMBERSHIP_PUBLICATION_ACK_TRANSITION_STATE.ACK_PENDING :
-        MEMBERSHIP_PUBLICATION_ACK_TRANSITION_STATE.NOOP;
-  const statusByState = Object.freeze({
-    [MEMBERSHIP_PUBLICATION_ACK_TRANSITION_STATE.PUBLISHED]:
-      MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED,
-    [MEMBERSHIP_PUBLICATION_ACK_TRANSITION_STATE.ACK_PENDING]:
-      MEMBERSHIP_PUBLICATION_STATUS.ACK_PENDING,
-    [MEMBERSHIP_PUBLICATION_ACK_TRANSITION_STATE.NOOP]:
-      normalizedPublication.status,
-  });
-  const reasonByState = Object.freeze({
-    [MEMBERSHIP_PUBLICATION_ACK_TRANSITION_STATE.PUBLISHED]:
-      MEMBERSHIP_PUBLICATION_ACK_TRANSITION_REASON
-        .REQUIRED_ACKNOWLEDGEMENTS_COMPLETED,
-    [MEMBERSHIP_PUBLICATION_ACK_TRANSITION_STATE.ACK_PENDING]:
-      MEMBERSHIP_PUBLICATION_ACK_TRANSITION_REASON.ACKNOWLEDGEMENT_RECORDED,
-    [MEMBERSHIP_PUBLICATION_ACK_TRANSITION_STATE.NOOP]:
-      MEMBERSHIP_PUBLICATION_COORDINATOR_LITERAL.EMPTY,
+    acknowledgementChanged,
   });
   return Object.freeze({
-    state,
-    nextStatus: statusByState[state],
-    reasonCode: reasonByState[state],
+    state: machineDecision.action,
+    action: machineDecision.action,
+    nextStatus: machineDecision.nextStatus,
+    reasonCode: machineDecision.reasonCode,
     acknowledgementChanged,
-    allAcknowledged,
+    allAcknowledged:
+      machineDecision.evidence.requiredAckCount > NUM.ZERO &&
+      machineDecision.evidence.pendingAckCount === NUM.ZERO,
+    machineDecision,
   });
+}
+function buildPublicationMetadataRefreshDecision(options = {}) {
+  const normalizedPublication = normalizeControlPlanePublicationRow(options.publicationRow);
+  const machineDecision = evaluatePublicationRecoveryMachine({
+    context: PUBLICATION_RECOVERY_MACHINE_CONTEXT.METADATA_REFRESH,
+    status: normalizedPublication.status,
+    requiredAckNodeIds: normalizedPublication.requiredAckNodeIds,
+    acknowledgedNodeIds: normalizedPublication.acknowledgedNodeIds,
+  });
+  return Object.freeze({
+    state: machineDecision.action,
+    action: machineDecision.action,
+    nextStatus: machineDecision.nextStatus,
+    reasonCode: machineDecision.reasonCode,
+    allRequiredAcknowledged:
+      machineDecision.evidence.requiredAckCount > NUM.ZERO &&
+      machineDecision.evidence.pendingAckCount === NUM.ZERO,
+    terminalPublication: machineDecision.evidence.terminalPublication,
+    shouldClose:
+      machineDecision.action ===
+        PUBLICATION_RECOVERY_MACHINE_ACTION.CLOSE_ACK_COMPLETE,
+    machineDecision,
+  });
+}
+function closeAcknowledgedMetadataRefreshRow(options = {}) {
+  const publicationRow = options.publicationRow;
+  if (!publicationRow || typeof publicationRow !== TYPEOF.OBJECT) {
+    return publicationRow;
+  }
+  const closureDecision = buildPublicationMetadataRefreshDecision({
+    publicationRow,
+  });
+  if (closureDecision.shouldClose !== true) {
+    return publicationRow;
+  }
+  const normalizedPublication = normalizeControlPlanePublicationRow(publicationRow);
+  const nowMs = normalizePositiveInteger(options.nowMs, Date.now());
+  const existingHistory = Array.isArray(publicationRow.transition_history) ?
+    publicationRow.transition_history :
+    normalizedPublication.transitionHistory;
+  const publishedNodeIdsForState =
+    normalizedPublication.publishedActiveNodeIds.length > NUM.ZERO ?
+      normalizedPublication.publishedActiveNodeIds :
+      normalizedPublication.requiredAckNodeIds;
+  const membershipLifecycleSummary = buildMembershipLifecycleSummary({
+    lifecycleState: MEMBERSHIP_LIFECYCLE_STATE.PUBLISHED_ACTIVE,
+    publishedActiveNodeIds: normalizedPublication.publishedActiveNodeIds,
+    projectedServingNodeIds:
+      normalizedPublication.membershipLifecycleSummary?.projectedServingNodeIds,
+    locallyEligibleNodeIds:
+      normalizedPublication.membershipLifecycleSummary?.locallyEligibleNodeIds,
+    suspectedOrTransitioningNodeIds:
+      normalizedPublication.membershipLifecycleSummary?.suspectedOrTransitioningNodeIds,
+    memberStatesByNodeId: buildServingMemberStatesByNodeId(
+      normalizedPublication.membershipLifecycleSummary?.memberStatesByNodeId,
+      publishedNodeIdsForState,
+    ),
+    recoveryEpochByNodeId:
+      normalizedPublication.membershipLifecycleSummary?.recoveryEpochByNodeId,
+    membershipFreeze: normalizedPublication.membershipLifecycleSummary?.membershipFreeze,
+    projectionDiagnostics:
+      normalizedPublication.membershipLifecycleSummary?.projectionDiagnostics,
+  });
+  return {
+    ...publicationRow,
+    status: closureDecision.nextStatus,
+    updated_at: nowMs,
+    published_at: publicationRow.published_at || nowMs,
+    closed_at: publicationRow.closed_at || nowMs,
+    membership_lifecycle_summary: membershipLifecycleSummary,
+    membershipLifecycleSummary,
+    transition_history: [
+      ...existingHistory,
+      buildTransitionHistoryEntry({
+        state: closureDecision.nextStatus,
+        reasonCode: closureDecision.reasonCode,
+        at: nowMs,
+      }),
+    ],
+  };
 }
 function acknowledgeMembershipPublication(options = {}) {
   const publicationRow = options.publicationRow || {};
@@ -899,8 +998,8 @@ function acknowledgeMembershipPublication(options = {}) {
       acknowledgedNodeIds,
     });
   if (
-    acknowledgementDecision.state ===
-    MEMBERSHIP_PUBLICATION_ACK_TRANSITION_STATE.NOOP
+    acknowledgementDecision.action ===
+    PUBLICATION_RECOVERY_MACHINE_ACTION.PRESERVE_STATUS
   ) {
     return {
       ...publicationRow,
@@ -909,7 +1008,7 @@ function acknowledgeMembershipPublication(options = {}) {
       transition_history: [
         ...(Array.isArray(publicationRow.transition_history) ?
           publicationRow.transition_history :
-        normalizedPublication.transitionHistory),
+          normalizedPublication.transitionHistory),
       ],
     };
   }
@@ -1185,11 +1284,11 @@ class MembershipPublicationCoordinator {
       return null;
     }
     const initialPublication = normalizeControlPlanePublicationRow(initialPublicationRow);
-    const initialRequiredAckNodeIds = normalizeNodeIdList(initialPublication.requiredAckNodeIds);
-    const authoritativeRefreshAttempted =
-      !this.isTerminalPublicationStatus(initialPublication.status) &&
-      !initialRequiredAckNodeIds.includes(normalizedNodeId);
-    const refreshedPublicationRow = authoritativeRefreshAttempted ?
+    const refreshDecision = buildMembershipPublicationAckRefreshDecision({
+      normalizedPublication: initialPublication,
+      nodeId: normalizedNodeId,
+    });
+    const refreshedPublicationRow = refreshDecision.shouldRefresh ?
       await safelyGetLatestMembershipPublicationRow(this, {
         ...options,
         preferAuthoritativeRead: true,
@@ -1205,7 +1304,7 @@ class MembershipPublicationCoordinator {
     return Object.freeze({
       nodeId: normalizedNodeId,
       publicationRow: candidatePublicationRow,
-      authoritativeRefreshAttempted,
+      authoritativeRefreshAttempted: refreshDecision.shouldRefresh,
       terminal: this.isTerminalPublicationStatus(normalizedPublication.status),
       requiresAcknowledgement: requiredAckNodeIds.includes(normalizedNodeId),
       alreadyAcknowledged: acknowledgedNodeIds.includes(normalizedNodeId),
@@ -1387,8 +1486,8 @@ class MembershipPublicationCoordinator {
       {
         ...options,
         publicationRow: candidatePublicationRow,
-        publicationWriteMaxAttempts: NUM.ONE,
-        skipPublicationWriteReadback: true,
+        skipPublicationWriteReadback:
+          options.skipPublicationWriteReadback === true,
       },
     );
   }

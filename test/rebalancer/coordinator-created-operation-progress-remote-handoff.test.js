@@ -636,7 +636,7 @@ async (t) => {
 test('priority add-like recent intents survive deferred authoritative ' +
   'misses through the priority create-phase window',
 async (t) => {
-  let nowMs = REMOTE_HANDOFF_TEST_INITIAL_NOW_MS;
+  const nowMs = REMOTE_HANDOFF_TEST_INITIAL_NOW_MS;
   const originalDateNow = Date.now;
   Date.now = () => nowMs;
 

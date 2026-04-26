@@ -17,14 +17,8 @@ import {
 import {
   firstStringField,
 } from './admin-helpers.js';
-import {
-} from '../control-plane/active-node-projection.js';
 import {buildCanonicalPublicationRecoveryEvidence} from '../control-plane/publication-recovery-evidence.js';
 import {buildPriorityRecoveryDecisionSnapshots as buildSharedPriorityRecoveryDecisionSnapshots} from '../control-plane/priority-recovery-snapshot.js';
-import {
-} from '../control-plane/priority-recovery-diagnostics-constants.js';
-import {
-} from './admin-authoritative-repair-evaluation.js';
 import {LogsTableService} from '../logging/logs-table-service.js';
 import {AdminControlSnapshotPart4} from './admin-control-snapshot-class-part-4.js';
 // ── file-local constants ────────────────────────────────────────────────────

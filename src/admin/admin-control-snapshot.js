@@ -25,8 +25,6 @@ import {
   firstStringField,
   uniqueSorted,
 } from './admin-helpers.js';
-import {
-} from '../control-plane/active-node-projection.js';
 import {buildCanonicalPublicationRecoveryEvidence} from '../control-plane/publication-recovery-evidence.js';
 import {buildPublicationRecoveryProtocolSnapshot} from '../control-plane/recovery-protocol-snapshot.js';
 import {buildPublicationRecoveryGateSnapshot} from '../control-plane/publication-recovery-gate.js';
@@ -41,8 +39,6 @@ import {
   PRIORITY_RECOVERY_SEMANTIC_STATE_IDS,
   PRIORITY_RECOVERY_UNRESOLVED_SEMANTIC_STATE_IDS,
 } from '../control-plane/priority-recovery-diagnostics-constants.js';
-import {
-} from './admin-authoritative-repair-evaluation.js';
 import {StartupRecoveryCoordinator} from '../bootstrap/startup-recovery-coordinator.js';
 import {assignAdminControlSnapshotReadinessDiagnosticsMethods} from './admin-control-snapshot-readiness-diagnostics-methods.js';
 import {assignAdminControlSnapshotLocalDiagnosticsMethods} from './admin-control-snapshot-local-diagnostics-methods.js';

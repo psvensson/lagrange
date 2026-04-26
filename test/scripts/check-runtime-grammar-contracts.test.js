@@ -24,6 +24,10 @@ const CLUSTER_SEGMENT_2_FILE_PATH =
   'test/distributed/harness/cluster-segment-2.js';
 const PUBLICATION_EVIDENCE_REPLAY_FILE_PATH =
   'test/distributed/harness/publication-evidence-replay.js';
+const STATE_MACHINE_PRESSURE_PREFLIGHT_FILE_PATH =
+  'test/distributed/harness/state-machine-pressure-preflight.js';
+const DISTRIBUTED_RUN_RUNTIME_HELPERS_FILE_PATH =
+  'test/distributed/run-runtime-helpers.js';
 const EXTRACT_LEADERS_FUNCTION = 'extractControlSnapshotLeaders';
 const HANDLE_COORDINATOR_PROGRESS_FUNCTION = 'handleCoordinatorProgressEvent';
 const CALCULATE_MOVES_FUNCTION = 'calculateMoves';
@@ -39,6 +43,7 @@ const EVALUATE_LOAD_PUBLISHED_CONVERGENCE_FUNCTION =
   'evaluateLoadPublishedConvergence';
 const REPLAY_PUBLICATION_PRIORITY_EVIDENCE_FROM_ROWS_FUNCTION =
   'replayPublicationPriorityEvidenceFromRows';
+const RUN_SCENARIOS_FUNCTION = 'runScenarios';
 const BIND_PRIORITY_VISIBILITY_FUNCTION =
   'bindPriorityRecoveryVisibilityCacheListener';
 const BUILD_PRIORITY_SPREAD_DECISION_FUNCTION = 'buildPrioritySpreadDecision';
@@ -61,6 +66,10 @@ const COMPLETED_LEADER_HANDOFF_EVIDENCE_FRAGMENT =
   'completedLeaderHandoffEvidence';
 const WAIT_REPLACEMENT_LEADER_OWNERSHIP_FRAGMENT =
   'WAIT_REPLACEMENT_LEADER_OWNERSHIP';
+const STATE_MACHINE_PRESSURE_PREFLIGHT_GRAMMAR_FRAGMENT =
+  'STATE_MACHINE_PRESSURE_POINT_GRAMMAR';
+const STATE_MACHINE_PRESSURE_PREFLIGHT_METADATA_FRAGMENT =
+  'STATE_MACHINE_PRESSURE_PREFLIGHT_METADATA_KEY';
 
 test('detects forbidden strict leader inference fragments inside leader extraction',
   async (t) => {
@@ -241,6 +250,43 @@ test('detects publication recovery gate code that skips summary authority',
     );
   });
 
+test('detects missing state-machine pressure preflight grammar', async (t) => {
+  const violations = collectRuntimeGrammarContractViolationsFromSource(
+    [
+      'function evaluateStaticPressurePointGrammar() { return []; }',
+      'function evaluateStateMachinePressureSnapshot() { return {}; }',
+      'function runStateMachinePressurePreflight() { return {}; }',
+    ].join('\n'),
+    STATE_MACHINE_PRESSURE_PREFLIGHT_FILE_PATH,
+  );
+
+  t.ok(
+    violations.some((violation) =>
+      violation.target === STATE_MACHINE_PRESSURE_PREFLIGHT_GRAMMAR_FRAGMENT,
+    ),
+  );
+});
+
+test('detects distributed runner paths that skip pressure preflight metadata',
+  async (t) => {
+    const violations = collectRuntimeGrammarContractViolationsFromSource(
+      [
+        'async function runScenarios(config, scenarios, options) {',
+        '  const report = new ReportWriter(options.output, {});',
+        '  return {report, hasFailures: false};',
+        '}',
+      ].join('\n'),
+      DISTRIBUTED_RUN_RUNTIME_HELPERS_FILE_PATH,
+    );
+
+    t.ok(
+      violations.some((violation) =>
+        violation.functionName === RUN_SCENARIOS_FUNCTION &&
+        violation.target === STATE_MACHINE_PRESSURE_PREFLIGHT_METADATA_FRAGMENT,
+      ),
+    );
+  });
+
 test('detects readiness planning code that reintroduces stale priority-spread reasons',
   async (t) => {
     const violations = collectRuntimeGrammarContractViolationsFromSource(
@@ -414,6 +460,9 @@ test('tracks the bounded runtime grammar hotspot set explicitly', async (t) => {
       'test/distributed/harness/assertions-segment-3.js',
       'test/distributed/harness/cluster-segment-2.js',
       'test/distributed/harness/publication-evidence-replay.js',
+      'test/distributed/harness/state-machine-pressure-preflight.js',
+      'test/distributed/run-runtime-helpers.js',
+      'test/distributed/run.js',
     ],
   );
 });

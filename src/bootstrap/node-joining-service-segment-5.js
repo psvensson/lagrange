@@ -625,6 +625,8 @@ class NodeJoiningServiceSegment5 extends NodeJoiningServiceSegment4 {
       createPartitionService: createPartitionService,
       dataDir: this.dataDir,
       rpcClient: this.rpcClient,
+      executorOutcomeEmitter:
+        this.rebalanceCoordinator?.executorOutcomeEmitter,
     });
     this.replicaHandler = replicaHandler;
     this.replicaStateMachine = replicaStateMachine;
@@ -685,7 +687,8 @@ class NodeJoiningServiceSegment5 extends NodeJoiningServiceSegment4 {
       if (!subscriptionMessageGroupService) {
         throw this.buildMessageGroupOwnerNotReadyError(subscriptionSelection, {
           message:
-            'Operational message-group ingress not ready ' +
+            NODE_JOINING_SERVICE_LITERAL
+              .OPERATIONAL_MESSAGE_GROUP_CDC_INGRESS_NOT_READY +
             `for ${tableName} CDC subscription`,
         });
       }
@@ -834,6 +837,7 @@ class NodeJoiningServiceSegment5 extends NodeJoiningServiceSegment4 {
       getLocalClusterIncarnationFence: () => this.clusterIncarnationFence,
       rebalanceCoordinator: this.rebalanceCoordinator,
       bootstrapReadinessState: this.bootstrapReadinessState,
+      executorOutcomeEmitter: this.replicaHandler?.executorOutcomeEmitter,
     });
     this.heartbeatService = controlPlane.heartbeatService;
     if (
@@ -855,6 +859,22 @@ class NodeJoiningServiceSegment5 extends NodeJoiningServiceSegment4 {
     this.endpointService = controlPlane.endpointService;
     this.dispatchService = controlPlane.dispatchService;
     this.rebalanceCoordinator = controlPlane.rebalanceCoordinator;
+    const resolvedExecutorOutcomeEmitter =
+      this.rebalanceCoordinator?.executorOutcomeEmitter;
+    if (
+      this.replicaHandler &&
+      resolvedExecutorOutcomeEmitter
+    ) {
+      this.replicaHandler.executorOutcomeEmitter =
+        resolvedExecutorOutcomeEmitter;
+    }
+    if (
+      this.messageGroupServiceHandler &&
+      resolvedExecutorOutcomeEmitter
+    ) {
+      this.messageGroupServiceHandler.executorOutcomeEmitter =
+        resolvedExecutorOutcomeEmitter;
+    }
     this.runtimeSurfaceOwner.bindControlPlaneServices();
     this.logger.info(
       NODE_JOINING_SERVICE_LITERAL.CONTROL_PLANE_INITIALIZED_BY_OWNER,
@@ -890,6 +910,8 @@ class NodeJoiningServiceSegment5 extends NodeJoiningServiceSegment4 {
         systemTableCache,
         serviceLifecycleManager: this.serviceLifecycleManager,
         rpcClient: this.rpcClient,
+        executorOutcomeEmitter:
+          this.rebalanceCoordinator?.executorOutcomeEmitter,
       });
     });
     if (result) {
@@ -934,6 +956,8 @@ class NodeJoiningServiceSegment5 extends NodeJoiningServiceSegment4 {
       resolveLocalMessageGroupReplica: (replicaId) =>
         this.messageGroupServices.get(replicaId) || null,
       rpcClient: this.rpcClient,
+      executorOutcomeEmitter:
+        this.rebalanceCoordinator?.executorOutcomeEmitter,
     });
     if (result) {
       this.messageGroupServiceHandler = result.messageGroupServiceHandler;
@@ -1279,7 +1303,7 @@ class NodeJoiningServiceSegment5 extends NodeJoiningServiceSegment4 {
     }
     return services.some((service) => {
       return (
-        String(service?.[COLUMN.RAFT_ROLE] || '').toLowerCase() ===
+        String(service?.[COLUMN.RAFT_ROLE] || STRING.EMPTY).toLowerCase() ===
         String(RAFT_ROLE.LEADER).toLowerCase()
       );
     });

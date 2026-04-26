@@ -90,7 +90,14 @@ function createDistributedRunRuntimeBundle(deps = {}) {
     pathToFileURL,
     resolve,
     normalizeFiniteNumber,
+    formatStateMachinePressurePreflightSummary,
+    runStateMachinePressurePreflight,
   } = deps;
+
+  const STATE_MACHINE_PRESSURE_PREFLIGHT_METADATA_KEY =
+    'stateMachinePressurePreflight';
+  const STATE_MACHINE_PRESSURE_PREFLIGHT_ERROR_PREFIX =
+    'State-machine pressure preflight failed';
 
   function resolveBenchmarkGateConfig(config) {
     const configuredGate = config?.benchmarkGate &&
@@ -301,6 +308,8 @@ function createDistributedRunRuntimeBundle(deps = {}) {
     return parts.join(' ').trim();
   }
 
+  const ERROR_DIAGNOSTICS_FIELD_QUIESCENCE = 'quiescence';
+
   function extractScenarioFailurePartialResult(errorDiagnostics) {
     const partialResult = errorDiagnostics?.partialResult;
     if (!partialResult || typeof partialResult !== 'object' ||
@@ -308,6 +317,27 @@ function createDistributedRunRuntimeBundle(deps = {}) {
       return null;
     }
     return partialResult;
+  }
+
+  function resolveErrorQuiescence(error) {
+    const quiescence = error &&
+      typeof error === 'object' &&
+      error.quiescence &&
+      typeof error.quiescence === 'object' &&
+      !Array.isArray(error.quiescence) ?
+      error.quiescence :
+      null;
+    return quiescence;
+  }
+
+  function mergeErrorDiagnostics(errorDiagnostics, errorQuiescence) {
+    const diagnostics = errorDiagnostics && typeof errorDiagnostics === 'object' ?
+      {...errorDiagnostics} :
+      {};
+    if (errorQuiescence) {
+      diagnostics[ERROR_DIAGNOSTICS_FIELD_QUIESCENCE] = errorQuiescence;
+    }
+    return Object.keys(diagnostics).length > 0 ? diagnostics : null;
   }
 
   function mergeFailedScenarioDetails(errorDiagnostics, partialResult) {
@@ -347,12 +377,45 @@ function createDistributedRunRuntimeBundle(deps = {}) {
    * @returns {Promise<{report: ReportWriter, hasFailures: boolean}>}
    */
   async function runScenarios(config, scenarios, options) {
+    const providedStateMachinePressurePreflight =
+      options?.stateMachinePressurePreflight &&
+      typeof options.stateMachinePressurePreflight === 'object' ?
+        options.stateMachinePressurePreflight :
+        null;
+    const stateMachinePressurePreflight =
+      providedStateMachinePressurePreflight ||
+      (typeof runStateMachinePressurePreflight === 'function' ?
+        runStateMachinePressurePreflight() :
+        null);
+    if (
+      stateMachinePressurePreflight &&
+      stateMachinePressurePreflight.ready !== true
+    ) {
+      const summary =
+        typeof formatStateMachinePressurePreflightSummary === 'function' ?
+          formatStateMachinePressurePreflightSummary(
+            stateMachinePressurePreflight,
+          ) :
+          STATE_MACHINE_PRESSURE_PREFLIGHT_ERROR_PREFIX;
+      throw new Error(
+        STATE_MACHINE_PRESSURE_PREFLIGHT_ERROR_PREFIX + ': ' + summary,
+      );
+    }
+    const reportMetadata =
+      options?.reportMetadata && typeof options.reportMetadata === 'object' ?
+        options.reportMetadata :
+        {};
     const report = new ReportWriter(options.output, {
       historyReports: options?.historyReports,
-      metadata:
-        options?.reportMetadata && typeof options.reportMetadata === 'object' ?
-          options.reportMetadata :
-          null,
+      metadata: {
+        ...reportMetadata,
+        ...(stateMachinePressurePreflight ?
+          {
+            [STATE_MACHINE_PRESSURE_PREFLIGHT_METADATA_KEY]:
+              stateMachinePressurePreflight,
+          } :
+          {}),
+      },
     });
     let hasFailures = false;
     const dockerOperationSink = typeof options?.dockerOperationSink === 'function' ?
@@ -463,7 +526,13 @@ function createDistributedRunRuntimeBundle(deps = {}) {
           typeof err.diagnostics === 'object' ?
           err.diagnostics :
           null;
-        const partialResult = extractScenarioFailurePartialResult(errorDiagnostics);
+        const mergedErrorDiagnostics = mergeErrorDiagnostics(
+          errorDiagnostics,
+          resolveErrorQuiescence(err),
+        );
+        const partialResult = extractScenarioFailurePartialResult(
+          mergedErrorDiagnostics,
+        );
         let performanceDiagnostics = null;
 
         // Attempt fallback log collection on failure
@@ -498,7 +567,10 @@ function createDistributedRunRuntimeBundle(deps = {}) {
           error: err.message,
           stackTrace: err.stack || null,
           analysisSummary,
-          details: mergeFailedScenarioDetails(errorDiagnostics, partialResult),
+          details: mergeFailedScenarioDetails(
+            mergedErrorDiagnostics,
+            partialResult,
+          ),
           convergenceTiming: partialResult?.convergenceTiming || null,
           loadMetrics: partialResult?.loadMetrics || null,
           clusterSize: resolveClusterSize(config),

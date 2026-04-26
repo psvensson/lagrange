@@ -47,7 +47,7 @@ function validatePlan(plan) {
  * In KEY mode, iterates all partition buffers.
  * In LOCAL mode, reads the local buffer.
  *
- * @param {import('./exchange-manager.js').ExchangeManager} mgr
+ * @param {import('./distributed/exchange-manager.js').ExchangeManager} mgr
  *   Exchange manager instance.
  * @return {Array<Object>} Flat array of exchange entries.
  */

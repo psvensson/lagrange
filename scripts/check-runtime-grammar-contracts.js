@@ -18,6 +18,32 @@ const VIOLATION_KIND = Object.freeze({
   REQUIRED_FRAGMENT: 'runtime_grammar_required_fragment_missing',
 });
 
+const AST_NODE_TYPE = Object.freeze({
+  FUNCTION_DECLARATION: 'FunctionDeclaration',
+  IDENTIFIER: 'Identifier',
+  LITERAL: 'Literal',
+  METHOD_DEFINITION: 'MethodDefinition',
+});
+
+const RUNTIME_GRAMMAR_TEXT = Object.freeze({
+  EMPTY: '',
+  PATH_SEPARATOR: '/',
+  REQUIRED_FRAGMENT_MISSING:
+    'runtime grammar hotspot no longer contains required contract fragment ',
+  FORBIDDEN_FRAGMENT_PRESENT:
+    'runtime grammar hotspot contains forbidden alternate-route fragment ',
+  SUMMARY_LABEL: 'runtime-grammar-contract',
+});
+
+const SOURCE_RANGE_INDEX = Object.freeze({
+  START: 0,
+  END: 1,
+});
+
+const POSITION_DEFAULT = 1;
+const PROCESS_ARG_OFFSET = 2;
+const EMPTY_LENGTH = 0;
+
 const CONTRACT_FIELD = Object.freeze({
   FORBIDDEN_FRAGMENTS: 'forbiddenFragments',
   FUNCTION_CONTRACTS: 'functionContracts',
@@ -297,10 +323,40 @@ const RUNTIME_GRAMMAR_HOTSPOT_CONTRACTS = Object.freeze({
       }),
     ]),
   }),
+  'test/distributed/harness/state-machine-pressure-preflight.js': Object.freeze({
+    requiredFragments: Object.freeze([
+      'STATE_MACHINE_PRESSURE_POINT_GRAMMAR',
+      'evaluateStaticPressurePointGrammar',
+      'evaluateStateMachinePressureSnapshot',
+      'runStateMachinePressurePreflight',
+      'PUBLICATION_ACK_COMPLETE_NON_TERMINAL',
+      'COMPLETED_ACTIVE_OPERATION_ROW',
+      'MEMBERSHIP_TRIM_WITH_CLOSED_DRAIN',
+      'OVERTARGET_WITH_CLOSED_DRAIN',
+    ]),
+  }),
+  'test/distributed/run.js': Object.freeze({
+    requiredFragments: Object.freeze([
+      'runStateMachinePressurePreflight',
+      './harness/state-machine-pressure-preflight.js',
+    ]),
+  }),
+  'test/distributed/run-runtime-helpers.js': Object.freeze({
+    functionContracts: Object.freeze([
+      Object.freeze({
+        functionName: 'runScenarios',
+        requiredFragments: Object.freeze([
+          'runStateMachinePressurePreflight',
+          'STATE_MACHINE_PRESSURE_PREFLIGHT_METADATA_KEY',
+          'stateMachinePressurePreflight.ready !== true',
+        ]),
+      }),
+    ]),
+  }),
 });
 
 function normalizePath(filePath) {
-  return filePath.split(path.sep).join('/');
+  return filePath.split(path.sep).join(RUNTIME_GRAMMAR_TEXT.PATH_SEPARATOR);
 }
 
 function resolveRuntimeGrammarContract(filePath) {
@@ -308,32 +364,39 @@ function resolveRuntimeGrammarContract(filePath) {
 }
 
 function getPropertyName(key) {
-  if (key?.type === 'Identifier') {
+  if (key?.type === AST_NODE_TYPE.IDENTIFIER) {
     return key.name;
   }
-  if (key?.type === 'Literal') {
-    return String(key.value || '');
+  if (key?.type === AST_NODE_TYPE.LITERAL) {
+    return String(key.value || RUNTIME_GRAMMAR_TEXT.EMPTY);
   }
-  return '';
+  return RUNTIME_GRAMMAR_TEXT.EMPTY;
 }
 
 function collectFunctionSourceByName(source) {
   const ast = parseSourceFile(source);
   const functionSourceByName = new Map();
   walkAst(ast, (node) => {
-    if (node.type === 'FunctionDeclaration' && node.id?.type === 'Identifier') {
+    if (node.type === AST_NODE_TYPE.FUNCTION_DECLARATION &&
+        node.id?.type === AST_NODE_TYPE.IDENTIFIER) {
       functionSourceByName.set(
         node.id.name,
-        source.slice(node.range[0], node.range[1]),
+        source.slice(
+          node.range[SOURCE_RANGE_INDEX.START],
+          node.range[SOURCE_RANGE_INDEX.END],
+        ),
       );
       return;
     }
-    if (node.type === 'MethodDefinition') {
+    if (node.type === AST_NODE_TYPE.METHOD_DEFINITION) {
       const functionName = getPropertyName(node.key);
-      if (functionName.length > 0) {
+      if (functionName.length > EMPTY_LENGTH) {
         functionSourceByName.set(
           functionName,
-          source.slice(node.range[0], node.range[1]),
+          source.slice(
+            node.range[SOURCE_RANGE_INDEX.START],
+            node.range[SOURCE_RANGE_INDEX.END],
+          ),
         );
       }
     }
@@ -344,8 +407,8 @@ function collectFunctionSourceByName(source) {
 function buildViolation(filePath, kind, target, reason, functionName = null) {
   return {
     filePath,
-    line: 1,
-    column: 1,
+    line: POSITION_DEFAULT,
+    column: POSITION_DEFAULT,
     kind,
     target,
     ...(functionName ? {functionName} : {}),
@@ -361,12 +424,13 @@ function collectMissingRequiredFragmentViolations(
   functionName = null,
 ) {
   return requiredFragments
-    .filter((fragment) => !String(source || '').includes(fragment))
+    .filter((fragment) =>
+      !String(source || RUNTIME_GRAMMAR_TEXT.EMPTY).includes(fragment))
     .map((fragment) => buildViolation(
       filePath,
       VIOLATION_KIND.REQUIRED_FRAGMENT,
       fragment,
-      'runtime grammar hotspot no longer contains required contract fragment ' +
+      RUNTIME_GRAMMAR_TEXT.REQUIRED_FRAGMENT_MISSING +
         `"${fragment}"`,
       functionName,
     ));
@@ -379,19 +443,20 @@ function collectForbiddenFragmentViolations(
   functionName = null,
 ) {
   return forbiddenFragments
-    .filter((fragment) => String(source || '').includes(fragment))
+    .filter((fragment) =>
+      String(source || RUNTIME_GRAMMAR_TEXT.EMPTY).includes(fragment))
     .map((fragment) => buildViolation(
       filePath,
       VIOLATION_KIND.FORBIDDEN_FRAGMENT,
       fragment,
-      'runtime grammar hotspot contains forbidden alternate-route fragment ' +
+      RUNTIME_GRAMMAR_TEXT.FORBIDDEN_FRAGMENT_PRESENT +
         `"${fragment}"`,
       functionName,
     ));
 }
 
 function collectFunctionContractViolations(source, filePath, functionContracts = []) {
-  if (functionContracts.length === 0) {
+  if (functionContracts.length === EMPTY_LENGTH) {
     return [];
   }
   const functionSourceByName = collectFunctionSourceByName(source);
@@ -464,10 +529,13 @@ async function buildRuntimeGrammarContractViolationReport(pathsToScan) {
 }
 
 function formatRuntimeGrammarContractHumanSummary(report) {
-  return formatGuidelineHumanSummary(report, 'runtime-grammar-contract');
+  return formatGuidelineHumanSummary(
+    report,
+    RUNTIME_GRAMMAR_TEXT.SUMMARY_LABEL,
+  );
 }
 
-async function main(argv = process.argv.slice(2)) {
+async function main(argv = process.argv.slice(PROCESS_ARG_OFFSET)) {
   return runGuidelineCheck(
     argv,
     buildRuntimeGrammarContractViolationReport,

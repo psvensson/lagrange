@@ -284,9 +284,17 @@ function buildPublicationRecoveryGateSnapshot(options = {}) {
     pendingAckNodeIds.length > NUM.ZERO ?
       pendingAckNodeIds :
       derivedPendingAckNodeIds;
+  const pendingAckCount = Math.max(
+    effectivePendingAckNodeIds.length,
+    normalizeNonNegativeInteger(options.pendingAckCount),
+  );
   const missingPublishedNodeIds = normalizeDistinctStringArray(
     options.missingPublishedNodeIds ??
       options.missingPublishedRecoveryActiveNodeIds,
+  );
+  const missingPublishedCount = Math.max(
+    missingPublishedNodeIds.length,
+    normalizeNonNegativeInteger(options.missingPublishedCount),
   );
   const providedReasonCodes = normalizeDistinctStringArray(
     options.priorityRecoveryReasonCodes ??
@@ -306,12 +314,12 @@ function buildPublicationRecoveryGateSnapshot(options = {}) {
     publicationStatus: options.publicationStatus,
     recoveryProtocolState: options.recoveryProtocolState,
     reasonCodes: providedReasonCodes,
-    missingPublishedCount: missingPublishedNodeIds.length,
+    missingPublishedCount,
   });
   const prioritySpreadEvidenceUnavailableReasonActive =
     prioritySpreadEvidenceUnavailable === true &&
     initialPublicationPending !== true &&
-    effectivePendingAckNodeIds.length === NUM.ZERO;
+    pendingAckCount === NUM.ZERO;
   const retainedProvidedReasonCodes = filterProvidedPriorityRecoveryReasonCodes(
     providedReasonCodes,
     prioritySpreadDecision,
@@ -326,13 +334,13 @@ function buildPublicationRecoveryGateSnapshot(options = {}) {
     publicationStatus: options.publicationStatus,
     recoveryProtocolState: options.recoveryProtocolState,
     reasonCodes: retainedProvidedReasonCodes,
-    missingPublishedCount: missingPublishedNodeIds.length,
+    missingPublishedCount,
   });
   const publicationStatusNormalized = normalizePublicationStatus(
     options.publicationStatus,
   );
   const reasonCodes = [
-    ...(publicationPending || effectivePendingAckNodeIds.length > NUM.ZERO ? [
+    ...(publicationPending || pendingAckCount > NUM.ZERO ? [
       CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PUBLICATION_EPOCH_PENDING,
     ] : []),
     ...retainedProvidedReasonCodes,
@@ -352,7 +360,7 @@ function buildPublicationRecoveryGateSnapshot(options = {}) {
     publicationPending,
     prioritySpreadPending,
     prioritySpreadEvidenceUnavailable,
-    pendingAckCount: effectivePendingAckNodeIds.length,
+    pendingAckCount,
   });
 
   return Object.freeze({
@@ -393,13 +401,13 @@ function buildPublicationRecoveryGateSnapshot(options = {}) {
     acknowledgedCount: normalizeNonNegativeInteger(acknowledgedNodeIds.length),
     pendingAckNodeIds: effectivePendingAckNodeIds,
     pendingAckCount:
-      normalizeNonNegativeInteger(effectivePendingAckNodeIds.length),
+      normalizeNonNegativeInteger(pendingAckCount),
     missingPublishedNodeIds,
     missingPublishedCount:
-      normalizeNonNegativeInteger(missingPublishedNodeIds.length),
+      normalizeNonNegativeInteger(missingPublishedCount),
     publicationPending:
-      publicationPending || effectivePendingAckNodeIds.length > NUM.ZERO,
-    ackPending: effectivePendingAckNodeIds.length > NUM.ZERO,
+      publicationPending || pendingAckCount > NUM.ZERO,
+    ackPending: pendingAckCount > NUM.ZERO,
     prioritySpreadPending,
   });
 }

@@ -15,6 +15,7 @@ const UNKNOWN_WORKFLOW_STEP = 'UNKNOWN';
 const REPLICA_OPERATION_STATUS_FAILED = 'failed';
 const REPLICA_OPERATION_STATUS_ACTIVE = 'active';
 const REPLICA_OPERATION_STATUS_REMOVING = 'removing';
+const REPLICA_OPERATION_STATUS_REMOVED = 'removed';
 const WORKFLOW_STEP_FAILED = 'FAILED';
 const OPERATION_TIMELINE_EVENT_STEP = 'step';
 const OPERATION_TIMELINE_EVENT_STATE = 'state';
@@ -30,7 +31,7 @@ const STALE_TIMEOUT_CLASSIFICATION_LOOKBACK_MS =
   MINUTES_PER_HOUR;
 
 const REPLICA_OPERATION_IN_FLIGHT_EXCLUDED_STATUSES = new Set([
-  'removed',
+  REPLICA_OPERATION_STATUS_REMOVED,
   REPLICA_OPERATION_STATUS_FAILED,
 ]);
 const REPLACE_SOURCE_RETIREMENT_BLOCKING_STATUSES = new Set([
@@ -381,9 +382,12 @@ function isReplicaOperationTerminalSuccess(record) {
     return false;
   }
   if (record.type === OperationType.ADD) {
-    return record.status === 'active';
+    return record.status === REPLICA_OPERATION_STATUS_ACTIVE;
   }
-  return record.status === 'removed';
+  if (record.type === BOOTSTRAP_MOVE_ASSIGNMENT_OPERATION_TYPE) {
+    return record.status === REPLICA_OPERATION_STATUS_ACTIVE;
+  }
+  return record.status === REPLICA_OPERATION_STATUS_REMOVED;
 }
 
 function hasObservedActiveTargetReplica(record, options = {}) {
@@ -621,6 +625,9 @@ function isReplicaOperationExplicitlyExcludedFromInFlight(record) {
     return true;
   }
   if (normalizedStatus !== REPLICA_OPERATION_STATUS_ACTIVE) {
+    return false;
+  }
+  if (record?.type === BOOTSTRAP_MOVE_ASSIGNMENT_OPERATION_TYPE) {
     return false;
   }
   return !isReplaceRemoveDispatchPhase(record);

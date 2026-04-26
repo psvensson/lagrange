@@ -34,6 +34,10 @@ import {formatLogEntry} from './harness/log-collector.js';
 import {analyzeMemoryLeakFromPlayback} from './harness/memory-leak-analyzer.js';
 import {buildPerformanceDiagnostics} from './harness/performance-diagnostics.js';
 import {writeFailureBundlesForReport} from './harness/failure-bundle.js';
+import {
+  formatStateMachinePressurePreflightSummary,
+  runStateMachinePressurePreflight,
+} from './harness/state-machine-pressure-preflight.js';
 import {createDistributedRunRuntimeBundle} from './run-runtime-helpers.js';
 import {
   CLI,
@@ -364,6 +368,8 @@ const DISTRIBUTED_RUN_RUNTIME_BUNDLE = createDistributedRunRuntimeBundle({
   pathToFileURL,
   resolve,
   normalizeFiniteNumber,
+  formatStateMachinePressurePreflightSummary,
+  runStateMachinePressurePreflight,
 });
 
 const {
@@ -1343,6 +1349,18 @@ async function main() {
         startedAt: new Date().toISOString(),
       },
     };
+    const stateMachinePressurePreflight = runStateMachinePressurePreflight();
+    if (stateMachinePressurePreflight.ready !== true) {
+      const preflightSummary = formatStateMachinePressurePreflightSummary(
+        stateMachinePressurePreflight,
+      );
+      runStatusContext.milestones.failedAt = new Date().toISOString();
+      await writeRunnerStatus(RUN_STATUS_STATE_FATAL_ERROR, {
+        error: preflightSummary,
+      });
+      process.stderr.write(preflightSummary + '\n');
+      process.exit(EXIT_CODES.FAILURE);
+    }
     if (args.verbose) {
       const hasRemoteHosts = Array.isArray(runConfig?.docker?.hosts) &&
         runConfig.docker.hosts.length > 0;
@@ -1441,6 +1459,7 @@ async function main() {
         historyReports: historicalReports,
         dockerOperationSink,
         reportMetadata,
+        stateMachinePressurePreflight,
       },
     );
 

@@ -5,30 +5,6 @@ import {
 } from './postgres-baseline-comparison-admission-runtime-helpers.js';
 import {rowsFromQueryResult} from './postgres-baseline-comparison-query-helpers.js';
 
-let loadRebalancingHelpersPromise = null;
-
-async function loadRebalancingHelpers() {
-  if (!loadRebalancingHelpersPromise) {
-    loadRebalancingHelpersPromise = import(
-      './postgres-baseline-comparison-segment-9.js'
-    ).then(({POSTGRES_BASELINE_COMPARISON_SEGMENT_9}) => {
-      const {
-        buildLoadRebalancingPressureState,
-        buildRebalancingCriticalState,
-        finalizeHeartbeatFreshnessState,
-        startLoadRebalancingPressureMonitor,
-      } = POSTGRES_BASELINE_COMPARISON_SEGMENT_9;
-      return {
-        buildLoadRebalancingPressureState,
-        buildRebalancingCriticalState,
-        finalizeHeartbeatFreshnessState,
-        startLoadRebalancingPressureMonitor,
-      };
-    });
-  }
-  return loadRebalancingHelpersPromise;
-}
-
 const {
   BENCHMARK_DEFAULTS,
   BASELINE_LOAD_NODE_PREFIX,
@@ -869,15 +845,13 @@ async function runSutSharedLoad({
   requiredSchemaVersion,
   benchmarkConfig,
   runtimeAdmissionOwnership = null,
+  buildLoadRebalancingPressureState,
+  buildRebalancingCriticalState,
+  finalizeHeartbeatFreshnessState,
+  startLoadRebalancingPressureMonitor,
   onProgress,
   progressHeartbeatIntervalMs,
 }) {
-  const {
-    buildLoadRebalancingPressureState,
-    buildRebalancingCriticalState,
-    finalizeHeartbeatFreshnessState,
-    startLoadRebalancingPressureMonitor,
-  } = await loadRebalancingHelpers();
   let rebalancingPressureMonitor = null;
   const routedLoadNodes = loadNodes.map((node) => ({
     id: node.id,

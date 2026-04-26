@@ -12,6 +12,19 @@ import {
 } from '../../src/config/dynamic-config-service.js';
 import {CONFIG_KEY} from '../../src/config/config-constants.js';
 
+const GATEWAY_ONLY_NODE_ID = 'gateway-only-node';
+const GATEWAY_ONLY_UPDATED_BY = 'gateway-only-user';
+const GATEWAY_ONLY_LOG_LEVEL_KEY = 'logging.level';
+const GATEWAY_ONLY_LOG_LEVEL_VALUE = 'warn';
+const GATEWAY_ONLY_AFFECTED_ROWS = 1;
+const EXPECTED_SINGLE_GATEWAY_MUTATION_COUNT = 1;
+const FIRST_GATEWAY_MUTATION_INDEX = 0;
+const GATEWAY_ONLY_READ_RESULT = Object.freeze({rows: []});
+const GATEWAY_ONLY_MUTATION_RESULT = Object.freeze({
+  success: true,
+  affectedRows: GATEWAY_ONLY_AFFECTED_ROWS,
+});
+
 /**
  * Create a mock CDC integration service.
  */
@@ -47,6 +60,33 @@ function createMockCDCService(options = {}) {
     async updateSystemTableRow(tableName, whereClause, data) {
       updatedRows.push({tableName, whereClause, data});
       return {success: true, changes: 1};
+    },
+  };
+}
+
+/**
+ * Create a mock control-plane system-table gateway.
+ */
+function createMockControlPlaneGateway(options = {}) {
+  const insertedRows = [];
+  const submittedMutations = [];
+  const readRows = Array.isArray(options.readRows) ?
+    options.readRows :
+    GATEWAY_ONLY_READ_RESULT.rows;
+
+  return {
+    insertedRows,
+    submittedMutations,
+    async insertSystemTableRow(tableName, row, writeOptions = {}) {
+      insertedRows.push({tableName, row, writeOptions});
+      return GATEWAY_ONLY_MUTATION_RESULT;
+    },
+    async submitMutation(mutation, writeOptions = {}) {
+      submittedMutations.push({mutation, writeOptions});
+      return GATEWAY_ONLY_MUTATION_RESULT;
+    },
+    async readRows() {
+      return {rows: readRows};
     },
   };
 }
@@ -153,6 +193,58 @@ test('DynamicConfigService set value', async (t) => {
     'should record who made change',
   );
 });
+
+test('DynamicConfigService seed uses injected gateway without CDC',
+  async (t) => {
+    const mockGateway = createMockControlPlaneGateway();
+    const service = new DynamicConfigService({
+      controlPlaneSystemTableGateway: mockGateway,
+      nodeId: GATEWAY_ONLY_NODE_ID,
+    });
+    await service.initialize();
+
+    const result = await service.seedConfiguration(GATEWAY_ONLY_UPDATED_BY);
+
+    t.equal(
+      mockGateway.insertedRows.length,
+      Object.keys(CONFIG_DEFINITIONS).length,
+      'should write every config definition through the injected gateway',
+    );
+    t.equal(
+      result.seeded.length,
+      Object.keys(CONFIG_DEFINITIONS).length,
+      'gateway-only seed should classify successful inserts as seeded',
+    );
+  });
+
+test('DynamicConfigService set uses injected gateway without CDC',
+  async (t) => {
+    const mockGateway = createMockControlPlaneGateway();
+    const service = new DynamicConfigService({
+      controlPlaneSystemTableGateway: mockGateway,
+      nodeId: GATEWAY_ONLY_NODE_ID,
+    });
+    await service.initialize();
+
+    const result = await service.set(
+      GATEWAY_ONLY_LOG_LEVEL_KEY,
+      GATEWAY_ONLY_LOG_LEVEL_VALUE,
+      GATEWAY_ONLY_UPDATED_BY,
+    );
+
+    t.ok(result.success, 'gateway-only set should succeed');
+    t.equal(
+      mockGateway.submittedMutations.length,
+      EXPECTED_SINGLE_GATEWAY_MUTATION_COUNT,
+      'should submit the mutation through the injected gateway',
+    );
+    t.equal(
+      mockGateway.submittedMutations[FIRST_GATEWAY_MUTATION_INDEX]
+        .mutation.row.config_key,
+      GATEWAY_ONLY_LOG_LEVEL_KEY,
+      'should preserve the config key in the insert mutation',
+    );
+  });
 
 test('DynamicConfigService update existing value', async (t) => {
   const mockCDC = createMockCDCService();
@@ -586,15 +678,18 @@ test('DynamicConfigService seedConfiguration from env vars',
 test('DynamicConfigService seedConfiguration bootstrap fast path skips reads',
   async (t) => {
     const mockCDC = createMockCDCService();
+    const gatewayWrites = [];
     const service = new DynamicConfigService({
       cdcIntegrationService: mockCDC,
+      controlPlaneSystemTableGateway: {
+        async insertSystemTableRow(tableName, row, options = {}) {
+          gatewayWrites.push({tableName, row, options});
+          return mockCDC.insertSystemTableRow(tableName, row, options);
+        },
+      },
       nodeId: 'test-node',
     });
     await service.initialize();
-
-    service.getControlPlaneSystemTableGateway = () => {
-      throw new Error('gateway should not be used');
-    };
 
     const result = await service.seedConfiguration('system', {
       skipExistingCheck: true,
@@ -608,9 +703,9 @@ test('DynamicConfigService seedConfiguration bootstrap fast path skips reads',
     );
     t.same(result.skipped, [], 'should not skip keys when table is known empty');
     t.equal(
-      mockCDC.insertedRows.length,
+      gatewayWrites.length,
       Object.keys(CONFIG_DEFINITIONS).length,
-      'should write directly through CDC for each definition',
+      'should write through the control-plane gateway for each definition',
     );
   });
 
@@ -619,6 +714,11 @@ test('DynamicConfigService seedConfiguration fast path remains idempotent',
     const mockCDC = createMockCDCService();
     const service = new DynamicConfigService({
       cdcIntegrationService: mockCDC,
+      controlPlaneSystemTableGateway: {
+        async insertSystemTableRow(tableName, row, options = {}) {
+          return mockCDC.insertSystemTableRow(tableName, row, options);
+        },
+      },
       nodeId: 'test-node',
     });
     await service.initialize();

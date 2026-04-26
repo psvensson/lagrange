@@ -103,13 +103,17 @@ const PRIORITY_RECOVERY_WORKFLOW_STEP_REMOVED = 'REMOVED';
 const PRIORITY_RECOVERY_PROGRESS_CONTRACT_STATE_PENDING = 'pending';
 const PRIORITY_RECOVERY_PROGRESS_CONTRACT_STATE_BLOCKED = 'blocked';
 const PRIORITY_RECOVERY_PROGRESS_CONTRACT_STATE_DEFERRED = 'deferred';
+const PRIORITY_RECOVERY_PROGRESS_CONTRACT_STATE_READY = 'ready';
 const PRIORITY_RECOVERY_PROGRESS_NEXT_ACTION_WAIT = 'wait';
 const PRIORITY_RECOVERY_PROGRESS_NEXT_ACTION_RETRY = 'retry';
 const PRIORITY_RECOVERY_PROGRESS_NEXT_ACTION_STOP = 'stop';
+const PRIORITY_RECOVERY_PROGRESS_NEXT_ACTION_PROCEED = 'proceed';
 const PRIORITY_RECOVERY_PROGRESS_OWNER_WORKFLOW = 'operation_workflow_owner';
 const PRIORITY_RECOVERY_PROGRESS_OWNER_REBALANCER = 'rebalancer_leader';
 const PRIORITY_RECOVERY_PROGRESS_OWNER_VISIBILITY =
   'authoritative_visibility_owner';
+const PRIORITY_RECOVERY_PROGRESS_OWNER_NONE = 'none';
+const PRIORITY_RECOVERY_PROGRESS_ACTION_NONE = 'none';
 const PRIORITY_RECOVERY_PROGRESS_ACTION_WAIT_FOR_PROGRESS =
   'wait_for_operation_progress';
 const PRIORITY_RECOVERY_PROGRESS_ACTION_RECONCILE_STALE_OPERATION =
@@ -125,6 +129,7 @@ const PRIORITY_RECOVERY_PROGRESS_BOUNDARY_VISIBILITY =
   'authoritative_visibility';
 const PRIORITY_RECOVERY_PROGRESS_BOUNDARY_SCHEDULING =
   'operation_scheduling';
+const PRIORITY_RECOVERY_PROGRESS_BOUNDARY_NONE = 'none';
 const PRIORITY_RECOVERY_PROGRESS_WAIT_EVENT_DRIVEN = 'event_driven';
 const PRIORITY_RECOVERY_PROGRESS_WAIT_RETRY_SCHEDULED = 'retry_scheduled';
 const PRIORITY_RECOVERY_PROGRESS_WAIT_TIMEOUT_RECONCILE_DUE =
@@ -132,6 +137,7 @@ const PRIORITY_RECOVERY_PROGRESS_WAIT_TIMEOUT_RECONCILE_DUE =
 const PRIORITY_RECOVERY_PROGRESS_WAIT_DEFERRED_VISIBILITY =
   'deferred_visibility';
 const PRIORITY_RECOVERY_PROGRESS_WAIT_STALLED = 'stalled';
+const PRIORITY_RECOVERY_PROGRESS_WAIT_NONE = 'none';
 const PRIORITY_RECOVERY_PROGRESS_PHASE_TARGET_CREATION = 'target_creation';
 const PRIORITY_RECOVERY_CREATING_TIMEOUT_MS = 60000;
 const PRIORITY_RECOVERY_ACTUATION_STATE_ACTION_REQUIRED =
@@ -177,6 +183,22 @@ const PRIORITY_RECOVERY_OPERATION_ID_SUPERSEDED_SYNCING =
   'op-superseded-syncing';
 const PRIORITY_RECOVERY_OPERATION_ID_NEWER_FAILED_REPLACE =
   'op-newer-failed-replace';
+const PRIORITY_RECOVERY_OPERATION_ID_FAILED_REPLACE_ACTIVE_TARGET =
+  'op-failed-replace-active-target';
+const PRIORITY_RECOVERY_TARGET_VISIBILITY_ACTIVE_OPERATIONAL =
+  'active_operational';
+const PRIORITY_RECOVERY_FAILED_REPLACE_ACTIVE_TARGET_TEST_NAME =
+  'priority recovery failed REPLACE with active target satisfies spread instead of missing operation';
+const PRIORITY_RECOVERY_ACTIVE_TARGET_NOT_MISSING_OPERATION_MESSAGE =
+  'an active operational replacement target should not be reported as missing operation work';
+const PRIORITY_RECOVERY_ACTIVE_TARGET_SPREAD_WITNESS_MESSAGE =
+  'the failed replacement should still witness spread when its target is active operational on an eligible node';
+const PRIORITY_RECOVERY_ACTIVE_TARGET_SEMANTIC_MESSAGE =
+  'the partition should leave needs_operation once the active target satisfies recovery';
+const PRIORITY_RECOVERY_ACTIVE_TARGET_COMPLETION_MESSAGE =
+  'completion should use the spread-satisfied recovery state';
+const PRIORITY_RECOVERY_ACTIVE_TARGET_PROGRESS_MESSAGE =
+  'the progress contract should not schedule a duplicate recovery operation';
 const PRIORITY_RECOVERY_SQL_TRANSACTIONS_REPLICA_ID =
   'sql_transactions-p1-r5';
 const PRIORITY_RECOVERY_SQL_TRANSACTIONS_REPLACEMENT_REPLICA_ID =
@@ -195,6 +217,7 @@ const PRIORITY_RECOVERY_NEWER_OPERATION_COMPLETED_AT_MS = 4500;
 const PRIORITY_RECOVERY_STALE_READY_DISTINCT_NODE_COUNT = 2;
 const PRIORITY_RECOVERY_SINGLE_SPREAD_GAP = 1;
 const PRIORITY_RECOVERY_EMPTY_COUNT = 0;
+const PRIORITY_RECOVERY_SINGLE_OPERATION_COUNT = 1;
 const PRIORITY_RECOVERY_SINGLE_ADD_BUDGET_LIMIT = 1;
 const PRIORITY_RECOVERY_SINGLE_EMERGENCY_OVERFLOW_SLOT_COUNT = 1;
 const PRIORITY_RECOVERY_DUAL_EMERGENCY_OVERFLOW_SLOT_COUNT = 2;
@@ -2098,6 +2121,97 @@ test('priority recovery snapshots never report completed actuation while a new r
       snapshot?.progress?.nextRequiredAction,
       PRIORITY_RECOVERY_PROGRESS_ACTION_CREATE_OPERATION,
       'the shared decision contract should still require one follow-up recovery operation',
+    );
+  });
+
+test(PRIORITY_RECOVERY_FAILED_REPLACE_ACTIVE_TARGET_TEST_NAME,
+  async (t) => {
+    const failedReplaceActiveTargetOperation = {
+      partitionId: PUBLICATION_PRIORITY_PARTITION_ID,
+      operationId: PRIORITY_RECOVERY_OPERATION_ID_FAILED_REPLACE_ACTIVE_TARGET,
+      type: PRIORITY_RECOVERY_OPERATION_TYPE_REPLACE,
+      status: PRIORITY_RECOVERY_STATUS_FAILED,
+      workflowStep: PRIORITY_RECOVERY_WORKFLOW_STEP_FAILED,
+      targetNodeId: PRIORITY_RECOVERY_NODE_ID_B,
+      targetVisibilityState:
+        PRIORITY_RECOVERY_TARGET_VISIBILITY_ACTIVE_OPERATIONAL,
+      updatedAtMs: PRIORITY_RECOVERY_OPERATION_UPDATED_AT_MS,
+      completedAtMs: PRIORITY_RECOVERY_OPERATION_COMPLETED_AT_MS,
+      timelineLength:
+        PRIORITY_RECOVERY_TERMINAL_REPLACE_OPERATION_CONTEXT.timelineLength,
+      timelineStepCount:
+        PRIORITY_RECOVERY_TERMINAL_REPLACE_OPERATION_CONTEXT
+          .timelineStepCount,
+      latestTimelineStep: PRIORITY_RECOVERY_WORKFLOW_STEP_FAILED,
+      latestTimelineStatus: PRIORITY_RECOVERY_STATUS_FAILED,
+      latestTimelineInFlight: false,
+    };
+    const snapshot = buildPriorityRecoveryDecisionSnapshot({
+      partitionId: PUBLICATION_PRIORITY_PARTITION_ID,
+      publicationEpoch: PRIORITY_RECOVERY_SAMPLE_PUBLICATION_EPOCH,
+      priorityPartitionSummary: {
+        blockedPartitions: [{
+          partitionId: PUBLICATION_PRIORITY_PARTITION_ID,
+          requiredDistinctNodeCount:
+            PRIORITY_RECOVERY_REQUIRED_DISTINCT_NODE_COUNT,
+          readyDistinctNodeCount:
+            PRIORITY_RECOVERY_STALE_READY_DISTINCT_NODE_COUNT,
+          spreadGap: PRIORITY_RECOVERY_SINGLE_SPREAD_GAP,
+        }],
+      },
+      admission: {
+        effectiveEligibleNodeIds: [
+          PRIORITY_RECOVERY_NODE_ID_B,
+          PRIORITY_RECOVERY_NODE_ID_C,
+        ],
+        effectiveEligibleNodeCount:
+          PRIORITY_RECOVERY_SINGLE_EMERGENCY_BUDGET_LIMIT,
+        ineligibleNodes: [],
+      },
+      operationContexts: [failedReplaceActiveTargetOperation],
+    });
+
+    t.same(
+      snapshot?.blockerReasons,
+      [],
+      PRIORITY_RECOVERY_ACTIVE_TARGET_NOT_MISSING_OPERATION_MESSAGE,
+    );
+    t.match(
+      snapshot?.spreadCompletion,
+      {
+        satisfied: true,
+        reasonCode:
+          PRIORITY_RECOVERY_REASON_OPERATIONAL_TARGET_VISIBLE_ON_ELIGIBLE_NODE,
+        satisfyingOperationIds: [
+          PRIORITY_RECOVERY_OPERATION_ID_FAILED_REPLACE_ACTIVE_TARGET,
+        ],
+        satisfyingOperationCount: PRIORITY_RECOVERY_SINGLE_OPERATION_COUNT,
+        blockingOperationIds: [],
+        blockingOperationCount: PRIORITY_RECOVERY_EMPTY_COUNT,
+      },
+      PRIORITY_RECOVERY_ACTIVE_TARGET_SPREAD_WITNESS_MESSAGE,
+    );
+    t.equal(
+      snapshot?.semanticState,
+      PRIORITY_RECOVERY_SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT,
+      PRIORITY_RECOVERY_ACTIVE_TARGET_SEMANTIC_MESSAGE,
+    );
+    t.equal(
+      snapshot?.completion?.state,
+      PRIORITY_RECOVERY_COMPLETION_STATE.SPREAD_SATISFIED_IN_FLIGHT,
+      PRIORITY_RECOVERY_ACTIVE_TARGET_COMPLETION_MESSAGE,
+    );
+    t.match(
+      snapshot?.progress,
+      {
+        contractState: PRIORITY_RECOVERY_PROGRESS_CONTRACT_STATE_READY,
+        nextAction: PRIORITY_RECOVERY_PROGRESS_NEXT_ACTION_PROCEED,
+        currentOwner: PRIORITY_RECOVERY_PROGRESS_OWNER_NONE,
+        nextRequiredAction: PRIORITY_RECOVERY_PROGRESS_ACTION_NONE,
+        blockingBoundary: PRIORITY_RECOVERY_PROGRESS_BOUNDARY_NONE,
+        waitMode: PRIORITY_RECOVERY_PROGRESS_WAIT_NONE,
+      },
+      PRIORITY_RECOVERY_ACTIVE_TARGET_PROGRESS_MESSAGE,
     );
   });
 

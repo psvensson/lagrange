@@ -1,7 +1,5 @@
 # Rolling Restart Final Leader-Map Consistency And CDC Pressure
 
-Status: done on April 24, 2026.
-
 ## Why
 
 The `rolling-restart` secondary re-entry moved beyond strict post-restart

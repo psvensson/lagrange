@@ -550,20 +550,16 @@ class OperationWorkflowOwnerSegment4 extends OperationWorkflowOwnerSegment3 {
         REBALANCE_COORDINATOR_ERROR_MSG.MESSAGE_NOT_ACKED,
       );
       if (this.deferDispatchRetry(operation, error)) {
-        return {
-          success: false,
-          skipped: true,
-          reason: REBALANCER_SKIP_REASON.DEFERRED_RETRY_PENDING,
-          operationId: operation.operationId,
-          error: errorMsg,
-        };
+        return this.buildSkippedOperationResult(
+          REBALANCER_SKIP_REASON.DEFERRED_RETRY_PENDING,
+          operation.operationId,
+          {
+            error: errorMsg,
+          },
+        );
       }
       await this.failOperation(operation, errorMsg);
-      return {
-        success: false,
-        operationId: operation.operationId,
-        error: errorMsg,
-      };
+      return this.buildFailedOperationResult(operation.operationId, errorMsg);
     }
 
     if (
@@ -580,20 +576,16 @@ class OperationWorkflowOwnerSegment4 extends OperationWorkflowOwnerSegment3 {
         REBALANCE_COORDINATOR_ERROR_MSG.MESSAGE_NOT_ACKED,
       );
       if (this.deferDispatchRetry(operation, errorLike)) {
-        return {
-          success: false,
-          skipped: true,
-          reason: REBALANCER_SKIP_REASON.DEFERRED_RETRY_PENDING,
-          operationId: operation.operationId,
-          error: errorMsg,
-        };
+        return this.buildSkippedOperationResult(
+          REBALANCER_SKIP_REASON.DEFERRED_RETRY_PENDING,
+          operation.operationId,
+          {
+            error: errorMsg,
+          },
+        );
       }
       await this.failOperation(operation, errorMsg);
-      return {
-        success: false,
-        operationId: operation.operationId,
-        error: errorMsg,
-      };
+      return this.buildFailedOperationResult(operation.operationId, errorMsg);
     }
 
     return this._handleDispatchResponse(
@@ -636,6 +628,15 @@ class OperationWorkflowOwnerSegment4 extends OperationWorkflowOwnerSegment3 {
         (operation.type === OperationType.REPLACE && !replaceRemovePhase)
       ) {
         return this.handleCreatePhaseSatisfiedResponse(
+          operation,
+          ReplicaOperationResponseStatus.ALREADY_EXISTS,
+        );
+      }
+      if (
+        operation.type === OperationType.REMOVE ||
+        (operation.type === OperationType.REPLACE && replaceRemovePhase)
+      ) {
+        return this.handleStopPhaseSatisfiedResponse(
           operation,
           ReplicaOperationResponseStatus.ALREADY_EXISTS,
         );
@@ -911,10 +912,9 @@ class OperationWorkflowOwnerSegment4 extends OperationWorkflowOwnerSegment3 {
   }
 
   /**
-   * Treat stop-phase completion/not-found responses as observed source truth.
-   * If the durable terminal write is retryably backpressured, re-arm
-   * observed-progress reconciliation directly instead of redispatching
-   * duplicate remove work.
+   * Treat stop-phase absent-source responses as terminal truth, while ordinary
+   * completion responses only advance to STOPPING until service visibility
+   * confirms source retirement.
    *
    * @param {Object} operation
    * @param {string} responseStatus

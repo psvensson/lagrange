@@ -3,6 +3,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
+import {fileURLToPath} from 'node:url';
 
 const DEFAULT_CONFIG_PATH = path.join(
   '.kiro',
@@ -12,7 +13,22 @@ const DEFAULT_CONFIG_PATH = path.join(
 
 const HEADING_PATTERN = /^(\s{0,3})(#{1,6})\s+(.+)$/u;
 const BULLET_PATTERN = /^\s*(?:[-*]|\d+\.)\s+(.+)$/u;
+const BULLET_WITH_INDENT_PATTERN = /^(\s*)(?:[-*]|\d+\.)\s+(.+)$/u;
 const TABLE_PATTERN = /^\s*\|/u;
+const TRAILING_COLON_PATTERN = /:\s*$/u;
+const CHILD_RULE_PREFIX = '- ';
+const CHILD_RULE_JOINER = '; ';
+const RULE_BODY_JOINER = ' ';
+const EMPTY_TEXT = '';
+const PROCESS_ARG_SCRIPT_INDEX = 1;
+const COMPARE_EQUAL = 0;
+const RULE_ID_PREFIX_START_INDEX = 0;
+const RULE_ID_PREFIX_MAX_LENGTH = 6;
+const RULE_COUNT_INCREMENT = 1;
+const EXIT_CODE_SUCCESS = 0;
+const EXIT_CODE_FAILURE = 1;
+const JSON_INDENT_SPACES = 2;
+const DEFAULT_RULE_PREFIX = 'RULE';
 
 const NORMATIVE_PATTERN =
   /\b(MUST\s+NOT|SHALL\s+NOT|MUST|SHALL|NEVER|SHOULD|MAY|REQUIRED|FORBIDDEN|DO\s+NOT|ONLY)\b/iu;
@@ -88,10 +104,14 @@ function isPathOnlyText(text = '') {
   return /^[./\p{L}\p{N}_*\- ]+\.(?:md|json)$/u.test(normalized);
 }
 
+function isIncompleteRuleText(text = '') {
+  return TRAILING_COLON_PATTERN.test(normalizeWhitespace(text));
+}
+
 function stripInlineMarkdown(value) {
   return normalizeWhitespace(
     String(value || '')
-      .replace(/\[([^\]]+)\]\([^\)]+\)/gu, '$1')
+      .replace(/\[([^\]]+)\]\([^)]+\)/gu, '$1')
       .replace(/`([^`]+)`/gu, '$1')
       .replace(/\*\*([^*]+)\*\*/gu, '$1')
       .replace(/__([^_]+)__/gu, '$1')
@@ -237,6 +257,9 @@ function pushCandidate(container, options = {}) {
   if (isPathOnlyText(text)) {
     return;
   }
+  if (isIncompleteRuleText(text)) {
+    return;
+  }
 
   const strength = inferStrength(text);
   if (strength === 'info' && options.kind !== 'bullet') {
@@ -264,6 +287,65 @@ function pushCandidate(container, options = {}) {
   container.push(candidate);
 }
 
+function collectBulletListText(lines = [], startIndex = 0, options = {}) {
+  const items = [];
+  let cursor = startIndex;
+  const minimumIndent = Number.isFinite(options.minimumIndent) ?
+    options.minimumIndent :
+    0;
+
+  while (cursor < lines.length) {
+    const rawLine = lines[cursor];
+    const bulletMatch = rawLine.match(BULLET_WITH_INDENT_PATTERN);
+    if (!bulletMatch || bulletMatch[1].length < minimumIndent) {
+      break;
+    }
+
+    let text = bulletMatch[2];
+    let itemCursor = cursor + 1;
+
+    while (itemCursor < lines.length) {
+      const nextLine = lines[itemCursor];
+      if (isBlank(nextLine) || isHeading(nextLine) ||
+          isBullet(nextLine) || isTable(nextLine)) {
+        break;
+      }
+      text += `${RULE_BODY_JOINER}${nextLine.trim()}`;
+      itemCursor += 1;
+    }
+
+    items.push(text.trim());
+    cursor = itemCursor;
+  }
+
+  return {items, nextIndex: cursor};
+}
+
+function appendChildBulletsForParentRule(
+  paragraph,
+  lines = [],
+  cursor = 0,
+  options = {},
+) {
+  if (!TRAILING_COLON_PATTERN.test(paragraph)) {
+    return {text: paragraph, nextIndex: cursor};
+  }
+
+  const collected = collectBulletListText(lines, cursor, options);
+  if (collected.items.length === 0) {
+    return {text: paragraph, nextIndex: cursor};
+  }
+
+  const childText = collected.items
+    .map((item) => `${CHILD_RULE_PREFIX}${item}`)
+    .join(CHILD_RULE_JOINER);
+
+  return {
+    text: `${paragraph}${RULE_BODY_JOINER}${childText}`,
+    nextIndex: collected.nextIndex,
+  };
+}
+
 function parseMarkdownCandidates(content, source = {}) {
   const lines = String(content || '').split(/\r?\n/u);
   const sectionStack = [];
@@ -281,9 +363,9 @@ function parseMarkdownCandidates(content, source = {}) {
       continue;
     }
 
-    const bulletMatch = rawLine.match(BULLET_PATTERN);
+    const bulletMatch = rawLine.match(BULLET_WITH_INDENT_PATTERN);
     if (bulletMatch) {
-      let text = bulletMatch[1];
+      let text = bulletMatch[2];
       let cursor = index + 1;
 
       while (cursor < lines.length) {
@@ -295,6 +377,15 @@ function parseMarkdownCandidates(content, source = {}) {
         text += ` ${nextLine.trim()}`;
         cursor += 1;
       }
+
+      const expandedRule = appendChildBulletsForParentRule(
+        text,
+        lines,
+        cursor,
+        {minimumIndent: bulletMatch[1].length + 1},
+      );
+      text = expandedRule.text;
+      cursor = expandedRule.nextIndex;
 
       pushCandidate(candidates, {
         text,
@@ -325,6 +416,14 @@ function parseMarkdownCandidates(content, source = {}) {
       paragraph += ` ${nextLine.trim()}`;
       cursor += 1;
     }
+
+    const expandedRule = appendChildBulletsForParentRule(
+      paragraph,
+      lines,
+      cursor,
+    );
+    paragraph = expandedRule.text;
+    cursor = expandedRule.nextIndex;
 
     const sentences = splitNormativeSentences(paragraph);
     for (const sentence of sentences) {
@@ -401,7 +500,7 @@ function compareRules(left, right) {
   const strengthDelta =
     (STRENGTH_PRIORITY[right.strength] || 0) -
     (STRENGTH_PRIORITY[left.strength] || 0);
-  if (strengthDelta !== 0) {
+  if (strengthDelta !== COMPARE_EQUAL) {
     return strengthDelta;
   }
 
@@ -425,8 +524,11 @@ function ruleIdPrefix(domain, domainPrefixes = {}) {
     return String(domainPrefixes[domain]).toUpperCase();
   }
 
-  return String(domain || 'RULE').replace(/[^a-z0-9]/giu, '')
-    .toUpperCase().slice(0, 6) || 'RULE';
+  return String(domain || DEFAULT_RULE_PREFIX).replace(/[^a-z0-9]/giu, EMPTY_TEXT)
+    .toUpperCase().slice(
+      RULE_ID_PREFIX_START_INDEX,
+      RULE_ID_PREFIX_MAX_LENGTH,
+    ) || DEFAULT_RULE_PREFIX;
 }
 
 function assignRuleIds(rules = [], domainPrefixes = {}) {
@@ -480,7 +582,7 @@ function selectOutputRules(allRules = [], output = {}) {
     }
 
     selected.push(rule);
-    countsByDomain.set(rule.domain, currentCount + 1);
+    countsByDomain.set(rule.domain, currentCount + RULE_COUNT_INCREMENT);
   }
 
   return selected;
@@ -580,7 +682,7 @@ async function main() {
   const arg = process.argv[2];
   if (arg === '--help' || arg === '-h') {
     printUsage();
-    process.exit(0);
+    process.exit(EXIT_CODE_SUCCESS);
   }
 
   const workspaceRoot = process.cwd();
@@ -654,7 +756,7 @@ async function main() {
 
   await fs.writeFile(
     path.join(llmDir, 'rules.json'),
-    `${JSON.stringify(rulesJson, null, 2)}\n`,
+    `${JSON.stringify(rulesJson, null, JSON_INDENT_SPACES)}\n`,
     'utf8',
   );
 
@@ -665,7 +767,7 @@ async function main() {
 
   await fs.writeFile(
     path.join(llmDir, 'manifest.json'),
-    `${JSON.stringify(manifest, null, 2)}\n`,
+    `${JSON.stringify(manifest, null, JSON_INDENT_SPACES)}\n`,
     'utf8',
   );
 
@@ -685,7 +787,20 @@ async function main() {
   }
 }
 
-main().catch((error) => {
-  console.error(`Failed to generate steering LLM pack: ${error.message}`);
-  process.exit(1);
-});
+function isDirectRun() {
+  return path.resolve(process.argv[PROCESS_ARG_SCRIPT_INDEX] || EMPTY_TEXT) ===
+    fileURLToPath(import.meta.url);
+}
+
+if (isDirectRun()) {
+  main().catch((error) => {
+    console.error(`Failed to generate steering LLM pack: ${error.message}`);
+    process.exit(EXIT_CODE_FAILURE);
+  });
+}
+
+export {
+  appendChildBulletsForParentRule,
+  collectBulletListText,
+  parseMarkdownCandidates,
+};

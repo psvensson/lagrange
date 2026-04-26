@@ -23,8 +23,6 @@ import {
   isCanonicalWebSocketEndpointRow,
   isCanonicallyActiveNode,
 } from '../control-plane/active-node-projection.js';
-import {
-} from '../control-plane/priority-recovery-diagnostics-constants.js';
 import {evaluateSharedMetadataNodeCoverage} from './admin-shared-metadata-consistency.js';
 import {
   shouldAttemptAuthoritativeRepair,

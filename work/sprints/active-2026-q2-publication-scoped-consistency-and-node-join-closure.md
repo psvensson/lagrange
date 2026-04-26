@@ -79,11 +79,18 @@ Secondary after the primary path is stable:
 
 ## Active Packages
 
-1. [Priority spread recovery operation creation under load](../packages/active-20260426-priority-spread-recovery-operation-creation-under-load.md)
+1. [Publication recovery machine spec and preflight verification](../packages/active-20260426-publication-recovery-machine-spec-and-preflight-verification.md)
 
 ## Queued Packages
 
-All final consistency recommendation packages are now complete or queued outside
+The post-active transition and quiescence packages are paused until the current
+startup/active-gate publication recovery and heartbeat-status blocker closes
+or migrates:
+
+1. [Rolling restart operation transition pressure and over-target trim](../packages/todo-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md)
+2. [Control plane quiescence owner snapshot](../packages/todo-20260426-control-plane-quiescence-owner-snapshot.md)
+
+All final consistency recommendation packages are complete or queued outside
 the current execution path.
 
 Other secondary matrix failures become active packages only after the
@@ -96,35 +103,44 @@ Queued convergence-grammar packages:
 3. [Critical pressure workload taxonomy audit](../packages/todo-20260424-critical-pressure-workload-taxonomy-audit.md)
 4. [Critical replace operation lifecycle convergence owner](../packages/todo-20260424-critical-replace-operation-lifecycle-convergence-owner.md)
 5. [Rolling restart in-flight operation drain and CDC pressure](../packages/todo-20260425-rolling-restart-inflight-operation-drain-and-cdc-pressure.md)
-6. [Rolling restart operation transition pressure and over-target trim](../packages/todo-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md)
 
 ## Remaining Work Summary
 
 1. Current execution blocker:
-   The April 26 cleanup-budget rerun no longer has membership publication ACK
-   debt or the earlier `sql_transactions-p1` over-target blocker. It fails
-   during load readiness with publication epoch `4` `PUBLISHED`,
-   `pendingAckCount=0`, `prioritySpreadPending=true`, and
-   `sql_write_operations-p1` still classified as
-   `eligible_but_no_operation_created`.
+   The April 26 source-visibility, failed-`REPLACE` active-target, local
+   mutation priority-creation, executor outcome, metadata gateway, successor
+   leader safety, completed-row liveness, ACK-complete publication repair,
+   heartbeat ACK probe, state-machine pressure preflight, replacement-target
+   `NOT_FOUND`, and quiescence-classification slices are complete or paused.
+   The latest pre-revival `test-output/report.json` rerun moved the blocker
+   again and did not reach post-active trim or quiescence. Publication is now
+   `PUBLISHED`, pending ACK is `0`, priority recovery is `none`, active
+   diagnostics report `5/5`, but snapshot coverage is `4/5` because one active
+   node is missing from published membership:
+   `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`.
 2. Next active investigation:
-   close priority-spread recovery operation creation/progression under
-   `query:update:replica_operations` delivery-source saturation. The current
-   blocker has `needs_operation` on `sql_write_operations-p1`, while
-   `sql_transactions-p1` is recovering in flight after reaching
-   `currentCount=3,targetCount=3`.
+   close the active
+   [Publication recovery machine spec and preflight verification](../packages/active-20260426-publication-recovery-machine-spec-and-preflight-verification.md)
+   boundary. The immediate blocker is no longer post-active trim or
+   quiescence. The ACK/published-active evidence normalization slice moved the
+   failure to stale node-state publication: the missing node is direct-probe
+   active/admin-ready while the durable control-plane node row still carries
+   stale `stopped` status. READY heartbeat-only recovery now revives that row
+   to active before membership publication repair; the representative rerun is
+   intentionally pending.
 3. Harness classification:
    terminal barrier evidence wins over stale playback reconstruction for
-   active, restart-recovery, and convergence failures. The current
-   representative failure is owner-visible priority recovery progress, not
-   stale startup or a membership publication ACK artifact.
+   active, restart-recovery, load-readiness, and convergence failures. The
+   current representative failure classifies from the shared publication
+   recovery machine so stale top-level publication summaries cannot hide
+   active-gate ACK or missing-published evidence.
 4. Final consistency:
    the final leader-map consistency package is complete for this sprint
    because the rerun moved to a freshly split non-final blocker.
 5. Residual cleanup:
    fence or delete superseded local reconstruction and caller-local pressure
-   exception paths through queued packages only after the current operation
-   transition blocker closes or migrates.
+   exception paths through queued packages only after the current publication
+   recovery / node-state revival blocker closes or migrates.
 6. Matrix re-entry:
    after `rolling-restart` passes or moves to a stable named blocker,
    continue with `seven-node-read-write-load-transaction-recovery`, then
@@ -161,6 +177,11 @@ representative failure forward.
 22. [Admin observation mode and repair contract](../packages/done-20260424-admin-observation-mode-and-repair-contract.md)
 23. [Final consistency failure classifier cutover](../packages/done-20260424-final-consistency-failure-classifier-cutover.md)
 24. [Rolling restart durable rejoin admin reachability](../packages/done-20260425-rolling-restart-durable-rejoin-admin-reachability.md)
+25. [Priority spread recovery operation creation under load](../packages/done-20260426-priority-spread-recovery-operation-creation-under-load.md)
+26. [Priority failed replace active-target recovery closure under load](../packages/done-20260426-priority-failed-replace-active-target-recovery-closure-under-load.md)
+27. [Priority operation creation local mutation gate under load](../packages/done-20260426-priority-operation-creation-local-mutation-gate-under-load.md)
+28. [MOVE_ASSIGNMENT liveness proof hardening](../packages/done-20260426-move-assignment-liveness-proof-hardening.md)
+29. [State machine pressure preflight](../packages/done-20260426-state-machine-pressure-preflight.md)
 
 ## Parked Work
 
@@ -316,8 +337,89 @@ Current secondary evidence:
     `sql_transaction_participants-p1` and `sql_transactions-p1`.
 30. The post-active split remains queued, and the dominant systemic boundary
     has moved from membership publication closure to the active
-    [Priority spread recovery operation creation under load](../packages/active-20260426-priority-spread-recovery-operation-creation-under-load.md)
+    [Priority spread recovery operation creation under load](../packages/done-20260426-priority-spread-recovery-operation-creation-under-load.md)
     package.
+31. `test-output/reports/runtime-stability-rolling-restart-20260426-codex-failed-replace-active-target.report.json`
+    confirms that `control_plane_publications-p1` no longer owns missing
+    operation creation after a failed priority `REPLACE` with an
+    `active_operational` target. That partition is
+    `spread_satisfied_in_flight`.
+32. The current load-readiness blocker is now
+    `sql_write_operations-p1` with semantic state `needs_operation`, blocker
+    `eligible_but_no_operation_created`, no operation row, and next action
+    `create_recovery_operation`.
+33. That migrated load-readiness boundary was split as
+    [Priority operation creation local mutation gate under load](../packages/done-20260426-priority-operation-creation-local-mutation-gate-under-load.md).
+34. `test-output/reports/runtime-stability-rolling-restart-20260426-codex-local-mutation-priority-creation.report.json`
+    moved beyond load readiness and through the restart cycle. Priority
+    recovery blocked and unresolved counts are `0`,
+    `eligible_but_no_operation_created` is empty, `needs_operation` is empty,
+    and priority spread is not pending.
+35. `test-output/reports/runtime-stability-rolling-restart-20260426-codex-executor-outcome-wiring.report.json`
+    wires executor outcomes through bootstrap and node-join runtime handlers,
+    but still leaves missing final leaders for `control_plane_publications-p1`
+    and `sql_write_operations-p1`.
+36. `test-output/reports/runtime-stability-rolling-restart-20260426-codex-source-follower-successor-leader.report.json`
+    closes the missing-leader symptom after source-follower evidence stopped
+    authorizing source removal without a canonical successor leader.
+37. The current blocker is post-restart convergence: in-flight replica
+    operations are `6`, stale active rows with `completedAt` remain in drain,
+    replacement election requests complete without canonical replacement leader
+    ownership for `control_plane_publications-p1` and
+    `replica_operations-p1`, and post-rebalance closure is open on operation
+    drain, membership trim, and no-over-target evidence.
+38. The active package is again
+    [Rolling restart operation transition pressure and over-target trim](../packages/todo-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md).
+39. The post-review continuation run in `test-output/report.json` moves the
+    blocker again. It fails in `waitForControlPlaneQuiescence` after
+    `120000ms`, with failover, convergence, restart recovery, and publication
+    ACK gates closed.
+40. The prior stale active `completedAt` drain symptom is closed in the final
+    priority snapshot. Completed rows are terminal `removed` rows with
+    `latestTimelineInFlight=false`, and completed replacement-election
+    requests now have an explicit retarget outcome.
+41. The remaining dominant evidence is quiescence instability:
+    `replica_operations_in_flight` samples, one snapshot timeout on
+    `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`, node-state publication write
+    pressure, discovery repair timeouts, and five priority partitions still
+    classified as `spread_satisfied_in_flight`.
+42. The quiescence boundary is now active as
+    [Control plane quiescence owner snapshot](../packages/todo-20260426-control-plane-quiescence-owner-snapshot.md).
+    Its first implementation slice added an explicit snapshot resolver and
+    wired `waitForControlPlaneQuiescence` through that resolver.
+43. The quiescence continuation added progressing/stalled operation-drain
+    states, snapshot/admin timeout pressure classification, structured
+    quiescence timeout diagnostics, and failure-bundle owner-state
+    classification.
+44. The `MOVE_ASSIGNMENT` proof-hardening split is complete. Active assignment
+    rows without durable completion remain in flight, while report-shaped
+    completed assignment rows drain from the liveness summary.
+45. The next `rolling-restart` rerun did not reach quiescence. It failed at
+    `waitForConvergence` after `389.5s` with publication epoch `11` still
+    `OPEN`, pending ACK count `0`, blocked node count `5`,
+    `control_plane_publication_pending`, priority recovery
+    `coordination_mismatch` / `recovering_in_flight`, and over-target durations
+    on `control_plane_publications-p1`, `replica_operations-p1`, and
+    `sql_transactions-p1`.
+46. A startup active-gate rerun moved the blocker earlier than post-active
+    convergence and quiescence. The regenerated playback classified
+    `publication_convergence_blocked` /
+    `PRIORITY_CONTROL_PLANE_RECOVERY_PENDING`, publication epoch `91` was
+    `ACK_PENDING`, top-level pending ACK was stale at `0`, active-gate
+    progress reported `pendingAck=1`, and priority recovery carried
+    `coordination_mismatch` / `blocked_unclassified` evidence. The active
+    package became
+    [Publication recovery machine spec and preflight verification](../packages/active-20260426-publication-recovery-machine-spec-and-preflight-verification.md).
+47. The publication recovery evidence fix moved the latest
+    `test-output/report.json` rerun again. Publication is `PUBLISHED`,
+    `pendingAck=0`, priority recovery is `none`, and active diagnostics report
+    `5/5`, but published active membership is `4/5` with missing node
+    `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`. The root cause is stale durable
+    node-state status: direct node diagnostics are active/admin-ready, while
+    the control-plane node row still says `stopped` despite READY/fresh
+    heartbeat evidence. The current code slice revives stale stopped rows on
+    READY heartbeat-only recovery updates; the post-fix representative rerun
+    has not been run.
 
 ## Progress Grammar
 
@@ -351,10 +453,11 @@ This sprint stays active until all of the following are true:
    membership publication. Status: implemented for the representative path;
    memory and queue pressure remain residual risks.
 4. Harness triage and failure bundles classify the final blocker from
-   canonical owner-state contracts. Status: implemented for final consistency;
-   the next `rolling-restart` rerun should now identify authority divergence,
-   observer/cache lag, CDC lag, or the next runtime blocker from structured
-   diagnostics.
+   canonical owner-state contracts. Status: implemented for final consistency
+   and quiescence owner-state failures; the next `rolling-restart` rerun should
+   now identify `control_plane_pressure`, `operation_drain_stalled`,
+   `leadership_churn`, critical spread, authority divergence, observer/cache
+   lag, CDC lag, or the next runtime blocker from structured diagnostics.
 5. Broad matrix reruns are reintroduced only through the representative
    stability package. Status: started with `rolling-restart`.
 
@@ -558,3 +661,58 @@ Executed on April 24, 2026:
     unresolved priority-recovery operation state and places the priority
     partitions under `spread_satisfied_in_flight`. This did not reach the
     post-active over-target convergence barrier.
+91. Quiescence owner-state continuation:
+    `node --test test/distributed/harness/__tests__/control-plane-quiescence-snapshot.test.js`
+92. Result: passed, `6/6`.
+93. Failure-bundle quiescence classification:
+    `node --test test/distributed/harness/__tests__/failure-bundle.test.js`
+94. Result: passed, `48/48`.
+95. Runner diagnostics propagation:
+    `node --test test/distributed/harness/__tests__/run.test.js`
+96. Result: passed, `68/68`.
+97. Harness quiescence compatibility:
+    `node --test test/distributed/harness/__tests__/cluster.test-part-6.js`
+98. Result: passed, `22/22` skipped by the existing harness skip gate.
+99. Static and guideline checks:
+    `node --check test/distributed/harness/control-plane-quiescence-snapshot.js`,
+    `node --check test/distributed/harness/cluster-segment-7-class-3.js`,
+    `node --check test/distributed/run-runtime-helpers.js`,
+    `node --check test/distributed/harness/failure-bundle-segment-4.js`,
+    `node --check test/distributed/harness/failure-bundle-segment-5.js`,
+    `node --check test/distributed/harness/failure-bundle-segment-6.js`,
+    `node --check test/distributed/harness/__tests__/failure-bundle.test.js`,
+    `npm run audit:guideline:literals`,
+    `npm run audit:guideline:decision-boundaries`, and `git diff --check`.
+100. Result: passed; literal audit reported `0` new violations and `6219`
+     inherited baseline violations, and decision-boundary audit reported `0`
+     violations.
+101. Rolling-restart quiescence-owner rerun:
+     `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --fast-local`
+102. Result: failed, `0/1` passed after `389.5s`. The failure migrated earlier
+     than quiescence to `waitForConvergence`: publication epoch `11` is
+     `OPEN`, pending ACK count is `0`, blocked node count is `5`, the failure
+     bundle dominant reason is `control_plane_publication_pending`, and
+     post-rebalance closure remains open on operation drain, publication
+     visibility, and no-over-target evidence.
+103. Publication recovery machine focused validation:
+     `node --test test/control-plane/publication-recovery-state-machine.test.js test/control-plane/publication-recovery-gate.test.js test/control-plane/publication-recovery-evidence.test.js`
+104. Result: passed, `103/103`; active-gate pending-ACK and
+     missing-published evidence now survives stale top-level summaries.
+105. Membership publication and active-node projection validation:
+     `node --test test/control-plane/active-node-projection.test.js test/control-plane/membership-publication-coordinator.test.js`
+106. Result: passed, `255/255`.
+107. Harness publication evidence validation:
+     `node --test test/distributed/harness/__tests__/state-machine-pressure-preflight.test.js test/distributed/harness/__tests__/failure-bundle.test.js`
+108. Result: passed, `62/62`.
+109. Pre-revival rolling-restart publication recovery rerun:
+     `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --fast-local`
+110. Result: failed after the ACK contradiction moved. Publication was
+     `PUBLISHED`, pending ACK was `0`, active diagnostics were `5/5`, and the
+     remaining startup active-gate blocker was missing published membership for
+     node `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`.
+111. Heartbeat-only node-state revival validation:
+     `node --test test/control-plane/replica-dispatch-node-state-update.test.js`
+112. Result: passed, `97/97`; READY heartbeat-only recovery now revives stale
+     stopped durable node rows before membership publication repair.
+113. Post-revival guardrails and the representative `rolling-restart` rerun:
+     pending by request.

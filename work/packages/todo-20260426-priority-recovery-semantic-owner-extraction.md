@@ -16,7 +16,7 @@ guarantees`.
 
 Sprint:
 
-1. [Roadmap runtime truth and boundary closure](../sprints/active-2026-q2-roadmap-runtime-truth-and-boundary-closure.md)
+1. [Roadmap runtime truth and boundary closure](../sprints/archived/done-2026-q2-roadmap-runtime-truth-and-boundary-closure.md)
 
 Related backlog:
 

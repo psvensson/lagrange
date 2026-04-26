@@ -236,6 +236,8 @@ const NODE_JOINING_SERVICE_LITERAL = Object.freeze({
   BACKGROUND: 'background',
   JOIN_BACKFILL_DETECTED_REPLICA_DIVERGENCE:
     'Join backfill detected replica divergence',
+  OPERATIONAL_MESSAGE_GROUP_CDC_INGRESS_NOT_READY:
+    'Operational message-group ingress not ready ',
   QUERY_FAILED: 'query failed',
   RESTORED_DURABLE_LOCAL_PARTITION_SERVICES_FROM_CACHED_TOPOLOGY:
     'Restored durable local partition services from cached topology',

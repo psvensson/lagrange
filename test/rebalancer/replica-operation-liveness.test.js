@@ -5,6 +5,109 @@ import {
   summarizeReplicaOperationLiveness,
 } from '../../src/rebalancer/replica-operation-liveness.js';
 
+const COMPLETED_MOVE_ASSIGNMENT_OPERATION_ID =
+  'completed-move-assignment';
+const COMPLETED_MOVE_ASSIGNMENT_TYPE = 'MOVE_ASSIGNMENT';
+const COMPLETED_MOVE_ASSIGNMENT_STATUS = 'active';
+const COMPLETED_MOVE_ASSIGNMENT_WORKFLOW_STEP = 'ACTIVE';
+const COMPLETED_MOVE_ASSIGNMENT_REPLICA_ID = 'mg-1-r2';
+const COMPLETED_MOVE_ASSIGNMENT_SOURCE_NODE_ID = 'seed-node';
+const COMPLETED_MOVE_ASSIGNMENT_TARGET_NODE_ID = 'target-node';
+const COMPLETED_MOVE_ASSIGNMENT_UPDATED_AT = 100;
+const COMPLETED_MOVE_ASSIGNMENT_COMPLETED_AT = 100;
+const COMPLETED_MOVE_ASSIGNMENT_NOW_MS = 200;
+const MOVE_ASSIGNMENT_IN_FLIGHT_COUNT_ZERO = 0;
+const MOVE_ASSIGNMENT_STALE_IN_FLIGHT_COUNT_ZERO = 0;
+const MOVE_ASSIGNMENT_NO_IN_FLIGHT_OPERATION_IDS = Object.freeze([]);
+const MOVE_ASSIGNMENT_ACTIVE_WITHOUT_COMPLETION_OPERATION_ID =
+  'active-move-assignment-without-completion';
+const MOVE_ASSIGNMENT_ACTIVE_WITHOUT_COMPLETION_UPDATED_AT = 100;
+const MOVE_ASSIGNMENT_ACTIVE_WITHOUT_COMPLETION_NOW_MS = 200;
+
+test(
+  'replica-operation-liveness treats completed MOVE_ASSIGNMENT rows as not in flight',
+  async (t) => {
+    const record = normalizeReplicaOperationRecord({
+      operation_id: COMPLETED_MOVE_ASSIGNMENT_OPERATION_ID,
+      type: COMPLETED_MOVE_ASSIGNMENT_TYPE,
+      replica_id: COMPLETED_MOVE_ASSIGNMENT_REPLICA_ID,
+      source_node_id: COMPLETED_MOVE_ASSIGNMENT_SOURCE_NODE_ID,
+      target_node_id: COMPLETED_MOVE_ASSIGNMENT_TARGET_NODE_ID,
+      status: COMPLETED_MOVE_ASSIGNMENT_STATUS,
+      workflow_step: COMPLETED_MOVE_ASSIGNMENT_WORKFLOW_STEP,
+      updated_at: COMPLETED_MOVE_ASSIGNMENT_UPDATED_AT,
+      completed_at: COMPLETED_MOVE_ASSIGNMENT_COMPLETED_AT,
+    }, {
+      nowMs: COMPLETED_MOVE_ASSIGNMENT_NOW_MS,
+    });
+
+    t.equal(
+      isReplicaOperationInFlight(record),
+      false,
+      'completed bootstrap move-assignment rows should not keep operation drain open',
+    );
+  },
+);
+
+test(
+  'replica-operation-liveness keeps active MOVE_ASSIGNMENT rows in flight until completion is observed',
+  async (t) => {
+    const record = normalizeReplicaOperationRecord({
+      operation_id: MOVE_ASSIGNMENT_ACTIVE_WITHOUT_COMPLETION_OPERATION_ID,
+      type: COMPLETED_MOVE_ASSIGNMENT_TYPE,
+      replica_id: COMPLETED_MOVE_ASSIGNMENT_REPLICA_ID,
+      source_node_id: COMPLETED_MOVE_ASSIGNMENT_SOURCE_NODE_ID,
+      target_node_id: COMPLETED_MOVE_ASSIGNMENT_TARGET_NODE_ID,
+      status: COMPLETED_MOVE_ASSIGNMENT_STATUS,
+      workflow_step: COMPLETED_MOVE_ASSIGNMENT_WORKFLOW_STEP,
+      updated_at: MOVE_ASSIGNMENT_ACTIVE_WITHOUT_COMPLETION_UPDATED_AT,
+    }, {
+      nowMs: MOVE_ASSIGNMENT_ACTIVE_WITHOUT_COMPLETION_NOW_MS,
+    });
+
+    t.equal(
+      isReplicaOperationInFlight(record),
+      true,
+      'active bootstrap move-assignment rows should remain in flight until completion is durable',
+    );
+  },
+);
+
+test(
+  'replica-operation-liveness summary drains report-shaped completed MOVE_ASSIGNMENT rows',
+  async (t) => {
+    const summary = summarizeReplicaOperationLiveness([{
+      operation_id: COMPLETED_MOVE_ASSIGNMENT_OPERATION_ID,
+      operation_type: COMPLETED_MOVE_ASSIGNMENT_TYPE,
+      replica_id: COMPLETED_MOVE_ASSIGNMENT_REPLICA_ID,
+      source_node_id: COMPLETED_MOVE_ASSIGNMENT_SOURCE_NODE_ID,
+      target_node_id: COMPLETED_MOVE_ASSIGNMENT_TARGET_NODE_ID,
+      status: COMPLETED_MOVE_ASSIGNMENT_STATUS,
+      workflow_step: COMPLETED_MOVE_ASSIGNMENT_WORKFLOW_STEP,
+      updated_at: COMPLETED_MOVE_ASSIGNMENT_UPDATED_AT,
+      completed_at: COMPLETED_MOVE_ASSIGNMENT_COMPLETED_AT,
+    }], {
+      nowMs: COMPLETED_MOVE_ASSIGNMENT_NOW_MS,
+    });
+
+    t.equal(
+      summary.inFlightCount,
+      MOVE_ASSIGNMENT_IN_FLIGHT_COUNT_ZERO,
+      'completed move-assignment rows should not contribute to operation drain summary',
+    );
+    t.equal(
+      summary.staleInFlightCount,
+      MOVE_ASSIGNMENT_STALE_IN_FLIGHT_COUNT_ZERO,
+      'completed move-assignment rows should not contribute to stale drain summary',
+    );
+    t.same(
+      summary.inFlightOperationIds,
+      MOVE_ASSIGNMENT_NO_IN_FLIGHT_OPERATION_IDS,
+      'completed move-assignment operation id should not appear in current blockers',
+    );
+  },
+);
+
 test(
   'replica-operation-liveness treats observed-converged MOVE_ASSIGNMENT rows as not in flight',
   async (t) => {

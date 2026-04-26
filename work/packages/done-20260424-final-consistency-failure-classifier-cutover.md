@@ -1,7 +1,5 @@
 # Final Consistency Failure Classifier Cutover
 
-Status: done on April 24, 2026.
-
 ## Why
 
 Failure bundles still keep a legacy message-string fallback for final leader

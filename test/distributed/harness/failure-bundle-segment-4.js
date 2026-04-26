@@ -7,6 +7,10 @@ import {
   normalizePriorityRecoveryActiveGateSnapshot,
 } from './active-gate-contract.js';
 import {
+  CONTROL_PLANE_QUIESCENCE_REASON,
+  CONTROL_PLANE_QUIESCENCE_STATE,
+} from './control-plane-quiescence-snapshot.js';
+import {
   buildCanonicalControlPlaneDiagnosticsFromControlPlane,
   buildCanonicalPublicationEvidenceFromControlPlane,
 } from
@@ -258,6 +262,22 @@ const FAILURE_BARRIER_SUPERSEDED_REASON_FRAGMENT_SET = Object.freeze([
 ]);
 const PRIORITY_RECOVERY_REASON_PRIORITY_PARTITIONS_NOT_SPREAD =
   'priority_partitions_not_spread';
+const CONTROL_PLANE_QUIESCENCE_DISCOVERY_REASON_SET = Object.freeze(new Set([
+  CONTROL_PLANE_QUIESCENCE_REASON.CONTROL_PLANE_PRESSURE,
+  CONTROL_PLANE_QUIESCENCE_REASON.SNAPSHOT_QUERY_ERROR,
+  CONTROL_PLANE_QUIESCENCE_STATE.OBSERVATION_UNAVAILABLE,
+  CONTROL_PLANE_QUIESCENCE_STATE.CONTROL_PLANE_PRESSURE,
+]));
+const CONTROL_PLANE_QUIESCENCE_TOPOLOGY_REASON_SET = Object.freeze(new Set([
+  CONTROL_PLANE_QUIESCENCE_REASON.OPERATION_DRAIN_STALLED,
+  CONTROL_PLANE_QUIESCENCE_REASON.REPLICA_OPERATIONS_IN_FLIGHT,
+  CONTROL_PLANE_QUIESCENCE_REASON.LEADERSHIP_UNSTABLE,
+  CONTROL_PLANE_QUIESCENCE_REASON.CRITICAL_SYSTEM_SPREAD_OPEN,
+  CONTROL_PLANE_QUIESCENCE_STATE.OPERATION_DRAIN_PROGRESSING,
+  CONTROL_PLANE_QUIESCENCE_STATE.OPERATION_DRAIN_STALLED,
+  CONTROL_PLANE_QUIESCENCE_STATE.LEADERSHIP_CHURN,
+  CONTROL_PLANE_QUIESCENCE_STATE.CRITICAL_SPREAD_OPEN,
+]));
 const RECOVERY_PROTOCOL_STATE_PRIORITY_SPREAD_PENDING =
   'priority_spread_pending';
 
@@ -638,6 +658,52 @@ function resolveFinalConsistencyFailure(entry, controlPlane) {
     resolveStructuredFinalConsistencyFailure(controlPlane) ||
     resolveLegacyFinalConsistencyFailureFromMessage(entry)
   );
+}
+
+function resolveControlPlaneQuiescenceRootCauseClass(quiescence) {
+  const state = String(quiescence?.state || '').trim();
+  const canonicalBlocker = String(quiescence?.canonicalBlocker || '').trim();
+  if (
+    CONTROL_PLANE_QUIESCENCE_DISCOVERY_REASON_SET.has(canonicalBlocker) ||
+    CONTROL_PLANE_QUIESCENCE_DISCOVERY_REASON_SET.has(state)
+  ) {
+    return ROOT_CAUSE_CLASS_DISCOVERY;
+  }
+  if (
+    CONTROL_PLANE_QUIESCENCE_TOPOLOGY_REASON_SET.has(canonicalBlocker) ||
+    CONTROL_PLANE_QUIESCENCE_TOPOLOGY_REASON_SET.has(state)
+  ) {
+    return ROOT_CAUSE_CLASS_TOPOLOGY;
+  }
+  return ROOT_CAUSE_CLASS_UNKNOWN;
+}
+
+function resolveStructuredControlPlaneQuiescenceFailure(diagnostics) {
+  const quiescence = isRecord(diagnostics?.quiescence) ?
+    diagnostics.quiescence :
+    null;
+  if (!quiescence) {
+    return null;
+  }
+  const canonicalBlocker = String(quiescence.canonicalBlocker || '').trim();
+  const state = String(quiescence.state || '').trim();
+  const dominantReason = canonicalBlocker || state;
+  if (dominantReason.length === ZERO) {
+    return null;
+  }
+  const reasonCounts = {};
+  for (const reasonCode of normalizeDistinctStringArray(
+    quiescence.reasonCodes,
+  )) {
+    addNormalizedReasonCount(reasonCounts, reasonCode);
+  }
+  addNormalizedReasonCount(reasonCounts, dominantReason);
+  return {
+    dominantReason,
+    rootCauseClass: resolveControlPlaneQuiescenceRootCauseClass(quiescence),
+    reasonCounts,
+    quiescence: cloneJsonValue(quiescence),
+  };
 }
 
 function hasOpenPublicationOrPriorityRecoveryBlocker(publicationConvergence) {
@@ -1178,6 +1244,8 @@ function buildFailureArtifact({
   const publicationConvergenceReasonCounts =
     deriveReasonCountsFromPublicationConvergence(controlPlane);
   const publicationConvergence = buildPublicationConvergenceSummary(controlPlane);
+  const quiescenceFailure =
+    resolveStructuredControlPlaneQuiescenceFailure(diagnostics);
   const failureBarrier = resolveFailureBarrier({
     entry,
     existingFailure,
@@ -1191,6 +1259,7 @@ function buildFailureArtifact({
     loadReasonCounts,
     readinessReasonCounts,
     publicationConvergenceReasonCounts,
+    quiescenceFailure?.reasonCounts,
   );
   if (failureBarrier?.dominantReason) {
     addNormalizedReasonCount(
@@ -1210,12 +1279,14 @@ function buildFailureArtifact({
   );
   const finalConsistencyReason =
     finalConsistencyFailure?.dominantReason || null;
+  const quiescenceReason = quiescenceFailure?.dominantReason || null;
   const dominantReasonOverride = resolveDominantReasonOverride({
     existingDominantReason: existingFailure.dominantReason,
     publicationConvergence,
   });
   const dominantReason =
     finalConsistencyReason ||
+    quiescenceReason ||
     dominantReasonOverride ||
     failureBarrier?.dominantReason ||
     (typeof existingFailure.dominantReason === 'string' &&
@@ -1230,17 +1301,19 @@ function buildFailureArtifact({
   }
   const rootCauseClass = finalConsistencyFailure ?
     finalConsistencyFailure.rootCauseClass :
-    failureBarrier?.rootCauseClass ?
-      failureBarrier.rootCauseClass :
-      resolveRootCauseClass({
-        rootCauseClass: existingFailure.rootCauseClass,
-        dominantReason,
-        reasonCounts,
-        loadMetrics,
-        firstFaultTimeline,
-        readiness,
-        controlPlane,
-      });
+    quiescenceFailure ?
+      quiescenceFailure.rootCauseClass :
+      failureBarrier?.rootCauseClass ?
+        failureBarrier.rootCauseClass :
+        resolveRootCauseClass({
+          rootCauseClass: existingFailure.rootCauseClass,
+          dominantReason,
+          reasonCounts,
+          loadMetrics,
+          firstFaultTimeline,
+          readiness,
+          controlPlane,
+        });
   const affectedNodeIds = normalizeAffectedNodeIds(
     entry,
     resolveRelevantNodeIds(entry),
@@ -1263,6 +1336,7 @@ function buildFailureArtifact({
     reasonCounts,
     affectedNodeIds,
     ...(failureBarrier ? {failureBarrier} : {}),
+    ...(quiescenceFailure ? {quiescence: quiescenceFailure.quiescence} : {}),
   };
 }
 
@@ -1477,6 +1551,35 @@ function buildPublicationConvergenceSummary(controlPlane) {
   ) ?
     activeGateProgress.priorityRecoveryProgressClasses :
     null;
+  const pendingAckCount = Math.max(
+    pendingAckNodeIds.length,
+    normalizeNonNegativeCount(priorityRecoveryObservation?.pendingAckCount),
+    normalizeNonNegativeCount(publicationConvergence?.pendingAckCount),
+    normalizeNonNegativeCount(publicationConvergenceGate?.pendingAckCount),
+    normalizeNonNegativeCount(activeGateProgress?.pendingAckCount),
+    normalizeNonNegativeCount(activeGateBestProgress?.pendingAckCount),
+  );
+  const missingPublishedNodeIds = normalizeDistinctStringArray([
+    ...(Array.isArray(publicationConvergenceGate?.missingPublishedNodeIds) ?
+      publicationConvergenceGate.missingPublishedNodeIds :
+      []),
+    ...(Array.isArray(publicationConvergence?.missingPublishedNodeIds) ?
+      publicationConvergence.missingPublishedNodeIds :
+      []),
+    ...(Array.isArray(activeGateProgress?.selectedMissingPublishedNodeIds) ?
+      activeGateProgress.selectedMissingPublishedNodeIds :
+      []),
+    ...(Array.isArray(activeGateBestProgress?.selectedMissingPublishedNodeIds) ?
+      activeGateBestProgress.selectedMissingPublishedNodeIds :
+      []),
+  ]);
+  const missingPublishedCount = Math.max(
+    missingPublishedNodeIds.length,
+    normalizeNonNegativeCount(publicationConvergenceGate?.missingPublishedCount),
+    normalizeNonNegativeCount(publicationConvergence?.missingPublishedCount),
+    normalizeNonNegativeCount(activeGateProgress?.missingPublishedCount),
+    normalizeNonNegativeCount(activeGateBestProgress?.missingPublishedCount),
+  );
   return {
     publicationEpoch:
       priorityRecoveryObservation?.publicationEpoch ??
@@ -1491,11 +1594,7 @@ function buildPublicationConvergenceSummary(controlPlane) {
       activeGateBestProgress?.publicationStatus ||
       null,
     pendingAckNodeIds,
-    pendingAckCount:
-      priorityRecoveryObservation?.pendingAckCount ??
-      activeGateProgress?.pendingAckCount ??
-      activeGateBestProgress?.pendingAckCount ??
-      pendingAckNodeIds.length,
+    pendingAckCount,
     blockedNodeIds,
     blockedNodeCount: blockedNodeIds.length,
     blockingReasonCounts,
@@ -1508,6 +1607,8 @@ function buildPublicationConvergenceSummary(controlPlane) {
         Array.isArray(activeGateProgress?.selectedPublishedActiveNodeIds) ?
           activeGateProgress.selectedPublishedActiveNodeIds :
           [],
+    missingPublishedNodeIds,
+    missingPublishedCount,
     publishedAt: publicationConvergence?.publishedAt || null,
     updatedAt: publicationConvergence?.updatedAt || null,
     recoveryProtocolState:

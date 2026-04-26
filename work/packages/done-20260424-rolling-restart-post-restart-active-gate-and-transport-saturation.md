@@ -1,7 +1,5 @@
 # Rolling Restart Post-Restart ACTIVE Gate And Transport Saturation
 
-Status: done on April 24, 2026.
-
 ## Why
 
 The `rolling-restart` secondary re-entry moved beyond the per-restart

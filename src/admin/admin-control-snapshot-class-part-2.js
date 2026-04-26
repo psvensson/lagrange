@@ -17,10 +17,6 @@ import {
   ADMIN_CONTROL_SNAPSHOT_OBSERVATION_MODE,
 } from './admin-constants.js';
 import {
-} from '../control-plane/active-node-projection.js';
-import {
-} from '../control-plane/priority-recovery-diagnostics-constants.js';
-import {
   hasAuthoritativeRepairTrigger,
   isReplicaOperationsOnlyRepairScope,
   isReplicaOperationsOnlyTableSet,

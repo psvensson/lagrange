@@ -1,6 +1,6 @@
 # Rolling Restart Durable Rejoin Admin Reachability
 
-Status: done on April 25, 2026. The owner-path fix moved `rolling-restart`
+April 25 update: The owner-path fix moved `rolling-restart`
 past restart readiness and back to the post-active topology convergence
 boundary.
 

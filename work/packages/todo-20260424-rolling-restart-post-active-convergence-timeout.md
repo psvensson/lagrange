@@ -1,6 +1,6 @@
 # Rolling Restart Post-Active Convergence Timeout
 
-Status: todo. Superseded as the active blocker by the latest
+Supersession note: Superseded as the active blocker by the latest
 restart-recovery failure on April 24, 2026.
 
 ## Supersession Note

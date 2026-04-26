@@ -1849,6 +1849,9 @@ function isPriorityRecoveryCompletedReplaceOperationContext(operationContext) {
   ) {
     return false;
   }
+  if (isPriorityRecoveryOperationContextTerminal(operationContext)) {
+    return true;
+  }
   const workflowStep = String(
     operationContext.workflowStep || '',
   ).toUpperCase();
@@ -2095,7 +2098,7 @@ function selectLatestPriorityRecoveryOperationContext(operationContexts = []) {
         resolvePriorityRecoveryOperationProgressTimestampMs(right) -
         resolvePriorityRecoveryOperationProgressTimestampMs(left)
       );
-    })[0] || null
+    })[NUM.ZERO] || null
   );
 }
 function hasPriorityRecoveryScheduledRetry(retryAfterMs) {
@@ -3215,14 +3218,19 @@ function resolvePriorityRecoveryDecisionLearnerPromotion(options = {}) {
 }
 
 function resolvePriorityRecoveryDecisionOperationContexts(options = {}) {
-  const partitionId = String(options.partitionId || '').trim();
+  const partitionId = String(
+    options.partitionId || PRIORITY_RECOVERY_SNAPSHOT_LITERAL.VALUE,
+  ).trim();
   const operationContexts = Array.isArray(options.operationContexts) ?
     options.operationContexts :
     [];
   return operationContexts.filter(
     (operationContext) =>
       isPriorityRecoverySnapshotObject(operationContext) &&
-      String(operationContext.partitionId || '').trim() === partitionId,
+      String(
+        operationContext.partitionId ||
+          PRIORITY_RECOVERY_SNAPSHOT_LITERAL.VALUE,
+      ).trim() === partitionId,
   );
 }
 

@@ -39,6 +39,9 @@ import {
 import {CLI} from '../constants.js';
 import {DockerProvider} from '../docker-provider.js';
 
+const STATE_MACHINE_PRESSURE_PREFLIGHT_METADATA_KEY =
+  'stateMachinePressurePreflight';
+
 describe('parseArgs', () => {
   it('returns defaults when no args provided', () => {
     const result = parseArgs([]);
@@ -361,6 +364,10 @@ describe('runScenarios', () => {
 
     assert.equal(hasFailures, false);
     assert.equal(report.scenarios.length, 0);
+    assert.equal(
+      report.metadata?.[STATE_MACHINE_PRESSURE_PREFLIGHT_METADATA_KEY]?.ready,
+      true,
+    );
   });
 });
 

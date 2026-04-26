@@ -1,3 +1,5 @@
+import fs from 'node:fs/promises';
+
 import {
   FILE_CLASS,
   buildGuidelineViolationReport,
@@ -8,8 +10,16 @@ import {
   runGuidelineCheckWhenDirect,
   walkAst,
 } from './guideline-check-shared.js';
+import {SCRIPT_TEXT} from './guideline-check-constants.js';
 
 const RULE_REFERENCE = 'system guidelines.md §4.1 Constants, Not Literals';
+const LITERAL_BASELINE_FILE_URL = new URL(
+  './check-guideline-literals-baseline.json',
+  import.meta.url,
+);
+const FILE_NOT_FOUND_ERROR_CODE = 'ENOENT';
+const NUMERIC_LITERAL_ZERO = 0;
+const NUMERIC_LITERAL_ONE = 1;
 
 function isLiteralNode(node) {
   return node?.type === 'Literal' &&
@@ -151,14 +161,100 @@ async function collectMagicLiteralViolations(pathsToScan, options = {}) {
   );
 }
 
+function buildLiteralViolationIdentity(violation) {
+  return JSON.stringify([
+    violation.filePath,
+    violation.line,
+    violation.column,
+    violation.value,
+    violation.kind,
+  ]);
+}
+
+function summarizeLiteralViolationsByFile(violations) {
+  const violationsByFile = new Map();
+  for (const violation of violations) {
+    const existing = violationsByFile.get(violation.filePath) || [];
+    existing.push(violation);
+    violationsByFile.set(violation.filePath, existing);
+  }
+  return [...violationsByFile.entries()]
+    .map(([filePath, fileViolations]) => ({
+      filePath,
+      violationCount: fileViolations.length,
+    }))
+    .sort((left, right) =>
+      right.violationCount - left.violationCount ||
+      left.filePath.localeCompare(right.filePath));
+}
+
+async function loadMagicLiteralBaseline() {
+  try {
+    const rawBaseline = await fs.readFile(
+      LITERAL_BASELINE_FILE_URL,
+      SCRIPT_TEXT.ENCODING_UTF8,
+    );
+    const parsedBaseline = JSON.parse(rawBaseline);
+    return new Set(
+      (Array.isArray(parsedBaseline?.violations) ?
+        parsedBaseline.violations :
+        []).map(buildLiteralViolationIdentity),
+    );
+  } catch (error) {
+    if (error?.code === FILE_NOT_FOUND_ERROR_CODE) {
+      return new Set();
+    }
+    throw error;
+  }
+}
+
+function applyMagicLiteralBaseline(report, baseline) {
+  const newViolations = [];
+  let inheritedViolationCount = NUMERIC_LITERAL_ZERO;
+  for (const violation of report.violations) {
+    if (baseline.has(buildLiteralViolationIdentity(violation))) {
+      inheritedViolationCount += NUMERIC_LITERAL_ONE;
+      continue;
+    }
+    newViolations.push(violation);
+  }
+  return {
+    ...report,
+    rawViolationCount: report.totalViolationCount,
+    inheritedViolationCount,
+    baselineViolationCount: baseline.size,
+    totalViolationCount: newViolations.length,
+    filesWithViolations: summarizeLiteralViolationsByFile(newViolations),
+    violations: newViolations,
+  };
+}
+
+async function collectMagicLiteralViolationsWithBaseline(
+  pathsToScan,
+  options = {},
+) {
+  const [report, baseline] = await Promise.all([
+    collectMagicLiteralViolations(pathsToScan, options),
+    loadMagicLiteralBaseline(),
+  ]);
+  return applyMagicLiteralBaseline(report, baseline);
+}
+
 function formatHumanSummary(report) {
-  return formatGuidelineHumanSummary(report, 'literal-guideline');
+  const summary = formatGuidelineHumanSummary(report, 'new literal-guideline');
+  if (!Number.isFinite(report.inheritedViolationCount)) {
+    return summary;
+  }
+  return [
+    summary,
+    `Matched ${report.inheritedViolationCount} inherited literal-guideline baseline violations`,
+  ].join(SCRIPT_TEXT.NEWLINE);
 }
 
 async function main(argv = process.argv.slice(2)) {
   return runGuidelineCheck(
     argv,
-    collectMagicLiteralViolations,
+    collectMagicLiteralViolationsWithBaseline,
     formatHumanSummary,
   );
 }
@@ -168,7 +264,10 @@ runGuidelineCheckWhenDirect(import.meta.url, main);
 export {
   FILE_CLASS,
   RULE_REFERENCE,
+  applyMagicLiteralBaseline,
+  buildLiteralViolationIdentity,
   classifyFilePath,
   collectMagicLiteralViolations,
+  collectMagicLiteralViolationsWithBaseline,
   collectMagicLiteralViolationsFromSource,
 };

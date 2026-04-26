@@ -7,6 +7,8 @@ import {buildCanonicalPublicationRecoveryEvidence} from
   '../../src/control-plane/publication-recovery-evidence.js';
 
 const TEST_PUBLICATION_EPOCH = 9;
+const TEST_EMPTY_PUBLICATION_DEBT_COUNT = 0;
+const TEST_PUBLICATION_DEBT_COUNT = 1;
 const TEST_PRIORITY_PARTITION_ID = 'replica_operations-p1';
 const TEST_NODE_ID = Object.freeze({
   FIRST: 'node-a',
@@ -184,6 +186,68 @@ test('buildCanonicalPublicationRecoveryEvidence rebuilds a stale observation fro
     );
     t.equal(evidence.publicationConvergence.prioritySpreadPending, false);
     t.same(evidence.publicationConvergence.priorityRecoveryReasonCodes, []);
+    t.end();
+  });
+
+test('buildCanonicalPublicationRecoveryEvidence keeps active-gate publication debt over stale top-level zero counts',
+  (t) => {
+    const activeGateProgress = {
+      publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.ACK_PENDING,
+      pendingAckCount: TEST_PUBLICATION_DEBT_COUNT,
+      missingPublishedCount: TEST_PUBLICATION_DEBT_COUNT,
+      selectedMissingPublishedNodeIds: [TEST_NODE_ID.SECOND],
+    };
+    const evidence = buildCanonicalPublicationRecoveryEvidence({
+      publicationConvergence: {
+        publicationEpoch: TEST_PUBLICATION_EPOCH,
+        publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.ACK_PENDING,
+        pendingAckNodeIds: [],
+        pendingAckCount: TEST_EMPTY_PUBLICATION_DEBT_COUNT,
+        missingPublishedNodeIds: [],
+        missingPublishedCount: TEST_EMPTY_PUBLICATION_DEBT_COUNT,
+        priorityRecoveryReasonCodes: [],
+        priorityPartitionSummary: TEST_SATISFIED_PRIORITY_PARTITION_SUMMARY,
+      },
+      priorityRecoveryObservation: {
+        publicationEpoch: TEST_PUBLICATION_EPOCH,
+        publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.ACK_PENDING,
+        pendingAckNodeIds: [],
+        pendingAckCount: TEST_EMPTY_PUBLICATION_DEBT_COUNT,
+        missingPublishedNodeIds: [],
+        missingPublishedCount: TEST_EMPTY_PUBLICATION_DEBT_COUNT,
+        activeGateProgress,
+      },
+      activeGateProgress,
+    });
+
+    t.equal(
+      evidence.publicationConvergenceGate.pendingAckCount,
+      TEST_PUBLICATION_DEBT_COUNT,
+    );
+    t.equal(
+      evidence.publicationConvergenceGate.missingPublishedCount,
+      TEST_PUBLICATION_DEBT_COUNT,
+    );
+    t.equal(
+      evidence.priorityRecoveryObservation.pendingAckCount,
+      TEST_PUBLICATION_DEBT_COUNT,
+    );
+    t.equal(
+      evidence.priorityRecoveryObservation.missingPublishedCount,
+      TEST_PUBLICATION_DEBT_COUNT,
+    );
+    t.same(
+      evidence.publicationConvergence.missingPublishedNodeIds,
+      [TEST_NODE_ID.SECOND],
+    );
+    t.equal(
+      evidence.publicationConvergence.pendingAckCount,
+      TEST_PUBLICATION_DEBT_COUNT,
+    );
+    t.equal(
+      evidence.publicationConvergence.missingPublishedCount,
+      TEST_PUBLICATION_DEBT_COUNT,
+    );
     t.end();
   });
 

@@ -269,13 +269,13 @@ class QueryExecutorSegment2Part1 extends QueryExecutorSegment1 {
           forRead,
           preferLeader,
           preferSameLatencyGroup,
-            routingReadinessDimension,
-            {
-              allowReadinessAuthoritativeRefresh,
-              recoveryCandidateSelectionKey:
+          routingReadinessDimension,
+          {
+            allowReadinessAuthoritativeRefresh,
+            recoveryCandidateSelectionKey:
                 executionOptions.recoveryCandidateSelectionKey,
-            },
-          );
+          },
+        );
       if (
         !awaitedRoutingRepair &&
         serviceCandidates.length === NUM.ZERO &&
@@ -292,12 +292,12 @@ class QueryExecutorSegment2Part1 extends QueryExecutorSegment1 {
             preferLeader,
             preferSameLatencyGroup,
             routingReadinessDimension,
-              {
-                allowReadinessAuthoritativeRefresh,
-                recoveryCandidateSelectionKey:
+            {
+              allowReadinessAuthoritativeRefresh,
+              recoveryCandidateSelectionKey:
                   executionOptions.recoveryCandidateSelectionKey,
-              },
-            ));
+            },
+          ));
       }
       serviceCandidates = this.prioritizeSessionPartitionAddress(
         serviceCandidates,

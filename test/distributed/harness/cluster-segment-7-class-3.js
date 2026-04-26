@@ -1,4 +1,7 @@
 import {CLUSTER_SEGMENT_7_CLASS_SHARED} from './cluster-segment-7-class-shared.js';
+import {
+  buildControlPlaneQuiescenceSnapshot,
+} from './control-plane-quiescence-snapshot.js';
 
 const {
   ACTIVE_POLL_INTERVAL_MS,
@@ -27,10 +30,6 @@ const {
   PLAYBACK_SCOPE_LOAD,
   PLAYBACK_SCOPE_NODE,
   PORTS,
-  QUIESCENCE_REASON_CRITICAL_SYSTEM_SPREAD_PREFIX,
-  QUIESCENCE_REASON_IN_FLIGHT_PREFIX,
-  QUIESCENCE_REASON_LEADERSHIP_PREFIX,
-  QUIESCENCE_REASON_SNAPSHOT_ERROR_PREFIX,
   REUSE_ENTRYPOINT,
   REUSE_START_COMMAND_ARGS,
   STARTUP_GATE_WAITING_EVENT_INTERVAL,
@@ -52,6 +51,10 @@ const {
 } = CLUSTER_SEGMENT_7_CLASS_SHARED;
 import {Cluster2} from './cluster-segment-7-class-2.js';
 
+const QUIESCENCE_NODE_ID_UNKNOWN = 'unknown';
+const QUIESCENCE_CANONICAL_BLOCKER_NONE = 'none';
+const QUIESCENCE_INSTABILITY_SUMMARY_NONE = 'none';
+
 class Cluster3 extends Cluster2 {
   async waitForControlPlaneQuiescence(options = {}) {
     const stableWindowMs =
@@ -72,6 +75,7 @@ class Cluster3 extends Cluster2 {
     let lowestCriticalSystemSpreadGap = Number.POSITIVE_INFINITY;
     let highestCriticalSystemReadyTableCount = ZERO;
     let lastOperationTimelineSignature = null;
+    let lastOperationProgressAtMs = Date.now();
 
     let pollResult;
     try {
@@ -85,14 +89,16 @@ class Cluster3 extends Cluster2 {
           const nowMs = Date.now();
           if (snapshotProbe.error) {
             stableWindowStartedAtMs = null;
+            const quiescenceSnapshot = buildControlPlaneQuiescenceSnapshot({
+              snapshotProbe,
+              nowMs,
+              stableWindowStartedAtMs,
+              stableWindowMs,
+              maxInFlightCount,
+            });
             return {
               ...snapshotProbe,
-              ready: false,
-              reasons: [
-                QUIESCENCE_REASON_SNAPSHOT_ERROR_PREFIX + snapshotProbe.error,
-              ],
-              stableElapsedMs: ZERO,
-              leaderQuietElapsedMs: ZERO,
+              ...quiescenceSnapshot,
             };
           }
 
@@ -105,37 +111,32 @@ class Cluster3 extends Cluster2 {
           }
 
           const leaderQuietElapsedMs = nowMs - lastLeaderChangeAtMs;
-          const leadershipStable =
-            snapshotProbe.leaderCount > ZERO &&
-            leaderQuietElapsedMs >= stableWindowMs;
           const criticalSystemTopology =
             await this._probeCriticalSystemTopology(deadline, options);
-          const reasons = [];
+          const operationTimelineChanged =
+            snapshotProbe.operationTimelineSignature !== null &&
+            snapshotProbe.operationTimelineSignature !==
+              lastOperationTimelineSignature;
+          const operationProgressObserved =
+            snapshotProbe.inFlightCount < lowestInFlightCount ||
+            operationTimelineChanged;
+          const candidateWindowStartedAtMs =
+            stableWindowStartedAtMs === null ? nowMs : stableWindowStartedAtMs;
+          const quiescenceSnapshot = buildControlPlaneQuiescenceSnapshot({
+            snapshotProbe,
+            criticalSystemTopology,
+            leaderQuietElapsedMs,
+            nowMs,
+            stableWindowStartedAtMs: candidateWindowStartedAtMs,
+            stableWindowMs,
+            maxInFlightCount,
+            operationNoProgressElapsedMs: operationProgressObserved ?
+              ZERO :
+              nowMs - lastOperationProgressAtMs,
+            operationNoProgressTimeoutMs: noProgressTimeoutMs,
+          });
 
-          if (snapshotProbe.inFlightCount > maxInFlightCount) {
-            reasons.push(
-              QUIESCENCE_REASON_IN_FLIGHT_PREFIX +
-                String(snapshotProbe.inFlightCount),
-            );
-          }
-          if (!leadershipStable) {
-            reasons.push(
-              QUIESCENCE_REASON_LEADERSHIP_PREFIX +
-                String(leaderQuietElapsedMs),
-            );
-          }
-          if (
-            criticalSystemTopology.enabled === true &&
-            criticalSystemTopology.ready !== true
-          ) {
-            reasons.push(
-              QUIESCENCE_REASON_CRITICAL_SYSTEM_SPREAD_PREFIX +
-                String(criticalSystemTopology.totalSpreadGap),
-            );
-          }
-
-          const ready = reasons.length === ZERO;
-          if (ready) {
+          if (quiescenceSnapshot.ready) {
             if (stableWindowStartedAtMs === null) {
               stableWindowStartedAtMs = nowMs;
             }
@@ -143,19 +144,16 @@ class Cluster3 extends Cluster2 {
             stableWindowStartedAtMs = null;
           }
 
-          let progressObserved = false;
+          let progressObserved = operationProgressObserved;
           if (snapshotProbe.inFlightCount < lowestInFlightCount) {
             lowestInFlightCount = snapshotProbe.inFlightCount;
-            progressObserved = true;
           }
-          if (
-            snapshotProbe.operationTimelineSignature !== null &&
-            snapshotProbe.operationTimelineSignature !==
-              lastOperationTimelineSignature
-          ) {
+          if (operationTimelineChanged) {
             lastOperationTimelineSignature =
               snapshotProbe.operationTimelineSignature;
-            progressObserved = true;
+          }
+          if (operationProgressObserved) {
+            lastOperationProgressAtMs = nowMs;
           }
           if (
             snapshotProbe.inFlightCount <= maxInFlightCount &&
@@ -199,17 +197,24 @@ class Cluster3 extends Cluster2 {
                 ', leaderQuietElapsedMs=' +
                 String(leaderQuietElapsedMs) +
                 ', nodeId=' +
-                String(snapshotProbe.nodeId || 'unknown') +
+                String(snapshotProbe.nodeId || QUIESCENCE_NODE_ID_UNKNOWN) +
+                ', quiescenceState=' +
+                String(quiescenceSnapshot.state || UNKNOWN_STATE) +
+                ', canonicalBlocker=' +
+                String(
+                  quiescenceSnapshot.canonicalBlocker ||
+                    QUIESCENCE_CANONICAL_BLOCKER_NONE,
+                ) +
                 ')',
             );
             stalledError.quiescence = {
               nodeId: snapshotProbe.nodeId || null,
               inFlightCount: snapshotProbe.inFlightCount,
-              reasons,
-              stableElapsedMs:
-                stableWindowStartedAtMs === null ?
-                  ZERO :
-                  nowMs - stableWindowStartedAtMs,
+              state: quiescenceSnapshot.state,
+              canonicalBlocker: quiescenceSnapshot.canonicalBlocker,
+              reasonCodes: quiescenceSnapshot.reasonCodes,
+              reasons: quiescenceSnapshot.reasons,
+              stableElapsedMs: quiescenceSnapshot.stableElapsedMs,
               leaderQuietElapsedMs,
               criticalSystemDistribution:
                 criticalSystemTopology.enabled === true ?
@@ -223,9 +228,8 @@ class Cluster3 extends Cluster2 {
 
           return {
             ...snapshotProbe,
+            ...quiescenceSnapshot,
             criticalSystemTopology,
-            ready,
-            reasons,
             stableElapsedMs:
               stableWindowStartedAtMs === null ?
                 ZERO :
@@ -259,6 +263,9 @@ class Cluster3 extends Cluster2 {
           pollResult.lastResult?.leaderQuietElapsedMs ?? ZERO,
         selectedNodeId: pollResult.lastResult?.nodeId || null,
         selectedCapturedAtMs: pollResult.lastResult?.capturedAtMs ?? null,
+        state: pollResult.lastResult?.state || null,
+        canonicalBlocker: pollResult.lastResult?.canonicalBlocker || null,
+        reasonCodes: pollResult.lastResult?.reasonCodes || [],
         partitionGroupInFlight:
           pollResult.lastResult?.partitionGroupInFlight || {},
         criticalSystemTopology:
@@ -268,7 +275,7 @@ class Cluster3 extends Cluster2 {
 
     await this._collectFailureLogs();
     const instabilitySummary = formatCountSummary(instabilitySummaryCounts);
-    throw new Error(
+    const timeoutError = new Error(
       'Control plane did not quiesce within ' +
         timeoutMs +
         'ms (attempts=' +
@@ -284,15 +291,38 @@ class Cluster3 extends Cluster2 {
         ', leaderQuietElapsedMs=' +
         String(pollResult.lastResult?.leaderQuietElapsedMs ?? ZERO) +
         ', selectedNodeId=' +
-        String(pollResult.lastResult?.nodeId || 'unknown') +
+        String(pollResult.lastResult?.nodeId || QUIESCENCE_NODE_ID_UNKNOWN) +
         ', criticalSystemDistribution=' +
         formatCriticalSystemDistributionSummary(
           pollResult.lastResult?.criticalSystemTopology || null,
         ) +
+        ', quiescenceState=' +
+        String(pollResult.lastResult?.state || UNKNOWN_STATE) +
+        ', canonicalBlocker=' +
+        String(
+          pollResult.lastResult?.canonicalBlocker ||
+            QUIESCENCE_CANONICAL_BLOCKER_NONE,
+        ) +
         ', instabilitySummary=' +
-        (instabilitySummary || 'none') +
+        (instabilitySummary || QUIESCENCE_INSTABILITY_SUMMARY_NONE) +
         ')',
     );
+    timeoutError.quiescence = {
+      nodeId: pollResult.lastResult?.nodeId || null,
+      inFlightCount: pollResult.lastResult?.inFlightCount ?? null,
+      state: pollResult.lastResult?.state || null,
+      canonicalBlocker: pollResult.lastResult?.canonicalBlocker || null,
+      reasonCodes: pollResult.lastResult?.reasonCodes || [],
+      reasons: pollResult.lastResult?.reasons || [],
+      stableElapsedMs: pollResult.lastResult?.stableElapsedMs ?? ZERO,
+      leaderQuietElapsedMs:
+        pollResult.lastResult?.leaderQuietElapsedMs ?? ZERO,
+      criticalSystemDistribution:
+        formatCriticalSystemDistributionSummary(
+          pollResult.lastResult?.criticalSystemTopology || null,
+        ),
+    };
+    throw timeoutError;
   }
 
   startLoad(options) {

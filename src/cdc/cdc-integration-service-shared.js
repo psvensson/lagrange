@@ -422,14 +422,15 @@ function buildSystemTableMutationError(result, fallbackMessage) {
   ) {
     error.tableName = result.tableName;
   }
-  if (result?.deferRetry === true) {
+  const retryAfterMs = Number.isFinite(result?.retryAfterMs) ?
+    Math.max(NUM.ZERO, Math.floor(result.retryAfterMs)) :
+    null;
+  if (result?.deferRetry === true ||
+      (Number.isFinite(retryAfterMs) && retryAfterMs > NUM.ZERO)) {
     error.deferRetry = true;
   }
-  if (Number.isFinite(result?.retryAfterMs)) {
-    error.retryAfterMs = Math.max(NUM.ZERO, Math.floor(result.retryAfterMs));
-    if (error.retryAfterMs > NUM.ZERO) {
-      error.deferRetry = true;
-    }
+  if (Number.isFinite(retryAfterMs)) {
+    error.retryAfterMs = retryAfterMs;
   }
   if (
     result?.pressureSummary &&

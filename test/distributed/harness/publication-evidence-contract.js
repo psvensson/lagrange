@@ -1171,6 +1171,13 @@ function buildCanonicalPublicationConvergence(
     isRecord(controlPlane?.publicationConvergence) ?
       controlPlane.publicationConvergence :
       null;
+  const activeGateProgress = isRecord(
+    priorityRecoveryObservation?.activeGate?.progress,
+  ) ?
+    priorityRecoveryObservation.activeGate.progress :
+    isRecord(priorityRecoveryObservation?.activeGateProgress) ?
+      priorityRecoveryObservation.activeGateProgress :
+      null;
   if (
     !rawPublicationConvergence &&
     !publicationConvergenceGate &&
@@ -1231,11 +1238,34 @@ function buildCanonicalPublicationConvergence(
       rawPublicationConvergence?.pendingAckNodeIds ??
       PUBLICATION_EVIDENCE_EMPTY_LIST,
   );
+  const pendingAckCount = Math.max(
+    pendingAckNodeIds.length,
+    normalizeNonNegativeInteger(priorityRecoveryObservation?.pendingAckCount) ??
+      PUBLICATION_EVIDENCE_ZERO,
+    normalizeNonNegativeInteger(publicationConvergenceGate?.pendingAckCount) ??
+      PUBLICATION_EVIDENCE_ZERO,
+    normalizeNonNegativeInteger(rawPublicationConvergence?.pendingAckCount) ??
+      PUBLICATION_EVIDENCE_ZERO,
+    normalizeNonNegativeInteger(activeGateProgress?.pendingAckCount) ??
+      PUBLICATION_EVIDENCE_ZERO,
+  );
   const missingPublishedNodeIds = normalizeDistinctStringArray(
     publicationConvergenceGate?.missingPublishedNodeIds ??
       rawPublicationConvergence?.missingPublishedNodeIds ??
       rawPublicationConvergence?.missingPublishedRecoveryActiveNodeIds ??
+      activeGateProgress?.selectedMissingPublishedNodeIds ??
       PUBLICATION_EVIDENCE_EMPTY_LIST,
+  );
+  const missingPublishedCount = Math.max(
+    missingPublishedNodeIds.length,
+    normalizeNonNegativeInteger(
+      publicationConvergenceGate?.missingPublishedCount,
+    ) ?? PUBLICATION_EVIDENCE_ZERO,
+    normalizeNonNegativeInteger(
+      rawPublicationConvergence?.missingPublishedCount,
+    ) ?? PUBLICATION_EVIDENCE_ZERO,
+    normalizeNonNegativeInteger(activeGateProgress?.missingPublishedCount) ??
+      PUBLICATION_EVIDENCE_ZERO,
   );
   const closureRecordId =
     normalizeOptionalString(priorityRecoveryObservation?.closureRecordId) ||
@@ -1262,9 +1292,9 @@ function buildCanonicalPublicationConvergence(
     requiredAckNodeIds,
     acknowledgedNodeIds,
     pendingAckNodeIds,
-    pendingAckCount: pendingAckNodeIds.length,
+    pendingAckCount,
     missingPublishedNodeIds,
-    missingPublishedCount: missingPublishedNodeIds.length,
+    missingPublishedCount,
     publicationPending:
       priorityRecoveryObservation?.publicationPending === true ||
       publicationConvergenceGate?.publicationPending === true,
@@ -1300,6 +1330,11 @@ function buildCanonicalPublicationEvidenceFromControlPlane(controlPlane = null) 
         evidenceControlPlane.priorityRecoveryDecisionSnapshots,
       priorityRecoveryInvariants:
         evidenceControlPlane.priorityRecoveryInvariants,
+      activeGate: evidenceControlPlane.activeGate,
+      activeGateProgress: evidenceControlPlane.activeGateProgress,
+      activeGateBestProgress: evidenceControlPlane.activeGateBestProgress,
+      activeGateNoProgress: evidenceControlPlane.activeGateNoProgress,
+      activeGateBlockerHistory: evidenceControlPlane.activeGateBlockerHistory,
       logsTable: evidenceControlPlane.logsTable,
     });
   const publicationConvergenceGate =

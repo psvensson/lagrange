@@ -31,6 +31,47 @@ const {
 const PRIORITY_OPERATION_VISIBILITY_DEFERRED_SAFE_REMOVAL_SUFFIX =
   ' operation visibility is deferred for safe removal';
 
+const PRIORITY_PUBLICATION_REPLACEMENT_LEADER_CANDIDATE_STATE =
+  Object.freeze({
+    USE_FALLBACK: 'use_fallback',
+    USE_CONFIRMED_EVIDENCE: 'use_confirmed_evidence',
+    RETARGET_AFTER_COMPLETED_WITHOUT_OWNERSHIP:
+      'retarget_after_completed_without_ownership',
+    RETARGET_AFTER_NOT_FOUND: 'retarget_after_not_found',
+  });
+
+const PRIORITY_PUBLICATION_REPLACEMENT_LEADER_CANDIDATE_ACTION =
+  Object.freeze({
+    USE_FALLBACK: 'use_fallback',
+    USE_EVIDENCE: 'use_evidence',
+    RETARGET: 'retarget',
+  });
+
+const PRIORITY_PUBLICATION_REPLACEMENT_LEADER_CANDIDATE_ACTION_BY_STATE =
+  Object.freeze(
+    new Map([
+      [
+        PRIORITY_PUBLICATION_REPLACEMENT_LEADER_CANDIDATE_STATE.USE_FALLBACK,
+        PRIORITY_PUBLICATION_REPLACEMENT_LEADER_CANDIDATE_ACTION.USE_FALLBACK,
+      ],
+      [
+        PRIORITY_PUBLICATION_REPLACEMENT_LEADER_CANDIDATE_STATE
+          .USE_CONFIRMED_EVIDENCE,
+        PRIORITY_PUBLICATION_REPLACEMENT_LEADER_CANDIDATE_ACTION.USE_EVIDENCE,
+      ],
+      [
+        PRIORITY_PUBLICATION_REPLACEMENT_LEADER_CANDIDATE_STATE
+          .RETARGET_AFTER_COMPLETED_WITHOUT_OWNERSHIP,
+        PRIORITY_PUBLICATION_REPLACEMENT_LEADER_CANDIDATE_ACTION.RETARGET,
+      ],
+      [
+        PRIORITY_PUBLICATION_REPLACEMENT_LEADER_CANDIDATE_STATE
+          .RETARGET_AFTER_NOT_FOUND,
+        PRIORITY_PUBLICATION_REPLACEMENT_LEADER_CANDIDATE_ACTION.RETARGET,
+      ],
+    ]),
+  );
+
 class OperationWorkflowOwnerSegment6 extends OperationWorkflowOwnerSegment5 {
   buildPriorityRecoveryAssessmentContextForOperation(
     operation,
@@ -619,6 +660,72 @@ class OperationWorkflowOwnerSegment6 extends OperationWorkflowOwnerSegment5 {
   }
 
   /**
+   * @param {Object} options
+   * @return {string}
+   * @private
+   */
+  resolvePriorityPublicationReplacementLeaderCandidateState(options = {}) {
+    if (!options.electionEvidence) {
+      return (
+        PRIORITY_PUBLICATION_REPLACEMENT_LEADER_CANDIDATE_STATE.USE_FALLBACK
+      );
+    }
+    if (
+      options.notFoundReplicaIds?.has(options.normalizedReplacementReplicaId) &&
+      !options.replacementOwnershipObserved
+    ) {
+      return (
+        PRIORITY_PUBLICATION_REPLACEMENT_LEADER_CANDIDATE_STATE
+          .RETARGET_AFTER_NOT_FOUND
+      );
+    }
+    if (
+      options.electionEvidence.responseStatus ===
+        ReplicaOperationResponseStatus.COMPLETED &&
+      options.evidenceCandidateRow &&
+      options.evidenceCandidateOwnershipObserved
+    ) {
+      return (
+        PRIORITY_PUBLICATION_REPLACEMENT_LEADER_CANDIDATE_STATE
+          .USE_CONFIRMED_EVIDENCE
+      );
+    }
+    if (options.electionRetrySuppressed) {
+      return (
+        PRIORITY_PUBLICATION_REPLACEMENT_LEADER_CANDIDATE_STATE.USE_FALLBACK
+      );
+    }
+    if (
+      options.electionEvidence.responseStatus ===
+        ReplicaOperationResponseStatus.COMPLETED &&
+      options.evidenceCandidateRow &&
+      !options.evidenceCandidateOwnershipObserved
+    ) {
+      return (
+        PRIORITY_PUBLICATION_REPLACEMENT_LEADER_CANDIDATE_STATE
+          .RETARGET_AFTER_COMPLETED_WITHOUT_OWNERSHIP
+      );
+    }
+    return (
+      PRIORITY_PUBLICATION_REPLACEMENT_LEADER_CANDIDATE_STATE.USE_FALLBACK
+    );
+  }
+
+  /**
+   * @param {string} state
+   * @return {string}
+   * @private
+   */
+  resolvePriorityPublicationReplacementLeaderCandidateAction(state) {
+    return (
+      PRIORITY_PUBLICATION_REPLACEMENT_LEADER_CANDIDATE_ACTION_BY_STATE.get(
+        state,
+      ) ||
+      PRIORITY_PUBLICATION_REPLACEMENT_LEADER_CANDIDATE_ACTION.USE_FALLBACK
+    );
+  }
+
+  /**
    * @param {Object} operation
    * @param {Object|null} replacementReplicaRow
    * @param {Object[]} currentVoterReadyRows
@@ -655,7 +762,7 @@ class OperationWorkflowOwnerSegment6 extends OperationWorkflowOwnerSegment5 {
       );
     const electionRetrySuppressed =
       this.isPriorityPublicationLeaderHandoffRetrySuppressed(electionEvidence);
-    if (!electionRetrySuppressed) {
+    if (!electionEvidence) {
       return fallbackReplacementReplicaRow;
     }
 
@@ -676,29 +783,29 @@ class OperationWorkflowOwnerSegment6 extends OperationWorkflowOwnerSegment5 {
         electionEvidence.notFoundReplicaIds :
         [],
     );
-    if (notFoundReplicaIds.has(normalizedReplacementReplicaId)) {
+    const partitionRow = await this.getCriticalPartitionRowForSafety(
+      operation.partitionId,
+    );
+    const partitionLeaderNodeId =
+      this.getCriticalPartitionLeaderNodeIdForSafety(partitionRow);
+    const hasReplacementLeaderOwnership = (replicaRow) => {
       const replacementRoleState =
-        this.getPriorityPublicationReplacementRoleState(replacementReplicaRow);
+        this.getPriorityPublicationReplacementRoleState(replicaRow);
       const replacementNodeId =
-        typeof replacementReplicaRow?.node_id === TYPEOF.STRING ?
-          replacementReplicaRow.node_id.trim() :
+        typeof replicaRow?.node_id === TYPEOF.STRING ?
+          replicaRow.node_id.trim() :
           typeof operation.targetNodeId === TYPEOF.STRING ?
             operation.targetNodeId.trim() :
             null;
-      const partitionRow = await this.getCriticalPartitionRowForSafety(
-        operation.partitionId,
-      );
-      const partitionLeaderNodeId =
-        this.getCriticalPartitionLeaderNodeIdForSafety(partitionRow);
-      const replacementOwnershipObserved =
+      return (
         replacementRoleState ===
           PRIORITY_PUBLICATION_SOURCE_ROLE_STATE.LEADER ||
         (replacementNodeId !== null &&
-          partitionLeaderNodeId === replacementNodeId);
-      if (replacementOwnershipObserved) {
-        return fallbackReplacementReplicaRow;
-      }
-    }
+          partitionLeaderNodeId === replacementNodeId)
+      );
+    };
+    const replacementOwnershipObserved =
+      hasReplacementLeaderOwnership(replacementReplicaRow);
     const evidenceReplicaId =
       typeof electionEvidence?.replacementReplicaId === TYPEOF.STRING ?
         electionEvidence.replacementReplicaId.trim() :
@@ -733,21 +840,45 @@ class OperationWorkflowOwnerSegment6 extends OperationWorkflowOwnerSegment5 {
             this.getReplicaRowIdentity(row) === evidenceReplicaId &&
               isEligibleCandidateRow(row, evidenceCandidateBlockedReplicaIds),
         ) || null;
+    const evidenceCandidateOwnershipObserved =
+      hasReplacementLeaderOwnership(evidenceCandidateRow);
+    const candidateState =
+      this.resolvePriorityPublicationReplacementLeaderCandidateState({
+        electionEvidence,
+        electionRetrySuppressed,
+        evidenceCandidateRow,
+        evidenceCandidateOwnershipObserved,
+        normalizedReplacementReplicaId,
+        notFoundReplicaIds,
+        replacementOwnershipObserved,
+      });
+    const candidateAction =
+      this.resolvePriorityPublicationReplacementLeaderCandidateAction(
+        candidateState,
+      );
     if (
-      electionEvidence?.responseStatus ===
-        ReplicaOperationResponseStatus.COMPLETED &&
-      this.getReplicaRowIdentity(evidenceCandidateRow) === evidenceReplicaId
+      candidateAction ===
+      PRIORITY_PUBLICATION_REPLACEMENT_LEADER_CANDIDATE_ACTION.USE_EVIDENCE
     ) {
-      return evidenceCandidateRow;
+      return evidenceCandidateRow || fallbackReplacementReplicaRow;
     }
-    if (notFoundReplicaIds.size === NUM.ZERO) {
+    if (
+      candidateAction !==
+      PRIORITY_PUBLICATION_REPLACEMENT_LEADER_CANDIDATE_ACTION.RETARGET
+    ) {
       return fallbackReplacementReplicaRow;
     }
-    if (!notFoundReplicaIds.has(normalizedReplacementReplicaId)) {
-      return fallbackReplacementReplicaRow;
+    const retargetBlockedReplicaIds = new Set(notFoundReplicaIds);
+    if (
+      candidateState ===
+      PRIORITY_PUBLICATION_REPLACEMENT_LEADER_CANDIDATE_STATE
+        .RETARGET_AFTER_COMPLETED_WITHOUT_OWNERSHIP &&
+      evidenceReplicaId !== null
+    ) {
+      retargetBlockedReplicaIds.add(evidenceReplicaId);
     }
     return (
-      findEligibleCandidateRow(notFoundReplicaIds) ||
+      findEligibleCandidateRow(retargetBlockedReplicaIds) ||
       fallbackReplacementReplicaRow
     );
   }

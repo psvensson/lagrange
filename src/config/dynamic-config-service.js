@@ -38,6 +38,7 @@ import {
 
 const CONFIG_SELECT_ALL_SQL = CONFIG_SQL.SELECT_ALL;
 const CONFIG_SELECT_BY_KEY_SQL = CONFIG_SQL.SELECT_BY_KEY;
+const CONFIG_MUTATION_DELIVERY_PRIORITY = 'critical';
 
 const ConfigValueType = CONFIG_VALUE_TYPE;
 
@@ -119,22 +120,18 @@ class DynamicConfigService extends EventEmitter {
    * @param {boolean} [options.skipExistingCheck=false] - Legacy compatibility
    *   flag. Seeding now uses idempotent insert-if-absent writes, so per-key
    *   existence reads are no longer required.
-   * @param {boolean} [options.useDirectCdcMutations=false] - Write directly
-   *   through the CDC integration service instead of the control-plane gateway.
+   * @param {boolean} [options.useDirectCdcMutations=false] - Legacy
+   *   compatibility flag. Seeding always writes through the control-plane
+   *   gateway owner.
    * @return {Promise<Object>} Seeding result.
    */
   async seedConfiguration(
     updatedBy = CONFIG_SEED_SOURCE.SYSTEM,
-    options = {},
+    _options = {},
   ) {
-    if (!this.cdcIntegrationService) {
-      throw new Error(CONFIG_ERROR_MSG.CDC_UNAVAILABLE);
-    }
-
     const seeded = [];
     const skipped = [];
     const now = Date.now();
-    const useDirectCdcMutations = options?.useDirectCdcMutations === true;
 
     for (const [key, definition] of Object.entries(CONFIG_DEFINITIONS)) {
       // Check for environment variable override
@@ -163,25 +160,16 @@ class DynamicConfigService extends EventEmitter {
       };
       const writeOptions = {
         workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
-        deliveryPriority: 'critical',
+        deliveryPriority: CONFIG_MUTATION_DELIVERY_PRIORITY,
         ignoreExisting: true,
       };
 
-      let mutationResult = null;
-      if (useDirectCdcMutations) {
-        mutationResult = await this.cdcIntegrationService.insertSystemTableRow(
+      const mutationResult = await this.getControlPlaneSystemTableGateway()
+        .insertSystemTableRow(
           SYSTEM_TABLE_NAME.CONFIG,
           row,
           writeOptions,
         );
-      } else {
-        mutationResult = await this.getControlPlaneSystemTableGateway()
-          .insertSystemTableRow(
-            SYSTEM_TABLE_NAME.CONFIG,
-            row,
-            writeOptions,
-          );
-      }
 
       if (this.didConfigSeedInsertApply(mutationResult)) {
         seeded.push(key);
@@ -260,10 +248,6 @@ class DynamicConfigService extends EventEmitter {
    * @return {Promise<Object>} Update result.
    */
   async set(key, value, updatedBy = CONFIG_ENV.UPDATED_BY_UNKNOWN) {
-    if (!this.cdcIntegrationService) {
-      throw new Error(CONFIG_ERROR_MSG.CDC_UNAVAILABLE);
-    }
-
     // Validate the value
     const validation = this.validateValue(key, value);
     if (!validation.valid) {
@@ -290,7 +274,7 @@ class DynamicConfigService extends EventEmitter {
         },
       }, {
         workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
-        deliveryPriority: 'critical',
+        deliveryPriority: CONFIG_MUTATION_DELIVERY_PRIORITY,
       });
     } else {
       // Insert new
@@ -314,7 +298,7 @@ class DynamicConfigService extends EventEmitter {
         },
       }, {
         workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
-        deliveryPriority: 'critical',
+        deliveryPriority: CONFIG_MUTATION_DELIVERY_PRIORITY,
       });
     }
 
@@ -595,7 +579,7 @@ class DynamicConfigService extends EventEmitter {
         CONFIG_SELECT_BY_KEY_SQL,
         [key],
       );
-      return result.rows?.[0] || null;
+      return result.rows?.[NUM.ZERO] || null;
     }
     return null;
   }

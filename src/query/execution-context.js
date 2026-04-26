@@ -78,7 +78,7 @@ class ExecutionContext {
    *   accepting (query, params) and returning {rows: Array}.
    * @param {import('./result-stream.js').ResultStream}
    *   [deps.resultStream] - Output stream for ctx.out.
-   * @param {import('./exchange-manager.js').ExchangeManager}
+   * @param {import('./distributed/exchange-manager.js').ExchangeManager}
    *   [deps.exchangeManager] - Exchange manager for ctx.emit.
    * @param {import('./dedupe-registry.js').DedupeRegistry}
    *   [deps.dedupeRegistry] - Dedupe registry for emit
@@ -603,7 +603,7 @@ class ExecutionContext {
 
   /**
    * Get the exchange manager for this execution.
-   * @return {import('./exchange-manager.js').ExchangeManager}
+   * @return {import('./distributed/exchange-manager.js').ExchangeManager}
    */
   getExchangeManager() {
     return this._exchangeManager;

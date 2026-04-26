@@ -1,6 +1,6 @@
 # Representative Stability Gate And Matrix Re-Entry
 
-Status: done. The `node-join-under-load` representative gate is complete, and
+Closure note: The `node-join-under-load` representative gate is complete, and
 secondary re-entry is now narrowed to one active `rolling-restart` package.
 
 ## Why

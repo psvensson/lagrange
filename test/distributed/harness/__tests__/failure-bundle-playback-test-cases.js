@@ -1024,6 +1024,7 @@ export function registerFailureBundlePlaybackTests({
   });
 
   it('maps closure-witness-only startup convergence failures to a non-unknown root cause', async () => {
+    const CLOSURE_WITNESS_ONLY_PUBLICATION_DEBT_COUNT = 0;
     const scenarioDir = join(
       state.outputDir,
       'seed-restart-under-load-topology',
@@ -1038,6 +1039,7 @@ export function registerFailureBundlePlaybackTests({
             activeGateCurrentProgress: buildStartupModeWitnessProgress({
               snapshotCoverageNodeCount: 0,
               isTimeoutError: true,
+              missingPublishedCount: CLOSURE_WITNESS_ONLY_PUBLICATION_DEBT_COUNT,
             }),
           }),
         ),

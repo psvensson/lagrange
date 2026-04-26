@@ -2,9 +2,9 @@
 
 ## Why
 
-`npm run test:metadata-gateway:audit` currently reports direct authoritative
-read bypasses, direct writers, duplicate pressure admission policy, and direct
-transport-pressure sensors. Those failures contradict the one-owner metadata
+`npm run test:metadata-gateway:audit` reported direct authoritative read
+bypasses, direct writers, duplicate pressure admission policy, and direct
+transport-pressure sensors. Those failures contradicted the one-owner metadata
 gateway doctrine.
 
 ## Scope Basis
@@ -15,7 +15,7 @@ guarantees`.
 
 Sprint:
 
-1. [Roadmap runtime truth and boundary closure](../sprints/active-2026-q2-roadmap-runtime-truth-and-boundary-closure.md)
+1. [Roadmap runtime truth and boundary closure](../sprints/archived/done-2026-q2-roadmap-runtime-truth-and-boundary-closure.md)
 
 ## In Scope
 
@@ -78,32 +78,53 @@ Observed on April 26, 2026:
 12. `direct-authoritative-read-bypass`:
     `src/rebalancer/unified-rebalancer-segment-4.js`
 
+## Closure Update
+
+The audit is green after the canonical segmented owner paths were recognized
+by the audit and the two active touched runtime bypasses were closed:
+
+1. `src/config/dynamic-config-service.js` seeds through
+   `controlPlaneSystemTableGateway.insertSystemTableRow` instead of the CDC
+   integration service.
+2. `src/rebalancer/unified-rebalancer-segment-4.js` reads budget rows through
+   `controlPlaneSystemTableGateway.readAuthoritativeRows`.
+3. Existing segmented gateway/CDC/query owner modules are represented in the
+   audit owner path rules instead of being counted as bypasses of themselves.
+
+Allowlist rationale:
+
+1. `src/control-plane/control-plane-system-table-gateway-`,
+   `src/cdc/cdc-integration-service-`, and `src/query/sql-query-engine-`
+   are bounded to the existing segmented owner modules for those canonical
+   owners.
+2. Runtime consumers outside those owner module families must still enter
+   through the metadata gateway contract; `src/rebalancer/` is intentionally
+   not allowlisted for direct authoritative read calls.
+
 ## Static Drift Ledger
 
 Preflight:
 
-- [ ] Run `npm run test:metadata-gateway:audit`.
-- [ ] Record inherited repo-wide audit failures.
-- [ ] Record touched-file failures before edits.
-- [ ] Select focused owner-path tests for each group.
+- [x] Run `npm run test:metadata-gateway:audit`.
+- [x] Record inherited repo-wide audit failures.
+- [x] Record touched-file failures before edits.
+- [x] Select focused owner-path tests for each group.
 
 Closure:
 
-- [ ] Rerun `npm run test:metadata-gateway:audit`.
-- [ ] No metadata-gateway violation count increased.
-- [ ] No new touched-file direct owner bypass remains.
-- [ ] Any remaining inherited violation is linked to a narrower follow-on.
+- [x] Rerun `npm run test:metadata-gateway:audit`.
+- [x] No metadata-gateway violation count increased.
+- [x] No new touched-file direct owner bypass remains.
+- [x] No inherited metadata-gateway audit violation remains.
 
 ## Validation
 
-1. `npm run test:metadata-gateway:audit`
-2. Focused owner-path tests for every touched boundary.
-3. `npm run audit:guideline:decision-boundaries` for touched files if any
-   readiness, admission, retry, lifecycle, phase, or outcome logic changes.
+1. `npm run test:metadata-gateway:audit`: passed.
+2. `npx tap test/config/dynamic-config-service.test.js`: passed.
+3. `npm run audit:guideline:decision-boundaries`: passed.
 
 ## Done When
 
-1. The metadata-gateway audit is green, or remaining violations are split into
-   explicit owner-scoped packages with no touched-file regressions.
+1. The metadata-gateway audit is green.
 2. Direct authoritative reads and writers found by this package are removed or
    routed through the canonical owner.

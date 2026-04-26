@@ -104,8 +104,8 @@ const PRIORITY_RECOVERY_FOLLOW_UP_AUGMENTATION_ACTION_BY_STATE = Object.freeze({
   [PRIORITY_RECOVERY_FOLLOW_UP_AUGMENTATION_STATE.ADD_FOLLOW_UP]:
     PRIORITY_RECOVERY_FOLLOW_UP_AUGMENTATION_ACTION.PREPEND_FOLLOW_UP,
   [
-    PRIORITY_RECOVERY_FOLLOW_UP_AUGMENTATION_STATE
-      .CURRENT_FOLLOW_UP_ALREADY_PLANNED
+  PRIORITY_RECOVERY_FOLLOW_UP_AUGMENTATION_STATE
+    .CURRENT_FOLLOW_UP_ALREADY_PLANNED
   ]: PRIORITY_RECOVERY_FOLLOW_UP_AUGMENTATION_ACTION.KEEP_MOVES,
   [PRIORITY_RECOVERY_FOLLOW_UP_AUGMENTATION_STATE.NO_FOLLOW_UP]:
     PRIORITY_RECOVERY_FOLLOW_UP_AUGMENTATION_ACTION.KEEP_MOVES,
@@ -159,10 +159,8 @@ class UnifiedRebalancerSegment4 extends UnifiedRebalancerSegment3 {
   }
 
   /**
-   * Execute one authoritative budget read through the canonical CDC owner
-   * path when available, then fall back to the gateway compatibility path.
-   * This keeps rebalancer budget probes out of the generic SQL ingress and
-   * avoids recursive owner-read dispatch on control-plane partitions.
+   * Execute one authoritative budget read through the control-plane metadata
+   * gateway owner.
    *
    * @param {string} tableName
    * @param {string} sql
@@ -172,10 +170,10 @@ class UnifiedRebalancerSegment4 extends UnifiedRebalancerSegment3 {
   async executeBudgetRead(tableName, sql, params = []) {
     const queryOptions = this.getBudgetQueryOptions();
     if (
-      typeof this.cdcIntegrationService?.executeAuthoritativeSystemTableRead ===
+      typeof this.controlPlaneSystemTableGateway?.readAuthoritativeRows ===
       UNIFIED_REBALANCER_LITERAL.FUNCTION
     ) {
-      return this.cdcIntegrationService.executeAuthoritativeSystemTableRead(
+      return this.controlPlaneSystemTableGateway.readAuthoritativeRows(
         tableName,
         sql,
         params,
@@ -1129,8 +1127,8 @@ class UnifiedRebalancerSegment4 extends UnifiedRebalancerSegment3 {
     }
     return Number.isInteger(targetState?.targetReplicaCount) &&
       targetState.targetReplicaCount > NUM.ZERO ?
-        targetState.targetReplicaCount :
-        this.getPriorityControlPlaneTargetReplicaCount();
+      targetState.targetReplicaCount :
+      this.getPriorityControlPlaneTargetReplicaCount();
   }
 
   /**

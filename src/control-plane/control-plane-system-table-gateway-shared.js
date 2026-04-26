@@ -724,48 +724,54 @@ function canonicalizeControlPlaneMutation(
   };
 }
 
+function buildControlPlaneMutationOutcomeSnapshot(outcome, completionState) {
+  return {
+    outcome,
+    completionState,
+  };
+}
+
 function resolveControlPlaneMutationOutcomeSnapshot(result = {}) {
   const completionState = resolveMutationCompletionState(result);
   const affectedRows = Number(
     result?.partitionResult?.affectedRows ?? result?.affectedRows,
   );
   if (result?.outcome) {
-    return {
-      outcome: result.outcome,
+    return buildControlPlaneMutationOutcomeSnapshot(
+      result.outcome,
       completionState,
-    };
+    );
   }
   if (result?.success === false) {
-    return {
-      outcome:
-        result?.pressureAction === PRESSURE_GOVERNOR_ACTION.DEFER ?
-          CONTROL_PLANE_MUTATION_OUTCOME.DEFERRED :
-          result?.pressureAction === PRESSURE_GOVERNOR_ACTION.REJECT ?
-            CONTROL_PLANE_MUTATION_OUTCOME.REJECTED :
-            CONTROL_PLANE_MUTATION_OUTCOME.OWNER_NOT_READY,
+    return buildControlPlaneMutationOutcomeSnapshot(
+      result?.pressureAction === PRESSURE_GOVERNOR_ACTION.DEFER ?
+        CONTROL_PLANE_MUTATION_OUTCOME.DEFERRED :
+        result?.pressureAction === PRESSURE_GOVERNOR_ACTION.REJECT ?
+          CONTROL_PLANE_MUTATION_OUTCOME.REJECTED :
+          CONTROL_PLANE_MUTATION_OUTCOME.OWNER_NOT_READY,
       completionState,
-    };
+    );
   }
   if (
     typeof result?.visibilityState === TYPEOF.STRING &&
     result.visibilityState !==
       CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.VISIBLE
   ) {
-    return {
-      outcome: CONTROL_PLANE_MUTATION_OUTCOME.PENDING_VISIBILITY,
+    return buildControlPlaneMutationOutcomeSnapshot(
+      CONTROL_PLANE_MUTATION_OUTCOME.PENDING_VISIBILITY,
       completionState,
-    };
+    );
   }
   if (Number.isFinite(affectedRows) && affectedRows <= NUM.ZERO) {
-    return {
-      outcome: CONTROL_PLANE_MUTATION_OUTCOME.OBSERVED_STATE_CHANGED,
+    return buildControlPlaneMutationOutcomeSnapshot(
+      CONTROL_PLANE_MUTATION_OUTCOME.OBSERVED_STATE_CHANGED,
       completionState,
-    };
+    );
   }
-  return {
-    outcome: CONTROL_PLANE_MUTATION_OUTCOME.APPLIED,
+  return buildControlPlaneMutationOutcomeSnapshot(
+    CONTROL_PLANE_MUTATION_OUTCOME.APPLIED,
     completionState,
-  };
+  );
 }
 
 function resolveControlPlaneMutationContractOutcome(

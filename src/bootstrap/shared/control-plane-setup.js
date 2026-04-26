@@ -62,6 +62,9 @@ import {SUBSYSTEM} from '../../constants/index.js';
  */
 const CONTROL_PLANE_SETUP_SUBSYSTEM =
   SUBSYSTEM.CONTROL_PLANE_SETUP;
+const CONTROL_PLANE_SETUP_NAME = 'ControlPlaneSetup';
+const TYPEOF_FUNCTION = 'function';
+const NUMERIC_ZERO = 0;
 
 /**
  * Log messages for ControlPlaneSetup.
@@ -110,6 +113,8 @@ class ControlPlaneSetup {
    * @param {Map} options.messageGroupServices - MG services to attach.
    * @param {Object} options.rebalanceCoordinator - Optional existing
    *   rebalance coordinator.
+   * @param {Object} options.executorOutcomeEmitter - Optional executor
+   *   outcome emitter shared with executor handlers.
    * @return {Promise<Object>} Object containing heartbeatService,
    *   leaseService, endpointService, dispatchService, and
    *   rebalanceCoordinator.
@@ -129,39 +134,40 @@ class ControlPlaneSetup {
       cdcGroupPropagationService,
       bootstrapReadinessState,
       getLocalClusterIncarnationFence,
+      executorOutcomeEmitter,
     } = options;
 
     // Validate required dependencies
     if (!nodeId) {
       throw new DependencyError(
-        'ControlPlaneSetup', ERROR_MSG.NODE_ID_REQUIRED,
+        CONTROL_PLANE_SETUP_NAME, ERROR_MSG.NODE_ID_REQUIRED,
       );
     }
     if (!nodeAddress) {
       throw new DependencyError(
-        'ControlPlaneSetup', ERROR_MSG.NODE_ADDRESS_REQUIRED,
+        CONTROL_PLANE_SETUP_NAME, ERROR_MSG.NODE_ADDRESS_REQUIRED,
       );
     }
     if (!messageRouter) {
       throw new DependencyError(
-        'ControlPlaneSetup', ERROR_MSG.MESSAGE_ROUTER_REQUIRED,
+        CONTROL_PLANE_SETUP_NAME, ERROR_MSG.MESSAGE_ROUTER_REQUIRED,
       );
     }
     if (!cdcIntegrationService) {
       throw new DependencyError(
-        'ControlPlaneSetup',
+        CONTROL_PLANE_SETUP_NAME,
         ERROR_MSG.CDC_INTEGRATION_SERVICE_REQUIRED,
       );
     }
     if (!systemTableCache) {
       throw new DependencyError(
-        'ControlPlaneSetup',
+        CONTROL_PLANE_SETUP_NAME,
         ERROR_MSG.SYSTEM_TABLE_CACHE_REQUIRED,
       );
     }
     if (!tablePolicyService) {
       throw new DependencyError(
-        'ControlPlaneSetup',
+        CONTROL_PLANE_SETUP_NAME,
         ERROR_MSG.TABLE_POLICY_SERVICE_REQUIRED,
       );
     }
@@ -171,9 +177,9 @@ class ControlPlaneSetup {
       cdcIntegrationService.sqlQueryEngine?.transactionCoordinator ||
       null;
     if (!transactionCoordinator ||
-        typeof transactionCoordinator.begin !== 'function') {
+        typeof transactionCoordinator.begin !== TYPEOF_FUNCTION) {
       throw new DependencyError(
-        'ControlPlaneSetup',
+        CONTROL_PLANE_SETUP_NAME,
         ERROR_MSG.TRANSACTION_COORDINATOR_REQUIRED,
       );
     }
@@ -189,7 +195,7 @@ class ControlPlaneSetup {
       advertisedNodeWsAddress,
       hasMessageGroupServices: !!messageGroupServices,
       messageGroupCount: messageGroupServices ?
-        messageGroupServices.size : 0,
+        messageGroupServices.size : NUMERIC_ZERO,
     });
 
     const controlPlaneRuntimeBundle = createControlPlaneRuntimeBundle({
@@ -254,9 +260,11 @@ class ControlPlaneSetup {
       });
 
     if (!rebalanceCoordinator) {
-      const executorOutcomeEmitter = new ExecutorOutcomeEmitter({
-        logger,
-      });
+      const resolvedExecutorOutcomeEmitter =
+        executorOutcomeEmitter ||
+        new ExecutorOutcomeEmitter({
+          logger,
+        });
 
       rebalanceCoordinator = new RebalanceCoordinator({
         nodeId,
@@ -273,7 +281,7 @@ class ControlPlaneSetup {
         bootstrapReadinessState: bootstrapReadinessState || null,
         startupRecoveryCoordinator,
         controlPlaneSystemTableGateway,
-        executorOutcomeEmitter,
+        executorOutcomeEmitter: resolvedExecutorOutcomeEmitter,
       });
       rebalanceCoordinator.initialize();
 
@@ -302,7 +310,7 @@ class ControlPlaneSetup {
       rebalanceCoordinator.startupRecoveryCoordinator =
         startupRecoveryCoordinator;
     } else if (typeof rebalanceCoordinator.startupRecoveryCoordinator
-      .syncOwnerDependencies === 'function') {
+      .syncOwnerDependencies === TYPEOF_FUNCTION) {
       rebalanceCoordinator.startupRecoveryCoordinator.syncOwnerDependencies({
         readinessState: bootstrapReadinessState || null,
       });
@@ -346,7 +354,8 @@ class ControlPlaneSetup {
       controlPlaneReadinessService.servicesOwner =
         systemMetadataOwners.servicesOwner;
     }
-    if (typeof controlPlaneReadinessService.syncOwnerDependencies === 'function') {
+    if (typeof controlPlaneReadinessService.syncOwnerDependencies ===
+      TYPEOF_FUNCTION) {
       controlPlaneReadinessService.syncOwnerDependencies({
         systemTableCache,
         cacheMutationTarget: systemTableCache,
@@ -404,7 +413,7 @@ class ControlPlaneSetup {
     dispatchService.initialize();
 
     // Attach message group services if provided
-    if (messageGroupServices && messageGroupServices.size > 0) {
+    if (messageGroupServices && messageGroupServices.size > NUMERIC_ZERO) {
       logger.debug(LOG_MSG.ATTACHING_MESSAGE_GROUPS, {
         nodeId,
         count: messageGroupServices.size,
@@ -420,7 +429,7 @@ class ControlPlaneSetup {
       nodeId,
       nodeAddress,
       messageGroupCount: messageGroupServices ?
-        messageGroupServices.size : 0,
+        messageGroupServices.size : NUMERIC_ZERO,
     });
 
     return {

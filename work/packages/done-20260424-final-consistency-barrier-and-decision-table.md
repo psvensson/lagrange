@@ -1,7 +1,5 @@
 # Final Consistency Barrier And Decision Table
 
-Status: done on April 24, 2026.
-
 ## Why
 
 The rolling-restart final consistency blocker now has better mismatch

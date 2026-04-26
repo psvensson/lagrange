@@ -163,6 +163,8 @@ const OPERATION_WORKFLOW_OWNER_LITERAL = Object.freeze({
   HANDOFF_PENDING_BEFORE_SAFE_REMOVAL: ' handoff pending before safe removal',
   REPLACEMENT_LEADER_OWNERSHIP_PENDING_BEFORE_SAFE_REMOVAL:
     ' replacement leader ownership pending before safe removal',
+  REPLACEMENT_LEADER_ELECTION_RETURNED_NOT_FOUND:
+    ' replacement leader election returned not_found before safe removal',
   PRIORITY_SPREAD: 'priority spread',
   PRIORITY_SPREAD_HAS_NOT_CONVERGED: ' priority spread has not converged',
   PROGRESS: 'progress',
@@ -337,6 +339,8 @@ const PRIORITY_PUBLICATION_LEADER_REMOVE_SAFETY_STATE = Object.freeze({
   WAIT_PUBLICATION_PUBLISHED: 'wait_publication_published',
   REQUEST_SOURCE_LEADER_HANDOFF: 'request_source_leader_handoff',
   REQUEST_REPLACEMENT_LEADER_ELECTION: 'request_replacement_leader_election',
+  FAIL_REPLACEMENT_REPLICA_NOT_FOUND:
+    'fail_replacement_replica_not_found',
   WAIT_REPLACEMENT_LEADER_OWNERSHIP: 'wait_replacement_leader_ownership',
 });
 const PRIORITY_PUBLICATION_SOURCE_ROLE_STATE = Object.freeze({

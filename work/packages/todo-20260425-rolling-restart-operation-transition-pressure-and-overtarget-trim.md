@@ -1,10 +1,44 @@
 # Rolling Restart Operation Transition Pressure And Over-Target Trim
 
-Status: queued on April 26, 2026. The seed-contact startup-authority fix moved
-`rolling-restart` back to this post-active topology convergence boundary, but
-the April 25 ACK-complete-trim rerun failed earlier during load readiness.
-Post-active over-target trim resumes after priority-spread recovery operation
-creation/progression closes.
+April 26 pause: this package is no longer the current execution owner. Recent
+local `rolling-restart` reruns moved earlier than post-active trim into
+startup active-gate publication recovery evidence, then migrated again to
+missing published membership from a stale stopped node-state row. Active
+execution remains with
+[Publication recovery machine spec and preflight verification](./active-20260426-publication-recovery-machine-spec-and-preflight-verification.md).
+Re-enter this package only after that publication recovery /
+heartbeat-status revival boundary closes or migrates.
+
+April 26 update: The April 26 source-visibility and
+priority-recovery operation-creation fixes moved `rolling-restart` back to
+this package's post-active convergence barrier.
+
+Latest representative evidence after the publication ACK closure fixes and
+state-machine pressure preflight:
+
+1. `test-output/report.json`
+2. failure point: `waitForConvergence` timed out after `120000ms`
+3. run duration: `417.8s`
+4. failure bundle:
+   `test-output/.playback/report/rolling-restart/failure-bundle.md`
+5. failure class: `topology_unstable`
+6. dominant reason: `convergence_timeout`
+7. publication epoch `9` is `PUBLISHED` with pending ACK count `0`
+8. blocked publication node count: `0`
+9. priority recovery blocked and unresolved partition counts: `0`
+10. in-flight replica operations: `0`
+11. effective in-flight replica operations: `0`
+12. in-flight operation status summary still sees `active=3` and `removed=1`
+13. over-target durations:
+    `control_plane_publications-p1=140636ms`,
+    `replica_operations-p1=140636ms`,
+    `sql_transaction_participants-p1=140636ms`, and
+    `sql_transactions-p1=140636ms`
+14. post-rebalance closure is open on `membership_trim_open` and
+    `no_over_target_open`
+15. the state-machine pressure preflight on the report reports warnings for
+    completed-active operation rows, membership trim after operation drain
+    closure, and over-target voter cleanup after operation drain closure
 
 ## Why
 
@@ -27,6 +61,215 @@ convergence barrier honest, but moved the runtime blocker again:
 This is no longer the previous restart-recovery or priority-spread blocker. It
 is a transition-progress and over-target trim problem after the owner gates
 close.
+
+## April 26 Source-Visibility Update
+
+The recommendation implemented in this slice prevents ordinary source-removal
+stop-phase success responses from making a `REPLACE` operation terminal before
+source membership visibility confirms the old source is absent:
+
+1. `COMPLETED` and idempotent remove acknowledgements now advance the operation
+   to `STOPPING` and return `IN_PROGRESS`.
+2. only an absent-source response can terminalize the stop phase immediately.
+3. the workflow keeps persisted metadata in `removing` while source visibility
+   reconciliation remains outstanding.
+4. focused replacement workflow coverage proves the completed stop-phase
+   response stays non-terminal.
+
+The fast-local validation rerun moved to a different earlier blocker:
+
+1. `test-output/reports/runtime-stability-rolling-restart-20260426-codex-stop-phase-source-visibility.report.json`
+2. the scenario failed during load readiness, before the restart and before the
+   post-active convergence barrier.
+3. `control_plane_publications-p1` carried a failed priority `REPLACE` whose
+   target was already `active_operational`.
+4. the classification still exposed `eligible_but_no_operation_created` /
+   `blocked_unclassified` evidence, while logs showed message-router,
+   CDC-forwarding, and system-table write pressure.
+
+The residual is therefore not the original `sql_write_operations-p1` premature
+source-removal terminalization. The next boundary is priority recovery handling
+for a terminal failed `REPLACE` whose target is already visible and operational:
+that state must either satisfy the recovery closure model or create one
+canonical follow-up operation instead of remaining unclassified.
+
+## April 26 Post-Active Re-Entry Update
+
+The failed-`REPLACE` active-target and local mutation priority-creation slices
+closed the load-readiness priority recovery blockers and moved the
+representative path back to this package:
+
+1. `test-output/reports/runtime-stability-rolling-restart-20260426-codex-failed-replace-active-target.report.json`
+   moved `control_plane_publications-p1` to `spread_satisfied_in_flight`.
+2. `test-output/reports/runtime-stability-rolling-restart-20260426-codex-local-mutation-priority-creation.report.json`
+   moved beyond `sql_write_operations-p1` `needs_operation` /
+   `eligible_but_no_operation_created`.
+3. the final report has no unresolved priority recovery partitions and no
+   pending priority spread.
+4. `sql_write_operations-p1` now creates replacement operation rows and the
+   target reaches active state.
+5. the remaining failure is post-rebalance closure: operation drain,
+   membership trim, publication visibility, and over-target voter count.
+
+The current owner boundary is therefore no longer missing priority operation
+creation. It is operation lifecycle drain plus durable trim for over-target
+system partitions under publication and control-plane pressure.
+
+## April 26 Executor Outcome And Successor-Leader Safety Update
+
+The executor outcome wiring and quorum safety recommendations are implemented
+for this active path:
+
+1. runtime bootstrap and node-join service handlers now pass executor outcomes
+   through the shared setup lane instead of dropping them at the handler edge.
+2. metadata gateway reads now own the unified rebalancer path instead of
+   direct CDC owner reads.
+3. source-follower evidence no longer makes a `REPLACE` source removal safe by
+   itself; the owner must observe either a canonical partition leader away from
+   the source or replacement leader ownership.
+4. quorum-conditioned removal tests now cover the missing canonical successor
+   leader path, stale source-leader rows, and authoritative rows with missing
+   `raft_role`.
+
+Representative migration:
+
+1. `test-output/reports/runtime-stability-rolling-restart-20260426-codex-executor-outcome-wiring.report.json`
+   moved the run through operation drain soft-closure, but still had missing
+   final leaders for `control_plane_publications-p1` and
+   `sql_write_operations-p1`.
+2. `test-output/reports/runtime-stability-rolling-restart-20260426-codex-source-follower-successor-leader.report.json`
+   closes that missing-leader symptom. All expected partitions have leaders,
+   priority recovery has no blocked or unresolved partitions, and publication
+   is `PUBLISHED` with no pending ACK debt.
+3. the remaining blocker is now post-active operation lifecycle drain,
+   membership trim, and over-target voter cleanup.
+4. replacement election nudges are not enough under this load: handlers return
+   completed responses, but canonical ownership for the replacement remains
+   unobserved on `control_plane_publications-p1` and
+   `replica_operations-p1`.
+
+The next owner boundary is therefore no longer unsafe source removal from
+source-follower evidence. It is the contract for completed replacement-election
+requests that do not produce canonical replacement leader ownership, plus the
+stale in-flight operation drain rows that keep trim and no-over-target closure
+open.
+
+## April 26 Post-Review Continuation Update
+
+The review recommendations implemented in this slice close two local owner
+gaps and move the representative rerun to a narrower quiescence failure:
+
+1. dynamic config seeding and updates now use the injected control-plane
+   gateway without requiring a CDC integration service when a gateway is
+   already available
+2. non-archived work package status now comes from filenames instead of
+   duplicate body `Status:` fields
+3. completed `MOVE_ASSIGNMENT` rows with `completedAt` no longer count as
+   in-flight drain candidates
+4. completed replacement-election requests that do not produce canonical
+   replacement leadership now retarget to another eligible follower after the
+   retry-suppression window instead of retrying the same completed request
+
+The continuation rerun
+`test-output/report.json` fails before the old final convergence report path:
+
+1. `waitForControlPlaneQuiescence` times out after `120000ms`
+2. failover, convergence, and restart-recovery gates are already closed
+3. publication epoch `4` is `PUBLISHED` with no pending ACK debt
+4. priority recovery blocked and unresolved counts remain `0`
+5. the five priority partitions remain `spread_satisfied_in_flight`
+6. operation rows with `completedAt` are terminal `removed` rows with
+   `latestTimelineInFlight=false`
+7. the still-open quiescence evidence is in-flight operation snapshots,
+   admin snapshot timeouts, and control-plane backpressure during node-state
+   publication and discovery repair
+
+The residual is therefore no longer stale completed `MOVE_ASSIGNMENT` rows or
+completed replacement-election retry loops. The next active boundary is
+control-plane quiescence while priority partitions still have live
+`spread_satisfied_in_flight` operation evidence. That work is now split as
+[Control plane quiescence owner snapshot](./todo-20260426-control-plane-quiescence-owner-snapshot.md).
+
+## April 26 Quiescence-Owner Rerun Update
+
+The quiescence owner-state implementation and failure-bundle wiring are in
+place, but the next representative rerun migrated earlier:
+
+1. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --fast-local`
+2. Result: failed, `0/1` passed after `389.5s`.
+3. Terminal barrier: `Convergence timeout after 120000ms`.
+4. The failure bundle now reports `publication_convergence_blocked` with
+   dominant reason `control_plane_publication_pending`.
+5. Publication epoch `11` remains `OPEN`, pending ACK count is `0`, and all
+   five nodes are blocked on control-plane publication visibility.
+6. Priority recovery now names `coordination_mismatch` for
+   `control_plane_publications-p1` and
+   `sql_transaction_participants-p1`, plus `recovering_in_flight` for
+   `replica_operations-p1`.
+7. Post-rebalance closure is open on operation drain, publication visibility,
+   and no-over-target evidence.
+
+The active blocker is therefore back in this package: publication-visible trim
+and operation transition pressure must close before the quiescence owner gate
+can be re-entered.
+
+## April 26 Publication ACK Closure And Pressure Preflight Update
+
+The publication-visible portion of this package has now moved forward:
+
+1. metadata refresh closes ACK-complete non-terminal publication rows instead
+   of preserving `OPEN` with pending ACK count `0`.
+2. membership publication row construction now honors an ACK-complete
+   candidate publication status.
+3. heartbeat-only READY updates now probe the ACK owner when the local cache
+   sees a `PUBLISHED_NODE_MISSING` publication gap.
+4. the first rerun moved from impossible `OPEN` / pending ACK `0` to real
+   `ACK_PENDING` publication debt.
+5. the second rerun closed publication convergence entirely: publication is
+   `PUBLISHED`, pending ACK count is `0`, and the failure class moved to
+   `topology_unstable`.
+
+The package now has a fast preflight guardrail:
+
+1. `node scripts/check-state-machine-pressure-preflight.js`
+2. `node scripts/check-state-machine-pressure-preflight.js --report test-output/report.json`
+3. `npm run audit:state-machine-pressure`
+
+The report-backed preflight classifies the current pressure points before a
+full rerun: completed-active operation rows, membership trim still open after
+operation drain closure, and over-target voter cleanup still open after
+operation drain closure.
+
+## April 26 Replacement Target Not-Found Update
+
+The latest playback showed a narrower source-removal liveness failure inside
+the post-active trim set:
+
+1. `sql_transaction_participants-p1` had an ACTIVE `REPLACE` source-removal
+   row for `81b6d58d-a50c-483d-aa9c-2ad85899af82`.
+2. source removal was blocked on
+   `replacement leader ownership pending before safe removal`.
+3. the replacement election nudge targeted
+   `sql_transaction_participants-p1-r4` on
+   `11601fe0-72d6-5853-8590-ec2881853e72`.
+4. that node answered `Replica not found for leader handoff`.
+5. the row then remained active, which kept the partition above target instead
+   of releasing the failed target for cleanup planning.
+
+The workflow owner now models this as a terminal replacement-target proof:
+
+1. source-removal safety records replacement-election `NOT_FOUND` evidence.
+2. if the same replacement replica still lacks canonical leader ownership and
+   no retarget candidate has been selected, the safety state becomes
+   `fail_replacement_replica_not_found`.
+3. the operation is failed instead of deferred indefinitely.
+4. the existing failed-`REPLACE` target cleanup path can then remove the stale
+   target placement and let the planner create fresh work.
+
+Focused coverage:
+
+1. `node --test test/rebalancer/quorum-conditioned-remove-safety.test.js`
+2. `node --test test/rebalancer/replace-replica-workflow.test.js`
 
 ## April 25 Execution Update
 
@@ -243,6 +486,42 @@ Depends on:
    outcome.
 4. Pro or Enterprise features.
 
+## Static Drift Ledger
+
+Preflight on April 26, 2026:
+
+1. `npm run test:metadata-gateway:audit`: failed with 12 inherited violations.
+   Relevant touched-file risk includes
+   `src/rebalancer/unified-rebalancer-segment-4.js`.
+2. `npm run audit:guideline:decision-boundaries`: failed with 16 inherited
+   violations. Relevant touched-file risk includes
+   `src/rebalancer/operation-workflow-owner-segment-4.js`.
+3. `npm run audit:guideline:literals`: failed with 6288 inherited violations
+   before the literal baseline/ratchet package.
+4. `npm run audit:runtime-grammar`: passed with 0 violations.
+5. Current representative blocker:
+   `runtime-stability-rolling-restart-20260426-codex-priority-recent-intent-reuse`
+   fails post-active convergence with `sql_write_operations-p1` over target.
+
+Guardrail closure on April 26, 2026:
+
+1. `npm run test:metadata-gateway:audit`: passed.
+2. `npm run audit:guideline:decision-boundaries`: passed.
+3. `npm run audit:guideline:literals`: passed with 0 new violations and 6224
+   matched inherited baseline violations.
+4. `npm run audit:guideline:boundary-mode-contracts`: passed.
+5. `npm run audit:runtime-grammar`: passed.
+
+Closure requirements:
+
+1. The metadata-gateway, decision-boundary, literal, boundary-mode, and
+   runtime-grammar audits must stay green for any future touched file in this
+   package.
+2. The repo-wide literal audit now uses a baseline ratchet; new literal
+   violations must fail this package while inherited debt remains recorded.
+3. The next `rolling-restart` rerun must either pass post-active convergence
+   or migrate to a newly named owner boundary.
+
 ## Shared Boundary Contract
 
 - Semantic owner:
@@ -281,6 +560,8 @@ Depends on:
       action.
 - [ ] Active replacements in `remove_phase` continue source removal after
       transient control-plane pressure.
+- [x] Ordinary `REPLACE` source-removal stop-phase success waits for source
+      visibility instead of marking the operation removed immediately.
 - [x] Critical STOPPING source-removal visibility pressure defers instead of
       becoming a terminal timeout.
 - [ ] The representative rerun reconfirms the over-target voter symptom is
@@ -309,15 +590,35 @@ Depends on:
       placement is already converged.
 - [x] Fully acknowledged membership trim candidates publish immediately instead
       of creating an `OPEN` epoch with no pending ACK debt.
-- [ ] Priority-spread recovery operation creation/progression closes during
-      load readiness so the scenario can reach the post-active over-target
-      barrier again.
+- [x] Missing priority-spread recovery operation creation closed in the
+      recent-intent rerun, proving the earlier
+      `eligible_but_no_operation_created` gap was not still the active symptom.
 - [ ] Any repeated `restart_recovery` /
       `priority_recovery_progress_blocked` regression becomes a newly named
       owner boundary instead of being counted as post-active over-target
       closure.
-- [ ] Focused regression covers failed `STOPPING` plus active replacement
-      source-removal progress under retryable pressure.
+- [x] Terminal failed priority `REPLACE` rows with an `active_operational`
+      target classify as closure or emit one canonical follow-up operation
+      during load readiness.
+- [x] Required priority recovery operation creation bypasses local mutation
+      readiness deferral and reaches rebalance evaluation.
+- [x] The latest representative rerun reaches the post-active convergence
+      barrier again instead of failing load readiness on
+      `eligible_but_no_operation_created`.
+- [x] Focused regression covers active replacement source-removal progress
+      after ordinary stop-phase success.
+- [x] Source-follower evidence cannot authorize source removal unless a
+      canonical successor leader or replacement leader ownership is observed.
+- [x] The latest representative rerun closes the prior missing final leader
+      symptom for `control_plane_publications-p1` and `sql_write_operations-p1`.
+- [x] Completed replacement-election requests must either produce canonical
+      replacement leader ownership or move to one explicit retry/retarget
+      outcome.
+- [x] Stale active rows with `completedAt` reconcile out of in-flight operation
+      drain; the focused proof is closed in
+      [MOVE_ASSIGNMENT liveness proof hardening](./done-20260426-move-assignment-liveness-proof-hardening.md).
+- [x] The current quiescence blocker is split into a dedicated active work
+      package.
 - [ ] `rolling-restart` passes or moves to a newly named owner boundary with
       the post-active transition-pressure loop closed.
 
@@ -465,6 +766,93 @@ Executed before activation:
      `pendingAckCount=0`, `publicationPending=false`, and priority spread is
      pending with `eligible_but_no_operation_created` /
      `priority_recovery_progress_blocked`.
+102. `npx tap test/rebalancer/replace-replica-workflow.test.js`
+103. Result: passed, `198/198`.
+104. `npx tap test/scripts/check-guideline-literals.test.js`
+105. Result: passed.
+106. `npm run audit:guideline:decision-boundaries`
+107. Result: passed.
+108. `npm run audit:guideline:boundary-mode-contracts`
+109. Result: passed.
+110. `npm run audit:runtime-grammar`
+111. Result: passed.
+112. `npm run audit:guideline:literals`
+113. Result: passed with 0 new violations and 6284 inherited baseline
+     violations.
+114. `npm run test:metadata-gateway:audit`
+115. Result: passed.
+116. `git diff --check`
+117. Result: passed.
+118. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --fast-local --output test-output/reports/runtime-stability-rolling-restart-20260426-codex-stop-phase-source-visibility.report.json --verbose`
+119. Result: failed during load readiness before the restart. The residual is
+     `control_plane_publications-p1` priority recovery with a failed `REPLACE`,
+     target visibility `active_operational`, and control-plane delivery/write
+     pressure. This rerun does not prove the post-active over-target barrier
+     closed.
+120. `node --check src/rebalancer/operation-workflow-owner-segment-5.js`
+121. Result: passed.
+122. `node --check test/rebalancer/quorum-conditioned-remove-safety-tail-more-test-cases.js`
+123. Result: passed.
+124. `node --check test/rebalancer/quorum-conditioned-remove-safety-tail-test-cases.js`
+125. Result: passed.
+126. `npm test -- test/rebalancer/quorum-conditioned-remove-safety.test.js --grep "source follower without canonical successor leader"`
+127. Result: passed.
+128. `npm test -- test/rebalancer/quorum-conditioned-remove-safety.test.js --grep "source follower evidence outruns partition leader ownership"`
+129. Result: passed.
+130. `npm test -- test/rebalancer/quorum-conditioned-remove-safety.test.js --grep "authoritative service rows with missing raft_role"`
+131. Result: passed.
+132. `npm test -- test/rebalancer/quorum-conditioned-remove-safety.test.js`
+133. Result: passed, `229/229`.
+134. `npm test -- test/rebalancer/replace-replica-workflow.test.js`
+135. Result: passed, `198/198`.
+136. `npm test -- test/rebalancer/unified-rebalancer.test.js --grep "priority operation creation bypass local"`
+137. Result: passed.
+138. `npm test -- test/bootstrap/shared/control-plane-setup.test.js test/bootstrap/shared/replica-handler-setup.test.js`
+139. Result: passed, `30/30`.
+140. `npm run audit:guideline:decision-boundaries`
+141. Result: passed.
+142. `npm run audit:guideline:literals`
+143. Result: passed with 0 new violations and 6224 inherited baseline
+     violations.
+144. `npm run audit:runtime-grammar`
+145. Result: passed.
+146. `npm run audit:guideline:boundary-mode-contracts`
+147. Result: passed.
+148. `git diff --check`
+149. Result: passed.
+150. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --fast-local --output test-output/reports/runtime-stability-rolling-restart-20260426-codex-source-follower-successor-leader.report.json --verbose`
+151. Result: failed with `topology_unstable` / `convergence_timeout`. The
+     previous missing final leader symptom is closed; the active blockers are
+     now `operation_drain_open`, `membership_trim_open`, and
+     `no_over_target_open`.
+152. `npm test -- test/config/dynamic-config-service.test.js test/rebalancer/replica-operation-liveness.test.js test/rebalancer/quorum-conditioned-remove-safety.test.js`
+153. Result: passed, `625/625`.
+154. `npx eslint src/config/dynamic-config-service.js src/rebalancer/replica-operation-liveness.js src/rebalancer/operation-workflow-owner-segment-6.js test/config/dynamic-config-service.test.js test/rebalancer/replica-operation-liveness.test.js test/rebalancer/quorum-conditioned-remove-safety.test.js`
+155. Result: passed.
+156. `npm run audit:guideline:literals`
+157. Result: passed with 0 new violations and 6219 inherited baseline
+     violations.
+158. `npm run audit:guideline:decision-boundaries`
+159. Result: passed.
+160. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --fast-local`
+161. Result: failed, `0/1` passed after `418.2s`. The report is
+     `test-output/report.json`. The terminal error is
+     `Control plane did not quiesce within 120000ms`, with
+     `spread_satisfied_in_flight` priority partitions and no stale active
+     `completedAt` drain rows in the final priority snapshot.
+162. `rg -n '^Status:' work/packages work/sprints -g '!work/packages/archived/**'`
+163. Result: no matches.
+164. `git diff --check`
+165. Result: passed.
+166. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --fast-local`
+167. Result: failed, `0/1` passed after `389.5s`. The report is
+     `test-output/report.json`. The terminal error is
+     `Convergence timeout after 120000ms`; the failure bundle classifies the
+     current blocker as `publication_convergence_blocked` /
+     `control_plane_publication_pending` with publication epoch `11` still
+     `OPEN`, pending ACK count `0`, blocked node count `5`, and over-target
+     durations on `control_plane_publications-p1`, `replica_operations-p1`,
+     and `sql_transactions-p1`.
 
 ## Done When
 

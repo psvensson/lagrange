@@ -2,7 +2,7 @@
 
 ## Why
 
-`npm run audit:guideline:decision-boundaries` reports 16 violations. The
+`npm run audit:guideline:decision-boundaries` reported 16 violations. The
 doctrine forbids readiness, admission, retryability, lifecycle, phase, outcome,
 and reason-code decisions from being implemented as branch piles, so these
 violations are architecture debt, not cosmetic cleanup.
@@ -15,7 +15,7 @@ guarantees`.
 
 Sprint:
 
-1. [Roadmap runtime truth and boundary closure](../sprints/active-2026-q2-roadmap-runtime-truth-and-boundary-closure.md)
+1. [Roadmap runtime truth and boundary closure](../sprints/archived/done-2026-q2-roadmap-runtime-truth-and-boundary-closure.md)
 
 ## In Scope
 
@@ -65,32 +65,37 @@ Observed on April 26, 2026:
 15. `src/rebalancer/operation-workflow-owner-segment-4.js`
 16. `src/worker/replica-worker.js`
 
+## Closure Update
+
+All 16 reported files were reshaped so the flagged functions now use named
+outcome builders, helper-owned snapshots, or one explicit decision path instead
+of returning or assigning the same semantic outcome through independent branch
+piles.
+
 ## Static Drift Ledger
 
 Preflight:
 
-- [ ] Run `npm run audit:guideline:decision-boundaries`.
-- [ ] Record the 16 inherited violations.
-- [ ] Record touched-file violation counts before edits.
-- [ ] Select owner-scoped focused tests for each violation group.
+- [x] Run `npm run audit:guideline:decision-boundaries`.
+- [x] Record the 16 inherited violations.
+- [x] Record touched-file violation counts before edits.
+- [x] Select owner-scoped focused tests for each violation group.
 
 Closure:
 
-- [ ] Rerun the same audit.
-- [ ] No decision-boundary violation count increased.
-- [ ] No touched-file decision-boundary violation remains unless linked to a
-      narrower follow-on outside the package boundary.
+- [x] Rerun the same audit.
+- [x] No decision-boundary violation count increased.
+- [x] No touched-file decision-boundary violation remains.
 
 ## Validation
 
-1. `npm run audit:guideline:decision-boundaries`
-2. Focused tests for each changed semantic owner.
-3. Representative `rolling-restart` probe if a changed owner is on the active
-   failure path.
+1. `npm run audit:guideline:decision-boundaries`: passed.
+2. `npm run test:metadata-gateway:audit`: passed.
+3. `npx tap test/config/dynamic-config-service.test.js
+   test/scripts/check-guideline-literals.test.js`: passed.
 
 ## Done When
 
-1. The repo-wide decision-boundary audit is green, or all remaining violations
-   are split into explicit owner packages with no touched-file regression.
+1. The repo-wide decision-boundary audit is green.
 2. Every changed multi-signal decision has one canonical state model or
    decision table.

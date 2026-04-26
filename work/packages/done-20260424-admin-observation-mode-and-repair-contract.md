@@ -1,7 +1,5 @@
 # Admin Observation Mode And Repair Contract
 
-Status: done on April 24, 2026.
-
 ## Why
 
 The harness currently uses forced control snapshot repair as an escape hatch

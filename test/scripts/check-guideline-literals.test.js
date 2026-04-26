@@ -1,6 +1,7 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {
   FILE_CLASS,
+  applyMagicLiteralBaseline,
   classifyFilePath,
   collectMagicLiteralViolationsFromSource,
 } from '../../scripts/check-guideline-literals.js';
@@ -102,3 +103,46 @@ test('scanner skips test files by default because the guideline defines suite-lo
       'test files should be skipped unless explicitly included',
     );
   });
+
+test('baseline filtering keeps only new literal violations', async (t) => {
+  const inheritedViolation = {
+    filePath: '/repo/src/runtime/task-runner.js',
+    line: 3,
+    column: 18,
+    value: '\'ready\'',
+    kind: 'free_floating_string_literal',
+  };
+  const newViolation = {
+    filePath: '/repo/src/runtime/task-runner.js',
+    line: 3,
+    column: 28,
+    value: '3',
+    kind: 'free_floating_number_literal',
+  };
+  const report = applyMagicLiteralBaseline(
+    {
+      scannedFileCount: 1,
+      totalViolationCount: 2,
+      filesWithViolations: [
+        {
+          filePath: '/repo/src/runtime/task-runner.js',
+          violationCount: 2,
+        },
+      ],
+      violations: [inheritedViolation, newViolation],
+    },
+    new Set([
+      JSON.stringify([
+        inheritedViolation.filePath,
+        inheritedViolation.line,
+        inheritedViolation.column,
+        inheritedViolation.value,
+        inheritedViolation.kind,
+      ]),
+    ]),
+  );
+
+  t.equal(report.inheritedViolationCount, 1);
+  t.equal(report.totalViolationCount, 1);
+  t.same(report.violations, [newViolation]);
+});

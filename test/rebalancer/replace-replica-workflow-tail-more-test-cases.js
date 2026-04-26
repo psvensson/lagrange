@@ -450,8 +450,8 @@ export async function registerReplaceReplicaWorkflowTailMoreTests({
         );
         t.equal(
           persistedOperation?.workflowStep,
-          WORKFLOW_STEP.REMOVED,
-          'remove phase completion should terminate the REPLACE operation',
+          WORKFLOW_STEP.STOPPING,
+          'remove phase completion should wait for source visibility before terminal removal',
         );
       } finally {
         await coordinator.shutdown();

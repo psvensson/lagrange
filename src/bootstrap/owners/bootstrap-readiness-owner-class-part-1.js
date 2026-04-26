@@ -678,6 +678,25 @@ class BootstrapReadinessOwnerPart1 {
       targetParticipation: startupRecovery.targetParticipation || null,
     };
   }
+  resolveLocalStartupAuthoritySnapshot(service, observedAt) {
+    if (typeof service.getStartupAuthoritySnapshotSync === TYPEOF.FUNCTION) {
+      return service.getStartupAuthoritySnapshotSync(
+        this.getSeedNodeId(),
+        observedAt,
+      );
+    }
+    if (typeof service.getStartupAuthoritySnapshot !== TYPEOF.FUNCTION) {
+      return null;
+    }
+    const localStartupAuthority = service.getStartupAuthoritySnapshot(
+      this.getSeedNodeId(),
+      observedAt,
+    );
+    return localStartupAuthority &&
+      typeof localStartupAuthority.then === TYPEOF.FUNCTION ?
+      null :
+      localStartupAuthority;
+  }
   getStartupAuthoritySnapshot(observedAt = Date.now()) {
     const seedContactStartupAuthority =
       this.getSeedContactStartupAuthoritySnapshot();
@@ -686,26 +705,10 @@ class BootstrapReadinessOwnerPart1 {
       return seedContactStartupAuthority;
     }
     try {
-      let localStartupAuthority = null;
-      if (typeof service.getStartupAuthoritySnapshotSync === TYPEOF.FUNCTION) {
-        localStartupAuthority = service.getStartupAuthoritySnapshotSync(
-          this.getSeedNodeId(),
-          observedAt,
-        );
-      } else if (
-        typeof service.getStartupAuthoritySnapshot === TYPEOF.FUNCTION
-      ) {
-        localStartupAuthority = service.getStartupAuthoritySnapshot(
-          this.getSeedNodeId(),
-          observedAt,
-        );
-        if (
-          localStartupAuthority &&
-          typeof localStartupAuthority.then === TYPEOF.FUNCTION
-        ) {
-          localStartupAuthority = null;
-        }
-      }
+      const localStartupAuthority = this.resolveLocalStartupAuthoritySnapshot(
+        service,
+        observedAt,
+      );
       return selectStartupAuthoritySnapshot(
         localStartupAuthority,
         seedContactStartupAuthority,

@@ -1161,6 +1161,59 @@ function buildPriorityRecoveryObservationSnapshot(options = {}) {
   const observationPendingAckNodeIds =
     publicationConvergence?.pendingAckNodeIds ||
     publicationConvergenceGate?.pendingAckNodeIds;
+  const observationPendingAckCount = Math.max(
+    normalizeNonNegativeInteger(
+      Array.isArray(observationPendingAckNodeIds) ?
+        observationPendingAckNodeIds.length :
+        publicationConvergenceGate?.pendingAckCount ?? NUM.ZERO,
+    ) ?? NUM.ZERO,
+    normalizeNonNegativeInteger(
+      activeGateContext.activeGateProgress?.pendingAckCount,
+    ) ?? NUM.ZERO,
+    normalizeNonNegativeInteger(
+      activeGateContext.activeGateBestProgress?.pendingAckCount,
+    ) ?? NUM.ZERO,
+  );
+  const observationMissingPublishedNodeIds = Object.freeze(
+    normalizeDistinctStringArray([
+      ...normalizeDistinctStringArray(
+        publicationConvergenceGate?.missingPublishedNodeIds,
+      ),
+      ...normalizeDistinctStringArray(
+        publicationConvergence?.missingPublishedNodeIds,
+      ),
+      ...normalizeDistinctStringArray(
+        publicationConvergence?.missingPublishedRecoveryActiveNodeIds,
+      ),
+      ...normalizeDistinctStringArray(
+        activeGateContext.activeGateProgress?.missingPublishedNodeIds,
+      ),
+      ...normalizeDistinctStringArray(
+        activeGateContext.activeGateProgress?.selectedMissingPublishedNodeIds,
+      ),
+      ...normalizeDistinctStringArray(
+        activeGateContext.activeGateBestProgress?.missingPublishedNodeIds,
+      ),
+      ...normalizeDistinctStringArray(
+        activeGateContext.activeGateBestProgress
+          ?.selectedMissingPublishedNodeIds,
+      ),
+    ]),
+  );
+  const observationMissingPublishedCount = Math.max(
+    observationMissingPublishedNodeIds.length,
+    normalizeNonNegativeInteger(
+      publicationConvergenceGate?.missingPublishedCount,
+    ) ?? NUM.ZERO,
+    normalizeNonNegativeInteger(publicationConvergence?.missingPublishedCount) ??
+      NUM.ZERO,
+    normalizeNonNegativeInteger(
+      activeGateContext.activeGateProgress?.missingPublishedCount,
+    ) ?? NUM.ZERO,
+    normalizeNonNegativeInteger(
+      activeGateContext.activeGateBestProgress?.missingPublishedCount,
+    ) ?? NUM.ZERO,
+  );
   const pressureConditions = buildPriorityRecoveryPressureConditions(
     options.logsTable,
   );
@@ -1198,12 +1251,9 @@ function buildPriorityRecoveryObservationSnapshot(options = {}) {
         observationPendingAckNodeIds,
       ),
     ),
-    pendingAckCount: normalizeNonNegativeInteger(
-      Array.isArray(observationPendingAckNodeIds) ?
-        observationPendingAckNodeIds.length :
-        publicationConvergenceGate?.pendingAckCount ??
-          NUM.ZERO,
-    ),
+    pendingAckCount: observationPendingAckCount,
+    missingPublishedNodeIds: observationMissingPublishedNodeIds,
+    missingPublishedCount: observationMissingPublishedCount,
     publicationConvergenceGateReasons: Object.freeze(
       normalizeDistinctStringArray(
         publicationConvergenceGate?.reasonCodes ||
@@ -1212,13 +1262,13 @@ function buildPriorityRecoveryObservationSnapshot(options = {}) {
     ),
     closureRecordId: resolveObservationClosureField(
       options,
-      'closureRecordId',
+      PRIORITY_RECOVERY_OBSERVATION_CLOSURE_FIELD.RECORD_ID,
       priorityRecoveryClosureWitness,
       activeGateContext,
     ),
     closureWitnessClass: resolveObservationClosureField(
       options,
-      'closureWitnessClass',
+      PRIORITY_RECOVERY_OBSERVATION_CLOSURE_FIELD.WITNESS_CLASS,
       priorityRecoveryClosureWitness,
       activeGateContext,
     ),
@@ -1286,6 +1336,11 @@ function buildPriorityRecoveryObservationSnapshot(options = {}) {
         NUM.ZERO,
   });
 }
+
+const PRIORITY_RECOVERY_OBSERVATION_CLOSURE_FIELD = Object.freeze({
+  RECORD_ID: 'closureRecordId',
+  WITNESS_CLASS: 'closureWitnessClass',
+});
 
 export {
   buildPriorityRecoveryObservationSnapshot,

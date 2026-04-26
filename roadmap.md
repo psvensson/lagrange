@@ -60,10 +60,10 @@ Open exit blockers as of April 26, 2026:
 | Exit area | Capability Exists | Representative Gate Green | Current blocker |
 |-----------|-------------------|---------------------------|-----------------|
 | Rolling restart under load | ✅ | 🔧 | `rolling-restart` remains the active representative gate in `work/sprints/active-2026-q2-publication-scoped-consistency-and-node-join-closure.md` |
-| Priority recovery progress under load | ✅ | 🔧 | `work/packages/active-20260426-priority-spread-recovery-operation-creation-under-load.md` owns the current blocker |
-| Metadata gateway and owner-ingress audit | ✅ | 🔧 | `npm run test:metadata-gateway:audit` still reports owner-path bypass and duplicate pressure-policy failures |
-| Decision-boundary guardrail | ✅ | 🔧 | `npm run audit:guideline:decision-boundaries` still reports 16 violations |
-| Literal-owner guardrail | ✅ | 🔧 | `npm run audit:guideline:literals` still reports repo-wide inherited debt and needs a ratchet |
+| Priority recovery progress under load | ✅ | 🔧 | Missing-operation and stale ACK blockers migrated; `work/packages/active-20260426-publication-recovery-machine-spec-and-preflight-verification.md` owns the current missing-published active-node / heartbeat-status revival blocker |
+| Metadata gateway and owner-ingress audit | ✅ | ✅ | `npm run test:metadata-gateway:audit` passed on April 26, 2026 |
+| Decision-boundary guardrail | ✅ | ✅ | `npm run audit:guideline:decision-boundaries` passed on April 26, 2026 |
+| Literal-owner guardrail | ✅ | ✅ | `npm run audit:guideline:literals` passed on April 26, 2026 with 0 new violations against the 6285-entry inherited baseline |
 
 ### 0.1a. Topology Workflow Stabilization (March 2026)
 

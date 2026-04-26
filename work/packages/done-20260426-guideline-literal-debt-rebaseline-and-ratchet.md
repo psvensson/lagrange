@@ -2,7 +2,7 @@
 
 ## Why
 
-`npm run audit:guideline:literals` reports 6288 violations. That count is too
+`npm run audit:guideline:literals` reported 6288 violations. That count is too
 large for one cleanup pass, but leaving it as ambient debt makes the critical
 generation contract unenforceable during future LLM sprints.
 
@@ -13,7 +13,7 @@ Coherence`.
 
 Sprint:
 
-1. [Roadmap runtime truth and boundary closure](../sprints/active-2026-q2-roadmap-runtime-truth-and-boundary-closure.md)
+1. [Roadmap runtime truth and boundary closure](../sprints/archived/done-2026-q2-roadmap-runtime-truth-and-boundary-closure.md)
 
 ## In Scope
 
@@ -62,26 +62,35 @@ Observed on April 26, 2026:
    `scripts/generate-steering-llm-pack.js`,
    `src/cli/core/keyboard-handler.js`.
 
+## Closure Update
+
+The current inherited literal debt is recorded in
+`scripts/check-guideline-literals-baseline.json` with 6285 exact violation
+identities after the overlapping metadata-gateway and decision-boundary cleanup
+removed three literal findings. The default audit now filters that baseline
+and fails on any new unbaselined literal violation.
+
 ## Static Drift Ledger
 
 Preflight:
 
-- [ ] Run `npm run audit:guideline:literals`.
-- [ ] Record repo-wide count and production/test split.
-- [ ] Record touched-file counts before edits.
-- [ ] Identify the first owner-scoped cleanup tranche.
+- [x] Run `npm run audit:guideline:literals`.
+- [x] Record repo-wide count and production/test split.
+- [x] Record touched-file counts before edits.
+- [x] Identify the first owner-scoped cleanup tranche.
 
 Closure:
 
-- [ ] Rerun the literal audit or the selected boundary-scoped literal audit.
-- [ ] No touched production file has a higher literal count.
-- [ ] Any new allowlist entry has owner, reason, expiry, and follow-on.
+- [x] Rerun the literal audit.
+- [x] No touched production file has unbaselined literal debt.
+- [x] No allowlist expansion was used; the ratchet is an exact baseline.
 
 ## Validation
 
-1. `npm run audit:guideline:literals`
-2. Boundary-scoped literal audit for first cleanup tranche.
-3. Focused tests for any runtime file changed during cleanup.
+1. `npm run audit:guideline:literals`: passed with 0 new violations and 6285
+   matched inherited baseline violations.
+2. `npx tap test/scripts/check-guideline-literals.test.js`: passed.
+3. `npm run audit:guideline:decision-boundaries`: passed.
 
 ## Done When
 

@@ -1,6 +1,6 @@
 # Rolling Restart In-Flight Operation Drain And CDC Pressure
 
-Status: todo on April 25, 2026. This remains valid if `rolling-restart`
+Migration note: This remains valid if `rolling-restart`
 returns to placement-converged post-active operation drain after the active
 operation transition and over-target blocker closes.
 

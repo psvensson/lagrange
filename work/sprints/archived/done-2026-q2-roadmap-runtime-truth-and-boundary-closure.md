@@ -21,8 +21,9 @@ runtime and static guardrails prove:
 
 1. Phase 0.1 says failure simulation work is complete, while the active
    representative gate is still `rolling-restart` under load.
-2. The doctrine requires one owner path, but decision-boundary,
-   literal-owner, and metadata-gateway audits still report violations.
+2. The doctrine requires one owner path; decision-boundary, literal-owner, and
+   metadata-gateway audits reported violations at sprint start and are now
+   closed by executed follow-on packages.
 3. Hot runtime owners remain too large to review against the ownership model,
    especially priority recovery and rebalancer files on the current failure
    path.
@@ -94,25 +95,25 @@ Phase 0.5 usability gate after Phase 0.1 blockers stop moving:
 3. `lagrange cluster join`
 4. one local-cluster getting-started path
 
-## Executed Package
+## Executed Packages
 
-1. [Roadmap runtime truth and AGPL boundary closure](../packages/done-20260426-roadmap-runtime-truth-and-agpl-boundary-closure.md)
+1. [Roadmap runtime truth and AGPL boundary closure](../../packages/done-20260426-roadmap-runtime-truth-and-agpl-boundary-closure.md)
+2. [Metadata gateway audit owner-path closure](../../packages/done-20260426-metadata-gateway-audit-owner-path-closure.md)
+3. [Decision-boundary audit closure](../../packages/done-20260426-decision-boundary-audit-closure.md)
+4. [Guideline literal debt rebaseline and ratchet](../../packages/done-20260426-guideline-literal-debt-rebaseline-and-ratchet.md)
 
 ## Queued Packages
 
-1. [Metadata gateway audit owner-path closure](../packages/todo-20260426-metadata-gateway-audit-owner-path-closure.md)
-2. [Decision-boundary audit closure](../packages/todo-20260426-decision-boundary-audit-closure.md)
-3. [Guideline literal debt rebaseline and ratchet](../packages/todo-20260426-guideline-literal-debt-rebaseline-and-ratchet.md)
-4. [Priority recovery semantic owner extraction](../packages/todo-20260426-priority-recovery-semantic-owner-extraction.md)
-5. [Lagrange package and CLI naming alignment](../packages/todo-20260426-lagrange-package-and-cli-naming-alignment.md)
+1. [Priority recovery semantic owner extraction](../../packages/todo-20260426-priority-recovery-semantic-owner-extraction.md)
+2. [Lagrange package and CLI naming alignment](../../packages/todo-20260426-lagrange-package-and-cli-naming-alignment.md)
 
 ## Execution Order
 
 1. Keep the current runtime stability sprint focused on the moving
    `rolling-restart` blocker.
-2. Close metadata-gateway audit drift before broadening owner-path work.
-3. Close the 16 decision-boundary violations or split them by semantic owner.
-4. Rebaseline literal debt with a ratchet so broad counts cannot grow while
+2. Metadata-gateway audit drift closed before broadening owner-path work.
+3. The 16 decision-boundary violations closed without remaining owner splits.
+4. Literal debt rebaselined with a ratchet so broad counts cannot grow while
    focused owner packages proceed.
 5. Extract semantic owners from priority recovery and rebalancer hotspots only
    after the active blocker identifies the owner boundary.

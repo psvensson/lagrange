@@ -190,6 +190,9 @@ const FAILURE_SIGNAL_DOMINANT_REASON_PREFIX = 'dominantReason=';
 const FAILURE_SIGNAL_FAILURE_BARRIER_PREFIX = 'failureBarrier=';
 const FAILURE_SIGNAL_FAILURE_BARRIER_REASON_PREFIX =
   'failureBarrierReason=';
+const FAILURE_SIGNAL_QUIESCENCE_STATE_PREFIX = 'quiescenceState=';
+const FAILURE_SIGNAL_QUIESCENCE_BLOCKER_PREFIX = 'quiescenceBlocker=';
+const FAILURE_SIGNAL_QUIESCENCE_REASON_PREFIX = 'quiescenceReason=';
 const FAILURE_SIGNAL_PENDING_ACK_COUNT_PREFIX = 'pendingAckCount=';
 const FAILURE_SIGNAL_BLOCKED_NODE_COUNT_PREFIX = 'blockedNodeCount=';
 const FAILURE_SIGNAL_RECOVERY_PROTOCOL_STATE_PREFIX =
@@ -1184,6 +1187,36 @@ function appendFailureBarrierSignals(signals, failureBarrier) {
   return signals;
 }
 
+function appendControlPlaneQuiescenceSignals(signals, quiescence) {
+  if (!Array.isArray(signals) || !isRecord(quiescence)) {
+    return signals;
+  }
+  const state = String(quiescence.state || '').trim();
+  if (state.length > ZERO) {
+    appendSignalOnce(signals, FAILURE_SIGNAL_QUIESCENCE_STATE_PREFIX + state);
+  }
+  const canonicalBlocker = String(quiescence.canonicalBlocker || '').trim();
+  if (canonicalBlocker.length > ZERO) {
+    appendSignalOnce(
+      signals,
+      FAILURE_SIGNAL_QUIESCENCE_BLOCKER_PREFIX + canonicalBlocker,
+    );
+  }
+  for (const reasonCode of Array.isArray(quiescence.reasonCodes) ?
+    quiescence.reasonCodes :
+    []) {
+    const normalizedReasonCode = String(reasonCode || '').trim();
+    if (normalizedReasonCode.length === ZERO) {
+      continue;
+    }
+    appendSignalOnce(
+      signals,
+      FAILURE_SIGNAL_QUIESCENCE_REASON_PREFIX + normalizedReasonCode,
+    );
+  }
+  return signals;
+}
+
 function resolveFailureClassificationGuidance({
   failureClassification,
   readinessFailureGuidance,
@@ -1233,6 +1266,7 @@ function buildFailureClassification({
   const dominantReason = String(failure?.dominantReason || '').trim();
   const rootCauseClass = String(failure?.rootCauseClass || '').trim();
   appendFailureBarrierSignals(signals, failure?.failureBarrier);
+  appendControlPlaneQuiescenceSignals(signals, failure?.quiescence);
   const publicationConvergence =
     buildPublicationConvergenceSummary(controlPlane);
   const readinessFailure = resolveReadinessFailure(controlPlane);
@@ -1265,6 +1299,27 @@ function buildFailureClassification({
     publicationConvergence,
     readinessFailure,
   });
+
+  if (isRecord(failure?.quiescence)) {
+    if (rootCauseClass === ROOT_CAUSE_CLASS_DISCOVERY) {
+      return {
+        failureClass: FAILURE_CLASS_DISCOVERY_UNAVAILABLE,
+        confidence: FAILURE_CLASS_CONFIDENCE_MEDIUM,
+        rootCauseClass,
+        dominantReason: dominantReason || null,
+        signals,
+      };
+    }
+    if (rootCauseClass === ROOT_CAUSE_CLASS_TOPOLOGY) {
+      return {
+        failureClass: FAILURE_CLASS_TOPOLOGY_UNSTABLE,
+        confidence: FAILURE_CLASS_CONFIDENCE_MEDIUM,
+        rootCauseClass,
+        dominantReason: dominantReason || null,
+        signals,
+      };
+    }
+  }
 
   if (
     hasPublicationOwnerConvergenceBlocker({
@@ -1582,6 +1637,7 @@ function buildScenarioFailureBundle({
       phase: diagnostics?.failedPhase?.phase || null,
       rootCauseClass: summaryRootCauseClass,
       dominantReason: failure?.dominantReason || null,
+      quiescence: failure?.quiescence || null,
       failureClassification,
       readinessFailure,
       failureAction: failureGuidance.failureAction,

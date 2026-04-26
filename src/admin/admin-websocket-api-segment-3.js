@@ -1282,17 +1282,14 @@ class AdminWebSocketAPISegment3 extends AdminWebSocketAPISegment2 {
       result.rows !== undefined || result.results !== undefined;
     if (result.success === false) {
       return {kind: QUERY_RESULT_MESSAGE_KIND.ERROR, hasRowPayload};
-    }
-    if (
+    } else if (
       result.hostResult ||
       result.executionMode === EXECUTION_MODE.PARTITION_CALLBACK
     ) {
       return {kind: QUERY_RESULT_MESSAGE_KIND.HOST_CALLBACK, hasRowPayload};
-    }
-    if (QUERY_RESULT_WRITE_OPERATIONS.has(operation) || hasAffectedRows) {
+    } else if (QUERY_RESULT_WRITE_OPERATIONS.has(operation) || hasAffectedRows) {
       return {kind: QUERY_RESULT_MESSAGE_KIND.WRITE, hasRowPayload};
-    }
-    if (hasRowPayload) {
+    } else if (hasRowPayload) {
       return {kind: QUERY_RESULT_MESSAGE_KIND.ROWS, hasRowPayload};
     }
     return {kind: QUERY_RESULT_MESSAGE_KIND.DEFAULT_WRITE, hasRowPayload};

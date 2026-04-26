@@ -34,8 +34,23 @@ import {
   TYPEOF,
   SERVICE_STATUS,
   STATE,
+  STRING,
   WORKFLOW_STEP,
 } from '../../src/constants/index.js';
+
+const HEARTBEAT_STATUS_REVIVAL_NODE_ID = 'node-heartbeat-status-revival';
+const HEARTBEAT_STATUS_REVIVAL_NODE_ADDRESS = 'localhost:8097';
+const HEARTBEAT_STATUS_REVIVAL_PUBLISHED_NODE_ID = 'node-published-peer';
+const HEARTBEAT_STATUS_REVIVAL_STALE_DELTA_MS = 1000;
+const HEARTBEAT_STATUS_REVIVAL_NO_PUBLICATION_ROW = null;
+const HEARTBEAT_STATUS_REVIVAL_NO_READY_LEASE = null;
+const HEARTBEAT_PUBLICATION_GAP_NODE_ID = 'node-heartbeat-publication-gap';
+const HEARTBEAT_PUBLICATION_GAP_NODE_ADDRESS = 'localhost:8098';
+const HEARTBEAT_PUBLICATION_GAP_PUBLISHED_NODE_ID = 'node-1';
+const HEARTBEAT_PUBLICATION_GAP_STALE_DELTA_MS = 1000;
+const HEARTBEAT_PUBLICATION_GAP_CREATED_STALE_DELTA_MS = 10000;
+const HEARTBEAT_PUBLICATION_GAP_NO_PUBLICATION_ROW = null;
+const HEARTBEAT_PUBLICATION_GAP_NO_READY_LEASE = null;
 
 function initEnv() {
   ConfigurationManager.resetInstance();
@@ -486,6 +501,103 @@ test('ReplicaDispatchService routes READY heartbeat-only node-state updates to t
   service.stop();
 });
 
+test('ReplicaDispatchService revives stale stopped rows on READY ' +
+  'heartbeat-only node-state updates',
+async (t) => {
+  initEnv();
+
+  const now = Date.now();
+  const updates = [];
+  const reconcileCalls = [];
+  const acknowledgementCalls = [];
+  const cacheNode = {
+    node_id: HEARTBEAT_STATUS_REVIVAL_NODE_ID,
+    node_address: HEARTBEAT_STATUS_REVIVAL_NODE_ADDRESS,
+    status: SERVICE_STATUS.STOPPED,
+    connection_state: STATE.READY,
+    capabilities: STRING.EMPTY_JSON_ARRAY,
+    last_heartbeat: now - HEARTBEAT_STATUS_REVIVAL_STALE_DELTA_MS,
+    ready_lease_expires_at: HEARTBEAT_STATUS_REVIVAL_NO_READY_LEASE,
+    created_at: now - HEARTBEAT_STATUS_REVIVAL_STALE_DELTA_MS,
+  };
+  const membershipPublicationService = {
+    getLatestPublicationForNodeSync() {
+      return HEARTBEAT_STATUS_REVIVAL_NO_PUBLICATION_ROW;
+    },
+    getLatestPublicationRowSync() {
+      return {
+        status: TEST_MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED,
+        publishedActiveNodeIds: [HEARTBEAT_STATUS_REVIVAL_PUBLISHED_NODE_ID],
+      };
+    },
+    enqueueClusterMembershipReconcile(reason, context) {
+      reconcileCalls.push({reason, context});
+      return true;
+    },
+    async acknowledgeMembershipPublicationForNode(nodeId) {
+      acknowledgementCalls.push(nodeId);
+      return HEARTBEAT_STATUS_REVIVAL_NO_PUBLICATION_ROW;
+    },
+  };
+
+  const service = createService({
+    cacheNode,
+    cdcIntegrationService: {
+      updateSystemTableRow: async (tableName, whereClause, row, options) => {
+        updates.push({tableName, whereClause, row, options});
+        return {
+          success: true,
+          partitionResult: {affectedRows: 1},
+        };
+      },
+      upsertSystemTableRow: async () => ({success: true}),
+    },
+    controlPlaneReadinessService: {
+      membershipPublicationService,
+    },
+  });
+
+  await service.handleNodeStateUpdate({
+    [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
+    [ControlPlaneField.NODE_ID]: HEARTBEAT_STATUS_REVIVAL_NODE_ID,
+    [ControlPlaneField.NODE_ADDRESS]: HEARTBEAT_STATUS_REVIVAL_NODE_ADDRESS,
+    [ControlPlaneField.STATE]: STATE.READY,
+    [ControlPlaneField.HEARTBEAT_ONLY]: true,
+    [ControlPlaneField.NODE_STATE_PUBLICATION_MODE]:
+      CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.HEARTBEAT_RECOVERY,
+    [ControlPlaneField.HEARTBEAT_AT]: now,
+  });
+
+  t.equal(updates.length, 1, 'persists one heartbeat-only node-state update');
+  t.equal(
+    updates[0].row.status,
+    SERVICE_STATUS.ACTIVE,
+    'READY heartbeat-only recovery should revive a stale stopped node row',
+  );
+  t.equal(
+    updates[0].row.connection_state,
+    STATE.READY,
+    'revival update should preserve the READY connection state',
+  );
+  t.equal(
+    reconcileCalls.length,
+    1,
+    'revived READY visibility should re-enter membership publication',
+  );
+  t.equal(
+    reconcileCalls[0]?.context?.nodeRow?.status,
+    SERVICE_STATUS.ACTIVE,
+    'publication repair should receive the revived active row shape',
+  );
+  t.same(
+    acknowledgementCalls,
+    [HEARTBEAT_STATUS_REVIVAL_NODE_ID],
+    'revived rows missing from publication should still probe the ACK owner',
+  );
+
+  service.stop();
+});
+
 test('ReplicaDispatchService re-enters membership publication when a READY ' +
   'heartbeat-only update reaches a node missing from the latest publication',
 async (t) => {
@@ -495,26 +607,26 @@ async (t) => {
   const reconcileCalls = [];
   const acknowledgementCalls = [];
   const cacheNode = {
-    node_id: 'node-heartbeat-publication-gap',
-    node_address: 'localhost:8098',
+    node_id: HEARTBEAT_PUBLICATION_GAP_NODE_ID,
+    node_address: HEARTBEAT_PUBLICATION_GAP_NODE_ADDRESS,
     cpu_cores: 8,
     memory_mb: 16384,
     disk_gb: 500,
     status: SERVICE_STATUS.ACTIVE,
     connection_state: STATE.CONNECTED,
     capabilities: '[]',
-    last_heartbeat: now - 1000,
-    ready_lease_expires_at: null,
-    created_at: now - 10000,
+    last_heartbeat: now - HEARTBEAT_PUBLICATION_GAP_STALE_DELTA_MS,
+    ready_lease_expires_at: HEARTBEAT_PUBLICATION_GAP_NO_READY_LEASE,
+    created_at: now - HEARTBEAT_PUBLICATION_GAP_CREATED_STALE_DELTA_MS,
   };
   const membershipPublicationService = {
     getLatestPublicationForNodeSync() {
-      return null;
+      return HEARTBEAT_PUBLICATION_GAP_NO_PUBLICATION_ROW;
     },
     getLatestPublicationRowSync() {
       return {
         status: TEST_MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED,
-        publishedActiveNodeIds: ['node-1'],
+        publishedActiveNodeIds: [HEARTBEAT_PUBLICATION_GAP_PUBLISHED_NODE_ID],
       };
     },
     enqueueClusterMembershipReconcile(reason, context) {
@@ -543,8 +655,8 @@ async (t) => {
 
   await service.handleNodeStateUpdate({
     [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
-    [ControlPlaneField.NODE_ID]: 'node-heartbeat-publication-gap',
-    [ControlPlaneField.NODE_ADDRESS]: 'localhost:8098',
+    [ControlPlaneField.NODE_ID]: HEARTBEAT_PUBLICATION_GAP_NODE_ID,
+    [ControlPlaneField.NODE_ADDRESS]: HEARTBEAT_PUBLICATION_GAP_NODE_ADDRESS,
     [ControlPlaneField.STATE]: STATE.READY,
     [ControlPlaneField.HEARTBEAT_ONLY]: true,
     [ControlPlaneField.NODE_STATE_PUBLICATION_MODE]:
@@ -564,7 +676,7 @@ async (t) => {
   );
   t.equal(
     reconcileCalls[0]?.context?.nodeId,
-    'node-heartbeat-publication-gap',
+    HEARTBEAT_PUBLICATION_GAP_NODE_ID,
     'publication repair should target the missing node',
   );
   t.equal(
@@ -579,8 +691,10 @@ async (t) => {
   );
   t.same(
     acknowledgementCalls,
-    [],
-    'missing publication membership should reconcile before acknowledgements',
+    [
+      HEARTBEAT_PUBLICATION_GAP_NODE_ID,
+    ],
+    'cache-stale publication membership should still probe the ACK owner',
   );
 
   service.stop();

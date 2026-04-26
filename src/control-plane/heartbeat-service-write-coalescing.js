@@ -329,6 +329,30 @@ function recordHeartbeatPublicationAttempt(options = {}) {
   options.diagnostics.consecutiveFailures = options.heartbeatConsecutiveFailures;
 }
 
+function resolveHeartbeatPublicationTargetUpdates(normalized, resetTarget) {
+  const targetUpdates = {};
+  if (resetTarget) {
+    targetUpdates.targetAddress = null;
+    targetUpdates.targetNodeId = null;
+    targetUpdates.targetServiceType = null;
+    targetUpdates.targetServiceId = null;
+    return targetUpdates;
+  }
+  if (normalized.targetAddress) {
+    targetUpdates.targetAddress = normalized.targetAddress;
+  }
+  if (normalized.targetNodeId) {
+    targetUpdates.targetNodeId = normalized.targetNodeId;
+  }
+  if (normalized.targetServiceType) {
+    targetUpdates.targetServiceType = normalized.targetServiceType;
+  }
+  if (normalized.targetServiceId) {
+    targetUpdates.targetServiceId = normalized.targetServiceId;
+  }
+  return targetUpdates;
+}
+
 function recordHeartbeatPublicationTarget(options = {}) {
   const normalized = normalizeHeartbeatPublicationDiagnostics(options.diagnostics);
   const resetTarget =
@@ -337,25 +361,10 @@ function recordHeartbeatPublicationTarget(options = {}) {
   if (normalized.publicationPath) {
     options.heartbeatPublicationDiagnostics.publicationPath = normalized.publicationPath;
   }
-  if (resetTarget) {
-    options.heartbeatPublicationDiagnostics.targetAddress = null;
-    options.heartbeatPublicationDiagnostics.targetNodeId = null;
-    options.heartbeatPublicationDiagnostics.targetServiceType = null;
-    options.heartbeatPublicationDiagnostics.targetServiceId = null;
-    return;
-  }
-  if (normalized.targetAddress) {
-    options.heartbeatPublicationDiagnostics.targetAddress = normalized.targetAddress;
-  }
-  if (normalized.targetNodeId) {
-    options.heartbeatPublicationDiagnostics.targetNodeId = normalized.targetNodeId;
-  }
-  if (normalized.targetServiceType) {
-    options.heartbeatPublicationDiagnostics.targetServiceType = normalized.targetServiceType;
-  }
-  if (normalized.targetServiceId) {
-    options.heartbeatPublicationDiagnostics.targetServiceId = normalized.targetServiceId;
-  }
+  Object.assign(
+    options.heartbeatPublicationDiagnostics,
+    resolveHeartbeatPublicationTargetUpdates(normalized, resetTarget),
+  );
 }
 
 function recordHeartbeatPublicationSuccess(options = {}) {

@@ -23,10 +23,6 @@ import {
 import {
   buildReadinessByNodeId,
 } from '../control-plane/active-node-projection.js';
-import {
-} from '../control-plane/priority-recovery-diagnostics-constants.js';
-import {
-} from './admin-authoritative-repair-evaluation.js';
 import {AdminControlSnapshotPart3} from './admin-control-snapshot-class-part-3.js';
 // ── file-local constants ────────────────────────────────────────────────────
 const PARTITION_STATE_NORMAL = 'NORMAL';

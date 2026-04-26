@@ -716,6 +716,10 @@ class QueryExecutorSegment2 extends QueryExecutorSegment2Part1 {
     return isRetryableControlPlaneError(failure);
   }
 
+  buildControlPlaneWriteRetryDecision(state) {
+    return {state};
+  }
+
   /**
    * Resolve the canonical retry decision for routed control-plane writes.
    * Deferred transport failures normally pause the current partition attempt
@@ -761,9 +765,9 @@ class QueryExecutorSegment2 extends QueryExecutorSegment2Part1 {
         forRead,
       )
     ) {
-      return {
-        state: CONTROL_PLANE_WRITE_RETRY_DECISION_STATE.RETRY_SAME_ADDRESS,
-      };
+      return this.buildControlPlaneWriteRetryDecision(
+        CONTROL_PLANE_WRITE_RETRY_DECISION_STATE.RETRY_SAME_ADDRESS,
+      );
     }
     const priorityControlPlaneWrite =
       !forRead &&
@@ -773,25 +777,23 @@ class QueryExecutorSegment2 extends QueryExecutorSegment2Part1 {
       });
     if (systemTableWrite && deferredFailure) {
       if (priorityControlPlaneWrite && retryable) {
-        return {
-          state:
-            CONTROL_PLANE_WRITE_RETRY_DECISION_STATE
-              .WIDEN_TO_RECOVERY_CANDIDATE,
-        };
+        return this.buildControlPlaneWriteRetryDecision(
+          CONTROL_PLANE_WRITE_RETRY_DECISION_STATE
+            .WIDEN_TO_RECOVERY_CANDIDATE,
+        );
       }
-      return {
-        state: CONTROL_PLANE_WRITE_RETRY_DECISION_STATE.DEFER_PARTITION_RETRY,
-      };
+      return this.buildControlPlaneWriteRetryDecision(
+        CONTROL_PLANE_WRITE_RETRY_DECISION_STATE.DEFER_PARTITION_RETRY,
+      );
     }
     if (!retryable) {
-      return {
-        state: CONTROL_PLANE_WRITE_RETRY_DECISION_STATE.NONE,
-      };
+      return this.buildControlPlaneWriteRetryDecision(
+        CONTROL_PLANE_WRITE_RETRY_DECISION_STATE.NONE,
+      );
     }
-    return {
-      state:
-        CONTROL_PLANE_WRITE_RETRY_DECISION_STATE.WIDEN_TO_RECOVERY_CANDIDATE,
-    };
+    return this.buildControlPlaneWriteRetryDecision(
+      CONTROL_PLANE_WRITE_RETRY_DECISION_STATE.WIDEN_TO_RECOVERY_CANDIDATE,
+    );
   }
 
   /**

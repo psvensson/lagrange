@@ -5,6 +5,7 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
 import {
+  OPERATION_METADATA_KEY,
   OperationType,
   ReplicaStatus,
 } from '../../src/rebalancer/replica-status.js';
@@ -46,6 +47,29 @@ const TEST_PENDING_RESPONSE_LEADER_ROLE = 'leader';
 const TEST_PENDING_RESPONSE_FOLLOWER_ROLE = 'follower';
 const TEST_PENDING_RESPONSE_READY_LEASE_EXTENSION_MS = 60000;
 const TEST_PENDING_RESPONSE_RETRY_POLL_LIMIT = 10;
+const TEST_COMPLETED_REMOVE_TEST_NAME =
+  'REPLACE source-removal completed response waits for source visibility';
+const TEST_COMPLETED_REMOVE_OPERATION_ID =
+  'replace-source-remove-completed-op';
+const TEST_COMPLETED_REMOVE_PARTITION_ID = 'sql_write_operations-p1';
+const TEST_COMPLETED_REMOVE_SOURCE_NODE_ID = 'node-completed-remove-a';
+const TEST_COMPLETED_REMOVE_STABLE_NODE_ID = 'node-completed-remove-b';
+const TEST_COMPLETED_REMOVE_SECOND_STABLE_NODE_ID = 'node-completed-remove-c';
+const TEST_COMPLETED_REMOVE_TARGET_NODE_ID = 'node-completed-remove-d';
+const TEST_COMPLETED_REMOVE_SOURCE_REPLICA_ID =
+  'sql_write_operations-p1-r1';
+const TEST_COMPLETED_REMOVE_STABLE_REPLICA_ID =
+  'sql_write_operations-p1-r2';
+const TEST_COMPLETED_REMOVE_SECOND_STABLE_REPLICA_ID =
+  'sql_write_operations-p1-r3';
+const TEST_COMPLETED_REMOVE_TARGET_REPLICA_ID =
+  'sql_write_operations-p1-r4';
+const TEST_COMPLETED_REMOVE_SERVICE_TYPE = 'partition';
+const TEST_COMPLETED_REMOVE_CONNECTION_CONNECTED = 'connected';
+const TEST_COMPLETED_REMOVE_CONNECTION_READY = 'ready';
+const TEST_COMPLETED_REMOVE_LEADER_ROLE = 'leader';
+const TEST_COMPLETED_REMOVE_FOLLOWER_ROLE = 'follower';
+const TEST_COMPLETED_REMOVE_READY_LEASE_EXTENSION_MS = 60000;
 
 test('REPLACE replica workflow', async (t) => {
   await t.test('MovePlanner emits REPLACE moves for spread correction',
@@ -246,6 +270,182 @@ test('REPLACE replica workflow', async (t) => {
         await coordinator.shutdown();
       }
     });
+
+  await t.test(TEST_COMPLETED_REMOVE_TEST_NAME, async (t) => {
+    const deliveries = [];
+    const nowMs = Date.now();
+    const buildReadyNode = (nodeId) => ({
+      node_id: nodeId,
+      status: ReplicaStatus.ACTIVE,
+      connection_state: TEST_COMPLETED_REMOVE_CONNECTION_READY,
+      ready_lease_expires_at:
+        nowMs + TEST_COMPLETED_REMOVE_READY_LEASE_EXTENSION_MS,
+    });
+    const buildService = (replicaId, nodeId, raftRole) => ({
+      service_id: replicaId,
+      replica_id: replicaId,
+      service_type: TEST_COMPLETED_REMOVE_SERVICE_TYPE,
+      partition_id: TEST_COMPLETED_REMOVE_PARTITION_ID,
+      node_id: nodeId,
+      status: ReplicaStatus.ACTIVE,
+      raft_role: raftRole,
+      address:
+        nodeId +
+        '/' +
+        TEST_COMPLETED_REMOVE_SERVICE_TYPE +
+        '/' +
+        replicaId,
+    });
+    const activeReplaceOperation = {
+      operation_id: TEST_COMPLETED_REMOVE_OPERATION_ID,
+      operationId: TEST_COMPLETED_REMOVE_OPERATION_ID,
+      type: OperationType.REPLACE,
+      partition_id: TEST_COMPLETED_REMOVE_PARTITION_ID,
+      partitionId: TEST_COMPLETED_REMOVE_PARTITION_ID,
+      replica_id: TEST_COMPLETED_REMOVE_TARGET_REPLICA_ID,
+      replicaId: TEST_COMPLETED_REMOVE_TARGET_REPLICA_ID,
+      sourceReplicaId: TEST_COMPLETED_REMOVE_SOURCE_REPLICA_ID,
+      source_node_id: TEST_COMPLETED_REMOVE_SOURCE_NODE_ID,
+      sourceNodeId: TEST_COMPLETED_REMOVE_SOURCE_NODE_ID,
+      target_node_id: TEST_COMPLETED_REMOVE_TARGET_NODE_ID,
+      targetNodeId: TEST_COMPLETED_REMOVE_TARGET_NODE_ID,
+      status: ReplicaStatus.ACTIVE,
+      workflow_step: WORKFLOW_STEP.ACTIVE,
+      workflowStep: WORKFLOW_STEP.ACTIVE,
+      created_at: nowMs,
+      createdAt: nowMs,
+      updated_at: nowMs,
+      updatedAt: nowMs,
+      completed_at: null,
+      completedAt: null,
+      error_message: null,
+      errorMessage: null,
+      entity_type: TEST_COMPLETED_REMOVE_SERVICE_TYPE,
+      entityType: TEST_COMPLETED_REMOVE_SERVICE_TYPE,
+      entity_id: TEST_COMPLETED_REMOVE_PARTITION_ID,
+      entityId: TEST_COMPLETED_REMOVE_PARTITION_ID,
+      stepsHistory: [
+        {
+          step: WORKFLOW_STEP.PENDING,
+          timestamp: nowMs,
+          [OPERATION_METADATA_KEY.SOURCE_REPLICA_ID]:
+            TEST_COMPLETED_REMOVE_SOURCE_REPLICA_ID,
+        },
+        {
+          step: WORKFLOW_STEP.ACTIVE,
+          timestamp: nowMs,
+          previousStep: WORKFLOW_STEP.SYNCING,
+        },
+      ],
+    };
+    const messageRouter = {
+      async deliver(target, payload, options) {
+        deliveries.push({target, payload, options});
+        return {
+          acknowledged: true,
+          status: ReplicaOperationResponseStatus.COMPLETED,
+        };
+      },
+      getConnectionState: () => TEST_COMPLETED_REMOVE_CONNECTION_CONNECTED,
+      pingNode: async () => true,
+      isOutboundQueueAvailable: () => true,
+    };
+    const coordinator = createTestCoordinator({
+      nodeId: TEST_COMPLETED_REMOVE_TARGET_NODE_ID,
+      enableTimeouts: false,
+      messageRouter,
+      cacheData: {
+        nodes: [
+          buildReadyNode(TEST_COMPLETED_REMOVE_SOURCE_NODE_ID),
+          buildReadyNode(TEST_COMPLETED_REMOVE_STABLE_NODE_ID),
+          buildReadyNode(TEST_COMPLETED_REMOVE_SECOND_STABLE_NODE_ID),
+          buildReadyNode(TEST_COMPLETED_REMOVE_TARGET_NODE_ID),
+        ],
+        services: [
+          buildService(
+            TEST_COMPLETED_REMOVE_SOURCE_REPLICA_ID,
+            TEST_COMPLETED_REMOVE_SOURCE_NODE_ID,
+            TEST_COMPLETED_REMOVE_FOLLOWER_ROLE,
+          ),
+          buildService(
+            TEST_COMPLETED_REMOVE_STABLE_REPLICA_ID,
+            TEST_COMPLETED_REMOVE_STABLE_NODE_ID,
+            TEST_COMPLETED_REMOVE_LEADER_ROLE,
+          ),
+          buildService(
+            TEST_COMPLETED_REMOVE_SECOND_STABLE_REPLICA_ID,
+            TEST_COMPLETED_REMOVE_SECOND_STABLE_NODE_ID,
+            TEST_COMPLETED_REMOVE_FOLLOWER_ROLE,
+          ),
+          buildService(
+            TEST_COMPLETED_REMOVE_TARGET_REPLICA_ID,
+            TEST_COMPLETED_REMOVE_TARGET_NODE_ID,
+            TEST_COMPLETED_REMOVE_FOLLOWER_ROLE,
+          ),
+        ],
+        replicaOperations: [activeReplaceOperation],
+      },
+    });
+    const originalEvaluateRemoveSafety =
+      coordinator.workflowOwner.evaluateRemoveSafety.bind(
+        coordinator.workflowOwner,
+      );
+    coordinator.workflowOwner.evaluateRemoveSafety = async (operation) => {
+      if (operation?.operationId === TEST_COMPLETED_REMOVE_OPERATION_ID) {
+        return coordinator.workflowOwner.buildSafeRemoveSafetyEvaluation();
+      }
+      return originalEvaluateRemoveSafety(operation);
+    };
+
+    try {
+      const result = await coordinator.executeOperation(activeReplaceOperation);
+      const persistedOperation =
+        await coordinator.queryOperationById(TEST_COMPLETED_REMOVE_OPERATION_ID);
+
+      t.equal(
+        deliveries.length,
+        1,
+        'source removal should dispatch once',
+      );
+      t.equal(
+        deliveries[0]?.payload?.type,
+        ReplicaOperationMessageType.REMOVE_REPLICA,
+        'completed response should come from source-removal dispatch',
+      );
+      t.equal(
+        result?.status,
+        ReplicaOperationResponseStatus.IN_PROGRESS,
+        'completed dispatch response should remain in-progress until source visibility closes',
+      );
+      t.equal(
+        activeReplaceOperation.workflowStep,
+        WORKFLOW_STEP.STOPPING,
+        'operation should advance to STOPPING instead of terminal REMOVED',
+      );
+      t.equal(
+        activeReplaceOperation.completedAt,
+        null,
+        'operation should not complete while the source service row remains visible',
+      );
+      t.equal(
+        persistedOperation?.workflowStep,
+        WORKFLOW_STEP.STOPPING,
+        'durable operation row should remain in source-removal drain',
+      );
+      t.equal(
+        persistedOperation?.status,
+        ReplicaStatus.REMOVING,
+        'durable operation row should record the source-removal state',
+      );
+      t.equal(
+        persistedOperation?.completedAt,
+        null,
+        'durable operation row should not have a terminal timestamp yet',
+      );
+    } finally {
+      await coordinator.shutdown();
+    }
+  });
 
   await t.test(
     'critical dispatch defers retryable control-plane failures instead of ' +

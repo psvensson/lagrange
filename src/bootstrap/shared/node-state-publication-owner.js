@@ -179,6 +179,19 @@ function buildNodeStateUpdatePublicationFailureAction(overrides = {}) {
   });
 }
 
+function resolveNodeStateUpdateRetryAfterMs(error, failureAction) {
+  if (Number.isFinite(error?.retryAfterMs)) {
+    return Math.max(NUM.ZERO, Math.floor(error.retryAfterMs));
+  }
+  if (
+    Number.isFinite(failureAction?.retryAfterMs) &&
+    failureAction.retryAfterMs > NUM.ZERO
+  ) {
+    return Math.floor(failureAction.retryAfterMs);
+  }
+  return null;
+}
+
 function buildNodeStateUpdatePublicationFailureError(
   error,
   publicationDiagnostics,
@@ -198,11 +211,9 @@ function buildNodeStateUpdatePublicationFailureError(
   if (error?.deferRetry === true) {
     wrappedError.deferRetry = true;
   }
-  if (Number.isFinite(error?.retryAfterMs)) {
-    wrappedError.retryAfterMs = Math.max(NUM.ZERO, Math.floor(error.retryAfterMs));
-  } else if (Number.isFinite(failureAction?.retryAfterMs) &&
-      failureAction.retryAfterMs > NUM.ZERO) {
-    wrappedError.retryAfterMs = Math.floor(failureAction.retryAfterMs);
+  const retryAfterMs = resolveNodeStateUpdateRetryAfterMs(error, failureAction);
+  if (Number.isFinite(retryAfterMs)) {
+    wrappedError.retryAfterMs = retryAfterMs;
   }
   return wrappedError;
 }

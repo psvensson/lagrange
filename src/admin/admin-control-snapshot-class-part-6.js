@@ -11,13 +11,7 @@
  * admin-helpers.js.
  */
 import {NUM, TABLES, TYPEOF} from '../constants/index.js';
-import {
-} from '../control-plane/active-node-projection.js';
 import {normalizeControlPlanePublicationRow} from '../control-plane/system-row-normalizers.js';
-import {
-} from '../control-plane/priority-recovery-diagnostics-constants.js';
-import {
-} from './admin-authoritative-repair-evaluation.js';
 import {AdminControlSnapshotPart5} from './admin-control-snapshot-class-part-5.js';
 // ── file-local constants ────────────────────────────────────────────────────
 const ADMIN_CONTROL_SNAPSHOT_LITERAL = Object.freeze({

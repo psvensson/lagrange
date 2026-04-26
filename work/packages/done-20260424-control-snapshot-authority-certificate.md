@@ -1,7 +1,5 @@
 # Control Snapshot Authority Certificate
 
-Status: done on April 24, 2026.
-
 ## Why
 
 Final consistency should eventually compare owner-backed leadership facts, not

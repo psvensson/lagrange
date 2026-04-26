@@ -373,6 +373,10 @@ function hasRuntimeTransportEvidence(nodeId, options = {}) {
     nodeEvidence?.localQueryTransportReady !== false;
 }
 
+function buildProjectionReadinessDimensionOutcome(outcome) {
+  return outcome;
+}
+
 function evaluateProjectionReadinessDimensions(
   readinessEntry = null,
   options = {},
@@ -397,7 +401,7 @@ function evaluateProjectionReadinessDimensions(
         options.allowControlPlaneRecoveryEligibleProjection === true &&
         runtimeAuthority.provisioning?.eligible === true) {
       if (runtimeAuthority.state === RUNTIME_AUTHORITY_STATE.CONFIRMED) {
-        return {
+        return buildProjectionReadinessDimensionOutcome({
           hasReadinessEvidence: true,
           projectionEligible: true,
           projectedByRecoveryEligibility: false,
@@ -405,10 +409,10 @@ function evaluateProjectionReadinessDimensions(
           clusterMemberHealthyMissing: true,
           authoritySource: PROJECTION_AUTHORITY_SOURCE
             .RUNTIME_AUTHORITY_CONFIRMED,
-        };
+        });
       }
       if (runtimeAuthority.state === RUNTIME_AUTHORITY_STATE.ESTABLISHING) {
-        return {
+        return buildProjectionReadinessDimensionOutcome({
           hasReadinessEvidence: true,
           projectionEligible: true,
           projectedByRecoveryEligibility: false,
@@ -416,35 +420,35 @@ function evaluateProjectionReadinessDimensions(
           clusterMemberHealthyMissing: true,
           authoritySource: PROJECTION_AUTHORITY_SOURCE
             .RUNTIME_AUTHORITY_ESTABLISHING,
-        };
+        });
       }
     }
-    return {
+    return buildProjectionReadinessDimensionOutcome({
       hasReadinessEvidence,
       projectionEligible: null,
       projectedByRecoveryEligibility: false,
       projectedByRuntimeAuthority: false,
       clusterMemberHealthyMissing: false,
       authoritySource: PROJECTION_AUTHORITY_SOURCE.NONE,
-    };
+    });
   }
   if (readinessDimensions[
     CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY
   ] === true) {
-    return {
+    return buildProjectionReadinessDimensionOutcome({
       hasReadinessEvidence: true,
       projectionEligible: true,
       projectedByRecoveryEligibility: false,
       projectedByRuntimeAuthority: false,
       clusterMemberHealthyMissing: false,
       authoritySource: PROJECTION_AUTHORITY_SOURCE.CLUSTER_MEMBER_HEALTHY,
-    };
+    });
   }
   if (options.allowControlPlaneRecoveryEligibleProjection === true &&
       runtimeAuthority &&
       runtimeAuthority.provisioning?.eligible === true) {
     if (runtimeAuthority.state === RUNTIME_AUTHORITY_STATE.CONFIRMED) {
-      return {
+      return buildProjectionReadinessDimensionOutcome({
         hasReadinessEvidence: true,
         projectionEligible: true,
         projectedByRecoveryEligibility: false,
@@ -452,10 +456,10 @@ function evaluateProjectionReadinessDimensions(
         clusterMemberHealthyMissing: true,
         authoritySource: PROJECTION_AUTHORITY_SOURCE
           .RUNTIME_AUTHORITY_CONFIRMED,
-      };
+      });
     }
     if (runtimeAuthority.state === RUNTIME_AUTHORITY_STATE.ESTABLISHING) {
-      return {
+      return buildProjectionReadinessDimensionOutcome({
         hasReadinessEvidence: true,
         projectionEligible: true,
         projectedByRecoveryEligibility: false,
@@ -463,7 +467,7 @@ function evaluateProjectionReadinessDimensions(
         clusterMemberHealthyMissing: true,
         authoritySource: PROJECTION_AUTHORITY_SOURCE
           .RUNTIME_AUTHORITY_ESTABLISHING,
-      };
+      });
     }
   }
   const controlPlaneRecoveryEligible = readinessDimensions[
@@ -472,7 +476,7 @@ function evaluateProjectionReadinessDimensions(
   const projectedByRecoveryEligibility =
     options.allowControlPlaneRecoveryEligibleProjection === true &&
     controlPlaneRecoveryEligible;
-  return {
+  return buildProjectionReadinessDimensionOutcome({
     hasReadinessEvidence: true,
     projectionEligible: projectedByRecoveryEligibility,
     projectedByRecoveryEligibility,
@@ -481,7 +485,7 @@ function evaluateProjectionReadinessDimensions(
     authoritySource: projectedByRecoveryEligibility ?
       PROJECTION_AUTHORITY_SOURCE.RECOVERY_ELIGIBLE_DIMENSION :
       PROJECTION_AUTHORITY_SOURCE.NONE,
-  };
+  });
 }
 
 function resolveProjectionReadinessDecisionMode(options = {}) {

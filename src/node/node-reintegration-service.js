@@ -384,6 +384,25 @@ class NodeReintegrationService extends EventEmitter {
     return successfulChecks === this.healthCheckCount;
   }
 
+  recordPendingReintegrationAdmissionBlock(nodeId, admissionBlock, now) {
+    const pending = this.pendingReintegrations.get(nodeId);
+    if (!pending) {
+      return;
+    }
+    pending.status = ReintegrationStatus.PENDING;
+    pending.blockedReasonCode = admissionBlock.reasonCode;
+    pending.blockedAt = now;
+  }
+
+  recordPendingReintegrationCompleted(nodeId, now) {
+    const pending = this.pendingReintegrations.get(nodeId);
+    if (!pending) {
+      return;
+    }
+    pending.status = ReintegrationStatus.COMPLETED;
+    pending.completedAt = now;
+  }
+
   /**
    * Complete node reintegration.
    * @param {Object} node - Node to reintegrate.
@@ -396,12 +415,11 @@ class NodeReintegrationService extends EventEmitter {
     const admissionBlock = this.resolveStartupAuthorityAdmissionBlock(nodeId);
 
     if (admissionBlock) {
-      const pending = this.pendingReintegrations.get(nodeId);
-      if (pending) {
-        pending.status = ReintegrationStatus.PENDING;
-        pending.blockedReasonCode = admissionBlock.reasonCode;
-        pending.blockedAt = now;
-      }
+      this.recordPendingReintegrationAdmissionBlock(
+        nodeId,
+        admissionBlock,
+        now,
+      );
       this.logger.info(NODE_REINTEGRATION_LOG_MSG.REINTEGRATION_ADMISSION_BLOCKED, {
         nodeId,
         startupAuthorityState: admissionBlock.startupAuthorityState,
@@ -445,11 +463,7 @@ class NodeReintegrationService extends EventEmitter {
     }
 
     // Update pending reintegration status
-    const pending = this.pendingReintegrations.get(nodeId);
-    if (pending) {
-      pending.status = ReintegrationStatus.COMPLETED;
-      pending.completedAt = now;
-    }
+    this.recordPendingReintegrationCompleted(nodeId, now);
 
     this.reintegrationCount += NUM.ONE;
 

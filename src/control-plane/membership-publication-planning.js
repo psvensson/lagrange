@@ -1094,8 +1094,8 @@ function deriveMembershipPublicationCandidate(options = {}, helperFns = {}) {
     {
       explicitPublishedNodeIds:
         Array.isArray(planningSnapshot.publishedActiveNodeIds) ?
-        planningSnapshot.publishedActiveNodeIds :
-        [],
+          planningSnapshot.publishedActiveNodeIds :
+          [],
       publishedBaselineNodeIds,
       projectedServingNodeIds: publicationProjectedServingNodeIds,
       recoveryActiveNodeIds:

@@ -180,8 +180,9 @@ function buildControlPlaneWriteHealthOutcome(snapshot, state) {
       state,
       details: baseDetails,
     };
-  }
-  if (state === CONTROL_PLANE_WRITE_HEALTH_STATE.BACKGROUND_BACKLOG_CONTAINED) {
+  } else if (
+    state === CONTROL_PLANE_WRITE_HEALTH_STATE.BACKGROUND_BACKLOG_CONTAINED
+  ) {
     return {
       healthy: false,
       classification: LIFECYCLE_DEPENDENCY_CLASS.SOFT,

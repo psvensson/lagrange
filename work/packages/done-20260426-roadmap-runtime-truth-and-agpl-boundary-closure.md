@@ -15,7 +15,7 @@ matrix AGPL implementation-home rules.
 
 Sprint:
 
-1. [Roadmap runtime truth and boundary closure](../sprints/active-2026-q2-roadmap-runtime-truth-and-boundary-closure.md)
+1. [Roadmap runtime truth and boundary closure](../sprints/archived/done-2026-q2-roadmap-runtime-truth-and-boundary-closure.md)
 
 ## In Scope
 
@@ -107,6 +107,15 @@ Closure:
    the literal ratchet follow-on package.
 5. Steering-derived content was not changed by this package, so the LLM pack did
    not need regeneration.
+
+## April 26 Follow-On Update
+
+The static guardrail follow-ons created by this package are now closed:
+
+1. `npm run test:metadata-gateway:audit`: passed.
+2. `npm run audit:guideline:decision-boundaries`: passed.
+3. `npm run audit:guideline:literals`: passed with 0 new violations against
+   the 6285-entry inherited baseline.
 
 ## Done When
 

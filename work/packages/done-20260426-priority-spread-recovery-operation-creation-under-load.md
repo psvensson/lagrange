@@ -1,11 +1,8 @@
 # Priority Spread Recovery Operation Creation Under Load
 
-Status: active on April 26, 2026. The latest `rolling-restart` rerun moved
-the representative blocker from post-active over-target trim back into
-load-readiness priority-spread recovery operation creation/progression. The
-current execution slice has closed the first two operation-creation symptoms
-and exposed delivery-source saturation on `replica_operations` updates as the
-next pressure boundary.
+April 26 update: This package closed the missing
+priority-recovery operation creation symptoms and migrated the representative
+blocker back to post-active operation transition and over-target trim.
 
 ## Why
 
@@ -73,6 +70,20 @@ The remaining owner boundary is no longer the missing `sql_transactions-p1`
 operation or the post-active over-target remove. It is priority follow-up
 operation admission for `sql_write_operations-p1` while
 `replica_operations` update traffic is saturating the critical delivery source.
+
+## Closure Update
+
+The latest representative rerun,
+`test-output/reports/runtime-stability-rolling-restart-20260426-codex-priority-recent-intent-reuse.report.json`,
+moved beyond the missing-operation blocker. Priority recovery current summary
+has no `eligible_but_no_operation_created`, no `needs_operation`, and zero
+unresolved classes. The terminal barrier is now post-active convergence:
+`sql_write_operations-p1` is over target at voter count `4`, one replica
+operation is still in flight, and post-rebalance closure remains open on
+operation drain, membership trim, and over-target evidence.
+
+The active handoff is:
+[Rolling restart operation transition pressure and over-target trim](./todo-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md).
 
 ## Scope Basis
 
@@ -158,9 +169,10 @@ Depends on:
       control-plane partitions.
 - [x] Priority topology cleanup can use one saturated global budget slot for a
       standalone-safe over-target `REMOVE`.
-- [ ] `sql_write_operations-p1` creates its follow-up operation when
+- [x] `sql_write_operations-p1` creates or reuses its follow-up operation when
       `query:update:replica_operations` traffic saturates the delivery-source
-      queue.
+      queue; latest evidence moved to an existing operation/over-target
+      convergence blocker rather than missing operation creation.
 - [x] The representative rerun either reaches the queued post-active
       over-target barrier or names the next owner boundary.
 
@@ -172,7 +184,7 @@ Depends on:
 4. `npm test -- test/rebalancer/unified-rebalancer.test.js`
 5. `npm test -- test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js`
 6. `node scripts/check-guideline-decision-boundaries.js --json src/rebalancer/unified-rebalancer-segment-4.js src/rebalancer/operation-workflow-owner-segment-1.js src/control-plane/membership-publication-planning.js src/control-plane/priority-recovery-snapshot.js`
-7. `git diff --check -- src/control-plane/membership-publication-planning.js src/control-plane/membership-publication-coordinator.js src/control-plane/priority-recovery-snapshot.js src/rebalancer/unified-rebalancer-segment-4.js src/rebalancer/operation-workflow-owner-segment-1.js test/rebalancer/unified-rebalancer.test.js test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js work/sprints/active-2026-q2-publication-scoped-consistency-and-node-join-closure.md work/packages/active-20260426-priority-spread-recovery-operation-creation-under-load.md work/packages/todo-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md`
+7. `git diff --check -- src/control-plane/membership-publication-planning.js src/control-plane/membership-publication-coordinator.js src/control-plane/priority-recovery-snapshot.js src/rebalancer/unified-rebalancer-segment-4.js src/rebalancer/operation-workflow-owner-segment-1.js test/rebalancer/unified-rebalancer.test.js test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js work/sprints/active-2026-q2-publication-scoped-consistency-and-node-join-closure.md work/packages/done-20260426-priority-spread-recovery-operation-creation-under-load.md work/packages/todo-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md`
 8. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/runtime-stability-rolling-restart-20260426-codex-priority-remote-handoff-retry.report.json --fast-local --verbose`
 9. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/runtime-stability-rolling-restart-20260426-codex-priority-cleanup-remove-budget.report.json --fast-local --verbose`
 

@@ -23,15 +23,9 @@ import {
   uniqueSorted,
 } from './admin-helpers.js';
 import {
-} from '../control-plane/active-node-projection.js';
-import {
   CONTROL_PLANE_SNAPSHOT_OBSERVATION_STATE,
   CONTROL_PLANE_SNAPSHOT_REFRESH_STATE,
 } from '../control-plane/control-plane-snapshot-owner.js';
-import {
-} from '../control-plane/priority-recovery-diagnostics-constants.js';
-import {
-} from './admin-authoritative-repair-evaluation.js';
 import {StartupRecoveryCoordinator} from '../bootstrap/startup-recovery-coordinator.js';
 // ── file-local constants ────────────────────────────────────────────────────
 const ADMIN_CONTROL_SNAPSHOT_LITERAL = Object.freeze({

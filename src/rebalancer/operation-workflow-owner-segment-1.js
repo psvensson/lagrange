@@ -15,6 +15,7 @@ const {
   TYPEOF,
   WORKFLOW_STEP,
   getControlPlaneRetryAfterMs,
+  isPriorityControlPlanePartition,
   isRetryableControlPlaneError,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
 

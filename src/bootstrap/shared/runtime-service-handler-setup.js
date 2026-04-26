@@ -19,6 +19,9 @@ const LOG_MSG = Object.freeze({
   CREATED: 'RuntimeServiceHandler created and registered',
 });
 
+const RUNTIME_SERVICE_HANDLER_SETUP_NAME =
+  'RuntimeServiceHandlerSetup';
+
 const ERROR_MSG = Object.freeze({
   NODE_ID_REQUIRED: 'nodeId',
   MESSAGE_ROUTER_REQUIRED: 'messageRouter',
@@ -39,6 +42,8 @@ class RuntimeServiceHandlerSetup {
    * @param {Object} options.serviceLifecycleManager - Lifecycle
    *   manager (required).
    * @param {Object} [options.rpcClient] - Optional RPC client.
+   * @param {Object} [options.executorOutcomeEmitter] - Optional executor
+   *   outcome emitter shared with the rebalance coordinator.
    * @return {Object} Object containing runtimeServiceHandler.
    * @throws {DependencyError} If required dependencies missing.
    */
@@ -50,34 +55,35 @@ class RuntimeServiceHandlerSetup {
       systemTableCache,
       serviceLifecycleManager,
       rpcClient,
+      executorOutcomeEmitter,
     } = options;
 
     if (!nodeId) {
       throw new DependencyError(
-        'RuntimeServiceHandlerSetup', ERROR_MSG.NODE_ID_REQUIRED,
+        RUNTIME_SERVICE_HANDLER_SETUP_NAME, ERROR_MSG.NODE_ID_REQUIRED,
       );
     }
     if (!messageRouter) {
       throw new DependencyError(
-        'RuntimeServiceHandlerSetup',
+        RUNTIME_SERVICE_HANDLER_SETUP_NAME,
         ERROR_MSG.MESSAGE_ROUTER_REQUIRED,
       );
     }
     if (!cdcIntegrationService) {
       throw new DependencyError(
-        'RuntimeServiceHandlerSetup',
+        RUNTIME_SERVICE_HANDLER_SETUP_NAME,
         ERROR_MSG.CDC_INTEGRATION_SERVICE_REQUIRED,
       );
     }
     if (!systemTableCache) {
       throw new DependencyError(
-        'RuntimeServiceHandlerSetup',
+        RUNTIME_SERVICE_HANDLER_SETUP_NAME,
         ERROR_MSG.SYSTEM_TABLE_CACHE_REQUIRED,
       );
     }
     if (!serviceLifecycleManager) {
       throw new DependencyError(
-        'RuntimeServiceHandlerSetup',
+        RUNTIME_SERVICE_HANDLER_SETUP_NAME,
         ERROR_MSG.SERVICE_LIFECYCLE_MANAGER_REQUIRED,
       );
     }
@@ -95,6 +101,7 @@ class RuntimeServiceHandlerSetup {
       systemTableCache,
       cdcIntegrationService,
       serviceLifecycleManager,
+      executorOutcomeEmitter,
     });
 
     runtimeServiceHandler.initialize();

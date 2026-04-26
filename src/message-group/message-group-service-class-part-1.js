@@ -29,8 +29,6 @@ import {
   isMetadataPublicationReady as isMetadataPublicationLifecycleReady,
 } from '../bootstrap/traffic-readiness-utils.js';
 import {InMemoryLogAdapter} from '../raft/in-memory-log-adapter.js';
-import {} from '../raft/constants.js';
-import {} from '../raft/raft-timing-utils.js';
 import {LeaderActivationGate} from '../raft/leader-activation-gate.js';
 import {LeaderActivationScheduler} from '../raft/leader-activation-scheduler.js';
 import {assertRaftProviderContract} from '../raft/raft-provider-contract.js';

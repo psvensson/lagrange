@@ -25,8 +25,6 @@ import {
   SYSTEM_TABLE_NAME,
 } from '../bootstrap/system-table-schemas-constants.js';
 import {isCriticalTransportTargetAddress} from '../bootstrap/system-partition-classification.js';
-import {
-} from '../bootstrap/traffic-readiness-utils.js';
 import {isSystemTableWriteReady} from '../cache/leader-readiness-gate.js';
 import {isRaftPacket, RAFT_PACKET_TYPES} from '../raft/raft-packet-utils.js';
 import {

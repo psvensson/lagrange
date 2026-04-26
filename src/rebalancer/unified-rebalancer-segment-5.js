@@ -57,6 +57,52 @@ const REBALANCE_PLANNING_GATE_DELAY_MULTIPLIER = Object.freeze({
   BACKPRESSURE: 1.5,
 });
 
+const LOCAL_MUTATION_READINESS_PLANNING_STATE = Object.freeze({
+  CLEAR: 'clear',
+  PRIORITY_RECOVERY_OPERATION_CREATION_REQUIRED:
+    'priority_recovery_operation_creation_required',
+  LOCAL_MUTATION_BLOCKED: 'local_mutation_blocked',
+});
+
+const LOCAL_MUTATION_READINESS_PLANNING_ACTION = Object.freeze({
+  ALLOW_PLANNING: 'allow_planning',
+  DEFER_PLANNING: 'defer_planning',
+});
+
+const LOCAL_MUTATION_READINESS_OPERATION_CREATION_FIELD = Object.freeze({
+  PARTITION_NOT_APPLICABLE: 'operation_creation_partition_not_applicable',
+  SCOPE_NOT_APPLICABLE: 'operation_creation_scope_not_applicable',
+});
+
+const LOCAL_MUTATION_READINESS_PLANNING_STATE_TABLE = Object.freeze([
+  Object.freeze({
+    state: LOCAL_MUTATION_READINESS_PLANNING_STATE.CLEAR,
+    matches: (evidence) => evidence.blocked !== true,
+  }),
+  Object.freeze({
+    state:
+      LOCAL_MUTATION_READINESS_PLANNING_STATE
+        .PRIORITY_RECOVERY_OPERATION_CREATION_REQUIRED,
+    matches: (evidence) =>
+      evidence.priorityRecoveryOperationCreationRequired === true,
+  }),
+  Object.freeze({
+    state: LOCAL_MUTATION_READINESS_PLANNING_STATE.LOCAL_MUTATION_BLOCKED,
+    matches: () => true,
+  }),
+]);
+
+const LOCAL_MUTATION_READINESS_PLANNING_ACTION_BY_STATE = Object.freeze({
+  [LOCAL_MUTATION_READINESS_PLANNING_STATE.CLEAR]:
+    LOCAL_MUTATION_READINESS_PLANNING_ACTION.ALLOW_PLANNING,
+  [
+  LOCAL_MUTATION_READINESS_PLANNING_STATE
+    .PRIORITY_RECOVERY_OPERATION_CREATION_REQUIRED
+  ]: LOCAL_MUTATION_READINESS_PLANNING_ACTION.ALLOW_PLANNING,
+  [LOCAL_MUTATION_READINESS_PLANNING_STATE.LOCAL_MUTATION_BLOCKED]:
+    LOCAL_MUTATION_READINESS_PLANNING_ACTION.DEFER_PLANNING,
+});
+
 const REBALANCER_SCHEDULE_PRESSURE_RESOURCE_KEYS = Object.freeze([
   UNIFIED_REBALANCER_LITERAL.REBALANCER_COLON_SCHEDULE,
 ]);
@@ -125,14 +171,14 @@ const TRANSPORT_BACKPRESSURE_PLANNING_ACTION_BY_STATE = Object.freeze({
   [TRANSPORT_BACKPRESSURE_PLANNING_STATE.CLEAR]:
     TRANSPORT_BACKPRESSURE_PLANNING_ACTION.ALLOW_PLANNING,
   [
-    TRANSPORT_BACKPRESSURE_PLANNING_STATE
-      .PRIORITY_RECOVERY_OPERATION_CREATION_REQUIRED
+  TRANSPORT_BACKPRESSURE_PLANNING_STATE
+    .PRIORITY_RECOVERY_OPERATION_CREATION_REQUIRED
   ]: TRANSPORT_BACKPRESSURE_PLANNING_ACTION.ALLOW_PLANNING,
   [TRANSPORT_BACKPRESSURE_PLANNING_STATE.PRIORITY_RECOVERY_CONTAINED]:
     TRANSPORT_BACKPRESSURE_PLANNING_ACTION.ALLOW_PLANNING,
   [
-    TRANSPORT_BACKPRESSURE_PLANNING_STATE
-      .PRIORITY_RECOVERY_CRITICAL_RESERVE_EXHAUSTED
+  TRANSPORT_BACKPRESSURE_PLANNING_STATE
+    .PRIORITY_RECOVERY_CRITICAL_RESERVE_EXHAUSTED
   ]: TRANSPORT_BACKPRESSURE_PLANNING_ACTION.DEFER_PLANNING,
   [TRANSPORT_BACKPRESSURE_PLANNING_STATE.GENERAL_BACKPRESSURE]:
     TRANSPORT_BACKPRESSURE_PLANNING_ACTION.DEFER_PLANNING,
@@ -569,10 +615,59 @@ class UnifiedRebalancerSegment5 extends UnifiedRebalancerSegment4 {
     });
   }
 
-  resolveLocalMutationPlanningGateDecision() {
+  /**
+   * @return {Object}
+   * @private
+   */
+  buildLocalMutationReadinessPlanningGateSnapshot() {
     const localMutationReadinessBlocker =
       this.getLocalControlPlaneMutationReadinessBlocker();
-    if (!localMutationReadinessBlocker) {
+    const isPriorityPartition = this.isControlPlanePriorityPartition();
+    const operationCreationGate = isPriorityPartition ?
+      this.buildPriorityRecoveryOperationCreationPlanningGateSnapshot(
+        this.entityId,
+      ) :
+      null;
+    const priorityRecoveryOperationCreationRequired =
+      operationCreationGate?.operationCreationRequired === true;
+    const evidence = Object.freeze({
+      blocked: !!localMutationReadinessBlocker,
+      priorityRecoveryOperationCreationRequired,
+    });
+    const planningState =
+      LOCAL_MUTATION_READINESS_PLANNING_STATE_TABLE.find((entry) =>
+        entry.matches(evidence),
+      )?.state ||
+      LOCAL_MUTATION_READINESS_PLANNING_STATE.LOCAL_MUTATION_BLOCKED;
+    const planningAction =
+      LOCAL_MUTATION_READINESS_PLANNING_ACTION_BY_STATE[planningState] ||
+      LOCAL_MUTATION_READINESS_PLANNING_ACTION.DEFER_PLANNING;
+    return Object.freeze({
+      localMutationReadinessBlocker,
+      isPriorityPartition,
+      priorityRecoveryOperationCreationRequired,
+      priorityRecoveryOperationCreationPartitionId:
+        operationCreationGate?.operationCreationPartitionId ||
+        LOCAL_MUTATION_READINESS_OPERATION_CREATION_FIELD
+          .PARTITION_NOT_APPLICABLE,
+      priorityRecoveryOperationCreationScope:
+        operationCreationGate?.operationCreationScope ||
+        LOCAL_MUTATION_READINESS_OPERATION_CREATION_FIELD.SCOPE_NOT_APPLICABLE,
+      evidence,
+      planningState,
+      planningAction,
+      shouldDefer:
+        planningAction ===
+        LOCAL_MUTATION_READINESS_PLANNING_ACTION.DEFER_PLANNING,
+    });
+  }
+
+  resolveLocalMutationPlanningGateDecision() {
+    const gateSnapshot =
+      this.buildLocalMutationReadinessPlanningGateSnapshot();
+    const localMutationReadinessBlocker =
+      gateSnapshot.localMutationReadinessBlocker;
+    if (gateSnapshot.shouldDefer !== true) {
       return null;
     }
     const scheduleDelayMs = this.increaseCurrentInterval(
@@ -595,6 +690,13 @@ class UnifiedRebalancerSegment5 extends UnifiedRebalancerSegment4 {
         reasonCodes: Array.isArray(localMutationReadinessBlocker.reasonCodes) ?
           [...localMutationReadinessBlocker.reasonCodes] :
           [],
+        planningState: gateSnapshot.planningState,
+        priorityRecoveryOperationCreationRequired:
+          gateSnapshot.priorityRecoveryOperationCreationRequired,
+        priorityRecoveryOperationCreationPartitionId:
+          gateSnapshot.priorityRecoveryOperationCreationPartitionId,
+        priorityRecoveryOperationCreationScope:
+          gateSnapshot.priorityRecoveryOperationCreationScope,
       },
       scheduleMode: REBALANCE_PLANNING_GATE_SCHEDULE_MODE.PRIORITY_AWARE,
       scheduleDelayMs,

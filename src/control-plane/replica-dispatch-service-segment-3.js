@@ -677,7 +677,12 @@ class ReplicaDispatchServiceSegment3 extends ReplicaDispatchServiceSegment2 {
       advancementState ===
         READY_NODE_PUBLICATION_ADVANCEMENT_STATE.IN_FLIGHT_NODE_VISIBLE ||
       advancementState ===
-        READY_NODE_PUBLICATION_ADVANCEMENT_STATE.IN_FLIGHT_NODE_UNRESOLVED;
+        READY_NODE_PUBLICATION_ADVANCEMENT_STATE.IN_FLIGHT_NODE_UNRESOLVED ||
+      (
+        advancementState ===
+          READY_NODE_PUBLICATION_ADVANCEMENT_STATE.PUBLISHED_NODE_MISSING &&
+        latestPublicationStatus === MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED
+      );
     const needsReconcile =
       advancementState !==
         READY_NODE_PUBLICATION_ADVANCEMENT_STATE.PUBLISHED_NODE_VISIBLE ||

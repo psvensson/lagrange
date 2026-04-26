@@ -31,34 +31,44 @@ const DIRECT_WRITER_ALLOWLIST = [
   'src/bootstrap/',
   'src/cdc/',
   'src/control-plane/control-plane-system-table-gateway.js',
+  'src/control-plane/control-plane-system-table-gateway-',
 ];
 const DIRECT_SQL_ALLOWLIST = [
   'src/bootstrap/',
   'src/cdc/',
   'src/control-plane/control-plane-system-table-gateway.js',
+  'src/control-plane/control-plane-system-table-gateway-',
 ];
 const DIRECT_AUTHORITATIVE_READ_ALLOWLIST = [
   'src/cdc/cdc-integration-service.js',
+  'src/cdc/cdc-integration-service-',
   'src/control-plane/authoritative-control-plane-view.js',
   'src/control-plane/control-plane-system-table-gateway.js',
+  'src/control-plane/control-plane-system-table-gateway-',
 ];
 const DIRECT_CACHE_APPLY_ALLOWLIST = [
   'src/bootstrap/',
   'src/cdc/',
+  'src/cdc/cdc-integration-service-',
   'src/cdc/cdc-event-handler.js',
   'src/message-group/cdc-handler.js',
   'src/control-plane/control-plane-system-table-gateway.js',
+  'src/control-plane/control-plane-system-table-gateway-',
   'src/cache/system-table-cache.js',
 ];
 const PRESSURE_FAILURE_HELPER_ALLOWLIST = [
   'src/control-plane/pressure-governor.js',
   'src/control-plane/control-plane-system-table-gateway.js',
+  'src/control-plane/control-plane-system-table-gateway-',
   'src/control-plane/authoritative-control-plane-view.js',
   'src/cdc/cdc-integration-service.js',
+  'src/cdc/cdc-integration-service-',
   'src/query/sql-query-engine.js',
+  'src/query/sql-query-engine-',
 ];
 const TRANSPORT_PRESSURE_SENSOR_ALLOWLIST = [
   'src/control-plane/pressure-governor.js',
+  'src/control-plane/control-plane-system-table-gateway-',
   'src/transport/message-router.js',
 ];
 const VIOLATION_RULES = Object.freeze([

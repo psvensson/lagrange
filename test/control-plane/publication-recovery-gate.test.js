@@ -19,6 +19,7 @@ import {
 } from '../../src/control-plane/publication-recovery-gate.js';
 
 const TEST_PUBLICATION_EPOCH = 7;
+const TEST_PUBLICATION_DEBT_COUNT = 1;
 const TEST_NODE_ID = Object.freeze({
   FIRST: 'node-a',
   SECOND: 'node-b',
@@ -69,6 +70,29 @@ test('buildPublicationRecoveryGateSnapshot classifies acknowledgement lag explic
     t.equal(gate.ready, false);
     t.equal(gate.pendingAckCount, 1);
     t.same(gate.pendingAckNodeIds, [TEST_NODE_ID.SECOND]);
+    t.same(gate.reasonCodes, [
+      CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PUBLICATION_EPOCH_PENDING,
+    ]);
+    t.end();
+  });
+
+test('buildPublicationRecoveryGateSnapshot preserves count-only publication debt',
+  (t) => {
+    const gate = buildPublicationRecoveryGateSnapshot({
+      publicationEpoch: TEST_PUBLICATION_EPOCH,
+      publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+      recoveryProtocolState: RECOVERY_PROTOCOL_STATE.PUBLICATION_PENDING,
+      pendingAckCount: TEST_PUBLICATION_DEBT_COUNT,
+      missingPublishedCount: TEST_PUBLICATION_DEBT_COUNT,
+      priorityPartitionSummary: TEST_PRIORITY_PARTITION_SUMMARY.SATISFIED,
+    });
+
+    t.equal(gate.state, PUBLICATION_RECOVERY_GATE_STATE.ACK_PENDING);
+    t.equal(gate.ready, false);
+    t.equal(gate.pendingAckCount, TEST_PUBLICATION_DEBT_COUNT);
+    t.equal(gate.missingPublishedCount, TEST_PUBLICATION_DEBT_COUNT);
+    t.equal(gate.ackPending, true);
+    t.equal(gate.publicationPending, true);
     t.same(gate.reasonCodes, [
       CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PUBLICATION_EPOCH_PENDING,
     ]);

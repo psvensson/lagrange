@@ -111,6 +111,8 @@ const PRIORITY_RECOVERY_SEMANTIC_STATE_RECOVERING_IN_FLIGHT =
   'recovering_in_flight';
 const PRIORITY_RECOVERY_READY_REPLICA_COUNT_CANONICAL = 2;
 const PRIORITY_RECOVERY_REQUIRED_DISTINCT_NODE_COUNT = 3;
+const PRIORITY_RECOVERY_OPERATION_CREATION_SCOPE_CURRENT_PARTITION =
+  'current_partition';
 const PRIORITY_SURROGATE_CREATED_OPERATION_ID =
   'op-priority-surrogate-follow-up';
 const PRIORITY_SURROGATE_STALE_OPERATION_ID =
@@ -137,6 +139,17 @@ const NON_PRIORITY_SYSTEM_PARTITION_ID = 'logs-p1';
 const NO_PROGRESS_LISTENERS = 0;
 const ONE_PROGRESS_LISTENER = 1;
 const ONE_MEMBERSHIP_PUBLICATION_RECONCILE_CALL = 1;
+const ONE_REBALANCE_EVALUATE_CALL = 1;
+const NO_REBALANCE_PLANNING_GATE_DECISION = null;
+const LOCAL_MUTATION_TEST_CONTROL_PLANE_WRITE_UNHEALTHY =
+  'control_plane_write_unhealthy';
+const LOCAL_MUTATION_TEST_METADATA_PUBLICATION_DEGRADED =
+  'metadata_publication_degraded';
+
+const resolveNoRebalancePlanningGateDecision = () =>
+  NO_REBALANCE_PLANNING_GATE_DECISION;
+const resolveNoAsyncRebalancePlanningGateDecision = async () =>
+  NO_REBALANCE_PLANNING_GATE_DECISION;
 
 // Initialize test environment
 function initializeTestEnvironment() {
@@ -1496,6 +1509,157 @@ test('UnifiedRebalancer exposes one explicit local mutation planning gate decisi
     }
   });
 
+test('UnifiedRebalancer lets priority operation creation bypass local ' +
+  'mutation readiness deferral', async (t) => {
+  initializeTestEnvironment();
+
+  const priorityPartitionSummary = {
+    satisfied: false,
+    blockedPartitions: [{
+      partitionId: REPLICA_OPERATION_PRIORITY_PARTITION_ID,
+      readyReplicaCount: PRIORITY_RECOVERY_READY_REPLICA_COUNT_CANONICAL,
+      readyDistinctNodeCount: PRIORITY_RECOVERY_READY_DISTINCT_NODE_COUNT,
+      requiredDistinctNodeCount:
+        PRIORITY_RECOVERY_REQUIRED_DISTINCT_NODE_COUNT,
+      spreadGap: PRIORITY_RECOVERY_SPREAD_GAP,
+    }],
+  };
+  const priorityRecoveryPlanningSnapshot = {
+    publicationEpoch: PRIORITY_RECOVERY_PUBLICATION_EPOCH,
+    publishedActiveNodeIds: [
+      PRIORITY_FOLLOW_UP_NODE_ID_A,
+      PRIORITY_FOLLOW_UP_NODE_ID_B,
+      PRIORITY_FOLLOW_UP_NODE_ID_C,
+    ],
+    priorityPartitionSummary,
+    priorityRecoveryDecisionSnapshots: {
+      snapshots: [{
+        partitionId: REPLICA_OPERATION_PRIORITY_PARTITION_ID,
+        semanticState: PRIORITY_RECOVERY_SEMANTIC_STATE_NEEDS_OPERATION,
+        blockerReasons: [
+          PRIORITY_RECOVERY_BLOCKER_REASON_ELIGIBLE_NO_OPERATION,
+        ],
+        progress: {
+          nextRequiredAction:
+            PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION_CREATE_RECOVERY_OPERATION,
+        },
+        admission: {
+          effectiveEligibleNodeIds: [
+            PRIORITY_FOLLOW_UP_NODE_ID_A,
+            PRIORITY_FOLLOW_UP_NODE_ID_B,
+            PRIORITY_FOLLOW_UP_NODE_ID_C,
+          ],
+        },
+        publication: {
+          recoveryActiveNodeIds: [
+            PRIORITY_FOLLOW_UP_NODE_ID_A,
+            PRIORITY_FOLLOW_UP_NODE_ID_B,
+            PRIORITY_FOLLOW_UP_NODE_ID_C,
+          ],
+        },
+      }],
+    },
+  };
+  const rebalancer = createTestRebalancer({
+    entityId: REPLICA_OPERATION_PRIORITY_PARTITION_ID,
+    entityType: EntityType.PARTITION,
+    nodeId: PRIORITY_FOLLOW_UP_NODE_ID_A,
+    nodes: [
+      {node_id: PRIORITY_FOLLOW_UP_NODE_ID_A, status: NodeStatus.ACTIVE},
+      {node_id: PRIORITY_FOLLOW_UP_NODE_ID_B, status: NodeStatus.ACTIVE},
+      {node_id: PRIORITY_FOLLOW_UP_NODE_ID_C, status: NodeStatus.ACTIVE},
+    ],
+    partitions: [{
+      partition_id: REPLICA_OPERATION_PRIORITY_PARTITION_ID,
+      table_id: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+    }],
+    controlPlaneReadinessService: {
+      getNodeReadinessSync() {
+        return {
+          nodeId: PRIORITY_FOLLOW_UP_NODE_ID_A,
+          dimensions: {
+            [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: true,
+            [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: true,
+            [CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY]: true,
+            [CONTROL_PLANE_READINESS_DIMENSION.LOAD_READY]: true,
+            [CONTROL_PLANE_READINESS_DIMENSION.PLACEMENT_ELIGIBLE]: true,
+            [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]:
+              false,
+            [CONTROL_PLANE_READINESS_DIMENSION.METADATA_PUBLICATION_HEALTHY]:
+              false,
+            [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
+            [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: true,
+          },
+          reasons: [
+            {code: LOCAL_MUTATION_TEST_CONTROL_PLANE_WRITE_UNHEALTHY},
+            {code: LOCAL_MUTATION_TEST_METADATA_PUBLICATION_DEGRADED},
+          ],
+        };
+      },
+      getPriorityRecoveryPlanningAnswerSync() {
+        return priorityRecoveryPlanningSnapshot;
+      },
+    },
+  });
+
+  rebalancer.initialize();
+  rebalancer.isLeader = true;
+  rebalancer.clusterReadinessConfirmed = true;
+  rebalancer.isStabilized = () => true;
+  rebalancer.scheduleNextCheck = () => {};
+  rebalancer.evaluateClusterReadinessGateDecision =
+    resolveNoRebalancePlanningGateDecision;
+  rebalancer.resolveStartDelayPlanningGateDecision =
+    resolveNoRebalancePlanningGateDecision;
+  rebalancer.resolveStabilizationPlanningGateDecision =
+    resolveNoRebalancePlanningGateDecision;
+  rebalancer.resolveTopologySettlingPlanningGateDecision =
+    resolveNoAsyncRebalancePlanningGateDecision;
+  rebalancer.resolveTrafficReadinessPlanningGateDecision =
+    resolveNoRebalancePlanningGateDecision;
+  rebalancer.resolveLocalServePlanningGateDecision =
+    resolveNoRebalancePlanningGateDecision;
+  rebalancer.resolvePrioritySpreadPlanningGateDecision =
+    resolveNoRebalancePlanningGateDecision;
+  rebalancer.resolveTransportBackpressurePlanningGateDecision =
+    resolveNoRebalancePlanningGateDecision;
+
+  let evaluateCalls = NO_GLOBAL_IN_FLIGHT_OPERATIONS;
+  rebalancer.evaluateState = async () => {
+    evaluateCalls += ONE_REBALANCE_EVALUATE_CALL;
+    return false;
+  };
+
+  try {
+    const gateSnapshot =
+      rebalancer.buildLocalMutationReadinessPlanningGateSnapshot();
+    await rebalancer.checkRebalance();
+
+    t.equal(
+      gateSnapshot.shouldDefer,
+      false,
+      'local mutation readiness should not defer required priority creation',
+    );
+    t.equal(
+      gateSnapshot.priorityRecoveryOperationCreationRequired,
+      true,
+      'gate snapshot should retain the priority creation requirement',
+    );
+    t.equal(
+      gateSnapshot.priorityRecoveryOperationCreationScope,
+      PRIORITY_RECOVERY_OPERATION_CREATION_SCOPE_CURRENT_PARTITION,
+      'gate snapshot should name the current-partition operation scope',
+    );
+    t.equal(
+      evaluateCalls,
+      ONE_REBALANCE_EVALUATE_CALL,
+      'priority operation creation should reach rebalance evaluation',
+    );
+  } finally {
+    rebalancer.shutdown();
+  }
+});
+
 test('UnifiedRebalancer exposes one explicit priority spread planning gate decision',
   async (t) => {
     initializeTestEnvironment();
@@ -1996,15 +2160,13 @@ test('UnifiedRebalancer budget queries stay critical for priority control-plane 
   );
 });
 
-test('UnifiedRebalancer budget queries prefer authoritative CDC owner reads when available', async (t) => {
-  initializeTestEnvironment();
+test('UnifiedRebalancer budget queries use gateway authoritative owner reads',
+  async (t) => {
+    initializeTestEnvironment();
 
-  const cdcCalls = [];
-  const gatewayCalls = [];
-  const rebalancer = createTestRebalancer({
-    entityId: 'replica_operations-p1',
-    entityType: EntityType.PARTITION,
-    cdcIntegrationService: {
+    const cdcCalls = [];
+    const gatewayCalls = [];
+    const cdcIntegrationService = {
       ...createMockCdcService(),
       async executeAuthoritativeSystemTableRead(tableName, sql, params, options) {
         cdcCalls.push({tableName, sql, params, options});
@@ -2013,42 +2175,57 @@ test('UnifiedRebalancer budget queries prefer authoritative CDC owner reads when
         }
         return {success: true, rows: [{total_count: 2}]};
       },
-    },
-    controlPlaneSystemTableGateway: {
-      async executeQuery(sql, params, queryOptions) {
-        gatewayCalls.push({sql, params, queryOptions});
-        return {success: true, rows: []};
+    };
+    const rebalancer = createTestRebalancer({
+      entityId: 'replica_operations-p1',
+      entityType: EntityType.PARTITION,
+      cdcIntegrationService,
+      controlPlaneSystemTableGateway: {
+        async readAuthoritativeRows(tableName, sql, params, options) {
+          gatewayCalls.push({tableName, sql, params, options});
+          return cdcIntegrationService.executeAuthoritativeSystemTableRead(
+            tableName,
+            sql,
+            params,
+            options,
+          );
+        },
+        async executeQuery(sql, params, queryOptions) {
+          throw new Error(
+            'budget reads should use authoritative gateway rows',
+            {cause: {sql, params, queryOptions}},
+          );
+        },
       },
-    },
+    });
+
+    const configuredBudget = await rebalancer.getConfiguredRebalanceBudget();
+    const inFlightCount = await rebalancer.getGlobalInFlightOperationCount();
+
+    t.equal(configuredBudget, 6,
+      'authoritative gateway reads should provide config-backed budget');
+    t.equal(inFlightCount, 2,
+      'authoritative gateway reads should provide in-flight count');
+    t.equal(gatewayCalls.length, 2,
+      'budget probes should use the authoritative gateway owner path');
+    t.equal(cdcCalls.length, 2,
+      'the gateway owner should delegate into the CDC owner implementation');
+    t.equal(
+      cdcCalls[0]?.options?.localReadConsistency,
+      LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.ANY_REPLICA,
+      'budget probes should allow any local authoritative replica for config reads',
+    );
+    t.equal(
+      cdcCalls[0]?.options?.authoritativeReadMode,
+      CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
+      'budget probes should report the canonical local-only authoritative read mode',
+    );
+    t.equal(
+      cdcCalls[1]?.options?.queryOptions?.deliveryPriority,
+      'critical',
+      'priority control-plane budget probes should preserve critical delivery priority on owner reads',
+    );
   });
-
-  const configuredBudget = await rebalancer.getConfiguredRebalanceBudget();
-  const inFlightCount = await rebalancer.getGlobalInFlightOperationCount();
-
-  t.equal(configuredBudget, 6,
-    'authoritative CDC owner reads should provide config-backed budget');
-  t.equal(inFlightCount, 2,
-    'authoritative CDC owner reads should provide in-flight count');
-  t.equal(cdcCalls.length, 2,
-    'budget probes should use the authoritative CDC owner path');
-  t.equal(gatewayCalls.length, 0,
-    'budget probes should not fall through to the gateway when CDC owner reads are available');
-  t.equal(
-    cdcCalls[0]?.options?.localReadConsistency,
-    LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.ANY_REPLICA,
-    'budget probes should allow any local authoritative replica for config reads',
-  );
-  t.equal(
-    cdcCalls[0]?.options?.authoritativeReadMode,
-    CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
-    'budget probes should report the canonical local-only authoritative read mode',
-  );
-  t.equal(
-    cdcCalls[1]?.options?.queryOptions?.deliveryPriority,
-    'critical',
-    'priority control-plane budget probes should preserve critical delivery priority on owner reads',
-  );
-});
 
 test('UnifiedRebalancer allows priority spread scheduling when global budget is ' +
   'saturated by non-priority work', async (t) => {

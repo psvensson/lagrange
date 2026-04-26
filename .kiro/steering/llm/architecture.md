@@ -3,7 +3,7 @@
 Load for bootstrap/join/rebalance/control-plane/runtime ownership and lifecycle work.
 
 Generated rules: 140
-Estimated tokens: 4535
+Estimated tokens: 4891
 Domains: architecture
 
 ## Rules
@@ -19,8 +19,8 @@ Domains: architecture
 9. [ARCH-0009] Do not hide guardrail failures by weakening scripts, expanding allowlists, renaming files out of scan scope, or moving code into test-only paths.
 10. [ARCH-0010] No inline domain scalars. Do not write raw string, number, null, or undefined values directly in domain logic, runtime/exported structures, or semantic decisions.
 11. [ARCH-0011] Absence is not state. null and undefined must not encode runtime/domain state. Use an explicit named variant instead.
-12. [ARCH-0012] Semantic decision boundaries must not be implemented as bags of independent if statements. When multiple signals determine one outcome, the code must:
-13. [ARCH-0013] If a scalar or state has no clear owner, stop and define the owner first. Do not inline it “for now”.
+12. [ARCH-0012] If a scalar or state has no clear owner, stop and define the owner first. Do not inline it “for now”.
+13. [ARCH-0013] Shared contract surfaces must declare: - semantic owner; - canonical evidence inputs; - canonical state or outcome vocabulary; - allowed consumers; - forbidden reinterpretations
 14. [ARCH-0014] Do not expose semantic mode through combinable boolean or tri-state option bags. If callers are choosing between policy variants, define one explicit named mode set and make invalid combinations unrepresentable.
 15. [ARCH-0015] Do not introduce a second cache, snapshot, field, or helper for the same concern unless the role boundary is explicit and non-overlapping.
 16. [ARCH-0016] If it exists, use it. Do not create a second version.
@@ -72,79 +72,79 @@ Domains: architecture
 62. [ARCH-0062] Caught errors MUST be either re-thrown or clearly logged. Never swallowed.
 63. [ARCH-0063] NEVER add eslint-disable comments. Not inline, not file-level. Never.
 64. [ARCH-0064] NEVER modify the ESLint configuration.
-65. [ARCH-0065] forbidden reinterpretations
-66. [ARCH-0066] Planning must not be allowed to fragment into several parallel tracking systems any more than runtime logic is.
-67. [ARCH-0067] Roadmap status must not outrun current representative evidence.
-68. [ARCH-0068] Users do not directly manage partitions, replicas, placement, or rebalancing.
-69. [ARCH-0069] External simplicity — do not introduce unnecessary new user-visible concepts.
-70. [ARCH-0070] No machinery leakage — internal mechanisms must not become accidental user-facing concepts unless explicitly designed as such.
-71. [ARCH-0071] Do not generalize this exception into ad-hoc "try cache then try SQL" patterns.
-72. [ARCH-0072] They must NOT maintain their own copy, shadow, or derived version of that state.
-73. [ARCH-0073] It must NOT silently recreate the row inside an updater.
-74. [ARCH-0074] A single persisted field MUST NOT carry multiple lifecycle semantics for different owners.
-75. [ARCH-0075] Bootstrap, join, and recovery phases may initialize runtime mechanisms, but steady-state correctness must not depend on phase-owned wiring after completion.
-76. [ARCH-0076] Queries may be slower but MUST NOT fail due to transient topology state.
-77. [ARCH-0077] Bootstrap-only write exceptions must NOT leak into steady-state runtime paths.
-78. [ARCH-0078] If owner references can refresh at runtime, route refresh through the canonical setter path (for example setRebalanceCoordinator) so child dependencies resync; do not mutate coordinator/owner fields directly.
-79. [ARCH-0079] Do not introduce new user-visible entity categories unless explicitly required by the platform design.
-80. [ARCH-0080] It is FORBIDDEN to expose internal implementation concepts as ordinary user-facing control surfaces unless explicitly intended by the architecture.
-81. [ARCH-0081] Users may observe diagnostics about these mechanisms, but must not be required to manage them directly in ordinary workflows.
-82. [ARCH-0082] Do not add APIs that require users to directly assign partitions, leaders, replicas, or rebalance targets.
-83. [ARCH-0083] Do not fragment the service model into multiple incompatible conceptual categories unless explicitly designed and documented as such.
-84. [ARCH-0084] Broad or scope-changing ideas MUST sharpen ../../roadmap.md before active implementation starts.
-85. [ARCH-0085] In-scope bounded work MUST be executed from a work package in work/packages/.
-86. [ARCH-0086] Active code changes MUST be driven by an active-... work package, unless the immediate change is the roadmap-sharpening step that creates the package.
-87. [ARCH-0087] docs/ is reserved for end-user or operator-facing documentation. Internal planning and execution material MUST live under work/.
-88. [ARCH-0088] Every active package must carry an explicit residual-closure inventory in the package file.
-89. [ARCH-0089] That inventory must name, at minimum:
-90. [ARCH-0090] the tail consumers and collaborator owners that must be cut over
-91. [ARCH-0091] the status, diagnostics, harness, admin, or reporting surfaces that must match the new contract
-92. [ARCH-0092] the superseded paths, fallbacks, or vocabulary that must be deleted
-93. [ARCH-0093] the required proof layers before closure
-94. [ARCH-0094] If two packages must be worked in parallel on the same broad area, they must have explicitly disjoint file and owner scope, or one umbrella package must define the sequencing and completion contract for both.
-95. [ARCH-0095] Package progress notes must distinguish clearly between:
-96. [ARCH-0096] If the concern has several views, the package must state which view is:
-97. [ARCH-0097] The active package must name the current dominant blocker for the scenario it is trying to close.
-98. [ARCH-0098] The package or linked architecture record must name:
-99. [ARCH-0099] If the concern has several axes, the package must name the axes explicitly instead of collapsing them into one local boolean bag.
-100. [ARCH-0100] Diagnostics, admin, harness, and reporting surfaces that consume that boundary must reuse the same grammar or declare a bounded view role.
-101. [ARCH-0101] It is FORBIDDEN to:
-102. [ARCH-0102] If a guardrail fails repo-wide before work begins, the package must still run the narrowest file-scoped guard for touched files before and after the change and record both results.
-103. [ARCH-0103] Any new allowlist, suppression, or accepted-boundary entry must name:
-104. [ARCH-0104] A sprint must name one representative gate before broad execution starts.
-105. [ARCH-0105] A package must name one primary architectural boundary and one primary semantic owner.
-106. [ARCH-0106] When an LLM sprint repeatedly exposes new blockers at the same boundary, the next package must reduce the boundary surface area before adding more symptom-specific behavior.
-107. [ARCH-0107] If an active sprint or package is still fixing a failure that belongs to a completed roadmap row, the package must explicitly say whether the row is:
-108. [ARCH-0108] Every scalar must have an owner. Before using a scalar, classify it:
-109. [ARCH-0109] One runtime concern must have one canonical contract shape. If several views exist, each must have a non-overlapping role such as:
-110. [ARCH-0110] Shared contract surfaces must declare:
-111. [ARCH-0111] Any given runtime function or semantic concern MUST have one active code path once policy has been normalized.
-112. [ARCH-0112] Boundary normalization happens once at ingress. Runtime logic must consume the normalized state rather than reopening raw storage or transport shapes. at a time.
-113. [ARCH-0113] A phase must not tear down the only live runtime path.
-114. [ARCH-0114] Pressure must not become hidden drops, memory growth without bounds, or correctness failures.
-115. [ARCH-0115] Never let degraded evidence promote a blocked entity to ready or admitted.
-116. [ARCH-0116] Broad ideas must not go straight into code.
-117. [ARCH-0117] Do not treat a package as complete when only the hot path is fixed. A package is complete only when the hot path, tail consumers, diagnostics or reporting, deletion work, and required proof are all closed.
-118. [ARCH-0118] one declared list of forbidden reinterpretations
-119. [ARCH-0119] Initial creation must write the full canonical row shape.
-120. [ARCH-0120] Later lifecycle changes must use partial updates only.
-121. [ARCH-0121] When cache evidence is insufficient, readers MUST consume the owner outcome directly as fresh, stale-but-usable, deferred-refresh, or failed instead of reopening broad repair locally.
-122. [ARCH-0122] Background or deferred repair MUST be scheduled through the owner-held reconcile path rather than through reader-local retry loops.
-123. [ARCH-0123] Forced repair, when a boundary explicitly allows it, MUST still route through the same owner and bounded budget rather than bypassing it with a second repair path.
-124. [ARCH-0124] Any "is active" predicate must gate on the canonical active status set.
-125. [ARCH-0125] Any sweep that expires entries must skip canonical terminal statuses.
-126. [ARCH-0126] Evaluate canonical admission owner (storageAdmissionService) per candidate until the required minimum cohort is satisfiable.
-127. [ARCH-0127] If a phase establishes a subscriber, bridge, queue, retry loop, or cache hydration path needed by steady state, ownership must transfer explicitly to a runtime owner before phase completion.
-128. [ARCH-0128] Handoff completion must be represented by one owner transition, not inferred from phase timers or "good enough" cache visibility.
-129. [ARCH-0129] Policy targets such as strict cohort size or parity must remain owned by explicit policy, not be rewritten opportunistically from the survivors of a local fallback branch.
-130. [ARCH-0130] Capacity reservations or priority isolation must be expressed through the shared pressure contract, not through hidden local queues.
-131. [ARCH-0131] The same spec or task list that introduces a transitional delegator must include its removal task and the target canonical owner.
-132. [ARCH-0132] A structural guard (CI audit, import guard, or equivalent) must prevent new call sites from binding to the transitional path.
-133. [ARCH-0133] The delegator must preserve one semantic owner. It may forward, but it may not add a second decision path.
-134. [ARCH-0134] Search for phase-scoped runtime subscribers, bridges, or retry loops that remain required after phase completion.
-135. [ARCH-0135] For a given owner key, there MUST be at most one reconcile execution in flight.
-136. [ARCH-0136] Multiple triggers for the same concern (event, cache update, timer) MUST converge into the same reconcile queue and owner path.
-137. [ARCH-0137] Step transitions MUST be persisted durably with previous step, next step, reason, and timestamp.
-138. [ARCH-0138] A transition that requires atomic multi-row authoritative updates MUST commit through the shared DistributedTransactionCoordinator.
-139. [ARCH-0139] Cache divergence recovery MUST re-enter the same owner-key reconcile queue rather than a direct mutation fallback path.
-140. [ARCH-0140] Cache/authoritative divergence must be surfaced as typed diagnostics and invariants, not hidden by silent fallback behavior.
+65. [ARCH-0065] Planning must not be allowed to fragment into several parallel tracking systems any more than runtime logic is.
+66. [ARCH-0066] Roadmap status must not outrun current representative evidence.
+67. [ARCH-0067] Users do not directly manage partitions, replicas, placement, or rebalancing.
+68. [ARCH-0068] External simplicity — do not introduce unnecessary new user-visible concepts.
+69. [ARCH-0069] No machinery leakage — internal mechanisms must not become accidental user-facing concepts unless explicitly designed as such.
+70. [ARCH-0070] Do not generalize this exception into ad-hoc "try cache then try SQL" patterns.
+71. [ARCH-0071] They must NOT maintain their own copy, shadow, or derived version of that state.
+72. [ARCH-0072] It must NOT silently recreate the row inside an updater.
+73. [ARCH-0073] A single persisted field MUST NOT carry multiple lifecycle semantics for different owners.
+74. [ARCH-0074] Bootstrap, join, and recovery phases may initialize runtime mechanisms, but steady-state correctness must not depend on phase-owned wiring after completion.
+75. [ARCH-0075] Queries may be slower but MUST NOT fail due to transient topology state.
+76. [ARCH-0076] Bootstrap-only write exceptions must NOT leak into steady-state runtime paths.
+77. [ARCH-0077] If owner references can refresh at runtime, route refresh through the canonical setter path (for example setRebalanceCoordinator) so child dependencies resync; do not mutate coordinator/owner fields directly.
+78. [ARCH-0078] Do not introduce new user-visible entity categories unless explicitly required by the platform design.
+79. [ARCH-0079] It is FORBIDDEN to expose internal implementation concepts as ordinary user-facing control surfaces unless explicitly intended by the architecture.
+80. [ARCH-0080] Users may observe diagnostics about these mechanisms, but must not be required to manage them directly in ordinary workflows.
+81. [ARCH-0081] Do not add APIs that require users to directly assign partitions, leaders, replicas, or rebalance targets.
+82. [ARCH-0082] Do not fragment the service model into multiple incompatible conceptual categories unless explicitly designed and documented as such.
+83. [ARCH-0083] Broad or scope-changing ideas MUST sharpen ../../roadmap.md before active implementation starts.
+84. [ARCH-0084] In-scope bounded work MUST be executed from a work package in work/packages/.
+85. [ARCH-0085] Active code changes MUST be driven by an active-... work package, unless the immediate change is the roadmap-sharpening step that creates the package.
+86. [ARCH-0086] docs/ is reserved for end-user or operator-facing documentation. Internal planning and execution material MUST live under work/.
+87. [ARCH-0087] Every active package must carry an explicit residual-closure inventory in the package file.
+88. [ARCH-0088] If two packages must be worked in parallel on the same broad area, they must have explicitly disjoint file and owner scope, or one umbrella package must define the sequencing and completion contract for both.
+89. [ARCH-0089] Package progress notes must distinguish clearly between: - landed hot-path changes; - remaining residual closures; - proof already run; - proof still required
+90. [ARCH-0090] The package must name: - semantic owner; - canonical contract shape or vocabulary; - allowed consumers; - prohibited reinterpretations; - primary diagnostics and proof surfaces
+91. [ARCH-0091] If the concern has several views, the package must state which view is: - operational authority; - diagnostics-only observation; - owner-internal retained state
+92. [ARCH-0092] The active package must name the current dominant blocker for the scenario it is trying to close.
+93. [ARCH-0093] Package progress notes must distinguish clearly between: - the blocker that was just reduced; - the blocker that now dominates; - the hypothesis for why the new blocker remained latent
+94. [ARCH-0094] If the concern has several axes, the package must name the axes explicitly instead of collapsing them into one local boolean bag.
+95. [ARCH-0095] Diagnostics, admin, harness, and reporting surfaces that consume that boundary must reuse the same grammar or declare a bounded view role.
+96. [ARCH-0096] The ledger must distinguish: - inherited repo-wide debt outside the package boundary; - inherited debt in touched files; - new debt introduced by the package; - debt removed by the package
+97. [ARCH-0097] If a guardrail fails repo-wide before work begins, the package must still run the narrowest file-scoped guard for touched files before and after the change and record both results.
+98. [ARCH-0098] A sprint must name one representative gate before broad execution starts.
+99. [ARCH-0099] A package must name one primary architectural boundary and one primary semantic owner.
+100. [ARCH-0100] When an LLM sprint repeatedly exposes new blockers at the same boundary, the next package must reduce the boundary surface area before adding more symptom-specific behavior.
+101. [ARCH-0101] Any given runtime function or semantic concern MUST have one active code path once policy has been normalized.
+102. [ARCH-0102] Boundary normalization happens once at ingress. Runtime logic must consume the normalized state rather than reopening raw storage or transport shapes. at a time.
+103. [ARCH-0103] A phase must not tear down the only live runtime path.
+104. [ARCH-0104] Pressure must not become hidden drops, memory growth without bounds, or correctness failures.
+105. [ARCH-0105] Never let degraded evidence promote a blocked entity to ready or admitted.
+106. [ARCH-0106] Broad ideas must not go straight into code.
+107. [ARCH-0107] Do not treat a package as complete when only the hot path is fixed. A package is complete only when the hot path, tail consumers, diagnostics or reporting, deletion work, and required proof are all closed.
+108. [ARCH-0108] one declared list of forbidden reinterpretations
+109. [ARCH-0109] Initial creation must write the full canonical row shape.
+110. [ARCH-0110] Later lifecycle changes must use partial updates only.
+111. [ARCH-0111] When cache evidence is insufficient, readers MUST consume the owner outcome directly as fresh, stale-but-usable, deferred-refresh, or failed instead of reopening broad repair locally.
+112. [ARCH-0112] Background or deferred repair MUST be scheduled through the owner-held reconcile path rather than through reader-local retry loops.
+113. [ARCH-0113] Forced repair, when a boundary explicitly allows it, MUST still route through the same owner and bounded budget rather than bypassing it with a second repair path.
+114. [ARCH-0114] Any "is active" predicate must gate on the canonical active status set.
+115. [ARCH-0115] Any sweep that expires entries must skip canonical terminal statuses.
+116. [ARCH-0116] Evaluate canonical admission owner (storageAdmissionService) per candidate until the required minimum cohort is satisfiable.
+117. [ARCH-0117] If a phase establishes a subscriber, bridge, queue, retry loop, or cache hydration path needed by steady state, ownership must transfer explicitly to a runtime owner before phase completion.
+118. [ARCH-0118] Handoff completion must be represented by one owner transition, not inferred from phase timers or "good enough" cache visibility.
+119. [ARCH-0119] Policy targets such as strict cohort size or parity must remain owned by explicit policy, not be rewritten opportunistically from the survivors of a local fallback branch.
+120. [ARCH-0120] Capacity reservations or priority isolation must be expressed through the shared pressure contract, not through hidden local queues.
+121. [ARCH-0121] The same spec or task list that introduces a transitional delegator must include its removal task and the target canonical owner.
+122. [ARCH-0122] A structural guard (CI audit, import guard, or equivalent) must prevent new call sites from binding to the transitional path.
+123. [ARCH-0123] The delegator must preserve one semantic owner. It may forward, but it may not add a second decision path.
+124. [ARCH-0124] Search for phase-scoped runtime subscribers, bridges, or retry loops that remain required after phase completion.
+125. [ARCH-0125] For a given owner key, there MUST be at most one reconcile execution in flight.
+126. [ARCH-0126] Multiple triggers for the same concern (event, cache update, timer) MUST converge into the same reconcile queue and owner path.
+127. [ARCH-0127] Step transitions MUST be persisted durably with previous step, next step, reason, and timestamp.
+128. [ARCH-0128] A transition that requires atomic multi-row authoritative updates MUST commit through the shared DistributedTransactionCoordinator.
+129. [ARCH-0129] Cache divergence recovery MUST re-enter the same owner-key reconcile queue rather than a direct mutation fallback path.
+130. [ARCH-0130] Cache/authoritative divergence must be surfaced as typed diagnostics and invariants, not hidden by silent fallback behavior.
+131. [ARCH-0131] New topology workflows and control-plane features MUST be composed from the shared primitives first.
+132. [ARCH-0132] Every top-level control-plane operation MUST start with one canonical timeout budget.
+133. [ARCH-0133] Control-plane owners MUST emit structured invariant results. Hard invariant breaches MUST fail deterministic test gates and remain serializable into diagnostics and harness artifacts.
+134. [ARCH-0134] Bounded queues with rejection — work queues MUST have a capacity limit. When full, new work MUST be rejected with a structured reason, not silently dropped or left to time out.
+135. [ARCH-0135] Retry to available replicas — when a partition leader is unavailable during a topology transition, the query router MUST retry to another replica or the new leader rather than returning a hard failure.
+136. [ARCH-0136] Stale routing tolerance — the routing layer MUST tolerate briefly stale partition maps during topology changes. A query routed to a stale leader MUST be redirected, not failed.
+137. [ARCH-0137] Unique operation identity — state-mutating operations MUST carry a unique identifier (operation ID, idempotency key, or equivalent) so duplicate applications can be detected.
+138. [ARCH-0138] Monotonic transitions — state transitions MUST be monotonic. Replaying a transition that has already been applied MUST be a no-op, not a second mutation.
+139. [ARCH-0139] Deterministic outcomes — given the same inputs and current state, an operation MUST produce the same outcome regardless of how many times it executes.
+140. [ARCH-0140] All nodes must have at least one Message Group replica, but can host more to let sparse message groups form quorum.

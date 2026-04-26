@@ -3,7 +3,7 @@
 Always-load compact rules for ownership, safety, scope, and quality baseline.
 
 Generated rules: 48
-Estimated tokens: 1600
+Estimated tokens: 1606
 Domains: architecture, governance, style, testing
 
 ## Rules
@@ -19,8 +19,8 @@ Domains: architecture, governance, style, testing
 9. [ARCH-0009] Do not hide guardrail failures by weakening scripts, expanding allowlists, renaming files out of scan scope, or moving code into test-only paths.
 10. [ARCH-0010] No inline domain scalars. Do not write raw string, number, null, or undefined values directly in domain logic, runtime/exported structures, or semantic decisions.
 11. [ARCH-0011] Absence is not state. null and undefined must not encode runtime/domain state. Use an explicit named variant instead.
-12. [ARCH-0012] Semantic decision boundaries must not be implemented as bags of independent if statements. When multiple signals determine one outcome, the code must:
-13. [ARCH-0013] If a scalar or state has no clear owner, stop and define the owner first. Do not inline it “for now”.
+12. [ARCH-0012] If a scalar or state has no clear owner, stop and define the owner first. Do not inline it “for now”.
+13. [ARCH-0013] Shared contract surfaces must declare: - semantic owner; - canonical evidence inputs; - canonical state or outcome vocabulary; - allowed consumers; - forbidden reinterpretations
 14. [ARCH-0014] Do not expose semantic mode through combinable boolean or tri-state option bags. If callers are choosing between policy variants, define one explicit named mode set and make invalid combinations unrepresentable.
 15. [ARCH-0015] Do not introduce a second cache, snapshot, field, or helper for the same concern unless the role boundary is explicit and non-overlapping.
 16. [ARCH-0016] If it exists, use it. Do not create a second version.

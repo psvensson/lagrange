@@ -22,8 +22,10 @@ const {
   CONSISTENCY_VERDICT,
   PHASE_STATUS,
   SCENARIO_PHASE,
+  buildLoadRebalancingPressureState,
   buildLoadParity,
   buildPostLoadDrainRebalancingPressure,
+  buildRebalancingCriticalState,
   buildSaturationCounters,
   buildStrictParityGate,
   collectLoadMetricHardFailures,
@@ -32,6 +34,7 @@ const {
   emitPhaseProgress,
   evaluateOverloadPolicy,
   evaluateWritePressure,
+  finalizeHeartbeatFreshnessState,
   formatHeartbeatFreshnessFailures,
   formatLoadParityReasons,
   formatLoadRebalancingPinningReasons,
@@ -42,6 +45,7 @@ const {
   resolveBaselineLoadNodeCountForRun,
   resolveBaselineMetrics,
   runSutSharedLoad,
+  startLoadRebalancingPressureMonitor,
   waitForSutLoadQuiescence,
 } = POSTGRES_BASELINE_COMPARISON_SEGMENT_11;
 
@@ -96,6 +100,10 @@ export function buildLoadPhaseHandlers(context) {
         requiredSchemaVersion: state.requiredSchemaVersion,
         benchmarkConfig: effectiveLoadBenchmarkConfig,
         runtimeAdmissionOwnership: state.runtimeAdmissionOwnership,
+        buildLoadRebalancingPressureState,
+        buildRebalancingCriticalState,
+        finalizeHeartbeatFreshnessState,
+        startLoadRebalancingPressureMonitor,
         onProgress: (message, details) =>
           emitPhaseProgress(phaseContext, message, details),
         progressHeartbeatIntervalMs:

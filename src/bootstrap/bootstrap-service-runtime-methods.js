@@ -57,6 +57,41 @@ const bootstrapError = BOOTSTRAP_ERROR;
 const DEFAULT_BOOTSTRAP_CONFIG = BOOTSTRAP_DEFAULT;
 const BOOTSTRAP_REPLICA_REGISTRATION_PROGRESS_INTERVAL = NUM.TEN;
 const BOOTSTRAP_REPLICA_STATE_TRANSITIONS_PER_REPLICA = NUM.FOUR;
+const TYPEOF_OBJECT = 'object';
+const TYPEOF_FUNCTION = 'function';
+const DEFERRED_LATENCY_TOPOLOGY_START_KIND_IMMEDIATE = 'immediate';
+const BOOTSTRAP_CONTROL_PLANE_OWNER_NAME = 'ControlPlaneSetup';
+const LOCAL_QUERY_TRANSPORT_GATE = 'local_query_transport';
+const BOOTSTRAP_RUNTIME_LOG_MSG = Object.freeze({
+  DEFERRED_SEED_MESSAGE_GROUP_SERVICE_ACTIVATION:
+    'Deferring seed message-group service row activation during startup',
+  REPLICA_HANDLER_PARTITION_REGISTRATION_SUMMARY:
+    'Bootstrap replica-handler partition registration summary',
+  REPLICA_HANDLER_STATE_REGISTRATION_SUMMARY:
+    'Bootstrap replica-handler state registration summary',
+  STARTING_PARTITION_REGISTRATION:
+    'Starting bootstrap partition registration with replica handler',
+  PARTITION_SERVICE_MISSING_DURING_REPLICA_HANDLER_REGISTRATION:
+    'Partition service missing during replica-handler registration',
+  PARTITION_REGISTRATION_PROGRESS:
+    'Bootstrap partition registration progress',
+  COMPLETED_PARTITION_REGISTRATION:
+    'Completed bootstrap partition registration with replica handler',
+  RETRYING_SEED_CONTROL_PLANE_REGISTRATION:
+    'Retrying seed control-plane registration until local query transport is ready',
+  LOCAL_QUERY_TRANSPORT_NOT_READY:
+    'Local query/data-plane transport is not ready',
+  STARTING_STATE_MACHINE_REGISTRATION:
+    'Starting bootstrap replica registration with state machine',
+  PARTITION_SERVICE_MISSING_DURING_STATE_MACHINE_REGISTRATION:
+    'Partition service missing during state-machine registration',
+  STATE_MACHINE_REGISTRATION_PROGRESS:
+    'Bootstrap state-machine registration progress',
+  COMPLETED_STATE_MACHINE_REGISTRATION:
+    'Completed bootstrap replica registration with state machine',
+  STATE_MACHINE_REGISTRATION_PERSISTENCE_SETTLED:
+    'Bootstrap state-machine registration persistence settled',
+});
 
 function createBootstrapServiceRuntimeMethods() {
   return {
@@ -68,7 +103,7 @@ function createBootstrapServiceRuntimeMethods() {
       ) ||
         (systemTableCache?.getAll?.(TABLES.SERVICE_ENDPOINTS) || [])
           .filter((row) => row?.[COLUMN.NODE_ID] === this.nodeId);
-      return localEndpointRows.length > 0;
+      return localEndpointRows.length > NUM.ZERO;
     },
 
     async activateMessageGroupServiceRows() {
@@ -82,7 +117,8 @@ function createBootstrapServiceRuntimeMethods() {
         messageGroupServices: this.messageGroupServices,
         onDeferredActivation: ({groupId, replicaId, error}) => {
           this.logger.warn(
-            'Deferring seed message-group service row activation during startup',
+            BOOTSTRAP_RUNTIME_LOG_MSG
+              .DEFERRED_SEED_MESSAGE_GROUP_SERVICE_ACTIVATION,
             {
               nodeId: this.nodeId,
               groupId,
@@ -247,6 +283,8 @@ function createBootstrapServiceRuntimeMethods() {
         createPartitionService: createPartitionService,
         dataDir: dataDir,
         rpcClient: this.rpcClient,
+        executorOutcomeEmitter:
+          this.rebalanceCoordinator?.executorOutcomeEmitter,
       });
 
       this.replicaHandler = replicaHandler;
@@ -278,14 +316,18 @@ function createBootstrapServiceRuntimeMethods() {
           totalPartitions: partitionRegistrationSummary.totalPartitions,
         },
       );
-      this.logger.info('Bootstrap replica-handler partition registration summary', {
-        nodeId: this.nodeId,
-        durationMs: Date.now() - partitionRegistrationStartedAt,
-        attemptedCount: partitionRegistrationSummary.attemptedCount,
-        registeredCount: partitionRegistrationSummary.registeredCount,
-        skippedCount: partitionRegistrationSummary.skippedCount,
-        totalPartitions: partitionRegistrationSummary.totalPartitions,
-      });
+      this.logger.info(
+        BOOTSTRAP_RUNTIME_LOG_MSG
+          .REPLICA_HANDLER_PARTITION_REGISTRATION_SUMMARY,
+        {
+          nodeId: this.nodeId,
+          durationMs: Date.now() - partitionRegistrationStartedAt,
+          attemptedCount: partitionRegistrationSummary.attemptedCount,
+          registeredCount: partitionRegistrationSummary.registeredCount,
+          skippedCount: partitionRegistrationSummary.skippedCount,
+          totalPartitions: partitionRegistrationSummary.totalPartitions,
+        },
+      );
 
       const stateRegistrationStartedAt = Date.now();
       this.writeBootstrapReplicaRegistrationTrace(
@@ -315,16 +357,20 @@ function createBootstrapServiceRuntimeMethods() {
           persistErrorCount: stateRegistrationSummary.persistErrorCount,
         },
       );
-      this.logger.info('Bootstrap replica-handler state registration summary', {
-        nodeId: this.nodeId,
-        durationMs: Date.now() - stateRegistrationStartedAt,
-        attemptedCount: stateRegistrationSummary.attemptedCount,
-        registeredCount: stateRegistrationSummary.registeredCount,
-        skippedCount: stateRegistrationSummary.skippedCount,
-        pendingPersistCount: stateRegistrationSummary.pendingPersistCount,
-        expectedPersistCount: stateRegistrationSummary.expectedPersistCount,
-        persistErrorCount: stateRegistrationSummary.persistErrorCount,
-      });
+      this.logger.info(
+        BOOTSTRAP_RUNTIME_LOG_MSG
+          .REPLICA_HANDLER_STATE_REGISTRATION_SUMMARY,
+        {
+          nodeId: this.nodeId,
+          durationMs: Date.now() - stateRegistrationStartedAt,
+          attemptedCount: stateRegistrationSummary.attemptedCount,
+          registeredCount: stateRegistrationSummary.registeredCount,
+          skippedCount: stateRegistrationSummary.skippedCount,
+          pendingPersistCount: stateRegistrationSummary.pendingPersistCount,
+          expectedPersistCount: stateRegistrationSummary.expectedPersistCount,
+          persistErrorCount: stateRegistrationSummary.persistErrorCount,
+        },
+      );
 
       this.logger.info(BootstrapLog.REPLICA_HANDLER_READY, {
         nodeId: this.nodeId,
@@ -362,10 +408,13 @@ function createBootstrapServiceRuntimeMethods() {
           details,
         );
       };
-      this.logger.info('Starting bootstrap partition registration with replica handler', {
-        nodeId: this.nodeId,
-        totalPartitions,
-      });
+      this.logger.info(
+        BOOTSTRAP_RUNTIME_LOG_MSG.STARTING_PARTITION_REGISTRATION,
+        {
+          nodeId: this.nodeId,
+          totalPartitions,
+        },
+      );
       writeRegistrationTrace(BOOTSTRAP_REPLICA_REGISTRATION_TRACE.EVENT_START, {
         nodeId: this.nodeId,
         totalPartitions,
@@ -373,7 +422,7 @@ function createBootstrapServiceRuntimeMethods() {
 
       for (const [replicaId, partition] of partitions) {
         attemptedCount++;
-        if (!partition || typeof partition !== 'object') {
+        if (!partition || typeof partition !== TYPEOF_OBJECT) {
           skippedCount++;
           writeRegistrationTrace(
             BOOTSTRAP_REPLICA_REGISTRATION_TRACE.EVENT_SKIP_MISSING_PARTITION,
@@ -387,7 +436,8 @@ function createBootstrapServiceRuntimeMethods() {
             replicaId,
             partitionId: null,
             error:
-              'Partition service missing during replica-handler registration',
+              BOOTSTRAP_RUNTIME_LOG_MSG
+                .PARTITION_SERVICE_MISSING_DURING_REPLICA_HANDLER_REGISTRATION,
           });
           continue;
         }
@@ -439,7 +489,8 @@ function createBootstrapServiceRuntimeMethods() {
           attemptedCount % BOOTSTRAP_REPLICA_REGISTRATION_PROGRESS_INTERVAL ===
           NUM.ZERO
         ) {
-          this.logger.info('Bootstrap partition registration progress', {
+          this.logger.info(BOOTSTRAP_RUNTIME_LOG_MSG
+            .PARTITION_REGISTRATION_PROGRESS, {
             nodeId: this.nodeId,
             attemptedCount,
             registeredCount,
@@ -457,7 +508,7 @@ function createBootstrapServiceRuntimeMethods() {
         nodeId: this.nodeId,
       });
       this.logger.info(
-        'Completed bootstrap partition registration with replica handler',
+        BOOTSTRAP_RUNTIME_LOG_MSG.COMPLETED_PARTITION_REGISTRATION,
         {
           nodeId: this.nodeId,
           attemptedCount,
@@ -509,6 +560,7 @@ function createBootstrapServiceRuntimeMethods() {
         getLocalClusterIncarnationFence: () => this.clusterIncarnationFence,
         rebalanceCoordinator: this.rebalanceCoordinator,
         bootstrapReadinessState: this.bootstrapReadinessState,
+        executorOutcomeEmitter: this.replicaHandler?.executorOutcomeEmitter,
       });
 
       this.heartbeatService = controlPlane.heartbeatService;
@@ -516,12 +568,28 @@ function createBootstrapServiceRuntimeMethods() {
       this.endpointService = controlPlane.endpointService;
       this.dispatchService = controlPlane.dispatchService;
       this.rebalanceCoordinator = controlPlane.rebalanceCoordinator;
+      const resolvedExecutorOutcomeEmitter =
+        this.rebalanceCoordinator?.executorOutcomeEmitter;
+      if (
+        this.replicaHandler &&
+        resolvedExecutorOutcomeEmitter
+      ) {
+        this.replicaHandler.executorOutcomeEmitter =
+          resolvedExecutorOutcomeEmitter;
+      }
+      if (
+        this.messageGroupServiceHandler &&
+        resolvedExecutorOutcomeEmitter
+      ) {
+        this.messageGroupServiceHandler.executorOutcomeEmitter =
+          resolvedExecutorOutcomeEmitter;
+      }
       this.runtimeSurfaceOwner.bindControlPlaneServices();
 
       this.logger.info(BootstrapLog.CONTROL_PLANE_READY, {
         nodeId: this.nodeId,
         messageGroupCount: this.messageGroupServices.size,
-        owner: 'ControlPlaneSetup',
+        owner: BOOTSTRAP_CONTROL_PLANE_OWNER_NAME,
       });
     },
 
@@ -561,6 +629,8 @@ function createBootstrapServiceRuntimeMethods() {
           systemTableCache,
           serviceLifecycleManager: this.serviceLifecycleManager,
           rpcClient: this.rpcClient,
+          executorOutcomeEmitter:
+            this.rebalanceCoordinator?.executorOutcomeEmitter,
         });
       });
 
@@ -611,6 +681,8 @@ function createBootstrapServiceRuntimeMethods() {
         resolveLocalMessageGroupReplica: (replicaId) =>
           this.messageGroupServices.get(replicaId) || null,
         rpcClient: this.rpcClient,
+        executorOutcomeEmitter:
+          this.rebalanceCoordinator?.executorOutcomeEmitter,
       });
 
       if (result) {
@@ -630,7 +702,8 @@ function createBootstrapServiceRuntimeMethods() {
         sleep: (delayMs) => this.sleep(delayMs),
         onRetry: ({attempt, maxAttempts, delayMs, readiness}) => {
           this.logger.warn(
-            'Retrying seed control-plane registration until local query transport is ready',
+            BOOTSTRAP_RUNTIME_LOG_MSG
+              .RETRYING_SEED_CONTROL_PLANE_REGISTRATION,
             {
               nodeId: this.nodeId,
               attempt,
@@ -638,8 +711,8 @@ function createBootstrapServiceRuntimeMethods() {
               nextDelayMs: delayMs,
               error:
                 readiness?.reason ||
-                'Local query/data-plane transport is not ready',
-              gate: 'local_query_transport',
+                BOOTSTRAP_RUNTIME_LOG_MSG.LOCAL_QUERY_TRANSPORT_NOT_READY,
+              gate: LOCAL_QUERY_TRANSPORT_GATE,
               localQueryTransport: readiness,
             },
           );
@@ -880,7 +953,7 @@ function createBootstrapServiceRuntimeMethods() {
       };
 
       this.logger.info(
-        'Starting bootstrap replica registration with state machine',
+        BOOTSTRAP_RUNTIME_LOG_MSG.STARTING_STATE_MACHINE_REGISTRATION,
         {
           nodeId: this.nodeId,
           totalPartitions,
@@ -899,7 +972,7 @@ function createBootstrapServiceRuntimeMethods() {
           replicaId,
           partitionId: partition?.partitionId || null,
         });
-        if (!partition || typeof partition !== 'object') {
+        if (!partition || typeof partition !== TYPEOF_OBJECT) {
           skippedCount++;
           writeStateTrace(
             BOOTSTRAP_REPLICA_REGISTRATION_TRACE.EVENT_SKIP_MISSING_PARTITION,
@@ -912,7 +985,8 @@ function createBootstrapServiceRuntimeMethods() {
           this.logger.error(BootstrapLog.STATE_MACHINE_REGISTER_FAILED, {
             replicaId,
             partitionId: null,
-            error: 'Partition service missing during state-machine registration',
+            error: BOOTSTRAP_RUNTIME_LOG_MSG
+              .PARTITION_SERVICE_MISSING_DURING_STATE_MACHINE_REGISTRATION,
           });
           continue;
         }
@@ -983,7 +1057,8 @@ function createBootstrapServiceRuntimeMethods() {
           attemptedCount % BOOTSTRAP_REPLICA_REGISTRATION_PROGRESS_INTERVAL ===
           NUM.ZERO
         ) {
-          this.logger.info('Bootstrap state-machine registration progress', {
+          this.logger.info(BOOTSTRAP_RUNTIME_LOG_MSG
+            .STATE_MACHINE_REGISTRATION_PROGRESS, {
             nodeId: this.nodeId,
             attemptedCount,
             registeredCount,
@@ -1008,7 +1083,7 @@ function createBootstrapServiceRuntimeMethods() {
         stateCounts: stateMachine.getStateCounts(),
       });
       this.logger.info(
-        'Completed bootstrap replica registration with state machine',
+        BOOTSTRAP_RUNTIME_LOG_MSG.COMPLETED_STATE_MACHINE_REGISTRATION,
         {
           nodeId: this.nodeId,
           attemptedCount,
@@ -1036,7 +1111,8 @@ function createBootstrapServiceRuntimeMethods() {
       if (persistSettles.length > NUM.ZERO) {
         void Promise.all(persistSettles).then(() => {
           this.logger.info(
-            'Bootstrap state-machine registration persistence settled',
+            BOOTSTRAP_RUNTIME_LOG_MSG
+              .STATE_MACHINE_REGISTRATION_PERSISTENCE_SETTLED,
             {
               nodeId: this.nodeId,
               attemptedCount,
@@ -1355,7 +1431,8 @@ function createBootstrapServiceRuntimeMethods() {
      * @return {void}
      */
     openExternalTransportAdmission() {
-      if (typeof this.messageRouter?.setExternalAdmissionEnabled === 'function') {
+      if (typeof this.messageRouter?.setExternalAdmissionEnabled ===
+        TYPEOF_FUNCTION) {
         this.messageRouter.setExternalAdmissionEnabled(true);
       }
     },
@@ -1424,8 +1501,9 @@ function createBootstrapServiceRuntimeMethods() {
         this.isShuttingDown = true;
 
         if (this.deferredLatencyTopologyStartHandle) {
-          if (this.deferredLatencyTopologyStartKind === 'immediate' &&
-              typeof clearImmediate === 'function') {
+          if (this.deferredLatencyTopologyStartKind ===
+              DEFERRED_LATENCY_TOPOLOGY_START_KIND_IMMEDIATE &&
+              typeof clearImmediate === TYPEOF_FUNCTION) {
             clearImmediate(this.deferredLatencyTopologyStartHandle);
           } else {
             clearTimeout(this.deferredLatencyTopologyStartHandle);
@@ -1434,7 +1512,7 @@ function createBootstrapServiceRuntimeMethods() {
           this.deferredLatencyTopologyStartKind = null;
         }
 
-        if (typeof setImmediate === 'function') {
+        if (typeof setImmediate === TYPEOF_FUNCTION) {
           await new Promise((resolve) => setImmediate(resolve));
         }
 

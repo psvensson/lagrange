@@ -22,12 +22,6 @@ import {
   firstStringField,
   uniqueSorted,
 } from './admin-helpers.js';
-import {
-} from '../control-plane/active-node-projection.js';
-import {
-} from '../control-plane/priority-recovery-diagnostics-constants.js';
-import {
-} from './admin-authoritative-repair-evaluation.js';
 import {AdminControlSnapshotPart6} from './admin-control-snapshot-class-part-6.js';
 // ── file-local constants ────────────────────────────────────────────────────
 const ADMIN_CONTROL_SNAPSHOT_LITERAL = Object.freeze({

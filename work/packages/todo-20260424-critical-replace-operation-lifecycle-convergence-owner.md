@@ -1,6 +1,6 @@
 # Critical Replace Operation Lifecycle Convergence Owner
 
-Status: todo on April 25, 2026. This remains the queued owner-contract cleanup
+Migration note: This remains the queued owner-contract cleanup
 for operation lifecycle convergence, but it is not the current execution
 package while `rolling-restart` is blocked on the active operation transition
 and over-target trim boundary.

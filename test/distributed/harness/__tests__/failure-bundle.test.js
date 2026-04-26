@@ -6,6 +6,10 @@ import {tmpdir} from 'node:os';
 import {randomUUID} from 'node:crypto';
 import {ReportWriter} from '../report-writer.js';
 import {writeFailureBundlesForReport} from '../failure-bundle.js';
+import {
+  CONTROL_PLANE_QUIESCENCE_REASON,
+  CONTROL_PLANE_QUIESCENCE_STATE,
+} from '../control-plane-quiescence-snapshot.js';
 import {FAILURE_BUNDLE_SEGMENT_1} from
   '../failure-bundle-segment-1.js';
 import {FAILURE_BUNDLE_SEGMENT_4} from
@@ -23,6 +27,7 @@ const {
   FAILURE_CLASS_LOAD_PRESSURE,
   FAILURE_CLASS_PUBLICATION_CONVERGENCE_BLOCKED,
   FAILURE_CLASS_STARTUP_RECOVERY_BLOCKED,
+  FAILURE_CLASS_DISCOVERY_UNAVAILABLE,
   FAILURE_CLASS_CACHE_STALE,
   FAILURE_CLASS_TOPOLOGY_UNSTABLE,
   FAILURE_CLASS_CDC_DEGRADED,
@@ -618,6 +623,7 @@ function buildStartupModeWitnessProgress({
   snapshotCoverageNodeCount = 0,
   isTimeoutError = true,
   readinessDelay = null,
+  missingPublishedCount = 1,
 } = {}) {
   const selectedSnapshotReachableBy = 'admin_health';
   const selectedSnapshotError = isTimeoutError ?
@@ -631,7 +637,7 @@ function buildStartupModeWitnessProgress({
     snapshotCoverageComplete: false,
     publicationStatus: 'PUBLISHED',
     pendingAckCount: 0,
-    missingPublishedCount: 1,
+    missingPublishedCount,
     gateReasons: [],
     prioritySpreadSatisfied: false,
     selectedSnapshotReachableBy,
@@ -5672,6 +5678,173 @@ describe('failure-bundle', () => {
       assert.equal(
         selectedWitness?.partitionId,
         'pressure-shaped-scheduling',
+      );
+    },
+  );
+
+  it(
+    'classifies control-plane quiescence diagnostics from owner snapshot',
+    async () => {
+      const SCENARIO_NAME = 'rolling-restart';
+      const ROOT_CAUSE_CLASS_DISCOVERY = 'discovery';
+      const CONTROL_PLANE_QUIESCENCE_ERROR =
+        'Control plane did not quiesce within 120000ms';
+      const SNAPSHOT_TIMEOUT_REASON =
+        'snapshot_query_error=Admin API query timed out';
+      const CONTROL_PLANE_PRESSURE_REASON =
+        'control_plane_pressure=Admin API query timed out';
+      const QUIESCENCE_STATE_SIGNAL =
+        'quiescenceState=' +
+        CONTROL_PLANE_QUIESCENCE_STATE.CONTROL_PLANE_PRESSURE;
+      const QUIESCENCE_BLOCKER_SIGNAL =
+        'quiescenceBlocker=' +
+        CONTROL_PLANE_QUIESCENCE_REASON.CONTROL_PLANE_PRESSURE;
+      const QUIESCENCE_REASON_SIGNAL =
+        'quiescenceReason=' +
+        CONTROL_PLANE_QUIESCENCE_REASON.CONTROL_PLANE_PRESSURE;
+      const QUIESCENCE_MARKDOWN_PATTERN =
+        /- Quiescence: state=control_plane_pressure/;
+      const SCENARIO_DURATION_MS = 100;
+      const EMPTY_ELAPSED_MS = 0;
+      const IN_FLIGHT_COUNT = 5;
+      const SINGLE_REASON_COUNT = 1;
+      const scenarios = [{
+        scenario: SCENARIO_NAME,
+        passed: false,
+        duration: SCENARIO_DURATION_MS,
+        error: CONTROL_PLANE_QUIESCENCE_ERROR,
+        details: {
+          diagnostics: {
+            quiescence: {
+              state:
+                CONTROL_PLANE_QUIESCENCE_STATE.CONTROL_PLANE_PRESSURE,
+              canonicalBlocker:
+                CONTROL_PLANE_QUIESCENCE_REASON.CONTROL_PLANE_PRESSURE,
+              reasonCodes: [
+                CONTROL_PLANE_QUIESCENCE_REASON.CONTROL_PLANE_PRESSURE,
+                CONTROL_PLANE_QUIESCENCE_REASON.SNAPSHOT_QUERY_ERROR,
+              ],
+              reasons: [
+                CONTROL_PLANE_PRESSURE_REASON,
+                SNAPSHOT_TIMEOUT_REASON,
+              ],
+              stableElapsedMs: EMPTY_ELAPSED_MS,
+              leaderQuietElapsedMs: EMPTY_ELAPSED_MS,
+              inFlightCount: IN_FLIGHT_COUNT,
+            },
+          },
+        },
+      }];
+
+      const {scenarioBundles} = await writeFailureBundlesForReport({
+        scenarios,
+        reportOutputPath: reportPath,
+        outputDir: tempDir,
+        workspaceRoot: tempDir,
+      });
+      const scenarioBundle = JSON.parse(
+        await readFile(
+          resolve(tempDir, scenarioBundles[0].links.jsonPath),
+          UTF8_ENCODING,
+        ),
+      );
+      const markdown = await readFile(
+        resolve(tempDir, scenarioBundles[0].links.markdownPath),
+        UTF8_ENCODING,
+      );
+      const failureClassification =
+        scenarioBundle.summary.failureClassification;
+
+      assert.equal(
+        scenarioBundle.summary.dominantReason,
+        CONTROL_PLANE_QUIESCENCE_REASON.CONTROL_PLANE_PRESSURE,
+      );
+      assert.equal(
+        scenarioBundle.summary.rootCauseClass,
+        ROOT_CAUSE_CLASS_DISCOVERY,
+      );
+      assert.equal(
+        failureClassification.failureClass,
+        FAILURE_CLASS_DISCOVERY_UNAVAILABLE,
+      );
+      assert.equal(
+        failureClassification.dominantReason,
+        CONTROL_PLANE_QUIESCENCE_REASON.CONTROL_PLANE_PRESSURE,
+      );
+      assert.ok(
+        failureClassification.signals.includes(QUIESCENCE_STATE_SIGNAL),
+      );
+      assert.ok(
+        failureClassification.signals.includes(QUIESCENCE_BLOCKER_SIGNAL),
+      );
+      assert.ok(
+        failureClassification.signals.includes(QUIESCENCE_REASON_SIGNAL),
+      );
+      assert.equal(
+        scenarioBundle.diagnostics.failure.quiescence.state,
+        CONTROL_PLANE_QUIESCENCE_STATE.CONTROL_PLANE_PRESSURE,
+      );
+      assert.equal(
+        scenarioBundle.topFailures.reasonCounts[
+          CONTROL_PLANE_QUIESCENCE_REASON.SNAPSHOT_QUERY_ERROR
+        ],
+        SINGLE_REASON_COUNT,
+      );
+      assert.match(markdown, QUIESCENCE_MARKDOWN_PATTERN);
+    },
+  );
+
+  it(
+    'normalizes active-gate publication debt over stale top-level counts',
+    () => {
+      const PUBLICATION_EPOCH = 91;
+      const PUBLICATION_STATUS_ACK_PENDING = 'ACK_PENDING';
+      const PENDING_ACK_COUNT = 1;
+      const MISSING_PUBLISHED_COUNT = 2;
+      const MISSING_NODE_ONE = 'missing-node-1';
+      const MISSING_NODE_TWO = 'missing-node-2';
+      const ZERO_COUNT = 0;
+      const controlPlane = {
+        publicationConvergence: {
+          publicationEpoch: PUBLICATION_EPOCH,
+          publicationStatus: PUBLICATION_STATUS_ACK_PENDING,
+          pendingAckNodeIds: [],
+          pendingAckCount: ZERO_COUNT,
+        },
+        priorityRecoveryObservation: {
+          publicationEpoch: PUBLICATION_EPOCH,
+          publicationStatus: PUBLICATION_STATUS_ACK_PENDING,
+          pendingAckNodeIds: [],
+          pendingAckCount: ZERO_COUNT,
+          activeGate: {
+            progress: {
+              publicationEpoch: PUBLICATION_EPOCH,
+              publicationStatus: PUBLICATION_STATUS_ACK_PENDING,
+              pendingAckCount: PENDING_ACK_COUNT,
+              missingPublishedCount: MISSING_PUBLISHED_COUNT,
+              selectedMissingPublishedNodeIds: [
+                MISSING_NODE_ONE,
+                MISSING_NODE_TWO,
+              ],
+            },
+          },
+        },
+      };
+
+      const publicationConvergence =
+        buildPublicationConvergenceSummary(controlPlane);
+
+      assert.equal(
+        publicationConvergence.pendingAckCount,
+        PENDING_ACK_COUNT,
+      );
+      assert.equal(
+        publicationConvergence.missingPublishedCount,
+        MISSING_PUBLISHED_COUNT,
+      );
+      assert.deepEqual(
+        publicationConvergence.missingPublishedNodeIds,
+        [MISSING_NODE_ONE, MISSING_NODE_TWO],
       );
     },
   );

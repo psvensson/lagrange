@@ -214,6 +214,66 @@ function resolveTableCreationMutationContractOutcome(
   }
   return strongestOutcome;
 }
+
+function buildTableCreationCompletionDecision(decision) {
+  return decision;
+}
+
+function resolveTableCreationProvisioningCompletionDecision(
+  contractOutcome,
+  provisioningContractOutcome,
+) {
+  const selectedContractOutcome = provisioningContractOutcome ?
+    pickStrongerTableCreationContractOutcome(
+      contractOutcome,
+      provisioningContractOutcome,
+    ) :
+    contractOutcome;
+  const readyContractOutcome =
+    selectedContractOutcome.contractState === OWNER_CONTRACT_STATE.READY ?
+      buildOwnerContractOutcome({
+        contractState: OWNER_CONTRACT_STATE.PENDING,
+        nextAction: OWNER_CONTRACT_NEXT_ACTION.WAIT,
+      }) :
+      selectedContractOutcome;
+  return buildTableCreationCompletionDecision({
+    completionState: TABLE_CREATION_COMPLETION_STATE.PENDING_CREATION,
+    completionReason:
+      TABLE_CREATION_COMPLETION_REASON.REPLICA_CONVERGENCE_PENDING,
+    contractOutcome: readyContractOutcome,
+  });
+}
+
+function resolveTableCreationCompletionDecision(
+  visibilityState,
+  provisioningSummary,
+  contractOutcome,
+  provisioningContractOutcome,
+) {
+  if (visibilityState !== TABLE_CREATION_VISIBILITY_STATE.VISIBLE) {
+    return buildTableCreationCompletionDecision({
+      completionState: TABLE_CREATION_COMPLETION_STATE.PENDING_CREATION,
+      completionReason:
+        TABLE_CREATION_COMPLETION_REASON.METADATA_VISIBILITY_PENDING,
+      contractOutcome,
+    });
+  }
+  if (
+    provisioningSummary &&
+    provisioningSummary.fullReplicaCountConverged === false
+  ) {
+    return resolveTableCreationProvisioningCompletionDecision(
+      contractOutcome,
+      provisioningContractOutcome,
+    );
+  }
+  return buildTableCreationCompletionDecision({
+    completionState: TABLE_CREATION_COMPLETION_STATE.ACTIVE,
+    completionReason: null,
+    contractOutcome,
+  });
+}
+
 function resolveTableCreationCompletion(options = {}) {
   const visibilityState = String(
     options?.visibilityState || TABLE_CREATION_VISIBILITY_STATE.VISIBLE,
@@ -227,45 +287,26 @@ function resolveTableCreationCompletion(options = {}) {
         nextAction: provisioningSummary.nextAction,
       }) :
       null;
-  let contractOutcome =
+  const contractOutcome =
     options?.metadataContractOutcome &&
-    typeof options.metadataContractOutcome === 'object' ?
+    typeof options.metadataContractOutcome ===
+      TABLE_CREATION_SERVICE_LITERAL.OBJECT ?
       buildOwnerContractOutcome({
         contractState: options.metadataContractOutcome.contractState,
         nextAction: options.metadataContractOutcome.nextAction,
       }) :
       resolveTableCreationVisibilityContractOutcome(visibilityState);
-  let completionState = TABLE_CREATION_COMPLETION_STATE.ACTIVE;
-  let completionReason = null;
-  if (visibilityState !== TABLE_CREATION_VISIBILITY_STATE.VISIBLE) {
-    completionState = TABLE_CREATION_COMPLETION_STATE.PENDING_CREATION;
-    completionReason =
-      TABLE_CREATION_COMPLETION_REASON.METADATA_VISIBILITY_PENDING;
-  } else if (
-    provisioningSummary &&
-    provisioningSummary.fullReplicaCountConverged === false
-  ) {
-    completionState = TABLE_CREATION_COMPLETION_STATE.PENDING_CREATION;
-    completionReason =
-      TABLE_CREATION_COMPLETION_REASON.REPLICA_CONVERGENCE_PENDING;
-    if (provisioningContractOutcome) {
-      contractOutcome = pickStrongerTableCreationContractOutcome(
-        contractOutcome,
-        provisioningContractOutcome,
-      );
-    }
-    if (contractOutcome.contractState === OWNER_CONTRACT_STATE.READY) {
-      contractOutcome = buildOwnerContractOutcome({
-        contractState: OWNER_CONTRACT_STATE.PENDING,
-        nextAction: OWNER_CONTRACT_NEXT_ACTION.WAIT,
-      });
-    }
-  }
+  const completionDecision = resolveTableCreationCompletionDecision(
+    visibilityState,
+    provisioningSummary,
+    contractOutcome,
+    provisioningContractOutcome,
+  );
   return {
-    completionState,
-    completionReason,
-    contractState: contractOutcome.contractState,
-    nextAction: contractOutcome.nextAction,
+    completionState: completionDecision.completionState,
+    completionReason: completionDecision.completionReason,
+    contractState: completionDecision.contractOutcome.contractState,
+    nextAction: completionDecision.contractOutcome.nextAction,
   };
 }
 function buildCreateTableSuccessResult(options = {}) {

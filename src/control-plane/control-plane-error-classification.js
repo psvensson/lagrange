@@ -179,6 +179,22 @@ function isRetryableControlPlaneError(value) {
   return false;
 }
 
+function resolveControlPlanePrimaryFailureReason(summary) {
+  if (summary.authoritativeRowSourceUnavailableCount > NUM.ZERO) {
+    return CONTROL_PLANE_FAILURE_REASON.AUTHORITATIVE_ROW_SOURCE_UNAVAILABLE;
+  }
+  if (summary.distributedParticipantFailureCount > NUM.ZERO) {
+    return CONTROL_PLANE_FAILURE_REASON.DISTRIBUTED_PARTICIPANT_FAILURE;
+  }
+  if (summary.reconnectDeliveryFailureCount > NUM.ZERO) {
+    return CONTROL_PLANE_FAILURE_REASON.RECONNECT_DELIVERY_FAILURE;
+  }
+  if (summary.pressureDegradedCount > NUM.ZERO) {
+    return CONTROL_PLANE_FAILURE_REASON.PRESSURE_DEGRADED;
+  }
+  return CONTROL_PLANE_FAILURE_REASON.UNKNOWN;
+}
+
 function getControlPlaneFailureSummary(value) {
   const summary = {
     primaryReason: CONTROL_PLANE_FAILURE_REASON.UNKNOWN,
@@ -230,19 +246,7 @@ function getControlPlaneFailureSummary(value) {
     }
   }
 
-  if (summary.authoritativeRowSourceUnavailableCount > NUM.ZERO) {
-    summary.primaryReason =
-      CONTROL_PLANE_FAILURE_REASON.AUTHORITATIVE_ROW_SOURCE_UNAVAILABLE;
-  } else if (summary.distributedParticipantFailureCount > NUM.ZERO) {
-    summary.primaryReason =
-      CONTROL_PLANE_FAILURE_REASON.DISTRIBUTED_PARTICIPANT_FAILURE;
-  } else if (summary.reconnectDeliveryFailureCount > NUM.ZERO) {
-    summary.primaryReason =
-      CONTROL_PLANE_FAILURE_REASON.RECONNECT_DELIVERY_FAILURE;
-  } else if (summary.pressureDegradedCount > NUM.ZERO) {
-    summary.primaryReason =
-      CONTROL_PLANE_FAILURE_REASON.PRESSURE_DEGRADED;
-  }
+  summary.primaryReason = resolveControlPlanePrimaryFailureReason(summary);
 
   return summary;
 }

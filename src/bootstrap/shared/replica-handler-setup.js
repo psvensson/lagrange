@@ -22,6 +22,7 @@ import {SUBSYSTEM} from '../../constants/index.js';
  * Subsystem identifier for logging.
  */
 const REPLICA_HANDLER_SETUP_SUBSYSTEM = SUBSYSTEM.REPLICA_HANDLER_SETUP;
+const REPLICA_HANDLER_SETUP_NAME = 'ReplicaHandlerSetup';
 
 /**
  * Log messages for ReplicaHandlerSetup.
@@ -67,6 +68,8 @@ class ReplicaHandlerSetup {
    * @param {Function} options.createPartitionService - Factory for creating partitions (required).
    * @param {string} options.dataDir - Base data directory for partition storage.
    * @param {Object} options.rpcClient - Optional RPC client for responses.
+   * @param {Object} options.executorOutcomeEmitter - Optional executor
+   *   outcome emitter shared with the rebalance coordinator.
    * @return {Object} Object containing replicaHandler and replicaStateMachine.
    * @throws {DependencyError} If required dependencies are not provided.
    */
@@ -79,24 +82,37 @@ class ReplicaHandlerSetup {
       createPartitionService,
       dataDir,
       rpcClient,
+      executorOutcomeEmitter,
     } = options;
 
     // Validate required dependencies
     if (!nodeId) {
-      throw new DependencyError('ReplicaHandlerSetup', ERROR_MSG.NODE_ID_REQUIRED);
+      throw new DependencyError(
+        REPLICA_HANDLER_SETUP_NAME,
+        ERROR_MSG.NODE_ID_REQUIRED,
+      );
     }
     if (!messageRouter) {
-      throw new DependencyError('ReplicaHandlerSetup', ERROR_MSG.MESSAGE_ROUTER_REQUIRED);
+      throw new DependencyError(
+        REPLICA_HANDLER_SETUP_NAME,
+        ERROR_MSG.MESSAGE_ROUTER_REQUIRED,
+      );
     }
     if (!cdcIntegrationService) {
-      throw new DependencyError('ReplicaHandlerSetup', ERROR_MSG.CDC_INTEGRATION_SERVICE_REQUIRED);
+      throw new DependencyError(
+        REPLICA_HANDLER_SETUP_NAME,
+        ERROR_MSG.CDC_INTEGRATION_SERVICE_REQUIRED,
+      );
     }
     if (!systemTableCache) {
-      throw new DependencyError('ReplicaHandlerSetup', ERROR_MSG.SYSTEM_TABLE_CACHE_REQUIRED);
+      throw new DependencyError(
+        REPLICA_HANDLER_SETUP_NAME,
+        ERROR_MSG.SYSTEM_TABLE_CACHE_REQUIRED,
+      );
     }
     if (!createPartitionService) {
       throw new DependencyError(
-        'ReplicaHandlerSetup',
+        REPLICA_HANDLER_SETUP_NAME,
         ERROR_MSG.CREATE_PARTITION_SERVICE_REQUIRED,
       );
     }
@@ -132,6 +148,7 @@ class ReplicaHandlerSetup {
       replicaStateMachine,
       createPartitionService,
       dataDir,
+      executorOutcomeEmitter,
     });
 
     // Initialize the handler

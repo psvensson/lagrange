@@ -9,6 +9,9 @@ import {DependencyError} from '../bootstrap-errors.js';
 
 const MESSAGE_GROUP_HANDLER_SETUP_SUBSYSTEM =
   'message-group-service-handler-setup';
+const MESSAGE_GROUP_SERVICE_HANDLER_SETUP_NAME =
+  'MessageGroupServiceHandlerSetup';
+const TYPEOF_FUNCTION = 'function';
 
 const LOG_MSG = Object.freeze({
   CREATING: 'Creating MessageGroupServiceHandler',
@@ -37,47 +40,48 @@ class MessageGroupServiceHandlerSetup {
       stopMessageGroupReplica,
       resolveLocalMessageGroupReplica,
       rpcClient,
+      executorOutcomeEmitter,
     } = options;
 
     if (!nodeId) {
       throw new DependencyError(
-        'MessageGroupServiceHandlerSetup',
+        MESSAGE_GROUP_SERVICE_HANDLER_SETUP_NAME,
         ERROR_MSG.NODE_ID_REQUIRED,
       );
     }
     if (!messageRouter) {
       throw new DependencyError(
-        'MessageGroupServiceHandlerSetup',
+        MESSAGE_GROUP_SERVICE_HANDLER_SETUP_NAME,
         ERROR_MSG.MESSAGE_ROUTER_REQUIRED,
       );
     }
     if (!cdcIntegrationService) {
       throw new DependencyError(
-        'MessageGroupServiceHandlerSetup',
+        MESSAGE_GROUP_SERVICE_HANDLER_SETUP_NAME,
         ERROR_MSG.CDC_INTEGRATION_SERVICE_REQUIRED,
       );
     }
     if (!systemTableCache) {
       throw new DependencyError(
-        'MessageGroupServiceHandlerSetup',
+        MESSAGE_GROUP_SERVICE_HANDLER_SETUP_NAME,
         ERROR_MSG.SYSTEM_TABLE_CACHE_REQUIRED,
       );
     }
-    if (typeof createMessageGroupReplica !== 'function') {
+    if (typeof createMessageGroupReplica !== TYPEOF_FUNCTION) {
       throw new DependencyError(
-        'MessageGroupServiceHandlerSetup',
+        MESSAGE_GROUP_SERVICE_HANDLER_SETUP_NAME,
         ERROR_MSG.CREATE_REQUIRED,
       );
     }
-    if (typeof startMessageGroupReplica !== 'function') {
+    if (typeof startMessageGroupReplica !== TYPEOF_FUNCTION) {
       throw new DependencyError(
-        'MessageGroupServiceHandlerSetup',
+        MESSAGE_GROUP_SERVICE_HANDLER_SETUP_NAME,
         ERROR_MSG.START_REQUIRED,
       );
     }
-    if (typeof stopMessageGroupReplica !== 'function') {
+    if (typeof stopMessageGroupReplica !== TYPEOF_FUNCTION) {
       throw new DependencyError(
-        'MessageGroupServiceHandlerSetup',
+        MESSAGE_GROUP_SERVICE_HANDLER_SETUP_NAME,
         ERROR_MSG.STOP_REQUIRED,
       );
     }
@@ -98,6 +102,7 @@ class MessageGroupServiceHandlerSetup {
       startMessageGroupReplica,
       stopMessageGroupReplica,
       resolveLocalMessageGroupReplica,
+      executorOutcomeEmitter,
     });
 
     messageGroupServiceHandler.initialize();

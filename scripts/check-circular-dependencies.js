@@ -1,6 +1,6 @@
 /**
- * Runs madge for circular dependency detection across repo-owned runtime and
- * script code.
+ * Runs madge for circular dependency detection across repo-owned runtime,
+ * script, and test code.
  *
  * Default mode: fails if cycle groups exceed the current baseline count.
  * --strict mode: fails if any cycle group is present.
@@ -16,9 +16,9 @@ import {
 const BASELINE_CYCLE_GROUP_COUNT = 0;
 const STRICT_FLAG = '--strict';
 const FILE_EXTENSIONS = ['js'];
-const SOURCE_DIRECTORIES = ['src', 'scripts'];
+const SOURCE_DIRECTORIES = ['src', 'scripts', 'test'];
 const REPORT_RELATIVE_PATH =
-  'test-output/analysis/madge-circular-src-scripts.json';
+  'test-output/analysis/madge-circular-src-scripts-test.json';
 const strict = process.argv.includes(STRICT_FLAG);
 
 const result = await madge(SOURCE_DIRECTORIES, {

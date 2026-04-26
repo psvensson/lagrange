@@ -390,6 +390,17 @@ function formatReadinessFailure(readinessFailure) {
   return parts.join(', ');
 }
 
+function formatControlPlaneQuiescence(quiescence) {
+  if (!isRecord(quiescence)) {
+    return UNKNOWN_VALUE;
+  }
+  return [
+    'state=' + String(quiescence.state || UNKNOWN_VALUE),
+    'blocker=' + String(quiescence.canonicalBlocker || UNKNOWN_VALUE),
+    'reasons=' + formatList(quiescence.reasonCodes),
+  ].join(', ');
+}
+
 function formatReadinessDimensions(readiness) {
   const dimensions =
     readiness?.dimensions && typeof readiness.dimensions === 'object' ?
@@ -656,6 +667,8 @@ function renderScenarioFailureBundleMarkdown(bundle) {
         ),
       '- Readiness Failure: ' +
         formatReadinessFailure(bundle.summary.readinessFailure),
+      '- Quiescence: ' +
+        formatControlPlaneQuiescence(bundle.summary.quiescence),
       `- Bottleneck: ${bundle.summary.bottleneckEstimate?.kind || UNKNOWN_VALUE}`,
       `- Report: ${bundle.reportPath || UNKNOWN_VALUE}`,
     ].join('\n'),

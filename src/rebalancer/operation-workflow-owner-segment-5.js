@@ -43,6 +43,10 @@ const PRIORITY_RECOVERY_WORKFLOW_TIMEOUT_STEPS = Object.freeze([
   WORKFLOW_STEP.STOPPING,
 ]);
 
+const STOP_PHASE_SOURCE_ABSENT_RESPONSE_STATUSES = Object.freeze(
+  new Set([ReplicaOperationResponseStatus.NOT_FOUND]),
+);
+
 class OperationWorkflowOwnerSegment5 extends OperationWorkflowOwnerSegment4 {
   buildPriorityRecoveryWorkflowStepTimeoutMap(operation = null) {
     const timeoutMap = {};
@@ -61,9 +65,14 @@ class OperationWorkflowOwnerSegment5 extends OperationWorkflowOwnerSegment4 {
       if (operation?.workflowStep !== WORKFLOW_STEP.STOPPING) {
         await this.updateStep(operation, WORKFLOW_STEP.STOPPING);
       }
-      await this.completeOperation(operation);
+      if (STOP_PHASE_SOURCE_ABSENT_RESPONSE_STATUSES.has(responseStatus)) {
+        await this.completeOperation(operation);
+        return this.buildSuccessfulOperationResult(operation.operationId, {
+          status: responseStatus,
+        });
+      }
       return this.buildSuccessfulOperationResult(operation.operationId, {
-        status: responseStatus,
+        status: ReplicaOperationResponseStatus.IN_PROGRESS,
       });
     } catch (error) {
       if (
@@ -761,7 +770,7 @@ class OperationWorkflowOwnerSegment5 extends OperationWorkflowOwnerSegment4 {
       ) {
         return cachedRow;
       }
-      return this.mergePartitionRowForSafety(result.rows[0], cachedRow);
+      return this.mergePartitionRowForSafety(result.rows[NUM.ZERO], cachedRow);
     } catch {
       return cachedRow;
     }
@@ -1011,6 +1020,13 @@ class OperationWorkflowOwnerSegment5 extends OperationWorkflowOwnerSegment4 {
         operation,
         replacementReplicaId,
       );
+    const replacementReplicaNotFoundByElection =
+      Array.isArray(replacementLeaderElectionEvidence?.notFoundReplicaIds) &&
+      typeof replacementReplicaId === TYPEOF.STRING &&
+      replacementReplicaId.length > NUM.ZERO &&
+      replacementLeaderElectionEvidence.notFoundReplicaIds.includes(
+        replacementReplicaId,
+      );
     const replacementLeaderElectionRetrySuppressed =
       this.isPriorityPublicationLeaderHandoffRetrySuppressed(
         replacementLeaderElectionEvidence,
@@ -1028,8 +1044,12 @@ class OperationWorkflowOwnerSegment5 extends OperationWorkflowOwnerSegment4 {
       (replacementNodeId !== null &&
         partitionLeaderMovedAwayFromSource &&
         partitionLeaderNodeId === replacementNodeId);
+    const sourceLeadershipReleaseHasCanonicalSuccessor =
+      sourceLeadershipReleaseObserved &&
+      partitionLeaderMovedAwayFromSource;
     const sourceRemovalLeadershipSafe =
-      sourceLeadershipReleaseObserved || replacementLeaderOwnershipObserved;
+      sourceLeadershipReleaseHasCanonicalSuccessor ||
+      replacementLeaderOwnershipObserved;
     const publicationStatus =
       this.normalizePriorityPublicationStatus(planningSnapshot);
 
@@ -1152,6 +1172,37 @@ class OperationWorkflowOwnerSegment5 extends OperationWorkflowOwnerSegment4 {
         handoffRequestRetrySuppressed,
         replacementLeaderElectionEvidence,
         replacementLeaderElectionRetrySuppressed,
+        publicationPartitionId,
+        publicationStatus,
+      });
+    }
+
+    if (
+      sourceLeaderHandoffSatisfied &&
+      replacementReplicaNotFoundByElection &&
+      !replacementLeaderOwnershipObserved
+    ) {
+      return Object.freeze({
+        state:
+          PRIORITY_PUBLICATION_LEADER_REMOVE_SAFETY_STATE
+            .FAIL_REPLACEMENT_REPLICA_NOT_FOUND,
+        partitionId,
+        sourceRoleState,
+        observedSourceRoleState,
+        sourceReplicaId,
+        sourceNodeId,
+        partitionLeaderNodeId,
+        replacementReplicaId,
+        replacementNodeId,
+        replacementRoleState,
+        sourceLeadershipReleaseObserved,
+        replacementLeaderOwnershipObserved,
+        sourceRemovalLeadershipSafe,
+        completedLeaderHandoffEvidence,
+        handoffRequestRetrySuppressed,
+        replacementLeaderElectionEvidence,
+        replacementLeaderElectionRetrySuppressed,
+        replacementReplicaNotFoundByElection,
         publicationPartitionId,
         publicationStatus,
       });
@@ -1304,6 +1355,20 @@ class OperationWorkflowOwnerSegment5 extends OperationWorkflowOwnerSegment4 {
             requestReplicaId: safetySnapshot.replacementReplicaId,
           }),
         },
+      );
+    }
+
+    if (
+      safetySnapshot.state ===
+      PRIORITY_PUBLICATION_LEADER_REMOVE_SAFETY_STATE
+        .FAIL_REPLACEMENT_REPLICA_NOT_FOUND
+    ) {
+      return this.buildFailedRemoveSafetyEvaluation(
+        OPERATION_WORKFLOW_OWNER_LITERAL.CRITICAL_PARTITION +
+          safetySnapshot.partitionId +
+          OPERATION_WORKFLOW_OWNER_LITERAL.REPLACEMENT_REPLICA_2 +
+          safetySnapshot.replacementReplicaId +
+          OPERATION_WORKFLOW_OWNER_LITERAL.REPLACEMENT_LEADER_ELECTION_RETURNED_NOT_FOUND,
       );
     }
 

@@ -1533,6 +1533,111 @@ export function registerMembershipPublicationCoordinatorTailMoreTests({
       );
     });
 
+  test('reconcileClusterMembership closes ack-complete open rows during metadata refresh',
+    async (t) => {
+      const REFRESH_PUBLICATION_ID = 'publication-ack-complete-refresh';
+      const REFRESH_PUBLICATION_KIND = 'cluster_membership';
+      const REFRESH_PUBLICATION_EPOCH = 24;
+      const REFRESH_STATUS_OPEN = 'OPEN';
+      const REFRESH_STATUS_PUBLISHED = 'PUBLISHED';
+      const REFRESH_OLD_TIMESTAMP_MS = 2400;
+      const REFRESH_NOW_MS = 2800;
+      const REFRESH_REQUIRED_DISTINCT_NODE_COUNT = 3;
+      const REFRESH_READY_ELIGIBLE_NODE_COUNT = 3;
+      const REFRESH_STALE_READY_DISTINCT_NODE_COUNT = 2;
+      const REFRESH_SPREAD_GAP = 1;
+      const REFRESH_ACK_COMPLETED_REASON =
+        'required_acknowledgements_completed';
+      const REFRESH_STALE_PARTITION_ID = PRIORITY_REFRESH_PARTITION_IDS[0];
+      const latestPublicationRow = {
+        publication_id: REFRESH_PUBLICATION_ID,
+        publication_kind: REFRESH_PUBLICATION_KIND,
+        publication_epoch: REFRESH_PUBLICATION_EPOCH,
+        published_active_node_ids: [...PRIORITY_REFRESH_NODE_IDS],
+        required_ack_node_ids: [...PRIORITY_REFRESH_NODE_IDS],
+        acknowledged_node_ids: [...PRIORITY_REFRESH_NODE_IDS],
+        priority_partition_summary: {
+          satisfied: false,
+          requiredDistinctNodeCount: REFRESH_REQUIRED_DISTINCT_NODE_COUNT,
+          readyEligibleNodeCount: REFRESH_READY_ELIGIBLE_NODE_COUNT,
+          missingPartitionIds: [REFRESH_STALE_PARTITION_ID],
+          blockedPartitions: [{
+            partitionId: REFRESH_STALE_PARTITION_ID,
+            requiredDistinctNodeCount: REFRESH_REQUIRED_DISTINCT_NODE_COUNT,
+            readyDistinctNodeCount: REFRESH_STALE_READY_DISTINCT_NODE_COUNT,
+            spreadGap: REFRESH_SPREAD_GAP,
+          }],
+        },
+        membership_lifecycle_summary: {
+          lifecycleState: MEMBERSHIP_LIFECYCLE_STATE.PUBLISH_PENDING,
+        },
+        status: REFRESH_STATUS_OPEN,
+        updated_at: REFRESH_OLD_TIMESTAMP_MS,
+      };
+      const planningSnapshot = {
+        latestPublicationRow,
+        publishedActiveNodeIds: [...PRIORITY_REFRESH_NODE_IDS],
+        requiredAckNodeIds: [...PRIORITY_REFRESH_NODE_IDS],
+        priorityPartitionSummary: {
+          satisfied: true,
+          requiredDistinctNodeCount: REFRESH_REQUIRED_DISTINCT_NODE_COUNT,
+          readyEligibleNodeCount: REFRESH_READY_ELIGIBLE_NODE_COUNT,
+          missingPartitionIds: [],
+          blockedPartitions: [],
+        },
+        nodeRows: [],
+        nodeEndpointRows: [],
+        serviceRows: [],
+        partitionRows: [],
+        replicaOperationRows: [],
+        readinessEntries: [],
+      };
+      const persistedRows = [];
+      const coordinator = new MembershipPublicationCoordinator({
+        nodeId: PRIORITY_REFRESH_NODE_IDS[PRIORITY_REFRESH_LOCAL_NODE_INDEX],
+        controlPlanePublicationsOwner: {
+          async upsertPublication(row) {
+            persistedRows.push(row);
+          },
+        },
+        now: () => REFRESH_NOW_MS,
+      });
+
+      const result = await coordinator.reconcileClusterMembership({
+        publicationRows: [latestPublicationRow],
+        planningSnapshot,
+      });
+
+      t.equal(
+        persistedRows.length,
+        PRIORITY_REFRESH_EXPECTED_PERSIST_COUNT,
+        'metadata refresh should persist exactly one repaired row',
+      );
+      t.match(
+        persistedRows[0],
+        {
+          publication_id: REFRESH_PUBLICATION_ID,
+          status: REFRESH_STATUS_PUBLISHED,
+          published_at: REFRESH_NOW_MS,
+          closed_at: REFRESH_NOW_MS,
+          membership_lifecycle_summary: {
+            lifecycleState: MEMBERSHIP_LIFECYCLE_STATE.PUBLISHED_ACTIVE,
+          },
+        },
+        'ack-complete metadata refresh should close the durable row',
+      );
+      t.same(
+        persistedRows[0].transition_history.map((entry) => entry.reasonCode),
+        [REFRESH_ACK_COMPLETED_REASON],
+        'repair transition should identify ack completion as the closure reason',
+      );
+      t.equal(
+        result.publicationRow.status,
+        REFRESH_STATUS_PUBLISHED,
+        'reconcile result should expose the repaired published status',
+      );
+    });
+
   test('reconcileClusterMembership uses authoritative readiness when published priority spread is still blocked',
     async (t) => {
       const latestPublicationRow = {

@@ -864,7 +864,7 @@ export function registerQuorumConditionedRemoveSafetyTailTests({
       }
     });
 
-  test('RebalanceCoordinator - dispatches sql_transactions source removal when source follower evidence outruns partition leader ownership',
+  test('RebalanceCoordinator - nudges sql_transactions replacement election when source follower evidence outruns partition leader ownership',
     async (t) => {
       ConfigurationManager.resetInstance();
       LoggingService.resetInstance();
@@ -1050,18 +1050,65 @@ export function registerQuorumConditionedRemoveSafetyTailTests({
 
         t.equal(
           blockedResult.success,
+          false,
+          'source follower evidence should defer until successor leadership is visible',
+        );
+        t.equal(
+          blockedResult.skipped,
           true,
-          'source removal should dispatch once source follower evidence is explicit',
+          'source follower evidence should keep the replace source-removal retryable',
+        );
+        t.equal(
+          deliveries.length,
+          1,
+          'source follower evidence should request replacement leader election first',
         );
         t.equal(
           deliveries[0].payload.type,
+          ReplicaOperationMessageType.STEP_DOWN_REPLICA,
+          'source follower evidence should nudge replacement election before removal',
+        );
+        t.equal(
+          deliveries[0].payload.replicaId,
+          testReplacementReplicaId,
+          'replacement election should target the replacement replica',
+        );
+        t.equal(
+          operation.workflowStep,
+          WORKFLOW_STEP.ACTIVE,
+          'the replace workflow should remain in source-removal retry while successor leadership is missing',
+        );
+
+        coordinator.systemTableCache.merge(
+          TEST_PARTITIONS_TABLE_NAME,
+          testPartitionId,
+          createCriticalPartitionRow({
+            partitionId: testPartitionId,
+            leaderNodeId: testReplacementNodeId,
+          }),
+        );
+
+        const retryResult = await coordinator.executeOperation(operation);
+
+        t.equal(
+          retryResult.success,
+          true,
+          'source removal should dispatch once successor leadership is visible',
+        );
+        t.equal(
+          deliveries.length,
+          2,
+          'the second dispatch should remove the old source replica',
+        );
+        t.equal(
+          deliveries[1].payload.type,
           ReplicaOperationMessageType.REMOVE_REPLICA,
-          'source follower evidence should go directly to source removal',
+          'source removal should follow replacement leader ownership',
         );
         t.equal(
           operation.workflowStep,
           WORKFLOW_STEP.STOPPING,
-          'the replace workflow should move into source removal after follower evidence appears',
+          'the replace workflow should move into source removal after successor leadership appears',
         );
       } finally {
         await coordinator.shutdown();
@@ -1883,6 +1930,231 @@ export function registerQuorumConditionedRemoveSafetyTailTests({
       }
     });
 
+  test('RebalanceCoordinator - retargets replacement leader election after completed election does not produce ownership',
+    async (t) => {
+      ConfigurationManager.resetInstance();
+      LoggingService.resetInstance();
+      ConfigurationManager.getInstance().initialize({});
+      LoggingService.getInstance().initialize({level: 'error'});
+
+      const TEST_PARTITION_ID = 'replica_operations-p1';
+      const TEST_SOURCE_NODE_ID = 'node-a';
+      const TEST_ALTERNATE_NODE_ID = 'node-b';
+      const TEST_STANDBY_NODE_ID = 'node-c';
+      const TEST_REPLACEMENT_NODE_ID = 'node-d';
+      const TEST_SOURCE_REPLICA_ID = 'replica_operations-p1-r1';
+      const TEST_ALTERNATE_REPLICA_ID = 'replica_operations-p1-r2';
+      const TEST_STANDBY_REPLICA_ID = 'replica_operations-p1-r3';
+      const TEST_REPLACEMENT_REPLICA_ID = 'replica_operations-p1-r4';
+      const TEST_REPLICA_HANDLER_TARGET_SUFFIX = '/service/replica-handler';
+      const TEST_FOLLOWER_ROLE = 'follower';
+      const TEST_LEADER_ROLE = 'leader';
+      const TEST_OPERATION_ACTIVE_STATUS = 'active';
+      const TEST_MIN_REPLICA_COUNT = 3;
+      const TEST_REQUIRED_DISTINCT_NODE_COUNT = 2;
+      const TEST_RETRY_READY_EVIDENCE_AGE_MS = 6000;
+      const TEST_READY_NODE_IDS = Object.freeze([
+        TEST_SOURCE_NODE_ID,
+        TEST_ALTERNATE_NODE_ID,
+        TEST_STANDBY_NODE_ID,
+        TEST_REPLACEMENT_NODE_ID,
+      ]);
+      const TEST_EMPTY_PARTITION_IDS = Object.freeze([]);
+      const TEST_ORIGINAL_REPLACEMENT_TARGET =
+      `${TEST_REPLACEMENT_NODE_ID}${TEST_REPLICA_HANDLER_TARGET_SUFFIX}`;
+      const TEST_ALTERNATE_REPLACEMENT_TARGET =
+      `${TEST_ALTERNATE_NODE_ID}${TEST_REPLICA_HANDLER_TARGET_SUFFIX}`;
+      const TEST_SOURCE_REMOVAL_TARGET =
+      `${TEST_SOURCE_NODE_ID}${TEST_REPLICA_HANDLER_TARGET_SUFFIX}`;
+      const deliveries = [];
+      let alternateReplicaRole = TEST_FOLLOWER_ROLE;
+
+      const buildPlanningSnapshot = (nodeId) => ({
+        publicationStatus: TEST_PUBLICATION_STATUS_PUBLISHED,
+        publishedActiveNodeIdsPresent: true,
+        publishedActiveNodeIds: TEST_READY_NODE_IDS,
+        recoveryActiveNodeIds: TEST_READY_NODE_IDS,
+        projectedServingNodeIds: TEST_READY_NODE_IDS,
+        publishedMembershipIncludesTargetNode:
+        nodeId === TEST_REPLACEMENT_NODE_ID,
+        priorityPartitionSummary: Object.freeze({
+          satisfied: true,
+          requiredDistinctNodeCount: TEST_REQUIRED_DISTINCT_NODE_COUNT,
+          missingPartitionIds: TEST_EMPTY_PARTITION_IDS,
+        }),
+      });
+      const buildServiceRows = () => [
+        createCriticalPartitionServiceRow({
+          partitionId: TEST_PARTITION_ID,
+          replicaId: TEST_SOURCE_REPLICA_ID,
+          nodeId: TEST_SOURCE_NODE_ID,
+          raftRole: null,
+        }),
+        createCriticalPartitionServiceRow({
+          partitionId: TEST_PARTITION_ID,
+          replicaId: TEST_ALTERNATE_REPLICA_ID,
+          nodeId: TEST_ALTERNATE_NODE_ID,
+          raftRole: alternateReplicaRole,
+        }),
+        createCriticalPartitionServiceRow({
+          partitionId: TEST_PARTITION_ID,
+          replicaId: TEST_STANDBY_REPLICA_ID,
+          nodeId: TEST_STANDBY_NODE_ID,
+          raftRole: TEST_FOLLOWER_ROLE,
+        }),
+        createCriticalPartitionServiceRow({
+          partitionId: TEST_PARTITION_ID,
+          replicaId: TEST_REPLACEMENT_REPLICA_ID,
+          nodeId: TEST_REPLACEMENT_NODE_ID,
+          raftRole: TEST_FOLLOWER_ROLE,
+        }),
+      ];
+      const coordinator = createTestCoordinator({
+        nodeId: TEST_REPLACEMENT_NODE_ID,
+        enableTimeouts: false,
+        messageRouter: {
+          deliver: async (target, payload, options) => {
+            deliveries.push({target, payload, options});
+            return {
+              acknowledged: true,
+              status: ReplicaOperationResponseStatus.COMPLETED,
+            };
+          },
+          getConnectionState: () => 'connected',
+          pingNode: async () => true,
+          isOutboundQueueAvailable: () => true,
+        },
+        controlPlaneReadinessService: {
+          getNodeReadinessSync(nodeId) {
+            return {
+              nodeId,
+              dimensions: {
+                controlPlaneRecoveryEligible: true,
+                repairEligible: true,
+                serveEligible: true,
+              },
+            };
+          },
+          async getMembershipPublicationPlanningSnapshotBestEffort(nodeId) {
+            return buildPlanningSnapshot(nodeId);
+          },
+          async getMembershipPublicationPlanningSnapshot(nodeId) {
+            return buildPlanningSnapshot(nodeId);
+          },
+          getMembershipPublicationPlanningSnapshotSync(nodeId) {
+            return buildPlanningSnapshot(nodeId);
+          },
+        },
+        tablePolicyService: {
+          getPolicyForPartition: () => ({minReplicaCount: TEST_MIN_REPLICA_COUNT}),
+        },
+        cacheData: {
+          nodes: TEST_READY_NODE_IDS.map((nodeId) => createReadyNode(nodeId)),
+          services: buildServiceRows(),
+        },
+      });
+
+      coordinator.initialize();
+      try {
+        installAuthoritativeServicesRead(coordinator, buildServiceRows);
+        coordinator.systemTableCache.merge(
+          TEST_PARTITIONS_TABLE_NAME,
+          TEST_PARTITION_ID,
+          createCriticalPartitionRow({
+            partitionId: TEST_PARTITION_ID,
+            leaderNodeId: TEST_SOURCE_NODE_ID,
+          }),
+        );
+
+        const operation = await coordinator.createOperation({
+          type: OperationType.REPLACE,
+          partitionId: TEST_PARTITION_ID,
+          nodeId: TEST_REPLACEMENT_NODE_ID,
+          sourceNodeId: TEST_SOURCE_NODE_ID,
+          replicaId: TEST_SOURCE_REPLICA_ID,
+        });
+
+        operation.replicaId = TEST_REPLACEMENT_REPLICA_ID;
+        operation.workflowStep = WORKFLOW_STEP.ACTIVE;
+        operation.status = TEST_OPERATION_ACTIVE_STATUS;
+        coordinator.workflowOwner
+          .getPriorityPublicationLeaderHandoffEvidenceMap()
+          .set(
+            operation.operationId,
+            Object.freeze({
+              observedAt: Date.now(),
+              sourceReplicaId: TEST_SOURCE_REPLICA_ID,
+            }),
+          );
+
+        const firstResult = await coordinator.executeOperation(operation);
+
+        t.equal(
+          firstResult.success,
+          false,
+          'source removal should defer while the completed election has not produced replacement leadership',
+        );
+        t.equal(
+          deliveries[0].target,
+          TEST_ORIGINAL_REPLACEMENT_TARGET,
+          'the first nudge should target the original replacement node',
+        );
+
+        const evidenceMap = coordinator.workflowOwner
+          .getPriorityPublicationReplacementLeaderElectionEvidenceMap();
+        const firstElectionEvidence = evidenceMap.get(operation.operationId);
+        evidenceMap.set(
+          operation.operationId,
+          Object.freeze({
+            ...firstElectionEvidence,
+            observedAt: Date.now() - TEST_RETRY_READY_EVIDENCE_AGE_MS,
+          }),
+        );
+
+        const secondResult = await coordinator.executeOperation(operation);
+
+        t.equal(
+          secondResult.success,
+          false,
+          'source removal should stay deferred while retargeted leadership is pending',
+        );
+        t.equal(
+          deliveries[1].target,
+          TEST_ALTERNATE_REPLACEMENT_TARGET,
+          'the second nudge should retarget when completed election evidence did not produce ownership',
+        );
+        t.equal(
+          deliveries[1].payload.replicaId,
+          TEST_ALTERNATE_REPLICA_ID,
+          'the retargeted nudge should name the alternate voter replica',
+        );
+
+        alternateReplicaRole = TEST_LEADER_ROLE;
+
+        const finalResult = await coordinator.executeOperation(operation);
+
+        t.equal(
+          finalResult.success,
+          true,
+          'source removal should proceed once the retargeted voter owns leadership',
+        );
+        t.equal(
+          deliveries[2].target,
+          TEST_SOURCE_REMOVAL_TARGET,
+          'source removal should go back to the source node handler',
+        );
+        t.equal(
+          deliveries[2].payload.type,
+          ReplicaOperationMessageType.REMOVE_REPLICA,
+          'the final dispatch should be source removal',
+        );
+      } finally {
+        await coordinator.shutdown();
+        ConfigurationManager.resetInstance();
+        LoggingService.resetInstance();
+      }
+    });
+
   test('RebalanceCoordinator - authoritative service rows with missing raft_role preserve cached follower evidence while waiting for leader ownership',
     async (t) => {
       ConfigurationManager.resetInstance();
@@ -2069,18 +2341,65 @@ export function registerQuorumConditionedRemoveSafetyTailTests({
 
         t.equal(
           blockedResult.success,
+          false,
+          'cached follower evidence should still wait for successor leadership despite stale authoritative role gaps',
+        );
+        t.equal(
+          blockedResult.skipped,
           true,
-          'cached follower evidence should allow source removal despite stale authoritative role gaps',
+          'cached follower evidence should keep the replace source-removal retryable',
+        );
+        t.equal(
+          deliveries.length,
+          1,
+          'cached follower evidence should request replacement leader election first',
         );
         t.equal(
           deliveries[0].payload.type,
+          ReplicaOperationMessageType.STEP_DOWN_REPLICA,
+          'cached follower evidence should nudge replacement election before removal',
+        );
+        t.equal(
+          deliveries[0].payload.replicaId,
+          testReplacementReplicaId,
+          'replacement election should target the replacement replica',
+        );
+        t.equal(
+          operation.workflowStep,
+          WORKFLOW_STEP.ACTIVE,
+          'the replace workflow should remain in source-removal retry while successor leadership is missing',
+        );
+
+        coordinator.systemTableCache.merge(
+          TEST_PARTITIONS_TABLE_NAME,
+          testPartitionId,
+          createCriticalPartitionRow({
+            partitionId: testPartitionId,
+            leaderNodeId: testReplacementNodeId,
+          }),
+        );
+
+        const retryResult = await coordinator.executeOperation(operation);
+
+        t.equal(
+          retryResult.success,
+          true,
+          'source removal should dispatch once successor leadership is visible',
+        );
+        t.equal(
+          deliveries.length,
+          2,
+          'the second dispatch should remove the old source replica',
+        );
+        t.equal(
+          deliveries[1].payload.type,
           ReplicaOperationMessageType.REMOVE_REPLICA,
-          'cached follower evidence should go directly to source removal',
+          'source removal should follow replacement leader ownership',
         );
         t.equal(
           operation.workflowStep,
           WORKFLOW_STEP.STOPPING,
-          'the replace workflow should move into source removal from cached follower evidence',
+          'the replace workflow should move into source removal after successor leadership appears',
         );
       } finally {
         await coordinator.shutdown();

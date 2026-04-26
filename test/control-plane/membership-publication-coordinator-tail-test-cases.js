@@ -582,6 +582,62 @@ export function registerMembershipPublicationCoordinatorTailTests({
       ]);
     });
 
+  test('buildMembershipPublicationRow honors ack-complete candidate publication status',
+    async (t) => {
+      const PUBLICATION_ID = 'publication-ack-complete-row';
+      const PUBLICATION_KIND = 'cluster_membership';
+      const PUBLICATION_EPOCH = 9;
+      const PUBLISHER_NODE_ID = 'seed-node';
+      const NOW_MS = 1700;
+      const PUBLISHED_STATUS = 'PUBLISHED';
+      const NODE_IDS = Object.freeze([
+        'node-1',
+        'node-2',
+      ]);
+      const REASON_CODE = 'required_acknowledgements_completed';
+
+      const publicationRow = buildMembershipPublicationRow({
+        publicationId: PUBLICATION_ID,
+        nowMs: NOW_MS,
+        candidate: {
+          publicationKind: PUBLICATION_KIND,
+          publicationEpoch: PUBLICATION_EPOCH,
+          publicationStatus: PUBLISHED_STATUS,
+          publisherNodeId: PUBLISHER_NODE_ID,
+          publishedActiveNodeIds: [...NODE_IDS],
+          requiredAckNodeIds: [...NODE_IDS],
+          acknowledgedNodeIds: [...NODE_IDS],
+          reasonCode: REASON_CODE,
+        },
+      });
+
+      t.match(publicationRow, {
+        publication_id: PUBLICATION_ID,
+        publication_kind: PUBLICATION_KIND,
+        publication_epoch: PUBLICATION_EPOCH,
+        publisher_node_id: PUBLISHER_NODE_ID,
+        status: PUBLISHED_STATUS,
+        published_at: NOW_MS,
+        closed_at: NOW_MS,
+        acknowledged_node_ids: [...NODE_IDS],
+        membership_lifecycle_summary: {
+          lifecycleState: MEMBERSHIP_LIFECYCLE_STATE.PUBLISHED_ACTIVE,
+          publishedActiveNodeIds: [...NODE_IDS],
+          memberStatesByNodeId: {
+            'node-1': 'serving',
+            'node-2': 'serving',
+          },
+        },
+      });
+      t.match(publicationRow.transition_history, [
+        {
+          state: PUBLISHED_STATUS,
+          reasonCode: REASON_CODE,
+          at: NOW_MS,
+        },
+      ]);
+    });
+
   test('buildMembershipPublicationRow derives a stable publication id from the candidate when none is provided',
     async (t) => {
       const firstPublicationRow = buildMembershipPublicationRow({
@@ -887,6 +943,15 @@ export function registerMembershipPublicationCoordinatorTailTests({
     async (t) => {
       const persistedRows = [];
       const getPublicationCalls = [];
+      let durablePublicationRow = {
+        publication_id: 'publication-20',
+        publication_kind: 'cluster_membership',
+        publication_epoch: 20,
+        status: 'OPEN',
+        published_active_node_ids: ['node-1', 'node-2'],
+        required_ack_node_ids: ['node-1', 'node-2'],
+        acknowledged_node_ids: [],
+      };
       const coordinator = new MembershipPublicationCoordinator({
         nodeId: 'seed-node',
         systemTableCache: {
@@ -910,18 +975,11 @@ export function registerMembershipPublicationCoordinatorTailTests({
         controlPlanePublicationsOwner: {
           async getPublication(publicationId) {
             getPublicationCalls.push(publicationId);
-            return {
-              publication_id: 'publication-20',
-              publication_kind: 'cluster_membership',
-              publication_epoch: 20,
-              status: 'OPEN',
-              published_active_node_ids: ['node-1', 'node-2'],
-              required_ack_node_ids: ['node-1', 'node-2'],
-              acknowledged_node_ids: [],
-            };
+            return durablePublicationRow;
           },
           async upsertPublication(row) {
             persistedRows.push(row);
+            durablePublicationRow = row;
           },
         },
       });
@@ -945,8 +1003,8 @@ export function registerMembershipPublicationCoordinatorTailTests({
       );
       t.equal(
         getPublicationCalls.length,
-        1,
-        'owner read should be used when writing the acknowledgement',
+        3,
+        'owner reads should merge and verify the acknowledgement write',
       );
       t.equal(
         publicationRow?.acknowledged_node_ids?.[0],
@@ -961,6 +1019,15 @@ export function registerMembershipPublicationCoordinatorTailTests({
       const listPublicationsCalls = [];
       const getPublicationCalls = [];
       const persistedRows = [];
+      let durablePublicationRow = {
+        publication_id: 'publication-21',
+        publication_kind: 'cluster_membership',
+        publication_epoch: 21,
+        status: 'ACK_PENDING',
+        published_active_node_ids: ['node-1', 'node-2'],
+        required_ack_node_ids: ['node-1'],
+        acknowledged_node_ids: [],
+      };
       const coordinator = new MembershipPublicationCoordinator({
         nodeId: 'seed-node',
         systemTableCache: {
@@ -1000,18 +1067,11 @@ export function registerMembershipPublicationCoordinatorTailTests({
           },
           async getPublication(publicationId) {
             getPublicationCalls.push(publicationId);
-            return {
-              publication_id: 'publication-21',
-              publication_kind: 'cluster_membership',
-              publication_epoch: 21,
-              status: 'ACK_PENDING',
-              published_active_node_ids: ['node-1', 'node-2'],
-              required_ack_node_ids: ['node-1'],
-              acknowledged_node_ids: [],
-            };
+            return durablePublicationRow;
           },
           async upsertPublication(row) {
             persistedRows.push(row);
+            durablePublicationRow = row;
           },
         },
       });
@@ -1039,13 +1099,168 @@ export function registerMembershipPublicationCoordinatorTailTests({
       );
       t.equal(
         getPublicationCalls.length,
-        1,
-        'authoritative acknowledgement should still re-read the publication by id',
+        3,
+        'authoritative acknowledgement should merge and verify the publication by id',
       );
       t.equal(
         publicationRow?.acknowledged_node_ids?.[0],
         'node-1',
         'refresh+ack should persist the node acknowledgement',
+      );
+      t.end();
+    });
+
+  test('acknowledgeMembershipPublicationForNode rechecks durable state when cache already has the node ack',
+    async (t) => {
+      const listPublicationsCalls = [];
+      const persistedRows = [];
+      let durablePublicationRow = {
+        publication_id: 'publication-24',
+        publication_kind: 'cluster_membership',
+        publication_epoch: 24,
+        status: 'ACK_PENDING',
+        published_active_node_ids: ['node-1', 'node-2'],
+        required_ack_node_ids: ['node-1', 'node-2'],
+        acknowledged_node_ids: [],
+      };
+      const coordinator = new MembershipPublicationCoordinator({
+        nodeId: 'seed-node',
+        systemTableCache: {
+          getAll(tableName) {
+            if (tableName !== 'control_plane_publications') {
+              return [];
+            }
+            return [
+              {
+                publication_id: 'publication-24',
+                publication_kind: 'cluster_membership',
+                publication_epoch: 24,
+                status: 'ACK_PENDING',
+                published_active_node_ids: ['node-1', 'node-2'],
+                required_ack_node_ids: ['node-1', 'node-2'],
+                acknowledged_node_ids: ['node-1'],
+              },
+            ];
+          },
+        },
+        controlPlanePublicationsOwner: {
+          async listPublications(options = {}) {
+            listPublicationsCalls.push(options);
+            return {rows: [durablePublicationRow]};
+          },
+          async getPublication() {
+            return durablePublicationRow;
+          },
+          async upsertPublication(row) {
+            persistedRows.push(row);
+            durablePublicationRow = row;
+          },
+        },
+      });
+
+      const publicationRow =
+      await coordinator.acknowledgeMembershipPublicationForNode('node-1');
+
+      t.equal(
+        listPublicationsCalls.length,
+        1,
+        'in-flight duplicate acknowledgements should verify durable publication state',
+      );
+      t.equal(
+        persistedRows.length,
+        1,
+        'missing durable acknowledgement should be restored even when cache had the node ack',
+      );
+      t.match(
+        publicationRow,
+        {
+          publication_id: 'publication-24',
+          status: 'ACK_PENDING',
+          acknowledged_node_ids: ['node-1'],
+        },
+        'acknowledgement result should reflect the repaired durable row',
+      );
+      t.end();
+    });
+
+  test('acknowledgeMembershipPublicationForNode retries when durable readback drops a merged acknowledgement',
+    async (t) => {
+      let upsertCallCount = 0;
+      let durablePublicationRow = {
+        publication_id: 'publication-25',
+        publication_kind: 'cluster_membership',
+        publication_epoch: 25,
+        status: 'ACK_PENDING',
+        published_active_node_ids: ['node-1', 'node-2', 'node-3'],
+        required_ack_node_ids: ['node-1', 'node-2', 'node-3'],
+        acknowledged_node_ids: ['node-1', 'node-3'],
+        updated_at: 2500,
+      };
+      const coordinator = new MembershipPublicationCoordinator({
+        nodeId: 'seed-node',
+        systemTableCache: {
+          getAll(tableName) {
+            if (tableName !== 'control_plane_publications') {
+              return [];
+            }
+            return [
+              {
+                publication_id: 'publication-25',
+                publication_kind: 'cluster_membership',
+                publication_epoch: 25,
+                status: 'ACK_PENDING',
+                published_active_node_ids: ['node-1', 'node-2', 'node-3'],
+                required_ack_node_ids: ['node-1', 'node-2', 'node-3'],
+                acknowledged_node_ids: ['node-1'],
+              },
+            ];
+          },
+        },
+        controlPlanePublicationsOwner: {
+          async getPublication() {
+            return durablePublicationRow;
+          },
+          async upsertPublication(row) {
+            upsertCallCount += 1;
+            if (upsertCallCount === 1) {
+              durablePublicationRow = {
+                ...row,
+                status: 'ACK_PENDING',
+                acknowledged_node_ids: ['node-1', 'node-2'],
+                updated_at: 2501,
+              };
+              return;
+            }
+            durablePublicationRow = row;
+          },
+        },
+      });
+
+      const publicationRow =
+      await coordinator.acknowledgeMembershipPublicationForNode('node-2');
+
+      t.equal(
+        upsertCallCount,
+        2,
+        'membership acknowledgement path should retry dropped durable acknowledgement unions',
+      );
+      t.match(
+        durablePublicationRow,
+        {
+          publication_id: 'publication-25',
+          status: 'PUBLISHED',
+          acknowledged_node_ids: ['node-1', 'node-2', 'node-3'],
+        },
+        'readback retry should preserve every merged acknowledgement',
+      );
+      t.match(
+        publicationRow,
+        {
+          publication_id: 'publication-25',
+          status: 'PUBLISHED',
+          acknowledged_node_ids: ['node-1', 'node-2', 'node-3'],
+        },
+        'caller should receive the verified durable publication row',
       );
       t.end();
     });
