@@ -1,6 +1,32 @@
 import {ADMIN_WEBSOCKET_API_SHARED} from './admin-websocket-api-shared.js';
 import {AdminWebSocketAPISegment1} from './admin-websocket-api-segment-1.js';
 
+const LOCAL_STR_129XF = 'serve not ready: load lane admission denied on node ';
+const LOCAL_STR_SERVEELIGIBLE = ' (serveEligible=';
+const LOCAL_STR_REASONS = ', reasons=';
+const LOCAL_STR_COMMA = ',';
+const LOCAL_STR_NONE = 'none';
+const LOCAL_STR_C7ZU6 = ')';
+const LOCAL_STR_TABLENAME = ' (tableName=';
+const LOCAL_STR_5JWN7 = ', benchmarkReady=false, reasons=';
+const LOCAL_STR_TIMEOUT = 'timeout';
+const LOCAL_STR_TIMED_OUT = 'timed out';
+const LOCAL_STR_DEADLINE_EXCEEDED = 'deadline exceeded';
+const LOCAL_STR_AND = 'AND';
+const LOCAL_STR_OR = 'OR';
+const LOCAL_STR_EQUALS = '=';
+const LOCAL_STR_151ZF = '<>';
+const LOCAL_STR_GDTVK = '>';
+const LOCAL_STR_4PO0L = '>=';
+const LOCAL_STR_FTUO6 = '<';
+const LOCAL_STR_15BZ1 = '<=';
+const LOCAL_STR_IS_NULL = 'IS NULL';
+const LOCAL_STR_IS_NOT_NULL = 'IS NOT NULL';
+const LOCAL_STR_NOT = 'NOT';
+const LOCAL_STR_HYPHEN = '-';
+const LOCAL_STR_ASC = 'ASC';
+const LOCAL_STR_DESC = 'DESC';
+
 const {
   ADMIN_CACHE_DUMP,
   ADMIN_CACHE_OBSERVATION_TABLES,
@@ -86,15 +112,15 @@ class AdminWebSocketAPISegment2 extends AdminWebSocketAPISegment1 {
     }
     throw createRetryableAdminOperationError(
       ErrorCode.INTERNAL_ERROR,
-      'serve not ready: load lane admission denied on node ' +
+      LOCAL_STR_129XF +
         this.nodeId +
-        ' (serveEligible=' +
+        LOCAL_STR_SERVEELIGIBLE +
         String(admission.serveEligible) +
-        ', reasons=' +
+        LOCAL_STR_REASONS +
         (admission.reasonCodes.length > NUM.ZERO ?
-          admission.reasonCodes.join(',') :
-          'none') +
-        ')',
+          admission.reasonCodes.join(LOCAL_STR_COMMA) :
+          LOCAL_STR_NONE) +
+        LOCAL_STR_C7ZU6,
       {
         details: buildLoadLaneAdmissionErrorDetails(admission),
       },
@@ -484,13 +510,13 @@ class AdminWebSocketAPISegment2 extends AdminWebSocketAPISegment1 {
         ['benchmark_admission_blocked'];
     throw createRetryableAdminOperationError(
       ErrorCode.INTERNAL_ERROR,
-      'serve not ready: load lane admission denied on node ' +
+      LOCAL_STR_129XF +
         this.nodeId +
-        ' (tableName=' +
+        LOCAL_STR_TABLENAME +
         tableName +
-        ', benchmarkReady=false, reasons=' +
-        reasonCodes.join(',') +
-        ')',
+        LOCAL_STR_5JWN7 +
+        reasonCodes.join(LOCAL_STR_COMMA) +
+        LOCAL_STR_C7ZU6,
     );
   }
 
@@ -570,9 +596,9 @@ class AdminWebSocketAPISegment2 extends AdminWebSocketAPISegment1 {
       value?.message || value?.error || EMPTY_STRING,
     ).toLowerCase();
     return (
-      message.includes('timeout') ||
-      message.includes('timed out') ||
-      message.includes('deadline exceeded')
+      message.includes(LOCAL_STR_TIMEOUT) ||
+      message.includes(LOCAL_STR_TIMED_OUT) ||
+      message.includes(LOCAL_STR_DEADLINE_EXCEEDED)
     );
   }
 
@@ -679,7 +705,7 @@ class AdminWebSocketAPISegment2 extends AdminWebSocketAPISegment1 {
     }
 
     if (expr.type === EXPR_TYPE.BINARY) {
-      if (expr.operator === 'AND') {
+      if (expr.operator === LOCAL_STR_AND) {
         return (
           this.evaluateLocalSystemTableObservationExpression(
             expr.left,
@@ -693,7 +719,7 @@ class AdminWebSocketAPISegment2 extends AdminWebSocketAPISegment1 {
           )
         );
       }
-      if (expr.operator === 'OR') {
+      if (expr.operator === LOCAL_STR_OR) {
         return (
           this.evaluateLocalSystemTableObservationExpression(
             expr.left,
@@ -724,21 +750,21 @@ class AdminWebSocketAPISegment2 extends AdminWebSocketAPISegment1 {
       );
 
       switch (expr.operator) {
-      case '=':
+      case LOCAL_STR_EQUALS:
         return comparison === NUM.ZERO;
-      case '<>':
+      case LOCAL_STR_151ZF:
         return comparison !== NUM.ZERO;
-      case '>':
+      case LOCAL_STR_GDTVK:
         return comparison > NUM.ZERO;
-      case '>=':
+      case LOCAL_STR_4PO0L:
         return comparison >= NUM.ZERO;
-      case '<':
+      case LOCAL_STR_FTUO6:
         return comparison < NUM.ZERO;
-      case '<=':
+      case LOCAL_STR_15BZ1:
         return comparison <= NUM.ZERO;
-      case 'IS NULL':
+      case LOCAL_STR_IS_NULL:
         return leftValue === null || leftValue === undefined;
-      case 'IS NOT NULL':
+      case LOCAL_STR_IS_NOT_NULL:
         return leftValue !== null && leftValue !== undefined;
       default:
         throw new Error(
@@ -786,7 +812,7 @@ class AdminWebSocketAPISegment2 extends AdminWebSocketAPISegment1 {
       return expr.negated === true ? !matched : matched;
     }
 
-    if (expr.type === EXPR_TYPE.UNARY && expr.operator === 'NOT') {
+    if (expr.type === EXPR_TYPE.UNARY && expr.operator === LOCAL_STR_NOT) {
       return !this.evaluateLocalSystemTableObservationExpression(
         expr.operand,
         row,
@@ -840,7 +866,7 @@ class AdminWebSocketAPISegment2 extends AdminWebSocketAPISegment1 {
       return undefined;
     }
     case EXPR_TYPE.UNARY:
-      if (expr.operator === '-') {
+      if (expr.operator === LOCAL_STR_HYPHEN) {
         const value = Number(
           this.resolveLocalSystemTableObservationValue(
             expr.operand,
@@ -968,7 +994,7 @@ class AdminWebSocketAPISegment2 extends AdminWebSocketAPISegment1 {
           rightValue,
         );
         if (comparison !== NUM.ZERO) {
-          return String(ordering.direction || 'ASC').toUpperCase() === 'DESC' ?
+          return String(ordering.direction || LOCAL_STR_ASC).toUpperCase() === LOCAL_STR_DESC ?
             -comparison :
             comparison;
         }

@@ -30,6 +30,11 @@ import {
   DriverLifecycleError,
 } from './runtime-driver-errors.js';
 
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_STR_PREPARE = 'prepare';
+const LOCAL_STR_START = 'start';
+const LOCAL_STR_STOP = 'stop';
+
 // --- Driver-specific constants ---
 
 const OCI_DIGEST_MARKER = '@sha256:';
@@ -144,13 +149,13 @@ class OciContainerDriver extends RuntimeDriver {
       errors.push(OCI_DRIVER_ERROR.REF_REQUIRED);
     } else if (typeof ref !== TYPEOF.STRING) {
       errors.push(OCI_DRIVER_ERROR.REF_MUST_BE_STRING);
-    } else if (ref.trim().length === 0) {
+    } else if (ref.trim().length === LOCAL_NUM_ZERO) {
       errors.push(OCI_DRIVER_ERROR.REF_EMPTY);
     } else if (!ref.includes(OCI_DIGEST_MARKER)) {
       errors.push(OCI_DRIVER_ERROR.DIGEST_REQUIRED);
     }
 
-    if (errors.length > 0) {
+    if (errors.length > LOCAL_NUM_ZERO) {
       return {valid: false, errors};
     }
     return {valid: true};
@@ -173,7 +178,7 @@ class OciContainerDriver extends RuntimeDriver {
     const gate = this._checkFeatureGate();
     if (!gate.enabled) {
       throw new DriverLifecycleError(
-        this.kind, 'prepare',
+        this.kind, LOCAL_STR_PREPARE,
         OCI_DRIVER_ERROR.FEATURE_GATE_DISABLED,
       );
     }
@@ -207,7 +212,7 @@ class OciContainerDriver extends RuntimeDriver {
     const gate = this._checkFeatureGate();
     if (!gate.enabled) {
       throw new DriverLifecycleError(
-        this.kind, 'start',
+        this.kind, LOCAL_STR_START,
         OCI_DRIVER_ERROR.FEATURE_GATE_DISABLED,
       );
     }
@@ -215,7 +220,7 @@ class OciContainerDriver extends RuntimeDriver {
     if (!replicaContext ||
         typeof replicaContext !== TYPEOF.OBJECT) {
       throw new DriverLifecycleError(
-        this.kind, 'start',
+        this.kind, LOCAL_STR_START,
         OCI_DRIVER_ERROR.REPLICA_CONTEXT_REQUIRED,
       );
     }
@@ -224,7 +229,7 @@ class OciContainerDriver extends RuntimeDriver {
       replicaContext.service_id;
     if (!serviceId) {
       throw new DriverLifecycleError(
-        this.kind, 'start',
+        this.kind, LOCAL_STR_START,
         OCI_DRIVER_ERROR.SERVICE_ID_REQUIRED,
       );
     }
@@ -258,7 +263,7 @@ class OciContainerDriver extends RuntimeDriver {
     const gate = this._checkFeatureGate();
     if (!gate.enabled) {
       throw new DriverLifecycleError(
-        this.kind, 'stop',
+        this.kind, LOCAL_STR_STOP,
         OCI_DRIVER_ERROR.FEATURE_GATE_DISABLED,
       );
     }
@@ -266,7 +271,7 @@ class OciContainerDriver extends RuntimeDriver {
     if (!replicaContext ||
         typeof replicaContext !== TYPEOF.OBJECT) {
       throw new DriverLifecycleError(
-        this.kind, 'stop',
+        this.kind, LOCAL_STR_STOP,
         OCI_DRIVER_ERROR.REPLICA_CONTEXT_REQUIRED,
       );
     }
@@ -275,7 +280,7 @@ class OciContainerDriver extends RuntimeDriver {
       replicaContext.service_id;
     if (!serviceId) {
       throw new DriverLifecycleError(
-        this.kind, 'stop',
+        this.kind, LOCAL_STR_STOP,
         OCI_DRIVER_ERROR.SERVICE_ID_REQUIRED,
       );
     }

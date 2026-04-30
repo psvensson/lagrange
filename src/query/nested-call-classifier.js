@@ -16,6 +16,10 @@ import {
   NESTED_CALL_MAX_IN_PARAMS,
 } from './runtime-constants.js';
 
+const LOCAL_NUM_ONE = 1;
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_STR_STRING = 'string';
+
 /**
  * Case-insensitive regex for JOIN keyword (word-bounded).
  * @type {RegExp}
@@ -114,10 +118,10 @@ const NESTED_CALL_OUTCOME_BY_DECISION = Object.freeze({
  */
 function countInParams(query) {
   const inMatch = IN_CLAUSE_RE.exec(query);
-  if (!inMatch) return -1;
+  if (!inMatch) return -LOCAL_NUM_ONE;
   const start = inMatch.index + inMatch[0].length;
   const closeIdx = query.indexOf(')', start);
-  if (closeIdx === -1) return -1;
+  if (closeIdx === -LOCAL_NUM_ONE) return -LOCAL_NUM_ONE;
   const inner = query.slice(start, closeIdx);
   const placeholders = inner.split('?').length - 1;
   return placeholders;
@@ -134,13 +138,13 @@ function collectNestedCallSignals(normalizedQuery) {
     hasRange: RANGE_OP_RE.test(normalizedQuery),
     hasSubquery: SUBQUERY_RE.test(normalizedQuery),
     hasWhere: WHERE_RE.test(normalizedQuery),
-    paramCount: hasIn ? countInParams(normalizedQuery) : 1,
+    paramCount: hasIn ? countInParams(normalizedQuery) : LOCAL_NUM_ONE,
   });
 }
 
 function isBoundedInClause(signals) {
   return (signals.hasIn || signals.hasAny) &&
-    signals.paramCount >= 0 &&
+    signals.paramCount >= LOCAL_NUM_ZERO &&
     signals.paramCount <= NESTED_CALL_MAX_IN_PARAMS;
 }
 
@@ -179,7 +183,7 @@ function resolveNestedCallDecision(signals) {
  * @return {{classification: string, reason: string}}
  */
 function classifyNestedCall(query) {
-  if (typeof query !== 'string' || query.trim().length === 0) {
+  if (typeof query !== LOCAL_STR_STRING || query.trim().length === LOCAL_NUM_ZERO) {
     throw new Error(ERR.QUERY_REQUIRED);
   }
 

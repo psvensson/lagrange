@@ -7,6 +7,12 @@ import {
   buildTransitionIdempotencyKey,
 } from './workflow-constants.js';
 
+const LOCAL_STR_UPDATEDAT = 'updatedAt';
+const LOCAL_STR_OBJECT = 'object';
+const LOCAL_STR_FUNCTION = 'function';
+const LOCAL_STR_METADATA = 'metadata';
+const LOCAL_STR_EMPTY = '';
+
 /**
  * Generic durable workflow runtime with optional participant persistence.
  */
@@ -55,7 +61,7 @@ class DurableWorkflowCoordinator {
     if (updates.participants instanceof Map) {
       workflow.participants = new Map(updates.participants.entries());
     }
-    if (!Object.prototype.hasOwnProperty.call(updates, 'updatedAt')) {
+    if (!Object.prototype.hasOwnProperty.call(updates, LOCAL_STR_UPDATEDAT)) {
       workflow.updatedAt = this.now();
     }
     await this.persistWorkflow(workflow);
@@ -142,7 +148,7 @@ class DurableWorkflowCoordinator {
           workflow.fenceToken ?? null,
     };
     if (transition.metadata &&
-          typeof transition.metadata === 'object') {
+          typeof transition.metadata === LOCAL_STR_OBJECT) {
       Object.assign(historyEntry, transition.metadata);
     }
 
@@ -458,7 +464,7 @@ class DurableWorkflowCoordinator {
       if (!workflowRecord) {
         continue;
       }
-      if (typeof isTerminalWorkflow === 'function' &&
+      if (typeof isTerminalWorkflow === LOCAL_STR_FUNCTION &&
           isTerminalWorkflow(workflowRecord, row)) {
         continue;
       }
@@ -540,7 +546,7 @@ class DurableWorkflowCoordinator {
       ...record,
       workflowId,
       ownerKey,
-      metadata: Object.prototype.hasOwnProperty.call(record, 'metadata') ?
+      metadata: Object.prototype.hasOwnProperty.call(record, LOCAL_STR_METADATA) ?
         record.metadata :
         null,
       participants: record.participants instanceof Map ?
@@ -610,7 +616,7 @@ class DurableWorkflowCoordinator {
       record.partitionId ||
       record.participantId ||
       '';
-    return String(participantKey || '');
+    return String(participantKey || LOCAL_STR_EMPTY);
   }
 
   /**
@@ -648,7 +654,7 @@ class DurableWorkflowCoordinator {
    * @private
    */
   emitAckRejectionDiagnostic(workflowId, participantKey, context = {}) {
-    if (typeof this.onAckRejection !== 'function') {
+    if (typeof this.onAckRejection !== LOCAL_STR_FUNCTION) {
       return null;
     }
     const record = Object.freeze({

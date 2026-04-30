@@ -1,5 +1,7 @@
 import {NUM, TABLES} from '../constants/index.js';
 
+const LOCAL_STR_STRING = 'string';
+
 const AUTHORITATIVE_REPAIR_TRIGGER = Object.freeze({
   CACHE_STALE_WATERMARK: 'cache_stale_watermark',
   DISCOVERY_EMPTY_WITH_SERVICES_PRESENT:
@@ -91,7 +93,7 @@ function addRepairTables(targetTableNames, tableNames) {
     tableNames :
     DEFAULT_AUTHORITATIVE_REPAIR_TABLES;
   for (const tableName of normalizedTableNames) {
-    if (typeof tableName === 'string' &&
+    if (typeof tableName === LOCAL_STR_STRING &&
         tableName.length > NUM.ZERO) {
       normalizedTargetTableNames.add(tableName);
     }

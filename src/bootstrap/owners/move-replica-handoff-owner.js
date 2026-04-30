@@ -25,6 +25,12 @@ import {
   BOOTSTRAP_PIPELINE_ERROR_CODE,
 } from '../bootstrap-constants.js';
 
+const LOCAL_STR_SJUG2 = 'MOVE_REPLICA target node must differ from source node';
+const LOCAL_STR_11VSR = 'MOVE_REPLICA target address mismatch';
+const LOCAL_STR_P1U35 = 'unknown MOVE_REPLICA handoff failure';
+const LOCAL_STR_D6B6P = 'Restored previous service owner after failed MOVE_REPLICA target registration';
+const LOCAL_STR_Y2LF5 = 'Failed to restore previous service owner after MOVE_REPLICA target registration failure';
+
 class MoveReplicaHandoffOwner {
   constructor(options = {}) {
     this.delegates = options.delegates || {};
@@ -352,14 +358,14 @@ class MoveReplicaHandoffOwner {
 
   verifyMoveReplicaHandoffTarget(handoffContext, serviceData) {
     if (handoffContext.sourceNodeId === handoffContext.targetNodeId) {
-      throw new Error('MOVE_REPLICA target node must differ from source node');
+      throw new Error(LOCAL_STR_SJUG2);
     }
 
     const expectedAddress = `${handoffContext.targetNodeId}${ADDRESS.SEPARATOR}` +
       `${ENTITY_TYPE.MESSAGE_GROUP}${ADDRESS.SEPARATOR}${handoffContext.replicaId}`;
     const suppliedAddress = serviceData[COLUMN.ADDRESS];
     if (suppliedAddress && suppliedAddress !== expectedAddress) {
-      throw new Error('MOVE_REPLICA target address mismatch');
+      throw new Error(LOCAL_STR_11VSR);
     }
   }
 
@@ -418,7 +424,7 @@ class MoveReplicaHandoffOwner {
       handoffContext.completedAt = handoffContext.updatedAt;
       handoffContext.leaseExpiresAt = handoffContext.updatedAt;
       handoffContext.errorMessage =
-        error?.message || 'unknown MOVE_REPLICA handoff failure';
+        error?.message || LOCAL_STR_P1U35;
       await this.updateMoveReplicaHandoffOperation(handoffContext);
       this.getMoveReplicaAssignmentReservations()?.set(handoffContext.operationId, {
         ...(this.getMoveReplicaAssignmentReservations()?.get(handoffContext.operationId) || {}),
@@ -538,7 +544,7 @@ class MoveReplicaHandoffOwner {
       }
       await this.waitForRegisteredServiceCacheVisibility(previousServiceRow);
       this.getLogger().warn(
-        'Restored previous service owner after failed MOVE_REPLICA target registration',
+        LOCAL_STR_D6B6P,
         {
           serviceId: requestedServiceData?.[COLUMN.SERVICE_ID] || null,
           targetNodeId: requestedServiceData?.[COLUMN.NODE_ID] || null,
@@ -548,7 +554,7 @@ class MoveReplicaHandoffOwner {
       );
     } catch (rollbackError) {
       this.getLogger().error(
-        'Failed to restore previous service owner after MOVE_REPLICA target registration failure',
+        LOCAL_STR_Y2LF5,
         {
           serviceId: requestedServiceData?.[COLUMN.SERVICE_ID] || null,
           targetNodeId: requestedServiceData?.[COLUMN.NODE_ID] || null,

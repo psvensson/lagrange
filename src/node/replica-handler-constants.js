@@ -61,6 +61,10 @@ const REPLICA_HANDLER_LOG_MSG = Object.freeze({
     'Replica local cleanup requires retry after durable removal',
   REMOVE_COMPLETED: 'Replica removal completed',
   REMOVE_FAILED: 'Replica removal failed',
+  REMOVE_STATUS_WRITE_DEFERRED:
+    'Replica removal status write deferred after retryable control-plane failure',
+  REMOVE_FAILED_STATUS_WRITE_DEFERRED:
+    'Replica failed-status write deferred after retryable control-plane failure',
   UPDATE_STATUS: 'Updating replica status',
   UPDATE_STATUS_RETRY:
     'Retrying replica status persistence after retryable control-plane failure',

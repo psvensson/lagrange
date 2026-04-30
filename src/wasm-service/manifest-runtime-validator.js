@@ -21,6 +21,8 @@ import {
 } from './module-manifest-constants.js';
 import {validateModuleManifest} from './module-manifest-models.js';
 
+const LOCAL_STR_RUNTIME_VALIDATION = 'runtime-validation';
+
 const RUNTIME_VALIDATION_ERROR_MSG = Object.freeze({
   ADAPTER_REQUIRED:
     'Runtime adapter with createInstance/inspect/destroyInstance is required',
@@ -154,7 +156,7 @@ async function validateManifestRuntimeWithAdapter(
   manifest,
   moduleEntry,
   runtimeAdapter,
-  moduleRef = 'runtime-validation',
+  moduleRef = LOCAL_STR_RUNTIME_VALIDATION,
 ) {
   const allErrors = [];
 

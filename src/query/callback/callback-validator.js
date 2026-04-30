@@ -20,6 +20,8 @@ import {
   CALLBACK_ERROR_MSG,
 } from './callback-constants.js';
 
+const LOCAL_STR_ASYNCFUNCTION = 'AsyncFunction';
+
 /**
  * Validate that a callback descriptor has the required fields.
  *
@@ -171,7 +173,7 @@ function validateCallback(descriptor, manifest, exportFn) {
  */
 function isAsyncFunction(fn) {
   if (typeof fn !== TYPEOF.FUNCTION) return false;
-  return fn.constructor.name === 'AsyncFunction';
+  return fn.constructor.name === LOCAL_STR_ASYNCFUNCTION;
 }
 
 export {

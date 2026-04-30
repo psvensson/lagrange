@@ -1,6 +1,11 @@
 import {CONTROL_PLANE_READINESS_SERVICE_SHARED} from './control-plane-readiness-service-shared.js';
 import {ControlPlaneReadinessServiceSegment3} from './control-plane-readiness-service-segment-3.js';
 
+const LOCAL_STR_PRESENT = 'present';
+const LOCAL_STR_12BRF = 'ControlPlaneReadinessService missing storage accounting owner';
+const LOCAL_STR_EMPTY = '';
+const LOCAL_STR_BOOLEAN = 'boolean';
+
 const {
   COLUMN,
   CONTROL_PLANE_PRIORITY_RECOVERY_REASON,
@@ -15,6 +20,7 @@ const {
   NUM,
   PRESSURE_STATE,
   PRIORITY_CONTROL_PLANE_RECOVERY_HEALTH_FAILURE,
+  PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE,
   READINESS_ERROR_MSG,
   RECOVERY_GRACE_MESSAGE_GROUP_SERVICE_STATUSES,
   SERVICE_STATUS,
@@ -54,6 +60,59 @@ const PRIORITY_CONTROL_PLANE_RECOVERY_PROJECTION_STATE = Object.freeze({
   READY: 'ready',
   RUNTIME_BLOCKED: 'runtime_blocked',
 });
+
+function normalizePendingAckEvidenceSource(source = {}) {
+  const requiredAckNodeIds = Array.isArray(source?.requiredAckNodeIds) ?
+    source.requiredAckNodeIds :
+    [];
+  const pendingAckCount = Number(source?.pendingAckCount);
+  return Object.freeze({
+    hasExplicitCountOnlyState:
+      source?.pendingAckEvidenceState ===
+        PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.COUNT_ONLY,
+    hasExplicitRequiredAckNodeListState:
+      source?.pendingAckEvidenceState ===
+        PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE
+          .REQUIRED_ACK_NODE_LIST,
+    hasRequiredAckNodeList: Array.isArray(source?.requiredAckNodeIds),
+    hasRequiredAckNodeListDebt: requiredAckNodeIds.length > NUM.ZERO,
+    hasPendingAckCountDebt:
+      Number.isFinite(pendingAckCount) && pendingAckCount > NUM.ZERO,
+  });
+}
+
+function resolvePendingAckEvidenceStateFromSources(sources = []) {
+  const pendingAckEvidenceDecision = sources
+    .map((source) => normalizePendingAckEvidenceSource(source))
+    .flatMap((evidence) => [
+      {
+        matches: evidence.hasExplicitCountOnlyState,
+        state: PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.COUNT_ONLY,
+      },
+      {
+        matches: evidence.hasExplicitRequiredAckNodeListState,
+        state: PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE
+          .REQUIRED_ACK_NODE_LIST,
+      },
+      {
+        matches: evidence.hasRequiredAckNodeListDebt,
+        state: PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE
+          .REQUIRED_ACK_NODE_LIST,
+      },
+      {
+        matches: evidence.hasPendingAckCountDebt,
+        state: PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.COUNT_ONLY,
+      },
+      {
+        matches: evidence.hasRequiredAckNodeList,
+        state: PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE
+          .REQUIRED_ACK_NODE_LIST,
+      },
+    ])
+    .find((decision) => decision.matches === true);
+  return pendingAckEvidenceDecision?.state ||
+    PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.COUNT_ONLY;
+}
 
 class ControlPlaneReadinessServiceSegment4 extends ControlPlaneReadinessServiceSegment3 {
   getLocalClusterIncarnationFence() {
@@ -279,6 +338,44 @@ class ControlPlaneReadinessServiceSegment4 extends ControlPlaneReadinessServiceS
       null;
   }
 
+  resolvePlanningPendingAckEvidenceState(
+    planningSnapshot = null,
+    publicationRecoveryGate = null,
+  ) {
+    return resolvePendingAckEvidenceStateFromSources([
+      planningSnapshot,
+      publicationRecoveryGate,
+    ]);
+  }
+
+  resolveRetainedPendingAckEvidenceState(
+    planningSnapshot = null,
+    retainedSnapshot = null,
+    planningGate = null,
+    retainedGate = null,
+  ) {
+    if (Array.isArray(planningSnapshot?.requiredAckNodeIds)) {
+      return PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE
+        .REQUIRED_ACK_NODE_LIST;
+    }
+    if (Array.isArray(retainedSnapshot?.requiredAckNodeIds)) {
+      return PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE
+        .REQUIRED_ACK_NODE_LIST;
+    }
+    const planningGateState = this.resolvePlanningPendingAckEvidenceState(
+      null,
+      planningGate,
+    );
+    if (
+      planningGateState ===
+        PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE
+          .REQUIRED_ACK_NODE_LIST
+    ) {
+      return planningGateState;
+    }
+    return this.resolvePlanningPendingAckEvidenceState(null, retainedGate);
+  }
+
   filterPriorityRecoveryReasonCodesForPublicationGate(
     reasonCodes = [],
     publicationRecoveryGate = null,
@@ -375,6 +472,14 @@ class ControlPlaneReadinessServiceSegment4 extends ControlPlaneReadinessServiceS
           planningSnapshot.pendingAckNodeIds :
           providedPublicationRecoveryGate?.pendingAckNodeIds ??
           [],
+      pendingAckCount:
+        planningSnapshot.pendingAckCount ??
+        providedPublicationRecoveryGate?.pendingAckCount ??
+        NUM.ZERO,
+      pendingAckEvidenceState: this.resolvePlanningPendingAckEvidenceState(
+        planningSnapshot,
+        providedPublicationRecoveryGate,
+      ),
       missingPublishedNodeIds:
         Array.isArray(planningSnapshot.missingPublishedNodeIds) ?
           planningSnapshot.missingPublishedNodeIds :
@@ -561,50 +666,58 @@ class ControlPlaneReadinessServiceSegment4 extends ControlPlaneReadinessServiceS
       recoveryProtocolState,
       priorityPartitionSummary,
       requiredAckNodeIds:
-        Array.isArray(planningSnapshot?.requiredAckNodeIds) &&
-        planningSnapshot.requiredAckNodeIds.length > NUM.ZERO ?
+        Array.isArray(planningSnapshot?.requiredAckNodeIds) ?
           planningSnapshot.requiredAckNodeIds :
           Array.isArray(retainedSnapshot?.requiredAckNodeIds) ?
             retainedSnapshot.requiredAckNodeIds :
             planningGate?.requiredAckNodeIds ||
               retainedGate?.requiredAckNodeIds,
       acknowledgedNodeIds:
-        Array.isArray(planningSnapshot?.acknowledgedNodeIds) &&
-        planningSnapshot.acknowledgedNodeIds.length > NUM.ZERO ?
+        Array.isArray(planningSnapshot?.acknowledgedNodeIds) ?
           planningSnapshot.acknowledgedNodeIds :
           Array.isArray(retainedSnapshot?.acknowledgedNodeIds) ?
             retainedSnapshot.acknowledgedNodeIds :
             planningGate?.acknowledgedNodeIds ||
               retainedGate?.acknowledgedNodeIds,
       pendingAckNodeIds:
-        Array.isArray(planningSnapshot?.pendingAckNodeIds) &&
-        planningSnapshot.pendingAckNodeIds.length > NUM.ZERO ?
+        Array.isArray(planningSnapshot?.pendingAckNodeIds) ?
           planningSnapshot.pendingAckNodeIds :
           Array.isArray(retainedSnapshot?.pendingAckNodeIds) ?
             retainedSnapshot.pendingAckNodeIds :
             planningGate?.pendingAckNodeIds ||
               retainedGate?.pendingAckNodeIds,
+      pendingAckCount:
+        planningSnapshot?.pendingAckCount ??
+        retainedSnapshot?.pendingAckCount ??
+        planningGate?.pendingAckCount ??
+        retainedGate?.pendingAckCount ??
+        NUM.ZERO,
+      pendingAckEvidenceState: this.resolveRetainedPendingAckEvidenceState(
+        planningSnapshot,
+        retainedSnapshot,
+        planningGate,
+        retainedGate,
+      ),
       reasonCodes: Object.freeze([
         ...new Set([...planningReasonCodes, ...retainedReasonCodes]),
       ]),
       missingPublishedNodeIds:
-        Array.isArray(planningSnapshot?.missingPublishedNodeIds) &&
-        planningSnapshot.missingPublishedNodeIds.length > NUM.ZERO ?
+        Array.isArray(planningSnapshot?.missingPublishedNodeIds) ?
           planningSnapshot.missingPublishedNodeIds :
           Array.isArray(
             planningSnapshot?.missingPublishedRecoveryActiveNodeIds,
-          ) &&
-              planningSnapshot.missingPublishedRecoveryActiveNodeIds.length >
-                NUM.ZERO ?
+          ) ?
             planningSnapshot.missingPublishedRecoveryActiveNodeIds :
-            Array.isArray(retainedSnapshot?.missingPublishedNodeIds) ?
-              retainedSnapshot.missingPublishedNodeIds :
-              Array.isArray(
-                retainedSnapshot?.missingPublishedRecoveryActiveNodeIds,
-              ) ?
-                retainedSnapshot.missingPublishedRecoveryActiveNodeIds :
-                planningGate?.missingPublishedNodeIds ||
-                  retainedGate?.missingPublishedNodeIds,
+            Array.isArray(planningGate?.missingPublishedNodeIds) ?
+              planningGate.missingPublishedNodeIds :
+              Array.isArray(retainedSnapshot?.missingPublishedNodeIds) ?
+                retainedSnapshot.missingPublishedNodeIds :
+                Array.isArray(
+                  retainedSnapshot?.missingPublishedRecoveryActiveNodeIds,
+                ) ?
+                  retainedSnapshot.missingPublishedRecoveryActiveNodeIds :
+                  planningGate?.missingPublishedNodeIds ||
+                    retainedGate?.missingPublishedNodeIds,
     });
   }
 
@@ -865,10 +978,123 @@ class ControlPlaneReadinessServiceSegment4 extends ControlPlaneReadinessServiceS
         directPlanningSnapshot,
         providedPlanningSnapshot,
       );
+    const directPublicationRecoveryGate =
+      directPlanningSnapshot.publicationRecoveryGate &&
+      typeof directPlanningSnapshot.publicationRecoveryGate === TYPEOF.OBJECT ?
+        directPlanningSnapshot.publicationRecoveryGate :
+        null;
+    const providedPublicationRecoveryGate =
+      providedPlanningSnapshot.publicationRecoveryGate &&
+      typeof providedPlanningSnapshot.publicationRecoveryGate ===
+        TYPEOF.OBJECT ?
+        providedPlanningSnapshot.publicationRecoveryGate :
+        null;
+    const directPendingAckEvidenceState =
+      this.resolvePlanningPendingAckEvidenceState(
+        directPlanningSnapshot,
+        directPublicationRecoveryGate,
+      );
+    const providedPendingAckEvidenceState =
+      this.resolvePlanningPendingAckEvidenceState(
+        providedPlanningSnapshot,
+        providedPublicationRecoveryGate,
+      );
+    const providedPendingAckCountValue =
+      providedPlanningSnapshot.pendingAckCount ??
+      providedPlanningSnapshot.publicationRecoveryGate?.pendingAckCount;
+    const providedPendingAckCount = Number(providedPendingAckCountValue);
+    const directRequiredAckNodeIds = Array.isArray(
+      directPlanningSnapshot.requiredAckNodeIds,
+    ) ?
+      directPlanningSnapshot.requiredAckNodeIds :
+      Array.isArray(
+        directPlanningSnapshot.publicationRecoveryGate?.requiredAckNodeIds,
+      ) ?
+        directPlanningSnapshot.publicationRecoveryGate.requiredAckNodeIds :
+        [];
+    const directPendingAckCount = Number(
+      directPlanningSnapshot.pendingAckCount ??
+      directPlanningSnapshot.publicationRecoveryGate?.pendingAckCount ??
+      NUM.ZERO,
+    );
+    const directHasPendingAckDebt =
+      Number.isFinite(directPendingAckCount) &&
+      directPendingAckCount > NUM.ZERO;
+    const directHasRequiredAckNodeListDebt =
+      directPendingAckEvidenceState ===
+        PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE
+          .REQUIRED_ACK_NODE_LIST &&
+      directRequiredAckNodeIds.length > NUM.ZERO;
+    const providedHasCountOnlyAckDebt =
+      providedPendingAckEvidenceState ===
+        PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.COUNT_ONLY &&
+      Number.isFinite(providedPendingAckCount) &&
+      providedPendingAckCount > NUM.ZERO;
+    const directCanAcceptProvidedCountOnlyAckDebt =
+      directPendingAckEvidenceState ===
+        PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.COUNT_ONLY ||
+      (
+        directHasPendingAckDebt !== true &&
+        directHasRequiredAckNodeListDebt !== true
+      );
+    const shouldUseProvidedAckNodeList =
+      directPendingAckEvidenceState ===
+        PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.COUNT_ONLY &&
+      directHasPendingAckDebt !== true &&
+      providedPendingAckEvidenceState !==
+        PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.COUNT_ONLY &&
+      Array.isArray(providedPlanningSnapshot.requiredAckNodeIds);
+    const shouldUseProvidedCountOnlyAckDebt =
+      shouldUseProvidedAckNodeList !== true &&
+      providedHasCountOnlyAckDebt &&
+      directCanAcceptProvidedCountOnlyAckDebt;
+    const publicationConvergenceForEvidence =
+      shouldUseProvidedAckNodeList ?
+        {
+          ...directPlanningSnapshot,
+          requiredAckNodeIds: providedPlanningSnapshot.requiredAckNodeIds,
+          acknowledgedNodeIds: Array.isArray(
+            providedPlanningSnapshot.acknowledgedNodeIds,
+          ) ?
+            providedPlanningSnapshot.acknowledgedNodeIds :
+            directPlanningSnapshot.acknowledgedNodeIds,
+          pendingAckNodeIds: Array.isArray(
+            providedPlanningSnapshot.pendingAckNodeIds,
+          ) ?
+            providedPlanningSnapshot.pendingAckNodeIds :
+            directPlanningSnapshot.pendingAckNodeIds,
+          pendingAckEvidenceState:
+            PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE
+              .REQUIRED_ACK_NODE_LIST,
+        } :
+        shouldUseProvidedCountOnlyAckDebt ?
+          {
+            ...directPlanningSnapshot,
+            pendingAckCount: providedPendingAckCount,
+            pendingAckEvidenceState:
+              PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.COUNT_ONLY,
+            pendingAckNodeIds: Array.isArray(
+              providedPlanningSnapshot.pendingAckNodeIds,
+            ) ?
+              providedPlanningSnapshot.pendingAckNodeIds :
+              directPlanningSnapshot.pendingAckNodeIds,
+            publicationRecoveryGate: {
+              ...(directPlanningSnapshot.publicationRecoveryGate || {}),
+              pendingAckCount: providedPendingAckCount,
+              pendingAckEvidenceState:
+                PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.COUNT_ONLY,
+              pendingAckNodeIds: Array.isArray(
+                providedPlanningSnapshot.pendingAckNodeIds,
+              ) ?
+                providedPlanningSnapshot.pendingAckNodeIds :
+                directPlanningSnapshot.pendingAckNodeIds,
+            },
+          } :
+          directPlanningSnapshot;
     const publicationEvidence = buildCanonicalPublicationRecoveryEvidence({
-      publicationConvergence: directPlanningSnapshot,
+      publicationConvergence: publicationConvergenceForEvidence,
       publicationConvergenceGate:
-        directPlanningSnapshot.publicationRecoveryGate ||
+        publicationConvergenceForEvidence.publicationRecoveryGate ||
         providedPlanningSnapshot.publicationRecoveryGate ||
         null,
       priorityRecoveryObservation:
@@ -890,9 +1116,9 @@ class ControlPlaneReadinessServiceSegment4 extends ControlPlaneReadinessServiceS
     const diagnosticPublicationEvidence =
       preferDirectReadyGate ?
         buildCanonicalPublicationRecoveryEvidence({
-          publicationConvergence: directPlanningSnapshot,
+          publicationConvergence: publicationConvergenceForEvidence,
           publicationConvergenceGate:
-            directPlanningSnapshot.publicationRecoveryGate ||
+            publicationConvergenceForEvidence.publicationRecoveryGate ||
             providedPlanningSnapshot.publicationRecoveryGate ||
             null,
           priorityRecoveryObservation:
@@ -917,6 +1143,36 @@ class ControlPlaneReadinessServiceSegment4 extends ControlPlaneReadinessServiceS
     return this.buildPriorityRecoveryPlanningProjection({
       ...providedPlanningSnapshot,
       ...directPlanningSnapshot,
+      ...(shouldUseProvidedAckNodeList ?
+        {
+          requiredAckNodeIds: providedPlanningSnapshot.requiredAckNodeIds,
+          acknowledgedNodeIds: Array.isArray(
+            providedPlanningSnapshot.acknowledgedNodeIds,
+          ) ?
+            providedPlanningSnapshot.acknowledgedNodeIds :
+            directPlanningSnapshot.acknowledgedNodeIds,
+          pendingAckNodeIds: Array.isArray(
+            providedPlanningSnapshot.pendingAckNodeIds,
+          ) ?
+            providedPlanningSnapshot.pendingAckNodeIds :
+            directPlanningSnapshot.pendingAckNodeIds,
+          pendingAckEvidenceState:
+            PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE
+              .REQUIRED_ACK_NODE_LIST,
+        } :
+        {}),
+      ...(shouldUseProvidedCountOnlyAckDebt ?
+        {
+          pendingAckCount: providedPendingAckCount,
+          pendingAckEvidenceState:
+            PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.COUNT_ONLY,
+          pendingAckNodeIds: Array.isArray(
+            providedPlanningSnapshot.pendingAckNodeIds,
+          ) ?
+            providedPlanningSnapshot.pendingAckNodeIds :
+            directPlanningSnapshot.pendingAckNodeIds,
+        } :
+        {}),
       priorityRecoveryDecisionSnapshots:
         preferDirectReadyGate ?
           null :
@@ -938,6 +1194,11 @@ class ControlPlaneReadinessServiceSegment4 extends ControlPlaneReadinessServiceS
         directPlanningSnapshot.publicationObservationState ??
         providedPlanningSnapshot.publicationObservationState ??
         null,
+      pendingAckCount:
+        publicationConvergenceGate?.pendingAckCount ??
+        directPlanningSnapshot.pendingAckCount ??
+        providedPlanningSnapshot.pendingAckCount ??
+        NUM.ZERO,
       recoveryProtocolState:
         priorityRecoveryObservation?.recoveryProtocolState ??
         publicationConvergenceGate?.recoveryProtocolState ??
@@ -964,6 +1225,23 @@ class ControlPlaneReadinessServiceSegment4 extends ControlPlaneReadinessServiceS
           directPlanningSnapshot.priorityRecoveryClosureWitness ??
             providedPlanningSnapshot.priorityRecoveryClosureWitness ??
             null),
+      diagnosticPriorityRecoveryClosureWitness:
+        providedPlanningSnapshot.diagnosticPriorityRecoveryClosureWitness ||
+        providedPlanningSnapshot.priorityRecoveryClosureWitness ||
+        providedPlanningSnapshot.publicationRecoveryGate
+          ?.priorityRecoveryClosureWitness ||
+        null,
+      diagnosticPriorityRecoveryReasonCodes:
+        Array.isArray(
+          providedPlanningSnapshot.diagnosticPriorityRecoveryReasonCodes,
+        ) ?
+          [...providedPlanningSnapshot.diagnosticPriorityRecoveryReasonCodes] :
+          Array.isArray(providedPlanningSnapshot.priorityRecoveryReasonCodes) ?
+            [...providedPlanningSnapshot.priorityRecoveryReasonCodes] :
+            Array.isArray(providedPlanningSnapshot.publicationRecoveryGate
+              ?.reasonCodes) ?
+              [...providedPlanningSnapshot.publicationRecoveryGate.reasonCodes] :
+              [],
       publicationRecoveryGate: publicationConvergenceGate,
       priorityRecoveryObservation,
     });
@@ -1276,7 +1554,7 @@ class ControlPlaneReadinessServiceSegment4 extends ControlPlaneReadinessServiceS
           startupAuthority,
         );
       return this.buildPriorityControlPlaneRecoveryUnavailableHealth(
-        startupAuthority.failure.state === 'present' ?
+        startupAuthority.failure.state === LOCAL_STR_PRESENT ?
           startupAuthority.failure.reason :
           PRIORITY_CONTROL_PLANE_RECOVERY_HEALTH_FAILURE.PLANNING_UNAVAILABLE,
         null,
@@ -1418,6 +1696,11 @@ class ControlPlaneReadinessServiceSegment4 extends ControlPlaneReadinessServiceS
       typeof context.membershipPublication === TYPEOF.OBJECT ?
         context.membershipPublication :
         null;
+    const providedPlanningSnapshot =
+      context.membershipPublicationPlanningSnapshot &&
+      typeof context.membershipPublicationPlanningSnapshot === TYPEOF.OBJECT ?
+        context.membershipPublicationPlanningSnapshot :
+        null;
     const planningSnapshot =
       this.buildPriorityRecoveryPlanningProjection(
         this.resolveMembershipPublicationPlanningSnapshot(context),
@@ -1444,12 +1727,83 @@ class ControlPlaneReadinessServiceSegment4 extends ControlPlaneReadinessServiceS
       typeof planningSnapshot.priorityRecoveryObservation === TYPEOF.OBJECT ?
         planningSnapshot.priorityRecoveryObservation :
         null;
+    const planningPriorityRecoveryClosureWitness =
+      planningSnapshot?.diagnosticPriorityRecoveryClosureWitness &&
+      typeof planningSnapshot.diagnosticPriorityRecoveryClosureWitness ===
+        TYPEOF.OBJECT ?
+        planningSnapshot.diagnosticPriorityRecoveryClosureWitness :
+        planningSnapshot?.priorityRecoveryClosureWitness &&
+          typeof planningSnapshot.priorityRecoveryClosureWitness ===
+            TYPEOF.OBJECT ?
+          planningSnapshot.priorityRecoveryClosureWitness :
+          providedPlanningSnapshot?.priorityRecoveryClosureWitness &&
+            typeof providedPlanningSnapshot.priorityRecoveryClosureWitness ===
+              TYPEOF.OBJECT ?
+            providedPlanningSnapshot.priorityRecoveryClosureWitness :
+            providedPlanningSnapshot?.publicationRecoveryGate
+              ?.priorityRecoveryClosureWitness &&
+              typeof providedPlanningSnapshot.publicationRecoveryGate
+                .priorityRecoveryClosureWitness === TYPEOF.OBJECT ?
+              providedPlanningSnapshot.publicationRecoveryGate
+                .priorityRecoveryClosureWitness :
+              null;
+    const planningPriorityRecoveryObservationHasClosureState =
+      typeof planningPriorityRecoveryObservation
+        ?.priorityRecoveryClosureState === TYPEOF.STRING &&
+      planningPriorityRecoveryObservation.priorityRecoveryClosureState.length >
+        NUM.ZERO;
+    const planningPriorityRecoveryObservationHasReasonCodes =
+      Array.isArray(
+        planningPriorityRecoveryObservation?.priorityRecoveryReasonCodes,
+      ) &&
+      planningPriorityRecoveryObservation.priorityRecoveryReasonCodes.length >
+        NUM.ZERO;
+    const planningDiagnosticPriorityRecoveryObservation =
+      planningPriorityRecoveryObservationHasClosureState ||
+      planningPriorityRecoveryObservationHasReasonCodes ?
+        planningPriorityRecoveryObservation :
+        (
+          publicationRecoveryGate?.ready === true &&
+          planningPriorityRecoveryClosureWitness ?
+            Object.freeze({
+              ...(publicationEvidence.priorityRecoveryObservation || {}),
+              priorityRecoveryClosureState:
+                planningPriorityRecoveryClosureWitness.state || null,
+              priorityRecoveryReasonCodes:
+                Array.isArray(
+                  planningSnapshot.diagnosticPriorityRecoveryReasonCodes,
+                ) &&
+                planningSnapshot.diagnosticPriorityRecoveryReasonCodes.length >
+                  NUM.ZERO ?
+                  [...planningSnapshot.diagnosticPriorityRecoveryReasonCodes] :
+                  Array.isArray(
+                    providedPlanningSnapshot?.priorityRecoveryReasonCodes,
+                  ) &&
+                  providedPlanningSnapshot.priorityRecoveryReasonCodes.length >
+                    NUM.ZERO ?
+                    [...providedPlanningSnapshot.priorityRecoveryReasonCodes] :
+                    Array.isArray(
+                      providedPlanningSnapshot?.publicationRecoveryGate
+                        ?.reasonCodes,
+                    ) &&
+                    providedPlanningSnapshot.publicationRecoveryGate.reasonCodes
+                      .length > NUM.ZERO ?
+                      [
+                        ...providedPlanningSnapshot.publicationRecoveryGate
+                          .reasonCodes,
+                      ] :
+                      Array.isArray(planningSnapshot.priorityRecoveryReasonCodes) ?
+                        [...planningSnapshot.priorityRecoveryReasonCodes] :
+                        [],
+            }) :
+            planningPriorityRecoveryObservation
+        );
     const priorityRecoveryObservation =
       publicationRecoveryGate?.ready === true &&
-        planningPriorityRecoveryObservation ?
-        planningPriorityRecoveryObservation :
+        planningDiagnosticPriorityRecoveryObservation ?
+        planningDiagnosticPriorityRecoveryObservation :
         publicationEvidence.priorityRecoveryObservation ||
-          planningPriorityRecoveryObservation ||
+          planningDiagnosticPriorityRecoveryObservation ||
           null;
     const priorityPartitionSummary =
       publicationRecoveryGate.priorityPartitionSummary ||
@@ -1765,7 +2119,7 @@ class ControlPlaneReadinessServiceSegment4 extends ControlPlaneReadinessServiceS
     if (!this.loggedMissingStorageAccountingOwner) {
       this.loggedMissingStorageAccountingOwner = true;
       this.logMissingOwner(
-        'ControlPlaneReadinessService missing storage accounting owner',
+        LOCAL_STR_12BRF,
         CONTROL_PLANE_READINESS_OWNER.STORAGE_ACCOUNTING,
       );
     }
@@ -1796,7 +2150,7 @@ class ControlPlaneReadinessServiceSegment4 extends ControlPlaneReadinessServiceS
     }
     return serviceRows.some((serviceRow) => {
       return (
-        String(serviceRow?.[COLUMN.STATUS] || '').toLowerCase() ===
+        String(serviceRow?.[COLUMN.STATUS] || LOCAL_STR_EMPTY).toLowerCase() ===
           SERVICE_STATUS.ACTIVE &&
         this.hasAddressedService(serviceRow)
       );
@@ -1842,7 +2196,7 @@ class ControlPlaneReadinessServiceSegment4 extends ControlPlaneReadinessServiceS
     return serviceRows.some((serviceRow) => {
       return (
         serviceRow?.[COLUMN.SERVICE_TYPE] === SERVICE_TYPE.MESSAGE_GROUP &&
-        String(serviceRow?.[COLUMN.STATUS] || '').toLowerCase() ===
+        String(serviceRow?.[COLUMN.STATUS] || LOCAL_STR_EMPTY).toLowerCase() ===
           SERVICE_STATUS.ACTIVE &&
         this.hasAddressedService(serviceRow)
       );
@@ -1891,7 +2245,7 @@ class ControlPlaneReadinessServiceSegment4 extends ControlPlaneReadinessServiceS
       return (
         serviceRow?.[COLUMN.SERVICE_TYPE] === SERVICE_TYPE.MESSAGE_GROUP &&
         allowedStatuses.includes(
-          String(serviceRow?.[COLUMN.STATUS] || '').toLowerCase(),
+          String(serviceRow?.[COLUMN.STATUS] || LOCAL_STR_EMPTY).toLowerCase(),
         ) &&
         this.hasAddressedService(serviceRow)
       );
@@ -1902,7 +2256,7 @@ class ControlPlaneReadinessServiceSegment4 extends ControlPlaneReadinessServiceS
     return serviceRows.some((serviceRow) => {
       return (
         serviceRow?.[COLUMN.SERVICE_TYPE] !== SERVICE_TYPE.MESSAGE_GROUP &&
-        String(serviceRow?.[COLUMN.STATUS] || '').toLowerCase() ===
+        String(serviceRow?.[COLUMN.STATUS] || LOCAL_STR_EMPTY).toLowerCase() ===
           SERVICE_STATUS.ACTIVE &&
         this.hasAddressedService(serviceRow)
       );
@@ -1946,7 +2300,7 @@ class ControlPlaneReadinessServiceSegment4 extends ControlPlaneReadinessServiceS
     }
     return !CONTROL_PLANE_READINESS_DEFAULT
       .PLACEMENT_BLOCKING_PRESSURE_STATES.includes(
-        String(capacity.pressureState || ''),
+        String(capacity.pressureState || LOCAL_STR_EMPTY),
       );
   }
 
@@ -2003,7 +2357,7 @@ class ControlPlaneReadinessServiceSegment4 extends ControlPlaneReadinessServiceS
       transportConnected: transportState.connected,
       localQueryTransportState: localQueryTransport?.state || null,
       localQueryTransportReady:
-        typeof localQueryTransport?.ready === 'boolean' ?
+        typeof localQueryTransport?.ready === LOCAL_STR_BOOLEAN ?
           localQueryTransport.ready :
           null,
       localQueryTransportReason: localQueryTransport?.reason || null,
@@ -2066,7 +2420,7 @@ class ControlPlaneReadinessServiceSegment4 extends ControlPlaneReadinessServiceS
       typeof this.messageRouter.getConnectionState === TYPEOF.FUNCTION
     ) {
       routerState = String(
-        this.messageRouter.getConnectionState(nodeId) || '',
+        this.messageRouter.getConnectionState(nodeId) || LOCAL_STR_EMPTY,
       ).toLowerCase();
     }
 
@@ -2165,10 +2519,7 @@ class ControlPlaneReadinessServiceSegment4 extends ControlPlaneReadinessServiceS
       return false;
     }
 
-    if (
-      nodeId !== this.nodeId &&
-      isNodeReadyLeaseExplicitlyCleared(nodeRow)
-    ) {
+    if (isNodeReadyLeaseExplicitlyCleared(nodeRow)) {
       return false;
     }
 

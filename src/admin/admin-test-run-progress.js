@@ -5,6 +5,10 @@
 
 import {ADMIN_TEST_LOG_STREAM} from './admin-constants.js';
 
+const LOCAL_NUM_ONE = 1;
+const LOCAL_STR_SCENARIO = 'scenario';
+const LOCAL_NUM_35 = 35;
+
 const EMPTY_STRING = '';
 
 const RUN_PROGRESS_PHASE = Object.freeze({
@@ -112,8 +116,8 @@ function matchScenarioStart(text, currentPercent, scenarioName) {
   }
   return {
     phase: RUN_PROGRESS_PHASE.SCENARIO_RUNNING,
-    message: `Running ${match[1] || scenarioName || 'scenario'}`,
-    percent: Math.max(35, currentPercent),
+    message: `Running ${match[LOCAL_NUM_ONE] || scenarioName || LOCAL_STR_SCENARIO}`,
+    percent: Math.max(LOCAL_NUM_35, currentPercent),
   };
 }
 

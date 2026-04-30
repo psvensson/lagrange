@@ -38,6 +38,18 @@ import {
   createPartitionSplitMergeManagerEvaluationMethods,
 } from './partition-split-merge-manager-evaluation-methods.js';
 
+const LOCAL_STR_1EJ8C = 'partition:split:evaluation';
+const LOCAL_STR_10NUJ = 'control-plane:write';
+const LOCAL_STR_NUMBER = 'number';
+const LOCAL_STR_FUNCTION = 'function';
+const LOCAL_STR_STRING = 'string';
+const LOCAL_STR_OBJECT = 'object';
+const LOCAL_STR_EXECUTED = 'executed';
+const LOCAL_STR_DEFERRED = 'deferred';
+const LOCAL_STR_ERROR = 'error';
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_STR_SPLIT_PLAN = 'split_plan';
+
 const OperationState = SPLIT_MERGE_STATE;
 const DEFAULT_SPLIT_STORAGE_THRESHOLD = SPLIT_MERGE_DEFAULT.SPLIT_STORAGE_THRESHOLD_BYTES;
 const DEFAULT_SPLIT_TRAFFIC_THRESHOLD = SPLIT_MERGE_DEFAULT.SPLIT_TRAFFIC_THRESHOLD_QPM;
@@ -210,8 +222,8 @@ class PartitionSplitMergeManager extends EventEmitter {
     return this.getPressureGovernor().evaluate({
       workClass: options.workClass || PRESSURE_WORK_CLASS.BACKGROUND,
       resourceKeys: [
-        'partition:split:evaluation',
-        'control-plane:write',
+        LOCAL_STR_1EJ8C,
+        LOCAL_STR_10NUJ,
       ],
       allowDegrade: false,
       allowDefer: true,
@@ -305,7 +317,7 @@ class PartitionSplitMergeManager extends EventEmitter {
    */
   getNumericConfig(config, key, fallback) {
     const value = config.get(key);
-    if (typeof value === 'number' && Number.isFinite(value)) {
+    if (typeof value === LOCAL_STR_NUMBER && Number.isFinite(value)) {
       return value;
     }
     return fallback;
@@ -318,7 +330,7 @@ class PartitionSplitMergeManager extends EventEmitter {
    * @private
    */
   async loadEvaluationPartitions() {
-    if (typeof this.listPartitions === 'function') {
+    if (typeof this.listPartitions === LOCAL_STR_FUNCTION) {
       const partitions = await this.listPartitions();
       return Array.isArray(partitions) ? partitions : [];
     }
@@ -335,10 +347,10 @@ class PartitionSplitMergeManager extends EventEmitter {
    * @private
    */
   getPartitionId(partition) {
-    if (typeof partition === 'string') {
+    if (typeof partition === LOCAL_STR_STRING) {
       return partition;
     }
-    if (!partition || typeof partition !== 'object') {
+    if (!partition || typeof partition !== LOCAL_STR_OBJECT) {
       return null;
     }
     return partition.partition_id || partition.partitionId || null;
@@ -351,7 +363,7 @@ class PartitionSplitMergeManager extends EventEmitter {
    * @private
    */
   getPartitionTableId(partition) {
-    if (!partition || typeof partition !== 'object') {
+    if (!partition || typeof partition !== LOCAL_STR_OBJECT) {
       return null;
     }
     return partition.table_id || partition.tableId || null;
@@ -364,7 +376,7 @@ class PartitionSplitMergeManager extends EventEmitter {
    * @private
    */
   getPartitionStartKey(partition) {
-    if (!partition || typeof partition !== 'object') {
+    if (!partition || typeof partition !== LOCAL_STR_OBJECT) {
       return null;
     }
     return partition.partition_key_start ?? partition.partitionKeyStart ?? null;
@@ -377,7 +389,7 @@ class PartitionSplitMergeManager extends EventEmitter {
    * @private
    */
   getPartitionEndKey(partition) {
-    if (!partition || typeof partition !== 'object') {
+    if (!partition || typeof partition !== LOCAL_STR_OBJECT) {
       return null;
     }
     return partition.partition_key_end ?? partition.partitionKeyEnd ?? null;
@@ -417,7 +429,7 @@ class PartitionSplitMergeManager extends EventEmitter {
    * @private
    */
   normalizeKeyRange(range) {
-    if (!range || typeof range !== 'object') {
+    if (!range || typeof range !== LOCAL_STR_OBJECT) {
       return null;
     }
     if (range instanceof KeyRange) {
@@ -434,7 +446,7 @@ class PartitionSplitMergeManager extends EventEmitter {
    */
   sortEvaluationPartitions(partitions) {
     return [...partitions]
-      .filter((partition) => partition && typeof partition === 'object')
+      .filter((partition) => partition && typeof partition === LOCAL_STR_OBJECT)
       .sort((left, right) => {
         const tableOrder = this.comparePartitionKeys(
           this.getPartitionTableId(left),
@@ -467,7 +479,7 @@ class PartitionSplitMergeManager extends EventEmitter {
 
     if ((metrics.sizeBytes === undefined || metrics.sizeBytes === null) &&
         partition &&
-        typeof partition === 'object') {
+        typeof partition === LOCAL_STR_OBJECT) {
       const sizeBytes = Number(
         partition.size_bytes ?? partition.sizeBytes ?? NUM.ZERO,
       );
@@ -491,7 +503,7 @@ class PartitionSplitMergeManager extends EventEmitter {
   async executeManagedSplitCandidate(partitionId, options = {}) {
     if (!partitionId ||
         !this.autoExecuteCandidates ||
-        typeof this.executeSplitCandidate !== 'function') {
+        typeof this.executeSplitCandidate !== LOCAL_STR_FUNCTION) {
       return null;
     }
     const pressureDecision = this.evaluateSplitPressure();
@@ -529,14 +541,14 @@ class PartitionSplitMergeManager extends EventEmitter {
    */
   classifyManagedSplitExecution(execution) {
     if (!execution || execution.success === true) {
-      return 'executed';
+      return LOCAL_STR_EXECUTED;
     }
     const state = String(execution.state || '').toLowerCase();
     if (state === PARTITION_TRANSITION_STATE.BLOCKED ||
         state === PARTITION_TRANSITION_STATE.DEFERRED) {
-      return 'deferred';
+      return LOCAL_STR_DEFERRED;
     }
-    return 'error';
+    return LOCAL_STR_ERROR;
   }
 
   /**
@@ -546,7 +558,7 @@ class PartitionSplitMergeManager extends EventEmitter {
    * @private
    */
   resolveManagedSplitExecutionError(execution) {
-    if (typeof execution?.error === 'string' && execution.error.length > 0) {
+    if (typeof execution?.error === LOCAL_STR_STRING && execution.error.length > LOCAL_NUM_ZERO) {
       return execution.error;
     }
     return SPLIT_MERGE_ERROR_MSG.MANAGED_SPLIT_EXECUTION_FAILED;
@@ -657,12 +669,12 @@ class PartitionSplitMergeManager extends EventEmitter {
     }
 
     const outcome = this.classifyManagedSplitExecution(execution);
-    if (outcome === 'executed') {
+    if (outcome === LOCAL_STR_EXECUTED) {
       results.executedSplits.push(execution);
       return;
     }
 
-    if (outcome === 'deferred') {
+    if (outcome === LOCAL_STR_DEFERRED) {
       const deferredReason =
         this.resolveManagedSplitExecutionDeferredReason(execution);
       this.logger.warn(SPLIT_MERGE_LOG_MSG.SPLIT_EXECUTION_DEFERRED, {
@@ -997,7 +1009,7 @@ class PartitionSplitMergeManager extends EventEmitter {
         leftPartitionId,
         rightPartitionId,
         medianKey,
-        phase: 'split_plan',
+        phase: LOCAL_STR_SPLIT_PLAN,
       });
 
       this.emit(SPLIT_MERGE_EVENT.SPLIT_COMPLETED, result);
@@ -1006,7 +1018,7 @@ class PartitionSplitMergeManager extends EventEmitter {
       this.logger.error(SPLIT_MERGE_LOG_MSG.SPLIT_PLAN_FAILED, {
         partitionId,
         error: error.message,
-        phase: 'split_plan',
+        phase: LOCAL_STR_SPLIT_PLAN,
       });
 
       this.emit(SPLIT_MERGE_EVENT.SPLIT_FAILED, {partitionId, error: error.message});

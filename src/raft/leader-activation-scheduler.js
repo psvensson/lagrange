@@ -1,5 +1,10 @@
 import {NUM} from '../constants/index.js';
 
+const LOCAL_STR_STRING = 'string';
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_STR_SHARED_NODE = 'shared-node';
+const LOCAL_STR_FUNCTION = 'function';
+
 const DEFAULT_LEADER_ACTIVATION_NODE_SPACING_MS = 25;
 const SHARED_LEADER_ACTIVATION_SCHEDULERS = new Map();
 
@@ -32,9 +37,9 @@ class LeaderActivationScheduler {
   }
 
   constructor(options = {}) {
-    this.nodeId = typeof options.nodeId === 'string' && options.nodeId.length > 0 ?
+    this.nodeId = typeof options.nodeId === LOCAL_STR_STRING && options.nodeId.length > LOCAL_NUM_ZERO ?
       options.nodeId :
-      'shared-node';
+      LOCAL_STR_SHARED_NODE;
     this.spacingMs = normalizeSpacingMs(options.spacingMs);
     this.queue = [];
     this.nextEntryId = NUM.ONE;
@@ -51,7 +56,7 @@ class LeaderActivationScheduler {
   }
 
   enqueue(run) {
-    if (this.destroyed || typeof run !== 'function') {
+    if (this.destroyed || typeof run !== LOCAL_STR_FUNCTION) {
       return {cancel: () => {}};
     }
 
@@ -84,7 +89,7 @@ class LeaderActivationScheduler {
       this.dispatchTimer = null;
       this.dispatchNext();
     }, delayMs);
-    if (typeof this.dispatchTimer?.unref === 'function') {
+    if (typeof this.dispatchTimer?.unref === LOCAL_STR_FUNCTION) {
       this.dispatchTimer.unref();
     }
   }
@@ -102,7 +107,7 @@ class LeaderActivationScheduler {
       this.lastDispatchAt = Date.now();
       try {
         const result = entry.run();
-        if (result && typeof result.catch === 'function') {
+        if (result && typeof result.catch === LOCAL_STR_FUNCTION) {
           result.catch(() => {});
         }
       } finally {

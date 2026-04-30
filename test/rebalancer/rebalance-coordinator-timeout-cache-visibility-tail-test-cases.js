@@ -1,6 +1,14 @@
 import {registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests} from './rebalance-coordinator-timeout-cache-visibility-tail-more-test-cases.js';
 
 const REPLICA_OPERATION_CRITICAL_RECOVERY_QUERY_TIMEOUT_MS = 15_000;
+const NON_PRIORITY_DEFERRED_PARTITION_ID = 'customer_orders-p1';
+const PRIORITY_RECOVERY_BLOCKED_PARTITION_ID = 'replica_operations-p1';
+const TEST_PRIORITY_RECOVERY_SPREAD_GAP = 1;
+const TEST_PRESSURE_DEGRADED_ERROR =
+  'Distributed operation failed due to participant failures';
+const TEST_PRESSURE_DEGRADED_ERROR_CODE =
+  'CONTROL_PLANE_PRESSURE_DEGRADED';
+const TEST_PRESSURE_DEGRADED_RETRY_AFTER_MS = 250;
 
 export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
   test,
@@ -767,6 +775,99 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
   );
 
   test(
+    'canStartAddOperation blocks non-priority deferred owner reads under ' +
+    'contained priority pressure',
+    async (t) => {
+      let replicaOperationReads = 0;
+      const coordinator = createCoordinator({
+        nodeId: 'node-router-degrade-non-priority-add',
+        transactionCoordinator: buildTransactionCoordinator(),
+        systemTableCache: {
+          filter() {
+            return [];
+          },
+          get() {
+            return null;
+          },
+        },
+        cdcIntegrationService: {
+          async waitForCacheUpdate() {},
+        },
+        controlPlaneReadinessService: {
+          getPriorityRecoveryPlanningAnswerBestEffort() {
+            return {
+              publicationStatus: 'PENDING',
+              priorityPartitionSummary: {
+                satisfied: false,
+                blockedPartitions: [{
+                  partitionId: PRIORITY_RECOVERY_BLOCKED_PARTITION_ID,
+                  spreadGap: TEST_PRIORITY_RECOVERY_SPREAD_GAP,
+                }],
+              },
+            };
+          },
+        },
+        messageRouter: {
+          async deliver() {
+            return {acknowledged: true, status: 'completed'};
+          },
+          getOutboundPressureSummary() {
+            return {backpressured: true};
+          },
+        },
+        tablePolicyService: {
+          async getPolicyForPartition() {
+            return {minReplicaCount: 1};
+          },
+        },
+        sqlQueryEngine: {
+          async executeQuery(sql) {
+            if (String(sql).includes('FROM replica_operations')) {
+              replicaOperationReads += 1;
+              return {
+                success: false,
+                error: TEST_PRESSURE_DEGRADED_ERROR,
+                errorCode: TEST_PRESSURE_DEGRADED_ERROR_CODE,
+                retryAfterMs: TEST_PRESSURE_DEGRADED_RETRY_AFTER_MS,
+              };
+            }
+            return {success: true, rows: [], affectedRows: 0};
+          },
+        },
+        enableTimeouts: false,
+      });
+
+      coordinator.initialize();
+      try {
+        const canStart = await coordinator.canStartAddOperation({
+          bypassEmptyQueryDelay: true,
+          partitionId: NON_PRIORITY_DEFERRED_PARTITION_ID,
+        });
+        const outcome =
+        coordinator.repository.getLastIncompleteOperationReadOutcome();
+
+        t.equal(
+          canStart,
+          false,
+          'non-priority add admission must not reuse the priority recovery pressure lane',
+        );
+        t.equal(
+          replicaOperationReads,
+          1,
+          'non-priority add admission should still attempt one owner read before blocking',
+        );
+        t.equal(
+          outcome?.completionState,
+          PRIORITY_RECOVERY_DEFERRED_COMPLETION_STATE,
+          'non-priority add admission should preserve deferred owner-read diagnostics',
+        );
+      } finally {
+        await coordinator.shutdown();
+      }
+    },
+  );
+
+  test(
     'canStartAddOperation reuses empty cache observation boundary before routed SQL',
     async (t) => {
       let sqlQueryCalls = 0;
@@ -1266,6 +1367,92 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
           outcome?.completionState,
           PRIORITY_RECOVERY_DEFERRED_COMPLETION_STATE,
           'degraded remove admission should preserve the canonical deferred outcome',
+        );
+      } finally {
+        await coordinator.shutdown();
+      }
+    },
+  );
+
+  test(
+    'canStartRemoveOperation blocks non-priority deferred owner reads under ' +
+    'contained priority pressure',
+    async (t) => {
+      let replicaOperationReads = 0;
+      const coordinator = createCoordinator({
+        nodeId: 'node-router-degrade-non-priority-remove',
+        transactionCoordinator: buildTransactionCoordinator(),
+        systemTableCache: {},
+        cdcIntegrationService: {
+          async waitForCacheUpdate() {},
+        },
+        controlPlaneReadinessService: {
+          getPriorityRecoveryPlanningAnswerBestEffort() {
+            return {
+              publicationStatus: 'PENDING',
+              priorityPartitionSummary: {
+                satisfied: false,
+                blockedPartitions: [{
+                  partitionId: PRIORITY_RECOVERY_BLOCKED_PARTITION_ID,
+                  spreadGap: TEST_PRIORITY_RECOVERY_SPREAD_GAP,
+                }],
+              },
+            };
+          },
+        },
+        messageRouter: {
+          async deliver() {
+            return {acknowledged: true, status: 'completed'};
+          },
+          getOutboundPressureSummary() {
+            return {backpressured: true};
+          },
+        },
+        tablePolicyService: {
+          async getPolicyForPartition() {
+            return {minReplicaCount: 1};
+          },
+        },
+        sqlQueryEngine: {
+          async executeQuery(sql) {
+            if (String(sql).includes('FROM replica_operations')) {
+              replicaOperationReads += 1;
+              return {
+                success: false,
+                error: TEST_PRESSURE_DEGRADED_ERROR,
+                errorCode: TEST_PRESSURE_DEGRADED_ERROR_CODE,
+                retryAfterMs: TEST_PRESSURE_DEGRADED_RETRY_AFTER_MS,
+              };
+            }
+            return {success: true, rows: [], affectedRows: 0};
+          },
+        },
+        enableTimeouts: false,
+      });
+
+      coordinator.initialize();
+      try {
+        const canStart = await coordinator.canStartRemoveOperation({
+          bypassEmptyQueryDelay: true,
+          partitionId: NON_PRIORITY_DEFERRED_PARTITION_ID,
+        });
+        const outcome =
+        coordinator.repository.getLastIncompleteOperationReadOutcome();
+
+        t.equal(
+          canStart,
+          false,
+          'non-priority remove admission must not reuse the priority recovery pressure lane',
+        );
+        t.equal(
+          replicaOperationReads,
+          1,
+          'non-priority remove admission should still attempt one owner read before blocking',
+        );
+        t.equal(
+          outcome?.completionState,
+          PRIORITY_RECOVERY_DEFERRED_COMPLETION_STATE,
+          'non-priority remove admission should preserve deferred owner-read diagnostics',
         );
       } finally {
         await coordinator.shutdown();

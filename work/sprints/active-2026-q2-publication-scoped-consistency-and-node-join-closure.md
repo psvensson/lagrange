@@ -79,22 +79,24 @@ Secondary after the primary path is stable:
 
 ## Active Packages
 
-1. [Publication recovery machine spec and preflight verification](../packages/active-20260426-publication-recovery-machine-spec-and-preflight-verification.md)
+1. [Priority Recovery Actuation Contract Under Load](../packages/active-20260430-priority-recovery-actuation-contract-under-load.md)
 
 ## Queued Packages
 
-The post-active transition and quiescence packages are paused until the current
-startup/active-gate publication recovery and heartbeat-status blocker closes
-or migrates:
-
-1. [Rolling restart operation transition pressure and over-target trim](../packages/todo-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md)
-2. [Control plane quiescence owner snapshot](../packages/todo-20260426-control-plane-quiescence-owner-snapshot.md)
+The current active package is intentionally narrow. It owns only the latest
+priority recovery workflow-progress blocker for `sql_transactions-p1` after
+publication, ACK debt, missing published-active nodes, and snapshot coverage
+are closed in the representative artifact.
 
 All final consistency recommendation packages are complete or queued outside
 the current execution path.
 
 Other secondary matrix failures become active packages only after the
 `rolling-restart` gate passes or migrates to a new named owner boundary.
+
+Queued re-entry packages:
+
+1. [Rolling Restart Operation Transition Pressure And Over-Target Trim](../packages/todo-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md)
 
 Queued convergence-grammar packages:
 
@@ -104,43 +106,45 @@ Queued convergence-grammar packages:
 4. [Critical replace operation lifecycle convergence owner](../packages/todo-20260424-critical-replace-operation-lifecycle-convergence-owner.md)
 5. [Rolling restart in-flight operation drain and CDC pressure](../packages/todo-20260425-rolling-restart-inflight-operation-drain-and-cdc-pressure.md)
 
+Queued cleanup packages:
+
+1. [Structural bookkeeping semantic source names](../packages/todo-20260429-structural-bookkeeping-semantic-source-names.md)
+
 ## Remaining Work Summary
 
 1. Current execution blocker:
-   The April 26 source-visibility, failed-`REPLACE` active-target, local
-   mutation priority-creation, executor outcome, metadata gateway, successor
-   leader safety, completed-row liveness, ACK-complete publication repair,
-   heartbeat ACK probe, state-machine pressure preflight, replacement-target
-   `NOT_FOUND`, and quiescence-classification slices are complete or paused.
-   The latest pre-revival `test-output/report.json` rerun moved the blocker
-   again and did not reach post-active trim or quiescence. Publication is now
-   `PUBLISHED`, pending ACK is `0`, priority recovery is `none`, active
-   diagnostics report `5/5`, but snapshot coverage is `4/5` because one active
-   node is missing from published membership:
-   `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`.
+   The latest April 30 representative rerun is
+   `test-output/reports/runtime-stability-rolling-restart-20260430-codex-active-publication-missing-node-owner-state.report.json`:
+   publication epoch `4` is `PUBLISHED`, pending ACK count is `0`,
+   `publishedActive=5/5`, `missingPublished=0`, and selected snapshot coverage
+   is `5/5`. The terminal barrier has moved to priority-spread workflow
+   progress: `prioritySpread=pending#gap=6`,
+   dominant reason `priority_recovery_workflow_progress_event_driven`,
+   unresolved partition `sql_transactions-p1`, owner
+   `operation_workflow_owner`, boundary `workflow_progress`, wait mode
+   `event_driven`, next action `wait_for_operation_progress`, latest step
+   `SENDING`, and latest operation status `pending`.
 2. Next active investigation:
-   close the active
-   [Publication recovery machine spec and preflight verification](../packages/active-20260426-publication-recovery-machine-spec-and-preflight-verification.md)
-   boundary. The immediate blocker is no longer post-active trim or
-   quiescence. The ACK/published-active evidence normalization slice moved the
-   failure to stale node-state publication: the missing node is direct-probe
-   active/admin-ready while the durable control-plane node row still carries
-   stale `stopped` status. READY heartbeat-only recovery now revives that row
-   to active before membership publication repair; the representative rerun is
-   intentionally pending.
+   execute
+   [Priority Recovery Actuation Contract Under Load](../packages/active-20260430-priority-recovery-actuation-contract-under-load.md)
+   by deriving one replayable owner-decision fixture for the current
+   `sql_transactions-p1` evidence, then cutting decision and presentation
+   consumers over to the owner actuation contract.
 3. Harness classification:
    terminal barrier evidence wins over stale playback reconstruction for
-   active, restart-recovery, load-readiness, and convergence failures. The
-   current representative failure classifies from the shared publication
-   recovery machine so stale top-level publication summaries cannot hide
-   active-gate ACK or missing-published evidence.
+   active, restart-recovery, load-readiness, convergence, and quiescence
+   failures. The missing published-active-node drift is closed: stale
+   `PRIORITY_CONTROL_PLANE_RECOVERY_PENDING` and publication-pending vocabulary
+   no longer hide a terminal `publication_missing_active_node=<node>` owner.
+   The current failure now carries explicit priority-recovery workflow witness
+   evidence for `sql_transactions-p1`.
 4. Final consistency:
    the final leader-map consistency package is complete for this sprint
    because the rerun moved to a freshly split non-final blocker.
 5. Residual cleanup:
    fence or delete superseded local reconstruction and caller-local pressure
-   exception paths through queued packages only after the current publication
-   recovery / node-state revival blocker closes or migrates.
+   exception paths through queued packages only after the current
+   priority recovery actuation blocker closes or migrates.
 6. Matrix re-entry:
    after `rolling-restart` passes or moves to a stable named blocker,
    continue with `seven-node-read-write-load-transaction-recovery`, then
@@ -182,6 +186,18 @@ representative failure forward.
 27. [Priority operation creation local mutation gate under load](../packages/done-20260426-priority-operation-creation-local-mutation-gate-under-load.md)
 28. [MOVE_ASSIGNMENT liveness proof hardening](../packages/done-20260426-move-assignment-liveness-proof-hardening.md)
 29. [State machine pressure preflight](../packages/done-20260426-state-machine-pressure-preflight.md)
+30. [Publication recovery machine spec and preflight verification](../packages/done-20260426-publication-recovery-machine-spec-and-preflight-verification.md)
+31. [Restart recovery control-plane pressure and admin reachability](../packages/done-20260426-restart-recovery-control-plane-pressure-and-admin-reachability.md)
+32. [Rolling restart priority follow-up under transport pressure](../packages/done-20260427-rolling-restart-priority-follow-up-under-transport-pressure.md)
+33. [Rolling restart startup readiness snapshot gating](../packages/done-20260427-rolling-restart-startup-readiness-snapshot-gating.md)
+34. [Rolling restart load readiness stable window after CDC closure](../packages/done-20260430-rolling-restart-load-readiness-stable-window-after-cdc-closure.md)
+35. [Rolling restart control plane quiescence critical spread after load readiness closure](../packages/done-20260430-rolling-restart-control-plane-quiescence-critical-spread-after-load-readiness-closure.md)
+36. [Rolling restart load readiness no progress fast fail and publication gate closure](../packages/done-20260430-rolling-restart-load-readiness-no-progress-fast-fail-and-publication-gate-closure.md)
+37. [Rolling restart pre load priority recovery operation creation under load readiness](../packages/done-20260430-rolling-restart-pre-load-priority-recovery-operation-creation-under-load-readiness.md)
+38. [Rolling restart startup publication epoch pending operation stalled](../packages/done-20260430-rolling-restart-startup-publication-epoch-pending-operation-stalled.md)
+39. [Rolling restart quiescence stale in flight canonical blocker](../packages/done-20260430-rolling-restart-quiescence-stale-inflight-canonical-blocker.md)
+40. [Rolling restart restart recovery admin reachability regression](../packages/done-20260430-rolling-restart-restart-recovery-admin-reachability-regression.md)
+41. [Rolling restart active publication missing node convergence](../packages/done-20260430-rolling-restart-active-publication-missing-node-convergence.md)
 
 ## Parked Work
 
@@ -384,7 +400,7 @@ Current secondary evidence:
     pressure, discovery repair timeouts, and five priority partitions still
     classified as `spread_satisfied_in_flight`.
 42. The quiescence boundary is now active as
-    [Control plane quiescence owner snapshot](../packages/todo-20260426-control-plane-quiescence-owner-snapshot.md).
+    [Control plane quiescence owner snapshot](../packages/done-20260426-control-plane-quiescence-owner-snapshot.md).
     Its first implementation slice added an explicit snapshot resolver and
     wired `waitForControlPlaneQuiescence` through that resolver.
 43. The quiescence continuation added progressing/stalled operation-drain
@@ -409,7 +425,7 @@ Current secondary evidence:
     progress reported `pendingAck=1`, and priority recovery carried
     `coordination_mismatch` / `blocked_unclassified` evidence. The active
     package became
-    [Publication recovery machine spec and preflight verification](../packages/active-20260426-publication-recovery-machine-spec-and-preflight-verification.md).
+    [Publication recovery machine spec and preflight verification](../packages/done-20260426-publication-recovery-machine-spec-and-preflight-verification.md).
 47. The publication recovery evidence fix moved the latest
     `test-output/report.json` rerun again. Publication is `PUBLISHED`,
     `pendingAck=0`, priority recovery is `none`, and active diagnostics report
@@ -418,8 +434,60 @@ Current secondary evidence:
     node-state status: direct node diagnostics are active/admin-ready, while
     the control-plane node row still says `stopped` despite READY/fresh
     heartbeat evidence. The current code slice revives stale stopped rows on
-    READY heartbeat-only recovery updates; the post-fix representative rerun
-    has not been run.
+    READY heartbeat-only recovery updates.
+48. The post-revival continuation closed the stale terminal-cache ACK owner gap:
+    terminal cached publication rows now force an authoritative refresh before
+    node ACK handling, so a newer `ACK_PENDING` publication cannot be hidden by
+    a stale `PUBLISHED` cache row. Focused tests and static guardrails pass. The
+    representative `rolling-restart --fast-local` rerun failed after `269.1s`
+    with publication recovery closed: publication epoch `4` is `PUBLISHED`,
+    `pendingAck=0`, missing published membership is `0`, and priority recovery
+    blocked count is `0`. The new active blocker is restarted-node recovery
+    readiness for node `11601fe0-72d6-5853-8590-ec2881853e72`, with bootstrap
+    health reachable, admin API refused, `control_snapshot_authority_unavailable`,
+    and pressure on `control_plane_publications`. The active package is
+    [Restart recovery control-plane pressure and admin reachability](../packages/done-20260426-restart-recovery-control-plane-pressure-and-admin-reachability.md).
+49. The restart-recovery pressure repair made publication mutation work
+    critical and deferrable through the shared workload profile and propagated
+    workload resource keys through routed SQL writes. The representative rerun
+    then closed restart recovery and migrated back to post-active convergence:
+    failover, convergence, restart recovery, and publication were closed, but
+    four replica operations remained in flight and post-rebalance closure stayed
+    open on operation drain, membership trim, and no-over-target evidence. The
+    active package is again
+    [Rolling restart operation transition pressure and over-target trim](../packages/todo-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md).
+50. The April 30 fast-fail continuation changed the failure shape from an outer
+    load-readiness timeout to owner-state no-progress. The representative run
+    `test-output/reports/runtime-stability-rolling-restart-20260430-codex-fast-fail-load-readiness.report.json`
+    now fails after `110.8s` with active gate state `stalled`,
+    `stalled_no_progress`, publication status `ACK_PENDING`, pending ACK count
+    `2`, priority spread gap `8`, and priority recovery
+    `eligible_but_no_operation_created` on
+    `sql_transaction_participants-p1` and `sql_transactions-p1`.
+51. The pre-load operation-creation continuation then moved the path to
+    startup publication epoch convergence:
+    `test-output/reports/runtime-stability-rolling-restart-20260430-codex-priority-authoritative-service-evidence.report.json`
+    failed after `130.0s` with active nodes `5/5`, publication `PUBLISHED`,
+    pending ACK count `0`, selected snapshot coverage `3/5`, and a
+    cache-visible young pending recovery operation for
+    `sql_write_operations-p1`.
+52. The pending-operation stalled package closed the false stalled
+    interpretation for young workflow-owned work. The next representative run
+    `test-output/reports/runtime-stability-rolling-restart-20260430-codex-pending-owner-state.report.json`
+    fails after `131.3s` with no `operation_stalled` partitions. The remaining
+    evidence is publication epoch `4` `ACK_PENDING`, pending ACK count `1`,
+    empty pending ACK node ids, selected snapshot coverage `4/5`, selected
+    snapshot reachability timeout on
+    `7493b0ab-a054-5fad-a91b-5e331db29304`, and
+    `eligible_but_no_operation_created` for `sql_write_operations-p1`.
+53. The startup publication epoch operation-creation package moved the path
+    past the prior publication blocker. The representative run
+    `test-output/reports/runtime-stability-rolling-restart-20260430-codex-operation-snapshot-reachability.report.json`
+    fails after `507.0s`, but publication epoch `7` is `PUBLISHED`, pending ACK
+    count is `0`, priority spread is satisfied, blocked and unresolved priority
+    partition counts are `0`, and `needs_operation` is empty.
+54. The active package is now
+    [Rolling Restart Quiescence Stale In Flight Canonical Blocker](../packages/done-20260430-rolling-restart-quiescence-stale-inflight-canonical-blocker.md).
 
 ## Progress Grammar
 
@@ -714,5 +782,361 @@ Executed on April 24, 2026:
      `node --test test/control-plane/replica-dispatch-node-state-update.test.js`
 112. Result: passed, `97/97`; READY heartbeat-only recovery now revives stale
      stopped durable node rows before membership publication repair.
-113. Post-revival guardrails and the representative `rolling-restart` rerun:
-     pending by request.
+113. Terminal stale-cache ACK refresh validation:
+     `node --test test/control-plane/membership-publication-coordinator.test.js`
+114. Result: passed, `208/208`; a stale terminal cached publication now forces
+     authoritative refresh before node ACK handling.
+115. Post-revival focused publication and restart-readiness validations:
+     `node --test test/control-plane/publication-recovery-state-machine.test.js test/control-plane/publication-recovery-gate.test.js test/control-plane/publication-recovery-evidence.test.js`
+116. Result: passed, `103/103`.
+117. Post-revival active-node and membership-coordinator validations:
+     `node --test test/control-plane/active-node-projection.test.js test/control-plane/membership-publication-coordinator.test.js`
+118. Result: passed, `261/261`.
+119. Post-revival replica dispatch validation:
+     `node --test test/control-plane/replica-dispatch-node-state-update.test.js`
+120. Result: passed, `97/97`.
+121. Post-revival harness validations:
+     `node --test test/distributed/harness/__tests__/state-machine-pressure-preflight.test.js test/distributed/harness/__tests__/failure-bundle.test.js`
+122. Result: passed, `62/62`.
+123. Post-revival static guardrails:
+     `npm run audit:state-machine-pressure`;
+     `npm run audit:runtime-grammar`;
+     `npm run audit:guideline:decision-boundaries`;
+     `npm run audit:guideline:literals`
+124. Result: passed. Runtime grammar and decision-boundary audits reported
+     `0` violations; literal guardrail reported `0` new violations against the
+     inherited baseline.
+125. Post-revival representative `rolling-restart` rerun:
+     `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --fast-local`
+126. Result: failed after `269.1s`, but the publication recovery blocker closed.
+     Publication epoch `4` was `PUBLISHED`, pending ACK count was `0`, missing
+     published membership was `0`, and the failure migrated to
+     `restart_recovery_timeout` for node
+     `11601fe0-72d6-5853-8590-ec2881853e72`.
+127. Quiescence candidate classification validation:
+     `node --test test/distributed/harness/__tests__/control-plane-quiescence-snapshot.test.js test/distributed/harness/__tests__/failure-bundle.test.js`
+128. Result: passed, `60/60`; a terminal `quiescence_candidate` timeout now
+     classifies as topology stability evidence instead of `unknown`.
+129. Quiescence timeout diagnostics validation:
+     `node --test test/distributed/harness/__tests__/cluster.test-part-6.js`
+130. Result: passed under the existing harness skip gate, `24/24` skipped; the
+     timeout diagnostic object now carries effective and stale operation counts.
+131. Quiescence classification static guardrails:
+     `npm run audit:guideline:literals`;
+     `npm run audit:guideline:decision-boundaries`;
+     `npm run audit:runtime-grammar`;
+     `npm run test:metadata-gateway:audit`;
+     `git diff --check`
+132. Result: passed. Literal, decision-boundary, runtime-grammar, and
+     state-machine pressure checks reported `0` violations/issues.
+133. Post-quiescence-classification representative rerun:
+     `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --fast-local`
+134. Result: failed, `0/1` passed after `273.6s`. The run did not reach
+     quiescence; it migrated back to restart-recovery readiness for node
+     `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`, with `adminReady=false`,
+     `controlPlaneRecoveryReady=false`, readiness phase `INIT`, and
+     `bootstrapJoinProjectionBlocker=control_snapshot_authority_unavailable`.
+135. Restart-recovery stale priority-spread classifier validation:
+     `node --test test/distributed/harness/__tests__/failure-bundle.test.js`
+136. Result: passed, `53/53`; stale `priority_spread_pending` protocol state
+     no longer overrides closed priority-recovery blocker evidence on
+     restart-recovery timeouts.
+137. Failure-bundle regeneration for the post-repair `test-output/report.json`
+138. Result: `failureClass=startup_recovery_blocked`,
+     `rootCauseClass=startup`, dominant reason `restart_recovery_timeout`, and
+     signal `startupMode=durable_rejoin`.
+139. Load-readiness stable-window owner validation:
+     `node --check test/distributed/harness/cluster-segment-7.js`;
+     `node --check test/distributed/harness/__tests__/cluster.test-part-6.js`;
+     `./node_modules/.bin/tap test/distributed/harness/__tests__/cluster.test-part-6.js`;
+     `./node_modules/.bin/tap test/distributed/harness/__tests__/cluster.test-part-4.js`;
+     `./node_modules/.bin/tap test/distributed/harness/__tests__/post-rebalance-closure-contract.test.js`;
+     `./node_modules/.bin/tap test/distributed/harness/__tests__/assertions.test.js`.
+140. Result: passed. The harness now closes load-readiness stable-window from
+     canonical selected-snapshot capture time when that snapshot already
+     satisfies the configured window.
+141. Load-readiness static guardrails:
+     `npm run audit:guideline:literals`;
+     `npm run audit:guideline:decision-boundaries`;
+     `npm run audit:runtime-grammar`;
+     `git diff --check`.
+142. Result: passed. Literal, decision-boundary, runtime-grammar, and diff
+     whitespace checks reported no issues.
+143. Post-load-readiness representative `rolling-restart` rerun:
+     `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --fast-local --output test-output/reports/runtime-stability-rolling-restart-20260430-codex-load-readiness-stable-window.report.json --verbose`
+144. Result: failed, `0/1` passed after `411.7s`, but the
+     load-readiness stable-window blocker closed. The run recorded
+     `scenario.load-readiness.stable` with `state=closed`, `reason=ready`,
+     `source=selected_snapshot`, and `stableElapsedMs=5866`.
+145. The active representative blocker migrated to
+     `critical_system_spread_open` under control-plane quiescence:
+     root cause class `topology`, quiescence state `critical_spread_open`,
+     `inFlightCount=3`, `effectiveInFlightCount=0`,
+     `staleInFlightCount=2`, and critical-system distribution `0/3` for the
+     critical system tables due to snapshot-lane admin timeouts.
+146. The migrated quiescence boundary was captured as
+     [Rolling Restart Control Plane Quiescence Critical Spread After Load Readiness Closure](../packages/done-20260430-rolling-restart-control-plane-quiescence-critical-spread-after-load-readiness-closure.md).
+147. Quiescence critical-spread owner validation:
+     `node --check test/distributed/harness/control-plane-quiescence-snapshot.js`;
+     `node --check test/distributed/harness/cluster-segment-7-class-5.js`;
+     `node --check test/distributed/harness/cluster-segment-7-class-3.js`;
+     `node --check test/distributed/harness/__tests__/control-plane-quiescence-snapshot.test.js`;
+     `node --check test/distributed/harness/__tests__/cluster.test-part-6.js`;
+     `./node_modules/.bin/tap test/distributed/harness/__tests__/control-plane-quiescence-snapshot.test.js`;
+     `./node_modules/.bin/tap test/distributed/harness/__tests__/cluster.test-part-6.js`.
+148. Result: passed. The quiescence snapshot now separates true critical spread
+     debt from snapshot-lane critical-system observation gaps; the focused TAP
+     suites passed `12/12` and `30/30`.
+149. Quiescence critical-spread static guardrails:
+     `npm run audit:guideline:literals`;
+     `npm run audit:guideline:decision-boundaries`;
+     `npm run audit:runtime-grammar`;
+     `git diff --check`.
+150. Result: passed. Literal, decision-boundary, runtime-grammar, and diff
+     whitespace checks reported no issues.
+151. Post-quiescence representative `rolling-restart` rerun:
+     `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --fast-local --output test-output/reports/runtime-stability-rolling-restart-20260430-codex-quiescence-critical-spread.report.json --verbose`
+152. Result: failed, `0/1` passed after `469.1s`, but the
+     `critical_system_spread_open` blocker closed. Terminal priority spread
+     evidence reports `prioritySpreadSatisfied=true`, `prioritySpreadGap=0`,
+     `priorityBlockedPartitionCount=0`, and no unresolved priority-recovery
+     classes.
+153. The active representative blocker migrated to post-restart load readiness:
+     dominant reason `publication_epoch_pending`, publication epoch `29`,
+     publication status `PUBLISHED`, pending ACK count `0`, missing published
+     node `7493b0ab-a054-5fad-a91b-5e331db29304`, active gate mode `load`,
+     elapsed `121604ms`, stable window `15000ms`, and snapshot reachability
+     timeout on selected snapshot node
+     `11601fe0-72d6-5853-8590-ec2881853e72`.
+154. The migrated post-restart load-readiness publication gate activated
+     [Rolling Restart Load Readiness No Progress Fast Fail And Publication Gate Closure](../packages/done-20260430-rolling-restart-load-readiness-no-progress-fast-fail-and-publication-gate-closure.md).
+155. Load-readiness no-progress fast-fail reproduction:
+     `./node_modules/.bin/tap test/distributed/harness/__tests__/cluster.test-part-6.js --grep "waitForLoadReadinessStability fails fast"`
+156. Result before the fix: failed through the outer
+     `Cluster load readiness did not stabilize within 6000ms` timeout, proving
+     that unchanged owner-state evidence was not failing through the
+     no-progress budget.
+157. Load-readiness no-progress fast-fail and stable-window regression validation:
+     `node --check test/distributed/harness/cluster-segment-7.js`;
+     `node --check test/distributed/scenarios/rolling-restart.js`;
+     `node --check test/distributed/harness/__tests__/cluster.test-part-6.js`;
+     `node --check test/distributed/harness/__tests__/rolling-restart-scenario.test.js`;
+     `./node_modules/.bin/tap test/distributed/harness/__tests__/cluster.test-part-6.js --grep "backdate complete snapshot|waitForLoadReadinessStability fails fast"`;
+     `node --test test/distributed/harness/__tests__/rolling-restart-scenario.test.js`;
+     `./node_modules/.bin/tap test/distributed/harness/__tests__/cluster.test-part-6.js`.
+158. Result: passed. The focused TAP grep covered both the no-progress
+     fast-fail behavior and the stable-window backdating regression, the full
+     cluster harness suite passed `32/32`, and the rolling restart scenario
+     unit coverage passed `5/5`.
+159. Load-readiness no-progress static guardrails:
+     `npm run audit:guideline:literals`;
+     `npm run audit:guideline:decision-boundaries`;
+     `npm run audit:runtime-grammar`;
+     `git diff --check`.
+160. Result: passed. Literal, decision-boundary, runtime-grammar, and diff
+     whitespace checks reported no issues.
+161. Fast-fail representative `rolling-restart` rerun:
+     `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --fast-local --output test-output/reports/runtime-stability-rolling-restart-20260430-codex-fast-fail-load-readiness.report.json --verbose`
+162. Result: failed, `0/1` passed after `110.8s`. The run now stops in the
+     pre-load readiness gate on `stalled_no_progress` after `8` no-progress
+     attempts instead of waiting for the outer load-readiness timeout. The
+     terminal evidence names `PRIORITY_CONTROL_PLANE_RECOVERY_PENDING`,
+     publication status `ACK_PENDING`, pending ACK count `2`, priority spread
+     gap `8`, and `eligible_but_no_operation_created` for
+     `sql_transaction_participants-p1` and `sql_transactions-p1`.
+163. The load-readiness fast-fail package is closed as
+     [Rolling Restart Load Readiness No Progress Fast Fail And Publication Gate Closure](../packages/done-20260430-rolling-restart-load-readiness-no-progress-fast-fail-and-publication-gate-closure.md).
+164. The migrated pre-load priority recovery operation-creation boundary is
+     closed as
+     [Rolling Restart Pre Load Priority Recovery Operation Creation Under Load Readiness](../packages/done-20260430-rolling-restart-pre-load-priority-recovery-operation-creation-under-load-readiness.md).
+165. Priority recovery operation-creation validation:
+     `node --check src/rebalancer/operation-workflow-owner-segment-5.js`;
+     `node --check test/rebalancer/rebalance-coordinator-operation-ownership-tail-test-cases.js`;
+     `./node_modules/.bin/tap test/rebalancer/rebalance-coordinator-operation-ownership.test.js --grep "planning-owned priority spread completion"`;
+     `./node_modules/.bin/tap test/rebalancer/rebalance-coordinator-operation-ownership.test.js`;
+     `node --check src/rebalancer/unified-rebalancer-segment-4.js`;
+     `node --check test/rebalancer/unified-rebalancer.test.js`;
+     `./node_modules/.bin/tap test/rebalancer/unified-rebalancer.test.js --grep "closure-witness needs_operation"`;
+     `./node_modules/.bin/tap test/rebalancer/unified-rebalancer.test.js`.
+166. Result: passed. Raw operation rows now preserve priority partition
+     identity across repository boundaries, and closure-witness operation
+     creation advances an unblocked `needs_operation` candidate when the
+     current owner partition is topology-blocked.
+167. Authoritative service evidence validation:
+     `node --check src/control-plane/membership-publication-coordinator.js`;
+     `node --check test/control-plane/membership-publication-coordinator-tail-final-test-cases.js`;
+     `./node_modules/.bin/tap test/control-plane/membership-publication-coordinator.test.js --grep "owner-rpc service evidence"`;
+     `./node_modules/.bin/tap test/control-plane/membership-publication-coordinator.test.js`;
+     `./node_modules/.bin/tap test/rebalancer/unified-rebalancer.test.js --grep "closure-witness|owner-rpc service evidence|priority recovery active service visibility|terminal operation visibility|service cache visibility"`.
+168. Result: passed. Published priority spread gaps now read service evidence
+     with `OWNER_RPC_PREFERRED`, so stale cache rows no longer hide active
+     authoritative priority service placement.
+169. Post-operation-creation representative `rolling-restart` rerun:
+     `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --fast-local --output test-output/reports/runtime-stability-rolling-restart-20260430-codex-priority-authoritative-service-evidence.report.json --verbose`
+170. Result: failed, `0/1` passed after `130.0s`, but the
+     `eligible_but_no_operation_created` blocker is closed. Publication is
+     `PUBLISHED`, pending ACK count is `0`, active nodes are `5/5`, selected
+     snapshot coverage is `3/5`, and the remaining priority recovery blocker is
+     `operation_created_but_no_step_transitions` for
+     `sql_write_operations-p1` with cache-visible pending operation
+     `dbbc250c-aec0-40eb-9637-8194f955bfea`.
+171. The migrated startup publication epoch and pending-operation boundary is
+     closed as
+     [Rolling Restart Startup Publication Epoch Pending Operation Stalled](../packages/done-20260430-rolling-restart-startup-publication-epoch-pending-operation-stalled.md).
+172. Operation-creation closure static guardrails:
+     `npm run audit:guideline:literals`;
+     `npm run audit:guideline:decision-boundaries`;
+     `npm run audit:runtime-grammar`;
+     `git diff --check -- <touched files>`.
+173. Result: passed. Literal, decision-boundary, runtime-grammar,
+     state-machine pressure, and scoped whitespace checks reported no issues.
+174. Pending-operation stalled focused validation:
+     `node --check src/control-plane/priority-recovery-snapshot.js`;
+     `node --check test/control-plane/priority-recovery-snapshot.test.js`;
+     `node --check test/distributed/harness/failure-bundle-segment-1.js`;
+     `node --check test/distributed/harness/failure-bundle-segment-2.js`;
+     `node --check test/distributed/harness/priority-recovery-summary-normalization.js`;
+     `node --check test/distributed/harness/__tests__/failure-bundle.test.js`;
+     `./node_modules/.bin/tap test/control-plane/priority-recovery-snapshot.test.js --grep "young pending work|workflow-owned event-driven progress|timeout-reconcile-due"`;
+     `node --test test/distributed/harness/__tests__/failure-bundle.test.js --test-name-pattern "preserves priority-recovery operation ids|replays playback snapshot priority-recovery evidence"`.
+175. Result: passed. Young no-transition operations inside their step timeout
+     remain workflow-owned `recovering_in_flight`, and failure-bundle
+     normalization preserves progress and actuation owner-state fields.
+176. Pending-operation stalled full focused validation:
+     `./node_modules/.bin/tap test/control-plane/priority-recovery-snapshot.test.js`;
+     `node --test test/distributed/harness/__tests__/failure-bundle.test.js`;
+     `./node_modules/.bin/tap test/control-plane/membership-publication-coordinator.test.js`;
+     `./node_modules/.bin/tap test/control-plane/replica-dispatch-atomic-claim.integration.test.js`.
+177. Result: passed. The selected suites reported `219/219`, `53/53`,
+     `215/215`, and `28/28` passing.
+178. Pending-operation stalled static guardrails:
+     `npm run audit:guideline:literals`;
+     `npm run audit:guideline:decision-boundaries`;
+     `npm run audit:runtime-grammar`;
+     `git diff --check -- <touched files>`.
+179. Result: passed. Literal, decision-boundary, runtime-grammar, and scoped
+     whitespace checks reported no new issues.
+180. Pending-owner-state representative `rolling-restart` rerun:
+     `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --fast-local --output test-output/reports/runtime-stability-rolling-restart-20260430-codex-pending-owner-state.report.json --verbose`
+181. Result: failed, `0/1` passed after `131.3s`, but the false
+     `operation_stalled` blocker is closed. The latest blocker is publication
+     epoch `4` `ACK_PENDING` with pending ACK count `1`, selected snapshot
+     coverage `4/5`, selected snapshot reachability timeout on
+     `7493b0ab-a054-5fad-a91b-5e331db29304`, and
+     `eligible_but_no_operation_created` for `sql_write_operations-p1`.
+182. The migrated operation-creation and snapshot-reachability boundary is
+     complete as
+     [Rolling Restart Startup Publication Epoch Operation Creation And Snapshot Reachability](../packages/done-20260430-rolling-restart-startup-publication-epoch-operation-creation-and-snapshot-reachability.md).
+183. Operation snapshot and ACK-target focused checks:
+     `git diff --check -- <touched files>`;
+     `./node_modules/.bin/eslint <touched runtime and focused test files>`;
+     `./node_modules/.bin/tap test/control-plane/priority-recovery-snapshot.test.js --grep 'caller timeout budgets|young pending work'`;
+     `./node_modules/.bin/tap test/control-plane/replica-dispatch-node-state-update.test-part-4.js --grep 'authoritative CREATING|CREATING system-table rows'`;
+     `./node_modules/.bin/tap test/control-plane/publication-recovery-evidence.test.js --grep 'pending ACK targets|count-only ACK debt|explicit empty required ACK list|retires stale closure diagnostics'`;
+     `./node_modules/.bin/tap test/control-plane/membership-publication-coordinator.test.js --grep 'refreshes stale priority spread metadata'`.
+184. Result: passed.
+185. Operation snapshot and reachability representative `rolling-restart`
+     rerun:
+     `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/runtime-stability-rolling-restart-20260430-codex-operation-snapshot-reachability.report.json --fast-local --verbose`
+186. Result: failed, `0/1` passed after `507.0s`, but the startup
+     publication blocker migrated. The latest blocker is control-plane
+     quiescence with `inFlightCount=2`, `effectiveInFlightCount=0`,
+     `staleInFlightCount=2`, `quiescenceState=quiescent`,
+     `canonicalBlocker=none`, and candidate-window reset `leadership_churn`.
+187. The migrated quiescence boundary is active as
+     [Rolling Restart Quiescence Stale In Flight Canonical Blocker](../packages/done-20260430-rolling-restart-quiescence-stale-inflight-canonical-blocker.md).
+188. ACK evidence follow-up fixes:
+     stale explicit pending ACK node ids no longer override a complete required
+     ACK list, and rebuilt publication gates preserve count-only ACK debt.
+189. Quiescence stale-in-flight focused proof:
+     `./node_modules/.bin/tap test/distributed/harness/__tests__/cluster.test-part-6.js --grep 'discounted stale in-flight work'`;
+     `./node_modules/.bin/tap test/distributed/harness/__tests__/cluster.test-part-6.js --grep 'waitForControlPlaneQuiescence'`;
+     `./node_modules/.bin/tap test/distributed/harness/__tests__/control-plane-quiescence-snapshot.test.js`.
+190. Result: passed. The quiescence wait loop now uses canonical
+     `effectiveInFlightCount` for progress accounting and no longer lets the
+     no-progress watchdog preempt a closed quiescence stable window.
+191. Quiescence stale-in-flight static guardrails:
+     `./node_modules/.bin/eslint <touched runtime and focused test files> --no-ignore`;
+     `npm run audit:guideline:literals`;
+     `npm run audit:guideline:decision-boundaries`;
+     `npm run audit:runtime-grammar`.
+192. Result: passed. Literal, decision-boundary, runtime-grammar,
+     state-machine pressure, and scoped lint checks reported no issues.
+193. Quiescence stale-in-flight representative `rolling-restart` rerun:
+     `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/runtime-stability-rolling-restart-20260430-codex-quiescence-stale-inflight-closure.report.json --fast-local --verbose`
+194. Result: failed, `0/1` passed after `353.9s`, but the quiescence blocker
+     migrated. The failure bundle has `quiescence=null`; the new dominant
+     reason is `restart_recovery_timeout` for node
+     `11601fe0-72d6-5853-8590-ec2881853e72`, with bootstrap health reachable
+     but admin/control-plane recovery readiness false and admin probe
+     `ECONNREFUSED 172.19.0.4:8081`.
+195. The migrated recovery-readiness boundary was completed as
+     [Rolling Restart Restart Recovery Admin Reachability Regression](../packages/done-20260430-rolling-restart-restart-recovery-admin-reachability-regression.md).
+196. Restart recovery admin reachability regression checks:
+     `node --test test/distributed/harness/__tests__/failure-bundle.test.js --test-name-pattern 'admin refusal'`;
+     `node --test test/distributed/harness/__tests__/failure-bundle.test.js --test-name-pattern 'admin refusal|stale restart-recovery priority spread'`.
+197. Review-fix checks carried in the same validation:
+     `./node_modules/.bin/tap test/control-plane/control-plane-readiness-service.test-part-4.js --grep 'count-only ACK debt'`;
+     `node --test test/distributed/harness/__tests__/control-plane-quiescence-snapshot.test.js --test-name-pattern 'critical spread observation gaps'`.
+198. Restart recovery admin reachability static guardrails:
+     `node --check <touched runtime and focused test files>`;
+     `git diff --check -- <touched files>`;
+     `npx eslint <touched files> --no-ignore`;
+     `npm run audit:guideline:literals`;
+     `npm run audit:guideline:decision-boundaries`;
+     `npm run audit:runtime-grammar`;
+     `npm run test:metadata-gateway:audit`.
+199. Result: passed. The failure bundle now gives admin-refused restart
+     recovery one canonical `admin_reachability_refused` owner state and keeps
+     stale priority-spread protocol vocabulary coherent when the gate is not
+     active.
+200. Restart recovery admin reachability representative `rolling-restart`
+     rerun:
+     `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/runtime-stability-rolling-restart-20260430-codex-admin-reachability-owner-state.report.json --fast-local --verbose`
+201. Result: failed, `0/1` passed after `398.2s`, but the restart-recovery
+     admin reachability blocker migrated. The terminal error is now
+     `Cluster ACTIVE wait stalled with no meaningful progress for 8 attempts`;
+     dominant reason is `PRIORITY_CONTROL_PLANE_RECOVERY_PENDING`, failure
+     class is `publication_convergence_blocked`, and the active publication
+     gate is missing published node
+     `8be8d30f-4499-5eed-865c-71b4d529a67a` with `PUBLISHED`,
+     `pendingAck=0`, `recoveryProtocolState=steady_published`, and
+     `prioritySpreadPending=false`.
+202. The migrated ACTIVE publication boundary is active as
+     [Rolling Restart Active Publication Missing Node Convergence](../packages/done-20260430-rolling-restart-active-publication-missing-node-convergence.md).
+203. Review-fix and missing-node owner focused validation:
+     `node --check src/control-plane/active-node-projection.js`;
+     `node --check src/control-plane/recovery-protocol-snapshot.js`;
+     `node --check src/control-plane/control-plane-readiness-service-segment-4.js`;
+     `node --check test/control-plane/control-plane-readiness-service.test-part-4.js`;
+     `node --check test/distributed/harness/failure-bundle-segment-1.js`;
+     `node --check test/distributed/harness/failure-bundle-segment-2.js`;
+     `node --check test/distributed/harness/failure-bundle-segment-3.js`;
+     `node --check test/distributed/harness/failure-bundle-segment-4.js`;
+     `node --check test/distributed/harness/failure-bundle-segment-5.js`;
+     `node --check test/distributed/harness/failure-bundle-segment-6.js`;
+     `node --check test/distributed/harness/failure-bundle-segment-7.js`;
+     `node --check test/distributed/harness/__tests__/failure-bundle.test.js`;
+     `./node_modules/.bin/tap test/control-plane/control-plane-readiness-service.test-part-4.js --grep 'count-only ACK debt|direct count-only ACK debt'`;
+     `node --test test/distributed/harness/__tests__/failure-bundle.test.js`.
+204. Result: passed. Count-only ACK debt survives publication projection and
+     direct/provided planning merges, stale priority-spread playback remains
+     open only with real ACK debt, and failure bundles now classify terminal
+     missing published-active membership as
+     `publication_missing_active_node=<node>` instead of stale priority or
+     generic publication-pending vocabulary.
+205. Missing-node owner scoped guardrails:
+     `node scripts/check-guideline-literals.js ./test/distributed/harness/failure-bundle-segment-1.js ./test/distributed/harness/failure-bundle-segment-4.js ./test/distributed/harness/failure-bundle-segment-5.js ./test/distributed/harness/__tests__/failure-bundle.test.js ./src/control-plane/active-node-projection.js ./src/control-plane/recovery-protocol-snapshot.js ./src/control-plane/control-plane-readiness-service-segment-4.js ./test/control-plane/control-plane-readiness-service.test-part-4.js`;
+     `node scripts/check-guideline-decision-boundaries.js ./test/distributed/harness/failure-bundle-segment-4.js ./test/distributed/harness/failure-bundle-segment-5.js ./src/control-plane/active-node-projection.js ./src/control-plane/recovery-protocol-snapshot.js ./src/control-plane/control-plane-readiness-service-segment-4.js`;
+     `node scripts/check-guideline-boundary-mode-contracts.js ./test/distributed/harness/failure-bundle-segment-4.js ./test/distributed/harness/failure-bundle-segment-5.js ./src/control-plane/active-node-projection.js ./src/control-plane/recovery-protocol-snapshot.js ./src/control-plane/control-plane-readiness-service-segment-4.js`.
+206. Result: passed with `0` new literal, decision-boundary, or
+     boundary-mode-contract violations.
+207. Missing-node representative `rolling-restart` rerun:
+     `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/runtime-stability-rolling-restart-20260430-codex-active-publication-missing-node-owner-state.report.json --fast-local --verbose`.
+208. Result: failed, `0/1` passed after `132.1s`, but the missing-node blocker
+     migrated. Terminal evidence now reports publication epoch `4`,
+     `PUBLISHED`, `publishedActive=5/5`, `pendingAck=0`,
+     `missingPublished=0`, selected snapshot coverage `5/5`, and a genuine
+     priority-recovery workflow-progress blocker for `sql_transactions-p1`.
+209. The migrated operation-transition boundary is active as
+     [Rolling Restart Operation Transition Pressure And Over-Target Trim](../packages/todo-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md).

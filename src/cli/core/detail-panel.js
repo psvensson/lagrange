@@ -1,3 +1,39 @@
+const LOCAL_STR_SIDE = 'side';
+const LOCAL_STR_BOTTOM = 'bottom';
+const LOCAL_STR_OVERLAY = 'overlay';
+const LOCAL_NUM_30 = 30;
+const LOCAL_NUM_60 = 60;
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_STR_1N3ZR = 'detailCoordinator:detailUpdated';
+const LOCAL_STR_1I2PP = 'detailCoordinator:detailCleared';
+const LOCAL_STR_1MVFP = 'detailCoordinator:panelShown';
+const LOCAL_STR_1N52F = 'detailCoordinator:panelHidden';
+const LOCAL_STR_DETAILPANEL_SHOWN = 'detailPanel:shown';
+const LOCAL_STR_DETAILPANEL_HIDDEN = 'detailPanel:hidden';
+const LOCAL_NUM_ONE = 1;
+const LOCAL_NUM_TWO = 2;
+const LOCAL_STR_BLANK = 'blank';
+const LOCAL_STR_SECTIONHEADER = 'sectionHeader';
+const LOCAL_STR_TITLE = 'title';
+const LOCAL_STR_SEPARATOR = 'separator';
+const LOCAL_STR_FIELD = 'field';
+const LOCAL_STR_LINK = 'link';
+const LOCAL_STR_NEWLINE = '\n';
+const LOCAL_STR_FIELDLABEL = 'fieldLabel';
+const LOCAL_STR_FIELDVALUELINE = 'fieldValueLine';
+const LOCAL_STR_EMPTY = '';
+const LOCAL_STR_1G31G = '─';
+const LOCAL_STR_TEXT = 'text';
+const LOCAL_NUM_THREE = 3;
+const LOCAL_STR_2ZI04 = '...';
+const LOCAL_STR_UP = 'up';
+const LOCAL_STR_DOWN = 'down';
+const LOCAL_STR_PAGEUP = 'pageup';
+const LOCAL_STR_PAGEDOWN = 'pagedown';
+const LOCAL_STR_HOME = 'home';
+const LOCAL_STR_END = 'end';
+const LOCAL_NUM_100 = 100;
+
 /**
  * DetailPanel - Reusable detail panel component for displaying entity details
  *
@@ -11,9 +47,9 @@
  * Detail panel position types
  */
 export const PANEL_POSITION = {
-  SIDE: 'side',
-  BOTTOM: 'bottom',
-  OVERLAY: 'overlay',
+  SIDE: LOCAL_STR_SIDE,
+  BOTTOM: LOCAL_STR_BOTTOM,
+  OVERLAY: LOCAL_STR_OVERLAY,
 };
 
 const DETAIL_PANEL_SECTION_TITLE = Object.freeze({
@@ -36,13 +72,13 @@ export class DetailPanel {
   constructor(options = {}) {
     this.eventBus = options.eventBus || null;
     this.position = options.position || PANEL_POSITION.SIDE;
-    this.maxHeight = options.maxHeight || 30;
-    this.maxWidth = options.maxWidth || 60;
+    this.maxHeight = options.maxHeight || LOCAL_NUM_30;
+    this.maxWidth = options.maxWidth || LOCAL_NUM_60;
 
     // Panel state
     this.visible = false;
     this.detailData = null;
-    this.scrollOffset = 0;
+    this.scrollOffset = LOCAL_NUM_ZERO;
     this.renderedLines = [];
 
     // Setup event listeners
@@ -54,19 +90,19 @@ export class DetailPanel {
    */
   setupEventListeners() {
     if (this.eventBus) {
-      this.eventBus.on('detailCoordinator:detailUpdated', (data) => {
+      this.eventBus.on(LOCAL_STR_1N3ZR, (data) => {
         this.setDetailData(data.detailData);
       });
 
-      this.eventBus.on('detailCoordinator:detailCleared', () => {
+      this.eventBus.on(LOCAL_STR_1I2PP, () => {
         this.clearDetailData();
       });
 
-      this.eventBus.on('detailCoordinator:panelShown', () => {
+      this.eventBus.on(LOCAL_STR_1MVFP, () => {
         this.show();
       });
 
-      this.eventBus.on('detailCoordinator:panelHidden', () => {
+      this.eventBus.on(LOCAL_STR_1N52F, () => {
         this.hide();
       });
     }
@@ -78,7 +114,7 @@ export class DetailPanel {
    */
   setDetailData(detailData) {
     this.detailData = detailData;
-    this.scrollOffset = 0;
+    this.scrollOffset = LOCAL_NUM_ZERO;
     this.renderContent();
   }
 
@@ -87,7 +123,7 @@ export class DetailPanel {
    */
   clearDetailData() {
     this.detailData = null;
-    this.scrollOffset = 0;
+    this.scrollOffset = LOCAL_NUM_ZERO;
     this.renderedLines = [];
   }
 
@@ -97,7 +133,7 @@ export class DetailPanel {
   show() {
     this.visible = true;
     if (this.eventBus) {
-      this.eventBus.emit('detailPanel:shown', {position: this.position});
+      this.eventBus.emit(LOCAL_STR_DETAILPANEL_SHOWN, {position: this.position});
     }
   }
 
@@ -107,7 +143,7 @@ export class DetailPanel {
   hide() {
     this.visible = false;
     if (this.eventBus) {
-      this.eventBus.emit('detailPanel:hidden', {});
+      this.eventBus.emit(LOCAL_STR_DETAILPANEL_HIDDEN, {});
     }
   }
 
@@ -153,8 +189,8 @@ export class DetailPanel {
    * Requirements: 16.4
    * @param {number} [lines=1] - Number of lines to scroll
    */
-  scrollUp(lines = 1) {
-    this.scrollOffset = Math.max(0, this.scrollOffset - lines);
+  scrollUp(lines = LOCAL_NUM_ONE) {
+    this.scrollOffset = Math.max(LOCAL_NUM_ZERO, this.scrollOffset - lines);
   }
 
   /**
@@ -162,7 +198,7 @@ export class DetailPanel {
    * Requirements: 16.4
    * @param {number} [lines=1] - Number of lines to scroll
    */
-  scrollDown(lines = 1) {
+  scrollDown(lines = LOCAL_NUM_ONE) {
     const maxScroll = Math.max(0, this.renderedLines.length - this.maxHeight);
     this.scrollOffset = Math.min(maxScroll, this.scrollOffset + lines);
   }
@@ -171,7 +207,7 @@ export class DetailPanel {
    * Scroll to top
    */
   scrollToTop() {
-    this.scrollOffset = 0;
+    this.scrollOffset = LOCAL_NUM_ZERO;
   }
 
   /**
@@ -186,22 +222,22 @@ export class DetailPanel {
    * Page up in the detail panel
    */
   pageUp() {
-    this.scrollUp(this.maxHeight - 2);
+    this.scrollUp(this.maxHeight - LOCAL_NUM_TWO);
   }
 
   /**
    * Page down in the detail panel
    */
   pageDown() {
-    this.scrollDown(this.maxHeight - 2);
+    this.scrollDown(this.maxHeight - LOCAL_NUM_TWO);
   }
 
   addSectionHeader(title, options = {}) {
     if (options.leadingBlank === true) {
-      this.renderedLines.push({type: 'blank'});
+      this.renderedLines.push({type: LOCAL_STR_BLANK});
     }
     this.renderedLines.push({
-      type: 'sectionHeader',
+      type: LOCAL_STR_SECTIONHEADER,
       text: title,
     });
   }
@@ -212,10 +248,10 @@ export class DetailPanel {
     }
 
     this.renderedLines.push({
-      type: 'title',
+      type: LOCAL_STR_TITLE,
       text: this.detailData.title,
     });
-    this.renderedLines.push({type: 'separator'});
+    this.renderedLines.push({type: LOCAL_STR_SEPARATOR});
   }
 
   renderSections() {
@@ -227,7 +263,7 @@ export class DetailPanel {
     for (const [index, section] of sections.entries()) {
       if (section.title) {
         this.addSectionHeader(section.title, {
-          leadingBlank: index > 0,
+          leadingBlank: index > LOCAL_NUM_ZERO,
         });
       }
 
@@ -251,7 +287,7 @@ export class DetailPanel {
 
     for (const [entity, count] of Object.entries(relatedCounts)) {
       this.renderedLines.push({
-        type: 'field',
+        type: LOCAL_STR_FIELD,
         label: entity,
         value: String(count),
       });
@@ -260,7 +296,7 @@ export class DetailPanel {
 
   renderNavigationLinks() {
     const navigationLinks = this.detailData?.navigationLinks;
-    if (!navigationLinks || navigationLinks.length === 0) {
+    if (!navigationLinks || navigationLinks.length === LOCAL_NUM_ZERO) {
       return;
     }
 
@@ -270,7 +306,7 @@ export class DetailPanel {
 
     for (const link of navigationLinks) {
       this.renderedLines.push({
-        type: 'link',
+        type: LOCAL_STR_LINK,
         label: link.label,
         target: link.target,
         key: link.key,
@@ -303,10 +339,10 @@ export class DetailPanel {
       String(field.value) : 'N/A';
 
     // Check if value is multi-line
-    if (value.includes('\n')) {
+    if (value.includes(LOCAL_STR_NEWLINE)) {
       // Add label on its own line
       this.renderedLines.push({
-        type: 'fieldLabel',
+        type: LOCAL_STR_FIELDLABEL,
         label: field.label,
       });
 
@@ -314,14 +350,14 @@ export class DetailPanel {
       const lines = value.split('\n');
       for (const line of lines) {
         this.renderedLines.push({
-          type: 'fieldValueLine',
+          type: LOCAL_STR_FIELDVALUELINE,
           text: line,
         });
       }
     } else {
       // Single line field
       this.renderedLines.push({
-        type: 'field',
+        type: LOCAL_STR_FIELD,
         label: field.label,
         value: value,
       });
@@ -360,7 +396,7 @@ export class DetailPanel {
     return {
       visible: this.visible,
       position: this.position,
-      title: this.detailData?.title || '',
+      title: this.detailData?.title || LOCAL_STR_EMPTY,
       lines: formattedLines,
       totalLines: this.renderedLines.length,
       visibleLines: visibleLines.length,
@@ -394,70 +430,70 @@ export class DetailPanel {
     };
 
     switch (line.type) {
-    case 'title':
+    case LOCAL_STR_TITLE:
       return {
-        type: 'title',
+        type: LOCAL_STR_TITLE,
         text: line.text,
         color: colors.title,
         bold: true,
       };
 
-    case 'separator':
+    case LOCAL_STR_SEPARATOR:
       return {
-        type: 'separator',
-        text: '─'.repeat(this.maxWidth - 2),
+        type: LOCAL_STR_SEPARATOR,
+        text: LOCAL_STR_1G31G.repeat(this.maxWidth - LOCAL_NUM_TWO),
         color: colors.label,
       };
 
-    case 'sectionHeader':
+    case LOCAL_STR_SECTIONHEADER:
       return {
-        type: 'sectionHeader',
+        type: LOCAL_STR_SECTIONHEADER,
         text: `▸ ${line.text}`,
         color: colors.sectionHeader,
         bold: true,
       };
 
-    case 'field':
+    case LOCAL_STR_FIELD:
       return {
-        type: 'field',
+        type: LOCAL_STR_FIELD,
         label: line.label,
         value: this.truncateValue(line.value),
         labelColor: colors.label,
         valueColor: colors.value,
       };
 
-    case 'fieldLabel':
+    case LOCAL_STR_FIELDLABEL:
       return {
-        type: 'fieldLabel',
+        type: LOCAL_STR_FIELDLABEL,
         label: line.label,
         color: colors.label,
       };
 
-    case 'fieldValueLine':
+    case LOCAL_STR_FIELDVALUELINE:
       return {
-        type: 'fieldValueLine',
+        type: LOCAL_STR_FIELDVALUELINE,
         text: this.truncateValue(line.text),
         color: colors.value,
       };
 
-    case 'link':
+    case LOCAL_STR_LINK:
       return {
-        type: 'link',
+        type: LOCAL_STR_LINK,
         label: line.label,
         key: line.key,
         color: colors.link,
       };
 
-    case 'blank':
+    case LOCAL_STR_BLANK:
       return {
-        type: 'blank',
-        text: '',
+        type: LOCAL_STR_BLANK,
+        text: LOCAL_STR_EMPTY,
       };
 
     default:
       return {
-        type: 'text',
-        text: line.text || '',
+        type: LOCAL_STR_TEXT,
+        text: line.text || LOCAL_STR_EMPTY,
         color: colors.value,
       };
     }
@@ -473,7 +509,7 @@ export class DetailPanel {
     if (value.length <= maxValueWidth) {
       return value;
     }
-    return value.substring(0, maxValueWidth - 3) + '...';
+    return value.substring(LOCAL_NUM_ZERO, maxValueWidth - LOCAL_NUM_THREE) + LOCAL_STR_2ZI04;
   }
 
   /**
@@ -487,22 +523,22 @@ export class DetailPanel {
     }
 
     switch (key.name) {
-    case 'up':
+    case LOCAL_STR_UP:
       this.scrollUp();
       return true;
-    case 'down':
+    case LOCAL_STR_DOWN:
       this.scrollDown();
       return true;
-    case 'pageup':
+    case LOCAL_STR_PAGEUP:
       this.pageUp();
       return true;
-    case 'pagedown':
+    case LOCAL_STR_PAGEDOWN:
       this.pageDown();
       return true;
-    case 'home':
+    case LOCAL_STR_HOME:
       this.scrollToTop();
       return true;
-    case 'end':
+    case LOCAL_STR_END:
       this.scrollToBottom();
       return true;
     default:
@@ -519,9 +555,9 @@ export class DetailPanel {
       offset: this.scrollOffset,
       totalLines: this.renderedLines.length,
       visibleLines: Math.min(this.maxHeight, this.renderedLines.length),
-      percentage: this.renderedLines.length > 0 ?
-        Math.round((this.scrollOffset / Math.max(1,
-          this.renderedLines.length - this.maxHeight)) * 100) : 0,
+      percentage: this.renderedLines.length > LOCAL_NUM_ZERO ?
+        Math.round((this.scrollOffset / Math.max(LOCAL_NUM_ONE,
+          this.renderedLines.length - this.maxHeight)) * LOCAL_NUM_100) : LOCAL_NUM_ZERO,
     };
   }
 

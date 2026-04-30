@@ -120,6 +120,20 @@ Required workflow:
    commentary or memory.
 5. Do not close the package on local green proof alone while the reference
    scenario still fails for a different named reason.
+6. If the package has already recorded two material blocker migrations, the
+   next validation cycle must start from a replayable owner-decision fixture or
+   the narrowest blocker probe that represents the current dominant owner.
+7. A scenario-driven package that changes runtime meaning, decision meaning, or
+   presentation meaning must prove the current blocker in this order:
+   owner-decision fixture or blocker probe, focused owner tests, affected
+   presentation tests, then the representative scenario.
+8. Presentation tests are required when failure bundles, triage summaries,
+   admin summaries, active gates, or report writers consume the changed
+   contract. A green owner test alone is not sufficient if presentation can
+   still classify the same evidence under a different blocker.
+9. If the representative scenario still fails after the fixture and focused
+   tests pass, the package must record whether the fixture contract was
+   correct and what new owner boundary now dominates.
 
 ## Runner Stability Boundary Policy
 

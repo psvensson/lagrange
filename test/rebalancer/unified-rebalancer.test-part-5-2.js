@@ -25,6 +25,7 @@ import {
 } from '../../src/rebalancer/rebalancer-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {PRIORITY_RECOVERY_SEMANTIC_STATE} from '../../src/control-plane/priority-recovery-diagnostics-constants.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
@@ -1335,6 +1336,154 @@ await t.test(
 );
 
 await t.test(
+  'checkRebalance lets priority recovery operation creation bypass startup ' +
+    'cluster and stabilization gates',
+  async (t) => {
+    const TEST_PRIORITY_PARTITION_ID = 'sql_write_operations-p1';
+    const TEST_PUBLICATION_EPOCH = 7;
+    const TEST_REQUIRED_DISTINCT_NODE_COUNT = 3;
+    const TEST_READY_DISTINCT_NODE_COUNT = 1;
+    const TEST_SPREAD_GAP = 2;
+    const TEST_NODE_ID_A = 'node-1';
+    const TEST_NODE_ID_B = 'node-2';
+    const TEST_NODE_ID_C = 'node-3';
+    const TEST_CLUSTER_READINESS_CONDITION = 'cache_hydrated';
+    const TEST_START_DELAY_MS = 60000;
+    const TEST_STABILIZATION_DELAY_MS = 30000;
+    const TEST_BLOCKER_ELIGIBLE_NO_OPERATION =
+      'eligible_but_no_operation_created';
+    const TEST_NEXT_ACTION_CREATE_OPERATION = 'create_recovery_operation';
+    const nodes = Object.freeze([
+      Object.freeze({node_id: TEST_NODE_ID_A, status: NodeStatus.ACTIVE}),
+      Object.freeze({node_id: TEST_NODE_ID_B, status: NodeStatus.ACTIVE}),
+      Object.freeze({node_id: TEST_NODE_ID_C, status: NodeStatus.ACTIVE}),
+    ]);
+    const priorityPartitionSummary = Object.freeze({
+      satisfied: false,
+      requiredDistinctNodeCount: TEST_REQUIRED_DISTINCT_NODE_COUNT,
+      blockedPartitions: Object.freeze([Object.freeze({
+        partitionId: TEST_PRIORITY_PARTITION_ID,
+        readyDistinctNodeCount: TEST_READY_DISTINCT_NODE_COUNT,
+        requiredDistinctNodeCount: TEST_REQUIRED_DISTINCT_NODE_COUNT,
+        spreadGap: TEST_SPREAD_GAP,
+      })]),
+      missingPartitionIds: Object.freeze([TEST_PRIORITY_PARTITION_ID]),
+    });
+    const planningSnapshot = Object.freeze({
+      publicationEpoch: TEST_PUBLICATION_EPOCH,
+      publishedActiveNodeIds: Object.freeze([
+        TEST_NODE_ID_A,
+        TEST_NODE_ID_B,
+        TEST_NODE_ID_C,
+      ]),
+      projectedServingNodeIds: Object.freeze([
+        TEST_NODE_ID_A,
+        TEST_NODE_ID_B,
+        TEST_NODE_ID_C,
+      ]),
+      locallyEligibleNodeIds: Object.freeze([
+        TEST_NODE_ID_A,
+        TEST_NODE_ID_B,
+        TEST_NODE_ID_C,
+      ]),
+      priorityPartitionSummary,
+      priorityRecoveryDecisionSnapshots: Object.freeze({
+        snapshots: Object.freeze([Object.freeze({
+          partitionId: TEST_PRIORITY_PARTITION_ID,
+          semanticState: PRIORITY_RECOVERY_SEMANTIC_STATE.NEEDS_OPERATION,
+          blockerReasons: Object.freeze([
+            TEST_BLOCKER_ELIGIBLE_NO_OPERATION,
+          ]),
+          progress: Object.freeze({
+            nextRequiredAction: TEST_NEXT_ACTION_CREATE_OPERATION,
+          }),
+          planner: Object.freeze({
+            requiredDistinctNodeCount: TEST_REQUIRED_DISTINCT_NODE_COUNT,
+            readyDistinctNodeCount: TEST_READY_DISTINCT_NODE_COUNT,
+            spreadGap: TEST_SPREAD_GAP,
+          }),
+          admission: Object.freeze({
+            effectiveEligibleNodeIds: Object.freeze([
+              TEST_NODE_ID_A,
+              TEST_NODE_ID_B,
+              TEST_NODE_ID_C,
+            ]),
+          }),
+          publication: Object.freeze({
+            recoveryActiveNodeIds: Object.freeze([
+              TEST_NODE_ID_A,
+              TEST_NODE_ID_B,
+              TEST_NODE_ID_C,
+            ]),
+            concreteEligibleNodeIds: Object.freeze([
+              TEST_NODE_ID_A,
+              TEST_NODE_ID_B,
+              TEST_NODE_ID_C,
+            ]),
+            publishedActiveNodeIds: Object.freeze([
+              TEST_NODE_ID_A,
+              TEST_NODE_ID_B,
+              TEST_NODE_ID_C,
+            ]),
+          }),
+        })]),
+      }),
+    });
+    const cache = createMockCache(nodes);
+    const readinessService = {
+      ...createMockReadinessService(cache),
+      getPriorityRecoveryPlanningAnswerSync() {
+        return planningSnapshot;
+      },
+      membershipPublicationService: {
+        getLatestClusterPublicationSync() {
+          return {priorityPartitionSummary};
+        },
+      },
+    };
+    const rebalancer = createTestRebalancer({
+      entityId: TEST_PRIORITY_PARTITION_ID,
+      entityType: EntityType.PARTITION,
+      nodeId: TEST_NODE_ID_A,
+      nodes,
+      controlPlaneReadinessService: readinessService,
+    });
+
+    rebalancer.initialize();
+    rebalancer.isLeader = true;
+    rebalancer.clusterReadinessConfirmed = false;
+    rebalancer.clusterReadinessSignal = {
+      evaluate: () => Object.freeze({
+        ready: false,
+        unmetConditions: Object.freeze([TEST_CLUSTER_READINESS_CONDITION]),
+      }),
+    };
+    rebalancer.getTimeUntilRebalanceStartEligible = () => TEST_START_DELAY_MS;
+    rebalancer.isStabilized = () => false;
+    rebalancer.getTimeUntilStabilized = () => TEST_STABILIZATION_DELAY_MS;
+    rebalancer.getCriticalSystemTopologySettlingBlocker = () => null;
+    rebalancer.getCriticalSystemTrafficReadinessBlocker = () => null;
+    rebalancer.getCriticalSystemLocalServeReadinessBlocker = () => null;
+    rebalancer.getLocalControlPlaneMutationReadinessBlocker = () => null;
+
+    let evaluateCalls = 0;
+    rebalancer.evaluateState = async () => {
+      evaluateCalls++;
+      return false;
+    };
+    rebalancer.scheduleNextCheck = () => {};
+
+    await rebalancer.checkRebalance();
+
+    t.equal(
+      evaluateCalls,
+      1,
+      'priority operation creation should not wait behind startup planning gates',
+    );
+  },
+);
+
+await t.test(
   'checkRebalance lets a priority owner create surrogate recovery work when ' +
     'the control-plane critical reserve is exhausted',
   async (t) => {
@@ -1597,6 +1746,210 @@ await t.test(
       createdOperations[0]?.nodeId,
       TEST_NODE_ID_B,
       'created operation should choose a missing eligible node',
+    );
+  },
+);
+
+await t.test(
+  'checkRebalance lets blocked priority recovery re-enter follow-up when ' +
+    'closure witness is blocked_unclassified and planning snapshots are absent',
+  async (t) => {
+    const TEST_PRIORITY_PARTITION_ID = 'sql_write_operations-p1';
+    const TEST_PUBLICATION_EPOCH = 6;
+    const TEST_REQUIRED_DISTINCT_NODE_COUNT = 3;
+    const TEST_READY_DISTINCT_NODE_COUNT = 1;
+    const TEST_SPREAD_GAP = 2;
+    const TEST_NODE_ID_A = 'node-1';
+    const TEST_NODE_ID_B = 'node-2';
+    const TEST_NODE_ID_C = 'node-3';
+    const TEST_REPLICA_ID_A = 'sql_write_operations-p1-r1';
+    const TEST_BLOCKED_SERVICE_STATUS = ReplicaStatus.ACTIVE;
+    const TEST_SERVICE_TYPE_PARTITION = 'partition';
+    const TEST_RAFT_ROLE_VOTER = 'voter';
+    const TEST_CREATED_OPERATION_ID = 'op-priority-blocked-terminal';
+    const TEST_CRITICAL_RESERVE_EXHAUSTED_SUMMARY = Object.freeze({
+      backpressured: true,
+      saturatedNodeCount: 1,
+      totalPending: 36,
+      totalPendingCritical: 36,
+      totalPendingBackground: 0,
+      criticalReserveExhausted: true,
+      maxPendingUtilization: 0.5625,
+    });
+    const priorityPartitionSummary = Object.freeze({
+      satisfied: false,
+      requiredDistinctNodeCount: TEST_REQUIRED_DISTINCT_NODE_COUNT,
+      blockedPartitions: Object.freeze([{
+        partitionId: TEST_PRIORITY_PARTITION_ID,
+        readyDistinctNodeCount: TEST_READY_DISTINCT_NODE_COUNT,
+        requiredDistinctNodeCount: TEST_REQUIRED_DISTINCT_NODE_COUNT,
+        spreadGap: TEST_SPREAD_GAP,
+      }]),
+      missingPartitionIds: Object.freeze([TEST_PRIORITY_PARTITION_ID]),
+    });
+    const priorityRecoveryClosureWitness = {
+      blockedPartitionIds: Object.freeze([TEST_PRIORITY_PARTITION_ID]),
+      unresolvedSemanticStateIds: Object.freeze([
+        PRIORITY_RECOVERY_SEMANTIC_STATE.BLOCKED_UNCLASSIFIED,
+      ]),
+    };
+    const planningSnapshot = Object.freeze({
+      publicationEpoch: TEST_PUBLICATION_EPOCH,
+      publishedActiveNodeIds: Object.freeze([
+        TEST_NODE_ID_A,
+        TEST_NODE_ID_B,
+        TEST_NODE_ID_C,
+      ]),
+      projectedServingNodeIds: Object.freeze([
+        TEST_NODE_ID_A,
+        TEST_NODE_ID_B,
+        TEST_NODE_ID_C,
+      ]),
+      locallyEligibleNodeIds: Object.freeze([
+        TEST_NODE_ID_A,
+        TEST_NODE_ID_B,
+        TEST_NODE_ID_C,
+      ]),
+      priorityPartitionSummary,
+      priorityRecoveryClosureWitness,
+      publicationRecoveryGate: {
+        priorityPartitionSummary,
+        priorityRecoveryClosureWitness,
+      },
+    });
+    const router = createMockMessageRouter('connected');
+    router.getOutboundPressureSummary = () =>
+      TEST_CRITICAL_RESERVE_EXHAUSTED_SUMMARY;
+    const cache = createMockCache(
+      [
+        {node_id: TEST_NODE_ID_A, status: NodeStatus.ACTIVE},
+        {node_id: TEST_NODE_ID_B, status: NodeStatus.ACTIVE},
+        {node_id: TEST_NODE_ID_C, status: NodeStatus.ACTIVE},
+      ],
+      [
+        Object.freeze({
+          service_id: TEST_REPLICA_ID_A,
+          service_type: TEST_SERVICE_TYPE_PARTITION,
+          node_id: TEST_NODE_ID_A,
+          partition_id: TEST_PRIORITY_PARTITION_ID,
+          replica_id: TEST_REPLICA_ID_A,
+          raft_role: TEST_RAFT_ROLE_VOTER,
+          status: TEST_BLOCKED_SERVICE_STATUS,
+          address: `${TEST_NODE_ID_A}/partition/${TEST_REPLICA_ID_A}`,
+        }),
+      ],
+      [
+        {
+          partition_id: TEST_PRIORITY_PARTITION_ID,
+          table_id: 'sql_write_operations',
+        },
+      ],
+    );
+    const readinessService = {
+      ...createMockReadinessService(cache),
+      getPriorityRecoveryPlanningAnswerSync() {
+        return planningSnapshot;
+      },
+      async getPriorityRecoveryPlanningAnswerBestEffort() {
+        return planningSnapshot;
+      },
+      getMembershipPublicationPlanningAnswerSync() {
+        return planningSnapshot;
+      },
+      async getMembershipPublicationPlanningAnswerBestEffort() {
+        return planningSnapshot;
+      },
+      membershipPublicationService: {
+        getLatestClusterPublicationSync() {
+          return {priorityPartitionSummary};
+        },
+      },
+    };
+    const createdOperations = [];
+    const rebalancer = createTestRebalancer({
+      entityId: TEST_PRIORITY_PARTITION_ID,
+      entityType: EntityType.PARTITION,
+      nodeId: TEST_NODE_ID_A,
+      nodes: [
+        {node_id: TEST_NODE_ID_A, status: NodeStatus.ACTIVE},
+        {node_id: TEST_NODE_ID_B, status: NodeStatus.ACTIVE},
+        {node_id: TEST_NODE_ID_C, status: NodeStatus.ACTIVE},
+      ],
+      services: [{
+        service_id: TEST_REPLICA_ID_A,
+        service_type: TEST_SERVICE_TYPE_PARTITION,
+        node_id: TEST_NODE_ID_A,
+        partition_id: TEST_PRIORITY_PARTITION_ID,
+        replica_id: TEST_REPLICA_ID_A,
+        raft_role: TEST_RAFT_ROLE_VOTER,
+        status: TEST_BLOCKED_SERVICE_STATUS,
+        address: `${TEST_NODE_ID_A}/partition/${TEST_REPLICA_ID_A}`,
+      }],
+      partitions: [{
+        partition_id: TEST_PRIORITY_PARTITION_ID,
+        table_id: 'sql_write_operations',
+      }],
+      messageRouter: router,
+      controlPlaneReadinessService: readinessService,
+      rebalanceCoordinator: {
+        ...createMockCoordinator(),
+        async createOperation(operationRequest) {
+          createdOperations.push(operationRequest);
+          return {
+            operationId: TEST_CREATED_OPERATION_ID,
+            replicaId: operationRequest.replicaId,
+            targetNodeId: operationRequest.nodeId,
+          };
+        },
+      },
+    });
+
+    rebalancer.initialize();
+    rebalancer.isLeader = true;
+    rebalancer.clusterReadinessConfirmed = true;
+    rebalancer.isStabilized = () => true;
+    rebalancer.getCriticalSystemTopologySettlingBlocker = () => null;
+    rebalancer.getCriticalSystemTrafficReadinessBlocker = () => null;
+    rebalancer.getCriticalSystemLocalServeReadinessBlocker = () => null;
+    rebalancer.getLocalControlPlaneMutationReadinessBlocker = () => null;
+    rebalancer.getConfiguredRebalanceBudget = async () =>
+      TEST_REQUIRED_DISTINCT_NODE_COUNT;
+    rebalancer.getGlobalInFlightOperationCount = async () => 0;
+    rebalancer.scheduleNextCheck = () => {};
+
+    const gateSnapshot =
+      rebalancer.buildTransportBackpressurePlanningGateSnapshot();
+    await rebalancer.checkRebalance();
+
+    t.equal(
+      gateSnapshot.priorityRecoveryOperationCreationRequired,
+      true,
+      'blocked partition should be treated as follow-up required under critical reserve exhaustion',
+    );
+    t.equal(
+      gateSnapshot.priorityRecoveryOperationCreationPartitionId,
+      TEST_PRIORITY_PARTITION_ID,
+      'transport gate should report the blocked partition as the creation target',
+    );
+    t.equal(
+      createdOperations.length,
+      2,
+      'blocked terminal recovery should create follow-up operations despite pressure',
+    );
+    t.ok(
+      createdOperations.every((operation) =>
+        operation?.partitionId === TEST_PRIORITY_PARTITION_ID),
+      'follow-up operations should target the blocked partition',
+    );
+    t.ok(
+      createdOperations.every((operation) =>
+        operation?.nodeId !== TEST_NODE_ID_A),
+      'follow-up operations should avoid placing on same-node replica',
+    );
+    t.equal(
+      createdOperations[0]?.nodeId,
+      TEST_NODE_ID_B,
+      'blocked terminal recovery should prefer a missing eligible node',
     );
   },
 );

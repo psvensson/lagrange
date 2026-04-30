@@ -16,6 +16,8 @@ const PRIORITY_RECOVERY_LOGS_TABLE_FIELD = Object.freeze({
   MAX_PENDING_WRITES: 'maxPendingWrites',
   CONSECUTIVE_DEFERRED_WRITE_FAILURES: 'consecutiveDeferredWriteFailures',
   SHARED_PRESSURE_BACKPRESSURED: 'sharedPressureBackpressured',
+  TRANSPORT_PRESSURE_BACKPRESSURED: 'transportPressureBackpressured',
+  QUERY_PRESSURE_BACKPRESSURED: 'queryPressureBackpressured',
 });
 const PRIORITY_RECOVERY_TABLE_SUFFIX_PATTERN = /^\d+$/;
 
@@ -115,20 +117,39 @@ function buildPriorityRecoveryPressureConditions(logsTable = null) {
     normalizedLogsTable?.[
       PRIORITY_RECOVERY_LOGS_TABLE_FIELD.SHARED_PRESSURE_BACKPRESSURED
     ] === true;
+  const transportPressureBackpressured =
+    normalizedLogsTable?.[
+      PRIORITY_RECOVERY_LOGS_TABLE_FIELD.TRANSPORT_PRESSURE_BACKPRESSURED
+    ] === true;
+  const queryPressureBackpressured =
+    normalizedLogsTable?.[
+      PRIORITY_RECOVERY_LOGS_TABLE_FIELD.QUERY_PRESSURE_BACKPRESSURED
+    ] === true;
+
+  const pressureEvidence = Object.freeze({
+    hasPendingWrites:
+      Number.isFinite(pendingWrites) && pendingWrites > NUM.ZERO,
+    hasPendingWriteGrowth:
+      Number.isFinite(pendingWriteGrowthCount) &&
+      pendingWriteGrowthCount > NUM.ZERO,
+    hasRetainedBacklogGrowth:
+      Number.isFinite(retainedBacklogGrowthCount) &&
+      retainedBacklogGrowthCount > NUM.ZERO,
+    isBackpressuredBySharedSignals:
+      sharedPressureBackpressured === true ||
+      transportPressureBackpressured === true ||
+      queryPressureBackpressured === true ||
+      (Number.isFinite(consecutiveDeferredWriteFailures) &&
+        consecutiveDeferredWriteFailures > NUM.ZERO),
+  });
 
   let pressureState = PRIORITY_RECOVERY_PRESSURE_STATE.NONE;
-  if (
-    sharedPressureBackpressured === true ||
-    (Number.isFinite(consecutiveDeferredWriteFailures) &&
-      consecutiveDeferredWriteFailures > NUM.ZERO)
-  ) {
+  if (pressureEvidence.isBackpressuredBySharedSignals === true) {
     pressureState = PRIORITY_RECOVERY_PRESSURE_STATE.BACKPRESSURED;
   } else if (
-    (Number.isFinite(pendingWrites) && pendingWrites > NUM.ZERO) ||
-    (Number.isFinite(pendingWriteGrowthCount) &&
-      pendingWriteGrowthCount > NUM.ZERO) ||
-    (Number.isFinite(retainedBacklogGrowthCount) &&
-      retainedBacklogGrowthCount > NUM.ZERO)
+    pressureEvidence.hasPendingWrites ||
+    pressureEvidence.hasPendingWriteGrowth ||
+    pressureEvidence.hasRetainedBacklogGrowth
   ) {
     pressureState = PRIORITY_RECOVERY_PRESSURE_STATE.WRITE_BACKLOG;
   }
@@ -155,6 +176,12 @@ function buildPriorityRecoveryPressureConditions(logsTable = null) {
       {}),
     ...(sharedPressureBackpressured === true ?
       {sharedPressureBackpressured: true} :
+      {}),
+    ...(transportPressureBackpressured === true ?
+      {transportPressureBackpressured: true} :
+      {}),
+    ...(queryPressureBackpressured === true ?
+      {queryPressureBackpressured: true} :
       {}),
   });
 }

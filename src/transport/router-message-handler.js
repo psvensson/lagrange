@@ -13,6 +13,10 @@ import {
   TRANSPORT_EVENT,
 } from '../constants/transport.js';
 
+const LOCAL_STR_5PIBN = 'existing_connection_preferred';
+const LOCAL_STR_J8ZRO = 'Message not acknowledged';
+const LOCAL_NUM_TWO = 2;
+
 const RouterMessageType = ROUTER_MESSAGE_TYPE;
 const ConnectionState = CONNECTION_STATE;
 
@@ -214,7 +218,7 @@ class RouterMessageHandler {
         this.logger.debug(ROUTER_LOG_MSG.KEEP_ORIGINAL_CONNECTION, {
           connectionId,
           nodeId,
-          reason: 'existing_connection_preferred',
+          reason: LOCAL_STR_5PIBN,
         });
         this.nodeConnections.delete(connectionId);
         try {
@@ -344,7 +348,7 @@ class RouterMessageHandler {
       if (acknowledged) {
         pending.resolve({messageId, acknowledged: true, ...rest});
       } else {
-        pending.reject(new Error(error || 'Message not acknowledged'));
+        pending.reject(new Error(error || LOCAL_STR_J8ZRO));
       }
     }
   }
@@ -367,7 +371,7 @@ class RouterMessageHandler {
     });
 
     if (this.onServiceResponse) {
-      if (this.onServiceResponse.length >= 2) {
+      if (this.onServiceResponse.length >= LOCAL_NUM_TWO) {
         this.onServiceResponse(messageId, result, error);
       } else {
         this.onServiceResponse(message);

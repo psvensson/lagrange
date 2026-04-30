@@ -30,6 +30,8 @@ import {
   LATENCY_GROUP_MANAGER_TRIGGER,
 } from './latency-group-manager-constants.js';
 
+const LOCAL_STR_CRITICAL = 'critical';
+
 class LatencyGroupManager extends EventEmitter {
   /**
    * @param {Object} options
@@ -432,7 +434,7 @@ class LatencyGroupManager extends EventEmitter {
         row: decision.createdGroupRow,
       }, {
         workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
-        deliveryPriority: 'critical',
+        deliveryPriority: LOCAL_STR_CRITICAL,
       });
       this.logger.info(LATENCY_GROUP_MANAGER_LOG_MSG.GROUP_CREATED, {
         nodeId: this.nodeId,
@@ -506,7 +508,7 @@ class LatencyGroupManager extends EventEmitter {
       data: updateRow,
     }, {
       workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
-      deliveryPriority: 'critical',
+      deliveryPriority: LOCAL_STR_CRITICAL,
     });
   }
 
@@ -552,7 +554,7 @@ class LatencyGroupManager extends EventEmitter {
           row: normalizedGroupRow,
         }, {
           workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
-          deliveryPriority: 'critical',
+          deliveryPriority: LOCAL_STR_CRITICAL,
         });
       }
 

@@ -10,6 +10,24 @@ import {ConfigurationManager} from '../config/configuration-manager.js';
 import {CONFIG_KEY} from '../config/config-constants.js';
 import {ERRORS} from '../constants/index.js';
 
+const LOCAL_NUM_30000 = 30000;
+const LOCAL_STR_CACHE_QUERY = 'cache-query';
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_STR_64888 = 'Registered message group for queries';
+const LOCAL_STR_14BJU = 'Unregistered message group from queries';
+const LOCAL_STR_22W3J = 'No active local message group replica available';
+const LOCAL_STR_14VZS = 'Routing query to message group';
+const LOCAL_STR_NODES = 'nodes';
+const LOCAL_STR_PARTITIONS = 'partitions';
+const LOCAL_STR_TABLES = 'tables';
+const LOCAL_STR_SERVICES = 'services';
+const LOCAL_STR_MESSAGE_GROUPS = 'message_groups';
+const LOCAL_STR_INDICES = 'indices';
+const LOCAL_NUM_100 = 100;
+const LOCAL_NUM_TWO = 2;
+const LOCAL_STR_PERCENT = '%';
+const LOCAL_STR_0 = '0%';
+
 /**
  * Query types supported by the service.
  */
@@ -40,17 +58,17 @@ class SystemCacheQueryService extends EventEmitter {
 
     // Configuration
     const config = ConfigurationManager.getInstance();
-    this.queryTimeoutMs = config.get(CONFIG_KEY.MESSAGE_GROUP_CACHE_TTL_MS) || 30000;
+    this.queryTimeoutMs = config.get(CONFIG_KEY.MESSAGE_GROUP_CACHE_TTL_MS) || LOCAL_NUM_30000;
 
     // Logging
     const loggingService = LoggingService.getInstance();
     this.logger = loggingService.isInitialized() ?
-      loggingService.forSubsystem('cache-query') : console;
+      loggingService.forSubsystem(LOCAL_STR_CACHE_QUERY) : console;
 
     // Statistics
-    this.queryCount = 0;
-    this.cacheHits = 0;
-    this.cacheMisses = 0;
+    this.queryCount = LOCAL_NUM_ZERO;
+    this.cacheHits = LOCAL_NUM_ZERO;
+    this.cacheMisses = LOCAL_NUM_ZERO;
   }
 
   /**
@@ -60,7 +78,7 @@ class SystemCacheQueryService extends EventEmitter {
    */
   registerMessageGroup(serviceId, service) {
     this.messageGroupServices.set(serviceId, service);
-    this.logger.debug('Registered message group for queries', {serviceId});
+    this.logger.debug(LOCAL_STR_64888, {serviceId});
   }
 
   /**
@@ -69,7 +87,7 @@ class SystemCacheQueryService extends EventEmitter {
    */
   unregisterMessageGroup(serviceId) {
     this.messageGroupServices.delete(serviceId);
-    this.logger.debug('Unregistered message group from queries', {serviceId});
+    this.logger.debug(LOCAL_STR_14BJU, {serviceId});
   }
 
   /**
@@ -106,10 +124,10 @@ class SystemCacheQueryService extends EventEmitter {
     const replica = this.getActiveReplica();
     if (!replica) {
       this.cacheMisses++;
-      throw new Error('No active local message group replica available');
+      throw new Error(LOCAL_STR_22W3J);
     }
 
-    this.logger.debug('Routing query to message group', {
+    this.logger.debug(LOCAL_STR_14VZS, {
       tableName,
       queryType: this.getQueryType(query),
       replicaId: replica.replicaId,
@@ -200,9 +218,9 @@ class SystemCacheQueryService extends EventEmitter {
       return node ? [node] : [];
     }
     if (filter.status) {
-      return this.filter('nodes', (n) => n.status === filter.status);
+      return this.filter(LOCAL_STR_NODES, (n) => n.status === filter.status);
     }
-    return this.getAll('nodes');
+    return this.getAll(LOCAL_STR_NODES);
   }
 
   /**
@@ -216,9 +234,9 @@ class SystemCacheQueryService extends EventEmitter {
       return partition ? [partition] : [];
     }
     if (filter.tableId) {
-      return this.filter('partitions', (p) => p.tableId === filter.tableId);
+      return this.filter(LOCAL_STR_PARTITIONS, (p) => p.tableId === filter.tableId);
     }
-    return this.getAll('partitions');
+    return this.getAll(LOCAL_STR_PARTITIONS);
   }
 
   /**
@@ -232,9 +250,9 @@ class SystemCacheQueryService extends EventEmitter {
       return table ? [table] : [];
     }
     if (filter.tableName) {
-      return this.filter('tables', (t) => t.name === filter.tableName);
+      return this.filter(LOCAL_STR_TABLES, (t) => t.name === filter.tableName);
     }
-    return this.getAll('tables');
+    return this.getAll(LOCAL_STR_TABLES);
   }
 
   /**
@@ -248,12 +266,12 @@ class SystemCacheQueryService extends EventEmitter {
       return service ? [service] : [];
     }
     if (filter.nodeId) {
-      return this.filter('services', (s) => s.nodeId === filter.nodeId);
+      return this.filter(LOCAL_STR_SERVICES, (s) => s.nodeId === filter.nodeId);
     }
     if (filter.type) {
-      return this.filter('services', (s) => s.type === filter.type);
+      return this.filter(LOCAL_STR_SERVICES, (s) => s.type === filter.type);
     }
-    return this.getAll('services');
+    return this.getAll(LOCAL_STR_SERVICES);
   }
 
   /**
@@ -266,7 +284,7 @@ class SystemCacheQueryService extends EventEmitter {
       const group = await this.get('message_groups', filter.groupId);
       return group ? [group] : [];
     }
-    return this.getAll('message_groups');
+    return this.getAll(LOCAL_STR_MESSAGE_GROUPS);
   }
 
   /**
@@ -280,9 +298,9 @@ class SystemCacheQueryService extends EventEmitter {
       return index ? [index] : [];
     }
     if (filter.tableId) {
-      return this.filter('indices', (i) => i.tableId === filter.tableId);
+      return this.filter(LOCAL_STR_INDICES, (i) => i.tableId === filter.tableId);
     }
-    return this.getAll('indices');
+    return this.getAll(LOCAL_STR_INDICES);
   }
 
   /**
@@ -307,8 +325,8 @@ class SystemCacheQueryService extends EventEmitter {
       queryCount: this.queryCount,
       cacheHits: this.cacheHits,
       cacheMisses: this.cacheMisses,
-      hitRate: this.queryCount > 0 ?
-        (this.cacheHits / this.queryCount * 100).toFixed(2) + '%' : '0%',
+      hitRate: this.queryCount > LOCAL_NUM_ZERO ?
+        (this.cacheHits / this.queryCount * LOCAL_NUM_100).toFixed(LOCAL_NUM_TWO) + LOCAL_STR_PERCENT : LOCAL_STR_0,
       registeredReplicas: this.messageGroupServices.size,
     };
   }
@@ -317,9 +335,9 @@ class SystemCacheQueryService extends EventEmitter {
    * Reset statistics.
    */
   resetStats() {
-    this.queryCount = 0;
-    this.cacheHits = 0;
-    this.cacheMisses = 0;
+    this.queryCount = LOCAL_NUM_ZERO;
+    this.cacheHits = LOCAL_NUM_ZERO;
+    this.cacheMisses = LOCAL_NUM_ZERO;
   }
 }
 

@@ -170,11 +170,21 @@ function normalizeCDCForwardDeliveryEvents(
       data: event?.data && typeof event.data === TYPEOF.OBJECT ?
         event.data :
         null,
+      operation:
+        typeof event?.operation === TYPEOF.STRING &&
+          event.operation.length > NUM.ZERO ?
+          event.operation :
+          null,
     }));
   if (normalizedEvents.length === NUM.ZERO) {
     return [{
       tableName: fallbackTableName,
       data: null,
+      operation:
+        typeof payload?.operation === TYPEOF.STRING &&
+          payload.operation.length > NUM.ZERO ?
+          payload.operation :
+          null,
     }];
   }
   return normalizedEvents;

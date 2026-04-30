@@ -14,6 +14,9 @@
 
 import {EventEmitter} from 'events';
 
+const LOCAL_STR_PVWQ9 = 'InvalidTransitionError';
+const LOCAL_NUM_ZERO = 0;
+
 /**
  * Event names emitted by the phase state machine.
  * @type {Object}
@@ -54,7 +57,7 @@ class InvalidTransitionError extends Error {
       targetState,
       validTransitions,
     ));
-    this.name = 'InvalidTransitionError';
+    this.name = LOCAL_STR_PVWQ9;
     this.currentState = currentState;
     this.targetState = targetState;
     this.validTransitions = validTransitions;
@@ -216,7 +219,7 @@ class PhaseStateMachine extends EventEmitter {
    */
   isTerminal() {
     const validTransitions = this._transitions[this._currentState] || [];
-    return validTransitions.length === 0;
+    return validTransitions.length === LOCAL_NUM_ZERO;
   }
 
   /**

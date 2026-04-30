@@ -9,6 +9,44 @@
 
 import {BaseView, ROW_STATUS} from '../core/base-view.js';
 
+const LOCAL_STR_MESSAGE_GROUPS = 'message_groups';
+const LOCAL_STR_GROUP_ID = 'group_id';
+const LOCAL_STR_GROUP_ID_2 = 'Group ID';
+const LOCAL_NUM_20 = 20;
+const LOCAL_STR_REPLICA_COUNT = 'replica_count';
+const LOCAL_STR_REPLICAS = 'Replicas';
+const LOCAL_NUM_10 = 10;
+const LOCAL_STR_NODES_COVERED = 'nodes_covered';
+const LOCAL_STR_NODES_COVERED_2 = 'Nodes Covered';
+const LOCAL_NUM_30 = 30;
+const LOCAL_STR_STATUS = 'status';
+const LOCAL_STR_STATUS_2 = 'Status';
+const LOCAL_NUM_12 = 12;
+const LOCAL_STR_N_A = 'N/A';
+const LOCAL_STR_UNKNOWN = 'unknown';
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_STR_NONE = 'None';
+const LOCAL_STR_128KJ = ', ';
+const LOCAL_STR_FAILED = 'failed';
+const LOCAL_STR_ERROR = 'error';
+const LOCAL_STR_DEGRADED = 'degraded';
+const LOCAL_STR_HEALTHY = 'healthy';
+const LOCAL_STR_ACTIVE = 'active';
+const LOCAL_STR_EMPTY = '';
+const LOCAL_STR_DRILLDOWN = 'drillDown';
+const LOCAL_STR_REPLICAS_2 = 'replicas';
+const LOCAL_STR_MESSAGE_GROUP = 'message_group';
+const LOCAL_STR_JUMPTOENTITY = 'jumpToEntity';
+const LOCAL_STR_NODE = 'node';
+const LOCAL_STR_ENTER = 'enter';
+const LOCAL_STR_RETURN = 'return';
+const LOCAL_STR_N = 'n';
+const LOCAL_STR_N_2 = 'N';
+const LOCAL_STR_LEADER_NODE = 'Leader Node';
+const LOCAL_STR_RAFT_STATE = 'Raft State';
+const LOCAL_STR_TERM = 'Term';
+const LOCAL_STR_INDEX = 'Index';
+
 /**
  * MessageGroupsView displays message group distribution and health
  */
@@ -22,7 +60,7 @@ export class MessageGroupsView extends BaseView {
   constructor(options = {}) {
     super(options);
     this.cache = options.cache || null;
-    this.viewName = 'message_groups';
+    this.viewName = LOCAL_STR_MESSAGE_GROUPS;
   }
 
   /**
@@ -32,10 +70,10 @@ export class MessageGroupsView extends BaseView {
    */
   getColumns() {
     return [
-      {key: 'group_id', label: 'Group ID', width: 20},
-      {key: 'replica_count', label: 'Replicas', width: 10},
-      {key: 'nodes_covered', label: 'Nodes Covered', width: 30},
-      {key: 'status', label: 'Status', width: 12},
+      {key: LOCAL_STR_GROUP_ID, label: LOCAL_STR_GROUP_ID_2, width: LOCAL_NUM_20},
+      {key: LOCAL_STR_REPLICA_COUNT, label: LOCAL_STR_REPLICAS, width: LOCAL_NUM_10},
+      {key: LOCAL_STR_NODES_COVERED, label: LOCAL_STR_NODES_COVERED_2, width: LOCAL_NUM_30},
+      {key: LOCAL_STR_STATUS, label: LOCAL_STR_STATUS_2, width: LOCAL_NUM_12},
     ];
   }
 
@@ -47,10 +85,10 @@ export class MessageGroupsView extends BaseView {
    */
   formatRow(messageGroup) {
     return [
-      messageGroup.group_id || 'N/A',
+      messageGroup.group_id || LOCAL_STR_N_A,
       this.formatReplicaCount(messageGroup.replica_count),
       this.formatNodesCovered(messageGroup.nodes_covered),
-      messageGroup.status || 'unknown',
+      messageGroup.status || LOCAL_STR_UNKNOWN,
     ];
   }
 
@@ -61,7 +99,7 @@ export class MessageGroupsView extends BaseView {
    */
   formatReplicaCount(count) {
     if (count === null || count === undefined) {
-      return 'N/A';
+      return LOCAL_STR_N_A;
     }
     return String(count);
   }
@@ -74,13 +112,13 @@ export class MessageGroupsView extends BaseView {
    */
   formatNodesCovered(nodes) {
     if (!nodes) {
-      return 'N/A';
+      return LOCAL_STR_N_A;
     }
     if (Array.isArray(nodes)) {
-      if (nodes.length === 0) {
-        return 'None';
+      if (nodes.length === LOCAL_NUM_ZERO) {
+        return LOCAL_STR_NONE;
       }
-      return nodes.join(', ');
+      return nodes.join(LOCAL_STR_128KJ);
     }
     return String(nodes);
   }
@@ -93,7 +131,7 @@ export class MessageGroupsView extends BaseView {
    */
   getRowStatus(messageGroup) {
     // Failed or error status
-    if (messageGroup.status === 'failed' || messageGroup.status === 'error') {
+    if (messageGroup.status === LOCAL_STR_FAILED || messageGroup.status === LOCAL_STR_ERROR) {
       return ROW_STATUS.ERROR;
     }
 
@@ -103,7 +141,7 @@ export class MessageGroupsView extends BaseView {
     }
 
     // Degraded status is a warning
-    if (messageGroup.status === 'degraded') {
+    if (messageGroup.status === LOCAL_STR_DEGRADED) {
       return ROW_STATUS.WARNING;
     }
 
@@ -120,13 +158,13 @@ export class MessageGroupsView extends BaseView {
     // Check unhealthy_replica_count if available
     if (messageGroup.unhealthy_replica_count !== undefined &&
         messageGroup.unhealthy_replica_count !== null) {
-      return messageGroup.unhealthy_replica_count > 0;
+      return messageGroup.unhealthy_replica_count > LOCAL_NUM_ZERO;
     }
 
     // Check replica_statuses array if available
     if (Array.isArray(messageGroup.replica_statuses)) {
       return messageGroup.replica_statuses.some(
-        (status) => status !== 'healthy' && status !== 'active');
+        (status) => status !== LOCAL_STR_HEALTHY && status !== LOCAL_STR_ACTIVE);
     }
 
     return false;
@@ -138,7 +176,7 @@ export class MessageGroupsView extends BaseView {
    * @return {string} Unique key (group_id)
    */
   getItemKey(messageGroup) {
-    return messageGroup.group_id || '';
+    return messageGroup.group_id || LOCAL_STR_EMPTY;
   }
 
   /**
@@ -153,11 +191,11 @@ export class MessageGroupsView extends BaseView {
     }
 
     return {
-      action: 'drillDown',
-      view: 'replicas',
+      action: LOCAL_STR_DRILLDOWN,
+      view: LOCAL_STR_REPLICAS_2,
       context: {
         groupId: selectedGroup.group_id,
-        entityType: 'message_group',
+        entityType: LOCAL_STR_MESSAGE_GROUP,
       },
     };
   }
@@ -168,14 +206,14 @@ export class MessageGroupsView extends BaseView {
    * @param {number} nodeIndex - Index of node in nodes_covered array
    * @return {Object|null} Navigation action or null
    */
-  navigateToNode(nodeIndex = 0) {
+  navigateToNode(nodeIndex = LOCAL_NUM_ZERO) {
     const selectedGroup = this.getSelectedItem();
     if (!selectedGroup) {
       return null;
     }
 
     const nodes = selectedGroup.nodes_covered;
-    if (!Array.isArray(nodes) || nodes.length === 0) {
+    if (!Array.isArray(nodes) || nodes.length === LOCAL_NUM_ZERO) {
       return null;
     }
 
@@ -183,8 +221,8 @@ export class MessageGroupsView extends BaseView {
     const nodeId = nodes[targetIndex];
 
     return {
-      action: 'jumpToEntity',
-      entityType: 'node',
+      action: LOCAL_STR_JUMPTOENTITY,
+      entityType: LOCAL_STR_NODE,
       entityId: nodeId,
     };
   }
@@ -195,11 +233,11 @@ export class MessageGroupsView extends BaseView {
    * @return {boolean|Object} True if handled, navigation object, or false
    */
   handleKey(key) {
-    if (key.name === 'enter' || key.name === 'return') {
+    if (key.name === LOCAL_STR_ENTER || key.name === LOCAL_STR_RETURN) {
       return this.handleDrillDown();
     }
-    if (key.name === 'n' || key.name === 'N') {
-      return this.navigateToNode(0);
+    if (key.name === LOCAL_STR_N || key.name === LOCAL_STR_N_2) {
+      return this.navigateToNode(LOCAL_NUM_ZERO);
     }
     return super.handleKey(key);
   }
@@ -238,17 +276,17 @@ export class MessageGroupsView extends BaseView {
 
     // Add leader info if available
     if (group.leader_node_id) {
-      sections[0].fields.push(
-        {label: 'Leader Node', value: group.leader_node_id});
+      sections[LOCAL_NUM_ZERO].fields.push(
+        {label: LOCAL_STR_LEADER_NODE, value: group.leader_node_id});
     }
 
     // Add Raft state if available
     if (group.raft_term !== undefined || group.raft_index !== undefined) {
       sections.push({
-        title: 'Raft State',
+        title: LOCAL_STR_RAFT_STATE,
         fields: [
-          {label: 'Term', value: String(group.raft_term || 0)},
-          {label: 'Index', value: String(group.raft_index || 0)},
+          {label: LOCAL_STR_TERM, value: String(group.raft_term || LOCAL_NUM_ZERO)},
+          {label: LOCAL_STR_INDEX, value: String(group.raft_index || LOCAL_NUM_ZERO)},
         ],
       });
     }

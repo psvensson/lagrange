@@ -8,6 +8,10 @@ import {
   SPLIT_MERGE_REASON,
 } from './partition-constants.js';
 
+const LOCAL_STR_EMPTY = '';
+const LOCAL_STR_WORKFLOW_EXECUTION = 'workflow_execution';
+const LOCAL_STR_OBJECT = 'object';
+
 function createPartitionSplitMergeManagerEvaluationMethods(options = {}) {
   const cloneStringArray = options.cloneStringArray;
   const operationState = options.operationState;
@@ -248,7 +252,7 @@ function createPartitionSplitMergeManagerEvaluationMethods(options = {}) {
       this.lastEvaluationDurationMs = Number.isFinite(startedAtMs) ?
         Math.max(NUM.ZERO, completedAtMs - startedAtMs) :
         null;
-      this.lastEvaluationError = String(error?.message || error || '');
+      this.lastEvaluationError = String(error?.message || error || LOCAL_STR_EMPTY);
     },
 
     /**
@@ -441,7 +445,7 @@ function createPartitionSplitMergeManagerEvaluationMethods(options = {}) {
             this.logger.error(SPLIT_MERGE_LOG_MSG.SPLIT_EXECUTION_FAILED, {
               partitionId,
               error: error.message,
-              phase: 'workflow_execution',
+              phase: LOCAL_STR_WORKFLOW_EXECUTION,
             });
             results.splitErrors.push({
               partitionId,
@@ -573,7 +577,7 @@ function createPartitionSplitMergeManagerEvaluationMethods(options = {}) {
         lastDurationMs: this.lastEvaluationDurationMs,
         lastError: this.lastEvaluationError,
         lastSummary: this.lastEvaluationSummary &&
-          typeof this.lastEvaluationSummary === 'object' ?
+          typeof this.lastEvaluationSummary === LOCAL_STR_OBJECT ?
           {...this.lastEvaluationSummary} :
           null,
       };

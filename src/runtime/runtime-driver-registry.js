@@ -26,6 +26,9 @@ import {
   RegistryFrozenError,
 } from './runtime-driver-errors.js';
 
+const LOCAL_STR_REGISTER = 'register';
+const LOCAL_STR_1J8ZG = 'driver must be an instance of RuntimeDriver';
+
 /**
  * RuntimeDriverRegistry — the single lookup owner for runtime
  * drivers, keyed by runtime_kind.
@@ -64,11 +67,11 @@ class RuntimeDriverRegistry {
    */
   register(driver) {
     if (this._frozen) {
-      throw new RegistryFrozenError('register');
+      throw new RegistryFrozenError(LOCAL_STR_REGISTER);
     }
     if (!(driver instanceof RuntimeDriver)) {
       throw new TypeError(
-        'driver must be an instance of RuntimeDriver',
+        LOCAL_STR_1J8ZG,
       );
     }
     if (this._drivers.has(driver.kind)) {

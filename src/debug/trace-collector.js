@@ -9,6 +9,8 @@ import {
   DEBUG_ERROR_MSG,
 } from './debug-constants.js';
 
+const LOCAL_STR_EMPTY = '';
+
 /**
  * Node-local collector for Trace_Event forwarding.
  */
@@ -163,7 +165,7 @@ function matchesFilter(event, filter) {
     return true;
   }
   if (filter.lineagePrefix &&
-    !String(event.lineageId || '').startsWith(filter.lineagePrefix)) {
+    !String(event.lineageId || LOCAL_STR_EMPTY).startsWith(filter.lineagePrefix)) {
     return false;
   }
   if (filter.level &&

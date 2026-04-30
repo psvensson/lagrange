@@ -1,6 +1,9 @@
 import {QUERY_EXECUTOR_SHARED} from './query-executor-shared.js';
 import {QueryExecutorSegment3Part1} from './query-executor-segment-3-part-1.js';
 
+const LOCAL_STR_STRING = 'string';
+const LOCAL_STR_OBJECT = 'object';
+
 const {
   COLUMN,
   CONTROL_PLANE_PARTICIPATION_KIND,
@@ -1441,7 +1444,7 @@ class QueryExecutorSegment3 extends QueryExecutorSegment3Part1 {
         result.error || `Insert failed on partition: ${partitionId}`,
       );
       if (
-        typeof result?.errorCode === 'string' &&
+        typeof result?.errorCode === LOCAL_STR_STRING &&
         result.errorCode.length > NUM.ZERO
       ) {
         error.code = result.errorCode;
@@ -1458,51 +1461,51 @@ class QueryExecutorSegment3 extends QueryExecutorSegment3Part1 {
       }
       if (Array.isArray(result?.participantFailures)) {
         error.participantFailures = result.participantFailures
-          .filter((entry) => entry && typeof entry === 'object')
+          .filter((entry) => entry && typeof entry === LOCAL_STR_OBJECT)
           .map((entry) => ({...entry}));
       }
       if (
         result?.firstFailedParticipant &&
-        typeof result.firstFailedParticipant === 'object'
+        typeof result.firstFailedParticipant === LOCAL_STR_OBJECT
       ) {
         error.firstFailedParticipant = {
           ...result.firstFailedParticipant,
         };
       }
       if (
-        typeof result?.participantNodeId === 'string' &&
+        typeof result?.participantNodeId === LOCAL_STR_STRING &&
         result.participantNodeId.length > NUM.ZERO
       ) {
         error.participantNodeId = result.participantNodeId;
       }
       if (
-        typeof result?.participantAddress === 'string' &&
+        typeof result?.participantAddress === LOCAL_STR_STRING &&
         result.participantAddress.length > NUM.ZERO
       ) {
         error.participantAddress = result.participantAddress;
       }
       if (
-        typeof result?.reasonCode === 'string' &&
+        typeof result?.reasonCode === LOCAL_STR_STRING &&
         result.reasonCode.length > NUM.ZERO
       ) {
         error.reasonCode = result.reasonCode;
       }
       if (
-        typeof result?.participationKind === 'string' &&
+        typeof result?.participationKind === LOCAL_STR_STRING &&
         result.participationKind.length > NUM.ZERO
       ) {
         error.participationKind = result.participationKind;
       }
       if (
-        typeof result?.tableName === 'string' &&
+        typeof result?.tableName === LOCAL_STR_STRING &&
         result.tableName.length > NUM.ZERO
       ) {
         error.tableName = result.tableName;
-      } else if (typeof ast?.table === 'string' && ast.table.length > NUM.ZERO) {
+      } else if (typeof ast?.table === LOCAL_STR_STRING && ast.table.length > NUM.ZERO) {
         error.tableName = ast.table;
       }
       if (
-        typeof result?.failedTable === 'string' &&
+        typeof result?.failedTable === LOCAL_STR_STRING &&
         result.failedTable.length > NUM.ZERO
       ) {
         error.failedTable = result.failedTable;

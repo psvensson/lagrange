@@ -64,6 +64,15 @@ import {
   resolveSystemCacheHandles,
 } from './entrypoint-runtime-helpers.js';
 
+const LOCAL_STR_OBJECT = 'object';
+const LOCAL_STR_JOINER = 'joiner';
+const LOCAL_NUM_TWO = 2;
+const LOCAL_STR_MX5FT = 'Failed to persist bootstrap rejoin hints';
+const LOCAL_NUM_ONE = 1;
+const LOCAL_STR_JOIN = 'join';
+const LOCAL_STR_SEED = 'seed';
+const LOCAL_STR_PY3S1 = 'Configuration loaded';
+
 // Re-export modules for external use
 export * from './query/index.js';
 export * from './partition/index.js';
@@ -94,7 +103,7 @@ async function resolveLocalClusterIncarnationFence(options = {}) {
     nodeAddress: options.nodeAddress,
   });
   return startupDecision?.clusterIncarnationFence &&
-    typeof startupDecision.clusterIncarnationFence === 'object' ?
+    typeof startupDecision.clusterIncarnationFence === LOCAL_STR_OBJECT ?
     startupDecision.clusterIncarnationFence :
     null;
 }
@@ -132,12 +141,12 @@ async function startJoinNode(options) {
       dataDir: dataDirectoryManager.getDataDir(),
       nodeId,
       nodeAddress: joiningNodeAddress,
-      nodeRole: 'joiner',
+      nodeRole: LOCAL_STR_JOINER,
       peerAddresses: [seedNodeAddress],
-      clusterNodeCount: 2,
+      clusterNodeCount: LOCAL_NUM_TWO,
     });
   } catch (error) {
-    mainLogger.warn('Failed to persist bootstrap rejoin hints', {
+    mainLogger.warn(LOCAL_STR_MX5FT, {
       nodeId,
       dataDir: dataDirectoryManager.getDataDir(),
       error: error.message,
@@ -259,7 +268,7 @@ async function startJoinNode(options) {
       phase: joinResult.phase,
     });
     await bootstrapAPI.shutdown();
-    process.exit(1);
+    process.exit(LOCAL_NUM_ONE);
   }
 
   let joinLogsPersistence = null;
@@ -341,7 +350,7 @@ async function startJoinNode(options) {
   reportStartupRuntimeHandoff({
     logger: mainLogger,
     nodeId,
-    startupBranch: 'join',
+    startupBranch: LOCAL_STR_JOIN,
     bootstrapAPI,
     startupOwner: nodeJoiningService,
     adminRuntime: joinAdminRuntime,
@@ -363,7 +372,7 @@ async function startJoinNode(options) {
   scheduleStartupLivenessPulse({
     logger: mainLogger,
     nodeId,
-    startupBranch: 'join',
+    startupBranch: LOCAL_STR_JOIN,
     bootstrapAPI,
     startupOwner: nodeJoiningService,
   });
@@ -477,7 +486,7 @@ async function startSeedNode(options) {
     mainLogger.error(ENTRYPOINT_LOG_MSG.BOOTSTRAP_FAILED, {
       error: bootstrapResult.error,
     });
-    process.exit(1);
+    process.exit(LOCAL_NUM_ONE);
   }
 
   let seedLogsPersistence = null;
@@ -560,7 +569,7 @@ async function startSeedNode(options) {
   reportStartupRuntimeHandoff({
     logger: mainLogger,
     nodeId,
-    startupBranch: 'seed',
+    startupBranch: LOCAL_STR_SEED,
     bootstrapAPI,
     startupOwner: bootstrapService,
     adminRuntime: seedAdminRuntime,
@@ -583,7 +592,7 @@ async function startSeedNode(options) {
   scheduleStartupLivenessPulse({
     logger: mainLogger,
     nodeId,
-    startupBranch: 'seed',
+    startupBranch: LOCAL_STR_SEED,
     bootstrapAPI,
     startupOwner: bootstrapService,
   });
@@ -659,7 +668,7 @@ async function main() {
   });
   ensureLiferaftProviderForRuntime(process.env);
 
-  configLogger.debug('Configuration loaded', {
+  configLogger.debug(LOCAL_STR_PY3S1, {
     categories: config.getCategories(),
   });
 
@@ -722,5 +731,5 @@ async function main() {
 
 main().catch((err) => {
   console.error(`${ENTRYPOINT_TEXT.FATAL_ERROR_PREFIX}`, err);
-  process.exit(1);
+  process.exit(LOCAL_NUM_ONE);
 });

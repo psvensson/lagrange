@@ -1,3 +1,14 @@
+const LOCAL_STR_FROM = 'FROM';
+const LOCAL_STR_INTO = 'INTO';
+const LOCAL_STR_UPDATE = 'UPDATE';
+const LOCAL_STR_JOIN = 'JOIN';
+const LOCAL_STR_TABLE = 'TABLE';
+const LOCAL_NUM_ONE = 1;
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_NUM_10 = 10;
+const LOCAL_NUM_TWO = 2;
+const LOCAL_STR_EMPTY = '';
+
 /**
  * TableAutocomplete - Autocomplete provider for table names
  *
@@ -11,11 +22,11 @@
  * SQL contexts that trigger table name autocomplete
  */
 export const TABLE_CONTEXTS = [
-  'FROM',
-  'INTO',
-  'UPDATE',
-  'JOIN',
-  'TABLE',
+  LOCAL_STR_FROM,
+  LOCAL_STR_INTO,
+  LOCAL_STR_UPDATE,
+  LOCAL_STR_JOIN,
+  LOCAL_STR_TABLE,
 ];
 
 /**
@@ -102,15 +113,15 @@ export class TableAutocomplete {
 
       // Exact match first (only when there's a prefix)
       if (lowerPrefix) {
-        if (aLower === lowerPrefix) return -1;
-        if (bLower === lowerPrefix) return 1;
+        if (aLower === lowerPrefix) return -LOCAL_NUM_ONE;
+        if (bLower === lowerPrefix) return LOCAL_NUM_ONE;
       }
 
       // Then alphabetically
       return aLower.localeCompare(bLower);
     });
 
-    return matches.slice(0, 10); // Limit to 10 suggestions
+    return matches.slice(LOCAL_NUM_ZERO, LOCAL_NUM_10); // Limit to 10 suggestions
   }
 
   /**
@@ -151,7 +162,7 @@ export class TableAutocomplete {
    */
   getBestSuggestion(prefix) {
     const suggestions = this.getTableSuggestions(prefix);
-    return suggestions.length > 0 ? suggestions[0] : null;
+    return suggestions.length > LOCAL_NUM_ZERO ? suggestions[LOCAL_NUM_ZERO] : null;
   }
 
   /**
@@ -190,9 +201,9 @@ export class TableAutocomplete {
     }
 
     return {
-      keyword: match[1].toUpperCase(),
-      prefix: match[2] || '',
-      keywordPosition: beforeCursor.lastIndexOf(match[1]),
+      keyword: match[LOCAL_NUM_ONE].toUpperCase(),
+      prefix: match[LOCAL_NUM_TWO] || LOCAL_STR_EMPTY,
+      keywordPosition: beforeCursor.lastIndexOf(match[LOCAL_NUM_ONE]),
     };
   }
 }

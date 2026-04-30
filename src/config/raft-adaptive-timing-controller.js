@@ -17,6 +17,8 @@ import {
   RAFT_ADAPTIVE_TIMING_VALUE,
 } from './raft-adaptive-timing-controller-constants.js';
 
+const LOCAL_STR_1VWEM = 'RaftAdaptiveTimingController requires dynamicConfigService';
+
 const ADAPTIVE_TIMING_PROFILE_FIELDS = Object.freeze({
   HEARTBEAT_INTERVAL_MS: 'heartbeatIntervalMs',
   ELECTION_TIMEOUT_MIN_MS: 'electionTimeoutMinMs',
@@ -166,7 +168,7 @@ class RaftAdaptiveTimingController {
    */
   constructor(options = {}) {
     if (!options.dynamicConfigService) {
-      throw new Error('RaftAdaptiveTimingController requires dynamicConfigService');
+      throw new Error(LOCAL_STR_1VWEM);
     }
 
     this.dynamicConfigService = options.dynamicConfigService;

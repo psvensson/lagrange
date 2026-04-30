@@ -30,6 +30,77 @@ const {
   isRetryableControlPlaneError,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
 
+const COORDINATOR_CREATED_LOCAL_OPERATION_PRIME_STATE = Object.freeze({
+  DEFAULT: 'default',
+  CRITICAL_SYSTEM_PARTITION: 'critical_system_partition',
+});
+
+const COORDINATOR_CREATED_LOCAL_OPERATION_PRIME_ACTION = Object.freeze({
+  CLAIM_ONLY: 'claim_only',
+  DISPATCH_AFTER_CLAIM: 'dispatch_after_claim',
+});
+
+const COORDINATOR_CREATED_LOCAL_OPERATION_PRIME_ACTION_BY_STATE =
+  Object.freeze(
+    new Map([
+      [
+        COORDINATOR_CREATED_LOCAL_OPERATION_PRIME_STATE.DEFAULT,
+        COORDINATOR_CREATED_LOCAL_OPERATION_PRIME_ACTION.CLAIM_ONLY,
+      ],
+      [
+        COORDINATOR_CREATED_LOCAL_OPERATION_PRIME_STATE
+          .CRITICAL_SYSTEM_PARTITION,
+        COORDINATOR_CREATED_LOCAL_OPERATION_PRIME_ACTION
+          .DISPATCH_AFTER_CLAIM,
+      ],
+    ]),
+  );
+
+const COORDINATOR_CREATED_OPERATION_ARM_STATE = Object.freeze({
+  UNAVAILABLE: 'unavailable',
+  TERMINAL: 'terminal',
+  LOCALLY_OWNED_PENDING: 'locally_owned_pending',
+  LOCALLY_OWNED_DISPATCHABLE: 'locally_owned_dispatchable',
+  REMOTE_OWNED_DISPATCHABLE: 'remote_owned_dispatchable',
+  UNSUPPORTED_WORKFLOW: 'unsupported_workflow',
+});
+
+const COORDINATOR_CREATED_OPERATION_ARM_ACTION = Object.freeze({
+  SKIP: 'skip',
+  CLAIM_AND_APPLY_LOCAL_PRIME: 'claim_and_apply_local_prime',
+  DISPATCH_LOCAL: 'dispatch_local',
+  WAKE_REMOTE_OWNER: 'wake_remote_owner',
+});
+
+const COORDINATOR_CREATED_OPERATION_ARM_ACTION_BY_STATE = Object.freeze(
+  new Map([
+    [
+      COORDINATOR_CREATED_OPERATION_ARM_STATE.UNAVAILABLE,
+      COORDINATOR_CREATED_OPERATION_ARM_ACTION.SKIP,
+    ],
+    [
+      COORDINATOR_CREATED_OPERATION_ARM_STATE.TERMINAL,
+      COORDINATOR_CREATED_OPERATION_ARM_ACTION.SKIP,
+    ],
+    [
+      COORDINATOR_CREATED_OPERATION_ARM_STATE.LOCALLY_OWNED_PENDING,
+      COORDINATOR_CREATED_OPERATION_ARM_ACTION.CLAIM_AND_APPLY_LOCAL_PRIME,
+    ],
+    [
+      COORDINATOR_CREATED_OPERATION_ARM_STATE.LOCALLY_OWNED_DISPATCHABLE,
+      COORDINATOR_CREATED_OPERATION_ARM_ACTION.DISPATCH_LOCAL,
+    ],
+    [
+      COORDINATOR_CREATED_OPERATION_ARM_STATE.REMOTE_OWNED_DISPATCHABLE,
+      COORDINATOR_CREATED_OPERATION_ARM_ACTION.WAKE_REMOTE_OWNER,
+    ],
+    [
+      COORDINATOR_CREATED_OPERATION_ARM_STATE.UNSUPPORTED_WORKFLOW,
+      COORDINATOR_CREATED_OPERATION_ARM_ACTION.SKIP,
+    ],
+  ]),
+);
+
 class OperationWorkflowOwnerSegment2 extends OperationWorkflowOwnerSegment1 {
   deferCoordinatorCreatedRemoteHandoffRetry(operation, errorLike) {
     const operationId = operation?.operationId || null;
@@ -182,8 +253,9 @@ class OperationWorkflowOwnerSegment2 extends OperationWorkflowOwnerSegment1 {
    * transition lane so it does not wait for cache visibility or external
    * dispatch observation before leaving PENDING.
    *
-   * The coordinator-created event remains the actual dispatch trigger. This
-   * hook only claims the durable workflow step through the owner path.
+   * Ordinary coordinator-created events remain the dispatch trigger after this
+   * hook claims the durable workflow step. Critical system partitions continue
+   * directly into dispatch so startup recovery is not pinned behind queue lag.
    *
    * @param {Object|null} operationInput
    * @return {Promise<boolean>}
@@ -210,20 +282,24 @@ class OperationWorkflowOwnerSegment2 extends OperationWorkflowOwnerSegment1 {
           if (!operation) {
             operation = this.cloneOperationSnapshot(operationInput);
           }
-          if (
-            !operation ||
-            this.repository.isOperationTerminal(operation) ||
-            operation.workflowStep !== WORKFLOW_STEP.PENDING
-          ) {
-            return false;
-          }
 
-          if (this.isCoordinatorCreatedOperationLocallyOwned(operation)) {
+          const armState =
+            this.resolveCoordinatorCreatedOperationArmState(operation);
+          const armAction =
+            this.resolveCoordinatorCreatedOperationArmAction(armState);
+
+          if (
+            armAction ===
+            COORDINATOR_CREATED_OPERATION_ARM_ACTION
+              .CLAIM_AND_APPLY_LOCAL_PRIME
+          ) {
             this.clearCreatedOperationHandoffRetry(operationId);
             try {
               const claimedOperation =
                 await this.claimPendingDispatchOperation(operation);
-              return Boolean(claimedOperation);
+              return this.applyCoordinatorCreatedLocalOperationPrimeAction(
+                claimedOperation,
+              );
             } catch (error) {
               if (
                 this.deferTransitionRetry(operationId, error, {
@@ -239,6 +315,44 @@ class OperationWorkflowOwnerSegment2 extends OperationWorkflowOwnerSegment1 {
               }
               throw error;
             }
+          }
+
+          if (
+            armAction ===
+            COORDINATOR_CREATED_OPERATION_ARM_ACTION.DISPATCH_LOCAL
+          ) {
+            this.clearCreatedOperationHandoffRetry(operationId);
+            try {
+              const dispatchResult =
+                await this.dispatchOperationInternal(operation);
+              return (
+                dispatchResult?.success === true ||
+                dispatchResult?.reason ===
+                  REBALANCER_SKIP_REASON.DEFERRED_RETRY_PENDING
+              );
+            } catch (error) {
+              if (
+                this.deferTransitionRetry(operationId, error, {
+                  boundary:
+                    OPERATION_WORKFLOW_OWNER_LITERAL.COORDINATOR_CREATED_OPERATION,
+                  workflowStep: operation?.workflowStep || null,
+                  partitionId,
+                  updatedAt: operation?.updatedAt,
+                  createdAt: operation?.createdAt,
+                  operationSnapshot: operation,
+                })
+              ) {
+                return false;
+              }
+              throw error;
+            }
+          }
+
+          if (
+            armAction !==
+            COORDINATOR_CREATED_OPERATION_ARM_ACTION.WAKE_REMOTE_OWNER
+          ) {
+            return false;
           }
 
           const handoffTimeoutDecision =
@@ -261,6 +375,98 @@ class OperationWorkflowOwnerSegment2 extends OperationWorkflowOwnerSegment1 {
       }
       throw error;
     }
+  }
+
+  /**
+   * @param {Object|null} operation
+   * @return {string}
+   * @private
+   */
+  resolveCoordinatorCreatedLocalOperationPrimeState(operation) {
+    if (this.isCriticalSystemPartition(operation?.partitionId || null)) {
+      return COORDINATOR_CREATED_LOCAL_OPERATION_PRIME_STATE
+        .CRITICAL_SYSTEM_PARTITION;
+    }
+    return COORDINATOR_CREATED_LOCAL_OPERATION_PRIME_STATE.DEFAULT;
+  }
+
+  /**
+   * @param {Object|null} operation
+   * @return {string}
+   * @private
+   */
+  resolveCoordinatorCreatedLocalOperationPrimeAction(operation) {
+    return COORDINATOR_CREATED_LOCAL_OPERATION_PRIME_ACTION_BY_STATE.get(
+      this.resolveCoordinatorCreatedLocalOperationPrimeState(operation),
+    ) || COORDINATOR_CREATED_LOCAL_OPERATION_PRIME_ACTION.CLAIM_ONLY;
+  }
+
+  /**
+   * @param {Object|null} operation
+   * @return {string}
+   * @private
+   */
+  resolveCoordinatorCreatedOperationArmState(operation) {
+    if (!operation) {
+      return COORDINATOR_CREATED_OPERATION_ARM_STATE.UNAVAILABLE;
+    }
+    if (this.repository.isOperationTerminal(operation)) {
+      return COORDINATOR_CREATED_OPERATION_ARM_STATE.TERMINAL;
+    }
+
+    const locallyOwned =
+      this.isCoordinatorCreatedOperationLocallyOwned(operation);
+    const dispatchable = this.isDispatchRetryableWorkflowStep(operation);
+
+    if (locallyOwned && operation.workflowStep === WORKFLOW_STEP.PENDING) {
+      return COORDINATOR_CREATED_OPERATION_ARM_STATE.LOCALLY_OWNED_PENDING;
+    }
+    if (locallyOwned && dispatchable) {
+      return COORDINATOR_CREATED_OPERATION_ARM_STATE.LOCALLY_OWNED_DISPATCHABLE;
+    }
+    if (!locallyOwned && dispatchable) {
+      return COORDINATOR_CREATED_OPERATION_ARM_STATE.REMOTE_OWNED_DISPATCHABLE;
+    }
+    return COORDINATOR_CREATED_OPERATION_ARM_STATE.UNSUPPORTED_WORKFLOW;
+  }
+
+  /**
+   * @param {string} armState
+   * @return {string}
+   * @private
+   */
+  resolveCoordinatorCreatedOperationArmAction(armState) {
+    return COORDINATOR_CREATED_OPERATION_ARM_ACTION_BY_STATE.get(armState) ||
+      COORDINATOR_CREATED_OPERATION_ARM_ACTION.SKIP;
+  }
+
+  /**
+   * @param {Object|null} claimedOperation
+   * @return {Promise<boolean>}
+   * @private
+   */
+  async applyCoordinatorCreatedLocalOperationPrimeAction(
+    claimedOperation,
+  ) {
+    if (!claimedOperation) {
+      return false;
+    }
+    const primeAction = this.resolveCoordinatorCreatedLocalOperationPrimeAction(
+      claimedOperation,
+    );
+    if (
+      primeAction !==
+      COORDINATOR_CREATED_LOCAL_OPERATION_PRIME_ACTION.DISPATCH_AFTER_CLAIM
+    ) {
+      return true;
+    }
+
+    const dispatchResult =
+      await this.dispatchOperationInternal(claimedOperation);
+    return (
+      dispatchResult?.success === true ||
+      dispatchResult?.reason === REBALANCER_SKIP_REASON.DEFERRED_RETRY_PENDING
+    );
   }
 
   /**

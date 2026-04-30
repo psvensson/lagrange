@@ -18,6 +18,27 @@ const TEST_RETRY_SYNCING_REASON = 'syncing';
 const TEST_RETRY_ACTIVE_REASON = 'active';
 const TEST_RETRY_PRESSURE_ERROR =
   'Distributed operation failed due to participant failures';
+const TEST_CREATING_REMOVE_TEST_NAME =
+  'ReplicaStateMachine allows creating replicas to enter removing for cleanup';
+const TEST_CREATING_REMOVE_SERVICE_ID = 'svc-creating-remove-1';
+const TEST_CREATING_REMOVE_PARTITION_ID = 'partition-creating-remove-1';
+const TEST_CREATING_REMOVE_NODE_ID = 'node-creating-remove-1';
+const TEST_CREATING_REMOVE_SERVICE_ADDRESS =
+  'node-creating-remove-1/partition/svc-creating-remove-1';
+const TEST_CREATING_REMOVE_REGISTER_REASON =
+  'registered creating cleanup target';
+const TEST_CREATING_REMOVE_TRANSITION_REASON =
+  'cleanup remove for failed replacement target';
+const TEST_CREATING_REMOVE_EXPECTED_UPDATE_CALLS = 2;
+const TEST_CREATING_REMOVE_FIRST_CALL_INDEX = 0;
+const TEST_CREATING_REMOVE_RESULT_MESSAGE =
+  'creating cleanup transition should succeed';
+const TEST_CREATING_REMOVE_COUNT_MESSAGE =
+  'creating cleanup should persist service update and leader clear';
+const TEST_CREATING_REMOVE_STATE_MESSAGE =
+  'creating cleanup should track removing state';
+const TEST_CREATING_REMOVE_STATUS_MESSAGE =
+  'creating cleanup should persist removing status';
 
 test('ReplicaStateMachine uses upsert for initial services persistence',
   async (t) => {
@@ -62,6 +83,73 @@ test('ReplicaStateMachine uses upsert for initial services persistence',
     ConfigurationManager.resetInstance();
     LoggingService.resetInstance();
   });
+
+test(TEST_CREATING_REMOVE_TEST_NAME, async (t) => {
+  ConfigurationManager.resetInstance();
+  LoggingService.resetInstance();
+
+  const config = ConfigurationManager.getInstance();
+  config.initialize({});
+
+  const logging = LoggingService.getInstance();
+  logging.initialize({level: 'error'});
+
+  const updateCalls = [];
+  const stateMachine = new ReplicaStateMachine({
+    nodeId: TEST_CREATING_REMOVE_NODE_ID,
+    cdcIntegrationService: {
+      async upsertSystemTableRow() {
+        return {success: true};
+      },
+      async updateSystemTableRow(tableName, whereClause, data, options) {
+        updateCalls.push({tableName, whereClause, data, options});
+        return {success: true};
+      },
+    },
+  });
+
+  stateMachine.registerReplicaSnapshot(TEST_CREATING_REMOVE_SERVICE_ID, {
+    partitionId: TEST_CREATING_REMOVE_PARTITION_ID,
+    nodeId: TEST_CREATING_REMOVE_NODE_ID,
+    state: ReplicaState.CREATING,
+    serviceId: TEST_CREATING_REMOVE_SERVICE_ID,
+    serviceAddress: TEST_CREATING_REMOVE_SERVICE_ADDRESS,
+    reason: TEST_CREATING_REMOVE_REGISTER_REASON,
+  });
+
+  const result = await stateMachine.transition(
+    TEST_CREATING_REMOVE_SERVICE_ID,
+    ReplicaState.REMOVING,
+    {
+      partitionId: TEST_CREATING_REMOVE_PARTITION_ID,
+      nodeId: TEST_CREATING_REMOVE_NODE_ID,
+      reason: TEST_CREATING_REMOVE_TRANSITION_REASON,
+      serviceId: TEST_CREATING_REMOVE_SERVICE_ID,
+      serviceAddress: TEST_CREATING_REMOVE_SERVICE_ADDRESS,
+    },
+  );
+
+  t.equal(result, true, TEST_CREATING_REMOVE_RESULT_MESSAGE);
+  t.equal(
+    updateCalls.length,
+    TEST_CREATING_REMOVE_EXPECTED_UPDATE_CALLS,
+    TEST_CREATING_REMOVE_COUNT_MESSAGE,
+  );
+  t.equal(
+    stateMachine.getState(TEST_CREATING_REMOVE_SERVICE_ID).state,
+    ReplicaState.REMOVING,
+    TEST_CREATING_REMOVE_STATE_MESSAGE,
+  );
+  t.equal(
+    updateCalls[TEST_CREATING_REMOVE_FIRST_CALL_INDEX].data.status,
+    ReplicaState.REMOVING,
+    TEST_CREATING_REMOVE_STATUS_MESSAGE,
+  );
+
+  stateMachine.clear();
+  ConfigurationManager.resetInstance();
+  LoggingService.resetInstance();
+});
 
 test('ReplicaStateMachine demotes transitional persistence and skips cache waits',
   async (t) => {

@@ -21,12 +21,24 @@ import {
   isTerminalStep,
 } from '../../src/rebalancer/replica-status.js';
 import {
+  WORKFLOW_STEP,
+} from '../../src/constants/index.js';
+import {
   createMockCache,
   createMockPolicyService,
   createMockMessageRouter,
   createMockControlPlaneReadinessService,
   createMockTransactionCoordinator,
 } from './test-helpers.js';
+
+const TIMEOUT_SELECTION_OPERATION_ID = 'op-timeout-selection';
+const TIMEOUT_SELECTION_PARTITION_ID = 'partition-timeout-selection';
+const TIMEOUT_SELECTION_REPLICA_ID = 'partition-timeout-selection-r1';
+const TIMEOUT_SELECTION_SOURCE_NODE_ID = 'node-timeout-selection-source';
+const TIMEOUT_SELECTION_TARGET_NODE_ID = 'node-timeout-selection-target';
+const TIMEOUT_SELECTION_STALE_UPDATED_AT_MS = 10_000;
+const TIMEOUT_SELECTION_ADVANCED_UPDATED_AT_MS = 20_000;
+const TIMEOUT_SELECTION_FAILED_UPDATED_AT_MS = 30_000;
 
 /**
  * Create a RebalanceCoordinator for timeout testing.
@@ -243,6 +255,59 @@ function createTimeoutTestCoordinator(options = {}) {
 
   return {coordinator, backdateOperation, getTrackedOperation, trackedOperations};
 }
+
+test('timeout reconcile uses the most advanced same-operation snapshot',
+  async (t) => {
+    const {coordinator} = createTimeoutTestCoordinator();
+    const stalePendingOperation = {
+      operationId: TIMEOUT_SELECTION_OPERATION_ID,
+      type: OperationType.REPLACE,
+      partitionId: TIMEOUT_SELECTION_PARTITION_ID,
+      replicaId: TIMEOUT_SELECTION_REPLICA_ID,
+      sourceNodeId: TIMEOUT_SELECTION_SOURCE_NODE_ID,
+      targetNodeId: TIMEOUT_SELECTION_TARGET_NODE_ID,
+      workflowStep: WORKFLOW_STEP.PENDING,
+      status: ReplicaStatus.PENDING,
+      updatedAt: TIMEOUT_SELECTION_STALE_UPDATED_AT_MS,
+    };
+    const advancedSendingOperation = {
+      ...stalePendingOperation,
+      workflowStep: WORKFLOW_STEP.SENDING,
+      updatedAt: TIMEOUT_SELECTION_ADVANCED_UPDATED_AT_MS,
+    };
+    const terminalFailedOperation = {
+      ...advancedSendingOperation,
+      workflowStep: WORKFLOW_STEP.FAILED,
+      status: ReplicaStatus.FAILED,
+      updatedAt: TIMEOUT_SELECTION_FAILED_UPDATED_AT_MS,
+    };
+
+    try {
+      const selectedAdvanced =
+        coordinator.workflowOwner.selectTimeoutReconcileOperation(
+          {operation: stalePendingOperation},
+          advancedSendingOperation,
+        );
+      t.equal(
+        selectedAdvanced.workflowStep,
+        WORKFLOW_STEP.SENDING,
+        'cache-observed SENDING should outrank a stale PENDING owner read',
+      );
+
+      const selectedTerminal =
+        coordinator.workflowOwner.selectTimeoutReconcileOperation(
+          {operation: terminalFailedOperation},
+          advancedSendingOperation,
+        );
+      t.equal(
+        selectedTerminal.workflowStep,
+        WORKFLOW_STEP.FAILED,
+        'terminal visibility should still dominate non-terminal fallback state',
+      );
+    } finally {
+      coordinator.shutdown();
+    }
+  });
 
 test('Property 7: Timeout Triggers Failure', async (t) => {
   await t.test('operation in PENDING times out and fails', async (t) => {

@@ -73,7 +73,15 @@ export function registerMembershipPublicationCoordinatorTailMoreTests({
   'sql_transaction_participants-p1-r5';
   const DISPATCH_RETRY_OPERATION_TYPE_REPLACE = 'REPLACE';
   const DISPATCH_RETRY_STATUS_ACTIVE = 'active';
+  const DISPATCH_RETRY_STATUS_CREATING = 'creating';
   const DISPATCH_RETRY_WORKFLOW_STEP_ACTIVE = 'ACTIVE';
+  const DISPATCH_RETRY_WORKFLOW_STEP_CREATING = 'CREATING';
+  const DISPATCH_RETRY_CREATING_OPERATION_ID =
+  'op-creating-target-rearm-retry';
+  const DISPATCH_RETRY_CREATING_PARTITION_ID =
+  INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SQL_WRITE_OPERATIONS];
+  const DISPATCH_RETRY_CREATING_REPLICA_ID =
+  'sql_write_operations-p1-r5';
 
   test('getDispatchRetryRowsForNode refreshes through the replica-operation owner when priority recovery leaves cache empty',
     async (t) => {
@@ -151,6 +159,101 @@ export function registerMembershipPublicationCoordinatorTailMoreTests({
       );
       t.end();
     });
+
+  test('getDispatchRetryRowsForNode keeps authoritative retry rows when ' +
+    'cache has stale replayable rows',
+  async (t) => {
+    const authoritativeQueryOptions = [];
+    const staleCacheOperationId = 'op-stale-cache-retry';
+    const authoritativeOperationId = 'op-authoritative-priority-retry';
+    const coordinator = new MembershipPublicationCoordinator({
+      nodeId: DISPATCH_RETRY_TARGET_NODE_ID,
+      systemTableCache: {
+        getAll(tableName) {
+          if (tableName === 'replica_operations') {
+            return [{
+              operation_id: staleCacheOperationId,
+              type: DISPATCH_RETRY_OPERATION_TYPE_REPLACE,
+              partition_id: DISPATCH_RETRY_PARTITION_ID,
+              replica_id: DISPATCH_RETRY_REPLICA_ID,
+              source_node_id: DISPATCH_RETRY_SOURCE_NODE_ID,
+              target_node_id: DISPATCH_RETRY_TARGET_NODE_ID,
+              status: 'pending',
+              workflow_step: 'PENDING',
+              steps_history: '[]',
+            }];
+          }
+          return [];
+        },
+      },
+      controlPlaneReadinessService: {
+        getMembershipPublicationDiagnosticsSync() {
+          return {
+            publicationEpoch: 16,
+            publicationStatus: 'PUBLISHED',
+            publishedActiveNodeIds: [DISPATCH_RETRY_TARGET_NODE_ID],
+            priorityPartitionSummary: {
+              requiredDistinctNodeCount: 2,
+              readyEligibleNodeCount: 1,
+              blockedPartitions: [{
+                partitionId: DISPATCH_RETRY_CREATING_PARTITION_ID,
+                requiredDistinctNodeCount: 2,
+                readyDistinctNodeCount: 1,
+                spreadGap: 1,
+              }],
+              missingPartitionIds: [DISPATCH_RETRY_CREATING_PARTITION_ID],
+            },
+            membershipLifecycleSummary: {
+              locallyEligibleNodeIds: [DISPATCH_RETRY_TARGET_NODE_ID],
+              projectedServingNodeIds: [DISPATCH_RETRY_TARGET_NODE_ID],
+            },
+          };
+        },
+      },
+      replicaOperationRepository: {
+        isOperationLocallyOwned(operation) {
+          return operation?.targetNodeId === DISPATCH_RETRY_TARGET_NODE_ID;
+        },
+        async queryIncompleteOperations(options) {
+          authoritativeQueryOptions.push(options);
+          return [{
+            operationId: authoritativeOperationId,
+            partitionId: DISPATCH_RETRY_CREATING_PARTITION_ID,
+            type: DISPATCH_RETRY_OPERATION_TYPE_REPLACE,
+            sourceNodeId: DISPATCH_RETRY_SOURCE_NODE_ID,
+            targetNodeId: DISPATCH_RETRY_TARGET_NODE_ID,
+            replicaId: DISPATCH_RETRY_CREATING_REPLICA_ID,
+            status: 'pending',
+            workflowStep: 'PENDING',
+            stepsHistory: [],
+          }];
+        },
+      },
+    });
+
+    const dispatchRows =
+      await coordinator.getDispatchRetryRowsForNode(
+        DISPATCH_RETRY_TARGET_NODE_ID,
+      );
+
+    t.same(
+      authoritativeQueryOptions,
+      [{
+        visibilityReadMode:
+          REPLICA_OPERATION_VISIBILITY_READ_MODE.OWNER_RPC_REQUIRED,
+      }],
+      'priority recovery should still query authoritative retry rows when cache has replayable work',
+    );
+    t.same(
+      dispatchRows.map((row) => row.operation_id),
+      [
+        authoritativeOperationId,
+        staleCacheOperationId,
+      ],
+      'authoritative retry rows should be unioned ahead of cache rows',
+    );
+    t.end();
+  });
 
   test('getDispatchRetryRowsForNode respects canonical target ownership for replace operations',
     async (t) => {
@@ -277,6 +380,103 @@ export function registerMembershipPublicationCoordinatorTailMoreTests({
           workflow_step: DISPATCH_RETRY_WORKFLOW_STEP_ACTIVE,
         }],
         'source-node retry should include target-owned ACTIVE replace source removal',
+      );
+      t.end();
+    });
+
+  test('getDispatchRetryRowsForNode replays ACTIVE replace source removal by owner node',
+    async (t) => {
+      const coordinator = new MembershipPublicationCoordinator({
+        nodeId: DISPATCH_RETRY_TARGET_NODE_ID,
+        systemTableCache: {
+          getAll(tableName) {
+            if (tableName !== SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) {
+              return [];
+            }
+            return [{
+              operation_id: DISPATCH_RETRY_OPERATION_ID,
+              partition_id: DISPATCH_RETRY_PARTITION_ID,
+              entity_id: DISPATCH_RETRY_PARTITION_ID,
+              entity_type: PRIORITY_REFRESH_SERVICE_TYPE_PARTITION,
+              type: DISPATCH_RETRY_OPERATION_TYPE_REPLACE,
+              source_node_id: DISPATCH_RETRY_SOURCE_NODE_ID,
+              target_node_id: DISPATCH_RETRY_TARGET_NODE_ID,
+              replica_id: DISPATCH_RETRY_REPLICA_ID,
+              status: DISPATCH_RETRY_STATUS_ACTIVE,
+              workflow_step: DISPATCH_RETRY_WORKFLOW_STEP_ACTIVE,
+              steps_history: [],
+            }];
+          },
+        },
+        replicaOperationRepository: {
+          isOperationLocallyOwned(operation) {
+            return operation?.targetNodeId === DISPATCH_RETRY_TARGET_NODE_ID;
+          },
+        },
+      });
+
+      const dispatchRows =
+      await coordinator.getDispatchRetryRowsForNode(
+        DISPATCH_RETRY_TARGET_NODE_ID,
+      );
+
+      t.match(
+        dispatchRows,
+        [{
+          operation_id: DISPATCH_RETRY_OPERATION_ID,
+          source_node_id: DISPATCH_RETRY_SOURCE_NODE_ID,
+          target_node_id: DISPATCH_RETRY_TARGET_NODE_ID,
+          workflow_step: DISPATCH_RETRY_WORKFLOW_STEP_ACTIVE,
+        }],
+        'owner-node retry should include target-owned ACTIVE replace source removal',
+      );
+      t.end();
+    });
+
+  test('getDispatchRetryRowsForNode replays CREATING system-table replace by target node',
+    async (t) => {
+      const coordinator = new MembershipPublicationCoordinator({
+        nodeId: DISPATCH_RETRY_TARGET_NODE_ID,
+        systemTableCache: {
+          getAll(tableName) {
+            if (tableName !== SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) {
+              return [];
+            }
+            return [{
+              operation_id: DISPATCH_RETRY_CREATING_OPERATION_ID,
+              partition_id: DISPATCH_RETRY_CREATING_PARTITION_ID,
+              entity_id: DISPATCH_RETRY_CREATING_PARTITION_ID,
+              entity_type: PRIORITY_REFRESH_SERVICE_TYPE_PARTITION,
+              type: DISPATCH_RETRY_OPERATION_TYPE_REPLACE,
+              source_node_id: DISPATCH_RETRY_SOURCE_NODE_ID,
+              target_node_id: DISPATCH_RETRY_TARGET_NODE_ID,
+              replica_id: DISPATCH_RETRY_CREATING_REPLICA_ID,
+              status: DISPATCH_RETRY_STATUS_CREATING,
+              workflow_step: DISPATCH_RETRY_WORKFLOW_STEP_CREATING,
+              steps_history: [],
+            }];
+          },
+        },
+        replicaOperationRepository: {
+          isOperationLocallyOwned(operation) {
+            return operation?.targetNodeId === DISPATCH_RETRY_TARGET_NODE_ID;
+          },
+        },
+      });
+
+      const dispatchRows =
+      await coordinator.getDispatchRetryRowsForNode(
+        DISPATCH_RETRY_TARGET_NODE_ID,
+      );
+
+      t.match(
+        dispatchRows,
+        [{
+          operation_id: DISPATCH_RETRY_CREATING_OPERATION_ID,
+          target_node_id: DISPATCH_RETRY_TARGET_NODE_ID,
+          workflow_step: DISPATCH_RETRY_WORKFLOW_STEP_CREATING,
+        }],
+        'ready target retry should include target-owned CREATING system-table replace work',
       );
       t.end();
     });

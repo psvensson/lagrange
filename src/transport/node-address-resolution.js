@@ -13,6 +13,15 @@ import {
 import {ENTRYPOINT_DEFAULT} from '../constants/entrypoint.js';
 import {normalizeToWebSocketAddress} from '../constants/transport.js';
 
+const LOCAL_STR_EMPTY = '';
+const LOCAL_STR_1PLYW = '[';
+const LOCAL_STR_1NY19 = ']';
+const LOCAL_STR_COLON = ':';
+const LOCAL_STR_127_0_0_1 = '127.0.0.1';
+const LOCAL_STR_1 = '::1';
+const LOCAL_STR_HOST = 'host';
+const LOCAL_STR_PORT = 'port';
+
 const NODE_WEBSOCKET_ADDRESS_RESOLUTION_REASON = Object.freeze({
   TARGET_NODE_MISSING: 'target_node_missing',
   CANONICAL_METADATA_MISSING: 'canonical_websocket_metadata_missing',
@@ -59,7 +68,7 @@ const ADDRESS_PROTOCOL_SEPARATOR = '://';
 function normalizeAddressString(value) {
   return typeof value === TYPEOF.STRING ?
     value.trim() :
-    '';
+    LOCAL_STR_EMPTY;
 }
 
 function buildAddressStateResult(state) {
@@ -99,8 +108,8 @@ function buildParsedAddressResult(options = {}) {
 
 function normalizeParsedUrlHost(host) {
   return typeof host === TYPEOF.STRING &&
-    host.startsWith('[') &&
-    host.endsWith(']') ?
+    host.startsWith(LOCAL_STR_1PLYW) &&
+    host.endsWith(LOCAL_STR_1NY19) ?
     host.substring(NUM.ONE, host.length - NUM.ONE) :
     host;
 }
@@ -126,7 +135,7 @@ function parseUrlAddressParts(normalizedAddress) {
 }
 
 function parseBracketedAddressParts(normalizedAddress) {
-  if (!normalizedAddress.startsWith('[')) {
+  if (!normalizedAddress.startsWith(LOCAL_STR_1PLYW)) {
     return null;
   }
 
@@ -188,7 +197,7 @@ function formatHostForWebSocketUrl(host) {
   if (typeof host !== TYPEOF.STRING || host.length === NUM.ZERO) {
     return null;
   }
-  return host.includes(':') && !host.startsWith('[') ?
+  return host.includes(LOCAL_STR_COLON) && !host.startsWith(LOCAL_STR_1PLYW) ?
     `[${host}]` :
     host;
 }
@@ -202,18 +211,18 @@ function buildWebSocketAddress(host, port) {
 }
 
 function isIpv4Literal(host) {
-  return /^\d{1,3}(?:\.\d{1,3}){3}$/.test(String(host || ''));
+  return /^\d{1,3}(?:\.\d{1,3}){3}$/.test(String(host || LOCAL_STR_EMPTY));
 }
 
 function isIpv6Literal(host) {
-  return String(host || '').includes(':');
+  return String(host || LOCAL_STR_EMPTY).includes(LOCAL_STR_COLON);
 }
 
 function isLocalOnlyHost(host) {
   const normalized = String(host || '').toLowerCase();
   return normalized === HOST.LOCALHOST ||
-    normalized === '127.0.0.1' ||
-    normalized === '::1';
+    normalized === LOCAL_STR_127_0_0_1 ||
+    normalized === LOCAL_STR_1;
 }
 
 function isIpLiteral(host) {
@@ -272,8 +281,8 @@ function resolveExplicitAdvertisedWebSocketAddress(
 
   const parsedExplicit = parseAddressPartsResult(explicitAddress);
   return buildWebSocketAddress(
-    readParsedAddressPartValue(parsedExplicit, 'host'),
-    readParsedAddressPartValue(parsedExplicit, 'port') || explicitWsPort,
+    readParsedAddressPartValue(parsedExplicit, LOCAL_STR_HOST),
+    readParsedAddressPartValue(parsedExplicit, LOCAL_STR_PORT) || explicitWsPort,
   );
 }
 

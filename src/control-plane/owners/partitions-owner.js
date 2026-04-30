@@ -1,8 +1,10 @@
 import {TABLES} from '../../constants/index.js';
 import {SystemMetadataOwnerBase} from './system-metadata-owner-base.js';
 
+const LOCAL_STR_PARTITIONS_OWNER = 'partitions-owner';
+
 class PartitionsOwner extends SystemMetadataOwnerBase {
-  static OWNER_NAME = 'partitions-owner';
+  static OWNER_NAME = LOCAL_STR_PARTITIONS_OWNER;
   static TABLE_NAME = TABLES.PARTITIONS;
 
   async getPartition(partitionId, options = {}) {

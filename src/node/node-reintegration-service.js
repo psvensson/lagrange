@@ -31,6 +31,9 @@ import {
   NODE_STATUS,
 } from './node-constants.js';
 
+const LOCAL_STR_STRING = 'string';
+const LOCAL_NUM_ZERO = 0;
+
 const NodeStatus = NODE_STATUS;
 const ReintegrationStatus = NODE_REINTEGRATION_STATUS;
 
@@ -38,7 +41,7 @@ function buildObservedNodeWhereClause(node) {
   const whereClause = {
     node_id: node.node_id,
   };
-  if (typeof node?.status === 'string' && node.status.length > 0) {
+  if (typeof node?.status === LOCAL_STR_STRING && node.status.length > LOCAL_NUM_ZERO) {
     whereClause.status = node.status;
   }
   if (Number.isFinite(node?.last_heartbeat)) {

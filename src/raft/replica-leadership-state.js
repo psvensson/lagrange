@@ -1,7 +1,9 @@
 import {TYPEOF} from '../constants/index.js';
 
+const LOCAL_NUM_ZERO = 0;
+
 function normalizeReplicaLeaderId(nextLeaderId, options = {}) {
-  if (typeof nextLeaderId !== TYPEOF.STRING || nextLeaderId.length === 0) {
+  if (typeof nextLeaderId !== TYPEOF.STRING || nextLeaderId.length === LOCAL_NUM_ZERO) {
     return null;
   }
   const normalizeLeaderId =
@@ -13,7 +15,7 @@ function normalizeReplicaLeaderId(nextLeaderId, options = {}) {
   }
   const normalizedLeaderId = normalizeLeaderId(nextLeaderId);
   return typeof normalizedLeaderId === TYPEOF.STRING &&
-    normalizedLeaderId.length > 0 ?
+    normalizedLeaderId.length > LOCAL_NUM_ZERO ?
     normalizedLeaderId :
     nextLeaderId;
 }

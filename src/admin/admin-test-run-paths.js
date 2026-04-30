@@ -20,6 +20,16 @@ import {
   ADMIN_TEST_RUN_PATH,
 } from './admin-constants.js';
 
+const LOCAL_STR_STRING = 'string';
+const LOCAL_STR_EVENTS = 'events';
+const LOCAL_STR_SAMPLES = 'samples';
+const LOCAL_STR_SNAPSHOTS = 'snapshots';
+const LOCAL_STR_FOLLOW = 'follow';
+const LOCAL_STR_1 = '1';
+const LOCAL_STR_AUTOPLAY = 'autoplay';
+const LOCAL_STR_RUNID = 'runId';
+const LOCAL_NUM_ZERO = 0;
+
 const PATH_SEPARATOR_WEB = '/';
 const EMPTY_STRING = '';
 const LEADING_SLASH_REGEX = /^\/+/;
@@ -89,7 +99,7 @@ function buildRunPlaybackOutputDir(runId) {
  * @return {string|null}
  */
 function buildScenarioOutputDir(scenarioName, runId = null) {
-  if (!scenarioName || typeof scenarioName !== 'string') {
+  if (!scenarioName || typeof scenarioName !== LOCAL_STR_STRING) {
     return null;
   }
   return join(
@@ -152,25 +162,25 @@ function buildScenarioPlaybackPaths(scenarioName, runId = null) {
 function buildLivePlaybackViewerUrl(payload, options = {}) {
   const params = new URLSearchParams();
   if (payload?.eventsUrl) {
-    params.set('events', payload.eventsUrl);
+    params.set(LOCAL_STR_EVENTS, payload.eventsUrl);
   }
   if (payload?.samplesUrl) {
-    params.set('samples', payload.samplesUrl);
+    params.set(LOCAL_STR_SAMPLES, payload.samplesUrl);
   }
   if (payload?.snapshotsUrl) {
-    params.set('snapshots', payload.snapshotsUrl);
+    params.set(LOCAL_STR_SNAPSHOTS, payload.snapshotsUrl);
   }
   if (options.follow) {
-    params.set('follow', '1');
+    params.set(LOCAL_STR_FOLLOW, LOCAL_STR_1);
   }
   if (options.autoplay) {
-    params.set('autoplay', '1');
+    params.set(LOCAL_STR_AUTOPLAY, LOCAL_STR_1);
   }
   if (options.runId) {
-    params.set('runId', options.runId);
+    params.set(LOCAL_STR_RUNID, options.runId);
   }
   if (Number.isFinite(Number(options.runStartMs)) &&
-    Number(options.runStartMs) > 0) {
+    Number(options.runStartMs) > LOCAL_NUM_ZERO) {
     params.set(
       PLAYBACK_RUN_START_QUERY_KEY,
       String(Math.floor(Number(options.runStartMs))),
@@ -215,7 +225,7 @@ function buildPlaybackViewerUrl(
 function normalizeWorkspaceRelativePath(
   maybePath, outputDir, workspaceRoot,
 ) {
-  if (!maybePath || typeof maybePath !== 'string') {
+  if (!maybePath || typeof maybePath !== LOCAL_STR_STRING) {
     return null;
   }
   const absolutePath = resolve(workspaceRoot, maybePath);
@@ -238,7 +248,7 @@ function toOutputWebPath(
   outputRelativePath, outputDir, workspaceRoot,
 ) {
   if (!outputRelativePath ||
-    typeof outputRelativePath !== 'string') {
+    typeof outputRelativePath !== LOCAL_STR_STRING) {
     return null;
   }
   const absolutePath = resolve(workspaceRoot, outputRelativePath);

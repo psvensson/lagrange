@@ -8,6 +8,13 @@ import {
   resolveControlPlaneSnapshotRevisionMetadata,
 } from './control-plane-snapshot-revision.js';
 
+const LOCAL_STR_STRING = 'string';
+const LOCAL_STR_EMPTY = '';
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_STR_OBJECT = 'object';
+const LOCAL_STR_FUNCTION = 'function';
+const LOCAL_STR_PHT46 = 'Authoritative service discovery repair failed';
+
 const CONTROL_PLANE_SNAPSHOT_OBSERVATION_STATE = Object.freeze({
   FRESH: 'fresh',
   STALE_BUT_USABLE: 'stale_usable',
@@ -36,8 +43,8 @@ const CONTROL_PLANE_SNAPSHOT_REASON_CODE = Object.freeze({
 function normalizeDistinctStringArray(values = []) {
   return [...new Set(
     (Array.isArray(values) ? values : [])
-      .map((value) => typeof value === 'string' ? value.trim() : '')
-      .filter((value) => value.length > 0),
+      .map((value) => typeof value === LOCAL_STR_STRING ? value.trim() : LOCAL_STR_EMPTY)
+      .filter((value) => value.length > LOCAL_NUM_ZERO),
   )].sort();
 }
 
@@ -46,7 +53,7 @@ function normalizeRetryAfterMs(value) {
     return null;
   }
   const parsedValue = Number(value);
-  if (!Number.isFinite(parsedValue) || parsedValue < 0) {
+  if (!Number.isFinite(parsedValue) || parsedValue < LOCAL_NUM_ZERO) {
     return null;
   }
   return Math.floor(parsedValue);
@@ -94,7 +101,7 @@ function buildSnapshotObservation(snapshot, options = {}) {
 }
 
 function attachSnapshotObservation(snapshot, observation) {
-  if (!snapshot || typeof snapshot !== 'object') {
+  if (!snapshot || typeof snapshot !== LOCAL_STR_OBJECT) {
     return snapshot;
   }
   snapshot.snapshotObservation = observation;
@@ -386,7 +393,7 @@ class ControlPlaneSnapshotOwner {
 
   resolveRepairDecision(repairOptions = {}) {
     if (typeof this.serviceDiscovery?.buildAuthoritativeDiscoveryRepairScheduleDecision !==
-      'function') {
+      LOCAL_STR_FUNCTION) {
       return {
         state: CONTROL_PLANE_SNAPSHOT_REFRESH_STATE.IDLE,
         repair: null,
@@ -396,7 +403,7 @@ class ControlPlaneSnapshotOwner {
       this.serviceDiscovery.buildAuthoritativeDiscoveryRepairScheduleDecision(
         repairOptions,
       );
-    return repairDecision && typeof repairDecision === 'object' ?
+    return repairDecision && typeof repairDecision === LOCAL_STR_OBJECT ?
       repairDecision :
       {
         state: CONTROL_PLANE_SNAPSHOT_REFRESH_STATE.IDLE,
@@ -440,7 +447,7 @@ class ControlPlaneSnapshotOwner {
       repairEvaluation?.triggerCodes,
     );
     if (typeof this.controlSnapshot?.forceAuthoritativeControlSnapshotRepair ===
-      'function') {
+      LOCAL_STR_FUNCTION) {
       const repairedSnapshot =
         await this.controlSnapshot.forceAuthoritativeControlSnapshotRepair(
           options,
@@ -495,7 +502,7 @@ class ControlPlaneSnapshotOwner {
         triggerCodes: reasonCodes,
       });
     if (repair?.applied !== true) {
-      throw new Error('Authoritative service discovery repair failed');
+      throw new Error(LOCAL_STR_PHT46);
     }
     const repairedSnapshot =
       await this.serviceDiscovery.buildLocalServiceDiscoverySnapshot(options);

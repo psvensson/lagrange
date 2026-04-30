@@ -52,6 +52,11 @@ import {
 import {createBootstrapCacheHydrationApplier} from
   '../bootstrap-cache-hydration-applier.js';
 
+const LOCAL_STR_FUNCTION = 'function';
+const LOCAL_STR_1IES0 = 'Deferring seed partition service row activation during startup';
+const LOCAL_STR_INSERT = 'INSERT';
+const LOCAL_STR_1O7VI = 'direct_bootstrap_seed';
+
 const EPOCH_EXISTS_SQL = BOOTSTRAP_SQL.EPOCH_EXISTS;
 const REGISTRATION_REQUIRED_LEADER_TABLES = Object.freeze([
   SYSTEM_TABLE_NAME.PARTITIONS,
@@ -241,13 +246,13 @@ class SeedRegistrationPhase {
     await activatePartitionServiceRows({
       nodeId,
       systemTableWriter,
-      messageRouter: typeof d.getMessageRouter === 'function' ?
+      messageRouter: typeof d.getMessageRouter === LOCAL_STR_FUNCTION ?
         d.getMessageRouter() :
         null,
       deferTransientFailures: true,
       onDeferredActivation: ({partitionId, replicaId, error}) => {
         logger.warn(
-          'Deferring seed partition service row activation during startup',
+          LOCAL_STR_1IES0,
           {
             nodeId,
             partitionId,
@@ -320,7 +325,7 @@ class SeedRegistrationPhase {
       createBootstrapCacheHydrationApplier(systemTableCache);
     applyBootstrapCacheHydration(
       tableName,
-      'INSERT',
+      LOCAL_STR_INSERT,
       row,
     );
   }
@@ -485,7 +490,7 @@ class SeedRegistrationPhase {
       }
     } else {
       logger.debug(BOOTSTRAP_LOG_MSG.CONFIG_LEADER_MISSING, {
-        strategy: 'direct_bootstrap_seed',
+        strategy: LOCAL_STR_1O7VI,
       });
     }
 

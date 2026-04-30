@@ -27,8 +27,73 @@ import {
   resolveReadProfileOptions,
 } from './control-plane-system-table-gateway-shared.js';
 import {
+  SYSTEM_TABLE_NAME,
+} from '../bootstrap/system-table-schemas-constants.js';
+import {
   ControlPlaneSystemTableGatewaySegment2,
 } from './control-plane-system-table-gateway-segment-2.js';
+
+const LOCAL_STR_1IXG4 = 'mutationSingleFlightJoinCount';
+const GATEWAY_REPLICA_OPERATION_ID_FIELD = 'operation_id';
+const GATEWAY_REPLICA_OPERATION_COALESCING_KEY_PREFIX =
+  'replica-operation';
+const GATEWAY_REPLICA_OPERATION_COALESCING_KEY_SEPARATOR = ':';
+
+function normalizeGatewayReplicaOperationMutationId(value) {
+  return typeof value === TYPEOF.STRING && value.length > NUM.ZERO ?
+    value :
+    null;
+}
+
+function buildGatewayReplicaOperationMutationCoalescingKey(operationId) {
+  const normalizedOperationId =
+    normalizeGatewayReplicaOperationMutationId(operationId);
+  if (!normalizedOperationId) {
+    return null;
+  }
+  return [
+    GATEWAY_REPLICA_OPERATION_COALESCING_KEY_PREFIX,
+    normalizedOperationId,
+  ].join(GATEWAY_REPLICA_OPERATION_COALESCING_KEY_SEPARATOR);
+}
+
+function resolveGatewayReplicaOperationMutationId(mutation = {}) {
+  const candidateIds = [
+    mutation?.row?.[GATEWAY_REPLICA_OPERATION_ID_FIELD],
+    mutation?.whereClause?.[GATEWAY_REPLICA_OPERATION_ID_FIELD],
+    mutation?.data?.[GATEWAY_REPLICA_OPERATION_ID_FIELD],
+  ];
+  const operationId = candidateIds.find((candidate) => {
+    return normalizeGatewayReplicaOperationMutationId(candidate);
+  });
+  return normalizeGatewayReplicaOperationMutationId(operationId);
+}
+
+function applyReplicaOperationMutationCoalescingFallback(
+  tableName,
+  mutation,
+  options = {},
+) {
+  if (tableName !== SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) {
+    return options;
+  }
+  if (
+    typeof options?.coalescingKey === TYPEOF.STRING &&
+    options.coalescingKey.length > NUM.ZERO
+  ) {
+    return options;
+  }
+  const coalescingKey = buildGatewayReplicaOperationMutationCoalescingKey(
+    resolveGatewayReplicaOperationMutationId(mutation),
+  );
+  if (!coalescingKey) {
+    return options;
+  }
+  return {
+    ...options,
+    coalescingKey,
+  };
+}
 
 class ControlPlaneSystemTableGatewaySegment3 extends ControlPlaneSystemTableGatewaySegment2 {
   async readRows(tableName, sql, params = [], options = {}) {
@@ -311,7 +376,12 @@ class ControlPlaneSystemTableGatewaySegment3 extends ControlPlaneSystemTableGate
       operation,
       tableName,
     );
-    let writeOptions = this.buildWriteOptions(options, {
+    const mutationOptions = applyReplicaOperationMutationCoalescingFallback(
+      tableName,
+      normalizedMutation,
+      options,
+    );
+    let writeOptions = this.buildWriteOptions(mutationOptions, {
       tableName,
       operationKind: operation,
     });
@@ -471,7 +541,7 @@ class ControlPlaneSystemTableGatewaySegment3 extends ControlPlaneSystemTableGate
           requestKey,
           executionFactory,
           {
-            joinMetricName: 'mutationSingleFlightJoinCount',
+            joinMetricName: LOCAL_STR_1IXG4,
             maxTrackedRequests: this.gatewayLimits.maxTrackedMutationRequests,
           },
         ),

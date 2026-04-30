@@ -38,6 +38,14 @@ import {
   createMessageGroupWorkerServiceRuntimeMethods,
 } from './message-group-worker-service-runtime-methods.js';
 
+const LOCAL_STR_FUNCTION = 'function';
+const LOCAL_STR_JOURNAL_MODE_WAL = 'journal_mode = WAL';
+const LOCAL_STR_FA5IJ = 'MessageGroupWorkerService stopped before CDC commit';
+const LOCAL_STR_L556Q = 'Failed to subscribe to partition CDC';
+const LOCAL_STR_1CVR7 = 'Failed to unsubscribe from partition CDC';
+const LOCAL_STR_STRING = 'string';
+const LOCAL_STR_OK = 'ok';
+
 /**
  * Default configuration values for MessageGroupWorkerService.
  * @type {Readonly<Object>}
@@ -136,7 +144,7 @@ const RAFT_PACKET_TYPE_APPEND_ACK = 'append ack';
 const RAFT_PACKET_TYPE_APPEND_FAIL = 'append fail';
 
 function isPromiseLike(value) {
-  return !!value && typeof value.then === 'function';
+  return !!value && typeof value.then === LOCAL_STR_FUNCTION;
 }
 
 const MESSAGE_GROUP_WORKER_SERVICE_RUNTIME_METHODS =
@@ -280,7 +288,7 @@ class MessageGroupWorkerService extends ReplicaWorkerBase {
     this.logDb = new Database(
       MESSAGE_GROUP_WORKER_DEFAULT.MEMORY_DB_PATH,
     );
-    this.logDb.pragma('journal_mode = WAL');
+    this.logDb.pragma(LOCAL_STR_JOURNAL_MODE_WAL);
 
     // Create SQLite log adapter for liferaft
     this.logAdapter = new SQLiteLogAdapter(this.logDb);
@@ -510,7 +518,7 @@ class MessageGroupWorkerService extends ReplicaWorkerBase {
     }
 
     this.clearPendingCDCCommits(
-      'MessageGroupWorkerService stopped before CDC commit',
+      LOCAL_STR_FA5IJ,
     );
 
     // Shutdown RaftGroup
@@ -586,7 +594,7 @@ class MessageGroupWorkerService extends ReplicaWorkerBase {
           this.cdcSubscriptions.add(partitionAddress);
         }
       } catch (error) {
-        this.logger.warn('Failed to subscribe to partition CDC', {
+        this.logger.warn(LOCAL_STR_L556Q, {
           groupId: this.groupId,
           partitionAddress,
           error: error.message,
@@ -629,7 +637,7 @@ class MessageGroupWorkerService extends ReplicaWorkerBase {
         }
       } catch (error) {
         this.logger.warn(
-          'Failed to unsubscribe from partition CDC',
+          LOCAL_STR_1CVR7,
           {
             groupId: this.groupId,
             partitionAddress,
@@ -1025,7 +1033,7 @@ class MessageGroupWorkerService extends ReplicaWorkerBase {
    */
   resolveLeaderAddress() {
     const leaderId = this.getLeaderId();
-    if (!leaderId || typeof leaderId !== 'string') {
+    if (!leaderId || typeof leaderId !== LOCAL_STR_STRING) {
       return null;
     }
 
@@ -1201,7 +1209,7 @@ class MessageGroupWorkerService extends ReplicaWorkerBase {
     if (this.raftGroup) {
       this.raftGroup.startElection();
     }
-    return {status: 'ok', replicaId: this.replicaId};
+    return {status: LOCAL_STR_OK, replicaId: this.replicaId};
   }
 
   /**

@@ -3,6 +3,9 @@ import {CACHE_HYDRATION_TABLES} from '../cache/cache-constants.js';
 import {NUM, TABLES, TYPEOF} from '../constants/index.js';
 import {normalizeNodeRow} from '../control-plane/system-row-normalizers.js';
 
+const LOCAL_STR_ACTIVE = 'active';
+const LOCAL_STR_8XO15 = 'bootstrap topology snapshot requires systemTableCache.getAll';
+
 const DEFAULT_TOPOLOGY_EPOCH = NUM.ZERO;
 
 function resolvePublishedTopologyEpoch(systemTableCache, currentEpoch) {
@@ -27,7 +30,7 @@ function resolveActiveNodeIds(nodeRows) {
     if (nodeId.length === NUM.ZERO) {
       continue;
     }
-    if (status === 'active') {
+    if (status === LOCAL_STR_ACTIVE) {
       activeNodeIds.add(nodeId);
     }
   }
@@ -40,7 +43,7 @@ function buildBootstrapTopologySnapshotEnvelope(options = {}) {
     'bootstrap topology snapshot requires systemTableCache',
   );
   if (typeof systemTableCache.getAll !== TYPEOF.FUNCTION) {
-    throw new Error('bootstrap topology snapshot requires systemTableCache.getAll');
+    throw new Error(LOCAL_STR_8XO15);
   }
 
   const hydrationTables = Array.isArray(options.hydrationTables) ?

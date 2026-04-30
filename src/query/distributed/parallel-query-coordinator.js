@@ -17,6 +17,8 @@ import {
   QUERY_SUBSYSTEM,
 } from '../query-constants.js';
 
+const LOCAL_NUM_ZERO = 0;
+
 const QUERY_ID_PREFIX = 'q-';
 const QUERY_CANCELLED_ERROR = 'Query cancelled';
 
@@ -432,7 +434,7 @@ class ParallelQueryCoordinator {
   buildPartitionChunks(partitionIds) {
     const chunkSize = Math.max(this.maxParallelPartitions, NUM.ONE);
     const chunks = [];
-    for (let index = 0; index < partitionIds.length; index += chunkSize) {
+    for (let index = LOCAL_NUM_ZERO; index < partitionIds.length; index += chunkSize) {
       chunks.push(partitionIds.slice(index, index + chunkSize));
     }
     return chunks;

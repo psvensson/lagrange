@@ -15,21 +15,86 @@
 
 import {BaseView, ROW_STATUS} from '../core/base-view.js';
 
+const LOCAL_STR_ERROR = 'ERROR';
+const LOCAL_STR_WARN = 'WARN';
+const LOCAL_STR_INFO = 'INFO';
+const LOCAL_STR_DEBUG = 'DEBUG';
+const LOCAL_STR_TRACE = 'TRACE';
+const LOCAL_STR_RED = 'red';
+const LOCAL_STR_YELLOW = 'yellow';
+const LOCAL_STR_WHITE = 'white';
+const LOCAL_STR_GRAY = 'gray';
+const LOCAL_STR_LOGS = 'logs';
+const LOCAL_STR_TIMESTAMP = 'timestamp';
+const LOCAL_STR_DESC = 'desc';
+const LOCAL_STR_1RDRD = 'livequery:initialized';
+const LOCAL_STR_VIEW_REFRESH = 'view:refresh';
+const LOCAL_STR_LIVEQUERY_EVENT = 'livequery:event';
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_STR_NULL = 'NULL';
+const LOCAL_STR_NUMBER = 'number';
+const LOCAL_STR_BOOLEAN = 'boolean';
+const LOCAL_STR_1 = '1';
+const LOCAL_STR_0 = '0';
+const LOCAL_STR_Y2288 = '\'\'';
+const LOCAL_STR_AND = ' AND ';
+const LOCAL_STR_EMPTY = '';
+const LOCAL_STR_TIMESTAMP_2 = 'Timestamp';
+const LOCAL_NUM_24 = 24;
+const LOCAL_STR_LEVEL = 'level';
+const LOCAL_STR_LEVEL_2 = 'Level';
+const LOCAL_NUM_EIGHT = 8;
+const LOCAL_STR_NODE_ID = 'node_id';
+const LOCAL_STR_NODE_ID_2 = 'Node ID';
+const LOCAL_NUM_15 = 15;
+const LOCAL_STR_SERVICE_ID = 'service_id';
+const LOCAL_STR_SERVICE_ID_2 = 'Service ID';
+const LOCAL_NUM_20 = 20;
+const LOCAL_STR_MESSAGE = 'message';
+const LOCAL_STR_MESSAGE_2 = 'Message';
+const LOCAL_NUM_60 = 60;
+const LOCAL_STR_N_A = 'N/A';
+const LOCAL_STR_T = 'T';
+const LOCAL_STR_SPACE = ' ';
+const LOCAL_NUM_23 = 23;
+const LOCAL_NUM_80 = 80;
+const LOCAL_NUM_THREE = 3;
+const LOCAL_STR_2ZI04 = '...';
+const LOCAL_STR_STRING = 'string';
+const LOCAL_STR_1D7VE = '\\$&';
+const LOCAL_NUM_ONE = 1;
+const LOCAL_STR_ASC = 'asc';
+const LOCAL_STR_SHOWDETAIL = 'showDetail';
+const LOCAL_STR_ENTER = 'enter';
+const LOCAL_STR_RETURN = 'return';
+const LOCAL_STR_OBJECT = 'object';
+const LOCAL_STR_METADATA = 'Metadata';
+const LOCAL_STR_UNKNOWN = 'Unknown';
+const LOCAL_STR_TIME_RANGE_ACTIVE = 'Time range active';
+const LOCAL_STR_JSON = 'json';
+const LOCAL_STR_CSV = 'csv';
+const LOCAL_STR_TEXT = 'text';
+const LOCAL_NUM_TWO = 2;
+const LOCAL_STR_192RZ = 'timestamp,level,node_id,service_id,message';
+const LOCAL_STR_COMMA = ',';
+const LOCAL_STR_NEWLINE = '\n';
+const LOCAL_STR_NO_LOGS_TO_EXPORT = 'No logs to export';
+
 /**
  * Log levels in order of severity
  */
-export const LOG_LEVELS = ['ERROR', 'WARN', 'INFO', 'DEBUG', 'TRACE'];
+export const LOG_LEVELS = [LOCAL_STR_ERROR, LOCAL_STR_WARN, LOCAL_STR_INFO, LOCAL_STR_DEBUG, LOCAL_STR_TRACE];
 
 /**
  * Color mappings for log levels
  * Requirements: 29.8
  */
 export const LOG_LEVEL_COLORS = {
-  ERROR: 'red',
-  WARN: 'yellow',
-  INFO: 'white',
-  DEBUG: 'gray',
-  TRACE: 'gray',
+  ERROR: LOCAL_STR_RED,
+  WARN: LOCAL_STR_YELLOW,
+  INFO: LOCAL_STR_WHITE,
+  DEBUG: LOCAL_STR_GRAY,
+  TRACE: LOCAL_STR_GRAY,
 };
 
 const LOGS_QUERY_LIMIT = 200;
@@ -92,7 +157,7 @@ export class LogsView extends BaseView {
     this.connectionManager = options.connectionManager || null;
     this.liveQueryManager = options.liveQueryManager || null;
     this.liveQueryEnabled = options.liveQueryEnabled === true;
-    this.viewName = 'logs';
+    this.viewName = LOCAL_STR_LOGS;
 
     // Multi-criteria filter state
     this.levelFilter = null;
@@ -103,8 +168,8 @@ export class LogsView extends BaseView {
     this.messageFilter = null;
 
     // Default sort by timestamp descending (most recent first)
-    this.sortColumn = 'timestamp';
-    this.sortDirection = 'desc';
+    this.sortColumn = LOCAL_STR_TIMESTAMP;
+    this.sortDirection = LOCAL_STR_DESC;
 
     // Streaming state (kept for API compat; actual streaming
     // is driven by live query events)
@@ -156,7 +221,7 @@ export class LogsView extends BaseView {
       return;
     }
 
-    this.eventBus.on('livequery:initialized', (event) => {
+    this.eventBus.on(LOCAL_STR_1RDRD, (event) => {
       if (!this.activeSubscriptionId) {
         return;
       }
@@ -165,10 +230,10 @@ export class LogsView extends BaseView {
       }
       const rows = Array.isArray(event.data) ? event.data : [];
       this.applySnapshotRows(rows);
-      this.eventBus.emit('view:refresh', {view: this});
+      this.eventBus.emit(LOCAL_STR_VIEW_REFRESH, {view: this});
     });
 
-    this.eventBus.on('livequery:event', (event) => {
+    this.eventBus.on(LOCAL_STR_LIVEQUERY_EVENT, (event) => {
       if (!this.activeSubscriptionId) {
         return;
       }
@@ -178,7 +243,7 @@ export class LogsView extends BaseView {
       const eventType = (event.eventType || '').toUpperCase();
       if (eventType === LOGS_EVENT_TYPE_SNAPSHOT && Array.isArray(event.data)) {
         this.applySnapshotRows(event.data);
-        this.eventBus.emit('view:refresh', {view: this});
+        this.eventBus.emit(LOCAL_STR_VIEW_REFRESH, {view: this});
         return;
       }
 
@@ -194,7 +259,7 @@ export class LogsView extends BaseView {
           const existingIndex = this.data.findIndex((log) =>
             this.getItemKey(log) === incomingLogId,
           );
-          if (existingIndex >= 0) {
+          if (existingIndex >= LOCAL_NUM_ZERO) {
             this.data[existingIndex] = incomingLog;
             replaced = true;
           }
@@ -208,7 +273,7 @@ export class LogsView extends BaseView {
         if (incomingLogId) {
           this.markLogAsChanged(incomingLogId);
         }
-        this.eventBus.emit('view:refresh', {view: this});
+        this.eventBus.emit(LOCAL_STR_VIEW_REFRESH, {view: this});
         return;
       }
 
@@ -224,7 +289,7 @@ export class LogsView extends BaseView {
         if (this.data.length !== previousLength) {
           this.updateFilteredData();
           this.restoreSelectionByLogId(selectedLogId);
-          this.eventBus.emit('view:refresh', {view: this});
+          this.eventBus.emit(LOCAL_STR_VIEW_REFRESH, {view: this});
         }
       }
     });
@@ -238,7 +303,7 @@ export class LogsView extends BaseView {
   buildLiveLogsQuery() {
     const conditions = this.buildLiveLogsWhereConditions();
     let sql = `${LOGS_QUERY_LIVE_PREFIX}${LOGS_QUERY_SELECT_ALL} FROM ${LOGS_TABLE}`;
-    if (conditions.length > 0) {
+    if (conditions.length > LOCAL_NUM_ZERO) {
       sql += `${LOGS_QUERY_WHERE}${conditions.join(LOGS_QUERY_AND)}`;
     }
     sql += LOGS_QUERY_ORDER_BY_CLAUSE;
@@ -296,15 +361,15 @@ export class LogsView extends BaseView {
    */
   quoteSqlLiteral(value) {
     if (value === null || value === undefined) {
-      return 'NULL';
+      return LOCAL_STR_NULL;
     }
-    if (typeof value === 'number') {
+    if (typeof value === LOCAL_STR_NUMBER) {
       return String(Math.trunc(value));
     }
-    if (typeof value === 'boolean') {
-      return value ? '1' : '0';
+    if (typeof value === LOCAL_STR_BOOLEAN) {
+      return value ? LOCAL_STR_1 : LOCAL_STR_0;
     }
-    return `'${String(value).replace(/'/g, '\'\'')}'`;
+    return `'${String(value).replace(/'/g, LOCAL_STR_Y2288)}'`;
   }
 
   /**
@@ -343,8 +408,8 @@ export class LogsView extends BaseView {
     }
 
     let sql = `SELECT * FROM ${LOGS_TABLE}`;
-    if (conditions.length > 0) {
-      sql += ` WHERE ${conditions.join(' AND ')}`;
+    if (conditions.length > LOCAL_NUM_ZERO) {
+      sql += ` WHERE ${conditions.join(LOCAL_STR_AND)}`;
     }
     sql += ` ORDER BY ${LOGS_QUERY_ORDER_BY} LIMIT ${LOGS_QUERY_LIMIT}`;
 
@@ -370,7 +435,7 @@ export class LogsView extends BaseView {
     this.restoreSelectionByLogId(selectedLogId);
     this.clearChangedLogHighlights();
 
-    if (previousLogIds.size === 0) {
+    if (previousLogIds.size === LOCAL_NUM_ZERO) {
       return;
     }
 
@@ -393,7 +458,7 @@ export class LogsView extends BaseView {
       return;
     }
     const index = this.filteredData.findIndex((log) => this.getItemKey(log) === logId);
-    if (index >= 0) {
+    if (index >= LOCAL_NUM_ZERO) {
       this.selectedIndex = index;
     }
   }
@@ -470,13 +535,13 @@ export class LogsView extends BaseView {
     this.replaceData([{
       log_id: LOGS_QUERY_ERROR_ID,
       timestamp: Date.now(),
-      level: 'ERROR',
+      level: LOCAL_STR_ERROR,
       node_id: LOGS_SYSTEM_NODE_ID,
       service_id: LOGS_SYSTEM_SERVICE_ID,
       message,
     }]);
     if (this.eventBus) {
-      this.eventBus.emit('view:refresh', {view: this});
+      this.eventBus.emit(LOCAL_STR_VIEW_REFRESH, {view: this});
     }
   }
 
@@ -556,7 +621,7 @@ export class LogsView extends BaseView {
       return now;
     }
 
-    if (typeof value === 'number') {
+    if (typeof value === LOCAL_STR_NUMBER) {
       const normalized = this.normalizeNumericTimestamp(value);
       if (normalized === null) {
         throw new Error(`${LOGS_SINCE_INVALID_VALUE_PREFIX}${String(value)}`);
@@ -565,7 +630,7 @@ export class LogsView extends BaseView {
     }
 
     const trimmedValue = String(value).trim();
-    if (trimmedValue === '' || trimmedValue.toLowerCase() === LOGS_SINCE_RESET_VALUE) {
+    if (trimmedValue === LOCAL_STR_EMPTY || trimmedValue.toLowerCase() === LOGS_SINCE_RESET_VALUE) {
       return now;
     }
 
@@ -574,7 +639,7 @@ export class LogsView extends BaseView {
       const amount = Number(relativeMatch[1]);
       const unit = relativeMatch[2].toLowerCase();
       const unitMs = LOGS_RELATIVE_UNIT_MILLISECONDS[unit];
-      if (Number.isFinite(amount) && amount >= 0 && Number.isFinite(unitMs)) {
+      if (Number.isFinite(amount) && amount >= LOCAL_NUM_ZERO && Number.isFinite(unitMs)) {
         return now - (amount * unitMs);
       }
     }
@@ -614,11 +679,11 @@ export class LogsView extends BaseView {
    */
   getColumns() {
     return [
-      {key: 'timestamp', label: 'Timestamp', width: 24},
-      {key: 'level', label: 'Level', width: 8},
-      {key: 'node_id', label: 'Node ID', width: 15},
-      {key: 'service_id', label: 'Service ID', width: 20},
-      {key: 'message', label: 'Message', width: 60},
+      {key: LOCAL_STR_TIMESTAMP, label: LOCAL_STR_TIMESTAMP_2, width: LOCAL_NUM_24},
+      {key: LOCAL_STR_LEVEL, label: LOCAL_STR_LEVEL_2, width: LOCAL_NUM_EIGHT},
+      {key: LOCAL_STR_NODE_ID, label: LOCAL_STR_NODE_ID_2, width: LOCAL_NUM_15},
+      {key: LOCAL_STR_SERVICE_ID, label: LOCAL_STR_SERVICE_ID_2, width: LOCAL_NUM_20},
+      {key: LOCAL_STR_MESSAGE, label: LOCAL_STR_MESSAGE_2, width: LOCAL_NUM_60},
     ];
   }
 
@@ -631,9 +696,9 @@ export class LogsView extends BaseView {
   formatRow(log) {
     return [
       this.formatTimestamp(this.getLogTimestampMs(log)),
-      log.level || 'INFO',
-      log.node_id || 'N/A',
-      log.service_id || 'N/A',
+      log.level || LOCAL_STR_INFO,
+      log.node_id || LOCAL_STR_N_A,
+      log.service_id || LOCAL_STR_N_A,
       this.truncateMessage(log.message),
     ];
   }
@@ -653,7 +718,7 @@ export class LogsView extends BaseView {
     if (isNaN(date.getTime())) {
       return LOGS_TIMESTAMP_UNAVAILABLE;
     }
-    return date.toISOString().replace('T', ' ').substring(0, 23);
+    return date.toISOString().replace(LOCAL_STR_T, LOCAL_STR_SPACE).substring(LOCAL_NUM_ZERO, LOCAL_NUM_23);
   }
 
   /**
@@ -662,16 +727,16 @@ export class LogsView extends BaseView {
    * @param {number} maxLength - Maximum length
    * @return {string} Truncated message
    */
-  truncateMessage(message, maxLength = 80) {
+  truncateMessage(message, maxLength = LOCAL_NUM_80) {
     if (!message) {
-      return '';
+      return LOCAL_STR_EMPTY;
     }
     // Replace newlines with spaces for table display
     const singleLine = String(message).replace(/[\r\n]+/g, ' ');
     if (singleLine.length <= maxLength) {
       return singleLine;
     }
-    return singleLine.substring(0, maxLength - 3) + '...';
+    return singleLine.substring(LOCAL_NUM_ZERO, maxLength - LOCAL_NUM_THREE) + LOCAL_STR_2ZI04;
   }
 
   /**
@@ -683,11 +748,11 @@ export class LogsView extends BaseView {
   getRowStatus(log) {
     const level = (log.level || 'INFO').toUpperCase();
 
-    if (level === 'ERROR') {
+    if (level === LOCAL_STR_ERROR) {
       return ROW_STATUS.ERROR;
     }
 
-    if (level === 'WARN') {
+    if (level === LOCAL_STR_WARN) {
       return ROW_STATUS.WARNING;
     }
 
@@ -711,7 +776,7 @@ export class LogsView extends BaseView {
    * @return {string} Unique key (log_id)
    */
   getItemKey(log) {
-    return log.log_id || '';
+    return log.log_id || LOCAL_STR_EMPTY;
   }
 
   /**
@@ -776,7 +841,7 @@ export class LogsView extends BaseView {
     this.startTimeFilter = null;
     this.endTimeFilter = null;
     this.messageFilter = null;
-    this.filter = '';
+    this.filter = LOCAL_STR_EMPTY;
     this.fetchLogs();
   }
 
@@ -796,7 +861,7 @@ export class LogsView extends BaseView {
     // or for data already loaded via setData in tests).
     if (this.levelFilter) {
       result = result.filter((log) =>
-        (log.level || 'INFO').toUpperCase() ===
+        (log.level || LOCAL_STR_INFO).toUpperCase() ===
           this.levelFilter.toUpperCase(),
       );
     }
@@ -827,12 +892,12 @@ export class LogsView extends BaseView {
         this.escapeRegex(this.messageFilter), 'i',
       );
       result = result.filter((log) =>
-        pattern.test(log.message || ''),
+        pattern.test(log.message || LOCAL_STR_EMPTY),
       );
     }
 
     // Apply general text filter from base class
-    if (this.filter && this.filter.trim() !== '') {
+    if (this.filter && this.filter.trim() !== LOCAL_STR_EMPTY) {
       const lowerFilter = this.filter.toLowerCase();
       result = result.filter((item) => {
         const values = Object.values(item);
@@ -856,12 +921,12 @@ export class LogsView extends BaseView {
       return null;
     }
 
-    if (typeof timestamp === 'number') {
+    if (typeof timestamp === LOCAL_STR_NUMBER) {
       return this.normalizeNumericTimestamp(timestamp);
     }
-    if (typeof timestamp === 'string') {
+    if (typeof timestamp === LOCAL_STR_STRING) {
       const trimmedTimestamp = timestamp.trim();
-      if (trimmedTimestamp === '') {
+      if (trimmedTimestamp === LOCAL_STR_EMPTY) {
         return null;
       }
       if (LOGS_TIMESTAMP_INTEGER_REGEX.test(trimmedTimestamp)) {
@@ -914,11 +979,11 @@ export class LogsView extends BaseView {
    * @return {string} Escaped string
    */
   escapeRegex(str) {
-    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return str.replace(/[.*+?^${}()|[\]\\]/g, LOCAL_STR_1D7VE);
   }
 
   resolveSortValue(log) {
-    return this.sortColumn === 'timestamp' ?
+    return this.sortColumn === LOCAL_STR_TIMESTAMP ?
       this.getLogTimestampMs(log) :
       log?.[this.sortColumn];
   }
@@ -927,19 +992,19 @@ export class LogsView extends BaseView {
     const aMissing = aVal === null || aVal === undefined;
     const bMissing = bVal === null || bVal === undefined;
     if (aMissing && bMissing) {
-      return 0;
+      return LOCAL_NUM_ZERO;
     }
     if (aMissing) {
-      return 1;
+      return LOCAL_NUM_ONE;
     }
     if (bMissing) {
-      return -1;
+      return -LOCAL_NUM_ONE;
     }
     return null;
   }
 
   compareResolvedSortValues(aVal, bVal) {
-    if (typeof aVal === 'number' && typeof bVal === 'number') {
+    if (typeof aVal === LOCAL_STR_NUMBER && typeof bVal === LOCAL_STR_NUMBER) {
       return aVal - bVal;
     }
     return String(aVal).localeCompare(String(bVal));
@@ -950,13 +1015,13 @@ export class LogsView extends BaseView {
     const bCreatedAt = this.parseTimestamp(b?.created_at);
     if (aCreatedAt !== null && bCreatedAt !== null) {
       const timestampCompare = aCreatedAt - bCreatedAt;
-      if (timestampCompare !== 0) {
+      if (timestampCompare !== LOCAL_NUM_ZERO) {
         return timestampCompare;
       }
     } else if (aCreatedAt !== null) {
-      return 1;
+      return LOCAL_NUM_ONE;
     } else if (bCreatedAt !== null) {
-      return -1;
+      return -LOCAL_NUM_ONE;
     }
 
     const aId = String(a?.[LOGS_SORT_FALLBACK_ID_FIELD] || '');
@@ -973,7 +1038,7 @@ export class LogsView extends BaseView {
     }
 
     const valueComparison = this.compareResolvedSortValues(aVal, bVal);
-    if (valueComparison !== 0 || this.sortColumn !== 'timestamp') {
+    if (valueComparison !== LOCAL_NUM_ZERO || this.sortColumn !== LOCAL_STR_TIMESTAMP) {
       return valueComparison;
     }
 
@@ -993,7 +1058,7 @@ export class LogsView extends BaseView {
 
     return [...data].sort((a, b) => {
       const comparison = this.compareRowsForCurrentSort(a, b);
-      return this.sortDirection === 'asc' ? comparison : -comparison;
+      return this.sortDirection === LOCAL_STR_ASC ? comparison : -comparison;
     });
   }
 
@@ -1009,8 +1074,8 @@ export class LogsView extends BaseView {
     }
 
     return {
-      action: 'showDetail',
-      view: 'logs',
+      action: LOCAL_STR_SHOWDETAIL,
+      view: LOCAL_STR_LOGS,
       context: {logId: selectedLog.log_id},
       detail: this.getSelectedDetails(),
     };
@@ -1022,7 +1087,7 @@ export class LogsView extends BaseView {
    * @return {boolean|Object} True if handled, navigation object, or false
    */
   handleKey(key) {
-    if (key.name === 'enter' || key.name === 'return') {
+    if (key.name === LOCAL_STR_ENTER || key.name === LOCAL_STR_RETURN) {
       return this.handleDrillDown();
     }
     return super.handleKey(key);
@@ -1059,7 +1124,7 @@ export class LogsView extends BaseView {
     ];
 
     // Add metadata section if available
-    if (log.metadata && typeof log.metadata === 'object') {
+    if (log.metadata && typeof log.metadata === LOCAL_STR_OBJECT) {
       const metadataFields = Object.entries(log.metadata).map(
         ([k, v]) => ({
           label: k,
@@ -1067,16 +1132,16 @@ export class LogsView extends BaseView {
         }),
       );
 
-      if (metadataFields.length > 0) {
+      if (metadataFields.length > LOCAL_NUM_ZERO) {
         sections.push({
-          title: 'Metadata',
+          title: LOCAL_STR_METADATA,
           fields: metadataFields,
         });
       }
     }
 
     return {
-      title: `Log: ${log.log_id || 'Unknown'}`,
+      title: `Log: ${log.log_id || LOCAL_STR_UNKNOWN}`,
       sections,
     };
   }
@@ -1087,7 +1152,7 @@ export class LogsView extends BaseView {
    * @return {Object} Time range with start and end
    */
   getTimeRange() {
-    if (this.filteredData.length === 0) {
+    if (this.filteredData.length === LOCAL_NUM_ZERO) {
       return {start: null, end: null};
     }
 
@@ -1130,7 +1195,7 @@ export class LogsView extends BaseView {
       activeFilters.push(`Message: "${this.messageFilter}"`);
     }
     if (this.startTimeFilter || this.endTimeFilter) {
-      activeFilters.push('Time range active');
+      activeFilters.push(LOCAL_STR_TIME_RANGE_ACTIVE);
     }
 
     return {
@@ -1161,15 +1226,15 @@ export class LogsView extends BaseView {
    * @param {string} format - Export format ('json', 'csv', 'text')
    * @return {string} Exported logs as string
    */
-  exportLogs(format = 'json') {
+  exportLogs(format = LOCAL_STR_JSON) {
     const logs = this.filteredData;
 
     switch (format.toLowerCase()) {
-    case 'json':
+    case LOCAL_STR_JSON:
       return this.exportAsJSON(logs);
-    case 'csv':
+    case LOCAL_STR_CSV:
       return this.exportAsCSV(logs);
-    case 'text':
+    case LOCAL_STR_TEXT:
       return this.exportAsText(logs);
     default:
       return this.exportAsJSON(logs);
@@ -1182,7 +1247,7 @@ export class LogsView extends BaseView {
    * @return {string} JSON string
    */
   exportAsJSON(logs) {
-    return JSON.stringify(logs, null, 2);
+    return JSON.stringify(logs, null, LOCAL_NUM_TWO);
   }
 
   /**
@@ -1191,8 +1256,8 @@ export class LogsView extends BaseView {
    * @return {string} CSV string
    */
   exportAsCSV(logs) {
-    if (logs.length === 0) {
-      return 'timestamp,level,node_id,service_id,message';
+    if (logs.length === LOCAL_NUM_ZERO) {
+      return LOCAL_STR_192RZ;
     }
 
     const headers = [
@@ -1216,10 +1281,10 @@ export class LogsView extends BaseView {
         }
         return value;
       });
-      rows.push(row.join(','));
+      rows.push(row.join(LOCAL_STR_COMMA));
     }
 
-    return rows.join('\n');
+    return rows.join(LOCAL_STR_NEWLINE);
   }
 
   /**
@@ -1228,8 +1293,8 @@ export class LogsView extends BaseView {
    * @return {string} Text string
    */
   exportAsText(logs) {
-    if (logs.length === 0) {
-      return 'No logs to export';
+    if (logs.length === LOCAL_NUM_ZERO) {
+      return LOCAL_STR_NO_LOGS_TO_EXPORT;
     }
 
     const lines = [];
@@ -1246,7 +1311,7 @@ export class LogsView extends BaseView {
       );
     }
 
-    return lines.join('\n');
+    return lines.join(LOCAL_STR_NEWLINE);
   }
 
   /**

@@ -17,6 +17,17 @@ import {
   ENDPOINT_SYNC_LABEL,
 } from './endpoint-sync-constants.js';
 
+const LOCAL_STR_COMMA = ',';
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_STR_FEBQQ = 'EndpointSyncK8sClient';
+const LOCAL_STR_REQUEST = 'request';
+const LOCAL_STR_UTF8 = 'utf8';
+const LOCAL_STR_EMPTY = '';
+const LOCAL_STR_V1 = 'v1';
+const LOCAL_STR_EVENT = 'Event';
+const LOCAL_STR_168NE = 'endpoint-sync-controller-';
+const LOCAL_NUM_ONE = 1;
+
 const K8S_DEFAULT = Object.freeze({
   API_HOST: 'kubernetes.default.svc',
   API_PORT_HTTPS: '443',
@@ -91,7 +102,7 @@ function buildLabelSelector() {
   return [
     `${ENDPOINT_SYNC_LABEL.MANAGED_KEY}=${ENDPOINT_SYNC_LABEL.MANAGED_VALUE}`,
     `${ENDPOINT_SYNC_LABEL.SOURCE_KEY}=${ENDPOINT_SYNC_LABEL.SOURCE_VALUE}`,
-  ].join(',');
+  ].join(LOCAL_STR_COMMA);
 }
 
 function buildApiServerUrl() {
@@ -106,7 +117,7 @@ function buildApiServerUrl() {
 function withQuery(path, query = {}) {
   const queryEntries = Object.entries(query)
     .filter(([, value]) => value !== null && value !== undefined && value !== '');
-  if (queryEntries.length === 0) {
+  if (queryEntries.length === LOCAL_NUM_ZERO) {
     return path;
   }
 
@@ -130,8 +141,8 @@ class EndpointSyncK8sClientError extends BaseError {
     super(message, {
       cause,
       context: {
-        component: 'EndpointSyncK8sClient',
-        operation: 'request',
+        component: LOCAL_STR_FEBQQ,
+        operation: LOCAL_STR_REQUEST,
         metadata,
       },
     });
@@ -140,7 +151,7 @@ class EndpointSyncK8sClientError extends BaseError {
 
 async function readOptionalFile(filePath) {
   try {
-    return await readFile(filePath, 'utf8');
+    return await readFile(filePath, LOCAL_STR_UTF8);
   } catch (_error) {
     return null;
   }
@@ -153,9 +164,9 @@ async function readK8sServiceAccountFiles() {
     readOptionalFile(K8S_DEFAULT.SERVICE_ACCOUNT_NAMESPACE_PATH),
   ]);
   return {
-    token: typeof tokenRaw === TYPEOF.STRING ? tokenRaw.trim() : '',
-    caCert: typeof caRaw === TYPEOF.STRING ? caRaw : '',
-    namespace: typeof namespaceRaw === TYPEOF.STRING ? namespaceRaw.trim() : '',
+    token: typeof tokenRaw === TYPEOF.STRING ? tokenRaw.trim() : LOCAL_STR_EMPTY,
+    caCert: typeof caRaw === TYPEOF.STRING ? caRaw : LOCAL_STR_EMPTY,
+    namespace: typeof namespaceRaw === TYPEOF.STRING ? namespaceRaw.trim() : LOCAL_STR_EMPTY,
   };
 }
 
@@ -165,14 +176,14 @@ function buildEventManifest(event) {
   const involvedName = event.serviceName || event.namespace;
 
   return {
-    apiVersion: 'v1',
-    kind: 'Event',
+    apiVersion: LOCAL_STR_V1,
+    kind: LOCAL_STR_EVENT,
     metadata: {
       namespace: event.namespace,
-      generateName: 'endpoint-sync-controller-',
+      generateName: LOCAL_STR_168NE,
     },
     involvedObject: {
-      apiVersion: 'v1',
+      apiVersion: LOCAL_STR_V1,
       kind: involvedKind,
       namespace: event.namespace,
       name: involvedName,
@@ -187,7 +198,7 @@ function buildEventManifest(event) {
     },
     firstTimestamp: nowIso,
     lastTimestamp: nowIso,
-    count: 1,
+    count: LOCAL_NUM_ONE,
   };
 }
 
@@ -229,7 +240,7 @@ class EndpointSyncK8sClient {
     const headers = {
       [HEADER.ACCEPT]: HEADER.APPLICATION_JSON,
     };
-    if (typeof this._token === TYPEOF.STRING && this._token.length > 0) {
+    if (typeof this._token === TYPEOF.STRING && this._token.length > LOCAL_NUM_ZERO) {
       headers[HEADER.AUTHORIZATION] = `Bearer ${this._token}`;
     }
     if (body !== null) {
@@ -245,7 +256,7 @@ class EndpointSyncK8sClient {
 
     let payload = null;
     const rawText = await response.text();
-    if (rawText.length > 0) {
+    if (rawText.length > LOCAL_NUM_ZERO) {
       try {
         payload = JSON.parse(rawText);
       } catch (_error) {
@@ -334,7 +345,7 @@ class EndpointSyncK8sClient {
       updateManifest.spec.clusterIP = existing.spec.clusterIP;
     }
     if (Array.isArray(existing?.spec?.clusterIPs) &&
-      existing.spec.clusterIPs.length > 0) {
+      existing.spec.clusterIPs.length > LOCAL_NUM_ZERO) {
       updateManifest.spec.clusterIPs = existing.spec.clusterIPs;
     }
 
@@ -416,7 +427,7 @@ class EndpointSyncK8sClient {
 
   async updateLease(manifest) {
     const resourceVersion = manifest?.metadata?.resourceVersion || '';
-    if (typeof resourceVersion !== TYPEOF.STRING || resourceVersion.length === 0) {
+    if (typeof resourceVersion !== TYPEOF.STRING || resourceVersion.length === LOCAL_NUM_ZERO) {
       throw new EndpointSyncK8sClientError(
         K8S_CLIENT_ERROR.RESOURCE_VERSION_REQUIRED,
       );
@@ -435,7 +446,7 @@ class EndpointSyncK8sClient {
 
   async recordEvent(event) {
     const namespace = event?.namespace || this._defaultNamespace;
-    if (typeof namespace !== TYPEOF.STRING || namespace.length === 0) {
+    if (typeof namespace !== TYPEOF.STRING || namespace.length === LOCAL_NUM_ZERO) {
       return;
     }
 

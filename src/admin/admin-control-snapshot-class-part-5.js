@@ -88,6 +88,10 @@ function buildLogsTableRetentionDiagnostics() {
       stats.consecutiveDeferredWriteFailures,
     ),
     sharedPressureBackpressured: stats.sharedPressureBackpressured === true,
+    transportPressureBackpressured:
+      stats.transportPressureBackpressured === true,
+    queryPressureBackpressured:
+      stats.queryPressureBackpressured === true,
   };
 }
 function buildCdcReplayRetentionDiagnostics(partitionServices) {

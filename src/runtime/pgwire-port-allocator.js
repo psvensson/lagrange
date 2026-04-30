@@ -31,6 +31,11 @@ import {
   BIND_CONFLICT_CODE,
 } from './pgwire-port-constants.js';
 
+const LOCAL_STR_M7SXD = 'PgwirePortAllocator';
+const LOCAL_STR_VALIDATE = 'validate';
+const LOCAL_STR_BIND = 'bind';
+const LOCAL_NUM_ZERO = 0;
+
 // --- Typed errors ---
 
 /**
@@ -46,8 +51,8 @@ class PortValidationError extends BaseError {
   constructor(reason, metadata = {}) {
     super(reason, {
       context: {
-        component: 'PgwirePortAllocator',
-        operation: 'validate',
+        component: LOCAL_STR_M7SXD,
+        operation: LOCAL_STR_VALIDATE,
         metadata,
       },
     });
@@ -72,8 +77,8 @@ class PortBindConflictError extends BaseError {
       `${PGWIRE_PORT_ERROR.BIND_CONFLICT}: port ${port}`;
     super(msg, {
       context: {
-        component: 'PgwirePortAllocator',
-        operation: 'bind',
+        component: LOCAL_STR_M7SXD,
+        operation: LOCAL_STR_BIND,
         metadata: {port},
       },
     });
@@ -105,7 +110,7 @@ function isValidPort(val) {
  */
 function validatePort(port) {
   if (typeof port !== TYPEOF.NUMBER ||
-      !Number.isInteger(port) || port <= 0) {
+      !Number.isInteger(port) || port <= LOCAL_NUM_ZERO) {
     throw new PortValidationError(
       PGWIRE_PORT_ERROR.PORT_NOT_INTEGER, {port},
     );

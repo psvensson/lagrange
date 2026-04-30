@@ -255,7 +255,7 @@ async (t) => {
 });
 
 test('createOperation re-arms acknowledged remote handoff while the ' +
-  'authoritative priority REPLACE row remains PENDING',
+  'authoritative priority REPLACE row remains dispatchable',
 async (t) => {
   const operationRows = new Map();
   const deferredTimers = [];
@@ -418,12 +418,17 @@ async (t) => {
       'an acknowledged handoff should still arm one follow-up verification while the authoritative row remains PENDING',
     );
 
+    const remoteOwnedRow = operationRows.get(operation.operationId);
+    remoteOwnedRow.workflow_step = WORKFLOW_STEP.SENDING;
+    remoteOwnedRow.status = ReplicaStatus.PENDING;
+    operationRows.set(operation.operationId, remoteOwnedRow);
+
     await deferredTimers[0].fn();
 
     t.equal(
       deliveries.length,
       2,
-      'the follow-up verification should re-send the owner wake-up when the authoritative row is still PENDING',
+      'the follow-up verification should re-send the owner wake-up when the authoritative row is still dispatchable',
     );
   } finally {
     await coordinator.shutdown();

@@ -1,3 +1,8 @@
+const LOCAL_NUM_FIVE = 5;
+const LOCAL_STR_ABFPD = 'Authoritative discovery cache repair failed';
+const LOCAL_STR_LIZAB = 'Authoritative discovery cache repair completed';
+const LOCAL_STR_CONSTRUCTOR = 'constructor';
+
 function assignAdminServiceDiscoveryRepairMethods(
   AdminServiceDiscovery,
   options = {},
@@ -358,7 +363,7 @@ function assignAdminServiceDiscoveryRepairMethods(
           errorCodeSet.add(errorCode);
         }
       }
-      return [...errorCodeSet].slice(NUM.ZERO, 5);
+      return [...errorCodeSet].slice(NUM.ZERO, LOCAL_NUM_FIVE);
     }
 
     extractAuthoritativeDiscoveryRepairErrorCode(errorValue) {
@@ -447,7 +452,7 @@ function assignAdminServiceDiscoveryRepairMethods(
       outcome,
     ) {
       if (outcome.repairApplied !== true) {
-        this.logger?.warn?.('Authoritative discovery cache repair failed', {
+        this.logger?.warn?.(LOCAL_STR_ABFPD, {
           nodeId: this.nodeId,
           reason: options.reason || null,
           tableName: options.tableName || null,
@@ -470,7 +475,7 @@ function assignAdminServiceDiscoveryRepairMethods(
         });
         return;
       }
-      this.logger?.info?.('Authoritative discovery cache repair completed', {
+      this.logger?.info?.(LOCAL_STR_LIZAB, {
         nodeId: this.nodeId,
         reason: options.reason || null,
         tableName: options.tableName || null,
@@ -835,7 +840,7 @@ function assignAdminServiceDiscoveryRepairMethods(
   for (const methodName of Object.getOwnPropertyNames(
     AdminServiceDiscoveryRepairMethods.prototype,
   )) {
-    if (methodName === 'constructor') {
+    if (methodName === LOCAL_STR_CONSTRUCTOR) {
       continue;
     }
     Object.defineProperty(

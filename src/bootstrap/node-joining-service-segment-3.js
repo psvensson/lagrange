@@ -22,6 +22,10 @@ const {
   getControlPlaneMessageRequiredTables,
 } = NODE_JOINING_SERVICE_SHARED;
 
+const JOIN_MESSAGE_GROUP_SERVICE_REGISTRATION_OPTION = Object.freeze({
+  PREFER_CONTROL_PLANE_UPSERT: 'preferControlPlaneUpsert',
+});
+
 class NodeJoiningServiceSegment3 extends NodeJoiningServiceSegment2 {
   async createJoinPartitionReplica(context) {
     const definition = context?.definition || {};
@@ -311,9 +315,24 @@ class NodeJoiningServiceSegment3 extends NodeJoiningServiceSegment2 {
       activateReplica: async ({groupId, replicaId, service}) => {
         await this.registerMessageGroupService(groupId, replicaId, service, {
           status: SERVICE_STATUS.ACTIVE,
+          [JOIN_MESSAGE_GROUP_SERVICE_REGISTRATION_OPTION
+            .PREFER_CONTROL_PLANE_UPSERT]: true,
         });
       },
       messageRouter: this.messageRouter,
+      deferTransientFailures: true,
+      onDeferredActivation: ({groupId, replicaId, error}) => {
+        this.logger.warn(
+          NODE_JOINING_SERVICE_LITERAL
+            .DEFERRING_JOIN_MESSAGE_GROUP_SERVICE_ROW_ACTIVATION,
+          {
+            nodeId: this.nodeId,
+            groupId,
+            replicaId,
+            error: error?.message || String(error),
+          },
+        );
+      },
       messageGroupServiceHandler: this.messageGroupServiceHandler,
       endpointsPublished: this.hasPublishedLocalServiceEndpoints(),
       messageGroupServices: this.messageGroupServices,

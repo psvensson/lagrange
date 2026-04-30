@@ -14,6 +14,7 @@ import {
   ReplicaOperationMessageType,
   ReplicaOperationResponseStatus,
 } from '../../src/rebalancer/replica-operation-constants.js';
+import {OPERATION_WORKFLOW_OWNER_SHARED} from '../../src/rebalancer/operation-workflow-owner-shared.js';
 import {ROUTER_ERROR_MSG} from '../../src/constants/transport.js';
 import {SQLParser} from '../../src/query/sql-parser.js';
 import {MoveType} from '../../src/rebalancer/unified-rebalancer.js';
@@ -70,6 +71,75 @@ const TEST_COMPLETED_REMOVE_CONNECTION_READY = 'ready';
 const TEST_COMPLETED_REMOVE_LEADER_ROLE = 'leader';
 const TEST_COMPLETED_REMOVE_FOLLOWER_ROLE = 'follower';
 const TEST_COMPLETED_REMOVE_READY_LEASE_EXTENSION_MS = 60000;
+const TEST_REPLICA_OPERATION_DISPATCH_DELIVERY_SOURCE =
+  OPERATION_WORKFLOW_OWNER_SHARED.OPERATION_WORKFLOW_OWNER_LITERAL
+    .REPLICA_OPERATION_DISPATCH;
+const TEST_REPLICA_OPERATION_DISPATCH_TIMEOUT_MS =
+  OPERATION_WORKFLOW_OWNER_SHARED.REPLICA_OPERATION_DISPATCH_TIMEOUT_MS;
+const TEST_DISPATCH_DEADLINE_FAST_TIMEOUT_MS = 5;
+const TEST_DISPATCH_DEADLINE_RETRY_POLL_LIMIT = 10;
+const TEST_DISPATCH_DEADLINE_TEST_NAME =
+  'critical dispatch delivery timeout defers a stuck local handler';
+const TEST_DISPATCH_DEADLINE_PARTITION_ID = 'replica_operations-p1';
+const TEST_DISPATCH_DEADLINE_ENTITY_TYPE = 'partition';
+const TEST_DISPATCH_DEADLINE_OWNER_NODE_ID = 'node-dispatch-deadline-owner';
+const TEST_DISPATCH_DEADLINE_SEED_NODE_ID = 'node-dispatch-deadline-seed';
+const TEST_DISPATCH_DEADLINE_PEER_NODE_ID = 'node-dispatch-deadline-peer';
+const TEST_DISPATCH_DEADLINE_SOURCE_REPLICA_ID =
+  'replica_operations-p1-r1';
+const TEST_DISPATCH_DEADLINE_PEER_REPLICA_ID =
+  'replica_operations-p1-r2';
+const TEST_DISPATCH_DEADLINE_SERVICE_TYPE = 'partition';
+const TEST_DISPATCH_DEADLINE_ACTIVE_STATUS = 'active';
+const TEST_DISPATCH_DEADLINE_ADDRESS_PARTITION_SEGMENT = '/partition/';
+const TEST_DEFERRED_RETRY_PENDING_REASON = 'deferred_retry_pending';
+const TEST_RECENT_REPLICA_ID_ALLOCATION_TEST_NAME =
+  'REPLACE allocation skips recently completed target replica ids';
+const TEST_RECENT_REPLICA_ID_PARTITION_ID =
+  'sql_transaction_participants-p1';
+const TEST_RECENT_REPLICA_ID_ENTITY_TYPE = 'partition';
+const TEST_RECENT_REPLICA_ID_SOURCE_NODE_ID = 'node-recent-a';
+const TEST_RECENT_REPLICA_ID_SECOND_NODE_ID = 'node-recent-b';
+const TEST_RECENT_REPLICA_ID_THIRD_NODE_ID = 'node-recent-c';
+const TEST_RECENT_REPLICA_ID_COMPLETED_TARGET_NODE_ID = 'node-recent-d';
+const TEST_RECENT_REPLICA_ID_NEW_TARGET_NODE_ID = 'node-recent-e';
+const TEST_RECENT_REPLICA_ID_SOURCE_REPLICA_ID =
+  'sql_transaction_participants-p1-r1';
+const TEST_RECENT_REPLICA_ID_SECOND_REPLICA_ID =
+  'sql_transaction_participants-p1-r2';
+const TEST_RECENT_REPLICA_ID_THIRD_REPLICA_ID =
+  'sql_transaction_participants-p1-r3';
+const TEST_RECENT_REPLICA_ID_COMPLETED_TARGET_REPLICA_ID =
+  'sql_transaction_participants-p1-r4';
+const TEST_RECENT_REPLICA_ID_NEXT_TARGET_REPLICA_ID =
+  'sql_transaction_participants-p1-r5';
+const TEST_RECENT_REPLICA_ID_COMPLETED_OPERATION_ID =
+  'completed-replace-target-r4';
+const TEST_RECENT_REPLICA_ID_COMPLETED_AGE_MS = 1;
+const TEST_RETIRED_SOURCE_SAFETY_TEST_NAME =
+  'REPLACE creation skips source replica retired by completed replacement';
+const TEST_RETIRED_SOURCE_PARTITION_ID =
+  'sql_transaction_participants-p1';
+const TEST_RETIRED_SOURCE_ENTITY_TYPE = 'partition';
+const TEST_RETIRED_SOURCE_STABLE_NODE_ID = 'node-retired-a';
+const TEST_RETIRED_SOURCE_SECOND_STABLE_NODE_ID = 'node-retired-b';
+const TEST_RETIRED_SOURCE_RETIRED_NODE_ID = 'node-retired-c';
+const TEST_RETIRED_SOURCE_TARGET_NODE_ID = 'node-retired-d';
+const TEST_RETIRED_SOURCE_STABLE_REPLICA_ID =
+  'sql_transaction_participants-p1-r1';
+const TEST_RETIRED_SOURCE_SECOND_STABLE_REPLICA_ID =
+  'sql_transaction_participants-p1-r2';
+const TEST_RETIRED_SOURCE_RETIRED_REPLICA_ID =
+  'sql_transaction_participants-p1-r4';
+const TEST_RETIRED_SOURCE_COMPLETED_TARGET_REPLICA_ID =
+  'sql_transaction_participants-p1-r5';
+const TEST_RETIRED_SOURCE_COMPLETED_OPERATION_ID =
+  'completed-replace-retired-source-r4';
+const TEST_RETIRED_SOURCE_SAFETY_ERROR =
+  'replace source replica already retired by completed operation';
+const TEST_RETIRED_SOURCE_COMPLETED_AGE_MS = 1;
+const TEST_RETIRED_SOURCE_CREATE_ERROR_MESSAGE =
+  'createOperation should reject retired replacement source';
 
 test('REPLACE replica workflow', async (t) => {
   await t.test('MovePlanner emits REPLACE moves for spread correction',
@@ -270,6 +340,166 @@ test('REPLACE replica workflow', async (t) => {
         await coordinator.shutdown();
       }
     });
+
+  await t.test(TEST_RECENT_REPLICA_ID_ALLOCATION_TEST_NAME, async (t) => {
+    const nowMs = Date.now();
+    const buildService = (replicaId, nodeId) => ({
+      service_id: replicaId,
+      replica_id: replicaId,
+      service_type: TEST_RECENT_REPLICA_ID_ENTITY_TYPE,
+      partition_id: TEST_RECENT_REPLICA_ID_PARTITION_ID,
+      node_id: nodeId,
+      status: ReplicaStatus.ACTIVE,
+      address:
+        nodeId +
+        '/' +
+        TEST_RECENT_REPLICA_ID_ENTITY_TYPE +
+        '/' +
+        replicaId,
+    });
+    const coordinator = createTestCoordinator({
+      cacheData: {
+        services: [
+          buildService(
+            TEST_RECENT_REPLICA_ID_SOURCE_REPLICA_ID,
+            TEST_RECENT_REPLICA_ID_SOURCE_NODE_ID,
+          ),
+          buildService(
+            TEST_RECENT_REPLICA_ID_SECOND_REPLICA_ID,
+            TEST_RECENT_REPLICA_ID_SECOND_NODE_ID,
+          ),
+          buildService(
+            TEST_RECENT_REPLICA_ID_THIRD_REPLICA_ID,
+            TEST_RECENT_REPLICA_ID_THIRD_NODE_ID,
+          ),
+        ],
+        replicaOperations: [
+          {
+            operation_id: TEST_RECENT_REPLICA_ID_COMPLETED_OPERATION_ID,
+            type: OperationType.REPLACE,
+            partition_id: TEST_RECENT_REPLICA_ID_PARTITION_ID,
+            entity_type: TEST_RECENT_REPLICA_ID_ENTITY_TYPE,
+            entity_id: TEST_RECENT_REPLICA_ID_PARTITION_ID,
+            replica_id: TEST_RECENT_REPLICA_ID_COMPLETED_TARGET_REPLICA_ID,
+            source_node_id: TEST_RECENT_REPLICA_ID_SOURCE_NODE_ID,
+            target_node_id: TEST_RECENT_REPLICA_ID_COMPLETED_TARGET_NODE_ID,
+            status: ReplicaStatus.REMOVED,
+            workflow_step: WORKFLOW_STEP.REMOVED,
+            created_at: nowMs - TEST_RECENT_REPLICA_ID_COMPLETED_AGE_MS,
+            updated_at: nowMs,
+            completed_at: nowMs,
+          },
+        ],
+      },
+    });
+    coordinator.initialize();
+
+    try {
+      const operation = await coordinator.createOperation({
+        type: OperationType.REPLACE,
+        partitionId: TEST_RECENT_REPLICA_ID_PARTITION_ID,
+        entityType: TEST_RECENT_REPLICA_ID_ENTITY_TYPE,
+        entityId: TEST_RECENT_REPLICA_ID_PARTITION_ID,
+        nodeId: TEST_RECENT_REPLICA_ID_NEW_TARGET_NODE_ID,
+        sourceNodeId: TEST_RECENT_REPLICA_ID_SOURCE_NODE_ID,
+        replicaId: TEST_RECENT_REPLICA_ID_SOURCE_REPLICA_ID,
+      });
+
+      t.equal(
+        operation.replicaId,
+        TEST_RECENT_REPLICA_ID_NEXT_TARGET_REPLICA_ID,
+        'allocator should not reuse a recently completed replacement target replica id',
+      );
+    } finally {
+      await coordinator.shutdown();
+    }
+  });
+
+  await t.test(TEST_RETIRED_SOURCE_SAFETY_TEST_NAME, async (t) => {
+    const nowMs = Date.now();
+    const buildService = (replicaId, nodeId) => ({
+      service_id: replicaId,
+      replica_id: replicaId,
+      service_type: TEST_RETIRED_SOURCE_ENTITY_TYPE,
+      partition_id: TEST_RETIRED_SOURCE_PARTITION_ID,
+      node_id: nodeId,
+      status: ReplicaStatus.ACTIVE,
+      address:
+        nodeId +
+        '/' +
+        TEST_RETIRED_SOURCE_ENTITY_TYPE +
+        '/' +
+        replicaId,
+    });
+    const replaceMove = {
+      type: OperationType.REPLACE,
+      partitionId: TEST_RETIRED_SOURCE_PARTITION_ID,
+      entityType: TEST_RETIRED_SOURCE_ENTITY_TYPE,
+      entityId: TEST_RETIRED_SOURCE_PARTITION_ID,
+      nodeId: TEST_RETIRED_SOURCE_TARGET_NODE_ID,
+      sourceNodeId: TEST_RETIRED_SOURCE_RETIRED_NODE_ID,
+      replicaId: TEST_RETIRED_SOURCE_RETIRED_REPLICA_ID,
+    };
+    const coordinator = createTestCoordinator({
+      cacheData: {
+        services: [
+          buildService(
+            TEST_RETIRED_SOURCE_STABLE_REPLICA_ID,
+            TEST_RETIRED_SOURCE_STABLE_NODE_ID,
+          ),
+          buildService(
+            TEST_RETIRED_SOURCE_SECOND_STABLE_REPLICA_ID,
+            TEST_RETIRED_SOURCE_SECOND_STABLE_NODE_ID,
+          ),
+          buildService(
+            TEST_RETIRED_SOURCE_RETIRED_REPLICA_ID,
+            TEST_RETIRED_SOURCE_RETIRED_NODE_ID,
+          ),
+        ],
+        replicaOperations: [
+          {
+            operation_id: TEST_RETIRED_SOURCE_COMPLETED_OPERATION_ID,
+            type: OperationType.REPLACE,
+            partition_id: TEST_RETIRED_SOURCE_PARTITION_ID,
+            entity_type: TEST_RETIRED_SOURCE_ENTITY_TYPE,
+            entity_id: TEST_RETIRED_SOURCE_PARTITION_ID,
+            replica_id: TEST_RETIRED_SOURCE_COMPLETED_TARGET_REPLICA_ID,
+            source_node_id: TEST_RETIRED_SOURCE_RETIRED_NODE_ID,
+            target_node_id: TEST_RETIRED_SOURCE_TARGET_NODE_ID,
+            status: ReplicaStatus.REMOVED,
+            workflow_step: WORKFLOW_STEP.REMOVED,
+            steps_history: JSON.stringify([
+              {
+                step: WORKFLOW_STEP.PENDING,
+                [OPERATION_METADATA_KEY.SOURCE_REPLICA_ID]:
+                  TEST_RETIRED_SOURCE_RETIRED_REPLICA_ID,
+              },
+            ]),
+            created_at: nowMs - TEST_RETIRED_SOURCE_COMPLETED_AGE_MS,
+            updated_at: nowMs,
+            completed_at: nowMs,
+          },
+        ],
+      },
+    });
+    coordinator.initialize();
+
+    try {
+      let createError = null;
+      try {
+        await coordinator.createOperation(replaceMove);
+      } catch (error) {
+        createError = error;
+      }
+      t.equal(
+        createError?.message,
+        TEST_RETIRED_SOURCE_SAFETY_ERROR,
+        TEST_RETIRED_SOURCE_CREATE_ERROR_MESSAGE,
+      );
+    } finally {
+      await coordinator.shutdown();
+    }
+  });
 
   await t.test(TEST_COMPLETED_REMOVE_TEST_NAME, async (t) => {
     const deliveries = [];
@@ -528,6 +758,16 @@ test('REPLACE replica workflow', async (t) => {
         );
         t.equal(deliveries.length, 1, 'first dispatch attempt should execute');
         t.equal(
+          deliveries[0]?.options?.deliverySource,
+          TEST_REPLICA_OPERATION_DISPATCH_DELIVERY_SOURCE,
+          'critical system dispatch should use an owned transport source',
+        );
+        t.equal(
+          deliveries[0]?.options?.timeoutMs,
+          TEST_REPLICA_OPERATION_DISPATCH_TIMEOUT_MS,
+          'critical system dispatch should use a bounded delivery deadline',
+        );
+        t.equal(
           deferredTimers.length,
           1,
           'a bounded deferred retry should be armed',
@@ -569,6 +809,138 @@ test('REPLACE replica workflow', async (t) => {
       }
     },
   );
+
+  await t.test(TEST_DISPATCH_DEADLINE_TEST_NAME, async (t) => {
+    const deliveries = [];
+    const deferredTimers = [];
+    let hangFirstDispatch = true;
+    const messageRouter = {
+      async deliver(target, payload, options) {
+        deliveries.push({target, payload, options});
+        if (hangFirstDispatch) {
+          hangFirstDispatch = false;
+          return new Promise(() => {});
+        }
+        return {
+          acknowledged: true,
+          status: ReplicaOperationResponseStatus.INITIATED,
+        };
+      },
+    };
+
+    const coordinator = createTestCoordinator({
+      nodeId: TEST_DISPATCH_DEADLINE_OWNER_NODE_ID,
+      enableTimeouts: false,
+      messageRouter,
+      replicaOperationDispatchTimeoutMs:
+        TEST_DISPATCH_DEADLINE_FAST_TIMEOUT_MS,
+      setTimeoutFn(fn, delayMs) {
+        const handle = {fn, delayMs};
+        deferredTimers.push(handle);
+        return handle;
+      },
+      clearTimeoutFn() {},
+      cacheData: {
+        services: [
+          {
+            service_id: TEST_DISPATCH_DEADLINE_SOURCE_REPLICA_ID,
+            replica_id: TEST_DISPATCH_DEADLINE_SOURCE_REPLICA_ID,
+            service_type: TEST_DISPATCH_DEADLINE_SERVICE_TYPE,
+            partition_id: TEST_DISPATCH_DEADLINE_PARTITION_ID,
+            node_id: TEST_DISPATCH_DEADLINE_SEED_NODE_ID,
+            status: TEST_DISPATCH_DEADLINE_ACTIVE_STATUS,
+            address:
+              TEST_DISPATCH_DEADLINE_SEED_NODE_ID +
+              TEST_DISPATCH_DEADLINE_ADDRESS_PARTITION_SEGMENT +
+              TEST_DISPATCH_DEADLINE_SOURCE_REPLICA_ID,
+          },
+          {
+            service_id: TEST_DISPATCH_DEADLINE_PEER_REPLICA_ID,
+            replica_id: TEST_DISPATCH_DEADLINE_PEER_REPLICA_ID,
+            service_type: TEST_DISPATCH_DEADLINE_SERVICE_TYPE,
+            partition_id: TEST_DISPATCH_DEADLINE_PARTITION_ID,
+            node_id: TEST_DISPATCH_DEADLINE_PEER_NODE_ID,
+            status: TEST_DISPATCH_DEADLINE_ACTIVE_STATUS,
+            address:
+              TEST_DISPATCH_DEADLINE_PEER_NODE_ID +
+              TEST_DISPATCH_DEADLINE_ADDRESS_PARTITION_SEGMENT +
+              TEST_DISPATCH_DEADLINE_PEER_REPLICA_ID,
+          },
+        ],
+      },
+    });
+
+    try {
+      const operation = await coordinator.createOperation({
+        type: OperationType.ADD,
+        partitionId: TEST_DISPATCH_DEADLINE_PARTITION_ID,
+        entityType: TEST_DISPATCH_DEADLINE_ENTITY_TYPE,
+        entityId: TEST_DISPATCH_DEADLINE_PARTITION_ID,
+        nodeId: TEST_DISPATCH_DEADLINE_OWNER_NODE_ID,
+      });
+
+      const firstAttempt = await coordinator.executeOperation(operation);
+      t.equal(
+        firstAttempt.reason,
+        TEST_DEFERRED_RETRY_PENDING_REASON,
+        'dispatch deadline should keep critical operation retryable',
+      );
+      t.equal(
+        deliveries.length,
+        1,
+        'first dispatch should be abandoned after the delivery deadline',
+      );
+      t.equal(
+        deliveries[0]?.options?.timeoutMs,
+        TEST_DISPATCH_DEADLINE_FAST_TIMEOUT_MS,
+        'dispatch should use the configured owner deadline',
+      );
+      t.equal(
+        deferredTimers.length,
+        1,
+        'deadline failure should arm the existing dispatch retry timer',
+      );
+
+      const persistedBeforeRetry =
+        await coordinator.queryOperationById(operation.operationId);
+      t.equal(
+        persistedBeforeRetry.workflowStep,
+        WORKFLOW_STEP.SENDING,
+        'timed-out dispatch should remain replayable from SENDING',
+      );
+      t.equal(
+        persistedBeforeRetry.status,
+        ReplicaStatus.PENDING,
+        'timed-out dispatch should not fail the operation row',
+      );
+
+      await deferredTimers[0].fn();
+      for (
+        let attempt = 0;
+        attempt < TEST_DISPATCH_DEADLINE_RETRY_POLL_LIMIT &&
+          deliveries.length < 2;
+        attempt++
+      ) {
+        await new Promise((resolve) => setImmediate(resolve));
+      }
+
+      const persistedAfterRetry =
+        await coordinator.queryOperationById(operation.operationId);
+      t.equal(deliveries.length, 2, 'deferred retry should replay dispatch');
+      t.equal(
+        persistedAfterRetry.workflowStep,
+        WORKFLOW_STEP.CREATING,
+        'successful retry should advance the original operation',
+      );
+      t.equal(
+        persistedAfterRetry.status,
+        ReplicaStatus.CREATING,
+        'successful retry should keep the operation alive',
+      );
+    } finally {
+      await coordinator.shutdown();
+    }
+  });
 
   await t.test(
     'REPLACE create ALREADY_EXISTS re-arms observed progress instead of ' +
@@ -1413,13 +1785,13 @@ test('REPLACE replica workflow', async (t) => {
   });
 
   await t.test(
-    'critical REPLACE deferred safety retry reconciles stale CREATING state ' +
-      'forward instead of dropping the retry lane',
+    'critical REPLACE deferred safety retry uses its operation snapshot when ' +
+      'priority visibility defers',
     async (t) => {
       const deliveries = [];
       const deferredTimers = [];
       let sourceRemovalBlocked = true;
-      let staleSafetyRetryRead = true;
+      let deferredSafetyRetryRead = true;
       const messageRouter = {
         async deliver(target, payload, options) {
           deliveries.push({target, payload, options});
@@ -1552,28 +1924,26 @@ test('REPLACE replica workflow', async (t) => {
           sourceNodeId: 'node-a',
           replicaId: 'control_plane_publications-p1-r1',
         });
-        const baseQueryAuthoritativeOperationById =
-          coordinator.repository.queryAuthoritativeOperationById.bind(
+        const baseGetOperationByIdVisibilityObservation =
+          coordinator.repository.getOperationByIdVisibilityObservation.bind(
             coordinator.repository,
           );
-        coordinator.repository.queryAuthoritativeOperationById =
+        coordinator.repository.getOperationByIdVisibilityObservation =
           async (operationId, options = {}) => {
-            const persistedOperation =
-              await baseQueryAuthoritativeOperationById(
-                operationId,
-                options,
-              );
-            if (staleSafetyRetryRead &&
-                operationId === operation.operationId &&
-                persistedOperation) {
-              staleSafetyRetryRead = false;
+            if (deferredSafetyRetryRead &&
+                operationId === operation.operationId) {
+              deferredSafetyRetryRead = false;
               return {
-                ...persistedOperation,
-                workflowStep: WORKFLOW_STEP.CREATING,
-                status: ReplicaStatus.CREATING,
+                operation: null,
+                deferredOutcome: {
+                  completionState: TEST_AUTHORITATIVE_OPERATION_READ_DEFERRED,
+                },
               };
             }
-            return persistedOperation;
+            return baseGetOperationByIdVisibilityObservation(
+              operationId,
+              options,
+            );
           };
 
         const firstAttempt = await coordinator.executeOperation(operation);
@@ -1615,7 +1985,7 @@ test('REPLACE replica workflow', async (t) => {
         t.equal(
           deliveries.length,
           2,
-          'the deferred retry should recover from stale creating visibility and continue with source removal',
+          'the deferred retry should recover from deferred empty visibility and continue with source removal',
         );
         t.equal(
           deliveries[1]?.payload?.type,

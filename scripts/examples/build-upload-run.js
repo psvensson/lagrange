@@ -21,6 +21,8 @@ import {
 } from './run-examples-catalog.js';
 import {validateExampleOutput} from './validate-output.js';
 
+const LOCAL_NUM_ONE = 1;
+
 /**
  * CLI entrypoint for local examples execution.
  *
@@ -49,7 +51,7 @@ const isDirectRun = resolve(process.argv[1] || '') === __filename;
 if (isDirectRun) {
   main().catch((error) => {
     process.stderr.write(`Examples failed: ${error.message}\n`);
-    process.exitCode = 1;
+    process.exitCode = LOCAL_NUM_ONE;
   });
 }
 

@@ -575,6 +575,140 @@ export async function registerReplaceReplicaWorkflowTailMoreTests({
     });
 
   await t.test(
+    'critical ACTIVE REPLACE dispatches source removal when replacement is a syncing voter',
+    async (t) => {
+      const PARTITION_ID = 'nodes-p1';
+      const SOURCE_NODE_ID = 'node-a';
+      const SECOND_NODE_ID = 'node-b';
+      const THIRD_NODE_ID = 'node-c';
+      const TARGET_NODE_ID = 'node-d';
+      const SOURCE_REPLICA_ID = `${PARTITION_ID}-r1`;
+      const SECOND_REPLICA_ID = `${PARTITION_ID}-r2`;
+      const THIRD_REPLICA_ID = `${PARTITION_ID}-r3`;
+      const TARGET_REPLICA_ID = `${PARTITION_ID}-r4`;
+      const SERVICE_TYPE_PARTITION = 'partition';
+      const NODE_STATUS_ACTIVE = 'active';
+      const CONNECTION_STATE_READY = 'ready';
+      const RAFT_ROLE_FOLLOWER = 'follower';
+      const READY_LEASE_EXTENSION_MS = 60000;
+      const readyLeaseExpiresAt = Date.now() + READY_LEASE_EXTENSION_MS;
+      const deliveries = [];
+      const messageRouter = {
+        async deliver(target, payload, options) {
+          deliveries.push({target, payload, options});
+          return {
+            acknowledged: true,
+            status: ReplicaOperationResponseStatus.INITIATED,
+          };
+        },
+        getConnectionState: () => 'connected',
+        pingNode: async () => true,
+        isOutboundQueueAvailable: () => true,
+      };
+      const buildNodeRow = (nodeId) => ({
+        node_id: nodeId,
+        status: NODE_STATUS_ACTIVE,
+        connection_state: CONNECTION_STATE_READY,
+        ready_lease_expires_at: readyLeaseExpiresAt,
+      });
+      const buildReplicaRow = (replicaId, nodeId, status) => ({
+        service_id: replicaId,
+        replica_id: replicaId,
+        service_type: SERVICE_TYPE_PARTITION,
+        partition_id: PARTITION_ID,
+        node_id: nodeId,
+        status,
+        raft_role: RAFT_ROLE_FOLLOWER,
+        address: `${nodeId}/partition/${replicaId}`,
+      });
+      const coordinator = createTestCoordinator({
+        nodeId: TARGET_NODE_ID,
+        enableTimeouts: false,
+        messageRouter,
+        cacheData: {
+          nodes: [
+            buildNodeRow(SOURCE_NODE_ID),
+            buildNodeRow(SECOND_NODE_ID),
+            buildNodeRow(THIRD_NODE_ID),
+            buildNodeRow(TARGET_NODE_ID),
+          ],
+          services: [
+            buildReplicaRow(
+              SOURCE_REPLICA_ID,
+              SOURCE_NODE_ID,
+              ReplicaStatus.ACTIVE,
+            ),
+            buildReplicaRow(
+              SECOND_REPLICA_ID,
+              SECOND_NODE_ID,
+              ReplicaStatus.ACTIVE,
+            ),
+            buildReplicaRow(
+              THIRD_REPLICA_ID,
+              THIRD_NODE_ID,
+              ReplicaStatus.ACTIVE,
+            ),
+            buildReplicaRow(
+              TARGET_REPLICA_ID,
+              TARGET_NODE_ID,
+              ReplicaStatus.SYNCING,
+            ),
+          ],
+        },
+      });
+
+      try {
+        const operation = await coordinator.createOperation({
+          type: OperationType.REPLACE,
+          partitionId: PARTITION_ID,
+          entityType: SERVICE_TYPE_PARTITION,
+          entityId: PARTITION_ID,
+          nodeId: TARGET_NODE_ID,
+          sourceNodeId: SOURCE_NODE_ID,
+          replicaId: SOURCE_REPLICA_ID,
+        });
+        operation.replicaId = TARGET_REPLICA_ID;
+        await coordinator.workflowOwner.updateStep(
+          operation,
+          WORKFLOW_STEP.ACTIVE,
+        );
+
+        const progressed =
+          await coordinator.reconcileOperationProgress(operation);
+        const persistedOperation =
+          await coordinator.getOperation(operation.operationId);
+
+        t.equal(
+          progressed,
+          true,
+          'ACTIVE REPLACE should continue once replacement has voter topology',
+        );
+        t.equal(
+          deliveries.length,
+          1,
+          'source removal should dispatch from syncing follower replacement evidence',
+        );
+        t.equal(
+          deliveries[0]?.payload?.type,
+          ReplicaOperationMessageType.REMOVE_REPLICA,
+          'source removal should send a remove request',
+        );
+        t.equal(
+          deliveries[0]?.payload?.replicaId,
+          SOURCE_REPLICA_ID,
+          'source removal should retire the original source replica',
+        );
+        t.equal(
+          persistedOperation?.workflowStep,
+          WORKFLOW_STEP.STOPPING,
+          'source removal dispatch should advance the workflow to STOPPING',
+        );
+      } finally {
+        await coordinator.shutdown();
+      }
+    });
+
+  await t.test(
     'critical REPLACE keeps ACTIVE ownership on the target while source removal remains deferred',
     async (t) => {
       const deliveries = [];
@@ -882,6 +1016,70 @@ export async function registerReplaceReplicaWorkflowTailMoreTests({
           deferredTimers.length,
           1,
           'reconcile should re-arm one deferred retry while ACTIVE remains deferred',
+        );
+      } finally {
+        await coordinator.shutdown();
+      }
+    });
+
+  await t.test(
+    'critical ACTIVE REPLACE lifecycle re-arms retry when resume dispatch skips',
+    async (t) => {
+      const TEST_PARTITION_ID = 'control_plane_publications-p1';
+      const TEST_ENTITY_TYPE = 'partition';
+      const TEST_SOURCE_NODE_ID = 'node-a';
+      const TEST_TARGET_NODE_ID = 'node-d';
+      const TEST_SOURCE_REPLICA_ID = 'control_plane_publications-p1-r1';
+      const TEST_TARGET_REPLICA_ID = 'control_plane_publications-p1-r4';
+      const TEST_SKIPPED_RESUME_RESULT = Object.freeze({skipped: true});
+      let rearmCount = 0;
+
+      const coordinator = createTestCoordinator({
+        nodeId: TEST_TARGET_NODE_ID,
+        enableTimeouts: false,
+      });
+
+      try {
+        const operation = await coordinator.createOperation({
+          type: OperationType.REPLACE,
+          partitionId: TEST_PARTITION_ID,
+          entityType: TEST_ENTITY_TYPE,
+          entityId: TEST_PARTITION_ID,
+          nodeId: TEST_TARGET_NODE_ID,
+          sourceNodeId: TEST_SOURCE_NODE_ID,
+          replicaId: TEST_SOURCE_REPLICA_ID,
+        });
+
+        operation.replicaId = TEST_TARGET_REPLICA_ID;
+        operation.workflowStep = WORKFLOW_STEP.ACTIVE;
+        operation.status = ReplicaStatus.ACTIVE;
+
+        coordinator.workflowOwner.reconcileActiveReplaceSourceRemovalProgress =
+          async () => false;
+        coordinator.workflowOwner.executeOperationFromReconcilePath =
+          async () => TEST_SKIPPED_RESUME_RESULT;
+        coordinator.workflowOwner.ensurePriorityActiveReplaceRetryArmed =
+          (retryOperation) => {
+            rearmCount += 1;
+            t.equal(
+              retryOperation.operationId,
+              operation.operationId,
+              'retry should be armed for the skipped ACTIVE REPLACE operation',
+            );
+          };
+
+        const progressed =
+          await coordinator.reconcileOperationProgress(operation);
+
+        t.equal(
+          progressed,
+          true,
+          'skipped ACTIVE REPLACE resume should still count as lifecycle progress',
+        );
+        t.equal(
+          rearmCount,
+          1,
+          'skipped ACTIVE REPLACE resume should arm one retry',
         );
       } finally {
         await coordinator.shutdown();

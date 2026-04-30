@@ -1,23 +1,26 @@
 import {READINESS_EVENT} from '../bootstrap/bootstrap-readiness-state-constants.js';
 
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_STR_FUNCTION = 'function';
+
 const LOGS_TABLE_PERSISTENCE_READY_DELAY_MS = 5000;
 
 function normalizeDelayMs(value) {
-  if (!Number.isFinite(value) || value < 0) {
+  if (!Number.isFinite(value) || value < LOCAL_NUM_ZERO) {
     return LOGS_TABLE_PERSISTENCE_READY_DELAY_MS;
   }
   return Math.floor(value);
 }
 
 function removeReadinessTransitionListener(readinessState, listener) {
-  if (!readinessState || typeof listener !== 'function') {
+  if (!readinessState || typeof listener !== LOCAL_STR_FUNCTION) {
     return;
   }
-  if (typeof readinessState.off === 'function') {
+  if (typeof readinessState.off === LOCAL_STR_FUNCTION) {
     readinessState.off(READINESS_EVENT.TRANSITION, listener);
     return;
   }
-  if (typeof readinessState.removeListener === 'function') {
+  if (typeof readinessState.removeListener === LOCAL_STR_FUNCTION) {
     readinessState.removeListener(READINESS_EVENT.TRANSITION, listener);
   }
 }
@@ -113,7 +116,7 @@ function startLogsTablePersistenceOnReadiness(options = {}) {
     }
   }
 
-  if (readinessState && typeof readinessState.on === 'function') {
+  if (readinessState && typeof readinessState.on === LOCAL_STR_FUNCTION) {
     readinessState.on(READINESS_EVENT.TRANSITION, handleTransition);
     scheduleStart();
   } else {

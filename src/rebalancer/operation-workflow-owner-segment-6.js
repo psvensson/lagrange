@@ -2,7 +2,11 @@ import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared
 import {OperationWorkflowOwnerSegment5} from './operation-workflow-owner-segment-5.js';
 
 const {
+  CONTROL_PLANE_PRIORITY_RECOVERY_REASON,
+  CONTROL_PLANE_READINESS_DIMENSION,
+  CONTROL_PLANE_READINESS_REASON,
   NUM,
+  INITIAL_PARTITION_IDS,
   OPERATION_METADATA_KEY,
   OPERATION_WORKFLOW_OWNER_LITERAL,
   OperationType,
@@ -11,10 +15,13 @@ const {
   PRIORITY_REMOVE_SAFETY_MEMBERSHIP_SOURCE,
   REBALANCE_COORDINATOR_DEFER_REASON,
   REMOVE_SAFETY_EVALUATION_CLASSIFICATION,
+  REMOVE_SAFETY_HANDOFF_FAILURE_POLICY,
   REMOVE_SAFETY_OWNER_PARTICIPATION_KIND,
   REMOVE_SAFETY_READINESS_DIMENSION,
   REPLACE_SOURCE_LEADER_HANDOFF_REQUIRED_PARTITION_IDS,
+  ReplicaStatus,
   ReplicaOperationResponseStatus,
+  SYSTEM_TABLE_NAME,
   TYPEOF,
   WORKFLOW_STEP,
   buildPriorityRecoveryBlockedPartitionIds,
@@ -30,6 +37,8 @@ const {
 
 const PRIORITY_OPERATION_VISIBILITY_DEFERRED_SAFE_REMOVAL_SUFFIX =
   ' operation visibility is deferred for safe removal';
+const CONTROL_PLANE_PUBLICATION_PARTITION_ID =
+  INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS];
 
 const PRIORITY_PUBLICATION_REPLACEMENT_LEADER_CANDIDATE_STATE =
   Object.freeze({
@@ -71,6 +80,131 @@ const PRIORITY_PUBLICATION_REPLACEMENT_LEADER_CANDIDATE_ACTION_BY_STATE =
       ],
     ]),
   );
+
+const PRIORITY_RECOVERY_SUPERSEDED_TARGET_DECISION_STATE = Object.freeze({
+  NOT_APPLICABLE: 'not_applicable',
+  DEFER: 'defer',
+  FAIL: 'fail',
+});
+
+const PRIORITY_RECOVERY_SUPERSEDED_TARGET_DEFER_REASON_CODES = Object.freeze(
+  new Set([
+    CONTROL_PLANE_READINESS_REASON.PROCESS_NOT_ALIVE,
+    CONTROL_PLANE_READINESS_REASON.CLUSTER_MEMBER_UNHEALTHY,
+    CONTROL_PLANE_READINESS_REASON.CONTROL_PLANE_WRITE_UNHEALTHY,
+    CONTROL_PLANE_READINESS_REASON.CONTROL_PLANE_PUBLICATION_PENDING,
+    CONTROL_PLANE_READINESS_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
+    CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PUBLICATION_EPOCH_PENDING,
+  ]),
+);
+
+const PRIORITY_RECOVERY_SUPERSEDED_TARGET_DECISION_TABLE = Object.freeze([
+  Object.freeze({
+    state: PRIORITY_RECOVERY_SUPERSEDED_TARGET_DECISION_STATE.NOT_APPLICABLE,
+    matches: (evidence) => evidence.targetOutsideEligibleCohort !== true,
+  }),
+  Object.freeze({
+    state: PRIORITY_RECOVERY_SUPERSEDED_TARGET_DECISION_STATE.DEFER,
+    matches: (evidence) => evidence.transientReadinessBlockerPresent === true,
+  }),
+  Object.freeze({
+    state: PRIORITY_RECOVERY_SUPERSEDED_TARGET_DECISION_STATE.FAIL,
+    matches: (evidence) => evidence.targetOutsideEligibleCohort === true,
+  }),
+]);
+
+function normalizePriorityRecoverySupersededReasonCodes(readiness) {
+  const runtimeAuthority =
+    readiness?.runtimeAuthority &&
+    typeof readiness.runtimeAuthority === TYPEOF.OBJECT ?
+      readiness.runtimeAuthority :
+      null;
+  const reasonCodes = [
+    ...(Array.isArray(readiness?.reasonCodes) ? readiness.reasonCodes : []),
+    ...(Array.isArray(runtimeAuthority?.reasonCodes) ?
+      runtimeAuthority.reasonCodes :
+      []),
+  ];
+  const normalizedReasonCodes = [];
+  const seenReasonCodes = new Set();
+  for (const reasonCode of reasonCodes) {
+    const normalizedReasonCode = String(reasonCode || '').trim();
+    if (
+      normalizedReasonCode.length === NUM.ZERO ||
+      seenReasonCodes.has(normalizedReasonCode)
+    ) {
+      continue;
+    }
+    seenReasonCodes.add(normalizedReasonCode);
+    normalizedReasonCodes.push(normalizedReasonCode);
+  }
+  return Object.freeze(normalizedReasonCodes);
+}
+
+function buildPriorityRecoverySupersededTargetEvidence({
+  operation,
+  priorityPartitionSummary,
+  eligibleNodeIds,
+  targetReadiness,
+}) {
+  const targetNodeId = String(operation?.targetNodeId || '').trim();
+  const blockedPartitionIds = priorityPartitionSummary ?
+    buildPriorityRecoveryBlockedPartitionIds(priorityPartitionSummary) :
+    [];
+  const blockedPartitionScopeApplies =
+    blockedPartitionIds.length === NUM.ZERO ||
+    blockedPartitionIds.includes(operation?.partitionId);
+  const targetOutsideEligibleCohort =
+    hasPriorityRecoverySpreadGap(priorityPartitionSummary) &&
+    eligibleNodeIds.length > NUM.ZERO &&
+    targetNodeId.length > NUM.ZERO &&
+    !eligibleNodeIds.includes(targetNodeId) &&
+    blockedPartitionScopeApplies === true;
+  const dimensions =
+    targetReadiness?.dimensions &&
+    typeof targetReadiness.dimensions === TYPEOF.OBJECT ?
+      targetReadiness.dimensions :
+      null;
+  const reasonCodes =
+    normalizePriorityRecoverySupersededReasonCodes(targetReadiness);
+  const transientReasonCodePresent = reasonCodes.some((reasonCode) =>
+    PRIORITY_RECOVERY_SUPERSEDED_TARGET_DEFER_REASON_CODES.has(reasonCode),
+  );
+  const transientDimensionBlockerPresent =
+    dimensions?.[CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE] === false ||
+    dimensions?.[CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY] ===
+      false ||
+    dimensions?.[CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE] ===
+      false ||
+    dimensions?.[CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_PUBLISHED] ===
+      false;
+  return Object.freeze({
+    targetOutsideEligibleCohort,
+    transientReadinessBlockerPresent:
+      transientReasonCodePresent || transientDimensionBlockerPresent,
+  });
+}
+
+function decidePriorityRecoverySupersededTarget(evidence) {
+  const decision = PRIORITY_RECOVERY_SUPERSEDED_TARGET_DECISION_TABLE.find(
+    (candidate) => candidate.matches(evidence),
+  );
+  return Object.freeze({
+    state: decision?.state ||
+      PRIORITY_RECOVERY_SUPERSEDED_TARGET_DECISION_STATE.NOT_APPLICABLE,
+  });
+}
+
+function shouldPreservePriorityPublicationMinimumReplicaCount(
+  operation,
+  projectedVoterReadyCount,
+  minReplicaCount,
+) {
+  return (
+    operation?.partitionId === CONTROL_PLANE_PUBLICATION_PARTITION_ID &&
+    projectedVoterReadyCount < minReplicaCount
+  );
+}
 
 class OperationWorkflowOwnerSegment6 extends OperationWorkflowOwnerSegment5 {
   buildPriorityRecoveryAssessmentContextForOperation(
@@ -371,24 +505,49 @@ class OperationWorkflowOwnerSegment6 extends OperationWorkflowOwnerSegment5 {
     const eligibleNodeIds = normalizeNodeIdList(
       priorityRecoveryContext.effectiveEligibleNodeIds,
     );
+    const targetReadiness =
+      typeof this.controlPlaneReadinessService?.getNodeReadinessSync ===
+        TYPEOF.FUNCTION ?
+        this.controlPlaneReadinessService.getNodeReadinessSync(targetNodeId, {
+          decisionDimension: REMOVE_SAFETY_READINESS_DIMENSION,
+          participationKind: REMOVE_SAFETY_OWNER_PARTICIPATION_KIND,
+        }) :
+        null;
+    const supersededTargetEvidence =
+      buildPriorityRecoverySupersededTargetEvidence({
+        operation,
+        priorityPartitionSummary,
+        eligibleNodeIds,
+        targetReadiness,
+      });
+    const supersededTargetDecision =
+      decidePriorityRecoverySupersededTarget(supersededTargetEvidence);
     if (
-      !hasPriorityRecoverySpreadGap(priorityPartitionSummary) ||
-      eligibleNodeIds.length === NUM.ZERO ||
-      eligibleNodeIds.includes(targetNodeId)
+      supersededTargetDecision.state !==
+      PRIORITY_RECOVERY_SUPERSEDED_TARGET_DECISION_STATE.FAIL
     ) {
       return null;
     }
 
-    const blockedPartitionIds = priorityPartitionSummary ?
-      buildPriorityRecoveryBlockedPartitionIds(priorityPartitionSummary) :
-      [];
-    if (
-      blockedPartitionIds.length > NUM.ZERO &&
-      !blockedPartitionIds.includes(operation.partitionId)
-    ) {
-      return null;
-    }
+    return this.buildPriorityRecoverySupersededTargetError(
+      operation,
+      targetNodeId,
+      eligibleNodeIds,
+    );
+  }
 
+  /**
+   * @param {Object} operation
+   * @param {string} targetNodeId
+   * @param {string[]} eligibleNodeIds
+   * @return {string}
+   * @private
+   */
+  buildPriorityRecoverySupersededTargetError(
+    operation,
+    targetNodeId,
+    eligibleNodeIds,
+  ) {
     return (
       OPERATION_WORKFLOW_OWNER_LITERAL.PRIORITY_RECOVERY_TARGET_NODE +
       targetNodeId +
@@ -581,6 +740,10 @@ class OperationWorkflowOwnerSegment6 extends OperationWorkflowOwnerSegment5 {
       classification: REMOVE_SAFETY_EVALUATION_CLASSIFICATION.DEFER,
       deferReason,
       error,
+      handoffFailureError: options?.handoffFailureError || error,
+      handoffFailurePolicy:
+        options?.handoffFailurePolicy ||
+        REMOVE_SAFETY_HANDOFF_FAILURE_POLICY.NONE,
       handoffRequest: options?.handoffRequest || null,
     });
   }
@@ -725,6 +888,91 @@ class OperationWorkflowOwnerSegment6 extends OperationWorkflowOwnerSegment5 {
     );
   }
 
+  resolvePriorityPublicationCompletedWithoutOwnershipReplicaIds(
+    electionEvidence,
+    candidateRows,
+    hasReplacementLeaderOwnership,
+  ) {
+    const completedReplicaIds = Array.isArray(
+      electionEvidence?.completedReplicaIds,
+    ) ?
+      electionEvidence.completedReplicaIds :
+      [];
+    return new Set(
+      completedReplicaIds.filter((replicaId) => {
+        const row =
+          candidateRows.find(
+            (candidateRow) =>
+              this.getReplicaRowIdentity(candidateRow) === replicaId,
+          ) || null;
+        return !hasReplacementLeaderOwnership(row);
+      }),
+    );
+  }
+
+  hasPriorityPublicationReplacementLeaderRetargetCandidateAfterNotFound(
+    operation,
+    currentVoterReadyRows,
+    operationReplicaId,
+    replacementReplicaRow,
+  ) {
+    if (
+      !operation ||
+      operation.type !== OperationType.REPLACE ||
+      !this.isReplaceSourceLeaderHandoffRequiredPartition(operation.partitionId)
+    ) {
+      return false;
+    }
+    const currentReplacementReplicaId =
+      this.getReplicaRowIdentity(replacementReplicaRow) ||
+      this.repository.getReplaceTargetReplicaId(operation) ||
+      null;
+    if (!currentReplacementReplicaId) {
+      return false;
+    }
+    const sourceNodeId =
+      typeof operation.sourceNodeId === TYPEOF.STRING ?
+        operation.sourceNodeId.trim() :
+        null;
+    const normalizedOperationReplicaId =
+      typeof operationReplicaId === TYPEOF.STRING ?
+        operationReplicaId.trim() :
+        null;
+    const candidateRows = Array.isArray(currentVoterReadyRows) ?
+      currentVoterReadyRows :
+      [];
+    const electionEvidence =
+      this.getFreshPriorityPublicationReplacementLeaderElectionEvidence(
+        operation,
+      );
+    const blockedReplicaIds = new Set(
+      Array.isArray(electionEvidence?.notFoundReplicaIds) ?
+        electionEvidence.notFoundReplicaIds :
+        [],
+    );
+    const completedReplicaIds = Array.isArray(
+      electionEvidence?.completedReplicaIds,
+    ) ?
+      electionEvidence.completedReplicaIds :
+      [];
+    for (const completedReplicaId of completedReplicaIds) {
+      blockedReplicaIds.add(completedReplicaId);
+    }
+    blockedReplicaIds.add(currentReplacementReplicaId);
+    return candidateRows.some((row) => {
+      const rowReplicaId = this.getReplicaRowIdentity(row);
+      const rowNodeId =
+        typeof row?.node_id === TYPEOF.STRING ? row.node_id.trim() : null;
+      return (
+        rowReplicaId &&
+        rowNodeId &&
+        rowReplicaId !== normalizedOperationReplicaId &&
+        !blockedReplicaIds.has(rowReplicaId) &&
+        (!sourceNodeId || rowNodeId !== sourceNodeId)
+      );
+    });
+  }
+
   /**
    * @param {Object} operation
    * @param {Object|null} replacementReplicaRow
@@ -806,6 +1054,12 @@ class OperationWorkflowOwnerSegment6 extends OperationWorkflowOwnerSegment5 {
     };
     const replacementOwnershipObserved =
       hasReplacementLeaderOwnership(replacementReplicaRow);
+    const completedWithoutOwnershipReplicaIds =
+      this.resolvePriorityPublicationCompletedWithoutOwnershipReplicaIds(
+        electionEvidence,
+        candidateRows,
+        hasReplacementLeaderOwnership,
+      );
     const evidenceReplicaId =
       typeof electionEvidence?.replacementReplicaId === TYPEOF.STRING ?
         electionEvidence.replacementReplicaId.trim() :
@@ -868,7 +1122,10 @@ class OperationWorkflowOwnerSegment6 extends OperationWorkflowOwnerSegment5 {
     ) {
       return fallbackReplacementReplicaRow;
     }
-    const retargetBlockedReplicaIds = new Set(notFoundReplicaIds);
+    const retargetBlockedReplicaIds = new Set([
+      ...notFoundReplicaIds,
+      ...completedWithoutOwnershipReplicaIds,
+    ]);
     if (
       candidateState ===
       PRIORITY_PUBLICATION_REPLACEMENT_LEADER_CANDIDATE_STATE
@@ -1066,12 +1323,44 @@ class OperationWorkflowOwnerSegment6 extends OperationWorkflowOwnerSegment5 {
       }
     }
 
+    const replacementLeaderRetargetCandidateAvailable =
+      requiresSourceLeaderHandoff &&
+      this.hasPriorityPublicationReplacementLeaderRetargetCandidateAfterNotFound(
+        operation,
+        currentVoterReadyRows,
+        operationReplicaId,
+        replacementLeaderCandidateRow,
+      );
     const priorityPublicationLeaderRemoveSafetyEvaluation =
       await this.evaluatePriorityPublicationLeaderRemoveSafety(
         operation,
         removingReplicaRow,
         replacementLeaderCandidateRow,
+        {
+          priorityRecoveryCompletionSafe,
+          replacementLeaderElectionNotFoundTerminal:
+            requiresSourceLeaderHandoff &&
+            !replacementLeaderRetargetCandidateAvailable,
+          replacementLeaderRetargetCandidateAvailable,
+        },
       );
+    if (
+      priorityPublicationLeaderRemoveSafetyEvaluation?.classification ===
+        REMOVE_SAFETY_EVALUATION_CLASSIFICATION.SAFE &&
+      priorityRecoveryCompletionSafe &&
+      shouldPreservePriorityPublicationMinimumReplicaCount(
+        operation,
+        projectedVoterReadyCount,
+        minReplicaCount,
+      )
+    ) {
+      return this.buildDeferredRemoveSafetyEvaluationForOperation(
+        operation,
+        `Critical partition ${operation.partitionId}` +
+          OPERATION_WORKFLOW_OWNER_LITERAL.WOULD_DROP_VOTER_DASH_READY_REPLICAS_BELOW_MINIMUM +
+          ` (${projectedVoterReadyCount}/${minReplicaCount})`,
+      );
+    }
     if (priorityPublicationLeaderRemoveSafetyEvaluation) {
       return priorityPublicationLeaderRemoveSafetyEvaluation;
     }
@@ -1145,6 +1434,38 @@ class OperationWorkflowOwnerSegment6 extends OperationWorkflowOwnerSegment5 {
       return false;
     }
     await this.executeOperationFromReconcilePath(authoritativeOperation);
+    return true;
+  }
+
+  /**
+   * Replay REPLACE source-removal from observed target ACTIVE evidence when
+   * the durable ACTIVE transition is retryably backpressured.
+   *
+   * @param {Object} operation
+   * @return {Promise<boolean>}
+   * @private
+   */
+  async replayReplaceActiveSourceRemovalFromObservedTarget(operation) {
+    if (
+      !operation ||
+      operation.type !== OperationType.REPLACE ||
+      !this.repository.isOperationLocallyOwned(operation) ||
+      !isPriorityControlPlanePartition({
+        partitionId: operation.partitionId,
+      })
+    ) {
+      return false;
+    }
+    const activeOperation = {
+      ...operation,
+      workflowStep: WORKFLOW_STEP.ACTIVE,
+      status: ReplicaStatus.ACTIVE,
+    };
+    const replaceResumeResult =
+      await this.executeOperationFromReconcilePath(activeOperation);
+    if (replaceResumeResult?.skipped === true) {
+      this.ensurePriorityActiveReplaceRetryArmed(activeOperation);
+    }
     return true;
   }
 
@@ -1353,10 +1674,20 @@ class OperationWorkflowOwnerSegment6 extends OperationWorkflowOwnerSegment5 {
       }
     }
 
-    const activeTransitionCommitted = await this.updateStep(
-      operation,
-      WORKFLOW_STEP.ACTIVE,
-    );
+    let activeTransitionCommitted = false;
+    try {
+      activeTransitionCommitted = await this.updateStep(
+        operation,
+        WORKFLOW_STEP.ACTIVE,
+      );
+    } catch (error) {
+      if (
+        await this.replayReplaceActiveSourceRemovalFromObservedTarget(operation)
+      ) {
+        return;
+      }
+      throw error;
+    }
     if (activeTransitionCommitted) {
       const replaceResumeResult =
         await this.executeOperationFromReconcilePath(operation);

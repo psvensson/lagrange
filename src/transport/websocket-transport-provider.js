@@ -26,6 +26,11 @@ import {
   WS_MESSAGE_TYPE,
 } from '../constants/transport.js';
 
+const LOCAL_STR_93OFL = 'Failed to parse message';
+const LOCAL_STR_PROVIDER_SHUTDOWN = 'Provider shutdown';
+const LOCAL_STR_5OD22 = 'Pending message cancelled';
+const LOCAL_STR_STRING = 'string';
+
 /**
  * Subsystem name for logging.
  */
@@ -330,7 +335,7 @@ class WebSocketTransportProvider extends TransportProvider {
     try {
       message = JSON.parse(data.toString());
     } catch (error) {
-      this.logger.error('Failed to parse message', {
+      this.logger.error(LOCAL_STR_93OFL, {
         connectionId: connectionInfo.connectionId,
         error: error.message,
       });
@@ -731,8 +736,8 @@ class WebSocketTransportProvider extends TransportProvider {
     // Clear pending messages
     for (const [messageId, pending] of this.pendingMessages) {
       clearTimeout(pending.timeout);
-      pending.reject(new Error('Provider shutdown'));
-      this.logger.debug('Pending message cancelled', {messageId});
+      pending.reject(new Error(LOCAL_STR_PROVIDER_SHUTDOWN));
+      this.logger.debug(LOCAL_STR_5OD22, {messageId});
     }
 
     this.connections.clear();
@@ -775,7 +780,7 @@ class WebSocketTransportProvider extends TransportProvider {
     if (!metadata) {
       return {};
     }
-    if (typeof metadata === 'string') {
+    if (typeof metadata === LOCAL_STR_STRING) {
       try {
         return JSON.parse(metadata);
       } catch (_error) {

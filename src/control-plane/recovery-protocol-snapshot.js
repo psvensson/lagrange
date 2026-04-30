@@ -20,8 +20,12 @@ import {
   buildMembershipPublicationActiveSnapshot,
 } from './active-node-projection.js';
 import {
+  PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE,
   buildPublicationRecoveryGateSnapshot,
 } from './publication-recovery-gate.js';
+
+const LOCAL_STR_EMPTY = '';
+const LOCAL_NUM_ONE = 1;
 
 const PARTICIPATION_REASON = Object.freeze({
   PUBLISHED_MEMBERSHIP: 'published_membership',
@@ -46,7 +50,7 @@ function normalizeOptionalString(value) {
 function normalizeNodeIdList(values = []) {
   return [...new Set(
     (Array.isArray(values) ? values : [])
-      .map((value) => String(value || '').trim())
+      .map((value) => String(value || LOCAL_STR_EMPTY).trim())
       .filter((value) => value.length > NUM.ZERO),
   )].sort();
 }
@@ -54,9 +58,15 @@ function normalizeNodeIdList(values = []) {
 function normalizeStringList(values = []) {
   return [...new Set(
     (Array.isArray(values) ? values : [])
-      .map((value) => String(value || '').trim())
+      .map((value) => String(value || LOCAL_STR_EMPTY).trim())
       .filter((value) => value.length > NUM.ZERO),
   )];
+}
+
+function normalizeNonNegativeInteger(value) {
+  return Number.isFinite(value) && value >= NUM.ZERO ?
+    Math.floor(value) :
+    NUM.ZERO;
 }
 
 function normalizeStringMap(values = {}) {
@@ -243,6 +253,7 @@ function buildContext(options = {}) {
     publishedActiveNodeIds,
     requiredAckNodeIds: normalizeNodeIdList(options.requiredAckNodeIds),
     acknowledgedNodeIds: normalizeNodeIdList(options.acknowledgedNodeIds),
+    pendingAckCount: normalizeNonNegativeInteger(options.pendingAckCount),
     priorityPartitionSummary:
       options.priorityPartitionSummary &&
         typeof options.priorityPartitionSummary === TYPEOF.OBJECT ?
@@ -532,7 +543,7 @@ function buildParticipationStateCounts(participationByNodeId = {}) {
         if (typeof state !== TYPEOF.STRING || state.length === NUM.ZERO) {
           return accumulator;
         }
-        accumulator[state] = (accumulator[state] || NUM.ZERO) + 1;
+        accumulator[state] = (accumulator[state] || NUM.ZERO) + LOCAL_NUM_ONE;
         return accumulator;
       }, {}),
   );
@@ -561,6 +572,16 @@ function buildRecoveryProtocolSnapshot(options = {}) {
       publishedMembershipIncludesTargetNode === false :
       false;
   const recoveryProtocolState = resolveRecoveryProtocolState(context);
+  const pendingAckEvidenceState =
+    options.pendingAckEvidenceState ===
+      PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.COUNT_ONLY ||
+    options.pendingAckEvidenceState ===
+      PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.REQUIRED_ACK_NODE_LIST ?
+      options.pendingAckEvidenceState :
+      Array.isArray(options.requiredAckNodeIds) ?
+      PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE
+        .REQUIRED_ACK_NODE_LIST :
+      PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.COUNT_ONLY;
   const publicationRecoveryGate = buildPublicationRecoveryGateSnapshot({
     publicationEpoch: context.publicationEpoch,
     publicationStatus: context.publicationStatus,
@@ -571,6 +592,8 @@ function buildRecoveryProtocolSnapshot(options = {}) {
     priorityRecoveryClosureWitness: context.priorityRecoveryClosureWitness,
     requiredAckNodeIds: context.requiredAckNodeIds,
     acknowledgedNodeIds: context.acknowledgedNodeIds,
+    pendingAckEvidenceState,
+    pendingAckCount: context.pendingAckCount,
     missingPublishedRecoveryActiveNodeIds:
       effectiveMissingPublishedRecoveryActiveNodeIds,
   });
@@ -585,6 +608,8 @@ function buildRecoveryProtocolSnapshot(options = {}) {
     publishedActiveNodeIds: Object.freeze([...context.publishedActiveNodeIds]),
     requiredAckNodeIds: Object.freeze([...context.requiredAckNodeIds]),
     acknowledgedNodeIds: Object.freeze([...context.acknowledgedNodeIds]),
+    pendingAckCount: context.pendingAckCount,
+    pendingAckEvidenceState,
     priorityPartitionSummary: freezeRecord(context.priorityPartitionSummary),
     priorityRecoveryClosureWitness:
       freezeRecord(context.priorityRecoveryClosureWitness),

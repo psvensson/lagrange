@@ -21,6 +21,8 @@ import {
   DEFAULT_EXCHANGE_PARTITION_COUNT,
 } from '../runtime-constants.js';
 
+const LOCAL_NUM_ZERO = 0;
+
 /**
  * Compute a simple consistent hash of a string key,
  * returning a non-negative integer.
@@ -35,11 +37,11 @@ const FNV_PRIME = 0x01000193;
 
 function hashKey(key) {
   let hash = FNV_OFFSET;
-  for (let i = 0; i < key.length; i++) {
+  for (let i = LOCAL_NUM_ZERO; i < key.length; i++) {
     hash ^= key.charCodeAt(i);
     hash = Math.imul(hash, FNV_PRIME);
   }
-  return hash >>> 0;
+  return hash >>> LOCAL_NUM_ZERO;
 }
 
 /**

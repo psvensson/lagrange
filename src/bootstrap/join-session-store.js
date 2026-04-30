@@ -3,6 +3,8 @@ import {
   StartupWorkflowStore,
 } from './startup-workflow-store.js';
 
+const LOCAL_STR_JOIN = 'join';
+
 const JOIN_CHECKPOINT = Object.freeze({
   SESSION_CREATED: 'SESSION_CREATED',
   SEED_CONTACTED: 'SEED_CONTACTED',
@@ -49,7 +51,7 @@ class JoinSessionStore {
     this.workflowStore = options.workflowStore instanceof StartupWorkflowStore ?
       options.workflowStore :
       new StartupWorkflowStore({
-        workflowKind: 'join',
+        workflowKind: LOCAL_STR_JOIN,
         checkpointSequence: JOIN_CHECKPOINT_SEQUENCE,
         initialCheckpoint: JOIN_CHECKPOINT.SESSION_CREATED,
         initialPhase: JOIN_SESSION_DEFAULT.PHASE,

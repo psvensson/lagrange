@@ -1,5 +1,7 @@
 import {TABLES} from '../constants/index.js';
 
+const LOCAL_STR_EMPTY = '';
+
 const CDC_AUTHORITY_CLASS = Object.freeze({
   CONTROL: 'control',
   USER: 'user',
@@ -366,7 +368,7 @@ const CDC_NON_PROPAGATED_TABLES = Object.freeze(
 function isKnownSystemTable(tableName) {
   return Object.prototype.hasOwnProperty.call(
     SYSTEM_TABLE_CDC_POLICIES,
-    String(tableName || ''),
+    String(tableName || LOCAL_STR_EMPTY),
   );
 }
 

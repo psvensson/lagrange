@@ -6,14 +6,23 @@ import {
   MEMBERSHIP_LIFECYCLE_STATE,
 } from './membership-lifecycle-constants.js';
 
+const LOCAL_STR_JOIN_ADMISSION = 'join_admission';
+const LOCAL_STR_RESTART_REENTRY = 'restart_reentry';
+const LOCAL_STR_DRAIN = 'drain';
+const LOCAL_STR_REMOVAL = 'removal';
+const LOCAL_STR_EMPTY = '';
+const LOCAL_STR_1IZGR = 'restart_reentry_requested';
+const LOCAL_STR_1J4BI = 'join_admission_requested';
+const LOCAL_STR_U0NVB = 'membership_removal_requested';
+
 export const MEMBERSHIP_LIFECYCLE_INTENT = Object.freeze({
-  JOIN_ADMISSION: 'join_admission',
-  RESTART_REENTRY: 'restart_reentry',
-  DRAIN: 'drain',
-  REMOVAL: 'removal',
+  JOIN_ADMISSION: LOCAL_STR_JOIN_ADMISSION,
+  RESTART_REENTRY: LOCAL_STR_RESTART_REENTRY,
+  DRAIN: LOCAL_STR_DRAIN,
+  REMOVAL: LOCAL_STR_REMOVAL,
 });
 
-function normalizeString(value, fallback = '') {
+function normalizeString(value, fallback = LOCAL_STR_EMPTY) {
   return typeof value === TYPEOF.STRING ? value.trim() || fallback : fallback;
 }
 
@@ -49,8 +58,8 @@ function buildJoinIntent(options = {}) {
     reasonCode: normalizeString(
       options.reasonCode,
       intentType === MEMBERSHIP_LIFECYCLE_INTENT.RESTART_REENTRY ?
-        'restart_reentry_requested' :
-        'join_admission_requested',
+        LOCAL_STR_1IZGR :
+        LOCAL_STR_1J4BI,
     ),
     membershipLifecycleSummary: buildMembershipLifecycleSummary({
       lifecycleState:
@@ -98,7 +107,7 @@ function buildRemovalIntent(options = {}) {
     intentType: MEMBERSHIP_LIFECYCLE_INTENT.REMOVAL,
     nodeId: normalizeString(options.nodeId),
     requestedAt: normalizeTimestamp(options.requestedAt, Date.now()),
-    reasonCode: normalizeString(options.reasonCode, 'membership_removal_requested'),
+    reasonCode: normalizeString(options.reasonCode, LOCAL_STR_U0NVB),
     membershipLifecycleSummary: buildMembershipLifecycleSummary({
       lifecycleState: MEMBERSHIP_LIFECYCLE_STATE.REMOVED,
       publishedActiveNodeIds: options.publishedActiveNodeIds,

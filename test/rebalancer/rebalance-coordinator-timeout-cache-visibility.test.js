@@ -515,7 +515,7 @@ test('checkTimeouts preserves cache-preferred incomplete visibility when the ' +
 test('checkTimeouts applies bounded SYNCING timeout to priority control-plane partitions',
   async (t) => {
     const nowMs = Date.now();
-    const staleUpdatedAtMs = nowMs - 130000;
+    const staleUpdatedAtMs = nowMs - 70000;
     const prioritySyncingOperationRow = {
       operation_id: 'op-priority-syncing-timeout',
       type: 'REPLACE',

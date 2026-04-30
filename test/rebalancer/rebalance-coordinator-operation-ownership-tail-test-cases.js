@@ -1378,6 +1378,161 @@ export function registerRebalanceCoordinatorOperationOwnershipTailTests({
   );
 
   test(
+    'RebalanceCoordinator accepts planning-owned priority spread completion ' +
+    'from raw operation rows',
+    async (t) => {
+      const spreadSatisfiedInFlightState = 'spread_satisfied_in_flight';
+      const staleOperationId = 'op-priority-raw-planning-spread-satisfied';
+      const stalePartitionId = 'sql_write_operations-p1';
+      const nextPartitionId = 'sql_transactions-p1';
+      const requiredDistinctNodeCount = 3;
+      const staleReadyDistinctNodeCount = 3;
+      const nextReadyDistinctNodeCount = 1;
+      const staleSpreadGap = 0;
+      const nextSpreadGap = 2;
+      const maxConcurrentAdds = 1;
+      const minReplicaCount = 1;
+      const nowMs = 1_000_000;
+      const createdAtOffsetMs = 1_000;
+      const updatedAtOffsetMs = 500;
+      const createdAt = nowMs - createdAtOffsetMs;
+      const updatedAt = nowMs - updatedAtOffsetMs;
+      let planningSnapshotCalls = 0;
+      let planningSnapshot = null;
+      const coordinator = new RebalanceCoordinator({
+        nodeId: 'node-local',
+        transactionCoordinator: createTransactionCoordinator(),
+        systemTableCache: {
+          get() {
+            return null;
+          },
+        },
+        cdcIntegrationService: {
+          async waitForCacheUpdate() {},
+        },
+        controlPlaneReadinessService: {
+          getPriorityRecoveryPlanningAnswerBestEffort() {
+            planningSnapshotCalls += 1;
+            return planningSnapshot;
+          },
+        },
+        tablePolicyService: {
+          async getPolicyForPartition() {
+            return {minReplicaCount};
+          },
+        },
+        messageRouter: {
+          async deliver() {
+            return {acknowledged: true, status: 'completed'};
+          },
+        },
+        sqlQueryEngine: {
+          async executeQuery() {
+            return {success: true, rows: [], changes: 1};
+          },
+        },
+        ...createStorageOwners(),
+        nowFn: () => nowMs,
+        enableTimeouts: false,
+      });
+      coordinator.initialize();
+      coordinator.config.maxConcurrentAdds = maxConcurrentAdds;
+
+      const stalePriorityReplaceOperation = {
+        operation_id: staleOperationId,
+        type: OperationType.REPLACE,
+        partition_id: stalePartitionId,
+        source_node_id: 'node-local',
+        target_node_id: 'node-remote-a',
+        replica_id: `${stalePartitionId}-r4`,
+        status: ReplicaStatus.PENDING,
+        workflow_step: WORKFLOW_STEP.SENDING,
+        created_at: createdAt,
+        updated_at: updatedAt,
+        completed_at: null,
+        error_message: null,
+        steps_history: JSON.stringify([{
+          step: WORKFLOW_STEP.SENDING,
+          timestamp: updatedAt,
+        }]),
+      };
+      planningSnapshot = {
+        priorityPartitionSummary: {
+          satisfied: false,
+          requiredDistinctNodeCount,
+          blockedPartitions: [{
+            partitionId: stalePartitionId,
+            requiredDistinctNodeCount,
+            readyDistinctNodeCount: staleReadyDistinctNodeCount,
+            spreadGap: staleSpreadGap,
+          }, {
+            partitionId: nextPartitionId,
+            requiredDistinctNodeCount,
+            readyDistinctNodeCount: nextReadyDistinctNodeCount,
+            spreadGap: nextSpreadGap,
+          }],
+          missingPartitionIds: [stalePartitionId, nextPartitionId],
+        },
+        priorityRecoveryDecisionSnapshots: {
+          snapshots: [{
+            partitionId: stalePartitionId,
+            operationId: staleOperationId,
+            semanticState: spreadSatisfiedInFlightState,
+            completion: {
+              state: spreadSatisfiedInFlightState,
+              blocked: false,
+            },
+            spreadCompletion: {
+              satisfied: true,
+              satisfyingOperationIds: [staleOperationId],
+            },
+            coordinator: {
+              operationCount: maxConcurrentAdds,
+              operationIds: [staleOperationId],
+              operation: null,
+            },
+          }],
+        },
+      };
+
+      coordinator.getPriorityRecoveryAdmissionPlan = () =>
+        buildPriorityRecoveryAdmissionPlan({
+          maxConcurrentAdds,
+          priorityPartitionSummary: planningSnapshot.priorityPartitionSummary,
+          isPriorityPartition: (partitionId) =>
+            partitionId === stalePartitionId ||
+            partitionId === nextPartitionId,
+          isEmergencyPriorityPartition: () => false,
+        });
+      coordinator.queryCachedIncompleteOperations = async () => (
+        [stalePriorityReplaceOperation]
+      );
+      coordinator.queryIncompleteOperations = async () => (
+        [stalePriorityReplaceOperation]
+      );
+
+      try {
+        const canStartPriorityOperation =
+        await coordinator.canStartPriorityAddOperation({
+          partitionId: nextPartitionId,
+        });
+
+        t.equal(
+          canStartPriorityOperation,
+          true,
+          'raw priority rows should use planning snapshots before deciding whether they still consume the ordinary priority lane',
+        );
+        t.ok(
+          planningSnapshotCalls > maxConcurrentAdds,
+          'the grouped priority add-budget path should request planning evidence beyond the pressure gate',
+        );
+      } finally {
+        await coordinator.shutdown();
+      }
+    },
+  );
+
+  test(
     'RebalanceCoordinator releases priority add budget from admission ' +
     'blocked-partition evidence when workflow snapshots are unavailable',
     async (t) => {
@@ -1476,6 +1631,119 @@ export function registerRebalanceCoordinatorOperationOwnershipTailTests({
           canStartPriorityOperation,
           true,
           'current blocked partition should retain the ordinary priority lane when stale rows belong to partitions outside the blocked set',
+        );
+      } finally {
+        await coordinator.shutdown();
+      }
+    },
+  );
+
+  test(
+    'RebalanceCoordinator keeps blocked priority add admission open when ' +
+    'the critical reserve is exhausted',
+    async (t) => {
+      const pressuredNodeId = 'node-priority-pressure-admission';
+      const blockedPartitionId = 'sql_write_operations-p1';
+      const nonBlockedPriorityPartitionId = 'sql_transactions-p1';
+      const maxConcurrentAdds = 1;
+      const noCacheRow = null;
+      const minReplicaCount = 1;
+      const sqlChangeCount = 1;
+      const requiredDistinctNodeCount = 3;
+      const readyDistinctNodeCount = 1;
+      const spreadGap = 2;
+      const saturatedNodeCount = 1;
+      const totalPending = 36;
+      const totalPendingCritical = 36;
+      const totalPendingBackground = 0;
+      const maxPendingUtilization = 0.5625;
+      const pressureSummary = Object.freeze({
+        backpressured: true,
+        saturatedNodeCount,
+        totalPending,
+        totalPendingCritical,
+        totalPendingBackground,
+        criticalReserveExhausted: true,
+        maxPendingUtilization,
+      });
+      const priorityPartitionSummary = Object.freeze({
+        satisfied: false,
+        requiredDistinctNodeCount,
+        blockedPartitions: Object.freeze([Object.freeze({
+          partitionId: blockedPartitionId,
+          requiredDistinctNodeCount,
+          readyDistinctNodeCount,
+          spreadGap,
+        })]),
+        missingPartitionIds: Object.freeze([blockedPartitionId]),
+      });
+      const coordinator = new RebalanceCoordinator({
+        nodeId: pressuredNodeId,
+        transactionCoordinator: createTransactionCoordinator(),
+        systemTableCache: {
+          get() {
+            return noCacheRow;
+          },
+        },
+        cdcIntegrationService: {
+          async waitForCacheUpdate() {},
+        },
+        tablePolicyService: {
+          async getPolicyForPartition() {
+            return {minReplicaCount};
+          },
+        },
+        messageRouter: {
+          getOutboundPressureSummary() {
+            return pressureSummary;
+          },
+          async deliver() {
+            return {acknowledged: true, status: 'completed'};
+          },
+        },
+        sqlQueryEngine: {
+          async executeQuery() {
+            return {success: true, rows: [], changes: sqlChangeCount};
+          },
+        },
+        ...createStorageOwners(),
+        enableTimeouts: false,
+      });
+      coordinator.initialize();
+      coordinator.config.maxConcurrentAdds = maxConcurrentAdds;
+      coordinator.getPriorityRecoveryAdmissionPlan = () =>
+        buildPriorityRecoveryAdmissionPlan({
+          maxConcurrentAdds,
+          priorityPartitionSummary,
+          isPriorityPartition: (partitionId) =>
+            partitionId === blockedPartitionId ||
+            partitionId === nonBlockedPriorityPartitionId,
+          isEmergencyPriorityPartition: () => false,
+        });
+      coordinator.queryCachedIncompleteOperations = async () => [];
+      coordinator.queryIncompleteOperations = async () => [];
+
+      try {
+        const blockedPartitionCanStart =
+          await coordinator.canStartPriorityAddOperation({
+            partitionId: blockedPartitionId,
+            bypassEmptyQueryDelay: true,
+          });
+        const nonBlockedPartitionCanStart =
+          await coordinator.canStartPriorityAddOperation({
+            partitionId: nonBlockedPriorityPartitionId,
+            bypassEmptyQueryDelay: true,
+          });
+
+        t.equal(
+          blockedPartitionCanStart,
+          true,
+          'blocked priority recovery should retain its add lane under critical-reserve pressure',
+        );
+        t.equal(
+          nonBlockedPartitionCanStart,
+          false,
+          'priority partitions outside the blocked recovery set should still pause under critical-reserve pressure',
         );
       } finally {
         await coordinator.shutdown();

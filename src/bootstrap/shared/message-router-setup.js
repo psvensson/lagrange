@@ -26,6 +26,10 @@ import {
 } from
   '../../transport/node-address-resolution.js';
 
+const LOCAL_STR_MESSAGEROUTERSETUP = 'MessageRouterSetup';
+const LOCAL_STR_NODEID = 'nodeId';
+const LOCAL_NUM_ONE = 1;
+
 /**
  * Subsystem identifier for logging.
  */
@@ -107,7 +111,7 @@ class MessageRouterSetup {
   }) {
     // Validate required dependencies
     if (!nodeId) {
-      throw new DependencyError('MessageRouterSetup', 'nodeId');
+      throw new DependencyError(LOCAL_STR_MESSAGEROUTERSETUP, LOCAL_STR_NODEID);
     }
 
     const loggingService = LoggingService.getInstance();
@@ -135,7 +139,7 @@ class MessageRouterSetup {
     // like "joining-node-id/lifecycle" -> routes to node "joining-node-id"
     messageRouter.setServiceNodeResolver((address) => {
       const match = address.match(/^([^/]+)\//);
-      return match ? match[1] : null;
+      return match ? match[LOCAL_NUM_ONE] : null;
     });
     messageRouter.setNodeAddressResolver(
       createNodeWebSocketAddressResolver(),

@@ -824,6 +824,7 @@ class ControlPlaneSystemTableGatewaySegment1 {
       tableName: context?.tableName || null,
       sql: context?.sql || null,
       operationKind: context?.operationKind || null,
+      coalescingKey: options?.coalescingKey || null,
     });
     let queryOptions = {
       ...buildControlPlaneQueryOptions({
@@ -867,6 +868,7 @@ class ControlPlaneSystemTableGatewaySegment1 {
       deliverySource: options?.deliverySource,
       tableName: context?.tableName || null,
       operationKind: context?.operationKind || null,
+      coalescingKey: options?.coalescingKey || null,
     });
     let writeOptions = {
       routingReadinessDimension:
@@ -966,6 +968,11 @@ class ControlPlaneSystemTableGatewaySegment1 {
       writeOptions,
       options,
       CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.PRESSURERETRYAFTERMS,
+    );
+    writeOptions = copyOption(
+      writeOptions,
+      options,
+      CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.RESOURCEKEYS,
     );
     writeOptions = copyOption(
       writeOptions,

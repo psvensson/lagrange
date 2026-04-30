@@ -9,6 +9,9 @@ import {
   TYPEOF,
 } from '../../constants/index.js';
 
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_NUM_ONE = 1;
+
 const MESSAGE_GROUP_SERVICE_ACTIVATION_ERROR = Object.freeze({
   NODE_ID_REQUIRED:
     'Message-group service activation requires nodeId',
@@ -32,7 +35,7 @@ function resolveReplicaUnifiedAddress(nodeId, replicaId, service) {
     return service.getUnifiedAddress();
   }
   if (typeof service?.unifiedAddress === TYPEOF.STRING &&
-      service.unifiedAddress.length > 0) {
+      service.unifiedAddress.length > LOCAL_NUM_ZERO) {
     return service.unifiedAddress;
   }
   return AddressManager.getInstance().format(
@@ -47,7 +50,7 @@ function isTransientActivationError(error) {
 }
 
 async function activateMessageGroupServiceRows(options = {}) {
-  if (typeof options.nodeId !== TYPEOF.STRING || options.nodeId.length === 0) {
+  if (typeof options.nodeId !== TYPEOF.STRING || options.nodeId.length === LOCAL_NUM_ZERO) {
     throw new Error(MESSAGE_GROUP_SERVICE_ACTIVATION_ERROR.NODE_ID_REQUIRED);
   }
   const activateReplica =
@@ -94,11 +97,11 @@ async function activateMessageGroupServiceRows(options = {}) {
     typeof options.resolveExtraFields === TYPEOF.FUNCTION ?
       options.resolveExtraFields :
       () => null;
-  let activatedCount = 0;
+  let activatedCount = LOCAL_NUM_ZERO;
 
   for (const [replicaId, service] of messageGroupServices.entries()) {
     const groupId = service?.groupId || null;
-    if (typeof groupId !== TYPEOF.STRING || groupId.length === 0) {
+    if (typeof groupId !== TYPEOF.STRING || groupId.length === LOCAL_NUM_ZERO) {
       continue;
     }
     const handlerRegistered = await Promise.resolve(
@@ -125,7 +128,7 @@ async function activateMessageGroupServiceRows(options = {}) {
       } else {
         await owner.activateReplica(activationContext);
       }
-      activatedCount += 1;
+      activatedCount += LOCAL_NUM_ONE;
     } catch (error) {
       if (options.deferTransientFailures === true &&
           isTransientActivationError(error)) {

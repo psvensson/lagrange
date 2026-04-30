@@ -11,6 +11,17 @@
 
 import {BaseError} from '../utils/base-error.js';
 
+const LOCAL_STR_RUNTIMEDRIVER = 'RuntimeDriver';
+const LOCAL_STR_1AM9G = '; ';
+const LOCAL_STR_VALIDATEDESCRIPTOR = 'validateDescriptor';
+const LOCAL_STR_LLYQW = 'RuntimeDriverRegistry';
+const LOCAL_STR_GETDRIVER = 'getDriver';
+const LOCAL_STR_REGISTER = 'register';
+const LOCAL_STR_163VV = 'ServiceRuntimeLifecycle';
+const LOCAL_STR_REGISTERENDPOINT = 'registerEndpoint';
+const LOCAL_STR_OPERATIONJOURNAL = 'operationJournal';
+const LOCAL_STR_IDEMPOTENCYCHECK = 'idempotencyCheck';
+
 /**
  * Error thrown when a driver method is not implemented by a subclass.
  *
@@ -26,7 +37,7 @@ class DriverNotImplementedError extends BaseError {
       `Driver '${driverKind}' does not implement '${methodName}'`,
       {
         context: {
-          component: 'RuntimeDriver',
+          component: LOCAL_STR_RUNTIMEDRIVER,
           operation: methodName,
           metadata: {driverKind},
         },
@@ -49,11 +60,11 @@ class DriverValidationError extends BaseError {
    */
   constructor(driverKind, errors) {
     super(
-      `Descriptor validation failed for '${driverKind}': ${errors.join('; ')}`,
+      `Descriptor validation failed for '${driverKind}': ${errors.join(LOCAL_STR_1AM9G)}`,
       {
         context: {
-          component: 'RuntimeDriver',
-          operation: 'validateDescriptor',
+          component: LOCAL_STR_RUNTIMEDRIVER,
+          operation: LOCAL_STR_VALIDATEDESCRIPTOR,
           metadata: {driverKind, errors},
         },
       },
@@ -81,7 +92,7 @@ class DriverLifecycleError extends BaseError {
       {
         cause: options.cause,
         context: {
-          component: 'RuntimeDriver',
+          component: LOCAL_STR_RUNTIMEDRIVER,
           operation,
           metadata: {driverKind},
           ...(options.context || {}),
@@ -113,8 +124,8 @@ class UnknownRuntimeKindError extends BaseError {
       ` (available: ${available})`,
       {
         context: {
-          component: 'RuntimeDriverRegistry',
-          operation: 'getDriver',
+          component: LOCAL_STR_LLYQW,
+          operation: LOCAL_STR_GETDRIVER,
           metadata: {kind, availableKinds},
         },
       },
@@ -138,8 +149,8 @@ class DuplicateDriverError extends BaseError {
       `Driver already registered for runtime kind '${kind}'`,
       {
         context: {
-          component: 'RuntimeDriverRegistry',
-          operation: 'register',
+          component: LOCAL_STR_LLYQW,
+          operation: LOCAL_STR_REGISTER,
           metadata: {kind},
         },
       },
@@ -162,7 +173,7 @@ class RegistryFrozenError extends BaseError {
       `Registry is frozen; cannot perform '${operation}'`,
       {
         context: {
-          component: 'RuntimeDriverRegistry',
+          component: LOCAL_STR_LLYQW,
           operation,
         },
       },
@@ -192,7 +203,7 @@ class LifecycleOrchestrationError extends BaseError {
       {
         cause: options.cause,
         context: {
-          component: 'ServiceRuntimeLifecycle',
+          component: LOCAL_STR_163VV,
           operation,
           metadata: {runtimeKind, serviceId},
         },
@@ -225,8 +236,8 @@ class EndpointIntentError extends BaseError {
       ` for service '${serviceId}': ${reason}`,
       {
         context: {
-          component: 'ServiceRuntimeLifecycle',
-          operation: 'registerEndpoint',
+          component: LOCAL_STR_163VV,
+          operation: LOCAL_STR_REGISTERENDPOINT,
           metadata: {runtimeKind, serviceId},
         },
       },
@@ -262,8 +273,8 @@ class OperationJournalError extends BaseError {
       {
         cause: options.cause,
         context: {
-          component: 'ServiceRuntimeLifecycle',
-          operation: 'operationJournal',
+          component: LOCAL_STR_163VV,
+          operation: LOCAL_STR_OPERATIONJOURNAL,
           metadata: {runtimeKind, serviceId, lifecycleOp: operation},
         },
       },
@@ -298,8 +309,8 @@ class IdempotencyCheckError extends BaseError {
       {
         cause: options.cause,
         context: {
-          component: 'ServiceRuntimeLifecycle',
-          operation: 'idempotencyCheck',
+          component: LOCAL_STR_163VV,
+          operation: LOCAL_STR_IDEMPOTENCYCHECK,
           metadata: {runtimeKind, serviceId},
         },
       },

@@ -1,3 +1,6 @@
+const LOCAL_STR_WWEY1 = 'Deferred Raft response delivery';
+const LOCAL_STR_OMLJF = 'Failed to send Raft response';
+
 function createMessageGroupServiceRuntimeMethodsClassPart1(deps = {}) {
   const {
     CDC_FORWARD_MAX_RELAY_DEPTH,
@@ -450,14 +453,14 @@ function createMessageGroupServiceRuntimeMethodsClassPart1(deps = {}) {
                   !result?.acknowledged &&
                   shouldDeferImmediateDeliveryRetry(result)
                 ) {
-                  this.logger.debug('Deferred Raft response delivery', {
+                  this.logger.debug(LOCAL_STR_WWEY1, {
                     destination: senderAddress,
                     retryAfterMs: result.retryAfterMs,
                     errorCode: result?.errorCode || null,
                   });
                 }
               } catch (err) {
-                this.logger.error('Failed to send Raft response', {
+                this.logger.error(LOCAL_STR_OMLJF, {
                   error: err.message,
                   destination: senderAddress,
                 });

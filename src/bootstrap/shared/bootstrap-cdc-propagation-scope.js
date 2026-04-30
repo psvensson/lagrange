@@ -1,5 +1,7 @@
 import {TYPEOF} from '../../constants/index.js';
 
+const LOCAL_STR_1IWB9 = 'Detached bootstrap-owned CDC propagation subscriber';
+
 function isBootstrapOwnedCdcPropagationActive(currentPhase, completePhase) {
   return currentPhase !== completePhase;
 }
@@ -16,7 +18,7 @@ function detachBootstrapOwnedCdcSubscriber(options = {}) {
   if (typeof options.logger?.debug === TYPEOF.FUNCTION) {
     options.logger.debug(
       options.logMessage ||
-        'Detached bootstrap-owned CDC propagation subscriber',
+        LOCAL_STR_1IWB9,
       {
         nodeId: options.nodeId || null,
         tableName: options.tableName || null,

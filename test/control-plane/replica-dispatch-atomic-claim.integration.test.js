@@ -20,6 +20,9 @@ import {
 import {DISPATCH_SUBSYSTEM} from
   '../../src/control-plane/replica-dispatch-service-constants.js';
 import {
+  REPLICA_OPERATION_VISIBILITY_READ_MODE,
+} from '../../src/rebalancer/replica-operation-repository.js';
+import {
   COLUMN,
   SERVICE_TYPE,
   SERVICE_STATUS,
@@ -211,6 +214,125 @@ test(
 );
 
 test(
+  'ReplicaDispatchService unions authoritative priority retry rows when ' +
+  'cache has stale rows',
+  async (t) => {
+    initEnv();
+
+    const now = Date.now();
+    const targetNodeId = 'node-target';
+    const sourceNodeId = 'node-source';
+    const staleCacheOperationId = 'op-stale-cache-retry-dispatch';
+    const authoritativeOperationId = 'op-authoritative-priority-retry-dispatch';
+    const staleCacheRow = {
+      operation_id: staleCacheOperationId,
+      type: 'REPLACE',
+      partition_id: 'sql_transactions-p1',
+      replica_id: 'sql_transactions-p1-r4',
+      source_node_id: sourceNodeId,
+      target_node_id: targetNodeId,
+      status: 'pending',
+      workflow_step: WORKFLOW_STEP.PENDING,
+      created_at: now,
+      updated_at: now,
+      completed_at: null,
+      error_message: null,
+      steps_history: '[]',
+    };
+    const authoritativeQueryOptions = [];
+    const service = new ReplicaDispatchService({
+      nodeId: targetNodeId,
+      messageRouter: {},
+      cdcIntegrationService: {},
+      systemTableCache: {
+        get() {
+          return null;
+        },
+        getAll(tableName) {
+          return tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS ?
+            [staleCacheRow] :
+            [];
+        },
+      },
+      rebalanceCoordinator: {
+        isOperationLocallyOwned(operation) {
+          return (
+            operation?.targetNodeId === targetNodeId ||
+            operation?.target_node_id === targetNodeId
+          );
+        },
+        repository: {
+          async queryIncompleteOperations(options) {
+            authoritativeQueryOptions.push(options);
+            return [{
+              operationId: authoritativeOperationId,
+              type: 'REPLACE',
+              partitionId: 'sql_write_operations-p1',
+              replicaId: 'sql_write_operations-p1-r4',
+              sourceNodeId,
+              targetNodeId,
+              status: 'pending',
+              workflowStep: WORKFLOW_STEP.PENDING,
+              createdAt: now,
+              updatedAt: now,
+              completedAt: null,
+              errorMessage: null,
+              stepsHistory: [],
+              entityType: SERVICE_TYPE.PARTITION,
+              entityId: 'sql_write_operations-p1',
+            }];
+          },
+        },
+      },
+      controlPlaneReadinessService: {
+        getMembershipPublicationDiagnosticsSync() {
+          return {
+            publicationEpoch: 3,
+            publicationStatus: 'PUBLISHED',
+            publishedActiveNodeIds: [targetNodeId],
+            priorityPartitionSummary: {
+              requiredDistinctNodeCount: 3,
+              readyEligibleNodeCount: 2,
+              blockedPartitions: [{
+                partitionId: 'sql_write_operations-p1',
+                requiredDistinctNodeCount: 3,
+                readyDistinctNodeCount: 2,
+                spreadGap: 1,
+              }],
+              missingPartitionIds: ['sql_write_operations-p1'],
+            },
+            membershipLifecycleSummary: {
+              locallyEligibleNodeIds: [targetNodeId],
+              projectedServingNodeIds: [targetNodeId],
+            },
+          };
+        },
+      },
+    });
+
+    const dispatchRows =
+      await service.getDispatchRetryRowsForNode(targetNodeId);
+
+    t.same(
+      authoritativeQueryOptions,
+      [{
+        visibilityReadMode:
+          REPLICA_OPERATION_VISIBILITY_READ_MODE.OWNER_RPC_REQUIRED,
+      }],
+      'priority recovery should still query authoritative retry rows when cache has replayable work',
+    );
+    t.same(
+      dispatchRows.map((row) => row.operation_id),
+      [
+        authoritativeOperationId,
+        staleCacheOperationId,
+      ],
+      'authoritative retry rows should be unioned ahead of cache rows',
+    );
+  },
+);
+
+test(
   'ReplicaDispatchService dispatches coordinator-created pending operation without CDC trigger',
   async (t) => {
     initEnv();
@@ -389,6 +511,8 @@ test(
           return {
             nodeId,
             dimensions: {
+              [CONTROL_PLANE_READINESS_DIMENSION
+                .CONTROL_PLANE_RECOVERY_ELIGIBLE]: true,
               [CONTROL_PLANE_READINESS_DIMENSION
                 .REPAIR_ELIGIBLE]: true,
             },

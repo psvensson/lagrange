@@ -7,6 +7,12 @@ import {
   WS_OPEN_STATE,
 } from './examples-runner-constants.js';
 
+const LOCAL_STR_OPEN = 'open';
+const LOCAL_STR_ERROR = 'error';
+const LOCAL_STR_3FM1D = 'Admin examples socket closed';
+const LOCAL_STR_MESSAGE = 'message';
+const LOCAL_STR_CLOSE = 'close';
+
 /**
  * Admin websocket client used by the examples runner.
  */
@@ -51,8 +57,8 @@ class AdminWsClient {
         reject(error);
       };
 
-      socket.once('open', onOpen);
-      socket.once('error', onOpenError);
+      socket.once(LOCAL_STR_OPEN, onOpen);
+      socket.once(LOCAL_STR_ERROR, onOpenError);
     });
 
     return this.socketReady;
@@ -64,7 +70,7 @@ class AdminWsClient {
    * @return {Promise<void>}
    */
   async close() {
-    this._rejectPending('Admin examples socket closed');
+    this._rejectPending(LOCAL_STR_3FM1D);
     if (this.socket) {
       try {
         this.socket.close();
@@ -143,7 +149,7 @@ class AdminWsClient {
    * @private
    */
   _bindSocket(socket) {
-    socket.on('message', (data) => {
+    socket.on(LOCAL_STR_MESSAGE, (data) => {
       let parsed = null;
       try {
         parsed = JSON.parse(data.toString());
@@ -153,13 +159,13 @@ class AdminWsClient {
       this._handleMessage(parsed);
     });
 
-    socket.on('error', (error) => {
+    socket.on(LOCAL_STR_ERROR, (error) => {
       this._rejectPending(`Admin examples socket error: ${error.message}`);
       this._resetSocket();
     });
 
-    socket.on('close', () => {
-      this._rejectPending('Admin examples socket closed');
+    socket.on(LOCAL_STR_CLOSE, () => {
+      this._rejectPending(LOCAL_STR_3FM1D);
       this._resetSocket();
     });
   }

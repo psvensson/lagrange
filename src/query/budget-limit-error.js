@@ -11,6 +11,9 @@
 
 import {BaseError} from '../utils/base-error.js';
 
+const LOCAL_STR_BUDGETENFORCER = 'BudgetEnforcer';
+const LOCAL_STR_BUDGETCHECK = 'budgetCheck';
+
 /**
  * Budget category identifiers for error context.
  * @enum {string}
@@ -52,8 +55,8 @@ class BudgetLimitError extends BaseError {
   constructor(message, options = {}) {
     super(message, {
       context: {
-        component: 'BudgetEnforcer',
-        operation: 'budgetCheck',
+        component: LOCAL_STR_BUDGETENFORCER,
+        operation: LOCAL_STR_BUDGETCHECK,
         metadata: {
           category: options.category,
           limit: options.limit,

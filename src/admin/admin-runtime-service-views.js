@@ -25,6 +25,8 @@ import {
   PORT_UNKNOWN,
 } from './admin-runtime-service-view-constants.js';
 
+const LOCAL_NUM_ZERO = 0;
+
 const SELECT_ALL_FROM = `${SQL.SELECT} * FROM`;
 
 /**
@@ -55,7 +57,7 @@ function handleListRuntimeServiceReplicas(params) {
     );
   }
 
-  if (filters.length > 0) {
+  if (filters.length > LOCAL_NUM_ZERO) {
     sql += ` ${SQL.WHERE} ${filters.join(` ${SQL.AND} `)}`;
   }
 
@@ -180,15 +182,15 @@ function formatEndpointUri(protocol, address, port) {
  * @return {string} Health state constant.
  */
 function resolveLogicalServiceHealth(desired, observed, healthy) {
-  if (desired <= 0) {
-    return observed === 0 ?
+  if (desired <= LOCAL_NUM_ZERO) {
+    return observed === LOCAL_NUM_ZERO ?
       LOGICAL_SERVICE_HEALTH.UNKNOWN :
       LOGICAL_SERVICE_HEALTH.HEALTHY;
   }
   if (healthy >= desired) {
     return LOGICAL_SERVICE_HEALTH.HEALTHY;
   }
-  if (healthy === 0) {
+  if (healthy === LOCAL_NUM_ZERO) {
     return LOGICAL_SERVICE_HEALTH.DEGRADED;
   }
   return LOGICAL_SERVICE_HEALTH.PARTIAL;
@@ -211,7 +213,7 @@ function isBuiltInRuntimeService(serviceId) {
  * @return {number} Count of healthy endpoints.
  */
 function countHealthyReplicas(endpoints) {
-  let count = 0;
+  let count = LOCAL_NUM_ZERO;
   for (const ep of endpoints) {
     const status = ep[EP_COL.HEALTH_STATUS] ||
       ep.health_status;

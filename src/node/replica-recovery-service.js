@@ -31,6 +31,10 @@ import {
   REPLICA_RECOVERY_SUBSYSTEM,
 } from './replica-recovery-constants.js';
 
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_NUM_ONE = 1;
+const LOCAL_STR_CRITICAL = 'critical';
+
 /**
  * Node status values.
  */
@@ -93,7 +97,7 @@ class ReplicaRecoveryService extends EventEmitter {
     this.monitoringActive = false;
     this.currentCheckIntervalMs = this.checkIntervalMs;
     this.pendingRecoveries = new Map(); // entityId -> recovery info
-    this.recoveryCount = 0;
+    this.recoveryCount = LOCAL_NUM_ZERO;
 
     this.initialized = false;
   }
@@ -211,7 +215,7 @@ class ReplicaRecoveryService extends EventEmitter {
       const targetCount = partition.replica_count || this.minPartitionReplicas;
 
       if (healthyReplicas.length < targetCount) {
-        deficitCount += 1;
+        deficitCount += LOCAL_NUM_ONE;
         try {
           recoveryCount += await this.triggerPartitionRecovery(
             partition,
@@ -253,7 +257,7 @@ class ReplicaRecoveryService extends EventEmitter {
       const targetCount = group.replica_count || this.minMessageGroupReplicas;
 
       if (healthyReplicas.length < targetCount) {
-        deficitCount += 1;
+        deficitCount += LOCAL_NUM_ONE;
         try {
           recoveryCount += await this.triggerMessageGroupRecovery(
             group,
@@ -399,7 +403,7 @@ class ReplicaRecoveryService extends EventEmitter {
       let createdCount = REPLICA_RECOVERY_NUM.ZERO;
       for (const node of targetNodes) {
         await this.createPartitionReplica(partition, node.node_id);
-        createdCount += 1;
+        createdCount += LOCAL_NUM_ONE;
       }
       return createdCount;
     } finally {
@@ -463,7 +467,7 @@ class ReplicaRecoveryService extends EventEmitter {
       let createdCount = REPLICA_RECOVERY_NUM.ZERO;
       for (const node of targetNodes) {
         await this.createMessageGroupReplica(group, node.node_id);
-        createdCount += 1;
+        createdCount += LOCAL_NUM_ONE;
       }
       return createdCount;
     } finally {
@@ -575,7 +579,7 @@ class ReplicaRecoveryService extends EventEmitter {
         },
       }, {
         workClass: PRESSURE_WORK_CLASS.CRITICAL,
-        deliveryPriority: 'critical',
+        deliveryPriority: LOCAL_STR_CRITICAL,
       });
 
       this.recoveryCount++;
@@ -634,7 +638,7 @@ class ReplicaRecoveryService extends EventEmitter {
         },
       }, {
         workClass: PRESSURE_WORK_CLASS.CRITICAL,
-        deliveryPriority: 'critical',
+        deliveryPriority: LOCAL_STR_CRITICAL,
       });
 
       this.recoveryCount++;

@@ -11,6 +11,8 @@ import {
 import {generateCorrelationId} from '../utils/correlation.js';
 import {ADMIN_MESSAGE_TYPE} from './admin-constants.js';
 
+const LOCAL_STR_STRING = 'string';
+
 const ADMIN_SERVICE_OPERATION = Object.freeze({
   EXECUTE_QUERY: 'admin.execute_query',
   EXECUTE_PARTITION_CALLBACK: 'admin.execute_partition_callback',
@@ -37,7 +39,7 @@ function resolveOptionalTimeoutMs(value) {
 }
 
 function resolveOptionalLane(value) {
-  if (typeof value !== 'string') {
+  if (typeof value !== LOCAL_STR_STRING) {
     return null;
   }
   const normalized = value.trim().toLowerCase();

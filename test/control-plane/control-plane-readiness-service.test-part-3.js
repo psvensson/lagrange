@@ -1039,17 +1039,18 @@ test('ControlPlaneReadinessService treats config-safe publication as writable',
 
 test('ControlPlaneReadinessService exposes active priority control-plane recovery mode while publication is pending',
   async (t) => {
+    const nodeId = 'node-priority-recovery';
     const publicationReadOptions = [];
     const cache = createCache({
-      nodes: [createActiveNode('node-priority-recovery')],
-      services: [createMessageGroupService('node-priority-recovery')],
+      nodes: [createActiveNode(nodeId)],
+      services: [createMessageGroupService(nodeId)],
     });
     const readinessService = new ControlPlaneReadinessService({
-      nodeId: 'node-priority-recovery',
+      nodeId,
       systemTableCache: cache,
       storageAccountingService: createAccountingService({
-        'node-priority-recovery': {
-          nodeId: 'node-priority-recovery',
+        [nodeId]: {
+          nodeId,
           budgetBytes: 1000,
           pressureState: 'normal',
         },
@@ -1067,6 +1068,8 @@ test('ControlPlaneReadinessService exposes active priority control-plane recover
             publicationEpoch: 14,
             status: 'ACK_PENDING',
             createdAt: 1200,
+            requiredAckNodeIds: [nodeId],
+            acknowledgedNodeIds: [],
             priorityPartitionSummary: {
               satisfied: false,
               missingPartitionIds: ['replica_operations-p1'],
@@ -1078,7 +1081,7 @@ test('ControlPlaneReadinessService exposes active priority control-plane recover
     });
 
     const readiness = await readinessService.getNodeReadiness(
-      'node-priority-recovery',
+      nodeId,
     );
 
     t.equal(readiness.priorityControlPlaneRecovery.active, true);

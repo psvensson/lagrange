@@ -1,6 +1,8 @@
 import {CONTROL_PLANE_READINESS_SERVICE_SHARED} from './control-plane-readiness-service-shared.js';
 import {ControlPlaneReadinessServiceSegment2} from './control-plane-readiness-service-segment-2.js';
 
+const LOCAL_STR_BOOLEAN = 'boolean';
+
 const {
   AUTHORITY_DESCRIPTOR_STATE,
   AUTHORITY_PUBLICATION_OBSERVATION_STATE,
@@ -334,6 +336,11 @@ class ControlPlaneReadinessServiceSegment3 extends ControlPlaneReadinessServiceS
       partitionRowCount: Number.isFinite(latestRepair.partitionRowCount) ?
         latestRepair.partitionRowCount :
         null,
+      error:
+        typeof latestRepair.error === TYPEOF.STRING &&
+        latestRepair.error.length > NUM.ZERO ?
+          latestRepair.error :
+          null,
       recordedAt:
         typeof latestRepair.recordedAt === TYPEOF.STRING &&
         latestRepair.recordedAt.length > NUM.ZERO ?
@@ -762,7 +769,7 @@ class ControlPlaneReadinessServiceSegment3 extends ControlPlaneReadinessServiceS
       transportConnected: transportState.connected,
       localQueryTransportState: localQueryTransport?.state || null,
       localQueryTransportReady:
-        typeof localQueryTransport?.ready === 'boolean' ?
+        typeof localQueryTransport?.ready === LOCAL_STR_BOOLEAN ?
           localQueryTransport.ready :
           null,
       localQueryTransportReason: localQueryTransport?.reason || null,

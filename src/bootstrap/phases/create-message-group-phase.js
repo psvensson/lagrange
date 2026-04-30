@@ -35,6 +35,10 @@ import {
   UNIFIED_SERVICE_TYPE,
 } from '../../constants/index.js';
 
+const LOCAL_STR_FUNCTION = 'function';
+const LOCAL_NUM_ONE = 1;
+const LOCAL_STR_FS525 = 'CREATE_SELF_HOSTED message-group metadata staged for deferred authoritative publication';
+
 /**
  * Format missing-replica assertion message for join lifecycle.
  * @param {string} replicaId
@@ -330,7 +334,7 @@ class CreateMessageGroupPhase {
       messageGroup.startElection();
       if (index < replicas.length - NUM.ONE &&
           electionReleaseDelayMs > NUM.ZERO &&
-          typeof sleep === 'function') {
+          typeof sleep === LOCAL_STR_FUNCTION) {
         await sleep(electionReleaseDelayMs);
       }
     }
@@ -561,7 +565,7 @@ class CreateMessageGroupPhase {
         );
       }
 
-      if (typeof this.delegates.seedJoinTimeCacheRow === 'function') {
+      if (typeof this.delegates.seedJoinTimeCacheRow === LOCAL_STR_FUNCTION) {
         this.delegates.seedJoinTimeCacheRow(
           TABLES.SERVICES,
           serviceData,
@@ -595,7 +599,7 @@ class CreateMessageGroupPhase {
     let lastError = null;
 
     while (nowFn() - startTime < retryTimeoutMs) {
-      attempt += 1;
+      attempt += LOCAL_NUM_ONE;
       try {
         const response = await this.delegates
           .getHttpPostImpl()(registerUrl, serviceData);
@@ -774,7 +778,7 @@ class CreateMessageGroupPhase {
       updated_at: now,
     };
     this.pendingCreateSelfHostedMessageGroupRow = messageGroupRow;
-    if (typeof this.delegates.seedJoinTimeCacheRow === 'function') {
+    if (typeof this.delegates.seedJoinTimeCacheRow === LOCAL_STR_FUNCTION) {
       this.delegates.seedJoinTimeCacheRow(
         TABLES.MESSAGE_GROUPS,
         messageGroupRow,
@@ -795,7 +799,7 @@ class CreateMessageGroupPhase {
       );
     }
 
-    logger.info('CREATE_SELF_HOSTED message-group metadata staged for deferred authoritative publication', {
+    logger.info(LOCAL_STR_FS525, {
       nodeId: this.nodeId,
       groupId,
       replicaCount: replicas.length,

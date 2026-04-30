@@ -1,3 +1,14 @@
+const LOCAL_STR_6O8SF = 'startup workflow requires a durable session store';
+const LOCAL_STR_STRING = 'string';
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_STR_FUNCTION = 'function';
+const LOCAL_STR_1JUYB = 'startup workflow sessionId is required';
+const LOCAL_STR_OBJECT = 'object';
+const LOCAL_STR_R8QIF = 'startup workflow step must be an object';
+const LOCAL_STR_16C99 = 'startup workflow step run must be a function';
+const LOCAL_STR_1DD7X = 'startup workflow step shouldRerun must be a function';
+const LOCAL_STR_19U5T = 'startup workflow step checkpoint must be a string';
+
 /**
  * Shared startup pipeline runner for seed bootstrap and node join.
  *
@@ -26,15 +37,15 @@ function validateWorkflowSessionStore(sessionStore) {
     typeof sessionStore.advanceCheckpoint === 'function' &&
     typeof sessionStore.recordFailure === 'function';
   if (!hasSessionStore) {
-    throw new Error('startup workflow requires a durable session store');
+    throw new Error(LOCAL_STR_6O8SF);
   }
 }
 
 function defaultExtractErrorCode(error) {
-  if (typeof error?.code === 'string' && error.code.length > 0) {
+  if (typeof error?.code === LOCAL_STR_STRING && error.code.length > LOCAL_NUM_ZERO) {
     return error.code;
   }
-  if (typeof error?.message === 'string' && error.message.length > 0) {
+  if (typeof error?.message === LOCAL_STR_STRING && error.message.length > LOCAL_NUM_ZERO) {
     return error.message;
   }
   return STARTUP_WORKFLOW_DEFAULT_ERROR_CODE;
@@ -194,7 +205,7 @@ class StartupPipelineRunner {
    * @param {Object} payload
    */
   emit(eventName, payload) {
-    if (!this.eventSink || typeof this.eventSink.emit !== 'function') {
+    if (!this.eventSink || typeof this.eventSink.emit !== LOCAL_STR_FUNCTION) {
       return;
     }
     this.eventSink.emit(`pipeline:${eventName}`, payload);
@@ -212,8 +223,8 @@ class StartupPipelineRunner {
       nodeId: options.nodeId,
       allowResumeLatest: options.allowResumeLatest === true,
     });
-    if (typeof resolvedSessionId !== 'string' || resolvedSessionId.length === 0) {
-      throw new Error('startup workflow sessionId is required');
+    if (typeof resolvedSessionId !== LOCAL_STR_STRING || resolvedSessionId.length === LOCAL_NUM_ZERO) {
+      throw new Error(LOCAL_STR_1JUYB);
     }
     return resolvedSessionId;
   }
@@ -227,7 +238,7 @@ class StartupPipelineRunner {
 
   shouldRerunSatisfiedStep(sessionStore, session, step) {
     return this.isCheckpointSatisfied(sessionStore, session, step) &&
-      typeof step.shouldRerun === 'function' &&
+      typeof step.shouldRerun === LOCAL_STR_FUNCTION &&
       step.shouldRerun(session) === true;
   }
 
@@ -249,7 +260,7 @@ class StartupPipelineRunner {
       phase: options.phase,
       errorCode: extractErrorCode(error),
       failureMessage:
-        typeof error?.message === 'string' && error.message.length > 0 ?
+        typeof error?.message === LOCAL_STR_STRING && error.message.length > LOCAL_NUM_ZERO ?
           error.message :
           null,
       retryAfterMs: error?.retryAfterMs,
@@ -298,18 +309,18 @@ class StartupPipelineRunner {
    * @return {void}
    */
   assertValidCheckpointStep(step) {
-    if (!step || typeof step !== 'object') {
-      throw new Error('startup workflow step must be an object');
+    if (!step || typeof step !== LOCAL_STR_OBJECT) {
+      throw new Error(LOCAL_STR_R8QIF);
     }
-    if (typeof step.run !== 'function') {
-      throw new Error('startup workflow step run must be a function');
+    if (typeof step.run !== LOCAL_STR_FUNCTION) {
+      throw new Error(LOCAL_STR_16C99);
     }
     if (step.shouldRerun !== undefined &&
-        typeof step.shouldRerun !== 'function') {
-      throw new Error('startup workflow step shouldRerun must be a function');
+        typeof step.shouldRerun !== LOCAL_STR_FUNCTION) {
+      throw new Error(LOCAL_STR_1DD7X);
     }
-    if (typeof step.checkpoint !== 'string' || step.checkpoint.length === 0) {
-      throw new Error('startup workflow step checkpoint must be a string');
+    if (typeof step.checkpoint !== LOCAL_STR_STRING || step.checkpoint.length === LOCAL_NUM_ZERO) {
+      throw new Error(LOCAL_STR_19U5T);
     }
   }
 }

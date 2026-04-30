@@ -55,15 +55,15 @@ be completed.
 Phase 0.1 is capability-complete in several areas, but not exit-complete.
 Representative gate status is the current source of truth for closure.
 
-Open exit blockers as of April 26, 2026:
+Open exit blockers as of April 29, 2026:
 
 | Exit area | Capability Exists | Representative Gate Green | Current blocker |
 |-----------|-------------------|---------------------------|-----------------|
 | Rolling restart under load | ✅ | 🔧 | `rolling-restart` remains the active representative gate in `work/sprints/active-2026-q2-publication-scoped-consistency-and-node-join-closure.md` |
-| Priority recovery progress under load | ✅ | 🔧 | Missing-operation and stale ACK blockers migrated; `work/packages/active-20260426-publication-recovery-machine-spec-and-preflight-verification.md` owns the current missing-published active-node / heartbeat-status revival blocker |
+| Priority recovery progress under load | ✅ | 🔧 | Publication and restart-recovery gates are closed again; the current representative blocker is the quiescence stable-window timeout in `work/packages/active-20260429-control-plane-quiescence-stable-window-after-publication-closure.md` |
 | Metadata gateway and owner-ingress audit | ✅ | ✅ | `npm run test:metadata-gateway:audit` passed on April 26, 2026 |
 | Decision-boundary guardrail | ✅ | ✅ | `npm run audit:guideline:decision-boundaries` passed on April 26, 2026 |
-| Literal-owner guardrail | ✅ | ✅ | `npm run audit:guideline:literals` passed on April 26, 2026 with 0 new violations against the 6285-entry inherited baseline |
+| Literal-owner guardrail | ✅ | ✅ | `npm run audit:guideline:literals` passed on April 27, 2026 with 0 new and 0 inherited violations; the inherited baseline is retired at 0 entries |
 
 ### 0.1a. Topology Workflow Stabilization (March 2026)
 

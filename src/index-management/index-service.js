@@ -23,6 +23,11 @@ import {
   INDEX_TYPE,
 } from './index-constants.js';
 
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_STR_CRITICAL = 'critical';
+const LOCAL_STR_INSERT = 'INSERT';
+const LOCAL_STR_DELETE = 'DELETE';
+
 /**
  * Index types supported by the system.
  */
@@ -159,7 +164,7 @@ class IndexService {
     if (!indexName) {
       throw new Error(INDEX_ERROR_MSG.INDEX_NAME_REQUIRED);
     }
-    if (!columnNames || columnNames.length === 0) {
+    if (!columnNames || columnNames.length === LOCAL_NUM_ZERO) {
       throw new Error(INDEX_ERROR_MSG.COLUMN_NAMES_REQUIRED);
     }
 
@@ -209,7 +214,7 @@ class IndexService {
         },
       }, {
         workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
-        deliveryPriority: 'critical',
+        deliveryPriority: LOCAL_STR_CRITICAL,
       });
     }
 
@@ -245,7 +250,7 @@ class IndexService {
     // Get all partitions for this table
     const partitions = await this.getPartitionsForTable(tableId);
 
-    if (partitions.length === 0) {
+    if (partitions.length === LOCAL_NUM_ZERO) {
       this.logger.warn(INDEX_LOG_MSG.NO_PARTITIONS_FOR_TABLE, {tableId, tableName});
       return;
     }
@@ -336,7 +341,7 @@ class IndexService {
         'SELECT * FROM partitions WHERE partition_id = ?',
         [partitionId],
       );
-      return result.rows?.[0] || null;
+      return result.rows?.[LOCAL_NUM_ZERO] || null;
     }
     return null;
   }
@@ -370,7 +375,7 @@ class IndexService {
         },
       }, {
         workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
-        deliveryPriority: 'critical',
+        deliveryPriority: LOCAL_STR_CRITICAL,
       });
     }
 
@@ -478,7 +483,7 @@ class IndexService {
    * @return {number} Total number of indices.
    */
   getTotalIndexCount() {
-    let count = 0;
+    let count = LOCAL_NUM_ZERO;
     for (const tableIndices of this.indexCache.values()) {
       count += tableIndices.size;
     }
@@ -514,7 +519,7 @@ class IndexService {
     const {operation, data} = cdcEvent;
 
     switch (operation) {
-    case 'INSERT': {
+    case LOCAL_STR_INSERT: {
       const tableId = data.table_id;
       if (!this.indexCache.has(tableId)) {
         this.indexCache.set(tableId, new Map());
@@ -537,7 +542,7 @@ class IndexService {
       break;
     }
 
-    case 'DELETE': {
+    case LOCAL_STR_DELETE: {
       const tableId = data.table_id;
       if (this.indexCache.has(tableId)) {
         this.indexCache.get(tableId).delete(data.index_name);
@@ -568,7 +573,7 @@ class IndexService {
     const {operation, data} = cdcEvent;
 
     // Only handle INSERT events (new partitions)
-    if (operation !== 'INSERT') {
+    if (operation !== LOCAL_STR_INSERT) {
       return;
     }
 
@@ -578,7 +583,7 @@ class IndexService {
     // Get all indices for this table
     const indices = this.getIndicesForTable(tableId);
 
-    if (indices.length === 0) {
+    if (indices.length === LOCAL_NUM_ZERO) {
       return;
     }
 
@@ -646,8 +651,8 @@ class IndexService {
   async ensureIndicesOnPartition(partitionId, tableId) {
     const indices = this.getIndicesForTable(tableId);
 
-    if (indices.length === 0) {
-      return 0;
+    if (indices.length === LOCAL_NUM_ZERO) {
+      return LOCAL_NUM_ZERO;
     }
 
     this.logger.debug(INDEX_LOG_MSG.ENSURING_INDICES, {
@@ -656,7 +661,7 @@ class IndexService {
       indexCount: indices.length,
     });
 
-    let createdCount = 0;
+    let createdCount = LOCAL_NUM_ZERO;
     for (const index of indices) {
       const success = await this.createIndexOnPartition(partitionId, index);
       if (success) {
@@ -688,7 +693,7 @@ class IndexService {
     this.logger.info(INDEX_LOG_MSG.REBUILDING_INDEX, {tableId, indexName});
 
     const partitions = await this.getPartitionsForTable(tableId);
-    let successCount = 0;
+    let successCount = LOCAL_NUM_ZERO;
     const failCount = 0;
 
     for (const partition of partitions) {

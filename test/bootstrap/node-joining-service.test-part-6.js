@@ -51,6 +51,8 @@ import {
 import {META_SERVICE_ID} from '../../src/constants/wasm-meta.js';
 import {URL} from 'url';
 
+const JOIN_ACTIVATION_CONTROL_PLANE_UPSERT_OPTION =
+  'preferControlPlaneUpsert';
 
 // Initialize configuration and logging for tests
 function initializeTestEnvironment() {
@@ -419,8 +421,13 @@ test('NodeJoiningService - full join with MOVE_REPLICA', async (t) => {
           'activation should proceed once local service_endpoints rows are visible in cache');
         t.equal(activated.length, 1,
           'activation should register the visible replica');
-        t.same(activated[0]?.options, {status: SERVICE_STATUS.ACTIVE},
-          'activation should mark the replica service row active');
+        t.same(
+          activated[0]?.options,
+          {
+            status: SERVICE_STATUS.ACTIVE,
+            [JOIN_ACTIVATION_CONTROL_PLANE_UPSERT_OPTION]: true,
+          },
+          'activation should mark the replica service row active through the join-time control-plane upsert lane');
       } finally {
         NodeService.getInstance = originalGetNodeService;
       }

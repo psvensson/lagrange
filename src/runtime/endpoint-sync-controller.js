@@ -26,6 +26,17 @@ import {
 } from './endpoint-sync-leader-election.js';
 import {EndpointSyncMetrics} from './endpoint-sync-metrics.js';
 
+const LOCAL_STR_1P5S0 = 'EndpointSyncController';
+const LOCAL_STR_RUNONCE = 'runOnce';
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_STR_1T6E5 = 'EndpointSyncSourceClient';
+const LOCAL_STR_EMPTY = '';
+const LOCAL_STR_WARN = 'warn';
+const LOCAL_STR_ERROR = 'error';
+const LOCAL_STR_INFO = 'info';
+const LOCAL_STR_128KJ = ', ';
+const LOCAL_STR_MANAGED_RESOURCE = 'managed-resource';
+
 const ENDPOINT_SYNC_CONTROLLER_ERROR = Object.freeze({
   SOURCE_CLIENT_REQUIRED: 'sourceClient is required',
   SOURCE_FETCH_METHOD_REQUIRED:
@@ -64,8 +75,8 @@ class EndpointSyncControllerError extends BaseError {
     super(message, {
       cause,
       context: {
-        component: 'EndpointSyncController',
-        operation: 'runOnce',
+        component: LOCAL_STR_1P5S0,
+        operation: LOCAL_STR_RUNONCE,
         metadata,
       },
     });
@@ -116,10 +127,10 @@ function cloneReconcileSummary() {
  */
 function createRunSummary() {
   return {
-    sourceRowCount: 0,
-    filteredRowCount: 0,
-    plannedExportCount: 0,
-    conflictCount: 0,
+    sourceRowCount: LOCAL_NUM_ZERO,
+    filteredRowCount: LOCAL_NUM_ZERO,
+    plannedExportCount: LOCAL_NUM_ZERO,
+    conflictCount: LOCAL_NUM_ZERO,
     conflicts: [],
     skippedAsFollower: false,
     leadership: null,
@@ -137,7 +148,7 @@ function isSourceQueryError(error) {
   if (!error || typeof error !== TYPEOF.OBJECT) {
     return false;
   }
-  if (error?.context?.component === 'EndpointSyncSourceClient') {
+  if (error?.context?.component === LOCAL_STR_1T6E5) {
     return true;
   }
   return error.message === ENDPOINT_SYNC_ERROR.SOURCE_QUERY_FAILED ||
@@ -195,9 +206,9 @@ class EndpointSyncController {
     this._namespace = options.namespace ||
       this._config.targetNamespace ||
       this._config.leaseNamespace ||
-      '';
+      LOCAL_STR_EMPTY;
     if (typeof this._namespace !== TYPEOF.STRING ||
-      this._namespace.trim().length === 0) {
+      this._namespace.trim().length === LOCAL_NUM_ZERO) {
       throw new EndpointSyncControllerError(
         ENDPOINT_SYNC_CONTROLLER_ERROR.NAMESPACE_REQUIRED,
       );
@@ -263,7 +274,7 @@ class EndpointSyncController {
         stage: eventData.stage || null,
       });
     } catch (error) {
-      safeLog(this._logger, 'warn', ENDPOINT_SYNC_LOG.EVENT_EMIT_FAILURE, {
+      safeLog(this._logger, LOCAL_STR_WARN, ENDPOINT_SYNC_LOG.EVENT_EMIT_FAILURE, {
         namespace: this._namespace,
         reason: eventData.reason,
         error: error.message,
@@ -287,7 +298,7 @@ class EndpointSyncController {
     this._metrics.setExportedServices(summary.reconcileSummary.upsertedServices);
     this._metrics.setExportedEndpoints(summary.reconcileSummary.exportedEndpoints);
     this._metrics.incrementPortConflicts(summary.conflictCount);
-    if (cycleFailed || summary.reconcileSummary.groupFailures.length > 0) {
+    if (cycleFailed || summary.reconcileSummary.groupFailures.length > LOCAL_NUM_ZERO) {
       this._metrics.incrementReconcileFailures();
     }
   }
@@ -319,15 +330,15 @@ class EndpointSyncController {
     };
 
     if (cycleFailed) {
-      safeLog(this._logger, 'error', ENDPOINT_SYNC_LOG.RECONCILE_SUMMARY, payload);
+      safeLog(this._logger, LOCAL_STR_ERROR, ENDPOINT_SYNC_LOG.RECONCILE_SUMMARY, payload);
       return;
     }
-    if (summary.reconcileSummary.groupFailures.length > 0 ||
-      summary.conflictCount > 0) {
-      safeLog(this._logger, 'warn', ENDPOINT_SYNC_LOG.RECONCILE_SUMMARY, payload);
+    if (summary.reconcileSummary.groupFailures.length > LOCAL_NUM_ZERO ||
+      summary.conflictCount > LOCAL_NUM_ZERO) {
+      safeLog(this._logger, LOCAL_STR_WARN, ENDPOINT_SYNC_LOG.RECONCILE_SUMMARY, payload);
       return;
     }
-    safeLog(this._logger, 'info', ENDPOINT_SYNC_LOG.RECONCILE_SUMMARY, payload);
+    safeLog(this._logger, LOCAL_STR_INFO, ENDPOINT_SYNC_LOG.RECONCILE_SUMMARY, payload);
   }
 
   /**
@@ -351,7 +362,7 @@ class EndpointSyncController {
     try {
       if (this._leaderElector) {
         summary.leadership = await this._leaderElector.tryAcquireLeadership();
-        safeLog(this._logger, 'info', ENDPOINT_SYNC_LOG.LEADER_STATUS, {
+        safeLog(this._logger, LOCAL_STR_INFO, ENDPOINT_SYNC_LOG.LEADER_STATUS, {
           holderIdentity: summary.leadership.holderIdentity,
           leaseName: summary.leadership.leaseName,
           leaseNamespace: summary.leadership.leaseNamespace,
@@ -388,7 +399,7 @@ class EndpointSyncController {
       summary.conflicts = plan.conflicts;
 
       for (const conflict of plan.conflicts) {
-        safeLog(this._logger, 'warn', ENDPOINT_SYNC_LOG.GROUP_FAILURE, {
+        safeLog(this._logger, LOCAL_STR_WARN, ENDPOINT_SYNC_LOG.GROUP_FAILURE, {
           reason: ENDPOINT_SYNC_EVENT_REASON.PORT_CONFLICT,
           serviceKey: conflict.serviceKey,
           serviceName: conflict.logicalServiceName,
@@ -402,7 +413,7 @@ class EndpointSyncController {
           serviceName: conflict.logicalServiceName,
           protocol: conflict.protocol,
           message:
-            `Strict port conflict for ${conflict.serviceKey}: ${conflict.ports.join(', ')}`,
+            `Strict port conflict for ${conflict.serviceKey}: ${conflict.ports.join(LOCAL_STR_128KJ)}`,
         });
       }
 
@@ -414,7 +425,7 @@ class EndpointSyncController {
       });
 
       for (const groupFailure of summary.reconcileSummary.groupFailures) {
-        safeLog(this._logger, 'error', ENDPOINT_SYNC_LOG.GROUP_FAILURE, {
+        safeLog(this._logger, LOCAL_STR_ERROR, ENDPOINT_SYNC_LOG.GROUP_FAILURE, {
           reason: ENDPOINT_SYNC_EVENT_REASON.RECONCILE_FAILED,
           serviceKey: groupFailure.serviceKey,
           serviceName: groupFailure.serviceName,
@@ -429,7 +440,7 @@ class EndpointSyncController {
           protocol: groupFailure.protocol,
           stage: groupFailure.stage,
           message:
-            `Projection failure for ${groupFailure.serviceName || 'managed-resource'}: ` +
+            `Projection failure for ${groupFailure.serviceName || LOCAL_STR_MANAGED_RESOURCE}: ` +
             `${groupFailure.message}`,
         });
       }
@@ -451,7 +462,7 @@ class EndpointSyncController {
         message: error.message,
       });
 
-      safeLog(this._logger, 'error', ENDPOINT_SYNC_LOG.RECONCILE_FAILURE, {
+      safeLog(this._logger, LOCAL_STR_ERROR, ENDPOINT_SYNC_LOG.RECONCILE_FAILURE, {
         error: error.message,
       });
       this._logReconcileSummary(summary, durationMs, true);

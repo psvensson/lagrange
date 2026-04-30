@@ -1,3 +1,26 @@
+const LOCAL_STR_DISCONNECTED = 'disconnected';
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_NUM_5000 = 5000;
+const LOCAL_NUM_2000 = 2000;
+const LOCAL_STR_CONNECTED = 'connected';
+const LOCAL_STR_CDC_INITIALIZED = 'cdc:initialized';
+const LOCAL_STR_CACHE_UPDATE = 'cache:update';
+const LOCAL_STR_RECONNECTING = 'reconnecting';
+const LOCAL_STR_FAILED = 'failed';
+const LOCAL_STR_ERROR = 'error';
+const LOCAL_NUM_1000 = 1000;
+const LOCAL_STR_F0TXN = 'cdc:highlightCleared';
+const LOCAL_STR_CDC_STATUS = 'cdc:status';
+const LOCAL_NUM_100 = 100;
+const LOCAL_STR_PAUSED = 'paused';
+const LOCAL_STR_CDC_PAUSED = 'cdc:paused';
+const LOCAL_STR_CDC_RESUMED = 'cdc:resumed';
+const LOCAL_STR_R57P1 = 'cdc:refreshRequested';
+const LOCAL_NUM_ONE = 1;
+const LOCAL_STR_17XHO = ' | ';
+const LOCAL_STR_YELLOW = 'yellow';
+const LOCAL_STR_CDC_DESTROYED = 'cdc:destroyed';
+
 /**
  * CDCStreamHandler - Handles CDC stream subscription and event processing
  *
@@ -39,26 +62,26 @@ export class CDCStreamHandler {
     this.stateManager = options.stateManager || null;
 
     /** @type {CDCStreamStatus} */
-    this.status = 'disconnected';
+    this.status = LOCAL_STR_DISCONNECTED;
 
     /** @type {boolean} */
     this.paused = false;
 
     /** @type {CDCStreamStats} */
     this.stats = {
-      eventsReceived: 0,
-      eventsPerSecond: 0,
+      eventsReceived: LOCAL_NUM_ZERO,
+      eventsPerSecond: LOCAL_NUM_ZERO,
       lastEventTime: null,
-      lag: 0,
+      lag: LOCAL_NUM_ZERO,
     };
 
     // Event rate calculation
     this.eventTimestamps = [];
-    this.rateWindowMs = 5000; // 5 second window for rate calculation
+    this.rateWindowMs = LOCAL_NUM_5000; // 5 second window for rate calculation
 
     // Changed rows tracking for highlighting
     this.changedRows = new Map(); // key -> {timestamp, table}
-    this.highlightDurationMs = 2000;
+    this.highlightDurationMs = LOCAL_NUM_2000;
 
     // Bind handlers
     this.handleCacheDump = this.handleCacheDump.bind(this);
@@ -97,11 +120,11 @@ export class CDCStreamHandler {
     if (!this.cache) return;
 
     this.cache.loadFromDump(dump);
-    this.status = 'connected';
+    this.status = LOCAL_STR_CONNECTED;
 
     // Emit cache initialized event
     if (this.eventBus) {
-      this.eventBus.emit('cdc:initialized', {
+      this.eventBus.emit(LOCAL_STR_CDC_INITIALIZED, {
         timestamp: Date.now(),
         tableCount: Object.keys(dump).length,
       });
@@ -112,7 +135,7 @@ export class CDCStreamHandler {
       this.stateManager.setState({
         cache: {
           lastUpdate: Date.now(),
-          cdcLag: 0,
+          cdcLag: LOCAL_NUM_ZERO,
         },
       });
     }
@@ -152,7 +175,7 @@ export class CDCStreamHandler {
 
     // Emit CDC update event
     if (this.eventBus) {
-      this.eventBus.emit('cache:update', {
+      this.eventBus.emit(LOCAL_STR_CACHE_UPDATE, {
         table: change.table,
         key: change.key,
         operation: change.operation,
@@ -186,15 +209,15 @@ export class CDCStreamHandler {
    */
   handleStatusChange(status, _delay) {
     switch (status) {
-    case 'connected':
-      this.status = 'connected';
+    case LOCAL_STR_CONNECTED:
+      this.status = LOCAL_STR_CONNECTED;
       break;
-    case 'disconnected':
-    case 'reconnecting':
-      this.status = 'disconnected';
+    case LOCAL_STR_DISCONNECTED:
+    case LOCAL_STR_RECONNECTING:
+      this.status = LOCAL_STR_DISCONNECTED;
       break;
-    case 'failed':
-      this.status = 'error';
+    case LOCAL_STR_FAILED:
+      this.status = LOCAL_STR_ERROR;
       break;
     default:
       break;
@@ -214,11 +237,11 @@ export class CDCStreamHandler {
     this.eventTimestamps = this.eventTimestamps.filter((t) => t > cutoff);
 
     // Calculate rate
-    if (this.eventTimestamps.length > 0) {
+    if (this.eventTimestamps.length > LOCAL_NUM_ZERO) {
       this.stats.eventsPerSecond =
-        (this.eventTimestamps.length / this.rateWindowMs) * 1000;
+        (this.eventTimestamps.length / this.rateWindowMs) * LOCAL_NUM_1000;
     } else {
-      this.stats.eventsPerSecond = 0;
+      this.stats.eventsPerSecond = LOCAL_NUM_ZERO;
     }
   }
 
@@ -250,7 +273,7 @@ export class CDCStreamHandler {
       this.changedRows.delete(key);
 
       if (this.eventBus) {
-        this.eventBus.emit('cdc:highlightCleared', {
+        this.eventBus.emit(LOCAL_STR_F0TXN, {
           key,
           table: entry.table,
         });
@@ -281,7 +304,7 @@ export class CDCStreamHandler {
    */
   emitStatusUpdate() {
     if (this.eventBus) {
-      this.eventBus.emit('cdc:status', {
+      this.eventBus.emit(LOCAL_STR_CDC_STATUS, {
         status: this.status,
         paused: this.paused,
         stats: this.getStats(),
@@ -308,7 +331,7 @@ export class CDCStreamHandler {
 
     return {
       ...this.stats,
-      eventsPerSecond: Math.round(this.stats.eventsPerSecond * 100) / 100,
+      eventsPerSecond: Math.round(this.stats.eventsPerSecond * LOCAL_NUM_100) / LOCAL_NUM_100,
     };
   }
 
@@ -325,7 +348,7 @@ export class CDCStreamHandler {
    * @return {boolean}
    */
   isConnected() {
-    return this.status === 'connected' && !this.paused;
+    return this.status === LOCAL_STR_CONNECTED && !this.paused;
   }
 
   /**
@@ -335,11 +358,11 @@ export class CDCStreamHandler {
   pause() {
     if (!this.paused) {
       this.paused = true;
-      this.status = 'paused';
+      this.status = LOCAL_STR_PAUSED;
       this.emitStatusUpdate();
 
       if (this.eventBus) {
-        this.eventBus.emit('cdc:paused', {
+        this.eventBus.emit(LOCAL_STR_CDC_PAUSED, {
           timestamp: Date.now(),
         });
       }
@@ -355,14 +378,14 @@ export class CDCStreamHandler {
       this.paused = false;
       // Restore status based on connection state
       if (this.connectionManager && this.connectionManager.isConnected()) {
-        this.status = 'connected';
+        this.status = LOCAL_STR_CONNECTED;
       } else {
-        this.status = 'disconnected';
+        this.status = LOCAL_STR_DISCONNECTED;
       }
       this.emitStatusUpdate();
 
       if (this.eventBus) {
-        this.eventBus.emit('cdc:resumed', {
+        this.eventBus.emit(LOCAL_STR_CDC_RESUMED, {
           timestamp: Date.now(),
         });
       }
@@ -393,7 +416,7 @@ export class CDCStreamHandler {
     const sent = this.connectionManager.requestCacheDump();
 
     if (sent && this.eventBus) {
-      this.eventBus.emit('cdc:refreshRequested', {
+      this.eventBus.emit(LOCAL_STR_R57P1, {
         timestamp: Date.now(),
       });
     }
@@ -440,26 +463,26 @@ export class CDCStreamHandler {
     const statusSegments = [baseStatusInfo.text];
 
     // Add rate info if connected
-    if (this.status === 'connected') {
-      statusSegments.push(`${stats.eventsPerSecond.toFixed(1)} evt/s`);
+    if (this.status === LOCAL_STR_CONNECTED) {
+      statusSegments.push(`${stats.eventsPerSecond.toFixed(LOCAL_NUM_ONE)} evt/s`);
     }
 
     // Add lag info if significant
-    if (stats.lag > 1000) {
-      statusSegments.push(`Lag: ${Math.round(stats.lag / 1000)}s`);
+    if (stats.lag > LOCAL_NUM_1000) {
+      statusSegments.push(`Lag: ${Math.round(stats.lag / LOCAL_NUM_1000)}s`);
     }
 
     // Add last update time
     if (stats.lastEventTime) {
       const secondsAgo = Math.round((Date.now() - stats.lastEventTime) / 1000);
-      if (secondsAgo > 0) {
+      if (secondsAgo > LOCAL_NUM_ZERO) {
         statusSegments.push(`Last: ${secondsAgo}s ago`);
       }
     }
 
     return {
-      text: statusSegments.join(' | '),
-      color: stats.lag > 5000 ? 'yellow' : baseStatusInfo.color,
+      text: statusSegments.join(LOCAL_STR_17XHO),
+      color: stats.lag > LOCAL_NUM_5000 ? LOCAL_STR_YELLOW : baseStatusInfo.color,
       status: this.status,
       paused: this.paused,
       stats,
@@ -471,10 +494,10 @@ export class CDCStreamHandler {
    */
   resetStats() {
     this.stats = {
-      eventsReceived: 0,
-      eventsPerSecond: 0,
+      eventsReceived: LOCAL_NUM_ZERO,
+      eventsPerSecond: LOCAL_NUM_ZERO,
       lastEventTime: null,
-      lag: 0,
+      lag: LOCAL_NUM_ZERO,
     };
     this.eventTimestamps = [];
   }
@@ -493,7 +516,7 @@ export class CDCStreamHandler {
     }
 
     if (this.eventBus) {
-      this.eventBus.emit('cdc:destroyed', {});
+      this.eventBus.emit(LOCAL_STR_CDC_DESTROYED, {});
     }
   }
 }

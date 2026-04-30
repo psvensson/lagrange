@@ -14,6 +14,8 @@ import {
   WASM_RUNTIME_ADAPTER_ERROR_MSG as ERR,
 } from './debug-runtime-constants.js';
 
+const LOCAL_STR_KIND = 'kind';
+
 const DEFAULT_RUNTIME_OPTIONS = Object.freeze({
   timeoutMs: WASM_RUNTIME_DEFAULT.EXECUTION_TIMEOUT_MS,
 });
@@ -65,7 +67,7 @@ class WasmRuntimeAdapter {
       throw new Error(ERR.ABSTRACT_CLASS);
     }
     this.kind = kind || WASM_RUNTIME_ADAPTER_KIND.ABSTRACT;
-    Object.defineProperty(this, 'kind', {writable: false, configurable: false});
+    Object.defineProperty(this, LOCAL_STR_KIND, {writable: false, configurable: false});
   }
 
   /**

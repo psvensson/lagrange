@@ -1,6 +1,16 @@
 import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
 import {RebalanceCoordinatorSegment2} from './rebalance-coordinator-segment-2.js';
 
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_STR_1CXMR = 'RebalanceCoordinator is shutting down';
+const LOCAL_STR_FUNCTION = 'function';
+const LOCAL_STR_GWX6H = 'Failed to prime coordinator-created operation progress';
+const LOCAL_NUM_ONE = 1;
+const LOCAL_STR_CRITICAL_PARTITION = 'Critical partition ';
+const LOCAL_STR_IN_FLIGHT = 'in flight';
+const LOCAL_STR_OBJECT = 'object';
+const LOCAL_STR_ADD = 'add';
+
 const {
   CONCURRENT_CREATE_BUDGET_SCOPE,
   ControlPlaneReadinessService,
@@ -62,7 +72,7 @@ const PRIORITY_CONTROL_PLANE_REMOVE_LANE_CONFLICT_MESSAGE_SUFFIX =
 class RebalanceCoordinatorSegment3 extends RebalanceCoordinatorSegment2 {
   assertMembershipPublicationEpoch(move) {
     const requestedEpoch = Number(move?.membershipPublicationEpoch);
-    if (!Number.isInteger(requestedEpoch) || requestedEpoch < 0) {
+    if (!Number.isInteger(requestedEpoch) || requestedEpoch < LOCAL_NUM_ZERO) {
       return;
     }
 
@@ -101,7 +111,7 @@ class RebalanceCoordinatorSegment3 extends RebalanceCoordinatorSegment2 {
    */
   async createOperation(move) {
     if (this.isShuttingDown || !this.initialized) {
-      throw new Error('RebalanceCoordinator is shutting down');
+      throw new Error(LOCAL_STR_1CXMR);
     }
 
     this.assertLocalControlPlaneMutationReady(move);
@@ -206,6 +216,16 @@ class RebalanceCoordinatorSegment3 extends RebalanceCoordinatorSegment2 {
       normalizedMoveType === OperationType.REPLACE ?
         move.sourceNodeId || this.nodeId :
         this.nodeId;
+    const retiredSourceSafetyError =
+      await this.getRetiredReplaceSourceMoveSafetyError(normalizedMove, {
+        entityType,
+        entityId,
+      });
+    if (retiredSourceSafetyError) {
+      const error = new Error(retiredSourceSafetyError);
+      error.rebalanceSkipReason = REBALANCER_SKIP_REASON.SAFETY_BLOCKED;
+      throw error;
+    }
 
     // Deduplication: check for existing in-flight operation
     const existing = await this.queryExistingInFlightOperation(
@@ -570,7 +590,7 @@ class RebalanceCoordinatorSegment3 extends RebalanceCoordinatorSegment2 {
   async armCoordinatorCreatedOperationProgress(operation) {
     if (
       !operation?.operationId ||
-      typeof this.workflowOwner?.armCoordinatorCreatedOperation !== 'function'
+      typeof this.workflowOwner?.armCoordinatorCreatedOperation !== LOCAL_STR_FUNCTION
     ) {
       return false;
     }
@@ -578,7 +598,7 @@ class RebalanceCoordinatorSegment3 extends RebalanceCoordinatorSegment2 {
       return await this.workflowOwner.armCoordinatorCreatedOperation(operation);
     } catch (error) {
       this.logger.warn(
-        'Failed to prime coordinator-created operation progress',
+        LOCAL_STR_GWX6H,
         {
           operationId: operation.operationId,
           partitionId: operation.partitionId || null,
@@ -607,6 +627,29 @@ class RebalanceCoordinatorSegment3 extends RebalanceCoordinatorSegment2 {
       normalizedMoveType === OperationType.REPLACE ||
       normalizedMoveType === OperationType.REMOVE
     );
+  }
+
+  /**
+   * Resolve the first priority add-like operation that should keep the
+   * critical create lane closed.
+   * @param {Array<Object>} operations
+   * @return {Promise<Object|null>}
+   * @private
+   */
+  async findCriticalAddLikeConflictingOperation(operations = []) {
+    for (const operation of Array.isArray(operations) ? operations : []) {
+      if (!operation || this.isOperationTerminal(operation)) {
+        continue;
+      }
+      if (!this.isConcurrentAddBudgetOperation(operation)) {
+        continue;
+      }
+      if (await this.shouldIgnoreCriticalAddBudgetOperation(operation)) {
+        continue;
+      }
+      return operation;
+    }
+    return null;
   }
 
   /**
@@ -640,19 +683,13 @@ class RebalanceCoordinatorSegment3 extends RebalanceCoordinatorSegment2 {
     const existingOperations = Array.isArray(operationObservation?.operations) ?
       operationObservation.operations :
       [];
-    let conflictingOperation = null;
-    for (const operation of existingOperations) {
-      if (!operation || this.isOperationTerminal(operation)) {
-        continue;
-      }
-      if (!this.isConcurrentAddBudgetOperation(operation)) {
-        continue;
-      }
-      if (await this.shouldIgnoreCriticalAddBudgetOperation(operation)) {
-        continue;
-      }
-      conflictingOperation = operation;
-      break;
+    let conflictingOperation =
+      await this.findCriticalAddLikeConflictingOperation(existingOperations);
+    if (!conflictingOperation && operationObservation?.deferredOutcome) {
+      conflictingOperation =
+        await this.findCriticalAddLikeConflictingOperation(
+          this.getCacheVisibleEntityOperations(context),
+        );
     }
     if (!conflictingOperation && operationObservation?.deferredOutcome) {
       if (
@@ -677,11 +714,11 @@ class RebalanceCoordinatorSegment3 extends RebalanceCoordinatorSegment2 {
       return;
     }
 
-    throw this.createConcurrentOperationBudgetError(normalizedMoveType, 1, {
+    throw this.createConcurrentOperationBudgetError(normalizedMoveType, LOCAL_NUM_ONE, {
       message:
-        'Critical partition ' +
+        LOCAL_STR_CRITICAL_PARTITION +
         `${context.partitionId} already has an add-like operation ` +
-        'in flight',
+        LOCAL_STR_IN_FLIGHT,
       conflictingOperationId: conflictingOperation.operationId,
     });
   }
@@ -802,19 +839,19 @@ class RebalanceCoordinatorSegment3 extends RebalanceCoordinatorSegment2 {
     }
     if (
       typeof this.workflowOwner
-        ?.getPriorityRecoveryDecisionSnapshotForOperation === 'function'
+        ?.getPriorityRecoveryDecisionSnapshotForOperation === LOCAL_STR_FUNCTION
     ) {
       const decisionSnapshot =
         await this.workflowOwner.getPriorityRecoveryDecisionSnapshotForOperation(
           operation,
         );
-      if (decisionSnapshot && typeof decisionSnapshot === 'object') {
+      if (decisionSnapshot && typeof decisionSnapshot === LOCAL_STR_OBJECT) {
         return !shouldPriorityRecoveryOperationBlockPlanning(decisionSnapshot);
       }
     }
     if (
       typeof this.workflowOwner
-        ?.getPriorityRecoveryPlanningSnapshotForOperation !== 'function'
+        ?.getPriorityRecoveryPlanningSnapshotForOperation !== LOCAL_STR_FUNCTION
     ) {
       return false;
     }
@@ -822,7 +859,7 @@ class RebalanceCoordinatorSegment3 extends RebalanceCoordinatorSegment2 {
       await this.workflowOwner.getPriorityRecoveryPlanningSnapshotForOperation(
         operation,
       );
-    if (!planningSnapshot || typeof planningSnapshot !== 'object') {
+    if (!planningSnapshot || typeof planningSnapshot !== LOCAL_STR_OBJECT) {
       return false;
     }
     const assessment = buildPriorityRecoveryOperationAssessment({
@@ -1196,16 +1233,16 @@ class RebalanceCoordinatorSegment3 extends RebalanceCoordinatorSegment2 {
     let publicationRow = null;
     if (
       publicationService &&
-      typeof publicationService.getLatestClusterPublicationSync === 'function'
+      typeof publicationService.getLatestClusterPublicationSync === LOCAL_STR_FUNCTION
     ) {
       publicationRow = publicationService.getLatestClusterPublicationSync();
     } else if (
       publicationService &&
-      typeof publicationService.getLatestPublicationRowSync === 'function'
+      typeof publicationService.getLatestPublicationRowSync === LOCAL_STR_FUNCTION
     ) {
       publicationRow = publicationService.getLatestPublicationRowSync();
     }
-    return publicationRow && typeof publicationRow === 'object' ?
+    return publicationRow && typeof publicationRow === LOCAL_STR_OBJECT ?
       publicationRow :
       null;
   }
@@ -1264,7 +1301,7 @@ class RebalanceCoordinatorSegment3 extends RebalanceCoordinatorSegment2 {
   getReservedPriorityRecoveryAddSlots(options = {}) {
     return this.getPriorityRecoveryAdmissionPlan().getReservedNonPrioritySlots(
       options.partitionId,
-      'add',
+      LOCAL_STR_ADD,
     );
   }
 

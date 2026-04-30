@@ -24,6 +24,17 @@ import {
   NODE_PARTICIPATION_ADMISSION_STATE,
   normalizeNodeParticipationAdmissionState,
 } from './membership-lifecycle-constants.js';
+import {
+  PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE,
+} from './publication-recovery-gate.js';
+
+const LOCAL_STR_EMPTY = '';
+const LOCAL_STR_UPDATEDAT = 'updatedAt';
+const LOCAL_STR_UPDATED_AT = 'updated_at';
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_STR_5O9M1 = 'published_membership';
+const LOCAL_STR_UNPUBLISHED = 'unpublished';
+const LOCAL_STR_PROJECTED = 'projected';
 
 const MEMBERSHIP_PUBLICATION_KIND = 'cluster_membership';
 const ACTIVE_NODE_HEARTBEAT_GRACE_MS = 60000;
@@ -55,7 +66,7 @@ const ACTIVE_MEMBERSHIP_SNAPSHOT_SOURCE = Object.freeze({
 function normalizeNodeIdList(values = []) {
   return [...new Set(
     (Array.isArray(values) ? values : [])
-      .map((value) => String(value || '').trim())
+      .map((value) => String(value || LOCAL_STR_EMPTY).trim())
       .filter((value) => value.length > NUM.ZERO),
   )].sort();
 }
@@ -63,9 +74,26 @@ function normalizeNodeIdList(values = []) {
 function normalizeStringList(values = []) {
   return [...new Set(
     (Array.isArray(values) ? values : [])
-      .map((value) => String(value || '').trim())
+      .map((value) => String(value || LOCAL_STR_EMPTY).trim())
       .filter((value) => value.length > NUM.ZERO),
   )];
+}
+
+function normalizeNonNegativeInteger(value) {
+  return Number.isFinite(value) && value >= NUM.ZERO ?
+    Math.floor(value) :
+    NUM.ZERO;
+}
+
+function normalizePendingAckEvidenceState(value) {
+  if (
+    value === PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.COUNT_ONLY ||
+    value ===
+      PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.REQUIRED_ACK_NODE_LIST
+  ) {
+    return value;
+  }
+  return null;
 }
 
 function normalizeOptionalString(value) {
@@ -173,11 +201,11 @@ function resolveLatestPublicationRow(options = {}) {
     if (publishedAtDelta !== NUM.ZERO) {
       return publishedAtDelta;
     }
-    return readPublicationOrderingValue(right, ['updatedAt', 'updated_at']) -
-      readPublicationOrderingValue(left, ['updatedAt', 'updated_at']);
+    return readPublicationOrderingValue(right, [LOCAL_STR_UPDATEDAT, LOCAL_STR_UPDATED_AT]) -
+      readPublicationOrderingValue(left, [LOCAL_STR_UPDATEDAT, LOCAL_STR_UPDATED_AT]);
   });
 
-  return publicationRows[0] || null;
+  return publicationRows[LOCAL_NUM_ZERO] || null;
 }
 
 function resolveLatestPublishedPublicationRow(options = {}) {
@@ -369,7 +397,7 @@ function hasRuntimeTransportEvidence(nodeId, options = {}) {
     return true;
   }
   return options.localNodeResponsive === true &&
-    String(options.localNodeId || '').trim() === normalizedNodeId &&
+    String(options.localNodeId || LOCAL_STR_EMPTY).trim() === normalizedNodeId &&
     nodeEvidence?.localQueryTransportReady !== false;
 }
 
@@ -820,8 +848,8 @@ function resolveActiveNodeViews(options = {}) {
 
   return Object.freeze({
     authoritativeSource: hasPublishedMembership ?
-      'published_membership' :
-      'unpublished',
+      LOCAL_STR_5O9M1 :
+      LOCAL_STR_UNPUBLISHED,
     authoritativeActiveNodeIds: Object.freeze([...authoritativeActiveNodeIds]),
     projectedServingNodeIds: Object.freeze([...projectedServingNodeIds]),
     locallyEligibleNodeIds: Object.freeze([...locallyEligibleNodeIds]),
@@ -830,8 +858,8 @@ function resolveActiveNodeViews(options = {}) {
     ]),
     membershipFreeze,
     effectiveSource: hasPublishedMembership ?
-      'published_membership' :
-      'projected',
+      LOCAL_STR_5O9M1 :
+      LOCAL_STR_PROJECTED,
     effectiveActiveNodeIds: Object.freeze(effectiveActiveNodeIds),
     projectedActiveNodeIds: Object.freeze([...projectedActiveNodeIds]),
     publishedActiveNodeIds: hasPublishedMembership ?
@@ -1141,6 +1169,18 @@ function buildMembershipPublicationActiveSnapshot(
     membershipPublication.publishedActiveNodeIdsPresent === true ||
     Array.isArray(membershipPublication.publishedActiveNodeIds) ||
     Array.isArray(membershipPublication.published_active_node_ids);
+  const pendingAckEvidenceState =
+    normalizePendingAckEvidenceState(
+      membershipPublication.pendingAckEvidenceState ??
+        membershipPublication.pending_ack_evidence_state,
+    ) ??
+    (Array.isArray(
+      membershipPublication.requiredAckNodeIds ??
+        membershipPublication.required_ack_node_ids,
+    ) ?
+      PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE
+        .REQUIRED_ACK_NODE_LIST :
+      PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.COUNT_ONLY);
   const priorityRecoveryPublicationContext =
     buildActiveMembershipSnapshot({
       publishedActiveNodeIds: normalizedPublication.publishedActiveNodeIds,
@@ -1234,6 +1274,11 @@ function buildMembershipPublicationActiveSnapshot(
     acknowledgedNodeIds: Object.freeze([
       ...normalizedPublication.acknowledgedNodeIds,
     ]),
+    pendingAckCount: normalizeNonNegativeInteger(
+      membershipPublication.pendingAckCount ??
+        membershipPublication.pending_ack_count,
+    ),
+    pendingAckEvidenceState,
     priorityPartitionSummary:
       normalizedPublication.priorityPartitionSummary &&
         typeof normalizedPublication.priorityPartitionSummary ===

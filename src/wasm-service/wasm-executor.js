@@ -32,6 +32,8 @@ import {
 import {DebugEmitter} from '../debug/debug-emitter.js';
 import {DEBUG_CAPABILITY, DEBUG_TRACE_SOURCE} from '../debug/debug-constants.js';
 
+const LOCAL_STR_FUNCTION = 'function';
+
 const UNKNOWN_FUNCTION_REF = 'unknown-function';
 
 /**
@@ -216,7 +218,7 @@ class WasmExecutor {
 
     const handler = exports[runExportName];
 
-    if (typeof handler !== 'function') {
+    if (typeof handler !== LOCAL_STR_FUNCTION) {
       throw new Error(
         WASM_SERVICE_ERROR_MSG.RUN_EXPORT_NOT_CALLABLE,
       );

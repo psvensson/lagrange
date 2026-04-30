@@ -15,6 +15,8 @@ import {
   MESSAGE_GROUP_ASSIGNMENT_SUBSYSTEM,
 } from './message-group-assignment-constants.js';
 
+const LOCAL_STR_STRING = 'string';
+
 /**
  * MessageGroupAssignment handles determining how new nodes get message group access.
  */
@@ -98,7 +100,7 @@ class MessageGroupAssignment {
         options.excludedSourceNodeIds :
         [],
     );
-    if (typeof newNodeId === 'string' && newNodeId.length > NUM.ZERO) {
+    if (typeof newNodeId === LOCAL_STR_STRING && newNodeId.length > NUM.ZERO) {
       excludedSourceNodeIds.add(newNodeId);
     }
     const movableReplica = this.findMovableReplica(messageGroups, {
@@ -171,7 +173,7 @@ class MessageGroupAssignment {
    * @return {string|null} Existing canonical group ID or null.
    */
   findExistingMembershipGroupId(nodeId, messageGroups, options = {}) {
-    if (typeof nodeId !== 'string' || nodeId.length === NUM.ZERO) {
+    if (typeof nodeId !== LOCAL_STR_STRING || nodeId.length === NUM.ZERO) {
       return null;
     }
     const canonicalGroupId = this.generateGroupId(nodeId);

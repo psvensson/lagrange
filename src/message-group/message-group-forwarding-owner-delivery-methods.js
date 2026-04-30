@@ -761,6 +761,7 @@ function createMessageGroupForwardingOwnerDeliveryMethods(options = {}) {
       );
       const deliveryPriority = deliveryProfile.deliveryPriority;
       const deliverySource = deliveryProfile.deliverySource;
+      const replacePendingKey = deliveryProfile.replacePendingKey;
       const relayDepth = Number.isInteger(logContext.relayDepth) ?
         logContext.relayDepth :
         num.ZERO;
@@ -827,10 +828,17 @@ function createMessageGroupForwardingOwnerDeliveryMethods(options = {}) {
 
         const forwardStartMs = service.now();
         try {
+          const deliveryOptions = {
+            deliveryPriority,
+            deliverySource,
+          };
+          if (replacePendingKey) {
+            deliveryOptions.replacePendingKey = replacePendingKey;
+          }
           const deliveryResult = await service.transport.deliver(
             leaderAddress,
             payload,
-            {deliveryPriority, deliverySource},
+            deliveryOptions,
           );
           const deliveryAcked = deliveryResult?.acknowledged === true;
           const deliverySucceeded = deliveryResult?.success !== false;
@@ -886,6 +894,7 @@ function createMessageGroupForwardingOwnerDeliveryMethods(options = {}) {
                 replayIsolationEngaged: replayOnly,
                 deliveryPriority,
                 deliverySource,
+                replacePendingKey,
                 strictForwarding,
                 strictForwardRetryAfterMs,
                 error: deliveryErrorMessage,

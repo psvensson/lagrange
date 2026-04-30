@@ -1,3 +1,23 @@
+const LOCAL_NUM_100 = 100;
+const LOCAL_NUM_1000 = 1000;
+const LOCAL_STR_ZFE55 = 'livequery:subscribed';
+const LOCAL_STR_LIVE_QUERY_INITIAL = 'live_query_initial';
+const LOCAL_STR_1RDRD = 'livequery:initialized';
+const LOCAL_STR_LIVE_QUERY_EVENT = 'live_query_event';
+const LOCAL_STR_LIVEQUERY_EVENT = 'livequery:event';
+const LOCAL_STR_LIVE_QUERY_EXPIRED = 'live_query_expired';
+const LOCAL_STR_LIVEQUERY_EXPIRED = 'livequery:expired';
+const LOCAL_STR_LIVE_QUERY_RENEWED = 'live_query_renewed';
+const LOCAL_STR_LIVEQUERY_RENEWED = 'livequery:renewed';
+const LOCAL_STR_ACTIVE = 'active';
+const LOCAL_STR_LIVEQUERY_PAUSED = 'livequery:paused';
+const LOCAL_STR_LIVEQUERY_RESUMED = 'livequery:resumed';
+const LOCAL_STR_CANCELLED = 'cancelled';
+const LOCAL_STR_3IHRH = 'livequery:cancelled';
+const LOCAL_STR_EXPIRED = 'expired';
+const LOCAL_STR_RENEWING = 'renewing';
+const LOCAL_STR_LIVEQUERY_RENEWING = 'livequery:renewing';
+
 /**
  * LiveQueryManager - Manages live query subscriptions
  *
@@ -49,10 +69,10 @@ export class LiveQueryManager {
     this.subscriptions = new Map();
 
     /** @type {number} */
-    this.maxSubscriptions = options.maxSubscriptions || 100;
+    this.maxSubscriptions = options.maxSubscriptions || LOCAL_NUM_100;
 
     /** @type {number} */
-    this.maxEventsPerSubscription = options.maxEventsPerSubscription || 1000;
+    this.maxEventsPerSubscription = options.maxEventsPerSubscription || LOCAL_NUM_1000;
   }
 
 
@@ -96,7 +116,7 @@ export class LiveQueryManager {
       this.connectionManager.subscribeLiveQuery(subscriptionId, sql);
     }
 
-    this.emitEvent('livequery:subscribed', {subscriptionId, sql});
+    this.emitEvent(LOCAL_STR_ZFE55, {subscriptionId, sql});
 
     return subscriptionId;
   }
@@ -122,17 +142,17 @@ export class LiveQueryManager {
     subscription.status = nextSubscriptionStatus;
 
     switch (type) {
-    case 'live_query_initial':
+    case LOCAL_STR_LIVE_QUERY_INITIAL:
       // Initial results received
       subscription.partitions = partitions || [];
       subscription.initialResults = data;
-      this.emitEvent('livequery:initialized', {
+      this.emitEvent(LOCAL_STR_1RDRD, {
         subscriptionId,
         data,
         partitions,
       });
       break;
-    case 'live_query_event':
+    case LOCAL_STR_LIVE_QUERY_EVENT:
       // CDC event received
       // Requirements: 32.7 - Don't add events when paused
       if (!subscription.paused) {
@@ -154,7 +174,7 @@ export class LiveQueryManager {
         // Requirements: 32.10
         this.updateEventRate(subscription);
 
-        this.emitEvent('livequery:event', {
+        this.emitEvent(LOCAL_STR_LIVEQUERY_EVENT, {
           subscriptionId,
           eventType,
           data,
@@ -162,13 +182,13 @@ export class LiveQueryManager {
         });
       }
       break;
-    case 'live_query_expired':
+    case LOCAL_STR_LIVE_QUERY_EXPIRED:
       // Subscription expired
-      this.emitEvent('livequery:expired', {subscriptionId});
+      this.emitEvent(LOCAL_STR_LIVEQUERY_EXPIRED, {subscriptionId});
       break;
-    case 'live_query_renewed':
+    case LOCAL_STR_LIVE_QUERY_RENEWED:
       // Subscription renewed
-      this.emitEvent('livequery:renewed', {subscriptionId});
+      this.emitEvent(LOCAL_STR_LIVEQUERY_RENEWED, {subscriptionId});
       break;
     default:
       break;
@@ -201,12 +221,12 @@ export class LiveQueryManager {
       return false;
     }
 
-    if (subscription.status !== 'active') {
+    if (subscription.status !== LOCAL_STR_ACTIVE) {
       return false;
     }
 
     subscription.paused = true;
-    this.emitEvent('livequery:paused', {subscriptionId});
+    this.emitEvent(LOCAL_STR_LIVEQUERY_PAUSED, {subscriptionId});
     return true;
   }
 
@@ -228,7 +248,7 @@ export class LiveQueryManager {
     }
 
     subscription.paused = false;
-    this.emitEvent('livequery:resumed', {subscriptionId});
+    this.emitEvent(LOCAL_STR_LIVEQUERY_RESUMED, {subscriptionId});
     return true;
   }
 
@@ -250,9 +270,9 @@ export class LiveQueryManager {
       this.connectionManager.unsubscribeLiveQuery(subscriptionId);
     }
 
-    subscription.status = 'cancelled';
+    subscription.status = LOCAL_STR_CANCELLED;
     this.subscriptions.delete(subscriptionId);
-    this.emitEvent('livequery:cancelled', {subscriptionId});
+    this.emitEvent(LOCAL_STR_3IHRH, {subscriptionId});
     return true;
   }
 
@@ -268,18 +288,18 @@ export class LiveQueryManager {
       return false;
     }
 
-    if (subscription.status !== 'expired') {
+    if (subscription.status !== LOCAL_STR_EXPIRED) {
       return false;
     }
 
-    subscription.status = 'renewing';
+    subscription.status = LOCAL_STR_RENEWING;
 
     // Re-subscribe with same SQL
     if (this.connectionManager) {
       this.connectionManager.subscribeLiveQuery(subscriptionId, subscription.sql);
     }
 
-    this.emitEvent('livequery:renewing', {subscriptionId});
+    this.emitEvent(LOCAL_STR_LIVEQUERY_RENEWING, {subscriptionId});
     return true;
   }
 
@@ -306,7 +326,7 @@ export class LiveQueryManager {
    */
   getActiveCount() {
     return Array.from(this.subscriptions.values())
-      .filter((s) => s.status === 'active').length;
+      .filter((s) => s.status === LOCAL_STR_ACTIVE).length;
   }
 
   /**

@@ -1,5 +1,7 @@
 import {createMessageGroupServiceRuntimeMethodsClassPart2} from './message-group-service-runtime-methods-class-part-2.js';
 
+const LOCAL_STR_CONSTRUCTOR = 'constructor';
+
 function createMessageGroupServiceRuntimeMethods(deps = {}) {
   const MessageGroupServiceRuntimeMethods =
     createMessageGroupServiceRuntimeMethodsClassPart2(deps);
@@ -9,7 +11,7 @@ function createMessageGroupServiceRuntimeMethods(deps = {}) {
   let prototype = MessageGroupServiceRuntimeMethods.prototype;
   while (prototype && prototype !== Object.prototype) {
     for (const name of Object.getOwnPropertyNames(prototype)) {
-      if (name === 'constructor' || seenMethodNames.has(name)) {
+      if (name === LOCAL_STR_CONSTRUCTOR || seenMethodNames.has(name)) {
         continue;
       }
       seenMethodNames.add(name);

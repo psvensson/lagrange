@@ -9,6 +9,38 @@ import {
 } from './replica-status.js';
 import {REBALANCER_DEFAULT} from './rebalancer-constants.js';
 
+const LOCAL_STR_STRING = 'string';
+const LOCAL_NUM_ONE = 1;
+const LOCAL_STR_OBJECT = 'object';
+const LOCAL_STR_SYNCING = 'syncing';
+const LOCAL_STR_CREATING = 'creating';
+const LOCAL_STR_OPERATION_ID = 'operation_id';
+const LOCAL_STR_OPERATIONID = 'operationId';
+const LOCAL_STR_EMPTY = '';
+const LOCAL_STR_ENTITY_TYPE = 'entity_type';
+const LOCAL_STR_ENTITYTYPE = 'entityType';
+const LOCAL_STR_ENTITY_ID = 'entity_id';
+const LOCAL_STR_ENTITYID = 'entityId';
+const LOCAL_STR_PARTITION_GROUP_ID = 'partition_group_id';
+const LOCAL_STR_PARTITIONGROUPID = 'partitionGroupId';
+const LOCAL_STR_PARTITION_ID = 'partition_id';
+const LOCAL_STR_PARTITIONID = 'partitionId';
+const LOCAL_STR_SOURCE_NODE_ID = 'source_node_id';
+const LOCAL_STR_SOURCENODEID = 'sourceNodeId';
+const LOCAL_STR_SOURCE_REPLICA_ID = 'source_replica_id';
+const LOCAL_STR_SOURCEREPLICAID = 'sourceReplicaId';
+const LOCAL_STR_TARGET_NODE_ID = 'target_node_id';
+const LOCAL_STR_TARGETNODEID = 'targetNodeId';
+const LOCAL_STR_STATUS = 'status';
+const LOCAL_STR_NODE_ID = 'node_id';
+const LOCAL_STR_NODEID = 'nodeId';
+const LOCAL_STR_ID = 'id';
+const LOCAL_STR_GROUP_ID = 'group_id';
+const LOCAL_STR_GROUPID = 'groupId';
+const LOCAL_STR_STEP = 'step';
+const LOCAL_STR_TIMESTAMP = 'timestamp';
+const LOCAL_STR_TIMESTAMPMS = 'timestampMs';
+
 const UNKNOWN_STATUS = 'unknown';
 const UNKNOWN_PARTITION_GROUP_ID = 'unknown';
 const UNKNOWN_WORKFLOW_STEP = 'UNKNOWN';
@@ -55,7 +87,7 @@ const DEFAULT_STEP_TIMEOUT_MS_BY_WORKFLOW_STEP = Object.freeze({
 function firstStringField(record, ...keys) {
   for (const key of keys) {
     const value = record?.[key];
-    if (typeof value === 'string' && value.length > NUM.ZERO) {
+    if (typeof value === LOCAL_STR_STRING && value.length > NUM.ZERO) {
       return value;
     }
   }
@@ -76,7 +108,7 @@ function parseStepsHistory(stepsHistoryRaw) {
   if (Array.isArray(stepsHistoryRaw)) {
     return stepsHistoryRaw;
   }
-  if (typeof stepsHistoryRaw !== 'string') {
+  if (typeof stepsHistoryRaw !== LOCAL_STR_STRING) {
     return [];
   }
   try {
@@ -93,7 +125,7 @@ function inferPartitionIdFromReplicaId(replicaId) {
     return null;
   }
   const match = normalizedReplicaId.match(/^(.*)-r\d+$/);
-  if (!match || typeof match[1] !== 'string') {
+  if (!match || typeof match[LOCAL_NUM_ONE] !== LOCAL_STR_STRING) {
     return null;
   }
   const partitionId = match[1].trim();
@@ -124,7 +156,7 @@ function inferTargetNodeIdFromStepsHistory(stepsHistory, replicaId) {
     index >= NUM.ZERO;
     index -= NUM.ONE) {
     const entry = normalizedStepsHistory[index];
-    if (!entry || typeof entry !== 'object') {
+    if (!entry || typeof entry !== LOCAL_STR_OBJECT) {
       continue;
     }
     const replicaIds = Array.isArray(entry.replicaIds) ?
@@ -205,8 +237,8 @@ function inferOperationTypeFromStepsHistory(
       timelineSteps.has(WORKFLOW_STEP.SYNCING) ||
       normalizedWorkflowStep === WORKFLOW_STEP.CREATING ||
       normalizedWorkflowStep === WORKFLOW_STEP.SYNCING ||
-      normalizedStatus === 'syncing' ||
-      normalizedStatus === 'creating') {
+      normalizedStatus === LOCAL_STR_SYNCING ||
+      normalizedStatus === LOCAL_STR_CREATING) {
     return sourceReplicaId ? OperationType.REPLACE : OperationType.ADD;
   }
   return null;
@@ -313,44 +345,44 @@ function normalizeReplicaOperationRecord(row, options = {}) {
   return {
     operationId: String(firstStringField(
       row,
-      'operation_id',
-      'operationId',
-    ) || ''),
-    type: type || inferredType || '',
+      LOCAL_STR_OPERATION_ID,
+      LOCAL_STR_OPERATIONID,
+    ) || LOCAL_STR_EMPTY),
+    type: type || inferredType || LOCAL_STR_EMPTY,
     status,
     workflowStep,
     partitionGroupId,
     partitionId: partitionGroupId,
     entityType: String(firstStringField(
       row,
-      'entity_type',
-      'entityType',
+      LOCAL_STR_ENTITY_TYPE,
+      LOCAL_STR_ENTITYTYPE,
     ) || SERVICE_TYPE_PARTITION).toLowerCase(),
     entityId: String(firstStringField(
       row,
-      'entity_id',
-      'entityId',
-      'partition_group_id',
-      'partitionGroupId',
-      'partition_id',
-      'partitionId',
+      LOCAL_STR_ENTITY_ID,
+      LOCAL_STR_ENTITYID,
+      LOCAL_STR_PARTITION_GROUP_ID,
+      LOCAL_STR_PARTITIONGROUPID,
+      LOCAL_STR_PARTITION_ID,
+      LOCAL_STR_PARTITIONID,
     ) || inferredPartitionGroupId || UNKNOWN_PARTITION_GROUP_ID),
     sourceNodeId: String(firstStringField(
       row,
-      'source_node_id',
-      'sourceNodeId',
-    ) || ''),
+      LOCAL_STR_SOURCE_NODE_ID,
+      LOCAL_STR_SOURCENODEID,
+    ) || LOCAL_STR_EMPTY),
     sourceReplicaId: String(firstStringField(
       row,
-      'source_replica_id',
-      'sourceReplicaId',
-    ) || inferredSourceReplicaId || ''),
+      LOCAL_STR_SOURCE_REPLICA_ID,
+      LOCAL_STR_SOURCEREPLICAID,
+    ) || inferredSourceReplicaId || LOCAL_STR_EMPTY),
     replicaId,
     targetNodeId: String(firstStringField(
       row,
-      'target_node_id',
-      'targetNodeId',
-    ) || inferredTargetNodeId || ''),
+      LOCAL_STR_TARGET_NODE_ID,
+      LOCAL_STR_TARGETNODEID,
+    ) || inferredTargetNodeId || LOCAL_STR_EMPTY),
     createdAt,
     updatedAt,
     completedAt,
@@ -441,15 +473,15 @@ function doesObservedActiveTargetReplicaServiceRowMatch(
   }
   if (String(firstStringField(
     serviceRow,
-    'status',
-  ) || '').toLowerCase() !== REPLICA_OPERATION_STATUS_ACTIVE) {
+    LOCAL_STR_STATUS,
+  ) || LOCAL_STR_EMPTY).toLowerCase() !== REPLICA_OPERATION_STATUS_ACTIVE) {
     return false;
   }
   if (String(firstStringField(
     serviceRow,
-    'node_id',
-    'nodeId',
-  ) || '') !== targetNodeId) {
+    LOCAL_STR_NODE_ID,
+    LOCAL_STR_NODEID,
+  ) || LOCAL_STR_EMPTY) !== targetNodeId) {
     return false;
   }
   const serviceReplicaId = firstStringField(
@@ -466,18 +498,18 @@ function doesObservedActiveTargetReplicaServiceRowMatch(
   if (entityType === SERVICE_TYPE_PARTITION) {
     return String(firstStringField(
       serviceRow,
-      'partition_id',
-      'partitionId',
-      'id',
-    ) || '') === entityId;
+      LOCAL_STR_PARTITION_ID,
+      LOCAL_STR_PARTITIONID,
+      LOCAL_STR_ID,
+    ) || LOCAL_STR_EMPTY) === entityId;
   }
   if (entityType === SERVICE_TYPE_MESSAGE_GROUP) {
     return String(firstStringField(
       serviceRow,
-      'group_id',
-      'groupId',
-      'id',
-    ) || '') === entityId;
+      LOCAL_STR_GROUP_ID,
+      LOCAL_STR_GROUPID,
+      LOCAL_STR_ID,
+    ) || LOCAL_STR_EMPTY) === entityId;
   }
   return true;
 }
@@ -518,18 +550,18 @@ function doesObservedSourceReplicaServiceRowBlockRetirement(
   if (entityType === SERVICE_TYPE_PARTITION) {
     return String(firstStringField(
       serviceRow,
-      'partition_id',
-      'partitionId',
-      'id',
-    ) || '') === entityId;
+      LOCAL_STR_PARTITION_ID,
+      LOCAL_STR_PARTITIONID,
+      LOCAL_STR_ID,
+    ) || LOCAL_STR_EMPTY) === entityId;
   }
   if (entityType === SERVICE_TYPE_MESSAGE_GROUP) {
     return String(firstStringField(
       serviceRow,
-      'group_id',
-      'groupId',
-      'id',
-    ) || '') === entityId;
+      LOCAL_STR_GROUP_ID,
+      LOCAL_STR_GROUPID,
+      LOCAL_STR_ID,
+    ) || LOCAL_STR_EMPTY) === entityId;
   }
   return true;
 }
@@ -588,15 +620,15 @@ function hasObservedActiveTargetServiceOwnership(record, options = {}) {
   for (const serviceRow of serviceRows) {
     if (String(firstStringField(
       serviceRow,
-      'status',
-    ) || '').toLowerCase() !== REPLICA_OPERATION_STATUS_ACTIVE) {
+      LOCAL_STR_STATUS,
+    ) || LOCAL_STR_EMPTY).toLowerCase() !== REPLICA_OPERATION_STATUS_ACTIVE) {
       continue;
     }
     if (String(firstStringField(
       serviceRow,
-      'node_id',
-      'nodeId',
-    ) || '') !== targetNodeId) {
+      LOCAL_STR_NODE_ID,
+      LOCAL_STR_NODEID,
+    ) || LOCAL_STR_EMPTY) !== targetNodeId) {
       continue;
     }
     const serviceReplicaId = firstStringField(
@@ -634,7 +666,7 @@ function isReplicaOperationExplicitlyExcludedFromInFlight(record) {
 }
 
 function isReplicaOperationInFlight(record, options = {}) {
-  if (!record || typeof record !== 'object') {
+  if (!record || typeof record !== LOCAL_STR_OBJECT) {
     return false;
   }
   if (isReplicaOperationExplicitlyExcludedFromInFlight(record)) {
@@ -689,7 +721,7 @@ function isReplicaOperationStale(record, options = {}) {
 }
 
 function normalizeTimelineEventEntry(event, operationId, nowMs) {
-  if (!event || typeof event !== 'object') {
+  if (!event || typeof event !== LOCAL_STR_OBJECT) {
     return null;
   }
   const step = String(event.step || '').toUpperCase();
@@ -701,7 +733,7 @@ function normalizeTimelineEventEntry(event, operationId, nowMs) {
   }
   const metadata = {};
   for (const [key, value] of Object.entries(event)) {
-    if (key === 'step' || key === 'timestamp' || key === 'timestampMs') {
+    if (key === LOCAL_STR_STEP || key === LOCAL_STR_TIMESTAMP || key === LOCAL_STR_TIMESTAMPMS) {
       continue;
     }
     metadata[key] = value;

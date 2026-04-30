@@ -1,6 +1,12 @@
 import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
 import {RebalanceCoordinatorSegment1} from './rebalance-coordinator-segment-1.js';
 
+const LOCAL_STR_STRING = 'string';
+const LOCAL_STR_FUNCTION = 'function';
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_STR_1F209 = 'Failed to refresh recent operation intent from cache-visible state';
+const LOCAL_STR_EMPTY = '';
+
 const {
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
   INCOMPLETE_OPERATION_OBSERVATION_STATE,
@@ -47,16 +53,33 @@ const PRIORITY_RECENT_INTENT_MISS_REUSE_EXTENDED_WORKFLOW_STEPS = new Set([
   WORKFLOW_STEP.PENDING,
   WORKFLOW_STEP.SENDING,
 ]);
+const RETIRED_REPLACE_SOURCE_OPERATION_STATUSES = new Set([
+  ReplicaStatus.REMOVED,
+]);
+const RETIRED_REPLACE_SOURCE_WORKFLOW_STEPS = new Set([
+  WORKFLOW_STEP.REMOVED,
+]);
+const REPLACE_SOURCE_RETIREMENT_SAFETY_STATE = Object.freeze({
+  NOT_REPLACE: 'not_replace',
+  SOURCE_UNAVAILABLE: 'source_unavailable',
+  ENTITY_UNAVAILABLE: 'entity_unavailable',
+  SOURCE_ACTIVE: 'source_active',
+  SOURCE_RETIRED: 'source_retired',
+});
+const REPLACE_SOURCE_RETIREMENT_SAFETY_ERROR_BY_STATE = Object.freeze({
+  [REPLACE_SOURCE_RETIREMENT_SAFETY_STATE.SOURCE_RETIRED]:
+    'replace source replica already retired by completed operation',
+});
 const TOPOLOGY_GUARD_ALLOWED_DECISION = Object.freeze({
   state: TOPOLOGY_GUARD_STATE.ALLOWED,
 });
 
 function extractCanonicalReplicaIndex(replicaId, canonicalPrefix) {
-  if (typeof replicaId !== 'string' || replicaId.length === NUM.ZERO) {
+  if (typeof replicaId !== LOCAL_STR_STRING || replicaId.length === NUM.ZERO) {
     return null;
   }
   if (
-    typeof canonicalPrefix !== 'string' ||
+    typeof canonicalPrefix !== LOCAL_STR_STRING ||
     canonicalPrefix.length === NUM.ZERO ||
     !replicaId.startsWith(canonicalPrefix)
   ) {
@@ -111,7 +134,7 @@ class RebalanceCoordinatorSegment2 extends RebalanceCoordinatorSegment1 {
     try {
       if (
         this.tablePolicyService &&
-        typeof this.tablePolicyService.getPolicyForPartition === 'function'
+        typeof this.tablePolicyService.getPolicyForPartition === LOCAL_STR_FUNCTION
       ) {
         policy =
           await this.tablePolicyService.getPolicyForPartition(partitionId);
@@ -373,6 +396,242 @@ class RebalanceCoordinatorSegment2 extends RebalanceCoordinatorSegment1 {
   }
 
   /**
+   * Resolve every replica ID already allocated by prior entity operations.
+   * Completed replacement targets can remain visible to runtime membership
+   * and publication convergence after they stop being in-flight, so replica ID
+   * allocation must be monotonic across operation history, not just current
+   * service rows and in-flight rows.
+   * @param {Object} params - Lookup parameters.
+   * @param {string} params.entityType - Entity type.
+   * @param {string} params.entityId - Entity ID.
+   * @return {Promise<Set<string>>} Operation-owned replica IDs.
+   * @private
+   */
+  async getEntityAllocatedOperationReplicaIds({entityType, entityId}) {
+    const replicaIds = new Set();
+    const authoritativeOperations =
+      typeof this.repository?.getOperationsByEntityAuthoritative ===
+      LOCAL_STR_FUNCTION ?
+        await this.repository.getOperationsByEntityAuthoritative(
+          entityType,
+          entityId,
+        ) :
+        [];
+    const cacheVisibleOperations =
+      typeof this.repository?.getOperationsByEntity === LOCAL_STR_FUNCTION ?
+        await this.repository.getOperationsByEntity(entityType, entityId) :
+        [];
+    const operationSets = [
+      authoritativeOperations,
+      cacheVisibleOperations,
+    ];
+    for (const operations of operationSets) {
+      if (!Array.isArray(operations)) {
+        continue;
+      }
+      for (const operation of operations) {
+        this.addAllocatedOperationReplicaIds(replicaIds, operation);
+      }
+    }
+    return replicaIds;
+  }
+
+  /**
+   * @param {Set<string>} replicaIds
+   * @param {Object|null} operation
+   * @return {void}
+   * @private
+   */
+  addAllocatedOperationReplicaIds(replicaIds, operation) {
+    if (!operation) {
+      return;
+    }
+    const operationReplicaId = operation.replicaId;
+    if (
+      typeof operationReplicaId === LOCAL_STR_STRING &&
+      operationReplicaId.length > LOCAL_NUM_ZERO
+    ) {
+      replicaIds.add(operationReplicaId);
+    }
+    const sourceReplicaId =
+      typeof this.getReplaceSourceReplicaId === LOCAL_STR_FUNCTION ?
+        this.getReplaceSourceReplicaId(operation) :
+        operation.sourceReplicaId;
+    if (
+      typeof sourceReplicaId === LOCAL_STR_STRING &&
+      sourceReplicaId.length > LOCAL_NUM_ZERO
+    ) {
+      replicaIds.add(sourceReplicaId);
+    }
+  }
+
+  /**
+   * Completed REPLACE source replicas are retired even if stale service rows
+   * remain cache-visible. This authoritative evidence prevents a later
+   * replacement from reusing an already-retired source and creating a surplus
+   * target replica.
+   * @param {Object} params - Lookup parameters.
+   * @param {string} params.entityType - Entity type.
+   * @param {string} params.entityId - Entity ID.
+   * @return {Promise<Set<string>>} Retired source replica IDs.
+   * @private
+   */
+  async getEntityRetiredReplaceSourceReplicaIds({entityType, entityId}) {
+    const retiredSourceReplicaIds = new Set();
+    const authoritativeOperations =
+      typeof this.repository?.getOperationsByEntityAuthoritative ===
+      LOCAL_STR_FUNCTION ?
+        await this.repository.getOperationsByEntityAuthoritative(
+          entityType,
+          entityId,
+        ) :
+        [];
+    const cacheVisibleOperations =
+      typeof this.repository?.getOperationsByEntity === LOCAL_STR_FUNCTION ?
+        await this.repository.getOperationsByEntity(entityType, entityId) :
+        [];
+    const operationSets = [
+      authoritativeOperations,
+      cacheVisibleOperations,
+    ];
+    for (const operations of operationSets) {
+      if (!Array.isArray(operations)) {
+        continue;
+      }
+      for (const operation of operations) {
+        this.addRetiredReplaceSourceReplicaId(
+          retiredSourceReplicaIds,
+          operation,
+        );
+      }
+    }
+    return retiredSourceReplicaIds;
+  }
+
+  /**
+   * @param {Set<string>} retiredSourceReplicaIds
+   * @param {Object|null} operation
+   * @return {void}
+   * @private
+   */
+  addRetiredReplaceSourceReplicaId(retiredSourceReplicaIds, operation) {
+    if (!this.isRetiredReplaceSourceOperation(operation)) {
+      return;
+    }
+    const sourceReplicaId =
+      typeof this.getReplaceSourceReplicaId === LOCAL_STR_FUNCTION ?
+        this.getReplaceSourceReplicaId(operation) :
+        operation.sourceReplicaId;
+    if (
+      typeof sourceReplicaId === LOCAL_STR_STRING &&
+      sourceReplicaId.length > LOCAL_NUM_ZERO
+    ) {
+      retiredSourceReplicaIds.add(sourceReplicaId);
+    }
+  }
+
+  /**
+   * @param {Object|null} operation
+   * @return {boolean}
+   * @private
+   */
+  isRetiredReplaceSourceOperation(operation) {
+    if (!operation) {
+      return false;
+    }
+    const operationType = this.normalizeMoveType(
+      operation.type || operation.operation_type || operation.operationType,
+    );
+    const workflowStep =
+      operation.workflowStep ?? operation.workflow_step ?? null;
+    return (
+      operationType === OperationType.REPLACE &&
+      (
+        RETIRED_REPLACE_SOURCE_OPERATION_STATUSES.has(operation.status) ||
+        RETIRED_REPLACE_SOURCE_WORKFLOW_STEPS.has(workflowStep)
+      )
+    );
+  }
+
+  /**
+   * @param {Object|null} move
+   * @param {Object} context
+   * @return {Object}
+   * @private
+   */
+  buildReplaceSourceRetirementEvidence(move, context = {}) {
+    return {
+      moveType: this.normalizeMoveType(move?.type),
+      sourceReplicaId:
+        typeof move?.replicaId === LOCAL_STR_STRING ?
+          move.replicaId.trim() :
+          LOCAL_STR_EMPTY,
+      entityType:
+        context.entityType || move?.entityType || SERVICE_TYPE.PARTITION,
+      entityId:
+        context.entityId || move?.entityId || move?.partitionId ||
+        LOCAL_STR_EMPTY,
+    };
+  }
+
+  /**
+   * @param {Object} evidence
+   * @param {Set<string>} retiredSourceReplicaIds
+   * @return {string}
+   * @private
+   */
+  resolveReplaceSourceRetirementSafetyState(
+    evidence,
+    retiredSourceReplicaIds,
+  ) {
+    if (evidence.moveType !== OperationType.REPLACE) {
+      return REPLACE_SOURCE_RETIREMENT_SAFETY_STATE.NOT_REPLACE;
+    }
+    if (evidence.sourceReplicaId.length === LOCAL_NUM_ZERO) {
+      return REPLACE_SOURCE_RETIREMENT_SAFETY_STATE.SOURCE_UNAVAILABLE;
+    }
+    if (
+      typeof evidence.entityId !== LOCAL_STR_STRING ||
+      evidence.entityId.length === LOCAL_NUM_ZERO
+    ) {
+      return REPLACE_SOURCE_RETIREMENT_SAFETY_STATE.ENTITY_UNAVAILABLE;
+    }
+    if (retiredSourceReplicaIds.has(evidence.sourceReplicaId)) {
+      return REPLACE_SOURCE_RETIREMENT_SAFETY_STATE.SOURCE_RETIRED;
+    }
+    return REPLACE_SOURCE_RETIREMENT_SAFETY_STATE.SOURCE_ACTIVE;
+  }
+
+  /**
+   * Return a safety error when a REPLACE move targets a source replica already
+   * retired by a completed replacement operation.
+   * @param {Object|null} move
+   * @param {Object} context
+   * @return {Promise<string|null>}
+   * @private
+   */
+  async getRetiredReplaceSourceMoveSafetyError(move, context = {}) {
+    const evidence = this.buildReplaceSourceRetirementEvidence(move, context);
+    const shouldReadRetirementEvidence =
+      evidence.moveType === OperationType.REPLACE &&
+      evidence.sourceReplicaId.length > LOCAL_NUM_ZERO &&
+      typeof evidence.entityId === LOCAL_STR_STRING &&
+      evidence.entityId.length > LOCAL_NUM_ZERO;
+    const retiredSourceReplicaIds = shouldReadRetirementEvidence ?
+      await this.getEntityRetiredReplaceSourceReplicaIds({
+        entityType: evidence.entityType,
+        entityId: evidence.entityId,
+      }) :
+      new Set();
+    const safetyState = this.resolveReplaceSourceRetirementSafetyState(
+      evidence,
+      retiredSourceReplicaIds,
+    );
+    return REPLACE_SOURCE_RETIREMENT_SAFETY_ERROR_BY_STATE[safetyState] ||
+      null;
+  }
+
+  /**
    * Allocate canonical replica ID for ADD/REPLACE create phase.
    * Canonical format mirrors bootstrap replicas: `${entityId}-rN`.
    * @param {Object} params - Allocation parameters.
@@ -407,17 +666,22 @@ class RebalanceCoordinatorSegment2 extends RebalanceCoordinatorSegment1 {
       entityType,
       entityId,
     });
+    const allocatedOperationReplicaIds =
+      await this.getEntityAllocatedOperationReplicaIds({
+        entityType,
+        entityId,
+      });
 
     for (const row of serviceRows) {
       const replicaId = row?.service_id || row?.replica_id;
-      if (typeof replicaId === 'string' && replicaId.length > 0) {
+      if (typeof replicaId === LOCAL_STR_STRING && replicaId.length > LOCAL_NUM_ZERO) {
         usedReplicaIds.add(replicaId);
       }
     }
 
     for (const row of authoritativeServiceRows) {
       const replicaId = row?.service_id || row?.replica_id;
-      if (typeof replicaId === 'string' && replicaId.length > 0) {
+      if (typeof replicaId === LOCAL_STR_STRING && replicaId.length > LOCAL_NUM_ZERO) {
         usedReplicaIds.add(replicaId);
       }
     }
@@ -426,8 +690,12 @@ class RebalanceCoordinatorSegment2 extends RebalanceCoordinatorSegment1 {
       usedReplicaIds.add(replicaId);
     }
 
+    for (const replicaId of allocatedOperationReplicaIds) {
+      usedReplicaIds.add(replicaId);
+    }
+
     for (const replicaId of excludeReplicaIds) {
-      if (typeof replicaId === 'string' && replicaId.length > 0) {
+      if (typeof replicaId === LOCAL_STR_STRING && replicaId.length > LOCAL_NUM_ZERO) {
         usedReplicaIds.add(replicaId);
       }
     }
@@ -458,7 +726,7 @@ class RebalanceCoordinatorSegment2 extends RebalanceCoordinatorSegment1 {
    * @private
    */
   normalizeMoveType(moveType) {
-    if (typeof moveType !== 'string') {
+    if (typeof moveType !== LOCAL_STR_STRING) {
       return null;
     }
     const normalized = moveType.toUpperCase();
@@ -583,7 +851,7 @@ class RebalanceCoordinatorSegment2 extends RebalanceCoordinatorSegment1 {
 
     const cachedOperationId = cachedOperation.operationId;
     if (
-      typeof cachedOperationId !== 'string' ||
+      typeof cachedOperationId !== LOCAL_STR_STRING ||
       cachedOperationId.length === NUM.ZERO
     ) {
       this.recentOperationIntents.delete(dedupeKey);
@@ -595,7 +863,7 @@ class RebalanceCoordinatorSegment2 extends RebalanceCoordinatorSegment1 {
       cacheVisibleOperation = await this.queryOperationById(cachedOperationId);
     } catch (error) {
       this.logger.debug(
-        'Failed to refresh recent operation intent from cache-visible state',
+        LOCAL_STR_1F209,
         {
           operationId: cachedOperationId,
           dedupeKey,
@@ -786,7 +1054,7 @@ class RebalanceCoordinatorSegment2 extends RebalanceCoordinatorSegment1 {
       intentKeys :
       Array.from(intentKeys || []);
     for (const key of keys) {
-      if (typeof key !== 'string' || key.length === NUM.ZERO) {
+      if (typeof key !== LOCAL_STR_STRING || key.length === NUM.ZERO) {
         continue;
       }
       this.rememberOperationIntent(key, operation);
@@ -836,7 +1104,7 @@ class RebalanceCoordinatorSegment2 extends RebalanceCoordinatorSegment1 {
       return;
     }
     for (const [dedupeKey, entry] of this.recentOperationIntents.entries()) {
-      if (String(entry?.operation?.operationId || '').trim() !== operationId) {
+      if (String(entry?.operation?.operationId || LOCAL_STR_EMPTY).trim() !== operationId) {
         continue;
       }
       this.recentOperationIntents.delete(dedupeKey);
@@ -1140,7 +1408,7 @@ class RebalanceCoordinatorSegment2 extends RebalanceCoordinatorSegment1 {
     if (
       !this.controlPlaneReadinessService ||
       typeof this.controlPlaneReadinessService
-        .getCurrentPublishedMembershipEpochSync !== 'function'
+        .getCurrentPublishedMembershipEpochSync !== LOCAL_STR_FUNCTION
     ) {
       return null;
     }

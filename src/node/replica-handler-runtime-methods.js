@@ -1,3 +1,5 @@
+const LOCAL_STR_CONSTRUCTOR = 'constructor';
+
 function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
   const {
     AddressManager,
@@ -1156,7 +1158,7 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
   for (const methodName of Object.getOwnPropertyNames(
     ReplicaHandlerRuntimeMethods.prototype,
   )) {
-    if (methodName === 'constructor') {
+    if (methodName === LOCAL_STR_CONSTRUCTOR) {
       continue;
     }
     Object.defineProperty(

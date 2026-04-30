@@ -8,6 +8,7 @@ import {
 
 const ZERO = 0;
 const ACTIVE_WAIT_PUBLICATION_STATUS_PUBLISHED = 'PUBLISHED';
+const ACTIVE_GATE_READINESS_MODE_STARTUP = 'startup';
 
 export const ACTIVE_GATE_CLOSURE_RECORD_ID_PRIORITY_SPREAD = 'CL-003';
 export const ACTIVE_GATE_CLOSURE_WITNESS_CLASS_PRIORITY_SPREAD =
@@ -15,6 +16,9 @@ export const ACTIVE_GATE_CLOSURE_WITNESS_CLASS_PRIORITY_SPREAD =
 export const ACTIVE_GATE_CLOSURE_RECORD_ID_STARTUP_SNAPSHOT_TIMEOUT = 'CL-004';
 export const ACTIVE_GATE_CLOSURE_WITNESS_CLASS_STARTUP_SNAPSHOT_TIMEOUT =
   'startup_active_snapshot_timeout';
+export const ACTIVE_GATE_CLOSURE_RECORD_ID_STARTUP_SNAPSHOT_ERROR = 'CL-005';
+export const ACTIVE_GATE_CLOSURE_WITNESS_CLASS_STARTUP_SNAPSHOT_ERROR =
+  'startup_active_snapshot_error';
 export const ACTIVE_GATE_CLOSURE_RECORD_ID_STARTUP_PUBLICATION_LAG = 'CL-006';
 export const ACTIVE_GATE_CLOSURE_WITNESS_CLASS_STARTUP_PUBLICATION_LAG =
   'startup_active_publication_lag';
@@ -59,8 +63,61 @@ function normalizeDistinctStringArray(values) {
   return normalizedValues;
 }
 
+function hasSnapshotError(progressSnapshot = null) {
+  return (
+    typeof progressSnapshot?.selectedSnapshotError === 'string' &&
+    progressSnapshot.selectedSnapshotError.trim().length > ZERO
+  );
+}
+
+function isStartupZeroCoverageSnapshotFailure({
+  progressSnapshot = null,
+  readinessMode = null,
+  gateReasons = [],
+} = {}) {
+  return (
+    readinessMode === ACTIVE_GATE_READINESS_MODE_STARTUP &&
+    progressSnapshot?.snapshotCoverageComplete !== true &&
+    normalizePublicationStatus(progressSnapshot?.publicationStatus) ===
+      ACTIVE_WAIT_PUBLICATION_STATUS_PUBLISHED &&
+    Number.isInteger(progressSnapshot?.snapshotCoverageNodeCount) &&
+    progressSnapshot.snapshotCoverageNodeCount === ZERO &&
+    gateReasons.length === ZERO &&
+    hasSnapshotError(progressSnapshot)
+  );
+}
+
+function buildStartupSnapshotFailureClosure(progressSnapshot = null) {
+  if (isTimeoutShapedProbeError(progressSnapshot?.selectedSnapshotError)) {
+    return {
+      closureRecordId: ACTIVE_GATE_CLOSURE_RECORD_ID_STARTUP_SNAPSHOT_TIMEOUT,
+      closureWitnessClass:
+        ACTIVE_GATE_CLOSURE_WITNESS_CLASS_STARTUP_SNAPSHOT_TIMEOUT,
+    };
+  }
+  return {
+    closureRecordId: ACTIVE_GATE_CLOSURE_RECORD_ID_STARTUP_SNAPSHOT_ERROR,
+    closureWitnessClass:
+      ACTIVE_GATE_CLOSURE_WITNESS_CLASS_STARTUP_SNAPSHOT_ERROR,
+  };
+}
+
+function isClosedStartupPublicationProgress(progressSnapshot = null) {
+  return (
+    progressSnapshot?.snapshotCoverageComplete === true &&
+    normalizePublicationStatus(progressSnapshot?.publicationStatus) ===
+      ACTIVE_WAIT_PUBLICATION_STATUS_PUBLISHED &&
+    Number.isInteger(progressSnapshot?.pendingAckCount) &&
+    progressSnapshot.pendingAckCount === ZERO &&
+    Number.isInteger(progressSnapshot?.missingPublishedCount) &&
+    progressSnapshot.missingPublishedCount === ZERO &&
+    progressSnapshot?.prioritySpreadSatisfied === true
+  );
+}
+
 export function classifyActiveGateClosureWitness({
   progressSnapshot = null,
+  bestProgressSnapshot = null,
   publicationConvergence = null,
   publicationConvergenceGate = null,
   readinessMode = null,
@@ -70,11 +127,14 @@ export function classifyActiveGateClosureWitness({
   );
   const hasStrongAdminWitness = hasStartupAdminClosureWitness({
     ...progressSnapshot,
-    selectedReachabilityError: progressSnapshot?.selectedReachabilityError,
-    selectedError: progressSnapshot?.selectedError,
+      selectedReachabilityError: progressSnapshot?.selectedReachabilityError,
+      selectedError: progressSnapshot?.selectedError,
   });
+  const closedStartupPublicationBestProgress =
+    isClosedStartupPublicationProgress(bestProgressSnapshot);
   const startupSnapshotTimeoutWitness =
-    readinessMode === 'startup' &&
+    closedStartupPublicationBestProgress !== true &&
+    readinessMode === ACTIVE_GATE_READINESS_MODE_STARTUP &&
     Number.isInteger(progressSnapshot?.inactiveNodeCount) &&
     progressSnapshot.inactiveNodeCount === ZERO &&
     progressSnapshot?.snapshotCoverageComplete !== true &&
@@ -90,6 +150,17 @@ export function classifyActiveGateClosureWitness({
       closureWitnessClass:
         ACTIVE_GATE_CLOSURE_WITNESS_CLASS_STARTUP_SNAPSHOT_TIMEOUT,
     };
+  }
+
+  if (
+    closedStartupPublicationBestProgress !== true &&
+    isStartupZeroCoverageSnapshotFailure({
+      progressSnapshot,
+      readinessMode,
+      gateReasons,
+    })
+  ) {
+    return buildStartupSnapshotFailureClosure(progressSnapshot);
   }
 
   const publicationStatus = normalizePublicationStatus(
@@ -136,7 +207,8 @@ export function classifyActiveGateClosureWitness({
       });
 
   const startupPublicationLagWitness =
-    readinessMode === 'startup' &&
+    closedStartupPublicationBestProgress !== true &&
+    readinessMode === ACTIVE_GATE_READINESS_MODE_STARTUP &&
     Number.isInteger(progressSnapshot?.expectedNodeCount) &&
     progressSnapshot.expectedNodeCount > ZERO &&
     Number.isInteger(progressSnapshot?.activeNodeCount) &&

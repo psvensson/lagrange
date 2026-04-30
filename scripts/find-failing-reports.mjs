@@ -1,6 +1,11 @@
 import {readdirSync, readFileSync} from 'node:fs';
 import {join} from 'node:path';
 
+const LOCAL_STR_QUESTION = '?';
+const LOCAL_STR_EMPTY = '';
+const LOCAL_STR_17XHO = ' | ';
+const LOCAL_STR_N = 'n | ';
+
 const dir = 'test-output/reports';
 const files = readdirSync(dir).filter((f) => f.endsWith('.report.json'));
 const results = [];
@@ -13,9 +18,9 @@ for (const f of files) {
     results.push({
       file: f,
       scenario: s.scenario,
-      size: s.clusterSize || r.config?.size || '?',
-      config: r.config?.configPath || r.metadata?.configPath || '?',
-      ts: r.timestamp || '',
+      size: s.clusterSize || r.config?.size || LOCAL_STR_QUESTION,
+      config: r.config?.configPath || r.metadata?.configPath || LOCAL_STR_QUESTION,
+      ts: r.timestamp || LOCAL_STR_EMPTY,
     });
   } catch (_e) { /* skip */ }
 }
@@ -27,6 +32,6 @@ for (const r of results) {
   if (seen.has(key)) continue;
   seen.add(key);
   console.log(
-    r.scenario + ' | ' + r.size + 'n | ' + r.config + ' | ' + r.file,
+    r.scenario + LOCAL_STR_17XHO + r.size + LOCAL_STR_N + r.config + LOCAL_STR_17XHO + r.file,
   );
 }

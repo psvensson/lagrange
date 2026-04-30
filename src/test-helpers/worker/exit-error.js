@@ -1,3 +1,5 @@
+const LOCAL_STR_EXITERROR = 'ExitError';
+
 /**
  * Shared error used by test helper workers to intercept `process.exit(code)`.
  *
@@ -8,7 +10,7 @@
 export class ExitError extends Error {
   constructor(code) {
     super(`process.exit(${code})`);
-    this.name = 'ExitError';
+    this.name = LOCAL_STR_EXITERROR;
     this.code = code;
   }
 }

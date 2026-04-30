@@ -1,11 +1,15 @@
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
 import {OperationWorkflowOwnerSegment6} from './operation-workflow-owner-segment-6.js';
+import {
+  PRIORITY_RECOVERY_BLOCKER_REASON,
+} from '../control-plane/priority-recovery-diagnostics-constants.js';
 
 const {
   EXECUTOR_OUTCOME_ACTION,
   EXECUTOR_OUTCOME_ACTION_MAP,
   EXECUTOR_OUTCOME_FIELD,
   EXECUTOR_OUTCOME_TYPE,
+  FAILURE_LOG_LEVEL,
   INCOMPLETE_OPERATION_OBSERVATION_STATE,
   NUM,
   OBSERVED_PROGRESS_RELEVANT_SERVICE_STATUSES,
@@ -16,6 +20,8 @@ const {
   OperationType,
   PRIORITY_CONTROL_PLANE_SYNCING_TIMEOUT_CAP_MS,
   PRIORITY_RECOVERY_COMPLETION_STATE,
+  REMOVE_SAFETY_OWNER_PARTICIPATION_KIND,
+  REMOVE_SAFETY_READINESS_DIMENSION,
   REBALANCE_COORDINATOR_DEFER_REASON,
   REBALANCE_COORDINATOR_EVENT,
   REBALANCE_COORDINATOR_LOG_MSG,
@@ -34,6 +40,7 @@ const {
   createChildTimeoutBudget,
   createTopLevelOperationBudget,
   isPriorityControlPlanePartition,
+  normalizeNodeIdList,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
 
 const STOPPING_REPLICA_OBSERVATION_STATE = Object.freeze({
@@ -109,6 +116,85 @@ const TARGET_CREATE_ADMISSION_WORKFLOW_STEPS_BY_STATUS = Object.freeze(
   ]),
 );
 
+const TIMEOUT_RECONCILE_OPERATION_SELECTION_STATE = Object.freeze({
+  NO_OPERATION: 'no_operation',
+  FALLBACK_ONLY: 'fallback_only',
+  VISIBILITY_ONLY: 'visibility_only',
+  DIFFERENT_OPERATION: 'different_operation',
+  VISIBILITY_TERMINAL: 'visibility_terminal',
+  FALLBACK_TERMINAL: 'fallback_terminal',
+  FALLBACK_AHEAD: 'fallback_ahead',
+  VISIBILITY_CURRENT: 'visibility_current',
+});
+
+const TIMEOUT_RECONCILE_OPERATION_SELECTION_ACTION = Object.freeze({
+  USE_NONE: 'use_none',
+  USE_VISIBILITY: 'use_visibility',
+  USE_FALLBACK: 'use_fallback',
+});
+
+const TIMEOUT_RECONCILE_OPERATION_SELECTION_STATE_TABLE = Object.freeze([
+  Object.freeze({
+    state: TIMEOUT_RECONCILE_OPERATION_SELECTION_STATE.NO_OPERATION,
+    matches: (evidence) =>
+      evidence.hasVisibilityOperation !== true &&
+      evidence.hasFallbackOperation !== true,
+  }),
+  Object.freeze({
+    state: TIMEOUT_RECONCILE_OPERATION_SELECTION_STATE.FALLBACK_ONLY,
+    matches: (evidence) =>
+      evidence.hasVisibilityOperation !== true &&
+      evidence.hasFallbackOperation === true,
+  }),
+  Object.freeze({
+    state: TIMEOUT_RECONCILE_OPERATION_SELECTION_STATE.VISIBILITY_ONLY,
+    matches: (evidence) =>
+      evidence.hasVisibilityOperation === true &&
+      evidence.hasFallbackOperation !== true,
+  }),
+  Object.freeze({
+    state: TIMEOUT_RECONCILE_OPERATION_SELECTION_STATE.DIFFERENT_OPERATION,
+    matches: (evidence) => evidence.sameOperationId !== true,
+  }),
+  Object.freeze({
+    state: TIMEOUT_RECONCILE_OPERATION_SELECTION_STATE.VISIBILITY_TERMINAL,
+    matches: (evidence) => evidence.visibilityTerminal === true,
+  }),
+  Object.freeze({
+    state: TIMEOUT_RECONCILE_OPERATION_SELECTION_STATE.FALLBACK_TERMINAL,
+    matches: (evidence) => evidence.fallbackTerminal === true,
+  }),
+  Object.freeze({
+    state: TIMEOUT_RECONCILE_OPERATION_SELECTION_STATE.FALLBACK_AHEAD,
+    matches: (evidence) =>
+      evidence.fallbackWorkflowRankAhead === true ||
+      evidence.fallbackUpdatedAtAhead === true,
+  }),
+  Object.freeze({
+    state: TIMEOUT_RECONCILE_OPERATION_SELECTION_STATE.VISIBILITY_CURRENT,
+    matches: () => true,
+  }),
+]);
+
+const TIMEOUT_RECONCILE_OPERATION_SELECTION_ACTION_BY_STATE = Object.freeze({
+  [TIMEOUT_RECONCILE_OPERATION_SELECTION_STATE.NO_OPERATION]:
+    TIMEOUT_RECONCILE_OPERATION_SELECTION_ACTION.USE_NONE,
+  [TIMEOUT_RECONCILE_OPERATION_SELECTION_STATE.FALLBACK_ONLY]:
+    TIMEOUT_RECONCILE_OPERATION_SELECTION_ACTION.USE_FALLBACK,
+  [TIMEOUT_RECONCILE_OPERATION_SELECTION_STATE.VISIBILITY_ONLY]:
+    TIMEOUT_RECONCILE_OPERATION_SELECTION_ACTION.USE_VISIBILITY,
+  [TIMEOUT_RECONCILE_OPERATION_SELECTION_STATE.DIFFERENT_OPERATION]:
+    TIMEOUT_RECONCILE_OPERATION_SELECTION_ACTION.USE_VISIBILITY,
+  [TIMEOUT_RECONCILE_OPERATION_SELECTION_STATE.VISIBILITY_TERMINAL]:
+    TIMEOUT_RECONCILE_OPERATION_SELECTION_ACTION.USE_VISIBILITY,
+  [TIMEOUT_RECONCILE_OPERATION_SELECTION_STATE.FALLBACK_TERMINAL]:
+    TIMEOUT_RECONCILE_OPERATION_SELECTION_ACTION.USE_FALLBACK,
+  [TIMEOUT_RECONCILE_OPERATION_SELECTION_STATE.FALLBACK_AHEAD]:
+    TIMEOUT_RECONCILE_OPERATION_SELECTION_ACTION.USE_FALLBACK,
+  [TIMEOUT_RECONCILE_OPERATION_SELECTION_STATE.VISIBILITY_CURRENT]:
+    TIMEOUT_RECONCILE_OPERATION_SELECTION_ACTION.USE_VISIBILITY,
+});
+
 const ACTIVE_REPLACE_SOURCE_RETIREMENT_BLOCKING_STATUSES = Object.freeze(
   new Set([
     ReplicaStatus.PENDING,
@@ -128,6 +214,8 @@ const PRIORITY_RECOVERY_OPERATION_DRAIN_STATE = Object.freeze({
   EVIDENCE_UNAVAILABLE: 'evidence_unavailable',
   CONVERGED: 'converged',
   IN_FLIGHT: 'in_flight',
+  OWNER_UNAVAILABLE_RELEASED: 'owner_unavailable_released',
+  SUPERSEDED_TARGET: 'superseded_target',
 });
 
 const PRIORITY_RECOVERY_OPERATION_DRAIN_WORKFLOW_STEPS = Object.freeze(
@@ -140,15 +228,64 @@ const PRIORITY_RECOVERY_OPERATION_DRAIN_WORKFLOW_STEPS = Object.freeze(
     WORKFLOW_STEP.STOPPING,
   ]),
 );
+const PRIORITY_RECOVERY_OPERATION_DRAIN_OPERATION_TYPES = Object.freeze(
+  new Set([
+    OperationType.ADD,
+    OperationType.REPLACE,
+    OperationType.REMOVE,
+  ]),
+);
+const PRIORITY_RECOVERY_OPERATION_DRAIN_SOURCE_REMOVAL_TYPES = Object.freeze(
+  new Set([
+    OperationType.REPLACE,
+    OperationType.REMOVE,
+  ]),
+);
+const PRIORITY_RECOVERY_OPERATION_DRAIN_ADD_TARGET_STATUSES = Object.freeze(
+  new Set([
+    ReplicaStatus.ACTIVE,
+  ]),
+);
+const PRIORITY_RECOVERY_OPERATION_DRAIN_REPLICA_TARGET_BY_TYPE =
+  Object.freeze(
+    new Map([
+      [
+        OperationType.REPLACE,
+        Object.freeze({
+          getNodeId: (operation) => operation.sourceNodeId,
+          getReplicaId: (operation, repository) =>
+            repository.getReplaceSourceReplicaId(operation),
+        }),
+      ],
+      [
+        OperationType.REMOVE,
+        Object.freeze({
+          getNodeId: (operation) => operation.targetNodeId,
+          getReplicaId: (operation) => operation.replicaId,
+        }),
+      ],
+    ]),
+  );
 
 const PRIORITY_RECOVERY_OPERATION_DRAIN_COMPLETION_STATES = Object.freeze(
-  new Set([PRIORITY_RECOVERY_COMPLETION_STATE.CONVERGED]),
+  new Set([
+    PRIORITY_RECOVERY_COMPLETION_STATE.CONVERGED,
+    PRIORITY_RECOVERY_COMPLETION_STATE.SPREAD_SATISFIED_IN_FLIGHT,
+  ]),
 );
 
 const PRIORITY_RECOVERY_OPERATION_DRAIN_ACTION_BY_STATE = Object.freeze(
   new Map([
     [
       PRIORITY_RECOVERY_OPERATION_DRAIN_STATE.CONVERGED,
+      OPERATION_LIFECYCLE_ACTION.COMPLETE_PRIORITY_RECOVERY_DRAIN,
+    ],
+    [
+      PRIORITY_RECOVERY_OPERATION_DRAIN_STATE.SUPERSEDED_TARGET,
+      OPERATION_LIFECYCLE_ACTION.FAIL_PRIORITY_RECOVERY_SUPERSEDED_TARGET,
+    ],
+    [
+      PRIORITY_RECOVERY_OPERATION_DRAIN_STATE.OWNER_UNAVAILABLE_RELEASED,
       OPERATION_LIFECYCLE_ACTION.COMPLETE_PRIORITY_RECOVERY_DRAIN,
     ],
     [
@@ -234,6 +371,99 @@ const PRIORITY_RECOVERY_OPERATION_DRAIN_SOURCE_STATE_BY_OBSERVATION_KEY =
     ]),
   );
 
+const PRIORITY_RECOVERY_OPERATION_DRAIN_RELEASE_SOURCE_STATES = Object.freeze(
+  new Set([
+    PRIORITY_RECOVERY_OPERATION_DRAIN_SOURCE_STATE.REMOVAL_REQUIRED,
+    PRIORITY_RECOVERY_OPERATION_DRAIN_SOURCE_STATE.REMOVAL_IN_FLIGHT,
+  ]),
+);
+const PRIORITY_RECOVERY_OPERATION_DRAIN_RELEASE_REPLACE_WORKFLOW_STEPS =
+  Object.freeze(
+    new Set([
+      WORKFLOW_STEP.ACTIVE,
+      WORKFLOW_STEP.STOPPING,
+    ]),
+  );
+const PRIORITY_RECOVERY_OPERATION_DRAIN_RELEASE_TARGET_OBSERVED_WORKFLOW_STEPS =
+  Object.freeze(
+    new Set([
+      WORKFLOW_STEP.SYNCING,
+    ]),
+  );
+const PRIORITY_RECOVERY_PRE_SYNC_REPLACE_TARGET_STATE = Object.freeze({
+  NOT_APPLICABLE: 'not_applicable',
+  EVIDENCE_UNAVAILABLE: 'evidence_unavailable',
+  MATERIALIZED: 'materialized',
+  UNMATERIALIZED: 'unmaterialized',
+});
+const PRIORITY_RECOVERY_PRE_SYNC_REPLACE_TARGET_MATERIALIZED_STATUSES =
+  Object.freeze(
+    new Set([
+      ReplicaStatus.PENDING,
+      ReplicaStatus.CREATING,
+      ReplicaStatus.SYNCING,
+      ReplicaStatus.ACTIVE,
+      ReplicaStatus.REMOVING,
+    ]),
+  );
+const PRIORITY_RECOVERY_PRE_SYNC_REPLACE_TARGET_UNMATERIALIZED_STATUSES =
+  Object.freeze(new Set([null, undefined]));
+const PRIORITY_RECOVERY_PRE_SYNC_REPLACE_DRAIN_DECISION = Object.freeze({
+  TARGET_UNMATERIALIZED: 'target_unmaterialized',
+  NO_OVERRIDE: 'no_override',
+});
+const PRIORITY_RECOVERY_PRE_SYNC_REPLACE_DRAIN_DECISION_TABLE =
+  Object.freeze([
+    Object.freeze({
+      state:
+        PRIORITY_RECOVERY_PRE_SYNC_REPLACE_DRAIN_DECISION
+          .TARGET_UNMATERIALIZED,
+      matches: (evidence) =>
+        evidence.completionAccepted === true &&
+        evidence.targetState ===
+          PRIORITY_RECOVERY_PRE_SYNC_REPLACE_TARGET_STATE.UNMATERIALIZED,
+    }),
+    Object.freeze({
+      state:
+        PRIORITY_RECOVERY_PRE_SYNC_REPLACE_DRAIN_DECISION.NO_OVERRIDE,
+      matches: () => true,
+    }),
+  ]);
+const PRIORITY_RECOVERY_PRE_SYNC_REPLACE_DRAIN_SOURCE_STATE_BY_DECISION =
+  Object.freeze(
+    new Map([
+      [
+        PRIORITY_RECOVERY_PRE_SYNC_REPLACE_DRAIN_DECISION
+          .TARGET_UNMATERIALIZED,
+        PRIORITY_RECOVERY_OPERATION_DRAIN_SOURCE_STATE.NOT_REQUIRED,
+      ],
+      [
+        PRIORITY_RECOVERY_PRE_SYNC_REPLACE_DRAIN_DECISION.NO_OVERRIDE,
+        PRIORITY_RECOVERY_PRE_SYNC_REPLACE_DRAIN_DECISION.NO_OVERRIDE,
+      ],
+    ]),
+  );
+const RECONCILED_REPLICA_STATUS_OBSERVED_TARGET_UNAVAILABLE =
+  'observed_target_unavailable';
+const RECONCILED_REPLICA_STATUS_ABSENT_VALUES =
+  Object.freeze(new Set([null, undefined]));
+const RECONCILED_REPLICA_STATUS_RESOLUTION_STATE = Object.freeze({
+  AUTHORITATIVE: 'authoritative',
+  OBSERVED_TARGET_CACHE: 'observed_target_cache',
+});
+const RECONCILED_REPLICA_STATUS_RESOLUTION_TABLE = Object.freeze([
+  Object.freeze({
+    state: RECONCILED_REPLICA_STATUS_RESOLUTION_STATE.OBSERVED_TARGET_CACHE,
+    matches: (evidence) =>
+      evidence.actualStatusAbsent === true &&
+      evidence.observedTargetProgress === true,
+  }),
+  Object.freeze({
+    state: RECONCILED_REPLICA_STATUS_RESOLUTION_STATE.AUTHORITATIVE,
+    matches: () => true,
+  }),
+]);
+
 const PRIORITY_RECOVERY_OPERATION_DRAIN_STATE_BY_SOURCE_STATE = Object.freeze(
   new Map([
     [
@@ -286,6 +516,27 @@ const PRIORITY_RECOVERY_OPERATION_DRAIN_OWNER_ACTION_BY_STATE = Object.freeze(
     ],
   ]),
 );
+
+const PRIORITY_RECOVERY_OPERATION_DRAIN_RELEASE_DECISION_STATE = Object.freeze({
+  RELEASE: 'release',
+  HOLD: 'hold',
+});
+
+const PRIORITY_RECOVERY_OPERATION_DRAIN_RELEASE_DECISION_TABLE =
+  Object.freeze([
+    Object.freeze({
+      state: PRIORITY_RECOVERY_OPERATION_DRAIN_RELEASE_DECISION_STATE.RELEASE,
+      matches: (evidence) =>
+        evidence.releaseEligibleReplace === true &&
+        evidence.completionAccepted === true &&
+        evidence.sourceRemovalPending === true &&
+        evidence.remoteOwnerUnavailable === true,
+    }),
+    Object.freeze({
+      state: PRIORITY_RECOVERY_OPERATION_DRAIN_RELEASE_DECISION_STATE.HOLD,
+      matches: () => true,
+    }),
+  ]);
 
 class OperationWorkflowOwnerSegment7 extends OperationWorkflowOwnerSegment6 {
   /**
@@ -364,6 +615,28 @@ class OperationWorkflowOwnerSegment7 extends OperationWorkflowOwnerSegment6 {
       );
     return OBSERVED_OPERATION_ROW_TARGET_PROGRESS_STATUSES.has(
       observedTargetStatus,
+    );
+  }
+
+  /**
+   * @param {Object} operation
+   * @return {string|null}
+   * @private
+   */
+  getObservedOperationRowTargetProgressStatus(operation) {
+    if (
+      !operation ||
+      !this.repository ||
+      typeof this.repository.getObservedReplicaStatusFromCache !==
+        TYPEOF.FUNCTION
+    ) {
+      return RECONCILED_REPLICA_STATUS_OBSERVED_TARGET_UNAVAILABLE;
+    }
+
+    return this.repository.getObservedReplicaStatusFromCache(
+      operation.replicaId,
+      operation.partitionId,
+      operation.targetNodeId,
     );
   }
 
@@ -907,21 +1180,28 @@ class OperationWorkflowOwnerSegment7 extends OperationWorkflowOwnerSegment6 {
    */
   async applyReconciledReplicaStatus(operation, actualStatus, options = {}) {
     const cause = options.cause || 'progress';
+    const reconciledStatus = this.resolveReconciledReplicaStatus(
+      operation,
+      actualStatus,
+    );
 
-    if (this.isTargetCreateAdmissionProgress(operation, actualStatus)) {
+    if (this.isTargetCreateAdmissionProgress(operation, reconciledStatus)) {
       await this.updateStep(operation, WORKFLOW_STEP.CREATING);
       return true;
     }
 
     if (
-      this.shouldRearmDispatchFromProgressReconcile(operation, actualStatus)
+      this.shouldRearmDispatchFromProgressReconcile(
+        operation,
+        reconciledStatus,
+      )
     ) {
       await this.executeOperationFromReconcilePath(operation);
       return true;
     }
 
     if (
-      actualStatus === ReplicaStatus.SYNCING &&
+      reconciledStatus === ReplicaStatus.SYNCING &&
       (operation.workflowStep === WORKFLOW_STEP.PENDING ||
         operation.workflowStep === WORKFLOW_STEP.SENDING ||
         operation.workflowStep === WORKFLOW_STEP.CREATING)
@@ -930,7 +1210,7 @@ class OperationWorkflowOwnerSegment7 extends OperationWorkflowOwnerSegment6 {
       return true;
     }
 
-    if (actualStatus === ReplicaStatus.ACTIVE) {
+    if (reconciledStatus === ReplicaStatus.ACTIVE) {
       if (operation.type === OperationType.REPLACE) {
         await this.reconcileReplaceActualActive(operation);
       } else {
@@ -939,7 +1219,7 @@ class OperationWorkflowOwnerSegment7 extends OperationWorkflowOwnerSegment6 {
       return true;
     }
 
-    if (actualStatus === ReplicaStatus.FAILED) {
+    if (reconciledStatus === ReplicaStatus.FAILED) {
       await this.failOperation(
         operation,
         cause === OPERATION_WORKFLOW_OWNER_LITERAL.RECOVERY &&
@@ -951,7 +1231,7 @@ class OperationWorkflowOwnerSegment7 extends OperationWorkflowOwnerSegment6 {
     }
 
     if (
-      actualStatus === null &&
+      reconciledStatus === null &&
       cause === OPERATION_WORKFLOW_OWNER_LITERAL.RECOVERY &&
       operation.workflowStep === WORKFLOW_STEP.SYNCING
     ) {
@@ -963,6 +1243,63 @@ class OperationWorkflowOwnerSegment7 extends OperationWorkflowOwnerSegment6 {
     }
 
     return false;
+  }
+
+  /**
+   * @param {Object} operation
+   * @param {string|null} actualStatus
+   * @return {Object}
+   * @private
+   */
+  buildReconciledReplicaStatusEvidence(operation, actualStatus) {
+    const observedTargetStatus =
+      this.getObservedOperationRowTargetProgressStatus(operation);
+    return Object.freeze({
+      actualStatus,
+      observedTargetStatus,
+      actualStatusAbsent:
+        RECONCILED_REPLICA_STATUS_ABSENT_VALUES.has(actualStatus),
+      observedTargetProgress:
+        OBSERVED_OPERATION_ROW_TARGET_PROGRESS_STATUSES.has(
+          observedTargetStatus,
+        ),
+    });
+  }
+
+  /**
+   * @param {Object} evidence
+   * @return {string}
+   * @private
+   */
+  resolveReconciledReplicaStatusResolutionState(evidence) {
+    return (
+      RECONCILED_REPLICA_STATUS_RESOLUTION_TABLE.find((entry) =>
+        entry.matches(evidence),
+      )?.state ||
+      RECONCILED_REPLICA_STATUS_RESOLUTION_STATE.AUTHORITATIVE
+    );
+  }
+
+  /**
+   * @param {Object} operation
+   * @param {string|null} actualStatus
+   * @return {string|null}
+   * @private
+   */
+  resolveReconciledReplicaStatus(operation, actualStatus) {
+    const evidence = this.buildReconciledReplicaStatusEvidence(
+      operation,
+      actualStatus,
+    );
+    const resolutionState =
+      this.resolveReconciledReplicaStatusResolutionState(evidence);
+    if (
+      resolutionState ===
+      RECONCILED_REPLICA_STATUS_RESOLUTION_STATE.OBSERVED_TARGET_CACHE
+    ) {
+      return evidence.observedTargetStatus;
+    }
+    return evidence.actualStatus;
   }
 
   /**
@@ -1031,7 +1368,11 @@ class OperationWorkflowOwnerSegment7 extends OperationWorkflowOwnerSegment6 {
       if (await this.reconcileActiveReplaceSourceRemovalProgress(operation)) {
         return true;
       }
-      await this.executeOperationFromReconcilePath(operation);
+      const activeReplaceResumeResult =
+        await this.executeOperationFromReconcilePath(operation);
+      if (activeReplaceResumeResult?.skipped === true) {
+        this.ensurePriorityActiveReplaceRetryArmed(operation);
+      }
       return true;
     case OPERATION_LIFECYCLE_ACTION.EXECUTE_REMOVE_DISPATCH:
       await this.executeOperationFromReconcilePath(operation);
@@ -1102,6 +1443,131 @@ class OperationWorkflowOwnerSegment7 extends OperationWorkflowOwnerSegment6 {
     default:
       return this.config.pendingTimeoutMs;
     }
+  }
+
+  /**
+   * @param {Object|null} visibilityOperation
+   * @param {Object|null} fallbackOperation
+   * @return {Object}
+   * @private
+   */
+  buildTimeoutReconcileOperationSelectionEvidence(
+    visibilityOperation,
+    fallbackOperation,
+  ) {
+    const visibilityOperationId = String(
+      visibilityOperation?.operationId || '',
+    ).trim();
+    const fallbackOperationId = String(
+      fallbackOperation?.operationId || '',
+    ).trim();
+    const hasVisibilityOperation =
+      visibilityOperationId.length > NUM.ZERO &&
+      visibilityOperation &&
+      typeof visibilityOperation === TYPEOF.OBJECT;
+    const hasFallbackOperation =
+      fallbackOperationId.length > NUM.ZERO &&
+      fallbackOperation &&
+      typeof fallbackOperation === TYPEOF.OBJECT;
+    const visibilityWorkflowRank =
+      hasVisibilityOperation ?
+        this.getOperationWorkflowStepRank(visibilityOperation) :
+        NUM.NEGATIVE_ONE;
+    const fallbackWorkflowRank =
+      hasFallbackOperation ?
+        this.getOperationWorkflowStepRank(fallbackOperation) :
+        NUM.NEGATIVE_ONE;
+    const visibilityUpdatedAt = Number(visibilityOperation?.updatedAt);
+    const fallbackUpdatedAt = Number(fallbackOperation?.updatedAt);
+    const fallbackWorkflowRankAhead =
+      hasVisibilityOperation &&
+      hasFallbackOperation &&
+      fallbackWorkflowRank > visibilityWorkflowRank;
+    const fallbackUpdatedAtAhead =
+      hasVisibilityOperation &&
+      hasFallbackOperation &&
+      fallbackWorkflowRank === visibilityWorkflowRank &&
+      Number.isFinite(fallbackUpdatedAt) &&
+      (
+        !Number.isFinite(visibilityUpdatedAt) ||
+        fallbackUpdatedAt > visibilityUpdatedAt
+      );
+
+    return Object.freeze({
+      hasVisibilityOperation,
+      hasFallbackOperation,
+      sameOperationId:
+        hasVisibilityOperation &&
+        hasFallbackOperation &&
+        visibilityOperationId === fallbackOperationId,
+      visibilityTerminal:
+        hasVisibilityOperation &&
+        this.repository.isOperationTerminal(visibilityOperation),
+      fallbackTerminal:
+        hasFallbackOperation &&
+        this.repository.isOperationTerminal(fallbackOperation),
+      fallbackWorkflowRankAhead,
+      fallbackUpdatedAtAhead,
+    });
+  }
+
+  /**
+   * @param {Object|null} visibilityOperation
+   * @param {Object|null} fallbackOperation
+   * @return {string}
+   * @private
+   */
+  resolveTimeoutReconcileOperationSelectionAction(
+    visibilityOperation,
+    fallbackOperation,
+  ) {
+    const evidence = this.buildTimeoutReconcileOperationSelectionEvidence(
+      visibilityOperation,
+      fallbackOperation,
+    );
+    const state =
+      TIMEOUT_RECONCILE_OPERATION_SELECTION_STATE_TABLE.find((entry) =>
+        entry.matches(evidence),
+      )?.state ||
+      TIMEOUT_RECONCILE_OPERATION_SELECTION_STATE.VISIBILITY_CURRENT;
+    return (
+      TIMEOUT_RECONCILE_OPERATION_SELECTION_ACTION_BY_STATE[state] ||
+      TIMEOUT_RECONCILE_OPERATION_SELECTION_ACTION.USE_NONE
+    );
+  }
+
+  /**
+   * Timeout reconciliation may receive an owner-read snapshot and a cache
+   * snapshot from the same sweep. Use one canonical selection model so a stale
+   * PENDING owner read cannot fail an operation already observed at SENDING.
+   *
+   * @param {Object|null} visibilityObservation
+   * @param {Object|null} fallbackOperation
+   * @return {Object|null}
+   * @private
+   */
+  selectTimeoutReconcileOperation(
+    visibilityObservation,
+    fallbackOperation,
+  ) {
+    const visibilityOperation = visibilityObservation?.operation || null;
+    const action = this.resolveTimeoutReconcileOperationSelectionAction(
+      visibilityOperation,
+      fallbackOperation,
+    );
+    if (
+      action ===
+      TIMEOUT_RECONCILE_OPERATION_SELECTION_ACTION.USE_FALLBACK
+    ) {
+      return fallbackOperation || null;
+    }
+    if (
+      action ===
+      TIMEOUT_RECONCILE_OPERATION_SELECTION_ACTION.USE_VISIBILITY
+    ) {
+      return visibilityOperation || null;
+    }
+    return null;
   }
 
   /**
@@ -1281,8 +1747,13 @@ class OperationWorkflowOwnerSegment7 extends OperationWorkflowOwnerSegment6 {
                 allowPriorityRecoveryDeferredVisibility: true,
               },
             );
-          const timeoutOperation =
-            visibilityObservation?.operation || operation;
+          const timeoutOperation = this.selectTimeoutReconcileOperation(
+            visibilityObservation,
+            operation,
+          );
+          if (!timeoutOperation) {
+            return;
+          }
           if (this.repository.isOperationTerminal(timeoutOperation)) {
             return;
           }
@@ -1600,7 +2071,9 @@ class OperationWorkflowOwnerSegment7 extends OperationWorkflowOwnerSegment6 {
   isPriorityRecoveryOperationDrainCandidate(operation) {
     if (
       !operation ||
-      operation.type !== OperationType.REPLACE ||
+      !PRIORITY_RECOVERY_OPERATION_DRAIN_OPERATION_TYPES.has(
+        operation.type,
+      ) ||
       this.repository.isOperationTerminal(operation)
     ) {
       return false;
@@ -1618,7 +2091,11 @@ class OperationWorkflowOwnerSegment7 extends OperationWorkflowOwnerSegment6 {
    * @return {string}
    * @private
    */
-  resolvePriorityRecoveryOperationDrainState(completion, sourceSnapshot) {
+  resolvePriorityRecoveryOperationDrainState(
+    completion,
+    sourceSnapshot,
+    releaseEvidence = null,
+  ) {
     if (!completion || typeof completion !== TYPEOF.OBJECT) {
       return PRIORITY_RECOVERY_OPERATION_DRAIN_STATE.EVIDENCE_UNAVAILABLE;
     }
@@ -1632,12 +2109,135 @@ class OperationWorkflowOwnerSegment7 extends OperationWorkflowOwnerSegment6 {
     const sourceState =
       sourceSnapshot?.state ||
       PRIORITY_RECOVERY_OPERATION_DRAIN_SOURCE_STATE.NOT_REQUIRED;
+    const releaseDecision =
+      this.decidePriorityRecoveryOperationDrainRelease(releaseEvidence);
+    if (
+      releaseDecision.state ===
+      PRIORITY_RECOVERY_OPERATION_DRAIN_RELEASE_DECISION_STATE.RELEASE
+    ) {
+      return PRIORITY_RECOVERY_OPERATION_DRAIN_STATE
+        .OWNER_UNAVAILABLE_RELEASED;
+    }
     return (
       PRIORITY_RECOVERY_OPERATION_DRAIN_STATE_BY_SOURCE_STATE.get(
         sourceState,
       ) ||
       PRIORITY_RECOVERY_OPERATION_DRAIN_STATE.EVIDENCE_UNAVAILABLE
     );
+  }
+
+  /**
+   * @param {Object|null} evidence
+   * @return {Object}
+   * @private
+   */
+  decidePriorityRecoveryOperationDrainRelease(evidence) {
+    const decision =
+      PRIORITY_RECOVERY_OPERATION_DRAIN_RELEASE_DECISION_TABLE.find((entry) =>
+        entry.matches(evidence || Object.freeze({})),
+      );
+    return Object.freeze({
+      state:
+        decision?.state ||
+        PRIORITY_RECOVERY_OPERATION_DRAIN_RELEASE_DECISION_STATE.HOLD,
+    });
+  }
+
+  /**
+   * @param {string|null} ownerNodeId
+   * @param {Object} operation
+   * @return {boolean}
+   * @private
+   */
+  isPriorityRecoveryDrainOwnerUnavailable(ownerNodeId, operation) {
+    if (
+      typeof ownerNodeId !== TYPEOF.STRING ||
+      ownerNodeId.length === NUM.ZERO ||
+      ownerNodeId === this.nodeId
+    ) {
+      return false;
+    }
+    try {
+      return !this.isNodeReadyForRouting(ownerNodeId, {
+        partitionId: operation?.partitionId || null,
+        decisionDimension: REMOVE_SAFETY_READINESS_DIMENSION,
+        participationKind: REMOVE_SAFETY_OWNER_PARTICIPATION_KIND,
+      });
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * @param {Object} operation
+   * @return {boolean}
+   * @private
+   */
+  isPriorityRecoveryOperationDrainReleaseEligibleReplace(operation) {
+    if (operation?.type !== OperationType.REPLACE) {
+      return false;
+    }
+    if (
+      PRIORITY_RECOVERY_OPERATION_DRAIN_RELEASE_REPLACE_WORKFLOW_STEPS.has(
+        operation?.workflowStep,
+      )
+    ) {
+      return true;
+    }
+    if (
+      !PRIORITY_RECOVERY_OPERATION_DRAIN_RELEASE_TARGET_OBSERVED_WORKFLOW_STEPS
+        .has(operation?.workflowStep) ||
+      !this.repository ||
+      typeof this.repository.getObservedReplicaStatusFromCache !==
+        TYPEOF.FUNCTION
+    ) {
+      return false;
+    }
+    return (
+      this.repository.getObservedReplicaStatusFromCache(
+        operation.replicaId,
+        operation.partitionId,
+        operation.targetNodeId,
+      ) === ReplicaStatus.ACTIVE
+    );
+  }
+
+  /**
+   * @param {Object} operation
+   * @param {Object|null} completion
+   * @param {Object} sourceSnapshot
+   * @return {Object}
+   * @private
+   */
+  buildPriorityRecoveryOperationDrainReleaseEvidence(
+    operation,
+    completion,
+    sourceSnapshot,
+  ) {
+    const ownerNodeId =
+      this.repository.resolveOperationOwnerNodeId(operation) || null;
+    const completionAccepted =
+      completion &&
+      typeof completion === TYPEOF.OBJECT &&
+      PRIORITY_RECOVERY_OPERATION_DRAIN_COMPLETION_STATES.has(
+        completion.state,
+      );
+    const sourceState =
+      sourceSnapshot?.state ||
+      PRIORITY_RECOVERY_OPERATION_DRAIN_SOURCE_STATE.EVIDENCE_UNAVAILABLE;
+    return Object.freeze({
+      releaseEligibleReplace:
+        this.isPriorityRecoveryOperationDrainReleaseEligibleReplace(operation),
+      completionAccepted,
+      sourceRemovalPending:
+        PRIORITY_RECOVERY_OPERATION_DRAIN_RELEASE_SOURCE_STATES.has(
+          sourceState,
+        ),
+      remoteOwnerUnavailable:
+        this.isPriorityRecoveryDrainOwnerUnavailable(ownerNodeId, operation),
+      ownerNodeId,
+      sourceState,
+    });
   }
 
   /**
@@ -1686,17 +2286,281 @@ class OperationWorkflowOwnerSegment7 extends OperationWorkflowOwnerSegment6 {
 
   /**
    * @param {Object} operation
+   * @return {boolean}
+   * @private
+   */
+  isPriorityRecoveryRemoteSupersededTargetDrainCandidate(operation) {
+    return (
+      operation?.type === OperationType.REPLACE &&
+      isPriorityControlPlanePartition({partitionId: operation.partitionId}) &&
+      this.isPreSyncStep(operation.workflowStep) &&
+      !this.repository.isOperationLocallyOwned(operation)
+    );
+  }
+
+  /**
+   * @param {Object} operation
+   * @param {Object|null} priorityRecoveryContext
+   * @return {string|null}
+   * @private
+   */
+  resolvePriorityRecoveryRemoteSupersededTargetDrainError(
+    operation,
+    priorityRecoveryContext,
+  ) {
+    if (
+      !this.isPriorityRecoveryRemoteSupersededTargetDrainCandidate(operation) ||
+      !priorityRecoveryContext ||
+      typeof priorityRecoveryContext !== TYPEOF.OBJECT
+    ) {
+      return null;
+    }
+    const decisionSnapshot = priorityRecoveryContext.decisionSnapshot;
+    const blockerReasons = Array.isArray(decisionSnapshot?.blockerReasons) ?
+      decisionSnapshot.blockerReasons :
+      [];
+    if (
+      !blockerReasons.includes(
+        PRIORITY_RECOVERY_BLOCKER_REASON.RECOVERY_ELIGIBLE_EXCLUDED,
+      )
+    ) {
+      return null;
+    }
+    const targetNodeId = String(
+      operation.targetNodeId || OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_STRING,
+    ).trim();
+    const eligibleNodeIds = normalizeNodeIdList(
+      priorityRecoveryContext.effectiveEligibleNodeIds,
+    );
+    if (
+      targetNodeId.length === NUM.ZERO ||
+      eligibleNodeIds.length === NUM.ZERO ||
+      eligibleNodeIds.includes(targetNodeId)
+    ) {
+      return null;
+    }
+    return this.buildPriorityRecoverySupersededTargetError(
+      operation,
+      targetNodeId,
+      eligibleNodeIds,
+    );
+  }
+
+  /**
+   * @param {Object} operation
+   * @param {Object|null} priorityRecoveryContext
+   * @return {boolean}
+   * @private
+   */
+  isPriorityRecoveryAddOperationDrainTargetSatisfied(
+    operation,
+    priorityRecoveryContext,
+  ) {
+    if (operation?.type !== OperationType.ADD) {
+      return false;
+    }
+    const operationId = String(
+      operation.operationId || OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_STRING,
+    ).trim();
+    const satisfyingOperationIds = Array.isArray(
+      priorityRecoveryContext?.decisionSnapshot?.spreadCompletion
+        ?.satisfyingOperationIds,
+    ) ?
+      priorityRecoveryContext.decisionSnapshot.spreadCompletion
+        .satisfyingOperationIds :
+      [];
+    if (
+      operationId.length > NUM.ZERO &&
+      satisfyingOperationIds.includes(operationId)
+    ) {
+      return true;
+    }
+    if (
+      !this.repository ||
+      typeof this.repository.getObservedReplicaStatusFromCache !==
+        TYPEOF.FUNCTION
+    ) {
+      return false;
+    }
+    const observedTargetStatus =
+      this.repository.getObservedReplicaStatusFromCache(
+        operation.replicaId,
+        operation.partitionId,
+        operation.targetNodeId,
+      );
+    return PRIORITY_RECOVERY_OPERATION_DRAIN_ADD_TARGET_STATUSES.has(
+      observedTargetStatus,
+    );
+  }
+
+  /**
+   * @param {Object} operation
    * @param {string|null} completionState
+   * @param {Object|null} priorityRecoveryContext
+   * @return {Object}
+   * @private
+   */
+  buildPriorityRecoveryAddOperationDrainSourceSnapshot(
+    operation,
+    completionState,
+    priorityRecoveryContext,
+  ) {
+    const targetSatisfied =
+      completionState === PRIORITY_RECOVERY_COMPLETION_STATE.CONVERGED &&
+      this.isPriorityRecoveryAddOperationDrainTargetSatisfied(
+        operation,
+        priorityRecoveryContext,
+      );
+    return Object.freeze({
+      state: targetSatisfied ?
+        PRIORITY_RECOVERY_OPERATION_DRAIN_SOURCE_STATE.NOT_REQUIRED :
+        PRIORITY_RECOVERY_OPERATION_DRAIN_SOURCE_STATE.EVIDENCE_UNAVAILABLE,
+      sourceReplicaId: null,
+      observationState: null,
+      lifecycleStatus: null,
+    });
+  }
+
+  /**
+   * @param {Object} operation
+   * @return {string}
+   * @private
+   */
+  resolvePriorityRecoveryPreSyncReplaceTargetState(operation) {
+    if (
+      operation?.type !== OperationType.REPLACE ||
+      !this.isPreSyncStep(operation.workflowStep)
+    ) {
+      return PRIORITY_RECOVERY_PRE_SYNC_REPLACE_TARGET_STATE.NOT_APPLICABLE;
+    }
+    if (
+      !this.repository ||
+      typeof this.repository.getObservedReplicaStatusFromCache !==
+        TYPEOF.FUNCTION
+    ) {
+      return PRIORITY_RECOVERY_PRE_SYNC_REPLACE_TARGET_STATE
+        .EVIDENCE_UNAVAILABLE;
+    }
+    const observedTargetStatus =
+      this.repository.getObservedReplicaStatusFromCache(
+        operation.replicaId,
+        operation.partitionId,
+        operation.targetNodeId,
+      );
+    if (
+      PRIORITY_RECOVERY_PRE_SYNC_REPLACE_TARGET_MATERIALIZED_STATUSES.has(
+        observedTargetStatus,
+      )
+    ) {
+      return PRIORITY_RECOVERY_PRE_SYNC_REPLACE_TARGET_STATE.MATERIALIZED;
+    }
+    if (
+      PRIORITY_RECOVERY_PRE_SYNC_REPLACE_TARGET_UNMATERIALIZED_STATUSES.has(
+        observedTargetStatus,
+      )
+    ) {
+      return PRIORITY_RECOVERY_PRE_SYNC_REPLACE_TARGET_STATE.UNMATERIALIZED;
+    }
+    return PRIORITY_RECOVERY_PRE_SYNC_REPLACE_TARGET_STATE
+      .EVIDENCE_UNAVAILABLE;
+  }
+
+  /**
+   * @param {Object} operation
+   * @param {string|null} completionState
+   * @return {Object}
+   * @private
+   */
+  buildPriorityRecoveryPreSyncReplaceDrainEvidence(
+    operation,
+    completionState,
+  ) {
+    return Object.freeze({
+      completionAccepted:
+        PRIORITY_RECOVERY_OPERATION_DRAIN_COMPLETION_STATES.has(
+          completionState,
+        ),
+      targetState:
+        this.resolvePriorityRecoveryPreSyncReplaceTargetState(operation),
+    });
+  }
+
+  /**
+   * @param {Object} evidence
+   * @return {string}
+   * @private
+   */
+  resolvePriorityRecoveryPreSyncReplaceDrainDecision(evidence) {
+    return (
+      PRIORITY_RECOVERY_PRE_SYNC_REPLACE_DRAIN_DECISION_TABLE.find((entry) =>
+        entry.matches(evidence),
+      )?.state ||
+      PRIORITY_RECOVERY_PRE_SYNC_REPLACE_DRAIN_DECISION.NO_OVERRIDE
+    );
+  }
+
+  /**
+   * @param {Object} operation
+   * @param {string|null} completionState
+   * @return {string}
+   * @private
+   */
+  resolvePriorityRecoveryPreSyncReplaceDrainSourceState(
+    operation,
+    completionState,
+  ) {
+    const evidence = this.buildPriorityRecoveryPreSyncReplaceDrainEvidence(
+      operation,
+      completionState,
+    );
+    return (
+      PRIORITY_RECOVERY_PRE_SYNC_REPLACE_DRAIN_SOURCE_STATE_BY_DECISION.get(
+        this.resolvePriorityRecoveryPreSyncReplaceDrainDecision(evidence),
+      ) ||
+      PRIORITY_RECOVERY_PRE_SYNC_REPLACE_DRAIN_DECISION.NO_OVERRIDE
+    );
+  }
+
+  /**
+   * @param {string} state
+   * @return {Object}
+   * @private
+   */
+  buildPriorityRecoveryOperationDrainSourceSnapshotForState(state) {
+    return Object.freeze({
+      state,
+      sourceReplicaId: null,
+      observationState: null,
+      lifecycleStatus: null,
+    });
+  }
+
+  /**
+   * @param {Object} operation
+   * @param {string|null} completionState
+   * @param {Object|null} [priorityRecoveryContext=null]
    * @return {Promise<Object>}
    * @private
    */
   async buildPriorityRecoveryOperationDrainSourceSnapshot(
     operation,
     completionState,
+    priorityRecoveryContext = null,
   ) {
+    if (operation?.type === OperationType.ADD) {
+      return this.buildPriorityRecoveryAddOperationDrainSourceSnapshot(
+        operation,
+        completionState,
+        priorityRecoveryContext,
+      );
+    }
     if (
-      operation?.type !== OperationType.REPLACE ||
-      completionState !== PRIORITY_RECOVERY_COMPLETION_STATE.CONVERGED
+      !PRIORITY_RECOVERY_OPERATION_DRAIN_SOURCE_REMOVAL_TYPES.has(
+        operation?.type,
+      ) ||
+      !PRIORITY_RECOVERY_OPERATION_DRAIN_COMPLETION_STATES.has(
+        completionState,
+      )
     ) {
       return Object.freeze({
         state: PRIORITY_RECOVERY_OPERATION_DRAIN_SOURCE_STATE.NOT_REQUIRED,
@@ -1705,8 +2569,28 @@ class OperationWorkflowOwnerSegment7 extends OperationWorkflowOwnerSegment6 {
         lifecycleStatus: null,
       });
     }
-    const sourceReplicaId =
-      this.repository.getReplaceSourceReplicaId(operation);
+    const preSyncReplaceDrainSourceState =
+      this.resolvePriorityRecoveryPreSyncReplaceDrainSourceState(
+        operation,
+        completionState,
+      );
+    if (
+      preSyncReplaceDrainSourceState !==
+      PRIORITY_RECOVERY_PRE_SYNC_REPLACE_DRAIN_DECISION.NO_OVERRIDE
+    ) {
+      return this
+        .buildPriorityRecoveryOperationDrainSourceSnapshotForState(
+          preSyncReplaceDrainSourceState,
+        );
+    }
+    const targetResolver =
+      PRIORITY_RECOVERY_OPERATION_DRAIN_REPLICA_TARGET_BY_TYPE.get(
+        operation.type,
+      );
+    const sourceReplicaId = targetResolver?.getReplicaId(
+      operation,
+      this.repository,
+    );
     if (!sourceReplicaId) {
       return Object.freeze({
         state:
@@ -1719,7 +2603,7 @@ class OperationWorkflowOwnerSegment7 extends OperationWorkflowOwnerSegment6 {
     const observation = await this.observeStoppingReplicaProgress(
       sourceReplicaId,
       operation.partitionId,
-      operation.sourceNodeId,
+      targetResolver.getNodeId(operation),
     );
     return Object.freeze({
       state: this.resolvePriorityRecoveryOperationDrainSourceState(
@@ -1743,7 +2627,9 @@ class OperationWorkflowOwnerSegment7 extends OperationWorkflowOwnerSegment6 {
     }
     if (
       drainAction ===
-      OPERATION_LIFECYCLE_ACTION.COMPLETE_PRIORITY_RECOVERY_DRAIN
+        OPERATION_LIFECYCLE_ACTION.COMPLETE_PRIORITY_RECOVERY_DRAIN ||
+      drainAction ===
+        OPERATION_LIFECYCLE_ACTION.FAIL_PRIORITY_RECOVERY_SUPERSEDED_TARGET
     ) {
       return (
         PRIORITY_RECOVERY_OPERATION_DRAIN_OWNER_STATE.REMOTE_SETTLE_ALLOWED
@@ -1807,22 +2693,55 @@ class OperationWorkflowOwnerSegment7 extends OperationWorkflowOwnerSegment6 {
 
     const planningSnapshot =
       await this.getPriorityRecoveryPlanningSnapshot(operation);
-    const completion = this.buildPriorityRecoveryCompletionForOperation(
-      operation,
-      planningSnapshot,
-    );
+    const priorityRecoveryContext =
+      this.buildPriorityRecoveryAssessmentContextForOperation(
+        operation,
+        planningSnapshot,
+      );
+    const completion =
+      this.buildPriorityRecoveryCompletionForOperation(
+        operation,
+        planningSnapshot,
+      ) ||
+      priorityRecoveryContext?.completion ||
+      null;
+    const supersededTargetError =
+      this.resolvePriorityRecoveryRemoteSupersededTargetDrainError(
+        operation,
+        priorityRecoveryContext,
+      );
+    const supersededTargetState =
+      supersededTargetError ?
+        PRIORITY_RECOVERY_OPERATION_DRAIN_STATE.SUPERSEDED_TARGET :
+        null;
     const completionState =
       completion?.state ||
       PRIORITY_RECOVERY_OPERATION_DRAIN_COMPLETION_STATE_UNAVAILABLE;
     const sourceSnapshot =
-      await this.buildPriorityRecoveryOperationDrainSourceSnapshot(
+      supersededTargetState ?
+        Object.freeze({
+          state: PRIORITY_RECOVERY_OPERATION_DRAIN_SOURCE_STATE.NOT_REQUIRED,
+          sourceReplicaId: null,
+          observationState: null,
+          lifecycleStatus: null,
+        }) :
+        await this.buildPriorityRecoveryOperationDrainSourceSnapshot(
+          operation,
+          completionState,
+          priorityRecoveryContext,
+        );
+    const releaseEvidence =
+      this.buildPriorityRecoveryOperationDrainReleaseEvidence(
         operation,
-        completionState,
+        completion,
+        sourceSnapshot,
       );
     const state =
+      supersededTargetState ||
       this.resolvePriorityRecoveryOperationDrainState(
         completion,
         sourceSnapshot,
+        releaseEvidence,
       );
     const action =
       PRIORITY_RECOVERY_OPERATION_DRAIN_ACTION_BY_STATE.get(state) ||
@@ -1843,6 +2762,7 @@ class OperationWorkflowOwnerSegment7 extends OperationWorkflowOwnerSegment6 {
       sourceReplicaId: sourceSnapshot.sourceReplicaId,
       sourceObservationState: sourceSnapshot.observationState,
       sourceLifecycleStatus: sourceSnapshot.lifecycleStatus,
+      supersededTargetError,
     });
   }
 
@@ -1859,6 +2779,17 @@ class OperationWorkflowOwnerSegment7 extends OperationWorkflowOwnerSegment6 {
     const resolvedDrainSnapshot =
       drainSnapshot ||
       await this.buildPriorityRecoveryOperationDrainSnapshot(operation);
+    if (
+      resolvedDrainSnapshot.action ===
+      OPERATION_LIFECYCLE_ACTION.FAIL_PRIORITY_RECOVERY_SUPERSEDED_TARGET
+    ) {
+      await this.failOperation(
+        operation,
+        resolvedDrainSnapshot.supersededTargetError,
+        {logLevel: FAILURE_LOG_LEVEL.WARN},
+      );
+      return true;
+    }
     if (
       resolvedDrainSnapshot.action !==
       OPERATION_LIFECYCLE_ACTION.COMPLETE_PRIORITY_RECOVERY_DRAIN

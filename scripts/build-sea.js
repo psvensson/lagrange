@@ -15,6 +15,20 @@ import {fileURLToPath} from 'url';
 import {dirname, join} from 'path';
 import {cpSync, existsSync, mkdirSync, rmSync} from 'fs';
 
+const LOCAL_STR_NODE = 'node';
+const LOCAL_STR_NODE22 = 'node22';
+const LOCAL_STR_DIST = 'dist';
+const LOCAL_STR_CJS = 'cjs';
+const LOCAL_STR_TRUE = '"true"';
+const LOCAL_STR_1523G = '=== Building SEA Bundles ===\n';
+const LOCAL_STR_JD32F = 'Created dist directory\n';
+const LOCAL_STR_53PKQ = '\nStaging runtime dependencies...';
+const LOCAL_STR_BUILD_COMPLETE = '\n=== Build Complete ===';
+const LOCAL_STR_1PL2X = 'Bundles created in dist/';
+const LOCAL_STR_1MECL = '  - node_modules/ (runtime dependencies)';
+const LOCAL_STR_BUILD_FAILED = '\nBuild failed:';
+const LOCAL_NUM_ONE = 1;
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const projectRoot = join(__dirname, '..');
@@ -85,16 +99,16 @@ async function buildBundle(entryPoint, outputFile, name, external) {
   await esbuild.build({
     entryPoints: [entryPoint],
     bundle: true,
-    platform: 'node',
-    target: 'node22',
-    outfile: join(projectRoot, 'dist', outputFile),
-    format: 'cjs',
+    platform: LOCAL_STR_NODE,
+    target: LOCAL_STR_NODE22,
+    outfile: join(projectRoot, LOCAL_STR_DIST, outputFile),
+    format: LOCAL_STR_CJS,
     external,
     minify: true,
     sourcemap: false,
     treeShaking: true,
     define: {
-      'process.env.SEA_BUILD': '"true"',
+      'process.env.SEA_BUILD': LOCAL_STR_TRUE,
     },
     banner: {
       js: BUILD_BANNER,
@@ -125,12 +139,12 @@ function stageRuntimePackages() {
  * Main build function.
  */
 async function main() {
-  console.log('=== Building SEA Bundles ===\n');
+  console.log(LOCAL_STR_1523G);
 
   const distDir = join(projectRoot, 'dist');
   if (!existsSync(distDir)) {
     mkdirSync(distDir, {recursive: true});
-    console.log('Created dist directory\n');
+    console.log(LOCAL_STR_JD32F);
   }
 
   try {
@@ -143,18 +157,18 @@ async function main() {
       );
     }
 
-    console.log('\nStaging runtime dependencies...');
+    console.log(LOCAL_STR_53PKQ);
     stageRuntimePackages();
 
-    console.log('\n=== Build Complete ===');
-    console.log('Bundles created in dist/');
+    console.log(LOCAL_STR_BUILD_COMPLETE);
+    console.log(LOCAL_STR_1PL2X);
     for (const bundle of BUNDLES) {
       console.log(`  - ${bundle.outputFile} (${bundle.name})`);
     }
-    console.log('  - node_modules/ (runtime dependencies)');
+    console.log(LOCAL_STR_1MECL);
   } catch (error) {
-    console.error('\nBuild failed:', error.message);
-    process.exit(1);
+    console.error(LOCAL_STR_BUILD_FAILED, error.message);
+    process.exit(LOCAL_NUM_ONE);
   }
 }
 

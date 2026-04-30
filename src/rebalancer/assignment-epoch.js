@@ -1,3 +1,27 @@
+const LOCAL_STR_1QWCK = 'EpochImmutabilityError';
+const LOCAL_STR_19AU2 = 'EpochValidationError';
+const LOCAL_STR_OBJECT = 'object';
+const LOCAL_STR_HNIK6 = 'Options must be an object';
+const LOCAL_STR_OPTIONS = 'options';
+const LOCAL_STR_NUMBER = 'number';
+const LOCAL_STR_14LRZ = 'Epoch must be a number';
+const LOCAL_STR_EPOCH = 'epoch';
+const LOCAL_STR_1NV6K = 'Epoch must be an integer';
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_STR_181I7 = 'Epoch must be non-negative';
+const LOCAL_STR_ZQJIK = 'Assignments must be an object';
+const LOCAL_STR_ASSIGNMENTS = 'assignments';
+const LOCAL_STR_STRING = 'string';
+const LOCAL_STR_1QIQB = 'Partition ID must be a non-empty string';
+const LOCAL_STR_6BVZP = 'Timestamp must be a string';
+const LOCAL_STR_TIMESTAMP = 'timestamp';
+const LOCAL_STR_1M05H = 'Timestamp cannot be empty';
+const LOCAL_STR_HSI91 = 'ProposedBy must be a string';
+const LOCAL_STR_PROPOSEDBY = 'proposedBy';
+const LOCAL_STR_14QI7 = 'ProposedBy cannot be empty';
+const LOCAL_STR_JSON = 'json';
+const LOCAL_NUM_ONE = 1;
+
 /**
  * Assignment Epoch - Immutable versioned snapshot of partition assignments.
  * Provides immutable epoch creation for coordinated partition-to-node mappings.
@@ -14,7 +38,7 @@ class EpochImmutabilityError extends Error {
    */
   constructor(message) {
     super(message);
-    this.name = 'EpochImmutabilityError';
+    this.name = LOCAL_STR_1QWCK;
   }
 }
 
@@ -29,7 +53,7 @@ class EpochValidationError extends Error {
    */
   constructor(message, field) {
     super(message);
-    this.name = 'EpochValidationError';
+    this.name = LOCAL_STR_19AU2;
     this.field = field;
   }
 }
@@ -81,90 +105,90 @@ class AssignmentEpoch {
    * @private
    */
   _validateOptions(options) {
-    if (options === null || typeof options !== 'object') {
+    if (options === null || typeof options !== LOCAL_STR_OBJECT) {
       throw new EpochValidationError(
-        'Options must be an object',
-        'options',
+        LOCAL_STR_HNIK6,
+        LOCAL_STR_OPTIONS,
       );
     }
 
     // Validate epoch number
-    if (typeof options.epoch !== 'number') {
+    if (typeof options.epoch !== LOCAL_STR_NUMBER) {
       throw new EpochValidationError(
-        'Epoch must be a number',
-        'epoch',
+        LOCAL_STR_14LRZ,
+        LOCAL_STR_EPOCH,
       );
     }
     if (!Number.isInteger(options.epoch)) {
       throw new EpochValidationError(
-        'Epoch must be an integer',
-        'epoch',
+        LOCAL_STR_1NV6K,
+        LOCAL_STR_EPOCH,
       );
     }
-    if (options.epoch < 0) {
+    if (options.epoch < LOCAL_NUM_ZERO) {
       throw new EpochValidationError(
-        'Epoch must be non-negative',
-        'epoch',
+        LOCAL_STR_181I7,
+        LOCAL_STR_EPOCH,
       );
     }
 
     // Validate assignments
-    if (options.assignments === null || typeof options.assignments !== 'object') {
+    if (options.assignments === null || typeof options.assignments !== LOCAL_STR_OBJECT) {
       throw new EpochValidationError(
-        'Assignments must be an object',
-        'assignments',
+        LOCAL_STR_ZQJIK,
+        LOCAL_STR_ASSIGNMENTS,
       );
     }
 
     // Validate each assignment entry
     for (const [partitionId, nodeList] of Object.entries(options.assignments)) {
-      if (!partitionId || typeof partitionId !== 'string') {
+      if (!partitionId || typeof partitionId !== LOCAL_STR_STRING) {
         throw new EpochValidationError(
-          'Partition ID must be a non-empty string',
-          'assignments',
+          LOCAL_STR_1QIQB,
+          LOCAL_STR_ASSIGNMENTS,
         );
       }
       if (!Array.isArray(nodeList)) {
         throw new EpochValidationError(
           `Assignment for partition '${partitionId}' must be an array of node IDs`,
-          'assignments',
+          LOCAL_STR_ASSIGNMENTS,
         );
       }
       for (const nodeId of nodeList) {
-        if (!nodeId || typeof nodeId !== 'string') {
+        if (!nodeId || typeof nodeId !== LOCAL_STR_STRING) {
           throw new EpochValidationError(
             `Node ID in partition '${partitionId}' must be a non-empty string`,
-            'assignments',
+            LOCAL_STR_ASSIGNMENTS,
           );
         }
       }
     }
 
     // Validate timestamp
-    if (typeof options.timestamp !== 'string') {
+    if (typeof options.timestamp !== LOCAL_STR_STRING) {
       throw new EpochValidationError(
-        'Timestamp must be a string',
-        'timestamp',
+        LOCAL_STR_6BVZP,
+        LOCAL_STR_TIMESTAMP,
       );
     }
     if (!options.timestamp) {
       throw new EpochValidationError(
-        'Timestamp cannot be empty',
-        'timestamp',
+        LOCAL_STR_1M05H,
+        LOCAL_STR_TIMESTAMP,
       );
     }
 
     // Validate proposedBy
-    if (typeof options.proposedBy !== 'string') {
+    if (typeof options.proposedBy !== LOCAL_STR_STRING) {
       throw new EpochValidationError(
-        'ProposedBy must be a string',
-        'proposedBy',
+        LOCAL_STR_HSI91,
+        LOCAL_STR_PROPOSEDBY,
       );
     }
     if (!options.proposedBy) {
       throw new EpochValidationError(
-        'ProposedBy cannot be empty',
-        'proposedBy',
+        LOCAL_STR_14QI7,
+        LOCAL_STR_PROPOSEDBY,
       );
     }
   }
@@ -276,7 +300,7 @@ class AssignmentEpoch {
    * @return {number} Total number of replica assignments across all partitions.
    */
   getTotalReplicaCount() {
-    let count = 0;
+    let count = LOCAL_NUM_ZERO;
     for (const nodeList of Object.values(this._assignments)) {
       count += nodeList.length;
     }
@@ -358,7 +382,7 @@ class AssignmentEpoch {
       }
       throw new EpochValidationError(
         `Invalid JSON: ${error.message}`,
-        'json',
+        LOCAL_STR_JSON,
       );
     }
   }
@@ -371,7 +395,7 @@ class AssignmentEpoch {
    */
   static createInitial(timestamp, proposedBy) {
     return new AssignmentEpoch({
-      epoch: 0,
+      epoch: LOCAL_NUM_ZERO,
       assignments: {},
       timestamp,
       proposedBy,
@@ -389,7 +413,7 @@ class AssignmentEpoch {
    */
   static createNext(previousEpoch, newAssignments, timestamp, proposedBy) {
     return new AssignmentEpoch({
-      epoch: previousEpoch.epoch + 1,
+      epoch: previousEpoch.epoch + LOCAL_NUM_ONE,
       assignments: newAssignments,
       timestamp,
       proposedBy,

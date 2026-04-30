@@ -1,5 +1,7 @@
 import {CDC_PIPELINE_METRIC, NUM} from '../constants/index.js';
 
+const LOCAL_STR_FUNCTION = 'function';
+
 const ONE_MINUTE_MS = 60 * 1000;
 
 function normalizePartitionSize(partition) {
@@ -8,7 +10,7 @@ function normalizePartitionSize(partition) {
 }
 
 function findLocalLeaderPartitionService(partitionServices, partitionId) {
-  if (!partitionServices || !partitionId || typeof partitionServices.values !== 'function') {
+  if (!partitionServices || !partitionId || typeof partitionServices.values !== LOCAL_STR_FUNCTION) {
     return null;
   }
 
@@ -16,7 +18,7 @@ function findLocalLeaderPartitionService(partitionServices, partitionId) {
     if (!service ||
         service.partitionId !== partitionId ||
         service.isLeader !== true ||
-        typeof service.getSize !== 'function') {
+        typeof service.getSize !== LOCAL_STR_FUNCTION) {
       continue;
     }
     return service;
@@ -35,7 +37,7 @@ function normalizeCounterValue(value) {
 
 function resolveGeneratedWriteCount(partitionService) {
   if (!partitionService?.cdcPipelineMetrics ||
-      typeof partitionService.cdcPipelineMetrics.getSnapshot !== 'function') {
+      typeof partitionService.cdcPipelineMetrics.getSnapshot !== LOCAL_STR_FUNCTION) {
     return null;
   }
   const snapshot = partitionService.cdcPipelineMetrics.getSnapshot();

@@ -1,6 +1,11 @@
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {NUM, SERVICE_STATUS, STATE, TYPEOF} from '../constants/index.js';
 
+const LOCAL_STR_1JMCK = 'ready_lease_expires_at';
+const LOCAL_STR_I7OGB = 'readyLeaseExpiresAt';
+const LOCAL_STR_XKEQN = 'readyLeaseExpiresAtMs';
+const LOCAL_STR_READYLEASEEXPIRES = 'readyLeaseExpires';
+
 const REQUIRE_ACTIVE_STATUS_DEFAULT = true;
 
 function normalizeConnectionState(nodeRow) {
@@ -29,10 +34,10 @@ function hasOwnField(target, fieldName) {
 }
 
 function hasExplicitReadyLeaseField(nodeRow) {
-  return hasOwnField(nodeRow, 'ready_lease_expires_at') ||
-    hasOwnField(nodeRow, 'readyLeaseExpiresAt') ||
-    hasOwnField(nodeRow, 'readyLeaseExpiresAtMs') ||
-    hasOwnField(nodeRow, 'readyLeaseExpires');
+  return hasOwnField(nodeRow, LOCAL_STR_1JMCK) ||
+    hasOwnField(nodeRow, LOCAL_STR_I7OGB) ||
+    hasOwnField(nodeRow, LOCAL_STR_XKEQN) ||
+    hasOwnField(nodeRow, LOCAL_STR_READYLEASEEXPIRES);
 }
 
 function getNodeHeartbeatWatermark(nodeRow) {

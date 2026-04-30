@@ -30,6 +30,18 @@ const CACHE_VISIBLE_PRIORITY_RECOVERY_DECISION_OPERATION_ID =
 const CACHE_VISIBLE_PRIORITY_RECOVERY_PARTITION_FALLBACK_OPERATION_ID =
   'op-cache-visible-spread-satisfied-partition-fallback';
 const CACHE_VISIBLE_PRIORITY_RECOVERY_TARGET_NODE_ID = 'node-d';
+const CDC_PROJECTION_OWNER_NODE_ID = 'mock-cdc-projection-owner-node';
+const CDC_PROJECTION_LEADER_VISIBLE_PARTITION_ID =
+  'control_plane_publications-p1';
+const CDC_PROJECTION_OWNER_MISSING_PARTITION_ID =
+  'sql_transaction_participants-p1';
+const CDC_PROJECTION_OWNER_OPERATION_ID =
+  'op-cdc-projection-visible-owner';
+const CDC_PROJECTION_OWNER_TARGET_NODE_ID = 'node-cdc-owner-target';
+const PRIORITY_RECOVERY_SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT =
+  'spread_satisfied_in_flight';
+const PRIORITY_RECOVERY_VISIBILITY_STATE_CACHE_VISIBLE = 'cache_visible';
+const PRIORITY_RECOVERY_COMPLETION_STATE_CONVERGED = 'converged';
 
 /**
  * Feature: distributed-testing-framework
@@ -1217,6 +1229,100 @@ test(
       /Convergence timeout/,
       'spread-satisfied partitions should still gate convergence by default',
     );
+
+    const result = await waitForConvergence([node], {
+      settleTimeoutMs: 80,
+      quietWindowMs: 0,
+      maxSustainedOverTargetMs: 80,
+      sampleIntervalMs: 10,
+      targetVoterCount: 3,
+      ignoreStaleInFlightReplicaOperations: true,
+    });
+    assert.strictEqual(typeof result.settledAfterMs, 'number');
+    assert.ok(result.settledAfterMs >= 0);
+  },
+);
+
+test(
+  'waitForConvergence — can close CDC projection leader gaps from priority recovery owner evidence',
+  async () => {
+    const node = {
+      id: CDC_PROJECTION_OWNER_NODE_ID,
+      isReachable: async () => true,
+      getControlSnapshot: async () => ({
+        rows: [buildControlSnapshotRecord({
+          nodeId: CDC_PROJECTION_OWNER_NODE_ID,
+          partitionIds: [
+            CDC_PROJECTION_LEADER_VISIBLE_PARTITION_ID,
+            CDC_PROJECTION_OWNER_MISSING_PARTITION_ID,
+          ],
+          servicesRows: [
+            {
+              service_type: 'partition',
+              status: 'ACTIVE',
+              raft_role: 'leader',
+              address:
+                CDC_PROJECTION_OWNER_NODE_ID +
+                '/' +
+                CDC_PROJECTION_LEADER_VISIBLE_PARTITION_ID +
+                '/r0',
+              partition_id: CDC_PROJECTION_LEADER_VISIBLE_PARTITION_ID,
+            },
+            {
+              service_type: 'partition',
+              status: 'ACTIVE',
+              raft_role: 'follower',
+              address:
+                'node-b/' +
+                CDC_PROJECTION_LEADER_VISIBLE_PARTITION_ID +
+                '/r1',
+              partition_id: CDC_PROJECTION_LEADER_VISIBLE_PARTITION_ID,
+            },
+            {
+              service_type: 'partition',
+              status: 'ACTIVE',
+              raft_role: 'follower',
+              address:
+                'node-c/' +
+                CDC_PROJECTION_LEADER_VISIBLE_PARTITION_ID +
+                '/r2',
+              partition_id: CDC_PROJECTION_LEADER_VISIBLE_PARTITION_ID,
+            },
+          ],
+          operationRows: [{
+            operation_id: CDC_PROJECTION_OWNER_OPERATION_ID,
+            type: 'REPLACE',
+            partition_id: CDC_PROJECTION_OWNER_MISSING_PARTITION_ID,
+            source_node_id: 'node-a',
+            target_node_id: CDC_PROJECTION_OWNER_TARGET_NODE_ID,
+            replica_id: CDC_PROJECTION_OWNER_MISSING_PARTITION_ID + '-r4',
+            status: 'syncing',
+            workflow_step: 'SYNCING',
+            updated_at: Date.now() - 1000,
+          }],
+          controlPlaneDiagnostics: {
+            replicaOperations: {
+              staleInFlightCount: 0,
+            },
+            priorityRecoveryDecisionSnapshots: {
+              snapshots: [{
+                partitionId: CDC_PROJECTION_OWNER_MISSING_PARTITION_ID,
+                operationId: CDC_PROJECTION_OWNER_OPERATION_ID,
+                semanticState:
+                  PRIORITY_RECOVERY_SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT,
+                observation: {
+                  visibilityState:
+                    PRIORITY_RECOVERY_VISIBILITY_STATE_CACHE_VISIBLE,
+                },
+                completion: {
+                  state: PRIORITY_RECOVERY_COMPLETION_STATE_CONVERGED,
+                },
+              }],
+            },
+          },
+        })],
+      }),
+    };
 
     const result = await waitForConvergence([node], {
       settleTimeoutMs: 80,

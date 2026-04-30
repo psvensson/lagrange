@@ -20,10 +20,45 @@ const {
   WORKFLOW_STEP,
   assertCritical,
   getControlPlaneErrorMessage,
+  isSystemTablePartition,
   isCoordinatorOwnedOperationType,
   shouldUseAuthoritativePriorityRecoveryRediscovery,
   wasNodeRecordReadyWhenWritten,
 } = REPLICA_DISPATCH_SERVICE_SHARED;
+
+const DISPATCH_REPLAY_READY_NODE_PHASE = Object.freeze({
+  INITIAL_TARGET_DISPATCH: 'initial_target_dispatch',
+  CREATE_TARGET_REARM: 'create_target_rearm',
+  ACTIVE_REPLACE_SOURCE_REMOVAL: 'active_replace_source_removal',
+  NOT_REPLAYABLE: 'not_replayable',
+});
+
+function mergeDispatchRetryRowsByOperationId(
+  preferredRows = [],
+  fallbackRows = [],
+) {
+  const rows = [];
+  const seenOperationIds = new Set();
+  const appendRow = (row) => {
+    const operationId = row?.[COLUMN.OPERATION_ID];
+    if (
+      typeof operationId !== TYPEOF.STRING ||
+      operationId.length === NUM.ZERO ||
+      seenOperationIds.has(operationId)
+    ) {
+      return;
+    }
+    seenOperationIds.add(operationId);
+    rows.push(row);
+  };
+  for (const row of preferredRows) {
+    appendRow(row);
+  }
+  for (const row of fallbackRows) {
+    appendRow(row);
+  }
+  return rows;
+}
 
 class ReplicaDispatchServiceSegment2 extends ReplicaDispatchServiceSegment1 {
   resolveNodeStateUpdateBudgetFields(nodeRow) {
@@ -532,22 +567,139 @@ class ReplicaDispatchServiceSegment2 extends ReplicaDispatchServiceSegment1 {
    * @private
    */
   resolveDispatchReplayNodeId(operation) {
+    const replayNodeIds = this.resolveDispatchReplayNodeIds(operation);
+    return replayNodeIds[NUM.ZERO] || null;
+  }
+
+  /**
+   * Resolve all ready-node triggers that should re-enter one operation.
+   * Initial dispatch follows the target node. ACTIVE REPLACE source removal is
+   * target-owned, but source readiness is the transport precondition for the
+   * removal request, so either node can supply the wake-up.
+   *
+   * @param {Object} operation
+   * @return {string[]}
+   * @private
+   */
+  resolveDispatchReplayNodeIds(operation) {
+    const evidence = this.buildDispatchReplayReadyNodeEvidence(operation);
+    const nodeIds = [
+      ...evidence.sourceNodeIds,
+      ...evidence.ownerNodeIds,
+      ...evidence.targetNodeIds,
+    ];
+    return [...new Set(nodeIds)].filter((nodeId) => {
+      return typeof nodeId === TYPEOF.STRING && nodeId.length > NUM.ZERO;
+    });
+  }
+
+  /**
+   * @param {Object} operation
+   * @return {Object}
+   * @private
+   */
+  buildDispatchReplayReadyNodeEvidence(operation) {
     if (!operation || typeof operation !== TYPEOF.OBJECT) {
-      return null;
+      return Object.freeze({
+        phase: DISPATCH_REPLAY_READY_NODE_PHASE.NOT_REPLAYABLE,
+        sourceNodeIds: Object.freeze([]),
+        ownerNodeIds: Object.freeze([]),
+        targetNodeIds: Object.freeze([]),
+      });
+    }
+    const workflowStep = operation.workflow_step;
+    const targetNodeId = operation.target_node_id || null;
+    const ownerNodeId = this.resolveReplicaOperationOwnerNodeId(operation);
+    if (
+      workflowStep === WORKFLOW_STEP.PENDING ||
+      workflowStep === WORKFLOW_STEP.SENDING
+    ) {
+      return Object.freeze({
+        phase: DISPATCH_REPLAY_READY_NODE_PHASE.INITIAL_TARGET_DISPATCH,
+        sourceNodeIds: Object.freeze([]),
+        ownerNodeIds: Object.freeze([]),
+        targetNodeIds: Object.freeze([targetNodeId]),
+      });
+    }
+    if (this.isDispatchReplayCreateTargetRearmOperation(operation)) {
+      return Object.freeze({
+        phase: DISPATCH_REPLAY_READY_NODE_PHASE.CREATE_TARGET_REARM,
+        sourceNodeIds: Object.freeze([]),
+        ownerNodeIds: Object.freeze([]),
+        targetNodeIds: Object.freeze([targetNodeId]),
+      });
     }
     if (
       operation.type === OperationType.REPLACE &&
-      operation.workflow_step === WORKFLOW_STEP.ACTIVE
+      workflowStep === WORKFLOW_STEP.ACTIVE
     ) {
-      return operation.source_node_id || operation.target_node_id || null;
+      return Object.freeze({
+        phase: DISPATCH_REPLAY_READY_NODE_PHASE.ACTIVE_REPLACE_SOURCE_REMOVAL,
+        sourceNodeIds: Object.freeze([operation.source_node_id || null]),
+        ownerNodeIds: Object.freeze([ownerNodeId]),
+        targetNodeIds: Object.freeze([]),
+      });
     }
-    return operation.target_node_id || null;
+    return Object.freeze({
+      phase: DISPATCH_REPLAY_READY_NODE_PHASE.NOT_REPLAYABLE,
+      sourceNodeIds: Object.freeze([]),
+      ownerNodeIds: Object.freeze([]),
+      targetNodeIds: Object.freeze([]),
+    });
+  }
+
+  /**
+   * @param {Object} operation
+   * @return {boolean}
+   * @private
+   */
+  isDispatchReplayCreateTargetRearmOperation(operation) {
+    return (
+      isSystemTablePartition({partitionId: operation?.partition_id}) &&
+      operation.workflow_step === WORKFLOW_STEP.CREATING &&
+      (
+        operation.type === OperationType.ADD ||
+        operation.type === OperationType.REPLACE
+      )
+    );
+  }
+
+  /**
+   * @param {Object} operation
+   * @return {boolean}
+   * @private
+   */
+  shouldExecuteOperationFromDispatchReplay(operation) {
+    if (!operation || typeof operation !== TYPEOF.OBJECT) {
+      return false;
+    }
+    return (
+      this.isDispatchReplayCreateTargetRearmOperation(operation) ||
+      (
+        operation.type === OperationType.REPLACE &&
+        operation.workflow_step === WORKFLOW_STEP.ACTIVE
+      )
+    );
+  }
+
+  /**
+   * @param {Object} operation
+   * @param {string} nodeId
+   * @return {boolean}
+   * @private
+   */
+  matchesDispatchReplayReadyNode(operation, nodeId) {
+    if (typeof nodeId !== TYPEOF.STRING || nodeId.length === NUM.ZERO) {
+      return false;
+    }
+    return this.resolveDispatchReplayNodeIds(operation).includes(nodeId);
   }
 
   /**
    * Determine whether one row remains replayable through the dispatch queue.
-   * PENDING/SENDING rows replay initial dispatch. ACTIVE REPLACE rows replay
-   * source removal on the canonical owner.
+   * PENDING/SENDING rows replay initial dispatch, CREATING system-table rows
+   * re-arm target creation, and ACTIVE REPLACE rows replay source removal on
+   * the canonical owner.
    *
    * @param {Object} operation
    * @return {boolean}
@@ -561,6 +713,9 @@ class ReplicaDispatchServiceSegment2 extends ReplicaDispatchServiceSegment1 {
       operation.workflow_step === WORKFLOW_STEP.PENDING ||
       operation.workflow_step === WORKFLOW_STEP.SENDING
     ) {
+      return true;
+    }
+    if (this.isDispatchReplayCreateTargetRearmOperation(operation)) {
       return true;
     }
     return (
@@ -614,13 +769,10 @@ class ReplicaDispatchServiceSegment2 extends ReplicaDispatchServiceSegment1 {
       return (
         isCoordinatorOwnedOperationType(row?.type) &&
         this.isReplicaOperationLocallyOwned(row) &&
-        this.resolveDispatchReplayNodeId(row) === nodeId &&
+        this.matchesDispatchReplayReadyNode(row, nodeId) &&
         this.isDispatchReplayableOperationRow(row)
       );
     });
-    if (dispatchRows.length > NUM.ZERO) {
-      return dispatchRows;
-    }
 
     if (
       !(await this.shouldUseAuthoritativePriorityRecoveryRediscovery(nodeId))
@@ -628,7 +780,10 @@ class ReplicaDispatchServiceSegment2 extends ReplicaDispatchServiceSegment1 {
       return dispatchRows;
     }
 
-    return this.getAuthoritativeDispatchRetryRowsForNode(nodeId);
+    return mergeDispatchRetryRowsByOperationId(
+      await this.getAuthoritativeDispatchRetryRowsForNode(nodeId),
+      dispatchRows,
+    );
   }
 
   /**
@@ -738,19 +893,12 @@ class ReplicaDispatchServiceSegment2 extends ReplicaDispatchServiceSegment1 {
 
       return operations
         .filter((operation) => {
+          const operationRow = this.buildOperationRowFromCoordinator(operation);
           return (
             isCoordinatorOwnedOperationType(operation?.type) &&
             this.isReplicaOperationLocallyOwned(operation) &&
-            this.resolveDispatchReplayNodeId({
-              type: operation?.type,
-              source_node_id: operation?.sourceNodeId,
-              target_node_id: operation?.targetNodeId,
-              workflow_step: operation?.workflowStep,
-            }) === nodeId &&
-            this.isDispatchReplayableOperationRow({
-              type: operation?.type,
-              workflow_step: operation?.workflowStep,
-            })
+            this.matchesDispatchReplayReadyNode(operationRow, nodeId) &&
+            this.isDispatchReplayableOperationRow(operationRow)
           );
         })
         .map((operation) => this.buildOperationRowFromCoordinator(operation));
@@ -875,10 +1023,7 @@ class ReplicaDispatchServiceSegment2 extends ReplicaDispatchServiceSegment1 {
     }
 
     try {
-      if (
-        row.type === OperationType.REPLACE &&
-        row.workflow_step === WORKFLOW_STEP.ACTIVE
-      ) {
+      if (this.shouldExecuteOperationFromDispatchReplay(row)) {
         this.clearDeferredOperationDispatchRetry(operationId);
         const operation = this.buildOperationFromRow(row);
         if (

@@ -85,11 +85,13 @@ const {
   STABILITY_GATE_TYPE_CONVERGENCE,
   STABILITY_GATE_TYPE_RESTART_RECOVERY,
   STABILITY_GATE_BLOCKER_PUBLICATION_PENDING,
+  STABILITY_GATE_BLOCKER_PUBLICATION_MISSING_ACTIVE_NODE,
   STABILITY_GATE_BLOCKER_PRIORITY_SPREAD_PENDING,
   STABILITY_GATE_BLOCKER_PENDING_ACK_NODES,
   STABILITY_GATE_BLOCKER_BLOCKED_NODES,
   STABILITY_GATE_BLOCKER_CLOSURE_RECORD,
   STABILITY_GATE_BLOCKER_STARTUP_READINESS,
+  STABILITY_GATE_BLOCKER_ADMIN_REACHABILITY_REFUSED,
   SCENARIO_NAME_FRAGMENT_RESTART,
   LOAD_WAIT_REASON_KEYS,
   LOAD_REASON_ROOT_CAUSE_CLASS_BY_REASON,
@@ -231,6 +233,93 @@ function mergePriorityRecoveryInvariants(primary, fallback) {
   };
 }
 
+function normalizePriorityRecoveryOwnerStateString(value) {
+  const normalizedValue = String(value || '').trim();
+  return normalizedValue.length > ZERO ? normalizedValue : null;
+}
+
+function buildPriorityRecoveryDecisionWitnessOwnerState(snapshot) {
+  const progress = isRecord(snapshot?.progress) ? snapshot.progress : null;
+  const actuation = isRecord(snapshot?.actuation) ? snapshot.actuation : null;
+  const pressure = isRecord(snapshot?.conditions?.pressure) ?
+    snapshot.conditions.pressure :
+    null;
+  const progressEvidenceSourceIds = normalizeDistinctStringArray(
+    progress?.evidenceSourceIds,
+  );
+  const stepAgeMs = normalizeNonNegativeCount(progress?.stepAgeMs);
+  const stepTimeoutMs = normalizeNonNegativeCount(progress?.stepTimeoutMs);
+  const pendingWrites = normalizeNonNegativeCount(pressure?.pendingWrites);
+  const pendingWriteGrowthCount = normalizeNonNegativeCount(
+    pressure?.pendingWriteGrowthCount,
+  );
+  const retainedBacklogGrowthCount = normalizeNonNegativeCount(
+    pressure?.retainedBacklogGrowthCount,
+  );
+  const lastProgressAtMs = normalizeNonNegativeCount(
+    progress?.lastProgressAtMs,
+  );
+  const retryAfterMs = normalizeNonNegativeCount(progress?.retryAfterMs);
+  const progressContractState = normalizePriorityRecoveryOwnerStateString(
+    progress?.contractState,
+  );
+  const progressNextAction = normalizePriorityRecoveryOwnerStateString(
+    progress?.nextAction,
+  );
+  const actuationState = normalizePriorityRecoveryOwnerStateString(
+    actuation?.state,
+  );
+  const actuationOwner = normalizePriorityRecoveryOwnerStateString(
+    actuation?.owner,
+  );
+  const currentOwner = normalizePriorityRecoveryOwnerStateString(
+    progress?.currentOwner,
+  );
+  const nextRequiredAction = normalizePriorityRecoveryOwnerStateString(
+    progress?.nextRequiredAction,
+  );
+  const blockingBoundary = normalizePriorityRecoveryOwnerStateString(
+    progress?.blockingBoundary,
+  );
+  const waitMode = normalizePriorityRecoveryOwnerStateString(
+    progress?.waitMode,
+  );
+  const workflowProgressPhaseId = normalizePriorityRecoveryOwnerStateString(
+    progress?.workflowProgressPhaseId,
+  );
+  const pressureState = normalizePriorityRecoveryOwnerStateString(
+    pressure?.pressureState,
+  );
+  return {
+    ...(progressContractState ? {progressContractState} : {}),
+    ...(progressNextAction ? {progressNextAction} : {}),
+    ...(actuationState ? {actuationState} : {}),
+    ...(actuationOwner ? {actuationOwner} : {}),
+    ...(currentOwner ? {currentOwner} : {}),
+    ...(nextRequiredAction ? {nextRequiredAction} : {}),
+    ...(blockingBoundary ? {blockingBoundary} : {}),
+    ...(waitMode ? {waitMode} : {}),
+    ...(workflowProgressPhaseId ? {workflowProgressPhaseId} : {}),
+    ...(stepAgeMs !== null ? {stepAgeMs} : {}),
+    ...(stepTimeoutMs !== null ? {stepTimeoutMs} : {}),
+    ...(lastProgressAtMs !== null ? {lastProgressAtMs} : {}),
+    ...(retryAfterMs !== null ? {retryAfterMs} : {}),
+    ...(progressEvidenceSourceIds.length > ZERO ?
+      {progressEvidenceSourceIds} :
+      {}),
+    ...(pressureState ? {pressureState} : {}),
+    ...(pressure ? {
+      blocksCriticalRecoveryActuation:
+        pressure.blocksCriticalRecoveryActuation === true,
+    } : {}),
+    ...(pendingWrites !== null ? {pendingWrites} : {}),
+    ...(pendingWriteGrowthCount !== null ? {pendingWriteGrowthCount} : {}),
+    ...(retainedBacklogGrowthCount !== null ?
+      {retainedBacklogGrowthCount} :
+      {}),
+  };
+}
+
 function summarizePriorityRecoveryDecisionSnapshots(value) {
   const decisionSnapshots = normalizePriorityRecoveryDecisionSnapshots(value);
   if (!decisionSnapshots) {
@@ -343,6 +432,8 @@ function summarizePriorityRecoveryDecisionSnapshots(value) {
     buildPriorityRecoveryExplicitSemanticStateByPartitionId(
       decisionSnapshots.partitionIdsBySemanticState,
     );
+  const allowLegacySemanticStateInference =
+    decisionSnapshots.hasExplicitSemanticStateContract !== true;
   const witnessPartitionIds = resolvePriorityRecoveryWitnessPartitionIds(
     [...blockedPartitionIds].sort(),
     unresolvedPartitionIds,
@@ -487,6 +578,9 @@ function summarizePriorityRecoveryDecisionSnapshots(value) {
         activeLearnerNodeIds,
         promotableLearnerNodeIds,
         operationIds,
+        ...buildPriorityRecoveryDecisionWitnessOwnerState(
+          latestPartitionSnapshot,
+        ),
         completionState:
           String(latestPartitionSnapshot?.completion?.state || '').trim() ||
           null,
@@ -1358,11 +1452,13 @@ export const FAILURE_BUNDLE_SEGMENT_2 = {
   STABILITY_GATE_TYPE_CONVERGENCE,
   STABILITY_GATE_TYPE_RESTART_RECOVERY,
   STABILITY_GATE_BLOCKER_PUBLICATION_PENDING,
+  STABILITY_GATE_BLOCKER_PUBLICATION_MISSING_ACTIVE_NODE,
   STABILITY_GATE_BLOCKER_PRIORITY_SPREAD_PENDING,
   STABILITY_GATE_BLOCKER_PENDING_ACK_NODES,
   STABILITY_GATE_BLOCKER_BLOCKED_NODES,
   STABILITY_GATE_BLOCKER_CLOSURE_RECORD,
   STABILITY_GATE_BLOCKER_STARTUP_READINESS,
+  STABILITY_GATE_BLOCKER_ADMIN_REACHABILITY_REFUSED,
   SCENARIO_NAME_FRAGMENT_RESTART,
   LOAD_WAIT_REASON_KEYS,
   LOAD_REASON_ROOT_CAUSE_CLASS_BY_REASON,

@@ -19,6 +19,8 @@ import {
 } from '../sql-adapter-constants.js';
 import {QUERY_AST_TYPE} from '../query-constants.js';
 
+const LOCAL_NUM_ZERO = 0;
+
 const SUBSYSTEM = 'partition-callback-dispatcher';
 
 /**
@@ -99,7 +101,7 @@ class PartitionCallbackDispatcher {
     // 2. Get all partitions for the table (reuses engine helper)
     const partitions = this.getTablePartitions(tableName);
 
-    if (partitions.length === 0) {
+    if (partitions.length === LOCAL_NUM_ZERO) {
       throw new Error(
         ADAPTER_ERROR_MSG.PARTITION_CALLBACK_NO_PARTITIONS,
       );
@@ -148,7 +150,7 @@ class PartitionCallbackDispatcher {
 
     this.logger.debug(ADAPTER_LOG_MSG.PARTITION_CALLBACK_BATCHED, {
       totalBatches: batches.length,
-      totalRows: batches.reduce((sum, b) => sum + b.rows.length, 0),
+      totalRows: batches.reduce((sum, b) => sum + b.rows.length, LOCAL_NUM_ZERO),
       callbackModuleRef,
       callbackExport,
     });

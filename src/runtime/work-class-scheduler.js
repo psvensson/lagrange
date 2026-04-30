@@ -1,6 +1,14 @@
 import {EventEmitter} from 'node:events';
 import {NUM} from '../constants/index.js';
 
+const LOCAL_STR_FUNCTION = 'function';
+const LOCAL_NUM_ONE = 1;
+const LOCAL_STR_SHED = 'shed';
+const LOCAL_STR_QUEUED = 'queued';
+const LOCAL_STR_STARTED = 'started';
+const LOCAL_STR_COMPLETED = 'completed';
+const LOCAL_STR_13EMY = ': ';
+
 const WORK_CLASS = Object.freeze({
   A: 'A',
   B: 'B',
@@ -69,17 +77,17 @@ class WorkClassScheduler extends EventEmitter {
    */
   enqueue(workClass, task) {
     const normalizedWorkClass = this.normalizeWorkClass(workClass);
-    if (typeof task !== 'function') {
+    if (typeof task !== LOCAL_STR_FUNCTION) {
       throw new Error(WORK_CLASS_SCHEDULER_ERROR.TASK_REQUIRED);
     }
 
     if (normalizedWorkClass === WORK_CLASS.C &&
         this.getQueueDepth(WORK_CLASS.C) >= this.maxClassCQueueSize) {
       const classCStats = this._statsByClass.get(WORK_CLASS.C);
-      classCStats.shedCount += 1;
+      classCStats.shedCount += LOCAL_NUM_ONE;
       const shedError = new Error(WORK_CLASS_SCHEDULER_ERROR.WORK_CLASS_C_SHED);
       shedError.code = WORK_CLASS_SCHEDULER_ERROR.WORK_CLASS_C_SHED;
-      this.emit('shed', {
+      this.emit(LOCAL_STR_SHED, {
         workClass: WORK_CLASS.C,
         queueDepth: this.getQueueDepth(WORK_CLASS.C),
       });
@@ -88,7 +96,7 @@ class WorkClassScheduler extends EventEmitter {
 
     return new Promise((resolve, reject) => {
       const classStats = this._statsByClass.get(normalizedWorkClass);
-      classStats.enqueuedCount += 1;
+      classStats.enqueuedCount += LOCAL_NUM_ONE;
       this._queues.get(normalizedWorkClass).push({
         workClass: normalizedWorkClass,
         task,
@@ -96,7 +104,7 @@ class WorkClassScheduler extends EventEmitter {
         reject,
         enqueuedAt: Date.now(),
       });
-      this.emit('queued', {
+      this.emit(LOCAL_STR_QUEUED, {
         workClass: normalizedWorkClass,
         queueDepth: this.getQueueDepth(normalizedWorkClass),
       });
@@ -181,22 +189,22 @@ class WorkClassScheduler extends EventEmitter {
    */
   dispatchEntry(entry) {
     const workClass = entry.workClass;
-    this._inFlightTotal += 1;
+    this._inFlightTotal += LOCAL_NUM_ONE;
     this._inFlightByClass.set(
       workClass,
-      this.getInFlightCount(workClass) + 1,
+      this.getInFlightCount(workClass) + LOCAL_NUM_ONE,
     );
     if (workClass !== WORK_CLASS.A) {
       this._lastDispatchedNonAClass = workClass;
     }
 
     const classStats = this._statsByClass.get(workClass);
-    classStats.startedCount += 1;
+    classStats.startedCount += LOCAL_NUM_ONE;
     classStats.lastQueueLatencyMs = Math.max(
       NUM.ZERO,
       Date.now() - entry.enqueuedAt,
     );
-    this.emit('started', {
+    this.emit(LOCAL_STR_STARTED, {
       workClass,
       queueDepth: this.getQueueDepth(workClass),
       queueLatencyMs: classStats.lastQueueLatencyMs,
@@ -205,20 +213,20 @@ class WorkClassScheduler extends EventEmitter {
     Promise.resolve()
       .then(() => entry.task())
       .then((result) => {
-        classStats.completedCount += 1;
+        classStats.completedCount += LOCAL_NUM_ONE;
         entry.resolve(result);
       })
       .catch((error) => {
-        classStats.failedCount += 1;
+        classStats.failedCount += LOCAL_NUM_ONE;
         entry.reject(error);
       })
       .finally(() => {
-        this._inFlightTotal -= 1;
+        this._inFlightTotal -= LOCAL_NUM_ONE;
         this._inFlightByClass.set(
           workClass,
-          this.getInFlightCount(workClass) - 1,
+          this.getInFlightCount(workClass) - LOCAL_NUM_ONE,
         );
-        this.emit('completed', {
+        this.emit(LOCAL_STR_COMPLETED, {
           workClass,
           queueDepth: this.getQueueDepth(workClass),
         });
@@ -232,7 +240,7 @@ class WorkClassScheduler extends EventEmitter {
         workClass === WORK_CLASS.C) {
       return workClass;
     }
-    throw new Error(WORK_CLASS_SCHEDULER_ERROR.INVALID_WORK_CLASS + ': ' + String(workClass));
+    throw new Error(WORK_CLASS_SCHEDULER_ERROR.INVALID_WORK_CLASS + LOCAL_STR_13EMY + String(workClass));
   }
 
   createClassStats() {

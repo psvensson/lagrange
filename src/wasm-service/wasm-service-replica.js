@@ -30,6 +30,9 @@ import {
   WRITE_CONSISTENCY_MODE,
 } from './wasm-service-constants.js';
 
+const LOCAL_STR_STRING = 'string';
+const LOCAL_NUM_ZERO = 0;
+
 // Entry type scalar values
 const ENTRY_TYPE_KV_SET = 'kv_set';
 const ENTRY_TYPE_KV_DELETE = 'kv_delete';
@@ -270,8 +273,8 @@ class WasmServiceReplica extends RaftReplicaBase {
       buildWhereClause: (_role, context = {}) => {
         const whereClause = {[COLUMN.SERVICE_ID]: this.replicaId};
         const cachedRow = context.cachedRow;
-        if (typeof cachedRow?.[COLUMN.RAFT_ROLE] === 'string' &&
-          cachedRow[COLUMN.RAFT_ROLE].length > 0) {
+        if (typeof cachedRow?.[COLUMN.RAFT_ROLE] === LOCAL_STR_STRING &&
+          cachedRow[COLUMN.RAFT_ROLE].length > LOCAL_NUM_ZERO) {
           whereClause[COLUMN.RAFT_ROLE] = cachedRow[COLUMN.RAFT_ROLE];
         }
         if (Number.isFinite(cachedRow?.[COLUMN.UPDATED_AT])) {
@@ -308,8 +311,8 @@ class WasmServiceReplica extends RaftReplicaBase {
       buildWhereClause: (_leaderNodeId, context = {}) => {
         const whereClause = {[COLUMN.SERVICE_ID]: this.replicaId};
         const cachedRow = context.cachedRow;
-        if (typeof cachedRow?.[COLUMN.NODE_ID] === 'string' &&
-          cachedRow[COLUMN.NODE_ID].length > 0) {
+        if (typeof cachedRow?.[COLUMN.NODE_ID] === LOCAL_STR_STRING &&
+          cachedRow[COLUMN.NODE_ID].length > LOCAL_NUM_ZERO) {
           whereClause[COLUMN.NODE_ID] = cachedRow[COLUMN.NODE_ID];
         }
         if (Number.isFinite(cachedRow?.[COLUMN.UPDATED_AT])) {

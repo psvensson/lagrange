@@ -145,6 +145,10 @@ import {MIGRATION_STATUS} from '../migration/migration-constants.js';
 import {MigrationCoordinator} from '../migration/migration-coordinator.js';
 import {MigrationPipeline} from '../migration/migration-pipeline.js';
 
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_STR_OBJECT = 'object';
+const LOCAL_STR_STRING = 'string';
+
 const CODE_LOOKUP_BY_FUNCTION_ID_SQL = `SELECT * FROM ${TABLES.CODE} WHERE function_id = ?`;
 const CODE_LOOKUP_BY_FUNCTION_NAME_SQL = `SELECT * FROM ${TABLES.CODE} WHERE function_name = ?`;
 const MODULE_MANIFEST_LOOKUP_BY_ARTIFACT_POINTER_SQL =
@@ -235,9 +239,9 @@ function resolveRetryableControlPlaneMutationDeferState(queryOptions = {}) {
 
 function createEmptyTransactionRecoveryReplaySummary() {
   return {
-    totalRecovered: 0,
-    resumed: 0,
-    failed: 0,
+    totalRecovered: LOCAL_NUM_ZERO,
+    resumed: LOCAL_NUM_ZERO,
+    failed: LOCAL_NUM_ZERO,
     results: [],
   };
 }
@@ -245,10 +249,10 @@ function createEmptyTransactionRecoveryReplaySummary() {
 function hasActiveAddressedPartitionService(service) {
   return Boolean(
     service &&
-    typeof service === 'object' &&
+    typeof service === LOCAL_STR_OBJECT &&
     service.status === STATUS_ACTIVE &&
-    typeof service.address === 'string' &&
-    service.address.length > 0,
+    typeof service.address === LOCAL_STR_STRING &&
+    service.address.length > LOCAL_NUM_ZERO,
   );
 }
 
@@ -277,7 +281,7 @@ function buildBootstrapRoutingOverlayEntryState(options = {}) {
 function buildBootstrapRoutingOverlayEntry(options = {}) {
   return {
     partition:
-      options.partition && typeof options.partition === 'object' ?
+      options.partition && typeof options.partition === LOCAL_STR_OBJECT ?
         options.partition :
         null,
     services: Array.isArray(options.services) ?

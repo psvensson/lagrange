@@ -31,6 +31,8 @@ import {
   NODE_STATUS,
 } from './node-constants.js';
 
+const LOCAL_NUM_ZERO = 0;
+
 /**
  * FailureDetector monitors node health via heartbeat timeouts.
  * When a node fails, it marks all affected replicas as unavailable.
@@ -45,7 +47,7 @@ function buildObservedNodeWhereClause(node) {
   const whereClause = {
     node_id: node.node_id,
   };
-  if (typeof node?.status === TYPEOF.STRING && node.status.length > 0) {
+  if (typeof node?.status === TYPEOF.STRING && node.status.length > LOCAL_NUM_ZERO) {
     whereClause.status = node.status;
   }
   if (Number.isFinite(node?.last_heartbeat)) {
@@ -64,10 +66,10 @@ function buildObservedReplicaWhereClause(replica) {
   const whereClause = {
     service_id: replica.service_id,
   };
-  if (typeof replica?.node_id === TYPEOF.STRING && replica.node_id.length > 0) {
+  if (typeof replica?.node_id === TYPEOF.STRING && replica.node_id.length > LOCAL_NUM_ZERO) {
     whereClause.node_id = replica.node_id;
   }
-  if (typeof replica?.status === TYPEOF.STRING && replica.status.length > 0) {
+  if (typeof replica?.status === TYPEOF.STRING && replica.status.length > LOCAL_NUM_ZERO) {
     whereClause.status = replica.status;
   }
   if (Number.isFinite(replica?.updated_at)) {

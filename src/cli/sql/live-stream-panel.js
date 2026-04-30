@@ -1,3 +1,21 @@
+const LOCAL_STR_GREEN = 'green';
+const LOCAL_STR_YELLOW = 'yellow';
+const LOCAL_STR_RED = 'red';
+const LOCAL_NUM_1000 = 1000;
+const LOCAL_NUM_10 = 10;
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_NUM_ONE = 1;
+const LOCAL_STR_LIVESTREAM_EVENT = 'livestream:event';
+const LOCAL_STR_WHITE = 'white';
+const LOCAL_NUM_SIX = 6;
+const LOCAL_NUM_80 = 80;
+const LOCAL_NUM_77 = 77;
+const LOCAL_STR_2ZI04 = '...';
+const LOCAL_STR_INVALID_DATA = '[Invalid data]';
+const LOCAL_STR_LIVESTREAM_SCROLL = 'livestream:scroll';
+const LOCAL_STR_LIVESTREAM_CLEARED = 'livestream:cleared';
+const LOCAL_STR_NEWLINE = '\n';
+
 /**
  * LiveStreamPanel - Displays live query events in a streaming panel
  *
@@ -12,9 +30,9 @@
  * Requirements: 32.5
  */
 export const EVENT_COLORS = {
-  INSERT: 'green',
-  UPDATE: 'yellow',
-  DELETE: 'red',
+  INSERT: LOCAL_STR_GREEN,
+  UPDATE: LOCAL_STR_YELLOW,
+  DELETE: LOCAL_STR_RED,
 };
 
 /**
@@ -41,13 +59,13 @@ export class LiveStreamPanel {
     this.events = [];
 
     /** @type {number} */
-    this.maxEvents = options.maxEvents || 1000;
+    this.maxEvents = options.maxEvents || LOCAL_NUM_1000;
 
     /** @type {number} */
-    this.visibleHeight = options.visibleHeight || 10;
+    this.visibleHeight = options.visibleHeight || LOCAL_NUM_10;
 
     /** @type {number} */
-    this.scrollPosition = 0;
+    this.scrollPosition = LOCAL_NUM_ZERO;
 
     /** @type {Object|null} */
     this.widget = null;
@@ -68,12 +86,12 @@ export class LiveStreamPanel {
     if (this.events.length > this.maxEvents) {
       this.events.shift();
       // Adjust scroll position if needed
-      if (this.scrollPosition > 0) {
-        this.scrollPosition = Math.max(0, this.scrollPosition - 1);
+      if (this.scrollPosition > LOCAL_NUM_ZERO) {
+        this.scrollPosition = Math.max(LOCAL_NUM_ZERO, this.scrollPosition - LOCAL_NUM_ONE);
       }
     }
 
-    this.emitEvent('livestream:event', event);
+    this.emitEvent(LOCAL_STR_LIVESTREAM_EVENT, event);
     this.render();
   }
 
@@ -85,7 +103,7 @@ export class LiveStreamPanel {
    */
   getEventColor(eventType) {
     return Object.hasOwn(EVENT_COLORS, eventType) ?
-      EVENT_COLORS[eventType] : 'white';
+      EVENT_COLORS[eventType] : LOCAL_STR_WHITE;
   }
 
   /**
@@ -99,7 +117,7 @@ export class LiveStreamPanel {
     const color = this.getEventColor(event.eventType);
     const dataStr = this.formatEventData(event.data);
 
-    return `{${color}-fg}${time} ${event.eventType.padEnd(6)}{/} ${dataStr}`;
+    return `{${color}-fg}${time} ${event.eventType.padEnd(LOCAL_NUM_SIX)}{/} ${dataStr}`;
   }
 
   /**
@@ -111,12 +129,12 @@ export class LiveStreamPanel {
     try {
       const str = JSON.stringify(data);
       // Truncate if too long
-      if (str.length > 80) {
-        return str.substring(0, 77) + '...';
+      if (str.length > LOCAL_NUM_80) {
+        return str.substring(LOCAL_NUM_ZERO, LOCAL_NUM_77) + LOCAL_STR_2ZI04;
       }
       return str;
     } catch (_err) {
-      return '[Invalid data]';
+      return LOCAL_STR_INVALID_DATA;
     }
   }
 
@@ -128,7 +146,7 @@ export class LiveStreamPanel {
   getVisibleEvents() {
     const totalEvents = this.events.length;
 
-    if (totalEvents === 0) {
+    if (totalEvents === LOCAL_NUM_ZERO) {
       return [];
     }
 
@@ -151,7 +169,7 @@ export class LiveStreamPanel {
 
     if (this.scrollPosition < maxScroll) {
       this.scrollPosition++;
-      this.emitEvent('livestream:scroll', {position: this.scrollPosition});
+      this.emitEvent(LOCAL_STR_LIVESTREAM_SCROLL, {position: this.scrollPosition});
       this.render();
       return true;
     }
@@ -165,9 +183,9 @@ export class LiveStreamPanel {
    * @return {boolean} True if scrolled
    */
   scrollDown() {
-    if (this.scrollPosition > 0) {
+    if (this.scrollPosition > LOCAL_NUM_ZERO) {
       this.scrollPosition--;
-      this.emitEvent('livestream:scroll', {position: this.scrollPosition});
+      this.emitEvent(LOCAL_STR_LIVESTREAM_SCROLL, {position: this.scrollPosition});
       this.render();
       return true;
     }
@@ -180,9 +198,9 @@ export class LiveStreamPanel {
    * @return {boolean} True if scrolled
    */
   scrollToBottom() {
-    if (this.scrollPosition !== 0) {
-      this.scrollPosition = 0;
-      this.emitEvent('livestream:scroll', {position: this.scrollPosition});
+    if (this.scrollPosition !== LOCAL_NUM_ZERO) {
+      this.scrollPosition = LOCAL_NUM_ZERO;
+      this.emitEvent(LOCAL_STR_LIVESTREAM_SCROLL, {position: this.scrollPosition});
       this.render();
       return true;
     }
@@ -199,7 +217,7 @@ export class LiveStreamPanel {
 
     if (this.scrollPosition !== maxScroll) {
       this.scrollPosition = maxScroll;
-      this.emitEvent('livestream:scroll', {position: this.scrollPosition});
+      this.emitEvent(LOCAL_STR_LIVESTREAM_SCROLL, {position: this.scrollPosition});
       this.render();
       return true;
     }
@@ -220,7 +238,7 @@ export class LiveStreamPanel {
    * @return {number} Maximum scroll position
    */
   getMaxScrollPosition() {
-    return Math.max(0, this.events.length - this.visibleHeight);
+    return Math.max(LOCAL_NUM_ZERO, this.events.length - this.visibleHeight);
   }
 
   /**
@@ -228,7 +246,7 @@ export class LiveStreamPanel {
    * @return {boolean} True if at bottom
    */
   isAtBottom() {
-    return this.scrollPosition === 0;
+    return this.scrollPosition === LOCAL_NUM_ZERO;
   }
 
   /**
@@ -260,8 +278,8 @@ export class LiveStreamPanel {
    */
   clear() {
     this.events = [];
-    this.scrollPosition = 0;
-    this.emitEvent('livestream:cleared', {});
+    this.scrollPosition = LOCAL_NUM_ZERO;
+    this.emitEvent(LOCAL_STR_LIVESTREAM_CLEARED, {});
     this.render();
   }
 
@@ -270,7 +288,7 @@ export class LiveStreamPanel {
    * @param {number} height - Visible height in rows
    */
   setVisibleHeight(height) {
-    this.visibleHeight = Math.max(1, height);
+    this.visibleHeight = Math.max(LOCAL_NUM_ONE, height);
     // Adjust scroll position if needed
     const maxScroll = this.getMaxScrollPosition();
     if (this.scrollPosition > maxScroll) {
@@ -298,7 +316,7 @@ export class LiveStreamPanel {
     const visibleEvents = this.getVisibleEvents();
     const lines = visibleEvents.map((event) => this.formatEvent(event));
 
-    this.widget.setContent(lines.join('\n'));
+    this.widget.setContent(lines.join(LOCAL_STR_NEWLINE));
 
     if (this.screen) {
       this.screen.render();
@@ -350,7 +368,7 @@ export class LiveStreamPanel {
     return visibleEvents.map((event) => {
       const time = new Date(event.timestamp).toISOString().substring(11, 23);
       const dataStr = this.formatEventData(event.data);
-      return `${time} ${event.eventType.padEnd(6)} ${dataStr}`;
+      return `${time} ${event.eventType.padEnd(LOCAL_NUM_SIX)} ${dataStr}`;
     });
   }
 }

@@ -7,6 +7,26 @@
 
 import {NUM} from '../constants/index.js';
 
+const LOCAL_STR_1BT83 = 'Database instance is required';
+const LOCAL_STR_1GJYB = 'Legacy raft log schema detected; manual migration required';
+const LOCAL_STR_OBJECT = 'object';
+const LOCAL_STR_COMMAND = 'command';
+const LOCAL_STR_RESPONSES = 'responses';
+const LOCAL_STR_COMMITTED = 'committed';
+const LOCAL_STR_EVRPI = 'INSERT OR REPLACE INTO _raft_log (log_index, term, command, timestamp) VALUES (?, ?, ?, ?)';
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_STR_8WQ9L = 'DELETE FROM _raft_log WHERE log_index >= ?';
+const LOCAL_NUM_ONE = 1;
+const LOCAL_STR_1FMKR = 'UPDATE _raft_log SET command = ? WHERE log_index = ?';
+const LOCAL_STR_NUMBER = 'number';
+const LOCAL_STR_1JYKG = 'DELETE FROM _raft_log WHERE log_index > ?';
+const LOCAL_STR_1RR58 = 'INSERT OR REPLACE INTO _raft_state (key, value) VALUES (?, ?)';
+const LOCAL_STR_COMMITTEDINDEX = 'committedIndex';
+const LOCAL_STR_CURRENTTERM = 'currentTerm';
+const LOCAL_STR_VOTEDFOR = 'votedFor';
+const LOCAL_STR_EMPTY = '';
+const LOCAL_STR_COMMITINDEX = 'commitIndex';
+
 /**
  * SQLite log adapter for liferaft.
  * Used by PartitionService for durable data storage.
@@ -19,7 +39,7 @@ class SQLiteLogAdapter {
    */
   constructor(db, node = null) {
     if (!db) {
-      throw new Error('Database instance is required');
+      throw new Error(LOCAL_STR_1BT83);
     }
     this.db = db;
     this.node = node;
@@ -64,7 +84,7 @@ class SQLiteLogAdapter {
     const hasCommandColumn = tableInfo.some((col) => col.name === 'command');
 
     if (hasDataColumn || !hasCommandColumn) {
-      throw new Error('Legacy raft log schema detected; manual migration required');
+      throw new Error(LOCAL_STR_1GJYB);
     }
 
     this.db.exec(`
@@ -83,11 +103,11 @@ class SQLiteLogAdapter {
    */
   isCanonicalEntryShape(entry) {
     return !!entry &&
-      typeof entry === 'object' &&
+      typeof entry === LOCAL_STR_OBJECT &&
       (
-        Object.prototype.hasOwnProperty.call(entry, 'command') ||
-        Object.prototype.hasOwnProperty.call(entry, 'responses') ||
-        Object.prototype.hasOwnProperty.call(entry, 'committed')
+        Object.prototype.hasOwnProperty.call(entry, LOCAL_STR_COMMAND) ||
+        Object.prototype.hasOwnProperty.call(entry, LOCAL_STR_RESPONSES) ||
+        Object.prototype.hasOwnProperty.call(entry, LOCAL_STR_COMMITTED)
       );
   }
 
@@ -162,7 +182,7 @@ class SQLiteLogAdapter {
       committedIndex: this.getCommittedIndex(),
     });
     this.db.prepare(
-      'INSERT OR REPLACE INTO _raft_log (log_index, term, command, timestamp) VALUES (?, ?, ?, ?)',
+      LOCAL_STR_EVRPI,
     ).run(
       normalizedEntry.index,
       normalizedEntry.term,
@@ -186,8 +206,8 @@ class SQLiteLogAdapter {
   getLastInfo() {
     if (!this.isOpen()) {
       return {
-        index: 0,
-        term: this.node ? this.node.term : 0,
+        index: LOCAL_NUM_ZERO,
+        term: this.node ? this.node.term : LOCAL_NUM_ZERO,
         committedIndex: this.getCommittedIndex(),
       };
     }
@@ -197,8 +217,8 @@ class SQLiteLogAdapter {
 
     if (!row) {
       return {
-        index: 0,
-        term: this.node ? this.node.term : 0,
+        index: LOCAL_NUM_ZERO,
+        term: this.node ? this.node.term : LOCAL_NUM_ZERO,
         committedIndex: this.getCommittedIndex(),
       };
     }
@@ -247,7 +267,7 @@ class SQLiteLogAdapter {
     if (!this.isOpen()) {
       return;
     }
-    this.db.prepare('DELETE FROM _raft_log WHERE log_index >= ?').run(index);
+    this.db.prepare(LOCAL_STR_8WQ9L).run(index);
   }
 
   /**
@@ -299,7 +319,7 @@ class SQLiteLogAdapter {
   saveCommand(command, term, index) {
     if (!index) {
       const lastInfo = this.getLastInfo();
-      index = lastInfo.index + 1;
+      index = lastInfo.index + LOCAL_NUM_ONE;
     }
 
     const entry = {
@@ -348,13 +368,13 @@ class SQLiteLogAdapter {
       entry.responses = [];
     }
     const existingIndex = entry.responses.findIndex((r) => r.address === address);
-    if (existingIndex === -1) {
+    if (existingIndex === -LOCAL_NUM_ONE) {
       entry.responses.push({address, ack: true});
     }
 
     // Update in SQLite
     this.db.prepare(
-      'UPDATE _raft_log SET command = ? WHERE log_index = ?',
+      LOCAL_STR_1FMKR,
     ).run(JSON.stringify(entry), index);
     this.setCommittedIndex(index);
 
@@ -407,7 +427,7 @@ class SQLiteLogAdapter {
 
     // Update in SQLite
     this.db.prepare(
-      'UPDATE _raft_log SET command = ? WHERE log_index = ?',
+      LOCAL_STR_1FMKR,
     ).run(JSON.stringify(entry), index);
 
     return entry;
@@ -422,8 +442,8 @@ class SQLiteLogAdapter {
   getLastEntry() {
     if (!this.isOpen()) {
       return {
-        index: 0,
-        term: this.node ? this.node.term : 0,
+        index: LOCAL_NUM_ZERO,
+        term: this.node ? this.node.term : LOCAL_NUM_ZERO,
       };
     }
     const row = this.db.prepare(
@@ -432,8 +452,8 @@ class SQLiteLogAdapter {
 
     if (!row) {
       return {
-        index: 0,
-        term: this.node ? this.node.term : 0,
+        index: LOCAL_NUM_ZERO,
+        term: this.node ? this.node.term : LOCAL_NUM_ZERO,
       };
     }
 
@@ -469,11 +489,11 @@ class SQLiteLogAdapter {
       term: this.node ? this.node.term : 0,
     };
 
-    if (!entry || typeof entry.index !== 'number' || !Number.isFinite(entry.index)) {
+    if (!entry || typeof entry.index !== LOCAL_STR_NUMBER || !Number.isFinite(entry.index)) {
       return defaultInfo;
     }
 
-    if (entry.index <= 1) {
+    if (entry.index <= LOCAL_NUM_ONE) {
       return defaultInfo;
     }
 
@@ -522,7 +542,7 @@ class SQLiteLogAdapter {
     if (!this.isOpen()) {
       return;
     }
-    this.db.prepare('DELETE FROM _raft_log WHERE log_index > ?').run(index);
+    this.db.prepare(LOCAL_STR_1JYKG).run(index);
   }
 
   /**
@@ -531,12 +551,12 @@ class SQLiteLogAdapter {
    */
   getCommittedIndex() {
     if (!this.isOpen()) {
-      return 0;
+      return LOCAL_NUM_ZERO;
     }
     const row = this.db.prepare(
       'SELECT value FROM _raft_state WHERE key = ?',
     ).get('committedIndex');
-    return row ? parseInt(row.value, 10) : 0;
+    return row ? parseInt(row.value, 10) : LOCAL_NUM_ZERO;
   }
 
   /**
@@ -557,8 +577,8 @@ class SQLiteLogAdapter {
       return;
     }
     this.db.prepare(
-      'INSERT OR REPLACE INTO _raft_state (key, value) VALUES (?, ?)',
-    ).run('committedIndex', String(index));
+      LOCAL_STR_1RR58,
+    ).run(LOCAL_STR_COMMITTEDINDEX, String(index));
   }
 
   /**
@@ -664,7 +684,7 @@ class SQLiteLogAdapter {
       return;
     }
     try {
-      this.db.prepare('DELETE FROM _raft_log WHERE log_index >= ?').run(fromIndex);
+      this.db.prepare(LOCAL_STR_8WQ9L).run(fromIndex);
       callback(null);
     } catch (error) {
       callback(error);
@@ -677,7 +697,7 @@ class SQLiteLogAdapter {
    */
   getLength(callback) {
     if (!this.isOpen()) {
-      callback(null, 0);
+      callback(null, LOCAL_NUM_ZERO);
       return;
     }
     try {
@@ -720,7 +740,7 @@ class SQLiteLogAdapter {
       return;
     }
     try {
-      this.db.prepare('INSERT OR REPLACE INTO _raft_state (key, value) VALUES (?, ?)')
+      this.db.prepare(LOCAL_STR_1RR58)
         .run(key, value);
       callback(null);
     } catch (error) {
@@ -734,11 +754,11 @@ class SQLiteLogAdapter {
    * @param {Function} callback - Callback with term
    */
   getTerm(callback) {
-    this.getState('currentTerm', (err, value) => {
+    this.getState(LOCAL_STR_CURRENTTERM, (err, value) => {
       if (err) {
         callback(err);
       } else {
-        callback(null, value ? parseInt(value, 10) : 0);
+        callback(null, value ? parseInt(value, 10) : LOCAL_NUM_ZERO);
       }
     });
   }
@@ -750,7 +770,7 @@ class SQLiteLogAdapter {
    * @param {Function} callback - Completion callback
    */
   setTerm(term, callback) {
-    this.setState('currentTerm', String(term), callback);
+    this.setState(LOCAL_STR_CURRENTTERM, String(term), callback);
   }
 
   /**
@@ -759,7 +779,7 @@ class SQLiteLogAdapter {
    * @param {Function} callback - Callback with votedFor
    */
   getVotedFor(callback) {
-    this.getState('votedFor', (err, value) => {
+    this.getState(LOCAL_STR_VOTEDFOR, (err, value) => {
       if (err) {
         callback(err);
       } else {
@@ -775,7 +795,7 @@ class SQLiteLogAdapter {
    * @param {Function} callback - Completion callback
    */
   setVotedFor(candidateId, callback) {
-    this.setState('votedFor', candidateId || '', callback);
+    this.setState(LOCAL_STR_VOTEDFOR, candidateId || LOCAL_STR_EMPTY, callback);
   }
 
   /**
@@ -783,11 +803,11 @@ class SQLiteLogAdapter {
    * @param {Function} callback - Callback with commit index
    */
   getCommitIndex(callback) {
-    this.getState('commitIndex', (err, value) => {
+    this.getState(LOCAL_STR_COMMITINDEX, (err, value) => {
       if (err) {
         callback(err);
       } else {
-        callback(null, value ? parseInt(value, 10) : 0);
+        callback(null, value ? parseInt(value, 10) : LOCAL_NUM_ZERO);
       }
     });
   }
@@ -798,7 +818,7 @@ class SQLiteLogAdapter {
    * @param {Function} callback - Completion callback
    */
   setCommitIndex(index, callback) {
-    this.setState('commitIndex', String(index), callback);
+    this.setState(LOCAL_STR_COMMITINDEX, String(index), callback);
   }
 
   /**

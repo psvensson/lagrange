@@ -108,6 +108,13 @@ Every work package should answer:
    - what the preflight baseline is
    - what inherited touched-file debt is in or out of scope
    - what after-state proves no drift increased
+14. If the package has accumulated repeated blocker migrations:
+    - which single current blocker remains active
+    - which historical migrations are evidence only
+    - whether the next step is a contraction package instead of another broad
+      patch
+    - what replayable owner-decision fixture or blocker probe represents the
+      current blocker
 
 Package closure also requires one final deep dive across the affected area:
 
@@ -122,6 +129,12 @@ Package closure also requires one final deep dive across the affected area:
 
 If the work package cannot answer those clearly, it is still an idea, not a
 package.
+
+When a scenario-driven package crosses two material blocker migrations, prefer
+splitting a new contraction package over continuing to edit the historical
+package. The contraction package should carry only the current owner,
+boundary, fixture or probe, touched files, and proof ladder. The older package
+may stay queued as history or later re-entry work.
 
 Shared-boundary work is not done when only the implementation changes land.
 The package should update the relevant architecture record and any bounded

@@ -1,3 +1,5 @@
+const LOCAL_STR_1 = '1';
+
 /**
  * Shared tap exports for repository tests.
  *
@@ -8,7 +10,7 @@
 // tap exits non-zero on incomplete coverage by default. Our repo uses coverage
 // as a signal (reporting), but not as a hard gate in `npm test`.
 if (!process.env.TAP_ALLOW_INCOMPLETE_COVERAGE) {
-  process.env.TAP_ALLOW_INCOMPLETE_COVERAGE = '1';
+  process.env.TAP_ALLOW_INCOMPLETE_COVERAGE = LOCAL_STR_1;
 }
 
 const tap = await import('tap');

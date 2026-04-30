@@ -23,6 +23,17 @@ import {
   TEST_HOST,
 } from './port-allocator-constants.js';
 
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_STR_OBJECT = 'object';
+const LOCAL_STR_UTF8 = 'utf8';
+const LOCAL_STR_EPERM = 'EPERM';
+const LOCAL_STR_EEXIST = 'EEXIST';
+const LOCAL_STR_1F308 = 'Timed out acquiring test port allocator lock';
+const LOCAL_STR_EXIT = 'exit';
+const LOCAL_STR_16TU6 = 'No available test ports remain in allocator range';
+const LOCAL_NUM_ONE = 1;
+const LOCAL_STR_ERROR = 'error';
+
 /**
  * Calculate the total number of available port ranges.
  */
@@ -66,7 +77,7 @@ let exitCleanupRegistered = false;
  */
 function hashString(str) {
   const hash = createHash('md5').update(str).digest();
-  return hash.readUInt32BE(0);
+  return hash.readUInt32BE(LOCAL_NUM_ZERO);
 }
 
 /**
@@ -113,7 +124,7 @@ function loadAllocatorState() {
   try {
     const raw = fs.readFileSync(PORT_ALLOCATOR_STATE_FILE, 'utf8');
     const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === 'object' ?
+    return parsed && typeof parsed === LOCAL_STR_OBJECT ?
       parsed :
       {reservations: {}};
   } catch {
@@ -128,7 +139,7 @@ function loadAllocatorState() {
  */
 function saveAllocatorState(state) {
   ensureAllocatorStateDir();
-  fs.writeFileSync(PORT_ALLOCATOR_STATE_FILE, JSON.stringify(state), 'utf8');
+  fs.writeFileSync(PORT_ALLOCATOR_STATE_FILE, JSON.stringify(state), LOCAL_STR_UTF8);
 }
 
 /**
@@ -138,14 +149,14 @@ function saveAllocatorState(state) {
  * @return {boolean} True if the process still exists.
  */
 function isProcessAlive(pid) {
-  if (!Number.isInteger(pid) || pid <= 0) {
+  if (!Number.isInteger(pid) || pid <= LOCAL_NUM_ZERO) {
     return false;
   }
   try {
-    process.kill(pid, 0);
+    process.kill(pid, LOCAL_NUM_ZERO);
     return true;
   } catch (error) {
-    return error?.code === 'EPERM';
+    return error?.code === LOCAL_STR_EPERM;
   }
 }
 
@@ -173,21 +184,21 @@ function withAllocatorLock(fn) {
   ensureAllocatorStateDir();
   let lockHeld = false;
 
-  for (let attempt = 0; attempt < PORT_ALLOCATOR_LOCK_ATTEMPTS; attempt++) {
+  for (let attempt = LOCAL_NUM_ZERO; attempt < PORT_ALLOCATOR_LOCK_ATTEMPTS; attempt++) {
     try {
       fs.mkdirSync(PORT_ALLOCATOR_LOCK_DIR);
       lockHeld = true;
       break;
     } catch (error) {
-      if (error?.code !== 'EEXIST') {
+      if (error?.code !== LOCAL_STR_EEXIST) {
         throw error;
       }
-      Atomics.wait(lockWaitArray, 0, 0, PORT_ALLOCATOR_LOCK_WAIT_MS);
+      Atomics.wait(lockWaitArray, LOCAL_NUM_ZERO, LOCAL_NUM_ZERO, PORT_ALLOCATOR_LOCK_WAIT_MS);
     }
   }
 
   if (!lockHeld) {
-    throw new Error('Timed out acquiring test port allocator lock');
+    throw new Error(LOCAL_STR_1F308);
   }
 
   try {
@@ -205,7 +216,7 @@ function withAllocatorLock(fn) {
  * Release this process's reserved ports.
  */
 function releaseReservedPorts() {
-  if (processReservedPorts.size === 0) {
+  if (processReservedPorts.size === LOCAL_NUM_ZERO) {
     return;
   }
 
@@ -235,7 +246,7 @@ function registerExitCleanup() {
     return;
   }
   exitCleanupRegistered = true;
-  process.on('exit', () => {
+  process.on(LOCAL_STR_EXIT, () => {
     try {
       releaseReservedPorts();
     } catch {
@@ -262,7 +273,7 @@ function reservePort(requestedPort, testFileId) {
       ((requestedPort - PORT_RANGE_START) % TOTAL_PORTS + TOTAL_PORTS) %
       TOTAL_PORTS;
 
-    for (let attempt = 0; attempt < TOTAL_PORTS; attempt++) {
+    for (let attempt = LOCAL_NUM_ZERO; attempt < TOTAL_PORTS; attempt++) {
       const port = PORT_RANGE_START + ((startOffset + attempt) % TOTAL_PORTS);
       const key = String(port);
       if (reservations[key]) {
@@ -279,7 +290,7 @@ function reservePort(requestedPort, testFileId) {
       return port;
     }
 
-    throw new Error('No available test ports remain in allocator range');
+    throw new Error(LOCAL_STR_16TU6);
   });
 }
 
@@ -303,7 +314,7 @@ export function getTestPort(testFileId = DEFAULT_TEST_FILE_ID) {
     );
   }
 
-  filePortOffsets.set(processScopedTestFileId, currentOffset + 1);
+  filePortOffsets.set(processScopedTestFileId, currentOffset + LOCAL_NUM_ONE);
   return reservePort(basePort + currentOffset, processScopedTestFileId);
 }
 
@@ -314,7 +325,7 @@ export function getTestPort(testFileId = DEFAULT_TEST_FILE_ID) {
  * @param {string} [testFileId] - Test file identifier to reset
  */
 export function resetTestPorts(testFileId = DEFAULT_TEST_FILE_ID) {
-  filePortOffsets.set(getProcessScopedTestFileId(testFileId), 0);
+  filePortOffsets.set(getProcessScopedTestFileId(testFileId), LOCAL_NUM_ZERO);
 }
 
 /**
@@ -327,7 +338,7 @@ export function resetTestPorts(testFileId = DEFAULT_TEST_FILE_ID) {
 export function getAvailablePort() {
   return new Promise((resolve, reject) => {
     const server = createServer();
-    server.listen(0, TEST_HOST, () => {
+    server.listen(LOCAL_NUM_ZERO, TEST_HOST, () => {
       const {port} = server.address();
       server.close((err) => {
         if (err) {
@@ -337,7 +348,7 @@ export function getAvailablePort() {
         }
       });
     });
-    server.on('error', reject);
+    server.on(LOCAL_STR_ERROR, reject);
   });
 }
 
@@ -349,7 +360,7 @@ export function getAvailablePort() {
  */
 export async function getAvailablePorts(count) {
   const ports = [];
-  for (let i = 0; i < count; i++) {
+  for (let i = LOCAL_NUM_ZERO; i < count; i++) {
     ports.push(await getAvailablePort());
   }
   return ports;

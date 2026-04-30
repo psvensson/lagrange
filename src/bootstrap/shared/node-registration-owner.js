@@ -41,6 +41,14 @@ import {AuthoritativeControlPlaneView} from
   '../../control-plane/authoritative-control-plane-view.js';
 import {runRetryableControlPlaneWrite} from './retryable-control-plane-write.js';
 
+const LOCAL_STR_RNTKK = 'Registering node in cluster';
+const LOCAL_STR_1PE7K = 'Node registered in cluster';
+const LOCAL_STR_VWYJO = 'Failed to register node in cluster';
+const LOCAL_STR_1YR7Z = 'Failed to refresh durable rejoin membership: ';
+const LOCAL_STR_1S6CG = 'node_state_reporter';
+const LOCAL_STR_V0KZD = 'retryable join admission write failure';
+const LOCAL_STR_UPSERT = 'UPSERT';
+
 const LOG_META_ENDPOINT_REGISTER_FAILED =
   'Failed to register built-in meta service endpoints';
 const LOG_NODE_REGISTER_ERROR_PREFIX =
@@ -100,7 +108,7 @@ class NodeRegistrationOwner {
   async registerNodeInCluster() {
     const logger = this.delegates.getLogger();
 
-    logger.info('Registering node in cluster', {
+    logger.info(LOCAL_STR_RNTKK, {
       nodeId: this.nodeId,
       nodeAddress: this.nodeAddress,
     });
@@ -164,7 +172,7 @@ class NodeRegistrationOwner {
           [COLUMN.READY_LEASE_EXPIRES_AT]: null,
         });
 
-        logger.info('Node registered in cluster', {
+        logger.info(LOCAL_STR_1PE7K, {
           nodeId: this.nodeId,
           nodeAddress: this.nodeAddress,
           cpuCores: budgetRow?.[COLUMN.CPU_CORES] || null,
@@ -235,7 +243,7 @@ class NodeRegistrationOwner {
         wrappedError.publicationDiagnostics =
           error.publicationDiagnostics;
       }
-      logger.error('Failed to register node in cluster', {
+      logger.error(LOCAL_STR_VWYJO, {
         nodeId: this.nodeId,
         error: wrappedError.message,
       });
@@ -430,7 +438,7 @@ class NodeRegistrationOwner {
     );
     if (!refreshResult?.success) {
       throw new Error(
-        'Failed to refresh durable rejoin membership: ' +
+        LOCAL_STR_1YR7Z +
         `${refreshResult?.error}`,
       );
     }
@@ -674,7 +682,7 @@ class NodeRegistrationOwner {
     );
     return {
       success: true,
-      publicationPath: 'node_state_reporter',
+      publicationPath: LOCAL_STR_1S6CG,
     };
   }
 
@@ -774,7 +782,7 @@ class NodeRegistrationOwner {
           error:
             resultOrError?.error ||
             resultOrError?.message ||
-            'retryable join admission write failure',
+            LOCAL_STR_V0KZD,
         },
       );
     };
@@ -903,7 +911,7 @@ class NodeRegistrationOwner {
 
     void createBootstrapCacheHydrationApplier(systemTableCache)(
       tableName,
-      'UPSERT',
+      LOCAL_STR_UPSERT,
       rowData,
     );
   }

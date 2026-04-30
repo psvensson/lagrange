@@ -26,6 +26,9 @@ import {
   resolveCanonicalLeaderIdentitySnapshot,
 } from '../../query/canonical-leader-routing.js';
 
+const LOCAL_STR_EMPTY = '';
+const LOCAL_STR_COLON = ':';
+
 const BOOTSTRAP_TOPOLOGY_SNAPSHOT_ROW_SOURCE = Object.freeze({
   CACHE: 'cache',
   AUTHORITATIVE_LOCAL_PARTITION: 'authoritative_local_partition',
@@ -293,11 +296,11 @@ class BootstrapTopologySnapshotOwner {
         .join('|') :
       '';
     return [
-      String(warningKey || ''),
+      String(warningKey || LOCAL_STR_EMPTY),
       tableName,
       partitionId,
       partitionIds,
-    ].join(':');
+    ].join(LOCAL_STR_COLON);
   }
 
   warnBootstrapTopologySnapshot(warningKey, message, payload = {}) {

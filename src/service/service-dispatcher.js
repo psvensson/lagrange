@@ -15,6 +15,10 @@ import {
 import {assertServiceMessageEnvelope} from './service-message-contract.js';
 import {ServicePolicyViolationError} from './service-lifecycle-errors.js';
 
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_NUM_ONE = 1;
+const LOCAL_STR_UNKNOWN_ERROR = 'unknown_error';
+
 const SERVICE_DISPATCHER_ERROR = Object.freeze({
   ROUTER_REQUIRED:
     'messageRouter must provide a deliver(targetAddress, message, options) function',
@@ -98,14 +102,14 @@ class ServiceDispatcher {
     this._authorize = options.authorize;
     this._logger = options.logger || this._initLogger();
     this._metrics = {
-      dispatchTotal: 0,
-      dispatchSuccess: 0,
-      dispatchFailure: 0,
-      authnFailure: 0,
-      authzFailure: 0,
-      lastDispatchDurationMs: 0,
-      dispatchLatencyMsTotal: 0,
-      dispatchLatencyMsMax: 0,
+      dispatchTotal: LOCAL_NUM_ZERO,
+      dispatchSuccess: LOCAL_NUM_ZERO,
+      dispatchFailure: LOCAL_NUM_ZERO,
+      authnFailure: LOCAL_NUM_ZERO,
+      authzFailure: LOCAL_NUM_ZERO,
+      lastDispatchDurationMs: LOCAL_NUM_ZERO,
+      dispatchLatencyMsTotal: LOCAL_NUM_ZERO,
+      dispatchLatencyMsMax: LOCAL_NUM_ZERO,
       lastError: null,
     };
   }
@@ -141,7 +145,7 @@ class ServiceDispatcher {
    * @private
    */
   _recordDispatchMetrics(status, durationMs, error = null) {
-    this._metrics.dispatchTotal += 1;
+    this._metrics.dispatchTotal += LOCAL_NUM_ONE;
     this._metrics.lastDispatchDurationMs = durationMs;
     this._metrics.dispatchLatencyMsTotal += durationMs;
     this._metrics.dispatchLatencyMsMax = Math.max(
@@ -150,17 +154,17 @@ class ServiceDispatcher {
     );
 
     if (status === DISPATCH_METRIC_STATUS.SUCCESS) {
-      this._metrics.dispatchSuccess += 1;
+      this._metrics.dispatchSuccess += LOCAL_NUM_ONE;
       this._metrics.lastError = null;
       return;
     }
 
-    this._metrics.dispatchFailure += 1;
+    this._metrics.dispatchFailure += LOCAL_NUM_ONE;
     if (status === DISPATCH_METRIC_STATUS.AUTHN_FAILURE) {
-      this._metrics.authnFailure += 1;
+      this._metrics.authnFailure += LOCAL_NUM_ONE;
     }
     if (status === DISPATCH_METRIC_STATUS.AUTHZ_FAILURE) {
-      this._metrics.authzFailure += 1;
+      this._metrics.authzFailure += LOCAL_NUM_ONE;
     }
     this._metrics.lastError = error ? error.message : null;
   }
@@ -280,7 +284,7 @@ class ServiceDispatcher {
             TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.NO_HANDLER) {
         throw new Error(
           `${SERVICE_DISPATCHER_ERROR.DELIVERY_REJECTED}:` +
-          ` ${delivery?.error || 'unknown_error'}`,
+          ` ${delivery?.error || LOCAL_STR_UNKNOWN_ERROR}`,
         );
       }
 

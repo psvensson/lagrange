@@ -33,6 +33,14 @@ import {
   STORAGE_PLACEMENT_CONSTRAINT,
 } from '../rebalancer/storage-capacity-constants.js';
 
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_STR_1S1UB = 'placementConstraints';
+const LOCAL_STR_OBJECT = 'object';
+const LOCAL_NUM_ONE = 1;
+const LOCAL_NUM_TWO = 2;
+const LOCAL_STR_128KJ = ', ';
+const LOCAL_STR_CRITICAL = 'critical';
+
 /**
  * Extract storage-related placement constraints from a constraints
  * object. Returns only the storage capacity keys defined in
@@ -126,7 +134,7 @@ class TablePolicyService extends EventEmitter {
         TABLES.TABLES,
         (table) => table?.table_id === tableId || table?.tableId === tableId,
       );
-      return rows[0] || null;
+      return rows[LOCAL_NUM_ZERO] || null;
     }
 
     if (typeof this.systemTableCache.getAll === TYPEOF.FUNCTION) {
@@ -157,7 +165,7 @@ class TablePolicyService extends EventEmitter {
           partition?.partition_id === partitionId ||
           partition?.partitionId === partitionId,
       );
-      return rows[0] || null;
+      return rows[LOCAL_NUM_ZERO] || null;
     }
 
     if (typeof this.systemTableCache.getAll === TYPEOF.FUNCTION) {
@@ -249,7 +257,7 @@ class TablePolicyService extends EventEmitter {
     const merged = {...DEFAULT_TABLE_POLICY};
 
     for (const [key, value] of Object.entries(storedPolicy)) {
-      if (key === 'placementConstraints' && typeof value === 'object') {
+      if (key === LOCAL_STR_1S1UB && typeof value === LOCAL_STR_OBJECT) {
         merged.placementConstraints = {
           ...DEFAULT_TABLE_POLICY.placementConstraints,
           ...value,
@@ -282,28 +290,28 @@ class TablePolicyService extends EventEmitter {
 
     // Validate replica counts
     if (policy.replicaCount !== undefined) {
-      if (policy.replicaCount < 1) {
+      if (policy.replicaCount < LOCAL_NUM_ONE) {
         errors.push(POLICY_ERROR_MSG.REPLICA_COUNT_MIN);
       }
-      if (policy.replicaCount % 2 === 0) {
+      if (policy.replicaCount % LOCAL_NUM_TWO === LOCAL_NUM_ZERO) {
         errors.push(POLICY_ERROR_MSG.REPLICA_COUNT_ODD);
       }
     }
 
     if (policy.minReplicaCount !== undefined) {
-      if (policy.minReplicaCount < 1) {
+      if (policy.minReplicaCount < LOCAL_NUM_ONE) {
         errors.push(POLICY_ERROR_MSG.MIN_REPLICA_COUNT_MIN);
       }
-      if (policy.minReplicaCount % 2 === 0) {
+      if (policy.minReplicaCount % LOCAL_NUM_TWO === LOCAL_NUM_ZERO) {
         errors.push(POLICY_ERROR_MSG.MIN_REPLICA_COUNT_ODD);
       }
     }
 
     if (policy.maxReplicaCount !== undefined) {
-      if (policy.maxReplicaCount < 1) {
+      if (policy.maxReplicaCount < LOCAL_NUM_ONE) {
         errors.push(POLICY_ERROR_MSG.MAX_REPLICA_COUNT_MIN);
       }
-      if (policy.maxReplicaCount % 2 === 0) {
+      if (policy.maxReplicaCount % LOCAL_NUM_TWO === LOCAL_NUM_ZERO) {
         errors.push(POLICY_ERROR_MSG.MAX_REPLICA_COUNT_ODD);
       }
     }
@@ -321,16 +329,16 @@ class TablePolicyService extends EventEmitter {
     }
 
     // Validate thresholds
-    if (policy.splitStorageThreshold !== undefined && policy.splitStorageThreshold < 0) {
+    if (policy.splitStorageThreshold !== undefined && policy.splitStorageThreshold < LOCAL_NUM_ZERO) {
       errors.push(POLICY_ERROR_MSG.SPLIT_STORAGE_NONNEGATIVE);
     }
-    if (policy.splitTrafficThreshold !== undefined && policy.splitTrafficThreshold < 0) {
+    if (policy.splitTrafficThreshold !== undefined && policy.splitTrafficThreshold < LOCAL_NUM_ZERO) {
       errors.push(POLICY_ERROR_MSG.SPLIT_TRAFFIC_NONNEGATIVE);
     }
-    if (policy.mergeStorageThreshold !== undefined && policy.mergeStorageThreshold < 0) {
+    if (policy.mergeStorageThreshold !== undefined && policy.mergeStorageThreshold < LOCAL_NUM_ZERO) {
       errors.push(POLICY_ERROR_MSG.MERGE_STORAGE_NONNEGATIVE);
     }
-    if (policy.mergeTrafficThreshold !== undefined && policy.mergeTrafficThreshold < 0) {
+    if (policy.mergeTrafficThreshold !== undefined && policy.mergeTrafficThreshold < LOCAL_NUM_ZERO) {
       errors.push(POLICY_ERROR_MSG.MERGE_TRAFFIC_NONNEGATIVE);
     }
 
@@ -341,7 +349,7 @@ class TablePolicyService extends EventEmitter {
     }
 
     return {
-      valid: errors.length === 0,
+      valid: errors.length === LOCAL_NUM_ZERO,
       errors,
     };
   }
@@ -408,7 +416,7 @@ class TablePolicyService extends EventEmitter {
     // Validate the policy updates
     const validation = this.validatePolicy(policyUpdates);
     if (!validation.valid) {
-      throw new Error(`${POLICY_ERROR_MSG.INVALID_POLICY_PREFIX}${validation.errors.join(', ')}`);
+      throw new Error(`${POLICY_ERROR_MSG.INVALID_POLICY_PREFIX}${validation.errors.join(LOCAL_STR_128KJ)}`);
     }
 
     // Get current policy
@@ -424,7 +432,7 @@ class TablePolicyService extends EventEmitter {
     const mergedValidation = this.validatePolicy(newPolicy);
     if (!mergedValidation.valid) {
       throw new Error(
-        `${POLICY_ERROR_MSG.INVALID_MERGED_POLICY_PREFIX}${mergedValidation.errors.join(', ')}`,
+        `${POLICY_ERROR_MSG.INVALID_MERGED_POLICY_PREFIX}${mergedValidation.errors.join(LOCAL_STR_128KJ)}`,
       );
     }
 
@@ -445,7 +453,7 @@ class TablePolicyService extends EventEmitter {
         },
       }, {
         workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
-        deliveryPriority: 'critical',
+        deliveryPriority: LOCAL_STR_CRITICAL,
       });
 
       // Invalidate cache
@@ -488,7 +496,7 @@ class TablePolicyService extends EventEmitter {
     // Validate
     const validation = this.validatePolicy(completePolicy);
     if (!validation.valid) {
-      throw new Error(`${POLICY_ERROR_MSG.INVALID_POLICY_PREFIX}${validation.errors.join(', ')}`);
+      throw new Error(`${POLICY_ERROR_MSG.INVALID_POLICY_PREFIX}${validation.errors.join(LOCAL_STR_128KJ)}`);
     }
 
     return this.updateTablePolicy(tableId, completePolicy);
@@ -629,7 +637,7 @@ class TablePolicyService extends EventEmitter {
         TABLES.MESSAGE_GROUPS,
         (group) => group?.group_id === groupId || group?.groupId === groupId,
       );
-      return rows[0] || null;
+      return rows[LOCAL_NUM_ZERO] || null;
     }
 
     if (typeof this.systemTableCache.getAll === TYPEOF.FUNCTION) {
@@ -651,7 +659,7 @@ class TablePolicyService extends EventEmitter {
     const merged = this.getDefaultMessageGroupPolicy();
 
     for (const [key, value] of Object.entries(storedPolicy)) {
-      if (key === 'placementConstraints' && typeof value === 'object') {
+      if (key === LOCAL_STR_1S1UB && typeof value === LOCAL_STR_OBJECT) {
         merged.placementConstraints = {
           ...DEFAULT_MESSAGE_GROUP_POLICY.placementConstraints,
           ...value,
@@ -824,14 +832,14 @@ class TablePolicyService extends EventEmitter {
           return row ? [row] : [];
         },
       });
-      return result.rows?.[0] || null;
+      return result.rows?.[LOCAL_NUM_ZERO] || null;
     }
     const result = await this.getControlPlaneSystemTableGateway().readRows(
       TABLES.TABLES,
       'SELECT * FROM tables WHERE table_id = ?',
       [tableId],
     );
-    return result.rows?.[0] || null;
+    return result.rows?.[LOCAL_NUM_ZERO] || null;
   }
 
   async readPartitionRow(partitionId) {
@@ -844,14 +852,14 @@ class TablePolicyService extends EventEmitter {
           return row ? [row] : [];
         },
       });
-      return result.rows?.[0] || null;
+      return result.rows?.[LOCAL_NUM_ZERO] || null;
     }
     const result = await this.getControlPlaneSystemTableGateway().readRows(
       TABLES.PARTITIONS,
       'SELECT * FROM partitions WHERE partition_id = ?',
       [partitionId],
     );
-    return result.rows?.[0] || null;
+    return result.rows?.[LOCAL_NUM_ZERO] || null;
   }
 
   async readMessageGroupRow(groupId) {
@@ -864,14 +872,14 @@ class TablePolicyService extends EventEmitter {
           return row ? [row] : [];
         },
       });
-      return result.rows?.[0] || null;
+      return result.rows?.[LOCAL_NUM_ZERO] || null;
     }
     const result = await this.getControlPlaneSystemTableGateway().readRows(
       TABLES.MESSAGE_GROUPS,
       'SELECT * FROM message_groups WHERE group_id = ?',
       [groupId],
     );
-    return result.rows?.[0] || null;
+    return result.rows?.[LOCAL_NUM_ZERO] || null;
   }
 
   getControlPlaneSystemTableGateway() {

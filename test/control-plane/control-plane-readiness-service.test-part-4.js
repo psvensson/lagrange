@@ -36,6 +36,9 @@ import {
 import {
   DEFAULT_PRIORITY_RECOVERY_ACTIVITY_STALE_GRACE_MS,
 } from '../../src/control-plane/priority-recovery-snapshot.js';
+import {
+  PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE,
+} from '../../src/control-plane/publication-recovery-gate.js';
 
 const TEST_STARTUP_ADMISSION_STATE_BLOCKED = 'blocked';
 const TEST_STARTUP_ADMISSION_REASON_CLUSTER_INTEGRITY =
@@ -51,6 +54,17 @@ const TEST_PRIORITY_SERVE_PUBLICATION_CREATED_AT =
 const TEST_PRIORITY_SERVE_READY_LEASE_EXPIRES_AT = 2000;
 const TEST_PRIORITY_SERVE_LAST_HEARTBEAT = 1000;
 const TEST_PRIORITY_SERVE_BUDGET_BYTES = 1000;
+const TEST_COUNT_ONLY_ACK_DEBT_COUNT = 1;
+const TEST_COUNT_ONLY_ACK_NODE_ID = 'node-count-only-ack-debt';
+const TEST_COUNT_ONLY_ACK_OBSERVED_AT = 1900;
+const TEST_COUNT_ONLY_ACK_PUBLICATION_EPOCH = 52;
+const TEST_COUNT_ONLY_ACK_PUBLICATION_CREATED_AT = 1500;
+const TEST_COUNT_ONLY_ACK_READY_PARTITION_SUMMARY = Object.freeze({
+  satisfied: true,
+  requiredDistinctNodeCount: 3,
+  missingPartitionIds: Object.freeze([]),
+  blockedPartitions: Object.freeze([]),
+});
 const TEST_LOCAL_CLUSTER_INCARNATION_FENCE_BLOCKED = Object.freeze({
   state: 'identity_mismatch',
   allowed: false,
@@ -992,6 +1006,234 @@ test('ControlPlaneReadinessService rebuilds stale embedded publication gates fro
       projection.reasonCodes,
       [],
       'stale embedded spread reasons should clear once the current planning snapshot is satisfied',
+    );
+    t.end();
+  });
+
+test('ControlPlaneReadinessService preserves count-only ACK debt in rebuilt publication gates',
+  (t) => {
+    const readinessService = new ControlPlaneReadinessService({
+      nodeId: TEST_COUNT_ONLY_ACK_NODE_ID,
+      systemTableCache: createCache(),
+      now: () => TEST_COUNT_ONLY_ACK_OBSERVED_AT,
+    });
+    const membershipPublicationPlanningSnapshot = {
+      publicationEpoch: TEST_COUNT_ONLY_ACK_PUBLICATION_EPOCH,
+      publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+      pendingAckCount: TEST_COUNT_ONLY_ACK_DEBT_COUNT,
+      pendingAckEvidenceState:
+        PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.COUNT_ONLY,
+      priorityPartitionSummary: TEST_COUNT_ONLY_ACK_READY_PARTITION_SUMMARY,
+      priorityRecoveryReasonCodes: [],
+    };
+
+    const projection = readinessService.getPriorityControlPlaneRecoveryState({
+      observedAt: TEST_COUNT_ONLY_ACK_OBSERVED_AT,
+      membershipPublication: {
+        publicationEpoch: TEST_COUNT_ONLY_ACK_PUBLICATION_EPOCH,
+        status: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+        createdAt: TEST_COUNT_ONLY_ACK_PUBLICATION_CREATED_AT,
+      },
+      membershipPublicationPlanningSnapshot,
+      dimensions: {
+        [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]: true,
+        [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE]:
+          true,
+      },
+    });
+
+    t.equal(
+      readinessService.isPriorityControlPlaneRecoveryActive(
+        membershipPublicationPlanningSnapshot,
+      ),
+      true,
+      'count-only ACK debt should keep the direct recovery-active check open',
+    );
+    t.equal(
+      projection.publicationRecoveryGate.pendingAckCount,
+      TEST_COUNT_ONLY_ACK_DEBT_COUNT,
+      'rebuilt publication gates should retain count-only ACK debt',
+    );
+    t.equal(
+      projection.publicationRecoveryGate.ackPending,
+      true,
+      'count-only ACK debt should stay ACK-pending after gate rebuild',
+    );
+    t.equal(
+      projection.active,
+      true,
+      'count-only ACK debt should keep priority recovery active',
+    );
+    t.end();
+  });
+
+test('ControlPlaneReadinessService preserves provided count-only ACK debt when direct publication has an empty ACK list',
+  (t) => {
+    const readinessService = new ControlPlaneReadinessService({
+      nodeId: TEST_COUNT_ONLY_ACK_NODE_ID,
+      systemTableCache: createCache(),
+      now: () => TEST_COUNT_ONLY_ACK_OBSERVED_AT,
+    });
+    const resolvedSnapshot =
+      readinessService.resolveMembershipPublicationPlanningSnapshot({
+        nodeId: TEST_COUNT_ONLY_ACK_NODE_ID,
+        observedAt: TEST_COUNT_ONLY_ACK_OBSERVED_AT,
+        membershipPublication: {
+          publicationEpoch: TEST_COUNT_ONLY_ACK_PUBLICATION_EPOCH,
+          status: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+          createdAt: TEST_COUNT_ONLY_ACK_PUBLICATION_CREATED_AT,
+          requiredAckNodeIds: [],
+          acknowledgedNodeIds: [],
+          priorityPartitionSummary:
+            TEST_COUNT_ONLY_ACK_READY_PARTITION_SUMMARY,
+        },
+        membershipPublicationPlanningSnapshot: {
+          publicationEpoch: TEST_COUNT_ONLY_ACK_PUBLICATION_EPOCH,
+          publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+          requiredAckNodeIds: [],
+          acknowledgedNodeIds: [],
+          pendingAckCount: TEST_COUNT_ONLY_ACK_DEBT_COUNT,
+          pendingAckEvidenceState:
+            PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.COUNT_ONLY,
+          priorityPartitionSummary:
+            TEST_COUNT_ONLY_ACK_READY_PARTITION_SUMMARY,
+          priorityRecoveryReasonCodes: [],
+        },
+      });
+
+    t.equal(
+      resolvedSnapshot.pendingAckEvidenceState,
+      PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.COUNT_ONLY,
+      'explicit count-only evidence should survive the direct/provided merge',
+    );
+    t.equal(
+      resolvedSnapshot.pendingAckCount,
+      TEST_COUNT_ONLY_ACK_DEBT_COUNT,
+      'explicit count-only ACK debt should not be zeroed by an empty direct list',
+    );
+    t.equal(
+      resolvedSnapshot.publicationRecoveryGate.pendingAckCount,
+      TEST_COUNT_ONLY_ACK_DEBT_COUNT,
+      'rebuilt publication gate should keep count-only ACK debt',
+    );
+    t.equal(
+      resolvedSnapshot.publicationRecoveryGate.active,
+      true,
+      'count-only ACK debt should keep the recovery gate active',
+    );
+    t.end();
+  });
+
+test('ControlPlaneReadinessService infers count-only ACK debt when a provided snapshot has an empty ACK list',
+  (t) => {
+    const readinessService = new ControlPlaneReadinessService({
+      nodeId: TEST_COUNT_ONLY_ACK_NODE_ID,
+      systemTableCache: createCache(),
+      now: () => TEST_COUNT_ONLY_ACK_OBSERVED_AT,
+    });
+    const resolvedSnapshot =
+      readinessService.resolveMembershipPublicationPlanningSnapshot({
+        nodeId: TEST_COUNT_ONLY_ACK_NODE_ID,
+        observedAt: TEST_COUNT_ONLY_ACK_OBSERVED_AT,
+        membershipPublication: {
+          publicationEpoch: TEST_COUNT_ONLY_ACK_PUBLICATION_EPOCH,
+          status: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+          createdAt: TEST_COUNT_ONLY_ACK_PUBLICATION_CREATED_AT,
+          requiredAckNodeIds: [],
+          acknowledgedNodeIds: [],
+          priorityPartitionSummary:
+            TEST_COUNT_ONLY_ACK_READY_PARTITION_SUMMARY,
+        },
+        membershipPublicationPlanningSnapshot: {
+          publicationEpoch: TEST_COUNT_ONLY_ACK_PUBLICATION_EPOCH,
+          publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+          requiredAckNodeIds: [],
+          acknowledgedNodeIds: [],
+          pendingAckCount: TEST_COUNT_ONLY_ACK_DEBT_COUNT,
+          priorityPartitionSummary:
+            TEST_COUNT_ONLY_ACK_READY_PARTITION_SUMMARY,
+          priorityRecoveryReasonCodes: [],
+        },
+      });
+
+    t.equal(
+      resolvedSnapshot.pendingAckEvidenceState,
+      PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.COUNT_ONLY,
+      'count-only debt should be inferred when the ACK list is empty but count debt exists',
+    );
+    t.equal(
+      resolvedSnapshot.pendingAckCount,
+      TEST_COUNT_ONLY_ACK_DEBT_COUNT,
+      'inferred count-only ACK debt should survive the direct/provided merge',
+    );
+    t.equal(
+      resolvedSnapshot.publicationRecoveryGate.pendingAckCount,
+      TEST_COUNT_ONLY_ACK_DEBT_COUNT,
+      'rebuilt publication gate should keep inferred count-only ACK debt',
+    );
+    t.equal(
+      resolvedSnapshot.publicationRecoveryGate.active,
+      true,
+      'inferred count-only ACK debt should keep the recovery gate active',
+    );
+    t.end();
+  });
+
+test('ControlPlaneReadinessService preserves direct count-only ACK debt over provided empty ACK list',
+  (t) => {
+    const readinessService = new ControlPlaneReadinessService({
+      nodeId: TEST_COUNT_ONLY_ACK_NODE_ID,
+      systemTableCache: createCache(),
+      now: () => TEST_COUNT_ONLY_ACK_OBSERVED_AT,
+    });
+    const resolvedSnapshot =
+      readinessService.resolveMembershipPublicationPlanningSnapshot({
+        nodeId: TEST_COUNT_ONLY_ACK_NODE_ID,
+        observedAt: TEST_COUNT_ONLY_ACK_OBSERVED_AT,
+        membershipPublication: {
+          publicationEpoch: TEST_COUNT_ONLY_ACK_PUBLICATION_EPOCH,
+          status: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+          createdAt: TEST_COUNT_ONLY_ACK_PUBLICATION_CREATED_AT,
+          pendingAckCount: TEST_COUNT_ONLY_ACK_DEBT_COUNT,
+          pendingAckEvidenceState:
+            PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.COUNT_ONLY,
+          priorityPartitionSummary:
+            TEST_COUNT_ONLY_ACK_READY_PARTITION_SUMMARY,
+        },
+        membershipPublicationPlanningSnapshot: {
+          publicationEpoch: TEST_COUNT_ONLY_ACK_PUBLICATION_EPOCH,
+          publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+          requiredAckNodeIds: [],
+          acknowledgedNodeIds: [],
+          pendingAckCount: NUM.ZERO,
+          pendingAckEvidenceState:
+            PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE
+              .REQUIRED_ACK_NODE_LIST,
+          priorityPartitionSummary:
+            TEST_COUNT_ONLY_ACK_READY_PARTITION_SUMMARY,
+          priorityRecoveryReasonCodes: [],
+        },
+      });
+
+    t.equal(
+      resolvedSnapshot.pendingAckEvidenceState,
+      PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.COUNT_ONLY,
+      'direct count-only evidence should not be replaced by an empty ACK list',
+    );
+    t.equal(
+      resolvedSnapshot.pendingAckCount,
+      TEST_COUNT_ONLY_ACK_DEBT_COUNT,
+      'direct count-only ACK debt should survive the direct/provided merge',
+    );
+    t.equal(
+      resolvedSnapshot.publicationRecoveryGate.pendingAckCount,
+      TEST_COUNT_ONLY_ACK_DEBT_COUNT,
+      'rebuilt publication gate should keep direct count-only ACK debt',
+    );
+    t.equal(
+      resolvedSnapshot.publicationRecoveryGate.active,
+      true,
+      'direct count-only ACK debt should keep the recovery gate active',
     );
     t.end();
   });

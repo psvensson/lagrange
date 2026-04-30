@@ -1,3 +1,5 @@
+const LOCAL_STR_CONSTRUCTOR = 'constructor';
+
 function createMovePlannerStateMethods(deps = {}) {
   const {
     ADJUST_DIRECTION,
@@ -609,7 +611,7 @@ function createMovePlannerStateMethods(deps = {}) {
   }
 
   return Object.getOwnPropertyNames(MovePlannerStateMethods.prototype)
-    .filter((name) => name !== 'constructor')
+    .filter((name) => name !== LOCAL_STR_CONSTRUCTOR)
     .reduce((accumulator, name) => {
       accumulator[name] = MovePlannerStateMethods.prototype[name];
       return accumulator;

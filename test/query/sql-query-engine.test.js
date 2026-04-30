@@ -44,6 +44,11 @@ import {
   createStaleOverlayOwnerHandoffFixture,
 } from './routing-repair-test-helpers.js';
 
+const SQL_ENGINE_SYSTEM_TABLE_UPDATE_SQL =
+  "UPDATE nodes SET status = 'active' WHERE node_id = 'node-a'";
+const SQL_ENGINE_SYSTEM_TABLE_WRITE_DELIVERY_SOURCE =
+  'control-plane:write:nodes:node-a';
+
 // Initialize configuration for tests
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 const config = ConfigurationManager.getInstance();
@@ -51,6 +56,12 @@ config.initialize();
 
 const TEST_PRIORITY_CONTROL_PLANE_TRANSACTION_DELIVERY_PRIORITY = 'critical';
 const TEST_PRIORITY_CONTROL_PLANE_TRANSACTION_DELIVERY_TIMEOUT_MS = 15000;
+const TEST_PRIORITY_CONTROL_PLANE_TRANSACTION_SESSION_ID = 'session-1';
+const TEST_PRIORITY_CONTROL_PLANE_TRANSACTION_PARTITION_ID =
+  'replica_operations-p1';
+const TEST_PRIORITY_CONTROL_PLANE_TRANSACTION_OPERATION = 'COMMIT';
+const TEST_PRIORITY_CONTROL_PLANE_TRANSACTION_DELIVERY_SOURCE =
+  'query:transaction:replica_operations-p1:session-1:COMMIT';
 const AUTHORITATIVE_OVERLAY_STATE_AUTHORITATIVE_MISSING =
   'authoritative_missing';
 
@@ -870,6 +881,103 @@ async (t) => {
   );
 });
 
+test('SQLQueryEngine - authoritative routing overlay keeps cache services ' +
+  'eligible when the service snapshot is below the replica target',
+async (t) => {
+  const partitionId = 'control_plane_publications-p1';
+  const overlayNodeId = 'overlay-node';
+  const cacheNodeId = 'cache-node';
+  const targetReplicaCount = 3;
+  const overlayAddress =
+    'overlay-node/partition/control_plane_publications-p1-r5';
+  const cacheFallbackAddress =
+    'cache-node/partition/control_plane_publications-p1-r4';
+  const cache = createMockSystemCache([], [
+    {
+      partition_id: partitionId,
+      table_name: TABLES.CONTROL_PLANE_PUBLICATIONS,
+      leader_node_id: overlayNodeId,
+      replica_count: targetReplicaCount,
+    },
+  ], [
+    {
+      service_id: 'control_plane_publications-p1-r4',
+      service_type: SERVICE_TYPE.PARTITION,
+      partition_id: partitionId,
+      node_id: cacheNodeId,
+      raft_role: 'follower',
+      address: cacheFallbackAddress,
+      status: SERVICE_STATUS.ACTIVE,
+    },
+  ]);
+  const engine = new SQLQueryEngine({
+    systemCache: cache,
+    messageRouter: createMockMessageRouter(),
+    authoritativeControlPlaneView: {
+      async readRows(tableName) {
+        if (tableName === TABLES.PARTITIONS) {
+          return {
+            success: true,
+            rows: [
+              {
+                partition_id: partitionId,
+                table_name: TABLES.CONTROL_PLANE_PUBLICATIONS,
+                leader_node_id: overlayNodeId,
+                replica_count: targetReplicaCount,
+              },
+            ],
+          };
+        }
+        if (tableName === TABLES.SERVICES) {
+          return {
+            success: true,
+            rows: [
+              {
+                service_id: 'control_plane_publications-p1-r5',
+                service_type: SERVICE_TYPE.PARTITION,
+                partition_id: partitionId,
+                node_id: overlayNodeId,
+                raft_role: 'follower',
+                address: overlayAddress,
+                status: SERVICE_STATUS.ACTIVE,
+              },
+            ],
+          };
+        }
+        return {
+          success: false,
+          rows: [],
+        };
+      },
+    },
+  });
+
+  const refreshed =
+    await engine.queryExecutor.routingMetadataOverlay
+      .refreshPartitionRouting(partitionId);
+
+  t.equal(refreshed, true);
+  t.equal(
+    engine.authoritativeRoutingOverlay.shouldMaskCacheServicesForPartition(
+      partitionId,
+    ),
+    false,
+    'partial authoritative service snapshots should not mask cached fallback rows',
+  );
+  const candidates = engine.queryExecutor.getPartitionServiceCandidates(
+    partitionId,
+    true,
+  );
+  t.ok(
+    candidates.some((candidate) => candidate.address === overlayAddress),
+    'routing should include the refreshed authoritative service row',
+  );
+  t.ok(
+    candidates.some((candidate) => candidate.address === cacheFallbackAddress),
+    'routing should retain cached fallback rows when authoritative coverage is incomplete',
+  );
+});
+
 test('SQLQueryEngine - authoritative routing overlay refresh requests ' +
   'bounded local replica fallback for control-plane routing repair', async (t) => {
   const partitionId = 'replica_operations-p1';
@@ -1077,6 +1185,8 @@ test('SQLQueryEngine - routes priority control-plane transaction delivery ' +
       preferLeader,
       preferSameLatencyGroup,
       deliveryPriority: executionOptions.deliveryPriority,
+      deliverySource: executionOptions.deliverySource,
+      replacePendingKey: executionOptions.replacePendingKey,
       routingReadinessDimension: executionOptions.routingReadinessDimension,
       timeoutMs: executionOptions.timeoutMs,
     });
@@ -1084,15 +1194,15 @@ test('SQLQueryEngine - routes priority control-plane transaction delivery ' +
   };
 
   await engine.deliverTransactionOperation(
-    'session-1',
-    'replica_operations-p1',
-    'COMMIT',
+    TEST_PRIORITY_CONTROL_PLANE_TRANSACTION_SESSION_ID,
+    TEST_PRIORITY_CONTROL_PLANE_TRANSACTION_PARTITION_ID,
+    TEST_PRIORITY_CONTROL_PLANE_TRANSACTION_OPERATION,
   );
 
   t.equal(routingCalls.length, 1,
     'transaction delivery should perform a single routing lookup');
   t.same(routingCalls[0], {
-    partitionId: 'replica_operations-p1',
+    partitionId: TEST_PRIORITY_CONTROL_PLANE_TRANSACTION_PARTITION_ID,
     sql: '',
     params: [],
     forRead: false,
@@ -1100,6 +1210,8 @@ test('SQLQueryEngine - routes priority control-plane transaction delivery ' +
     preferSameLatencyGroup: false,
     deliveryPriority:
       TEST_PRIORITY_CONTROL_PLANE_TRANSACTION_DELIVERY_PRIORITY,
+    deliverySource: TEST_PRIORITY_CONTROL_PLANE_TRANSACTION_DELIVERY_SOURCE,
+    replacePendingKey: TEST_PRIORITY_CONTROL_PLANE_TRANSACTION_DELIVERY_SOURCE,
     routingReadinessDimension:
       CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
     timeoutMs: TEST_PRIORITY_CONTROL_PLANE_TRANSACTION_DELIVERY_TIMEOUT_MS,
@@ -1315,7 +1427,11 @@ test('SQLQueryEngine - defaults system-table writes to recovery routing', async 
   });
 
   const result = await engine.executeQuery(
-    'UPDATE nodes SET status = \'active\' WHERE node_id = \'node-a\'',
+    SQL_ENGINE_SYSTEM_TABLE_UPDATE_SQL,
+    [],
+    {
+      deliverySource: SQL_ENGINE_SYSTEM_TABLE_WRITE_DELIVERY_SOURCE,
+    },
   );
 
   t.equal(result.success, true, 'system-table write should still succeed');
@@ -1323,6 +1439,11 @@ test('SQLQueryEngine - defaults system-table writes to recovery routing', async 
     capturedExecutionOptions?.routingReadinessDimension,
     CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
     'system-table write should default to the recovery-eligible routing lane',
+  );
+  t.equal(
+    capturedExecutionOptions?.deliverySource,
+    SQL_ENGINE_SYSTEM_TABLE_WRITE_DELIVERY_SOURCE,
+    'system-table write delivery source should reach partition delivery',
   );
 });
 
@@ -1633,6 +1754,7 @@ test('SQLQueryEngine - query ingress reuses the shared pressure admission ' +
       ...pressureSummary,
       totalPendingCritical: 0,
       totalPendingBackground: 0,
+      criticalReserveExhausted: false,
     }, `${testCase.name}: query ingress should expose the shared pressure summary shape`);
   }
 });

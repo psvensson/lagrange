@@ -5,6 +5,8 @@ import {
   MIGRATION_TYPE,
 } from './migration-constants.js';
 
+const LOCAL_STR_COLUMN = 'column';
+
 const ALTER_ACTION = Object.freeze({
   ADD: 'add',
   DROP: 'drop',
@@ -60,7 +62,7 @@ class MigrationPipeline {
     }
 
     const operationResource = String(ast.operation.resource || '').toLowerCase();
-    if (operationResource && operationResource !== 'column') {
+    if (operationResource && operationResource !== LOCAL_STR_COLUMN) {
       throw new Error(
         `${MIGRATION_PIPELINE_ERROR_MSG.UNSUPPORTED_ALTER_RESOURCE_PREFIX}` +
         `${operationResource}`,

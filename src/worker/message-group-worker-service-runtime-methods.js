@@ -1,3 +1,14 @@
+const LOCAL_STR_OK = 'ok';
+const LOCAL_STR_STRING = 'string';
+const LOCAL_STR_NO_SUCH_TABLE = 'no such table';
+const LOCAL_NUM_FOUR = 4;
+const LOCAL_STR_COMMA = ',';
+const LOCAL_NUM_TWO = 2;
+const LOCAL_STR_AU1TP = '"';
+const LOCAL_STR_1RJW3 = '`';
+const LOCAL_NUM_ONE = 1;
+const LOCAL_STR_CONSTRUCTOR = 'constructor';
+
 function createMessageGroupWorkerServiceRuntimeMethods(deps = {}) {
   const {
     getBaseWorkerStats,
@@ -34,7 +45,7 @@ function createMessageGroupWorkerServiceRuntimeMethods(deps = {}) {
       const newPhase = message.bootstrapPhase === true;
       this.setBootstrapPhase(newPhase);
       return {
-        status: 'ok',
+        status: LOCAL_STR_OK,
         replicaId: this.replicaId,
         bootstrapPhase: this.bootstrapPhase,
       };
@@ -66,7 +77,7 @@ function createMessageGroupWorkerServiceRuntimeMethods(deps = {}) {
      * @private
      */
     applyCacheMutation(tableName, operation, data) {
-      if (data && typeof data.sql === 'string') {
+      if (data && typeof data.sql === LOCAL_STR_STRING) {
         this.applyRawCDCMutation(tableName, data.sql, data.params || []);
         return;
       }
@@ -111,8 +122,8 @@ function createMessageGroupWorkerServiceRuntimeMethods(deps = {}) {
      */
     isMissingTableError(error) {
       return Boolean(error &&
-        typeof error.message === 'string' &&
-        error.message.includes('no such table'));
+        typeof error.message === LOCAL_STR_STRING &&
+        error.message.includes(LOCAL_STR_NO_SUCH_TABLE));
     }
 
     /**
@@ -135,8 +146,8 @@ function createMessageGroupWorkerServiceRuntimeMethods(deps = {}) {
         return null;
       }
 
-      return match[4]
-        .split(',')
+      return match[LOCAL_NUM_FOUR]
+        .split(LOCAL_STR_COMMA)
         .map((column) => this.normalizeIdentifier(column))
         .filter((column) => column.length > NUM.ZERO);
     }
@@ -149,14 +160,14 @@ function createMessageGroupWorkerServiceRuntimeMethods(deps = {}) {
      */
     normalizeIdentifier(identifier) {
       const trimmed = String(identifier).trim();
-      if (trimmed.length < 2) {
+      if (trimmed.length < LOCAL_NUM_TWO) {
         return trimmed;
       }
       const starts = trimmed[0];
       const ends = trimmed[trimmed.length - 1];
-      if ((starts === '"' && ends === '"') ||
-        (starts === '`' && ends === '`')) {
-        return trimmed.slice(1, -1);
+      if ((starts === LOCAL_STR_AU1TP && ends === LOCAL_STR_AU1TP) ||
+        (starts === LOCAL_STR_1RJW3 && ends === LOCAL_STR_1RJW3)) {
+        return trimmed.slice(LOCAL_NUM_ONE, -LOCAL_NUM_ONE);
       }
       return trimmed;
     }
@@ -256,7 +267,7 @@ function createMessageGroupWorkerServiceRuntimeMethods(deps = {}) {
   return Object.getOwnPropertyNames(
     MessageGroupWorkerServiceRuntimeMethods.prototype,
   )
-    .filter((name) => name !== 'constructor')
+    .filter((name) => name !== LOCAL_STR_CONSTRUCTOR)
     .reduce((accumulator, name) => {
       accumulator[name] = MessageGroupWorkerServiceRuntimeMethods.prototype[name];
       return accumulator;

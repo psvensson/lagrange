@@ -2,6 +2,12 @@ import {PRIORITY_RECOVERY_INVARIANT_FALLBACK} from '../../../src/control-plane/p
 import {
   CONTROL_PLANE_READINESS_REASON,
 } from '../../../src/control-plane/control-plane-readiness-constants.js';
+import {
+  POST_REBALANCE_CLOSURE_STATE,
+} from './post-rebalance-closure-contract.js';
+import {
+  CONTROL_PLANE_QUIESCENCE_CANDIDATE_WINDOW_RESET_REASON,
+} from './control-plane-quiescence-snapshot.js';
 import {FAILURE_BUNDLE_SEGMENT_4} from './failure-bundle-segment-4.js';
 const {
   FAILURE_BUNDLE_SCHEMA_VERSION,
@@ -76,11 +82,13 @@ const {
   STABILITY_GATE_TYPE_CONVERGENCE,
   STABILITY_GATE_TYPE_RESTART_RECOVERY,
   STABILITY_GATE_BLOCKER_PUBLICATION_PENDING,
+  STABILITY_GATE_BLOCKER_PUBLICATION_MISSING_ACTIVE_NODE,
   STABILITY_GATE_BLOCKER_PRIORITY_SPREAD_PENDING,
   STABILITY_GATE_BLOCKER_PENDING_ACK_NODES,
   STABILITY_GATE_BLOCKER_BLOCKED_NODES,
   STABILITY_GATE_BLOCKER_CLOSURE_RECORD,
   STABILITY_GATE_BLOCKER_STARTUP_READINESS,
+  STABILITY_GATE_BLOCKER_ADMIN_REACHABILITY_REFUSED,
   SCENARIO_NAME_FRAGMENT_RESTART,
   LOAD_WAIT_REASON_KEYS,
   LOAD_REASON_ROOT_CAUSE_CLASS_BY_REASON,
@@ -166,6 +174,7 @@ const {
   collectReadinessReasonCodes,
   buildRecoveryReadinessSummary,
   buildStabilityGate,
+  hasPublicationMissingActiveNodeBlocker,
   hasBlockingPublicationClosureRecord,
   isStartupReadinessBlocked,
   countRestartBoundaries,
@@ -186,15 +195,35 @@ const FAILURE_ACTION_POST_ACTIVE_CONVERGENCE_TIMEOUT =
   'Post-active topology convergence timed out after readiness and publication gates closed.';
 const OPERATOR_RECOMMENDATION_POST_ACTIVE_CONVERGENCE_TIMEOUT =
   'Inspect final leader ownership, in-flight replica operations, and over-target partition durations before rerun.';
+const FAILURE_ACTION_POST_REBALANCE_CLOSURE_OPEN =
+  'Post-rebalance topology closure remains open after readiness and publication gates closed.';
+const OPERATOR_RECOMMENDATION_POST_REBALANCE_CLOSURE_OPEN =
+  'Inspect post-rebalance closure blockers, membership trim debt, missing partition leaders, and sustained over-target voter durations before rerun.';
 const FAILURE_SIGNAL_DOMINANT_REASON_PREFIX = 'dominantReason=';
 const FAILURE_SIGNAL_FAILURE_BARRIER_PREFIX = 'failureBarrier=';
 const FAILURE_SIGNAL_FAILURE_BARRIER_REASON_PREFIX =
   'failureBarrierReason=';
+const FAILURE_SIGNAL_POST_REBALANCE_CLOSURE_STATE_PREFIX =
+  'postRebalanceClosureState=';
+const FAILURE_SIGNAL_POST_REBALANCE_BLOCKER_PREFIX =
+  'postRebalanceBlocker=';
+const FAILURE_SIGNAL_POST_REBALANCE_DIMENSION_PREFIX =
+  'postRebalanceDimension=';
+const FAILURE_SIGNAL_POST_REBALANCE_REASON_PREFIX =
+  'postRebalanceReason=';
+const FAILURE_SIGNAL_POST_REBALANCE_SOFT_CLOSURE_PREFIX =
+  'postRebalanceSoftClosure=';
 const FAILURE_SIGNAL_QUIESCENCE_STATE_PREFIX = 'quiescenceState=';
 const FAILURE_SIGNAL_QUIESCENCE_BLOCKER_PREFIX = 'quiescenceBlocker=';
 const FAILURE_SIGNAL_QUIESCENCE_REASON_PREFIX = 'quiescenceReason=';
+const FAILURE_SIGNAL_QUIESCENCE_CANDIDATE_WINDOW_RESET_PREFIX =
+  'quiescenceCandidateWindowReset=';
 const FAILURE_SIGNAL_PENDING_ACK_COUNT_PREFIX = 'pendingAckCount=';
 const FAILURE_SIGNAL_BLOCKED_NODE_COUNT_PREFIX = 'blockedNodeCount=';
+const FAILURE_SIGNAL_MISSING_PUBLISHED_COUNT_PREFIX =
+  'missingPublishedCount=';
+const FAILURE_SIGNAL_MISSING_PUBLISHED_NODE_IDS_PREFIX =
+  'missingPublishedNodeIds=';
 const FAILURE_SIGNAL_RECOVERY_PROTOCOL_STATE_PREFIX =
   'recoveryProtocolState=';
 const FAILURE_SIGNAL_PRIORITY_SPREAD_PENDING = 'prioritySpreadPending=true';
@@ -231,6 +260,7 @@ const FAILURE_SIGNAL_PRIORITY_RECOVERY_REASON_PREFIX =
 const FAILURE_SIGNAL_PRIORITY_RECOVERY_BLOCKED_PARTITION_COUNT_PREFIX =
   'priorityRecoveryBlockedPartitionCount=';
 const FAILURE_SIGNAL_VALUE_SEPARATOR = '|';
+const FAILURE_BUNDLE_POST_REBALANCE_CLOSURE_UNAVAILABLE = null;
 const FAILURE_GUIDANCE_EMPTY = Object.freeze({
   failureAction: null,
   operatorRecommendation: null,
@@ -241,6 +271,7 @@ function buildRestartRecoveryStabilityGate({
   controlPlane = null,
   publicationConvergence = null,
   readinessFailure = null,
+  failure = null,
   logs = null,
 }) {
   const scenarioName = String(entry?.scenario || '')
@@ -255,11 +286,20 @@ function buildRestartRecoveryStabilityGate({
   const startupRecovery = isRecord(controlPlane?.startupRecovery) ?
     controlPlane.startupRecovery :
     null;
+  const terminalRecoveryReadiness = isRecord(
+    failure?.failureBarrier?.terminalRecoveryReadiness,
+  ) ?
+    failure.failureBarrier.terminalRecoveryReadiness :
+    null;
+  const hasAdminReachabilityBlocker =
+    terminalRecoveryReadiness?.ownerState ===
+      STABILITY_GATE_BLOCKER_ADMIN_REACHABILITY_REFUSED;
   const applicable =
     scenarioName.includes(SCENARIO_NAME_FRAGMENT_RESTART) ||
     restartBoundaryCount > ZERO ||
     !!startupRecovery ||
-    hasStartupReadinessBlocker;
+    hasStartupReadinessBlocker ||
+    hasAdminReachabilityBlocker;
   if (!applicable) {
     return buildStabilityGate({
       type: STABILITY_GATE_TYPE_RESTART_RECOVERY,
@@ -270,7 +310,20 @@ function buildRestartRecoveryStabilityGate({
     });
   }
   const blockers = [];
-  if (publicationConvergence?.publicationPending === true) {
+  const hasMissingActiveNodeBlocker =
+    hasPublicationMissingActiveNodeBlocker(publicationConvergence);
+  const hasBlockingClosureRecord =
+    hasBlockingPublicationClosureRecord({
+      publicationConvergence,
+      readinessFailure,
+    });
+  if (hasMissingActiveNodeBlocker) {
+    blockers.push(STABILITY_GATE_BLOCKER_PUBLICATION_MISSING_ACTIVE_NODE);
+  }
+  if (
+    publicationConvergence?.publicationPending === true &&
+    hasMissingActiveNodeBlocker !== true
+  ) {
     blockers.push(STABILITY_GATE_BLOCKER_PUBLICATION_PENDING);
   }
   if (
@@ -286,15 +339,20 @@ function buildRestartRecoveryStabilityGate({
   if (publicationConvergence?.prioritySpreadPending === true) {
     blockers.push(STABILITY_GATE_BLOCKER_PRIORITY_SPREAD_PENDING);
   }
-  if (hasStartupReadinessBlocker || startupRecovery?.recoveryBlocked === true) {
+  if (
+    (hasStartupReadinessBlocker &&
+      (
+        hasMissingActiveNodeBlocker !== true ||
+        hasBlockingClosureRecord === true
+      )) ||
+    startupRecovery?.recoveryBlocked === true
+  ) {
     blockers.push(STABILITY_GATE_BLOCKER_STARTUP_READINESS);
   }
-  if (
-    hasBlockingPublicationClosureRecord({
-      publicationConvergence,
-      readinessFailure,
-    })
-  ) {
+  if (hasAdminReachabilityBlocker) {
+    blockers.push(STABILITY_GATE_BLOCKER_ADMIN_REACHABILITY_REFUSED);
+  }
+  if (hasBlockingClosureRecord) {
     blockers.push(STABILITY_GATE_BLOCKER_CLOSURE_RECORD);
   }
   return buildStabilityGate({
@@ -314,11 +372,18 @@ function buildRestartRecoveryStabilityGate({
       blockedNodeCount: normalizeNonNegativeCount(
         publicationConvergence?.blockedNodeCount,
       ),
+      missingPublishedCount: normalizeNonNegativeCount(
+        publicationConvergence?.missingPublishedCount,
+      ),
+      missingPublishedNodeIds: normalizeDistinctStringArray(
+        publicationConvergence?.missingPublishedNodeIds,
+      ),
       prioritySpreadPending:
         publicationConvergence?.prioritySpreadPending === true,
       closureRecordId: publicationConvergence?.closureRecordId || null,
       closureWitnessClass: publicationConvergence?.closureWitnessClass || null,
       readinessMode: readinessFailure?.mode || null,
+      terminalRecoveryReadiness,
     },
   });
 }
@@ -329,6 +394,7 @@ function buildStabilityGates({
   publicationConvergence = null,
   readinessFailure = null,
   recoveryReadiness = null,
+  failure = null,
   logs = null,
 }) {
   return {
@@ -347,6 +413,7 @@ function buildStabilityGates({
       controlPlane,
       publicationConvergence,
       readinessFailure,
+      failure,
       logs,
     }),
   };
@@ -358,8 +425,11 @@ function buildPublicationOwnerConvergenceBlockerEvidence({
   hasBlockingClosureRecord,
   hasPriorityRecoveryOwnerBlocker,
 }) {
+  const missingActiveNodeBlocked =
+    hasPublicationMissingActiveNodeBlocker(publicationConvergence);
   const publicationOwnerOpen =
     publicationConvergence?.publicationPending === true ||
+    missingActiveNodeBlocked ||
     normalizeNonNegativeCount(publicationConvergence?.pendingAckCount) >
       ZERO ||
     normalizeNonNegativeCount(publicationConvergence?.blockedNodeCount) >
@@ -373,7 +443,10 @@ function buildPublicationOwnerConvergenceBlockerEvidence({
     publicationNodeBlocked:
       normalizeNonNegativeCount(publicationConvergence?.blockedNodeCount) >
       ZERO,
-    publicationPending: publicationConvergence?.publicationPending === true,
+    missingActiveNodeBlocked,
+    publicationPending:
+      publicationConvergence?.publicationPending === true &&
+      missingActiveNodeBlocked !== true,
     startupReadinessBlocked:
       hasStartupReadinessBlocker === true && publicationOwnerOpen,
     closureRecordBlocked: hasBlockingClosureRecord === true,
@@ -390,6 +463,7 @@ function hasPublicationOwnerConvergenceBlocker(options) {
   return (
     evidence.pendingAckBlocked ||
     evidence.publicationNodeBlocked ||
+    evidence.missingActiveNodeBlocked ||
     evidence.publicationPending ||
     evidence.closureRecordBlocked ||
     (
@@ -1187,6 +1261,105 @@ function appendFailureBarrierSignals(signals, failureBarrier) {
   return signals;
 }
 
+function resolvePostRebalanceClosure(diagnostics) {
+  return isRecord(diagnostics?.postRebalanceClosure) ?
+    diagnostics.postRebalanceClosure :
+    FAILURE_BUNDLE_POST_REBALANCE_CLOSURE_UNAVAILABLE;
+}
+
+function hasOpenPostRebalanceClosure(postRebalanceClosure) {
+  return (
+    isRecord(postRebalanceClosure) &&
+    (
+      postRebalanceClosure.state === POST_REBALANCE_CLOSURE_STATE.OPEN ||
+      (
+        Array.isArray(postRebalanceClosure.blockers) &&
+        postRebalanceClosure.blockers.length > ZERO
+      )
+    )
+  );
+}
+
+function appendPostRebalanceClosureSignals(
+  signals,
+  postRebalanceClosure,
+) {
+  if (!Array.isArray(signals) || !isRecord(postRebalanceClosure)) {
+    return signals;
+  }
+  const state = String(postRebalanceClosure.state || '').trim();
+  if (state.length > ZERO) {
+    appendSignalOnce(
+      signals,
+      FAILURE_SIGNAL_POST_REBALANCE_CLOSURE_STATE_PREFIX + state,
+    );
+  }
+  const blockers = Array.isArray(postRebalanceClosure.blockers) ?
+    postRebalanceClosure.blockers :
+    [];
+  for (const blocker of blockers) {
+    if (!isRecord(blocker)) {
+      continue;
+    }
+    const blockerId = String(blocker.id || '').trim();
+    if (blockerId.length > ZERO) {
+      appendSignalOnce(
+        signals,
+        FAILURE_SIGNAL_POST_REBALANCE_BLOCKER_PREFIX + blockerId,
+      );
+    }
+    const dimension = String(blocker.dimension || '').trim();
+    if (dimension.length > ZERO) {
+      appendSignalOnce(
+        signals,
+        FAILURE_SIGNAL_POST_REBALANCE_DIMENSION_PREFIX + dimension,
+      );
+    }
+    for (const reasonCode of normalizeDistinctStringArray(
+      blocker.reasonCodes,
+    )) {
+      appendSignalOnce(
+        signals,
+        FAILURE_SIGNAL_POST_REBALANCE_REASON_PREFIX + reasonCode,
+      );
+    }
+  }
+  const softClosures = Array.isArray(postRebalanceClosure.softClosures) ?
+    postRebalanceClosure.softClosures :
+    [];
+  for (const softClosure of softClosures) {
+    if (!isRecord(softClosure)) {
+      continue;
+    }
+    const softClosureId = String(softClosure.id || '').trim();
+    if (softClosureId.length > ZERO) {
+      appendSignalOnce(
+        signals,
+        FAILURE_SIGNAL_POST_REBALANCE_SOFT_CLOSURE_PREFIX + softClosureId,
+      );
+    }
+  }
+  return signals;
+}
+
+function buildPostRebalanceClosureFailureClassification({
+  postRebalanceClosure,
+  dominantReason,
+  failureBarrier,
+}) {
+  const signals = [];
+  appendFailureBarrierSignals(signals, failureBarrier);
+  appendPostRebalanceClosureSignals(signals, postRebalanceClosure);
+  return {
+    failureClass: FAILURE_CLASS_TOPOLOGY_UNSTABLE,
+    confidence: FAILURE_CLASS_CONFIDENCE_HIGH,
+    rootCauseClass: ROOT_CAUSE_CLASS_TOPOLOGY,
+    dominantReason: dominantReason || null,
+    signals,
+    postRebalanceClosure,
+  };
+}
+
 function appendControlPlaneQuiescenceSignals(signals, quiescence) {
   if (!Array.isArray(signals) || !isRecord(quiescence)) {
     return signals;
@@ -1212,6 +1385,20 @@ function appendControlPlaneQuiescenceSignals(signals, quiescence) {
     appendSignalOnce(
       signals,
       FAILURE_SIGNAL_QUIESCENCE_REASON_PREFIX + normalizedReasonCode,
+    );
+  }
+  const candidateWindowResetReason = String(
+    quiescence.candidateWindowReset?.reason || '',
+  ).trim();
+  if (
+    candidateWindowResetReason.length > ZERO &&
+    candidateWindowResetReason !==
+      CONTROL_PLANE_QUIESCENCE_CANDIDATE_WINDOW_RESET_REASON.NONE
+  ) {
+    appendSignalOnce(
+      signals,
+      FAILURE_SIGNAL_QUIESCENCE_CANDIDATE_WINDOW_RESET_PREFIX +
+        candidateWindowResetReason,
     );
   }
   return signals;
@@ -1242,6 +1429,16 @@ function resolveFailureClassificationGuidance({
   }
   if (
     failureClassification?.failureClass === FAILURE_CLASS_TOPOLOGY_UNSTABLE &&
+    hasOpenPostRebalanceClosure(failureClassification?.postRebalanceClosure)
+  ) {
+    return {
+      failureAction: FAILURE_ACTION_POST_REBALANCE_CLOSURE_OPEN,
+      operatorRecommendation:
+        OPERATOR_RECOMMENDATION_POST_REBALANCE_CLOSURE_OPEN,
+    };
+  }
+  if (
+    failureClassification?.failureClass === FAILURE_CLASS_TOPOLOGY_UNSTABLE &&
     failureClassification?.dominantReason ===
       FAILURE_REASON_CONVERGENCE_TIMEOUT
   ) {
@@ -1261,6 +1458,7 @@ function buildFailureClassification({
   controlPlane,
   readiness,
   logs,
+  postRebalanceClosure = FAILURE_BUNDLE_POST_REBALANCE_CLOSURE_UNAVAILABLE,
 }) {
   const signals = [];
   const dominantReason = String(failure?.dominantReason || '').trim();
@@ -1299,6 +1497,8 @@ function buildFailureClassification({
     publicationConvergence,
     readinessFailure,
   });
+  const hasPostRebalanceClosureBlocker =
+    hasOpenPostRebalanceClosure(postRebalanceClosure);
 
   if (isRecord(failure?.quiescence)) {
     if (rootCauseClass === ROOT_CAUSE_CLASS_DISCOVERY) {
@@ -1339,7 +1539,18 @@ function buildFailureClassification({
         String(publicationConvergence.pendingAckCount),
       FAILURE_SIGNAL_BLOCKED_NODE_COUNT_PREFIX +
         String(publicationConvergence.blockedNodeCount),
+      FAILURE_SIGNAL_MISSING_PUBLISHED_COUNT_PREFIX +
+        String(publicationConvergence.missingPublishedCount || ZERO),
     );
+    const missingPublishedNodeIds = normalizeDistinctStringArray(
+      publicationConvergence.missingPublishedNodeIds,
+    );
+    if (missingPublishedNodeIds.length > ZERO) {
+      signals.push(
+        FAILURE_SIGNAL_MISSING_PUBLISHED_NODE_IDS_PREFIX +
+          missingPublishedNodeIds.join(FAILURE_SIGNAL_VALUE_SEPARATOR),
+      );
+    }
     if (
       typeof publicationConvergence.recoveryProtocolState === 'string' &&
       publicationConvergence.recoveryProtocolState.length > ZERO
@@ -1431,6 +1642,14 @@ function buildFailureClassification({
       dominantReason: dominantReason || null,
       signals,
     };
+  }
+
+  if (hasPostRebalanceClosureBlocker) {
+    return buildPostRebalanceClosureFailureClassification({
+      postRebalanceClosure,
+      dominantReason,
+      failureBarrier: failure?.failureBarrier,
+    });
   }
 
   if (hasPriorityRecoveryOwnerBlocker) {
@@ -1557,6 +1776,7 @@ function buildScenarioFailureBundle({
   logs,
 }) {
   const diagnostics = resolveFailureDiagnostics(entry);
+  const postRebalanceClosure = resolvePostRebalanceClosure(diagnostics);
   const noProgress = diagnostics.noProgress || null;
   const controlPlane = mergeControlPlaneDiagnostics(
     resolveControlPlaneDiagnostics(entry),
@@ -1610,6 +1830,7 @@ function buildScenarioFailureBundle({
     publicationConvergence,
     readinessFailure,
     recoveryReadiness,
+    failure,
     logs,
   });
   const failureClassification = buildFailureClassification({
@@ -1617,6 +1838,7 @@ function buildScenarioFailureBundle({
     controlPlane,
     readiness,
     logs,
+    postRebalanceClosure,
   });
   const failureGuidance = resolveFailureClassificationGuidance({
     failureClassification,
@@ -1644,6 +1866,7 @@ function buildScenarioFailureBundle({
       operatorRecommendation: failureGuidance.operatorRecommendation,
       publicationConvergence,
       stabilityGates,
+      ...(postRebalanceClosure ? {postRebalanceClosure} : {}),
       bottleneckEstimate: entry?.bottleneckEstimate || null,
     },
     reportSummary,
@@ -1664,6 +1887,7 @@ function buildScenarioFailureBundle({
       rootCauseBundle: diagnostics.rootCauseBundle || null,
       firstFaultTimeline,
       recoveryReadiness,
+      ...(postRebalanceClosure ? {postRebalanceClosure} : {}),
     },
     controlSnapshot: controlSnapshotByNodeId,
     controlPlane,
@@ -2539,11 +2763,13 @@ export const FAILURE_BUNDLE_SEGMENT_5 = {
   STABILITY_GATE_TYPE_CONVERGENCE,
   STABILITY_GATE_TYPE_RESTART_RECOVERY,
   STABILITY_GATE_BLOCKER_PUBLICATION_PENDING,
+  STABILITY_GATE_BLOCKER_PUBLICATION_MISSING_ACTIVE_NODE,
   STABILITY_GATE_BLOCKER_PRIORITY_SPREAD_PENDING,
   STABILITY_GATE_BLOCKER_PENDING_ACK_NODES,
   STABILITY_GATE_BLOCKER_BLOCKED_NODES,
   STABILITY_GATE_BLOCKER_CLOSURE_RECORD,
   STABILITY_GATE_BLOCKER_STARTUP_READINESS,
+  STABILITY_GATE_BLOCKER_ADMIN_REACHABILITY_REFUSED,
   SCENARIO_NAME_FRAGMENT_RESTART,
   LOAD_WAIT_REASON_KEYS,
   LOAD_REASON_ROOT_CAUSE_CLASS_BY_REASON,

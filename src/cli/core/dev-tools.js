@@ -1,3 +1,73 @@
+const LOCAL_STR_PRODUCTION = 'production';
+const LOCAL_STR_STATE = 'state';
+const LOCAL_NUM_100 = 100;
+const LOCAL_STR_EMPTY = '';
+const LOCAL_STR_CACHE_UPDATE = 'cache:update';
+const LOCAL_STR_VIEW_RENDERED = 'view:rendered';
+const LOCAL_STR_ASTERISK = '*';
+const LOCAL_STR_DEVTOOLS_SHOW = 'devtools:show';
+const LOCAL_STR_DEVTOOLS_HIDE = 'devtools:hide';
+const LOCAL_STR_1YTYF = 'devtools:tabChanged';
+const LOCAL_STR_1_STATE = '1: State';
+const LOCAL_STR_EVENTS = 'events';
+const LOCAL_STR_2_EVENTS = '2: Events';
+const LOCAL_STR_COMPONENTS = 'components';
+const LOCAL_STR_3_COMPONENTS = '3: Components';
+const LOCAL_STR_CDC = 'cdc';
+const LOCAL_STR_4_CDC_STREAM = '4: CDC Stream';
+const LOCAL_STR_PERFORMANCE = 'performance';
+const LOCAL_STR_5_PERFORMANCE = '5: Performance';
+const LOCAL_STR_EMPTY_2 = 'empty';
+const LOCAL_STR_UNKNOWN_TAB = 'Unknown tab';
+const LOCAL_STR_1C7M6 = 'StateManager not available';
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_STR_NULL = 'null';
+const LOCAL_STR_OBJECT = 'object';
+const LOCAL_STR_W7K42 = '[]';
+const LOCAL_NUM_THREE = 3;
+const LOCAL_STR_NEWLINE = '\n';
+const LOCAL_NUM_ONE = 1;
+const LOCAL_STR_UNDEFINED = 'undefined';
+const LOCAL_STR_STRING = 'string';
+const LOCAL_NUM_50 = 50;
+const LOCAL_NUM_47 = 47;
+const LOCAL_STR_NUMBER = 'number';
+const LOCAL_STR_BOOLEAN = 'boolean';
+const LOCAL_STR_1IZU7 = 'EventBus not available';
+const LOCAL_NUM_11 = 11;
+const LOCAL_NUM_23 = 23;
+const LOCAL_NUM_80 = 80;
+const LOCAL_NUM_77 = 77;
+const LOCAL_STR_2ZI04 = '...';
+const LOCAL_STR_1TJRQ = 'ComponentRegistry not available';
+const LOCAL_NUM_10 = 10;
+const LOCAL_NUM_10000 = 10000;
+const LOCAL_STR_OYQ6J = 'devtools:snapshotCreated';
+const LOCAL_STR_12PTN = 'devtools:snapshotRestored';
+const LOCAL_STR_1 = '1';
+const LOCAL_STR_2 = '2';
+const LOCAL_STR_3 = '3';
+const LOCAL_STR_4 = '4';
+const LOCAL_STR_5 = '5';
+const LOCAL_STR_ESCAPE = 'escape';
+const LOCAL_STR_Q = 'q';
+const LOCAL_STR_S = 's';
+const LOCAL_STR_C = 'c';
+const LOCAL_STR_O7OJW = '╔════════════════════════════════════════════════════════════╗';
+const LOCAL_STR_DEV_TOOLS = '║                        DEV TOOLS                           ║';
+const LOCAL_STR_146V0 = '╚════════════════════════════════════════════════════════════╝';
+const LOCAL_STR_1G31G = '─';
+const LOCAL_NUM_60 = 60;
+const LOCAL_STR_CURRENT_STATE = 'Current State:';
+const LOCAL_NUM_20 = 20;
+const LOCAL_STR_4N5M0 = 'Initialization Order:';
+const LOCAL_STR_NM5X6 = 'Performance Metrics:';
+const LOCAL_STR_RENDER_TIMES = 'Render Times:';
+const LOCAL_STR_EVENT_LATENCY = 'Event Latency:';
+const LOCAL_STR_NO_CONTENT = 'No content';
+const LOCAL_STR_NLF4D = 'Keys: 1-5:Tabs | s:Snapshot | c:Clear | q/Esc:Close';
+const LOCAL_STR_DEVTOOLS_DESTROYED = 'devtools:destroyed';
+
 /**
  * DevTools - Development and debugging overlay for the Admin CLI
  *
@@ -32,7 +102,7 @@
  * @returns {boolean}
  */
 function isProduction() {
-  return process.env.NODE_ENV === 'production';
+  return process.env.NODE_ENV === LOCAL_STR_PRODUCTION;
 }
 
 /**
@@ -61,21 +131,21 @@ export class DevTools {
     this.visible = false;
 
     /** @type {DevToolsTab} */
-    this.currentTab = 'state';
+    this.currentTab = LOCAL_STR_STATE;
 
     /** @type {PerformanceMetrics} */
     this.metrics = {
       renderTimes: [],
       eventLatencies: [],
-      maxSamples: 100,
+      maxSamples: LOCAL_NUM_100,
     };
 
     /** @type {CDCEventEntry[]} */
     this.cdcEvents = [];
-    this.maxCDCEvents = 100;
+    this.maxCDCEvents = LOCAL_NUM_100;
 
     /** @type {string} */
-    this.cdcFilter = '';
+    this.cdcFilter = LOCAL_STR_EMPTY;
 
     // Event log from event bus
     this.eventLogSubscription = null;
@@ -93,7 +163,7 @@ export class DevTools {
     if (!this.eventBus) return;
 
     // Track CDC events
-    this.eventBus.on('cache:update', (data) => {
+    this.eventBus.on(LOCAL_STR_CACHE_UPDATE, (data) => {
       this.trackCDCEvent({
         timestamp: Date.now(),
         table: data.table,
@@ -104,14 +174,14 @@ export class DevTools {
     });
 
     // Track render times
-    this.eventBus.on('view:rendered', (data) => {
+    this.eventBus.on(LOCAL_STR_VIEW_RENDERED, (data) => {
       if (data.duration !== undefined) {
         this.trackRenderTime(data.duration);
       }
     });
 
     // Track event latencies
-    this.eventBus.on('*', (_data, eventName) => {
+    this.eventBus.on(LOCAL_STR_ASTERISK, (_data, eventName) => {
       if (this.visible && eventName) {
         const latency = Date.now() - (this.lastEventTime || Date.now());
         this.trackEventLatency(latency);
@@ -147,7 +217,7 @@ export class DevTools {
     this.lastEventTime = Date.now();
 
     if (this.eventBus) {
-      this.eventBus.emit('devtools:show', {
+      this.eventBus.emit(LOCAL_STR_DEVTOOLS_SHOW, {
         timestamp: Date.now(),
       });
     }
@@ -160,7 +230,7 @@ export class DevTools {
     this.visible = false;
 
     if (this.eventBus) {
-      this.eventBus.emit('devtools:hide', {
+      this.eventBus.emit(LOCAL_STR_DEVTOOLS_HIDE, {
         timestamp: Date.now(),
       });
     }
@@ -198,7 +268,7 @@ export class DevTools {
       this.currentTab = tab;
 
       if (this.eventBus) {
-        this.eventBus.emit('devtools:tabChanged', {tab});
+        this.eventBus.emit(LOCAL_STR_1YTYF, {tab});
       }
     }
   }
@@ -209,11 +279,11 @@ export class DevTools {
    */
   getTabs() {
     return [
-      {id: 'state', label: '1: State'},
-      {id: 'events', label: '2: Events'},
-      {id: 'components', label: '3: Components'},
-      {id: 'cdc', label: '4: CDC Stream'},
-      {id: 'performance', label: '5: Performance'},
+      {id: LOCAL_STR_STATE, label: LOCAL_STR_1_STATE},
+      {id: LOCAL_STR_EVENTS, label: LOCAL_STR_2_EVENTS},
+      {id: LOCAL_STR_COMPONENTS, label: LOCAL_STR_3_COMPONENTS},
+      {id: LOCAL_STR_CDC, label: LOCAL_STR_4_CDC_STREAM},
+      {id: LOCAL_STR_PERFORMANCE, label: LOCAL_STR_5_PERFORMANCE},
     ];
   }
 
@@ -223,18 +293,18 @@ export class DevTools {
    */
   getTabContent() {
     switch (this.currentTab) {
-    case 'state':
+    case LOCAL_STR_STATE:
       return this.getStateContent();
-    case 'events':
+    case LOCAL_STR_EVENTS:
       return this.getEventsContent();
-    case 'components':
+    case LOCAL_STR_COMPONENTS:
       return this.getComponentsContent();
-    case 'cdc':
+    case LOCAL_STR_CDC:
       return this.getCDCContent();
-    case 'performance':
+    case LOCAL_STR_PERFORMANCE:
       return this.getPerformanceContent();
     default:
-      return {type: 'empty', content: 'Unknown tab'};
+      return {type: LOCAL_STR_EMPTY_2, content: LOCAL_STR_UNKNOWN_TAB};
     }
   }
 
@@ -246,10 +316,10 @@ export class DevTools {
   getStateContent() {
     if (!this.stateManager) {
       return {
-        type: 'state',
+        type: LOCAL_STR_STATE,
         state: null,
         snapshots: [],
-        error: 'StateManager not available',
+        error: LOCAL_STR_1C7M6,
       };
     }
 
@@ -257,7 +327,7 @@ export class DevTools {
     const snapshots = this.stateManager.getSnapshots();
 
     return {
-      type: 'state',
+      type: LOCAL_STR_STATE,
       state,
       snapshots,
       stateTree: this.formatStateTree(state),
@@ -271,47 +341,47 @@ export class DevTools {
    * @param {number} [indent=0] - Current indentation level
    * @returns {string} Formatted tree string
    */
-  formatStateTree(obj, indent = 0) {
+  formatStateTree(obj, indent = LOCAL_NUM_ZERO) {
     if (obj === null || obj === undefined) {
-      return 'null';
+      return LOCAL_STR_NULL;
     }
 
     const spaces = '  '.repeat(indent);
     const lines = [];
 
-    if (typeof obj !== 'object') {
+    if (typeof obj !== LOCAL_STR_OBJECT) {
       return String(obj);
     }
 
     if (Array.isArray(obj)) {
-      if (obj.length === 0) {
-        return '[]';
+      if (obj.length === LOCAL_NUM_ZERO) {
+        return LOCAL_STR_W7K42;
       }
       lines.push(`Array(${obj.length})`);
       // Show first few items
       const preview = obj.slice(0, 3);
-      for (let i = 0; i < preview.length; i++) {
+      for (let i = LOCAL_NUM_ZERO; i < preview.length; i++) {
         const value = this.formatValue(preview[i]);
         lines.push(`${spaces}  [${i}]: ${value}`);
       }
-      if (obj.length > 3) {
-        lines.push(`${spaces}  ... ${obj.length - 3} more items`);
+      if (obj.length > LOCAL_NUM_THREE) {
+        lines.push(`${spaces}  ... ${obj.length - LOCAL_NUM_THREE} more items`);
       }
-      return lines.join('\n');
+      return lines.join(LOCAL_STR_NEWLINE);
     }
 
     const entries = Object.entries(obj);
     for (const [key, value] of entries) {
-      if (value && typeof value === 'object' && !Array.isArray(value)) {
+      if (value && typeof value === LOCAL_STR_OBJECT && !Array.isArray(value)) {
         lines.push(`${spaces}${key}:`);
-        lines.push(this.formatStateTree(value, indent + 1));
+        lines.push(this.formatStateTree(value, indent + LOCAL_NUM_ONE));
       } else {
         const formattedValue = this.formatValue(value);
         lines.push(`${spaces}${key}: ${formattedValue}`);
       }
     }
 
-    return lines.join('\n');
+    return lines.join(LOCAL_STR_NEWLINE);
   }
 
   /**
@@ -320,18 +390,18 @@ export class DevTools {
    * @returns {string} Formatted value
    */
   formatValue(value) {
-    if (value === null) return 'null';
-    if (value === undefined) return 'undefined';
-    if (typeof value === 'string') {
-      return value.length > 50 ? `"${value.substring(0, 47)}..."` : `"${value}"`;
+    if (value === null) return LOCAL_STR_NULL;
+    if (value === undefined) return LOCAL_STR_UNDEFINED;
+    if (typeof value === LOCAL_STR_STRING) {
+      return value.length > LOCAL_NUM_50 ? `"${value.substring(LOCAL_NUM_ZERO, LOCAL_NUM_47)}..."` : `"${value}"`;
     }
-    if (typeof value === 'number' || typeof value === 'boolean') {
+    if (typeof value === LOCAL_STR_NUMBER || typeof value === LOCAL_STR_BOOLEAN) {
       return String(value);
     }
     if (Array.isArray(value)) {
       return `Array(${value.length})`;
     }
-    if (typeof value === 'object') {
+    if (typeof value === LOCAL_STR_OBJECT) {
       return `Object(${Object.keys(value).length} keys)`;
     }
     return String(value);
@@ -345,9 +415,9 @@ export class DevTools {
   getEventsContent() {
     if (!this.eventBus) {
       return {
-        type: 'events',
+        type: LOCAL_STR_EVENTS,
         events: [],
-        error: 'EventBus not available',
+        error: LOCAL_STR_1IZU7,
       };
     }
 
@@ -355,7 +425,7 @@ export class DevTools {
     const recentEvents = eventLog.slice(-50).reverse();
 
     return {
-      type: 'events',
+      type: LOCAL_STR_EVENTS,
       events: recentEvents.map((event) => ({
         timestamp: event.timestamp,
         time: this.formatTimestamp(event.timestamp),
@@ -375,7 +445,7 @@ export class DevTools {
    */
   formatTimestamp(timestamp) {
     const date = new Date(timestamp);
-    return date.toISOString().substring(11, 23); // HH:mm:ss.SSS
+    return date.toISOString().substring(LOCAL_NUM_11, LOCAL_NUM_23); // HH:mm:ss.SSS
   }
 
   /**
@@ -385,10 +455,10 @@ export class DevTools {
    */
   formatDataPreview(data) {
     if (data === undefined || data === null) {
-      return '';
+      return LOCAL_STR_EMPTY;
     }
     const str = JSON.stringify(data);
-    return str.length > 80 ? str.substring(0, 77) + '...' : str;
+    return str.length > LOCAL_NUM_80 ? str.substring(LOCAL_NUM_ZERO, LOCAL_NUM_77) + LOCAL_STR_2ZI04 : str;
   }
 
   /**
@@ -399,11 +469,11 @@ export class DevTools {
   getComponentsContent() {
     if (!this.componentRegistry) {
       return {
-        type: 'components',
+        type: LOCAL_STR_COMPONENTS,
         components: [],
         dependencyGraph: {},
         initOrder: [],
-        error: 'ComponentRegistry not available',
+        error: LOCAL_STR_1TJRQ,
       };
     }
 
@@ -412,7 +482,7 @@ export class DevTools {
     const initOrder = this.componentRegistry.getInitializationOrder();
 
     return {
-      type: 'components',
+      type: LOCAL_STR_COMPONENTS,
       components: componentNames,
       dependencyGraph,
       initOrder,
@@ -439,8 +509,8 @@ export class DevTools {
     }
 
     return {
-      type: 'cdc',
-      events: filteredEvents.slice(-50).reverse(),
+      type: LOCAL_STR_CDC,
+      events: filteredEvents.slice(-LOCAL_NUM_50).reverse(),
       totalCount: this.cdcEvents.length,
       filteredCount: filteredEvents.length,
       filter: this.cdcFilter,
@@ -479,20 +549,20 @@ export class DevTools {
     const latencyStats = this.calculateStats(this.metrics.eventLatencies);
 
     return {
-      type: 'performance',
+      type: LOCAL_STR_PERFORMANCE,
       render: {
         samples: this.metrics.renderTimes.length,
         avg: renderStats.avg,
         min: renderStats.min,
         max: renderStats.max,
-        recent: this.metrics.renderTimes.slice(-10),
+        recent: this.metrics.renderTimes.slice(-LOCAL_NUM_10),
       },
       eventLatency: {
         samples: this.metrics.eventLatencies.length,
         avg: latencyStats.avg,
         min: latencyStats.min,
         max: latencyStats.max,
-        recent: this.metrics.eventLatencies.slice(-10),
+        recent: this.metrics.eventLatencies.slice(-LOCAL_NUM_10),
       },
     };
   }
@@ -503,13 +573,13 @@ export class DevTools {
    * @returns {Object} Statistics
    */
   calculateStats(values) {
-    if (values.length === 0) {
-      return {avg: 0, min: 0, max: 0};
+    if (values.length === LOCAL_NUM_ZERO) {
+      return {avg: LOCAL_NUM_ZERO, min: LOCAL_NUM_ZERO, max: LOCAL_NUM_ZERO};
     }
 
     const sum = values.reduce((a, b) => a + b, 0);
     return {
-      avg: Math.round((sum / values.length) * 100) / 100,
+      avg: Math.round((sum / values.length) * LOCAL_NUM_100) / LOCAL_NUM_100,
       min: Math.min(...values),
       max: Math.max(...values),
     };
@@ -535,7 +605,7 @@ export class DevTools {
    */
   trackEventLatency(latency) {
     // Only track reasonable latencies (filter out initial/invalid values)
-    if (latency >= 0 && latency < 10000) {
+    if (latency >= LOCAL_NUM_ZERO && latency < LOCAL_NUM_10000) {
       this.metrics.eventLatencies.push(latency);
 
       if (this.metrics.eventLatencies.length > this.metrics.maxSamples) {
@@ -556,7 +626,7 @@ export class DevTools {
     const index = this.stateManager.createSnapshot(name);
 
     if (this.eventBus) {
-      this.eventBus.emit('devtools:snapshotCreated', {
+      this.eventBus.emit(LOCAL_STR_OYQ6J, {
         index,
         name: name || `snapshot_${index}`,
       });
@@ -578,7 +648,7 @@ export class DevTools {
       this.stateManager.restoreSnapshot(index);
 
       if (this.eventBus) {
-        this.eventBus.emit('devtools:snapshotRestored', {index});
+        this.eventBus.emit(LOCAL_STR_12PTN, {index});
       }
 
       return true;
@@ -633,44 +703,44 @@ export class DevTools {
     if (!this.visible) return false;
 
     // Tab switching with number keys
-    if (key.name === '1' || key.ch === '1') {
-      this.switchTab('state');
+    if (key.name === LOCAL_STR_1 || key.ch === LOCAL_STR_1) {
+      this.switchTab(LOCAL_STR_STATE);
       return true;
     }
-    if (key.name === '2' || key.ch === '2') {
-      this.switchTab('events');
+    if (key.name === LOCAL_STR_2 || key.ch === LOCAL_STR_2) {
+      this.switchTab(LOCAL_STR_EVENTS);
       return true;
     }
-    if (key.name === '3' || key.ch === '3') {
-      this.switchTab('components');
+    if (key.name === LOCAL_STR_3 || key.ch === LOCAL_STR_3) {
+      this.switchTab(LOCAL_STR_COMPONENTS);
       return true;
     }
-    if (key.name === '4' || key.ch === '4') {
-      this.switchTab('cdc');
+    if (key.name === LOCAL_STR_4 || key.ch === LOCAL_STR_4) {
+      this.switchTab(LOCAL_STR_CDC);
       return true;
     }
-    if (key.name === '5' || key.ch === '5') {
-      this.switchTab('performance');
+    if (key.name === LOCAL_STR_5 || key.ch === LOCAL_STR_5) {
+      this.switchTab(LOCAL_STR_PERFORMANCE);
       return true;
     }
 
     // Close with escape or q
-    if (key.name === 'escape' || key.name === 'q' || key.ch === 'q') {
+    if (key.name === LOCAL_STR_ESCAPE || key.name === LOCAL_STR_Q || key.ch === LOCAL_STR_Q) {
       this.hide();
       return true;
     }
 
     // Create snapshot with 's'
-    if (key.name === 's' || key.ch === 's') {
+    if (key.name === LOCAL_STR_S || key.ch === LOCAL_STR_S) {
       this.createSnapshot();
       return true;
     }
 
     // Clear metrics/events with 'c'
-    if (key.name === 'c' || key.ch === 'c') {
-      if (this.currentTab === 'performance') {
+    if (key.name === LOCAL_STR_C || key.ch === LOCAL_STR_C) {
+      if (this.currentTab === LOCAL_STR_PERFORMANCE) {
         this.resetMetrics();
-      } else if (this.currentTab === 'cdc') {
+      } else if (this.currentTab === LOCAL_STR_CDC) {
         this.clearCDCEvents();
       }
       return true;
@@ -688,10 +758,10 @@ export class DevTools {
     const content = this.getTabContent();
 
     // Header
-    lines.push('╔════════════════════════════════════════════════════════════╗');
-    lines.push('║                        DEV TOOLS                           ║');
-    lines.push('╚════════════════════════════════════════════════════════════╝');
-    lines.push('');
+    lines.push(LOCAL_STR_O7OJW);
+    lines.push(LOCAL_STR_DEV_TOOLS);
+    lines.push(LOCAL_STR_146V0);
+    lines.push(LOCAL_STR_EMPTY);
 
     // Tab bar
     const tabs = this.getTabs();
@@ -699,27 +769,27 @@ export class DevTools {
       t.id === this.currentTab ? `[${t.label}]` : ` ${t.label} `,
     ).join(' ');
     lines.push(tabLine);
-    lines.push('─'.repeat(60));
-    lines.push('');
+    lines.push(LOCAL_STR_1G31G.repeat(LOCAL_NUM_60));
+    lines.push(LOCAL_STR_EMPTY);
 
     // Content based on tab
     switch (content.type) {
-    case 'state':
-      lines.push('Current State:');
-      lines.push('');
+    case LOCAL_STR_STATE:
+      lines.push(LOCAL_STR_CURRENT_STATE);
+      lines.push(LOCAL_STR_EMPTY);
       if (content.stateTree) {
         lines.push(content.stateTree);
       } else if (content.error) {
         lines.push(`Error: ${content.error}`);
       }
-      lines.push('');
-      lines.push(`Snapshots: ${content.snapshots?.length || 0}`);
+      lines.push(LOCAL_STR_EMPTY);
+      lines.push(`Snapshots: ${content.snapshots?.length || LOCAL_NUM_ZERO}`);
       break;
 
-    case 'events':
+    case LOCAL_STR_EVENTS:
       lines.push(`Recent Events (${content.totalCount} total):`);
-      lines.push('');
-      for (const event of content.events.slice(0, 20)) {
+      lines.push(LOCAL_STR_EMPTY);
+      for (const event of content.events.slice(LOCAL_NUM_ZERO, LOCAL_NUM_20)) {
         lines.push(`${event.time} ${event.type || event.event}`);
         if (event.dataPreview) {
           lines.push(`  ${event.dataPreview}`);
@@ -727,10 +797,10 @@ export class DevTools {
       }
       break;
 
-    case 'components':
+    case LOCAL_STR_COMPONENTS:
       lines.push(`Components (${content.componentCount}):`);
-      lines.push('');
-      lines.push('Initialization Order:');
+      lines.push(LOCAL_STR_EMPTY);
+      lines.push(LOCAL_STR_4N5M0);
       for (const name of content.initOrder || []) {
         const info = content.dependencyGraph?.[name];
         const deps = info?.dependencies?.length ?
@@ -739,28 +809,28 @@ export class DevTools {
       }
       break;
 
-    case 'cdc':
+    case LOCAL_STR_CDC:
       lines.push(`CDC Events (${content.filteredCount}/${content.totalCount}):`);
       if (content.filter) {
         lines.push(`Filter: "${content.filter}"`);
       }
-      lines.push('');
-      for (const event of content.events.slice(0, 20)) {
+      lines.push(LOCAL_STR_EMPTY);
+      for (const event of content.events.slice(LOCAL_NUM_ZERO, LOCAL_NUM_20)) {
         const time = this.formatTimestamp(event.timestamp);
         lines.push(`${time} ${event.operation} ${event.table}:${event.key}`);
       }
       break;
 
-    case 'performance':
-      lines.push('Performance Metrics:');
-      lines.push('');
-      lines.push('Render Times:');
+    case LOCAL_STR_PERFORMANCE:
+      lines.push(LOCAL_STR_NM5X6);
+      lines.push(LOCAL_STR_EMPTY);
+      lines.push(LOCAL_STR_RENDER_TIMES);
       lines.push(`  Samples: ${content.render.samples}`);
       lines.push(`  Average: ${content.render.avg}ms`);
       lines.push(`  Min: ${content.render.min}ms`);
       lines.push(`  Max: ${content.render.max}ms`);
-      lines.push('');
-      lines.push('Event Latency:');
+      lines.push(LOCAL_STR_EMPTY);
+      lines.push(LOCAL_STR_EVENT_LATENCY);
       lines.push(`  Samples: ${content.eventLatency.samples}`);
       lines.push(`  Average: ${content.eventLatency.avg}ms`);
       lines.push(`  Min: ${content.eventLatency.min}ms`);
@@ -768,14 +838,14 @@ export class DevTools {
       break;
 
     default:
-      lines.push(content.content || 'No content');
+      lines.push(content.content || LOCAL_STR_NO_CONTENT);
     }
 
-    lines.push('');
-    lines.push('─'.repeat(60));
-    lines.push('Keys: 1-5:Tabs | s:Snapshot | c:Clear | q/Esc:Close');
+    lines.push(LOCAL_STR_EMPTY);
+    lines.push(LOCAL_STR_1G31G.repeat(LOCAL_NUM_60));
+    lines.push(LOCAL_STR_NLF4D);
 
-    return lines.join('\n');
+    return lines.join(LOCAL_STR_NEWLINE);
   }
 
   /**
@@ -788,7 +858,7 @@ export class DevTools {
     this.metrics.eventLatencies = [];
 
     if (this.eventBus) {
-      this.eventBus.emit('devtools:destroyed', {});
+      this.eventBus.emit(LOCAL_STR_DEVTOOLS_DESTROYED, {});
     }
   }
 }

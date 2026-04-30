@@ -14,6 +14,8 @@
 import {TYPEOF} from '../constants/types.js';
 import {validateDigestPin} from '../wasm-service/oci-reference.js';
 
+const LOCAL_NUM_ZERO = 0;
+
 // --- OCI descriptor field names ---
 
 const OCI_DESCRIPTOR_FIELD = Object.freeze({
@@ -95,7 +97,7 @@ function validateOciDescriptorRef(ref) {
   if (typeof ref !== TYPEOF.STRING) {
     return {valid: false, errors: [OCI_DESCRIPTOR_ERROR.REF_NOT_STRING]};
   }
-  if (ref.trim().length === 0) {
+  if (ref.trim().length === LOCAL_NUM_ZERO) {
     return {valid: false, errors: [OCI_DESCRIPTOR_ERROR.REF_EMPTY]};
   }
   const pinResult = validateDigestPin(ref);
@@ -140,13 +142,13 @@ function validateOciRuntimeConfig(configStr) {
   const errors = [];
   if (OCI_CONFIG_FIELD.MEMORY_LIMIT_MB in parsed) {
     const val = parsed[OCI_CONFIG_FIELD.MEMORY_LIMIT_MB];
-    if (typeof val !== TYPEOF.NUMBER || val <= 0) {
+    if (typeof val !== TYPEOF.NUMBER || val <= LOCAL_NUM_ZERO) {
       errors.push(OCI_DESCRIPTOR_ERROR.MEMORY_LIMIT_INVALID);
     }
   }
   if (OCI_CONFIG_FIELD.CPU_LIMIT in parsed) {
     const val = parsed[OCI_CONFIG_FIELD.CPU_LIMIT];
-    if (typeof val !== TYPEOF.NUMBER || val <= 0) {
+    if (typeof val !== TYPEOF.NUMBER || val <= LOCAL_NUM_ZERO) {
       errors.push(OCI_DESCRIPTOR_ERROR.CPU_LIMIT_INVALID);
     }
   }
@@ -159,13 +161,13 @@ function validateOciRuntimeConfig(configStr) {
   if (OCI_CONFIG_FIELD.HEALTH_CHECK_INTERVAL_MS in parsed) {
     const val = parsed[OCI_CONFIG_FIELD.HEALTH_CHECK_INTERVAL_MS];
     if (typeof val !== TYPEOF.NUMBER ||
-        val <= 0 || !Number.isInteger(val)) {
+        val <= LOCAL_NUM_ZERO || !Number.isInteger(val)) {
       errors.push(
         OCI_DESCRIPTOR_ERROR.HEALTH_CHECK_INTERVAL_INVALID,
       );
     }
   }
-  if (errors.length > 0) {
+  if (errors.length > LOCAL_NUM_ZERO) {
     return {valid: false, errors};
   }
   return {valid: true, config: parsed};
@@ -192,7 +194,7 @@ function validateOciDescriptor(descriptor) {
   if (!configResult.valid) {
     errors.push(...configResult.errors);
   }
-  if (errors.length > 0) {
+  if (errors.length > LOCAL_NUM_ZERO) {
     return {valid: false, errors};
   }
   return {valid: true};

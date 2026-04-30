@@ -76,6 +76,18 @@ const OWNER_PERSISTED_TRANSITION_VISIBILITY_STALE_READ_SOURCE =
   'owner_persisted_transition_authoritative_operation_visibility_stale_read';
 const OWNER_PERSISTED_TRANSITION_PENDING_AUTHORITATIVE_CONFIRMATION_REASON =
   'owner_persisted_transition_pending_authoritative_confirmation';
+const TEST_REPLICA_OPERATION_MUTATION_COALESCING_KEY =
+  'replica-operation:op-1';
+const TEST_REPLICA_OPERATION_MUTATION_DELIVERY_SOURCE =
+  'control-plane:write:replica_operations:replica-operation:op-1';
+const TEST_REPLICA_OPERATION_READ_COALESCING_KEY =
+  'replica-operation:op-1';
+const TEST_REPLICA_OPERATION_READ_DELIVERY_SOURCE =
+  'control-plane:read:replica_operations:replica-operation:op-1';
+const TEST_REPLICA_OPERATION_OWNER_READ_COALESCING_KEY =
+  'replica-operation-owner:test-node-1';
+const TEST_REPLICA_OPERATION_OWNER_READ_DELIVERY_SOURCE =
+  'control-plane:read:replica_operations:replica-operation-owner:test-node-1';
 
 /**
  * Create a minimal repository for testing.
@@ -160,6 +172,25 @@ function makeRow(overrides = {}) {
     ...overrides,
   };
 }
+
+test('buildOperationMutationQueryOptions scopes replica operation writes by owner id',
+  async (t) => {
+    const repo = createTestRepository();
+    const queryOptions = repo.buildOperationMutationQueryOptions({
+      ownerId: TEST_OPERATION_ID,
+    });
+
+    t.equal(
+      queryOptions.coalescingKey,
+      TEST_REPLICA_OPERATION_MUTATION_COALESCING_KEY,
+      'replica operation mutations should coalesce by operation id',
+    );
+    t.equal(
+      queryOptions.deliverySource,
+      TEST_REPLICA_OPERATION_MUTATION_DELIVERY_SOURCE,
+      'replica operation mutations should use an operation-scoped delivery source',
+    );
+  });
 
 // ── rowToOperation translation ──────────────────────────────────
 
@@ -738,6 +769,16 @@ test(
       capturedReads[0]?.options?.deliveryPriority,
       'critical',
       'replica_operations owner reads should use critical delivery priority',
+    );
+    t.equal(
+      capturedReads[0]?.options?.coalescingKey,
+      TEST_REPLICA_OPERATION_READ_COALESCING_KEY,
+      'operation-id owner reads should coalesce by operation id',
+    );
+    t.equal(
+      capturedReads[0]?.options?.deliverySource,
+      TEST_REPLICA_OPERATION_READ_DELIVERY_SOURCE,
+      'operation-id owner reads should use an operation-scoped delivery source',
     );
     t.equal(
       capturedReads[0]?.options?.timeoutMs,
@@ -1649,6 +1690,16 @@ test('queryIncompleteOperations requests bounded local replica fallback for auth
     authoritativeReadCalls[0]?.replicaFallbackConsistency,
     LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.ANY_REPLICA,
     'replica_operations owner reads should request bounded local replica fallback',
+  );
+  t.equal(
+    authoritativeReadCalls[0]?.coalescingKey,
+    TEST_REPLICA_OPERATION_OWNER_READ_COALESCING_KEY,
+    'incomplete-operation owner reads should coalesce by owner node',
+  );
+  t.equal(
+    authoritativeReadCalls[0]?.deliverySource,
+    TEST_REPLICA_OPERATION_OWNER_READ_DELIVERY_SOURCE,
+    'incomplete-operation owner reads should use an owner-scoped delivery source',
   );
 });
 

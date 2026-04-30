@@ -1,5 +1,12 @@
 import {CONTROL_PLANE_READINESS_SERVICE_SHARED} from './control-plane-readiness-service-shared.js';
 
+const LOCAL_STR_ZHDQ9 = 'control-plane-readiness-evaluation';
+const LOCAL_STR_MESSAGEROUTER = 'messageRouter';
+const LOCAL_STR_O1VD7 = 'cdcIntegrationService';
+const LOCAL_STR_1506A = 'storageAccountingService';
+const LOCAL_STR_1UD6S = 'cdcGroupPropagationService';
+const LOCAL_STR_13YWM = 'membershipPublicationService';
+
 const {
   AUTHORITATIVE_READINESS_REPAIR,
   AuthoritativeNodeEvidenceReconciler,
@@ -186,7 +193,7 @@ class ControlPlaneReadinessServiceSegment1 {
     this.readinessEvaluationLane =
       options.readinessEvaluationLane ||
       new OperationLane({
-        name: 'control-plane-readiness-evaluation',
+        name: LOCAL_STR_ZHDQ9,
         workflowCoordinator: this.readinessOperationWorkflowCoordinator,
       });
     this.cacheChangeListener = null;
@@ -290,20 +297,20 @@ class ControlPlaneReadinessServiceSegment1 {
     } else if (systemTableCacheProvided) {
       this.cacheMutationTarget = this.systemTableCache;
     }
-    if (Object.hasOwn(options, 'messageRouter')) {
+    if (Object.hasOwn(options, LOCAL_STR_MESSAGEROUTER)) {
       this.messageRouter = options.messageRouter || null;
     }
-    if (Object.hasOwn(options, 'cdcIntegrationService')) {
+    if (Object.hasOwn(options, LOCAL_STR_O1VD7)) {
       this.cdcIntegrationService = options.cdcIntegrationService || null;
     }
-    if (Object.hasOwn(options, 'storageAccountingService')) {
+    if (Object.hasOwn(options, LOCAL_STR_1506A)) {
       this.storageAccountingService = options.storageAccountingService || null;
     }
-    if (Object.hasOwn(options, 'cdcGroupPropagationService')) {
+    if (Object.hasOwn(options, LOCAL_STR_1UD6S)) {
       this.cdcGroupPropagationService =
         options.cdcGroupPropagationService || null;
     }
-    if (Object.hasOwn(options, 'membershipPublicationService')) {
+    if (Object.hasOwn(options, LOCAL_STR_13YWM)) {
       this.membershipPublicationService =
         options.membershipPublicationService || null;
     }

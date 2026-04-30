@@ -120,6 +120,50 @@ const PRIORITY_RECOVERY_PLANNING_GATE_SCOPE = Object.freeze({
   SURROGATE_PARTITION: 'surrogate_partition',
 });
 
+const PRIORITY_RECOVERY_PLANNING_GATE_BYPASS_STATE = Object.freeze({
+  NOT_PRIORITY_PARTITION: 'not_priority_partition',
+  OPERATION_CREATION_REQUIRED: 'operation_creation_required',
+  OPERATION_CREATION_NOT_REQUIRED: 'operation_creation_not_required',
+});
+
+const PRIORITY_RECOVERY_PLANNING_GATE_BYPASS_ACTION = Object.freeze({
+  APPLY_GATE: 'apply_gate',
+  ALLOW_PLANNING: 'allow_planning',
+});
+
+const PRIORITY_RECOVERY_PLANNING_GATE_BYPASS_STATE_TABLE = Object.freeze([
+  Object.freeze({
+    state:
+      PRIORITY_RECOVERY_PLANNING_GATE_BYPASS_STATE.NOT_PRIORITY_PARTITION,
+    matches: (evidence) => evidence.isPriorityPartition !== true,
+  }),
+  Object.freeze({
+    state:
+      PRIORITY_RECOVERY_PLANNING_GATE_BYPASS_STATE
+        .OPERATION_CREATION_REQUIRED,
+    matches: (evidence) =>
+      evidence.operationCreationRequired === true,
+  }),
+  Object.freeze({
+    state:
+      PRIORITY_RECOVERY_PLANNING_GATE_BYPASS_STATE
+        .OPERATION_CREATION_NOT_REQUIRED,
+    matches: () => true,
+  }),
+]);
+
+const PRIORITY_RECOVERY_PLANNING_GATE_BYPASS_ACTION_BY_STATE = Object.freeze({
+  [
+  PRIORITY_RECOVERY_PLANNING_GATE_BYPASS_STATE.NOT_PRIORITY_PARTITION
+  ]: PRIORITY_RECOVERY_PLANNING_GATE_BYPASS_ACTION.APPLY_GATE,
+  [
+  PRIORITY_RECOVERY_PLANNING_GATE_BYPASS_STATE.OPERATION_CREATION_REQUIRED
+  ]: PRIORITY_RECOVERY_PLANNING_GATE_BYPASS_ACTION.ALLOW_PLANNING,
+  [
+  PRIORITY_RECOVERY_PLANNING_GATE_BYPASS_STATE.OPERATION_CREATION_NOT_REQUIRED
+  ]: PRIORITY_RECOVERY_PLANNING_GATE_BYPASS_ACTION.APPLY_GATE,
+});
+
 const TRANSPORT_BACKPRESSURE_PLANNING_STATE = Object.freeze({
   CLEAR: 'clear',
   PRIORITY_RECOVERY_OPERATION_CREATION_REQUIRED:
@@ -428,6 +472,12 @@ class UnifiedRebalancerSegment5 extends UnifiedRebalancerSegment4 {
       return null;
     }
 
+    const priorityRecoveryGateBypass =
+      this.buildPriorityRecoveryPlanningGateBypassSnapshot();
+    if (priorityRecoveryGateBypass.shouldBypass === true) {
+      return null;
+    }
+
     return this.buildRebalancePlanningGateDecision({
       gate: REBALANCE_PLANNING_GATE.CLUSTER_READINESS,
       blocker: result,
@@ -451,6 +501,11 @@ class UnifiedRebalancerSegment5 extends UnifiedRebalancerSegment4 {
     if (timeUntilRebalanceEligibleMs <= UNIFIED_REBALANCER_LITERAL.ZERO) {
       return null;
     }
+    const priorityRecoveryGateBypass =
+      this.buildPriorityRecoveryPlanningGateBypassSnapshot();
+    if (priorityRecoveryGateBypass.shouldBypass === true) {
+      return null;
+    }
     return this.buildRebalancePlanningGateDecision({
       gate: REBALANCE_PLANNING_GATE.START_DELAY,
       blocker: {
@@ -469,6 +524,11 @@ class UnifiedRebalancerSegment5 extends UnifiedRebalancerSegment4 {
 
   resolveStabilizationPlanningGateDecision() {
     if (this.isStabilized()) {
+      return null;
+    }
+    const priorityRecoveryGateBypass =
+      this.buildPriorityRecoveryPlanningGateBypassSnapshot();
+    if (priorityRecoveryGateBypass.shouldBypass === true) {
       return null;
     }
     const timeUntilStabilized = this.getTimeUntilStabilized();
@@ -933,6 +993,45 @@ class UnifiedRebalancerSegment5 extends UnifiedRebalancerSegment4 {
         this.resolvePriorityRecoveryFollowUpPartitionId(surrogateDecision),
       operationCreationScope:
         PRIORITY_RECOVERY_PLANNING_GATE_SCOPE.SURROGATE_PARTITION,
+    });
+  }
+
+  /**
+   * Return one normalized bypass snapshot for planning gates that would
+   * otherwise strand the startup priority recovery operation-creation lane.
+   *
+   * @return {Object}
+   * @private
+   */
+  buildPriorityRecoveryPlanningGateBypassSnapshot() {
+    const isPriorityPartition = this.isControlPlanePriorityPartition();
+    const operationCreationGate = isPriorityPartition ?
+      this.buildPriorityRecoveryOperationCreationPlanningGateSnapshot(
+        this.entityId,
+      ) :
+      null;
+    const evidence = Object.freeze({
+      isPriorityPartition,
+      operationCreationRequired:
+        operationCreationGate?.operationCreationRequired === true,
+    });
+    const bypassState =
+      PRIORITY_RECOVERY_PLANNING_GATE_BYPASS_STATE_TABLE.find((entry) =>
+        entry.matches(evidence),
+      )?.state ||
+      PRIORITY_RECOVERY_PLANNING_GATE_BYPASS_STATE
+        .OPERATION_CREATION_NOT_REQUIRED;
+    const bypassAction =
+      PRIORITY_RECOVERY_PLANNING_GATE_BYPASS_ACTION_BY_STATE[bypassState] ||
+      PRIORITY_RECOVERY_PLANNING_GATE_BYPASS_ACTION.APPLY_GATE;
+    return Object.freeze({
+      evidence,
+      bypassState,
+      bypassAction,
+      operationCreationGate,
+      shouldBypass:
+        bypassAction ===
+        PRIORITY_RECOVERY_PLANNING_GATE_BYPASS_ACTION.ALLOW_PLANNING,
     });
   }
 

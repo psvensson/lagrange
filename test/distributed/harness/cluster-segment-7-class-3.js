@@ -1,5 +1,6 @@
 import {CLUSTER_SEGMENT_7_CLASS_SHARED} from './cluster-segment-7-class-shared.js';
 import {
+  buildControlPlaneQuiescenceCandidateWindowReset,
   buildControlPlaneQuiescenceSnapshot,
 } from './control-plane-quiescence-snapshot.js';
 
@@ -55,6 +56,27 @@ const QUIESCENCE_NODE_ID_UNKNOWN = 'unknown';
 const QUIESCENCE_CANONICAL_BLOCKER_NONE = 'none';
 const QUIESCENCE_INSTABILITY_SUMMARY_NONE = 'none';
 
+function resolveQuiescenceProgressInFlightCount(
+  snapshotProbe,
+  quiescenceSnapshot,
+) {
+  const effectiveInFlightCount = quiescenceSnapshot?.effectiveInFlightCount;
+  return Number.isInteger(effectiveInFlightCount) ?
+    effectiveInFlightCount :
+    snapshotProbe.inFlightCount;
+}
+
+function hasControlPlaneQuiescenceStableWindowClosed(
+  quiescenceSnapshot,
+  stableWindowMs,
+) {
+  return (
+    quiescenceSnapshot?.ready === true &&
+    Number.isFinite(quiescenceSnapshot.stableElapsedMs) &&
+    quiescenceSnapshot.stableElapsedMs >= stableWindowMs
+  );
+}
+
 class Cluster3 extends Cluster2 {
   async waitForControlPlaneQuiescence(options = {}) {
     const stableWindowMs =
@@ -76,6 +98,7 @@ class Cluster3 extends Cluster2 {
     let highestCriticalSystemReadyTableCount = ZERO;
     let lastOperationTimelineSignature = null;
     let lastOperationProgressAtMs = Date.now();
+    let candidateWindowReset = null;
 
     let pollResult;
     try {
@@ -89,12 +112,24 @@ class Cluster3 extends Cluster2 {
           const nowMs = Date.now();
           if (snapshotProbe.error) {
             stableWindowStartedAtMs = null;
-            const quiescenceSnapshot = buildControlPlaneQuiescenceSnapshot({
+            let quiescenceSnapshot = buildControlPlaneQuiescenceSnapshot({
               snapshotProbe,
               nowMs,
               stableWindowStartedAtMs,
               stableWindowMs,
               maxInFlightCount,
+              ignoreStaleInFlightReplicaOperations:
+                options.ignoreStaleInFlightReplicaOperations === true,
+              candidateWindowReset,
+            });
+            candidateWindowReset =
+              buildControlPlaneQuiescenceCandidateWindowReset(
+                quiescenceSnapshot,
+                nowMs,
+              );
+            quiescenceSnapshot = Object.freeze({
+              ...quiescenceSnapshot,
+              candidateWindowReset,
             });
             return {
               ...snapshotProbe,
@@ -117,12 +152,9 @@ class Cluster3 extends Cluster2 {
             snapshotProbe.operationTimelineSignature !== null &&
             snapshotProbe.operationTimelineSignature !==
               lastOperationTimelineSignature;
-          const operationProgressObserved =
-            snapshotProbe.inFlightCount < lowestInFlightCount ||
-            operationTimelineChanged;
           const candidateWindowStartedAtMs =
             stableWindowStartedAtMs === null ? nowMs : stableWindowStartedAtMs;
-          const quiescenceSnapshot = buildControlPlaneQuiescenceSnapshot({
+          let quiescenceSnapshot = buildControlPlaneQuiescenceSnapshot({
             snapshotProbe,
             criticalSystemTopology,
             leaderQuietElapsedMs,
@@ -130,11 +162,35 @@ class Cluster3 extends Cluster2 {
             stableWindowStartedAtMs: candidateWindowStartedAtMs,
             stableWindowMs,
             maxInFlightCount,
-            operationNoProgressElapsedMs: operationProgressObserved ?
-              ZERO :
-              nowMs - lastOperationProgressAtMs,
+            ignoreStaleInFlightReplicaOperations:
+              options.ignoreStaleInFlightReplicaOperations === true,
+            operationNoProgressElapsedMs: nowMs - lastOperationProgressAtMs,
             operationNoProgressTimeoutMs: noProgressTimeoutMs,
+            candidateWindowReset,
           });
+          const progressInFlightCount = resolveQuiescenceProgressInFlightCount(
+            snapshotProbe,
+            quiescenceSnapshot,
+          );
+          const operationProgressObserved =
+            progressInFlightCount < lowestInFlightCount ||
+            operationTimelineChanged;
+          if (operationProgressObserved) {
+            quiescenceSnapshot = buildControlPlaneQuiescenceSnapshot({
+              snapshotProbe,
+              criticalSystemTopology,
+              leaderQuietElapsedMs,
+              nowMs,
+              stableWindowStartedAtMs: candidateWindowStartedAtMs,
+              stableWindowMs,
+              maxInFlightCount,
+              ignoreStaleInFlightReplicaOperations:
+                options.ignoreStaleInFlightReplicaOperations === true,
+              operationNoProgressElapsedMs: ZERO,
+              operationNoProgressTimeoutMs: noProgressTimeoutMs,
+              candidateWindowReset,
+            });
+          }
 
           if (quiescenceSnapshot.ready) {
             if (stableWindowStartedAtMs === null) {
@@ -142,11 +198,20 @@ class Cluster3 extends Cluster2 {
             }
           } else {
             stableWindowStartedAtMs = null;
+            candidateWindowReset =
+              buildControlPlaneQuiescenceCandidateWindowReset(
+                quiescenceSnapshot,
+                nowMs,
+              );
+            quiescenceSnapshot = Object.freeze({
+              ...quiescenceSnapshot,
+              candidateWindowReset,
+            });
           }
 
           let progressObserved = operationProgressObserved;
-          if (snapshotProbe.inFlightCount < lowestInFlightCount) {
-            lowestInFlightCount = snapshotProbe.inFlightCount;
+          if (progressInFlightCount < lowestInFlightCount) {
+            lowestInFlightCount = progressInFlightCount;
           }
           if (operationTimelineChanged) {
             lastOperationTimelineSignature =
@@ -156,7 +221,7 @@ class Cluster3 extends Cluster2 {
             lastOperationProgressAtMs = nowMs;
           }
           if (
-            snapshotProbe.inFlightCount <= maxInFlightCount &&
+            progressInFlightCount <= maxInFlightCount &&
             leaderQuietElapsedMs > maxLeaderQuietElapsedMs
           ) {
             maxLeaderQuietElapsedMs = leaderQuietElapsedMs;
@@ -185,6 +250,10 @@ class Cluster3 extends Cluster2 {
           }
 
           if (
+            !hasControlPlaneQuiescenceStableWindowClosed(
+              quiescenceSnapshot,
+              stableWindowMs,
+            ) &&
             Number.isInteger(noProgressTimeoutMs) &&
             noProgressTimeoutMs > ZERO &&
             nowMs - lastProgressAtMs >= noProgressTimeoutMs
@@ -210,10 +279,25 @@ class Cluster3 extends Cluster2 {
             stalledError.quiescence = {
               nodeId: snapshotProbe.nodeId || null,
               inFlightCount: snapshotProbe.inFlightCount,
+              effectiveInFlightCount:
+                quiescenceSnapshot.effectiveInFlightCount ?? null,
+              staleInFlightCount:
+                quiescenceSnapshot.staleInFlightCount ?? null,
+              cacheVisibleSatisfiedPriorityRecoveryOperationCount:
+                quiescenceSnapshot
+                  .cacheVisibleSatisfiedPriorityRecoveryOperationCount ?? null,
+              staleInFlightDiscountCount:
+                quiescenceSnapshot.staleInFlightDiscountCount ?? null,
+              ignoreStaleInFlightReplicaOperations:
+                quiescenceSnapshot.ignoreStaleInFlightReplicaOperations,
               state: quiescenceSnapshot.state,
               canonicalBlocker: quiescenceSnapshot.canonicalBlocker,
               reasonCodes: quiescenceSnapshot.reasonCodes,
               reasons: quiescenceSnapshot.reasons,
+              controlPlanePressureSignals:
+                quiescenceSnapshot.controlPlanePressureSignals || [],
+              candidateWindowReset:
+                quiescenceSnapshot.candidateWindowReset || null,
               stableElapsedMs: quiescenceSnapshot.stableElapsedMs,
               leaderQuietElapsedMs,
               criticalSystemDistribution:
@@ -222,6 +306,7 @@ class Cluster3 extends Cluster2 {
                     criticalSystemTopology,
                   ) :
                   null,
+              criticalSystemTopology,
             };
             throw stalledError;
           }
@@ -259,6 +344,10 @@ class Cluster3 extends Cluster2 {
         elapsedMs: pollResult.elapsedMs,
         stableElapsedMs: pollResult.lastResult?.stableElapsedMs ?? ZERO,
         inFlightCount: pollResult.lastResult?.inFlightCount ?? null,
+        effectiveInFlightCount:
+          pollResult.lastResult?.effectiveInFlightCount ?? null,
+        staleInFlightCount:
+          pollResult.lastResult?.staleInFlightCount ?? null,
         leaderQuietElapsedMs:
           pollResult.lastResult?.leaderQuietElapsedMs ?? ZERO,
         selectedNodeId: pollResult.lastResult?.nodeId || null,
@@ -266,6 +355,10 @@ class Cluster3 extends Cluster2 {
         state: pollResult.lastResult?.state || null,
         canonicalBlocker: pollResult.lastResult?.canonicalBlocker || null,
         reasonCodes: pollResult.lastResult?.reasonCodes || [],
+        controlPlanePressureSignals:
+          pollResult.lastResult?.controlPlanePressureSignals || [],
+        candidateWindowReset:
+          pollResult.lastResult?.candidateWindowReset || null,
         partitionGroupInFlight:
           pollResult.lastResult?.partitionGroupInFlight || {},
         criticalSystemTopology:
@@ -296,6 +389,11 @@ class Cluster3 extends Cluster2 {
         formatCriticalSystemDistributionSummary(
           pollResult.lastResult?.criticalSystemTopology || null,
         ) +
+        ', criticalSystemObservationState=' +
+        String(
+          pollResult.lastResult?.criticalSystemTopology?.observationState ||
+            UNKNOWN_STATE,
+        ) +
         ', quiescenceState=' +
         String(pollResult.lastResult?.state || UNKNOWN_STATE) +
         ', canonicalBlocker=' +
@@ -310,10 +408,24 @@ class Cluster3 extends Cluster2 {
     timeoutError.quiescence = {
       nodeId: pollResult.lastResult?.nodeId || null,
       inFlightCount: pollResult.lastResult?.inFlightCount ?? null,
+      effectiveInFlightCount:
+        pollResult.lastResult?.effectiveInFlightCount ?? null,
+      staleInFlightCount: pollResult.lastResult?.staleInFlightCount ?? null,
+      cacheVisibleSatisfiedPriorityRecoveryOperationCount:
+        pollResult.lastResult
+          ?.cacheVisibleSatisfiedPriorityRecoveryOperationCount ?? null,
+      staleInFlightDiscountCount:
+        pollResult.lastResult?.staleInFlightDiscountCount ?? null,
+      ignoreStaleInFlightReplicaOperations:
+        pollResult.lastResult?.ignoreStaleInFlightReplicaOperations ?? null,
       state: pollResult.lastResult?.state || null,
       canonicalBlocker: pollResult.lastResult?.canonicalBlocker || null,
       reasonCodes: pollResult.lastResult?.reasonCodes || [],
       reasons: pollResult.lastResult?.reasons || [],
+      controlPlanePressureSignals:
+        pollResult.lastResult?.controlPlanePressureSignals || [],
+      candidateWindowReset:
+        pollResult.lastResult?.candidateWindowReset || null,
       stableElapsedMs: pollResult.lastResult?.stableElapsedMs ?? ZERO,
       leaderQuietElapsedMs:
         pollResult.lastResult?.leaderQuietElapsedMs ?? ZERO,
@@ -321,6 +433,8 @@ class Cluster3 extends Cluster2 {
         formatCriticalSystemDistributionSummary(
           pollResult.lastResult?.criticalSystemTopology || null,
         ),
+      criticalSystemTopology:
+        pollResult.lastResult?.criticalSystemTopology || null,
     };
     throw timeoutError;
   }

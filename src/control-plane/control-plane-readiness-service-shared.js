@@ -51,7 +51,10 @@ import {
 import {unwrapRowReadResult} from './owners/system-metadata-owner-base.js';
 import {buildPublicationRecoveryProtocolSnapshot} from './recovery-protocol-snapshot.js';
 import {buildControlPlanePublicationStory} from './control-plane-publication-story.js';
-import {buildPublicationRecoveryGateSnapshot} from './publication-recovery-gate.js';
+import {
+  PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE,
+  buildPublicationRecoveryGateSnapshot,
+} from './publication-recovery-gate.js';
 import {buildCanonicalPublicationRecoveryEvidence} from './publication-recovery-evidence.js';
 import {RECOVERY_PROTOCOL_STATE} from './membership-lifecycle-constants.js';
 import {ControlPlaneDiagnosticsLedger} from './control-plane-diagnostics-ledger.js';
@@ -73,6 +76,17 @@ import {
   PRIORITY_CONTROL_PLANE_RECOVERY_HEALTH_FAILURE,
   STARTUP_AUTHORITY_STATE,
 } from './startup-authority-snapshot-owner.js';
+
+const LOCAL_STR_OBJECT = 'object';
+const LOCAL_STR_EMPTY = '';
+const LOCAL_STR_UNKNOWN = 'unknown';
+const LOCAL_STR_READY = 'ready';
+const LOCAL_STR_DEFERRED = 'deferred';
+const LOCAL_STR_151IA = 'ROUTER_QUERY_TRANSPORT_NOT_READY';
+const LOCAL_STR_1UN26 = 'CONTROL_PLANE_PARTICIPATION_DEFERRED';
+const LOCAL_STR_XYV2U = 'CONTROL_PLANE_PARTICIPATION_BLOCKED';
+const LOCAL_STR_1R6W2 = 'Control-plane participation deferred by canonical readiness';
+const LOCAL_STR_8JH3G = 'Control-plane participation blocked by canonical readiness';
 
 const PUBLICATION_REASON_CONFIG_SAFE_MODE = 'config_safe_mode';
 const AUTHORITATIVE_READINESS_REPAIR = Object.freeze({
@@ -197,7 +211,7 @@ function buildReason(code, dimension, sourceOwner, observedAt, details = null) {
     sourceOwner,
     observedAt,
   };
-  if (details && typeof details === 'object') {
+  if (details && typeof details === LOCAL_STR_OBJECT) {
     reason.details = details;
   }
   return Object.freeze(reason);
@@ -228,7 +242,7 @@ function normalizeNodeIdList(values = []) {
   return [
     ...new Set(
       (Array.isArray(values) ? values : [])
-        .map((value) => String(value || '').trim())
+        .map((value) => String(value || LOCAL_STR_EMPTY).trim())
         .filter((value) => value.length > NUM.ZERO),
     ),
   ];
@@ -237,7 +251,7 @@ function normalizeNodeIdList(values = []) {
 function normalizeLocalQueryTransportEvidence(readiness) {
   if (!readiness || typeof readiness !== TYPEOF.OBJECT) {
     return Object.freeze({
-      state: 'unknown',
+      state: LOCAL_STR_UNKNOWN,
       ready: null,
       reason: null,
       reasonCode: null,
@@ -247,7 +261,7 @@ function normalizeLocalQueryTransportEvidence(readiness) {
   }
   const ready = typeof readiness.ready === 'boolean' ? readiness.ready : null;
   return Object.freeze({
-    state: ready === true ? 'ready' : ready === false ? 'deferred' : 'unknown',
+    state: ready === true ? LOCAL_STR_READY : ready === false ? LOCAL_STR_DEFERRED : LOCAL_STR_UNKNOWN,
     ready,
     reason:
       typeof readiness.reason === TYPEOF.STRING &&
@@ -307,11 +321,11 @@ function buildParticipationErrorCode(participation) {
     participation?.reasonCode ===
     CONTROL_PLANE_READINESS_REASON.LOCAL_QUERY_TRANSPORT_NOT_READY
   ) {
-    return 'ROUTER_QUERY_TRANSPORT_NOT_READY';
+    return LOCAL_STR_151IA;
   }
   return participation?.decision === CONTROL_PLANE_PARTICIPATION_DECISION.DEFER ?
-    'CONTROL_PLANE_PARTICIPATION_DEFERRED' :
-    'CONTROL_PLANE_PARTICIPATION_BLOCKED';
+    LOCAL_STR_1UN26 :
+    LOCAL_STR_XYV2U;
 }
 
 function buildParticipationErrorMessage(participation) {
@@ -324,8 +338,8 @@ function buildParticipationErrorMessage(participation) {
     return participation.localQueryTransport.reason;
   }
   return participation?.decision === CONTROL_PLANE_PARTICIPATION_DECISION.DEFER ?
-    'Control-plane participation deferred by canonical readiness' :
-    'Control-plane participation blocked by canonical readiness';
+    LOCAL_STR_1R6W2 :
+    LOCAL_STR_8JH3G;
 }
 
 function shouldAllowLocalExecutionForParticipation({
@@ -388,6 +402,7 @@ export const CONTROL_PLANE_READINESS_SERVICE_SHARED = {
   PRIORITY_CONTROL_PLANE_RECOVERY_HEALTH_FAILURE,
   PROVISIONING_ELIGIBILITY_STATE,
   PUBLICATION_REASON_CONFIG_SAFE_MODE,
+  PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE,
   READINESS_DIAGNOSTICS_LEDGER_LIMIT,
   READINESS_ERROR_MSG,
   READINESS_TRANSITION_HISTORY_LIMIT,

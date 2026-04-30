@@ -12,6 +12,10 @@ import {NUM, SUBSYSTEM} from '../constants/index.js';
 import {LoggingService} from '../logging/logging-service.js';
 import {LogsTableService} from '../logging/logs-table-service.js';
 
+const LOCAL_NUM_TWO = 2;
+const LOCAL_STR_FUNCTION = 'function';
+const LOCAL_STR_OBJECT = 'object';
+
 const RESOURCE_DIAGNOSTICS_DEFAULT = Object.freeze({
   HISTORY_LIMIT: 180,
   TREND_WINDOW_SAMPLES: 12,
@@ -277,7 +281,7 @@ class ResourceDiagnosticsSampler {
    * @private
    */
   buildTrendReport() {
-    if (this.samples.length < 2) {
+    if (this.samples.length < LOCAL_NUM_TWO) {
       return null;
     }
 
@@ -361,42 +365,42 @@ class ResourceDiagnosticsSampler {
     const stats = {};
     const loggingService = LoggingService.getInstance();
     if (loggingService.isInitialized() &&
-      typeof loggingService.getDiagnosticsStats === 'function') {
+      typeof loggingService.getDiagnosticsStats === LOCAL_STR_FUNCTION) {
       stats.logging = loggingService.getDiagnosticsStats();
     }
 
     const logsTableService = LogsTableService.instance;
     if (logsTableService &&
-      typeof logsTableService.getStats === 'function') {
+      typeof logsTableService.getStats === LOCAL_STR_FUNCTION) {
       stats.logsTable = logsTableService.getStats();
     }
 
     const owner = this.owner;
-    if (!owner || typeof owner !== 'object') {
+    if (!owner || typeof owner !== LOCAL_STR_OBJECT) {
       return stats;
     }
 
     for (const component of RESOURCE_DIAGNOSTICS_OWNER_COMPONENT) {
       const componentRef = owner[component.field];
-      if (!componentRef || typeof componentRef.getStats !== 'function') {
+      if (!componentRef || typeof componentRef.getStats !== LOCAL_STR_FUNCTION) {
         continue;
       }
       const componentStats = componentRef.getStats();
       if (!componentStats ||
-        typeof componentStats !== 'object' ||
-        typeof componentStats.then === 'function') {
+        typeof componentStats !== LOCAL_STR_OBJECT ||
+        typeof componentStats.then === LOCAL_STR_FUNCTION) {
         continue;
       }
       stats[component.name] = componentStats;
     }
 
     if (owner.serviceLifecycleManager &&
-      typeof owner.serviceLifecycleManager.getMetrics === 'function') {
+      typeof owner.serviceLifecycleManager.getMetrics === LOCAL_STR_FUNCTION) {
       stats.serviceLifecycleManager = owner.serviceLifecycleManager.getMetrics();
     }
 
     if (owner.serviceReconciler &&
-      typeof owner.serviceReconciler.getStats === 'function') {
+      typeof owner.serviceReconciler.getStats === LOCAL_STR_FUNCTION) {
       stats.serviceReconciler = owner.serviceReconciler.getStats();
     }
 

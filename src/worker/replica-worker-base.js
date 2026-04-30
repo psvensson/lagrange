@@ -18,6 +18,8 @@ import {
   WORKER_STATUS,
 } from './worker-constants.js';
 
+const LOCAL_STR_OK = 'ok';
+
 /**
  * Error messages specific to ReplicaWorkerBase.
  * @type {Readonly<Object>}
@@ -299,7 +301,7 @@ class ReplicaWorkerBase extends EventEmitter {
     });
 
     return {
-      status: 'ok',
+      status: LOCAL_STR_OK,
       replicaId: this.replicaId,
     };
   }

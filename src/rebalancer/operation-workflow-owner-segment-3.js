@@ -216,7 +216,10 @@ class OperationWorkflowOwnerSegment3 extends OperationWorkflowOwnerSegment2 {
             {},
             TRANSITION_STEP_OPTIONS.DEFER_COMMITTED_MARK,
           );
-          await persistFn(null);
+          const persistResult = await persistFn(null);
+          if (persistResult === false) {
+            return false;
+          }
           this.operationWorkflowCoordinator.markTransitionCommitted(
             operation.operationId,
             step,
@@ -432,9 +435,20 @@ class OperationWorkflowOwnerSegment3 extends OperationWorkflowOwnerSegment2 {
     };
 
     const persistFn = async (sessionId) => {
-      await this.repository.persistOperationUpdate(
+      const persistOptions = this.buildOperationTransitionPersistOptions(
+        operation,
+        sessionId,
+      );
+      const guardedPersistOptions =
+        this.shouldBypassTransitionExecutionTransaction(operation) ?
+          {
+            ...persistOptions,
+            expectedWorkflowStep: previousStep,
+          } :
+          persistOptions;
+      return this.repository.persistOperationUpdate(
         projectedOperation,
-        this.buildOperationTransitionPersistOptions(operation, sessionId),
+        guardedPersistOptions,
       );
     };
     const bypassExecutionTransaction =

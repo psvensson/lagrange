@@ -41,6 +41,12 @@ import {
 } from './replica-lifecycle-constants.js';
 import {ReplicaHandler} from './replica-handler.js';
 
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_STR_1EYB6 = 'Skipped stale replica recovery failure update';
+const LOCAL_STR_13LAG = 'Skipped stale replica recovery stop update';
+const LOCAL_STR_CRITICAL = 'critical';
+const LOCAL_STR_A2VUY = 'Failed to shut down delegated replica handler';
+
 /**
  * Replica status values for lifecycle management.
  */
@@ -75,10 +81,10 @@ function buildObservedReplicaWhereClause(service) {
   const whereClause = {
     service_id: service.service_id,
   };
-  if (typeof service?.node_id === TYPEOF.STRING && service.node_id.length > 0) {
+  if (typeof service?.node_id === TYPEOF.STRING && service.node_id.length > LOCAL_NUM_ZERO) {
     whereClause.node_id = service.node_id;
   }
-  if (typeof service?.status === TYPEOF.STRING && service.status.length > 0) {
+  if (typeof service?.status === TYPEOF.STRING && service.status.length > LOCAL_NUM_ZERO) {
     whereClause.status = service.status;
   }
   if (Number.isFinite(service?.updated_at)) {
@@ -639,7 +645,7 @@ class ReplicaLifecycleManager extends EventEmitter {
               deliveryPriority: 'critical',
             });
           if (!guardedMutationApplied(failResult)) {
-            this.logger.debug('Skipped stale replica recovery failure update', {
+            this.logger.debug(LOCAL_STR_1EYB6, {
               replicaId: serviceId,
               partitionId,
               status,
@@ -669,7 +675,7 @@ class ReplicaLifecycleManager extends EventEmitter {
               deliveryPriority: 'critical',
             });
           if (!guardedMutationApplied(stopResult)) {
-            this.logger.debug('Skipped stale replica recovery stop update', {
+            this.logger.debug(LOCAL_STR_13LAG, {
               replicaId: serviceId,
               partitionId,
               nodeId: this.nodeId,
@@ -686,7 +692,7 @@ class ReplicaLifecycleManager extends EventEmitter {
             },
           }, {
             workClass: PRESSURE_WORK_CLASS.CRITICAL,
-            deliveryPriority: 'critical',
+            deliveryPriority: LOCAL_STR_CRITICAL,
           });
 
           // Clean up local resources
@@ -873,7 +879,7 @@ class ReplicaLifecycleManager extends EventEmitter {
         try {
           await this.replicaHandler.shutdown();
         } catch (error) {
-          this.logger.warn('Failed to shut down delegated replica handler', {
+          this.logger.warn(LOCAL_STR_A2VUY, {
             nodeId: this.nodeId,
             error: error.message,
           });

@@ -19,6 +19,9 @@ import {
 } from './endpoint-sync-source-query.js';
 import {groupEndpointRows} from './endpoint-sync-planner.js';
 
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_NUM_ONE = 1;
+
 const SERVICE_DISCOVERY_DEFAULT = Object.freeze({
   HEALTHY_ONLY: false,
   UNHEALTHY_POLICY: ENDPOINT_SYNC_UNHEALTHY_POLICY.NOT_READY,
@@ -45,7 +48,7 @@ function toStringAllowlist(values) {
     values
       .filter((value) => typeof value === TYPEOF.STRING)
       .map((value) => value.trim())
-      .filter((value) => value.length > 0),
+      .filter((value) => value.length > LOCAL_NUM_ZERO),
   );
 }
 
@@ -60,7 +63,7 @@ function resolveDefinitionServiceId(row) {
     return null;
   }
   const serviceId = row.service_id || row.serviceId || row.id || null;
-  if (typeof serviceId !== TYPEOF.STRING || serviceId.trim().length === 0) {
+  if (typeof serviceId !== TYPEOF.STRING || serviceId.trim().length === LOCAL_NUM_ZERO) {
     return null;
   }
   return serviceId.trim();
@@ -78,7 +81,7 @@ function resolveDefinitionReplicaCount(row) {
   }
   const rawReplicaCount = row.replica_count ?? row.replicaCount;
   const parsedReplicaCount = Number(rawReplicaCount);
-  if (!Number.isInteger(parsedReplicaCount) || parsedReplicaCount < 0) {
+  if (!Number.isInteger(parsedReplicaCount) || parsedReplicaCount < LOCAL_NUM_ZERO) {
     return null;
   }
   return parsedReplicaCount;
@@ -139,7 +142,7 @@ function buildDesiredReplicaCountMap(serviceIds, desiredByServiceId) {
  * @return {number|null}
  */
 function resolveDesiredReplicaCount(serviceIds, desiredByServiceId) {
-  if (serviceIds.length !== 1) {
+  if (serviceIds.length !== LOCAL_NUM_ONE) {
     return null;
   }
   const serviceId = serviceIds[0];
@@ -157,13 +160,13 @@ function resolveDesiredReplicaCount(serviceIds, desiredByServiceId) {
  * @return {string}
  */
 function resolveDiscoveryHealth(observedReplicaCount, healthyReplicaCount) {
-  if (observedReplicaCount <= 0) {
+  if (observedReplicaCount <= LOCAL_NUM_ZERO) {
     return SERVICE_DISCOVERY_HEALTH.UNKNOWN;
   }
   if (healthyReplicaCount >= observedReplicaCount) {
     return SERVICE_DISCOVERY_HEALTH.HEALTHY;
   }
-  if (healthyReplicaCount === 0) {
+  if (healthyReplicaCount === LOCAL_NUM_ZERO) {
     return SERVICE_DISCOVERY_HEALTH.DEGRADED;
   }
   return SERVICE_DISCOVERY_HEALTH.PARTIAL;

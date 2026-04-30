@@ -4,6 +4,9 @@ import {
   SYSTEM_TABLE_NAME,
 } from '../../src/bootstrap/system-table-schemas-constants.js';
 import {
+  PRIORITY_RECOVERY_COMPLETION_STATE,
+} from '../../src/control-plane/priority-recovery-completion.js';
+import {
   OperationType,
   ReplicaStatus,
 } from '../../src/rebalancer/replica-status.js';
@@ -11,6 +14,7 @@ import {
   ReplicaOperationMessageType,
   ReplicaOperationResponseStatus,
 } from '../../src/rebalancer/replica-operation-constants.js';
+import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {createTestCoordinator} from './test-helpers.js';
 
 const STOPPING_REPLICA_OBSERVATION_STATE = Object.freeze({
@@ -31,6 +35,55 @@ const PRIORITY_DRAIN_TEST_READY_NODE_IDS = Object.freeze([
 const PRIORITY_DRAIN_TEST_REQUIRED_DISTINCT_NODE_COUNT = 3;
 const PRIORITY_DRAIN_TEST_NO_COMPLETED_AT = null;
 const PRIORITY_DRAIN_TEST_NO_ERROR_MESSAGE = null;
+const PRIORITY_DRAIN_TEST_BLOCKED_PARTITION_COUNT = 1;
+const PRIORITY_DRAIN_TEST_SPREAD_GAP = 1;
+const PRIORITY_DRAIN_TEST_READY_DISTINCT_NODE_COUNT = 2;
+const PRIORITY_DRAIN_TEST_TOTAL_SPREAD_GAP = 1;
+const PRIORITY_DRAIN_TEST_RECOVERY_ELIGIBLE_EXCLUDED_REASON =
+  'publication_recovery_eligible_but_coordinator_excludes_node';
+const PRIORITY_DRAIN_TEST_COMPLETION_BLOCKED_STATE = 'blocked';
+const PRIORITY_DRAIN_TEST_ACTIVE_OPERATION_STILL_BLOCKS_REASON =
+  'active_operation_still_blocks_spread';
+const PRIORITY_DRAIN_TEST_STALE_TARGET_NODE_ID = 'node-stale-target';
+const PRIORITY_DRAIN_TEST_AUTHORITATIVE_SOURCE = 'authoritative';
+const PRIORITY_DRAIN_TEST_UNAVAILABLE_TARGET_NODE_ID =
+  'node-unavailable-target';
+const PRIORITY_DRAIN_TEST_REMOTE_RELEASE_OPERATION_ID =
+  'priority-drain-remote-owner-unavailable-active';
+const PRIORITY_DRAIN_TEST_REMOTE_RELEASE_SYNCING_OPERATION_ID =
+  'priority-drain-remote-owner-unavailable-syncing';
+const PRIORITY_DRAIN_TEST_REMOTE_RELEASE_STOPPING_OPERATION_ID =
+  'priority-drain-remote-owner-unavailable-stopping';
+const PRIORITY_DRAIN_TEST_TERMINAL_GUARD_OPERATION_ID =
+  'priority-drain-terminal-guard';
+const PRIORITY_DRAIN_TEST_FOLLOWER_ELECTION_OPERATION_ID =
+  'priority-drain-follower-election-safe';
+const PRIORITY_DRAIN_TEST_REMOTE_RELEASE_PARTITION_ID =
+  'sql_write_operations-p1';
+const PRIORITY_DRAIN_TEST_REMOTE_RELEASE_SERVICE_TYPE = 'partition';
+const PRIORITY_DRAIN_TEST_REMOTE_RELEASE_VOTER_ROLE = 'follower';
+const PRIORITY_DRAIN_TEST_REMOTE_RELEASE_SOURCE_ACTIVE_ASSERTION =
+  'remote owner unavailable priority drain should settle without dispatch';
+const PRIORITY_DRAIN_TEST_REMOTE_RELEASE_SOURCE_STOPPING_ASSERTION =
+  'remote owner unavailable source-removal drain should settle without dispatch';
+const PRIORITY_DRAIN_TEST_REMOTE_RELEASE_TERMINAL_ASSERTION =
+  'remote owner unavailable ACTIVE replacement should become terminal';
+const PRIORITY_DRAIN_TEST_REMOTE_RELEASE_SYNCING_ASSERTION =
+  'remote owner unavailable SYNCING replacement should become terminal';
+const PRIORITY_DRAIN_TEST_REMOTE_RELEASE_STOPPING_ASSERTION =
+  'remote owner unavailable STOPPING replacement should become terminal';
+const PRIORITY_DRAIN_TEST_REMOTE_RELEASE_NO_DELIVERY_ASSERTION =
+  'remote owner unavailable priority drain should not replay source removal';
+const PRIORITY_DRAIN_TEST_FOLLOWER_ELECTION_DISPATCH_ASSERTION =
+  'fresh replacement election evidence should dispatch source removal';
+const PRIORITY_DRAIN_TEST_FOLLOWER_ELECTION_STEP_ASSERTION =
+  'fresh replacement election evidence should advance source removal';
+const PRIORITY_DRAIN_TEST_TERMINAL_GUARD_TRANSITION_ASSERTION =
+  'stale direct priority transition should not commit';
+const PRIORITY_DRAIN_TEST_TERMINAL_GUARD_STEP_ASSERTION =
+  'stale direct priority transition should not overwrite terminal step';
+const PRIORITY_DRAIN_TEST_TERMINAL_GUARD_STATUS_ASSERTION =
+  'stale direct priority transition should not overwrite terminal status';
 
 function buildPriorityDrainConvergedPlanningSnapshot(partitionId) {
   return Object.freeze({
@@ -55,9 +108,118 @@ function buildPriorityDrainConvergedPlanningSnapshot(partitionId) {
   });
 }
 
+function buildPriorityDrainSupersededPlanningSnapshot(
+  partitionId,
+  operationId,
+) {
+  return Object.freeze({
+    publicationStatus: PRIORITY_DRAIN_TEST_PUBLICATION_STATUS,
+    publishedActiveNodeIdsPresent: true,
+    publishedActiveNodeIds: PRIORITY_DRAIN_TEST_READY_NODE_IDS,
+    recoveryActiveNodeIds: PRIORITY_DRAIN_TEST_READY_NODE_IDS,
+    projectedServingNodeIds: PRIORITY_DRAIN_TEST_READY_NODE_IDS,
+    locallyEligibleNodeIds: PRIORITY_DRAIN_TEST_READY_NODE_IDS,
+    priorityPartitionSummary: Object.freeze({
+      satisfied: false,
+      requiredDistinctNodeCount:
+        PRIORITY_DRAIN_TEST_REQUIRED_DISTINCT_NODE_COUNT,
+      missingPartitionIds: Object.freeze([partitionId]),
+      blockedPartitions: Object.freeze([Object.freeze({
+        partitionId,
+        requiredDistinctNodeCount:
+          PRIORITY_DRAIN_TEST_REQUIRED_DISTINCT_NODE_COUNT,
+        readyDistinctNodeCount:
+          PRIORITY_DRAIN_TEST_READY_DISTINCT_NODE_COUNT,
+        spreadGap: PRIORITY_DRAIN_TEST_SPREAD_GAP,
+      })]),
+      blockedPartitionCount: PRIORITY_DRAIN_TEST_BLOCKED_PARTITION_COUNT,
+      largestSpreadGap: PRIORITY_DRAIN_TEST_SPREAD_GAP,
+      totalSpreadGap: PRIORITY_DRAIN_TEST_TOTAL_SPREAD_GAP,
+      totalPriorityPartitionCount: PRIORITY_DRAIN_TEST_BLOCKED_PARTITION_COUNT,
+      witnessPartitionIds: Object.freeze([partitionId]),
+    }),
+    priorityRecoveryDecisionSnapshots: Object.freeze({
+      snapshots: Object.freeze([Object.freeze({
+        partitionId,
+        operationId,
+        operationIds: Object.freeze([operationId]),
+        blockerReasons: Object.freeze([
+          PRIORITY_DRAIN_TEST_RECOVERY_ELIGIBLE_EXCLUDED_REASON,
+        ]),
+        admission: Object.freeze({
+          effectiveEligibleNodeIds: PRIORITY_DRAIN_TEST_READY_NODE_IDS,
+          effectiveEligibleNodeCount: PRIORITY_DRAIN_TEST_READY_NODE_IDS.length,
+        }),
+        completion: Object.freeze({
+          state: PRIORITY_DRAIN_TEST_COMPLETION_BLOCKED_STATE,
+          reasonCode: PRIORITY_DRAIN_TEST_ACTIVE_OPERATION_STILL_BLOCKS_REASON,
+          blocked: true,
+        }),
+        spreadCompletion: Object.freeze({
+          satisfied: false,
+          reasonCode: PRIORITY_DRAIN_TEST_ACTIVE_OPERATION_STILL_BLOCKS_REASON,
+          blockingOperationIds: Object.freeze([operationId]),
+          blockingOperationCount: PRIORITY_DRAIN_TEST_BLOCKED_PARTITION_COUNT,
+        }),
+      })]),
+    }),
+  });
+}
+
 function buildPriorityDrainReadinessService(partitionId) {
   const planningSnapshot =
     buildPriorityDrainConvergedPlanningSnapshot(partitionId);
+  return Object.freeze({
+    getNodeReadinessSync(nodeId) {
+      return {
+        nodeId,
+        dimensions: {
+          controlPlaneRecoveryEligible: true,
+          repairEligible: true,
+          serveEligible: true,
+        },
+      };
+    },
+    getPriorityRecoveryPlanningAnswerBestEffort() {
+      return planningSnapshot;
+    },
+  });
+}
+
+function buildPriorityDrainOwnerUnavailableReadinessService(
+  partitionId,
+  unavailableNodeId,
+) {
+  const planningSnapshot =
+    buildPriorityDrainConvergedPlanningSnapshot(partitionId);
+  return Object.freeze({
+    getNodeReadinessSync(nodeId) {
+      const unavailable = nodeId === unavailableNodeId;
+      return {
+        nodeId,
+        dimensions: {
+          processAlive: !unavailable,
+          clusterMemberHealthy: !unavailable,
+          controlPlaneWritable: !unavailable,
+          controlPlanePublished: true,
+          controlPlaneRecoveryEligible: !unavailable,
+          repairEligible: !unavailable,
+          serveEligible: !unavailable,
+        },
+      };
+    },
+    getPriorityRecoveryPlanningAnswerBestEffort() {
+      return planningSnapshot;
+    },
+  });
+}
+
+function buildPriorityDrainSupersededReadinessService(
+  partitionId,
+  operationId,
+) {
+  const planningSnapshot =
+    buildPriorityDrainSupersededPlanningSnapshot(partitionId, operationId);
   return Object.freeze({
     getNodeReadinessSync(nodeId) {
       return {
@@ -293,8 +455,8 @@ test('RebalanceCoordinator completes ACTIVE REPLACE when source removal is alrea
     }
   });
 
-test('RebalanceCoordinator re-dispatches REPLACE STOPPING remove phase ' +
-  'while source replica remains active', async (t) => {
+test('RebalanceCoordinator keeps REPLACE STOPPING in progress when replayed ' +
+  'remove completes while source replica remains active', async (t) => {
   const deliveries = [];
   const messageRouter = {
     async deliver(target, payload) {
@@ -414,8 +576,8 @@ test('RebalanceCoordinator re-dispatches REPLACE STOPPING remove phase ' +
     );
     t.equal(
       persistedOperation?.workflowStep,
-      WORKFLOW_STEP.REMOVED,
-      'STOPPING reconciliation should complete when replayed remove returns completed',
+      WORKFLOW_STEP.STOPPING,
+      'STOPPING reconciliation should wait for source visibility after completed replay',
     );
   } finally {
     await coordinator.shutdown();
@@ -457,8 +619,8 @@ test('RebalanceCoordinator retires stale priority REPLACE SENDING when ' +
           workflow_step: WORKFLOW_STEP.SENDING,
           created_at: TEST_NOW_MS,
           updated_at: TEST_NOW_MS,
-          completed_at: null,
-          error_message: null,
+          completed_at: PRIORITY_DRAIN_TEST_NO_COMPLETED_AT,
+          error_message: PRIORITY_DRAIN_TEST_NO_ERROR_MESSAGE,
           entity_type: PRIORITY_DRAIN_TEST_ENTITY_TYPE,
           entity_id: TEST_PARTITION_ID,
           steps_history: JSON.stringify([
@@ -481,7 +643,7 @@ test('RebalanceCoordinator retires stale priority REPLACE SENDING when ' +
   try {
     coordinator.repository.getActualReplicaObservation = async () => ({
       state: STOPPING_REPLICA_OBSERVATION_STATE.ABSENT,
-      source: 'authoritative',
+      source: PRIORITY_DRAIN_TEST_AUTHORITATIVE_SOURCE,
     });
 
     const operation = await coordinator.getOperation(TEST_OPERATION_ID);
@@ -602,7 +764,316 @@ test('RebalanceCoordinator retires remote-owned stale priority REPLACE ' +
   }
 });
 
-test('RebalanceCoordinator dispatches source removal instead of draining a ' +
+test('RebalanceCoordinator retires remote-owned stale priority REPLACE ' +
+  'PENDING when target never materialized and spread is satisfied in flight',
+async (t) => {
+  const TEST_PARTITION_ID = 'replica_operations-p1';
+  const TEST_SOURCE_REPLICA_ID = TEST_PARTITION_ID + '-r2';
+  const TEST_TARGET_REPLICA_ID = TEST_PARTITION_ID + '-r7';
+  const TEST_OPERATION_ID = 'priority-drain-remote-pending-target-absent';
+  const TEST_NOW_MS = Date.now();
+  const deliveries = [];
+  const coordinator = createTestCoordinator({
+    nodeId: PRIORITY_DRAIN_TEST_SOURCE_NODE_ID,
+    enableTimeouts: false,
+    messageRouter: {
+      async deliver(target, payload) {
+        deliveries.push({target, payload});
+        return {
+          acknowledged: true,
+          status: ReplicaOperationResponseStatus.INITIATED,
+        };
+      },
+    },
+    controlPlaneReadinessService:
+      buildPriorityDrainReadinessService(TEST_PARTITION_ID),
+    cacheData: {
+      services: [
+        {
+          service_id: TEST_SOURCE_REPLICA_ID,
+          replica_id: TEST_SOURCE_REPLICA_ID,
+          service_type: PRIORITY_DRAIN_TEST_ENTITY_TYPE,
+          partition_id: TEST_PARTITION_ID,
+          node_id: PRIORITY_DRAIN_TEST_SOURCE_NODE_ID,
+          status: ReplicaStatus.ACTIVE,
+          address: PRIORITY_DRAIN_TEST_SOURCE_NODE_ID + '/partition/' +
+            TEST_SOURCE_REPLICA_ID,
+        },
+      ],
+      replicaOperations: [
+        {
+          operation_id: TEST_OPERATION_ID,
+          type: OperationType.REPLACE,
+          partition_id: TEST_PARTITION_ID,
+          replica_id: TEST_TARGET_REPLICA_ID,
+          source_node_id: PRIORITY_DRAIN_TEST_SOURCE_NODE_ID,
+          target_node_id: PRIORITY_DRAIN_TEST_TARGET_NODE_ID,
+          status: ReplicaStatus.PENDING,
+          workflow_step: WORKFLOW_STEP.PENDING,
+          created_at: TEST_NOW_MS,
+          updated_at: TEST_NOW_MS,
+          completed_at: PRIORITY_DRAIN_TEST_NO_COMPLETED_AT,
+          error_message: PRIORITY_DRAIN_TEST_NO_ERROR_MESSAGE,
+          entity_type: PRIORITY_DRAIN_TEST_ENTITY_TYPE,
+          entity_id: TEST_PARTITION_ID,
+          steps_history: JSON.stringify([
+            {
+              step: WORKFLOW_STEP.PENDING,
+              timestamp: TEST_NOW_MS,
+              sourceReplicaId: TEST_SOURCE_REPLICA_ID,
+            },
+          ]),
+        },
+      ],
+    },
+  });
+
+  try {
+    coordinator.workflowOwner.buildPriorityRecoveryCompletionForOperation =
+      () => Object.freeze({
+        state:
+          PRIORITY_RECOVERY_COMPLETION_STATE.SPREAD_SATISFIED_IN_FLIGHT,
+        blocked: false,
+      });
+    coordinator.repository.getActualReplicaObservation = async () => ({
+      state: STOPPING_REPLICA_OBSERVATION_STATE.OBSERVED,
+      source: PRIORITY_DRAIN_TEST_AUTHORITATIVE_SOURCE,
+      lifecycleStatus: ReplicaStatus.ACTIVE,
+    });
+
+    const operation = await coordinator.getOperation(TEST_OPERATION_ID);
+    const reconciled =
+      await coordinator.workflowOwner.reconcilePriorityRecoveryOperationDrain(
+        operation,
+      );
+    const persistedOperation =
+      await coordinator.getOperation(TEST_OPERATION_ID);
+
+    t.equal(
+      reconciled,
+      true,
+      'target-absent spread-satisfied priority replacement should drain',
+    );
+    t.equal(
+      deliveries.length,
+      0,
+      'target-absent priority drain should not remove the source replica',
+    );
+    t.equal(
+      persistedOperation?.workflowStep,
+      WORKFLOW_STEP.REMOVED,
+      'target-absent priority replacement should become terminal',
+    );
+    t.equal(
+      persistedOperation?.status,
+      ReplicaStatus.REMOVED,
+      'target-absent priority replacement should persist removed status',
+    );
+  } finally {
+    await coordinator.shutdown();
+  }
+});
+
+test('RebalanceCoordinator retires remote-owned stale priority ADD ' +
+  'SENDING when priority recovery placement is converged', async (t) => {
+  const TEST_PARTITION_ID = 'sql_transactions-p1';
+  const TEST_TARGET_REPLICA_ID = TEST_PARTITION_ID + '-r6';
+  const TEST_OPERATION_ID = 'priority-drain-remote-add-sending-converged';
+  const TEST_TARGET_REPLICA_ADDRESS =
+    PRIORITY_DRAIN_TEST_TARGET_NODE_ID + '/partition/' +
+    TEST_TARGET_REPLICA_ID;
+  const TEST_NOW_MS = Date.now();
+  const deliveries = [];
+  const coordinator = createTestCoordinator({
+    nodeId: PRIORITY_DRAIN_TEST_TARGET_NODE_ID,
+    enableTimeouts: false,
+    messageRouter: {
+      async deliver(target, payload) {
+        deliveries.push({target, payload});
+        return {
+          acknowledged: true,
+          status: ReplicaOperationResponseStatus.INITIATED,
+        };
+      },
+    },
+    controlPlaneReadinessService:
+      buildPriorityDrainReadinessService(TEST_PARTITION_ID),
+    cacheData: {
+      services: [
+        {
+          service_id: TEST_TARGET_REPLICA_ID,
+          replica_id: TEST_TARGET_REPLICA_ID,
+          service_type: PRIORITY_DRAIN_TEST_ENTITY_TYPE,
+          node_id: PRIORITY_DRAIN_TEST_TARGET_NODE_ID,
+          partition_id: TEST_PARTITION_ID,
+          status: ReplicaStatus.ACTIVE,
+          raft_role: RAFT_ROLE.FOLLOWER,
+          address: TEST_TARGET_REPLICA_ADDRESS,
+        },
+      ],
+      replicaOperations: [
+        {
+          operation_id: TEST_OPERATION_ID,
+          type: OperationType.ADD,
+          partition_id: TEST_PARTITION_ID,
+          replica_id: TEST_TARGET_REPLICA_ID,
+          source_node_id: PRIORITY_DRAIN_TEST_SOURCE_NODE_ID,
+          target_node_id: PRIORITY_DRAIN_TEST_TARGET_NODE_ID,
+          status: ReplicaStatus.PENDING,
+          workflow_step: WORKFLOW_STEP.SENDING,
+          created_at: TEST_NOW_MS,
+          updated_at: TEST_NOW_MS,
+          completed_at: PRIORITY_DRAIN_TEST_NO_COMPLETED_AT,
+          error_message: PRIORITY_DRAIN_TEST_NO_ERROR_MESSAGE,
+          entity_type: PRIORITY_DRAIN_TEST_ENTITY_TYPE,
+          entity_id: TEST_PARTITION_ID,
+          steps_history: JSON.stringify([
+            {
+              step: WORKFLOW_STEP.PENDING,
+              timestamp: TEST_NOW_MS,
+            },
+            {
+              step: WORKFLOW_STEP.SENDING,
+              timestamp: TEST_NOW_MS,
+              previousStep: WORKFLOW_STEP.PENDING,
+            },
+          ]),
+        },
+      ],
+    },
+  });
+
+  try {
+    const operation = await coordinator.getOperation(TEST_OPERATION_ID);
+    const progressed =
+      await coordinator.workflowOwner.reconcilePriorityRecoveryOperationDrain(
+        operation,
+      );
+    const persistedOperation =
+      await coordinator.getOperation(TEST_OPERATION_ID);
+
+    t.equal(
+      progressed,
+      true,
+      'remote converged priority ADD drain should reconcile',
+    );
+    t.equal(
+      deliveries.length,
+      0,
+      'remote converged priority ADD drain should not dispatch work',
+    );
+    t.equal(
+      persistedOperation?.workflowStep,
+      WORKFLOW_STEP.ACTIVE,
+      'remote-owned stale SENDING priority ADD should become terminal active',
+    );
+    t.equal(
+      persistedOperation?.status,
+      ReplicaStatus.ACTIVE,
+      'remote-owned stale SENDING priority ADD should persist active status',
+    );
+  } finally {
+    await coordinator.shutdown();
+  }
+});
+
+test('RebalanceCoordinator fails remote-owned stale priority REPLACE ' +
+  'SENDING when the target leaves the recovery cohort', async (t) => {
+  const TEST_PARTITION_ID = 'sql_write_operations-p1';
+  const TEST_SOURCE_REPLICA_ID = TEST_PARTITION_ID + '-r2';
+  const TEST_TARGET_REPLICA_ID = TEST_PARTITION_ID + '-r5';
+  const TEST_OPERATION_ID = 'priority-drain-remote-superseded-sending';
+  const TEST_NOW_MS = Date.now();
+  const deliveries = [];
+  const coordinator = createTestCoordinator({
+    nodeId: PRIORITY_DRAIN_TEST_SOURCE_NODE_ID,
+    enableTimeouts: false,
+    messageRouter: {
+      async deliver(target, payload) {
+        deliveries.push({target, payload});
+        return {
+          acknowledged: true,
+          status: ReplicaOperationResponseStatus.INITIATED,
+        };
+      },
+    },
+    controlPlaneReadinessService:
+      buildPriorityDrainSupersededReadinessService(
+        TEST_PARTITION_ID,
+        TEST_OPERATION_ID,
+      ),
+    cacheData: {
+      replicaOperations: [
+        {
+          operation_id: TEST_OPERATION_ID,
+          type: OperationType.REPLACE,
+          partition_id: TEST_PARTITION_ID,
+          replica_id: TEST_TARGET_REPLICA_ID,
+          source_node_id: PRIORITY_DRAIN_TEST_SOURCE_NODE_ID,
+          target_node_id: PRIORITY_DRAIN_TEST_STALE_TARGET_NODE_ID,
+          status: ReplicaStatus.PENDING,
+          workflow_step: WORKFLOW_STEP.SENDING,
+          created_at: TEST_NOW_MS,
+          updated_at: TEST_NOW_MS,
+          completed_at: PRIORITY_DRAIN_TEST_NO_COMPLETED_AT,
+          error_message: PRIORITY_DRAIN_TEST_NO_ERROR_MESSAGE,
+          entity_type: PRIORITY_DRAIN_TEST_ENTITY_TYPE,
+          entity_id: TEST_PARTITION_ID,
+          steps_history: JSON.stringify([
+            {
+              step: WORKFLOW_STEP.PENDING,
+              timestamp: TEST_NOW_MS,
+              sourceReplicaId: TEST_SOURCE_REPLICA_ID,
+            },
+            {
+              step: WORKFLOW_STEP.SENDING,
+              timestamp: TEST_NOW_MS,
+              previousStep: WORKFLOW_STEP.PENDING,
+            },
+          ]),
+        },
+      ],
+    },
+  });
+
+  try {
+    const operation = await coordinator.getOperation(TEST_OPERATION_ID);
+    const progressed =
+      await coordinator.workflowOwner.reconcileOperationProgress(operation);
+    const persistedOperation =
+      await coordinator.getOperation(TEST_OPERATION_ID);
+
+    t.equal(
+      progressed,
+      true,
+      'remote superseded priority recovery row should reconcile',
+    );
+    t.equal(
+      deliveries.length,
+      0,
+      'remote superseded target should not dispatch replica work',
+    );
+    t.equal(
+      persistedOperation?.workflowStep,
+      WORKFLOW_STEP.FAILED,
+      'remote-owned superseded SENDING priority replacement should fail',
+    );
+    t.equal(
+      persistedOperation?.status,
+      ReplicaStatus.FAILED,
+      'remote-owned superseded SENDING priority replacement should persist failed status',
+    );
+    t.match(
+      String(persistedOperation?.errorMessage || ''),
+      /eligible cohort/i,
+      'failure should explain the eligible recovery cohort mismatch',
+    );
+  } finally {
+    await coordinator.shutdown();
+  }
+});
+
+test('RebalanceCoordinator dispatches source handoff instead of draining a ' +
   'priority REPLACE while the source replica is still active', async (t) => {
   const TEST_PARTITION_ID = 'control_plane_publications-p1';
   const TEST_SOURCE_REPLICA_ID = TEST_PARTITION_ID + '-r1';
@@ -720,22 +1191,870 @@ test('RebalanceCoordinator dispatches source removal instead of draining a ' +
     t.equal(
       deliveries.length,
       1,
-      'source-present priority recovery drain should dispatch source removal',
+      'source-present priority recovery drain should dispatch source handoff',
+    );
+    t.equal(
+      deliveries[0]?.payload?.type,
+      ReplicaOperationMessageType.STEP_DOWN_REPLICA,
+      'source-present priority recovery drain should honor source handoff safety',
+    );
+    t.equal(
+      persistedOperation?.workflowStep,
+      WORKFLOW_STEP.ACTIVE,
+      'source-present priority replacement should remain active during handoff',
+    );
+    t.equal(
+      persistedOperation?.status,
+      ReplicaStatus.ACTIVE,
+      'source-present priority replacement should keep active status during handoff',
+    );
+    t.equal(
+      coordinator.workflowOwner.safetyDeferredRetryTimerByOperationId.size,
+      1,
+      'source-present priority replacement should arm a safety retry',
+    );
+  } finally {
+    await coordinator.shutdown();
+  }
+});
+
+test('RebalanceCoordinator uses observed active target cache state to ' +
+  'advance a priority REPLACE SENDING source removal', async (t) => {
+  const TEST_PARTITION_ID = 'sql_transactions-p1';
+  const TEST_SOURCE_REPLICA_ID = TEST_PARTITION_ID + '-r2';
+  const TEST_TARGET_REPLICA_ID = TEST_PARTITION_ID + '-r6';
+  const TEST_OPERATION_ID = 'priority-drain-sending-target-cache-active';
+  const TEST_NOW_MS = Date.now();
+  const TEST_SERVICE_TYPE = 'partition';
+  const TEST_VOTER_RAFT_ROLE = 'follower';
+  const TEST_SOURCE_ADDRESS =
+    PRIORITY_DRAIN_TEST_SOURCE_NODE_ID + '/partition/' +
+    TEST_SOURCE_REPLICA_ID;
+  const TEST_TARGET_ADDRESS =
+    PRIORITY_DRAIN_TEST_TARGET_NODE_ID + '/partition/' +
+    TEST_TARGET_REPLICA_ID;
+  const deliveries = [];
+  const coordinator = createTestCoordinator({
+    nodeId: PRIORITY_DRAIN_TEST_TARGET_NODE_ID,
+    enableTimeouts: false,
+    messageRouter: {
+      async deliver(target, payload) {
+        deliveries.push({target, payload});
+        return {
+          acknowledged: true,
+          status: ReplicaOperationResponseStatus.INITIATED,
+        };
+      },
+    },
+    controlPlaneReadinessService:
+      buildPriorityDrainReadinessService(TEST_PARTITION_ID),
+    cacheData: {
+      services: [
+        {
+          service_id: TEST_SOURCE_REPLICA_ID,
+          replica_id: TEST_SOURCE_REPLICA_ID,
+          service_type: TEST_SERVICE_TYPE,
+          partition_id: TEST_PARTITION_ID,
+          node_id: PRIORITY_DRAIN_TEST_SOURCE_NODE_ID,
+          raft_role: TEST_VOTER_RAFT_ROLE,
+          status: ReplicaStatus.ACTIVE,
+          address: TEST_SOURCE_ADDRESS,
+        },
+        {
+          service_id: TEST_TARGET_REPLICA_ID,
+          replica_id: TEST_TARGET_REPLICA_ID,
+          service_type: TEST_SERVICE_TYPE,
+          partition_id: TEST_PARTITION_ID,
+          node_id: PRIORITY_DRAIN_TEST_TARGET_NODE_ID,
+          raft_role: TEST_VOTER_RAFT_ROLE,
+          status: ReplicaStatus.ACTIVE,
+          address: TEST_TARGET_ADDRESS,
+        },
+      ],
+      replicaOperations: [
+        {
+          operation_id: TEST_OPERATION_ID,
+          type: OperationType.REPLACE,
+          partition_id: TEST_PARTITION_ID,
+          replica_id: TEST_TARGET_REPLICA_ID,
+          source_node_id: PRIORITY_DRAIN_TEST_SOURCE_NODE_ID,
+          target_node_id: PRIORITY_DRAIN_TEST_TARGET_NODE_ID,
+          status: ReplicaStatus.PENDING,
+          workflow_step: WORKFLOW_STEP.SENDING,
+          created_at: TEST_NOW_MS,
+          updated_at: TEST_NOW_MS,
+          completed_at: PRIORITY_DRAIN_TEST_NO_COMPLETED_AT,
+          error_message: PRIORITY_DRAIN_TEST_NO_ERROR_MESSAGE,
+          entity_type: PRIORITY_DRAIN_TEST_ENTITY_TYPE,
+          entity_id: TEST_PARTITION_ID,
+          steps_history: JSON.stringify([
+            {
+              step: WORKFLOW_STEP.PENDING,
+              timestamp: TEST_NOW_MS,
+              sourceReplicaId: TEST_SOURCE_REPLICA_ID,
+            },
+            {
+              step: WORKFLOW_STEP.SENDING,
+              timestamp: TEST_NOW_MS,
+              previousStep: WORKFLOW_STEP.PENDING,
+            },
+          ]),
+        },
+      ],
+    },
+  });
+
+  try {
+    coordinator.repository.getActualReplicaObservation = async (replicaId) => {
+      if (replicaId === TEST_SOURCE_REPLICA_ID) {
+        return {
+          state: STOPPING_REPLICA_OBSERVATION_STATE.OBSERVED,
+          source: PRIORITY_DRAIN_TEST_AUTHORITATIVE_SOURCE,
+          lifecycleStatus: ReplicaStatus.ACTIVE,
+        };
+      }
+      return {
+        state: STOPPING_REPLICA_OBSERVATION_STATE.ABSENT,
+        source: PRIORITY_DRAIN_TEST_AUTHORITATIVE_SOURCE,
+      };
+    };
+
+    const operation = await coordinator.getOperation(TEST_OPERATION_ID);
+    const progressed =
+      await coordinator.workflowOwner.reconcileOperationProgress(operation);
+    const persistedOperation =
+      await coordinator.getOperation(TEST_OPERATION_ID);
+
+    t.equal(
+      progressed,
+      true,
+      'observed active target cache state should continue source removal',
+    );
+    t.equal(
+      deliveries.length,
+      1,
+      'observed active target should dispatch source removal once',
     );
     t.equal(
       deliveries[0]?.payload?.type,
       ReplicaOperationMessageType.REMOVE_REPLICA,
-      'source-present priority recovery drain should dispatch remove work',
+      'observed active target should dispatch safe source removal',
     );
     t.equal(
       persistedOperation?.workflowStep,
       WORKFLOW_STEP.STOPPING,
-      'source-present priority replacement should advance to stopping',
+      'observed active target should advance the replacement to STOPPING',
     );
     t.equal(
       persistedOperation?.status,
       ReplicaStatus.REMOVING,
-      'source-present priority replacement should persist removing status',
+      'observed active target should persist removing status',
+    );
+  } finally {
+    await coordinator.shutdown();
+  }
+});
+
+test('RebalanceCoordinator releases remote-owned ACTIVE priority REPLACE ' +
+  'when the canonical owner is no longer repair-eligible and spread is ' +
+  'satisfied', async (t) => {
+  const TEST_PARTITION_ID = PRIORITY_DRAIN_TEST_REMOTE_RELEASE_PARTITION_ID;
+  const TEST_SOURCE_REPLICA_ID = TEST_PARTITION_ID + '-r1';
+  const TEST_TARGET_REPLICA_ID = TEST_PARTITION_ID + '-r4';
+  const TEST_OPERATION_ID = PRIORITY_DRAIN_TEST_REMOTE_RELEASE_OPERATION_ID;
+  const TEST_NOW_MS = Date.now();
+  const TEST_SOURCE_ADDRESS =
+    PRIORITY_DRAIN_TEST_SOURCE_NODE_ID + '/partition/' +
+    TEST_SOURCE_REPLICA_ID;
+  const TEST_TARGET_ADDRESS =
+    PRIORITY_DRAIN_TEST_UNAVAILABLE_TARGET_NODE_ID + '/partition/' +
+    TEST_TARGET_REPLICA_ID;
+  const deliveries = [];
+  const coordinator = createTestCoordinator({
+    nodeId: PRIORITY_DRAIN_TEST_SOURCE_NODE_ID,
+    enableTimeouts: false,
+    messageRouter: {
+      async deliver(target, payload) {
+        deliveries.push({target, payload});
+        return {
+          acknowledged: true,
+          status: ReplicaOperationResponseStatus.INITIATED,
+        };
+      },
+    },
+    controlPlaneReadinessService:
+      buildPriorityDrainOwnerUnavailableReadinessService(
+        TEST_PARTITION_ID,
+        PRIORITY_DRAIN_TEST_UNAVAILABLE_TARGET_NODE_ID,
+      ),
+    cacheData: {
+      services: [
+        {
+          service_id: TEST_SOURCE_REPLICA_ID,
+          replica_id: TEST_SOURCE_REPLICA_ID,
+          service_type: PRIORITY_DRAIN_TEST_REMOTE_RELEASE_SERVICE_TYPE,
+          partition_id: TEST_PARTITION_ID,
+          node_id: PRIORITY_DRAIN_TEST_SOURCE_NODE_ID,
+          raft_role: PRIORITY_DRAIN_TEST_REMOTE_RELEASE_VOTER_ROLE,
+          status: ReplicaStatus.ACTIVE,
+          address: TEST_SOURCE_ADDRESS,
+        },
+        {
+          service_id: TEST_TARGET_REPLICA_ID,
+          replica_id: TEST_TARGET_REPLICA_ID,
+          service_type: PRIORITY_DRAIN_TEST_REMOTE_RELEASE_SERVICE_TYPE,
+          partition_id: TEST_PARTITION_ID,
+          node_id: PRIORITY_DRAIN_TEST_UNAVAILABLE_TARGET_NODE_ID,
+          raft_role: PRIORITY_DRAIN_TEST_REMOTE_RELEASE_VOTER_ROLE,
+          status: ReplicaStatus.ACTIVE,
+          address: TEST_TARGET_ADDRESS,
+        },
+      ],
+      replicaOperations: [
+        {
+          operation_id: TEST_OPERATION_ID,
+          type: OperationType.REPLACE,
+          partition_id: TEST_PARTITION_ID,
+          replica_id: TEST_TARGET_REPLICA_ID,
+          source_node_id: PRIORITY_DRAIN_TEST_SOURCE_NODE_ID,
+          target_node_id: PRIORITY_DRAIN_TEST_UNAVAILABLE_TARGET_NODE_ID,
+          status: ReplicaStatus.ACTIVE,
+          workflow_step: WORKFLOW_STEP.ACTIVE,
+          created_at: TEST_NOW_MS,
+          updated_at: TEST_NOW_MS,
+          completed_at: PRIORITY_DRAIN_TEST_NO_COMPLETED_AT,
+          error_message: PRIORITY_DRAIN_TEST_NO_ERROR_MESSAGE,
+          entity_type: PRIORITY_DRAIN_TEST_ENTITY_TYPE,
+          entity_id: TEST_PARTITION_ID,
+          steps_history: JSON.stringify([
+            {
+              step: WORKFLOW_STEP.PENDING,
+              timestamp: TEST_NOW_MS,
+              sourceReplicaId: TEST_SOURCE_REPLICA_ID,
+            },
+            {
+              step: WORKFLOW_STEP.ACTIVE,
+              timestamp: TEST_NOW_MS,
+              previousStep: WORKFLOW_STEP.SYNCING,
+            },
+          ]),
+        },
+      ],
+    },
+  });
+
+  try {
+    coordinator.repository.getActualReplicaObservation = async () => ({
+      state: STOPPING_REPLICA_OBSERVATION_STATE.OBSERVED,
+      source: PRIORITY_DRAIN_TEST_AUTHORITATIVE_SOURCE,
+      lifecycleStatus: ReplicaStatus.ACTIVE,
+    });
+
+    const operation = await coordinator.getOperation(TEST_OPERATION_ID);
+    const reconciled =
+      await coordinator.workflowOwner.reconcilePriorityRecoveryOperationDrain(
+        operation,
+      );
+    const persistedOperation =
+      await coordinator.getOperation(TEST_OPERATION_ID);
+
+    t.equal(
+      reconciled,
+      true,
+      PRIORITY_DRAIN_TEST_REMOTE_RELEASE_SOURCE_ACTIVE_ASSERTION,
+    );
+    t.equal(
+      deliveries.length,
+      0,
+      PRIORITY_DRAIN_TEST_REMOTE_RELEASE_NO_DELIVERY_ASSERTION,
+    );
+    t.equal(
+      persistedOperation?.workflowStep,
+      WORKFLOW_STEP.REMOVED,
+      PRIORITY_DRAIN_TEST_REMOTE_RELEASE_TERMINAL_ASSERTION,
+    );
+  } finally {
+    await coordinator.shutdown();
+  }
+});
+
+test('RebalanceCoordinator releases remote-owned SYNCING priority REPLACE ' +
+  'when the target is active and canonical owner is no longer repair-eligible',
+async (t) => {
+  const TEST_PARTITION_ID = PRIORITY_DRAIN_TEST_REMOTE_RELEASE_PARTITION_ID;
+  const TEST_SOURCE_REPLICA_ID = TEST_PARTITION_ID + '-r1';
+  const TEST_TARGET_REPLICA_ID = TEST_PARTITION_ID + '-r4';
+  const TEST_OPERATION_ID =
+    PRIORITY_DRAIN_TEST_REMOTE_RELEASE_SYNCING_OPERATION_ID;
+  const TEST_NOW_MS = Date.now();
+  const TEST_SOURCE_ADDRESS =
+    PRIORITY_DRAIN_TEST_SOURCE_NODE_ID + '/partition/' +
+    TEST_SOURCE_REPLICA_ID;
+  const TEST_TARGET_ADDRESS =
+    PRIORITY_DRAIN_TEST_UNAVAILABLE_TARGET_NODE_ID + '/partition/' +
+    TEST_TARGET_REPLICA_ID;
+  const deliveries = [];
+  const coordinator = createTestCoordinator({
+    nodeId: PRIORITY_DRAIN_TEST_SOURCE_NODE_ID,
+    enableTimeouts: false,
+    messageRouter: {
+      async deliver(target, payload) {
+        deliveries.push({target, payload});
+        return {
+          acknowledged: true,
+          status: ReplicaOperationResponseStatus.INITIATED,
+        };
+      },
+    },
+    controlPlaneReadinessService:
+      buildPriorityDrainOwnerUnavailableReadinessService(
+        TEST_PARTITION_ID,
+        PRIORITY_DRAIN_TEST_UNAVAILABLE_TARGET_NODE_ID,
+      ),
+    cacheData: {
+      services: [
+        {
+          service_id: TEST_SOURCE_REPLICA_ID,
+          replica_id: TEST_SOURCE_REPLICA_ID,
+          service_type: PRIORITY_DRAIN_TEST_REMOTE_RELEASE_SERVICE_TYPE,
+          partition_id: TEST_PARTITION_ID,
+          node_id: PRIORITY_DRAIN_TEST_SOURCE_NODE_ID,
+          raft_role: PRIORITY_DRAIN_TEST_REMOTE_RELEASE_VOTER_ROLE,
+          status: ReplicaStatus.ACTIVE,
+          address: TEST_SOURCE_ADDRESS,
+        },
+        {
+          service_id: TEST_TARGET_REPLICA_ID,
+          replica_id: TEST_TARGET_REPLICA_ID,
+          service_type: PRIORITY_DRAIN_TEST_REMOTE_RELEASE_SERVICE_TYPE,
+          partition_id: TEST_PARTITION_ID,
+          node_id: PRIORITY_DRAIN_TEST_UNAVAILABLE_TARGET_NODE_ID,
+          raft_role: PRIORITY_DRAIN_TEST_REMOTE_RELEASE_VOTER_ROLE,
+          status: ReplicaStatus.ACTIVE,
+          address: TEST_TARGET_ADDRESS,
+        },
+      ],
+      replicaOperations: [
+        {
+          operation_id: TEST_OPERATION_ID,
+          type: OperationType.REPLACE,
+          partition_id: TEST_PARTITION_ID,
+          replica_id: TEST_TARGET_REPLICA_ID,
+          source_node_id: PRIORITY_DRAIN_TEST_SOURCE_NODE_ID,
+          target_node_id: PRIORITY_DRAIN_TEST_UNAVAILABLE_TARGET_NODE_ID,
+          status: ReplicaStatus.SYNCING,
+          workflow_step: WORKFLOW_STEP.SYNCING,
+          created_at: TEST_NOW_MS,
+          updated_at: TEST_NOW_MS,
+          completed_at: PRIORITY_DRAIN_TEST_NO_COMPLETED_AT,
+          error_message: PRIORITY_DRAIN_TEST_NO_ERROR_MESSAGE,
+          entity_type: PRIORITY_DRAIN_TEST_ENTITY_TYPE,
+          entity_id: TEST_PARTITION_ID,
+          steps_history: JSON.stringify([
+            {
+              step: WORKFLOW_STEP.PENDING,
+              timestamp: TEST_NOW_MS,
+              sourceReplicaId: TEST_SOURCE_REPLICA_ID,
+            },
+            {
+              step: WORKFLOW_STEP.SYNCING,
+              timestamp: TEST_NOW_MS,
+              previousStep: WORKFLOW_STEP.CREATING,
+            },
+          ]),
+        },
+      ],
+    },
+  });
+
+  try {
+    coordinator.repository.getActualReplicaObservation = async () => ({
+      state: STOPPING_REPLICA_OBSERVATION_STATE.OBSERVED,
+      source: PRIORITY_DRAIN_TEST_AUTHORITATIVE_SOURCE,
+      lifecycleStatus: ReplicaStatus.ACTIVE,
+    });
+
+    const operation = await coordinator.getOperation(TEST_OPERATION_ID);
+    const reconciled =
+      await coordinator.workflowOwner.reconcilePriorityRecoveryOperationDrain(
+        operation,
+      );
+    const persistedOperation =
+      await coordinator.getOperation(TEST_OPERATION_ID);
+
+    t.equal(
+      reconciled,
+      true,
+      PRIORITY_DRAIN_TEST_REMOTE_RELEASE_SOURCE_ACTIVE_ASSERTION,
+    );
+    t.equal(
+      deliveries.length,
+      0,
+      PRIORITY_DRAIN_TEST_REMOTE_RELEASE_NO_DELIVERY_ASSERTION,
+    );
+    t.equal(
+      persistedOperation?.workflowStep,
+      WORKFLOW_STEP.REMOVED,
+      PRIORITY_DRAIN_TEST_REMOTE_RELEASE_SYNCING_ASSERTION,
+    );
+  } finally {
+    await coordinator.shutdown();
+  }
+});
+
+test('RebalanceCoordinator releases remote-owned STOPPING priority REPLACE ' +
+  'when the canonical owner is no longer repair-eligible and source removal ' +
+  'is in flight', async (t) => {
+  const TEST_PARTITION_ID = PRIORITY_DRAIN_TEST_REMOTE_RELEASE_PARTITION_ID;
+  const TEST_SOURCE_REPLICA_ID = TEST_PARTITION_ID + '-r1';
+  const TEST_TARGET_REPLICA_ID = TEST_PARTITION_ID + '-r4';
+  const TEST_OPERATION_ID =
+    PRIORITY_DRAIN_TEST_REMOTE_RELEASE_STOPPING_OPERATION_ID;
+  const TEST_NOW_MS = Date.now();
+  const TEST_SOURCE_ADDRESS =
+    PRIORITY_DRAIN_TEST_SOURCE_NODE_ID + '/partition/' +
+    TEST_SOURCE_REPLICA_ID;
+  const TEST_TARGET_ADDRESS =
+    PRIORITY_DRAIN_TEST_UNAVAILABLE_TARGET_NODE_ID + '/partition/' +
+    TEST_TARGET_REPLICA_ID;
+  const deliveries = [];
+  const coordinator = createTestCoordinator({
+    nodeId: PRIORITY_DRAIN_TEST_SOURCE_NODE_ID,
+    enableTimeouts: false,
+    messageRouter: {
+      async deliver(target, payload) {
+        deliveries.push({target, payload});
+        return {
+          acknowledged: true,
+          status: ReplicaOperationResponseStatus.INITIATED,
+        };
+      },
+    },
+    controlPlaneReadinessService:
+      buildPriorityDrainOwnerUnavailableReadinessService(
+        TEST_PARTITION_ID,
+        PRIORITY_DRAIN_TEST_UNAVAILABLE_TARGET_NODE_ID,
+      ),
+    cacheData: {
+      services: [
+        {
+          service_id: TEST_SOURCE_REPLICA_ID,
+          replica_id: TEST_SOURCE_REPLICA_ID,
+          service_type: PRIORITY_DRAIN_TEST_REMOTE_RELEASE_SERVICE_TYPE,
+          partition_id: TEST_PARTITION_ID,
+          node_id: PRIORITY_DRAIN_TEST_SOURCE_NODE_ID,
+          raft_role: PRIORITY_DRAIN_TEST_REMOTE_RELEASE_VOTER_ROLE,
+          status: ReplicaStatus.REMOVING,
+          address: TEST_SOURCE_ADDRESS,
+        },
+        {
+          service_id: TEST_TARGET_REPLICA_ID,
+          replica_id: TEST_TARGET_REPLICA_ID,
+          service_type: PRIORITY_DRAIN_TEST_REMOTE_RELEASE_SERVICE_TYPE,
+          partition_id: TEST_PARTITION_ID,
+          node_id: PRIORITY_DRAIN_TEST_UNAVAILABLE_TARGET_NODE_ID,
+          raft_role: PRIORITY_DRAIN_TEST_REMOTE_RELEASE_VOTER_ROLE,
+          status: ReplicaStatus.ACTIVE,
+          address: TEST_TARGET_ADDRESS,
+        },
+      ],
+      replicaOperations: [
+        {
+          operation_id: TEST_OPERATION_ID,
+          type: OperationType.REPLACE,
+          partition_id: TEST_PARTITION_ID,
+          replica_id: TEST_TARGET_REPLICA_ID,
+          source_node_id: PRIORITY_DRAIN_TEST_SOURCE_NODE_ID,
+          target_node_id: PRIORITY_DRAIN_TEST_UNAVAILABLE_TARGET_NODE_ID,
+          status: ReplicaStatus.REMOVING,
+          workflow_step: WORKFLOW_STEP.STOPPING,
+          created_at: TEST_NOW_MS,
+          updated_at: TEST_NOW_MS,
+          completed_at: PRIORITY_DRAIN_TEST_NO_COMPLETED_AT,
+          error_message: PRIORITY_DRAIN_TEST_NO_ERROR_MESSAGE,
+          entity_type: PRIORITY_DRAIN_TEST_ENTITY_TYPE,
+          entity_id: TEST_PARTITION_ID,
+          steps_history: JSON.stringify([
+            {
+              step: WORKFLOW_STEP.PENDING,
+              timestamp: TEST_NOW_MS,
+              sourceReplicaId: TEST_SOURCE_REPLICA_ID,
+            },
+            {
+              step: WORKFLOW_STEP.STOPPING,
+              timestamp: TEST_NOW_MS,
+              previousStep: WORKFLOW_STEP.ACTIVE,
+            },
+          ]),
+        },
+      ],
+    },
+  });
+
+  try {
+    coordinator.repository.getActualReplicaObservation = async () => ({
+      state: STOPPING_REPLICA_OBSERVATION_STATE.OBSERVED,
+      source: PRIORITY_DRAIN_TEST_AUTHORITATIVE_SOURCE,
+      lifecycleStatus: ReplicaStatus.REMOVING,
+    });
+
+    const operation = await coordinator.getOperation(TEST_OPERATION_ID);
+    const reconciled =
+      await coordinator.workflowOwner.reconcilePriorityRecoveryOperationDrain(
+        operation,
+      );
+    const persistedOperation =
+      await coordinator.getOperation(TEST_OPERATION_ID);
+
+    t.equal(
+      reconciled,
+      true,
+      PRIORITY_DRAIN_TEST_REMOTE_RELEASE_SOURCE_STOPPING_ASSERTION,
+    );
+    t.equal(
+      deliveries.length,
+      0,
+      PRIORITY_DRAIN_TEST_REMOTE_RELEASE_NO_DELIVERY_ASSERTION,
+    );
+    t.equal(
+      persistedOperation?.workflowStep,
+      WORKFLOW_STEP.REMOVED,
+      PRIORITY_DRAIN_TEST_REMOTE_RELEASE_STOPPING_ASSERTION,
+    );
+  } finally {
+    await coordinator.shutdown();
+  }
+});
+
+test('RebalanceCoordinator guards terminal priority REPLACE rows from stale ' +
+  'direct nonterminal transitions', async (t) => {
+  const TEST_PARTITION_ID = 'sql_transactions-p1';
+  const TEST_SOURCE_REPLICA_ID = TEST_PARTITION_ID + '-r1';
+  const TEST_TARGET_REPLICA_ID = TEST_PARTITION_ID + '-r4';
+  const TEST_OPERATION_ID = PRIORITY_DRAIN_TEST_TERMINAL_GUARD_OPERATION_ID;
+  const TEST_NOW_MS = Date.now();
+  const TEST_SOURCE_NODE_ID = PRIORITY_DRAIN_TEST_SOURCE_NODE_ID;
+  const TEST_TARGET_NODE_ID = PRIORITY_DRAIN_TEST_TARGET_NODE_ID;
+  const TEST_STALE_OPERATION = {
+    operationId: TEST_OPERATION_ID,
+    type: OperationType.REPLACE,
+    partitionId: TEST_PARTITION_ID,
+    replicaId: TEST_TARGET_REPLICA_ID,
+    sourceNodeId: TEST_SOURCE_NODE_ID,
+    targetNodeId: TEST_TARGET_NODE_ID,
+    status: ReplicaStatus.ACTIVE,
+    workflowStep: WORKFLOW_STEP.ACTIVE,
+    createdAt: TEST_NOW_MS,
+    updatedAt: TEST_NOW_MS,
+    completedAt: PRIORITY_DRAIN_TEST_NO_COMPLETED_AT,
+    errorMessage: PRIORITY_DRAIN_TEST_NO_ERROR_MESSAGE,
+    entityType: PRIORITY_DRAIN_TEST_ENTITY_TYPE,
+    entityId: TEST_PARTITION_ID,
+    stepsHistory: [
+      {
+        step: WORKFLOW_STEP.PENDING,
+        timestamp: TEST_NOW_MS,
+        sourceReplicaId: TEST_SOURCE_REPLICA_ID,
+      },
+      {
+        step: WORKFLOW_STEP.ACTIVE,
+        timestamp: TEST_NOW_MS,
+        previousStep: WORKFLOW_STEP.CREATING,
+      },
+    ],
+  };
+  const coordinator = createTestCoordinator({
+    nodeId: TEST_TARGET_NODE_ID,
+    enableTimeouts: false,
+    controlPlaneReadinessService:
+      buildPriorityDrainReadinessService(TEST_PARTITION_ID),
+    cacheData: {
+      replicaOperations: [
+        {
+          operation_id: TEST_OPERATION_ID,
+          type: OperationType.REPLACE,
+          partition_id: TEST_PARTITION_ID,
+          replica_id: TEST_TARGET_REPLICA_ID,
+          source_node_id: TEST_SOURCE_NODE_ID,
+          target_node_id: TEST_TARGET_NODE_ID,
+          status: ReplicaStatus.REMOVED,
+          workflow_step: WORKFLOW_STEP.REMOVED,
+          created_at: TEST_NOW_MS,
+          updated_at: TEST_NOW_MS,
+          completed_at: TEST_NOW_MS,
+          error_message: PRIORITY_DRAIN_TEST_NO_ERROR_MESSAGE,
+          entity_type: PRIORITY_DRAIN_TEST_ENTITY_TYPE,
+          entity_id: TEST_PARTITION_ID,
+          steps_history: JSON.stringify([
+            ...TEST_STALE_OPERATION.stepsHistory,
+            {
+              step: WORKFLOW_STEP.REMOVED,
+              timestamp: TEST_NOW_MS,
+              previousStep: WORKFLOW_STEP.STOPPING,
+            },
+          ]),
+        },
+      ],
+    },
+  });
+
+  try {
+    const transitionCommitted = await coordinator.workflowOwner.updateStep(
+      TEST_STALE_OPERATION,
+      WORKFLOW_STEP.STOPPING,
+    );
+    const persistedOperation =
+      await coordinator.getOperation(TEST_OPERATION_ID);
+
+    t.equal(
+      transitionCommitted,
+      false,
+      PRIORITY_DRAIN_TEST_TERMINAL_GUARD_TRANSITION_ASSERTION,
+    );
+    t.equal(
+      persistedOperation?.workflowStep,
+      WORKFLOW_STEP.REMOVED,
+      PRIORITY_DRAIN_TEST_TERMINAL_GUARD_STEP_ASSERTION,
+    );
+    t.equal(
+      persistedOperation?.status,
+      ReplicaStatus.REMOVED,
+      PRIORITY_DRAIN_TEST_TERMINAL_GUARD_STATUS_ASSERTION,
+    );
+  } finally {
+    await coordinator.shutdown();
+  }
+});
+
+test('RebalanceCoordinator removes a priority REPLACE source follower after ' +
+  'fresh replacement election evidence and safe recovery completion',
+async (t) => {
+  const TEST_PARTITION_ID = 'sql_transactions-p1';
+  const TEST_SOURCE_REPLICA_ID = TEST_PARTITION_ID + '-r1';
+  const TEST_TARGET_REPLICA_ID = TEST_PARTITION_ID + '-r5';
+  const TEST_OPERATION_ID = PRIORITY_DRAIN_TEST_FOLLOWER_ELECTION_OPERATION_ID;
+  const TEST_NOW_MS = Date.now();
+  const TEST_SOURCE_ADDRESS =
+    PRIORITY_DRAIN_TEST_SOURCE_NODE_ID + '/partition/' +
+    TEST_SOURCE_REPLICA_ID;
+  const TEST_TARGET_ADDRESS =
+    PRIORITY_DRAIN_TEST_TARGET_NODE_ID + '/partition/' +
+    TEST_TARGET_REPLICA_ID;
+  const deliveries = [];
+  const coordinator = createTestCoordinator({
+    nodeId: PRIORITY_DRAIN_TEST_TARGET_NODE_ID,
+    enableTimeouts: false,
+    messageRouter: {
+      async deliver(target, payload) {
+        deliveries.push({target, payload});
+        return {
+          acknowledged: true,
+          status: ReplicaOperationResponseStatus.INITIATED,
+        };
+      },
+    },
+    controlPlaneReadinessService:
+      buildPriorityDrainReadinessService(TEST_PARTITION_ID),
+    cacheData: {
+      services: [
+        {
+          service_id: TEST_SOURCE_REPLICA_ID,
+          replica_id: TEST_SOURCE_REPLICA_ID,
+          service_type: PRIORITY_DRAIN_TEST_REMOTE_RELEASE_SERVICE_TYPE,
+          partition_id: TEST_PARTITION_ID,
+          node_id: PRIORITY_DRAIN_TEST_SOURCE_NODE_ID,
+          raft_role: PRIORITY_DRAIN_TEST_REMOTE_RELEASE_VOTER_ROLE,
+          status: ReplicaStatus.ACTIVE,
+          address: TEST_SOURCE_ADDRESS,
+        },
+        {
+          service_id: TEST_TARGET_REPLICA_ID,
+          replica_id: TEST_TARGET_REPLICA_ID,
+          service_type: PRIORITY_DRAIN_TEST_REMOTE_RELEASE_SERVICE_TYPE,
+          partition_id: TEST_PARTITION_ID,
+          node_id: PRIORITY_DRAIN_TEST_TARGET_NODE_ID,
+          raft_role: PRIORITY_DRAIN_TEST_REMOTE_RELEASE_VOTER_ROLE,
+          status: ReplicaStatus.ACTIVE,
+          address: TEST_TARGET_ADDRESS,
+        },
+      ],
+      replicaOperations: [
+        {
+          operation_id: TEST_OPERATION_ID,
+          type: OperationType.REPLACE,
+          partition_id: TEST_PARTITION_ID,
+          replica_id: TEST_TARGET_REPLICA_ID,
+          source_node_id: PRIORITY_DRAIN_TEST_SOURCE_NODE_ID,
+          target_node_id: PRIORITY_DRAIN_TEST_TARGET_NODE_ID,
+          status: ReplicaStatus.ACTIVE,
+          workflow_step: WORKFLOW_STEP.ACTIVE,
+          created_at: TEST_NOW_MS,
+          updated_at: TEST_NOW_MS,
+          completed_at: PRIORITY_DRAIN_TEST_NO_COMPLETED_AT,
+          error_message: PRIORITY_DRAIN_TEST_NO_ERROR_MESSAGE,
+          entity_type: PRIORITY_DRAIN_TEST_ENTITY_TYPE,
+          entity_id: TEST_PARTITION_ID,
+          steps_history: JSON.stringify([
+            {
+              step: WORKFLOW_STEP.PENDING,
+              timestamp: TEST_NOW_MS,
+              sourceReplicaId: TEST_SOURCE_REPLICA_ID,
+            },
+            {
+              step: WORKFLOW_STEP.ACTIVE,
+              timestamp: TEST_NOW_MS,
+              previousStep: WORKFLOW_STEP.SYNCING,
+            },
+          ]),
+        },
+      ],
+    },
+  });
+
+  try {
+    coordinator.workflowOwner
+      .getPriorityPublicationReplacementLeaderElectionEvidenceMap()
+      .set(
+        TEST_OPERATION_ID,
+        Object.freeze({
+          completedReplicaIds: Object.freeze([TEST_TARGET_REPLICA_ID]),
+          notFoundReplicaIds: Object.freeze([]),
+          observedAt: TEST_NOW_MS,
+          replacementReplicaId: TEST_TARGET_REPLICA_ID,
+          responseStatus: ReplicaOperationResponseStatus.COMPLETED,
+        }),
+      );
+
+    const operation = await coordinator.getOperation(TEST_OPERATION_ID);
+    const result = await coordinator.executeOperation(operation);
+    const persistedOperation =
+      await coordinator.getOperation(TEST_OPERATION_ID);
+
+    t.equal(
+      result.success,
+      true,
+      PRIORITY_DRAIN_TEST_FOLLOWER_ELECTION_DISPATCH_ASSERTION,
+    );
+    t.equal(
+      deliveries[0]?.payload?.type,
+      ReplicaOperationMessageType.REMOVE_REPLICA,
+      PRIORITY_DRAIN_TEST_FOLLOWER_ELECTION_DISPATCH_ASSERTION,
+    );
+    t.equal(
+      persistedOperation?.workflowStep,
+      WORKFLOW_STEP.STOPPING,
+      PRIORITY_DRAIN_TEST_FOLLOWER_ELECTION_STEP_ASSERTION,
+    );
+  } finally {
+    await coordinator.shutdown();
+  }
+});
+
+test('RebalanceCoordinator removes a non-publication priority REPLACE ' +
+  'source follower once recovery is safe and the target is voter-ready',
+async (t) => {
+  const TEST_PARTITION_ID = 'replica_operations-p1';
+  const TEST_SOURCE_REPLICA_ID = TEST_PARTITION_ID + '-r4';
+  const TEST_TARGET_REPLICA_ID = TEST_PARTITION_ID + '-r6';
+  const TEST_OPERATION_ID = 'priority-drain-follower-source-safe';
+  const TEST_NOW_MS = Date.now();
+  const TEST_SOURCE_ADDRESS =
+    PRIORITY_DRAIN_TEST_SOURCE_NODE_ID + '/partition/' +
+    TEST_SOURCE_REPLICA_ID;
+  const TEST_TARGET_ADDRESS =
+    PRIORITY_DRAIN_TEST_TARGET_NODE_ID + '/partition/' +
+    TEST_TARGET_REPLICA_ID;
+  const deliveries = [];
+  const coordinator = createTestCoordinator({
+    nodeId: PRIORITY_DRAIN_TEST_TARGET_NODE_ID,
+    enableTimeouts: false,
+    messageRouter: {
+      async deliver(target, payload) {
+        deliveries.push({target, payload});
+        return {
+          acknowledged: true,
+          status: ReplicaOperationResponseStatus.INITIATED,
+        };
+      },
+    },
+    controlPlaneReadinessService:
+      buildPriorityDrainReadinessService(TEST_PARTITION_ID),
+    cacheData: {
+      services: [
+        {
+          service_id: TEST_SOURCE_REPLICA_ID,
+          replica_id: TEST_SOURCE_REPLICA_ID,
+          service_type: PRIORITY_DRAIN_TEST_REMOTE_RELEASE_SERVICE_TYPE,
+          partition_id: TEST_PARTITION_ID,
+          node_id: PRIORITY_DRAIN_TEST_SOURCE_NODE_ID,
+          raft_role: PRIORITY_DRAIN_TEST_REMOTE_RELEASE_VOTER_ROLE,
+          status: ReplicaStatus.ACTIVE,
+          address: TEST_SOURCE_ADDRESS,
+        },
+        {
+          service_id: TEST_TARGET_REPLICA_ID,
+          replica_id: TEST_TARGET_REPLICA_ID,
+          service_type: PRIORITY_DRAIN_TEST_REMOTE_RELEASE_SERVICE_TYPE,
+          partition_id: TEST_PARTITION_ID,
+          node_id: PRIORITY_DRAIN_TEST_TARGET_NODE_ID,
+          raft_role: PRIORITY_DRAIN_TEST_REMOTE_RELEASE_VOTER_ROLE,
+          status: ReplicaStatus.ACTIVE,
+          address: TEST_TARGET_ADDRESS,
+        },
+      ],
+      replicaOperations: [
+        {
+          operation_id: TEST_OPERATION_ID,
+          type: OperationType.REPLACE,
+          partition_id: TEST_PARTITION_ID,
+          replica_id: TEST_TARGET_REPLICA_ID,
+          source_node_id: PRIORITY_DRAIN_TEST_SOURCE_NODE_ID,
+          target_node_id: PRIORITY_DRAIN_TEST_TARGET_NODE_ID,
+          status: ReplicaStatus.ACTIVE,
+          workflow_step: WORKFLOW_STEP.ACTIVE,
+          created_at: TEST_NOW_MS,
+          updated_at: TEST_NOW_MS,
+          completed_at: PRIORITY_DRAIN_TEST_NO_COMPLETED_AT,
+          error_message: PRIORITY_DRAIN_TEST_NO_ERROR_MESSAGE,
+          entity_type: PRIORITY_DRAIN_TEST_ENTITY_TYPE,
+          entity_id: TEST_PARTITION_ID,
+          steps_history: JSON.stringify([
+            {
+              step: WORKFLOW_STEP.PENDING,
+              timestamp: TEST_NOW_MS,
+              sourceReplicaId: TEST_SOURCE_REPLICA_ID,
+            },
+            {
+              step: WORKFLOW_STEP.ACTIVE,
+              timestamp: TEST_NOW_MS,
+              previousStep: WORKFLOW_STEP.SYNCING,
+            },
+          ]),
+        },
+      ],
+    },
+  });
+
+  try {
+    const operation = await coordinator.getOperation(TEST_OPERATION_ID);
+    const result = await coordinator.executeOperation(operation);
+    const persistedOperation =
+      await coordinator.getOperation(TEST_OPERATION_ID);
+
+    t.equal(
+      result.success,
+      true,
+      'safe priority follower source removal should dispatch',
+    );
+    t.equal(
+      deliveries[0]?.payload?.type,
+      ReplicaOperationMessageType.REMOVE_REPLICA,
+      'safe priority follower source removal should not require target election',
+    );
+    t.equal(
+      persistedOperation?.workflowStep,
+      WORKFLOW_STEP.STOPPING,
+      'safe priority follower source removal should advance to STOPPING',
     );
   } finally {
     await coordinator.shutdown();
@@ -826,6 +2145,95 @@ async (t) => {
       ),
       false,
       'converged priority recovery drain should not leave retry grace armed',
+    );
+  } finally {
+    await coordinator.shutdown();
+  }
+});
+
+test('RebalanceCoordinator retires stale priority REPLACE STOPPING when ' +
+  'spread is satisfied in flight and source removal is confirmed',
+async (t) => {
+  const TEST_PARTITION_ID = 'sql_transactions-p1';
+  const TEST_SOURCE_REPLICA_ID = TEST_PARTITION_ID + '-r1';
+  const TEST_TARGET_REPLICA_ID = TEST_PARTITION_ID + '-r4';
+  const TEST_OPERATION_ID = 'priority-drain-stopping-spread-satisfied';
+  const TEST_NOW_MS = Date.now();
+  const deliveries = [];
+  const coordinator = createTestCoordinator({
+    nodeId: PRIORITY_DRAIN_TEST_TARGET_NODE_ID,
+    enableTimeouts: false,
+    messageRouter: {
+      async deliver(target, payload) {
+        deliveries.push({target, payload});
+        return {
+          acknowledged: true,
+          status: ReplicaOperationResponseStatus.INITIATED,
+        };
+      },
+    },
+    controlPlaneReadinessService:
+      buildPriorityDrainReadinessService(TEST_PARTITION_ID),
+    cacheData: {
+      replicaOperations: [
+        {
+          operation_id: TEST_OPERATION_ID,
+          type: OperationType.REPLACE,
+          partition_id: TEST_PARTITION_ID,
+          replica_id: TEST_TARGET_REPLICA_ID,
+          source_node_id: PRIORITY_DRAIN_TEST_SOURCE_NODE_ID,
+          target_node_id: PRIORITY_DRAIN_TEST_TARGET_NODE_ID,
+          status: ReplicaStatus.REMOVING,
+          workflow_step: WORKFLOW_STEP.STOPPING,
+          created_at: TEST_NOW_MS,
+          updated_at: TEST_NOW_MS,
+          completed_at: null,
+          error_message: null,
+          entity_type: PRIORITY_DRAIN_TEST_ENTITY_TYPE,
+          entity_id: TEST_PARTITION_ID,
+          steps_history: JSON.stringify([
+            {
+              step: WORKFLOW_STEP.PENDING,
+              timestamp: TEST_NOW_MS,
+              sourceReplicaId: TEST_SOURCE_REPLICA_ID,
+            },
+            {
+              step: WORKFLOW_STEP.STOPPING,
+              timestamp: TEST_NOW_MS,
+              previousStep: WORKFLOW_STEP.ACTIVE,
+            },
+          ]),
+        },
+      ],
+    },
+  });
+
+  try {
+    coordinator.workflowOwner.buildPriorityRecoveryCompletionForOperation =
+      () => Object.freeze({
+        state:
+          PRIORITY_RECOVERY_COMPLETION_STATE.SPREAD_SATISFIED_IN_FLIGHT,
+        blocked: false,
+      });
+    coordinator.repository.getActualReplicaObservation = async () => ({
+      state: STOPPING_REPLICA_OBSERVATION_STATE.ABSENT,
+      source: 'authoritative',
+    });
+
+    coordinator.workflowOwner.incompleteOperationQueryEmptyBackoffMs = 0;
+    await coordinator.checkTimeouts();
+    const persistedOperation =
+      await coordinator.getOperation(TEST_OPERATION_ID);
+
+    t.equal(
+      deliveries.length,
+      0,
+      'spread-satisfied priority recovery drain should not replay source removal',
+    );
+    t.equal(
+      persistedOperation?.workflowStep,
+      WORKFLOW_STEP.REMOVED,
+      'source-confirmed STOPPING replacement should become terminal',
     );
   } finally {
     await coordinator.shutdown();

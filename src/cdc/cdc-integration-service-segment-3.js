@@ -809,6 +809,13 @@ class CDCIntegrationServiceSegment3 extends CDCIntegrationServiceSegment2 {
           allowPressureDefer: options?.allowPressureDefer,
           pressureRetryAfterMs: options?.pressureRetryAfterMs,
           deliveryPriority: options?.deliveryPriority,
+          deliverySource: options?.deliverySource,
+          replacePendingKey: options?.replacePendingKey,
+          sessionId: options?.sessionId,
+          disableSystemWriteSession: options?.disableSystemWriteSession,
+          coalescingKey: options?.coalescingKey,
+          recoveryCandidateSelectionKey:
+            options?.recoveryCandidateSelectionKey,
         });
         const sqlDurationMs = Date.now() - sqlStartMs;
         if (!result.success) {
@@ -975,6 +982,8 @@ class CDCIntegrationServiceSegment3 extends CDCIntegrationServiceSegment2 {
             allowPressureDefer: options?.allowPressureDefer,
             pressureRetryAfterMs: options?.pressureRetryAfterMs,
             deliveryPriority: options?.deliveryPriority,
+            deliverySource: options?.deliverySource,
+            replacePendingKey: options?.replacePendingKey,
           },
         );
         const sqlDurationMs = Date.now() - sqlStartMs;
@@ -1137,6 +1146,8 @@ class CDCIntegrationServiceSegment3 extends CDCIntegrationServiceSegment2 {
           allowPressureDefer: options?.allowPressureDefer,
           pressureRetryAfterMs: options?.pressureRetryAfterMs,
           deliveryPriority: options?.deliveryPriority,
+          deliverySource: options?.deliverySource,
+          replacePendingKey: options?.replacePendingKey,
         });
         if (!result.success) {
           throw buildSystemTableMutationError(
@@ -1272,6 +1283,8 @@ class CDCIntegrationServiceSegment3 extends CDCIntegrationServiceSegment2 {
           allowPressureDefer: options?.allowPressureDefer,
           pressureRetryAfterMs: options?.pressureRetryAfterMs,
           deliveryPriority: options?.deliveryPriority,
+          deliverySource: options?.deliverySource,
+          replacePendingKey: options?.replacePendingKey,
         });
         if (!result.success) {
           throw buildSystemTableMutationError(

@@ -44,6 +44,8 @@ import {
 } from './canonical-leader-routing.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 
+const LOCAL_STR_1WW3O = 'Unknown routing error';
+
 /**
  * QueryRouter handles routing queries to partition leaders with retry logic,
  * leader redirect following, and timeout management.
@@ -523,7 +525,7 @@ class QueryRouter {
       }
 
       // Track error for reporting
-      lastError = response.error || 'Unknown routing error';
+      lastError = response.error || LOCAL_STR_1WW3O;
     }
 
     return {

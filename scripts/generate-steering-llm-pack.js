@@ -5,6 +5,49 @@ import path from 'node:path';
 import process from 'node:process';
 import {fileURLToPath} from 'node:url';
 
+const LOCAL_STR_1YILH = 'Usage: node scripts/generate-steering-llm-pack.js ';
+const LOCAL_STR_WXJQD = '[optional-config-path]';
+const LOCAL_STR_EMPTY = '';
+const LOCAL_NUM_FOUR = 4;
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_STR_SPACE = ' ';
+const LOCAL_STR_GDTVK = '>';
+const LOCAL_STR_1 = '$1';
+const LOCAL_STR_MUST_NOT = 'must_not';
+const LOCAL_STR_MUST = 'must';
+const LOCAL_STR_SHOULD = 'should';
+const LOCAL_STR_MAY = 'may';
+const LOCAL_STR_INFO = 'info';
+const LOCAL_NUM_90 = 90;
+const LOCAL_NUM_72 = 72;
+const LOCAL_NUM_40 = 40;
+const LOCAL_NUM_24 = 24;
+const LOCAL_NUM_12 = 12;
+const LOCAL_STR_BULLET = 'bullet';
+const LOCAL_NUM_10 = 10;
+const LOCAL_NUM_30 = 30;
+const LOCAL_NUM_EIGHT = 8;
+const LOCAL_NUM_220 = 220;
+const LOCAL_STR_EXAMPLE = 'example';
+const LOCAL_STR_NOTE = 'note:';
+const LOCAL_NUM_SIX = 6;
+const LOCAL_NUM_250 = 250;
+const LOCAL_STR_592WI = ' > ';
+const LOCAL_STR_ROOT = 'root';
+const LOCAL_NUM_16 = 16;
+const LOCAL_NUM_ONE = 1;
+const LOCAL_NUM_TWO = 2;
+const LOCAL_STR_PARAGRAPH = 'paragraph';
+const LOCAL_STR_0 = '0';
+const LOCAL_STR_NEWLINE = '\n';
+const LOCAL_STR_HELP = '--help';
+const LOCAL_STR_H = '-h';
+const LOCAL_STR_UTF8 = 'utf8';
+const LOCAL_STR_RULES_JSON = 'rules.json';
+const LOCAL_STR_MANIFEST_JSON = 'manifest.json';
+const LOCAL_STR_README_MD = 'README.md';
+const LOCAL_STR_1WFBO = 'Generated steering LLM pack';
+
 const DEFAULT_CONFIG_PATH = path.join(
   '.kiro',
   'steering',
@@ -63,17 +106,17 @@ const NON_RULE_SECTION_HEADINGS = new Set([
 
 function printUsage() {
   console.log(
-    'Usage: node scripts/generate-steering-llm-pack.js ' +
-    '[optional-config-path]',
+    LOCAL_STR_1YILH +
+    LOCAL_STR_WXJQD,
   );
 }
 
 function estimateTokens(text) {
-  return Math.ceil(String(text || '').length / 4);
+  return Math.ceil(String(text || LOCAL_STR_EMPTY).length / LOCAL_NUM_FOUR);
 }
 
 function isBlank(line) {
-  return line.trim().length === 0;
+  return line.trim().length === LOCAL_NUM_ZERO;
 }
 
 function isHeading(line) {
@@ -89,63 +132,63 @@ function isTable(line) {
 }
 
 function normalizeWhitespace(value) {
-  return String(value || '').replace(/\s+/gu, ' ').trim();
+  return String(value || LOCAL_STR_EMPTY).replace(/\s+/gu, LOCAL_STR_SPACE).trim();
 }
 
-function shouldIgnoreSection(sectionPath = '') {
-  return String(sectionPath || '')
-    .split('>')
+function shouldIgnoreSection(sectionPath = LOCAL_STR_EMPTY) {
+  return String(sectionPath || LOCAL_STR_EMPTY)
+    .split(LOCAL_STR_GDTVK)
     .map((part) => normalizeWhitespace(part).toLowerCase())
     .some((part) => NON_RULE_SECTION_HEADINGS.has(part));
 }
 
-function isPathOnlyText(text = '') {
+function isPathOnlyText(text = LOCAL_STR_EMPTY) {
   const normalized = normalizeWhitespace(text);
   return /^[./\p{L}\p{N}_*\- ]+\.(?:md|json)$/u.test(normalized);
 }
 
-function isIncompleteRuleText(text = '') {
+function isIncompleteRuleText(text = LOCAL_STR_EMPTY) {
   return TRAILING_COLON_PATTERN.test(normalizeWhitespace(text));
 }
 
 function stripInlineMarkdown(value) {
   return normalizeWhitespace(
-    String(value || '')
-      .replace(/\[([^\]]+)\]\([^)]+\)/gu, '$1')
-      .replace(/`([^`]+)`/gu, '$1')
-      .replace(/\*\*([^*]+)\*\*/gu, '$1')
-      .replace(/__([^_]+)__/gu, '$1')
-      .replace(/\*([^*]+)\*/gu, '$1')
-      .replace(/_([^_]+)_/gu, '$1')
-      .replace(/^>\s*/gu, ''),
+    String(value || LOCAL_STR_EMPTY)
+      .replace(/\[([^\]]+)\]\([^)]+\)/gu, LOCAL_STR_1)
+      .replace(/`([^`]+)`/gu, LOCAL_STR_1)
+      .replace(/\*\*([^*]+)\*\*/gu, LOCAL_STR_1)
+      .replace(/__([^_]+)__/gu, LOCAL_STR_1)
+      .replace(/\*([^*]+)\*/gu, LOCAL_STR_1)
+      .replace(/_([^_]+)_/gu, LOCAL_STR_1)
+      .replace(/^>\s*/gu, LOCAL_STR_EMPTY),
   );
 }
 
 function normalizeRuleKey(value) {
   return normalizeWhitespace(
-    String(value || '')
+    String(value || LOCAL_STR_EMPTY)
       .toLowerCase()
-      .replace(/[“”"'`]/gu, '')
-      .replace(/[^\p{L}\p{N}\s-]/gu, ' ')
-      .replace(/\s+/gu, ' '),
+      .replace(/[“”"'`]/gu, LOCAL_STR_EMPTY)
+      .replace(/[^\p{L}\p{N}\s-]/gu, LOCAL_STR_SPACE)
+      .replace(/\s+/gu, LOCAL_STR_SPACE),
   );
 }
 
 function inferStrength(text) {
   const normalized = String(text || '').toUpperCase();
   if (/(MUST\s+NOT|SHALL\s+NOT|NEVER|FORBIDDEN|DO\s+NOT)/u.test(normalized)) {
-    return 'must_not';
+    return LOCAL_STR_MUST_NOT;
   }
   if (/(MUST|SHALL|REQUIRED)/u.test(normalized)) {
-    return 'must';
+    return LOCAL_STR_MUST;
   }
   if (/SHOULD/u.test(normalized)) {
-    return 'should';
+    return LOCAL_STR_SHOULD;
   }
   if (/(MAY|ONLY)/u.test(normalized)) {
-    return 'may';
+    return LOCAL_STR_MAY;
   }
-  return 'info';
+  return LOCAL_STR_INFO;
 }
 
 function inferTags(text) {
@@ -169,7 +212,7 @@ function splitNormativeSentences(paragraph) {
     .map((sentence) => normalizeWhitespace(sentence))
     .filter(Boolean);
 
-  if (sentences.length === 0) {
+  if (sentences.length === LOCAL_NUM_ZERO) {
     return [];
   }
 
@@ -177,7 +220,7 @@ function splitNormativeSentences(paragraph) {
     NORMATIVE_PATTERN.test(sentence),
   );
 
-  if (normative.length > 0) {
+  if (normative.length > LOCAL_NUM_ZERO) {
     return normative;
   }
 
@@ -190,43 +233,43 @@ function splitNormativeSentences(paragraph) {
 
 function scoreCandidate(candidate) {
   const strength = candidate.strength;
-  let score = Number(candidate.sourcePriority || 0);
+  let score = Number(candidate.sourcePriority || LOCAL_NUM_ZERO);
 
-  if (strength === 'must_not') {
-    score += 90;
-  } else if (strength === 'must') {
-    score += 72;
-  } else if (strength === 'should') {
-    score += 40;
-  } else if (strength === 'may') {
-    score += 24;
+  if (strength === LOCAL_STR_MUST_NOT) {
+    score += LOCAL_NUM_90;
+  } else if (strength === LOCAL_STR_MUST) {
+    score += LOCAL_NUM_72;
+  } else if (strength === LOCAL_STR_SHOULD) {
+    score += LOCAL_NUM_40;
+  } else if (strength === LOCAL_STR_MAY) {
+    score += LOCAL_NUM_24;
   } else {
-    score += 12;
+    score += LOCAL_NUM_12;
   }
 
-  if (candidate.kind === 'bullet') {
-    score += 10;
+  if (candidate.kind === LOCAL_STR_BULLET) {
+    score += LOCAL_NUM_10;
   }
 
   const text = candidate.text;
   const textLength = text.length;
 
-  if (textLength < 30) {
-    score -= 8;
+  if (textLength < LOCAL_NUM_30) {
+    score -= LOCAL_NUM_EIGHT;
   }
-  if (textLength > 220) {
-    score -= 24;
+  if (textLength > LOCAL_NUM_220) {
+    score -= LOCAL_NUM_24;
   }
 
   const lowered = text.toLowerCase();
-  if (lowered.includes('example')) {
-    score -= 12;
+  if (lowered.includes(LOCAL_STR_EXAMPLE)) {
+    score -= LOCAL_NUM_12;
   }
-  if (lowered.startsWith('note:')) {
-    score -= 10;
+  if (lowered.startsWith(LOCAL_STR_NOTE)) {
+    score -= LOCAL_NUM_10;
   }
 
-  score += Math.max(0, 6 - Math.floor(candidate.line / 250));
+  score += Math.max(LOCAL_NUM_ZERO, LOCAL_NUM_SIX - Math.floor(candidate.line / LOCAL_NUM_250));
 
   return score;
 }
@@ -240,7 +283,7 @@ function ensureRelativePath(workspaceRoot, value) {
 
 function sectionPathFromStack(sectionStack) {
   const parts = sectionStack.filter(Boolean);
-  return parts.length > 0 ? parts.join(' > ') : 'root';
+  return parts.length > LOCAL_NUM_ZERO ? parts.join(LOCAL_STR_592WI) : LOCAL_STR_ROOT;
 }
 
 function pushCandidate(container, options = {}) {
@@ -251,7 +294,7 @@ function pushCandidate(container, options = {}) {
   if (shouldIgnoreSection(options.section)) {
     return;
   }
-  if (text.length < 16) {
+  if (text.length < LOCAL_NUM_16) {
     return;
   }
   if (isPathOnlyText(text)) {
@@ -262,7 +305,7 @@ function pushCandidate(container, options = {}) {
   }
 
   const strength = inferStrength(text);
-  if (strength === 'info' && options.kind !== 'bullet') {
+  if (strength === LOCAL_STR_INFO && options.kind !== LOCAL_STR_BULLET) {
     return;
   }
 
@@ -287,7 +330,7 @@ function pushCandidate(container, options = {}) {
   container.push(candidate);
 }
 
-function collectBulletListText(lines = [], startIndex = 0, options = {}) {
+function collectBulletListText(lines = [], startIndex = LOCAL_NUM_ZERO, options = {}) {
   const items = [];
   let cursor = startIndex;
   const minimumIndent = Number.isFinite(options.minimumIndent) ?
@@ -297,12 +340,12 @@ function collectBulletListText(lines = [], startIndex = 0, options = {}) {
   while (cursor < lines.length) {
     const rawLine = lines[cursor];
     const bulletMatch = rawLine.match(BULLET_WITH_INDENT_PATTERN);
-    if (!bulletMatch || bulletMatch[1].length < minimumIndent) {
+    if (!bulletMatch || bulletMatch[LOCAL_NUM_ONE].length < minimumIndent) {
       break;
     }
 
-    let text = bulletMatch[2];
-    let itemCursor = cursor + 1;
+    let text = bulletMatch[LOCAL_NUM_TWO];
+    let itemCursor = cursor + LOCAL_NUM_ONE;
 
     while (itemCursor < lines.length) {
       const nextLine = lines[itemCursor];
@@ -311,7 +354,7 @@ function collectBulletListText(lines = [], startIndex = 0, options = {}) {
         break;
       }
       text += `${RULE_BODY_JOINER}${nextLine.trim()}`;
-      itemCursor += 1;
+      itemCursor += LOCAL_NUM_ONE;
     }
 
     items.push(text.trim());
@@ -324,7 +367,7 @@ function collectBulletListText(lines = [], startIndex = 0, options = {}) {
 function appendChildBulletsForParentRule(
   paragraph,
   lines = [],
-  cursor = 0,
+  cursor = LOCAL_NUM_ZERO,
   options = {},
 ) {
   if (!TRAILING_COLON_PATTERN.test(paragraph)) {
@@ -332,7 +375,7 @@ function appendChildBulletsForParentRule(
   }
 
   const collected = collectBulletListText(lines, cursor, options);
-  if (collected.items.length === 0) {
+  if (collected.items.length === LOCAL_NUM_ZERO) {
     return {text: paragraph, nextIndex: cursor};
   }
 
@@ -351,22 +394,22 @@ function parseMarkdownCandidates(content, source = {}) {
   const sectionStack = [];
   const candidates = [];
 
-  for (let index = 0; index < lines.length; index++) {
+  for (let index = LOCAL_NUM_ZERO; index < lines.length; index++) {
     const rawLine = lines[index];
 
     const headingMatch = rawLine.match(HEADING_PATTERN);
     if (headingMatch) {
       const level = headingMatch[2].length;
       const headingText = stripInlineMarkdown(headingMatch[3]);
-      sectionStack.length = Math.max(level - 1, 0);
-      sectionStack[level - 1] = headingText;
+      sectionStack.length = Math.max(level - LOCAL_NUM_ONE, LOCAL_NUM_ZERO);
+      sectionStack[level - LOCAL_NUM_ONE] = headingText;
       continue;
     }
 
     const bulletMatch = rawLine.match(BULLET_WITH_INDENT_PATTERN);
     if (bulletMatch) {
-      let text = bulletMatch[2];
-      let cursor = index + 1;
+      let text = bulletMatch[LOCAL_NUM_TWO];
+      let cursor = index + LOCAL_NUM_ONE;
 
       while (cursor < lines.length) {
         const nextLine = lines[cursor];
@@ -375,7 +418,7 @@ function parseMarkdownCandidates(content, source = {}) {
           break;
         }
         text += ` ${nextLine.trim()}`;
-        cursor += 1;
+        cursor += LOCAL_NUM_ONE;
       }
 
       const expandedRule = appendChildBulletsForParentRule(
@@ -392,12 +435,12 @@ function parseMarkdownCandidates(content, source = {}) {
         domain: source.domain,
         sourceFile: source.file,
         sourcePriority: source.priority,
-        line: index + 1,
+        line: index + LOCAL_NUM_ONE,
         section: sectionPathFromStack(sectionStack),
-        kind: 'bullet',
+        kind: LOCAL_STR_BULLET,
       });
 
-      index = cursor - 1;
+      index = cursor - LOCAL_NUM_ONE;
       continue;
     }
 
@@ -406,7 +449,7 @@ function parseMarkdownCandidates(content, source = {}) {
     }
 
     let paragraph = rawLine.trim();
-    let cursor = index + 1;
+    let cursor = index + LOCAL_NUM_ONE;
     while (cursor < lines.length) {
       const nextLine = lines[cursor];
       if (isBlank(nextLine) || isHeading(nextLine) || isBullet(nextLine) ||
@@ -414,7 +457,7 @@ function parseMarkdownCandidates(content, source = {}) {
         break;
       }
       paragraph += ` ${nextLine.trim()}`;
-      cursor += 1;
+      cursor += LOCAL_NUM_ONE;
     }
 
     const expandedRule = appendChildBulletsForParentRule(
@@ -432,13 +475,13 @@ function parseMarkdownCandidates(content, source = {}) {
         domain: source.domain,
         sourceFile: source.file,
         sourcePriority: source.priority,
-        line: index + 1,
+        line: index + LOCAL_NUM_ONE,
         section: sectionPathFromStack(sectionStack),
-        kind: 'paragraph',
+        kind: LOCAL_STR_PARAGRAPH,
       });
     }
 
-    index = cursor - 1;
+    index = cursor - LOCAL_NUM_ONE;
   }
 
   return candidates;
@@ -547,7 +590,7 @@ function assignRuleIds(rules = [], domainPrefixes = {}) {
 
     byDomain.set(domain, sorted.map((rule, index) => ({
       ...rule,
-      id: `${prefix}-${String(index + 1).padStart(4, '0')}`,
+      id: `${prefix}-${String(index + LOCAL_NUM_ONE).padStart(LOCAL_NUM_FOUR, LOCAL_STR_0)}`,
     })));
   }
 
@@ -612,7 +655,7 @@ function renderPackMarkdown(output = {}, rules = []) {
     '',
   ];
 
-  return body.join('\n');
+  return body.join(LOCAL_STR_NEWLINE);
 }
 
 function buildManifest(outputs = [], selectedByOutput = new Map()) {
@@ -670,7 +713,7 @@ function renderReadme(manifestEntries = []) {
     '',
   ];
 
-  return lines.join('\n');
+  return lines.join(LOCAL_STR_NEWLINE);
 }
 
 async function readJson(filePath) {
@@ -680,7 +723,7 @@ async function readJson(filePath) {
 
 async function main() {
   const arg = process.argv[2];
-  if (arg === '--help' || arg === '-h') {
+  if (arg === LOCAL_STR_HELP || arg === LOCAL_STR_H) {
     printUsage();
     process.exit(EXIT_CODE_SUCCESS);
   }
@@ -721,7 +764,7 @@ async function main() {
     await fs.writeFile(
       path.join(llmDir, `${output.name}.md`),
       `${markdown}`,
-      'utf8',
+      LOCAL_STR_UTF8,
     );
   }
 
@@ -755,9 +798,9 @@ async function main() {
   };
 
   await fs.writeFile(
-    path.join(llmDir, 'rules.json'),
+    path.join(llmDir, LOCAL_STR_RULES_JSON),
     `${JSON.stringify(rulesJson, null, JSON_INDENT_SPACES)}\n`,
-    'utf8',
+    LOCAL_STR_UTF8,
   );
 
   const manifest = {
@@ -766,19 +809,19 @@ async function main() {
   };
 
   await fs.writeFile(
-    path.join(llmDir, 'manifest.json'),
+    path.join(llmDir, LOCAL_STR_MANIFEST_JSON),
     `${JSON.stringify(manifest, null, JSON_INDENT_SPACES)}\n`,
-    'utf8',
+    LOCAL_STR_UTF8,
   );
 
   const readme = renderReadme(manifestEntries);
   await fs.writeFile(
-    path.join(llmDir, 'README.md'),
+    path.join(llmDir, LOCAL_STR_README_MD),
     `${readme}`,
-    'utf8',
+    LOCAL_STR_UTF8,
   );
 
-  console.log('Generated steering LLM pack');
+  console.log(LOCAL_STR_1WFBO);
   for (const entry of manifestEntries) {
     console.log(
       `- ${entry.name}: ${entry.ruleCount} rules ` +

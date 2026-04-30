@@ -17,6 +17,8 @@
 
 import {ADMIN_MESSAGE_TYPE} from './admin-constants.js';
 
+const LOCAL_NUM_ZERO = 0;
+
 /**
  * Error messages for CLI compatibility validation.
  * @type {Object}
@@ -108,7 +110,7 @@ function validateFields(message, contract) {
       errors.push(CLI_COMPAT_ERROR_MSG.MISSING_REQUIRED_FIELD(field));
     }
   }
-  if (errors.length > 0) {
+  if (errors.length > LOCAL_NUM_ZERO) {
     return {valid: false, errors};
   }
   return {valid: true, messageType: contract.type};

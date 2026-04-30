@@ -63,6 +63,17 @@ Closure:
       metadata-gateway violation remains.
 - [ ] Any out-of-scope inherited violation has a linked follow-on package.
 
+## Failure Migration / Contraction
+
+Required for scenario-driven packages after blocker migration.
+
+- Current dominant blocker:
+- Current semantic owner:
+- Current boundary:
+- Historical migrations that are evidence only:
+- Replayable owner-decision fixture or blocker probe:
+- Presentation surfaces that must consume the decision contract:
+
 ## Detection / Analysis Tasks
 
 - [ ] Build the concern inventory.

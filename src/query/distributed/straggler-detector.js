@@ -14,6 +14,9 @@ import {
   QUERY_SUBSYSTEM,
 } from '../query-constants.js';
 
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_NUM_ONE = 1;
+
 const MIN_COMPLETIONS_FOR_MEDIAN = 2;
 const MEDIAN_DIVISOR = 2;
 const PARITY_MODULUS = 2;
@@ -60,7 +63,7 @@ class StragglerDetector {
 
     // Track latencies for median calculation
     this.latencies = new Map(); // partitionId -> latencyMs
-    this.completedCount = 0;
+    this.completedCount = LOCAL_NUM_ZERO;
     this.detectedStragglers = new Set();
   }
 
@@ -80,11 +83,11 @@ class StragglerDetector {
    */
   getMedianLatency() {
     const values = Array.from(this.latencies.values()).sort((a, b) => a - b);
-    if (values.length === 0) return NO_LATENCY_MS;
+    if (values.length === LOCAL_NUM_ZERO) return NO_LATENCY_MS;
 
     const mid = Math.floor(values.length / MEDIAN_DIVISOR);
-    return values.length % PARITY_MODULUS === 0 ?
-      (values[mid - 1] + values[mid]) / MEDIAN_DIVISOR :
+    return values.length % PARITY_MODULUS === LOCAL_NUM_ZERO ?
+      (values[mid - LOCAL_NUM_ONE] + values[mid]) / MEDIAN_DIVISOR :
       values[mid];
   }
 
@@ -192,7 +195,7 @@ class StragglerDetector {
    */
   reset() {
     this.latencies.clear();
-    this.completedCount = 0;
+    this.completedCount = LOCAL_NUM_ZERO;
     this.detectedStragglers.clear();
   }
 }
@@ -221,7 +224,7 @@ class SpeculativeExecutor {
 
     // Track active speculative executions
     this.activeExecutions = new Map(); // partitionId -> {promise, abortController}
-    this.executionCount = 0;
+    this.executionCount = LOCAL_NUM_ZERO;
   }
 
   /**
@@ -268,7 +271,7 @@ class SpeculativeExecutor {
     }
 
     const replicas = this.getAlternativeReplicas(partitionId);
-    if (replicas.length === 0) {
+    if (replicas.length === LOCAL_NUM_ZERO) {
       this.logger.debug(QUERY_LOG_MSG.NO_ALTERNATIVE_REPLICAS, {
         partitionId,
       });
@@ -394,7 +397,7 @@ class SpeculativeExecutor {
    */
   reset() {
     this.cancelAll();
-    this.executionCount = 0;
+    this.executionCount = LOCAL_NUM_ZERO;
   }
 }
 

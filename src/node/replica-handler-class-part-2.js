@@ -14,6 +14,9 @@ import {STORAGE_DEFAULT} from '../storage/storage-constants.js';
 import {NUM, WORKFLOW_STEP} from '../constants/index.js';
 import {createControlPlaneRuntimeBundle} from '../control-plane/control-plane-runtime-bundle.js';
 import {PRESSURE_WORK_CLASS} from '../control-plane/pressure-governor.js';
+import {
+  isRetryableControlPlaneError,
+} from '../control-plane/control-plane-error-classification.js';
 import {PartitionServiceRowOwner} from '../partition/partition-service-row-owner.js';
 import {createSystemMetadataGatewayRequiredError} from '../control-plane/system-metadata-access-error.js';
 import {runRetryableControlPlaneWrite} from '../bootstrap/shared/retryable-control-plane-write.js';
@@ -410,23 +413,38 @@ class ReplicaHandler extends ReplicaHandlerPart1 {
       this.throwIfShuttingDown();
       if (!skipRemovingStatusWrite) {
         try {
-          await this.updateReplicaStatus(replicaId, ReplicaStatus.REMOVING, {
-            partitionId,
-          });
+          await this.persistReplicaStatusWithRetry(
+            replicaId,
+            ReplicaStatus.REMOVING,
+            {partitionId},
+          );
         } catch (error) {
           if (!this.shouldSkipReplicaRemovalLifecycleWrite(
             replicaId,
             ReplicaStatus.REMOVING,
           )) {
-            throw error;
+            if (!isRetryableControlPlaneError(error)) {
+              throw error;
+            }
+            this.logger.warn(
+              REPLICA_HANDLER_LOG_MSG.REMOVE_STATUS_WRITE_DEFERRED,
+              {
+                operationId,
+                replicaId,
+                partitionId,
+                nodeId: this.nodeId,
+                error: error.message,
+              },
+            );
+          } else {
+            skipRemovingStatusWrite = true;
+            this.setLocalReplica(replicaId, {
+              replicaId,
+              partitionId,
+              status: ReplicaStatus.FAILED,
+              service,
+            });
           }
-          skipRemovingStatusWrite = true;
-          this.setLocalReplica(replicaId, {
-            replicaId,
-            partitionId,
-            status: ReplicaStatus.FAILED,
-            service,
-          });
         }
       }
       // Delete the authoritative row before local shutdown so routing never points at a dead handler.
@@ -538,10 +556,30 @@ class ReplicaHandler extends ReplicaHandlerPart1 {
             ReplicaStatus.FAILED,
           )
         ) {
-          await this.updateReplicaStatus(replicaId, ReplicaStatus.FAILED, {
-            partitionId,
-            errorMessage: error.message,
-          });
+          try {
+            await this.persistReplicaStatusWithRetry(
+              replicaId,
+              ReplicaStatus.FAILED,
+              {
+                partitionId,
+                errorMessage: error.message,
+              },
+            );
+          } catch (statusError) {
+            if (!isRetryableControlPlaneError(statusError)) {
+              throw statusError;
+            }
+            this.logger.warn(
+              REPLICA_HANDLER_LOG_MSG.REMOVE_FAILED_STATUS_WRITE_DEFERRED,
+              {
+                operationId,
+                replicaId,
+                partitionId,
+                nodeId: this.nodeId,
+                error: statusError.message,
+              },
+            );
+          }
         }
         this.setLocalReplica(replicaId, {
           replicaId,

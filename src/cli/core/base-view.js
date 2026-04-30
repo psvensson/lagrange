@@ -1,3 +1,20 @@
+const LOCAL_STR_NORMAL = 'normal';
+const LOCAL_STR_WARNING = 'warning';
+const LOCAL_STR_ERROR = 'error';
+const LOCAL_STR_WHITE = 'white';
+const LOCAL_STR_YELLOW = 'yellow';
+const LOCAL_STR_RED = 'red';
+const LOCAL_STR_CYAN = 'cyan';
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_STR_EMPTY = '';
+const LOCAL_STR_ASC = 'asc';
+const LOCAL_NUM_ONE = 1;
+const LOCAL_STR_NUMBER = 'number';
+const LOCAL_STR_DESC = 'desc';
+const LOCAL_STR_VIEW_SHOW = 'view:show';
+const LOCAL_STR_VIEW_HIDE = 'view:hide';
+const LOCAL_STR_VIEW_REFRESH = 'view:refresh';
+
 /**
  * BaseView - Base class for all CLI views with common functionality
  *
@@ -10,9 +27,9 @@
  * Row status types for styling
  */
 export const ROW_STATUS = {
-  NORMAL: 'normal',
-  WARNING: 'warning',
-  ERROR: 'error',
+  NORMAL: LOCAL_STR_NORMAL,
+  WARNING: LOCAL_STR_WARNING,
+  ERROR: LOCAL_STR_ERROR,
 };
 
 /**
@@ -20,10 +37,10 @@ export const ROW_STATUS = {
  * Requirements: 17.1
  */
 export const STATUS_COLORS = {
-  normal: 'white',
-  warning: 'yellow',
-  error: 'red',
-  changed: 'cyan',
+  normal: LOCAL_STR_WHITE,
+  warning: LOCAL_STR_YELLOW,
+  error: LOCAL_STR_RED,
+  changed: LOCAL_STR_CYAN,
 };
 
 /**
@@ -42,10 +59,10 @@ export class BaseView {
     this.options = options;
 
     // View state
-    this.selectedIndex = 0;
-    this.filter = '';
+    this.selectedIndex = LOCAL_NUM_ZERO;
+    this.filter = LOCAL_STR_EMPTY;
     this.sortColumn = null;
-    this.sortDirection = 'asc';
+    this.sortDirection = LOCAL_STR_ASC;
     this.visible = false;
 
     // Data
@@ -90,7 +107,7 @@ export class BaseView {
    * @return {string} Unique key
    */
   getItemKey(_item) {
-    return '';
+    return LOCAL_STR_EMPTY;
   }
 
   /**
@@ -100,7 +117,7 @@ export class BaseView {
    * @return {Array} Filtered data
    */
   applyFilter(data) {
-    if (!this.filter || this.filter.trim() === '') {
+    if (!this.filter || this.filter.trim() === LOCAL_STR_EMPTY) {
       return data;
     }
 
@@ -132,21 +149,21 @@ export class BaseView {
 
       // Handle null/undefined
       if (aVal === null || aVal === undefined) {
-        return this.sortDirection === 'asc' ? 1 : -1;
+        return this.sortDirection === LOCAL_STR_ASC ? LOCAL_NUM_ONE : -LOCAL_NUM_ONE;
       }
       if (bVal === null || bVal === undefined) {
-        return this.sortDirection === 'asc' ? -1 : 1;
+        return this.sortDirection === LOCAL_STR_ASC ? -LOCAL_NUM_ONE : LOCAL_NUM_ONE;
       }
 
       // Compare values
       let cmp;
-      if (typeof aVal === 'number' && typeof bVal === 'number') {
+      if (typeof aVal === LOCAL_STR_NUMBER && typeof bVal === LOCAL_STR_NUMBER) {
         cmp = aVal - bVal;
       } else {
         cmp = String(aVal).localeCompare(String(bVal));
       }
 
-      return this.sortDirection === 'asc' ? cmp : -cmp;
+      return this.sortDirection === LOCAL_STR_ASC ? cmp : -cmp;
     });
   }
 
@@ -156,7 +173,7 @@ export class BaseView {
    */
   setFilter(filter) {
     this.filter = filter;
-    this.selectedIndex = 0;
+    this.selectedIndex = LOCAL_NUM_ZERO;
     this.updateFilteredData();
   }
 
@@ -164,8 +181,8 @@ export class BaseView {
    * Clear the filter
    */
   clearFilter() {
-    this.filter = '';
-    this.selectedIndex = 0;
+    this.filter = LOCAL_STR_EMPTY;
+    this.selectedIndex = LOCAL_NUM_ZERO;
     this.updateFilteredData();
   }
 
@@ -177,10 +194,10 @@ export class BaseView {
   setSort(column, direction) {
     if (this.sortColumn === column && !direction) {
       // Toggle direction if same column
-      this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
+      this.sortDirection = this.sortDirection === LOCAL_STR_ASC ? LOCAL_STR_DESC : LOCAL_STR_ASC;
     } else {
       this.sortColumn = column;
-      this.sortDirection = direction || 'asc';
+      this.sortDirection = direction || LOCAL_STR_ASC;
     }
     this.updateFilteredData();
   }
@@ -190,7 +207,7 @@ export class BaseView {
    */
   clearSort() {
     this.sortColumn = null;
-    this.sortDirection = 'asc';
+    this.sortDirection = LOCAL_STR_ASC;
     this.updateFilteredData();
   }
 
@@ -204,7 +221,7 @@ export class BaseView {
 
     // Ensure selected index is valid
     if (this.selectedIndex >= this.filteredData.length) {
-      this.selectedIndex = Math.max(0, this.filteredData.length - 1);
+      this.selectedIndex = Math.max(LOCAL_NUM_ZERO, this.filteredData.length - LOCAL_NUM_ONE);
     }
   }
 
@@ -315,7 +332,7 @@ export class BaseView {
    * @return {Object|null} Selected item or null
    */
   getSelectedItem() {
-    if (this.filteredData.length === 0) {
+    if (this.filteredData.length === LOCAL_NUM_ZERO) {
       return null;
     }
     return this.filteredData[this.selectedIndex] || null;
@@ -325,17 +342,17 @@ export class BaseView {
    * Move selection up
    * @param {number} [count=1] - Number of rows to move
    */
-  selectUp(count = 1) {
-    this.selectedIndex = Math.max(0, this.selectedIndex - count);
+  selectUp(count = LOCAL_NUM_ONE) {
+    this.selectedIndex = Math.max(LOCAL_NUM_ZERO, this.selectedIndex - count);
   }
 
   /**
    * Move selection down
    * @param {number} [count=1] - Number of rows to move
    */
-  selectDown(count = 1) {
+  selectDown(count = LOCAL_NUM_ONE) {
     this.selectedIndex = Math.min(
-      this.filteredData.length - 1,
+      this.filteredData.length - LOCAL_NUM_ONE,
       this.selectedIndex + count,
     );
   }
@@ -344,14 +361,14 @@ export class BaseView {
    * Select first row
    */
   selectFirst() {
-    this.selectedIndex = 0;
+    this.selectedIndex = LOCAL_NUM_ZERO;
   }
 
   /**
    * Select last row
    */
   selectLast() {
-    this.selectedIndex = Math.max(0, this.filteredData.length - 1);
+    this.selectedIndex = Math.max(LOCAL_NUM_ZERO, this.filteredData.length - LOCAL_NUM_ONE);
   }
 
   /**
@@ -360,7 +377,7 @@ export class BaseView {
   show() {
     this.visible = true;
     if (this.eventBus) {
-      this.eventBus.emit('view:show', {view: this});
+      this.eventBus.emit(LOCAL_STR_VIEW_SHOW, {view: this});
     }
   }
 
@@ -370,7 +387,7 @@ export class BaseView {
   hide() {
     this.visible = false;
     if (this.eventBus) {
-      this.eventBus.emit('view:hide', {view: this});
+      this.eventBus.emit(LOCAL_STR_VIEW_HIDE, {view: this});
     }
   }
 
@@ -398,7 +415,7 @@ export class BaseView {
   refresh() {
     this.updateFilteredData();
     if (this.eventBus) {
-      this.eventBus.emit('view:refresh', {view: this});
+      this.eventBus.emit(LOCAL_STR_VIEW_REFRESH, {view: this});
     }
   }
 }

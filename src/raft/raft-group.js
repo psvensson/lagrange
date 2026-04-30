@@ -25,6 +25,8 @@ import {
   RAFT_GROUP_ROLE,
 } from './raft-group-constants.js';
 
+const LOCAL_STR_SHARED_NODE = 'shared-node';
+
 /**
  * Hash modulo for fallback replica index calculation.
  * @type {number}
@@ -50,12 +52,12 @@ function resolveActivationNodeId(options = {}) {
   }
   if (typeof options.unifiedAddress !== TYPEOF.STRING ||
       options.unifiedAddress.length === NUM.ZERO) {
-    return 'shared-node';
+    return LOCAL_STR_SHARED_NODE;
   }
   const [nodeId] = options.unifiedAddress.split(RAFT_GROUP_ADDRESS.SEPARATOR);
   return typeof nodeId === TYPEOF.STRING && nodeId.length > NUM.ZERO ?
     nodeId :
-    'shared-node';
+    LOCAL_STR_SHARED_NODE;
 }
 
 /**

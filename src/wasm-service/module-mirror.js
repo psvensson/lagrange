@@ -18,6 +18,11 @@ import {validateManifestRuntimeWithAdapter} from
 import {InProcessWasmRuntimeAdapter} from
   '../debug-runtime/wasm-runtime-adapter.js';
 
+const LOCAL_STR_FUNCTION = 'function';
+const LOCAL_STR_OBJECT = 'object';
+const LOCAL_STR_BASE64 = 'base64';
+const LOCAL_STR_EMPTY = '';
+
 const CODE_CDC_EVENTS = Object.freeze([
   CDC_EVENT.INSERT,
   CDC_EVENT.UPDATE,
@@ -134,7 +139,7 @@ class ModuleMirror {
    */
   async pullModule(functionId, version, sourceNodeId) {
     if (!this.moduleProvider ||
-      typeof this.moduleProvider !== 'function') {
+      typeof this.moduleProvider !== LOCAL_STR_FUNCTION) {
       throw new Error(MODULE_MIRROR_ERROR_MSG.PROVIDER_REQUIRED);
     }
 
@@ -143,7 +148,7 @@ class ModuleMirror {
       version,
       sourceNodeId,
     );
-    if (!modulePayload || typeof modulePayload !== 'object') {
+    if (!modulePayload || typeof modulePayload !== LOCAL_STR_OBJECT) {
       throw new Error(MODULE_MIRROR_ERROR_MSG.INVALID_PAYLOAD);
     }
 
@@ -205,13 +210,13 @@ class ModuleMirror {
     } else if (wasmBytes instanceof Uint8Array) {
       wasmBytes = Buffer.from(wasmBytes);
     } else if (typeof wasmBytes === TYPEOF.STRING) {
-      wasmBytes = Buffer.from(wasmBytes, 'base64');
+      wasmBytes = Buffer.from(wasmBytes, LOCAL_STR_BASE64);
     } else {
       throw new Error(MODULE_MIRROR_ERROR_MSG.WASM_BYTES_REQUIRED);
     }
 
     return {
-      version: String(payloadVersion ?? ''),
+      version: String(payloadVersion ?? LOCAL_STR_EMPTY),
       wasmBytes,
       manifest: payloadManifest,
       exports: payloadExports,

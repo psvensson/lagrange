@@ -18,6 +18,8 @@ import {
   STORAGE_CAPACITY_SUBSYSTEM,
 } from './storage-capacity-constants.js';
 
+const LOCAL_STR_FUNCTION = 'function';
+
 const PRESSURE_BEHAVIOR_EVALUATION_STATE = Object.freeze({
   CONSTRAINED_ALLOW: 'constrained_allow',
   CONSTRAINED_DENY: 'constrained_deny',
@@ -133,7 +135,7 @@ class StoragePressureBehavior {
   async resolvePressureState(nodeId) {
     if (!this.accountingService ||
         typeof this.accountingService.getCapacitySnapshotForNode !==
-          'function') {
+          LOCAL_STR_FUNCTION) {
       return PRESSURE_STATE.NORMAL;
     }
 

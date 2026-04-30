@@ -45,6 +45,10 @@ import {
   JOINING_LOG_MSG,
 } from '../node-joining-constants.js';
 
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_NUM_ONE = 1;
+const LOCAL_STR_SLASH = '/';
+
 const NODE_STATE_UPDATE_PUBLICATION_PATH = 'node_state_reporter';
 
 const NODE_STATE_UPDATE_PUBLICATION_DEFER_STATE = Object.freeze({
@@ -124,9 +128,9 @@ function buildNodeStateUpdatePublicationDiagnostics(
   return Object.freeze({
     publicationPath: NODE_STATE_UPDATE_PUBLICATION_PATH,
     targetAddress,
-    targetNodeId: targetAddressParts[0] || null,
-    targetServiceType: targetAddressParts[1] || null,
-    targetServiceId: targetAddressParts.slice(NUM.TWO).join('/') || null,
+    targetNodeId: targetAddressParts[LOCAL_NUM_ZERO] || null,
+    targetServiceType: targetAddressParts[LOCAL_NUM_ONE] || null,
+    targetServiceId: targetAddressParts.slice(NUM.TWO).join(LOCAL_STR_SLASH) || null,
     nodeStatePublicationMode: publicationMode,
   });
 }

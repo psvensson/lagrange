@@ -1,3 +1,10 @@
+const LOCAL_STR_CONSTRUCTOR = 'constructor';
+const REPLICA_OPERATION_MUTATION_COALESCING_KEY_PREFIX =
+  'replica-operation';
+const REPLICA_OPERATION_MUTATION_DELIVERY_SOURCE_PREFIX =
+  'control-plane:write';
+const REPLICA_OPERATION_MUTATION_DELIVERY_SOURCE_SEPARATOR = ':';
+
 function assignReplicaOperationRepositoryMutationMethods(
   ReplicaOperationRepository,
   options = {},
@@ -66,7 +73,7 @@ function assignReplicaOperationRepositoryMutationMethods(
                 owner: REPLICA_OPERATION_OWNER_NAME,
               },
               {
-                ownerId: operation.operationId,
+                ownerId: this.resolveReplicaOperationMutationOwnerId(operation),
                 onRetryableFailure: (errorResult) =>
                   this.recoverPersistedReplicaOperationMutation(
                     operation,
@@ -149,10 +156,18 @@ function assignReplicaOperationRepositoryMutationMethods(
      */
     async persistOperationUpdate(operation, options = {}) {
       const expectedWorkflowStep =
-        typeof options.expectedWorkflowStep === 'string' &&
+        typeof options.expectedWorkflowStep === TYPEOF.STRING &&
         options.expectedWorkflowStep.length > NUM.ZERO ?
           options.expectedWorkflowStep :
           null;
+      if (
+        await this.shouldRejectExpectedWorkflowStepMutation(
+          operation,
+          expectedWorkflowStep,
+        )
+      ) {
+        return false;
+      }
       const result = await this.executeReplicaOperationGatewayMutationWithRetry(
         {
           operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
@@ -165,7 +180,7 @@ function assignReplicaOperationRepositoryMutationMethods(
           owner: REPLICA_OPERATION_OWNER_NAME,
         },
         {
-          ownerId: operation.operationId,
+          ownerId: this.resolveReplicaOperationMutationOwnerId(operation),
           sessionId: options.sessionId,
           timeoutBudget: options.timeoutBudget,
           disableSystemWriteSession: options.disableSystemWriteSession === true,
@@ -248,6 +263,55 @@ function assignReplicaOperationRepositoryMutationMethods(
       }
       this.syncIncompleteOperationObservation(operation);
       return true;
+    }
+    /**
+     * Reject stale conditional updates before they reach the gateway path.
+     * @param {object} operation
+     * @param {string|null} expectedWorkflowStep
+     * @return {Promise<boolean>}
+     */
+    async shouldRejectExpectedWorkflowStepMutation(
+      operation,
+      expectedWorkflowStep,
+    ) {
+      if (
+        typeof expectedWorkflowStep !== TYPEOF.STRING ||
+        expectedWorkflowStep.length <= NUM.ZERO
+      ) {
+        return false;
+      }
+      const authoritativeOperation =
+        await this.queryAuthoritativeOperationById(operation.operationId, {
+          authoritativeReadMode:
+            CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
+          requireOwnerRpcRead: false,
+        });
+      if (
+        !authoritativeOperation ||
+        authoritativeOperation.workflowStep === expectedWorkflowStep
+      ) {
+        return false;
+      }
+      if (
+        this.isReplicaOperationVisibilitySatisfied(
+          operation,
+          authoritativeOperation,
+        )
+      ) {
+        return false;
+      }
+      return this.isAuthoritativeOperationTerminal(authoritativeOperation);
+    }
+    /**
+     * Detect terminal authoritative operation rows.
+     * @param {object|null} authoritativeOperation
+     * @return {boolean}
+     */
+    isAuthoritativeOperationTerminal(authoritativeOperation) {
+      return (
+        Number.isFinite(authoritativeOperation?.completedAt) ||
+        Number.isFinite(authoritativeOperation?.completed_at)
+      );
     }
     /**
      * Confirm a persisted operation through authoritative reads and diagnose
@@ -1075,9 +1139,17 @@ function assignReplicaOperationRepositoryMutationMethods(
           options.timeoutBudget :
           undefined;
       const ownerId =
-        typeof options.ownerId === 'string' && options.ownerId.length > NUM.ZERO ?
+        typeof options.ownerId === TYPEOF.STRING &&
+        options.ownerId.length > NUM.ZERO ?
           options.ownerId :
           null;
+      const coalescingKey =
+        this.buildReplicaOperationMutationCoalescingKey(ownerId);
+      const deliverySource =
+        this.resolveReplicaOperationMutationDeliverySource(
+          options,
+          ownerId,
+        );
       const sessionId =
         options.disableSystemWriteSession === true ?
           null :
@@ -1110,8 +1182,74 @@ function assignReplicaOperationRepositoryMutationMethods(
           CONTROL_PLANE_MUTATION_MERGE_POLICY.SINGLE_FLIGHT,
         controlPlaneTableName: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
         controlPlaneOperationKind: REPLICA_OPERATION_REPOSITORY_LITERAL.WRITE,
-        ...(ownerId ? {coalescingKey: `replica-operation:${ownerId}`} : {}),
+        ...(coalescingKey ? {coalescingKey} : {}),
+        ...(deliverySource ? {deliverySource} : {}),
       };
+    }
+    /**
+     * @param {string|null} ownerId
+     * @return {string|null}
+     * @private
+     */
+    buildReplicaOperationMutationCoalescingKey(ownerId) {
+      if (typeof ownerId !== TYPEOF.STRING || ownerId.length === NUM.ZERO) {
+        return null;
+      }
+      return `${REPLICA_OPERATION_MUTATION_COALESCING_KEY_PREFIX}` +
+        `${REPLICA_OPERATION_MUTATION_DELIVERY_SOURCE_SEPARATOR}${ownerId}`;
+    }
+    /**
+     * @param {string|null} ownerId
+     * @return {string|null}
+     * @private
+     */
+    buildReplicaOperationMutationDeliverySource(ownerId) {
+      const coalescingKey =
+        this.buildReplicaOperationMutationCoalescingKey(ownerId);
+      if (coalescingKey === null) {
+        return null;
+      }
+      return [
+        REPLICA_OPERATION_MUTATION_DELIVERY_SOURCE_PREFIX,
+        SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+        coalescingKey,
+      ].join(REPLICA_OPERATION_MUTATION_DELIVERY_SOURCE_SEPARATOR);
+    }
+    /**
+     * @param {object} [options]
+     * @param {string|null} ownerId
+     * @return {string|null}
+     * @private
+     */
+    resolveReplicaOperationMutationDeliverySource(
+      options = {},
+      ownerId = null,
+    ) {
+      if (
+        typeof options.deliverySource === TYPEOF.STRING &&
+        options.deliverySource.length > NUM.ZERO
+      ) {
+        return options.deliverySource;
+      }
+      return this.buildReplicaOperationMutationDeliverySource(ownerId);
+    }
+    /**
+     * Resolve the canonical owner id for a replica_operations mutation from
+     * either workflow objects or durable row-shaped records.
+     * @param {object} [operation]
+     * @return {string|null}
+     */
+    resolveReplicaOperationMutationOwnerId(operation = {}) {
+      const candidateOwnerIds = [
+        operation?.operationId,
+        operation?.operation_id,
+        operation?.id,
+      ];
+      const ownerId = candidateOwnerIds.find(
+        (candidate) =>
+          typeof candidate === TYPEOF.STRING && candidate.length > NUM.ZERO,
+      );
+      return typeof ownerId === TYPEOF.STRING ? ownerId : null;
     }
     /**
      * Resolve a session ID for an operation mutation.
@@ -1346,7 +1484,7 @@ function assignReplicaOperationRepositoryMutationMethods(
   for (const methodName of Object.getOwnPropertyNames(
     ReplicaOperationRepositoryMutationMethods.prototype,
   )) {
-    if (methodName === 'constructor') {
+    if (methodName === LOCAL_STR_CONSTRUCTOR) {
       continue;
     }
     Object.defineProperty(

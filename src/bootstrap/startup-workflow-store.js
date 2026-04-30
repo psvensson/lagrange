@@ -2,6 +2,10 @@ import {mkdir, readFile, rename, writeFile} from 'node:fs/promises';
 import {join as joinPath} from 'node:path';
 import {NUM, TYPEOF} from '../constants/index.js';
 
+const LOCAL_STR_UNDERSCORE = '_';
+const LOCAL_STR_ENOENT = 'ENOENT';
+const LOCAL_STR_13EMY = ': ';
+
 const STARTUP_WORKFLOW_STATUS = Object.freeze({
   ACTIVE: 'active',
   FAILED_RETRYABLE: 'failed_retryable',
@@ -46,7 +50,7 @@ function sanitizeFileToken(value) {
   if (normalized === null) {
     return null;
   }
-  return normalized.replace(/[^a-zA-Z0-9._-]/g, '_');
+  return normalized.replace(/[^a-zA-Z0-9._-]/g, LOCAL_STR_UNDERSCORE);
 }
 
 function cloneWorkflowRecord(record) {
@@ -112,7 +116,7 @@ class FileStartupWorkflowStorage {
       const raw = await readFile(recordPath, STARTUP_WORKFLOW_UTF8);
       return JSON.parse(raw);
     } catch (error) {
-      if (error?.code === 'ENOENT') {
+      if (error?.code === LOCAL_STR_ENOENT) {
         return null;
       }
       throw error;
@@ -205,7 +209,7 @@ class StartupWorkflowStore {
         )) {
       throw new Error(
         STARTUP_WORKFLOW_ERROR.INVALID_CHECKPOINT +
-          ': ' +
+          LOCAL_STR_13EMY +
           String(checkpoint),
       );
     }
@@ -318,7 +322,7 @@ class StartupWorkflowStore {
     if (!existing || existing.sessionId !== sessionId) {
       throw new Error(
         STARTUP_WORKFLOW_ERROR.SESSION_NOT_FOUND +
-          ': ' +
+          LOCAL_STR_13EMY +
           `${nodeId}::${sessionId}`,
       );
     }
@@ -372,7 +376,7 @@ class StartupWorkflowStore {
     if (!existing || existing.sessionId !== sessionId) {
       throw new Error(
         STARTUP_WORKFLOW_ERROR.SESSION_NOT_FOUND +
-          ': ' +
+          LOCAL_STR_13EMY +
           `${nodeId}::${sessionId}`,
       );
     }

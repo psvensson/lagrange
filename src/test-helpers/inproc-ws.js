@@ -1,5 +1,8 @@
 import {EventEmitter} from 'node:events';
 
+const LOCAL_STR_SOCKET_IS_NOT_OPEN = 'Socket is not open';
+const LOCAL_STR_MESSAGE = 'message';
+
 // queueMicrotask is a global in Node.js, but ESLint doesn't know about it
 const queueMicrotaskFn = globalThis.queueMicrotask;
 
@@ -27,12 +30,12 @@ export function createInProcWebSocketPair() {
   };
 
   clientSocket.send = (data) => {
-    if (clientSocket.readyState !== OPEN) throw new Error('Socket is not open');
-    deliver(serverSocket, 'message', data);
+    if (clientSocket.readyState !== OPEN) throw new Error(LOCAL_STR_SOCKET_IS_NOT_OPEN);
+    deliver(serverSocket, LOCAL_STR_MESSAGE, data);
   };
   serverSocket.send = (data) => {
-    if (serverSocket.readyState !== OPEN) throw new Error('Socket is not open');
-    deliver(clientSocket, 'message', data);
+    if (serverSocket.readyState !== OPEN) throw new Error(LOCAL_STR_SOCKET_IS_NOT_OPEN);
+    deliver(clientSocket, LOCAL_STR_MESSAGE, data);
   };
 
   clientSocket.close = closeBoth;

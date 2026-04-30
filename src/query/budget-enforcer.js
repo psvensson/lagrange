@@ -31,6 +31,8 @@ import {
   BUDGET_CATEGORY,
 } from './budget-limit-error.js';
 
+const LOCAL_STR_TERMINATED = 'terminated';
+
 /**
  * Enforces resource budgets for a single query execution.
  * Accumulates usage and throws typed BudgetLimitError when
@@ -401,7 +403,7 @@ class BudgetEnforcer {
       throw new BudgetLimitError(
         ERR.OPERATION_TERMINATED,
         {
-          category: 'terminated',
+          category: LOCAL_STR_TERMINATED,
           limit: NUM.ZERO,
           usage: NUM.ZERO,
         },

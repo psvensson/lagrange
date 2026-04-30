@@ -50,6 +50,22 @@ const TEST_PRIORITY_RECENT_INTENT_REPLACEMENT_OPERATION_ID =
   'replacement-op';
 const TEST_CACHE_VISIBLE_SOURCE_REMOVAL_OPERATION_ID =
   'cache-visible-source-removal-op';
+const TEST_DEFERRED_CACHE_CONFLICT_PARTITION_ID = 'sql_write_operations-p1';
+const TEST_DEFERRED_CACHE_CONFLICT_ENTITY_TYPE = 'partition';
+const TEST_DEFERRED_CACHE_CONFLICT_SOURCE_NODE_ID = 'seed-node';
+const TEST_DEFERRED_CACHE_CONFLICT_TARGET_NODE_ID = 'node-2';
+const TEST_DEFERRED_CACHE_CONFLICT_SOURCE_REPLICA_ID =
+  `${TEST_DEFERRED_CACHE_CONFLICT_PARTITION_ID}-r1`;
+const TEST_DEFERRED_CACHE_CONFLICT_TARGET_REPLICA_ID =
+  `${TEST_DEFERRED_CACHE_CONFLICT_PARTITION_ID}-r4`;
+const TEST_DEFERRED_CACHE_CONFLICT_OPERATION_ID =
+  'cache-visible-creating-priority-op';
+const TEST_DEFERRED_CACHE_CONFLICT_TEST_NAME =
+  'priority create lane blocks cache-visible add-like work when authoritative visibility is deferred';
+const TEST_DEFERRED_CACHE_CONFLICT_ASSERT_SKIP_REASON =
+  'cache-visible add-like work should close the critical create lane';
+const TEST_DEFERRED_CACHE_CONFLICT_ASSERT_OPERATION_ID =
+  'conflict error should identify the cache-visible operation';
 
 test('Bug: coordinator dedup gap on sequential calls', async (t) => {
   t.beforeEach(async () => {
@@ -1227,4 +1243,78 @@ test('Bug: coordinator dedup gap on sequential calls', async (t) => {
       }
     },
   );
+});
+
+test(TEST_DEFERRED_CACHE_CONFLICT_TEST_NAME, async (t) => {
+  const coordinator = createTestCoordinator({
+    nodeId: TEST_DEFERRED_CACHE_CONFLICT_SOURCE_NODE_ID,
+    enableTimeouts: false,
+    cacheData: {
+      replicaOperations: [{
+        operation_id: TEST_DEFERRED_CACHE_CONFLICT_OPERATION_ID,
+        type: OperationType.REPLACE,
+        partition_id: TEST_DEFERRED_CACHE_CONFLICT_PARTITION_ID,
+        entity_type: TEST_DEFERRED_CACHE_CONFLICT_ENTITY_TYPE,
+        entity_id: TEST_DEFERRED_CACHE_CONFLICT_PARTITION_ID,
+        source_node_id: TEST_DEFERRED_CACHE_CONFLICT_SOURCE_NODE_ID,
+        target_node_id: TEST_DEFERRED_CACHE_CONFLICT_TARGET_NODE_ID,
+        replica_id: TEST_DEFERRED_CACHE_CONFLICT_TARGET_REPLICA_ID,
+        status: ReplicaStatus.CREATING,
+        workflow_step: WORKFLOW_STEP.CREATING,
+        created_at: Date.now(),
+        updated_at: Date.now(),
+        steps_history: JSON.stringify([{
+          step: WORKFLOW_STEP.PENDING,
+          sourceReplicaId: TEST_DEFERRED_CACHE_CONFLICT_SOURCE_REPLICA_ID,
+        }]),
+      }],
+    },
+  });
+
+  const originalQueryExistingInFlightOperation =
+    coordinator.queryExistingInFlightOperation;
+  const originalGetOperationsByEntityAuthoritativeObservation =
+    coordinator.repository.getOperationsByEntityAuthoritativeObservation;
+  const originalHasContainedPriorityRecoveryPressure =
+    coordinator.hasContainedPriorityRecoveryPressure;
+
+  coordinator.queryExistingInFlightOperation = async () => null;
+  coordinator.repository.getOperationsByEntityAuthoritativeObservation =
+    async () => DEFERRED_PRIORITY_ENTITY_OBSERVATION;
+  coordinator.hasContainedPriorityRecoveryPressure = () => true;
+
+  try {
+    try {
+      await coordinator.createOperation({
+        type: OperationType.REPLACE,
+        partitionId: TEST_DEFERRED_CACHE_CONFLICT_PARTITION_ID,
+        entityType: TEST_DEFERRED_CACHE_CONFLICT_ENTITY_TYPE,
+        entityId: TEST_DEFERRED_CACHE_CONFLICT_PARTITION_ID,
+        nodeId: TEST_DEFERRED_CACHE_CONFLICT_TARGET_NODE_ID,
+        sourceNodeId: TEST_DEFERRED_CACHE_CONFLICT_SOURCE_NODE_ID,
+        replicaId: TEST_DEFERRED_CACHE_CONFLICT_SOURCE_REPLICA_ID,
+        enforceConcurrentOperationBudget: true,
+      });
+      t.fail(TEST_DEFERRED_CACHE_CONFLICT_ASSERT_SKIP_REASON);
+    } catch (error) {
+      t.equal(
+        error?.rebalanceSkipReason,
+        REBALANCER_SKIP_REASON.BUDGET_EXCEEDED,
+        TEST_DEFERRED_CACHE_CONFLICT_ASSERT_SKIP_REASON,
+      );
+      t.equal(
+        error?.conflictingOperationId,
+        TEST_DEFERRED_CACHE_CONFLICT_OPERATION_ID,
+        TEST_DEFERRED_CACHE_CONFLICT_ASSERT_OPERATION_ID,
+      );
+    }
+  } finally {
+    coordinator.queryExistingInFlightOperation =
+      originalQueryExistingInFlightOperation;
+    coordinator.repository.getOperationsByEntityAuthoritativeObservation =
+      originalGetOperationsByEntityAuthoritativeObservation;
+    coordinator.hasContainedPriorityRecoveryPressure =
+      originalHasContainedPriorityRecoveryPressure;
+    await coordinator.shutdown();
+  }
 });

@@ -10,6 +10,8 @@
 import {PhaseGate} from './phase-gate.js';
 import {createSystemLeaderReadinessSnapshot} from './system-readiness-snapshot.js';
 
+const LOCAL_STR_88695 = 'Cache hydration incomplete';
+
 /**
  * CacheHydrationGate - Validates cache hydration completeness.
  * Checks that all partitions and message groups have leader services
@@ -34,7 +36,7 @@ class CacheHydrationGate extends PhaseGate {
 
     return {
       success,
-      errors: success ? [] : ['Cache hydration incomplete'],
+      errors: success ? [] : [LOCAL_STR_88695],
       diagnostics: {
         missingPartitionLeaders: missingLeaders.missingPartitionLeaders,
         missingMessageGroupLeaders: missingLeaders.missingMessageGroupLeaders,

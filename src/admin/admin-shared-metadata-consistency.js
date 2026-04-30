@@ -4,6 +4,15 @@ import {
   TYPEOF,
 } from '../constants/index.js';
 
+const LOCAL_STR_ACTIVE = 'active';
+const LOCAL_STR_PARTITION = 'partition';
+const LOCAL_STR_ZBNMX = 'leader_node_id_missing';
+const LOCAL_STR_1RF9D = 'leader_service_missing';
+const LOCAL_STR_NODE_ID = 'node_id';
+const LOCAL_STR_NODEID = 'nodeId';
+const LOCAL_STR_LEADER_NODE_ID = 'leader_node_id';
+const LOCAL_STR_LEADERNODEID = 'leaderNodeId';
+
 function normalizeNodeId(value) {
   if (typeof value !== TYPEOF.STRING) {
     return null;
@@ -50,14 +59,14 @@ function isActiveServiceRow(row) {
   const status = normalizeLowerString(
     row?.[COLUMN.STATUS] ?? row?.status,
   );
-  return status === 'active';
+  return status === LOCAL_STR_ACTIVE;
 }
 
 function isActiveEndpointRow(row) {
   const status = normalizeLowerString(
     row?.[COLUMN.STATUS] ?? row?.status,
   );
-  return status === 'active' || status === null;
+  return status === LOCAL_STR_ACTIVE || status === null;
 }
 
 function sortNodeIds(nodeIds) {
@@ -74,7 +83,7 @@ function isPartitionServiceRow(row) {
   const serviceType = normalizeLowerString(
     row?.[COLUMN.SERVICE_TYPE] ?? row?.service_type ?? row?.serviceType,
   );
-  return serviceType === null || serviceType === 'partition';
+  return serviceType === null || serviceType === LOCAL_STR_PARTITION;
 }
 
 function evaluatePartitionReplicaTopology(options = {}) {
@@ -149,11 +158,11 @@ function evaluatePartitionReplicaTopology(options = {}) {
     activeReplicaNodeIds.length > NUM.ZERO;
   let lastErrorCode = null;
   if (missingLeaderNodeId) {
-    lastErrorCode = 'leader_node_id_missing';
+    lastErrorCode = LOCAL_STR_ZBNMX;
   } else if (hasLeaderMetadata &&
       activeReplicaNodeIds.length > NUM.ZERO &&
       leaderKnown !== true) {
-    lastErrorCode = 'leader_service_missing';
+    lastErrorCode = LOCAL_STR_1RF9D;
   }
   const topologyState = overTargetReplicaCount || lastErrorCode ?
     'invalid' :
@@ -189,7 +198,7 @@ function evaluateSharedMetadataNodeCoverage(options = {}) {
 
   for (const nodeId of collectNodeIds(
     options.serviceRows,
-    [COLUMN.NODE_ID, 'node_id', 'nodeId'],
+    [COLUMN.NODE_ID, LOCAL_STR_NODE_ID, LOCAL_STR_NODEID],
     isActiveServiceRow,
   )) {
     referencedNodeIds.add(nodeId);
@@ -197,7 +206,7 @@ function evaluateSharedMetadataNodeCoverage(options = {}) {
 
   for (const nodeId of collectNodeIds(
     options.nodeEndpointRows,
-    [COLUMN.NODE_ID, 'node_id', 'nodeId'],
+    [COLUMN.NODE_ID, LOCAL_STR_NODE_ID, LOCAL_STR_NODEID],
     isActiveEndpointRow,
   )) {
     referencedNodeIds.add(nodeId);
@@ -205,7 +214,7 @@ function evaluateSharedMetadataNodeCoverage(options = {}) {
 
   for (const nodeId of collectNodeIds(
     options.partitionRows,
-    [COLUMN.LEADER_NODE_ID, 'leader_node_id', 'leaderNodeId'],
+    [COLUMN.LEADER_NODE_ID, LOCAL_STR_LEADER_NODE_ID, LOCAL_STR_LEADERNODEID],
   )) {
     referencedNodeIds.add(nodeId);
   }

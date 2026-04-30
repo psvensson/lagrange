@@ -27,6 +27,10 @@ import {
 } from '../constants/index.js';
 import {RECONCILE_REASON} from '../workflow/reconcile-queue-constants.js';
 
+const LOCAL_STR_NODE_WITHDRAWAL = 'node withdrawal';
+const LOCAL_STR_1CO3M = 'rebalanceCoordinator.shutdown';
+const LOCAL_STR_FUNCTION = 'function';
+
 /**
  * Maps each JOINING_PHASE to its index in the cleanup steps array.
  * Phases that completed before the failed phase need cleanup.
@@ -288,7 +292,7 @@ class JoinCleanupHandler {
               .FAILED_JOIN_CLEANUP_QUERYING_STATE_ERROR,
             {
               nodeId: this.nodeId,
-              detail: 'node withdrawal',
+              detail: LOCAL_STR_NODE_WITHDRAWAL,
               error: nodeErr.message,
             });
         }
@@ -586,7 +590,7 @@ class JoinCleanupHandler {
     } catch (error) {
       logger.warn(JOINING_LOG_MSG.CLEANUP_STEP_FAILED, {
         nodeId: this.nodeId,
-        step: 'rebalanceCoordinator.shutdown',
+        step: LOCAL_STR_1CO3M,
         error: error.message,
       });
     }
@@ -615,7 +619,7 @@ class JoinCleanupHandler {
   async shutdownCdcSqlQueryEngine() {
     const cdcIntegrationService = this.delegates.getCdcIntegrationService();
     const sqlQueryEngine = cdcIntegrationService?.sqlQueryEngine || null;
-    if (sqlQueryEngine && typeof sqlQueryEngine.shutdown === 'function') {
+    if (sqlQueryEngine && typeof sqlQueryEngine.shutdown === LOCAL_STR_FUNCTION) {
       await sqlQueryEngine.shutdown();
     }
     if (cdcIntegrationService?.sqlQueryEngine === sqlQueryEngine) {

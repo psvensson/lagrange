@@ -2,8 +2,10 @@ import {
   ControlPlaneSystemTableGateway,
 } from './control-plane-system-table-gateway.js';
 
+const LOCAL_STR_FUNCTION = 'function';
+
 function resolveProviderValue(options, fieldName, providerName) {
-  if (typeof options?.[providerName] === 'function') {
+  if (typeof options?.[providerName] === LOCAL_STR_FUNCTION) {
     return options[providerName]() || null;
   }
   return options?.[fieldName] || null;

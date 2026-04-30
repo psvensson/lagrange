@@ -6,6 +6,9 @@ import {
 import {createControlPlaneRuntimeBundle} from
   '../control-plane/control-plane-runtime-bundle.js';
 
+const LOCAL_NUM_ONE = 1;
+const LOCAL_NUM_ZERO = 0;
+
 const CACHE_VISIBILITY_ERROR_FRAGMENT = 'Cache update not observed';
 const AUTHORITATIVE_ROW_MUTATION_REASON = Object.freeze({
   APPLIED: 'applied',
@@ -122,11 +125,11 @@ class AuthoritativeRowMutationHelper {
     this.prepareFlush = prepareFlush;
     this.retryDelayMs = retryDelayMs;
     this.retryBackoffMultiplier = Number.isFinite(retryBackoffMultiplier) &&
-      retryBackoffMultiplier >= 1 ?
+      retryBackoffMultiplier >= LOCAL_NUM_ONE ?
       retryBackoffMultiplier :
       AUTHORITATIVE_ROW_MUTATION_RETRY.BACKOFF_MULTIPLIER;
     this.maxRetryDelayMs = Number.isFinite(maxRetryDelayMs) &&
-      maxRetryDelayMs > 0 ?
+      maxRetryDelayMs > LOCAL_NUM_ZERO ?
       Math.floor(maxRetryDelayMs) :
       AUTHORITATIVE_ROW_MUTATION_RETRY.MAX_DELAY_MS;
     this.cdcIntegrationService = cdcIntegrationService;
@@ -143,7 +146,7 @@ class AuthoritativeRowMutationHelper {
     this.persistedValue = null;
     this.inFlight = false;
     this.retryTimer = null;
-    this.retryAttemptCount = 0;
+    this.retryAttemptCount = LOCAL_NUM_ZERO;
     this.followUpFlushScheduled = false;
     this.shuttingDown = false;
   }
@@ -235,7 +238,7 @@ class AuthoritativeRowMutationHelper {
       this.pendingValue === this.persistedValue) {
       if (this.pendingValue === null ||
           this.pendingValue === this.persistedValue) {
-        this.retryAttemptCount = 0;
+        this.retryAttemptCount = LOCAL_NUM_ZERO;
       }
       return this.buildResult({
         cacheVisible: this.pendingValue === null,
@@ -296,7 +299,7 @@ class AuthoritativeRowMutationHelper {
       if (partitionResult?.success === false && gatewayFailureReason) {
         this.scheduleRetry(partitionResult?.retryAfterMs);
         return this.buildResult({
-          attempts: 1,
+          attempts: LOCAL_NUM_ONE,
           partitionResult,
           reason: gatewayFailureReason,
         });
@@ -304,10 +307,10 @@ class AuthoritativeRowMutationHelper {
       const affectedRows = extractAffectedRows(partitionResult);
       if (gatewayFailureReason === AUTHORITATIVE_ROW_MUTATION_REASON
         .OBSERVED_STATE_CHANGED ||
-        (affectedRows !== null && affectedRows <= 0)) {
+        (affectedRows !== null && affectedRows <= LOCAL_NUM_ZERO)) {
         this.scheduleRetry();
         return this.buildResult({
-          attempts: 1,
+          attempts: LOCAL_NUM_ONE,
           partitionResult,
           reason: AUTHORITATIVE_ROW_MUTATION_REASON.OBSERVED_STATE_CHANGED,
         });
@@ -318,13 +321,13 @@ class AuthoritativeRowMutationHelper {
         this.pendingValue = null;
       }
       writeSucceeded = true;
-      this.retryAttemptCount = 0;
+      this.retryAttemptCount = LOCAL_NUM_ZERO;
 
       return this.buildResult({
         applied: true,
         authoritativeWriteApplied: true,
         cacheVisible: true,
-        attempts: 1,
+        attempts: LOCAL_NUM_ONE,
         partitionResult,
         reason: AUTHORITATIVE_ROW_MUTATION_REASON.APPLIED,
       });
@@ -356,7 +359,7 @@ class AuthoritativeRowMutationHelper {
     }
 
     const boundedDelayMs = this.resolveRetryDelayMs(delayMs);
-    this.retryAttemptCount += 1;
+    this.retryAttemptCount += LOCAL_NUM_ONE;
     this.retryTimer = this.setTimeoutFn(async () => {
       this.retryTimer = null;
       await this.flush().catch((error) => {
@@ -412,14 +415,14 @@ class AuthoritativeRowMutationHelper {
     if (!this.retryTimer) {
       this.followUpFlushScheduled = false;
       this.pendingValue = null;
-      this.retryAttemptCount = 0;
+      this.retryAttemptCount = LOCAL_NUM_ZERO;
       return;
     }
     this.clearTimeoutFn(this.retryTimer);
     this.retryTimer = null;
     this.followUpFlushScheduled = false;
     this.pendingValue = null;
-    this.retryAttemptCount = 0;
+    this.retryAttemptCount = LOCAL_NUM_ZERO;
   }
 
   buildResult(overrides = {}) {
@@ -428,7 +431,7 @@ class AuthoritativeRowMutationHelper {
       authoritativeWriteApplied: false,
       cacheVisible: false,
       recoveredFromCacheGap: false,
-      attempts: 0,
+      attempts: LOCAL_NUM_ZERO,
       reason: AUTHORITATIVE_ROW_MUTATION_REASON.NOOP,
       ...overrides,
     };

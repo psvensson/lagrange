@@ -40,11 +40,94 @@ const PRIORITY_RECOVERY_ADMISSION_PLAN_FIELD = Object.freeze({
 
 const REBALANCE_COORDINATOR_TYPE = Object.freeze({
   FUNCTION: 'function',
+  OBJECT: 'object',
 });
 
 const REBALANCE_COORDINATOR_SEGMENT_5_LITERAL = Object.freeze({
   EMPTY_STRING: '',
+  PRESSURE_ACTION_UNAVAILABLE: 'pressure_action_unavailable',
 });
+
+const PRIORITY_ADD_ADMISSION_PRESSURE_STATE = Object.freeze({
+  CLEAR: 'clear',
+  PRIORITY_RECOVERY_ACTIVE: 'priority_recovery_active',
+  PRESSURE_PAUSE: 'pressure_pause',
+});
+
+const PRIORITY_ADD_ADMISSION_PRESSURE_ACTION = Object.freeze({
+  ALLOW_READ: 'allow_read',
+  PAUSE_READ: 'pause_read',
+});
+
+const PRIORITY_ADD_ADMISSION_PRESSURE_STATE_TABLE = Object.freeze([
+  Object.freeze({
+    state: PRIORITY_ADD_ADMISSION_PRESSURE_STATE.PRIORITY_RECOVERY_ACTIVE,
+    matches: (evidence) =>
+      evidence.priorityRecoveryPartitionActive === true,
+  }),
+  Object.freeze({
+    state: PRIORITY_ADD_ADMISSION_PRESSURE_STATE.CLEAR,
+    matches: (evidence) => evidence.pressureBlocked !== true,
+  }),
+  Object.freeze({
+    state: PRIORITY_ADD_ADMISSION_PRESSURE_STATE.PRESSURE_PAUSE,
+    matches: () => true,
+  }),
+]);
+
+const PRIORITY_ADD_ADMISSION_PRESSURE_ACTION_BY_STATE = Object.freeze({
+  [PRIORITY_ADD_ADMISSION_PRESSURE_STATE.CLEAR]:
+    PRIORITY_ADD_ADMISSION_PRESSURE_ACTION.ALLOW_READ,
+  [PRIORITY_ADD_ADMISSION_PRESSURE_STATE.PRIORITY_RECOVERY_ACTIVE]:
+    PRIORITY_ADD_ADMISSION_PRESSURE_ACTION.ALLOW_READ,
+  [PRIORITY_ADD_ADMISSION_PRESSURE_STATE.PRESSURE_PAUSE]:
+    PRIORITY_ADD_ADMISSION_PRESSURE_ACTION.PAUSE_READ,
+});
+const PRIORITY_DEFERRED_OBSERVATION_PRESSURE_STATE = Object.freeze({
+  PRIORITY_RECOVERY_ACTIVE: 'priority_recovery_active',
+  EMERGENCY_VISIBILITY_RECOVERY: 'emergency_visibility_recovery',
+  BLOCKED: 'blocked',
+});
+const PRIORITY_DEFERRED_OBSERVATION_PRESSURE_STATE_TABLE = Object.freeze([
+  Object.freeze({
+    state:
+      PRIORITY_DEFERRED_OBSERVATION_PRESSURE_STATE.PRIORITY_RECOVERY_ACTIVE,
+    matches: (evidence) =>
+      evidence.priorityRecoveryPartitionActive === true &&
+      evidence.backpressured === true,
+  }),
+  Object.freeze({
+    state:
+      PRIORITY_DEFERRED_OBSERVATION_PRESSURE_STATE
+        .EMERGENCY_VISIBILITY_RECOVERY,
+    matches: (evidence) =>
+      evidence.emergencyPriorityPartition === true &&
+      evidence.backpressured === true,
+  }),
+  Object.freeze({
+    state: PRIORITY_DEFERRED_OBSERVATION_PRESSURE_STATE.BLOCKED,
+    matches: () => true,
+  }),
+]);
+const PRIORITY_DEFERRED_OBSERVATION_PRESSURE_ALLOWED_STATES = new Set([
+  PRIORITY_DEFERRED_OBSERVATION_PRESSURE_STATE.PRIORITY_RECOVERY_ACTIVE,
+  PRIORITY_DEFERRED_OBSERVATION_PRESSURE_STATE.EMERGENCY_VISIBILITY_RECOVERY,
+]);
+
+function resolvePriorityAddAdmissionPressureState(evidence) {
+  return (
+    PRIORITY_ADD_ADMISSION_PRESSURE_STATE_TABLE.find((entry) =>
+      entry.matches(evidence),
+    )?.state || PRIORITY_ADD_ADMISSION_PRESSURE_STATE.PRESSURE_PAUSE
+  );
+}
+function resolvePriorityDeferredObservationPressureState(evidence) {
+  return (
+    PRIORITY_DEFERRED_OBSERVATION_PRESSURE_STATE_TABLE.find((entry) =>
+      entry.matches(evidence),
+    )?.state || PRIORITY_DEFERRED_OBSERVATION_PRESSURE_STATE.BLOCKED
+  );
+}
 
 class RebalanceCoordinatorSegment5 extends RebalanceCoordinatorSegment4 {
   async checkTimeouts() {
@@ -325,7 +408,8 @@ class RebalanceCoordinatorSegment5 extends RebalanceCoordinatorSegment4 {
     if (
       options?.visibilityReadMode ===
         REPLICA_OPERATION_VISIBILITY_READ_MODE.OWNER_RPC_REQUIRED &&
-      typeof this.repository?.getOperationsByEntityAuthoritative === 'function'
+      typeof this.repository?.getOperationsByEntityAuthoritative ===
+        REBALANCE_COORDINATOR_TYPE.FUNCTION
     ) {
       return this.repository.getOperationsByEntityAuthoritative(
         entityType,
@@ -370,7 +454,7 @@ class RebalanceCoordinatorSegment5 extends RebalanceCoordinatorSegment4 {
         operation?.[REBALANCE_COORDINATOR_OPERATION_FIELD.PARTITION_ID_SNAKE] ||
         operation?.[REBALANCE_COORDINATOR_OPERATION_FIELD.ENTITY_ID] ||
         operation?.[REBALANCE_COORDINATOR_OPERATION_FIELD.ENTITY_ID_SNAKE] ||
-        '',
+        REBALANCE_COORDINATOR_SEGMENT_5_LITERAL.EMPTY_STRING,
     ).trim();
   }
 
@@ -568,20 +652,24 @@ class RebalanceCoordinatorSegment5 extends RebalanceCoordinatorSegment4 {
     if (
       typeof this.workflowOwner
         ?.getPriorityRecoveryDecisionSnapshotForPartitionOperations ===
-      'function'
+      REBALANCE_COORDINATOR_TYPE.FUNCTION
     ) {
       const decisionSnapshot =
         await this.workflowOwner.getPriorityRecoveryDecisionSnapshotForPartitionOperations(
           normalizedPartitionId,
           partitionOperations,
         );
-      if (decisionSnapshot && typeof decisionSnapshot === 'object') {
+      if (
+        decisionSnapshot &&
+        typeof decisionSnapshot === REBALANCE_COORDINATOR_TYPE.OBJECT
+      ) {
         return decisionSnapshot;
       }
     }
     if (
       typeof this.workflowOwner
-        ?.getPriorityRecoveryPlanningSnapshotForOperation !== 'function'
+        ?.getPriorityRecoveryPlanningSnapshotForOperation !==
+      REBALANCE_COORDINATOR_TYPE.FUNCTION
     ) {
       return null;
     }
@@ -589,7 +677,10 @@ class RebalanceCoordinatorSegment5 extends RebalanceCoordinatorSegment4 {
       await this.workflowOwner.getPriorityRecoveryPlanningSnapshotForOperation(
         representativeOperation,
       );
-    if (!planningSnapshot || typeof planningSnapshot !== 'object') {
+    if (
+      !planningSnapshot ||
+      typeof planningSnapshot !== REBALANCE_COORDINATOR_TYPE.OBJECT
+    ) {
       return null;
     }
     const effectiveEligibleNodeIds =
@@ -752,10 +843,12 @@ class RebalanceCoordinatorSegment5 extends RebalanceCoordinatorSegment4 {
    * @private
    */
   isConcurrentAddBudgetOperation(operation) {
-    if (!operation || typeof operation !== 'object') {
+    if (!operation || typeof operation !== REBALANCE_COORDINATOR_TYPE.OBJECT) {
       return false;
     }
-    const type = String(operation.type || '').toUpperCase();
+    const type = String(
+      operation.type || REBALANCE_COORDINATOR_SEGMENT_5_LITERAL.EMPTY_STRING,
+    ).toUpperCase();
     if (type === OperationType.ADD) {
       return true;
     }
@@ -892,7 +985,9 @@ class RebalanceCoordinatorSegment5 extends RebalanceCoordinatorSegment4 {
    * @return {Promise<boolean>}
    */
   async canStartPriorityAddOperation(options = {}) {
-    if (this.shouldPauseAdmissionReadForLocalRouterPressure(options)) {
+    if (this.shouldPausePriorityAddAdmissionReadForLocalRouterPressure(
+      options,
+    )) {
       return false;
     }
     const priorityRecoveryAdmissionPlan =
@@ -1182,26 +1277,40 @@ class RebalanceCoordinatorSegment5 extends RebalanceCoordinatorSegment4 {
     if (normalizedPartitionId.length === NUM.ZERO) {
       return false;
     }
-    const emergencyPriorityPartition =
-      this.isEmergencyPriorityControlPlanePartition(normalizedPartitionId);
-    const priorityRecoveryAdmissionPlan =
-      this.getPriorityRecoveryAdmissionPlan();
-    if (
-      emergencyPriorityPartition !== true &&
-      (
-        priorityRecoveryAdmissionPlan?.recoveryActive !== true ||
-        priorityRecoveryAdmissionPlan.hasBlockedPartition(
-          normalizedPartitionId,
-        ) !== true
-      )
-    ) {
-      return false;
-    }
     const decision = this.getLocalRouterPressureDecision({partitionId});
-    return (
-      decision?.action === PRESSURE_GOVERNOR_ACTION.ALLOW &&
-      decision?.summary?.backpressured === true
-    );
+    const evidence = this.buildPriorityDeferredObservationPressureEvidence({
+      partitionId,
+      pressureDecision: decision,
+    });
+    const state = resolvePriorityDeferredObservationPressureState(evidence);
+    return PRIORITY_DEFERRED_OBSERVATION_PRESSURE_ALLOWED_STATES.has(state);
+  }
+
+  /**
+   * @param {Object} options
+   * @param {string} options.partitionId
+   * @param {Object|null} options.pressureDecision
+   * @return {Object}
+   * @private
+   */
+  buildPriorityDeferredObservationPressureEvidence(options = {}) {
+    const partitionId = String(options.partitionId || '').trim();
+    const pressureDecision =
+      options.pressureDecision && typeof options.pressureDecision === 'object' ?
+        options.pressureDecision :
+        this.getLocalRouterPressureDecision(options);
+    const admissionEvidence = this.buildPriorityAddAdmissionPressureEvidence({
+      partitionId,
+      pressureDecision,
+    });
+    return Object.freeze({
+      priorityRecoveryPartitionActive:
+        admissionEvidence.priorityRecoveryPartitionActive === true,
+      emergencyPriorityPartition:
+        partitionId.length > NUM.ZERO &&
+        this.isEmergencyPriorityControlPlanePartition(partitionId),
+      backpressured: pressureDecision?.summary?.backpressured === true,
+    });
   }
 
   /**
@@ -1232,6 +1341,114 @@ class RebalanceCoordinatorSegment5 extends RebalanceCoordinatorSegment4 {
       return false;
     }
     return this.hasContainedPriorityRecoveryPressure(partitionId);
+  }
+
+  /**
+   * @param {string} partitionId
+   * @return {Object}
+   * @private
+   */
+  resolvePriorityRecoveryPlanningEvidence(partitionId) {
+    const resolvePlanningSnapshot =
+      this.repository?.resolvePriorityRecoveryPlanningSnapshotForOwnerRead;
+    const planningSnapshot =
+      typeof resolvePlanningSnapshot === REBALANCE_COORDINATOR_TYPE.FUNCTION ?
+        resolvePlanningSnapshot.call(this.repository) :
+        null;
+    const isPlanningRecoveryActive =
+      this.repository?.isPriorityRecoveryOwnerReadActive;
+    const recoveryActive =
+      typeof isPlanningRecoveryActive === REBALANCE_COORDINATOR_TYPE.FUNCTION ?
+        isPlanningRecoveryActive.call(this.repository, planningSnapshot) :
+        false;
+    const partitionAssessment = buildPriorityRecoveryPartitionAssessment({
+      partitionId,
+      priorityPartitionSummary:
+        planningSnapshot?.priorityPartitionSummary || null,
+    });
+    return Object.freeze({
+      recoveryActive,
+      blockedPriorityPartition:
+        partitionAssessment?.planner?.ready === false,
+    });
+  }
+
+  /**
+   * @param {Object} [options={}]
+   * @return {Object}
+   * @private
+   */
+  buildPriorityAddAdmissionPressureEvidence(options = {}) {
+    const partitionId = String(options.partitionId || '').trim();
+    const pressureDecision =
+      options.pressureDecision && typeof options.pressureDecision === 'object' ?
+        options.pressureDecision :
+        this.getLocalRouterPressureDecision(options);
+    const priorityRecoveryAdmissionPlan =
+      this.getPriorityRecoveryAdmissionPlan();
+    const hasBlockedPartition =
+      typeof priorityRecoveryAdmissionPlan?.hasBlockedPartition ===
+      REBALANCE_COORDINATOR_TYPE.FUNCTION ?
+        priorityRecoveryAdmissionPlan.hasBlockedPartition(partitionId) :
+        false;
+    const planningEvidence =
+      this.resolvePriorityRecoveryPlanningEvidence(partitionId);
+    const emergencyPriorityRecoveryPartition =
+      partitionId.length > NUM.ZERO &&
+      priorityRecoveryAdmissionPlan?.emergencyRecoveryActive === true &&
+      this.isEmergencyPriorityControlPlanePartition(partitionId);
+    const priorityRecoveryActive =
+      priorityRecoveryAdmissionPlan?.recoveryActive === true ||
+      planningEvidence.recoveryActive === true;
+    const blockedPriorityPartition =
+      hasBlockedPartition === true ||
+      planningEvidence.blockedPriorityPartition === true;
+    const priorityRecoveryPartitionActive =
+      priorityRecoveryActive === true &&
+      (
+        blockedPriorityPartition === true ||
+        emergencyPriorityRecoveryPartition === true
+      );
+    const pressureBlocked =
+      pressureDecision?.action === PRESSURE_GOVERNOR_ACTION.DEFER ||
+      pressureDecision?.action === PRESSURE_GOVERNOR_ACTION.REJECT;
+    return Object.freeze({
+      partitionId,
+      pressureAction:
+        pressureDecision?.action ||
+        REBALANCE_COORDINATOR_SEGMENT_5_LITERAL.PRESSURE_ACTION_UNAVAILABLE,
+      pressureBlocked,
+      priorityRecoveryActive,
+      blockedPriorityPartition,
+      emergencyPriorityRecoveryPartition,
+      priorityRecoveryPartitionActive,
+    });
+  }
+
+  /**
+   * @param {Object} [options={}]
+   * @return {string}
+   * @private
+   */
+  resolvePriorityAddAdmissionPressureAction(options = {}) {
+    const evidence = this.buildPriorityAddAdmissionPressureEvidence(options);
+    const state = resolvePriorityAddAdmissionPressureState(evidence);
+    return (
+      PRIORITY_ADD_ADMISSION_PRESSURE_ACTION_BY_STATE[state] ||
+      PRIORITY_ADD_ADMISSION_PRESSURE_ACTION.PAUSE_READ
+    );
+  }
+
+  /**
+   * @param {Object} [options={}]
+   * @return {boolean}
+   * @private
+   */
+  shouldPausePriorityAddAdmissionReadForLocalRouterPressure(options = {}) {
+    return (
+      this.resolvePriorityAddAdmissionPressureAction(options) ===
+      PRIORITY_ADD_ADMISSION_PRESSURE_ACTION.PAUSE_READ
+    );
   }
 
   /**

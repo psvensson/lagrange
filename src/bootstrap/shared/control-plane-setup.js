@@ -37,6 +37,9 @@ import {
   ControlPlaneReadinessService,
 } from '../../control-plane/control-plane-readiness-service.js';
 import {
+  DEFAULT_NODE_CAPABILITIES,
+} from '../../control-plane/control-plane-constants.js';
+import {
   MembershipPublicationCoordinator,
 } from '../../control-plane/membership-publication-coordinator.js';
 import {StartupRecoveryCoordinator} from '../startup-recovery-coordinator.js';
@@ -491,6 +494,7 @@ class ControlPlaneSetup {
           diskGb: stats.diskGb,
           diskUsagePercent: stats.diskUsagePercent,
         },
+        [...DEFAULT_NODE_CAPABILITIES],
       );
 
       logger.debug(LOG_MSG.NODE_REGISTERED, {
@@ -502,6 +506,7 @@ class ControlPlaneSetup {
         nodeAddress,
         getStats: () =>
           NodeService.getInstance().getNodeStats(),
+        capabilities: [...DEFAULT_NODE_CAPABILITIES],
       });
 
       logger.debug(LOG_MSG.HEARTBEAT_STARTED, {nodeId});

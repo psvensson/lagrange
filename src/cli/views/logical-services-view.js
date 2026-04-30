@@ -7,6 +7,36 @@
 
 import {BaseView, ROW_STATUS} from '../core/base-view.js';
 
+const LOCAL_STR_SERVICES = 'services';
+const LOCAL_STR_SERVICE_NAME = 'service_name';
+const LOCAL_STR_NAME = 'Name';
+const LOCAL_NUM_20 = 20;
+const LOCAL_STR_SERVICE_ID = 'service_id';
+const LOCAL_STR_SERVICE_ID_2 = 'Service ID';
+const LOCAL_NUM_24 = 24;
+const LOCAL_STR_RUNTIME_KIND = 'runtime_kind';
+const LOCAL_STR_RUNTIME = 'Runtime';
+const LOCAL_NUM_14 = 14;
+const LOCAL_STR_DESIRED = 'desired';
+const LOCAL_STR_DESIRED_2 = 'Desired';
+const LOCAL_NUM_EIGHT = 8;
+const LOCAL_STR_REPLICAS = 'replicas';
+const LOCAL_STR_REPLICAS_2 = 'Replicas';
+const LOCAL_NUM_NINE = 9;
+const LOCAL_STR_HEALTHY = 'healthy';
+const LOCAL_STR_HEALTHY_2 = 'Healthy';
+const LOCAL_STR_NODES = 'nodes';
+const LOCAL_STR_NODES_2 = 'Nodes';
+const LOCAL_STR_STATUS = 'status';
+const LOCAL_STR_STATUS_2 = 'Status';
+const LOCAL_NUM_10 = 10;
+const LOCAL_STR_N_A = 'N/A';
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_STR_EMPTY = '';
+const LOCAL_STR_DRILLDOWN = 'drillDown';
+const LOCAL_STR_VIEW_REPLICAS = 'View Replicas';
+const LOCAL_STR_R = 'r';
+
 const LOGICAL_SERVICE_STATE = Object.freeze({
   HEALTHY: 'healthy',
   PARTIAL: 'partial',
@@ -24,7 +54,7 @@ class LogicalServicesView extends BaseView {
   constructor(options = {}) {
     super(options);
     this.cache = options.cache || null;
-    this.viewName = 'services';
+    this.viewName = LOCAL_STR_SERVICES;
     this.nodeFilter = null;
     this.serviceIdFilter = null;
   }
@@ -34,14 +64,14 @@ class LogicalServicesView extends BaseView {
    */
   getColumns() {
     return [
-      {key: 'service_name', label: 'Name', width: 20},
-      {key: 'service_id', label: 'Service ID', width: 24},
-      {key: 'runtime_kind', label: 'Runtime', width: 14},
-      {key: 'desired', label: 'Desired', width: 8},
-      {key: 'replicas', label: 'Replicas', width: 9},
-      {key: 'healthy', label: 'Healthy', width: 8},
-      {key: 'nodes', label: 'Nodes', width: 24},
-      {key: 'status', label: 'Status', width: 10},
+      {key: LOCAL_STR_SERVICE_NAME, label: LOCAL_STR_NAME, width: LOCAL_NUM_20},
+      {key: LOCAL_STR_SERVICE_ID, label: LOCAL_STR_SERVICE_ID_2, width: LOCAL_NUM_24},
+      {key: LOCAL_STR_RUNTIME_KIND, label: LOCAL_STR_RUNTIME, width: LOCAL_NUM_14},
+      {key: LOCAL_STR_DESIRED, label: LOCAL_STR_DESIRED_2, width: LOCAL_NUM_EIGHT},
+      {key: LOCAL_STR_REPLICAS, label: LOCAL_STR_REPLICAS_2, width: LOCAL_NUM_NINE},
+      {key: LOCAL_STR_HEALTHY, label: LOCAL_STR_HEALTHY_2, width: LOCAL_NUM_EIGHT},
+      {key: LOCAL_STR_NODES, label: LOCAL_STR_NODES_2, width: LOCAL_NUM_24},
+      {key: LOCAL_STR_STATUS, label: LOCAL_STR_STATUS_2, width: LOCAL_NUM_10},
     ];
   }
 
@@ -51,13 +81,13 @@ class LogicalServicesView extends BaseView {
    */
   formatRow(logicalService) {
     return [
-      logicalService.service_name || logicalService.service_id || 'N/A',
-      logicalService.service_id || 'N/A',
-      logicalService.runtime_kind || 'N/A',
-      String(logicalService.replica_count ?? 0),
-      String(logicalService.replica_count_observed ?? 0),
-      String(logicalService.healthy_replica_count ?? 0),
-      logicalService.nodes_summary || 'N/A',
+      logicalService.service_name || logicalService.service_id || LOCAL_STR_N_A,
+      logicalService.service_id || LOCAL_STR_N_A,
+      logicalService.runtime_kind || LOCAL_STR_N_A,
+      String(logicalService.replica_count ?? LOCAL_NUM_ZERO),
+      String(logicalService.replica_count_observed ?? LOCAL_NUM_ZERO),
+      String(logicalService.healthy_replica_count ?? LOCAL_NUM_ZERO),
+      logicalService.nodes_summary || LOCAL_STR_N_A,
       logicalService.status || LOGICAL_SERVICE_STATE.UNKNOWN,
     ];
   }
@@ -67,7 +97,7 @@ class LogicalServicesView extends BaseView {
    * @return {string}
    */
   getItemKey(logicalService) {
-    return logicalService.service_id || '';
+    return logicalService.service_id || LOCAL_STR_EMPTY;
   }
 
   /**
@@ -135,8 +165,8 @@ class LogicalServicesView extends BaseView {
     }
 
     return {
-      action: 'drillDown',
-      view: 'replicas',
+      action: LOCAL_STR_DRILLDOWN,
+      view: LOCAL_STR_REPLICAS,
       context: {serviceId: logicalService.service_id},
     };
   }
@@ -179,10 +209,10 @@ class LogicalServicesView extends BaseView {
     ];
 
     return {
-      title: `Service: ${logicalService.service_id || 'N/A'}`,
+      title: `Service: ${logicalService.service_id || LOCAL_STR_N_A}`,
       sections,
       navigationLinks: [
-        {label: 'View Replicas', target: 'replicas', key: 'r'},
+        {label: LOCAL_STR_VIEW_REPLICAS, target: LOCAL_STR_REPLICAS, key: LOCAL_STR_R},
       ],
     };
   }

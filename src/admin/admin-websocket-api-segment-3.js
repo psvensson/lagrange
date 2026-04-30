@@ -1,6 +1,8 @@
 import {ADMIN_WEBSOCKET_API_SHARED} from './admin-websocket-api-shared.js';
 import {AdminWebSocketAPISegment2} from './admin-websocket-api-segment-2.js';
 
+const LOCAL_STR_I = 'i';
+
 const {
   ADMIN_CACHE_DUMP,
   ADMIN_CONTROL_SNAPSHOT,
@@ -115,7 +117,7 @@ class AdminWebSocketAPISegment3 extends AdminWebSocketAPISegment2 {
       .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
       .replace(/%/g, '.*')
       .replace(/_/g, '.');
-    return new RegExp(`^${normalizedPattern}$`, 'i').test(normalizedValue);
+    return new RegExp(`^${normalizedPattern}$`, LOCAL_STR_I).test(normalizedValue);
   }
 
   /**

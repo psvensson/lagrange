@@ -9,6 +9,59 @@
 
 import {BaseView, ROW_STATUS} from '../core/base-view.js';
 
+const LOCAL_STR_PARTITIONS = 'partitions';
+const LOCAL_STR_PARTITION_ID = 'partition_id';
+const LOCAL_STR_PARTITION_ID_2 = 'Partition ID';
+const LOCAL_NUM_20 = 20;
+const LOCAL_STR_KEY_RANGE = 'key_range';
+const LOCAL_STR_KEY_RANGE_2 = 'Key Range';
+const LOCAL_NUM_25 = 25;
+const LOCAL_STR_REPLICA_COUNT = 'replica_count';
+const LOCAL_STR_REPLICAS = 'Replicas';
+const LOCAL_NUM_10 = 10;
+const LOCAL_STR_LEADER_NODE_ID = 'leader_node_id';
+const LOCAL_STR_LEADER_NODE = 'Leader Node';
+const LOCAL_STR_SIZE_BYTES = 'size_bytes';
+const LOCAL_STR_SIZE = 'Size';
+const LOCAL_NUM_12 = 12;
+const LOCAL_STR_STATUS = 'status';
+const LOCAL_STR_STATUS_2 = 'Status';
+const LOCAL_STR_N_A = 'N/A';
+const LOCAL_STR_NO_LEADER = 'No Leader';
+const LOCAL_STR_UNKNOWN = 'unknown';
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_STR_0_B = '0 B';
+const LOCAL_NUM_ONE = 1;
+const LOCAL_STR_FAILED = 'failed';
+const LOCAL_STR_ERROR = 'error';
+const LOCAL_STR_EMPTY = '';
+const LOCAL_STR_DRILLDOWN = 'drillDown';
+const LOCAL_STR_REPLICAS_2 = 'replicas';
+const LOCAL_STR_JUMPTOENTITY = 'jumpToEntity';
+const LOCAL_STR_NODE = 'node';
+const LOCAL_STR_ENTER = 'enter';
+const LOCAL_STR_RETURN = 'return';
+const LOCAL_STR_N = 'n';
+const LOCAL_STR_N_2 = 'N';
+const LOCAL_STR_RAFT_STATE = 'Raft State';
+const LOCAL_STR_TERM = 'Term';
+const LOCAL_STR_COMMIT_INDEX = 'Commit Index';
+const LOCAL_STR_APPLIED_INDEX = 'Applied Index';
+const LOCAL_STR_LAST_LOG_INDEX = 'Last Log Index';
+const LOCAL_STR_ROLE = 'Role';
+const LOCAL_STR_8XEJZ = 'Replica Sync Status';
+const LOCAL_STR_NFN9W = 'No replica information available';
+const LOCAL_STR_REPLICA_LOCATIONS = 'Replica Locations';
+const LOCAL_STR_RECENT_CDC_EVENTS = 'Recent CDC Events';
+const LOCAL_STR_GO_TO_LEADER_NODE = 'Go to Leader Node';
+const LOCAL_STR_NODES = 'nodes';
+const LOCAL_STR_GO_TO_TABLE = 'Go to Table';
+const LOCAL_STR_TABLES = 'tables';
+const LOCAL_STR_T = 't';
+const LOCAL_STR_T_2 = 'T';
+const LOCAL_STR_SPACE = ' ';
+const LOCAL_NUM_19 = 19;
+
 /**
  * Size units for formatting
  */
@@ -28,7 +81,7 @@ export class PartitionsView extends BaseView {
   constructor(options = {}) {
     super(options);
     this.cache = options.cache || null;
-    this.viewName = 'partitions';
+    this.viewName = LOCAL_STR_PARTITIONS;
     this.tableFilter = null;
     this.expectedReplicaCount = options.expectedReplicaCount || null;
   }
@@ -40,12 +93,12 @@ export class PartitionsView extends BaseView {
    */
   getColumns() {
     return [
-      {key: 'partition_id', label: 'Partition ID', width: 20},
-      {key: 'key_range', label: 'Key Range', width: 25},
-      {key: 'replica_count', label: 'Replicas', width: 10},
-      {key: 'leader_node_id', label: 'Leader Node', width: 20},
-      {key: 'size_bytes', label: 'Size', width: 12},
-      {key: 'status', label: 'Status', width: 12},
+      {key: LOCAL_STR_PARTITION_ID, label: LOCAL_STR_PARTITION_ID_2, width: LOCAL_NUM_20},
+      {key: LOCAL_STR_KEY_RANGE, label: LOCAL_STR_KEY_RANGE_2, width: LOCAL_NUM_25},
+      {key: LOCAL_STR_REPLICA_COUNT, label: LOCAL_STR_REPLICAS, width: LOCAL_NUM_10},
+      {key: LOCAL_STR_LEADER_NODE_ID, label: LOCAL_STR_LEADER_NODE, width: LOCAL_NUM_20},
+      {key: LOCAL_STR_SIZE_BYTES, label: LOCAL_STR_SIZE, width: LOCAL_NUM_12},
+      {key: LOCAL_STR_STATUS, label: LOCAL_STR_STATUS_2, width: LOCAL_NUM_12},
     ];
   }
 
@@ -57,12 +110,12 @@ export class PartitionsView extends BaseView {
    */
   formatRow(partition) {
     return [
-      partition.partition_id || 'N/A',
+      partition.partition_id || LOCAL_STR_N_A,
       this.formatKeyRange(partition),
       this.formatReplicaCount(partition.replica_count),
-      partition.leader_node_id || 'No Leader',
+      partition.leader_node_id || LOCAL_STR_NO_LEADER,
       this.formatSize(partition.size_bytes),
-      partition.status || 'unknown',
+      partition.status || LOCAL_STR_UNKNOWN,
     ];
   }
 
@@ -89,7 +142,7 @@ export class PartitionsView extends BaseView {
    */
   formatReplicaCount(count) {
     if (count === null || count === undefined) {
-      return 'N/A';
+      return LOCAL_STR_N_A;
     }
     return String(count);
   }
@@ -102,16 +155,16 @@ export class PartitionsView extends BaseView {
    */
   formatSize(bytes) {
     if (bytes === null || bytes === undefined) {
-      return 'N/A';
+      return LOCAL_STR_N_A;
     }
-    if (bytes === 0) {
-      return '0 B';
+    if (bytes === LOCAL_NUM_ZERO) {
+      return LOCAL_STR_0_B;
     }
 
     const i = Math.floor(Math.log(bytes) / Math.log(1024));
     const value = bytes / Math.pow(1024, i);
 
-    return `${value.toFixed(1)} ${SIZE_UNITS[i]}`;
+    return `${value.toFixed(LOCAL_NUM_ONE)} ${SIZE_UNITS[i]}`;
   }
 
   /**
@@ -122,7 +175,7 @@ export class PartitionsView extends BaseView {
    */
   getRowStatus(partition) {
     // Failed status is an error
-    if (partition.status === 'failed' || partition.status === 'error') {
+    if (partition.status === LOCAL_STR_FAILED || partition.status === LOCAL_STR_ERROR) {
       return ROW_STATUS.ERROR;
     }
 
@@ -173,7 +226,7 @@ export class PartitionsView extends BaseView {
    * @return {string} Unique key (partition_id)
    */
   getItemKey(partition) {
-    return partition.partition_id || '';
+    return partition.partition_id || LOCAL_STR_EMPTY;
   }
 
   /**
@@ -222,8 +275,8 @@ export class PartitionsView extends BaseView {
     }
 
     return {
-      action: 'drillDown',
-      view: 'replicas',
+      action: LOCAL_STR_DRILLDOWN,
+      view: LOCAL_STR_REPLICAS_2,
       context: {
         partitionId: selectedPartition.partition_id,
         tableId: selectedPartition.table_id,
@@ -243,8 +296,8 @@ export class PartitionsView extends BaseView {
     }
 
     return {
-      action: 'jumpToEntity',
-      entityType: 'node',
+      action: LOCAL_STR_JUMPTOENTITY,
+      entityType: LOCAL_STR_NODE,
       entityId: selectedPartition.leader_node_id,
     };
   }
@@ -255,10 +308,10 @@ export class PartitionsView extends BaseView {
    * @return {boolean|Object} True if handled, navigation object, or false
    */
   handleKey(key) {
-    if (key.name === 'enter' || key.name === 'return') {
+    if (key.name === LOCAL_STR_ENTER || key.name === LOCAL_STR_RETURN) {
       return this.handleDrillDown();
     }
-    if (key.name === 'n' || key.name === 'N') {
+    if (key.name === LOCAL_STR_N || key.name === LOCAL_STR_N_2) {
       return this.navigateToLeaderNode();
     }
     return super.handleKey(key);
@@ -310,13 +363,13 @@ export class PartitionsView extends BaseView {
     // Add Raft state section
     // Requirements: 16.6
     sections.push({
-      title: 'Raft State',
+      title: LOCAL_STR_RAFT_STATE,
       fields: [
-        {label: 'Term', value: String(partition.raft_term ?? 0)},
-        {label: 'Commit Index', value: String(partition.raft_commit_index ?? 0)},
-        {label: 'Applied Index', value: String(partition.raft_applied_index ?? 0)},
-        {label: 'Last Log Index', value: String(partition.raft_last_log_index ?? 0)},
-        {label: 'Role', value: partition.raft_role || 'N/A'},
+        {label: LOCAL_STR_TERM, value: String(partition.raft_term ?? LOCAL_NUM_ZERO)},
+        {label: LOCAL_STR_COMMIT_INDEX, value: String(partition.raft_commit_index ?? LOCAL_NUM_ZERO)},
+        {label: LOCAL_STR_APPLIED_INDEX, value: String(partition.raft_applied_index ?? LOCAL_NUM_ZERO)},
+        {label: LOCAL_STR_LAST_LOG_INDEX, value: String(partition.raft_last_log_index ?? LOCAL_NUM_ZERO)},
+        {label: LOCAL_STR_ROLE, value: partition.raft_role || LOCAL_STR_N_A},
       ],
     });
 
@@ -330,9 +383,9 @@ export class PartitionsView extends BaseView {
       }));
 
       sections.push({
-        title: 'Replica Sync Status',
-        fields: replicaFields.length > 0 ? replicaFields : [
-          {label: 'Replicas', value: 'No replica information available'},
+        title: LOCAL_STR_8XEJZ,
+        fields: replicaFields.length > LOCAL_NUM_ZERO ? replicaFields : [
+          {label: LOCAL_STR_REPLICAS, value: LOCAL_STR_NFN9W},
         ],
       });
     } else if (partition.replica_nodes && Array.isArray(partition.replica_nodes)) {
@@ -342,9 +395,9 @@ export class PartitionsView extends BaseView {
       }));
 
       sections.push({
-        title: 'Replica Locations',
-        fields: replicaFields.length > 0 ? replicaFields : [
-          {label: 'Replicas', value: 'No replica information available'},
+        title: LOCAL_STR_REPLICA_LOCATIONS,
+        fields: replicaFields.length > LOCAL_NUM_ZERO ? replicaFields : [
+          {label: LOCAL_STR_REPLICAS, value: LOCAL_STR_NFN9W},
         ],
       });
     }
@@ -357,9 +410,9 @@ export class PartitionsView extends BaseView {
         value: `${this.formatTimestamp(event.timestamp)} - ${event.key || 'N/A'}`,
       }));
 
-      if (cdcFields.length > 0) {
+      if (cdcFields.length > LOCAL_NUM_ZERO) {
         sections.push({
-          title: 'Recent CDC Events',
+          title: LOCAL_STR_RECENT_CDC_EVENTS,
           fields: cdcFields,
         });
       }
@@ -372,17 +425,17 @@ export class PartitionsView extends BaseView {
 
     if (partition.leader_node_id) {
       navigationLinks.push({
-        label: 'Go to Leader Node',
-        target: 'nodes',
-        key: 'n',
+        label: LOCAL_STR_GO_TO_LEADER_NODE,
+        target: LOCAL_STR_NODES,
+        key: LOCAL_STR_N,
       });
     }
 
     if (partition.table_id) {
       navigationLinks.push({
-        label: 'Go to Table',
-        target: 'tables',
-        key: 't',
+        label: LOCAL_STR_GO_TO_TABLE,
+        target: LOCAL_STR_TABLES,
+        key: LOCAL_STR_T,
       });
     }
 
@@ -400,17 +453,17 @@ export class PartitionsView extends BaseView {
    */
   formatTimestamp(timestamp) {
     if (timestamp === null || timestamp === undefined) {
-      return 'N/A';
+      return LOCAL_STR_N_A;
     }
 
     try {
       const date = new Date(timestamp);
       if (isNaN(date.getTime())) {
-        return 'N/A';
+        return LOCAL_STR_N_A;
       }
-      return date.toISOString().replace('T', ' ').substring(0, 19);
+      return date.toISOString().replace(LOCAL_STR_T_2, LOCAL_STR_SPACE).substring(LOCAL_NUM_ZERO, LOCAL_NUM_19);
     } catch (_err) {
-      return 'N/A';
+      return LOCAL_STR_N_A;
     }
   }
 }

@@ -1,5 +1,7 @@
 import {NUM, TYPEOF} from '../constants/index.js';
 
+const LOCAL_STR_OPERATION_LANE = 'operation-lane';
+
 const OPERATION_LANE_ERROR_MSG = Object.freeze({
   EXECUTION_FACTORY_REQUIRED:
     'OperationLane requires an execution factory',
@@ -14,7 +16,7 @@ class OperationLane {
    * @param {Object} options
    */
   constructor(options = {}) {
-    this.name = options.name || 'operation-lane';
+    this.name = options.name || LOCAL_STR_OPERATION_LANE;
     this.workflowCoordinator = options.workflowCoordinator || null;
     if (!this.workflowCoordinator ||
         typeof this.workflowCoordinator.runExclusive !== TYPEOF.FUNCTION) {

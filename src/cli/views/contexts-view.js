@@ -9,15 +9,60 @@
 
 import {BaseView, ROW_STATUS} from '../core/base-view.js';
 
+const LOCAL_STR_FUNCTION = 'function';
+const LOCAL_STR_SERVICE = 'service';
+const LOCAL_STR_USER = 'user';
+const LOCAL_NUM_FIVE = 5;
+const LOCAL_NUM_60 = 60;
+const LOCAL_NUM_1000 = 1000;
+const LOCAL_STR_CONTEXTS = 'contexts';
+const LOCAL_STR_UPDATED_AT = 'updated_at';
+const LOCAL_STR_DESC = 'desc';
+const LOCAL_STR_CONTEXT_ID = 'context_id';
+const LOCAL_STR_CONTEXT_ID_2 = 'Context ID';
+const LOCAL_NUM_20 = 20;
+const LOCAL_STR_CONTEXT_TYPE = 'context_type';
+const LOCAL_STR_TYPE = 'Type';
+const LOCAL_NUM_12 = 12;
+const LOCAL_STR_NAME = 'name';
+const LOCAL_STR_NAME_2 = 'Name';
+const LOCAL_NUM_30 = 30;
+const LOCAL_STR_CREATED_AT = 'created_at';
+const LOCAL_STR_CREATED_AT_2 = 'Created At';
+const LOCAL_STR_UPDATED_AT_2 = 'Updated At';
+const LOCAL_STR_N_A = 'N/A';
+const LOCAL_NUM_40 = 40;
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_NUM_THREE = 3;
+const LOCAL_STR_2ZI04 = '...';
+const LOCAL_STR_T = 'T';
+const LOCAL_STR_SPACE = ' ';
+const LOCAL_NUM_19 = 19;
+const LOCAL_STR_NUMBER = 'number';
+const LOCAL_STR_EMPTY = '';
+const LOCAL_STR_1D7VE = '\\$&';
+const LOCAL_STR_ASC = 'asc';
+const LOCAL_NUM_ONE = 1;
+const LOCAL_STR_SHOWDETAIL = 'showDetail';
+const LOCAL_STR_ENTER = 'enter';
+const LOCAL_STR_RETURN = 'return';
+const LOCAL_STR_OBJECT = 'object';
+const LOCAL_STR_STATE_DATA = 'State Data';
+const LOCAL_STR_DATA = 'Data';
+const LOCAL_STR_STATUS = 'Status';
+const LOCAL_STR_INFO = 'Info';
+const LOCAL_STR_RECENTLY_UPDATED = 'Recently updated';
+const LOCAL_STR_UNKNOWN = 'Unknown';
+
 /**
  * Context types
  */
-export const CONTEXT_TYPES = ['function', 'service', 'user'];
+export const CONTEXT_TYPES = [LOCAL_STR_FUNCTION, LOCAL_STR_SERVICE, LOCAL_STR_USER];
 
 /**
  * Threshold for "recently updated" highlighting (5 minutes in milliseconds)
  */
-export const RECENT_UPDATE_THRESHOLD_MS = 5 * 60 * 1000;
+export const RECENT_UPDATE_THRESHOLD_MS = LOCAL_NUM_FIVE * LOCAL_NUM_60 * LOCAL_NUM_1000;
 
 /**
  * ContextsView displays function execution contexts
@@ -33,7 +78,7 @@ export class ContextsView extends BaseView {
   constructor(options = {}) {
     super(options);
     this.cache = options.cache || null;
-    this.viewName = 'contexts';
+    this.viewName = LOCAL_STR_CONTEXTS;
 
     // Filter state
     // Requirements: 31.2, 31.5
@@ -45,8 +90,8 @@ export class ContextsView extends BaseView {
       RECENT_UPDATE_THRESHOLD_MS;
 
     // Default sort by updated_at descending (most recent first)
-    this.sortColumn = 'updated_at';
-    this.sortDirection = 'desc';
+    this.sortColumn = LOCAL_STR_UPDATED_AT;
+    this.sortDirection = LOCAL_STR_DESC;
   }
 
   /**
@@ -56,11 +101,11 @@ export class ContextsView extends BaseView {
    */
   getColumns() {
     return [
-      {key: 'context_id', label: 'Context ID', width: 20},
-      {key: 'context_type', label: 'Type', width: 12},
-      {key: 'name', label: 'Name', width: 30},
-      {key: 'created_at', label: 'Created At', width: 20},
-      {key: 'updated_at', label: 'Updated At', width: 20},
+      {key: LOCAL_STR_CONTEXT_ID, label: LOCAL_STR_CONTEXT_ID_2, width: LOCAL_NUM_20},
+      {key: LOCAL_STR_CONTEXT_TYPE, label: LOCAL_STR_TYPE, width: LOCAL_NUM_12},
+      {key: LOCAL_STR_NAME, label: LOCAL_STR_NAME_2, width: LOCAL_NUM_30},
+      {key: LOCAL_STR_CREATED_AT, label: LOCAL_STR_CREATED_AT_2, width: LOCAL_NUM_20},
+      {key: LOCAL_STR_UPDATED_AT, label: LOCAL_STR_UPDATED_AT_2, width: LOCAL_NUM_20},
     ];
   }
 
@@ -72,8 +117,8 @@ export class ContextsView extends BaseView {
    */
   formatRow(context) {
     return [
-      context.context_id || 'N/A',
-      context.context_type || 'N/A',
+      context.context_id || LOCAL_STR_N_A,
+      context.context_type || LOCAL_STR_N_A,
       this.truncateName(context.name),
       this.formatTimestamp(context.created_at),
       this.formatTimestamp(context.updated_at),
@@ -86,15 +131,15 @@ export class ContextsView extends BaseView {
    * @param {number} maxLength - Maximum length
    * @return {string} Truncated name
    */
-  truncateName(name, maxLength = 40) {
+  truncateName(name, maxLength = LOCAL_NUM_40) {
     if (!name) {
-      return 'N/A';
+      return LOCAL_STR_N_A;
     }
     const str = String(name);
     if (str.length <= maxLength) {
       return str;
     }
-    return str.substring(0, maxLength - 3) + '...';
+    return str.substring(LOCAL_NUM_ZERO, maxLength - LOCAL_NUM_THREE) + LOCAL_STR_2ZI04;
   }
 
   /**
@@ -104,17 +149,17 @@ export class ContextsView extends BaseView {
    */
   formatTimestamp(timestamp) {
     if (timestamp === null || timestamp === undefined) {
-      return 'N/A';
+      return LOCAL_STR_N_A;
     }
 
     try {
       const date = new Date(timestamp);
       if (isNaN(date.getTime())) {
-        return 'N/A';
+        return LOCAL_STR_N_A;
       }
-      return date.toISOString().replace('T', ' ').substring(0, 19);
+      return date.toISOString().replace(LOCAL_STR_T, LOCAL_STR_SPACE).substring(LOCAL_NUM_ZERO, LOCAL_NUM_19);
     } catch {
-      return 'N/A';
+      return LOCAL_STR_N_A;
     }
   }
 
@@ -151,7 +196,7 @@ export class ContextsView extends BaseView {
     }
 
     const timeSinceUpdate = referenceTime - updatedAt;
-    return timeSinceUpdate >= 0 && timeSinceUpdate <= this.recentUpdateThreshold;
+    return timeSinceUpdate >= LOCAL_NUM_ZERO && timeSinceUpdate <= this.recentUpdateThreshold;
   }
 
   /**
@@ -163,7 +208,7 @@ export class ContextsView extends BaseView {
     if (timestamp === null || timestamp === undefined) {
       return null;
     }
-    if (typeof timestamp === 'number') {
+    if (typeof timestamp === LOCAL_STR_NUMBER) {
       return timestamp;
     }
     const parsed = Date.parse(timestamp);
@@ -176,7 +221,7 @@ export class ContextsView extends BaseView {
    * @return {string} Unique key (context_id)
    */
   getItemKey(context) {
-    return context.context_id || '';
+    return context.context_id || LOCAL_STR_EMPTY;
   }
 
   /**
@@ -221,7 +266,7 @@ export class ContextsView extends BaseView {
   clearAllFilters() {
     this.typeFilter = null;
     this.namePatternFilter = null;
-    this.filter = '';
+    this.filter = LOCAL_STR_EMPTY;
     this.updateFilteredData();
   }
 
@@ -238,7 +283,7 @@ export class ContextsView extends BaseView {
     // Requirements: 31.2
     if (this.typeFilter) {
       result = result.filter((context) =>
-        (context.context_type || '').toLowerCase() === this.typeFilter.toLowerCase(),
+        (context.context_type || LOCAL_STR_EMPTY).toLowerCase() === this.typeFilter.toLowerCase(),
       );
     }
 
@@ -247,18 +292,18 @@ export class ContextsView extends BaseView {
     if (this.namePatternFilter) {
       try {
         const pattern = new RegExp(this.escapeRegex(this.namePatternFilter), 'i');
-        result = result.filter((context) => pattern.test(context.name || ''));
+        result = result.filter((context) => pattern.test(context.name || LOCAL_STR_EMPTY));
       } catch {
         // If regex is invalid, fall back to simple includes
         const lowerPattern = this.namePatternFilter.toLowerCase();
         result = result.filter((context) =>
-          (context.name || '').toLowerCase().includes(lowerPattern),
+          (context.name || LOCAL_STR_EMPTY).toLowerCase().includes(lowerPattern),
         );
       }
     }
 
     // Apply general text filter (from base class)
-    if (this.filter && this.filter.trim() !== '') {
+    if (this.filter && this.filter.trim() !== LOCAL_STR_EMPTY) {
       const lowerFilter = this.filter.toLowerCase();
       result = result.filter((item) => {
         const values = Object.values(item);
@@ -278,7 +323,7 @@ export class ContextsView extends BaseView {
    * @return {string} Escaped string
    */
   escapeRegex(str) {
-    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return str.replace(/[.*+?^${}()|[\]\\]/g, LOCAL_STR_1D7VE);
   }
 
   /**
@@ -296,28 +341,28 @@ export class ContextsView extends BaseView {
       let bVal = b[this.sortColumn];
 
       // Special handling for timestamp sorting
-      if (this.sortColumn === 'created_at' || this.sortColumn === 'updated_at') {
+      if (this.sortColumn === LOCAL_STR_CREATED_AT || this.sortColumn === LOCAL_STR_UPDATED_AT) {
         aVal = this.parseTimestamp(aVal);
         bVal = this.parseTimestamp(bVal);
       }
 
       // Handle null/undefined
       if (aVal === null || aVal === undefined) {
-        return this.sortDirection === 'asc' ? 1 : -1;
+        return this.sortDirection === LOCAL_STR_ASC ? LOCAL_NUM_ONE : -LOCAL_NUM_ONE;
       }
       if (bVal === null || bVal === undefined) {
-        return this.sortDirection === 'asc' ? -1 : 1;
+        return this.sortDirection === LOCAL_STR_ASC ? -LOCAL_NUM_ONE : LOCAL_NUM_ONE;
       }
 
       // Compare values
       let cmp;
-      if (typeof aVal === 'number' && typeof bVal === 'number') {
+      if (typeof aVal === LOCAL_STR_NUMBER && typeof bVal === LOCAL_STR_NUMBER) {
         cmp = aVal - bVal;
       } else {
         cmp = String(aVal).localeCompare(String(bVal));
       }
 
-      return this.sortDirection === 'asc' ? cmp : -cmp;
+      return this.sortDirection === LOCAL_STR_ASC ? cmp : -cmp;
     });
   }
 
@@ -333,8 +378,8 @@ export class ContextsView extends BaseView {
     }
 
     return {
-      action: 'showDetail',
-      view: 'contexts',
+      action: LOCAL_STR_SHOWDETAIL,
+      view: LOCAL_STR_CONTEXTS,
       context: {contextId: selectedContext.context_id},
       detail: this.getSelectedDetails(),
     };
@@ -346,7 +391,7 @@ export class ContextsView extends BaseView {
    * @return {boolean|Object} True if handled, navigation object, or false
    */
   handleKey(key) {
-    if (key.name === 'enter' || key.name === 'return') {
+    if (key.name === LOCAL_STR_ENTER || key.name === LOCAL_STR_RETURN) {
       return this.handleDrillDown();
     }
     return super.handleKey(key);
@@ -378,24 +423,24 @@ export class ContextsView extends BaseView {
 
     // Add state data section if available
     // Requirements: 31.3
-    if (context.state_data && typeof context.state_data === 'object') {
+    if (context.state_data && typeof context.state_data === LOCAL_STR_OBJECT) {
       const stateFields = Object.entries(context.state_data).map(([k, v]) => ({
         label: k,
         value: typeof v === 'object' ? JSON.stringify(v, null, 2) : String(v),
       }));
 
-      if (stateFields.length > 0) {
+      if (stateFields.length > LOCAL_NUM_ZERO) {
         sections.push({
-          title: 'State Data',
+          title: LOCAL_STR_STATE_DATA,
           fields: stateFields,
         });
       }
     } else if (context.state_data) {
       // Handle non-object state_data
       sections.push({
-        title: 'State Data',
+        title: LOCAL_STR_STATE_DATA,
         fields: [
-          {label: 'Data', value: String(context.state_data)},
+          {label: LOCAL_STR_DATA, value: String(context.state_data)},
         ],
       });
     }
@@ -403,15 +448,15 @@ export class ContextsView extends BaseView {
     // Add recently updated indicator
     if (this.isRecentlyUpdated(context)) {
       sections.push({
-        title: 'Status',
+        title: LOCAL_STR_STATUS,
         fields: [
-          {label: 'Info', value: 'Recently updated'},
+          {label: LOCAL_STR_INFO, value: LOCAL_STR_RECENTLY_UPDATED},
         ],
       });
     }
 
     return {
-      title: `Context: ${context.name || context.context_id || 'Unknown'}`,
+      title: `Context: ${context.name || context.context_id || LOCAL_STR_UNKNOWN}`,
       sections,
     };
   }
@@ -426,7 +471,7 @@ export class ContextsView extends BaseView {
 
     // Initialize counts for known types
     for (const type of CONTEXT_TYPES) {
-      counts[type] = 0;
+      counts[type] = LOCAL_NUM_ZERO;
     }
 
     // Count contexts by type
@@ -435,7 +480,7 @@ export class ContextsView extends BaseView {
       if (counts[type] !== undefined) {
         counts[type]++;
       } else {
-        counts[type] = 1;
+        counts[type] = LOCAL_NUM_ONE;
       }
     }
 

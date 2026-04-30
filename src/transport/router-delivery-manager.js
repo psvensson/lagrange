@@ -29,6 +29,9 @@ import {
 } from '../utils/correlation.js';
 import {isRaftPacket} from '../raft/raft-packet-utils.js';
 
+const LOCAL_STR_DELIVERY_FAILED = 'DELIVERY_FAILED';
+const LOCAL_STR_DELIVERY_FAILED_2 = 'Delivery failed';
+
 const ConnectionState = CONNECTION_STATE;
 const RouterMessageType = ROUTER_MESSAGE_TYPE;
 
@@ -198,7 +201,7 @@ class RouterDeliveryManager {
           endpointId: endpoint[COLUMN.ENDPOINT_ID],
           transportType, priority: endpoint[COLUMN.PRIORITY],
         },
-        error: {code: 'DELIVERY_FAILED', message: result.error || 'Delivery failed'},
+        error: {code: LOCAL_STR_DELIVERY_FAILED, message: result.error || LOCAL_STR_DELIVERY_FAILED_2},
       });
     }
 

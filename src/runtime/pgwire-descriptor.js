@@ -15,6 +15,8 @@ import {TYPEOF} from '../constants/types.js';
 import {MIN_PORT, MAX_PORT} from '../constants/runtime.js';
 import {META_SERVICE_RUNTIME_REF} from '../constants/wasm-meta.js';
 
+const LOCAL_NUM_ZERO = 0;
+
 // --- PG wire runtime config field names ---
 
 const PGWIRE_CONFIG_FIELD = Object.freeze({
@@ -96,7 +98,7 @@ const PGWIRE_DESCRIPTOR_ERROR = Object.freeze({
  */
 function validatePort(val, notIntError, rangeError) {
   if (typeof val !== TYPEOF.NUMBER ||
-      !Number.isInteger(val) || val <= 0) {
+      !Number.isInteger(val) || val <= LOCAL_NUM_ZERO) {
     return notIntError;
   }
   if (val < MIN_PORT || val > MAX_PORT) {
@@ -140,7 +142,7 @@ function validatePgwireRuntimeConfig(configStr) {
     const val = parsed[PGWIRE_CONFIG_FIELD.HOST];
     if (typeof val !== TYPEOF.STRING) {
       errors.push(PGWIRE_DESCRIPTOR_ERROR.HOST_NOT_STRING);
-    } else if (val.trim().length === 0) {
+    } else if (val.trim().length === LOCAL_NUM_ZERO) {
       errors.push(PGWIRE_DESCRIPTOR_ERROR.HOST_EMPTY);
     }
   }
@@ -194,7 +196,7 @@ function validatePgwireRuntimeConfig(configStr) {
   if (PGWIRE_CONFIG_FIELD.MAX_SESSIONS in parsed) {
     const val = parsed[PGWIRE_CONFIG_FIELD.MAX_SESSIONS];
     if (typeof val !== TYPEOF.NUMBER ||
-        !Number.isInteger(val) || val <= 0) {
+        !Number.isInteger(val) || val <= LOCAL_NUM_ZERO) {
       errors.push(PGWIRE_DESCRIPTOR_ERROR.MAX_SESSIONS_NOT_INTEGER);
     }
   }
@@ -213,7 +215,7 @@ function validatePgwireRuntimeConfig(configStr) {
     }
   }
 
-  if (errors.length > 0) {
+  if (errors.length > LOCAL_NUM_ZERO) {
     return {valid: false, errors};
   }
   return {valid: true, config: parsed};

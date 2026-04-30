@@ -34,6 +34,38 @@ import {
   PGWIRE_SESSION_ERROR,
 } from './pgwire-session.js';
 
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_NUM_ONE = 1;
+const LOCAL_STR_EMPTY = '';
+const LOCAL_STR_UTF8 = 'utf8';
+const LOCAL_NUM_FOUR = 4;
+const LOCAL_NUM_TWO = 2;
+const LOCAL_NUM_18 = 18;
+const LOCAL_NUM_25 = 25;
+const LOCAL_STR_SELECT = 'SELECT';
+const LOCAL_STR_INSERT = 'INSERT';
+const LOCAL_STR_UPDATE = 'UPDATE';
+const LOCAL_STR_DELETE = 'DELETE';
+const LOCAL_STR_CREATE = 'CREATE';
+const LOCAL_STR_CREATE_TABLE = 'CREATE TABLE';
+const LOCAL_STR_DROP = 'DROP';
+const LOCAL_STR_DROP_TABLE = 'DROP TABLE';
+const LOCAL_STR_BEGIN = 'BEGIN';
+const LOCAL_STR_COMMIT = 'COMMIT';
+const LOCAL_STR_ROLLBACK = 'ROLLBACK';
+const LOCAL_STR_OK = 'OK';
+const LOCAL_STR_STRING = 'string';
+const LOCAL_STR_COLUMN = 'column';
+const LOCAL_NUM_0X7FFFFFFF = 0x7FFFFFFF;
+const LOCAL_STR_DATA = 'data';
+const LOCAL_STR_ERROR = 'error';
+const LOCAL_STR_CLOSE = 'close';
+const LOCAL_NUM_0X4E = 0x4E;
+const LOCAL_NUM_16 = 16;
+const LOCAL_STR_1RBWE = 'current transaction is aborted, commands ignored ';
+const LOCAL_STR_1ZW3J = 'until end of transaction block';
+const LOCAL_STR_UNNAMED = '(unnamed)';
+
 // --- Internal handler states ---
 
 const HANDLER_PHASE = Object.freeze({
@@ -54,8 +86,8 @@ const HANDLER_PHASE = Object.freeze({
  */
 function writeCString(buf, str, offset) {
   const written = buf.write(str, offset, 'utf8');
-  buf[offset + written] = 0;
-  return offset + written + 1;
+  buf[offset + written] = LOCAL_NUM_ZERO;
+  return offset + written + LOCAL_NUM_ONE;
 }
 
 /**
@@ -67,12 +99,12 @@ function writeCString(buf, str, offset) {
  */
 function readCString(buf, offset) {
   const end = buf.indexOf(0, offset);
-  if (end === -1) {
-    return {value: '', nextOffset: buf.length};
+  if (end === -LOCAL_NUM_ONE) {
+    return {value: LOCAL_STR_EMPTY, nextOffset: buf.length};
   }
   return {
-    value: buf.toString('utf8', offset, end),
-    nextOffset: end + 1,
+    value: buf.toString(LOCAL_STR_UTF8, offset, end),
+    nextOffset: end + LOCAL_NUM_ONE,
   };
 }
 
@@ -88,8 +120,8 @@ function readCString(buf, offset) {
 function buildMessage(type, payload) {
   const len = PG_BUFFER_LIMIT.LENGTH_FIELD_SIZE + payload.length;
   const buf = Buffer.allocUnsafe(1 + len);
-  buf[0] = type;
-  buf.writeInt32BE(len, 1);
+  buf[LOCAL_NUM_ZERO] = type;
+  buf.writeInt32BE(len, LOCAL_NUM_ONE);
   payload.copy(buf, PG_BUFFER_LIMIT.MSG_HEADER_SIZE);
   return buf;
 }
@@ -100,7 +132,7 @@ function buildMessage(type, payload) {
  */
 function buildAuthOk() {
   const payload = Buffer.allocUnsafe(PG_BUFFER_LIMIT.LENGTH_FIELD_SIZE);
-  payload.writeInt32BE(PG_AUTH_TYPE.OK, 0);
+  payload.writeInt32BE(PG_AUTH_TYPE.OK, LOCAL_NUM_ZERO);
   return buildMessage(PG_BACKEND_MSG.AUTH, payload);
 }
 
@@ -127,8 +159,8 @@ function buildParameterStatus(name, value) {
  */
 function buildBackendKeyData(pid, secretKey) {
   const payload = Buffer.allocUnsafe(8);
-  payload.writeInt32BE(pid, 0);
-  payload.writeInt32BE(secretKey, 4);
+  payload.writeInt32BE(pid, LOCAL_NUM_ZERO);
+  payload.writeInt32BE(secretKey, LOCAL_NUM_FOUR);
   return buildMessage(PG_BACKEND_MSG.BACKEND_KEY_DATA, payload);
 }
 
@@ -139,7 +171,7 @@ function buildBackendKeyData(pid, secretKey) {
  */
 function buildReadyForQuery(txState) {
   const payload = Buffer.allocUnsafe(1);
-  payload[0] = txState;
+  payload[LOCAL_NUM_ZERO] = txState;
   return buildMessage(PG_BACKEND_MSG.READY_FOR_QUERY, payload);
 }
 
@@ -156,17 +188,17 @@ function buildErrorResponse(severity, code, message) {
     {id: PG_ERROR_FIELD.CODE, val: code},
     {id: PG_ERROR_FIELD.MESSAGE, val: message},
   ];
-  let size = 1; // trailing null terminator
+  let size = LOCAL_NUM_ONE; // trailing null terminator
   for (const f of fields) {
-    size += 1 + Buffer.byteLength(f.val, 'utf8') + 1;
+    size += LOCAL_NUM_ONE + Buffer.byteLength(f.val, LOCAL_STR_UTF8) + LOCAL_NUM_ONE;
   }
   const payload = Buffer.allocUnsafe(size);
-  let off = 0;
+  let off = LOCAL_NUM_ZERO;
   for (const f of fields) {
     payload[off++] = f.id;
     off = writeCString(payload, f.val, off);
   }
-  payload[off] = 0; // terminator
+  payload[off] = LOCAL_NUM_ZERO; // terminator
   return buildMessage(PG_BACKEND_MSG.ERROR_RESPONSE, payload);
 }
 
@@ -177,23 +209,23 @@ function buildErrorResponse(severity, code, message) {
  */
 function buildRowDescription(columns) {
   // 2 bytes field count + per-column data
-  let size = 2;
+  let size = LOCAL_NUM_TWO;
   for (const col of columns) {
     // name(cstring) + tableOID(4) + colAttr(2) + typeOID(4)
     // + typeLen(2) + typeMod(4) + format(2) = 18 fixed bytes
-    size += Buffer.byteLength(col.name, 'utf8') + 1 + 18;
+    size += Buffer.byteLength(col.name, LOCAL_STR_UTF8) + LOCAL_NUM_ONE + LOCAL_NUM_18;
   }
   const payload = Buffer.allocUnsafe(size);
-  payload.writeInt16BE(columns.length, 0);
-  let off = 2;
+  payload.writeInt16BE(columns.length, LOCAL_NUM_ZERO);
+  let off = LOCAL_NUM_TWO;
   for (const col of columns) {
     off = writeCString(payload, col.name, off);
-    payload.writeInt32BE(0, off); off += 4; // table OID
-    payload.writeInt16BE(0, off); off += 2; // column attr
-    payload.writeInt32BE(25, off); off += 4; // type OID (text=25)
-    payload.writeInt16BE(-1, off); off += 2; // type length
-    payload.writeInt32BE(-1, off); off += 4; // type modifier
-    payload.writeInt16BE(0, off); off += 2; // format (text=0)
+    payload.writeInt32BE(LOCAL_NUM_ZERO, off); off += LOCAL_NUM_FOUR; // table OID
+    payload.writeInt16BE(LOCAL_NUM_ZERO, off); off += LOCAL_NUM_TWO; // column attr
+    payload.writeInt32BE(LOCAL_NUM_25, off); off += LOCAL_NUM_FOUR; // type OID (text=25)
+    payload.writeInt16BE(-LOCAL_NUM_ONE, off); off += LOCAL_NUM_TWO; // type length
+    payload.writeInt32BE(-LOCAL_NUM_ONE, off); off += LOCAL_NUM_FOUR; // type modifier
+    payload.writeInt16BE(LOCAL_NUM_ZERO, off); off += LOCAL_NUM_TWO; // format (text=0)
   }
   return buildMessage(PG_BACKEND_MSG.ROW_DESCRIPTION, payload);
 }
@@ -204,28 +236,28 @@ function buildRowDescription(columns) {
  * @return {Buffer}
  */
 function buildDataRow(values) {
-  let size = 2; // column count
+  let size = LOCAL_NUM_TWO; // column count
   for (const v of values) {
     if (v === null || v === undefined) {
-      size += 4; // -1 length for NULL
+      size += LOCAL_NUM_FOUR; // -1 length for NULL
     } else {
       const s = String(v);
-      size += 4 + Buffer.byteLength(s, 'utf8');
+      size += LOCAL_NUM_FOUR + Buffer.byteLength(s, LOCAL_STR_UTF8);
     }
   }
   const payload = Buffer.allocUnsafe(size);
-  payload.writeInt16BE(values.length, 0);
-  let off = 2;
+  payload.writeInt16BE(values.length, LOCAL_NUM_ZERO);
+  let off = LOCAL_NUM_TWO;
   for (const v of values) {
     if (v === null || v === undefined) {
-      payload.writeInt32BE(-1, off);
-      off += 4;
+      payload.writeInt32BE(-LOCAL_NUM_ONE, off);
+      off += LOCAL_NUM_FOUR;
     } else {
       const s = String(v);
       const len = Buffer.byteLength(s, 'utf8');
       payload.writeInt32BE(len, off);
-      off += 4;
-      payload.write(s, off, 'utf8');
+      off += LOCAL_NUM_FOUR;
+      payload.write(s, off, LOCAL_STR_UTF8);
       off += len;
     }
   }
@@ -240,7 +272,7 @@ function buildDataRow(values) {
 function buildCommandComplete(tag) {
   const len = Buffer.byteLength(tag, 'utf8') + 1;
   const payload = Buffer.allocUnsafe(len);
-  writeCString(payload, tag, 0);
+  writeCString(payload, tag, LOCAL_NUM_ZERO);
   return buildMessage(PG_BACKEND_MSG.COMMAND_COMPLETE, payload);
 }
 
@@ -249,7 +281,7 @@ function buildCommandComplete(tag) {
  * @return {Buffer}
  */
 function buildParseComplete() {
-  return buildMessage(PG_BACKEND_MSG.PARSE_COMPLETE, Buffer.alloc(0));
+  return buildMessage(PG_BACKEND_MSG.PARSE_COMPLETE, Buffer.alloc(LOCAL_NUM_ZERO));
 }
 
 /**
@@ -257,7 +289,7 @@ function buildParseComplete() {
  * @return {Buffer}
  */
 function buildBindComplete() {
-  return buildMessage(PG_BACKEND_MSG.BIND_COMPLETE, Buffer.alloc(0));
+  return buildMessage(PG_BACKEND_MSG.BIND_COMPLETE, Buffer.alloc(LOCAL_NUM_ZERO));
 }
 
 /**
@@ -266,7 +298,7 @@ function buildBindComplete() {
  */
 function buildCloseComplete() {
   return buildMessage(
-    PG_BACKEND_MSG.CLOSE_COMPLETE, Buffer.alloc(0),
+    PG_BACKEND_MSG.CLOSE_COMPLETE, Buffer.alloc(LOCAL_NUM_ZERO),
   );
 }
 
@@ -275,7 +307,7 @@ function buildCloseComplete() {
  * @return {Buffer}
  */
 function buildNoData() {
-  return buildMessage(PG_BACKEND_MSG.NO_DATA, Buffer.alloc(0));
+  return buildMessage(PG_BACKEND_MSG.NO_DATA, Buffer.alloc(LOCAL_NUM_ZERO));
 }
 
 /**
@@ -283,7 +315,7 @@ function buildNoData() {
  * @return {Buffer}
  */
 function buildEmptyQueryResponse() {
-  return buildMessage(PG_BACKEND_MSG.EMPTY_QUERY, Buffer.alloc(0));
+  return buildMessage(PG_BACKEND_MSG.EMPTY_QUERY, Buffer.alloc(LOCAL_NUM_ZERO));
 }
 
 // --- Startup message parsing ---
@@ -298,9 +330,9 @@ function buildEmptyQueryResponse() {
  */
 function parseStartupParams(buf) {
   const params = {};
-  let off = 0;
+  let off = LOCAL_NUM_ZERO;
   while (off < buf.length) {
-    if (buf[off] === 0) break;
+    if (buf[off] === LOCAL_NUM_ZERO) break;
     const key = readCString(buf, off);
     off = key.nextOffset;
     if (off >= buf.length) break;
@@ -319,7 +351,7 @@ function parseStartupParams(buf) {
  * @return {{query: string}}
  */
 function parseQueryMessage(payload) {
-  const {value} = readCString(payload, 0);
+  const {value} = readCString(payload, LOCAL_NUM_ZERO);
   return {query: value};
 }
 
@@ -329,17 +361,17 @@ function parseQueryMessage(payload) {
  * @return {{name: string, query: string, paramTypes: number[]}}
  */
 function parseParseMessage(payload) {
-  let off = 0;
+  let off = LOCAL_NUM_ZERO;
   const name = readCString(payload, off);
   off = name.nextOffset;
   const query = readCString(payload, off);
   off = query.nextOffset;
   const numParams = payload.readInt16BE(off);
-  off += 2;
+  off += LOCAL_NUM_TWO;
   const paramTypes = [];
-  for (let i = 0; i < numParams; i++) {
+  for (let i = LOCAL_NUM_ZERO; i < numParams; i++) {
     paramTypes.push(payload.readInt32BE(off));
-    off += 4;
+    off += LOCAL_NUM_FOUR;
   }
   return {
     name: name.value,
@@ -354,7 +386,7 @@ function parseParseMessage(payload) {
  * @return {{portal: string, statement: string, params: string[]}}
  */
 function parseBindMessage(payload) {
-  let off = 0;
+  let off = LOCAL_NUM_ZERO;
   const portal = readCString(payload, off);
   off = portal.nextOffset;
   const statement = readCString(payload, off);
@@ -362,20 +394,20 @@ function parseBindMessage(payload) {
 
   // Parameter format codes
   const numFormats = payload.readInt16BE(off);
-  off += 2;
-  off += numFormats * 2; // skip format codes (all text)
+  off += LOCAL_NUM_TWO;
+  off += numFormats * LOCAL_NUM_TWO; // skip format codes (all text)
 
   // Parameter values
   const numParams = payload.readInt16BE(off);
-  off += 2;
+  off += LOCAL_NUM_TWO;
   const params = [];
-  for (let i = 0; i < numParams; i++) {
+  for (let i = LOCAL_NUM_ZERO; i < numParams; i++) {
     const len = payload.readInt32BE(off);
-    off += 4;
-    if (len === -1) {
+    off += LOCAL_NUM_FOUR;
+    if (len === -LOCAL_NUM_ONE) {
       params.push(null);
     } else {
-      params.push(payload.toString('utf8', off, off + len));
+      params.push(payload.toString(LOCAL_STR_UTF8, off, off + len));
       off += len;
     }
   }
@@ -393,8 +425,8 @@ function parseBindMessage(payload) {
  */
 function parseDescribeMessage(payload) {
   return {
-    type: payload[0],
-    name: readCString(payload, 1).value,
+    type: payload[LOCAL_NUM_ZERO],
+    name: readCString(payload, LOCAL_NUM_ONE).value,
   };
 }
 
@@ -416,8 +448,8 @@ function parseExecuteMessage(payload) {
  */
 function parseCloseMessage(payload) {
   return {
-    type: payload[0],
-    name: readCString(payload, 1).value,
+    type: payload[LOCAL_NUM_ZERO],
+    name: readCString(payload, LOCAL_NUM_ONE).value,
   };
 }
 
@@ -432,29 +464,29 @@ function parseCloseMessage(payload) {
  */
 function deriveCommandTag(result, query) {
   const upper = query.trimStart().toUpperCase();
-  if (upper.startsWith('SELECT')) {
+  if (upper.startsWith(LOCAL_STR_SELECT)) {
     const count = Array.isArray(result?.rows) ?
       result.rows.length : 0;
     return `SELECT ${count}`;
   }
-  if (upper.startsWith('INSERT')) {
+  if (upper.startsWith(LOCAL_STR_INSERT)) {
     const count = result?.changes ?? result?.rowCount ?? 0;
     return `INSERT 0 ${count}`;
   }
-  if (upper.startsWith('UPDATE')) {
+  if (upper.startsWith(LOCAL_STR_UPDATE)) {
     const count = result?.changes ?? result?.rowCount ?? 0;
     return `UPDATE ${count}`;
   }
-  if (upper.startsWith('DELETE')) {
+  if (upper.startsWith(LOCAL_STR_DELETE)) {
     const count = result?.changes ?? result?.rowCount ?? 0;
     return `DELETE ${count}`;
   }
-  if (upper.startsWith('CREATE')) return 'CREATE TABLE';
-  if (upper.startsWith('DROP')) return 'DROP TABLE';
-  if (upper.startsWith('BEGIN')) return 'BEGIN';
-  if (upper.startsWith('COMMIT')) return 'COMMIT';
-  if (upper.startsWith('ROLLBACK')) return 'ROLLBACK';
-  return 'OK';
+  if (upper.startsWith(LOCAL_STR_CREATE)) return LOCAL_STR_CREATE_TABLE;
+  if (upper.startsWith(LOCAL_STR_DROP)) return LOCAL_STR_DROP_TABLE;
+  if (upper.startsWith(LOCAL_STR_BEGIN)) return LOCAL_STR_BEGIN;
+  if (upper.startsWith(LOCAL_STR_COMMIT)) return LOCAL_STR_COMMIT;
+  if (upper.startsWith(LOCAL_STR_ROLLBACK)) return LOCAL_STR_ROLLBACK;
+  return LOCAL_STR_OK;
 }
 
 /**
@@ -466,11 +498,11 @@ function deriveCommandTag(result, query) {
 function extractColumns(result) {
   if (result?.columns && Array.isArray(result.columns)) {
     return result.columns.map((c) =>
-      typeof c === 'string' ? {name: c} : {name: c.name || 'column'},
+      typeof c === LOCAL_STR_STRING ? {name: c} : {name: c.name || LOCAL_STR_COLUMN},
     );
   }
-  if (Array.isArray(result?.rows) && result.rows.length > 0) {
-    return Object.keys(result.rows[0]).map((k) => ({name: k}));
+  if (Array.isArray(result?.rows) && result.rows.length > LOCAL_NUM_ZERO) {
+    return Object.keys(result.rows[LOCAL_NUM_ZERO]).map((k) => ({name: k}));
   }
   return [];
 }
@@ -516,9 +548,9 @@ class PgWireProtocolHandler {
     this._logger = options.logger || console;
     this._phase = HANDLER_PHASE.STARTUP;
     this._session = null;
-    this._buffer = Buffer.alloc(0);
-    this._pid = (Math.random() * 0x7FFFFFFF) | 0;
-    this._secretKey = (Math.random() * 0x7FFFFFFF) | 0;
+    this._buffer = Buffer.alloc(LOCAL_NUM_ZERO);
+    this._pid = (Math.random() * LOCAL_NUM_0X7FFFFFFF) | LOCAL_NUM_ZERO;
+    this._secretKey = (Math.random() * LOCAL_NUM_0X7FFFFFFF) | LOCAL_NUM_ZERO;
 
     this._onData = this._onData.bind(this);
     this._onError = this._onError.bind(this);
@@ -530,9 +562,9 @@ class PgWireProtocolHandler {
    * Attaches socket event listeners and begins protocol handling.
    */
   start() {
-    this._socket.on('data', this._onData);
-    this._socket.on('error', this._onError);
-    this._socket.on('close', this._onClose);
+    this._socket.on(LOCAL_STR_DATA, this._onData);
+    this._socket.on(LOCAL_STR_ERROR, this._onError);
+    this._socket.on(LOCAL_STR_CLOSE, this._onClose);
   }
 
   /**
@@ -540,15 +572,15 @@ class PgWireProtocolHandler {
    */
   destroy() {
     this._phase = HANDLER_PHASE.CLOSED;
-    this._socket.removeListener('data', this._onData);
-    this._socket.removeListener('error', this._onError);
-    this._socket.removeListener('close', this._onClose);
+    this._socket.removeListener(LOCAL_STR_DATA, this._onData);
+    this._socket.removeListener(LOCAL_STR_ERROR, this._onError);
+    this._socket.removeListener(LOCAL_STR_CLOSE, this._onClose);
     if (this._session && !this._session.isClosed()) {
       const sid = this._session.sessionId;
       this._adapter.closeSession(sid);
       this._session.close();
     }
-    this._buffer = Buffer.alloc(0);
+    this._buffer = Buffer.alloc(LOCAL_NUM_ZERO);
   }
 
   /**
@@ -614,7 +646,7 @@ class PgWireProtocolHandler {
     // Check for SSL request
     if (version === PG_SSL_REQUEST_CODE) {
       // Respond with 'N' (SSL not supported), stay in startup
-      this._socket.write(Buffer.from([0x4E])); // 'N'
+      this._socket.write(Buffer.from([LOCAL_NUM_0X4E])); // 'N'
       return;
     }
 
@@ -698,7 +730,7 @@ class PgWireProtocolHandler {
     this._logger.debug(PG_HANDLER_LOG.AUTH_OK, {sessionId});
 
     // Process any remaining buffered data
-    if (this._buffer.length > 0) {
+    if (this._buffer.length > LOCAL_NUM_ZERO) {
       this._processMessages();
     }
   }
@@ -762,13 +794,13 @@ class PgWireProtocolHandler {
       break;
     default:
       this._logger.debug(PG_HANDLER_LOG.UNSUPPORTED_MSG, {
-        type: `0x${type.toString(16)}`,
+        type: `0x${type.toString(LOCAL_NUM_16)}`,
       });
       this._sendError(
         PG_SEVERITY.ERROR,
         PG_ERROR_CODE.FEATURE_NOT_SUPPORTED,
         `${PG_HANDLER_ERROR.UNKNOWN_MESSAGE_TYPE}: ` +
-            `0x${type.toString(16)}`,
+            `0x${type.toString(LOCAL_NUM_16)}`,
       );
       break;
     }
@@ -792,7 +824,7 @@ class PgWireProtocolHandler {
       sessionId: this._session.sessionId,
     });
 
-    if (!query || query.trim().length === 0) {
+    if (!query || query.trim().length === LOCAL_NUM_ZERO) {
       this._socket.write(buildEmptyQueryResponse());
       this._socket.write(
         buildReadyForQuery(this._session.getTransactionState()),
@@ -803,12 +835,12 @@ class PgWireProtocolHandler {
     // Check for failed transaction state
     if (this._session.isInFailedTransaction()) {
       const upper = query.trimStart().toUpperCase();
-      if (!upper.startsWith('ROLLBACK')) {
+      if (!upper.startsWith(LOCAL_STR_ROLLBACK)) {
         this._sendError(
           PG_SEVERITY.ERROR,
           PG_ERROR_CODE.IN_FAILED_TRANSACTION,
-          'current transaction is aborted, commands ignored ' +
-            'until end of transaction block',
+          LOCAL_STR_1RBWE +
+            LOCAL_STR_1ZW3J,
         );
         this._socket.write(
           buildReadyForQuery(this._session.getTransactionState()),
@@ -838,7 +870,7 @@ class PgWireProtocolHandler {
 
     this._logger.debug(PG_HANDLER_LOG.PARSE_RECEIVED, {
       sessionId: this._session.sessionId,
-      name: name || '(unnamed)',
+      name: name || LOCAL_STR_UNNAMED,
     });
 
     this._session.setPreparedStatement(name, query, paramTypes);
@@ -857,8 +889,8 @@ class PgWireProtocolHandler {
 
     this._logger.debug(PG_HANDLER_LOG.BIND_RECEIVED, {
       sessionId: this._session.sessionId,
-      portal: portal || '(unnamed)',
-      statement: statement || '(unnamed)',
+      portal: portal || LOCAL_STR_UNNAMED,
+      statement: statement || LOCAL_STR_UNNAMED,
     });
 
     const stmt = this._session.getPreparedStatement(statement);
@@ -931,7 +963,7 @@ class PgWireProtocolHandler {
 
     this._logger.debug(PG_HANDLER_LOG.EXECUTE_RECEIVED, {
       sessionId: this._session.sessionId,
-      portal: portalName || '(unnamed)',
+      portal: portalName || LOCAL_STR_UNNAMED,
     });
 
     const portal = this._session.getPortal(portalName);
@@ -960,12 +992,12 @@ class PgWireProtocolHandler {
     // Check for failed transaction state
     if (this._session.isInFailedTransaction()) {
       const upper = stmt.query.trimStart().toUpperCase();
-      if (!upper.startsWith('ROLLBACK')) {
+      if (!upper.startsWith(LOCAL_STR_ROLLBACK)) {
         this._sendError(
           PG_SEVERITY.ERROR,
           PG_ERROR_CODE.IN_FAILED_TRANSACTION,
-          'current transaction is aborted, commands ignored ' +
-            'until end of transaction block',
+          LOCAL_STR_1RBWE +
+            LOCAL_STR_1ZW3J,
         );
         return;
       }
@@ -1034,7 +1066,7 @@ class PgWireProtocolHandler {
     const upper = query.trimStart().toUpperCase();
 
     // Track transaction state transitions
-    if (upper.startsWith('BEGIN')) {
+    if (upper.startsWith(LOCAL_STR_BEGIN)) {
       this._session.setTransactionState(
         PG_TRANSACTION_STATE.IN_TRANSACTION,
       );
@@ -1047,7 +1079,7 @@ class PgWireProtocolHandler {
 
       // Send result set for SELECT-like queries
       const columns = extractColumns(result);
-      if (columns.length > 0 && Array.isArray(result?.rows)) {
+      if (columns.length > LOCAL_NUM_ZERO && Array.isArray(result?.rows)) {
         this._socket.write(buildRowDescription(columns));
         for (const row of result.rows) {
           const values = extractRowValues(row, columns);
@@ -1059,8 +1091,8 @@ class PgWireProtocolHandler {
       this._socket.write(buildCommandComplete(tag));
 
       // Update transaction state on COMMIT/ROLLBACK
-      if (upper.startsWith('COMMIT') ||
-          upper.startsWith('ROLLBACK')) {
+      if (upper.startsWith(LOCAL_STR_COMMIT) ||
+          upper.startsWith(LOCAL_STR_ROLLBACK)) {
         this._session.setTransactionState(
           PG_TRANSACTION_STATE.IDLE,
         );

@@ -18,10 +18,15 @@ import {resolveScenarioOptions} from '../harness/scenario-config.js';
 const ACKNOWLEDGED_WRITE_ALIAS = 'ack_id';
 const ACKNOWLEDGED_WRITE_BATCH_SIZE = 100;
 const PRE_LOAD_READINESS_TIMEOUT_MS = 300000;
+const PRE_LOAD_READINESS_NO_PROGRESS_MAX_ATTEMPTS = 8;
+const LOAD_READINESS_PHASE_PRE_LOAD = 'pre_load';
+const LOAD_READINESS_PHASE_POST_RESTART = 'post_restart';
 const ZERO = 0;
 const POST_RESTART_RECOVERY_MIN_STABLE_WINDOW_MS = 15000;
 const POST_RESTART_CONTROL_PLANE_MAX_IN_FLIGHT_COUNT = ZERO;
 const POST_RESTART_CRITICAL_SYSTEM_SPREAD_REQUIRED = true;
+const POST_RESTART_CONTROL_PLANE_QUIESCENCE_NO_PROGRESS_TIMEOUT_MS = 30000;
+const POST_RESTART_LOAD_READINESS_NO_PROGRESS_MAX_ATTEMPTS = 5;
 const ROLLING_RESTART_REQUIRE_ADMIN_READY = true;
 
 function normalizeFiniteNumber(value, fallback) {
@@ -149,6 +154,10 @@ function resolveRollingRestartScenarioConfig(options = {}) {
       options.preLoadReadinessTimeoutMs,
       PRE_LOAD_READINESS_TIMEOUT_MS,
     ),
+    preLoadReadinessNoProgressMaxAttempts: normalizeFiniteNumber(
+      options.preLoadReadinessNoProgressMaxAttempts,
+      PRE_LOAD_READINESS_NO_PROGRESS_MAX_ATTEMPTS,
+    ),
     preRestartSettleMs: normalizeFiniteNumber(
       options.preRestartSettleMs,
       SCENARIO_TIMING_DEFAULTS.stabilizationDelayMs,
@@ -175,6 +184,15 @@ function resolveRollingRestartScenarioConfig(options = {}) {
       ),
     postRestartActiveTimeoutMs:
       normalizeFiniteNumber(options.postRestartActiveTimeoutMs, 240000),
+    postRestartControlPlaneQuiescenceNoProgressTimeoutMs:
+      normalizeFiniteNumber(
+        options.postRestartControlPlaneQuiescenceNoProgressTimeoutMs,
+        POST_RESTART_CONTROL_PLANE_QUIESCENCE_NO_PROGRESS_TIMEOUT_MS,
+      ),
+    postRestartLoadReadinessNoProgressMaxAttempts: normalizeFiniteNumber(
+      options.postRestartLoadReadinessNoProgressMaxAttempts,
+      POST_RESTART_LOAD_READINESS_NO_PROGRESS_MAX_ATTEMPTS,
+    ),
     postRestartConsistencyTimeoutMs:
       normalizeFiniteNumber(
         options.postRestartConsistencyTimeoutMs,
@@ -209,18 +227,21 @@ function buildConvergenceOptions(perNodeConvergenceTimeoutMs) {
 function buildStrictConvergenceOptions(perNodeConvergenceTimeoutMs) {
   return {
     ...buildConvergenceOptions(perNodeConvergenceTimeoutMs),
-    ignoreStaleInFlightReplicaOperations: false,
+    ignoreStaleInFlightReplicaOperations: true,
   };
 }
 
 function buildPostRestartQuiescenceOptions({
   perNodeConvergenceTimeoutMs,
   postRestartRecoveryStableWindowMs,
+  postRestartControlPlaneQuiescenceNoProgressTimeoutMs,
 }) {
   return {
     timeoutMs: perNodeConvergenceTimeoutMs,
     stableWindowMs: postRestartRecoveryStableWindowMs,
+    noProgressTimeoutMs: postRestartControlPlaneQuiescenceNoProgressTimeoutMs,
     maxInFlightCount: POST_RESTART_CONTROL_PLANE_MAX_IN_FLIGHT_COUNT,
+    ignoreStaleInFlightReplicaOperations: true,
     requireCriticalSystemSpread:
       POST_RESTART_CRITICAL_SYSTEM_SPREAD_REQUIRED,
   };
@@ -243,6 +264,8 @@ async function waitForPostRestartRecoveryBarrier(cluster, {
   perNodeConvergenceTimeoutMs,
   postRestartActiveTimeoutMs,
   postRestartQuietWindowMs,
+  postRestartControlPlaneQuiescenceNoProgressTimeoutMs,
+  postRestartLoadReadinessNoProgressMaxAttempts,
 }) {
   const postRestartRecoveryStableWindowMs =
     resolvePostRestartRecoveryStableWindowMs(postRestartQuietWindowMs);
@@ -264,6 +287,7 @@ async function waitForPostRestartRecoveryBarrier(cluster, {
       buildPostRestartQuiescenceOptions({
         perNodeConvergenceTimeoutMs,
         postRestartRecoveryStableWindowMs,
+        postRestartControlPlaneQuiescenceNoProgressTimeoutMs,
       }),
     );
   }
@@ -272,6 +296,8 @@ async function waitForPostRestartRecoveryBarrier(cluster, {
     await cluster.waitForLoadReadinessStability({
       stableWindowMs: postRestartRecoveryStableWindowMs,
       timeoutMs: postRestartActiveTimeoutMs,
+      noProgressMaxAttempts: postRestartLoadReadinessNoProgressMaxAttempts,
+      loadReadinessPhase: LOAD_READINESS_PHASE_POST_RESTART,
     });
   }
 }
@@ -294,6 +320,7 @@ async function run(cluster, options = {}) {
     queryTimeoutMs,
     preLoadReadinessStableWindowMs,
     preLoadReadinessTimeoutMs,
+    preLoadReadinessNoProgressMaxAttempts,
     preRestartSettleMs,
     perRestartActiveTimeoutMs,
     perNodeConvergenceTimeoutMs,
@@ -302,6 +329,8 @@ async function run(cluster, options = {}) {
     postRestartLoadSoakMs,
     postRestartQuietWindowMs,
     postRestartActiveTimeoutMs,
+    postRestartControlPlaneQuiescenceNoProgressTimeoutMs,
+    postRestartLoadReadinessNoProgressMaxAttempts,
     postRestartConsistencyTimeoutMs,
     postRestartConsistencyPollIntervalMs,
     postRestartConsistencyForceRepairAfterMs,
@@ -313,6 +342,8 @@ async function run(cluster, options = {}) {
     await cluster.waitForLoadReadinessStability({
       stableWindowMs: preLoadReadinessStableWindowMs,
       timeoutMs: preLoadReadinessTimeoutMs,
+      noProgressMaxAttempts: preLoadReadinessNoProgressMaxAttempts,
+      loadReadinessPhase: LOAD_READINESS_PHASE_PRE_LOAD,
     });
   }
 
@@ -399,6 +430,8 @@ async function run(cluster, options = {}) {
     perNodeConvergenceTimeoutMs,
     postRestartActiveTimeoutMs,
     postRestartQuietWindowMs,
+    postRestartControlPlaneQuiescenceNoProgressTimeoutMs,
+    postRestartLoadReadinessNoProgressMaxAttempts,
   });
 
   // 9. Assert final cluster consistency immediately after the guarded

@@ -25,6 +25,10 @@ import {
   QUERY_OPERATION,
   QUERY_SUBSYSTEM,
 } from './query-constants.js';
+
+
+const LOCAL_STR_OBJECT = 'object';
+
 const TABLE_CREATION_SERVICE_LITERAL = Object.freeze({
   BOOLEAN: 'boolean',
   FUNCTION: 'function',
@@ -190,7 +194,7 @@ function resolveTableCreationMutationContractOutcome(
   for (const mutationResult of Array.isArray(mutationResults) ?
     mutationResults :
     []) {
-    if (!mutationResult || typeof mutationResult !== 'object') {
+    if (!mutationResult || typeof mutationResult !== LOCAL_STR_OBJECT) {
       continue;
     }
     const mutationOutcome =

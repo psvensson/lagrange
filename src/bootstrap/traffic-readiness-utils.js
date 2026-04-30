@@ -5,6 +5,15 @@ import {
   isPriorityControlPlanePartition,
 } from './system-partition-classification.js';
 
+const LOCAL_STR_OBJECT = 'object';
+const LOCAL_STR_FUNCTION = 'function';
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_NUM_ONE = 1;
+const LOCAL_STR_J2SMD = 'BOOTSTRAP_TRAFFIC_NOT_READY';
+const LOCAL_STR_1Y6VT = 'Lifecycle traffic readiness';
+const LOCAL_STR_1LT6Z = 'Lifecycle metadata publication readiness';
+const LOCAL_STR_GMYW4 = 'BOOTSTRAP_METADATA_PUBLICATION_NOT_READY';
+
 const METADATA_PUBLICATION_ALLOWED_CONTROL_READY_REASONS = Object.freeze([
   LIFECYCLE_REASON.LEADER_METADATA_INCOMPLETE,
   LIFECYCLE_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
@@ -30,13 +39,13 @@ function normalizeBackoffMultiplier(value) {
 }
 
 function getTrafficReadinessSnapshot(readinessState) {
-  if (!readinessState || typeof readinessState !== 'object') {
+  if (!readinessState || typeof readinessState !== LOCAL_STR_OBJECT) {
     return null;
   }
-  if (typeof readinessState.evaluate === 'function') {
+  if (typeof readinessState.evaluate === LOCAL_STR_FUNCTION) {
     return readinessState.evaluate();
   }
-  if (typeof readinessState.getSnapshot === 'function') {
+  if (typeof readinessState.getSnapshot === LOCAL_STR_FUNCTION) {
     return readinessState.getSnapshot();
   }
   return null;
@@ -57,7 +66,7 @@ function isTrafficReady(readinessState) {
 }
 
 function isBackgroundWorkReady(readinessState, options = {}) {
-  if (!readinessState || typeof readinessState !== 'object') {
+  if (!readinessState || typeof readinessState !== LOCAL_STR_OBJECT) {
     return true;
   }
   return isBackgroundWorkReadySnapshot(
@@ -97,15 +106,15 @@ function isMetadataPublicationReadySnapshot(snapshot) {
 
   if (snapshot.phase === LIFECYCLE_PHASE.CONTROL_READY ||
       snapshot.phase === LIFECYCLE_PHASE.DEGRADED) {
-    return reasons.length > 0 &&
+    return reasons.length > LOCAL_NUM_ZERO &&
       reasons.every((reason) =>
         METADATA_PUBLICATION_ALLOWED_CONTROL_READY_REASONS.includes(reason),
       );
   }
 
   if (snapshot.phase === LIFECYCLE_PHASE.JOIN_READY) {
-    return reasons.length === 1 &&
-      reasons[0] === LIFECYCLE_REASON.READINESS_STABLE_WINDOW_PENDING;
+    return reasons.length === LOCAL_NUM_ONE &&
+      reasons[LOCAL_NUM_ZERO] === LIFECYCLE_REASON.READINESS_STABLE_WINDOW_PENDING;
   }
 
   return false;
@@ -135,7 +144,7 @@ function buildLifecycleReadinessNotReadyError(snapshot, options = {}) {
     typeof options.code === TYPEOF.STRING &&
     options.code.length > NUM.ZERO ?
       options.code :
-      'BOOTSTRAP_TRAFFIC_NOT_READY';
+      LOCAL_STR_J2SMD;
   error.retryAfterMs = normalizePositiveInteger(snapshot?.retryAfterMs, null);
   error.lifecycleReadiness = snapshot || null;
   return error;
@@ -168,8 +177,8 @@ async function waitForTrafficReadiness(options = {}) {
     ...options,
     isSatisfied: isTrafficReadySnapshot,
     buildError: (snapshot) => buildLifecycleReadinessNotReadyError(snapshot, {
-      label: 'Lifecycle traffic readiness',
-      code: 'BOOTSTRAP_TRAFFIC_NOT_READY',
+      label: LOCAL_STR_1Y6VT,
+      code: LOCAL_STR_J2SMD,
     }),
   });
 }
@@ -179,8 +188,8 @@ async function waitForMetadataPublicationReadiness(options = {}) {
     ...options,
     isSatisfied: isMetadataPublicationReadySnapshot,
     buildError: (snapshot) => buildLifecycleReadinessNotReadyError(snapshot, {
-      label: 'Lifecycle metadata publication readiness',
-      code: 'BOOTSTRAP_METADATA_PUBLICATION_NOT_READY',
+      label: LOCAL_STR_1LT6Z,
+      code: LOCAL_STR_GMYW4,
     }),
   });
 }
@@ -265,10 +274,10 @@ async function waitForLifecycleReadiness(options = {}) {
 }
 
 function attachTrafficReadinessListener(readinessState, listener) {
-  if (!readinessState || typeof listener !== 'function') {
+  if (!readinessState || typeof listener !== LOCAL_STR_FUNCTION) {
     return () => {};
   }
-  if (typeof readinessState.on !== 'function') {
+  if (typeof readinessState.on !== LOCAL_STR_FUNCTION) {
     return () => {};
   }
   const removeListener =

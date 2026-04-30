@@ -8,8 +8,12 @@ import {
 } from '../control-plane-workload-profile.js';
 import {SystemMetadataOwnerBase} from './system-metadata-owner-base.js';
 
+const CONTROL_PLANE_PUBLICATION_DELIVERY_PRIORITY = 'critical';
+const CONTROL_PLANE_PUBLICATIONS_OWNER_NAME =
+  'control-plane-publications-owner';
+
 class ControlPlanePublicationsOwner extends SystemMetadataOwnerBase {
-  static OWNER_NAME = 'control-plane-publications-owner';
+  static OWNER_NAME = CONTROL_PLANE_PUBLICATIONS_OWNER_NAME;
   static TABLE_NAME = TABLES.CONTROL_PLANE_PUBLICATIONS;
 
   buildPublicationMutationOptions(options = {}) {
@@ -19,7 +23,7 @@ class ControlPlanePublicationsOwner extends SystemMetadataOwnerBase {
     return {
       ...options,
       allowPressureDefer: workloadProfile.allowPressureDefer,
-      deliveryPriority: 'critical',
+      deliveryPriority: CONTROL_PLANE_PUBLICATION_DELIVERY_PRIORITY,
       routingReadinessDimension:
         CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
       workloadClass: workloadProfile.workloadClass,

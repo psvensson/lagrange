@@ -4,6 +4,8 @@ import {NUM} from '../../constants/index.js';
 import {createSystemMetadataOwners} from './create-system-metadata-owners.js';
 import {NodeEndpointsOwner} from './node-endpoints-owner.js';
 
+const LOCAL_STR_FUNCTION = 'function';
+
 const JOIN_PUBLICATION_DELIVERY_PRIORITY = 'critical';
 
 function normalizeNonNegativeInteger(value, fallback = null) {
@@ -18,7 +20,7 @@ function applyOwnerDependencies(owner, options = {}) {
   if (!owner) {
     return;
   }
-  if (typeof owner.setControlPlaneSystemTableGateway === 'function') {
+  if (typeof owner.setControlPlaneSystemTableGateway === LOCAL_STR_FUNCTION) {
     owner.setControlPlaneSystemTableGateway(
       options.controlPlaneSystemTableGateway || null,
     );
@@ -118,13 +120,13 @@ class MembershipPublicationRuntimeOwner {
     if (retryMaxDelayMs !== null && retryMaxDelayMs > NUM.ZERO) {
       mutationOptions.controlPlaneWriteRetryMaxDelayMs = retryMaxDelayMs;
     }
-    if (typeof options.controlPlaneWriteRetryNow !== 'function' &&
-        typeof this.controlPlaneWriteRetryNow === 'function') {
+    if (typeof options.controlPlaneWriteRetryNow !== LOCAL_STR_FUNCTION &&
+        typeof this.controlPlaneWriteRetryNow === LOCAL_STR_FUNCTION) {
       mutationOptions.controlPlaneWriteRetryNow =
         this.controlPlaneWriteRetryNow;
     }
-    if (typeof options.controlPlaneWriteRetrySleep !== 'function' &&
-        typeof this.controlPlaneWriteRetrySleep === 'function') {
+    if (typeof options.controlPlaneWriteRetrySleep !== LOCAL_STR_FUNCTION &&
+        typeof this.controlPlaneWriteRetrySleep === LOCAL_STR_FUNCTION) {
       mutationOptions.controlPlaneWriteRetrySleep =
         this.controlPlaneWriteRetrySleep;
     }

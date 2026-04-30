@@ -52,6 +52,11 @@ const PUBLICATION_RECOVERY_EVIDENCE_FLAG = Object.freeze({
   UNAVAILABLE: 'unavailable',
 });
 
+const PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE = Object.freeze({
+  COUNT_ONLY: 'count_only',
+  REQUIRED_ACK_NODE_LIST: 'required_ack_node_list',
+});
+
 const PUBLICATION_RECOVERY_REASON = Object.freeze({
   ACKNOWLEDGEMENT_RECORDED: 'acknowledgement_recorded',
   PUBLICATION_ACK_PENDING: 'publication_ack_pending',
@@ -299,6 +304,59 @@ function countPendingRequiredAckNodeIds(requiredAckNodeIds, acknowledgedNodeIds)
   return requiredAckNodeIds.filter((nodeId) => !acknowledgedNodeIdSet.has(nodeId));
 }
 
+function resolvePublicationRecoveryPendingAckEvidenceState(options = {}) {
+  return Array.isArray(
+    options[PUBLICATION_RECOVERY_EVIDENCE_FIELD.REQUIRED_ACK_NODE_IDS],
+  ) ?
+    PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.REQUIRED_ACK_NODE_LIST :
+    PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.COUNT_ONLY;
+}
+
+function resolvePublicationRecoveryPendingAckEvidence(options = {}) {
+  const evidenceState =
+    resolvePublicationRecoveryPendingAckEvidenceState(options);
+  const requiredAckNodeIds = normalizePublicationRecoveryNodeIdList(
+    options[PUBLICATION_RECOVERY_EVIDENCE_FIELD.REQUIRED_ACK_NODE_IDS],
+  );
+  const acknowledgedNodeIds = normalizePublicationRecoveryNodeIdList(
+    options[PUBLICATION_RECOVERY_EVIDENCE_FIELD.ACKNOWLEDGED_NODE_IDS],
+  );
+  const explicitPendingAckNodeIds = normalizePublicationRecoveryNodeIdList(
+    options[PUBLICATION_RECOVERY_EVIDENCE_FIELD.PENDING_ACK_NODE_IDS],
+  );
+  const derivedPendingAckNodeIds =
+    evidenceState ===
+      PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE
+        .REQUIRED_ACK_NODE_LIST ?
+      Object.freeze(
+        countPendingRequiredAckNodeIds(requiredAckNodeIds, acknowledgedNodeIds),
+      ) :
+      Object.freeze([]);
+  const pendingAckNodeIds =
+    explicitPendingAckNodeIds.length > NUM.ZERO ?
+      explicitPendingAckNodeIds :
+      derivedPendingAckNodeIds;
+  const pendingAckCountByState = Object.freeze({
+    [PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.COUNT_ONLY]:
+      Math.max(
+        pendingAckNodeIds.length,
+        normalizePublicationRecoveryCount(
+          options[PUBLICATION_RECOVERY_EVIDENCE_FIELD.PENDING_ACK_COUNT],
+        ),
+      ),
+    [PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.REQUIRED_ACK_NODE_LIST]:
+      pendingAckNodeIds.length,
+  });
+
+  return Object.freeze({
+    evidenceState,
+    requiredAckNodeIds,
+    acknowledgedNodeIds,
+    pendingAckNodeIds,
+    pendingAckCount: pendingAckCountByState[evidenceState],
+  });
+}
+
 function isTerminalPublicationRecoveryStatus(publicationStatus) {
   const normalizedStatus = normalizePublicationRecoveryStatus(publicationStatus);
   return PUBLICATION_RECOVERY_TERMINAL_PUBLICATION_STATUSES.includes(
@@ -310,28 +368,12 @@ function normalizePublicationRecoveryEvidence(options = {}) {
   const status = normalizePublicationRecoveryStatus(
     options[PUBLICATION_RECOVERY_EVIDENCE_FIELD.STATUS],
   );
-  const requiredAckNodeIds = normalizePublicationRecoveryNodeIdList(
-    options[PUBLICATION_RECOVERY_EVIDENCE_FIELD.REQUIRED_ACK_NODE_IDS],
-  );
-  const acknowledgedNodeIds = normalizePublicationRecoveryNodeIdList(
-    options[PUBLICATION_RECOVERY_EVIDENCE_FIELD.ACKNOWLEDGED_NODE_IDS],
-  );
-  const explicitPendingAckNodeIds = normalizePublicationRecoveryNodeIdList(
-    options[PUBLICATION_RECOVERY_EVIDENCE_FIELD.PENDING_ACK_NODE_IDS],
-  );
-  const derivedPendingAckNodeIds = countPendingRequiredAckNodeIds(
-    requiredAckNodeIds,
-    acknowledgedNodeIds,
-  );
-  const pendingAckNodeIds = explicitPendingAckNodeIds.length > NUM.ZERO ?
-    explicitPendingAckNodeIds :
-    Object.freeze(derivedPendingAckNodeIds);
-  const pendingAckCount = Math.max(
-    pendingAckNodeIds.length,
-    normalizePublicationRecoveryCount(
-      options[PUBLICATION_RECOVERY_EVIDENCE_FIELD.PENDING_ACK_COUNT],
-    ),
-  );
+  const pendingAckEvidence =
+    resolvePublicationRecoveryPendingAckEvidence(options);
+  const requiredAckNodeIds = pendingAckEvidence.requiredAckNodeIds;
+  const acknowledgedNodeIds = pendingAckEvidence.acknowledgedNodeIds;
+  const pendingAckNodeIds = pendingAckEvidence.pendingAckNodeIds;
+  const pendingAckCount = pendingAckEvidence.pendingAckCount;
   const missingPublishedNodeIds = normalizePublicationRecoveryNodeIdList(
     options[PUBLICATION_RECOVERY_EVIDENCE_FIELD.MISSING_PUBLISHED_NODE_IDS],
   );
@@ -348,6 +390,7 @@ function normalizePublicationRecoveryEvidence(options = {}) {
     acknowledgedNodeIds,
     pendingAckNodeIds,
     missingPublishedNodeIds,
+    pendingAckEvidenceState: pendingAckEvidence.evidenceState,
     requiredAckCount: requiredAckNodeIds.length,
     acknowledgedAckCount: acknowledgedNodeIds.length,
     pendingAckCount,
@@ -373,11 +416,15 @@ function collectPublicationRecoveryEvidenceFlagIds(evidence) {
     [PUBLICATION_RECOVERY_EVIDENCE_FLAG.STATUS_NON_TERMINAL]:
       evidence.terminalPublication !== true,
     [PUBLICATION_RECOVERY_EVIDENCE_FLAG.ACKS_REQUIRED]:
-      evidence.requiredAckCount > NUM.ZERO,
+      evidence.pendingAckEvidenceState ===
+        PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE
+          .REQUIRED_ACK_NODE_LIST,
     [PUBLICATION_RECOVERY_EVIDENCE_FLAG.ACKS_PENDING]:
       evidence.pendingAckCount > NUM.ZERO,
     [PUBLICATION_RECOVERY_EVIDENCE_FLAG.ACKS_COMPLETE]:
-      evidence.requiredAckCount > NUM.ZERO &&
+      evidence.pendingAckEvidenceState ===
+        PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE
+          .REQUIRED_ACK_NODE_LIST &&
       evidence.pendingAckCount === NUM.ZERO,
     [PUBLICATION_RECOVERY_EVIDENCE_FLAG.ACK_CHANGED]:
       evidence.acknowledgementChanged === true,

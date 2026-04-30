@@ -549,6 +549,8 @@ class BootstrapReadinessOwnerPart1 {
       snapshot: startupRecoverySnapshot,
       priorityRecoveryHealth,
       startupAuthority,
+      allowBootstrapInitPriorityBypass:
+        options.scope === BOOTSTRAP_API_PROBE_SCOPE.BOOTSTRAP_JOIN,
     });
     if (!startupRecovery) {
       this.appendPriorityRecoveryProtocolFields(

@@ -70,6 +70,20 @@ import {
 } from '../wasm-service/runtime-descriptor-validator.js';
 import {getOrCreateCauseId, normalizeCauseId} from '../utils/cause-id.js';
 
+const LOCAL_STR_UNKNOWN = 'unknown';
+const LOCAL_STR_1SK8V = 'registry must be an instance of RuntimeDriverRegistry';
+const LOCAL_STR_6SQ8N = 'query executor factory must be a function';
+const LOCAL_STR_BYITH = 'endpoint writer must be a function';
+const LOCAL_STR_1FJ0H = 'endpoint remover must be a function';
+const LOCAL_STR_1DAXA = 'operation writer must be a function';
+const LOCAL_STR_NPQTQ = 'idempotency reader must be a function';
+const LOCAL_STR_1199D = 'state projection writer must be a function';
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_STR_1AM9G = '; ';
+const LOCAL_STR_NONE = 'none';
+const LOCAL_STR_17O4M = 'service definition is missing runtime_kind';
+const LOCAL_STR_VUZ91 = 'replica context is missing runtime_kind';
+
 /**
  * Resolve the runtime kind string from a service definition object.
  *
@@ -92,12 +106,12 @@ function resolveRuntimeKind(definition) {
  */
 function resolveServiceId(definition) {
   if (!definition || typeof definition !== TYPEOF.OBJECT) {
-    return 'unknown';
+    return LOCAL_STR_UNKNOWN;
   }
   return definition.serviceId ??
     definition.service_id ??
     definition.name ??
-    'unknown';
+    LOCAL_STR_UNKNOWN;
 }
 
 /**
@@ -150,7 +164,7 @@ class ServiceRuntimeLifecycle extends EventEmitter {
     super();
     if (!(registry instanceof RuntimeDriverRegistry)) {
       throw new TypeError(
-        'registry must be an instance of RuntimeDriverRegistry',
+        LOCAL_STR_1SK8V,
       );
     }
     /** @type {RuntimeDriverRegistry} */
@@ -271,7 +285,7 @@ class ServiceRuntimeLifecycle extends EventEmitter {
   setQueryExecutorFactory(factory) {
     if (typeof factory !== TYPEOF.FUNCTION) {
       throw new TypeError(
-        'query executor factory must be a function',
+        LOCAL_STR_6SQ8N,
       );
     }
     this._queryExecutorFactory = factory;
@@ -294,7 +308,7 @@ class ServiceRuntimeLifecycle extends EventEmitter {
   setEndpointWriter(writer) {
     if (typeof writer !== TYPEOF.FUNCTION) {
       throw new TypeError(
-        'endpoint writer must be a function',
+        LOCAL_STR_BYITH,
       );
     }
     this._endpointWriter = writer;
@@ -316,7 +330,7 @@ class ServiceRuntimeLifecycle extends EventEmitter {
   setEndpointRemover(remover) {
     if (typeof remover !== TYPEOF.FUNCTION) {
       throw new TypeError(
-        'endpoint remover must be a function',
+        LOCAL_STR_1FJ0H,
       );
     }
     this._endpointRemover = remover;
@@ -339,7 +353,7 @@ class ServiceRuntimeLifecycle extends EventEmitter {
   setOperationWriter(writer) {
     if (typeof writer !== TYPEOF.FUNCTION) {
       throw new TypeError(
-        'operation writer must be a function',
+        LOCAL_STR_1DAXA,
       );
     }
     this._operationWriter = writer;
@@ -365,7 +379,7 @@ class ServiceRuntimeLifecycle extends EventEmitter {
   setIdempotencyReader(reader) {
     if (typeof reader !== TYPEOF.FUNCTION) {
       throw new TypeError(
-        'idempotency reader must be a function',
+        LOCAL_STR_NPQTQ,
       );
     }
     this._idempotencyReader = reader;
@@ -387,7 +401,7 @@ class ServiceRuntimeLifecycle extends EventEmitter {
   setStateProjectionWriter(writer) {
     if (typeof writer !== TYPEOF.FUNCTION) {
       throw new TypeError(
-        'state projection writer must be a function',
+        LOCAL_STR_1199D,
       );
     }
     this._stateProjectionWriter = writer;
@@ -508,8 +522,8 @@ class ServiceRuntimeLifecycle extends EventEmitter {
       const rows = await this._idempotencyReader(
         check.sql, check.params,
       );
-      if (rows && rows.length > 0) {
-        return rows[0];
+      if (rows && rows.length > LOCAL_NUM_ZERO) {
+        return rows[LOCAL_NUM_ZERO];
       }
       return null;
     } catch (err) {
@@ -567,7 +581,7 @@ class ServiceRuntimeLifecycle extends EventEmitter {
     if (!result.success) {
       throw new OperationJournalError(
         runtimeKind, serviceId, command,
-        result.errors.join('; '),
+        result.errors.join(LOCAL_STR_1AM9G),
       );
     }
     try {
@@ -687,7 +701,7 @@ class ServiceRuntimeLifecycle extends EventEmitter {
         operation,
         runtimeKind,
         serviceId,
-        validation.errors.join('; '),
+        validation.errors.join(LOCAL_STR_1AM9G),
       );
     }
   }
@@ -713,8 +727,8 @@ class ServiceRuntimeLifecycle extends EventEmitter {
 
     if (!runtimeKind) {
       throw new LifecycleOrchestrationError(
-        op, 'none', serviceId,
-        'service definition is missing runtime_kind',
+        op, LOCAL_STR_NONE, serviceId,
+        LOCAL_STR_17O4M,
       );
     }
     this._validateRuntimeDescriptor(
@@ -839,8 +853,8 @@ class ServiceRuntimeLifecycle extends EventEmitter {
 
     if (!runtimeKind) {
       throw new LifecycleOrchestrationError(
-        op, 'none', serviceId,
-        'replica context is missing runtime_kind',
+        op, LOCAL_STR_NONE, serviceId,
+        LOCAL_STR_VUZ91,
       );
     }
     this._validateRuntimeDescriptor(
@@ -1005,8 +1019,8 @@ class ServiceRuntimeLifecycle extends EventEmitter {
 
     if (!runtimeKind) {
       throw new LifecycleOrchestrationError(
-        op, 'none', serviceId,
-        'replica context is missing runtime_kind',
+        op, LOCAL_STR_NONE, serviceId,
+        LOCAL_STR_VUZ91,
       );
     }
     this._validateRuntimeDescriptor(
@@ -1107,8 +1121,8 @@ class ServiceRuntimeLifecycle extends EventEmitter {
 
     if (!runtimeKind) {
       throw new LifecycleOrchestrationError(
-        op, 'none', serviceId,
-        'replica context is missing runtime_kind',
+        op, LOCAL_STR_NONE, serviceId,
+        LOCAL_STR_VUZ91,
       );
     }
     this._validateRuntimeDescriptor(

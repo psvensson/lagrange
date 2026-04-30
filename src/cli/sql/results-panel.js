@@ -1,3 +1,33 @@
+const LOCAL_STR_SELECT = 'select';
+const LOCAL_STR_INSERT = 'insert';
+const LOCAL_STR_UPDATE = 'update';
+const LOCAL_STR_DELETE = 'delete';
+const LOCAL_STR_ERROR = 'error';
+const LOCAL_STR_EMPTY = 'empty';
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_STR_INSERT_2 = 'INSERT';
+const LOCAL_STR_UPDATE_2 = 'UPDATE';
+const LOCAL_STR_DELETE_2 = 'DELETE';
+const LOCAL_STR_UNKNOWN_ERROR = 'Unknown error';
+const LOCAL_STR_GRAY_FG_NULL = '{gray-fg}NULL{/}';
+const LOCAL_STR_EMPTY_2 = '';
+const LOCAL_STR_OBJECT = 'object';
+const LOCAL_NUM_50 = 50;
+const LOCAL_NUM_47 = 47;
+const LOCAL_STR_2ZI04 = '...';
+const LOCAL_STR_OBJECT_2 = '[Object]';
+const LOCAL_STR_BOOLEAN = 'boolean';
+const LOCAL_STR_TRUE = 'true';
+const LOCAL_STR_FALSE = 'false';
+const LOCAL_NUM_ONE = 1;
+const LOCAL_STR_S = 's';
+const LOCAL_STR_17XHO = ' | ';
+const LOCAL_STR_VQFON = '{yellow-fg}No results{/}\n\n';
+const LOCAL_STR_CDEXS = '{red-fg}✗ Query failed{/}\n\nUnknown error';
+const LOCAL_STR_1SIZV = '{red-fg}✗ Query failed{/}\n\n';
+const LOCAL_STR_4ATH1 = 'resultspanel:render';
+const LOCAL_STR_UMMD1 = 'resultspanel:update';
+
 /**
  * ResultsPanel - Display panel for SQL query results
  *
@@ -11,12 +41,12 @@
  * Result types
  */
 export const RESULT_TYPE = {
-  SELECT: 'select',
-  INSERT: 'insert',
-  UPDATE: 'update',
-  DELETE: 'delete',
-  ERROR: 'error',
-  EMPTY: 'empty',
+  SELECT: LOCAL_STR_SELECT,
+  INSERT: LOCAL_STR_INSERT,
+  UPDATE: LOCAL_STR_UPDATE,
+  DELETE: LOCAL_STR_DELETE,
+  ERROR: LOCAL_STR_ERROR,
+  EMPTY: LOCAL_STR_EMPTY,
 };
 
 /**
@@ -43,8 +73,8 @@ export class ResultsPanel {
     this.error = null;
 
     // Scrolling state
-    this.scrollPosition = 0;
-    this.selectedRow = 0;
+    this.scrollPosition = LOCAL_NUM_ZERO;
+    this.selectedRow = LOCAL_NUM_ZERO;
 
     // Widget reference
     this.widget = null;
@@ -65,14 +95,14 @@ export class ResultsPanel {
     this.resultType = RESULT_TYPE.SELECT;
     this.executionTime = executionTime;
     this.error = null;
-    this.scrollPosition = 0;
-    this.selectedRow = 0;
+    this.scrollPosition = LOCAL_NUM_ZERO;
+    this.selectedRow = LOCAL_NUM_ZERO;
 
     const rows = result.rows || result.results || [];
     this.rowCount = result.count ?? rows.length;
     this.partitions = result.partitions || [];
 
-    if (rows.length === 0) {
+    if (rows.length === LOCAL_NUM_ZERO) {
       this.resultType = RESULT_TYPE.EMPTY;
       this.currentResult = {
         tableName: result.tableName,
@@ -106,13 +136,13 @@ export class ResultsPanel {
     const operation = (result.operation || 'WRITE').toUpperCase();
 
     switch (operation) {
-    case 'INSERT':
+    case LOCAL_STR_INSERT_2:
       this.resultType = RESULT_TYPE.INSERT;
       break;
-    case 'UPDATE':
+    case LOCAL_STR_UPDATE_2:
       this.resultType = RESULT_TYPE.UPDATE;
       break;
-    case 'DELETE':
+    case LOCAL_STR_DELETE_2:
       this.resultType = RESULT_TYPE.DELETE;
       break;
     default:
@@ -120,7 +150,7 @@ export class ResultsPanel {
     }
 
     this.executionTime = executionTime;
-    this.affectedRows = result.affectedRows ?? 0;
+    this.affectedRows = result.affectedRows ?? LOCAL_NUM_ZERO;
     this.partitions = result.partitions || [];
     this.error = null;
     this.currentResult = result;
@@ -140,7 +170,7 @@ export class ResultsPanel {
   displayError(error) {
     this.resultType = RESULT_TYPE.ERROR;
     this.error = {
-      message: error.message || 'Unknown error',
+      message: error.message || LOCAL_STR_UNKNOWN_ERROR,
       code: error.code,
       detail: error.detail,
     };
@@ -165,8 +195,8 @@ export class ResultsPanel {
     this.affectedRows = null;
     this.partitions = [];
     this.error = null;
-    this.scrollPosition = 0;
-    this.selectedRow = 0;
+    this.scrollPosition = LOCAL_NUM_ZERO;
+    this.selectedRow = LOCAL_NUM_ZERO;
 
     this.render();
   }
@@ -199,21 +229,21 @@ export class ResultsPanel {
    */
   formatCell(value) {
     if (value === null) {
-      return '{gray-fg}NULL{/}';
+      return LOCAL_STR_GRAY_FG_NULL;
     }
     if (value === undefined) {
-      return '';
+      return LOCAL_STR_EMPTY_2;
     }
-    if (typeof value === 'object') {
+    if (typeof value === LOCAL_STR_OBJECT) {
       try {
         const json = JSON.stringify(value);
-        return json.length > 50 ? json.slice(0, 47) + '...' : json;
+        return json.length > LOCAL_NUM_50 ? json.slice(LOCAL_NUM_ZERO, LOCAL_NUM_47) + LOCAL_STR_2ZI04 : json;
       } catch (_e) {
-        return '[Object]';
+        return LOCAL_STR_OBJECT_2;
       }
     }
-    if (typeof value === 'boolean') {
-      return value ? 'true' : 'false';
+    if (typeof value === LOCAL_STR_BOOLEAN) {
+      return value ? LOCAL_STR_TRUE : LOCAL_STR_FALSE;
     }
     return String(value);
   }
@@ -228,39 +258,39 @@ export class ResultsPanel {
 
     switch (this.resultType) {
     case RESULT_TYPE.SELECT:
-      parts.push(`${this.rowCount} row${this.rowCount !== 1 ? 's' : ''}`);
+      parts.push(`${this.rowCount} row${this.rowCount !== LOCAL_NUM_ONE ? LOCAL_STR_S : LOCAL_STR_EMPTY_2}`);
       break;
     case RESULT_TYPE.INSERT:
-      parts.push(`INSERT: ${this.affectedRows} row${this.affectedRows !== 1 ? 's' : ''} affected`);
+      parts.push(`INSERT: ${this.affectedRows} row${this.affectedRows !== LOCAL_NUM_ONE ? LOCAL_STR_S : LOCAL_STR_EMPTY_2} affected`);
       break;
     case RESULT_TYPE.UPDATE:
-      parts.push(`UPDATE: ${this.affectedRows} row${this.affectedRows !== 1 ? 's' : ''} affected`);
+      parts.push(`UPDATE: ${this.affectedRows} row${this.affectedRows !== LOCAL_NUM_ONE ? LOCAL_STR_S : LOCAL_STR_EMPTY_2} affected`);
       break;
     case RESULT_TYPE.DELETE:
-      parts.push(`DELETE: ${this.affectedRows} row${this.affectedRows !== 1 ? 's' : ''} affected`);
+      parts.push(`DELETE: ${this.affectedRows} row${this.affectedRows !== LOCAL_NUM_ONE ? LOCAL_STR_S : LOCAL_STR_EMPTY_2} affected`);
       break;
     case RESULT_TYPE.EMPTY:
       // For empty SELECT results, still show row count (0 rows)
-      parts.push(`${this.rowCount ?? 0} row${this.rowCount !== 1 ? 's' : ''}`);
+      parts.push(`${this.rowCount ?? LOCAL_NUM_ZERO} row${this.rowCount !== LOCAL_NUM_ONE ? LOCAL_STR_S : LOCAL_STR_EMPTY_2}`);
       break;
     case RESULT_TYPE.ERROR:
-      return `{red-fg}Error: ${this.error?.message || 'Unknown error'}{/}`;
+      return `{red-fg}Error: ${this.error?.message || LOCAL_STR_UNKNOWN_ERROR}{/}`;
     default:
-      return '';
+      return LOCAL_STR_EMPTY_2;
     }
 
     if (this.executionTime !== null) {
       parts.push(`${this.executionTime}ms`);
     }
 
-    if (this.partitions.length > 0) {
+    if (this.partitions.length > LOCAL_NUM_ZERO) {
       const partitionStr = this.partitions.length <= 3 ?
         this.partitions.join(', ') :
         `${this.partitions.slice(0, 3).join(', ')}... (${this.partitions.length} total)`;
       parts.push(`Partitions: ${partitionStr}`);
     }
 
-    return parts.join(' | ');
+    return parts.join(LOCAL_STR_17XHO);
   }
 
   /**
@@ -278,7 +308,7 @@ export class ResultsPanel {
     case RESULT_TYPE.ERROR:
       return this.getErrorMessage();
     default:
-      return '';
+      return LOCAL_STR_EMPTY_2;
     }
   }
 
@@ -308,7 +338,7 @@ export class ResultsPanel {
     const tableName = this.currentResult?.tableName || 'query';
     const time = this.executionTime ?? 0;
 
-    return '{yellow-fg}No results{/}\n\n' +
+    return LOCAL_STR_VQFON +
            `Table: ${tableName}\n` +
            `Execution time: ${time}ms`;
   }
@@ -320,10 +350,10 @@ export class ResultsPanel {
    */
   getErrorMessage() {
     if (!this.error) {
-      return '{red-fg}✗ Query failed{/}\n\nUnknown error';
+      return LOCAL_STR_CDEXS;
     }
 
-    let message = '{red-fg}✗ Query failed{/}\n\n';
+    let message = LOCAL_STR_1SIZV;
     message += `Error: ${this.error.message}`;
 
     if (this.error.code) {
@@ -342,8 +372,8 @@ export class ResultsPanel {
    * Requirements: 7.8
    * @param {number} [lines=1] - Lines to scroll
    */
-  scrollUp(lines = 1) {
-    this.scrollPosition = Math.max(0, this.scrollPosition - lines);
+  scrollUp(lines = LOCAL_NUM_ONE) {
+    this.scrollPosition = Math.max(LOCAL_NUM_ZERO, this.scrollPosition - lines);
     this.render();
   }
 
@@ -352,7 +382,7 @@ export class ResultsPanel {
    * Requirements: 7.8
    * @param {number} [lines=1] - Lines to scroll
    */
-  scrollDown(lines = 1) {
+  scrollDown(lines = LOCAL_NUM_ONE) {
     const maxScroll = this.getMaxScroll();
     this.scrollPosition = Math.min(maxScroll, this.scrollPosition + lines);
     this.render();
@@ -364,16 +394,16 @@ export class ResultsPanel {
    */
   getMaxScroll() {
     if (!this.currentResult || !this.currentResult.rows) {
-      return 0;
+      return LOCAL_NUM_ZERO;
     }
-    return Math.max(0, this.currentResult.rows.length - 1);
+    return Math.max(LOCAL_NUM_ZERO, this.currentResult.rows.length - LOCAL_NUM_ONE);
   }
 
   /**
    * Select previous row
    */
   selectPrevious() {
-    if (this.selectedRow > 0) {
+    if (this.selectedRow > LOCAL_NUM_ZERO) {
       this.selectedRow--;
       // Adjust scroll if needed
       if (this.selectedRow < this.scrollPosition) {
@@ -426,7 +456,7 @@ export class ResultsPanel {
    */
   render() {
     if (this.widget) {
-      if (this.resultType === RESULT_TYPE.SELECT && this.currentResult?.rows?.length > 0) {
+      if (this.resultType === RESULT_TYPE.SELECT && this.currentResult?.rows?.length > LOCAL_NUM_ZERO) {
         // Render table
         const tableData = this.getTableData();
         this.widget.setData({
@@ -444,7 +474,7 @@ export class ResultsPanel {
     }
 
     if (this.eventBus) {
-      this.eventBus.emit('resultspanel:render', {
+      this.eventBus.emit(LOCAL_STR_4ATH1, {
         resultType: this.resultType,
         rowCount: this.rowCount,
         executionTime: this.executionTime,
@@ -457,7 +487,7 @@ export class ResultsPanel {
    */
   emitUpdate() {
     if (this.eventBus) {
-      this.eventBus.emit('resultspanel:update', {
+      this.eventBus.emit(LOCAL_STR_UMMD1, {
         resultType: this.resultType,
         rowCount: this.rowCount,
         affectedRows: this.affectedRows,

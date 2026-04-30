@@ -1,6 +1,8 @@
 import {randomUUID} from 'node:crypto';
 import {NUM, TYPEOF} from '../constants/index.js';
 
+const LOCAL_STR_EMPTY = '';
+
 const PARTITION_WRITE_COMMIT_MODE = Object.freeze({
   DIRECT: 'direct',
   RAFT: 'raft',
@@ -29,7 +31,7 @@ function buildPartitionWriteEntry(operation, options = {}) {
         operation.entryId.length > NUM.ZERO ?
         operation.entryId :
         randomUUID(),
-    timestamp: timestamp === undefined ? '' : String(timestamp),
+    timestamp: timestamp === undefined ? LOCAL_STR_EMPTY : String(timestamp),
     proposedBy:
       typeof options.proposedBy === TYPEOF.STRING ?
         options.proposedBy :

@@ -188,6 +188,11 @@ export function registerControlPlaneSystemTableGatewayTailTests({
       false,
       'gateway should derive the workload-owned no-defer contract when callers omit it',
     );
+    t.same(
+      updateCalls[0].options.resourceKeys,
+      ['control-plane:transaction-control:recovery'],
+      'gateway should carry workload-owned resource keys into mutation options',
+    );
   });
 
   test('ControlPlaneSystemTableGateway submitMutation surfaces pending visibility outcomes',

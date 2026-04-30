@@ -15,6 +15,8 @@ import {
   ENDPOINT_SYNC_REGEX,
 } from './endpoint-sync-constants.js';
 
+const LOCAL_NUM_ZERO = 0;
+
 /**
  * Normalize an input segment into DNS-1123 label-safe text.
  *
@@ -35,7 +37,7 @@ function normalizeDns1123Segment(input) {
       ENDPOINT_SYNC_NAME.CONCAT_SEPARATOR)
     .replace(ENDPOINT_SYNC_REGEX.EDGE_DASH, '');
 
-  if (normalized.length === 0) {
+  if (normalized.length === LOCAL_NUM_ZERO) {
     return ENDPOINT_SYNC_NAME.FALLBACK_SEGMENT;
   }
   return normalized;

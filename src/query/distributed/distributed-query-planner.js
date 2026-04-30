@@ -16,6 +16,11 @@ import {
   DISTRIBUTED_STATEMENT_TYPE,
 } from './distributed-query-plan-constants.js';
 
+const LOCAL_STR_EMPTY = '';
+const LOCAL_STR_NULL = 'NULL';
+const LOCAL_STR_Y2288 = '\'\'';
+const LOCAL_STR_QUESTION = '?';
+
 const PLAN_HASH = Object.freeze({
   SHA1: 'sha1',
   HEX: 'hex',
@@ -711,21 +716,21 @@ class DistributedQueryPlanner {
    */
   renderExpression(expr) {
     if (!expr || typeof expr !== TYPEOF.OBJECT) {
-      return '';
+      return LOCAL_STR_EMPTY;
     }
 
     if (expr.type === QUERY_AST_NODE.LITERAL) {
       if (expr.value === null) {
-        return 'NULL';
+        return LOCAL_STR_NULL;
       }
       if (typeof expr.value === TYPEOF.STRING) {
-        return `'${expr.value.replace(/'/g, '\'\'')}'`;
+        return `'${expr.value.replace(/'/g, LOCAL_STR_Y2288)}'`;
       }
       return String(expr.value);
     }
 
     if (expr.type === QUERY_AST_NODE.PARAMETER) {
-      return '?';
+      return LOCAL_STR_QUESTION;
     }
 
     if (expr.type === QUERY_AST_NODE.COLUMN_REF) {
@@ -763,7 +768,7 @@ class DistributedQueryPlanner {
         `${this.renderExpression(expr.pattern)}`;
     }
 
-    return '';
+    return LOCAL_STR_EMPTY;
   }
 }
 

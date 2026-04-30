@@ -12,6 +12,11 @@ import {
   BREAKPOINT_MANAGER_ERROR_MSG as ERR,
 } from './breakpoint-manager-constants.js';
 
+const LOCAL_NUM_ONE = 1;
+const LOCAL_STR_BREAKPOINT = 'breakpoint';
+const LOCAL_STR_PAUSE = 'pause';
+const LOCAL_STR_RUNNING = 'running';
+
 /**
  * Manages breakpoints and step control for debug sessions.
  */
@@ -172,7 +177,7 @@ class BreakpointManager {
           continue;
         }
 
-        record.hitCount += 1;
+        record.hitCount += LOCAL_NUM_ONE;
         hits.push({...record});
       }
     }
@@ -205,10 +210,10 @@ class BreakpointManager {
 
     return {
       reason: pauseReason,
-      hitBreakpoints: pauseReason === 'breakpoint' ?
+      hitBreakpoints: pauseReason === LOCAL_STR_BREAKPOINT ?
         hitResult.breakpoints :
         [],
-      stepAction: pauseReason === 'pause' ? null : pendingStepAction,
+      stepAction: pauseReason === LOCAL_STR_PAUSE ? null : pendingStepAction,
     };
   }
 
@@ -331,7 +336,7 @@ class BreakpointManager {
     return {
       sessionId: request.sessionId,
       action: stepAction,
-      status: resumeResult?.status || 'running',
+      status: resumeResult?.status || LOCAL_STR_RUNNING,
       instanceHandle: request.instanceHandle,
     };
   }

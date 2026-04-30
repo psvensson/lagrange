@@ -8,6 +8,8 @@ import {
 } from '../control-plane/control-plane-constants.js';
 import {PressureGovernor} from '../control-plane/pressure-governor.js';
 
+const LOCAL_NUM_ZERO = 0;
+
 const CONTROL_PLANE_WRITE_HEALTH_DEFAULT = Object.freeze({
   FAILURE_THRESHOLD: 3,
 });
@@ -38,17 +40,17 @@ const BACKGROUND_PUBLICATION_MODE_SET = new Set([
 ]);
 
 function normalizeFailureThreshold(value) {
-  return Number.isFinite(value) && value > 0 ?
+  return Number.isFinite(value) && value > LOCAL_NUM_ZERO ?
     Math.floor(value) :
     CONTROL_PLANE_WRITE_HEALTH_DEFAULT.FAILURE_THRESHOLD;
 }
 
 function normalizeNonNegativeInteger(value) {
-  return Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
+  return Number.isFinite(value) && value > LOCAL_NUM_ZERO ? Math.floor(value) : LOCAL_NUM_ZERO;
 }
 
 function normalizeNonEmptyString(value, fallbackValue) {
-  return typeof value === TYPEOF.STRING && value.length > 0 ?
+  return typeof value === TYPEOF.STRING && value.length > LOCAL_NUM_ZERO ?
     value :
     fallbackValue;
 }
@@ -109,7 +111,7 @@ function hasContainedBackgroundBacklog(routerStats = {}) {
     );
     const pendingCritical = normalizeNonNegativeInteger(queue?.pendingCritical);
     const criticalReserve = normalizeNonNegativeInteger(queue?.criticalReserve);
-    return backgroundPendingLimit > 0 &&
+    return backgroundPendingLimit > LOCAL_NUM_ZERO &&
       pendingBackground >= backgroundPendingLimit &&
       pendingCritical < criticalReserve;
   });

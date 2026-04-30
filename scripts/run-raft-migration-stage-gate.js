@@ -3,6 +3,29 @@
 import {mkdir, readFile, writeFile} from 'node:fs/promises';
 import {join, resolve} from 'node:path';
 
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_NUM_ONE = 1;
+const LOCAL_STR_128KJ = ', ';
+const LOCAL_STR_HYPHEN = '-';
+const LOCAL_STR_HIGH = 'high';
+const LOCAL_STR_SCENARIO_FAILURE = 'scenario_failure';
+const LOCAL_STR_FAILED = 'failed';
+const LOCAL_STR_1Y1O3 = 'benchmark_regression_gate_failure';
+const LOCAL_STR_UNKNOWN = 'unknown';
+const LOCAL_STR_1XCQE = 'benchmark_pipeline_passed';
+const LOCAL_STR_OK = 'ok';
+const LOCAL_STR_CN3IO = 'benchmark pipeline did not pass';
+const LOCAL_STR_ENJ8X = 'standard_profiles_present';
+const LOCAL_STR_CQURS = '3-node and 5-node benchmark reports present';
+const LOCAL_STR_192AS = 'missing standardized profile(s)';
+const LOCAL_STR_NO_HIGH_INCIDENTS = 'no_high_incidents';
+const LOCAL_STR_I70OS = 'no high-severity incidents detected';
+const LOCAL_STR_1J8HJ = 'rollback_drill_passed';
+const LOCAL_STR_OZF4W = 'rollback drill summary passed';
+const LOCAL_STR_NISIJ = 'rollback drill summary missing or failed';
+const LOCAL_NUM_TWO = 2;
+const LOCAL_STR_UTF8 = 'utf8';
+
 const STAGE = Object.freeze({
   DEV: 'dev',
   CANARY: 'canary',
@@ -29,23 +52,23 @@ function parseArgs(argv) {
   let benchmarkSummaryPath = DEFAULT_PATH.benchmarkSummary;
   let rollbackSummaryPath = DEFAULT_PATH.rollbackSummary;
 
-  for (let i = 0; i < argv.length; i++) {
+  for (let i = LOCAL_NUM_ZERO; i < argv.length; i++) {
     const arg = argv[i];
-    if (arg === ARG.STAGE && i + 1 < argv.length) {
+    if (arg === ARG.STAGE && i + LOCAL_NUM_ONE < argv.length) {
       stage = String(argv[++i] || STAGE.DEV).trim().toLowerCase();
       continue;
     }
-    if (arg === ARG.BENCHMARK_SUMMARY && i + 1 < argv.length) {
+    if (arg === ARG.BENCHMARK_SUMMARY && i + LOCAL_NUM_ONE < argv.length) {
       benchmarkSummaryPath = String(argv[++i] || DEFAULT_PATH.benchmarkSummary);
       continue;
     }
-    if (arg === ARG.ROLLBACK_SUMMARY && i + 1 < argv.length) {
+    if (arg === ARG.ROLLBACK_SUMMARY && i + LOCAL_NUM_ONE < argv.length) {
       rollbackSummaryPath = String(argv[++i] || DEFAULT_PATH.rollbackSummary);
     }
   }
 
   if (!STAGES.includes(stage)) {
-    throw new Error(`invalid stage "${stage}", expected one of: ${STAGES.join(', ')}`);
+    throw new Error(`invalid stage "${stage}", expected one of: ${STAGES.join(LOCAL_STR_128KJ)}`);
   }
 
   return {
@@ -56,7 +79,7 @@ function parseArgs(argv) {
 }
 
 function timestampTag(date = new Date()) {
-  return date.toISOString().replace(/[:.]/g, '-');
+  return date.toISOString().replace(/[:.]/g, LOCAL_STR_HYPHEN);
 }
 
 function buildIncidents(benchmarkSummary) {
@@ -66,22 +89,22 @@ function buildIncidents(benchmarkSummary) {
     [];
 
   for (const profile of profiles) {
-    if (profile?.exitCode !== 0) {
+    if (profile?.exitCode !== LOCAL_NUM_ZERO) {
       incidents.push({
-        severity: 'high',
-        type: 'scenario_failure',
+        severity: LOCAL_STR_HIGH,
+        type: LOCAL_STR_SCENARIO_FAILURE,
         profile: profile.profile || null,
         reportPath: profile.outputPath || null,
         detail: `scenario command exited with code ${profile.exitCode}`,
       });
     }
-    if (profile?.benchmarkRegressionGate?.status === 'failed') {
+    if (profile?.benchmarkRegressionGate?.status === LOCAL_STR_FAILED) {
       incidents.push({
-        severity: 'high',
-        type: 'benchmark_regression_gate_failure',
+        severity: LOCAL_STR_HIGH,
+        type: LOCAL_STR_1Y1O3,
         profile: profile.profile || null,
         reportPath: profile.outputPath || null,
-        detail: profile?.benchmarkRegressionGate?.reason || 'unknown',
+        detail: profile?.benchmarkRegressionGate?.reason || LOCAL_STR_UNKNOWN,
       });
     }
   }
@@ -95,9 +118,9 @@ function evaluateStage(stage, benchmarkSummary, rollbackSummary) {
 
   const benchmarkPassed = benchmarkSummary?.overall?.passed === true;
   checks.push({
-    check: 'benchmark_pipeline_passed',
+    check: LOCAL_STR_1XCQE,
     passed: benchmarkPassed,
-    detail: benchmarkPassed ? 'ok' : 'benchmark pipeline did not pass',
+    detail: benchmarkPassed ? LOCAL_STR_OK : LOCAL_STR_CN3IO,
   });
 
   const has3Node = Array.isArray(benchmarkSummary?.profiles) &&
@@ -105,20 +128,20 @@ function evaluateStage(stage, benchmarkSummary, rollbackSummary) {
   const has5Node = Array.isArray(benchmarkSummary?.profiles) &&
     benchmarkSummary.profiles.some((entry) => entry.profile === 'benchmark-5node');
   checks.push({
-    check: 'standard_profiles_present',
+    check: LOCAL_STR_ENJ8X,
     passed: has3Node && has5Node,
     detail: has3Node && has5Node ?
-      '3-node and 5-node benchmark reports present' :
-      'missing standardized profile(s)',
+      LOCAL_STR_CQURS :
+      LOCAL_STR_192AS,
   });
 
   if (stage !== STAGE.DEV) {
     const noHighIncidents = incidents.length === 0;
     checks.push({
-      check: 'no_high_incidents',
+      check: LOCAL_STR_NO_HIGH_INCIDENTS,
       passed: noHighIncidents,
       detail: noHighIncidents ?
-        'no high-severity incidents detected' :
+        LOCAL_STR_I70OS :
         `${incidents.length} high-severity incident(s) detected`,
     });
   }
@@ -126,11 +149,11 @@ function evaluateStage(stage, benchmarkSummary, rollbackSummary) {
   if (stage === STAGE.LIMITED_PRODUCTION) {
     const rollbackPassed = rollbackSummary?.overall?.passed === true;
     checks.push({
-      check: 'rollback_drill_passed',
+      check: LOCAL_STR_1J8HJ,
       passed: rollbackPassed,
       detail: rollbackPassed ?
-        'rollback drill summary passed' :
-        'rollback drill summary missing or failed',
+        LOCAL_STR_OZF4W :
+        LOCAL_STR_NISIJ,
     });
   }
 
@@ -181,12 +204,12 @@ async function main() {
   const latestByStagePath = join(outDir, `latest-${args.stage}.json`);
   const latestPath = join(outDir, 'latest.json');
 
-  await writeFile(timestampedPath, JSON.stringify(stageReport, null, 2), 'utf8');
-  await writeFile(latestByStagePath, JSON.stringify(stageReport, null, 2), 'utf8');
-  await writeFile(latestPath, JSON.stringify(stageReport, null, 2), 'utf8');
+  await writeFile(timestampedPath, JSON.stringify(stageReport, null, LOCAL_NUM_TWO), LOCAL_STR_UTF8);
+  await writeFile(latestByStagePath, JSON.stringify(stageReport, null, LOCAL_NUM_TWO), LOCAL_STR_UTF8);
+  await writeFile(latestPath, JSON.stringify(stageReport, null, LOCAL_NUM_TWO), LOCAL_STR_UTF8);
 
   if (!stageReport.passed) {
-    process.exitCode = 1;
+    process.exitCode = LOCAL_NUM_ONE;
   }
 }
 
@@ -194,5 +217,5 @@ main().catch((error) => {
   process.stderr.write(
     `raft migration stage gate failed: ${error.message}\n`,
   );
-  process.exit(1);
+  process.exit(LOCAL_NUM_ONE);
 });

@@ -21,6 +21,12 @@ import {
   FAILURE_CLASS_STATUS,
 } from './failure-class-constants.js';
 
+const LOCAL_STR_NOOVZ = 'failureClassId is required and must be a non-empty string';
+const LOCAL_STR_STRING = 'string';
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_STR_RQ14S = 'deterministicTestId is required and must be a non-empty string';
+const LOCAL_STR_1BMD6 = 'Cannot close a failure class that is not in reproduced status';
+
 /**
  * @type {Map<string, Object>}
  */
@@ -39,7 +45,7 @@ function buildEntry(options) {
 
   if (!failureClassId) {
     throw new Error(
-      'failureClassId is required and must be a non-empty string',
+      LOCAL_STR_NOOVZ,
     );
   }
 
@@ -96,8 +102,8 @@ function registerFailureClass(options) {
  */
 function getFailureClass(failureClassId) {
   if (
-    typeof failureClassId !== 'string' ||
-    failureClassId.length === 0
+    typeof failureClassId !== LOCAL_STR_STRING ||
+    failureClassId.length === LOCAL_NUM_ZERO
   ) {
     return null;
   }
@@ -137,11 +143,11 @@ function markReproduced(failureClassId, deterministicTestId) {
     );
   }
   if (
-    typeof deterministicTestId !== 'string' ||
-    deterministicTestId.length === 0
+    typeof deterministicTestId !== LOCAL_STR_STRING ||
+    deterministicTestId.length === LOCAL_NUM_ZERO
   ) {
     throw new Error(
-      'deterministicTestId is required and must be a non-empty string',
+      LOCAL_STR_RQ14S,
     );
   }
 
@@ -170,7 +176,7 @@ function markClosed(failureClassId) {
   }
   if (existing.status !== FAILURE_CLASS_STATUS.REPRODUCED) {
     throw new Error(
-      'Cannot close a failure class that is not in reproduced status',
+      LOCAL_STR_1BMD6,
     );
   }
 

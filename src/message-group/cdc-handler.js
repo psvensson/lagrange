@@ -16,6 +16,30 @@ import {
 } from '../cache/system-cache-key-descriptor.js';
 import {canonicalizeSystemTableRow} from '../control-plane/system-row-normalizers.js';
 
+const LOCAL_STR_CE2UE = 'CDCHandler requires a SystemTableCache';
+const LOCAL_NUM_100 = 100;
+const LOCAL_NUM_1000 = 1000;
+const LOCAL_NUM_10000 = 10000;
+const LOCAL_STR_CDC_HANDLER = 'cdc-handler';
+const LOCAL_STR_RORIR = 'CDC handler initialized';
+const LOCAL_STR_SUBSCRIBED_TO_CDC = 'Subscribed to CDC';
+const LOCAL_STR_SUBSCRIBED = 'subscribed';
+const LOCAL_STR_UKIR7 = 'Unsubscribed from CDC';
+const LOCAL_STR_UNSUBSCRIBED = 'unsubscribed';
+const LOCAL_STR_1XFEM = 'Ignoring event for unsubscribed table';
+const LOCAL_STR_JK70T = 'Duplicate CDC event ignored';
+const LOCAL_STR_CDC_EVENT_BUFFERED = 'CDC event buffered';
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_STR_FLUSHED_CDC_BUFFER = 'Flushed CDC buffer';
+const LOCAL_STR_PXUDN = 'Out-of-order CDC event detected';
+const LOCAL_STR_FUNCTION = 'function';
+const LOCAL_STR_APPLIED_CDC_EVENT = 'Applied CDC event';
+const LOCAL_STR_EVENTAPPLIED = 'eventApplied';
+const LOCAL_STR_1S0VR = 'Failed to apply CDC event';
+const LOCAL_STR_EVENTERROR = 'eventError';
+const LOCAL_STR_1VTOI = 'CDC handler shutdown';
+const LOCAL_STR_SHUTDOWN = 'shutdown';
+
 /**
  * CDC event structure.
  */
@@ -109,7 +133,7 @@ class CDCHandler extends EventEmitter {
     super();
 
     if (!cache) {
-      throw new Error('CDCHandler requires a SystemTableCache');
+      throw new Error(LOCAL_STR_CE2UE);
     }
 
     this.cache = cache;
@@ -122,10 +146,10 @@ class CDCHandler extends EventEmitter {
     // Configuration
     const config = ConfigurationManager.getInstance();
     this.bufferSize = options.bufferSize ||
-      config.get(CONFIG_KEY.MESSAGE_GROUP_CDC_BUFFER_SIZE) || 100;
+      config.get(CONFIG_KEY.MESSAGE_GROUP_CDC_BUFFER_SIZE) || LOCAL_NUM_100;
     this.flushIntervalMs = options.flushIntervalMs ||
-      config.get(CONFIG_KEY.MESSAGE_GROUP_CDC_FLUSH_INTERVAL_MS) || 1000;
-    this.maxProcessedEventIds = options.maxProcessedEventIds || 10000;
+      config.get(CONFIG_KEY.MESSAGE_GROUP_CDC_FLUSH_INTERVAL_MS) || LOCAL_NUM_1000;
+    this.maxProcessedEventIds = options.maxProcessedEventIds || LOCAL_NUM_10000;
 
     // Optional CDC pipeline metrics for delivery tracking
     this.cdcPipelineMetrics = options.cdcPipelineMetrics || null;
@@ -133,7 +157,7 @@ class CDCHandler extends EventEmitter {
     // Logging
     const loggingService = LoggingService.getInstance();
     this.logger = loggingService.isInitialized() ?
-      loggingService.forSubsystem('cdc-handler') : console;
+      loggingService.forSubsystem(LOCAL_STR_CDC_HANDLER) : console;
 
     // Flush scheduling
     this.flushTimer = null;
@@ -150,7 +174,7 @@ class CDCHandler extends EventEmitter {
 
     this.initialized = true;
 
-    this.logger.debug('CDC handler initialized', {
+    this.logger.debug(LOCAL_STR_RORIR, {
       bufferSize: this.bufferSize,
       flushIntervalMs: this.flushIntervalMs,
     });
@@ -170,8 +194,8 @@ class CDCHandler extends EventEmitter {
     this.lastAppliedTimestamp.set(tableName, null);
     this.lastAppliedTimestampByKey.set(tableName, new Map());
 
-    this.logger.debug('Subscribed to CDC', {tableName});
-    this.emit('subscribed', {tableName});
+    this.logger.debug(LOCAL_STR_SUBSCRIBED_TO_CDC, {tableName});
+    this.emit(LOCAL_STR_SUBSCRIBED, {tableName});
   }
 
   /**
@@ -191,8 +215,8 @@ class CDCHandler extends EventEmitter {
     this.lastAppliedTimestamp.delete(tableName);
     this.lastAppliedTimestampByKey.delete(tableName);
 
-    this.logger.debug('Unsubscribed from CDC', {tableName});
-    this.emit('unsubscribed', {tableName});
+    this.logger.debug(LOCAL_STR_UKIR7, {tableName});
+    this.emit(LOCAL_STR_UNSUBSCRIBED, {tableName});
   }
 
   /**
@@ -235,14 +259,14 @@ class CDCHandler extends EventEmitter {
 
     // Check subscription
     if (!this.subscriptions.has(tableName)) {
-      this.logger.debug('Ignoring event for unsubscribed table', {tableName});
+      this.logger.debug(LOCAL_STR_1XFEM, {tableName});
       return false;
     }
 
     // Generate event ID for deduplication
     const eventId = this.generateEventId(cdcEvent);
     if (this.processedEventIds.has(eventId)) {
-      this.logger.debug('Duplicate CDC event ignored', {
+      this.logger.debug(LOCAL_STR_JK70T, {
         tableName,
         eventId,
         key: cdcEvent.getKey(),
@@ -254,7 +278,7 @@ class CDCHandler extends EventEmitter {
     const buffer = this.eventBuffer.get(tableName);
     buffer.push(cdcEvent);
 
-    this.logger.debug('CDC event buffered', {
+    this.logger.debug(LOCAL_STR_CDC_EVENT_BUFFERED, {
       tableName,
       operation: cdcEvent.operation,
       key: cdcEvent.getKey(),
@@ -292,7 +316,7 @@ class CDCHandler extends EventEmitter {
 
     const skipSubscriptionCheck = options.skipSubscriptionCheck === true;
     if (!skipSubscriptionCheck && !this.subscriptions.has(cdcEvent.tableName)) {
-      this.logger.debug('Ignoring event for unsubscribed table', {
+      this.logger.debug(LOCAL_STR_1XFEM, {
         tableName: cdcEvent.tableName,
       });
       return false;
@@ -300,7 +324,7 @@ class CDCHandler extends EventEmitter {
 
     const eventId = this.generateEventId(cdcEvent);
     if (this.processedEventIds.has(eventId)) {
-      this.logger.debug('Duplicate CDC event ignored', {
+      this.logger.debug(LOCAL_STR_JK70T, {
         tableName: cdcEvent.tableName,
         eventId,
         key: cdcEvent.getKey(),
@@ -319,7 +343,7 @@ class CDCHandler extends EventEmitter {
    */
   flushBuffer(tableName) {
     const buffer = this.eventBuffer.get(tableName);
-    if (!buffer || buffer.length === 0) {
+    if (!buffer || buffer.length === LOCAL_NUM_ZERO) {
       return;
     }
 
@@ -335,7 +359,7 @@ class CDCHandler extends EventEmitter {
     this.eventBuffer.set(tableName, []);
     this.reconcileFlushScheduling();
 
-    this.logger.debug('Flushed CDC buffer', {
+    this.logger.debug(LOCAL_STR_FLUSHED_CDC_BUFFER, {
       tableName,
       eventCount: buffer.length,
     });
@@ -357,7 +381,7 @@ class CDCHandler extends EventEmitter {
    */
   hasBufferedEvents() {
     for (const buffer of this.eventBuffer.values()) {
-      if (Array.isArray(buffer) && buffer.length > 0) {
+      if (Array.isArray(buffer) && buffer.length > LOCAL_NUM_ZERO) {
         return true;
       }
     }
@@ -427,8 +451,8 @@ class CDCHandler extends EventEmitter {
     if (lastTimestamp) {
       const lastTs = HLCTimestamp.fromString(lastTimestamp);
       const eventTs = HLCTimestamp.fromString(timestamp);
-      if (eventTs.compare(lastTs) < 0) {
-        this.logger.warn('Out-of-order CDC event detected', {
+      if (eventTs.compare(lastTs) < LOCAL_NUM_ZERO) {
+        this.logger.warn(LOCAL_STR_PXUDN, {
           tableName,
           key,
           eventTimestamp: timestamp,
@@ -452,12 +476,12 @@ class CDCHandler extends EventEmitter {
 
       // Update tracking
       this.recordLastAppliedTimestamp(tableName, timestamp, key);
-      if (typeof this.cache.recordAppliedSchemaVersion === 'function') {
+      if (typeof this.cache.recordAppliedSchemaVersion === LOCAL_STR_FUNCTION) {
         this.cache.recordAppliedSchemaVersion(tableName, timestamp);
       }
       this.markEventProcessed(event);
 
-      this.logger.debug('Applied CDC event', {
+      this.logger.debug(LOCAL_STR_APPLIED_CDC_EVENT, {
         tableName,
         operation,
         key,
@@ -465,7 +489,7 @@ class CDCHandler extends EventEmitter {
         causeId,
       });
 
-      this.emit('eventApplied', {
+      this.emit(LOCAL_STR_EVENTAPPLIED, {
         tableName,
         operation,
         key,
@@ -473,7 +497,7 @@ class CDCHandler extends EventEmitter {
         causeId,
       });
     } catch (error) {
-      this.logger.error('Failed to apply CDC event', {
+      this.logger.error(LOCAL_STR_1S0VR, {
         tableName,
         operation,
         key,
@@ -481,7 +505,7 @@ class CDCHandler extends EventEmitter {
         error: error.message,
       });
 
-      this.emit('eventError', {
+      this.emit(LOCAL_STR_EVENTERROR, {
         tableName,
         operation,
         key,
@@ -509,13 +533,13 @@ class CDCHandler extends EventEmitter {
       const normalizedKey = String(key);
       const previousForKey = keyMap.get(normalizedKey) || null;
       if (!previousForKey ||
-          this.compareTimestampStrings(timestamp, previousForKey) >= 0) {
+          this.compareTimestampStrings(timestamp, previousForKey) >= LOCAL_NUM_ZERO) {
         keyMap.set(normalizedKey, timestamp);
       }
     }
 
     const previous = this.lastAppliedTimestamp.get(tableName);
-    if (!previous || this.compareTimestampStrings(timestamp, previous) >= 0) {
+    if (!previous || this.compareTimestampStrings(timestamp, previous) >= LOCAL_NUM_ZERO) {
       this.lastAppliedTimestamp.set(tableName, timestamp);
       return timestamp;
     }
@@ -620,7 +644,7 @@ class CDCHandler extends EventEmitter {
    */
   getBufferSize(tableName) {
     const buffer = this.eventBuffer.get(tableName);
-    return buffer ? buffer.length : 0;
+    return buffer ? buffer.length : LOCAL_NUM_ZERO;
   }
 
   /**
@@ -628,7 +652,7 @@ class CDCHandler extends EventEmitter {
    * @return {number} Total buffered events across all tables.
    */
   getTotalBufferedEvents() {
-    let total = 0;
+    let total = LOCAL_NUM_ZERO;
     for (const buffer of this.eventBuffer.values()) {
       total += buffer.length;
     }
@@ -664,8 +688,8 @@ class CDCHandler extends EventEmitter {
     this.flushAllBuffers();
 
     this.initialized = false;
-    this.logger.debug('CDC handler shutdown');
-    this.emit('shutdown');
+    this.logger.debug(LOCAL_STR_1VTOI);
+    this.emit(LOCAL_STR_SHUTDOWN);
   }
 }
 

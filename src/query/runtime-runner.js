@@ -22,11 +22,13 @@ import {
   RUNTIME_ERROR_MSG as ERR,
 } from './runtime-constants.js';
 
+const LOCAL_NUM_ZERO = 0;
+
 /**
  * Counter for generating unique query IDs per process.
  * @type {number}
  */
-let queryIdCounter = 0;
+let queryIdCounter = LOCAL_NUM_ZERO;
 
 /**
  * Generate a unique query ID for lineage tracking.
@@ -144,7 +146,7 @@ async function run(userFn, opts) {
     const result = await userFn(ctx);
     ctx.closeOutputStream();
     const outputRows = ctx.getResults();
-    if (outputRows.length > 0) {
+    if (outputRows.length > LOCAL_NUM_ZERO) {
       const telemetry = ctx.getOutTelemetry();
       return {result, output: outputRows, telemetry};
     }

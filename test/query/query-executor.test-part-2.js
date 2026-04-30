@@ -36,6 +36,17 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 const config = ConfigurationManager.getInstance();
 config.initialize();
 
+const QUERY_EXECUTOR_DELIVERY_PRIORITY_CRITICAL = 'critical';
+const QUERY_EXECUTOR_ROUTER_TIMEOUT_MS = 4321;
+const QUERY_EXECUTOR_DELIVERY_SOURCE =
+  'control-plane:read:control_plane_publications';
+const QUERY_EXECUTOR_REPLACE_PENDING_KEY =
+  'control-plane:read:control_plane_publications:replace';
+const QUERY_EXECUTOR_FANOUT_DELIVERY_SOURCE =
+  'control-plane:write:replica_operations:replica-operation:op-1';
+const QUERY_EXECUTOR_FANOUT_REPLACE_PENDING_KEY =
+  'control-plane:write:replica_operations:replica-operation:op-1:replace';
+
 // Mock partition data storage
 const mockPartitionData = new Map();
 
@@ -654,8 +665,6 @@ test('QueryExecutor - executeOnPartition widens recovery-owned system-table ' +
 
 test('QueryExecutor - executeOnPartition forwards router delivery overrides',
   async (t) => {
-    const QUERY_EXECUTOR_DELIVERY_SOURCE =
-      'control-plane:read:control_plane_publications';
     const deliveries = [];
     const messageRouter = {
       deliver: async (address, message, options) => {
@@ -677,9 +686,10 @@ test('QueryExecutor - executeOnPartition forwards router delivery overrides',
       false,
       false,
       {
-        deliveryPriority: 'critical',
+        deliveryPriority: QUERY_EXECUTOR_DELIVERY_PRIORITY_CRITICAL,
         deliverySource: QUERY_EXECUTOR_DELIVERY_SOURCE,
-        timeoutMs: 4321,
+        replacePendingKey: QUERY_EXECUTOR_REPLACE_PENDING_KEY,
+        timeoutMs: QUERY_EXECUTOR_ROUTER_TIMEOUT_MS,
       },
     );
 
@@ -687,18 +697,78 @@ test('QueryExecutor - executeOnPartition forwards router delivery overrides',
     t.equal(deliveries.length, 1, 'partition execution should dispatch once');
     t.equal(
       deliveries[0]?.options?.deliveryPriority,
-      'critical',
+      QUERY_EXECUTOR_DELIVERY_PRIORITY_CRITICAL,
       'partition execution should preserve delivery priority overrides',
     );
-    t.equal(
-      deliveries[0]?.options?.timeoutMs,
-      4321,
-      'partition execution should preserve per-call timeout overrides',
+    t.ok(
+      deliveries[0]?.options?.timeoutMs > 0 &&
+        deliveries[0].options.timeoutMs <= QUERY_EXECUTOR_ROUTER_TIMEOUT_MS,
+      'partition execution should preserve a bounded per-call timeout budget',
     );
     t.equal(
       deliveries[0]?.options?.deliverySource,
       QUERY_EXECUTOR_DELIVERY_SOURCE,
       'partition execution should preserve explicit delivery-source overrides',
+    );
+    t.equal(
+      deliveries[0]?.options?.replacePendingKey,
+      QUERY_EXECUTOR_REPLACE_PENDING_KEY,
+      'partition execution should preserve explicit replacement keys',
+    );
+  });
+
+test('QueryExecutor - executeOnPartitions forwards router delivery source',
+  async (t) => {
+    const deliveries = [];
+    const messageRouter = {
+      deliver: async (address, message, options) => {
+        deliveries.push({address, message, options});
+        return {acknowledged: true, success: true, rows: [], changes: 1};
+      },
+    };
+
+    const executor = new QueryExecutor({
+      messageRouter,
+      systemCache: createMockSystemCache(['p1', 'p2']),
+    });
+
+    const results = await executor.executeOnPartitions(
+      ['p1', 'p2'],
+      'UPDATE replica_operations SET status = ? WHERE operation_id = ?',
+      ['active', 'op-1'],
+      Date.now(),
+      false,
+      false,
+      false,
+      {
+        deliveryPriority: QUERY_EXECUTOR_DELIVERY_PRIORITY_CRITICAL,
+        deliverySource: QUERY_EXECUTOR_FANOUT_DELIVERY_SOURCE,
+        replacePendingKey: QUERY_EXECUTOR_FANOUT_REPLACE_PENDING_KEY,
+        timeoutMs: QUERY_EXECUTOR_ROUTER_TIMEOUT_MS,
+      },
+    );
+
+    t.equal(results.length, 2, 'fanout execution should return both results');
+    t.equal(deliveries.length, 2, 'fanout execution should dispatch both partitions');
+    t.equal(
+      deliveries[0]?.options?.deliverySource,
+      QUERY_EXECUTOR_FANOUT_DELIVERY_SOURCE,
+      'fanout execution should preserve explicit delivery-source overrides',
+    );
+    t.equal(
+      deliveries[1]?.options?.deliverySource,
+      QUERY_EXECUTOR_FANOUT_DELIVERY_SOURCE,
+      'fanout execution should preserve delivery source for every partition',
+    );
+    t.equal(
+      deliveries[0]?.options?.replacePendingKey,
+      QUERY_EXECUTOR_FANOUT_REPLACE_PENDING_KEY,
+      'fanout execution should preserve replacement keys for every partition',
+    );
+    t.equal(
+      deliveries[1]?.options?.replacePendingKey,
+      QUERY_EXECUTOR_FANOUT_REPLACE_PENDING_KEY,
+      'fanout execution should preserve replacement keys across fanout',
     );
   });
 

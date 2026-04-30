@@ -1,3 +1,22 @@
+const LOCAL_STR_EMPTY = '';
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_NUM_ONE = 1;
+const LOCAL_STR_ESCAPE = 'escape';
+const LOCAL_STR_BACKSPACE = 'backspace';
+const LOCAL_STR_DELETE = 'delete';
+const LOCAL_STR_LEFT = 'left';
+const LOCAL_STR_RIGHT = 'right';
+const LOCAL_STR_UP = 'up';
+const LOCAL_STR_DOWN = 'down';
+const LOCAL_STR_HOME = 'home';
+const LOCAL_STR_END = 'end';
+const LOCAL_STR_TAB = 'tab';
+const LOCAL_STR_ENTER = 'enter';
+const LOCAL_STR_NEWLINE = '\n';
+const LOCAL_STR_V0H0S = 'queryinput:suggestions';
+const LOCAL_STR_QUERYINPUT_RENDER = 'queryinput:render';
+const LOCAL_STR_QUERYINPUT_CHANGE = 'queryinput:change';
+
 /**
  * QueryInput - Multi-line text input component for SQL queries
  *
@@ -28,10 +47,10 @@ export class QueryInput {
     this.eventBus = options.eventBus || null;
 
     // Text state
-    this.value = '';
-    this.cursorPosition = 0;
-    this.historyIndex = -1;
-    this.savedInput = ''; // Saved input when navigating history
+    this.value = LOCAL_STR_EMPTY;
+    this.cursorPosition = LOCAL_NUM_ZERO;
+    this.historyIndex = -LOCAL_NUM_ONE;
+    this.savedInput = LOCAL_STR_EMPTY; // Saved input when navigating history
 
     // Widget reference (for blessed integration)
     this.widget = null;
@@ -50,7 +69,7 @@ export class QueryInput {
    * @param {string} value - New value
    */
   setValue(value) {
-    this.value = value || '';
+    this.value = value || LOCAL_STR_EMPTY;
     this.cursorPosition = this.value.length;
     this.render();
   }
@@ -60,10 +79,10 @@ export class QueryInput {
    * Requirements: 9.5
    */
   clear() {
-    this.value = '';
-    this.cursorPosition = 0;
-    this.historyIndex = -1;
-    this.savedInput = '';
+    this.value = LOCAL_STR_EMPTY;
+    this.cursorPosition = LOCAL_NUM_ZERO;
+    this.historyIndex = -LOCAL_NUM_ONE;
+    this.savedInput = LOCAL_STR_EMPTY;
     this.render();
     this.emitChange();
   }
@@ -81,7 +100,7 @@ export class QueryInput {
    * @param {number} position - New cursor position
    */
   setCursorPosition(position) {
-    this.cursorPosition = Math.max(0, Math.min(position, this.value.length));
+    this.cursorPosition = Math.max(LOCAL_NUM_ZERO, Math.min(position, this.value.length));
   }
 
   /**
@@ -94,53 +113,53 @@ export class QueryInput {
     const keyName = key.full || key.name || '';
 
     switch (keyName) {
-    case 'escape':
+    case LOCAL_STR_ESCAPE:
       this.clear();
       return true;
 
-    case 'backspace':
+    case LOCAL_STR_BACKSPACE:
       this.deleteBackward();
       return true;
 
-    case 'delete':
+    case LOCAL_STR_DELETE:
       this.deleteForward();
       return true;
 
-    case 'left':
+    case LOCAL_STR_LEFT:
       this.moveCursorLeft();
       return true;
 
-    case 'right':
+    case LOCAL_STR_RIGHT:
       this.moveCursorRight();
       return true;
 
-    case 'up':
+    case LOCAL_STR_UP:
       this.navigateHistoryUp();
       return true;
 
-    case 'down':
+    case LOCAL_STR_DOWN:
       this.navigateHistoryDown();
       return true;
 
-    case 'home':
+    case LOCAL_STR_HOME:
       this.moveCursorToLineStart();
       return true;
 
-    case 'end':
+    case LOCAL_STR_END:
       this.moveCursorToLineEnd();
       return true;
 
-    case 'tab':
+    case LOCAL_STR_TAB:
       this.triggerAutocomplete();
       return true;
 
-    case 'enter':
+    case LOCAL_STR_ENTER:
       this.insertNewline();
       return true;
 
     default:
       // Handle regular character input
-      if (key.ch && key.ch.length === 1 && !key.ctrl && !key.meta) {
+      if (key.ch && key.ch.length === LOCAL_NUM_ONE && !key.ctrl && !key.meta) {
         this.insertChar(key.ch);
         return true;
       }
@@ -154,7 +173,7 @@ export class QueryInput {
    * @param {string} char - Character to insert
    */
   insertChar(char) {
-    this.value = this.value.slice(0, this.cursorPosition) +
+    this.value = this.value.slice(LOCAL_NUM_ZERO, this.cursorPosition) +
                  char +
                  this.value.slice(this.cursorPosition);
     this.cursorPosition++;
@@ -167,7 +186,7 @@ export class QueryInput {
    * Requirements: 7.3
    */
   insertNewline() {
-    this.insertChar('\n');
+    this.insertChar(LOCAL_STR_NEWLINE);
   }
 
   /**
@@ -177,7 +196,7 @@ export class QueryInput {
   insertText(text) {
     if (!text) return;
 
-    this.value = this.value.slice(0, this.cursorPosition) +
+    this.value = this.value.slice(LOCAL_NUM_ZERO, this.cursorPosition) +
                  text +
                  this.value.slice(this.cursorPosition);
     this.cursorPosition += text.length;
@@ -190,8 +209,8 @@ export class QueryInput {
    * Requirements: 7.4
    */
   deleteBackward() {
-    if (this.cursorPosition > 0) {
-      this.value = this.value.slice(0, this.cursorPosition - 1) +
+    if (this.cursorPosition > LOCAL_NUM_ZERO) {
+      this.value = this.value.slice(LOCAL_NUM_ZERO, this.cursorPosition - LOCAL_NUM_ONE) +
                    this.value.slice(this.cursorPosition);
       this.cursorPosition--;
       this.render();
@@ -205,8 +224,8 @@ export class QueryInput {
    */
   deleteForward() {
     if (this.cursorPosition < this.value.length) {
-      this.value = this.value.slice(0, this.cursorPosition) +
-                   this.value.slice(this.cursorPosition + 1);
+      this.value = this.value.slice(LOCAL_NUM_ZERO, this.cursorPosition) +
+                   this.value.slice(this.cursorPosition + LOCAL_NUM_ONE);
       this.render();
       this.emitChange();
     }
@@ -217,7 +236,7 @@ export class QueryInput {
    * Requirements: 7.4
    */
   moveCursorLeft() {
-    if (this.cursorPosition > 0) {
+    if (this.cursorPosition > LOCAL_NUM_ZERO) {
       this.cursorPosition--;
       this.render();
     }
@@ -240,7 +259,7 @@ export class QueryInput {
   moveCursorToLineStart() {
     const beforeCursor = this.value.slice(0, this.cursorPosition);
     const lastNewline = beforeCursor.lastIndexOf('\n');
-    this.cursorPosition = lastNewline + 1;
+    this.cursorPosition = lastNewline + LOCAL_NUM_ONE;
     this.render();
   }
 
@@ -250,7 +269,7 @@ export class QueryInput {
   moveCursorToLineEnd() {
     const afterCursor = this.value.slice(this.cursorPosition);
     const nextNewline = afterCursor.indexOf('\n');
-    if (nextNewline === -1) {
+    if (nextNewline === -LOCAL_NUM_ONE) {
       this.cursorPosition = this.value.length;
     } else {
       this.cursorPosition += nextNewline;
@@ -266,11 +285,11 @@ export class QueryInput {
     if (!this.history) return;
 
     // Save current input when starting history navigation
-    if (this.historyIndex === -1) {
+    if (this.historyIndex === -LOCAL_NUM_ONE) {
       this.savedInput = this.value;
     }
 
-    if (this.historyIndex < this.history.length - 1) {
+    if (this.historyIndex < this.history.length - LOCAL_NUM_ONE) {
       this.historyIndex++;
       const entry = this.history.getAt(this.historyIndex);
       if (entry !== null) {
@@ -289,7 +308,7 @@ export class QueryInput {
   navigateHistoryDown() {
     if (!this.history) return;
 
-    if (this.historyIndex > 0) {
+    if (this.historyIndex > LOCAL_NUM_ZERO) {
       this.historyIndex--;
       const entry = this.history.getAt(this.historyIndex);
       if (entry !== null) {
@@ -298,9 +317,9 @@ export class QueryInput {
         this.render();
         this.emitChange();
       }
-    } else if (this.historyIndex === 0) {
+    } else if (this.historyIndex === LOCAL_NUM_ZERO) {
       // Return to saved input
-      this.historyIndex = -1;
+      this.historyIndex = -LOCAL_NUM_ONE;
       this.value = this.savedInput;
       this.cursorPosition = this.value.length;
       this.render();
@@ -312,8 +331,8 @@ export class QueryInput {
    * Reset history navigation state
    */
   resetHistoryNavigation() {
-    this.historyIndex = -1;
-    this.savedInput = '';
+    this.historyIndex = -LOCAL_NUM_ONE;
+    this.savedInput = LOCAL_STR_EMPTY;
   }
 
   /**
@@ -326,9 +345,9 @@ export class QueryInput {
     const context = this.getAutocompleteContext();
     const suggestions = this.autocomplete.getSuggestions(context);
 
-    if (suggestions.length === 1) {
-      this.applyCompletion(suggestions[0]);
-    } else if (suggestions.length > 1) {
+    if (suggestions.length === LOCAL_NUM_ONE) {
+      this.applyCompletion(suggestions[LOCAL_NUM_ZERO]);
+    } else if (suggestions.length > LOCAL_NUM_ONE) {
       this.showSuggestions(suggestions);
     }
   }
@@ -352,7 +371,7 @@ export class QueryInput {
   getCurrentWord() {
     const before = this.value.slice(0, this.cursorPosition);
     const match = before.match(/\w+$/);
-    return match ? match[0] : '';
+    return match ? match[LOCAL_NUM_ZERO] : LOCAL_STR_EMPTY;
   }
 
   /**
@@ -363,7 +382,7 @@ export class QueryInput {
     const currentWord = this.getCurrentWord();
     const wordStart = this.cursorPosition - currentWord.length;
 
-    this.value = this.value.slice(0, wordStart) +
+    this.value = this.value.slice(LOCAL_NUM_ZERO, wordStart) +
                  suggestion +
                  this.value.slice(this.cursorPosition);
     this.cursorPosition = wordStart + suggestion.length;
@@ -377,7 +396,7 @@ export class QueryInput {
    */
   showSuggestions(suggestions) {
     if (this.eventBus) {
-      this.eventBus.emit('queryinput:suggestions', {
+      this.eventBus.emit(LOCAL_STR_V0H0S, {
         suggestions,
         position: this.cursorPosition,
         word: this.getCurrentWord(),
@@ -409,7 +428,7 @@ export class QueryInput {
     }
 
     if (this.eventBus) {
-      this.eventBus.emit('queryinput:render', {
+      this.eventBus.emit(LOCAL_STR_QUERYINPUT_RENDER, {
         value: this.value,
         cursorPosition: this.cursorPosition,
         highlighted: this.getHighlightedContent(),
@@ -422,7 +441,7 @@ export class QueryInput {
    */
   emitChange() {
     if (this.eventBus) {
-      this.eventBus.emit('queryinput:change', {
+      this.eventBus.emit(LOCAL_STR_QUERYINPUT_CHANGE, {
         value: this.value,
         cursorPosition: this.cursorPosition,
       });
@@ -442,7 +461,7 @@ export class QueryInput {
    * @return {boolean} True if empty
    */
   isEmpty() {
-    return this.value.trim() === '';
+    return this.value.trim() === LOCAL_STR_EMPTY;
   }
 
   /**
@@ -453,8 +472,8 @@ export class QueryInput {
     const beforeCursor = this.value.slice(0, this.cursorPosition);
     const lines = beforeCursor.split('\n');
     return {
-      line: lines.length - 1,
-      column: lines[lines.length - 1].length,
+      line: lines.length - LOCAL_NUM_ONE,
+      column: lines[lines.length - LOCAL_NUM_ONE].length,
     };
   }
 
@@ -463,6 +482,6 @@ export class QueryInput {
    * @return {number} Line count
    */
   getLineCount() {
-    return this.value.split('\n').length;
+    return this.value.split(LOCAL_STR_NEWLINE).length;
   }
 }

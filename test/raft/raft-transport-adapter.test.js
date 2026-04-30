@@ -189,8 +189,16 @@ test('RaftTransportAdapter keeps syncing replica_operations append traffic off t
       });
     });
 
-    t.same(receivedOptions, RAFT_TRANSPORT_BACKGROUND_DELIVERY_OPTIONS,
-      'syncing replica_operations append traffic should use the background delivery lane');
+    t.equal(
+      receivedOptions?.deliveryPriority,
+      RAFT_TRANSPORT_BACKGROUND_DELIVERY_OPTIONS.deliveryPriority,
+      'syncing replica_operations append traffic should use the background delivery lane',
+    );
+    t.equal(
+      receivedOptions?.deliverySource,
+      'raft:append:entries:node-2/partition/replica_operations-p1-r2',
+      'syncing replica_operations append traffic should stamp one canonical delivery source',
+    );
   });
 
 test('RaftTransportAdapter keeps active replica_operations append traffic critical',
@@ -278,6 +286,53 @@ test('RaftTransportAdapter keeps sql transaction append traffic off the critical
 
     t.same(receivedOptions, RAFT_TRANSPORT_BACKGROUND_DELIVERY_OPTIONS,
       'sql transaction append traffic should use the background delivery lane');
+  });
+
+test('RaftTransportAdapter keeps sql transaction participant append traffic off the critical lane',
+  async (t) => {
+    let receivedOptions = null;
+    const messageRouter = {
+      async deliver(_address, _message, options) {
+        receivedOptions = options;
+        return {acknowledged: true};
+      },
+    };
+    const adapter = new RaftTransportAdapter({
+      messageRouter,
+      entityType: 'partition',
+      nodeId: 'node-1',
+    });
+    const packet = {
+      type: RAFT_PACKET_TYPE.APPEND,
+      term: 7,
+      address: 'node-1/partition/sql_transaction_participants-p1-r1',
+      state: 'leader',
+      leader: 'sql_transaction_participants-p1-r1',
+      last: {index: 12, term: 7},
+      data: [{index: 12, term: 7, command: {type: 'QUERY'}}],
+      destination: 'node-2/partition/sql_transaction_participants-p1-r2',
+    };
+
+    await new Promise((resolve, reject) => {
+      adapter.write(packet, (error) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+        resolve();
+      });
+    });
+
+    t.equal(
+      receivedOptions?.deliveryPriority,
+      RAFT_TRANSPORT_BACKGROUND_DELIVERY_OPTIONS.deliveryPriority,
+      'sql transaction participant append traffic should use the background delivery lane',
+    );
+    t.equal(
+      receivedOptions?.deliverySource,
+      'raft:append:entries:node-2/partition/sql_transaction_participants-p1-r2',
+      'sql transaction participant append traffic should stamp one canonical delivery source',
+    );
   });
 
 test('RaftTransportAdapter keeps non-critical append-fail traffic off the ' +

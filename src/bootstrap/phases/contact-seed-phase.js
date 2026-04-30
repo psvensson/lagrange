@@ -26,6 +26,15 @@ import {
   TYPEOF,
 } from '../../constants/index.js';
 
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_NUM_ONE = 1;
+const LOCAL_STR_1JITK = 'missingPartitionLeaders=';
+const LOCAL_STR_COMMA = ',';
+const LOCAL_STR_19TB4 = 'missingMessageGroupLeaders=';
+const LOCAL_STR_159CY = 'missingPartitionLeaderNodes=';
+const LOCAL_STR_1AWHD = 'missingMessageGroupLeaderNodes=';
+const LOCAL_STR_SPACE = ' ';
+
 const SEED_READINESS_TIMEOUT_MSG = (ms) =>
   `seed readiness timeout after ${ms}ms`;
 const HTTP_ERROR_MESSAGE_PATTERN = /^HTTP (\d+):\s*(.*)$/s;
@@ -83,7 +92,7 @@ class ContactSeedPhase {
     const backoffMultiplier = retryPolicy.backoffMultiplier;
     const now = this.delegates.getNow();
     const startTime = now();
-    let attempt = 0;
+    let attempt = LOCAL_NUM_ZERO;
     let lastBootstrapError = null;
     let lastRetryableSeedContactError = null;
     let lastRetryAfterMs = null;
@@ -109,7 +118,7 @@ class ContactSeedPhase {
     };
 
     while (now() - startTime < retryTimeoutMs) {
-      attempt += 1;
+      attempt += LOCAL_NUM_ONE;
       try {
         const httpPostImpl = this.delegates.getHttpPostImpl();
         const bootstrapRequest = {
@@ -567,26 +576,26 @@ function formatLeaderMetadataDetails(details) {
   const parts = [];
   if (Array.isArray(details.missingPartitionLeaders) &&
       details.missingPartitionLeaders.length > NUM.ZERO) {
-    parts.push('missingPartitionLeaders=' +
-      details.missingPartitionLeaders.join(','));
+    parts.push(LOCAL_STR_1JITK +
+      details.missingPartitionLeaders.join(LOCAL_STR_COMMA));
   }
   if (Array.isArray(details.missingMessageGroupLeaders) &&
       details.missingMessageGroupLeaders.length > NUM.ZERO) {
-    parts.push('missingMessageGroupLeaders=' +
-      details.missingMessageGroupLeaders.join(','));
+    parts.push(LOCAL_STR_19TB4 +
+      details.missingMessageGroupLeaders.join(LOCAL_STR_COMMA));
   }
   if (Array.isArray(details.missingPartitionLeaderNodes) &&
       details.missingPartitionLeaderNodes.length > NUM.ZERO) {
-    parts.push('missingPartitionLeaderNodes=' +
-      details.missingPartitionLeaderNodes.join(','));
+    parts.push(LOCAL_STR_159CY +
+      details.missingPartitionLeaderNodes.join(LOCAL_STR_COMMA));
   }
   if (Array.isArray(details.missingMessageGroupLeaderNodes) &&
       details.missingMessageGroupLeaderNodes.length > NUM.ZERO) {
-    parts.push('missingMessageGroupLeaderNodes=' +
-      details.missingMessageGroupLeaderNodes.join(','));
+    parts.push(LOCAL_STR_1AWHD +
+      details.missingMessageGroupLeaderNodes.join(LOCAL_STR_COMMA));
   }
 
-  return parts.length > NUM.ZERO ? parts.join(' ') : STRING.UNKNOWN;
+  return parts.length > NUM.ZERO ? parts.join(LOCAL_STR_SPACE) : STRING.UNKNOWN;
 }
 
 export {

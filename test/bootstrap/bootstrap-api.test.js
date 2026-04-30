@@ -68,6 +68,13 @@ const TEST_DURABLE_REJOIN_PEER_MESSAGE_GROUP_ADDRESS =
   'peer-node-1/message-group/mg-durable-r2';
 const TEST_DURABLE_REJOIN_SECOND_PEER_MESSAGE_GROUP_ADDRESS =
   'peer-node-2/message-group/mg-durable-r3';
+const TEST_DURABLE_REJOIN_SERVICES_PARTITION_ID = 'services-p1';
+const TEST_DURABLE_REJOIN_SERVICES_REPLICA_ID = 'services-p1-r1';
+const TEST_DURABLE_REJOIN_LOCAL_READ_FAILURE =
+  'durable rejoin assignment should not query local authoritative partitions';
+const TEST_DURABLE_REJOIN_LOCAL_READ_COUNT_NONE = 0;
+const TEST_DURABLE_REJOIN_BOUNDED_ASSIGNMENT_ASSERTION =
+  'durable rejoin assignment should use bounded published/cache topology rows';
 const TEST_STARTUP_AUTHORITY_STATE = 'seed_locally_ready_unpublished';
 const TEST_STARTUP_AUTHORITY_PUBLICATION_STATE = 'unpublished';
 const TEST_STARTUP_AUTHORITY_FAILURE_STATE = 'none';
@@ -1044,6 +1051,13 @@ test('BootstrapAPI - durable rejoin reuses existing message group without assign
     initializeTestEnvironment();
 
     const cacheData = {
+      [TABLES.PARTITIONS]: [
+        {
+          partition_id: TEST_DURABLE_REJOIN_SERVICES_PARTITION_ID,
+          table_id: TABLES.SERVICES,
+          table_name: TABLES.SERVICES,
+        },
+      ],
       [TABLES.SERVICES]: [
         {
           service_id: TEST_DURABLE_REJOIN_REPLICA_ID,
@@ -1093,6 +1107,23 @@ test('BootstrapAPI - durable rejoin reuses existing message group without assign
 
     await api.initialize(0, {listen: false});
     let reservationSweepCalled = false;
+    let localAuthoritativeReadCount = 0;
+    api.partitionServices = new Map([
+      [
+        TEST_DURABLE_REJOIN_SERVICES_REPLICA_ID,
+        {
+          partitionId: TEST_DURABLE_REJOIN_SERVICES_PARTITION_ID,
+          initialized: true,
+          replicaId: TEST_DURABLE_REJOIN_SERVICES_REPLICA_ID,
+          db: {
+            prepare() {
+              localAuthoritativeReadCount++;
+              throw new Error(TEST_DURABLE_REJOIN_LOCAL_READ_FAILURE);
+            },
+          },
+        },
+      ],
+    ]);
     api.expireMoveReplicaAssignmentReservations = async () => {
       reservationSweepCalled = true;
       throw new Error('durable rejoin should not sweep move-replica reservations');
@@ -1122,6 +1153,11 @@ test('BootstrapAPI - durable rejoin reuses existing message group without assign
       reservationSweepCalled,
       false,
       'durable rejoin should bypass move-replica reservation sweep when reuse is known',
+    );
+    t.equal(
+      localAuthoritativeReadCount,
+      TEST_DURABLE_REJOIN_LOCAL_READ_COUNT_NONE,
+      TEST_DURABLE_REJOIN_BOUNDED_ASSIGNMENT_ASSERTION,
     );
 
     await api.shutdown();
@@ -1504,6 +1540,9 @@ test('BootstrapAPI - bootstrap join readiness uses seed-contact startup authorit
         },
       },
       readinessState,
+      startupRecoveryCoordinator: new StartupRecoveryCoordinator({
+        readinessState,
+      }),
       sqlQueryEngine: {},
     });
 
@@ -1525,6 +1564,11 @@ test('BootstrapAPI - bootstrap join readiness uses seed-contact startup authorit
       bootstrapReadyBody.ready,
       true,
       'bootstrap join readiness should project ready=true',
+    );
+    t.equal(
+      bootstrapReadyBody.controlPlaneRecoveryReady,
+      true,
+      'seed-authorized bootstrap INIT should be recovery-ready for restart admission',
     );
     t.same(
       bootstrapReadyBody.reasons,

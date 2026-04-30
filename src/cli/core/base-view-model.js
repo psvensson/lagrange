@@ -1,3 +1,13 @@
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_STR_STATE_CHANGED = 'state:changed';
+const LOCAL_STR_1YZ5I = 'viewModel:computedChanged';
+const LOCAL_STR_N_A = 'N/A';
+const LOCAL_STR_0_B = '0 B';
+const LOCAL_NUM_ONE = 1;
+const LOCAL_STR_T = 'T';
+const LOCAL_STR_SPACE = ' ';
+const LOCAL_NUM_19 = 19;
+
 /**
  * BaseViewModel - Base class for view models separating business logic from UI
  *
@@ -29,7 +39,7 @@ export class BaseViewModel {
     this.computedCache = new Map();
 
     // Cache version for invalidation
-    this.cacheVersion = 0;
+    this.cacheVersion = LOCAL_NUM_ZERO;
 
     // Computed property definitions
     /** @type {Map<string, {compute: Function, dependencies: string[]}>} */
@@ -44,7 +54,7 @@ export class BaseViewModel {
    */
   setupStateSubscriptions() {
     if (this.stateManager && this.eventBus) {
-      this.eventBus.on('state:changed', (data) => {
+      this.eventBus.on(LOCAL_STR_STATE_CHANGED, (data) => {
         this.handleStateChange(data);
       });
     }
@@ -173,7 +183,7 @@ export class BaseViewModel {
     }
 
     for (const name of this.computedDefinitions.keys()) {
-      this.eventBus.emit('viewModel:computedChanged', {
+      this.eventBus.emit(LOCAL_STR_1YZ5I, {
         property: name,
         viewModel: this,
       });
@@ -217,7 +227,7 @@ export class BaseViewModel {
    */
   formatValue(value, _type) {
     if (value === null || value === undefined) {
-      return 'N/A';
+      return LOCAL_STR_N_A;
     }
     return String(value);
   }
@@ -229,17 +239,17 @@ export class BaseViewModel {
    */
   formatSize(bytes) {
     if (bytes === null || bytes === undefined) {
-      return 'N/A';
+      return LOCAL_STR_N_A;
     }
-    if (bytes === 0) {
-      return '0 B';
+    if (bytes === LOCAL_NUM_ZERO) {
+      return LOCAL_STR_0_B;
     }
 
     const units = ['B', 'KB', 'MB', 'GB', 'TB'];
     const i = Math.floor(Math.log(bytes) / Math.log(1024));
     const value = bytes / Math.pow(1024, i);
 
-    return `${value.toFixed(1)} ${units[i]}`;
+    return `${value.toFixed(LOCAL_NUM_ONE)} ${units[i]}`;
   }
 
   /**
@@ -248,9 +258,9 @@ export class BaseViewModel {
    * @param {number} [decimals=1] - Decimal places
    * @return {string} Formatted percentage
    */
-  formatPercent(value, decimals = 1) {
+  formatPercent(value, decimals = LOCAL_NUM_ONE) {
     if (value === null || value === undefined) {
-      return 'N/A';
+      return LOCAL_STR_N_A;
     }
     return `${value.toFixed(decimals)}%`;
   }
@@ -262,11 +272,11 @@ export class BaseViewModel {
    */
   formatTimestamp(timestamp) {
     if (!timestamp) {
-      return 'N/A';
+      return LOCAL_STR_N_A;
     }
 
     const date = timestamp instanceof Date ? timestamp : new Date(timestamp);
-    return date.toISOString().replace('T', ' ').substring(0, 19);
+    return date.toISOString().replace(LOCAL_STR_T, LOCAL_STR_SPACE).substring(LOCAL_NUM_ZERO, LOCAL_NUM_19);
   }
 
   /**
@@ -303,7 +313,7 @@ export class BaseViewModel {
    * @return {boolean}
    */
   isEmpty() {
-    return this.data.length === 0;
+    return this.data.length === LOCAL_NUM_ZERO;
   }
 
   /**

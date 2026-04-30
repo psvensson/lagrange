@@ -14,6 +14,10 @@ import {
   writeJsonReport,
 } from './metric-check-helpers.js';
 
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_NUM_ONE = 1;
+const LOCAL_STR_1A2OZ = 'scripts/check-cognitive-complexity.js';
+
 const TARGET_THRESHOLD = 20;
 const BASELINE_COUNT = 144;
 const STRICT_FLAG = '--strict';
@@ -69,7 +73,7 @@ writeJsonReport(REPORT_RELATIVE_PATH, {
 });
 
 if (strict) {
-  if (count > 0) {
+  if (count > LOCAL_NUM_ZERO) {
     console.log(
       `Cognitive complexity violations (threshold: ${TARGET_THRESHOLD}):\n`,
     );
@@ -80,7 +84,7 @@ if (strict) {
       );
     }
     console.log(`\n${count} violation(s) found.`);
-    process.exit(1);
+    process.exit(LOCAL_NUM_ONE);
   }
   console.log(
     `No cognitive complexity violations (threshold: ${TARGET_THRESHOLD}).`,
@@ -97,7 +101,7 @@ if (strict) {
         `${violation.message}`,
       );
     }
-    process.exit(1);
+    process.exit(LOCAL_NUM_ONE);
   }
   console.log(
     `Cognitive complexity ratchet OK: ${count}/${BASELINE_COUNT} violations ` +
@@ -105,9 +109,9 @@ if (strict) {
   );
   console.log(`Saved cognitive complexity report to ${REPORT_RELATIVE_PATH}.`);
   printRatchetTighteningHint(
-    'scripts/check-cognitive-complexity.js',
+    LOCAL_STR_1A2OZ,
     count,
     BASELINE_COUNT,
-    'scripts/check-cognitive-complexity.js',
+    LOCAL_STR_1A2OZ,
   );
 }

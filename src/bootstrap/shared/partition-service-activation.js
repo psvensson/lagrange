@@ -9,6 +9,9 @@ import {
   TYPEOF,
 } from '../../constants/index.js';
 
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_NUM_ONE = 1;
+
 const PARTITION_SERVICE_ACTIVATION_ERROR = Object.freeze({
   NODE_ID_REQUIRED:
     'Partition service activation requires nodeId',
@@ -28,7 +31,7 @@ function resolveReplicaUnifiedAddress(nodeId, replicaId, service) {
     return service.getUnifiedAddress();
   }
   if (typeof service?.unifiedAddress === TYPEOF.STRING &&
-      service.unifiedAddress.length > 0) {
+      service.unifiedAddress.length > LOCAL_NUM_ZERO) {
     return service.unifiedAddress;
   }
   return AddressManager.getInstance().format(
@@ -43,7 +46,7 @@ function isTransientActivationError(error) {
 }
 
 async function activatePartitionServiceRows(options = {}) {
-  if (typeof options.nodeId !== TYPEOF.STRING || options.nodeId.length === 0) {
+  if (typeof options.nodeId !== TYPEOF.STRING || options.nodeId.length === LOCAL_NUM_ZERO) {
     throw new Error(PARTITION_SERVICE_ACTIVATION_ERROR.NODE_ID_REQUIRED);
   }
   if (!options.systemTableWriter) {
@@ -78,11 +81,11 @@ async function activatePartitionServiceRows(options = {}) {
       options.now :
       () => Date.now(),
   });
-  let activatedCount = 0;
+  let activatedCount = LOCAL_NUM_ZERO;
 
   for (const [replicaId, service] of partitionServices.entries()) {
     const partitionId = service?.partitionId || null;
-    if (typeof partitionId !== TYPEOF.STRING || partitionId.length === 0) {
+    if (typeof partitionId !== TYPEOF.STRING || partitionId.length === LOCAL_NUM_ZERO) {
       continue;
     }
     const runtimeReady = await Promise.resolve(
@@ -111,7 +114,7 @@ async function activatePartitionServiceRows(options = {}) {
         nodeId: options.nodeId,
         service,
       });
-      activatedCount += 1;
+      activatedCount += LOCAL_NUM_ONE;
     } catch (error) {
       if (options.deferTransientFailures === true &&
           isTransientActivationError(error)) {

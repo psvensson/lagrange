@@ -17,6 +17,25 @@ import {
   LOGGING_PRETTY,
 } from './logging-constants.js';
 
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_STR_STRING = 'string';
+const LOCAL_STR_OBJECT = 'object';
+const LOCAL_NUM_ONE = 1;
+const LOCAL_STR_SUBSYSTEM = 'subsystem';
+const LOCAL_STR_TAG = 'tag';
+const LOCAL_STR_TRACE = 'trace';
+const LOCAL_STR_DEBUG = 'debug';
+const LOCAL_STR_INFO = 'info';
+const LOCAL_STR_WARN = 'warn';
+const LOCAL_STR_ERROR = 'error';
+const LOCAL_STR_FATAL = 'fatal';
+const LOCAL_STR_BACKGROUND = 'background';
+const LOCAL_NUM_10 = 10;
+const LOCAL_STR_KRDOX = 'metrics.logging.buffer_flush.background.started';
+const LOCAL_STR_BOOLEAN = 'boolean';
+const LOCAL_NUM_1000 = 1000;
+const LOCAL_STR_FUNCTION = 'function';
+
 const LOGGING_DIAGNOSTICS_UNKNOWN_SUBSYSTEM = 'unknown';
 const LOGGING_LEVEL_FALLBACK = LOGGING_DEFAULT.LEVEL;
 const LOGGING_LEVEL_INDEX = Object.freeze(
@@ -174,14 +193,14 @@ class LoggingService {
    */
   createDiagnosticsState() {
     return {
-      totalLogs: 0,
-      metricsLogs: 0,
-      nonMetricsLogs: 0,
-      logsSuppressedByLevel: 0,
-      metricsSuppressedFromConsole: 0,
-      metricsSuppressedFromPersistence: 0,
-      metricsSuppressedByResolution: 0,
-      metricsSuppressedByDetailedWindow: 0,
+      totalLogs: LOCAL_NUM_ZERO,
+      metricsLogs: LOCAL_NUM_ZERO,
+      nonMetricsLogs: LOCAL_NUM_ZERO,
+      logsSuppressedByLevel: LOCAL_NUM_ZERO,
+      metricsSuppressedFromConsole: LOCAL_NUM_ZERO,
+      metricsSuppressedFromPersistence: LOCAL_NUM_ZERO,
+      metricsSuppressedByResolution: LOCAL_NUM_ZERO,
+      metricsSuppressedByDetailedWindow: LOCAL_NUM_ZERO,
       subsystemCounts: new Map(),
       metricTagCounts: new Map(),
     };
@@ -218,7 +237,7 @@ class LoggingService {
    * @private
    */
   isMetricsLogMessage(message) {
-    return typeof message === 'string' &&
+    return typeof message === LOCAL_STR_STRING &&
       message.startsWith(METRICS_LOG_PREFIX);
   }
 
@@ -229,7 +248,7 @@ class LoggingService {
    * @private
    */
   isDetailedMetricsContext(context = {}) {
-    if (!context || typeof context !== 'object') {
+    if (!context || typeof context !== LOCAL_STR_OBJECT) {
       return false;
     }
     if (context.metricsDetailed === true) {
@@ -282,9 +301,9 @@ class LoggingService {
    */
   getMetricsDetailedWindowRemainingMs(nowMs = Date.now()) {
     if (!this.isMetricsDetailedWindowActive(nowMs)) {
-      return 0;
+      return LOCAL_NUM_ZERO;
     }
-    return Math.max(0, this.metricsDetailedWindowExpiresAtMs - nowMs);
+    return Math.max(LOCAL_NUM_ZERO, this.metricsDetailedWindowExpiresAtMs - nowMs);
   }
 
   /**
@@ -349,7 +368,7 @@ class LoggingService {
    * @private
    */
   normalizeLogLevel(level) {
-    if (typeof level !== 'string') {
+    if (typeof level !== LOCAL_STR_STRING) {
       return LOGGING_LEVEL_FALLBACK;
     }
     const normalized = level.toLowerCase();
@@ -402,26 +421,26 @@ class LoggingService {
     const context = options.context || {};
 
     if (!isLevelEnabled) {
-      this.diagnostics.logsSuppressedByLevel += 1;
+      this.diagnostics.logsSuppressedByLevel += LOCAL_NUM_ONE;
       return;
     }
 
-    this.diagnostics.totalLogs += 1;
+    this.diagnostics.totalLogs += LOCAL_NUM_ONE;
     if (isMetricsMessage) {
-      this.diagnostics.metricsLogs += 1;
+      this.diagnostics.metricsLogs += LOCAL_NUM_ONE;
       if (!shouldWriteToConsole) {
-        this.diagnostics.metricsSuppressedFromConsole += 1;
+        this.diagnostics.metricsSuppressedFromConsole += LOCAL_NUM_ONE;
       }
       if (!shouldPersist) {
-        this.diagnostics.metricsSuppressedFromPersistence += 1;
+        this.diagnostics.metricsSuppressedFromPersistence += LOCAL_NUM_ONE;
       }
       if (metricsSuppressReason ===
         LOGGING_METRICS_SUPPRESS_REASON.RESOLUTION) {
-        this.diagnostics.metricsSuppressedByResolution += 1;
+        this.diagnostics.metricsSuppressedByResolution += LOCAL_NUM_ONE;
       }
       if (metricsSuppressReason ===
         LOGGING_METRICS_SUPPRESS_REASON.DETAILED_WINDOW) {
-        this.diagnostics.metricsSuppressedByDetailedWindow += 1;
+        this.diagnostics.metricsSuppressedByDetailedWindow += LOCAL_NUM_ONE;
       }
       this.incrementBoundedCounter(
         this.diagnostics.metricTagCounts,
@@ -429,7 +448,7 @@ class LoggingService {
         LOGGING_DIAGNOSTICS_DEFAULT.MAX_METRIC_TAG_CARDINALITY,
       );
     } else {
-      this.diagnostics.nonMetricsLogs += 1;
+      this.diagnostics.nonMetricsLogs += LOCAL_NUM_ONE;
     }
 
     const subsystem = context.subsystem || LOGGING_DIAGNOSTICS_UNKNOWN_SUBSYSTEM;
@@ -449,13 +468,13 @@ class LoggingService {
    */
   incrementBoundedCounter(map, key, maxCardinality) {
     if (map.has(key)) {
-      map.set(key, map.get(key) + 1);
+      map.set(key, map.get(key) + LOCAL_NUM_ONE);
       return;
     }
     if (map.size >= maxCardinality) {
       return;
     }
-    map.set(key, 1);
+    map.set(key, LOCAL_NUM_ONE);
   }
 
   /**
@@ -467,8 +486,8 @@ class LoggingService {
    */
   getTopCounterEntries(map, fieldName) {
     return [...map.entries()]
-      .sort((left, right) => right[1] - left[1])
-      .slice(0, LOGGING_DIAGNOSTICS_DEFAULT.TOP_LIMIT)
+      .sort((left, right) => right[LOCAL_NUM_ONE] - left[LOCAL_NUM_ONE])
+      .slice(LOCAL_NUM_ZERO, LOGGING_DIAGNOSTICS_DEFAULT.TOP_LIMIT)
       .map(([name, count]) => ({[fieldName]: name, count}));
   }
 
@@ -502,11 +521,11 @@ class LoggingService {
       logsTableReady: this.logsTableReady,
       topSubsystems: this.getTopCounterEntries(
         this.diagnostics.subsystemCounts,
-        'subsystem',
+        LOCAL_STR_SUBSYSTEM,
       ),
       topMetricTags: this.getTopCounterEntries(
         this.diagnostics.metricTagCounts,
-        'tag',
+        LOCAL_STR_TAG,
       ),
     };
   }
@@ -583,7 +602,7 @@ class LoggingService {
    * @param {Object} context - Additional context.
    */
   trace(message, context = {}) {
-    this.log('trace', message, context);
+    this.log(LOCAL_STR_TRACE, message, context);
   }
 
   /**
@@ -592,7 +611,7 @@ class LoggingService {
    * @param {Object} context - Additional context.
    */
   debug(message, context = {}) {
-    this.log('debug', message, context);
+    this.log(LOCAL_STR_DEBUG, message, context);
   }
 
   /**
@@ -601,7 +620,7 @@ class LoggingService {
    * @param {Object} context - Additional context.
    */
   info(message, context = {}) {
-    this.log('info', message, context);
+    this.log(LOCAL_STR_INFO, message, context);
   }
 
   /**
@@ -610,7 +629,7 @@ class LoggingService {
    * @param {Object} context - Additional context.
    */
   warn(message, context = {}) {
-    this.log('warn', message, context);
+    this.log(LOCAL_STR_WARN, message, context);
   }
 
   /**
@@ -619,7 +638,7 @@ class LoggingService {
    * @param {Object} context - Additional context.
    */
   error(message, context = {}) {
-    this.log('error', message, context);
+    this.log(LOCAL_STR_ERROR, message, context);
   }
 
   /**
@@ -628,7 +647,7 @@ class LoggingService {
    * @param {Object} context - Additional context.
    */
   fatal(message, context = {}) {
-    this.log('fatal', message, context);
+    this.log(LOCAL_STR_FATAL, message, context);
   }
 
   /**
@@ -699,7 +718,7 @@ class LoggingService {
     this.buffer = [];
 
     const flushedCount = entriesToFlush.length;
-    if (flushMode === 'background' && flushedCount > 0 && writeCallback) {
+    if (flushMode === LOCAL_STR_BACKGROUND && flushedCount > LOCAL_NUM_ZERO && writeCallback) {
       this.flushBufferedEntriesInBackground(writeCallback, entriesToFlush, options);
       return flushedCount;
     }
@@ -726,10 +745,10 @@ class LoggingService {
     const yieldMs = Number.isFinite(options.yieldMs) && options.yieldMs >= 0 ?
       Math.floor(options.yieldMs) : 0;
     const startedAt = Date.now();
-    let index = 0;
-    let nextProgressMark = chunkSize * 10;
+    let index = LOCAL_NUM_ZERO;
+    let nextProgressMark = chunkSize * LOCAL_NUM_10;
 
-    this.info('metrics.logging.buffer_flush.background.started', {
+    this.info(LOCAL_STR_KRDOX, {
       bufferedEntries: entries.length,
       chunkSize,
       yieldMs,
@@ -746,7 +765,7 @@ class LoggingService {
 
     const processChunk = async () => {
       try {
-        let processedInChunk = 0;
+        let processedInChunk = LOCAL_NUM_ZERO;
         while (index < entries.length && processedInChunk < chunkSize) {
           await writeCallback(entries[index]);
           index++;
@@ -830,7 +849,7 @@ class LoggingService {
    * @return {boolean} True when the update was applied.
    */
   setPersistMetricsLogs(persistMetricsLogs) {
-    if (typeof persistMetricsLogs !== 'boolean') {
+    if (typeof persistMetricsLogs !== LOCAL_STR_BOOLEAN) {
       return false;
     }
 
@@ -845,7 +864,7 @@ class LoggingService {
    */
   setMetricsDefaultResolutionMs(metricsDefaultResolutionMs) {
     if (!Number.isFinite(metricsDefaultResolutionMs) ||
-      metricsDefaultResolutionMs < 0) {
+      metricsDefaultResolutionMs < LOCAL_NUM_ZERO) {
       return false;
     }
 
@@ -860,7 +879,7 @@ class LoggingService {
    */
   setMetricsDetailedWindowTtlMs(metricsDetailedWindowTtlMs) {
     if (!Number.isFinite(metricsDetailedWindowTtlMs) ||
-      metricsDetailedWindowTtlMs < 1000) {
+      metricsDetailedWindowTtlMs < LOCAL_NUM_1000) {
       return false;
     }
 
@@ -878,7 +897,7 @@ class LoggingService {
    * @return {boolean} True when the update was applied.
    */
   setMetricsDetailedWindowEnabled(metricsDetailedWindowEnabled) {
-    if (typeof metricsDetailedWindowEnabled !== 'boolean') {
+    if (typeof metricsDetailedWindowEnabled !== LOCAL_STR_BOOLEAN) {
       return false;
     }
 
@@ -898,7 +917,7 @@ class LoggingService {
    * @return {Promise<void>}
    */
   async shutdown() {
-    if (this.logger && typeof this.logger.flush === 'function') {
+    if (this.logger && typeof this.logger.flush === LOCAL_STR_FUNCTION) {
       this.logger.flush();
     }
     this.initialized = false;

@@ -45,6 +45,13 @@ import {
   ControlPlaneSystemTableGatewaySegment1,
 } from './control-plane-system-table-gateway-segment-1.js';
 
+const LOCAL_STR_1NXSQ = 'maxObservedMutationQueueWaitMs';
+const LOCAL_STR_SLN22 = 'maxObservedTransportPendingNodeConnectionCount';
+const LOCAL_STR_1UYEC = 'mutationFailureReasonCounts';
+const LOCAL_STR_1OW12 = 'authoritativeRowSourceUnavailableCount';
+const LOCAL_STR_1O67A = 'distributedParticipantFailureCount';
+const LOCAL_STR_1K86M = 'reconnectDeliveryFailureCount';
+
 class ControlPlaneSystemTableGatewaySegment2 extends ControlPlaneSystemTableGatewaySegment1 {
   incrementGatewayOutcomeMetric(bucketName, outcome) {
     const bucket = this.gatewayMetrics?.[bucketName];
@@ -252,26 +259,26 @@ class ControlPlaneSystemTableGatewaySegment2 extends ControlPlaneSystemTableGate
       CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.MAXOBSERVEDMUTATIONLATENCYMS,
       latencyMs,
     );
-    this.recordGatewayLatency('maxObservedMutationQueueWaitMs', queueWaitMs);
+    this.recordGatewayLatency(LOCAL_STR_1NXSQ, queueWaitMs);
     this.recordGatewayLatency(
-      'maxObservedTransportPendingNodeConnectionCount',
+      LOCAL_STR_SLN22,
       transportPendingNodeConnectionCount,
     );
     if (result?.success === false) {
       this.incrementGatewayOutcomeMetric(
-        'mutationFailureReasonCounts',
+        LOCAL_STR_1UYEC,
         failureSummary.primaryReason,
       );
       this.addGatewayMetric(
-        'authoritativeRowSourceUnavailableCount',
+        LOCAL_STR_1OW12,
         failureSummary.authoritativeRowSourceUnavailableCount,
       );
       this.addGatewayMetric(
-        'distributedParticipantFailureCount',
+        LOCAL_STR_1O67A,
         failureSummary.distributedParticipantFailureCount,
       );
       this.addGatewayMetric(
-        'reconnectDeliveryFailureCount',
+        LOCAL_STR_1K86M,
         failureSummary.reconnectDeliveryFailureCount,
       );
     }

@@ -1,5 +1,7 @@
 import {NUM} from '../constants/index.js';
 
+const LOCAL_STR_NEWLINE = '\n';
+
 const REPLICA_CREATION_PROGRESS_DEFAULT = Object.freeze({
   TICK_MS: 120,
   SPINNER_FRAMES: Object.freeze(['|', '/', '-', '\\']),
@@ -170,7 +172,7 @@ class ReplicaCreationProgressReporter {
     progress.previousLineLength = padded.length;
     this.stdout.write(`\r${padded}`);
     if (finalize) {
-      this.stdout.write('\n');
+      this.stdout.write(LOCAL_STR_NEWLINE);
     }
   }
 

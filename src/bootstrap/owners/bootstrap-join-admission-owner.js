@@ -84,6 +84,14 @@ class BootstrapJoinAdmissionOwner {
     return this.delegates.getBootstrapAuthoritativeTableRows?.(tableName) || [];
   }
 
+  getBootstrapAdmissionTableRows(tableName) {
+    const rows =
+      this.delegates.getBootstrapAdmissionTableRows?.(tableName) || null;
+    return Array.isArray(rows) ?
+      rows :
+      this.getBootstrapAuthoritativeTableRows(tableName);
+  }
+
   async expireMoveReplicaAssignmentReservations() {
     return this.delegates.expireMoveReplicaAssignmentReservations?.();
   }
@@ -514,7 +522,7 @@ class BootstrapJoinAdmissionOwner {
   }
 
   getMessageGroups() {
-    const services = this.getBootstrapAuthoritativeTableRows(TABLES.SERVICES);
+    const services = this.getBootstrapAdmissionTableRows(TABLES.SERVICES);
     const messageGroupServices = services.filter((service) =>
       service[COLUMN.SERVICE_TYPE] === SERVICE_TYPE.MESSAGE_GROUP,
     );
@@ -549,7 +557,7 @@ class BootstrapJoinAdmissionOwner {
     }
 
     const cachedGroups =
-      this.getBootstrapAuthoritativeTableRows(TABLES.MESSAGE_GROUPS);
+      this.getBootstrapAdmissionTableRows(TABLES.MESSAGE_GROUPS);
 
     return cachedGroups.map((group) => {
       const replicas = messageGroupServices

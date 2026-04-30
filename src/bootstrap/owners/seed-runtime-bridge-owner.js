@@ -18,6 +18,8 @@ import {
   CDC_PROPAGATED_TABLES,
 } from '../../cache/cache-constants.js';
 
+const LOCAL_STR_FUNCTION = 'function';
+
 const LOG_CDC_INITIALIZED = 'CDC integration initialized by owner';
 const CDC_INTEGRATION_OWNER = 'CDCIntegrationSetup';
 const CDC_INTEGRATION_MODE_BOOTSTRAP = 'bootstrap';
@@ -36,7 +38,7 @@ class SeedRuntimeBridgeOwner {
     }
 
     const override = this.compatibilityPhase[methodName];
-    return typeof override === 'function' ?
+    return typeof override === LOCAL_STR_FUNCTION ?
       override.bind(this.compatibilityPhase) :
       null;
   }

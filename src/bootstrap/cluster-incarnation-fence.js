@@ -1,32 +1,47 @@
 import {NUM, TYPEOF} from '../constants/index.js';
 
+const LOCAL_STR_CURRENT = 'current';
+const LOCAL_STR_IDENTITY_MISMATCH = 'identity_mismatch';
+const LOCAL_STR_NOT_REQUIRED = 'not_required';
+const LOCAL_STR_PEER_PROOF_MISSING = 'peer_proof_missing';
+const LOCAL_STR_MATCHED = 'matched';
+const LOCAL_STR_MISMATCHED = 'mismatched';
+const LOCAL_STR_UNOBSERVED = 'unobserved';
+const LOCAL_STR_ABSENT = 'absent';
+const LOCAL_STR_PRESENT = 'present';
+const LOCAL_STR_MISSING = 'missing';
+const LOCAL_STR_RECOVERED = 'recovered';
+const LOCAL_STR_H0QXZ = 'cluster_incarnation_identity_mismatch';
+const LOCAL_STR_1YOIV = 'cluster_incarnation_peer_proof_missing';
+const LOCAL_STR_EMPTY = '';
+
 export const CLUSTER_INCARNATION_FENCE_STATE = Object.freeze({
-  CURRENT: 'current',
-  IDENTITY_MISMATCH: 'identity_mismatch',
-  NOT_REQUIRED: 'not_required',
-  PEER_PROOF_MISSING: 'peer_proof_missing',
+  CURRENT: LOCAL_STR_CURRENT,
+  IDENTITY_MISMATCH: LOCAL_STR_IDENTITY_MISMATCH,
+  NOT_REQUIRED: LOCAL_STR_NOT_REQUIRED,
+  PEER_PROOF_MISSING: LOCAL_STR_PEER_PROOF_MISSING,
 });
 
 export const CLUSTER_INCARNATION_LOCAL_IDENTITY_STATE = Object.freeze({
-  MATCHED: 'matched',
-  MISMATCHED: 'mismatched',
-  UNOBSERVED: 'unobserved',
+  MATCHED: LOCAL_STR_MATCHED,
+  MISMATCHED: LOCAL_STR_MISMATCHED,
+  UNOBSERVED: LOCAL_STR_UNOBSERVED,
 });
 
 export const CLUSTER_INCARNATION_DURABLE_MEMBERSHIP_STATE = Object.freeze({
-  ABSENT: 'absent',
-  PRESENT: 'present',
+  ABSENT: LOCAL_STR_ABSENT,
+  PRESENT: LOCAL_STR_PRESENT,
 });
 
 export const CLUSTER_INCARNATION_PEER_PROOF_STATE = Object.freeze({
-  MISSING: 'missing',
-  NOT_REQUIRED: 'not_required',
-  RECOVERED: 'recovered',
+  MISSING: LOCAL_STR_MISSING,
+  NOT_REQUIRED: LOCAL_STR_NOT_REQUIRED,
+  RECOVERED: LOCAL_STR_RECOVERED,
 });
 
 export const CLUSTER_INCARNATION_FENCE_REASON = Object.freeze({
-  IDENTITY_MISMATCH: 'cluster_incarnation_identity_mismatch',
-  PEER_PROOF_MISSING: 'cluster_incarnation_peer_proof_missing',
+  IDENTITY_MISMATCH: LOCAL_STR_H0QXZ,
+  PEER_PROOF_MISSING: LOCAL_STR_1YOIV,
 });
 
 function normalizeDistinctReasonCodes(values = []) {
@@ -34,7 +49,7 @@ function normalizeDistinctReasonCodes(values = []) {
     [...new Set(
       (Array.isArray(values) ? values : [])
         .map((value) =>
-          typeof value === TYPEOF.STRING ? value.trim() : '')
+          typeof value === TYPEOF.STRING ? value.trim() : LOCAL_STR_EMPTY)
         .filter((value) => value.length > NUM.ZERO),
     )],
   );

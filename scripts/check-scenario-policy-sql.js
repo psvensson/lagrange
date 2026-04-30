@@ -3,6 +3,16 @@
 import {readdir, readFile} from 'node:fs/promises';
 import {join, relative, resolve} from 'node:path';
 
+const LOCAL_STR_JS = '.js';
+const LOCAL_STR_NEWLINE = '\n';
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_STR_1WK50 = 'Scenario policy SQL guard passed: no forbidden raw table_policies updates found.\n';
+const LOCAL_STR_1W4RY = 'Scenario policy SQL guard failed. Move table policy mutation through the owner helper.\n';
+const LOCAL_STR_9XLXH = '- ';
+const LOCAL_STR_COLON = ':';
+const LOCAL_NUM_ONE = 1;
+const LOCAL_STR_I7C58 = 'Scenario policy SQL guard crashed: ';
+
 const SCENARIOS_DIR = resolve('test/distributed/scenarios');
 const UTF8_ENCODING = 'utf8';
 const POLICY_SQL_PATTERN = /UPDATE\s+tables\s+SET\s+table_policies/ig;
@@ -20,7 +30,7 @@ async function listScenarioFiles(dir) {
       files.push(...await listScenarioFiles(fullPath));
       continue;
     }
-    if (!entry.isFile() || !entry.name.endsWith('.js')) {
+    if (!entry.isFile() || !entry.name.endsWith(LOCAL_STR_JS)) {
       continue;
     }
     files.push(fullPath);
@@ -30,7 +40,7 @@ async function listScenarioFiles(dir) {
 
 function toLineNumber(source, index) {
   const prefix = source.slice(0, Math.max(0, index));
-  return prefix.split('\n').length;
+  return prefix.split(LOCAL_STR_NEWLINE).length;
 }
 
 async function findViolations() {
@@ -47,7 +57,7 @@ async function findViolations() {
     for (const match of matches) {
       violations.push({
         filePath: workspaceRelativePath,
-        line: toLineNumber(source, match.index || 0),
+        line: toLineNumber(source, match.index || LOCAL_NUM_ZERO),
       });
     }
   }
@@ -56,28 +66,28 @@ async function findViolations() {
 
 async function main() {
   const violations = await findViolations();
-  if (violations.length === 0) {
+  if (violations.length === LOCAL_NUM_ZERO) {
     process.stdout.write(
-      'Scenario policy SQL guard passed: no forbidden raw table_policies updates found.\n',
+      LOCAL_STR_1WK50,
     );
     return;
   }
 
   process.stderr.write(
-    'Scenario policy SQL guard failed. Move table policy mutation through the owner helper.\n',
+    LOCAL_STR_1W4RY,
   );
   for (const violation of violations) {
     process.stderr.write(
-      '- ' + violation.filePath + ':' + violation.line + '\n',
+      LOCAL_STR_9XLXH + violation.filePath + LOCAL_STR_COLON + violation.line + LOCAL_STR_NEWLINE,
     );
   }
-  process.exitCode = 1;
+  process.exitCode = LOCAL_NUM_ONE;
 }
 
 main().catch((error) => {
   process.stderr.write(
-    'Scenario policy SQL guard crashed: ' +
-    String(error?.message || error) + '\n',
+    LOCAL_STR_I7C58 +
+    String(error?.message || error) + LOCAL_STR_NEWLINE,
   );
-  process.exitCode = 1;
+  process.exitCode = LOCAL_NUM_ONE;
 });

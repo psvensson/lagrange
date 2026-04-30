@@ -1,3 +1,11 @@
+const LOCAL_STR_1USAM = 'Not implemented: getType() must be implemented by subclass';
+const LOCAL_STR_1ZD75 = 'Not implemented: isAvailable() must be implemented by subclass';
+const LOCAL_STR_IYU2S = 'Not implemented: connect() must be implemented by subclass';
+const LOCAL_STR_7MIB3 = 'Not implemented: send() must be implemented by subclass';
+const LOCAL_STR_1DV3N = 'Not implemented: disconnect() must be implemented by subclass';
+const LOCAL_STR_J9281 = 'Not implemented: getHealthStatus() must be implemented by subclass';
+const LOCAL_STR_EV5IX = 'Not implemented: shutdown() must be implemented by subclass';
+
 /**
  * TransportProvider - Base class for transport implementations.
  *
@@ -26,7 +34,7 @@ class TransportProvider {
    * provider.getType(); // Returns 'ws'
    */
   getType() {
-    throw new Error('Not implemented: getType() must be implemented by subclass');
+    throw new Error(LOCAL_STR_1USAM);
   }
 
   /**
@@ -45,7 +53,7 @@ class TransportProvider {
    * }
    */
   isAvailable() {
-    throw new Error('Not implemented: isAvailable() must be implemented by subclass');
+    throw new Error(LOCAL_STR_1ZD75);
   }
 
   /**
@@ -78,7 +86,7 @@ class TransportProvider {
    * });
    */
   async connect(_endpoint) {
-    throw new Error('Not implemented: connect() must be implemented by subclass');
+    throw new Error(LOCAL_STR_IYU2S);
   }
 
   /**
@@ -106,7 +114,7 @@ class TransportProvider {
    * }
    */
   async send(_connection, _message) {
-    throw new Error('Not implemented: send() must be implemented by subclass');
+    throw new Error(LOCAL_STR_7MIB3);
   }
 
   /**
@@ -123,7 +131,7 @@ class TransportProvider {
    * await provider.disconnect(connection);
    */
   async disconnect(_connection) {
-    throw new Error('Not implemented: disconnect() must be implemented by subclass');
+    throw new Error(LOCAL_STR_1DV3N);
   }
 
   /**
@@ -147,7 +155,7 @@ class TransportProvider {
    */
   getHealthStatus(_connection) {
     throw new Error(
-      'Not implemented: getHealthStatus() must be implemented by subclass',
+      LOCAL_STR_J9281,
     );
   }
 
@@ -164,7 +172,7 @@ class TransportProvider {
    * await provider.shutdown();
    */
   async shutdown() {
-    throw new Error('Not implemented: shutdown() must be implemented by subclass');
+    throw new Error(LOCAL_STR_EV5IX);
   }
 }
 

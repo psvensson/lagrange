@@ -1,10 +1,25 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {
+  STARTUP_RECOVERY_STAGE,
   StartupRecoveryCoordinator,
 } from '../../src/bootstrap/startup-recovery-coordinator.js';
 import {
+  LIFECYCLE_REASON,
+} from '../../src/bootstrap/lifecycle-controller-constants.js';
+import {
   BootstrapClusterViewOwner,
 } from '../../src/bootstrap/owners/bootstrap-cluster-view-owner.js';
+import {
+  STARTUP_AUTHORITY_STATE,
+} from '../../src/control-plane/startup-authority-snapshot-owner.js';
+
+const BOOTSTRAP_INIT_PRIORITY_RECOVERY_REASONS = Object.freeze([
+  LIFECYCLE_REASON.BOOTSTRAP_PHASE_INCOMPLETE,
+  LIFECYCLE_REASON.SQL_ENGINE_UNAVAILABLE,
+  LIFECYCLE_REASON.LEADER_METADATA_INCOMPLETE,
+  LIFECYCLE_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
+]);
+const STARTUP_AUTHORITY_PUBLICATION_UNPUBLISHED = 'unpublished';
 
 function createCache(rowsByTable = {}) {
   return {
@@ -124,6 +139,37 @@ test('StartupRecoveryCoordinator keeps bootstrap-init recovery bypass open for e
     observationState: 'unpublished',
   });
   t.equal(result.shouldBypassLocalPriorityControlPlaneStartupReadiness, true);
+  t.end();
+});
+
+test('StartupRecoveryCoordinator treats seed-authorized bootstrap INIT as control-plane recovery-ready', async (t) => {
+  const coordinator = new StartupRecoveryCoordinator({
+    readinessState: {
+      evaluate() {
+        return {
+          ready: false,
+          phase: 'INIT',
+          reasons: BOOTSTRAP_INIT_PRIORITY_RECOVERY_REASONS,
+        };
+      },
+    },
+  });
+
+  const result = coordinator.evaluate({
+    allowBootstrapInitPriorityBypass: true,
+    startupAuthority: {
+      state: STARTUP_AUTHORITY_STATE.SEED_LOCALLY_READY_UNPUBLISHED,
+      authorityAvailable: true,
+      publicationObservationState: STARTUP_AUTHORITY_PUBLICATION_UNPUBLISHED,
+    },
+  });
+
+  t.equal(result.controlPlaneRecoveryReady, true);
+  t.equal(
+    result.recoveryStage,
+    STARTUP_RECOVERY_STAGE.CONTROL_PLANE_RECOVERY_READY,
+  );
+  t.equal(result.recoveryBlocked, false);
   t.end();
 });
 

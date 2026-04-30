@@ -840,7 +840,11 @@ test('PartitionService - non-critical Raft peer writes use background delivery',
 
       t.same(
         deliveries,
-        [RAFT_TRANSPORT_BACKGROUND_DELIVERY_OPTIONS],
+        [{
+          ...RAFT_TRANSPORT_BACKGROUND_DELIVERY_OPTIONS,
+          deliverySource:
+            'raft:append:entries:node-2/partition/sql_transaction_participants-p1-r4',
+        }],
         'non-critical transaction-state append traffic should not consume the critical lane',
       );
     } finally {
@@ -949,7 +953,11 @@ test('PartitionService - non-critical Raft responses use background delivery',
 
       t.same(
         deliveries,
-        [RAFT_TRANSPORT_BACKGROUND_DELIVERY_OPTIONS],
+        [{
+          ...RAFT_TRANSPORT_BACKGROUND_DELIVERY_OPTIONS,
+          deliverySource:
+            'raft:append:entries:node-2/partition/sql_transaction_participants-p1-r4',
+        }],
         'non-critical transaction-state responses should also avoid the critical lane',
       );
     } finally {

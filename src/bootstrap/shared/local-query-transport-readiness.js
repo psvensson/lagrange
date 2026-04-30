@@ -1,6 +1,11 @@
 import {NUM, TIME_MS, TYPEOF} from '../../constants/index.js';
 import {ROUTER_ERROR_MSG} from '../../constants/transport.js';
 
+const LOCAL_STR_UNKNOWN = 'unknown';
+const LOCAL_STR_READY = 'ready';
+const LOCAL_STR_DEFERRED = 'deferred';
+const LOCAL_STR_151IA = 'ROUTER_QUERY_TRANSPORT_NOT_READY';
+
 const LOCAL_QUERY_TRANSPORT_WAIT_DEFAULT = Object.freeze({
   MAX_ATTEMPTS: NUM.SIX,
   INITIAL_DELAY_MS: TIME_MS.SECOND,
@@ -24,7 +29,7 @@ function normalizeLocalQueryTransportReadiness(rawReadiness) {
   if (!rawReadiness || typeof rawReadiness !== TYPEOF.OBJECT) {
     return Object.freeze({
       ready: null,
-      state: 'unknown',
+      state: LOCAL_STR_UNKNOWN,
       reason: null,
       reasonCode: null,
       errorCode: null,
@@ -43,10 +48,10 @@ function normalizeLocalQueryTransportReadiness(rawReadiness) {
         rawReadiness.state :
         (
           ready === true ?
-            'ready' :
+            LOCAL_STR_READY :
             ready === false ?
-              'deferred' :
-              'unknown'
+              LOCAL_STR_DEFERRED :
+              LOCAL_STR_UNKNOWN
         ),
     reason:
       typeof rawReadiness.reason === TYPEOF.STRING &&
@@ -87,7 +92,7 @@ function buildLocalQueryTransportNotReadyError(readiness) {
   const error = new Error(
     readiness?.reason || ROUTER_ERROR_MSG.QUERY_MESSAGE_GROUP_TRANSPORT_REQUIRED,
   );
-  error.code = readiness?.errorCode || 'ROUTER_QUERY_TRANSPORT_NOT_READY';
+  error.code = readiness?.errorCode || LOCAL_STR_151IA;
   error.retryAfterMs =
     normalizePositiveInteger(readiness?.retryAfterMs, NUM.ZERO);
   error.localQueryTransport = readiness || null;

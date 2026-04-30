@@ -10,14 +10,105 @@
 
 import {BaseView, ROW_STATUS} from '../core/base-view.js';
 
+const LOCAL_STR_PARTITION = 'partition';
+const LOCAL_STR_MESSAGE_GROUP = 'message_group';
+const LOCAL_STR_NODE = 'node';
+const LOCAL_STR_RUNTIME_SERVICE = 'runtime_service';
+const LOCAL_STR_PENDING = 'pending';
+const LOCAL_STR_CREATING = 'creating';
+const LOCAL_STR_SYNCING = 'syncing';
+const LOCAL_STR_ACTIVE = 'active';
+const LOCAL_STR_REMOVING = 'removing';
+const LOCAL_STR_REMOVED = 'removed';
+const LOCAL_STR_FAILED = 'failed';
+const LOCAL_STR_GREEN = 'green';
+const LOCAL_STR_YELLOW = 'yellow';
+const LOCAL_STR_BLUE = 'blue';
+const LOCAL_STR_GRAY = 'gray';
+const LOCAL_STR_RED = 'red';
+const LOCAL_STR_REPLICAS = 'replicas';
+const LOCAL_STR_SHORT_NAME = 'short_name';
+const LOCAL_STR_NAME = 'Name';
+const LOCAL_NUM_15 = 15;
+const LOCAL_STR_UNIFIED_ADDRESS = 'unified_address';
+const LOCAL_STR_UNIFIED_ADDRESS_2 = 'Unified Address';
+const LOCAL_NUM_35 = 35;
+const LOCAL_STR_NODE_ADDRESS = 'node_address';
+const LOCAL_STR_NODE_ADDRESS_2 = 'Node Address';
+const LOCAL_NUM_20 = 20;
+const LOCAL_STR_STATUS = 'status';
+const LOCAL_STR_STATE = 'State';
+const LOCAL_NUM_12 = 12;
+const LOCAL_STR_N_A = 'N/A';
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_NUM_EIGHT = 8;
+const LOCAL_NUM_17 = 17;
+const LOCAL_STR_2ZI04 = '...';
+const LOCAL_STR_LEADER = 'leader';
+const LOCAL_STR_FOLLOWER = 'follower';
+const LOCAL_STR_0S = '0s';
+const LOCAL_NUM_60 = 60;
+const LOCAL_STR_WHITE = 'white';
+const LOCAL_STR_ERROR = 'error';
+const LOCAL_STR_STARTING = 'starting';
+const LOCAL_STR_STOPPING = 'stopping';
+const LOCAL_STR_EMPTY = '';
+const LOCAL_STR_DRILLDOWN = 'drillDown';
+const LOCAL_STR_PARTITIONS = 'partitions';
+const LOCAL_STR_MESSAGE_GROUPS = 'message_groups';
+const LOCAL_STR_NODES = 'nodes';
+const LOCAL_STR_ENTER = 'enter';
+const LOCAL_STR_RETURN = 'return';
+const LOCAL_STR_TIME_IN_STATE = 'Time in State';
+const LOCAL_STR_STATE_SINCE = 'State Since';
+const LOCAL_STR_PREVIOUS_STATE = 'Previous State';
+const LOCAL_STR_TRIGGER_REASON = 'Trigger Reason';
+const LOCAL_STR_FAILURE_REASON = 'Failure Reason';
+const LOCAL_STR_REPLICA_STATE = 'Replica State';
+const LOCAL_STR_SYNC_PROGRESS = 'Sync Progress';
+const LOCAL_NUM_100 = 100;
+const LOCAL_NUM_ONE = 1;
+const LOCAL_STR_SYNC_SOURCE = 'Sync Source';
+const LOCAL_STR_BYTES_SYNCED = 'Bytes Synced';
+const LOCAL_STR_TOTAL_BYTES = 'Total Bytes';
+const LOCAL_STR_SYNC_RATE = 'Sync Rate';
+const LOCAL_STR_EST_COMPLETION = 'Est. Completion';
+const LOCAL_STR_RAFT_STATE = 'Raft State';
+const LOCAL_STR_TERM = 'Term';
+const LOCAL_STR_COMMIT_INDEX = 'Commit Index';
+const LOCAL_STR_APPLIED_INDEX = 'Applied Index';
+const LOCAL_STR_LAST_LOG_INDEX = 'Last Log Index';
+const LOCAL_STR_LEADER_ID = 'Leader ID';
+const LOCAL_STR_PARTITION_DETAILS = 'Partition Details';
+const LOCAL_STR_PARTITION_ID = 'Partition ID';
+const LOCAL_STR_TABLE_ID = 'Table ID';
+const LOCAL_STR_STORAGE = 'Storage';
+const LOCAL_STR_ROW_COUNT = 'Row Count';
+const LOCAL_STR_1MFBR = 'Message Group Details';
+const LOCAL_STR_GROUP_ID = 'Group ID';
+const LOCAL_STR_MESSAGE_COUNT = 'Message Count';
+const LOCAL_STR_EPOCH_INFORMATION = 'Epoch Information';
+const LOCAL_STR_CURRENT_EPOCH = 'Current Epoch';
+const LOCAL_STR_ASSIGNMENT_EPOCH = 'Assignment Epoch';
+const LOCAL_STR_VIEW_PARTITION = 'View Partition';
+const LOCAL_STR_P = 'p';
+const LOCAL_STR_VIEW_MESSAGE_GROUP = 'View Message Group';
+const LOCAL_STR_M = 'm';
+const LOCAL_STR_VIEW_NODE = 'View Node';
+const LOCAL_STR_N = 'n';
+const LOCAL_STR_T = 'T';
+const LOCAL_STR_SPACE = ' ';
+const LOCAL_NUM_19 = 19;
+const LOCAL_STR_0_B = '0 B';
+
 /**
  * Service types for filtering
  */
 export const SERVICE_TYPES = {
-  PARTITION: 'partition',
-  MESSAGE_GROUP: 'message_group',
-  NODE: 'node',
-  RUNTIME_SERVICE: 'runtime_service',
+  PARTITION: LOCAL_STR_PARTITION,
+  MESSAGE_GROUP: LOCAL_STR_MESSAGE_GROUP,
+  NODE: LOCAL_STR_NODE,
+  RUNTIME_SERVICE: LOCAL_STR_RUNTIME_SERVICE,
 };
 
 /**
@@ -25,13 +116,13 @@ export const SERVICE_TYPES = {
  * Requirements: 8.1
  */
 export const REPLICA_STATES = {
-  PENDING: 'pending',
-  CREATING: 'creating',
-  SYNCING: 'syncing',
-  ACTIVE: 'active',
-  REMOVING: 'removing',
-  REMOVED: 'removed',
-  FAILED: 'failed',
+  PENDING: LOCAL_STR_PENDING,
+  CREATING: LOCAL_STR_CREATING,
+  SYNCING: LOCAL_STR_SYNCING,
+  ACTIVE: LOCAL_STR_ACTIVE,
+  REMOVING: LOCAL_STR_REMOVING,
+  REMOVED: LOCAL_STR_REMOVED,
+  FAILED: LOCAL_STR_FAILED,
 };
 
 /**
@@ -44,13 +135,13 @@ export const REPLICA_STATES = {
  * - failed: red
  */
 export const REPLICA_STATE_COLORS = {
-  [REPLICA_STATES.ACTIVE]: 'green',
-  [REPLICA_STATES.SYNCING]: 'yellow',
-  [REPLICA_STATES.CREATING]: 'blue',
-  [REPLICA_STATES.PENDING]: 'blue',
-  [REPLICA_STATES.REMOVING]: 'yellow', // orange not available, use yellow
-  [REPLICA_STATES.REMOVED]: 'gray',
-  [REPLICA_STATES.FAILED]: 'red',
+  [REPLICA_STATES.ACTIVE]: LOCAL_STR_GREEN,
+  [REPLICA_STATES.SYNCING]: LOCAL_STR_YELLOW,
+  [REPLICA_STATES.CREATING]: LOCAL_STR_BLUE,
+  [REPLICA_STATES.PENDING]: LOCAL_STR_BLUE,
+  [REPLICA_STATES.REMOVING]: LOCAL_STR_YELLOW, // orange not available, use yellow
+  [REPLICA_STATES.REMOVED]: LOCAL_STR_GRAY,
+  [REPLICA_STATES.FAILED]: LOCAL_STR_RED,
 };
 
 /**
@@ -77,7 +168,7 @@ class ReplicasView extends BaseView {
   constructor(options = {}) {
     super(options);
     this.cache = options.cache || null;
-    this.viewName = 'replicas';
+    this.viewName = LOCAL_STR_REPLICAS;
     this.nodeFilter = null;
     this.typeFilter = null;
     this.serviceIdFilter = null;
@@ -90,10 +181,10 @@ class ReplicasView extends BaseView {
    */
   getColumns() {
     return [
-      {key: 'short_name', label: 'Name', width: 15},
-      {key: 'unified_address', label: 'Unified Address', width: 35},
-      {key: 'node_address', label: 'Node Address', width: 20},
-      {key: 'status', label: 'State', width: 12},
+      {key: LOCAL_STR_SHORT_NAME, label: LOCAL_STR_NAME, width: LOCAL_NUM_15},
+      {key: LOCAL_STR_UNIFIED_ADDRESS, label: LOCAL_STR_UNIFIED_ADDRESS_2, width: LOCAL_NUM_35},
+      {key: LOCAL_STR_NODE_ADDRESS, label: LOCAL_STR_NODE_ADDRESS_2, width: LOCAL_NUM_20},
+      {key: LOCAL_STR_STATUS, label: LOCAL_STR_STATE, width: LOCAL_NUM_12},
     ];
   }
 
@@ -119,7 +210,7 @@ class ReplicasView extends BaseView {
    * @return {string} Node address
    */
   formatNodeAddress(service) {
-    return service.node_address || service.address || 'N/A';
+    return service.node_address || service.address || LOCAL_STR_N_A;
   }
 
   /**
@@ -133,7 +224,7 @@ class ReplicasView extends BaseView {
     const serviceType = service.service_type || '';
 
     if (!serviceId) {
-      return 'N/A';
+      return LOCAL_STR_N_A;
     }
 
     // Check if service_id is a UUID (8-4-4-4-12 format)
@@ -141,16 +232,16 @@ class ReplicasView extends BaseView {
     if (uuidPattern.test(serviceId)) {
       const prefix = serviceType === 'partition' ? 'p' :
         serviceType === 'message_group' ? 'mg' : 's';
-      return `${prefix}-${serviceId.substring(0, 8)}`;
+      return `${prefix}-${serviceId.substring(LOCAL_NUM_ZERO, LOCAL_NUM_EIGHT)}`;
     }
 
     // If it's already short, use as-is
-    if (serviceId.length <= 20) {
+    if (serviceId.length <= LOCAL_NUM_20) {
       return serviceId;
     }
 
     // Truncate long names
-    return serviceId.substring(0, 17) + '...';
+    return serviceId.substring(LOCAL_NUM_ZERO, LOCAL_NUM_17) + LOCAL_STR_2ZI04;
   }
 
   /**
@@ -176,7 +267,7 @@ class ReplicasView extends BaseView {
    * @return {string} Formatted type
    */
   formatServiceType(type) {
-    if (!type) return 'N/A';
+    if (!type) return LOCAL_STR_N_A;
 
     const typeLabels = {
       'partition': 'Partition',
@@ -201,7 +292,7 @@ class ReplicasView extends BaseView {
     let result = status;
 
     // Add role indicator if present
-    if (role && (role === 'leader' || role === 'follower')) {
+    if (role && (role === LOCAL_STR_LEADER || role === LOCAL_STR_FOLLOWER)) {
       result = `${status} (${role})`;
     }
 
@@ -222,24 +313,24 @@ class ReplicasView extends BaseView {
    */
   formatTimeInState(stateEnteredAt) {
     if (!stateEnteredAt) {
-      return 'N/A';
+      return LOCAL_STR_N_A;
     }
 
     const now = Date.now();
     const elapsed = now - stateEnteredAt;
 
-    if (elapsed < 0) {
-      return '0s';
+    if (elapsed < LOCAL_NUM_ZERO) {
+      return LOCAL_STR_0S;
     }
 
     const seconds = Math.floor(elapsed / 1000);
     const minutes = Math.floor(seconds / 60);
     const hours = Math.floor(minutes / 60);
 
-    if (hours > 0) {
-      return `${hours}h ${minutes % 60}m`;
-    } else if (minutes > 0) {
-      return `${minutes}m ${seconds % 60}s`;
+    if (hours > LOCAL_NUM_ZERO) {
+      return `${hours}h ${minutes % LOCAL_NUM_60}m`;
+    } else if (minutes > LOCAL_NUM_ZERO) {
+      return `${minutes}m ${seconds % LOCAL_NUM_60}s`;
     } else {
       return `${seconds}s`;
     }
@@ -252,7 +343,7 @@ class ReplicasView extends BaseView {
    * @return {string} Color name for the status
    */
   getStatusColor(status) {
-    return REPLICA_STATE_COLORS[status] || 'white';
+    return REPLICA_STATE_COLORS[status] || LOCAL_STR_WHITE;
   }
 
   /**
@@ -265,7 +356,7 @@ class ReplicasView extends BaseView {
     const status = service.status;
 
     // Failed state gets error styling (red)
-    if (status === 'failed' || status === 'error') {
+    if (status === LOCAL_STR_FAILED || status === LOCAL_STR_ERROR) {
       return ROW_STATUS.ERROR;
     }
 
@@ -275,7 +366,7 @@ class ReplicasView extends BaseView {
     }
 
     // Starting/stopping also get warning
-    if (status === 'starting' || status === 'stopping') {
+    if (status === LOCAL_STR_STARTING || status === LOCAL_STR_STOPPING) {
       return ROW_STATUS.WARNING;
     }
 
@@ -288,7 +379,7 @@ class ReplicasView extends BaseView {
    * @return {string} Unique key (service_id)
    */
   getItemKey(service) {
-    return service.row_key || service.service_id || '';
+    return service.row_key || service.service_id || LOCAL_STR_EMPTY;
   }
 
   /**
@@ -375,8 +466,8 @@ class ReplicasView extends BaseView {
 
     if (serviceType === SERVICE_TYPES.PARTITION) {
       return {
-        action: 'drillDown',
-        view: 'partitions',
+        action: LOCAL_STR_DRILLDOWN,
+        view: LOCAL_STR_PARTITIONS,
         context: {
           partitionId: selectedService.partition_id,
           serviceId: selectedService.service_id,
@@ -386,8 +477,8 @@ class ReplicasView extends BaseView {
 
     if (serviceType === SERVICE_TYPES.MESSAGE_GROUP) {
       return {
-        action: 'drillDown',
-        view: 'message_groups',
+        action: LOCAL_STR_DRILLDOWN,
+        view: LOCAL_STR_MESSAGE_GROUPS,
         context: {
           groupId: selectedService.group_id,
           serviceId: selectedService.service_id,
@@ -398,8 +489,8 @@ class ReplicasView extends BaseView {
     // For node services, show node details
     if (serviceType === SERVICE_TYPES.NODE) {
       return {
-        action: 'drillDown',
-        view: 'nodes',
+        action: LOCAL_STR_DRILLDOWN,
+        view: LOCAL_STR_NODES,
         context: {nodeId: selectedService.node_id},
       };
     }
@@ -413,7 +504,7 @@ class ReplicasView extends BaseView {
    * @return {boolean|Object} True if handled, navigation object, or false
    */
   handleKey(key) {
-    if (key.name === 'enter' || key.name === 'return') {
+    if (key.name === LOCAL_STR_ENTER || key.name === LOCAL_STR_RETURN) {
       return this.handleDrillDown();
     }
     return super.handleKey(key);
@@ -455,7 +546,7 @@ class ReplicasView extends BaseView {
     // Add time-in-state for transitional states
     if (TRANSITIONAL_STATES.includes(service.status) && service.state_entered_at) {
       replicaStateFields.push({
-        label: 'Time in State',
+        label: LOCAL_STR_TIME_IN_STATE,
         value: this.formatTimeInState(service.state_entered_at),
       });
     }
@@ -463,7 +554,7 @@ class ReplicasView extends BaseView {
     // Add state entered timestamp
     if (service.state_entered_at) {
       replicaStateFields.push({
-        label: 'State Since',
+        label: LOCAL_STR_STATE_SINCE,
         value: this.formatTimestamp(service.state_entered_at),
       });
     }
@@ -471,7 +562,7 @@ class ReplicasView extends BaseView {
     // Add previous state if available
     if (service.previous_state) {
       replicaStateFields.push({
-        label: 'Previous State',
+        label: LOCAL_STR_PREVIOUS_STATE,
         value: service.previous_state,
       });
     }
@@ -479,22 +570,22 @@ class ReplicasView extends BaseView {
     // Add trigger reason if available
     if (service.trigger_reason) {
       replicaStateFields.push({
-        label: 'Trigger Reason',
+        label: LOCAL_STR_TRIGGER_REASON,
         value: service.trigger_reason,
       });
     }
 
     // Add failure reason for failed replicas (Requirement 8.3)
-    if ((service.status === 'failed' || service.status === 'error') &&
+    if ((service.status === LOCAL_STR_FAILED || service.status === LOCAL_STR_ERROR) &&
         service.error_message) {
       replicaStateFields.push({
-        label: 'Failure Reason',
+        label: LOCAL_STR_FAILURE_REASON,
         value: service.error_message,
       });
     }
 
     sections.push({
-      title: 'Replica State',
+      title: LOCAL_STR_REPLICA_STATE,
       fields: replicaStateFields,
     });
 
@@ -504,49 +595,49 @@ class ReplicasView extends BaseView {
 
       if (service.sync_progress !== undefined) {
         syncFields.push({
-          label: 'Sync Progress',
-          value: `${(service.sync_progress * 100).toFixed(1)}%`,
+          label: LOCAL_STR_SYNC_PROGRESS,
+          value: `${(service.sync_progress * LOCAL_NUM_100).toFixed(LOCAL_NUM_ONE)}%`,
         });
       }
 
       if (service.sync_source_node) {
         syncFields.push({
-          label: 'Sync Source',
+          label: LOCAL_STR_SYNC_SOURCE,
           value: service.sync_source_node,
         });
       }
 
       if (service.bytes_synced !== undefined) {
         syncFields.push({
-          label: 'Bytes Synced',
+          label: LOCAL_STR_BYTES_SYNCED,
           value: this.formatBytes(service.bytes_synced),
         });
       }
 
       if (service.bytes_total !== undefined) {
         syncFields.push({
-          label: 'Total Bytes',
+          label: LOCAL_STR_TOTAL_BYTES,
           value: this.formatBytes(service.bytes_total),
         });
       }
 
       if (service.sync_rate_bytes_per_sec !== undefined) {
         syncFields.push({
-          label: 'Sync Rate',
+          label: LOCAL_STR_SYNC_RATE,
           value: `${this.formatBytes(service.sync_rate_bytes_per_sec)}/s`,
         });
       }
 
       if (service.estimated_completion) {
         syncFields.push({
-          label: 'Est. Completion',
+          label: LOCAL_STR_EST_COMPLETION,
           value: this.formatTimestamp(service.estimated_completion),
         });
       }
 
-      if (syncFields.length > 0) {
+      if (syncFields.length > LOCAL_NUM_ZERO) {
         sections.push({
-          title: 'Sync Progress',
+          title: LOCAL_STR_SYNC_PROGRESS,
           fields: syncFields,
         });
       }
@@ -555,13 +646,13 @@ class ReplicasView extends BaseView {
     // Add Raft state section if available
     if (service.raft_term !== undefined || service.raft_commit_index !== undefined) {
       sections.push({
-        title: 'Raft State',
+        title: LOCAL_STR_RAFT_STATE,
         fields: [
-          {label: 'Term', value: String(service.raft_term ?? 'N/A')},
-          {label: 'Commit Index', value: String(service.raft_commit_index ?? 'N/A')},
-          {label: 'Applied Index', value: String(service.raft_applied_index ?? 'N/A')},
-          {label: 'Last Log Index', value: String(service.raft_last_log_index ?? 'N/A')},
-          {label: 'Leader ID', value: service.raft_leader_id || 'N/A'},
+          {label: LOCAL_STR_TERM, value: String(service.raft_term ?? LOCAL_STR_N_A)},
+          {label: LOCAL_STR_COMMIT_INDEX, value: String(service.raft_commit_index ?? LOCAL_STR_N_A)},
+          {label: LOCAL_STR_APPLIED_INDEX, value: String(service.raft_applied_index ?? LOCAL_STR_N_A)},
+          {label: LOCAL_STR_LAST_LOG_INDEX, value: String(service.raft_last_log_index ?? LOCAL_STR_N_A)},
+          {label: LOCAL_STR_LEADER_ID, value: service.raft_leader_id || LOCAL_STR_N_A},
         ],
       });
     }
@@ -569,12 +660,12 @@ class ReplicasView extends BaseView {
     // Add storage info for partition services
     if (service.service_type === SERVICE_TYPES.PARTITION) {
       sections.push({
-        title: 'Partition Details',
+        title: LOCAL_STR_PARTITION_DETAILS,
         fields: [
-          {label: 'Partition ID', value: service.partition_id || 'N/A'},
-          {label: 'Table ID', value: service.table_id || 'N/A'},
-          {label: 'Storage', value: this.formatBytes(service.storage_bytes)},
-          {label: 'Row Count', value: String(service.row_count ?? 'N/A')},
+          {label: LOCAL_STR_PARTITION_ID, value: service.partition_id || LOCAL_STR_N_A},
+          {label: LOCAL_STR_TABLE_ID, value: service.table_id || LOCAL_STR_N_A},
+          {label: LOCAL_STR_STORAGE, value: this.formatBytes(service.storage_bytes)},
+          {label: LOCAL_STR_ROW_COUNT, value: String(service.row_count ?? LOCAL_STR_N_A)},
         ],
       });
     }
@@ -582,11 +673,11 @@ class ReplicasView extends BaseView {
     // Add storage info for message group services
     if (service.service_type === SERVICE_TYPES.MESSAGE_GROUP) {
       sections.push({
-        title: 'Message Group Details',
+        title: LOCAL_STR_1MFBR,
         fields: [
-          {label: 'Group ID', value: service.group_id || 'N/A'},
-          {label: 'Storage', value: this.formatBytes(service.storage_bytes)},
-          {label: 'Message Count', value: String(service.message_count ?? 'N/A')},
+          {label: LOCAL_STR_GROUP_ID, value: service.group_id || LOCAL_STR_N_A},
+          {label: LOCAL_STR_STORAGE, value: this.formatBytes(service.storage_bytes)},
+          {label: LOCAL_STR_MESSAGE_COUNT, value: String(service.message_count ?? LOCAL_STR_N_A)},
         ],
       });
     }
@@ -594,10 +685,10 @@ class ReplicasView extends BaseView {
     // Add epoch information if available
     if (service.epoch !== undefined || service.assignment_epoch !== undefined) {
       sections.push({
-        title: 'Epoch Information',
+        title: LOCAL_STR_EPOCH_INFORMATION,
         fields: [
-          {label: 'Current Epoch', value: String(service.epoch ?? 'N/A')},
-          {label: 'Assignment Epoch', value: String(service.assignment_epoch ?? 'N/A')},
+          {label: LOCAL_STR_CURRENT_EPOCH, value: String(service.epoch ?? LOCAL_STR_N_A)},
+          {label: LOCAL_STR_ASSIGNMENT_EPOCH, value: String(service.assignment_epoch ?? LOCAL_STR_N_A)},
         ],
       });
     }
@@ -607,25 +698,25 @@ class ReplicasView extends BaseView {
 
     if (service.service_type === SERVICE_TYPES.PARTITION && service.partition_id) {
       navigationLinks.push({
-        label: 'View Partition',
-        target: 'partitions',
-        key: 'p',
+        label: LOCAL_STR_VIEW_PARTITION,
+        target: LOCAL_STR_PARTITIONS,
+        key: LOCAL_STR_P,
       });
     }
 
     if (service.service_type === SERVICE_TYPES.MESSAGE_GROUP && service.group_id) {
       navigationLinks.push({
-        label: 'View Message Group',
-        target: 'message_groups',
-        key: 'm',
+        label: LOCAL_STR_VIEW_MESSAGE_GROUP,
+        target: LOCAL_STR_MESSAGE_GROUPS,
+        key: LOCAL_STR_M,
       });
     }
 
     if (service.node_id) {
       navigationLinks.push({
-        label: 'View Node',
-        target: 'nodes',
-        key: 'n',
+        label: LOCAL_STR_VIEW_NODE,
+        target: LOCAL_STR_NODES,
+        key: LOCAL_STR_N,
       });
     }
 
@@ -643,17 +734,17 @@ class ReplicasView extends BaseView {
    */
   formatTimestamp(timestamp) {
     if (timestamp === null || timestamp === undefined) {
-      return 'N/A';
+      return LOCAL_STR_N_A;
     }
 
     try {
       const date = new Date(timestamp);
       if (isNaN(date.getTime())) {
-        return 'N/A';
+        return LOCAL_STR_N_A;
       }
-      return date.toISOString().replace('T', ' ').substring(0, 19);
+      return date.toISOString().replace(LOCAL_STR_T, LOCAL_STR_SPACE).substring(LOCAL_NUM_ZERO, LOCAL_NUM_19);
     } catch (_err) {
-      return 'N/A';
+      return LOCAL_STR_N_A;
     }
   }
 
@@ -664,17 +755,17 @@ class ReplicasView extends BaseView {
    */
   formatBytes(bytes) {
     if (bytes === null || bytes === undefined) {
-      return 'N/A';
+      return LOCAL_STR_N_A;
     }
-    if (bytes === 0) {
-      return '0 B';
+    if (bytes === LOCAL_NUM_ZERO) {
+      return LOCAL_STR_0_B;
     }
 
     const units = ['B', 'KB', 'MB', 'GB', 'TB'];
     const i = Math.floor(Math.log(bytes) / Math.log(1024));
     const value = bytes / Math.pow(1024, i);
 
-    return `${value.toFixed(1)} ${units[i]}`;
+    return `${value.toFixed(LOCAL_NUM_ONE)} ${units[i]}`;
   }
 }
 

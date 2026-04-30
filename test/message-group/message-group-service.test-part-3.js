@@ -31,6 +31,7 @@ import {
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {
   buildCriticalVisibilityCdcPropagationDeliverySource,
+  buildCriticalVisibilityCdcPropagationReplacePendingKey,
 } from '../../src/cache/cdc-propagation-delivery-profile.js';
 import {
   COLUMN,
@@ -94,6 +95,22 @@ const TEST_STRICT_RECOVERY_FORWARD_REMOTE_ADDRESS =
 const TEST_STRICT_RECOVERY_ROUTING_STATE_LOCAL_ONLY = 'local_only';
 const TEST_STRICT_RECOVERY_ROUTING_STATE_REMOTE_TARGETS =
   'remote_targets_available';
+const TEST_CDC_VISIBILITY_REPLACE_GROUP_ID = 'mg-cdc-visibility-replace';
+const TEST_CDC_VISIBILITY_REPLACE_REPLICA_ID =
+  'mg-cdc-visibility-replace-r1';
+const TEST_CDC_VISIBILITY_REPLACE_NODE_ID = 'node-cdc-visibility-replace';
+const TEST_CDC_VISIBILITY_REPLACE_ADDRESS =
+  'node-cdc-visibility-replace/message-group/mg-cdc-visibility-replace-r1';
+const TEST_CDC_VISIBILITY_REPLACE_RETRY_AFTER_MS = 250;
+const TEST_CDC_VISIBILITY_REPLACE_OPERATION_ID =
+  'replica-operation-cdc-visibility-replace';
+const TEST_CDC_VISIBILITY_REPLACE_UPDATED_AT = 1710000000000;
+const TEST_CDC_VISIBILITY_REPLACE_CAUSE_ID =
+  'cause-cdc-visibility-replace';
+const TEST_CDC_VISIBILITY_REPLACE_REPLICA_OPERATION_ROW = Object.freeze({
+  [COLUMN.OPERATION_ID]: TEST_CDC_VISIBILITY_REPLACE_OPERATION_ID,
+  [COLUMN.UPDATED_AT]: TEST_CDC_VISIBILITY_REPLACE_UPDATED_AT,
+});
 
 function createTrafficReadinessState() {
   const emitter = new EventEmitter();
@@ -626,6 +643,64 @@ test(
     } finally {
       await cleanup();
     }
+  },
+);
+
+test(
+  'MessageGroupService - critical CDC replica-operation forwards carry a row replacement key',
+  async (t) => {
+    let deliveredOptions = null;
+    const transport = {
+      async deliver(_address, _payload, options) {
+        deliveredOptions = options;
+        return {acknowledged: true, success: true};
+      },
+      async initialize() {},
+      async shutdown() {},
+      setServiceNodeResolver() {},
+    };
+    const service = new MessageGroupService({
+      groupId: TEST_CDC_VISIBILITY_REPLACE_GROUP_ID,
+      replicaId: TEST_CDC_VISIBILITY_REPLACE_REPLICA_ID,
+      nodeId: TEST_CDC_VISIBILITY_REPLACE_NODE_ID,
+      transport,
+    });
+    service.resolveCDCForwardSelection = () => ({
+      strictForwarding: true,
+      strictForwardRetryAfterMs: TEST_CDC_VISIBILITY_REPLACE_RETRY_AFTER_MS,
+      targets: [{
+        serviceId: TEST_CDC_VISIBILITY_REPLACE_REPLICA_ID,
+        address: TEST_CDC_VISIBILITY_REPLACE_ADDRESS,
+      }],
+      suppressedCount: 0,
+    });
+
+    await service.forwardCDCEventToLeader(
+      TABLES.REPLICA_OPERATIONS,
+      CDC_OPERATION.UPDATE,
+      TEST_CDC_VISIBILITY_REPLACE_REPLICA_OPERATION_ROW,
+      {causeId: TEST_CDC_VISIBILITY_REPLACE_CAUSE_ID},
+    );
+
+    t.equal(
+      deliveredOptions?.replacePendingKey,
+      buildCriticalVisibilityCdcPropagationReplacePendingKey([
+        {
+          tableName: TABLES.REPLICA_OPERATIONS,
+          operation: CDC_OPERATION.UPDATE,
+          data: TEST_CDC_VISIBILITY_REPLACE_REPLICA_OPERATION_ROW,
+        },
+      ]),
+      'strict CDC propagation should supersede pending visibility forwards for the same replica-operation row',
+    );
+    t.equal(
+      deliveredOptions?.deliverySource,
+      buildCriticalVisibilityCdcPropagationDeliverySource(
+        TABLES.REPLICA_OPERATIONS,
+        TEST_CDC_VISIBILITY_REPLACE_OPERATION_ID,
+      ),
+      'strict CDC propagation should isolate replica-operation visibility forwards by row',
+    );
   },
 );
 

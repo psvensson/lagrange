@@ -19,6 +19,10 @@ import {
   buildServiceKey,
 } from './endpoint-sync-naming.js';
 
+const LOCAL_STR_COLON = ':';
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_NUM_ONE = 1;
+
 /**
  * Resolve address type for EndpointSlice planning.
  *
@@ -29,7 +33,7 @@ function resolveAddressType(address) {
   if (ENDPOINT_SYNC_REGEX.IPV4.test(address)) {
     return ENDPOINT_SYNC_ADDRESS_TYPE.IPV4;
   }
-  if (address.includes(':') && ENDPOINT_SYNC_REGEX.IPV6.test(address)) {
+  if (address.includes(LOCAL_STR_COLON) && ENDPOINT_SYNC_REGEX.IPV6.test(address)) {
     return ENDPOINT_SYNC_ADDRESS_TYPE.IPV6;
   }
   return ENDPOINT_SYNC_ADDRESS_TYPE.FQDN;
@@ -68,12 +72,12 @@ function groupEndpointRows(rows) {
  * @return {Array<Array<Object>>}
  */
 function chunkEndpoints(endpoints, maxEndpointsPerSlice) {
-  if (endpoints.length === 0) {
+  if (endpoints.length === LOCAL_NUM_ZERO) {
     return [];
   }
 
   const chunks = [];
-  for (let idx = 0; idx < endpoints.length; idx += maxEndpointsPerSlice) {
+  for (let idx = LOCAL_NUM_ZERO; idx < endpoints.length; idx += maxEndpointsPerSlice) {
     chunks.push(endpoints.slice(idx, idx + maxEndpointsPerSlice));
   }
   return chunks;
@@ -121,7 +125,7 @@ function validateGroupPorts(group) {
   const ports = [...new Set(group.endpoints.map((row) => row.port))]
     .sort((left, right) => left - right);
   return {
-    valid: ports.length === 1,
+    valid: ports.length === LOCAL_NUM_ONE,
     ports,
   };
 }

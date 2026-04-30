@@ -11,6 +11,12 @@
 
 import {execSync} from 'node:child_process';
 
+const LOCAL_STR_EMPTY = '';
+const LOCAL_STR_UTF8 = 'utf8';
+const LOCAL_STR_PIPE = 'pipe';
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_NUM_ONE = 1;
+
 const TARGET_THRESHOLD = 12;
 const BASELINE_COUNT = 308;
 const strict = process.argv.includes('--strict');
@@ -19,11 +25,11 @@ const cmd =
   `npx eslint src/ test/ --ignore-pattern test/.gitkeep` +
   ` --rule 'complexity: ["error", ${TARGET_THRESHOLD}]'`;
 
-let output = '';
+let output = LOCAL_STR_EMPTY;
 try {
-  execSync(cmd, {encoding: 'utf8', stdio: 'pipe'});
+  execSync(cmd, {encoding: LOCAL_STR_UTF8, stdio: LOCAL_STR_PIPE});
 } catch (err) {
-  output = err.stdout || '';
+  output = err.stdout || LOCAL_STR_EMPTY;
 }
 
 const complexityLines = output
@@ -33,7 +39,7 @@ const complexityLines = output
 const count = complexityLines.length;
 
 if (strict) {
-  if (count > 0) {
+  if (count > LOCAL_NUM_ZERO) {
     console.log(
       `Complexity violations (threshold: ${TARGET_THRESHOLD}):\n`
     );
@@ -41,7 +47,7 @@ if (strict) {
       console.log(line);
     }
     console.log(`\n${count} violation(s) found.`);
-    process.exit(1);
+    process.exit(LOCAL_NUM_ONE);
   }
   console.log(
     `No complexity violations (threshold: ${TARGET_THRESHOLD}).`
@@ -55,7 +61,7 @@ if (strict) {
     for (const line of complexityLines) {
       console.log(line);
     }
-    process.exit(1);
+    process.exit(LOCAL_NUM_ONE);
   }
   console.log(
     `Complexity ratchet OK: ${count}/${BASELINE_COUNT} ` +

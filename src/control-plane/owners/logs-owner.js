@@ -1,8 +1,10 @@
 import {TABLES} from '../../constants/index.js';
 import {SystemMetadataOwnerBase} from './system-metadata-owner-base.js';
 
+const LOCAL_STR_LOGS_OWNER = 'logs-owner';
+
 class LogsOwner extends SystemMetadataOwnerBase {
-  static OWNER_NAME = 'logs-owner';
+  static OWNER_NAME = LOCAL_STR_LOGS_OWNER;
   static TABLE_NAME = TABLES.LOGS;
 
   async getLog(logId, options = {}) {

@@ -17,6 +17,8 @@ import {
   RESOLUTION_DECISION as DECISION,
 } from './module-manifest-constants.js';
 
+const LOCAL_STR_FUNCTION = 'function';
+
 /**
  * Create a structured audit record.
  *
@@ -55,7 +57,7 @@ function auditManifestValidation(moduleId, valid, errors, logger) {
     errors,
   });
 
-  if (typeof logger === 'function') {
+  if (typeof logger === LOCAL_STR_FUNCTION) {
     logger(record);
   }
 
@@ -84,7 +86,7 @@ function auditRunExportVerification(
     },
   );
 
-  if (typeof logger === 'function') {
+  if (typeof logger === LOCAL_STR_FUNCTION) {
     logger(record);
   }
 
@@ -118,7 +120,7 @@ function auditDependencyResolution(
     errors,
   });
 
-  if (typeof logger === 'function') {
+  if (typeof logger === LOCAL_STR_FUNCTION) {
     logger(record);
   }
 
@@ -151,7 +153,7 @@ function auditCapabilityDecision(
     allowed,
   });
 
-  if (typeof logger === 'function') {
+  if (typeof logger === LOCAL_STR_FUNCTION) {
     logger(record);
   }
 
@@ -183,7 +185,7 @@ function auditModuleActivation(
     errors,
   });
 
-  if (typeof logger === 'function') {
+  if (typeof logger === LOCAL_STR_FUNCTION) {
     logger(record);
   }
 

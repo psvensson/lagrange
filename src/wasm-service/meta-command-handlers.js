@@ -42,6 +42,10 @@ import {
   validateServiceDescriptor,
 } from '../service/service-descriptor.js';
 
+const LOCAL_STR_RESOURCEBUDGET = 'resourceBudget';
+const LOCAL_STR_RUNTIMECONFIG = 'runtimeConfig';
+const LOCAL_STR_OBJECT = 'object';
+
 const META_COMMAND_ERROR_MSG = Object.freeze({
   MANIFEST_REQUIRED: 'Manifest is required for publish',
   NAMESPACE_REQUIRED: 'Namespace is required',
@@ -324,10 +328,10 @@ function handleUpdateService(params) {
     const key = fieldKeys[i];
     if (params[key] !== undefined) {
       let value = params[key];
-      if (key === 'resourceBudget') {
+      if (key === LOCAL_STR_RESOURCEBUDGET) {
         value = JSON.stringify(params[key]);
-      } else if (key === 'runtimeConfig' &&
-        typeof params[key] === 'object' &&
+      } else if (key === LOCAL_STR_RUNTIMECONFIG &&
+        typeof params[key] === LOCAL_STR_OBJECT &&
         params[key] !== null) {
         value = JSON.stringify(params[key]);
       }

@@ -15,6 +15,12 @@ import {
   DEBUG_COORDINATOR_ERROR_MSG as ERR,
 } from './debug-coordinator-constants.js';
 
+const LOCAL_STR_MANUAL = 'manual';
+const LOCAL_NUM_ONE = 1;
+const LOCAL_STR_INITIAL = 'initial';
+const LOCAL_STR_ADVANCE_STAGE = 'advance_stage';
+const LOCAL_STR_REFRESH_STAGE = 'refresh_stage';
+
 const COORDINATOR_CDC_EVENTS = Object.freeze([
   CDC_EVENT.INSERT,
   CDC_EVENT.UPDATE,
@@ -113,7 +119,7 @@ class DebugCoordinator {
    * @param {string} [source] - Optional source label.
    * @return {{applied: boolean, reason: string, current: Object}}
    */
-  upsertStageEndpoint(request, source = 'manual') {
+  upsertStageEndpoint(request, source = LOCAL_STR_MANUAL) {
     assertRequest(request);
     assertLineageId(request.lineageId);
     assertStageId(request.stageId);
@@ -175,7 +181,7 @@ class DebugCoordinator {
     for (const row of appliedRows) {
       const result = this.upsertStageEndpoint(row, 'cache_hydration');
       if (result.applied) {
-        appliedCount += 1;
+        appliedCount += LOCAL_NUM_ONE;
       }
     }
     return appliedCount;
@@ -299,9 +305,9 @@ function decideMonotonicTransition(previous, next) {
 
   return {
     applied:
-      transitionReason === 'initial' ||
-      transitionReason === 'advance_stage' ||
-      transitionReason === 'refresh_stage',
+      transitionReason === LOCAL_STR_INITIAL ||
+      transitionReason === LOCAL_STR_ADVANCE_STAGE ||
+      transitionReason === LOCAL_STR_REFRESH_STAGE,
     reason: transitionReason,
   };
 }

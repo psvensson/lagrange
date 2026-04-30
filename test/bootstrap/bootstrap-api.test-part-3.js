@@ -1225,6 +1225,11 @@ test('BootstrapAPI - returns bootstrap-not-ready when control-plane dependencies
       seedNodeId: 'seed-node-1',
       seedNodeAddress: 'ws://localhost:8080',
       systemTableCache: createEmptySystemTableCache(),
+      controlPlaneReadinessService: {
+        getStartupAuthoritySnapshotSync() {
+          return BOOTSTRAP_LEADER_NOT_READY_STARTUP_AUTHORITY;
+        },
+      },
     });
 
     api.waitForServiceLeaders = async () => ({ready: true});
@@ -1270,6 +1275,11 @@ test('BootstrapAPI - returns bootstrap-not-ready when control-plane dependencies
         BOOTSTRAP_API_PROBE_REASON.CONTROL_PLANE_DEPENDENCY_UNAVAILABLE,
       ),
       'response should expose the control-plane dependency blocker',
+    );
+    t.same(
+      body[BOOTSTRAP_API_RESPONSE_FIELD.STARTUP_AUTHORITY],
+      BOOTSTRAP_LEADER_NOT_READY_STARTUP_AUTHORITY,
+      'retryable dependency responses should retain startup authority evidence',
     );
 
     await api.shutdown();

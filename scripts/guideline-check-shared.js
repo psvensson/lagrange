@@ -10,6 +10,20 @@ import {
   SCRIPT_TEXT,
 } from './guideline-check-constants.js';
 
+const LOCAL_STR_SLASH = '/';
+const LOCAL_STR_TEST = '/test/';
+const LOCAL_STR_TEST_JS = '.test.js';
+const LOCAL_STR_TEST_MJS = '.test.mjs';
+const LOCAL_STR_TEST_CJS = '.test.cjs';
+const LOCAL_STR_SRC_CONSTANTS = '/src/constants/';
+const LOCAL_STR_CONSTANTS = 'constants';
+const LOCAL_STR_MODULE = 'module';
+const LOCAL_STR_SCRIPT = 'script';
+const LOCAL_STR_STRING = 'string';
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_STR_TOP_FILES = 'Top files:';
+const LOCAL_NUM_TWO = 2;
+
 const FILE_EXTENSION = Object.freeze({
   CJS: '.cjs',
   JS: '.js',
@@ -32,20 +46,20 @@ const DEFAULT_OUTPUT_LIMIT = 20;
 const HASHBANG_PATTERN = /^#!.*(?:\r?\n|$)/;
 
 function normalizePath(filePath) {
-  return filePath.split(path.sep).join('/');
+  return filePath.split(path.sep).join(LOCAL_STR_SLASH);
 }
 
 function classifyFilePath(filePath) {
   const normalized = normalizePath(filePath);
   const basename = path.basename(normalized).toLowerCase();
-  if (normalized.includes('/test/') ||
-      basename.endsWith('.test.js') ||
-      basename.endsWith('.test.mjs') ||
-      basename.endsWith('.test.cjs')) {
+  if (normalized.includes(LOCAL_STR_TEST) ||
+      basename.endsWith(LOCAL_STR_TEST_JS) ||
+      basename.endsWith(LOCAL_STR_TEST_MJS) ||
+      basename.endsWith(LOCAL_STR_TEST_CJS)) {
     return FILE_CLASS.TEST;
   }
-  if (normalized.includes('/src/constants/') ||
-      basename.includes('constants')) {
+  if (normalized.includes(LOCAL_STR_SRC_CONSTANTS) ||
+      basename.includes(LOCAL_STR_CONSTANTS)) {
     return FILE_CLASS.CONSTANTS_OWNER;
   }
   return FILE_CLASS.RUNTIME;
@@ -62,7 +76,7 @@ function isJavaScriptFile(filePath) {
 function shouldSkipDirectory(directoryPath) {
   const normalized = normalizePath(directoryPath);
   return GUIDELINE_LLM_SKIP_PATH_PART.some((part) =>
-    normalized.split('/').includes(part));
+    normalized.split(LOCAL_STR_SLASH).includes(part));
 }
 
 async function collectJavaScriptFiles(entryPath) {
@@ -103,18 +117,18 @@ function parseSourceFile(source) {
   try {
     return parse(normalizedSource, {
       ...parseOptions,
-      sourceType: 'module',
+      sourceType: LOCAL_STR_MODULE,
     });
   } catch (_moduleError) {
     return parse(normalizedSource, {
       ...parseOptions,
-      sourceType: 'script',
+      sourceType: LOCAL_STR_SCRIPT,
     });
   }
 }
 
 function walkAst(node, visitor, parent = null, ancestors = []) {
-  if (!node || typeof node.type !== 'string') {
+  if (!node || typeof node.type !== LOCAL_STR_STRING) {
     return;
   }
   visitor(node, parent, ancestors);
@@ -188,17 +202,17 @@ function formatGuidelineHumanSummary(report, violationLabel) {
     `Scanned ${report.scannedFileCount} JavaScript files`,
     `Found ${report.totalViolationCount} ${violationLabel} violations`,
   ];
-  if (report.filesWithViolations.length === 0) {
+  if (report.filesWithViolations.length === LOCAL_NUM_ZERO) {
     return lines.join(SCRIPT_TEXT.NEWLINE);
   }
-  lines.push('Top files:');
-  for (const entry of report.filesWithViolations.slice(0, DEFAULT_OUTPUT_LIMIT)) {
+  lines.push(LOCAL_STR_TOP_FILES);
+  for (const entry of report.filesWithViolations.slice(LOCAL_NUM_ZERO, DEFAULT_OUTPUT_LIMIT)) {
     lines.push(`- ${entry.filePath}: ${entry.violationCount}`);
   }
   return lines.join(SCRIPT_TEXT.NEWLINE);
 }
 
-function parseGuidelineCliArgs(argv = process.argv.slice(2)) {
+function parseGuidelineCliArgs(argv = process.argv.slice(LOCAL_NUM_TWO)) {
   return {
     includeTests: argv.includes(OUTPUT_FORMAT.INCLUDE_TESTS),
     jsonOutput: argv.includes(OUTPUT_FORMAT.JSON),
@@ -216,11 +230,11 @@ async function runGuidelineCheck(argv, collectReport, formatHumanSummary) {
   } = parseGuidelineCliArgs(argv);
   const report = await collectReport(pathsToScan, {includeTests});
   if (jsonOutput) {
-    process.stdout.write(JSON.stringify(report, null, 2) + SCRIPT_TEXT.NEWLINE);
+    process.stdout.write(JSON.stringify(report, null, LOCAL_NUM_TWO) + SCRIPT_TEXT.NEWLINE);
     return EXIT_CODE.SUCCESS;
   }
   process.stdout.write(formatHumanSummary(report) + SCRIPT_TEXT.NEWLINE);
-  return report.totalViolationCount > 0 ?
+  return report.totalViolationCount > LOCAL_NUM_ZERO ?
     EXIT_CODE.FAILURE :
     EXIT_CODE.SUCCESS;
 }

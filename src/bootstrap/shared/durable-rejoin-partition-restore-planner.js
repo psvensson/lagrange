@@ -22,13 +22,15 @@ import {
 } from '../system-table-schemas-constants.js';
 import {getPartitionDbPath} from '../../storage/data-directory-manager.js';
 
+const LOCAL_STR_EMPTY = '';
+
 const RESTORABLE_DURABLE_REJOIN_PARTITION_STATUSES = new Set([
   ReplicaStatus.ACTIVE,
   SERVICE_STATUS.ACTIVE,
 ]);
 
 function normalizeJoinMetadataString(value) {
-  return typeof value === TYPEOF.STRING ? value.trim() : '';
+  return typeof value === TYPEOF.STRING ? value.trim() : LOCAL_STR_EMPTY;
 }
 
 function normalizeJoinMetadataInteger(value) {

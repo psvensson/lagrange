@@ -69,6 +69,12 @@ import {
   createJoinReadinessEvaluatorTailMethods,
 } from './join-readiness-evaluator-tail-methods.js';
 
+const LOCAL_STR_1C87J = 'Join canonical readiness converged';
+const LOCAL_STR_ELZSM = 'JOIN_READINESS_TIMEOUT';
+const LOCAL_STR_98J4B = 'Join canonical readiness timed out';
+const LOCAL_STR_SELF = 'self';
+const LOCAL_STR_UNKNOWN = 'unknown';
+
 const JOIN_READINESS_REASON_PRECEDENCE = Object.freeze([
   JOIN_READINESS_REASON.ROUTING_NOT_READY,
   JOIN_READINESS_REASON.SCHEMA_VERSION_UNKNOWN,
@@ -212,7 +218,7 @@ class JoinReadinessEvaluator {
 
     const finalEvaluation = result?.evaluation || null;
     this.delegates.getLogger().info(
-      'Join canonical readiness converged',
+      LOCAL_STR_1C87J,
       {
         nodeId: this.nodeId,
         attempts: result?.attempts || NUM.ONE,
@@ -395,7 +401,7 @@ class JoinReadinessEvaluator {
       `${terminalEvaluation.reasons.join(', ')} ` +
       `after ${timeoutMs}ms`,
     );
-    error.code = 'JOIN_READINESS_TIMEOUT';
+    error.code = LOCAL_STR_ELZSM;
     error.joinReadiness = {
       reasons: terminalEvaluation.reasons,
       requiredSchemaVersion:
@@ -463,7 +469,7 @@ class JoinReadinessEvaluator {
     };
 
     this.delegates.getLogger().error(
-      'Join canonical readiness timed out',
+      LOCAL_STR_98J4B,
       {
         nodeId: this.nodeId,
         timeoutMs,
@@ -1005,8 +1011,8 @@ class JoinReadinessEvaluator {
         );
         connectionStates[targetAddress] =
           isLocalQueryTransportReady(readiness) ?
-            'self' :
-            `self:${readiness.state || 'unknown'}`;
+            LOCAL_STR_SELF :
+            `self:${readiness.state || LOCAL_STR_UNKNOWN}`;
         continue;
       }
       if (typeof messageRouter?.getConnectionState !== TYPEOF.FUNCTION) {
@@ -1215,19 +1221,22 @@ class JoinReadinessEvaluator {
       typeof systemTableCache.getAll === TYPEOF.FUNCTION ?
         systemTableCache.getAll(TABLES.NODES) || [] :
         [];
+    const startupAuthority =
+      this.resolveStartupAuthorityActiveNodeAuthority(readinessService);
+    if (startupAuthority.available) {
+      return Object.freeze({
+        kind: JOIN_READINESS_ACTIVE_NODE_AUTHORITY_KIND.STARTUP_AUTHORITY,
+        nodeIds: startupAuthority.nodeIds,
+      });
+    }
     const readinessActiveNodeIds =
       this.getReadinessActiveNodeIds(
         readinessService,
         cacheNodeRows,
       );
-    const startupAuthorityNodeIds =
-      this.getStartupAuthorityActiveNodeIds(readinessService);
     const candidates = Object.freeze([{
       kind: JOIN_READINESS_ACTIVE_NODE_AUTHORITY_KIND.READINESS_SERVICE,
       nodeIds: readinessActiveNodeIds,
-    }, {
-      kind: JOIN_READINESS_ACTIVE_NODE_AUTHORITY_KIND.STARTUP_AUTHORITY,
-      nodeIds: startupAuthorityNodeIds,
     }]);
     const selected = candidates.find((candidate) =>
       candidate.nodeIds.length > NUM.ZERO,
@@ -1282,10 +1291,10 @@ class JoinReadinessEvaluator {
     return activeNodeIds;
   }
 
-  getStartupAuthorityActiveNodeIds(readinessService) {
+  resolveStartupAuthorityActiveNodeAuthority(readinessService) {
     if (typeof readinessService?.getStartupAuthoritySnapshotSync !==
         TYPEOF.FUNCTION) {
-      return [];
+      return Object.freeze({available: false, nodeIds: []});
     }
     const startupAuthority = readinessService.getStartupAuthoritySnapshotSync(
       this.nodeId,
@@ -1295,13 +1304,22 @@ class JoinReadinessEvaluator {
       startupAuthority?.authorityAvailable !== true ||
       !Array.isArray(startupAuthority?.canonicalStartupNodeIds)
     ) {
-      return [];
+      return Object.freeze({available: false, nodeIds: []});
     }
-    return [...new Set(
-      startupAuthority.canonicalStartupNodeIds.filter((nodeId) =>
-        typeof nodeId === TYPEOF.STRING && nodeId.length > NUM.ZERO,
-      ),
-    )];
+    return Object.freeze({
+      available: true,
+      nodeIds: [...new Set(
+        startupAuthority.canonicalStartupNodeIds.filter((nodeId) =>
+          typeof nodeId === TYPEOF.STRING && nodeId.length > NUM.ZERO,
+        ),
+      )],
+    });
+  }
+
+  getStartupAuthorityActiveNodeIds(readinessService) {
+    return this.resolveStartupAuthorityActiveNodeAuthority(
+      readinessService,
+    ).nodeIds;
   }
 }
 

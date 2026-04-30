@@ -1,3 +1,8 @@
+const LOCAL_STR_RUN_STOPPED = 'Run stopped';
+const LOCAL_NUM_100 = 100;
+const LOCAL_STR_WVB4L = 'Run completed successfully';
+const LOCAL_STR_RUN_FAILED = 'Run failed';
+
 function buildAdminTestRunServiceHelpers(deps = {}) {
   const {
     ADMIN_TEST_ERROR_MSG,
@@ -109,8 +114,8 @@ function buildAdminTestRunServiceHelpers(deps = {}) {
         status: ADMIN_TEST_RUN_STATUS.STOPPED,
         progress: Object.freeze({
           phase: RUN_PROGRESS_PHASE.STOPPED,
-          message: 'Run stopped',
-          percent: 100,
+          message: LOCAL_STR_RUN_STOPPED,
+          percent: LOCAL_NUM_100,
         }),
       });
     case RUN_FINALIZATION_STATE.PASSED:
@@ -119,8 +124,8 @@ function buildAdminTestRunServiceHelpers(deps = {}) {
         status: ADMIN_TEST_RUN_STATUS.PASSED,
         progress: Object.freeze({
           phase: RUN_PROGRESS_PHASE.COMPLETED,
-          message: 'Run completed successfully',
-          percent: 100,
+          message: LOCAL_STR_WVB4L,
+          percent: LOCAL_NUM_100,
         }),
       });
     case RUN_FINALIZATION_STATE.FAILED:
@@ -130,8 +135,8 @@ function buildAdminTestRunServiceHelpers(deps = {}) {
         status: ADMIN_TEST_RUN_STATUS.FAILED,
         progress: Object.freeze({
           phase: RUN_PROGRESS_PHASE.FAILED,
-          message: 'Run failed',
-          percent: 100,
+          message: LOCAL_STR_RUN_FAILED,
+          percent: LOCAL_NUM_100,
         }),
       });
     }

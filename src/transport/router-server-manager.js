@@ -25,6 +25,16 @@ import {
   INPROC,
 } from './inproc-transport.js';
 
+const LOCAL_STR_1MC96 = 'RouterServerManager requires nodeId';
+const LOCAL_STR_XQYG0 = 'RouterServerManager requires logger';
+const LOCAL_STR_1FXN6 = 'RouterServerManager requires routerId';
+const LOCAL_STR_1O5ND = 'RouterServerManager requires nodeConnections';
+const LOCAL_STR_REN10 = 'RouterServerManager requires onMessage callback';
+const LOCAL_STR_1A5M9 = 'RouterServerManager requires onConnectionClose callback';
+const LOCAL_STR_16804 = 'RouterServerManager requires emit function';
+const LOCAL_STR_17COI = 'Invalid wsPort for in-process server';
+const LOCAL_STR_EADDRINUSE = 'EADDRINUSE';
+
 const ConnectionState = CONNECTION_STATE;
 
 /**
@@ -92,25 +102,25 @@ class RouterServerManager {
    */
   constructor(options) {
     if (!options.nodeId) {
-      throw new Error('RouterServerManager requires nodeId');
+      throw new Error(LOCAL_STR_1MC96);
     }
     if (!options.logger) {
-      throw new Error('RouterServerManager requires logger');
+      throw new Error(LOCAL_STR_XQYG0);
     }
     if (!options.routerId) {
-      throw new Error('RouterServerManager requires routerId');
+      throw new Error(LOCAL_STR_1FXN6);
     }
     if (!options.nodeConnections) {
-      throw new Error('RouterServerManager requires nodeConnections');
+      throw new Error(LOCAL_STR_1O5ND);
     }
     if (!options.onMessage) {
-      throw new Error('RouterServerManager requires onMessage callback');
+      throw new Error(LOCAL_STR_REN10);
     }
     if (!options.onConnectionClose) {
-      throw new Error('RouterServerManager requires onConnectionClose callback');
+      throw new Error(LOCAL_STR_1A5M9);
     }
     if (!options.emit) {
-      throw new Error('RouterServerManager requires emit function');
+      throw new Error(LOCAL_STR_16804);
     }
 
     this.nodeId = options.nodeId;
@@ -180,11 +190,11 @@ class RouterServerManager {
   startInProcessServer() {
     const portKey = Number(this.wsPort);
     if (!Number.isFinite(portKey)) {
-      throw new Error('Invalid wsPort for in-process server');
+      throw new Error(LOCAL_STR_17COI);
     }
     if (INPROC.serversByPort.has(portKey)) {
       const err = new Error(ROUTER_ERROR_MSG.addressInUse(portKey));
-      err.code = 'EADDRINUSE';
+      err.code = LOCAL_STR_EADDRINUSE;
       throw err;
     }
     this.inProcessTransport = true;

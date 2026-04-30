@@ -47,6 +47,9 @@ import {
 import {
   REPLICA_OPERATION_VISIBILITY_READ_MODE,
 } from '../rebalancer/replica-operation-repository.js';
+import {
+  isSystemTablePartition,
+} from '../bootstrap/system-partition-classification.js';
 const MEMBERSHIP_PUBLICATION_COORDINATOR_LITERAL = Object.freeze({
   EMPTY: '',
   MEMBERSHIP_PUBLICATION: 'membership-publication:',
@@ -116,10 +119,44 @@ const MEMBERSHIP_PUBLICATION_TARGET_NODE_STATE = Object.freeze({
   AVAILABLE: 'available',
   UNAVAILABLE: 'unavailable',
 });
+const DISPATCH_RETRY_READY_NODE_PHASE = Object.freeze({
+  INITIAL_TARGET_DISPATCH: 'initial_target_dispatch',
+  CREATE_TARGET_REARM: 'create_target_rearm',
+  ACTIVE_REPLACE_SOURCE_REMOVAL: 'active_replace_source_removal',
+  NOT_RETRYABLE: 'not_retryable',
+});
 const MEMBERSHIP_PUBLICATION_ACK_REFRESH_STATE = Object.freeze({
   CACHE_SUFFICIENT: 'cache_sufficient',
   DURABLE_REQUIRED: 'durable_required',
 });
+const MEMBERSHIP_PUBLICATION_ACK_REFRESH_REASON = Object.freeze({
+  CACHE_PENDING_TARGET_ACK: 'cache_pending_target_ack',
+  NODE_ALREADY_ACKNOWLEDGED: 'node_already_acknowledged',
+  NODE_NOT_REQUIRED: 'node_not_required',
+  TERMINAL_CACHE_ROW: 'terminal_cache_row',
+});
+const MEMBERSHIP_PUBLICATION_ACK_REFRESH_DECISION_RULES = Object.freeze([
+  Object.freeze({
+    state: MEMBERSHIP_PUBLICATION_ACK_REFRESH_STATE.DURABLE_REQUIRED,
+    reason: MEMBERSHIP_PUBLICATION_ACK_REFRESH_REASON.TERMINAL_CACHE_ROW,
+    matches: (evidence) => evidence.terminalPublication === true,
+  }),
+  Object.freeze({
+    state: MEMBERSHIP_PUBLICATION_ACK_REFRESH_STATE.DURABLE_REQUIRED,
+    reason: MEMBERSHIP_PUBLICATION_ACK_REFRESH_REASON.NODE_NOT_REQUIRED,
+    matches: (evidence) => evidence.nodeRequired !== true,
+  }),
+  Object.freeze({
+    state: MEMBERSHIP_PUBLICATION_ACK_REFRESH_STATE.DURABLE_REQUIRED,
+    reason: MEMBERSHIP_PUBLICATION_ACK_REFRESH_REASON.NODE_ALREADY_ACKNOWLEDGED,
+    matches: (evidence) => evidence.nodeAlreadyAcknowledged === true,
+  }),
+  Object.freeze({
+    state: MEMBERSHIP_PUBLICATION_ACK_REFRESH_STATE.CACHE_SUFFICIENT,
+    reason: MEMBERSHIP_PUBLICATION_ACK_REFRESH_REASON.CACHE_PENDING_TARGET_ACK,
+    matches: () => true,
+  }),
+]);
 const PUBLICATION_WORKFLOW_REASON = Object.freeze({
   DERIVE_MEMBERSHIP_PUBLICATION: 'derive-membership-publication',
   PERSIST_OPEN_PUBLICATION: 'persist-open-publication',
@@ -234,21 +271,104 @@ function buildMembershipPublicationTargetNodeDecision(options = {}) {
     state: targetDecision.state,
   });
 }
-function resolveDispatchRetryNodeId(operation) {
+function resolveDispatchRetryNodeIds(operation) {
+  const evidence = buildDispatchRetryReadyNodeEvidence(operation);
+  const nodeIds = [
+    ...evidence.sourceNodeIds,
+    ...evidence.ownerNodeIds,
+    ...evidence.targetNodeIds,
+  ];
+  return [...new Set(nodeIds)].filter((nodeId) => {
+    return typeof nodeId === TYPEOF.STRING && nodeId.length > NUM.ZERO;
+  });
+}
+function buildDispatchRetryReadyNodeEvidence(operation) {
+  if (!operation) {
+    return Object.freeze({
+      phase: DISPATCH_RETRY_READY_NODE_PHASE.NOT_RETRYABLE,
+      sourceNodeIds: Object.freeze([]),
+      ownerNodeIds: Object.freeze([]),
+      targetNodeIds: Object.freeze([]),
+    });
+  }
   if (
     operation?.type === OperationType.REPLACE &&
     operation?.workflowStep === WORKFLOW_STEP.ACTIVE
   ) {
-    return (
-      operation.sourceNodeId ||
-      operation.targetNodeId ||
-      MEMBERSHIP_PUBLICATION_COORDINATOR_LITERAL.EMPTY
-    );
+    return Object.freeze({
+      phase: DISPATCH_RETRY_READY_NODE_PHASE.ACTIVE_REPLACE_SOURCE_REMOVAL,
+      sourceNodeIds: Object.freeze([operation.sourceNodeId || null]),
+      ownerNodeIds: Object.freeze([operation.targetNodeId || null]),
+      targetNodeIds: Object.freeze([]),
+    });
   }
+  if (
+    operation.workflowStep === WORKFLOW_STEP.PENDING ||
+    operation.workflowStep === WORKFLOW_STEP.SENDING
+  ) {
+    return Object.freeze({
+      phase: DISPATCH_RETRY_READY_NODE_PHASE.INITIAL_TARGET_DISPATCH,
+      sourceNodeIds: Object.freeze([]),
+      ownerNodeIds: Object.freeze([]),
+      targetNodeIds: Object.freeze([operation.targetNodeId || null]),
+    });
+  }
+  if (isDispatchRetryCreateTargetRearmOperation(operation)) {
+    return Object.freeze({
+      phase: DISPATCH_RETRY_READY_NODE_PHASE.CREATE_TARGET_REARM,
+      sourceNodeIds: Object.freeze([]),
+      ownerNodeIds: Object.freeze([]),
+      targetNodeIds: Object.freeze([operation.targetNodeId || null]),
+    });
+  }
+  return Object.freeze({
+    phase: DISPATCH_RETRY_READY_NODE_PHASE.NOT_RETRYABLE,
+    sourceNodeIds: Object.freeze([]),
+    ownerNodeIds: Object.freeze([]),
+    targetNodeIds: Object.freeze([]),
+  });
+}
+function isDispatchRetryCreateTargetRearmOperation(operation) {
   return (
-    operation?.targetNodeId ||
-    MEMBERSHIP_PUBLICATION_COORDINATOR_LITERAL.EMPTY
+    isSystemTablePartition({partitionId: operation?.partitionId}) &&
+    operation.workflowStep === WORKFLOW_STEP.CREATING &&
+    (
+      operation.type === OperationType.ADD ||
+      operation.type === OperationType.REPLACE
+    )
   );
+}
+function matchesDispatchRetryReadyNode(operation, nodeId) {
+  if (typeof nodeId !== TYPEOF.STRING || nodeId.length === NUM.ZERO) {
+    return false;
+  }
+  return resolveDispatchRetryNodeIds(operation).includes(nodeId);
+}
+function mergeDispatchRetryRowsByOperationId(
+  preferredRows = [],
+  fallbackRows = [],
+) {
+  const rows = [];
+  const seenOperationIds = new Set();
+  const appendRow = (row) => {
+    const operationId = row?.[COLUMN.OPERATION_ID];
+    if (
+      typeof operationId !== TYPEOF.STRING ||
+      operationId.length === NUM.ZERO ||
+      seenOperationIds.has(operationId)
+    ) {
+      return;
+    }
+    seenOperationIds.add(operationId);
+    rows.push(row);
+  };
+  for (const row of preferredRows) {
+    appendRow(row);
+  }
+  for (const row of fallbackRows) {
+    appendRow(row);
+  }
+  return rows;
 }
 function isDispatchRetryOperation(operation) {
   if (!operation) {
@@ -258,6 +378,9 @@ function isDispatchRetryOperation(operation) {
     operation.workflowStep === WORKFLOW_STEP.PENDING ||
     operation.workflowStep === WORKFLOW_STEP.SENDING
   ) {
+    return true;
+  }
+  if (isDispatchRetryCreateTargetRearmOperation(operation)) {
     return true;
   }
   return (
@@ -381,13 +504,19 @@ function buildMembershipPublicationAckRefreshDecision(options = {}) {
   const nodeAlreadyAcknowledged = acknowledgedNodeIds.includes(
     normalizedNodeId,
   );
-  const state =
-    terminalPublication !== true &&
-    (nodeRequired !== true || nodeAlreadyAcknowledged === true) ?
-      MEMBERSHIP_PUBLICATION_ACK_REFRESH_STATE.DURABLE_REQUIRED :
-      MEMBERSHIP_PUBLICATION_ACK_REFRESH_STATE.CACHE_SUFFICIENT;
+  const evidence = Object.freeze({
+    terminalPublication,
+    nodeRequired,
+    nodeAlreadyAcknowledged,
+  });
+  const decisionRule = MEMBERSHIP_PUBLICATION_ACK_REFRESH_DECISION_RULES.find(
+    (rule) => rule.matches(evidence),
+  );
+  const state = decisionRule.state;
   return Object.freeze({
     state,
+    reason: decisionRule.reason,
+    reasonCodes: Object.freeze([decisionRule.reason]),
     terminalPublication,
     nodeRequired,
     nodeAlreadyAcknowledged,
@@ -587,10 +716,17 @@ function buildPublicationListReadOptions(options = {}) {
     authoritativeReadMode: CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
   };
 }
+function resolveMembershipEvidenceAuthoritativeReadMode(options = {}) {
+  return options.preferAuthoritativeRead === true ||
+    options.requireAuthoritative === true ?
+    CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED :
+    CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY;
+}
 function buildLocalAuthoritativeMembershipReadOptions(options = {}) {
   return {
     ...options,
-    authoritativeReadMode: CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
+    authoritativeReadMode:
+      resolveMembershipEvidenceAuthoritativeReadMode(options),
   };
 }
 function buildMembershipPublicationEvidenceSnapshot(options = {}) {
@@ -1357,13 +1493,10 @@ class MembershipPublicationCoordinator {
         operation &&
         isCoordinatorOwnedOperationType(operation.type) &&
         this.isLocallyOwnedReplicaOperationRow(operation) &&
-        resolveDispatchRetryNodeId(operation) === normalizedNodeId &&
+        matchesDispatchRetryReadyNode(operation, normalizedNodeId) &&
         isDispatchRetryOperation(operation)
       );
     });
-    if (dispatchRows.length > NUM.ZERO) {
-      return dispatchRows;
-    }
     const readinessService = this.controlPlaneReadinessService;
     if (!readinessService || typeof readinessService !== TYPEOF.OBJECT) {
       return dispatchRows;
@@ -1388,30 +1521,36 @@ class MembershipPublicationCoordinator {
     }
     const repository = this.replicaOperationRepository;
     if (!repository || typeof repository.queryIncompleteOperations !== TYPEOF.FUNCTION) {
-      return [];
+      return dispatchRows;
     }
     try {
       const operations = await repository.queryIncompleteOperations({
         visibilityReadMode: REPLICA_OPERATION_VISIBILITY_READ_MODE.OWNER_RPC_REQUIRED,
       });
       if (!Array.isArray(operations) || operations.length === NUM.ZERO) {
-        return [];
+        return dispatchRows;
       }
-      return operations
+      const authoritativeRows = operations
         .filter((operation) => {
           const normalizedOperation = normalizeReplicaOperationView(operation);
           return (
             normalizedOperation &&
             isCoordinatorOwnedOperationType(normalizedOperation.type) &&
             this.isLocallyOwnedReplicaOperationRow(normalizedOperation) &&
-            resolveDispatchRetryNodeId(normalizedOperation) ===
-              normalizedNodeId &&
+            matchesDispatchRetryReadyNode(
+              normalizedOperation,
+              normalizedNodeId,
+            ) &&
             isDispatchRetryOperation(normalizedOperation)
           );
         })
         .map((operation) => this.buildDispatchRetryRowFromOperation(operation));
+      return mergeDispatchRetryRowsByOperationId(
+        authoritativeRows,
+        dispatchRows,
+      );
     } catch (_error) {
-      return [];
+      return dispatchRows;
     }
   }
 

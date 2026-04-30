@@ -33,6 +33,8 @@ import {
 } from '../bootstrap/system-partition-classification.js';
 import {RAFT_ROLE} from '../raft/constants.js';
 
+const LOCAL_STR_EMPTY = '';
+
 const MEMBERSHIP_PUBLICATION_STATUS = CONTROL_PLANE_PUBLICATION_STATUS;
 const PRIORITY_SPREAD_REQUIRED_DISTINCT_NODE_COUNT = 3;
 const AUTHORITATIVE_MEMBERSHIP_CHANGED_REASON = 'authoritative_membership_changed';
@@ -61,7 +63,7 @@ function normalizePartitionIdList(values = []) {
   return [
     ...new Set(
       (Array.isArray(values) ? values : [])
-        .map((value) => String(value || '').trim())
+        .map((value) => String(value || LOCAL_STR_EMPTY).trim())
         .filter((value) => value.length > NUM.ZERO),
     ),
   ].sort();
@@ -1266,6 +1268,7 @@ function deriveMembershipPublicationCandidate(options = {}, helperFns = {}) {
   const pendingAckNodeIds = ackCompletionSnapshot.pendingAckNodeIds;
   const {
     priorityRecoveryClosureWitness,
+    priorityRecoveryDecisionSnapshots,
   } = buildPriorityRecoveryClosureEvidence(
     {
       latestPublicationRow,
@@ -1364,6 +1367,7 @@ function deriveMembershipPublicationCandidate(options = {}, helperFns = {}) {
         planningSnapshot.clusterIncarnationFence :
         null,
     priorityRecoveryClosureWitness,
+    priorityRecoveryDecisionSnapshots,
     projectionDiagnostics,
     reasonCode,
     changed,

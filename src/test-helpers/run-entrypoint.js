@@ -2,6 +2,13 @@ import {Worker} from 'node:worker_threads';
 import {fileURLToPath} from 'node:url';
 import {dirname, join} from 'node:path';
 
+const LOCAL_NUM_5000 = 5000;
+const LOCAL_STR_MESSAGE = 'message';
+const LOCAL_STR_ENTRYPOINT_FAILED = 'Entrypoint failed';
+const LOCAL_STR_EMPTY = '';
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_STR_ERROR = 'error';
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const workerPath = join(__dirname, 'worker', 'entry-runner.js');
@@ -18,7 +25,7 @@ const workerPath = join(__dirname, 'worker', 'entry-runner.js');
  * @return {Promise<{stdout: string, stderr: string, exitCode: number}>}
  */
 export function runEntrypoint(entryPath, opts = {}) {
-  const {args = [], env = {}, timeoutMs = 5000} = opts;
+  const {args = [], env = {}, timeoutMs = LOCAL_NUM_5000} = opts;
 
   return new Promise((resolve, reject) => {
     const worker = new Worker(workerPath, {
@@ -33,21 +40,21 @@ export function runEntrypoint(entryPath, opts = {}) {
       reject(new Error(`runEntrypoint timeout after ${timeoutMs}ms: ${entryPath}`));
     }, timeoutMs);
 
-    worker.once('message', (msg) => {
+    worker.once(LOCAL_STR_MESSAGE, (msg) => {
       clearTimeout(timer);
       worker.terminate().catch(() => {});
       if (msg && msg.error) {
-        reject(new Error(msg.stderr || 'Entrypoint failed'));
+        reject(new Error(msg.stderr || LOCAL_STR_ENTRYPOINT_FAILED));
         return;
       }
       resolve({
-        stdout: msg.stdout || '',
-        stderr: msg.stderr || '',
-        exitCode: msg.exitCode ?? 0,
+        stdout: msg.stdout || LOCAL_STR_EMPTY,
+        stderr: msg.stderr || LOCAL_STR_EMPTY,
+        exitCode: msg.exitCode ?? LOCAL_NUM_ZERO,
       });
     });
 
-    worker.once('error', (err) => {
+    worker.once(LOCAL_STR_ERROR, (err) => {
       clearTimeout(timer);
       worker.terminate().catch(() => {});
       reject(err);

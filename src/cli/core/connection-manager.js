@@ -9,6 +9,30 @@ import WebSocket from 'ws';
 import {CLI_STREAM} from '../cli-constants.js';
 import {ADMIN_MESSAGE_TYPE} from '../../admin/admin-constants.js';
 
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_NUM_10 = 10;
+const LOCAL_NUM_1000 = 1000;
+const LOCAL_NUM_30000 = 30000;
+const LOCAL_STR_DISCONNECTED = 'disconnected';
+const LOCAL_STR_HTTP = 'http://';
+const LOCAL_STR_HTTPS = 'https://';
+const LOCAL_STR_WS = 'ws://';
+const LOCAL_STR_WSS = 'wss://';
+const LOCAL_STR_WS_2 = 'ws:';
+const LOCAL_STR_WSS_2 = 'wss:';
+const LOCAL_STR_EMPTY = '';
+const LOCAL_STR_CONNECTING = 'connecting';
+const LOCAL_STR_13QTI = 'Connection already in progress';
+const LOCAL_STR_OPEN = 'open';
+const LOCAL_STR_CONNECTED = 'connected';
+const LOCAL_STR_MESSAGE = 'message';
+const LOCAL_STR_CLOSE = 'close';
+const LOCAL_STR_ERROR = 'error';
+const LOCAL_STR_UNKNOWN_ERROR = 'Unknown error';
+const LOCAL_STR_ID = 'id';
+const LOCAL_STR_FAILED = 'failed';
+const LOCAL_STR_RECONNECTING = 'reconnecting';
+
 /**
  * @typedef {'disconnected'|'connecting'|'connected'|'reconnecting'|'failed'} ConnectionStatus
  */
@@ -34,19 +58,19 @@ export class ConnectionManager {
     this.currentAddress = null;
 
     /** @type {number} */
-    this.reconnectAttempts = 0;
+    this.reconnectAttempts = LOCAL_NUM_ZERO;
 
     /** @type {number} */
-    this.maxReconnectAttempts = config.maxReconnectAttempts || 10;
+    this.maxReconnectAttempts = config.maxReconnectAttempts || LOCAL_NUM_10;
 
     /** @type {number} */
-    this.baseDelay = config.baseDelay || 1000;
+    this.baseDelay = config.baseDelay || LOCAL_NUM_1000;
 
     /** @type {number} */
-    this.maxDelay = config.maxDelay || 30000;
+    this.maxDelay = config.maxDelay || LOCAL_NUM_30000;
 
     /** @type {ConnectionStatus} */
-    this.status = 'disconnected';
+    this.status = LOCAL_STR_DISCONNECTED;
 
     /** @type {NodeJS.Timeout|null} */
     this.reconnectTimer = null;
@@ -114,17 +138,17 @@ export class ConnectionManager {
     let url = address;
 
     // Add protocol if missing
-    if (!url.startsWith('http://') && !url.startsWith('https://') &&
-        !url.startsWith('ws://') && !url.startsWith('wss://')) {
+    if (!url.startsWith(LOCAL_STR_HTTP) && !url.startsWith(LOCAL_STR_HTTPS) &&
+        !url.startsWith(LOCAL_STR_WS) && !url.startsWith(LOCAL_STR_WSS)) {
       url = `ws://${url}`;
     }
 
     // Convert http to ws
-    url = url.replace(/^http:/, 'ws:').replace(/^https:/, 'wss:');
+    url = url.replace(/^http:/, LOCAL_STR_WS_2).replace(/^https:/, LOCAL_STR_WSS_2);
 
     // Add API path if not present
     if (!url.includes(CLI_STREAM.ADMIN_PATH)) {
-      url = url.replace(/\/$/, '') + CLI_STREAM.ADMIN_PATH;
+      url = url.replace(/\/$/, LOCAL_STR_EMPTY) + CLI_STREAM.ADMIN_PATH;
     }
 
     return url;
@@ -136,14 +160,14 @@ export class ConnectionManager {
    * @returns {Promise<void>}
    */
   async connect(nodeAddress) {
-    if (this.status === 'connecting') {
-      throw new Error('Connection already in progress');
+    if (this.status === LOCAL_STR_CONNECTING) {
+      throw new Error(LOCAL_STR_13QTI);
     }
 
     this.currentAddress = nodeAddress;
     this.intentionalDisconnect = false;
-    this.status = 'connecting';
-    this.onStatusChange?.('connecting');
+    this.status = LOCAL_STR_CONNECTING;
+    this.onStatusChange?.(LOCAL_STR_CONNECTING);
 
     const wsUrl = this.buildWebSocketUrl(nodeAddress);
 
@@ -151,8 +175,8 @@ export class ConnectionManager {
       try {
         this.ws = new WebSocket(wsUrl);
       } catch (err) {
-        this.status = 'disconnected';
-        this.onStatusChange?.('disconnected');
+        this.status = LOCAL_STR_DISCONNECTED;
+        this.onStatusChange?.(LOCAL_STR_DISCONNECTED);
         reject(err);
         return;
       }
@@ -166,23 +190,23 @@ export class ConnectionManager {
         }
       }, 10000);
 
-      this.ws.on('open', () => {
+      this.ws.on(LOCAL_STR_OPEN, () => {
         clearTimeout(connectionTimeout);
-        this.status = 'connected';
-        this.reconnectAttempts = 0;
-        this.onStatusChange?.('connected');
+        this.status = LOCAL_STR_CONNECTED;
+        this.reconnectAttempts = LOCAL_NUM_ZERO;
+        this.onStatusChange?.(LOCAL_STR_CONNECTED);
         resolve();
       });
 
-      this.ws.on('message', (data) => {
+      this.ws.on(LOCAL_STR_MESSAGE, (data) => {
         this.handleMessage(data);
       });
 
-      this.ws.on('close', () => {
+      this.ws.on(LOCAL_STR_CLOSE, () => {
         clearTimeout(connectionTimeout);
         const wasConnected = this.status === 'connected';
-        this.status = 'disconnected';
-        this.onStatusChange?.('disconnected');
+        this.status = LOCAL_STR_DISCONNECTED;
+        this.onStatusChange?.(LOCAL_STR_DISCONNECTED);
 
         // Only auto-reconnect if we were connected and didn't intentionally disconnect
         if (wasConnected && !this.intentionalDisconnect) {
@@ -190,14 +214,14 @@ export class ConnectionManager {
         }
       });
 
-      this.ws.on('error', (err) => {
+      this.ws.on(LOCAL_STR_ERROR, (err) => {
         clearTimeout(connectionTimeout);
         this.onError?.(err);
 
         // If we're still connecting, reject the promise
-        if (this.status === 'connecting') {
-          this.status = 'disconnected';
-          this.onStatusChange?.('disconnected');
+        if (this.status === LOCAL_STR_CONNECTING) {
+          this.status = LOCAL_STR_DISCONNECTED;
+          this.onStatusChange?.(LOCAL_STR_DISCONNECTED);
           reject(err);
         }
       });
@@ -244,7 +268,7 @@ export class ConnectionManager {
       case ADMIN_MESSAGE_TYPE.ERROR:
         if (this.onError) {
           this.onError(
-            new Error(message.error || message.message || 'Unknown error'),
+            new Error(message.error || message.message || LOCAL_STR_UNKNOWN_ERROR),
           );
         }
         break;
@@ -276,7 +300,7 @@ export class ConnectionManager {
       config: 'key',
       contexts: 'context_id',
     };
-    return primaryKeys[tableName] || 'id';
+    return primaryKeys[tableName] || LOCAL_STR_ID;
   }
 
   /**
@@ -288,15 +312,15 @@ export class ConnectionManager {
     }
 
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      this.status = 'failed';
-      this.onStatusChange?.('failed');
+      this.status = LOCAL_STR_FAILED;
+      this.onStatusChange?.(LOCAL_STR_FAILED);
       return;
     }
 
     const delay = this.calculateBackoffDelay(this.reconnectAttempts);
     this.reconnectAttempts++;
-    this.status = 'reconnecting';
-    this.onStatusChange?.('reconnecting', delay);
+    this.status = LOCAL_STR_RECONNECTING;
+    this.onStatusChange?.(LOCAL_STR_RECONNECTING, delay);
 
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
@@ -322,7 +346,7 @@ export class ConnectionManager {
    * Reset reconnection attempts counter
    */
   resetReconnectAttempts() {
-    this.reconnectAttempts = 0;
+    this.reconnectAttempts = LOCAL_NUM_ZERO;
   }
 
   /**
@@ -413,8 +437,8 @@ export class ConnectionManager {
       this.ws = null;
     }
 
-    this.status = 'disconnected';
-    this.onStatusChange?.('disconnected');
+    this.status = LOCAL_STR_DISCONNECTED;
+    this.onStatusChange?.(LOCAL_STR_DISCONNECTED);
   }
 
   /**
@@ -422,7 +446,7 @@ export class ConnectionManager {
    * @returns {boolean}
    */
   isConnected() {
-    return this.status === 'connected' &&
+    return this.status === LOCAL_STR_CONNECTED &&
            this.ws !== null &&
            this.ws.readyState === WebSocket.OPEN;
   }

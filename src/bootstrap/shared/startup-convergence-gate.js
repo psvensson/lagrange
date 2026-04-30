@@ -6,6 +6,9 @@ import {
 import {NUM, TYPEOF} from '../../constants/index.js';
 import {TRANSPORT_EVENT} from '../../constants/transport.js';
 
+const LOCAL_STR_7NZXU = 'waitForStartupConvergence requires evaluate';
+const LOCAL_STR_INTERNAL_WAKE = 'internal_wake';
+
 const STARTUP_CONVERGENCE_TIMEOUT_KIND = Object.freeze({
   NO_PROGRESS: 'no_progress',
   ABSOLUTE_DEADLINE_EXHAUSTED: 'absolute_deadline_exhausted',
@@ -98,7 +101,7 @@ function subscribeToMessageRouterEvents(
 
 async function waitForStartupConvergence(options = {}) {
   if (typeof options.evaluate !== TYPEOF.FUNCTION) {
-    throw new Error('waitForStartupConvergence requires evaluate');
+    throw new Error(LOCAL_STR_7NZXU);
   }
 
   const now = typeof options.now === TYPEOF.FUNCTION ?
@@ -231,7 +234,7 @@ async function waitForStartupConvergence(options = {}) {
         blockedOutcome?.wake === true;
       if (shouldWakeImmediately) {
         lastSignal = blockedOutcome?.signal || {
-          kind: 'internal_wake',
+          kind: LOCAL_STR_INTERNAL_WAKE,
           attempt,
         };
         continue;

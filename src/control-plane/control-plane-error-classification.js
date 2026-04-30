@@ -7,6 +7,11 @@ import {
 } from './pressure-governor.js';
 import {ROUTER_ERROR_MSG} from '../constants/transport.js';
 
+const LOCAL_STR_EMPTY = '';
+
+const RETRYABLE_RAFT_WRITE_COMMIT_TIMEOUT_FRAGMENT =
+  'Raft write commit timed out';
+
 const RETRYABLE_CONTROL_PLANE_ERROR_FRAGMENTS = Object.freeze([
   'Distributed operation failed due to participant failures',
   'authoritative_row_source_unavailable',
@@ -22,6 +27,7 @@ const RETRYABLE_CONTROL_PLANE_ERROR_FRAGMENTS = Object.freeze([
   ROUTER_ERROR_MSG.PENDING_RESPONSE_TIMEOUT,
   'Transaction already active on this partition',
   'No active transaction to commit',
+  RETRYABLE_RAFT_WRITE_COMMIT_TIMEOUT_FRAGMENT,
 ]);
 
 const CONTROL_PLANE_FAILURE_REASON = Object.freeze({
@@ -74,7 +80,7 @@ function getDirectControlPlaneErrorMessage(value) {
   if (typeof value?.error === TYPEOF.STRING) {
     return value.error;
   }
-  return '';
+  return LOCAL_STR_EMPTY;
 }
 
 function getDirectControlPlaneErrorCode(value) {
@@ -84,7 +90,7 @@ function getDirectControlPlaneErrorCode(value) {
   if (typeof value?.errorCode === TYPEOF.STRING) {
     return value.errorCode;
   }
-  return '';
+  return LOCAL_STR_EMPTY;
 }
 
 function getDirectControlPlaneRetryAfterMs(value) {

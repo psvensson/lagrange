@@ -1108,6 +1108,8 @@ class QueryExecutorSegment1 {
           preferLeader,
           preferSameLatencyGroup,
           deliveryPriority: executionOptions.deliveryPriority,
+          deliverySource: executionOptions.deliverySource,
+          replacePendingKey: executionOptions.replacePendingKey,
           routingReadinessDimension:
             executionOptions.routingReadinessDimension ||
             this.defaultRoutingReadinessDimension,

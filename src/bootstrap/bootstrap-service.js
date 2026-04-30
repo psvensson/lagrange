@@ -49,6 +49,7 @@ import {
   StartupRuntimeSurfaceOwner,
 } from './shared/startup-runtime-surface-owner.js';
 import {HEARTBEAT_STATE} from '../control-plane/heartbeat-service-constants.js';
+import {DEFAULT_NODE_CAPABILITIES} from '../control-plane/control-plane-constants.js';
 import {LEASE_STATE} from '../control-plane/lease-service-constants.js';
 import {createRuntimeStartupWiring} from '../runtime/runtime-startup-wiring.js';
 import {
@@ -115,6 +116,28 @@ import {
 } from './bootstrap-service-runtime-methods.js';
 import {NUM} from '../constants/index.js';
 
+const LOCAL_STR_STRING = 'string';
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_STR_FUNCTION = 'function';
+const LOCAL_STR_BOOTSTRAPSERVICE = 'BootstrapService';
+const LOCAL_STR_OBJECT = 'object';
+const LOCAL_STR_9RBME = 'createRuntimeStartupWiring';
+const LOCAL_STR_1TQ8P = 'triggerRebalancingOnAllPartitions';
+const LOCAL_STR_1VE2J = 'Retrying seed steady-state control-plane writers until ';
+const LOCAL_STR_1TW15 = 'lifecycle metadata publication readiness is satisfied';
+const LOCAL_STR_L9TQM = 'Deferring seed steady-state control-plane writers until ';
+const LOCAL_STR_IMMEDIATE = 'immediate';
+const LOCAL_STR_TIMEOUT = 'timeout';
+const LOCAL_STR_ZXEBO = 'metrics.bootstrap.post_pipeline.start';
+const LOCAL_STR_11VZY = 'metrics.bootstrap.post_pipeline.replica_handler';
+const LOCAL_STR_ONFS8 = 'metrics.bootstrap.post_pipeline.message_group_handler';
+const LOCAL_STR_PS273 = 'metrics.bootstrap.post_pipeline.control_plane';
+const LOCAL_STR_1J81H = 'metrics.bootstrap.post_pipeline.seed_registration';
+const LOCAL_STR_1QVRC = 'metrics.bootstrap.post_pipeline.runtime_handler';
+const LOCAL_STR_PHASE_START = 'phase:start';
+const LOCAL_STR_PHASE_COMPLETE = 'phase:complete';
+const LOCAL_STR_PHASE_FAILED = 'phase:failed';
+
 const BootstrapPhase = BOOTSTRAP_PHASE;
 const BootstrapEvent = BOOTSTRAP_EVENT;
 const BootstrapLog = BOOTSTRAP_LOG_MSG;
@@ -156,20 +179,20 @@ const SEED_STARTUP_CHECKPOINT_SNAPSHOT_FIELD = Object.freeze({
 });
 
 function resolveBootstrapWorkflowDataDir(options = {}) {
-  if (typeof options.dataDir === 'string' && options.dataDir.length > 0) {
+  if (typeof options.dataDir === LOCAL_STR_STRING && options.dataDir.length > LOCAL_NUM_ZERO) {
     return options.dataDir;
   }
   const dataDirectoryManager = options.dataDirectoryManager || null;
-  if (typeof dataDirectoryManager?.isInitialized === 'function' &&
+  if (typeof dataDirectoryManager?.isInitialized === LOCAL_STR_FUNCTION &&
       dataDirectoryManager.isInitialized() === true &&
-      typeof dataDirectoryManager.getDataDir === 'function') {
+      typeof dataDirectoryManager.getDataDir === LOCAL_STR_FUNCTION) {
     return dataDirectoryManager.getDataDir();
   }
   return null;
 }
 
 function isExternalAdmissionOpen(messageRouter) {
-  return typeof messageRouter?.isExternalAdmissionEnabled === 'function' &&
+  return typeof messageRouter?.isExternalAdmissionEnabled === LOCAL_STR_FUNCTION &&
     messageRouter.isExternalAdmissionEnabled() === true;
 }
 
@@ -189,7 +212,7 @@ class BootstrapService extends EventEmitter {
     const startupWorkflowDataDir = resolveBootstrapWorkflowDataDir(options);
 
     this.rolloutControls = assertRequiredControlPlaneRollout({
-      owner: 'BootstrapService',
+      owner: LOCAL_STR_BOOTSTRAPSERVICE,
       controls: options.rolloutControls,
       required: CONTROL_PLANE_ROLLOUT_REQUIRED.BOOTSTRAP_SERVICE,
     });
@@ -212,7 +235,7 @@ class BootstrapService extends EventEmitter {
     this.bootstrapReadinessState = options.readinessState || null;
     this.sqlQueryEngine = options.sqlQueryEngine || null;
     this.onLocalAdminRuntimeReady =
-      typeof options.onLocalAdminRuntimeReady === 'function' ?
+      typeof options.onLocalAdminRuntimeReady === LOCAL_STR_FUNCTION ?
         options.onLocalAdminRuntimeReady :
         null;
     this.localAdminRuntimeReadyNotified = false;
@@ -223,7 +246,7 @@ class BootstrapService extends EventEmitter {
       BOOTSTRAP_REBALANCE_DELAY_MS;
     this.clusterIncarnationFence =
       options.clusterIncarnationFence &&
-        typeof options.clusterIncarnationFence === 'object' ?
+        typeof options.clusterIncarnationFence === LOCAL_STR_OBJECT ?
         options.clusterIncarnationFence :
         null;
     this.dataDirectoryManager = options.dataDirectoryManager || null;
@@ -399,7 +422,7 @@ class BootstrapService extends EventEmitter {
     this.logger = loggingService.forSubsystem(BOOTSTRAP_SUBSYSTEM.SERVICE);
     this.logger.debug(BootstrapLog.RUNTIME_WIRING_READY, {
       nodeId: this.nodeId,
-      owner: 'createRuntimeStartupWiring',
+      owner: LOCAL_STR_9RBME,
       runtimeDriverCount: Object.keys(this.runtimeDrivers).length,
       ociFeatureGateEnabled: Boolean(options.ociFeatureGateEnabled),
     });
@@ -416,7 +439,7 @@ class BootstrapService extends EventEmitter {
         executeNodeReadyRebalance: (reason) => {
           if (Object.prototype.hasOwnProperty.call(
             this,
-            'triggerRebalancingOnAllPartitions',
+            LOCAL_STR_1TQ8P,
           )) {
             this.triggerRebalancingOnAllPartitions(reason);
             return;
@@ -434,8 +457,8 @@ class BootstrapService extends EventEmitter {
           sleep: (delayMs) => this.sleep(delayMs),
           onRetry: ({attempt, maxAttempts, delayMs, snapshot}) => {
             this.logger.warn(
-              'Retrying seed steady-state control-plane writers until ' +
-              'lifecycle metadata publication readiness is satisfied',
+              LOCAL_STR_1VE2J +
+              LOCAL_STR_1TW15,
               {
                 nodeId: this.nodeId,
                 attempt,
@@ -448,8 +471,8 @@ class BootstrapService extends EventEmitter {
         }),
         onMetadataPublicationReadinessDeferred: (error) => {
           this.logger.warn(
-            'Deferring seed steady-state control-plane writers until ' +
-            'lifecycle metadata publication readiness is satisfied',
+            LOCAL_STR_L9TQM +
+            LOCAL_STR_1TW15,
             {
               nodeId: this.nodeId,
               error: error?.message || String(error),
@@ -463,12 +486,13 @@ class BootstrapService extends EventEmitter {
         buildHeartbeatStartOptions: () => ({
           nodeAddress: this.nodeAddress,
           getStats: () => NodeService.getInstance().getNodeStats(),
+          capabilities: [...DEFAULT_NODE_CAPABILITIES],
         }),
         getHeartbeatRunningState: () => HEARTBEAT_STATE.RUNNING,
         activateDistributedTransactionRecovery: () => {
           const sqlQueryEngine = this.sqlQueryEngine;
           if (typeof sqlQueryEngine?.activateDistributedTransactionRecovery !==
-            'function') {
+            LOCAL_STR_FUNCTION) {
             return;
           }
           void sqlQueryEngine.activateDistributedTransactionRecovery();
@@ -1183,13 +1207,13 @@ class BootstrapService extends EventEmitter {
         });
       }
     };
-    if (typeof setImmediate === 'function') {
-      this.deferredLatencyTopologyStartKind = 'immediate';
+    if (typeof setImmediate === LOCAL_STR_FUNCTION) {
+      this.deferredLatencyTopologyStartKind = LOCAL_STR_IMMEDIATE;
       this.deferredLatencyTopologyStartHandle = setImmediate(startTopologyAsync);
       return;
     }
-    this.deferredLatencyTopologyStartKind = 'timeout';
-    this.deferredLatencyTopologyStartHandle = setTimeout(startTopologyAsync, 0);
+    this.deferredLatencyTopologyStartKind = LOCAL_STR_TIMEOUT;
+    this.deferredLatencyTopologyStartHandle = setTimeout(startTopologyAsync, LOCAL_NUM_ZERO);
   }
 
   /**
@@ -1333,13 +1357,13 @@ class BootstrapService extends EventEmitter {
           resolveCheckpointSnapshot(),
         ),
         run: async () => {
-          this.logger.info('metrics.bootstrap.post_pipeline.start', {
+          this.logger.info(LOCAL_STR_ZXEBO, {
             nodeId: this.nodeId,
           });
 
           const replicaHandlerStartMs = Date.now();
           this.initializeReplicaHandler();
-          this.logger.info('metrics.bootstrap.post_pipeline.replica_handler', {
+          this.logger.info(LOCAL_STR_11VZY, {
             nodeId: this.nodeId,
             durationMs: Date.now() - replicaHandlerStartMs,
           });
@@ -1347,7 +1371,7 @@ class BootstrapService extends EventEmitter {
           const messageGroupHandlerStartMs = Date.now();
           this.initializeMessageGroupServiceHandler();
           this.logger.info(
-            'metrics.bootstrap.post_pipeline.message_group_handler',
+            LOCAL_STR_ONFS8,
             {
               nodeId: this.nodeId,
               durationMs: Date.now() - messageGroupHandlerStartMs,
@@ -1356,7 +1380,7 @@ class BootstrapService extends EventEmitter {
 
           const controlPlaneStartMs = Date.now();
           await this.initializeControlPlaneService();
-          this.logger.info('metrics.bootstrap.post_pipeline.control_plane', {
+          this.logger.info(LOCAL_STR_PS273, {
             nodeId: this.nodeId,
             durationMs: Date.now() - controlPlaneStartMs,
           });
@@ -1364,7 +1388,7 @@ class BootstrapService extends EventEmitter {
 
           const registerSeedStartMs = Date.now();
           await this.registerSeedNodeWithControlPlane();
-          this.logger.info('metrics.bootstrap.post_pipeline.seed_registration', {
+          this.logger.info(LOCAL_STR_1J81H, {
             nodeId: this.nodeId,
             durationMs: Date.now() - registerSeedStartMs,
           });
@@ -1381,7 +1405,7 @@ class BootstrapService extends EventEmitter {
         run: async () => {
           const runtimeHandlerStartMs = Date.now();
           this.initializeRuntimeServiceHandler();
-          this.logger.info('metrics.bootstrap.post_pipeline.runtime_handler', {
+          this.logger.info(LOCAL_STR_1QVRC, {
             nodeId: this.nodeId,
             durationMs: Date.now() - runtimeHandlerStartMs,
           });
@@ -1480,7 +1504,7 @@ class BootstrapService extends EventEmitter {
       state,
       subPhase: activeSubPhase,
     });
-    this.emit('phase:start', {
+    this.emit(LOCAL_STR_PHASE_START, {
       phase: phaseName,
       nodeId: this.nodeId,
       state,
@@ -1510,7 +1534,7 @@ class BootstrapService extends EventEmitter {
         subPhase: activeSubPhase,
         duration: phaseDuration,
       });
-      this.emit('phase:complete', {
+      this.emit(LOCAL_STR_PHASE_COMPLETE, {
         phase: phaseName,
         nodeId: this.nodeId,
         state,
@@ -1538,7 +1562,7 @@ class BootstrapService extends EventEmitter {
         duration: phaseDuration,
         error: error.message,
       });
-      this.emit('phase:failed', {
+      this.emit(LOCAL_STR_PHASE_FAILED, {
         phase: phaseName,
         nodeId: this.nodeId,
         state,

@@ -441,6 +441,17 @@ function createBootstrapApiRuntimeMethods(options = {}) {
         .getBootstrapAuthoritativeTableRows(tableName);
     },
 
+    getBootstrapAdmissionTableRows(tableName) {
+      const systemTableCache = this.getSystemTableCache();
+      const cacheRows =
+        typeof systemTableCache?.getAll === typeofToken.FUNCTION ?
+          systemTableCache.getAll(tableName) || [] :
+          [];
+      const rows = this.bootstrapTopologySnapshotOwner
+        .resolveBootstrapResponseTopologySnapshotRows(tableName, cacheRows);
+      return Array.isArray(rows) ? rows : [];
+    },
+
     buildSystemTableSnapshots() {
       return this.bootstrapTopologySnapshotOwner
         .buildSystemTableSnapshots();

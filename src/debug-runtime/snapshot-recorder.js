@@ -9,6 +9,13 @@ import {
   SNAPSHOT_RECORDER_ERROR_MSG as ERR,
 } from './snapshot-recorder-constants.js';
 
+const LOCAL_STR_BASE64 = 'base64';
+const LOCAL_NUM_FOUR = 4;
+const LOCAL_STR_ASCII = 'ascii';
+const LOCAL_NUM_FIVE = 5;
+const LOCAL_NUM_NINE = 9;
+const LOCAL_STR_UTF8 = 'utf8';
+
 /**
  * Snapshot recorder with bounded capture and versioned serialization.
  */
@@ -182,7 +189,7 @@ class SnapshotRecorder {
         label: request.label,
         offset,
         length,
-        bytesBase64: Buffer.from(bytes).toString('base64'),
+        bytesBase64: Buffer.from(bytes).toString(LOCAL_STR_BASE64),
         capturedAt: this.now(),
       });
 
@@ -318,10 +325,10 @@ function serializeSnapshotEnvelope(snapshot, manifest) {
   const payloadBytes = Buffer.from(payloadJson, 'utf8');
 
   const header = Buffer.alloc(DEF.HEADER_SIZE_BYTES);
-  header.write(DEF.FORMAT_MAGIC, NUM.ZERO, 4, 'ascii');
-  header.writeUInt8(DEF.FORMAT_VERSION, 4);
-  header.writeUInt32BE(manifestBytes.length, 5);
-  header.writeUInt32BE(payloadBytes.length, 9);
+  header.write(DEF.FORMAT_MAGIC, NUM.ZERO, LOCAL_NUM_FOUR, LOCAL_STR_ASCII);
+  header.writeUInt8(DEF.FORMAT_VERSION, LOCAL_NUM_FOUR);
+  header.writeUInt32BE(manifestBytes.length, LOCAL_NUM_FIVE);
+  header.writeUInt32BE(payloadBytes.length, LOCAL_NUM_NINE);
 
   return Buffer.concat([header, manifestBytes, payloadBytes]);
 }
@@ -366,14 +373,14 @@ function deserializeSnapshotEnvelope(buffer) {
   let payload;
   try {
     manifest = JSON.parse(
-      bytes.toString('utf8', manifestStart, manifestEnd),
+      bytes.toString(LOCAL_STR_UTF8, manifestStart, manifestEnd),
     );
   } catch (_err) {
     throw new Error(ERR.SNAPSHOT_MANIFEST_INVALID);
   }
 
   try {
-    payload = JSON.parse(bytes.toString('utf8', manifestEnd, payloadEnd));
+    payload = JSON.parse(bytes.toString(LOCAL_STR_UTF8, manifestEnd, payloadEnd));
   } catch (_err) {
     throw new Error(ERR.SNAPSHOT_PAYLOAD_INVALID);
   }
@@ -495,7 +502,7 @@ function cloneSnapshot(snapshot) {
  */
 function estimateSnapshotBytes(snapshot) {
   const payload = serializeSnapshotPayload(snapshot);
-  return Buffer.byteLength(JSON.stringify(payload), 'utf8');
+  return Buffer.byteLength(JSON.stringify(payload), LOCAL_STR_UTF8);
 }
 
 /**

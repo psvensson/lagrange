@@ -88,8 +88,11 @@ const PRIORITY_FOLLOW_UP_NODE_ID_A = 'node-priority-a';
 const PRIORITY_FOLLOW_UP_NODE_ID_B = 'node-priority-b';
 const PRIORITY_FOLLOW_UP_NODE_ID_C = 'node-priority-c';
 const PRIORITY_FOLLOW_UP_NODE_ID_D = 'node-priority-d';
+const PRIORITY_FOLLOW_UP_NODE_ID_E = 'node-priority-e';
 const PRIORITY_FOLLOW_UP_SOURCE_REPLICA_ID =
   'replica_operations-p1-source';
+const PRIORITY_FOLLOW_UP_OCCUPIED_REPLICA_ID =
+  'replica_operations-p1-occupied';
 const PRIORITY_FOLLOW_UP_CREATED_OPERATION_ID = 'op-priority-follow-up';
 const PRIORITY_FOLLOW_UP_SERVICE_ADDRESS_PREFIX = 'local/partition/';
 const PRIORITY_FOLLOW_UP_RAFT_ROLE_VOTER = 'voter';
@@ -97,6 +100,7 @@ const NO_GLOBAL_IN_FLIGHT_OPERATIONS = 0;
 const PRIORITY_RECOVERY_SEMANTIC_STATE_NEEDS_OPERATION = 'needs_operation';
 const PRIORITY_RECOVERY_SEMANTIC_STATE_BLOCKED_UNCLASSIFIED =
   'blocked_unclassified';
+const PRIORITY_RECOVERY_WORKFLOW_STATE_TERMINAL = 'terminal';
 const PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION_CREATE_RECOVERY_OPERATION =
   'create_recovery_operation';
 const PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION_SCHEDULE_FOLLOWUP_REBALANCE =
@@ -2557,6 +2561,135 @@ test('UnifiedRebalancer creates a priority follow-up operation when the ' +
   }
 });
 
+test('UnifiedRebalancer skips occupied non-healthy priority follow-up ' +
+  'targets', async (t) => {
+  initializeTestEnvironment();
+
+  const rebalancer = createTestRebalancer({
+    entityId: REPLICA_OPERATION_PRIORITY_PARTITION_ID,
+    entityType: EntityType.PARTITION,
+    nodeId: PRIORITY_FOLLOW_UP_NODE_ID_A,
+    nodes: [
+      {node_id: PRIORITY_FOLLOW_UP_NODE_ID_A, status: NodeStatus.ACTIVE},
+      {node_id: PRIORITY_FOLLOW_UP_NODE_ID_B, status: NodeStatus.ACTIVE},
+      {node_id: PRIORITY_FOLLOW_UP_NODE_ID_C, status: NodeStatus.ACTIVE},
+      {node_id: PRIORITY_FOLLOW_UP_NODE_ID_D, status: NodeStatus.ACTIVE},
+      {node_id: PRIORITY_FOLLOW_UP_NODE_ID_E, status: NodeStatus.ACTIVE},
+    ],
+    partitions: [{
+      partition_id: REPLICA_OPERATION_PRIORITY_PARTITION_ID,
+      table_id: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+    }],
+  });
+  const decision = {
+    decisionSnapshot: {
+      partitionId: REPLICA_OPERATION_PRIORITY_PARTITION_ID,
+      semanticState: PRIORITY_RECOVERY_SEMANTIC_STATE_NEEDS_OPERATION,
+      progress: {
+        nextRequiredAction:
+          PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION_CREATE_RECOVERY_OPERATION,
+      },
+      planner: {
+        requiredDistinctNodeCount:
+          PRIORITY_RECOVERY_REQUIRED_DISTINCT_NODE_COUNT,
+      },
+      admission: {
+        effectiveEligibleNodeIds: [
+          PRIORITY_FOLLOW_UP_NODE_ID_A,
+          PRIORITY_FOLLOW_UP_NODE_ID_B,
+          PRIORITY_FOLLOW_UP_NODE_ID_C,
+          PRIORITY_FOLLOW_UP_NODE_ID_D,
+          PRIORITY_FOLLOW_UP_NODE_ID_E,
+        ],
+      },
+      publication: {
+        recoveryActiveNodeIds: [
+          PRIORITY_FOLLOW_UP_NODE_ID_A,
+          PRIORITY_FOLLOW_UP_NODE_ID_B,
+          PRIORITY_FOLLOW_UP_NODE_ID_C,
+          PRIORITY_FOLLOW_UP_NODE_ID_D,
+          PRIORITY_FOLLOW_UP_NODE_ID_E,
+        ],
+      },
+    },
+  };
+  const currentReplicas = [
+    {
+      service_id: PRIORITY_FOLLOW_UP_SOURCE_REPLICA_ID,
+      service_type: SERVICE_TYPE.PARTITION,
+      node_id: PRIORITY_FOLLOW_UP_NODE_ID_A,
+      partition_id: REPLICA_OPERATION_PRIORITY_PARTITION_ID,
+      replica_id: PRIORITY_FOLLOW_UP_SOURCE_REPLICA_ID,
+      address:
+        PRIORITY_FOLLOW_UP_SERVICE_ADDRESS_PREFIX +
+        PRIORITY_FOLLOW_UP_SOURCE_REPLICA_ID,
+      raft_role: PRIORITY_FOLLOW_UP_RAFT_ROLE_VOTER,
+      status: ReplicaStatus.ACTIVE,
+    },
+    {
+      service_id: REPLICA_OPERATION_PRIORITY_REPLICA_ID_B,
+      service_type: SERVICE_TYPE.PARTITION,
+      node_id: PRIORITY_FOLLOW_UP_NODE_ID_B,
+      partition_id: REPLICA_OPERATION_PRIORITY_PARTITION_ID,
+      replica_id: REPLICA_OPERATION_PRIORITY_REPLICA_ID_B,
+      address:
+        PRIORITY_FOLLOW_UP_SERVICE_ADDRESS_PREFIX +
+        REPLICA_OPERATION_PRIORITY_REPLICA_ID_B,
+      raft_role: PRIORITY_FOLLOW_UP_RAFT_ROLE_VOTER,
+      status: ReplicaStatus.ACTIVE,
+    },
+    {
+      service_id: REPLICA_OPERATION_PRIORITY_REPLICA_ID_C,
+      service_type: SERVICE_TYPE.PARTITION,
+      node_id: PRIORITY_FOLLOW_UP_NODE_ID_C,
+      partition_id: REPLICA_OPERATION_PRIORITY_PARTITION_ID,
+      replica_id: REPLICA_OPERATION_PRIORITY_REPLICA_ID_C,
+      address:
+        PRIORITY_FOLLOW_UP_SERVICE_ADDRESS_PREFIX +
+        REPLICA_OPERATION_PRIORITY_REPLICA_ID_C,
+      raft_role: PRIORITY_FOLLOW_UP_RAFT_ROLE_VOTER,
+      status: ReplicaStatus.ACTIVE,
+    },
+    {
+      service_id: PRIORITY_FOLLOW_UP_OCCUPIED_REPLICA_ID,
+      service_type: SERVICE_TYPE.PARTITION,
+      node_id: PRIORITY_FOLLOW_UP_NODE_ID_D,
+      partition_id: REPLICA_OPERATION_PRIORITY_PARTITION_ID,
+      replica_id: PRIORITY_FOLLOW_UP_OCCUPIED_REPLICA_ID,
+      address:
+        PRIORITY_FOLLOW_UP_SERVICE_ADDRESS_PREFIX +
+        PRIORITY_FOLLOW_UP_OCCUPIED_REPLICA_ID,
+      raft_role: PRIORITY_FOLLOW_UP_RAFT_ROLE_VOTER,
+      status: ReplicaStatus.SYNCING,
+    },
+  ];
+
+  try {
+    const move = rebalancer.buildPriorityRecoveryFollowUpMove({
+      decision,
+      currentReplicas,
+    });
+
+    t.equal(
+      move.type,
+      MoveType.REPLACE,
+      'full healthy topology should still choose replacement follow-up',
+    );
+    t.equal(
+      move.nodeId,
+      PRIORITY_FOLLOW_UP_NODE_ID_E,
+      'follow-up should skip occupied non-healthy service-row targets',
+    );
+    t.equal(
+      move.replicaId,
+      PRIORITY_FOLLOW_UP_SOURCE_REPLICA_ID,
+      'replacement should retain a concrete healthy source replica',
+    );
+  } finally {
+    rebalancer.shutdown();
+  }
+});
+
 test('UnifiedRebalancer treats needs_operation blocker reasons as ' +
   'priority follow-up work', async (t) => {
   initializeTestEnvironment();
@@ -2584,6 +2717,43 @@ test('UnifiedRebalancer treats needs_operation blocker reasons as ' +
       required,
       true,
       'eligible-but-no-operation is enough to create follow-up work when progress details are absent',
+    );
+  } finally {
+    rebalancer.shutdown();
+  }
+});
+
+test('UnifiedRebalancer treats terminal failed priority recovery as ' +
+  'follow-up work while spread remains blocked', async (t) => {
+  initializeTestEnvironment();
+
+  const rebalancer = createTestRebalancer({
+    entityId: SQL_WRITE_OPERATION_PRIORITY_PARTITION_ID,
+    entityType: EntityType.PARTITION,
+    partitions: [{
+      partition_id: SQL_WRITE_OPERATION_PRIORITY_PARTITION_ID,
+      table_id: SYSTEM_TABLE_NAME.SQL_WRITE_OPERATIONS,
+    }],
+  });
+
+  try {
+    const required =
+      rebalancer.isPriorityRecoveryFollowUpOperationRequired({
+        partitionId: SQL_WRITE_OPERATION_PRIORITY_PARTITION_ID,
+        semanticStateId:
+          PRIORITY_RECOVERY_SEMANTIC_STATE_BLOCKED_UNCLASSIFIED,
+        workflowState: PRIORITY_RECOVERY_WORKFLOW_STATE_TERMINAL,
+        latestOperationStatus: PRIORITY_VISIBILITY_OPERATION_STATUS_FAILED,
+        eligibleNodeIds: [
+          PRIORITY_FOLLOW_UP_NODE_ID_A,
+          PRIORITY_FOLLOW_UP_NODE_ID_B,
+        ],
+      });
+
+    t.equal(
+      required,
+      true,
+      'terminal failed recovery operation should not strand a blocked priority partition',
     );
   } finally {
     rebalancer.shutdown();
@@ -3246,6 +3416,436 @@ test('UnifiedRebalancer prefers closure-witness priority follow-up over stale ' 
   }
 });
 
+test('UnifiedRebalancer trusts needs_operation closure witness over stale ' +
+  'cache-visible topology rows for the same blocked partition', async (t) => {
+  initializeTestEnvironment();
+
+  const nodeRows = [
+    {node_id: PRIORITY_FOLLOW_UP_NODE_ID_A, status: NodeStatus.ACTIVE},
+    {node_id: PRIORITY_FOLLOW_UP_NODE_ID_B, status: NodeStatus.ACTIVE},
+    {node_id: PRIORITY_FOLLOW_UP_NODE_ID_C, status: NodeStatus.ACTIVE},
+    {node_id: PRIORITY_FOLLOW_UP_NODE_ID_D, status: NodeStatus.ACTIVE},
+  ];
+  const serviceRows = [
+    {
+      service_id: PRIORITY_SURROGATE_OWNER_REPLICA_ID,
+      service_type: SERVICE_TYPE.PARTITION,
+      node_id: PRIORITY_FOLLOW_UP_NODE_ID_A,
+      partition_id: PRIORITY_PROGRESS_PARTITION_ID,
+      replica_id: PRIORITY_SURROGATE_OWNER_REPLICA_ID,
+      address:
+        PRIORITY_FOLLOW_UP_SERVICE_ADDRESS_PREFIX +
+        PRIORITY_SURROGATE_OWNER_REPLICA_ID,
+      raft_role: PRIORITY_FOLLOW_UP_RAFT_ROLE_VOTER,
+      status: ReplicaStatus.ACTIVE,
+    },
+    {
+      service_id: SQL_WRITE_OPERATION_PRIORITY_REPLICA_ID_A,
+      service_type: SERVICE_TYPE.PARTITION,
+      node_id: PRIORITY_FOLLOW_UP_NODE_ID_A,
+      partition_id: SQL_WRITE_OPERATION_PRIORITY_PARTITION_ID,
+      replica_id: SQL_WRITE_OPERATION_PRIORITY_REPLICA_ID_A,
+      address:
+        PRIORITY_FOLLOW_UP_SERVICE_ADDRESS_PREFIX +
+        SQL_WRITE_OPERATION_PRIORITY_REPLICA_ID_A,
+      raft_role: PRIORITY_FOLLOW_UP_RAFT_ROLE_VOTER,
+      status: ReplicaStatus.ACTIVE,
+    },
+    {
+      service_id: SQL_WRITE_OPERATION_PRIORITY_REPLICA_ID_B,
+      service_type: SERVICE_TYPE.PARTITION,
+      node_id: PRIORITY_FOLLOW_UP_NODE_ID_A,
+      partition_id: SQL_WRITE_OPERATION_PRIORITY_PARTITION_ID,
+      replica_id: SQL_WRITE_OPERATION_PRIORITY_REPLICA_ID_B,
+      address:
+        PRIORITY_FOLLOW_UP_SERVICE_ADDRESS_PREFIX +
+        SQL_WRITE_OPERATION_PRIORITY_REPLICA_ID_B,
+      raft_role: PRIORITY_FOLLOW_UP_RAFT_ROLE_VOTER,
+      status: ReplicaStatus.ACTIVE,
+    },
+    {
+      service_id: SQL_WRITE_OPERATION_PRIORITY_REPLICA_ID_C,
+      service_type: SERVICE_TYPE.PARTITION,
+      node_id: PRIORITY_FOLLOW_UP_NODE_ID_A,
+      partition_id: SQL_WRITE_OPERATION_PRIORITY_PARTITION_ID,
+      replica_id: SQL_WRITE_OPERATION_PRIORITY_REPLICA_ID_C,
+      address:
+        PRIORITY_FOLLOW_UP_SERVICE_ADDRESS_PREFIX +
+        SQL_WRITE_OPERATION_PRIORITY_REPLICA_ID_C,
+      raft_role: PRIORITY_FOLLOW_UP_RAFT_ROLE_VOTER,
+      status: ReplicaStatus.ACTIVE,
+    },
+  ];
+  const partitionRows = [
+    {
+      partition_id: PRIORITY_PROGRESS_PARTITION_ID,
+      table_id: SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS,
+    },
+    {
+      partition_id: SQL_WRITE_OPERATION_PRIORITY_PARTITION_ID,
+      table_id: SYSTEM_TABLE_NAME.SQL_WRITE_OPERATIONS,
+    },
+  ];
+  const replicaOperations = [{
+    operation_id: PRIORITY_SURROGATE_STALE_OPERATION_ID,
+    partition_id: SQL_WRITE_OPERATION_PRIORITY_PARTITION_ID,
+    type: OperationType.REPLACE,
+    status: ReplicaStatus.PENDING,
+    workflow_step: WORKFLOW_STEP.PENDING,
+    target_node_id: PRIORITY_FOLLOW_UP_NODE_ID_B,
+  }];
+  const priorityPartitionSummary = {
+    satisfied: false,
+    blockedPartitions: [{
+      partitionId: SQL_WRITE_OPERATION_PRIORITY_PARTITION_ID,
+      readyReplicaCount: PRIORITY_RECOVERY_READY_REPLICA_COUNT_CANONICAL,
+      readyDistinctNodeCount: PRIORITY_RECOVERY_READY_DISTINCT_NODE_COUNT,
+      requiredDistinctNodeCount:
+        PRIORITY_RECOVERY_REQUIRED_DISTINCT_NODE_COUNT,
+      spreadGap: PRIORITY_RECOVERY_SPREAD_GAP,
+    }],
+  };
+  const priorityRecoveryClosureWitness = {
+    blockedPartitionIds: [
+      SQL_WRITE_OPERATION_PRIORITY_PARTITION_ID,
+    ],
+    unresolvedSemanticStateIds: [
+      PRIORITY_RECOVERY_SEMANTIC_STATE_NEEDS_OPERATION,
+    ],
+  };
+  const planningSnapshot = {
+    publicationEpoch: PRIORITY_RECOVERY_PUBLICATION_EPOCH,
+    publishedActiveNodeIds: [
+      PRIORITY_FOLLOW_UP_NODE_ID_A,
+      PRIORITY_FOLLOW_UP_NODE_ID_B,
+      PRIORITY_FOLLOW_UP_NODE_ID_C,
+      PRIORITY_FOLLOW_UP_NODE_ID_D,
+    ],
+    priorityPartitionSummary,
+    publicationRecoveryGate: {
+      prioritySpreadPending: true,
+      priorityPartitionSummary,
+      priorityRecoveryClosureWitness,
+    },
+    priorityRecoveryClosureWitness,
+  };
+  const cache = createMockCache(
+    nodeRows,
+    serviceRows,
+    partitionRows,
+    [],
+    replicaOperations,
+  );
+  const readinessService = {
+    ...createMockReadinessService(cache),
+    getPriorityRecoveryPlanningAnswerBestEffort() {
+      return planningSnapshot;
+    },
+    getPriorityRecoveryPlanningAnswerSync() {
+      return planningSnapshot;
+    },
+    membershipPublicationService: createMockMembershipPublicationService(
+      planningSnapshot.publishedActiveNodeIds,
+      PRIORITY_RECOVERY_PUBLICATION_EPOCH,
+      {
+        priorityPartitionSummary,
+      },
+    ),
+  };
+  const createdOperations = [];
+  const coordinator = {
+    ...createMockCoordinator(),
+    createOperation: async (move) => {
+      createdOperations.push(move);
+      return {
+        operationId: PRIORITY_SURROGATE_CREATED_OPERATION_ID,
+        type: move.type,
+        partitionId: move.partitionId,
+        entityId: move.entityId,
+        targetNodeId: move.nodeId,
+        replicaId: move.replicaId,
+        status: ReplicaStatus.PENDING,
+        workflowStep: WORKFLOW_STEP.PENDING,
+      };
+    },
+  };
+  const rebalancer = createTestRebalancer({
+    entityId: PRIORITY_PROGRESS_PARTITION_ID,
+    entityType: EntityType.PARTITION,
+    nodeId: PRIORITY_FOLLOW_UP_NODE_ID_A,
+    systemTableCache: cache,
+    rebalanceCoordinator: coordinator,
+    controlPlaneReadinessService: readinessService,
+  });
+
+  rebalancer.setLeader(true);
+  rebalancer.clusterReadinessConfirmed = true;
+  rebalancer.isStabilized = () => true;
+  rebalancer.getConfiguredRebalanceBudget = async () =>
+    PRIORITY_RECOVERY_REQUIRED_DISTINCT_NODE_COUNT;
+  rebalancer.getGlobalInFlightOperationCount = async () =>
+    NO_GLOBAL_IN_FLIGHT_OPERATIONS;
+  rebalancer.movePlanner.calculateTargetState = async () => ({
+    targetReplicaCount: PRIORITY_RECOVERY_REQUIRED_DISTINCT_NODE_COUNT,
+    targetNodes: [
+      PRIORITY_FOLLOW_UP_NODE_ID_A,
+      PRIORITY_FOLLOW_UP_NODE_ID_B,
+      PRIORITY_FOLLOW_UP_NODE_ID_C,
+    ],
+  });
+  rebalancer.movePlanner.calculateMoves = () => [];
+  rebalancer.movePlanner.applyPressureGating = async (moves) => moves;
+
+  try {
+    const result = await rebalancer.rebalance(
+      TriggerType.PERIODIC,
+      {
+        targetReplicaCount: PRIORITY_RECOVERY_REQUIRED_DISTINCT_NODE_COUNT,
+        placementConstraints: {
+          spreadAcrossNodes: true,
+        },
+      },
+    );
+
+    t.equal(
+      result.moves.length,
+      1,
+      'needs_operation witness should schedule one surrogate follow-up move',
+    );
+    t.equal(
+      createdOperations.length,
+      1,
+      'stale cache-visible operation row should not suppress persistence',
+    );
+    t.equal(
+      createdOperations[0].partitionId,
+      SQL_WRITE_OPERATION_PRIORITY_PARTITION_ID,
+      'surrogate follow-up should target the canonical blocked partition',
+    );
+    t.equal(
+      createdOperations[0].nodeId,
+      PRIORITY_FOLLOW_UP_NODE_ID_B,
+      'follow-up should use the first eligible recovery target',
+    );
+  } finally {
+    rebalancer.shutdown();
+  }
+});
+
+test('UnifiedRebalancer advances closure-witness needs_operation work past ' +
+  'topology-blocked priority candidates', async (t) => {
+  initializeTestEnvironment();
+
+  const nodeRows = [
+    {node_id: PRIORITY_FOLLOW_UP_NODE_ID_A, status: NodeStatus.ACTIVE},
+    {node_id: PRIORITY_FOLLOW_UP_NODE_ID_B, status: NodeStatus.ACTIVE},
+    {node_id: PRIORITY_FOLLOW_UP_NODE_ID_C, status: NodeStatus.ACTIVE},
+    {node_id: PRIORITY_FOLLOW_UP_NODE_ID_D, status: NodeStatus.ACTIVE},
+  ];
+  const serviceRows = [
+    {
+      service_id: PRIORITY_SURROGATE_OWNER_REPLICA_ID,
+      service_type: SERVICE_TYPE.PARTITION,
+      node_id: PRIORITY_FOLLOW_UP_NODE_ID_A,
+      partition_id: PRIORITY_PROGRESS_PARTITION_ID,
+      replica_id: PRIORITY_SURROGATE_OWNER_REPLICA_ID,
+      address:
+        PRIORITY_FOLLOW_UP_SERVICE_ADDRESS_PREFIX +
+        PRIORITY_SURROGATE_OWNER_REPLICA_ID,
+      raft_role: PRIORITY_FOLLOW_UP_RAFT_ROLE_VOTER,
+      status: ReplicaStatus.ACTIVE,
+    },
+    {
+      service_id: SQL_WRITE_OPERATION_PRIORITY_REPLICA_ID_A,
+      service_type: SERVICE_TYPE.PARTITION,
+      node_id: PRIORITY_FOLLOW_UP_NODE_ID_A,
+      partition_id: SQL_WRITE_OPERATION_PRIORITY_PARTITION_ID,
+      replica_id: SQL_WRITE_OPERATION_PRIORITY_REPLICA_ID_A,
+      address:
+        PRIORITY_FOLLOW_UP_SERVICE_ADDRESS_PREFIX +
+        SQL_WRITE_OPERATION_PRIORITY_REPLICA_ID_A,
+      raft_role: PRIORITY_FOLLOW_UP_RAFT_ROLE_VOTER,
+      status: ReplicaStatus.ACTIVE,
+    },
+    {
+      service_id: SQL_TRANSACTIONS_PRIORITY_REPLICA_ID_A,
+      service_type: SERVICE_TYPE.PARTITION,
+      node_id: PRIORITY_FOLLOW_UP_NODE_ID_A,
+      partition_id: SQL_TRANSACTIONS_PRIORITY_PARTITION_ID,
+      replica_id: SQL_TRANSACTIONS_PRIORITY_REPLICA_ID_A,
+      address:
+        PRIORITY_FOLLOW_UP_SERVICE_ADDRESS_PREFIX +
+        SQL_TRANSACTIONS_PRIORITY_REPLICA_ID_A,
+      raft_role: PRIORITY_FOLLOW_UP_RAFT_ROLE_VOTER,
+      status: ReplicaStatus.ACTIVE,
+    },
+  ];
+  const partitionRows = [
+    {
+      partition_id: PRIORITY_PROGRESS_PARTITION_ID,
+      table_id: SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS,
+    },
+    {
+      partition_id: SQL_WRITE_OPERATION_PRIORITY_PARTITION_ID,
+      table_id: SYSTEM_TABLE_NAME.SQL_WRITE_OPERATIONS,
+    },
+    {
+      partition_id: SQL_TRANSACTIONS_PRIORITY_PARTITION_ID,
+      table_id: SYSTEM_TABLE_NAME.SQL_TRANSACTIONS,
+    },
+  ];
+  const replicaOperations = [{
+    operation_id: PRIORITY_SURROGATE_STALE_OPERATION_ID,
+    partition_id: SQL_WRITE_OPERATION_PRIORITY_PARTITION_ID,
+    type: OperationType.ADD,
+    status: ReplicaStatus.PENDING,
+    workflow_step: WORKFLOW_STEP.PENDING,
+    target_node_id: PRIORITY_FOLLOW_UP_NODE_ID_B,
+  }];
+  const priorityPartitionSummary = {
+    satisfied: false,
+    blockedPartitions: [
+      {
+        partitionId: SQL_WRITE_OPERATION_PRIORITY_PARTITION_ID,
+        readyReplicaCount: PRIORITY_RECOVERY_READY_REPLICA_COUNT_CANONICAL,
+        readyDistinctNodeCount: PRIORITY_RECOVERY_READY_DISTINCT_NODE_COUNT,
+        requiredDistinctNodeCount:
+          PRIORITY_RECOVERY_REQUIRED_DISTINCT_NODE_COUNT,
+        spreadGap: PRIORITY_RECOVERY_SPREAD_GAP,
+      },
+      {
+        partitionId: SQL_TRANSACTIONS_PRIORITY_PARTITION_ID,
+        readyReplicaCount: PRIORITY_RECOVERY_READY_REPLICA_COUNT_CANONICAL,
+        readyDistinctNodeCount: PRIORITY_RECOVERY_READY_DISTINCT_NODE_COUNT,
+        requiredDistinctNodeCount:
+          PRIORITY_RECOVERY_REQUIRED_DISTINCT_NODE_COUNT,
+        spreadGap: PRIORITY_RECOVERY_SPREAD_GAP,
+      },
+    ],
+  };
+  const priorityRecoveryClosureWitness = {
+    blockedPartitionIds: [
+      SQL_WRITE_OPERATION_PRIORITY_PARTITION_ID,
+      SQL_TRANSACTIONS_PRIORITY_PARTITION_ID,
+    ],
+    unresolvedSemanticStateIds: [
+      PRIORITY_RECOVERY_SEMANTIC_STATE_NEEDS_OPERATION,
+    ],
+  };
+  const planningSnapshot = {
+    publicationEpoch: PRIORITY_RECOVERY_PUBLICATION_EPOCH,
+    publishedActiveNodeIds: [
+      PRIORITY_FOLLOW_UP_NODE_ID_A,
+      PRIORITY_FOLLOW_UP_NODE_ID_B,
+      PRIORITY_FOLLOW_UP_NODE_ID_C,
+      PRIORITY_FOLLOW_UP_NODE_ID_D,
+    ],
+    priorityPartitionSummary,
+    publicationRecoveryGate: {
+      prioritySpreadPending: true,
+      priorityPartitionSummary,
+      priorityRecoveryClosureWitness,
+    },
+    priorityRecoveryClosureWitness,
+  };
+  const cache = createMockCache(
+    nodeRows,
+    serviceRows,
+    partitionRows,
+    [],
+    replicaOperations,
+  );
+  const readinessService = {
+    ...createMockReadinessService(cache),
+    getPriorityRecoveryPlanningAnswerBestEffort() {
+      return planningSnapshot;
+    },
+    getPriorityRecoveryPlanningAnswerSync() {
+      return planningSnapshot;
+    },
+    membershipPublicationService: createMockMembershipPublicationService(
+      planningSnapshot.publishedActiveNodeIds,
+      PRIORITY_RECOVERY_PUBLICATION_EPOCH,
+      {
+        priorityPartitionSummary,
+      },
+    ),
+  };
+  const createdOperations = [];
+  const coordinator = {
+    ...createMockCoordinator(),
+    createOperation: async (move) => {
+      createdOperations.push(move);
+      return {
+        operationId: PRIORITY_SURROGATE_CREATED_OPERATION_ID,
+        type: move.type,
+        partitionId: move.partitionId,
+        entityId: move.entityId,
+        targetNodeId: move.nodeId,
+        replicaId: move.replicaId,
+        status: ReplicaStatus.PENDING,
+        workflowStep: WORKFLOW_STEP.PENDING,
+      };
+    },
+  };
+  const rebalancer = createTestRebalancer({
+    entityId: PRIORITY_PROGRESS_PARTITION_ID,
+    entityType: EntityType.PARTITION,
+    nodeId: PRIORITY_FOLLOW_UP_NODE_ID_A,
+    systemTableCache: cache,
+    rebalanceCoordinator: coordinator,
+    controlPlaneReadinessService: readinessService,
+  });
+
+  rebalancer.setLeader(true);
+  rebalancer.clusterReadinessConfirmed = true;
+  rebalancer.isStabilized = () => true;
+  rebalancer.getConfiguredRebalanceBudget = async () =>
+    PRIORITY_RECOVERY_REQUIRED_DISTINCT_NODE_COUNT;
+  rebalancer.getGlobalInFlightOperationCount = async () =>
+    NO_GLOBAL_IN_FLIGHT_OPERATIONS;
+  rebalancer.movePlanner.calculateTargetState = async () => ({
+    targetReplicaCount: PRIORITY_RECOVERY_REQUIRED_DISTINCT_NODE_COUNT,
+    targetNodes: [
+      PRIORITY_FOLLOW_UP_NODE_ID_A,
+      PRIORITY_FOLLOW_UP_NODE_ID_B,
+      PRIORITY_FOLLOW_UP_NODE_ID_C,
+    ],
+  });
+  rebalancer.movePlanner.calculateMoves = () => [];
+  rebalancer.movePlanner.applyPressureGating = async (moves) => moves;
+
+  try {
+    const result = await rebalancer.rebalance(
+      TriggerType.PERIODIC,
+      {
+        targetReplicaCount: PRIORITY_RECOVERY_REQUIRED_DISTINCT_NODE_COUNT,
+        placementConstraints: {
+          spreadAcrossNodes: true,
+        },
+      },
+    );
+
+    t.equal(
+      result.moves.length,
+      1,
+      'closure witness should schedule an unblocked surrogate follow-up move',
+    );
+    t.equal(
+      createdOperations.length,
+      1,
+      'unblocked closure-witness work should persist one operation',
+    );
+    t.equal(
+      createdOperations[0].partitionId,
+      SQL_TRANSACTIONS_PRIORITY_PARTITION_ID,
+      'surrogate follow-up should advance to the unblocked closure candidate',
+    );
+  } finally {
+    rebalancer.shutdown();
+  }
+});
+
 test('UnifiedRebalancer preempts current priority moves with a closure-witness ' +
   'no-operation surrogate under a one-slot budget', async (t) => {
   initializeTestEnvironment();
@@ -3543,6 +4143,104 @@ test('UnifiedRebalancer treats rebalancer-handoff progress contracts as ' +
   }
 });
 
+test('UnifiedRebalancer uses target-sized endpoint visibility for ' +
+  'post-published publication-owner trim overflow', async (t) => {
+  initializeTestEnvironment();
+  const PUBLICATION_REPLICA_ID_B = 'control_plane_publications-p1-r2';
+  const PUBLICATION_REPLICA_ID_C = 'control_plane_publications-p1-r3';
+  const PUBLICATION_REPLICA_ID_D = 'control_plane_publications-p1-r4';
+
+  const rebalancer = createTestRebalancer({
+    entityId: PRIORITY_PROGRESS_PARTITION_ID,
+    entityType: EntityType.PARTITION,
+    nodeId: PRIORITY_FOLLOW_UP_NODE_ID_A,
+    nodes: [
+      {node_id: PRIORITY_FOLLOW_UP_NODE_ID_A, status: NodeStatus.ACTIVE},
+      {node_id: PRIORITY_FOLLOW_UP_NODE_ID_B, status: NodeStatus.ACTIVE},
+      {node_id: PRIORITY_FOLLOW_UP_NODE_ID_C, status: NodeStatus.ACTIVE},
+      {node_id: PRIORITY_FOLLOW_UP_NODE_ID_D, status: NodeStatus.ACTIVE},
+    ],
+    partitions: [{
+      partition_id: PRIORITY_PROGRESS_PARTITION_ID,
+      table_id: SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS,
+    }],
+  });
+
+  try {
+    rebalancer.controlPlaneReadinessService.membershipPublicationService =
+      createMockMembershipPublicationService(
+        [
+          PRIORITY_FOLLOW_UP_NODE_ID_A,
+          PRIORITY_FOLLOW_UP_NODE_ID_B,
+          PRIORITY_FOLLOW_UP_NODE_ID_C,
+          PRIORITY_FOLLOW_UP_NODE_ID_D,
+        ],
+        PRIORITY_RECOVERY_PUBLICATION_EPOCH,
+        {
+          priorityPartitionSummary: {
+            satisfied: false,
+            blockedPartitions: [{
+              partitionId: SQL_WRITE_OPERATION_PRIORITY_PARTITION_ID,
+              readyDistinctNodeCount:
+                PRIORITY_RECOVERY_READY_DISTINCT_NODE_COUNT,
+              requiredDistinctNodeCount:
+                PRIORITY_RECOVERY_REQUIRED_DISTINCT_NODE_COUNT,
+              spreadGap: PRIORITY_RECOVERY_SPREAD_GAP,
+            }],
+          },
+        },
+      );
+    rebalancer.getCurrentReplicas = () => ([
+      {
+        replica_id: PRIORITY_SURROGATE_OWNER_REPLICA_ID,
+        node_id: PRIORITY_FOLLOW_UP_NODE_ID_A,
+        status: ReplicaStatus.ACTIVE,
+      },
+      {
+        replica_id: PUBLICATION_REPLICA_ID_B,
+        node_id: PRIORITY_FOLLOW_UP_NODE_ID_B,
+        status: ReplicaStatus.ACTIVE,
+      },
+      {
+        replica_id: PUBLICATION_REPLICA_ID_C,
+        node_id: PRIORITY_FOLLOW_UP_NODE_ID_C,
+        status: ReplicaStatus.ACTIVE,
+      },
+      {
+        replica_id: PUBLICATION_REPLICA_ID_D,
+        node_id: PRIORITY_FOLLOW_UP_NODE_ID_D,
+        status: ReplicaStatus.ACTIVE,
+      },
+    ]);
+
+    const endpointVisibilityPolicy =
+      rebalancer.getCriticalSystemEndpointVisibilityPolicy([
+        PRIORITY_FOLLOW_UP_NODE_ID_A,
+        PRIORITY_FOLLOW_UP_NODE_ID_B,
+        PRIORITY_FOLLOW_UP_NODE_ID_C,
+        PRIORITY_FOLLOW_UP_NODE_ID_D,
+      ]);
+
+    t.equal(
+      rebalancer.isPriorityControlPlaneRecoveryActive(),
+      true,
+      'stale publication priority summary should still report recovery active',
+    );
+    t.equal(
+      rebalancer.shouldRequireFullControlPlanePublicationEndpointVisibility(),
+      false,
+      'published over-target publication owner should enter bounded trim visibility',
+    );
+    t.equal(
+      endpointVisibilityPolicy.requiredReadyNodeCount,
+      PRIORITY_RECOVERY_REQUIRED_DISTINCT_NODE_COUNT,
+      'bounded trim should require target-sized endpoint visibility',
+    );
+  } finally {
+    rebalancer.shutdown();
+  }
+});
+
 test('UnifiedRebalancer prioritizes safe priority cleanup removes when ' +
   'the global budget is saturated', async (t) => {
   initializeTestEnvironment();
@@ -3670,6 +4368,133 @@ test('UnifiedRebalancer prioritizes safe priority cleanup removes when ' +
   }
 });
 
+test('UnifiedRebalancer prioritizes safe priority cleanup removes when ' +
+  'budget is available', async (t) => {
+  initializeTestEnvironment();
+
+  const executedMoves = [];
+  const rebalancer = createTestRebalancer({
+    entityId: SQL_TRANSACTIONS_PRIORITY_PARTITION_ID,
+    entityType: EntityType.PARTITION,
+    nodeId: REBALANCER_TEST_NODE_ID_A,
+    nodes: [
+      {node_id: REBALANCER_TEST_NODE_ID_A, status: NodeStatus.ACTIVE},
+      {node_id: REBALANCER_TEST_NODE_ID_B, status: NodeStatus.ACTIVE},
+      {node_id: REBALANCER_TEST_NODE_ID_C, status: NodeStatus.ACTIVE},
+      {node_id: PRIORITY_FOLLOW_UP_NODE_ID_D, status: NodeStatus.ACTIVE},
+    ],
+    partitions: [{
+      partition_id: SQL_TRANSACTIONS_PRIORITY_PARTITION_ID,
+      table_id: SYSTEM_TABLE_NAME.SQL_TRANSACTIONS,
+    }],
+  });
+
+  try {
+    rebalancer.controlPlaneReadinessService.membershipPublicationService =
+      createMockMembershipPublicationService(
+        [
+          REBALANCER_TEST_NODE_ID_A,
+          REBALANCER_TEST_NODE_ID_B,
+          REBALANCER_TEST_NODE_ID_C,
+          PRIORITY_FOLLOW_UP_NODE_ID_D,
+        ],
+        PRIORITY_RECOVERY_PUBLICATION_EPOCH,
+        {
+          priorityPartitionSummary: {
+            satisfied: true,
+          },
+        },
+      );
+    rebalancer.setLeader(true);
+    rebalancer.getCurrentReplicas = () => ([
+      {
+        replica_id: SQL_TRANSACTIONS_PRIORITY_REPLICA_ID_A,
+        node_id: REBALANCER_TEST_NODE_ID_A,
+        status: ReplicaStatus.ACTIVE,
+      },
+      {
+        replica_id: SQL_TRANSACTIONS_PRIORITY_REPLICA_ID_B,
+        node_id: REBALANCER_TEST_NODE_ID_B,
+        status: ReplicaStatus.ACTIVE,
+      },
+      {
+        replica_id: SQL_TRANSACTIONS_PRIORITY_REPLICA_ID_C,
+        node_id: REBALANCER_TEST_NODE_ID_C,
+        status: ReplicaStatus.ACTIVE,
+      },
+      {
+        replica_id: SQL_TRANSACTIONS_PRIORITY_REPLICA_ID_D,
+        node_id: PRIORITY_FOLLOW_UP_NODE_ID_D,
+        status: ReplicaStatus.ACTIVE,
+      },
+    ]);
+    rebalancer.getAvailableNodes = () => ([
+      {node_id: REBALANCER_TEST_NODE_ID_A},
+      {node_id: REBALANCER_TEST_NODE_ID_B},
+      {node_id: REBALANCER_TEST_NODE_ID_C},
+      {node_id: PRIORITY_FOLLOW_UP_NODE_ID_D},
+    ]);
+    rebalancer.movePlanner.calculateTargetState = async () => ({
+      targetReplicaCount: PRIORITY_RECOVERY_REQUIRED_DISTINCT_NODE_COUNT,
+    });
+    rebalancer.movePlanner.calculateMoves = () => ([
+      {
+        type: MoveType.REPLACE,
+        nodeId: REBALANCER_TEST_NODE_ID_C,
+        sourceNodeId: REBALANCER_TEST_NODE_ID_A,
+        replicaId: SQL_TRANSACTIONS_PRIORITY_REPLICA_ID_A,
+        reason: MOVE_REASON.REPLACE_REPLICA,
+      },
+      {
+        type: MoveType.REMOVE,
+        nodeId: PRIORITY_FOLLOW_UP_NODE_ID_D,
+        replicaId: SQL_TRANSACTIONS_PRIORITY_REPLICA_ID_D,
+        reason: MOVE_REASON.NODE_NOT_IN_TARGET,
+        standaloneSafe: true,
+      },
+    ]);
+    rebalancer.movePlanner.applyPressureGating = async (moves) => moves;
+    rebalancer.movePlanner.isCriticalState = () => false;
+    rebalancer.getConfiguredRebalanceBudget = async () =>
+      PRIORITY_RECOVERY_SPREAD_GAP;
+    rebalancer.getGlobalInFlightOperationCount = async () =>
+      NO_GLOBAL_IN_FLIGHT_OPERATIONS;
+    rebalancer.executeRebalancingMoves = async (moves) => {
+      executedMoves.push(...moves);
+      return moves.map((move) => ({
+        success: true,
+        operation: move.type,
+        nodeId: move.nodeId,
+        replicaId: move.replicaId,
+      }));
+    };
+
+    const result = await rebalancer.rebalance(
+      TriggerType.PERIODIC,
+      {targetReplicaCount: PRIORITY_RECOVERY_REQUIRED_DISTINCT_NODE_COUNT},
+    );
+
+    t.equal(result.success, true, 'cleanup pass should be accepted');
+    t.equal(
+      executedMoves.length,
+      PRIORITY_RECOVERY_SPREAD_GAP,
+      'available one-slot budget should still allow one cleanup move',
+    );
+    t.equal(
+      executedMoves[0]?.type,
+      MoveType.REMOVE,
+      'safe over-target cleanup remove should spend the available slot first',
+    );
+    t.equal(
+      executedMoves[0]?.replicaId,
+      SQL_TRANSACTIONS_PRIORITY_REPLICA_ID_D,
+      'cleanup should target the standalone-safe over-target replica',
+    );
+  } finally {
+    rebalancer.shutdown();
+  }
+});
+
 test('UnifiedRebalancer reserves one global move slot for priority recovery ' +
   'while priority spread is still unsatisfied', async (t) => {
   initializeTestEnvironment();
@@ -3742,4 +4567,64 @@ test('UnifiedRebalancer reserves one global move slot for priority recovery ' +
   );
 
   rebalancer.shutdown();
+});
+
+test('UnifiedRebalancer constrains priority placement to published membership after published satisfied recovery', async (t) => {
+  initializeTestEnvironment();
+
+  const rebalancer = createTestRebalancer({
+    entityId: SQL_TRANSACTIONS_PRIORITY_PARTITION_ID,
+    entityType: EntityType.PARTITION,
+    nodeId: REBALANCER_TEST_NODE_ID_A,
+    nodes: [
+      {node_id: REBALANCER_TEST_NODE_ID_A, status: NodeStatus.ACTIVE},
+      {node_id: REBALANCER_TEST_NODE_ID_B, status: NodeStatus.ACTIVE},
+      {node_id: REBALANCER_TEST_NODE_ID_C, status: NodeStatus.ACTIVE},
+      {node_id: PRIORITY_FOLLOW_UP_NODE_ID_D, status: NodeStatus.ACTIVE},
+    ],
+    partitions: [{
+      partition_id: SQL_TRANSACTIONS_PRIORITY_PARTITION_ID,
+      table_id: SYSTEM_TABLE_NAME.SQL_TRANSACTIONS,
+    }],
+  });
+
+  try {
+    rebalancer.controlPlaneReadinessService.membershipPublicationService =
+      createMockMembershipPublicationService(
+        [
+          REBALANCER_TEST_NODE_ID_A,
+          REBALANCER_TEST_NODE_ID_B,
+          REBALANCER_TEST_NODE_ID_C,
+        ],
+        PRIORITY_RECOVERY_PUBLICATION_EPOCH,
+        {
+          priorityPartitionSummary: {
+            satisfied: true,
+          },
+        },
+      );
+    rebalancer.controlPlaneReadinessService.getNodeReadinessSync = () => ({
+      dimensions: {
+        [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE]:
+          true,
+      },
+    });
+    rebalancer.isGlobalPriorityControlPlaneRecoveryActive = () => true;
+
+    const availableNodeIds = rebalancer.getAvailableNodes()
+      .map((node) => node.node_id)
+      .sort();
+
+    t.same(
+      availableNodeIds,
+      [
+        REBALANCER_TEST_NODE_ID_A,
+        REBALANCER_TEST_NODE_ID_B,
+        REBALANCER_TEST_NODE_ID_C,
+      ].sort(),
+      'published satisfied recovery must exclude stale unpublished recovery-cohort nodes from placement',
+    );
+  } finally {
+    rebalancer.shutdown();
+  }
 });

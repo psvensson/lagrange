@@ -82,7 +82,7 @@ test('createSystemMetadataOwners wires one shared gateway and cache into every o
   });
 
 test('ControlPlanePublicationsOwner marks publication mutations as ' +
-  'critical non-deferrable writes', async (t) => {
+  'critical deferrable writes', async (t) => {
   const gatewayCalls = [];
   const gateway = {
     async upsertSystemTableRow(tableName, row, options) {
@@ -126,8 +126,8 @@ test('ControlPlanePublicationsOwner marks publication mutations as ' +
   );
   t.equal(
     gatewayCalls[0]?.options?.allowPressureDefer,
-    false,
-    'publication mutations should not defer behind transport pressure',
+    true,
+    'publication mutations should defer behind transport pressure',
   );
   t.equal(
     gatewayCalls[0]?.options?.routingReadinessDimension,

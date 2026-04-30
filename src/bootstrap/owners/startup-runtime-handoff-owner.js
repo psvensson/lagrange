@@ -2,6 +2,10 @@ import {
   waitForMetadataPublicationReadiness,
 } from '../traffic-readiness-utils.js';
 
+const LOCAL_STR_FUNCTION = 'function';
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_NUM_ONE = 1;
+
 const CONTROL_PLANE_BACKGROUND_WRITER_RETRY_DELAY_MS = 1000;
 
 class StartupRuntimeHandoffOwner {
@@ -22,7 +26,7 @@ class StartupRuntimeHandoffOwner {
     }
 
     const override = service[methodName];
-    return typeof override === 'function' ? override.bind(service) : null;
+    return typeof override === LOCAL_STR_FUNCTION ? override.bind(service) : null;
   }
 
   hasActiveControlPlaneBackgroundWriters() {
@@ -46,14 +50,14 @@ class StartupRuntimeHandoffOwner {
 
   resolveControlPlaneBackgroundWriterRetryDelayMs(error = null) {
     const hintedDelayMs = Number(error?.retryAfterMs);
-    if (Number.isFinite(hintedDelayMs) && hintedDelayMs > 0) {
-      return Math.max(1, Math.floor(hintedDelayMs));
+    if (Number.isFinite(hintedDelayMs) && hintedDelayMs > LOCAL_NUM_ZERO) {
+      return Math.max(LOCAL_NUM_ONE, Math.floor(hintedDelayMs));
     }
     const configuredDelayMs = Number(
       this.delegates.getControlPlaneBackgroundWriterRetryDelayMs?.(),
     );
-    if (Number.isFinite(configuredDelayMs) && configuredDelayMs > 0) {
-      return Math.max(1, Math.floor(configuredDelayMs));
+    if (Number.isFinite(configuredDelayMs) && configuredDelayMs > LOCAL_NUM_ZERO) {
+      return Math.max(LOCAL_NUM_ONE, Math.floor(configuredDelayMs));
     }
     return CONTROL_PLANE_BACKGROUND_WRITER_RETRY_DELAY_MS;
   }
@@ -88,7 +92,7 @@ class StartupRuntimeHandoffOwner {
       }
       void this.activateControlPlaneBackgroundWriters();
     }, delayMs);
-    if (typeof this.controlPlaneBackgroundWriterRetryTimer?.unref === 'function') {
+    if (typeof this.controlPlaneBackgroundWriterRetryTimer?.unref === LOCAL_STR_FUNCTION) {
       this.controlPlaneBackgroundWriterRetryTimer.unref();
     }
   }

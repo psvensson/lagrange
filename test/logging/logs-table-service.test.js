@@ -12,6 +12,14 @@ import {
   PRESSURE_GOVERNOR_ACTION,
   PRESSURE_WORK_CLASS,
 } from '../../src/control-plane/pressure-governor.js';
+import {
+  CONTROL_PLANE_WORKLOAD_CLASS,
+} from '../../src/control-plane/control-plane-workload-profile.js';
+
+const SHARED_PRESSURE_RESOURCE_KEY = 'logs-table';
+const SHARED_PRESSURE_RESOURCE_KEYS = Object.freeze([
+  SHARED_PRESSURE_RESOURCE_KEY,
+]);
 
 function createLogsOwner(writeImpl = async () => ({success: true})) {
   return {
@@ -519,6 +527,11 @@ test('LogsTableService routes owner-backed log writes through background control
       writes[0].options.workClass,
       PRESSURE_WORK_CLASS.BACKGROUND,
       'logs-table writes should use background pressure admission',
+    );
+    t.equal(
+      writes[0].options.workloadClass,
+      CONTROL_PLANE_WORKLOAD_CLASS.LOGS_TABLE_BACKGROUND_WRITE,
+      'logs-table writes should use isolated background workload admission',
     );
     t.equal(
       writes[0].options.deliveryPriority,
@@ -1030,6 +1043,35 @@ test('LogsTableService arms a shared-pressure defer window before the local ' +
 
   await service.shutdown();
 });
+
+test('LogsTableService evaluates shared pressure with explicit resource keys',
+  async (t) => {
+    LogsTableService.resetInstance();
+    const pressureGovernor = {
+      evaluate() {
+        return {
+          action: PRESSURE_GOVERNOR_ACTION.ADMIT,
+        };
+      },
+      isBackpressured() {
+        return true;
+      },
+      configure() {},
+    };
+    const service = new LogsTableService({
+      logsOwner: createLogsOwner(),
+      pressureGovernor,
+    });
+    service.initialize();
+
+    t.equal(
+      service.isSharedPressureBackpressured(SHARED_PRESSURE_RESOURCE_KEYS),
+      true,
+      'resource-key shared pressure checks should return governor pressure',
+    );
+
+    await service.shutdown();
+  });
 
 test('LogsTableService collapses transient transport failures by family while ' +
   'shared pressure is active', async (t) => {

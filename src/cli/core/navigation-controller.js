@@ -1,3 +1,27 @@
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_NUM_EIGHT = 8;
+const LOCAL_STR_NODES = 'nodes';
+const LOCAL_STR_592WI = ' > ';
+const LOCAL_STR_DRILLDOWN = 'drillDown';
+const LOCAL_STR_GOBACK = 'goBack';
+const LOCAL_STR_GOTOVIEW = 'goToView';
+const LOCAL_STR_JUMPTOENTITY = 'jumpToEntity';
+const LOCAL_STR_SERVICES = 'services';
+const LOCAL_STR_REPLICAS = 'replicas';
+const LOCAL_STR_TABLES = 'tables';
+const LOCAL_STR_PARTITIONS = 'partitions';
+const LOCAL_STR_MESSAGE_GROUPS = 'message_groups';
+const LOCAL_STR_LOGS = 'logs';
+const LOCAL_STR_CONFIG = 'config';
+const LOCAL_STR_CONTEXTS = 'contexts';
+const LOCAL_STR_OPERATIONS = 'operations';
+const LOCAL_STR_NODE = 'node';
+const LOCAL_STR_TABLE = 'table';
+const LOCAL_STR_PARTITION = 'partition';
+const LOCAL_STR_MESSAGE_GROUP = 'message_group';
+const LOCAL_STR_RESET = 'reset';
+const LOCAL_STR_NAVIGATION = 'navigation:';
+
 /**
  * NavigationController - Manages hierarchical navigation state and breadcrumbs
  *
@@ -87,7 +111,7 @@ function formatReplicasBreadcrumb(context = {}) {
 
 function formatOperationsBreadcrumb(context = {}) {
   return context.operationId ?
-    `Operation: ${context.operationId.substring(0, 8)}...` :
+    `Operation: ${context.operationId.substring(LOCAL_NUM_ZERO, LOCAL_NUM_EIGHT)}...` :
     VIEW_DISPLAY_NAME.operations;
 }
 
@@ -118,7 +142,7 @@ export class NavigationController {
     this.cache = cache;
     this.eventBus = eventBus;
     this.stack = [];
-    this.currentView = 'nodes';
+    this.currentView = LOCAL_STR_NODES;
     this.currentContext = null;
   }
 
@@ -148,14 +172,14 @@ export class NavigationController {
     }
 
     // Add current view if not at home
-    if (this.currentView !== 'nodes' || this.currentContext) {
+    if (this.currentView !== LOCAL_STR_NODES || this.currentContext) {
       parts.push(this.formatBreadcrumbItem({
         view: this.currentView,
         context: this.currentContext,
       }));
     }
 
-    return parts.join(' > ');
+    return parts.join(LOCAL_STR_592WI);
   }
 
   /**
@@ -203,7 +227,7 @@ export class NavigationController {
     this.currentView = view;
     this.currentContext = context;
 
-    this.emitNavigationEvent('drillDown', {view, context});
+    this.emitNavigationEvent(LOCAL_STR_DRILLDOWN, {view, context});
   }
 
   /**
@@ -212,7 +236,7 @@ export class NavigationController {
    * @return {boolean} True if navigation occurred, false if at root
    */
   goBack() {
-    if (this.stack.length === 0) {
+    if (this.stack.length === LOCAL_NUM_ZERO) {
       return false;
     }
 
@@ -223,7 +247,7 @@ export class NavigationController {
     this.currentView = prev.view;
     this.currentContext = prev.context;
 
-    this.emitNavigationEvent('goBack', {
+    this.emitNavigationEvent(LOCAL_STR_GOBACK, {
       from: {view: oldView, context: oldContext},
       to: {view: this.currentView, context: this.currentContext},
     });
@@ -247,7 +271,7 @@ export class NavigationController {
     this.currentView = view;
     this.currentContext = null;
 
-    this.emitNavigationEvent('goToView', {
+    this.emitNavigationEvent(LOCAL_STR_GOTOVIEW, {
       from: {view: oldView, context: oldContext},
       to: {view, context: null},
     });
@@ -282,7 +306,7 @@ export class NavigationController {
     this.currentView = view;
     this.currentContext = context;
 
-    this.emitNavigationEvent('jumpToEntity', {
+    this.emitNavigationEvent(LOCAL_STR_JUMPTOENTITY, {
       entityType,
       entityId,
       view,
@@ -296,25 +320,25 @@ export class NavigationController {
    */
   getViewData() {
     switch (this.currentView) {
-    case 'nodes':
+    case LOCAL_STR_NODES:
       return this.cache.getNodes();
-    case 'services':
+    case LOCAL_STR_SERVICES:
       return this.cache.getLogicalServices(this.currentContext || {});
-    case 'replicas':
+    case LOCAL_STR_REPLICAS:
       return this.cache.getServices(this.currentContext || {});
-    case 'tables':
+    case LOCAL_STR_TABLES:
       return this.cache.getTables();
-    case 'partitions':
+    case LOCAL_STR_PARTITIONS:
       return this.cache.getPartitions(this.currentContext || {});
-    case 'message_groups':
+    case LOCAL_STR_MESSAGE_GROUPS:
       return this.cache.getMessageGroups();
-    case 'logs':
+    case LOCAL_STR_LOGS:
       return this.cache.getLogs(this.currentContext || {});
-    case 'config':
+    case LOCAL_STR_CONFIG:
       return this.cache.getConfig();
-    case 'contexts':
+    case LOCAL_STR_CONTEXTS:
       return this.cache.getContexts(this.currentContext || {});
-    case 'operations':
+    case LOCAL_STR_OPERATIONS:
       return this.cache.getOperations(this.currentContext || {});
     default:
       return [];
@@ -330,25 +354,25 @@ export class NavigationController {
    */
   getRelatedCounts(entityType, entityId) {
     switch (entityType) {
-    case 'node':
+    case LOCAL_STR_NODE:
       return {
         services: this.cache.getLogicalServices({nodeId: entityId}).length,
         replicas: this.cache.getServices({nodeId: entityId}).length,
       };
-    case 'table':
+    case LOCAL_STR_TABLE:
       return {
         partitions: this.cache.getPartitions({tableId: entityId}).length,
       };
-    case 'partition': {
+    case LOCAL_STR_PARTITION: {
       const partition = this.cache.getPartition(entityId);
       return {
-        replicas: partition ? (partition.replica_count || 0) : 0,
+        replicas: partition ? (partition.replica_count || LOCAL_NUM_ZERO) : LOCAL_NUM_ZERO,
       };
     }
-    case 'message_group': {
+    case LOCAL_STR_MESSAGE_GROUP: {
       const group = this.cache.getMessageGroup(entityId);
       return {
-        replicas: group ? (group.replica_count || 0) : 0,
+        replicas: group ? (group.replica_count || LOCAL_NUM_ZERO) : LOCAL_NUM_ZERO,
       };
     }
     default:
@@ -361,7 +385,7 @@ export class NavigationController {
    * @return {boolean} True if back navigation is possible
    */
   canGoBack() {
-    return this.stack.length > 0;
+    return this.stack.length > LOCAL_NUM_ZERO;
   }
 
   /**
@@ -377,10 +401,10 @@ export class NavigationController {
    */
   reset() {
     this.stack = [];
-    this.currentView = 'nodes';
+    this.currentView = LOCAL_STR_NODES;
     this.currentContext = null;
 
-    this.emitNavigationEvent('reset', {});
+    this.emitNavigationEvent(LOCAL_STR_RESET, {});
   }
 
   /**
@@ -390,7 +414,7 @@ export class NavigationController {
    */
   emitNavigationEvent(action, data) {
     if (this.eventBus) {
-      this.eventBus.emit('navigation:' + action, {
+      this.eventBus.emit(LOCAL_STR_NAVIGATION + action, {
         ...data,
         state: this.getCurrentState(),
       });

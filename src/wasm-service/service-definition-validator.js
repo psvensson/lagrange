@@ -11,6 +11,8 @@ import {
 import {RB_FIELD} from './wasm-service-models.js';
 import {validateRuntimeDescriptor} from './runtime-descriptor-validator.js';
 
+const LOCAL_STR_1JW4B = 'non-negative number';
+
 /**
  * SQL query to check if a handler function exists in the code table.
  * @type {string}
@@ -206,7 +208,7 @@ class ServiceDefinitionValidator {
       if (typeof value !== TYPEOF.NUMBER || value < NUM.ZERO) {
         errors.push(
           `Resource budget field '${field}' must be a ` +
-          'non-negative number',
+          LOCAL_STR_1JW4B,
         );
       }
     }

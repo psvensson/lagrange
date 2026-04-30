@@ -5,6 +5,9 @@ import {
 } from '../control-plane/pressure-governor.js';
 import {PARTITION_SERVICE_EVENT} from '../partition/partition-service-constants.js';
 
+const LOCAL_STR_FUNCTION = 'function';
+const LOCAL_NUM_ZERO = 0;
+
 const MIGRATION_RECOVERY_REASON = Object.freeze({
   NODE_RESTART: 'node_restart',
   LEADER_ELECTED: 'leader_elected',
@@ -24,7 +27,7 @@ const MIGRATION_RECOVERY_DEFAULT = Object.freeze({
 async function recoverMigrationsForReason(sqlQueryEngine, logger, reason) {
   const migrationCoordinator = sqlQueryEngine?.migrationCoordinator || null;
   if (!migrationCoordinator ||
-      typeof migrationCoordinator.recoverMigrations !== 'function') {
+      typeof migrationCoordinator.recoverMigrations !== LOCAL_STR_FUNCTION) {
     logger.debug(MIGRATION_RECOVERY_LOG_MSG.SKIPPED, {reason});
     return;
   }
@@ -33,7 +36,7 @@ async function recoverMigrationsForReason(sqlQueryEngine, logger, reason) {
     const recoveryResult = await migrationCoordinator.recoverMigrations();
     logger.info(MIGRATION_RECOVERY_LOG_MSG.COMPLETE, {
       reason,
-      recoveredCount: recoveryResult?.recovered || 0,
+      recoveredCount: recoveryResult?.recovered || LOCAL_NUM_ZERO,
     });
   } catch (error) {
     logger.error(MIGRATION_RECOVERY_LOG_MSG.FAILED, {
@@ -57,7 +60,7 @@ function wireMigrationRecoveryOnLeaderElection(options = {}) {
       MIGRATION_RECOVERY_DEFAULT.LEADER_ELECTION_COOLDOWN_MS;
   if (!sqlQueryEngine ||
       !partitionServices ||
-      typeof partitionServices.values !== 'function') {
+      typeof partitionServices.values !== LOCAL_STR_FUNCTION) {
     return () => {};
   }
 
@@ -169,7 +172,7 @@ function wireMigrationRecoveryOnLeaderElection(options = {}) {
 
   const handlers = [];
   for (const partitionService of partitionServices.values()) {
-    if (!partitionService || typeof partitionService.on !== 'function') {
+    if (!partitionService || typeof partitionService.on !== LOCAL_STR_FUNCTION) {
       continue;
     }
     const handler = () => {
@@ -188,12 +191,12 @@ function wireMigrationRecoveryOnLeaderElection(options = {}) {
     clearScheduledRecovery();
     pendingLeaderElectionRecovery = false;
     for (const entry of handlers) {
-      if (typeof entry.partitionService?.off === 'function') {
+      if (typeof entry.partitionService?.off === LOCAL_STR_FUNCTION) {
         entry.partitionService.off(
           PARTITION_SERVICE_EVENT.LEADER_ELECTED,
           entry.handler,
         );
-      } else if (typeof entry.partitionService?.removeListener === 'function') {
+      } else if (typeof entry.partitionService?.removeListener === LOCAL_STR_FUNCTION) {
         entry.partitionService.removeListener(
           PARTITION_SERVICE_EVENT.LEADER_ELECTED,
           entry.handler,

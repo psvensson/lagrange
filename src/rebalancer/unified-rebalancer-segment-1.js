@@ -50,6 +50,7 @@ const PRIORITY_RECOVERY_COORDINATOR_TERMINAL_EVENT_SET = new Set([
   REBALANCE_COORDINATOR_EVENT.OPERATION_COMPLETED,
   REBALANCE_COORDINATOR_EVENT.OPERATION_FAILED,
 ]);
+const CONTROL_PLANE_PUBLICATION_TRIM_RAFT_LEARNER = 'learner';
 const PRIORITY_RECOVERY_VISIBILITY_SERVICE_FIELD = Object.freeze({
   ENTITY_ID: 'entityId',
   ENTITY_ID_SNAKE: 'entity_id',
@@ -1093,11 +1094,10 @@ class UnifiedRebalancerSegment1 extends EventEmitter {
 
   /**
    * `control_plane_publications` owns the publication path other priority
-   * partitions depend on, so it still requires coverage for every active node.
-   * Priority partitions should, however, consume canonical readiness backfill
-   * for endpoint visibility rather than waiting only on service-endpoint row
-   * publication. Other priority partitions may recover against the quorum-
-   * sized replica target.
+   * partitions depend on, so active publication recovery still requires
+   * coverage for every active node. Once the latest publication is closed and
+   * priority recovery is inactive, bounded over-target cleanup may use the
+   * target-sized visibility policy used by the other priority partitions.
    *
    * @return {boolean}
    * @private
@@ -1118,6 +1118,50 @@ class UnifiedRebalancerSegment1 extends EventEmitter {
   }
 
   /**
+   * A published publication-owner partition with more active voters than its
+   * target is in the bounded trim lane. It must not wait for every active node
+   * endpoint before planning the standalone-safe remove that reduces voter
+   * count back to target.
+   *
+   * @return {boolean}
+   * @private
+   */
+  hasControlPlanePublicationTrimOverflow() {
+    if (!this.isControlPlanePublicationPriorityPartition()) {
+      return false;
+    }
+    const targetReplicaCount = this.getPriorityControlPlaneTargetReplicaCount();
+    if (
+      !Number.isFinite(targetReplicaCount) ||
+      targetReplicaCount <= NUM.ZERO
+    ) {
+      return false;
+    }
+    const currentReplicas =
+      typeof this.getCurrentReplicas === TYPEOF.FUNCTION ?
+        this.getCurrentReplicas() :
+        [];
+    const activeVoterReplicaCount = (Array.isArray(currentReplicas) ?
+      currentReplicas :
+      []
+    ).filter((replica) => {
+      const status = String(
+        replica?.status || SERVICE_STATUS.ACTIVE,
+      ).toLowerCase();
+      const raftRole = String(
+        replica?.raft_role ||
+          replica?.raftRole ||
+          UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
+      ).toLowerCase();
+      return (
+        status === SERVICE_STATUS.ACTIVE &&
+        raftRole !== CONTROL_PLANE_PUBLICATION_TRIM_RAFT_LEARNER
+      );
+    }).length;
+    return activeVoterReplicaCount > targetReplicaCount;
+  }
+
+  /**
    * Resolve one canonical endpoint-visibility policy for the current critical
    * system partition.
    *
@@ -1133,7 +1177,7 @@ class UnifiedRebalancerSegment1 extends EventEmitter {
       NUM.ZERO;
     const isPriorityPartition = this.isControlPlanePriorityPartition();
     const requireEveryActiveNode =
-      this.isControlPlanePublicationPriorityPartition();
+      this.shouldRequireFullControlPlanePublicationEndpointVisibility();
     const requiredReadyNodeCount =
       isPriorityPartition &&
       !requireEveryActiveNode &&
@@ -1150,6 +1194,38 @@ class UnifiedRebalancerSegment1 extends EventEmitter {
       allowReadinessBackfill: isPriorityPartition,
       requiredReadyNodeCount,
     });
+  }
+
+  /**
+   * Decide whether the publication-owner partition still needs endpoint
+   * visibility for every active node before planning.
+   *
+   * @return {boolean}
+   * @private
+   */
+  shouldRequireFullControlPlanePublicationEndpointVisibility() {
+    const isPublicationOwner = this.isControlPlanePublicationPriorityPartition();
+    const latestPublicationRow = this.getLatestMembershipPublicationRow();
+    const latestPublicationClosed =
+      String(
+        latestPublicationRow?.status ||
+          UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
+      ).toUpperCase() === CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED;
+    const boundedTrimOverflow =
+      latestPublicationClosed &&
+      this.hasControlPlanePublicationTrimOverflow();
+    const policyEvidence = Object.freeze({
+      isPublicationOwner,
+      latestPublicationClosed,
+      priorityRecoveryActive: this.isPriorityControlPlaneRecoveryActive(),
+      boundedTrimOverflow,
+    });
+    return policyEvidence.isPublicationOwner &&
+      policyEvidence.boundedTrimOverflow !== true &&
+      (
+        !policyEvidence.latestPublicationClosed ||
+        policyEvidence.priorityRecoveryActive
+      );
   }
 
   /**

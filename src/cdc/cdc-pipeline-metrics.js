@@ -12,6 +12,8 @@
 
 import {CDC_PIPELINE_METRIC} from '../constants/cdc-lifecycle-constants.js';
 
+const LOCAL_NUM_ZERO = 0;
+
 /**
  * CDCPipelineMetrics provides simple in-memory counters for CDC pipeline
  * observability. Counters are incremented at the generation site
@@ -25,11 +27,11 @@ import {CDC_PIPELINE_METRIC} from '../constants/cdc-lifecycle-constants.js';
  */
 class CDCPipelineMetrics {
   constructor() {
-    this[CDC_PIPELINE_METRIC.EVENTS_GENERATED] = 0;
-    this[CDC_PIPELINE_METRIC.EVENTS_DELIVERED] = 0;
-    this[CDC_PIPELINE_METRIC.EVENTS_BUFFERED] = 0;
-    this[CDC_PIPELINE_METRIC.EVENTS_DROPPED] = 0;
-    this[CDC_PIPELINE_METRIC.DELIVERY_FAILURES] = 0;
+    this[CDC_PIPELINE_METRIC.EVENTS_GENERATED] = LOCAL_NUM_ZERO;
+    this[CDC_PIPELINE_METRIC.EVENTS_DELIVERED] = LOCAL_NUM_ZERO;
+    this[CDC_PIPELINE_METRIC.EVENTS_BUFFERED] = LOCAL_NUM_ZERO;
+    this[CDC_PIPELINE_METRIC.EVENTS_DROPPED] = LOCAL_NUM_ZERO;
+    this[CDC_PIPELINE_METRIC.DELIVERY_FAILURES] = LOCAL_NUM_ZERO;
   }
 
   /**
@@ -66,11 +68,11 @@ class CDCPipelineMetrics {
    * Reset all counters to zero.
    */
   reset() {
-    this[CDC_PIPELINE_METRIC.EVENTS_GENERATED] = 0;
-    this[CDC_PIPELINE_METRIC.EVENTS_DELIVERED] = 0;
-    this[CDC_PIPELINE_METRIC.EVENTS_BUFFERED] = 0;
-    this[CDC_PIPELINE_METRIC.EVENTS_DROPPED] = 0;
-    this[CDC_PIPELINE_METRIC.DELIVERY_FAILURES] = 0;
+    this[CDC_PIPELINE_METRIC.EVENTS_GENERATED] = LOCAL_NUM_ZERO;
+    this[CDC_PIPELINE_METRIC.EVENTS_DELIVERED] = LOCAL_NUM_ZERO;
+    this[CDC_PIPELINE_METRIC.EVENTS_BUFFERED] = LOCAL_NUM_ZERO;
+    this[CDC_PIPELINE_METRIC.EVENTS_DROPPED] = LOCAL_NUM_ZERO;
+    this[CDC_PIPELINE_METRIC.DELIVERY_FAILURES] = LOCAL_NUM_ZERO;
   }
 }
 

@@ -51,6 +51,21 @@ import {
 } from './admin-test-run-report.js';
 import {buildAdminTestRunServiceHelpers} from './admin-test-run-service-helpers.js';
 
+const LOCAL_STR_OBJECT = 'object';
+const LOCAL_NUM_ONE = 1;
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_STR_128KJ = ', ';
+const LOCAL_STR_VERBOSE = '--verbose';
+const LOCAL_STR_FUNCTION = 'function';
+const LOCAL_STR_DATA = 'data';
+const LOCAL_STR_ERROR = 'error';
+const LOCAL_STR_CLOSE = 'close';
+const LOCAL_STR_STOP_REQUESTED = 'Stop requested';
+const LOCAL_NUM_90 = 90;
+const LOCAL_NUM_100 = 100;
+const LOCAL_STR_NUMBER = 'number';
+const LOCAL_NUM_TWO = 2;
+
 const FILE_ENCODING = 'utf8';
 const REPORT_TIMESTAMP_FALLBACK_MS = 0;
 const PROCESS_EXIT_SUCCESS = 0;
@@ -228,7 +243,7 @@ class AdminTestRunService {
 
     try {
       const parsed = JSON.parse(raw);
-      return parsed && typeof parsed === 'object' ? parsed : {};
+      return parsed && typeof parsed === LOCAL_STR_OBJECT ? parsed : {};
     } catch (error) {
       throw new Error(
         `${CONFIG_PRECHECK_ERROR_PREFIX}` +
@@ -264,16 +279,16 @@ class AdminTestRunService {
     }
     if (firstSegment.startsWith(DOCKER_HOST_IPV6_PREFIX)) {
       const suffixIndex = firstSegment.indexOf(DOCKER_HOST_IPV6_SUFFIX);
-      if (suffixIndex > 1) {
-        return firstSegment.slice(1, suffixIndex);
+      if (suffixIndex > LOCAL_NUM_ONE) {
+        return firstSegment.slice(LOCAL_NUM_ONE, suffixIndex);
       }
       return null;
     }
 
     const firstSeparator = firstSegment.indexOf(DOCKER_HOST_PORT_SEPARATOR);
     const lastSeparator = firstSegment.lastIndexOf(DOCKER_HOST_PORT_SEPARATOR);
-    if (firstSeparator >= 0 && firstSeparator === lastSeparator) {
-      return firstSegment.slice(0, lastSeparator) || null;
+    if (firstSeparator >= LOCAL_NUM_ZERO && firstSeparator === lastSeparator) {
+      return firstSegment.slice(LOCAL_NUM_ZERO, lastSeparator) || null;
     }
     return firstSegment;
   }
@@ -293,7 +308,7 @@ class AdminTestRunService {
         .filter((entry) => Boolean(entry)) :
       [];
 
-    if (hosts.length === 0) {
+    if (hosts.length === LOCAL_NUM_ZERO) {
       return buildLocalConfigPrecheck(
         String(docker.socketPath || EMPTY_STRING).trim() || null,
       );
@@ -358,7 +373,7 @@ class AdminTestRunService {
   formatPrecheckSummary(precheck, configName) {
     if (precheck?.mode === RUN_CONFIG_MODE.REMOTE) {
       return `[preflight] config "${configName}" resolved ` +
-        `${precheck.hosts.length} docker host(s): ${precheck.hosts.join(', ')}`;
+        `${precheck.hosts.length} docker host(s): ${precheck.hosts.join(LOCAL_STR_128KJ)}`;
     }
     const socketPath = precheck?.socketPath || 'default docker socket';
     return `[preflight] config "${configName}" using local socket "${socketPath}"`;
@@ -510,7 +525,7 @@ class AdminTestRunService {
     ];
 
     if (payload?.verbose !== false) {
-      args.push('--verbose');
+      args.push(LOCAL_STR_VERBOSE);
     }
 
     const child = this.spawnRunner(process.execPath, args, {
@@ -575,19 +590,19 @@ class AdminTestRunService {
     this.publishStatus(run);
     await this.persistRunMetadata(run);
 
-    if (child.stdout && typeof child.stdout.on === 'function') {
-      child.stdout.on('data', (chunk) => {
+    if (child.stdout && typeof child.stdout.on === LOCAL_STR_FUNCTION) {
+      child.stdout.on(LOCAL_STR_DATA, (chunk) => {
         this.captureRunOutput(run, ADMIN_TEST_LOG_STREAM.STDOUT, chunk);
       });
     }
 
-    if (child.stderr && typeof child.stderr.on === 'function') {
-      child.stderr.on('data', (chunk) => {
+    if (child.stderr && typeof child.stderr.on === LOCAL_STR_FUNCTION) {
+      child.stderr.on(LOCAL_STR_DATA, (chunk) => {
         this.captureRunOutput(run, ADMIN_TEST_LOG_STREAM.STDERR, chunk);
       });
     }
 
-    child.on('error', (error) => {
+    child.on(LOCAL_STR_ERROR, (error) => {
       this.appendRunLog(
         run,
         ADMIN_TEST_LOG_STREAM.SYSTEM,
@@ -595,7 +610,7 @@ class AdminTestRunService {
       );
     });
 
-    child.on('close', (code, signal) => {
+    child.on(LOCAL_STR_CLOSE, (code, signal) => {
       void this.finalizeRun(run, code, signal);
     });
 
@@ -619,8 +634,8 @@ class AdminTestRunService {
     run.status = ADMIN_TEST_RUN_STATUS.STOPPING;
     this.updateRunProgress(run, {
       phase: RUN_PROGRESS_PHASE.STOPPING,
-      message: 'Stop requested',
-      percent: Math.max(90, Number(run.progress?.percent || 0)),
+      message: LOCAL_STR_STOP_REQUESTED,
+      percent: Math.max(LOCAL_NUM_90, Number(run.progress?.percent || LOCAL_NUM_ZERO)),
     });
     this.publishStatus(run);
     await this.persistRunMetadata(run);
@@ -802,7 +817,7 @@ class AdminTestRunService {
       } catch {
         tailLines = [];
       }
-      if (tailLines.length === 0) {
+      if (tailLines.length === LOCAL_NUM_ZERO) {
         continue;
       }
 
@@ -897,7 +912,7 @@ class AdminTestRunService {
     for (const reportFile of reportFiles) {
       const fullPath = resolve(this.outputDir, reportFile);
       const report = await tryReadJson(fullPath);
-      if (!report || typeof report !== 'object') {
+      if (!report || typeof report !== LOCAL_STR_OBJECT) {
         continue;
       }
 
@@ -956,7 +971,7 @@ class AdminTestRunService {
     }
     const reportPath = resolve(this.workspaceRoot, outputReportPath);
     const report = await tryReadJson(reportPath);
-    if (!report || typeof report !== 'object') {
+    if (!report || typeof report !== LOCAL_STR_OBJECT) {
       return {runId};
     }
     let reportStats = null;
@@ -981,7 +996,7 @@ class AdminTestRunService {
     );
     const reportPath = resolve(this.workspaceRoot, outputReportPath);
     const report = await tryReadJson(reportPath);
-    if (!report || typeof report !== 'object') {
+    if (!report || typeof report !== LOCAL_STR_OBJECT) {
       return null;
     }
 
@@ -1131,7 +1146,7 @@ class AdminTestRunService {
     return {
       phase: input?.phase || RUN_PROGRESS_PHASE.STARTING,
       message: input?.message || EMPTY_STRING,
-      percent: Math.max(0, Math.min(100, Number(input?.percent || 0))),
+      percent: Math.max(LOCAL_NUM_ZERO, Math.min(LOCAL_NUM_100, Number(input?.percent || LOCAL_NUM_ZERO))),
       updatedAt: new Date(this.now()).toISOString(),
     };
   }
@@ -1305,7 +1320,7 @@ class AdminTestRunService {
       run.stderrRemainder = EMPTY_STRING;
     }
 
-    run.exitCode = typeof code === 'number' ? code : null;
+    run.exitCode = typeof code === LOCAL_STR_NUMBER ? code : null;
     run.signal = signal || null;
     run.endedAt = new Date(this.now()).toISOString();
     run.childProcess = null;
@@ -1424,7 +1439,7 @@ class AdminTestRunService {
     const metadataPath = this.resolveMetadataFilePath(run.runId);
     await writeFile(
       metadataPath,
-      JSON.stringify(metadata, null, 2),
+      JSON.stringify(metadata, null, LOCAL_NUM_TWO),
       FILE_ENCODING,
     );
   }

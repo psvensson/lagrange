@@ -21,6 +21,10 @@ import {
   isRetryableControlPlaneError,
 } from '../../control-plane/control-plane-error-classification.js';
 
+const LOCAL_STR_836HW = 'move_replica_handoff_stabilizing';
+const LOCAL_STR_STRING = 'string';
+const LOCAL_NUM_ZERO = 0;
+
 const RETRYABLE_BOOTSTRAP_DEPENDENCY_ERROR_FRAGMENTS = Object.freeze([
   'ControlPlaneSystemTableGateway requires cdcIntegrationService',
   'ControlPlaneSystemTableGateway requires sqlQueryEngine',
@@ -304,7 +308,7 @@ class BootstrapRequestOwner {
         nodeId,
         nodeAddress,
         seedNodeId: this.getSeedNodeId(),
-        admissionBlock: 'move_replica_handoff_stabilizing',
+        admissionBlock: LOCAL_STR_836HW,
         assignmentId: blockingReservation.assignmentId,
         replicaId: blockingReservation.replicaId,
         groupId: blockingReservation.groupId || null,
@@ -456,6 +460,11 @@ class BootstrapRequestOwner {
     } catch (error) {
       if (this.isRetryableBootstrapRequestError(error)) {
         const retryAfterMs = this.resolveBootstrapRequestRetryAfterMs(error);
+        const responseTimestamp = Date.now();
+        const startupAuthority =
+          this.getStartupAuthoritySnapshotForBootstrapResponse(
+            responseTimestamp,
+          );
         this.getLogger().warn(BOOTSTRAP_API_LOG_MSG.BOOTSTRAP_FAILED, {
           nodeId,
           nodeAddress,
@@ -467,12 +476,13 @@ class BootstrapRequestOwner {
         return this.buildBootstrapNotReadyResponse({
           error: BOOTSTRAP_API_ERROR.BOOTSTRAP_NOT_READY,
           code:
-            typeof error?.errorCode === 'string' && error.errorCode.length > 0 ?
+            typeof error?.errorCode === LOCAL_STR_STRING && error.errorCode.length > LOCAL_NUM_ZERO ?
               error.errorCode :
               BOOTSTRAP_PIPELINE_ERROR_CODE.BOOTSTRAP_NOT_READY,
           reasonCode:
             BOOTSTRAP_API_PROBE_REASON.CONTROL_PLANE_DEPENDENCY_UNAVAILABLE,
           retryAfterMs,
+          startupAuthority,
         });
       }
       this.getLogger().error(BOOTSTRAP_API_LOG_MSG.BOOTSTRAP_FAILED, {

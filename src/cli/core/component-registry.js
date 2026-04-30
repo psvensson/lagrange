@@ -1,3 +1,9 @@
+const LOCAL_STR_1YSCS = 'Cannot register components after initialization';
+const LOCAL_STR_1LD1G = ' -> ';
+const LOCAL_STR_SINGLETON = 'singleton';
+const LOCAL_STR_FACTORY = 'factory';
+const LOCAL_STR_FUNCTION = 'function';
+
 /**
  * ComponentRegistry - Dependency injection container with topological initialization
  * Manages component lifecycles and dependency resolution
@@ -36,7 +42,7 @@ export class ComponentRegistry {
    */
   register(name, factory, options = {}) {
     if (this.initialized) {
-      throw new Error('Cannot register components after initialization');
+      throw new Error(LOCAL_STR_1YSCS);
     }
 
     const definition = {
@@ -72,7 +78,7 @@ export class ComponentRegistry {
     // Check for circular dependencies first
     const circularDep = this.detectCircularDependency();
     if (circularDep) {
-      throw new Error(`Circular dependency detected: ${circularDep.join(' -> ')}`);
+      throw new Error(`Circular dependency detected: ${circularDep.join(LOCAL_STR_1LD1G)}`);
     }
 
     // Get initialization order via topological sort
@@ -120,7 +126,7 @@ export class ComponentRegistry {
     const instance = await definition.factory(...deps);
 
     // Store singleton instances
-    if (definition.lifecycle === 'singleton') {
+    if (definition.lifecycle === LOCAL_STR_SINGLETON) {
       this.instances.set(name, instance);
     }
 
@@ -145,7 +151,7 @@ export class ComponentRegistry {
 
     // For factory lifecycle, create new instance
     const definition = this.definitions.get(name);
-    if (definition && definition.lifecycle === 'factory') {
+    if (definition && definition.lifecycle === LOCAL_STR_FACTORY) {
       const deps = definition.dependencies.map((d) => this.get(d));
       return definition.factory(...deps);
     }
@@ -291,7 +297,7 @@ export class ComponentRegistry {
 
     for (const name of order) {
       const instance = this.instances.get(name);
-      if (instance && typeof instance.dispose === 'function') {
+      if (instance && typeof instance.dispose === LOCAL_STR_FUNCTION) {
         await instance.dispose();
       }
     }

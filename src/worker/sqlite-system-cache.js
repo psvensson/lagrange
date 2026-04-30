@@ -19,6 +19,14 @@ import {
   SYSTEM_CACHE_KEY_DESCRIPTOR,
 } from '../cache/system-cache-key-descriptor.js';
 
+const LOCAL_STR_MEMORY = ':memory:';
+const LOCAL_STR_JOURNAL_MODE_WAL = 'journal_mode = WAL';
+const LOCAL_STR_SELECT = 'SELECT';
+const LOCAL_STR_TABLE = 'table';
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_STR_128KJ = ', ';
+const LOCAL_STR_OBJECT = 'object';
+
 /**
  * Primary key column names for each system table.
  * Used for get() and applyCDCEvent() operations.
@@ -66,10 +74,10 @@ class SQLiteSystemCache {
     }
 
     // Create in-memory SQLite database
-    this.db = new Database(':memory:');
+    this.db = new Database(LOCAL_STR_MEMORY);
 
     // Enable WAL mode for better performance (even in memory)
-    this.db.pragma('journal_mode = WAL');
+    this.db.pragma(LOCAL_STR_JOURNAL_MODE_WAL);
 
     // Create all system tables
     for (const schema of SYSTEM_TABLE_SCHEMAS) {
@@ -153,7 +161,7 @@ class SQLiteSystemCache {
     this.ensureInitialized();
 
     const stmt = this.db.prepare(sql);
-    if (sql.trim().toUpperCase().startsWith('SELECT')) {
+    if (sql.trim().toUpperCase().startsWith(LOCAL_STR_SELECT)) {
       return stmt.all(...params);
     }
 
@@ -174,7 +182,7 @@ class SQLiteSystemCache {
     const stmt = this.db.prepare(
       'SELECT 1 FROM sqlite_master WHERE type = ? AND name = ?',
     );
-    return Boolean(stmt.get('table', tableName));
+    return Boolean(stmt.get(LOCAL_STR_TABLE, tableName));
   }
 
   /**
@@ -184,7 +192,7 @@ class SQLiteSystemCache {
    */
   createDynamicTable(tableName, columns) {
     this.ensureInitialized();
-    if (!Array.isArray(columns) || columns.length === 0) {
+    if (!Array.isArray(columns) || columns.length === LOCAL_NUM_ZERO) {
       throw new Error(CACHE_ERROR_MSG.INVALID_DYNAMIC_TABLE_COLUMNS);
     }
 
@@ -198,7 +206,7 @@ class SQLiteSystemCache {
     }
 
     this.db.exec(
-      `CREATE TABLE IF NOT EXISTS "${tableName}" (${quotedColumns.join(', ')})`,
+      `CREATE TABLE IF NOT EXISTS "${tableName}" (${quotedColumns.join(LOCAL_STR_128KJ)})`,
     );
   }
 
@@ -247,7 +255,7 @@ class SQLiteSystemCache {
   applyCDCEvent(tableName, operation, data) {
     this.ensureInitialized();
 
-    if (!data || typeof data !== 'object') {
+    if (!data || typeof data !== LOCAL_STR_OBJECT) {
       throw new Error(CACHE_ERROR_MSG.INVALID_DATA);
     }
 
@@ -297,7 +305,7 @@ class SQLiteSystemCache {
     }
 
     const columns = Object.keys(data).filter((col) => col !== pkColumn);
-    if (columns.length === 0) {
+    if (columns.length === LOCAL_NUM_ZERO) {
       return; // Nothing to update
     }
 
@@ -375,7 +383,7 @@ class SQLiteSystemCache {
   applyReplicationState(state) {
     this.ensureInitialized();
 
-    if (!state || typeof state !== 'object') {
+    if (!state || typeof state !== LOCAL_STR_OBJECT) {
       throw new Error(CACHE_ERROR_MSG.INVALID_DATA);
     }
 
@@ -430,12 +438,12 @@ class SQLiteSystemCache {
     if (!this.initialized) {
       return {
         initialized: false,
-        tableCount: 0,
-        totalRecords: 0,
+        tableCount: LOCAL_NUM_ZERO,
+        totalRecords: LOCAL_NUM_ZERO,
       };
     }
 
-    let totalRecords = 0;
+    let totalRecords = LOCAL_NUM_ZERO;
     const tableCounts = {};
 
     for (const schema of SYSTEM_TABLE_SCHEMAS) {

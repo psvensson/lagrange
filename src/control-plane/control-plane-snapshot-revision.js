@@ -3,6 +3,8 @@ import {
   TYPEOF,
 } from '../constants/index.js';
 
+const LOCAL_NUM_THREE = 3;
+
 const CONTROL_PLANE_SNAPSHOT_REVISION_STATE = Object.freeze({
   CURRENT: 'current',
   STALE_USABLE: 'stale_usable',
@@ -82,7 +84,7 @@ function readResumeTokenRevision(resumeToken) {
   const segments = resumeToken.split(
     CONTROL_PLANE_SNAPSHOT_RESUME_TOKEN_LITERAL.SEPARATOR,
   );
-  if (segments.length < 3 ||
+  if (segments.length < LOCAL_NUM_THREE ||
       segments[NUM.ZERO] !== CONTROL_PLANE_SNAPSHOT_RESUME_TOKEN_LITERAL.PREFIX) {
     return null;
   }

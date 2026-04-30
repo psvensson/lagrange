@@ -8,6 +8,8 @@
 
 import {TYPEOF} from '../constants/index.js';
 
+const LOCAL_NUM_ZERO = 0;
+
 const SYSTEM_CACHE_CLIENT_MODE = Object.freeze({
   DIRECT: 'direct',
   PROXY: 'proxy',
@@ -65,7 +67,7 @@ function createProxySystemCacheClient(systemCacheProxy) {
         return systemCacheProxy.count(tableName);
       }
       const records = await systemCacheProxy.getAll(tableName);
-      return Array.isArray(records) ? records.length : 0;
+      return Array.isArray(records) ? records.length : LOCAL_NUM_ZERO;
     },
     getTableNames: async () => {
       if (typeof systemCacheProxy.getTableNames === TYPEOF.FUNCTION) {

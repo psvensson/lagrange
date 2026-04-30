@@ -24,6 +24,7 @@ import {
   PRIORITY_RECOVERY_BLOCKER_REASON_PRECEDENCE,
   PRIORITY_RECOVERY_BLOCKER_TO_SEMANTIC_STATE,
   PRIORITY_RECOVERY_CORRELATION_KEY,
+  PRIORITY_RECOVERY_OBSERVATION_STATE_VALUE,
   PRIORITY_RECOVERY_PROGRESS_CLASS_IDS,
   PRIORITY_RECOVERY_SEMANTIC_STATE,
   PRIORITY_RECOVERY_SEMANTIC_STATE_IDS,
@@ -126,12 +127,16 @@ const STABILITY_GATE_TYPE_FAILOVER = 'failover';
 const STABILITY_GATE_TYPE_CONVERGENCE = 'convergence';
 const STABILITY_GATE_TYPE_RESTART_RECOVERY = 'restart_recovery';
 const STABILITY_GATE_BLOCKER_PUBLICATION_PENDING = 'publication_pending';
+const STABILITY_GATE_BLOCKER_PUBLICATION_MISSING_ACTIVE_NODE =
+  'publication_missing_active_node';
 const STABILITY_GATE_BLOCKER_PRIORITY_SPREAD_PENDING =
   'priority_spread_pending';
 const STABILITY_GATE_BLOCKER_PENDING_ACK_NODES = 'pending_ack_nodes';
 const STABILITY_GATE_BLOCKER_BLOCKED_NODES = 'publication_blocked_nodes';
 const STABILITY_GATE_BLOCKER_CLOSURE_RECORD = 'closure_record';
 const STABILITY_GATE_BLOCKER_STARTUP_READINESS = 'startup_readiness_blocked';
+const STABILITY_GATE_BLOCKER_ADMIN_REACHABILITY_REFUSED =
+  'admin_reachability_refused';
 const SCENARIO_NAME_FRAGMENT_RESTART = 'restart';
 
 const LOAD_WAIT_REASON_KEYS = Object.freeze([
@@ -379,7 +384,8 @@ function isMeaningfulPriorityRecoveryProgressValue(value) {
   return (
     typeof value === 'string' &&
     value.length > ZERO &&
-    value !== PRIORITY_RECOVERY_PROGRESS_NONE
+    value !== PRIORITY_RECOVERY_PROGRESS_NONE &&
+    value !== PRIORITY_RECOVERY_OBSERVATION_STATE_VALUE.UNAVAILABLE
   );
 }
 
@@ -615,6 +621,7 @@ function deriveReasonCountsFromPublicationConvergence(controlPlane = null) {
       null);
   const activeGateClosureWitness = classifyActiveGateClosureWitness({
     progressSnapshot: closureProgressSnapshot,
+    bestProgressSnapshot: activeGateBestProgress,
     publicationConvergence: publicationDetails,
     publicationConvergenceGate,
     readinessMode: activeGate?.mode || activeGateNoProgress?.mode || null,
@@ -1562,6 +1569,15 @@ function normalizePriorityRecoveryDecisionSnapshots(value) {
       observation: isRecord(snapshot.observation) ?
         cloneJsonValue(snapshot.observation) :
         null,
+      conditions: isRecord(snapshot.conditions) ?
+        cloneJsonValue(snapshot.conditions) :
+        null,
+      actuation: isRecord(snapshot.actuation) ?
+        cloneJsonValue(snapshot.actuation) :
+        null,
+      progress: isRecord(snapshot.progress) ?
+        cloneJsonValue(snapshot.progress) :
+        null,
       admission: isRecord(snapshot.admission) ?
         cloneJsonValue(snapshot.admission) :
         null,
@@ -1846,11 +1862,13 @@ export const FAILURE_BUNDLE_SEGMENT_1 = {
   STABILITY_GATE_TYPE_CONVERGENCE,
   STABILITY_GATE_TYPE_RESTART_RECOVERY,
   STABILITY_GATE_BLOCKER_PUBLICATION_PENDING,
+  STABILITY_GATE_BLOCKER_PUBLICATION_MISSING_ACTIVE_NODE,
   STABILITY_GATE_BLOCKER_PRIORITY_SPREAD_PENDING,
   STABILITY_GATE_BLOCKER_PENDING_ACK_NODES,
   STABILITY_GATE_BLOCKER_BLOCKED_NODES,
   STABILITY_GATE_BLOCKER_CLOSURE_RECORD,
   STABILITY_GATE_BLOCKER_STARTUP_READINESS,
+  STABILITY_GATE_BLOCKER_ADMIN_REACHABILITY_REFUSED,
   SCENARIO_NAME_FRAGMENT_RESTART,
   LOAD_WAIT_REASON_KEYS,
   LOAD_REASON_ROOT_CAUSE_CLASS_BY_REASON,

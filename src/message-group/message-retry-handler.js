@@ -10,6 +10,27 @@ import {ConfigurationManager} from '../config/configuration-manager.js';
 import {CONFIG_KEY} from '../config/config-constants.js';
 import {LoggingService} from '../logging/logging-service.js';
 
+const LOCAL_STR_1BUA7 = 'message-retry-handler';
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_STR_T3QGE = 'Starting retry execution';
+const LOCAL_STR_18X6P = 'Retrying after delay';
+const LOCAL_STR_SUCCESS = 'success';
+const LOCAL_STR_DELIVERY_SUCCEEDED = 'Delivery succeeded';
+const LOCAL_STR_DELIVERYSUCCESS = 'deliverySuccess';
+const LOCAL_STR_1B5LQ = 'Delivery not acknowledged';
+const LOCAL_STR_NOT_ACKNOWLEDGED = 'not_acknowledged';
+const LOCAL_STR_ERROR = 'error';
+const LOCAL_STR_LXQUA = 'Delivery attempt failed';
+const LOCAL_STR_KFWKK = 'Switching to alternative replica';
+const LOCAL_STR_1QSPJ = 'Max retries exceeded';
+const LOCAL_STR_MAXRETRIESEXCEEDED = 'maxRetriesExceeded';
+const LOCAL_NUM_ONE = 1;
+const LOCAL_STR_PU65M = 'Failed to get alternative replicas';
+const LOCAL_STR_FUNCTION = 'function';
+const LOCAL_STR_6CFAP = 'Alternative replica provider must be a function';
+const LOCAL_STR_1FE1P = 'Retry configuration updated';
+const LOCAL_STR_114SL = 'MaxRetriesExceededError';
+
 /**
  * Retry result status enumeration.
  */
@@ -75,15 +96,15 @@ class MessageRetryHandler extends EventEmitter {
     // Logging
     const loggingService = LoggingService.getInstance();
     this.logger = loggingService.isInitialized() ?
-      loggingService.forSubsystem('message-retry-handler') : console;
+      loggingService.forSubsystem(LOCAL_STR_1BUA7) : console;
 
     // Statistics
     this.stats = {
-      totalAttempts: 0,
-      successfulDeliveries: 0,
-      failedDeliveries: 0,
-      retriesPerformed: 0,
-      alternativeReplicasUsed: 0,
+      totalAttempts: LOCAL_NUM_ZERO,
+      successfulDeliveries: LOCAL_NUM_ZERO,
+      failedDeliveries: LOCAL_NUM_ZERO,
+      retriesPerformed: LOCAL_NUM_ZERO,
+      alternativeReplicasUsed: LOCAL_NUM_ZERO,
     };
   }
 
@@ -93,8 +114,8 @@ class MessageRetryHandler extends EventEmitter {
    * @return {number} Delay in milliseconds.
    */
   calculateDelay(attempt) {
-    if (attempt <= 0) {
-      return 0;
+    if (attempt <= LOCAL_NUM_ZERO) {
+      return LOCAL_NUM_ZERO;
     }
 
     // Calculate base delay with exponential backoff
@@ -108,7 +129,7 @@ class MessageRetryHandler extends EventEmitter {
     const jitterRange = baseDelay * this.jitterFactor;
     const jitter = (Math.random() * 2 - 1) * jitterRange;
 
-    return Math.max(0, Math.round(baseDelay + jitter));
+    return Math.max(LOCAL_NUM_ZERO, Math.round(baseDelay + jitter));
   }
 
   /**
@@ -129,22 +150,22 @@ class MessageRetryHandler extends EventEmitter {
     const attemptHistory = [];
     const triedTargets = new Set([targetAddress]);
 
-    this.logger.debug('Starting retry execution', {
+    this.logger.debug(LOCAL_STR_T3QGE, {
       retryId,
       messageId,
       targetAddress,
       maxRetries: this.maxRetries,
     });
 
-    for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
+    for (let attempt = LOCAL_NUM_ZERO; attempt <= this.maxRetries; attempt++) {
       this.stats.totalAttempts++;
 
       // Calculate and apply delay (skip for first attempt)
-      if (attempt > 0) {
+      if (attempt > LOCAL_NUM_ZERO) {
         const delay = this.calculateDelay(attempt);
         this.stats.retriesPerformed++;
 
-        this.logger.debug('Retrying after delay', {
+        this.logger.debug(LOCAL_STR_18X6P, {
           retryId,
           messageId,
           attempt,
@@ -167,19 +188,19 @@ class MessageRetryHandler extends EventEmitter {
         const result = await deliveryFn(currentTarget, message);
 
         if (result && (result.acknowledged || result.success)) {
-          attemptRecord.status = 'success';
+          attemptRecord.status = LOCAL_STR_SUCCESS;
           attemptHistory.push(attemptRecord);
 
           this.stats.successfulDeliveries++;
 
-          this.logger.debug('Delivery succeeded', {
+          this.logger.debug(LOCAL_STR_DELIVERY_SUCCEEDED, {
             retryId,
             messageId,
             attempt,
             target: currentTarget,
           });
 
-          this.emit('deliverySuccess', {
+          this.emit(LOCAL_STR_DELIVERYSUCCESS, {
             retryId,
             messageId,
             targetAddress: currentTarget,
@@ -198,15 +219,15 @@ class MessageRetryHandler extends EventEmitter {
         }
 
         // Delivery returned but not acknowledged
-        lastError = new Error(result?.error || 'Delivery not acknowledged');
-        attemptRecord.status = 'not_acknowledged';
+        lastError = new Error(result?.error || LOCAL_STR_1B5LQ);
+        attemptRecord.status = LOCAL_STR_NOT_ACKNOWLEDGED;
         attemptRecord.error = lastError.message;
       } catch (error) {
         lastError = error;
-        attemptRecord.status = 'error';
+        attemptRecord.status = LOCAL_STR_ERROR;
         attemptRecord.error = error.message;
 
-        this.logger.debug('Delivery attempt failed', {
+        this.logger.debug(LOCAL_STR_LXQUA, {
           retryId,
           messageId,
           attempt,
@@ -229,7 +250,7 @@ class MessageRetryHandler extends EventEmitter {
           triedTargets.add(alternative);
           this.stats.alternativeReplicasUsed++;
 
-          this.logger.debug('Switching to alternative replica', {
+          this.logger.debug(LOCAL_STR_KFWKK, {
             retryId,
             messageId,
             attempt,
@@ -253,15 +274,15 @@ class MessageRetryHandler extends EventEmitter {
       attemptHistory,
     };
 
-    this.logger.warn('Max retries exceeded', diagnostics);
+    this.logger.warn(LOCAL_STR_1QSPJ, diagnostics);
 
-    this.emit('maxRetriesExceeded', diagnostics);
+    this.emit(LOCAL_STR_MAXRETRIESEXCEEDED, diagnostics);
 
     return {
       status: RetryStatus.MAX_RETRIES_EXCEEDED,
       messageId,
       targetAddress,
-      error: `Failed after ${this.maxRetries + 1} attempts: ${lastError?.message}`,
+      error: `Failed after ${this.maxRetries + LOCAL_NUM_ONE} attempts: ${lastError?.message}`,
       diagnostics,
     };
   }
@@ -294,7 +315,7 @@ class MessageRetryHandler extends EventEmitter {
 
       return null;
     } catch (error) {
-      this.logger.debug('Failed to get alternative replicas', {
+      this.logger.debug(LOCAL_STR_PU65M, {
         originalTarget,
         error: error.message,
       });
@@ -307,8 +328,8 @@ class MessageRetryHandler extends EventEmitter {
    * @param {Function} fn - Function that returns alternative replica addresses.
    */
   setAlternativeReplicaProvider(fn) {
-    if (typeof fn !== 'function') {
-      throw new Error('Alternative replica provider must be a function');
+    if (typeof fn !== LOCAL_STR_FUNCTION) {
+      throw new Error(LOCAL_STR_6CFAP);
     }
     this.getAlternativeReplicas = fn;
   }
@@ -348,7 +369,7 @@ class MessageRetryHandler extends EventEmitter {
       this.jitterFactor = config.jitterFactor;
     }
 
-    this.logger.debug('Retry configuration updated', this.getConfig());
+    this.logger.debug(LOCAL_STR_1FE1P, this.getConfig());
   }
 
   /**
@@ -358,8 +379,8 @@ class MessageRetryHandler extends EventEmitter {
   getStats() {
     return {
       ...this.stats,
-      successRate: this.stats.totalAttempts > 0 ?
-        this.stats.successfulDeliveries / this.stats.totalAttempts : 0,
+      successRate: this.stats.totalAttempts > LOCAL_NUM_ZERO ?
+        this.stats.successfulDeliveries / this.stats.totalAttempts : LOCAL_NUM_ZERO,
     };
   }
 
@@ -368,11 +389,11 @@ class MessageRetryHandler extends EventEmitter {
    */
   resetStats() {
     this.stats = {
-      totalAttempts: 0,
-      successfulDeliveries: 0,
-      failedDeliveries: 0,
-      retriesPerformed: 0,
-      alternativeReplicasUsed: 0,
+      totalAttempts: LOCAL_NUM_ZERO,
+      successfulDeliveries: LOCAL_NUM_ZERO,
+      failedDeliveries: LOCAL_NUM_ZERO,
+      retriesPerformed: LOCAL_NUM_ZERO,
+      alternativeReplicasUsed: LOCAL_NUM_ZERO,
     };
   }
 
@@ -398,7 +419,7 @@ class MaxRetriesExceededError extends Error {
    */
   constructor(message, diagnostics = {}) {
     super(message);
-    this.name = 'MaxRetriesExceededError';
+    this.name = LOCAL_STR_114SL;
     this.diagnostics = diagnostics;
   }
 }

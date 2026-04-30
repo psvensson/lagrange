@@ -780,6 +780,8 @@ function createTestCoordinator(options = {}) {
     enableTimeouts,
     setTimeoutFn: options.setTimeoutFn,
     clearTimeoutFn: options.clearTimeoutFn,
+    replicaOperationDispatchTimeoutMs:
+      options.replicaOperationDispatchTimeoutMs,
   });
 
   coordinator.initialize();

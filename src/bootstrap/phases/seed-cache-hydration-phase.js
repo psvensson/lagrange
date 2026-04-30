@@ -57,6 +57,9 @@ import {
   isSystemTableWriteReady,
 } from '../../cache/leader-readiness-gate.js';
 
+const LOCAL_STR_FUNCTION = 'function';
+const LOCAL_STR_EMPTY = '';
+
 const LOG_HYDRATION_STEP_COMPLETE = 'Cache hydration step complete';
 const HYDRATION_STEP = Object.freeze({
   HYDRATE_FROM_LOCAL: 'hydrateFromLocalPartitions',
@@ -730,7 +733,7 @@ class SeedCacheHydrationPhase {
     }
 
     const partitionServices = this.delegates.getPartitionServices?.();
-    if (!partitionServices || typeof partitionServices.get !== 'function') {
+    if (!partitionServices || typeof partitionServices.get !== LOCAL_STR_FUNCTION) {
       return false;
     }
 
@@ -769,7 +772,7 @@ class SeedCacheHydrationPhase {
         .join(', ');
       throw new Error(
         LOG_REPAIR_ERROR_PREFIX +
-        (errorDetails ? ` (${errorDetails})` : ''),
+        (errorDetails ? ` (${errorDetails})` : LOCAL_STR_EMPTY),
       );
     }
 
@@ -835,7 +838,7 @@ class SeedCacheHydrationPhase {
     options = {},
   ) {
     const d = this.delegates;
-    if (typeof d.resolveOperationalMessageGroupSelectionAsync === 'function') {
+    if (typeof d.resolveOperationalMessageGroupSelectionAsync === LOCAL_STR_FUNCTION) {
       const selection = await d.resolveOperationalMessageGroupSelectionAsync({
         requiredTables: Array.isArray(options.requiredTables) ?
           options.requiredTables :

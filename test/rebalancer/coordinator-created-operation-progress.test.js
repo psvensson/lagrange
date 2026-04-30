@@ -7,6 +7,124 @@ import {
   createMockTransactionCoordinator,
 } from './test-helpers.js';
 
+const TEST_CRITICAL_CREATED_OPERATION_ID = 'critical-created-op';
+const TEST_CRITICAL_CREATED_PARTITION_ID = 'sql_write_operations-p1';
+const TEST_CRITICAL_CREATED_LOCAL_NODE_ID = 'node-local';
+const TEST_CRITICAL_CREATED_SOURCE_NODE_ID = 'node-source';
+const TEST_CRITICAL_CREATED_REPLICA_ID = 'sql_write_operations-p1-r4';
+const TEST_CRITICAL_CREATED_OPERATION_TYPE = 'REPLACE';
+const TEST_CRITICAL_CREATED_ENTITY_TYPE = 'partition';
+const TEST_CRITICAL_CREATED_PENDING_STATUS = 'pending';
+const TEST_CRITICAL_CREATED_INITIATED_STATUS = 'initiated';
+const TEST_CRITICAL_CREATED_MIN_REPLICA_COUNT = 1;
+const TEST_CRITICAL_CREATED_EMPTY_COUNT = 0;
+const TEST_CRITICAL_CREATED_ONE_DISPATCH = 1;
+const TEST_CRITICAL_CREATED_FIRST_DISPATCH_INDEX = 0;
+const TEST_CRITICAL_CREATED_NO_ROW = null;
+const TEST_CRITICAL_CREATED_DISPATCH_SUCCESS = Object.freeze({
+  success: true,
+});
+
+test('armCoordinatorCreatedOperation immediately dispatches locally owned ' +
+  'critical system operations after claim', async (t) => {
+  const coordinator = new RebalanceCoordinator({
+    nodeId: TEST_CRITICAL_CREATED_LOCAL_NODE_ID,
+    systemTableCache: {
+      get() {
+        return TEST_CRITICAL_CREATED_NO_ROW;
+      },
+      getAll() {
+        return [];
+      },
+      filter() {
+        return [];
+      },
+    },
+    cdcIntegrationService: {
+      async waitForCacheUpdate() {},
+    },
+    tablePolicyService: {
+      async getPolicyForPartition() {
+        return {minReplicaCount: TEST_CRITICAL_CREATED_MIN_REPLICA_COUNT};
+      },
+    },
+    messageRouter: {
+      async deliver() {
+        return {
+          acknowledged: true,
+          status: TEST_CRITICAL_CREATED_INITIATED_STATUS,
+        };
+      },
+    },
+    sqlQueryEngine: {
+      async executeQuery() {
+        return {
+          success: true,
+          rows: [],
+          affectedRows: TEST_CRITICAL_CREATED_EMPTY_COUNT,
+        };
+      },
+    },
+    controlPlaneReadinessService: createMockControlPlaneReadinessService(),
+    transactionCoordinator: createMockTransactionCoordinator(),
+    enableTimeouts: false,
+  });
+  coordinator.initialize();
+
+  const operation = {
+    operationId: TEST_CRITICAL_CREATED_OPERATION_ID,
+    type: TEST_CRITICAL_CREATED_OPERATION_TYPE,
+    partitionId: TEST_CRITICAL_CREATED_PARTITION_ID,
+    entityType: TEST_CRITICAL_CREATED_ENTITY_TYPE,
+    entityId: TEST_CRITICAL_CREATED_PARTITION_ID,
+    replicaId: TEST_CRITICAL_CREATED_REPLICA_ID,
+    sourceNodeId: TEST_CRITICAL_CREATED_SOURCE_NODE_ID,
+    targetNodeId: TEST_CRITICAL_CREATED_LOCAL_NODE_ID,
+    status: TEST_CRITICAL_CREATED_PENDING_STATUS,
+    workflowStep: WORKFLOW_STEP.PENDING,
+    stepsHistory: [],
+  };
+  const claimedOperation = {
+    ...operation,
+    workflowStep: WORKFLOW_STEP.SENDING,
+  };
+  const dispatchedOperations = [];
+  coordinator.workflowOwner.repository.queryAuthoritativeOperationById =
+    async () => TEST_CRITICAL_CREATED_NO_ROW;
+  coordinator.workflowOwner.claimPendingDispatchOperation = async () =>
+    claimedOperation;
+  coordinator.workflowOwner.dispatchOperationInternal = async (
+    dispatchOperation,
+  ) => {
+    dispatchedOperations.push(dispatchOperation);
+    return TEST_CRITICAL_CREATED_DISPATCH_SUCCESS;
+  };
+
+  try {
+    const primed =
+      await coordinator.workflowOwner.armCoordinatorCreatedOperation(operation);
+
+    t.equal(
+      primed,
+      true,
+      'critical local priming should report progress',
+    );
+    t.equal(
+      dispatchedOperations.length,
+      TEST_CRITICAL_CREATED_ONE_DISPATCH,
+      'critical local priming should continue directly into dispatch',
+    );
+    t.equal(
+      dispatchedOperations[TEST_CRITICAL_CREATED_FIRST_DISPATCH_INDEX]
+        ?.workflowStep,
+      WORKFLOW_STEP.SENDING,
+      'dispatch should use the claimed operation snapshot',
+    );
+  } finally {
+    await coordinator.shutdown();
+  }
+});
+
 test('createOperation primes coordinator-created local operations through ' +
   'the owner transition lane before external observation arrives',
 async (t) => {

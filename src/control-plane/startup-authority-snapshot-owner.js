@@ -12,21 +12,34 @@ import {
   buildPublicationRecoveryGateSnapshot,
 } from './publication-recovery-gate.js';
 
+const LOCAL_STR_1P74U = 'control_plane_recovery_service_unavailable';
+const LOCAL_STR_RZRDP = 'control_plane_recovery_planning_provider_unavailable';
+const LOCAL_STR_K5O5W = 'control_plane_recovery_planning_read_failed';
+const LOCAL_STR_K9A2Z = 'control_plane_recovery_planning_unavailable';
+const LOCAL_STR_1WVYP = 'control_plane_recovery_planning_incomplete';
+const LOCAL_STR_READY = 'ready';
+const LOCAL_STR_RECOVERY_PENDING = 'recovery_pending';
+const LOCAL_STR_1YO6Q = 'seed_locally_ready_unpublished';
+const LOCAL_STR_Q43AB = 'authority_unavailable';
+const LOCAL_STR_BLOCKED = 'blocked';
+const LOCAL_STR_ADMITTED = 'admitted';
+const LOCAL_STR_UNAVAILABLE = 'unavailable';
+
 export const PRIORITY_CONTROL_PLANE_RECOVERY_HEALTH_FAILURE = Object.freeze({
-  SERVICE_UNAVAILABLE: 'control_plane_recovery_service_unavailable',
+  SERVICE_UNAVAILABLE: LOCAL_STR_1P74U,
   PLANNING_PROVIDER_UNAVAILABLE:
-    'control_plane_recovery_planning_provider_unavailable',
-  PLANNING_READ_FAILED: 'control_plane_recovery_planning_read_failed',
-  PLANNING_UNAVAILABLE: 'control_plane_recovery_planning_unavailable',
-  PLANNING_INCOMPLETE: 'control_plane_recovery_planning_incomplete',
+    LOCAL_STR_RZRDP,
+  PLANNING_READ_FAILED: LOCAL_STR_K5O5W,
+  PLANNING_UNAVAILABLE: LOCAL_STR_K9A2Z,
+  PLANNING_INCOMPLETE: LOCAL_STR_1WVYP,
 });
 
 export const STARTUP_AUTHORITY_STATE = Object.freeze({
-  READY: 'ready',
-  RECOVERY_PENDING: 'recovery_pending',
-  SEED_LOCALLY_READY_UNPUBLISHED: 'seed_locally_ready_unpublished',
-  AUTHORITY_UNAVAILABLE: 'authority_unavailable',
-  BLOCKED: 'blocked',
+  READY: LOCAL_STR_READY,
+  RECOVERY_PENDING: LOCAL_STR_RECOVERY_PENDING,
+  SEED_LOCALLY_READY_UNPUBLISHED: LOCAL_STR_1YO6Q,
+  AUTHORITY_UNAVAILABLE: LOCAL_STR_Q43AB,
+  BLOCKED: LOCAL_STR_BLOCKED,
 });
 
 const STARTUP_AUTHORITY_PUBLICATION_STATE = Object.freeze({
@@ -34,9 +47,9 @@ const STARTUP_AUTHORITY_PUBLICATION_STATE = Object.freeze({
   ESTABLISHING: 'establishing',
 });
 export const STARTUP_AUTHORITY_ADMISSION_STATE = Object.freeze({
-  ADMITTED: 'admitted',
-  BLOCKED: 'blocked',
-  UNAVAILABLE: 'unavailable',
+  ADMITTED: LOCAL_STR_ADMITTED,
+  BLOCKED: LOCAL_STR_BLOCKED,
+  UNAVAILABLE: LOCAL_STR_UNAVAILABLE,
 });
 const STARTUP_AUTHORITY_TRANSITIONAL_RECOVERY_GATE_STATE = new Set([
   PUBLICATION_RECOVERY_GATE_STATE.PUBLICATION_PENDING,

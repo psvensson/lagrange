@@ -1,3 +1,23 @@
+const LOCAL_NUM_10 = 10;
+const LOCAL_STR_DISCONNECTED = 'disconnected';
+const LOCAL_STR_NODES = 'nodes';
+const LOCAL_STR_HOME = 'Home';
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_STR_EMPTY = '';
+const LOCAL_STR_ASC = 'asc';
+const LOCAL_NUM_5000 = 5000;
+const LOCAL_STR_DEFAULT = 'default';
+const LOCAL_STR_STATE_CHANGED = 'state:changed';
+const LOCAL_STR_NUMBER = 'number';
+const LOCAL_STR_DESC = 'desc';
+const LOCAL_NUM_1000 = 1000;
+const LOCAL_STR_STATE_SNAPSHOT = 'state:snapshot';
+const LOCAL_NUM_ONE = 1;
+const LOCAL_STR_STATE_RESTORED = 'state:restored';
+const LOCAL_STR_OBJECT = 'object';
+const LOCAL_STR_STATE_RESET = 'state:reset';
+const LOCAL_STR_1CRED = 'EventBus required for subscriptions';
+
 /**
  * StateManager - Centralized state management with immutable snapshots
  * Single source of truth for all application state
@@ -55,7 +75,7 @@ export class StateManager {
 
     /** @type {AppState[]} */
     this.snapshots = [];
-    this.maxSnapshots = options.maxSnapshots || 10;
+    this.maxSnapshots = options.maxSnapshots || LOCAL_NUM_10;
   }
 
   /**
@@ -64,13 +84,13 @@ export class StateManager {
    */
   getInitialState() {
     return {
-      connectionStatus: 'disconnected',
+      connectionStatus: LOCAL_STR_DISCONNECTED,
       nodeAddress: null,
       navigation: {
-        currentView: 'nodes',
+        currentView: LOCAL_STR_NODES,
         context: null,
         stack: [],
-        breadcrumb: 'Home',
+        breadcrumb: LOCAL_STR_HOME,
       },
       cache: {
         nodes: [],
@@ -82,21 +102,21 @@ export class StateManager {
         config: [],
         contexts: [],
         lastUpdate: null,
-        cdcLag: 0,
+        cdcLag: LOCAL_NUM_ZERO,
       },
       ui: {
-        selectedIndex: 0,
-        filter: '',
+        selectedIndex: LOCAL_NUM_ZERO,
+        filter: LOCAL_STR_EMPTY,
         sortColumn: null,
-        sortDirection: 'asc',
+        sortDirection: LOCAL_STR_ASC,
         detailPanelVisible: false,
         helpVisible: false,
         commandMode: false,
       },
       config: {
-        refreshInterval: 5000,
-        defaultView: 'nodes',
-        colorScheme: 'default',
+        refreshInterval: LOCAL_NUM_5000,
+        defaultView: LOCAL_STR_NODES,
+        colorScheme: LOCAL_STR_DEFAULT,
         readOnlyMode: false,
       },
     };
@@ -146,7 +166,7 @@ export class StateManager {
 
     // Emit state change event
     if (this.eventBus) {
-      this.eventBus.emit('state:changed', {
+      this.eventBus.emit(LOCAL_STR_STATE_CHANGED, {
         oldState: this.deepClone(oldState),
         newState: this.deepClone(newState),
         updates,
@@ -181,20 +201,20 @@ export class StateManager {
     }
 
     // Validate UI state
-    if (typeof state.ui.selectedIndex !== 'number' ||
-        state.ui.selectedIndex < 0) {
+    if (typeof state.ui.selectedIndex !== LOCAL_STR_NUMBER ||
+        state.ui.selectedIndex < LOCAL_NUM_ZERO) {
       return `Invalid selected index: ${state.ui.selectedIndex}`;
     }
 
     // Validate sort direction
     if (state.ui.sortDirection &&
-        !['asc', 'desc'].includes(state.ui.sortDirection)) {
+        ![LOCAL_STR_ASC, LOCAL_STR_DESC].includes(state.ui.sortDirection)) {
       return `Invalid sort direction: ${state.ui.sortDirection}`;
     }
 
     // Validate config
-    if (typeof state.config.refreshInterval !== 'number' ||
-        state.config.refreshInterval < 1000) {
+    if (typeof state.config.refreshInterval !== LOCAL_STR_NUMBER ||
+        state.config.refreshInterval < LOCAL_NUM_1000) {
       return `Invalid refresh interval: ${state.config.refreshInterval}`;
     }
 
@@ -221,10 +241,10 @@ export class StateManager {
     }
 
     if (this.eventBus) {
-      this.eventBus.emit('state:snapshot', {name: snapshot.name});
+      this.eventBus.emit(LOCAL_STR_STATE_SNAPSHOT, {name: snapshot.name});
     }
 
-    return this.snapshots.length - 1;
+    return this.snapshots.length - LOCAL_NUM_ONE;
   }
 
   /**
@@ -233,7 +253,7 @@ export class StateManager {
    * @throws {Error} If snapshot doesn't exist
    */
   restoreSnapshot(index) {
-    if (index < 0 || index >= this.snapshots.length) {
+    if (index < LOCAL_NUM_ZERO || index >= this.snapshots.length) {
       throw new Error(`Snapshot at index ${index} does not exist`);
     }
 
@@ -242,7 +262,7 @@ export class StateManager {
     this.state = this.deepClone(snapshot.state);
 
     if (this.eventBus) {
-      this.eventBus.emit('state:restored', {
+      this.eventBus.emit(LOCAL_STR_STATE_RESTORED, {
         snapshotName: snapshot.name,
         oldState: this.deepClone(oldState),
         newState: this.deepClone(this.state),
@@ -272,10 +292,10 @@ export class StateManager {
 
     for (const key of Object.keys(source)) {
       if (source[key] !== null &&
-          typeof source[key] === 'object' &&
+          typeof source[key] === LOCAL_STR_OBJECT &&
           !Array.isArray(source[key]) &&
           target[key] !== null &&
-          typeof target[key] === 'object' &&
+          typeof target[key] === LOCAL_STR_OBJECT &&
           !Array.isArray(target[key])) {
         result[key] = this.mergeState(target[key], source[key]);
       } else {
@@ -292,7 +312,7 @@ export class StateManager {
    * @returns {*} Cloned object
    */
   deepClone(obj) {
-    if (obj === null || typeof obj !== 'object') {
+    if (obj === null || typeof obj !== LOCAL_STR_OBJECT) {
       return obj;
     }
 
@@ -319,7 +339,7 @@ export class StateManager {
     this.state = this.getInitialState();
 
     if (this.eventBus) {
-      this.eventBus.emit('state:reset', {
+      this.eventBus.emit(LOCAL_STR_STATE_RESET, {
         oldState: this.deepClone(oldState),
       });
     }
@@ -333,10 +353,10 @@ export class StateManager {
    */
   subscribe(path, callback) {
     if (!this.eventBus) {
-      throw new Error('EventBus required for subscriptions');
+      throw new Error(LOCAL_STR_1CRED);
     }
 
-    return this.eventBus.on('state:changed', ({oldState, newState}) => {
+    return this.eventBus.on(LOCAL_STR_STATE_CHANGED, ({oldState, newState}) => {
       const oldValue = this.getValueAtPath(oldState, path);
       const newValue = this.getValueAtPath(newState, path);
 
@@ -375,7 +395,7 @@ export class StateManager {
     if (a === null || b === null) return false;
     if (typeof a !== typeof b) return false;
 
-    if (typeof a !== 'object') return false;
+    if (typeof a !== LOCAL_STR_OBJECT) return false;
 
     if (Array.isArray(a) !== Array.isArray(b)) return false;
 

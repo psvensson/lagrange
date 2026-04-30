@@ -1,5 +1,21 @@
 import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
 
+const LOCAL_STR_FUNCTION = 'function';
+const LOCAL_STR_SYSTEMTABLECACHE = 'systemTableCache';
+const LOCAL_STR_O1VD7 = 'cdcIntegrationService';
+const LOCAL_STR_MESSAGEROUTER = 'messageRouter';
+const LOCAL_STR_TABLEPOLICYSERVICE = 'tablePolicyService';
+const LOCAL_STR_SQLQUERYENGINE = 'sqlQueryEngine';
+const LOCAL_STR_1506A = 'storageAccountingService';
+const LOCAL_STR_NXU1D = 'storageAdmissionService';
+const LOCAL_STR_1UD6S = 'cdcGroupPropagationService';
+const LOCAL_STR_V9KQS = 'bootstrapReadinessState';
+const LOCAL_STR_1KAZK = 'startupRecoveryCoordinator';
+const LOCAL_STR_1WEH4 = 'controlPlaneReadinessService';
+const LOCAL_STR_1HYTQ = 'transactionCoordinator';
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_STR_OBJECT = 'object';
+
 const {
   CONTROL_PLANE_QUERY_OPTIONS,
   ConfigurationManager,
@@ -205,7 +221,7 @@ class RebalanceCoordinatorSegment1 extends EventEmitter {
         workflowCoordinator: this.operationWorkflowCoordinator,
       });
     this.operationWorkflowRunExclusive = assertCritical(
-      typeof this.operationLane.run === 'function' ?
+      typeof this.operationLane.run === LOCAL_STR_FUNCTION ?
         this.operationLane.run.bind(this.operationLane) :
         null,
       REBALANCE_COORDINATOR_ERROR_MSG.WORKFLOW_COORDINATOR_REQUIRED,
@@ -220,7 +236,7 @@ class RebalanceCoordinatorSegment1 extends EventEmitter {
     this.operationsInCreation = workflowInFlightExecutions;
     this.operationsInExecution = workflowInFlightExecutions;
     this.transactionCoordinator = options.transactionCoordinator || null;
-    this.nowFn = typeof options.nowFn === 'function' ? options.nowFn : Date.now;
+    this.nowFn = typeof options.nowFn === LOCAL_STR_FUNCTION ? options.nowFn : Date.now;
     this.priorityRecoveryActivityStaleGraceMs = Number.isFinite(
       options.priorityRecoveryActivityStaleGraceMs,
     ) ?
@@ -284,6 +300,8 @@ class RebalanceCoordinatorSegment1 extends EventEmitter {
           this.getActualReplicaStatus(...args),
         setTimeoutFn: options.setTimeoutFn,
         clearTimeoutFn: options.clearTimeoutFn,
+        replicaOperationDispatchTimeoutMs:
+          options.replicaOperationDispatchTimeoutMs,
         incompleteOperationQueryEmptyBackoffMs:
           INCOMPLETE_OPERATION_EMPTY_QUERY_BACKOFF_MS,
       });
@@ -318,58 +336,58 @@ class RebalanceCoordinatorSegment1 extends EventEmitter {
   syncOwnerDependencies(options = {}) {
     const previousSystemTableCache = this.systemTableCache;
 
-    if (Object.hasOwn(options, 'systemTableCache')) {
+    if (Object.hasOwn(options, LOCAL_STR_SYSTEMTABLECACHE)) {
       this.systemTableCache = options.systemTableCache || null;
     }
-    if (Object.hasOwn(options, 'cdcIntegrationService')) {
+    if (Object.hasOwn(options, LOCAL_STR_O1VD7)) {
       this.cdcIntegrationService = options.cdcIntegrationService || null;
     }
-    if (Object.hasOwn(options, 'messageRouter')) {
+    if (Object.hasOwn(options, LOCAL_STR_MESSAGEROUTER)) {
       this.messageRouter = options.messageRouter || null;
     }
-    if (Object.hasOwn(options, 'tablePolicyService')) {
+    if (Object.hasOwn(options, LOCAL_STR_TABLEPOLICYSERVICE)) {
       this.tablePolicyService = options.tablePolicyService || null;
     }
-    if (Object.hasOwn(options, 'sqlQueryEngine')) {
+    if (Object.hasOwn(options, LOCAL_STR_SQLQUERYENGINE)) {
       this.sqlQueryEngine = options.sqlQueryEngine || null;
     }
-    if (Object.hasOwn(options, 'storageAccountingService')) {
+    if (Object.hasOwn(options, LOCAL_STR_1506A)) {
       this.storageAccountingService = options.storageAccountingService || null;
     }
-    if (Object.hasOwn(options, 'storageAdmissionService')) {
+    if (Object.hasOwn(options, LOCAL_STR_NXU1D)) {
       this.storageAdmissionService = options.storageAdmissionService || null;
     }
-    if (Object.hasOwn(options, 'cdcGroupPropagationService')) {
+    if (Object.hasOwn(options, LOCAL_STR_1UD6S)) {
       this.cdcGroupPropagationService =
         options.cdcGroupPropagationService || null;
     }
-    if (Object.hasOwn(options, 'bootstrapReadinessState')) {
+    if (Object.hasOwn(options, LOCAL_STR_V9KQS)) {
       this.bootstrapReadinessState = options.bootstrapReadinessState || null;
       if (
         this.startupRecoveryCoordinator &&
         typeof this.startupRecoveryCoordinator.syncOwnerDependencies ===
-          'function'
+          LOCAL_STR_FUNCTION
       ) {
         this.startupRecoveryCoordinator.syncOwnerDependencies({
           readinessState: this.bootstrapReadinessState,
         });
       }
     }
-    if (Object.hasOwn(options, 'startupRecoveryCoordinator')) {
+    if (Object.hasOwn(options, LOCAL_STR_1KAZK)) {
       this.startupRecoveryCoordinator =
         options.startupRecoveryCoordinator || null;
     }
-    if (Object.hasOwn(options, 'controlPlaneReadinessService')) {
+    if (Object.hasOwn(options, LOCAL_STR_1WEH4)) {
       this.controlPlaneReadinessService =
         options.controlPlaneReadinessService || null;
     }
-    if (Object.hasOwn(options, 'transactionCoordinator')) {
+    if (Object.hasOwn(options, LOCAL_STR_1HYTQ)) {
       this.transactionCoordinator = options.transactionCoordinator || null;
     }
 
     if (
       this.repository &&
-      typeof this.repository.syncOwnerDependencies === 'function'
+      typeof this.repository.syncOwnerDependencies === LOCAL_STR_FUNCTION
     ) {
       this.repository.syncOwnerDependencies({
         systemTableCache: this.systemTableCache,
@@ -391,7 +409,7 @@ class RebalanceCoordinatorSegment1 extends EventEmitter {
     if (
       this.controlPlaneReadinessService &&
       typeof this.controlPlaneReadinessService.syncOwnerDependencies ===
-        'function'
+        LOCAL_STR_FUNCTION
     ) {
       this.controlPlaneReadinessService.syncOwnerDependencies({
         systemTableCache: this.systemTableCache,
@@ -420,7 +438,7 @@ class RebalanceCoordinatorSegment1 extends EventEmitter {
   bindSystemTableCacheListener() {
     if (
       !this.systemTableCache ||
-      typeof this.systemTableCache.onCacheChange !== 'function'
+      typeof this.systemTableCache.onCacheChange !== LOCAL_STR_FUNCTION
     ) {
       return;
     }
@@ -441,7 +459,7 @@ class RebalanceCoordinatorSegment1 extends EventEmitter {
     if (
       !this.cacheChangeListener ||
       !systemTableCache ||
-      typeof systemTableCache.offCacheChange !== 'function'
+      typeof systemTableCache.offCacheChange !== LOCAL_STR_FUNCTION
     ) {
       return;
     }
@@ -632,7 +650,7 @@ class RebalanceCoordinatorSegment1 extends EventEmitter {
    */
   async queryCachedIncompleteOperations() {
     if (
-      typeof this.repository?.queryCachedIncompleteOperations === 'function'
+      typeof this.repository?.queryCachedIncompleteOperations === LOCAL_STR_FUNCTION
     ) {
       return this.repository.queryCachedIncompleteOperations();
     }
@@ -665,14 +683,14 @@ class RebalanceCoordinatorSegment1 extends EventEmitter {
   getIncompleteOperationObservation(operations = []) {
     if (
       typeof this.repository?.resolveIncompleteOperationObservation ===
-      'function'
+      LOCAL_STR_FUNCTION
     ) {
       return this.repository.resolveIncompleteOperationObservation(operations);
     }
     const operationCount = Array.isArray(operations) ? operations.length : 0;
     return Object.freeze({
       state:
-        operationCount > 0 ?
+        operationCount > LOCAL_NUM_ZERO ?
           INCOMPLETE_OPERATION_OBSERVATION_STATE.PRESENT :
           INCOMPLETE_OPERATION_OBSERVATION_STATE.EMPTY,
       operationCount,
@@ -728,7 +746,7 @@ class RebalanceCoordinatorSegment1 extends EventEmitter {
     const operationCount = Array.isArray(operations) ? operations.length : 0;
     return Object.freeze({
       state:
-        operationCount > 0 ?
+        operationCount > LOCAL_NUM_ZERO ?
           INCOMPLETE_OPERATION_OBSERVATION_STATE.PRESENT :
           INCOMPLETE_OPERATION_OBSERVATION_STATE.EMPTY,
       operationCount,
@@ -991,7 +1009,7 @@ class RebalanceCoordinatorSegment1 extends EventEmitter {
         []),
     ];
     for (const row of allRows) {
-      if (!row || typeof row !== 'object') {
+      if (!row || typeof row !== LOCAL_STR_OBJECT) {
         continue;
       }
       const serviceId = String(

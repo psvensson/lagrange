@@ -1,3 +1,5 @@
+const LOCAL_STR_CONSTRUCTOR = 'constructor';
+
 const OBSERVED_REPLICA_ROW_FIELD = Object.freeze({
   ADDRESS: 'address',
   RAFT_ROLE: 'raft_role',
@@ -394,7 +396,7 @@ function assignReplicaOperationRepositoryObservationMethods(
       ReplicaOperationRepositoryObservationMethods.prototype,
     )
   ) {
-    if (methodName === 'constructor') {
+    if (methodName === LOCAL_STR_CONSTRUCTOR) {
       continue;
     }
     Object.defineProperty(

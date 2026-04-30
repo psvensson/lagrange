@@ -1,3 +1,9 @@
+const LOCAL_STR_REPAIR_REQUIRED = 'repair_required';
+const LOCAL_STR_REPAIR = 'repair';
+const LOCAL_STR_AGEMS = 'ageMs=';
+const LOCAL_STR_TIMEOUTMS = 'timeoutMs=';
+const LOCAL_STR_CONSTRUCTOR = 'constructor';
+
 function assignAdminServiceDiscoveryReadinessMethods(
   AdminServiceDiscovery,
   options = {},
@@ -500,9 +506,9 @@ function assignAdminServiceDiscoveryReadinessMethods(
       const routingReadinessDimension =
         CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE;
       return {
-        readProfile: 'repair_required',
+        readProfile: LOCAL_STR_REPAIR_REQUIRED,
         queryTimeoutMs: AUTHORITATIVE_DISCOVERY_REPAIR.QUERY_TIMEOUT_MS,
-        sessionId: `${reason || 'repair'}:${tableName}:${now}`,
+        sessionId: `${reason || LOCAL_STR_REPAIR}:${tableName}:${now}`,
         allowSqlFallback: tableScopedDiscoveryRepair === true,
         allowPressureDegrade: transportProfile.allowPressureDegrade,
         allowPressureDefer: transportProfile.allowPressureDefer,
@@ -1663,10 +1669,10 @@ function assignAdminServiceDiscoveryReadinessMethods(
           SERVICE_DISCOVERY_REASON_DETAIL_SEPARATOR +
           String(normalizedOperation.workflowStep || EMPTY_STRING) +
           SERVICE_DISCOVERY_REASON_DETAIL_SEPARATOR +
-          'ageMs=' +
+          LOCAL_STR_AGEMS +
           String(normalizedOperation.ageMs) +
           SERVICE_DISCOVERY_REASON_DETAIL_SEPARATOR +
-          'timeoutMs=' +
+          LOCAL_STR_TIMEOUTMS +
           (Number.isFinite(timeoutMs) ? String(timeoutMs) : EMPTY_STRING),
       };
     }
@@ -1794,7 +1800,7 @@ function assignAdminServiceDiscoveryReadinessMethods(
   for (const methodName of Object.getOwnPropertyNames(
     AdminServiceDiscoveryReadinessMethods.prototype,
   )) {
-    if (methodName === 'constructor') {
+    if (methodName === LOCAL_STR_CONSTRUCTOR) {
       continue;
     }
     Object.defineProperty(

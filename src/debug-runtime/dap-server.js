@@ -11,6 +11,11 @@ import {
   DAP_ERROR_MSG as ERR,
 } from './dap-constants.js';
 
+const LOCAL_STR_EMPTY = '';
+const LOCAL_STR_UTF8 = 'utf8';
+const LOCAL_STR_UNDEFINED = 'undefined';
+const LOCAL_STR_NULL = 'null';
+
 /**
  * Encode one DAP payload into framed wire format.
  *
@@ -29,7 +34,7 @@ function encodeDapProtocolMessage(message) {
  */
 class DapMessageFramer {
   constructor() {
-    this._buffer = '';
+    this._buffer = LOCAL_STR_EMPTY;
   }
 
   /**
@@ -580,10 +585,10 @@ function normalizeChunkToString(chunk) {
     return chunk;
   }
   if (Buffer.isBuffer(chunk)) {
-    return chunk.toString('utf8');
+    return chunk.toString(LOCAL_STR_UTF8);
   }
   if (chunk instanceof Uint8Array) {
-    return Buffer.from(chunk).toString('utf8');
+    return Buffer.from(chunk).toString(LOCAL_STR_UTF8);
   }
   throw new Error(ERR.MESSAGE_REQUIRED);
 }
@@ -597,10 +602,10 @@ function formatVariableValue(value) {
     return value;
   }
   if (value === undefined) {
-    return 'undefined';
+    return LOCAL_STR_UNDEFINED;
   }
   if (value === null) {
-    return 'null';
+    return LOCAL_STR_NULL;
   }
   if (typeof value === TYPEOF.OBJECT) {
     try {

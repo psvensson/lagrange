@@ -15,6 +15,8 @@ import {
   validatePgwireRuntimeConfig,
 } from '../runtime/pgwire-descriptor.js';
 
+const LOCAL_NUM_ZERO = 0;
+
 // --- Validation error message constants ---
 
 const DESCRIPTOR_ERROR = Object.freeze({
@@ -124,7 +126,7 @@ function validateWasmComponentRef(ref) {
   if (typeof ref !== TYPEOF.STRING) {
     return {valid: false, errors: [DESCRIPTOR_ERROR.REF_NOT_STRING]};
   }
-  if (ref.length === 0) {
+  if (ref.length === LOCAL_NUM_ZERO) {
     return {valid: false, errors: [DESCRIPTOR_ERROR.REF_EMPTY]};
   }
   return {valid: true};
@@ -144,7 +146,7 @@ function validateOciContainerRef(ref) {
   if (typeof ref !== TYPEOF.STRING) {
     return {valid: false, errors: [DESCRIPTOR_ERROR.REF_NOT_STRING]};
   }
-  if (ref.length === 0) {
+  if (ref.length === LOCAL_NUM_ZERO) {
     return {valid: false, errors: [DESCRIPTOR_ERROR.REF_EMPTY]};
   }
   if (!ref.includes(OCI_DIGEST_MARKER)) {
@@ -209,7 +211,7 @@ function validateRuntimeDescriptor(descriptor) {
     }
   }
 
-  if (errors.length > 0) {
+  if (errors.length > LOCAL_NUM_ZERO) {
     return {valid: false, errors};
   }
   return {valid: true};

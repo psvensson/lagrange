@@ -1,6 +1,8 @@
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 import {PartitionServiceSegment2} from './partition-service-segment-2.js';
 
+const LOCAL_NUM_ZERO = 0;
+
 const {
   ERRORS,
   LifeRaft,
@@ -364,7 +366,7 @@ class PartitionServiceSegment3Part1 extends PartitionServiceSegment2 {
    * @private
    */
   normalizeMetricIdentifier(value) {
-    if (value === null || value === void 0) {
+    if (value === null || value === void LOCAL_NUM_ZERO) {
       return null;
     }
     const normalized = String(value).trim();
@@ -548,7 +550,7 @@ class PartitionServiceSegment3Part1 extends PartitionServiceSegment2 {
     const whereClause = operation.whereClause || {};
     const data = operation.data || {};
     const pkValue = whereClause[pkField] ?? data[pkField];
-    if (pkValue !== void 0 && pkValue !== null) {
+    if (pkValue !== void LOCAL_NUM_ZERO && pkValue !== null) {
       result.cdcConfirmation = this.cdcConfirmationTracker.awaitConfirmation(
         tableName,
         pkValue,

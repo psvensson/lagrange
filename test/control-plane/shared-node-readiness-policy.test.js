@@ -35,6 +35,8 @@ function createMockReadinessService(systemTableCache) {
             [CONTROL_PLANE_READINESS_DIMENSION
               .METADATA_PUBLICATION_HEALTHY]: true,
             [CONTROL_PLANE_READINESS_DIMENSION
+              .CONTROL_PLANE_RECOVERY_ELIGIBLE]: false,
+            [CONTROL_PLANE_READINESS_DIMENSION
               .REPAIR_ELIGIBLE]: false,
             [CONTROL_PLANE_READINESS_DIMENSION
               .SERVE_ELIGIBLE]: false,
@@ -62,6 +64,8 @@ function createMockReadinessService(systemTableCache) {
             .CONTROL_PLANE_WRITABLE]: healthy,
           [CONTROL_PLANE_READINESS_DIMENSION
             .METADATA_PUBLICATION_HEALTHY]: true,
+          [CONTROL_PLANE_READINESS_DIMENSION
+            .CONTROL_PLANE_RECOVERY_ELIGIBLE]: healthy,
           [CONTROL_PLANE_READINESS_DIMENSION
             .REPAIR_ELIGIBLE]: healthy,
           [CONTROL_PLANE_READINESS_DIMENSION

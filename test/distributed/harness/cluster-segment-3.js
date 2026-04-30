@@ -578,6 +578,7 @@ function formatCriticalSystemDistributionSummary(summary) {
         ZERO;
       const readyNodeIds = normalizeDistinctStringArray(table?.readyNodeIds);
       const selectedNodeId = String(table?.selectedNodeId || '').trim();
+      const observationState = String(table?.observationState || '').trim();
       const error = String(table?.error || '').trim();
       return (
         tableName +
@@ -587,6 +588,7 @@ function formatCriticalSystemDistributionSummary(summary) {
         String(requiredDistinctNodeCount) +
         (readyNodeIds.length > ZERO ? '@' + readyNodeIds.join('|') : '') +
         (selectedNodeId.length > ZERO ? '#src=' + selectedNodeId : '') +
+        (observationState.length > ZERO ? '#obs=' + observationState : '') +
         (error.length > ZERO ? '#err=' + error : '')
       );
     })

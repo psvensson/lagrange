@@ -1,5 +1,11 @@
 import {COLUMN, TABLES} from '../constants/index.js';
 
+const LOCAL_STR_STRING = 'string';
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_STR_EMPTY = '';
+const LOCAL_STR_OBJECT = 'object';
+const LOCAL_NUM_ONE = 1;
+
 const CONTROL_PLANE_PUBLICATION_DEFAULT = Object.freeze({
   KIND: 'cluster_membership',
   STATUS: 'OPEN',
@@ -7,17 +13,17 @@ const CONTROL_PLANE_PUBLICATION_DEFAULT = Object.freeze({
 
 function readText(...values) {
   for (const value of values) {
-    if (typeof value === 'string' && value.length > 0) {
+    if (typeof value === LOCAL_STR_STRING && value.length > LOCAL_NUM_ZERO) {
       return value;
     }
     if (value !== null && value !== undefined) {
       const normalized = String(value);
-      if (normalized.length > 0) {
+      if (normalized.length > LOCAL_NUM_ZERO) {
         return normalized;
       }
     }
   }
-  return '';
+  return LOCAL_STR_EMPTY;
 }
 
 function readLowerText(...values) {
@@ -26,7 +32,7 @@ function readLowerText(...values) {
 
 function readInteger(...values) {
   for (const value of values) {
-    if (value === null || value === undefined || value === '') {
+    if (value === null || value === undefined || value === LOCAL_STR_EMPTY) {
       continue;
     }
     const normalized = Number(value);
@@ -41,7 +47,7 @@ function readJsonValue(value, fallbackValue) {
   if (value === null || value === undefined) {
     return fallbackValue;
   }
-  if (typeof value === 'string') {
+  if (typeof value === LOCAL_STR_STRING) {
     try {
       return JSON.parse(value);
     } catch {
@@ -64,7 +70,7 @@ function readArrayValue(...values) {
 function readObjectValue(...values) {
   for (const value of values) {
     const normalized = readJsonValue(value, null);
-    if (normalized && typeof normalized === 'object' &&
+    if (normalized && typeof normalized === LOCAL_STR_OBJECT &&
         !Array.isArray(normalized)) {
       return normalized;
     }
@@ -262,7 +268,7 @@ function serializeControlPlanePublicationRow(row) {
       normalizedRow.publicationEpoch,
       row?.publication_epoch,
       row?.publicationEpoch,
-      1,
+      LOCAL_NUM_ONE,
     ),
     publisher_node_id: readText(
       normalizedRow.publisherNodeId,

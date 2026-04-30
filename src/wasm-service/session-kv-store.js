@@ -13,6 +13,9 @@ import {
   WASM_SERVICE_ERROR_MSG,
 } from './wasm-service-constants.js';
 
+const LOCAL_STR_JOURNAL_MODE_WAL = 'journal_mode = WAL';
+const LOCAL_STR_SYNCHRONOUS_NORMAL = 'synchronous = NORMAL';
+
 /**
  * Internal table name for the KV store.
  */
@@ -89,8 +92,8 @@ class SessionKVStore {
    */
   constructor(dbPath) {
     this.db = new Database(dbPath);
-    this.db.pragma('journal_mode = WAL');
-    this.db.pragma('synchronous = NORMAL');
+    this.db.pragma(LOCAL_STR_JOURNAL_MODE_WAL);
+    this.db.pragma(LOCAL_STR_SYNCHRONOUS_NORMAL);
     this._sessionSizeLimitBytes = null;
     this._serviceSizeLimitBytes = null;
     this._createSchema();

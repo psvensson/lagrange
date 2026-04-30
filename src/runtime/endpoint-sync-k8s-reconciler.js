@@ -20,6 +20,11 @@ import {
   normalizeDns1123Segment,
 } from './endpoint-sync-naming.js';
 
+const LOCAL_STR_65Q9P = 'EndpointSyncK8sReconciler';
+const LOCAL_STR_RECONCILE = 'reconcile';
+const LOCAL_NUM_ONE = 1;
+const LOCAL_NUM_ZERO = 0;
+
 const K8S_KIND = Object.freeze({
   SERVICE: 'Service',
   ENDPOINT_SLICE: 'EndpointSlice',
@@ -80,8 +85,8 @@ class EndpointSyncReconcilerError extends BaseError {
     super(message, {
       cause,
       context: {
-        component: 'EndpointSyncK8sReconciler',
-        operation: 'reconcile',
+        component: LOCAL_STR_65Q9P,
+        operation: LOCAL_STR_RECONCILE,
         metadata,
       },
     });
@@ -321,10 +326,10 @@ async function reconcilePlannedExports(options) {
   for (const plannedExport of options.plannedExports) {
     const serviceManifest = buildServiceManifest(plannedExport, options.namespace);
     desiredServiceNames.add(serviceManifest.metadata.name);
-    summary.desiredServices += 1;
+    summary.desiredServices += LOCAL_NUM_ONE;
 
     const sliceManifests = [];
-    for (let idx = 0; idx < plannedExport.slicePlans.length; idx += 1) {
+    for (let idx = LOCAL_NUM_ZERO; idx < plannedExport.slicePlans.length; idx += LOCAL_NUM_ONE) {
       const sliceManifest = buildEndpointSliceManifest(
         plannedExport,
         plannedExport.slicePlans[idx],
@@ -334,12 +339,12 @@ async function reconcilePlannedExports(options) {
       );
       desiredEndpointSliceNames.add(sliceManifest.metadata.name);
       sliceManifests.push(sliceManifest);
-      summary.desiredEndpointSlices += 1;
+      summary.desiredEndpointSlices += LOCAL_NUM_ONE;
     }
 
     try {
       await options.k8sClient.upsertService(serviceManifest);
-      summary.upsertedServices += 1;
+      summary.upsertedServices += LOCAL_NUM_ONE;
     } catch (error) {
       summary.groupFailures.push({
         serviceKey: plannedExport.serviceKey,
@@ -355,7 +360,7 @@ async function reconcilePlannedExports(options) {
     for (const sliceManifest of sliceManifests) {
       try {
         await options.k8sClient.upsertEndpointSlice(sliceManifest);
-        summary.upsertedEndpointSlices += 1;
+        summary.upsertedEndpointSlices += LOCAL_NUM_ONE;
       } catch (error) {
         groupFailed = true;
         summary.groupFailures.push({
@@ -383,7 +388,7 @@ async function reconcilePlannedExports(options) {
   for (const serviceName of staleServiceNames) {
     try {
       await options.k8sClient.deleteService(options.namespace, serviceName);
-      summary.deletedServices += 1;
+      summary.deletedServices += LOCAL_NUM_ONE;
     } catch (error) {
       summary.groupFailures.push({
         serviceKey: null,
@@ -405,7 +410,7 @@ async function reconcilePlannedExports(options) {
   for (const sliceName of staleEndpointSliceNames) {
     try {
       await options.k8sClient.deleteEndpointSlice(options.namespace, sliceName);
-      summary.deletedEndpointSlices += 1;
+      summary.deletedEndpointSlices += LOCAL_NUM_ONE;
     } catch (error) {
       summary.groupFailures.push({
         serviceKey: null,

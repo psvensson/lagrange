@@ -3,6 +3,7 @@ import {UnifiedRebalancerSegment1} from './unified-rebalancer-segment-1.js';
 
 const {
   COLUMN,
+  CONTROL_PLANE_PUBLICATION_STATUS,
   CONTROL_PLANE_READINESS_DIMENSION,
   CRITICAL_SYSTEM_ENDPOINT_VISIBILITY_AUTHORITATIVE_READ,
   CRITICAL_SYSTEM_TOPOLOGY_SETTLING_BLOCKER_REASON,
@@ -28,6 +29,58 @@ const {
   resolvePriorityRecoveryActiveNodeCohort,
 } = UNIFIED_REBALANCER_SHARED;
 
+const AVAILABLE_NODE_MEMBERSHIP_CONSTRAINT_STATE = Object.freeze({
+  ORDINARY_ENTITY: 'ordinary_entity',
+  PRIORITY_RECOVERY_OPEN: 'priority_recovery_open',
+  PRIORITY_RECOVERY_CLOSED: 'priority_recovery_closed',
+});
+
+const AVAILABLE_NODE_MEMBERSHIP_CONSTRAINT_ACTION = Object.freeze({
+  CONSTRAIN_TO_PUBLISHED_MEMBERSHIP: 'constrain_to_published_membership',
+  ALLOW_RECOVERY_COHORT: 'allow_recovery_cohort',
+});
+
+const AVAILABLE_NODE_MEMBERSHIP_CONSTRAINT_ACTION_BY_STATE = Object.freeze(
+  new Map([
+    [
+      AVAILABLE_NODE_MEMBERSHIP_CONSTRAINT_STATE.ORDINARY_ENTITY,
+      AVAILABLE_NODE_MEMBERSHIP_CONSTRAINT_ACTION
+        .CONSTRAIN_TO_PUBLISHED_MEMBERSHIP,
+    ],
+    [
+      AVAILABLE_NODE_MEMBERSHIP_CONSTRAINT_STATE.PRIORITY_RECOVERY_CLOSED,
+      AVAILABLE_NODE_MEMBERSHIP_CONSTRAINT_ACTION
+        .CONSTRAIN_TO_PUBLISHED_MEMBERSHIP,
+    ],
+    [
+      AVAILABLE_NODE_MEMBERSHIP_CONSTRAINT_STATE.PRIORITY_RECOVERY_OPEN,
+      AVAILABLE_NODE_MEMBERSHIP_CONSTRAINT_ACTION.ALLOW_RECOVERY_COHORT,
+    ],
+  ]),
+);
+
+const AVAILABLE_NODE_MEMBERSHIP_CONSTRAINT_STATE_TABLE = Object.freeze([
+  Object.freeze({
+    state: AVAILABLE_NODE_MEMBERSHIP_CONSTRAINT_STATE.ORDINARY_ENTITY,
+    matches: (evidence) => evidence.priorityPartition !== true,
+  }),
+  Object.freeze({
+    state: AVAILABLE_NODE_MEMBERSHIP_CONSTRAINT_STATE.PRIORITY_RECOVERY_CLOSED,
+    matches: (evidence) =>
+      evidence.recoveryActive !== true ||
+      (
+        evidence.publicationPublished === true &&
+        evidence.prioritySummarySatisfied === true
+      ),
+  }),
+  Object.freeze({
+    state: AVAILABLE_NODE_MEMBERSHIP_CONSTRAINT_STATE.PRIORITY_RECOVERY_OPEN,
+    matches: (evidence) =>
+      evidence.priorityPartition === true &&
+      evidence.recoveryActive === true,
+  }),
+]);
+
 class UnifiedRebalancerSegment2 extends UnifiedRebalancerSegment1 {
   getReservedPriorityRecoveryMoveSlots() {
     if (
@@ -51,10 +104,57 @@ class UnifiedRebalancerSegment2 extends UnifiedRebalancerSegment1 {
    * @private
    */
   shouldConstrainAvailableNodesToPublishedMembership() {
-    if (!this.isControlPlanePriorityPartition()) {
-      return true;
-    }
-    return !this.isPriorityControlPlaneRecoveryActive();
+    const evidence = this.buildAvailableNodeMembershipConstraintEvidence();
+    const state = this.resolveAvailableNodeMembershipConstraintState(evidence);
+    const action =
+      AVAILABLE_NODE_MEMBERSHIP_CONSTRAINT_ACTION_BY_STATE.get(state) ||
+      AVAILABLE_NODE_MEMBERSHIP_CONSTRAINT_ACTION
+        .CONSTRAIN_TO_PUBLISHED_MEMBERSHIP;
+    return action ===
+      AVAILABLE_NODE_MEMBERSHIP_CONSTRAINT_ACTION
+        .CONSTRAIN_TO_PUBLISHED_MEMBERSHIP;
+  }
+
+  /**
+   * @return {Object}
+   * @private
+   */
+  buildAvailableNodeMembershipConstraintEvidence() {
+    const latestPublicationRow = this.getLatestMembershipPublicationRow();
+    const priorityPartitionSummary =
+      latestPublicationRow?.priorityPartitionSummary &&
+        typeof latestPublicationRow.priorityPartitionSummary ===
+          TYPEOF.OBJECT ?
+        latestPublicationRow.priorityPartitionSummary :
+        latestPublicationRow?.priority_partition_summary &&
+          typeof latestPublicationRow.priority_partition_summary ===
+            TYPEOF.OBJECT ?
+          latestPublicationRow.priority_partition_summary :
+          null;
+    const publicationStatus = String(
+      latestPublicationRow?.status || UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
+    ).toUpperCase();
+    return Object.freeze({
+      priorityPartition: this.isControlPlanePriorityPartition(),
+      recoveryActive: this.isGlobalPriorityControlPlaneRecoveryActive(),
+      publicationPublished:
+        publicationStatus === CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+      prioritySummarySatisfied: priorityPartitionSummary?.satisfied === true,
+    });
+  }
+
+  /**
+   * @param {Object} evidence
+   * @return {string}
+   * @private
+   */
+  resolveAvailableNodeMembershipConstraintState(evidence) {
+    return (
+      AVAILABLE_NODE_MEMBERSHIP_CONSTRAINT_STATE_TABLE.find((entry) =>
+        entry.matches(evidence),
+      )?.state ||
+      AVAILABLE_NODE_MEMBERSHIP_CONSTRAINT_STATE.ORDINARY_ENTITY
+    );
   }
 
   /**

@@ -16,6 +16,12 @@ import {
 import {packageExamples} from './package-examples.js';
 import {validateExampleOutput} from './validate-output.js';
 
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_NUM_ONE = 1;
+const LOCAL_STR_19GGI = '..';
+const LOCAL_STR_EMPTY = '';
+const LOCAL_STR_FUNCTION = 'function';
+
 /**
  * Summarize example pass/fail counters.
  *
@@ -23,19 +29,19 @@ import {validateExampleOutput} from './validate-output.js';
  * @return {{total: number, passed: number, failed: number, requiredFailed: number}}
  */
 function summarizeExamples(results) {
-  let passed = 0;
-  let failed = 0;
-  let requiredFailed = 0;
+  let passed = LOCAL_NUM_ZERO;
+  let failed = LOCAL_NUM_ZERO;
+  let requiredFailed = LOCAL_NUM_ZERO;
 
   for (const result of results) {
     if (result.passed) {
-      passed += 1;
+      passed += LOCAL_NUM_ONE;
       continue;
     }
 
-    failed += 1;
+    failed += LOCAL_NUM_ONE;
     if (result.required) {
-      requiredFailed += 1;
+      requiredFailed += LOCAL_NUM_ONE;
     }
   }
 
@@ -66,7 +72,7 @@ function buildDefaultOutputPath(runId) {
  */
 async function writeArtifact(outputPath, artifact) {
   const absolutePath = resolve(outputPath);
-  await mkdir(resolve(absolutePath, '..'), {recursive: true});
+  await mkdir(resolve(absolutePath, LOCAL_STR_19GGI), {recursive: true});
   await writeFile(
     absolutePath,
     JSON.stringify(artifact, null, JSON_SPACES),
@@ -84,8 +90,8 @@ async function writeArtifact(outputPath, artifact) {
 function buildRunId(startedAt) {
   return `examples-${startedAt.toISOString().replace(
     RUN_ID_TIMESTAMP_SANITIZE_REGEX,
-    '',
-  )}-${randomUUID().slice(0, RUN_ID_RANDOM_SLICE_LENGTH)}`;
+    LOCAL_STR_EMPTY,
+  )}-${randomUUID().slice(LOCAL_NUM_ZERO, RUN_ID_RANDOM_SLICE_LENGTH)}`;
 }
 
 /**
@@ -123,7 +129,7 @@ async function runExamplesCatalog(options = {}) {
   const results = [];
 
   try {
-    if (ownClient && typeof client.connect === 'function') {
+    if (ownClient && typeof client.connect === LOCAL_STR_FUNCTION) {
       await client.connect();
     }
 
@@ -164,7 +170,7 @@ async function runExamplesCatalog(options = {}) {
       });
     }
   } finally {
-    if (ownClient && typeof client.close === 'function') {
+    if (ownClient && typeof client.close === LOCAL_STR_FUNCTION) {
       await client.close();
     }
   }
@@ -189,7 +195,7 @@ async function runExamplesCatalog(options = {}) {
     artifactPath: absoluteOutputPath,
   };
 
-  if (options.failOnRequired !== false && summary.requiredFailed > 0) {
+  if (options.failOnRequired !== false && summary.requiredFailed > LOCAL_NUM_ZERO) {
     throw new Error(
       `Required examples failed: ${summary.requiredFailed} (artifact: ${absoluteOutputPath})`,
     );

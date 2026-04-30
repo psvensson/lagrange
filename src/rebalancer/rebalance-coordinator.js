@@ -1,6 +1,9 @@
 import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
 import {RebalanceCoordinatorSegment5} from './rebalance-coordinator-segment-5.js';
 
+const LOCAL_STR_FUNCTION = 'function';
+const LOCAL_STR_1I9PK = 'Skipping in-flight operation count during coordinator shutdown';
+
 const {
   CONTROL_PLANE_WORKLOAD_CLASS,
   NUM,
@@ -143,7 +146,7 @@ class RebalanceCoordinator extends RebalanceCoordinatorSegment5 {
       this._boundOutcomeHandler = null;
     }
     if (this.cacheChangeListener &&
-        typeof this.systemTableCache?.offCacheChange === 'function') {
+        typeof this.systemTableCache?.offCacheChange === LOCAL_STR_FUNCTION) {
       this.unbindSystemTableCacheListener();
       this.cacheChangeListener = null;
     }
@@ -158,7 +161,7 @@ class RebalanceCoordinator extends RebalanceCoordinatorSegment5 {
       inFlightOperationCount = inFlightOps.length;
     } catch (error) {
       this.logger.debug(
-        'Skipping in-flight operation count during coordinator shutdown',
+        LOCAL_STR_1I9PK,
         {
           nodeId: this.nodeId,
           error: error.message,
@@ -173,7 +176,7 @@ class RebalanceCoordinator extends RebalanceCoordinatorSegment5 {
 
     this.operationsInCreation.clear();
     this.recentOperationIntents.clear();
-    if (typeof this.workflowOwner?.shutdown === 'function') {
+    if (typeof this.workflowOwner?.shutdown === LOCAL_STR_FUNCTION) {
       this.workflowOwner.shutdown();
     }
 

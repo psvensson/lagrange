@@ -9,6 +9,8 @@ import {
 import {RAFT_ROLE} from '../raft/constants.js';
 import {normalizePublishedRaftRole} from '../raft/published-raft-role.js';
 
+const LOCAL_NUM_ZERO = 0;
+
 const PARTITION_SERVICE_ROW_OWNER_ERROR = Object.freeze({
   PARTITION_ID_REQUIRED: 'PartitionServiceRowOwner requires partitionId',
   NODE_ID_REQUIRED: 'PartitionServiceRowOwner requires nodeId',
@@ -39,7 +41,7 @@ const CRITICAL_SYSTEM_PARTITION_IDS = new Set(
 );
 
 function assertRequiredString(value, errorMessage) {
-  if (typeof value !== TYPEOF.STRING || value.length === 0) {
+  if (typeof value !== TYPEOF.STRING || value.length === LOCAL_NUM_ZERO) {
     throw new Error(errorMessage);
   }
 }
@@ -249,10 +251,10 @@ class PartitionServiceRowOwner {
       service_id: replicaId,
       service_type: SERVICE_TYPE.PARTITION,
     };
-    if (typeof partitionId === TYPEOF.STRING && partitionId.length > 0) {
+    if (typeof partitionId === TYPEOF.STRING && partitionId.length > LOCAL_NUM_ZERO) {
       whereClause.partition_id = partitionId;
     }
-    if (typeof nodeId === TYPEOF.STRING && nodeId.length > 0) {
+    if (typeof nodeId === TYPEOF.STRING && nodeId.length > LOCAL_NUM_ZERO) {
       whereClause.node_id = nodeId;
     }
 

@@ -31,6 +31,18 @@ import {
   WRITE_OPERATION_STATUS,
 } from './distributed-transaction-coordinator-constants.js';
 
+const LOCAL_NUM_ONE = 1;
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_STR_FUNCTION = 'function';
+const LOCAL_STR_OBJECT = 'object';
+const LOCAL_STR_TRANSACTION_EPOCH = 'transaction_epoch';
+const LOCAL_STR_TRANSACTIONEPOCH = 'transactionEpoch';
+const LOCAL_STR_TIMEOUT_DEADLINE = 'timeout_deadline';
+const LOCAL_STR_TIMEOUTDEADLINE = 'timeoutDeadline';
+const LOCAL_STR_SHA1 = 'sha1';
+const LOCAL_STR_HEX = 'hex';
+const LOCAL_STR_STRING = 'string';
+
 /**
  * Distributed transaction coordinator with participant state persistence hooks.
  */
@@ -69,27 +81,27 @@ class DistributedTransactionCoordinator {
     this.epochSource =
       options.epochSource ||
       (() => {
-        this.nextEpoch += 1;
+        this.nextEpoch += LOCAL_NUM_ONE;
         return this.nextEpoch;
       });
     this.transactionBudgetMs =
       Number.isFinite(options.transactionBudgetMs) &&
-      options.transactionBudgetMs > 0 ?
+      options.transactionBudgetMs > LOCAL_NUM_ZERO ?
         Math.floor(options.transactionBudgetMs) :
         TIMEOUT_BUDGET_DEFAULT.TRANSACTION_BUDGET_MS;
     this.participantRetryMaxRetries =
       Number.isFinite(options.participantRetryMaxRetries) &&
-      options.participantRetryMaxRetries >= 0 ?
+      options.participantRetryMaxRetries >= LOCAL_NUM_ZERO ?
         Math.floor(options.participantRetryMaxRetries) :
         PARTICIPANT_RETRY_DEFAULT.MAX_RETRIES;
     this.participantRetryBaseDelayMs =
       Number.isFinite(options.participantRetryBaseDelayMs) &&
-      options.participantRetryBaseDelayMs > 0 ?
+      options.participantRetryBaseDelayMs > LOCAL_NUM_ZERO ?
         Math.floor(options.participantRetryBaseDelayMs) :
         PARTICIPANT_RETRY_DEFAULT.BASE_DELAY_MS;
     this.participantRetryMaxDelayMs =
       Number.isFinite(options.participantRetryMaxDelayMs) &&
-      options.participantRetryMaxDelayMs > 0 ?
+      options.participantRetryMaxDelayMs > LOCAL_NUM_ZERO ?
         Math.floor(options.participantRetryMaxDelayMs) :
         PARTICIPANT_RETRY_DEFAULT.MAX_DELAY_MS;
     this.sleep =
@@ -100,13 +112,13 @@ class DistributedTransactionCoordinator {
     this.loadRecoveryStateForSweep = options.loadRecoveryStateForSweep || null;
     this.recoverySweepIntervalMs =
       Number.isFinite(options.recoverySweepIntervalMs) &&
-      options.recoverySweepIntervalMs > 0 ?
+      options.recoverySweepIntervalMs > LOCAL_NUM_ZERO ?
         Math.floor(options.recoverySweepIntervalMs) :
         RECOVERY_SWEEP_DEFAULT_INTERVAL_MS;
     this.recoverySweepTimer = null;
     this.recoverySweepInFlight = false;
-    this.recoverySweepDeferredUntilMs = 0;
-    this.recoverySweepDeferredAttempts = 0;
+    this.recoverySweepDeferredUntilMs = LOCAL_NUM_ZERO;
+    this.recoverySweepDeferredAttempts = LOCAL_NUM_ZERO;
     this.workflowCoordinator =
       options.workflowCoordinator ||
       new DurableWorkflowCoordinator({
@@ -310,7 +322,7 @@ class DistributedTransactionCoordinator {
         WRITE_OPERATION_STATUS.FAILED;
     operation.retryCount = Number.isInteger(result?.retryCount) ?
       result.retryCount :
-      0;
+      LOCAL_NUM_ZERO;
     operation.lastError =
       result?.success === true ?
         null :
@@ -531,28 +543,28 @@ class DistributedTransactionCoordinator {
   async runRecoverySweep() {
     if (this.recoverySweepInFlight) {
       return {
-        swept: 0,
-        resolved: 0,
-        failed: 0,
+        swept: LOCAL_NUM_ZERO,
+        resolved: LOCAL_NUM_ZERO,
+        failed: LOCAL_NUM_ZERO,
         skipped: true,
-        deferred: 0,
+        deferred: LOCAL_NUM_ZERO,
         results: [],
       };
     }
     if (this.isRecoverySweepDeferred()) {
       return {
-        swept: 0,
-        resolved: 0,
-        failed: 0,
+        swept: LOCAL_NUM_ZERO,
+        resolved: LOCAL_NUM_ZERO,
+        failed: LOCAL_NUM_ZERO,
         skipped: false,
-        deferred: 1,
+        deferred: LOCAL_NUM_ONE,
         deferredUntilMs: this.recoverySweepDeferredUntilMs,
         results: [],
       };
     }
     this.recoverySweepInFlight = true;
     try {
-      if (typeof this.loadRecoveryStateForSweep === 'function') {
+      if (typeof this.loadRecoveryStateForSweep === LOCAL_STR_FUNCTION) {
         let payload;
         try {
           payload = await this.loadRecoveryStateForSweep();
@@ -562,7 +574,7 @@ class DistributedTransactionCoordinator {
           }
           throw error;
         }
-        if (payload && typeof payload === 'object') {
+        if (payload && typeof payload === LOCAL_STR_OBJECT) {
           this.recoverFromSystemTables(payload);
         }
       }
@@ -576,7 +588,7 @@ class DistributedTransactionCoordinator {
           this.isTransactionBudgetExceeded(tx),
       );
       const results = [];
-      let deferred = 0;
+      let deferred = LOCAL_NUM_ZERO;
 
       for (const tx of stuckTransactions) {
         let protocolResult = null;
@@ -595,7 +607,7 @@ class DistributedTransactionCoordinator {
           });
         } catch (error) {
           if (this.shouldDeferRecoverySweepError(error)) {
-            deferred += 1;
+            deferred += LOCAL_NUM_ONE;
             const deferredResult = this.buildDeferredRecoverySweepResult(
               error,
               {
@@ -623,7 +635,7 @@ class DistributedTransactionCoordinator {
           protocolResult?.success !== true &&
           this.shouldDeferRecoverySweepError(protocolResult)
         ) {
-          deferred += 1;
+          deferred += LOCAL_NUM_ONE;
           this.deferRecoverySweep(protocolResult);
           results.push({
             transactionId: tx.transactionId,
@@ -651,7 +663,7 @@ class DistributedTransactionCoordinator {
       const failed = results.filter(
         (entry) => entry.success !== true && entry.deferred !== true,
       ).length;
-      if (deferred === 0) {
+      if (deferred === LOCAL_NUM_ZERO) {
         this.clearRecoverySweepDeferState();
       }
       return {
@@ -659,7 +671,7 @@ class DistributedTransactionCoordinator {
         resolved,
         failed,
         deferred,
-        deferredUntilMs: deferred > 0 ? this.recoverySweepDeferredUntilMs : 0,
+        deferredUntilMs: deferred > LOCAL_NUM_ZERO ? this.recoverySweepDeferredUntilMs : LOCAL_NUM_ZERO,
         skipped: false,
         results,
       };
@@ -734,7 +746,7 @@ class DistributedTransactionCoordinator {
                 2 ** this.recoverySweepDeferredAttempts,
           ),
         );
-    this.recoverySweepDeferredAttempts += 1;
+    this.recoverySweepDeferredAttempts += LOCAL_NUM_ONE;
     this.recoverySweepDeferredUntilMs = this.now() + backoffMs;
     return {
       delayMs: backoffMs,
@@ -747,8 +759,8 @@ class DistributedTransactionCoordinator {
    * @private
    */
   clearRecoverySweepDeferState() {
-    this.recoverySweepDeferredUntilMs = 0;
-    this.recoverySweepDeferredAttempts = 0;
+    this.recoverySweepDeferredUntilMs = LOCAL_NUM_ZERO;
+    this.recoverySweepDeferredAttempts = LOCAL_NUM_ZERO;
   }
 
   /**
@@ -760,11 +772,11 @@ class DistributedTransactionCoordinator {
   buildDeferredRecoverySweepResult(errorLike, overrides = {}) {
     this.deferRecoverySweep(errorLike);
     return {
-      swept: overrides.swept || 0,
-      resolved: 0,
-      failed: 0,
+      swept: overrides.swept || LOCAL_NUM_ZERO,
+      resolved: LOCAL_NUM_ZERO,
+      failed: LOCAL_NUM_ZERO,
       skipped: false,
-      deferred: Number.isFinite(overrides.deferred) ? overrides.deferred : 1,
+      deferred: Number.isFinite(overrides.deferred) ? overrides.deferred : LOCAL_NUM_ONE,
       deferredUntilMs: this.recoverySweepDeferredUntilMs,
       error: errorLike?.message || String(errorLike),
       results: Array.isArray(overrides.results) ? overrides.results : [],
@@ -808,13 +820,13 @@ class DistributedTransactionCoordinator {
           status,
           transactionEpoch: this.resolveFiniteNumberField(
             row,
-            'transaction_epoch',
-            'transactionEpoch',
+            LOCAL_STR_TRANSACTION_EPOCH,
+            LOCAL_STR_TRANSACTIONEPOCH,
           ),
           timeoutDeadline: this.resolveFiniteNumberField(
             row,
-            'timeout_deadline',
-            'timeoutDeadline',
+            LOCAL_STR_TIMEOUT_DEADLINE,
+            LOCAL_STR_TIMEOUTDEADLINE,
           ),
           writeOperations: [],
           createdAt: row.created_at || row.createdAt || this.now(),
@@ -876,7 +888,7 @@ class DistributedTransactionCoordinator {
         idempotencyKey: row.idempotency_key || row.idempotencyKey,
         payloadHash: row.payload_hash || row.payloadHash,
         status: row.status || WRITE_OPERATION_STATUS.PENDING,
-        retryCount: row.retry_count || row.retryCount || 0,
+        retryCount: row.retry_count || row.retryCount || LOCAL_NUM_ZERO,
         lastError: row.last_error || row.lastError || null,
         createdAt: row.created_at || row.createdAt || tx.createdAt,
         updatedAt: row.updated_at || row.updatedAt || tx.updatedAt,
@@ -908,7 +920,7 @@ class DistributedTransactionCoordinator {
       return getRemainingBudgetMs(tx.timeoutBudget, {now: this.now});
     }
     if (Number.isFinite(tx?.timeoutDeadline)) {
-      return Math.max(0, tx.timeoutDeadline - this.now());
+      return Math.max(LOCAL_NUM_ZERO, tx.timeoutDeadline - this.now());
     }
     return Number.POSITIVE_INFINITY;
   }
@@ -920,7 +932,7 @@ class DistributedTransactionCoordinator {
    * @private
    */
   isTransactionBudgetExceeded(tx) {
-    return this.getRemainingTransactionBudgetMs(tx) <= 0;
+    return this.getRemainingTransactionBudgetMs(tx) <= LOCAL_NUM_ZERO;
   }
 
   /**
@@ -999,7 +1011,7 @@ class DistributedTransactionCoordinator {
         (partitionId) => this.prepareParticipant(tx.sessionId, partitionId),
         {participantKeys: this.getPrepareParticipantKeys(tx)},
       );
-      if (prepareFailures.length > 0) {
+      if (prepareFailures.length > LOCAL_NUM_ZERO) {
         if (this.hasTimeoutFailure(prepareFailures)) {
           return this.abortTimedOutTransaction(
             tx,
@@ -1055,7 +1067,7 @@ class DistributedTransactionCoordinator {
         skipBudgetEnforcement: commitStatusAllowsTimeout,
       },
     );
-    if (commitFailures.length > 0) {
+    if (commitFailures.length > LOCAL_NUM_ZERO) {
       if (
         !commitStatusAllowsTimeout &&
         this.hasTimeoutFailure(commitFailures)
@@ -1102,7 +1114,7 @@ class DistributedTransactionCoordinator {
       {participantKeys: this.getRollbackParticipantKeys(tx)},
     );
 
-    if (rollbackFailures.length > 0) {
+    if (rollbackFailures.length > LOCAL_NUM_ZERO) {
       await this.setTransactionStatus(tx, TRANSACTION_STATUS.ROLLING_BACK);
     } else {
       await this.setTransactionStatus(tx, TRANSACTION_STATUS.ROLLED_BACK);
@@ -1110,17 +1122,17 @@ class DistributedTransactionCoordinator {
     }
 
     return {
-      success: rollbackFailures.length === 0,
+      success: rollbackFailures.length === LOCAL_NUM_ZERO,
       operation: QUERY_OPERATION.ROLLBACK,
       transactionId: tx.transactionId,
       participants: this.getOrderedParticipantIds(tx),
       failedParticipants: rollbackFailures,
       errorCode:
-        rollbackFailures.length > 0 ?
+        rollbackFailures.length > LOCAL_NUM_ZERO ?
           QUERY_ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE :
           undefined,
       error:
-        rollbackFailures.length > 0 ?
+        rollbackFailures.length > LOCAL_NUM_ZERO ?
           QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE :
           undefined,
     };
@@ -1266,7 +1278,7 @@ class DistributedTransactionCoordinator {
     operation,
     options = {},
   ) {
-    let attempt = 0;
+    let attempt = LOCAL_NUM_ZERO;
     const skipBudgetEnforcement = options.skipBudgetEnforcement === true;
     while (true) {
       if (
@@ -1287,7 +1299,7 @@ class DistributedTransactionCoordinator {
           throw error;
         }
 
-        attempt += 1;
+        attempt += LOCAL_NUM_ONE;
         const retryDelayMs = this.calculateParticipantRetryDelay(attempt);
         this.emitParticipantRetryDiagnostic({
           transactionId: tx.transactionId,
@@ -1349,13 +1361,13 @@ class DistributedTransactionCoordinator {
    * @private
    */
   emitParticipantRetryDiagnostic(diagnostic) {
-    if (typeof this.onParticipantRetry === 'function') {
+    if (typeof this.onParticipantRetry === LOCAL_STR_FUNCTION) {
       this.onParticipantRetry(diagnostic);
     }
     if (diagnostic?.duringRecovery !== true) {
       return;
     }
-    if (typeof this.logger?.warn === 'function') {
+    if (typeof this.logger?.warn === LOCAL_STR_FUNCTION) {
       this.logger.warn(PARTICIPANT_RETRY_LOG_MSG, diagnostic);
     }
   }
@@ -1469,7 +1481,7 @@ class DistributedTransactionCoordinator {
       statementType: operation.statementType,
       partitionIds: operation.partitionIds || [],
     });
-    return createHash('sha1').update(payload).digest('hex');
+    return createHash(LOCAL_STR_SHA1).update(payload).digest(LOCAL_STR_HEX);
   }
 
   /**
@@ -1482,7 +1494,7 @@ class DistributedTransactionCoordinator {
     if (Array.isArray(value)) {
       return value.map((entry) => String(entry));
     }
-    if (typeof value !== 'string' || !value.trim()) {
+    if (typeof value !== LOCAL_STR_STRING || !value.trim()) {
       return [];
     }
     try {

@@ -90,6 +90,13 @@ import {BootstrapClusterViewOwner} from
 import {createBootstrapApiRuntimeMethods} from
   './bootstrap-api-runtime-methods.js';
 
+const LOCAL_STR_BOOTSTRAPAPI = 'BootstrapAPI';
+const LOCAL_STR_FUNCTION = 'function';
+const LOCAL_STR_OBJECT = 'object';
+const LOCAL_STR_CRITICAL = 'critical';
+const LOCAL_STR_PRESENT = 'present';
+const LOCAL_STR_DHB9T = 'metrics.bootstrap_api.health.initializing';
+
 /**
  * Bootstrap response strategies.
  */
@@ -126,7 +133,7 @@ class BootstrapAPI {
    */
   constructor(options = {}) {
     this.rolloutControls = assertRequiredControlPlaneRollout({
-      owner: 'BootstrapAPI',
+      owner: LOCAL_STR_BOOTSTRAPAPI,
       controls: options.rolloutControls,
       required: CONTROL_PLANE_ROLLOUT_REQUIRED.BOOTSTRAP_API,
     });
@@ -380,7 +387,7 @@ class BootstrapAPI {
         },
       });
     if (typeof this.sqlQueryEngine?.queryExecutor
-      ?.setBootstrapTopologySnapshotOwner === 'function') {
+      ?.setBootstrapTopologySnapshotOwner === LOCAL_STR_FUNCTION) {
       this.sqlQueryEngine.queryExecutor.setBootstrapTopologySnapshotOwner(
         this.bootstrapTopologySnapshotOwner,
       );
@@ -405,6 +412,8 @@ class BootstrapAPI {
           },
           getBootstrapAuthoritativeTableRows: (tableName) =>
             this.getBootstrapAuthoritativeTableRows(tableName),
+          getBootstrapAdmissionTableRows: (tableName) =>
+            this.getBootstrapAdmissionTableRows(tableName),
           expireMoveReplicaAssignmentReservations: () =>
             this.expireMoveReplicaAssignmentReservations(),
           getActiveMoveReplicaAssignmentReservations: () =>
@@ -538,18 +547,18 @@ class BootstrapAPI {
   setSqlQueryEngine(sqlQueryEngine) {
     this.sqlQueryEngine = sqlQueryEngine;
     if (typeof this.sqlQueryEngine?.queryExecutor
-      ?.setBootstrapTopologySnapshotOwner === 'function') {
+      ?.setBootstrapTopologySnapshotOwner === LOCAL_STR_FUNCTION) {
       this.sqlQueryEngine.queryExecutor.setBootstrapTopologySnapshotOwner(
         this.bootstrapTopologySnapshotOwner,
       );
     }
     if (this.partitionServices &&
-        typeof this.partitionServices.values === 'function') {
+        typeof this.partitionServices.values === LOCAL_STR_FUNCTION) {
       for (const partitionService of this.partitionServices.values()) {
-        if (!partitionService || typeof partitionService !== 'object') {
+        if (!partitionService || typeof partitionService !== LOCAL_STR_OBJECT) {
           continue;
         }
-        if (typeof partitionService.setSqlQueryEngine === 'function') {
+        if (typeof partitionService.setSqlQueryEngine === LOCAL_STR_FUNCTION) {
           partitionService.setSqlQueryEngine(sqlQueryEngine);
           continue;
         }
@@ -637,7 +646,7 @@ class BootstrapAPI {
       owner: BOOTSTRAP_API_SUBSYSTEM,
       workloadClass: BOOTSTRAP_CONTROL_PLANE_READ_PROFILE.workloadClass,
       workClass: BOOTSTRAP_CONTROL_PLANE_READ_PROFILE.workClass,
-      deliveryPriority: 'critical',
+      deliveryPriority: LOCAL_STR_CRITICAL,
       enforcePressureAdmission: true,
       allowPressureDefer:
         BOOTSTRAP_CONTROL_PLANE_READ_PROFILE.allowPressureDefer,
@@ -772,17 +781,17 @@ class BootstrapAPI {
           });
       error.details = {
         pressure,
-        ...(pressure.state === 'present' && pressure.action ?
+        ...(pressure.state === LOCAL_STR_PRESENT && pressure.action ?
           {
             pressureAction: pressure.action,
           } :
           {}),
-        ...(pressure.state === 'present' && pressure.reason ?
+        ...(pressure.state === LOCAL_STR_PRESENT && pressure.reason ?
           {
             pressureReason: pressure.reason,
           } :
           {}),
-        ...(pressure.state === 'present' && pressure.summary ?
+        ...(pressure.state === LOCAL_STR_PRESENT && pressure.summary ?
           {
             pressureSummary: pressure.summary,
           } :
@@ -876,7 +885,7 @@ class BootstrapAPI {
     // Health check endpoint
     this.fastify.get(BOOTSTRAP_API_ROUTE.HEALTH, async (_request, reply) => {
       if (!this.getSqlQueryEngine()) {
-        this.logger.debug('metrics.bootstrap_api.health.initializing', {
+        this.logger.debug(LOCAL_STR_DHB9T, {
           seedNodeId: this.seedNodeId,
           sqlEngineReady: false,
         });

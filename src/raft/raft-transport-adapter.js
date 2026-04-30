@@ -12,6 +12,11 @@ import {
   resolveRaftTransportDeliveryOptions,
 } from './constants.js';
 
+const LOCAL_STR_FUNCTION = 'function';
+const LOCAL_STR_STRING = 'string';
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_NUM_ONE = 1;
+
 /**
  * Transport adapter for liferaft that uses MessageRouter.
  * Implements the write() method required by liferaft.
@@ -93,13 +98,13 @@ class RaftTransportAdapter {
    */
   resolveTargetReplicaStatus(peerAddress) {
     if (!this.systemTableCache ||
-        typeof this.systemTableCache.get !== 'function' ||
-        typeof peerAddress !== 'string' ||
-        peerAddress.length === 0) {
+        typeof this.systemTableCache.get !== LOCAL_STR_FUNCTION ||
+        typeof peerAddress !== LOCAL_STR_STRING ||
+        peerAddress.length === LOCAL_NUM_ZERO) {
       return null;
     }
     const separatorIndex = peerAddress.lastIndexOf(ADDRESS.SEPARATOR);
-    if (separatorIndex <= 0 || separatorIndex === peerAddress.length - 1) {
+    if (separatorIndex <= LOCAL_NUM_ZERO || separatorIndex === peerAddress.length - LOCAL_NUM_ONE) {
       return null;
     }
     const serviceId = peerAddress.slice(
@@ -107,7 +112,7 @@ class RaftTransportAdapter {
     );
     const serviceRow = this.systemTableCache.get(TABLES.SERVICES, serviceId);
     const status = serviceRow?.status;
-    return typeof status === 'string' && status.length > 0 ? status : null;
+    return typeof status === LOCAL_STR_STRING && status.length > LOCAL_NUM_ZERO ? status : null;
   }
 
   /**

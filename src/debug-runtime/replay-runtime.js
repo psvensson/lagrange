@@ -12,6 +12,10 @@ import {
   REPLAY_RUNTIME_ERROR_MSG as ERR,
 } from './replay-runtime-constants.js';
 
+const LOCAL_NUM_ONE = 1;
+const LOCAL_STR_RUNNING = 'running';
+const LOCAL_STR_PAUSED = 'paused';
+
 /**
  * Replay runtime that serves state from captured snapshot artifacts.
  */
@@ -105,11 +109,11 @@ class ReplayRuntime {
    */
   async resume(request) {
     this._assertLoadedWithInstance(request);
-    if (this.frameCursor < this.snapshot.inputFrames.length - 1) {
-      this.frameCursor += 1;
+    if (this.frameCursor < this.snapshot.inputFrames.length - LOCAL_NUM_ONE) {
+      this.frameCursor += LOCAL_NUM_ONE;
     }
     return {
-      status: 'running',
+      status: LOCAL_STR_RUNNING,
       instanceHandle: request.instanceHandle,
     };
   }
@@ -124,7 +128,7 @@ class ReplayRuntime {
   async suspend(request) {
     this._assertLoadedWithInstance(request);
     return {
-      status: 'paused',
+      status: LOCAL_STR_PAUSED,
       instanceHandle: request.instanceHandle,
     };
   }
@@ -146,7 +150,7 @@ class ReplayRuntime {
       Buffer.alloc(NUM.ZERO);
 
     return {
-      state: 'paused',
+      state: LOCAL_STR_PAUSED,
       codeOffset: frame?.codeOffset || NUM.ZERO,
       stackFrames: [{
         frameId: NUM.ZERO,
@@ -217,7 +221,7 @@ class ReplayRuntime {
       return {ok: false, error: DRIFT.HOST_CALL_ARGS_MISMATCH};
     }
 
-    this.hostCallCursor += 1;
+    this.hostCallCursor += LOCAL_NUM_ONE;
     this.consumedHostCalls.push({
       namespace: request.namespace,
       functionName: request.functionName,

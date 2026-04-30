@@ -15,12 +15,16 @@ const {
   REBALANCE_COORDINATOR_ERROR_MSG,
   REBALANCE_COORDINATOR_LOG_MSG,
   REMOVE_SAFETY_EVALUATION_CLASSIFICATION,
+  REMOVE_SAFETY_HANDOFF_FAILURE_POLICY,
+  REPLICA_OPERATION_DISPATCH_TIMEOUT_RETRY_AFTER_MS,
+  ROUTER_MESSAGE_TIMEOUT_ERROR_CODE,
   ReplicaOperationField,
   ReplicaOperationMessageType,
   ReplicaOperationResponseStatus,
   ReplicaStatus,
   SERVICE_TYPE,
   SYSTEM_TABLE_NAME,
+  TRANSPORT_ERROR_MSG,
   WORKFLOW_STEP,
   classifyTransportDeliveryOutcome,
   isCoordinatorOwnedOperationType,
@@ -29,6 +33,26 @@ const {
 } = OPERATION_WORKFLOW_OWNER_SHARED;
 
 class OperationWorkflowOwnerSegment4 extends OperationWorkflowOwnerSegment3 {
+  shouldFailRemoveSafetyHandoffResponse(removeSafetyEvaluation, response) {
+    return (
+      removeSafetyEvaluation?.handoffFailurePolicy ===
+        REMOVE_SAFETY_HANDOFF_FAILURE_POLICY.FAIL_ON_NOT_FOUND &&
+      response?.status === ReplicaOperationResponseStatus.NOT_FOUND
+    );
+  }
+
+  resolveRemoveSafetyHandoffFailureError(removeSafetyEvaluation) {
+    if (
+      typeof removeSafetyEvaluation?.handoffFailureError ===
+        OPERATION_WORKFLOW_OWNER_LITERAL.STRING &&
+      removeSafetyEvaluation.handoffFailureError.length > NUM.ZERO
+    ) {
+      return removeSafetyEvaluation.handoffFailureError;
+    }
+    return removeSafetyEvaluation?.error ||
+      REBALANCE_COORDINATOR_LOG_MSG.OPERATION_BLOCKED_BY_SAFETY_POLICY;
+  }
+
   async claimPendingDispatchOperation(operation) {
     if (
       !operation ||
@@ -335,6 +359,110 @@ class OperationWorkflowOwnerSegment4 extends OperationWorkflowOwnerSegment3 {
   }
 
   /**
+   * Critical system-partition dispatch is a recovery signal. Bound its local
+   * and remote delivery wait so one stuck executor cannot hold the owner lane.
+   *
+   * @param {Object} operation
+   * @return {boolean}
+   * @private
+   */
+  shouldBoundReplicaOperationDispatch(operation) {
+    return this.isCriticalSystemPartition(operation?.partitionId);
+  }
+
+  /**
+   * @param {Object} operation
+   * @param {string} dispatchNodeId
+   * @return {Object}
+   * @private
+   */
+  buildReplicaOperationDispatchOptions(operation, dispatchNodeId) {
+    const options = {
+      targetNodeId: dispatchNodeId,
+      // Replica operation dispatch is the control-plane progress signal that
+      // advances split/rebalance workflows. It must preempt bulk metadata
+      // replication from transaction bookkeeping.
+      deliveryPriority: OPERATION_WORKFLOW_OWNER_LITERAL.CRITICAL,
+    };
+    if (this.shouldBoundReplicaOperationDispatch(operation)) {
+      options.timeoutMs = this.replicaOperationDispatchTimeoutMs;
+      options.deliverySource =
+        OPERATION_WORKFLOW_OWNER_LITERAL.REPLICA_OPERATION_DISPATCH;
+    }
+    return options;
+  }
+
+  /**
+   * @param {Object} operation
+   * @return {Error}
+   * @private
+   */
+  buildReplicaOperationDispatchTimeoutError(operation) {
+    const error = new Error(TRANSPORT_ERROR_MSG.MESSAGE_TIMEOUT);
+    error.code = ROUTER_MESSAGE_TIMEOUT_ERROR_CODE;
+    error.errorCode = ROUTER_MESSAGE_TIMEOUT_ERROR_CODE;
+    error.deferRetry = true;
+    error.retryAfterMs = REPLICA_OPERATION_DISPATCH_TIMEOUT_RETRY_AFTER_MS;
+    error.operationId = operation?.operationId;
+    return error;
+  }
+
+  /**
+   * @param {Object} operation
+   * @param {Promise<Object>} deliveryPromise
+   * @return {Promise<Object>}
+   * @private
+   */
+  async awaitReplicaOperationDispatchDeadline(operation, deliveryPromise) {
+    let timeoutHandle;
+    const timeoutPromise = new Promise((_, reject) => {
+      timeoutHandle = setTimeout(() => {
+        reject(this.buildReplicaOperationDispatchTimeoutError(operation));
+      }, this.replicaOperationDispatchTimeoutMs);
+    });
+
+    try {
+      return await Promise.race([deliveryPromise, timeoutPromise]);
+    } finally {
+      if (timeoutHandle) {
+        clearTimeout(timeoutHandle);
+      }
+    }
+  }
+
+  /**
+   * @param {Object} operation
+   * @param {string} target
+   * @param {Object} request
+   * @param {string} dispatchNodeId
+   * @return {Promise<Object>}
+   * @private
+   */
+  async deliverReplicaOperationRequest(
+    operation,
+    target,
+    request,
+    dispatchNodeId,
+  ) {
+    const deliveryOptions = this.buildReplicaOperationDispatchOptions(
+      operation,
+      dispatchNodeId,
+    );
+    const deliveryPromise = this.messageRouter.deliver(
+      target,
+      request,
+      deliveryOptions,
+    );
+    if (!this.shouldBoundReplicaOperationDispatch(operation)) {
+      return deliveryPromise;
+    }
+    return this.awaitReplicaOperationDispatchDeadline(
+      operation,
+      deliveryPromise,
+    );
+  }
+
+  /**
    * Execute operation body once per operation ID.
    * @param {Object} operation
    * @return {Promise<Object>}
@@ -385,46 +513,88 @@ class OperationWorkflowOwnerSegment4 extends OperationWorkflowOwnerSegment3 {
       await this.updateStep(operation, WORKFLOW_STEP.SENDING);
     }
 
-    const removeSafetyEvaluation = await this.evaluateRemoveSafety(operation);
+    let removeSafetyEvaluation = await this.evaluateRemoveSafety(operation);
     if (removeSafetyEvaluation?.error) {
       if (
         removeSafetyEvaluation.classification ===
         REMOVE_SAFETY_EVALUATION_CLASSIFICATION.DEFER
       ) {
+        let handoffResponse = null;
         if (removeSafetyEvaluation.handoffRequest) {
-          await this.dispatchRemoveSafetyHandoffRequest(
+          handoffResponse = await this.dispatchRemoveSafetyHandoffRequest(
             operation,
             removeSafetyEvaluation.handoffRequest,
           );
         }
-        this.logDeferredSafetyBlockedRemove(
-          operation,
-          removeSafetyEvaluation.error,
-          removeSafetyEvaluation.deferReason,
-        );
-        this.scheduleDeferredSafetyRetry(
-          operation,
-          removeSafetyEvaluation.deferReason,
-          removeSafetyEvaluation.error,
-        );
-        return this.buildSkippedOperationResult(
-          REBALANCER_SKIP_REASON.SAFETY_BLOCKED,
+        if (
+          typeof this.shouldContinueAfterRemoveSafetyHandoffResponse ===
+            OPERATION_WORKFLOW_OWNER_LITERAL.FUNCTION &&
+          await this.shouldContinueAfterRemoveSafetyHandoffResponse(
+            operation,
+            removeSafetyEvaluation,
+            handoffResponse,
+          )
+        ) {
+          const refreshedRemoveSafetyEvaluation =
+            await this.evaluateRemoveSafety(operation);
+          if (!refreshedRemoveSafetyEvaluation?.error) {
+            removeSafetyEvaluation = refreshedRemoveSafetyEvaluation;
+          }
+        }
+        if (
+          this.shouldFailRemoveSafetyHandoffResponse(
+            removeSafetyEvaluation,
+            handoffResponse,
+          )
+        ) {
+          const handoffFailureError =
+            this.resolveRemoveSafetyHandoffFailureError(
+              removeSafetyEvaluation,
+            );
+          await this.failOperation(operation, handoffFailureError, {
+            logLevel: FAILURE_LOG_LEVEL.WARN,
+            logMessage:
+              REBALANCE_COORDINATOR_LOG_MSG.OPERATION_BLOCKED_BY_SAFETY_POLICY,
+          });
+          return this.buildFailedOperationResult(
+            operation.operationId,
+            handoffFailureError,
+          );
+        }
+        if (!removeSafetyEvaluation?.error) {
+          this.clearDeferredSafetyBlockState(operation.operationId);
+        } else {
+          this.logDeferredSafetyBlockedRemove(
+            operation,
+            removeSafetyEvaluation.error,
+            removeSafetyEvaluation.deferReason,
+          );
+          this.scheduleDeferredSafetyRetry(
+            operation,
+            removeSafetyEvaluation.deferReason,
+            removeSafetyEvaluation.error,
+          );
+          return this.buildSkippedOperationResult(
+            REBALANCER_SKIP_REASON.SAFETY_BLOCKED,
+            operation.operationId,
+            {
+              deferReason: removeSafetyEvaluation.deferReason,
+              error: removeSafetyEvaluation.error,
+            },
+          );
+        }
+      }
+      if (removeSafetyEvaluation?.error) {
+        await this.failOperation(operation, removeSafetyEvaluation.error, {
+          logLevel: FAILURE_LOG_LEVEL.WARN,
+          logMessage:
+            REBALANCE_COORDINATOR_LOG_MSG.OPERATION_BLOCKED_BY_SAFETY_POLICY,
+        });
+        return this.buildFailedOperationResult(
           operation.operationId,
-          {
-            deferReason: removeSafetyEvaluation.deferReason,
-            error: removeSafetyEvaluation.error,
-          },
+          removeSafetyEvaluation.error,
         );
       }
-      await this.failOperation(operation, removeSafetyEvaluation.error, {
-        logLevel: FAILURE_LOG_LEVEL.WARN,
-        logMessage:
-          REBALANCE_COORDINATOR_LOG_MSG.OPERATION_BLOCKED_BY_SAFETY_POLICY,
-      });
-      return this.buildFailedOperationResult(
-        operation.operationId,
-        removeSafetyEvaluation.error,
-      );
     }
     this.clearDeferredSafetyBlockState(operation.operationId);
 
@@ -536,13 +706,12 @@ class OperationWorkflowOwnerSegment4 extends OperationWorkflowOwnerSegment3 {
     let response;
     try {
       response = classifyTransportDeliveryOutcome(
-        await this.messageRouter.deliver(target, request, {
-          targetNodeId: dispatchNodeId,
-          // Replica operation dispatch is the control-plane progress signal that
-          // advances split/rebalance workflows. It must preempt bulk metadata
-          // replication from transaction bookkeeping.
-          deliveryPriority: 'critical',
-        }),
+        await this.deliverReplicaOperationRequest(
+          operation,
+          target,
+          request,
+          dispatchNodeId,
+        ),
       );
     } catch (error) {
       const errorMsg = this.normalizeErrorMessage(
@@ -814,7 +983,10 @@ class OperationWorkflowOwnerSegment4 extends OperationWorkflowOwnerSegment3 {
                 allowPriorityRecoveryDeferredVisibility: true,
               },
             );
-          const currentOperation = visibilityObservation?.operation || null;
+          const currentOperation = this.resolveDeferredRetryVisibleOperation(
+            visibilityObservation,
+            operation,
+          );
           if (
             !currentOperation ||
             this.repository.isOperationTerminal(currentOperation) ||
@@ -840,6 +1012,19 @@ class OperationWorkflowOwnerSegment4 extends OperationWorkflowOwnerSegment3 {
           );
         },
       ).catch((retryError) => {
+        if (
+          this.deferTransitionRetry(operationId, retryError, {
+            boundary:
+              OPERATION_WORKFLOW_OWNER_LITERAL.PRIORITY_ACTIVE_REPLACE_RESUME,
+            partitionId: operation?.partitionId || null,
+            workflowStep: operation?.workflowStep || null,
+            updatedAt: operation?.updatedAt,
+            createdAt: operation?.createdAt,
+            operationSnapshot: operation,
+          })
+        ) {
+          return;
+        }
         this.logger.error(
           REBALANCE_COORDINATOR_LOG_MSG.OPERATION_DISPATCH_RETRY_FAILED,
           {

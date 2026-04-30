@@ -1,6 +1,10 @@
 import {NUM, TYPEOF} from '../constants/index.js';
 import {RAFT_ROLE} from '../raft/constants.js';
 
+const LOCAL_STR_LEADER_ROLE = 'leader_role';
+const LOCAL_STR_LEADER_HINT = 'leader_hint';
+const LOCAL_STR_SINGLE_SERVICE = 'single_service';
+
 function normalizeVisiblePartitionServices(services) {
   return (Array.isArray(services) ? services : [])
     .filter((service) => service && typeof service === TYPEOF.OBJECT)
@@ -33,7 +37,7 @@ function resolveBootstrapLeaderSelection(options = {}) {
         leaderServiceNodeId.length > NUM.ZERO ? {
           leaderNodeId: leaderServiceNodeId,
         } : {}),
-      selectionSource: 'leader_role',
+      selectionSource: LOCAL_STR_LEADER_ROLE,
     };
   }
 
@@ -46,7 +50,7 @@ function resolveBootstrapLeaderSelection(options = {}) {
       return {
         selectedService: hintedServices[NUM.ZERO],
         leaderNodeId: hintedLeaderNodeId,
-        selectionSource: 'leader_hint',
+        selectionSource: LOCAL_STR_LEADER_HINT,
       };
     }
   }
@@ -62,7 +66,7 @@ function resolveBootstrapLeaderSelection(options = {}) {
         singleReplicaNodeId.length > NUM.ZERO ? {
           leaderNodeId: singleReplicaNodeId,
         } : {}),
-      selectionSource: 'single_service',
+      selectionSource: LOCAL_STR_SINGLE_SERVICE,
     };
   }
 

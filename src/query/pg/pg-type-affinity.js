@@ -1,3 +1,5 @@
+const LOCAL_STR_STRING = 'string';
+
 /**
  * PostgreSQL type to SQLite affinity mapping.
  * Maps PG type names to SQLite type affinities (TEXT, INTEGER, REAL, BLOB).
@@ -45,7 +47,7 @@ const PG_TYPE_AFFINITY_MAP = Object.freeze({
  * @returns {string} SQLite affinity or the input type uppercased if unmapped.
  */
 function resolveAffinity(pgType) {
-  if (typeof pgType !== 'string') {
+  if (typeof pgType !== LOCAL_STR_STRING) {
     throw new TypeError(PG_TYPE_ERROR_MSG);
   }
   const normalized = pgType.toLowerCase();

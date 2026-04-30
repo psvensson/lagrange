@@ -1548,6 +1548,218 @@ t.test('MessageRouter unit tests', async (t) => {
   );
 
   t.test(
+    'should let critical recovery sources use non-reserved pending capacity',
+    async (t) => {
+      const TEST_LOCAL_NODE_ID = 'local-node';
+      const TEST_REMOTE_NODE_ID = 'remote-node';
+      const TEST_NODE_ADDRESS = 'ws://local-node:7000';
+      const TEST_MAX_CONCURRENT = 1;
+      const TEST_MAX_PENDING = 64;
+      const TEST_CRITICAL_RESERVE = 16;
+      const TEST_ALLOWED_HOT_SOURCE_DELIVERIES = 17;
+      const TEST_HOT_RECOVERY_TARGET_ADDRESS =
+        'remote-node/partition/sql_transactions-p1-r4';
+      const TEST_CONTROL_PLANE_TARGET_ADDRESS =
+        'remote-node/service/control-plane';
+      const router = new MessageRouter({
+        nodeId: TEST_LOCAL_NODE_ID,
+        nodeAddress: TEST_NODE_ADDRESS,
+        startServer: false,
+        outboundQueueMaxConcurrent: TEST_MAX_CONCURRENT,
+        outboundQueueMaxPending: TEST_MAX_PENDING,
+        outboundQueueCriticalReserve: TEST_CRITICAL_RESERVE,
+      });
+      await router.initialize();
+
+      const warnEntries = [];
+      const originalWarn = router.logger.warn.bind(router.logger);
+      router.logger.warn = (message, context) => {
+        warnEntries.push({message, context});
+        return originalWarn(message, context);
+      };
+
+      let releaseFirstSend = null;
+      const firstDelivery = router.enqueueOutbound(
+        TEST_REMOTE_NODE_ID,
+        () => new Promise((resolve) => {
+          releaseFirstSend = () => resolve({acknowledged: true});
+        }),
+        {deliveryPriority: 'critical'},
+      );
+      await Promise.resolve();
+
+      const criticalSourceDeliveries = [];
+      for (
+        let index = 0;
+        index < TEST_ALLOWED_HOT_SOURCE_DELIVERIES;
+        index++
+      ) {
+        criticalSourceDeliveries.push(
+          router.enqueueOutbound(
+            TEST_REMOTE_NODE_ID,
+            async () => ({acknowledged: true, criticalIndex: index}),
+            {
+              deliveryPriority: 'critical',
+              targetAddress: TEST_HOT_RECOVERY_TARGET_ADDRESS,
+              message: {},
+            },
+          ),
+        );
+        await Promise.resolve();
+      }
+
+      const unrelatedCriticalDelivery = router.enqueueOutbound(
+        TEST_REMOTE_NODE_ID,
+        async () => ({acknowledged: true, unrelated: true}),
+        {
+          deliveryPriority: 'critical',
+          targetAddress: TEST_CONTROL_PLANE_TARGET_ADDRESS,
+          message: {
+            type: 'NODE_STATE_UPDATE',
+            node_id: TEST_REMOTE_NODE_ID,
+            heartbeat_only: true,
+          },
+        },
+      );
+      await Promise.resolve();
+
+      const queue = router.getOutboundQueue(TEST_REMOTE_NODE_ID);
+      t.equal(
+        queue.pending.filter((item) =>
+          item?.deliverySource ===
+          `target:${TEST_HOT_RECOVERY_TARGET_ADDRESS}`).length,
+        TEST_ALLOWED_HOT_SOURCE_DELIVERIES,
+        'critical recovery source should exceed the proportional source cap',
+      );
+      t.equal(
+        queue.pending.length,
+        TEST_ALLOWED_HOT_SOURCE_DELIVERIES + TEST_MAX_CONCURRENT,
+        'critical recovery source should still leave reserved pending capacity',
+      );
+      t.equal(
+        warnEntries.some((entry) =>
+          entry.message === 'Outbound queue saturated for node delivery' &&
+          entry.context?.backpressureScope === 'delivery_source'),
+        false,
+        'critical recovery source should not trip the proportional source cap',
+      );
+
+      releaseFirstSend();
+      await firstDelivery;
+      await Promise.all(criticalSourceDeliveries);
+      await unrelatedCriticalDelivery;
+      await router.shutdown();
+    },
+  );
+
+  t.test(
+    'should let large critical recovery sources use full pending source capacity',
+    async (t) => {
+      const TEST_LOCAL_NODE_ID = 'local-node';
+      const TEST_REMOTE_NODE_ID = 'remote-node';
+      const TEST_NODE_ADDRESS = 'ws://local-node:7000';
+      const TEST_MAX_CONCURRENT = 1;
+      const TEST_MAX_PENDING = 64;
+      const TEST_CRITICAL_RESERVE = 16;
+      const TEST_ALLOWED_HOT_SOURCE_DELIVERIES = 49;
+      const TEST_UNRELATED_PENDING_DELIVERIES = 1;
+      const TEST_HOT_RECOVERY_TARGET_ADDRESS =
+        'remote-node/partition/control_plane_publications-p1-r1';
+      const TEST_CONTROL_PLANE_TARGET_ADDRESS =
+        'remote-node/service/control-plane';
+      const router = new MessageRouter({
+        nodeId: TEST_LOCAL_NODE_ID,
+        nodeAddress: TEST_NODE_ADDRESS,
+        startServer: false,
+        outboundQueueMaxConcurrent: TEST_MAX_CONCURRENT,
+        outboundQueueMaxPending: TEST_MAX_PENDING,
+        outboundQueueCriticalReserve: TEST_CRITICAL_RESERVE,
+      });
+      await router.initialize();
+
+      const warnEntries = [];
+      const originalWarn = router.logger.warn.bind(router.logger);
+      router.logger.warn = (message, context) => {
+        warnEntries.push({message, context});
+        return originalWarn(message, context);
+      };
+
+      let releaseFirstSend = null;
+      const firstDelivery = router.enqueueOutbound(
+        TEST_REMOTE_NODE_ID,
+        () => new Promise((resolve) => {
+          releaseFirstSend = () => resolve({acknowledged: true});
+        }),
+        {deliveryPriority: 'critical'},
+      );
+      await Promise.resolve();
+
+      const criticalSourceDeliveries = [];
+      for (
+        let index = 0;
+        index < TEST_ALLOWED_HOT_SOURCE_DELIVERIES;
+        index++
+      ) {
+        criticalSourceDeliveries.push(
+          router.enqueueOutbound(
+            TEST_REMOTE_NODE_ID,
+            async () => ({acknowledged: true, criticalIndex: index}),
+            {
+              deliveryPriority: 'critical',
+              targetAddress: TEST_HOT_RECOVERY_TARGET_ADDRESS,
+              message: {},
+            },
+          ),
+        );
+        await Promise.resolve();
+      }
+
+      const unrelatedCriticalDelivery = router.enqueueOutbound(
+        TEST_REMOTE_NODE_ID,
+        async () => ({acknowledged: true, unrelated: true}),
+        {
+          deliveryPriority: 'critical',
+          targetAddress: TEST_CONTROL_PLANE_TARGET_ADDRESS,
+          message: {
+            type: 'NODE_STATE_UPDATE',
+            node_id: TEST_REMOTE_NODE_ID,
+            heartbeat_only: true,
+          },
+        },
+      );
+      await Promise.resolve();
+
+      const queue = router.getOutboundQueue(TEST_REMOTE_NODE_ID);
+      t.equal(
+        queue.pending.filter((item) =>
+          item?.deliverySource ===
+          `target:${TEST_HOT_RECOVERY_TARGET_ADDRESS}`).length,
+        TEST_ALLOWED_HOT_SOURCE_DELIVERIES,
+        'critical recovery source should exceed the reserve-protected source cap',
+      );
+      t.equal(
+        queue.pending.length,
+        TEST_ALLOWED_HOT_SOURCE_DELIVERIES +
+          TEST_UNRELATED_PENDING_DELIVERIES,
+        'critical recovery traffic should stop being source-capped before the node queue is full',
+      );
+      t.equal(
+        warnEntries.some((entry) =>
+          entry.message === 'Outbound queue saturated for node delivery' &&
+          entry.context?.backpressureScope === 'delivery_source'),
+        false,
+        'large critical recovery source should not trip the reserve-protected source cap',
+      );
+
+      releaseFirstSend();
+      await firstDelivery;
+      await Promise.all(criticalSourceDeliveries);
+      await unrelatedCriticalDelivery;
+      await router.shutdown();
+    },
+  );
+
+  t.test(
     'should classify wrapped query payloads by nested payload semantics',
     async (t) => {
       const WRAPPED_QUERY_TARGET_ADDRESS =

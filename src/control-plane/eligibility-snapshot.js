@@ -9,6 +9,8 @@ import {
   RUNTIME_AUTHORITY_VISIBILITY_STATE,
 } from './control-plane-readiness-constants.js';
 
+const LOCAL_STR_EMPTY = '';
+
 function freezeObject(value) {
   return value && typeof value === TYPEOF.OBJECT ?
     Object.freeze({...value}) :
@@ -48,7 +50,7 @@ function normalizeStringList(values) {
   }
   return Object.freeze([...new Set(
     values
-      .map((value) => String(value || '').trim())
+      .map((value) => String(value || LOCAL_STR_EMPTY).trim())
       .filter((value) => value.length > NUM.ZERO),
   )]);
 }

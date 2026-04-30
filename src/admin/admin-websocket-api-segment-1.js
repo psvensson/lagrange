@@ -1,5 +1,7 @@
 import {ADMIN_WEBSOCKET_API_SHARED} from './admin-websocket-api-shared.js';
 
+const LOCAL_STR_1BT5T = 'System table cache not initialized';
+
 const {
   ADMIN_CACHE_DUMP,
   ADMIN_CLIENT,
@@ -884,7 +886,7 @@ class AdminWebSocketAPISegment1 {
       !this.systemTableCache ||
       typeof this.systemTableCache.getAll !== TYPEOF.FUNCTION
     ) {
-      throw new Error('System table cache not initialized');
+      throw new Error(LOCAL_STR_1BT5T);
     }
 
     for (const tableName of targetTables) {

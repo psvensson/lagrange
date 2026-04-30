@@ -10,7 +10,15 @@
 import {test} from '../../../../src/test-helpers/tap.js';
 import assert from 'node:assert';
 import {validate as uuidValidate} from 'uuid';
+import {
+  RUNTIME_AUTHORITY_REPAIR_STATE,
+} from '../../../../src/control-plane/control-plane-readiness-constants.js';
 import {CLUSTER_SEGMENT_2} from '../cluster-segment-2.js';
+import {
+  CONTROL_PLANE_QUIESCENCE_CRITICAL_SYSTEM_OBSERVATION_STATE,
+  CONTROL_PLANE_QUIESCENCE_REASON,
+  CONTROL_PLANE_QUIESCENCE_STATE,
+} from '../control-plane-quiescence-snapshot.js';
 import {
   ACTIVE_WAIT_HANG_TEST_TIMEOUT_MS,
   buildCriticalSystemDiscoverySnapshot,
@@ -25,6 +33,129 @@ import {
 const {
   summarizePriorityRecoveryProgressClasses,
 } = CLUSTER_SEGMENT_2;
+
+const DISCOVERY_REPAIR_TIMEOUT_ERROR =
+  'Authoritative discovery repair timed out after 1500ms';
+const NODE_STATE_PUBLICATION_PRESSURE_ERROR =
+  'Distributed operation failed due to participant failures';
+const QUIESCENCE_CACHE_VISIBLE_NODE_ID = 'seed-a';
+const QUIESCENCE_CACHE_VISIBLE_PARTITION_ID = 'replica_operations-p1';
+const QUIESCENCE_CACHE_VISIBLE_OPERATION_ID = 'op-cache-visible';
+const QUIESCENCE_CACHE_VISIBLE_STATUS = 'ACTIVE';
+const QUIESCENCE_CACHE_VISIBLE_STEP = 'PENDING';
+const QUIESCENCE_CACHE_VISIBLE_VISIBILITY_STATE = 'cache_visible';
+const QUIESCENCE_CACHE_VISIBLE_COMPLETION_STATE =
+  'spread_satisfied_in_flight';
+const QUIESCENCE_CACHE_VISIBLE_IN_FLIGHT_COUNT = 1;
+const QUIESCENCE_CACHE_VISIBLE_EFFECTIVE_IN_FLIGHT_COUNT = 0;
+const QUIESCENCE_CACHE_VISIBLE_STABLE_WINDOW_MS = 2;
+const QUIESCENCE_CACHE_VISIBLE_TIMEOUT_MS = 50;
+const QUIESCENCE_CACHE_VISIBLE_MAX_IN_FLIGHT_COUNT = 0;
+const QUIESCENCE_CACHE_VISIBLE_SLEEP_MS = 1;
+const QUIESCENCE_CACHE_VISIBLE_FAILURE_LOG_MESSAGE =
+  'should not collect failure logs when cache-visible priority recovery is ' +
+  'discounted';
+const QUIESCENCE_RESET_NODE_ID = 'seed-reset';
+const QUIESCENCE_RESET_OPERATION_ID = 'op-reset';
+const QUIESCENCE_RESET_PARTITION_ID = 'replica_operations-p1';
+const QUIESCENCE_RESET_STATUS = 'ACTIVE';
+const QUIESCENCE_RESET_STEP = 'PENDING';
+const QUIESCENCE_RESET_IN_FLIGHT_COUNT = 1;
+const QUIESCENCE_RESET_EFFECTIVE_IN_FLIGHT_COUNT = 0;
+const QUIESCENCE_RESET_STALE_IN_FLIGHT_COUNT = 1;
+const QUIESCENCE_RESET_STABLE_WINDOW_MS = 10;
+const QUIESCENCE_RESET_TIMEOUT_MS = 16;
+const QUIESCENCE_RESET_MAX_IN_FLIGHT_COUNT = 0;
+const QUIESCENCE_RESET_SLEEP_MS = 1;
+const QUIESCENCE_RESET_BLOCKED_CAPTURED_AT_MS = 1;
+const QUIESCENCE_RESET_CANDIDATE_CAPTURED_AT_MS = 2;
+const QUIESCENCE_RESET_START_AT_MS = 1000;
+const QUIESCENCE_RESET_CANDIDATE_READY_AT_MS = 1012;
+const QUIESCENCE_STALE_PROGRESS_NODE_ID = 'seed-stale-progress';
+const QUIESCENCE_STALE_PROGRESS_OPERATION_ID = 'op-stale-progress';
+const QUIESCENCE_STALE_PROGRESS_PARTITION_ID = 'replica_operations-p1';
+const QUIESCENCE_STALE_PROGRESS_STATUS = 'ACTIVE';
+const QUIESCENCE_STALE_PROGRESS_STEP = 'PENDING';
+const QUIESCENCE_STALE_PROGRESS_IN_FLIGHT_COUNT = 2;
+const QUIESCENCE_STALE_PROGRESS_STALE_IN_FLIGHT_COUNT =
+  QUIESCENCE_STALE_PROGRESS_IN_FLIGHT_COUNT;
+const QUIESCENCE_STALE_PROGRESS_EFFECTIVE_IN_FLIGHT_COUNT = 0;
+const QUIESCENCE_STALE_PROGRESS_STABLE_WINDOW_MS = 2;
+const QUIESCENCE_STALE_PROGRESS_TIMEOUT_MS = 10;
+const QUIESCENCE_STALE_PROGRESS_NO_PROGRESS_TIMEOUT_MS = 4;
+const QUIESCENCE_STALE_PROGRESS_MAX_IN_FLIGHT_COUNT = 0;
+const QUIESCENCE_STALE_PROGRESS_SLEEP_MS = 1;
+const QUIESCENCE_STALE_PROGRESS_START_AT_MS = 1000;
+const QUIESCENCE_STALE_PROGRESS_CAPTURED_AT_MS = 1;
+const QUIESCENCE_STALE_PROGRESS_LOG_FAILURE =
+  'discounted stale in-flight operations should not fail quiescence';
+const QUIESCENCE_SNAPSHOT_LANE_NODE_ID = 'seed-snapshot-lane';
+const QUIESCENCE_SNAPSHOT_LANE_CAPTURED_AT_MS = 1;
+const QUIESCENCE_SNAPSHOT_LANE_STABLE_WINDOW_MS = 2;
+const QUIESCENCE_SNAPSHOT_LANE_TIMEOUT_MS = 15;
+const QUIESCENCE_SNAPSHOT_LANE_MAX_IN_FLIGHT_COUNT = 0;
+const QUIESCENCE_SNAPSHOT_LANE_REQUIRED_NODE_COUNT = 3;
+const QUIESCENCE_SNAPSHOT_LANE_UNAVAILABLE_TABLE_COUNT = 1;
+const QUIESCENCE_SNAPSHOT_LANE_TABLE_NAME = 'replica_operations';
+const QUIESCENCE_SNAPSHOT_LANE_DISCOVERY_SQL_PATTERN =
+  /service_discovery_local\('replica_operations'\)/;
+const QUIESCENCE_SNAPSHOT_LANE_ERROR =
+  'Admin API query timed out for node seed-snapshot-lane on lane snapshot ' +
+  'after 1ms';
+const LOAD_READINESS_CANONICAL_CLUSTER_SIZE = 2;
+const LOAD_READINESS_CANONICAL_START_MS = 1000;
+const LOAD_READINESS_CANONICAL_SNAPSHOT_CAPTURED_AT_MS = 1200;
+const LOAD_READINESS_CANONICAL_OBSERVED_AT_MS = 2500;
+const LOAD_READINESS_CANONICAL_STABLE_WINDOW_MS = 1000;
+const LOAD_READINESS_CANONICAL_TIMEOUT_MS = 3000;
+const LOAD_READINESS_CANONICAL_NODE_A = 'load-node-a';
+const LOAD_READINESS_CANONICAL_NODE_B = 'load-node-b';
+const LOAD_READINESS_CANONICAL_ACTIVE_STATE = 'active';
+const LOAD_READINESS_CANONICAL_READY_STATE = 'closed';
+const LOAD_READINESS_CANONICAL_READY_REASON = 'ready';
+const LOAD_READINESS_CANONICAL_SOURCE = 'selected_snapshot';
+const LOAD_READINESS_CANONICAL_STAGE = 'scenario.load-readiness.stable';
+const LOAD_READINESS_CANONICAL_PUBLICATION_STATUS = 'PUBLISHED';
+const LOAD_READINESS_CANONICAL_ZERO_COUNT = 0;
+const LOAD_READINESS_CANONICAL_SINGLE_PROBE_COUNT = 1;
+const LOAD_READINESS_CANONICAL_DOCKER_SOCKET = '/var/run/docker.sock';
+const LOAD_READINESS_CANONICAL_IMAGE = 'distributed-db:test';
+const LOAD_READINESS_CANONICAL_SLEEP_FAILURE =
+  'canonical snapshot should close load readiness before sleeping';
+const LOAD_READINESS_CANONICAL_LOG_FAILURE =
+  'canonical snapshot closure should not collect failure logs';
+const LOAD_READINESS_PARTIAL_COVERAGE_START_MS = 1000;
+const LOAD_READINESS_PARTIAL_COVERAGE_FIRST_OBSERVED_MS = 2500;
+const LOAD_READINESS_PARTIAL_COVERAGE_SECOND_OBSERVED_MS = 3500;
+const LOAD_READINESS_PARTIAL_COVERAGE_SNAPSHOT_CAPTURED_AT_MS = 1200;
+const LOAD_READINESS_PARTIAL_COVERAGE_STABLE_WINDOW_MS = 1000;
+const LOAD_READINESS_PARTIAL_COVERAGE_TIMEOUT_MS = 5000;
+const LOAD_READINESS_PARTIAL_COVERAGE_BEST_NODE_COUNT = 1;
+const LOAD_READINESS_PARTIAL_COVERAGE_EXPECTED_PROBES = 2;
+const LOAD_READINESS_PARTIAL_COVERAGE_EXPECTED_SLEEPS = 1;
+const LOAD_READINESS_PARTIAL_COVERAGE_SOURCE = 'observed_probe';
+const LOAD_READINESS_PARTIAL_COVERAGE_LOG_FAILURE =
+  'partial snapshot timestamp should not fail load readiness';
+const LOAD_READINESS_PARTIAL_TO_COMPLETE_SECOND_OBSERVED_MS = 3000;
+const LOAD_READINESS_PARTIAL_TO_COMPLETE_READY_OBSERVED_MS = 3600;
+const LOAD_READINESS_PARTIAL_TO_COMPLETE_EXPECTED_PROBES = 3;
+const LOAD_READINESS_PARTIAL_TO_COMPLETE_EXPECTED_SLEEPS = 2;
+const LOAD_READINESS_NO_PROGRESS_START_MS = 1000;
+const LOAD_READINESS_NO_PROGRESS_STEP_MS = 1000;
+const LOAD_READINESS_NO_PROGRESS_STABLE_WINDOW_MS = 1000;
+const LOAD_READINESS_NO_PROGRESS_TIMEOUT_MS = 6000;
+const LOAD_READINESS_NO_PROGRESS_MAX_ATTEMPTS = 3;
+const LOAD_READINESS_NO_PROGRESS_CLUSTER_SIZE = 1;
+const LOAD_READINESS_NO_PROGRESS_NODE_ID = 'load-stalled-seed';
+const LOAD_READINESS_NO_PROGRESS_PUBLICATION_STATUS = 'PUBLISHED';
+const LOAD_READINESS_NO_PROGRESS_MISSING_NODE_ID = 'missing-load-node';
+const LOAD_READINESS_NO_PROGRESS_MISSING_NODE_PREFIX =
+  'publication_missing_active_node=';
+const LOAD_READINESS_NO_PROGRESS_STAGE = 'scenario.load-readiness.waiting';
+const LOAD_READINESS_NO_PROGRESS_REASON = 'stalled_no_progress';
+const LOAD_READINESS_NO_PROGRESS_ACTIVE_GATE_STATE = 'stalled';
+const LOAD_READINESS_NO_PROGRESS_DOCKER_SOCKET = '/var/run/docker.sock';
+const LOAD_READINESS_NO_PROGRESS_IMAGE = 'distributed-db:test';
 
 test(
   'Unit: summarizePriorityRecoveryProgressClasses uses the latest partition snapshot state',
@@ -203,6 +334,98 @@ test('Unit: _waitForAllActive rejects CL-006 witness when only reachability is t
       true,
       'startup publication-lag timeout should collect failure logs',
     );
+  });
+
+test('Unit: _probeClusterActiveState accepts startup partial coverage with live active probes',
+  async () => {
+    const STARTUP_PARTIAL_SEED_ID = 'seed-1';
+    const STARTUP_PARTIAL_JOINER_ONE_ID = 'joiner-1';
+    const STARTUP_PARTIAL_JOINER_TWO_ID = 'joiner-2';
+    const STARTUP_PARTIAL_NODE_IDS = Object.freeze([
+      STARTUP_PARTIAL_SEED_ID,
+      STARTUP_PARTIAL_JOINER_ONE_ID,
+      STARTUP_PARTIAL_JOINER_TWO_ID,
+    ]);
+    const STARTUP_PARTIAL_PUBLISHED_NODE_IDS = Object.freeze([
+      STARTUP_PARTIAL_SEED_ID,
+      STARTUP_PARTIAL_JOINER_ONE_ID,
+    ]);
+    const STARTUP_PARTIAL_MISSING_NODE_IDS = Object.freeze([
+      STARTUP_PARTIAL_JOINER_TWO_ID,
+    ]);
+    const STARTUP_PARTIAL_BEST_COVERAGE_NODE_COUNT = 2;
+    const STARTUP_PARTIAL_DEADLINE_MS = 5000;
+    const STARTUP_PARTIAL_HTTP_OK = 200;
+    const STARTUP_PARTIAL_PUBLICATION_STATUS = 'PUBLISHED';
+    const STARTUP_PARTIAL_ADMIN_HEALTH_SOURCE = 'admin_health';
+    const STARTUP_PARTIAL_ZERO_COUNT = 0;
+
+    const cluster = createCluster({
+      size: STARTUP_PARTIAL_NODE_IDS.length,
+      docker: {socketPath: '/var/run/docker.sock'},
+      image: 'distributed-db:test',
+    });
+
+    for (const nodeId of STARTUP_PARTIAL_NODE_IDS) {
+      cluster._nodes.set(nodeId, {
+        id: nodeId,
+        role: nodeId === STARTUP_PARTIAL_SEED_ID ?
+          NODE_ROLES.SEED :
+          NODE_ROLES.JOINER,
+        async probeBootstrapReadiness() {
+          return {
+            status: STARTUP_PARTIAL_HTTP_OK,
+            state: 'active',
+            reasons: [],
+          };
+        },
+      });
+    }
+
+    cluster._probeControlSnapshotCoverage = async () => {
+      return {
+        completeCoverage: false,
+        expectedNodeCount: STARTUP_PARTIAL_NODE_IDS.length,
+        bestCoverageNodeCount: STARTUP_PARTIAL_BEST_COVERAGE_NODE_COUNT,
+        selectedNodeId: STARTUP_PARTIAL_SEED_ID,
+        selectedAdminReady: true,
+        selectedReachableBy: STARTUP_PARTIAL_ADMIN_HEALTH_SOURCE,
+        selectedPublicationConvergence: {
+          publicationStatus: STARTUP_PARTIAL_PUBLICATION_STATUS,
+          publishedActiveNodeIds: [...STARTUP_PARTIAL_PUBLISHED_NODE_IDS],
+          pendingAckNodeIds: [],
+          priorityPartitionSummary: {
+            satisfied: true,
+            blockedPartitionCount: STARTUP_PARTIAL_ZERO_COUNT,
+            totalSpreadGap: STARTUP_PARTIAL_ZERO_COUNT,
+          },
+        },
+        selectedPublicationConvergenceGate: {
+          publicationStatus: STARTUP_PARTIAL_PUBLICATION_STATUS,
+          pendingAckNodeIds: [],
+          missingPublishedNodeIds: [],
+          priorityPartitionSummary: {
+            satisfied: true,
+            blockedPartitionCount: STARTUP_PARTIAL_ZERO_COUNT,
+            totalSpreadGap: STARTUP_PARTIAL_ZERO_COUNT,
+          },
+        },
+        selectedPublishedActiveNodeIds: [...STARTUP_PARTIAL_PUBLISHED_NODE_IDS],
+        selectedMissingPublishedNodeIds: [...STARTUP_PARTIAL_MISSING_NODE_IDS],
+      };
+    };
+
+    const result = await cluster._probeClusterActiveState(
+      Date.now() + STARTUP_PARTIAL_DEADLINE_MS,
+    );
+
+    assert.equal(result.allActive, true);
+    assert.equal(result.snapshotCoverage.completeCoverage, false);
+    assert.deepStrictEqual(
+      result.snapshotCoverage.selectedMissingPublishedNodeIds,
+      [...STARTUP_PARTIAL_MISSING_NODE_IDS],
+    );
+    assert.equal(result.priorityRecoveryInvariants.passed, true);
   });
 
 test('Unit: _probeClusterActiveState forwards forced repair to snapshot coverage',
@@ -429,6 +652,36 @@ test('Unit: _waitForAllActive scales timeout budget for larger clusters',
     assert.ok(
       elapsedMs >= 70,
       'scaled timeout should keep ACTIVE gate open longer for larger clusters',
+    );
+  });
+
+test('Unit: _resolveActiveWaitTimeoutMs keeps convergence budget precedence',
+  async () => {
+    const SCENARIO_DEFAULT_ACTIVE_WAIT_CLUSTER_SIZE = 5;
+    const SCENARIO_DEFAULT_ACTIVE_WAIT_CONVERGENCE_MS = 40;
+    const SCENARIO_DEFAULT_ACTIVE_WAIT_BASE_MS = 80;
+    const SCENARIO_DEFAULT_ACTIVE_WAIT_EXPECTED_MS = 80;
+    const SCENARIO_DEFAULT_ACTIVE_WAIT_DOCKER_SOCKET =
+      '/var/run/docker.sock';
+    const SCENARIO_DEFAULT_ACTIVE_WAIT_IMAGE = 'distributed-db:test';
+
+    const cluster = createCluster({
+      size: SCENARIO_DEFAULT_ACTIVE_WAIT_CLUSTER_SIZE,
+      docker: {socketPath: SCENARIO_DEFAULT_ACTIVE_WAIT_DOCKER_SOCKET},
+      image: SCENARIO_DEFAULT_ACTIVE_WAIT_IMAGE,
+      timeouts: {
+        convergence: SCENARIO_DEFAULT_ACTIVE_WAIT_CONVERGENCE_MS,
+        scenarioDefault: SCENARIO_DEFAULT_ACTIVE_WAIT_BASE_MS,
+      },
+    });
+
+    assert.equal(
+      cluster._resolveActiveWaitBaseTimeoutMs(),
+      SCENARIO_DEFAULT_ACTIVE_WAIT_CONVERGENCE_MS,
+    );
+    assert.equal(
+      cluster._resolveActiveWaitTimeoutMs(),
+      SCENARIO_DEFAULT_ACTIVE_WAIT_EXPECTED_MS,
     );
   });
 
@@ -1173,6 +1426,436 @@ test('Unit: waitForLoadReadinessStability requires a sustained ACTIVE window',
     );
   });
 
+test(
+  'Unit: waitForLoadReadinessStability credits canonical snapshot capture time',
+  async () => {
+    const cluster = createCluster({
+      size: LOAD_READINESS_CANONICAL_CLUSTER_SIZE,
+      docker: {socketPath: LOAD_READINESS_CANONICAL_DOCKER_SOCKET},
+      image: LOAD_READINESS_CANONICAL_IMAGE,
+    });
+
+    const recordedStages = [];
+    cluster._recordClusterStage = (stage, details = {}) => {
+      recordedStages.push({stage, details});
+    };
+    cluster._sleep = async () => {
+      throw new Error(LOAD_READINESS_CANONICAL_SLEEP_FAILURE);
+    };
+    cluster._collectFailureLogs = async () => {
+      throw new Error(LOAD_READINESS_CANONICAL_LOG_FAILURE);
+    };
+
+    let probeCallCount = LOAD_READINESS_CANONICAL_ZERO_COUNT;
+    let fakeNowMs = LOAD_READINESS_CANONICAL_START_MS;
+    const originalDateNow = Date.now;
+    Date.now = () => fakeNowMs;
+    cluster._probeClusterActiveState = async () => {
+      probeCallCount += LOAD_READINESS_CANONICAL_SINGLE_PROBE_COUNT;
+      fakeNowMs = LOAD_READINESS_CANONICAL_OBSERVED_AT_MS;
+      return {
+        allActive: true,
+        nodeDiagnostics: [
+          {
+            nodeId: LOAD_READINESS_CANONICAL_NODE_A,
+            active: true,
+            state: LOAD_READINESS_CANONICAL_ACTIVE_STATE,
+            reasons: [],
+          },
+          {
+            nodeId: LOAD_READINESS_CANONICAL_NODE_B,
+            active: true,
+            state: LOAD_READINESS_CANONICAL_ACTIVE_STATE,
+            reasons: [],
+          },
+        ],
+        snapshotCoverage: {
+          completeCoverage: true,
+          expectedNodeCount: LOAD_READINESS_CANONICAL_CLUSTER_SIZE,
+          bestCoverageNodeCount: LOAD_READINESS_CANONICAL_CLUSTER_SIZE,
+          selectedCapturedAtMs:
+            LOAD_READINESS_CANONICAL_SNAPSHOT_CAPTURED_AT_MS,
+        },
+        publicationConvergenceGate: {
+          ready: true,
+          reasons: [],
+          publicationStatus: LOAD_READINESS_CANONICAL_PUBLICATION_STATUS,
+          pendingAckNodeIds: [],
+          missingPublishedNodeIds: [],
+          priorityPartitionSummary: {
+            satisfied: true,
+            blockedPartitionCount: LOAD_READINESS_CANONICAL_ZERO_COUNT,
+            totalSpreadGap: LOAD_READINESS_CANONICAL_ZERO_COUNT,
+          },
+        },
+      };
+    };
+
+    try {
+      await cluster.waitForLoadReadinessStability({
+        stableWindowMs: LOAD_READINESS_CANONICAL_STABLE_WINDOW_MS,
+        timeoutMs: LOAD_READINESS_CANONICAL_TIMEOUT_MS,
+      });
+    } finally {
+      Date.now = originalDateNow;
+    }
+
+    assert.equal(
+      probeCallCount,
+      LOAD_READINESS_CANONICAL_SINGLE_PROBE_COUNT,
+    );
+    const stableStage = recordedStages.find(
+      (entry) => entry.stage === LOAD_READINESS_CANONICAL_STAGE,
+    );
+    assert.equal(
+      stableStage?.details?.loadReadinessStableWindow?.state,
+      LOAD_READINESS_CANONICAL_READY_STATE,
+    );
+    assert.equal(
+      stableStage?.details?.loadReadinessStableWindow?.reasonCode,
+      LOAD_READINESS_CANONICAL_READY_REASON,
+    );
+    assert.equal(
+      stableStage?.details?.loadReadinessStableWindow?.source,
+      LOAD_READINESS_CANONICAL_SOURCE,
+    );
+    assert.equal(
+      stableStage?.details?.loadReadinessStableWindow?.stableElapsedMs,
+      LOAD_READINESS_CANONICAL_OBSERVED_AT_MS -
+        LOAD_READINESS_CANONICAL_SNAPSHOT_CAPTURED_AT_MS,
+    );
+  });
+
+test(
+  'Unit: waitForLoadReadinessStability does not credit partial snapshot time',
+  async () => {
+    const cluster = createCluster({
+      size: LOAD_READINESS_CANONICAL_CLUSTER_SIZE,
+      docker: {socketPath: LOAD_READINESS_CANONICAL_DOCKER_SOCKET},
+      image: LOAD_READINESS_CANONICAL_IMAGE,
+    });
+
+    const recordedStages = [];
+    cluster._recordClusterStage = (stage, details = {}) => {
+      recordedStages.push({stage, details});
+    };
+    let sleepCallCount = LOAD_READINESS_CANONICAL_ZERO_COUNT;
+    cluster._sleep = async () => {
+      sleepCallCount += LOAD_READINESS_CANONICAL_SINGLE_PROBE_COUNT;
+      fakeNowMs = LOAD_READINESS_PARTIAL_COVERAGE_SECOND_OBSERVED_MS;
+    };
+    cluster._collectFailureLogs = async () => {
+      throw new Error(LOAD_READINESS_PARTIAL_COVERAGE_LOG_FAILURE);
+    };
+
+    let probeCallCount = LOAD_READINESS_CANONICAL_ZERO_COUNT;
+    let fakeNowMs = LOAD_READINESS_PARTIAL_COVERAGE_START_MS;
+    const originalDateNow = Date.now;
+    Date.now = () => fakeNowMs;
+    cluster._probeClusterActiveState = async () => {
+      probeCallCount += LOAD_READINESS_CANONICAL_SINGLE_PROBE_COUNT;
+      fakeNowMs =
+        probeCallCount === LOAD_READINESS_CANONICAL_SINGLE_PROBE_COUNT ?
+          LOAD_READINESS_PARTIAL_COVERAGE_FIRST_OBSERVED_MS :
+          LOAD_READINESS_PARTIAL_COVERAGE_SECOND_OBSERVED_MS;
+      return {
+        allActive: true,
+        nodeDiagnostics: [
+          {
+            nodeId: LOAD_READINESS_CANONICAL_NODE_A,
+            active: true,
+            state: LOAD_READINESS_CANONICAL_ACTIVE_STATE,
+            reasons: [],
+          },
+          {
+            nodeId: LOAD_READINESS_CANONICAL_NODE_B,
+            active: true,
+            state: LOAD_READINESS_CANONICAL_ACTIVE_STATE,
+            reasons: [],
+          },
+        ],
+        snapshotCoverage: {
+          completeCoverage: false,
+          expectedNodeCount: LOAD_READINESS_CANONICAL_CLUSTER_SIZE,
+          bestCoverageNodeCount: LOAD_READINESS_PARTIAL_COVERAGE_BEST_NODE_COUNT,
+          selectedCapturedAtMs:
+            LOAD_READINESS_PARTIAL_COVERAGE_SNAPSHOT_CAPTURED_AT_MS,
+        },
+        publicationConvergenceGate: {
+          ready: true,
+          reasons: [],
+          publicationStatus: LOAD_READINESS_CANONICAL_PUBLICATION_STATUS,
+          pendingAckNodeIds: [],
+          missingPublishedNodeIds: [],
+          priorityPartitionSummary: {
+            satisfied: true,
+            blockedPartitionCount: LOAD_READINESS_CANONICAL_ZERO_COUNT,
+            totalSpreadGap: LOAD_READINESS_CANONICAL_ZERO_COUNT,
+          },
+        },
+      };
+    };
+
+    try {
+      await cluster.waitForLoadReadinessStability({
+        stableWindowMs: LOAD_READINESS_PARTIAL_COVERAGE_STABLE_WINDOW_MS,
+        timeoutMs: LOAD_READINESS_PARTIAL_COVERAGE_TIMEOUT_MS,
+      });
+    } finally {
+      Date.now = originalDateNow;
+    }
+
+    assert.equal(
+      probeCallCount,
+      LOAD_READINESS_PARTIAL_COVERAGE_EXPECTED_PROBES,
+    );
+    assert.equal(
+      sleepCallCount,
+      LOAD_READINESS_PARTIAL_COVERAGE_EXPECTED_SLEEPS,
+    );
+    const stableStage = recordedStages.find(
+      (entry) => entry.stage === LOAD_READINESS_CANONICAL_STAGE,
+    );
+    assert.equal(
+      stableStage?.details?.loadReadinessStableWindow?.source,
+      LOAD_READINESS_PARTIAL_COVERAGE_SOURCE,
+    );
+    assert.equal(
+      stableStage?.details?.loadReadinessStableWindow?.startedAtMs,
+      LOAD_READINESS_PARTIAL_COVERAGE_FIRST_OBSERVED_MS,
+    );
+    assert.equal(
+      stableStage?.details?.loadReadinessStableWindow?.stableElapsedMs,
+      LOAD_READINESS_PARTIAL_COVERAGE_SECOND_OBSERVED_MS -
+        LOAD_READINESS_PARTIAL_COVERAGE_FIRST_OBSERVED_MS,
+    );
+  });
+
+test(
+  'Unit: waitForLoadReadinessStability does not backdate complete snapshot ' +
+    'after partial coverage',
+  async () => {
+    const cluster = createCluster({
+      size: LOAD_READINESS_CANONICAL_CLUSTER_SIZE,
+      docker: {socketPath: LOAD_READINESS_CANONICAL_DOCKER_SOCKET},
+      image: LOAD_READINESS_CANONICAL_IMAGE,
+    });
+
+    const recordedStages = [];
+    cluster._recordClusterStage = (stage, details = {}) => {
+      recordedStages.push({stage, details});
+    };
+    let sleepCallCount = LOAD_READINESS_CANONICAL_ZERO_COUNT;
+    cluster._sleep = async () => {
+      sleepCallCount += LOAD_READINESS_CANONICAL_SINGLE_PROBE_COUNT;
+    };
+    cluster._collectFailureLogs = async () => {
+      throw new Error(LOAD_READINESS_PARTIAL_COVERAGE_LOG_FAILURE);
+    };
+
+    let probeCallCount = LOAD_READINESS_CANONICAL_ZERO_COUNT;
+    let fakeNowMs = LOAD_READINESS_PARTIAL_COVERAGE_START_MS;
+    const originalDateNow = Date.now;
+    Date.now = () => fakeNowMs;
+    cluster._probeClusterActiveState = async () => {
+      probeCallCount += LOAD_READINESS_CANONICAL_SINGLE_PROBE_COUNT;
+      const firstProbe =
+        probeCallCount === LOAD_READINESS_CANONICAL_SINGLE_PROBE_COUNT;
+      fakeNowMs = firstProbe ?
+        LOAD_READINESS_PARTIAL_COVERAGE_FIRST_OBSERVED_MS :
+        probeCallCount === LOAD_READINESS_PARTIAL_TO_COMPLETE_EXPECTED_PROBES ?
+          LOAD_READINESS_PARTIAL_TO_COMPLETE_READY_OBSERVED_MS :
+          LOAD_READINESS_PARTIAL_TO_COMPLETE_SECOND_OBSERVED_MS;
+      return {
+        allActive: true,
+        nodeDiagnostics: [
+          {
+            nodeId: LOAD_READINESS_CANONICAL_NODE_A,
+            active: true,
+            state: LOAD_READINESS_CANONICAL_ACTIVE_STATE,
+            reasons: [],
+          },
+          {
+            nodeId: LOAD_READINESS_CANONICAL_NODE_B,
+            active: true,
+            state: LOAD_READINESS_CANONICAL_ACTIVE_STATE,
+            reasons: [],
+          },
+        ],
+        snapshotCoverage: {
+          completeCoverage: firstProbe !== true,
+          expectedNodeCount: LOAD_READINESS_CANONICAL_CLUSTER_SIZE,
+          bestCoverageNodeCount: firstProbe ?
+            LOAD_READINESS_PARTIAL_COVERAGE_BEST_NODE_COUNT :
+            LOAD_READINESS_CANONICAL_CLUSTER_SIZE,
+          selectedCapturedAtMs:
+            LOAD_READINESS_PARTIAL_COVERAGE_SNAPSHOT_CAPTURED_AT_MS,
+        },
+        publicationConvergenceGate: {
+          ready: true,
+          reasons: [],
+          publicationStatus: LOAD_READINESS_CANONICAL_PUBLICATION_STATUS,
+          pendingAckNodeIds: [],
+          missingPublishedNodeIds: [],
+          priorityPartitionSummary: {
+            satisfied: true,
+            blockedPartitionCount: LOAD_READINESS_CANONICAL_ZERO_COUNT,
+            totalSpreadGap: LOAD_READINESS_CANONICAL_ZERO_COUNT,
+          },
+        },
+      };
+    };
+
+    try {
+      await cluster.waitForLoadReadinessStability({
+        stableWindowMs: LOAD_READINESS_PARTIAL_COVERAGE_STABLE_WINDOW_MS,
+        timeoutMs: LOAD_READINESS_PARTIAL_COVERAGE_TIMEOUT_MS,
+      });
+    } finally {
+      Date.now = originalDateNow;
+    }
+
+    assert.equal(
+      probeCallCount,
+      LOAD_READINESS_PARTIAL_TO_COMPLETE_EXPECTED_PROBES,
+    );
+    assert.equal(
+      sleepCallCount,
+      LOAD_READINESS_PARTIAL_TO_COMPLETE_EXPECTED_SLEEPS,
+    );
+    const stableStage = recordedStages.find(
+      (entry) => entry.stage === LOAD_READINESS_CANONICAL_STAGE,
+    );
+    assert.equal(
+      stableStage?.details?.loadReadinessStableWindow?.source,
+      LOAD_READINESS_PARTIAL_COVERAGE_SOURCE,
+    );
+    assert.equal(
+      stableStage?.details?.loadReadinessStableWindow?.startedAtMs,
+      LOAD_READINESS_PARTIAL_COVERAGE_FIRST_OBSERVED_MS,
+    );
+    assert.equal(
+      stableStage?.details?.loadReadinessStableWindow?.stableElapsedMs,
+      LOAD_READINESS_PARTIAL_TO_COMPLETE_READY_OBSERVED_MS -
+        LOAD_READINESS_PARTIAL_COVERAGE_FIRST_OBSERVED_MS,
+    );
+  });
+
+test(
+  'Unit: waitForLoadReadinessStability fails fast when load ACTIVE progress stalls',
+  async () => {
+    const cluster = createCluster({
+      size: LOAD_READINESS_NO_PROGRESS_CLUSTER_SIZE,
+      docker: {socketPath: LOAD_READINESS_NO_PROGRESS_DOCKER_SOCKET},
+      image: LOAD_READINESS_NO_PROGRESS_IMAGE,
+    });
+
+    const recordedStages = [];
+    cluster._recordClusterStage = (stage, details = {}) => {
+      recordedStages.push({stage, details});
+    };
+
+    let collectedFailureLogs = false;
+    cluster._collectFailureLogs = async () => {
+      collectedFailureLogs = true;
+    };
+
+    let fakeNowMs = LOAD_READINESS_NO_PROGRESS_START_MS;
+    const originalDateNow = Date.now;
+    Date.now = () => fakeNowMs;
+    cluster._sleep = async () => {};
+    cluster._probeClusterActiveState = async () => {
+      fakeNowMs += LOAD_READINESS_NO_PROGRESS_STEP_MS;
+      return {
+        allActive: false,
+        nodeDiagnostics: [{
+          nodeId: LOAD_READINESS_NO_PROGRESS_NODE_ID,
+          active: true,
+          state: LOAD_READINESS_CANONICAL_ACTIVE_STATE,
+          reasons: [],
+        }],
+        snapshotCoverage: {
+          completeCoverage: true,
+          expectedNodeCount: LOAD_READINESS_NO_PROGRESS_CLUSTER_SIZE,
+          bestCoverageNodeCount: LOAD_READINESS_NO_PROGRESS_CLUSTER_SIZE,
+          selectedPublicationConvergence: {
+            publicationStatus: LOAD_READINESS_NO_PROGRESS_PUBLICATION_STATUS,
+            pendingAckNodeIds: [],
+            priorityPartitionSummary: {
+              satisfied: true,
+              blockedPartitionCount: LOAD_READINESS_CANONICAL_ZERO_COUNT,
+              totalSpreadGap: LOAD_READINESS_CANONICAL_ZERO_COUNT,
+            },
+          },
+        },
+        publicationConvergenceGate: {
+          ready: false,
+          reasons: [
+            LOAD_READINESS_NO_PROGRESS_MISSING_NODE_PREFIX +
+              LOAD_READINESS_NO_PROGRESS_MISSING_NODE_ID,
+          ],
+          publicationStatus: LOAD_READINESS_NO_PROGRESS_PUBLICATION_STATUS,
+          pendingAckNodeIds: [],
+          missingPublishedNodeIds: [
+            LOAD_READINESS_NO_PROGRESS_MISSING_NODE_ID,
+          ],
+          priorityPartitionSummary: {
+            satisfied: true,
+            blockedPartitionCount: LOAD_READINESS_CANONICAL_ZERO_COUNT,
+            totalSpreadGap: LOAD_READINESS_CANONICAL_ZERO_COUNT,
+          },
+        },
+      };
+    };
+
+    try {
+      await assert.rejects(
+        async () => {
+          await cluster.waitForLoadReadinessStability({
+            stableWindowMs: LOAD_READINESS_NO_PROGRESS_STABLE_WINDOW_MS,
+            timeoutMs: LOAD_READINESS_NO_PROGRESS_TIMEOUT_MS,
+            noProgressMaxAttempts: LOAD_READINESS_NO_PROGRESS_MAX_ATTEMPTS,
+          });
+        },
+        (error) => {
+          assert.match(
+            error.message,
+            /stalled with no meaningful progress/,
+          );
+          assert.equal(
+            error?.diagnostics?.noProgress?.reasonCode,
+            LOAD_READINESS_NO_PROGRESS_REASON,
+          );
+          assert.equal(
+            error?.diagnostics?.noProgress?.failedNoProgress?.details
+              ?.budgetAttempts,
+            LOAD_READINESS_NO_PROGRESS_MAX_ATTEMPTS,
+          );
+          assert.equal(
+            error?.diagnostics?.activeGate?.state,
+            LOAD_READINESS_NO_PROGRESS_ACTIVE_GATE_STATE,
+          );
+          return true;
+        },
+      );
+    } finally {
+      Date.now = originalDateNow;
+    }
+
+    assert.equal(
+      collectedFailureLogs,
+      true,
+      'should collect failure logs before surfacing load-readiness stalls',
+    );
+    assert.equal(
+      recordedStages.some((entry) =>
+        entry.stage === LOAD_READINESS_NO_PROGRESS_STAGE &&
+        entry.details?.activeGateNoProgress?.stalled === true),
+      true,
+      'load-readiness stall diagnostics should be recorded as stage evidence',
+    );
+  });
+
 test('Unit: waitForControlPlaneQuiescence waits for replica operations to ' +
   'drain and leadership to stay stable', async () => {
   const cluster = createCluster({
@@ -1269,6 +1952,12 @@ test('Unit: waitForControlPlaneQuiescence waits for replica operations to ' +
 
 test('Unit: waitForControlPlaneQuiescence surfaces timeout diagnostics',
   async () => {
+    const STALE_IN_FLIGHT_COUNT = 1;
+    const EFFECTIVE_IN_FLIGHT_COUNT = 0;
+    const STABLE_WINDOW_MS = 50;
+    const TIMEOUT_MS = 15;
+    const MAX_IN_FLIGHT_COUNT = 0;
+
     const cluster = createCluster({
       size: 3,
       docker: {socketPath: '/var/run/docker.sock'},
@@ -1284,10 +1973,373 @@ test('Unit: waitForControlPlaneQuiescence surfaces timeout diagnostics',
             capturedAt: Date.now(),
             leaders: {partitions: 'seed-a'},
             replicaOperations: {
-              inFlightCount: 1,
+              inFlightCount: STALE_IN_FLIGHT_COUNT,
+              staleInFlightCount: STALE_IN_FLIGHT_COUNT,
               partitionGroupInFlight: {groupA: 1},
               operationTimelineById: {
                 op1: [{step: 'PENDING', status: 'ACTIVE', inFlight: true}],
+              },
+            },
+          }],
+        };
+      },
+      async getLogs() {
+        return '';
+      },
+    }]]);
+    cluster._sleep = async () => {
+      await new Promise((resolve) => setTimeout(resolve, 1));
+    };
+    let collected = false;
+    cluster._collectFailureLogs = async () => {
+      collected = true;
+    };
+
+    await assert.rejects(
+      async () => cluster.waitForControlPlaneQuiescence({
+        stableWindowMs: STABLE_WINDOW_MS,
+        timeoutMs: TIMEOUT_MS,
+        maxInFlightCount: MAX_IN_FLIGHT_COUNT,
+        ignoreStaleInFlightReplicaOperations: true,
+      }),
+      (error) => {
+        assert.ok(collected, 'should collect failure logs before throwing');
+        assert.match(error.message, /Control plane did not quiesce/i);
+        assert.match(error.message, /inFlightCount=1/i);
+        assert.equal(
+          error.quiescence.effectiveInFlightCount,
+          EFFECTIVE_IN_FLIGHT_COUNT,
+        );
+        assert.equal(
+          error.quiescence.staleInFlightCount,
+          STALE_IN_FLIGHT_COUNT,
+        );
+        assert.equal(
+          error.quiescence.ignoreStaleInFlightReplicaOperations,
+          true,
+        );
+        return true;
+      },
+    );
+  });
+
+test(
+  'Unit: waitForControlPlaneQuiescence discounts nested cache-visible priority recovery diagnostics',
+  async () => {
+    const cluster = createCluster({
+      size: 3,
+      docker: {socketPath: '/var/run/docker.sock'},
+      image: 'distributed-db:test',
+    });
+
+    let probeCallCount = 0;
+    cluster._nodes = new Map([[QUIESCENCE_CACHE_VISIBLE_NODE_ID, {
+      id: QUIESCENCE_CACHE_VISIBLE_NODE_ID,
+      role: NODE_ROLES.SEED,
+      async getControlSnapshot() {
+        probeCallCount += 1;
+        return {
+          rows: [{
+            capturedAt: Date.now(),
+            leaders: {
+              [QUIESCENCE_CACHE_VISIBLE_PARTITION_ID]:
+                QUIESCENCE_CACHE_VISIBLE_NODE_ID,
+            },
+            replicaOperations: {
+              inFlightCount: QUIESCENCE_CACHE_VISIBLE_IN_FLIGHT_COUNT,
+              partitionGroupInFlight: {
+                [QUIESCENCE_CACHE_VISIBLE_PARTITION_ID]:
+                  QUIESCENCE_CACHE_VISIBLE_IN_FLIGHT_COUNT,
+              },
+              operationTimelineById: {
+                [QUIESCENCE_CACHE_VISIBLE_OPERATION_ID]: [{
+                  step: QUIESCENCE_CACHE_VISIBLE_STEP,
+                  status: QUIESCENCE_CACHE_VISIBLE_STATUS,
+                  inFlight: true,
+                }],
+              },
+              rows: [{
+                operationId: QUIESCENCE_CACHE_VISIBLE_OPERATION_ID,
+                partitionId: QUIESCENCE_CACHE_VISIBLE_PARTITION_ID,
+                status: QUIESCENCE_CACHE_VISIBLE_STATUS,
+                workflowStep: QUIESCENCE_CACHE_VISIBLE_STEP,
+              }],
+            },
+            controlPlaneDiagnostics: {
+              priorityRecoveryObservation: {
+                priorityRecoveryPartitionSnapshots: [{
+                  partitionId: QUIESCENCE_CACHE_VISIBLE_PARTITION_ID,
+                  visibilityState:
+                    QUIESCENCE_CACHE_VISIBLE_VISIBILITY_STATE,
+                  semanticState:
+                    QUIESCENCE_CACHE_VISIBLE_COMPLETION_STATE,
+                  operationIds: [QUIESCENCE_CACHE_VISIBLE_OPERATION_ID],
+                }],
+              },
+            },
+          }],
+        };
+      },
+      async getLogs() {
+        return '';
+      },
+    }]]);
+    cluster._sleep = async () => {
+      await new Promise((resolve) =>
+        setTimeout(resolve, QUIESCENCE_CACHE_VISIBLE_SLEEP_MS),
+      );
+    };
+    cluster._collectFailureLogs = async () => {
+      throw new Error(QUIESCENCE_CACHE_VISIBLE_FAILURE_LOG_MESSAGE);
+    };
+
+    const result = await cluster.waitForControlPlaneQuiescence({
+      stableWindowMs: QUIESCENCE_CACHE_VISIBLE_STABLE_WINDOW_MS,
+      timeoutMs: QUIESCENCE_CACHE_VISIBLE_TIMEOUT_MS,
+      maxInFlightCount: QUIESCENCE_CACHE_VISIBLE_MAX_IN_FLIGHT_COUNT,
+      ignoreStaleInFlightReplicaOperations: true,
+    });
+
+    assert.equal(
+      result.inFlightCount,
+      QUIESCENCE_CACHE_VISIBLE_IN_FLIGHT_COUNT,
+    );
+    assert.equal(
+      result.effectiveInFlightCount,
+      QUIESCENCE_CACHE_VISIBLE_EFFECTIVE_IN_FLIGHT_COUNT,
+    );
+    assert.ok(
+      probeCallCount > QUIESCENCE_CACHE_VISIBLE_IN_FLIGHT_COUNT,
+      'quiescence gate should hold the stable window after discounting',
+    );
+  },
+);
+
+test(
+  'Unit: waitForControlPlaneQuiescence timeout names candidate window reset reason',
+  async () => {
+    const cluster = createCluster({
+      size: 3,
+      docker: {socketPath: '/var/run/docker.sock'},
+      image: 'distributed-db:test',
+    });
+
+    let currentNowMs = QUIESCENCE_RESET_START_AT_MS;
+    const blockedSnapshot = {
+      rows: [{
+        capturedAt: QUIESCENCE_RESET_BLOCKED_CAPTURED_AT_MS,
+        leaders: {[QUIESCENCE_RESET_PARTITION_ID]: QUIESCENCE_RESET_NODE_ID},
+        replicaOperations: {
+          inFlightCount: QUIESCENCE_RESET_IN_FLIGHT_COUNT,
+          partitionGroupInFlight: {
+            [QUIESCENCE_RESET_PARTITION_ID]: QUIESCENCE_RESET_IN_FLIGHT_COUNT,
+          },
+          operationTimelineById: {
+            [QUIESCENCE_RESET_OPERATION_ID]: [{
+              step: QUIESCENCE_RESET_STEP,
+              status: QUIESCENCE_RESET_STATUS,
+              inFlight: true,
+            }],
+          },
+        },
+      }],
+    };
+    const candidateSnapshot = {
+      rows: [{
+        capturedAt: QUIESCENCE_RESET_CANDIDATE_CAPTURED_AT_MS,
+        leaders: {[QUIESCENCE_RESET_PARTITION_ID]: QUIESCENCE_RESET_NODE_ID},
+        replicaOperations: {
+          inFlightCount: QUIESCENCE_RESET_IN_FLIGHT_COUNT,
+          staleInFlightCount: QUIESCENCE_RESET_STALE_IN_FLIGHT_COUNT,
+          partitionGroupInFlight: {
+            [QUIESCENCE_RESET_PARTITION_ID]: QUIESCENCE_RESET_IN_FLIGHT_COUNT,
+          },
+          operationTimelineById: {
+            [QUIESCENCE_RESET_OPERATION_ID]: [{
+              step: QUIESCENCE_RESET_STEP,
+              status: QUIESCENCE_RESET_STATUS,
+              inFlight: true,
+            }],
+          },
+        },
+      }],
+    };
+
+    cluster._nodes = new Map([[QUIESCENCE_RESET_NODE_ID, {
+      id: QUIESCENCE_RESET_NODE_ID,
+      role: NODE_ROLES.SEED,
+      async getControlSnapshot() {
+        return currentNowMs < QUIESCENCE_RESET_CANDIDATE_READY_AT_MS ?
+          blockedSnapshot :
+          candidateSnapshot;
+      },
+      async getLogs() {
+        return '';
+      },
+    }]]);
+    cluster._sleep = async () => {
+      currentNowMs += QUIESCENCE_RESET_SLEEP_MS;
+    };
+    let collected = false;
+    cluster._collectFailureLogs = async () => {
+      collected = true;
+    };
+    const originalDateNow = Date.now;
+    Date.now = () => currentNowMs;
+    try {
+      await assert.rejects(
+        async () => cluster.waitForControlPlaneQuiescence({
+          stableWindowMs: QUIESCENCE_RESET_STABLE_WINDOW_MS,
+          timeoutMs: QUIESCENCE_RESET_TIMEOUT_MS,
+          maxInFlightCount: QUIESCENCE_RESET_MAX_IN_FLIGHT_COUNT,
+          ignoreStaleInFlightReplicaOperations: true,
+        }),
+        (error) => {
+          assert.ok(collected, 'should collect failure logs before throwing');
+          assert.equal(
+            error.quiescence.state,
+            CONTROL_PLANE_QUIESCENCE_STATE.QUIESCENCE_CANDIDATE,
+          );
+          assert.equal(
+            error.quiescence.effectiveInFlightCount,
+            QUIESCENCE_RESET_EFFECTIVE_IN_FLIGHT_COUNT,
+          );
+          assert.equal(
+            error.quiescence.candidateWindowReset.reason,
+            CONTROL_PLANE_QUIESCENCE_STATE.OPERATION_DRAIN_PROGRESSING,
+          );
+          assert.equal(
+            error.quiescence.candidateWindowReset.canonicalBlocker,
+            CONTROL_PLANE_QUIESCENCE_REASON.REPLICA_OPERATIONS_IN_FLIGHT,
+          );
+          return true;
+        },
+      );
+    } finally {
+      Date.now = originalDateNow;
+    }
+  },
+);
+
+test(
+  'Unit: waitForControlPlaneQuiescence lets discounted stale in-flight work ' +
+    'complete the stable window',
+  async () => {
+    const cluster = createCluster({
+      size: 3,
+      docker: {socketPath: '/var/run/docker.sock'},
+      image: 'distributed-db:test',
+    });
+
+    let currentNowMs = QUIESCENCE_STALE_PROGRESS_START_AT_MS;
+    cluster._nodes = new Map([[QUIESCENCE_STALE_PROGRESS_NODE_ID, {
+      id: QUIESCENCE_STALE_PROGRESS_NODE_ID,
+      role: NODE_ROLES.SEED,
+      async getControlSnapshot() {
+        return {
+          rows: [{
+            capturedAt: QUIESCENCE_STALE_PROGRESS_CAPTURED_AT_MS,
+            leaders: {
+              [QUIESCENCE_STALE_PROGRESS_PARTITION_ID]:
+                QUIESCENCE_STALE_PROGRESS_NODE_ID,
+            },
+            replicaOperations: {
+              inFlightCount: QUIESCENCE_STALE_PROGRESS_IN_FLIGHT_COUNT,
+              staleInFlightCount:
+                QUIESCENCE_STALE_PROGRESS_STALE_IN_FLIGHT_COUNT,
+              partitionGroupInFlight: {
+                [QUIESCENCE_STALE_PROGRESS_PARTITION_ID]:
+                  QUIESCENCE_STALE_PROGRESS_IN_FLIGHT_COUNT,
+              },
+              operationTimelineById: {
+                [QUIESCENCE_STALE_PROGRESS_OPERATION_ID]: [{
+                  step: QUIESCENCE_STALE_PROGRESS_STEP,
+                  status: QUIESCENCE_STALE_PROGRESS_STATUS,
+                  inFlight: true,
+                }],
+              },
+            },
+          }],
+        };
+      },
+      async getLogs() {
+        return '';
+      },
+    }]]);
+    cluster._sleep = async () => {
+      currentNowMs += QUIESCENCE_STALE_PROGRESS_SLEEP_MS;
+    };
+    let collected = false;
+    cluster._collectFailureLogs = async () => {
+      collected = true;
+    };
+    const originalDateNow = Date.now;
+    Date.now = () => currentNowMs;
+    try {
+      const result = await cluster.waitForControlPlaneQuiescence({
+        stableWindowMs: QUIESCENCE_STALE_PROGRESS_STABLE_WINDOW_MS,
+        timeoutMs: QUIESCENCE_STALE_PROGRESS_TIMEOUT_MS,
+        noProgressTimeoutMs: QUIESCENCE_STALE_PROGRESS_NO_PROGRESS_TIMEOUT_MS,
+        maxInFlightCount: QUIESCENCE_STALE_PROGRESS_MAX_IN_FLIGHT_COUNT,
+        ignoreStaleInFlightReplicaOperations: true,
+      });
+
+      assert.equal(
+        result.state,
+        CONTROL_PLANE_QUIESCENCE_STATE.QUIESCENT,
+      );
+      assert.equal(
+        result.inFlightCount,
+        QUIESCENCE_STALE_PROGRESS_IN_FLIGHT_COUNT,
+      );
+      assert.equal(
+        result.effectiveInFlightCount,
+        QUIESCENCE_STALE_PROGRESS_EFFECTIVE_IN_FLIGHT_COUNT,
+      );
+      assert.equal(result.canonicalBlocker, null);
+      assert.equal(collected, false, QUIESCENCE_STALE_PROGRESS_LOG_FAILURE);
+    } finally {
+      Date.now = originalDateNow;
+    }
+  },
+);
+
+test(
+  'Unit: waitForControlPlaneQuiescence consumes control-plane pressure owner diagnostics',
+  async () => {
+    const cluster = createCluster({
+      size: 3,
+      docker: {socketPath: '/var/run/docker.sock'},
+      image: 'distributed-db:test',
+    });
+
+    cluster._nodes = new Map([['seed-a', {
+      id: 'seed-a',
+      role: NODE_ROLES.SEED,
+      async getControlSnapshot() {
+        return {
+          rows: [{
+            capturedAt: Date.now(),
+            leaders: {partitions: 'seed-a'},
+            replicaOperations: {
+              inFlightCount: 0,
+              partitionGroupInFlight: {},
+              operationTimelineById: {},
+            },
+            controlPlaneDiagnostics: {
+              readinessByNodeId: {
+                'seed-a': {
+                  runtimeAuthority: {
+                    repair: {
+                      state: RUNTIME_AUTHORITY_REPAIR_STATE.FAILED,
+                      error: DISCOVERY_REPAIR_TIMEOUT_ERROR,
+                    },
+                  },
+                },
+              },
+              heartbeatPublication: {
+                consecutiveFailures: 1,
+                lastFailureReason: NODE_STATE_PUBLICATION_PRESSURE_ERROR,
               },
             },
           }],
@@ -1313,12 +2365,22 @@ test('Unit: waitForControlPlaneQuiescence surfaces timeout diagnostics',
       }),
       (error) => {
         assert.ok(collected, 'should collect failure logs before throwing');
-        assert.match(error.message, /Control plane did not quiesce/i);
-        assert.match(error.message, /inFlightCount=1/i);
+        assert.equal(
+          error.quiescence.state,
+          CONTROL_PLANE_QUIESCENCE_STATE.CONTROL_PLANE_PRESSURE,
+        );
+        assert.deepEqual(
+          error.quiescence.reasonCodes,
+          [
+            CONTROL_PLANE_QUIESCENCE_REASON.DISCOVERY_REPAIR_TIMEOUT,
+            CONTROL_PLANE_QUIESCENCE_REASON.NODE_STATE_PUBLICATION_PRESSURE,
+          ],
+        );
         return true;
       },
     );
-  });
+  },
+);
 
 test(
   'Unit: waitForControlPlaneQuiescence waits for critical system table spread',
@@ -1500,6 +2562,92 @@ test(
         assert.ok(collected, 'should collect failure logs before throwing');
         assert.match(error.message, /criticalSystemDistribution=/i);
         assert.match(error.message, /replica_operations:1\/3/i);
+        return true;
+      },
+    );
+  },
+);
+
+test(
+  'Unit: waitForControlPlaneQuiescence separates snapshot-lane critical evidence gaps',
+  async () => {
+    const cluster = createCluster({
+      size: QUIESCENCE_SNAPSHOT_LANE_REQUIRED_NODE_COUNT,
+      docker: {socketPath: LOAD_READINESS_CANONICAL_DOCKER_SOCKET},
+      image: LOAD_READINESS_CANONICAL_IMAGE,
+    });
+
+    cluster._nodes = new Map([[QUIESCENCE_SNAPSHOT_LANE_NODE_ID, {
+      id: QUIESCENCE_SNAPSHOT_LANE_NODE_ID,
+      role: NODE_ROLES.SEED,
+      async getControlSnapshot() {
+        return {
+          rows: [{
+            capturedAt: QUIESCENCE_SNAPSHOT_LANE_CAPTURED_AT_MS,
+            leaders: {partitions: QUIESCENCE_SNAPSHOT_LANE_NODE_ID},
+            replicaOperations: {
+              inFlightCount: QUIESCENCE_SNAPSHOT_LANE_MAX_IN_FLIGHT_COUNT,
+              partitionGroupInFlight: {},
+              operationTimelineById: {},
+            },
+          }],
+        };
+      },
+      async queryWithTimeout(sql) {
+        assert.match(
+          sql,
+          QUIESCENCE_SNAPSHOT_LANE_DISCOVERY_SQL_PATTERN,
+        );
+        throw new Error(QUIESCENCE_SNAPSHOT_LANE_ERROR);
+      },
+      async getLogs() {
+        return '';
+      },
+    }]]);
+    cluster._sleep = async () => {
+      await new Promise((resolve) => setTimeout(resolve, 1));
+    };
+    let collected = false;
+    cluster._collectFailureLogs = async () => {
+      collected = true;
+    };
+
+    await assert.rejects(
+      async () => cluster.waitForControlPlaneQuiescence({
+        stableWindowMs: QUIESCENCE_SNAPSHOT_LANE_STABLE_WINDOW_MS,
+        timeoutMs: QUIESCENCE_SNAPSHOT_LANE_TIMEOUT_MS,
+        maxInFlightCount: QUIESCENCE_SNAPSHOT_LANE_MAX_IN_FLIGHT_COUNT,
+        requireCriticalSystemSpread: true,
+        criticalSystemTableNames: [QUIESCENCE_SNAPSHOT_LANE_TABLE_NAME],
+        criticalSystemRequiredDistinctNodeCount:
+          QUIESCENCE_SNAPSHOT_LANE_REQUIRED_NODE_COUNT,
+      }),
+      (error) => {
+        assert.ok(collected, 'should collect failure logs before throwing');
+        assert.equal(
+          error.quiescence.state,
+          CONTROL_PLANE_QUIESCENCE_STATE
+            .CRITICAL_SPREAD_OBSERVATION_UNAVAILABLE,
+        );
+        assert.equal(
+          error.quiescence.canonicalBlocker,
+          CONTROL_PLANE_QUIESCENCE_REASON
+            .CRITICAL_SYSTEM_SNAPSHOT_REACHABILITY_UNAVAILABLE,
+        );
+        assert.equal(
+          error.quiescence.criticalSystemTopology.observationState,
+          CONTROL_PLANE_QUIESCENCE_CRITICAL_SYSTEM_OBSERVATION_STATE
+            .SNAPSHOT_LANE_UNAVAILABLE,
+        );
+        assert.equal(
+          error.quiescence.criticalSystemTopology
+            .snapshotLaneUnavailableTableCount,
+          QUIESCENCE_SNAPSHOT_LANE_UNAVAILABLE_TABLE_COUNT,
+        );
+        assert.match(
+          error.message,
+          /criticalSystemObservationState=snapshot_lane_unavailable/i,
+        );
         return true;
       },
     );

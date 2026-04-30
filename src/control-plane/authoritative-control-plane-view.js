@@ -32,6 +32,15 @@ import {
   classifyTransportSemanticOutcome,
 } from '../transport/transport-semantic-outcome.js';
 
+const LOCAL_STR_SQL_QUERY_ENGINE = 'sql_query_engine';
+const LOCAL_STR_EMPTY = '';
+const LOCAL_STR_READY = 'ready';
+const LOCAL_STR_WR5H7 = 'control_plane_backpressure';
+const LOCAL_STR_O1VD7 = 'cdcIntegrationService';
+const LOCAL_STR_MESSAGEROUTER = 'messageRouter';
+const LOCAL_STR_106NE = 'authoritative_row_source_unavailable';
+const LOCAL_STR_EA869 = 'authoritative_query_failed';
+
 const AUTHORITATIVE_CONTROL_PLANE_VIEW_SOURCE = Object.freeze({
   LOCAL_PARTITION_REPLICA: 'local_partition_replica',
   OWNER_RPC_LANE: 'owner_rpc_lane',
@@ -52,7 +61,7 @@ function normalizeReadSource(source) {
   if (normalized === AUTHORITATIVE_CONTROL_PLANE_VIEW_SOURCE.OWNER_RPC_LANE) {
     return AUTHORITATIVE_CONTROL_PLANE_VIEW_SOURCE.OWNER_RPC_LANE;
   }
-  if (normalized === 'sql_query_engine') {
+  if (normalized === LOCAL_STR_SQL_QUERY_ENGINE) {
     return AUTHORITATIVE_CONTROL_PLANE_VIEW_SOURCE.SQL_QUERY_ENGINE;
   }
   return AUTHORITATIVE_CONTROL_PLANE_VIEW_SOURCE.UNAVAILABLE;
@@ -92,7 +101,7 @@ function isReadyLocalQueryTransport(localQueryTransport = null) {
   if (localQueryTransport.ready === true) {
     return true;
   }
-  return String(localQueryTransport.state || '').toLowerCase() === 'ready';
+  return String(localQueryTransport.state || LOCAL_STR_EMPTY).toLowerCase() === LOCAL_STR_READY;
 }
 
 function shouldRetryAuthoritativeReadWithoutOwnerRpc(
@@ -121,8 +130,8 @@ function shouldRetryAuthoritativeReadWithoutOwnerRpc(
     result.causeChain.map((cause) => String(cause || '').toLowerCase()) :
     [];
   return isDeferredTransportSemanticOutcome(transportOutcome) ||
-    causeChain.includes('control_plane_backpressure') ||
-    errorText.includes('control_plane_backpressure');
+    causeChain.includes(LOCAL_STR_WR5H7) ||
+    errorText.includes(LOCAL_STR_WR5H7);
 }
 
 function freezeRows(rows) {
@@ -270,7 +279,7 @@ function collectNodeSnapshotPartitionIds(serviceRows = []) {
           serviceRow?.[COLUMN.SERVICE_TYPE] ??
           serviceRow?.service_type ??
           serviceRow?.serviceType ??
-          '',
+          LOCAL_STR_EMPTY,
         ).toLowerCase() === String(SERVICE_TYPE.PARTITION).toLowerCase();
       })
       .map((serviceRow) => readNodeSnapshotServicePartitionId(serviceRow))
@@ -320,10 +329,10 @@ class AuthoritativeControlPlaneView {
    * @param {Object} [options={}]
    */
   syncOwnerDependencies(options = {}) {
-    if (Object.hasOwn(options, 'cdcIntegrationService')) {
+    if (Object.hasOwn(options, LOCAL_STR_O1VD7)) {
       this.cdcIntegrationService = options.cdcIntegrationService || null;
     }
-    if (Object.hasOwn(options, 'messageRouter')) {
+    if (Object.hasOwn(options, LOCAL_STR_MESSAGEROUTER)) {
       this.messageRouter = options.messageRouter || null;
     }
   }
@@ -455,7 +464,7 @@ class AuthoritativeControlPlaneView {
           snapshotVersion: null,
           observedAt,
           observedAtMs,
-          error: 'authoritative_row_source_unavailable',
+          error: LOCAL_STR_106NE,
         });
       }
 
@@ -579,7 +588,7 @@ class AuthoritativeControlPlaneView {
         observedAtMs,
         error: result?.success === true ?
           null :
-          (result?.error || 'authoritative_query_failed'),
+          (result?.error || LOCAL_STR_EA869),
       });
     })().finally(() => {
       if (this.inFlightReadsByKey.get(readKey) === inFlightRead) {

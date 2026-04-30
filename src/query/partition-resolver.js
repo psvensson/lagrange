@@ -16,6 +16,9 @@ import {
 import {DISTRIBUTED_PREDICATE_SHAPE as PREDICATE_SHAPE} from
   './distributed/distributed-query-plan-constants.js';
 
+const LOCAL_NUM_ONE = 1;
+const LOCAL_NUM_ZERO = 0;
+
 const KEY_CONDITION_TYPE = Object.freeze({
   EQUALS: 'equals',
   RANGE: 'range',
@@ -85,7 +88,7 @@ class PartitionResolver {
     const tableInfo = this.getTableInfo(tableName);
     const primaryKeyColumns = this.resolvePrimaryKeyColumns(tableInfo, options);
 
-    if (primaryKeyColumns.length > 1) {
+    if (primaryKeyColumns.length > LOCAL_NUM_ONE) {
       const compositeResolution = this.resolveCompositeKeyPartitions(
         whereClause,
         primaryKeyColumns,
@@ -219,7 +222,7 @@ class PartitionResolver {
       );
       if (!keyConditions ||
         keyConditions.type !== KEY_CONDITION_TYPE.EQUALS ||
-        keyConditions.values.length !== 1) {
+        keyConditions.values.length !== LOCAL_NUM_ONE) {
         return {
           partitionIds: partitions.map((partition) =>
             partition.partition_id || partition.partitionId,
@@ -690,15 +693,15 @@ class PartitionResolver {
     }
 
     if (start === null || start === undefined) {
-      return this.compareValues(value, end) < 0;
+      return this.compareValues(value, end) < LOCAL_NUM_ZERO;
     }
 
     if (end === null || end === undefined) {
-      return this.compareValues(value, start) >= 0;
+      return this.compareValues(value, start) >= LOCAL_NUM_ZERO;
     }
 
-    return this.compareValues(value, start) >= 0 &&
-           this.compareValues(value, end) < 0;
+    return this.compareValues(value, start) >= LOCAL_NUM_ZERO &&
+           this.compareValues(value, end) < LOCAL_NUM_ZERO;
   }
 
   /**
@@ -723,7 +726,7 @@ class PartitionResolver {
     // If partition ends before query starts, no overlap
     if (pEnd !== null && pEnd !== undefined && low !== null) {
       const cmp = this.compareValues(pEnd, low);
-      if (cmp < 0 || (cmp === 0 && !lowInclusive)) {
+      if (cmp < LOCAL_NUM_ZERO || (cmp === LOCAL_NUM_ZERO && !lowInclusive)) {
         return false;
       }
     }
@@ -731,7 +734,7 @@ class PartitionResolver {
     // If partition starts after query ends, no overlap
     if (pStart !== null && pStart !== undefined && high !== null) {
       const cmp = this.compareValues(pStart, high);
-      if (cmp > 0 || (cmp === 0 && !highInclusive)) {
+      if (cmp > LOCAL_NUM_ZERO || (cmp === LOCAL_NUM_ZERO && !highInclusive)) {
         return false;
       }
     }

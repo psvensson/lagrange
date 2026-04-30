@@ -39,6 +39,7 @@ const TEST_RUNTIME_AUTHORITY_PUBLICATION_STATE = Object.freeze({
   HEALTHY: 'healthy',
 });
 const TEST_RUNTIME_AUTHORITY_REPAIR_STATE = Object.freeze({
+  FAILED: 'failed',
   NOT_ATTEMPTED: 'not_attempted',
 });
 const TEST_RUNTIME_AUTHORITY_STATE = Object.freeze({
@@ -51,6 +52,8 @@ const TEST_RUNTIME_AUTHORITY_VISIBILITY_STATE = Object.freeze({
   PENDING_PUBLICATION: 'pending_publication',
   RETAINED_LOCAL_RUNTIME: 'retained_local_runtime',
 });
+const TEST_AUTHORITATIVE_REPAIR_TIMEOUT_ERROR =
+  'Authoritative discovery repair timed out after 1500ms';
 
 function createCache({nodes = [], services = []} = {}) {
   const nodeRows = new Map(nodes.map((row) => [row[COLUMN.NODE_ID], row]));
@@ -232,6 +235,22 @@ test('ControlPlaneReadinessService classifies a fully ready node', async (t) => 
   t.same(readiness.reasons, []);
   t.end();
 });
+
+test('ControlPlaneReadinessService preserves runtime authority repair errors',
+  (t) => {
+    const service = new ControlPlaneReadinessService({
+      nodeId: 'node-repair-error',
+      systemTableCache: createCache(),
+    });
+    const repair = service.buildRuntimeAuthorityRepairDescriptor({
+      outcome: TEST_RUNTIME_AUTHORITY_REPAIR_STATE.FAILED,
+      error: TEST_AUTHORITATIVE_REPAIR_TIMEOUT_ERROR,
+    });
+
+    t.equal(repair.state, TEST_RUNTIME_AUTHORITY_REPAIR_STATE.FAILED);
+    t.equal(repair.error, TEST_AUTHORITATIVE_REPAIR_TIMEOUT_ERROR);
+    t.end();
+  });
 
 test('ControlPlaneReadinessService builds establishing runtime authority ' +
   'during publication convergence', async (t) => {
@@ -840,28 +859,29 @@ test('ControlPlaneReadinessService fails closed for stale lease rows even ' +
 test('ControlPlaneReadinessService opens provisioning grace during ' +
   'publication convergence when recovery stays available', async (t) => {
   const now = 120000;
+  const nodeId = 'node-convergence-grace';
   const cache = createCache({
     nodes: [{
-      ...createActiveNode('node-convergence-grace'),
+      ...createActiveNode(nodeId),
       [COLUMN.CONNECTION_STATE]: STATE.CONNECTED,
       [COLUMN.LAST_HEARTBEAT]: now - 4000,
       [COLUMN.READY_LEASE_EXPIRES_AT]: now - 1000,
     }],
-    services: [createMessageGroupService('node-convergence-grace')],
+    services: [createMessageGroupService(nodeId)],
   });
   const readinessService = new ControlPlaneReadinessService({
     nodeId: 'seed-node',
     systemTableCache: cache,
     messageRouter: {
-      getConnectionState(nodeId) {
-        return nodeId === 'node-convergence-grace' ?
+      getConnectionState(targetNodeId) {
+        return targetNodeId === nodeId ?
           STATE.CONNECTED :
           STATE.DISCONNECTED;
       },
     },
     storageAccountingService: createAccountingService({
-      'node-convergence-grace': {
-        nodeId: 'node-convergence-grace',
+      [nodeId]: {
+        nodeId,
         budgetBytes: 1000,
         pressureState: 'normal',
       },
@@ -877,6 +897,8 @@ test('ControlPlaneReadinessService opens provisioning grace during ' +
         return {
           publicationEpoch: 21,
           status: 'ACK_PENDING',
+          requiredAckNodeIds: [nodeId],
+          acknowledgedNodeIds: [],
         };
       },
     },
@@ -884,7 +906,7 @@ test('ControlPlaneReadinessService opens provisioning grace during ' +
   });
 
   const readiness = await readinessService.getNodeReadiness(
-    'node-convergence-grace',
+    nodeId,
   );
 
   t.equal(readiness.dimensions.clusterMemberHealthy, false);

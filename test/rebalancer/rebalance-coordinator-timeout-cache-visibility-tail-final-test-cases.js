@@ -914,6 +914,120 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests
     );
   });
 
+  test('priority REMOVE drain completes when remote removal is already proven',
+    async (t) => {
+      const TEST_LOCAL_NODE_ID = 'node-local-remove-drain';
+      const TEST_REMOTE_TARGET_NODE_ID = 'node-remote-remove-drain';
+      const TEST_PARTITION_ID = 'replica_operations-p1';
+      const TEST_OPERATION_ID = 'op-priority-remove-drain-settle';
+      const TEST_REPLICA_ID = `${TEST_PARTITION_ID}-r4`;
+      const TEST_OPERATION_TYPE_REMOVE = 'REMOVE';
+      const TEST_WORKFLOW_STEP_SENDING = 'SENDING';
+      const TEST_OPERATION_STATUS_PENDING = 'pending';
+      const TEST_ENTITY_TYPE_PARTITION = 'partition';
+      const TEST_COMPLETION_STATE_CONVERGED = 'converged';
+      const TEST_OBSERVATION_STATE_ABSENT = 'absent';
+      const TEST_NULL_VALUE = null;
+      const TEST_ACKNOWLEDGED = true;
+      const TEST_DELIVERY_STATUS_COMPLETED = 'completed';
+      const TEST_MIN_REPLICA_COUNT = 3;
+      const observedReplicaChecks = [];
+      const completedOperationIds = [];
+
+      const coordinator = createCoordinator({
+        nodeId: TEST_LOCAL_NODE_ID,
+        transactionCoordinator: buildTransactionCoordinator(),
+        systemTableCache: {
+          get() {
+            return TEST_NULL_VALUE;
+          },
+          filter() {
+            return [];
+          },
+        },
+        cdcIntegrationService: {
+          async waitForCacheUpdate() {},
+        },
+        messageRouter: {
+          async deliver() {
+            return {
+              acknowledged: TEST_ACKNOWLEDGED,
+              status: TEST_DELIVERY_STATUS_COMPLETED,
+            };
+          },
+        },
+        tablePolicyService: {
+          async getPolicyForPartition() {
+            return {minReplicaCount: TEST_MIN_REPLICA_COUNT};
+          },
+        },
+        enableTimeouts: false,
+      });
+
+      coordinator.initialize();
+      try {
+        const workflowOwner = coordinator.workflowOwner;
+        workflowOwner.repository.isOperationLocallyOwned = () => false;
+        workflowOwner.getPriorityRecoveryPlanningSnapshot = async () => ({});
+        workflowOwner.buildPriorityRecoveryCompletionForOperation = () => ({
+          state: TEST_COMPLETION_STATE_CONVERGED,
+        });
+        workflowOwner.observeStoppingReplicaProgress =
+          async (replicaId, partitionId, targetNodeId) => {
+            observedReplicaChecks.push({
+              replicaId,
+              partitionId,
+              targetNodeId,
+            });
+            return {
+              state: TEST_OBSERVATION_STATE_ABSENT,
+              lifecycleStatus: TEST_NULL_VALUE,
+            };
+          };
+        workflowOwner.completeOperation = async (operation) => {
+          completedOperationIds.push(operation.operationId);
+          return true;
+        };
+
+        const reconciled =
+          await workflowOwner.reconcilePriorityRecoveryOperationDrain({
+            operationId: TEST_OPERATION_ID,
+            type: TEST_OPERATION_TYPE_REMOVE,
+            partitionId: TEST_PARTITION_ID,
+            entityType: TEST_ENTITY_TYPE_PARTITION,
+            entityId: TEST_PARTITION_ID,
+            replicaId: TEST_REPLICA_ID,
+            sourceNodeId: TEST_LOCAL_NODE_ID,
+            targetNodeId: TEST_REMOTE_TARGET_NODE_ID,
+            status: TEST_OPERATION_STATUS_PENDING,
+            workflowStep: TEST_WORKFLOW_STEP_SENDING,
+            completedAt: TEST_NULL_VALUE,
+          });
+
+        t.equal(
+          reconciled,
+          true,
+          'proven priority REMOVE drain should settle without target ownership',
+        );
+        t.same(
+          observedReplicaChecks,
+          [{
+            replicaId: TEST_REPLICA_ID,
+            partitionId: TEST_PARTITION_ID,
+            targetNodeId: TEST_REMOTE_TARGET_NODE_ID,
+          }],
+          'REMOVE drain should observe the replica targeted by the REMOVE row',
+        );
+        t.same(
+          completedOperationIds,
+          [TEST_OPERATION_ID],
+          'remote settlement should complete the stale REMOVE operation',
+        );
+      } finally {
+        await coordinator.shutdown();
+      }
+    });
+
   test('observed progress defers retryable failures back onto the owner lane',
     async (t) => {
       const scheduledTimers = [];

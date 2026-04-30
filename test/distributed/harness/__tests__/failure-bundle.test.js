@@ -7,6 +7,7 @@ import {randomUUID} from 'node:crypto';
 import {ReportWriter} from '../report-writer.js';
 import {writeFailureBundlesForReport} from '../failure-bundle.js';
 import {
+  CONTROL_PLANE_QUIESCENCE_CANDIDATE_WINDOW_RESET_REASON,
   CONTROL_PLANE_QUIESCENCE_REASON,
   CONTROL_PLANE_QUIESCENCE_STATE,
 } from '../control-plane-quiescence-snapshot.js';
@@ -32,11 +33,17 @@ const {
   FAILURE_CLASS_TOPOLOGY_UNSTABLE,
   FAILURE_CLASS_CDC_DEGRADED,
   FAILURE_CLASS_UNKNOWN,
+  ROOT_CAUSE_CLASS_STARTUP,
   PRIORITY_RECOVERY_PROGRESS_REASON_FALLBACK,
+  STABILITY_GATE_BLOCKER_ADMIN_REACHABILITY_REFUSED,
+  STABILITY_GATE_BLOCKER_PUBLICATION_PENDING,
+  STABILITY_GATE_BLOCKER_PUBLICATION_MISSING_ACTIVE_NODE,
+  STABILITY_GATE_BLOCKER_STARTUP_READINESS,
   mergePriorityRecoveryDecisionSnapshots,
 } = FAILURE_BUNDLE_SEGMENT_1;
 const {
   buildPublicationConvergenceSummary,
+  hasPublicationMissingActiveNodeBlocker,
   isStartupReadinessBlocked,
   mergeControlPlaneDiagnostics,
 } = FAILURE_BUNDLE_SEGMENT_4;
@@ -619,7 +626,11 @@ function buildPlaybackActiveGateStageEvent({
   };
 }
 
+const TEST_COUNT_ZERO = 0;
+
 function buildStartupModeWitnessProgress({
+  expectedNodeCount = 2,
+  activeNodeCount = 2,
   snapshotCoverageNodeCount = 0,
   isTimeoutError = true,
   readinessDelay = null,
@@ -630,9 +641,10 @@ function buildStartupModeWitnessProgress({
     'Admin API query timed out for node seed-1 on lane snapshot after 30ms' :
     'metadata_publication_degraded';
   const progress = {
-    expectedNodeCount: 2,
-    activeNodeCount: 2,
-    inactiveNodeCount: 0,
+    expectedNodeCount,
+    activeNodeCount,
+    inactiveNodeCount:
+      Math.max(TEST_COUNT_ZERO, expectedNodeCount - activeNodeCount),
     snapshotCoverageNodeCount,
     snapshotCoverageComplete: false,
     publicationStatus: 'PUBLISHED',
@@ -1974,6 +1986,226 @@ describe('failure-bundle', () => {
       assert.match(
         scenarioBundle.summary.operatorRecommendation,
         POST_ACTIVE_CONVERGENCE_RECOMMENDATION_MATCH,
+      );
+    });
+
+  it('classifies open post-rebalance closure before stale priority recovery evidence',
+    async () => {
+      const REPORT_PATH = join(
+        tempDir,
+        'post-rebalance-closure-owner-report.json',
+      );
+      const SCENARIO_NAME = 'rolling-restart';
+      const CONVERGENCE_TIMEOUT_ERROR =
+        'Convergence timeout after 120000ms. Max over-target: 151321ms.';
+      const CONVERGENCE_TIMEOUT_REASON = 'convergence_timeout';
+      const ROOT_CAUSE_CLASS_TOPOLOGY = 'topology';
+      const PUBLICATION_STATUS_PUBLISHED = 'PUBLISHED';
+      const RECOVERY_PROTOCOL_STATE_STEADY = 'steady_published';
+      const POST_REBALANCE_CLOSURE_STATE_OPEN = 'open';
+      const POST_REBALANCE_CLOSURE_STATE_SOFT_CLOSED = 'soft_closed';
+      const MEMBERSHIP_TRIM_BLOCKER_ID = 'membership_trim_open';
+      const NO_OVER_TARGET_BLOCKER_ID = 'no_over_target_open';
+      const OPERATION_DRAIN_SOFT_CLOSURE_ID =
+        'operation_drain_soft_closed';
+      const MEMBERSHIP_TRIM_DIMENSION = 'membership_trim';
+      const NO_OVER_TARGET_DIMENSION = 'no_over_target';
+      const OPERATION_DRAIN_DIMENSION = 'operation_drain';
+      const MEMBERSHIP_TRIM_REASON = 'published_membership_trim_debt';
+      const OVERTARGET_REASON = 'overtarget_budget_exceeded';
+      const STALE_REPLICA_OPERATIONS_REASON =
+        'ignored_stale_replica_operations';
+      const PRIORITY_RECOVERY_PARTITION_ID = 'replica_operations-p1';
+      const PRIORITY_RECOVERY_PROGRESS_CLASS = 'operation_stalled';
+      const PRIORITY_RECOVERY_SEMANTIC_STATE = 'recovering_in_flight';
+      const SCENARIO_DURATION_MS = 100;
+      const PUBLICATION_EPOCH = 7;
+      const EMPTY_COUNT = 0;
+      const SINGLE_COUNT = 1;
+      const POST_REBALANCE_STATE_SIGNAL =
+        'postRebalanceClosureState=' +
+        POST_REBALANCE_CLOSURE_STATE_OPEN;
+      const POST_REBALANCE_BLOCKER_SIGNAL =
+        'postRebalanceBlocker=' + MEMBERSHIP_TRIM_BLOCKER_ID;
+      const POST_REBALANCE_DIMENSION_SIGNAL =
+        'postRebalanceDimension=' + MEMBERSHIP_TRIM_DIMENSION;
+      const POST_REBALANCE_REASON_SIGNAL =
+        'postRebalanceReason=' + MEMBERSHIP_TRIM_REASON;
+      const POST_REBALANCE_SOFT_CLOSURE_SIGNAL =
+        'postRebalanceSoftClosure=' + OPERATION_DRAIN_SOFT_CLOSURE_ID;
+      const POST_REBALANCE_ACTION_MATCH =
+        /Post-rebalance topology closure remains open/;
+      const POST_REBALANCE_RECOMMENDATION_MATCH =
+        /membership trim debt/;
+      const writer = new ReportWriter(REPORT_PATH);
+      writer.addResult(SCENARIO_NAME, {
+        passed: false,
+        duration: SCENARIO_DURATION_MS,
+        error: CONVERGENCE_TIMEOUT_ERROR,
+        details: {
+          diagnostics: {
+            failure: {
+              rootCauseClass: ROOT_CAUSE_CLASS_TOPOLOGY,
+              dominantReason: CONVERGENCE_TIMEOUT_REASON,
+              reasonCounts: {
+                [CONVERGENCE_TIMEOUT_REASON]: SINGLE_COUNT,
+              },
+            },
+            postRebalanceClosure: {
+              state: POST_REBALANCE_CLOSURE_STATE_OPEN,
+              blockers: [
+                {
+                  id: MEMBERSHIP_TRIM_BLOCKER_ID,
+                  dimension: MEMBERSHIP_TRIM_DIMENSION,
+                  reasonCodes: [MEMBERSHIP_TRIM_REASON],
+                },
+                {
+                  id: NO_OVER_TARGET_BLOCKER_ID,
+                  dimension: NO_OVER_TARGET_DIMENSION,
+                  reasonCodes: [OVERTARGET_REASON],
+                },
+              ],
+              softClosures: [
+                {
+                  id: OPERATION_DRAIN_SOFT_CLOSURE_ID,
+                  dimension: OPERATION_DRAIN_DIMENSION,
+                  reasonCodes: [STALE_REPLICA_OPERATIONS_REASON],
+                },
+              ],
+              dimensions: {
+                [OPERATION_DRAIN_DIMENSION]: {
+                  dimension: OPERATION_DRAIN_DIMENSION,
+                  state: POST_REBALANCE_CLOSURE_STATE_SOFT_CLOSED,
+                  reasonCodes: [STALE_REPLICA_OPERATIONS_REASON],
+                },
+              },
+            },
+            controlPlaneDiagnostics: {
+              hasExplicitPriorityRecoveryObservation: true,
+              publicationConvergence: {
+                publicationEpoch: PUBLICATION_EPOCH,
+                publicationStatus: PUBLICATION_STATUS_PUBLISHED,
+                pendingAckNodeIds: [],
+                pendingAckCount: EMPTY_COUNT,
+                blockedNodeIds: [],
+                blockedNodeCount: EMPTY_COUNT,
+                publicationPending: false,
+                prioritySpreadPending: false,
+                recoveryProtocolState: RECOVERY_PROTOCOL_STATE_STEADY,
+                priorityRecoveryReasonCodes: [],
+                priorityRecoveryProgressClassCount: EMPTY_COUNT,
+                priorityRecoverySemanticStateCount: EMPTY_COUNT,
+                priorityRecoveryBlockedPartitionCount: EMPTY_COUNT,
+                priorityRecoveryUnresolvedPartitionCount: EMPTY_COUNT,
+                priorityRecoveryInvariantFailingIds: [],
+              },
+              priorityRecoveryObservation: {
+                publicationEpoch: PUBLICATION_EPOCH,
+                publicationStatus: PUBLICATION_STATUS_PUBLISHED,
+                pendingAckNodeIds: [],
+                pendingAckCount: EMPTY_COUNT,
+                blockedNodeIds: [],
+                blockedNodeCount: EMPTY_COUNT,
+                publicationPending: false,
+                prioritySpreadPending: false,
+                recoveryProtocolState: RECOVERY_PROTOCOL_STATE_STEADY,
+                priorityRecoveryReasonCodes: [],
+                priorityRecoveryProgressClassIds: [
+                  PRIORITY_RECOVERY_PROGRESS_CLASS,
+                ],
+                priorityRecoveryProgressClassCount: SINGLE_COUNT,
+                priorityRecoverySemanticStateIds: [
+                  PRIORITY_RECOVERY_SEMANTIC_STATE,
+                ],
+                priorityRecoverySemanticStateCount: SINGLE_COUNT,
+                priorityRecoveryBlockedPartitionIds: [
+                  PRIORITY_RECOVERY_PARTITION_ID,
+                ],
+                priorityRecoveryBlockedPartitionCount: SINGLE_COUNT,
+                priorityRecoveryUnresolvedPartitionIds: [
+                  PRIORITY_RECOVERY_PARTITION_ID,
+                ],
+                priorityRecoveryUnresolvedPartitionCount: SINGLE_COUNT,
+              },
+            },
+          },
+        },
+      });
+      await writer.write();
+
+      const {scenarioBundles} = await writeFailureBundlesForReport({
+        scenarios: JSON.parse(
+          await readFile(REPORT_PATH, UTF8_ENCODING),
+        ).scenarios,
+        reportOutputPath: REPORT_PATH,
+        outputDir,
+        workspaceRoot: tempDir,
+      });
+      const scenarioBundle = JSON.parse(
+        await readFile(
+          resolve(tempDir, scenarioBundles[0].links.jsonPath),
+          UTF8_ENCODING,
+        ),
+      );
+      const failureClassification =
+        scenarioBundle.summary.failureClassification;
+
+      assert.equal(
+        failureClassification.failureClass,
+        FAILURE_CLASS_TOPOLOGY_UNSTABLE,
+      );
+      assert.equal(
+        failureClassification.rootCauseClass,
+        ROOT_CAUSE_CLASS_TOPOLOGY,
+      );
+      assert.equal(
+        failureClassification.dominantReason,
+        CONVERGENCE_TIMEOUT_REASON,
+      );
+      assert.notEqual(
+        failureClassification.failureClass,
+        PRIORITY_RECOVERY_PROGRESS_REASON_FALLBACK,
+      );
+      assert.ok(
+        failureClassification.signals.includes(
+          POST_REBALANCE_STATE_SIGNAL,
+        ),
+      );
+      assert.ok(
+        failureClassification.signals.includes(
+          POST_REBALANCE_BLOCKER_SIGNAL,
+        ),
+      );
+      assert.ok(
+        failureClassification.signals.includes(
+          POST_REBALANCE_DIMENSION_SIGNAL,
+        ),
+      );
+      assert.ok(
+        failureClassification.signals.includes(
+          POST_REBALANCE_REASON_SIGNAL,
+        ),
+      );
+      assert.ok(
+        failureClassification.signals.includes(
+          POST_REBALANCE_SOFT_CLOSURE_SIGNAL,
+        ),
+      );
+      assert.equal(
+        scenarioBundle.summary.postRebalanceClosure.state,
+        POST_REBALANCE_CLOSURE_STATE_OPEN,
+      );
+      assert.equal(
+        scenarioBundle.diagnostics.postRebalanceClosure.state,
+        POST_REBALANCE_CLOSURE_STATE_OPEN,
+      );
+      assert.match(
+        scenarioBundle.summary.failureAction,
+        POST_REBALANCE_ACTION_MATCH,
+      );
+      assert.match(
+        scenarioBundle.summary.operatorRecommendation,
+        POST_REBALANCE_RECOMMENDATION_MATCH,
       );
     });
 
@@ -4614,6 +4846,370 @@ describe('failure-bundle', () => {
   );
 
   it(
+    'ignores stale restart-recovery priority spread state after closure',
+    async () => {
+      const RESTART_RECOVERY_REPORT_PATH = join(
+        tempDir,
+        'restart-recovery-stale-priority-spread-report.json',
+      );
+      const SCENARIO_NAME = 'rolling-restart';
+      const RESTART_RECOVERY_ERROR =
+        'Restarted node did not become recovery-ready within 120000ms';
+      const STALE_STARTUP_REASON = 'snapshot_reachability_timeout';
+      const ROOT_CAUSE_CLASS_STARTUP = 'startup';
+      const FAILURE_BARRIER_PHASE = 'restart_recovery';
+      const FAILURE_BARRIER_REASON = 'startup_readiness_blocked';
+      const STALE_PRIORITY_SPREAD_REASON = 'priority_spread_pending';
+      const FAILURE_BARRIER_SIGNAL =
+        'failureBarrier=' + FAILURE_BARRIER_PHASE;
+      const FAILURE_BARRIER_REASON_SIGNAL =
+        'failureBarrierReason=' + FAILURE_BARRIER_REASON;
+      const STALE_PRIORITY_SPREAD_SIGNAL =
+        'failureBarrierReason=' + STALE_PRIORITY_SPREAD_REASON;
+      const PUBLICATION_STATUS_PUBLISHED = 'PUBLISHED';
+      const RECOVERY_PROTOCOL_STATE_PRIORITY_SPREAD =
+        STALE_PRIORITY_SPREAD_REASON;
+      const PUBLICATION_EPOCH = 4;
+      const EXPECTED_NODE_COUNT = 5;
+      const EMPTY_COUNT = 0;
+      const SINGLE_COUNT = 1;
+      const SCENARIO_DURATION_MS = 100;
+      const writer = new ReportWriter(RESTART_RECOVERY_REPORT_PATH);
+      writer.addResult(SCENARIO_NAME, {
+        passed: false,
+        duration: SCENARIO_DURATION_MS,
+        error: RESTART_RECOVERY_ERROR,
+        details: {
+          diagnostics: {
+            failure: {
+              rootCauseClass: ROOT_CAUSE_CLASS_STARTUP,
+              dominantReason: STALE_STARTUP_REASON,
+              reasonCounts: {
+                [STALE_STARTUP_REASON]: SINGLE_COUNT,
+              },
+            },
+            controlPlaneDiagnostics: {
+              hasExplicitPriorityRecoveryObservation: true,
+              priorityRecoveryObservation: {
+                publicationEpoch: PUBLICATION_EPOCH,
+                publicationStatus: PUBLICATION_STATUS_PUBLISHED,
+                pendingAckNodeIds: [],
+                pendingAckCount: EMPTY_COUNT,
+                blockedNodeIds: [],
+                blockedNodeCount: EMPTY_COUNT,
+                publicationPending: false,
+                prioritySpreadPending: false,
+                recoveryProtocolState:
+                  RECOVERY_PROTOCOL_STATE_PRIORITY_SPREAD,
+                priorityRecoveryReasonCodes: [],
+                priorityPartitionSummary: {
+                  satisfied: true,
+                  requiredDistinctNodeCount: EMPTY_COUNT,
+                  readyEligibleNodeCount: EXPECTED_NODE_COUNT,
+                  totalPriorityPartitionCount: EMPTY_COUNT,
+                  blockedPartitionCount: EMPTY_COUNT,
+                  largestSpreadGap: EMPTY_COUNT,
+                  totalSpreadGap: EMPTY_COUNT,
+                  missingPartitionIds: [],
+                  blockedPartitions: [],
+                },
+                priorityRecoveryProgressClassIds: [],
+                priorityRecoveryProgressClassCount: EMPTY_COUNT,
+                priorityRecoverySemanticStateIds: [],
+                priorityRecoverySemanticStateCount: EMPTY_COUNT,
+                priorityRecoveryBlockedPartitionIds: [],
+                priorityRecoveryBlockedPartitionCount: EMPTY_COUNT,
+                priorityRecoveryUnresolvedPartitionIds: [],
+                priorityRecoveryUnresolvedPartitionCount: EMPTY_COUNT,
+              },
+              activeGateProgress: {
+                expectedNodeCount: EXPECTED_NODE_COUNT,
+                activeNodeCount: EXPECTED_NODE_COUNT,
+                inactiveNodeCount: EMPTY_COUNT,
+                snapshotCoverageNodeCount: EXPECTED_NODE_COUNT,
+                snapshotCoverageComplete: true,
+                publicationStatus: PUBLICATION_STATUS_PUBLISHED,
+                recoveryProtocolState:
+                  RECOVERY_PROTOCOL_STATE_PRIORITY_SPREAD,
+                pendingAckCount: EMPTY_COUNT,
+                missingPublishedCount: EMPTY_COUNT,
+                gateReasonCount: EMPTY_COUNT,
+                gateReasons: [],
+                prioritySpreadSatisfied: true,
+              },
+            },
+          },
+        },
+      });
+      await writer.write();
+
+      const {scenarioBundles} = await writeFailureBundlesForReport({
+        scenarios: JSON.parse(
+          await readFile(RESTART_RECOVERY_REPORT_PATH, UTF8_ENCODING),
+        ).scenarios,
+        reportOutputPath: RESTART_RECOVERY_REPORT_PATH,
+        outputDir: tempDir,
+        workspaceRoot: tempDir,
+      });
+      const scenarioBundle = JSON.parse(
+        await readFile(
+          resolve(tempDir, scenarioBundles[0].links.jsonPath),
+          UTF8_ENCODING,
+        ),
+      );
+      const failureClassification =
+        scenarioBundle.summary.failureClassification;
+
+      assert.equal(
+        failureClassification.failureClass,
+        FAILURE_CLASS_STARTUP_RECOVERY_BLOCKED,
+      );
+      assert.equal(
+        failureClassification.rootCauseClass,
+        ROOT_CAUSE_CLASS_STARTUP,
+      );
+      assert.equal(
+        failureClassification.dominantReason,
+        FAILURE_BARRIER_REASON,
+      );
+      assert.ok(
+        failureClassification.signals.includes(FAILURE_BARRIER_SIGNAL),
+      );
+      assert.ok(
+        failureClassification.signals.includes(
+          FAILURE_BARRIER_REASON_SIGNAL,
+        ),
+      );
+      assert.equal(
+        failureClassification.signals.includes(
+          STALE_PRIORITY_SPREAD_SIGNAL,
+        ),
+        false,
+      );
+    },
+  );
+
+  it(
+    'keeps publication protocol open while stale priority-spread state has ACK debt',
+    () => {
+      const PUBLICATION_STATUS_ACK_PENDING = 'ACK_PENDING';
+      const RECOVERY_PROTOCOL_STATE_PRIORITY_SPREAD =
+        'priority_spread_pending';
+      const RECOVERY_PROTOCOL_STATE_PUBLICATION_PENDING =
+        'publication_pending';
+      const PUBLICATION_EPOCH = 4;
+      const EXPECTED_NODE_COUNT = 5;
+      const ACK_DEBT_COUNT = 1;
+      const EMPTY_COUNT = 0;
+      const ACK_NODE_ID = 'node-ack-pending';
+
+      const publicationConvergence = buildPublicationConvergenceSummary({
+        hasExplicitPriorityRecoveryObservation: true,
+        priorityRecoveryObservation: {
+          publicationEpoch: PUBLICATION_EPOCH,
+          publicationStatus: PUBLICATION_STATUS_ACK_PENDING,
+          pendingAckNodeIds: [ACK_NODE_ID],
+          pendingAckCount: ACK_DEBT_COUNT,
+          blockedNodeIds: [],
+          blockedNodeCount: EMPTY_COUNT,
+          publicationPending: true,
+          prioritySpreadPending: false,
+          recoveryProtocolState: RECOVERY_PROTOCOL_STATE_PRIORITY_SPREAD,
+          priorityRecoveryReasonCodes: [],
+          priorityPartitionSummary: {
+            satisfied: true,
+            requiredDistinctNodeCount: EMPTY_COUNT,
+            readyEligibleNodeCount: EXPECTED_NODE_COUNT,
+            totalPriorityPartitionCount: EMPTY_COUNT,
+            blockedPartitionCount: EMPTY_COUNT,
+            largestSpreadGap: EMPTY_COUNT,
+            totalSpreadGap: EMPTY_COUNT,
+            missingPartitionIds: [],
+            blockedPartitions: [],
+          },
+          priorityRecoveryProgressClassIds: [],
+          priorityRecoveryProgressClassCount: EMPTY_COUNT,
+          priorityRecoverySemanticStateIds: [],
+          priorityRecoverySemanticStateCount: EMPTY_COUNT,
+          priorityRecoveryBlockedPartitionIds: [],
+          priorityRecoveryBlockedPartitionCount: EMPTY_COUNT,
+          priorityRecoveryUnresolvedPartitionIds: [],
+          priorityRecoveryUnresolvedPartitionCount: EMPTY_COUNT,
+        },
+      });
+
+      assert.equal(publicationConvergence.pendingAckCount, ACK_DEBT_COUNT);
+      assert.equal(publicationConvergence.publicationPending, true);
+      assert.equal(publicationConvergence.prioritySpreadPending, false);
+      assert.equal(
+        publicationConvergence.recoveryProtocolState,
+        RECOVERY_PROTOCOL_STATE_PUBLICATION_PENDING,
+      );
+    },
+  );
+
+  it(
+    'classifies restart recovery admin refusal as the terminal owner state',
+    async () => {
+      const RESTART_RECOVERY_REPORT_PATH = join(
+        tempDir,
+        'restart-recovery-admin-refused-report.json',
+      );
+      const SCENARIO_NAME = 'rolling-restart';
+      const RESTARTED_NODE_ID = '11601fe0-72d6-5853-8590-ec2881853e72';
+      const FAILURE_BARRIER_PHASE = 'restart_recovery';
+      const FAILURE_BARRIER_SIGNAL =
+        'failureBarrier=' + FAILURE_BARRIER_PHASE;
+      const ADMIN_REFUSED_SIGNAL =
+        'failureBarrierReason=' +
+        STABILITY_GATE_BLOCKER_ADMIN_REACHABILITY_REFUSED;
+      const STALE_PRIORITY_SPREAD_SIGNAL =
+        'failureBarrierReason=priority_spread_pending';
+      const PUBLICATION_STATUS_PUBLISHED = 'PUBLISHED';
+      const RECOVERY_PROTOCOL_STATE_PRIORITY_SPREAD =
+        'priority_spread_pending';
+      const RECOVERY_PROTOCOL_STATE_STEADY = 'steady_published';
+      const PUBLICATION_EPOCH = 4;
+      const EXPECTED_NODE_COUNT = 5;
+      const EMPTY_COUNT = 0;
+      const SCENARIO_DURATION_MS = 100;
+      const RESTART_RECOVERY_ERROR =
+        'Restarted node did not become recovery-ready within 120000ms ' +
+        'for node ' +
+        RESTARTED_NODE_ID +
+        ' (reachable=true, ready=false, adminReady=false, ' +
+        'controlPlaneRecoveryReady=false, ' +
+        'publishedControlPlaneEpoch=unknown, ' +
+        'expectedPublicationEpoch=none, readinessPhase=INIT, ' +
+        'readinessStage=traffic_ready, readinessStageRank=5, ' +
+        'readinessReasons=none, recoveryStage=unknown, ' +
+        'bootstrapJoinProjectionBlocker=none, ' +
+        'bootstrapJoinProjectionRule=init_priority_bypass, ' +
+        'reachableBy=bootstrap_health, lastError=Admin API query failed ' +
+        'for node ' +
+        RESTARTED_NODE_ID +
+        ' on lane probe: connect ECONNREFUSED 172.19.0.4:8081)';
+      const writer = new ReportWriter(RESTART_RECOVERY_REPORT_PATH);
+      writer.addResult(SCENARIO_NAME, {
+        passed: false,
+        duration: SCENARIO_DURATION_MS,
+        error: RESTART_RECOVERY_ERROR,
+        details: {
+          diagnostics: {
+            controlPlaneDiagnostics: {
+              hasExplicitPriorityRecoveryObservation: true,
+              priorityRecoveryObservation: {
+                publicationEpoch: PUBLICATION_EPOCH,
+                publicationStatus: PUBLICATION_STATUS_PUBLISHED,
+                pendingAckNodeIds: [],
+                pendingAckCount: EMPTY_COUNT,
+                blockedNodeIds: [],
+                blockedNodeCount: EMPTY_COUNT,
+                publicationPending: false,
+                prioritySpreadPending: false,
+                recoveryProtocolState:
+                  RECOVERY_PROTOCOL_STATE_PRIORITY_SPREAD,
+                priorityRecoveryReasonCodes: [],
+                priorityPartitionSummary: {
+                  satisfied: true,
+                  requiredDistinctNodeCount: 3,
+                  readyEligibleNodeCount: EXPECTED_NODE_COUNT,
+                  totalPriorityPartitionCount: EXPECTED_NODE_COUNT,
+                  blockedPartitionCount: EMPTY_COUNT,
+                  largestSpreadGap: EMPTY_COUNT,
+                  totalSpreadGap: EMPTY_COUNT,
+                  missingPartitionIds: [],
+                  blockedPartitions: [],
+                },
+                priorityRecoveryProgressClassIds: [],
+                priorityRecoveryProgressClassCount: EMPTY_COUNT,
+                priorityRecoverySemanticStateIds: [],
+                priorityRecoverySemanticStateCount: EMPTY_COUNT,
+                priorityRecoveryBlockedPartitionIds: [],
+                priorityRecoveryBlockedPartitionCount: EMPTY_COUNT,
+                priorityRecoveryUnresolvedPartitionIds: [],
+                priorityRecoveryUnresolvedPartitionCount: EMPTY_COUNT,
+              },
+            },
+          },
+        },
+      });
+      await writer.write();
+
+      const {scenarioBundles} = await writeFailureBundlesForReport({
+        scenarios: JSON.parse(
+          await readFile(RESTART_RECOVERY_REPORT_PATH, UTF8_ENCODING),
+        ).scenarios,
+        reportOutputPath: RESTART_RECOVERY_REPORT_PATH,
+        outputDir: tempDir,
+        workspaceRoot: tempDir,
+      });
+      const scenarioBundle = JSON.parse(
+        await readFile(
+          resolve(tempDir, scenarioBundles[0].links.jsonPath),
+          UTF8_ENCODING,
+        ),
+      );
+      const failureClassification =
+        scenarioBundle.summary.failureClassification;
+      const restartRecoveryGate =
+        scenarioBundle.summary.stabilityGates.restart_recovery;
+
+      assert.equal(
+        scenarioBundle.summary.dominantReason,
+        STABILITY_GATE_BLOCKER_ADMIN_REACHABILITY_REFUSED,
+      );
+      assert.equal(
+        failureClassification.failureClass,
+        FAILURE_CLASS_STARTUP_RECOVERY_BLOCKED,
+      );
+      assert.equal(
+        failureClassification.dominantReason,
+        STABILITY_GATE_BLOCKER_ADMIN_REACHABILITY_REFUSED,
+      );
+      assert.ok(
+        failureClassification.signals.includes(FAILURE_BARRIER_SIGNAL),
+      );
+      assert.ok(
+        failureClassification.signals.includes(ADMIN_REFUSED_SIGNAL),
+      );
+      assert.equal(
+        failureClassification.signals.includes(STALE_PRIORITY_SPREAD_SIGNAL),
+        false,
+      );
+      assert.equal(
+        scenarioBundle.diagnostics.failure.failureBarrier
+          .terminalRecoveryReadiness.ownerState,
+        STABILITY_GATE_BLOCKER_ADMIN_REACHABILITY_REFUSED,
+      );
+      assert.equal(
+        scenarioBundle.diagnostics.failure.failureBarrier
+          .terminalRecoveryReadiness.nodeId,
+        RESTARTED_NODE_ID,
+      );
+      assert.equal(restartRecoveryGate.status, 'open');
+      assert.equal(
+        restartRecoveryGate.blockers.includes(
+          STABILITY_GATE_BLOCKER_ADMIN_REACHABILITY_REFUSED,
+        ),
+        true,
+      );
+      assert.equal(
+        restartRecoveryGate.evidence.terminalRecoveryReadiness.ownerState,
+        STABILITY_GATE_BLOCKER_ADMIN_REACHABILITY_REFUSED,
+      );
+      assert.equal(
+        scenarioBundle.publicationConvergence.recoveryProtocolState,
+        RECOVERY_PROTOCOL_STATE_STEADY,
+      );
+      assert.equal(
+        scenarioBundle.publicationConvergence.prioritySpreadPending,
+        false,
+      );
+    },
+  );
+
+  it(
     'uses closed best-progress publication evidence when the terminal snapshot probe is degraded',
     () => {
       const EXPECTED_NODE_COUNT = 5;
@@ -5263,6 +5859,10 @@ describe('failure-bundle', () => {
       const OPERATION_EVIDENCE_PARTITION_ID = 'control_plane_publications-p1';
       const OPERATION_EVIDENCE_OPERATION_ID =
         'op-priority-operation-evidence';
+      const OPERATION_EVIDENCE_PROGRESS_NEXT_ACTION = 'wait';
+      const OPERATION_EVIDENCE_WORKFLOW_PHASE = 'target_creation';
+      const OPERATION_EVIDENCE_STEP_AGE_MS = 500;
+      const OPERATION_EVIDENCE_STEP_TIMEOUT_MS = 30000;
       const writer = new ReportWriter(OPERATION_EVIDENCE_REPORT_PATH);
       writer.addResult('node-join-under-load', {
         passed: false,
@@ -5292,13 +5892,28 @@ describe('failure-bundle', () => {
                       updatedAtMs: 1500,
                     },
                   },
+                  conditions: {
+                    pressure: {
+                      pressureState: 'none',
+                    },
+                  },
+                  actuation: {
+                    state: 'dispatched',
+                    owner: 'operation_workflow_owner',
+                  },
                   progress: {
                     contractState: 'pending',
+                    nextAction: OPERATION_EVIDENCE_PROGRESS_NEXT_ACTION,
                     currentOwner: 'operation_workflow_owner',
                     nextRequiredAction: 'wait_for_operation_progress',
                     blockingBoundary: 'workflow_progress',
                     waitMode: 'event_driven',
+                    workflowProgressPhaseId:
+                      OPERATION_EVIDENCE_WORKFLOW_PHASE,
+                    stepAgeMs: OPERATION_EVIDENCE_STEP_AGE_MS,
+                    stepTimeoutMs: OPERATION_EVIDENCE_STEP_TIMEOUT_MS,
                     lastProgressAtMs: 1500,
+                    evidenceSourceIds: ['operation_context'],
                   },
                 }],
               },
@@ -5332,6 +5947,46 @@ describe('failure-bundle', () => {
         scenarioBundle.publicationConvergence.priorityRecoveryProgressSummary
           .dominantWitness.operationIds,
         [OPERATION_EVIDENCE_OPERATION_ID],
+      );
+      assert.equal(
+        scenarioBundle.publicationConvergence
+          .priorityRecoveryPartitionWitnesses[0].progressContractState,
+        'pending',
+      );
+      assert.equal(
+        scenarioBundle.publicationConvergence
+          .priorityRecoveryPartitionWitnesses[0].progressNextAction,
+        OPERATION_EVIDENCE_PROGRESS_NEXT_ACTION,
+      );
+      assert.equal(
+        scenarioBundle.publicationConvergence
+          .priorityRecoveryPartitionWitnesses[0].actuationState,
+        'dispatched',
+      );
+      assert.equal(
+        scenarioBundle.publicationConvergence
+          .priorityRecoveryPartitionWitnesses[0].currentOwner,
+        'operation_workflow_owner',
+      );
+      assert.equal(
+        scenarioBundle.publicationConvergence
+          .priorityRecoveryPartitionWitnesses[0].nextRequiredAction,
+        'wait_for_operation_progress',
+      );
+      assert.equal(
+        scenarioBundle.publicationConvergence
+          .priorityRecoveryPartitionWitnesses[0].workflowProgressPhaseId,
+        OPERATION_EVIDENCE_WORKFLOW_PHASE,
+      );
+      assert.equal(
+        scenarioBundle.publicationConvergence
+          .priorityRecoveryPartitionWitnesses[0].stepAgeMs,
+        OPERATION_EVIDENCE_STEP_AGE_MS,
+      );
+      assert.equal(
+        scenarioBundle.publicationConvergence
+          .priorityRecoveryProgressSummary.dominantWitness.currentOwner,
+        'operation_workflow_owner',
       );
     },
   );
@@ -5795,6 +6450,110 @@ describe('failure-bundle', () => {
   );
 
   it(
+    'classifies pending quiescence stable window from owner snapshot',
+    async () => {
+      const SCENARIO_NAME = 'rolling-restart';
+      const ROOT_CAUSE_CLASS_TOPOLOGY = 'topology';
+      const CONTROL_PLANE_QUIESCENCE_ERROR =
+        'Control plane did not quiesce within 120000ms';
+      const QUIESCENCE_STATE_SIGNAL =
+        'quiescenceState=' +
+        CONTROL_PLANE_QUIESCENCE_STATE.QUIESCENCE_CANDIDATE;
+      const QUIESCENCE_CANDIDATE_WINDOW_RESET_SIGNAL =
+        'quiescenceCandidateWindowReset=' +
+        CONTROL_PLANE_QUIESCENCE_CANDIDATE_WINDOW_RESET_REASON
+          .OPERATION_DRAIN_PROGRESSING;
+      const SCENARIO_DURATION_MS = 100;
+      const EMPTY_ELAPSED_MS = 0;
+      const IN_FLIGHT_COUNT = 3;
+      const EFFECTIVE_IN_FLIGHT_COUNT = 0;
+      const STALE_IN_FLIGHT_COUNT = IN_FLIGHT_COUNT;
+      const scenarios = [{
+        scenario: SCENARIO_NAME,
+        passed: false,
+        duration: SCENARIO_DURATION_MS,
+        error: CONTROL_PLANE_QUIESCENCE_ERROR,
+        details: {
+          diagnostics: {
+            quiescence: {
+              state:
+                CONTROL_PLANE_QUIESCENCE_STATE.QUIESCENCE_CANDIDATE,
+              canonicalBlocker: null,
+              reasonCodes: [],
+              reasons: [],
+              stableElapsedMs: EMPTY_ELAPSED_MS,
+              leaderQuietElapsedMs: EMPTY_ELAPSED_MS,
+              inFlightCount: IN_FLIGHT_COUNT,
+              effectiveInFlightCount: EFFECTIVE_IN_FLIGHT_COUNT,
+              staleInFlightCount: STALE_IN_FLIGHT_COUNT,
+              candidateWindowReset: {
+                reason:
+                  CONTROL_PLANE_QUIESCENCE_CANDIDATE_WINDOW_RESET_REASON
+                    .OPERATION_DRAIN_PROGRESSING,
+                state:
+                  CONTROL_PLANE_QUIESCENCE_STATE.OPERATION_DRAIN_PROGRESSING,
+                canonicalBlocker:
+                  CONTROL_PLANE_QUIESCENCE_REASON
+                    .REPLICA_OPERATIONS_IN_FLIGHT,
+                reasonCodes: [
+                  CONTROL_PLANE_QUIESCENCE_REASON
+                    .REPLICA_OPERATIONS_IN_FLIGHT,
+                ],
+                reasons: [],
+                observedAtMs: SCENARIO_DURATION_MS,
+              },
+            },
+          },
+        },
+      }];
+
+      const {scenarioBundles} = await writeFailureBundlesForReport({
+        scenarios,
+        reportOutputPath: reportPath,
+        outputDir: tempDir,
+        workspaceRoot: tempDir,
+      });
+      const scenarioBundle = JSON.parse(
+        await readFile(
+          resolve(tempDir, scenarioBundles[0].links.jsonPath),
+          UTF8_ENCODING,
+        ),
+      );
+      const failureClassification =
+        scenarioBundle.summary.failureClassification;
+
+      assert.equal(
+        scenarioBundle.summary.dominantReason,
+        CONTROL_PLANE_QUIESCENCE_STATE.QUIESCENCE_CANDIDATE,
+      );
+      assert.equal(
+        scenarioBundle.summary.rootCauseClass,
+        ROOT_CAUSE_CLASS_TOPOLOGY,
+      );
+      assert.equal(
+        failureClassification.failureClass,
+        FAILURE_CLASS_TOPOLOGY_UNSTABLE,
+      );
+      assert.equal(
+        failureClassification.dominantReason,
+        CONTROL_PLANE_QUIESCENCE_STATE.QUIESCENCE_CANDIDATE,
+      );
+      assert.ok(
+        failureClassification.signals.includes(QUIESCENCE_STATE_SIGNAL),
+      );
+      assert.ok(
+        failureClassification.signals.includes(
+          QUIESCENCE_CANDIDATE_WINDOW_RESET_SIGNAL,
+        ),
+      );
+      assert.equal(
+        scenarioBundle.diagnostics.failure.quiescence.effectiveInFlightCount,
+        EFFECTIVE_IN_FLIGHT_COUNT,
+      );
+    },
+  );
+
+  it(
     'normalizes active-gate publication debt over stale top-level counts',
     () => {
       const PUBLICATION_EPOCH = 91;
@@ -5845,6 +6604,290 @@ describe('failure-bundle', () => {
       assert.deepEqual(
         publicationConvergence.missingPublishedNodeIds,
         [MISSING_NODE_ONE, MISSING_NODE_TWO],
+      );
+    },
+  );
+
+  it(
+    'ignores stale best-progress missing publication evidence when current active-gate progress is clean',
+    () => {
+      const PUBLICATION_EPOCH = 92;
+      const PUBLICATION_STATUS_PUBLISHED = 'PUBLISHED';
+      const RECOVERY_PROTOCOL_STEADY_PUBLISHED = 'steady_published';
+      const MISSING_NODE_ID = 'stale-missing-node';
+      const PUBLISHED_NODE_ID = 'published-node';
+      const MISSING_NODE_REASON =
+        STABILITY_GATE_BLOCKER_PUBLICATION_MISSING_ACTIVE_NODE + '=' +
+        MISSING_NODE_ID;
+      const ACTIVE_GATE_MISSING_BLOCKER = 'publication_gate=' +
+        MISSING_NODE_REASON;
+      const ONE_COUNT = 1;
+      const ZERO_COUNT = 0;
+      const controlPlane = {
+        publicationConvergence: {
+          publicationEpoch: PUBLICATION_EPOCH,
+          publicationStatus: PUBLICATION_STATUS_PUBLISHED,
+          pendingAckNodeIds: [],
+          pendingAckCount: ZERO_COUNT,
+          missingPublishedNodeIds: [],
+          missingPublishedCount: ZERO_COUNT,
+          publicationPending: false,
+        },
+        priorityRecoveryObservation: {
+          publicationEpoch: PUBLICATION_EPOCH,
+          publicationStatus: PUBLICATION_STATUS_PUBLISHED,
+          pendingAckNodeIds: [],
+          pendingAckCount: ZERO_COUNT,
+          missingPublishedNodeIds: [],
+          missingPublishedCount: ZERO_COUNT,
+          publicationPending: false,
+          recoveryProtocolState: RECOVERY_PROTOCOL_STEADY_PUBLISHED,
+          activeGate: {
+            progress: {
+              publicationEpoch: PUBLICATION_EPOCH,
+              publicationStatus: PUBLICATION_STATUS_PUBLISHED,
+              recoveryProtocolState: RECOVERY_PROTOCOL_STEADY_PUBLISHED,
+              selectedPublishedActiveNodeIds: [PUBLISHED_NODE_ID],
+              selectedMissingPublishedNodeIds: [],
+              pendingAckCount: ZERO_COUNT,
+              missingPublishedCount: ZERO_COUNT,
+              gateReasons: [],
+              blockers: [],
+            },
+            bestProgress: {
+              publicationEpoch: PUBLICATION_EPOCH,
+              publicationStatus: PUBLICATION_STATUS_PUBLISHED,
+              recoveryProtocolState: RECOVERY_PROTOCOL_STEADY_PUBLISHED,
+              selectedPublishedActiveNodeIds: [PUBLISHED_NODE_ID],
+              selectedMissingPublishedNodeIds: [MISSING_NODE_ID],
+              pendingAckCount: ZERO_COUNT,
+              missingPublishedCount: ONE_COUNT,
+              gateReasons: [MISSING_NODE_REASON],
+              blockers: [ACTIVE_GATE_MISSING_BLOCKER],
+            },
+          },
+        },
+      };
+
+      const publicationConvergence =
+        buildPublicationConvergenceSummary(controlPlane);
+
+      assert.equal(
+        publicationConvergence.missingPublishedCount,
+        ZERO_COUNT,
+      );
+      assert.deepEqual(publicationConvergence.missingPublishedNodeIds, []);
+      assert.deepEqual(
+        publicationConvergence.publicationConvergenceGateReasons,
+        [],
+      );
+      assert.equal(
+        hasPublicationMissingActiveNodeBlocker(publicationConvergence),
+        false,
+      );
+    },
+  );
+
+  it(
+    'classifies published active missing-node owner over stale priority recovery vocabulary',
+    async () => {
+      const SCENARIO_NAME = 'rolling-restart';
+      const PUBLICATION_STATUS_PUBLISHED = 'PUBLISHED';
+      const RECOVERY_PROTOCOL_STEADY_PUBLISHED = 'steady_published';
+      const ACTIVE_GATE_MODE_LOAD = 'load';
+      const ACTIVE_GATE_STATE_STALLED = 'stalled';
+      const GENERIC_PUBLICATION_REASON = 'publication_epoch_pending';
+      const MISSING_NODE_ID = 'node-missing-published';
+      const PUBLISHED_NODE_ID = 'node-published';
+      const SELECTED_SNAPSHOT_NODE_ID = 'node-snapshot';
+      const MISSING_NODE_REASON =
+        STABILITY_GATE_BLOCKER_PUBLICATION_MISSING_ACTIVE_NODE + '=' +
+        MISSING_NODE_ID;
+      const ACTIVE_GATE_INACTIVE_BLOCKER = 'inactive_nodes=5';
+      const ACTIVE_GATE_COVERAGE_BLOCKER = 'snapshot_coverage=4/5';
+      const ACTIVE_GATE_MISSING_BLOCKER = 'publication_gate=' +
+        MISSING_NODE_REASON;
+      const FAILURE_SIGNAL_MISSING_COUNT = 'missingPublishedCount=1';
+      const FAILURE_SIGNAL_MISSING_NODE =
+        'missingPublishedNodeIds=' + MISSING_NODE_ID;
+      const PUBLICATION_EPOCH = 25;
+      const EXPECTED_NODE_COUNT = 5;
+      const SNAPSHOT_COVERAGE_COUNT = 4;
+      const ONE_COUNT = 1;
+      const ZERO_COUNT = 0;
+      const scenarios = [{
+        scenario: SCENARIO_NAME,
+        passed: false,
+        error: 'Cluster ACTIVE wait stalled with no meaningful progress',
+        details: {
+          diagnostics: {
+            failure: {
+              rootCauseClass: ROOT_CAUSE_CLASS_STARTUP,
+              dominantReason:
+                CONTROL_PLANE_READINESS_REASON
+                  .PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
+              reasonCounts: {
+                [CONTROL_PLANE_READINESS_REASON
+                  .PRIORITY_CONTROL_PLANE_RECOVERY_PENDING]: ONE_COUNT,
+                [GENERIC_PUBLICATION_REASON]: ONE_COUNT,
+              },
+            },
+            controlPlaneDiagnostics: {
+              hasExplicitPriorityRecoveryObservation: true,
+              priorityRecoveryObservation: {
+                publicationEpoch: PUBLICATION_EPOCH,
+                publicationStatus: PUBLICATION_STATUS_PUBLISHED,
+                pendingAckNodeIds: [],
+                pendingAckCount: ZERO_COUNT,
+                blockedNodeIds: [],
+                blockedNodeCount: ZERO_COUNT,
+                missingPublishedNodeIds: [MISSING_NODE_ID],
+                missingPublishedCount: ONE_COUNT,
+                publicationPending: true,
+                prioritySpreadPending: false,
+                recoveryProtocolState: RECOVERY_PROTOCOL_STEADY_PUBLISHED,
+                priorityRecoveryReasonCodes: [GENERIC_PUBLICATION_REASON],
+                publicationConvergenceGateReasons: [
+                  GENERIC_PUBLICATION_REASON,
+                  MISSING_NODE_REASON,
+                ],
+                priorityPartitionSummary: {
+                  satisfied: true,
+                  requiredDistinctNodeCount: EXPECTED_NODE_COUNT,
+                  readyEligibleNodeCount: SNAPSHOT_COVERAGE_COUNT,
+                  totalPriorityPartitionCount: EXPECTED_NODE_COUNT,
+                  blockedPartitionCount: ZERO_COUNT,
+                  largestSpreadGap: ZERO_COUNT,
+                  totalSpreadGap: ZERO_COUNT,
+                  missingPartitionIds: [],
+                  blockedPartitions: [],
+                },
+              },
+              activeGate: {
+                mode: ACTIVE_GATE_MODE_LOAD,
+                state: ACTIVE_GATE_STATE_STALLED,
+                ready: false,
+                progress: {
+                  expectedNodeCount: EXPECTED_NODE_COUNT,
+                  activeNodeCount: ZERO_COUNT,
+                  inactiveNodeCount: EXPECTED_NODE_COUNT,
+                  snapshotCoverageNodeCount: SNAPSHOT_COVERAGE_COUNT,
+                  snapshotCoverageComplete: false,
+                  publicationStatus: PUBLICATION_STATUS_PUBLISHED,
+                  publicationEpoch: PUBLICATION_EPOCH,
+                  recoveryProtocolState: RECOVERY_PROTOCOL_STEADY_PUBLISHED,
+                  selectedSnapshotNodeId: SELECTED_SNAPSHOT_NODE_ID,
+                  selectedPublishedActiveNodeIds: [PUBLISHED_NODE_ID],
+                  selectedMissingPublishedNodeIds: [MISSING_NODE_ID],
+                  pendingAckCount: ZERO_COUNT,
+                  missingPublishedCount: ONE_COUNT,
+                  gateReasons: [MISSING_NODE_REASON],
+                  prioritySpreadSatisfied: true,
+                  prioritySpreadGap: ZERO_COUNT,
+                  priorityBlockedPartitionCount: ZERO_COUNT,
+                  blockers: [
+                    ACTIVE_GATE_INACTIVE_BLOCKER,
+                    ACTIVE_GATE_COVERAGE_BLOCKER,
+                    ACTIVE_GATE_MISSING_BLOCKER,
+                  ],
+                },
+              },
+              activeGateProgress: {
+                expectedNodeCount: EXPECTED_NODE_COUNT,
+                activeNodeCount: ZERO_COUNT,
+                inactiveNodeCount: EXPECTED_NODE_COUNT,
+                snapshotCoverageNodeCount: SNAPSHOT_COVERAGE_COUNT,
+                snapshotCoverageComplete: false,
+                publicationStatus: PUBLICATION_STATUS_PUBLISHED,
+                publicationEpoch: PUBLICATION_EPOCH,
+                recoveryProtocolState: RECOVERY_PROTOCOL_STEADY_PUBLISHED,
+                selectedSnapshotNodeId: SELECTED_SNAPSHOT_NODE_ID,
+                selectedPublishedActiveNodeIds: [PUBLISHED_NODE_ID],
+                selectedMissingPublishedNodeIds: [MISSING_NODE_ID],
+                pendingAckCount: ZERO_COUNT,
+                missingPublishedCount: ONE_COUNT,
+                gateReasons: [MISSING_NODE_REASON],
+                prioritySpreadSatisfied: true,
+                prioritySpreadGap: ZERO_COUNT,
+                priorityBlockedPartitionCount: ZERO_COUNT,
+                blockers: [
+                  ACTIVE_GATE_INACTIVE_BLOCKER,
+                  ACTIVE_GATE_COVERAGE_BLOCKER,
+                  ACTIVE_GATE_MISSING_BLOCKER,
+                ],
+              },
+            },
+          },
+        },
+      }];
+
+      const {scenarioBundles} = await writeFailureBundlesForReport({
+        scenarios,
+        reportOutputPath: reportPath,
+        outputDir: tempDir,
+        reportSummary: {total: ONE_COUNT, fail: ONE_COUNT, pass: ZERO_COUNT},
+        standardSummary: {scenarios: []},
+        benchmarkRegressionGate: {status: 'skipped'},
+        workspaceRoot: tempDir,
+      });
+      const scenarioBundle = JSON.parse(
+        await readFile(
+          resolve(tempDir, scenarioBundles[0].links.jsonPath),
+          UTF8_ENCODING,
+        ),
+      );
+      const failureClassification =
+        scenarioBundle.summary.failureClassification;
+
+      assert.equal(scenarioBundle.summary.dominantReason, MISSING_NODE_REASON);
+      assert.equal(
+        scenarioBundle.diagnostics.failure.reasonCounts[
+          CONTROL_PLANE_READINESS_REASON
+            .PRIORITY_CONTROL_PLANE_RECOVERY_PENDING
+        ],
+        undefined,
+      );
+      assert.equal(
+        scenarioBundle.diagnostics.failure.reasonCounts[MISSING_NODE_REASON],
+        ONE_COUNT,
+      );
+      assert.deepEqual(
+        scenarioBundle.publicationConvergence.publicationConvergenceGateReasons,
+        [MISSING_NODE_REASON],
+      );
+      assert.deepEqual(
+        scenarioBundle.publicationConvergence.priorityRecoveryReasonCodes,
+        [],
+      );
+      assert.equal(
+        failureClassification.failureClass,
+        FAILURE_CLASS_PUBLICATION_CONVERGENCE_BLOCKED,
+      );
+      assert.ok(
+        failureClassification.signals.includes(FAILURE_SIGNAL_MISSING_COUNT),
+      );
+      assert.ok(
+        failureClassification.signals.includes(FAILURE_SIGNAL_MISSING_NODE),
+      );
+      assert.deepEqual(
+        scenarioBundle.summary.stabilityGates.convergence.blockers,
+        [STABILITY_GATE_BLOCKER_PUBLICATION_MISSING_ACTIVE_NODE],
+      );
+      assert.equal(
+        scenarioBundle.summary.stabilityGates.convergence.blockers.includes(
+          STABILITY_GATE_BLOCKER_PUBLICATION_PENDING,
+        ),
+        false,
+      );
+      assert.equal(
+        scenarioBundle.summary.stabilityGates.convergence.blockers.includes(
+          STABILITY_GATE_BLOCKER_STARTUP_READINESS,
+        ),
+        false,
+      );
+      assert.deepEqual(
+        scenarioBundle.summary.stabilityGates.restart_recovery.blockers,
+        [STABILITY_GATE_BLOCKER_PUBLICATION_MISSING_ACTIVE_NODE],
       );
     },
   );

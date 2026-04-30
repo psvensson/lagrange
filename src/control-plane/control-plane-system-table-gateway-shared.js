@@ -68,6 +68,7 @@ const CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL = Object.freeze({
     'control_plane_mutation_tracking_saturated',
   CRITICAL: 'critical',
   DELETE: 'delete',
+  DELIVERY_SOURCE_SEPARATOR: ':',
   DELIVERYSOURCE: 'deliverySource',
   DELIVERYPRIORITY: 'deliveryPriority',
   DISABLESYSTEMWRITESESSION: 'disableSystemWriteSession',
@@ -99,6 +100,7 @@ const CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL = Object.freeze({
   RECOVERYCANDIDATESELECTIONKEY: 'recoveryCandidateSelectionKey',
   REQUIREAUTHORITATIVE: 'requireAuthoritative',
   REQUIREOWNERRPCREAD: 'requireOwnerRpcRead',
+  RESOURCEKEYS: 'resourceKeys',
   ROUTER_QUERY_TRANSPORT_NOT_READY: 'ROUTER_QUERY_TRANSPORT_NOT_READY',
   ROUTINGREADINESSDIMENSION: 'routingReadinessDimension',
   SELECT: 'select',
@@ -201,6 +203,17 @@ const CONTROL_PLANE_MUTATION_OPERATION = Object.freeze({
   UPSERT: 'upsert',
   DELETE: 'delete',
 });
+const CONTROL_PLANE_WRITE_OPERATION_KINDS = new Set([
+  CONTROL_PLANE_SQL_OPERATION.WRITE,
+  CONTROL_PLANE_MUTATION_OPERATION.INSERT,
+  CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
+  CONTROL_PLANE_MUTATION_OPERATION.UPSERT,
+  CONTROL_PLANE_MUTATION_OPERATION.DELETE,
+  CDC_OPERATION.INSERT,
+  CDC_OPERATION.UPDATE,
+  CDC_OPERATION.UPSERT,
+  CDC_OPERATION.DELETE,
+]);
 const CONTROL_PLANE_MUTATION_MERGE_POLICY = Object.freeze({
   NONE: 'none',
   SINGLE_FLIGHT: 'single_flight',
@@ -319,7 +332,7 @@ function normalizeSqlOperationKind(value) {
   if (value === CONTROL_PLANE_SQL_OPERATION.READ) {
     return CONTROL_PLANE_SQL_OPERATION.READ;
   }
-  if (value === CONTROL_PLANE_SQL_OPERATION.WRITE) {
+  if (CONTROL_PLANE_WRITE_OPERATION_KINDS.has(value)) {
     return CONTROL_PLANE_SQL_OPERATION.WRITE;
   }
   return CONTROL_PLANE_SQL_OPERATION.UNKNOWN;
@@ -385,7 +398,7 @@ function resolveControlPlaneCacheReconcileIntent(value) {
 }
 
 function resolveControlPlaneCacheReconcileDeletePolicy(options = {}) {
-  if (typeof options?.deleteMissing === 'boolean') {
+  if (typeof options?.deleteMissing === TYPEOF.BOOLEAN) {
     return options.deleteMissing === true ?
       CONTROL_PLANE_CACHE_RECONCILE_DELETE_POLICY.DELETE_MISSING :
       CONTROL_PLANE_CACHE_RECONCILE_DELETE_POLICY.PRESERVE_MISSING;
@@ -889,6 +902,14 @@ function applyMutationWorkloadProfileDefaults(
   const workloadProfile = buildControlPlaneWorkloadProfile(
     options.workloadClass,
   );
+  const mergedResourceKeys = normalizeDistinctStringArray([
+    ...(typeof options?.resourceKeys === TYPEOF.UNDEFINED ?
+      workloadProfile.resourceKeys :
+      []),
+    ...(Array.isArray(resolvedOptions?.resourceKeys) ?
+      resolvedOptions.resourceKeys :
+      []),
+  ]);
   return {
     ...resolvedOptions,
     workloadClass: workloadProfile.workloadClass,
@@ -900,6 +921,7 @@ function applyMutationWorkloadProfileDefaults(
       typeof options?.allowPressureDefer === TYPEOF.UNDEFINED ?
         workloadProfile.allowPressureDefer :
         resolvedOptions.allowPressureDefer,
+    resourceKeys: mergedResourceKeys,
   };
 }
 
@@ -1067,6 +1089,7 @@ function resolveControlPlaneSystemTableDeliverySource({
   tableName = null,
   sql = null,
   operationKind = null,
+  coalescingKey = null,
 } = {}) {
   if (typeof deliverySource === TYPEOF.STRING && deliverySource.length > NUM.ZERO) {
     return deliverySource;
@@ -1089,7 +1112,13 @@ function resolveControlPlaneSystemTableDeliverySource({
     normalizedOperationKind === CONTROL_PLANE_SQL_OPERATION.READ ?
       CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.CONTROL_DASH_PLANE_COLON_READ :
       CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.CONTROL_DASH_PLANE_COLON_WRITE;
-  return `${deliveryPrefix}:${normalizedTableName}`;
+  const normalizedCoalescingKey = normalizeCoalescingToken(coalescingKey);
+  const deliverySourceParts = normalizedCoalescingKey ?
+    [deliveryPrefix, normalizedTableName, normalizedCoalescingKey] :
+    [deliveryPrefix, normalizedTableName];
+  return deliverySourceParts.join(
+    CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.DELIVERY_SOURCE_SEPARATOR,
+  );
 }
 
 export {

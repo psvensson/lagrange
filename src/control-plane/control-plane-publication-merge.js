@@ -4,6 +4,25 @@ import {
   serializeControlPlanePublicationRow,
 } from './system-row-normalizers.js';
 
+const LOCAL_STR_EMPTY = '';
+const LOCAL_STR_PUBLICATION_EPOCH = 'publication_epoch';
+const LOCAL_STR_PUBLICATIONEPOCH = 'publicationEpoch';
+const LOCAL_NUM_ONE = 1;
+const LOCAL_STR_PUBLISHER_NODE_ID = 'publisher_node_id';
+const LOCAL_STR_PUBLISHERNODEID = 'publisherNodeId';
+const LOCAL_STR_1YKL7 = 'source_topology_epoch';
+const LOCAL_STR_10FMC = 'sourceTopologyEpoch';
+const LOCAL_STR_1P9NT = 'source_snapshot_version';
+const LOCAL_STR_AUVHV = 'sourceSnapshotVersion';
+const LOCAL_STR_1W110 = 'priority_partition_summary';
+const LOCAL_STR_1GZ5U = 'priorityPartitionSummary';
+const LOCAL_STR_1S0NF = 'membership_lifecycle_summary';
+const LOCAL_STR_N7ZDE = 'membershipLifecycleSummary';
+const LOCAL_STR_REASON_CODE = 'reason_code';
+const LOCAL_STR_REASONCODE = 'reasonCode';
+const LOCAL_STR_TRANSITION_HISTORY = 'transition_history';
+const LOCAL_STR_TRANSITIONHISTORY = 'transitionHistory';
+
 const CONTROL_PLANE_PUBLICATION_STATUS = Object.freeze({
   OPEN: 'OPEN',
   ACK_PENDING: 'ACK_PENDING',
@@ -39,7 +58,7 @@ function normalizePublicationNodeIdList(values = []) {
   return [
     ...new Set(
       (Array.isArray(values) ? values : [])
-        .map((value) => String(value || '').trim())
+        .map((value) => String(value || LOCAL_STR_EMPTY).trim())
         .filter((value) => value.length > NUM.ZERO),
     ),
   ].sort();
@@ -382,28 +401,28 @@ function mergeControlPlanePublicationRows(primaryRow, secondaryRow) {
         readPreferredPublicationField(
           latestRow,
           fallbackRow,
-          'publication_epoch',
-          'publicationEpoch',
+          LOCAL_STR_PUBLICATION_EPOCH,
+          LOCAL_STR_PUBLICATIONEPOCH,
         ),
-        1,
+        LOCAL_NUM_ONE,
       ),
     publisher_node_id: readPreferredPublicationField(
       latestRow,
       fallbackRow,
-      'publisher_node_id',
-      'publisherNodeId',
+      LOCAL_STR_PUBLISHER_NODE_ID,
+      LOCAL_STR_PUBLISHERNODEID,
     ),
     source_topology_epoch: readPreferredPublicationField(
       latestRow,
       fallbackRow,
-      'source_topology_epoch',
-      'sourceTopologyEpoch',
+      LOCAL_STR_1YKL7,
+      LOCAL_STR_10FMC,
     ),
     source_snapshot_version: readPreferredPublicationField(
       latestRow,
       fallbackRow,
-      'source_snapshot_version',
-      'sourceSnapshotVersion',
+      LOCAL_STR_1P9NT,
+      LOCAL_STR_AUVHV,
     ),
     published_active_node_ids: publishedActiveNodeIds,
     required_ack_node_ids: requiredAckNodeIds,
@@ -411,23 +430,23 @@ function mergeControlPlanePublicationRows(primaryRow, secondaryRow) {
     priority_partition_summary: readPreferredPublicationField(
       latestRow,
       fallbackRow,
-      'priority_partition_summary',
-      'priorityPartitionSummary',
+      LOCAL_STR_1W110,
+      LOCAL_STR_1GZ5U,
     ),
     membership_lifecycle_summary: readPreferredPublicationField(
       latestRow,
       fallbackRow,
-      'membership_lifecycle_summary',
-      'membershipLifecycleSummary',
+      LOCAL_STR_1S0NF,
+      LOCAL_STR_N7ZDE,
     ),
     status,
     reason_code:
       readPreferredPublicationField(
         latestRow,
         fallbackRow,
-        'reason_code',
-        'reasonCode',
-      ) || '',
+        LOCAL_STR_REASON_CODE,
+        LOCAL_STR_REASONCODE,
+      ) || LOCAL_STR_EMPTY,
     created_at: createdAt,
     updated_at: updatedAt,
     published_at: publishedAt,
@@ -436,8 +455,8 @@ function mergeControlPlanePublicationRows(primaryRow, secondaryRow) {
       readPreferredPublicationField(
         latestRow,
         fallbackRow,
-        'transition_history',
-        'transitionHistory',
+        LOCAL_STR_TRANSITION_HISTORY,
+        LOCAL_STR_TRANSITIONHISTORY,
       ) || [],
   });
 }

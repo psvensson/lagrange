@@ -19,6 +19,8 @@ import {
   ADAPTER_LOG_MSG,
 } from '../sql-adapter-constants.js';
 
+const LOCAL_NUM_ZERO = 0;
+
 /**
  * PostgresWireAdapter maps authenticated protocol sessions to
  * tenant/service policy and delegates SQL execution to SqlCore.
@@ -180,7 +182,7 @@ class PostgresWireAdapter {
       unsupported.push(feature);
     }
 
-    if (unsupported.length > 0) {
+    if (unsupported.length > LOCAL_NUM_ZERO) {
       this.logger.debug(ADAPTER_LOG_MSG.UNSUPPORTED_FEATURE, {
         sessionId,
         unsupported,

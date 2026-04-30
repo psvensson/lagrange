@@ -42,6 +42,8 @@ const MEMBERSHIP_PUBLICATION_CLOSURE_WITNESS_CLASS_PRIORITY_SPREAD =
   'publication_converged_priority_spread_pending';
 const MEMBERSHIP_PUBLICATION_RECOVERY_PROTOCOL_STATE_STEADY_PUBLISHED =
   'steady_published';
+const MEMBERSHIP_PUBLICATION_PRIORITY_DECISION_SNAPSHOT_ASSERTION =
+  'priority recovery decision snapshots should remain available to planning consumers';
 const MEMBERSHIP_PUBLICATION_TRIM_PUBLISHER_NODE_ID = 'seed-node';
 const MEMBERSHIP_PUBLICATION_TRIM_NODE_ONE_ID = 'node-1';
 const MEMBERSHIP_PUBLICATION_TRIM_NODE_TWO_ID = 'node-2';
@@ -716,6 +718,11 @@ test('deriveMembershipPublicationCandidate refreshes stale priority spread metad
       missingPartitionIds: [],
       blockedPartitions: [],
     });
+    t.equal(
+      candidate.priorityRecoveryDecisionSnapshots?.snapshotCount,
+      priorityTableIds.length,
+      MEMBERSHIP_PUBLICATION_PRIORITY_DECISION_SNAPSHOT_ASSERTION,
+    );
     t.equal(
       candidate.priorityPartitionSummaryChanged,
       true,

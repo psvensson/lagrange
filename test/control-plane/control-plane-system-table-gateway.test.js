@@ -41,6 +41,26 @@ const GATEWAY_FAILURE_RECONNECT_MESSAGE =
   'Connection to node node-2 closed';
 const CONTROL_PLANE_PUBLICATION_READ_DELIVERY_SOURCE =
   'control-plane:read:control_plane_publications';
+const GATEWAY_DELIVERY_SOURCE_PREFIX_CONTROL_PLANE_WRITE =
+  'control-plane:write';
+const GATEWAY_DELIVERY_SOURCE_SEPARATOR = ':';
+const GATEWAY_NODE_ENDPOINT_ID = 'ep-1';
+const GATEWAY_NODE_ENDPOINT_ADDRESS = 'ws://127.0.0.1:8080';
+const GATEWAY_NODE_ENDPOINT_WRITE_COALESCING_KEY =
+  'gateway:node_endpoints:ep-1';
+const GATEWAY_NODE_ENDPOINT_WRITE_DELIVERY_SOURCE = [
+  GATEWAY_DELIVERY_SOURCE_PREFIX_CONTROL_PLANE_WRITE,
+  TABLES.NODE_ENDPOINTS,
+  GATEWAY_NODE_ENDPOINT_WRITE_COALESCING_KEY,
+].join(GATEWAY_DELIVERY_SOURCE_SEPARATOR);
+const GATEWAY_REPLICA_OPERATION_ID = 'op-gateway-1';
+const GATEWAY_REPLICA_OPERATION_WRITE_COALESCING_KEY =
+  'replica-operation:op-gateway-1';
+const GATEWAY_REPLICA_OPERATION_WRITE_DELIVERY_SOURCE = [
+  GATEWAY_DELIVERY_SOURCE_PREFIX_CONTROL_PLANE_WRITE,
+  TABLES.REPLICA_OPERATIONS,
+  GATEWAY_REPLICA_OPERATION_WRITE_COALESCING_KEY,
+].join(GATEWAY_DELIVERY_SOURCE_SEPARATOR);
 
 test('ControlPlaneSystemTableGateway readRows uses authoritative recovery-' +
   'eligible defaults', async (t) => {
@@ -1011,8 +1031,9 @@ test('ControlPlaneSystemTableGateway updateSystemTableRow routes writes ' +
 
   await gateway.updateSystemTableRow(
     TABLES.NODE_ENDPOINTS,
-    {endpoint_id: 'ep-1'},
-    {address: 'ws://127.0.0.1:8080'},
+    {endpoint_id: GATEWAY_NODE_ENDPOINT_ID},
+    {address: GATEWAY_NODE_ENDPOINT_ADDRESS},
+    {coalescingKey: GATEWAY_NODE_ENDPOINT_WRITE_COALESCING_KEY},
   );
 
   t.equal(updateCalls.length, 1, 'write should be delegated once');
@@ -1020,6 +1041,43 @@ test('ControlPlaneSystemTableGateway updateSystemTableRow routes writes ' +
     updateCalls[0].options.routingReadinessDimension,
     CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
     'control-plane writes should use control-plane recovery routing',
+  );
+  t.equal(
+    updateCalls[0].options.deliverySource,
+    GATEWAY_NODE_ENDPOINT_WRITE_DELIVERY_SOURCE,
+    'coalesced control-plane writes should own a distinct delivery source',
+  );
+});
+
+test('ControlPlaneSystemTableGateway updateSystemTableRow scopes ' +
+  'replica_operations writes by row identity', async (t) => {
+  const updateCalls = [];
+  const gateway = new ControlPlaneSystemTableGateway({
+    nodeId: 'node-gateway',
+    cdcIntegrationService: {
+      async updateSystemTableRow(tableName, whereClause, data, options) {
+        updateCalls.push({tableName, whereClause, data, options});
+        return {success: true};
+      },
+    },
+  });
+
+  await gateway.updateSystemTableRow(
+    TABLES.REPLICA_OPERATIONS,
+    {operation_id: GATEWAY_REPLICA_OPERATION_ID},
+    {status: GATEWAY_MUTATION_STATUS_ACTIVE},
+  );
+
+  t.equal(updateCalls.length, 1, 'write should be delegated once');
+  t.equal(
+    updateCalls[0].options.coalescingKey,
+    GATEWAY_REPLICA_OPERATION_WRITE_COALESCING_KEY,
+    'replica operation gateway writes should coalesce by operation id',
+  );
+  t.equal(
+    updateCalls[0].options.deliverySource,
+    GATEWAY_REPLICA_OPERATION_WRITE_DELIVERY_SOURCE,
+    'replica operation gateway writes should use an operation-scoped delivery source',
   );
 });
 

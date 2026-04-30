@@ -455,6 +455,81 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
     });
 
   await t.test(
+    'checkRebalance allows post-published control_plane_publications trim ' +
+      'once endpoint visibility covers the replica target',
+    async (t) => {
+      const activeNodeIds = Object.freeze([
+        'node-1',
+        'node-2',
+        'node-3',
+        'node-4',
+        'node-5',
+      ]);
+      const endpointVisibleNodeIds = Object.freeze([
+        activeNodeIds[0],
+        activeNodeIds[1],
+        activeNodeIds[2],
+      ]);
+      const publicationEpoch = 2;
+
+      const rebalancer = createTestRebalancer({
+        entityId: 'control_plane_publications-p1',
+        entityType: EntityType.PARTITION,
+        nodeId: activeNodeIds[0],
+        nodes: activeNodeIds.map((nodeId) => ({
+          node_id: nodeId,
+          status: NodeStatus.ACTIVE,
+        })),
+        partitions: [{
+          partition_id: 'control_plane_publications-p1',
+          table_id: SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS,
+        }],
+        nodeEndpoints: endpointVisibleNodeIds.map((nodeId) =>
+          createNodeEndpoint(nodeId)),
+        serviceEndpoints: endpointVisibleNodeIds.map((nodeId) =>
+          createPostgresWireEndpoint(nodeId)),
+      });
+
+      rebalancer.controlPlaneReadinessService.membershipPublicationService =
+        createMockMembershipPublicationService(
+          [...activeNodeIds],
+          publicationEpoch,
+          {
+            priorityPartitionSummary: {
+              satisfied: true,
+            },
+          },
+        );
+      rebalancer.initialize();
+      rebalancer.isLeader = true;
+      rebalancer.isStabilized = () => true;
+
+      let evaluateCalls = 0;
+      rebalancer.evaluateState = async () => {
+        evaluateCalls++;
+        return false;
+      };
+
+      let scheduledDelayMs = null;
+      rebalancer.scheduleNextCheck = (overrideDelayMs = null) => {
+        scheduledDelayMs = overrideDelayMs;
+      };
+
+      await rebalancer.checkRebalance();
+
+      t.equal(
+        evaluateCalls,
+        1,
+        'post-published publication-owner trim should proceed at target endpoint coverage',
+      );
+      t.equal(
+        scheduledDelayMs,
+        null,
+        'post-published publication-owner trim should not wait for every active endpoint',
+      );
+    });
+
+  await t.test(
     'checkRebalance clears endpoint visibility blockers after authoritative ' +
       'endpoint revalidation closes a cache gap',
     async (t) => {

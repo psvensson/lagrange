@@ -7,6 +7,8 @@
 import {TYPEOF} from '../constants/index.js';
 import {HLC_ERROR_MSG, HLC_PART, HLC_SEPARATOR} from './hlc-constants.js';
 
+const LOCAL_NUM_ZERO = 0;
+
 /**
  * HLCTimestamp represents a hybrid logical clock timestamp.
  * Combines physical time with a logical counter for global ordering.
@@ -79,7 +81,7 @@ class HLCTimestamp {
    * @return {boolean} True if this timestamp is before the other.
    */
   isBefore(other) {
-    return this.compare(other) < 0;
+    return this.compare(other) < LOCAL_NUM_ZERO;
   }
 
   /**
@@ -88,7 +90,7 @@ class HLCTimestamp {
    * @return {boolean} True if this timestamp is after the other.
    */
   isAfter(other) {
-    return this.compare(other) > 0;
+    return this.compare(other) > LOCAL_NUM_ZERO;
   }
 
   /**
@@ -97,7 +99,7 @@ class HLCTimestamp {
    * @return {boolean} True if timestamps are equal.
    */
   equals(other) {
-    return this.compare(other) === 0;
+    return this.compare(other) === LOCAL_NUM_ZERO;
   }
 
   /**

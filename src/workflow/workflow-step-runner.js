@@ -2,6 +2,10 @@ import {TYPEOF} from '../constants/index.js';
 import {OperationLane} from './operation-lane.js';
 import {WORKFLOW_ERROR_MSG} from './workflow-constants.js';
 
+const LOCAL_STR_ATDIQ = 'workflow-step-runner';
+const LOCAL_STR_EMPTY = '';
+const LOCAL_STR_RESULT = 'result';
+
 class WorkflowStepRunner {
   /**
    * @param {Object} options
@@ -16,12 +20,12 @@ class WorkflowStepRunner {
     }
     this.operationLane = options.operationLane ||
       new OperationLane({
-        name: options.name || 'workflow-step-runner',
+        name: options.name || LOCAL_STR_ATDIQ,
         workflowCoordinator: this.workflowCoordinator,
         timeoutPolicy: options.timeoutPolicy || null,
         ownerKeyFactory: ({workflowId}) => {
           return this.workflowCoordinator.getWorkflowById(workflowId)?.ownerKey ||
-            '';
+            LOCAL_STR_EMPTY;
         },
       });
     this.now = typeof options.now === TYPEOF.FUNCTION ?
@@ -68,7 +72,7 @@ class WorkflowStepRunner {
           });
           await this.persistStepResult(workflowId, stepResult);
           return stepResult &&
-            Object.prototype.hasOwnProperty.call(stepResult, 'result') ?
+            Object.prototype.hasOwnProperty.call(stepResult, LOCAL_STR_RESULT) ?
             stepResult.result :
             stepResult;
         } catch (error) {

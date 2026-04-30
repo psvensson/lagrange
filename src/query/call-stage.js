@@ -23,6 +23,8 @@ import {
 } from './runtime-constants.js';
 import {classifyNestedCall} from './nested-call-classifier.js';
 
+const LOCAL_NUM_ZERO = 0;
+
 /**
  * Build a stage context that exposes the execution context's
  * primitives for use inside the handler.
@@ -92,7 +94,7 @@ function buildStageContext(execCtx, planDiagnostics) {
  */
 function batchRows(rows, batchSize) {
   const batches = [];
-  for (let i = 0; i < rows.length; i += batchSize) {
+  for (let i = LOCAL_NUM_ZERO; i < rows.length; i += batchSize) {
     batches.push(rows.slice(i, i + batchSize));
   }
   return batches;

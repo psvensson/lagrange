@@ -9,6 +9,8 @@ import {
   normalizeJoinSchemaVersion,
 } from './join-schema-version-resolver.js';
 
+const LOCAL_STR_EMPTY = '';
+
 const JOIN_PROMOTION_STATE = Object.freeze({
   OBSERVED: 'observed',
   HYDRATED: 'hydrated',
@@ -40,7 +42,7 @@ const JOIN_PROMOTION_REASON = Object.freeze({
 function normalizeDistinctStringArray(values = []) {
   return [...new Set(
     (Array.isArray(values) ? values : [])
-      .map((value) => typeof value === TYPEOF.STRING ? value.trim() : '')
+      .map((value) => typeof value === TYPEOF.STRING ? value.trim() : LOCAL_STR_EMPTY)
       .filter((value) => value.length > NUM.ZERO),
   )];
 }

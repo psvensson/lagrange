@@ -3,6 +3,7 @@ import {ERRORS, NUM, TYPEOF} from '../constants/index.js';
 const QUERY_EXECUTION_BUDGET_FIELD = Object.freeze({
   DELIVERY_SOURCE: 'deliverySource',
   DELIVERY_PRIORITY: 'deliveryPriority',
+  REPLACE_PENDING_KEY: 'replacePendingKey',
 });
 
 export function normalizeParticipantFailureString(value) {
@@ -147,6 +148,14 @@ export function createPartitionExecutionBudget({
         executionOptions.deliverySource.length > NUM.ZERO
       ) {
         routerOptions.deliverySource = executionOptions.deliverySource;
+      }
+      if (
+        typeof executionOptions?.[
+          QUERY_EXECUTION_BUDGET_FIELD.REPLACE_PENDING_KEY
+        ] === TYPEOF.STRING &&
+        executionOptions.replacePendingKey.length > NUM.ZERO
+      ) {
+        routerOptions.replacePendingKey = executionOptions.replacePendingKey;
       }
       const routerDeliveryTimeoutMs = getRouterDeliveryTimeoutMs();
       if (routerDeliveryTimeoutMs !== null) {

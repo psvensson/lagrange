@@ -20,6 +20,12 @@ import {TABLES} from '../../constants/index.js';
 import {runRetryableControlPlaneWrite} from
   '../shared/retryable-control-plane-write.js';
 
+const LOCAL_STR_UPSERT = 'upsert';
+const LOCAL_STR_1ANOQ = 'retryable register-service metadata write failure';
+const LOCAL_STR_SYNCING = 'syncing';
+const LOCAL_STR_STOPPING = 'stopping';
+const LOCAL_STR_1TLI7 = 'Preserving MOVE_REPLICA handoff reservation after retryable register-service failure';
+
 const REGISTER_SERVICE_SQL_ENGINE_UNAVAILABLE_RETRY_AFTER_MS =
   BOOTSTRAP_API_DEFAULT.BOOTSTRAP_ADMISSION_RETRY_AFTER_MS;
 
@@ -57,7 +63,7 @@ class ServiceRegistrationHandoffOwner {
   async writeRegisteredServiceRowWithRetry(serviceData, registeredServiceRow) {
     return runRetryableControlPlaneWrite(
       () => this.delegates.executeBootstrapControlPlaneMutation({
-        operation: 'upsert',
+        operation: LOCAL_STR_UPSERT,
         tableName: TABLES.SERVICES,
         row: registeredServiceRow,
       }, {
@@ -88,7 +94,7 @@ class ServiceRegistrationHandoffOwner {
               error:
                 resultOrError?.error ||
                 resultOrError?.message ||
-                'retryable register-service metadata write failure',
+                LOCAL_STR_1ANOQ,
             },
           );
         },
@@ -178,7 +184,7 @@ class ServiceRegistrationHandoffOwner {
         await this.delegates.executeMoveReplicaHandoffPhase(
           handoffContext,
           BOOTSTRAP_API_HANDOFF_PHASE.VERIFY_TARGET,
-          'syncing',
+          LOCAL_STR_SYNCING,
           BOOTSTRAP_API_HANDOFF_STATUS.VERIFYING,
           () => this.delegates.verifyMoveReplicaHandoffTarget(
             handoffContext,
@@ -224,7 +230,7 @@ class ServiceRegistrationHandoffOwner {
         await this.delegates.executeMoveReplicaHandoffPhase(
           handoffContext,
           BOOTSTRAP_API_HANDOFF_PHASE.REMOVE_SOURCE,
-          'stopping',
+          LOCAL_STR_STOPPING,
           BOOTSTRAP_API_HANDOFF_STATUS.REMOVING,
           async () => {
             await this.delegates.removeLocalSourceReplicaForMoveReplica(
@@ -270,7 +276,7 @@ class ServiceRegistrationHandoffOwner {
           );
         if (shouldPreserveRetryableHandoff) {
           this.getLogger().warn(
-            'Preserving MOVE_REPLICA handoff reservation after retryable register-service failure',
+            LOCAL_STR_1TLI7,
             {
               operationId: handoffContext.operationId,
               serviceId: handoffContext.replicaId,

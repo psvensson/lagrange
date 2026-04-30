@@ -32,6 +32,11 @@ import {
   buildTransportDeliveryOutcome,
   buildQueryTransportSemanticOutcome,
 } from './transport-semantic-outcome.js';
+
+
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_NUM_ONE = 1;
+
 const MESSAGE_ROUTER_LITERAL = Object.freeze({
   STRING_UNKNOWN: 'unknown',
   STRING_SELECT: 'select',
@@ -155,11 +160,40 @@ const OUTBOUND_QUEUE_BACKPRESSURE_ERROR_CODE =
   'ROUTER_OUTBOUND_QUEUE_BACKPRESSURED';
 const OUTBOUND_QUEUE_PENDING_SOURCE_LIMIT_DIVISOR = TRANSPORT_NUM.FOUR;
 const OUTBOUND_QUEUE_PENDING_SOURCE_LIMIT_MINIMUM = TRANSPORT_NUM.FOUR;
+const OUTBOUND_QUEUE_CRITICAL_FULL_SOURCE_LIMIT_RESERVE_MULTIPLIER =
+  TRANSPORT_NUM.FOUR;
+const OUTBOUND_QUEUE_PENDING_SOURCE_LIMIT_STATE = Object.freeze({
+  DISABLED: 'disabled',
+  CRITICAL_FULL_QUEUE: 'critical_full_queue',
+  CRITICAL_RESERVE_PROTECTED: 'critical_reserve_protected',
+  PROPORTIONAL: 'proportional',
+});
 const OUTBOUND_QUEUE_BACKPRESSURE_SCOPE = Object.freeze({
   NODE: 'node',
   DELIVERY_SOURCE: 'delivery_source',
 });
 const OutboundDeliveryPriority = OUTBOUND_DELIVERY_PRIORITY;
+const OUTBOUND_QUEUE_PENDING_SOURCE_LIMIT_STATE_TABLE = Object.freeze([
+  Object.freeze({
+    state: OUTBOUND_QUEUE_PENDING_SOURCE_LIMIT_STATE.DISABLED,
+    matches: (evidence) => evidence.maxPending <= TRANSPORT_NUM.ZERO,
+  }),
+  Object.freeze({
+    state: OUTBOUND_QUEUE_PENDING_SOURCE_LIMIT_STATE.CRITICAL_FULL_QUEUE,
+    matches: (evidence) =>
+      evidence.deliveryPriority === OutboundDeliveryPriority.CRITICAL &&
+      evidence.criticalFullSourceLimitEligible,
+  }),
+  Object.freeze({
+    state: OUTBOUND_QUEUE_PENDING_SOURCE_LIMIT_STATE.CRITICAL_RESERVE_PROTECTED,
+    matches: (evidence) =>
+      evidence.deliveryPriority === OutboundDeliveryPriority.CRITICAL,
+  }),
+  Object.freeze({
+    state: OUTBOUND_QUEUE_PENDING_SOURCE_LIMIT_STATE.PROPORTIONAL,
+    matches: () => true,
+  }),
+]);
 const CONNECTION_CLOSE_DISPOSITION = Object.freeze({
   SHUTDOWN: 'shutdown',
   RETIRED: 'retired',
@@ -257,7 +291,7 @@ function createInProcWebSocketPair() {
   };
 }
 function normalizeIdentifier(value) {
-  if (value === null || value === void 0) {
+  if (value === null || value === void LOCAL_NUM_ZERO) {
     return null;
   }
   const normalized = String(value).trim();
@@ -711,9 +745,12 @@ function countPendingBySource(queue, deliverySource) {
       count;
   }, TRANSPORT_NUM.ZERO);
 }
-function buildPendingSourceAdmission(queue, deliverySource, _deliveryPriority) {
+function buildPendingSourceAdmission(queue, deliverySource, deliveryPriority) {
   const pendingForSource = countPendingBySource(queue, deliverySource);
-  const pendingSourceLimit = resolvePendingSourceLimit(queue);
+  const pendingSourceLimit = resolvePendingSourceLimit(
+    queue,
+    deliveryPriority,
+  );
   const applySourceLimit = pendingSourceLimit > TRANSPORT_NUM.ZERO;
   return Object.freeze({
     pendingForSource,
@@ -725,17 +762,15 @@ function buildPendingSourceAdmission(queue, deliverySource, _deliveryPriority) {
       pendingForSource >= pendingSourceLimit,
   });
 }
-function resolvePendingSourceLimit(queue) {
-  if (!queue) {
-    return TRANSPORT_NUM.ZERO;
-  }
+function normalizeQueueMaxPending(queue) {
   const maxPending =
-    Number.isFinite(queue.maxPending) && queue.maxPending > TRANSPORT_NUM.ZERO ?
+    Number.isFinite(queue?.maxPending) &&
+    queue.maxPending > TRANSPORT_NUM.ZERO ?
       Math.floor(queue.maxPending) :
       TRANSPORT_NUM.ZERO;
-  if (maxPending <= TRANSPORT_NUM.ZERO) {
-    return TRANSPORT_NUM.ZERO;
-  }
+  return maxPending;
+}
+function resolveProportionalPendingSourceLimit(maxPending) {
   const proportionalLimit = Math.floor(
     maxPending / OUTBOUND_QUEUE_PENDING_SOURCE_LIMIT_DIVISOR,
   );
@@ -743,6 +778,69 @@ function resolvePendingSourceLimit(queue) {
     maxPending,
     Math.max(OUTBOUND_QUEUE_PENDING_SOURCE_LIMIT_MINIMUM, proportionalLimit),
   );
+}
+function buildPendingSourceLimitEvidence(queue, maxPending, deliveryPriority) {
+  const criticalReserve = resolveBoundedCriticalReserve(
+    queue?.criticalReserve,
+    maxPending,
+  );
+  const criticalFullSourceLimitThreshold =
+    criticalReserve *
+    OUTBOUND_QUEUE_CRITICAL_FULL_SOURCE_LIMIT_RESERVE_MULTIPLIER;
+  return Object.freeze({
+    maxPending,
+    deliveryPriority,
+    criticalReserve,
+    criticalFullSourceLimitThreshold,
+    criticalFullSourceLimitEligible:
+      criticalReserve > TRANSPORT_NUM.ZERO &&
+      maxPending >= criticalFullSourceLimitThreshold,
+  });
+}
+function resolveCriticalPendingSourceLimit(queue, maxPending) {
+  const criticalReserve = resolveBoundedCriticalReserve(
+    queue?.criticalReserve,
+    maxPending,
+  );
+  const reserveProtectedLimit = Math.max(
+    TRANSPORT_NUM.ZERO,
+    maxPending - criticalReserve,
+  );
+  return Math.min(
+    maxPending,
+    Math.max(
+      OUTBOUND_QUEUE_PENDING_SOURCE_LIMIT_MINIMUM,
+      reserveProtectedLimit,
+    ),
+  );
+}
+function resolvePendingSourceLimit(queue, deliveryPriority) {
+  const maxPending = normalizeQueueMaxPending(queue);
+  const evidence = buildPendingSourceLimitEvidence(
+    queue,
+    maxPending,
+    deliveryPriority,
+  );
+  const limitState =
+    OUTBOUND_QUEUE_PENDING_SOURCE_LIMIT_STATE_TABLE.find((entry) =>
+      entry.matches(evidence),
+    )?.state ||
+    OUTBOUND_QUEUE_PENDING_SOURCE_LIMIT_STATE.PROPORTIONAL;
+  if (limitState === OUTBOUND_QUEUE_PENDING_SOURCE_LIMIT_STATE.DISABLED) {
+    return TRANSPORT_NUM.ZERO;
+  }
+  if (
+    limitState ===
+    OUTBOUND_QUEUE_PENDING_SOURCE_LIMIT_STATE.CRITICAL_RESERVE_PROTECTED
+  ) {
+    return resolveCriticalPendingSourceLimit(queue, maxPending);
+  }
+  if (
+    limitState === OUTBOUND_QUEUE_PENDING_SOURCE_LIMIT_STATE.CRITICAL_FULL_QUEUE
+  ) {
+    return maxPending;
+  }
+  return resolveProportionalPendingSourceLimit(maxPending);
 }
 function countInFlightByPriority(queue, priority) {
   if (!queue) {
@@ -808,7 +906,7 @@ function resolveNextPendingItemIndex(queue) {
     !Array.isArray(queue.pending) ||
     queue.pending.length === TRANSPORT_NUM.ZERO
   ) {
-    return -1;
+    return -LOCAL_NUM_ONE;
   }
   const criticalIndex = queue.pending.findIndex((item) => {
     return item?.priority === OutboundDeliveryPriority.CRITICAL;

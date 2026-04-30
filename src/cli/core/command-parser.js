@@ -24,13 +24,25 @@ import {
   CLI_COMMAND_ERROR,
 } from '../cli-constants.js';
 
+const LOCAL_NUM_100 = 100;
+const LOCAL_STR_128KJ = ', ';
+const LOCAL_STR_EMPTY = '';
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_STR_AU1TP = '"';
+const LOCAL_STR_9G3T8 = '\'';
+const LOCAL_STR_SPACE = ' ';
+const LOCAL_NUM_ONE = 1;
+const LOCAL_STR_GOTO = 'goto';
+const LOCAL_STR_SORT = 'sort';
+const LOCAL_STR_HELP = 'help';
+
 export class CommandParser {
   /**
    * @param {Object} options - Configuration options
    * @param {number} [options.maxHistory=100] - Maximum history entries
    */
   constructor(options = {}) {
-    this.maxHistory = options.maxHistory || 100;
+    this.maxHistory = options.maxHistory || LOCAL_NUM_100;
 
     /** @type {Map<string, CommandDefinition>} */
     this.commands = new Map();
@@ -104,7 +116,7 @@ export class CommandParser {
     if (args.length < requiredParams.length) {
       const missing = requiredParams.slice(args.length);
       return {
-        error: `${CLI_COMMAND_ERROR.MISSING_PARAMS_PREFIX}${missing.join(', ')}`,
+        error: `${CLI_COMMAND_ERROR.MISSING_PARAMS_PREFIX}${missing.join(LOCAL_STR_128KJ)}`,
       };
     }
 
@@ -124,23 +136,23 @@ export class CommandParser {
    */
   tokenize(input) {
     const tokens = [];
-    let current = '';
+    let current = LOCAL_STR_EMPTY;
     let inQuotes = false;
     let quoteChar = null;
 
-    for (let i = 0; i < input.length; i++) {
+    for (let i = LOCAL_NUM_ZERO; i < input.length; i++) {
       const char = input[i];
 
-      if ((char === '"' || char === '\'') && !inQuotes) {
+      if ((char === LOCAL_STR_AU1TP || char === LOCAL_STR_9G3T8) && !inQuotes) {
         inQuotes = true;
         quoteChar = char;
       } else if (char === quoteChar && inQuotes) {
         inQuotes = false;
         quoteChar = null;
-      } else if (char === ' ' && !inQuotes) {
+      } else if (char === LOCAL_STR_SPACE && !inQuotes) {
         if (current) {
           tokens.push(current);
-          current = '';
+          current = LOCAL_STR_EMPTY;
         }
       } else {
         current += char;
@@ -163,12 +175,12 @@ export class CommandParser {
     const trimmed = (partial || '').trim().toLowerCase();
     const parts = this.tokenize(trimmed);
 
-    if (parts.length === 0) {
+    if (parts.length === LOCAL_NUM_ZERO) {
       // Return all command names (excluding aliases)
       return this.getCommandNames();
     }
 
-    if (parts.length === 1) {
+    if (parts.length === LOCAL_NUM_ONE) {
       // Complete command name
       const prefix = parts[0];
       return this.getCommandNames()
@@ -185,7 +197,7 @@ export class CommandParser {
 
     // Get parameter completions
     const paramIndex = parts.length - 2;
-    return this.getParameterCompletions(commandName, paramIndex, parts[parts.length - 1]);
+    return this.getParameterCompletions(commandName, paramIndex, parts[parts.length - LOCAL_NUM_ONE]);
   }
 
   /**
@@ -199,7 +211,7 @@ export class CommandParser {
     const prefix = (partial || '').toLowerCase();
 
     // Special completions for known parameters
-    if (command === 'goto' && paramIndex === 0) {
+    if (command === LOCAL_STR_GOTO && paramIndex === LOCAL_NUM_ZERO) {
       const views = [
         'nodes', 'services', 'replicas', 'tables', 'partitions',
         'message_groups', 'sql', 'logs', 'config', 'contexts',
@@ -207,12 +219,12 @@ export class CommandParser {
       return views.filter((v) => v.startsWith(prefix));
     }
 
-    if (command === 'sort' && paramIndex === 1) {
+    if (command === LOCAL_STR_SORT && paramIndex === LOCAL_NUM_ONE) {
       const directions = ['asc', 'desc'];
       return directions.filter((d) => d.startsWith(prefix));
     }
 
-    if (command === 'help' && paramIndex === 0) {
+    if (command === LOCAL_STR_HELP && paramIndex === LOCAL_NUM_ZERO) {
       return this.getCommandNames().filter((c) => c.startsWith(prefix));
     }
 
@@ -263,8 +275,8 @@ export class CommandParser {
   addToHistory(command) {
     // Remove duplicate if exists
     const existingIndex = this.history.indexOf(command);
-    if (existingIndex !== -1) {
-      this.history.splice(existingIndex, 1);
+    if (existingIndex !== -LOCAL_NUM_ONE) {
+      this.history.splice(existingIndex, LOCAL_NUM_ONE);
     }
 
     // Add to front
@@ -272,7 +284,7 @@ export class CommandParser {
 
     // Trim if too long
     if (this.history.length > this.maxHistory) {
-      this.history = this.history.slice(0, this.maxHistory);
+      this.history = this.history.slice(LOCAL_NUM_ZERO, this.maxHistory);
     }
   }
 

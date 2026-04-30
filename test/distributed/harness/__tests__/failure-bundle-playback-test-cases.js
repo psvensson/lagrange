@@ -14,6 +14,8 @@ export function registerFailureBundlePlaybackTests({
   buildPlaybackActiveGateStageEvent,
   buildStartupModeWitnessProgress,
 }) {
+  const EXPECTED_UNAVAILABLE_STATE = 'unavailable';
+
   it('derives root-cause, readiness reasons, and first-fault timeline from playback events', async () => {
     const scenarioDir = join(state.outputDir, 'node-join-under-load');
     await mkdir(scenarioDir, {recursive: true});
@@ -619,14 +621,14 @@ export function registerFailureBundlePlaybackTests({
           activeLearnerNodeIds: [],
           promotableLearnerNodeIds: [],
           operationIds: [],
-          completionState: null,
-          workflowState: null,
-          visibilityState: null,
-          convergenceState: null,
-          workflowSource: null,
+          completionState: EXPECTED_UNAVAILABLE_STATE,
+          workflowState: EXPECTED_UNAVAILABLE_STATE,
+          visibilityState: EXPECTED_UNAVAILABLE_STATE,
+          convergenceState: EXPECTED_UNAVAILABLE_STATE,
+          workflowSource: EXPECTED_UNAVAILABLE_STATE,
           snapshotCapturedAt: 5000,
-          latestOperationWorkflowStep: null,
-          latestOperationStatus: null,
+          latestOperationWorkflowStep: EXPECTED_UNAVAILABLE_STATE,
+          latestOperationStatus: EXPECTED_UNAVAILABLE_STATE,
         },
         {
           partitionId: 'replica_operations-p1',
@@ -646,11 +648,11 @@ export function registerFailureBundlePlaybackTests({
           activeLearnerNodeIds: ['joiner-1'],
           promotableLearnerNodeIds: [],
           operationIds: ['op-1'],
-          completionState: null,
-          workflowState: null,
-          visibilityState: null,
-          convergenceState: null,
-          workflowSource: null,
+          completionState: EXPECTED_UNAVAILABLE_STATE,
+          workflowState: EXPECTED_UNAVAILABLE_STATE,
+          visibilityState: EXPECTED_UNAVAILABLE_STATE,
+          convergenceState: EXPECTED_UNAVAILABLE_STATE,
+          workflowSource: EXPECTED_UNAVAILABLE_STATE,
           snapshotCapturedAt: 5000,
           latestOperationWorkflowStep: 'DISPATCHED',
           latestOperationStatus: 'open',
@@ -1021,6 +1023,97 @@ export function registerFailureBundlePlaybackTests({
     );
     assert.match(triageMarkdown, /restart_recovery: status=open/);
     assert.match(triageMarkdown, /closure_record/);
+  });
+
+  it('classifies zero-coverage startup snapshot errors before inactive-node fallback', async () => {
+    const SCENARIO_NAME = 'seed-restart-zero-coverage-snapshot-error';
+    const STARTUP_READINESS_MODE = 'startup';
+    const EXPECTED_NODE_COUNT = 5;
+    const ACTIVE_NODE_COUNT = 4;
+    const SNAPSHOT_COVERAGE_NODE_COUNT = 0;
+    const MISSING_PUBLISHED_COUNT = 0;
+    const STARTUP_SNAPSHOT_TIMEOUT_RECORD_ID = 'CL-004';
+    const STARTUP_SNAPSHOT_TIMEOUT_WITNESS_CLASS =
+      'startup_active_snapshot_timeout';
+    const SNAPSHOT_TIMEOUT_CLASS_CODE = 'snapshot_timeout';
+    const SNAPSHOT_TIMEOUT_SIGNAL = 'activeGateReadinessCause=snapshot_timeout';
+    const SNAPSHOT_TIMEOUT_ACTION =
+      'Snapshot/reachability timeout is blocking convergence.';
+    const scenarioDir = join(state.outputDir, SCENARIO_NAME);
+    await mkdir(scenarioDir, {recursive: true});
+    await writeFile(
+      join(scenarioDir, 'events.ndjson'),
+      [
+        JSON.stringify(
+          buildPlaybackActiveGateStageEvent({
+            readinessMode: STARTUP_READINESS_MODE,
+            activeGateCurrentProgress: buildStartupModeWitnessProgress({
+              expectedNodeCount: EXPECTED_NODE_COUNT,
+              activeNodeCount: ACTIVE_NODE_COUNT,
+              snapshotCoverageNodeCount: SNAPSHOT_COVERAGE_NODE_COUNT,
+              isTimeoutError: true,
+              missingPublishedCount: MISSING_PUBLISHED_COUNT,
+            }),
+          }),
+        ),
+      ].join('\n') + '\n',
+    );
+
+    const writer = new ReportWriter(state.reportPath);
+    writer.addResult(
+      SCENARIO_NAME,
+      buildPlaybackDerivedFailureResult(),
+    );
+
+    const {scenarioBundles} = await writeFailureBundlesForReport({
+      scenarios: writer.scenarios,
+      reportOutputPath: state.reportPath,
+      outputDir: state.outputDir,
+      reportSummary: {total: 1, fail: 1, pass: 0},
+      standardSummary: {scenarios: []},
+      benchmarkRegressionGate: {status: 'skipped'},
+      workspaceRoot: state.tempDir,
+    });
+
+    const scenarioBundle = JSON.parse(
+      await readFile(
+        resolve(state.tempDir, scenarioBundles[0].links.jsonPath),
+        UTF8_ENCODING,
+      ),
+    );
+
+    assert.equal(
+      scenarioBundle.publicationConvergence.closureRecordId,
+      STARTUP_SNAPSHOT_TIMEOUT_RECORD_ID,
+    );
+    assert.equal(
+      scenarioBundle.publicationConvergence.closureWitnessClass,
+      STARTUP_SNAPSHOT_TIMEOUT_WITNESS_CLASS,
+    );
+    assert.equal(
+      scenarioBundle.publicationConvergence.activeGateProgress
+        .activeNodeCount,
+      ACTIVE_NODE_COUNT,
+    );
+    assert.equal(
+      scenarioBundle.publicationConvergence.activeGateProgress
+        .snapshotCoverageNodeCount,
+      SNAPSHOT_COVERAGE_NODE_COUNT,
+    );
+    assert.equal(
+      scenarioBundle.summary.readinessFailure?.classCode,
+      SNAPSHOT_TIMEOUT_CLASS_CODE,
+    );
+    assert.equal(
+      scenarioBundle.summary.failureClassification.signals.includes(
+        SNAPSHOT_TIMEOUT_SIGNAL,
+      ),
+      true,
+    );
+    assert.equal(
+      scenarioBundle.summary.failureAction,
+      SNAPSHOT_TIMEOUT_ACTION,
+    );
   });
 
   it('maps closure-witness-only startup convergence failures to a non-unknown root cause', async () => {

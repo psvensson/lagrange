@@ -1,6 +1,13 @@
 import {spawnSync} from 'node:child_process';
 import {resolve} from 'node:path';
 
+const LOCAL_STR_ENOENT = 'ENOENT';
+const LOCAL_STR_1SQJU = 'helm CLI is required for endpoint-sync chart checks but was not found in PATH.';
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_STR_EMPTY = '';
+const LOCAL_STR_I1KQU = 'endpoint-sync chart render/lint checks passed for all scenarios.\n';
+const LOCAL_NUM_ONE = 1;
+
 const HELM_BINARY = 'helm';
 const HELM_TEMPLATE_CMD = 'template';
 const HELM_LINT_CMD = 'lint';
@@ -64,22 +71,22 @@ function runHelm(scenarioName, args) {
   });
 
   if (result.error) {
-    if (result.error.code === 'ENOENT') {
+    if (result.error.code === LOCAL_STR_ENOENT) {
       throw new Error(
-        'helm CLI is required for endpoint-sync chart checks but was not found in PATH.',
+        LOCAL_STR_1SQJU,
       );
     }
     throw result.error;
   }
 
-  if (result.status !== 0) {
+  if (result.status !== LOCAL_NUM_ZERO) {
     throw new Error(
-      `helm ${args[0]} failed for scenario "${scenarioName}" ` +
+      `helm ${args[LOCAL_NUM_ZERO]} failed for scenario "${scenarioName}" ` +
       `(exit ${result.status}): ${result.stderr.trim() || result.stdout.trim()}`,
     );
   }
 
-  return result.stdout || '';
+  return result.stdout || LOCAL_STR_EMPTY;
 }
 
 /**
@@ -125,7 +132,7 @@ function main() {
   }
 
   process.stdout.write(
-    'endpoint-sync chart render/lint checks passed for all scenarios.\n',
+    LOCAL_STR_I1KQU,
   );
 }
 
@@ -133,5 +140,5 @@ try {
   main();
 } catch (error) {
   process.stderr.write(`${error.message}\n`);
-  process.exitCode = 1;
+  process.exitCode = LOCAL_NUM_ONE;
 }

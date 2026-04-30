@@ -14,6 +14,16 @@ import {
   printRatchetTighteningHint,
 } from './metric-check-helpers.js';
 
+const LOCAL_STR_JSCPD = 'jscpd';
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_STR_13JIR = 'Duplication violations:\n';
+const LOCAL_NUM_ONE = 1;
+const LOCAL_STR_1ARTH = 'No duplication detected.';
+const LOCAL_STR_DUPLICATED_LINE_S = 'duplicated line(s).';
+const LOCAL_STR_13YEE = 'scripts/check-duplication.js clone baseline';
+const LOCAL_STR_1Q3KT = 'scripts/check-duplication.js';
+const LOCAL_STR_15SUO = 'scripts/check-duplication.js duplicated-line baseline';
+
 const BASELINE_CLONE_GROUP_COUNT = 16;
 const BASELINE_DUPLICATED_LINE_COUNT = 529;
 const MINIMUM_LINE_COUNT = 20;
@@ -26,7 +36,7 @@ const REPORT_FILE_NAME = 'jscpd-report.json';
 const REPORT_RELATIVE_PATH =
   `${REPORT_OUTPUT_DIRECTORY}/${REPORT_FILE_NAME}`;
 const require = createRequire(import.meta.url);
-const {detectClones} = require('jscpd');
+const {detectClones} = require(LOCAL_STR_JSCPD);
 const JSCPD_OPTIONS = {
   path: SOURCE_DIRECTORIES,
   minLines: MINIMUM_LINE_COUNT,
@@ -58,8 +68,8 @@ const sourceStats = Object.entries(report.statistics.formats.javascript.sources)
   .slice(0, 10);
 
 if (strict) {
-  if (totals.clones > 0) {
-    console.log('Duplication violations:\n');
+  if (totals.clones > LOCAL_NUM_ZERO) {
+    console.log(LOCAL_STR_13JIR);
     for (const entry of sourceStats) {
       console.log(
         `${entry.filePath}: ${entry.cloneCount} clone group(s), ` +
@@ -67,9 +77,9 @@ if (strict) {
       );
     }
     console.log(`\n${totals.clones} clone group(s) found.`);
-    process.exit(1);
+    process.exit(LOCAL_NUM_ONE);
   }
-  console.log('No duplication detected.');
+  console.log(LOCAL_STR_1ARTH);
 } else {
   const exceedsCloneBaseline = totals.clones > BASELINE_CLONE_GROUP_COUNT;
   const exceedsLineBaseline =
@@ -88,25 +98,25 @@ if (strict) {
         `${entry.duplicatedLines} duplicated line(s)`,
       );
     }
-    process.exit(1);
+    process.exit(LOCAL_NUM_ONE);
   }
   console.log(
     `Duplication ratchet OK: ${totals.clones}/` +
     `${BASELINE_CLONE_GROUP_COUNT} clone group(s), ` +
     `${totals.duplicatedLines}/${BASELINE_DUPLICATED_LINE_COUNT} ` +
-    'duplicated line(s).',
+    LOCAL_STR_DUPLICATED_LINE_S,
   );
   console.log(`Saved duplication report to ${REPORT_RELATIVE_PATH}.`);
   printRatchetTighteningHint(
-    'scripts/check-duplication.js clone baseline',
+    LOCAL_STR_13YEE,
     totals.clones,
     BASELINE_CLONE_GROUP_COUNT,
-    'scripts/check-duplication.js',
+    LOCAL_STR_1Q3KT,
   );
   printRatchetTighteningHint(
-    'scripts/check-duplication.js duplicated-line baseline',
+    LOCAL_STR_15SUO,
     totals.duplicatedLines,
     BASELINE_DUPLICATED_LINE_COUNT,
-    'scripts/check-duplication.js',
+    LOCAL_STR_1Q3KT,
   );
 }

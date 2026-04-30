@@ -18,6 +18,9 @@ import {
   PACKAGE_NAME_PATTERN,
 } from './wasm-meta-models-constants.js';
 
+const LOCAL_STR_EMPTY = '';
+const LOCAL_STR_STRING = 'string';
+
 /**
  * Version format pattern: digit start, then digits, dots,
  * hyphens, plus signs, lowercase/uppercase alpha, 1-64 chars.
@@ -114,11 +117,11 @@ function validatePackageReference(ref) {
  */
 function collectErrors(ref) {
   const errors = [];
-  if (ref === undefined || ref === null || ref === '') {
+  if (ref === undefined || ref === null || ref === LOCAL_STR_EMPTY) {
     errors.push(PKG_REF_ERROR.INPUT_REQUIRED);
     return errors;
   }
-  if (typeof ref !== 'string') {
+  if (typeof ref !== LOCAL_STR_STRING) {
     errors.push(PKG_REF_ERROR.INPUT_NOT_STRING);
     return errors;
   }

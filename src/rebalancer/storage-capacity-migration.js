@@ -21,6 +21,9 @@ import {
   STORAGE_CAPACITY_SUBSYSTEM,
 } from './storage-capacity-constants.js';
 
+const LOCAL_STR_X0MHC = 'disk_gb unavailable';
+const LOCAL_STR_CRITICAL = 'critical';
+
 const MIGRATION_ERROR_MSG = Object.freeze({
   CDC_REQUIRED:
     'StorageCapacityMigration requires cdcIntegrationService',
@@ -96,7 +99,7 @@ class StorageCapacityMigration {
       if (budgetBytes === null) {
         this.logger.warn(STORAGE_CAPACITY_LOG_MSG.BACKFILL_SKIPPED, {
           nodeId,
-          reason: 'disk_gb unavailable',
+          reason: LOCAL_STR_X0MHC,
         });
         skipped++;
         continue;
@@ -115,7 +118,7 @@ class StorageCapacityMigration {
         row: budgetRow,
       }, {
         workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
-        deliveryPriority: 'critical',
+        deliveryPriority: LOCAL_STR_CRITICAL,
       });
 
       this.logger.info(STORAGE_CAPACITY_LOG_MSG.BACKFILL_APPLIED, {

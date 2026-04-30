@@ -24,6 +24,9 @@ import {
   WORKER_RESPONSE_STATUS,
 } from './worker-constants.js';
 
+const LOCAL_STR_MESSAGE = 'message';
+const LOCAL_NUM_ZERO = 0;
+
 /**
  * IPC message types for communication between worker and main process.
  * Note: REGISTER and UNREGISTER are no longer used - registration is handled
@@ -196,7 +199,7 @@ class WorkerMessageBridge extends EventEmitter {
         correlationId: envelope.correlationId,
       });
 
-      this.emit('message', envelope);
+      this.emit(LOCAL_STR_MESSAGE, envelope);
 
       if (this.messageHandler) {
         resultPayload = await this.messageHandler(envelope);
@@ -268,7 +271,7 @@ class WorkerMessageBridge extends EventEmitter {
     return {
       initialized: this.initialized,
       unifiedAddress: this.unifiedAddress,
-      pendingRequestCount: 0,
+      pendingRequestCount: LOCAL_NUM_ZERO,
     };
   }
 }

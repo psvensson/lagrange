@@ -6,6 +6,8 @@ import {
   SYSTEM_TABLE_NAME,
 } from './system-table-schemas-constants.js';
 
+const LOCAL_NUM_THREE = 3;
+
 const PARTITION_ID_CANONICAL_PATTERN = /^(.+)-p\d+$/;
 const PARTITION_ID_SPLIT_SEPARATOR = '_p_';
 const REPLICA_ID_SUFFIX_PATTERN = /-r\d+$/;
@@ -156,7 +158,7 @@ function resolveCriticalTransportTargetSnapshot(options = {}) {
   }
 
   const addressSegments = normalizedTargetAddress.split(ADDRESS.SEPARATOR);
-  if (addressSegments.length < 3) {
+  if (addressSegments.length < LOCAL_NUM_THREE) {
     return Object.freeze({
       criticalTransport: false,
       entityId: null,

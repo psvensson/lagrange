@@ -29,6 +29,11 @@ import {SQLiteLogAdapter} from '../raft/sqlite-log-adapter.js';
 import {HLCClockService} from '../hlc/hlc-clock-service.js';
 import {isRaftPacket} from '../raft/raft-packet-utils.js';
 import {WORKER_RAFT_RUNTIME_DEFAULT} from './worker-raft-runtime-defaults.js';
+
+
+const LOCAL_STR_START_ELECTION = 'START_ELECTION';
+const LOCAL_STR_OK = 'ok';
+
 const RAFT_PACKET_TYPE_APPEND_ACK = 'append ack';
 const RAFT_PACKET_TYPE_APPEND_FAIL = 'append fail';
 
@@ -487,7 +492,7 @@ class PartitionWorkerService extends ReplicaWorkerBase {
     }
 
     // Handle start election request
-    if (message.type === 'START_ELECTION') {
+    if (message.type === LOCAL_STR_START_ELECTION) {
       return this.handleStartElection();
     }
 
@@ -545,7 +550,7 @@ class PartitionWorkerService extends ReplicaWorkerBase {
         );
       }
 
-      return {status: 'ok', result};
+      return {status: LOCAL_STR_OK, result};
     } catch (error) {
       this.logger.error(PARTITION_WORKER_ERROR_MSG.QUERY_FAILED, {
         partitionId: this.partitionId,
@@ -567,7 +572,7 @@ class PartitionWorkerService extends ReplicaWorkerBase {
     this.ensureCDCForwarder();
 
     return {
-      status: 'ok',
+      status: LOCAL_STR_OK,
       partitionId: this.partitionId,
       replicaId: this.replicaId,
     };
@@ -584,7 +589,7 @@ class PartitionWorkerService extends ReplicaWorkerBase {
     if (this.cdcSubscribers.size === NUM.ZERO) {
       this.removeCDCForwarder();
     }
-    return {status: 'ok', replicaId: this.replicaId};
+    return {status: LOCAL_STR_OK, replicaId: this.replicaId};
   }
 
   /**
@@ -673,7 +678,7 @@ class PartitionWorkerService extends ReplicaWorkerBase {
     if (this.raftGroup) {
       this.raftGroup.startElection();
     }
-    return {status: 'ok', replicaId: this.replicaId};
+    return {status: LOCAL_STR_OK, replicaId: this.replicaId};
   }
 
   /**

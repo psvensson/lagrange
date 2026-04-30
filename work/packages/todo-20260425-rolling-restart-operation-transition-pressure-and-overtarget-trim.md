@@ -1,19 +1,182 @@
 # Rolling Restart Operation Transition Pressure And Over-Target Trim
 
-April 26 pause: this package is no longer the current execution owner. Recent
-local `rolling-restart` reruns moved earlier than post-active trim into
-startup active-gate publication recovery evidence, then migrated again to
-missing published membership from a stale stopped node-state row. Active
-execution remains with
-[Publication recovery machine spec and preflight verification](./active-20260426-publication-recovery-machine-spec-and-preflight-verification.md).
-Re-enter this package only after that publication recovery /
-heartbeat-status revival boundary closes or migrates.
+April 30 contraction handoff: this package is queued again. The representative
+path is currently active in
+[Priority Recovery Actuation Contract Under Load](./active-20260430-priority-recovery-actuation-contract-under-load.md),
+which owns the narrower `sql_transactions-p1` workflow-progress blocker. This
+package remains the historical and queued owner for post-active operation drain,
+membership trim, and over-target cleanup after that actuation blocker closes or
+migrates.
 
-April 26 update: The April 26 source-visibility and
-priority-recovery operation-creation fixes moved `rolling-restart` back to
-this package's post-active convergence barrier.
+April 30 reactivation: the active publication missing-node package closed its
+terminal blocker. The latest representative `rolling-restart --fast-local` run
+now has all published active nodes present, ACK debt cleared, and complete
+snapshot coverage, but still fails in load-mode ACTIVE readiness on a genuine
+priority-spread/workflow-progress boundary:
 
-Latest representative evidence after the publication ACK closure fixes and
+1. `test-output/reports/runtime-stability-rolling-restart-20260430-codex-active-publication-missing-node-owner-state.report.json`
+2. Result: failed, `0/1` passed after `132.1s`.
+3. Terminal barrier: `Cluster ACTIVE wait stalled with no meaningful progress
+   for 8 attempts`.
+4. publication epoch `4` is `PUBLISHED`.
+5. published active nodes are `5/5`.
+6. pending ACK count is `0`.
+7. missing published node count is `0`.
+8. selected snapshot coverage is `5/5`.
+9. readiness delay is a recoverable selected-snapshot reachability timeout for
+   `7493b0ab-a054-5fad-a91b-5e331db29304`.
+10. active gate priority spread is pending with gap `6`.
+11. the unresolved priority partition is `sql_transactions-p1`.
+12. dominant reason is `priority_recovery_workflow_progress_event_driven`.
+13. current owner is `operation_workflow_owner`.
+14. blocking boundary is `workflow_progress`.
+15. wait mode is `event_driven`.
+16. next action is `wait_for_operation_progress`.
+17. latest operation step is `SENDING`.
+18. latest operation status is `pending`.
+
+The current blocker is therefore no longer missing publication membership.
+It is operation transition progress under the priority-spread/load-readiness
+owner path. That active work is split into the contraction package above before
+the post-active over-target trim history in this package can resume.
+
+April 29 queued re-entry: the frozen-publication visibility slice moved the
+representative path past the publication-visible blocker and into a newly named
+quiescence stable-window boundary:
+
+1. `test-output/reports/runtime-stability-rolling-restart-20260429-codex-frozen-publication-visibility.report.json`
+2. failover, convergence, and restart-recovery gates are closed
+3. publication epoch `4` is `PUBLISHED`
+4. pending ACK count is `0`
+5. blocked publication node count is `0`
+6. priority recovery blocked and unresolved counts are `0`
+7. `waitForControlPlaneQuiescence` times out after `120000ms`
+8. the final quiescence state is `quiescence_candidate` with
+   `canonicalBlocker=null`, `stableElapsedMs=0`, raw `inFlightCount=1`,
+   `effectiveInFlightCount=0`, and one stale discounted operation
+
+This package is queued again as the operation-transition history and re-entry
+owner. Active execution is now
+[Control plane quiescence stable window after publication closure](./active-20260429-control-plane-quiescence-stable-window-after-publication-closure.md).
+
+April 29 handoff: the latest representative report reaches the quiescence
+owner again after the April 28 trim/over-target work:
+
+1. `test-output/reports/runtime-stability-rolling-restart-20260428-codex-after-follower-source-removal.report.json`
+2. failover, convergence, restart recovery, publication ACK, and priority
+   recovery are closed
+3. `waitForControlPlaneQuiescence` times out with final state
+   `quiescence_candidate`, `canonicalBlocker=null`, `stableElapsedMs=0`, and
+   raw `inFlightCount=3`
+4. this package remains the runtime trim history owner, but the active code
+   slice is back in the quiescence owner package so the timeout classifies from
+   the owner state instead of falling to `unknown`
+
+April 29 post-repair rerun: after the quiescence classification repair, the
+representative path did not reach post-active trim or quiescence. It failed
+earlier in restart-recovery readiness for node
+`35a891b8-c1a0-5064-9c6e-2acfba61c2a7`, with bootstrap health reachable but
+admin/control-plane recovery readiness unavailable. The immediate continuation
+therefore fenced stale `priority_spread_pending` restart-recovery
+classification rather than changing trim behavior.
+
+April 29 quiescence direct-pressure handoff: after the quiescence owner learned
+direct discovery-repair timeout and node-state publication pressure signals,
+the representative path again failed before quiescence. The run failed at
+`waitForConvergence` after `404.4s` with failure-bundle classification
+`publication_convergence_blocked` / `control_plane_publication_pending`.
+Publication epoch `13` is `ACK_PENDING`, pending ACK count is `1`, pending ACK
+node is `8be8d30f-4499-5eed-865c-71b4d529a67a`, blocked publication node count
+is `5`, and priority recovery blocked/unresolved counts are `0`.
+`control_plane_publications-p1` remains `spread_satisfied_in_flight` while the
+latest stability gates are open on `publication_pending`,
+`pending_ack_nodes`, and `publication_blocked_nodes`. Active ownership is
+therefore back on publication-visible trim and operation transition pressure.
+
+April 29 frozen-publication visibility slice: the latest report also carried a
+published-membership observation for epoch `12` with status `PUBLISHED`, no
+pending ACKs, and active-node views using `published_membership` as the
+effective source while membership freeze was active. Post-rebalance closure now
+soft-closes `publication_visible` with
+`effective_published_membership_during_freeze` when a newer speculative
+`ACK_PENDING` publication is not the effective membership view. The
+state-machine pressure preflight also preserves active-gate count-only pending
+ACK evidence instead of turning an absent required-ACK list into
+ack-complete-non-terminal evidence. The representative rerun showed the next
+blocker is a quiescence stable-window timeout after publication gates close.
+
+April 28 reactivation: startup-readiness snapshot gating closed and the
+representative `rolling-restart --fast-local` run returned to this post-active
+owner boundary.
+
+Latest representative evidence:
+
+1. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --fast-local --verbose`
+2. Result: failed, `0/1` passed after `462.7s`.
+3. Terminal barrier: `Convergence timeout after 120000ms`.
+4. Failover, convergence, and restart-recovery stability gates are closed.
+5. publication epoch `7` is `PUBLISHED` with pending ACK count `0`, blocked
+   publication node count `0`, and missing published count `0`.
+6. priority recovery blocked and unresolved counts are `0`.
+7. operation drain is soft-closed with
+   `ignored_stale_replica_operations`.
+8. post-rebalance closure remains open on:
+   `membership_trim_open`, `cdc_projection_visible_open`, and
+   `no_over_target_open`.
+9. over-target voters remain on `control_plane_publications-p1`,
+   `replica_operations-p1`, `sql_transaction_participants-p1`,
+   `sql_transactions-p1`, and `sql_write_operations-p1`.
+10. the immediate work is no longer startup authority, publication ACK, or
+    priority follow-up creation; it is durable membership trim and CDC
+    projection visibility after operation drain soft-closure.
+
+April 27 pause: this package was not the current execution owner while the
+representative `rolling-restart --fast-local` run is blocked earlier by
+load-readiness priority follow-up under transport pressure. The post-active
+operation drain and durable trim boundary remains queued here and should resume
+only after the active April 27 priority follow-up package closes or migrates.
+
+Latest representative evidence after the restart-recovery pressure repair and
+replacement-target `NOT_FOUND` safety update:
+
+1. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --fast-local`
+2. Result: failed, `0/1` passed after `441.3s`.
+3. Terminal barrier: `Convergence timeout after 120000ms`.
+4. failover, convergence, and restart-recovery gates were closed.
+5. publication epoch `46` was `PUBLISHED` with pending ACK count `0`, blocked
+   publication node count `0`, and missing published node count `0`.
+6. priority recovery was satisfied: ready eligible node count `5`, blocked
+   priority recovery count `0`, unresolved priority recovery count `0`.
+7. stale in-flight operation count was `0`.
+8. in-flight replica operation count was `4`:
+   `replica_operations-p1`, `sql_transaction_participants-p1`,
+   `sql_write_operations-p1`, and `sql_transactions-p1`.
+9. over-target voters remained only on `replica_operations-p1` and
+   `sql_transaction_participants-p1`, with max over-target around `134113ms`.
+10. post-rebalance closure remained open on operation drain, membership trim,
+    and no-over-target evidence.
+
+The queued owner boundary is therefore post-active operation lifecycle drain
+and durable trim after publication/restart-recovery gates have closed. The
+latest `NOT_FOUND` safety slice reduced the prior stuck active source-removal
+set, but the remaining rows still need one canonical transition-progress or
+terminal cleanup path under control-plane pressure once the earlier
+load-readiness gate is closed.
+
+Latest focused validation:
+
+1. `node --test test/rebalancer/quorum-conditioned-remove-safety.test.js test/rebalancer/replace-replica-workflow.test.js`
+   passed with `442/442` assertions.
+2. `node --test test/control-plane/pressure-governor.test.js test/control-plane/control-plane-system-table-gateway.test.js test/cdc/cdc-integration-service.test.js`
+   passed with `350/350` assertions.
+3. `npm run test:metadata-gateway:audit` passed.
+4. `npm run audit:runtime-grammar` passed, including
+   `audit:state-machine-pressure`.
+5. `npm run audit:guideline:decision-boundaries` passed.
+6. `npm run audit:guideline:literals` passed with `0` new violations.
+7. `git diff --check` passed.
+
+Earlier representative evidence after the publication ACK closure fixes and
 state-machine pressure preflight:
 
 1. `test-output/report.json`
@@ -188,7 +351,7 @@ The residual is therefore no longer stale completed `MOVE_ASSIGNMENT` rows or
 completed replacement-election retry loops. The next active boundary is
 control-plane quiescence while priority partitions still have live
 `spread_satisfied_in_flight` operation evidence. That work is now split as
-[Control plane quiescence owner snapshot](./todo-20260426-control-plane-quiescence-owner-snapshot.md).
+[Control plane quiescence owner snapshot](./done-20260426-control-plane-quiescence-owner-snapshot.md).
 
 ## April 26 Quiescence-Owner Rerun Update
 
@@ -443,6 +606,50 @@ bootstrap admission. The current systemic boundary is priority-spread recovery
 operation creation/progression during load readiness, before the scenario
 reaches the post-active over-target convergence barrier.
 
+## April 27 Post-Published Trim And Cleanup Ordering Update
+
+The April 27 continuation closed two bounded symptoms in this package and then
+hit a surprising earlier load-readiness blocker:
+
+1. the literal-guideline baseline was refreshed mechanically after line and
+   column drift only; the raw inherited count for that slice was `6187` and the
+   audit still reported `0` new violations
+2. `control_plane_publications-p1` now requires full endpoint visibility only
+   while the latest membership publication is not yet `PUBLISHED` or priority
+   recovery is still active
+3. focused coverage proves post-published
+   `control_plane_publications-p1` trim can proceed when endpoint visibility
+   covers the replica target
+4. safe priority topology-cleanup removes now keep their ordering priority even
+   when a normal budget slot is available, so add-like work cannot consume the
+   only slot ahead of standalone-safe over-target cleanup
+5. focused and full unified-rebalancer coverage prove the saturated-budget and
+   available-budget cleanup ordering paths
+
+Representative migration:
+
+1. `test-output/reports/runtime-stability-rolling-restart-20260427-codex-post-published-publication-trim.report.json`
+   failed with `priority_recovery_progress_blocked`, not publication ACK debt.
+   Publication epoch `15` was `PUBLISHED`, pending ACK count was `0`, and
+   `replica_operations-p1` reached target voter count. The remaining evidence
+   was SQL priority over-target and operation drain under CDC/transport
+   pressure.
+2. `test-output/reports/runtime-stability-rolling-restart-20260427-codex-priority-cleanup-first.report.json`
+   failed during load readiness after `351.9s`. Publication epoch `5` was
+   `PUBLISHED`, pending ACK count was `0`, blocked publication node count was
+   `0`, and the recovery protocol state was `priority_spread_pending`.
+3. the latest blocked priority partitions are `sql_transactions-p1` and
+   `sql_write_operations-p1`. `sql_transactions-p1` has a terminal failed
+   operation witness; `sql_write_operations-p1` is `needs_operation` with
+   `eligible_but_no_operation_created`.
+4. the latest logs are dominated by router message timeouts, outbound queue
+   saturation, system-table query/update pressure, heartbeat/write-health
+   degradation, and authoritative discovery repair failures.
+
+The original publication ACK and post-published endpoint-visibility blocker is
+closed. The current surprise is split as
+[Rolling restart priority follow-up under transport pressure](./active-20260427-rolling-restart-priority-follow-up-under-transport-pressure.md).
+
 
 ## Scope Basis
 
@@ -590,6 +797,11 @@ Closure requirements:
       placement is already converged.
 - [x] Fully acknowledged membership trim candidates publish immediately instead
       of creating an `OPEN` epoch with no pending ACK debt.
+- [x] Frozen speculative publication debt no longer wins over effective
+      published membership during membership freeze in post-rebalance closure
+      diagnostics.
+- [x] State-machine pressure preflight preserves active-gate count-only pending
+      ACK evidence without manufacturing empty required-ACK-list completion.
 - [x] Missing priority-spread recovery operation creation closed in the
       recent-intent rerun, proving the earlier
       `eligible_but_no_operation_created` gap was not still the active symptom.
@@ -602,8 +814,13 @@ Closure requirements:
       during load readiness.
 - [x] Required priority recovery operation creation bypasses local mutation
       readiness deferral and reaches rebalance evaluation.
-- [x] The latest representative rerun reaches the post-active convergence
-      barrier again instead of failing load readiness on
+- [x] Post-published `control_plane_publications-p1` trim no longer requires
+      full endpoint visibility once the latest publication is `PUBLISHED` and
+      priority recovery is inactive.
+- [x] Standalone-safe priority cleanup removes are ordered before add-like work
+      even when a normal budget slot is available.
+- [ ] A representative rerun reaches the post-active convergence barrier again
+      instead of failing load readiness on
       `eligible_but_no_operation_created`.
 - [x] Focused regression covers active replacement source-removal progress
       after ordinary stop-phase success.
@@ -617,10 +834,15 @@ Closure requirements:
 - [x] Stale active rows with `completedAt` reconcile out of in-flight operation
       drain; the focused proof is closed in
       [MOVE_ASSIGNMENT liveness proof hardening](./done-20260426-move-assignment-liveness-proof-hardening.md).
-- [x] The current quiescence blocker is split into a dedicated active work
-      package.
-- [ ] `rolling-restart` passes or moves to a newly named owner boundary with
-      the post-active transition-pressure loop closed.
+- [x] The current quiescence blocker is split into a dedicated work package.
+- [x] `rolling-restart` passes or moves to a newly named owner boundary with
+      the post-active transition-pressure loop closed. The active boundary is
+      now
+      [Control plane quiescence stable window after publication closure](./active-20260429-control-plane-quiescence-stable-window-after-publication-closure.md).
+- [ ] The load-readiness regression on
+      `eligible_but_no_operation_created` under transport/query pressure is
+      tracked in
+      [Rolling restart priority follow-up under transport pressure](./active-20260427-rolling-restart-priority-follow-up-under-transport-pressure.md).
 
 ## Validation
 
@@ -853,6 +1075,74 @@ Executed before activation:
      `OPEN`, pending ACK count `0`, blocked node count `5`, and over-target
      durations on `control_plane_publications-p1`, `replica_operations-p1`,
      and `sql_transactions-p1`.
+168. `node --check src/rebalancer/unified-rebalancer-segment-1.js`
+169. Result: passed.
+170. `node --check test/rebalancer/unified-rebalancer.test-part-5-4.js`
+171. Result: passed.
+172. `npm test -- test/rebalancer/unified-rebalancer.test-part-5-4.js`
+173. Result: passed, `28/28`.
+174. `node --check src/rebalancer/unified-rebalancer-segment-4.js`
+175. Result: passed.
+176. `node --check test/rebalancer/unified-rebalancer.test.js`
+177. Result: passed.
+178. `npm test -- test/rebalancer/unified-rebalancer.test.js --grep "prioritizes safe priority cleanup removes when budget is available"`
+179. Result: passed.
+180. `npm test -- test/rebalancer/unified-rebalancer.test.js`
+181. Result: passed, `152/152`.
+182. `npm run audit:guideline:literals`
+183. Result: passed with `0` new violations and `6187` inherited baseline
+     violations.
+184. `npm run audit:guideline:decision-boundaries`
+185. Result: passed.
+186. `npm run audit:runtime-grammar`
+187. Result: passed, including `audit:state-machine-pressure`.
+188. `npm run audit:guideline:boundary-mode-contracts`
+189. Result: passed.
+190. `git diff --check`
+191. Result: passed.
+192. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --fast-local --output test-output/reports/runtime-stability-rolling-restart-20260427-codex-post-published-publication-trim.report.json --verbose`
+193. Result: failed after `550.5s`. Publication epoch `15` was
+     `PUBLISHED`, pending ACK count was `0`, and
+     `replica_operations-p1` reached target voter count. The failure migrated
+     to `priority_recovery_progress_blocked` with SQL priority over-target
+     evidence and CDC/transport pressure.
+194. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --fast-local --output test-output/reports/runtime-stability-rolling-restart-20260427-codex-priority-cleanup-first.report.json --verbose`
+195. Result: failed after `351.9s` during load readiness. Publication epoch
+     `5` was `PUBLISHED`, pending ACK count was `0`, blocked publication node
+     count was `0`, and unresolved priority partitions were
+     `sql_transactions-p1` and `sql_write_operations-p1`.
+196. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --fast-local`
+197. Result: failed after `404.4s` at `waitForConvergence`. The report is
+     `test-output/report.json`; publication epoch `13` is `ACK_PENDING`,
+     pending ACK count is `1`, pending ACK node is
+     `8be8d30f-4499-5eed-865c-71b4d529a67a`, blocked publication node count
+     is `5`, and the dominant reason is
+     `control_plane_publication_pending`.
+198. `node --check test/distributed/harness/post-rebalance-closure-contract.js`
+199. Result: passed.
+200. `node --check test/distributed/harness/__tests__/post-rebalance-closure-contract.test.js`
+201. Result: passed.
+202. `node --test test/distributed/harness/__tests__/post-rebalance-closure-contract.test.js`
+203. Result: passed with `5/5` skipped by the existing harness skip gate.
+204. Inline import assertion for frozen publication visibility.
+205. Result: passed.
+206. `node --test test/distributed/harness/__tests__/failure-bundle.test.js`
+207. Result: passed, `53/53`.
+208. `node --check test/distributed/harness/state-machine-pressure-preflight.js`
+209. Result: passed.
+210. `node --test test/distributed/harness/__tests__/state-machine-pressure-preflight.test.js`
+211. Result: passed, `13/13`.
+212. `git diff --check -- test/distributed/harness/post-rebalance-closure-contract.js test/distributed/harness/__tests__/post-rebalance-closure-contract.test.js test/distributed/harness/state-machine-pressure-preflight.js`
+213. Result: passed.
+214. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --fast-local --output test-output/reports/runtime-stability-rolling-restart-20260429-codex-frozen-publication-visibility.report.json --verbose`
+215. Result: failed after `606.8s`, but publication convergence closed.
+     Publication epoch `4` is `PUBLISHED`, pending ACK count is `0`, blocked
+     publication node count is `0`, and failover/convergence/restart-recovery
+     gates are closed. The terminal barrier is now
+     `waitForControlPlaneQuiescence`, with final state
+     `quiescence_candidate`, `canonicalBlocker=null`, `stableElapsedMs=0`,
+     raw `inFlightCount=1`, `effectiveInFlightCount=0`, and one stale
+     discounted operation.
 
 ## Done When
 

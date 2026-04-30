@@ -7,6 +7,13 @@ import {
   runGuidelineCheckWhenDirect,
 } from './guideline-check-shared.js';
 
+const LOCAL_STR_SLASH = '/';
+const LOCAL_STR_EMPTY = '';
+const LOCAL_NUM_ONE = 1;
+const LOCAL_STR_1M6MB = 'hotspot boundary still contains legacy semantic mode fragment ';
+const LOCAL_STR_15J5F = 'boundary-mode-contract hotspot';
+const LOCAL_NUM_TWO = 2;
+
 const RULE_REFERENCE =
   'system guidelines.md §0.2.1 Shared Contract Shape And Boundary-Impedance Discipline';
 
@@ -39,7 +46,7 @@ const BOUNDARY_MODE_HOTSPOT_CONTRACTS = Object.freeze({
 });
 
 function normalizePath(filePath) {
-  return filePath.split(path.sep).join('/');
+  return filePath.split(path.sep).join(LOCAL_STR_SLASH);
 }
 
 function resolveBoundaryModeContract(filePath) {
@@ -52,15 +59,15 @@ function collectBoundaryModeContractViolationsFromSource(source, filePath) {
     return [];
   }
   return bannedFragments
-    .filter((fragment) => String(source || '').includes(fragment))
+    .filter((fragment) => String(source || LOCAL_STR_EMPTY).includes(fragment))
     .map((fragment) => ({
       filePath,
-      line: 1,
-      column: 1,
+      line: LOCAL_NUM_ONE,
+      column: LOCAL_NUM_ONE,
       kind: VIOLATION_KIND,
       target: fragment,
       reason:
-        'hotspot boundary still contains legacy semantic mode fragment ' +
+        LOCAL_STR_1M6MB +
         `"${fragment}" instead of the named mode contract`,
       ruleReference: RULE_REFERENCE,
     }));
@@ -81,11 +88,11 @@ async function buildBoundaryModeContractViolationReport(pathsToScan) {
 function formatBoundaryModeContractHumanSummary(report) {
   return formatGuidelineHumanSummary(
     report,
-    'boundary-mode-contract hotspot',
+    LOCAL_STR_15J5F,
   );
 }
 
-async function main(argv = process.argv.slice(2)) {
+async function main(argv = process.argv.slice(LOCAL_NUM_TWO)) {
   return runGuidelineCheck(
     argv,
     buildBoundaryModeContractViolationReport,

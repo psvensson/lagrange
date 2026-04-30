@@ -14,6 +14,10 @@ import {
 import {PRESSURE_WORK_CLASS} from '../control-plane/pressure-governor.js';
 import {QUERY_ERROR_CODE, QUERY_ERROR_MSG} from './query-constants.js';
 import {TableCreationServicePart1} from './table-creation-service-class-part-1.js';
+
+
+const LOCAL_STR_OBJECT = 'object';
+
 const TABLE_CREATION_SERVICE_LITERAL = Object.freeze({
   BOOLEAN: 'boolean',
   FUNCTION: 'function',
@@ -98,7 +102,7 @@ function resolveTableCreationMutationContractOutcome(
   for (const mutationResult of Array.isArray(mutationResults) ?
     mutationResults :
     []) {
-    if (!mutationResult || typeof mutationResult !== 'object') {
+    if (!mutationResult || typeof mutationResult !== LOCAL_STR_OBJECT) {
       continue;
     }
     const mutationOutcome =

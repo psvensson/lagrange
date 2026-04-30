@@ -15,6 +15,9 @@ import {
 } from '../bootstrap-constants.js';
 import {JOINING_ERROR_MSG} from '../node-joining-constants.js';
 
+const LOCAL_STR_OBJECT = 'object';
+const LOCAL_NUM_ZERO = 0;
+
 const READINESS_CONVERGENCE_PHASE =
   'joining:readiness-convergence';
 
@@ -149,7 +152,7 @@ const REQUIRED_SEGMENTS = Object.freeze([
  *   absent, or a required segment is empty.
  */
 function assertJoinPlanSegments(plan) {
-  if (!plan.segments || typeof plan.segments !== 'object') {
+  if (!plan.segments || typeof plan.segments !== LOCAL_STR_OBJECT) {
     throw new Error(JOINING_ERROR_MSG.JOIN_PLAN_SEGMENTS_MISSING);
   }
 
@@ -160,7 +163,7 @@ function assertJoinPlanSegments(plan) {
         JOINING_ERROR_MSG.joinPlanSegmentMissing(segmentName),
       );
     }
-    if (segment.length === 0) {
+    if (segment.length === LOCAL_NUM_ZERO) {
       throw new Error(
         JOINING_ERROR_MSG.joinPlanSegmentEmpty(segmentName),
       );

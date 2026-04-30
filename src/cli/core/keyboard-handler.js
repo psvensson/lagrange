@@ -1,3 +1,68 @@
+const LOCAL_STR_NORMAL = 'normal';
+const LOCAL_STR_FILTER = 'filter';
+const LOCAL_STR_COMMAND = 'command';
+const LOCAL_STR_NODES = 'nodes';
+const LOCAL_STR_REPLICAS = 'replicas';
+const LOCAL_STR_TABLES = 'tables';
+const LOCAL_STR_PARTITIONS = 'partitions';
+const LOCAL_STR_MESSAGE_GROUPS = 'message_groups';
+const LOCAL_STR_SQL = 'sql';
+const LOCAL_STR_LOGS = 'logs';
+const LOCAL_STR_CONFIG = 'config';
+const LOCAL_STR_CONTEXTS = 'contexts';
+const LOCAL_STR_SERVICES = 'services';
+const LOCAL_STR_EMPTY = '';
+const LOCAL_NUM_10 = 10;
+const LOCAL_STR_HELP_DISMISS = 'help:dismiss';
+const LOCAL_STR_C = 'c';
+const LOCAL_STR_APP_FORCE_QUIT = 'app:force-quit';
+const LOCAL_STR_ESCAPE = 'escape';
+const LOCAL_STR_FILTER_CANCEL = 'filter:cancel';
+const LOCAL_STR_ENTER = 'enter';
+const LOCAL_STR_FILTER_APPLY = 'filter:apply';
+const LOCAL_STR_BACKSPACE = 'backspace';
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_NUM_ONE = 1;
+const LOCAL_STR_FILTER_INPUT = 'filter:input';
+const LOCAL_STR_COMMAND_INPUT = 'command:input';
+const LOCAL_STR_VIEW_SWITCH = 'view:switch';
+const LOCAL_STR_SLASH = '/';
+const LOCAL_STR_MODE_FILTER = 'mode:filter';
+const LOCAL_STR_COLON = ':';
+const LOCAL_STR_MODE_COMMAND = 'mode:command';
+const LOCAL_STR_QUESTION = '?';
+const LOCAL_STR_HELP_SHOW = 'help:show';
+const LOCAL_STR_COMMAND_CANCEL = 'command:cancel';
+const LOCAL_STR_TAB = 'tab';
+const LOCAL_STR_UP = 'up';
+const LOCAL_STR_DOWN = 'down';
+const LOCAL_STR_COMMAND_HISTORY = 'command:history';
+const LOCAL_STR_COMMAND_ERROR = 'command:error';
+const LOCAL_STR_COMMAND_EXECUTE = 'command:execute';
+const LOCAL_STR_12RO8 = 'command:autocomplete';
+const LOCAL_STR_1Y3VE = 'command:completions';
+const LOCAL_STR_KEYBOARD_MODE = 'keyboard:mode';
+const LOCAL_STR_KEYBOARD_INPUT = 'keyboard:input';
+const LOCAL_STR_ENTER_2 = 'Enter';
+const LOCAL_STR_APPLY_FILTER = 'Apply filter';
+const LOCAL_STR_ESCAPE_2 = 'Escape';
+const LOCAL_STR_CANCEL = 'Cancel';
+const LOCAL_STR_EXECUTE_COMMAND = 'Execute command';
+const LOCAL_STR_TAB_2 = 'Tab';
+const LOCAL_STR_AUTOCOMPLETE = 'Autocomplete';
+const LOCAL_STR_1UYVY = '↑/↓';
+const LOCAL_STR_NAVIGATE = 'Navigate';
+const LOCAL_STR_SELECT = 'Select';
+const LOCAL_STR_FILTER_2 = 'Filter';
+const LOCAL_STR_COMMAND_2 = 'Command';
+const LOCAL_STR_P = 'p';
+const LOCAL_STR_PAUSE_RESUME_CDC = 'Pause/Resume CDC';
+const LOCAL_STR_R = 'r';
+const LOCAL_STR_REFRESH = 'Refresh';
+const LOCAL_STR_HELP = 'Help';
+const LOCAL_STR_Q = 'q';
+const LOCAL_STR_QUIT = 'Quit';
+
 /**
  * KeyboardHandler - Centralized keyboard navigation and input handling
  *
@@ -11,25 +76,25 @@
  * Input modes for the keyboard handler
  */
 export const INPUT_MODE = {
-  NORMAL: 'normal',
-  FILTER: 'filter',
-  COMMAND: 'command',
+  NORMAL: LOCAL_STR_NORMAL,
+  FILTER: LOCAL_STR_FILTER,
+  COMMAND: LOCAL_STR_COMMAND,
 };
 
 /**
  * View mapping for number keys
  */
 export const VIEW_KEYS = {
-  '1': 'nodes',
-  '2': 'replicas',
-  '3': 'tables',
-  '4': 'partitions',
-  '5': 'message_groups',
-  '6': 'sql',
-  '7': 'logs',
-  '8': 'config',
-  '9': 'contexts',
-  '0': 'services',
+  '1': LOCAL_STR_NODES,
+  '2': LOCAL_STR_REPLICAS,
+  '3': LOCAL_STR_TABLES,
+  '4': LOCAL_STR_PARTITIONS,
+  '5': LOCAL_STR_MESSAGE_GROUPS,
+  '6': LOCAL_STR_SQL,
+  '7': LOCAL_STR_LOGS,
+  '8': LOCAL_STR_CONFIG,
+  '9': LOCAL_STR_CONTEXTS,
+  '0': LOCAL_STR_SERVICES,
 };
 
 const NORMAL_MODE_NAVIGATION_ACTION = Object.freeze({
@@ -93,10 +158,10 @@ export class KeyboardHandler {
     this.mode = INPUT_MODE.NORMAL;
 
     // Input buffer for filter/command modes
-    this.inputBuffer = '';
+    this.inputBuffer = LOCAL_STR_EMPTY;
 
     // Page size for Page Up/Down
-    this.pageSize = options.pageSize || 10;
+    this.pageSize = options.pageSize || LOCAL_NUM_10;
 
     // Callbacks for mode changes
     this.onModeChange = options.onModeChange || null;
@@ -113,7 +178,7 @@ export class KeyboardHandler {
     // Help overlay takes priority
     if (this.helpOverlay && this.helpOverlay.isVisible()) {
       this.helpOverlay.handleKey(key);
-      return {type: 'help:dismiss'};
+      return {type: LOCAL_STR_HELP_DISMISS};
     }
 
     // Route based on current mode
@@ -156,8 +221,8 @@ export class KeyboardHandler {
       return helpAction;
     }
 
-    if (key.ctrl && ch === 'c') {
-      return this.emitAction('app:force-quit');
+    if (key.ctrl && ch === LOCAL_STR_C) {
+      return this.emitAction(LOCAL_STR_APP_FORCE_QUIT);
     }
 
     return this.handleNormalModeCharacterAction(ch);
@@ -172,32 +237,32 @@ export class KeyboardHandler {
     const keyName = key.full || key.name || '';
 
     // Escape exits filter mode
-    if (keyName === 'escape') {
+    if (keyName === LOCAL_STR_ESCAPE) {
       this.exitInputMode();
-      return {type: 'filter:cancel'};
+      return {type: LOCAL_STR_FILTER_CANCEL};
     }
 
     // Enter applies filter
-    if (keyName === 'enter') {
+    if (keyName === LOCAL_STR_ENTER) {
       const filter = this.inputBuffer;
       this.exitInputMode();
-      return this.emitAction('filter:apply', {pattern: filter});
+      return this.emitAction(LOCAL_STR_FILTER_APPLY, {pattern: filter});
     }
 
     // Backspace removes character
-    if (keyName === 'backspace') {
-      if (this.inputBuffer.length > 0) {
-        this.inputBuffer = this.inputBuffer.slice(0, -1);
+    if (keyName === LOCAL_STR_BACKSPACE) {
+      if (this.inputBuffer.length > LOCAL_NUM_ZERO) {
+        this.inputBuffer = this.inputBuffer.slice(LOCAL_NUM_ZERO, -LOCAL_NUM_ONE);
         this.notifyInputChange();
       }
-      return {type: 'filter:input', value: this.inputBuffer};
+      return {type: LOCAL_STR_FILTER_INPUT, value: this.inputBuffer};
     }
 
     // Add printable characters
-    if (key.ch && key.ch.length === 1) {
+    if (key.ch && key.ch.length === LOCAL_NUM_ONE) {
       this.inputBuffer += key.ch;
       this.notifyInputChange();
-      return {type: 'filter:input', value: this.inputBuffer};
+      return {type: LOCAL_STR_FILTER_INPUT, value: this.inputBuffer};
     }
 
     return null;
@@ -215,7 +280,7 @@ export class KeyboardHandler {
       return specialAction;
     }
 
-    return this.handleBufferedCharacterInput(key.ch, 'command:input');
+    return this.handleBufferedCharacterInput(key.ch, LOCAL_STR_COMMAND_INPUT);
   }
 
   handleNormalModeNavigationKey(keyName) {
@@ -231,29 +296,29 @@ export class KeyboardHandler {
 
   handleNormalModeViewSwitch(ch) {
     const view = VIEW_KEYS[ch];
-    return view ? this.emitAction('view:switch', {view}) : null;
+    return view ? this.emitAction(LOCAL_STR_VIEW_SWITCH, {view}) : null;
   }
 
   handleNormalModeInputModeSwitch(ch) {
-    if (ch === '/') {
+    if (ch === LOCAL_STR_SLASH) {
       this.enterFilterMode();
-      return {type: 'mode:filter'};
+      return {type: LOCAL_STR_MODE_FILTER};
     }
-    if (ch === ':') {
+    if (ch === LOCAL_STR_COLON) {
       this.enterCommandMode();
-      return {type: 'mode:command'};
+      return {type: LOCAL_STR_MODE_COMMAND};
     }
     return null;
   }
 
   handleNormalModeHelp(ch) {
-    if (ch !== '?') {
+    if (ch !== LOCAL_STR_QUESTION) {
       return null;
     }
     if (this.helpOverlay) {
       this.helpOverlay.show();
     }
-    return {type: 'help:show'};
+    return {type: LOCAL_STR_HELP_SHOW};
   }
 
   handleNormalModeCharacterAction(ch) {
@@ -262,24 +327,24 @@ export class KeyboardHandler {
   }
 
   handleCommandModeSpecialKey(keyName) {
-    if (keyName === 'escape') {
+    if (keyName === LOCAL_STR_ESCAPE) {
       this.exitInputMode();
-      return {type: 'command:cancel'};
+      return {type: LOCAL_STR_COMMAND_CANCEL};
     }
-    if (keyName === 'enter') {
+    if (keyName === LOCAL_STR_ENTER) {
       return this.executeBufferedCommand();
     }
-    if (keyName === 'tab') {
+    if (keyName === LOCAL_STR_TAB) {
       return this.autocompleteCommandInput();
     }
-    if (keyName === 'up') {
+    if (keyName === LOCAL_STR_UP) {
       return this.recallCommandHistory();
     }
-    if (keyName === 'down') {
-      return {type: 'command:history', direction: 'down'};
+    if (keyName === LOCAL_STR_DOWN) {
+      return {type: LOCAL_STR_COMMAND_HISTORY, direction: LOCAL_STR_DOWN};
     }
-    if (keyName === 'backspace') {
-      return this.removeBufferedCharacter('command:input');
+    if (keyName === LOCAL_STR_BACKSPACE) {
+      return this.removeBufferedCharacter(LOCAL_STR_COMMAND_INPUT);
     }
     return null;
   }
@@ -291,31 +356,31 @@ export class KeyboardHandler {
     if (this.commandParser) {
       const result = this.commandParser.parse(command);
       if (result.error) {
-        return this.emitAction('command:error', {error: result.error});
+        return this.emitAction(LOCAL_STR_COMMAND_ERROR, {error: result.error});
       }
-      return this.emitAction('command:execute', {
+      return this.emitAction(LOCAL_STR_COMMAND_EXECUTE, {
         command: result.command,
         args: result.args,
       });
     }
 
-    return {type: 'command:execute', command};
+    return {type: LOCAL_STR_COMMAND_EXECUTE, command};
   }
 
   autocompleteCommandInput() {
     if (!this.commandParser) {
-      return {type: 'command:autocomplete', value: this.inputBuffer};
+      return {type: LOCAL_STR_12RO8, value: this.inputBuffer};
     }
 
     const completions = this.commandParser.getCompletions(this.inputBuffer);
-    if (completions.length === 1) {
-      this.inputBuffer = completions[0];
+    if (completions.length === LOCAL_NUM_ONE) {
+      this.inputBuffer = completions[LOCAL_NUM_ZERO];
       this.notifyInputChange();
-    } else if (completions.length > 1) {
-      return {type: 'command:completions', completions};
+    } else if (completions.length > LOCAL_NUM_ONE) {
+      return {type: LOCAL_STR_1Y3VE, completions};
     }
 
-    return {type: 'command:autocomplete', value: this.inputBuffer};
+    return {type: LOCAL_STR_12RO8, value: this.inputBuffer};
   }
 
   recallCommandHistory() {
@@ -324,23 +389,23 @@ export class KeyboardHandler {
     }
 
     const history = this.commandParser.getHistory();
-    if (history.length > 0) {
-      this.inputBuffer = history[0] || '';
+    if (history.length > LOCAL_NUM_ZERO) {
+      this.inputBuffer = history[LOCAL_NUM_ZERO] || LOCAL_STR_EMPTY;
       this.notifyInputChange();
     }
-    return {type: 'command:history', direction: 'up'};
+    return {type: LOCAL_STR_COMMAND_HISTORY, direction: LOCAL_STR_UP};
   }
 
   removeBufferedCharacter(actionType) {
-    if (this.inputBuffer.length > 0) {
-      this.inputBuffer = this.inputBuffer.slice(0, -1);
+    if (this.inputBuffer.length > LOCAL_NUM_ZERO) {
+      this.inputBuffer = this.inputBuffer.slice(LOCAL_NUM_ZERO, -LOCAL_NUM_ONE);
       this.notifyInputChange();
     }
     return {type: actionType, value: this.inputBuffer};
   }
 
   handleBufferedCharacterInput(ch, actionType) {
-    if (!ch || ch.length !== 1) {
+    if (!ch || ch.length !== LOCAL_NUM_ONE) {
       return null;
     }
 
@@ -354,7 +419,7 @@ export class KeyboardHandler {
    */
   enterFilterMode() {
     this.mode = INPUT_MODE.FILTER;
-    this.inputBuffer = '';
+    this.inputBuffer = LOCAL_STR_EMPTY;
     this.notifyModeChange();
   }
 
@@ -363,7 +428,7 @@ export class KeyboardHandler {
    */
   enterCommandMode() {
     this.mode = INPUT_MODE.COMMAND;
-    this.inputBuffer = '';
+    this.inputBuffer = LOCAL_STR_EMPTY;
     this.notifyModeChange();
   }
 
@@ -372,7 +437,7 @@ export class KeyboardHandler {
    */
   exitInputMode() {
     this.mode = INPUT_MODE.NORMAL;
-    this.inputBuffer = '';
+    this.inputBuffer = LOCAL_STR_EMPTY;
     this.notifyModeChange();
   }
 
@@ -438,7 +503,7 @@ export class KeyboardHandler {
     }
 
     if (this.eventBus) {
-      this.eventBus.emit('keyboard:mode', {mode: this.mode});
+      this.eventBus.emit(LOCAL_STR_KEYBOARD_MODE, {mode: this.mode});
     }
   }
 
@@ -451,7 +516,7 @@ export class KeyboardHandler {
     }
 
     if (this.eventBus) {
-      this.eventBus.emit('keyboard:input', {
+      this.eventBus.emit(LOCAL_STR_KEYBOARD_INPUT, {
         mode: this.mode,
         value: this.inputBuffer,
       });
@@ -465,26 +530,26 @@ export class KeyboardHandler {
   getAvailableShortcuts() {
     if (this.mode === INPUT_MODE.FILTER) {
       return [
-        {key: 'Enter', description: 'Apply filter'},
-        {key: 'Escape', description: 'Cancel'},
+        {key: LOCAL_STR_ENTER_2, description: LOCAL_STR_APPLY_FILTER},
+        {key: LOCAL_STR_ESCAPE_2, description: LOCAL_STR_CANCEL},
       ];
     }
     if (this.mode === INPUT_MODE.COMMAND) {
       return [
-        {key: 'Enter', description: 'Execute command'},
-        {key: 'Tab', description: 'Autocomplete'},
-        {key: 'Escape', description: 'Cancel'},
+        {key: LOCAL_STR_ENTER_2, description: LOCAL_STR_EXECUTE_COMMAND},
+        {key: LOCAL_STR_TAB_2, description: LOCAL_STR_AUTOCOMPLETE},
+        {key: LOCAL_STR_ESCAPE_2, description: LOCAL_STR_CANCEL},
       ];
     }
     return [
-      {key: '↑/↓', description: 'Navigate'},
-      {key: 'Enter', description: 'Select'},
-      {key: '/', description: 'Filter'},
-      {key: ':', description: 'Command'},
-      {key: 'p', description: 'Pause/Resume CDC'},
-      {key: 'r', description: 'Refresh'},
-      {key: '?', description: 'Help'},
-      {key: 'q', description: 'Quit'},
+      {key: LOCAL_STR_1UYVY, description: LOCAL_STR_NAVIGATE},
+      {key: LOCAL_STR_ENTER_2, description: LOCAL_STR_SELECT},
+      {key: LOCAL_STR_SLASH, description: LOCAL_STR_FILTER_2},
+      {key: LOCAL_STR_COLON, description: LOCAL_STR_COMMAND_2},
+      {key: LOCAL_STR_P, description: LOCAL_STR_PAUSE_RESUME_CDC},
+      {key: LOCAL_STR_R, description: LOCAL_STR_REFRESH},
+      {key: LOCAL_STR_QUESTION, description: LOCAL_STR_HELP},
+      {key: LOCAL_STR_Q, description: LOCAL_STR_QUIT},
     ];
   }
 
@@ -499,7 +564,7 @@ export class KeyboardHandler {
     if (this.mode === INPUT_MODE.COMMAND) {
       return `:${this.inputBuffer}_`;
     }
-    return '';
+    return LOCAL_STR_EMPTY;
   }
 
   /**
@@ -509,7 +574,7 @@ export class KeyboardHandler {
    */
   isNavigationKey(key) {
     const navKeys = ['up', 'down', 'pageup', 'pagedown', 'home', 'end'];
-    return navKeys.includes(key.name || key.full || '');
+    return navKeys.includes(key.name || key.full || LOCAL_STR_EMPTY);
   }
 
   /**
@@ -518,7 +583,7 @@ export class KeyboardHandler {
    * @returns {boolean}
    */
   isViewSwitchKey(key) {
-    return Object.prototype.hasOwnProperty.call(VIEW_KEYS, key.ch || '');
+    return Object.prototype.hasOwnProperty.call(VIEW_KEYS, key.ch || LOCAL_STR_EMPTY);
   }
 
   /**
@@ -527,6 +592,6 @@ export class KeyboardHandler {
    * @returns {string|null}
    */
   getViewForKey(key) {
-    return VIEW_KEYS[key.ch || ''] || null;
+    return VIEW_KEYS[key.ch || LOCAL_STR_EMPTY] || null;
   }
 }

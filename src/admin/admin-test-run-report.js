@@ -19,6 +19,10 @@ import {
 } from './admin-test-run-paths.js';
 import {RUN_PROGRESS_PHASE} from './admin-test-run-progress.js';
 
+const LOCAL_STR_OBJECT = 'object';
+const LOCAL_STR_STRING = 'string';
+const LOCAL_NUM_ZERO = 0;
+
 const EMPTY_STRING = '';
 const REPORT_TIMESTAMP_FALLBACK_MS = 0;
 const FULL_PERCENT = 100;
@@ -42,7 +46,7 @@ function isRunStatusActive(status) {
  */
 function resolvePlaybackManifestPath(scenario) {
   const playback = scenario?.playback;
-  if (!playback || typeof playback !== 'object') {
+  if (!playback || typeof playback !== LOCAL_STR_OBJECT) {
     return null;
   }
 
@@ -52,7 +56,7 @@ function resolvePlaybackManifestPath(scenario) {
     playback.files?.manifestPath,
   ];
   for (const candidate of candidates) {
-    if (typeof candidate === 'string' && candidate.trim()) {
+    if (typeof candidate === LOCAL_STR_STRING && candidate.trim()) {
       return candidate;
     }
   }
@@ -70,7 +74,7 @@ function extractExamplesPayload(
   scenarios, outputDir, workspaceRoot,
 ) {
   const fallback = {summary: null, artifactPath: null};
-  if (!Array.isArray(scenarios) || scenarios.length === 0) {
+  if (!Array.isArray(scenarios) || scenarios.length === LOCAL_NUM_ZERO) {
     return fallback;
   }
 
@@ -78,16 +82,16 @@ function extractExamplesPayload(
   let artifactPath = null;
   for (const scenario of scenarios) {
     if (!summary && scenario?.exampleResults &&
-      typeof scenario.exampleResults === 'object') {
+      typeof scenario.exampleResults === LOCAL_STR_OBJECT) {
       summary = scenario.exampleResults;
     }
     const details = scenario?.details;
     if (!summary && details?.exampleResults &&
-      typeof details.exampleResults === 'object') {
+      typeof details.exampleResults === LOCAL_STR_OBJECT) {
       summary = details.exampleResults;
     }
     if (!artifactPath &&
-      typeof details?.artifactPath === 'string') {
+      typeof details?.artifactPath === LOCAL_STR_STRING) {
       artifactPath = details.artifactPath;
     }
   }

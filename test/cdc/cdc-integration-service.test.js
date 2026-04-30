@@ -567,6 +567,87 @@ test('CDCIntegrationService - derives routed SQL admission defaults from one ' +
   t.end();
 });
 
+test('CDCIntegrationService - derives publication mutation pressure admission ' +
+  'from the shared workload class', async (t) => {
+  const mockSqlEngine = createMockSqlQueryEngine();
+  const service = new CDCIntegrationService({
+    nodeId: 'test-node',
+    sqlQueryEngine: mockSqlEngine,
+  });
+  service.initialize();
+
+  let evaluateArgs = null;
+  const originalGetShared = PressureGovernor.getShared;
+  PressureGovernor.getShared = () => ({
+    evaluate(args) {
+      evaluateArgs = args;
+      return {
+        action: 'allow',
+        reason: 'test-allow',
+        summary: null,
+        retryAfterMs: 0,
+      };
+    },
+  });
+  t.after(() => {
+    PressureGovernor.getShared = originalGetShared;
+  });
+
+  await service.upsertSystemTableRow(
+    SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS,
+    {
+      publicationId: 'pub-workload-1',
+      publicationKind: 'cluster_membership',
+      publicationEpoch: 7,
+      publisherNodeId: 'node-a',
+      publishedActiveNodeIds: ['node-a'],
+      requiredAckNodeIds: ['node-a'],
+      acknowledgedNodeIds: [],
+      status: 'OPEN',
+    },
+    {
+      skipCacheWait: true,
+      workloadClass: CONTROL_PLANE_WORKLOAD_CLASS.PUBLICATION_MUTATION,
+    },
+  );
+
+  t.equal(mockSqlEngine.executedQueries.length, 1,
+    'publication workload write should execute once');
+  t.equal(
+    evaluateArgs?.workClass,
+    PRESSURE_WORK_CLASS.CRITICAL,
+    'publication pressure admission should derive the critical work class',
+  );
+  t.equal(
+    evaluateArgs?.allowDefer,
+    true,
+    'publication pressure admission should derive the deferrable contract',
+  );
+  t.ok(
+    evaluateArgs?.resourceKeys?.includes(
+      'control-plane:membership:publication',
+    ),
+    'publication pressure admission should use the membership publication key',
+  );
+  t.ok(
+    evaluateArgs?.resourceKeys?.includes(
+      'control-plane:table:control_plane_publications',
+    ),
+    'publication pressure admission should keep the table-scoped fairness key',
+  );
+  t.equal(
+    mockSqlEngine.executedQueries[0]?.options?.workloadClass,
+    CONTROL_PLANE_WORKLOAD_CLASS.PUBLICATION_MUTATION,
+    'publication routed SQL writes should preserve the workload class',
+  );
+  t.equal(
+    mockSqlEngine.executedQueries[0]?.options?.allowPressureDefer,
+    true,
+    'publication routed SQL writes should preserve the deferrable contract',
+  );
+  t.end();
+});
+
 test('CDCIntegrationService canonicalizes control_plane_publications upserts ' +
   'before filtering schema columns', async (t) => {
   const mockSqlEngine = createMockSqlQueryEngine();

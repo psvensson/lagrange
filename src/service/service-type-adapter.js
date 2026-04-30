@@ -7,6 +7,14 @@ import {
   assertKnownServiceType,
 } from './service-lifecycle-errors.js';
 
+const LOCAL_STR_5JQKT = 'ServiceTypeAdapter is abstract and cannot be instantiated directly';
+const LOCAL_STR_SERVICETYPE = 'serviceType';
+const LOCAL_STR_VALIDATEDEFINITION = 'validateDefinition';
+const LOCAL_STR_CREATEREPLICA = 'createReplica';
+const LOCAL_STR_STARTREPLICA = 'startReplica';
+const LOCAL_STR_STOPREPLICA = 'stopReplica';
+const LOCAL_STR_HEALTH = 'health';
+
 class ServiceTypeAdapter {
   /**
    * @param {string} serviceType
@@ -14,12 +22,12 @@ class ServiceTypeAdapter {
   constructor(serviceType) {
     if (new.target === ServiceTypeAdapter) {
       throw new Error(
-        'ServiceTypeAdapter is abstract and cannot be instantiated directly',
+        LOCAL_STR_5JQKT,
       );
     }
 
     this.serviceType = assertKnownServiceType(serviceType);
-    Object.defineProperty(this, 'serviceType', {
+    Object.defineProperty(this, LOCAL_STR_SERVICETYPE, {
       writable: false,
       configurable: false,
     });
@@ -32,7 +40,7 @@ class ServiceTypeAdapter {
   validateDefinition(_definition) {
     throw new ServiceTypeAdapterNotImplementedError(
       this.serviceType,
-      'validateDefinition',
+      LOCAL_STR_VALIDATEDEFINITION,
     );
   }
 
@@ -43,7 +51,7 @@ class ServiceTypeAdapter {
   async createReplica(_context) {
     throw new ServiceTypeAdapterNotImplementedError(
       this.serviceType,
-      'createReplica',
+      LOCAL_STR_CREATEREPLICA,
     );
   }
 
@@ -55,7 +63,7 @@ class ServiceTypeAdapter {
   async startReplica(_replicaHandle, _context) {
     throw new ServiceTypeAdapterNotImplementedError(
       this.serviceType,
-      'startReplica',
+      LOCAL_STR_STARTREPLICA,
     );
   }
 
@@ -67,7 +75,7 @@ class ServiceTypeAdapter {
   async stopReplica(_replicaHandle, _context) {
     throw new ServiceTypeAdapterNotImplementedError(
       this.serviceType,
-      'stopReplica',
+      LOCAL_STR_STOPREPLICA,
     );
   }
 
@@ -79,7 +87,7 @@ class ServiceTypeAdapter {
   async health(_replicaHandle, _context) {
     throw new ServiceTypeAdapterNotImplementedError(
       this.serviceType,
-      'health',
+      LOCAL_STR_HEALTH,
     );
   }
 }

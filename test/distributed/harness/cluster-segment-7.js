@@ -1,6 +1,9 @@
 import {CLUSTER_SEGMENT_6} from './cluster-segment-6.js';
 import {Cluster5} from './cluster-segment-7-class-5.js';
 import {
+  LIFECYCLE_REASON,
+} from '../../../src/bootstrap/lifecycle-controller-constants.js';
+import {
   buildPriorityRecoveryActiveGateSnapshot,
   deriveLegacyPriorityRecoveryActiveGateFields,
   PRIORITY_RECOVERY_ACTIVE_GATE_STATE,
@@ -32,6 +35,7 @@ const {
   TIMEOUTS,
   UNKNOWN_REASON,
   UNKNOWN_STATE,
+  ONE,
   ZERO,
   buildActiveGateWaitPolicy,
   buildActiveWaitProgressSnapshot,
@@ -48,6 +52,267 @@ const {
   upsertActiveWaitBlockerHistory,
   withTimeout,
 } = CLUSTER_SEGMENT_6;
+
+const LOAD_READINESS_STABLE_WINDOW_TIMESTAMP_STATE = Object.freeze({
+  AVAILABLE: 'available',
+  UNAVAILABLE: 'unavailable',
+});
+const LOAD_READINESS_STABLE_WINDOW_NO_TIMESTAMP = Object.freeze({
+  state: LOAD_READINESS_STABLE_WINDOW_TIMESTAMP_STATE.UNAVAILABLE,
+  timestampMs: ZERO,
+});
+const LOAD_READINESS_STABLE_WINDOW_SOURCE_NONE = 'none';
+const LOAD_READINESS_STABLE_WINDOW_SOURCE_SELECTED_SNAPSHOT =
+  'selected_snapshot';
+const LOAD_READINESS_STABLE_WINDOW_SOURCE_OBSERVED_PROBE =
+  'observed_probe';
+const LOAD_READINESS_STABLE_WINDOW_STATE_CLOSED = 'closed';
+const LOAD_READINESS_STABLE_WINDOW_STATE_PENDING = 'pending';
+const LOAD_READINESS_STABLE_WINDOW_STATE_BLOCKED = 'blocked';
+const LOAD_READINESS_STABLE_WINDOW_BLOCKER_NOT_ACTIVE =
+  'load_readiness_not_active';
+const LOAD_READINESS_STABLE_WINDOW_ROOT_CAUSE_CLASS = 'startup';
+const LOAD_READINESS_STABLE_WINDOW_REASON_READY = 'ready';
+const LOAD_READINESS_STABLE_WINDOW_REASON_PENDING =
+  LIFECYCLE_REASON.READINESS_STABLE_WINDOW_PENDING;
+const LOAD_READINESS_PHASE_UNSPECIFIED = 'unspecified';
+const LOAD_READINESS_STABLE_WINDOW_DECISION_TABLE = Object.freeze([
+  Object.freeze({
+    state: LOAD_READINESS_STABLE_WINDOW_STATE_CLOSED,
+    reasonCode: LOAD_READINESS_STABLE_WINDOW_REASON_READY,
+    matches: (evidence) =>
+      evidence.allActive === true &&
+      evidence.stableElapsedMs >= evidence.stableWindowMs,
+  }),
+  Object.freeze({
+    state: LOAD_READINESS_STABLE_WINDOW_STATE_PENDING,
+    reasonCode: LOAD_READINESS_STABLE_WINDOW_REASON_PENDING,
+    matches: (evidence) => evidence.allActive === true,
+  }),
+  Object.freeze({
+    state: LOAD_READINESS_STABLE_WINDOW_STATE_BLOCKED,
+    reasonCode: LOAD_READINESS_STABLE_WINDOW_BLOCKER_NOT_ACTIVE,
+    matches: () => true,
+  }),
+]);
+
+function normalizeStableWindowTimestamp(timestampMs) {
+  if (!Number.isFinite(timestampMs)) {
+    return LOAD_READINESS_STABLE_WINDOW_NO_TIMESTAMP;
+  }
+  return Object.freeze({
+    state: LOAD_READINESS_STABLE_WINDOW_TIMESTAMP_STATE.AVAILABLE,
+    timestampMs: Math.max(ZERO, Math.floor(timestampMs)),
+  });
+}
+
+function isStableWindowTimestampAvailable(timestamp) {
+  return (
+    timestamp &&
+    timestamp.state === LOAD_READINESS_STABLE_WINDOW_TIMESTAMP_STATE.AVAILABLE
+  );
+}
+
+function resolveLoadReadinessSnapshotStartedAt({
+  snapshotCoverage = {},
+  resetAt = LOAD_READINESS_STABLE_WINDOW_NO_TIMESTAMP,
+  nowMs = ZERO,
+} = {}) {
+  const selectedCapturedAt = normalizeStableWindowTimestamp(
+    snapshotCoverage?.selectedCapturedAtMs,
+  );
+  const normalizedResetAt = isStableWindowTimestampAvailable(resetAt) ?
+    resetAt :
+    LOAD_READINESS_STABLE_WINDOW_NO_TIMESTAMP;
+  if (
+    snapshotCoverage?.completeCoverage !== true ||
+    isStableWindowTimestampAvailable(selectedCapturedAt) !== true ||
+    selectedCapturedAt.timestampMs > nowMs ||
+    (
+      isStableWindowTimestampAvailable(normalizedResetAt) &&
+      selectedCapturedAt.timestampMs < normalizedResetAt.timestampMs
+    )
+  ) {
+    return LOAD_READINESS_STABLE_WINDOW_NO_TIMESTAMP;
+  }
+  return selectedCapturedAt;
+}
+
+function resolveLoadReadinessStableWindowStart({
+  activeProbe,
+  currentStartedAt = LOAD_READINESS_STABLE_WINDOW_NO_TIMESTAMP,
+  currentSource = LOAD_READINESS_STABLE_WINDOW_SOURCE_NONE,
+  resetAt = LOAD_READINESS_STABLE_WINDOW_NO_TIMESTAMP,
+  nowMs = ZERO,
+} = {}) {
+  if (activeProbe?.allActive !== true) {
+    return {
+      startedAt: LOAD_READINESS_STABLE_WINDOW_NO_TIMESTAMP,
+      source: LOAD_READINESS_STABLE_WINDOW_SOURCE_NONE,
+    };
+  }
+  const observedStartedAt = isStableWindowTimestampAvailable(currentStartedAt) ?
+    currentStartedAt :
+    normalizeStableWindowTimestamp(nowMs);
+  const snapshotStartedAt = resolveLoadReadinessSnapshotStartedAt({
+    snapshotCoverage: activeProbe?.snapshotCoverage || {},
+    resetAt,
+    nowMs,
+  });
+  const mayBackdateToSnapshot =
+    currentSource !== LOAD_READINESS_STABLE_WINDOW_SOURCE_OBSERVED_PROBE;
+  if (
+    isStableWindowTimestampAvailable(snapshotStartedAt) &&
+    (
+      snapshotStartedAt.timestampMs < observedStartedAt.timestampMs ?
+        mayBackdateToSnapshot :
+        true
+    )
+  ) {
+    return {
+      startedAt: snapshotStartedAt,
+      source: LOAD_READINESS_STABLE_WINDOW_SOURCE_SELECTED_SNAPSHOT,
+    };
+  }
+  return {
+    startedAt: observedStartedAt,
+    source:
+      isStableWindowTimestampAvailable(currentStartedAt) !== true ||
+        currentSource === LOAD_READINESS_STABLE_WINDOW_SOURCE_NONE ?
+        LOAD_READINESS_STABLE_WINDOW_SOURCE_OBSERVED_PROBE :
+        currentSource,
+  };
+}
+
+function decideLoadReadinessStableWindow({
+  activeProbe,
+  stableWindowMs = ZERO,
+  currentStartedAt = LOAD_READINESS_STABLE_WINDOW_NO_TIMESTAMP,
+  currentSource = LOAD_READINESS_STABLE_WINDOW_SOURCE_NONE,
+  resetAt = LOAD_READINESS_STABLE_WINDOW_NO_TIMESTAMP,
+  nowMs = ZERO,
+} = {}) {
+  const start = resolveLoadReadinessStableWindowStart({
+    activeProbe,
+    currentStartedAt,
+    currentSource,
+    resetAt,
+    nowMs,
+  });
+  const stableElapsedMs =
+    isStableWindowTimestampAvailable(start.startedAt) ?
+      Math.max(ZERO, nowMs - start.startedAt.timestampMs) :
+      ZERO;
+  const evidence = {
+    allActive: activeProbe?.allActive === true,
+    stableWindowMs,
+    stableElapsedMs,
+  };
+  const decision =
+    LOAD_READINESS_STABLE_WINDOW_DECISION_TABLE.find((entry) =>
+      entry.matches(evidence),
+    );
+  return {
+    state: decision.state,
+    reasonCode: decision.reasonCode,
+    stable: decision.state === LOAD_READINESS_STABLE_WINDOW_STATE_CLOSED,
+    stableWindowMs,
+    stableElapsedMs,
+    startedAt: start.startedAt,
+    startedAtState: start.startedAt.state,
+    startedAtMs: start.startedAt.timestampMs,
+    observedAtMs: nowMs,
+    resetAtState: resetAt.state,
+    resetAtMs: resetAt.timestampMs,
+    source: start.source,
+  };
+}
+
+function buildLoadReadinessStableWindowFailure(stableWindow) {
+  if (
+    stableWindow?.reasonCode !== LOAD_READINESS_STABLE_WINDOW_REASON_PENDING
+  ) {
+    return null;
+  }
+  return {
+    rootCauseClass: LOAD_READINESS_STABLE_WINDOW_ROOT_CAUSE_CLASS,
+    dominantReason: LOAD_READINESS_STABLE_WINDOW_REASON_PENDING,
+    reasonCounts: {
+      [LOAD_READINESS_STABLE_WINDOW_REASON_PENDING]: ONE,
+    },
+  };
+}
+
+function normalizeLoadReadinessPhase(value) {
+  return typeof value === 'string' && value.length > ZERO ?
+    value :
+    LOAD_READINESS_PHASE_UNSPECIFIED;
+}
+
+function buildActiveWaitReadinessFailure({
+  mode = null,
+  noProgress = null,
+  attemptsSinceProgress = null,
+  maxAttempts = null,
+} = {}) {
+  if (!noProgress || typeof noProgress !== 'object') {
+    return null;
+  }
+  const readinessDelay =
+    typeof noProgress.readinessDelay === 'object' &&
+    noProgress.readinessDelay !== null ?
+      noProgress.readinessDelay :
+      null;
+  const timedOut = readinessDelay && readinessDelay.timedOut === true;
+  const classCode =
+    timedOut &&
+    typeof readinessDelay?.cause === 'string' &&
+    readinessDelay.cause.length > ZERO ?
+      readinessDelay.cause :
+      noProgress?.reasonCode === ACTIVE_WAIT_NO_PROGRESS_REASON_CODE ||
+          noProgress?.stalled === true ?
+        ACTIVE_WAIT_NO_PROGRESS_CLASS_CODE :
+        null;
+  return {
+    mode: typeof mode === 'string' && mode.length > ZERO ? mode : null,
+    classCode,
+    recoverability:
+      typeof readinessDelay?.recoverability === 'string' &&
+      readinessDelay.recoverability.length > ZERO ?
+        readinessDelay.recoverability :
+        null,
+    progressSignal: {
+      attemptsSinceProgress: Number.isInteger(attemptsSinceProgress) ?
+        Math.max(ZERO, attemptsSinceProgress) :
+        null,
+      maxAttempts:
+        Number.isInteger(maxAttempts) && maxAttempts > ZERO ?
+          Math.max(ZERO, maxAttempts) :
+          null,
+      stalled: noProgress?.stalled === true,
+    },
+    terminalReason:
+      typeof noProgress?.reasonCode === 'string' &&
+      noProgress.reasonCode.length > ZERO ?
+        noProgress.reasonCode :
+        null,
+    source:
+      typeof readinessDelay?.source === 'string' &&
+      readinessDelay.source.length > ZERO ?
+        readinessDelay.source :
+        null,
+    cause:
+      typeof readinessDelay?.cause === 'string' &&
+      readinessDelay.cause.length > ZERO ?
+        readinessDelay.cause :
+        null,
+    error:
+      typeof readinessDelay?.error === 'string' &&
+      readinessDelay.error.length > ZERO ?
+        readinessDelay.error :
+        null,
+  };
+}
 
 class Cluster extends Cluster5 {
   async _waitForAllActive(options = {}) {
@@ -152,71 +417,6 @@ class Cluster extends Cluster5 {
         readinessDelay: progressSnapshot?.readinessDelay || null,
       };
     };
-    const buildActiveWaitReadinessFailure = ({
-      mode = null,
-      noProgress = null,
-      attemptsSinceProgress = null,
-      maxAttempts = null,
-    } = {}) => {
-      if (!noProgress || typeof noProgress !== 'object') {
-        return null;
-      }
-      const readinessDelay =
-        typeof noProgress.readinessDelay === 'object' &&
-        noProgress.readinessDelay !== null ?
-          noProgress.readinessDelay :
-          null;
-      const timedOut = readinessDelay && readinessDelay.timedOut === true;
-      const classCode =
-        timedOut &&
-        typeof readinessDelay?.cause === 'string' &&
-        readinessDelay.cause.length > ZERO ?
-          readinessDelay.cause :
-          noProgress?.reasonCode === ACTIVE_WAIT_NO_PROGRESS_REASON_CODE ||
-              noProgress?.stalled === true ?
-            ACTIVE_WAIT_NO_PROGRESS_CLASS_CODE :
-            null;
-      return {
-        mode: typeof mode === 'string' && mode.length > ZERO ? mode : null,
-        classCode,
-        recoverability:
-          typeof readinessDelay?.recoverability === 'string' &&
-          readinessDelay.recoverability.length > ZERO ?
-            readinessDelay.recoverability :
-            null,
-        progressSignal: {
-          attemptsSinceProgress: Number.isInteger(attemptsSinceProgress) ?
-            Math.max(ZERO, attemptsSinceProgress) :
-            null,
-          maxAttempts:
-            Number.isInteger(maxAttempts) && maxAttempts > ZERO ?
-              Math.max(ZERO, maxAttempts) :
-              null,
-          stalled: noProgress?.stalled === true,
-        },
-        terminalReason:
-          typeof noProgress?.reasonCode === 'string' &&
-          noProgress.reasonCode.length > ZERO ?
-            noProgress.reasonCode :
-            null,
-        source:
-          typeof readinessDelay?.source === 'string' &&
-          readinessDelay.source.length > ZERO ?
-            readinessDelay.source :
-            null,
-        cause:
-          typeof readinessDelay?.cause === 'string' &&
-          readinessDelay.cause.length > ZERO ?
-            readinessDelay.cause :
-            null,
-        error:
-          typeof readinessDelay?.error === 'string' &&
-          readinessDelay.error.length > ZERO ?
-            readinessDelay.error :
-            null,
-      };
-    };
-
     const buildActiveGateDetails = ({
       state = PRIORITY_RECOVERY_ACTIVE_GATE_STATE.WAITING,
       attempts = ZERO,
@@ -872,39 +1072,127 @@ class Cluster extends Cluster5 {
     }
     const timeoutMs = this._resolveLoadReadinessStabilityTimeoutMs(options);
     const deadline = Date.now() + timeoutMs;
-    let stableWindowStartedAtMs = null;
+    const loadReadinessPhase = normalizeLoadReadinessPhase(
+      options.loadReadinessPhase,
+    );
+    const noProgressMaxAttempts =
+      this._resolveActiveWaitNoProgressMaxAttempts(options, timeoutMs);
+    let stableWindowStartedAt = LOAD_READINESS_STABLE_WINDOW_NO_TIMESTAMP;
+    let stableWindowStartedSource =
+      LOAD_READINESS_STABLE_WINDOW_SOURCE_NONE;
+    let stableWindowResetAt = normalizeStableWindowTimestamp(Date.now());
     const instabilitySummaryCounts = new Map();
+    const blockerHistoryBySignature = new Map();
+    let bestProgressSnapshot = null;
+    let bestProgressScore = Number.NEGATIVE_INFINITY;
+    let lastMeaningfulProgressAttempt = ZERO;
+    let lastMeaningfulProgressElapsedMs = ZERO;
+    let lastMeaningfulProgressSnapshot = null;
+    let lastObservedProgressSnapshot = null;
+    let lastObservedAttempt = ZERO;
+    let lastObservedElapsedMs = ZERO;
+    let highestStableElapsedMs = ZERO;
+
+    const buildLoadReadinessNoProgressDetails = (
+      attempts,
+      elapsedMs,
+      stalled,
+      progressSnapshot,
+    ) => {
+      const noProgressBudgetEnabled =
+        Number.isInteger(noProgressMaxAttempts) &&
+        noProgressMaxAttempts > ZERO;
+      const attemptsSinceProgress = Math.max(
+        ZERO,
+        attempts - (lastMeaningfulProgressAttempt || ZERO),
+      );
+      return {
+        enabled: noProgressBudgetEnabled,
+        mode: CLUSTER_READINESS_MODE_LOAD,
+        loadReadinessPhase,
+        maxAttempts: noProgressBudgetEnabled ? noProgressMaxAttempts : null,
+        maxCoordinatorCycles: noProgressBudgetEnabled ?
+          noProgressMaxAttempts :
+          null,
+        attemptsSinceProgress,
+        coordinatorCyclesSinceProgress: attemptsSinceProgress,
+        stalled: stalled === true,
+        lastMeaningfulProgressAttempt: lastMeaningfulProgressAttempt || null,
+        lastMeaningfulProgressElapsedMs:
+          lastMeaningfulProgressElapsedMs || null,
+        lastMeaningfulProgress: lastMeaningfulProgressSnapshot || null,
+        currentProgress: progressSnapshot || null,
+        closureRecordId: progressSnapshot?.closureRecordId || null,
+        closureWitnessClass: progressSnapshot?.closureWitnessClass || null,
+        readinessDelay: progressSnapshot?.readinessDelay || null,
+      };
+    };
+
     const buildLoadReadinessActiveGateDetails = ({
       state = PRIORITY_RECOVERY_ACTIVE_GATE_STATE.WAITING,
       attempts = ZERO,
       elapsedMs = ZERO,
       result = null,
+      progressSnapshot = null,
+      noProgress = null,
+      readinessFailure = null,
+      reasonCode = null,
+      stalledReason = null,
+      failedNoProgress = null,
+      lastMeaningfulChange = null,
+      lastProgressEvent = null,
+      blockerHistory = [],
     } = {}) => {
-      const progressSnapshot = buildActiveWaitProgressSnapshot(
-        result || {},
-        this._nodes.size,
-        {readinessMode: CLUSTER_READINESS_MODE_LOAD},
+      const resolvedProgressSnapshot =
+        progressSnapshot ||
+        buildActiveWaitProgressSnapshot(
+          result || {},
+          this._nodes.size,
+          {readinessMode: CLUSTER_READINESS_MODE_LOAD},
+        );
+      const attemptsSinceProgress = Math.max(
+        ZERO,
+        attempts - (lastMeaningfulProgressAttempt || ZERO),
       );
+      const maxAttempts =
+        Number.isInteger(noProgress?.maxAttempts) &&
+        noProgress.maxAttempts > ZERO ?
+          Math.max(ZERO, noProgress.maxAttempts) :
+          Number.isInteger(noProgressMaxAttempts) &&
+              noProgressMaxAttempts > ZERO ?
+            Math.max(ZERO, noProgressMaxAttempts) :
+            null;
       const activeGate = buildPriorityRecoveryActiveGateSnapshot({
         mode: CLUSTER_READINESS_MODE_LOAD,
         state,
         attempts,
         elapsedMs,
-        attemptsSinceProgress: attempts,
-        coordinatorCyclesSinceProgress: attempts,
-        progress: progressSnapshot,
-        bestProgress: progressSnapshot,
-        closureRecordId: progressSnapshot?.closureRecordId || null,
-        closureWitnessClass: progressSnapshot?.closureWitnessClass || null,
-        reasonCode:
-          state === PRIORITY_RECOVERY_ACTIVE_GATE_STATE.TIMED_OUT ?
-            ACTIVE_WAIT_NO_PROGRESS_REASON_CODE :
-            null,
-        readinessDelay: progressSnapshot?.readinessDelay || null,
+        maxAttempts,
+        maxCoordinatorCycles: maxAttempts,
+        attemptsSinceProgress,
+        coordinatorCyclesSinceProgress: attemptsSinceProgress,
+        progress: resolvedProgressSnapshot,
+        bestProgress: bestProgressSnapshot || resolvedProgressSnapshot,
+        closureRecordId: resolvedProgressSnapshot?.closureRecordId || null,
+        closureWitnessClass:
+          resolvedProgressSnapshot?.closureWitnessClass || null,
+        reasonCode,
+        stalledReason,
+        blockerHistory,
+        readinessDelay:
+          noProgress?.readinessDelay ||
+          resolvedProgressSnapshot?.readinessDelay ||
+          null,
+        readinessFailure,
+        lastMeaningfulProgress: lastMeaningfulProgressSnapshot || null,
+        lastMeaningfulChange,
+        lastProgressEvent,
+        failedNoProgress,
         waitPolicy: buildActiveGateWaitPolicy({
           readinessMode: CLUSTER_READINESS_MODE_LOAD,
-          closureRecordId: progressSnapshot?.closureRecordId || null,
+          closureRecordId: resolvedProgressSnapshot?.closureRecordId || null,
         }),
+        stalled: state === PRIORITY_RECOVERY_ACTIVE_GATE_STATE.STALLED,
         timedOut: state === PRIORITY_RECOVERY_ACTIVE_GATE_STATE.TIMED_OUT,
       });
       return {
@@ -912,39 +1200,108 @@ class Cluster extends Cluster5 {
         ...deriveLegacyPriorityRecoveryActiveGateFields(activeGate),
       };
     };
+
+    const observeLoadReadinessProgress = (attempts, elapsedMs, result) => {
+      const progressSnapshot = buildActiveWaitProgressSnapshot(
+        result || {},
+        this._nodes.size,
+        {readinessMode: CLUSTER_READINESS_MODE_LOAD},
+      );
+      const stableElapsedMs = Number.isFinite(result?.stableElapsedMs) ?
+        Math.max(ZERO, Math.floor(result.stableElapsedMs)) :
+        ZERO;
+      const progressScore = scoreActiveWaitProgress(progressSnapshot);
+      const activeGateProgressObserved = progressScore > bestProgressScore;
+      const stableWindowProgressObserved =
+        result?.loadReadinessStableWindow?.state ===
+          LOAD_READINESS_STABLE_WINDOW_STATE_PENDING &&
+        stableElapsedMs > highestStableElapsedMs;
+      if (activeGateProgressObserved) {
+        bestProgressScore = progressScore;
+        bestProgressSnapshot = progressSnapshot;
+      }
+      if (stableWindowProgressObserved) {
+        highestStableElapsedMs = stableElapsedMs;
+      }
+      if (activeGateProgressObserved || stableWindowProgressObserved) {
+        lastMeaningfulProgressAttempt = attempts;
+        lastMeaningfulProgressElapsedMs = elapsedMs;
+        lastMeaningfulProgressSnapshot = progressSnapshot;
+      }
+      upsertActiveWaitBlockerHistory(
+        blockerHistoryBySignature,
+        progressSnapshot,
+        attempts,
+        elapsedMs,
+      );
+      lastObservedProgressSnapshot = progressSnapshot;
+      lastObservedAttempt = attempts;
+      lastObservedElapsedMs = elapsedMs;
+      return {
+        progressSnapshot,
+        attemptsSinceProgress: Math.max(
+          ZERO,
+          attempts - (lastMeaningfulProgressAttempt || ZERO),
+        ),
+        blockerHistory: summarizeActiveWaitBlockerHistory(
+          blockerHistoryBySignature,
+        ),
+      };
+    };
     this._recordClusterStage(CLUSTER_STAGE_LOAD_READINESS_WAITING, {
+      loadReadinessPhase,
       stableWindowMs,
       timeoutMs,
     });
-    const pollResult = await pollUntilCondition({
-      deadline,
-      intervalMs: ACTIVE_POLL_INTERVAL_MS,
-      sleep: (ms) => this._sleep(ms),
-      probe: async () => {
-        const activeProbe = await this._probeClusterActiveState(deadline, {
-          mode: CLUSTER_READINESS_MODE_LOAD,
-        });
-        const now = Date.now();
-        if (activeProbe.allActive === true) {
-          if (stableWindowStartedAtMs === null) {
-            stableWindowStartedAtMs = now;
+    let pollResult;
+    try {
+      pollResult = await pollUntilCondition({
+        deadline,
+        intervalMs: ACTIVE_POLL_INTERVAL_MS,
+        sleep: (ms) => this._sleep(ms),
+        probe: async () => {
+          const activeProbe = await this._probeClusterActiveState(deadline, {
+            mode: CLUSTER_READINESS_MODE_LOAD,
+          });
+          const now = Date.now();
+          if (activeProbe.allActive !== true) {
+            stableWindowStartedAt = LOAD_READINESS_STABLE_WINDOW_NO_TIMESTAMP;
+            stableWindowStartedSource =
+              LOAD_READINESS_STABLE_WINDOW_SOURCE_NONE;
+            stableWindowResetAt = normalizeStableWindowTimestamp(now);
           }
-        } else {
-          stableWindowStartedAtMs = null;
-        }
-        const stableElapsedMs =
-          stableWindowStartedAtMs === null ?
-            ZERO :
-            now - stableWindowStartedAtMs;
-        return {
-          ...activeProbe,
-          stableElapsedMs,
-          stable:
-            activeProbe.allActive === true && stableElapsedMs >= stableWindowMs,
-        };
-      },
-      isSuccess: (result) => result.stable === true,
-      onAttempt: ({attempts, elapsedMs, lastResult}) => {
+          const stableWindow = decideLoadReadinessStableWindow({
+            activeProbe,
+            stableWindowMs,
+            currentStartedAt: stableWindowStartedAt,
+            currentSource: stableWindowStartedSource,
+            resetAt: stableWindowResetAt,
+            nowMs: now,
+          });
+          if (activeProbe.allActive === true) {
+            stableWindowStartedAt = stableWindow.startedAt;
+            stableWindowStartedSource = stableWindow.source;
+          }
+          return {
+            ...activeProbe,
+            stableElapsedMs: stableWindow.stableElapsedMs,
+            loadReadinessStableWindow: stableWindow,
+            stable: stableWindow.stable,
+          };
+        },
+        isSuccess: (result) => result.stable === true,
+        onAttempt: ({attempts, elapsedMs, lastResult}) => {
+        const readinessProgress = observeLoadReadinessProgress(
+          attempts,
+          elapsedMs,
+          lastResult,
+        );
+        const noProgress = buildLoadReadinessNoProgressDetails(
+          attempts,
+          elapsedMs,
+          false,
+          readinessProgress.progressSnapshot,
+        );
         for (const diagnostic of lastResult.nodeDiagnostics || []) {
           if (diagnostic.active === true) {
             continue;
@@ -964,8 +1321,11 @@ class Cluster extends Cluster5 {
             elapsedMs,
           },
           {
+            loadReadinessPhase,
             stableWindowMs,
             stableElapsedMs: lastResult?.stableElapsedMs ?? ZERO,
+            loadReadinessStableWindow:
+              lastResult.loadReadinessStableWindow || null,
             nodeDiagnostics: lastResult.nodeDiagnostics || [],
             snapshotCoverage: lastResult.snapshotCoverage || null,
             publicationConvergenceGate:
@@ -976,18 +1336,146 @@ class Cluster extends Cluster5 {
               attempts,
               elapsedMs,
               result: lastResult,
+              progressSnapshot: readinessProgress.progressSnapshot,
+              noProgress,
+              blockerHistory: readinessProgress.blockerHistory,
             }),
           },
         );
-      },
-    });
+        if (
+          Number.isInteger(noProgressMaxAttempts) &&
+          noProgressMaxAttempts > ZERO &&
+          readinessProgress.attemptsSinceProgress >= noProgressMaxAttempts
+        ) {
+          const stalledAttempts = readinessProgress.attemptsSinceProgress;
+          const stalledProgress = buildLoadReadinessNoProgressDetails(
+            attempts,
+            elapsedMs,
+            true,
+            readinessProgress.progressSnapshot,
+          );
+          const stalledNoProgress = {
+            ...stalledProgress,
+            readinessFailure: buildActiveWaitReadinessFailure({
+              mode: CLUSTER_READINESS_MODE_LOAD,
+              noProgress: stalledProgress,
+              attemptsSinceProgress: stalledAttempts,
+              maxAttempts: noProgressMaxAttempts,
+            }),
+            reasonCode: ACTIVE_WAIT_NO_PROGRESS_REASON_CODE,
+            stalledReason:
+              ACTIVE_WAIT_NO_PROGRESS_REASON_CYCLES_PREFIX +
+              String(stalledAttempts),
+            failedNoProgress: {
+              phase: CLUSTER_STAGE_LOAD_READINESS_WAITING,
+              details: {
+                mode: CLUSTER_READINESS_MODE_LOAD,
+                loadReadinessPhase,
+                budgetCoordinatorCycles: noProgressMaxAttempts,
+                budgetAttempts: noProgressMaxAttempts,
+                attempts,
+                elapsedMs,
+                attemptsSinceProgress: stalledAttempts,
+                coordinatorCyclesSinceProgress: stalledAttempts,
+              },
+            },
+            lastMeaningfulChange:
+              lastMeaningfulProgressSnapshot &&
+              typeof lastMeaningfulProgressSnapshot === 'object' ?
+                {
+                  attempt: lastMeaningfulProgressAttempt,
+                  elapsedMs: lastMeaningfulProgressElapsedMs,
+                  message: formatActiveWaitProgressSnapshot(
+                    lastMeaningfulProgressSnapshot,
+                  ),
+                } :
+                null,
+            lastProgressEvent:
+              readinessProgress.progressSnapshot &&
+              typeof readinessProgress.progressSnapshot === 'object' ?
+                {
+                  attempt: attempts,
+                  elapsedMs,
+                  message: formatActiveWaitProgressSnapshot(
+                    readinessProgress.progressSnapshot,
+                  ),
+                } :
+                null,
+            activeGateBlockerHistory: readinessProgress.blockerHistory,
+          };
+          const stalledActiveGateDetails = buildLoadReadinessActiveGateDetails({
+            state: PRIORITY_RECOVERY_ACTIVE_GATE_STATE.STALLED,
+            attempts,
+            elapsedMs,
+            result: lastResult,
+            progressSnapshot: readinessProgress.progressSnapshot,
+            noProgress: stalledNoProgress,
+            readinessFailure: stalledNoProgress.readinessFailure,
+            reasonCode: stalledNoProgress.reasonCode,
+            stalledReason: stalledNoProgress.stalledReason,
+            failedNoProgress: stalledNoProgress.failedNoProgress,
+            lastMeaningfulChange: stalledNoProgress.lastMeaningfulChange,
+            lastProgressEvent: stalledNoProgress.lastProgressEvent,
+            blockerHistory: readinessProgress.blockerHistory,
+          });
+          this._recordClusterStage(CLUSTER_STAGE_LOAD_READINESS_WAITING, {
+            loadReadinessPhase,
+            attempts,
+            elapsedMs,
+            stableWindowMs,
+            stableElapsedMs: lastResult?.stableElapsedMs ?? ZERO,
+            loadReadinessStableWindow:
+              lastResult.loadReadinessStableWindow || null,
+            nodeDiagnostics: lastResult.nodeDiagnostics || [],
+            snapshotCoverage: lastResult.snapshotCoverage || null,
+            publicationConvergenceGate:
+              lastResult.publicationConvergenceGate || null,
+            priorityRecoveryInvariants:
+              lastResult.priorityRecoveryInvariants || null,
+            activeGateNoProgress: stalledNoProgress,
+            ...stalledActiveGateDetails,
+          });
+          const stalledError = new Error(
+            ACTIVE_WAIT_STALLED_MESSAGE_PREFIX +
+              'for ' +
+              String(stalledAttempts) +
+              ' attempts (mode=' +
+              CLUSTER_READINESS_MODE_LOAD +
+              ', progress=' +
+              formatActiveWaitProgressSnapshot(
+                readinessProgress.progressSnapshot,
+              ) +
+              ')',
+          );
+          stalledError.diagnostics = {
+            activeGate: stalledActiveGateDetails.activeGate,
+            noProgress: stalledNoProgress,
+            priorityRecoveryInvariants:
+              lastResult?.priorityRecoveryInvariants || null,
+          };
+          throw stalledError;
+        }
+        },
+      });
+    } catch (error) {
+      try {
+        await this._collectFailureLogs();
+      } catch (_collectFailureLogsError) {
+        // Best effort log collection only.
+      }
+      throw error;
+    }
 
     if (pollResult.success) {
       this._recordClusterStage(CLUSTER_STAGE_LOAD_READINESS_STABLE, {
         stableWindowMs,
         timeoutMs,
+        loadReadinessPhase,
         attempts: pollResult.attempts,
         elapsedMs: pollResult.elapsedMs,
+        stableElapsedMs: pollResult.lastResult?.stableElapsedMs ?? ZERO,
+        loadReadinessStableWindow:
+          pollResult.lastResult?.loadReadinessStableWindow || null,
         snapshotCoverage: pollResult.lastResult?.snapshotCoverage || null,
         publicationConvergenceGate:
           pollResult.lastResult?.publicationConvergenceGate || null,
@@ -1006,24 +1494,71 @@ class Cluster extends Cluster5 {
     const publicationConvergenceSummary = formatPublicationConvergenceGate(
       pollResult.lastResult?.publicationConvergenceGate || null,
     );
+    const finalProgressSnapshot =
+      lastObservedProgressSnapshot ||
+      buildActiveWaitProgressSnapshot(
+        pollResult.lastResult || {},
+        this._nodes.size,
+        {readinessMode: CLUSTER_READINESS_MODE_LOAD},
+      );
+    const finalAttemptsSinceProgress = Math.max(
+      ZERO,
+      pollResult.attempts - (lastMeaningfulProgressAttempt || ZERO),
+    );
+    const finalNoProgress = buildLoadReadinessNoProgressDetails(
+      pollResult.attempts,
+      pollResult.elapsedMs,
+      false,
+      finalProgressSnapshot,
+    );
+    const finalNoProgressWithReasonCode = {
+      ...finalNoProgress,
+      reasonCode: ACTIVE_WAIT_NO_PROGRESS_REASON_CODE,
+      stalledReason:
+        ACTIVE_WAIT_NO_PROGRESS_REASON_CYCLES_PREFIX +
+        String(finalAttemptsSinceProgress),
+    };
+    const finalReadinessFailure = buildActiveWaitReadinessFailure({
+      mode: CLUSTER_READINESS_MODE_LOAD,
+      noProgress: finalNoProgressWithReasonCode,
+      attemptsSinceProgress: finalAttemptsSinceProgress,
+      maxAttempts: noProgressMaxAttempts,
+    });
     const timeoutActiveGateDetails = buildLoadReadinessActiveGateDetails({
       state: PRIORITY_RECOVERY_ACTIVE_GATE_STATE.TIMED_OUT,
       attempts: pollResult.attempts,
       elapsedMs: pollResult.elapsedMs,
       result: pollResult.lastResult,
+      progressSnapshot: finalProgressSnapshot,
+      noProgress: finalNoProgressWithReasonCode,
+      readinessFailure: finalReadinessFailure,
+      reasonCode: ACTIVE_WAIT_NO_PROGRESS_REASON_CODE,
+      stalledReason:
+        ACTIVE_WAIT_NO_PROGRESS_REASON_CYCLES_PREFIX +
+        String(finalAttemptsSinceProgress),
+      blockerHistory: summarizeActiveWaitBlockerHistory(
+        blockerHistoryBySignature,
+      ),
     });
+    const stableWindowFailure = buildLoadReadinessStableWindowFailure(
+      pollResult.lastResult?.loadReadinessStableWindow,
+    );
     this._recordClusterStage(CLUSTER_STAGE_LOAD_READINESS_WAITING, {
       stableWindowMs,
       timeoutMs,
+      loadReadinessPhase,
       attempts: pollResult.attempts,
       elapsedMs: pollResult.elapsedMs,
       stableElapsedMs: pollResult.lastResult?.stableElapsedMs ?? ZERO,
+      loadReadinessStableWindow:
+        pollResult.lastResult?.loadReadinessStableWindow || null,
       nodeDiagnostics: pollResult.lastResult?.nodeDiagnostics || [],
       snapshotCoverage: pollResult.lastResult?.snapshotCoverage || null,
       publicationConvergenceGate:
         pollResult.lastResult?.publicationConvergenceGate || null,
       priorityRecoveryInvariants:
         pollResult.lastResult?.priorityRecoveryInvariants || null,
+      activeGateNoProgress: finalNoProgressWithReasonCode,
       activeGate: timeoutActiveGateDetails.activeGate,
       ...timeoutActiveGateDetails,
     });
@@ -1050,6 +1585,10 @@ class Cluster extends Cluster5 {
     );
     timeoutError.diagnostics = {
       activeGate: timeoutActiveGateDetails.activeGate,
+      loadReadinessPhase,
+      ...(stableWindowFailure ? {failure: stableWindowFailure} : {}),
+      loadReadinessStableWindow:
+        pollResult.lastResult?.loadReadinessStableWindow || null,
       controlPlaneDiagnostics: {
         publicationConvergenceGate:
           pollResult.lastResult?.publicationConvergenceGate || null,
@@ -1057,8 +1596,15 @@ class Cluster extends Cluster5 {
           pollResult.lastResult?.snapshotCoverage || null,
         priorityRecoveryInvariants:
           pollResult.lastResult?.priorityRecoveryInvariants || null,
+        loadReadinessStableWindow:
+          pollResult.lastResult?.loadReadinessStableWindow || null,
         activeGate: timeoutActiveGateDetails.activeGate,
         ...timeoutActiveGateDetails,
+      },
+      noProgress: {
+        ...finalNoProgressWithReasonCode,
+        readinessFailure: finalReadinessFailure,
+        loadReadinessPhase,
       },
       nodeDiagnostics: pollResult.lastResult?.nodeDiagnostics || [],
       snapshotCoverage: pollResult.lastResult?.snapshotCoverage || null,

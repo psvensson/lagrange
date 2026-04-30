@@ -1119,6 +1119,13 @@ class CDCGroupPropagationService extends EventEmitter {
     const deliveryProfile = resolveCdcPropagationDeliveryProfile(events, {
       replayOnly: options?.replayOnly === true,
     });
+    const baseDeliveryOptions = {
+      deliveryPriority: deliveryProfile.deliveryPriority,
+      deliverySource: deliveryProfile.deliverySource,
+    };
+    if (deliveryProfile.replacePendingKey) {
+      baseDeliveryOptions.replacePendingKey = deliveryProfile.replacePendingKey;
+    }
     const deliveryFailures = [];
     for (const target of options.targets) {
       if (!this.messageRouter || typeof this.messageRouter.deliver !== TYPEOF.FUNCTION) {
@@ -1148,13 +1155,12 @@ class CDCGroupPropagationService extends EventEmitter {
             sourceNodeId: this.nodeId,
             sourceGroupId: options.sourceGroupId,
             targetGroupId: target.groupId,
-          };
+      };
       let result = null;
       try {
         result = await this.messageRouter.deliver(target.address, payload, {
+          ...baseDeliveryOptions,
           targetNodeId: target.coordinatorNodeId,
-          deliveryPriority: deliveryProfile.deliveryPriority,
-          deliverySource: deliveryProfile.deliverySource,
         });
       } catch (error) {
         deliveryFailures.push({

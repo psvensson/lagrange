@@ -426,21 +426,27 @@ class StartupRecoveryCoordinator {
       startupAuthority?.state === STARTUP_AUTHORITY_STATE.AUTHORITY_UNAVAILABLE;
     const startupAuthorityBlocked =
       startupAuthority?.state === STARTUP_AUTHORITY_STATE.BLOCKED;
+    const startupAuthorityBlocksRecovery =
+      startupAuthorityUnavailable || startupAuthorityBlocked;
+    const startupAuthorityAvailableForBootstrapInit =
+      startupAuthority?.authorityAvailable === true &&
+      !startupAuthorityBlocksRecovery;
     const backgroundWorkReady = managed ?
       isBackgroundWorkReadySnapshot(snapshot, {partitionId}) :
       true;
+    const bootstrapInitControlPlaneRecoveryReady =
+      startupAuthorityAvailableForBootstrapInit &&
+      options.allowBootstrapInitPriorityBypass === true &&
+      this.canBypassPriorityPartitionDuringBootstrapInit(reasonCodes, snapshot);
     const controlPlaneRecoveryReady =
-      (trafficReady || metadataPublicationReady) &&
-      !startupAuthorityUnavailable &&
-      !startupAuthorityBlocked;
+      ((trafficReady || metadataPublicationReady) &&
+        !startupAuthorityBlocksRecovery) ||
+      bootstrapInitControlPlaneRecoveryReady;
     const priorityControlPlaneRecoveryReady =
       isPriorityControlPlanePartition && controlPlaneRecoveryReady;
     const bootstrapInitPriorityBypassReady =
       isPriorityControlPlanePartition &&
-      !startupAuthorityUnavailable &&
-      !startupAuthorityBlocked &&
-      options.allowBootstrapInitPriorityBypass === true &&
-      this.canBypassPriorityPartitionDuringBootstrapInit(reasonCodes, snapshot);
+      bootstrapInitControlPlaneRecoveryReady;
     const shouldBypassLocalPriorityControlPlaneStartupReadiness = Boolean(
       (priorityControlPlaneRecoveryReady && !trafficReady) ||
       bootstrapInitPriorityBypassReady,

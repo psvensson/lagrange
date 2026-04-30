@@ -27,12 +27,64 @@ import {
 import {
 } from '../../src/rebalancer/replica-operation-repository.js';
 import {
+  COLUMN,
+  NODE_CAPABILITY,
   NUM,
   SERVICE_STATUS,
   STATE,
   WORKFLOW_STEP,
 } from '../../src/constants/index.js';
 import {OperationType} from '../../src/rebalancer/replica-status.js';
+
+const HEARTBEAT_READY_CAPABILITY_TEST_NAME =
+  'ReplicaDispatchService heartbeat-only READY updates explicit capabilities';
+const HEARTBEAT_READY_CAPABILITY_NODE_ID = 'node-heartbeat-capability-ready';
+const HEARTBEAT_READY_CAPABILITY_NODE_ADDRESS = 'localhost:19190';
+const HEARTBEAT_READY_CAPABILITY_EXISTING_JSON = '[]';
+const HEARTBEAT_READY_CAPABILITY_LAST_HEARTBEAT = 1;
+const HEARTBEAT_READY_CAPABILITY_EXPIRED_LEASE = 2;
+const HEARTBEAT_READY_CAPABILITY_AT = 3;
+const HEARTBEAT_READY_CAPABILITY_LEASE_EXPIRES_AT = 4;
+const HEARTBEAT_READY_CAPABILITY_VALUES = Object.freeze([
+  NODE_CAPABILITY.PARTITION_REPLICA,
+  NODE_CAPABILITY.MESSAGE_GROUP_REPLICA,
+]);
+const HEARTBEAT_READY_CAPABILITY_JSON =
+  JSON.stringify(HEARTBEAT_READY_CAPABILITY_VALUES);
+const HEARTBEAT_READY_CAPABILITY_UPDATE_COUNT = 1;
+const HEARTBEAT_READY_CAPABILITY_ASSERT_UPDATE =
+  'heartbeat-only READY should persist one nodes update';
+const HEARTBEAT_READY_CAPABILITY_ASSERT_CAPABILITIES =
+  'heartbeat-only READY should not leave replica capabilities empty';
+const CREATING_REARM_REPLAY_TEST_NAME =
+  'ReplicaDispatchService replays CREATING system-table rows through the ' +
+  'coordinator owner path';
+const CREATING_REARM_REPLAY_OPERATION_ID =
+  'replace-op-dispatch-creating-1';
+const CREATING_REARM_REPLAY_PARTITION_ID =
+  'control_plane_publications-p1';
+const CREATING_REARM_REPLAY_REPLICA_ID =
+  'control_plane_publications-p1-r6';
+const CREATING_REARM_REPLAY_SOURCE_NODE_ID = 'node-2';
+const CREATING_REARM_REPLAY_TARGET_NODE_ID = 'node-1';
+const CREATING_REARM_REPLAY_STATUS = 'creating';
+const CREATING_REARM_REPLAY_STEPS_HISTORY_JSON = '[]';
+const CREATING_REARM_REPLAY_CREATED_AT = 1700000000000;
+const CREATING_REARM_REPLAY_UPDATED_AT = 1700000000500;
+const CREATING_REARM_REPLAY_DISPATCH_COUNT = 1;
+const CREATING_REARM_REPLAY_ASSERT_DISPATCHED =
+  'reconcile should replay CREATING rearm rows instead of dropping them';
+const CREATING_REARM_REPLAY_ASSERT_OPERATION_ID =
+  'CREATING rearm replay should preserve the operation id';
+const CREATING_REARM_REPLAY_ASSERT_WORKFLOW_STEP =
+  'CREATING rearm replay should preserve the workflow step';
+const AUTHORITATIVE_CREATING_RETRY_TEST_NAME =
+  'ReplicaDispatchService keeps authoritative CREATING system-table retry rows';
+const AUTHORITATIVE_CREATING_RETRY_QUERY_COUNT = 1;
+const AUTHORITATIVE_CREATING_RETRY_ASSERT_QUERY =
+  'authoritative retry discovery should query the repository owner path';
+const AUTHORITATIVE_CREATING_RETRY_ASSERT_ROW =
+  'authoritative CREATING system-table rows should remain retryable';
 
 function initEnv() {
   ConfigurationManager.resetInstance();
@@ -125,6 +177,58 @@ function createService(options = {}) {
   return service;
 }
 
+test(HEARTBEAT_READY_CAPABILITY_TEST_NAME, async (t) => {
+  initEnv();
+
+  const updateCalls = [];
+  const service = createService({
+    cacheNode: {
+      [COLUMN.NODE_ID]: HEARTBEAT_READY_CAPABILITY_NODE_ID,
+      [COLUMN.NODE_ADDRESS]: HEARTBEAT_READY_CAPABILITY_NODE_ADDRESS,
+      status: SERVICE_STATUS.ACTIVE,
+      [COLUMN.CONNECTION_STATE]: STATE.CONNECTED,
+      [COLUMN.CAPABILITIES]: HEARTBEAT_READY_CAPABILITY_EXISTING_JSON,
+      [COLUMN.LAST_HEARTBEAT]: HEARTBEAT_READY_CAPABILITY_LAST_HEARTBEAT,
+      [COLUMN.READY_LEASE_EXPIRES_AT]:
+        HEARTBEAT_READY_CAPABILITY_EXPIRED_LEASE,
+    },
+    cdcIntegrationService: {
+      updateSystemTableRow: async (...args) => {
+        updateCalls.push(args);
+        return {partitionResult: {affectedRows: NUM.ONE}};
+      },
+      upsertSystemTableRow: async () => ({success: true}),
+    },
+  });
+
+  try {
+    await service.handleNodeStateUpdate({
+      type: ControlPlaneMessageType.NODE_STATE_UPDATE,
+      [ControlPlaneField.NODE_ID]: HEARTBEAT_READY_CAPABILITY_NODE_ID,
+      [ControlPlaneField.NODE_ADDRESS]: HEARTBEAT_READY_CAPABILITY_NODE_ADDRESS,
+      [ControlPlaneField.STATE]: STATE.READY,
+      [ControlPlaneField.CAPABILITIES]: HEARTBEAT_READY_CAPABILITY_VALUES,
+      [ControlPlaneField.HEARTBEAT_AT]: HEARTBEAT_READY_CAPABILITY_AT,
+      [ControlPlaneField.READY_LEASE_EXPIRES_AT]:
+        HEARTBEAT_READY_CAPABILITY_LEASE_EXPIRES_AT,
+      [ControlPlaneField.HEARTBEAT_ONLY]: true,
+    });
+
+    t.equal(
+      updateCalls.length,
+      HEARTBEAT_READY_CAPABILITY_UPDATE_COUNT,
+      HEARTBEAT_READY_CAPABILITY_ASSERT_UPDATE,
+    );
+    t.equal(
+      updateCalls[NUM.ZERO]?.[NUM.TWO]?.[COLUMN.CAPABILITIES],
+      HEARTBEAT_READY_CAPABILITY_JSON,
+      HEARTBEAT_READY_CAPABILITY_ASSERT_CAPABILITIES,
+    );
+  } finally {
+    service.stop();
+  }
+});
+
 
 test('ReplicaDispatchService replays SENDING rows through the canonical ' +
   'dispatch owner path',
@@ -198,6 +302,127 @@ async (t) => {
       dispatchCalls[0]?.operationId,
       operationRow.operation_id,
       'replayed dispatch should preserve the operation id',
+    );
+  } finally {
+    service.stop();
+  }
+});
+
+test(CREATING_REARM_REPLAY_TEST_NAME, async (t) => {
+  initEnv();
+
+  const dispatchCalls = [];
+  const operationRow = {
+    operation_id: CREATING_REARM_REPLAY_OPERATION_ID,
+    partition_id: CREATING_REARM_REPLAY_PARTITION_ID,
+    replica_id: CREATING_REARM_REPLAY_REPLICA_ID,
+    source_node_id: CREATING_REARM_REPLAY_SOURCE_NODE_ID,
+    target_node_id: CREATING_REARM_REPLAY_TARGET_NODE_ID,
+    status: CREATING_REARM_REPLAY_STATUS,
+    workflow_step: WORKFLOW_STEP.CREATING,
+    type: OperationType.REPLACE,
+    steps_history: CREATING_REARM_REPLAY_STEPS_HISTORY_JSON,
+    created_at: CREATING_REARM_REPLAY_CREATED_AT,
+    updated_at: CREATING_REARM_REPLAY_UPDATED_AT,
+  };
+
+  const service = createService({
+    cdcIntegrationService: {
+      updateSystemTableRow: async () => ({success: true}),
+      upsertSystemTableRow: async () => ({success: true}),
+    },
+    rebalanceCoordinator: {
+      async dispatchOperation(operation) {
+        dispatchCalls.push(operation);
+        return {success: true};
+      },
+      isOperationLocallyOwned(operation) {
+        return operation?.target_node_id ===
+          CREATING_REARM_REPLAY_TARGET_NODE_ID ||
+          operation?.targetNodeId === CREATING_REARM_REPLAY_TARGET_NODE_ID;
+      },
+    },
+  });
+
+  try {
+    await service.reconcileOperationDispatch(
+      operationRow.operation_id,
+      {row: operationRow},
+    );
+
+    t.equal(
+      dispatchCalls.length,
+      CREATING_REARM_REPLAY_DISPATCH_COUNT,
+      CREATING_REARM_REPLAY_ASSERT_DISPATCHED,
+    );
+    t.equal(
+      dispatchCalls[NUM.ZERO]?.operationId,
+      CREATING_REARM_REPLAY_OPERATION_ID,
+      CREATING_REARM_REPLAY_ASSERT_OPERATION_ID,
+    );
+    t.equal(
+      dispatchCalls[NUM.ZERO]?.workflowStep,
+      WORKFLOW_STEP.CREATING,
+      CREATING_REARM_REPLAY_ASSERT_WORKFLOW_STEP,
+    );
+  } finally {
+    service.stop();
+  }
+});
+
+test(AUTHORITATIVE_CREATING_RETRY_TEST_NAME, async (t) => {
+  initEnv();
+
+  const queryOptions = [];
+  const service = createService({
+    cdcIntegrationService: {
+      updateSystemTableRow: async () => ({success: true}),
+      upsertSystemTableRow: async () => ({success: true}),
+    },
+    rebalanceCoordinator: {
+      repository: {
+        async queryIncompleteOperations(options) {
+          queryOptions.push(options);
+          return [{
+            operationId: CREATING_REARM_REPLAY_OPERATION_ID,
+            partitionId: CREATING_REARM_REPLAY_PARTITION_ID,
+            replicaId: CREATING_REARM_REPLAY_REPLICA_ID,
+            sourceNodeId: CREATING_REARM_REPLAY_SOURCE_NODE_ID,
+            targetNodeId: CREATING_REARM_REPLAY_TARGET_NODE_ID,
+            status: CREATING_REARM_REPLAY_STATUS,
+            workflowStep: WORKFLOW_STEP.CREATING,
+            type: OperationType.REPLACE,
+            stepsHistory: [],
+            createdAt: CREATING_REARM_REPLAY_CREATED_AT,
+            updatedAt: CREATING_REARM_REPLAY_UPDATED_AT,
+          }];
+        },
+      },
+      isOperationLocallyOwned(operation) {
+        return operation?.targetNodeId === CREATING_REARM_REPLAY_TARGET_NODE_ID;
+      },
+    },
+  });
+
+  try {
+    const dispatchRows = await service.getAuthoritativeDispatchRetryRowsForNode(
+      CREATING_REARM_REPLAY_TARGET_NODE_ID,
+    );
+
+    t.equal(
+      queryOptions.length,
+      AUTHORITATIVE_CREATING_RETRY_QUERY_COUNT,
+      AUTHORITATIVE_CREATING_RETRY_ASSERT_QUERY,
+    );
+    t.match(
+      dispatchRows,
+      [{
+        operation_id: CREATING_REARM_REPLAY_OPERATION_ID,
+        partition_id: CREATING_REARM_REPLAY_PARTITION_ID,
+        target_node_id: CREATING_REARM_REPLAY_TARGET_NODE_ID,
+        workflow_step: WORKFLOW_STEP.CREATING,
+      }],
+      AUTHORITATIVE_CREATING_RETRY_ASSERT_ROW,
     );
   } finally {
     service.stop();

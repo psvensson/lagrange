@@ -66,6 +66,10 @@ import {
   OWNER_CONTRACT_NEXT_ACTION,
   OWNER_CONTRACT_STATE,
 } from './owner-contract-outcome.js';
+
+
+const LOCAL_STR_EMPTY = '';
+
 const PRIORITY_RECOVERY_SNAPSHOT_LITERAL = Object.freeze({
   VALUE: '',
   TYPE: 'type',
@@ -107,6 +111,34 @@ const PRIORITY_RECOVERY_WORKFLOW_STATE = Object.freeze({
   REMOVE_PHASE: 'remove_phase',
   TERMINAL: 'terminal',
 });
+const PRIORITY_RECOVERY_OPERATION_TRANSITION_STATE = Object.freeze({
+  TRANSITION_OBSERVED: 'transition_observed',
+  WAITING_FOR_OWNER: 'waiting_for_owner',
+  OVERDUE_NO_TRANSITION: 'overdue_no_transition',
+  UNKNOWN_NO_TRANSITION: 'unknown_no_transition',
+});
+const PRIORITY_RECOVERY_OPERATION_TRANSITION_RULES = Object.freeze([
+  Object.freeze({
+    state: PRIORITY_RECOVERY_OPERATION_TRANSITION_STATE.TRANSITION_OBSERVED,
+    matches: (evidence) => evidence.timelineStepCount > NUM.ONE,
+  }),
+  Object.freeze({
+    state: PRIORITY_RECOVERY_OPERATION_TRANSITION_STATE.WAITING_FOR_OWNER,
+    matches: (evidence) => evidence.ownerWaitWindowOpen === true,
+  }),
+  Object.freeze({
+    state: PRIORITY_RECOVERY_OPERATION_TRANSITION_STATE.OVERDUE_NO_TRANSITION,
+    matches: (evidence) => evidence.timeoutReconcileDue === true,
+  }),
+  Object.freeze({
+    state: PRIORITY_RECOVERY_OPERATION_TRANSITION_STATE.UNKNOWN_NO_TRANSITION,
+    matches: () => true,
+  }),
+]);
+const PRIORITY_RECOVERY_NO_TRANSITION_BLOCKING_STATES = new Set([
+  PRIORITY_RECOVERY_OPERATION_TRANSITION_STATE.OVERDUE_NO_TRANSITION,
+  PRIORITY_RECOVERY_OPERATION_TRANSITION_STATE.UNKNOWN_NO_TRANSITION,
+]);
 const PRIORITY_RECOVERY_VISIBILITY_STATE = Object.freeze({
   NONE: 'none',
   CACHE_VISIBLE: 'cache_visible',
@@ -246,6 +278,9 @@ function buildPriorityRecoverySpreadCompletion(options = {}) {
     ) {
       satisfyingOperationIds.push(operationId);
       satisfyingOperationContexts.push(operationContext);
+      continue;
+    }
+    if (isPriorityRecoveryOperationContextTerminal(operationContext)) {
       continue;
     }
     blockingOperationIds.push(operationId);
@@ -1705,9 +1740,9 @@ function buildPriorityRecoveryOperationContextFromRecord(record, options = {}) {
     operationId,
     partitionId,
     tableName: inferPriorityRecoveryTableNameFromPartitionId(partitionId),
-    type: String(normalizedRecord.type || '').toUpperCase(),
-    status: String(normalizedRecord.status || '').toLowerCase(),
-    workflowStep: String(normalizedRecord.workflowStep || '').toUpperCase(),
+    type: String(normalizedRecord.type || LOCAL_STR_EMPTY).toUpperCase(),
+    status: String(normalizedRecord.status || LOCAL_STR_EMPTY).toLowerCase(),
+    workflowStep: String(normalizedRecord.workflowStep || LOCAL_STR_EMPTY).toUpperCase(),
     sourceNodeId: normalizedRecord.sourceNodeId || null,
     targetNodeId: normalizedRecord.targetNodeId || null,
     replicaId: normalizedRecord.replicaId || null,
@@ -2082,6 +2117,78 @@ function buildPriorityRecoveryWorkflowProgressMetrics(options = {}) {
       stepAgeMs >= stepTimeoutMs,
   });
 }
+function buildPriorityRecoveryOperationTransitionEvidence(
+  operationContext,
+  options = {},
+) {
+  const stepAgeMs =
+    resolvePriorityRecoveryWorkflowStepAgeMs(
+      operationContext,
+      options.nowMs,
+    );
+  const stepTimeoutMs =
+    resolvePriorityRecoveryWorkflowStepTimeoutMs(operationContext, {
+      stepTimeoutMsByWorkflowStep: options.stepTimeoutMsByWorkflowStep,
+    });
+  const timelineStepCount = Math.max(
+    NUM.ZERO,
+    normalizePriorityRecoveryInteger(operationContext?.timelineStepCount) ||
+      NUM.ZERO,
+  );
+  const timeoutReconcileDue =
+    Number.isFinite(stepAgeMs) &&
+    Number.isFinite(stepTimeoutMs) &&
+    stepTimeoutMs > NUM.ZERO &&
+    stepAgeMs >= stepTimeoutMs;
+  const ownerWaitWindowOpen =
+    Number.isFinite(stepAgeMs) &&
+    Number.isFinite(stepTimeoutMs) &&
+    stepTimeoutMs > NUM.ZERO &&
+    stepAgeMs < stepTimeoutMs;
+  return Object.freeze({
+    timelineStepCount,
+    timeoutReconcileDue,
+    ownerWaitWindowOpen,
+  });
+}
+function resolvePriorityRecoveryOperationTransitionState(
+  operationContext,
+  options = {},
+) {
+  const evidence =
+    buildPriorityRecoveryOperationTransitionEvidence(
+      operationContext,
+      options,
+    );
+  return PRIORITY_RECOVERY_OPERATION_TRANSITION_RULES.find((rule) =>
+    rule.matches(evidence),
+  ).state;
+}
+function isPriorityRecoveryNoTransitionBlocker(
+  operationContext,
+  options = {},
+) {
+  return PRIORITY_RECOVERY_NO_TRANSITION_BLOCKING_STATES.has(
+    resolvePriorityRecoveryOperationTransitionState(operationContext, options),
+  );
+}
+function arePriorityRecoveryBlockingOperationsWithoutOwnedTransitions(
+  operationContexts = [],
+  options = {},
+) {
+  const normalizedOperationContexts = Array.isArray(operationContexts) ?
+    operationContexts.filter(
+      (operationContext) =>
+        operationContext && typeof operationContext === TYPEOF.OBJECT,
+    ) :
+    [];
+  return (
+    normalizedOperationContexts.length > NUM.ZERO &&
+    normalizedOperationContexts.every((operationContext) =>
+      isPriorityRecoveryNoTransitionBlocker(operationContext, options),
+    )
+  );
+}
 function selectLatestPriorityRecoveryOperationContext(operationContexts = []) {
   const normalizedContexts = Array.isArray(operationContexts) ?
     operationContexts.filter(
@@ -2328,13 +2435,6 @@ function buildPriorityRecoveryActuationContract(options = {}) {
     retryAfterMs,
   });
 
-  if (completionState === PRIORITY_RECOVERY_COMPLETION_STATE.CONVERGED) {
-    return buildPriorityRecoveryActuationSnapshot(
-      actuationShape,
-      PRIORITY_RECOVERY_PROGRESS_OWNER.NONE,
-      PRIORITY_RECOVERY_ACTUATION_STATE.NO_ACTION_NEEDED,
-    );
-  }
   if (
     isPriorityRecoveryObservationDeferred({
       completionState,
@@ -2349,6 +2449,18 @@ function buildPriorityRecoveryActuationContract(options = {}) {
       PRIORITY_RECOVERY_ACTUATION_STATE.AWAITING_OBSERVATION,
     );
   }
+  const followupActuationState = resolvePriorityRecoveryFollowupActuationState({
+    missingFollowupOperation,
+    blocksCriticalRecoveryActuation,
+    scheduledRetry,
+  });
+  if (followupActuationState) {
+    return buildPriorityRecoveryActuationSnapshot(
+      actuationShape,
+      PRIORITY_RECOVERY_PROGRESS_OWNER.REBALANCER_LEADER,
+      followupActuationState,
+    );
+  }
   const inFlightActuationState = resolvePriorityRecoveryInFlightActuationState(
     workflowState,
     progressMetrics,
@@ -2360,6 +2472,13 @@ function buildPriorityRecoveryActuationContract(options = {}) {
       inFlightActuationState,
     );
   }
+  if (completionState === PRIORITY_RECOVERY_COMPLETION_STATE.CONVERGED) {
+    return buildPriorityRecoveryActuationSnapshot(
+      actuationShape,
+      PRIORITY_RECOVERY_PROGRESS_OWNER.NONE,
+      PRIORITY_RECOVERY_ACTUATION_STATE.NO_ACTION_NEEDED,
+    );
+  }
   if (
     blockerReasons.includes(
       PRIORITY_RECOVERY_BLOCKER_REASON.OPERATION_NO_TRANSITIONS,
@@ -2369,18 +2488,6 @@ function buildPriorityRecoveryActuationContract(options = {}) {
       actuationShape,
       PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER,
       PRIORITY_RECOVERY_ACTUATION_STATE.RECONCILE_DUE,
-    );
-  }
-  const followupActuationState = resolvePriorityRecoveryFollowupActuationState({
-    missingFollowupOperation,
-    blocksCriticalRecoveryActuation,
-    scheduledRetry,
-  });
-  if (followupActuationState) {
-    return buildPriorityRecoveryActuationSnapshot(
-      actuationShape,
-      PRIORITY_RECOVERY_PROGRESS_OWNER.REBALANCER_LEADER,
-      followupActuationState,
     );
   }
   if (workflowState === PRIORITY_RECOVERY_WORKFLOW_STATE.TERMINAL) {
@@ -2606,20 +2713,6 @@ function buildPriorityRecoveryProgressContract(options = {}) {
     visibilityState,
     workflowState,
   } = progressContext;
-  if (completionState === PRIORITY_RECOVERY_COMPLETION_STATE.CONVERGED) {
-    return buildPriorityRecoveryProgressOutcome({
-      contractState: OWNER_CONTRACT_STATE.READY,
-      nextAction: OWNER_CONTRACT_NEXT_ACTION.PROCEED,
-      progressShape,
-      currentOwner: PRIORITY_RECOVERY_PROGRESS_OWNER.NONE,
-      nextRequiredAction: PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.NONE,
-      blockingBoundary: PRIORITY_RECOVERY_BLOCKING_BOUNDARY.NONE,
-      waitMode: PRIORITY_RECOVERY_WAIT_MODE.NONE,
-      lastProgressAtMs,
-      retryAfterMs,
-      evidenceSourceIds,
-    });
-  }
   if (
     isPriorityRecoveryObservationDeferred({
       completionState,
@@ -2644,6 +2737,48 @@ function buildPriorityRecoveryProgressContract(options = {}) {
       evidenceSourceIds,
     });
   }
+  if (
+    actuation.state ===
+    PRIORITY_RECOVERY_ACTUATION_STATE.PERSIST_BLOCKED_BY_PRESSURE
+  ) {
+    return buildPriorityRecoveryProgressOutcome({
+      ...buildPriorityRecoveryRetryScheduledDescriptor(
+        scheduledRetry ?
+          PRIORITY_RECOVERY_WAIT_MODE.RETRY_SCHEDULED :
+          PRIORITY_RECOVERY_WAIT_MODE.STALLED,
+      ),
+      progressShape,
+      currentOwner: PRIORITY_RECOVERY_PROGRESS_OWNER.REBALANCER_LEADER,
+      nextRequiredAction:
+        PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.CREATE_RECOVERY_OPERATION,
+      blockingBoundary:
+        PRIORITY_RECOVERY_BLOCKING_BOUNDARY.OPERATION_SCHEDULING,
+      lastProgressAtMs,
+      retryAfterMs,
+      evidenceSourceIds,
+    });
+  }
+  if (
+    blockerReasons.includes(
+      PRIORITY_RECOVERY_BLOCKER_REASON.ELIGIBLE_NO_OPERATION,
+    )
+  ) {
+    return buildPriorityRecoveryProgressOutcome({
+      ...buildPriorityRecoveryPendingDescriptor(
+        scheduledRetry,
+        PRIORITY_RECOVERY_WAIT_MODE.EVENT_DRIVEN,
+      ),
+      progressShape,
+      currentOwner: PRIORITY_RECOVERY_PROGRESS_OWNER.REBALANCER_LEADER,
+      nextRequiredAction:
+        PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.CREATE_RECOVERY_OPERATION,
+      blockingBoundary:
+        PRIORITY_RECOVERY_BLOCKING_BOUNDARY.OPERATION_SCHEDULING,
+      lastProgressAtMs,
+      retryAfterMs,
+      evidenceSourceIds,
+    });
+  }
   const inFlightDescriptor = resolvePriorityRecoveryInFlightProgressDescriptor({
     workflowState,
     progressMetrics,
@@ -2653,6 +2788,20 @@ function buildPriorityRecoveryProgressContract(options = {}) {
     return buildPriorityRecoveryProgressOutcome({
       ...inFlightDescriptor,
       progressShape,
+      lastProgressAtMs,
+      retryAfterMs,
+      evidenceSourceIds,
+    });
+  }
+  if (completionState === PRIORITY_RECOVERY_COMPLETION_STATE.CONVERGED) {
+    return buildPriorityRecoveryProgressOutcome({
+      contractState: OWNER_CONTRACT_STATE.READY,
+      nextAction: OWNER_CONTRACT_NEXT_ACTION.PROCEED,
+      progressShape,
+      currentOwner: PRIORITY_RECOVERY_PROGRESS_OWNER.NONE,
+      nextRequiredAction: PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.NONE,
+      blockingBoundary: PRIORITY_RECOVERY_BLOCKING_BOUNDARY.NONE,
+      waitMode: PRIORITY_RECOVERY_WAIT_MODE.NONE,
       lastProgressAtMs,
       retryAfterMs,
       evidenceSourceIds,
@@ -2730,48 +2879,6 @@ function buildPriorityRecoveryProgressContract(options = {}) {
       nextRequiredAction:
         PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.RESTORE_PROMOTABLE_TARGET,
       blockingBoundary: PRIORITY_RECOVERY_BLOCKING_BOUNDARY.LEARNER_PROMOTION,
-      lastProgressAtMs,
-      retryAfterMs,
-      evidenceSourceIds,
-    });
-  }
-  if (
-    actuation.state ===
-    PRIORITY_RECOVERY_ACTUATION_STATE.PERSIST_BLOCKED_BY_PRESSURE
-  ) {
-    return buildPriorityRecoveryProgressOutcome({
-      ...buildPriorityRecoveryRetryScheduledDescriptor(
-        scheduledRetry ?
-          PRIORITY_RECOVERY_WAIT_MODE.RETRY_SCHEDULED :
-          PRIORITY_RECOVERY_WAIT_MODE.STALLED,
-      ),
-      progressShape,
-      currentOwner: PRIORITY_RECOVERY_PROGRESS_OWNER.REBALANCER_LEADER,
-      nextRequiredAction:
-        PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.CREATE_RECOVERY_OPERATION,
-      blockingBoundary:
-        PRIORITY_RECOVERY_BLOCKING_BOUNDARY.OPERATION_SCHEDULING,
-      lastProgressAtMs,
-      retryAfterMs,
-      evidenceSourceIds,
-    });
-  }
-  if (
-    blockerReasons.includes(
-      PRIORITY_RECOVERY_BLOCKER_REASON.ELIGIBLE_NO_OPERATION,
-    )
-  ) {
-    return buildPriorityRecoveryProgressOutcome({
-      ...buildPriorityRecoveryPendingDescriptor(
-        scheduledRetry,
-        PRIORITY_RECOVERY_WAIT_MODE.EVENT_DRIVEN,
-      ),
-      progressShape,
-      currentOwner: PRIORITY_RECOVERY_PROGRESS_OWNER.REBALANCER_LEADER,
-      nextRequiredAction:
-        PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.CREATE_RECOVERY_OPERATION,
-      blockingBoundary:
-        PRIORITY_RECOVERY_BLOCKING_BOUNDARY.OPERATION_SCHEDULING,
       lastProgressAtMs,
       retryAfterMs,
       evidenceSourceIds,
@@ -3245,6 +3352,8 @@ function resolvePriorityRecoveryDecisionAssessment(options = {}) {
     admission: options.admission,
     learnerPromotion: options.learnerPromotion,
     operationContexts: options.operationContexts,
+    nowMs: options.nowMs,
+    stepTimeoutMsByWorkflowStep: options.stepTimeoutMsByWorkflowStep,
   });
 }
 
@@ -3401,6 +3510,8 @@ function buildPriorityRecoveryDecisionSnapshot(options = {}) {
     admission,
     learnerPromotion,
     operationContexts,
+    nowMs: options.capturedAt,
+    stepTimeoutMsByWorkflowStep: options.stepTimeoutMsByWorkflowStep,
   });
   const semanticState = assessment.semanticState;
   const completion = resolvePriorityRecoveryDecisionCompletion({
@@ -3813,6 +3924,9 @@ function buildPriorityRecoveryPartitionAssessment(options = {}) {
   });
   const blockingOperationIdSet = new Set(spreadCompletion.blockingOperationIds);
   const hasActiveOperationContexts = activeOperationContexts.length > NUM.ZERO;
+  const blockingActiveOperationContexts = activeOperationContexts.filter(
+    (context) => blockingOperationIdSet.has(context.operationId),
+  );
   const hasCompletedPlacementOperationContext = operationContexts.some(
     (context) => isPriorityRecoveryCompletedPlacementOperationContext(context),
   );
@@ -3843,15 +3957,23 @@ function buildPriorityRecoveryPartitionAssessment(options = {}) {
     spreadCompletion.satisfied !== true &&
     hasActiveOperationContexts &&
     spreadCompletion.blockingOperationCount > NUM.ZERO &&
-    activeOperationContexts
-      .filter((context) => blockingOperationIdSet.has(context.operationId))
-      .every((context) => context.timelineStepCount <= NUM.ONE);
+    arePriorityRecoveryBlockingOperationsWithoutOwnedTransitions(
+      blockingActiveOperationContexts,
+      {
+        nowMs: options.nowMs,
+        stepTimeoutMsByWorkflowStep: options.stepTimeoutMsByWorkflowStep,
+      },
+    );
   const learnerActiveNeverPromotable =
     learnerPromotion.activeLearnerNodeCount > NUM.ZERO &&
     learnerPromotion.promotableLearnerNodeCount === NUM.ZERO;
+  const spreadCompletionUnsatisfied = spreadCompletion.satisfied !== true;
   const publicationRecoveryEligibleButCoordinatorExcludesNode =
-    recoveryEligibleExcludedNodeIds.length > NUM.ZERO ||
-    operationTargetsOutsideEligibleCohort;
+    spreadCompletionUnsatisfied &&
+    (
+      recoveryEligibleExcludedNodeIds.length > NUM.ZERO ||
+      operationTargetsOutsideEligibleCohort
+    );
   const blockerReasons = [];
   if (eligibleButNoOperation) {
     blockerReasons.push(PRIORITY_RECOVERY_BLOCKER_REASON.ELIGIBLE_NO_OPERATION);
@@ -3899,6 +4021,8 @@ function buildPriorityRecoveryOperationAssessment(options = {}) {
   const assessment = buildPriorityRecoveryPartitionAssessment({
     partitionId: operationContext?.partitionId || options.partitionId || '',
     priorityPartitionSummary: options.priorityPartitionSummary,
+    nowMs: options.nowMs,
+    stepTimeoutMsByWorkflowStep: options.stepTimeoutMsByWorkflowStep,
     admission: {
       effectiveEligibleNodeIds,
       effectiveEligibleNodeCount: effectiveEligibleNodeIds.length,

@@ -27,6 +27,11 @@ import {
   ENDPOINT_SVC_STATE,
 } from './endpoint-service-constants.js';
 
+const LOCAL_STR_ENDPOINTSERVICE = 'EndpointService';
+const LOCAL_STR_1D19D = 'serviceEndpointsOwner';
+const LOCAL_STR_SERVICE_ENDPOINTS = 'service_endpoints';
+const LOCAL_STR_READ_WRITE = 'read_write';
+
 class EndpointService extends EventEmitter {
   /**
    * @param {Object} options - Configuration options.
@@ -57,10 +62,10 @@ class EndpointService extends EventEmitter {
     assertCritical(this.nodeId, ENDPOINT_SVC_ERROR_MSG.MISSING_NODE_ID);
     if (!this.serviceEndpointsOwner) {
       throw createSystemMetadataOwnerRequiredError({
-        serviceName: 'EndpointService',
-        ownerName: 'serviceEndpointsOwner',
-        tableName: 'service_endpoints',
-        operation: 'read_write',
+        serviceName: LOCAL_STR_ENDPOINTSERVICE,
+        ownerName: LOCAL_STR_1D19D,
+        tableName: LOCAL_STR_SERVICE_ENDPOINTS,
+        operation: LOCAL_STR_READ_WRITE,
         message: ENDPOINT_SVC_ERROR_MSG.MISSING_OWNER,
       });
     }

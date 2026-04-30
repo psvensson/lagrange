@@ -28,6 +28,8 @@ import {
 } from './partition-replication-handler-constants.js';
 import {ProposalQueue} from './proposal-queue.js';
 
+const LOCAL_NUM_ONE = 1;
+
 /**
  * Manages write forwarding and replication for partitions.
  *
@@ -127,7 +129,7 @@ class PartitionReplicationHandler {
    * @return {boolean} True if the partition has more than one replica.
    */
   isMultiReplica() {
-    return Array.isArray(this.replicaIds) && this.replicaIds.length > 1;
+    return Array.isArray(this.replicaIds) && this.replicaIds.length > LOCAL_NUM_ONE;
   }
 
   /**

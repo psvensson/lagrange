@@ -30,6 +30,11 @@ import {
   OperationType,
 } from '../rebalancer/replica-status.js';
 
+const LOCAL_STR_EMPTY = '';
+const LOCAL_STR_SYSTEM_TABLE_CACHE = 'system_table_cache';
+const LOCAL_STR_BOOTSTRAP_SNAPSHOT = 'bootstrap_snapshot';
+const LOCAL_STR_COMMA = ',';
+
 const JOIN_READINESS_REPLICA_OPERATION_ENTITY_TYPE = Object.freeze({
   PARTITION: 'partition',
 });
@@ -84,7 +89,7 @@ function createJoinReadinessEvaluatorTailMethods(options = {}) {
         row?.connection_state,
         row?.connectionState,
       ].map((value) => {
-        return String(value || '').toLowerCase();
+        return String(value || LOCAL_STR_EMPTY).toLowerCase();
       }).filter((value) => value.length > NUM.ZERO)));
     },
 
@@ -130,7 +135,7 @@ function createJoinReadinessEvaluatorTailMethods(options = {}) {
           });
         if (cacheRows.length > NUM.ZERO) {
           return {
-            source: 'system_table_cache',
+            source: LOCAL_STR_SYSTEM_TABLE_CACHE,
             rows: cacheRows,
           };
         }
@@ -151,7 +156,7 @@ function createJoinReadinessEvaluatorTailMethods(options = {}) {
         }) :
         [];
       return {
-        source: 'bootstrap_snapshot',
+        source: LOCAL_STR_BOOTSTRAP_SNAPSHOT,
         rows: snapshotRows,
       };
     },
@@ -163,7 +168,7 @@ function createJoinReadinessEvaluatorTailMethods(options = {}) {
      */
     buildClusterMeshSignature(nodeRows) {
       if (!Array.isArray(nodeRows) || nodeRows.length === NUM.ZERO) {
-        return '';
+        return LOCAL_STR_EMPTY;
       }
 
       const members = nodeRows
@@ -191,7 +196,7 @@ function createJoinReadinessEvaluatorTailMethods(options = {}) {
         .filter(Boolean)
         .sort();
 
-      return members.join(',');
+      return members.join(LOCAL_STR_COMMA);
     },
 
     /**
@@ -466,7 +471,7 @@ function createJoinReadinessEvaluatorTailMethods(options = {}) {
         type: normalizedOperation.type,
         partitionId: normalizedOperation.partitionGroupId,
         replicaId: String(
-          row?.replica_id || row?.replicaId || '',
+          row?.replica_id || row?.replicaId || LOCAL_STR_EMPTY,
         ),
         sourceNodeId: normalizedOperation.sourceNodeId,
         targetNodeId: normalizedOperation.targetNodeId,

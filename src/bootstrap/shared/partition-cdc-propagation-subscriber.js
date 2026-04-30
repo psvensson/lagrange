@@ -1,5 +1,7 @@
 import {NUM, TYPEOF} from '../../constants/index.js';
 
+const LOCAL_STR_1XIO2 = 'Operational message-group ingress not ready ';
+
 const CDC_PROPAGATION_SUBSCRIBER_REASON = Object.freeze({
   OWNER_NOT_READY: 'operational message-group ingress not ready',
 });
@@ -148,7 +150,7 @@ function buildPropagationSelectionOptions(
 }
 
 function buildPropagationOwnerNotReadyMessage(tableName) {
-  return 'Operational message-group ingress not ready ' +
+  return LOCAL_STR_1XIO2 +
     `for ${tableName} ${CDC_PROPAGATION_SUBSCRIBER_MESSAGE.PROPAGATION}`;
 }
 

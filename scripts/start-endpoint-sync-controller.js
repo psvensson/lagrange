@@ -14,6 +14,11 @@ import {
   EndpointSyncK8sClient,
 } from '../src/runtime/endpoint-sync-k8s-client.js';
 
+const LOCAL_STR_STRING = 'string';
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_STR_1X6N9 = 'namespace is required via ENDPOINT_SYNC_TARGET_NAMESPACE, ';
+const LOCAL_STR_1IQN3 = 'ENDPOINT_SYNC_LEASE_NAMESPACE, or in-cluster service account namespace';
+
 const EXIT_CODE = Object.freeze({
   SUCCESS: 0,
   CONFIG_ERROR: 1,
@@ -44,12 +49,12 @@ const DRAIN_WAIT = Object.freeze({
 });
 
 function resolveControllerNamespace(config, k8sClient) {
-  if (typeof config.targetNamespace === 'string' &&
-    config.targetNamespace.trim().length > 0) {
+  if (typeof config.targetNamespace === LOCAL_STR_STRING &&
+    config.targetNamespace.trim().length > LOCAL_NUM_ZERO) {
     return config.targetNamespace.trim();
   }
-  if (typeof config.leaseNamespace === 'string' &&
-    config.leaseNamespace.trim().length > 0) {
+  if (typeof config.leaseNamespace === LOCAL_STR_STRING &&
+    config.leaseNamespace.trim().length > LOCAL_NUM_ZERO) {
     return config.leaseNamespace.trim();
   }
   return k8sClient.getDefaultNamespace();
@@ -71,8 +76,8 @@ async function main() {
   if (!namespace) {
     console.error(LOG_TAG.CONFIG_INVALID, {
       errors: [
-        'namespace is required via ENDPOINT_SYNC_TARGET_NAMESPACE, ' +
-        'ENDPOINT_SYNC_LEASE_NAMESPACE, or in-cluster service account namespace',
+        LOCAL_STR_1X6N9 +
+        LOCAL_STR_1IQN3,
       ],
     });
     process.exitCode = EXIT_CODE.CONFIG_ERROR;

@@ -1,5 +1,7 @@
 import {CDCIntegrationSetup} from './cdc-integration-setup.js';
 
+const LOCAL_STR_FUNCTION = 'function';
+
 /**
  * Attach the final runtime SQL engine to the canonical startup owner.
  *
@@ -32,7 +34,7 @@ function attachSqlRuntimeToStartupOwner(options) {
       null);
   if (bootstrapTopologySnapshotOwner &&
       typeof sqlQueryEngine.queryExecutor?.setBootstrapTopologySnapshotOwner ===
-        'function') {
+        LOCAL_STR_FUNCTION) {
     sqlQueryEngine.queryExecutor.setBootstrapTopologySnapshotOwner(
       bootstrapTopologySnapshotOwner,
     );
@@ -46,7 +48,7 @@ function attachSqlRuntimeToStartupOwner(options) {
       null);
   if (bootstrapSystemTableSnapshots &&
       typeof sqlQueryEngine.seedBootstrapRoutingOverlayFromSnapshots ===
-        'function') {
+        LOCAL_STR_FUNCTION) {
     sqlQueryEngine.seedBootstrapRoutingOverlayFromSnapshots(
       bootstrapSystemTableSnapshots,
     );
@@ -61,11 +63,11 @@ function attachSqlRuntimeToStartupOwner(options) {
       messageRouter: options.messageRouter || null,
       cacheMutationTarget: options.cacheMutationTarget || null,
       partitionServicesProvider:
-        typeof options.partitionServicesProvider === 'function' ?
+        typeof options.partitionServicesProvider === LOCAL_STR_FUNCTION ?
           options.partitionServicesProvider :
           null,
     });
-    if (typeof sqlQueryEngine.setCDCIntegrationService === 'function') {
+    if (typeof sqlQueryEngine.setCDCIntegrationService === LOCAL_STR_FUNCTION) {
       sqlQueryEngine.setCDCIntegrationService(cdcIntegrationService);
     }
   }
@@ -74,7 +76,7 @@ function attachSqlRuntimeToStartupOwner(options) {
     typeof owner.hasActiveControlPlaneBackgroundWriters === 'function' &&
     owner.hasActiveControlPlaneBackgroundWriters() === true;
   if (backgroundWritersActive === true &&
-      typeof owner.activateDistributedTransactionRecovery === 'function') {
+      typeof owner.activateDistributedTransactionRecovery === LOCAL_STR_FUNCTION) {
     owner.activateDistributedTransactionRecovery();
   }
 }
@@ -99,22 +101,22 @@ function activateSteadyStateRuntimeHandoff(options) {
   }
 
   if (options.activateControlPlaneBackgroundWriters === true &&
-      typeof owner.activateControlPlaneBackgroundWriters === 'function') {
+      typeof owner.activateControlPlaneBackgroundWriters === LOCAL_STR_FUNCTION) {
     void owner.activateControlPlaneBackgroundWriters();
   }
 
   if (options.flushDeferredCreateSelfHostedMetadata === true &&
-      typeof owner.flushDeferredCreateSelfHostedMetadata === 'function') {
+      typeof owner.flushDeferredCreateSelfHostedMetadata === LOCAL_STR_FUNCTION) {
     owner.flushDeferredCreateSelfHostedMetadata();
   }
 
   if (options.activateDistributedTransactionRecovery === true &&
-      typeof owner.activateDistributedTransactionRecovery === 'function') {
+      typeof owner.activateDistributedTransactionRecovery === LOCAL_STR_FUNCTION) {
     owner.activateDistributedTransactionRecovery();
   }
 
   if (options.startLatencyTopologyLifecycle === true &&
-      typeof owner.startLatencyTopologyLifecycle === 'function') {
+      typeof owner.startLatencyTopologyLifecycle === LOCAL_STR_FUNCTION) {
     owner.startLatencyTopologyLifecycle();
   }
 }

@@ -1,4 +1,7 @@
 import {NUM, TYPEOF} from '../../../src/constants/index.js';
+import {
+  normalizeReplicaOperationRecord,
+} from '../../../src/rebalancer/replica-operation-liveness.js';
 
 const POST_REBALANCE_CLOSURE_STATE = Object.freeze({
   CLOSED: 'closed',
@@ -18,6 +21,8 @@ const POST_REBALANCE_CLOSURE_DIMENSION = Object.freeze({
 const POST_REBALANCE_CLOSURE_REASON = Object.freeze({
   CDC_PROJECTION_UNAVAILABLE: 'cdc_projection_unavailable',
   CURRENT_OVERTARGET_VOTERS: 'current_overtarget_voters',
+  EFFECTIVE_PUBLISHED_MEMBERSHIP_DURING_FREEZE:
+    'effective_published_membership_during_freeze',
   IGNORED_STALE_REPLICA_OPERATIONS: 'ignored_stale_replica_operations',
   IN_FLIGHT_REPLICA_OPERATIONS: 'in_flight_replica_operations',
   MEMBERSHIP_TRIM_BLOCKED_BY_OPERATION_DRAIN:
@@ -33,11 +38,108 @@ const CONTROL_PLANE_PUBLICATION_STATUS = Object.freeze({
   PUBLISHED: 'PUBLISHED',
 });
 
+const CONTROL_PLANE_ACTIVE_NODE_SOURCE = Object.freeze({
+  PUBLISHED_MEMBERSHIP: 'published_membership',
+});
+
+const POST_REBALANCE_PUBLICATION_VISIBILITY_SOURCE = Object.freeze({
+  PUBLICATION_CONVERGENCE: 'publication_convergence',
+  PUBLISHED_MEMBERSHIP_OBSERVATION: 'published_membership_observation',
+});
+
+const PRIORITY_RECOVERY_SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT =
+  'spread_satisfied_in_flight';
+const PRIORITY_RECOVERY_COMPLETION_STATE_SPREAD_SATISFIED_IN_FLIGHT =
+  'spread_satisfied_in_flight';
+const PRIORITY_RECOVERY_COMPLETION_STATE_CONVERGED = 'converged';
+const PRIORITY_RECOVERY_VISIBILITY_STATE_CACHE_VISIBLE = 'cache_visible';
+const PRIORITY_RECOVERY_SATISFIED_COMPLETION_STATES = Object.freeze([
+  PRIORITY_RECOVERY_COMPLETION_STATE_SPREAD_SATISFIED_IN_FLIGHT,
+  PRIORITY_RECOVERY_COMPLETION_STATE_CONVERGED,
+]);
+const POST_REBALANCE_CLOSURE_TERMINAL_STATES = Object.freeze([
+  POST_REBALANCE_CLOSURE_STATE.CLOSED,
+  POST_REBALANCE_CLOSURE_STATE.SOFT_CLOSED,
+]);
 const POST_REBALANCE_CLOSURE_BLOCKER_SUFFIX = '_open';
 const POST_REBALANCE_CLOSURE_SOFT_SUFFIX = '_soft_closed';
 const POST_REBALANCE_CLOSURE_TEXT_EMPTY = '';
 const POST_REBALANCE_CLOSURE_EMPTY_LIST = Object.freeze([]);
 const POST_REBALANCE_CLOSURE_EMPTY_RECORD = Object.freeze({});
+const POST_REBALANCE_PUBLICATION_VISIBILITY_DECISION_TABLE = Object.freeze([
+  Object.freeze({
+    matches: (evidence) =>
+      evidence.membershipFreezeActive === true &&
+      evidence.activeNodeEffectiveSource ===
+        CONTROL_PLANE_ACTIVE_NODE_SOURCE.PUBLISHED_MEMBERSHIP &&
+      evidence.publishedMembershipAvailable === true &&
+      evidence.publishedMembershipObservationStatus ===
+        CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+    state: POST_REBALANCE_CLOSURE_STATE.SOFT_CLOSED,
+    source:
+      POST_REBALANCE_PUBLICATION_VISIBILITY_SOURCE
+        .PUBLISHED_MEMBERSHIP_OBSERVATION,
+    reasonCodes: Object.freeze([
+      POST_REBALANCE_CLOSURE_REASON
+        .EFFECTIVE_PUBLISHED_MEMBERSHIP_DURING_FREEZE,
+    ]),
+  }),
+  Object.freeze({
+    matches: (evidence) => evidence.publicationAvailable !== true,
+    state: POST_REBALANCE_CLOSURE_STATE.UNAVAILABLE,
+    source: POST_REBALANCE_PUBLICATION_VISIBILITY_SOURCE.PUBLICATION_CONVERGENCE,
+    reasonCodes: Object.freeze([
+      POST_REBALANCE_CLOSURE_REASON.PUBLICATION_UNAVAILABLE,
+    ]),
+  }),
+  Object.freeze({
+    matches: (evidence) =>
+      evidence.rawPublicationStatus.length === NUM.ZERO ||
+      evidence.rawPublicationStatus === CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+    state: POST_REBALANCE_CLOSURE_STATE.CLOSED,
+    source: POST_REBALANCE_PUBLICATION_VISIBILITY_SOURCE.PUBLICATION_CONVERGENCE,
+    reasonCodes: POST_REBALANCE_CLOSURE_EMPTY_LIST,
+  }),
+  Object.freeze({
+    matches: () => true,
+    state: POST_REBALANCE_CLOSURE_STATE.OPEN,
+    source: POST_REBALANCE_PUBLICATION_VISIBILITY_SOURCE.PUBLICATION_CONVERGENCE,
+    reasonCodes: Object.freeze([
+      POST_REBALANCE_CLOSURE_REASON.PUBLICATION_PENDING,
+    ]),
+  }),
+]);
+const POST_REBALANCE_CDC_PROJECTION_VISIBILITY_DECISION_TABLE = Object.freeze([
+  Object.freeze({
+    matches: (evidence) => evidence.expectedPartitionIds.length === NUM.ZERO,
+    state: POST_REBALANCE_CLOSURE_STATE.UNAVAILABLE,
+    reasonCodes: Object.freeze([
+      POST_REBALANCE_CLOSURE_REASON.CDC_PROJECTION_UNAVAILABLE,
+    ]),
+  }),
+  Object.freeze({
+    matches: (evidence) => evidence.missingLeaderPartitionIds.length === NUM.ZERO,
+    state: POST_REBALANCE_CLOSURE_STATE.CLOSED,
+    reasonCodes: POST_REBALANCE_CLOSURE_EMPTY_LIST,
+  }),
+  Object.freeze({
+    matches: (evidence) =>
+      evidence.ignoreStaleInFlightReplicaOperations === true &&
+      evidence.staleDiscountCount > NUM.ZERO &&
+      evidence.uncoveredMissingLeaderPartitionIds.length === NUM.ZERO,
+    state: POST_REBALANCE_CLOSURE_STATE.SOFT_CLOSED,
+    reasonCodes: Object.freeze([
+      POST_REBALANCE_CLOSURE_REASON.IGNORED_STALE_REPLICA_OPERATIONS,
+    ]),
+  }),
+  Object.freeze({
+    matches: () => true,
+    state: POST_REBALANCE_CLOSURE_STATE.OPEN,
+    reasonCodes: Object.freeze([
+      POST_REBALANCE_CLOSURE_REASON.MISSING_PARTITION_LEADERS,
+    ]),
+  }),
+]);
 
 function normalizeNonNegativeInteger(value, fallback = NUM.ZERO) {
   const numericValue = Number(value);
@@ -125,6 +227,12 @@ function getPublicationConvergence(controlPlaneDiagnostics) {
   return getDiagnosticsObject(controlPlaneDiagnostics.publicationConvergence);
 }
 
+function getPublishedMembershipObservation(controlPlaneDiagnostics) {
+  return getDiagnosticsObject(
+    controlPlaneDiagnostics.publishedMembershipObservation,
+  );
+}
+
 function getActiveNodeViews(controlPlaneDiagnostics) {
   return getDiagnosticsObject(controlPlaneDiagnostics.activeNodeViews);
 }
@@ -158,6 +266,75 @@ function resolvePublicationStatus(controlPlaneDiagnostics) {
   ).trim().toUpperCase();
 }
 
+function resolvePublishedMembershipObservationStatus(controlPlaneDiagnostics) {
+  const publishedMembershipObservation =
+    getPublishedMembershipObservation(controlPlaneDiagnostics);
+  return String(
+    publishedMembershipObservation.publicationStatus ||
+      publishedMembershipObservation.status ||
+      POST_REBALANCE_CLOSURE_TEXT_EMPTY,
+  ).trim().toUpperCase();
+}
+
+function collectPublicationVisibilityEvidence(
+  controlPlaneDiagnostics,
+  publicationFallbackAvailable = false,
+) {
+  const publicationConvergence =
+    getPublicationConvergence(controlPlaneDiagnostics);
+  const publishedMembershipObservation =
+    getPublishedMembershipObservation(controlPlaneDiagnostics);
+  const activeNodeViews = getActiveNodeViews(controlPlaneDiagnostics);
+  const membershipFreeze = getDiagnosticsObject(activeNodeViews.membershipFreeze);
+  const rawPublicationStatus = resolvePublicationStatus(controlPlaneDiagnostics);
+  const publishedMembershipObservationStatus =
+    resolvePublishedMembershipObservationStatus(controlPlaneDiagnostics);
+  return Object.freeze({
+    rawPublicationStatus,
+    publishedMembershipObservationStatus,
+    publicationAvailable:
+      publicationFallbackAvailable === true ||
+      publicationConvergence !== POST_REBALANCE_CLOSURE_EMPTY_RECORD ||
+      publishedMembershipObservation !== POST_REBALANCE_CLOSURE_EMPTY_RECORD,
+    publishedMembershipAvailable:
+      activeNodeViews.publishedMembershipAvailable === true ||
+      publishedMembershipObservationStatus ===
+        CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+    membershipFreezeActive: membershipFreeze.active === true,
+    activeNodeEffectiveSource: String(
+      activeNodeViews.effectiveSource ||
+        POST_REBALANCE_CLOSURE_TEXT_EMPTY,
+    ).trim(),
+  });
+}
+
+function resolvePublicationVisibility(
+  controlPlaneDiagnostics,
+  publicationFallbackAvailable = false,
+) {
+  const evidence = collectPublicationVisibilityEvidence(
+    controlPlaneDiagnostics,
+    publicationFallbackAvailable,
+  );
+  const decision = POST_REBALANCE_PUBLICATION_VISIBILITY_DECISION_TABLE.find(
+    (candidate) => candidate.matches(evidence),
+  );
+  const selectedDecision = decision;
+  const status =
+    selectedDecision.source ===
+      POST_REBALANCE_PUBLICATION_VISIBILITY_SOURCE
+        .PUBLISHED_MEMBERSHIP_OBSERVATION ?
+      evidence.publishedMembershipObservationStatus :
+      evidence.rawPublicationStatus;
+  return Object.freeze({
+    ...evidence,
+    status,
+    state: selectedDecision.state,
+    source: selectedDecision.source,
+    reasonCodes: selectedDecision.reasonCodes,
+  });
+}
+
 function collectOverTargetPartitionIds(
   voterCounts,
   targetVoterCount,
@@ -177,6 +354,248 @@ function collectOverTargetPartitionIds(
   return Array.from(partitionIds).sort();
 }
 
+function collectCacheVisiblePriorityRecoveryEvidence(
+  controlPlaneDiagnostics = POST_REBALANCE_CLOSURE_EMPTY_RECORD,
+) {
+  const diagnosticsSources = collectPriorityRecoveryDiagnosticsSources(
+    controlPlaneDiagnostics,
+  );
+  const evidence = [];
+  for (const source of diagnosticsSources) {
+    evidence.push(...collectPriorityRecoveryWitnessEvidence(source));
+    evidence.push(...collectPriorityRecoverySummaryEvidence(source));
+    evidence.push(...collectPriorityRecoveryDecisionSnapshotEvidence(source));
+  }
+  return evidence;
+}
+
+function collectPriorityRecoveryDiagnosticsSources(
+  controlPlaneDiagnostics = POST_REBALANCE_CLOSURE_EMPTY_RECORD,
+) {
+  const sources = [];
+  for (const candidate of [
+    controlPlaneDiagnostics,
+    controlPlaneDiagnostics?.publicationConvergence,
+    controlPlaneDiagnostics?.priorityRecoveryObservation,
+    controlPlaneDiagnostics?.publicationConvergence
+      ?.priorityRecoveryCurrentSummary,
+    controlPlaneDiagnostics?.priorityRecoveryObservation
+      ?.priorityRecoveryCurrentSummary,
+  ]) {
+    if (candidate && typeof candidate === TYPEOF.OBJECT &&
+      !Array.isArray(candidate)) {
+      sources.push(candidate);
+    }
+  }
+  return sources;
+}
+
+function collectPriorityRecoveryWitnessEvidence(source) {
+  const witnesses = Array.isArray(source?.priorityRecoveryPartitionWitnesses) ?
+    source.priorityRecoveryPartitionWitnesses :
+    Array.isArray(source?.partitionWitnesses) ?
+      source.partitionWitnesses :
+      POST_REBALANCE_CLOSURE_EMPTY_LIST;
+  const evidence = [];
+  for (const witness of witnesses) {
+    if (!isCacheVisibleSatisfiedPriorityRecoverySnapshot(witness)) {
+      continue;
+    }
+    evidence.push({
+      operationIds: witness.operationIds,
+      partitionIds: [witness.partitionId],
+    });
+  }
+  return evidence;
+}
+
+function collectPriorityRecoverySummaryEvidence(source) {
+  const evidence = [];
+  const partitionIdsBySemanticState =
+    source?.priorityRecoveryPartitionIdsBySemanticState &&
+    typeof source.priorityRecoveryPartitionIdsBySemanticState === TYPEOF.OBJECT ?
+      source.priorityRecoveryPartitionIdsBySemanticState :
+      source?.partitionIdsBySemanticState &&
+          typeof source.partitionIdsBySemanticState === TYPEOF.OBJECT ?
+        source.partitionIdsBySemanticState :
+        POST_REBALANCE_CLOSURE_EMPTY_RECORD;
+  evidence.push({
+    operationIds: POST_REBALANCE_CLOSURE_EMPTY_LIST,
+    partitionIds: Array.isArray(
+      partitionIdsBySemanticState[
+        PRIORITY_RECOVERY_SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT
+      ],
+    ) ?
+      partitionIdsBySemanticState[
+        PRIORITY_RECOVERY_SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT
+      ] :
+      POST_REBALANCE_CLOSURE_EMPTY_LIST,
+  });
+
+  const partitionSnapshots = Array.isArray(
+    source?.priorityRecoveryPartitionSnapshots,
+  ) ?
+    source.priorityRecoveryPartitionSnapshots :
+    Array.isArray(source?.partitionSnapshots) ?
+      source.partitionSnapshots :
+      POST_REBALANCE_CLOSURE_EMPTY_LIST;
+  for (const partitionSnapshot of partitionSnapshots) {
+    if (!isCacheVisibleSatisfiedPriorityRecoverySnapshot(partitionSnapshot)) {
+      continue;
+    }
+    evidence.push({
+      operationIds: partitionSnapshot.operationIds,
+      partitionIds: [partitionSnapshot.partitionId],
+    });
+  }
+
+  return evidence;
+}
+
+function collectPriorityRecoveryDecisionSnapshotEvidence(source) {
+  const snapshots = Array.isArray(source?.priorityRecoveryDecisionSnapshots) ?
+    source.priorityRecoveryDecisionSnapshots :
+    Array.isArray(source?.priorityRecoveryDecisionSnapshots?.snapshots) ?
+      source.priorityRecoveryDecisionSnapshots.snapshots :
+      POST_REBALANCE_CLOSURE_EMPTY_LIST;
+  const evidence = [];
+  for (const snapshot of snapshots) {
+    if (!isCacheVisibleSatisfiedPriorityRecoverySnapshot(snapshot)) {
+      continue;
+    }
+    evidence.push({
+      operationIds: collectPriorityRecoverySnapshotOperationIds(snapshot),
+      partitionIds: [snapshot.partitionId],
+    });
+  }
+  return evidence;
+}
+
+function collectPriorityRecoverySnapshotOperationIds(snapshot) {
+  const operationIds = [];
+  if (snapshot?.operationId) {
+    operationIds.push(snapshot.operationId);
+  }
+  if (snapshot?.coordinator?.operation?.operationId) {
+    operationIds.push(snapshot.coordinator.operation.operationId);
+  }
+  if (Array.isArray(snapshot?.coordinator?.operationIds)) {
+    operationIds.push(...snapshot.coordinator.operationIds);
+  }
+  if (Array.isArray(snapshot?.operationIds)) {
+    operationIds.push(...snapshot.operationIds);
+  }
+  return operationIds;
+}
+
+function isCacheVisibleSatisfiedPriorityRecoverySnapshot(snapshot) {
+  const visibilityState = String(
+    snapshot?.visibilityState ||
+      snapshot?.authoritativeVisibilityState ||
+      snapshot?.observation?.visibilityState ||
+      POST_REBALANCE_CLOSURE_TEXT_EMPTY,
+  ).trim();
+  const semanticState = String(
+    snapshot?.semanticState ||
+      snapshot?.semanticStateId ||
+      POST_REBALANCE_CLOSURE_TEXT_EMPTY,
+  ).trim();
+  const completionState = String(
+    snapshot?.completionState ||
+      snapshot?.completion?.state ||
+      POST_REBALANCE_CLOSURE_TEXT_EMPTY,
+  ).trim();
+  const spreadSatisfied = snapshot?.spreadCompletion?.satisfied === true;
+  const visibilitySatisfied =
+    visibilityState === PRIORITY_RECOVERY_VISIBILITY_STATE_CACHE_VISIBLE;
+  const semanticSatisfied =
+    semanticState ===
+    PRIORITY_RECOVERY_SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT;
+  const completionSatisfied =
+    PRIORITY_RECOVERY_SATISFIED_COMPLETION_STATES.includes(completionState);
+
+  return (
+    visibilitySatisfied &&
+    (semanticSatisfied || completionSatisfied || spreadSatisfied)
+  );
+}
+
+function addNormalizedIds(target, ids) {
+  for (const id of Array.isArray(ids) ? ids : POST_REBALANCE_CLOSURE_EMPTY_LIST) {
+    const normalizedId = String(
+      id || POST_REBALANCE_CLOSURE_TEXT_EMPTY,
+    ).trim();
+    if (normalizedId.length === NUM.ZERO) {
+      continue;
+    }
+    target.add(normalizedId);
+  }
+}
+
+function buildCacheVisibleSatisfiedPriorityRecoveryOperationIdSet(
+  controlPlaneDiagnostics = POST_REBALANCE_CLOSURE_EMPTY_RECORD,
+) {
+  const operationIds = new Set();
+  for (const evidence of collectCacheVisiblePriorityRecoveryEvidence(
+    controlPlaneDiagnostics,
+  )) {
+    addNormalizedIds(operationIds, evidence.operationIds);
+  }
+  return operationIds;
+}
+
+function buildCacheVisibleSatisfiedPriorityRecoveryPartitionIdSet(
+  controlPlaneDiagnostics = POST_REBALANCE_CLOSURE_EMPTY_RECORD,
+) {
+  const partitionIds = new Set();
+  for (const evidence of collectCacheVisiblePriorityRecoveryEvidence(
+    controlPlaneDiagnostics,
+  )) {
+    addNormalizedIds(partitionIds, evidence.partitionIds);
+  }
+  return partitionIds;
+}
+
+function countCacheVisibleSatisfiedPriorityRecoveryOperations(
+  controlPlaneDiagnostics = POST_REBALANCE_CLOSURE_EMPTY_RECORD,
+  operationRows = POST_REBALANCE_CLOSURE_EMPTY_LIST,
+) {
+  const operationIds =
+    buildCacheVisibleSatisfiedPriorityRecoveryOperationIdSet(
+      controlPlaneDiagnostics,
+    );
+  const partitionIds =
+    buildCacheVisibleSatisfiedPriorityRecoveryPartitionIdSet(
+      controlPlaneDiagnostics,
+    );
+  if (operationIds.size === NUM.ZERO && partitionIds.size === NUM.ZERO) {
+    return NUM.ZERO;
+  }
+  let matchingOperationCount = NUM.ZERO;
+  for (const operationRow of Array.isArray(operationRows) ?
+    operationRows :
+    POST_REBALANCE_CLOSURE_EMPTY_LIST) {
+    const normalizedOperation = normalizeReplicaOperationRecord(operationRow);
+    const operationId = String(
+      normalizedOperation.operationId || POST_REBALANCE_CLOSURE_TEXT_EMPTY,
+    ).trim();
+    const partitionId = String(
+      normalizedOperation.partitionId || POST_REBALANCE_CLOSURE_TEXT_EMPTY,
+    ).trim();
+    const matchesByOperationId =
+      operationId.length > NUM.ZERO && operationIds.has(operationId);
+    const matchesByPartitionId =
+      partitionId.length > NUM.ZERO && partitionIds.has(partitionId);
+    if (!matchesByOperationId && !matchesByPartitionId) {
+      continue;
+    }
+    matchingOperationCount += NUM.ONE;
+  }
+  return matchingOperationCount > NUM.ZERO ?
+    matchingOperationCount :
+    Math.max(operationIds.size, partitionIds.size);
+}
+
 function buildDimension(dimension, state, reasonCodes, evidence) {
   return {
     dimension,
@@ -190,6 +609,8 @@ function collectClosureEvidence(options = POST_REBALANCE_CLOSURE_EMPTY_RECORD) {
   const controlPlaneDiagnostics = getDiagnosticsObject(
     options.controlPlaneDiagnostics,
   );
+  const activeNodeViews = getActiveNodeViews(controlPlaneDiagnostics);
+  const membershipFreeze = getDiagnosticsObject(activeNodeViews.membershipFreeze);
   const voterCounts = normalizeCountMap(options.voterCounts);
   const targetVoterCount = normalizeNonNegativeInteger(
     options.targetVoterCount,
@@ -214,6 +635,27 @@ function collectClosureEvidence(options = POST_REBALANCE_CLOSURE_EMPTY_RECORD) {
   const missingLeaderPartitionIds = expectedPartitionIds.filter(
     (partitionId) => !leaderPartitionIds.has(partitionId),
   );
+  const cacheVisibleSatisfiedPriorityRecoveryPartitionIds =
+    normalizeStringList(
+      options.cacheVisibleSatisfiedPriorityRecoveryPartitionIds,
+    );
+  const priorityRecoveryPartitionIds =
+    cacheVisibleSatisfiedPriorityRecoveryPartitionIds.length > NUM.ZERO ?
+      cacheVisibleSatisfiedPriorityRecoveryPartitionIds :
+      normalizeStringList(
+        buildCacheVisibleSatisfiedPriorityRecoveryPartitionIdSet(
+          controlPlaneDiagnostics,
+        ),
+      );
+  const priorityRecoveryPartitionIdSet = new Set(priorityRecoveryPartitionIds);
+  const coveredMissingLeaderPartitionIds =
+    missingLeaderPartitionIds.filter((partitionId) =>
+      priorityRecoveryPartitionIdSet.has(partitionId),
+    );
+  const uncoveredMissingLeaderPartitionIds =
+    missingLeaderPartitionIds.filter((partitionId) =>
+      !priorityRecoveryPartitionIdSet.has(partitionId),
+    );
   const publishedActiveNodeIds = resolvePublishedActiveNodeIds(
     options,
     controlPlaneDiagnostics,
@@ -229,6 +671,10 @@ function collectClosureEvidence(options = POST_REBALANCE_CLOSURE_EMPTY_RECORD) {
         (nodeId) => !projectedActiveNodeIdSet.has(nodeId),
       ) :
       POST_REBALANCE_CLOSURE_EMPTY_LIST;
+  const publicationVisibility = resolvePublicationVisibility(
+    controlPlaneDiagnostics,
+    publishedActiveNodeIds.length > NUM.ZERO,
+  );
   const inFlightReplicaOperationCount = normalizeNonNegativeInteger(
     options.inFlightReplicaOperationCount,
     NUM.ZERO,
@@ -244,7 +690,7 @@ function collectClosureEvidence(options = POST_REBALANCE_CLOSURE_EMPTY_RECORD) {
   const cacheVisibleSatisfiedPriorityRecoveryOperationCount =
     normalizeNonNegativeInteger(
       options.cacheVisibleSatisfiedPriorityRecoveryOperationCount,
-      NUM.ZERO,
+      priorityRecoveryPartitionIds.length,
     );
   const staleDiscountCount = Math.max(
     staleInFlightReplicaOperationCount,
@@ -272,20 +718,28 @@ function collectClosureEvidence(options = POST_REBALANCE_CLOSURE_EMPTY_RECORD) {
     effectiveInFlightReplicaOperationCount,
     staleInFlightReplicaOperationCount,
     cacheVisibleSatisfiedPriorityRecoveryOperationCount,
+    cacheVisibleSatisfiedPriorityRecoveryPartitionIds:
+      priorityRecoveryPartitionIds,
+    coveredMissingLeaderPartitionIds,
+    uncoveredMissingLeaderPartitionIds,
     staleDiscountCount,
     ignoreStaleInFlightReplicaOperations:
       options.ignoreStaleInFlightReplicaOperations === true,
     inFlightReplicaOperationStatuses: getDiagnosticsObject(
       options.inFlightReplicaOperationStatuses,
     ),
-    publicationStatus: resolvePublicationStatus(controlPlaneDiagnostics),
-    publicationAvailable:
-      getPublicationConvergence(controlPlaneDiagnostics) !==
-        POST_REBALANCE_CLOSURE_EMPTY_RECORD ||
-      publishedActiveNodeIds.length > NUM.ZERO,
+    publicationStatus: publicationVisibility.status,
+    rawPublicationStatus: publicationVisibility.rawPublicationStatus,
+    publishedMembershipObservationStatus:
+      publicationVisibility.publishedMembershipObservationStatus,
+    publicationVisibilitySource: publicationVisibility.source,
+    publicationVisibilityState: publicationVisibility.state,
+    publicationVisibilityReasonCodes: publicationVisibility.reasonCodes,
+    publicationAvailable: publicationVisibility.publicationAvailable,
     publishedActiveNodeIds,
     projectedActiveNodeIds,
     stalePublishedNodeIds,
+    membershipFreezeActive: membershipFreeze.active === true,
   };
 }
 
@@ -319,60 +773,31 @@ function classifyOperationDrain(evidence) {
 }
 
 function classifyPublicationVisible(evidence) {
-  if (!evidence.publicationAvailable) {
-    return buildDimension(
-      POST_REBALANCE_CLOSURE_DIMENSION.PUBLICATION_VISIBLE,
-      POST_REBALANCE_CLOSURE_STATE.UNAVAILABLE,
-      [POST_REBALANCE_CLOSURE_REASON.PUBLICATION_UNAVAILABLE],
-      evidence,
-    );
-  }
-  if (
-    evidence.publicationStatus.length === NUM.ZERO ||
-    evidence.publicationStatus === CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED
-  ) {
-    return buildDimension(
-      POST_REBALANCE_CLOSURE_DIMENSION.PUBLICATION_VISIBLE,
-      POST_REBALANCE_CLOSURE_STATE.CLOSED,
-      POST_REBALANCE_CLOSURE_EMPTY_LIST,
-      evidence,
-    );
-  }
   return buildDimension(
     POST_REBALANCE_CLOSURE_DIMENSION.PUBLICATION_VISIBLE,
-    POST_REBALANCE_CLOSURE_STATE.OPEN,
-    [POST_REBALANCE_CLOSURE_REASON.PUBLICATION_PENDING],
+    evidence.publicationVisibilityState,
+    evidence.publicationVisibilityReasonCodes,
     evidence,
   );
 }
 
 function classifyCdcProjectionVisible(evidence) {
-  if (evidence.expectedPartitionIds.length === NUM.ZERO) {
-    return buildDimension(
-      POST_REBALANCE_CLOSURE_DIMENSION.CDC_PROJECTION_VISIBLE,
-      POST_REBALANCE_CLOSURE_STATE.UNAVAILABLE,
-      [POST_REBALANCE_CLOSURE_REASON.CDC_PROJECTION_UNAVAILABLE],
-      evidence,
-    );
-  }
-  if (evidence.missingLeaderPartitionIds.length > NUM.ZERO) {
-    return buildDimension(
-      POST_REBALANCE_CLOSURE_DIMENSION.CDC_PROJECTION_VISIBLE,
-      POST_REBALANCE_CLOSURE_STATE.OPEN,
-      [POST_REBALANCE_CLOSURE_REASON.MISSING_PARTITION_LEADERS],
-      evidence,
-    );
-  }
+  const decision = POST_REBALANCE_CDC_PROJECTION_VISIBILITY_DECISION_TABLE.find(
+    (candidate) => candidate.matches(evidence),
+  );
   return buildDimension(
     POST_REBALANCE_CLOSURE_DIMENSION.CDC_PROJECTION_VISIBLE,
-    POST_REBALANCE_CLOSURE_STATE.CLOSED,
-    POST_REBALANCE_CLOSURE_EMPTY_LIST,
+    decision.state,
+    decision.reasonCodes,
     evidence,
   );
 }
 
 function classifyMembershipTrim(evidence, operationDrainState) {
-  if (evidence.stalePublishedNodeIds.length > NUM.ZERO) {
+  if (
+    evidence.stalePublishedNodeIds.length > NUM.ZERO &&
+    evidence.membershipFreezeActive !== true
+  ) {
     return buildDimension(
       POST_REBALANCE_CLOSURE_DIMENSION.MEMBERSHIP_TRIM,
       POST_REBALANCE_CLOSURE_STATE.OPEN,
@@ -413,6 +838,17 @@ function classifyMembershipTrim(evidence, operationDrainState) {
 }
 
 function classifyNoOverTarget(evidence, operationDrainState) {
+  if (
+    evidence.membershipFreezeActive === true &&
+    evidence.overTargetPartitionIds.length > NUM.ZERO
+  ) {
+    return buildDimension(
+      POST_REBALANCE_CLOSURE_DIMENSION.NO_OVER_TARGET,
+      POST_REBALANCE_CLOSURE_STATE.SOFT_CLOSED,
+      [POST_REBALANCE_CLOSURE_REASON.CURRENT_OVERTARGET_VOTERS],
+      evidence,
+    );
+  }
   if (evidence.maxOverTargetMs > evidence.maxSustainedOverTargetMs) {
     return buildDimension(
       POST_REBALANCE_CLOSURE_DIMENSION.NO_OVER_TARGET,
@@ -509,9 +945,21 @@ function buildPostRebalanceClosureSnapshot(
   };
 }
 
+function isPostRebalanceCdcProjectionVisibleSatisfied(
+  options = POST_REBALANCE_CLOSURE_EMPTY_RECORD,
+) {
+  const evidence = collectClosureEvidence(options);
+  const cdcProjectionVisible = classifyCdcProjectionVisible(evidence);
+  return POST_REBALANCE_CLOSURE_TERMINAL_STATES.includes(
+    cdcProjectionVisible.state,
+  );
+}
+
 export {
   POST_REBALANCE_CLOSURE_DIMENSION,
   POST_REBALANCE_CLOSURE_REASON,
   POST_REBALANCE_CLOSURE_STATE,
   buildPostRebalanceClosureSnapshot,
+  countCacheVisibleSatisfiedPriorityRecoveryOperations,
+  isPostRebalanceCdcProjectionVisibleSatisfied,
 };

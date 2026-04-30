@@ -2,10 +2,16 @@ import {NUM} from '../constants/index.js';
 import {TABLES} from '../constants/index.js';
 import {PRESSURE_WORK_CLASS} from './pressure-governor.js';
 
+const LOCAL_STR_STRING = 'string';
+
 const TRANSACTION_CONTROL_MUTATION_WORKLOAD_CLASS =
   'transaction_control_mutation';
+const LOGS_TABLE_BACKGROUND_WRITE_WORKLOAD_CLASS =
+  'logs_table_background_write';
 const CONTROL_PLANE_TRANSACTION_CONTROL_RECOVERY_RESOURCE_KEY =
   'control-plane:transaction-control:recovery';
+const CONTROL_PLANE_LOGS_TABLE_BACKGROUND_WRITE_RESOURCE_KEY =
+  'control-plane:logs-table:background-write';
 
 const CONTROL_PLANE_WORKLOAD_CLASS = Object.freeze({
   BOOTSTRAP_CONTROL_PLANE_READ: 'bootstrap_control_plane_read',
@@ -16,6 +22,7 @@ const CONTROL_PLANE_WORKLOAD_CLASS = Object.freeze({
   TRANSACTION_CONTROL_MUTATION: TRANSACTION_CONTROL_MUTATION_WORKLOAD_CLASS,
   ADMIN_DIAGNOSTIC_READ: 'admin_diagnostic_read',
   CONTROL_SNAPSHOT_REPAIR: 'control_snapshot_repair',
+  LOGS_TABLE_BACKGROUND_WRITE: LOGS_TABLE_BACKGROUND_WRITE_WORKLOAD_CLASS,
   MESSAGE_GROUP_FORWARD_TOPOLOGY_REPAIR:
     'message_group_forward_topology_repair',
   JOIN_REPAIR: 'join_repair',
@@ -96,6 +103,16 @@ const CONTROL_PLANE_WORKLOAD_PROFILE = Object.freeze({
     allowPressureDefer: true,
     resourceKeys: Object.freeze(['control-plane:snapshot:repair']),
   }),
+  [CONTROL_PLANE_WORKLOAD_CLASS.LOGS_TABLE_BACKGROUND_WRITE]:
+    Object.freeze({
+      workloadClass: CONTROL_PLANE_WORKLOAD_CLASS.LOGS_TABLE_BACKGROUND_WRITE,
+      workClass: PRESSURE_WORK_CLASS.BACKGROUND,
+      allowPressureDegrade: true,
+      allowPressureDefer: true,
+      resourceKeys: Object.freeze([
+        CONTROL_PLANE_LOGS_TABLE_BACKGROUND_WRITE_RESOURCE_KEY,
+      ]),
+    }),
   [CONTROL_PLANE_WORKLOAD_CLASS.MESSAGE_GROUP_FORWARD_TOPOLOGY_REPAIR]:
     Object.freeze({
       workloadClass:
@@ -119,7 +136,7 @@ const CONTROL_PLANE_WORKLOAD_PROFILE = Object.freeze({
       workloadClass: CONTROL_PLANE_WORKLOAD_CLASS.PUBLICATION_MUTATION,
       workClass: PRESSURE_WORK_CLASS.CRITICAL,
       allowPressureDegrade: false,
-      allowPressureDefer: false,
+      allowPressureDefer: true,
       resourceKeys: Object.freeze(['control-plane:membership:publication']),
     }),
   [CONTROL_PLANE_WORKLOAD_CLASS.NODE_METADATA_MUTATION]:
@@ -171,7 +188,7 @@ const CONTROL_PLANE_WORKLOAD_PROFILE = Object.freeze({
 function normalizeDistinctStringArray(values = []) {
   return [...new Set(
     (Array.isArray(values) ? values : [])
-      .filter((value) => typeof value === 'string' && value.length > NUM.ZERO),
+      .filter((value) => typeof value === LOCAL_STR_STRING && value.length > NUM.ZERO),
   )];
 }
 

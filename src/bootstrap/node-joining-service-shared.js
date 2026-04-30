@@ -216,6 +216,8 @@ const NODE_JOINING_SERVICE_LITERAL = Object.freeze({
   METADATA_PUBLICATION_READINESS: 'metadata_publication_readiness',
   DEFERRING_JOIN_PARTITION_SERVICE_ROW_ACTIVATION:
     'Deferring join partition service row activation',
+  DEFERRING_JOIN_MESSAGE_GROUP_SERVICE_ROW_ACTIVATION:
+    'Deferring join message-group service row activation',
   ANY_REPLICA: 'any_replica',
   NO_CONNECTION_TO_NODE: 'No connection to node',
   CONNECTION_TO_NODE: 'Connection to node',

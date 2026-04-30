@@ -32,6 +32,9 @@ import {
   ADMIN_TEST_ERROR_MSG,
 } from './admin-constants.js';
 
+const LOCAL_STR_COMMA = ',';
+const LOCAL_STR_BASE64 = 'base64';
+
 // ── file-local constants ────────────────────────────────────────────────────
 const HTTP_STATUS = Object.freeze({
   OK: 200,
@@ -60,7 +63,7 @@ function parseHeaderRoles(rolesHeader) {
   if (typeof rolesHeader !== TYPEOF.STRING) {
     return [];
   }
-  return rolesHeader.split(',')
+  return rolesHeader.split(LOCAL_STR_COMMA)
     .map((value) => value.trim())
     .filter((value) => value.length > NUM.ZERO);
 }
@@ -122,7 +125,7 @@ function parseTraceLevels(levelsParam) {
   if (typeof levelsParam !== TYPEOF.STRING) {
     return [];
   }
-  return levelsParam.split(',')
+  return levelsParam.split(LOCAL_STR_COMMA)
     .map((value) => value.trim())
     .filter((value) => value.length > NUM.ZERO);
 }
@@ -155,7 +158,7 @@ function normalizeSnapshotApiPayload(snapshot) {
 
   return {
     ...snapshot,
-    envelopeBase64: snapshot.envelope.toString('base64'),
+    envelopeBase64: snapshot.envelope.toString(LOCAL_STR_BASE64),
     envelope: undefined,
   };
 }

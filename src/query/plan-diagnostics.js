@@ -16,6 +16,8 @@ import {
   DIAGNOSTICS_FIELD,
 } from './runtime-constants.js';
 
+const LOCAL_NUM_ZERO = 0;
+
 /**
  * Diagnostic field names for plan output.
  * @enum {string}
@@ -171,7 +173,7 @@ class PlanDiagnostics {
    * @return {number} Rejection count.
    */
   getRejectionCount() {
-    let count = 0;
+    let count = LOCAL_NUM_ZERO;
     for (const d of this._classifications) {
       if (d[DIAGNOSTICS_FIELD.CLASSIFICATION] ===
           NESTED_CALL_CLASSIFICATION.UNBOUNDED) {
@@ -187,7 +189,7 @@ class PlanDiagnostics {
    * @return {number} Bounded count.
    */
   getBoundedCount() {
-    let count = 0;
+    let count = LOCAL_NUM_ZERO;
     for (const d of this._classifications) {
       if (d[DIAGNOSTICS_FIELD.CLASSIFICATION] ===
           NESTED_CALL_CLASSIFICATION.BOUNDED) {

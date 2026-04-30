@@ -9,6 +9,8 @@ import {test} from '../../src/test-helpers/tap.js';
 import {QueryExecutor} from '../../src/query/query-executor.js';
 import {ERRORS} from '../../src/constants/index.js';
 import {
+  SERVICE_STATUS,
+  SERVICE_TYPE,
   TABLES,
 } from '../../src/constants/index.js';
 import {
@@ -459,6 +461,116 @@ test('QueryExecutor - executeOnPartition repairs stale no-handler read ' +
   t.equal(
     readinessCalls[0].options.refreshReason,
     QUERY_ROUTING_REPAIR_REASON.NO_HANDLER_STALE_SERVICE,
+  );
+  t.end();
+});
+
+test('QueryExecutor - executeOnPartition skips duplicate queued ' +
+  'no-handler read addresses after quarantine', async (t) => {
+  const deliveries = [];
+  const partitionId = 'replica_operations-p1';
+  const staleAddress = 'leader-node/partition/replica_operations-p1-r1';
+  const fallbackAddress = 'follower-node/partition/replica_operations-p1-r3';
+  const systemCache = {
+    partitions: [
+      {
+        partition_id: partitionId,
+        leader_node_id: 'leader-node',
+        table_name: TABLES.REPLICA_OPERATIONS,
+      },
+    ],
+    services: [
+      {
+        service_id: 'replica_operations-p1-r1',
+        service_type: SERVICE_TYPE.PARTITION,
+        partition_id: partitionId,
+        node_id: 'leader-node',
+        raft_role: 'leader',
+        address: staleAddress,
+        status: SERVICE_STATUS.ACTIVE,
+      },
+      {
+        service_id: 'replica_operations-p1-r2',
+        service_type: SERVICE_TYPE.PARTITION,
+        partition_id: partitionId,
+        node_id: 'leader-node',
+        raft_role: 'follower',
+        address: staleAddress,
+        status: SERVICE_STATUS.ACTIVE,
+      },
+      {
+        service_id: 'replica_operations-p1-r3',
+        service_type: SERVICE_TYPE.PARTITION,
+        partition_id: partitionId,
+        node_id: 'follower-node',
+        raft_role: 'follower',
+        address: fallbackAddress,
+        status: SERVICE_STATUS.ACTIVE,
+      },
+    ],
+    get(type, key) {
+      if (type === TABLES.PARTITIONS) {
+        return this.partitions.find((partition) =>
+          partition.partition_id === key,
+        ) || null;
+      }
+      return null;
+    },
+    filter(type, predicate) {
+      if (type === TABLES.SERVICES) {
+        return this.services.filter(predicate);
+      }
+      if (type === TABLES.PARTITIONS) {
+        return this.partitions.filter(predicate);
+      }
+      return [];
+    },
+  };
+  const messageRouter = {
+    async deliver(address) {
+      deliveries.push(address);
+      if (address === staleAddress) {
+        return {
+          acknowledged: true,
+          success: false,
+          noHandler: true,
+          error: `${ERRORS.NO_HANDLER_FOR_ADDRESS} ${address}`,
+        };
+      }
+      if (address === fallbackAddress) {
+        return {
+          acknowledged: true,
+          success: true,
+          rows: [{operation_id: 'op-1'}],
+        };
+      }
+      return {
+        acknowledged: true,
+        success: false,
+        error: 'unexpected address',
+      };
+    },
+  };
+
+  const executor = new QueryExecutor({
+    messageRouter,
+    systemCache,
+    nodeId: 'local-node',
+  });
+
+  const result = await executor.executeOnPartition(
+    partitionId,
+    'SELECT * FROM replica_operations WHERE operation_id = ?',
+    ['op-1'],
+    true,
+    true,
+  );
+
+  t.equal(result.success, true);
+  t.same(
+    deliveries,
+    [staleAddress, fallbackAddress],
+    'delivery should not retry a queued duplicate stale address after the first no-handler witness quarantines it',
   );
   t.end();
 });

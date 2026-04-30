@@ -1,5 +1,16 @@
 import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
 
+const LOCAL_STR_SQL_CONTROL_PLANE = 'sql_control_plane';
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_STR_FUNCTION = 'function';
+const LOCAL_NUM_100 = 100;
+const LOCAL_STR_COMPLETED = 'completed';
+const LOCAL_STR_FAILED = 'failed';
+const LOCAL_STR_STRING = 'string';
+const LOCAL_STR_OBJECT = 'object';
+const LOCAL_STR_EXAMPLES = 'examples';
+const LOCAL_STR_1_0_0 = '1.0.0';
+
 const {
   ADAPTER_ERROR_MSG,
   ADAPTER_LOG_MSG,
@@ -95,22 +106,22 @@ class SQLQueryEngineSegment1 {
     this.controlPlaneTimeoutPolicy =
       options.controlPlaneTimeoutPolicy ||
       new TimeoutPolicy({
-        operationName: 'sql_control_plane',
+        operationName: LOCAL_STR_SQL_CONTROL_PLANE,
         now: this.nowFn,
       });
     this.tablePartitionProvisioningTimeoutMs =
       Number.isFinite(options.tablePartitionProvisioningTimeoutMs) &&
-      options.tablePartitionProvisioningTimeoutMs > 0 ?
+      options.tablePartitionProvisioningTimeoutMs > LOCAL_NUM_ZERO ?
         Math.floor(options.tablePartitionProvisioningTimeoutMs) :
         QUERY_DEFAULTS.TABLE_CREATE_PROVISION_TIMEOUT_MS;
     this.tablePartitionProvisioningPollIntervalMs =
       Number.isFinite(options.tablePartitionProvisioningPollIntervalMs) &&
-      options.tablePartitionProvisioningPollIntervalMs > 0 ?
+      options.tablePartitionProvisioningPollIntervalMs > LOCAL_NUM_ZERO ?
         Math.floor(options.tablePartitionProvisioningPollIntervalMs) :
         QUERY_DEFAULTS.TABLE_CREATE_PROVISION_POLL_INTERVAL_MS;
     this.tablePartitionTargetNodeConvergenceTimeoutMs =
       Number.isFinite(options.tablePartitionTargetNodeConvergenceTimeoutMs) &&
-      options.tablePartitionTargetNodeConvergenceTimeoutMs > 0 ?
+      options.tablePartitionTargetNodeConvergenceTimeoutMs > LOCAL_NUM_ZERO ?
         Math.floor(options.tablePartitionTargetNodeConvergenceTimeoutMs) :
         QUERY_DEFAULTS.TABLE_CREATE_TARGET_NODE_CONVERGENCE_TIMEOUT_MS;
 
@@ -356,7 +367,7 @@ class SQLQueryEngineSegment1 {
     }
     this.recoverDistributedTransactionStateFromCache();
     const replayPromise = this.resumeRecoveredDistributedTransactions();
-    if (typeof this.transactionCoordinator.startRecoverySweep === 'function') {
+    if (typeof this.transactionCoordinator.startRecoverySweep === LOCAL_STR_FUNCTION) {
       this.transactionCoordinator.startRecoverySweep();
     }
     return replayPromise;
@@ -470,13 +481,13 @@ class SQLQueryEngineSegment1 {
   async shutdown() {
     if (
       this.transactionCoordinator &&
-      typeof this.transactionCoordinator.stopRecoverySweep === 'function'
+      typeof this.transactionCoordinator.stopRecoverySweep === LOCAL_STR_FUNCTION
     ) {
       this.transactionCoordinator.stopRecoverySweep();
     }
     if (
       this.tableCreationService &&
-      typeof this.tableCreationService.shutdown === 'function'
+      typeof this.tableCreationService.shutdown === LOCAL_STR_FUNCTION
     ) {
       await this.tableCreationService.shutdown();
     }
@@ -511,7 +522,7 @@ class SQLQueryEngineSegment1 {
    * @private
    */
   _wireQueryExecutorFactory(lifecycle) {
-    if (!lifecycle || typeof lifecycle.setQueryExecutorFactory !== 'function') {
+    if (!lifecycle || typeof lifecycle.setQueryExecutorFactory !== LOCAL_STR_FUNCTION) {
       return;
     }
     lifecycle.setQueryExecutorFactory(
@@ -564,7 +575,7 @@ class SQLQueryEngineSegment1 {
 
     this.logger.debug(ADAPTER_LOG_MSG.EXECUTE_REQUEST_START, {
       executionMode,
-      statement: statement.substring(0, 100),
+      statement: statement.substring(LOCAL_NUM_ZERO, LOCAL_NUM_100),
       sessionId,
     });
 
@@ -669,7 +680,7 @@ class SQLQueryEngineSegment1 {
     }
 
     this.logger.debug(ADAPTER_LOG_MSG.PARTITION_CALLBACK_DISPATCH, {
-      statement: statement.substring(0, 100),
+      statement: statement.substring(LOCAL_NUM_ZERO, LOCAL_NUM_100),
       callbackModuleRef,
       callbackExport,
       sessionId,
@@ -717,7 +728,7 @@ class SQLQueryEngineSegment1 {
         ociFeatureGateEnabled: Boolean(sqlRequest.ociFeatureGateEnabled),
       });
     if (
-      typeof callbackRuntimeRegistry.hasRuntimeDriverRegistry !== 'function' ||
+      typeof callbackRuntimeRegistry.hasRuntimeDriverRegistry !== LOCAL_STR_FUNCTION ||
       !callbackRuntimeRegistry.hasRuntimeDriverRegistry()
     ) {
       throw new Error(ADAPTER_ERROR_MSG.CALLBACK_RUNTIME_REGISTRY_REQUIRED);
@@ -750,7 +761,7 @@ class SQLQueryEngineSegment1 {
     });
 
     this.logger.debug(ADAPTER_LOG_MSG.PARTITION_CALLBACK_COMPLETE, {
-      success: hostResult.state === 'completed',
+      success: hostResult.state === LOCAL_STR_COMPLETED,
       batchCount: dispatchResult.batches.length,
       processedPartitions: hostResult.processedPartitions,
       callbackModuleRef,
@@ -759,7 +770,7 @@ class SQLQueryEngineSegment1 {
 
     return {
       success:
-        hostResult.state === 'completed' || hostResult.state === 'failed',
+        hostResult.state === LOCAL_STR_COMPLETED || hostResult.state === LOCAL_STR_FAILED,
       batches: dispatchResult.batches,
       callbackModuleRef,
       callbackExport,
@@ -780,7 +791,7 @@ class SQLQueryEngineSegment1 {
    * @private
    */
   async resolvePartitionCallbackHandler(sqlRequest, executionContext) {
-    if (typeof sqlRequest.handler === 'function') {
+    if (typeof sqlRequest.handler === LOCAL_STR_FUNCTION) {
       return sqlRequest.handler;
     }
     if (sqlRequest.runtimeKind !== CALLBACK_RUNTIME_KIND.NATIVE_JS) {
@@ -826,7 +837,7 @@ class SQLQueryEngineSegment1 {
     }
 
     const source = codeRow.code_blob;
-    if (typeof source !== 'string' || !source.trim()) {
+    if (typeof source !== LOCAL_STR_STRING || !source.trim()) {
       throw new Error(ADAPTER_ERROR_MSG.NATIVE_CALLBACK_SOURCE_INVALID);
     }
     const compiledExports = this.compileCallbackModuleSource(
@@ -834,7 +845,7 @@ class SQLQueryEngineSegment1 {
       ADAPTER_ERROR_MSG.NATIVE_CALLBACK_COMPILE_FAILED,
     );
     const rawHandler = compiledExports ? compiledExports[callbackExport] : null;
-    if (typeof rawHandler !== 'function') {
+    if (typeof rawHandler !== LOCAL_STR_FUNCTION) {
       throw new Error(
         `${ADAPTER_ERROR_MSG.NATIVE_CALLBACK_EXPORT_NOT_FOUND}: ` +
           callbackExport,
@@ -859,8 +870,8 @@ class SQLQueryEngineSegment1 {
       [callbackModuleRef],
       {sessionId},
     );
-    if (byFunctionId.rows?.[0]) {
-      return byFunctionId.rows[0];
+    if (byFunctionId.rows?.[LOCAL_NUM_ZERO]) {
+      return byFunctionId.rows[LOCAL_NUM_ZERO];
     }
 
     const byFunctionName = await this.executeQuery(
@@ -868,7 +879,7 @@ class SQLQueryEngineSegment1 {
       [callbackModuleRef],
       {sessionId},
     );
-    return byFunctionName.rows?.[0] || null;
+    return byFunctionName.rows?.[LOCAL_NUM_ZERO] || null;
   }
 
   /**
@@ -895,7 +906,7 @@ class SQLQueryEngineSegment1 {
       throw compileError;
     }
 
-    return evaluated && typeof evaluated === 'object' ?
+    return evaluated && typeof evaluated === LOCAL_STR_OBJECT ?
       evaluated :
       module.exports;
   }
@@ -914,7 +925,7 @@ class SQLQueryEngineSegment1 {
       [callbackModuleRef],
       {sessionId},
     );
-    return manifestLookup.rows?.[0] || null;
+    return manifestLookup.rows?.[LOCAL_NUM_ZERO] || null;
   }
 
   /**
@@ -927,15 +938,15 @@ class SQLQueryEngineSegment1 {
    */
   parseJsonArrayField(rawValue, fallback) {
     if (Array.isArray(rawValue)) {
-      return rawValue.filter((entry) => typeof entry === 'string');
+      return rawValue.filter((entry) => typeof entry === LOCAL_STR_STRING);
     }
-    if (typeof rawValue !== 'string' || !rawValue.trim()) {
+    if (typeof rawValue !== LOCAL_STR_STRING || !rawValue.trim()) {
       return fallback;
     }
     try {
       const parsed = JSON.parse(rawValue);
       return Array.isArray(parsed) ?
-        parsed.filter((entry) => typeof entry === 'string') :
+        parsed.filter((entry) => typeof entry === LOCAL_STR_STRING) :
         fallback;
     } catch (_parseErr) {
       return fallback;
@@ -960,9 +971,9 @@ class SQLQueryEngineSegment1 {
       [...declaredExports, runExport];
 
     return {
-      namespace: manifestRow?.namespace || 'examples',
+      namespace: manifestRow?.namespace || LOCAL_STR_EXAMPLES,
       name: manifestRow?.name || callbackModuleRef,
-      version: String(manifestRow?.version || '1.0.0'),
+      version: String(manifestRow?.version || LOCAL_STR_1_0_0),
       digest: manifestRow?.digest || ZERO_SHA256_DIGEST,
       runExport,
       exports: exportsWithRun,

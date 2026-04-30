@@ -4,6 +4,8 @@ import {
   getMissingSystemServiceLeaders,
 } from '../cache/leader-readiness-gate.js';
 
+const LOCAL_NUM_ZERO = 0;
+
 function createSystemLeaderReadinessSnapshot(options = {}) {
   const {
     systemTableCache = null,
@@ -38,7 +40,7 @@ function createSystemLeaderReadinessSnapshot(options = {}) {
     getMissingSystemServiceLeaderCount(missingLeaders);
 
   return {
-    ready: missingCount === 0,
+    ready: missingCount === LOCAL_NUM_ZERO,
     missingLeaders,
     missingCount,
   };

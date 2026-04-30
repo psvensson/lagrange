@@ -10,6 +10,8 @@ import {
 import {validateRuntimeDescriptor} from '../wasm-service/runtime-descriptor-validator.js';
 import {ServiceDescriptorValidationError} from './service-lifecycle-errors.js';
 
+const LOCAL_NUM_ZERO = 0;
+
 const DESCRIPTOR_ERROR = Object.freeze({
   SERVICE_ID_REQUIRED: 'serviceId is required',
   SERVICE_ID_NOT_STRING: 'serviceId must be a non-empty string',
@@ -44,7 +46,7 @@ function normalizeServiceDescriptor(descriptor) {
     [SERVICE_DESCRIPTOR_FIELD.REPLICA_COUNT]:
       descriptor?.[SERVICE_DESCRIPTOR_FIELD.REPLICA_COUNT] ??
       descriptor?.replica_count ??
-      0,
+      LOCAL_NUM_ZERO,
     [SERVICE_DESCRIPTOR_FIELD.RUNTIME_KIND]:
       descriptor?.[SERVICE_DESCRIPTOR_FIELD.RUNTIME_KIND] ||
       descriptor?.runtime_kind ||
@@ -78,7 +80,7 @@ function validateServiceDescriptor(descriptor, options = {}) {
 
   if (serviceId === null || serviceId === undefined) {
     errors.push(DESCRIPTOR_ERROR.SERVICE_ID_REQUIRED);
-  } else if (typeof serviceId !== TYPEOF.STRING || serviceId.length === 0) {
+  } else if (typeof serviceId !== TYPEOF.STRING || serviceId.length === LOCAL_NUM_ZERO) {
     errors.push(DESCRIPTOR_ERROR.SERVICE_ID_NOT_STRING);
   }
 
@@ -90,7 +92,7 @@ function validateServiceDescriptor(descriptor, options = {}) {
 
   if (!Number.isFinite(replicaCount) ||
     !Number.isInteger(replicaCount) ||
-    replicaCount < 0) {
+    replicaCount < LOCAL_NUM_ZERO) {
     errors.push(DESCRIPTOR_ERROR.REPLICA_COUNT_INVALID);
   }
 
@@ -111,7 +113,7 @@ function validateServiceDescriptor(descriptor, options = {}) {
   }
 
   return {
-    valid: errors.length === 0,
+    valid: errors.length === LOCAL_NUM_ZERO,
     errors,
     descriptor: normalized,
   };

@@ -60,6 +60,18 @@ const REPORTER_FORWARD_SEED_ADDRESS = 'http://localhost:8080';
 const REPORTER_FORWARD_HEARTBEAT_AT = 4242;
 const REPORTER_FORWARD_READY_LEASE_AT = 8484;
 const REPORTER_FORWARD_TARGET_ADDRESS = 'seed-node-1/message-group/mg-1-r3';
+const LATE_PHASE_RESUME_NODE_ID = 'joining-node-late-phase-resume-1';
+const LATE_PHASE_RESUME_NODE_ADDRESS = 'ws://localhost:9199';
+const LATE_PHASE_RESUME_SEED_ADDRESS = 'http://localhost:8080';
+const LATE_PHASE_RESUME_HTTP_TIMEOUT_MS = 30000;
+const LATE_PHASE_RESUME_RETRY_WINDOW_MS = 120000;
+const LATE_PHASE_RESUME_EXPECTED_MAX_ELAPSED_MS = 300000;
+const LATE_PHASE_RESUME_OBSERVED_ELAPSED_MS = 293824;
+const LATE_PHASE_RESUME_START_TIME_MS = 0;
+const LATE_PHASE_RESUME_RETRY_AFTER_MS = 1000;
+const LATE_PHASE_RESUME_ATTEMPT = 1;
+const LATE_PHASE_RESUME_ERROR_MESSAGE = 'Request timeout after 30000ms';
+const LATE_PHASE_RESUME_ERROR_PHASE = 'querying_state';
 
 // Initialize configuration and logging for tests
 function initializeTestEnvironment() {
@@ -1052,6 +1064,51 @@ test('NodeJoiningService - retryable auto-resume budget covers one full ' +
     'one full contact-seed timeout window should not exhaust auto-resume before a retry can begin',
   );
 });
+
+test('NodeJoiningService - retryable auto-resume budget covers late membership pressure',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const service = new NodeJoiningService({
+      nodeId: LATE_PHASE_RESUME_NODE_ID,
+      nodeAddress: LATE_PHASE_RESUME_NODE_ADDRESS,
+      seedNodeAddress: LATE_PHASE_RESUME_SEED_ADDRESS,
+      config: {
+        autoResumeRetryableFailures: true,
+        leadershipWaitTimeoutMs: LATE_PHASE_RESUME_RETRY_WINDOW_MS,
+        httpTimeoutMs: LATE_PHASE_RESUME_HTTP_TIMEOUT_MS,
+      },
+    });
+
+    const policy = service.resolveRetryableJoinResumePolicy();
+    t.equal(
+      policy.maxElapsedMs,
+      LATE_PHASE_RESUME_EXPECTED_MAX_ELAPSED_MS,
+      'resume budget should cover one late membership retry window before exhausting',
+    );
+
+    service.startTime = LATE_PHASE_RESUME_START_TIME_MS;
+    service.now = () => LATE_PHASE_RESUME_OBSERVED_ELAPSED_MS;
+    const retryableMembershipTimeout = new Error(
+      LATE_PHASE_RESUME_ERROR_MESSAGE,
+    );
+    retryableMembershipTimeout.deferRetry = true;
+    retryableMembershipTimeout.retryAfterMs = LATE_PHASE_RESUME_RETRY_AFTER_MS;
+
+    t.equal(
+      service.shouldAutoResumeRetryableJoinFailure(
+        retryableMembershipTimeout,
+        {
+          phase: LATE_PHASE_RESUME_ERROR_PHASE,
+          error: LATE_PHASE_RESUME_ERROR_MESSAGE,
+        },
+        LATE_PHASE_RESUME_ATTEMPT,
+        policy,
+      ),
+      true,
+      'late retryable membership pressure should still resume instead of terminally stopping the node',
+    );
+  });
 
 test(
   'NodeJoiningService - does not transition READY when canonical join readiness has ' +

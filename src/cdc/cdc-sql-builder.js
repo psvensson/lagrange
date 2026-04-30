@@ -18,6 +18,10 @@ import {
   CDC_SQL,
 } from './cdc-constants.js';
 
+const LOCAL_STR_9G3T8 = '\'';
+const LOCAL_STR_AU1TP = '"';
+const LOCAL_STR_NULL = 'null';
+
 const DEFAULT_VALUE_NORMALIZATION_STATE = Object.freeze({
   NULL: 'null',
   UNDEFINED: 'undefined',
@@ -171,14 +175,14 @@ class CDCSqlBuilder {
       });
     }
     const trimmed = value.trim();
-    if ((trimmed.startsWith('\'') && trimmed.endsWith('\'')) ||
-        (trimmed.startsWith('"') && trimmed.endsWith('"'))) {
+    if ((trimmed.startsWith(LOCAL_STR_9G3T8) && trimmed.endsWith(LOCAL_STR_9G3T8)) ||
+        (trimmed.startsWith(LOCAL_STR_AU1TP) && trimmed.endsWith(LOCAL_STR_AU1TP))) {
       return Object.freeze({
         state: DEFAULT_VALUE_NORMALIZATION_STATE.VALUE,
         value: trimmed.slice(NUM.ONE, NUM.NEGATIVE_ONE),
       });
     }
-    if (trimmed.toLowerCase() === 'null') {
+    if (trimmed.toLowerCase() === LOCAL_STR_NULL) {
       return Object.freeze({
         state: DEFAULT_VALUE_NORMALIZATION_STATE.NULL,
       });

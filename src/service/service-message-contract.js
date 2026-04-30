@@ -9,6 +9,10 @@ import {
 } from '../constants/unified-service-lifecycle.js';
 import {InvalidServiceMessageError} from './service-lifecycle-errors.js';
 
+const LOCAL_STR_1XPH1 = 'envelope must be an object';
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_STR_1AM9G = '; ';
+
 /**
  * Validate canonical service message envelope shape.
  *
@@ -21,7 +25,7 @@ function validateServiceMessageEnvelope(envelope) {
   if (!envelope || typeof envelope !== TYPEOF.OBJECT) {
     return {
       valid: false,
-      errors: ['envelope must be an object'],
+      errors: [LOCAL_STR_1XPH1],
     };
   }
 
@@ -47,7 +51,7 @@ function validateServiceMessageEnvelope(envelope) {
   }
 
   return {
-    valid: errors.length === 0,
+    valid: errors.length === LOCAL_NUM_ZERO,
     errors,
   };
 }
@@ -62,7 +66,7 @@ function assertServiceMessageEnvelope(envelope) {
   const validation = validateServiceMessageEnvelope(envelope);
   if (!validation.valid) {
     throw new InvalidServiceMessageError(
-      validation.errors.join('; '),
+      validation.errors.join(LOCAL_STR_1AM9G),
       {
         errors: validation.errors,
       },

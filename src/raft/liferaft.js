@@ -1,5 +1,10 @@
 import BaseLifeRaft from '@markwylde/liferaft';
 
+const LOCAL_STR_NUMBER = 'number';
+const LOCAL_STR_OBJECT = 'object';
+const LOCAL_STR_COMMAND = 'command';
+const LOCAL_STR_FUNCTION = 'function';
+
 const RAFT_EVENT = Object.freeze({
   DATA: 'data',
 });
@@ -11,15 +16,15 @@ const RAFT_PACKET_TYPE = Object.freeze({
 });
 
 function hasFiniteNumber(value) {
-  return typeof value === 'number' && Number.isFinite(value);
+  return typeof value === LOCAL_STR_NUMBER && Number.isFinite(value);
 }
 
 function isRecoverableAppendEntry(entry) {
   return !!entry &&
-    typeof entry === 'object' &&
+    typeof entry === LOCAL_STR_OBJECT &&
     hasFiniteNumber(entry.index) &&
     hasFiniteNumber(entry.term) &&
-    Object.prototype.hasOwnProperty.call(entry, 'command');
+    Object.prototype.hasOwnProperty.call(entry, LOCAL_STR_COMMAND);
 }
 
 function getCommittedIndex(raft) {
@@ -34,7 +39,7 @@ function patchIncomingDataListener(raft) {
   const listeners = raft.listeners(RAFT_EVENT.DATA);
   const originalListener = Array.isArray(listeners) ? listeners[0] : null;
 
-  if (typeof originalListener !== 'function' ||
+  if (typeof originalListener !== LOCAL_STR_FUNCTION ||
       originalListener.__lagrangePatched === true) {
     return;
   }

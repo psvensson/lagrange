@@ -1,5 +1,7 @@
 import {NUM, TYPEOF} from '../constants/index.js';
 
+const LOCAL_NUM_128 = 128;
+
 function freezeValue(value) {
   if (Array.isArray(value)) {
     return Object.freeze(value.map((entry) => freezeValue(entry)));
@@ -24,7 +26,7 @@ class ControlPlaneDiagnosticsLedger {
     this.maxEntries = Number.isInteger(options.maxEntries) &&
       options.maxEntries > NUM.ZERO ?
       options.maxEntries :
-      128;
+      LOCAL_NUM_128;
     this.now = typeof options.now === TYPEOF.FUNCTION ?
       options.now :
       () => Date.now();

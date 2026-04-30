@@ -13,6 +13,8 @@ import {
   extractUpdateDataFromSQL,
 } from './partition-sql-parser.js';
 
+const LOCAL_NUM_ZERO = 0;
+
 const SPLIT_ROUTING_LITERAL = Object.freeze({
   OBJECT: 'object',
 });
@@ -145,7 +147,7 @@ export function resolveSplitTargetPartitionId(value, metadata = {}) {
   ) ?
     metadata.targetPartitionIds :
     [];
-  if (value === null || value === void 0) {
+  if (value === null || value === void LOCAL_NUM_ZERO) {
     return rightPartitionId;
   }
   return value < metadata.splitKey ? leftPartitionId : rightPartitionId;
@@ -168,7 +170,7 @@ export function extractSplitRoutingKey(
     primaryKeyColumn,
     options.tableName,
   );
-  if (routingKey === null || routingKey === void 0) {
+  if (routingKey === null || routingKey === void LOCAL_NUM_ZERO) {
     throw new Error(PARTITION_SERVICE_ERROR_MSG.SPLIT_REPLICATION_ROUTING_FAILED);
   }
   return routingKey;

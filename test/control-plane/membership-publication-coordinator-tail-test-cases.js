@@ -1110,6 +1110,119 @@ export function registerMembershipPublicationCoordinatorTailTests({
       t.end();
     });
 
+  test('acknowledgeMembershipPublicationForNode refreshes from authoritative when cache has terminal stale publication',
+    async (t) => {
+      const PUBLICATIONS_TABLE = 'control_plane_publications';
+      const PUBLICATION_KIND = 'cluster_membership';
+      const STALE_PUBLICATION_ID = 'publication-25-stale';
+      const FRESH_PUBLICATION_ID = 'publication-26';
+      const STALE_PUBLICATION_EPOCH = 25;
+      const FRESH_PUBLICATION_EPOCH = 26;
+      const PUBLISHED_STATUS = 'PUBLISHED';
+      const ACK_PENDING_STATUS = 'ACK_PENDING';
+      const FIRST_NODE_ID = 'node-1';
+      const SECOND_NODE_ID = 'node-2';
+      const REQUIRED_NODE_IDS = Object.freeze([
+        FIRST_NODE_ID,
+        SECOND_NODE_ID,
+      ]);
+      const listPublicationsCalls = [];
+      const getPublicationCalls = [];
+      const persistedRows = [];
+      let durablePublicationRow = {
+        publication_id: FRESH_PUBLICATION_ID,
+        publication_kind: PUBLICATION_KIND,
+        publication_epoch: FRESH_PUBLICATION_EPOCH,
+        status: ACK_PENDING_STATUS,
+        published_active_node_ids: [...REQUIRED_NODE_IDS],
+        required_ack_node_ids: [...REQUIRED_NODE_IDS],
+        acknowledged_node_ids: [SECOND_NODE_ID],
+      };
+      const coordinator = new MembershipPublicationCoordinator({
+        nodeId: 'seed-node',
+        systemTableCache: {
+          getAll(tableName) {
+            if (tableName !== PUBLICATIONS_TABLE) {
+              return [];
+            }
+            return [
+              {
+                publication_id: STALE_PUBLICATION_ID,
+                publication_kind: PUBLICATION_KIND,
+                publication_epoch: STALE_PUBLICATION_EPOCH,
+                status: PUBLISHED_STATUS,
+                published_active_node_ids: [...REQUIRED_NODE_IDS],
+                required_ack_node_ids: [...REQUIRED_NODE_IDS],
+                acknowledged_node_ids: [...REQUIRED_NODE_IDS],
+              },
+            ];
+          },
+        },
+        controlPlanePublicationsOwner: {
+          async listPublications(options = {}) {
+            listPublicationsCalls.push(options);
+            return {
+              rows: [durablePublicationRow],
+            };
+          },
+          async getPublication(publicationId) {
+            getPublicationCalls.push(publicationId);
+            return durablePublicationRow;
+          },
+          async upsertPublication(row) {
+            persistedRows.push(row);
+            durablePublicationRow = row;
+          },
+        },
+      });
+
+      const publicationRow =
+      await coordinator.acknowledgeMembershipPublicationForNode(FIRST_NODE_ID);
+
+      t.equal(
+        listPublicationsCalls.length,
+        1,
+        'terminal cache rows should trigger an authoritative publication list refresh',
+      );
+      t.match(
+        listPublicationsCalls[0],
+        {
+          authoritativeReadMode:
+          CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
+        },
+        'terminal-cache refresh should stay on local authoritative publication reads',
+      );
+      t.equal(
+        persistedRows.length,
+        1,
+        'newer authoritative rows should be acknowledged when stale cache is terminal',
+      );
+      t.equal(
+        getPublicationCalls.length,
+        3,
+        'terminal-cache acknowledgement should merge and verify the publication by id',
+      );
+      t.match(
+        persistedRows[0],
+        {
+          publication_id: FRESH_PUBLICATION_ID,
+          status: PUBLISHED_STATUS,
+          acknowledged_node_ids: [...REQUIRED_NODE_IDS],
+        },
+        'fresh publication should close once the missing node acknowledgement is added',
+      );
+      t.match(
+        publicationRow,
+        {
+          publication_id: FRESH_PUBLICATION_ID,
+          status: PUBLISHED_STATUS,
+          acknowledged_node_ids: [...REQUIRED_NODE_IDS],
+        },
+        'acknowledgement result should reflect the refreshed durable publication row',
+      );
+      t.end();
+    });
+
   test('acknowledgeMembershipPublicationForNode rechecks durable state when cache already has the node ack',
     async (t) => {
       const listPublicationsCalls = [];

@@ -23,6 +23,14 @@ import {ALLOWED_RUNTIME_KINDS} from '../constants/runtime.js';
 import {TYPEOF} from '../constants/types.js';
 import {DriverNotImplementedError} from './runtime-driver-errors.js';
 
+const LOCAL_STR_8NMJ4 = 'RuntimeDriver is abstract and cannot be instantiated directly';
+const LOCAL_STR_KIND = 'kind';
+const LOCAL_STR_VALIDATEDESCRIPTOR = 'validateDescriptor';
+const LOCAL_STR_PREPARE = 'prepare';
+const LOCAL_STR_START = 'start';
+const LOCAL_STR_STOP = 'stop';
+const LOCAL_STR_HEALTH = 'health';
+
 // --- Result status constants ---
 
 const VALIDATION_STATUS = Object.freeze({
@@ -89,7 +97,7 @@ class RuntimeDriver {
   constructor(kind) {
     if (new.target === RuntimeDriver) {
       throw new Error(
-        'RuntimeDriver is abstract and cannot be instantiated directly',
+        LOCAL_STR_8NMJ4,
       );
     }
     if (typeof kind !== TYPEOF.STRING || !ALLOWED_RUNTIME_KINDS.has(kind)) {
@@ -104,7 +112,7 @@ class RuntimeDriver {
      * @readonly
      */
     this.kind = kind;
-    Object.defineProperty(this, 'kind', {writable: false, configurable: false});
+    Object.defineProperty(this, LOCAL_STR_KIND, {writable: false, configurable: false});
   }
 
   /**
@@ -115,7 +123,7 @@ class RuntimeDriver {
    * @abstract
    */
   validateDescriptor(_definition) {
-    throw new DriverNotImplementedError(this.kind, 'validateDescriptor');
+    throw new DriverNotImplementedError(this.kind, LOCAL_STR_VALIDATEDESCRIPTOR);
   }
 
   /**
@@ -128,7 +136,7 @@ class RuntimeDriver {
    * @abstract
    */
   async prepare(_definition, _context) {
-    throw new DriverNotImplementedError(this.kind, 'prepare');
+    throw new DriverNotImplementedError(this.kind, LOCAL_STR_PREPARE);
   }
 
   /**
@@ -140,7 +148,7 @@ class RuntimeDriver {
    * @abstract
    */
   async start(_replicaContext) {
-    throw new DriverNotImplementedError(this.kind, 'start');
+    throw new DriverNotImplementedError(this.kind, LOCAL_STR_START);
   }
 
   /**
@@ -152,7 +160,7 @@ class RuntimeDriver {
    * @abstract
    */
   async stop(_replicaContext) {
-    throw new DriverNotImplementedError(this.kind, 'stop');
+    throw new DriverNotImplementedError(this.kind, LOCAL_STR_STOP);
   }
 
   /**
@@ -163,7 +171,7 @@ class RuntimeDriver {
    * @abstract
    */
   async health(_replicaContext) {
-    throw new DriverNotImplementedError(this.kind, 'health');
+    throw new DriverNotImplementedError(this.kind, LOCAL_STR_HEALTH);
   }
 }
 

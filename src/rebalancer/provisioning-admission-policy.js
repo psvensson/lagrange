@@ -24,6 +24,13 @@ import {
 } from './storage-admission-constants.js';
 import {OperationType} from './replica-status.js';
 
+const LOCAL_STR_FUNCTION = 'function';
+const LOCAL_STR_DEFER = 'defer';
+const LOCAL_STR_OBJECT = 'object';
+const LOCAL_STR_SECONDARY = 'secondary=';
+const LOCAL_STR_COMMA = ',';
+const LOCAL_STR_NODE_REASON_CODES = 'node_reason_codes=';
+
 const PROVISIONING_ADMISSION_EVALUATION_STATE = Object.freeze({
   CHECK_ADD: 'check_add',
   CHECK_REPLACE: 'check_replace',
@@ -48,7 +55,7 @@ class ProvisioningAdmissionPolicy {
    * @private
    */
   getNodeId() {
-    if (typeof this.delegates.getNodeId === 'function') {
+    if (typeof this.delegates.getNodeId === LOCAL_STR_FUNCTION) {
       return this.delegates.getNodeId();
     }
     return this.nodeId;
@@ -59,7 +66,7 @@ class ProvisioningAdmissionPolicy {
    * @private
    */
   getControlPlaneReadinessService() {
-    if (typeof this.delegates.getControlPlaneReadinessService === 'function') {
+    if (typeof this.delegates.getControlPlaneReadinessService === LOCAL_STR_FUNCTION) {
       return this.delegates.getControlPlaneReadinessService();
     }
     return null;
@@ -70,7 +77,7 @@ class ProvisioningAdmissionPolicy {
    * @private
    */
   getStorageAdmissionService() {
-    if (typeof this.delegates.getStorageAdmissionService === 'function') {
+    if (typeof this.delegates.getStorageAdmissionService === LOCAL_STR_FUNCTION) {
       return this.delegates.getStorageAdmissionService();
     }
     return null;
@@ -81,7 +88,7 @@ class ProvisioningAdmissionPolicy {
    * @private
    */
   getStorageAccountingService() {
-    if (typeof this.delegates.getStorageAccountingService === 'function') {
+    if (typeof this.delegates.getStorageAccountingService === LOCAL_STR_FUNCTION) {
       return this.delegates.getStorageAccountingService();
     }
     return null;
@@ -93,7 +100,7 @@ class ProvisioningAdmissionPolicy {
    * @private
    */
   isCriticalSystemPartition(partitionId) {
-    if (typeof this.delegates.isCriticalSystemPartition === 'function') {
+    if (typeof this.delegates.isCriticalSystemPartition === LOCAL_STR_FUNCTION) {
       return this.delegates.isCriticalSystemPartition(partitionId) === true;
     }
     return false;
@@ -121,7 +128,7 @@ class ProvisioningAdmissionPolicy {
    * @private
    */
   normalizeMoveType(moveType) {
-    if (typeof this.delegates.normalizeMoveType === 'function') {
+    if (typeof this.delegates.normalizeMoveType === LOCAL_STR_FUNCTION) {
       return this.delegates.normalizeMoveType(moveType);
     }
     return moveType;
@@ -169,7 +176,7 @@ class ProvisioningAdmissionPolicy {
       null;
     return Object.freeze({
       allowed: false,
-      decision: 'defer',
+      decision: LOCAL_STR_DEFER,
       decisionType: STORAGE_ADMISSION_DECISION_TYPE.DEFERRED,
       reason: firstReason,
       blockingReasons: Object.freeze(
@@ -323,7 +330,7 @@ class ProvisioningAdmissionPolicy {
             firstIneligibleNode.reasonCodes :
             [],
           nodeSummary: firstIneligibleNode.nodeSummary &&
-            typeof firstIneligibleNode.nodeSummary === 'object' ?
+            typeof firstIneligibleNode.nodeSummary === LOCAL_STR_OBJECT ?
             {
               status: firstIneligibleNode.nodeSummary.status ?? null,
               connectionState:
@@ -462,7 +469,7 @@ class ProvisioningAdmissionPolicy {
   estimateProvisioningAdmissionBytes(entityType) {
     const storageAccountingService = this.getStorageAccountingService();
     if (!storageAccountingService ||
-        typeof storageAccountingService.estimateReplicaBytes !== 'function') {
+        typeof storageAccountingService.estimateReplicaBytes !== LOCAL_STR_FUNCTION) {
       return NUM.ZERO;
     }
     return storageAccountingService.estimateReplicaBytes({
@@ -488,18 +495,18 @@ class ProvisioningAdmissionPolicy {
     assertCritical(
       storageAccountingService &&
         typeof storageAccountingService.estimateReplicaBytes ===
-          'function',
+          LOCAL_STR_FUNCTION,
       REBALANCE_COORDINATOR_ERROR_MSG.STORAGE_ACCOUNTING_REQUIRED,
     );
     if (moveType === OperationType.ADD) {
       assertCritical(
-        typeof storageAdmissionService.checkAdd === 'function',
+        typeof storageAdmissionService.checkAdd === LOCAL_STR_FUNCTION,
         REBALANCE_COORDINATOR_ERROR_MSG.STORAGE_ADMISSION_CHECK_ADD_REQUIRED,
       );
     }
     if (moveType === OperationType.REPLACE) {
       assertCritical(
-        typeof storageAdmissionService.checkReplace === 'function',
+        typeof storageAdmissionService.checkReplace === LOCAL_STR_FUNCTION,
         REBALANCE_COORDINATOR_ERROR_MSG.STORAGE_ADMISSION_CHECK_REPLACE_REQUIRED,
       );
     }
@@ -541,12 +548,12 @@ class ProvisioningAdmissionPolicy {
     const diagnosticsSuffixParts = [];
     if (secondaryReasons.length > NUM.ZERO) {
       diagnosticsSuffixParts.push(
-        'secondary=' + secondaryReasons.join(','),
+        LOCAL_STR_SECONDARY + secondaryReasons.join(LOCAL_STR_COMMA),
       );
     }
     if (firstIneligibleReasonCodes.length > NUM.ZERO) {
       diagnosticsSuffixParts.push(
-        'node_reason_codes=' + firstIneligibleReasonCodes.join(','),
+        LOCAL_STR_NODE_REASON_CODES + firstIneligibleReasonCodes.join(LOCAL_STR_COMMA),
       );
     }
     const diagnosticsSuffix = diagnosticsSuffixParts.length > NUM.ZERO ?

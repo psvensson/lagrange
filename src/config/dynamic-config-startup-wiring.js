@@ -16,6 +16,12 @@ import {DynamicConfigService} from './dynamic-config-service.js';
 import {RaftAdaptiveTimingController} from
   './raft-adaptive-timing-controller.js';
 
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_STR_1H1DF = 'Timed out reading startup dynamic config key ';
+const LOCAL_STR_AFTER = ' after ';
+const LOCAL_STR_MS = 'ms';
+const LOCAL_STR_VM2WU = 'Timed out initializing adaptive timing controller after ';
+
 const DYNAMIC_CONFIG_STARTUP_EVENT = Object.freeze({
   CDC_APPLIED: 'cdcApplied',
 });
@@ -39,7 +45,7 @@ const DYNAMIC_CONFIG_STARTUP_CONTROLLER_INIT_TIMEOUT_MS = 300;
  */
 function resolveInitialReadTimeoutMs(options = {}) {
   const timeoutMs = Number(options.initialReadTimeoutMs);
-  if (Number.isFinite(timeoutMs) && timeoutMs > 0) {
+  if (Number.isFinite(timeoutMs) && timeoutMs > LOCAL_NUM_ZERO) {
     return Math.floor(timeoutMs);
   }
   return DYNAMIC_CONFIG_STARTUP_INITIAL_READ_TIMEOUT_MS;
@@ -52,7 +58,7 @@ function resolveInitialReadTimeoutMs(options = {}) {
  */
 function resolveControllerInitTimeoutMs(options = {}) {
   const timeoutMs = Number(options.controllerInitTimeoutMs);
-  if (Number.isFinite(timeoutMs) && timeoutMs > 0) {
+  if (Number.isFinite(timeoutMs) && timeoutMs > LOCAL_NUM_ZERO) {
     return Math.floor(timeoutMs);
   }
   return DYNAMIC_CONFIG_STARTUP_CONTROLLER_INIT_TIMEOUT_MS;
@@ -109,8 +115,8 @@ async function readStartupConfigValue(dynamicConfigService, key, timeoutMs) {
   return withTimeout(
     dynamicConfigService.get(key),
     timeoutMs,
-    'Timed out reading startup dynamic config key ' + key +
-      ' after ' + timeoutMs + 'ms',
+    LOCAL_STR_1H1DF + key +
+      LOCAL_STR_AFTER + timeoutMs + LOCAL_STR_MS,
   );
 }
 
@@ -194,7 +200,7 @@ function isValidRaftTimingConfig(raftTimingConfig) {
     Number.isFinite(electionTimeoutMinMs) &&
     Number.isFinite(electionTimeoutMaxMs) &&
     Number.isFinite(tickIntervalMs) &&
-    tickIntervalMs > 0 &&
+    tickIntervalMs > LOCAL_NUM_ZERO &&
     electionTimeoutMinMs <= electionTimeoutMaxMs;
 }
 
@@ -274,8 +280,8 @@ async function createDynamicConfigStartupWiring(options = {}) {
     }
 
     writeRaftTimingConfig(configManager, nextRaftTimingConfig);
-    let runtimeAppliedCount = 0;
-    let deferredCount = 0;
+    let runtimeAppliedCount = LOCAL_NUM_ZERO;
+    let deferredCount = LOCAL_NUM_ZERO;
     for (const service of raftServices) {
       if (!service ||
         typeof service.applyRaftTimingConfig !== TYPEOF.FUNCTION) {
@@ -426,8 +432,8 @@ async function createDynamicConfigStartupWiring(options = {}) {
     await withTimeout(
       adaptiveTimingController.initialize(),
       controllerInitTimeoutMs,
-      'Timed out initializing adaptive timing controller after ' +
-        controllerInitTimeoutMs + 'ms',
+      LOCAL_STR_VM2WU +
+        controllerInitTimeoutMs + LOCAL_STR_MS,
     );
   } catch (error) {
     adaptiveTimingController = null;

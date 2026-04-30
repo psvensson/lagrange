@@ -8,6 +8,19 @@ import {
   ALLOWED_UNIFIED_SERVICE_TYPES,
 } from '../constants/unified-service-lifecycle.js';
 
+const LOCAL_STR_SERVICELIFECYCLE = 'ServiceLifecycle';
+const LOCAL_STR_RESOLVEADAPTER = 'resolveAdapter';
+const LOCAL_STR_SERVICETYPEADAPTER = 'ServiceTypeAdapter';
+const LOCAL_STR_LPC4T = 'ServiceMessageContract';
+const LOCAL_STR_VALIDATEENVELOPE = 'validateEnvelope';
+const LOCAL_STR_1ABKS = 'ServiceLifecycleManager';
+const LOCAL_STR_OPERATIONJOURNAL = 'operationJournal';
+const LOCAL_STR_IDEMPOTENCYCHECK = 'idempotencyCheck';
+const LOCAL_STR_1AM9G = '; ';
+const LOCAL_STR_SERVICEDESCRIPTOR = 'ServiceDescriptor';
+const LOCAL_STR_VALIDATEDESCRIPTOR = 'validateDescriptor';
+const LOCAL_STR_SERVICEPOLICY = 'ServicePolicy';
+
 class UnknownServiceTypeError extends BaseError {
   /**
    * @param {string} serviceType
@@ -22,8 +35,8 @@ class UnknownServiceTypeError extends BaseError {
       `Unknown service type '${serviceType}' (available: ${available})`,
       {
         context: {
-          component: 'ServiceLifecycle',
-          operation: 'resolveAdapter',
+          component: LOCAL_STR_SERVICELIFECYCLE,
+          operation: LOCAL_STR_RESOLVEADAPTER,
           metadata: {serviceType, availableTypes},
         },
       },
@@ -44,7 +57,7 @@ class ServiceTypeAdapterNotImplementedError extends BaseError {
       `ServiceTypeAdapter '${serviceType}' does not implement '${methodName}'`,
       {
         context: {
-          component: 'ServiceTypeAdapter',
+          component: LOCAL_STR_SERVICETYPEADAPTER,
           operation: methodName,
           metadata: {serviceType},
         },
@@ -66,8 +79,8 @@ class InvalidServiceMessageError extends BaseError {
       `Invalid service message envelope: ${reason}`,
       {
         context: {
-          component: 'ServiceMessageContract',
-          operation: 'validateEnvelope',
+          component: LOCAL_STR_LPC4T,
+          operation: LOCAL_STR_VALIDATEENVELOPE,
           metadata,
         },
       },
@@ -90,7 +103,7 @@ class ServiceLifecycleTransitionError extends BaseError {
       ` ${operation} cannot move ${fromState} -> ${toState}`,
       {
         context: {
-          component: 'ServiceLifecycleManager',
+          component: LOCAL_STR_1ABKS,
           operation,
           metadata: {serviceId, fromState, toState},
         },
@@ -118,8 +131,8 @@ class ServiceOperationJournalError extends BaseError {
       {
         cause: options.cause,
         context: {
-          component: 'ServiceLifecycleManager',
-          operation: 'operationJournal',
+          component: LOCAL_STR_1ABKS,
+          operation: LOCAL_STR_OPERATIONJOURNAL,
           metadata: {serviceId, lifecycleOperation: operation},
         },
       },
@@ -145,8 +158,8 @@ class ServiceIdempotencyCheckError extends BaseError {
       {
         cause: options.cause,
         context: {
-          component: 'ServiceLifecycleManager',
-          operation: 'idempotencyCheck',
+          component: LOCAL_STR_1ABKS,
+          operation: LOCAL_STR_IDEMPOTENCYCHECK,
           metadata: {serviceId, lifecycleOperation: operation},
         },
       },
@@ -165,11 +178,11 @@ class ServiceDescriptorValidationError extends BaseError {
    */
   constructor(errors, metadata = {}) {
     super(
-      `Invalid service descriptor: ${errors.join('; ')}`,
+      `Invalid service descriptor: ${errors.join(LOCAL_STR_1AM9G)}`,
       {
         context: {
-          component: 'ServiceDescriptor',
-          operation: 'validateDescriptor',
+          component: LOCAL_STR_SERVICEDESCRIPTOR,
+          operation: LOCAL_STR_VALIDATEDESCRIPTOR,
           metadata: {
             errors,
             ...metadata,
@@ -197,7 +210,7 @@ class ServicePolicyViolationError extends BaseError {
       {
         cause: options.cause,
         context: {
-          component: 'ServicePolicy',
+          component: LOCAL_STR_SERVICEPOLICY,
           operation,
           metadata: {
             policyType,

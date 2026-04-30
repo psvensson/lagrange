@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {
+  CDC_OPERATION,
   COLUMN,
   SERVICE_TYPE,
   SERVICE_STATUS,
@@ -15,6 +16,7 @@ import {
 } from '../../src/topology/latency-topology-constants.js';
 import {
   buildCriticalVisibilityCdcPropagationDeliverySource,
+  buildCriticalVisibilityCdcPropagationReplacePendingKey,
 } from '../../src/cache/cdc-propagation-delivery-profile.js';
 import {
   CDC_GROUP_PUBLICATION_MODE,
@@ -25,6 +27,13 @@ import {
 import {
   CDCGroupPropagationService,
 } from '../../src/topology/cdc-group-propagation-service.js';
+
+const GROUPED_VISIBILITY_NODE_ID = 'node-z';
+const GROUPED_VISIBILITY_UPDATED_AT = 2000;
+const GROUPED_VISIBILITY_NODE_ROW = Object.freeze({
+  [COLUMN.NODE_ID]: GROUPED_VISIBILITY_NODE_ID,
+  [COLUMN.UPDATED_AT]: GROUPED_VISIBILITY_UPDATED_AT,
+});
 
 function setupConfig(propagationMode) {
   ConfigurationManager.resetInstance();
@@ -363,8 +372,8 @@ test('CDCGroupPropagationService fans out by group coordinators in grouped mode'
 
     const result = await service.propagateCDCEvent({
       tableName: TABLES.NODES,
-      operation: 'UPDATE',
-      data: {[COLUMN.NODE_ID]: 'node-z'},
+      operation: CDC_OPERATION.UPDATE,
+      data: GROUPED_VISIBILITY_NODE_ROW,
       sourceMessageGroupService: source,
     });
     assert.equal(result.mode, CDC_GROUP_PROPAGATION_STATUS.GROUPED);
@@ -388,11 +397,37 @@ test('CDCGroupPropagationService fans out by group coordinators in grouped mode'
     assert.equal(router.calls[1].options.deliveryPriority, 'critical');
     assert.equal(
       router.calls[0].options.deliverySource,
-      buildCriticalVisibilityCdcPropagationDeliverySource(TABLES.NODES),
+      buildCriticalVisibilityCdcPropagationDeliverySource(
+        TABLES.NODES,
+        GROUPED_VISIBILITY_NODE_ID,
+      ),
     );
     assert.equal(
       router.calls[1].options.deliverySource,
-      buildCriticalVisibilityCdcPropagationDeliverySource(TABLES.NODES),
+      buildCriticalVisibilityCdcPropagationDeliverySource(
+        TABLES.NODES,
+        GROUPED_VISIBILITY_NODE_ID,
+      ),
+    );
+    assert.equal(
+      router.calls[0].options.replacePendingKey,
+      buildCriticalVisibilityCdcPropagationReplacePendingKey([
+        {
+          tableName: TABLES.NODES,
+          operation: CDC_OPERATION.UPDATE,
+          data: GROUPED_VISIBILITY_NODE_ROW,
+        },
+      ]),
+    );
+    assert.equal(
+      router.calls[1].options.replacePendingKey,
+      buildCriticalVisibilityCdcPropagationReplacePendingKey([
+        {
+          tableName: TABLES.NODES,
+          operation: CDC_OPERATION.UPDATE,
+          data: GROUPED_VISIBILITY_NODE_ROW,
+        },
+      ]),
     );
     assert.equal(service.getStats().groupedCount, 1);
 
@@ -1513,7 +1548,10 @@ test('CDCGroupPropagationService keeps partition visibility propagation on the c
     );
     assert.equal(
       router.calls[0].options?.deliverySource,
-      buildCriticalVisibilityCdcPropagationDeliverySource(TABLES.PARTITIONS),
+      buildCriticalVisibilityCdcPropagationDeliverySource(
+        TABLES.PARTITIONS,
+        'tbl-critical-p1',
+      ),
       'partition visibility propagation should use the visibility delivery source',
     );
 

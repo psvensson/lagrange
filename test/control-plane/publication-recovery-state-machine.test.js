@@ -18,6 +18,7 @@ const TEST_NODE_ID = Object.freeze({
   SECOND: 'node-2',
 });
 const TEST_FUNCTION_VALUE_TYPE = 'function';
+const TEST_STALE_PENDING_ACK_COUNT = 1;
 const TEST_ROOT_PATH = 'spec';
 const TEST_PATH_SEPARATOR = '.';
 const TEST_EMPTY_LIST = Object.freeze([]);
@@ -88,6 +89,32 @@ test('publication recovery machine closes ACK-complete metadata refresh',
     t.same(result.livenessObligations.map((obligation) => obligation.id), [
       PUBLICATION_RECOVERY_LIVENESS_ID.ACK_COMPLETE_EVENTUALLY_PUBLISHED,
     ]);
+    t.end();
+  });
+
+test('publication recovery machine closes ACK-pending metadata when the required ACK list is empty',
+  (t) => {
+    const result = evaluatePublicationRecoveryMachine({
+      context: PUBLICATION_RECOVERY_MACHINE_CONTEXT.METADATA_REFRESH,
+      status: CONTROL_PLANE_PUBLICATION_STATUS.ACK_PENDING,
+      requiredAckNodeIds: TEST_EMPTY_LIST,
+      acknowledgedNodeIds: TEST_EMPTY_LIST,
+      pendingAckNodeIds: TEST_EMPTY_LIST,
+      pendingAckCount: TEST_STALE_PENDING_ACK_COUNT,
+    });
+
+    t.equal(
+      result.action,
+      PUBLICATION_RECOVERY_MACHINE_ACTION.CLOSE_ACK_COMPLETE,
+    );
+    t.equal(result.nextStatus, CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED);
+    t.equal(result.evidence.pendingAckCount, 0);
+    t.equal(
+      result.satisfiedFlagIds.includes(
+        PUBLICATION_RECOVERY_EVIDENCE_FLAG.ACKS_COMPLETE,
+      ),
+      true,
+    );
     t.end();
   });
 

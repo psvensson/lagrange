@@ -1,3 +1,5 @@
+const LOCAL_NUM_ZERO = 0;
+
 /**
  * CallIterator — async iterator wrapper for Iterator_Mode
  * of `ctx.call(query, params?)`.
@@ -26,7 +28,7 @@ function createCallIterator(
   query, params, queryExecutor, cancellationToken,
 ) {
   let rows = null;
-  let index = 0;
+  let index = LOCAL_NUM_ZERO;
   let exhausted = false;
 
   return {

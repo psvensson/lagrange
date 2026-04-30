@@ -1,6 +1,16 @@
 import {CONTROL_PLANE_READINESS_SERVICE_SHARED} from './control-plane-readiness-service-shared.js';
 import {ControlPlaneReadinessServiceSegment1} from './control-plane-readiness-service-segment-1.js';
 
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_STR_EMPTY = '';
+const LOCAL_STR_REFRESH = '::refresh=';
+const LOCAL_STR_STALE = '::stale=';
+const LOCAL_STR_PLANNING = '::planning=';
+const LOCAL_STR_1S6CG = 'node_state_reporter';
+const LOCAL_STR_ATTEMPT_TIMEOUT = 'attempt_timeout';
+const LOCAL_STR_1TU6L = 'ControlPlaneReadinessService missing CDC publication owner';
+const LOCAL_STR_IBFUE = 'publication_owner_unavailable';
+
 const {
   COLUMN,
   CONTROL_PLANE_PUBLICATION_MODE,
@@ -11,6 +21,7 @@ const {
   NUM,
   PROVISIONING_ELIGIBILITY_STATE,
   PUBLICATION_REASON_CONFIG_SAFE_MODE,
+  PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE,
   READINESS_ERROR_MSG,
   STATE,
   TABLES,
@@ -369,7 +380,7 @@ class ControlPlaneReadinessServiceSegment2 extends ControlPlaneReadinessServiceS
       currentEpoch.events.push(summary);
       if (currentEpoch.events.length > this.recoveryEpochEventLimit) {
         currentEpoch.events.splice(
-          0,
+          LOCAL_NUM_ZERO,
           currentEpoch.events.length - this.recoveryEpochEventLimit,
         );
       }
@@ -513,12 +524,12 @@ class ControlPlaneReadinessServiceSegment2 extends ControlPlaneReadinessServiceS
    */
   buildReadinessEvaluationKey(nodeId, options = {}) {
     return (
-      String(nodeId || '') +
-      '::refresh=' +
+      String(nodeId || LOCAL_STR_EMPTY) +
+      LOCAL_STR_REFRESH +
       String(options.allowAuthoritativeRefresh === true) +
-      '::stale=' +
+      LOCAL_STR_STALE +
       String(options.allowStaleOnCacheChange === true) +
-      '::planning=' +
+      LOCAL_STR_PLANNING +
       this.resolveMembershipPublicationPlanningSource(options)
     );
   }
@@ -670,7 +681,7 @@ class ControlPlaneReadinessServiceSegment2 extends ControlPlaneReadinessServiceS
     }
 
     const diagnostics = this.getHeartbeatPublicationDiagnostics();
-    if (!diagnostics || diagnostics.publicationPath !== 'node_state_reporter') {
+    if (!diagnostics || diagnostics.publicationPath !== LOCAL_STR_1S6CG) {
       return false;
     }
 
@@ -734,7 +745,7 @@ class ControlPlaneReadinessServiceSegment2 extends ControlPlaneReadinessServiceS
       return false;
     }
 
-    if (String(diagnostics?.lastFailureStage || '') !== 'attempt_timeout') {
+    if (String(diagnostics?.lastFailureStage || LOCAL_STR_EMPTY) !== LOCAL_STR_ATTEMPT_TIMEOUT) {
       return false;
     }
 
@@ -759,7 +770,7 @@ class ControlPlaneReadinessServiceSegment2 extends ControlPlaneReadinessServiceS
     if (!this.loggedMissingPublicationOwner) {
       this.loggedMissingPublicationOwner = true;
       this.logMissingOwner(
-        'ControlPlaneReadinessService missing CDC publication owner',
+        LOCAL_STR_1TU6L,
         CONTROL_PLANE_READINESS_OWNER.CDC_GROUP_PROPAGATION,
       );
     }
@@ -770,7 +781,7 @@ class ControlPlaneReadinessServiceSegment2 extends ControlPlaneReadinessServiceS
 
     return Object.freeze({
       currentMode: CONTROL_PLANE_PUBLICATION_MODE.REPAIR_ONLY,
-      reasonCode: 'publication_owner_unavailable',
+      reasonCode: LOCAL_STR_IBFUE,
       enteredAt: observedAt,
       recentTransitions: Object.freeze([]),
     });
@@ -943,6 +954,20 @@ class ControlPlaneReadinessServiceSegment2 extends ControlPlaneReadinessServiceS
         TYPEOF.OBJECT ?
         membershipPublicationPlanningSnapshot.publicationRecoveryGate :
         null;
+    const pendingAckEvidenceState =
+      membershipPublicationPlanningSnapshot.pendingAckEvidenceState ===
+        PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.COUNT_ONLY ||
+      membershipPublicationPlanningSnapshot.pendingAckEvidenceState ===
+        PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE
+          .REQUIRED_ACK_NODE_LIST ?
+        membershipPublicationPlanningSnapshot.pendingAckEvidenceState :
+        Array.isArray(
+          membershipPublicationPlanningSnapshot.requiredAckNodeIds,
+        ) ?
+          PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE
+            .REQUIRED_ACK_NODE_LIST :
+          providedPublicationRecoveryGate?.pendingAckEvidenceState ??
+            PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.COUNT_ONLY;
     const publicationRecoveryGate = buildPublicationRecoveryGateSnapshot({
       ...(providedPublicationRecoveryGate || {}),
       publicationEpoch:
@@ -988,6 +1013,11 @@ class ControlPlaneReadinessServiceSegment2 extends ControlPlaneReadinessServiceS
         membershipPublicationPlanningSnapshot.pendingAckNodeIds ??
         providedPublicationRecoveryGate?.pendingAckNodeIds ??
         [],
+      pendingAckCount:
+        membershipPublicationPlanningSnapshot.pendingAckCount ??
+        providedPublicationRecoveryGate?.pendingAckCount ??
+        NUM.ZERO,
+      pendingAckEvidenceState,
       missingPublishedNodeIds:
         membershipPublicationPlanningSnapshot.missingPublishedNodeIds ??
         membershipPublicationPlanningSnapshot
@@ -1076,7 +1106,7 @@ class ControlPlaneReadinessServiceSegment2 extends ControlPlaneReadinessServiceS
       return true;
     }
     return (
-      String(membershipPublication.status || '').toUpperCase() ===
+      String(membershipPublication.status || LOCAL_STR_EMPTY).toUpperCase() ===
       CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED
     );
   }

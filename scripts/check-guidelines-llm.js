@@ -20,6 +20,62 @@ import {
   SCRIPT_TEXT,
 } from './guideline-check-constants.js';
 
+const LOCAL_STR_HASH = '#';
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_NUM_ONE = 1;
+const LOCAL_STR_AU1TP = '"';
+const LOCAL_STR_9G3T8 = '\'';
+const LOCAL_STR_ENOENT = 'ENOENT';
+const LOCAL_STR_UNDEFINED = 'undefined';
+const LOCAL_STR_EMPTY = '';
+const LOCAL_STR_19GGI = '..';
+const LOCAL_STR_1YHM6 = '{';
+const LOCAL_STR_1WTOK = '}';
+const LOCAL_STR_SHA256 = 'sha256';
+const LOCAL_STR_HEX = 'hex';
+const LOCAL_STR_OBJECT = 'object';
+const LOCAL_NUM_TWO = 2;
+const LOCAL_STR_COLON = ':';
+const LOCAL_STR_NEWLINE = '\n';
+const LOCAL_STR_SRC = 'src';
+const LOCAL_STR_CONSTANTS = 'constants';
+const LOCAL_STR_CATALOG = 'catalog';
+const LOCAL_STR_REGISTRY = 'registry';
+const LOCAL_STR_AFFINITY = 'affinity';
+const LOCAL_STR_ARTIFACT = 'artifact';
+const LOCAL_STR_2EVI7 = 'canonical constants-owner module';
+const LOCAL_STR_TEST = 'test';
+const LOCAL_STR_18J3Q = 'test-local constants-owner module';
+const LOCAL_STR_TEST_FILE = 'test file';
+const LOCAL_STR_CHECK_GUIDELINES = 'check-guidelines-';
+const LOCAL_STR_A6ZLE = 'guideline checker implementation';
+const LOCAL_STR_3T32Q = 'regular source file';
+const LOCAL_STR_LIKELY = 'likely';
+const LOCAL_STR_POTENTIAL = 'potential';
+const LOCAL_STR_APPEAR_TO_BE = 'appear to be';
+const LOCAL_STR_APPEARS_TO_BE = 'appears to be';
+const LOCAL_STR_SEEMS = 'seems';
+const LOCAL_STR_TYPICALLY = 'typically';
+const LOCAL_STR_NOT_CLEARLY = 'not clearly';
+const LOCAL_STR_CPXNG = 'from this file alone';
+const LOCAL_STR_IF_THIS_IS = 'if this is';
+const LOCAL_STR_IF_A = 'if a';
+const LOCAL_STR_IF_AN = 'if an';
+const LOCAL_STR_IF_THE_CODEBASE = 'if the codebase';
+const LOCAL_STR_XSAER = 'search the codebase';
+const LOCAL_STR_VERIFY_THIS_MODULE = 'verify this module';
+const LOCAL_STR_11EC7 = 'possible duplication risk';
+const LOCAL_STR_4_1 = '4.1';
+const LOCAL_STR_7VEL7 = 'constants, not literals';
+const LOCAL_STR_MAGIC_LITERAL = 'magic literal';
+const LOCAL_STR_MAGIC_STRING = 'magic string';
+const LOCAL_STR_MAGIC_NUMBER = 'magic number';
+const LOCAL_STR_RAW_LITERAL = 'raw literal';
+const LOCAL_STR_RAW_STRING_LITERAL = 'raw string literal';
+const LOCAL_STR_NDJVI = 'raw numeric literal';
+const LOCAL_STR_CONSTANTS_OWNER = 'constants-owner';
+const LOCAL_STR_B4ZPQ = 'LLM response did not contain parseable JSON output.';
+
 const WORKSPACE_ROOT = process.cwd();
 const GUIDELINES_PATH = path.join(
   WORKSPACE_ROOT,
@@ -43,12 +99,12 @@ const CACHE_FILE_PATH = path.join(
 
 function parseEnvLine(line) {
   const trimmed = line.trim();
-  if (!trimmed || trimmed.startsWith('#')) {
+  if (!trimmed || trimmed.startsWith(LOCAL_STR_HASH)) {
     return null;
   }
 
   const separatorIndex = trimmed.indexOf('=');
-  if (separatorIndex <= 0) {
+  if (separatorIndex <= LOCAL_NUM_ZERO) {
     return null;
   }
 
@@ -57,12 +113,12 @@ function parseEnvLine(line) {
     return null;
   }
 
-  let value = trimmed.slice(separatorIndex + 1).trim();
+  let value = trimmed.slice(separatorIndex + LOCAL_NUM_ONE).trim();
   if (
-    (value.startsWith('"') && value.endsWith('"')) ||
-    (value.startsWith('\'') && value.endsWith('\''))
+    (value.startsWith(LOCAL_STR_AU1TP) && value.endsWith(LOCAL_STR_AU1TP)) ||
+    (value.startsWith(LOCAL_STR_9G3T8) && value.endsWith(LOCAL_STR_9G3T8))
   ) {
-    value = value.slice(1, -1);
+    value = value.slice(LOCAL_NUM_ONE, -LOCAL_NUM_ONE);
   }
 
   return {key, value};
@@ -74,7 +130,7 @@ async function loadEnvFile(fileName) {
   try {
     fileContent = await fs.readFile(filePath, SCRIPT_TEXT.ENCODING_UTF8);
   } catch (error) {
-    if (error.code === 'ENOENT') {
+    if (error.code === LOCAL_STR_ENOENT) {
       return;
     }
     throw error;
@@ -87,7 +143,7 @@ async function loadEnvFile(fileName) {
       continue;
     }
 
-    if (typeof process.env[parsed.key] === 'undefined') {
+    if (typeof process.env[parsed.key] === LOCAL_STR_UNDEFINED) {
       process.env[parsed.key] = parsed.value;
     }
   }
@@ -100,7 +156,7 @@ async function initializeConfig() {
   DEFAULT_MODEL = process.env[GUIDELINE_LLM_ENV_KEY.MODEL] ||
     GUIDELINE_LLM_DEFAULT.MODEL;
   BASE_URL = (process.env[GUIDELINE_LLM_ENV_KEY.BASE_URL] ||
-    GUIDELINE_LLM_DEFAULT.BASE_URL).replace(/\/$/, '');
+    GUIDELINE_LLM_DEFAULT.BASE_URL).replace(/\/$/, LOCAL_STR_EMPTY);
   API_KEY = process.env[GUIDELINE_LLM_ENV_KEY.API_KEY] ||
     process.env[GUIDELINE_LLM_ENV_KEY.OPENAI_API_KEY];
   REQUEST_TIMEOUT_MS = Number(
@@ -133,8 +189,8 @@ function formatGuidelineLocation(relativePath, line = GUIDELINE_POSITION.DEFAULT
 }
 
 function isProbablyBinary(content) {
-  for (let index = 0; index < content.length; index++) {
-    if (content.charCodeAt(index) === 0) {
+  for (let index = LOCAL_NUM_ZERO; index < content.length; index++) {
+    if (content.charCodeAt(index) === LOCAL_NUM_ZERO) {
       return true;
     }
   }
@@ -149,7 +205,7 @@ function normalizePath(filePath) {
 
 function shouldSkipPath(absolutePath) {
   const relativePath = path.relative(WORKSPACE_ROOT, absolutePath);
-  if (relativePath.startsWith('..')) {
+  if (relativePath.startsWith(LOCAL_STR_19GGI)) {
     return true;
   }
 
@@ -170,19 +226,19 @@ function extractJsonObject(rawText) {
   }
 
   const trimmed = rawText.trim();
-  if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+  if (trimmed.startsWith(LOCAL_STR_1YHM6) && trimmed.endsWith(LOCAL_STR_1WTOK)) {
     return trimmed;
   }
 
   const fencedMatch = trimmed.match(GUIDELINE_LLM_PROMPT.JSON_FENCE_PATTERN);
-  if (fencedMatch && fencedMatch[1]) {
-    return fencedMatch[1].trim();
+  if (fencedMatch && fencedMatch[LOCAL_NUM_ONE]) {
+    return fencedMatch[LOCAL_NUM_ONE].trim();
   }
 
   const firstBrace = trimmed.indexOf('{');
   const lastBrace = trimmed.lastIndexOf('}');
-  if (firstBrace >= 0 && lastBrace > firstBrace) {
-    return trimmed.slice(firstBrace, lastBrace + 1);
+  if (firstBrace >= LOCAL_NUM_ZERO && lastBrace > firstBrace) {
+    return trimmed.slice(firstBrace, lastBrace + LOCAL_NUM_ONE);
   }
 
   return null;
@@ -193,14 +249,14 @@ async function readGuidelines() {
 }
 
 function hashText(value) {
-  return crypto.createHash('sha256').update(String(value || '')).digest('hex');
+  return crypto.createHash(LOCAL_STR_SHA256).update(String(value || LOCAL_STR_EMPTY)).digest(LOCAL_STR_HEX);
 }
 
 async function readCacheFile() {
   try {
     const raw = await fs.readFile(CACHE_FILE_PATH, SCRIPT_TEXT.ENCODING_UTF8);
     const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== 'object') {
+    if (!parsed || typeof parsed !== LOCAL_STR_OBJECT) {
       return {entries: {}};
     }
     const entries = parsed.entries && typeof parsed.entries === 'object' ?
@@ -208,7 +264,7 @@ async function readCacheFile() {
       {};
     return {entries};
   } catch (error) {
-    if (error.code === 'ENOENT') {
+    if (error.code === LOCAL_STR_ENOENT) {
       return {entries: {}};
     }
     return {entries: {}};
@@ -220,7 +276,7 @@ async function writeCacheFile(cache) {
   await fs.mkdir(directory, {recursive: true});
   await fs.writeFile(
     CACHE_FILE_PATH,
-    JSON.stringify(cache, null, 2) + SCRIPT_TEXT.NEWLINE,
+    JSON.stringify(cache, null, LOCAL_NUM_TWO) + SCRIPT_TEXT.NEWLINE,
     SCRIPT_TEXT.ENCODING_UTF8,
   );
 }
@@ -232,7 +288,7 @@ function buildCacheKey(relativePath, fileContent, guidelines) {
     hashText(guidelines),
     relativePath,
     hashText(fileContent),
-  ].join(':');
+  ].join(LOCAL_STR_COLON);
 }
 
 async function readFileSafe(absolutePath) {
@@ -272,62 +328,62 @@ function buildPrompt(relativePath, fileContent, guidelines) {
     GUIDELINE_LLM_PROMPT.JSON_SCHEMA,
     GUIDELINE_LLM_PROMPT.NO_VIOLATION_SCHEMA,
     GUIDELINE_LLM_PROMPT.HIGH_CONFIDENCE_ONLY,
-    '',
+    LOCAL_STR_EMPTY,
     `${GUIDELINE_LLM_PROMPT.FILE_LABEL} ${relativePath}`,
     `${GUIDELINE_LLM_PROMPT.FILE_CLASSIFICATION_LABEL} ${fileClassification}`,
-    '',
+    LOCAL_STR_EMPTY,
     GUIDELINE_LLM_PROMPT.SYSTEM_GUIDELINES_LABEL,
     guidelines,
-    '',
+    LOCAL_STR_EMPTY,
     GUIDELINE_LLM_PROMPT.FILE_CONTENT_LABEL,
     truncatedContent,
-  ].join('\n');
+  ].join(LOCAL_STR_NEWLINE);
 }
 
 function buildFileClassification(normalizedRelativePath) {
   const basename = path.basename(normalizedRelativePath);
   if (
-    normalizedRelativePath.startsWith(path.join('src', 'constants') + path.sep) ||
-    basename.includes('constants') ||
-    basename.includes('catalog') ||
-    basename.includes('registry') ||
-    basename.includes('affinity') ||
-    basename.includes('artifact')
+    normalizedRelativePath.startsWith(path.join(LOCAL_STR_SRC, LOCAL_STR_CONSTANTS) + path.sep) ||
+    basename.includes(LOCAL_STR_CONSTANTS) ||
+    basename.includes(LOCAL_STR_CATALOG) ||
+    basename.includes(LOCAL_STR_REGISTRY) ||
+    basename.includes(LOCAL_STR_AFFINITY) ||
+    basename.includes(LOCAL_STR_ARTIFACT)
   ) {
-    return 'canonical constants-owner module';
+    return LOCAL_STR_2EVI7;
   }
 
-  if (normalizedRelativePath.startsWith('test' + path.sep)) {
-    return basename.includes('constants') ?
-      'test-local constants-owner module' :
-      'test file';
+  if (normalizedRelativePath.startsWith(LOCAL_STR_TEST + path.sep)) {
+    return basename.includes(LOCAL_STR_CONSTANTS) ?
+      LOCAL_STR_18J3Q :
+      LOCAL_STR_TEST_FILE;
   }
 
-  if (basename.startsWith('check-guidelines-')) {
-    return 'guideline checker implementation';
+  if (basename.startsWith(LOCAL_STR_CHECK_GUIDELINES)) {
+    return LOCAL_STR_A6ZLE;
   }
 
-  return 'regular source file';
+  return LOCAL_STR_3T32Q;
 }
 
 function isSpeculativeText(text) {
   const normalizedText = String(text || '').toLowerCase();
   return (
-    normalizedText.includes('likely') ||
-    normalizedText.includes('potential') ||
-    normalizedText.includes('appear to be') ||
-    normalizedText.includes('appears to be') ||
-    normalizedText.includes('seems') ||
-    normalizedText.includes('typically') ||
-    normalizedText.includes('not clearly') ||
-    normalizedText.includes('from this file alone') ||
-    normalizedText.includes('if this is') ||
-    normalizedText.includes('if a') ||
-    normalizedText.includes('if an') ||
-    normalizedText.includes('if the codebase') ||
-    normalizedText.includes('search the codebase') ||
-    normalizedText.includes('verify this module') ||
-    normalizedText.includes('possible duplication risk')
+    normalizedText.includes(LOCAL_STR_LIKELY) ||
+    normalizedText.includes(LOCAL_STR_POTENTIAL) ||
+    normalizedText.includes(LOCAL_STR_APPEAR_TO_BE) ||
+    normalizedText.includes(LOCAL_STR_APPEARS_TO_BE) ||
+    normalizedText.includes(LOCAL_STR_SEEMS) ||
+    normalizedText.includes(LOCAL_STR_TYPICALLY) ||
+    normalizedText.includes(LOCAL_STR_NOT_CLEARLY) ||
+    normalizedText.includes(LOCAL_STR_CPXNG) ||
+    normalizedText.includes(LOCAL_STR_IF_THIS_IS) ||
+    normalizedText.includes(LOCAL_STR_IF_A) ||
+    normalizedText.includes(LOCAL_STR_IF_AN) ||
+    normalizedText.includes(LOCAL_STR_IF_THE_CODEBASE) ||
+    normalizedText.includes(LOCAL_STR_XSAER) ||
+    normalizedText.includes(LOCAL_STR_VERIFY_THIS_MODULE) ||
+    normalizedText.includes(LOCAL_STR_11EC7)
   );
 }
 
@@ -814,26 +870,26 @@ function isConstantsRuleViolation(violation) {
   const title = String(violation.title || '').toLowerCase();
   const description = String(violation.description || '').toLowerCase();
   return (
-    rule.includes('4.1') ||
-    rule.includes('constants, not literals') ||
-    title.includes('magic literal') ||
-    title.includes('magic string') ||
-    title.includes('magic number') ||
-    title.includes('raw literal') ||
-    description.includes('magic literal') ||
-    description.includes('raw string literal') ||
-    description.includes('raw numeric literal') ||
-    description.includes('constants-owner')
+    rule.includes(LOCAL_STR_4_1) ||
+    rule.includes(LOCAL_STR_7VEL7) ||
+    title.includes(LOCAL_STR_MAGIC_LITERAL) ||
+    title.includes(LOCAL_STR_MAGIC_STRING) ||
+    title.includes(LOCAL_STR_MAGIC_NUMBER) ||
+    title.includes(LOCAL_STR_RAW_LITERAL) ||
+    description.includes(LOCAL_STR_MAGIC_LITERAL) ||
+    description.includes(LOCAL_STR_RAW_STRING_LITERAL) ||
+    description.includes(LOCAL_STR_NDJVI) ||
+    description.includes(LOCAL_STR_CONSTANTS_OWNER)
   );
 }
 
 function isCommitBlockingViolation(classification, violation) {
-  if (classification === 'test file' && isConstantsRuleViolation(violation)) {
+  if (classification === LOCAL_STR_TEST_FILE && isConstantsRuleViolation(violation)) {
     return false;
   }
 
   if (
-    classification === 'canonical constants-owner module' &&
+    classification === LOCAL_STR_2EVI7 &&
     isConstantsRuleViolation(violation)
   ) {
     return false;
@@ -891,7 +947,7 @@ async function checkWithLlm(relativePath, fileContent, guidelines) {
     const messageContent = payload?.choices?.[0]?.message?.content || '';
     const jsonText = extractJsonObject(messageContent);
     if (!jsonText) {
-      throw new Error('LLM response did not contain parseable JSON output.');
+      throw new Error(LOCAL_STR_B4ZPQ);
     }
 
     let parsed;
@@ -910,7 +966,7 @@ async function checkWithLlm(relativePath, fileContent, guidelines) {
       ruleReference: String(
         violation.rule_reference || GUIDELINE_LLM_MESSAGE.DEFAULT_RULE_REFERENCE,
       ),
-      line: Number.isInteger(violation.line) && violation.line > 0 ?
+      line: Number.isInteger(violation.line) && violation.line > LOCAL_NUM_ZERO ?
         violation.line :
         GUIDELINE_POSITION.DEFAULT_LINE,
       suggestedFix: String(
@@ -978,7 +1034,7 @@ async function collectPendingChecks(fileArgs, guidelines, cache) {
 }
 
 function getEffectiveConcurrency() {
-  return Math.max(1, Number.isFinite(REQUEST_CONCURRENCY) ?
+  return Math.max(LOCAL_NUM_ONE, Number.isFinite(REQUEST_CONCURRENCY) ?
     Math.floor(REQUEST_CONCURRENCY) :
     GUIDELINE_LLM_DEFAULT.CONCURRENCY);
 }
@@ -989,12 +1045,12 @@ async function runPendingChecks(pendingChecks, guidelines, cache) {
     getEffectiveConcurrency(),
     Math.max(1, pendingChecks.length),
   );
-  let nextIndex = 0;
+  let nextIndex = LOCAL_NUM_ZERO;
 
   async function worker() {
     while (nextIndex < pendingChecks.length) {
       const currentIndex = nextIndex;
-      nextIndex += 1;
+      nextIndex += LOCAL_NUM_ONE;
       const pending = pendingChecks[currentIndex];
       if (pending.cached) {
         results[currentIndex] = pending;
@@ -1053,7 +1109,7 @@ function reportCheckResults(results) {
       continue;
     }
 
-    if (result.violations.length > 0) {
+    if (result.violations.length > LOCAL_NUM_ZERO) {
       hasViolations = true;
       printViolations(result.relativePath, result.violations);
     }
@@ -1061,11 +1117,11 @@ function reportCheckResults(results) {
   return hasViolations;
 }
 
-async function main(argv = process.argv.slice(2)) {
+async function main(argv = process.argv.slice(LOCAL_NUM_TWO)) {
   await initializeConfig();
 
   const fileArgs = argv.filter(Boolean);
-  if (fileArgs.length === 0) {
+  if (fileArgs.length === LOCAL_NUM_ZERO) {
     printUsage();
     process.exitCode = EXIT_CODE.USAGE;
     return;

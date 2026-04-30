@@ -1,6 +1,15 @@
 import {JOIN_SESSION_ERROR, JoinSessionStore} from './join-session-store.js';
 import {StartupPipelineRunner} from './pipeline/startup-pipeline-runner.js';
 
+const LOCAL_STR_OBJECT = 'object';
+const LOCAL_STR_1UXGP = 'join step must be an object';
+const LOCAL_STR_FUNCTION = 'function';
+const LOCAL_STR_UBGC0 = 'join step run must be a function';
+const LOCAL_STR_15XRI = 'join step shouldRerun must be a function';
+const LOCAL_STR_STRING = 'string';
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_STR_FTIWW = 'JOIN_COORDINATOR_STEP_FAILED';
+
 /**
  * JoinCoordinator executes checkpointed join steps idempotently.
  */
@@ -45,29 +54,29 @@ class JoinCoordinator {
   }
 
   assertValidStep(step) {
-    if (!step || typeof step !== 'object') {
-      throw new Error('join step must be an object');
+    if (!step || typeof step !== LOCAL_STR_OBJECT) {
+      throw new Error(LOCAL_STR_1UXGP);
     }
-    if (typeof step.run !== 'function') {
-      throw new Error('join step run must be a function');
+    if (typeof step.run !== LOCAL_STR_FUNCTION) {
+      throw new Error(LOCAL_STR_UBGC0);
     }
     if (step.shouldRerun !== undefined &&
-        typeof step.shouldRerun !== 'function') {
-      throw new Error('join step shouldRerun must be a function');
+        typeof step.shouldRerun !== LOCAL_STR_FUNCTION) {
+      throw new Error(LOCAL_STR_15XRI);
     }
-    if (typeof step.checkpoint !== 'string' || step.checkpoint.length === 0) {
+    if (typeof step.checkpoint !== LOCAL_STR_STRING || step.checkpoint.length === LOCAL_NUM_ZERO) {
       throw new Error(JOIN_SESSION_ERROR.INVALID_CHECKPOINT);
     }
   }
 
   extractErrorCode(error) {
-    if (typeof error?.code === 'string' && error.code.length > 0) {
+    if (typeof error?.code === LOCAL_STR_STRING && error.code.length > LOCAL_NUM_ZERO) {
       return error.code;
     }
-    if (typeof error?.message === 'string' && error.message.length > 0) {
+    if (typeof error?.message === LOCAL_STR_STRING && error.message.length > LOCAL_NUM_ZERO) {
       return error.message;
     }
-    return 'JOIN_COORDINATOR_STEP_FAILED';
+    return LOCAL_STR_FTIWW;
   }
 }
 

@@ -1,3 +1,7 @@
+const LOCAL_STR_FUNCTION = 'function';
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_STR_OBJECT = 'object';
+
 const TIMEOUT_BUDGET_CLASSIFICATION = Object.freeze({
   LOCAL_SCHEDULER_STARVATION: 'local_scheduler_starvation',
   REMOTE_CALL_TIMEOUT: 'remote_call_timeout',
@@ -23,11 +27,11 @@ const CONTROL_PLANE_TIMEOUT_DEFAULT = Object.freeze({
 });
 
 function resolveNow(now) {
-  return typeof now === 'function' ? now : Date.now;
+  return typeof now === LOCAL_STR_FUNCTION ? now : Date.now;
 }
 
-function normalizePositiveInteger(value, fallback = 0) {
-  return Number.isFinite(value) && value > 0 ?
+function normalizePositiveInteger(value, fallback = LOCAL_NUM_ZERO) {
+  return Number.isFinite(value) && value > LOCAL_NUM_ZERO ?
     Math.floor(value) :
     fallback;
 }
@@ -56,7 +60,7 @@ function getBudgetTiming(budget, now) {
   return {
     nowMs,
     rawRemainingMs,
-    remainingBudgetMs: Math.max(0, rawRemainingMs),
+    remainingBudgetMs: Math.max(LOCAL_NUM_ZERO, rawRemainingMs),
   };
 }
 
@@ -70,14 +74,14 @@ function resolveControlPlaneQueryTimeoutMs(options = {}) {
     CONTROL_PLANE_TIMEOUT_DEFAULT.SQL_QUERY_TIMEOUT_MS,
   );
   const timeoutBudget = options.timeoutBudget;
-  if (!timeoutBudget || typeof timeoutBudget !== 'object') {
+  if (!timeoutBudget || typeof timeoutBudget !== LOCAL_STR_OBJECT) {
     return requestedTimeoutMs;
   }
 
   const remainingBudgetMs = getRemainingBudgetMs(timeoutBudget, {
     now: options.now,
   });
-  if (remainingBudgetMs <= 0) {
+  if (remainingBudgetMs <= LOCAL_NUM_ZERO) {
     return TIMEOUT_BUDGET_DEFAULT.MINIMUM_OPERATION_BUDGET_MS;
   }
 

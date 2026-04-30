@@ -46,6 +46,8 @@ function buildReadiness(nodeId, ready) {
         ready,
       [CONTROL_PLANE_READINESS_DIMENSION
         .METADATA_PUBLICATION_HEALTHY]: true,
+      [CONTROL_PLANE_READINESS_DIMENSION
+        .CONTROL_PLANE_RECOVERY_ELIGIBLE]: ready,
       [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: ready,
       [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: ready,
     },
@@ -212,8 +214,8 @@ test('ReplicaDispatchService.isNodeReady consumes canonical readiness',
         );
         t.equal(
           readinessCalls[readinessCalls.length - 1]?.options?.decisionDimension,
-          CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
-          'dispatch should record control-plane recovery as its decision dimension',
+          CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
+          'dispatch should record repair eligibility as its generic node decision dimension',
         );
       });
 

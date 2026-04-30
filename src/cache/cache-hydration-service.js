@@ -17,6 +17,9 @@ import {
   CACHE_SUBSYSTEM,
 } from './cache-constants.js';
 
+const LOCAL_STR_FUNCTION = 'function';
+const LOCAL_NUM_ZERO = 0;
+
 /**
  * CacheHydrationService populates the SystemTableCache with existing data
  * from system table partitions on startup.
@@ -75,7 +78,7 @@ class CacheHydrationService {
    * @private
    */
   reportNonFatalLoggingFailure(message, error) {
-    if (typeof console?.debug !== 'function') {
+    if (typeof console?.debug !== LOCAL_STR_FUNCTION) {
       return;
     }
     console.debug(message, {error: error?.message || null});
@@ -101,7 +104,7 @@ class CacheHydrationService {
   async hydrateCache() {
     this.logger.info(CACHE_HYDRATION_LOG_MSG.STARTING);
     const totalStartMs = this.now();
-    let totalRows = 0;
+    let totalRows = LOCAL_NUM_ZERO;
 
     const results = {
       success: true,
@@ -139,7 +142,7 @@ class CacheHydrationService {
     }
 
     // Mark overall success as false if any table failed
-    if (results.errors.length > 0) {
+    if (results.errors.length > LOCAL_NUM_ZERO) {
       results.success = false;
     }
 

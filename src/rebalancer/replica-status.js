@@ -9,6 +9,12 @@
 
 import {WORKFLOW_STEP} from '../constants/index.js';
 
+const LOCAL_STR_STRING = 'string';
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_STR_OBJECT = 'object';
+const LOCAL_NUM_ONE = 1;
+const LOCAL_STR_EMPTY = '';
+
 /**
  * ReplicaStatus - Single source of truth for replica states.
  * Used by RebalanceCoordinator, ReplicaHandler, CDC, and Admin CLI.
@@ -182,13 +188,13 @@ const OPERATION_METADATA_KEY = Object.freeze({
 
 function getOperationMetadataValue(stepsHistory, metadataKey) {
   if (!Array.isArray(stepsHistory) ||
-      typeof metadataKey !== 'string' ||
-      metadataKey.length === 0) {
+      typeof metadataKey !== LOCAL_STR_STRING ||
+      metadataKey.length === LOCAL_NUM_ZERO) {
     return null;
   }
 
   for (const stepEntry of stepsHistory) {
-    if (!stepEntry || typeof stepEntry !== 'object') {
+    if (!stepEntry || typeof stepEntry !== LOCAL_STR_OBJECT) {
       continue;
     }
 
@@ -203,7 +209,7 @@ function getOperationMetadataValue(stepsHistory, metadataKey) {
 
 function getOperationMetadataString(stepsHistory, metadataKey) {
   const value = getOperationMetadataValue(stepsHistory, metadataKey);
-  return typeof value === 'string' && value.length > 0 ? value : null;
+  return typeof value === LOCAL_STR_STRING && value.length > LOCAL_NUM_ZERO ? value : null;
 }
 
 function getOperationMetadataStringArray(stepsHistory, metadataKey) {
@@ -215,8 +221,8 @@ function getOperationMetadataStringArray(stepsHistory, metadataKey) {
   const normalized = [];
   const seen = new Set();
   for (const entry of value) {
-    if (typeof entry !== 'string' ||
-        entry.length === 0 ||
+    if (typeof entry !== LOCAL_STR_STRING ||
+        entry.length === LOCAL_NUM_ZERO ||
         seen.has(entry)) {
       continue;
     }
@@ -228,7 +234,7 @@ function getOperationMetadataStringArray(stepsHistory, metadataKey) {
 
 function getOperationMetadataObject(stepsHistory, metadataKey) {
   const value = getOperationMetadataValue(stepsHistory, metadataKey);
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+  if (!value || typeof value !== LOCAL_STR_OBJECT || Array.isArray(value)) {
     return null;
   }
   return value;
@@ -275,10 +281,10 @@ function isValidWorkflowStep(operationType, step) {
 function getNextWorkflowStep(operationType, currentStep) {
   const steps = getWorkflowSteps(operationType);
   const currentIndex = steps.indexOf(currentStep);
-  if (currentIndex === -1 || currentIndex >= steps.length - 1) {
+  if (currentIndex === -LOCAL_NUM_ONE || currentIndex >= steps.length - LOCAL_NUM_ONE) {
     return null;
   }
-  return steps[currentIndex + 1];
+  return steps[currentIndex + LOCAL_NUM_ONE];
 }
 
 /**
@@ -293,28 +299,28 @@ function isTerminalStep(operationType, step) {
     return true;
   }
   const steps = getWorkflowSteps(operationType);
-  if (steps.length === 0) {
+  if (steps.length === LOCAL_NUM_ZERO) {
     return false;
   }
-  return step === steps[steps.length - 1];
+  return step === steps[steps.length - LOCAL_NUM_ONE];
 }
 
 function normalizeWorkflowStepIdentifier(step) {
-  return typeof step === 'string' && step.length > 0 ?
+  return typeof step === LOCAL_STR_STRING && step.length > LOCAL_NUM_ZERO ?
     step.toUpperCase() :
-    '';
+    LOCAL_STR_EMPTY;
 }
 
 function normalizeReplicaStatusIdentifier(status) {
-  return typeof status === 'string' && status.length > 0 ?
+  return typeof status === LOCAL_STR_STRING && status.length > LOCAL_NUM_ZERO ?
     status.toLowerCase() :
-    '';
+    LOCAL_STR_EMPTY;
 }
 
 function resolveReplicaOperationSemanticPhase(
   operationType,
   workflowStep,
-  status = '',
+  status = LOCAL_STR_EMPTY,
 ) {
   const normalizedType =
     typeof operationType === 'string' && operationType.length > 0 ?
@@ -388,7 +394,7 @@ function resolveReplicaOperationSemanticPhase(
 function buildReplicaOperationSemanticWitnesses(
   operationType,
   workflowStep,
-  status = '',
+  status = LOCAL_STR_EMPTY,
 ) {
   const semanticPhase = resolveReplicaOperationSemanticPhase(
     operationType,
@@ -460,7 +466,7 @@ function createOperation(params) {
       params.sourceReplicaId;
   }
   if (Number.isInteger(params.membershipPublicationEpoch) &&
-      params.membershipPublicationEpoch >= 0) {
+      params.membershipPublicationEpoch >= LOCAL_NUM_ZERO) {
     initialHistory[OPERATION_METADATA_KEY.MEMBERSHIP_PUBLICATION_EPOCH] =
       params.membershipPublicationEpoch;
   }
@@ -510,7 +516,7 @@ function isValidStatus(value) {
  * @return {boolean} True when the type is coordinator-owned.
  */
 function isCoordinatorOwnedOperationType(value) {
-  if (typeof value !== 'string') {
+  if (typeof value !== LOCAL_STR_STRING) {
     return false;
   }
   return COORDINATOR_OWNED_OPERATION_TYPES.includes(value.toUpperCase());

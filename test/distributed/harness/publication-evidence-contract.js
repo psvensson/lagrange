@@ -821,6 +821,7 @@ function buildCanonicalPriorityRecoveryActiveGate(
   );
   const activeGateClosureWitness = classifyActiveGateClosureWitness({
     progressSnapshot: canonicalProgress,
+    bestProgressSnapshot: activeGate?.bestProgress || null,
     publicationConvergence: null,
     publicationConvergenceGate,
     readinessMode: activeGate?.mode || null,
@@ -920,6 +921,16 @@ function buildCanonicalPublicationConvergenceGate(controlPlane = null) {
     return null;
   }
 
+  const hasRequiredAckNodeIdEvidence =
+    Array.isArray(rawPublicationConvergenceGate?.requiredAckNodeIds) ||
+    Array.isArray(publicationConvergence?.requiredAckNodeIds);
+  const hasAcknowledgedNodeIdEvidence =
+    Array.isArray(rawPublicationConvergenceGate?.acknowledgedNodeIds) ||
+    Array.isArray(publicationConvergence?.acknowledgedNodeIds);
+  const hasPendingAckNodeIdEvidence =
+    Array.isArray(rawPublicationConvergenceGate?.pendingAckNodeIds) ||
+    Array.isArray(publicationConvergence?.pendingAckNodeIds) ||
+    Array.isArray(priorityRecoveryObservation?.pendingAckNodeIds);
   const canonicalPublicationConvergenceGate = buildPublicationRecoveryGateSnapshot({
     ...(rawPublicationConvergenceGate || {}),
     publicationEpoch:
@@ -958,24 +969,35 @@ function buildCanonicalPublicationConvergenceGate(controlPlane = null) {
       null,
     priorityRecoveryDecisionSnapshots,
     priorityRecoveryClosureWitness,
-    requiredAckNodeIds:
-      rawPublicationConvergenceGate?.requiredAckNodeIds ??
-      publicationConvergence?.requiredAckNodeIds ??
-      PUBLICATION_EVIDENCE_EMPTY_LIST,
-    acknowledgedNodeIds:
-      rawPublicationConvergenceGate?.acknowledgedNodeIds ??
-      publicationConvergence?.acknowledgedNodeIds ??
-      PUBLICATION_EVIDENCE_EMPTY_LIST,
-    pendingAckNodeIds:
-      rawPublicationConvergenceGate?.pendingAckNodeIds ??
-      publicationConvergence?.pendingAckNodeIds ??
-      priorityRecoveryObservation?.pendingAckNodeIds ??
-      PUBLICATION_EVIDENCE_EMPTY_LIST,
+    ...(hasRequiredAckNodeIdEvidence ? {
+      requiredAckNodeIds:
+        rawPublicationConvergenceGate?.requiredAckNodeIds ??
+        publicationConvergence?.requiredAckNodeIds,
+    } : {}),
+    ...(hasAcknowledgedNodeIdEvidence ? {
+      acknowledgedNodeIds:
+        rawPublicationConvergenceGate?.acknowledgedNodeIds ??
+        publicationConvergence?.acknowledgedNodeIds,
+    } : {}),
+    ...(hasPendingAckNodeIdEvidence ? {
+      pendingAckNodeIds:
+        rawPublicationConvergenceGate?.pendingAckNodeIds ??
+        publicationConvergence?.pendingAckNodeIds ??
+        priorityRecoveryObservation?.pendingAckNodeIds,
+    } : {}),
+    pendingAckCount:
+      rawPublicationConvergenceGate?.pendingAckCount ??
+      publicationConvergence?.pendingAckCount ??
+      priorityRecoveryObservation?.pendingAckCount,
     missingPublishedNodeIds:
       rawPublicationConvergenceGate?.missingPublishedNodeIds ??
       publicationConvergence?.missingPublishedNodeIds ??
       publicationConvergence?.missingPublishedRecoveryActiveNodeIds ??
       PUBLICATION_EVIDENCE_EMPTY_LIST,
+    missingPublishedCount:
+      rawPublicationConvergenceGate?.missingPublishedCount ??
+      publicationConvergence?.missingPublishedCount ??
+      priorityRecoveryObservation?.missingPublishedCount,
   });
   return Array.isArray(rawPublicationConvergenceGate?.reasons) ?
     {
@@ -1222,6 +1244,16 @@ function buildCanonicalPublicationConvergence(
       rawPublicationConvergence?.publishedActiveNodeIds ??
       PUBLICATION_EVIDENCE_EMPTY_LIST,
   );
+  const hasMergedRequiredAckNodeIdEvidence =
+    Array.isArray(publicationConvergenceGate?.requiredAckNodeIds) ||
+    Array.isArray(rawPublicationConvergence?.requiredAckNodeIds);
+  const hasMergedAcknowledgedNodeIdEvidence =
+    Array.isArray(publicationConvergenceGate?.acknowledgedNodeIds) ||
+    Array.isArray(rawPublicationConvergence?.acknowledgedNodeIds);
+  const hasMergedPendingAckNodeIdEvidence =
+    Array.isArray(priorityRecoveryObservation?.pendingAckNodeIds) ||
+    Array.isArray(publicationConvergenceGate?.pendingAckNodeIds) ||
+    Array.isArray(rawPublicationConvergence?.pendingAckNodeIds);
   const requiredAckNodeIds = normalizeDistinctStringArray(
     publicationConvergenceGate?.requiredAckNodeIds ??
       rawPublicationConvergence?.requiredAckNodeIds ??
@@ -1289,9 +1321,9 @@ function buildCanonicalPublicationConvergence(
     priorityPartitionSummary,
     priorityRecoveryClosureWitness,
     publishedActiveNodeIds,
-    requiredAckNodeIds,
-    acknowledgedNodeIds,
-    pendingAckNodeIds,
+    ...(hasMergedRequiredAckNodeIdEvidence ? {requiredAckNodeIds} : {}),
+    ...(hasMergedAcknowledgedNodeIdEvidence ? {acknowledgedNodeIds} : {}),
+    ...(hasMergedPendingAckNodeIdEvidence ? {pendingAckNodeIds} : {}),
     pendingAckCount,
     missingPublishedNodeIds,
     missingPublishedCount,

@@ -1,3 +1,92 @@
+const LOCAL_STR_SELECT = 'SELECT';
+const LOCAL_STR_FROM = 'FROM';
+const LOCAL_STR_WHERE = 'WHERE';
+const LOCAL_STR_INSERT = 'INSERT';
+const LOCAL_STR_INTO = 'INTO';
+const LOCAL_STR_VALUES = 'VALUES';
+const LOCAL_STR_UPDATE = 'UPDATE';
+const LOCAL_STR_SET = 'SET';
+const LOCAL_STR_DELETE = 'DELETE';
+const LOCAL_STR_MERGE = 'MERGE';
+const LOCAL_STR_UPSERT = 'UPSERT';
+const LOCAL_STR_ORDER = 'ORDER';
+const LOCAL_STR_BY = 'BY';
+const LOCAL_STR_GROUP = 'GROUP';
+const LOCAL_STR_HAVING = 'HAVING';
+const LOCAL_STR_LIMIT = 'LIMIT';
+const LOCAL_STR_OFFSET = 'OFFSET';
+const LOCAL_STR_DISTINCT = 'DISTINCT';
+const LOCAL_STR_ALL = 'ALL';
+const LOCAL_STR_AS = 'AS';
+const LOCAL_STR_CASE = 'CASE';
+const LOCAL_STR_WHEN = 'WHEN';
+const LOCAL_STR_THEN = 'THEN';
+const LOCAL_STR_ELSE = 'ELSE';
+const LOCAL_STR_END = 'END';
+const LOCAL_STR_JOIN = 'JOIN';
+const LOCAL_STR_LEFT = 'LEFT';
+const LOCAL_STR_RIGHT = 'RIGHT';
+const LOCAL_STR_INNER = 'INNER';
+const LOCAL_STR_OUTER = 'OUTER';
+const LOCAL_STR_CROSS = 'CROSS';
+const LOCAL_STR_FULL = 'FULL';
+const LOCAL_STR_NATURAL = 'NATURAL';
+const LOCAL_STR_ON = 'ON';
+const LOCAL_STR_USING = 'USING';
+const LOCAL_STR_AND = 'AND';
+const LOCAL_STR_OR = 'OR';
+const LOCAL_STR_NOT = 'NOT';
+const LOCAL_STR_IN = 'IN';
+const LOCAL_STR_LIKE = 'LIKE';
+const LOCAL_STR_BETWEEN = 'BETWEEN';
+const LOCAL_STR_IS = 'IS';
+const LOCAL_STR_EXISTS = 'EXISTS';
+const LOCAL_STR_ANY = 'ANY';
+const LOCAL_STR_SOME = 'SOME';
+const LOCAL_STR_UNION = 'UNION';
+const LOCAL_STR_INTERSECT = 'INTERSECT';
+const LOCAL_STR_EXCEPT = 'EXCEPT';
+const LOCAL_STR_ASC = 'ASC';
+const LOCAL_STR_DESC = 'DESC';
+const LOCAL_STR_NULLS = 'NULLS';
+const LOCAL_STR_FIRST = 'FIRST';
+const LOCAL_STR_LAST = 'LAST';
+const LOCAL_STR_NULL = 'NULL';
+const LOCAL_STR_TRUE = 'TRUE';
+const LOCAL_STR_FALSE = 'FALSE';
+const LOCAL_STR_DEFAULT = 'DEFAULT';
+const LOCAL_STR_COUNT = 'COUNT';
+const LOCAL_STR_SUM = 'SUM';
+const LOCAL_STR_AVG = 'AVG';
+const LOCAL_STR_MIN = 'MIN';
+const LOCAL_STR_MAX = 'MAX';
+const LOCAL_STR_CREATE = 'CREATE';
+const LOCAL_STR_ALTER = 'ALTER';
+const LOCAL_STR_DROP = 'DROP';
+const LOCAL_STR_TRUNCATE = 'TRUNCATE';
+const LOCAL_STR_TABLE = 'TABLE';
+const LOCAL_STR_INDEX = 'INDEX';
+const LOCAL_STR_VIEW = 'VIEW';
+const LOCAL_STR_DATABASE = 'DATABASE';
+const LOCAL_STR_SCHEMA = 'SCHEMA';
+const LOCAL_STR_PRIMARY = 'PRIMARY';
+const LOCAL_STR_KEY = 'KEY';
+const LOCAL_STR_FOREIGN = 'FOREIGN';
+const LOCAL_STR_REFERENCES = 'REFERENCES';
+const LOCAL_STR_UNIQUE = 'UNIQUE';
+const LOCAL_STR_CHECK = 'CHECK';
+const LOCAL_STR_CONSTRAINT = 'CONSTRAINT';
+const LOCAL_STR_LIVE = 'LIVE';
+const LOCAL_STR_BLUE = 'blue';
+const LOCAL_STR_GREEN = 'green';
+const LOCAL_STR_YELLOW = 'yellow';
+const LOCAL_STR_MAGENTA = 'magenta';
+const LOCAL_STR_GRAY = 'gray';
+const LOCAL_STR_CYAN = 'cyan';
+const LOCAL_STR_PIPE = '|';
+const LOCAL_STR_GI = 'gi';
+const LOCAL_STR_EMPTY = '';
+
 /**
  * SQLSyntaxHighlighter - Syntax highlighting for SQL queries
  *
@@ -13,42 +102,42 @@
 export const SQL_KEYWORDS = {
   // DML keywords
   dml: [
-    'SELECT', 'FROM', 'WHERE', 'INSERT', 'INTO', 'VALUES',
-    'UPDATE', 'SET', 'DELETE', 'MERGE', 'UPSERT',
+    LOCAL_STR_SELECT, LOCAL_STR_FROM, LOCAL_STR_WHERE, LOCAL_STR_INSERT, LOCAL_STR_INTO, LOCAL_STR_VALUES,
+    LOCAL_STR_UPDATE, LOCAL_STR_SET, LOCAL_STR_DELETE, LOCAL_STR_MERGE, LOCAL_STR_UPSERT,
   ],
   // Clauses
   clauses: [
-    'ORDER', 'BY', 'GROUP', 'HAVING', 'LIMIT', 'OFFSET',
-    'DISTINCT', 'ALL', 'AS', 'CASE', 'WHEN', 'THEN', 'ELSE', 'END',
+    LOCAL_STR_ORDER, LOCAL_STR_BY, LOCAL_STR_GROUP, LOCAL_STR_HAVING, LOCAL_STR_LIMIT, LOCAL_STR_OFFSET,
+    LOCAL_STR_DISTINCT, LOCAL_STR_ALL, LOCAL_STR_AS, LOCAL_STR_CASE, LOCAL_STR_WHEN, LOCAL_STR_THEN, LOCAL_STR_ELSE, LOCAL_STR_END,
   ],
   // Joins
   joins: [
-    'JOIN', 'LEFT', 'RIGHT', 'INNER', 'OUTER', 'CROSS',
-    'FULL', 'NATURAL', 'ON', 'USING',
+    LOCAL_STR_JOIN, LOCAL_STR_LEFT, LOCAL_STR_RIGHT, LOCAL_STR_INNER, LOCAL_STR_OUTER, LOCAL_STR_CROSS,
+    LOCAL_STR_FULL, LOCAL_STR_NATURAL, LOCAL_STR_ON, LOCAL_STR_USING,
   ],
   // Operators
   operators: [
-    'AND', 'OR', 'NOT', 'IN', 'LIKE', 'BETWEEN', 'IS',
-    'EXISTS', 'ANY', 'SOME', 'UNION', 'INTERSECT', 'EXCEPT',
+    LOCAL_STR_AND, LOCAL_STR_OR, LOCAL_STR_NOT, LOCAL_STR_IN, LOCAL_STR_LIKE, LOCAL_STR_BETWEEN, LOCAL_STR_IS,
+    LOCAL_STR_EXISTS, LOCAL_STR_ANY, LOCAL_STR_SOME, LOCAL_STR_UNION, LOCAL_STR_INTERSECT, LOCAL_STR_EXCEPT,
   ],
   // Sort directions
-  sort: ['ASC', 'DESC', 'NULLS', 'FIRST', 'LAST'],
+  sort: [LOCAL_STR_ASC, LOCAL_STR_DESC, LOCAL_STR_NULLS, LOCAL_STR_FIRST, LOCAL_STR_LAST],
   // Literals
-  literals: ['NULL', 'TRUE', 'FALSE', 'DEFAULT'],
+  literals: [LOCAL_STR_NULL, LOCAL_STR_TRUE, LOCAL_STR_FALSE, LOCAL_STR_DEFAULT],
   // Aggregate functions
-  aggregates: ['COUNT', 'SUM', 'AVG', 'MIN', 'MAX'],
+  aggregates: [LOCAL_STR_COUNT, LOCAL_STR_SUM, LOCAL_STR_AVG, LOCAL_STR_MIN, LOCAL_STR_MAX],
   // DDL keywords (for completeness)
   ddl: [
-    'CREATE', 'ALTER', 'DROP', 'TRUNCATE', 'TABLE',
-    'INDEX', 'VIEW', 'DATABASE', 'SCHEMA',
+    LOCAL_STR_CREATE, LOCAL_STR_ALTER, LOCAL_STR_DROP, LOCAL_STR_TRUNCATE, LOCAL_STR_TABLE,
+    LOCAL_STR_INDEX, LOCAL_STR_VIEW, LOCAL_STR_DATABASE, LOCAL_STR_SCHEMA,
   ],
   // Constraints
   constraints: [
-    'PRIMARY', 'KEY', 'FOREIGN', 'REFERENCES', 'UNIQUE',
-    'CHECK', 'CONSTRAINT', 'NOT', 'NULL',
+    LOCAL_STR_PRIMARY, LOCAL_STR_KEY, LOCAL_STR_FOREIGN, LOCAL_STR_REFERENCES, LOCAL_STR_UNIQUE,
+    LOCAL_STR_CHECK, LOCAL_STR_CONSTRAINT, LOCAL_STR_NOT, LOCAL_STR_NULL,
   ],
   // Live query extension
-  live: ['LIVE'],
+  live: [LOCAL_STR_LIVE],
 };
 
 /**
@@ -56,12 +145,12 @@ export const SQL_KEYWORDS = {
  * Uses blessed-compatible color tags
  */
 export const HIGHLIGHT_COLORS = {
-  keyword: 'blue',
-  string: 'green',
-  number: 'yellow',
-  parameter: 'magenta',
-  comment: 'gray',
-  function: 'cyan',
+  keyword: LOCAL_STR_BLUE,
+  string: LOCAL_STR_GREEN,
+  number: LOCAL_STR_YELLOW,
+  parameter: LOCAL_STR_MAGENTA,
+  comment: LOCAL_STR_GRAY,
+  function: LOCAL_STR_CYAN,
 };
 
 /**
@@ -87,8 +176,8 @@ export class SQLSyntaxHighlighter {
     // Build keyword pattern for matching
     const allKeywords = Array.from(this.keywords);
     this.keywordPattern = new RegExp(
-      `\\b(${allKeywords.join('|')})\\b`,
-      'gi',
+      `\\b(${allKeywords.join(LOCAL_STR_PIPE)})\\b`,
+      LOCAL_STR_GI,
     );
   }
 
@@ -99,7 +188,7 @@ export class SQLSyntaxHighlighter {
    * @return {string} Highlighted text with blessed color tags
    */
   highlight(sql) {
-    if (!sql) return '';
+    if (!sql) return LOCAL_STR_EMPTY;
 
     let result = sql;
 
@@ -245,7 +334,7 @@ export class SQLSyntaxHighlighter {
    * @return {string} Plain text without color tags
    */
   stripHighlighting(text) {
-    if (!text) return '';
-    return text.replace(/\{[a-z]+-fg\}|\{\/\}/g, '');
+    if (!text) return LOCAL_STR_EMPTY;
+    return text.replace(/\{[a-z]+-fg\}|\{\/\}/g, LOCAL_STR_EMPTY);
   }
 }

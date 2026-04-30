@@ -15,6 +15,14 @@ const CALL_WAIT_FOR_CONSISTENCY_CONVERGENCE =
 const ZERO = 0;
 const PRE_LOAD_READINESS_CALL_COUNT = 1;
 const POST_RESTART_QUIESCENCE_MAX_IN_FLIGHT_COUNT = ZERO;
+const DEFAULT_PRE_LOAD_READINESS_NO_PROGRESS_MAX_ATTEMPTS = 8;
+const DEFAULT_POST_RESTART_LOAD_READINESS_NO_PROGRESS_MAX_ATTEMPTS = 5;
+const DEFAULT_POST_RESTART_QUIESCENCE_NO_PROGRESS_TIMEOUT_MS = 30000;
+const OVERRIDE_PRE_LOAD_READINESS_NO_PROGRESS_MAX_ATTEMPTS = 11;
+const OVERRIDE_POST_RESTART_LOAD_READINESS_NO_PROGRESS_MAX_ATTEMPTS = 7;
+const OVERRIDE_POST_RESTART_QUIESCENCE_NO_PROGRESS_TIMEOUT_MS = 2222;
+const LOAD_READINESS_PHASE_PRE_LOAD = 'pre_load';
+const LOAD_READINESS_PHASE_POST_RESTART = 'post_restart';
 const SINGLE_SEED_NODE_ID = 'seed-1';
 const SINGLE_SEED_NODE_ROLE = 'seed';
 const LOGS_TABLE_NAME = 'logs';
@@ -81,6 +89,9 @@ describe('rolling-restart scenario', () => {
           {
             stableWindowMs: 123,
             timeoutMs: 456,
+            noProgressMaxAttempts:
+              DEFAULT_PRE_LOAD_READINESS_NO_PROGRESS_MAX_ATTEMPTS,
+            loadReadinessPhase: LOAD_READINESS_PHASE_PRE_LOAD,
           },
         ],
         ['startLoad'],
@@ -110,6 +121,12 @@ describe('rolling-restart scenario', () => {
               postRestartLoadSoakMs: 0,
               postRestartQuietWindowMs: 0,
               postRestartActiveTimeoutMs: 4321,
+              preLoadReadinessNoProgressMaxAttempts:
+                OVERRIDE_PRE_LOAD_READINESS_NO_PROGRESS_MAX_ATTEMPTS,
+              postRestartControlPlaneQuiescenceNoProgressTimeoutMs:
+                OVERRIDE_POST_RESTART_QUIESCENCE_NO_PROGRESS_TIMEOUT_MS,
+              postRestartLoadReadinessNoProgressMaxAttempts:
+                OVERRIDE_POST_RESTART_LOAD_READINESS_NO_PROGRESS_MAX_ATTEMPTS,
               postRestartConsistencyTimeoutMs: 9876,
               postRestartConsistencyPollIntervalMs: 43,
               postRestartConsistencyForceRepairAfterMs: 12,
@@ -188,17 +205,27 @@ describe('rolling-restart scenario', () => {
       assert.equal(convergenceOptions[0].ignoreStaleInFlightReplicaOperations,
         true);
       assert.equal(convergenceOptions[1].ignoreStaleInFlightReplicaOperations,
-        false);
+        true);
       assert.deepEqual(activeOptions, [{timeoutMs: 4321}]);
       assert.deepEqual(quiescenceOptions, [{
         timeoutMs: OVERRIDE_PER_NODE_CONVERGENCE_TIMEOUT_MS,
         stableWindowMs: 0,
+        noProgressTimeoutMs:
+          OVERRIDE_POST_RESTART_QUIESCENCE_NO_PROGRESS_TIMEOUT_MS,
         maxInFlightCount: POST_RESTART_QUIESCENCE_MAX_IN_FLIGHT_COUNT,
+        ignoreStaleInFlightReplicaOperations: true,
         requireCriticalSystemSpread: true,
       }]);
+      assert.equal(
+        loadReadinessOptions[ZERO].noProgressMaxAttempts,
+        OVERRIDE_PRE_LOAD_READINESS_NO_PROGRESS_MAX_ATTEMPTS,
+      );
       assert.deepEqual(loadReadinessOptions.slice(1), [{
         stableWindowMs: 0,
         timeoutMs: 4321,
+        noProgressMaxAttempts:
+          OVERRIDE_POST_RESTART_LOAD_READINESS_NO_PROGRESS_MAX_ATTEMPTS,
+        loadReadinessPhase: LOAD_READINESS_PHASE_POST_RESTART,
       }]);
       assert.deepEqual(consistencyOptions, [{
         timeoutMs: 9876,
@@ -270,7 +297,10 @@ describe('rolling-restart scenario', () => {
       assert.deepEqual(quiescenceOptions, [{
         timeoutMs: SHORT_BARRIER_TIMEOUT_MS,
         stableWindowMs: EXPECTED_POST_RESTART_RECOVERY_STABLE_WINDOW_MS,
+        noProgressTimeoutMs:
+          DEFAULT_POST_RESTART_QUIESCENCE_NO_PROGRESS_TIMEOUT_MS,
         maxInFlightCount: POST_RESTART_QUIESCENCE_MAX_IN_FLIGHT_COUNT,
+        ignoreStaleInFlightReplicaOperations: true,
         requireCriticalSystemSpread: true,
       }]);
       assert.deepEqual(
@@ -278,6 +308,9 @@ describe('rolling-restart scenario', () => {
         [{
           stableWindowMs: EXPECTED_POST_RESTART_RECOVERY_STABLE_WINDOW_MS,
           timeoutMs: SHORT_BARRIER_TIMEOUT_MS,
+          noProgressMaxAttempts:
+            DEFAULT_POST_RESTART_LOAD_READINESS_NO_PROGRESS_MAX_ATTEMPTS,
+          loadReadinessPhase: LOAD_READINESS_PHASE_POST_RESTART,
         }],
       );
       assert.deepEqual(finalBarrierCalls.slice(PRE_LOAD_READINESS_CALL_COUNT), [
@@ -413,7 +446,7 @@ describe('rolling-restart scenario', () => {
       );
       assert.equal(
         convergenceCalls[1].ignoreStaleInFlightReplicaOperations,
-        false,
+        true,
       );
       assert.deepEqual(
         finalBarrierCalls.slice(2),

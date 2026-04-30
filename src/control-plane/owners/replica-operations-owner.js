@@ -1,8 +1,10 @@
 import {TABLES} from '../../constants/index.js';
 import {SystemMetadataOwnerBase} from './system-metadata-owner-base.js';
 
+const LOCAL_STR_1J3NM = 'replica-operations-owner';
+
 class ReplicaOperationsOwner extends SystemMetadataOwnerBase {
-  static OWNER_NAME = 'replica-operations-owner';
+  static OWNER_NAME = LOCAL_STR_1J3NM;
   static TABLE_NAME = TABLES.REPLICA_OPERATIONS;
 
   async getReplicaOperation(assignmentId, options = {}) {

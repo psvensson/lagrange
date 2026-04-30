@@ -21,10 +21,19 @@ import {
   normalizeEndpointRows,
 } from './endpoint-sync-source-query.js';
 
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_NUM_ONE = 1;
+const LOCAL_STR_1T6E5 = 'EndpointSyncSourceClient';
+const LOCAL_STR_QUERY = 'query';
+const LOCAL_STR_OPEN = 'open';
+const LOCAL_STR_MESSAGE = 'message';
+const LOCAL_STR_ERROR = 'error';
+const LOCAL_STR_CLOSE = 'close';
+
 const ADMIN_AUTH_HEADER = 'authorization';
 const BEARER_PREFIX = 'Bearer ';
 
-let queryCounter = 0;
+let queryCounter = LOCAL_NUM_ZERO;
 
 /**
  * Build deterministic query id.
@@ -32,7 +41,7 @@ let queryCounter = 0;
  * @return {string}
  */
 function nextQueryId() {
-  queryCounter += 1;
+  queryCounter += LOCAL_NUM_ONE;
   return ENDPOINT_SYNC_SOURCE_QUERY.QUERY_ID_PREFIX + queryCounter;
 }
 
@@ -61,8 +70,8 @@ class EndpointSyncSourceQueryError extends BaseError {
     super(message, {
       cause,
       context: {
-        component: 'EndpointSyncSourceClient',
-        operation: 'query',
+        component: LOCAL_STR_1T6E5,
+        operation: LOCAL_STR_QUERY,
         metadata,
       },
     });
@@ -188,7 +197,7 @@ class EndpointSyncSourceClient {
     });
 
     let lastError = null;
-    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    for (let attempt = LOCAL_NUM_ZERO; attempt <= maxRetries; attempt++) {
       try {
         const rows = await this._executeQueryOnce({
           adminStreamUrl: options.adminStreamUrl,
@@ -203,7 +212,7 @@ class EndpointSyncSourceClient {
         if (attempt === maxRetries) {
           break;
         }
-        await sleep(retryDelayMs * (attempt + 1));
+        await sleep(retryDelayMs * (attempt + LOCAL_NUM_ONE));
       }
     }
 
@@ -273,7 +282,7 @@ class EndpointSyncSourceClient {
         resolve(rows);
       };
 
-      socket.on('open', () => {
+      socket.on(LOCAL_STR_OPEN, () => {
         const message = {
           type: ADMIN_MESSAGE_TYPE.QUERY,
           queryId,
@@ -283,7 +292,7 @@ class EndpointSyncSourceClient {
         socket.send(JSON.stringify(message));
       });
 
-      socket.on('message', (frame) => {
+      socket.on(LOCAL_STR_MESSAGE, (frame) => {
         let parsed;
         try {
           parsed = JSON.parse(frame.toString());
@@ -303,7 +312,7 @@ class EndpointSyncSourceClient {
         finalize(null, result.rows);
       });
 
-      socket.on('error', (error) => {
+      socket.on(LOCAL_STR_ERROR, (error) => {
         finalize(new EndpointSyncSourceQueryError(
           ENDPOINT_SYNC_ERROR.SOURCE_QUERY_FAILED,
           {
@@ -314,7 +323,7 @@ class EndpointSyncSourceClient {
         ), null);
       });
 
-      socket.on('close', () => {
+      socket.on(LOCAL_STR_CLOSE, () => {
         if (!settled) {
           finalize(new EndpointSyncSourceQueryError(
             ENDPOINT_SYNC_ERROR.SOURCE_QUERY_UNEXPECTED_MESSAGE,

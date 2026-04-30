@@ -14,7 +14,7 @@ const JOINING_DEFAULT = Object.freeze({
   retryableFailureResumeMaxAttempts: 4,
   retryableFailureResumeBaseDelayMs: 250,
   retryableFailureResumeMaxDelayMs: 5000,
-  retryableFailureResumeMaxElapsedMs: TIME_MS.MINUTE * 3,
+  retryableFailureResumeMaxElapsedMs: TIME_MS.MINUTE * NUM.THREE,
   readySignalMaxAttempts: 6,
   readySignalRetryDelayMs: 1000,
   readySignalRetryMaxDelayMs: 5000,

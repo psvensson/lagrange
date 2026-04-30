@@ -7,6 +7,8 @@ import {
   SCRIPT_TEXT,
 } from './guideline-check-constants.js';
 
+const LOCAL_NUM_ZERO = 0;
+
 function runGit(args) {
   return spawnSync(GUIDELINE_STAGED.GIT_BIN, args, {
     encoding: SCRIPT_TEXT.ENCODING_UTF8,
@@ -16,7 +18,7 @@ function runGit(args) {
 
 function getStagedFiles() {
   const gitResult = runGit(GUIDELINE_STAGED.DIFF_ARGS);
-  if (gitResult.status !== 0) {
+  if (gitResult.status !== LOCAL_NUM_ZERO) {
     const errorMessage = gitResult.stderr?.trim() ||
       GUIDELINE_STAGED.GIT_READ_FAILED;
     throw new Error(errorMessage);
@@ -45,12 +47,12 @@ function main() {
     process.exit(EXIT_CODE.USAGE);
   }
 
-  if (files.length === 0) {
+  if (files.length === LOCAL_NUM_ZERO) {
     process.exit(EXIT_CODE.SUCCESS);
   }
 
   const checkResult = runGuidelineCheck(files);
-  if (checkResult.status !== 0) {
+  if (checkResult.status !== LOCAL_NUM_ZERO) {
     process.exit(checkResult.status || EXIT_CODE.FAILURE);
   }
 }

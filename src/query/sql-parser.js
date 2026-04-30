@@ -6,6 +6,15 @@
  */
 
 import nodeSqlParser from 'node-sql-parser';
+
+
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_STR_VALUE = 'value';
+const LOCAL_STR_PRIMARY_KEY = 'PRIMARY_KEY';
+const LOCAL_STR_UNIQUE = 'UNIQUE';
+const LOCAL_STR_145ZS = '!=';
+const LOCAL_STR_151ZF = '<>';
+
 const {Parser} = nodeSqlParser;
 import {NUM, TYPEOF} from '../constants/index.js';
 import {LoggingService} from '../logging/logging-service.js';
@@ -295,7 +304,7 @@ class SQLParser {
    * @returns {Array|null} Converted CTE definitions or null.
    */
   convertCtes(withClause) {
-    if (!withClause || withClause.length === 0) {
+    if (!withClause || withClause.length === LOCAL_NUM_ZERO) {
       return null;
     }
     return withClause.map((cte) => {
@@ -419,7 +428,7 @@ class SQLParser {
    * @private
    */
   convertReturning(returning) {
-    if (!returning || !returning.columns || returning.columns.length === 0) {
+    if (!returning || !returning.columns || returning.columns.length === LOCAL_NUM_ZERO) {
       return null;
     }
     const columns = returning.columns;
@@ -492,11 +501,11 @@ class SQLParser {
     if (!defaultNode) {
       return null;
     }
-    if (Object.prototype.hasOwnProperty.call(defaultNode, 'value')) {
+    if (Object.prototype.hasOwnProperty.call(defaultNode, LOCAL_STR_VALUE)) {
       const converted = this.convertValue(defaultNode.value);
       if (converted &&
         converted.type === EXPR_TYPE.LITERAL &&
-        Object.prototype.hasOwnProperty.call(converted, 'value')) {
+        Object.prototype.hasOwnProperty.call(converted, LOCAL_STR_VALUE)) {
         return converted.value;
       }
       return converted;
@@ -544,11 +553,11 @@ class SQLParser {
       } else if (def.resource === SQL_SCHEMA_KEYWORD.CONSTRAINT) {
         if (def.constraint_type === SQL_SCHEMA_KEYWORD.PRIMARY_KEY) {
           const pkColumns = def.definition.map((d) => d.column);
-          tableConstraints.push({type: 'PRIMARY_KEY', columns: pkColumns});
+          tableConstraints.push({type: LOCAL_STR_PRIMARY_KEY, columns: pkColumns});
           primaryKey = pkColumns;
         } else if (def.constraint_type === SQL_SCHEMA_KEYWORD.UNIQUE) {
           const uniqueColumns = def.definition.map((d) => d.column);
-          tableConstraints.push({type: 'UNIQUE', columns: uniqueColumns});
+          tableConstraints.push({type: LOCAL_STR_UNIQUE, columns: uniqueColumns});
         }
       }
     }
@@ -579,14 +588,14 @@ class SQLParser {
     if (ast.keyword === SQL_SCHEMA_KEYWORD.TABLE) {
       return {
         type: AST_TYPE.DROP_TABLE,
-        tableName: ast.name[0].table,
+        tableName: ast.name[LOCAL_NUM_ZERO].table,
         ifExists: !!ast.if_exists,
       };
     }
     if (ast.keyword === SQL_SCHEMA_KEYWORD.INDEX) {
       return {
         type: AST_TYPE.DROP_INDEX,
-        indexName: ast.name[0].table,
+        indexName: ast.name[LOCAL_NUM_ZERO].table,
         tableName: null,
         ifExists: !!ast.if_exists,
       };
@@ -783,7 +792,7 @@ class SQLParser {
 
     case PG_NODE_TYPE.CAST:
       return translateTypeCast(
-        {expr: expr.expr, target: {dataType: expr.target[0]?.dataType}},
+        {expr: expr.expr, target: {dataType: expr.target[LOCAL_NUM_ZERO]?.dataType}},
         convertExprFn,
       );
 
@@ -950,7 +959,7 @@ class SQLParser {
 
   normalizeOperator(op) {
     const upper = op.toUpperCase();
-    if (upper === '!=') return '<>';
+    if (upper === LOCAL_STR_145ZS) return LOCAL_STR_151ZF;
     return upper;
   }
 

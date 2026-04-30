@@ -10,6 +10,8 @@ import {EXPR_TYPE} from '../parser-constants.js';
 import {PG_TRANSLATE_ERROR, PG_EXPR_TYPE} from './pg-compat-constants.js';
 import {resolveAffinity} from './pg-type-affinity.js';
 
+const LOCAL_NUM_ZERO = 0;
+
 /**
  * Boolean literal value mapping.
  * TRUE → 1, FALSE → 0.
@@ -166,7 +168,7 @@ function reorderParams(params, paramMapping) {
  * @throws {Error} If gaps or out-of-bounds indices are found.
  */
 function validateParamMapping(mapping, paramsLength) {
-  if (mapping.length === 0) {
+  if (mapping.length === LOCAL_NUM_ZERO) {
     return;
   }
 

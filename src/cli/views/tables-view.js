@@ -10,15 +10,61 @@
 
 import {BaseView, ROW_STATUS} from '../core/base-view.js';
 
+const LOCAL_STR_B = 'B';
+const LOCAL_STR_KB = 'KB';
+const LOCAL_STR_MB = 'MB';
+const LOCAL_STR_GB = 'GB';
+const LOCAL_STR_TB = 'TB';
+const LOCAL_NUM_50 = 50;
+const LOCAL_STR_TABLES = 'tables';
+const LOCAL_STR_TABLE_NAME = 'table_name';
+const LOCAL_STR_TABLE_NAME_2 = 'Table Name';
+const LOCAL_NUM_25 = 25;
+const LOCAL_STR_PARTITION_COUNT = 'partition_count';
+const LOCAL_STR_PARTITIONS = 'Partitions';
+const LOCAL_NUM_12 = 12;
+const LOCAL_STR_REPLICA_FACTOR = 'replica_factor';
+const LOCAL_STR_REPLICAS = 'Replicas';
+const LOCAL_NUM_10 = 10;
+const LOCAL_STR_TOTAL_SIZE = 'total_size';
+const LOCAL_STR_TOTAL_SIZE_2 = 'Total Size';
+const LOCAL_STR_POLICY_SUMMARY = 'policy_summary';
+const LOCAL_STR_POLICY_SUMMARY_2 = 'Policy Summary';
+const LOCAL_NUM_40 = 40;
+const LOCAL_STR_N_A = 'N/A';
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_STR_0_B = '0 B';
+const LOCAL_NUM_ONE = 1;
+const LOCAL_STR_OBJECT = 'object';
+const LOCAL_STR_DEFAULT = 'Default';
+const LOCAL_NUM_THREE = 3;
+const LOCAL_STR_2ZI04 = '...';
+const LOCAL_STR_EMPTY = '';
+const LOCAL_STR_DRILLDOWN = 'drillDown';
+const LOCAL_STR_PARTITIONS_2 = 'partitions';
+const LOCAL_STR_ENTER = 'enter';
+const LOCAL_STR_RETURN = 'return';
+const LOCAL_STR_SCHEMA = 'Schema';
+const LOCAL_STR_DEFINITION = 'Definition';
+const LOCAL_STR_POLICIES = 'Policies';
+const LOCAL_STR_STRING = 'string';
+const LOCAL_NUM_TWO = 2;
+const LOCAL_STR_POLICY = 'Policy';
+const LOCAL_STR_PLACEMENT = 'Placement';
+const LOCAL_STR_REPLICATION = 'Replication';
+const LOCAL_STR_CONSISTENCY = 'Consistency';
+const LOCAL_STR_DURABILITY = 'Durability';
+const LOCAL_STR_COMPRESSION = 'Compression';
+
 /**
  * Size units for formatting
  */
-export const SIZE_UNITS = ['B', 'KB', 'MB', 'GB', 'TB'];
+export const SIZE_UNITS = [LOCAL_STR_B, LOCAL_STR_KB, LOCAL_STR_MB, LOCAL_STR_GB, LOCAL_STR_TB];
 
 /**
  * Maximum length for policy summary before truncation
  */
-export const POLICY_SUMMARY_MAX_LENGTH = 50;
+export const POLICY_SUMMARY_MAX_LENGTH = LOCAL_NUM_50;
 
 /**
  * TablesView displays database tables with metadata
@@ -33,7 +79,7 @@ export class TablesView extends BaseView {
   constructor(options = {}) {
     super(options);
     this.cache = options.cache || null;
-    this.viewName = 'tables';
+    this.viewName = LOCAL_STR_TABLES;
   }
 
   /**
@@ -43,11 +89,11 @@ export class TablesView extends BaseView {
    */
   getColumns() {
     return [
-      {key: 'table_name', label: 'Table Name', width: 25},
-      {key: 'partition_count', label: 'Partitions', width: 12},
-      {key: 'replica_factor', label: 'Replicas', width: 10},
-      {key: 'total_size', label: 'Total Size', width: 12},
-      {key: 'policy_summary', label: 'Policy Summary', width: 40},
+      {key: LOCAL_STR_TABLE_NAME, label: LOCAL_STR_TABLE_NAME_2, width: LOCAL_NUM_25},
+      {key: LOCAL_STR_PARTITION_COUNT, label: LOCAL_STR_PARTITIONS, width: LOCAL_NUM_12},
+      {key: LOCAL_STR_REPLICA_FACTOR, label: LOCAL_STR_REPLICAS, width: LOCAL_NUM_10},
+      {key: LOCAL_STR_TOTAL_SIZE, label: LOCAL_STR_TOTAL_SIZE_2, width: LOCAL_NUM_12},
+      {key: LOCAL_STR_POLICY_SUMMARY, label: LOCAL_STR_POLICY_SUMMARY_2, width: LOCAL_NUM_40},
     ];
   }
 
@@ -59,7 +105,7 @@ export class TablesView extends BaseView {
    */
   formatRow(table) {
     return [
-      table.table_name || 'N/A',
+      table.table_name || LOCAL_STR_N_A,
       this.formatPartitionCount(table.partition_count),
       this.formatReplicaFactor(table.replica_factor),
       this.formatSize(table.total_size),
@@ -75,7 +121,7 @@ export class TablesView extends BaseView {
    */
   formatPartitionCount(count) {
     if (count === null || count === undefined) {
-      return 'N/A';
+      return LOCAL_STR_N_A;
     }
     return String(count);
   }
@@ -88,7 +134,7 @@ export class TablesView extends BaseView {
    */
   formatReplicaFactor(factor) {
     if (factor === null || factor === undefined) {
-      return 'N/A';
+      return LOCAL_STR_N_A;
     }
     return String(factor);
   }
@@ -101,16 +147,16 @@ export class TablesView extends BaseView {
    */
   formatSize(bytes) {
     if (bytes === null || bytes === undefined) {
-      return 'N/A';
+      return LOCAL_STR_N_A;
     }
-    if (bytes === 0) {
-      return '0 B';
+    if (bytes === LOCAL_NUM_ZERO) {
+      return LOCAL_STR_0_B;
     }
 
     const i = Math.floor(Math.log(bytes) / Math.log(1024));
     const value = bytes / Math.pow(1024, i);
 
-    return `${value.toFixed(1)} ${SIZE_UNITS[i]}`;
+    return `${value.toFixed(LOCAL_NUM_ONE)} ${SIZE_UNITS[i]}`;
   }
 
   /**
@@ -127,8 +173,8 @@ export class TablesView extends BaseView {
         JSON.parse(table.table_policies) :
         table.table_policies;
 
-      if (!parsed || typeof parsed !== 'object') {
-        return 'Default';
+      if (!parsed || typeof parsed !== LOCAL_STR_OBJECT) {
+        return LOCAL_STR_DEFAULT;
       }
 
       // Requirements: 4.11 - placement_policy
@@ -153,19 +199,19 @@ export class TablesView extends BaseView {
       }
     } catch (_err) {
       // Requirements: 4.14 - malformed policy data
-      return 'Default';
+      return LOCAL_STR_DEFAULT;
     }
 
     // Requirements: 4.14 - no custom policies
-    if (policies.length === 0) {
-      return 'Default';
+    if (policies.length === LOCAL_NUM_ZERO) {
+      return LOCAL_STR_DEFAULT;
     }
 
     const summary = policies.join(', ');
 
     // Requirements: 4.15 - truncation
     if (summary.length > POLICY_SUMMARY_MAX_LENGTH) {
-      return summary.substring(0, POLICY_SUMMARY_MAX_LENGTH - 3) + '...';
+      return summary.substring(LOCAL_NUM_ZERO, POLICY_SUMMARY_MAX_LENGTH - LOCAL_NUM_THREE) + LOCAL_STR_2ZI04;
     }
 
     return summary;
@@ -178,7 +224,7 @@ export class TablesView extends BaseView {
    */
   getRowStatus(table) {
     // Warning if table has no partitions
-    if (table.partition_count === 0) {
+    if (table.partition_count === LOCAL_NUM_ZERO) {
       return ROW_STATUS.WARNING;
     }
 
@@ -191,7 +237,7 @@ export class TablesView extends BaseView {
    * @return {string} Unique key (table_id or table_name)
    */
   getItemKey(table) {
-    return table.table_id || table.table_name || '';
+    return table.table_id || table.table_name || LOCAL_STR_EMPTY;
   }
 
   /**
@@ -206,8 +252,8 @@ export class TablesView extends BaseView {
     }
 
     return {
-      action: 'drillDown',
-      view: 'partitions',
+      action: LOCAL_STR_DRILLDOWN,
+      view: LOCAL_STR_PARTITIONS_2,
       context: {
         tableId: selectedTable.table_id,
         tableName: selectedTable.table_name,
@@ -221,7 +267,7 @@ export class TablesView extends BaseView {
    * @return {boolean|Object} True if handled, navigation object, or false
    */
   handleKey(key) {
-    if (key.name === 'enter' || key.name === 'return') {
+    if (key.name === LOCAL_STR_ENTER || key.name === LOCAL_STR_RETURN) {
       return this.handleDrillDown();
     }
     return super.handleKey(key);
@@ -256,16 +302,16 @@ export class TablesView extends BaseView {
     // Add schema section if available
     if (table.schema) {
       sections.push({
-        title: 'Schema',
+        title: LOCAL_STR_SCHEMA,
         fields: [
-          {label: 'Definition', value: this.formatSchema(table.schema)},
+          {label: LOCAL_STR_DEFINITION, value: this.formatSchema(table.schema)},
         ],
       });
     }
 
     // Add policy section
     sections.push({
-      title: 'Policies',
+      title: LOCAL_STR_POLICIES,
       fields: this.getPolicyFields(table),
     });
 
@@ -281,9 +327,9 @@ export class TablesView extends BaseView {
    * @return {string} Formatted schema
    */
   formatSchema(schema) {
-    if (!schema) return 'N/A';
-    if (typeof schema === 'string') return schema;
-    return JSON.stringify(schema, null, 2);
+    if (!schema) return LOCAL_STR_N_A;
+    if (typeof schema === LOCAL_STR_STRING) return schema;
+    return JSON.stringify(schema, null, LOCAL_NUM_TWO);
   }
 
   /**
@@ -299,31 +345,31 @@ export class TablesView extends BaseView {
         JSON.parse(table.table_policies) :
         table.table_policies;
 
-      if (!parsed || typeof parsed !== 'object') {
-        return [{label: 'Policy', value: 'Default'}];
+      if (!parsed || typeof parsed !== LOCAL_STR_OBJECT) {
+        return [{label: LOCAL_STR_POLICY, value: LOCAL_STR_DEFAULT}];
       }
 
       if (parsed.placement_policy) {
-        fields.push({label: 'Placement', value: parsed.placement_policy});
+        fields.push({label: LOCAL_STR_PLACEMENT, value: parsed.placement_policy});
       }
       if (parsed.replication_policy) {
-        fields.push({label: 'Replication', value: parsed.replication_policy});
+        fields.push({label: LOCAL_STR_REPLICATION, value: parsed.replication_policy});
       }
       if (parsed.consistency_level) {
-        fields.push({label: 'Consistency', value: parsed.consistency_level});
+        fields.push({label: LOCAL_STR_CONSISTENCY, value: parsed.consistency_level});
       }
       if (parsed.durability) {
-        fields.push({label: 'Durability', value: parsed.durability});
+        fields.push({label: LOCAL_STR_DURABILITY, value: parsed.durability});
       }
       if (parsed.compression) {
-        fields.push({label: 'Compression', value: parsed.compression});
+        fields.push({label: LOCAL_STR_COMPRESSION, value: parsed.compression});
       }
     } catch (_err) {
-      return [{label: 'Policy', value: 'Default'}];
+      return [{label: LOCAL_STR_POLICY, value: LOCAL_STR_DEFAULT}];
     }
 
-    if (fields.length === 0) {
-      return [{label: 'Policy', value: 'Default'}];
+    if (fields.length === LOCAL_NUM_ZERO) {
+      return [{label: LOCAL_STR_POLICY, value: LOCAL_STR_DEFAULT}];
     }
 
     return fields;

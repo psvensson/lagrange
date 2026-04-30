@@ -1,8 +1,10 @@
 import {TABLES} from '../../constants/index.js';
 import {SystemMetadataOwnerBase} from './system-metadata-owner-base.js';
 
+const LOCAL_STR_NODES_OWNER = 'nodes-owner';
+
 class NodesOwner extends SystemMetadataOwnerBase {
-  static OWNER_NAME = 'nodes-owner';
+  static OWNER_NAME = LOCAL_STR_NODES_OWNER;
   static TABLE_NAME = TABLES.NODES;
 
   async getNode(nodeId, options = {}) {

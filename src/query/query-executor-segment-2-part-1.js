@@ -65,6 +65,13 @@ class QueryExecutorSegment2Part1 extends QueryExecutorSegment1 {
       ) {
         routerOptions.deliverySource = executionOptions.deliverySource;
       }
+      if (
+        typeof executionOptions?.replacePendingKey ===
+          QUERY_EXECUTOR_LITERAL.STRING_STRING &&
+        executionOptions.replacePendingKey.length > NUM.ZERO
+      ) {
+        routerOptions.replacePendingKey = executionOptions.replacePendingKey;
+      }
       const remainingBudgetMs = getRemainingExecutionBudgetMs();
       if (remainingBudgetMs !== null) {
         if (remainingBudgetMs <= NUM.ZERO) {
@@ -372,6 +379,25 @@ class QueryExecutorSegment2Part1 extends QueryExecutorSegment1 {
       let retryCurrentAddressOnNextAttempt = false;
       let deferPartitionRetryOnNextAttempt = false;
       let leaderRecoveryQueued = false;
+      const shouldSkipCandidateDelivery = (serviceInfo, address) => {
+        if (
+          typeof address !== QUERY_EXECUTOR_LITERAL.STRING_STRING ||
+          address.length === NUM.ZERO ||
+          attemptedAddresses.has(address)
+        ) {
+          return true;
+        }
+        const witnessedService = this.findRoutingSnapshotService(
+          routingSnapshot,
+          serviceInfo,
+          address,
+        );
+        return this.isTemporarilyUnroutableAddress(
+          partitionId,
+          address,
+          witnessedService,
+        );
+      };
       const queueLeaderRecoveryCandidates = (
         currentCandidateIndex = null,
         participantNodeId = null,
@@ -383,6 +409,10 @@ class QueryExecutorSegment2Part1 extends QueryExecutorSegment1 {
           routingSnapshot,
           attemptedAddresses,
           preferSameLatencyGroup,
+          {
+            recoveryCandidateSelectionKey:
+              executionOptions.recoveryCandidateSelectionKey,
+          },
         );
         if (recoveryCandidates.length === 0) {
           return;
@@ -458,6 +488,9 @@ class QueryExecutorSegment2Part1 extends QueryExecutorSegment1 {
       ) {
         const serviceInfo = candidateQueue[candidateIndex];
         const {address} = serviceInfo;
+        if (shouldSkipCandidateDelivery(serviceInfo, address)) {
+          continue;
+        }
         attemptedAddresses.add(address);
         this.logger.debug(QUERY_LOG_MSG.ROUTING_QUERY_TO_PARTITION, {
           partitionId,
@@ -670,6 +703,10 @@ class QueryExecutorSegment2Part1 extends QueryExecutorSegment1 {
                   routingSnapshot,
                   attemptedAddresses,
                   preferSameLatencyGroup,
+                  {
+                    recoveryCandidateSelectionKey:
+                      executionOptions.recoveryCandidateSelectionKey,
+                  },
                 );
               if (refreshedRecoveryCandidates.length > NUM.ZERO) {
                 candidateQueue.push(...refreshedRecoveryCandidates);
@@ -852,6 +889,10 @@ class QueryExecutorSegment2Part1 extends QueryExecutorSegment1 {
                   routingSnapshot,
                   attemptedAddresses,
                   preferSameLatencyGroup,
+                  {
+                    recoveryCandidateSelectionKey:
+                      executionOptions.recoveryCandidateSelectionKey,
+                  },
                 );
               if (refreshedRecoveryCandidates.length > NUM.ZERO) {
                 candidateQueue.push(...refreshedRecoveryCandidates);

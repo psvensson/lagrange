@@ -8,6 +8,13 @@ import {parentPort, workerData} from 'worker_threads';
 import {AdminCLI} from '../../cli/index.js';
 import {ExitError} from './exit-error.js';
 
+const LOCAL_STR_EMPTY = '';
+const LOCAL_STR_UTF8 = 'utf8';
+const LOCAL_STR_FUNCTION = 'function';
+const LOCAL_STR_SPACE = ' ';
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_NUM_ONE = 1;
+
 function captureOutput() {
   const originalStdoutWrite = process.stdout.write.bind(process.stdout);
   const originalStderrWrite = process.stderr.write.bind(process.stderr);
@@ -15,29 +22,29 @@ function captureOutput() {
   const originalConsoleError = console.error;
   const originalExit = process.exit;
 
-  let stdout = '';
-  let stderr = '';
+  let stdout = LOCAL_STR_EMPTY;
+  let stderr = LOCAL_STR_EMPTY;
 
   process.stdout.write = (chunk, encoding, cb) => {
-    stdout += Buffer.isBuffer(chunk) ? chunk.toString('utf8') : String(chunk);
-    if (typeof cb === 'function') cb();
+    stdout += Buffer.isBuffer(chunk) ? chunk.toString(LOCAL_STR_UTF8) : String(chunk);
+    if (typeof cb === LOCAL_STR_FUNCTION) cb();
     return true;
   };
 
   process.stderr.write = (chunk, encoding, cb) => {
-    stderr += Buffer.isBuffer(chunk) ? chunk.toString('utf8') : String(chunk);
-    if (typeof cb === 'function') cb();
+    stderr += Buffer.isBuffer(chunk) ? chunk.toString(LOCAL_STR_UTF8) : String(chunk);
+    if (typeof cb === LOCAL_STR_FUNCTION) cb();
     return true;
   };
 
   console.log = (...args) => {
-    stdout += `${args.join(' ')}\n`;
+    stdout += `${args.join(LOCAL_STR_SPACE)}\n`;
   };
   console.error = (...args) => {
-    stderr += `${args.join(' ')}\n`;
+    stderr += `${args.join(LOCAL_STR_SPACE)}\n`;
   };
 
-  process.exit = (code = 0) => {
+  process.exit = (code = LOCAL_NUM_ZERO) => {
     throw new ExitError(code);
   };
 
@@ -63,14 +70,14 @@ async function run() {
   }
 
   const cap = captureOutput();
-  let exitCode = 0;
+  let exitCode = LOCAL_NUM_ZERO;
 
   try {
     const cli = new AdminCLI();
     await cli.start(args);
   } catch (err) {
     if (err instanceof ExitError) {
-      exitCode = err.code ?? 0;
+      exitCode = err.code ?? LOCAL_NUM_ZERO;
     } else {
       throw err;
     }
@@ -92,9 +99,9 @@ async function run() {
 
 run().catch((err) => {
   parentPort.postMessage({
-    stdout: '',
+    stdout: LOCAL_STR_EMPTY,
     stderr: err?.stack || String(err),
-    exitCode: 1,
+    exitCode: LOCAL_NUM_ONE,
     error: true,
   });
 });

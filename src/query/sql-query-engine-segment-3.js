@@ -1,6 +1,19 @@
 import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
 import {SQLQueryEngineSegment2} from './sql-query-engine-segment-2.js';
 
+const LOCAL_STR_FUNCTION = 'function';
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_NUM_ONE = 1;
+const LOCAL_STR_OBJECT = 'object';
+const LOCAL_STR_EMPTY = '';
+const LOCAL_STR_STRING = 'string';
+const LOCAL_NUM_1000 = 1000;
+const LOCAL_STR_G8F90 = 'dispatch_operations';
+const LOCAL_STR_S70AG = 'wait_replica_metadata';
+const LOCAL_STR_1MMFO = 'wait_minimum_replica_metadata';
+const LOCAL_STR_1AM9G = '; ';
+const LOCAL_STR_WARN = 'warn';
+
 const {
   CONTROL_PLANE_MUTATION_WORK_CLASS,
   NUM,
@@ -39,8 +52,8 @@ class SQLQueryEngineSegment3 extends SQLQueryEngineSegment2 {
 
     if (
       !this.rebalanceCoordinator ||
-      typeof this.rebalanceCoordinator.createOperation !== 'function' ||
-      typeof this.rebalanceCoordinator.executeOperation !== 'function'
+      typeof this.rebalanceCoordinator.createOperation !== LOCAL_STR_FUNCTION ||
+      typeof this.rebalanceCoordinator.executeOperation !== LOCAL_STR_FUNCTION
     ) {
       throw new Error(
         QUERY_ERROR_MSG.TABLE_PARTITION_PROVISION_COORDINATOR_REQUIRED,
@@ -48,12 +61,12 @@ class SQLQueryEngineSegment3 extends SQLQueryEngineSegment2 {
     }
 
     let targetReplicaCount =
-      explicitTargetNodeIds.length > 0 ?
+      explicitTargetNodeIds.length > LOCAL_NUM_ZERO ?
         Math.max(
-          1,
+          LOCAL_NUM_ONE,
           Math.min(requestedReplicaCount, explicitTargetNodeIds.length),
         ) :
-        Math.max(1, requestedReplicaCount);
+        Math.max(LOCAL_NUM_ONE, requestedReplicaCount);
     const hasExplicitMinimumRoutableReplicaCount =
       Number.isInteger(context?.minimumRoutableReplicaCount) &&
       context.minimumRoutableReplicaCount > 0;
@@ -84,7 +97,7 @@ class SQLQueryEngineSegment3 extends SQLQueryEngineSegment2 {
         this.tablePartitionProvisioningTimeoutMs,
       );
     let provisionTargetDiagnostics =
-      explicitTargetNodeIds.length === 0 ?
+      explicitTargetNodeIds.length === LOCAL_NUM_ZERO ?
         this.resolveProvisionTargetNodeIdsWithDiagnostics(targetReplicaCount)
           .diagnostics :
         null;
@@ -99,7 +112,7 @@ class SQLQueryEngineSegment3 extends SQLQueryEngineSegment2 {
     let provisioningRetryAfterMs = NUM.ZERO;
     let admissionConvergence =
       context?.admissionConvergence &&
-      typeof context.admissionConvergence === 'object' ?
+      typeof context.admissionConvergence === LOCAL_STR_OBJECT ?
         context.admissionConvergence :
         null;
 
@@ -117,7 +130,7 @@ class SQLQueryEngineSegment3 extends SQLQueryEngineSegment2 {
     }
 
     if (
-      explicitTargetNodeIds.length === 0 &&
+      explicitTargetNodeIds.length === LOCAL_NUM_ZERO &&
       enforceEveryProvisioningOperation &&
       (provisionTargetNodeIds.length < targetReplicaCount ||
         this.supportsProvisioningAdmissionPrecheck())
@@ -154,11 +167,11 @@ class SQLQueryEngineSegment3 extends SQLQueryEngineSegment2 {
 
       if (
         convergenceResult.nextAction === OWNER_CONTRACT_NEXT_ACTION.WAIT &&
-        maximumProvisionableReplicaCount > 0 &&
+        maximumProvisionableReplicaCount > LOCAL_NUM_ZERO &&
         maximumProvisionableReplicaCount < targetReplicaCount &&
         maximumProvisionableReplicaCount >= implicitFallbackMinimumReplicaCount
       ) {
-        targetReplicaCount = Math.max(1, maximumProvisionableReplicaCount);
+        targetReplicaCount = Math.max(LOCAL_NUM_ONE, maximumProvisionableReplicaCount);
         if (!hasExplicitMinimumRoutableReplicaCount) {
           minimumRoutableReplicaCount = Math.min(
             minimumRoutableReplicaCount,
@@ -229,12 +242,12 @@ class SQLQueryEngineSegment3 extends SQLQueryEngineSegment2 {
       Array.isArray(admissionConvergence.rejectedTargetNodePlans)
     ) {
       for (const targetNodeId of admissionConvergence.candidateTargetNodeIds) {
-        precheckedTargetNodeIds.add(String(targetNodeId || ''));
+        precheckedTargetNodeIds.add(String(targetNodeId || LOCAL_STR_EMPTY));
       }
       admittedTargetNodeIds.push(
         ...admissionConvergence.admittedTargetNodeIds.filter(
           (targetNodeId) =>
-            typeof targetNodeId === 'string' && targetNodeId.length > 0,
+            typeof targetNodeId === LOCAL_STR_STRING && targetNodeId.length > LOCAL_NUM_ZERO,
         ),
       );
       rejectedTargetNodePlans.push(
@@ -339,7 +352,7 @@ class SQLQueryEngineSegment3 extends SQLQueryEngineSegment2 {
         const operationCreatedAt = Number(operation?.createdAt);
         if (
           !Number.isFinite(operationCreatedAt) ||
-          operationCreatedAt >= operationPlanningStartedAtMs - 1000
+          operationCreatedAt >= operationPlanningStartedAtMs - LOCAL_NUM_1000
         ) {
           createdPlanningOperations.push(operation);
         }
@@ -370,12 +383,12 @@ class SQLQueryEngineSegment3 extends SQLQueryEngineSegment2 {
     if (maximumProvisionableReplicaCount < minimumRoutableReplicaCount) {
       if (
         !hasExplicitMinimumRoutableReplicaCount &&
-        maximumProvisionableReplicaCount > 0 &&
+        maximumProvisionableReplicaCount > LOCAL_NUM_ZERO &&
         maximumProvisionableReplicaCount >= implicitFallbackMinimumReplicaCount
       ) {
         const previousTargetReplicaCount = targetReplicaCount;
         const previousMinimumRoutableReplicaCount = minimumRoutableReplicaCount;
-        targetReplicaCount = Math.max(1, maximumProvisionableReplicaCount);
+        targetReplicaCount = Math.max(LOCAL_NUM_ONE, maximumProvisionableReplicaCount);
         minimumRoutableReplicaCount = targetReplicaCount;
         enforceEveryProvisioningOperation =
           minimumRoutableReplicaCount >= targetReplicaCount;
@@ -395,7 +408,7 @@ class SQLQueryEngineSegment3 extends SQLQueryEngineSegment2 {
                   operation?.targetNodeId || operation?.nodeId || null,
               )
               .filter(
-                (nodeId) => typeof nodeId === 'string' && nodeId.length > 0,
+                (nodeId) => typeof nodeId === LOCAL_STR_STRING && nodeId.length > LOCAL_NUM_ZERO,
               ),
             rejectedTargetNodePlans,
           },
@@ -418,7 +431,7 @@ class SQLQueryEngineSegment3 extends SQLQueryEngineSegment2 {
                 operation?.targetNodeId || operation?.nodeId || null,
             )
             .filter(
-              (nodeId) => typeof nodeId === 'string' && nodeId.length > 0,
+              (nodeId) => typeof nodeId === LOCAL_STR_STRING && nodeId.length > LOCAL_NUM_ZERO,
             ),
           rejectedTargetNodePlans,
           maximumProvisionableReplicaCount,
@@ -443,7 +456,7 @@ class SQLQueryEngineSegment3 extends SQLQueryEngineSegment2 {
       candidateTargetNodeCount: provisionTargetNodeIds.length,
       rejectedTargetNodeCount: rejectedTargetNodePlans.length,
       plannedOperationCount: plannedOperations.length,
-      phase: 'dispatch_operations',
+      phase: LOCAL_STR_G8F90,
       remainingBudgetMs: getRemainingBudgetMs(timeoutBudget, {
         now: this.nowFn,
       }),
@@ -486,8 +499,8 @@ class SQLQueryEngineSegment3 extends SQLQueryEngineSegment2 {
           bootstrapPartitionMetadata;
       }
       if (
-        typeof this.rebalanceCoordinator.dispatchOperation === 'function' &&
-        typeof this.rebalanceCoordinator.persistOperationUpdate === 'function'
+        typeof this.rebalanceCoordinator.dispatchOperation === LOCAL_STR_FUNCTION &&
+        typeof this.rebalanceCoordinator.persistOperationUpdate === LOCAL_STR_FUNCTION
       ) {
         await this.rebalanceCoordinator.persistOperationUpdate(operation);
       }
@@ -511,17 +524,17 @@ class SQLQueryEngineSegment3 extends SQLQueryEngineSegment2 {
       }
 
       const replicaId = operation?.replicaId || operation?.replica_id || null;
-      if (typeof replicaId === 'string' && replicaId.length > 0) {
+      if (typeof replicaId === LOCAL_STR_STRING && replicaId.length > LOCAL_NUM_ZERO) {
         metadataWaitReplicaIds.push(replicaId);
       }
     }
 
     const uniqueMetadataWaitReplicaIds = [...new Set(metadataWaitReplicaIds)];
-    if (uniqueMetadataWaitReplicaIds.length > 0) {
+    if (uniqueMetadataWaitReplicaIds.length > LOCAL_NUM_ZERO) {
       if (enforceEveryProvisioningOperation) {
         this.logger.debug(QUERY_LOG_MSG.TABLE_PARTITION_PROVISION_START, {
           partitionId,
-          phase: 'wait_replica_metadata',
+          phase: LOCAL_STR_S70AG,
           replicaIds: uniqueMetadataWaitReplicaIds,
           remainingBudgetMs: getRemainingBudgetMs(timeoutBudget, {
             now: this.nowFn,
@@ -535,7 +548,7 @@ class SQLQueryEngineSegment3 extends SQLQueryEngineSegment2 {
       } else {
         this.logger.debug(QUERY_LOG_MSG.TABLE_PARTITION_PROVISION_START, {
           partitionId,
-          phase: 'wait_minimum_replica_metadata',
+          phase: LOCAL_STR_1MMFO,
           replicaIds: uniqueMetadataWaitReplicaIds,
           minimumRoutableReplicaCount,
           remainingBudgetMs: getRemainingBudgetMs(timeoutBudget, {
@@ -650,11 +663,11 @@ class SQLQueryEngineSegment3 extends SQLQueryEngineSegment2 {
    * @private
    */
   isProvisioningAdmissionDeniedError(error) {
-    if (!error || typeof error !== 'object') {
+    if (!error || typeof error !== LOCAL_STR_OBJECT) {
       return false;
     }
     const admissionResult = error.admissionResult;
-    if (!admissionResult || typeof admissionResult !== 'object') {
+    if (!admissionResult || typeof admissionResult !== LOCAL_STR_OBJECT) {
       return false;
     }
     if (admissionResult.allowed === true) {
@@ -753,7 +766,7 @@ class SQLQueryEngineSegment3 extends SQLQueryEngineSegment2 {
   summarizeProvisioningTargetRejections(rejectedTargetNodePlans) {
     if (
       !Array.isArray(rejectedTargetNodePlans) ||
-      rejectedTargetNodePlans.length === 0
+      rejectedTargetNodePlans.length === LOCAL_NUM_ZERO
     ) {
       return PROVISIONING_REJECTION_SUMMARY_NONE;
     }
@@ -793,8 +806,8 @@ class SQLQueryEngineSegment3 extends SQLQueryEngineSegment2 {
       }
     }
 
-    return summaryEntries.length > 0 ?
-      summaryEntries.join('; ') :
+    return summaryEntries.length > LOCAL_NUM_ZERO ?
+      summaryEntries.join(LOCAL_STR_1AM9G) :
       PROVISIONING_REJECTION_SUMMARY_NONE;
   }
 
@@ -832,10 +845,10 @@ class SQLQueryEngineSegment3 extends SQLQueryEngineSegment2 {
     );
     throw new Error(
       QUERY_ERROR_MSG.TABLE_PARTITION_PROVISION_INSUFFICIENT_TARGETS_PREFIX +
-        String(details?.partitionId || '') +
-        `: required=${details?.minimumRoutableReplicaCount || 0}, ` +
-        `provisionable=${details?.maximumProvisionableReplicaCount || 0}, ` +
-        `target=${details?.targetReplicaCount || 0}, ` +
+        String(details?.partitionId || LOCAL_STR_EMPTY) +
+        `: required=${details?.minimumRoutableReplicaCount || LOCAL_NUM_ZERO}, ` +
+        `provisionable=${details?.maximumProvisionableReplicaCount || LOCAL_NUM_ZERO}, ` +
+        `target=${details?.targetReplicaCount || LOCAL_NUM_ZERO}, ` +
         `rejected=${rejectionSummary}`,
     );
   }
@@ -849,12 +862,12 @@ class SQLQueryEngineSegment3 extends SQLQueryEngineSegment2 {
    * @private
    */
   async abortProvisioningPlanningOperations(partitionId, operations, reason) {
-    if (!Array.isArray(operations) || operations.length === 0) {
+    if (!Array.isArray(operations) || operations.length === LOCAL_NUM_ZERO) {
       return;
     }
     if (
       !this.rebalanceCoordinator ||
-      typeof this.rebalanceCoordinator.failOperation !== 'function'
+      typeof this.rebalanceCoordinator.failOperation !== LOCAL_STR_FUNCTION
     ) {
       return;
     }
@@ -866,12 +879,12 @@ class SQLQueryEngineSegment3 extends SQLQueryEngineSegment2 {
     });
 
     for (const operation of operations) {
-      if (!operation || typeof operation !== 'object') {
+      if (!operation || typeof operation !== LOCAL_STR_OBJECT) {
         continue;
       }
       try {
         await this.rebalanceCoordinator.failOperation(operation, reason, {
-          logLevel: 'warn',
+          logLevel: LOCAL_STR_WARN,
         });
       } catch (error) {
         this.logger.error(
@@ -895,7 +908,7 @@ class SQLQueryEngineSegment3 extends SQLQueryEngineSegment2 {
   supportsProvisioningAdmissionPrecheck() {
     return (
       !!this.rebalanceCoordinator &&
-      typeof this.rebalanceCoordinator.checkProvisioningAdmission === 'function'
+      typeof this.rebalanceCoordinator.checkProvisioningAdmission === LOCAL_STR_FUNCTION
     );
   }
 

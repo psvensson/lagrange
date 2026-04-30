@@ -8,6 +8,7 @@ const {
   OperationType,
   REBALANCE_COORDINATOR_ERROR_MSG,
   REBALANCE_COORDINATOR_LOG_MSG,
+  REPLICA_OPERATION_DISPATCH_TIMEOUT_MS,
   ReplicaStatus,
   SAFETY_DEFERRED_RETRY_DELAY_MS,
   TIMEOUT_BUDGET_DEFAULT,
@@ -62,6 +63,11 @@ class OperationWorkflowOwnerSegment1 {
     this.lastEmptyIncompleteOperationQueryAtMs = NUM.ZERO;
     this.incompleteOperationQueryEmptyBackoffMs =
       options.incompleteOperationQueryEmptyBackoffMs || NUM.ZERO;
+    this.replicaOperationDispatchTimeoutMs =
+      Number.isFinite(options.replicaOperationDispatchTimeoutMs) &&
+      options.replicaOperationDispatchTimeoutMs > NUM.ZERO ?
+        Math.floor(options.replicaOperationDispatchTimeoutMs) :
+        REPLICA_OPERATION_DISPATCH_TIMEOUT_MS;
     this.safetyDeferredLogStateByOperationId = new Map();
     this.safetyDeferredRetryTimerByOperationId = new Map();
     this.observedProgressRetryTimerByOperationId = new Map();
@@ -619,6 +625,25 @@ class OperationWorkflowOwnerSegment1 {
   }
 
   /**
+   * @param {Object|null} visibilityObservation
+   * @param {Object|null} fallbackOperation
+   * @return {Object|null}
+   * @private
+   */
+  resolveDeferredRetryVisibleOperation(
+    visibilityObservation,
+    fallbackOperation,
+  ) {
+    if (visibilityObservation?.operation) {
+      return visibilityObservation.operation;
+    }
+    if (visibilityObservation?.deferredOutcome && fallbackOperation) {
+      return this.cloneOperationSnapshot(fallbackOperation);
+    }
+    return null;
+  }
+
+  /**
    * @param {Object} operation
    * @param {Error|Object} error
    */
@@ -696,7 +721,10 @@ class OperationWorkflowOwnerSegment1 {
                 allowPriorityRecoveryDeferredVisibility: true,
               },
             );
-          const currentOperation = visibilityObservation?.operation || null;
+          const currentOperation = this.resolveDeferredRetryVisibleOperation(
+            visibilityObservation,
+            operation,
+          );
           if (
             !currentOperation ||
             this.repository.isOperationTerminal(currentOperation) ||
@@ -724,6 +752,7 @@ class OperationWorkflowOwnerSegment1 {
             workflowStep: operation?.workflowStep || null,
             updatedAt: operation?.updatedAt,
             createdAt: operation?.createdAt,
+            operationSnapshot: operation,
           })
         ) {
           return;

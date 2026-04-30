@@ -9,6 +9,8 @@ import {
 import {RAFT_ROLE} from '../raft/constants.js';
 import {normalizePublishedRaftRole} from '../raft/published-raft-role.js';
 
+const LOCAL_NUM_ZERO = 0;
+
 const MESSAGE_GROUP_SERVICE_ROW_OWNER_ERROR = Object.freeze({
   GROUP_ID_REQUIRED: 'MessageGroupServiceRowOwner requires groupId',
   NODE_ID_REQUIRED: 'MessageGroupServiceRowOwner requires nodeId',
@@ -28,7 +30,7 @@ const SERVICE_ROW_UPDATE_OPTION = Object.freeze({
 });
 
 function assertRequiredString(value, errorMessage) {
-  if (typeof value !== TYPEOF.STRING || value.length === 0) {
+  if (typeof value !== TYPEOF.STRING || value.length === LOCAL_NUM_ZERO) {
     throw new Error(errorMessage);
   }
 }
@@ -198,7 +200,7 @@ class MessageGroupServiceRowOwner {
       service_id: replicaId,
       service_type: SERVICE_TYPE.MESSAGE_GROUP,
     };
-    if (typeof nodeId === TYPEOF.STRING && nodeId.length > 0) {
+    if (typeof nodeId === TYPEOF.STRING && nodeId.length > LOCAL_NUM_ZERO) {
       whereClause.node_id = nodeId;
     }
 

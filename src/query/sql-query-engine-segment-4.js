@@ -1,10 +1,22 @@
 import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
 import {SQLQueryEngineSegment3} from './sql-query-engine-segment-3.js';
 
+const LOCAL_STR_FUNCTION = 'function';
+const LOCAL_STR_STEADY_STATE = 'steady_state';
+const LOCAL_STR_6ABQV = 'table_partition_metadata_wait';
+const LOCAL_NUM_ONE = 1;
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_STR_164LE = 'partition_routing_wait';
+const LOCAL_STR_GC3QE = 'partition_leader_wait';
+const LOCAL_STR_STRING = 'string';
+const LOCAL_STR_AVAILABLE = 'available';
+const LOCAL_STR_OBJECT = 'object';
+
 const {
   COLUMN,
   DEFAULT_PARTITION_VERSION,
   LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY,
+  NUM,
   PARTITION_SERVICE_MESSAGE_TYPE,
   PARTITION_TRANSITION_METADATA_FIELD,
   QUERY_ERROR_MSG,
@@ -32,9 +44,20 @@ const AUTHORITATIVE_ROUTING_OVERLAY_CACHE_SERVICE_STATE = Object.freeze({
   MASKED: 'masked',
 });
 
+const AUTHORITATIVE_ROUTING_OVERLAY_SERVICE_COVERAGE_STATE = Object.freeze({
+  COMPLETE: 'complete',
+  INCOMPLETE: 'incomplete',
+  UNKNOWN: 'unknown',
+});
+
+const AUTHORITATIVE_ROUTING_OVERLAY_PARTITION_FIELD = Object.freeze({
+  REPLICA_COUNT: 'replica_count',
+  REPLICA_COUNT_CAMEL: 'replicaCount',
+});
+
 class SQLQueryEngineSegment4 extends SQLQueryEngineSegment3 {
   listManagedSplitPartitions() {
-    if (!this.systemCache || typeof this.systemCache.getAll !== 'function') {
+    if (!this.systemCache || typeof this.systemCache.getAll !== LOCAL_STR_FUNCTION) {
       return [];
     }
 
@@ -112,7 +135,7 @@ class SQLQueryEngineSegment4 extends SQLQueryEngineSegment3 {
   async executeManagedSplit(partitionId, executionOptions = {}) {
     if (
       !this.managedSplitWorkflow ||
-      typeof this.managedSplitWorkflow.execute !== 'function'
+      typeof this.managedSplitWorkflow.execute !== LOCAL_STR_FUNCTION
     ) {
       throw new Error(QUERY_ERROR_MSG.TABLE_SPLIT_START_FAILED);
     }
@@ -135,7 +158,7 @@ class SQLQueryEngineSegment4 extends SQLQueryEngineSegment3 {
     primaryKeyColumn,
   ) {
     const manager = this.partitionSplitMergeManager;
-    if (!manager || typeof manager.splitPartition !== 'function') {
+    if (!manager || typeof manager.splitPartition !== LOCAL_STR_FUNCTION) {
       throw new Error(QUERY_ERROR_MSG.TABLE_SPLIT_START_FAILED);
     }
 
@@ -268,7 +291,7 @@ class SQLQueryEngineSegment4 extends SQLQueryEngineSegment3 {
             tableId,
             true,
             {
-              fallbackPhase: 'steady_state',
+              fallbackPhase: LOCAL_STR_STEADY_STATE,
               timeoutMs: waitBudgetMs,
             },
           ),
@@ -286,7 +309,7 @@ class SQLQueryEngineSegment4 extends SQLQueryEngineSegment3 {
       {
         timeoutBudget: effectiveBudget,
         classification: TIMEOUT_BUDGET_CLASSIFICATION.CACHE_VISIBILITY_TIMEOUT,
-        nestedOperation: 'table_partition_metadata_wait',
+        nestedOperation: LOCAL_STR_6ABQV,
       },
     );
   }
@@ -300,7 +323,7 @@ class SQLQueryEngineSegment4 extends SQLQueryEngineSegment3 {
   async waitForRoutablePartitionService(partitionId, timeoutBudget = null) {
     await this.waitForRoutablePartitionServiceCount(
       partitionId,
-      1,
+      LOCAL_NUM_ONE,
       timeoutBudget,
     );
   }
@@ -346,7 +369,7 @@ class SQLQueryEngineSegment4 extends SQLQueryEngineSegment3 {
         replicaId,
         true,
         {
-          fallbackPhase: 'steady_state',
+          fallbackPhase: LOCAL_STR_STEADY_STATE,
           timeoutMs: waitBudgetMs,
         },
       );
@@ -393,7 +416,7 @@ class SQLQueryEngineSegment4 extends SQLQueryEngineSegment3 {
         ),
       ),
     ];
-    if (uniqueReplicaIds.length === 0) {
+    if (uniqueReplicaIds.length === LOCAL_NUM_ZERO) {
       return;
     }
 
@@ -467,7 +490,7 @@ class SQLQueryEngineSegment4 extends SQLQueryEngineSegment3 {
       {
         timeoutBudget: effectiveBudget,
         classification: TIMEOUT_BUDGET_CLASSIFICATION.PUBLICATION_WAIT_TIMEOUT,
-        nestedOperation: 'partition_routing_wait',
+        nestedOperation: LOCAL_STR_164LE,
       },
     );
   }
@@ -487,9 +510,9 @@ class SQLQueryEngineSegment4 extends SQLQueryEngineSegment3 {
     if (
       !partitionId ||
       !this.queryExecutor ||
-      typeof this.queryExecutor.getPartitionRoutingSnapshot !== 'function' ||
+      typeof this.queryExecutor.getPartitionRoutingSnapshot !== LOCAL_STR_FUNCTION ||
       typeof this.queryExecutor.maybeAwaitDeniedPartitionRoutingRepair !==
-        'function'
+        LOCAL_STR_FUNCTION
     ) {
       return false;
     }
@@ -564,7 +587,7 @@ class SQLQueryEngineSegment4 extends SQLQueryEngineSegment3 {
       {
         timeoutBudget: effectiveBudget,
         classification: TIMEOUT_BUDGET_CLASSIFICATION.PUBLICATION_WAIT_TIMEOUT,
-        nestedOperation: 'partition_leader_wait',
+        nestedOperation: LOCAL_STR_GC3QE,
       },
     );
   }
@@ -580,20 +603,20 @@ class SQLQueryEngineSegment4 extends SQLQueryEngineSegment3 {
       return false;
     }
 
-    if (typeof this.systemCache.has === 'function') {
+    if (typeof this.systemCache.has === LOCAL_STR_FUNCTION) {
       return this.systemCache.has(TABLES.TABLES, tableId);
     }
 
-    if (typeof this.systemCache.get === 'function') {
+    if (typeof this.systemCache.get === LOCAL_STR_FUNCTION) {
       return Boolean(this.systemCache.get(TABLES.TABLES, tableId));
     }
 
-    if (typeof this.systemCache.filter === 'function') {
+    if (typeof this.systemCache.filter === LOCAL_STR_FUNCTION) {
       const matches = this.systemCache.filter(
         TABLES.TABLES,
         (row) => row.table_id === tableId,
       );
-      return Array.isArray(matches) && matches.length > 0;
+      return Array.isArray(matches) && matches.length > LOCAL_NUM_ZERO;
     }
 
     return false;
@@ -610,24 +633,24 @@ class SQLQueryEngineSegment4 extends SQLQueryEngineSegment3 {
       return false;
     }
 
-    if (typeof this.systemCache.has === 'function') {
+    if (typeof this.systemCache.has === LOCAL_STR_FUNCTION) {
       if (this.systemCache.has(TABLES.SERVICES, replicaId)) {
         return true;
       }
     }
 
-    if (typeof this.systemCache.get === 'function') {
+    if (typeof this.systemCache.get === LOCAL_STR_FUNCTION) {
       if (this.systemCache.get(TABLES.SERVICES, replicaId)) {
         return true;
       }
     }
 
-    if (typeof this.systemCache.filter === 'function') {
+    if (typeof this.systemCache.filter === LOCAL_STR_FUNCTION) {
       const matches = this.systemCache.filter(
         TABLES.SERVICES,
         (row) => row.service_id === replicaId || row.replica_id === replicaId,
       );
-      if (Array.isArray(matches) && matches.length > 0) {
+      if (Array.isArray(matches) && matches.length > LOCAL_NUM_ZERO) {
         return true;
       }
     }
@@ -661,22 +684,22 @@ class SQLQueryEngineSegment4 extends SQLQueryEngineSegment3 {
     const matchesReplicaId = (row) =>
       row?.service_id === replicaId || row?.replica_id === replicaId;
 
-    if (typeof this.systemCache.get === 'function') {
+    if (typeof this.systemCache.get === LOCAL_STR_FUNCTION) {
       const row = this.systemCache.get(TABLES.SERVICES, replicaId);
       if (isRoutableService(row)) {
         return true;
       }
     }
 
-    if (typeof this.systemCache.filter === 'function') {
+    if (typeof this.systemCache.filter === LOCAL_STR_FUNCTION) {
       const matches = this.systemCache.filter(
         TABLES.SERVICES,
         (row) => matchesReplicaId(row) && isRoutableService(row),
       );
-      return Array.isArray(matches) && matches.length > 0;
+      return Array.isArray(matches) && matches.length > LOCAL_NUM_ZERO;
     }
 
-    if (typeof this.systemCache.getAll === 'function') {
+    if (typeof this.systemCache.getAll === LOCAL_STR_FUNCTION) {
       const rows = this.systemCache.getAll(TABLES.SERVICES);
       if (!Array.isArray(rows)) {
         return false;
@@ -696,7 +719,7 @@ class SQLQueryEngineSegment4 extends SQLQueryEngineSegment3 {
    * @private
    */
   hasRoutablePartitionService(partitionId) {
-    return this.getRoutablePartitionServiceNodeIds(partitionId).length > 0;
+    return this.getRoutablePartitionServiceNodeIds(partitionId).length > LOCAL_NUM_ZERO;
   }
 
   /**
@@ -711,7 +734,7 @@ class SQLQueryEngineSegment4 extends SQLQueryEngineSegment3 {
   ) {
     if (
       !this.queryExecutor ||
-      typeof this.queryExecutor.getRoutablePartitionServices !== 'function'
+      typeof this.queryExecutor.getRoutablePartitionServices !== LOCAL_STR_FUNCTION
     ) {
       return [];
     }
@@ -722,7 +745,7 @@ class SQLQueryEngineSegment4 extends SQLQueryEngineSegment3 {
     const nodeIds = new Set();
     for (const service of services) {
       const nodeId = service?.node_id || service?.nodeId || null;
-      if (typeof nodeId === 'string' && nodeId.length > 0) {
+      if (typeof nodeId === LOCAL_STR_STRING && nodeId.length > LOCAL_NUM_ZERO) {
         nodeIds.add(nodeId);
       }
     }
@@ -789,7 +812,7 @@ class SQLQueryEngineSegment4 extends SQLQueryEngineSegment3 {
         if (primaryPartition) {
           return primaryPartition;
         }
-        return typeof secondaryOverlay.getPartitionById === 'function' ?
+        return typeof secondaryOverlay.getPartitionById === LOCAL_STR_FUNCTION ?
           secondaryOverlay.getPartitionById(partitionId) :
           null;
       },
@@ -798,7 +821,7 @@ class SQLQueryEngineSegment4 extends SQLQueryEngineSegment3 {
         for (const overlay of [primaryOverlay, secondaryOverlay]) {
           if (
             !overlay ||
-            typeof overlay.shouldMaskCacheServicesForPartition !== 'function'
+            typeof overlay.shouldMaskCacheServicesForPartition !== LOCAL_STR_FUNCTION
           ) {
             continue;
           }
@@ -812,7 +835,7 @@ class SQLQueryEngineSegment4 extends SQLQueryEngineSegment3 {
         for (const overlay of [primaryOverlay, secondaryOverlay]) {
           if (
             !overlay ||
-            typeof overlay.refreshPartitionRouting !== 'function'
+            typeof overlay.refreshPartitionRouting !== LOCAL_STR_FUNCTION
           ) {
             continue;
           }
@@ -838,7 +861,7 @@ class SQLQueryEngineSegment4 extends SQLQueryEngineSegment3 {
   getAuthoritativeRoutingOverlayPartition(partitionId) {
     const overlayState =
       this.getAuthoritativeRoutingOverlayEntryState(partitionId);
-    return overlayState.partitionState === 'available' ?
+    return overlayState.partitionState === LOCAL_STR_AVAILABLE ?
       overlayState.partition :
       null;
   }
@@ -876,7 +899,7 @@ class SQLQueryEngineSegment4 extends SQLQueryEngineSegment3 {
    */
   getAuthoritativeRoutingOverlayEntryState(partitionId) {
     const entry = this.authoritativeRoutingOverlayEntries.get(partitionId);
-    if (!entry || typeof entry !== 'object') {
+    if (!entry || typeof entry !== LOCAL_STR_OBJECT) {
       return Object.freeze({
         state: AUTHORITATIVE_ROUTING_OVERLAY_STATE.MISSING,
         partitionState:
@@ -899,13 +922,14 @@ class SQLQueryEngineSegment4 extends SQLQueryEngineSegment3 {
         services,
       });
     }
-    if (entry.partition && typeof entry.partition === 'object') {
+    if (entry.partition && typeof entry.partition === LOCAL_STR_OBJECT) {
       return Object.freeze({
         state: AUTHORITATIVE_ROUTING_OVERLAY_STATE.AVAILABLE,
         partitionState:
           AUTHORITATIVE_ROUTING_OVERLAY_PARTITION_STATE.AVAILABLE,
         partition: entry.partition,
         cacheServiceState:
+          entry.cacheServiceState ||
           AUTHORITATIVE_ROUTING_OVERLAY_CACHE_SERVICE_STATE.MASKED,
         services,
       });
@@ -915,9 +939,86 @@ class SQLQueryEngineSegment4 extends SQLQueryEngineSegment3 {
       partitionState:
         AUTHORITATIVE_ROUTING_OVERLAY_PARTITION_STATE.UNAVAILABLE,
       cacheServiceState:
+        entry.cacheServiceState ||
         AUTHORITATIVE_ROUTING_OVERLAY_CACHE_SERVICE_STATE.MASKED,
       services,
     });
+  }
+
+  /**
+   * Resolve whether an authoritative service snapshot is complete enough to
+   * mask cached service rows for the same partition.
+   * @param {Object|null} partitionRow
+   * @param {Array<Object>} serviceRows
+   * @return {{state:string, expectedReplicaCount:number|null,
+   *   observedServiceCount:number}}
+   * @private
+   */
+  resolveAuthoritativeRoutingOverlayServiceCoverage(
+    partitionRow,
+    serviceRows,
+  ) {
+    const observedServiceCount = Array.isArray(serviceRows) ?
+      serviceRows.length :
+      NUM.ZERO;
+    const partitionReplicaCount =
+      partitionRow?.[
+        AUTHORITATIVE_ROUTING_OVERLAY_PARTITION_FIELD.REPLICA_COUNT
+      ] ??
+      partitionRow?.[
+        AUTHORITATIVE_ROUTING_OVERLAY_PARTITION_FIELD.REPLICA_COUNT_CAMEL
+      ];
+    const expectedReplicaCount = Number(
+      partitionReplicaCount,
+    );
+    if (
+      !Number.isFinite(expectedReplicaCount) ||
+      expectedReplicaCount <= NUM.ZERO
+    ) {
+      return Object.freeze({
+        state: AUTHORITATIVE_ROUTING_OVERLAY_SERVICE_COVERAGE_STATE.UNKNOWN,
+        expectedReplicaCount: NUM.ZERO,
+        observedServiceCount,
+      });
+    }
+    const normalizedExpectedReplicaCount = Math.floor(expectedReplicaCount);
+    if (observedServiceCount >= normalizedExpectedReplicaCount) {
+      return Object.freeze({
+        state: AUTHORITATIVE_ROUTING_OVERLAY_SERVICE_COVERAGE_STATE.COMPLETE,
+        expectedReplicaCount: normalizedExpectedReplicaCount,
+        observedServiceCount,
+      });
+    }
+    return Object.freeze({
+      state: AUTHORITATIVE_ROUTING_OVERLAY_SERVICE_COVERAGE_STATE.INCOMPLETE,
+      expectedReplicaCount: normalizedExpectedReplicaCount,
+      observedServiceCount,
+    });
+  }
+
+  /**
+   * Resolve the cache masking state for one authoritative routing refresh.
+   * @param {Object|null} partitionRow
+   * @param {Array<Object>} serviceRows
+   * @return {string}
+   * @private
+   */
+  resolveAuthoritativeRoutingOverlayCacheServiceState(
+    partitionRow,
+    serviceRows,
+  ) {
+    const serviceCoverage =
+      this.resolveAuthoritativeRoutingOverlayServiceCoverage(
+        partitionRow,
+        serviceRows,
+      );
+    if (
+      serviceCoverage.state ===
+      AUTHORITATIVE_ROUTING_OVERLAY_SERVICE_COVERAGE_STATE.INCOMPLETE
+    ) {
+      return AUTHORITATIVE_ROUTING_OVERLAY_CACHE_SERVICE_STATE.ELIGIBLE;
+    }
+    return AUTHORITATIVE_ROUTING_OVERLAY_CACHE_SERVICE_STATE.MASKED;
   }
 
   /**
@@ -930,7 +1031,7 @@ class SQLQueryEngineSegment4 extends SQLQueryEngineSegment3 {
    * @private
    */
   async refreshAuthoritativeRoutingOverlay(partitionId, options = {}) {
-    if (typeof partitionId !== 'string' || partitionId.length === 0) {
+    if (typeof partitionId !== LOCAL_STR_STRING || partitionId.length === LOCAL_NUM_ZERO) {
       return false;
     }
 
@@ -998,6 +1099,11 @@ class SQLQueryEngineSegment4 extends SQLQueryEngineSegment3 {
           state: AUTHORITATIVE_ROUTING_OVERLAY_STATE.AVAILABLE,
           partition: partitionRows[0] || null,
           services: serviceRows,
+          cacheServiceState:
+            this.resolveAuthoritativeRoutingOverlayCacheServiceState(
+              partitionRows[0] || null,
+              serviceRows,
+            ),
         };
 
     this.authoritativeRoutingOverlayEntries.set(partitionId, overlayEntry);
@@ -1015,7 +1121,7 @@ class SQLQueryEngineSegment4 extends SQLQueryEngineSegment3 {
     if (!partitionId || !this.systemCache) {
       return [];
     }
-    if (typeof this.systemCache.filter === 'function') {
+    if (typeof this.systemCache.filter === LOCAL_STR_FUNCTION) {
       const rows = this.systemCache.filter(
         TABLES.SERVICES,
         (service) =>
@@ -1024,7 +1130,7 @@ class SQLQueryEngineSegment4 extends SQLQueryEngineSegment3 {
       );
       return Array.isArray(rows) ? rows : [];
     }
-    if (typeof this.systemCache.getAll === 'function') {
+    if (typeof this.systemCache.getAll === LOCAL_STR_FUNCTION) {
       const rows = this.systemCache.getAll(TABLES.SERVICES);
       if (!Array.isArray(rows)) {
         return [];
@@ -1049,24 +1155,24 @@ class SQLQueryEngineSegment4 extends SQLQueryEngineSegment3 {
     if (!partitionId || !this.systemCache) {
       return null;
     }
-    if (typeof this.systemCache.get === 'function') {
+    if (typeof this.systemCache.get === LOCAL_STR_FUNCTION) {
       const record = this.systemCache.get(TABLES.PARTITIONS, partitionId);
       if (record) {
         return record;
       }
     }
-    if (typeof this.systemCache.filter === 'function') {
+    if (typeof this.systemCache.filter === LOCAL_STR_FUNCTION) {
       const records = this.systemCache.filter(
         TABLES.PARTITIONS,
         (partition) =>
           partition?.partition_id === partitionId ||
           partition?.partitionId === partitionId,
       );
-      if (Array.isArray(records) && records.length > 0) {
-        return records[0];
+      if (Array.isArray(records) && records.length > LOCAL_NUM_ZERO) {
+        return records[LOCAL_NUM_ZERO];
       }
     }
-    if (typeof this.systemCache.getAll === 'function') {
+    if (typeof this.systemCache.getAll === LOCAL_STR_FUNCTION) {
       const records = this.systemCache.getAll(TABLES.PARTITIONS) || [];
       return (
         records.find(

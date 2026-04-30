@@ -1,6 +1,8 @@
 import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
 import {RebalanceCoordinatorSegment3} from './rebalance-coordinator-segment-3.js';
 
+const LOCAL_STR_FUNCTION = 'function';
+
 const {
   CONTROL_PLANE_READINESS_DIMENSION,
   DEFAULT_AMPLIFICATION_FACTOR,
@@ -505,7 +507,7 @@ class RebalanceCoordinatorSegment4 extends RebalanceCoordinatorSegment3 {
     assertCritical(
       this.storageAccountingService &&
         typeof this.storageAccountingService.estimateReplicaBytes ===
-          'function',
+          LOCAL_STR_FUNCTION,
       REBALANCE_COORDINATOR_ERROR_MSG.STORAGE_ACCOUNTING_REQUIRED,
     );
 

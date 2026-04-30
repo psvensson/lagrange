@@ -1,6 +1,13 @@
 import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
 import {SQLQueryEngineSegment4} from './sql-query-engine-segment-4.js';
 
+const LOCAL_STR_FUNCTION = 'function';
+const LOCAL_STR_OBJECT = 'object';
+const LOCAL_STR_STRING = 'string';
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_NUM_ONE = 1;
+const LOCAL_NUM_THREE = 3;
+
 const {
   AddressManager,
   BOOTSTRAP_ROUTING_OVERLAY_ENTRY_STATE,
@@ -36,16 +43,16 @@ class SQLQueryEngineSegment5 extends SQLQueryEngineSegment4 {
     if (
       bootstrapTopologySnapshotOwner &&
       typeof bootstrapTopologySnapshotOwner.resolveCanonicalPartitionLeaderIdentity ===
-        'function'
+        LOCAL_STR_FUNCTION
     ) {
       const leaderIdentity =
         bootstrapTopologySnapshotOwner.resolveCanonicalPartitionLeaderIdentity(
           partitionId,
           serviceRows,
         );
-      if (leaderIdentity && typeof leaderIdentity === 'object') {
+      if (leaderIdentity && typeof leaderIdentity === LOCAL_STR_OBJECT) {
         const leaderNodeId = leaderIdentity.leaderNodeId;
-        return typeof leaderNodeId === 'string' && leaderNodeId.length > 0 ?
+        return typeof leaderNodeId === LOCAL_STR_STRING && leaderNodeId.length > LOCAL_NUM_ZERO ?
           leaderNodeId :
           null;
       }
@@ -53,21 +60,21 @@ class SQLQueryEngineSegment5 extends SQLQueryEngineSegment4 {
     if (
       bootstrapTopologySnapshotOwner &&
       typeof bootstrapTopologySnapshotOwner.resolveCanonicalPartitionLeaderNodeId ===
-        'function'
+        LOCAL_STR_FUNCTION
     ) {
       const leaderNodeId =
         bootstrapTopologySnapshotOwner.resolveCanonicalPartitionLeaderNodeId(
           partitionId,
         );
-      return typeof leaderNodeId === 'string' && leaderNodeId.length > 0 ?
+      return typeof leaderNodeId === LOCAL_STR_STRING && leaderNodeId.length > LOCAL_NUM_ZERO ?
         leaderNodeId :
         null;
     }
     const cachedPartition = this.getCachedPartitionRecord(partitionId);
     const cachedLeaderNodeId =
       cachedPartition?.leader_node_id || cachedPartition?.leaderNodeId || null;
-    return typeof cachedLeaderNodeId === 'string' &&
-      cachedLeaderNodeId.length > 0 ?
+    return typeof cachedLeaderNodeId === LOCAL_STR_STRING &&
+      cachedLeaderNodeId.length > LOCAL_NUM_ZERO ?
       cachedLeaderNodeId :
       null;
   }
@@ -104,7 +111,7 @@ class SQLQueryEngineSegment5 extends SQLQueryEngineSegment4 {
    * @private
    */
   getCachedLeaderAddressedPartitionServiceRows(partitionId, leaderNodeId) {
-    if (typeof leaderNodeId !== 'string' || leaderNodeId.length === 0) {
+    if (typeof leaderNodeId !== LOCAL_STR_STRING || leaderNodeId.length === LOCAL_NUM_ZERO) {
       return [];
     }
     return this.getPartitionServiceRows(partitionId).filter((service) => {
@@ -164,7 +171,7 @@ class SQLQueryEngineSegment5 extends SQLQueryEngineSegment4 {
    * @private
    */
   isBootstrapRoutingOverlayEntryExpired(entry) {
-    if (!entry || typeof entry !== 'object') {
+    if (!entry || typeof entry !== LOCAL_STR_OBJECT) {
       return false;
     }
     const retentionMode =
@@ -189,7 +196,7 @@ class SQLQueryEngineSegment5 extends SQLQueryEngineSegment4 {
    * @private
    */
   shouldRetainSupersededBootstrapRoutingOverlayEntry(entry) {
-    if (!entry || typeof entry !== 'object') {
+    if (!entry || typeof entry !== LOCAL_STR_OBJECT) {
       return false;
     }
     const retentionMode =
@@ -221,12 +228,12 @@ class SQLQueryEngineSegment5 extends SQLQueryEngineSegment4 {
       ) || '',
     );
 
-    if (cachedLeaderNodeId.length === 0) {
+    if (cachedLeaderNodeId.length === LOCAL_NUM_ZERO) {
       return Object.freeze({
         state: BOOTSTRAP_ROUTING_OVERLAY_REUSE_STATE.FRESH_BOOTSTRAP,
         reason: BOOTSTRAP_ROUTING_OVERLAY_REASON.FRESH_BOOTSTRAP,
         partition:
-          entry?.partition && typeof entry.partition === 'object' ?
+          entry?.partition && typeof entry.partition === LOCAL_STR_OBJECT ?
             entry.partition :
             null,
         services: overlayServices,
@@ -238,7 +245,7 @@ class SQLQueryEngineSegment5 extends SQLQueryEngineSegment4 {
         partitionId,
         cachedLeaderNodeId,
       );
-    if (cachedLeaderServices.length > 0) {
+    if (cachedLeaderServices.length > LOCAL_NUM_ZERO) {
       return Object.freeze({
         state: BOOTSTRAP_ROUTING_OVERLAY_REUSE_STATE.CACHE_READY,
         reason: BOOTSTRAP_ROUTING_OVERLAY_REASON.CACHE_LEADER_SERVICE_READY,
@@ -253,7 +260,7 @@ class SQLQueryEngineSegment5 extends SQLQueryEngineSegment4 {
         hasActiveAddressedPartitionService(service)
       );
     });
-    if (overlayLeaderServices.length === 0) {
+    if (overlayLeaderServices.length === LOCAL_NUM_ZERO) {
       return Object.freeze({
         state: BOOTSTRAP_ROUTING_OVERLAY_REUSE_STATE.STALE_FOR_CURRENT_LEADER,
         reason: BOOTSTRAP_ROUTING_OVERLAY_REASON.STALE_FOR_CURRENT_LEADER,
@@ -325,7 +332,7 @@ class SQLQueryEngineSegment5 extends SQLQueryEngineSegment4 {
         return false;
       }) :
       this.getCachedRoutablePartitionServiceRows(partitionId);
-    if (routableServices.length === 0) {
+    if (routableServices.length === LOCAL_NUM_ZERO) {
       return Object.freeze({
         state:
           BOOTSTRAP_ROUTING_OVERLAY_INSTALL_STATE.SKIP_NO_ROUTABLE_SERVICES,
@@ -344,14 +351,14 @@ class SQLQueryEngineSegment5 extends SQLQueryEngineSegment4 {
       hintedLeaderNodeId,
     });
     const leaderNodeId = leaderSelection.leaderNodeId;
-    if (typeof leaderNodeId !== 'string' || leaderNodeId.length === 0) {
+    if (typeof leaderNodeId !== LOCAL_STR_STRING || leaderNodeId.length === LOCAL_NUM_ZERO) {
       return Object.freeze({
         state: BOOTSTRAP_ROUTING_OVERLAY_INSTALL_STATE.SKIP_NO_SELECTED_LEADER,
       });
     }
     if (
-      typeof cachedLeaderNodeId === 'string' &&
-      cachedLeaderNodeId.length > 0 &&
+      typeof cachedLeaderNodeId === LOCAL_STR_STRING &&
+      cachedLeaderNodeId.length > LOCAL_NUM_ZERO &&
       cachedLeaderNodeId !== leaderNodeId
     ) {
       return Object.freeze({
@@ -398,7 +405,7 @@ class SQLQueryEngineSegment5 extends SQLQueryEngineSegment4 {
       ),
       retentionMode,
     });
-    if (cachedLeaderServices.length > 0) {
+    if (cachedLeaderServices.length > LOCAL_NUM_ZERO) {
       return Object.freeze({
         state:
           options.installSupersededEntry === true &&
@@ -463,8 +470,8 @@ class SQLQueryEngineSegment5 extends SQLQueryEngineSegment4 {
    * @return {number}
    */
   seedBootstrapRoutingOverlayFromSnapshots(systemTableSnapshots) {
-    if (!systemTableSnapshots || typeof systemTableSnapshots !== 'object') {
-      return 0;
+    if (!systemTableSnapshots || typeof systemTableSnapshots !== LOCAL_STR_OBJECT) {
+      return LOCAL_NUM_ZERO;
     }
 
     const partitionRows = Array.isArray(systemTableSnapshots[TABLES.PARTITIONS]) ?
@@ -473,7 +480,7 @@ class SQLQueryEngineSegment5 extends SQLQueryEngineSegment4 {
     const serviceRows = Array.isArray(systemTableSnapshots[TABLES.SERVICES]) ?
       systemTableSnapshots[TABLES.SERVICES] :
       [];
-    let seededCount = 0;
+    let seededCount = LOCAL_NUM_ZERO;
 
     for (const partitionRow of partitionRows) {
       const partitionId = String(
@@ -487,8 +494,8 @@ class SQLQueryEngineSegment5 extends SQLQueryEngineSegment4 {
           '',
       );
       if (
-        partitionId.length === 0 ||
-        tableRef.length === 0 ||
+        partitionId.length === LOCAL_NUM_ZERO ||
+        tableRef.length === LOCAL_NUM_ZERO ||
         !this.isSystemTable(tableRef)
       ) {
         continue;
@@ -510,7 +517,7 @@ class SQLQueryEngineSegment5 extends SQLQueryEngineSegment4 {
           installSupersededEntry: true,
         })
       ) {
-        seededCount += 1;
+        seededCount += LOCAL_NUM_ONE;
       }
     }
 
@@ -534,7 +541,7 @@ class SQLQueryEngineSegment5 extends SQLQueryEngineSegment4 {
     if (!partitionId || !tableName) {
       return false;
     }
-    if (!Array.isArray(serviceRows) || serviceRows.length === 0) {
+    if (!Array.isArray(serviceRows) || serviceRows.length === LOCAL_NUM_ZERO) {
       return false;
     }
     const cachedLeaderNodeId =
@@ -543,8 +550,8 @@ class SQLQueryEngineSegment5 extends SQLQueryEngineSegment4 {
         serviceRows,
       );
     if (
-      typeof cachedLeaderNodeId === 'string' &&
-      cachedLeaderNodeId.length > 0
+      typeof cachedLeaderNodeId === LOCAL_STR_STRING &&
+      cachedLeaderNodeId.length > LOCAL_NUM_ZERO
     ) {
       return false;
     }
@@ -598,7 +605,7 @@ class SQLQueryEngineSegment5 extends SQLQueryEngineSegment4 {
    */
   getBootstrapRoutingOverlayEntryState(partitionId) {
     const entry = this.bootstrapRoutingOverlayEntries.get(partitionId);
-    if (!entry || typeof entry !== 'object') {
+    if (!entry || typeof entry !== LOCAL_STR_OBJECT) {
       return buildBootstrapRoutingOverlayEntryState({
         state: BOOTSTRAP_ROUTING_OVERLAY_ENTRY_STATE.MISSING,
         reason: BOOTSTRAP_ROUTING_OVERLAY_REASON.MISSING,
@@ -682,7 +689,7 @@ class SQLQueryEngineSegment5 extends SQLQueryEngineSegment4 {
     tableRef,
     activePartitionVersion,
   ) {
-    if (typeof tableRef !== 'string' || tableRef.length === 0) {
+    if (typeof tableRef !== LOCAL_STR_STRING || tableRef.length === LOCAL_NUM_ZERO) {
       return [];
     }
 
@@ -721,13 +728,13 @@ class SQLQueryEngineSegment5 extends SQLQueryEngineSegment4 {
   ) {
     if (
       !Number.isInteger(requestedMinimumReplicaCount) ||
-      requestedMinimumReplicaCount <= 0
+      requestedMinimumReplicaCount <= LOCAL_NUM_ZERO
     ) {
       return targetReplicaCount;
     }
 
     return Math.max(
-      1,
+      LOCAL_NUM_ONE,
       Math.min(requestedMinimumReplicaCount, targetReplicaCount),
     );
   }
@@ -753,8 +760,8 @@ class SQLQueryEngineSegment5 extends SQLQueryEngineSegment4 {
       Number.isInteger(visibleActiveNodeCount) && visibleActiveNodeCount > 0 ?
         visibleActiveNodeCount :
         0;
-    if (normalizedReplicaCount < 3 || normalizedVisibleActiveNodeCount <= 1) {
-      return 1;
+    if (normalizedReplicaCount < LOCAL_NUM_THREE || normalizedVisibleActiveNodeCount <= LOCAL_NUM_ONE) {
+      return LOCAL_NUM_ONE;
     }
     return this.calculateQuorumReplicaCount(normalizedReplicaCount);
   }
@@ -841,7 +848,7 @@ class SQLQueryEngineSegment5 extends SQLQueryEngineSegment4 {
         admissionProbe: lastAdmissionProbe,
         timedOut,
         requiredReplicaCount,
-        waitedMs: 0,
+        waitedMs: LOCAL_NUM_ZERO,
       });
     }
 
@@ -937,19 +944,19 @@ class SQLQueryEngineSegment5 extends SQLQueryEngineSegment4 {
       nodeIds: Array.isArray(options.nodeIds) ? options.nodeIds : [],
       diagnostics,
       admissionProbe:
-        options?.admissionProbe && typeof options.admissionProbe === 'object' ?
+        options?.admissionProbe && typeof options.admissionProbe === LOCAL_STR_OBJECT ?
           options.admissionProbe :
           null,
       timedOut,
       requiredReplicaCount:
         Number.isInteger(options.requiredReplicaCount) &&
-        options.requiredReplicaCount > 0 ?
+        options.requiredReplicaCount > LOCAL_NUM_ZERO ?
           options.requiredReplicaCount :
-          1,
+          LOCAL_NUM_ONE,
       waitedMs:
-        Number.isFinite(options.waitedMs) && options.waitedMs > 0 ?
+        Number.isFinite(options.waitedMs) && options.waitedMs > LOCAL_NUM_ZERO ?
           Math.floor(options.waitedMs) :
-          0,
+          LOCAL_NUM_ZERO,
       retryAfterMs: timedOut ?
         Math.max(NUM.ONE, this.tablePartitionProvisioningPollIntervalMs) :
         NUM.ZERO,
@@ -976,8 +983,8 @@ class SQLQueryEngineSegment5 extends SQLQueryEngineSegment4 {
         service?.service_id || service?.replica_id || null;
       const nodeId = service?.node_id || service?.nodeId || null;
       if (
-        typeof serviceReplicaId !== 'string' ||
-        serviceReplicaId.length === 0
+        typeof serviceReplicaId !== LOCAL_STR_STRING ||
+        serviceReplicaId.length === LOCAL_NUM_ZERO
       ) {
         continue;
       }
@@ -985,11 +992,11 @@ class SQLQueryEngineSegment5 extends SQLQueryEngineSegment4 {
         seenReplicaIds.add(serviceReplicaId);
         replicaIds.push(serviceReplicaId);
       }
-      if (typeof service?.address === 'string' && service.address.length > 0) {
+      if (typeof service?.address === LOCAL_STR_STRING && service.address.length > LOCAL_NUM_ZERO) {
         peerAddresses.push(service.address);
         continue;
       }
-      if (typeof nodeId === 'string' && nodeId.length > 0) {
+      if (typeof nodeId === LOCAL_STR_STRING && nodeId.length > LOCAL_NUM_ZERO) {
         peerAddresses.push(
           addressManager.format(
             nodeId,
@@ -1003,14 +1010,14 @@ class SQLQueryEngineSegment5 extends SQLQueryEngineSegment4 {
     for (const operation of plannedOperations) {
       const replicaId = operation?.replicaId || null;
       const nodeId = operation?.targetNodeId || operation?.nodeId || null;
-      if (typeof replicaId !== 'string' || replicaId.length === 0) {
+      if (typeof replicaId !== LOCAL_STR_STRING || replicaId.length === LOCAL_NUM_ZERO) {
         continue;
       }
       if (!seenReplicaIds.has(replicaId)) {
         seenReplicaIds.add(replicaId);
         replicaIds.push(replicaId);
       }
-      if (typeof nodeId === 'string' && nodeId.length > 0) {
+      if (typeof nodeId === LOCAL_STR_STRING && nodeId.length > LOCAL_NUM_ZERO) {
         peerAddresses.push(
           addressManager.format(nodeId, ENTITY_TYPE.PARTITION, replicaId),
         );

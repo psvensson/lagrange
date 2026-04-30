@@ -27,6 +27,8 @@ import {
   resolveMembershipJoinIntentType,
 } from '../../control-plane/membership-lifecycle-controller.js';
 
+const LOCAL_STR_WZ28M = 'All service leaders ready';
+
 const BOOTSTRAP_REQUIRED_LEADER_TABLES = Object.freeze([
   TABLES.NODES,
   TABLES.TABLES,
@@ -342,7 +344,7 @@ class ServiceLeaderReadinessOwner {
 
     if (ready) {
       this.getLogger().info(
-        BOOTSTRAP_API_LOG_MSG.LEADERS_READY || 'All service leaders ready',
+        BOOTSTRAP_API_LOG_MSG.LEADERS_READY || LOCAL_STR_WZ28M,
         {
           seedNodeId: this.getSeedNodeId(),
           elapsedMs: NUM.ZERO,

@@ -16,6 +16,11 @@ import {
   CLI_VIEW_LIST,
 } from '../cli-constants.js';
 
+const LOCAL_STR_128KJ = ', ';
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_NUM_TWO = 2;
+const LOCAL_STR_UTF8 = 'utf8';
+
 /**
  * @typedef {Object} Config
  * @property {string} [node_address] - Node address to connect to
@@ -88,7 +93,7 @@ function validateStringField(schema, value) {
     return {valid: false, error: CONFIG_VALIDATION_ERROR.STRING};
   }
   if (schema.enum && !schema.enum.includes(value)) {
-    return {valid: false, error: `Must be one of: ${schema.enum.join(', ')}`};
+    return {valid: false, error: `Must be one of: ${schema.enum.join(LOCAL_STR_128KJ)}`};
   }
   return {valid: true};
 }
@@ -324,7 +329,7 @@ export class ConfigManager {
     }
 
     return {
-      valid: errors.length === 0,
+      valid: errors.length === LOCAL_NUM_ZERO,
       errors,
     };
   }
@@ -368,7 +373,7 @@ export class ConfigManager {
    * @returns {boolean}
    */
   hasWarnings() {
-    return this.warnings.length > 0;
+    return this.warnings.length > LOCAL_NUM_ZERO;
   }
 
   /**
@@ -396,6 +401,6 @@ export class ConfigManager {
       }
     }
 
-    fs.writeFileSync(configPath, JSON.stringify(toSave, null, 2), 'utf8');
+    fs.writeFileSync(configPath, JSON.stringify(toSave, null, LOCAL_NUM_TWO), LOCAL_STR_UTF8);
   }
 }

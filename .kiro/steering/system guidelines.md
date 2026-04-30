@@ -294,6 +294,28 @@ Mandatory rules:
 6. When an LLM sprint repeatedly exposes new blockers at the same boundary, the
    next package must reduce the boundary surface area before adding more
    symptom-specific behavior.
+7. A scenario-driven active package may carry at most one current dominant
+   blocker, one primary semantic owner, and one primary boundary. Historical
+   blocker migrations may remain as evidence, but they must not define the
+   current edit scope.
+8. After two material blocker migrations inside one package, the next work
+   cycle must either close the representative gate or split a contraction
+   package that names the current owner contract and removes older migrations
+   from the active edit scope.
+9. A contraction package must define the smallest replayable owner-decision
+   fixture or blocker probe before runtime behavior changes begin.
+10. Presentation surfaces, including admin summaries, triage summaries,
+    failure bundles, and harness reports, must consume a canonical
+    decision-layer contract when one is present. They must not invent a new
+    dominant reason by reassembling lower-layer publication, readiness,
+    transport, or cache fragments.
+11. If presentation and decision evidence disagree, the package must treat that
+    disagreement as a first-class blocker. The package may not close until
+    either presentation consumes the decision contract or the decision contract
+    is proven wrong by a focused owner test.
+12. Broad representative reruns are acceptance proof only after the replayable
+    owner fixture, focused owner tests, and affected presentation tests are
+    green.
 
 ### 0.1.9 Roadmap And Work-Tracker Truth Reconciliation
 

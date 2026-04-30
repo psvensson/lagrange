@@ -14,6 +14,10 @@ import {
   ENDPOINT_SYNC_NUM,
 } from './endpoint-sync-constants.js';
 
+const LOCAL_STR_1QI4R = 'EndpointSyncLeaseLeaderElector';
+const LOCAL_STR_BPD4X = 'tryAcquireLeadership';
+const LOCAL_NUM_ZERO = 0;
+
 const LEADER_ELECTOR_ERROR = Object.freeze({
   CLIENT_REQUIRED: 'k8sClient is required',
   CLIENT_METHOD_PREFIX: 'k8sClient missing required lease method',
@@ -42,8 +46,8 @@ class EndpointSyncLeaderElectorError extends BaseError {
     super(message, {
       cause,
       context: {
-        component: 'EndpointSyncLeaseLeaderElector',
-        operation: 'tryAcquireLeadership',
+        component: LOCAL_STR_1QI4R,
+        operation: LOCAL_STR_BPD4X,
         metadata,
       },
     });
@@ -104,7 +108,7 @@ function resolveLeaseTransitions(lease) {
  */
 function resolveLeaseRenewTimeMs(lease) {
   const renewTime = lease?.spec?.renewTime || lease?.spec?.acquireTime || null;
-  if (typeof renewTime !== TYPEOF.STRING || renewTime.trim().length === 0) {
+  if (typeof renewTime !== TYPEOF.STRING || renewTime.trim().length === LOCAL_NUM_ZERO) {
     return Number.NaN;
   }
   return Date.parse(renewTime);

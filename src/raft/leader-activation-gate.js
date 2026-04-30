@@ -1,5 +1,7 @@
 import {NUM} from '../constants/index.js';
 
+const LOCAL_STR_FUNCTION = 'function';
+
 const DEFAULT_LEADER_ACTIVATION_HOLDOFF_MS = 250;
 
 function normalizeHoldoffMs(value) {
@@ -20,7 +22,7 @@ class LeaderActivationGate {
   }
 
   schedule(term, activate, options = {}) {
-    if (this.destroyed || typeof activate !== 'function') {
+    if (this.destroyed || typeof activate !== LOCAL_STR_FUNCTION) {
       return false;
     }
     if (this.activatedTerm === term) {
@@ -69,7 +71,7 @@ class LeaderActivationGate {
     }
 
     this.timer = setTimeout(runActivation, this.holdoffMs);
-    if (typeof this.timer?.unref === 'function') {
+    if (typeof this.timer?.unref === LOCAL_STR_FUNCTION) {
       this.timer.unref();
     }
     return true;
@@ -81,7 +83,7 @@ class LeaderActivationGate {
       this.timer = null;
     }
     if (this.activationHandle &&
-        typeof this.activationHandle.cancel === 'function') {
+        typeof this.activationHandle.cancel === LOCAL_STR_FUNCTION) {
       this.activationHandle.cancel();
     }
     this.activationHandle = null;

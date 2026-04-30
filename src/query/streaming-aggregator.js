@@ -18,6 +18,8 @@ import {
   QUERY_SUBSYSTEM,
 } from './query-constants.js';
 
+const LOCAL_NUM_ZERO = 0;
+
 const RESULT_ESTIMATE = Object.freeze({
   UTF16_BYTES_PER_CHAR: NUM.TWO,
   FALLBACK_ROW_BYTES: NUM.HUNDRED,
@@ -334,7 +336,7 @@ class StreamingAggregator {
     this.flushCurrentChunk();
 
     const aggregates = this.extractAggregates(ast);
-    if (aggregates.length === 0) {
+    if (aggregates.length === LOCAL_NUM_ZERO) {
       return {rows: this.getAllRows()};
     }
 

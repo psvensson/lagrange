@@ -1,3 +1,16 @@
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_STR_INSERT = 'INSERT';
+const LOCAL_STR_UPDATE = 'UPDATE';
+const LOCAL_STR_PARTITIONS = 'partitions';
+const LOCAL_STR_DELETE = 'DELETE';
+const LOCAL_STR_RUNTIME_SERVICE = 'runtime_service';
+const LOCAL_STR_128KJ = ', ';
+const LOCAL_STR_NONE = 'none';
+const LOCAL_STR_EMPTY = '';
+const LOCAL_STR_UNKNOWN = 'unknown';
+const LOCAL_NUM_ONE = 1;
+const LOCAL_NUM_5000 = 5000;
+
 /**
  * Remote Cache - Maintains a local copy of system tables synchronized via CDC
  *
@@ -61,7 +74,7 @@ export class RemoteCache {
       replica_operations: new Map(),
     };
     this.lastUpdate = null;
-    this.cdcLag = 0;
+    this.cdcLag = LOCAL_NUM_ZERO;
     // Track tables affected by CDC events for selective invalidation
     this.affectedTableIds = new Set();
   }
@@ -124,18 +137,18 @@ export class RemoteCache {
     let affectedTableId = null;
 
     switch (operation) {
-    case 'INSERT':
-    case 'UPDATE':
+    case LOCAL_STR_INSERT:
+    case LOCAL_STR_UPDATE:
       this.tables[table].set(key, data);
       // If this is a partition change, track the owning table
-      if (table === 'partitions' && data && data.table_id) {
+      if (table === LOCAL_STR_PARTITIONS && data && data.table_id) {
         affectedTableId = data.table_id;
         this.affectedTableIds.add(affectedTableId);
       }
       break;
-    case 'DELETE':
+    case LOCAL_STR_DELETE:
       // For partition deletes, get the table_id before deletion
-      if (table === 'partitions') {
+      if (table === LOCAL_STR_PARTITIONS) {
         const existingPartition = this.tables[table].get(key);
         if (existingPartition && existingPartition.table_id) {
           affectedTableId = existingPartition.table_id;
@@ -285,7 +298,7 @@ export class RemoteCache {
         ...definition,
         service_id: serviceId,
         service_name: definition.service_name || definition.serviceName || serviceId,
-        service_type: definition.service_type || definition.serviceType || 'runtime_service',
+        service_type: definition.service_type || definition.serviceType || LOCAL_STR_RUNTIME_SERVICE,
         runtime_kind: definition.runtime_kind || definition.runtimeKind || null,
         runtime_ref: definition.runtime_ref || definition.runtimeRef || null,
         replica_count: desiredReplicaCount,
@@ -293,7 +306,7 @@ export class RemoteCache {
         healthy_replica_count: healthyReplicaCount,
         node_count: nodes.length,
         nodes,
-        nodes_summary: nodes.length > 0 ? nodes.join(', ') : 'none',
+        nodes_summary: nodes.length > LOCAL_NUM_ZERO ? nodes.join(LOCAL_STR_128KJ) : LOCAL_STR_NONE,
         status: this.resolveLogicalServiceStatus(
           desiredReplicaCount,
           observedReplicaCount,
@@ -346,7 +359,7 @@ export class RemoteCache {
       ...definition,
       service_id: serviceId,
       logical_service_id: serviceId,
-      service_type: 'runtime_service',
+      service_type: LOCAL_STR_RUNTIME_SERVICE,
       status,
       node_id: nodeId,
       endpoint_id: endpointId,
@@ -380,9 +393,9 @@ export class RemoteCache {
    */
   resolveServiceId(row) {
     if (!row) {
-      return '';
+      return LOCAL_STR_EMPTY;
     }
-    return row.service_id || row.serviceId || row.id || '';
+    return row.service_id || row.serviceId || row.id || LOCAL_STR_EMPTY;
   }
 
   /**
@@ -445,7 +458,7 @@ export class RemoteCache {
       endpoint?.status ||
       definition?.status ||
       definition?.state ||
-      'unknown';
+      LOCAL_STR_UNKNOWN;
   }
 
   /**
@@ -475,8 +488,8 @@ export class RemoteCache {
   resolveReplicaCount(definition) {
     const raw = definition?.replica_count ?? definition?.replicaCount ?? 0;
     const parsed = Number(raw);
-    if (!Number.isFinite(parsed) || parsed < 0) {
-      return 0;
+    if (!Number.isFinite(parsed) || parsed < LOCAL_NUM_ZERO) {
+      return LOCAL_NUM_ZERO;
     }
     return Math.floor(parsed);
   }
@@ -506,9 +519,9 @@ export class RemoteCache {
     return endpoints.reduce((count, endpoint) => {
       const status = this.resolveRuntimeStatus(null, endpoint);
       return HEALTHY_RUNTIME_STATUS.has(String(status).toLowerCase()) ?
-        count + 1 :
+        count + LOCAL_NUM_ONE :
         count;
-    }, 0);
+    }, LOCAL_NUM_ZERO);
   }
 
   /**
@@ -523,15 +536,15 @@ export class RemoteCache {
     observedReplicaCount,
     healthyReplicaCount,
   ) {
-    if (desiredReplicaCount <= 0) {
-      return observedReplicaCount === 0 ?
+    if (desiredReplicaCount <= LOCAL_NUM_ZERO) {
+      return observedReplicaCount === LOCAL_NUM_ZERO ?
         LOGICAL_SERVICE_STATUS.UNKNOWN :
         LOGICAL_SERVICE_STATUS.HEALTHY;
     }
     if (healthyReplicaCount >= desiredReplicaCount) {
       return LOGICAL_SERVICE_STATUS.HEALTHY;
     }
-    if (healthyReplicaCount === 0) {
+    if (healthyReplicaCount === LOCAL_NUM_ZERO) {
       return LOGICAL_SERVICE_STATUS.DEGRADED;
     }
     return LOGICAL_SERVICE_STATUS.PARTIAL;
@@ -639,7 +652,7 @@ export class RemoteCache {
     }
     if (filter.messagePattern) {
       const pattern = new RegExp(filter.messagePattern, 'i');
-      logs = logs.filter((l) => pattern.test(l.message || ''));
+      logs = logs.filter((l) => pattern.test(l.message || LOCAL_STR_EMPTY));
     }
     return logs;
   }
@@ -675,7 +688,7 @@ export class RemoteCache {
     }
     if (filter.namePattern) {
       const pattern = new RegExp(filter.namePattern, 'i');
-      contexts = contexts.filter((c) => pattern.test(c.name || ''));
+      contexts = contexts.filter((c) => pattern.test(c.name || LOCAL_STR_EMPTY));
     }
     return contexts;
   }
@@ -716,7 +729,7 @@ export class RemoteCache {
     }
 
     // Sort by updated_at descending (most recent first)
-    operations.sort((a, b) => (b.updated_at || 0) - (a.updated_at || 0));
+    operations.sort((a, b) => (b.updated_at || LOCAL_NUM_ZERO) - (a.updated_at || LOCAL_NUM_ZERO));
 
     return operations;
   }
@@ -762,7 +775,7 @@ export class RemoteCache {
       map.clear();
     }
     this.lastUpdate = null;
-    this.cdcLag = 0;
+    this.cdcLag = LOCAL_NUM_ZERO;
     this.affectedTableIds.clear();
   }
 
@@ -796,7 +809,7 @@ export class RemoteCache {
    * @param {number} threshold - Staleness threshold in milliseconds
    * @return {boolean} True if cache is stale
    */
-  isStale(threshold = 5000) {
+  isStale(threshold = LOCAL_NUM_5000) {
     return this.cdcLag > threshold;
   }
 }

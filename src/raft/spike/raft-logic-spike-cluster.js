@@ -11,6 +11,14 @@ import {
   RAFT_LOGIC_SPIKE_TIME,
 } from './raft-logic-spike-constants.js';
 
+const LOCAL_NUM_ONE = 1;
+const LOCAL_NUM_TWO = 2;
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_STR_12123 = 'Stable leader not observed before timeout';
+const LOCAL_STR_1A7IE = 'Leader node unavailable for failover';
+const LOCAL_STR_139G1 = 'Leader failover did not produce a different leader';
+const LOCAL_STR_R78BQ = 'Cluster is not started';
+
 const SPIKE_CLUSTER_DEFAULT = Object.freeze({
   SIZE: 3,
   REPLICA_ID_PREFIX: 'replica-',
@@ -34,7 +42,7 @@ function sleep(ms) {
  */
 function buildReplicaIds(size) {
   const ids = [];
-  for (let i = 1; i <= size; i++) {
+  for (let i = LOCAL_NUM_ONE; i <= size; i++) {
     ids.push(SPIKE_CLUSTER_DEFAULT.REPLICA_ID_PREFIX + String(i));
   }
   return ids;
@@ -56,7 +64,7 @@ function buildReplicaSqlitePath(baseDir, replicaId) {
  * @return {number}
  */
 function majority(size) {
-  return Math.floor(size / 2) + 1;
+  return Math.floor(size / LOCAL_NUM_TWO) + LOCAL_NUM_ONE;
 }
 
 /**
@@ -176,7 +184,7 @@ class RaftLogicSpikeCluster {
         }
         counts.set(
           snapshot.leaderId,
-          (counts.get(snapshot.leaderId) || 0) + 1,
+          (counts.get(snapshot.leaderId) || LOCAL_NUM_ZERO) + LOCAL_NUM_ONE,
         );
       }
 
@@ -187,7 +195,7 @@ class RaftLogicSpikeCluster {
       }
     }
 
-    throw new Error('Stable leader not observed before timeout');
+    throw new Error(LOCAL_STR_12123);
   }
 
   /**
@@ -236,7 +244,7 @@ class RaftLogicSpikeCluster {
     const previousLeader = this.adapters.get(previousLeaderId);
     const node = previousLeader ? previousLeader.getNode() : null;
     if (!node) {
-      throw new Error('Leader node unavailable for failover');
+      throw new Error(LOCAL_STR_1A7IE);
     }
 
     await node.stepDown(timeoutMs);
@@ -249,7 +257,7 @@ class RaftLogicSpikeCluster {
       await sleep(RAFT_LOGIC_SPIKE_DEFAULT.LEADER_STABILIZE_WAIT_MS);
     }
 
-    throw new Error('Leader failover did not produce a different leader');
+    throw new Error(LOCAL_STR_139G1);
   }
 
   /**
@@ -497,7 +505,7 @@ class RaftLogicSpikeCluster {
    */
   _assertStarted() {
     if (!this._started) {
-      throw new Error('Cluster is not started');
+      throw new Error(LOCAL_STR_R78BQ);
     }
   }
 }

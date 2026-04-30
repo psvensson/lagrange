@@ -13,6 +13,15 @@ import {
   isRetryableManagedSplitTransition,
 } from './managed-split-retry-policy.js';
 
+const LOCAL_STR_OBJECT = 'object';
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_NUM_ONE = 1;
+const LOCAL_STR_EMPTY = '';
+const LOCAL_STR_DEFERRED = 'deferred';
+const LOCAL_STR_2RKJB = 'Managed split child provisioning precheck could not satisfy ';
+const LOCAL_STR_1V197 = 'minimum routable cohorts: ';
+const LOCAL_STR_1AM9G = '; ';
+
 class ManagedSplitWorkflowStateMethods {
   /**
    * Build the initial transition metadata persisted before admission.
@@ -176,7 +185,7 @@ class ManagedSplitWorkflowStateMethods {
     const persistedParticipants =
       metadata[PARTITION_TRANSITION_METADATA_FIELD.PARTICIPANTS];
     if (!persistedParticipants ||
-        typeof persistedParticipants !== 'object') {
+        typeof persistedParticipants !== LOCAL_STR_OBJECT) {
       return participants;
     }
 
@@ -241,18 +250,18 @@ class ManagedSplitWorkflowStateMethods {
       partitionId: sourcePartitionId || null,
     }];
 
-    if (targetPartitionIds.length > 0) {
+    if (targetPartitionIds.length > LOCAL_NUM_ZERO) {
       participantSpecs.push({
         participantKey: SPLIT_PARTICIPANT_PREFIX.LEFT_CHILD,
         participantId: SPLIT_PARTICIPANT_PREFIX.LEFT_CHILD,
-        partitionId: targetPartitionIds[0] || null,
+        partitionId: targetPartitionIds[LOCAL_NUM_ZERO] || null,
       });
     }
-    if (targetPartitionIds.length > 1) {
+    if (targetPartitionIds.length > LOCAL_NUM_ONE) {
       participantSpecs.push({
         participantKey: SPLIT_PARTICIPANT_PREFIX.RIGHT_CHILD,
         participantId: SPLIT_PARTICIPANT_PREFIX.RIGHT_CHILD,
-        partitionId: targetPartitionIds[1] || null,
+        partitionId: targetPartitionIds[LOCAL_NUM_ONE] || null,
       });
     }
 
@@ -328,19 +337,19 @@ class ManagedSplitWorkflowStateMethods {
       estimatedBytes: context.estimatedBytes,
     };
     if (result.projectedUtilizationByNodeId &&
-        typeof result.projectedUtilizationByNodeId === 'object') {
+        typeof result.projectedUtilizationByNodeId === LOCAL_STR_OBJECT) {
       compact.projectedUtilizationByNodeId = JSON.parse(
         JSON.stringify(result.projectedUtilizationByNodeId),
       );
     }
     if (result.projectedUtilization &&
-        typeof result.projectedUtilization === 'object') {
+        typeof result.projectedUtilization === LOCAL_STR_OBJECT) {
       compact.projectedUtilization = JSON.parse(
         JSON.stringify(result.projectedUtilization),
       );
     }
     if (result.readinessSnapshots &&
-        typeof result.readinessSnapshots === 'object') {
+        typeof result.readinessSnapshots === LOCAL_STR_OBJECT) {
       compact.readinessSnapshots = JSON.parse(
         JSON.stringify(result.readinessSnapshots),
       );
@@ -369,11 +378,11 @@ class ManagedSplitWorkflowStateMethods {
           [],
         projectedUtilization:
           entry?.projectedUtilization &&
-            typeof entry.projectedUtilization === 'object' ?
+            typeof entry.projectedUtilization === LOCAL_STR_OBJECT ?
             JSON.parse(JSON.stringify(entry.projectedUtilization)) :
             null,
         nodeSummary: entry?.nodeSummary &&
-          typeof entry.nodeSummary === 'object' ?
+          typeof entry.nodeSummary === LOCAL_STR_OBJECT ?
           JSON.parse(JSON.stringify(entry.nodeSummary)) :
           null,
       };
@@ -466,7 +475,7 @@ class ManagedSplitWorkflowStateMethods {
 
     return entries.map((entry) => {
       return {
-        targetNodeId: String(entry?.targetNodeId || ''),
+        targetNodeId: String(entry?.targetNodeId || LOCAL_STR_EMPTY),
         decisionType: entry?.decisionType || null,
         blockingReasons: Array.isArray(entry?.blockingReasons) ?
           [...entry.blockingReasons] :
@@ -475,11 +484,11 @@ class ManagedSplitWorkflowStateMethods {
           [...entry.reasonCodes] :
           [],
         nodeSummary: entry?.nodeSummary &&
-          typeof entry.nodeSummary === 'object' ?
+          typeof entry.nodeSummary === LOCAL_STR_OBJECT ?
           JSON.parse(JSON.stringify(entry.nodeSummary)) :
           null,
         readinessSnapshot: entry?.readinessSnapshot &&
-          typeof entry.readinessSnapshot === 'object' ?
+          typeof entry.readinessSnapshot === LOCAL_STR_OBJECT ?
           JSON.parse(JSON.stringify(entry.readinessSnapshot)) :
           null,
         message: entry?.message || null,
@@ -529,7 +538,7 @@ class ManagedSplitWorkflowStateMethods {
     ).filter(([, admission]) => admission?.allowed !== true)
       .map(([childPartitionId]) => childPartitionId);
 
-    if (failingChildPartitionIds.length === 0) {
+    if (failingChildPartitionIds.length === LOCAL_NUM_ZERO) {
       return null;
     }
 
@@ -612,14 +621,14 @@ class ManagedSplitWorkflowStateMethods {
         childProvisioningAdmissionByPartitionId?.[childPartitionId] || {};
       details.push(
         `${childPartitionId}(required=` +
-          `${admission.minimumRoutableReplicaCount || 0}, ` +
-          `provisionable=${admission.maximumProvisionableReplicaCount || 0}, ` +
-          `decision=${admission.decisionType || 'deferred'})`,
+          `${admission.minimumRoutableReplicaCount || LOCAL_NUM_ZERO}, ` +
+          `provisionable=${admission.maximumProvisionableReplicaCount || LOCAL_NUM_ZERO}, ` +
+          `decision=${admission.decisionType || LOCAL_STR_DEFERRED})`,
       );
     }
 
-    return 'Managed split child provisioning precheck could not satisfy ' +
-      'minimum routable cohorts: ' + details.join('; ');
+    return LOCAL_STR_2RKJB +
+      LOCAL_STR_1V197 + details.join(LOCAL_STR_1AM9G);
   }
 
   /**
@@ -630,7 +639,7 @@ class ManagedSplitWorkflowStateMethods {
    */
   isRetryableAdmissionState(transitionOrState) {
     if (transitionOrState &&
-        typeof transitionOrState === 'object') {
+        typeof transitionOrState === LOCAL_STR_OBJECT) {
       return isRetryableManagedSplitTransition(transitionOrState);
     }
     const state = String(transitionOrState || '');
@@ -704,7 +713,7 @@ class ManagedSplitWorkflowStateMethods {
    * @private
    */
   isRetryableSplitPlanningError(error) {
-    return String(error?.message || '') ===
+    return String(error?.message || LOCAL_STR_EMPTY) ===
       SPLIT_MERGE_LOG_MSG.INSUFFICIENT_ROWS_FOR_SPLIT;
   }
 }

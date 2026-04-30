@@ -890,6 +890,12 @@ class ReplicaDispatchServiceSegment1 extends EventEmitter {
       STRING.UNKNOWN;
 
     if (isHeartbeatOnly === true) {
+      const payloadCapabilities = payload?.[ControlPlaneField.CAPABILITIES];
+      const capabilities = Array.isArray(payloadCapabilities) ?
+        JSON.stringify(payloadCapabilities) :
+        typeof payloadCapabilities === TYPEOF.STRING ?
+          payloadCapabilities :
+          existing?.[COLUMN.CAPABILITIES] || STRING.EMPTY_JSON_ARRAY;
       const heartbeatOnlyRow = {
         [COLUMN.NODE_ID]: nodeId,
         [COLUMN.NODE_ADDRESS]: baseNodeAddress,
@@ -897,6 +903,12 @@ class ReplicaDispatchServiceSegment1 extends EventEmitter {
         [COLUMN.LAST_HEARTBEAT]: heartbeatAt,
         [COLUMN.READY_LEASE_EXPIRES_AT]: readyLeaseExpiresAt,
       };
+      if (
+        nextState === STATE.READY &&
+        capabilities !== STRING.EMPTY_JSON_ARRAY
+      ) {
+        heartbeatOnlyRow[COLUMN.CAPABILITIES] = capabilities;
+      }
       if (
         this.shouldReviveHeartbeatOnlyNodeStatus({
           existing,

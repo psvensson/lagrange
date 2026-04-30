@@ -8,6 +8,8 @@ import {
   DWARF_INDEX_ERROR_MSG as ERR,
 } from './dwarf-index-constants.js';
 
+const LOCAL_STR_COLON = ':';
+
 /**
  * Build normalized indexes for source/offset/symbol lookups.
  *
@@ -364,7 +366,7 @@ function sourceMappingKey(mapping) {
     mapping.columnNumber,
     mapping.startOffset,
     mapping.endOffset,
-  ].join(':');
+  ].join(LOCAL_STR_COLON);
 }
 
 /**
@@ -376,7 +378,7 @@ function symbolMappingKey(symbolMapping) {
     symbolMapping.symbolName,
     symbolMapping.startOffset,
     symbolMapping.endOffset,
-  ].join(':');
+  ].join(LOCAL_STR_COLON);
 }
 
 /**

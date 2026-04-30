@@ -17,20 +17,23 @@ import {
   RETRYABLE_PARTITION_TRANSITION_STATES,
 } from './partition-constants.js';
 
+const LOCAL_STR_EMPTY = '';
+const LOCAL_STR_OBJECT = 'object';
+
 const RETRYABLE_MANAGED_SPLIT_TIMEOUT_CLASSIFICATION_SET = new Set([
   TIMEOUT_BUDGET_CLASSIFICATION.CACHE_VISIBILITY_TIMEOUT,
   TIMEOUT_BUDGET_CLASSIFICATION.PUBLICATION_WAIT_TIMEOUT,
 ]);
 
 function normalizeManagedSplitExecutionFailureMessage(errorOrFailure) {
-  return String(errorOrFailure?.message || '').toLowerCase();
+  return String(errorOrFailure?.message || LOCAL_STR_EMPTY).toLowerCase();
 }
 
 function resolveManagedSplitRetryableTimeoutClassification(
   timeoutClassification,
 ) {
   if (!timeoutClassification ||
-      typeof timeoutClassification !== 'object') {
+      typeof timeoutClassification !== LOCAL_STR_OBJECT) {
     return null;
   }
   const classification = String(
@@ -54,7 +57,7 @@ function resolveManagedSplitRetryableTimeoutClassification(
 }
 
 function isRetryableManagedSplitExecutionFailure(errorOrFailure) {
-  if (!errorOrFailure || typeof errorOrFailure !== 'object') {
+  if (!errorOrFailure || typeof errorOrFailure !== LOCAL_STR_OBJECT) {
     return false;
   }
   if (errorOrFailure.retryable === true) {
@@ -127,7 +130,7 @@ function resolveRetryableManagedSplitExecutionDecisionType(errorOrFailure) {
 }
 
 function isRetryableManagedSplitTransition(transition) {
-  if (!transition || typeof transition !== 'object') {
+  if (!transition || typeof transition !== LOCAL_STR_OBJECT) {
     return false;
   }
   const state = String(

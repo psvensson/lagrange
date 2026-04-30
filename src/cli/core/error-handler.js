@@ -18,6 +18,20 @@ import {
   CLI_TERMINAL_SIZE,
 } from '../cli-constants.js';
 
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_STR_ERROR_LOGGED = 'error:logged';
+const LOCAL_STR_UTF8 = 'utf8';
+const LOCAL_STR_1C6W0 = 'Failed to write to log file:';
+const LOCAL_STR_NOTIFICATION_SHOW = 'notification:show';
+const LOCAL_STR_Q03NW = 'notification:dismiss';
+const LOCAL_STR_API_CALL = 'API call';
+const LOCAL_STR_TERMINAL_RESIZED = 'Terminal resized';
+const LOCAL_STR_TERMINAL_RESIZE = 'terminal:resize';
+const LOCAL_STR_TERMINAL_SIZEOK = 'terminal:sizeOk';
+const LOCAL_STR_TERMINAL_TOOSMALL = 'terminal:tooSmall';
+const LOCAL_STR_N_A = 'N/A';
+const LOCAL_STR_OPERATION = 'Operation';
+
 /**
  * Error severity levels
  */
@@ -88,7 +102,7 @@ export class ErrorHandler {
     this.notifications = [];
 
     /** @type {number} */
-    this.notificationCounter = 0;
+    this.notificationCounter = LOCAL_NUM_ZERO;
 
     /** @type {Map<string, NodeJS.Timeout>} */
     this.dismissTimers = new Map();
@@ -161,7 +175,7 @@ export class ErrorHandler {
 
     // Emit event
     if (this.eventBus) {
-      this.eventBus.emit('error:logged', entry);
+      this.eventBus.emit(LOCAL_STR_ERROR_LOGGED, entry);
     }
   }
 
@@ -174,11 +188,11 @@ export class ErrorHandler {
     try {
       this.ensureLogDirectory();
       const line = JSON.stringify(entry) + '\n';
-      fs.appendFileSync(this.logPath, line, 'utf8');
+      fs.appendFileSync(this.logPath, line, LOCAL_STR_UTF8);
     } catch (err) {
       // Silently fail - can't log the logging error
       if (this.logToConsole) {
-        console.error('Failed to write to log file:', err.message);
+        console.error(LOCAL_STR_1C6W0, err.message);
       }
     }
   }
@@ -280,7 +294,7 @@ export class ErrorHandler {
     }
 
     // Set auto-dismiss timer if duration > 0
-    if (duration > 0) {
+    if (duration > LOCAL_NUM_ZERO) {
       const timer = setTimeout(() => {
         this.dismissNotification(id);
       }, duration);
@@ -289,7 +303,7 @@ export class ErrorHandler {
 
     // Emit event
     if (this.eventBus) {
-      this.eventBus.emit('notification:show', notification);
+      this.eventBus.emit(LOCAL_STR_NOTIFICATION_SHOW, notification);
     }
 
     // Call callback
@@ -361,7 +375,7 @@ export class ErrorHandler {
 
       // Emit event
       if (this.eventBus) {
-        this.eventBus.emit('notification:dismiss', notification);
+        this.eventBus.emit(LOCAL_STR_Q03NW, notification);
       }
     }
   }
@@ -399,7 +413,7 @@ export class ErrorHandler {
    * @param {Error} error - Error object
    * @param {string} [operation] - Operation that failed
    */
-  handleApiError(error, operation = 'API call') {
+  handleApiError(error, operation = LOCAL_STR_API_CALL) {
     const message = `${operation} failed: ${error.message}`;
     this.notifyError(message, {context: {operation, error}});
   }
@@ -420,7 +434,7 @@ export class ErrorHandler {
       height < MIN_TERMINAL_SIZE.height;
 
     // Log resize
-    this.debug('Terminal resized', {
+    this.debug(LOCAL_STR_TERMINAL_RESIZED, {
       from: oldSize,
       to: this.terminalSize,
       tooSmall: this.terminalTooSmall,
@@ -428,7 +442,7 @@ export class ErrorHandler {
 
     // Emit resize event
     if (this.eventBus) {
-      this.eventBus.emit('terminal:resize', {
+      this.eventBus.emit(LOCAL_STR_TERMINAL_RESIZE, {
         width,
         height,
         tooSmall: this.terminalTooSmall,
@@ -446,7 +460,7 @@ export class ErrorHandler {
     } else if (!this.terminalTooSmall && wasTooSmall) {
       // Terminal is now large enough
       if (this.eventBus) {
-        this.eventBus.emit('terminal:sizeOk', this.terminalSize);
+        this.eventBus.emit(LOCAL_STR_TERMINAL_SIZEOK, this.terminalSize);
       }
     }
   }
@@ -464,7 +478,7 @@ export class ErrorHandler {
 
     // Emit event
     if (this.eventBus) {
-      this.eventBus.emit('terminal:tooSmall', {
+      this.eventBus.emit(LOCAL_STR_TERMINAL_TOOSMALL, {
         current: this.terminalSize,
         minimum: MIN_TERMINAL_SIZE,
       });
@@ -508,7 +522,7 @@ export class ErrorHandler {
    * @param {string} [placeholder='N/A'] - Placeholder for missing data
    * @return {string}
    */
-  formatWithMissingIndicator(value, placeholder = 'N/A') {
+  formatWithMissingIndicator(value, placeholder = LOCAL_STR_N_A) {
     if (value === null || value === undefined) {
       return placeholder;
     }
@@ -546,7 +560,7 @@ export class ErrorHandler {
     }
 
     return {
-      isPartial: missingFields.length > 0,
+      isPartial: missingFields.length > LOCAL_NUM_ZERO,
       missingFields,
     };
   }
@@ -571,7 +585,7 @@ export class ErrorHandler {
    * @param {string} [operation] - Operation name for error messages
    * @return {Function} Wrapped function
    */
-  wrapWithErrorHandling(fn, operation = 'Operation') {
+  wrapWithErrorHandling(fn, operation = LOCAL_STR_OPERATION) {
     return async (...args) => {
       try {
         return await fn(...args);
@@ -589,7 +603,7 @@ export class ErrorHandler {
    * @param {string} [operation] - Operation name for logging
    * @return {*} Result or default value
    */
-  safeExecute(fn, defaultValue, operation = 'Operation') {
+  safeExecute(fn, defaultValue, operation = LOCAL_STR_OPERATION) {
     try {
       return fn();
     } catch (error) {

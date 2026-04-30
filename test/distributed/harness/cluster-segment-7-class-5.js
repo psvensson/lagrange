@@ -1,4 +1,13 @@
 import {CLUSTER_SEGMENT_7_CLASS_SHARED} from './cluster-segment-7-class-shared.js';
+import {ASSERTIONS_SEGMENT_2} from './assertions-segment-2.js';
+import {
+  CONTROL_PLANE_QUIESCENCE_CRITICAL_SYSTEM_OBSERVATION_STATE,
+  buildControlPlaneQuiescencePressureSignalsFromDiagnostics,
+} from './control-plane-quiescence-snapshot.js';
+
+const {
+  countCacheVisibleSatisfiedPriorityRecoveryOperations,
+} = ASSERTIONS_SEGMENT_2;
 
 const {
   ACTIVE_POLL_INTERVAL_MS,
@@ -588,6 +597,19 @@ class Cluster5 extends Cluster4 {
           typeof payload.replicaOperations === 'object' ?
             payload.replicaOperations :
             {};
+        const replicaOperationRows = Array.isArray(replicaOperations.rows) ?
+          replicaOperations.rows :
+          [];
+        const controlPlaneDiagnostics =
+          payload.controlPlaneDiagnostics &&
+          typeof payload.controlPlaneDiagnostics === 'object' ?
+            payload.controlPlaneDiagnostics :
+            null;
+        const cacheVisibleSatisfiedPriorityRecoveryOperationCount =
+          countCacheVisibleSatisfiedPriorityRecoveryOperations(
+            controlPlaneDiagnostics,
+            replicaOperationRows,
+          );
         const leaders =
           payload.leaders && typeof payload.leaders === 'object' ?
             payload.leaders :
@@ -605,6 +627,12 @@ class Cluster5 extends Cluster4 {
             replicaOperations.inFlightCount >= ZERO ?
               replicaOperations.inFlightCount :
               ZERO,
+          staleInFlightCount:
+            Number.isInteger(replicaOperations.staleInFlightCount) &&
+            replicaOperations.staleInFlightCount >= ZERO ?
+              replicaOperations.staleInFlightCount :
+              ZERO,
+          cacheVisibleSatisfiedPriorityRecoveryOperationCount,
           partitionGroupInFlight:
             normalizeReplicaOperationPartitionGroupInFlight(
               replicaOperations.partitionGroupInFlight,
@@ -614,6 +642,10 @@ class Cluster5 extends Cluster4 {
           operationTimelineSignature: buildReplicaOperationTimelineSignature(
             replicaOperations.operationTimelineById,
           ),
+          controlPlanePressureSignals:
+            buildControlPlaneQuiescencePressureSignalsFromDiagnostics(
+              controlPlaneDiagnostics,
+            ),
           error: null,
         };
         if (
@@ -648,7 +680,10 @@ class Cluster5 extends Cluster4 {
       return {
         enabled: false,
         ready: true,
+        observationState:
+          CONTROL_PLANE_QUIESCENCE_CRITICAL_SYSTEM_OBSERVATION_STATE.AVAILABLE,
         readyTableCount: ZERO,
+        snapshotLaneUnavailableTableCount: ZERO,
         totalSpreadGap: ZERO,
         tables: [],
       };
@@ -673,6 +708,11 @@ class Cluster5 extends Cluster4 {
     const readyTableCount = tables.filter(
       (table) => table.ready === true,
     ).length;
+    const snapshotLaneUnavailableTableCount = tables.filter((table) =>
+      table.observationState ===
+        CONTROL_PLANE_QUIESCENCE_CRITICAL_SYSTEM_OBSERVATION_STATE
+          .SNAPSHOT_LANE_UNAVAILABLE,
+    ).length;
     const totalSpreadGap = tables.reduce((sum, table) => {
       const spreadGap = Number.isInteger(table?.spreadGap) ?
         table.spreadGap :
@@ -681,8 +721,16 @@ class Cluster5 extends Cluster4 {
     }, ZERO);
     return {
       enabled: true,
-      ready: readyTableCount === tables.length,
+      ready:
+        snapshotLaneUnavailableTableCount === ZERO &&
+        readyTableCount === tables.length,
+      observationState:
+        snapshotLaneUnavailableTableCount > ZERO ?
+          CONTROL_PLANE_QUIESCENCE_CRITICAL_SYSTEM_OBSERVATION_STATE
+            .SNAPSHOT_LANE_UNAVAILABLE :
+          CONTROL_PLANE_QUIESCENCE_CRITICAL_SYSTEM_OBSERVATION_STATE.AVAILABLE,
       readyTableCount,
+      snapshotLaneUnavailableTableCount,
       requiredDistinctNodeCount,
       totalSpreadGap,
       tables,
@@ -732,6 +780,8 @@ class Cluster5 extends Cluster4 {
           readyReplicaCount: discoverySummary.readyReplicaCount,
           totalReplicaCount: discoverySummary.totalReplicaCount,
           requiredDistinctNodeCount,
+          observationState:
+            CONTROL_PLANE_QUIESCENCE_CRITICAL_SYSTEM_OBSERVATION_STATE.AVAILABLE,
           spreadGap: Math.max(
             ZERO,
             requiredDistinctNodeCount - discoverySummary.readyDistinctNodeCount,
@@ -766,6 +816,9 @@ class Cluster5 extends Cluster4 {
       readyReplicaCount: ZERO,
       totalReplicaCount: ZERO,
       requiredDistinctNodeCount,
+      observationState:
+        CONTROL_PLANE_QUIESCENCE_CRITICAL_SYSTEM_OBSERVATION_STATE
+          .SNAPSHOT_LANE_UNAVAILABLE,
       spreadGap: requiredDistinctNodeCount,
       ready: false,
       error: lastError || 'no_service_discovery_candidates',
@@ -773,8 +826,7 @@ class Cluster5 extends Cluster4 {
   }
 
   _resolveActiveWaitTimeoutMs() {
-    const baseTimeout =
-      this._config.timeouts?.convergence || TIMEOUTS.CONVERGENCE;
+    const baseTimeout = this._resolveActiveWaitBaseTimeoutMs();
     const configuredClusterSize = Number.isInteger(this._config?.size) ?
       this._config.size :
       0;
@@ -800,6 +852,25 @@ class Cluster5 extends Cluster4 {
       );
     const maxScaledTimeout = baseTimeout * ACTIVE_WAIT_TIMEOUT_MAX_MULTIPLIER;
     return Math.min(scaledTimeout, maxScaledTimeout);
+  }
+
+  _resolveActiveWaitBaseTimeoutMs() {
+    const configuredConvergenceTimeoutMs = this._config.timeouts?.convergence;
+    if (
+      Number.isFinite(configuredConvergenceTimeoutMs) &&
+      configuredConvergenceTimeoutMs > ZERO
+    ) {
+      return Math.floor(configuredConvergenceTimeoutMs);
+    }
+    const configuredScenarioDefaultTimeoutMs =
+      this._config.timeouts?.scenarioDefault;
+    if (
+      Number.isFinite(configuredScenarioDefaultTimeoutMs) &&
+      configuredScenarioDefaultTimeoutMs > ZERO
+    ) {
+      return Math.floor(configuredScenarioDefaultTimeoutMs);
+    }
+    return TIMEOUTS.CONVERGENCE;
   }
 
   _resolveNodeHandleAdminQueryTimeoutMs() {

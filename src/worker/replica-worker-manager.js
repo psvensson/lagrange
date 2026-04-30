@@ -35,6 +35,29 @@ import {
   ReplicaCreationProgressReporter,
 } from '../utils/replica-creation-progress-reporter.js';
 
+const LOCAL_STR_REPLICA_WORKER_JS = 'replica-worker.js';
+const LOCAL_STR_1P56U = 'replica-worker.bundle.cjs';
+const LOCAL_STR_EMPTY = '';
+const LOCAL_STR_STRING = 'string';
+const LOCAL_STR_ERROR = 'error';
+const LOCAL_STR_MESSAGE = 'message';
+const LOCAL_STR_12101 = 'Failed to handle worker message';
+const LOCAL_STR_O3DH7 = 'Created dedicated replica pool';
+const LOCAL_STR_WORKER_SEND = 'WORKER_SEND';
+const LOCAL_STR_1HK0P = 'Routing worker message';
+const LOCAL_STR_SVWDT = 'Invalid target address format';
+const LOCAL_STR_9XUGG = 'Target replica not found locally';
+const LOCAL_STR_7II3O = 'Failed to route external worker message';
+const LOCAL_STR_J1K7I = 'Worker message delivered';
+const LOCAL_STR_1J4DX = 'Failed to route local worker message';
+const LOCAL_STR_1P3J1 = 'Health check failed';
+const LOCAL_STR_1VOGR = 'Worker health check failed';
+const LOCAL_STR_TIMEOUT = 'timeout';
+const LOCAL_STR_1E23B = 'Failed to destroy dedicated replica pool';
+const LOCAL_STR_ORCT1 = 'Failed to destroy dedicated replica pool after crash';
+const LOCAL_STR_140D3 = 'Failed to stop replica during shutdown';
+const LOCAL_STR_1YHWS = 'Failed to destroy dedicated pool during shutdown';
+
 /**
  * Error messages for ReplicaWorkerManager.
  * @type {Readonly<Object>}
@@ -126,8 +149,8 @@ const REPLICA_WORKER_MODULE_DIR = resolveModuleDirectory(resolveModuleDirectory)
 function resolveReplicaWorkerPath() {
   return resolvePackagedRuntimeFile({
     moduleDir: REPLICA_WORKER_MODULE_DIR,
-    sourceFileName: 'replica-worker.js',
-    bundledFileName: 'replica-worker.bundle.cjs',
+    sourceFileName: LOCAL_STR_REPLICA_WORKER_JS,
+    bundledFileName: LOCAL_STR_1P56U,
   });
 }
 
@@ -329,9 +352,9 @@ class ReplicaWorkerManager extends EventEmitter {
    */
   formatReplicaCreationError(error) {
     if (!error) {
-      return '';
+      return LOCAL_STR_EMPTY;
     }
-    return typeof error === 'string' ? error : error.message;
+    return typeof error === LOCAL_STR_STRING ? error : error.message;
   }
 
   /**
@@ -391,7 +414,7 @@ class ReplicaWorkerManager extends EventEmitter {
     }
 
     // Handle worker errors
-    pool.on('error', (error) => {
+    pool.on(LOCAL_STR_ERROR, (error) => {
       this.logger.error(MANAGER_LOG_MSG.WORKER_CRASHED, {
         nodeId: this.nodeId,
         error: error.message,
@@ -401,9 +424,9 @@ class ReplicaWorkerManager extends EventEmitter {
     // Handle messages from workers (IPC messages for Raft packet routing)
     // Workers send WORKER_SEND messages via parentPort.postMessage()
     // Piscina emits these as 'message' events on the pool
-    pool.on('message', (message) => {
+    pool.on(LOCAL_STR_MESSAGE, (message) => {
       this.handleWorkerMessage(message).catch((error) => {
-        this.logger.error('Failed to handle worker message', {
+        this.logger.error(LOCAL_STR_12101, {
           nodeId: this.nodeId,
           error: error.message,
           messageType: message?.type,
@@ -436,7 +459,7 @@ class ReplicaWorkerManager extends EventEmitter {
       idleTimeout: MANAGER_DEFAULT.IDLE_TIMEOUT_MS,
     });
     this.setupPoolEventHandlersFor(pool);
-    this.logger.debug('Created dedicated replica pool', {
+    this.logger.debug(LOCAL_STR_O3DH7, {
       nodeId: this.nodeId,
       replicaId,
     });
@@ -481,7 +504,7 @@ class ReplicaWorkerManager extends EventEmitter {
     }
 
     // Handle WORKER_SEND messages - route to target worker
-    if (message.type === 'WORKER_SEND') {
+    if (message.type === LOCAL_STR_WORKER_SEND) {
       await this.routeWorkerMessage(message);
       return;
     }
@@ -496,7 +519,7 @@ class ReplicaWorkerManager extends EventEmitter {
   async routeWorkerMessage(envelope) {
     const {targetAddress, sourceAddress, payload, messageId, correlationId} = envelope;
 
-    this.logger.debug('Routing worker message', {
+    this.logger.debug(LOCAL_STR_1HK0P, {
       nodeId: this.nodeId,
       sourceAddress,
       targetAddress,
@@ -506,7 +529,7 @@ class ReplicaWorkerManager extends EventEmitter {
     // Extract replica ID from target address (format: nodeId/entityType/replicaId)
     const targetParts = targetAddress.split('/');
     if (targetParts.length < WORKER_MANAGER_ADDRESS_SEGMENT.MIN_LENGTH) {
-      this.logger.warn('Invalid target address format', {
+      this.logger.warn(LOCAL_STR_SVWDT, {
         targetAddress,
         messageId,
       });
@@ -518,7 +541,7 @@ class ReplicaWorkerManager extends EventEmitter {
     // Check if target replica exists in this manager
     const targetHandle = this.workers.get(targetReplicaId);
     if (!targetHandle) {
-      this.logger.debug('Target replica not found locally', {
+      this.logger.debug(LOCAL_STR_9XUGG, {
         targetReplicaId,
         messageId,
       });
@@ -527,7 +550,7 @@ class ReplicaWorkerManager extends EventEmitter {
         try {
           await this.messageRouter.deliver(targetAddress, payload);
         } catch (error) {
-          this.logger.warn('Failed to route external worker message', {
+          this.logger.warn(LOCAL_STR_7II3O, {
             nodeId: this.nodeId,
             sourceAddress,
             targetAddress,
@@ -542,13 +565,13 @@ class ReplicaWorkerManager extends EventEmitter {
     try {
       await this.deliverMessage(targetReplicaId, payload);
 
-      this.logger.debug('Worker message delivered', {
+      this.logger.debug(LOCAL_STR_J1K7I, {
         nodeId: this.nodeId,
         targetReplicaId,
         messageId,
       });
     } catch (error) {
-      this.logger.warn('Failed to route local worker message', {
+      this.logger.warn(LOCAL_STR_1J4DX, {
         nodeId: this.nodeId,
         sourceAddress,
         targetAddress,
@@ -571,7 +594,7 @@ class ReplicaWorkerManager extends EventEmitter {
 
     this.healthCheckTimer = setInterval(() => {
       this.performHealthChecks().catch((error) => {
-        this.logger.error('Health check failed', {
+        this.logger.error(LOCAL_STR_1P3J1, {
           nodeId: this.nodeId,
           error: error.message,
         });
@@ -713,7 +736,7 @@ class ReplicaWorkerManager extends EventEmitter {
         WORKER_HEALTH_STATUS.UNHEALTHY;
     } catch (error) {
       handle.healthStatus = WORKER_HEALTH_STATUS.UNHEALTHY;
-      this.logger.warn('Worker health check failed', {
+      this.logger.warn(LOCAL_STR_1VOGR, {
         replicaId,
         error: error.message,
       });
@@ -878,7 +901,7 @@ class ReplicaWorkerManager extends EventEmitter {
       return handle;
     } catch (error) {
       // Check if this is a timeout error - Requirements 7.1, 7.2, 7.3
-      if (error.message.includes('timeout')) {
+      if (error.message.includes(LOCAL_STR_TIMEOUT)) {
         // Clean up any partially created resources
         await this.cleanupPartialReplica(options.replicaId);
         this.failReplicaCreationProgress(
@@ -1032,7 +1055,7 @@ class ReplicaWorkerManager extends EventEmitter {
       return handle;
     } catch (error) {
       // Check if this is a timeout error - Requirements 7.1, 7.2, 7.3
-      if (error.message.includes('timeout')) {
+      if (error.message.includes(LOCAL_STR_TIMEOUT)) {
         // Clean up any partially created resources
         await this.cleanupPartialReplica(options.replicaId);
         this.failReplicaCreationProgress(
@@ -1131,7 +1154,7 @@ class ReplicaWorkerManager extends EventEmitter {
       this.workers.delete(replicaId);
 
       await this.destroyDedicatedReplicaPool(replicaId).catch((error) => {
-        this.logger.warn('Failed to destroy dedicated replica pool', {
+        this.logger.warn(LOCAL_STR_1E23B, {
           nodeId: this.nodeId,
           replicaId,
           error: error.message,
@@ -1340,7 +1363,7 @@ class ReplicaWorkerManager extends EventEmitter {
     this.workers.delete(replicaId);
 
     this.destroyDedicatedReplicaPool(replicaId).catch((destroyError) => {
-      this.logger.warn('Failed to destroy dedicated replica pool after crash', {
+      this.logger.warn(LOCAL_STR_ORCT1, {
         nodeId: this.nodeId,
         replicaId,
         error: destroyError.message,
@@ -1420,7 +1443,7 @@ class ReplicaWorkerManager extends EventEmitter {
     for (const replicaId of this.workers.keys()) {
       stopPromises.push(
         this.stopReplica(replicaId).catch((error) => {
-          this.logger.warn('Failed to stop replica during shutdown', {
+          this.logger.warn(LOCAL_STR_140D3, {
             replicaId,
             error: error.message,
           });
@@ -1435,7 +1458,7 @@ class ReplicaWorkerManager extends EventEmitter {
     for (const replicaId of this.replicaPools.keys()) {
       poolDestroyPromises.push(
         this.destroyDedicatedReplicaPool(replicaId).catch((error) => {
-          this.logger.warn('Failed to destroy dedicated pool during shutdown', {
+          this.logger.warn(LOCAL_STR_1YHWS, {
             replicaId,
             error: error.message,
           });

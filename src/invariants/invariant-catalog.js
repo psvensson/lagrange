@@ -1,3 +1,8 @@
+const LOCAL_STR_EMPTY = '';
+const LOCAL_STR_OBJECT = 'object';
+const LOCAL_STR_STRING = 'string';
+const LOCAL_NUM_ZERO = 0;
+
 const INVARIANT_SEVERITY = Object.freeze({
   CRITICAL: 'critical',
   ERROR: 'error',
@@ -63,7 +68,7 @@ function freezeDefinition(definition) {
   return Object.freeze({
     ...definition,
     expected: Object.freeze({
-      condition: String(definition.expected?.condition || ''),
+      condition: String(definition.expected?.condition || LOCAL_STR_EMPTY),
     }),
   });
 }
@@ -292,14 +297,14 @@ const INVARIANT_CATALOG = Object.freeze({
 });
 
 function clonePayload(payload) {
-  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+  if (!payload || typeof payload !== LOCAL_STR_OBJECT || Array.isArray(payload)) {
     return {};
   }
   return {...payload};
 }
 
 function getInvariantDefinition(invariantId) {
-  if (typeof invariantId !== 'string' || invariantId.length === 0) {
+  if (typeof invariantId !== LOCAL_STR_STRING || invariantId.length === LOCAL_NUM_ZERO) {
     return null;
   }
   return INVARIANT_CATALOG[invariantId] || null;
@@ -308,25 +313,25 @@ function getInvariantDefinition(invariantId) {
 function createInvariantRecord(options = {}) {
   const definition = getInvariantDefinition(options.invariantId);
   if (!definition) {
-    throw new Error(`Unknown invariant ID: ${String(options.invariantId || '')}`);
+    throw new Error(`Unknown invariant ID: ${String(options.invariantId || LOCAL_STR_EMPTY)}`);
   }
 
   return Object.freeze({
     invariantId: definition.id,
     severity: definition.severity,
-    scope: typeof options.scope === 'string' && options.scope.length > 0 ?
+    scope: typeof options.scope === LOCAL_STR_STRING && options.scope.length > LOCAL_NUM_ZERO ?
       options.scope :
       definition.scope,
-    entityId: typeof options.entityId === 'string' && options.entityId.length > 0 ?
+    entityId: typeof options.entityId === LOCAL_STR_STRING && options.entityId.length > LOCAL_NUM_ZERO ?
       options.entityId :
       null,
     owningSubsystem:
-      typeof options.owningSubsystem === 'string' &&
-        options.owningSubsystem.length > 0 ?
+      typeof options.owningSubsystem === LOCAL_STR_STRING &&
+        options.owningSubsystem.length > LOCAL_NUM_ZERO ?
         options.owningSubsystem :
         definition.owningSubsystem,
     reasonCode:
-      typeof options.reasonCode === 'string' && options.reasonCode.length > 0 ?
+      typeof options.reasonCode === LOCAL_STR_STRING && options.reasonCode.length > LOCAL_NUM_ZERO ?
         options.reasonCode :
         definition.defaultReasonCode,
     passed: options.passed !== false,

@@ -49,6 +49,8 @@ import {
   UNIFIED_SERVICE_TYPE,
 } from '../../constants/index.js';
 
+const LOCAL_STR_STRING = 'string';
+
 /**
  * Handles the partitions phase of seed bootstrap.
  */
@@ -657,7 +659,7 @@ class SeedPartitionsPhase {
 
         const configValue =
           result.rows[NUM.ZERO]?.[COLUMN.CONFIG_VALUE];
-        if (typeof configValue !== 'string' ||
+        if (typeof configValue !== LOCAL_STR_STRING ||
             configValue.length === NUM.ZERO) {
           continue;
         }
@@ -823,7 +825,7 @@ class SeedPartitionsPhase {
     if (!error) {
       return STRING.EMPTY;
     }
-    return typeof error === 'string' ? error : error.message;
+    return typeof error === LOCAL_STR_STRING ? error : error.message;
   }
 
   /**

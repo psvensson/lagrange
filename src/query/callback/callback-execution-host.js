@@ -38,6 +38,8 @@ import {buildCallbackContext} from './callback-context.js';
 import {DebugEmitter} from '../../debug/debug-emitter.js';
 import {DEBUG_TRACE_SOURCE} from '../../debug/debug-constants.js';
 
+const LOCAL_NUM_ZERO = 0;
+
 const SUBSYSTEM = 'callback-execution-host';
 
 /**
@@ -263,10 +265,10 @@ class CallbackExecutionHost {
         totalRows,
         totalBytes,
         totalDurationMs,
-        rowsPerSecond: totalDurationMs > 0 ?
-          Math.round(totalRows / (totalDurationMs / TIME_MS.SECOND)) : 0,
-        avgBatchDurationMs: batches.length > 0 ?
-          Math.round(totalDurationMs / batches.length) : 0,
+        rowsPerSecond: totalDurationMs > LOCAL_NUM_ZERO ?
+          Math.round(totalRows / (totalDurationMs / TIME_MS.SECOND)) : LOCAL_NUM_ZERO,
+        avgBatchDurationMs: batches.length > LOCAL_NUM_ZERO ?
+          Math.round(totalDurationMs / batches.length) : LOCAL_NUM_ZERO,
         failedPartitions: stageResult.failedPartitions,
       });
     } catch (metricsErr) {

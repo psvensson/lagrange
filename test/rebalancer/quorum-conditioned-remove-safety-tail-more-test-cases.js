@@ -26,12 +26,20 @@ const TEST_PRIORITY_REQUIRED_DISTINCT_NODE_COUNT = 2;
 const TEST_MIN_REPLICA_COUNT = 3;
 const TEST_EXPECTED_REPLACEMENT_ELECTION_DELIVERY_COUNT = 1;
 const TEST_EXPECTED_SOURCE_HANDOFF_AND_REPLACEMENT_ELECTION_COUNT = 2;
+const TEST_EXPECTED_NO_DELIVERY_COUNT = 0;
 const TEST_REPLACEMENT_ELECTION_DELIVERY_INDEX = 1;
 const TEST_CANONICAL_LEADER_NODE_ID_MISSING = null;
+const TEST_MINIMUM_REPLICA_ERROR_PATTERN =
+  /would drop voter-ready replicas below minimum/i;
 const TEST_REPLACEMENT_NOT_FOUND_FAILURE_TITLE =
   'RebalanceCoordinator - replacement target not-found evidence fails active REPLACE source removal';
 const TEST_REPLACEMENT_NOT_FOUND_ERROR_PATTERN =
   /replacement leader election returned not_found/i;
+const TEST_REASON_CONTROL_PLANE_PUBLICATION_PENDING =
+  'control_plane_publication_pending';
+const TEST_REASON_PRIORITY_CONTROL_PLANE_RECOVERY_PENDING =
+  'PRIORITY_CONTROL_PLANE_RECOVERY_PENDING';
+const TEST_DELIVERY_SENT = 'deliver';
 
 export function registerQuorumConditionedRemoveSafetyTailMoreTests({
   test,
@@ -75,11 +83,21 @@ export function registerQuorumConditionedRemoveSafetyTailMoreTests({
         enableTimeouts: false,
         messageRouter: {
           deliver: async (target, payload, options) => {
+            const deliveryIndex = deliveries.length;
             deliveries.push({target, payload, options});
-            if (payload.type === ReplicaOperationMessageType.STEP_DOWN_REPLICA) {
+            if (
+              payload.type === ReplicaOperationMessageType.STEP_DOWN_REPLICA &&
+              deliveryIndex === 0
+            ) {
               return {
                 acknowledged: true,
                 status: ReplicaOperationResponseStatus.NOT_FOUND,
+              };
+            }
+            if (payload.type === ReplicaOperationMessageType.STEP_DOWN_REPLICA) {
+              return {
+                acknowledged: true,
+                status: ReplicaOperationResponseStatus.COMPLETED,
               };
             }
             return {acknowledged: true, status: 'initiated'};
@@ -464,7 +482,6 @@ export function registerQuorumConditionedRemoveSafetyTailMoreTests({
       const replacementElectionResult = await coordinator.executeOperation(
         operation,
       );
-      const failedResult = await coordinator.executeOperation(operation);
 
       t.equal(
         sourceHandoffResult.skipped,
@@ -472,9 +489,9 @@ export function registerQuorumConditionedRemoveSafetyTailMoreTests({
         'source handoff should defer the first source-removal attempt',
       );
       t.equal(
-        replacementElectionResult.skipped,
-        true,
-        'replacement election should defer while recording target-side evidence',
+        replacementElectionResult.success,
+        false,
+        'replacement target not-found should fail while recording target-side evidence',
       );
       t.equal(
         deliveries.length,
@@ -487,12 +504,12 @@ export function registerQuorumConditionedRemoveSafetyTailMoreTests({
         'replacement election should target the active replacement replica',
       );
       t.equal(
-        failedResult.success,
+        replacementElectionResult.success,
         false,
         'target not-found evidence should fail the stale active REPLACE',
       );
       t.match(
-        failedResult.error,
+        replacementElectionResult.error,
         TEST_REPLACEMENT_NOT_FOUND_ERROR_PATTERN,
         'the failure should preserve the target not-found safety reason',
       );
@@ -707,6 +724,153 @@ export function registerQuorumConditionedRemoveSafetyTailMoreTests({
       LoggingService.resetInstance();
     }
   });
+
+  test('RebalanceCoordinator - preserves publication partition minimum voter count after leader handoff closes',
+    async (t) => {
+      ConfigurationManager.resetInstance();
+      LoggingService.resetInstance();
+      ConfigurationManager.getInstance().initialize({});
+      LoggingService.getInstance().initialize({level: TEST_LOG_LEVEL_ERROR});
+
+      const deliveries = [];
+      const coordinator = createTestCoordinator({
+        nodeId: TEST_NODE_D,
+        enableTimeouts: false,
+        messageRouter: {
+          deliver: async (target, payload, options) => {
+            deliveries.push({target, payload, options});
+            return {
+              acknowledged: true,
+              status: TEST_REPLICA_OPERATION_RESPONSE_INITIATED,
+            };
+          },
+          getConnectionState: () => TEST_CONNECTION_STATE_CONNECTED,
+          pingNode: async () => true,
+          isOutboundQueueAvailable: () => true,
+        },
+        controlPlaneReadinessService: {
+          getNodeReadinessSync(nodeId) {
+            return {
+              nodeId,
+              dimensions: {
+                controlPlaneRecoveryEligible: true,
+                repairEligible: true,
+                serveEligible: true,
+              },
+            };
+          },
+          async getMembershipPublicationPlanningSnapshotBestEffort(nodeId) {
+            return this.getMembershipPublicationPlanningSnapshotSync(nodeId);
+          },
+          async getMembershipPublicationPlanningSnapshot(nodeId) {
+            return this.getMembershipPublicationPlanningSnapshotSync(nodeId);
+          },
+          getMembershipPublicationPlanningSnapshotSync(nodeId) {
+            return {
+              publicationStatus: TEST_PUBLICATION_STATUS_PUBLISHED,
+              publishedActiveNodeIdsPresent: true,
+              publishedActiveNodeIds: Object.freeze([
+                TEST_NODE_A,
+                TEST_NODE_D,
+              ]),
+              recoveryActiveNodeIds: Object.freeze([
+                TEST_NODE_A,
+                TEST_NODE_D,
+              ]),
+              projectedServingNodeIds: Object.freeze([
+                TEST_NODE_A,
+                TEST_NODE_D,
+              ]),
+              publishedMembershipIncludesTargetNode: nodeId === TEST_NODE_D,
+              priorityPartitionSummary: Object.freeze({
+                satisfied: true,
+                requiredDistinctNodeCount:
+                  TEST_PRIORITY_REQUIRED_DISTINCT_NODE_COUNT,
+                missingPartitionIds: [],
+              }),
+            };
+          },
+        },
+        tablePolicyService: {
+          getPolicyForPartition: () => ({
+            minReplicaCount: TEST_MIN_REPLICA_COUNT,
+          }),
+        },
+        cacheData: {
+          nodes: [
+            createReadyNode(TEST_NODE_A),
+            createReadyNode(TEST_NODE_D),
+          ],
+          services: [
+            createCriticalPartitionServiceRow({
+              partitionId: TEST_CONTROL_PLANE_PUBLICATIONS_PARTITION_ID,
+              replicaId: TEST_CONTROL_PLANE_PUBLICATIONS_SOURCE_REPLICA_ID,
+              nodeId: TEST_NODE_A,
+              raftRole: TEST_RAFT_ROLE_FOLLOWER,
+            }),
+            createCriticalPartitionServiceRow({
+              partitionId: TEST_CONTROL_PLANE_PUBLICATIONS_PARTITION_ID,
+              replicaId:
+                TEST_CONTROL_PLANE_PUBLICATIONS_REPLACEMENT_REPLICA_ID,
+              nodeId: TEST_NODE_D,
+              raftRole: TEST_RAFT_ROLE_LEADER,
+            }),
+          ],
+        },
+      });
+
+      coordinator.initialize();
+      try {
+        coordinator.systemTableCache.merge(
+          TEST_PARTITIONS_TABLE_NAME,
+          TEST_CONTROL_PLANE_PUBLICATIONS_PARTITION_ID,
+          createCriticalPartitionRow({
+            partitionId: TEST_CONTROL_PLANE_PUBLICATIONS_PARTITION_ID,
+            leaderNodeId: TEST_NODE_D,
+          }),
+        );
+
+        const operation = await coordinator.createOperation({
+          type: OperationType.REPLACE,
+          partitionId: TEST_CONTROL_PLANE_PUBLICATIONS_PARTITION_ID,
+          nodeId: TEST_NODE_D,
+          sourceNodeId: TEST_NODE_A,
+          replicaId: TEST_CONTROL_PLANE_PUBLICATIONS_SOURCE_REPLICA_ID,
+        });
+
+        operation.replicaId =
+          TEST_CONTROL_PLANE_PUBLICATIONS_REPLACEMENT_REPLICA_ID;
+        operation.workflowStep = WORKFLOW_STEP.ACTIVE;
+        operation.status = TEST_OPERATION_STATUS_ACTIVE;
+
+        const blockedResult = await coordinator.executeOperation(operation);
+
+        t.equal(
+          blockedResult.success,
+          false,
+          'publication source removal should stay blocked below minimum voters',
+        );
+        t.equal(
+          blockedResult.skipped,
+          true,
+          'minimum voter protection should defer rather than fail terminally',
+        );
+        t.match(
+          blockedResult.error,
+          TEST_MINIMUM_REPLICA_ERROR_PATTERN,
+          'the defer should explain the minimum voter-ready replica protection',
+        );
+        t.equal(
+          deliveries.length,
+          TEST_EXPECTED_NO_DELIVERY_COUNT,
+          'source removal should not dispatch below the publication partition minimum',
+        );
+      } finally {
+        await coordinator.shutdown();
+        ConfigurationManager.resetInstance();
+        LoggingService.resetInstance();
+      }
+    });
 
   test('RebalanceCoordinator - requests leader handoff before removing sql_write_operations source when authority does not prove a follower',
     async (t) => {
@@ -1087,6 +1251,200 @@ export function registerQuorumConditionedRemoveSafetyTailMoreTests({
           String(result.error || operation.errorMessage || ''),
           /eligible recovery cohort|eligible cohort/i,
           'the failure should explain the current recovery cohort mismatch',
+        );
+      } finally {
+        await coordinator.shutdown();
+        ConfigurationManager.resetInstance();
+        LoggingService.resetInstance();
+      }
+    });
+
+  test('RebalanceCoordinator - defers priority REPLACE source removal when cohort mismatch is publication-transient',
+    async (t) => {
+      ConfigurationManager.resetInstance();
+      LoggingService.resetInstance();
+      ConfigurationManager.getInstance().initialize({});
+      LoggingService.getInstance().initialize({level: TEST_LOG_LEVEL_ERROR});
+
+      const deliveries = [];
+      const coordinator = createTestCoordinator({
+        nodeId: TEST_NODE_D,
+        enableTimeouts: false,
+        messageRouter: {
+          deliver: async () => {
+            deliveries.push(TEST_DELIVERY_SENT);
+            return {acknowledged: true, status: TEST_REPLICA_OPERATION_RESPONSE_INITIATED};
+          },
+          getConnectionState: () => TEST_CONNECTION_STATE_CONNECTED,
+          pingNode: async () => true,
+          isOutboundQueueAvailable: () => true,
+        },
+        controlPlaneReadinessService: {
+          getNodeReadinessSync(nodeId) {
+            return {
+              nodeId,
+              dimensions: {
+                controlPlaneRecoveryEligible: true,
+                controlPlanePublished: false,
+                repairEligible: true,
+                serveEligible: false,
+              },
+              reasonCodes: [
+                TEST_REASON_CONTROL_PLANE_PUBLICATION_PENDING,
+                TEST_REASON_PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
+              ],
+            };
+          },
+          async getMembershipPublicationPlanningSnapshotBestEffort(nodeId) {
+            return {
+              publicationStatus: TEST_PUBLICATION_STATUS_PUBLISHED,
+              publishedActiveNodeIdsPresent: true,
+              publishedActiveNodeIds: Object.freeze([
+                TEST_NODE_A,
+                TEST_NODE_B,
+                TEST_NODE_C,
+              ]),
+              recoveryActiveNodeIds: Object.freeze([
+                TEST_NODE_A,
+                TEST_NODE_B,
+                TEST_NODE_C,
+              ]),
+              projectedServingNodeIds: Object.freeze([
+                TEST_NODE_A,
+                TEST_NODE_B,
+                TEST_NODE_C,
+              ]),
+              publishedMembershipIncludesTargetNode: nodeId === TEST_NODE_D,
+              priorityPartitionSummary: Object.freeze({
+                satisfied: false,
+                requiredDistinctNodeCount:
+                  TEST_PRIORITY_REQUIRED_DISTINCT_NODE_COUNT,
+                missingPartitionIds: [
+                  TEST_CONTROL_PLANE_PUBLICATIONS_PARTITION_ID,
+                ],
+              }),
+            };
+          },
+          async getMembershipPublicationPlanningSnapshot(nodeId) {
+            return this.getMembershipPublicationPlanningSnapshotBestEffort(
+              nodeId,
+            );
+          },
+          getMembershipPublicationPlanningSnapshotSync(nodeId) {
+            return {
+              publicationStatus: TEST_PUBLICATION_STATUS_PUBLISHED,
+              publishedActiveNodeIdsPresent: true,
+              publishedActiveNodeIds: Object.freeze([
+                TEST_NODE_A,
+                TEST_NODE_B,
+                TEST_NODE_C,
+              ]),
+              recoveryActiveNodeIds: Object.freeze([
+                TEST_NODE_A,
+                TEST_NODE_B,
+                TEST_NODE_C,
+              ]),
+              projectedServingNodeIds: Object.freeze([
+                TEST_NODE_A,
+                TEST_NODE_B,
+                TEST_NODE_C,
+              ]),
+              publishedMembershipIncludesTargetNode: nodeId === TEST_NODE_D,
+              priorityPartitionSummary: Object.freeze({
+                satisfied: false,
+                requiredDistinctNodeCount:
+                  TEST_PRIORITY_REQUIRED_DISTINCT_NODE_COUNT,
+                missingPartitionIds: [
+                  TEST_CONTROL_PLANE_PUBLICATIONS_PARTITION_ID,
+                ],
+              }),
+            };
+          },
+        },
+        tablePolicyService: {
+          getPolicyForPartition: () => ({minReplicaCount: TEST_MIN_REPLICA_COUNT}),
+        },
+        cacheData: {
+          nodes: [
+            createReadyNode(TEST_NODE_A),
+            createReadyNode(TEST_NODE_B),
+            createReadyNode(TEST_NODE_C),
+            createReadyNode(TEST_NODE_D),
+          ],
+          services: [
+            createCriticalPartitionServiceRow({
+              partitionId: TEST_CONTROL_PLANE_PUBLICATIONS_PARTITION_ID,
+              replicaId: TEST_CONTROL_PLANE_PUBLICATIONS_SOURCE_REPLICA_ID,
+              nodeId: TEST_NODE_A,
+              raftRole: TEST_RAFT_ROLE_FOLLOWER,
+            }),
+            createCriticalPartitionServiceRow({
+              partitionId: TEST_CONTROL_PLANE_PUBLICATIONS_PARTITION_ID,
+              replicaId: TEST_CONTROL_PLANE_PUBLICATIONS_PEER_REPLICA_ID,
+              nodeId: TEST_NODE_B,
+              raftRole: TEST_RAFT_ROLE_FOLLOWER,
+            }),
+            createCriticalPartitionServiceRow({
+              partitionId: TEST_CONTROL_PLANE_PUBLICATIONS_PARTITION_ID,
+              replicaId: TEST_CONTROL_PLANE_PUBLICATIONS_OTHER_REPLICA_ID,
+              nodeId: TEST_NODE_C,
+              raftRole: TEST_RAFT_ROLE_FOLLOWER,
+            }),
+            createCriticalPartitionServiceRow({
+              partitionId: TEST_CONTROL_PLANE_PUBLICATIONS_PARTITION_ID,
+              replicaId: TEST_CONTROL_PLANE_PUBLICATIONS_REPLACEMENT_REPLICA_ID,
+              nodeId: TEST_NODE_D,
+              raftRole: TEST_RAFT_ROLE_LEADER,
+            }),
+          ],
+        },
+      });
+
+      coordinator.initialize();
+      try {
+        coordinator.systemTableCache.merge(
+          TEST_PARTITIONS_TABLE_NAME,
+          TEST_CONTROL_PLANE_PUBLICATIONS_PARTITION_ID,
+          createCriticalPartitionRow({
+            partitionId: TEST_CONTROL_PLANE_PUBLICATIONS_PARTITION_ID,
+            leaderNodeId: TEST_NODE_D,
+          }),
+        );
+
+        const operation = await coordinator.createOperation({
+          type: OperationType.REPLACE,
+          partitionId: TEST_CONTROL_PLANE_PUBLICATIONS_PARTITION_ID,
+          nodeId: TEST_NODE_D,
+          sourceNodeId: TEST_NODE_A,
+          replicaId: TEST_CONTROL_PLANE_PUBLICATIONS_SOURCE_REPLICA_ID,
+        });
+
+        operation.replicaId =
+          TEST_CONTROL_PLANE_PUBLICATIONS_REPLACEMENT_REPLICA_ID;
+        operation.workflowStep = WORKFLOW_STEP.ACTIVE;
+        operation.status = TEST_OPERATION_STATUS_ACTIVE;
+
+        const result = await coordinator.executeOperation(operation);
+
+        t.equal(
+          result.skipped,
+          true,
+          'publication-transient cohort mismatch should defer source removal',
+        );
+        t.equal(
+          result.reason,
+          REBALANCER_SKIP_REASON.SAFETY_BLOCKED,
+          'the operation should stay retryable behind the remove-safety gate',
+        );
+        t.equal(
+          operation.workflowStep,
+          WORKFLOW_STEP.ACTIVE,
+          'the active replace should remain open for the next safety retry',
+        );
+        t.equal(
+          deliveries.length,
+          0,
+          'transient publication evidence should not dispatch source removal',
         );
       } finally {
         await coordinator.shutdown();

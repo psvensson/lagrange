@@ -15,11 +15,13 @@ import {
 } from '../../src/control-plane/priority-recovery-snapshot.js';
 import {
   PUBLICATION_RECOVERY_GATE_STATE,
+  PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE,
   buildPublicationRecoveryGateSnapshot,
 } from '../../src/control-plane/publication-recovery-gate.js';
 
 const TEST_PUBLICATION_EPOCH = 7;
 const TEST_PUBLICATION_DEBT_COUNT = 1;
+const TEST_EMPTY_NODE_IDS = Object.freeze([]);
 const TEST_NODE_ID = Object.freeze({
   FIRST: 'node-a',
   SECOND: 'node-b',
@@ -96,6 +98,54 @@ test('buildPublicationRecoveryGateSnapshot preserves count-only publication debt
     t.same(gate.reasonCodes, [
       CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PUBLICATION_EPOCH_PENDING,
     ]);
+    t.end();
+  });
+
+test('buildPublicationRecoveryGateSnapshot preserves reason-only publication debt',
+  (t) => {
+    const gate = buildPublicationRecoveryGateSnapshot({
+      publicationEpoch: TEST_PUBLICATION_EPOCH,
+      priorityPartitionSummary: TEST_PRIORITY_PARTITION_SUMMARY.SATISFIED,
+      priorityRecoveryReasonCodes: [
+        CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PUBLICATION_EPOCH_PENDING,
+      ],
+    });
+
+    t.equal(gate.state, PUBLICATION_RECOVERY_GATE_STATE.PUBLICATION_PENDING);
+    t.equal(gate.ready, false);
+    t.equal(gate.publicationPending, true);
+    t.same(gate.reasonCodes, [
+      CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PUBLICATION_EPOCH_PENDING,
+    ]);
+    t.end();
+  });
+
+test('buildPublicationRecoveryGateSnapshot closes stale ACK status when the required ACK list is empty',
+  (t) => {
+    const gate = buildPublicationRecoveryGateSnapshot({
+      publicationEpoch: TEST_PUBLICATION_EPOCH,
+      publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.ACK_PENDING,
+      recoveryProtocolState: RECOVERY_PROTOCOL_STATE.PUBLICATION_PENDING,
+      requiredAckNodeIds: TEST_EMPTY_NODE_IDS,
+      acknowledgedNodeIds: TEST_EMPTY_NODE_IDS,
+      pendingAckNodeIds: TEST_EMPTY_NODE_IDS,
+      pendingAckCount: TEST_PUBLICATION_DEBT_COUNT,
+      priorityRecoveryReasonCodes: [
+        CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PUBLICATION_EPOCH_PENDING,
+      ],
+      priorityPartitionSummary: TEST_PRIORITY_PARTITION_SUMMARY.SATISFIED,
+    });
+
+    t.equal(gate.state, PUBLICATION_RECOVERY_GATE_STATE.READY);
+    t.equal(gate.ready, true);
+    t.equal(gate.pendingAckCount, 0);
+    t.equal(gate.publicationPending, false);
+    t.equal(gate.ackPending, false);
+    t.equal(
+      gate.pendingAckEvidenceState,
+      PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.REQUIRED_ACK_NODE_LIST,
+    );
+    t.same(gate.reasonCodes, []);
     t.end();
   });
 
@@ -202,6 +252,35 @@ test('buildPublicationRecoveryGateSnapshot prefers the closure witness over stal
       missingPartitionIds: [],
       blockedPartitions: [],
     });
+    t.same(gate.reasonCodes, []);
+    t.end();
+  });
+
+test('buildPublicationRecoveryGateSnapshot retires stale closure witness once durable spread metadata is refreshed',
+  (t) => {
+    const gate = buildPublicationRecoveryGateSnapshot({
+      publicationEpoch: TEST_PUBLICATION_EPOCH,
+      publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+      recoveryProtocolState: RECOVERY_PROTOCOL_STATE.PRIORITY_SPREAD_PENDING,
+      requiredAckNodeIds: [TEST_NODE_ID.FIRST, TEST_NODE_ID.SECOND],
+      acknowledgedNodeIds: [TEST_NODE_ID.FIRST, TEST_NODE_ID.SECOND],
+      priorityPartitionSummary: TEST_PRIORITY_PARTITION_SUMMARY.SATISFIED,
+      priorityRecoveryClosureWitness: TEST_PRIORITY_RECOVERY_CLOSURE_WITNESS,
+    });
+
+    t.equal(gate.state, PUBLICATION_RECOVERY_GATE_STATE.READY);
+    t.equal(gate.ready, true);
+    t.equal(gate.prioritySpreadPending, false);
+    t.equal(gate.closureRecordId, null);
+    t.equal(gate.closureWitnessClass, null);
+    t.equal(
+      gate.priorityRecoveryClosureWitness.state,
+      PRIORITY_RECOVERY_CLOSURE_WITNESS_STATE.SATISFIED_FRESH,
+    );
+    t.equal(
+      gate.priorityRecoveryClosureWitness.publicationRefreshRequired,
+      false,
+    );
     t.same(gate.reasonCodes, []);
     t.end();
   });

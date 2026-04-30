@@ -1,6 +1,22 @@
 import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
 import {SQLQueryEngineSegment7} from './sql-query-engine-segment-7.js';
 
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_STR_SHA1 = 'sha1';
+const LOCAL_STR_HEX = 'hex';
+const LOCAL_NUM_ONE = 1;
+const LOCAL_STR_STRING = 'string';
+const LOCAL_STR_FUNCTION = 'function';
+const LOCAL_STR_OBJECT = 'object';
+const LOCAL_STR_BACKGROUND = 'background';
+const LOCAL_STR_CRITICAL = 'critical';
+const LOCAL_STR_PARSE = 'parse';
+const LOCAL_STR_SYNTAX = 'syntax';
+const LOCAL_STR_TABLE_NOT_FOUND = 'table not found';
+const LOCAL_STR_TIMEOUT = 'timeout';
+const LOCAL_STR_BOOLEAN = 'boolean';
+const LOCAL_STR_EMPTY = '';
+
 const {
   ACTIVE_PARTITION_STATE,
   BACKGROUND_SYSTEM_TABLE_DELIVERY_PRIORITY_TABLES,
@@ -28,11 +44,63 @@ const {
 
 const PRIORITY_CONTROL_PLANE_TRANSACTION_DELIVERY_PRIORITY = 'critical';
 const PRIORITY_CONTROL_PLANE_TRANSACTION_DELIVERY_TIMEOUT_MS = 15000;
+const PRIORITY_CONTROL_PLANE_TRANSACTION_DELIVERY_SOURCE_PREFIX =
+  'query:transaction';
+const PRIORITY_CONTROL_PLANE_TRANSACTION_DELIVERY_KEY_SEPARATOR = ':';
+const PRIORITY_CONTROL_PLANE_TRANSACTION_DELIVERY_IDENTITY_STATE =
+  Object.freeze({
+    OMITTED: 'omitted',
+    RESOLVED: 'resolved',
+  });
+const PRIORITY_CONTROL_PLANE_TRANSACTION_DELIVERY_IDENTITY_OMITTED =
+  Object.freeze({
+    state: PRIORITY_CONTROL_PLANE_TRANSACTION_DELIVERY_IDENTITY_STATE.OMITTED,
+  });
 const NON_TRANSACTIONAL_WRITE_TRACKING_DISPOSITION = Object.freeze({
   PERSIST: 'persist',
   SKIP_RETRYABLE_CONTROL_PLANE_FAILURE:
     'skip_retryable_control_plane_failure',
 });
+
+function normalizePriorityControlPlaneTransactionDeliveryPart(value) {
+  return typeof value === LOCAL_STR_STRING ?
+    value.trim() :
+    LOCAL_STR_EMPTY;
+}
+
+function buildPriorityControlPlaneTransactionDeliveryIdentity({
+  sessionId,
+  partitionId,
+  operation,
+} = {}) {
+  const normalized = Object.freeze({
+    sessionId:
+      normalizePriorityControlPlaneTransactionDeliveryPart(sessionId),
+    partitionId:
+      normalizePriorityControlPlaneTransactionDeliveryPart(partitionId),
+    operation:
+      normalizePriorityControlPlaneTransactionDeliveryPart(operation),
+  });
+  const completeIdentity = [
+    normalized.sessionId,
+    normalized.partitionId,
+    normalized.operation,
+  ].every((part) => part.length > LOCAL_NUM_ZERO);
+  if (!completeIdentity) {
+    return PRIORITY_CONTROL_PLANE_TRANSACTION_DELIVERY_IDENTITY_OMITTED;
+  }
+  const deliveryKey = [
+    PRIORITY_CONTROL_PLANE_TRANSACTION_DELIVERY_SOURCE_PREFIX,
+    normalized.partitionId,
+    normalized.sessionId,
+    normalized.operation,
+  ].join(PRIORITY_CONTROL_PLANE_TRANSACTION_DELIVERY_KEY_SEPARATOR);
+  return Object.freeze({
+    state: PRIORITY_CONTROL_PLANE_TRANSACTION_DELIVERY_IDENTITY_STATE.RESOLVED,
+    deliverySource: deliveryKey,
+    replacePendingKey: deliveryKey,
+  });
+}
 
 class SQLQueryEngine extends SQLQueryEngineSegment7 {
   async persistDistributedTransactionRow(record) {
@@ -59,7 +127,7 @@ class SQLQueryEngine extends SQLQueryEngineSegment7 {
         // pressure and retain critical delivery priority so recovery metadata
         // does not stall behind background control-plane backlog.
         workClass: PRESSURE_WORK_CLASS.CRITICAL,
-        coalescingKey: transactionId.length > 0 ?
+        coalescingKey: transactionId.length > LOCAL_NUM_ZERO ?
           `sql-transaction:${transactionId}` :
           null,
       },
@@ -94,7 +162,7 @@ class SQLQueryEngine extends SQLQueryEngineSegment7 {
       TABLES.SQL_TRANSACTION_PARTICIPANTS,
       {
         workClass: PRESSURE_WORK_CLASS.CRITICAL,
-        coalescingKey: participantId.length > 0 ?
+        coalescingKey: participantId.length > LOCAL_NUM_ZERO ?
           `sql-transaction-participant:${participantId}` :
           null,
       },
@@ -128,7 +196,7 @@ class SQLQueryEngine extends SQLQueryEngineSegment7 {
         status: record.status,
         idempotency_key: record.idempotencyKey,
         payload_hash: record.payloadHash,
-        retry_count: record.retryCount || 0,
+        retry_count: record.retryCount || LOCAL_NUM_ZERO,
         last_error: record.lastError || null,
         partition_ids: JSON.stringify(record.partitionIds || []),
         created_at: record.createdAt,
@@ -138,7 +206,7 @@ class SQLQueryEngine extends SQLQueryEngineSegment7 {
       TABLES.SQL_WRITE_OPERATIONS,
       {
         workClass,
-        coalescingKey: operationId.length > 0 ?
+        coalescingKey: operationId.length > LOCAL_NUM_ZERO ?
           `sql-write-operation:${operationId}` :
           null,
       },
@@ -233,9 +301,9 @@ class SQLQueryEngine extends SQLQueryEngineSegment7 {
       statementType,
       partitionIds: Array.from(writePlan.partitionStatements.keys()).sort(),
     });
-    return createHash('sha1')
+    return createHash(LOCAL_STR_SHA1)
       .update(payload)
-      .digest('hex');
+      .digest(LOCAL_STR_HEX);
   }
 
   /**
@@ -249,12 +317,12 @@ class SQLQueryEngine extends SQLQueryEngineSegment7 {
       return result.retryCount;
     }
     if (!Array.isArray(result?.participantResults)) {
-      return 0;
+      return LOCAL_NUM_ZERO;
     }
     return result.participantResults.reduce((sum, entry) => {
       const attempts = Number.isInteger(entry.attempts) ? entry.attempts : 1;
-      return sum + Math.max(attempts - 1, 0);
-    }, 0);
+      return sum + Math.max(attempts - LOCAL_NUM_ONE, LOCAL_NUM_ZERO);
+    }, LOCAL_NUM_ZERO);
   }
 
   /**
@@ -334,7 +402,7 @@ class SQLQueryEngine extends SQLQueryEngineSegment7 {
    */
   getTransactionPartition(sessionId = QUERY_SESSION.DEFAULT) {
     const txState = this.transactionCoordinator.getTransaction(sessionId);
-    return txState?.participants?.[0] || null;
+    return txState?.participants?.[LOCAL_NUM_ZERO] || null;
   }
 
   /**
@@ -418,8 +486,8 @@ class SQLQueryEngine extends SQLQueryEngineSegment7 {
     routingReadinessDimension,
   ) {
     if (
-      typeof routingReadinessDimension === 'string' &&
-      routingReadinessDimension.length > 0
+      typeof routingReadinessDimension === LOCAL_STR_STRING &&
+      routingReadinessDimension.length > LOCAL_NUM_ZERO
     ) {
       return routingReadinessDimension;
     }
@@ -444,6 +512,15 @@ class SQLQueryEngine extends SQLQueryEngineSegment7 {
   async deliverTransactionOperation(sessionId, partitionId, operation, options = {}) {
     const deliveryProfile =
       this.buildTransactionOperationDeliveryProfile(partitionId);
+    const deliveryIdentity =
+      deliveryProfile.deliveryPriority ===
+        PRIORITY_CONTROL_PLANE_TRANSACTION_DELIVERY_PRIORITY ?
+        buildPriorityControlPlaneTransactionDeliveryIdentity({
+          sessionId,
+          partitionId,
+          operation,
+        }) :
+        PRIORITY_CONTROL_PLANE_TRANSACTION_DELIVERY_IDENTITY_OMITTED;
     const payload = {
       type: QUERY_OPERATION.TRANSACTION,
       operation,
@@ -452,6 +529,27 @@ class SQLQueryEngine extends SQLQueryEngineSegment7 {
     if (Number.isFinite(options.transactionEpoch)) {
       payload.transactionEpoch = Math.floor(options.transactionEpoch);
     }
+    const executionOptions = {
+      buildRequest: () => ({...payload}),
+      buildSuccessResult: () => ({success: true}),
+      isSuccessfulResponse: (response) =>
+        response?.acknowledged === true &&
+        response?.success === true,
+      routingReadinessDimension:
+        deliveryProfile.routingReadinessDimension,
+      deliveryPriority: deliveryProfile.deliveryPriority,
+      timeoutMs: deliveryProfile.timeoutMs,
+      clearSessionPartitionAffinityOnSuccess:
+        operation === QUERY_OPERATION.COMMIT ||
+        operation === QUERY_OPERATION.ROLLBACK,
+    };
+    if (
+      deliveryIdentity.state ===
+        PRIORITY_CONTROL_PLANE_TRANSACTION_DELIVERY_IDENTITY_STATE.RESOLVED
+    ) {
+      executionOptions.deliverySource = deliveryIdentity.deliverySource;
+      executionOptions.replacePendingKey = deliveryIdentity.replacePendingKey;
+    }
     const result = await this.queryExecutor.executeOnPartition(
       partitionId,
       '',
@@ -459,20 +557,7 @@ class SQLQueryEngine extends SQLQueryEngineSegment7 {
       false,
       false,
       false,
-      {
-        buildRequest: () => ({...payload}),
-        buildSuccessResult: () => ({success: true}),
-        isSuccessfulResponse: (response) =>
-          response?.acknowledged === true &&
-          response?.success === true,
-        routingReadinessDimension:
-          deliveryProfile.routingReadinessDimension,
-        deliveryPriority: deliveryProfile.deliveryPriority,
-        timeoutMs: deliveryProfile.timeoutMs,
-        clearSessionPartitionAffinityOnSuccess:
-          operation === QUERY_OPERATION.COMMIT ||
-          operation === QUERY_OPERATION.ROLLBACK,
-      },
+      executionOptions,
     );
     if (!result.success) {
       if (operation === QUERY_OPERATION.BEGIN) {
@@ -516,7 +601,7 @@ class SQLQueryEngine extends SQLQueryEngineSegment7 {
     const activePartitionVersion = this.resolveActivePartitionVersion(tableInfo);
 
     // Get partitions from the raw observed system cache.
-    if (typeof this.systemCache.filter === 'function') {
+    if (typeof this.systemCache.filter === LOCAL_STR_FUNCTION) {
       const directMatches =
         this.systemCache.filter(TABLES.PARTITIONS, (partition) =>
           this.partitionMatchesTableRef(partition, tableName),
@@ -524,14 +609,14 @@ class SQLQueryEngine extends SQLQueryEngineSegment7 {
       const visibleDirectMatches = directMatches.filter((partition) =>
         this.isPartitionVisibleForRouting(partition, activePartitionVersion),
       );
-      if (directMatches.length > 0) {
+      if (directMatches.length > LOCAL_NUM_ZERO) {
         return visibleDirectMatches;
       }
       const overlayDirectMatches = this.getBootstrapRoutingOverlayPartitionsForTable(
         tableName,
         activePartitionVersion,
       );
-      if (overlayDirectMatches.length > 0 || !tableId || tableId === tableName) {
+      if (overlayDirectMatches.length > LOCAL_NUM_ZERO || !tableId || tableId === tableName) {
         return overlayDirectMatches;
       }
 
@@ -541,7 +626,7 @@ class SQLQueryEngine extends SQLQueryEngineSegment7 {
       const visibleTableIdMatches = tableIdMatches.filter((partition) =>
         this.isPartitionVisibleForRouting(partition, activePartitionVersion),
       );
-      if (visibleTableIdMatches.length > 0) {
+      if (visibleTableIdMatches.length > LOCAL_NUM_ZERO) {
         return visibleTableIdMatches;
       }
       return this.getBootstrapRoutingOverlayPartitionsForTable(
@@ -550,7 +635,7 @@ class SQLQueryEngine extends SQLQueryEngineSegment7 {
       );
     }
 
-    if (typeof this.systemCache.getAll === 'function') {
+    if (typeof this.systemCache.getAll === LOCAL_STR_FUNCTION) {
       const all = this.systemCache.getAll(TABLES.PARTITIONS) || [];
       const directMatches = all.filter((partition) =>
         this.partitionMatchesTableRef(partition, tableName),
@@ -558,14 +643,14 @@ class SQLQueryEngine extends SQLQueryEngineSegment7 {
       const visibleDirectMatches = directMatches.filter((partition) =>
         this.isPartitionVisibleForRouting(partition, activePartitionVersion),
       );
-      if (directMatches.length > 0) {
+      if (directMatches.length > LOCAL_NUM_ZERO) {
         return visibleDirectMatches;
       }
       const overlayDirectMatches = this.getBootstrapRoutingOverlayPartitionsForTable(
         tableName,
         activePartitionVersion,
       );
-      if (overlayDirectMatches.length > 0 || !tableId || tableId === tableName) {
+      if (overlayDirectMatches.length > LOCAL_NUM_ZERO || !tableId || tableId === tableName) {
         return overlayDirectMatches;
       }
 
@@ -574,7 +659,7 @@ class SQLQueryEngine extends SQLQueryEngineSegment7 {
       ).filter((partition) =>
         this.isPartitionVisibleForRouting(partition, activePartitionVersion),
       );
-      if (visibleTableIdMatches.length > 0) {
+      if (visibleTableIdMatches.length > LOCAL_NUM_ZERO) {
         return visibleTableIdMatches;
       }
       return this.getBootstrapRoutingOverlayPartitionsForTable(
@@ -594,8 +679,8 @@ class SQLQueryEngine extends SQLQueryEngineSegment7 {
    * @private
    */
   partitionMatchesTableRef(partition, tableRef) {
-    if (!partition || typeof partition !== 'object' ||
-        typeof tableRef !== 'string' || tableRef.length === 0) {
+    if (!partition || typeof partition !== LOCAL_STR_OBJECT ||
+        typeof tableRef !== LOCAL_STR_STRING || tableRef.length === LOCAL_NUM_ZERO) {
       return false;
     }
     return partition.table_name === tableRef ||
@@ -616,13 +701,13 @@ class SQLQueryEngine extends SQLQueryEngineSegment7 {
     }
 
     try {
-      if (typeof this.systemCache.get === 'function') {
+      if (typeof this.systemCache.get === LOCAL_STR_FUNCTION) {
         const byPrimaryKey = this.systemCache.get(TABLES.TABLES, tableName);
         if (byPrimaryKey) {
           return byPrimaryKey;
         }
       }
-      if (typeof this.systemCache.find === 'function') {
+      if (typeof this.systemCache.find === LOCAL_STR_FUNCTION) {
         const found = this.systemCache.find(TABLES.TABLES, (t) =>
           t.table_name === tableName || t.tableName === tableName,
         );
@@ -630,7 +715,7 @@ class SQLQueryEngine extends SQLQueryEngineSegment7 {
           return found;
         }
       }
-      if (typeof this.systemCache.getAll === 'function') {
+      if (typeof this.systemCache.getAll === LOCAL_STR_FUNCTION) {
         const tables = this.systemCache.getAll(TABLES.TABLES) || [];
         return tables.find((table) =>
           table.table_name === tableName ||
@@ -666,14 +751,14 @@ class SQLQueryEngine extends SQLQueryEngineSegment7 {
         (tableName && rowTableName === tableName);
     };
 
-    if (typeof this.systemCache.filter === 'function') {
+    if (typeof this.systemCache.filter === LOCAL_STR_FUNCTION) {
       return this.systemCache.filter(
         TABLES.SCHEMA_MIGRATIONS,
         matchesTable,
       ) || [];
     }
 
-    if (typeof this.systemCache.getAll === 'function') {
+    if (typeof this.systemCache.getAll === LOCAL_STR_FUNCTION) {
       const rows = this.systemCache.getAll(TABLES.SCHEMA_MIGRATIONS) || [];
       return rows.filter(matchesTable);
     }
@@ -724,13 +809,13 @@ class SQLQueryEngine extends SQLQueryEngineSegment7 {
     }
 
     try {
-      if (typeof this.systemCache.get === 'function') {
+      if (typeof this.systemCache.get === LOCAL_STR_FUNCTION) {
         const direct = this.systemCache.get(TABLES.PARTITIONS, partitionId);
         if (direct) {
           return direct;
         }
       }
-      if (typeof this.systemCache.find === 'function') {
+      if (typeof this.systemCache.find === LOCAL_STR_FUNCTION) {
         const found = this.systemCache.find(TABLES.PARTITIONS, (partition) =>
           partition.partition_id === partitionId ||
           partition.partitionId === partitionId,
@@ -739,7 +824,7 @@ class SQLQueryEngine extends SQLQueryEngineSegment7 {
           return found;
         }
       }
-      if (typeof this.systemCache.getAll === 'function') {
+      if (typeof this.systemCache.getAll === LOCAL_STR_FUNCTION) {
         const partitions = this.systemCache.getAll(TABLES.PARTITIONS) || [];
         return partitions.find((partition) =>
           partition.partition_id === partitionId ||
@@ -793,7 +878,7 @@ class SQLQueryEngine extends SQLQueryEngineSegment7 {
       const metadata = typeof rawMetadata === 'string' ?
         JSON.parse(rawMetadata) :
         rawMetadata;
-      return metadata && typeof metadata === 'object' ?
+      return metadata && typeof metadata === LOCAL_STR_OBJECT ?
         {
           state,
           metadata,
@@ -906,16 +991,16 @@ class SQLQueryEngine extends SQLQueryEngineSegment7 {
    * @private
    */
   resolveRoutedDeliveryPriority(tableName, deliveryPriority) {
-    if (typeof deliveryPriority === 'string' &&
-        deliveryPriority.length > 0) {
+    if (typeof deliveryPriority === LOCAL_STR_STRING &&
+        deliveryPriority.length > LOCAL_NUM_ZERO) {
       return deliveryPriority;
     }
     if (!this.isSystemTable(tableName)) {
       return undefined;
     }
     return BACKGROUND_SYSTEM_TABLE_DELIVERY_PRIORITY_TABLES.has(tableName) ?
-      'background' :
-      'critical';
+      LOCAL_STR_BACKGROUND :
+      LOCAL_STR_CRITICAL;
   }
 
   /**
@@ -925,23 +1010,23 @@ class SQLQueryEngine extends SQLQueryEngineSegment7 {
    * @private
    */
   getErrorCode(error) {
-    if (typeof error?.errorCode === 'string' &&
-        error.errorCode.length > 0) {
+    if (typeof error?.errorCode === LOCAL_STR_STRING &&
+        error.errorCode.length > LOCAL_NUM_ZERO) {
       return error.errorCode;
     }
-    if (typeof error?.code === 'string' &&
-        error.code.length > 0) {
+    if (typeof error?.code === LOCAL_STR_STRING &&
+        error.code.length > LOCAL_NUM_ZERO) {
       return error.code;
     }
     const message = error.message.toLowerCase();
 
-    if (message.includes('parse') || message.includes('syntax')) {
+    if (message.includes(LOCAL_STR_PARSE) || message.includes(LOCAL_STR_SYNTAX)) {
       return QUERY_ERROR_CODE.SYNTAX_ERROR;
     }
-    if (message.includes('table not found')) {
+    if (message.includes(LOCAL_STR_TABLE_NOT_FOUND)) {
       return QUERY_ERROR_CODE.TABLE_NOT_FOUND;
     }
-    if (message.includes('timeout')) {
+    if (message.includes(LOCAL_STR_TIMEOUT)) {
       return QUERY_ERROR_CODE.TIMEOUT;
     }
 
@@ -965,71 +1050,71 @@ class SQLQueryEngine extends SQLQueryEngineSegment7 {
       result.deferRetry = true;
     }
     if (Number.isFinite(error?.retryAfterMs) &&
-        error.retryAfterMs > 0) {
+        error.retryAfterMs > LOCAL_NUM_ZERO) {
       result.retryAfterMs = Math.floor(error.retryAfterMs);
     }
-    if (typeof error?.pressureAction === 'string' &&
-        error.pressureAction.length > 0) {
+    if (typeof error?.pressureAction === LOCAL_STR_STRING &&
+        error.pressureAction.length > LOCAL_NUM_ZERO) {
       result.pressureAction = error.pressureAction;
     }
-    if (typeof error?.pressureReason === 'string' &&
-        error.pressureReason.length > 0) {
+    if (typeof error?.pressureReason === LOCAL_STR_STRING &&
+        error.pressureReason.length > LOCAL_NUM_ZERO) {
       result.pressureReason = error.pressureReason;
     }
     if (error?.pressureSummary &&
-        typeof error.pressureSummary === 'object') {
+        typeof error.pressureSummary === LOCAL_STR_OBJECT) {
       result.pressureSummary = {...error.pressureSummary};
     }
     if (Array.isArray(error?.participantFailures)) {
       result.participantFailures = error.participantFailures
-        .filter((entry) => entry && typeof entry === 'object')
+        .filter((entry) => entry && typeof entry === LOCAL_STR_OBJECT)
         .map((entry) => ({...entry}));
     }
     if (error?.firstFailedParticipant &&
-        typeof error.firstFailedParticipant === 'object') {
+        typeof error.firstFailedParticipant === LOCAL_STR_OBJECT) {
       result.firstFailedParticipant = {
         ...error.firstFailedParticipant,
       };
     } else if (Array.isArray(result.participantFailures) &&
-        result.participantFailures.length > 0) {
-      result.firstFailedParticipant = result.participantFailures[0];
+        result.participantFailures.length > LOCAL_NUM_ZERO) {
+      result.firstFailedParticipant = result.participantFailures[LOCAL_NUM_ZERO];
     }
-    if (typeof error?.reasonCode === 'string' &&
-        error.reasonCode.length > 0) {
+    if (typeof error?.reasonCode === LOCAL_STR_STRING &&
+        error.reasonCode.length > LOCAL_NUM_ZERO) {
       result.reasonCode = error.reasonCode;
     }
-    if (typeof error?.participationKind === 'string' &&
-        error.participationKind.length > 0) {
+    if (typeof error?.participationKind === LOCAL_STR_STRING &&
+        error.participationKind.length > LOCAL_NUM_ZERO) {
       result.participationKind = error.participationKind;
     }
-    if (typeof error?.tableName === 'string' &&
-        error.tableName.length > 0) {
+    if (typeof error?.tableName === LOCAL_STR_STRING &&
+        error.tableName.length > LOCAL_NUM_ZERO) {
       result.tableName = error.tableName;
     }
-    if (typeof error?.failedTable === 'string' &&
-        error.failedTable.length > 0) {
+    if (typeof error?.failedTable === LOCAL_STR_STRING &&
+        error.failedTable.length > LOCAL_NUM_ZERO) {
       result.failedTable = error.failedTable;
     }
-    if (typeof error?.outcome === 'string' &&
-        error.outcome.length > 0) {
+    if (typeof error?.outcome === LOCAL_STR_STRING &&
+        error.outcome.length > LOCAL_NUM_ZERO) {
       result.outcome = error.outcome;
     }
-    if (typeof error?.contractState === 'string' &&
-        error.contractState.length > 0) {
+    if (typeof error?.contractState === LOCAL_STR_STRING &&
+        error.contractState.length > LOCAL_NUM_ZERO) {
       result.contractState = error.contractState;
     }
-    if (typeof error?.nextAction === 'string' &&
-        error.nextAction.length > 0) {
+    if (typeof error?.nextAction === LOCAL_STR_STRING &&
+        error.nextAction.length > LOCAL_NUM_ZERO) {
       result.nextAction = error.nextAction;
     }
-    if (typeof error?.visibilityState === 'string' &&
-        error.visibilityState.length > 0) {
+    if (typeof error?.visibilityState === LOCAL_STR_STRING &&
+        error.visibilityState.length > LOCAL_NUM_ZERO) {
       result.visibilityState = error.visibilityState;
     }
     if (error?.authoritativeVisibilityConfirmed === true) {
       result.authoritativeVisibilityConfirmed = true;
     }
-    if (typeof error?.backpressured === 'boolean') {
+    if (typeof error?.backpressured === LOCAL_STR_BOOLEAN) {
       result.backpressured = error.backpressured;
     }
     if (Array.isArray(error?.reasonCodes)) {
@@ -1039,10 +1124,10 @@ class SQLQueryEngine extends SQLQueryEngineSegment7 {
       result.failedDimensions = [...error.failedDimensions];
     }
     if (error?.runtimeAuthority &&
-        typeof error.runtimeAuthority === 'object') {
+        typeof error.runtimeAuthority === LOCAL_STR_OBJECT) {
       result.runtimeAuthority = error.runtimeAuthority;
     }
-    if (error?.details && typeof error.details === 'object') {
+    if (error?.details && typeof error.details === LOCAL_STR_OBJECT) {
       result.details = {...error.details};
     }
     return result;

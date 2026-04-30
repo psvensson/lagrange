@@ -36,6 +36,8 @@ import {
   LEASE_SUBSYSTEM,
 } from './lease-service-constants.js';
 
+const LOCAL_STR_M52QG = 'LeaseService requires controlPlaneSystemTableGateway';
+
 const createDefaultMessageGroupServices = () => new Set();
 
 class LeaseService extends EventEmitter {
@@ -291,7 +293,7 @@ class LeaseService extends EventEmitter {
   getControlPlaneSystemTableGateway() {
     assertCritical(
       this.controlPlaneSystemTableGateway,
-      'LeaseService requires controlPlaneSystemTableGateway',
+      LOCAL_STR_M52QG,
     );
     return this.controlPlaneSystemTableGateway;
   }

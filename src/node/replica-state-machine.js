@@ -33,6 +33,11 @@ import {
   REPLICA_STATE_MACHINE_VALID_TRANSITIONS,
 } from './replica-state-machine-constants.js';
 
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_STR_CRITICAL = 'critical';
+const LOCAL_STR_BACKGROUND = 'background';
+const LOCAL_STR_STRING = 'string';
+
 /**
  * Replica state constants.
  * These are the only valid states a replica can be in.
@@ -491,9 +496,9 @@ class ReplicaStateMachine extends EventEmitter {
         replicaState.serviceType !== SERVICE_TYPE.PARTITION ||
         !CLEARS_CANONICAL_PARTITION_LEADER_STATES.has(replicaState.state) ||
         typeof replicaState.partitionId !== TYPEOF.STRING ||
-        replicaState.partitionId.length === 0 ||
+        replicaState.partitionId.length === LOCAL_NUM_ZERO ||
         typeof replicaState.nodeId !== TYPEOF.STRING ||
-        replicaState.nodeId.length === 0) {
+        replicaState.nodeId.length === LOCAL_NUM_ZERO) {
       return;
     }
     if (this.hasOtherActivePartitionReplicaOnLeaderNode(replicaState)) {
@@ -514,8 +519,8 @@ class ReplicaStateMachine extends EventEmitter {
     }, {
       allowCoalescing: true,
       coalescingKey: `partitions:leader:${replicaState.partitionId}`,
-      deliveryPriority: 'critical',
-      workClass: 'critical',
+      deliveryPriority: LOCAL_STR_CRITICAL,
+      workClass: LOCAL_STR_CRITICAL,
       skipCacheWait: true,
     });
   }
@@ -648,8 +653,8 @@ class ReplicaStateMachine extends EventEmitter {
     return {
       allowCoalescing: true,
       coalescingKey: `replica-state:${serviceId}`,
-      deliveryPriority: backgroundWrite ? 'background' : 'critical',
-      workClass: backgroundWrite ? 'background' : 'critical',
+      deliveryPriority: backgroundWrite ? LOCAL_STR_BACKGROUND : LOCAL_STR_CRITICAL,
+      workClass: backgroundWrite ? LOCAL_STR_BACKGROUND : LOCAL_STR_CRITICAL,
       // ReplicaStateMachine is the canonical owner already; waiting for the
       // local cache here only retains memory and elongates transitional churn.
       skipCacheWait: true,
@@ -1214,7 +1219,7 @@ class ReplicaStateMachine extends EventEmitter {
    * @return {boolean} True when registration succeeded.
    */
   registerReplicaSnapshot(replicaId, context = {}) {
-    if (!replicaId || typeof replicaId !== 'string') {
+    if (!replicaId || typeof replicaId !== LOCAL_STR_STRING) {
       return false;
     }
 

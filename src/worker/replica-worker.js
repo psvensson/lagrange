@@ -17,6 +17,15 @@ import {
 import {PartitionWorkerService} from './partition-worker-service.js';
 import {MessageGroupWorkerService} from './message-group-worker-service.js';
 
+const LOCAL_STR_FUNCTION = 'function';
+const LOCAL_STR_18IOJ = 'Creating partition replica';
+const LOCAL_STR_1DWG6 = 'Partition replica created';
+const LOCAL_STR_1XMWC = 'Creating message group replica';
+const LOCAL_STR_1BYQ9 = 'Message group replica created';
+const LOCAL_STR_STOPPING_REPLICA = 'Stopping replica';
+const LOCAL_STR_REPLICA_STOPPED = 'Replica stopped';
+const LOCAL_STR_RECEIVED_OPERATION = 'Received operation';
+
 const REPLICA_OPERATION_STATUS = Object.freeze({
   CREATED: 'created',
   STOPPED: 'stopped',
@@ -90,7 +99,7 @@ async function cleanupReplicaCreationFailure(service, replicaId) {
 }
 
 function observeReplicaStats(service) {
-  if (typeof service.getStats !== 'function') {
+  if (typeof service.getStats !== LOCAL_STR_FUNCTION) {
     return {
       state: REPLICA_HEALTH_CHECK_STATE.HEALTHY,
       stats: EMPTY_HEALTH_STATS,
@@ -167,7 +176,7 @@ async function createPartitionReplica(options) {
     throw new Error(WORKER_ERROR_MSG.REPLICA_ALREADY_EXISTS);
   }
 
-  logger.info('Creating partition replica', {replicaId, threadId});
+  logger.info(LOCAL_STR_18IOJ, {replicaId, threadId});
 
   const service = new PartitionWorkerService({
     nodeId: options.nodeId,
@@ -193,7 +202,7 @@ async function createPartitionReplica(options) {
 
   replicas.set(replicaId, service);
 
-  logger.info('Partition replica created', {replicaId, threadId});
+  logger.info(LOCAL_STR_1DWG6, {replicaId, threadId});
 
   return buildReplicaCreationResult(replicaId);
 }
@@ -210,7 +219,7 @@ async function createMessageGroupReplica(options) {
     throw new Error(WORKER_ERROR_MSG.REPLICA_ALREADY_EXISTS);
   }
 
-  logger.info('Creating message group replica', {replicaId, threadId});
+  logger.info(LOCAL_STR_1XMWC, {replicaId, threadId});
 
   const service = new MessageGroupWorkerService({
     nodeId: options.nodeId,
@@ -232,7 +241,7 @@ async function createMessageGroupReplica(options) {
 
   replicas.set(replicaId, service);
 
-  logger.info('Message group replica created', {replicaId, threadId});
+  logger.info(LOCAL_STR_1BYQ9, {replicaId, threadId});
 
   return buildReplicaCreationResult(replicaId);
 }
@@ -249,12 +258,12 @@ async function stopReplica(replicaId) {
     throw new Error(WORKER_ERROR_MSG.REPLICA_NOT_FOUND);
   }
 
-  logger.info('Stopping replica', {replicaId, threadId});
+  logger.info(LOCAL_STR_STOPPING_REPLICA, {replicaId, threadId});
 
   await service.stop();
   replicas.delete(replicaId);
 
-  logger.info('Replica stopped', {replicaId, threadId});
+  logger.info(LOCAL_STR_REPLICA_STOPPED, {replicaId, threadId});
 
   return buildReplicaStopResult(replicaId);
 }
@@ -297,7 +306,7 @@ async function healthCheck(replicaId) {
 export default async function workerEntryPoint(task) {
   const {operation, replicaId} = task;
 
-  logger.debug('Received operation', {operation, replicaId, threadId});
+  logger.debug(LOCAL_STR_RECEIVED_OPERATION, {operation, replicaId, threadId});
 
   switch (operation) {
   case WORKER_OPERATION.CREATE_PARTITION_REPLICA:

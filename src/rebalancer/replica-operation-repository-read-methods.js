@@ -1,3 +1,15 @@
+const LOCAL_STR_CONSTRUCTOR = 'constructor';
+const REPLICA_OPERATION_READ_COALESCING_KEY_SEPARATOR = ':';
+const REPLICA_OPERATION_READ_BY_ID_COALESCING_KEY_PREFIX =
+  'replica-operation';
+const REPLICA_OPERATION_OWNER_READ_COALESCING_KEY_PREFIX =
+  'replica-operation-owner';
+const REPLICA_OPERATION_ENTITY_READ_COALESCING_KEY_PREFIX =
+  'replica-operation-entity';
+const REPLICA_OPERATION_ENTITY_NODE_READ_COALESCING_KEY_PREFIX =
+  'replica-operation-entity-node';
+const REPLICA_OPERATION_READ_DELIVERY_SOURCE_PREFIX = 'control-plane:read';
+
 function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository, options = {}) {
   const {
     CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
@@ -116,6 +128,25 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
         {
           ...REPLICA_OPERATION_LOCAL_OWNER_READ_QUERY_OPTIONS,
         };
+      const coalescingKey =
+        this.resolveReplicaOperationReadCoalescingKey(sql, params);
+      if (
+        !queryOptions.coalescingKey &&
+        typeof coalescingKey === TYPEOF.STRING &&
+        coalescingKey.length > NUM.ZERO
+      ) {
+        queryOptions.coalescingKey = coalescingKey;
+      }
+      if (
+        !queryOptions.deliverySource &&
+        typeof queryOptions.coalescingKey === TYPEOF.STRING &&
+        queryOptions.coalescingKey.length > NUM.ZERO
+      ) {
+        queryOptions.deliverySource =
+          this.buildReplicaOperationReadDeliverySource(
+            queryOptions.coalescingKey,
+          );
+      }
 
       delete queryOptions.retryOnRetryableFailure;
 
@@ -198,6 +229,79 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
         deferRetry: participation.deferRetry === true,
         rows: [],
       };
+    }
+
+    /**
+   * Resolve a fairness key for replica_operations reads from the declared
+   * repository query shape.
+   * @param {string} sql
+   * @param {Array} params
+   * @return {string|null}
+   * @private
+   */
+    resolveReplicaOperationReadCoalescingKey(sql, params = []) {
+      if (sql === SQL.SELECT_OPERATION_BY_ID) {
+        return this.buildReplicaOperationReadCoalescingKey(
+          REPLICA_OPERATION_READ_BY_ID_COALESCING_KEY_PREFIX,
+          params[NUM.ZERO],
+        );
+      }
+      if (sql === SQL.SELECT_INCOMPLETE_OPERATIONS) {
+        return this.buildReplicaOperationReadCoalescingKey(
+          REPLICA_OPERATION_OWNER_READ_COALESCING_KEY_PREFIX,
+          this.nodeId,
+        );
+      }
+      if (sql === SQL.SELECT_OPERATIONS_BY_ENTITY) {
+        return this.buildReplicaOperationReadCoalescingKey(
+          REPLICA_OPERATION_ENTITY_READ_COALESCING_KEY_PREFIX,
+          params[NUM.ONE],
+        );
+      }
+      if (sql === SQL.SELECT_IN_FLIGHT_FOR_ENTITY_NODE) {
+        return this.buildReplicaOperationReadCoalescingKey(
+          REPLICA_OPERATION_ENTITY_NODE_READ_COALESCING_KEY_PREFIX,
+          params[NUM.ZERO],
+          params[NUM.ONE],
+        );
+      }
+      return null;
+    }
+
+    /**
+   * @param {string} prefix
+   * @param {...string} values
+   * @return {string|null}
+   * @private
+   */
+    buildReplicaOperationReadCoalescingKey(prefix, ...values) {
+      const normalizedValues = values.filter((value) => {
+        return typeof value === TYPEOF.STRING && value.length > NUM.ZERO;
+      });
+      if (
+        typeof prefix !== TYPEOF.STRING ||
+        prefix.length === NUM.ZERO ||
+        normalizedValues.length === NUM.ZERO
+      ) {
+        return null;
+      }
+      return [
+        prefix,
+        ...normalizedValues,
+      ].join(REPLICA_OPERATION_READ_COALESCING_KEY_SEPARATOR);
+    }
+
+    /**
+   * @param {string} coalescingKey
+   * @return {string}
+   * @private
+   */
+    buildReplicaOperationReadDeliverySource(coalescingKey) {
+      return [
+        REPLICA_OPERATION_READ_DELIVERY_SOURCE_PREFIX,
+        SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+        coalescingKey,
+      ].join(REPLICA_OPERATION_READ_COALESCING_KEY_SEPARATOR);
     }
 
     /**
@@ -1069,7 +1173,7 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
       ReplicaOperationRepositoryReadMethods.prototype,
     )
   ) {
-    if (methodName === 'constructor') {
+    if (methodName === LOCAL_STR_CONSTRUCTOR) {
       continue;
     }
     Object.defineProperty(

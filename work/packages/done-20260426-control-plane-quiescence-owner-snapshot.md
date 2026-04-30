@@ -1,12 +1,68 @@
 # Control Plane Quiescence Owner Snapshot
 
+April 29 successor package: the frozen-publication visibility rerun reached
+`waitForControlPlaneQuiescence` again with publication and restart-recovery
+gates closed. This original owner-snapshot package remains done; the fresh
+active boundary is the stable-window contract in
+[Control plane quiescence stable window after publication closure](./active-20260429-control-plane-quiescence-stable-window-after-publication-closure.md).
+
+April 29 re-entry: the latest `rolling-restart --fast-local` report reaches
+`waitForControlPlaneQuiescence` again:
+
+1. `test-output/reports/runtime-stability-rolling-restart-20260428-codex-after-follower-source-removal.report.json`
+2. failover, convergence, restart recovery, publication ACK, and priority
+   recovery are closed
+3. the timeout is now a quiescence stable-window failure after `120000ms`
+4. the final owner sample is `quiescence_candidate`, `canonicalBlocker=null`,
+   `stableElapsedMs=0`, `leaderQuietElapsedMs=110077`, and raw
+   `inFlightCount=3`
+5. earlier samples still report `replica_operations_in_flight`, but the final
+   discounted owner sample hides whether the raw operation evidence was stale
+   or cache-visible satisfied
+6. failure-bundle classification falls back to `unknown` because
+   `quiescence_candidate` is not mapped as a topology/stability owner state
+
+The April 29 continuation keeps the timeout and quiescence semantics unchanged:
+`quiescence_candidate` still means no current blocker is present but the stable
+window has not elapsed. The repair is diagnostic and classification-only: carry
+effective/stale in-flight evidence into timeout diagnostics, and classify a
+terminal candidate timeout as `topology_unstable` instead of `unknown`.
+
+The representative rerun after this repair did not reach quiescence. It failed
+earlier at restart-recovery readiness for node
+`35a891b8-c1a0-5064-9c6e-2acfba61c2a7`, with bootstrap health reachable but
+admin readiness unavailable and
+`bootstrapJoinProjectionBlocker=control_snapshot_authority_unavailable`. That
+result moves active runtime investigation back to restart-recovery
+startup/admin readiness; the quiescence owner repair remains covered by focused
+tests and static guardrails.
+
+April 29 direct-pressure execution: the residual owner-input item is now
+implemented. Quiescence snapshots preserve runtime-authority repair errors and
+normalize discovery repair timeouts plus node-state publication write pressure
+from owner diagnostics into `control_plane_pressure` with direct reasons
+`discovery_repair_timeout` and `node_state_publication_pressure`.
+
+The representative rerun after this direct-pressure repair did not reach
+`waitForControlPlaneQuiescence`. It failed at `waitForConvergence` after
+`404.4s`; `test-output/report.json` has publication epoch `13` in
+`ACK_PENDING`, pending ACK node
+`8be8d30f-4499-5eed-865c-71b4d529a67a`, blocked publication node count `5`,
+and failure-bundle classification `publication_convergence_blocked` /
+`control_plane_publication_pending`. Priority recovery has blocked and
+unresolved counts `0`; `control_plane_publications-p1` remains
+`spread_satisfied_in_flight`. Active runtime ownership moves back to the
+publication-visible trim and operation-transition package.
+
 April 26 pause: this package is implemented enough to classify the prior
 quiescence failure, but it is not the current execution owner. The latest
 `rolling-restart` rerun did not reach `waitForControlPlaneQuiescence`; it
 failed earlier in startup active-gate publication recovery, then migrated to
-missing published membership from a stale stopped node-state row. Re-enter this
-package after the publication recovery / heartbeat-status revival package
-closes or migrates and the representative path reaches quiescence again.
+missing published membership from a stale stopped node-state row, then closed
+publication recovery and moved to restart-recovery admin reachability and
+control-plane pressure. Re-enter this package after that restart-recovery
+pressure / admin-reachability package closes or migrates and the representative
+path reaches quiescence again.
 
 April 26 activation: the latest `rolling-restart` continuation moved past the
 stale completed-operation evidence and failed in the post-restart quiescence
@@ -135,10 +191,14 @@ Depends on:
 - [x] Add progress/stalled separation for operation drain using timeline
       signature and lowest in-flight evidence.
 - [x] Add pressure-specific state resolution for snapshot/admin timeout.
-- [ ] Add direct owner inputs for discovery repair timeout and node-state
+- [x] Add direct owner inputs for discovery repair timeout and node-state
       publication write pressure.
 - [x] Include quiescence state and canonical blocker in failure bundle
       summaries.
+- [x] Classify `quiescence_candidate` timeout diagnostics as topology
+      stability evidence instead of `unknown`.
+- [x] Carry effective, stale, and stale-discounted operation counts through
+      quiescence timeout diagnostics.
 - [x] Rerun `rolling-restart` and record whether the blocker is
       `control_plane_pressure`, `operation_drain_stalled`, `leadership_churn`,
       or a newly named owner boundary.
@@ -190,6 +250,72 @@ Executed on April 26, 2026:
 32. Result: failed, `0/1` passed after `389.5s`. The scenario did not reach
     `waitForControlPlaneQuiescence`; it failed at `waitForConvergence` with
     `publication_convergence_blocked` / `control_plane_publication_pending`.
+
+Executed on April 29, 2026:
+
+1. `node --check test/distributed/harness/cluster-segment-7-class-3.js`
+2. `node --check test/distributed/harness/failure-bundle-segment-4.js`
+3. `node --check test/distributed/harness/__tests__/failure-bundle.test.js`
+4. `node --check test/distributed/harness/__tests__/cluster.test-part-6.js`
+5. Result: all passed.
+6. `node --test test/distributed/harness/__tests__/control-plane-quiescence-snapshot.test.js test/distributed/harness/__tests__/failure-bundle.test.js`
+7. Result: passed, `60/60`.
+8. `node --test test/distributed/harness/__tests__/cluster.test-part-6.js`
+9. Result: passed under the existing harness skip gate, `24/24` skipped.
+10. `npm run audit:guideline:literals`
+11. Result: passed with `0` new literal-guideline violations and `0`
+    inherited baseline matches.
+12. `npm run audit:guideline:decision-boundaries`
+13. Result: passed with `0` decision-boundary guideline violations.
+14. `npm run audit:runtime-grammar`
+15. Result: passed with `0` runtime-grammar-contract violations and
+    state-machine pressure `issues=0`.
+16. `npm run test:metadata-gateway:audit`
+17. Result: passed.
+18. `git diff --check`
+19. Result: passed.
+20. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --fast-local`
+21. Result: failed, `0/1` passed after `273.6s`. The run did not reach
+    `waitForControlPlaneQuiescence`; it migrated back to restart-recovery
+    readiness with `adminReady=false`, `controlPlaneRecoveryReady=false`, and
+    `control_snapshot_authority_unavailable` for node
+    `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`.
+
+Executed on April 29, 2026, direct-pressure continuation:
+
+1. `node --check test/distributed/harness/control-plane-quiescence-snapshot.js`
+2. `node --check test/distributed/harness/cluster-segment-7-class-5.js`
+3. `node --check test/distributed/harness/cluster-segment-7-class-3.js`
+4. `node --check test/distributed/harness/failure-bundle-segment-4.js`
+5. `node --check src/control-plane/control-plane-readiness-service-segment-3.js`
+6. `node --check test/distributed/harness/__tests__/control-plane-quiescence-snapshot.test.js`
+7. `node --check test/distributed/harness/__tests__/cluster.test-part-6.js`
+8. `node --check test/control-plane/control-plane-readiness-service.test.js`
+9. Result: all passed.
+10. `node --test test/distributed/harness/__tests__/control-plane-quiescence-snapshot.test.js`
+11. Result: passed, `10/10`.
+12. `node --test test/distributed/harness/__tests__/cluster.test-part-6.js`
+13. Result: passed under the existing harness skip gate, `25/25` skipped.
+14. `node --test test/distributed/harness/__tests__/failure-bundle.test.js`
+15. Result: passed, `53/53`.
+16. `npm test -- test/control-plane/control-plane-readiness-service.test.js`
+17. Result: passed, `101/101`.
+18. `npm run audit:guideline:literals`
+19. Result: passed with `0` new literal-guideline violations and `0`
+    inherited baseline matches.
+20. `npm run audit:guideline:decision-boundaries`
+21. Result: passed with `0` decision-boundary guideline violations.
+22. `npm run audit:runtime-grammar`
+23. Result: passed with `0` runtime-grammar-contract violations and
+    state-machine pressure `issues=0`.
+24. `git diff --check`
+25. Result: passed.
+26. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --fast-local`
+27. Result: failed, `0/1` passed after `404.4s`. The run did not reach
+    `waitForControlPlaneQuiescence`; it failed at publication convergence with
+    publication epoch `13` in `ACK_PENDING`, pending ACK node
+    `8be8d30f-4499-5eed-865c-71b4d529a67a`, blocked publication node count
+    `5`, and dominant reason `control_plane_publication_pending`.
 
 ## Done When
 

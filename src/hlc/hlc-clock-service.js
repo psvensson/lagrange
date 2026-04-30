@@ -9,6 +9,9 @@ import {ConfigurationManager} from '../config/configuration-manager.js';
 import {LoggingService} from '../logging/logging-service.js';
 import {HLC_CONFIG_KEY, HLC_DEFAULT, HLC_LOG_MSG, HLC_SUBSYSTEM} from './hlc-constants.js';
 
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_NUM_ONE = 1;
+
 /**
  * HLCClockService provides hybrid logical clock functionality.
  * Generates monotonically increasing timestamps and handles clock drift.
@@ -22,7 +25,7 @@ class HLCClockService {
   constructor(nodeId, options = {}) {
     this.nodeId = nodeId;
     this.physical = Date.now();
-    this.logical = 0;
+    this.logical = LOCAL_NUM_ZERO;
 
     // Get configuration
     const config = ConfigurationManager.getInstance();
@@ -52,7 +55,7 @@ class HLCClockService {
     if (physicalNow > this.physical) {
       // Physical clock advanced, reset logical
       this.physical = physicalNow;
-      this.logical = 0;
+      this.logical = LOCAL_NUM_ZERO;
     } else {
       // Physical clock same or behind, increment logical
       this.logical++;
@@ -61,7 +64,7 @@ class HLCClockService {
       if (this.logical > this.maxLogicalCounter) {
         // Wait for physical clock to advance
         this.physical++;
-        this.logical = 0;
+        this.logical = LOCAL_NUM_ZERO;
       }
     }
 
@@ -104,24 +107,24 @@ class HLCClockService {
 
     if (newPhysical === this.physical && newPhysical === remotePhy) {
       // Same physical time, increment logical past remote
-      this.logical = Math.max(this.logical, remoteTimestamp.logical) + 1;
+      this.logical = Math.max(this.logical, remoteTimestamp.logical) + LOCAL_NUM_ONE;
     } else if (newPhysical === this.physical) {
       // Local physical time wins, increment logical
       this.logical++;
     } else if (newPhysical === remotePhy) {
       // Remote physical time wins, use remote logical + 1
       this.physical = newPhysical;
-      this.logical = remoteTimestamp.logical + 1;
+      this.logical = remoteTimestamp.logical + LOCAL_NUM_ONE;
     } else {
       // Physical clock advanced beyond both, reset logical
       this.physical = newPhysical;
-      this.logical = 0;
+      this.logical = LOCAL_NUM_ZERO;
     }
 
     // Handle logical overflow after update
     if (this.logical > this.maxLogicalCounter) {
       this.physical++;
-      this.logical = 0;
+      this.logical = LOCAL_NUM_ZERO;
     }
 
     return new HLCTimestamp(this.physical, this.logical, this.nodeId);

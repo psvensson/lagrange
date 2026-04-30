@@ -35,7 +35,7 @@ dominant blocker.
 1. Rewriting every priority recovery or rebalancer decision table.
 2. Pro or Enterprise feature work.
 3. Broad distributed matrix reruns before the representative blocker migrates.
-4. Closing the post-fix representative rerun in this edit pass.
+4. No-code confirmation rerun after the migrated restart-recovery blocker closes.
 
 ## Invariants
 
@@ -93,11 +93,12 @@ Preflight:
 
 Closure:
 
-- [ ] Same guardrails rerun after the heartbeat-status revival slice.
-- [ ] No relevant guardrail count increased after the latest slice.
-- [ ] No new touched-file owner-path, decision-boundary, runtime-grammar, or
+- [x] Same guardrails rerun after the heartbeat-status revival and ACK refresh
+      slices.
+- [x] No relevant guardrail count increased after the latest slice.
+- [x] No new touched-file owner-path, decision-boundary, runtime-grammar, or
       metadata-gateway violation remains.
-- [ ] Any out-of-scope inherited violation has a linked follow-on package.
+- [x] Any out-of-scope inherited violation has a linked follow-on package.
 
 ## Detection / Analysis Tasks
 
@@ -117,7 +118,7 @@ Closure:
       when node-id lists are stale or absent.
 - [x] Repair READY heartbeat-only node-state recovery so stale stopped rows
       revive to active before membership publication repair runs.
-- [ ] Tighten static guardrails.
+- [x] Tighten static guardrails.
 
 ## Residual Closure Inventory
 
@@ -127,9 +128,9 @@ Closure:
       evidence.
 - [x] Diagnostics, admin, and reporting surfaces match the active-gate
       pending-ACK and missing-published contract.
-- [ ] Superseded paths, booleans, or vocabulary are deleted or explicitly
+- [x] Superseded paths, booleans, or vocabulary are deleted or explicitly
       left outside this package.
-- [ ] Required proof layers are complete.
+- [x] Required proof layers are complete.
 
 ## Blocker Migration Notes
 
@@ -151,8 +152,30 @@ Closure:
    only when the existing durable node row is not already active. Normal
    heartbeat-only updates still avoid mutating resource and participation
    fields.
-5. The post-fix representative `rolling-restart` rerun is intentionally
-   pending in this edit pass.
+5. The post-fix representative `rolling-restart` rerun first exposed a stale
+   terminal-cache ACK owner gap: the authoritative event stream showed epoch
+   `14` `ACK_PENDING` with pending node
+   `11601fe0-72d6-5853-8590-ec2881853e72`, while that node could see a
+   terminal cached publication and skip the owner refresh. The ACK refresh
+   decision now uses one evidence snapshot and a decision table that forces an
+   authoritative read for terminal cache rows.
+6. The focused regression for that gap is
+   `acknowledgeMembershipPublicationForNode refreshes from authoritative when
+   cache has terminal stale publication`.
+7. The final representative rerun migrated out of this package. Publication
+   recovery was closed: publication epoch `4` was `PUBLISHED`,
+   `pendingAckCount=0`, `missingPublishedCount=0`, active-gate publication
+   debt was absent, and priority recovery had no blocked or unresolved
+   partitions.
+8. The new blocker is restarted-node recovery readiness for
+   `11601fe0-72d6-5853-8590-ec2881853e72`: the node remained reachable only by
+   bootstrap health, `adminReady=false`, `controlPlaneRecoveryReady=false`,
+   readiness phase `INIT`, and
+   `bootstrapJoinProjectionBlocker=control_snapshot_authority_unavailable`.
+   Surrounding logs show `control_plane_pressure_degraded` publication writes
+   and `query:insert:control_plane_publications` delivery-source saturation,
+   so the next owner boundary is restart-recovery control-plane pressure and
+   admin reachability.
 
 ## Validation
 
@@ -172,20 +195,29 @@ Executed proof:
 1. `node --test test/control-plane/publication-recovery-state-machine.test.js test/control-plane/publication-recovery-gate.test.js test/control-plane/publication-recovery-evidence.test.js`
    passed, `103/103`.
 2. `node --test test/control-plane/active-node-projection.test.js test/control-plane/membership-publication-coordinator.test.js`
-   passed, `255/255`.
+   passed, `261/261`.
 3. `node --test test/distributed/harness/__tests__/state-machine-pressure-preflight.test.js test/distributed/harness/__tests__/failure-bundle.test.js`
    passed, `62/62`.
 4. `node --test test/control-plane/replica-dispatch-node-state-update.test.js`
    passed, `97/97`.
 5. The pre-revival representative `rolling-restart --fast-local` rerun failed
    with the migrated missing-published active-node blocker described above.
+6. `npm run audit:state-machine-pressure`
+   passed, `ready=true static=7 snapshots=0: issues=0`.
+7. `npm run audit:runtime-grammar`
+   passed with `0` runtime grammar violations.
+8. `npm run audit:guideline:decision-boundaries`
+   passed with `0` violations across `882` JavaScript files.
+9. `npm run audit:guideline:literals`
+   passed with `0` new violations and `6191` inherited baseline violations.
+10. The post-revival representative `rolling-restart --fast-local` rerun
+    failed after `269.1s`, but migrated to the restart-recovery pressure/admin
+    reachability blocker described above.
 
 Pending proof:
 
-1. Static guardrails after the heartbeat-status revival slice.
-2. Post-fix representative `rolling-restart --fast-local` rerun.
-3. A no-code representative confirmation rerun only if the post-fix run
-   passes.
+1. A no-code representative confirmation rerun only after the new active
+   restart-recovery blocker closes.
 
 ## Done When
 

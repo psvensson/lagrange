@@ -9,28 +9,79 @@
 
 import {BaseView, ROW_STATUS} from '../core/base-view.js';
 
+const LOCAL_STR_PENDING = 'pending';
+const LOCAL_STR_CREATING = 'creating';
+const LOCAL_STR_SYNCING = 'syncing';
+const LOCAL_STR_ACTIVE = 'active';
+const LOCAL_STR_REMOVING = 'removing';
+const LOCAL_STR_REMOVED = 'removed';
+const LOCAL_STR_FAILED = 'failed';
+const LOCAL_STR_PENDING_2 = 'PENDING';
+const LOCAL_STR_SENDING = 'SENDING';
+const LOCAL_STR_CREATING_2 = 'CREATING';
+const LOCAL_STR_SYNCING_2 = 'SYNCING';
+const LOCAL_STR_ACTIVE_2 = 'ACTIVE';
+const LOCAL_STR_STOPPING = 'STOPPING';
+const LOCAL_STR_REMOVED_2 = 'REMOVED';
+const LOCAL_STR_OPERATIONS = 'operations';
+const LOCAL_STR_OPERATION_ID = 'operation_id';
+const LOCAL_STR_OPERATION_ID_2 = 'Operation ID';
+const LOCAL_NUM_12 = 12;
+const LOCAL_STR_TYPE = 'type';
+const LOCAL_STR_TYPE_2 = 'Type';
+const LOCAL_NUM_EIGHT = 8;
+const LOCAL_STR_PARTITION_ID = 'partition_id';
+const LOCAL_STR_PARTITION = 'Partition';
+const LOCAL_NUM_15 = 15;
+const LOCAL_STR_TARGET_NODE_ID = 'target_node_id';
+const LOCAL_STR_TARGET_NODE = 'Target Node';
+const LOCAL_STR_STATUS = 'status';
+const LOCAL_STR_STATUS_2 = 'Status';
+const LOCAL_NUM_10 = 10;
+const LOCAL_STR_WORKFLOW_STEP = 'workflow_step';
+const LOCAL_STR_STEP = 'Step';
+const LOCAL_STR_UPDATED_AT = 'updated_at';
+const LOCAL_STR_UPDATED = 'Updated';
+const LOCAL_NUM_20 = 20;
+const LOCAL_STR_N_A = 'N/A';
+const LOCAL_STR_UNKNOWN = 'unknown';
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_STR_2ZI04 = '...';
+const LOCAL_STR_T = 'T';
+const LOCAL_STR_SPACE = ' ';
+const LOCAL_NUM_19 = 19;
+const LOCAL_STR_EMPTY = '';
+const LOCAL_STR_ENTER = 'enter';
+const LOCAL_STR_RETURN = 'return';
+const LOCAL_STR_DRILLDOWN = 'drillDown';
+const LOCAL_STR_PARTITIONS = 'partitions';
+const LOCAL_STR_STRING = 'string';
+const LOCAL_STR_ERROR = 'Error';
+const LOCAL_STR_ERROR_MESSAGE = 'Error Message';
+const LOCAL_STR_WORKFLOW_HISTORY = 'Workflow History';
+
 /**
  * Operation status types for styling
  */
 export const OPERATION_STATUS = {
-  PENDING: 'pending',
-  CREATING: 'creating',
-  SYNCING: 'syncing',
-  ACTIVE: 'active',
-  REMOVING: 'removing',
-  REMOVED: 'removed',
-  FAILED: 'failed',
+  PENDING: LOCAL_STR_PENDING,
+  CREATING: LOCAL_STR_CREATING,
+  SYNCING: LOCAL_STR_SYNCING,
+  ACTIVE: LOCAL_STR_ACTIVE,
+  REMOVING: LOCAL_STR_REMOVING,
+  REMOVED: LOCAL_STR_REMOVED,
+  FAILED: LOCAL_STR_FAILED,
 };
 
 /**
  * Workflow steps for ADD operations
  */
-export const ADD_WORKFLOW_STEPS = ['PENDING', 'SENDING', 'CREATING', 'SYNCING', 'ACTIVE'];
+export const ADD_WORKFLOW_STEPS = [LOCAL_STR_PENDING_2, LOCAL_STR_SENDING, LOCAL_STR_CREATING_2, LOCAL_STR_SYNCING_2, LOCAL_STR_ACTIVE_2];
 
 /**
  * Workflow steps for REMOVE operations
  */
-export const REMOVE_WORKFLOW_STEPS = ['PENDING', 'SENDING', 'STOPPING', 'REMOVED'];
+export const REMOVE_WORKFLOW_STEPS = [LOCAL_STR_PENDING_2, LOCAL_STR_SENDING, LOCAL_STR_STOPPING, LOCAL_STR_REMOVED_2];
 
 /**
  * OperationsView displays all replica operations with workflow steps
@@ -45,7 +96,7 @@ export class OperationsView extends BaseView {
   constructor(options = {}) {
     super(options);
     this.cache = options.cache || null;
-    this.viewName = 'operations';
+    this.viewName = LOCAL_STR_OPERATIONS;
   }
 
   /**
@@ -55,13 +106,13 @@ export class OperationsView extends BaseView {
    */
   getColumns() {
     return [
-      {key: 'operation_id', label: 'Operation ID', width: 12},
-      {key: 'type', label: 'Type', width: 8},
-      {key: 'partition_id', label: 'Partition', width: 15},
-      {key: 'target_node_id', label: 'Target Node', width: 15},
-      {key: 'status', label: 'Status', width: 10},
-      {key: 'workflow_step', label: 'Step', width: 10},
-      {key: 'updated_at', label: 'Updated', width: 20},
+      {key: LOCAL_STR_OPERATION_ID, label: LOCAL_STR_OPERATION_ID_2, width: LOCAL_NUM_12},
+      {key: LOCAL_STR_TYPE, label: LOCAL_STR_TYPE_2, width: LOCAL_NUM_EIGHT},
+      {key: LOCAL_STR_PARTITION_ID, label: LOCAL_STR_PARTITION, width: LOCAL_NUM_15},
+      {key: LOCAL_STR_TARGET_NODE_ID, label: LOCAL_STR_TARGET_NODE, width: LOCAL_NUM_15},
+      {key: LOCAL_STR_STATUS, label: LOCAL_STR_STATUS_2, width: LOCAL_NUM_10},
+      {key: LOCAL_STR_WORKFLOW_STEP, label: LOCAL_STR_STEP, width: LOCAL_NUM_10},
+      {key: LOCAL_STR_UPDATED_AT, label: LOCAL_STR_UPDATED, width: LOCAL_NUM_20},
     ];
   }
 
@@ -74,11 +125,11 @@ export class OperationsView extends BaseView {
   formatRow(operation) {
     return [
       this.truncateId(operation.operation_id),
-      operation.type || 'N/A',
+      operation.type || LOCAL_STR_N_A,
       this.truncateId(operation.partition_id),
       this.truncateId(operation.target_node_id),
-      operation.status || 'unknown',
-      operation.workflow_step || 'N/A',
+      operation.status || LOCAL_STR_UNKNOWN,
+      operation.workflow_step || LOCAL_STR_N_A,
       this.formatTimestamp(operation.updated_at),
     ];
   }
@@ -89,9 +140,9 @@ export class OperationsView extends BaseView {
    * @return {string} Truncated ID
    */
   truncateId(id) {
-    if (!id) return 'N/A';
-    if (id.length <= 12) return id;
-    return id.substring(0, 8) + '...';
+    if (!id) return LOCAL_STR_N_A;
+    if (id.length <= LOCAL_NUM_12) return id;
+    return id.substring(LOCAL_NUM_ZERO, LOCAL_NUM_EIGHT) + LOCAL_STR_2ZI04;
   }
 
   /**
@@ -100,9 +151,9 @@ export class OperationsView extends BaseView {
    * @return {string} Formatted timestamp
    */
   formatTimestamp(timestamp) {
-    if (!timestamp) return 'N/A';
+    if (!timestamp) return LOCAL_STR_N_A;
     const date = new Date(timestamp);
-    return date.toISOString().replace('T', ' ').substring(0, 19);
+    return date.toISOString().replace(LOCAL_STR_T, LOCAL_STR_SPACE).substring(LOCAL_NUM_ZERO, LOCAL_NUM_19);
   }
 
   /**
@@ -145,7 +196,7 @@ export class OperationsView extends BaseView {
    * @return {string} Unique key (operation_id)
    */
   getItemKey(operation) {
-    return operation.operation_id || '';
+    return operation.operation_id || LOCAL_STR_EMPTY;
   }
 
   /**
@@ -154,7 +205,7 @@ export class OperationsView extends BaseView {
    * @return {boolean|Object} True if handled, navigation object, or false
    */
   handleKey(key) {
-    if (key.name === 'enter' || key.name === 'return') {
+    if (key.name === LOCAL_STR_ENTER || key.name === LOCAL_STR_RETURN) {
       // Show operation details
       return this.handleDrillDown();
     }
@@ -173,8 +224,8 @@ export class OperationsView extends BaseView {
 
     // Could navigate to partition details
     return {
-      action: 'drillDown',
-      view: 'partitions',
+      action: LOCAL_STR_DRILLDOWN,
+      view: LOCAL_STR_PARTITIONS,
       context: {partitionId: selectedOp.partition_id},
     };
   }
@@ -193,7 +244,7 @@ export class OperationsView extends BaseView {
     // Parse steps history
     let stepsHistory = [];
     try {
-      if (typeof operation.steps_history === 'string') {
+      if (typeof operation.steps_history === LOCAL_STR_STRING) {
         stepsHistory = JSON.parse(operation.steps_history);
       } else if (Array.isArray(operation.steps_history)) {
         stepsHistory = operation.steps_history;
@@ -234,22 +285,22 @@ export class OperationsView extends BaseView {
     // Add error section if there's an error
     if (operation.error_message) {
       sections.push({
-        title: 'Error',
+        title: LOCAL_STR_ERROR,
         fields: [
-          {label: 'Error Message', value: operation.error_message},
+          {label: LOCAL_STR_ERROR_MESSAGE, value: operation.error_message},
         ],
       });
     }
 
     // Add workflow history section
-    if (stepsHistory.length > 0) {
+    if (stepsHistory.length > LOCAL_NUM_ZERO) {
       const historyFields = stepsHistory.map((step, index) => ({
         label: `Step ${index + 1}`,
         value: `${step.step} at ${this.formatTimestamp(step.timestamp)}`,
       }));
 
       sections.push({
-        title: 'Workflow History',
+        title: LOCAL_STR_WORKFLOW_HISTORY,
         fields: historyFields,
       });
     }

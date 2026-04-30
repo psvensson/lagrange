@@ -1,5 +1,7 @@
 import {NUM, TYPEOF} from '../constants/index.js';
 
+const LOCAL_STR_EMPTY = '';
+
 const CONTROL_PLANE_ROLLOUT_CONTROL = Object.freeze({
   LIFECYCLE_PROBES: 'lifecycleProbes',
   WORK_CLASS_SCHEDULER: 'workClassScheduler',
@@ -47,7 +49,7 @@ const CONTROL_PLANE_ROLLOUT_ERROR = Object.freeze({
  * @return {boolean}
  */
 function parseRolloutControlBoolean(value, fallback) {
-  if (value === undefined || value === null || value === '') {
+  if (value === undefined || value === null || value === LOCAL_STR_EMPTY) {
     return fallback;
   }
   if (typeof value === TYPEOF.BOOLEAN) {

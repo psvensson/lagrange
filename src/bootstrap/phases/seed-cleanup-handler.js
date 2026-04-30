@@ -24,6 +24,8 @@ import {
   TYPEOF,
 } from '../../constants/index.js';
 
+const LOCAL_STR_FUNCTION = 'function';
+
 /**
  * All cleanup steps in reverse phase order.
  */
@@ -626,7 +628,7 @@ class SeedCleanupHandler {
       d.getSqlQueryEngine?.() ||
       d.getCdcIntegrationService?.()?.sqlQueryEngine ||
       null;
-    if (sqlQueryEngine && typeof sqlQueryEngine.shutdown === 'function') {
+    if (sqlQueryEngine && typeof sqlQueryEngine.shutdown === LOCAL_STR_FUNCTION) {
       await sqlQueryEngine.shutdown();
     }
     const cdcIntegrationService = d.getCdcIntegrationService?.() || null;

@@ -37,6 +37,16 @@ import {
   RAFT_REPLICA_BASE_VALUE,
 } from './raft-replica-base-constants.js';
 
+const LOCAL_STR_GIR4Q = 'RaftReplicaBase requires replicaId';
+const LOCAL_STR_10OVO = 'RaftReplicaBase requires entityType';
+const LOCAL_NUM_250 = 250;
+const LOCAL_NUM_25 = 25;
+const LOCAL_STR_1DAWU = 'flushRoleUpdate must be implemented by subclass';
+const LOCAL_STR_15DUC = 'flushLeaderNodeUpdate must be implemented by subclass';
+const LOCAL_STR_STRING = 'string';
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_STR_XXMH6 = 'Shutting down raft replica';
+
 const RaftRole = RAFT_REPLICA_BASE_ROLE;
 
 /**
@@ -63,10 +73,10 @@ class RaftReplicaBase extends EventEmitter {
     super();
 
     if (!options.replicaId) {
-      throw new Error('RaftReplicaBase requires replicaId');
+      throw new Error(LOCAL_STR_GIR4Q);
     }
     if (!options.entityType) {
-      throw new Error('RaftReplicaBase requires entityType');
+      throw new Error(LOCAL_STR_10OVO);
     }
 
     this.replicaId = options.replicaId;
@@ -117,7 +127,7 @@ class RaftReplicaBase extends EventEmitter {
         Math.floor(options.leaderActivationStabilizationMs) :
         (
           config.get(CONFIG_KEY.RAFT_LEADER_ACTIVATION_STABILIZATION_MS) ??
-          250
+          LOCAL_NUM_250
         );
     this.leaderActivationNodeSpacingMs =
       Number.isFinite(options.leaderActivationNodeSpacingMs) &&
@@ -125,7 +135,7 @@ class RaftReplicaBase extends EventEmitter {
         Math.floor(options.leaderActivationNodeSpacingMs) :
         (
           config.get(CONFIG_KEY.RAFT_LEADER_ACTIVATION_NODE_SPACING_MS) ??
-          25
+          LOCAL_NUM_25
         );
     this.leaderActivationScheduler = options.leaderActivationScheduler ||
       LeaderActivationScheduler.getShared({
@@ -616,7 +626,7 @@ class RaftReplicaBase extends EventEmitter {
    * @protected
    */
   async flushRoleUpdate() {
-    throw new Error('flushRoleUpdate must be implemented by subclass');
+    throw new Error(LOCAL_STR_1DAWU);
   }
 
   /**
@@ -627,7 +637,7 @@ class RaftReplicaBase extends EventEmitter {
    * @protected
    */
   async flushLeaderNodeUpdate() {
-    throw new Error('flushLeaderNodeUpdate must be implemented by subclass');
+    throw new Error(LOCAL_STR_15DUC);
   }
 
   /**
@@ -774,7 +784,7 @@ class RaftReplicaBase extends EventEmitter {
       demoted,
     };
     this.emitLeadershipInvariant(
-      typeof leaderId === 'string' && leaderId.length > 0,
+      typeof leaderId === LOCAL_STR_STRING && leaderId.length > LOCAL_NUM_ZERO,
       {
         leaderId,
         ...context,
@@ -849,7 +859,7 @@ class RaftReplicaBase extends EventEmitter {
    * @return {Promise<void>}
    */
   async shutdown() {
-    this.logger.info('Shutting down raft replica', {
+    this.logger.info(LOCAL_STR_XXMH6, {
       replicaId: this.replicaId,
     });
 

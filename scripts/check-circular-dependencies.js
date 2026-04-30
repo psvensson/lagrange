@@ -13,6 +13,12 @@ import {
   writeJsonReport,
 } from './metric-check-helpers.js';
 
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_STR_1N0AK = 'Circular dependency violations:\n';
+const LOCAL_NUM_ONE = 1;
+const LOCAL_STR_Y0V8O = 'No circular dependencies detected.';
+const LOCAL_STR_1E11T = 'scripts/check-circular-dependencies.js';
+
 const BASELINE_CYCLE_GROUP_COUNT = 0;
 const STRICT_FLAG = '--strict';
 const FILE_EXTENSIONS = ['js'];
@@ -30,15 +36,15 @@ const cycleGroupCount = cycleGroups.length;
 writeJsonReport(REPORT_RELATIVE_PATH, {cycleGroups});
 
 if (strict) {
-  if (cycleGroupCount > 0) {
-    console.log('Circular dependency violations:\n');
+  if (cycleGroupCount > LOCAL_NUM_ZERO) {
+    console.log(LOCAL_STR_1N0AK);
     for (const cycleGroup of cycleGroups) {
       console.log(JSON.stringify(cycleGroup));
     }
     console.log(`\n${cycleGroupCount} cycle group(s) found.`);
-    process.exit(1);
+    process.exit(LOCAL_NUM_ONE);
   }
-  console.log('No circular dependencies detected.');
+  console.log(LOCAL_STR_Y0V8O);
 } else {
   if (cycleGroupCount > BASELINE_CYCLE_GROUP_COUNT) {
     console.log(
@@ -48,7 +54,7 @@ if (strict) {
     for (const cycleGroup of cycleGroups) {
       console.log(JSON.stringify(cycleGroup));
     }
-    process.exit(1);
+    process.exit(LOCAL_NUM_ONE);
   }
   console.log(
     `Circular dependency ratchet OK: ${cycleGroupCount}/` +
@@ -56,9 +62,9 @@ if (strict) {
   );
   console.log(`Saved cycle report to ${REPORT_RELATIVE_PATH}.`);
   printRatchetTighteningHint(
-    'scripts/check-circular-dependencies.js',
+    LOCAL_STR_1E11T,
     cycleGroupCount,
     BASELINE_CYCLE_GROUP_COUNT,
-    'scripts/check-circular-dependencies.js',
+    LOCAL_STR_1E11T,
   );
 }

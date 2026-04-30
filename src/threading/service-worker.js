@@ -11,6 +11,8 @@ import {
   WORKER_RESPONSE_STATUS,
 } from './threading-constants.js';
 
+const LOCAL_STR_FUNCTION = 'function';
+
 /**
  * Service registry for worker thread.
  * Maps service IDs to their handlers.
@@ -87,7 +89,7 @@ async function executeOperation(task) {
       throw new Error(THREADING_ERROR_MSG.noHandlerRegistered(serviceId));
     }
 
-    if (typeof handler[operation] !== 'function') {
+    if (typeof handler[operation] !== LOCAL_STR_FUNCTION) {
       throw new Error(THREADING_ERROR_MSG.unknownOperation(operation, serviceId));
     }
 

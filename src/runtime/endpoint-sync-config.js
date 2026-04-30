@@ -17,6 +17,9 @@ import {
   ENDPOINT_SYNC_REGEX,
 } from './endpoint-sync-constants.js';
 
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_STR_EMPTY = '';
+
 /**
  * Parse a comma-separated list into trimmed non-empty values.
  *
@@ -31,7 +34,7 @@ function parseCsvList(raw) {
     .trim()
     .split(ENDPOINT_SYNC_REGEX.COMMA_SPLIT)
     .map((item) => item.trim())
-    .filter((item) => item.length > 0);
+    .filter((item) => item.length > LOCAL_NUM_ZERO);
 }
 
 /**
@@ -44,7 +47,7 @@ function parseCsvList(raw) {
  * @return {boolean}
  */
 function parseBooleanEnv(raw, fallback, envKey, errors) {
-  if (raw === undefined || raw === null || raw === '') {
+  if (raw === undefined || raw === null || raw === LOCAL_STR_EMPTY) {
     return fallback;
   }
   if (typeof raw !== TYPEOF.STRING) {
@@ -76,12 +79,12 @@ function parseBooleanEnv(raw, fallback, envKey, errors) {
  * @return {number}
  */
 function parsePositiveIntegerEnv(raw, fallback, envKey, errors) {
-  if (raw === undefined || raw === null || raw === '') {
+  if (raw === undefined || raw === null || raw === LOCAL_STR_EMPTY) {
     return fallback;
   }
 
   const parsed = Number(raw);
-  if (!Number.isInteger(parsed) || parsed <= 0) {
+  if (!Number.isInteger(parsed) || parsed <= LOCAL_NUM_ZERO) {
     errors.push(`${ENDPOINT_SYNC_ERROR.INVALID_INTEGER_PREFIX}: ${envKey}`);
     return fallback;
   }
@@ -113,7 +116,7 @@ function buildEndpointSyncConfig(env = process.env) {
       adminStreamUrlRaw.trim() :
       '';
 
-  if (adminStreamUrl.length === 0) {
+  if (adminStreamUrl.length === LOCAL_NUM_ZERO) {
     errors.push(ENDPOINT_SYNC_ERROR.ADMIN_STREAM_URL_REQUIRED);
   } else if (!ENDPOINT_SYNC_REGEX.WS_SCHEME.test(adminStreamUrl)) {
     errors.push(ENDPOINT_SYNC_ERROR.ADMIN_STREAM_URL_INVALID);
@@ -124,7 +127,7 @@ function buildEndpointSyncConfig(env = process.env) {
     normalizeProtocols(parseCsvList(protocolAllowlistRaw)) :
     [...ENDPOINT_SYNC_DEFAULT.PROTOCOL_ALLOWLIST];
 
-  if (protocolAllowlist.length === 0) {
+  if (protocolAllowlist.length === LOCAL_NUM_ZERO) {
     errors.push(ENDPOINT_SYNC_ERROR.PROTOCOL_ALLOWLIST_EMPTY);
   }
 
@@ -149,7 +152,7 @@ function buildEndpointSyncConfig(env = process.env) {
     typeof serviceNamePrefixRaw === TYPEOF.STRING ?
       serviceNamePrefixRaw.trim().toLowerCase() :
       '';
-  if (serviceNamePrefix.length === 0) {
+  if (serviceNamePrefix.length === LOCAL_NUM_ZERO) {
     errors.push(ENDPOINT_SYNC_ERROR.SERVICE_NAME_PREFIX_REQUIRED);
   }
 
@@ -160,7 +163,7 @@ function buildEndpointSyncConfig(env = process.env) {
     typeof leaseNameRaw === TYPEOF.STRING ?
       leaseNameRaw.trim() :
       '';
-  if (leaseName.length === 0) {
+  if (leaseName.length === LOCAL_NUM_ZERO) {
     errors.push(ENDPOINT_SYNC_ERROR.LEASE_NAME_REQUIRED);
   }
 
@@ -243,7 +246,7 @@ function buildEndpointSyncConfig(env = process.env) {
   };
 
   return {
-    valid: errors.length === 0,
+    valid: errors.length === LOCAL_NUM_ZERO,
     errors,
     config,
   };

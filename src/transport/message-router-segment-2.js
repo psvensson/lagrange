@@ -1,6 +1,8 @@
 import {MESSAGE_ROUTER_SHARED} from './message-router-shared.js';
 import {MessageRouterSegment1} from './message-router-segment-1.js';
 
+const LOCAL_NUM_ZERO = 0;
+
 const {
   CONNECTION_CLOSE_DISPOSITION,
   ConnectionState,
@@ -434,7 +436,7 @@ class MessageRouterSegment2 extends MessageRouterSegment1 {
           acknowledged: true,
           ...rest,
         };
-        if (error !== void 0) {
+        if (error !== void LOCAL_NUM_ZERO) {
           resolved.error = error;
         }
         pending.resolve(resolved);

@@ -31,6 +31,13 @@ import {
   extractPartitionKeyValue,
 } from './live-query-service.js';
 
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_NUM_0_POINT_7 = 0.7;
+const LOCAL_NUM_ONE = 1;
+const LOCAL_NUM_32 = 32;
+const LOCAL_STR_128KJ = ', ';
+const LOCAL_STR_SPACE = ' ';
+
 const DEFAULT_PARTITION_VERSION = 1;
 const ACTIVE_PARTITION_STATE = 'NORMAL';
 
@@ -146,7 +153,7 @@ class QueryGroup extends EventEmitter {
       clientCount: this.clients.size,
     });
 
-    return this.clients.size === 0;
+    return this.clients.size === LOCAL_NUM_ZERO;
   }
 
   /**
@@ -169,7 +176,7 @@ class QueryGroup extends EventEmitter {
       queryId: this.queryId,
       clientId,
       expiresAt: subscription.lastRenewal + subscription.ttlMs,
-      renewBefore: subscription.lastRenewal + Math.floor(subscription.ttlMs * 0.7),
+      renewBefore: subscription.lastRenewal + Math.floor(subscription.ttlMs * LOCAL_NUM_0_POINT_7),
     };
   }
 
@@ -306,15 +313,15 @@ class QueryGroup extends EventEmitter {
     }
 
     if (start === null || start === undefined) {
-      return this.compareValues(key, end) < 0;
+      return this.compareValues(key, end) < LOCAL_NUM_ZERO;
     }
 
     if (end === null || end === undefined) {
-      return this.compareValues(key, start) >= 0;
+      return this.compareValues(key, start) >= LOCAL_NUM_ZERO;
     }
 
-    return this.compareValues(key, start) >= 0 &&
-           this.compareValues(key, end) < 0;
+    return this.compareValues(key, start) >= LOCAL_NUM_ZERO &&
+           this.compareValues(key, end) < LOCAL_NUM_ZERO;
   }
 
   /**
@@ -383,9 +390,9 @@ class QueryGroup extends EventEmitter {
    * @return {number} Comparison result.
    */
   compareValues(a, b) {
-    if (a === b) return 0;
-    if (a === null) return -1;
-    if (b === null) return 1;
+    if (a === b) return LOCAL_NUM_ZERO;
+    if (a === null) return -LOCAL_NUM_ONE;
+    if (b === null) return LOCAL_NUM_ONE;
 
     if (typeof a === TYPEOF.STRING && typeof b === TYPEOF.STRING) {
       return a.localeCompare(b);
@@ -558,7 +565,7 @@ class QueryGroup extends EventEmitter {
     return {
       queryId: this.queryId,
       table: this.table,
-      predicateHash: canonicalizePredicate(this.whereClause).substring(0, 32),
+      predicateHash: canonicalizePredicate(this.whereClause).substring(LOCAL_NUM_ZERO, LOCAL_NUM_32),
       partitionKeyValue: this.partitionKeyValue,
       clientCount: this.clients.size,
       subscribedPartitions: Array.from(this.subscribedPartitions),
@@ -754,7 +761,7 @@ class LiveQueryManager extends EventEmitter {
     this.clientSubscriptions.get(clientId).add(group.queryId);
 
     // Update client query count
-    this.clientQueryCounts.set(clientId, currentCount + 1);
+    this.clientQueryCounts.set(clientId, currentCount + LOCAL_NUM_ONE);
 
     // Log creation event
     this.logger.info(LIVE_QUERY_LOG_MSG.SUBSCRIPTION_CREATED, {
@@ -774,7 +781,7 @@ class LiveQueryManager extends EventEmitter {
     return {
       queryId: group.queryId,
       expiresAt: Date.now() + group.ttlMs,
-      renewBefore: Date.now() + Math.floor(group.ttlMs * 0.7),
+      renewBefore: Date.now() + Math.floor(group.ttlMs * LOCAL_NUM_0_POINT_7),
       partitions: Array.from(group.subscribedPartitions),
     };
   }
@@ -853,7 +860,7 @@ class LiveQueryManager extends EventEmitter {
         }
         return LIVE_QUERY_SQL.STAR;
       });
-      parts.push(cols.join(', '));
+      parts.push(cols.join(LOCAL_STR_128KJ));
     } else {
       parts.push(LIVE_QUERY_SQL.STAR);
     }
@@ -864,7 +871,7 @@ class LiveQueryManager extends EventEmitter {
     // WHERE (simplified - would need full AST to SQL conversion)
     // For now, we rely on the original SQL being available
 
-    return parts.join(' ');
+    return parts.join(LOCAL_STR_SPACE);
   }
 
   /**
@@ -932,7 +939,7 @@ class LiveQueryManager extends EventEmitter {
 
     // Update query count
     const currentCount = this.clientQueryCounts.get(clientId) || 0;
-    this.clientQueryCounts.set(clientId, currentCount + 1);
+    this.clientQueryCounts.set(clientId, currentCount + LOCAL_NUM_ONE);
 
     this.logger.info(LIVE_QUERY_LOG_MSG.QUERY_RESUMED, {
       queryId,
@@ -955,12 +962,12 @@ class LiveQueryManager extends EventEmitter {
    * @private
    */
   parseCursorTime(cursor) {
-    if (!cursor) return 0;
+    if (!cursor) return LOCAL_NUM_ZERO;
 
     // HLC format: "physical:logical:nodeId" or just timestamp
     const parts = cursor.split(LIVE_QUERY_CURSOR.SEPARATOR);
     const physical = parseInt(parts[0], 10);
-    return isNaN(physical) ? 0 : physical;
+    return isNaN(physical) ? LOCAL_NUM_ZERO : physical;
   }
 
   /**
@@ -978,15 +985,15 @@ class LiveQueryManager extends EventEmitter {
     const subscriptions = this.clientSubscriptions.get(clientId);
     if (subscriptions) {
       subscriptions.delete(queryId);
-      if (subscriptions.size === 0) {
+      if (subscriptions.size === LOCAL_NUM_ZERO) {
         this.clientSubscriptions.delete(clientId);
       }
     }
 
     // Update query count
     const currentCount = this.clientQueryCounts.get(clientId) || 0;
-    if (currentCount > 0) {
-      this.clientQueryCounts.set(clientId, currentCount - 1);
+    if (currentCount > LOCAL_NUM_ZERO) {
+      this.clientQueryCounts.set(clientId, currentCount - LOCAL_NUM_ONE);
     }
 
     // Remove empty group
@@ -1127,14 +1134,14 @@ class LiveQueryManager extends EventEmitter {
         const subscriptions = this.clientSubscriptions.get(clientId);
         if (subscriptions) {
           subscriptions.delete(group.queryId);
-          if (subscriptions.size === 0) {
+          if (subscriptions.size === LOCAL_NUM_ZERO) {
             this.clientSubscriptions.delete(clientId);
           }
         }
 
         const currentCount = this.clientQueryCounts.get(clientId) || 0;
-        if (currentCount > 0) {
-          this.clientQueryCounts.set(clientId, currentCount - 1);
+        if (currentCount > LOCAL_NUM_ZERO) {
+          this.clientQueryCounts.set(clientId, currentCount - LOCAL_NUM_ONE);
         }
 
         this.logger.info(LIVE_QUERY_LOG_MSG.SUBSCRIPTION_EXPIRED, {
@@ -1149,7 +1156,7 @@ class LiveQueryManager extends EventEmitter {
       }
 
       // Remove empty groups
-      if (group.clients.size === 0) {
+      if (group.clients.size === LOCAL_NUM_ZERO) {
         this.removeGroup(group);
         this.queryGroups.delete(groupKey);
       }
@@ -1173,7 +1180,7 @@ class LiveQueryManager extends EventEmitter {
    * @return {Object} Manager statistics.
    */
   getStats() {
-    let totalClients = 0;
+    let totalClients = LOCAL_NUM_ZERO;
     for (const group of this.queryGroups.values()) {
       totalClients += group.clients.size;
     }

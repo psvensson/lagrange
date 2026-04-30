@@ -1,3 +1,5 @@
+const LOCAL_STR_CONSTRUCTOR = 'constructor';
+
 function assignAdminControlSnapshotReadinessDiagnosticsMethods(
   AdminControlSnapshot,
   options = {},
@@ -701,7 +703,7 @@ function assignAdminControlSnapshotReadinessDiagnosticsMethods(
   for (const methodName of Object.getOwnPropertyNames(
     AdminControlSnapshotReadinessDiagnosticsMethods.prototype,
   )) {
-    if (methodName === 'constructor') {
+    if (methodName === LOCAL_STR_CONSTRUCTOR) {
       continue;
     }
     Object.defineProperty(

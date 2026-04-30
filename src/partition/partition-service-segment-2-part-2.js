@@ -1,6 +1,8 @@
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 import {PartitionServiceSegment2Part1} from './partition-service-segment-2-part-1.js';
 
+const LOCAL_NUM_ZERO = 0;
+
 const {
   LifeRaft,
   NUM,
@@ -130,7 +132,7 @@ class PartitionServiceSegment2 extends PartitionServiceSegment2Part1 {
     }
     try {
       const routingKey = this.extractSplitRoutingKey(entry, primaryKeyColumn);
-      if (routingKey === void 0 || routingKey === null) {
+      if (routingKey === void LOCAL_NUM_ZERO || routingKey === null) {
         return null;
       }
       return `${tableName}:${routingKey}`;

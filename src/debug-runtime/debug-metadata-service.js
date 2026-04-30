@@ -27,6 +27,17 @@ import {
   DEBUG_METADATA_ROW_LIMIT as LIMIT,
 } from './debug-metadata-service-constants.js';
 
+const LOCAL_STR_I8FSF = 'lineNumber is required for each breakpoint';
+const LOCAL_STR_1XM6O = 'moduleRef is required for breakpoints';
+const LOCAL_STR_1A3OA = 'sourceFileUrl is required for breakpoints';
+const LOCAL_STR_J82AO = 'moduleRef is required for snapshot metadata';
+const LOCAL_STR_D1ZDM = 'moduleDigest is required for snapshot metadata';
+const LOCAL_STR_YWKFO = 'snapshotId is required';
+const LOCAL_STR_SQL_REQUEST_FAILED = 'SQL request failed';
+const LOCAL_STR_128KJ = ', ';
+const LOCAL_STR_BASE64 = 'base64';
+const LOCAL_STR_EMPTY = '';
+
 const SESSION_COLUMNS = Object.freeze([
   DSF.SESSION_ID,
   DSF.TENANT_ID,
@@ -367,7 +378,7 @@ class DebugMetadataStore {
       if (lineNumber === null) {
         throw createDebugMetadataError(
           CODE.INVALID_REQUEST,
-          'lineNumber is required for each breakpoint',
+          LOCAL_STR_I8FSF,
         );
       }
       const columnNumber = toNullableInteger(breakpoint.columnNumber) ??
@@ -377,12 +388,12 @@ class DebugMetadataStore {
         request.sourceFileUrl || breakpoint.sourceFileUrl;
       assertNonEmptyString(
         moduleRef,
-        'moduleRef is required for breakpoints',
+        LOCAL_STR_1XM6O,
         CODE.INVALID_REQUEST,
       );
       assertNonEmptyString(
         sourceFileUrl,
-        'sourceFileUrl is required for breakpoints',
+        LOCAL_STR_1A3OA,
         CODE.INVALID_REQUEST,
       );
 
@@ -519,12 +530,12 @@ class DebugMetadataStore {
 
     assertNonEmptyString(
       row[DPF.MODULE_REF],
-      'moduleRef is required for snapshot metadata',
+      LOCAL_STR_J82AO,
       CODE.INVALID_REQUEST,
     );
     assertNonEmptyString(
       row[DPF.MODULE_DIGEST],
-      'moduleDigest is required for snapshot metadata',
+      LOCAL_STR_D1ZDM,
       CODE.INVALID_REQUEST,
     );
 
@@ -546,7 +557,7 @@ class DebugMetadataStore {
    */
   async getSnapshot(request) {
     assertRequestObject(request);
-    assertNonEmptyString(request.snapshotId, 'snapshotId is required', CODE.INVALID_REQUEST);
+    assertNonEmptyString(request.snapshotId, LOCAL_STR_YWKFO, CODE.INVALID_REQUEST);
 
     const auth = this.authorizeRequest(request.securityContext, ACTION.READ_SNAPSHOT);
     const sql = `${SQL.SELECT} * FROM ${DT.SNAPSHOTS}` +
@@ -655,7 +666,7 @@ class DebugMetadataStore {
     if (result && result.success === false) {
       throw createDebugMetadataError(
         CODE.INVALID_REQUEST,
-        result.error || 'SQL request failed',
+        result.error || LOCAL_STR_SQL_REQUEST_FAILED,
       );
     }
     return result;
@@ -752,7 +763,7 @@ function buildPlaceholders(count) {
   for (let index = NUM.ONE; index <= count; index++) {
     placeholders.push(`?${index}`);
   }
-  return placeholders.join(', ');
+  return placeholders.join(LOCAL_STR_128KJ);
 }
 
 /**
@@ -788,7 +799,7 @@ function normalizeEnvelopeBuffer(value) {
     throw createDebugMetadataError(CODE.INVALID_REQUEST, ERR.SNAPSHOT_REQUIRED);
   }
   if (typeof value === TYPEOF.STRING) {
-    return Buffer.from(value, 'base64');
+    return Buffer.from(value, LOCAL_STR_BASE64);
   }
   if (Buffer.isBuffer(value)) {
     return value;
@@ -852,7 +863,7 @@ function normalizeBreakpointRow(row) {
 function normalizeSnapshotRow(row, includeEnvelope) {
   let envelope = null;
   if (includeEnvelope) {
-    envelope = Buffer.from(row[DPF.SNAPSHOT_BYTES_BASE64] || '', 'base64');
+    envelope = Buffer.from(row[DPF.SNAPSHOT_BYTES_BASE64] || LOCAL_STR_EMPTY, LOCAL_STR_BASE64);
   }
 
   return {

@@ -13,6 +13,13 @@ import {
 import {ServiceLifecycleManager} from './service-lifecycle-manager.js';
 import {ServicePolicyViolationError} from './service-lifecycle-errors.js';
 
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_STR_EMPTY = '';
+const LOCAL_STR_INTERVAL = 'interval';
+const LOCAL_STR_STARTUP = 'startup';
+const LOCAL_NUM_ONE = 1;
+const LOCAL_STR_RECONCILE = 'reconcile';
+
 const SERVICE_RECONCILER_DEFAULT = Object.freeze({
   CHECK_INTERVAL_MS: 5000,
   MAX_CONCURRENT_SERVICE_ACTIONS: 1,
@@ -123,9 +130,9 @@ function resolveRuntimeKind(entity) {
 function resolveReplicaCount(definition) {
   const count = definition?.[SERVICE_DESCRIPTOR_FIELD.REPLICA_COUNT];
   if (!Number.isFinite(count)) {
-    return 0;
+    return LOCAL_NUM_ZERO;
   }
-  return Math.max(0, Math.floor(count));
+  return Math.max(LOCAL_NUM_ZERO, Math.floor(count));
 }
 
 function resolveLifecycleState(replica) {
@@ -152,13 +159,13 @@ function compareReplicasByReplicaId(leftReplica, rightReplica) {
 function compareActionsDeterministically(leftAction, rightAction) {
   const typeCompare = (resolveServiceType(leftAction) || '')
     .localeCompare(resolveServiceType(rightAction) || '');
-  if (typeCompare !== 0) {
+  if (typeCompare !== LOCAL_NUM_ZERO) {
     return typeCompare;
   }
 
   const serviceCompare = (resolveServiceId(leftAction) || '')
     .localeCompare(resolveServiceId(rightAction) || '');
-  if (serviceCompare !== 0) {
+  if (serviceCompare !== LOCAL_NUM_ZERO) {
     return serviceCompare;
   }
 
@@ -168,8 +175,8 @@ function compareActionsDeterministically(leftAction, rightAction) {
     return leftPriority - rightPriority;
   }
 
-  return (resolveReplicaId(leftAction.replica) || '')
-    .localeCompare(resolveReplicaId(rightAction.replica) || '');
+  return (resolveReplicaId(leftAction.replica) || LOCAL_STR_EMPTY)
+    .localeCompare(resolveReplicaId(rightAction.replica) || LOCAL_STR_EMPTY);
 }
 
 async function defaultPlacementPolicyCheck(policyContext) {
@@ -229,14 +236,14 @@ class ServiceReconciler extends EventEmitter {
 
     const checkIntervalMs = options.checkIntervalMs ||
       SERVICE_RECONCILER_DEFAULT.CHECK_INTERVAL_MS;
-    if (!Number.isFinite(checkIntervalMs) || checkIntervalMs <= 0) {
+    if (!Number.isFinite(checkIntervalMs) || checkIntervalMs <= LOCAL_NUM_ZERO) {
       throw new TypeError(RECONCILER_ERROR.INTERVAL_REQUIRED);
     }
     const maxConcurrentServiceActions =
       options.maxConcurrentServiceActions ??
       SERVICE_RECONCILER_DEFAULT.MAX_CONCURRENT_SERVICE_ACTIONS;
     if (!Number.isFinite(maxConcurrentServiceActions) ||
-      maxConcurrentServiceActions <= 0) {
+      maxConcurrentServiceActions <= LOCAL_NUM_ZERO) {
       throw new TypeError(RECONCILER_ERROR.MAX_CONCURRENT_ACTIONS_REQUIRED);
     }
 
@@ -278,7 +285,7 @@ class ServiceReconciler extends EventEmitter {
     /** @type {string[]} */
     this._eventNames = options.eventNames || [];
     for (const eventName of this._eventNames) {
-      if (typeof eventName !== TYPEOF.STRING || eventName.length === 0) {
+      if (typeof eventName !== TYPEOF.STRING || eventName.length === LOCAL_NUM_ZERO) {
         throw new TypeError(RECONCILER_ERROR.EVENT_NAME_REQUIRED);
       }
     }
@@ -309,18 +316,18 @@ class ServiceReconciler extends EventEmitter {
     this._pendingTrigger = null;
 
     this._stats = {
-      cycleCount: 0,
-      cycleSuccessCount: 0,
-      cycleFailureCount: 0,
-      actionCount: 0,
-      actionSuccessCount: 0,
-      actionFailureCount: 0,
-      lastCycleDurationMs: 0,
-      cycleLatencyMsTotal: 0,
-      cycleLatencyMsMax: 0,
-      lastActionDurationMs: 0,
-      actionLatencyMsTotal: 0,
-      actionLatencyMsMax: 0,
+      cycleCount: LOCAL_NUM_ZERO,
+      cycleSuccessCount: LOCAL_NUM_ZERO,
+      cycleFailureCount: LOCAL_NUM_ZERO,
+      actionCount: LOCAL_NUM_ZERO,
+      actionSuccessCount: LOCAL_NUM_ZERO,
+      actionFailureCount: LOCAL_NUM_ZERO,
+      lastCycleDurationMs: LOCAL_NUM_ZERO,
+      cycleLatencyMsTotal: LOCAL_NUM_ZERO,
+      cycleLatencyMsMax: LOCAL_NUM_ZERO,
+      lastActionDurationMs: LOCAL_NUM_ZERO,
+      actionLatencyMsTotal: LOCAL_NUM_ZERO,
+      actionLatencyMsMax: LOCAL_NUM_ZERO,
       lastCycleAt: null,
       lastCycleReason: null,
       lastError: null,
@@ -357,11 +364,11 @@ class ServiceReconciler extends EventEmitter {
     }
 
     this._interval = setInterval(() => {
-      this.trigger('interval');
+      this.trigger(LOCAL_STR_INTERVAL);
     }, this._checkIntervalMs);
 
     this._bindEventTriggers();
-    await this.trigger('startup');
+    await this.trigger(LOCAL_STR_STARTUP);
   }
 
   /**
@@ -418,7 +425,7 @@ class ServiceReconciler extends EventEmitter {
         metadata: decision.metadata,
         action: decision.action,
         success: decision.success,
-        durationMs: decision.durationMs || 0,
+        durationMs: decision.durationMs || LOCAL_NUM_ZERO,
         operationId: decision.operationId || null,
         error: decision.error || null,
       }));
@@ -452,7 +459,7 @@ class ServiceReconciler extends EventEmitter {
       metadata: decision.metadata,
       action: decision.action,
       success: decision.success,
-      durationMs: decision.durationMs || 0,
+      durationMs: decision.durationMs || LOCAL_NUM_ZERO,
       operationId: decision.result?.operationId || null,
       error: decision.error ? decision.error.message : null,
     });
@@ -508,8 +515,8 @@ class ServiceReconciler extends EventEmitter {
         });
 
         const durationMs = Date.now() - cycleStartedAt;
-        this._stats.cycleCount += 1;
-        this._stats.cycleSuccessCount += 1;
+        this._stats.cycleCount += LOCAL_NUM_ONE;
+        this._stats.cycleSuccessCount += LOCAL_NUM_ONE;
         this._stats.lastCycleDurationMs = durationMs;
         this._stats.cycleLatencyMsTotal += durationMs;
         this._stats.cycleLatencyMsMax = Math.max(
@@ -534,7 +541,7 @@ class ServiceReconciler extends EventEmitter {
           actionCount: actions.length,
           nodeId: nextMetadata?.nodeId || null,
         };
-        if (actions.length > 0 || nextReason !== 'interval') {
+        if (actions.length > LOCAL_NUM_ZERO || nextReason !== LOCAL_STR_INTERVAL) {
           this._logger.info(RECONCILER_LOG.CYCLE_COMPLETE, cycleLogPayload);
         } else {
           this._logger.debug(RECONCILER_LOG.CYCLE_COMPLETE, cycleLogPayload);
@@ -546,7 +553,7 @@ class ServiceReconciler extends EventEmitter {
         }
       } while (this._rerunRequested && this._pendingTrigger);
     } catch (error) {
-      this._stats.cycleFailureCount += 1;
+      this._stats.cycleFailureCount += LOCAL_NUM_ONE;
       this._stats.lastError = error;
       this.emit(RECONCILER_EVENT.CYCLE_ERROR, {
         reason,
@@ -641,7 +648,7 @@ class ServiceReconciler extends EventEmitter {
         let missingCount = desiredReplicaCount - runningReplicas.length;
 
         for (const replica of nonRunningReplicas) {
-          if (missingCount <= 0) {
+          if (missingCount <= LOCAL_NUM_ZERO) {
             break;
           }
           actions.push({
@@ -650,19 +657,19 @@ class ServiceReconciler extends EventEmitter {
             definition,
             replica,
           });
-          missingCount -= 1;
+          missingCount -= LOCAL_NUM_ONE;
         }
 
-        if (missingCount > 0) {
+        if (missingCount > LOCAL_NUM_ZERO) {
           const knownReplicaIds = new Set(
             replicas.map((replica) => resolveReplicaId(replica)),
           );
 
-          for (let index = 1; index <= missingCount; index++) {
+          for (let index = LOCAL_NUM_ONE; index <= missingCount; index++) {
             let suffix = index;
             let candidateReplicaId = `${serviceId}-replica-${suffix}`;
             while (knownReplicaIds.has(candidateReplicaId)) {
-              suffix += 1;
+              suffix += LOCAL_NUM_ONE;
               candidateReplicaId = `${serviceId}-replica-${suffix}`;
             }
             knownReplicaIds.add(candidateReplicaId);
@@ -705,7 +712,7 @@ class ServiceReconciler extends EventEmitter {
             [SERVICE_DESCRIPTOR_FIELD.SERVICE_ID]: resolveServiceId(replica),
             [SERVICE_DESCRIPTOR_FIELD.SERVICE_TYPE]: resolveServiceType(replica),
             [SERVICE_DESCRIPTOR_FIELD.TENANT_ID]: resolveTenantId(replica),
-            [SERVICE_DESCRIPTOR_FIELD.REPLICA_COUNT]: 0,
+            [SERVICE_DESCRIPTOR_FIELD.REPLICA_COUNT]: LOCAL_NUM_ZERO,
           },
           replica,
         });
@@ -726,7 +733,7 @@ class ServiceReconciler extends EventEmitter {
     const execution = new Array(actions.length);
     const actionsByServiceId = new Map();
 
-    for (let index = 0; index < actions.length; index++) {
+    for (let index = LOCAL_NUM_ZERO; index < actions.length; index++) {
       const action = actions[index];
       const actionServiceId =
         resolveServiceId(action.definition || action.replica) ||
@@ -738,18 +745,18 @@ class ServiceReconciler extends EventEmitter {
     }
 
     const serviceActionQueues = [...actionsByServiceId.values()];
-    let nextQueueIndex = 0;
+    let nextQueueIndex = LOCAL_NUM_ZERO;
     const workerCount = Math.min(
       this._maxConcurrentServiceActions,
       serviceActionQueues.length,
     );
 
     const workers = [];
-    for (let workerIndex = 0; workerIndex < workerCount; workerIndex++) {
+    for (let workerIndex = LOCAL_NUM_ZERO; workerIndex < workerCount; workerIndex++) {
       workers.push((async () => {
         while (nextQueueIndex < serviceActionQueues.length) {
           const queueIndex = nextQueueIndex;
-          nextQueueIndex += 1;
+          nextQueueIndex += LOCAL_NUM_ONE;
           const actionQueue = serviceActionQueues[queueIndex];
           for (const actionEntry of actionQueue) {
             execution[actionEntry.index] = await this._executeAction(
@@ -777,7 +784,7 @@ class ServiceReconciler extends EventEmitter {
   async _executeAction(action, context) {
     const actionStartedAt = Date.now();
     const serviceContext = action.definition || action.replica || {};
-    this._stats.actionCount += 1;
+    this._stats.actionCount += LOCAL_NUM_ONE;
     const decision = {
       timestamp: Date.now(),
       reason: context.reason,
@@ -806,9 +813,9 @@ class ServiceReconciler extends EventEmitter {
       durationMs,
     );
     if (decision.success) {
-      this._stats.actionSuccessCount += 1;
+      this._stats.actionSuccessCount += LOCAL_NUM_ONE;
     } else {
-      this._stats.actionFailureCount += 1;
+      this._stats.actionFailureCount += LOCAL_NUM_ONE;
     }
     this._recordDecisionHistory(decision);
     const decisionLog = {
@@ -894,7 +901,7 @@ class ServiceReconciler extends EventEmitter {
     } catch (error) {
       throw new ServicePolicyViolationError(
         RECONCILER_POLICY_TYPE.PLACEMENT,
-        context.reason || 'reconcile',
+        context.reason || LOCAL_STR_RECONCILE,
         serviceId,
         error.message,
         {cause: error},

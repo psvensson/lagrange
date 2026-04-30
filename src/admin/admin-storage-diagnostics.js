@@ -13,6 +13,8 @@ import {
   STORAGE_ADMIN_COMMAND,
 } from '../rebalancer/storage-capacity-constants.js';
 
+const LOCAL_STR_FZHH8 = 'accountingService not available';
+
 const SELECT_ALL_FROM = `${SQL.SELECT} * FROM`;
 
 /**
@@ -28,7 +30,7 @@ async function handleGetStorageCapacity(params, context) {
   if (!accountingService) {
     return {
       success: false,
-      errors: ['accountingService not available'],
+      errors: [LOCAL_STR_FZHH8],
     };
   }
 

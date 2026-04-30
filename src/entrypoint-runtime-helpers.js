@@ -47,6 +47,23 @@ import {
 } from './constants/entrypoint.js';
 import {HTTP_STATUS, NUM, STRING, TYPEOF} from './constants/index.js';
 
+const LOCAL_STR_EMPTY = '';
+const LOCAL_STR_OPTIONS = 'Options:';
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_NUM_ONE = 1;
+const LOCAL_STR_FUNCTION = 'function';
+const LOCAL_STR_VPBYI = 'Failed to publish node shutdown status';
+const LOCAL_STR_1KAZK = 'startupRecoveryCoordinator';
+const LOCAL_STR_11E2L = './query/sql-query-engine.js';
+const LOCAL_STR_1SSS4 = './partition/partition-split-merge-manager.js';
+const LOCAL_STR_14077 = 'Shutdown already in progress, forcing process exit';
+const LOCAL_STR_SIGINT = 'SIGINT';
+const LOCAL_STR_SIGTERM = 'SIGTERM';
+const LOCAL_STR_BEFOREEXIT = 'beforeExit';
+const LOCAL_STR_EXIT = 'exit';
+const LOCAL_STR_DA12T = 'uncaughtExceptionMonitor';
+const LOCAL_STR_UNHANDLEDREJECTION = 'unhandledRejection';
+
 const STARTUP_JOIN_DECISION_SOURCE = Object.freeze({
   EXPLICIT: 'explicit',
 });
@@ -106,10 +123,10 @@ function checkVersionFlag(version) {
     args.includes(ENTRYPOINT_FLAG.HELP_SHORT)
   ) {
     console.log(ENTRYPOINT_TEXT.headerLine(version));
-    console.log('');
+    console.log(LOCAL_STR_EMPTY);
     console.log(ENTRYPOINT_TEXT.USAGE_LINE);
-    console.log('');
-    console.log('Options:');
+    console.log(LOCAL_STR_EMPTY);
+    console.log(LOCAL_STR_OPTIONS);
     for (const line of ENTRYPOINT_TEXT.OPTIONS_LINES) {
       console.log(line);
     }
@@ -126,15 +143,15 @@ function parseCommandLineArgs() {
   const args = process.argv.slice(2);
   const result = {};
 
-  for (let i = 0; i < args.length; i++) {
-    if (args[i] === ENTRYPOINT_FLAG.DATA_DIR && i + 1 < args.length) {
-      result.dataDir = args[i + 1];
+  for (let i = LOCAL_NUM_ZERO; i < args.length; i++) {
+    if (args[i] === ENTRYPOINT_FLAG.DATA_DIR && i + LOCAL_NUM_ONE < args.length) {
+      result.dataDir = args[i + LOCAL_NUM_ONE];
       i++;
-    } else if (args[i] === ENTRYPOINT_FLAG.SEED && i + 1 < args.length) {
-      result.seedNodeAddress = args[i + 1];
+    } else if (args[i] === ENTRYPOINT_FLAG.SEED && i + LOCAL_NUM_ONE < args.length) {
+      result.seedNodeAddress = args[i + LOCAL_NUM_ONE];
       i++;
-    } else if (args[i] === ENTRYPOINT_FLAG.CONFIG && i + 1 < args.length) {
-      result.configPath = args[i + 1];
+    } else if (args[i] === ENTRYPOINT_FLAG.CONFIG && i + LOCAL_NUM_ONE < args.length) {
+      result.configPath = args[i + LOCAL_NUM_ONE];
       i++;
     } else if (args[i] === ENTRYPOINT_FLAG.DRY_RUN) {
       result.dryRun = true;
@@ -151,7 +168,7 @@ function parseCommandLineArgs() {
  */
 function parsePositiveTimeoutMs(value) {
   const parsed = Number(value);
-  if (!Number.isFinite(parsed) || parsed < 1) {
+  if (!Number.isFinite(parsed) || parsed < LOCAL_NUM_ONE) {
     return null;
   }
   return Math.floor(parsed);
@@ -193,7 +210,7 @@ function resolvePartitionServiceByPartitionId(partitionServices, partitionId) {
   if (
     !partitionServices ||
     !partitionId ||
-    typeof partitionServices.values !== 'function'
+    typeof partitionServices.values !== LOCAL_STR_FUNCTION
   ) {
     return null;
   }
@@ -394,14 +411,14 @@ async function shutdownLogsTablePersistence(logsTableService, logger) {
  * @return {Promise<void>}
  */
 async function publishNodeShutdownStatus(heartbeatService, logger, nodeId) {
-  if (typeof heartbeatService?.reportNodeShutdown !== 'function') {
+  if (typeof heartbeatService?.reportNodeShutdown !== LOCAL_STR_FUNCTION) {
     return;
   }
 
   try {
     await heartbeatService.reportNodeShutdown();
   } catch (error) {
-    logger.warn('Failed to publish node shutdown status', {
+    logger.warn(LOCAL_STR_VPBYI, {
       nodeId,
       error: error.message,
     });
@@ -490,7 +507,7 @@ function createReadinessStateWithDiagnostics(logger, nodeId) {
  * @param {Object} options
  */
 function reportStartupRuntimeHandoff(options) {
-  if (!options?.logger || typeof options.logger.info !== 'function') {
+  if (!options?.logger || typeof options.logger.info !== LOCAL_STR_FUNCTION) {
     return;
   }
   options.logger.info(ENTRYPOINT_LOG_MSG.STARTUP_RUNTIME_HANDOFF, {
@@ -550,7 +567,7 @@ function resolveRuntimeAddresses(config) {
  */
 async function probeAutoRejoinPeerAddress(peerAddress) {
   const normalizedPeerAddress = String(peerAddress || '');
-  if (normalizedPeerAddress.length === 0) {
+  if (normalizedPeerAddress.length === LOCAL_NUM_ZERO) {
     return false;
   }
 
@@ -776,7 +793,7 @@ function hydrateBootstrapApiRuntime(options) {
   options.bootstrapAPI.replicaHandler = options.replicaHandler;
   options.bootstrapAPI.epochManager = options.epochManager;
   options.bootstrapAPI.messageRouter = options.messageRouter;
-  if (Object.hasOwn(options, 'startupRecoveryCoordinator')) {
+  if (Object.hasOwn(options, LOCAL_STR_1KAZK)) {
     options.bootstrapAPI.startupRecoveryCoordinator =
       options.startupRecoveryCoordinator || null;
   }
@@ -792,7 +809,7 @@ function resolveSystemCacheHandles(messageGroupServices) {
   let cacheMutationTarget = null;
   if (
     !messageGroupServices ||
-    typeof messageGroupServices.values !== 'function'
+    typeof messageGroupServices.values !== LOCAL_STR_FUNCTION
   ) {
     return {systemTableCache, cacheMutationTarget};
   }
@@ -856,7 +873,7 @@ async function createSqlRuntimeComposition(options) {
     };
   }
 
-  const {SQLQueryEngine} = await import('./query/sql-query-engine.js');
+  const {SQLQueryEngine} = await import(LOCAL_STR_11E2L);
   const wasmExecutor = createSqlCallbackWasmExecutor();
   const sqlQueryEngine = new SQLQueryEngine({
     systemCache: options.systemTableCache,
@@ -883,7 +900,7 @@ async function createSqlRuntimeComposition(options) {
   });
 
   const {PartitionSplitMergeManager} =
-    await import('./partition/partition-split-merge-manager.js');
+    await import(LOCAL_STR_1SSS4);
   const partitionSplitMergeManager = new PartitionSplitMergeManager({
     nodeId: options.nodeId,
     messageRouter: options.messageRouter,
@@ -947,7 +964,7 @@ async function startAdminRuntimeComposition(options) {
   const adminPort = ADMIN_DEFAULT.WEBSOCKET_PORT;
   await adminAPI.initialize(adminPort);
   const logger = options.owner?.logger;
-  if (logger && typeof logger.info === 'function') {
+  if (logger && typeof logger.info === LOCAL_STR_FUNCTION) {
     logger.info(ENTRYPOINT_LOG_MSG.ADMIN_RUNTIME_STARTED, {
       nodeId: options.nodeId,
       adminPort,
@@ -976,9 +993,9 @@ function attachSqlEngineToAdminRuntime(adminRuntime, sqlQueryEngine) {
     return;
   }
   const logger = adminRuntime.adminAPI?.logger;
-  if (typeof adminRuntime.adminAPI?.setSQLQueryEngine === 'function') {
+  if (typeof adminRuntime.adminAPI?.setSQLQueryEngine === LOCAL_STR_FUNCTION) {
     adminRuntime.adminAPI.setSQLQueryEngine(sqlQueryEngine);
-    if (logger && typeof logger.info === 'function') {
+    if (logger && typeof logger.info === LOCAL_STR_FUNCTION) {
       logger.info(ENTRYPOINT_LOG_MSG.ADMIN_RUNTIME_SQL_ENGINE_ATTACHED, {
         nodeId: adminRuntime.nodeId || null,
       });
@@ -988,12 +1005,12 @@ function attachSqlEngineToAdminRuntime(adminRuntime, sqlQueryEngine) {
   if (
     adminRuntime.liveQueryWiring?.liveQueryManager &&
     typeof adminRuntime.liveQueryWiring.liveQueryManager.initialize ===
-      'function'
+      LOCAL_STR_FUNCTION
   ) {
     adminRuntime.liveQueryWiring.liveQueryManager.initialize({
       sqlQueryEngine,
     });
-    if (logger && typeof logger.info === 'function') {
+    if (logger && typeof logger.info === LOCAL_STR_FUNCTION) {
       logger.info(ENTRYPOINT_LOG_MSG.ADMIN_RUNTIME_SQL_ENGINE_ATTACHED, {
         nodeId: adminRuntime.nodeId || null,
       });
@@ -1023,14 +1040,14 @@ async function resolveLogsTableServiceFromPersistence(logsPersistence) {
  * @return {(signal: string) => Promise<void>}
  */
 function createShutdownSignalHandler(options) {
-  let shutdownSignalCount = 0;
+  let shutdownSignalCount = LOCAL_NUM_ZERO;
   return async (signal) => {
     shutdownSignalCount++;
-    if (shutdownSignalCount > 1) {
-      options.logger.warn('Shutdown already in progress, forcing process exit', {
+    if (shutdownSignalCount > LOCAL_NUM_ONE) {
+      options.logger.warn(LOCAL_STR_14077, {
         signal,
       });
-      process.exit(1);
+      process.exit(LOCAL_NUM_ONE);
       return;
     }
 
@@ -1067,20 +1084,20 @@ function createShutdownSignalHandler(options) {
       await shutdownLogsTablePersistence(logsTableService, options.logger);
       await options.rejoinHintsPersistence?.stop?.();
       shutdownDynamicConfigWiring(options.dynamicConfigWiring, options.logger);
-      if (typeof options.detachMigrationRecovery === 'function') {
+      if (typeof options.detachMigrationRecovery === LOCAL_STR_FUNCTION) {
         options.detachMigrationRecovery();
       }
       await options.ownerCleanup();
       await options.bootstrapAPI.shutdown();
       await options.adminAPI.shutdown();
       options.liveQueryWiring.shutdown();
-      process.exit(0);
+      process.exit(LOCAL_NUM_ZERO);
     } catch (error) {
       options.logger.error(options.failureMessage, {
         signal,
         error: error.message,
       });
-      process.exit(1);
+      process.exit(LOCAL_NUM_ONE);
     }
   };
 }
@@ -1090,11 +1107,11 @@ function createShutdownSignalHandler(options) {
  * @param {Function} shutdownHandler
  */
 function registerShutdownSignalHandlers(shutdownHandler) {
-  process.on('SIGINT', () => {
-    void shutdownHandler('SIGINT');
+  process.on(LOCAL_STR_SIGINT, () => {
+    void shutdownHandler(LOCAL_STR_SIGINT);
   });
-  process.on('SIGTERM', () => {
-    void shutdownHandler('SIGTERM');
+  process.on(LOCAL_STR_SIGTERM, () => {
+    void shutdownHandler(LOCAL_STR_SIGTERM);
   });
 }
 
@@ -1121,19 +1138,19 @@ function registerProcessLifecycleDiagnostics(logger, contextProvider) {
     }
   };
 
-  process.on('beforeExit', (code) => {
+  process.on(LOCAL_STR_BEFOREEXIT, (code) => {
     logger.info(ENTRYPOINT_LOG_MSG.PROCESS_BEFORE_EXIT, {
       code,
       ...resolveContext(),
     });
   });
-  process.on('exit', (code) => {
+  process.on(LOCAL_STR_EXIT, (code) => {
     logger.info(ENTRYPOINT_LOG_MSG.PROCESS_EXIT, {
       code,
       ...resolveContext(),
     });
   });
-  process.on('uncaughtExceptionMonitor', (error, origin) => {
+  process.on(LOCAL_STR_DA12T, (error, origin) => {
     logger.error(ENTRYPOINT_LOG_MSG.PROCESS_UNCAUGHT_EXCEPTION, {
       origin,
       error: error?.message || String(error),
@@ -1141,7 +1158,7 @@ function registerProcessLifecycleDiagnostics(logger, contextProvider) {
       ...resolveContext(),
     });
   });
-  process.on('unhandledRejection', (reason) => {
+  process.on(LOCAL_STR_UNHANDLEDREJECTION, (reason) => {
     logger.error(ENTRYPOINT_LOG_MSG.PROCESS_UNHANDLED_REJECTION, {
       error: reason?.message || String(reason),
       stack: reason?.stack || null,
@@ -1156,10 +1173,10 @@ function registerProcessLifecycleDiagnostics(logger, contextProvider) {
  */
 function scheduleStartupLivenessPulse(options) {
   const logger = options?.logger;
-  if (!logger || typeof logger.info !== 'function') {
+  if (!logger || typeof logger.info !== LOCAL_STR_FUNCTION) {
     return;
   }
-  let pulseCount = 0;
+  let pulseCount = LOCAL_NUM_ZERO;
   const timer = setInterval(() => {
     pulseCount += 1;
     logger.info(ENTRYPOINT_LOG_MSG.STARTUP_LIVENESS_PULSE, {
@@ -1180,7 +1197,7 @@ function scheduleStartupLivenessPulse(options) {
       clearInterval(timer);
     }
   }, 2000);
-  if (typeof timer.unref === 'function') {
+  if (typeof timer.unref === LOCAL_STR_FUNCTION) {
     timer.unref();
   }
 }

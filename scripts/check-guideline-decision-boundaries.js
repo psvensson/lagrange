@@ -10,6 +10,26 @@ import {
   walkAst,
 } from './guideline-check-shared.js';
 
+const LOCAL_STR_IFSTATEMENT = 'IfStatement';
+const LOCAL_STR_IDENTIFIER = 'Identifier';
+const LOCAL_STR_VARIABLEDECLARATOR = 'VariableDeclarator';
+const LOCAL_STR_PROPERTY = 'Property';
+const LOCAL_STR_METHODDEFINITION = 'MethodDefinition';
+const LOCAL_STR_LITERAL = 'Literal';
+const LOCAL_STR_STRING = 'string';
+const LOCAL_STR_ANONYMOUS = '<anonymous>';
+const LOCAL_STR_MEMBEREXPRESSION = 'MemberExpression';
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_STR_OBJECTEXPRESSION = 'ObjectExpression';
+const LOCAL_NUM_ONE = 1;
+const LOCAL_STR_1NCMF = 'AssignmentExpression';
+const LOCAL_STR_RETURNSTATEMENT = 'ReturnStatement';
+const LOCAL_NUM_TWO = 2;
+const LOCAL_STR_128KJ = ', ';
+const LOCAL_STR_1JNGK = 'multiple independent if statements assign the same semantic outcome target';
+const LOCAL_STR_1MBIR = 'multiple independent if statements return semantic outcome objects';
+const LOCAL_STR_1PNFN = 'decision-boundary guideline';
+
 const RULE_REFERENCE =
   'system guidelines.md §4.1.1 Semantic Decision Boundaries Must Use Explicit State Models';
 
@@ -52,37 +72,37 @@ function isFunctionLikeNode(node) {
 }
 
 function isElseIfBranch(node, parent) {
-  return parent?.type === 'IfStatement' && parent.alternate === node;
+  return parent?.type === LOCAL_STR_IFSTATEMENT && parent.alternate === node;
 }
 
 function getFunctionName(node, parent) {
-  if (node.id?.type === 'Identifier') {
+  if (node.id?.type === LOCAL_STR_IDENTIFIER) {
     return node.id.name;
   }
-  if (parent?.type === 'VariableDeclarator' &&
-      parent.id?.type === 'Identifier') {
+  if (parent?.type === LOCAL_STR_VARIABLEDECLARATOR &&
+      parent.id?.type === LOCAL_STR_IDENTIFIER) {
     return parent.id.name;
   }
-  if ((parent?.type === 'Property' || parent?.type === 'MethodDefinition') &&
+  if ((parent?.type === LOCAL_STR_PROPERTY || parent?.type === LOCAL_STR_METHODDEFINITION) &&
       parent.key) {
-    if (parent.key.type === 'Identifier') {
+    if (parent.key.type === LOCAL_STR_IDENTIFIER) {
       return parent.key.name;
     }
-    if (parent.key.type === 'Literal' && typeof parent.key.value === 'string') {
+    if (parent.key.type === LOCAL_STR_LITERAL && typeof parent.key.value === LOCAL_STR_STRING) {
       return parent.key.value;
     }
   }
-  return '<anonymous>';
+  return LOCAL_STR_ANONYMOUS;
 }
 
 function extractTargetName(node) {
   if (!node) {
     return null;
   }
-  if (node.type === 'Identifier') {
+  if (node.type === LOCAL_STR_IDENTIFIER) {
     return node.name;
   }
-  if (node.type === 'MemberExpression') {
+  if (node.type === LOCAL_STR_MEMBEREXPRESSION) {
     const objectName = extractTargetName(node.object);
     const propertyName = node.computed ?
       (node.property?.type === 'Literal' ? String(node.property.value) : null) :
@@ -96,7 +116,7 @@ function extractTargetName(node) {
 }
 
 function isSemanticName(name) {
-  if (typeof name !== 'string' || name.length === 0) {
+  if (typeof name !== LOCAL_STR_STRING || name.length === LOCAL_NUM_ZERO) {
     return false;
   }
   const normalized = name.toLowerCase();
@@ -104,19 +124,19 @@ function isSemanticName(name) {
 }
 
 function collectSemanticKeysFromObject(node) {
-  if (node?.type !== 'ObjectExpression') {
+  if (node?.type !== LOCAL_STR_OBJECTEXPRESSION) {
     return [];
   }
   const keys = [];
   for (const property of node.properties || []) {
-    if (property.type !== 'Property' || property.computed === true) {
+    if (property.type !== LOCAL_STR_PROPERTY || property.computed === true) {
       continue;
     }
     let keyName = null;
-    if (property.key?.type === 'Identifier') {
+    if (property.key?.type === LOCAL_STR_IDENTIFIER) {
       keyName = property.key.name;
-    } else if (property.key?.type === 'Literal' &&
-      typeof property.key.value === 'string') {
+    } else if (property.key?.type === LOCAL_STR_LITERAL &&
+      typeof property.key.value === LOCAL_STR_STRING) {
       keyName = property.key.value;
     }
     if (isSemanticName(keyName)) {
@@ -137,7 +157,7 @@ function createViolationEvidence() {
     independentIfLines: new Set(),
     semanticAssignments: new Map(),
     semanticReturnKeys: new Map(),
-    semanticReturnCount: 0,
+    semanticReturnCount: LOCAL_NUM_ZERO,
   };
 }
 
@@ -150,22 +170,22 @@ function collectAssignmentEvidence(currentNode, evidence) {
   addLineToMap(
     evidence.semanticAssignments,
     targetName,
-    currentNode.loc?.start?.line || 1,
+    currentNode.loc?.start?.line || LOCAL_NUM_ONE,
   );
 }
 
 function collectReturnEvidence(currentNode, evidence) {
   const semanticKeys = collectSemanticKeysFromObject(currentNode.argument);
-  if (semanticKeys.length === 0) {
+  if (semanticKeys.length === LOCAL_NUM_ZERO) {
     return;
   }
 
-  evidence.semanticReturnCount += 1;
+  evidence.semanticReturnCount += LOCAL_NUM_ONE;
   for (const key of semanticKeys) {
     addLineToMap(
       evidence.semanticReturnKeys,
       key,
-      currentNode.loc?.start?.line || 1,
+      currentNode.loc?.start?.line || LOCAL_NUM_ONE,
     );
   }
 }
@@ -177,7 +197,7 @@ function traverseFunctionEvidence(
   ancestors,
   evidence,
 ) {
-  if (!currentNode || typeof currentNode.type !== 'string') {
+  if (!currentNode || typeof currentNode.type !== LOCAL_STR_STRING) {
     return;
   }
   if (currentNode !== functionNode && isFunctionLikeNode(currentNode)) {
@@ -185,15 +205,15 @@ function traverseFunctionEvidence(
   }
 
   const insideIf = ancestors.some((ancestor) => ancestor.type === 'IfStatement');
-  if (currentNode.type === 'IfStatement' &&
+  if (currentNode.type === LOCAL_STR_IFSTATEMENT &&
       !isElseIfBranch(currentNode, currentParent)) {
-    evidence.independentIfLines.add(currentNode.loc?.start?.line || 1);
+    evidence.independentIfLines.add(currentNode.loc?.start?.line || LOCAL_NUM_ONE);
   }
 
-  if (insideIf && currentNode.type === 'AssignmentExpression') {
+  if (insideIf && currentNode.type === LOCAL_STR_1NCMF) {
     collectAssignmentEvidence(currentNode, evidence);
   }
-  if (insideIf && currentNode.type === 'ReturnStatement') {
+  if (insideIf && currentNode.type === LOCAL_STR_RETURNSTATEMENT) {
     collectReturnEvidence(currentNode, evidence);
   }
 
@@ -230,7 +250,7 @@ function collectFunctionViolations(node, parent, filePath) {
 
   const violations = [];
   const independentIfCount = evidence.independentIfLines.size;
-  if (independentIfCount < 2) {
+  if (independentIfCount < LOCAL_NUM_TWO) {
     return violations;
   }
 
@@ -238,33 +258,33 @@ function collectFunctionViolations(node, parent, filePath) {
     .filter(([, lines]) => lines.size >= 2)
     .map(([target]) => target)
     .sort();
-  if (repeatedTargets.length > 0) {
+  if (repeatedTargets.length > LOCAL_NUM_ZERO) {
     violations.push({
       filePath,
       line: Math.min(...evidence.independentIfLines),
-      column: 1,
+      column: LOCAL_NUM_ONE,
       functionName,
       independentIfCount,
-      target: repeatedTargets.join(', '),
+      target: repeatedTargets.join(LOCAL_STR_128KJ),
       kind: VIOLATION_KIND.ASSIGNMENT,
       reason:
-        'multiple independent if statements assign the same semantic outcome target',
+        LOCAL_STR_1JNGK,
       ruleReference: RULE_REFERENCE,
     });
   }
 
   const repeatedReturnKeys = [...evidence.semanticReturnKeys.keys()].sort();
-  if (evidence.semanticReturnCount >= 2 && repeatedReturnKeys.length > 0) {
+  if (evidence.semanticReturnCount >= LOCAL_NUM_TWO && repeatedReturnKeys.length > LOCAL_NUM_ZERO) {
     violations.push({
       filePath,
       line: Math.min(...evidence.independentIfLines),
-      column: 1,
+      column: LOCAL_NUM_ONE,
       functionName,
       independentIfCount,
-      target: repeatedReturnKeys.join(', '),
+      target: repeatedReturnKeys.join(LOCAL_STR_128KJ),
       kind: VIOLATION_KIND.RETURN,
       reason:
-        'multiple independent if statements return semantic outcome objects',
+        LOCAL_STR_1MBIR,
       ruleReference: RULE_REFERENCE,
     });
   }
@@ -309,11 +329,11 @@ async function collectDecisionBoundaryViolations(pathsToScan, options = {}) {
 function formatHumanSummary(report) {
   return formatGuidelineHumanSummary(
     report,
-    'decision-boundary guideline',
+    LOCAL_STR_1PNFN,
   );
 }
 
-async function main(argv = process.argv.slice(2)) {
+async function main(argv = process.argv.slice(LOCAL_NUM_TWO)) {
   return runGuidelineCheck(
     argv,
     collectDecisionBoundaryViolations,

@@ -1,3 +1,7 @@
+const LOCAL_STR_ZYDCF = 'Registered message handler';
+const LOCAL_STR_S0VDU = 'Unknown message type received';
+const LOCAL_STR_NYBVK = 'Cleared all message handlers';
+
 /**
  * MessageHandlerRegistry - Map-based handler registry for message routing.
  *
@@ -48,7 +52,7 @@ class MessageHandlerRegistry {
   register(messageType, handler) {
     this.handlers.set(messageType, handler);
     if (this.logger) {
-      this.logger.debug('Registered message handler', {messageType});
+      this.logger.debug(LOCAL_STR_ZYDCF, {messageType});
     }
   }
 
@@ -63,7 +67,7 @@ class MessageHandlerRegistry {
 
     if (!handler) {
       if (this.logger) {
-        this.logger.warn('Unknown message type received', {messageType});
+        this.logger.warn(LOCAL_STR_S0VDU, {messageType});
       }
       return {
         acknowledged: false,
@@ -97,7 +101,7 @@ class MessageHandlerRegistry {
   clear() {
     this.handlers.clear();
     if (this.logger) {
-      this.logger.debug('Cleared all message handlers');
+      this.logger.debug(LOCAL_STR_NYBVK);
     }
   }
 }

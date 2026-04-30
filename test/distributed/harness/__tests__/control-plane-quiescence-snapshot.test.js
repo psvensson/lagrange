@@ -1,8 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  CONTROL_PLANE_QUIESCENCE_CANDIDATE_WINDOW_RESET_REASON,
+  CONTROL_PLANE_QUIESCENCE_CRITICAL_SYSTEM_OBSERVATION_STATE,
   CONTROL_PLANE_QUIESCENCE_REASON,
   CONTROL_PLANE_QUIESCENCE_STATE,
+  buildControlPlaneQuiescenceCandidateWindowReset,
   buildControlPlaneQuiescenceSnapshot,
 } from '../control-plane-quiescence-snapshot.js';
 
@@ -16,11 +19,23 @@ const SNAPSHOT_CAPTURED_AT_MS = 9_000;
 const LEADER_SIGNATURE = 'leader-signature';
 const LEADER_COUNT = 1;
 const IN_FLIGHT_COUNT = 1;
+const STALE_IN_FLIGHT_COUNT = IN_FLIGHT_COUNT;
+const CACHE_VISIBLE_SATISFIED_PRIORITY_RECOVERY_OPERATION_COUNT =
+  IN_FLIGHT_COUNT;
 const OPERATION_NO_PROGRESS_ELAPSED_MS = 30_000;
 const OPERATION_NO_PROGRESS_TIMEOUT_MS = 15_000;
 const SNAPSHOT_PRESSURE_ERROR = 'Admin API query timed out';
 const SNAPSHOT_OBSERVATION_ERROR = 'snapshot rows unavailable';
+const DISCOVERY_REPAIR_TIMEOUT_DETAIL =
+  'Authoritative discovery repair timed out after 1500ms';
+const NODE_STATE_PUBLICATION_PRESSURE_DETAIL =
+  'Distributed operation failed due to participant failures';
 const CRITICAL_SPREAD_GAP = 2;
+const CRITICAL_SYSTEM_SNAPSHOT_LANE_UNAVAILABLE_TABLE_COUNT = 1;
+const CRITICAL_SYSTEM_SNAPSHOT_LANE_UNAVAILABLE_ERROR =
+  'Admin API query timed out for node seed-b on lane snapshot after 1ms';
+const CRITICAL_SYSTEM_TABLE_NAME = 'replica_operations';
+const CANDIDATE_WINDOW_RESET_OBSERVED_AT_MS = 9_500;
 const READY_CRITICAL_SYSTEM_TOPOLOGY = Object.freeze({
   enabled: true,
   ready: true,
@@ -29,7 +44,28 @@ const READY_CRITICAL_SYSTEM_TOPOLOGY = Object.freeze({
 const OPEN_CRITICAL_SYSTEM_TOPOLOGY = Object.freeze({
   enabled: true,
   ready: false,
+  observationState:
+    CONTROL_PLANE_QUIESCENCE_CRITICAL_SYSTEM_OBSERVATION_STATE.AVAILABLE,
   totalSpreadGap: CRITICAL_SPREAD_GAP,
+});
+const SNAPSHOT_LANE_UNAVAILABLE_CRITICAL_SYSTEM_TOPOLOGY = Object.freeze({
+  enabled: true,
+  ready: false,
+  observationState:
+    CONTROL_PLANE_QUIESCENCE_CRITICAL_SYSTEM_OBSERVATION_STATE
+      .SNAPSHOT_LANE_UNAVAILABLE,
+  snapshotLaneUnavailableTableCount:
+    CRITICAL_SYSTEM_SNAPSHOT_LANE_UNAVAILABLE_TABLE_COUNT,
+  totalSpreadGap: CRITICAL_SPREAD_GAP,
+  tables: Object.freeze([
+    Object.freeze({
+      tableName: CRITICAL_SYSTEM_TABLE_NAME,
+      observationState:
+        CONTROL_PLANE_QUIESCENCE_CRITICAL_SYSTEM_OBSERVATION_STATE
+          .SNAPSHOT_LANE_UNAVAILABLE,
+      error: CRITICAL_SYSTEM_SNAPSHOT_LANE_UNAVAILABLE_ERROR,
+    }),
+  ]),
 });
 
 function buildSnapshotProbe(overrides = {}) {
@@ -80,6 +116,101 @@ test('control-plane quiescence snapshot names operation drain blocker',
     );
     assert.equal(
       snapshot.canonicalBlocker,
+      CONTROL_PLANE_QUIESCENCE_REASON.REPLICA_OPERATIONS_IN_FLIGHT,
+    );
+  });
+
+test('control-plane quiescence snapshot discounts stale replica operations when requested',
+  () => {
+    const snapshot = buildControlPlaneQuiescenceSnapshot({
+      snapshotProbe: buildSnapshotProbe({
+        inFlightCount: IN_FLIGHT_COUNT,
+        staleInFlightCount: STALE_IN_FLIGHT_COUNT,
+      }),
+      criticalSystemTopology: READY_CRITICAL_SYSTEM_TOPOLOGY,
+      nowMs: NOW_MS,
+      stableWindowStartedAtMs: STABLE_WINDOW_STARTED_AT_MS,
+      stableWindowMs: STABLE_WINDOW_MS,
+      maxInFlightCount: MAX_IN_FLIGHT_COUNT,
+      leaderQuietElapsedMs: LEADER_QUIET_ELAPSED_MS,
+      ignoreStaleInFlightReplicaOperations: true,
+    });
+
+    assert.equal(snapshot.state, CONTROL_PLANE_QUIESCENCE_STATE.QUIESCENT);
+    assert.equal(snapshot.ready, true);
+    assert.equal(snapshot.effectiveInFlightCount, MAX_IN_FLIGHT_COUNT);
+    assert.equal(snapshot.staleInFlightCount, STALE_IN_FLIGHT_COUNT);
+  });
+
+test('control-plane quiescence snapshot discounts cache-visible satisfied priority recovery operations when requested',
+  () => {
+    const snapshot = buildControlPlaneQuiescenceSnapshot({
+      snapshotProbe: buildSnapshotProbe({
+        inFlightCount: IN_FLIGHT_COUNT,
+        cacheVisibleSatisfiedPriorityRecoveryOperationCount:
+          CACHE_VISIBLE_SATISFIED_PRIORITY_RECOVERY_OPERATION_COUNT,
+      }),
+      criticalSystemTopology: READY_CRITICAL_SYSTEM_TOPOLOGY,
+      nowMs: NOW_MS,
+      stableWindowStartedAtMs: STABLE_WINDOW_STARTED_AT_MS,
+      stableWindowMs: STABLE_WINDOW_MS,
+      maxInFlightCount: MAX_IN_FLIGHT_COUNT,
+      leaderQuietElapsedMs: LEADER_QUIET_ELAPSED_MS,
+      ignoreStaleInFlightReplicaOperations: true,
+    });
+
+    assert.equal(snapshot.state, CONTROL_PLANE_QUIESCENCE_STATE.QUIESCENT);
+    assert.equal(snapshot.ready, true);
+    assert.equal(snapshot.effectiveInFlightCount, MAX_IN_FLIGHT_COUNT);
+    assert.equal(
+      snapshot.cacheVisibleSatisfiedPriorityRecoveryOperationCount,
+      CACHE_VISIBLE_SATISFIED_PRIORITY_RECOVERY_OPERATION_COUNT,
+    );
+    assert.equal(
+      snapshot.staleInFlightDiscountCount,
+      CACHE_VISIBLE_SATISFIED_PRIORITY_RECOVERY_OPERATION_COUNT,
+    );
+  });
+
+test('control-plane quiescence candidate preserves prior stable-window reset',
+  () => {
+    const blockedSnapshot = buildControlPlaneQuiescenceSnapshot({
+      snapshotProbe: buildSnapshotProbe({inFlightCount: IN_FLIGHT_COUNT}),
+      criticalSystemTopology: READY_CRITICAL_SYSTEM_TOPOLOGY,
+      nowMs: NOW_MS,
+      stableWindowStartedAtMs: STABLE_WINDOW_STARTED_AT_MS,
+      stableWindowMs: STABLE_WINDOW_MS,
+      maxInFlightCount: MAX_IN_FLIGHT_COUNT,
+      leaderQuietElapsedMs: LEADER_QUIET_ELAPSED_MS,
+    });
+    const candidateWindowReset =
+      buildControlPlaneQuiescenceCandidateWindowReset(
+        blockedSnapshot,
+        CANDIDATE_WINDOW_RESET_OBSERVED_AT_MS,
+      );
+    const candidateSnapshot = buildControlPlaneQuiescenceSnapshot({
+      snapshotProbe: buildSnapshotProbe(),
+      criticalSystemTopology: READY_CRITICAL_SYSTEM_TOPOLOGY,
+      nowMs: NOW_MS,
+      stableWindowStartedAtMs: NOW_MS,
+      stableWindowMs: STABLE_WINDOW_MS,
+      maxInFlightCount: MAX_IN_FLIGHT_COUNT,
+      leaderQuietElapsedMs: LEADER_QUIET_ELAPSED_MS,
+      candidateWindowReset,
+    });
+
+    assert.equal(
+      candidateSnapshot.state,
+      CONTROL_PLANE_QUIESCENCE_STATE.QUIESCENCE_CANDIDATE,
+    );
+    assert.equal(candidateSnapshot.canonicalBlocker, null);
+    assert.equal(
+      candidateSnapshot.candidateWindowReset.reason,
+      CONTROL_PLANE_QUIESCENCE_CANDIDATE_WINDOW_RESET_REASON
+        .OPERATION_DRAIN_PROGRESSING,
+    );
+    assert.equal(
+      candidateSnapshot.candidateWindowReset.canonicalBlocker,
       CONTROL_PLANE_QUIESCENCE_REASON.REPLICA_OPERATIONS_IN_FLIGHT,
     );
   });
@@ -152,6 +283,70 @@ test('control-plane quiescence snapshot preserves non-pressure observation failu
     );
   });
 
+test('control-plane quiescence snapshot names discovery repair timeout pressure',
+  () => {
+    const snapshot = buildControlPlaneQuiescenceSnapshot({
+      snapshotProbe: buildSnapshotProbe({
+        controlPlanePressureSignals: [{
+          reasonCode:
+            CONTROL_PLANE_QUIESCENCE_REASON.DISCOVERY_REPAIR_TIMEOUT,
+          detail: DISCOVERY_REPAIR_TIMEOUT_DETAIL,
+        }],
+      }),
+      criticalSystemTopology: READY_CRITICAL_SYSTEM_TOPOLOGY,
+      nowMs: NOW_MS,
+      stableWindowStartedAtMs: STABLE_WINDOW_STARTED_AT_MS,
+      stableWindowMs: STABLE_WINDOW_MS,
+      maxInFlightCount: MAX_IN_FLIGHT_COUNT,
+      leaderQuietElapsedMs: LEADER_QUIET_ELAPSED_MS,
+    });
+
+    assert.equal(
+      snapshot.state,
+      CONTROL_PLANE_QUIESCENCE_STATE.CONTROL_PLANE_PRESSURE,
+    );
+    assert.equal(
+      snapshot.canonicalBlocker,
+      CONTROL_PLANE_QUIESCENCE_REASON.DISCOVERY_REPAIR_TIMEOUT,
+    );
+    assert.deepEqual(
+      snapshot.reasonCodes,
+      [CONTROL_PLANE_QUIESCENCE_REASON.DISCOVERY_REPAIR_TIMEOUT],
+    );
+  });
+
+test('control-plane quiescence snapshot names node-state publication pressure',
+  () => {
+    const snapshot = buildControlPlaneQuiescenceSnapshot({
+      snapshotProbe: buildSnapshotProbe({
+        controlPlanePressureSignals: [{
+          reasonCode:
+            CONTROL_PLANE_QUIESCENCE_REASON.NODE_STATE_PUBLICATION_PRESSURE,
+          detail: NODE_STATE_PUBLICATION_PRESSURE_DETAIL,
+        }],
+      }),
+      criticalSystemTopology: READY_CRITICAL_SYSTEM_TOPOLOGY,
+      nowMs: NOW_MS,
+      stableWindowStartedAtMs: STABLE_WINDOW_STARTED_AT_MS,
+      stableWindowMs: STABLE_WINDOW_MS,
+      maxInFlightCount: MAX_IN_FLIGHT_COUNT,
+      leaderQuietElapsedMs: LEADER_QUIET_ELAPSED_MS,
+    });
+
+    assert.equal(
+      snapshot.state,
+      CONTROL_PLANE_QUIESCENCE_STATE.CONTROL_PLANE_PRESSURE,
+    );
+    assert.equal(
+      snapshot.canonicalBlocker,
+      CONTROL_PLANE_QUIESCENCE_REASON.NODE_STATE_PUBLICATION_PRESSURE,
+    );
+    assert.deepEqual(
+      snapshot.reasonCodes,
+      [CONTROL_PLANE_QUIESCENCE_REASON.NODE_STATE_PUBLICATION_PRESSURE],
+    );
+  });
+
 test('control-plane quiescence snapshot names critical spread blockers',
   () => {
     const snapshot = buildControlPlaneQuiescenceSnapshot({
@@ -171,5 +366,67 @@ test('control-plane quiescence snapshot names critical spread blockers',
     assert.equal(
       snapshot.canonicalBlocker,
       CONTROL_PLANE_QUIESCENCE_REASON.CRITICAL_SYSTEM_SPREAD_OPEN,
+    );
+  });
+
+test('control-plane quiescence snapshot separates critical spread observation gaps',
+  () => {
+    const snapshot = buildControlPlaneQuiescenceSnapshot({
+      snapshotProbe: buildSnapshotProbe(),
+      criticalSystemTopology:
+        SNAPSHOT_LANE_UNAVAILABLE_CRITICAL_SYSTEM_TOPOLOGY,
+      nowMs: NOW_MS,
+      stableWindowStartedAtMs: STABLE_WINDOW_STARTED_AT_MS,
+      stableWindowMs: STABLE_WINDOW_MS,
+      maxInFlightCount: MAX_IN_FLIGHT_COUNT,
+      leaderQuietElapsedMs: LEADER_QUIET_ELAPSED_MS,
+    });
+
+    assert.equal(
+      snapshot.state,
+      CONTROL_PLANE_QUIESCENCE_STATE.CRITICAL_SPREAD_OBSERVATION_UNAVAILABLE,
+    );
+    assert.equal(
+      snapshot.canonicalBlocker,
+      CONTROL_PLANE_QUIESCENCE_REASON
+        .CRITICAL_SYSTEM_SNAPSHOT_REACHABILITY_UNAVAILABLE,
+    );
+    assert.deepEqual(
+      snapshot.reasonCodes,
+      [
+        CONTROL_PLANE_QUIESCENCE_REASON
+          .CRITICAL_SYSTEM_SNAPSHOT_REACHABILITY_UNAVAILABLE,
+      ],
+    );
+  });
+
+test('control-plane quiescence candidate reset preserves critical spread observation gaps',
+  () => {
+    const blockedSnapshot = buildControlPlaneQuiescenceSnapshot({
+      snapshotProbe: buildSnapshotProbe(),
+      criticalSystemTopology:
+        SNAPSHOT_LANE_UNAVAILABLE_CRITICAL_SYSTEM_TOPOLOGY,
+      nowMs: NOW_MS,
+      stableWindowStartedAtMs: STABLE_WINDOW_STARTED_AT_MS,
+      stableWindowMs: STABLE_WINDOW_MS,
+      maxInFlightCount: MAX_IN_FLIGHT_COUNT,
+      leaderQuietElapsedMs: LEADER_QUIET_ELAPSED_MS,
+    });
+
+    const candidateWindowReset =
+      buildControlPlaneQuiescenceCandidateWindowReset(
+        blockedSnapshot,
+        CANDIDATE_WINDOW_RESET_OBSERVED_AT_MS,
+      );
+
+    assert.equal(
+      candidateWindowReset.reason,
+      CONTROL_PLANE_QUIESCENCE_CANDIDATE_WINDOW_RESET_REASON
+        .CRITICAL_SPREAD_OBSERVATION_UNAVAILABLE,
+    );
+    assert.equal(
+      candidateWindowReset.canonicalBlocker,
+      CONTROL_PLANE_QUIESCENCE_REASON
+        .CRITICAL_SYSTEM_SNAPSHOT_REACHABILITY_UNAVAILABLE,
     );
   });

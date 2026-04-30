@@ -10,6 +10,16 @@ import {
   DEBUG_TRACE_SOURCE,
 } from './debug-constants.js';
 
+const LOCAL_STR_LINEAGEID = 'lineageId';
+const LOCAL_STR_STAGEID = 'stageId';
+const LOCAL_STR_PARTITIONID = 'partitionId';
+const LOCAL_STR_NODEID = 'nodeId';
+const LOCAL_STR_25YCP = 'serviceDefinitionId';
+const LOCAL_STR_REPLICAID = 'replicaId';
+const LOCAL_STR_RUNTIMEKIND = 'runtimeKind';
+const LOCAL_STR_SOURCE = 'source';
+const LOCAL_STR_SESSIONID = 'sessionId';
+
 /**
  * Emits trace events when debug sessions are active.
  */
@@ -130,27 +140,27 @@ function buildTraceEvent(request) {
     [TF.MESSAGE]: request.message,
     [TF.CONTEXT]: request.context ?? null,
     [TF.TIMESTAMP]: request.timestamp,
-    [TF.LINEAGE_ID]: resolveField(scope, metadata, 'lineageId'),
+    [TF.LINEAGE_ID]: resolveField(scope, metadata, LOCAL_STR_LINEAGEID),
     [TF.STAGE_ID]: resolveNullableInt(
-      resolveField(scope, metadata, 'stageId'),
+      resolveField(scope, metadata, LOCAL_STR_STAGEID),
     ),
-    [TF.PARTITION_ID]: resolveField(scope, metadata, 'partitionId'),
-    [TF.NODE_ID]: resolveField(scope, metadata, 'nodeId', fallback.nodeId),
+    [TF.PARTITION_ID]: resolveField(scope, metadata, LOCAL_STR_PARTITIONID),
+    [TF.NODE_ID]: resolveField(scope, metadata, LOCAL_STR_NODEID, fallback.nodeId),
     [TF.SERVICE_DEFINITION_ID]: resolveField(
       scope,
       metadata,
-      'serviceDefinitionId',
+      LOCAL_STR_25YCP,
       fallback.serviceDefinitionId,
     ),
-    [TF.REPLICA_ID]: resolveField(scope, metadata, 'replicaId', fallback.replicaId),
+    [TF.REPLICA_ID]: resolveField(scope, metadata, LOCAL_STR_REPLICAID, fallback.replicaId),
     [TF.RUNTIME_KIND]: resolveField(
       scope,
       metadata,
-      'runtimeKind',
+      LOCAL_STR_RUNTIMEKIND,
       fallback.runtimeKind,
     ),
-    [TF.SOURCE]: resolveField(scope, metadata, 'source', fallback.source),
-    [TF.SESSION_ID]: resolveField(scope, metadata, 'sessionId'),
+    [TF.SOURCE]: resolveField(scope, metadata, LOCAL_STR_SOURCE, fallback.source),
+    [TF.SESSION_ID]: resolveField(scope, metadata, LOCAL_STR_SESSIONID),
   };
 }
 

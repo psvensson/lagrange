@@ -27,6 +27,11 @@ import {
   serializeDependencyLock,
 } from './wasm-meta-models.js';
 
+const LOCAL_STR_SHA256 = 'sha256';
+const LOCAL_STR_HEX = 'hex';
+const LOCAL_STR_ADDED = 'added';
+const LOCAL_STR_CHANGED = 'changed';
+
 /**
  * Generate a deterministic lock ID from module identity
  * and resolved dependency digests.
@@ -48,7 +53,7 @@ function generateLockId(
   const payload = JSON.stringify({
     namespace, name, version, deps: sorted,
   });
-  return createHash('sha256').update(payload).digest('hex');
+  return createHash(LOCAL_STR_SHA256).update(payload).digest(LOCAL_STR_HEX);
 }
 
 /**
@@ -172,7 +177,7 @@ function validateLockConsistency(
       );
       driftedDependencies.push({
         moduleId: dep.moduleId,
-        reason: 'added',
+        reason: LOCAL_STR_ADDED,
       });
     } else if (lockedDigest !== dep.digest) {
       errors.push(
@@ -182,7 +187,7 @@ function validateLockConsistency(
         moduleId: dep.moduleId,
         lockedDigest,
         newDigest: dep.digest,
-        reason: 'changed',
+        reason: LOCAL_STR_CHANGED,
       });
     }
   }

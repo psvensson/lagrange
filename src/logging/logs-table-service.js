@@ -26,6 +26,9 @@ import {
   PressureGovernor,
 } from '../control-plane/pressure-governor.js';
 import {
+  CONTROL_PLANE_WORKLOAD_CLASS,
+} from '../control-plane/control-plane-workload-profile.js';
+import {
   createSystemMetadataOwnerRequiredError,
 } from '../control-plane/system-metadata-access-error.js';
 import {
@@ -33,10 +36,53 @@ import {
   assertRequiredControlPlaneRollout,
 } from '../runtime/control-plane-rollout-controls.js';
 
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_NUM_ONE = 1;
+const LOCAL_STR_FUNCTION = 'function';
+const LOCAL_STR_MESSAGEROUTER = 'messageRouter';
+const LOCAL_STR_PRESSUREGOVERNOR = 'pressureGovernor';
+const LOCAL_STR_LSYAT = 'pendingWriteGrowthCount';
+const LOCAL_STR_BACKGROUND = 'background';
+const LOCAL_STR_LOGSOWNER = 'logsOwner';
+const LOCAL_STR_LOGS = 'logs';
+const LOCAL_STR_WRITE = 'write';
+const LOCAL_STR_12XVB = 'CONTROL_PLANE_PRESSURE_DEGRADED';
+const LOCAL_STR_OV8OK = 'Distributed operation failed due to participant failures';
+const LOCAL_STR_CONNECTION_TO_NODE = 'Connection to node';
+const LOCAL_STR_CLOSED = 'closed';
+const LOCAL_STR_10U11 = 'No connection to node';
+const LOCAL_STR_MESSAGE_TIMEOUT = 'Message timeout';
+const LOCAL_STR_1Y4H5 = 'Query routing failed';
+const LOCAL_STR_10811 = 'Failed to forward write to leader';
+const LOCAL_STR_10NUJ = 'control-plane:write';
+const LOCAL_STR_1KX9P = 'control-plane:read';
+const LOCAL_STR_121M5 = 'control-plane:table:logs';
+const LOCAL_STR_1SYL3 = 'transport:logs-writer';
+const LOCAL_STR_STRING = 'string';
+const LOCAL_STR_INFO = 'INFO';
+const LOCAL_STR_PIPE = '|';
+const LOCAL_STR_EMPTY = '';
+const LOCAL_STR_1M0NB = 'retainedBacklogGrowthCount';
+
 const LOGGING_METRIC_PREFIX = 'metrics.logging.';
 const LOGS_TABLE_METRIC_PREFIX = 'metrics.logs_table.';
 const LOG_RETENTION_METRIC_PREFIX = 'metrics.log_retention.';
 const LOG_QUERY_METRIC_PREFIX = 'metrics.log_query.';
+const LOGS_TABLE_TRANSPORT_PRESSURE_RESOURCE_KEYS = Object.freeze([
+  LOCAL_STR_1SYL3,
+]);
+const LOGS_TABLE_CONTROL_PLANE_WRITE_PRESSURE_RESOURCE_KEYS = Object.freeze([
+  LOCAL_STR_10NUJ,
+  LOCAL_STR_121M5,
+]);
+const LOGS_TABLE_CONTROL_PLANE_QUERY_PRESSURE_RESOURCE_KEYS = Object.freeze([
+  LOCAL_STR_1KX9P,
+  LOCAL_STR_121M5,
+]);
+const LOGS_TABLE_SHARED_PRESSURE_RESOURCE_KEYS = Object.freeze([
+  ...LOGS_TABLE_CONTROL_PLANE_WRITE_PRESSURE_RESOURCE_KEYS,
+  ...LOGS_TABLE_TRANSPORT_PRESSURE_RESOURCE_KEYS,
+]);
 
 const LOGGING_PIPELINE_METRIC_PREFIX = Object.freeze({
   LOGGING: LOGGING_METRIC_PREFIX,
@@ -130,20 +176,20 @@ class LogsTableService extends EventEmitter {
     this.retryDelayMs = options.retryDelayMs ||
       config.get(CONFIG_KEY.LOGGING_RETRY_DELAY_MS) || LOGS_TABLE_DEFAULT.RETRY_DELAY_MS;
     this.flushChunkSize = Number.isFinite(options.flushChunkSize) &&
-      options.flushChunkSize > 0 ?
+      options.flushChunkSize > LOCAL_NUM_ZERO ?
       Math.floor(options.flushChunkSize) :
       LOGS_TABLE_DEFAULT.FLUSH_CHUNK_SIZE;
     this.flushYieldMs = Number.isFinite(options.flushYieldMs) &&
-      options.flushYieldMs >= 0 ?
+      options.flushYieldMs >= LOCAL_NUM_ZERO ?
       Math.floor(options.flushYieldMs) :
       LOGS_TABLE_DEFAULT.FLUSH_YIELD_MS;
     this.maxPendingWrites = Number.isFinite(options.maxPendingWrites) &&
-      options.maxPendingWrites > 0 ?
+      options.maxPendingWrites > LOCAL_NUM_ZERO ?
       Math.floor(options.maxPendingWrites) :
       LOGS_TABLE_DEFAULT.MAX_PENDING_WRITES;
     this.pressureHighWatermark =
       Number.isFinite(options.pressureHighWatermark) &&
-      options.pressureHighWatermark > 0 ?
+      options.pressureHighWatermark > LOCAL_NUM_ZERO ?
         Math.min(
           this.maxPendingWrites,
           Math.floor(options.pressureHighWatermark),
@@ -154,7 +200,7 @@ class LogsTableService extends EventEmitter {
         );
     this.pressureRetainedPendingWrites =
       Number.isFinite(options.pressureRetainedPendingWrites) &&
-      options.pressureRetainedPendingWrites > 0 ?
+      options.pressureRetainedPendingWrites > LOCAL_NUM_ZERO ?
         Math.min(
           this.maxPendingWrites,
           Math.floor(options.pressureRetainedPendingWrites),
@@ -165,29 +211,29 @@ class LogsTableService extends EventEmitter {
         );
     this.pressureDeferBackoffMultiplier =
       Number.isFinite(options.pressureDeferBackoffMultiplier) &&
-      options.pressureDeferBackoffMultiplier >= 1 ?
+      options.pressureDeferBackoffMultiplier >= LOCAL_NUM_ONE ?
         options.pressureDeferBackoffMultiplier :
         LOGS_TABLE_DEFAULT.PRESSURE_DEFER_BACKOFF_MULTIPLIER;
     this.pressureMaxRetryDelayMs =
       Number.isFinite(options.pressureMaxRetryDelayMs) &&
-      options.pressureMaxRetryDelayMs > 0 ?
+      options.pressureMaxRetryDelayMs > LOCAL_NUM_ZERO ?
         Math.floor(options.pressureMaxRetryDelayMs) :
         LOGS_TABLE_DEFAULT.PRESSURE_MAX_RETRY_DELAY_MS;
     this.workClassScheduler = options.workClassScheduler ||
       new WorkClassScheduler();
-    this.now = typeof options.now === 'function' ?
+    this.now = typeof options.now === LOCAL_STR_FUNCTION ?
       options.now :
       () => Date.now();
-    this.setTimeoutFn = typeof options.setTimeoutFn === 'function' ?
+    this.setTimeoutFn = typeof options.setTimeoutFn === LOCAL_STR_FUNCTION ?
       options.setTimeoutFn :
       setTimeout;
-    this.clearTimeoutFn = typeof options.clearTimeoutFn === 'function' ?
+    this.clearTimeoutFn = typeof options.clearTimeoutFn === LOCAL_STR_FUNCTION ?
       options.clearTimeoutFn :
       clearTimeout;
-    this.setIntervalFn = typeof options.setIntervalFn === 'function' ?
+    this.setIntervalFn = typeof options.setIntervalFn === LOCAL_STR_FUNCTION ?
       options.setIntervalFn :
       setInterval;
-    this.clearIntervalFn = typeof options.clearIntervalFn === 'function' ?
+    this.clearIntervalFn = typeof options.clearIntervalFn === LOCAL_STR_FUNCTION ?
       options.clearIntervalFn :
       clearInterval;
 
@@ -200,14 +246,14 @@ class LogsTableService extends EventEmitter {
     this.flushWorkScheduled = false;
     this.isWriting = false;
     this.isShuttingDown = false;
-    this.writeDeferredUntilMs = 0;
-    this.writeCount = 0;
-    this.errorCount = 0;
-    this.droppedWrites = 0;
-    this.selfLoopPreventedWrites = 0;
-    this.consecutiveDeferredWriteFailures = 0;
-    this.pendingWriteGrowthCount = 0;
-    this.retainedBacklogGrowthCount = 0;
+    this.writeDeferredUntilMs = LOCAL_NUM_ZERO;
+    this.writeCount = LOCAL_NUM_ZERO;
+    this.errorCount = LOCAL_NUM_ZERO;
+    this.droppedWrites = LOCAL_NUM_ZERO;
+    this.selfLoopPreventedWrites = LOCAL_NUM_ZERO;
+    this.consecutiveDeferredWriteFailures = LOCAL_NUM_ZERO;
+    this.pendingWriteGrowthCount = LOCAL_NUM_ZERO;
+    this.retainedBacklogGrowthCount = LOCAL_NUM_ZERO;
 
     // Logging (use console until we're fully initialized to avoid recursion)
     this.logger = console;
@@ -241,12 +287,12 @@ class LogsTableService extends EventEmitter {
     instance.flushWorkScheduled = false;
     instance.isWriting = false;
     instance.flushContinuationDueAtMs = null;
-    instance.writeDeferredUntilMs = 0;
+    instance.writeDeferredUntilMs = LOCAL_NUM_ZERO;
     instance.initialized = false;
     instance.isShuttingDown = false;
-    instance.consecutiveDeferredWriteFailures = 0;
-    instance.pendingWriteGrowthCount = 0;
-    instance.retainedBacklogGrowthCount = 0;
+    instance.consecutiveDeferredWriteFailures = LOCAL_NUM_ZERO;
+    instance.pendingWriteGrowthCount = LOCAL_NUM_ZERO;
+    instance.retainedBacklogGrowthCount = LOCAL_NUM_ZERO;
     instance.removeAllListeners();
     LogsTableService.instance = null;
   }
@@ -264,10 +310,10 @@ class LogsTableService extends EventEmitter {
     if (options.logsOwner) {
       this.logsOwner = options.logsOwner;
     }
-    if (Object.prototype.hasOwnProperty.call(options, 'messageRouter')) {
+    if (Object.prototype.hasOwnProperty.call(options, LOCAL_STR_MESSAGEROUTER)) {
       this.messageRouter = options.messageRouter || null;
     }
-    if (Object.prototype.hasOwnProperty.call(options, 'pressureGovernor')) {
+    if (Object.prototype.hasOwnProperty.call(options, LOCAL_STR_PRESSUREGOVERNOR)) {
       this.pressureGovernor = options.pressureGovernor || null;
     }
 
@@ -343,7 +389,7 @@ class LogsTableService extends EventEmitter {
     }
 
     if (this.isLoggingPipelineMetricsEntry(entry)) {
-      this.selfLoopPreventedWrites += 1;
+      this.selfLoopPreventedWrites += LOCAL_NUM_ONE;
       return;
     }
 
@@ -379,7 +425,7 @@ class LogsTableService extends EventEmitter {
 
     // Add to pending writes
     this.pendingWrites.push(entry);
-    this.incrementBoundedCounter('pendingWriteGrowthCount');
+    this.incrementBoundedCounter(LOCAL_STR_LSYAT);
 
     // Flush if batch size reached
     if (this.pendingWrites.length >= this.batchSize) {
@@ -400,7 +446,7 @@ class LogsTableService extends EventEmitter {
   async flush(options = {}) {
     if (this.isWriteDeferred()) {
       this.scheduleContinuationFlush(this.getRemainingWriteDeferMs());
-      return 0;
+      return LOCAL_NUM_ZERO;
     }
 
     const scheduleThroughWorkClass = options.scheduleThroughWorkClass !== false;
@@ -408,7 +454,7 @@ class LogsTableService extends EventEmitter {
       this.workClassScheduler &&
       !this.isShuttingDown) {
       if (this.flushWorkScheduled) {
-        return 0;
+        return LOCAL_NUM_ZERO;
       }
       this.flushWorkScheduled = true;
       try {
@@ -421,7 +467,7 @@ class LogsTableService extends EventEmitter {
       } catch (error) {
         if (error?.code === WORK_CLASS_SCHEDULER_ERROR.WORK_CLASS_C_SHED) {
           this.recordDroppedWrite();
-          return 0;
+          return LOCAL_NUM_ZERO;
         }
         throw error;
       } finally {
@@ -429,8 +475,8 @@ class LogsTableService extends EventEmitter {
       }
     }
 
-    if (this.isWriting || this.pendingWrites.length === 0) {
-      return 0;
+    if (this.isWriting || this.pendingWrites.length === LOCAL_NUM_ZERO) {
+      return LOCAL_NUM_ZERO;
     }
 
     const maxEntries = Number.isFinite(options.maxEntries) &&
@@ -442,15 +488,15 @@ class LogsTableService extends EventEmitter {
     this.isWriting = true;
     const entriesToWrite = this.pendingWrites.splice(0, maxEntries);
 
-    let writtenCount = 0;
+    let writtenCount = LOCAL_NUM_ZERO;
 
     try {
-      for (let index = 0; index < entriesToWrite.length; index += 1) {
+      for (let index = LOCAL_NUM_ZERO; index < entriesToWrite.length; index += LOCAL_NUM_ONE) {
         const entry = entriesToWrite[index];
         try {
           const success = await this.writeEntryWithRetry(entry);
           if (success) {
-            this.consecutiveDeferredWriteFailures = 0;
+            this.consecutiveDeferredWriteFailures = LOCAL_NUM_ZERO;
             writtenCount++;
             this.writeCount++;
           } else {
@@ -470,13 +516,13 @@ class LogsTableService extends EventEmitter {
         }
       }
 
-      if (writtenCount > 0) {
+      if (writtenCount > LOCAL_NUM_ZERO) {
         this.emit(LOGS_TABLE_EVENT.FLUSHED, {count: writtenCount});
       }
     } finally {
       this.isWriting = false;
       if (yieldPending &&
-          this.pendingWrites.length > 0 &&
+          this.pendingWrites.length > LOCAL_NUM_ZERO &&
           !this.isWriteDeferred()) {
         this.scheduleContinuationFlush();
       }
@@ -531,7 +577,7 @@ class LogsTableService extends EventEmitter {
   async writeEntryWithRetry(entry) {
     let lastError = null;
 
-    for (let attempt = 0; attempt < this.maxRetries; attempt++) {
+    for (let attempt = LOCAL_NUM_ZERO; attempt < this.maxRetries; attempt++) {
       try {
         await this.writeEntryToTable(entry);
         return true;
@@ -540,8 +586,8 @@ class LogsTableService extends EventEmitter {
         if (this.shouldDeferWriteError(error)) {
           throw error;
         }
-        if (attempt < this.maxRetries - 1) {
-          await this.sleep(this.retryDelayMs * (attempt + 1));
+        if (attempt < this.maxRetries - LOCAL_NUM_ONE) {
+          await this.sleep(this.retryDelayMs * (attempt + LOCAL_NUM_ONE));
         }
       }
     }
@@ -576,7 +622,8 @@ class LogsTableService extends EventEmitter {
     if (this.logsOwner) {
       await this.logsOwner.upsertLog(row, {
         workClass: PRESSURE_WORK_CLASS.BACKGROUND,
-        deliveryPriority: 'background',
+        workloadClass: CONTROL_PLANE_WORKLOAD_CLASS.LOGS_TABLE_BACKGROUND_WRITE,
+        deliveryPriority: LOCAL_STR_BACKGROUND,
         allowPressureDefer: true,
         pressureRetryAfterMs: this.retryDelayMs,
       });
@@ -585,9 +632,9 @@ class LogsTableService extends EventEmitter {
 
     throw createSystemMetadataOwnerRequiredError({
       serviceName: LOGS_TABLE_OWNER,
-      ownerName: 'logsOwner',
-      tableName: 'logs',
-      operation: 'write',
+      ownerName: LOCAL_STR_LOGSOWNER,
+      tableName: LOCAL_STR_LOGS,
+      operation: LOCAL_STR_WRITE,
       message: LOGGING_ERROR_MSG.OWNER_REQUIRED,
     });
   }
@@ -599,11 +646,11 @@ class LogsTableService extends EventEmitter {
    */
   isWriteDeferred() {
     if (!Number.isFinite(this.writeDeferredUntilMs) ||
-        this.writeDeferredUntilMs <= 0) {
+        this.writeDeferredUntilMs <= LOCAL_NUM_ZERO) {
       return false;
     }
     if (this.now() >= this.writeDeferredUntilMs) {
-      this.writeDeferredUntilMs = 0;
+      this.writeDeferredUntilMs = LOCAL_NUM_ZERO;
       return false;
     }
     return true;
@@ -616,7 +663,7 @@ class LogsTableService extends EventEmitter {
    */
   getRemainingWriteDeferMs() {
     if (!this.isWriteDeferred()) {
-      return 0;
+      return LOCAL_NUM_ZERO;
     }
     return Math.max(MIN_SLEEP_MS, this.writeDeferredUntilMs - this.now());
   }
@@ -633,21 +680,21 @@ class LogsTableService extends EventEmitter {
       return false;
     }
     if (error?.deferRetry === true ||
-        error?.code === 'CONTROL_PLANE_PRESSURE_DEGRADED') {
+        error?.code === LOCAL_STR_12XVB) {
       return true;
     }
     if (Number.isFinite(error?.retryAfterMs) &&
-        error.retryAfterMs > 0) {
+        error.retryAfterMs > LOCAL_NUM_ZERO) {
       return true;
     }
     const message = error?.message || String(error);
-    return message.includes('Distributed operation failed due to participant failures') ||
-      message.includes('Connection to node') &&
-      message.includes('closed') ||
-      message.includes('No connection to node') ||
-      message.includes('Message timeout') ||
-      message.includes('Query routing failed') ||
-      message.includes('Failed to forward write to leader');
+    return message.includes(LOCAL_STR_OV8OK) ||
+      message.includes(LOCAL_STR_CONNECTION_TO_NODE) &&
+      message.includes(LOCAL_STR_CLOSED) ||
+      message.includes(LOCAL_STR_10U11) ||
+      message.includes(LOCAL_STR_MESSAGE_TIMEOUT) ||
+      message.includes(LOCAL_STR_1Y4H5) ||
+      message.includes(LOCAL_STR_10811);
   }
 
   /**
@@ -679,15 +726,15 @@ class LogsTableService extends EventEmitter {
    */
   deferPendingWrites(entries, error) {
     const requeuedEntries = Array.isArray(entries) ? entries.length : 0;
-    if (Array.isArray(entries) && entries.length > 0) {
+    if (Array.isArray(entries) && entries.length > LOCAL_NUM_ZERO) {
       this.pendingWrites = entries.concat(this.pendingWrites);
     }
-    this.consecutiveDeferredWriteFailures += 1;
+    this.consecutiveDeferredWriteFailures += LOCAL_NUM_ONE;
     const droppedEntries = this.trimPendingWritesUnderPressure();
     const retryAfterMs = this.resolveWriteDeferMs(error);
     const desiredUntilMs = this.now() + retryAfterMs;
     this.writeDeferredUntilMs = Math.max(
-      this.writeDeferredUntilMs || 0,
+      this.writeDeferredUntilMs || LOCAL_NUM_ZERO,
       desiredUntilMs,
     );
     this.scheduleContinuationFlush(retryAfterMs);
@@ -772,6 +819,12 @@ class LogsTableService extends EventEmitter {
       pendingWriteGrowthCount: this.pendingWriteGrowthCount,
       retainedBacklogGrowthCount: this.retainedBacklogGrowthCount,
       sharedPressureBackpressured: this.isSharedPressureBackpressured(),
+      transportPressureBackpressured: this.isSharedPressureBackpressured(
+        LOGS_TABLE_TRANSPORT_PRESSURE_RESOURCE_KEYS,
+      ),
+      queryPressureBackpressured: this.isSharedPressureBackpressured(
+        LOGS_TABLE_CONTROL_PLANE_QUERY_PRESSURE_RESOURCE_KEYS,
+      ),
     };
   }
 
@@ -824,7 +877,7 @@ class LogsTableService extends EventEmitter {
       Math.floor(decision.retryAfterMs) :
       Math.max(MIN_SLEEP_MS, this.retryDelayMs);
     this.writeDeferredUntilMs = Math.max(
-      this.writeDeferredUntilMs || 0,
+      this.writeDeferredUntilMs || LOCAL_NUM_ZERO,
       this.now() + retryAfterMs,
     );
     this.trimPendingWritesUnderPressure();
@@ -836,13 +889,13 @@ class LogsTableService extends EventEmitter {
    * @return {boolean}
    * @private
    */
-  isSharedPressureBackpressured() {
+  isSharedPressureBackpressured(resourceKeys = null) {
+    const pressureResourceKeys =
+      Array.isArray(resourceKeys) && resourceKeys.length > LOCAL_NUM_ZERO ?
+        resourceKeys :
+        LOGS_TABLE_SHARED_PRESSURE_RESOURCE_KEYS;
     return this.getPressureGovernor().isBackpressured({
-      resourceKeys: [
-        'control-plane:write',
-        'control-plane:table:logs',
-        'transport:logs-writer',
-      ],
+      resourceKeys: pressureResourceKeys,
     });
   }
 
@@ -853,7 +906,7 @@ class LogsTableService extends EventEmitter {
    * @private
    */
   isMetricsLogEntry(entry) {
-    return typeof entry?.message === 'string' &&
+    return typeof entry?.message === LOCAL_STR_STRING &&
       entry.message.startsWith(METRICS_LOG_PREFIX);
   }
 
@@ -938,11 +991,11 @@ class LogsTableService extends EventEmitter {
     );
     const fingerprintNodeId = transientFamily ? '' : (entry?.nodeId || '');
     return [
-      String(entry?.level || 'INFO').toUpperCase(),
+      String(entry?.level || LOCAL_STR_INFO).toUpperCase(),
       fingerprintNodeId,
       subsystem,
       transientFamily || message,
-    ].join('|');
+    ].join(LOCAL_STR_PIPE);
   }
 
   /**
@@ -953,8 +1006,8 @@ class LogsTableService extends EventEmitter {
    * @return {string|null}
    * @private
    */
-  resolveTransientPressureFamily(message, resourceId = '') {
-    if (typeof message !== 'string' || message.length === 0) {
+  resolveTransientPressureFamily(message, resourceId = LOCAL_STR_EMPTY) {
+    if (typeof message !== LOCAL_STR_STRING || message.length === LOCAL_NUM_ZERO) {
       return null;
     }
     const normalizedResourceId = typeof resourceId === 'string' ?
@@ -979,7 +1032,7 @@ class LogsTableService extends EventEmitter {
     }
     if (
       message.includes(LOG_PRESSURE_MESSAGE_FRAGMENT.CONNECTION_CLOSED) &&
-      message.includes('closed')
+      message.includes(LOCAL_STR_CLOSED)
     ) {
       return `${LOG_PRESSURE_FAMILY.CONNECTION_CLOSED}:${suffix}`;
     }
@@ -1089,12 +1142,12 @@ class LogsTableService extends EventEmitter {
    * @private
    */
   dropPendingMetricsLogEntry() {
-    for (let index = 0; index < this.pendingWrites.length; index++) {
+    for (let index = LOCAL_NUM_ZERO; index < this.pendingWrites.length; index++) {
       const entry = this.pendingWrites[index];
       if (!this.isMetricsLogEntry(entry)) {
         continue;
       }
-      this.pendingWrites.splice(index, 1);
+      this.pendingWrites.splice(index, LOCAL_NUM_ONE);
       this.recordDroppedWrite();
       return true;
     }
@@ -1114,12 +1167,12 @@ class LogsTableService extends EventEmitter {
     }
 
     const incomingPriority = this.getLogPriority(incomingEntry);
-    for (let index = 0; index < this.pendingWrites.length; index++) {
+    for (let index = LOCAL_NUM_ZERO; index < this.pendingWrites.length; index++) {
       const pendingEntry = this.pendingWrites[index];
       if (this.getLogPriority(pendingEntry) >= incomingPriority) {
         continue;
       }
-      this.pendingWrites.splice(index, 1);
+      this.pendingWrites.splice(index, LOCAL_NUM_ONE);
       this.recordDroppedWrite();
       return true;
     }
@@ -1128,12 +1181,12 @@ class LogsTableService extends EventEmitter {
     if (!incomingFingerprint) {
       return false;
     }
-    for (let index = 0; index < this.pendingWrites.length; index++) {
+    for (let index = LOCAL_NUM_ZERO; index < this.pendingWrites.length; index++) {
       const pendingEntry = this.pendingWrites[index];
       if (this.buildPressureFingerprint(pendingEntry) !== incomingFingerprint) {
         continue;
       }
-      this.pendingWrites.splice(index, 1);
+      this.pendingWrites.splice(index, LOCAL_NUM_ONE);
       this.recordDroppedWrite();
       return true;
     }
@@ -1148,19 +1201,19 @@ class LogsTableService extends EventEmitter {
    */
   trimPendingWritesUnderPressure() {
     const retainedCap = this.getRetainedPressureBacklogCap();
-    let droppedCount = 0;
+    let droppedCount = LOCAL_NUM_ZERO;
     while (this.pendingWrites.length > retainedCap) {
       const dropIndex = this.findPendingTrimDropIndex();
-      if (dropIndex < 0) {
+      if (dropIndex < LOCAL_NUM_ZERO) {
         break;
       }
-      this.pendingWrites.splice(dropIndex, 1);
+      this.pendingWrites.splice(dropIndex, LOCAL_NUM_ONE);
       this.recordDroppedWrite();
-      droppedCount += 1;
+      droppedCount += LOCAL_NUM_ONE;
     }
-    if (droppedCount > 0) {
+    if (droppedCount > LOCAL_NUM_ZERO) {
       this.incrementBoundedCounter(
-        'retainedBacklogGrowthCount',
+        LOCAL_STR_1M0NB,
         droppedCount,
       );
     }
@@ -1176,10 +1229,10 @@ class LogsTableService extends EventEmitter {
    */
   findPendingTrimDropIndex() {
     const seenFingerprints = new Set();
-    let lowestPriorityIndex = -1;
+    let lowestPriorityIndex = -LOCAL_NUM_ONE;
     let lowestPriority = Number.POSITIVE_INFINITY;
 
-    for (let index = 0; index < this.pendingWrites.length; index += 1) {
+    for (let index = LOCAL_NUM_ZERO; index < this.pendingWrites.length; index += LOCAL_NUM_ONE) {
       const entry = this.pendingWrites[index];
       if (this.isMetricsLogEntry(entry)) {
         return index;
@@ -1208,9 +1261,9 @@ class LogsTableService extends EventEmitter {
    * @private
    */
   recordDroppedWrite() {
-    this.droppedWrites += 1;
-    if (this.droppedWrites === 1 ||
-      this.droppedWrites % LOGS_TABLE_DEFAULT.BACKPRESSURE_WARNING_INTERVAL === 0) {
+    this.droppedWrites += LOCAL_NUM_ONE;
+    if (this.droppedWrites === LOCAL_NUM_ONE ||
+      this.droppedWrites % LOGS_TABLE_DEFAULT.BACKPRESSURE_WARNING_INTERVAL === LOCAL_NUM_ZERO) {
       this.logger.warn(
         LOGGING_LOG_MSG.logsDroppedByBackpressure(
           this.droppedWrites,
@@ -1226,11 +1279,11 @@ class LogsTableService extends EventEmitter {
    * @param {number} [delta=1]
    * @private
    */
-  incrementBoundedCounter(fieldName, delta = 1) {
-    if (typeof fieldName !== 'string' || fieldName.length === 0) {
+  incrementBoundedCounter(fieldName, delta = LOCAL_NUM_ONE) {
+    if (typeof fieldName !== LOCAL_STR_STRING || fieldName.length === LOCAL_NUM_ZERO) {
       return;
     }
-    if (!Number.isFinite(delta) || delta <= 0) {
+    if (!Number.isFinite(delta) || delta <= LOCAL_NUM_ZERO) {
       return;
     }
     const currentValue = Number.isFinite(this[fieldName]) ?
@@ -1261,7 +1314,7 @@ class LogsTableService extends EventEmitter {
 
     // Final drain. Avoid busy-spinning while an in-flight write is active.
     // Use direct flush mode so shutdown does not depend on class-C scheduling.
-    while (this.pendingWrites.length > 0 || this.isWriting) {
+    while (this.pendingWrites.length > LOCAL_NUM_ZERO || this.isWriting) {
       if (this.isWriting) {
         await this.sleep(Math.max(MIN_SLEEP_MS, this.flushYieldMs));
         continue;

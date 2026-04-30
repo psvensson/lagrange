@@ -3,6 +3,9 @@ import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../control-plane/control-plane-readiness-constants.js';
 
+const LOCAL_NUM_ONE = 1;
+const LOCAL_STR_FUNCTION = 'function';
+
 class ManagedSplitTopologyAdapter {
   constructor(options = {}) {
     this.sqlQueryEngine = options.sqlQueryEngine || null;
@@ -34,7 +37,7 @@ class ManagedSplitTopologyAdapter {
   }
 
   resolveActivePartitionVersion(tableInfo) {
-    return this.sqlQueryEngine?.resolveActivePartitionVersion(tableInfo) || 1;
+    return this.sqlQueryEngine?.resolveActivePartitionVersion(tableInfo) || LOCAL_NUM_ONE;
   }
 
   buildManagedSplitPlan(...args) {
@@ -55,7 +58,7 @@ class ManagedSplitTopologyAdapter {
 
   isCriticalSystemPartition(partitionId) {
     return typeof this.sqlQueryEngine?.rebalanceCoordinator
-      ?.isCriticalSystemPartition === 'function' &&
+      ?.isCriticalSystemPartition === LOCAL_STR_FUNCTION &&
       this.sqlQueryEngine.rebalanceCoordinator
         .isCriticalSystemPartition(partitionId) === true;
   }

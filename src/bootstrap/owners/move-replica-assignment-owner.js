@@ -34,6 +34,13 @@ import {
   getSystemCachePrimaryKeyFieldOrFallback,
 } from '../../cache/system-cache-key-descriptor.js';
 
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_STR_1IOIF = 'failed to persist MOVE_REPLICA assignment lease renewal';
+const LOCAL_STR_1GQG6 = 'Failed to persist MOVE_REPLICA assignment reservation';
+const LOCAL_STR_6LKDQ = 'failed to persist MOVE_REPLICA assignment reservation';
+const LOCAL_STR_GVGHU = 'failed to persist reservation terminal status';
+const LOCAL_STR_MC3LT = 'failed to reconcile MOVE_REPLICA assignment to committed state';
+
 const MOVE_REPLICA_ASSIGNMENT_SQL_RETRY_FLOOR_MS = 250;
 const MOVE_REPLICA_ASSIGNMENT_SQL_RETRY_CEILING_MS = 5000;
 const MOVE_REPLICA_ASSIGNMENT_ROW_FALLBACK_PRIMARY_KEY = 'id';
@@ -59,7 +66,7 @@ function readMoveReplicaAssignmentObservedRowKey(tableName, row) {
 class MoveReplicaAssignmentOwner {
   constructor(options = {}) {
     this.delegates = options.delegates || {};
-    this.nextReservationSqlRetryAtMs = 0;
+    this.nextReservationSqlRetryAtMs = LOCAL_NUM_ZERO;
     this.nextRenewalWriteRetryAtByAssignmentId = new Map();
   }
 
@@ -99,15 +106,15 @@ class MoveReplicaAssignmentOwner {
   }
 
   getMoveReplicaAssignmentLeaseMs() {
-    return this.delegates.getMoveReplicaAssignmentLeaseMs?.() || 0;
+    return this.delegates.getMoveReplicaAssignmentLeaseMs?.() || LOCAL_NUM_ZERO;
   }
 
   getMoveReplicaAssignmentSweepIntervalMs() {
-    return this.delegates.getMoveReplicaAssignmentSweepIntervalMs?.() || 0;
+    return this.delegates.getMoveReplicaAssignmentSweepIntervalMs?.() || LOCAL_NUM_ZERO;
   }
 
   getBootstrapAdmissionRetryAfterMs() {
-    return this.delegates.getBootstrapAdmissionRetryAfterMs?.() || 0;
+    return this.delegates.getBootstrapAdmissionRetryAfterMs?.() || LOCAL_NUM_ZERO;
   }
 
   async executeBootstrapControlPlaneQuery(sql, params) {
@@ -600,7 +607,7 @@ class MoveReplicaAssignmentOwner {
               status,
               error:
                 updateResult.error ||
-                'failed to persist MOVE_REPLICA assignment lease renewal',
+                LOCAL_STR_1IOIF,
             },
           );
           return force ? null : reservation;
@@ -1244,7 +1251,7 @@ class MoveReplicaAssignmentOwner {
             reservations?.delete(assignmentId);
             throw this.buildBootstrapControlPlaneQueryError(
               persistResult,
-              'Failed to persist MOVE_REPLICA assignment reservation',
+              LOCAL_STR_1GQG6,
             );
           }
           this.getLogger().warn(
@@ -1257,7 +1264,7 @@ class MoveReplicaAssignmentOwner {
               retryAfterMs: persistResult?.retryAfterMs || null,
               error:
                 persistResult?.error ||
-                'failed to persist MOVE_REPLICA assignment reservation',
+                LOCAL_STR_6LKDQ,
             },
           );
         }
@@ -1332,7 +1339,7 @@ class MoveReplicaAssignmentOwner {
             status,
             error:
               updateResult.error ||
-              'failed to persist reservation terminal status',
+              LOCAL_STR_GVGHU,
           },
         );
       }
@@ -1399,7 +1406,7 @@ class MoveReplicaAssignmentOwner {
             status: BOOTSTRAP_API_HANDOFF_STATUS.COMMITTED,
             error:
               updateResult.error ||
-              'failed to reconcile MOVE_REPLICA assignment to committed state',
+              LOCAL_STR_MC3LT,
           },
         );
         return;

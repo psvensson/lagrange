@@ -11,6 +11,9 @@ import {
   CONTROL_PLANE_CACHE_RECONCILE_INTENT,
 } from './control-plane-cache-reconcile-constants.js';
 
+const LOCAL_STR_EMPTY = '';
+const LOCAL_STR_G1DFB = 'Maximum call stack size exceeded';
+
 const READINESS_DIAGNOSTICS_LEDGER_LIMIT = 128;
 const EMPTY_STRING = '';
 const EMPTY_LEDGER_ENTRIES = Object.freeze([]);
@@ -450,8 +453,8 @@ class AuthoritativeNodeEvidenceReconciler {
               nodeId,
               error: error?.message || String(error),
               stack:
-                String(error?.message || error || '').includes(
-                  'Maximum call stack size exceeded',
+                String(error?.message || error || LOCAL_STR_EMPTY).includes(
+                  LOCAL_STR_G1DFB,
                 ) ?
                   (error?.stack || null) :
                   null,

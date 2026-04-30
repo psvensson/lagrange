@@ -1,3 +1,6 @@
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_STR_C7ZU6 = ')';
+
 /**
  * Generate SQL CREATE TABLE statement from schema.
  * @param {Object} schema - Table schema definition.
@@ -23,12 +26,12 @@ function generateCreateTableSQL(schema) {
 
   let sql = `CREATE TABLE IF NOT EXISTS ${schema.tableName} (${columnDefs}`;
 
-  if (schema.primaryKey && schema.primaryKey.length > 0) {
+  if (schema.primaryKey && schema.primaryKey.length > LOCAL_NUM_ZERO) {
     const pkCols = schema.primaryKey.join(', ');
     sql += `, PRIMARY KEY (${pkCols})`;
   }
 
-  sql += ')';
+  sql += LOCAL_STR_C7ZU6;
   return sql;
 }
 
@@ -38,7 +41,7 @@ function generateCreateTableSQL(schema) {
  * @return {Array<string>} Array of SQL CREATE INDEX statements.
  */
 function generateCreateIndexSQL(schema) {
-  if (!schema.indices || schema.indices.length === 0) {
+  if (!schema.indices || schema.indices.length === LOCAL_NUM_ZERO) {
     return [];
   }
 

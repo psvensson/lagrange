@@ -28,6 +28,9 @@ import {
 } from './pgwire-cutover-constants.js';
 import {LoggingService} from '../logging/logging-service.js';
 
+const LOCAL_STR_OBJECT = 'object';
+const LOCAL_STR_FUNCTION = 'function';
+
 class PgWireCutoverGuard {
   /**
    * @param {Object} [options]
@@ -57,12 +60,12 @@ class PgWireCutoverGuard {
    * @return {string[]} List of detected forbidden symbols.
    */
   checkForbiddenSymbols(service) {
-    if (!service || typeof service !== 'object') {
+    if (!service || typeof service !== LOCAL_STR_OBJECT) {
       return [];
     }
     const detected = [];
     for (const symbol of FORBIDDEN_ENTRYPOINT_SYMBOLS) {
-      if (typeof service[symbol] === 'function') {
+      if (typeof service[symbol] === LOCAL_STR_FUNCTION) {
         detected.push(symbol);
       }
     }
@@ -76,7 +79,7 @@ class PgWireCutoverGuard {
    * @return {string[]} List of detected forbidden config keys.
    */
   checkForbiddenConfig(configManager) {
-    if (!configManager || typeof configManager !== 'object') {
+    if (!configManager || typeof configManager !== LOCAL_STR_OBJECT) {
       return [];
     }
     const detected = [];

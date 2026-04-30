@@ -24,13 +24,19 @@ import {
   WORKER_OPERATION,
 } from './threading-constants.js';
 
+const LOCAL_STR_SERVICE_WORKER_JS = 'service-worker.js';
+const LOCAL_STR_DNQMM = 'service-worker.bundle.cjs';
+const LOCAL_STR_FUNCTION = 'function';
+const LOCAL_STR_ERROR = 'error';
+const LOCAL_NUM_ZERO = 0;
+
 const THREADING_MODULE_DIR = resolveModuleDirectory(resolveModuleDirectory);
 
 function resolveServiceWorkerPath() {
   return resolvePackagedRuntimeFile({
     moduleDir: THREADING_MODULE_DIR,
-    sourceFileName: 'service-worker.js',
-    bundledFileName: 'service-worker.bundle.cjs',
+    sourceFileName: LOCAL_STR_SERVICE_WORKER_JS,
+    bundledFileName: LOCAL_STR_DNQMM,
   });
 }
 
@@ -74,7 +80,7 @@ class ServiceThreadManager extends EventEmitter {
       return;
     }
 
-    if (instance.pool && typeof instance.pool.destroy === 'function') {
+    if (instance.pool && typeof instance.pool.destroy === LOCAL_STR_FUNCTION) {
       instance.pool.destroy().catch(() => {});
     }
     instance.pool = null;
@@ -117,7 +123,7 @@ class ServiceThreadManager extends EventEmitter {
     });
 
     // Set up pool event handlers
-    this.pool.on('error', (error) => {
+    this.pool.on(LOCAL_STR_ERROR, (error) => {
       this.logger.error(THREADING_LOG_MSG.POOL_ERROR, {error: error.message});
       this.emit(THREADING_EVENT.POOL_ERROR, error);
     });
@@ -346,11 +352,11 @@ class ServiceThreadManager extends EventEmitter {
     }
 
     return {
-      threads: this.pool.threads?.length || 0,
-      completed: this.pool.completed || 0,
-      runTime: this.pool.runTime || 0,
-      waitTime: this.pool.waitTime || 0,
-      queueSize: this.pool.queueSize || 0,
+      threads: this.pool.threads?.length || LOCAL_NUM_ZERO,
+      completed: this.pool.completed || LOCAL_NUM_ZERO,
+      runTime: this.pool.runTime || LOCAL_NUM_ZERO,
+      waitTime: this.pool.waitTime || LOCAL_NUM_ZERO,
+      queueSize: this.pool.queueSize || LOCAL_NUM_ZERO,
     };
   }
 

@@ -2,6 +2,9 @@ import {
   PRIORITY_RECOVERY_BLOCKER_REASON_FALLBACK,
   PRIORITY_RECOVERY_SEMANTIC_STATE,
 } from '../../../src/control-plane/priority-recovery-diagnostics-constants.js';
+import {
+  CONTROL_PLANE_QUIESCENCE_CANDIDATE_WINDOW_RESET_REASON,
+} from './control-plane-quiescence-snapshot.js';
 import {FAILURE_BUNDLE_SEGMENT_5} from './failure-bundle-segment-5.js';
 const {
   FAILURE_BUNDLE_SCHEMA_VERSION,
@@ -75,11 +78,13 @@ const {
   STABILITY_GATE_TYPE_CONVERGENCE,
   STABILITY_GATE_TYPE_RESTART_RECOVERY,
   STABILITY_GATE_BLOCKER_PUBLICATION_PENDING,
+  STABILITY_GATE_BLOCKER_PUBLICATION_MISSING_ACTIVE_NODE,
   STABILITY_GATE_BLOCKER_PRIORITY_SPREAD_PENDING,
   STABILITY_GATE_BLOCKER_PENDING_ACK_NODES,
   STABILITY_GATE_BLOCKER_BLOCKED_NODES,
   STABILITY_GATE_BLOCKER_CLOSURE_RECORD,
   STABILITY_GATE_BLOCKER_STARTUP_READINESS,
+  STABILITY_GATE_BLOCKER_ADMIN_REACHABILITY_REFUSED,
   SCENARIO_NAME_FRAGMENT_RESTART,
   LOAD_WAIT_REASON_KEYS,
   LOAD_REASON_ROOT_CAUSE_CLASS_BY_REASON,
@@ -394,11 +399,22 @@ function formatControlPlaneQuiescence(quiescence) {
   if (!isRecord(quiescence)) {
     return UNKNOWN_VALUE;
   }
-  return [
+  const parts = [
     'state=' + String(quiescence.state || UNKNOWN_VALUE),
     'blocker=' + String(quiescence.canonicalBlocker || UNKNOWN_VALUE),
     'reasons=' + formatList(quiescence.reasonCodes),
-  ].join(', ');
+  ];
+  const candidateWindowResetReason = String(
+    quiescence.candidateWindowReset?.reason || '',
+  ).trim();
+  if (
+    candidateWindowResetReason.length > ZERO &&
+    candidateWindowResetReason !==
+      CONTROL_PLANE_QUIESCENCE_CANDIDATE_WINDOW_RESET_REASON.NONE
+  ) {
+    parts.push('candidateWindowReset=' + candidateWindowResetReason);
+  }
+  return parts.join(', ');
 }
 
 function formatReadinessDimensions(readiness) {
@@ -1362,11 +1378,13 @@ export const FAILURE_BUNDLE_SEGMENT_6 = {
   STABILITY_GATE_TYPE_CONVERGENCE,
   STABILITY_GATE_TYPE_RESTART_RECOVERY,
   STABILITY_GATE_BLOCKER_PUBLICATION_PENDING,
+  STABILITY_GATE_BLOCKER_PUBLICATION_MISSING_ACTIVE_NODE,
   STABILITY_GATE_BLOCKER_PRIORITY_SPREAD_PENDING,
   STABILITY_GATE_BLOCKER_PENDING_ACK_NODES,
   STABILITY_GATE_BLOCKER_BLOCKED_NODES,
   STABILITY_GATE_BLOCKER_CLOSURE_RECORD,
   STABILITY_GATE_BLOCKER_STARTUP_READINESS,
+  STABILITY_GATE_BLOCKER_ADMIN_REACHABILITY_REFUSED,
   SCENARIO_NAME_FRAGMENT_RESTART,
   LOAD_WAIT_REASON_KEYS,
   LOAD_REASON_ROOT_CAUSE_CLASS_BY_REASON,

@@ -19,6 +19,10 @@ import {
   TYPEOF,
 } from './function-constants.js';
 
+const LOCAL_STR_FUNCTIONREGISTRY = 'FunctionRegistry';
+const LOCAL_STR_READ = 'read';
+const LOCAL_NUM_ZERO = 0;
+
 /**
  * FunctionRegistry provides a plugin architecture for registering
  * function executors by type (e.g., 'wasm', 'javascript').
@@ -201,9 +205,9 @@ class FunctionRegistry {
     const gateway = this.getControlPlaneSystemTableGateway();
     if (!gateway) {
       throw createSystemMetadataGatewayRequiredError({
-        serviceName: 'FunctionRegistry',
+        serviceName: LOCAL_STR_FUNCTIONREGISTRY,
         tableName: TABLES.CODE,
-        operation: 'read',
+        operation: LOCAL_STR_READ,
       });
     }
     const result = await gateway.readRows(
@@ -214,7 +218,7 @@ class FunctionRegistry {
         coalescingKey: `function:${functionId}`,
       },
     );
-    return result.rows?.[0] || null;
+    return result.rows?.[LOCAL_NUM_ZERO] || null;
   }
 
   /**
@@ -226,9 +230,9 @@ class FunctionRegistry {
     const gateway = this.getControlPlaneSystemTableGateway();
     if (!gateway) {
       throw createSystemMetadataGatewayRequiredError({
-        serviceName: 'FunctionRegistry',
+        serviceName: LOCAL_STR_FUNCTIONREGISTRY,
         tableName: TABLES.CODE,
-        operation: 'read',
+        operation: LOCAL_STR_READ,
       });
     }
     const result = await gateway.readRows(
@@ -239,7 +243,7 @@ class FunctionRegistry {
         coalescingKey: `function-name:${functionName}`,
       },
     );
-    return result.rows?.[0] || null;
+    return result.rows?.[LOCAL_NUM_ZERO] || null;
   }
 
   /**

@@ -24,6 +24,12 @@ import {
   LOG_QUERY_LOG_MSG,
 } from './logging-constants.js';
 
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_STR_LOGQUERYSERVICE = 'LogQueryService';
+const LOCAL_STR_READ = 'read';
+const LOCAL_STR_STRING = 'string';
+const LOCAL_STR_Y2288 = '\'\'';
+
 const DEFAULT_RECENT_MINUTES = 60;
 const MINUTES_TO_MS = 60 * 1000;
 const DEFAULT_BUCKET_SIZE_MS = 60000;
@@ -364,7 +370,7 @@ class LogQueryService extends EventEmitter {
       startTime,
       endTime,
       limit = this.defaultLimit,
-      offset = 0,
+      offset = LOCAL_NUM_ZERO,
       orderBy = DEFAULT_ORDER_COLUMN,
       orderDir = ORDER_DESC,
     } = options;
@@ -454,9 +460,9 @@ class LogQueryService extends EventEmitter {
     if (!gateway) {
       return buildSystemMetadataOwnerNotReadyFailure(
         createSystemMetadataGatewayRequiredError({
-          serviceName: 'LogQueryService',
+          serviceName: LOCAL_STR_LOGQUERYSERVICE,
           tableName: SYSTEM_TABLE_NAME.LOGS,
-          operation: 'read',
+          operation: LOCAL_STR_READ,
           message: LOG_QUERY_ERROR_MSG.ENGINE_NOT_AVAILABLE,
         }),
       );
@@ -487,10 +493,10 @@ class LogQueryService extends EventEmitter {
    * @private
    */
   escapeString(str) {
-    if (typeof str !== 'string') {
+    if (typeof str !== LOCAL_STR_STRING) {
       return String(str);
     }
-    return str.replace(/'/g, '\'\'');
+    return str.replace(/'/g, LOCAL_STR_Y2288);
   }
 
   /**

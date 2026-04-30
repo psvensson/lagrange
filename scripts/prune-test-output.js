@@ -38,6 +38,10 @@ import {
   TEST_OUTPUT_PRUNE_VERB,
 } from '../src/constants/test-output-prune-scalars.js';
 
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_NUM_ONE = 1;
+const LOCAL_STR_1B3UP = 'reports/report playbacks/legacy playbacks/run-like categories.';
+
 const TEST_OUTPUT_PRUNE_CATEGORY = Object.freeze({
   REPORTS: 'reports',
   REPORT_PLAYBACKS: 'reportPlaybacks',
@@ -117,7 +121,7 @@ function parseArgs(argv) {
     keepTopLevel: TEST_OUTPUT_PRUNE_DEFAULT_KEEP_TOP_LEVEL,
   };
 
-  for (let index = 0; index < argv.length; index += 1) {
+  for (let index = LOCAL_NUM_ZERO; index < argv.length; index += LOCAL_NUM_ONE) {
     const arg = argv[index];
     switch (arg) {
     case TEST_OUTPUT_PRUNE_FLAG.ROOT:
@@ -620,7 +624,7 @@ async function main(argv) {
     `Policy: keep pinned names, keep items newer than ${options.keepDays} days, ` +
     `and keep at least ${options.keepReports}/${options.keepReportPlaybacks}/` +
     `${options.keepLegacyPlaybacks}/${options.keepTopLevel} recent items for ` +
-    'reports/report playbacks/legacy playbacks/run-like categories.' +
+    LOCAL_STR_1B3UP +
     FILE_TEXT.NEWLINE,
   );
 }

@@ -17,6 +17,34 @@ import {
   MIGRATION_TYPE,
 } from './migration-constants.js';
 
+const LOCAL_STR_STRING = 'string';
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_STR_EMPTY = '';
+const LOCAL_STR_AU1TP = '"';
+const LOCAL_STR_1YZ14 = '""';
+const LOCAL_STR_NUMBER = 'number';
+const LOCAL_STR_BOOLEAN = 'boolean';
+const LOCAL_NUM_ONE = 1;
+const LOCAL_STR_FUNCTION = 'function';
+const LOCAL_STR_SCHEMA_MIGRATION = 'schema-migration';
+const LOCAL_STR_SCHEMA_MIGRATION_2 = 'schema_migration';
+const LOCAL_STR_OBJECT = 'object';
+const LOCAL_STR_1G5VR = 'MigrationCoordinator requires sqlCore.queryExecutor';
+const LOCAL_STR_1S4LL = 'Migration tableId is required';
+const LOCAL_STR_18RRO = 'Migration alter SQL is required for dual-write stage';
+const LOCAL_STR_1S5V1 = 'Partition ALTER TABLE failed';
+const LOCAL_STR_1A9V5 = 'Missing migration_id for rollback';
+const LOCAL_STR_1H4U6 = 'Partition rollback ALTER TABLE failed';
+const LOCAL_STR_1D25J = 'Invalid partition retry operation context';
+const LOCAL_STR_1UZWJ = 'Missing migration backfill context';
+const LOCAL_STR_16VMA = 'Backfill scan failed';
+const LOCAL_STR_9U4IH = 'Backfill update failed';
+const LOCAL_STR_16VZX = 'Missing migration_id for cutover';
+const LOCAL_STR_BEGIN = 'BEGIN';
+const LOCAL_STR_COMMIT = 'COMMIT';
+const LOCAL_STR_ROLLBACK = 'ROLLBACK';
+const LOCAL_STR_15T8X = 'WHERE rowid > ? AND rowid <= ?';
+
 const PARTITION_WRITE_DEFAULT_OPTIONS = Object.freeze({
   FOR_READ: false,
   PREFER_LEADER: true,
@@ -90,7 +118,7 @@ function sleep(delayMs) {
 }
 
 function parseJsonSafe(value, fallback) {
-  if (typeof value !== 'string' || value.length === 0) {
+  if (typeof value !== LOCAL_STR_STRING || value.length === LOCAL_NUM_ZERO) {
     return fallback;
   }
   try {
@@ -108,10 +136,10 @@ function cloneJson(value) {
 }
 
 function quoteIdentifier(identifier) {
-  return `"${String(identifier || '').replaceAll('"', '""')}"`;
+  return `"${String(identifier || LOCAL_STR_EMPTY).replaceAll(LOCAL_STR_AU1TP, LOCAL_STR_1YZ14)}"`;
 }
 
-function normalizeInteger(value, fallback = 0) {
+function normalizeInteger(value, fallback = LOCAL_NUM_ZERO) {
   return Number.isFinite(value) ?
     Math.floor(value) :
     fallback;
@@ -126,8 +154,8 @@ function formatBackfillCursor(value) {
 
 function parseBackfillCursor(value) {
   const parsed = Number.parseInt(String(value || ''), 10);
-  if (!Number.isFinite(parsed) || parsed < 0) {
-    return 0;
+  if (!Number.isFinite(parsed) || parsed < LOCAL_NUM_ZERO) {
+    return LOCAL_NUM_ZERO;
   }
   return parsed;
 }
@@ -137,8 +165,8 @@ function resolvePartitionIdList(rows) {
     return [];
   }
   return rows
-    .map((row) => String(row?.[MIGRATION_COLUMN.PARTITION_ID] || '').trim())
-    .filter((partitionId) => partitionId.length > 0);
+    .map((row) => String(row?.[MIGRATION_COLUMN.PARTITION_ID] || LOCAL_STR_EMPTY).trim())
+    .filter((partitionId) => partitionId.length > LOCAL_NUM_ZERO);
 }
 
 function mapStageIndex(status) {
@@ -149,11 +177,11 @@ function resolveDefaultLiteral(value) {
   if (value === null || value === undefined) {
     return null;
   }
-  if (typeof value === 'number') {
+  if (typeof value === LOCAL_STR_NUMBER) {
     return value;
   }
-  if (typeof value === 'boolean') {
-    return value ? 1 : 0;
+  if (typeof value === LOCAL_STR_BOOLEAN) {
+    return value ? LOCAL_NUM_ONE : LOCAL_NUM_ZERO;
   }
   return String(value);
 }
@@ -161,7 +189,7 @@ function resolveDefaultLiteral(value) {
 class MigrationCoordinator {
   constructor(options = {}) {
     this.sqlCore = options.sqlCore || null;
-    if (!this.sqlCore || typeof this.sqlCore.executeQuery !== 'function') {
+    if (!this.sqlCore || typeof this.sqlCore.executeQuery !== LOCAL_STR_FUNCTION) {
       throw new Error(MIGRATION_ERROR_MSG.SQL_CORE_REQUIRED);
     }
 
@@ -172,20 +200,20 @@ class MigrationCoordinator {
 
     this.transactionCoordinator = options.transactionCoordinator || null;
     this.logger = options.logger || console;
-    this.now = typeof options.now === 'function' ?
+    this.now = typeof options.now === LOCAL_STR_FUNCTION ?
       options.now :
       () => Date.now();
     this.workflowCoordinator = options.workflowCoordinator ||
       new DurableWorkflowCoordinator({now: this.now});
 
     this.migrationOperationLane = new OperationLane({
-      name: 'schema-migration',
+      name: LOCAL_STR_SCHEMA_MIGRATION,
       workflowCoordinator: this.workflowCoordinator,
       ownerKeyFactory: ({migrationId, ownerKey}) =>
-        String(ownerKey || migrationId || ''),
+        String(ownerKey || migrationId || LOCAL_STR_EMPTY),
     });
     this.migrationTimeoutPolicy = new TimeoutPolicy({
-      operationName: 'schema_migration',
+      operationName: LOCAL_STR_SCHEMA_MIGRATION_2,
       configuredBudgetMs: MIGRATION_DEFAULT.TIMEOUT_BUDGET_MS,
       now: this.now,
     });
@@ -212,8 +240,8 @@ class MigrationCoordinator {
       {},
       true,
     );
-    if (byId.rows.length > 0) {
-      return byId.rows[0];
+    if (byId.rows.length > LOCAL_NUM_ZERO) {
+      return byId.rows[LOCAL_NUM_ZERO];
     }
 
     const byName = await this.executeSql(
@@ -222,7 +250,7 @@ class MigrationCoordinator {
       {},
       true,
     );
-    return byName.rows[0] || null;
+    return byName.rows[LOCAL_NUM_ZERO] || null;
   }
 
   async findActiveMigrationByTableId(tableId) {
@@ -233,7 +261,7 @@ class MigrationCoordinator {
       true,
     );
     return result.rows.find((row) => {
-      return !MIGRATION_TERMINAL_STATUSES.has(String(row.status || ''));
+      return !MIGRATION_TERMINAL_STATUSES.has(String(row.status || LOCAL_STR_EMPTY));
     }) || null;
   }
 
@@ -249,7 +277,7 @@ class MigrationCoordinator {
       {},
       true,
     );
-    return result.rows[0] || null;
+    return result.rows[LOCAL_NUM_ZERO] || null;
   }
 
   async getPartitionMigrationRows(migrationId) {
@@ -328,7 +356,7 @@ class MigrationCoordinator {
 
     const previousIndex = mapStageIndex(normalizedPrevious);
     const nextIndex = mapStageIndex(normalizedNext);
-    if (previousIndex < 0 || nextIndex < 0) {
+    if (previousIndex < LOCAL_NUM_ZERO || nextIndex < LOCAL_NUM_ZERO) {
       return false;
     }
     return nextIndex > previousIndex;
@@ -386,7 +414,7 @@ class MigrationCoordinator {
   resolveAlterSpecFromMigration(migrationRow) {
     const targetPayload = parseJsonSafe(migrationRow?.target_schema, {});
     const alterSpec = targetPayload?.alterSpec || null;
-    if (alterSpec && typeof alterSpec === 'object') {
+    if (alterSpec && typeof alterSpec === LOCAL_STR_OBJECT) {
       return alterSpec;
     }
     return {
@@ -497,8 +525,8 @@ class MigrationCoordinator {
 
   async executePartitionSql(partitionId, sql, params = [], options = {}) {
     const queryExecutor = this.sqlCore?.queryExecutor || null;
-    if (!queryExecutor || typeof queryExecutor.executeOnPartition !== 'function') {
-      throw new Error('MigrationCoordinator requires sqlCore.queryExecutor');
+    if (!queryExecutor || typeof queryExecutor.executeOnPartition !== LOCAL_STR_FUNCTION) {
+      throw new Error(LOCAL_STR_1G5VR);
     }
 
     const forRead = options.forRead === true;
@@ -524,13 +552,13 @@ class MigrationCoordinator {
   }
 
   shouldStopForCancellation(migrationId) {
-    return this.cancellationRequestedByMigrationId.has(String(migrationId || ''));
+    return this.cancellationRequestedByMigrationId.has(String(migrationId || LOCAL_STR_EMPTY));
   }
 
   async initiateMigration(tableId, alterSpec) {
     const normalizedTableId = String(tableId || '').trim();
     if (!normalizedTableId) {
-      throw new Error('Migration tableId is required');
+      throw new Error(LOCAL_STR_1S4LL);
     }
 
     const activeMigration = await this.findActiveMigrationByTableId(
@@ -578,7 +606,7 @@ class MigrationCoordinator {
         ) :
         [];
     let partitionIds = resolvePartitionIdList(partitionRowsFromCache);
-    if (partitionIds.length === 0) {
+    if (partitionIds.length === LOCAL_NUM_ZERO) {
       const partitionQueryResult = await this.executeSql(
         MIGRATION_SQL.SELECT_PARTITIONS_BY_TABLE,
         [tableMetadata.table_id],
@@ -594,7 +622,7 @@ class MigrationCoordinator {
           partitionId,
           MIGRATION_STATUS.PENDING,
           null,
-          0,
+          LOCAL_NUM_ZERO,
           null,
           createdAt,
         ],
@@ -848,7 +876,7 @@ class MigrationCoordinator {
     const alterSpec = this.resolveAlterSpecFromMigration(activeMigrationRow);
     const alterSql = String(alterSpec?.sql || '').trim();
     if (!alterSql) {
-      throw new Error('Migration alter SQL is required for dual-write stage');
+      throw new Error(LOCAL_STR_18RRO);
     }
 
     const partitionRows = await this.getPartitionMigrationRows(migrationId);
@@ -884,12 +912,12 @@ class MigrationCoordinator {
             },
           );
           if (result?.success !== true) {
-            throw new Error(result?.error || 'Partition ALTER TABLE failed');
+            throw new Error(result?.error || LOCAL_STR_1S5V1);
           }
           await this.updatePartitionMigration(migrationId, partitionId, {
             status: MIGRATION_STATUS.DUAL_WRITE,
             error_message: null,
-            retry_count: normalizeInteger(partitionRow.retry_count, 0),
+            retry_count: normalizeInteger(partitionRow.retry_count, LOCAL_NUM_ZERO),
           });
           return result;
         },
@@ -922,7 +950,7 @@ class MigrationCoordinator {
       return;
     }
 
-    if (String(migrationRow.status || '') === MIGRATION_STATUS.DUAL_WRITE_COMPLETE) {
+    if (String(migrationRow.status || LOCAL_STR_EMPTY) === MIGRATION_STATUS.DUAL_WRITE_COMPLETE) {
       await this.transitionMigrationStage(
         migrationId,
         MIGRATION_STATUS.BACKFILL,
@@ -988,7 +1016,7 @@ class MigrationCoordinator {
       return;
     }
 
-    if (String(migrationRow.status || '') === MIGRATION_STATUS.BACKFILL_COMPLETE) {
+    if (String(migrationRow.status || LOCAL_STR_EMPTY) === MIGRATION_STATUS.BACKFILL_COMPLETE) {
       await this.transitionMigrationStage(
         migrationId,
         MIGRATION_STATUS.CUTOVER_PENDING,
@@ -999,7 +1027,7 @@ class MigrationCoordinator {
     const refreshedMigrationRow = await this.getMigrationById(migrationId);
     const partitionRows = await this.getPartitionMigrationRows(migrationId);
     let lastError = null;
-    for (let attempt = 0; attempt <= MIGRATION_DEFAULT.MAX_RETRY_COUNT; attempt++) {
+    for (let attempt = LOCAL_NUM_ZERO; attempt <= MIGRATION_DEFAULT.MAX_RETRY_COUNT; attempt++) {
       try {
         await this.executeCutoverTransaction(refreshedMigrationRow, partitionRows);
         await this.transitionMigrationStage(
@@ -1020,7 +1048,7 @@ class MigrationCoordinator {
         const delayMs = this.buildExponentialBackoffDelay(attempt);
         this.logger.info(MIGRATION_LOG_MSG.CUTOVER_RETRY, {
           migration_id: migrationId,
-          retry_count: attempt + 1,
+          retry_count: attempt + LOCAL_NUM_ONE,
           delay_ms: delayMs,
           error: error?.message || null,
         });
@@ -1041,7 +1069,7 @@ class MigrationCoordinator {
   async rollbackMigration(migrationRow) {
     const migrationId = String(migrationRow?.migration_id || '');
     if (!migrationId) {
-      throw new Error('Missing migration_id for rollback');
+      throw new Error(LOCAL_STR_1A9V5);
     }
 
     const rollbackSql = this.resolveRollbackSql(migrationRow);
@@ -1078,7 +1106,7 @@ class MigrationCoordinator {
             },
           );
           if (result?.success !== true) {
-            throw new Error(result?.error || 'Partition rollback ALTER TABLE failed');
+            throw new Error(result?.error || LOCAL_STR_1H4U6);
           }
           await this.updatePartitionMigration(migrationId, partitionId, {
             status: MIGRATION_STATUS.CANCELLED,
@@ -1105,11 +1133,11 @@ class MigrationCoordinator {
       options.operation :
       null;
     if (!migrationId || !partitionId || !operation) {
-      throw new Error('Invalid partition retry operation context');
+      throw new Error(LOCAL_STR_1D25J);
     }
 
     let lastError = null;
-    for (let attempt = 0; attempt <= MIGRATION_DEFAULT.MAX_RETRY_COUNT; attempt++) {
+    for (let attempt = LOCAL_NUM_ZERO; attempt <= MIGRATION_DEFAULT.MAX_RETRY_COUNT; attempt++) {
       const childBudget = this.migrationTimeoutPolicy.allocateOrThrow({
         timeoutBudget: options.timeoutBudget || null,
         nestedOperation: `partition_${partitionId}_attempt_${attempt}`,
@@ -1147,7 +1175,7 @@ class MigrationCoordinator {
     const partitionId = String(partitionRow?.partition_id || '');
     const tableName = String(migrationRow?.table_name || '');
     if (!migrationId || !partitionId || !tableName) {
-      throw new Error('Missing migration backfill context');
+      throw new Error(LOCAL_STR_1UZWJ);
     }
 
     let cursor = parseBackfillCursor(partitionRow?.backfill_cursor);
@@ -1179,11 +1207,11 @@ class MigrationCoordinator {
         },
       );
       if (scanResult?.success !== true) {
-        throw new Error(scanResult?.error || 'Backfill scan failed');
+        throw new Error(scanResult?.error || LOCAL_STR_16VMA);
       }
 
       const rows = Array.isArray(scanResult.rows) ? scanResult.rows : [];
-      if (rows.length === 0) {
+      if (rows.length === LOCAL_NUM_ZERO) {
         await this.updatePartitionMigration(migrationId, partitionId, {
           status: MIGRATION_STATUS.BACKFILL_COMPLETE,
           backfill_cursor: formatBackfillCursor(cursor),
@@ -1219,7 +1247,7 @@ class MigrationCoordinator {
           },
         );
         if (updateResult?.success !== true) {
-          throw new Error(updateResult?.error || 'Backfill update failed');
+          throw new Error(updateResult?.error || LOCAL_STR_9U4IH);
         }
       }
 
@@ -1235,7 +1263,7 @@ class MigrationCoordinator {
   async executeCutoverTransaction(migrationRow, partitionRows) {
     const migrationId = String(migrationRow?.migration_id || '');
     if (!migrationId) {
-      throw new Error('Missing migration_id for cutover');
+      throw new Error(LOCAL_STR_16VZX);
     }
     const sessionId = `schema-migration-cutover-${migrationId}`;
     const updatedAt = this.now();
@@ -1244,7 +1272,7 @@ class MigrationCoordinator {
     const targetSchema = targetPayload?.schema || targetPayload || {};
 
     try {
-      await this.executeSql('BEGIN', [], {sessionId});
+      await this.executeSql(LOCAL_STR_BEGIN, [], {sessionId});
       await this.executeSql(
         MIGRATION_SQL.UPDATE_TABLE_SCHEMA_BY_ID,
         [
@@ -1261,7 +1289,7 @@ class MigrationCoordinator {
           [
             MIGRATION_STATUS.COMPLETED,
             row?.backfill_cursor || null,
-            normalizeInteger(row?.retry_count, 0),
+            normalizeInteger(row?.retry_count, LOCAL_NUM_ZERO),
             null,
             updatedAt,
             migrationId,
@@ -1271,10 +1299,10 @@ class MigrationCoordinator {
         );
       }
 
-      await this.executeSql('COMMIT', [], {sessionId});
+      await this.executeSql(LOCAL_STR_COMMIT, [], {sessionId});
     } catch (error) {
       try {
-        await this.executeSql('ROLLBACK', [], {sessionId}, true);
+        await this.executeSql(LOCAL_STR_ROLLBACK, [], {sessionId}, true);
       } catch (_rollbackError) {
         // Intentionally ignored; rollback errors are secondary to cutover failure.
       }
@@ -1321,7 +1349,7 @@ class MigrationCoordinator {
       let sql = `ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${dataType}`;
       if (sourceColumn.default !== undefined && sourceColumn.default !== null) {
         const defaultLiteral = resolveDefaultLiteral(sourceColumn.default);
-        if (typeof defaultLiteral === 'number') {
+        if (typeof defaultLiteral === LOCAL_STR_NUMBER) {
           sql += ` DEFAULT ${defaultLiteral}`;
         } else {
           const escaped = String(defaultLiteral).replaceAll('\'', '\'\'');
@@ -1350,7 +1378,7 @@ class MigrationCoordinator {
         sql:
           `UPDATE ${tableName} ` +
           `SET ${columnName} = COALESCE(${columnName}, ?) ` +
-          'WHERE rowid > ? AND rowid <= ?',
+          LOCAL_STR_15T8X,
         params,
       };
     }

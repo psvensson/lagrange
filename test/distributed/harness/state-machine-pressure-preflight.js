@@ -579,6 +579,12 @@ function normalizePublicationEvidence(diagnostics) {
   const activeGatePendingAckCount = normalizeNonNegativeInteger(
     activeGateProgress[PENDING_ACK_COUNT_FIELD],
   );
+  const hasRequiredAckNodeIdEvidence = Array.isArray(
+    publication[REQUIRED_ACK_NODE_IDS_FIELD],
+  );
+  const hasAcknowledgedNodeIdEvidence = Array.isArray(
+    publication[ACKNOWLEDGED_NODE_IDS_FIELD],
+  );
   const pendingAckCount = Math.max(
     pendingAckNodeIds.length,
     normalizeNonNegativeInteger(publication[PENDING_ACK_COUNT_FIELD]),
@@ -612,8 +618,8 @@ function normalizePublicationEvidence(diagnostics) {
     pendingAckNodeIds,
     missingPublishedCount,
     missingPublishedNodeIds,
-    requiredAckNodeIds,
-    acknowledgedNodeIds,
+    ...(hasRequiredAckNodeIdEvidence ? {requiredAckNodeIds} : {}),
+    ...(hasAcknowledgedNodeIdEvidence ? {acknowledgedNodeIds} : {}),
   };
 }
 

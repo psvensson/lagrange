@@ -10,6 +10,78 @@
 
 import {BaseView, ROW_STATUS} from '../core/base-view.js';
 
+const LOCAL_STR_STRING = 'string';
+const LOCAL_STR_NUMBER = 'number';
+const LOCAL_STR_BOOLEAN = 'boolean';
+const LOCAL_STR_JSON = 'json';
+const LOCAL_STR_CONFIG = 'config';
+const LOCAL_STR_KEY = 'key';
+const LOCAL_STR_ASC = 'asc';
+const LOCAL_STR_KEY_2 = 'Key';
+const LOCAL_NUM_45 = 45;
+const LOCAL_STR_VALUE = 'value';
+const LOCAL_STR_VALUE_2 = 'Value';
+const LOCAL_NUM_20 = 20;
+const LOCAL_STR_TYPE = 'type';
+const LOCAL_STR_TYPE_2 = 'Type';
+const LOCAL_NUM_EIGHT = 8;
+const LOCAL_STR_REQUIRES_RESTART = 'requires_restart';
+const LOCAL_STR_RESTART = 'Restart';
+const LOCAL_STR_UPDATED_AT = 'updated_at';
+const LOCAL_STR_LAST_MODIFIED = 'Last Modified';
+const LOCAL_STR_N_A = 'N/A';
+const LOCAL_STR_NULL = 'null';
+const LOCAL_STR_OBJECT = 'object';
+const LOCAL_NUM_40 = 40;
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_NUM_37 = 37;
+const LOCAL_STR_2ZI04 = '...';
+const LOCAL_STR_TRUE = 'true';
+const LOCAL_STR_FALSE = 'false';
+const LOCAL_STR_YES = 'Yes (!)';
+const LOCAL_STR_YES_2 = 'Yes';
+const LOCAL_STR_NO = 'No';
+const LOCAL_STR_T = 'T';
+const LOCAL_STR_SPACE = ' ';
+const LOCAL_NUM_19 = 19;
+const LOCAL_STR_DEFAULT_VALUE = 'default_value';
+const LOCAL_STR_EMPTY = '';
+const LOCAL_STR_1D7VE = '\\$&';
+const LOCAL_STR_SHOWDETAIL = 'showDetail';
+const LOCAL_STR_ENTER = 'enter';
+const LOCAL_STR_RETURN = 'return';
+const LOCAL_STR_E = 'e';
+const LOCAL_STR_R = 'R';
+const LOCAL_STR_SHOWERROR = 'showError';
+const LOCAL_STR_EDITCONFIG = 'editConfig';
+const LOCAL_STR_REVERTCONFIG = 'revertConfig';
+const LOCAL_STR_1XHIH = 'e:Edit  R:Revert  Enter:Details  d:Detail Panel  /:Filter';
+const LOCAL_STR_DESCRIPTION = 'Description';
+const LOCAL_STR_INFO = 'Info';
+const LOCAL_STR_STATUS = 'Status';
+const LOCAL_STR_WARNING = 'Warning';
+const LOCAL_STR_2R3CU = 'Value differs from default';
+const LOCAL_STR_RESTART_REQUIRED = 'Restart Required';
+const LOCAL_STR_D2EP5 = 'Node restart required for changes to take effect';
+const LOCAL_STR_UNKNOWN = 'Unknown';
+const LOCAL_NUM_TWO = 2;
+const LOCAL_STR_OANV2 = 'Number value cannot be empty';
+const LOCAL_STR_1 = '1';
+const LOCAL_STR_YES_3 = 'yes';
+const LOCAL_STR_0 = '0';
+const LOCAL_STR_NO_2 = 'no';
+const LOCAL_STR_8FSYG = 'JSON value cannot be empty';
+const LOCAL_STR_FUNCTION = 'function';
+const LOCAL_STR_ALL = 'all';
+const LOCAL_STR_TO60Q = '⚠️  WARNING: This change requires a node restart to take effect.';
+const LOCAL_STR_1A45C = 'Confirm Configuration Change';
+const LOCAL_STR_NEWLINE = '\n';
+const LOCAL_STR_K2VMV = 'Confirm Revert to Default';
+const LOCAL_STR_1QQHQ = 'Config key not found';
+const LOCAL_STR_N24TW = 'Config is read-only';
+const LOCAL_STR_1BJ9Z = 'No default value defined';
+const LOCAL_STR_68GR3 = 'Already at default value';
+
 /**
  * Validation result object
  * @typedef {Object} ValidationResult
@@ -21,7 +93,7 @@ import {BaseView, ROW_STATUS} from '../core/base-view.js';
 /**
  * Supported config value types
  */
-export const CONFIG_TYPES = ['string', 'number', 'boolean', 'json'];
+export const CONFIG_TYPES = [LOCAL_STR_STRING, LOCAL_STR_NUMBER, LOCAL_STR_BOOLEAN, LOCAL_STR_JSON];
 
 /**
  * ConfigView displays system configuration entries
@@ -36,15 +108,15 @@ export class ConfigView extends BaseView {
   constructor(options = {}) {
     super(options);
     this.cache = options.cache || null;
-    this.viewName = 'config';
+    this.viewName = LOCAL_STR_CONFIG;
 
     // Key pattern filter
     // Requirements: 30.2
     this.keyPatternFilter = null;
 
     // Default sort by key ascending
-    this.sortColumn = 'key';
-    this.sortDirection = 'asc';
+    this.sortColumn = LOCAL_STR_KEY;
+    this.sortDirection = LOCAL_STR_ASC;
   }
 
   /**
@@ -54,11 +126,11 @@ export class ConfigView extends BaseView {
    */
   getColumns() {
     return [
-      {key: 'key', label: 'Key', width: 45},
-      {key: 'value', label: 'Value', width: 20},
-      {key: 'type', label: 'Type', width: 8},
-      {key: 'requires_restart', label: 'Restart', width: 8},
-      {key: 'updated_at', label: 'Last Modified', width: 20},
+      {key: LOCAL_STR_KEY, label: LOCAL_STR_KEY_2, width: LOCAL_NUM_45},
+      {key: LOCAL_STR_VALUE, label: LOCAL_STR_VALUE_2, width: LOCAL_NUM_20},
+      {key: LOCAL_STR_TYPE, label: LOCAL_STR_TYPE_2, width: LOCAL_NUM_EIGHT},
+      {key: LOCAL_STR_REQUIRES_RESTART, label: LOCAL_STR_RESTART, width: LOCAL_NUM_EIGHT},
+      {key: LOCAL_STR_UPDATED_AT, label: LOCAL_STR_LAST_MODIFIED, width: LOCAL_NUM_20},
     ];
   }
 
@@ -70,9 +142,9 @@ export class ConfigView extends BaseView {
    */
   formatRow(config) {
     return [
-      config.config_key || 'N/A',
+      config.config_key || LOCAL_STR_N_A,
       this.formatValue(config.config_value, config.value_type),
-      config.value_type || 'string',
+      config.value_type || LOCAL_STR_STRING,
       this.formatRequiresRestart(config),
       this.formatTimestamp(config.updated_at),
     ];
@@ -86,20 +158,20 @@ export class ConfigView extends BaseView {
    */
   formatValue(value, type) {
     if (value === null || value === undefined) {
-      return 'null';
+      return LOCAL_STR_NULL;
     }
 
-    if (type === 'json' && typeof value === 'object') {
+    if (type === LOCAL_STR_JSON && typeof value === LOCAL_STR_OBJECT) {
       const str = JSON.stringify(value);
-      return str.length > 40 ? str.substring(0, 37) + '...' : str;
+      return str.length > LOCAL_NUM_40 ? str.substring(LOCAL_NUM_ZERO, LOCAL_NUM_37) + LOCAL_STR_2ZI04 : str;
     }
 
-    if (type === 'boolean') {
-      return value ? 'true' : 'false';
+    if (type === LOCAL_STR_BOOLEAN) {
+      return value ? LOCAL_STR_TRUE : LOCAL_STR_FALSE;
     }
 
     const str = String(value);
-    return str.length > 40 ? str.substring(0, 37) + '...' : str;
+    return str.length > LOCAL_NUM_40 ? str.substring(LOCAL_NUM_ZERO, LOCAL_NUM_37) + LOCAL_STR_2ZI04 : str;
   }
 
   /**
@@ -112,11 +184,11 @@ export class ConfigView extends BaseView {
     if (config.requires_restart) {
       // Add warning indicator if pending restart
       if (config.pending_restart) {
-        return 'Yes (!)';
+        return LOCAL_STR_YES;
       }
-      return 'Yes';
+      return LOCAL_STR_YES_2;
     }
-    return 'No';
+    return LOCAL_STR_NO;
   }
 
   /**
@@ -126,17 +198,17 @@ export class ConfigView extends BaseView {
    */
   formatTimestamp(timestamp) {
     if (timestamp === null || timestamp === undefined) {
-      return 'N/A';
+      return LOCAL_STR_N_A;
     }
 
     try {
       const date = new Date(timestamp);
       if (isNaN(date.getTime())) {
-        return 'N/A';
+        return LOCAL_STR_N_A;
       }
-      return date.toISOString().replace('T', ' ').substring(0, 19);
+      return date.toISOString().replace(LOCAL_STR_T, LOCAL_STR_SPACE).substring(LOCAL_NUM_ZERO, LOCAL_NUM_19);
     } catch (_err) {
-      return 'N/A';
+      return LOCAL_STR_N_A;
     }
   }
 
@@ -169,7 +241,7 @@ export class ConfigView extends BaseView {
    */
   isDifferentFromDefault(config) {
     // If no default_value is defined, consider it as matching
-    if (!Object.prototype.hasOwnProperty.call(config, 'default_value')) {
+    if (!Object.prototype.hasOwnProperty.call(config, LOCAL_STR_DEFAULT_VALUE)) {
       return false;
     }
 
@@ -185,7 +257,7 @@ export class ConfigView extends BaseView {
     }
 
     // For objects/arrays, compare JSON strings
-    if (typeof currentValue === 'object' || typeof defaultValue === 'object') {
+    if (typeof currentValue === LOCAL_STR_OBJECT || typeof defaultValue === LOCAL_STR_OBJECT) {
       return JSON.stringify(currentValue) !== JSON.stringify(defaultValue);
     }
 
@@ -199,7 +271,7 @@ export class ConfigView extends BaseView {
    * @return {string} Unique key
    */
   getItemKey(config) {
-    return config.config_key || '';
+    return config.config_key || LOCAL_STR_EMPTY;
   }
 
   /**
@@ -233,18 +305,18 @@ export class ConfigView extends BaseView {
     if (this.keyPatternFilter) {
       try {
         const pattern = new RegExp(this.escapeRegex(this.keyPatternFilter), 'i');
-        result = result.filter((config) => pattern.test(config.config_key || ''));
+        result = result.filter((config) => pattern.test(config.config_key || LOCAL_STR_EMPTY));
       } catch (_err) {
         // If regex is invalid, fall back to simple includes
         const lowerPattern = this.keyPatternFilter.toLowerCase();
         result = result.filter((config) =>
-          (config.config_key || '').toLowerCase().includes(lowerPattern),
+          (config.config_key || LOCAL_STR_EMPTY).toLowerCase().includes(lowerPattern),
         );
       }
     }
 
     // Apply general text filter (from base class)
-    if (this.filter && this.filter.trim() !== '') {
+    if (this.filter && this.filter.trim() !== LOCAL_STR_EMPTY) {
       const lowerFilter = this.filter.toLowerCase();
       result = result.filter((item) => {
         const values = Object.values(item);
@@ -264,7 +336,7 @@ export class ConfigView extends BaseView {
    * @return {string} Escaped string
    */
   escapeRegex(str) {
-    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return str.replace(/[.*+?^${}()|[\]\\]/g, LOCAL_STR_1D7VE);
   }
 
   /**
@@ -279,8 +351,8 @@ export class ConfigView extends BaseView {
     }
 
     return {
-      action: 'showDetail',
-      view: 'config',
+      action: LOCAL_STR_SHOWDETAIL,
+      view: LOCAL_STR_CONFIG,
       context: {configKey: selectedConfig.config_key},
       detail: this.getSelectedDetails(),
     };
@@ -292,17 +364,17 @@ export class ConfigView extends BaseView {
    * @return {boolean|Object} True if handled, navigation object, or false
    */
   handleKey(key) {
-    if (key.name === 'enter' || key.name === 'return') {
+    if (key.name === LOCAL_STR_ENTER || key.name === LOCAL_STR_RETURN) {
       return this.handleDrillDown();
     }
 
     // 'e' key to edit selected config
-    if (key.ch === 'e') {
+    if (key.ch === LOCAL_STR_E) {
       return this.handleEditRequest();
     }
 
     // 'r' key to revert to default (when in config view context)
-    if (key.ch === 'R') {
+    if (key.ch === LOCAL_STR_R) {
       return this.handleRevertRequest();
     }
 
@@ -322,13 +394,13 @@ export class ConfigView extends BaseView {
     const editability = this.canEdit(selectedConfig.config_key);
     if (!editability.editable) {
       return {
-        action: 'showError',
+        action: LOCAL_STR_SHOWERROR,
         message: editability.reason,
       };
     }
 
     return {
-      action: 'editConfig',
+      action: LOCAL_STR_EDITCONFIG,
       config: selectedConfig,
       currentValue: this.formatFullValue(
         selectedConfig.config_value, selectedConfig.value_type,
@@ -349,14 +421,14 @@ export class ConfigView extends BaseView {
     const revertability = this.canRevert(selectedConfig.config_key);
     if (!revertability.revertable) {
       return {
-        action: 'showError',
+        action: LOCAL_STR_SHOWERROR,
         message: revertability.reason,
       };
     }
 
     const revertOp = this.prepareRevert(selectedConfig.config_key);
     return {
-      action: 'revertConfig',
+      action: LOCAL_STR_REVERTCONFIG,
       config: selectedConfig,
       revertOperation: revertOp,
       confirmation: this.getRevertConfirmation(revertOp),
@@ -368,7 +440,7 @@ export class ConfigView extends BaseView {
    * @return {string} Help text for status bar
    */
   getHelpText() {
-    return 'e:Edit  R:Revert  Enter:Details  d:Detail Panel  /:Filter';
+    return LOCAL_STR_1XHIH;
   }
 
   /**
@@ -403,9 +475,9 @@ export class ConfigView extends BaseView {
     // Add description if available
     if (config.description) {
       sections.push({
-        title: 'Description',
+        title: LOCAL_STR_DESCRIPTION,
         fields: [
-          {label: 'Info', value: config.description},
+          {label: LOCAL_STR_INFO, value: config.description},
         ],
       });
     }
@@ -413,9 +485,9 @@ export class ConfigView extends BaseView {
     // Add warning if value differs from default
     if (this.isDifferentFromDefault(config)) {
       sections.push({
-        title: 'Status',
+        title: LOCAL_STR_STATUS,
         fields: [
-          {label: 'Warning', value: 'Value differs from default'},
+          {label: LOCAL_STR_WARNING, value: LOCAL_STR_2R3CU},
         ],
       });
     }
@@ -423,15 +495,15 @@ export class ConfigView extends BaseView {
     // Add restart warning if applicable
     if (config.requires_restart && config.pending_restart) {
       sections.push({
-        title: 'Restart Required',
+        title: LOCAL_STR_RESTART_REQUIRED,
         fields: [
-          {label: 'Warning', value: 'Node restart required for changes to take effect'},
+          {label: LOCAL_STR_WARNING, value: LOCAL_STR_D2EP5},
         ],
       });
     }
 
     return {
-      title: `Config: ${config.config_key || 'Unknown'}`,
+      title: `Config: ${config.config_key || LOCAL_STR_UNKNOWN}`,
       sections,
     };
   }
@@ -444,15 +516,15 @@ export class ConfigView extends BaseView {
    */
   formatFullValue(value, type) {
     if (value === null || value === undefined) {
-      return 'null';
+      return LOCAL_STR_NULL;
     }
 
-    if (type === 'json' && typeof value === 'object') {
-      return JSON.stringify(value, null, 2);
+    if (type === LOCAL_STR_JSON && typeof value === LOCAL_STR_OBJECT) {
+      return JSON.stringify(value, null, LOCAL_NUM_TWO);
     }
 
-    if (type === 'boolean') {
-      return value ? 'true' : 'false';
+    if (type === LOCAL_STR_BOOLEAN) {
+      return value ? LOCAL_STR_TRUE : LOCAL_STR_FALSE;
     }
 
     return String(value);
@@ -517,12 +589,12 @@ export class ConfigView extends BaseView {
     const trimmedInput = String(inputValue).trim();
 
     switch (type) {
-    case 'string':
+    case LOCAL_STR_STRING:
       return {valid: true, parsedValue: trimmedInput};
 
-    case 'number': {
-      if (trimmedInput === '') {
-        return {valid: false, error: 'Number value cannot be empty'};
+    case LOCAL_STR_NUMBER: {
+      if (trimmedInput === LOCAL_STR_EMPTY) {
+        return {valid: false, error: LOCAL_STR_OANV2};
       }
       const num = Number(trimmedInput);
       if (isNaN(num)) {
@@ -531,12 +603,12 @@ export class ConfigView extends BaseView {
       return {valid: true, parsedValue: num};
     }
 
-    case 'boolean': {
+    case LOCAL_STR_BOOLEAN: {
       const lower = trimmedInput.toLowerCase();
-      if (lower === 'true' || lower === '1' || lower === 'yes') {
+      if (lower === LOCAL_STR_TRUE || lower === LOCAL_STR_1 || lower === LOCAL_STR_YES_3) {
         return {valid: true, parsedValue: true};
       }
-      if (lower === 'false' || lower === '0' || lower === 'no') {
+      if (lower === LOCAL_STR_FALSE || lower === LOCAL_STR_0 || lower === LOCAL_STR_NO_2) {
         return {valid: true, parsedValue: false};
       }
       return {
@@ -545,9 +617,9 @@ export class ConfigView extends BaseView {
       };
     }
 
-    case 'json': {
-      if (trimmedInput === '') {
-        return {valid: false, error: 'JSON value cannot be empty'};
+    case LOCAL_STR_JSON: {
+      if (trimmedInput === LOCAL_STR_EMPTY) {
+        return {valid: false, error: LOCAL_STR_8FSYG};
       }
       try {
         const parsed = JSON.parse(trimmedInput);
@@ -610,12 +682,12 @@ export class ConfigView extends BaseView {
     }
 
     // Otherwise, all nodes are affected (cluster-wide config)
-    if (this.cache && typeof this.cache.getNodes === 'function') {
+    if (this.cache && typeof this.cache.getNodes === LOCAL_STR_FUNCTION) {
       const nodes = this.cache.getNodes();
       return nodes.map((n) => n.node_id);
     }
 
-    return ['all'];
+    return [LOCAL_STR_ALL];
   }
 
   /**
@@ -641,13 +713,13 @@ export class ConfigView extends BaseView {
     ];
 
     if (requiresRestart) {
-      message.push('');
-      message.push('⚠️  WARNING: This change requires a node restart to take effect.');
+      message.push(LOCAL_STR_EMPTY);
+      message.push(LOCAL_STR_TO60Q);
     }
 
     return {
-      title: 'Confirm Configuration Change',
-      message: message.join('\n'),
+      title: LOCAL_STR_1A45C,
+      message: message.join(LOCAL_STR_NEWLINE),
       requiresRestart,
       affectedNodes,
     };
@@ -668,7 +740,7 @@ export class ConfigView extends BaseView {
       };
     }
 
-    if (!Object.prototype.hasOwnProperty.call(config, 'default_value')) {
+    if (!Object.prototype.hasOwnProperty.call(config, LOCAL_STR_DEFAULT_VALUE)) {
       return {
         success: false,
         error: `No default value defined for: ${configKey}`,
@@ -716,13 +788,13 @@ export class ConfigView extends BaseView {
     ];
 
     if (requiresRestart) {
-      message.push('');
-      message.push('⚠️  WARNING: This change requires a node restart to take effect.');
+      message.push(LOCAL_STR_EMPTY);
+      message.push(LOCAL_STR_TO60Q);
     }
 
     return {
-      title: 'Confirm Revert to Default',
-      message: message.join('\n'),
+      title: LOCAL_STR_K2VMV,
+      message: message.join(LOCAL_STR_NEWLINE),
       requiresRestart,
       affectedNodes,
     };
@@ -736,9 +808,9 @@ export class ConfigView extends BaseView {
   canEdit(configKey) {
     const config = this.data.find((c) => c.config_key === configKey);
     return !config ?
-      {editable: false, reason: 'Config key not found'} :
+      {editable: false, reason: LOCAL_STR_1QQHQ} :
       config.read_only ?
-        {editable: false, reason: 'Config is read-only'} :
+        {editable: false, reason: LOCAL_STR_N24TW} :
         {editable: true};
   }
 
@@ -752,13 +824,13 @@ export class ConfigView extends BaseView {
     const hasDefaultValue = config &&
       Object.prototype.hasOwnProperty.call(config, 'default_value');
     return !config ?
-      {revertable: false, reason: 'Config key not found'} :
+      {revertable: false, reason: LOCAL_STR_1QQHQ} :
       !hasDefaultValue ?
-        {revertable: false, reason: 'No default value defined'} :
+        {revertable: false, reason: LOCAL_STR_1BJ9Z} :
         !this.isDifferentFromDefault(config) ?
-          {revertable: false, reason: 'Already at default value'} :
+          {revertable: false, reason: LOCAL_STR_68GR3} :
           config.read_only ?
-            {revertable: false, reason: 'Config is read-only'} :
+            {revertable: false, reason: LOCAL_STR_N24TW} :
             {revertable: true};
   }
 }

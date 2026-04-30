@@ -1,3 +1,8 @@
+import {
+  PRIORITY_RECOVERY_OBSERVATION_STATE_VALUE,
+  PRIORITY_RECOVERY_SEMANTIC_STATE,
+} from '../../../src/control-plane/priority-recovery-diagnostics-constants.js';
+
 const ZERO = 0;
 const PRIORITY_RECOVERY_PROGRESS_NONE = 'none';
 const PRIORITY_RECOVERY_WAIT_MODE_PRECEDENCE = Object.freeze([
@@ -25,6 +30,10 @@ const PRIORITY_RECOVERY_ACTUATION_STATE_PRECEDENCE = Object.freeze([
   'completed',
   'no_action_needed',
   PRIORITY_RECOVERY_PROGRESS_NONE,
+]);
+const PRIORITY_RECOVERY_NON_BLOCKING_PROGRESS_SEMANTIC_STATES = new Set([
+  PRIORITY_RECOVERY_SEMANTIC_STATE.CONVERGED,
+  PRIORITY_RECOVERY_SEMANTIC_STATE.SPREAD_SATISFIED_IN_FLIGHT,
 ]);
 
 function normalizeNonNegativeInteger(value) {
@@ -437,7 +446,11 @@ function normalizePriorityRecoveryPartitionWitnessesForDiagnostics(witnesses) {
 
 function addCount(map, value) {
   const normalizedValue = normalizeStringField(value);
-  if (!normalizedValue || normalizedValue === PRIORITY_RECOVERY_PROGRESS_NONE) {
+  if (
+    !normalizedValue ||
+    normalizedValue === PRIORITY_RECOVERY_PROGRESS_NONE ||
+    normalizedValue === PRIORITY_RECOVERY_OBSERVATION_STATE_VALUE.UNAVAILABLE
+  ) {
     return;
   }
   map[normalizedValue] = (map[normalizedValue] || ZERO) + 1;
@@ -450,6 +463,21 @@ function resolvePrecedenceRank(value, precedence) {
 }
 
 function hasMeaningfulPriorityRecoveryProgressWitness(witness) {
+  const progressClassIds = normalizeDistinctStringArray(
+    witness?.progressClassIds,
+  );
+  const blockerReasonCodes = normalizeDistinctStringArray(
+    witness?.blockerReasonCodes,
+  );
+  if (
+    progressClassIds.length === ZERO &&
+    blockerReasonCodes.length === ZERO &&
+    PRIORITY_RECOVERY_NON_BLOCKING_PROGRESS_SEMANTIC_STATES.has(
+      witness?.semanticStateId,
+    )
+  ) {
+    return false;
+  }
   const progressFields = [
     witness?.progressContractState,
     witness?.actuationState,
@@ -461,7 +489,11 @@ function hasMeaningfulPriorityRecoveryProgressWitness(witness) {
   ];
   return progressFields.some((value) => {
     const normalizedValue = normalizeStringField(value);
-    return normalizedValue && normalizedValue !== PRIORITY_RECOVERY_PROGRESS_NONE;
+    return (
+      normalizedValue &&
+      normalizedValue !== PRIORITY_RECOVERY_PROGRESS_NONE &&
+      normalizedValue !== PRIORITY_RECOVERY_OBSERVATION_STATE_VALUE.UNAVAILABLE
+    );
   });
 }
 

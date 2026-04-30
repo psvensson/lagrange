@@ -407,6 +407,86 @@ test('CDCIntegrationService preserves explicit delivery source through one ' +
   );
 });
 
+test('CDCIntegrationService derives a coalesced delivery source for routed ' +
+  'system-table writes', async (t) => {
+  const COALESCING_KEY = 'cdc:nodes:node-coalesced-source';
+  const EXPECTED_DELIVERY_SOURCE =
+    `control-plane:write:nodes:${COALESCING_KEY}`;
+  const mockSqlEngine = createMockSqlQueryEngine();
+  const service = new CDCIntegrationService({
+    nodeId: 'test-node',
+    sqlQueryEngine: mockSqlEngine,
+  });
+  service.initialize();
+  service.waitForCacheUpdate = async () => {};
+
+  const result = await service.insertSystemTableRow(
+    SYSTEM_TABLE_NAME.NODES,
+    {
+      node_id: 'node-coalesced-source',
+      node_address: 'localhost:8080',
+      cpu_cores: 4,
+      memory_mb: 8192,
+      disk_gb: 100,
+      status: 'active',
+      last_heartbeat: Date.now(),
+      created_at: Date.now(),
+    },
+    {
+      skipCacheWait: true,
+      coalescingKey: COALESCING_KEY,
+    },
+  );
+
+  t.equal(result.success, true, 'routed write should still succeed');
+  t.equal(
+    mockSqlEngine.executedQueries[0]?.options?.deliverySource,
+    EXPECTED_DELIVERY_SOURCE,
+    'coalesced writes should not collapse into the table-level source bucket',
+  );
+});
+
+test('CDCIntegrationService derives replica-operation delivery source from ' +
+  'routed update identity', async (t) => {
+  const OPERATION_ID = 'cdc-replica-operation-source';
+  const EXPECTED_COALESCING_KEY =
+    `replica-operation:${OPERATION_ID}`;
+  const EXPECTED_DELIVERY_SOURCE =
+    `control-plane:write:replica_operations:${EXPECTED_COALESCING_KEY}`;
+  const mockSqlEngine = createMockSqlQueryEngine();
+  const service = new CDCIntegrationService({
+    nodeId: 'test-node',
+    sqlQueryEngine: mockSqlEngine,
+  });
+  service.initialize();
+  service.waitForCacheUpdate = async () => {};
+
+  const result = await service.updateSystemTableRow(
+    SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+    {
+      operation_id: OPERATION_ID,
+    },
+    {
+      status: 'pending',
+    },
+    {
+      skipCacheWait: true,
+    },
+  );
+
+  t.equal(result.success, true, 'routed write should still succeed');
+  t.equal(
+    mockSqlEngine.executedQueries[0]?.options?.coalescingKey,
+    EXPECTED_COALESCING_KEY,
+    'replica-operation writes should carry the row-scoped coalescing key',
+  );
+  t.equal(
+    mockSqlEngine.executedQueries[0]?.options?.deliverySource,
+    EXPECTED_DELIVERY_SOURCE,
+    'replica-operation writes should not collapse into the table-level source bucket',
+  );
+});
+
 
 test('CDCIntegrationService preserves canonical transaction-control routing ' +
   'gap defers instead of retrying them away', async (t) => {

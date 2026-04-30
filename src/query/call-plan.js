@@ -25,6 +25,8 @@ import {
   DEFAULT_MAX_GROUPS_PER_BATCH,
 } from './runtime-constants.js';
 
+const LOCAL_NUM_ZERO = 0;
+
 /**
  * Validate that a plan object has a recognized `kind` field.
  *
@@ -56,7 +58,7 @@ function collectExchangeRecords(mgr) {
     const buffers = mgr.getPartitionBuffers();
     const records = [];
     for (const buf of buffers.values()) {
-      for (let i = 0; i < buf.length; i++) {
+      for (let i = LOCAL_NUM_ZERO; i < buf.length; i++) {
         records.push(buf[i]);
       }
     }
@@ -74,7 +76,7 @@ function collectExchangeRecords(mgr) {
  */
 function groupRecordsByKey(records) {
   const groups = new Map();
-  for (let i = 0; i < records.length; i++) {
+  for (let i = LOCAL_NUM_ZERO; i < records.length; i++) {
     const entry = records[i];
     const key = entry[EXCHANGE_FIELD.KEY];
     const value = entry[EXCHANGE_FIELD.VALUE];
@@ -112,7 +114,7 @@ function buildGroupedBatches(groups, maxRecordsPerGroup) {
         [REDUCE_FIELD.RECORDS]: records,
       });
     } else {
-      for (let i = 0; i < records.length; i += limit) {
+      for (let i = LOCAL_NUM_ZERO; i < records.length; i += limit) {
         const chunk = records.slice(i, i + limit);
         const isLast = i + limit >= records.length;
         const entry = {
@@ -187,11 +189,11 @@ async function executeReduceByKey(deps) {
   );
 
   const results = [];
-  for (let i = 0; i < batches.length; i += maxPerBatch) {
+  for (let i = LOCAL_NUM_ZERO; i < batches.length; i += maxPerBatch) {
     cancellationToken.throwIfCancelled();
     executionContext.getBudgetEnforcer().checkWallTime();
     const slice = batches.slice(i, i + maxPerBatch);
-    for (let j = 0; j < slice.length; j++) {
+    for (let j = LOCAL_NUM_ZERO; j < slice.length; j++) {
       cancellationToken.throwIfCancelled();
       const handlerResult = await handler(slice[j], stageCtx);
       results.push(handlerResult);

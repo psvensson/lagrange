@@ -42,6 +42,8 @@ import {
   PRIMITIVE_ERROR_MSG,
 } from './distributed/distributed-context-constants.js';
 
+const LOCAL_STR_RESULTSTREAM = 'resultStream';
+
 const LOOKUP_PARTITION_SINGLE = 'single-partition';
 const SAFE_SQL_IDENTIFIER = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 const SQL_SELECT_PREFIX = 'SELECT * FROM ';
@@ -384,7 +386,7 @@ class ExecutionContext {
       throw new BudgetLimitError(
         this._resultStream.budgetError,
         {
-          category: 'resultStream',
+          category: LOCAL_STR_RESULTSTREAM,
           limit: this._resultStream.maxBytes,
           usage: this._resultStream.totalBytes,
         },

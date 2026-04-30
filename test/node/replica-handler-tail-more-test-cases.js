@@ -691,6 +691,116 @@ export async function registerReplicaHandlerTailMoreTests({
       handler.shutdown();
     });
 
+  t.test('handleRemoveReplica continues durable cleanup after retryable removing-status pressure',
+    async (t) => {
+      const TEST_PRESSURED_REMOVE_OPERATION_ID = 'op-pressured-remove-1';
+      const TEST_PRESSURED_REMOVE_PARTITION_ID = 'partition-pressured-remove-1';
+      const TEST_PRESSURED_REMOVE_REPLICA_ID = 'replica-pressured-remove-1';
+      const TEST_PRESSURED_REMOVE_ADDRESS =
+        `test-node/partition/${TEST_PRESSURED_REMOVE_REPLICA_ID}`;
+      const TEST_PRESSURED_REMOVE_ERROR =
+        'control_plane_pressure_degraded';
+      const TEST_PRESSURED_REMOVE_ERROR_CODE =
+        'CONTROL_PLANE_PRESSURE_DEGRADED';
+      const TEST_PRESSURED_REMOVE_REASON = 'rebalancing';
+      const cache = createSeededCache();
+      seedReplicaOperation(cache, TEST_PRESSURED_REMOVE_OPERATION_ID, {
+        type: 'REMOVE',
+      });
+      cache.applySystemTableChange(SYSTEM_TABLE_NAME.SERVICES, 'INSERT', {
+        service_id: TEST_PRESSURED_REMOVE_REPLICA_ID,
+        service_type: 'partition',
+        partition_id: TEST_PRESSURED_REMOVE_PARTITION_ID,
+        node_id: 'test-node',
+        replica_id: TEST_PRESSURED_REMOVE_REPLICA_ID,
+        raft_role: RAFT_ROLE.FOLLOWER,
+        status: ReplicaStatus.ACTIVE,
+        address: TEST_PRESSURED_REMOVE_ADDRESS,
+        created_at: Date.now(),
+        updated_at: Date.now(),
+      });
+      const mockCDC = createMockCDCService(cache);
+
+      const handler = new ReplicaHandler({
+        nodeId: 'test-node',
+        cdcIntegrationService: mockCDC,
+        systemTableCache: cache,
+        dataDir: tempDir,
+        createPartitionService: createMockPartitionServiceFactory(),
+      });
+
+      handler.initialize();
+      const originalPersistReplicaStatusWithRetry =
+        handler.persistReplicaStatusWithRetry.bind(handler);
+      let removingWriteAttempts = 0;
+      handler.persistReplicaStatusWithRetry = async (
+        replicaId,
+        newStatus,
+        additionalData,
+      ) => {
+        if (
+          replicaId === TEST_PRESSURED_REMOVE_REPLICA_ID &&
+          newStatus === ReplicaStatus.REMOVING
+        ) {
+          removingWriteAttempts += 1;
+          const error = new Error(TEST_PRESSURED_REMOVE_ERROR);
+          error.code = TEST_PRESSURED_REMOVE_ERROR_CODE;
+          throw error;
+        }
+        return originalPersistReplicaStatusWithRetry(
+          replicaId,
+          newStatus,
+          additionalData,
+        );
+      };
+
+      handler.localReplicas.set(TEST_PRESSURED_REMOVE_REPLICA_ID, {
+        replicaId: TEST_PRESSURED_REMOVE_REPLICA_ID,
+        partitionId: TEST_PRESSURED_REMOVE_PARTITION_ID,
+        status: ReplicaStatus.ACTIVE,
+        service: {
+          async shutdown() {},
+        },
+      });
+
+      const removed = waitForReplicaEvent(
+        handler,
+        'replicaRemoved',
+        'replicaRemovalFailed',
+      );
+
+      const response = await handler.handleRemoveReplica({
+        operationId: TEST_PRESSURED_REMOVE_OPERATION_ID,
+        partitionId: TEST_PRESSURED_REMOVE_PARTITION_ID,
+        replicaId: TEST_PRESSURED_REMOVE_REPLICA_ID,
+        reason: TEST_PRESSURED_REMOVE_REASON,
+      });
+
+      t.equal(
+        response.status,
+        ReplicaOperationResponseStatus.INITIATED,
+        'pressured removing-status write should not reject remove admission',
+      );
+      await removed;
+
+      t.equal(
+        removingWriteAttempts,
+        1,
+        'removing status write should be attempted before durable cleanup',
+      );
+      t.notOk(
+        cache.get(SYSTEM_TABLE_NAME.SERVICES, TEST_PRESSURED_REMOVE_REPLICA_ID),
+        'durable service row cleanup should still complete',
+      );
+      t.equal(
+        handler.getLocalReplica(TEST_PRESSURED_REMOVE_REPLICA_ID)?.status,
+        ReplicaStatus.REMOVED,
+        'local replica tracking should converge to removed',
+      );
+
+      handler.shutdown();
+    });
+
   t.test('registerWithRouter registers handler at correct address', async (t) => {
     const cache = createSeededCache();
     seedReplicaOperation(cache, 'op-1');

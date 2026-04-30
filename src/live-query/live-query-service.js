@@ -26,6 +26,9 @@ import {
   TYPEOF,
 } from './live-query-constants.js';
 
+const LOCAL_STR_OBJECT = 'object';
+const LOCAL_NUM_0_POINT_7 = 0.7;
+
 /**
  * Live query event types sent to clients.
  */
@@ -302,7 +305,7 @@ function canonicalizePredicate(whereClause) {
  * @return {*} Sorted object.
  */
 function sortObject(obj) {
-  if (obj === null || typeof obj !== 'object') {
+  if (obj === null || typeof obj !== LOCAL_STR_OBJECT) {
     return obj;
   }
 
@@ -490,7 +493,7 @@ class LiveQueryService {
     return {
       queryId: this.queryId,
       expiresAt: this.lastRenewal + this.ttlMs,
-      renewBefore: this.lastRenewal + Math.floor(this.ttlMs * 0.7),
+      renewBefore: this.lastRenewal + Math.floor(this.ttlMs * LOCAL_NUM_0_POINT_7),
     };
   }
 

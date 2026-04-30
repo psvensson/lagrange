@@ -19,6 +19,12 @@ import {
   VIOLATION_TYPE,
 } from './dual-path-closure-constants.js';
 
+const LOCAL_STR_STRING = 'string';
+const LOCAL_NUM_ONE = 1;
+const LOCAL_STR_128KJ = ', ';
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_STR_EMPTY = '';
+
 /**
  * Build a frozen violation result.
  *
@@ -32,7 +38,7 @@ function buildViolation(options) {
   return Object.freeze({
     concern: options.concern,
     violationType: options.violationType,
-    detail: typeof options.detail === 'string' ?
+    detail: typeof options.detail === LOCAL_STR_STRING ?
       options.detail :
       null,
   });
@@ -73,12 +79,12 @@ function verifyConcern(concernEntry) {
     entry.concern :
     '';
 
-  if (ownerPaths.length > 1) {
+  if (ownerPaths.length > LOCAL_NUM_ONE) {
     violations.push(buildViolation({
       concern,
       violationType: VIOLATION_TYPE.DUPLICATE_PROGRESSION,
       detail: `${ownerPaths.length} progression paths: ` +
-        ownerPaths.join(', '),
+        ownerPaths.join(LOCAL_STR_128KJ),
     }));
   }
 
@@ -86,7 +92,7 @@ function verifyConcern(concernEntry) {
     violations.push(buildViolation({
       concern,
       violationType: VIOLATION_TYPE.ACTIVE_TOGGLE,
-      detail: typeof toggle === 'string' ? toggle : null,
+      detail: typeof toggle === LOCAL_STR_STRING ? toggle : null,
     }));
   }
 
@@ -94,7 +100,7 @@ function verifyConcern(concernEntry) {
     violations.push(buildViolation({
       concern,
       violationType: VIOLATION_TYPE.LEGACY_BRANCH,
-      detail: typeof branch === 'string' ? branch : null,
+      detail: typeof branch === LOCAL_STR_STRING ? branch : null,
     }));
   }
 
@@ -116,11 +122,11 @@ function verifyClosureState(concernEntries) {
     [];
 
   const allViolations = [];
-  let cleanConcerns = 0;
+  let cleanConcerns = LOCAL_NUM_ZERO;
 
   for (const entry of entries) {
     const violations = verifyConcern(entry);
-    if (violations.length === 0) {
+    if (violations.length === LOCAL_NUM_ZERO) {
       cleanConcerns++;
     }
     for (const v of violations) {
@@ -151,9 +157,9 @@ function verifyClosureState(concernEntries) {
  */
 function buildCleanConcernEntry(concern, ownerPath) {
   return Object.freeze({
-    concern: typeof concern === 'string' ? concern : '',
+    concern: typeof concern === LOCAL_STR_STRING ? concern : LOCAL_STR_EMPTY,
     ownerPaths: Object.freeze(
-      typeof ownerPath === 'string' && ownerPath.length > 0 ?
+      typeof ownerPath === LOCAL_STR_STRING && ownerPath.length > LOCAL_NUM_ZERO ?
         [ownerPath] :
         [],
     ),
@@ -179,15 +185,15 @@ function buildDefaultConcernRegistry(ownerPathMap) {
   return Object.freeze([
     buildCleanConcernEntry(
       CONCERN.DISPATCH,
-      pathMap[CONCERN.DISPATCH] || '',
+      pathMap[CONCERN.DISPATCH] || LOCAL_STR_EMPTY,
     ),
     buildCleanConcernEntry(
       CONCERN.REBALANCE,
-      pathMap[CONCERN.REBALANCE] || '',
+      pathMap[CONCERN.REBALANCE] || LOCAL_STR_EMPTY,
     ),
     buildCleanConcernEntry(
       CONCERN.SPLIT,
-      pathMap[CONCERN.SPLIT] || '',
+      pathMap[CONCERN.SPLIT] || LOCAL_STR_EMPTY,
     ),
   ]);
 }

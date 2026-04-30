@@ -20,6 +20,23 @@ import {
   resolveRetryableManagedSplitExecutionDecisionType,
 } from './managed-split-retry-policy.js';
 
+const LOCAL_NUM_TWO = 2;
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_NUM_ONE = 1;
+const LOCAL_STR_OBJECT = 'object';
+const LOCAL_STR_FUNCTION = 'function';
+const LOCAL_STR_HO8X3 = 'split_execution_failure';
+const LOCAL_STR_1KKL2 = 'Failed to persist managed split workflow failure';
+const LOCAL_STR_93870 = 'Managed split child partition metadata is inconsistent: exactly one ';
+const LOCAL_STR_CHILD_ROW_EXISTS = 'child row exists';
+const LOCAL_STR_PARTITION_ID = 'partition_id';
+const LOCAL_STR_TABLE_ID = 'table_id';
+const LOCAL_STR_TABLE_NAME = 'table_name';
+const LOCAL_STR_S87I2 = 'partition_key_start';
+const LOCAL_STR_PARTITION_KEY_END = 'partition_key_end';
+const LOCAL_STR_PARTITION_VERSION = 'partition_version';
+const LOCAL_STR_1BLIL = 'Managed split child partition metadata mismatch for ';
+
 const CRITICAL_SPLIT_MINIMUM_ROUTABLE_SOURCE_COUNT = 1;
 
 class ManagedSplitWorkflowProvisioningMethods {
@@ -42,9 +59,9 @@ class ManagedSplitWorkflowProvisioningMethods {
       null;
     if (!splitKey ||
         !targetPartitionIds ||
-        targetPartitionIds.length !== 2 ||
-        !targetPartitionIds[0] ||
-        !targetPartitionIds[1]) {
+        targetPartitionIds.length !== LOCAL_NUM_TWO ||
+        !targetPartitionIds[LOCAL_NUM_ZERO] ||
+        !targetPartitionIds[LOCAL_NUM_ONE]) {
       return null;
     }
 
@@ -253,7 +270,7 @@ class ManagedSplitWorkflowProvisioningMethods {
       attemptCount,
       lastAttemptAt: new Date(this.now()).toISOString(),
       nextAttemptAt: null,
-      backoffMs: 0,
+      backoffMs: LOCAL_NUM_ZERO,
     };
   }
 
@@ -271,7 +288,7 @@ class ManagedSplitWorkflowProvisioningMethods {
     const retryMetadata = existingTransition?.metadata?.[
       PARTITION_TRANSITION_METADATA_FIELD.RETRY
     ];
-    if (!retryMetadata || typeof retryMetadata !== 'object') {
+    if (!retryMetadata || typeof retryMetadata !== LOCAL_STR_OBJECT) {
       return null;
     }
 
@@ -350,7 +367,7 @@ class ManagedSplitWorkflowProvisioningMethods {
       candidateTargetNodeIds: [...options.candidateTargetNodeIds],
       sourceRoutableNodeIds: [...options.sourceRoutableNodeIds],
     };
-    if (typeof this.captureTopologySnapshot !== 'function') {
+    if (typeof this.captureTopologySnapshot !== LOCAL_STR_FUNCTION) {
       return baseSnapshot;
     }
 
@@ -358,7 +375,7 @@ class ManagedSplitWorkflowProvisioningMethods {
       ...options,
       baseSnapshot,
     });
-    if (!capturedSnapshot || typeof capturedSnapshot !== 'object') {
+    if (!capturedSnapshot || typeof capturedSnapshot !== LOCAL_STR_OBJECT) {
       return baseSnapshot;
     }
 
@@ -406,7 +423,7 @@ class ManagedSplitWorkflowProvisioningMethods {
     const childPartitionIds = this.normalizeNodeIdList(
       options.childPartitionIds,
     );
-    if (childPartitionIds.length === 0) {
+    if (childPartitionIds.length === LOCAL_NUM_ZERO) {
       return {};
     }
 
@@ -431,13 +448,13 @@ class ManagedSplitWorkflowProvisioningMethods {
     );
     const sourceNodeIdSet = new Set(sourceRoutableNodeIds);
     const candidateOrderByNodeId = new Map();
-    for (let index = 0; index < candidateTargetNodeIds.length; index += 1) {
+    for (let index = LOCAL_NUM_ZERO; index < candidateTargetNodeIds.length; index += LOCAL_NUM_ONE) {
       candidateOrderByNodeId.set(candidateTargetNodeIds[index], index);
     }
 
     const usageByNodeId = new Map();
     for (const nodeId of sourceRoutableNodeIds) {
-      usageByNodeId.set(nodeId, (usageByNodeId.get(nodeId) || 0) + 1);
+      usageByNodeId.set(nodeId, (usageByNodeId.get(nodeId) || LOCAL_NUM_ZERO) + LOCAL_NUM_ONE);
     }
 
     const childTargetNodeIdsByPartitionId = {};
@@ -447,7 +464,7 @@ class ManagedSplitWorkflowProvisioningMethods {
         targetNodeIds.push(anchorNodeId);
         usageByNodeId.set(
           anchorNodeId,
-          (usageByNodeId.get(anchorNodeId) || 0) + 1,
+          (usageByNodeId.get(anchorNodeId) || LOCAL_NUM_ZERO) + LOCAL_NUM_ONE,
         );
       }
 
@@ -455,7 +472,7 @@ class ManagedSplitWorkflowProvisioningMethods {
         const remainingNodeIds = candidateTargetNodeIds.filter((nodeId) =>
           !targetNodeIds.includes(nodeId),
         );
-        if (remainingNodeIds.length === 0) {
+        if (remainingNodeIds.length === LOCAL_NUM_ZERO) {
           break;
         }
 
@@ -471,8 +488,8 @@ class ManagedSplitWorkflowProvisioningMethods {
             return leftSourcePenalty - rightSourcePenalty;
           }
           return (
-            (candidateOrderByNodeId.get(leftNodeId) || 0) -
-            (candidateOrderByNodeId.get(rightNodeId) || 0)
+            (candidateOrderByNodeId.get(leftNodeId) || LOCAL_NUM_ZERO) -
+            (candidateOrderByNodeId.get(rightNodeId) || LOCAL_NUM_ZERO)
           );
         });
 
@@ -480,7 +497,7 @@ class ManagedSplitWorkflowProvisioningMethods {
         targetNodeIds.push(selectedNodeId);
         usageByNodeId.set(
           selectedNodeId,
-          (usageByNodeId.get(selectedNodeId) || 0) + 1,
+          (usageByNodeId.get(selectedNodeId) || LOCAL_NUM_ZERO) + LOCAL_NUM_ONE,
         );
       }
 
@@ -499,8 +516,8 @@ class ManagedSplitWorkflowProvisioningMethods {
           return leftSourcePenalty - rightSourcePenalty;
         }
         return (
-          (candidateOrderByNodeId.get(leftNodeId) || 0) -
-          (candidateOrderByNodeId.get(rightNodeId) || 0)
+          (candidateOrderByNodeId.get(leftNodeId) || LOCAL_NUM_ZERO) -
+          (candidateOrderByNodeId.get(rightNodeId) || LOCAL_NUM_ZERO)
         );
       });
 
@@ -541,7 +558,7 @@ class ManagedSplitWorkflowProvisioningMethods {
       }
     }
 
-    return candidateTargetNodeIds[0] || null;
+    return candidateTargetNodeIds[LOCAL_NUM_ZERO] || null;
   }
 
   /**
@@ -557,10 +574,10 @@ class ManagedSplitWorkflowProvisioningMethods {
         PARTITION_TRANSITION_METADATA_FIELD.TARGET_PARTITION_VERSION
       ],
     );
-    if (Number.isInteger(persistedVersion) && persistedVersion > 0) {
+    if (Number.isInteger(persistedVersion) && persistedVersion > LOCAL_NUM_ZERO) {
       return persistedVersion;
     }
-    return this.resolveActivePartitionVersion(tableInfo) + 1;
+    return this.resolveActivePartitionVersion(tableInfo) + LOCAL_NUM_ONE;
   }
 
   /**
@@ -621,10 +638,10 @@ class ManagedSplitWorkflowProvisioningMethods {
     const sizeBytes = Number(
       partitionInfo?.size_bytes ?? partitionInfo?.sizeBytes,
     );
-    if (Number.isFinite(sizeBytes) && sizeBytes > 0) {
+    if (Number.isFinite(sizeBytes) && sizeBytes > LOCAL_NUM_ZERO) {
       return Math.ceil(sizeBytes);
     }
-    return 1;
+    return LOCAL_NUM_ONE;
   }
 
   /**
@@ -651,7 +668,7 @@ class ManagedSplitWorkflowProvisioningMethods {
         metadata: {
           ...(workflow.metadata || {}),
           [PARTITION_TRANSITION_METADATA_FIELD.FAILURE]: {
-            classification: 'split_execution_failure',
+            classification: LOCAL_STR_HO8X3,
             message: error?.message || QUERY_ERROR_MSG.TABLE_SPLIT_START_FAILED,
             failedAt: new Date(this.now()).toISOString(),
             ...(timeoutClassification ? {timeoutClassification} : {}),
@@ -659,7 +676,7 @@ class ManagedSplitWorkflowProvisioningMethods {
         },
       });
     } catch (persistError) {
-      this.logger.error('Failed to persist managed split workflow failure', {
+      this.logger.error(LOCAL_STR_1KKL2, {
         workflowId,
         error: persistError?.message || persistError,
       });
@@ -675,7 +692,7 @@ class ManagedSplitWorkflowProvisioningMethods {
   async persistWorkflowTransition(workflow) {
     const cdcIntegrationService = this.getCDCIntegrationService();
     if (!cdcIntegrationService ||
-        typeof cdcIntegrationService.updateSystemTableRow !== 'function') {
+        typeof cdcIntegrationService.updateSystemTableRow !== LOCAL_STR_FUNCTION) {
       return;
     }
 
@@ -710,7 +727,7 @@ class ManagedSplitWorkflowProvisioningMethods {
           pendingPartitionVersion;
         updatePayload.pending_partition_version = null;
       }
-      if (Array.isArray(targetIds) && targetIds.length > 0) {
+      if (Array.isArray(targetIds) && targetIds.length > LOCAL_NUM_ZERO) {
         updatePayload.partition_count = targetIds.length;
       }
     }
@@ -768,7 +785,7 @@ class ManagedSplitWorkflowProvisioningMethods {
    */
   serializeParticipantsForMetadata(workflow) {
     if (!(workflow.participants instanceof Map) ||
-        workflow.participants.size === 0) {
+        workflow.participants.size === LOCAL_NUM_ZERO) {
       return null;
     }
 
@@ -787,7 +804,7 @@ class ManagedSplitWorkflowProvisioningMethods {
    */
   resolveSourceCheckpoint(workflow) {
     if (!(workflow.participants instanceof Map) ||
-        workflow.participants.size === 0) {
+        workflow.participants.size === LOCAL_NUM_ZERO) {
       return null;
     }
 
@@ -838,8 +855,8 @@ class ManagedSplitWorkflowProvisioningMethods {
 
     if (leftExists !== rightExists) {
       throw new Error(
-        'Managed split child partition metadata is inconsistent: exactly one ' +
-        'child row exists',
+        LOCAL_STR_93870 +
+        LOCAL_STR_CHILD_ROW_EXISTS,
       );
     }
 
@@ -893,39 +910,39 @@ class ManagedSplitWorkflowProvisioningMethods {
     };
 
     compareField(
-      'partition_id',
+      LOCAL_STR_PARTITION_ID,
       expected.partition_id,
       existing.partition_id ?? existing.partitionId ?? null,
     );
     compareField(
-      'table_id',
+      LOCAL_STR_TABLE_ID,
       expected.table_id,
       existing.table_id ?? existing.tableId ?? null,
     );
     compareField(
-      'table_name',
+      LOCAL_STR_TABLE_NAME,
       expected.table_name,
       existing.table_name ?? existing.tableName ?? null,
     );
     compareField(
-      'partition_key_start',
+      LOCAL_STR_S87I2,
       expected.partition_key_start,
       existing.partition_key_start ?? existing.partitionKeyStart ?? null,
     );
     compareField(
-      'partition_key_end',
+      LOCAL_STR_PARTITION_KEY_END,
       expected.partition_key_end,
       existing.partition_key_end ?? existing.partitionKeyEnd ?? null,
     );
     compareField(
-      'partition_version',
+      LOCAL_STR_PARTITION_VERSION,
       expected.partition_version,
       existing.partition_version ?? existing.partitionVersion ?? null,
     );
 
-    if (mismatches.length > 0) {
+    if (mismatches.length > LOCAL_NUM_ZERO) {
       throw new Error(
-        'Managed split child partition metadata mismatch for ' +
+        LOCAL_STR_1BLIL +
         `${expected.partition_id}: ${JSON.stringify(mismatches)}`,
       );
     }
@@ -961,9 +978,9 @@ class ManagedSplitWorkflowProvisioningMethods {
   async insertPartitionMetadataAtomically(leftMetadata, rightMetadata) {
     const txCoordinator = this.transactionCoordinator;
     if (!txCoordinator ||
-        typeof txCoordinator.begin !== 'function' ||
-        typeof txCoordinator.commit !== 'function' ||
-        typeof txCoordinator.rollback !== 'function') {
+        typeof txCoordinator.begin !== LOCAL_STR_FUNCTION ||
+        typeof txCoordinator.commit !== LOCAL_STR_FUNCTION ||
+        typeof txCoordinator.rollback !== LOCAL_STR_FUNCTION) {
       throw new Error(
         QUERY_ERROR_MSG.TABLE_SPLIT_TRANSACTION_COORDINATOR_REQUIRED,
       );

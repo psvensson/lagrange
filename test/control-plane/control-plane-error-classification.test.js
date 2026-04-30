@@ -11,6 +11,10 @@ import {ROUTER_ERROR_MSG} from '../../src/constants/transport.js';
 
 const PENDING_RESPONSE_TIMEOUT_RETRYABLE_TEST_NAME =
   'isRetryableControlPlaneError treats pending response timeouts as retryable';
+const RAFT_WRITE_COMMIT_TIMEOUT_RETRYABLE_TEST_NAME =
+  'isRetryableControlPlaneError treats raft write commit timeouts as retryable';
+const RAFT_WRITE_COMMIT_TIMEOUT_ERROR_MESSAGE =
+  'Raft write commit timed out after 30000ms';
 
 test('isRetryableControlPlaneError detects typed pressure deferrals', async (t) => {
   const result = {
@@ -52,6 +56,12 @@ test('isRetryableControlPlaneError detects explicit deferRetry marker', async (t
 
 test(PENDING_RESPONSE_TIMEOUT_RETRYABLE_TEST_NAME, async (t) => {
   const error = new Error(ROUTER_ERROR_MSG.PENDING_RESPONSE_TIMEOUT);
+
+  t.equal(isRetryableControlPlaneError(error), true);
+});
+
+test(RAFT_WRITE_COMMIT_TIMEOUT_RETRYABLE_TEST_NAME, async (t) => {
+  const error = new Error(RAFT_WRITE_COMMIT_TIMEOUT_ERROR_MESSAGE);
 
   t.equal(isRetryableControlPlaneError(error), true);
 });

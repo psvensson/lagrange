@@ -57,6 +57,7 @@ import {Cluster3} from './cluster-segment-7-class-3.js';
 const TYPEOF_OBJECT = 'object';
 const TYPEOF_STRING = 'string';
 const EMPTY_STRING = '';
+const EMPTY_RECORD = Object.freeze({});
 const LOAD_PUBLICATION_GATE_WITNESS_READY = 'ready';
 const LOAD_PUBLICATION_GATE_WITNESS_CANONICAL_SNAPSHOT =
   'canonical_snapshot';
@@ -134,6 +135,44 @@ const STARTUP_SNAPSHOT_PROJECTION_DECISION_TABLE = Object.freeze([
       evidence.snapshotWitnessClean === true &&
       evidence.nodeCanonicalActive === true &&
       evidence.nodePublicationDisagreementCount === ZERO,
+  }),
+]);
+const PARTIAL_COVERAGE_CONVERGENCE_PUBLICATION_STATUS_PUBLISHED =
+  'PUBLISHED';
+const PARTIAL_COVERAGE_CONVERGENCE_ADMIN_HEALTH_SOURCE = 'admin_health';
+const PARTIAL_COVERAGE_CONVERGENCE_OUTCOME_KEEP = Object.freeze({
+  converged: false,
+});
+const PARTIAL_COVERAGE_CONVERGENCE_OUTCOME_APPLY = Object.freeze({
+  converged: true,
+});
+const PARTIAL_COVERAGE_CONVERGENCE_DECISION_TABLE = Object.freeze([
+  Object.freeze({
+    outcome: PARTIAL_COVERAGE_CONVERGENCE_OUTCOME_APPLY,
+    matches: (evidence) =>
+      evidence.readinessMode === CLUSTER_READINESS_MODE_LOAD &&
+      evidence.activeByStatus === true &&
+      evidence.publicationGateReady === true &&
+      evidence.snapshotCoverageComplete !== true &&
+      evidence.bestCoverageNodeCount > ZERO &&
+      evidence.selectedSnapshotErrorPresent !== true,
+  }),
+  Object.freeze({
+    outcome: PARTIAL_COVERAGE_CONVERGENCE_OUTCOME_APPLY,
+    matches: (evidence) =>
+      evidence.readinessMode === CLUSTER_READINESS_MODE_STARTUP &&
+      evidence.activeByStatus === true &&
+      evidence.publicationGateReady === true &&
+      evidence.snapshotCoverageComplete !== true &&
+      evidence.bestCoverageNodeCount > ZERO &&
+      evidence.selectedSnapshotErrorPresent !== true &&
+      evidence.selectedSnapshotReachabilityErrorPresent !== true &&
+      evidence.selectedSnapshotAdminBacked === true &&
+      evidence.publicationStatus ===
+        PARTIAL_COVERAGE_CONVERGENCE_PUBLICATION_STATUS_PUBLISHED &&
+      evidence.pendingAckCount === ZERO &&
+      evidence.missingPublishedCount > ZERO &&
+      evidence.prioritySpreadSatisfied === true,
   }),
 ]);
 const READINESS_TIMEOUT_FALLBACK_OUTCOME_STATUS = Object.freeze({
@@ -426,6 +465,99 @@ function projectStartupSnapshotDiagnostic(diagnostic, projectionContext) {
     sourceError: diagnostic?.error || null,
     error: null,
   };
+}
+
+function normalizePartialCoverageObject(value) {
+  return value && typeof value === TYPEOF_OBJECT && Array.isArray(value) !== true ?
+    value :
+    EMPTY_RECORD;
+}
+
+function normalizePartialCoveragePublicationStatus(status) {
+  return typeof status === TYPEOF_STRING ?
+    status.trim().toUpperCase() :
+    EMPTY_STRING;
+}
+
+function normalizePartialCoverageConvergenceEvidence({
+  readinessMode,
+  activeByStatus,
+  snapshotCoverage,
+  publicationConvergenceGate,
+}) {
+  const selectedPublicationConvergenceGate = normalizePartialCoverageObject(
+    snapshotCoverage?.selectedPublicationConvergenceGate,
+  );
+  const selectedPublicationConvergence = normalizePartialCoverageObject(
+    snapshotCoverage?.selectedPublicationConvergence,
+  );
+  const priorityPartitionSummary = normalizePartialCoverageObject(
+    selectedPublicationConvergenceGate.priorityPartitionSummary ||
+      selectedPublicationConvergence.priorityPartitionSummary,
+  );
+  const pendingAckNodeIds = normalizeDistinctStringArray([
+    ...normalizeDistinctStringArray(snapshotCoverage?.selectedPendingAckNodeIds),
+    ...normalizeDistinctStringArray(
+      selectedPublicationConvergenceGate.pendingAckNodeIds,
+    ),
+    ...normalizeDistinctStringArray(
+      selectedPublicationConvergence.pendingAckNodeIds,
+    ),
+  ]);
+  const missingPublishedNodeIds = normalizeDistinctStringArray([
+    ...normalizeDistinctStringArray(
+      snapshotCoverage?.selectedMissingPublishedNodeIds,
+    ),
+    ...normalizeDistinctStringArray(
+      selectedPublicationConvergenceGate.missingPublishedNodeIds,
+    ),
+  ]);
+  const bestCoverageNodeCount =
+    Number.isInteger(snapshotCoverage?.bestCoverageNodeCount) ?
+      Math.max(ZERO, snapshotCoverage.bestCoverageNodeCount) :
+      ZERO;
+  const selectedSnapshotErrorPresent =
+    typeof normalizeOptionalString(snapshotCoverage?.selectedError) ===
+      TYPEOF_STRING;
+  const selectedSnapshotReachabilityErrorPresent =
+    typeof normalizeOptionalString(
+      snapshotCoverage?.selectedReachabilityError,
+    ) === TYPEOF_STRING ||
+    typeof normalizeOptionalString(
+      snapshotCoverage?.selectedSnapshotReachabilityError,
+    ) === TYPEOF_STRING;
+  const selectedSnapshotAdminBacked =
+    snapshotCoverage?.selectedAdminReady === true ||
+    snapshotCoverage?.selectedSnapshotAdminReady === true ||
+    snapshotCoverage?.selectedReachableBy ===
+      PARTIAL_COVERAGE_CONVERGENCE_ADMIN_HEALTH_SOURCE ||
+    snapshotCoverage?.selectedSnapshotReachableBy ===
+      PARTIAL_COVERAGE_CONVERGENCE_ADMIN_HEALTH_SOURCE;
+  return Object.freeze({
+    readinessMode,
+    activeByStatus: activeByStatus === true,
+    publicationGateReady: publicationConvergenceGate?.ready === true,
+    snapshotCoverageComplete: snapshotCoverage?.completeCoverage === true,
+    bestCoverageNodeCount,
+    selectedSnapshotErrorPresent,
+    selectedSnapshotReachabilityErrorPresent,
+    selectedSnapshotAdminBacked,
+    publicationStatus: normalizePartialCoveragePublicationStatus(
+      selectedPublicationConvergenceGate.publicationStatus ||
+        selectedPublicationConvergence.publicationStatus ||
+        selectedPublicationConvergence.status,
+    ),
+    pendingAckCount: pendingAckNodeIds.length,
+    missingPublishedCount: missingPublishedNodeIds.length,
+    prioritySpreadSatisfied: priorityPartitionSummary.satisfied === true,
+  });
+}
+
+function decidePartialCoverageConvergence(evidence) {
+  const decision = PARTIAL_COVERAGE_CONVERGENCE_DECISION_TABLE.find(
+    (candidate) => candidate.matches(evidence),
+  );
+  return decision?.outcome || PARTIAL_COVERAGE_CONVERGENCE_OUTCOME_KEEP;
 }
 
 function normalizeReadinessTimeoutFallbackEvidence({
@@ -749,22 +881,19 @@ class Cluster4 extends Cluster3 {
       (diagnostic) => diagnostic.active === true,
     );
 
-    const loadModeConvergedPartialCoverage =
-      readinessMode === CLUSTER_READINESS_MODE_LOAD &&
-      activeByStatus === true &&
-      publicationConvergenceGate.ready === true &&
-      snapshotCoverage.completeCoverage !== true &&
-      Number.isInteger(snapshotCoverage.bestCoverageNodeCount) &&
-      snapshotCoverage.bestCoverageNodeCount > ZERO &&
-      !(
-        typeof snapshotCoverage.selectedError === 'string' &&
-        snapshotCoverage.selectedError.length > ZERO
-      );
+    const partialCoverageEvidence = normalizePartialCoverageConvergenceEvidence({
+      readinessMode,
+      activeByStatus,
+      snapshotCoverage,
+      publicationConvergenceGate,
+    });
+    const partialCoverageDecision =
+      decidePartialCoverageConvergence(partialCoverageEvidence);
 
     const allActive =
       activeByStatus &&
       (snapshotCoverage.completeCoverage === true ||
-        loadModeConvergedPartialCoverage) &&
+        partialCoverageDecision.converged === true) &&
       publicationConvergenceGate.ready === true;
     const priorityRecoveryInvariants =
       evaluatePriorityRecoveryCrossServiceInvariants({
@@ -1395,6 +1524,10 @@ class Cluster4 extends Cluster3 {
           ZERO,
         sharedPressureBackpressured:
             logsTable.sharedPressureBackpressured === true,
+        transportPressureBackpressured:
+          logsTable.transportPressureBackpressured === true,
+        queryPressureBackpressured:
+          logsTable.queryPressureBackpressured === true,
       } :
       null;
     const cdcReplayLag = cdcReplay ?

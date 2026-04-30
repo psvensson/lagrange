@@ -20,14 +20,23 @@ import {
   TYPEOF,
 } from '../../constants/index.js';
 
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_STR_OBJECT = 'object';
+const LOCAL_STR_UNKNOWN_OWNER = 'unknown-owner';
+const LOCAL_STR_FUNCTION = 'function';
+const LOCAL_STR_UPSERT = 'upsert';
+const LOCAL_STR_INSERT = 'insert';
+const LOCAL_STR_UPDATE = 'update';
+const LOCAL_STR_DELETE = 'delete';
+
 function unwrapRowReadResult(result) {
   if (Array.isArray(result)) {
-    return result[0] || null;
+    return result[LOCAL_NUM_ZERO] || null;
   }
   if (Array.isArray(result?.rows)) {
-    return result.rows[0] || null;
+    return result.rows[LOCAL_NUM_ZERO] || null;
   }
-  if (result && typeof result === 'object') {
+  if (result && typeof result === LOCAL_STR_OBJECT) {
     return result;
   }
   return null;
@@ -175,7 +184,7 @@ class SystemMetadataOwnerBase {
   }
 
   getOwnerName() {
-    return this.constructor.OWNER_NAME || 'unknown-owner';
+    return this.constructor.OWNER_NAME || LOCAL_STR_UNKNOWN_OWNER;
   }
 
   getTableName() {
@@ -264,7 +273,7 @@ class SystemMetadataOwnerBase {
   async listCachedRows(options = {}) {
     const tableName = this.getTableName();
     return this.executeCacheRead((systemTableCache) => {
-      if (typeof systemTableCache?.getAll !== 'function') {
+      if (typeof systemTableCache?.getAll !== LOCAL_STR_FUNCTION) {
         return [];
       }
       return systemTableCache.getAll(tableName) || [];
@@ -274,13 +283,13 @@ class SystemMetadataOwnerBase {
   async filterCachedRows(cachePredicate, options = {}) {
     const tableName = this.getTableName();
     return this.executeCacheRead((systemTableCache) => {
-      if (!systemTableCache || typeof cachePredicate !== 'function') {
+      if (!systemTableCache || typeof cachePredicate !== LOCAL_STR_FUNCTION) {
         return [];
       }
-      if (typeof systemTableCache.filter === 'function') {
+      if (typeof systemTableCache.filter === LOCAL_STR_FUNCTION) {
         return systemTableCache.filter(tableName, cachePredicate) || [];
       }
-      if (typeof systemTableCache.getAll !== 'function') {
+      if (typeof systemTableCache.getAll !== LOCAL_STR_FUNCTION) {
         return [];
       }
       return (systemTableCache.getAll(tableName) || []).filter(cachePredicate);
@@ -368,7 +377,7 @@ class SystemMetadataOwnerBase {
           options.owner :
           this.getOwnerName(),
     };
-    if (operation !== 'upsert') {
+    if (operation !== LOCAL_STR_UPSERT) {
       return mutationOptions;
     }
     if (typeof mutationOptions.coalescingKey === TYPEOF.STRING &&
@@ -433,7 +442,7 @@ class SystemMetadataOwnerBase {
 
   async insertRow(row, options = {}) {
     return this.executeMutation(
-      'insert',
+      LOCAL_STR_INSERT,
       {row},
       options,
       (mutationOptions) => this.requireGateway().insertSystemTableRow(
@@ -446,7 +455,7 @@ class SystemMetadataOwnerBase {
 
   async upsertRow(row, options = {}) {
     return this.executeMutation(
-      'upsert',
+      LOCAL_STR_UPSERT,
       {row},
       options,
       (mutationOptions) => this.requireGateway().upsertSystemTableRow(
@@ -459,7 +468,7 @@ class SystemMetadataOwnerBase {
 
   async updateByPrimaryKey(primaryKeyValue, data, options = {}) {
     return this.executeMutation(
-      'update',
+      LOCAL_STR_UPDATE,
       {primaryKeyValue, data},
       options,
       (mutationOptions) => this.requireGateway().updateSystemTableRow(
@@ -473,7 +482,7 @@ class SystemMetadataOwnerBase {
 
   async deleteByPrimaryKey(primaryKeyValue, options = {}) {
     return this.executeMutation(
-      'delete',
+      LOCAL_STR_DELETE,
       {primaryKeyValue},
       options,
       (mutationOptions) => this.requireGateway().deleteSystemTableRow(

@@ -24,6 +24,7 @@ import {
 import {
 } from '../../src/control-plane/membership-lifecycle-controller.js';
 import {
+  CONTROL_PLANE_READINESS_DIMENSION,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {
 } from '../../src/control-plane/owner-contract-outcome.js';
@@ -159,6 +160,55 @@ test('NodeJoiningService - canonical readiness snapshot tracks active required n
       snapshot.requiredNodeIds.sort(),
       ['joining-node-required-node-ids', 'seed-node'],
       'canonical readiness snapshot should retain active node diagnostics',
+    );
+  });
+
+test('NodeJoiningService - canonical readiness snapshot does not use partial readiness cohorts when startup authority is available',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const JOINING_NODE_ID = 'joining-node-startup-authority-empty';
+    const PARTIAL_READY_NODE_ID = 'seed-node';
+    const service = new NodeJoiningService({
+      nodeId: JOINING_NODE_ID,
+      nodeAddress: 'ws://localhost:9090',
+      seedNodeAddress: 'http://localhost:8080',
+    });
+    service.rebalanceCoordinator = {
+      controlPlaneReadinessService: {
+        getStartupAuthoritySnapshotSync: () => ({
+          authorityAvailable: true,
+          canonicalStartupNodeIds: [],
+        }),
+        getNodeReadinessSync: () => ({
+          dimensions: {
+            [CONTROL_PLANE_READINESS_DIMENSION
+              .CONTROL_PLANE_RECOVERY_ELIGIBLE]: true,
+          },
+        }),
+      },
+    };
+    const cache = new SystemTableCache();
+
+    cache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.UPSERT, {
+      [COLUMN.NODE_ID]: PARTIAL_READY_NODE_ID,
+      [COLUMN.STATUS]: 'active',
+    });
+    cache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.UPSERT, {
+      [COLUMN.NODE_ID]: JOINING_NODE_ID,
+      [COLUMN.STATUS]: 'active',
+    });
+
+    const snapshot = service.joinReadinessEvaluator
+      .buildCanonicalJoinReadinessSnapshot({
+        systemTableCache: cache,
+        tableName: TABLES.SERVICES,
+      });
+
+    t.same(
+      snapshot.requiredNodeIds,
+      [JOINING_NODE_ID],
+      'available startup authority should prevent partial readiness cohorts from owning join diagnostics',
     );
   });
 

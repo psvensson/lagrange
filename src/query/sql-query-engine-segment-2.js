@@ -1,6 +1,20 @@
 import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
 import {SQLQueryEngineSegment1} from './sql-query-engine-segment-1.js';
 
+const LOCAL_STR_FUNCTION = 'function';
+const LOCAL_STR_STRING = 'string';
+const LOCAL_STR_OBJECT = 'object';
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_STR_WRITE_ACTIVITY = 'write_activity';
+const LOCAL_NUM_100 = 100;
+const LOCAL_STR_1KD8O = 'query_admission_deferred';
+const LOCAL_STR_DDIFL = 'query_admission_rejected';
+const LOCAL_STR_EMPTY = '';
+const LOCAL_STR_G1DFB = 'Maximum call stack size exceeded';
+const LOCAL_STR_QUERY_PLANE_WRITE = 'query-plane:write';
+const LOCAL_STR_QUERY_PLANE_READ = 'query-plane:read';
+const LOCAL_STR_UNKNOWN = 'unknown';
+
 const {
   ADAPTER_ERROR_MSG,
   BudgetEnforcer,
@@ -34,7 +48,7 @@ class SQLQueryEngineSegment2 extends SQLQueryEngineSegment1 {
   async ensureWasmCallbackModuleLoaded(sqlRequest, wasmExecutor) {
     const callbackModuleRef = sqlRequest.callbackModuleRef;
     const moduleMirror = wasmExecutor.moduleMirror || null;
-    if (!moduleMirror || typeof moduleMirror.getModule !== 'function') {
+    if (!moduleMirror || typeof moduleMirror.getModule !== LOCAL_STR_FUNCTION) {
       throw new Error(ADAPTER_ERROR_MSG.WASM_CALLBACK_MODULE_MIRROR_REQUIRED);
     }
 
@@ -55,12 +69,12 @@ class SQLQueryEngineSegment2 extends SQLQueryEngineSegment1 {
       );
     }
     const codeBlob = codeRow.code_blob;
-    if (typeof codeBlob !== 'string' || !codeBlob.trim()) {
+    if (typeof codeBlob !== LOCAL_STR_STRING || !codeBlob.trim()) {
       throw new Error(ADAPTER_ERROR_MSG.WASM_CALLBACK_SOURCE_INVALID);
     }
 
     const parsedArtifact = parseCallbackModuleArtifact(codeBlob);
-    if (!parsedArtifact.source || typeof parsedArtifact.source !== 'string') {
+    if (!parsedArtifact.source || typeof parsedArtifact.source !== LOCAL_STR_STRING) {
       throw new Error(ADAPTER_ERROR_MSG.WASM_CALLBACK_SOURCE_INVALID);
     }
 
@@ -85,7 +99,7 @@ class SQLQueryEngineSegment2 extends SQLQueryEngineSegment1 {
     const rawHandler = compiledExports ?
       compiledExports[manifest.runExport] :
       null;
-    if (typeof rawHandler !== 'function') {
+    if (typeof rawHandler !== LOCAL_STR_FUNCTION) {
       throw new Error(
         `${ADAPTER_ERROR_MSG.WASM_CALLBACK_EXPORT_NOT_FOUND}: ` +
           manifest.runExport,
@@ -99,13 +113,13 @@ class SQLQueryEngineSegment2 extends SQLQueryEngineSegment1 {
       exports: compiledExports,
     };
 
-    if (typeof moduleMirror.setModule === 'function') {
+    if (typeof moduleMirror.setModule === LOCAL_STR_FUNCTION) {
       await moduleMirror.setModule(callbackModuleRef, moduleEntry);
       return;
     }
     if (
       moduleMirror.localCache &&
-      typeof moduleMirror.localCache.set === 'function'
+      typeof moduleMirror.localCache.set === LOCAL_STR_FUNCTION
     ) {
       moduleMirror.localCache.set(callbackModuleRef, {
         ...moduleEntry,
@@ -161,7 +175,7 @@ class SQLQueryEngineSegment2 extends SQLQueryEngineSegment1 {
    * @private
    */
   async executeStageRequest(sqlRequest) {
-    if (typeof sqlRequest.handler !== 'function') {
+    if (typeof sqlRequest.handler !== LOCAL_STR_FUNCTION) {
       throw new Error(ADAPTER_ERROR_MSG.STAGE_HANDLER_REQUIRED);
     }
 
@@ -198,7 +212,7 @@ class SQLQueryEngineSegment2 extends SQLQueryEngineSegment1 {
    */
   async executePlanRequest(sqlRequest) {
     const plan = sqlRequest.plan || sqlRequest.hints?.plan || null;
-    if (!plan || typeof plan !== 'object') {
+    if (!plan || typeof plan !== LOCAL_STR_OBJECT) {
       throw new Error(ADAPTER_ERROR_MSG.PLAN_OBJECT_REQUIRED);
     }
 
@@ -244,7 +258,7 @@ class SQLQueryEngineSegment2 extends SQLQueryEngineSegment1 {
     const manager = this.partitionSplitMergeManager;
     if (
       !manager ||
-      typeof manager.requestEvaluation !== 'function' ||
+      typeof manager.requestEvaluation !== LOCAL_STR_FUNCTION ||
       !tableName ||
       this.isSystemTable(tableName) ||
       writeResult?.success !== true
@@ -278,12 +292,12 @@ class SQLQueryEngineSegment2 extends SQLQueryEngineSegment1 {
       localLeaderPartitionIds,
     });
 
-    if (localLeaderPartitionIds.length === 0) {
+    if (localLeaderPartitionIds.length === LOCAL_NUM_ZERO) {
       return;
     }
 
     manager.requestEvaluation({
-      reasonCode: 'write_activity',
+      reasonCode: LOCAL_STR_WRITE_ACTIVITY,
       tableName,
       partitionIds: localLeaderPartitionIds,
     });
@@ -302,7 +316,7 @@ class SQLQueryEngineSegment2 extends SQLQueryEngineSegment1 {
         .map((partitionId) => String(partitionId || ''))
         .filter(Boolean),
     );
-    if (requestedPartitionIdSet.size === 0) {
+    if (requestedPartitionIdSet.size === LOCAL_NUM_ZERO) {
       return [];
     }
 
@@ -339,7 +353,7 @@ class SQLQueryEngineSegment2 extends SQLQueryEngineSegment1 {
     }
 
     this.logger.debug(QUERY_LOG_MSG.EXECUTING_SQL_QUERY, {
-      sql: sql.substring(0, 100),
+      sql: sql.substring(LOCAL_NUM_ZERO, LOCAL_NUM_100),
       paramCount: params.length,
       sessionId,
     });
@@ -358,12 +372,12 @@ class SQLQueryEngineSegment2 extends SQLQueryEngineSegment1 {
         ast = this.parseCache.cloneAst(ast);
       }
       // If PG mode produced param mapping, reorder params
-      if (ast._paramMapping && ast._paramMapping.length > 0) {
+      if (ast._paramMapping && ast._paramMapping.length > LOCAL_NUM_ZERO) {
         params = reorderParams(params, ast._paramMapping);
       }
     } catch (parseError) {
       this.logger.error(QUERY_LOG_MSG.QUERY_EXECUTION_FAILED, {
-        sql: sql.substring(0, 100),
+        sql: sql.substring(LOCAL_NUM_ZERO, LOCAL_NUM_100),
         error: parseError.message,
       });
       return {
@@ -401,8 +415,8 @@ class SQLQueryEngineSegment2 extends SQLQueryEngineSegment1 {
         return buildPressureAdmissionFailure(ingressPressureDecision, {
           error:
             ingressPressureDecision.action === PRESSURE_GOVERNOR_ACTION.DEFER ?
-              'query_admission_deferred' :
-              'query_admission_rejected',
+              LOCAL_STR_1KD8O :
+              LOCAL_STR_DDIFL,
           errorCode: QUERY_ERROR_CODE.INTERNAL_ERROR,
         });
       }
@@ -463,8 +477,8 @@ class SQLQueryEngineSegment2 extends SQLQueryEngineSegment1 {
           parseDurationMs: parseEndMs - queryStartMs,
           executionDurationMs: queryEndMs - parseEndMs,
           totalDurationMs: queryEndMs - queryStartMs,
-          partitionCount: result?.partitions?.length ?? 0,
-          rowCount: result?.count ?? result?.changes ?? 0,
+          partitionCount: result?.partitions?.length ?? LOCAL_NUM_ZERO,
+          rowCount: result?.count ?? result?.changes ?? LOCAL_NUM_ZERO,
           success: result?.success ?? false,
         });
       } catch (_metricsErr) {
@@ -482,8 +496,8 @@ class SQLQueryEngineSegment2 extends SQLQueryEngineSegment1 {
           parseDurationMs: parseEndMs - queryStartMs,
           executionDurationMs: queryEndMs - parseEndMs,
           totalDurationMs: queryEndMs - queryStartMs,
-          partitionCount: 0,
-          rowCount: 0,
+          partitionCount: LOCAL_NUM_ZERO,
+          rowCount: LOCAL_NUM_ZERO,
           success: false,
         });
       } catch (_metricsErr) {
@@ -492,15 +506,15 @@ class SQLQueryEngineSegment2 extends SQLQueryEngineSegment1 {
 
       const failureResult = this.buildCaughtQueryExecutionFailure(error);
       this.logger.error(QUERY_LOG_MSG.QUERY_EXECUTION_FAILED, {
-        sql: sql.substring(0, 100),
+        sql: sql.substring(LOCAL_NUM_ZERO, LOCAL_NUM_100),
         error: failureResult.error,
         errorCode: failureResult.errorCode || null,
         retryAfterMs: Number.isFinite(failureResult.retryAfterMs) ?
           failureResult.retryAfterMs :
           null,
         deferRetry: failureResult.deferRetry === true,
-        stack: String(failureResult.error || '').includes(
-          'Maximum call stack size exceeded',
+        stack: String(failureResult.error || LOCAL_STR_EMPTY).includes(
+          LOCAL_STR_G1DFB,
         ) ?
           error?.stack || null :
           null,
@@ -524,8 +538,8 @@ class SQLQueryEngineSegment2 extends SQLQueryEngineSegment1 {
           PRESSURE_WORK_CLASS.INTERACTIVE :
           PRESSURE_WORK_CLASS.INTERACTIVE),
       resourceKeys: [
-        writeStatement ? 'query-plane:write' : 'query-plane:read',
-        `query-plane:statement:${String(astType || 'unknown').toLowerCase()}`,
+        writeStatement ? LOCAL_STR_QUERY_PLANE_WRITE : LOCAL_STR_QUERY_PLANE_READ,
+        `query-plane:statement:${String(astType || LOCAL_STR_UNKNOWN).toLowerCase()}`,
       ],
       allowDegrade: false,
       allowDefer: options?.allowPressureDefer !== false,
@@ -574,7 +588,7 @@ class SQLQueryEngineSegment2 extends SQLQueryEngineSegment1 {
     try {
       const parser = new SQLParser(statement, {dialect: options.dialect});
       ast = parser.parse();
-      if (ast._paramMapping && ast._paramMapping.length > 0) {
+      if (ast._paramMapping && ast._paramMapping.length > LOCAL_NUM_ZERO) {
         normalizedParams = reorderParams(params, ast._paramMapping);
       }
     } catch (error) {
@@ -644,7 +658,7 @@ class SQLQueryEngineSegment2 extends SQLQueryEngineSegment1 {
   async executeAlterTable(ast, sessionId) {
     if (
       !this.migrationPipeline ||
-      typeof this.migrationPipeline.handleAlterTable !== 'function'
+      typeof this.migrationPipeline.handleAlterTable !== LOCAL_STR_FUNCTION
     ) {
       throw new Error(QUERY_ERROR_MSG.MIGRATION_PIPELINE_UNAVAILABLE);
     }

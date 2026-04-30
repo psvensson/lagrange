@@ -8,6 +8,8 @@
 
 import {assertCritical} from '../../utils/assert.js';
 
+const LOCAL_STR_RGXNE = 'BootstrapService is required for seed phase owners';
+
 const SEED_PHASE_OWNER = Object.freeze({
   INFRASTRUCTURE: 'infrastructure',
   MESSAGE_GROUPS: 'messageGroups',
@@ -71,7 +73,7 @@ function createPhaseInvoker(service, ownerField, methodName) {
 function createSeedPhaseOwners(service) {
   assertCritical(
     service,
-    'BootstrapService is required for seed phase owners',
+    LOCAL_STR_RGXNE,
   );
 
   const owners = {};

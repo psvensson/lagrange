@@ -8,6 +8,8 @@
 
 import {EventEmitter} from 'node:events';
 
+const LOCAL_STR_FUNCTION = 'function';
+
 const OPERATION_STREAM_EVENT = Object.freeze({
   STATE_CHANGE: 'operationStateChange',
 });
@@ -62,7 +64,7 @@ class OperationStream extends EventEmitter {
    * @return {Function} Unsubscribe function.
    */
   subscribe(listener) {
-    if (typeof listener !== 'function') {
+    if (typeof listener !== LOCAL_STR_FUNCTION) {
       throw new Error(
         OPERATION_STREAM_ERROR_MSG.LISTENER_REQUIRED,
       );
@@ -87,7 +89,7 @@ class OperationStream extends EventEmitter {
         OPERATION_STREAM_ERROR_MSG.TENANT_ID_REQUIRED,
       );
     }
-    if (typeof listener !== 'function') {
+    if (typeof listener !== LOCAL_STR_FUNCTION) {
       throw new Error(
         OPERATION_STREAM_ERROR_MSG.LISTENER_REQUIRED,
       );

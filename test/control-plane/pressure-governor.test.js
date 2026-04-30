@@ -270,6 +270,70 @@ test('PressureGovernor defers deferrable critical work when the control-plane ' 
   );
 });
 
+test('Publication mutation workload defers when the control-plane critical ' +
+  'reserve is exhausted', async (t) => {
+  const governor = new PressureGovernor({
+    nodeId: 'node-a',
+    messageRouter: {
+      getStats() {
+        return {
+          outboundQueues: {
+            'node-b': {
+              pending: 32,
+              pendingCritical: 16,
+              pendingBackground: 16,
+              criticalReserve: 16,
+              backgroundPendingLimit: 48,
+              maxPending: 64,
+            },
+          },
+        };
+      },
+    },
+  });
+  const publicationProfile = buildControlPlaneWorkloadProfile(
+    CONTROL_PLANE_WORKLOAD_CLASS.PUBLICATION_MUTATION,
+  );
+
+  const decision = governor.evaluate({
+    workClass: publicationProfile.workClass,
+    resourceKeys: publicationProfile.resourceKeys,
+    allowDegrade: publicationProfile.allowPressureDegrade,
+    allowDefer: publicationProfile.allowPressureDefer,
+  });
+
+  t.equal(
+    publicationProfile.workClass,
+    PRESSURE_WORK_CLASS.CRITICAL,
+    'publication mutation should stay on the critical work lane',
+  );
+  t.same(
+    publicationProfile.resourceKeys,
+    ['control-plane:membership:publication'],
+    'publication mutation should use the membership publication resource key',
+  );
+  t.equal(
+    publicationProfile.allowPressureDefer,
+    true,
+    'publication mutation should use a deferrable pressure contract',
+  );
+  t.equal(
+    decision.action,
+    PRESSURE_GOVERNOR_ACTION.DEFER,
+    'publication mutation should defer instead of reject when reserve is exhausted',
+  );
+  t.equal(
+    decision.reason,
+    PRESSURE_GOVERNOR_REASON.CRITICAL_RESERVE_EXHAUSTED,
+    'publication mutation defer should retain the reserve exhaustion reason',
+  );
+  t.equal(
+    decision.summary?.capacityPartition,
+    'control-plane',
+    'publication mutation should consume the control-plane capacity partition',
+  );
+});
+
 test('PressureGovernor keeps bootstrap-critical work admissible when the ' +
   'control-plane critical reserve is exhausted', async (t) => {
   const governor = new PressureGovernor({

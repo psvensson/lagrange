@@ -6,8 +6,10 @@ import {
   TYPEOF,
 } from '../constants/index.js';
 
+const LOCAL_STR_EMPTY = '';
+
 function normalizeString(value) {
-  return typeof value === TYPEOF.STRING ? value.trim() : '';
+  return typeof value === TYPEOF.STRING ? value.trim() : LOCAL_STR_EMPTY;
 }
 
 function normalizeServiceType(serviceType) {
@@ -29,7 +31,7 @@ function formatReplicatedServiceAddress(
   serviceType,
   nodeId,
   replicaId,
-  explicitAddress = '',
+  explicitAddress = LOCAL_STR_EMPTY,
 ) {
   const normalizedAddress = normalizeString(explicitAddress);
   if (normalizedAddress.length > NUM.ZERO) {

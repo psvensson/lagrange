@@ -5,6 +5,18 @@ import {
   CONTROL_PLANE_WORKLOAD_CLASS,
 } from '../control-plane/control-plane-workload-profile.js';
 
+const LOCAL_STR_STRING = 'string';
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_STR_OBJECT = 'object';
+const LOCAL_STR_ERRORCODE = 'errorCode';
+const LOCAL_STR_OUTCOME = 'outcome';
+const LOCAL_STR_CONTRACTSTATE = 'contractState';
+const LOCAL_STR_NEXTACTION = 'nextAction';
+const LOCAL_STR_REASONCODE = 'reasonCode';
+const LOCAL_STR_FUNCTION = 'function';
+const LOCAL_STR_BOOLEAN = 'boolean';
+const LOCAL_STR_DELIVERYSOURCE = 'deliverySource';
+
 const {
   BACKGROUND_SYSTEM_TABLE_DELIVERY_PRIORITY_TABLES,
   CONTROL_PLANE_MUTATION_MERGE_POLICY,
@@ -31,6 +43,19 @@ const TRANSACTION_CONTROL_MUTATION_WORKLOAD_TABLES = new Set([
 ]);
 
 class SQLQueryEngineSegment7 extends SQLQueryEngineSegment6 {
+  applyWriteExecutionDeliverySource(writeExecutionOptions, queryOptions = {}) {
+    if (
+      typeof queryOptions?.deliverySource !== LOCAL_STR_STRING ||
+      queryOptions.deliverySource.length <= LOCAL_NUM_ZERO
+    ) {
+      return writeExecutionOptions;
+    }
+    return {
+      ...writeExecutionOptions,
+      [LOCAL_STR_DELIVERYSOURCE]: queryOptions.deliverySource,
+    };
+  }
+
   buildRetryableControlPlaneLifecycleMutationFailure(
     tableName,
     error,
@@ -95,8 +120,8 @@ class SQLQueryEngineSegment7 extends SQLQueryEngineSegment6 {
   buildTimedOutSqlRequestFailure(sqlRequest, error) {
     if (
       !this.isRetryableControlPlaneMutationFailure(error) ||
-      typeof sqlRequest?.statement !== 'string' ||
-      sqlRequest.statement.length === 0
+      typeof sqlRequest?.statement !== LOCAL_STR_STRING ||
+      sqlRequest.statement.length === LOCAL_NUM_ZERO
     ) {
       return null;
     }
@@ -107,7 +132,7 @@ class SQLQueryEngineSegment7 extends SQLQueryEngineSegment6 {
     } catch (_error) {
       return null;
     }
-    if (!ast || typeof ast !== 'object') {
+    if (!ast || typeof ast !== LOCAL_STR_OBJECT) {
       return null;
     }
 
@@ -135,7 +160,7 @@ class SQLQueryEngineSegment7 extends SQLQueryEngineSegment6 {
       ast.type === QUERY_AST_TYPE.ALTER_TABLE
     ) {
       return this.buildRetryableControlPlaneLifecycleMutationFailure(
-        typeof ast.tableName === 'string' ? ast.tableName : null,
+        typeof ast.tableName === LOCAL_STR_STRING ? ast.tableName : null,
         error,
         queryOptions,
       );
@@ -228,7 +253,7 @@ class SQLQueryEngineSegment7 extends SQLQueryEngineSegment6 {
       addDependencyTable(participantFailure?.failedTable);
     }
 
-    return dependencyTables.size > 0 ? [...dependencyTables] : null;
+    return dependencyTables.size > LOCAL_NUM_ZERO ? [...dependencyTables] : null;
   }
 
   /**
@@ -294,12 +319,12 @@ class SQLQueryEngineSegment7 extends SQLQueryEngineSegment6 {
   }
 
   applyTrackedWriteFailureMetadata(trackedFailure, failureResult = null) {
-    if (!failureResult || typeof failureResult !== 'object') {
+    if (!failureResult || typeof failureResult !== LOCAL_STR_OBJECT) {
       return;
     }
     this.copyTrackedWriteFailureStringField(
       trackedFailure,
-      'errorCode',
+      LOCAL_STR_ERRORCODE,
       failureResult.errorCode,
     );
     if (failureResult.deferRetry === true) {
@@ -307,28 +332,28 @@ class SQLQueryEngineSegment7 extends SQLQueryEngineSegment6 {
     }
     if (
       Number.isFinite(failureResult.retryAfterMs) &&
-      failureResult.retryAfterMs > 0
+      failureResult.retryAfterMs > LOCAL_NUM_ZERO
     ) {
       trackedFailure.retryAfterMs = Math.floor(failureResult.retryAfterMs);
     }
     this.copyTrackedWriteFailureStringField(
       trackedFailure,
-      'outcome',
+      LOCAL_STR_OUTCOME,
       failureResult.outcome,
     );
     this.copyTrackedWriteFailureStringField(
       trackedFailure,
-      'contractState',
+      LOCAL_STR_CONTRACTSTATE,
       failureResult.contractState,
     );
     this.copyTrackedWriteFailureStringField(
       trackedFailure,
-      'nextAction',
+      LOCAL_STR_NEXTACTION,
       failureResult.nextAction,
     );
     this.copyTrackedWriteFailureStringField(
       trackedFailure,
-      'reasonCode',
+      LOCAL_STR_REASONCODE,
       failureResult.reasonCode,
     );
     if (Array.isArray(failureResult.reasonCodes)) {
@@ -339,11 +364,11 @@ class SQLQueryEngineSegment7 extends SQLQueryEngineSegment6 {
     }
     if (
       failureResult.runtimeAuthority &&
-      typeof failureResult.runtimeAuthority === 'object'
+      typeof failureResult.runtimeAuthority === LOCAL_STR_OBJECT
     ) {
       trackedFailure.runtimeAuthority = failureResult.runtimeAuthority;
     }
-    if (failureResult.details && typeof failureResult.details === 'object') {
+    if (failureResult.details && typeof failureResult.details === LOCAL_STR_OBJECT) {
       trackedFailure.details = {...failureResult.details};
     }
   }
@@ -353,7 +378,7 @@ class SQLQueryEngineSegment7 extends SQLQueryEngineSegment6 {
     fieldName,
     fieldValue,
   ) {
-    if (typeof fieldValue === 'string' && fieldValue.length > 0) {
+    if (typeof fieldValue === LOCAL_STR_STRING && fieldValue.length > LOCAL_NUM_ZERO) {
       trackedFailure[fieldName] = fieldValue;
     }
   }
@@ -379,7 +404,7 @@ class SQLQueryEngineSegment7 extends SQLQueryEngineSegment6 {
     );
     const planningDurationMs = Date.now() - planningStartTimeMs;
     const tablePlan = distributedPlan.tablePlans.get(tableName) || null;
-    if (!tablePlan || tablePlan.partitions.length === 0) {
+    if (!tablePlan || tablePlan.partitions.length === LOCAL_NUM_ZERO) {
       return {
         success: false,
         error: `${QUERY_ERROR_MSG.TABLE_NOT_FOUND_PREFIX}${tableName}`,
@@ -444,7 +469,7 @@ class SQLQueryEngineSegment7 extends SQLQueryEngineSegment6 {
         tableName,
         queryOptions.deliveryPriority,
       );
-      const writeExecutionOptions = {
+      const writeExecutionOptions = this.applyWriteExecutionDeliverySource({
         sessionId,
         deliveryPriority,
         timeoutMs: queryOptions.timeoutMs,
@@ -453,7 +478,7 @@ class SQLQueryEngineSegment7 extends SQLQueryEngineSegment6 {
           tableName,
           queryOptions.routingReadinessDimension,
         ),
-      };
+      }, queryOptions);
       if (dualWriteMigration) {
         writeExecutionOptions.dualWriteMode = true;
         writeExecutionOptions.migrationId =
@@ -533,7 +558,7 @@ class SQLQueryEngineSegment7 extends SQLQueryEngineSegment6 {
       distributedMetrics: {
         planningDurationMs,
         executionDurationMs,
-        retryCount: result.retryCount || 0,
+        retryCount: result.retryCount || LOCAL_NUM_ZERO,
       },
     };
   }
@@ -560,7 +585,7 @@ class SQLQueryEngineSegment7 extends SQLQueryEngineSegment6 {
     const planningDurationMs = Date.now() - planningStartTimeMs;
 
     const tablePlan = distributedPlan.tablePlans.get(tableName) || null;
-    if (!tablePlan || tablePlan.partitions.length === 0) {
+    if (!tablePlan || tablePlan.partitions.length === LOCAL_NUM_ZERO) {
       return {
         success: false,
         error: `${QUERY_ERROR_MSG.TABLE_NOT_FOUND_PREFIX}${tableName}`,
@@ -631,7 +656,7 @@ class SQLQueryEngineSegment7 extends SQLQueryEngineSegment6 {
         tableName,
         queryOptions.deliveryPriority,
       );
-      const writeExecutionOptions = {
+      const writeExecutionOptions = this.applyWriteExecutionDeliverySource({
         sessionId,
         deliveryPriority,
         timeoutMs: queryOptions.timeoutMs,
@@ -640,7 +665,7 @@ class SQLQueryEngineSegment7 extends SQLQueryEngineSegment6 {
           tableName,
           queryOptions.routingReadinessDimension,
         ),
-      };
+      }, queryOptions);
       if (dualWriteMigration) {
         writeExecutionOptions.dualWriteMode = true;
         writeExecutionOptions.migrationId =
@@ -719,7 +744,7 @@ class SQLQueryEngineSegment7 extends SQLQueryEngineSegment6 {
       distributedMetrics: {
         planningDurationMs,
         executionDurationMs,
-        retryCount: result.retryCount || 0,
+        retryCount: result.retryCount || LOCAL_NUM_ZERO,
       },
     };
   }
@@ -746,7 +771,7 @@ class SQLQueryEngineSegment7 extends SQLQueryEngineSegment6 {
     const planningDurationMs = Date.now() - planningStartTimeMs;
 
     const tablePlan = distributedPlan.tablePlans.get(tableName) || null;
-    if (!tablePlan || tablePlan.partitions.length === 0) {
+    if (!tablePlan || tablePlan.partitions.length === LOCAL_NUM_ZERO) {
       return {
         success: false,
         error: `${QUERY_ERROR_MSG.TABLE_NOT_FOUND_PREFIX}${tableName}`,
@@ -817,7 +842,7 @@ class SQLQueryEngineSegment7 extends SQLQueryEngineSegment6 {
         tableName,
         queryOptions.deliveryPriority,
       );
-      const writeExecutionOptions = {
+      const writeExecutionOptions = this.applyWriteExecutionDeliverySource({
         sessionId,
         deliveryPriority,
         timeoutMs: queryOptions.timeoutMs,
@@ -826,7 +851,7 @@ class SQLQueryEngineSegment7 extends SQLQueryEngineSegment6 {
           tableName,
           queryOptions.routingReadinessDimension,
         ),
-      };
+      }, queryOptions);
       if (dualWriteMigration) {
         writeExecutionOptions.dualWriteMode = true;
         writeExecutionOptions.migrationId =
@@ -905,7 +930,7 @@ class SQLQueryEngineSegment7 extends SQLQueryEngineSegment6 {
       distributedMetrics: {
         planningDurationMs,
         executionDurationMs,
-        retryCount: result.retryCount || 0,
+        retryCount: result.retryCount || LOCAL_NUM_ZERO,
       },
     };
   }
@@ -919,14 +944,14 @@ class SQLQueryEngineSegment7 extends SQLQueryEngineSegment6 {
       return;
     }
     if (
-      typeof this.transactionCoordinator.recoverFromSystemTables !== 'function'
+      typeof this.transactionCoordinator.recoverFromSystemTables !== LOCAL_STR_FUNCTION
     ) {
       this.transactionStateRecovered = true;
       return;
     }
 
     const transactions = this.loadSystemTableRows(TABLES.SQL_TRANSACTIONS);
-    if (transactions.length === 0) {
+    if (transactions.length === LOCAL_NUM_ZERO) {
       return;
     }
 
@@ -953,7 +978,7 @@ class SQLQueryEngineSegment7 extends SQLQueryEngineSegment6 {
   resumeRecoveredDistributedTransactions() {
     if (
       typeof this.transactionCoordinator.resumeRecoveredTransactions !==
-      'function'
+      LOCAL_STR_FUNCTION
     ) {
       const summary = createEmptyTransactionRecoveryReplaySummary();
       this.lastTransactionRecoveryReplayResult = summary;
@@ -1013,10 +1038,10 @@ class SQLQueryEngineSegment7 extends SQLQueryEngineSegment6 {
     if (!this.systemCache) {
       return [];
     }
-    if (typeof this.systemCache.getAll === 'function') {
+    if (typeof this.systemCache.getAll === LOCAL_STR_FUNCTION) {
       return this.systemCache.getAll(tableName) || [];
     }
-    if (typeof this.systemCache.filter === 'function') {
+    if (typeof this.systemCache.filter === LOCAL_STR_FUNCTION) {
       return this.systemCache.filter(tableName, () => true) || [];
     }
     return [];
@@ -1046,7 +1071,7 @@ class SQLQueryEngineSegment7 extends SQLQueryEngineSegment6 {
    */
   canPersistDistributedTransactionState() {
     const gateway = this.getControlPlaneSystemTableGateway();
-    if (typeof gateway?.supportsMutationSubmission === 'function') {
+    if (typeof gateway?.supportsMutationSubmission === LOCAL_STR_FUNCTION) {
       return gateway.supportsMutationSubmission();
     }
     return Boolean(this.cdcIntegrationService);
@@ -1094,12 +1119,12 @@ class SQLQueryEngineSegment7 extends SQLQueryEngineSegment6 {
       mutationOptions.workloadClass = workloadProfile.workloadClass;
       mutationOptions.allowPressureDefer =
         workloadProfile.allowPressureDefer;
-    } else if (typeof options?.allowPressureDefer === 'boolean') {
+    } else if (typeof options?.allowPressureDefer === LOCAL_STR_BOOLEAN) {
       mutationOptions.allowPressureDefer = options.allowPressureDefer;
     }
     const coalescingKey =
       typeof options?.coalescingKey === 'string' ? options.coalescingKey : '';
-    if (coalescingKey.length > 0) {
+    if (coalescingKey.length > LOCAL_NUM_ZERO) {
       mutationOptions.coalescingKey = coalescingKey;
     }
     return mutationOptions;

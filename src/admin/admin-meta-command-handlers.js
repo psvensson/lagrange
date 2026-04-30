@@ -8,6 +8,9 @@
 
 import {SQL, TABLES, COLUMN, WASM_META_ACTION} from '../constants/index.js';
 
+const LOCAL_STR_STRING = 'string';
+const LOCAL_NUM_ZERO = 0;
+
 const ADMIN_META_ACTION = Object.freeze({
   EXECUTE_QUERY: 'executeQuery',
   GET_CACHE_DUMP: 'getCacheDump',
@@ -63,7 +66,7 @@ function handleExecuteQuery(params) {
       errors: [ADMIN_META_ERROR_MSG.SQL_REQUIRED],
     };
   }
-  if (typeof params.sql !== 'string') {
+  if (typeof params.sql !== LOCAL_STR_STRING) {
     return {
       success: false,
       errors: [ADMIN_META_ERROR_MSG.SQL_MUST_BE_STRING],
@@ -131,7 +134,7 @@ function handleListServices(params) {
     );
   }
 
-  if (filters.length > 0) {
+  if (filters.length > LOCAL_NUM_ZERO) {
     sql += ` ${SQL.WHERE} ${filters.join(` ${SQL.AND} `)}`;
   }
 
@@ -204,7 +207,7 @@ function handleListInterGroupLatencies(params) {
     filters.push(`${COLUMN.TARGET_GROUP_ID} = ?${sqlParams.length}`);
   }
 
-  if (filters.length > 0) {
+  if (filters.length > LOCAL_NUM_ZERO) {
     sql += ` ${SQL.WHERE} ${filters.join(` ${SQL.AND} `)}`;
   }
 

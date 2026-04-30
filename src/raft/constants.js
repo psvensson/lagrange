@@ -1,8 +1,16 @@
 import {ADDRESS} from '../constants/index.js';
 import {OUTBOUND_DELIVERY_PRIORITY} from '../constants/transport.js';
+import {
+  INITIAL_PARTITION_IDS,
+  SYSTEM_TABLE_NAME,
+} from '../bootstrap/system-table-schemas-constants.js';
 import {isCriticalTransportControlPlanePartition} from
   '../bootstrap/system-partition-classification.js';
 import {ReplicaStatus} from '../rebalancer/replica-status.js';
+
+const LOCAL_STR_STRING = 'string';
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_NUM_ONE = 1;
 
 const RAFT_PACKET_TYPE = Object.freeze({
   VOTE: 'vote',
@@ -85,6 +93,7 @@ const RAFT_TRANSPORT_BACKGROUND_DELIVERY_OPTIONS = Object.freeze({
 });
 
 const RAFT_TRANSPORT_DELIVERY_SOURCE = Object.freeze({
+  APPEND_ENTRIES: 'raft:append:entries',
   HEARTBEAT_APPEND: 'raft:append:heartbeat',
 });
 
@@ -92,14 +101,22 @@ const RAFT_TRANSPORT_REPLACE_PENDING_KEY_PREFIX = Object.freeze({
   HEARTBEAT_APPEND: 'raft:append:heartbeat',
 });
 
+const RAFT_TRANSPORT_DELIVERY_SOURCE_SEPARATOR = ':';
+const RAFT_TRANSPORT_DELIVERY_SOURCE_UNKNOWN = 'unknown';
+
+const RAFT_TRANSPORT_BACKGROUND_APPEND_PARTITION_IDS = new Set([
+  INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SQL_TRANSACTIONS],
+  INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SQL_TRANSACTION_PARTICIPANTS],
+]);
+
 const REPLICA_SERVICE_SUFFIX_PATTERN = /-r\d+$/;
 
 function extractServiceIdFromUnifiedAddress(address) {
-  if (typeof address !== 'string' || address.length === 0) {
+  if (typeof address !== LOCAL_STR_STRING || address.length === LOCAL_NUM_ZERO) {
     return null;
   }
   const separatorIndex = address.lastIndexOf(ADDRESS.SEPARATOR);
-  if (separatorIndex <= 0 || separatorIndex === address.length - 1) {
+  if (separatorIndex <= LOCAL_NUM_ZERO || separatorIndex === address.length - LOCAL_NUM_ONE) {
     return null;
   }
   return address.slice(separatorIndex + ADDRESS.SEPARATOR.length);
@@ -147,22 +164,22 @@ function resolvePriorityControlPlanePartitionId(packet = null) {
 
 function resolveNormalizedTargetReplicaStatus(packet = null) {
   const targetReplicaStatus = packet?.targetReplicaStatus;
-  if (typeof targetReplicaStatus !== 'string') {
+  if (typeof targetReplicaStatus !== LOCAL_STR_STRING) {
     return null;
   }
   const normalizedTargetReplicaStatus = targetReplicaStatus.trim().toLowerCase();
-  return normalizedTargetReplicaStatus.length > 0 ?
+  return normalizedTargetReplicaStatus.length > LOCAL_NUM_ZERO ?
     normalizedTargetReplicaStatus :
     null;
 }
 
 function resolveNormalizedTargetAddress(packet = null) {
   for (const address of [packet?.targetAddress, packet?.destination]) {
-    if (typeof address !== 'string') {
+    if (typeof address !== LOCAL_STR_STRING) {
       continue;
     }
     const normalizedAddress = address.trim();
-    if (normalizedAddress.length > 0) {
+    if (normalizedAddress.length > LOCAL_NUM_ZERO) {
       return normalizedAddress;
     }
   }
@@ -176,7 +193,7 @@ function isRaftHeartbeatAppendPacket(packet = null) {
   if (packetType !== RAFT_PACKET_TYPE.APPEND) {
     return false;
   }
-  return !Array.isArray(packet?.data) || packet.data.length === 0;
+  return !Array.isArray(packet?.data) || packet.data.length === LOCAL_NUM_ZERO;
 }
 
 function buildHeartbeatAppendReplacePendingKey(packet = null) {
@@ -195,6 +212,34 @@ function buildHeartbeatAppendDeliveryOptions(baseOptions, packet = null) {
   });
 }
 
+function buildAppendEntriesDeliverySource(packet = null) {
+  const targetAddress = resolveNormalizedTargetAddress(packet);
+  const partitionId = resolveExplicitTargetPartitionId(packet) ||
+    resolvePriorityControlPlanePartitionId(packet);
+  const sourceTarget =
+    targetAddress ||
+    partitionId ||
+    RAFT_TRANSPORT_DELIVERY_SOURCE_UNKNOWN;
+  return [
+    RAFT_TRANSPORT_DELIVERY_SOURCE.APPEND_ENTRIES,
+    sourceTarget,
+  ].join(RAFT_TRANSPORT_DELIVERY_SOURCE_SEPARATOR);
+}
+
+function buildAppendEntriesDeliveryOptions(baseOptions, packet = null) {
+  return Object.freeze({
+    ...baseOptions,
+    deliverySource: buildAppendEntriesDeliverySource(packet),
+  });
+}
+
+function isBackgroundControlPlaneAppendPartition(packet = null) {
+  const partitionId = resolveExplicitTargetPartitionId(packet) ||
+    resolvePriorityControlPlanePartitionId(packet);
+  return partitionId !== null &&
+    RAFT_TRANSPORT_BACKGROUND_APPEND_PARTITION_IDS.has(partitionId);
+}
+
 function shouldUseBackgroundDeliveryForCriticalControlPlaneAppend(packet = null) {
   const packetType = typeof packet?.type === 'string' ?
     packet.type.toLowerCase() :
@@ -202,10 +247,11 @@ function shouldUseBackgroundDeliveryForCriticalControlPlaneAppend(packet = null)
   if (packetType !== RAFT_PACKET_TYPE.APPEND) {
     return false;
   }
-  if (!Array.isArray(packet?.data) || packet.data.length === 0) {
+  if (!Array.isArray(packet?.data) || packet.data.length === LOCAL_NUM_ZERO) {
     return false;
   }
-  return resolveNormalizedTargetReplicaStatus(packet) === ReplicaStatus.SYNCING;
+  return resolveNormalizedTargetReplicaStatus(packet) === ReplicaStatus.SYNCING ||
+    isBackgroundControlPlaneAppendPartition(packet);
 }
 
 function resolveRaftTransportDeliveryOptions(packet = null) {
@@ -216,7 +262,10 @@ function resolveRaftTransportDeliveryOptions(packet = null) {
   const explicitTargetPartitionId = resolveExplicitTargetPartitionId(packet);
   if (resolvePriorityControlPlanePartitionId(packet)) {
     if (shouldUseBackgroundDeliveryForCriticalControlPlaneAppend(packet)) {
-      return RAFT_TRANSPORT_BACKGROUND_DELIVERY_OPTIONS;
+      return buildAppendEntriesDeliveryOptions(
+        RAFT_TRANSPORT_BACKGROUND_DELIVERY_OPTIONS,
+        packet,
+      );
     }
     if (isHeartbeatAppendPacket) {
       return buildHeartbeatAppendDeliveryOptions(

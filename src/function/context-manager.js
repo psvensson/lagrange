@@ -20,6 +20,10 @@ import {
   FUNCTION_SUBSYSTEM,
 } from './function-constants.js';
 
+const LOCAL_STR_128KJ = ', ';
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_STR_CRITICAL = 'critical';
+
 /**
  * Valid context types.
  */
@@ -99,7 +103,7 @@ class ContextManager {
     if (!validTypes.includes(contextType)) {
       throw new Error(
         `${FUNCTION_ERROR_MSG.INVALID_CONTEXT_TYPE_PREFIX}${contextType}. ` +
-        `${FUNCTION_ERROR_MSG.VALID_CONTEXT_TYPE_PREFIX}${validTypes.join(', ')}`,
+        `${FUNCTION_ERROR_MSG.VALID_CONTEXT_TYPE_PREFIX}${validTypes.join(LOCAL_STR_128KJ)}`,
       );
     }
   }
@@ -125,7 +129,7 @@ class ContextManager {
         contexts = result.rows || [];
       }
 
-      if (contexts.length === 0) {
+      if (contexts.length === LOCAL_NUM_ZERO) {
         return null;
       }
 
@@ -176,7 +180,7 @@ class ContextManager {
         ' AND context_name = ?',
         [contextType, contextName],
       );
-      existing = result.rows?.[0] || null;
+      existing = result.rows?.[LOCAL_NUM_ZERO] || null;
     }
 
     const contextId = existing?.context_id || uuidv4();
@@ -194,7 +198,7 @@ class ContextManager {
         },
       }, {
         workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
-        deliveryPriority: 'critical',
+        deliveryPriority: LOCAL_STR_CRITICAL,
       });
 
       this.logger.info(FUNCTION_LOG_MSG.CONTEXT_UPDATED, {
@@ -220,7 +224,7 @@ class ContextManager {
         },
       }, {
         workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
-        deliveryPriority: 'critical',
+        deliveryPriority: LOCAL_STR_CRITICAL,
       });
 
       this.logger.info(FUNCTION_LOG_MSG.CONTEXT_CREATED, {
@@ -260,7 +264,7 @@ class ContextManager {
         ' AND context_name = ?',
         [contextType, contextName],
       );
-      existing = result.rows?.[0] || null;
+      existing = result.rows?.[LOCAL_NUM_ZERO] || null;
     }
 
     if (!existing) {
@@ -279,7 +283,7 @@ class ContextManager {
       },
     }, {
       workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
-      deliveryPriority: 'critical',
+      deliveryPriority: LOCAL_STR_CRITICAL,
     });
 
     this.logger.info(FUNCTION_LOG_MSG.CONTEXT_DELETED, {

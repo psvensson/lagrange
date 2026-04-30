@@ -23,6 +23,9 @@ import {
   TYPEOF,
 } from './policy-constants.js';
 
+const LOCAL_STR_BACKGROUND = 'background';
+const LOCAL_STR_FUNCTION = 'function';
+
 /**
  * Valid Raft roles.
  */
@@ -184,7 +187,7 @@ class RaftRoleTracker extends EventEmitter {
       }, {
         expectedCacheFields: updateData,
         workClass: PRESSURE_WORK_CLASS.BACKGROUND,
-        deliveryPriority: 'background',
+        deliveryPriority: LOCAL_STR_BACKGROUND,
         allowPressureDefer: true,
         coalescingKey: `services:raft-role:${serviceId}`,
       });
@@ -235,7 +238,7 @@ class RaftRoleTracker extends EventEmitter {
    */
   async getServiceRole(serviceId) {
     if (!this.systemTableCache ||
-        typeof this.systemTableCache.get !== 'function') {
+        typeof this.systemTableCache.get !== LOCAL_STR_FUNCTION) {
       return null;
     }
 
@@ -250,7 +253,7 @@ class RaftRoleTracker extends EventEmitter {
    */
   async getServicesByRole(role) {
     if (!this.systemTableCache ||
-        typeof this.systemTableCache.filter !== 'function') {
+        typeof this.systemTableCache.filter !== LOCAL_STR_FUNCTION) {
       return [];
     }
 

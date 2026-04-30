@@ -282,6 +282,7 @@ class QueryExecutorSegment2 extends QueryExecutorSegment2Part1 {
    * @param {Object|null} routingSnapshot
    * @param {Set<string>} attemptedAddresses
    * @param {boolean} preferSameLatencyGroup
+   * @param {Object} [routingOptions]
    * @return {Array<Object>}
    * @private
    */
@@ -289,15 +290,20 @@ class QueryExecutorSegment2 extends QueryExecutorSegment2Part1 {
     routingSnapshot,
     attemptedAddresses = new Set(),
     preferSameLatencyGroup = false,
+    routingOptions = {},
   ) {
     const routableServices = Array.isArray(routingSnapshot?.routableServices) ?
       routingSnapshot.routableServices :
       [];
     const localGroupId = this.resolveNodeLatencyGroupId(this.nodeId);
-    const orderedServices = this.orderServicesByLatencyGroup(
+    const latencyOrderedServices = this.orderServicesByLatencyGroup(
       routableServices,
       localGroupId,
       preferSameLatencyGroup,
+    );
+    const orderedServices = this.orderRecoveryCandidateServices(
+      latencyOrderedServices,
+      routingOptions,
     );
     const candidateServices = this.resolveLeaderRecoveryCandidateServices(
       routingSnapshot,

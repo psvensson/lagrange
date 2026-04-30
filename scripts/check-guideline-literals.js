@@ -12,6 +12,33 @@ import {
 } from './guideline-check-shared.js';
 import {SCRIPT_TEXT} from './guideline-check-constants.js';
 
+const LOCAL_STR_LITERAL = 'Literal';
+const LOCAL_STR_STRING = 'string';
+const LOCAL_STR_NUMBER = 'number';
+const LOCAL_STR_FGIQ5 = 'ExpressionStatement';
+const LOCAL_STR_PROGRAM = 'Program';
+const LOCAL_STR_IMPORTDECLARATION = 'ImportDeclaration';
+const LOCAL_STR_ASBFD = 'ExportAllDeclaration';
+const LOCAL_STR_1067J = 'ExportNamedDeclaration';
+const LOCAL_STR_PROPERTY = 'Property';
+const LOCAL_STR_METHODDEFINITION = 'MethodDefinition';
+const LOCAL_STR_PROPERTYDEFINITION = 'PropertyDefinition';
+const LOCAL_STR_CALLEXPRESSION = 'CallExpression';
+const LOCAL_NUM_ONE = 1;
+const LOCAL_STR_IDENTIFIER = 'Identifier';
+const LOCAL_STR_PARSEINT = 'parseInt';
+const LOCAL_STR_MEMBEREXPRESSION = 'MemberExpression';
+const LOCAL_NUM_ZERO = 0;
+const LOCAL_STR_VARIABLEDECLARATOR = 'VariableDeclarator';
+const LOCAL_STR_1QEZR = 'VariableDeclaration';
+const LOCAL_STR_CONST = 'const';
+const LOCAL_STR_1RKTJ = 'exported_literal_outside_constants_owner';
+const LOCAL_STR_1R1QC = 'free_floating_number_literal';
+const LOCAL_STR_THMXD = 'free_floating_string_literal';
+const LOCAL_STR_1E8GB = 'exported literal constant outside canonical constants-owner module';
+const LOCAL_STR_B3TUC = 'raw literal outside a named constant owner';
+const LOCAL_NUM_TWO = 2;
+
 const RULE_REFERENCE = 'system guidelines.md §4.1 Constants, Not Literals';
 const LITERAL_BASELINE_FILE_URL = new URL(
   './check-guideline-literals-baseline.json',
@@ -22,61 +49,61 @@ const NUMERIC_LITERAL_ZERO = 0;
 const NUMERIC_LITERAL_ONE = 1;
 
 function isLiteralNode(node) {
-  return node?.type === 'Literal' &&
-    (typeof node.value === 'string' || typeof node.value === 'number');
+  return node?.type === LOCAL_STR_LITERAL &&
+    (typeof node.value === LOCAL_STR_STRING || typeof node.value === LOCAL_STR_NUMBER);
 }
 
 function isDirectiveLiteral(node, parent, ancestors) {
   const grandparent = ancestors[ancestors.length - 1];
-  return parent?.type === 'ExpressionStatement' &&
-    grandparent?.type === 'Program' &&
-    typeof parent.directive === 'string';
+  return parent?.type === LOCAL_STR_FGIQ5 &&
+    grandparent?.type === LOCAL_STR_PROGRAM &&
+    typeof parent.directive === LOCAL_STR_STRING;
 }
 
 function isModuleSourceLiteral(node, parent) {
   return (
-    (parent?.type === 'ImportDeclaration' && parent.source === node) ||
-    (parent?.type === 'ExportAllDeclaration' && parent.source === node) ||
-    (parent?.type === 'ExportNamedDeclaration' && parent.source === node)
+    (parent?.type === LOCAL_STR_IMPORTDECLARATION && parent.source === node) ||
+    (parent?.type === LOCAL_STR_ASBFD && parent.source === node) ||
+    (parent?.type === LOCAL_STR_1067J && parent.source === node)
   );
 }
 
 function isObjectKeyLiteral(node, parent) {
   return (
-    (parent?.type === 'Property' && parent.key === node && parent.computed !== true) ||
-    (parent?.type === 'MethodDefinition' && parent.key === node && parent.computed !== true) ||
-    (parent?.type === 'PropertyDefinition' && parent.key === node &&
+    (parent?.type === LOCAL_STR_PROPERTY && parent.key === node && parent.computed !== true) ||
+    (parent?.type === LOCAL_STR_METHODDEFINITION && parent.key === node && parent.computed !== true) ||
+    (parent?.type === LOCAL_STR_PROPERTYDEFINITION && parent.key === node &&
       parent.computed !== true)
   );
 }
 
 function isParseIntRadixLiteral(node, parent) {
-  if (parent?.type !== 'CallExpression' || parent.arguments[1] !== node) {
+  if (parent?.type !== LOCAL_STR_CALLEXPRESSION || parent.arguments[LOCAL_NUM_ONE] !== node) {
     return false;
   }
-  if (parent.callee?.type === 'Identifier' && parent.callee.name === 'parseInt') {
+  if (parent.callee?.type === LOCAL_STR_IDENTIFIER && parent.callee.name === LOCAL_STR_PARSEINT) {
     return true;
   }
-  return parent.callee?.type === 'MemberExpression' &&
-    parent.callee.property?.type === 'Identifier' &&
-    parent.callee.property.name === 'parseInt';
+  return parent.callee?.type === LOCAL_STR_MEMBEREXPRESSION &&
+    parent.callee.property?.type === LOCAL_STR_IDENTIFIER &&
+    parent.callee.property.name === LOCAL_STR_PARSEINT;
 }
 
 function findConstDeclarationContext(ancestors) {
-  for (let index = ancestors.length - 1; index >= 0; index -= 1) {
+  for (let index = ancestors.length - LOCAL_NUM_ONE; index >= LOCAL_NUM_ZERO; index -= LOCAL_NUM_ONE) {
     const ancestor = ancestors[index];
-    if (ancestor?.type === 'VariableDeclarator') {
+    if (ancestor?.type === LOCAL_STR_VARIABLEDECLARATOR) {
       const declaration = ancestors[index - 1];
       const exportDeclaration = ancestors[index - 2];
-      if (declaration?.type !== 'VariableDeclaration' ||
-          declaration.kind !== 'const' ||
-          ancestor.id?.type !== 'Identifier') {
+      if (declaration?.type !== LOCAL_STR_1QEZR ||
+          declaration.kind !== LOCAL_STR_CONST ||
+          ancestor.id?.type !== LOCAL_STR_IDENTIFIER) {
         return null;
       }
       return {
         declaration,
         declarator: ancestor,
-        exported: exportDeclaration?.type === 'ExportNamedDeclaration',
+        exported: exportDeclaration?.type === LOCAL_STR_1067J,
       };
     }
   }
@@ -98,18 +125,18 @@ function shouldIgnoreBecauseNamedConstant(node, ancestors, fileClass) {
 function buildViolationKind(node, ancestors, fileClass) {
   const context = findConstDeclarationContext(ancestors);
   if (context?.exported === true && fileClass !== FILE_CLASS.CONSTANTS_OWNER) {
-    return 'exported_literal_outside_constants_owner';
+    return LOCAL_STR_1RKTJ;
   }
-  return typeof node.value === 'number' ?
-    'free_floating_number_literal' :
-    'free_floating_string_literal';
+  return typeof node.value === LOCAL_STR_NUMBER ?
+    LOCAL_STR_1R1QC :
+    LOCAL_STR_THMXD;
 }
 
 function buildViolationReason(kind) {
-  if (kind === 'exported_literal_outside_constants_owner') {
-    return 'exported literal constant outside canonical constants-owner module';
+  if (kind === LOCAL_STR_1RKTJ) {
+    return LOCAL_STR_1E8GB;
   }
-  return 'raw literal outside a named constant owner';
+  return LOCAL_STR_B3TUC;
 }
 
 function collectMagicLiteralViolationsFromSource(
@@ -139,8 +166,8 @@ function collectMagicLiteralViolationsFromSource(
 
     violations.push({
       filePath,
-      line: node.loc?.start?.line || 1,
-      column: node.loc?.start?.column + 1 || 1,
+      line: node.loc?.start?.line || LOCAL_NUM_ONE,
+      column: node.loc?.start?.column + LOCAL_NUM_ONE || LOCAL_NUM_ONE,
       value: String(node.raw ?? node.value),
       kind: buildViolationKind(node, ancestors, fileClass),
       reason: buildViolationReason(
@@ -251,7 +278,7 @@ function formatHumanSummary(report) {
   ].join(SCRIPT_TEXT.NEWLINE);
 }
 
-async function main(argv = process.argv.slice(2)) {
+async function main(argv = process.argv.slice(LOCAL_NUM_TWO)) {
   return runGuidelineCheck(
     argv,
     collectMagicLiteralViolationsWithBaseline,
