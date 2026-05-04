@@ -7710,6 +7710,193 @@ describe('failure-bundle', () => {
   );
 
   it(
+    'suppresses active-gate pending ACK reentry while waiting on operation-workflow progress',
+    () => {
+      const PUBLICATION_EPOCH = 4;
+      const EXPECTED_NODE_COUNT = 5;
+      const SNAPSHOT_COVERAGE_NODE_COUNT = 3;
+      const ZERO_COUNT = 0;
+      const PENDING_ACK_COUNT = 2;
+      const PENDING_ACK_NODE_ONE = '11601fe0-72d6-5853-8590-ec2881853e72';
+      const PENDING_ACK_NODE_TWO = 'ebc4aa0b-06c6-506d-93ea-1dd2deca3f58';
+      const controlPlane = {
+        publicationConvergence: {
+          publicationEpoch: PUBLICATION_EPOCH,
+          publicationStatus: 'OPEN',
+          pendingAckNodeIds: [
+            PENDING_ACK_NODE_ONE,
+            PENDING_ACK_NODE_TWO,
+          ],
+          pendingAckCount: PENDING_ACK_COUNT,
+          missingPublishedNodeIds: [
+            '8be8d30f-4499-5eed-865c-71b4d529a67a',
+          ],
+          missingPublishedCount: 1,
+          publicationPending: true,
+          prioritySpreadPending: true,
+          priorityRecoveryReasonCodes: ['priority_partitions_not_spread'],
+          priorityRecoveryGateReasons: [],
+          priorityRecoveryClosureState: 'closure_pending',
+        },
+        priorityRecoveryObservation: {
+          publicationEpoch: PUBLICATION_EPOCH,
+          publicationStatus: 'OPEN',
+          recoveryProtocolState: 'publication_pending',
+          publicationPending: true,
+          prioritySpreadPending: true,
+          pendingAckNodeIds: [
+            PENDING_ACK_NODE_ONE,
+            PENDING_ACK_NODE_TWO,
+          ],
+          pendingAckCount: PENDING_ACK_COUNT,
+          missingPublishedNodeIds: [
+            '8be8d30f-4499-5eed-865c-71b4d529a67a',
+          ],
+          missingPublishedCount: 1,
+          publicationConvergenceGateReasons: ['priority_partitions_not_spread'],
+          priorityRecoveryPartitionWitnesses: [
+            {
+              partitionId: 'replica_operations-p1',
+              currentOwner:
+                PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER,
+              actuationOwner:
+                PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER,
+              blockingBoundary:
+                PRIORITY_RECOVERY_BLOCKING_BOUNDARY.WORKFLOW_PROGRESS,
+              nextRequiredAction:
+                PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.WAIT_FOR_OPERATION_PROGRESS,
+              semanticStateId:
+                PRIORITY_RECOVERY_SEMANTIC_STATE.RECOVERING_IN_FLIGHT,
+              actuationState:
+                PRIORITY_RECOVERY_ACTUATION_STATE.DISPATCHED_WAITING_PROGRESS,
+              waitMode: PRIORITY_RECOVERY_WAIT_MODE.EVENT_DRIVEN,
+            },
+            {
+              partitionId: 'sql_write_operations-p1',
+              currentOwner:
+                PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER,
+              actuationOwner:
+                PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER,
+              blockingBoundary:
+                PRIORITY_RECOVERY_BLOCKING_BOUNDARY.WORKFLOW_PROGRESS,
+              nextRequiredAction:
+                PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.WAIT_FOR_OPERATION_PROGRESS,
+              semanticStateId:
+                PRIORITY_RECOVERY_SEMANTIC_STATE.RECOVERING_IN_FLIGHT,
+              actuationState:
+                PRIORITY_RECOVERY_ACTUATION_STATE.DISPATCHED_WAITING_PROGRESS,
+              waitMode: PRIORITY_RECOVERY_WAIT_MODE.EVENT_DRIVEN,
+            },
+          ],
+        },
+        activeGate: {
+          mode: 'startup',
+          progress: {
+            expectedNodeCount: EXPECTED_NODE_COUNT,
+            activeNodeCount: 1,
+            inactiveNodeCount: 4,
+            snapshotCoverageNodeCount: SNAPSHOT_COVERAGE_NODE_COUNT,
+            snapshotCoverageComplete: false,
+            publicationStatus: 'OPEN',
+            publicationEpoch: PUBLICATION_EPOCH,
+            recoveryProtocolState: 'publication_pending',
+            pendingAckCount: PENDING_ACK_COUNT,
+            selectedPublishedActiveNodeIds: [
+              PENDING_ACK_NODE_ONE,
+              '35a891b8-c1a0-5064-9c6e-2acfba61c2a7',
+              '7493b0ab-a054-5fad-a91b-5e331db29304',
+              PENDING_ACK_NODE_TWO,
+            ],
+            selectedMissingPublishedNodeIds: [
+              '8be8d30f-4499-5eed-865c-71b4d529a67a',
+            ],
+            missingPublishedCount: 1,
+            blockers: [
+              'inactive_nodes=4',
+              'snapshot_coverage=3/5',
+            ],
+          },
+          bestProgress: {
+            expectedNodeCount: EXPECTED_NODE_COUNT,
+            activeNodeCount: 3,
+            inactiveNodeCount: 2,
+            snapshotCoverageNodeCount: SNAPSHOT_COVERAGE_NODE_COUNT,
+            snapshotCoverageComplete: false,
+            publicationStatus: 'OPEN',
+            publicationEpoch: PUBLICATION_EPOCH,
+            recoveryProtocolState: 'publication_pending',
+            pendingAckCount: PENDING_ACK_COUNT,
+            selectedPublishedActiveNodeIds: [
+              '35a891b8-c1a0-5064-9c6e-2acfba61c2a7',
+              '7493b0ab-a054-5fad-a91b-5e331db29304',
+            ],
+            selectedMissingPublishedNodeIds: [
+              PENDING_ACK_NODE_ONE,
+              '8be8d30f-4499-5eed-865c-71b4d529a67a',
+              PENDING_ACK_NODE_TWO,
+            ],
+            missingPublishedCount: 3,
+            blockers: [
+              'inactive_nodes=2',
+              'snapshot_coverage=3/5',
+            ],
+          },
+        },
+      };
+
+      const publicationConvergence = buildPublicationConvergenceSummary(controlPlane);
+      const dominantWitness =
+        publicationConvergence.priorityRecoveryProgressSummary
+          .dominantWitness;
+
+      assert.equal(
+        publicationConvergence.activeGateSnapshotCoveragePending,
+        true,
+      );
+      assert.equal(
+        publicationConvergence.pendingAckCount,
+        ZERO_COUNT,
+      );
+      assert.deepEqual(
+        publicationConvergence.pendingAckNodeIds,
+        [],
+      );
+      assert.equal(
+        publicationConvergence.publicationConvergenceGateReasons.includes(
+          'snapshot_coverage=3/5',
+        ),
+        true,
+      );
+      assert.equal(
+        publicationConvergence.publicationConvergenceGateReasons.includes(
+          'publication_epoch_pending',
+        ),
+        false,
+      );
+      assert.equal(
+        publicationConvergence.publicationStatus,
+        'OPEN',
+      );
+      assert.equal(
+        dominantWitness.currentOwner,
+        PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER,
+      );
+      assert.equal(
+        dominantWitness.blockingBoundary,
+        PRIORITY_RECOVERY_BLOCKING_BOUNDARY.WORKFLOW_PROGRESS,
+      );
+      assert.equal(
+        dominantWitness.nextRequiredAction,
+        PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.WAIT_FOR_OPERATION_PROGRESS,
+      );
+      assert.equal(
+        dominantWitness.actuationState,
+        PRIORITY_RECOVERY_ACTUATION_STATE.DISPATCHED_WAITING_PROGRESS,
+      );
+    },
+  );
+
+  it(
     'ignores stale best-progress missing publication evidence when current active-gate progress is clean',
     () => {
       const PUBLICATION_EPOCH = 92;
