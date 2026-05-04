@@ -84,6 +84,8 @@ const ACTIVE_GATE_PENDING_ACK_PRIORITY_ACTUATION_TEST_NAME =
   'keeps explicit active-gate pending ACK while priority actuation remains open';
 const ACTIVE_GATE_COUNT_ONLY_PENDING_ACK_PRIORITY_ACTUATION_TEST_NAME =
   'keeps count-only active-gate pending ACK while priority actuation remains open';
+const ACTIVE_GATE_NESTED_COUNT_ONLY_PENDING_ACK_PRIORITY_ACTUATION_TEST_NAME =
+  'keeps nested count-only active-gate pending ACK while priority actuation remains open';
 const PRIORITY_RECOVERY_HISTORY_PARTITION_ID = 'replica_operations-p1';
 const PRIORITY_RECOVERY_SERIAL_WAIT_PARTITION_ID = 'sql_transactions-p1';
 const PRIORITY_RECOVERY_SERIAL_WAIT_OPERATION_ID = 'op-current-spread';
@@ -7981,6 +7983,109 @@ describe('failure-bundle', () => {
               unresolvedSemanticStateCount: UNRESOLVED_PARTITION_COUNT,
               blockedPartitionIds: [PARTITION_ID],
               blockedPartitionCount: UNRESOLVED_PARTITION_COUNT,
+            },
+          },
+        },
+      };
+
+      const publicationConvergence =
+        buildPublicationConvergenceSummary(controlPlane);
+
+      assert.equal(
+        publicationConvergence.activeGateSnapshotCoveragePending,
+        true,
+      );
+      assert.equal(
+        publicationConvergence.pendingAckCount,
+        PENDING_ACK_COUNT,
+      );
+      assert.deepEqual(publicationConvergence.pendingAckNodeIds, []);
+    },
+  );
+
+  it(
+    ACTIVE_GATE_NESTED_COUNT_ONLY_PENDING_ACK_PRIORITY_ACTUATION_TEST_NAME,
+    () => {
+      const PUBLICATION_EPOCH = 97;
+      const PUBLICATION_STATUS_PUBLISHED = 'PUBLISHED';
+      const ACTIVE_GATE_MODE_STARTUP = 'startup';
+      const EXPECTED_NODE_COUNT = 5;
+      const ACTIVE_NODE_COUNT = 3;
+      const INACTIVE_NODE_COUNT = 2;
+      const SNAPSHOT_COVERAGE_NODE_COUNT = 3;
+      const PENDING_ACK_COUNT = 1;
+      const UNRESOLVED_PARTITION_COUNT = 1;
+      const ZERO_COUNT = 0;
+      const PARTITION_ID = 'replica_operations-p1';
+      const controlPlane = {
+        publicationConvergence: {
+          publicationEpoch: PUBLICATION_EPOCH,
+          publicationStatus: PUBLICATION_STATUS_PUBLISHED,
+          pendingAckNodeIds: [],
+          pendingAckCount: ZERO_COUNT,
+          missingPublishedNodeIds: [],
+          missingPublishedCount: ZERO_COUNT,
+          publicationPending: false,
+          prioritySpreadPending: true,
+        },
+        priorityRecoveryObservation: {
+          publicationEpoch: PUBLICATION_EPOCH,
+          publicationStatus: PUBLICATION_STATUS_PUBLISHED,
+          pendingAckNodeIds: [],
+          pendingAckCount: ZERO_COUNT,
+          missingPublishedNodeIds: [],
+          missingPublishedCount: ZERO_COUNT,
+          publicationPending: false,
+          prioritySpreadPending: true,
+          priorityRecoveryProgressClassIds: [
+            PRIORITY_RECOVERY_BLOCKER_REASON.ELIGIBLE_NO_OPERATION,
+          ],
+          priorityRecoverySemanticStateIds: [
+            PRIORITY_RECOVERY_SEMANTIC_STATE.NEEDS_OPERATION,
+          ],
+          priorityRecoveryPartitionWitnesses: [{
+            partitionId: PARTITION_ID,
+            semanticStateId: PRIORITY_RECOVERY_SEMANTIC_STATE.NEEDS_OPERATION,
+            progressClassIds: [
+              PRIORITY_RECOVERY_BLOCKER_REASON.ELIGIBLE_NO_OPERATION,
+            ],
+            blockerReasonCodes: [
+              PRIORITY_RECOVERY_BLOCKER_REASON.ELIGIBLE_NO_OPERATION,
+            ],
+            actuationState:
+              PRIORITY_RECOVERY_ACTUATION_STATE.ACTION_REQUIRED,
+            currentOwner:
+              PRIORITY_RECOVERY_PROGRESS_OWNER.REBALANCER_LEADER,
+            blockingBoundary:
+              PRIORITY_RECOVERY_BLOCKING_BOUNDARY.OPERATION_SCHEDULING,
+            nextRequiredAction:
+              PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.CREATE_RECOVERY_OPERATION,
+            waitMode: PRIORITY_RECOVERY_WAIT_MODE.EVENT_DRIVEN,
+          }],
+          activeGate: {
+            mode: ACTIVE_GATE_MODE_STARTUP,
+            progress: {
+              expectedNodeCount: EXPECTED_NODE_COUNT,
+              activeNodeCount: ACTIVE_NODE_COUNT,
+              inactiveNodeCount: INACTIVE_NODE_COUNT,
+              snapshotCoverageNodeCount: SNAPSHOT_COVERAGE_NODE_COUNT,
+              snapshotCoverageComplete: false,
+              publicationStatus: PUBLICATION_STATUS_PUBLISHED,
+              publicationEpoch: PUBLICATION_EPOCH,
+              pendingAckCount: PENDING_ACK_COUNT,
+              missingPublishedCount: ZERO_COUNT,
+              priorityRecoveryProgressClasses: {
+                unresolvedClassIds: [
+                  PRIORITY_RECOVERY_BLOCKER_REASON.ELIGIBLE_NO_OPERATION,
+                ],
+                unresolvedClassCount: UNRESOLVED_PARTITION_COUNT,
+                unresolvedSemanticStateIds: [
+                  PRIORITY_RECOVERY_SEMANTIC_STATE.NEEDS_OPERATION,
+                ],
+                unresolvedSemanticStateCount: UNRESOLVED_PARTITION_COUNT,
+                blockedPartitionIds: [PARTITION_ID],
+                blockedPartitionCount: UNRESOLVED_PARTITION_COUNT,
+              },
             },
           },
         },

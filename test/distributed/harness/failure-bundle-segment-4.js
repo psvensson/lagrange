@@ -2157,14 +2157,21 @@ function shouldSuppressActiveGateSnapshotPublicationDebt({
   );
 }
 
-function resolveExplicitActiveGateProgress(controlPlane = null) {
-  if (isRecord(controlPlane?.activeGateProgress)) {
-    return controlPlane.activeGateProgress;
-  }
-  if (isRecord(controlPlane?.activeGate?.progress)) {
-    return controlPlane.activeGate.progress;
-  }
-  return null;
+function resolveActiveGatePublicationDebtSuppressionProgress({
+  controlPlane = null,
+  priorityRecoveryObservation = null,
+  activeGateProgress = null,
+} = {}) {
+  const activeGateProgressSources = [
+    controlPlane?.activeGateProgress,
+    controlPlane?.activeGate?.progress,
+    controlPlane?.priorityRecoveryObservation?.activeGate?.progress,
+    controlPlane?.priorityRecoveryObservation?.activeGateProgress,
+    priorityRecoveryObservation?.activeGate?.progress,
+    priorityRecoveryObservation?.activeGateProgress,
+    activeGateProgress,
+  ];
+  return activeGateProgressSources.find((progress) => isRecord(progress)) || null;
 }
 
 function resolveCurrentPendingAckNodeIds({
@@ -2418,13 +2425,16 @@ function buildPublicationConvergenceSummary(controlPlane) {
       priorityRecoveryPartitionWitnesses,
       activeGateProgressClasses,
     });
-  const explicitActiveGateProgress = resolveExplicitActiveGateProgress(
-    controlPlane,
-  );
+  const activeGateSuppressionProgress =
+    resolveActiveGatePublicationDebtSuppressionProgress({
+      controlPlane,
+      priorityRecoveryObservation,
+      activeGateProgress,
+    });
   const suppressActiveGateSnapshotPublicationDebt =
     shouldSuppressActiveGateSnapshotPublicationDebt({
       activeGatePriorityRecoveryActuationEvidenceOpen,
-      activeGateProgress: explicitActiveGateProgress,
+      activeGateProgress: activeGateSuppressionProgress,
     });
   const pendingAckNodeIds = suppressActiveGateSnapshotPublicationDebt ?
     [] :
