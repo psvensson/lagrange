@@ -5,7 +5,7 @@ Opened on May 4, 2026 after
 closed by migration.
 
 Closed May 4, 2026 by migration into
-[Rolling Restart Operation Transition Pressure And Over-Target Trim](./todo-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md).
+[Rolling Restart Operation Transition Status Authority Review Followup](./done-20260504-rolling-restart-operation-transition-status-authority-review-followup.md).
 
 ## Current Evidence
 
@@ -122,6 +122,27 @@ Contract:
       unresolved `eligible_but_no_operation_created`.
 - [x] Operation-transition / over-target trim re-enters only after this
       startup active gate closes or migrates to post-active convergence.
+
+## Static Drift Ledger
+
+Retrospective ledger added May 4, 2026 after review found the package closed
+without a dedicated static-drift section.
+
+Preflight:
+
+1. Relevant boundary selected literal ownership, decision-boundary, runtime
+   grammar, focused owner tests, and diff whitespace checks.
+2. No package-specific static baseline was recorded before the already-closed
+   implementation edits.
+
+Closure:
+
+1. Focused runtime validation recorded below passed.
+2. Package-specific closure guardrails are covered by the active
+   startup active-gate reentry package because that package now owns the
+   current executable representative boundary.
+3. No known new static drift from this closed package is left without an
+   active owner.
 
 ## Validation
 

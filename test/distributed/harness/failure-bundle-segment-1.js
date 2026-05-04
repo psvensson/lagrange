@@ -1,6 +1,9 @@
 import {relative, resolve} from 'node:path';
 import {ENTRYPOINT_LOG_MSG} from '../../../src/constants/entrypoint.js';
 import {
+  JOINING_LOG_MSG,
+} from '../../../src/bootstrap/node-joining-constants.js';
+import {
   RECOVERY_PROTOCOL_STATE,
 } from '../../../src/control-plane/membership-lifecycle-constants.js';
 import {buildPriorityRecoveryClosureWitness} from '../../../src/control-plane/priority-recovery-snapshot.js';
@@ -45,6 +48,7 @@ const TIMELINE_FILENAME = '_timeline.log';
 const ANALYSIS_FILENAME = '_analysis.json';
 const UTF8_ENCODING = 'utf8';
 const ZERO = 0;
+const ARRAY_LAST_INDEX_OFFSET = 1;
 const LOG_TAIL_LINE_COUNT = 20;
 const MARKDOWN_SECTION_BREAK = '\n\n';
 const UNKNOWN_VALUE = 'unknown';
@@ -150,6 +154,70 @@ const STABILITY_GATE_BLOCKER_STARTUP_READINESS = 'startup_readiness_blocked';
 const STABILITY_GATE_BLOCKER_ADMIN_REACHABILITY_REFUSED =
   'admin_reachability_refused';
 const SCENARIO_NAME_FRAGMENT_RESTART = 'restart';
+const DECISION_ARTIFACT_FIELD = Object.freeze({
+  ADMIN_PORT: 'adminPort',
+  ADMIN_RUNTIME_STARTED: 'adminRuntimeStarted',
+  ATTEMPT: 'attempt',
+  BOOTSTRAP_API_HAS_MESSAGE_ROUTER: 'bootstrapApiHasMessageRouter',
+  BOOTSTRAP_API_HAS_SQL_QUERY_ENGINE: 'bootstrapApiHasSqlQueryEngine',
+  BOOTSTRAP_API_HAS_STARTUP_RECOVERY_COORDINATOR:
+    'bootstrapApiHasStartupRecoveryCoordinator',
+  DURATION: 'duration',
+  ERROR: 'error',
+  JOIN_SESSION_ID: 'joinSessionId',
+  MAX_ATTEMPTS: 'maxAttempts',
+  MODE: 'mode',
+  NODE_ID: 'nodeId',
+  PEER_ADDRESS: 'peerAddress',
+  PHASE: 'phase',
+  RETRY_AFTER_MS: 'retryAfterMs',
+  SEED_NODE_ADDRESS: 'seedNodeAddress',
+  SOURCE: 'source',
+  STARTUP_BRANCH: 'startupBranch',
+  STARTUP_MODE: 'startupMode',
+  STARTUP_PHASE: 'startupPhase',
+  STATE: 'state',
+  SUB_PHASE: 'subPhase',
+});
+const AUTO_REJOIN_DECISION_ARTIFACT_FIELDS = Object.freeze([
+  DECISION_ARTIFACT_FIELD.NODE_ID,
+  DECISION_ARTIFACT_FIELD.MODE,
+  DECISION_ARTIFACT_FIELD.SOURCE,
+  DECISION_ARTIFACT_FIELD.STARTUP_MODE,
+  DECISION_ARTIFACT_FIELD.PEER_ADDRESS,
+]);
+const JOINING_CLUSTER_DECISION_ARTIFACT_FIELDS = Object.freeze([
+  DECISION_ARTIFACT_FIELD.NODE_ID,
+  DECISION_ARTIFACT_FIELD.SEED_NODE_ADDRESS,
+  DECISION_ARTIFACT_FIELD.STARTUP_MODE,
+]);
+const STARTUP_RUNTIME_HANDOFF_ARTIFACT_FIELDS = Object.freeze([
+  DECISION_ARTIFACT_FIELD.NODE_ID,
+  DECISION_ARTIFACT_FIELD.STARTUP_BRANCH,
+  DECISION_ARTIFACT_FIELD.STARTUP_PHASE,
+  DECISION_ARTIFACT_FIELD.BOOTSTRAP_API_HAS_SQL_QUERY_ENGINE,
+  DECISION_ARTIFACT_FIELD.BOOTSTRAP_API_HAS_MESSAGE_ROUTER,
+  DECISION_ARTIFACT_FIELD.BOOTSTRAP_API_HAS_STARTUP_RECOVERY_COORDINATOR,
+  DECISION_ARTIFACT_FIELD.ADMIN_RUNTIME_STARTED,
+  DECISION_ARTIFACT_FIELD.ADMIN_PORT,
+]);
+const JOIN_PHASE_FAILURE_ARTIFACT_FIELDS = Object.freeze([
+  DECISION_ARTIFACT_FIELD.NODE_ID,
+  DECISION_ARTIFACT_FIELD.STATE,
+  DECISION_ARTIFACT_FIELD.PHASE,
+  DECISION_ARTIFACT_FIELD.SUB_PHASE,
+  DECISION_ARTIFACT_FIELD.DURATION,
+  DECISION_ARTIFACT_FIELD.ERROR,
+]);
+const RETRYABLE_JOIN_RESUME_ARTIFACT_FIELDS = Object.freeze([
+  DECISION_ARTIFACT_FIELD.NODE_ID,
+  DECISION_ARTIFACT_FIELD.JOIN_SESSION_ID,
+  DECISION_ARTIFACT_FIELD.ATTEMPT,
+  DECISION_ARTIFACT_FIELD.MAX_ATTEMPTS,
+  DECISION_ARTIFACT_FIELD.RETRY_AFTER_MS,
+  DECISION_ARTIFACT_FIELD.PHASE,
+  DECISION_ARTIFACT_FIELD.ERROR,
+]);
 
 const LOAD_WAIT_REASON_KEYS = Object.freeze([
   LOAD_WAIT_REASON_NODE_SLOT_UNAVAILABLE,
@@ -242,9 +310,45 @@ function sanitizeStructuredDecisionArtifact(parsed, fields) {
   return artifact;
 }
 
+function resolveDecisionArtifactTimestampMs(artifact = null) {
+  const timestampMs = Date.parse(artifact?.timestamp);
+  return Number.isFinite(timestampMs) ? timestampMs : null;
+}
+
+function isDecisionArtifactCurrentForBoundary(
+  artifact = null,
+  boundaryTimestampMs = null,
+) {
+  const artifactTimestampMs = resolveDecisionArtifactTimestampMs(artifact);
+  return boundaryTimestampMs === null ||
+    artifactTimestampMs === null ||
+    artifactTimestampMs >= boundaryTimestampMs;
+}
+
+function filterDecisionArtifactsAtOrAfterBoundary(
+  artifacts = [],
+  boundaryArtifact = null,
+) {
+  const boundaryTimestampMs =
+    resolveDecisionArtifactTimestampMs(boundaryArtifact);
+  return boundaryTimestampMs === null ?
+    artifacts :
+    artifacts.filter((artifact) =>
+      isDecisionArtifactCurrentForBoundary(artifact, boundaryTimestampMs),
+    );
+}
+
+function resolveLatestDecisionArtifact(artifacts = []) {
+  return artifacts.length > ZERO ?
+    artifacts[artifacts.length - ARRAY_LAST_INDEX_OFFSET] :
+    null;
+}
+
 function extractDecisionArtifactsFromLogContent(content) {
   const startupDecisions = [];
   const runtimeHandoffs = [];
+  const startupFailures = [];
+  const retryableJoinResumes = [];
   const lines = String(content || '').split('\n');
   for (const line of lines) {
     const parsed = parseStructuredLogLine(line);
@@ -254,45 +358,83 @@ function extractDecisionArtifactsFromLogContent(content) {
     const message = resolveStructuredLogMessage(parsed);
     if (message === ENTRYPOINT_LOG_MSG.AUTO_REJOIN_DECISION) {
       startupDecisions.push(
-        sanitizeStructuredDecisionArtifact(parsed, [
-          'nodeId',
-          'mode',
-          'source',
-          'startupMode',
-          'peerAddress',
-        ]),
+        sanitizeStructuredDecisionArtifact(
+          parsed,
+          AUTO_REJOIN_DECISION_ARTIFACT_FIELDS,
+        ),
+      );
+      continue;
+    }
+    if (message === ENTRYPOINT_LOG_MSG.JOINING_CLUSTER) {
+      startupDecisions.push(
+        sanitizeStructuredDecisionArtifact(
+          parsed,
+          JOINING_CLUSTER_DECISION_ARTIFACT_FIELDS,
+        ),
       );
       continue;
     }
     if (message === ENTRYPOINT_LOG_MSG.STARTUP_RUNTIME_HANDOFF) {
       runtimeHandoffs.push(
-        sanitizeStructuredDecisionArtifact(parsed, [
-          'nodeId',
-          'startupBranch',
-          'startupPhase',
-          'bootstrapApiHasSqlQueryEngine',
-          'bootstrapApiHasMessageRouter',
-          'bootstrapApiHasStartupRecoveryCoordinator',
-          'adminRuntimeStarted',
-          'adminPort',
-        ]),
+        sanitizeStructuredDecisionArtifact(
+          parsed,
+          STARTUP_RUNTIME_HANDOFF_ARTIFACT_FIELDS,
+        ),
+      );
+      continue;
+    }
+    if (message === JOINING_LOG_MSG.PHASE_FAILED) {
+      startupFailures.push(
+        sanitizeStructuredDecisionArtifact(
+          parsed,
+          JOIN_PHASE_FAILURE_ARTIFACT_FIELDS,
+        ),
+      );
+      continue;
+    }
+    if (message === JOINING_LOG_MSG.RETRYABLE_FAILURE_RESUMING) {
+      retryableJoinResumes.push(
+        sanitizeStructuredDecisionArtifact(
+          parsed,
+          RETRYABLE_JOIN_RESUME_ARTIFACT_FIELDS,
+        ),
       );
     }
   }
-  if (startupDecisions.length === ZERO && runtimeHandoffs.length === ZERO) {
+  if (
+    startupDecisions.length === ZERO &&
+    runtimeHandoffs.length === ZERO &&
+    startupFailures.length === ZERO &&
+    retryableJoinResumes.length === ZERO
+  ) {
     return null;
   }
+  const normalizedStartupDecisions = startupDecisions.filter(Boolean);
+  const normalizedRuntimeHandoffs = runtimeHandoffs.filter(Boolean);
+  const latestStartupDecision = resolveLatestDecisionArtifact(
+    normalizedStartupDecisions,
+  );
+  const currentStartupFailures = filterDecisionArtifactsAtOrAfterBoundary(
+    startupFailures.filter(Boolean),
+    latestStartupDecision,
+  );
+  const currentRetryableJoinResumes = filterDecisionArtifactsAtOrAfterBoundary(
+    retryableJoinResumes.filter(Boolean),
+    latestStartupDecision,
+  );
   return {
-    startupDecisions: startupDecisions.filter(Boolean),
-    runtimeHandoffs: runtimeHandoffs.filter(Boolean),
-    latestStartupDecision:
-      startupDecisions.length > ZERO ?
-        startupDecisions[startupDecisions.length - 1] :
-        null,
-    latestRuntimeHandoff:
-      runtimeHandoffs.length > ZERO ?
-        runtimeHandoffs[runtimeHandoffs.length - 1] :
-        null,
+    startupDecisions: normalizedStartupDecisions,
+    runtimeHandoffs: normalizedRuntimeHandoffs,
+    startupFailures: currentStartupFailures,
+    retryableJoinResumes: currentRetryableJoinResumes,
+    latestStartupDecision,
+    latestRuntimeHandoff: resolveLatestDecisionArtifact(
+      normalizedRuntimeHandoffs,
+    ),
+    latestStartupFailure: resolveLatestDecisionArtifact(currentStartupFailures),
+    latestRetryableJoinResume: resolveLatestDecisionArtifact(
+      currentRetryableJoinResumes,
+    ),
   };
 }
 

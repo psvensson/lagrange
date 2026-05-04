@@ -79,14 +79,14 @@ Secondary after the primary path is stable:
 
 ## Active Packages
 
-1. [Rolling Restart Startup Active Gate Priority Operation Creation Snapshot Coverage](../packages/active-20260504-rolling-restart-startup-active-gate-priority-operation-creation-snapshot-coverage.md)
+1. [Rolling Restart Priority Recovery Actuation Active Gate Reentry](../packages/active-20260504-rolling-restart-priority-recovery-actuation-active-gate-reentry.md)
 
 ## Queued Packages
 
-The operation-transition dispatch-wake progress fixes have focused proof, but
-the latest representative path migrated before post-active over-target trim
-could be evaluated again. The operation-transition package is queued until the
-representative path reaches the post-active owner boundary again.
+The operation-transition status-authority follow-up, the startup active-gate
+presentation reentry, and the startup rejoin seed-contact package executed.
+The latest representative path now migrates to active-gate priority-recovery
+actuation.
 
 All final consistency recommendation packages are complete or queued outside
 the current execution path.
@@ -96,7 +96,7 @@ Other secondary matrix failures become active packages only after the
 
 Current re-entry package:
 
-1. [Rolling Restart Startup Active Gate Priority Operation Creation Snapshot Coverage](../packages/active-20260504-rolling-restart-startup-active-gate-priority-operation-creation-snapshot-coverage.md)
+1. [Rolling Restart Priority Recovery Actuation Active Gate Reentry](../packages/active-20260504-rolling-restart-priority-recovery-actuation-active-gate-reentry.md)
 
 Queued convergence-grammar packages:
 
@@ -114,27 +114,29 @@ Queued cleanup packages:
 ## Remaining Work Summary
 
 1. Current execution blocker:
-   The latest May 4 representative rerun is the current
-   `test-output/reports/rolling-restart-after-dispatch-wake-progress-20260504-codex.report.json`.
-   The operation-transition dispatch-wake progress blocker has focused proof
-   and playback evidence of `CREATING` replacement operations advancing to
-   `ACTIVE`. The representative path migrated earlier to startup active-gate
-   recovery with selected-snapshot coverage `2/5`, priority spread pending,
-   `sql_write_operations-p1` still `eligible_but_no_operation_created`, and
-   `sql_transactions-p1` still `recovering_in_flight`.
+   The latest May 4 representative rerun is
+   `test-output/reports/rolling-restart-startup-seed-contact-owner-20260504-codex.report.json`.
+   Publication convergence remains closed after failure-bundle regeneration:
+   publication pending `false`, pending ACK `0`, missing published `0`.
+   The startup seed-contact owner is now named and stale pre-decision retry
+   artifacts are filtered from current startup decisions. The representative
+   path migrated to `topology_unstable` with dominant reason
+   `priority_recovery_actuation_state_action_required`, active-gate blockers
+   `inactive_nodes=2`, `snapshot_coverage=2/5`, and
+   `priority_recovery_progress_class=eligible_but_no_operation_created`.
 2. Next active investigation:
    execute
-   [Rolling Restart Startup Active Gate Priority Operation Creation Snapshot Coverage](../packages/active-20260504-rolling-restart-startup-active-gate-priority-operation-creation-snapshot-coverage.md)
-   against the selected-snapshot coverage and priority operation-creation
-   owner boundary.
+   [Rolling Restart Priority Recovery Actuation Active Gate Reentry](../packages/active-20260504-rolling-restart-priority-recovery-actuation-active-gate-reentry.md)
+   against the active-gate priority-recovery actuation owner boundary.
 3. Harness classification:
    terminal barrier evidence wins over stale playback reconstruction for
    active, restart-recovery, load-readiness, convergence, and quiescence
    failures. Publication ACK and missing-published drift are closed: stale
    count-only ACK and top-level missing-published evidence no longer override
-   current active-gate owner evidence. The latest terminal owner boundary is
-   now startup active-gate selected-snapshot coverage plus priority operation
-   creation/progress evidence.
+   current active-gate owner evidence. The stale publication-classification
+   branch is closed for priority-spread publication closure records; the
+   startup seed-contact boundary is now named, and the latest terminal owner
+   boundary is priority recovery actuation.
 4. Final consistency:
    the final leader-map consistency package is complete for this sprint
    because the rerun moved to a freshly split non-final blocker.
@@ -202,6 +204,7 @@ representative failure forward.
 45. [Rolling Restart Startup Publication Membership Priority Recovery Coordination](../packages/done-20260504-rolling-restart-startup-publication-membership-priority-recovery-coordination.md)
 46. [Rolling Restart Readiness Gate Priority Operation Creation Reentry](../packages/done-20260504-rolling-restart-readiness-gate-priority-operation-creation-reentry.md)
 47. [Rolling Restart Startup Snapshot Coverage And Serial Priority Progress](../packages/done-20260504-rolling-restart-startup-snapshot-coverage-serial-priority-progress.md)
+48. [Rolling Restart Startup Rejoin Seed Contact Snapshot Coverage](../packages/done-20260504-rolling-restart-startup-rejoin-seed-contact-snapshot-coverage.md)
 
 ## Parked Work
 
@@ -1143,7 +1146,7 @@ Executed on April 24, 2026:
      `missingPublished=0`, selected snapshot coverage `5/5`, and a genuine
      priority-recovery workflow-progress blocker for `sql_transactions-p1`.
 209. The migrated operation-transition boundary was re-entered through
-     [Rolling Restart Operation Transition Pressure And Over-Target Trim](../packages/todo-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md).
+     [Rolling Restart Operation Transition Status Authority Review Followup](../packages/done-20260504-rolling-restart-operation-transition-status-authority-review-followup.md).
 210. Dispatch-wake progress focused validation passed, and the representative
      rerun
      `test-output/reports/rolling-restart-after-dispatch-wake-progress-20260504-codex.report.json`
@@ -1152,5 +1155,5 @@ Executed on April 24, 2026:
      has active `2/5`, selected-snapshot coverage `2/5`, priority spread gap
      `5`, `sql_write_operations-p1` still
      `eligible_but_no_operation_created`, and `sql_transactions-p1` still
-     `recovering_in_flight`. The new active package is
-     [Rolling Restart Startup Active Gate Priority Operation Creation Snapshot Coverage](../packages/active-20260504-rolling-restart-startup-active-gate-priority-operation-creation-snapshot-coverage.md).
+     `recovering_in_flight`. The startup package later closed by migration:
+     [Rolling Restart Startup Active Gate Priority Operation Creation Snapshot Coverage](../packages/done-20260504-rolling-restart-startup-active-gate-priority-operation-creation-snapshot-coverage.md).

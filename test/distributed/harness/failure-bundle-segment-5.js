@@ -1,5 +1,8 @@
 import {PRIORITY_RECOVERY_INVARIANT_FALLBACK} from '../../../src/control-plane/priority-recovery-diagnostics-constants.js';
 import {
+  JOINING_PHASE,
+} from '../../../src/bootstrap/bootstrap-constants.js';
+import {
   CONTROL_PLANE_READINESS_REASON,
 } from '../../../src/control-plane/control-plane-readiness-constants.js';
 import {
@@ -221,6 +224,11 @@ const FAILURE_SIGNAL_QUIESCENCE_BLOCKER_PREFIX = 'quiescenceBlocker=';
 const FAILURE_SIGNAL_QUIESCENCE_REASON_PREFIX = 'quiescenceReason=';
 const FAILURE_SIGNAL_QUIESCENCE_CANDIDATE_WINDOW_RESET_PREFIX =
   'quiescenceCandidateWindowReset=';
+const FAILURE_SIGNAL_STARTUP_OWNER_PREFIX = 'startupOwner=';
+const FAILURE_SIGNAL_STARTUP_PHASE_PREFIX = 'startupPhase=';
+const FAILURE_SIGNAL_STARTUP_RETRY_AFTER_MS_PREFIX = 'startupRetryAfterMs=';
+const FAILURE_SIGNAL_STARTUP_READINESS_REASON_PREFIX =
+  'startupReadinessReason=';
 const FAILURE_SIGNAL_PENDING_ACK_COUNT_PREFIX = 'pendingAckCount=';
 const FAILURE_SIGNAL_BLOCKED_NODE_COUNT_PREFIX = 'blockedNodeCount=';
 const FAILURE_SIGNAL_MISSING_PUBLISHED_COUNT_PREFIX =
@@ -266,6 +274,24 @@ const FAILURE_SIGNAL_VALUE_SEPARATOR = '|';
 const ACTIVE_GATE_PUBLICATION_GATE_PREFIX = 'publication_gate=';
 const ACTIVE_GATE_REASON_PRIORITY_CONTROL_PLANE_SPREAD_PENDING =
   'priority_control_plane_spread_pending';
+const ARRAY_LAST_INDEX = -1;
+const STARTUP_OWNER_SEED_CONTACT = 'seed_contact';
+const STARTUP_OWNER_REASON_SEED_CONTACT_RETRYING = 'seed_contact_retrying';
+const STARTUP_OWNER_EVIDENCE_STATE = Object.freeze({
+  SEED_CONTACT_RETRYING: 'seed_contact_retrying',
+  UNCLASSIFIED: 'unclassified',
+});
+const STARTUP_OWNER_EVIDENCE_BY_STATE = Object.freeze({
+  [STARTUP_OWNER_EVIDENCE_STATE.SEED_CONTACT_RETRYING]: Object.freeze({
+    owner: STARTUP_OWNER_SEED_CONTACT,
+    reasonCode: STARTUP_OWNER_REASON_SEED_CONTACT_RETRYING,
+  }),
+});
+const DECISION_ARTIFACT_LATEST_FIELD = Object.freeze({
+  RETRYABLE_JOIN_RESUME: 'latestRetryableJoinResume',
+  STARTUP_DECISION: 'latestStartupDecision',
+  STARTUP_FAILURE: 'latestStartupFailure',
+});
 const FAILURE_BUNDLE_POST_REBALANCE_CLOSURE_UNAVAILABLE = null;
 const FAILURE_GUIDANCE_EMPTY = Object.freeze({
   failureAction: null,
@@ -1507,6 +1533,117 @@ function resolveFailureClassificationGuidance({
     FAILURE_GUIDANCE_EMPTY;
 }
 
+function collectLatestDecisionArtifact(logs, fieldName) {
+  const artifacts = Object.values(logs?.decisionArtifactsByNodeId || {})
+    .map((artifact) => artifact?.[fieldName] || null)
+    .filter(Boolean);
+  return selectLatestTimestampedArtifact(artifacts);
+}
+
+function selectLatestTimestampedArtifact(artifacts) {
+  const normalizedArtifacts = Array.isArray(artifacts) ?
+    artifacts.filter(Boolean) :
+    [];
+  if (normalizedArtifacts.length === ZERO) {
+    return null;
+  }
+  return normalizedArtifacts
+    .slice()
+    .sort((left, right) => {
+      const leftTimeMs = Date.parse(left?.timestamp || UNKNOWN_VALUE);
+      const rightTimeMs = Date.parse(right?.timestamp || UNKNOWN_VALUE);
+      const normalizedLeftTimeMs = Number.isFinite(leftTimeMs) ?
+        leftTimeMs :
+        ZERO;
+      const normalizedRightTimeMs = Number.isFinite(rightTimeMs) ?
+        rightTimeMs :
+        ZERO;
+      return normalizedLeftTimeMs - normalizedRightTimeMs;
+    })
+    .at(ARRAY_LAST_INDEX) || null;
+}
+
+function resolveStartupOwnerEvidenceState(snapshot) {
+  if (
+    snapshot.phase === JOINING_PHASE.CONTACTING_SEED &&
+    isRecord(snapshot.latestRetryableJoinResume)
+  ) {
+    return STARTUP_OWNER_EVIDENCE_STATE.SEED_CONTACT_RETRYING;
+  }
+  return STARTUP_OWNER_EVIDENCE_STATE.UNCLASSIFIED;
+}
+
+function buildStartupOwnerEvidence(logs) {
+  const latestRetryableJoinResume = collectLatestDecisionArtifact(
+    logs,
+    DECISION_ARTIFACT_LATEST_FIELD.RETRYABLE_JOIN_RESUME,
+  );
+  const latestStartupFailure = collectLatestDecisionArtifact(
+    logs,
+    DECISION_ARTIFACT_LATEST_FIELD.STARTUP_FAILURE,
+  );
+  const phase = String(
+    latestRetryableJoinResume?.phase ||
+      latestStartupFailure?.phase ||
+      '',
+  ).trim();
+  const snapshot = {
+    phase,
+    latestRetryableJoinResume,
+    latestStartupFailure,
+    retryAfterMs: normalizeNonNegativeCount(
+      latestRetryableJoinResume?.retryAfterMs,
+    ),
+  };
+  const evidenceState = resolveStartupOwnerEvidenceState(snapshot);
+  const evidenceTemplate = STARTUP_OWNER_EVIDENCE_BY_STATE[evidenceState] ||
+    null;
+  if (!evidenceTemplate) {
+    return null;
+  }
+  return {
+    ...evidenceTemplate,
+    phase: snapshot.phase,
+    retryAfterMs: snapshot.retryAfterMs,
+    latestRetryableJoinResume,
+    latestStartupFailure,
+  };
+}
+
+function appendStartupOwnerEvidenceSignals(
+  signals,
+  startupOwnerEvidence,
+  readinessDominantReason,
+) {
+  if (!startupOwnerEvidence) {
+    return;
+  }
+  appendSignalOnce(
+    signals,
+    FAILURE_SIGNAL_STARTUP_OWNER_PREFIX + startupOwnerEvidence.owner,
+  );
+  if (startupOwnerEvidence.phase) {
+    appendSignalOnce(
+      signals,
+      FAILURE_SIGNAL_STARTUP_PHASE_PREFIX + startupOwnerEvidence.phase,
+    );
+  }
+  if (startupOwnerEvidence.retryAfterMs !== null) {
+    appendSignalOnce(
+      signals,
+      FAILURE_SIGNAL_STARTUP_RETRY_AFTER_MS_PREFIX +
+        String(startupOwnerEvidence.retryAfterMs),
+    );
+  }
+  if (readinessDominantReason) {
+    appendSignalOnce(
+      signals,
+      FAILURE_SIGNAL_STARTUP_READINESS_REASON_PREFIX +
+        readinessDominantReason,
+    );
+  }
+}
+
 function buildFailureClassification({
   failure,
   controlPlane,
@@ -1527,11 +1664,11 @@ function buildFailureClassification({
     typeof controlPlane.startupRecovery === 'object' ?
       controlPlane.startupRecovery :
       null;
-  const latestStartupDecision =
-    Object.values(logs?.decisionArtifactsByNodeId || {})
-      .map((artifact) => artifact?.latestStartupDecision || null)
-      .filter(Boolean)
-      .slice(-1)[ZERO] || null;
+  const latestStartupDecision = collectLatestDecisionArtifact(
+    logs,
+    DECISION_ARTIFACT_LATEST_FIELD.STARTUP_DECISION,
+  );
+  const startupOwnerEvidence = buildStartupOwnerEvidence(logs);
   const dominantProgressWitness =
     publicationConvergence?.priorityRecoveryProgressSummary?.dominantWitness &&
     isRecord(publicationConvergence.priorityRecoveryProgressSummary.dominantWitness) ?
@@ -1743,6 +1880,11 @@ function buildFailureClassification({
     if (latestStartupDecision?.startupMode) {
       signals.push('startupMode=' + latestStartupDecision.startupMode);
     }
+    appendStartupOwnerEvidenceSignals(
+      signals,
+      startupOwnerEvidence,
+      dominantReason,
+    );
     return {
       failureClass: FAILURE_CLASS_STARTUP_RECOVERY_BLOCKED,
       confidence:
@@ -1750,7 +1892,10 @@ function buildFailureClassification({
           FAILURE_CLASS_CONFIDENCE_HIGH :
           FAILURE_CLASS_CONFIDENCE_MEDIUM,
       rootCauseClass: rootCauseClass || ROOT_CAUSE_CLASS_STARTUP,
-      dominantReason: dominantReason || null,
+      dominantReason:
+        startupOwnerEvidence?.reasonCode ||
+        dominantReason ||
+        null,
       signals,
     };
   }

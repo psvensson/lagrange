@@ -193,6 +193,11 @@ const {
   formatPriorityRecoveryInvariantFailures,
 } = FAILURE_BUNDLE_SEGMENT_5;
 
+const NODE_DIAGNOSTICS_LINE_LATEST_STARTUP_FAILURE =
+  '- Latest Startup Failure: ';
+const NODE_DIAGNOSTICS_LINE_LATEST_RETRYABLE_JOIN_RESUME =
+  '- Latest Retryable Join Resume: ';
+
 function formatPriorityRecoveryPartitionBlockerHistory(history) {
   const entries = Array.isArray(history) ? history : [];
   if (entries.length === ZERO) {
@@ -1007,6 +1012,23 @@ function renderScenarioFailureBundleMarkdown(bundle) {
                 '- Latest Runtime Handoff: ' +
                   JSON.stringify(
                     nodeDiagnostic.decisionArtifacts.latestRuntimeHandoff,
+                  ),
+              );
+            }
+            if (nodeDiagnostic?.decisionArtifacts?.latestStartupFailure) {
+              lines.push(
+                NODE_DIAGNOSTICS_LINE_LATEST_STARTUP_FAILURE +
+                  JSON.stringify(
+                    nodeDiagnostic.decisionArtifacts.latestStartupFailure,
+                  ),
+              );
+            }
+            if (nodeDiagnostic?.decisionArtifacts?.latestRetryableJoinResume) {
+              lines.push(
+                NODE_DIAGNOSTICS_LINE_LATEST_RETRYABLE_JOIN_RESUME +
+                  JSON.stringify(
+                    nodeDiagnostic.decisionArtifacts
+                      .latestRetryableJoinResume,
                   ),
               );
             }

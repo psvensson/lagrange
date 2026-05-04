@@ -501,6 +501,8 @@ const RECONCILED_REPLICA_STATUS_RESOLUTION_STATE = Object.freeze({
 });
 const RECONCILED_REPLICA_STATUS_TERMINAL_CACHE_BLOCKING_STATUSES =
   Object.freeze(new Set([ReplicaStatus.FAILED]));
+const RECONCILED_REPLICA_STATUS_AUTHORITATIVE_TERMINAL_STATUSES =
+  Object.freeze(new Set([ReplicaStatus.REMOVED, ReplicaStatus.FAILED]));
 const RECONCILED_REPLICA_STATUS_PROGRESS_RANK_UNAVAILABLE = NUM.ZERO;
 const RECONCILED_REPLICA_STATUS_PROGRESS_RANK_BY_STATUS = Object.freeze(
   new Map([
@@ -511,6 +513,11 @@ const RECONCILED_REPLICA_STATUS_PROGRESS_RANK_BY_STATUS = Object.freeze(
   ]),
 );
 const RECONCILED_REPLICA_STATUS_RESOLUTION_TABLE = Object.freeze([
+  Object.freeze({
+    state: RECONCILED_REPLICA_STATUS_RESOLUTION_STATE.AUTHORITATIVE,
+    matches: (evidence) =>
+      evidence.authoritativeTerminalStatus === true,
+  }),
   Object.freeze({
     state: RECONCILED_REPLICA_STATUS_RESOLUTION_STATE.OBSERVED_TARGET_CACHE,
     matches: (evidence) =>
@@ -1405,6 +1412,10 @@ class OperationWorkflowOwnerSegment7 extends OperationWorkflowOwnerSegment6 {
       RECONCILED_REPLICA_STATUS_TERMINAL_CACHE_BLOCKING_STATUSES.has(
         observedTargetStatus,
       );
+    const authoritativeTerminalStatus =
+      RECONCILED_REPLICA_STATUS_AUTHORITATIVE_TERMINAL_STATUSES.has(
+        actualStatus,
+      );
     return Object.freeze({
       actualStatus,
       observedTargetStatus,
@@ -1417,7 +1428,9 @@ class OperationWorkflowOwnerSegment7 extends OperationWorkflowOwnerSegment6 {
       actualStatusRank,
       observedTargetStatusRank,
       observedTargetTerminalCacheBlocker,
+      authoritativeTerminalStatus,
       observedTargetAheadOfActual:
+        authoritativeTerminalStatus !== true &&
         observedTargetTerminalCacheBlocker !== true &&
         observedTargetStatusRank > actualStatusRank,
     });

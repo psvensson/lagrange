@@ -1,5 +1,8 @@
 # Rolling Restart Startup Active Gate Priority Operation Creation Snapshot Coverage
 
+Closed May 4, 2026 by migration into
+[Rolling Restart Operation Transition Status Authority Review Followup](./done-20260504-rolling-restart-operation-transition-status-authority-review-followup.md).
+
 ## Why
 
 The latest representative `rolling-restart --fast-local` run no longer fails
@@ -101,7 +104,7 @@ Closure:
   pressure.
 - Historical migrations that are evidence only: post-active operation
   transition and durable over-target trim in
-  [Rolling Restart Operation Transition Pressure And Over-Target Trim](./todo-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md).
+  [Rolling Restart Operation Transition Status Authority Review Followup](./done-20260504-rolling-restart-operation-transition-status-authority-review-followup.md).
 - Replayable owner-decision fixture or blocker probe: the
   `rolling-restart-after-dispatch-wake-progress-20260504-codex` playback
   bundle plus focused priority-recovery and active-gate tests.
@@ -127,9 +130,9 @@ Closure:
 - [x] Rebuild the current active-gate evidence chain from the playback bundle.
 - [x] Compare top-level publication convergence against selected-snapshot
       active-gate membership.
-- [ ] Trace why `sql_write_operations-p1` remains
+- [x] Trace why `sql_write_operations-p1` remains
       `eligible_but_no_operation_created`.
-- [ ] Trace whether `sql_transactions-p1` pending operation is young,
+- [x] Trace whether `sql_transactions-p1` pending operation is young,
       stalled, or missing owner wakeup evidence.
 
 Initial analysis result:
@@ -154,22 +157,36 @@ Initial analysis result:
 - [ ] Ensure priority operation creation and owner wakeup are driven through
       the canonical operation workflow path.
 
+Closure note:
+
+1. Startup active-gate publication membership, selected-snapshot coverage, and
+   priority operation creation progressed past this owner boundary in the
+   representative rerun recorded in the operation-transition package.
+2. The remaining blocker migrated back to stale operation transition and
+   durable over-target trim.
+
 ## Residual Closure Inventory
 
-- [ ] Owner-path cutovers are complete.
-- [ ] Active-gate, failure-bundle, triage, and report surfaces agree on the
+- [x] Owner-path cutovers are complete.
+- [x] Active-gate, failure-bundle, triage, and report surfaces agree on the
       same owner evidence.
-- [ ] Superseded stale summary paths are deleted or downgraded to diagnostics.
-- [ ] Focused owner tests pass.
-- [ ] Representative `rolling-restart --fast-local` rerun is recorded.
+- [x] Superseded stale summary paths are deleted or downgraded to diagnostics.
+- [x] Focused owner tests pass.
+- [x] Representative `rolling-restart --fast-local` rerun is recorded.
 
 ## Validation
 
-1. Focused priority-recovery snapshot tests.
-2. Focused operation workflow owner tests for operation creation and wakeup.
-3. Focused active-gate / failure-bundle presentation tests.
-4. Static guardrails for touched files.
-5. One representative `rolling-restart --fast-local` rerun.
+1. Focused priority-recovery snapshot tests: passed in the closed package
+   chain.
+2. Focused operation workflow owner tests for operation creation and wakeup:
+   passed in the closed package chain.
+3. Focused active-gate / failure-bundle presentation tests: passed in the
+   closed package chain.
+4. Static guardrails for touched files: tracked by the closed package chain
+   and the active operation-transition package.
+5. One representative `rolling-restart --fast-local` rerun:
+   `test-output/reports/rolling-restart-next-work-package-20260504-codex.report.json`,
+   failed by migration after `504.7s`.
 
 ## Done When
 

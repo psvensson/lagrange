@@ -1853,6 +1853,166 @@ test('RebalanceCoordinator does not let stale failed target cache override ' +
   }
 });
 
+test('RebalanceCoordinator does not let stale active target cache override ' +
+  'authoritative FAILED target during priority REPLACE drain', async (t) => {
+  const TEST_PARTITION_ID = 'sql_write_operations-p1';
+  const TEST_SOURCE_REPLICA_ID = TEST_PARTITION_ID + '-r2';
+  const TEST_TARGET_REPLICA_ID = TEST_PARTITION_ID + '-r6';
+  const TEST_OPERATION_ID = 'priority-drain-failed-target-cache-active';
+  const TEST_NOW_MS = Date.now();
+  const coordinator = createTestCoordinator({
+    nodeId: PRIORITY_DRAIN_TEST_TARGET_NODE_ID,
+    enableTimeouts: false,
+    controlPlaneReadinessService:
+      buildPriorityDrainReadinessService(TEST_PARTITION_ID),
+    cacheData: {
+      services: [
+        {
+          service_id: TEST_TARGET_REPLICA_ID,
+          replica_id: TEST_TARGET_REPLICA_ID,
+          service_type: PRIORITY_DRAIN_TEST_ENTITY_TYPE,
+          partition_id: TEST_PARTITION_ID,
+          node_id: PRIORITY_DRAIN_TEST_TARGET_NODE_ID,
+          raft_role: RAFT_ROLE.FOLLOWER,
+          status: ReplicaStatus.ACTIVE,
+        },
+      ],
+      replicaOperations: [
+        {
+          operation_id: TEST_OPERATION_ID,
+          type: OperationType.REPLACE,
+          partition_id: TEST_PARTITION_ID,
+          replica_id: TEST_TARGET_REPLICA_ID,
+          source_node_id: PRIORITY_DRAIN_TEST_SOURCE_NODE_ID,
+          target_node_id: PRIORITY_DRAIN_TEST_TARGET_NODE_ID,
+          status: ReplicaStatus.CREATING,
+          workflow_step: WORKFLOW_STEP.CREATING,
+          created_at: TEST_NOW_MS,
+          updated_at: TEST_NOW_MS,
+          completed_at: PRIORITY_DRAIN_TEST_NO_COMPLETED_AT,
+          error_message: PRIORITY_DRAIN_TEST_NO_ERROR_MESSAGE,
+          entity_type: PRIORITY_DRAIN_TEST_ENTITY_TYPE,
+          entity_id: TEST_PARTITION_ID,
+          steps_history: JSON.stringify([
+            {
+              step: WORKFLOW_STEP.PENDING,
+              timestamp: TEST_NOW_MS,
+              sourceReplicaId: TEST_SOURCE_REPLICA_ID,
+            },
+            {
+              step: WORKFLOW_STEP.SENDING,
+              timestamp: TEST_NOW_MS,
+              previousStep: WORKFLOW_STEP.PENDING,
+            },
+            {
+              step: WORKFLOW_STEP.CREATING,
+              timestamp: TEST_NOW_MS,
+              previousStep: WORKFLOW_STEP.SENDING,
+            },
+          ]),
+        },
+      ],
+    },
+  });
+
+  try {
+    const operation = await coordinator.getOperation(TEST_OPERATION_ID);
+    const reconciledStatus =
+      coordinator.workflowOwner.resolveReconciledReplicaStatus(
+        operation,
+        ReplicaStatus.FAILED,
+      );
+
+    t.equal(
+      reconciledStatus,
+      ReplicaStatus.FAILED,
+      'authoritative FAILED target status should outrank stale active cache',
+    );
+  } finally {
+    await coordinator.shutdown();
+  }
+});
+
+test('RebalanceCoordinator does not let stale active target cache override ' +
+  'authoritative REMOVED target during priority REPLACE drain', async (t) => {
+  const TEST_PARTITION_ID = 'sql_write_operations-p1';
+  const TEST_SOURCE_REPLICA_ID = TEST_PARTITION_ID + '-r2';
+  const TEST_TARGET_REPLICA_ID = TEST_PARTITION_ID + '-r6';
+  const TEST_OPERATION_ID = 'priority-drain-removed-target-cache-active';
+  const TEST_NOW_MS = Date.now();
+  const coordinator = createTestCoordinator({
+    nodeId: PRIORITY_DRAIN_TEST_TARGET_NODE_ID,
+    enableTimeouts: false,
+    controlPlaneReadinessService:
+      buildPriorityDrainReadinessService(TEST_PARTITION_ID),
+    cacheData: {
+      services: [
+        {
+          service_id: TEST_TARGET_REPLICA_ID,
+          replica_id: TEST_TARGET_REPLICA_ID,
+          service_type: PRIORITY_DRAIN_TEST_ENTITY_TYPE,
+          partition_id: TEST_PARTITION_ID,
+          node_id: PRIORITY_DRAIN_TEST_TARGET_NODE_ID,
+          raft_role: RAFT_ROLE.FOLLOWER,
+          status: ReplicaStatus.ACTIVE,
+        },
+      ],
+      replicaOperations: [
+        {
+          operation_id: TEST_OPERATION_ID,
+          type: OperationType.REPLACE,
+          partition_id: TEST_PARTITION_ID,
+          replica_id: TEST_TARGET_REPLICA_ID,
+          source_node_id: PRIORITY_DRAIN_TEST_SOURCE_NODE_ID,
+          target_node_id: PRIORITY_DRAIN_TEST_TARGET_NODE_ID,
+          status: ReplicaStatus.CREATING,
+          workflow_step: WORKFLOW_STEP.CREATING,
+          created_at: TEST_NOW_MS,
+          updated_at: TEST_NOW_MS,
+          completed_at: PRIORITY_DRAIN_TEST_NO_COMPLETED_AT,
+          error_message: PRIORITY_DRAIN_TEST_NO_ERROR_MESSAGE,
+          entity_type: PRIORITY_DRAIN_TEST_ENTITY_TYPE,
+          entity_id: TEST_PARTITION_ID,
+          steps_history: JSON.stringify([
+            {
+              step: WORKFLOW_STEP.PENDING,
+              timestamp: TEST_NOW_MS,
+              sourceReplicaId: TEST_SOURCE_REPLICA_ID,
+            },
+            {
+              step: WORKFLOW_STEP.SENDING,
+              timestamp: TEST_NOW_MS,
+              previousStep: WORKFLOW_STEP.PENDING,
+            },
+            {
+              step: WORKFLOW_STEP.CREATING,
+              timestamp: TEST_NOW_MS,
+              previousStep: WORKFLOW_STEP.SENDING,
+            },
+          ]),
+        },
+      ],
+    },
+  });
+
+  try {
+    const operation = await coordinator.getOperation(TEST_OPERATION_ID);
+    const reconciledStatus =
+      coordinator.workflowOwner.resolveReconciledReplicaStatus(
+        operation,
+        ReplicaStatus.REMOVED,
+      );
+
+    t.equal(
+      reconciledStatus,
+      ReplicaStatus.REMOVED,
+      'authoritative REMOVED target status should outrank stale active cache',
+    );
+  } finally {
+    await coordinator.shutdown();
+  }
+});
+
 test('RebalanceCoordinator releases remote-owned ACTIVE priority REPLACE ' +
   'when the canonical owner is no longer repair-eligible and spread is ' +
   'satisfied', async (t) => {

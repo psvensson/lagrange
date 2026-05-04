@@ -7,6 +7,11 @@ import {
   buildPublicationRecoveryGateSnapshot,
 } from
   '../../../src/control-plane/publication-recovery-gate.js';
+import {
+  PRIORITY_RECOVERY_CLOSURE_RECORD_ID,
+  PRIORITY_RECOVERY_CLOSURE_WITNESS_CLASS,
+  PRIORITY_RECOVERY_CLOSURE_WITNESS_STATE,
+} from '../../../src/control-plane/priority-recovery-snapshot.js';
 import {classifyActiveGateClosureWitness} from
   './active-gate-closure-classification.js';
 import {
@@ -20,6 +25,10 @@ const PUBLICATION_EVIDENCE_READY_BLOCKER = 'ready';
 const PUBLICATION_EVIDENCE_PUBLICATION_STATUS_PUBLISHED = 'PUBLISHED';
 const PUBLICATION_EVIDENCE_RECOVERY_PROTOCOL_STATE_STEADY_PUBLISHED =
   'steady_published';
+const PUBLICATION_EVIDENCE_PUBLICATION_GATE_REASON = Object.freeze({
+  PUBLICATION_EPOCH_PENDING: 'publication_epoch_pending',
+  MISSING_ACTIVE_NODE_PREFIX: 'publication_missing_active_node=',
+});
 const PUBLICATION_EVIDENCE_ACTIVE_GATE_BLOCKER_PREFIX = Object.freeze({
   PUBLICATION_GATE: 'publication_gate=',
   PRIORITY_RECOVERY_PROGRESS_CLASS: 'priority_recovery_progress_class=',
@@ -28,6 +37,28 @@ const PUBLICATION_EVIDENCE_SOURCE_SELECTION = Object.freeze({
   OBSERVED: 'observed',
   BEST_PROGRESS_CLOSED_PUBLICATION: 'best_progress_closed_publication',
 });
+const PUBLICATION_EVIDENCE_ACTIVE_GATE_PUBLICATION_MEMBERSHIP_STATE =
+  Object.freeze({
+    CLOSED_STALE_SELECTED_SNAPSHOT: 'closed_stale_selected_snapshot',
+    PROGRESS_SNAPSHOT: 'progress_snapshot',
+  });
+const PUBLICATION_EVIDENCE_ACTIVE_GATE_PUBLICATION_MEMBERSHIP_RULES =
+  Object.freeze([
+    Object.freeze({
+      state:
+        PUBLICATION_EVIDENCE_ACTIVE_GATE_PUBLICATION_MEMBERSHIP_STATE
+          .CLOSED_STALE_SELECTED_SNAPSHOT,
+      matches: (evidence) =>
+        evidence.stalePublicationClosure === true &&
+        evidence.currentPublicationGateClosed === true,
+    }),
+    Object.freeze({
+      state:
+        PUBLICATION_EVIDENCE_ACTIVE_GATE_PUBLICATION_MEMBERSHIP_STATE
+          .PROGRESS_SNAPSHOT,
+      matches: () => true,
+    }),
+  ]);
 const PUBLICATION_EVIDENCE_TYPEOF = Object.freeze({
   OBJECT: 'object',
   STRING: 'string',
@@ -163,6 +194,53 @@ function hasClosedPublicationBestProgress(progress = null) {
     );
 }
 
+function hasStaleGenericPublicationEpochClosure({
+  publicationStatus = null,
+  pendingAckCount = PUBLICATION_EVIDENCE_ZERO,
+  gateReasons = PUBLICATION_EVIDENCE_EMPTY_LIST,
+  priorityRecoveryObservation = null,
+  publicationConvergenceGate = null,
+} = {}) {
+  const closureRecordId =
+    normalizeOptionalString(priorityRecoveryObservation?.closureRecordId) ||
+    normalizeOptionalString(publicationConvergenceGate?.closureRecordId) ||
+    normalizeOptionalString(
+      publicationConvergenceGate?.priorityRecoveryClosureWitness
+        ?.closureRecordId,
+    );
+  const closureWitnessClass =
+    normalizeOptionalString(priorityRecoveryObservation?.closureWitnessClass) ||
+    normalizeOptionalString(publicationConvergenceGate?.closureWitnessClass) ||
+    normalizeOptionalString(
+      publicationConvergenceGate?.priorityRecoveryClosureWitness
+        ?.closureWitnessClass,
+    );
+  const closureState =
+    normalizeOptionalString(
+      priorityRecoveryObservation?.priorityRecoveryClosureState,
+    ) ||
+    normalizeOptionalString(
+      publicationConvergenceGate?.priorityRecoveryClosureWitness?.state,
+    );
+  const stalePublicationClosure =
+    closureState ===
+      PRIORITY_RECOVERY_CLOSURE_WITNESS_STATE.SATISFIED_STALE_PUBLICATION ||
+    (
+      closureRecordId ===
+        PRIORITY_RECOVERY_CLOSURE_RECORD_ID.PRIORITY_SPREAD &&
+      closureWitnessClass ===
+        PRIORITY_RECOVERY_CLOSURE_WITNESS_CLASS
+          .PUBLICATION_CONVERGED_PRIORITY_SPREAD_PENDING
+    );
+  return stalePublicationClosure === true &&
+    publicationStatus === PUBLICATION_EVIDENCE_PUBLICATION_STATUS_PUBLISHED &&
+    pendingAckCount === PUBLICATION_EVIDENCE_ZERO &&
+    hasOnlyGenericPublicationEpochGateReason(gateReasons) &&
+    normalizeDistinctStringArray(gateReasons).some((reason) =>
+      isPublicationMissingActiveGateReason(reason),
+    ) !== true;
+}
+
 function hasOpenPublicationEvidence({
   publicationConvergence = null,
   publicationConvergenceGate = null,
@@ -203,6 +281,22 @@ function hasOpenPublicationEvidence({
       publicationConvergence?.priorityRecoveryReasonCodes ??
       PUBLICATION_EVIDENCE_EMPTY_LIST,
   );
+  const staleGenericPublicationEpochClosure =
+    hasStaleGenericPublicationEpochClosure({
+      publicationStatus,
+      pendingAckCount,
+      gateReasons,
+      priorityRecoveryObservation,
+      publicationConvergenceGate,
+    });
+  const currentPriorityRecoveryReasonCodes =
+    staleGenericPublicationEpochClosure === true ?
+      priorityRecoveryReasonCodes.filter((reason) =>
+        reason !==
+          PUBLICATION_EVIDENCE_PUBLICATION_GATE_REASON
+            .PUBLICATION_EPOCH_PENDING,
+      ) :
+      priorityRecoveryReasonCodes;
   const decisionPriorityPartitionSummary =
     priorityRecoveryDecisionSnapshots?.priorityPartitionSummary &&
     isRecord(priorityRecoveryDecisionSnapshots.priorityPartitionSummary) ?
@@ -211,9 +305,12 @@ function hasOpenPublicationEvidence({
   const openEvidence = Object.freeze({
     pendingAckOpen: pendingAckCount > PUBLICATION_EVIDENCE_ZERO,
     publicationPending:
+      staleGenericPublicationEpochClosure !== true &&
+      (
       priorityRecoveryObservation?.publicationPending === true ||
       publicationConvergenceGate?.publicationPending === true ||
-      publicationConvergence?.publicationPending === true,
+      publicationConvergence?.publicationPending === true
+      ),
     publicationStatusOpen:
       Boolean(publicationStatus) &&
       publicationStatus !== PUBLICATION_EVIDENCE_PUBLICATION_STATUS_PUBLISHED,
@@ -222,9 +319,11 @@ function hasOpenPublicationEvidence({
       publicationConvergenceGate?.prioritySpreadPending === true ||
       publicationConvergence?.prioritySpreadPending === true ||
       priorityPartitionSummary?.satisfied === false,
-    gateReasonOpen: gateReasons.length > PUBLICATION_EVIDENCE_ZERO,
+    gateReasonOpen:
+      staleGenericPublicationEpochClosure !== true &&
+      gateReasons.length > PUBLICATION_EVIDENCE_ZERO,
     priorityRecoveryReasonOpen:
-      priorityRecoveryReasonCodes.length > PUBLICATION_EVIDENCE_ZERO,
+      currentPriorityRecoveryReasonCodes.length > PUBLICATION_EVIDENCE_ZERO,
     priorityRecoveryDecisionOpen:
       decisionPriorityPartitionSummary?.satisfied === false,
   });
@@ -586,6 +685,37 @@ function resolvePendingRequiredAckNodeIds(pendingAckSource = null) {
     null;
 }
 
+function hasCurrentActiveGatePendingAckClosure(progress = null) {
+  if (!isRecord(progress)) {
+    return false;
+  }
+  const pendingAckNodeIds = Array.isArray(progress.pendingAckNodeIds) ?
+    normalizeDistinctStringArray(progress.pendingAckNodeIds) :
+    null;
+  const pendingRequiredAckNodeIds = resolvePendingRequiredAckNodeIds(progress);
+  const closureEvidence = Object.freeze({
+    countClosed:
+      normalizeNonNegativeInteger(progress.pendingAckCount) ===
+      PUBLICATION_EVIDENCE_ZERO,
+    nodeListClosed:
+      pendingAckNodeIds !== null &&
+      pendingAckNodeIds.length === PUBLICATION_EVIDENCE_ZERO,
+    requiredAckListClosed:
+      pendingRequiredAckNodeIds !== null &&
+      pendingRequiredAckNodeIds.length === PUBLICATION_EVIDENCE_ZERO,
+    countOnlyClosed:
+      pendingAckNodeIds === null && pendingRequiredAckNodeIds === null,
+  });
+  return (
+    closureEvidence.countClosed === true &&
+    (
+      closureEvidence.nodeListClosed === true ||
+      closureEvidence.requiredAckListClosed === true ||
+      closureEvidence.countOnlyClosed === true
+    )
+  );
+}
+
 function resolveCurrentPendingAckNodeIds({
   progress = null,
   priorityRecoveryObservation = null,
@@ -630,21 +760,216 @@ function filterPublicationDerivedBlockers(blockers = []) {
   );
 }
 
+function isPublicationMembershipGateReason(reason) {
+  return reason ===
+    PUBLICATION_EVIDENCE_PUBLICATION_GATE_REASON.PUBLICATION_EPOCH_PENDING ||
+    reason.startsWith(
+      PUBLICATION_EVIDENCE_PUBLICATION_GATE_REASON
+        .MISSING_ACTIVE_NODE_PREFIX,
+    );
+}
+
+function hasPublicationMembershipGateReason(reasons) {
+  return normalizeDistinctStringArray(reasons).some((reason) =>
+    isPublicationMembershipGateReason(reason),
+  );
+}
+
+function isPublicationMissingActiveGateReason(reason) {
+  return String(reason || PUBLICATION_EVIDENCE_TEXT.EMPTY).startsWith(
+    PUBLICATION_EVIDENCE_PUBLICATION_GATE_REASON.MISSING_ACTIVE_NODE_PREFIX,
+  );
+}
+
+function hasOnlyGenericPublicationEpochGateReason(reasons) {
+  const normalizedReasons = normalizeDistinctStringArray(reasons);
+  return normalizedReasons.length > PUBLICATION_EVIDENCE_ZERO &&
+    normalizedReasons.every((reason) =>
+      reason ===
+        PUBLICATION_EVIDENCE_PUBLICATION_GATE_REASON.PUBLICATION_EPOCH_PENDING,
+    );
+}
+
+function resolvePublicationGateReasons({
+  publicationConvergenceGate = null,
+  priorityRecoveryObservation = null,
+  progress = null,
+} = {}) {
+  const reasonCandidates = [
+    publicationConvergenceGate?.reasons,
+    publicationConvergenceGate?.reasonCodes,
+    priorityRecoveryObservation?.publicationConvergenceGateReasons,
+    progress?.gateReasons,
+  ];
+  for (const candidate of reasonCandidates) {
+    const reasons = normalizeDistinctStringArray(candidate);
+    if (reasons.length > PUBLICATION_EVIDENCE_ZERO) {
+      return reasons;
+    }
+  }
+  return PUBLICATION_EVIDENCE_EMPTY_LIST;
+}
+
+function resolveActiveGateProgressGateReasons({
+  publicationConvergenceGate = null,
+  priorityRecoveryObservation = null,
+  progress = null,
+} = {}) {
+  return Array.isArray(progress?.gateReasons) ?
+    normalizeDistinctStringArray(progress.gateReasons) :
+    resolvePublicationGateReasons({
+      publicationConvergenceGate,
+      priorityRecoveryObservation,
+      progress,
+    });
+}
+
+function isCurrentPublicationMembershipGateClosed(
+  publicationConvergenceGate = null,
+  fallbackPublicationStatus = null,
+  fallbackPendingAckCount = PUBLICATION_EVIDENCE_ZERO,
+) {
+  if (!isRecord(publicationConvergenceGate)) {
+    return false;
+  }
+  const publicationStatus =
+    normalizeOptionalString(publicationConvergenceGate.publicationStatus) ||
+    fallbackPublicationStatus;
+  const pendingAckCount =
+    normalizeNonNegativeInteger(publicationConvergenceGate.pendingAckCount) ??
+    fallbackPendingAckCount;
+  const missingPublishedCount =
+    normalizeNonNegativeInteger(publicationConvergenceGate.missingPublishedCount) ??
+    PUBLICATION_EVIDENCE_ZERO;
+  const gateReasons =
+    publicationConvergenceGate.reasons ??
+    publicationConvergenceGate.reasonCodes ??
+    PUBLICATION_EVIDENCE_EMPTY_LIST;
+  return publicationConvergenceGate.ready === true &&
+    publicationConvergenceGate.publicationPending !== true &&
+    publicationStatus === PUBLICATION_EVIDENCE_PUBLICATION_STATUS_PUBLISHED &&
+    pendingAckCount === PUBLICATION_EVIDENCE_ZERO &&
+    missingPublishedCount === PUBLICATION_EVIDENCE_ZERO &&
+    hasPublicationMembershipGateReason(gateReasons) !== true;
+}
+
+function buildActiveGatePublicationMembershipEvidence({
+  progress = null,
+  priorityRecoveryObservation = null,
+  publicationConvergenceGate = null,
+  rawPublicationConvergenceGate = null,
+  pendingAckCount = PUBLICATION_EVIDENCE_ZERO,
+} = {}) {
+  const publicationStatus =
+    normalizeOptionalString(publicationConvergenceGate?.publicationStatus) ||
+    normalizeOptionalString(priorityRecoveryObservation?.publicationStatus) ||
+    normalizeOptionalString(progress?.publicationStatus);
+  const closureRecordId =
+    normalizeOptionalString(priorityRecoveryObservation?.closureRecordId) ||
+    normalizeOptionalString(publicationConvergenceGate?.closureRecordId) ||
+    normalizeOptionalString(progress?.closureRecordId);
+  const closureWitnessClass =
+    normalizeOptionalString(priorityRecoveryObservation?.closureWitnessClass) ||
+    normalizeOptionalString(publicationConvergenceGate?.closureWitnessClass) ||
+    normalizeOptionalString(progress?.closureWitnessClass);
+  const closureWitnessSatisfiesPublication =
+    closureRecordId ===
+      PRIORITY_RECOVERY_CLOSURE_RECORD_ID.PRIORITY_SPREAD &&
+    closureWitnessClass ===
+      PRIORITY_RECOVERY_CLOSURE_WITNESS_CLASS
+        .PUBLICATION_CONVERGED_PRIORITY_SPREAD_PENDING;
+  const stalePublicationClosure =
+    normalizeOptionalString(
+      priorityRecoveryObservation?.priorityRecoveryClosureState,
+    ) ===
+      PRIORITY_RECOVERY_CLOSURE_WITNESS_STATE
+        .SATISFIED_STALE_PUBLICATION ||
+    closureWitnessSatisfiesPublication;
+  const currentPublicationGateReasons = resolvePublicationGateReasons({
+    publicationConvergenceGate,
+    priorityRecoveryObservation,
+  });
+  const currentPublicationGateMissingPublishedCount =
+    normalizeNonNegativeInteger(publicationConvergenceGate?.missingPublishedCount) ??
+    PUBLICATION_EVIDENCE_ZERO;
+  const rawPublicationGateReasons = resolvePublicationGateReasons({
+    publicationConvergenceGate: rawPublicationConvergenceGate,
+  });
+  const rawPublicationGateStatus =
+    normalizeOptionalString(rawPublicationConvergenceGate?.publicationStatus) ||
+    publicationStatus;
+  const rawPublicationGatePendingAckCount =
+    normalizeNonNegativeInteger(rawPublicationConvergenceGate?.pendingAckCount) ??
+    pendingAckCount;
+  const staleGenericPublicationEpochGateClosed =
+    hasStaleGenericPublicationEpochClosure({
+      publicationStatus: rawPublicationGateStatus,
+      pendingAckCount: rawPublicationGatePendingAckCount,
+      gateReasons: rawPublicationGateReasons,
+      priorityRecoveryObservation,
+      publicationConvergenceGate: rawPublicationConvergenceGate,
+    });
+  const staleGenericCurrentPublicationEpochGateClosed =
+    hasStaleGenericPublicationEpochClosure({
+      publicationStatus,
+      pendingAckCount,
+      gateReasons: currentPublicationGateReasons,
+      priorityRecoveryObservation,
+      publicationConvergenceGate,
+    });
+  return Object.freeze({
+    stalePublicationClosure,
+    publicationStatusPublished:
+      publicationStatus === PUBLICATION_EVIDENCE_PUBLICATION_STATUS_PUBLISHED,
+    pendingAckClosed: pendingAckCount === PUBLICATION_EVIDENCE_ZERO,
+    currentPublicationGateClosed:
+      isCurrentPublicationMembershipGateClosed(
+        rawPublicationConvergenceGate,
+        publicationStatus,
+        pendingAckCount,
+      ) ||
+      staleGenericPublicationEpochGateClosed ||
+      staleGenericCurrentPublicationEpochGateClosed ||
+      (
+        currentPublicationGateMissingPublishedCount ===
+          PUBLICATION_EVIDENCE_ZERO &&
+        hasPublicationMembershipGateReason(currentPublicationGateReasons) !==
+          true &&
+        isCurrentPublicationMembershipGateClosed(
+          publicationConvergenceGate,
+          publicationStatus,
+          pendingAckCount,
+        )
+      ),
+  });
+}
+
+function resolveActiveGatePublicationMembershipState(evidence) {
+  return PUBLICATION_EVIDENCE_ACTIVE_GATE_PUBLICATION_MEMBERSHIP_RULES
+    .find((rule) => rule.matches(evidence))
+    .state;
+}
+
+function isClosedActiveGatePublicationMembershipState(state) {
+  return state ===
+    PUBLICATION_EVIDENCE_ACTIVE_GATE_PUBLICATION_MEMBERSHIP_STATE
+      .CLOSED_STALE_SELECTED_SNAPSHOT;
+}
+
 function buildCanonicalPriorityRecoveryActiveGateProgress(
   progress = null,
   priorityRecoveryObservation = null,
   publicationConvergenceGate = null,
+  rawPublicationConvergenceGate = null,
 ) {
   if (!isRecord(progress)) {
     return null;
   }
-  const gateReasons = normalizeDistinctStringArray(
-    publicationConvergenceGate?.reasons ??
-      priorityRecoveryObservation?.publicationConvergenceGateReasons ??
-      publicationConvergenceGate?.reasonCodes ??
-      progress?.gateReasons ??
-      PUBLICATION_EVIDENCE_EMPTY_LIST,
-  );
+  const gateReasons = resolveActiveGateProgressGateReasons({
+    publicationConvergenceGate,
+    priorityRecoveryObservation,
+    progress,
+  });
   const priorityRecoveryProgressClasses =
     buildCanonicalPriorityRecoveryProgressClasses(
       priorityRecoveryObservation,
@@ -670,21 +995,57 @@ function buildCanonicalPriorityRecoveryActiveGateProgress(
   });
   const pendingAckCount = pendingAckNodeIds !== null ?
     pendingAckNodeIds.length :
+    hasCurrentActiveGatePendingAckClosure(progress) === true ?
+      PUBLICATION_EVIDENCE_ZERO :
     Math.max(
       progressPendingAckCount,
       publicationPendingAckCount,
       observationPendingAckCount,
     );
-  const selectedMissingPublishedNodeIds =
+  const publicationMembershipEvidence =
+    buildActiveGatePublicationMembershipEvidence({
+      progress,
+      priorityRecoveryObservation,
+      publicationConvergenceGate,
+      rawPublicationConvergenceGate,
+      pendingAckCount,
+    });
+  const publicationMembershipState =
+    resolveActiveGatePublicationMembershipState(publicationMembershipEvidence);
+  const staleGenericPublicationMembershipClosed =
+    publicationMembershipEvidence.stalePublicationClosure === true &&
+    publicationMembershipEvidence.publicationStatusPublished === true &&
+    publicationMembershipEvidence.pendingAckClosed === true &&
+    hasOnlyGenericPublicationEpochGateReason(gateReasons) &&
+    normalizeDistinctStringArray(gateReasons).some((reason) =>
+      isPublicationMissingActiveGateReason(reason),
+    ) !== true;
+  const publicationMembershipClosed =
+    isClosedActiveGatePublicationMembershipState(publicationMembershipState) ||
+    staleGenericPublicationMembershipClosed;
+  const observedSelectedMissingPublishedNodeIds =
     resolveSelectedMissingPublishedNodeIds(progress);
+  const selectedMissingPublishedNodeIds =
+    publicationMembershipClosed ?
+      PUBLICATION_EVIDENCE_EMPTY_LIST :
+      observedSelectedMissingPublishedNodeIds;
+  const canonicalGateReasons =
+    publicationMembershipClosed ?
+      gateReasons.filter((reason) =>
+        isPublicationMembershipGateReason(reason) !== true,
+      ) :
+      gateReasons;
   const progressMissingPublishedCount =
     selectedMissingPublishedNodeIds !== null ?
       selectedMissingPublishedNodeIds.length :
       normalizeNonNegativeInteger(progress?.missingPublishedCount) ??
         PUBLICATION_EVIDENCE_ZERO;
   const publicationMissingPublishedCount =
-    normalizeNonNegativeInteger(publicationConvergenceGate?.missingPublishedCount) ??
-    PUBLICATION_EVIDENCE_ZERO;
+    publicationMembershipClosed ?
+      PUBLICATION_EVIDENCE_ZERO :
+      normalizeNonNegativeInteger(
+        publicationConvergenceGate?.missingPublishedCount,
+      ) ?? PUBLICATION_EVIDENCE_ZERO;
   const missingPublishedCount =
     selectedMissingPublishedNodeIds !== null ?
       selectedMissingPublishedNodeIds.length :
@@ -700,7 +1061,7 @@ function buildCanonicalPriorityRecoveryActiveGateProgress(
         progress?.prioritySpreadSatisfied ?? null;
   const blockers = [
     ...filterPublicationDerivedBlockers(progress?.blockers),
-    ...gateReasons.map((reason) =>
+    ...canonicalGateReasons.map((reason) =>
       PUBLICATION_EVIDENCE_ACTIVE_GATE_BLOCKER_PREFIX.PUBLICATION_GATE +
       reason,
     ),
@@ -716,7 +1077,7 @@ function buildCanonicalPriorityRecoveryActiveGateProgress(
     normalizeNonNegativeInteger(progress?.activeNodeCount) !== null &&
     progress.activeNodeCount === progress.expectedNodeCount &&
     progress.snapshotCoverageComplete === true &&
-    gateReasons.length === PUBLICATION_EVIDENCE_ZERO &&
+    canonicalGateReasons.length === PUBLICATION_EVIDENCE_ZERO &&
     pendingAckCount === PUBLICATION_EVIDENCE_ZERO &&
     missingPublishedCount === PUBLICATION_EVIDENCE_ZERO;
   if (
@@ -745,8 +1106,8 @@ function buildCanonicalPriorityRecoveryActiveGateProgress(
     ...(selectedMissingPublishedNodeIds !== null ?
       {selectedMissingPublishedNodeIds} :
       {}),
-    gateReasonCount: gateReasons.length,
-    gateReasons,
+    gateReasonCount: canonicalGateReasons.length,
+    gateReasons: canonicalGateReasons,
     prioritySpreadSatisfied,
     prioritySpreadGap:
       normalizeNonNegativeInteger(priorityPartitionSummary?.totalSpreadGap) ??
@@ -904,18 +1265,35 @@ function buildCanonicalPriorityRecoveryActiveGate(
   activeGate = null,
   priorityRecoveryObservation = null,
   publicationConvergenceGate = null,
+  rawPublicationConvergenceGate = null,
 ) {
   if (!isRecord(activeGate)) {
     return null;
   }
+  const priorityRecoveryObservationWithActiveGateClosure = Object.freeze({
+    ...(isRecord(priorityRecoveryObservation) ? priorityRecoveryObservation : {}),
+    closureRecordId:
+      normalizeOptionalString(priorityRecoveryObservation?.closureRecordId) ||
+      normalizeOptionalString(activeGate.closureRecordId),
+    closureWitnessClass:
+      normalizeOptionalString(priorityRecoveryObservation?.closureWitnessClass) ||
+      normalizeOptionalString(activeGate.closureWitnessClass),
+  });
   const canonicalProgress = buildCanonicalPriorityRecoveryActiveGateProgress(
     activeGate.progress,
-    priorityRecoveryObservation,
+    priorityRecoveryObservationWithActiveGateClosure,
     publicationConvergenceGate,
+    rawPublicationConvergenceGate,
+  );
+  const canonicalBestProgress = buildCanonicalPriorityRecoveryActiveGateProgress(
+    activeGate.bestProgress,
+    priorityRecoveryObservationWithActiveGateClosure,
+    publicationConvergenceGate,
+    rawPublicationConvergenceGate,
   );
   const activeGateClosureWitness = classifyActiveGateClosureWitness({
     progressSnapshot: canonicalProgress,
-    bestProgressSnapshot: activeGate?.bestProgress || null,
+    bestProgressSnapshot: canonicalBestProgress,
     publicationConvergence: null,
     publicationConvergenceGate,
     readinessMode: activeGate?.mode || null,
@@ -925,17 +1303,20 @@ function buildCanonicalPriorityRecoveryActiveGate(
       ...activeGate,
       closureRecordId:
         normalizeOptionalString(activeGate.closureRecordId) ||
-        normalizeOptionalString(priorityRecoveryObservation?.closureRecordId) ||
+        normalizeOptionalString(
+          priorityRecoveryObservationWithActiveGateClosure.closureRecordId,
+        ) ||
         normalizeOptionalString(publicationConvergenceGate?.closureRecordId) ||
         normalizeOptionalString(activeGateClosureWitness?.closureRecordId),
       closureWitnessClass:
         normalizeOptionalString(activeGate.closureWitnessClass) ||
         normalizeOptionalString(
-          priorityRecoveryObservation?.closureWitnessClass,
+          priorityRecoveryObservationWithActiveGateClosure.closureWitnessClass,
         ) ||
         normalizeOptionalString(publicationConvergenceGate?.closureWitnessClass) ||
         normalizeOptionalString(activeGateClosureWitness?.closureWitnessClass),
       progress: canonicalProgress,
+      bestProgress: canonicalBestProgress,
     },
   });
 }
@@ -1176,6 +1557,8 @@ function buildCanonicalPriorityRecoveryObservation(
     explicitPriorityRecoveryObservation?.activeGateBlockerHistory ||
     existingPriorityRecoveryObservation?.activeGateBlockerHistory ||
     null;
+  const rawPublicationConvergenceGate =
+    resolveRawPublicationConvergenceGate(controlPlane);
   const logsTable = isRecord(controlPlane?.logsTable) ? controlPlane.logsTable : null;
   const hasExplicitActiveGateSource =
     isRecord(controlPlane?.activeGate) ||
@@ -1224,6 +1607,7 @@ function buildCanonicalPriorityRecoveryObservation(
     rawActiveGate,
     baseDerivedPriorityRecoveryObservation,
     publicationConvergenceGate,
+    rawPublicationConvergenceGate,
   );
   const canonicalActiveGateFields = canonicalActiveGate ?
     deriveLegacyPriorityRecoveryActiveGateFields(canonicalActiveGate) :
@@ -1289,7 +1673,23 @@ function buildCanonicalPriorityRecoveryObservation(
     existingPendingAckNodeIds.every((nodeId, index) =>
       nodeId === derivedPendingAckNodeIds[index],
     );
+  const existingActiveGatePublicationContract =
+    buildActiveGatePublicationContract(existingPriorityRecoveryObservation);
+  const existingObservationHasStaleGenericPublicationGate =
+    hasStaleGenericPublicationEpochClosure({
+      publicationStatus: existingActiveGatePublicationContract
+        ?.publicationStatus,
+      pendingAckCount:
+        existingActiveGatePublicationContract?.pendingAckCount ??
+        PUBLICATION_EVIDENCE_ZERO,
+      gateReasons:
+        existingActiveGatePublicationContract?.gateReasons ??
+        PUBLICATION_EVIDENCE_EMPTY_LIST,
+      priorityRecoveryObservation: existingPriorityRecoveryObservation,
+      publicationConvergenceGate: rawPublicationConvergenceGate,
+    });
   return samePublicationGateState &&
+    existingObservationHasStaleGenericPublicationGate !== true &&
     sameActiveGatePublicationContract(
       existingPriorityRecoveryObservation,
       canonicalPriorityRecoveryObservation,
@@ -1400,6 +1800,8 @@ function buildCanonicalPublicationConvergence(
     currentPendingAckNodeIds || PUBLICATION_EVIDENCE_EMPTY_LIST;
   const pendingAckCount = currentPendingAckNodeIds !== null ?
     pendingAckNodeIds.length :
+    hasCurrentActiveGatePendingAckClosure(activeGateProgress) === true ?
+      PUBLICATION_EVIDENCE_ZERO :
     Math.max(
       normalizeNonNegativeInteger(priorityRecoveryObservation?.pendingAckCount) ??
         PUBLICATION_EVIDENCE_ZERO,
@@ -1410,24 +1812,52 @@ function buildCanonicalPublicationConvergence(
       normalizeNonNegativeInteger(activeGateProgress?.pendingAckCount) ??
         PUBLICATION_EVIDENCE_ZERO,
     );
-  const missingPublishedNodeIds = normalizeDistinctStringArray(
+  const rawPublicationGateReasons =
+    publicationConvergenceGate?.reasonCodes ??
+    publicationConvergenceGate?.reasons ??
+    priorityRecoveryObservation?.publicationConvergenceGateReasons ??
+    PUBLICATION_EVIDENCE_EMPTY_LIST;
+  const staleGenericPublicationEpochClosure =
+    hasStaleGenericPublicationEpochClosure({
+      publicationStatus,
+      pendingAckCount,
+      gateReasons: rawPublicationGateReasons,
+      priorityRecoveryObservation,
+      publicationConvergenceGate,
+    });
+  const currentPriorityRecoveryReasonCodes =
+    staleGenericPublicationEpochClosure === true ?
+      priorityRecoveryReasonCodes.filter((reason) =>
+        reason !==
+          PUBLICATION_EVIDENCE_PUBLICATION_GATE_REASON
+            .PUBLICATION_EPOCH_PENDING,
+      ) :
+      priorityRecoveryReasonCodes;
+  const observedMissingPublishedNodeIds = normalizeDistinctStringArray(
     publicationConvergenceGate?.missingPublishedNodeIds ??
       rawPublicationConvergence?.missingPublishedNodeIds ??
       rawPublicationConvergence?.missingPublishedRecoveryActiveNodeIds ??
       activeGateProgress?.selectedMissingPublishedNodeIds ??
       PUBLICATION_EVIDENCE_EMPTY_LIST,
   );
-  const missingPublishedCount = Math.max(
-    missingPublishedNodeIds.length,
-    normalizeNonNegativeInteger(
-      publicationConvergenceGate?.missingPublishedCount,
-    ) ?? PUBLICATION_EVIDENCE_ZERO,
-    normalizeNonNegativeInteger(
-      rawPublicationConvergence?.missingPublishedCount,
-    ) ?? PUBLICATION_EVIDENCE_ZERO,
-    normalizeNonNegativeInteger(activeGateProgress?.missingPublishedCount) ??
-      PUBLICATION_EVIDENCE_ZERO,
-  );
+  const missingPublishedNodeIds =
+    staleGenericPublicationEpochClosure === true ?
+      PUBLICATION_EVIDENCE_EMPTY_LIST :
+      observedMissingPublishedNodeIds;
+  const missingPublishedCount =
+    staleGenericPublicationEpochClosure === true ?
+      PUBLICATION_EVIDENCE_ZERO :
+      Math.max(
+        missingPublishedNodeIds.length,
+        normalizeNonNegativeInteger(
+          publicationConvergenceGate?.missingPublishedCount,
+        ) ?? PUBLICATION_EVIDENCE_ZERO,
+        normalizeNonNegativeInteger(
+          rawPublicationConvergence?.missingPublishedCount,
+        ) ?? PUBLICATION_EVIDENCE_ZERO,
+        normalizeNonNegativeInteger(activeGateProgress?.missingPublishedCount) ??
+          PUBLICATION_EVIDENCE_ZERO,
+      );
   const closureRecordId =
     normalizeOptionalString(priorityRecoveryObservation?.closureRecordId) ||
     normalizeOptionalString(publicationConvergenceGate?.closureRecordId) ||
@@ -1446,7 +1876,7 @@ function buildCanonicalPublicationConvergence(
     ...(publicationEpoch !== null ? {publicationEpoch} : {}),
     ...(publicationStatus ? {status: publicationStatus, publicationStatus} : {}),
     ...(recoveryProtocolState ? {recoveryProtocolState} : {}),
-    priorityRecoveryReasonCodes,
+    priorityRecoveryReasonCodes: currentPriorityRecoveryReasonCodes,
     priorityPartitionSummary,
     priorityRecoveryClosureWitness,
     publishedActiveNodeIds,
@@ -1462,8 +1892,11 @@ function buildCanonicalPublicationConvergence(
     missingPublishedNodeIds,
     missingPublishedCount,
     publicationPending:
+      staleGenericPublicationEpochClosure !== true &&
+      (
       priorityRecoveryObservation?.publicationPending === true ||
-      publicationConvergenceGate?.publicationPending === true,
+      publicationConvergenceGate?.publicationPending === true
+      ),
     prioritySpreadPending:
       priorityRecoveryObservation?.prioritySpreadPending === true ||
       publicationConvergenceGate?.prioritySpreadPending === true,
