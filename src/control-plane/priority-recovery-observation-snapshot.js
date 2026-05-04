@@ -701,6 +701,26 @@ function resolvePriorityRecoveryOperationIds(relatedSnapshots = []) {
   );
 }
 
+function resolvePriorityRecoverySerialWaitOperationIds(relatedSnapshots = []) {
+  return normalizeDistinctStringArray(
+    relatedSnapshots.flatMap((snapshot) =>
+      Array.isArray(snapshot?.coordinator?.serialWaitOperationIds) ?
+        snapshot.coordinator.serialWaitOperationIds :
+        LOCAL_EMPTY_LIST,
+    ),
+  );
+}
+
+function resolvePriorityRecoverySerialWaitPartitionIds(relatedSnapshots = []) {
+  return normalizeDistinctStringArray(
+    relatedSnapshots.flatMap((snapshot) =>
+      Array.isArray(snapshot?.coordinator?.serialWaitPartitionIds) ?
+        snapshot.coordinator.serialWaitPartitionIds :
+        LOCAL_EMPTY_LIST,
+    ),
+  );
+}
+
 function resolvePriorityRecoveryEligibleNodeIds(latestPartitionSnapshot) {
   const effectiveEligibleNodeIds = Array.isArray(
     latestPartitionSnapshot?.admission?.effectiveEligibleNodeIds,
@@ -735,6 +755,10 @@ function buildPriorityRecoveryPartitionSnapshot(
     latestPartitionSnapshot?.blockerReasons,
   );
   const operationIds = resolvePriorityRecoveryOperationIds(relatedSnapshots);
+  const serialWaitOperationIds =
+    resolvePriorityRecoverySerialWaitOperationIds(relatedSnapshots);
+  const serialWaitPartitionIds =
+    resolvePriorityRecoverySerialWaitPartitionIds(relatedSnapshots);
   const latestOperation = isRecord(latestPartitionSnapshot?.coordinator?.operation) ?
     latestPartitionSnapshot.coordinator.operation :
     null;
@@ -779,6 +803,7 @@ function buildPriorityRecoveryPartitionSnapshot(
       normalizeDistinctStringArray([
         latestPartitionSnapshot?.correlationKey,
         ...operationIds,
+        ...serialWaitOperationIds,
       ]),
     ),
     retryAfterMs: normalizeNonNegativeInteger(
@@ -872,6 +897,8 @@ function buildPriorityRecoveryPartitionSnapshot(
       ),
     ),
     operationIds: Object.freeze(operationIds),
+    serialWaitOperationIds: Object.freeze(serialWaitOperationIds),
+    serialWaitPartitionIds: Object.freeze(serialWaitPartitionIds),
     completionState:
       normalizePriorityRecoveryObservationStateValue(
         latestPartitionSnapshot?.completion?.state,

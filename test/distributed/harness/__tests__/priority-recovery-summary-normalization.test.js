@@ -25,11 +25,15 @@ const SAME_BOUNDARY_TEST_NAME =
   'same-boundary transition-deferred actuation outranks actionable scheduling';
 const SAME_OPERATION_FRESHNESS_TEST_NAME =
   'same-operation retry handoff progress supersedes stale workflow timeout';
+const SERIAL_WAIT_METADATA_TEST_NAME =
+  'serial wait operation metadata survives progress summary normalization';
 const OPERATION_SCHEDULING_PARTITION_ID = 'replica_operations-p1';
 const SERIAL_WAIT_PARTITION_ID = 'sql_transactions-p1';
+const SERIAL_WAIT_BLOCKING_PARTITION_ID = 'sql_transaction_participants-p1';
 const WORKFLOW_TIMEOUT_PARTITION_ID = 'sql_transactions-p2';
 const SAME_BOUNDARY_DEFERRED_PARTITION_ID = 'replica_operations-p2';
 const STALE_WORKFLOW_TIMEOUT_PARTITION_ID = 'sql_transactions-p1';
+const SERIAL_WAIT_BLOCKING_OPERATION_ID = 'op-serial-wait-owner';
 const STALE_WORKFLOW_TIMEOUT_OPERATION_ID = 'op-retry-handoff';
 const STALE_WORKFLOW_TIMEOUT_CORRELATION_KEY =
   'sql_transactions-p1|4|op-retry-handoff';
@@ -39,6 +43,7 @@ const RETRY_HANDOFF_PROGRESS_AT_MS = 1777922930548;
 const RETRY_HANDOFF_DELAY_MS = 250;
 const EXPECTED_PARTITION_COUNT = 2;
 const EXPECTED_FRESHENED_PARTITION_COUNT = 1;
+const EXPECTED_EMPTY_OPERATION_IDS = Object.freeze([]);
 const WORKFLOW_STEP_PENDING = 'PENDING';
 const WORKFLOW_STEP_SENDING = 'SENDING';
 const OPERATION_STATUS_PENDING = 'pending';
@@ -71,6 +76,8 @@ const SERIAL_WAIT_WITNESS = Object.freeze({
   waitMode: PRIORITY_RECOVERY_WAIT_MODE.EVENT_DRIVEN,
   nextRequiredAction:
     PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.WAIT_FOR_OPERATION_PROGRESS,
+  serialWaitOperationIds: Object.freeze([SERIAL_WAIT_BLOCKING_OPERATION_ID]),
+  serialWaitPartitionIds: Object.freeze([SERIAL_WAIT_BLOCKING_PARTITION_ID]),
   lastProgressAtMs: SAMPLE_CAPTURED_AT_MS,
 });
 const OPERATION_SCHEDULING_WITNESS = Object.freeze({
@@ -205,6 +212,32 @@ test(TEST_NAME, () => {
   assert.equal(
     progressSummary.dominantWitness.nextRequiredAction,
     PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.CREATE_RECOVERY_OPERATION,
+  );
+});
+
+test(SERIAL_WAIT_METADATA_TEST_NAME, () => {
+  const progressSummary = buildPriorityRecoveryProgressSummary({
+    priorityRecoveryPartitionWitnesses: Object.freeze([
+      SERIAL_WAIT_WITNESS,
+    ]),
+  });
+  const dominantWitness = progressSummary.dominantWitness;
+
+  assert.equal(
+    progressSummary.partitionCount,
+    EXPECTED_FRESHENED_PARTITION_COUNT,
+  );
+  assert.deepEqual(
+    dominantWitness.operationIds,
+    EXPECTED_EMPTY_OPERATION_IDS,
+  );
+  assert.deepEqual(
+    dominantWitness.serialWaitOperationIds,
+    [SERIAL_WAIT_BLOCKING_OPERATION_ID],
+  );
+  assert.deepEqual(
+    dominantWitness.serialWaitPartitionIds,
+    [SERIAL_WAIT_BLOCKING_PARTITION_ID],
   );
 });
 

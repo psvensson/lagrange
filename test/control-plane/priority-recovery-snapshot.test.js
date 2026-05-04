@@ -222,6 +222,8 @@ const PRIORITY_RECOVERY_TARGET_VISIBILITY_ACTIVE_OPERATIONAL =
   'active_operational';
 const PRIORITY_RECOVERY_FAILED_REPLACE_ACTIVE_TARGET_TEST_NAME =
   'priority recovery failed REPLACE with active target satisfies spread instead of missing operation';
+const PRIORITY_RECOVERY_SERIAL_WAIT_WITNESS_TEST_NAME =
+  'priority recovery serial-wait witnesses retain blocking operation evidence';
 const PRIORITY_RECOVERY_ACTIVE_TARGET_NOT_MISSING_OPERATION_MESSAGE =
   'an active operational replacement target should not be reported as missing operation work';
 const PRIORITY_RECOVERY_ACTIVE_TARGET_SPREAD_WITNESS_MESSAGE =
@@ -232,6 +234,14 @@ const PRIORITY_RECOVERY_ACTIVE_TARGET_COMPLETION_MESSAGE =
   'completion should use the spread-satisfied recovery state';
 const PRIORITY_RECOVERY_ACTIVE_TARGET_PROGRESS_MESSAGE =
   'the progress contract should not schedule a duplicate recovery operation';
+const PRIORITY_RECOVERY_SERIAL_WAIT_OPERATION_IDS_MESSAGE =
+  'serial-wait witnesses should keep current-partition operation ids separate';
+const PRIORITY_RECOVERY_SERIAL_WAIT_BLOCKING_OPERATION_MESSAGE =
+  'serial-wait witnesses should expose the operation that owns the serial lane';
+const PRIORITY_RECOVERY_SERIAL_WAIT_BLOCKING_PARTITION_MESSAGE =
+  'serial-wait witnesses should expose the partition that owns the serial lane';
+const PRIORITY_RECOVERY_SERIAL_WAIT_WITNESS_ID_MESSAGE =
+  'serial-wait operation ids should remain diagnostic witness ids';
 const PRIORITY_RECOVERY_SQL_TRANSACTIONS_REPLICA_ID =
   'sql_transactions-p1-r5';
 const PRIORITY_RECOVERY_SQL_TRANSACTIONS_REPLACEMENT_REPLICA_ID =
@@ -263,6 +273,9 @@ const PRIORITY_RECOVERY_STALE_READY_DISTINCT_NODE_COUNT = 2;
 const PRIORITY_RECOVERY_SINGLE_SPREAD_GAP = 1;
 const PRIORITY_RECOVERY_EMPTY_COUNT = 0;
 const PRIORITY_RECOVERY_SINGLE_OPERATION_COUNT = 1;
+const PRIORITY_RECOVERY_FIRST_PARTITION_WITNESS_INDEX = 0;
+const PRIORITY_RECOVERY_EMPTY_OPERATION_IDS = Object.freeze([]);
+const PRIORITY_RECOVERY_ABSENT_OPERATION = null;
 const PRIORITY_RECOVERY_SINGLE_ADD_BUDGET_LIMIT = 1;
 const PRIORITY_RECOVERY_SINGLE_EMERGENCY_OVERFLOW_SLOT_COUNT = 1;
 const PRIORITY_RECOVERY_DUAL_EMERGENCY_OVERFLOW_SLOT_COUNT = 2;
@@ -2222,6 +2235,88 @@ async (t) => {
       PRIORITY_RECOVERY_OPERATION_ID_OBJECT_ONLY,
     ),
     'operation ids should remain part of the witness id set for harness diagnostics',
+  );
+});
+
+test(PRIORITY_RECOVERY_SERIAL_WAIT_WITNESS_TEST_NAME, async (t) => {
+  const observationSnapshot = buildPriorityRecoveryObservationSnapshot({
+    priorityRecoveryDecisionSnapshots: {
+      capturedAt: PRIORITY_RECOVERY_SAMPLE_CAPTURED_AT_MS,
+      publicationEpoch: PRIORITY_RECOVERY_SAMPLE_PUBLICATION_EPOCH,
+      blockerPartitionIdsByReason: {
+        [PRIORITY_RECOVERY_BLOCKER_REASON_SERIAL_OPERATION_WAIT]: [
+          SQL_TRANSACTION_PRIORITY_PARTITION_ID,
+        ],
+      },
+      partitionIdsBySemanticState: {
+        [PRIORITY_RECOVERY_SEMANTIC_STATE_NEEDS_OPERATION]: [
+          SQL_TRANSACTION_PRIORITY_PARTITION_ID,
+        ],
+      },
+      snapshots: [{
+        partitionId: SQL_TRANSACTION_PRIORITY_PARTITION_ID,
+        epoch: PRIORITY_RECOVERY_SAMPLE_PUBLICATION_EPOCH,
+        semanticState: PRIORITY_RECOVERY_SEMANTIC_STATE_NEEDS_OPERATION,
+        blockerReasons: [
+          PRIORITY_RECOVERY_BLOCKER_REASON_SERIAL_OPERATION_WAIT,
+        ],
+        planner: {
+          ready: false,
+          spreadGap: PRIORITY_RECOVERY_REQUIRED_DISTINCT_NODE_COUNT,
+        },
+        coordinator: {
+          operationCount: PRIORITY_RECOVERY_EMPTY_COUNT,
+          operationIds: PRIORITY_RECOVERY_EMPTY_OPERATION_IDS,
+          operation: PRIORITY_RECOVERY_ABSENT_OPERATION,
+          serialWaitOperationCount: PRIORITY_RECOVERY_SINGLE_OPERATION_COUNT,
+          serialWaitOperationIds: [
+            PRIORITY_RECOVERY_OPERATION_ID_SERIAL_LANE_ADD,
+          ],
+          serialWaitPartitionIds: [
+            PRIORITY_RECOVERY_SQL_TRANSACTION_PARTICIPANTS_PARTITION_ID,
+          ],
+        },
+        progress: {
+          contractState: PRIORITY_RECOVERY_PROGRESS_CONTRACT_STATE_PENDING,
+          currentOwner: PRIORITY_RECOVERY_PROGRESS_OWNER_WORKFLOW,
+          nextRequiredAction:
+              PRIORITY_RECOVERY_PROGRESS_ACTION_WAIT_FOR_PROGRESS,
+          blockingBoundary: PRIORITY_RECOVERY_PROGRESS_BOUNDARY_WORKFLOW,
+          waitMode: PRIORITY_RECOVERY_PROGRESS_WAIT_EVENT_DRIVEN,
+          lastProgressAtMs: PRIORITY_RECOVERY_SAMPLE_CAPTURED_AT_MS,
+        },
+        actuation: {
+          owner: PRIORITY_RECOVERY_PROGRESS_OWNER_WORKFLOW,
+          state: PRIORITY_RECOVERY_ACTUATION_STATE_TRANSITION_DEFERRED,
+        },
+      }],
+    },
+  });
+  const partitionWitness =
+      observationSnapshot.priorityRecoveryPartitionWitnesses[
+        PRIORITY_RECOVERY_FIRST_PARTITION_WITNESS_INDEX
+      ];
+
+  t.same(
+    partitionWitness.operationIds,
+    PRIORITY_RECOVERY_EMPTY_OPERATION_IDS,
+    PRIORITY_RECOVERY_SERIAL_WAIT_OPERATION_IDS_MESSAGE,
+  );
+  t.same(
+    partitionWitness.serialWaitOperationIds,
+    [PRIORITY_RECOVERY_OPERATION_ID_SERIAL_LANE_ADD],
+    PRIORITY_RECOVERY_SERIAL_WAIT_BLOCKING_OPERATION_MESSAGE,
+  );
+  t.same(
+    partitionWitness.serialWaitPartitionIds,
+    [PRIORITY_RECOVERY_SQL_TRANSACTION_PARTICIPANTS_PARTITION_ID],
+    PRIORITY_RECOVERY_SERIAL_WAIT_BLOCKING_PARTITION_MESSAGE,
+  );
+  t.ok(
+    partitionWitness.witnessIds.includes(
+      PRIORITY_RECOVERY_OPERATION_ID_SERIAL_LANE_ADD,
+    ),
+    PRIORITY_RECOVERY_SERIAL_WAIT_WITNESS_ID_MESSAGE,
   );
 });
 

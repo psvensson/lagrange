@@ -243,6 +243,12 @@ function normalizePriorityRecoveryPartitionWitnessesForDiagnostics(witnesses) {
       const witnessIds = normalizeDistinctStringArray(
         witness?.witnessIds ?? witness?.witness_ids,
       );
+      const serialWaitOperationIds = normalizeDistinctStringArray(
+        witness?.serialWaitOperationIds ?? witness?.serial_wait_operation_ids,
+      );
+      const serialWaitPartitionIds = normalizeDistinctStringArray(
+        witness?.serialWaitPartitionIds ?? witness?.serial_wait_partition_ids,
+      );
       const eligibleNodeIds = normalizeDistinctStringArray(
         witness?.eligibleNodeIds ?? witness?.eligible_node_ids,
       );
@@ -509,6 +515,8 @@ function normalizePriorityRecoveryPartitionWitnessesForDiagnostics(witnesses) {
           {progressEvidenceSourceIds} :
           {}),
         witnessIds,
+        serialWaitOperationIds,
+        serialWaitPartitionIds,
         eligibleNodeIds,
         recoveryEligibleExcludedNodeIds,
         activeLearnerNodeIds,

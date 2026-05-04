@@ -129,6 +129,23 @@ representative path still exposes contradictory publication/active-gate
 evidence and a priority recovery `operation_unknown` serial-wait witness for
 `sql_transactions-p1`.
 
+May 4 serial-wait evidence continuation:
+
+1. Inspected the final May 4 failure bundle and traced the
+   `sql_transactions-p1` `operation_unknown` dominant witness back to
+   coordinator serial-wait metadata on the related decision snapshot.
+2. Preserved `serialWaitOperationIds` and `serialWaitPartitionIds` through
+   priority-recovery observation snapshots and harness progress-summary
+   normalization.
+3. Kept serial-wait operation evidence separate from current-partition
+   `operationIds` so freshness grouping does not collapse unrelated partitions
+   that are merely waiting behind the same serial-lane owner.
+4. Added focused regressions proving serial-wait blocker metadata survives
+   normalization while current-partition `operationIds` remains empty.
+5. This package remains active because the representative scenario has not
+   been rerun after this diagnostic-evidence slice, and the publication
+   summary versus active-gate missing-published disagreement remains open.
+
 ## Scope Basis
 
 Roadmap Phase `0.1 - Internal Coherence` maintenance/refactoring scope under
@@ -232,6 +249,30 @@ Closure:
       `failure-bundle.test.js` `1242`,
       `failure-bundle-playback-test-cases.js` `549`, and
       `failure-bundle-segment-3.js` `26`.
+- [x] May 4 serial-wait evidence slice `node --check` passed for
+      `src/control-plane/priority-recovery-observation-snapshot.js`,
+      `test/distributed/harness/priority-recovery-summary-normalization.js`,
+      `test/control-plane/priority-recovery-snapshot.test.js`, and
+      `test/distributed/harness/__tests__/priority-recovery-summary-normalization.test.js`.
+- [x] May 4 serial-wait evidence slice focused tests passed:
+      `node --test test/control-plane/priority-recovery-snapshot.test.js`
+      and
+      `node --test test/distributed/harness/__tests__/priority-recovery-summary-normalization.test.js`.
+- [x] May 4 serial-wait evidence slice harness regression check passed:
+      `node --test test/distributed/harness/__tests__/failure-bundle.test.js`.
+- [x] May 4 serial-wait evidence slice non-literal guardrails passed:
+      `node scripts/check-guideline-decision-boundaries.js ...` and
+      `node scripts/check-runtime-grammar-contracts.js ...` both reported
+      `0` violations across the four touched JS files.
+- [ ] May 4 serial-wait evidence slice exact touched-file literal guard
+      remains file-scoped red:
+      `node scripts/check-guideline-literals.js --include-tests src/control-plane/priority-recovery-observation-snapshot.js test/distributed/harness/priority-recovery-summary-normalization.js test/control-plane/priority-recovery-snapshot.test.js test/distributed/harness/__tests__/priority-recovery-summary-normalization.test.js`
+      reports `373` new literal-guideline violations and `0` inherited
+      baseline violations, all in
+      `test/control-plane/priority-recovery-snapshot.test.js`. Diff-aware
+      added-line filtering for this slice reports `0` literal-guideline
+      violations on added lines.
+- [x] May 4 serial-wait evidence slice `git diff --check` passed.
 
 ## Implementation Tasks
 
@@ -241,6 +282,8 @@ Closure:
       through the canonical operation workflow path.
 - [x] Ensure durable over-target trim runs only after lifecycle evidence is
       converged enough for safe voter removal.
+- [x] Preserve serial-wait operation and partition evidence without folding it
+      into current-partition operation identity.
 - [ ] Close or migrate the residual representative blocker after the
       `sql_transactions-p1` `operation_unknown` serial-wait witness,
       publication summary versus active-gate missing-published disagreement,
@@ -268,6 +311,9 @@ Closure:
    with a clean diff-aware added-line slice.
 7. Representative `rolling-restart --fast-local` rerun failed by residual
    blocker and kept this package active.
+8. Serial-wait evidence slice checks passed as recorded in the static drift
+   ledger. The representative path still needs a rerun after this metadata
+   preservation change.
 
 ## Done When
 
@@ -293,8 +339,11 @@ The dominant priority-recovery witness is now `sql_transactions-p1` as
 `wait_for_operation_progress`, correlation key
 `sql_transactions-p1|3|operation_unknown`, no operation IDs, workflow source
 `none`, latest workflow step `unavailable`, and latest status `unavailable`.
-The next continuation must reconcile why this partition has no operation row
-while four sibling priority partitions are either `spread_satisfied_in_flight`
-or represented by retryable operation-dispatch deferral logs. It must also
-reconcile the publication summary versus active-gate missing-published
-disagreement before recording publication or selected-snapshot closure.
+The serial-wait evidence slice now preserves blocking serial-lane operation
+and partition metadata for future failure bundles, while intentionally keeping
+the current partition operation identity empty. The next continuation must
+rerun the representative path, use the retained serial-wait metadata to
+reconcile the waiting partition against sibling retryable operation-dispatch
+evidence, and reconcile the publication summary versus active-gate
+missing-published disagreement before recording publication or
+selected-snapshot closure.
