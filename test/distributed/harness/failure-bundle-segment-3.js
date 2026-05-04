@@ -1,6 +1,18 @@
 import {readdir, readFile} from 'node:fs/promises';
 import {join} from 'node:path';
+import {
+  OWNER_CONTRACT_STATE,
+} from '../../../src/control-plane/owner-contract-outcome.js';
 import {buildPriorityRecoveryDecisionSnapshots as buildSharedPriorityRecoveryDecisionSnapshots} from '../../../src/control-plane/priority-recovery-snapshot.js';
+import {
+  PRIORITY_RECOVERY_ACTUATION_STATE,
+  PRIORITY_RECOVERY_BLOCKING_BOUNDARY,
+  PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION,
+  PRIORITY_RECOVERY_PROGRESS_OWNER,
+  PRIORITY_RECOVERY_SEMANTIC_STATE,
+  PRIORITY_RECOVERY_WAIT_MODE,
+  PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE,
+} from '../../../src/control-plane/priority-recovery-diagnostics-constants.js';
 import {
   deriveLegacyPriorityRecoveryActiveGateFields,
   normalizePriorityRecoveryActiveGateSnapshot,
@@ -178,6 +190,17 @@ const DIRECT_CONTROL_PLANE_DIAGNOSTIC_FIELD = Object.freeze({
   STARTUP_RECOVERY: 'startupRecovery',
 });
 const ACTIVE_GATE_PUBLICATION_GATE_READY_BLOCKER = 'ready';
+const PRIORITY_RECOVERY_LOG_OPERATION_STATUS_RETRY_DEFERRED =
+  'retry_deferred';
+const PRIORITY_RECOVERY_LOG_EVIDENCE_SOURCE_OPERATION_DISPATCH =
+  'operation_dispatch_retry_log';
+const DECISION_ARTIFACT_OPERATION_DISPATCH_RETRY_DEFERRALS_FIELD =
+  'operationDispatchRetryDeferrals';
+const DECISION_ARTIFACT_OPERATION_ID_FIELD = 'operationId';
+const DECISION_ARTIFACT_PARTITION_ID_FIELD = 'partitionId';
+const DECISION_ARTIFACT_WORKFLOW_STEP_FIELD = 'workflowStep';
+const DECISION_ARTIFACT_DELAY_MS_FIELD = 'delayMs';
+const EMPTY_STRING = '';
 
 function buildPlaybackControlPlaneFallback(events) {
   const sortedEvents = [...(Array.isArray(events) ? events : [])]
@@ -343,6 +366,133 @@ function buildPlaybackControlPlaneFallback(events) {
   return {
     controlPlaneFallback,
     controlSnapshotByNodeId,
+  };
+}
+
+function resolveDecisionArtifactProgressAtMs(artifact = null) {
+  const timestampMs = Date.parse(artifact?.timestamp);
+  return Number.isFinite(timestampMs) ? timestampMs : null;
+}
+
+function buildPriorityRecoveryLogWitnessFromDispatchRetryDeferral(artifact) {
+  if (!isRecord(artifact)) {
+    return null;
+  }
+  const partitionId = String(
+    artifact[DECISION_ARTIFACT_PARTITION_ID_FIELD] || EMPTY_STRING,
+  ).trim();
+  const operationId = String(
+    artifact[DECISION_ARTIFACT_OPERATION_ID_FIELD] || EMPTY_STRING,
+  ).trim();
+  if (partitionId.length === ZERO || operationId.length === ZERO) {
+    return null;
+  }
+  const workflowStep = String(
+    artifact[DECISION_ARTIFACT_WORKFLOW_STEP_FIELD] || EMPTY_STRING,
+  ).trim();
+  const retryAfterMs = normalizeNonNegativeCount(
+    artifact[DECISION_ARTIFACT_DELAY_MS_FIELD],
+  );
+  const lastProgressAtMs = resolveDecisionArtifactProgressAtMs(artifact);
+  return {
+    partitionId,
+    semanticStateId: PRIORITY_RECOVERY_SEMANTIC_STATE.RECOVERING_IN_FLIGHT,
+    progressContractState: OWNER_CONTRACT_STATE.DEFERRED,
+    actuationState:
+      PRIORITY_RECOVERY_ACTUATION_STATE.DISPATCHED_WAITING_PROGRESS,
+    currentOwner: PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER,
+    actuationOwner: PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER,
+    blockingBoundary: PRIORITY_RECOVERY_BLOCKING_BOUNDARY.REBALANCER_HANDOFF,
+    waitMode: PRIORITY_RECOVERY_WAIT_MODE.RETRY_SCHEDULED,
+    nextRequiredAction:
+      PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.WAIT_FOR_OPERATION_PROGRESS,
+    workflowProgressPhaseId:
+      PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.DISPATCH_PENDING,
+    operationIds: [operationId],
+    witnessIds: [operationId],
+    correlationKey: buildPriorityRecoveryCorrelationKey({
+      partitionId,
+      operationId,
+    }),
+    progressEvidenceSourceIds: [
+      PRIORITY_RECOVERY_LOG_EVIDENCE_SOURCE_OPERATION_DISPATCH,
+    ],
+    ...(retryAfterMs !== null ? {retryAfterMs} : {}),
+    ...(lastProgressAtMs !== null ? {lastProgressAtMs} : {}),
+    ...(workflowStep.length > ZERO ?
+      {latestOperationWorkflowStep: workflowStep} :
+      {}),
+    latestOperationStatus:
+      PRIORITY_RECOVERY_LOG_OPERATION_STATUS_RETRY_DEFERRED,
+  };
+}
+
+function buildPriorityRecoveryObservationFromDecisionArtifactsByNodeId(
+  decisionArtifactsByNodeId,
+) {
+  if (!isRecord(decisionArtifactsByNodeId)) {
+    return null;
+  }
+  const priorityRecoveryPartitionWitnesses = [];
+  for (const decisionArtifacts of Object.values(decisionArtifactsByNodeId)) {
+    const retryDeferrals = Array.isArray(
+      decisionArtifacts?.[
+        DECISION_ARTIFACT_OPERATION_DISPATCH_RETRY_DEFERRALS_FIELD
+      ],
+    ) ?
+      decisionArtifacts[
+        DECISION_ARTIFACT_OPERATION_DISPATCH_RETRY_DEFERRALS_FIELD
+      ] :
+      [];
+    for (const retryDeferral of retryDeferrals) {
+      const witness =
+        buildPriorityRecoveryLogWitnessFromDispatchRetryDeferral(
+          retryDeferral,
+        );
+      if (witness) {
+        priorityRecoveryPartitionWitnesses.push(witness);
+      }
+    }
+  }
+  return priorityRecoveryPartitionWitnesses.length > ZERO ?
+    {priorityRecoveryPartitionWitnesses} :
+    null;
+}
+
+function mergePriorityRecoveryObservationWitnessLists(
+  primaryWitnesses,
+  fallbackWitnesses,
+) {
+  return [
+    ...(Array.isArray(primaryWitnesses) ? primaryWitnesses : []),
+    ...(Array.isArray(fallbackWitnesses) ? fallbackWitnesses : []),
+  ];
+}
+
+function mergePlaybackPriorityRecoveryObservation(
+  controlPlane,
+  priorityRecoveryObservation,
+) {
+  if (!isRecord(priorityRecoveryObservation)) {
+    return controlPlane;
+  }
+  const mergedControlPlane = isRecord(controlPlane) ? controlPlane : {};
+  const existingObservation = isRecord(
+    mergedControlPlane.priorityRecoveryObservation,
+  ) ?
+    mergedControlPlane.priorityRecoveryObservation :
+    {};
+  return {
+    ...mergedControlPlane,
+    priorityRecoveryObservation: {
+      ...priorityRecoveryObservation,
+      ...existingObservation,
+      priorityRecoveryPartitionWitnesses:
+        mergePriorityRecoveryObservationWitnessLists(
+          existingObservation.priorityRecoveryPartitionWitnesses,
+          priorityRecoveryObservation.priorityRecoveryPartitionWitnesses,
+        ),
+    },
   };
 }
 
@@ -1620,6 +1770,15 @@ async function collectScenarioLogArtifacts(
     };
     result.playbackControlPlane = mergedPlaybackControlPlane;
   }
+
+  const logPriorityRecoveryObservation =
+    buildPriorityRecoveryObservationFromDecisionArtifactsByNodeId(
+      result.decisionArtifactsByNodeId,
+    );
+  result.playbackControlPlane = mergePlaybackPriorityRecoveryObservation(
+    result.playbackControlPlane,
+    logPriorityRecoveryObservation,
+  );
 
   return result;
 }

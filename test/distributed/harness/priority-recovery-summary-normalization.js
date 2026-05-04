@@ -15,6 +15,13 @@ const COMPARISON_RIGHT_PRECEDES_LEFT = 1;
 const EMPTY_STRING = '';
 const TYPEOF_OBJECT = 'object';
 const PRIORITY_RECOVERY_PROGRESS_NONE = 'none';
+const PRIORITY_RECOVERY_WITNESS_FRESHNESS_KEY_PREFIX = Object.freeze({
+  CORRELATION: 'correlation',
+  OPERATION: 'operation',
+  WITNESS: 'witness',
+});
+const PRIORITY_RECOVERY_WITNESS_FRESHNESS_KEY_SEPARATOR = '::';
+const PRIORITY_RECOVERY_WITNESS_ID_SEPARATOR = ',';
 const PRIORITY_RECOVERY_WAIT_MODE_PRECEDENCE = Object.freeze([
   'stalled',
   'timeout_reconcile_due',
@@ -649,6 +656,83 @@ function hasMeaningfulPriorityRecoveryProgressWitness(witness) {
   });
 }
 
+function buildPriorityRecoveryWitnessFreshnessKey(prefix, values) {
+  const normalizedValues = normalizeDistinctStringArray(values).sort();
+  if (normalizedValues.length === ZERO) {
+    return EMPTY_STRING;
+  }
+  return [
+    prefix,
+    normalizedValues.join(PRIORITY_RECOVERY_WITNESS_ID_SEPARATOR),
+  ].join(PRIORITY_RECOVERY_WITNESS_FRESHNESS_KEY_SEPARATOR);
+}
+
+function resolvePriorityRecoveryWitnessFreshnessKey(witness) {
+  const operationKey = buildPriorityRecoveryWitnessFreshnessKey(
+    PRIORITY_RECOVERY_WITNESS_FRESHNESS_KEY_PREFIX.OPERATION,
+    witness?.operationIds,
+  );
+  if (operationKey.length > ZERO) {
+    return operationKey;
+  }
+  const correlationKey = normalizeStringField(witness?.correlationKey);
+  if (correlationKey) {
+    return [
+      PRIORITY_RECOVERY_WITNESS_FRESHNESS_KEY_PREFIX.CORRELATION,
+      correlationKey,
+    ].join(PRIORITY_RECOVERY_WITNESS_FRESHNESS_KEY_SEPARATOR);
+  }
+  return buildPriorityRecoveryWitnessFreshnessKey(
+    PRIORITY_RECOVERY_WITNESS_FRESHNESS_KEY_PREFIX.WITNESS,
+    witness?.witnessIds,
+  );
+}
+
+function resolvePriorityRecoveryWitnessFreshnessAtMs(witness) {
+  const lastProgressAtMs = normalizeNonNegativeInteger(witness?.lastProgressAtMs);
+  if (lastProgressAtMs !== null) {
+    return lastProgressAtMs;
+  }
+  return normalizeNonNegativeInteger(witness?.snapshotCapturedAt);
+}
+
+function selectFreshestPriorityRecoveryWitness(existingWitness, nextWitness) {
+  const existingFreshnessAtMs =
+    resolvePriorityRecoveryWitnessFreshnessAtMs(existingWitness);
+  const nextFreshnessAtMs = resolvePriorityRecoveryWitnessFreshnessAtMs(
+    nextWitness,
+  );
+  if (existingFreshnessAtMs !== null && nextFreshnessAtMs !== null) {
+    return nextFreshnessAtMs > existingFreshnessAtMs ?
+      nextWitness :
+      existingWitness;
+  }
+  if (existingFreshnessAtMs === null && nextFreshnessAtMs !== null) {
+    return nextWitness;
+  }
+  return existingWitness;
+}
+
+function selectFreshestPriorityRecoveryWitnessesByOperation(witnesses) {
+  const freshestWitnessByKey = new Map();
+  const unkeyedWitnesses = [];
+  for (const witness of witnesses) {
+    const freshnessKey = resolvePriorityRecoveryWitnessFreshnessKey(witness);
+    if (freshnessKey.length === ZERO) {
+      unkeyedWitnesses.push(witness);
+      continue;
+    }
+    const existingWitness = freshestWitnessByKey.get(freshnessKey);
+    freshestWitnessByKey.set(
+      freshnessKey,
+      existingWitness ?
+        selectFreshestPriorityRecoveryWitness(existingWitness, witness) :
+        witness,
+    );
+  }
+  return [...unkeyedWitnesses, ...freshestWitnessByKey.values()];
+}
+
 function comparePriorityRecoveryPartitionWitnessPriority(left, right) {
   const priorityRankDelta = resolveDominantWitnessPriorityRankDelta(left, right);
   if (priorityRankDelta !== ZERO) {
@@ -683,7 +767,9 @@ function selectDominantPriorityRecoveryPartitionWitness(witnesses) {
   if (candidateWitnesses.length === ZERO) {
     return null;
   }
-  return [...candidateWitnesses].sort(
+  return selectFreshestPriorityRecoveryWitnessesByOperation(
+    candidateWitnesses,
+  ).sort(
     comparePriorityRecoveryPartitionWitnessPriority,
   )[ZERO];
 }

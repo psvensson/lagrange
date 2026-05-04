@@ -80,6 +80,8 @@ const ACTIVE_GATE_ACK_IDS_CLEAR_STALE_COUNT_TEST_NAME =
   'lets current pending ACK ids clear stale active-gate count-only debt';
 const ACTIVE_GATE_ACK_SET_DIFFERENCE_TEST_NAME =
   'keeps active-gate ACK set-difference debt when equal-length lists differ';
+const ACTIVE_GATE_PENDING_ACK_PRIORITY_ACTUATION_TEST_NAME =
+  'keeps explicit active-gate pending ACK while priority actuation remains open';
 const PRIORITY_RECOVERY_HISTORY_PARTITION_ID = 'replica_operations-p1';
 const PRIORITY_RECOVERY_SERIAL_WAIT_PARTITION_ID = 'sql_transactions-p1';
 const PRIORITY_RECOVERY_SERIAL_WAIT_OPERATION_ID = 'op-current-spread';
@@ -9345,7 +9347,7 @@ describe('failure-bundle', () => {
   );
 
   it(
-    'classifies startup active-gate priority actuation without reopening publication',
+    ACTIVE_GATE_PENDING_ACK_PRIORITY_ACTUATION_TEST_NAME,
     async () => {
       const SCENARIO_NAME = 'rolling-restart';
       const PUBLICATION_STATUS_PUBLISHED = 'PUBLISHED';
@@ -9398,6 +9400,7 @@ describe('failure-bundle', () => {
       const ELAPSED_MS = 122065;
       const ONE_COUNT = 1;
       const ZERO_COUNT = 0;
+      const PENDING_ACK_COUNT_SIGNAL = 'pendingAckCount=1';
       const scenarios = [{
         scenario: SCENARIO_NAME,
         passed: false,
@@ -9587,7 +9590,11 @@ describe('failure-bundle', () => {
         scenarioBundle.summary.failureClassification;
 
       assert.equal(publicationConvergence.publicationPending, false);
-      assert.equal(publicationConvergence.pendingAckCount, ZERO_COUNT);
+      assert.equal(publicationConvergence.pendingAckCount, ONE_COUNT);
+      assert.deepEqual(
+        publicationConvergence.pendingAckNodeIds,
+        [PENDING_ACK_NODE_ID],
+      );
       assert.equal(publicationConvergence.missingPublishedCount, ZERO_COUNT);
       assert.equal(
         publicationConvergence.publicationConvergenceGateReasons.includes(
@@ -9602,31 +9609,11 @@ describe('failure-bundle', () => {
       );
       assert.equal(
         failureClassification.failureClass,
-        PRIORITY_RECOVERY_PROGRESS_REASON_FALLBACK,
+        FAILURE_CLASS_PUBLICATION_CONVERGENCE_BLOCKED,
       );
       assert.ok(
         failureClassification.signals.includes(
-          PRIORITY_RECOVERY_PROGRESS_CLASS_SIGNAL,
-        ),
-      );
-      assert.ok(
-        failureClassification.signals.includes(
-          PRIORITY_RECOVERY_PARTITION_SIGNAL,
-        ),
-      );
-      assert.ok(
-        failureClassification.signals.includes(
-          PRIORITY_RECOVERY_OWNER_SIGNAL,
-        ),
-      );
-      assert.ok(
-        failureClassification.signals.includes(
-          PRIORITY_RECOVERY_BOUNDARY_SIGNAL,
-        ),
-      );
-      assert.ok(
-        failureClassification.signals.includes(
-          PRIORITY_RECOVERY_NEXT_ACTION_SIGNAL,
+          PENDING_ACK_COUNT_SIGNAL,
         ),
       );
     },

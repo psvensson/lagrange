@@ -200,6 +200,7 @@ const PRIORITY_RECOVERY_WORKFLOW_PROGRESS_ACTUATION_STATES = Object.freeze([
 const EMPTY_STRING = '';
 const ONE = 1;
 const JS_OBJECT_TYPE = 'object';
+const PRIORITY_RECOVERY_WITNESS_FRESHNESS_KEY_SEPARATOR = '|';
 const LOAD_WAIT_REASON_ATTEMPT_ERRORS = 'attemptErrors';
 const LOAD_WAIT_REASON_HARD_LOAD_FAILURES = 'hardLoadFailures';
 const READINESS_DIMENSION_REPAIR_ELIGIBLE = 'repairEligible';
@@ -370,6 +371,29 @@ function attachCanonicalPublicationEvidence(controlPlane) {
   };
 }
 
+function mergePriorityRecoveryObservationSnapshots(primaryObservation, fallbackObservation) {
+  const hasPrimaryObservation = isRecord(primaryObservation);
+  const hasFallbackObservation = isRecord(fallbackObservation);
+  if (!hasPrimaryObservation && !hasFallbackObservation) {
+    return null;
+  }
+  if (!hasPrimaryObservation) {
+    return fallbackObservation;
+  }
+  if (!hasFallbackObservation) {
+    return primaryObservation;
+  }
+  return {
+    ...fallbackObservation,
+    ...primaryObservation,
+    priorityRecoveryPartitionWitnesses:
+      resolvePriorityRecoveryObservationWitnesses(
+        primaryObservation.priorityRecoveryPartitionWitnesses,
+        fallbackObservation.priorityRecoveryPartitionWitnesses,
+      ),
+  };
+}
+
 function mergeControlPlaneDiagnostics(primary, fallback) {
   const hasPrimary = isRecord(primary);
   const hasFallback = isRecord(fallback);
@@ -439,6 +463,10 @@ function mergeControlPlaneDiagnostics(primary, fallback) {
       primary.activeGateBlockerHistory ||
       fallback.activeGateBlockerHistory ||
       null,
+    priorityRecoveryObservation: mergePriorityRecoveryObservationSnapshots(
+      primary.priorityRecoveryObservation,
+      fallback.priorityRecoveryObservation,
+    ),
     readinessByNodeId: mergeByNodeIdMaps(
       primary.readinessByNodeId,
       fallback.readinessByNodeId,
@@ -1658,6 +1686,85 @@ function resolvePriorityRecoveryObservationCount(primaryCount, fallbackCount) {
   return primary > ZERO ? primary : normalizeNonNegativeCount(fallbackCount);
 }
 
+function dedupePriorityRecoveryObservationWitnesses(witnesses) {
+  const witnessByKey = new Map();
+  for (const witness of witnesses) {
+    const witnessKey = JSON.stringify(witness);
+    if (!witnessByKey.has(witnessKey)) {
+      witnessByKey.set(witnessKey, witness);
+    }
+  }
+  return [...witnessByKey.values()];
+}
+
+function buildPriorityRecoveryWitnessFreshnessKey(witness) {
+  const operationIds = normalizeDistinctStringArray(witness?.operationIds)
+    .sort();
+  if (operationIds.length > ZERO) {
+    return operationIds.join(PRIORITY_RECOVERY_WITNESS_FRESHNESS_KEY_SEPARATOR);
+  }
+  const correlationKey = String(witness?.correlationKey || EMPTY_STRING).trim();
+  return correlationKey.length > ZERO ? correlationKey : EMPTY_STRING;
+}
+
+function resolvePriorityRecoveryWitnessFreshnessAtMs(witness) {
+  const lastProgressAtMs = normalizeNonNegativeCount(witness?.lastProgressAtMs);
+  if (lastProgressAtMs > ZERO) {
+    return lastProgressAtMs;
+  }
+  const snapshotCapturedAt = normalizeNonNegativeCount(
+    witness?.snapshotCapturedAt,
+  );
+  return snapshotCapturedAt > ZERO ? snapshotCapturedAt : null;
+}
+
+function resolveFreshRetainedPriorityRecoveryObservationWitnesses(
+  canonicalWitnesses,
+  sourceWitnesses,
+) {
+  const canonical = normalizePriorityRecoveryPartitionWitnessesForDiagnostics(
+    canonicalWitnesses,
+  );
+  const canonicalFreshnessByKey = new Map();
+  for (const canonicalWitness of canonical) {
+    const freshnessKey = buildPriorityRecoveryWitnessFreshnessKey(
+      canonicalWitness,
+    );
+    if (freshnessKey.length === ZERO) {
+      continue;
+    }
+    canonicalFreshnessByKey.set(
+      freshnessKey,
+      resolvePriorityRecoveryWitnessFreshnessAtMs(canonicalWitness),
+    );
+  }
+  const retainedSourceWitnesses =
+    normalizePriorityRecoveryPartitionWitnessesForDiagnostics(
+      sourceWitnesses,
+    ).filter((sourceWitness) => {
+      const freshnessKey = buildPriorityRecoveryWitnessFreshnessKey(
+        sourceWitness,
+      );
+      if (!canonicalFreshnessByKey.has(freshnessKey)) {
+        return false;
+      }
+      const sourceFreshnessAtMs =
+        resolvePriorityRecoveryWitnessFreshnessAtMs(sourceWitness);
+      const canonicalFreshnessAtMs = canonicalFreshnessByKey.get(freshnessKey);
+      return (
+        sourceFreshnessAtMs !== null &&
+        (
+          canonicalFreshnessAtMs === null ||
+          sourceFreshnessAtMs > canonicalFreshnessAtMs
+        )
+      );
+    });
+  return dedupePriorityRecoveryObservationWitnesses([
+    ...canonical,
+    ...retainedSourceWitnesses,
+  ]);
+}
+
 function resolvePriorityRecoveryObservationWitnesses(
   primaryWitnesses,
   fallbackWitnesses,
@@ -1665,11 +1772,15 @@ function resolvePriorityRecoveryObservationWitnesses(
   const primary = normalizePriorityRecoveryPartitionWitnessesForDiagnostics(
     primaryWitnesses,
   );
-  return primary.length > ZERO ?
-    primary :
-    normalizePriorityRecoveryPartitionWitnessesForDiagnostics(
-      fallbackWitnesses,
-    );
+  const fallback = normalizePriorityRecoveryPartitionWitnessesForDiagnostics(
+    fallbackWitnesses,
+  );
+  return [
+    ...dedupePriorityRecoveryObservationWitnesses([
+      ...primary,
+      ...fallback,
+    ]),
+  ];
 }
 
 function hasPriorityRecoveryOperationDetail(observation) {
@@ -1732,7 +1843,17 @@ function mergeRetainedPriorityRecoveryObservation(
       sourceObservation,
     ) !== true
   ) {
-    return canonicalObservation;
+    const retainedWitnesses =
+      resolveFreshRetainedPriorityRecoveryObservationWitnesses(
+        canonicalObservation.priorityRecoveryPartitionWitnesses,
+        sourceObservation.priorityRecoveryPartitionWitnesses,
+      );
+    return retainedWitnesses.length > ZERO ?
+      {
+        ...canonicalObservation,
+        priorityRecoveryPartitionWitnesses: retainedWitnesses,
+      } :
+      canonicalObservation;
   }
   return {
     ...canonicalObservation,
@@ -1997,6 +2118,52 @@ function hasCurrentActiveGatePendingAckClosure(progress = null) {
   );
 }
 
+function buildActiveGatePendingAckEvidence(progress = null) {
+  if (!isRecord(progress)) {
+    return Object.freeze({
+      explicitNodeListOpen: false,
+      requiredAckListOpen: false,
+      ackStatusCountOpen: false,
+    });
+  }
+  const pendingAckNodeIds = Array.isArray(progress.pendingAckNodeIds) ?
+    normalizeDistinctStringArray(progress.pendingAckNodeIds) :
+    null;
+  const pendingRequiredAckNodeIds = resolvePendingRequiredAckNodeIds(progress);
+  return Object.freeze({
+    explicitNodeListOpen:
+      pendingAckNodeIds !== null && pendingAckNodeIds.length > ZERO,
+    requiredAckListOpen:
+      pendingRequiredAckNodeIds !== null &&
+      pendingRequiredAckNodeIds.length > ZERO,
+  });
+}
+
+function shouldSuppressActiveGateSnapshotPublicationDebt({
+  activeGatePriorityRecoveryActuationEvidenceOpen = false,
+  activeGateProgress = null,
+} = {}) {
+  if (activeGatePriorityRecoveryActuationEvidenceOpen !== true) {
+    return false;
+  }
+  const pendingAckEvidence =
+    buildActiveGatePendingAckEvidence(activeGateProgress);
+  return (
+    pendingAckEvidence.explicitNodeListOpen !== true &&
+    pendingAckEvidence.requiredAckListOpen !== true
+  );
+}
+
+function resolveExplicitActiveGateProgress(controlPlane = null) {
+  if (isRecord(controlPlane?.activeGateProgress)) {
+    return controlPlane.activeGateProgress;
+  }
+  if (isRecord(controlPlane?.activeGate?.progress)) {
+    return controlPlane.activeGate.progress;
+  }
+  return null;
+}
+
 function resolveCurrentPendingAckNodeIds({
   activeGateProgress = null,
   priorityRecoveryObservation = null,
@@ -2248,8 +2415,14 @@ function buildPublicationConvergenceSummary(controlPlane) {
       priorityRecoveryPartitionWitnesses,
       activeGateProgressClasses,
     });
+  const explicitActiveGateProgress = resolveExplicitActiveGateProgress(
+    controlPlane,
+  );
   const suppressActiveGateSnapshotPublicationDebt =
-    activeGatePriorityRecoveryActuationEvidenceOpen === true;
+    shouldSuppressActiveGateSnapshotPublicationDebt({
+      activeGatePriorityRecoveryActuationEvidenceOpen,
+      activeGateProgress: explicitActiveGateProgress,
+    });
   const pendingAckNodeIds = suppressActiveGateSnapshotPublicationDebt ?
     [] :
     rawPendingAckNodeIds;

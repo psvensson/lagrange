@@ -64,9 +64,10 @@ May 4 execution attempt:
    for stale priority `PENDING` timeout reconciliation when the target replica
    is cache-visible `ACTIVE` and the over-target source row remains
    cache-visible.
-2. The fixture proves the owner path reconciles trustworthy target progress to
-   `ACTIVE`, does not set a timeout failure, and does not dispatch unsafe
-   source removal while source evidence remains cache-visible.
+2. The fixture proves the owner path reconciles trustworthy cache-visible
+   target progress to `ACTIVE` after authoritative `services` reads return no
+   rows, does not set a timeout failure, and does not dispatch unsafe source
+   removal while source evidence remains cache-visible.
 3. No production runtime change was made for this slice. The owner behavior was
    already correct for trustworthy cache-visible target progress and safe
    over-target trim deferral.
@@ -95,11 +96,38 @@ May 4 execution attempt:
     `SENDING` and then deferred a retryable dispatch failure at
     `coordinator_created_remote_handoff` because the target node connection
     closed.
+13. Final confirmation rerun:
+    `test-output/reports/rolling-restart-operation-transition-pressure-overtarget-trim-20260504-final.report.json`.
+14. Result: failed, `0/1` passed after `134.1s`.
+15. Failure bundle:
+    `test-output/reports/.playback/rolling-restart-operation-transition-pressure-overtarget-trim-20260504-final/rolling-restart/failure-bundle.json`.
+16. Terminal barrier:
+    `Not all nodes reached ACTIVE state within 120000ms`.
+17. Dominant reason remains
+    `priority_recovery_workflow_progress_transition_deferred`, but the
+    selected witness has migrated from stale workflow timeout to
+    `priority_operation_serial_wait`.
+18. Publication summary reports epoch `3`, status `PUBLISHED`,
+    pending ACK count `0`, missing published count `0`, and
+    `prioritySpreadPending=true`.
+19. Active-gate progress still reports active `4/5`, selected snapshot
+    coverage `4/5`, selected published active `3/5`, missing published count
+    `2`, and per-node publication disagreements across four nodes.
+20. The dominant priority-recovery witness is `sql_transactions-p1` with
+    semantic state `needs_operation`, boundary `workflow_progress`, wait mode
+    `event_driven`, next action `wait_for_operation_progress`, correlation key
+    `sql_transactions-p1|3|operation_unknown`, no operation IDs, workflow
+    source `none`, latest workflow step `unavailable`, and latest status
+    `unavailable`.
+21. Playback logs retain retryable operation-dispatch deferral witnesses for
+    other priority partitions, including `control_plane_publications-p1` and
+    `sql_transaction_participants-p1`, but those are not the final dominant
+    selected partition.
 
 This package remains active. The closure inventory is not complete because the
-representative path still selects a stale workflow-timeout witness while
-startup publication, selected-snapshot coverage, and retryable remote-handoff
-evidence are also present.
+representative path still exposes contradictory publication/active-gate
+evidence and a priority recovery `operation_unknown` serial-wait witness for
+`sql_transactions-p1`.
 
 ## Scope Basis
 
@@ -163,6 +191,35 @@ Closure:
 - [x] No touched-file owner-path, decision-boundary, runtime-grammar, or
       metadata-gateway violation remains.
 - [x] The inherited literal debt is unchanged and outside this owner slice.
+- [x] `node --check` passed for the touched harness and rebalancer test files:
+      `test/distributed/harness/priority-recovery-summary-normalization.js`,
+      `test/distributed/harness/failure-bundle-segment-1.js`,
+      `test/distributed/harness/failure-bundle-segment-3.js`,
+      `test/distributed/harness/failure-bundle-segment-4.js`,
+      `test/distributed/harness/__tests__/failure-bundle-playback-test-cases.js`,
+      `test/distributed/harness/__tests__/failure-bundle.test.js`,
+      `test/distributed/harness/__tests__/priority-recovery-summary-normalization.test.js`,
+      and
+      `test/rebalancer/rebalance-coordinator-timeout-cache-visibility.test.js`.
+- [x] `node scripts/check-guideline-decision-boundaries.js ...` passed with
+      `0` violations across those eight touched JS files after resolving an
+      inherited guidance-helper decision-boundary hit in
+      `test/distributed/harness/failure-bundle-segment-1.js`.
+- [x] `node scripts/check-runtime-grammar-contracts.js ...` passed with `0`
+      violations across those eight touched JS files.
+- [ ] Exact touched-file literal guard remains red after scoped literal-owner
+      cleanup:
+      `node scripts/check-guideline-literals.js --include-tests test/distributed/harness/__tests__/failure-bundle-playback-test-cases.js test/distributed/harness/__tests__/failure-bundle.test.js test/distributed/harness/__tests__/priority-recovery-summary-normalization.test.js test/distributed/harness/failure-bundle-segment-1.js test/distributed/harness/failure-bundle-segment-3.js test/distributed/harness/failure-bundle-segment-4.js test/distributed/harness/priority-recovery-summary-normalization.js test/rebalancer/rebalance-coordinator-timeout-cache-visibility.test.js`
+      reports `1954` new literal-guideline violations and `0` inherited
+      baseline violations. Top residual files are whole-file test/harness
+      fixture debt: `failure-bundle.test.js` `1242`,
+      `failure-bundle-playback-test-cases.js` `549`, and
+      `rebalance-coordinator-timeout-cache-visibility.test.js` `78`.
+- [x] Diff-aware filtering of that exact guard report against currently added
+      lines reports `0` literal-guideline violations on added lines. The
+      checker is file-scoped but not diff-scoped, and the literal baseline has
+      no inherited entries for these test/harness paths, so the remaining red
+      result is not a newly introduced package literal blocker.
 
 ## Implementation Tasks
 
@@ -172,9 +229,10 @@ Closure:
       through the canonical operation workflow path.
 - [x] Ensure durable over-target trim runs only after lifecycle evidence is
       converged enough for safe voter removal.
-- [ ] Close or migrate the residual representative blocker after the stale
-      workflow-timeout selected snapshot, startup publication ACK, selected
-      snapshot coverage, and retryable remote-handoff evidence are reconciled.
+- [ ] Close or migrate the residual representative blocker after the
+      `sql_transactions-p1` `operation_unknown` serial-wait witness,
+      publication summary versus active-gate missing-published disagreement,
+      and retained retryable dispatch evidence are reconciled.
 
 ## Validation
 
@@ -187,9 +245,15 @@ Closure:
 3. Review-fix harness coverage preserved:
    `node --test test/distributed/harness/__tests__/priority-recovery-summary-normalization.test.js`
    passed.
-4. Static guardrails for touched files passed or remained unchanged as recorded
+4. Harness failure-bundle coverage:
+   `node --test test/distributed/harness/__tests__/failure-bundle.test.js`
+   passed.
+5. Rebalancer cache-visible target proof:
+   `node --test test/rebalancer/rebalance-coordinator-timeout-cache-visibility.test.js`
+   passed.
+6. Static guardrails for touched files passed or remained unchanged as recorded
    in the static drift ledger.
-5. Representative `rolling-restart --fast-local` rerun failed by residual
+7. Representative `rolling-restart --fast-local` rerun failed by residual
    blocker and kept this package active.
 
 ## Done When
@@ -202,11 +266,22 @@ Closure:
 
 ## Residual Active Blocker
 
-The current blocker is not closed. The next continuation should reconcile why
-the failure bundle selects stale `PENDING / workflow_timeout /
-timeout_reconcile_due` evidence for `sql_transactions-p1` while playback logs
-show the same operation later reached `SENDING` and deferred on retryable
-`coordinator_created_remote_handoff`. It must also preserve the existing
-publication ACK closure and startup selected-snapshot reachability closure
-instead of reopening those as implementation scope unless new owner evidence
-requires it.
+The current blocker is not closed. The final May 4 rerun fails at startup
+ACTIVE convergence with active `4/5`, snapshot coverage `4/5`, and one
+degraded node reporting `OBSERVABILITY_BACKLOG` plus
+`PRIORITY_CONTROL_PLANE_RECOVERY_PENDING`. Normalized publication reports epoch
+`3` as `PUBLISHED`, pending ACK count `0`, and missing published count `0`,
+while active-gate progress reports selected published active `3/5`, missing
+published count `2`, and publication disagreement across four nodes.
+
+The dominant priority-recovery witness is now `sql_transactions-p1` as
+`needs_operation / priority_operation_serial_wait` at
+`operation_workflow_owner / workflow_progress / event_driven`, with next action
+`wait_for_operation_progress`, correlation key
+`sql_transactions-p1|3|operation_unknown`, no operation IDs, workflow source
+`none`, latest workflow step `unavailable`, and latest status `unavailable`.
+The next continuation must reconcile why this partition has no operation row
+while four sibling priority partitions are either `spread_satisfied_in_flight`
+or represented by retryable operation-dispatch deferral logs. It must also
+reconcile the publication summary versus active-gate missing-published
+disagreement before recording publication or selected-snapshot closure.

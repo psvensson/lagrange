@@ -4,6 +4,9 @@ import {
   JOINING_LOG_MSG,
 } from '../../../src/bootstrap/node-joining-constants.js';
 import {
+  REBALANCE_COORDINATOR_LOG_MSG,
+} from '../../../src/rebalancer/rebalancer-constants.js';
+import {
   RECOVERY_PROTOCOL_STATE,
 } from '../../../src/control-plane/membership-lifecycle-constants.js';
 import {buildPriorityRecoveryClosureWitness} from '../../../src/control-plane/priority-recovery-snapshot.js';
@@ -54,6 +57,41 @@ const MARKDOWN_SECTION_BREAK = '\n\n';
 const UNKNOWN_VALUE = 'unknown';
 const NO_PROGRESS_REASON_CODE = 'stalled_no_progress';
 const READINESS_FAILURE_CLASS_NO_PROGRESS = 'no_progress_terminal';
+const READINESS_FAILURE_GUIDANCE_KIND = Object.freeze({
+  NONE: 'none',
+  RECOVERABLE_DELAY: 'recoverable_delay',
+  BLOCKING_DELAY: 'blocking_delay',
+  NO_PROGRESS: 'no_progress',
+  DEFAULT: 'default',
+});
+const READINESS_FAILURE_GUIDANCE_BY_KIND = Object.freeze({
+  [READINESS_FAILURE_GUIDANCE_KIND.NONE]: Object.freeze({
+    failureAction: null,
+    operatorRecommendation: null,
+  }),
+  [READINESS_FAILURE_GUIDANCE_KIND.RECOVERABLE_DELAY]: Object.freeze({
+    failureAction:
+      'Probe delay is recoverable in this path; allow bounded retry.',
+    operatorRecommendation:
+      'Re-run with reduced startup concurrency and watch snapshot probe latencies.',
+  }),
+  [READINESS_FAILURE_GUIDANCE_KIND.BLOCKING_DELAY]: Object.freeze({
+    failureAction: 'Snapshot/reachability timeout is blocking convergence.',
+    operatorRecommendation:
+      'Inspect snapshot query latency, admin readiness, and host/network stability before rerun.',
+  }),
+  [READINESS_FAILURE_GUIDANCE_KIND.NO_PROGRESS]: Object.freeze({
+    failureAction:
+      'Convergence has stopped progressing within configured guarantees.',
+    operatorRecommendation:
+      'Inspect publication convergence blockers and topology readiness evidence before retry.',
+  }),
+  [READINESS_FAILURE_GUIDANCE_KIND.DEFAULT]: Object.freeze({
+    failureAction: 'Readiness convergence issue requires triage.',
+    operatorRecommendation:
+      'Collect active-gate diagnostics and follow triage priorities before rerun.',
+  }),
+});
 const NODE_DIAGNOSTICS_TRACE_LIMIT = 5;
 const NODE_ID_ERROR_PATTERN = /\bnode=([a-z0-9._:-]+)\b/gi;
 const PLAYBACK_EVENTS_FILENAME = 'events.ndjson';
@@ -168,8 +206,13 @@ const DECISION_ARTIFACT_FIELD = Object.freeze({
   MAX_ATTEMPTS: 'maxAttempts',
   MODE: 'mode',
   NODE_ID: 'nodeId',
+  OPERATION_ID: 'operationId',
+  PARTITION_ID: 'partitionId',
   PEER_ADDRESS: 'peerAddress',
   PHASE: 'phase',
+  BOUNDARY: 'boundary',
+  DELAY_MS: 'delayMs',
+  ERROR_MESSAGE: 'errorMessage',
   RETRY_AFTER_MS: 'retryAfterMs',
   SEED_NODE_ADDRESS: 'seedNodeAddress',
   SOURCE: 'source',
@@ -178,6 +221,8 @@ const DECISION_ARTIFACT_FIELD = Object.freeze({
   STARTUP_PHASE: 'startupPhase',
   STATE: 'state',
   SUB_PHASE: 'subPhase',
+  TARGET_NODE_ID: 'targetNodeId',
+  WORKFLOW_STEP: 'workflowStep',
 });
 const AUTO_REJOIN_DECISION_ARTIFACT_FIELDS = Object.freeze([
   DECISION_ARTIFACT_FIELD.NODE_ID,
@@ -217,6 +262,15 @@ const RETRYABLE_JOIN_RESUME_ARTIFACT_FIELDS = Object.freeze([
   DECISION_ARTIFACT_FIELD.RETRY_AFTER_MS,
   DECISION_ARTIFACT_FIELD.PHASE,
   DECISION_ARTIFACT_FIELD.ERROR,
+]);
+const OPERATION_DISPATCH_RETRY_DEFERRAL_ARTIFACT_FIELDS = Object.freeze([
+  DECISION_ARTIFACT_FIELD.OPERATION_ID,
+  DECISION_ARTIFACT_FIELD.PARTITION_ID,
+  DECISION_ARTIFACT_FIELD.TARGET_NODE_ID,
+  DECISION_ARTIFACT_FIELD.WORKFLOW_STEP,
+  DECISION_ARTIFACT_FIELD.DELAY_MS,
+  DECISION_ARTIFACT_FIELD.ERROR_MESSAGE,
+  DECISION_ARTIFACT_FIELD.BOUNDARY,
 ]);
 
 const LOAD_WAIT_REASON_KEYS = Object.freeze([
@@ -349,6 +403,7 @@ function extractDecisionArtifactsFromLogContent(content) {
   const runtimeHandoffs = [];
   const startupFailures = [];
   const retryableJoinResumes = [];
+  const operationDispatchRetryDeferrals = [];
   const lines = String(content || '').split('\n');
   for (const line of lines) {
     const parsed = parseStructuredLogLine(line);
@@ -399,18 +454,32 @@ function extractDecisionArtifactsFromLogContent(content) {
           RETRYABLE_JOIN_RESUME_ARTIFACT_FIELDS,
         ),
       );
+      continue;
+    }
+    if (
+      message === REBALANCE_COORDINATOR_LOG_MSG.OPERATION_DISPATCH_RETRY_DEFERRED
+    ) {
+      operationDispatchRetryDeferrals.push(
+        sanitizeStructuredDecisionArtifact(
+          parsed,
+          OPERATION_DISPATCH_RETRY_DEFERRAL_ARTIFACT_FIELDS,
+        ),
+      );
     }
   }
   if (
     startupDecisions.length === ZERO &&
     runtimeHandoffs.length === ZERO &&
     startupFailures.length === ZERO &&
-    retryableJoinResumes.length === ZERO
+    retryableJoinResumes.length === ZERO &&
+    operationDispatchRetryDeferrals.length === ZERO
   ) {
     return null;
   }
   const normalizedStartupDecisions = startupDecisions.filter(Boolean);
   const normalizedRuntimeHandoffs = runtimeHandoffs.filter(Boolean);
+  const normalizedOperationDispatchRetryDeferrals =
+    operationDispatchRetryDeferrals.filter(Boolean);
   const latestStartupDecision = resolveLatestDecisionArtifact(
     normalizedStartupDecisions,
   );
@@ -427,6 +496,8 @@ function extractDecisionArtifactsFromLogContent(content) {
     runtimeHandoffs: normalizedRuntimeHandoffs,
     startupFailures: currentStartupFailures,
     retryableJoinResumes: currentRetryableJoinResumes,
+    operationDispatchRetryDeferrals:
+      normalizedOperationDispatchRetryDeferrals,
     latestStartupDecision,
     latestRuntimeHandoff: resolveLatestDecisionArtifact(
       normalizedRuntimeHandoffs,
@@ -434,6 +505,9 @@ function extractDecisionArtifactsFromLogContent(content) {
     latestStartupFailure: resolveLatestDecisionArtifact(currentStartupFailures),
     latestRetryableJoinResume: resolveLatestDecisionArtifact(
       currentRetryableJoinResumes,
+    ),
+    latestOperationDispatchRetryDeferral: resolveLatestDecisionArtifact(
+      normalizedOperationDispatchRetryDeferrals,
     ),
   };
 }
@@ -1201,10 +1275,9 @@ function resolveReadinessFailure(controlPlane = {}) {
 
 function resolveReadinessFailureGuidance(readinessFailure = null) {
   if (!isRecord(readinessFailure) || readinessFailure.classCode === null) {
-    return {
-      failureAction: null,
-      operatorRecommendation: null,
-    };
+    return READINESS_FAILURE_GUIDANCE_BY_KIND[
+      READINESS_FAILURE_GUIDANCE_KIND.NONE
+    ];
   }
   if (
     readinessFailure.classCode ===
@@ -1216,32 +1289,22 @@ function resolveReadinessFailureGuidance(readinessFailure = null) {
       readinessFailure.recoverability ===
       ACTIVE_GATE_READINESS_DELAY_RECOVERABILITY_RECOVERABLE
     ) {
-      return {
-        failureAction:
-          'Probe delay is recoverable in this path; allow bounded retry.',
-        operatorRecommendation:
-          'Re-run with reduced startup concurrency and watch snapshot probe latencies.',
-      };
+      return READINESS_FAILURE_GUIDANCE_BY_KIND[
+        READINESS_FAILURE_GUIDANCE_KIND.RECOVERABLE_DELAY
+      ];
     }
-    return {
-      failureAction: 'Snapshot/reachability timeout is blocking convergence.',
-      operatorRecommendation:
-        'Inspect snapshot query latency, admin readiness, and host/network stability before rerun.',
-    };
+    return READINESS_FAILURE_GUIDANCE_BY_KIND[
+      READINESS_FAILURE_GUIDANCE_KIND.BLOCKING_DELAY
+    ];
   }
   if (readinessFailure.classCode === READINESS_FAILURE_CLASS_NO_PROGRESS) {
-    return {
-      failureAction:
-        'Convergence has stopped progressing within configured guarantees.',
-      operatorRecommendation:
-        'Inspect publication convergence blockers and topology readiness evidence before retry.',
-    };
+    return READINESS_FAILURE_GUIDANCE_BY_KIND[
+      READINESS_FAILURE_GUIDANCE_KIND.NO_PROGRESS
+    ];
   }
-  return {
-    failureAction: 'Readiness convergence issue requires triage.',
-    operatorRecommendation:
-      'Collect active-gate diagnostics and follow triage priorities before rerun.',
-  };
+  return READINESS_FAILURE_GUIDANCE_BY_KIND[
+    READINESS_FAILURE_GUIDANCE_KIND.DEFAULT
+  ];
 }
 
 function normalizeNonNegativeCount(value) {

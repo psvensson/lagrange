@@ -882,9 +882,6 @@ test(STALE_PRIORITY_PENDING_CACHE_ACTIVE_TIMEOUT_RECONCILE_TEST_NAME,
     const TEST_LOCAL_SOURCE = 'local_partition_replica';
     const TEST_UPDATE_OPERATION_SQL_PREFIX =
       'UPDATE replica_operations SET';
-    const TEST_SELECT_SERVICE_ID_FRAGMENT = 'WHERE service_id = ?';
-    const TEST_SELECT_PARTITION_NODE_FRAGMENT =
-      'WHERE partition_id = ? AND node_id = ?';
     const TEST_ADDRESS_SEPARATOR = '/';
     const TEST_STEP_STALE_MS = 65_000;
     const TEST_CREATED_LAG_MS = 5_000;
@@ -899,6 +896,12 @@ test(STALE_PRIORITY_PENDING_CACHE_ACTIVE_TIMEOUT_RECONCILE_TEST_NAME,
       'timeout reconciliation should advance the stale PENDING operation to ACTIVE';
     const TEST_ASSERT_NO_UNSAFE_TRIM =
       'source removal should wait while the over-target source row remains cache-visible';
+    const TEST_ASSERT_AUTHORITATIVE_SERVICE_READS =
+      'authoritative services reads should be attempted before cache fallback';
+    const TEST_ASSERT_EMPTY_AUTHORITATIVE_SERVICE_ROWS =
+      'authoritative services reads should not provide target progress';
+    const TEST_ASSERT_TARGET_CACHE_READ =
+      'target services cache row should drive active progress';
 
     const nowMs = Date.now();
     const staleUpdatedAtMs = nowMs - TEST_STEP_STALE_MS;
@@ -952,6 +955,8 @@ test(STALE_PRIORITY_PENDING_CACHE_ACTIVE_TIMEOUT_RECONCILE_TEST_NAME,
       ].join(TEST_ADDRESS_SEPARATOR),
     };
     const serviceRows = [sourceServiceRow, targetServiceRow];
+    const authoritativeServiceReadResults = [];
+    const serviceCacheReadKeys = [];
     const dispatchedMessages = [];
 
     const cdcIntegrationService = {
@@ -960,7 +965,7 @@ test(STALE_PRIORITY_PENDING_CACHE_ACTIVE_TIMEOUT_RECONCILE_TEST_NAME,
         tableName,
         sql,
         params = [],
-        options = {},
+        _options = {},
       ) {
         if (tableName === TEST_REPLICA_OPERATIONS_TABLE) {
           return {
@@ -970,27 +975,18 @@ test(STALE_PRIORITY_PENDING_CACHE_ACTIVE_TIMEOUT_RECONCILE_TEST_NAME,
           };
         }
         if (tableName === TEST_SERVICES_TABLE) {
-          if (String(sql).includes(TEST_SELECT_SERVICE_ID_FRAGMENT)) {
-            const [requestedReplicaId] = params;
-            return {
-              success: true,
-              source: TEST_LOCAL_SOURCE,
-              rows: serviceRows.filter((row) =>
-                row.service_id === requestedReplicaId,
-              ),
-            };
-          }
-          if (String(sql).includes(TEST_SELECT_PARTITION_NODE_FRAGMENT)) {
-            const [requestedPartitionId, requestedNodeId] = params;
-            return {
-              success: true,
-              source: TEST_LOCAL_SOURCE,
-              rows: serviceRows.filter((row) =>
-                row.partition_id === requestedPartitionId &&
-                row.node_id === requestedNodeId,
-              ),
-            };
-          }
+          const result = {
+            success: true,
+            source: TEST_LOCAL_SOURCE,
+            rows: [],
+          };
+          authoritativeServiceReadResults.push({
+            sql: String(sql),
+            params: [...params],
+            success: result.success,
+            rowCount: result.rows.length,
+          });
+          return result;
         }
         return {
           success: true,
@@ -1057,6 +1053,7 @@ test(STALE_PRIORITY_PENDING_CACHE_ACTIVE_TIMEOUT_RECONCILE_TEST_NAME,
               TEST_EMPTY_VALUE;
           }
           if (tableName === TEST_SERVICES_TABLE) {
+            serviceCacheReadKeys.push(key);
             return serviceRows.find((row) =>
               row.service_id === key,
             ) || TEST_EMPTY_VALUE;
@@ -1099,6 +1096,20 @@ test(STALE_PRIORITY_PENDING_CACHE_ACTIVE_TIMEOUT_RECONCILE_TEST_NAME,
       await coordinator.shutdown();
     }
 
+    t.ok(
+      authoritativeServiceReadResults.length > TEST_EMPTY_AFFECTED_ROW_COUNT,
+      TEST_ASSERT_AUTHORITATIVE_SERVICE_READS,
+    );
+    t.ok(
+      authoritativeServiceReadResults.every((result) =>
+        result.rowCount === TEST_EMPTY_AFFECTED_ROW_COUNT,
+      ),
+      TEST_ASSERT_EMPTY_AUTHORITATIVE_SERVICE_ROWS,
+    );
+    t.ok(
+      serviceCacheReadKeys.includes(TEST_REPLICA_ID),
+      TEST_ASSERT_TARGET_CACHE_READ,
+    );
     t.equal(
       operationRow.error_message,
       TEST_EMPTY_VALUE,

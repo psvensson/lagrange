@@ -15,6 +15,8 @@ export function registerFailureBundlePlaybackTests({
   buildStartupModeWitnessProgress,
 }) {
   const EXPECTED_UNAVAILABLE_STATE = 'unavailable';
+  const RETRY_HANDOFF_PLAYBACK_TEST_NAME =
+    'uses later retryable operation handoff logs over stale selected-snapshot timeout evidence';
 
   it('derives root-cause, readiness reasons, and first-fault timeline from playback events', async () => {
     const scenarioDir = join(state.outputDir, 'node-join-under-load');
@@ -773,6 +775,272 @@ export function registerFailureBundlePlaybackTests({
       scenarioMarkdown,
       /replica_operations-p1#state=recovering_in_flight#gap=1#blockers=(learner_active_but_never_promotable\|operation_created_but_no_step_transitions|operation_created_but_no_step_transitions\|learner_active_but_never_promotable)#decision=controlPlaneRecoveryEligible#eligible=3#ops=op-1#status=open#learners=joiner-1/,
     );
+  });
+
+  it(RETRY_HANDOFF_PLAYBACK_TEST_NAME, async () => {
+    const SCENARIO_NAME = 'rolling-restart';
+    const PLAYBACK_EVENTS_FILENAME = 'events.ndjson';
+    const NODE_LOG_FILENAME = 'node-1.log';
+    const PLAYBACK_EVENT_TYPE_CLUSTER_STAGE = 'cluster.stage';
+    const PLAYBACK_EVENT_SCOPE_CLUSTER = 'cluster';
+    const PLAYBACK_EVENT_ENTITY_CLUSTER = 'cluster';
+    const PLAYBACK_STAGE_SETUP_CLUSTER_WAITING_ACTIVE =
+      'setup.cluster.waiting-active';
+    const SELECTED_NODE_ONE_ID = 'node-1';
+    const SELECTED_NODE_TWO_ID = 'node-2';
+    const SELECTED_NODE_THREE_ID = 'node-3';
+    const ACTIVE_GATE_MODE_STARTUP = 'startup';
+    const ACTIVE_GATE_STATE_TIMED_OUT = 'timed_out';
+    const SNAPSHOT_COVERAGE_BLOCKER = 'snapshot_coverage=3/5';
+    const LOG_SUBSYSTEM_REBALANCE_COORDINATOR = 'rebalance-coordinator';
+    const FAILURE_BUNDLE_STATUS_SKIPPED = 'skipped';
+    const LINE_SEPARATOR = '\n';
+    const STALE_STAGE_TIMESTAMP_MS = 1777922922021;
+    const STALE_SNAPSHOT_CAPTURED_AT_MS = 1777922920790;
+    const STALE_OPERATION_PROGRESS_AT_MS = 1777922869705;
+    const RETRY_HANDOFF_PROGRESS_TIME = '2026-05-04T19:28:50.548Z';
+    const RETRY_HANDOFF_PROGRESS_AT_MS = 1777922930548;
+    const RETRY_HANDOFF_DELAY_MS = 250;
+    const PUBLICATION_EPOCH = 4;
+    const PARTITION_ID = 'sql_transactions-p1';
+    const OPERATION_ID = 'op-retry-handoff';
+    const TARGET_NODE_ID = 'target-node-1';
+    const CORRELATION_KEY = 'sql_transactions-p1|4|op-retry-handoff';
+    const PUBLICATION_STATUS_PUBLISHED = 'PUBLISHED';
+    const WORKFLOW_STEP_PENDING = 'PENDING';
+    const WORKFLOW_STEP_SENDING = 'SENDING';
+    const OPERATION_STATUS_PENDING = 'pending';
+    const OPERATION_STATUS_RETRY_DEFERRED = 'retry_deferred';
+    const SEMANTIC_STATE_OPERATION_STALLED = 'operation_stalled';
+    const BLOCKER_OPERATION_NO_TRANSITIONS =
+      'operation_created_but_no_step_transitions';
+    const OWNER_OPERATION_WORKFLOW = 'operation_workflow_owner';
+    const ACTUATION_STATE_TRANSITION_DEFERRED = 'transition_deferred';
+    const ACTUATION_STATE_DISPATCHED_WAITING_PROGRESS =
+      'dispatched_waiting_progress';
+    const BOUNDARY_WORKFLOW_TIMEOUT = 'workflow_timeout';
+    const BOUNDARY_REBALANCER_HANDOFF = 'rebalancer_handoff';
+    const WAIT_MODE_TIMEOUT_RECONCILE_DUE = 'timeout_reconcile_due';
+    const WAIT_MODE_RETRY_SCHEDULED = 'retry_scheduled';
+    const NEXT_ACTION_RECONCILE_STALE_OPERATION_PROGRESS =
+      'reconcile_stale_operation_progress';
+    const NEXT_ACTION_WAIT_FOR_OPERATION_PROGRESS =
+      'wait_for_operation_progress';
+    const LOG_MESSAGE_OPERATION_DISPATCH_RETRY_DEFERRED =
+      'Deferred retryable replica operation dispatch failure';
+    const OPERATION_WORKFLOW_BOUNDARY_COORDINATOR_CREATED_REMOTE_HANDOFF =
+      'coordinator_created_remote_handoff';
+    const RETRYABLE_ERROR_MESSAGE =
+      'Connection closed before message acknowledgement';
+    const EXPECTED_NODE_COUNT = 5;
+    const ACTIVE_NODE_COUNT = 4;
+    const SNAPSHOT_COVERAGE_NODE_COUNT = 3;
+    const ZERO_COUNT = 0;
+    const ONE_COUNT = 1;
+    const scenarioDir = join(state.outputDir, SCENARIO_NAME);
+    await mkdir(scenarioDir, {recursive: true});
+    await writeFile(
+      join(scenarioDir, PLAYBACK_EVENTS_FILENAME),
+      [
+        JSON.stringify({
+          timestamp: STALE_STAGE_TIMESTAMP_MS,
+          type: PLAYBACK_EVENT_TYPE_CLUSTER_STAGE,
+          scope: PLAYBACK_EVENT_SCOPE_CLUSTER,
+          entityId: PLAYBACK_EVENT_ENTITY_CLUSTER,
+          details: {
+            stage: PLAYBACK_STAGE_SETUP_CLUSTER_WAITING_ACTIVE,
+            snapshotCoverage: {
+              completeCoverage: false,
+              bestCoverageNodeCount: SNAPSHOT_COVERAGE_NODE_COUNT,
+              expectedNodeCount: EXPECTED_NODE_COUNT,
+              selectedNodeId: SELECTED_NODE_ONE_ID,
+              selectedCapturedAtMs: STALE_SNAPSHOT_CAPTURED_AT_MS,
+              selectedObservedNodeIds: [
+                SELECTED_NODE_ONE_ID,
+                SELECTED_NODE_TWO_ID,
+                SELECTED_NODE_THREE_ID,
+              ],
+              selectedControlPlaneDiagnosticsAvailable: true,
+              selectedPublicationConvergence: {
+                publicationEpoch: PUBLICATION_EPOCH,
+                publicationStatus: PUBLICATION_STATUS_PUBLISHED,
+                pendingAckNodeIds: [],
+                publishedActiveNodeIds: [
+                  SELECTED_NODE_ONE_ID,
+                  SELECTED_NODE_TWO_ID,
+                  SELECTED_NODE_THREE_ID,
+                ],
+              },
+              selectedPriorityRecoveryDecisionSnapshots: {
+                publicationEpoch: PUBLICATION_EPOCH,
+                capturedAt: STALE_SNAPSHOT_CAPTURED_AT_MS,
+                priorityPartitionSummary: {
+                  satisfied: false,
+                  blockedPartitionCount: ONE_COUNT,
+                },
+                snapshots: [{
+                  partitionId: PARTITION_ID,
+                  epoch: PUBLICATION_EPOCH,
+                  operationId: OPERATION_ID,
+                  correlationKey: CORRELATION_KEY,
+                  semanticState: SEMANTIC_STATE_OPERATION_STALLED,
+                  blockerReasons: [BLOCKER_OPERATION_NO_TRANSITIONS],
+                  coordinator: {
+                    operationIds: [OPERATION_ID],
+                    operation: {
+                      operationId: OPERATION_ID,
+                      status: OPERATION_STATUS_PENDING,
+                      workflowStep: WORKFLOW_STEP_PENDING,
+                      updatedAtMs: STALE_OPERATION_PROGRESS_AT_MS,
+                    },
+                  },
+                }],
+              },
+            },
+            publicationConvergenceGate: {
+              ready: false,
+              reasons: [],
+              publicationStatus: PUBLICATION_STATUS_PUBLISHED,
+              pendingAckNodeIds: [],
+              missingPublishedNodeIds: [],
+            },
+            activeGate: {
+              mode: ACTIVE_GATE_MODE_STARTUP,
+              state: ACTIVE_GATE_STATE_TIMED_OUT,
+              ready: false,
+              progress: {
+                expectedNodeCount: EXPECTED_NODE_COUNT,
+                activeNodeCount: ACTIVE_NODE_COUNT,
+                inactiveNodeCount: ONE_COUNT,
+                snapshotCoverageNodeCount: SNAPSHOT_COVERAGE_NODE_COUNT,
+                snapshotCoverageComplete: false,
+                publicationEpoch: PUBLICATION_EPOCH,
+                publicationStatus: PUBLICATION_STATUS_PUBLISHED,
+                pendingAckCount: ZERO_COUNT,
+                missingPublishedCount: ZERO_COUNT,
+                gateReasons: [],
+                prioritySpreadSatisfied: false,
+                priorityBlockedPartitionCount: ONE_COUNT,
+                priorityRecoveryProgressClasses: {
+                  unresolvedClassIds: [BLOCKER_OPERATION_NO_TRANSITIONS],
+                  unresolvedClassCount: ONE_COUNT,
+                  unresolvedSemanticStateIds: [
+                    SEMANTIC_STATE_OPERATION_STALLED,
+                  ],
+                  unresolvedSemanticStateCount: ONE_COUNT,
+                  blockedPartitionIds: [PARTITION_ID],
+                  blockedPartitionCount: ONE_COUNT,
+                },
+                blockers: [SNAPSHOT_COVERAGE_BLOCKER],
+              },
+            },
+          },
+        }),
+      ].join(LINE_SEPARATOR) + LINE_SEPARATOR,
+    );
+    await writeFile(
+      join(scenarioDir, NODE_LOG_FILENAME),
+      JSON.stringify({
+        time: RETRY_HANDOFF_PROGRESS_TIME,
+        subsystem: LOG_SUBSYSTEM_REBALANCE_COORDINATOR,
+        msg: LOG_MESSAGE_OPERATION_DISPATCH_RETRY_DEFERRED,
+        operationId: OPERATION_ID,
+        partitionId: PARTITION_ID,
+        targetNodeId: TARGET_NODE_ID,
+        workflowStep: WORKFLOW_STEP_SENDING,
+        delayMs: RETRY_HANDOFF_DELAY_MS,
+        errorMessage: RETRYABLE_ERROR_MESSAGE,
+        boundary: OPERATION_WORKFLOW_BOUNDARY_COORDINATOR_CREATED_REMOTE_HANDOFF,
+      }) + LINE_SEPARATOR,
+    );
+
+    const scenarioResult = buildPlaybackDerivedFailureResult();
+    scenarioResult.details.diagnostics.controlPlaneDiagnostics = {
+      publicationConvergence: {
+        publicationEpoch: PUBLICATION_EPOCH,
+        publicationStatus: PUBLICATION_STATUS_PUBLISHED,
+        pendingAckNodeIds: [],
+        pendingAckCount: ZERO_COUNT,
+        missingPublishedNodeIds: [],
+        missingPublishedCount: ZERO_COUNT,
+        publicationPending: false,
+        prioritySpreadPending: true,
+      },
+      priorityRecoveryObservation: {
+        publicationEpoch: PUBLICATION_EPOCH,
+        publicationStatus: PUBLICATION_STATUS_PUBLISHED,
+        pendingAckNodeIds: [],
+        pendingAckCount: ZERO_COUNT,
+        missingPublishedNodeIds: [],
+        missingPublishedCount: ZERO_COUNT,
+        publicationPending: false,
+        prioritySpreadPending: true,
+        priorityRecoveryPartitionWitnesses: [{
+          partitionId: PARTITION_ID,
+          semanticStateId: SEMANTIC_STATE_OPERATION_STALLED,
+          progressClassIds: [BLOCKER_OPERATION_NO_TRANSITIONS],
+          blockerReasonCodes: [BLOCKER_OPERATION_NO_TRANSITIONS],
+          progressContractState: OPERATION_STATUS_PENDING,
+          actuationState: ACTUATION_STATE_TRANSITION_DEFERRED,
+          currentOwner: OWNER_OPERATION_WORKFLOW,
+          actuationOwner: OWNER_OPERATION_WORKFLOW,
+          blockingBoundary: BOUNDARY_WORKFLOW_TIMEOUT,
+          waitMode: WAIT_MODE_TIMEOUT_RECONCILE_DUE,
+          nextRequiredAction:
+            NEXT_ACTION_RECONCILE_STALE_OPERATION_PROGRESS,
+          operationIds: [OPERATION_ID],
+          witnessIds: [OPERATION_ID],
+          correlationKey: CORRELATION_KEY,
+          lastProgressAtMs: STALE_OPERATION_PROGRESS_AT_MS,
+          latestOperationWorkflowStep: WORKFLOW_STEP_PENDING,
+          latestOperationStatus: OPERATION_STATUS_PENDING,
+        }],
+      },
+    };
+    const writer = new ReportWriter(state.reportPath);
+    writer.addResult(SCENARIO_NAME, scenarioResult);
+
+    const {scenarioBundles, runBundle} = await writeFailureBundlesForReport({
+      scenarios: writer.scenarios,
+      reportOutputPath: state.reportPath,
+      outputDir: state.outputDir,
+      reportSummary: {total: ONE_COUNT, fail: ONE_COUNT, pass: ZERO_COUNT},
+      standardSummary: {scenarios: []},
+      benchmarkRegressionGate: {status: FAILURE_BUNDLE_STATUS_SKIPPED},
+      workspaceRoot: state.tempDir,
+    });
+    await writer.write({failureBundle: runBundle});
+
+    const scenarioBundle = JSON.parse(
+      await readFile(
+        resolve(state.tempDir, scenarioBundles[ZERO_COUNT].links.jsonPath),
+        UTF8_ENCODING,
+      ),
+    );
+    const dominantWitness =
+      scenarioBundle.publicationConvergence.priorityRecoveryProgressSummary
+        .dominantWitness;
+
+    assert.equal(dominantWitness.partitionId, PARTITION_ID);
+    assert.equal(dominantWitness.blockingBoundary, BOUNDARY_REBALANCER_HANDOFF);
+    assert.equal(dominantWitness.waitMode, WAIT_MODE_RETRY_SCHEDULED);
+    assert.equal(
+      dominantWitness.nextRequiredAction,
+      NEXT_ACTION_WAIT_FOR_OPERATION_PROGRESS,
+    );
+    assert.equal(
+      dominantWitness.actuationState,
+      ACTUATION_STATE_DISPATCHED_WAITING_PROGRESS,
+    );
+    assert.equal(
+      dominantWitness.latestOperationWorkflowStep,
+      WORKFLOW_STEP_SENDING,
+    );
+    assert.equal(
+      dominantWitness.latestOperationStatus,
+      OPERATION_STATUS_RETRY_DEFERRED,
+    );
+    assert.equal(dominantWitness.lastProgressAtMs, RETRY_HANDOFF_PROGRESS_AT_MS);
   });
 
   it('classifies startup playback active-gate no-progress witness as CL-006 and preserves admission state', async () => {

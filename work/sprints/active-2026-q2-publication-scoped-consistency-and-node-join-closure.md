@@ -20,13 +20,16 @@ The sprint target is:
 ## Why This Sprint Exists
 
 The previous publication-scoped work was useful, but it is no longer the
-dominant blocker. Recent artifacts show that publication and readiness
-contradictions have moved out of the terminal path:
+dominant blocker. Earlier artifacts showed:
 
 1. publication gates reach ready or steady-published states
 2. priority spread summaries no longer dominate the final blocker
 3. readiness/planning same-epoch contradictions are closed
 4. the remaining failures are runtime liveness and pressure failures
+
+The latest May 4 operation-transition evidence records a publication summary
+versus active-gate missing-published contradiction that must stay open until
+reconciled.
 
 The active failure chain is now:
 
@@ -120,39 +123,48 @@ Queued cleanup packages:
 
 1. Current execution blocker:
    The latest May 4 representative rerun is
-   `test-output/reports/rolling-restart-operation-transition-pressure-overtarget-trim-20260504-codex.report.json`.
+   `test-output/reports/rolling-restart-operation-transition-pressure-overtarget-trim-20260504-final.report.json`.
    The owner fixture proved timeout reconciliation consumes cache-visible
    active target progress and defers unsafe over-target source trim, so no
    production runtime change was made for that slice. The representative path
    still fails with
-   `priority_recovery_workflow_timeout_transition_deferred`: publication epoch
-   `4` is `ACK_PENDING`, normalized pending ACK count is `0`, active-gate
-   progress still reports `pendingAck=1`, active `4/5`, missing published
-   `1`, and selected snapshot coverage `3/5`. The canonical witness is
-   `operation_workflow_owner / workflow_timeout / timeout_reconcile_due` for
-   `sql_transactions-p1`, with next action
-   `reconcile_stale_operation_progress`, workflow step `PENDING`, status
-   `pending`, and progress class
-   `operation_created_but_no_step_transitions`. Playback logs later show the
-   same operation advanced to `SENDING` and then deferred at retryable
-   `coordinator_created_remote_handoff`.
+   `priority_recovery_workflow_progress_transition_deferred`: publication
+   epoch `3` is `PUBLISHED`, normalized pending ACK count is `0`, normalized
+   missing published count is `0`, active-gate progress reports active `4/5`,
+   selected snapshot coverage `4/5`, selected published active `3/5`, missing
+   published `2`, and four nodes with publication disagreement. The canonical
+   witness is `operation_workflow_owner / workflow_progress / event_driven`
+   for `sql_transactions-p1`, with next action
+   `wait_for_operation_progress`, no operation IDs, workflow source `none`,
+   latest workflow step `unavailable`, latest status `unavailable`, semantic
+   state `needs_operation`, and progress class
+   `priority_operation_serial_wait`. Playback logs retain retryable
+   operation-dispatch deferral witnesses for other priority partitions, but
+   those are not the final dominant selected partition.
 2. Next active investigation:
    continue
    [Rolling Restart Operation Transition Pressure And Over-Target Trim](../packages/active-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md)
-   by reconciling stale selected-snapshot workflow-timeout evidence with the
-   later retryable remote-handoff owner evidence while preserving publication
-   ACK and startup selected-snapshot reachability closure.
+   by reconciling why `sql_transactions-p1` has only an `operation_unknown`
+   serial-wait witness while sibling priority partitions have in-flight or
+   retry-deferred operation evidence. The continuation must also reconcile the
+   publication summary versus active-gate missing-published disagreement
+   instead of preserving publication and selected-snapshot closure.
 3. Harness classification:
    terminal barrier evidence wins over stale playback reconstruction for
    active, restart-recovery, load-readiness, convergence, and quiescence
-   failures. Publication ACK and missing-published drift are closed: stale
-   count-only ACK and top-level missing-published evidence no longer override
-   current active-gate owner evidence. The stale publication-classification
-   branch is closed for priority-spread publication closure records; the
-   startup seed-contact, active-gate actuation, operation-workflow ACK,
-   startup snapshot reachability, and priority transition-deferred boundaries
-   are now named. The latest terminal owner boundary is priority recovery
-   workflow timeout reconciliation.
+   failures. Earlier publication ACK and missing-published drift fixes remain
+   historical proof, but current May 4 evidence is contradictory: normalized
+   publication reports epoch `3` as `PUBLISHED` with pending ACK count `0` and
+   missing published count `0`, while active-gate progress reports selected
+   published active `3/5`, missing published `2`, active `4/5`, and selected
+   snapshot coverage `4/5`. Do not treat publication, missing-published, or
+   startup selected-snapshot reachability as closed until one owner path
+   explains that disagreement. The stale publication-
+   classification branch is closed for priority-spread publication closure
+   records; the startup seed-contact, active-gate actuation, operation-workflow
+   ACK, startup snapshot reachability, and priority transition-deferred
+   boundaries are now named. The latest terminal owner boundary is priority
+   recovery workflow progress serial wait on `sql_transactions-p1`.
 4. Final consistency:
    the final leader-map consistency package is complete for this sprint
    because the rerun moved to a freshly split non-final blocker.
