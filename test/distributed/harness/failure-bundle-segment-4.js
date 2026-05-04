@@ -1499,6 +1499,16 @@ function buildPriorityRecoveryActuationWitnessEvidence(witness) {
     nextAction:
       witness?.nextRequiredAction ===
         PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.CREATE_RECOVERY_OPERATION,
+    operationWorkflowProgress:
+      ownerIds.includes(
+        PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER,
+      ) &&
+      witness?.blockingBoundary ===
+        PRIORITY_RECOVERY_BLOCKING_BOUNDARY.WORKFLOW_PROGRESS &&
+      witness?.nextRequiredAction ===
+        PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.WAIT_FOR_OPERATION_PROGRESS &&
+      witness?.actuationState ===
+        PRIORITY_RECOVERY_ACTUATION_STATE.DISPATCHED_WAITING_PROGRESS,
     actuationState:
       witness?.actuationState ===
         PRIORITY_RECOVERY_ACTUATION_STATE.ACTION_REQUIRED,
@@ -1527,6 +1537,21 @@ function buildActiveGatePriorityRecoveryActuationEvidence({
       priorityRecoveryPartitionWitnesses :
       []
   ).map(buildPriorityRecoveryActuationWitnessEvidence);
+  const witnessProgressClass = witnessEvidence.some(
+    (witness) => witness.progressClass === true,
+  );
+  const witnessOperationWorkflowProgress = witnessEvidence.some(
+    (witness) => witness.operationWorkflowProgress === true,
+  );
+  const witnessOperationCreationRequired = witnessEvidence.some(
+    (witness) =>
+      witness.progressClass === true &&
+      witness.semanticState === true &&
+      witness.owner === true &&
+      witness.boundary === true &&
+      witness.nextAction === true &&
+      witness.actuationState === true,
+  );
   return Object.freeze({
     progressClassIds:
       observationProgressClassIds.includes(
@@ -1556,19 +1581,20 @@ function buildActiveGatePriorityRecoveryActuationEvidence({
         witness.nextAction === true &&
         witness.actuationState === true,
       ),
+    witnessOperationWorkflowProgress,
+    witnessProgressClass,
+    isOpen:
+      (activeGateProgressClassIds.length > ZERO &&
+        activeGateSemanticStateIds.length > ZERO) ||
+      witnessProgressClass ||
+      witnessOperationCreationRequired ||
+      witnessOperationWorkflowProgress,
   });
 }
 
 function hasActiveGatePriorityRecoveryActuationEvidence(input) {
   const evidence = buildActiveGatePriorityRecoveryActuationEvidence(input);
-  return (
-    evidence.activeGateClassContract === true ||
-    (
-      evidence.progressClassIds === true &&
-      evidence.semanticStateIds === true &&
-      evidence.witnessOperationCreationRequired === true
-    )
-  );
+  return evidence.isOpen === true;
 }
 
 function resolvePriorityRecoveryObservationList(primaryValues, fallbackValues) {

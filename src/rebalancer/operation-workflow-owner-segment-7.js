@@ -1356,6 +1356,18 @@ class OperationWorkflowOwnerSegment7 extends OperationWorkflowOwnerSegment6 {
       return true;
     }
 
+    if (reconciledStatus === ReplicaStatus.REMOVED) {
+      if (operation.type !== OperationType.ADD) {
+        await this.completeOperation(operation);
+      } else {
+        await this.failOperation(
+          operation,
+          OPERATION_WORKFLOW_OWNER_LITERAL.REPLICA_FAILED_DURING_OPERATION_RECONCILIATION,
+        );
+      }
+      return true;
+    }
+
     if (reconciledStatus === ReplicaStatus.ACTIVE) {
       if (operation.type === OperationType.REPLACE) {
         await this.reconcileReplaceActualActive(operation);

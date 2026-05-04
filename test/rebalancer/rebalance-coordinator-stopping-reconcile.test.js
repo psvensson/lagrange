@@ -15,6 +15,9 @@ import {
   ReplicaStatus,
 } from '../../src/rebalancer/replica-status.js';
 import {
+  OPERATION_WORKFLOW_OWNER_SHARED,
+} from '../../src/rebalancer/operation-workflow-owner-shared.js';
+import {
   ReplicaOperationMessageType,
   ReplicaOperationResponseStatus,
 } from '../../src/rebalancer/replica-operation-constants.js';
@@ -458,6 +461,155 @@ test('RebalanceCoordinator completes ACTIVE REPLACE when source removal is alrea
       await coordinator.shutdown();
     }
   });
+
+test('RebalanceCoordinator completes non-ADD target REMOVED status during ' +
+  'reconciliation', async (t) => {
+  const TEST_PARTITION_ID = 'mg-2';
+  const TEST_TARGET_REPLICA_ID = TEST_PARTITION_ID + '-r2';
+  const TEST_OPERATION_ID = 'reconcile-removal-completes-replace';
+  const TEST_NOW_MS = Date.now();
+  const coordinator = createTestCoordinator({
+    nodeId: 'seed-node',
+    enableTimeouts: false,
+    cacheData: {
+      replicaOperations: [
+        {
+          operation_id: TEST_OPERATION_ID,
+          type: OperationType.REPLACE,
+          partition_id: TEST_PARTITION_ID,
+          replica_id: TEST_TARGET_REPLICA_ID,
+          source_node_id: 'seed-node',
+          target_node_id: 'node-target',
+          status: ReplicaStatus.CREATING,
+          workflow_step: WORKFLOW_STEP.CREATING,
+          created_at: TEST_NOW_MS,
+          updated_at: TEST_NOW_MS,
+          completed_at: PRIORITY_DRAIN_TEST_NO_COMPLETED_AT,
+          error_message: PRIORITY_DRAIN_TEST_NO_ERROR_MESSAGE,
+          entity_type: PRIORITY_DRAIN_TEST_ENTITY_TYPE,
+          entity_id: TEST_PARTITION_ID,
+          steps_history: JSON.stringify([
+            {
+              step: WORKFLOW_STEP.PENDING,
+              timestamp: TEST_NOW_MS,
+            },
+            {
+              step: WORKFLOW_STEP.CREATING,
+              timestamp: TEST_NOW_MS,
+              previousStep: WORKFLOW_STEP.PENDING,
+            },
+          ]),
+        },
+      ],
+    },
+  });
+
+  try {
+    coordinator.repository.getActualReplicaStatus = async () => ReplicaStatus.REMOVED;
+
+    const operation = await coordinator.getOperation(TEST_OPERATION_ID);
+    const reconciled =
+      await coordinator.workflowOwner.reconcileOperationProgress(operation);
+    const persistedOperation =
+      await coordinator.getOperation(TEST_OPERATION_ID);
+
+    t.equal(
+      reconciled,
+      true,
+      'reconcileOperationProgress should consume authoritative REMOVED state for REPLACE',
+    );
+    t.equal(
+      persistedOperation?.workflowStep,
+      WORKFLOW_STEP.REMOVED,
+      'reconcileOperationProgress should complete non-ADD operations on REMOVED status',
+    );
+    t.equal(
+      persistedOperation?.status,
+      ReplicaStatus.REMOVED,
+      'reconciled REMOVED status should be terminal for non-ADD operations',
+    );
+  } finally {
+    await coordinator.shutdown();
+  }
+});
+
+test('RebalanceCoordinator fails ADD target REMOVED status during ' +
+  'reconciliation', async (t) => {
+  const TEST_PARTITION_ID = 'mg-3';
+  const TEST_TARGET_REPLICA_ID = TEST_PARTITION_ID + '-r2';
+  const TEST_OPERATION_ID = 'reconcile-removed-add-fails';
+  const TEST_NOW_MS = Date.now();
+  const coordinator = createTestCoordinator({
+    nodeId: 'seed-node',
+    enableTimeouts: false,
+    cacheData: {
+      replicaOperations: [
+        {
+          operation_id: TEST_OPERATION_ID,
+          type: OperationType.ADD,
+          partition_id: TEST_PARTITION_ID,
+          replica_id: TEST_TARGET_REPLICA_ID,
+          source_node_id: 'seed-node',
+          target_node_id: 'node-target',
+          status: ReplicaStatus.CREATING,
+          workflow_step: WORKFLOW_STEP.CREATING,
+          created_at: TEST_NOW_MS,
+          updated_at: TEST_NOW_MS,
+          completed_at: PRIORITY_DRAIN_TEST_NO_COMPLETED_AT,
+          error_message: PRIORITY_DRAIN_TEST_NO_ERROR_MESSAGE,
+          entity_type: PRIORITY_DRAIN_TEST_ENTITY_TYPE,
+          entity_id: TEST_PARTITION_ID,
+          steps_history: JSON.stringify([
+            {
+              step: WORKFLOW_STEP.PENDING,
+              timestamp: TEST_NOW_MS,
+            },
+            {
+              step: WORKFLOW_STEP.CREATING,
+              timestamp: TEST_NOW_MS,
+              previousStep: WORKFLOW_STEP.PENDING,
+            },
+          ]),
+        },
+      ],
+    },
+  });
+
+  try {
+    coordinator.repository.getActualReplicaStatus = async () => ReplicaStatus.REMOVED;
+
+    const operation = await coordinator.getOperation(TEST_OPERATION_ID);
+    const reconciled =
+      await coordinator.workflowOwner.reconcileOperationProgress(operation);
+    const persistedOperation =
+      await coordinator.getOperation(TEST_OPERATION_ID);
+
+    t.equal(
+      reconciled,
+      true,
+      'reconcileOperationProgress should fail ADD on authoritative REMOVED status',
+    );
+    t.equal(
+      persistedOperation?.workflowStep,
+      WORKFLOW_STEP.FAILED,
+      'reconcileOperationProgress should persist ADD failure as workflow FAILED',
+    );
+    t.equal(
+      persistedOperation?.status,
+      ReplicaStatus.FAILED,
+      'failed operation status should be FAILED for ADD target REMOVED',
+    );
+    t.match(
+      persistedOperation?.errorMessage,
+      OPERATION_WORKFLOW_OWNER_SHARED
+        .OPERATION_WORKFLOW_OWNER_LITERAL
+        .REPLICA_FAILED_DURING_OPERATION_RECONCILIATION,
+      'failure reason should route through operation reconciliation',
+    );
+  } finally {
+    await coordinator.shutdown();
+  }
+});
 
 test('RebalanceCoordinator keeps REPLACE STOPPING in progress when replayed ' +
   'remove completes while source replica remains active', async (t) => {
