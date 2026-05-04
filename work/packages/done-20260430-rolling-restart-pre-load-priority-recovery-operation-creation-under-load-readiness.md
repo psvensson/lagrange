@@ -122,5 +122,5 @@ cache-visible pending operation for `sql_write_operations-p1`.
 3. The representative `rolling-restart --fast-local` path passes or migrates to
    one named active package with current owner-state evidence.
 
-Status: done. The representative blocker migrated to
+The representative blocker migrated to
 [Rolling Restart Startup Publication Epoch Pending Operation Stalled](./done-20260430-rolling-restart-startup-publication-epoch-pending-operation-stalled.md).

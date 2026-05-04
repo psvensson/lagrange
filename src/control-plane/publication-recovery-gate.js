@@ -95,7 +95,17 @@ function resolvePendingAckEvidenceState(options = {}) {
     return PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE
       .REQUIRED_ACK_NODE_LIST;
   }
-  return Array.isArray(options.requiredAckNodeIds) ?
+  const requiredAckNodeIds = normalizeDistinctStringArray(
+    options.requiredAckNodeIds,
+  );
+  const explicitPendingAckNodeIds = normalizeDistinctStringArray(
+    options.pendingAckNodeIds,
+  );
+  return Array.isArray(options.requiredAckNodeIds) &&
+    (
+      requiredAckNodeIds.length > NUM.ZERO ||
+      explicitPendingAckNodeIds.length === NUM.ZERO
+    ) ?
     PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.REQUIRED_ACK_NODE_LIST :
     PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.COUNT_ONLY;
 }
@@ -118,8 +128,11 @@ function buildPendingAckEvidence(options = {}) {
     options.pendingAckNodeIds,
   );
   const pendingAckNodeIds =
-    explicitPendingAckNodeIds.length > NUM.ZERO ?
-      explicitPendingAckNodeIds :
+    evidenceState ===
+      PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.REQUIRED_ACK_NODE_LIST ?
+      derivedPendingAckNodeIds :
+      explicitPendingAckNodeIds.length > NUM.ZERO ?
+        explicitPendingAckNodeIds :
       derivedPendingAckNodeIds;
   const pendingAckCountByState = Object.freeze({
     [PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.COUNT_ONLY]:

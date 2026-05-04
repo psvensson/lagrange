@@ -21,6 +21,8 @@ import {
   ACTIVE_GATE_READINESS_DELAY_RECOVERABILITY_RECOVERABLE,
 } from './startup-readiness-evidence.js';
 import {
+  PRIORITY_RECOVERY_BLOCKER_REASON,
+  PRIORITY_RECOVERY_ACTUATION_STATE,
   PRIORITY_RECOVERY_BLOCKER_REASON_PRECEDENCE,
   PRIORITY_RECOVERY_BLOCKER_TO_SEMANTIC_STATE,
   PRIORITY_RECOVERY_CORRELATION_KEY,
@@ -94,11 +96,21 @@ const PRIORITY_RECOVERY_CLOSURE_WITNESS_PRIORITY_SPREAD_PENDING =
   'publication_converged_priority_spread_pending';
 const PRIORITY_RECOVERY_SYNTHETIC_NO_OPERATION_BLOCKER_REASON =
   'eligible_but_no_operation_created';
+const PRIORITY_RECOVERY_SYNTHETIC_NO_OPERATION_BLOCKER_REASONS = Object.freeze([
+  PRIORITY_RECOVERY_SYNTHETIC_NO_OPERATION_BLOCKER_REASON,
+  PRIORITY_RECOVERY_BLOCKER_REASON.SERIAL_OPERATION_WAIT,
+]);
+const PRIORITY_RECOVERY_DECISION_SNAPSHOT_FRESHNESS_FIELD = Object.freeze({
+  CAPTURED_AT: 'capturedAt',
+  COMPLETED_AT_MS: 'completedAtMs',
+  CREATED_AT_MS: 'createdAtMs',
+  LAST_PROGRESS_AT_MS: 'lastProgressAtMs',
+  TARGET_SERVICE_PROGRESS_AT_MS: 'targetServiceProgressAtMs',
+  UPDATED_AT_MS: 'updatedAtMs',
+});
 const PRIORITY_RECOVERY_SPECIFIC_ACTUATION_STATES = Object.freeze([
-  'persist_blocked_by_pressure',
-  'persist_failed_retryable',
-  'reconcile_due',
-  'awaiting_observation',
+  PRIORITY_RECOVERY_ACTUATION_STATE.TRANSITION_DEFERRED,
+  PRIORITY_RECOVERY_ACTUATION_STATE.TERMINAL_FAILED,
 ]);
 const READINESS_REASON_MAX_NODES = 25;
 const READINESS_REASON_MAX_PER_NODE = 5;
@@ -1255,12 +1267,15 @@ function isPriorityRecoverySyntheticNoOperationDecisionSnapshot(snapshot) {
   const semanticState =
     normalizePriorityRecoverySemanticStateId(snapshot?.semanticState) || null;
   const blockerReasons = normalizeDistinctStringArray(snapshot?.blockerReasons);
+  const hasSyntheticNoOperationBlocker = blockerReasons.some((blockerReason) =>
+    PRIORITY_RECOVERY_SYNTHETIC_NO_OPERATION_BLOCKER_REASONS.includes(
+      blockerReason,
+    ),
+  );
   return (
     hasPriorityRecoveryDecisionSnapshotOperationEvidence(snapshot) !== true &&
     semanticState === PRIORITY_RECOVERY_SEMANTIC_STATE.NEEDS_OPERATION &&
-    blockerReasons.includes(
-      PRIORITY_RECOVERY_SYNTHETIC_NO_OPERATION_BLOCKER_REASON,
-    )
+    hasSyntheticNoOperationBlocker
   );
 }
 
@@ -1271,25 +1286,75 @@ function hasPriorityRecoveryDecisionSnapshotProgress(snapshot) {
   const semanticState =
     normalizePriorityRecoverySemanticStateId(snapshot?.semanticState) || null;
   const blockerReasons = normalizeDistinctStringArray(snapshot?.blockerReasons);
+  const hasSyntheticNoOperationBlocker = blockerReasons.some((blockerReason) =>
+    PRIORITY_RECOVERY_SYNTHETIC_NO_OPERATION_BLOCKER_REASONS.includes(
+      blockerReason,
+    ),
+  );
   return (
     semanticState !== PRIORITY_RECOVERY_SEMANTIC_STATE.NEEDS_OPERATION ||
-    !blockerReasons.includes(
-      PRIORITY_RECOVERY_SYNTHETIC_NO_OPERATION_BLOCKER_REASON,
-    )
+    !hasSyntheticNoOperationBlocker
+  );
+}
+
+function resolvePriorityRecoveryDecisionSnapshotFreshnessMs(snapshot) {
+  const operation = snapshot?.coordinator?.operation || {};
+  const freshnessCandidates = [
+    snapshot?.[PRIORITY_RECOVERY_DECISION_SNAPSHOT_FRESHNESS_FIELD.CAPTURED_AT],
+    snapshot?.observation?.provenance?.[
+      PRIORITY_RECOVERY_DECISION_SNAPSHOT_FRESHNESS_FIELD.CAPTURED_AT
+    ],
+    operation[
+      PRIORITY_RECOVERY_DECISION_SNAPSHOT_FRESHNESS_FIELD.COMPLETED_AT_MS
+    ],
+    operation[
+      PRIORITY_RECOVERY_DECISION_SNAPSHOT_FRESHNESS_FIELD.UPDATED_AT_MS
+    ],
+    operation[
+      PRIORITY_RECOVERY_DECISION_SNAPSHOT_FRESHNESS_FIELD
+        .TARGET_SERVICE_PROGRESS_AT_MS
+    ],
+    operation[
+      PRIORITY_RECOVERY_DECISION_SNAPSHOT_FRESHNESS_FIELD.CREATED_AT_MS
+    ],
+  ].map((value) => Number(value))
+    .filter((value) => Number.isFinite(value) && value > ZERO);
+  return freshnessCandidates.length > ZERO ?
+    Math.max(...freshnessCandidates) :
+    ZERO;
+}
+
+function shouldDropPriorityRecoverySyntheticNoOperationSnapshot({
+  progressFreshnessMs,
+  syntheticFreshnessMs,
+}) {
+  return (
+    syntheticFreshnessMs === ZERO ||
+    progressFreshnessMs === ZERO ||
+    progressFreshnessMs >= syntheticFreshnessMs
   );
 }
 
 function filterPriorityRecoverySyntheticNoOperationConflicts(snapshots) {
   const normalizedSnapshots = Array.isArray(snapshots) ? snapshots : [];
-  const partitionIdsWithProgress = new Set(
-    normalizedSnapshots
-      .filter((snapshot) =>
-        hasPriorityRecoveryDecisionSnapshotProgress(snapshot),
-      )
-      .map((snapshot) => String(snapshot?.partitionId || '').trim())
-      .filter((partitionId) => partitionId.length > ZERO),
-  );
-  if (partitionIdsWithProgress.size === ZERO) {
+  const progressFreshnessByPartitionId = new Map();
+  for (const snapshot of normalizedSnapshots) {
+    if (hasPriorityRecoveryDecisionSnapshotProgress(snapshot) !== true) {
+      continue;
+    }
+    const partitionId = String(snapshot?.partitionId || '').trim();
+    if (partitionId.length === ZERO) {
+      continue;
+    }
+    progressFreshnessByPartitionId.set(
+      partitionId,
+      Math.max(
+        progressFreshnessByPartitionId.get(partitionId) || ZERO,
+        resolvePriorityRecoveryDecisionSnapshotFreshnessMs(snapshot),
+      ),
+    );
+  }
+  if (progressFreshnessByPartitionId.size === ZERO) {
     return normalizedSnapshots;
   }
   return normalizedSnapshots.filter((snapshot) => {
@@ -1297,10 +1362,18 @@ function filterPriorityRecoverySyntheticNoOperationConflicts(snapshots) {
     if (partitionId.length === ZERO) {
       return false;
     }
-    return !(
-      partitionIdsWithProgress.has(partitionId) &&
-      isPriorityRecoverySyntheticNoOperationDecisionSnapshot(snapshot)
-    );
+    const progressFreshnessMs = progressFreshnessByPartitionId.get(partitionId);
+    if (
+      progressFreshnessMs === undefined ||
+      isPriorityRecoverySyntheticNoOperationDecisionSnapshot(snapshot) !== true
+    ) {
+      return true;
+    }
+    return !shouldDropPriorityRecoverySyntheticNoOperationSnapshot({
+      progressFreshnessMs,
+      syntheticFreshnessMs:
+        resolvePriorityRecoveryDecisionSnapshotFreshnessMs(snapshot),
+    });
   });
 }
 
@@ -1352,10 +1425,39 @@ function resolvePriorityRecoveryExplicitSemanticState(
   return explicitSemanticStateByPartitionId.get(partitionId) || null;
 }
 
+function resolvePriorityRecoveryDecisionSnapshotProgressSortTimestamp(
+  snapshot,
+) {
+  const operation = snapshot?.coordinator?.operation || {};
+  const progressTimestampCandidates = [
+    operation[
+      PRIORITY_RECOVERY_DECISION_SNAPSHOT_FRESHNESS_FIELD.COMPLETED_AT_MS
+    ],
+    operation[PRIORITY_RECOVERY_DECISION_SNAPSHOT_FRESHNESS_FIELD.UPDATED_AT_MS],
+    operation[
+      PRIORITY_RECOVERY_DECISION_SNAPSHOT_FRESHNESS_FIELD
+        .TARGET_SERVICE_PROGRESS_AT_MS
+    ],
+    snapshot?.progress?.[
+      PRIORITY_RECOVERY_DECISION_SNAPSHOT_FRESHNESS_FIELD.LAST_PROGRESS_AT_MS
+    ],
+    operation[PRIORITY_RECOVERY_DECISION_SNAPSHOT_FRESHNESS_FIELD.CREATED_AT_MS],
+  ]
+    .map((candidate) => Number(candidate))
+    .filter((candidate) => Number.isFinite(candidate) && candidate > ZERO);
+  return progressTimestampCandidates.length > ZERO ?
+    Math.max(...progressTimestampCandidates) :
+    ZERO;
+}
+
 function resolvePriorityRecoveryDecisionSnapshotSortTimestamp(snapshot) {
+  const progressTimestamp =
+    resolvePriorityRecoveryDecisionSnapshotProgressSortTimestamp(snapshot);
+  if (progressTimestamp > ZERO) {
+    return progressTimestamp;
+  }
   const updatedAtMs = Number(
-    snapshot?.coordinator?.operation?.updatedAtMs ??
-      snapshot?.observation?.provenance?.capturedAt ??
+    snapshot?.observation?.provenance?.capturedAt ??
       ZERO,
   );
   return Number.isFinite(updatedAtMs) ? updatedAtMs : ZERO;
@@ -1685,7 +1787,16 @@ function mergePriorityRecoveryDecisionSnapshots(primary, fallback) {
         operationId: snapshot.operationId,
         fallback: snapshot.correlationKey,
       });
-      snapshotsByCorrelationKey.set(correlationKey, snapshot);
+      const currentSnapshot = snapshotsByCorrelationKey.get(correlationKey);
+      if (
+        !currentSnapshot ||
+        comparePriorityRecoveryDecisionSummarySnapshots(
+          currentSnapshot,
+          snapshot,
+        ) < ZERO
+      ) {
+        snapshotsByCorrelationKey.set(correlationKey, snapshot);
+      }
     }
   }
 

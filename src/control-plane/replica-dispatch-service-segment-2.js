@@ -216,7 +216,9 @@ class ReplicaDispatchServiceSegment2 extends ReplicaDispatchServiceSegment1 {
         typeof this.rebalanceCoordinator.dispatchOperation === TYPEOF.FUNCTION
       ) {
         dispatchResult =
-          await this.rebalanceCoordinator.dispatchOperation(rowOperation);
+          await this.rebalanceCoordinator.dispatchOperation(rowOperation, {
+            cause: REPLICA_DISPATCH_SERVICE_LITERAL.REPLICA_OPERATION_DISPATCH,
+          });
       } else {
         const claimedOperation =
           await this.rebalanceCoordinator.claimDispatchTransition(operationId);
@@ -1029,7 +1031,9 @@ class ReplicaDispatchServiceSegment2 extends ReplicaDispatchServiceSegment1 {
         if (
           typeof this.rebalanceCoordinator.dispatchOperation === TYPEOF.FUNCTION
         ) {
-          await this.rebalanceCoordinator.dispatchOperation(operation);
+          await this.rebalanceCoordinator.dispatchOperation(operation, {
+            cause: REPLICA_DISPATCH_SERVICE_LITERAL.REPLICA_OPERATION_DISPATCH,
+          });
         } else {
           await this.rebalanceCoordinator.executeOperation(operation);
         }

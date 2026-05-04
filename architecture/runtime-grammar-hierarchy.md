@@ -85,14 +85,11 @@ The hierarchy is strict.
 - Typical outputs:
   `no_action_needed`,
   `action_required`,
-  `persist_in_flight`,
-  `persist_blocked_by_pressure`,
-  `persist_failed_retryable`,
-  `dispatched`,
-  `awaiting_observation`,
-  `reconcile_due`,
-  `completed`,
-  `failed_terminal`
+  `persisted_not_dispatched`,
+  `dispatched_waiting_progress`,
+  `transition_deferred`,
+  `terminal_completed`,
+  `terminal_failed`
 - Allowed owners:
   workflow owner,
   coordinator,
@@ -188,7 +185,7 @@ The pilot slice for this hierarchy is:
 | --- | --- | --- | --- |
 | `intent` | priority-recovery planner inputs in `src/control-plane/priority-recovery-snapshot.js` | `requiredDistinctNodeCount`, `readyDistinctNodeCount`, `spreadGap`, missing partition ids | mixed too closely with convergence and operation evidence |
 | `authority` | publication, admission, startup-authority, admitted participation | `publishedActiveNodeIds`, `pendingAckNodeIds`, admitted/eligible cohorts | publication truth is overloaded as both authority and closure |
-| `actuation` | `RebalanceCoordinator`, `OperationWorkflowOwner`, `replica_operations` | operation existence, workflow step, status, timeout reconcile | missing one first-class attempt/actuation grammar |
+| `actuation` | `RebalanceCoordinator`, `OperationWorkflowOwner`, `replica_operations`, `PriorityRecoveryDecisionSnapshot.actuation` | `no_action_needed`, `action_required`, `persisted_not_dispatched`, `dispatched_waiting_progress`, `transition_deferred`, `terminal_completed`, `terminal_failed` | actuation is first-class; remaining drift is older presentation vocabulary in retained artifacts |
 | `conditions` | readiness, repository visibility, pressure sensors, transport, queue depth | `visibilityState`, readiness dimensions, `pendingWrites`, `query_timeout`, `control_plane_backpressure` | pressure and timeout evidence are still too secondary |
 | `decision` | `OwnerContractOutcome`, `PriorityRecoveryProgressContract`, semantic state mapping | `contractState`, `nextAction`, `currentOwner`, `blockingBoundary`, `waitMode`, `semanticStateId` | forced to compensate for the missing actuation layer |
 | `presentation` | observation snapshot, admin control snapshot, failure bundle, triage summary | `dominantReason`, `failureClass`, operator text | still occasionally stands in for missing lower-layer meaning |

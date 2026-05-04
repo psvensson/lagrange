@@ -2,6 +2,7 @@ import {test} from '../../src/test-helpers/tap.js';
 import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
 import {
   CONTROL_PLANE_TIMEOUT_DEFAULT,
+  TIMEOUT_BUDGET_DEFAULT,
 } from '../../src/control-plane/timeout-budget.js';
 import {
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
@@ -23,6 +24,7 @@ const EMERGENCY_PRIORITY_PARTITION_ID = 'control_plane_publications-p1';
 const REPLICA_OPERATION_CRITICAL_RECOVERY_QUERY_TIMEOUT_MS = 15_000;
 const INCOMPLETE_OPERATION_OWNER_QUERY_SQL_FRAGMENT =
   'source_node_id = ? OR target_node_id = ?';
+const PRIORITY_PENDING_EXHAUSTED_OPERATION_BUDGET_OVERRUN_MS = 1000;
 
 function buildTransactionCoordinator() {
   return {
@@ -726,6 +728,10 @@ test('checkTimeouts does not fail a stale operation while a deferred transition 
 test('checkTimeouts fails stale priority PENDING recovery operations once the dispatch budget is exhausted',
   async (t) => {
     const nowMs = Date.now();
+    const staleCreatedAtMs =
+      nowMs -
+      TIMEOUT_BUDGET_DEFAULT.REBALANCE_OPERATION_BUDGET_MS -
+      PRIORITY_PENDING_EXHAUSTED_OPERATION_BUDGET_OVERRUN_MS;
     const staleUpdatedAtMs = nowMs - 65000;
     const operationRow = {
       operation_id: 'op-stale-priority-pending',
@@ -736,7 +742,7 @@ test('checkTimeouts fails stale priority PENDING recovery operations once the di
       target_node_id: 'node-2',
       status: 'pending',
       workflow_step: 'PENDING',
-      created_at: staleUpdatedAtMs - 5000,
+      created_at: staleCreatedAtMs,
       updated_at: staleUpdatedAtMs,
       completed_at: null,
       error_message: null,

@@ -207,5 +207,5 @@ for `sql_write_operations-p1`, and no `operation_stalled` partitions.
 3. The representative `rolling-restart --fast-local` path passes or migrates to
    one named active package with current owner-state evidence.
 
-Status: done. The representative blocker migrated to
+The representative blocker migrated to
 [Rolling Restart Startup Publication Epoch Operation Creation And Snapshot Reachability](./done-20260430-rolling-restart-startup-publication-epoch-operation-creation-and-snapshot-reachability.md).

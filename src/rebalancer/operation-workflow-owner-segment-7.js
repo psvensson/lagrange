@@ -72,6 +72,54 @@ const OBSERVED_PROGRESS_TABLE_STATE_BY_NAME = Object.freeze(
   ]),
 );
 
+const OBSERVED_PROGRESS_OPERATION_ROUTE_STATE = Object.freeze({
+  UNAVAILABLE: 'unavailable',
+  LOCAL_OWNER: 'local_owner',
+  REMOTE_OWNER: 'remote_owner',
+});
+
+const OBSERVED_PROGRESS_OPERATION_ROUTE_ACTION = Object.freeze({
+  SKIP: 'skip',
+  RECONCILE_LOCAL: 'reconcile_local',
+  WAKE_REMOTE_OWNER: 'wake_remote_owner',
+});
+
+const OBSERVED_PROGRESS_OPERATION_ROUTE_ACTION_BY_STATE = Object.freeze(
+  new Map([
+    [
+      OBSERVED_PROGRESS_OPERATION_ROUTE_STATE.UNAVAILABLE,
+      OBSERVED_PROGRESS_OPERATION_ROUTE_ACTION.SKIP,
+    ],
+    [
+      OBSERVED_PROGRESS_OPERATION_ROUTE_STATE.LOCAL_OWNER,
+      OBSERVED_PROGRESS_OPERATION_ROUTE_ACTION.RECONCILE_LOCAL,
+    ],
+    [
+      OBSERVED_PROGRESS_OPERATION_ROUTE_STATE.REMOTE_OWNER,
+      OBSERVED_PROGRESS_OPERATION_ROUTE_ACTION.WAKE_REMOTE_OWNER,
+    ],
+  ]),
+);
+
+const OBSERVED_PROGRESS_OPERATION_ROUTE_STATE_TABLE = Object.freeze([
+  Object.freeze({
+    state: OBSERVED_PROGRESS_OPERATION_ROUTE_STATE.UNAVAILABLE,
+    matches: (evidence) => evidence.shapeCandidate !== true,
+  }),
+  Object.freeze({
+    state: OBSERVED_PROGRESS_OPERATION_ROUTE_STATE.LOCAL_OWNER,
+    matches: (evidence) => evidence.locallyOwned === true,
+  }),
+  Object.freeze({
+    state: OBSERVED_PROGRESS_OPERATION_ROUTE_STATE.REMOTE_OWNER,
+    matches: (evidence) => evidence.remoteOwnerAvailable === true,
+  }),
+  Object.freeze({
+    state: OBSERVED_PROGRESS_OPERATION_ROUTE_STATE.UNAVAILABLE,
+    matches: () => true,
+  }),
+]);
+
 const OBSERVED_OPERATION_ROW_TARGET_PROGRESS_TYPES = Object.freeze(
   new Set([OperationType.ADD, OperationType.REPLACE]),
 );
@@ -451,12 +499,28 @@ const RECONCILED_REPLICA_STATUS_RESOLUTION_STATE = Object.freeze({
   AUTHORITATIVE: 'authoritative',
   OBSERVED_TARGET_CACHE: 'observed_target_cache',
 });
+const RECONCILED_REPLICA_STATUS_TERMINAL_CACHE_BLOCKING_STATUSES =
+  Object.freeze(new Set([ReplicaStatus.FAILED]));
+const RECONCILED_REPLICA_STATUS_PROGRESS_RANK_UNAVAILABLE = NUM.ZERO;
+const RECONCILED_REPLICA_STATUS_PROGRESS_RANK_BY_STATUS = Object.freeze(
+  new Map([
+    [ReplicaStatus.PENDING, NUM.ONE],
+    [ReplicaStatus.CREATING, NUM.TWO],
+    [ReplicaStatus.SYNCING, NUM.THREE],
+    [ReplicaStatus.ACTIVE, NUM.FOUR],
+  ]),
+);
 const RECONCILED_REPLICA_STATUS_RESOLUTION_TABLE = Object.freeze([
   Object.freeze({
     state: RECONCILED_REPLICA_STATUS_RESOLUTION_STATE.OBSERVED_TARGET_CACHE,
     matches: (evidence) =>
       evidence.actualStatusAbsent === true &&
       evidence.observedTargetProgress === true,
+  }),
+  Object.freeze({
+    state: RECONCILED_REPLICA_STATUS_RESOLUTION_STATE.OBSERVED_TARGET_CACHE,
+    matches: (evidence) =>
+      evidence.observedTargetAheadOfActual === true,
   }),
   Object.freeze({
     state: RECONCILED_REPLICA_STATUS_RESOLUTION_STATE.AUTHORITATIVE,
@@ -553,10 +617,22 @@ class OperationWorkflowOwnerSegment7 extends OperationWorkflowOwnerSegment6 {
 
   isObservedProgressOperationCandidate(operation) {
     if (
-      !operation ||
-      this.repository.isOperationTerminal(operation) ||
+      !this.isObservedProgressOperationShapeCandidate(operation) ||
       !this.repository.isOperationLocallyOwned(operation)
     ) {
+      return false;
+    }
+
+    return true;
+  }
+
+  /**
+   * @param {Object} operation
+   * @return {boolean}
+   * @private
+   */
+  isObservedProgressOperationShapeCandidate(operation) {
+    if (!operation || this.repository.isOperationTerminal(operation)) {
       return false;
     }
 
@@ -577,10 +653,22 @@ class OperationWorkflowOwnerSegment7 extends OperationWorkflowOwnerSegment6 {
    */
   isObservedOperationRowTargetProgressCandidate(operation) {
     if (
-      !operation ||
-      this.repository.isOperationTerminal(operation) ||
+      !this.isObservedOperationRowTargetProgressShapeCandidate(operation) ||
       !this.repository.isOperationLocallyOwned(operation)
     ) {
+      return false;
+    }
+
+    return true;
+  }
+
+  /**
+   * @param {Object} operation
+   * @return {boolean}
+   * @private
+   */
+  isObservedOperationRowTargetProgressShapeCandidate(operation) {
+    if (!operation || this.repository.isOperationTerminal(operation)) {
       return false;
     }
 
@@ -661,7 +749,7 @@ class OperationWorkflowOwnerSegment7 extends OperationWorkflowOwnerSegment6 {
 
     const operation = this.repository.rowToOperation(operationRow);
     if (
-      !this.isObservedOperationRowTargetProgressCandidate(operation) ||
+      !this.isObservedOperationRowTargetProgressShapeCandidate(operation) ||
       !this.hasObservedOperationRowTargetProgress(operation)
     ) {
       return [];
@@ -748,7 +836,7 @@ class OperationWorkflowOwnerSegment7 extends OperationWorkflowOwnerSegment6 {
     const matchingRows =
       this.repository.filterReplicaOperationRowsFromCache((row) => {
         const operation = this.repository.rowToOperation(row);
-        if (!this.isObservedProgressOperationCandidate(operation)) {
+        if (!this.isObservedProgressOperationShapeCandidate(operation)) {
           return false;
         }
         if (
@@ -820,6 +908,44 @@ class OperationWorkflowOwnerSegment7 extends OperationWorkflowOwnerSegment6 {
   }
 
   /**
+   * @param {Object} operation
+   * @return {Object}
+   * @private
+   */
+  buildObservedProgressOperationRouteEvidence(operation) {
+    const ownerNodeId =
+      this.repository.resolveOperationOwnerNodeId(operation) || null;
+    return Object.freeze({
+      shapeCandidate:
+        this.isObservedProgressOperationShapeCandidate(operation),
+      locallyOwned:
+        this.repository.isOperationLocallyOwned(operation),
+      remoteOwnerAvailable:
+        typeof ownerNodeId === TYPEOF.STRING &&
+        ownerNodeId.length > NUM.ZERO &&
+        ownerNodeId !== this.nodeId,
+      ownerNodeId,
+    });
+  }
+
+  /**
+   * @param {Object} evidence
+   * @return {string}
+   * @private
+   */
+  resolveObservedProgressOperationRouteAction(evidence) {
+    const state =
+      OBSERVED_PROGRESS_OPERATION_ROUTE_STATE_TABLE.find((entry) =>
+        entry.matches(evidence),
+      )?.state ||
+      OBSERVED_PROGRESS_OPERATION_ROUTE_STATE.UNAVAILABLE;
+    return (
+      OBSERVED_PROGRESS_OPERATION_ROUTE_ACTION_BY_STATE.get(state) ||
+      OBSERVED_PROGRESS_OPERATION_ROUTE_ACTION.SKIP
+    );
+  }
+
+  /**
    * @param {string} operationId
    * @return {Promise<boolean>}
    */
@@ -839,9 +965,21 @@ class OperationWorkflowOwnerSegment7 extends OperationWorkflowOwnerSegment6 {
         },
       );
     const operation = visibilityObservation?.operation || null;
-    if (!this.isObservedProgressOperationCandidate(operation)) {
+    const routeEvidence =
+      this.buildObservedProgressOperationRouteEvidence(operation);
+    const routeAction =
+      this.resolveObservedProgressOperationRouteAction(routeEvidence);
+    if (routeAction === OBSERVED_PROGRESS_OPERATION_ROUTE_ACTION.SKIP) {
       this.clearObservedProgressRetry(operationId);
       return false;
+    }
+    if (
+      routeAction ===
+      OBSERVED_PROGRESS_OPERATION_ROUTE_ACTION.WAKE_REMOTE_OWNER
+    ) {
+      const woken = await this.wakeCoordinatorCreatedRemoteOwner(operation);
+      this.clearObservedProgressRetry(operationId);
+      return woken;
     }
     const progressed = await this.reconcileOperationProgress(operation, {
       cause: 'observed_progress',
@@ -1194,6 +1332,7 @@ class OperationWorkflowOwnerSegment7 extends OperationWorkflowOwnerSegment6 {
       this.shouldRearmDispatchFromProgressReconcile(
         operation,
         reconciledStatus,
+        options,
       )
     ) {
       await this.executeOperationFromReconcilePath(operation);
@@ -1254,6 +1393,18 @@ class OperationWorkflowOwnerSegment7 extends OperationWorkflowOwnerSegment6 {
   buildReconciledReplicaStatusEvidence(operation, actualStatus) {
     const observedTargetStatus =
       this.getObservedOperationRowTargetProgressStatus(operation);
+    const actualStatusRank =
+      RECONCILED_REPLICA_STATUS_PROGRESS_RANK_BY_STATUS.get(actualStatus) ||
+      RECONCILED_REPLICA_STATUS_PROGRESS_RANK_UNAVAILABLE;
+    const observedTargetStatusRank =
+      RECONCILED_REPLICA_STATUS_PROGRESS_RANK_BY_STATUS.get(
+        observedTargetStatus,
+      ) ||
+      RECONCILED_REPLICA_STATUS_PROGRESS_RANK_UNAVAILABLE;
+    const observedTargetTerminalCacheBlocker =
+      RECONCILED_REPLICA_STATUS_TERMINAL_CACHE_BLOCKING_STATUSES.has(
+        observedTargetStatus,
+      );
     return Object.freeze({
       actualStatus,
       observedTargetStatus,
@@ -1263,6 +1414,12 @@ class OperationWorkflowOwnerSegment7 extends OperationWorkflowOwnerSegment6 {
         OBSERVED_OPERATION_ROW_TARGET_PROGRESS_STATUSES.has(
           observedTargetStatus,
         ),
+      actualStatusRank,
+      observedTargetStatusRank,
+      observedTargetTerminalCacheBlocker,
+      observedTargetAheadOfActual:
+        observedTargetTerminalCacheBlocker !== true &&
+        observedTargetStatusRank > actualStatusRank,
     });
   }
 
@@ -1588,6 +1745,7 @@ class OperationWorkflowOwnerSegment7 extends OperationWorkflowOwnerSegment6 {
     }
     const progressed = await this.reconcileOperationProgress(operation, {
       cause: 'timeout',
+      now,
     });
     if (progressed) {
       return;

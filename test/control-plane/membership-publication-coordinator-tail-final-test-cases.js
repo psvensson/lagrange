@@ -4,6 +4,7 @@ import {
   SERVICE_STATUS,
   SERVICE_TYPE,
   TABLES,
+  WORKFLOW_STEP,
 } from '../../src/constants/index.js';
 
 export function registerMembershipPublicationCoordinatorTailFinalTests({
@@ -1029,7 +1030,14 @@ export function registerMembershipPublicationCoordinatorTailFinalTests({
 
   test('deriveClusterMembershipCandidate prefers authoritative reads when membership publication is still in flight',
     async (t) => {
-      const tableReadOptions = [];
+      const expectedAuthoritativeReadTableNames = [
+        TABLES.NODES,
+        TABLES.NODE_ENDPOINTS,
+        TABLES.SERVICES,
+        TABLES.PARTITIONS,
+        TABLES.REPLICA_OPERATIONS,
+      ];
+      const tableReadRequests = [];
       const readinessOptions = [];
       const coordinator = new MembershipPublicationCoordinator({
         nodeId: 'node-1',
@@ -1045,8 +1053,8 @@ export function registerMembershipPublicationCoordinatorTailFinalTests({
           },
         },
       });
-      coordinator.readTableRows = async (_tableName, options = {}) => {
-        tableReadOptions.push(options);
+      coordinator.readTableRows = async (tableName, options = {}) => {
+        tableReadRequests.push({tableName, options});
         return [];
       };
 
@@ -1067,14 +1075,14 @@ export function registerMembershipPublicationCoordinatorTailFinalTests({
         },
       });
 
-      t.equal(
-        tableReadOptions.length,
-        4,
-        'deriveClusterMembershipCandidate should read the canonical membership tables once each',
+      t.same(
+        tableReadRequests.map((request) => request.tableName),
+        expectedAuthoritativeReadTableNames,
+        'deriveClusterMembershipCandidate should read the canonical planning tables once each',
       );
       t.equal(
-        tableReadOptions.every((options) =>
-          options.preferAuthoritativeRead === true),
+        tableReadRequests.every((request) =>
+          request.options.preferAuthoritativeRead === true),
         true,
         'in-flight membership publications should force authoritative table reads',
       );
@@ -1243,6 +1251,185 @@ export function registerMembershipPublicationCoordinatorTailFinalTests({
       snapshot.serviceRows[NUM.ZERO][COLUMN.UPDATED_AT],
       authoritativeServiceUpdatedAt,
       'planning should retain the freshest authoritative service row',
+    );
+  });
+
+  test('readPublicationPlanningSnapshot uses owner-rpc replica operation ' +
+    'evidence while published priority spread remains pending',
+  async (t) => {
+    const publicationId = 'publication-priority-operation-authoritative';
+    const publicationKind = 'cluster_membership';
+    const publicationStatus = 'PUBLISHED';
+    const priorityPartitionId = 'sql_write_operations-p1';
+    const priorityTableId = 'sql_write_operations';
+    const serviceId = 'sql_write_operations-p1-r1';
+    const operationId = 'op-sql-write-recovery';
+    const operationTypeField = 'type';
+    const operationTypeReplace = 'REPLACE';
+    const operationStatusPending = 'pending';
+    const nodeOneId = 'node-1';
+    const nodeTwoId = 'node-2';
+    const nodeThreeId = 'node-3';
+    const activeConnectionState = 'ready';
+    const endpointId = 'node-1-ws';
+    const endpointStatus = 'active';
+    const endpointAddress = 'ws://node-1:8082';
+    const endpointTransport = 'ws';
+    const raftRoleFollower = 'follower';
+    const publicationEpoch = 22;
+    const readyDistinctNodeCount = 1;
+    const requiredDistinctNodeCount = 3;
+    const spreadGap = 2;
+    const staleUpdatedAt = 1000;
+    const authoritativeUpdatedAt = 2000;
+    const nowMs = 2500;
+    const authoritativeReadOptionsByTableName = new Map();
+    const latestPublicationRow = {
+      publication_id: publicationId,
+      publication_kind: publicationKind,
+      publication_epoch: publicationEpoch,
+      published_active_node_ids: [nodeOneId, nodeTwoId, nodeThreeId],
+      required_ack_node_ids: [nodeOneId, nodeTwoId, nodeThreeId],
+      acknowledged_node_ids: [nodeOneId, nodeTwoId, nodeThreeId],
+      priority_partition_summary: {
+        satisfied: false,
+        missingPartitionIds: [priorityPartitionId],
+        blockedPartitions: [{
+          partitionId: priorityPartitionId,
+          readyDistinctNodeCount,
+          requiredDistinctNodeCount,
+          spreadGap,
+        }],
+      },
+      status: publicationStatus,
+      updated_at: staleUpdatedAt,
+      published_at: staleUpdatedAt,
+      closed_at: staleUpdatedAt,
+    };
+    const nodeRows = [
+      {
+        [COLUMN.NODE_ID]: nodeOneId,
+        [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+        [COLUMN.CONNECTION_STATE]: activeConnectionState,
+      },
+      {
+        [COLUMN.NODE_ID]: nodeTwoId,
+        [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+        [COLUMN.CONNECTION_STATE]: activeConnectionState,
+      },
+      {
+        [COLUMN.NODE_ID]: nodeThreeId,
+        [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+        [COLUMN.CONNECTION_STATE]: activeConnectionState,
+      },
+    ];
+    const endpointRows = [{
+      [COLUMN.ENDPOINT_ID]: endpointId,
+      [COLUMN.NODE_ID]: nodeOneId,
+      [COLUMN.STATUS]: endpointStatus,
+      [COLUMN.ADDRESS]: endpointAddress,
+      [COLUMN.TRANSPORT_TYPE]: endpointTransport,
+    }];
+    const serviceRows = [{
+      [COLUMN.SERVICE_ID]: serviceId,
+      [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
+      [COLUMN.NODE_ID]: nodeOneId,
+      [COLUMN.PARTITION_ID]: priorityPartitionId,
+      [COLUMN.REPLICA_ID]: serviceId,
+      [COLUMN.RAFT_ROLE]: raftRoleFollower,
+      [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+      [COLUMN.UPDATED_AT]: authoritativeUpdatedAt,
+    }];
+    const partitionRows = [{
+      [COLUMN.PARTITION_ID]: priorityPartitionId,
+      [COLUMN.TABLE_ID]: priorityTableId,
+    }];
+    const authoritativeOperationRow = {
+      [COLUMN.OPERATION_ID]: operationId,
+      [operationTypeField]: operationTypeReplace,
+      [COLUMN.PARTITION_ID]: priorityPartitionId,
+      [COLUMN.ENTITY_TYPE]: SERVICE_TYPE.PARTITION,
+      [COLUMN.ENTITY_ID]: priorityPartitionId,
+      [COLUMN.REPLICA_ID]: serviceId,
+      [COLUMN.TARGET_NODE_ID]: nodeTwoId,
+      [COLUMN.STATUS]: operationStatusPending,
+      workflow_step: WORKFLOW_STEP.PENDING,
+      [COLUMN.CREATED_AT]: authoritativeUpdatedAt,
+      [COLUMN.UPDATED_AT]: authoritativeUpdatedAt,
+    };
+    const authoritativeRowsByTableName = new Map([
+      [TABLES.NODES, nodeRows],
+      [TABLES.NODE_ENDPOINTS, endpointRows],
+      [TABLES.SERVICES, serviceRows],
+      [TABLES.PARTITIONS, partitionRows],
+      [TABLES.REPLICA_OPERATIONS, [authoritativeOperationRow]],
+    ]);
+    const coordinator = new MembershipPublicationCoordinator({
+      nodeId: nodeOneId,
+      controlPlanePublicationsOwner: {
+        async listPublications() {
+          return {rows: [latestPublicationRow]};
+        },
+      },
+      authoritativeControlPlaneView: {
+        canRead() {
+          return true;
+        },
+        async readRows(tableName, _sql, _params, options) {
+          authoritativeReadOptionsByTableName.set(tableName, options);
+          return {
+            success: true,
+            rows: authoritativeRowsByTableName.get(tableName) || [],
+          };
+        },
+      },
+      controlPlaneReadinessService: {
+        async getAllNodeReadiness() {
+          return [];
+        },
+        getRecoveryEpochHistoryByNodeId() {
+          return {};
+        },
+        async getMembershipPublicationPlanningAnswerBestEffort() {
+          return null;
+        },
+      },
+      systemTableCache: {
+        getAll() {
+          return [];
+        },
+      },
+      now: () => nowMs,
+    });
+
+    const snapshot = await coordinator.readPublicationPlanningSnapshot();
+    const candidate = await coordinator.deriveClusterMembershipCandidate();
+    const operationReadOptions =
+      authoritativeReadOptionsByTableName.get(TABLES.REPLICA_OPERATIONS);
+    const operationSnapshot =
+      candidate.priorityRecoveryDecisionSnapshots?.snapshots?.find(
+        (entry) => entry?.partitionId === priorityPartitionId,
+      );
+
+    t.equal(
+      operationReadOptions.authoritativeReadMode,
+      CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED,
+      'published priority spread gaps should use owner-rpc replica operation evidence',
+    );
+    t.equal(
+      snapshot.replicaOperationRows[NUM.ZERO]?.[COLUMN.OPERATION_ID],
+      operationId,
+      'planning should retain authoritative replica operation rows when cache is empty',
+    );
+    t.same(
+      operationSnapshot?.coordinator?.operationIds,
+      [operationId],
+      'priority recovery decisions should include authoritative operation ids',
+    );
+    t.equal(
+      operationSnapshot?.coordinator?.operation?.operationId,
+      operationId,
+      'priority recovery decisions should expose the authoritative operation context',
     );
   });
 }

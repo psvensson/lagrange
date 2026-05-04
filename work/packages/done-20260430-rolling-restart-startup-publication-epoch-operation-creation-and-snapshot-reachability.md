@@ -184,5 +184,5 @@ Migration target:
 4. The representative `rolling-restart --fast-local` path passes or migrates to
    one named active package with current owner-state evidence.
 
-Status: done. The representative blocker migrated to
+The representative blocker migrated to
 [Rolling Restart Quiescence Stale In Flight Canonical Blocker](./done-20260430-rolling-restart-quiescence-stale-inflight-canonical-blocker.md).

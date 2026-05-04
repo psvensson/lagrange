@@ -692,12 +692,13 @@ class OperationWorkflowOwnerSegment2 extends OperationWorkflowOwnerSegment1 {
   /**
    * @param {string} action
    * @param {string|Object} operationInput
+   * @param {Object} [options={}]
    * @return {Promise<Object>}
    * @private
    */
-  invokeOperationOwnerActionInternal(action, operationInput) {
+  invokeOperationOwnerActionInternal(action, operationInput, options = {}) {
     if (action === OPERATION_OWNER_ACTION.DISPATCH) {
-      return this.dispatchOperationInternal(operationInput);
+      return this.dispatchOperationInternal(operationInput, options);
     }
     if (action === OPERATION_OWNER_ACTION.EXECUTE) {
       return this.executeOperationInternal(operationInput);
@@ -727,7 +728,11 @@ class OperationWorkflowOwnerSegment2 extends OperationWorkflowOwnerSegment1 {
     }
 
     const invokeAction = () =>
-      this.invokeOperationOwnerActionInternal(action, operationInput);
+      this.invokeOperationOwnerActionInternal(
+        action,
+        operationInput,
+        options,
+      );
 
     try {
       if (

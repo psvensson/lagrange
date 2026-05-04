@@ -6,6 +6,12 @@ const NON_PRIORITY_SYSTEM_REPLACE_OPERATION_ID =
   'op-system-replace-target-owner';
 const NON_PRIORITY_SYSTEM_PARTITION_ID = 'service_timers-p1';
 const NON_PRIORITY_SYSTEM_REPLICA_ID = 'service_timers-p1-r4';
+const PRIORITY_PENDING_REARM_NODE_ID = 'node-local';
+const PRIORITY_PENDING_REARM_SOURCE_NODE_ID = 'node-remote';
+const PRIORITY_PENDING_REARM_OPERATION_ID = 'op-critical-pending-timeout-rearm';
+const PRIORITY_PENDING_REARM_PARTITION_ID = 'sql_transactions-p1';
+const PRIORITY_PENDING_REARM_REPLICA_ID = 'sql_transactions-p1-r4';
+const PRIORITY_PENDING_REARM_TIMEOUT_OVERRUN_MS = 1000;
 
 export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
   test,
@@ -356,6 +362,105 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
         executeFromReconcileCalls,
         1,
         'reconciliation should re-enter dispatch when observed status is pending',
+      );
+    } finally {
+      await coordinator.shutdown();
+    }
+  });
+
+  test('RebalanceCoordinator re-arms overdue critical PENDING operations ' +
+  'while operation budget remains active',
+  async (t) => {
+    const coordinator = new RebalanceCoordinator({
+      nodeId: PRIORITY_PENDING_REARM_NODE_ID,
+      transactionCoordinator: createTransactionCoordinator(),
+      systemTableCache: {
+        get() {
+          return null;
+        },
+        getAll() {
+          return [];
+        },
+        filter() {
+          return [];
+        },
+      },
+      cdcIntegrationService: {
+        async waitForCacheUpdate() {},
+      },
+      tablePolicyService: {
+        async getPolicyForPartition() {
+          return {minReplicaCount: 1};
+        },
+      },
+      messageRouter: {
+        async deliver() {
+          return {acknowledged: true, status: 'initiated'};
+        },
+      },
+      sqlQueryEngine: {
+        async executeQuery() {
+          return {success: true, rows: [], affectedRows: 0};
+        },
+      },
+      ...createStorageOwners(),
+      enableTimeouts: false,
+    });
+    coordinator.initialize();
+
+    const now = Date.now();
+    const pendingTimeoutMs = coordinator.getTimeoutForStep(
+      WORKFLOW_STEP.PENDING,
+      {partitionId: PRIORITY_PENDING_REARM_PARTITION_ID},
+    );
+    const expiredStepUpdatedAt =
+      now - pendingTimeoutMs - PRIORITY_PENDING_REARM_TIMEOUT_OVERRUN_MS;
+    const operation = {
+      operationId: PRIORITY_PENDING_REARM_OPERATION_ID,
+      type: OperationType.REPLACE,
+      partitionId: PRIORITY_PENDING_REARM_PARTITION_ID,
+      entityType: 'partition',
+      entityId: PRIORITY_PENDING_REARM_PARTITION_ID,
+      replicaId: PRIORITY_PENDING_REARM_REPLICA_ID,
+      sourceNodeId: PRIORITY_PENDING_REARM_SOURCE_NODE_ID,
+      targetNodeId: PRIORITY_PENDING_REARM_NODE_ID,
+      status: ReplicaStatus.PENDING,
+      workflowStep: WORKFLOW_STEP.PENDING,
+      createdAt: expiredStepUpdatedAt,
+      updatedAt: expiredStepUpdatedAt,
+      completedAt: null,
+      errorMessage: null,
+      stepsHistory: [],
+    };
+
+    let executeFromReconcileCalls = 0;
+    let failOperationCalls = 0;
+    coordinator.workflowOwner.getReconciledReplicaStatus = async () => null;
+    coordinator.workflowOwner.executeOperationFromReconcilePath =
+    async () => {
+      executeFromReconcileCalls += 1;
+      return {
+        success: false,
+        skipped: true,
+        reason: REBALANCER_SKIP_REASON.DEFERRED_RETRY_PENDING,
+        operationId: operation.operationId,
+      };
+    };
+    coordinator.workflowOwner.failOperation = async () => {
+      failOperationCalls += 1;
+    };
+
+    try {
+      await coordinator.reconcileTimeoutOperation(operation, now);
+      t.equal(
+        executeFromReconcileCalls,
+        1,
+        'timeout reconciliation should re-enter dispatch before failing the pending step',
+      );
+      t.equal(
+        failOperationCalls,
+        0,
+        'timeout reconciliation must not fail the critical operation while the operation budget remains active',
       );
     } finally {
       await coordinator.shutdown();

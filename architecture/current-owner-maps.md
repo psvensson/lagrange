@@ -160,6 +160,8 @@ The current shared building blocks for control-plane work are:
    - reuses one existing composed envelope:
      `completion`,
      `observation`,
+     `actuation`,
+     `progress`,
      `semanticState`,
      `spreadCompletion`,
      `admission`,
@@ -170,6 +172,14 @@ The current shared building blocks for control-plane work are:
      operations while still counting an eligible operational target as
      spread-satisfying evidence, so consumers do not reopen a synthetic
      rebalancer-handoff stall from the same snapshot
+   - emits one actuation contract:
+     `no_action_needed`,
+     `action_required`,
+     `persisted_not_dispatched`,
+     `dispatched_waiting_progress`,
+     `transition_deferred`,
+     `terminal_completed`,
+     or `terminal_failed`
    - is now shared by runtime add-budget and priority remove-safety consumers,
      and feeds the canonical priority-recovery observation snapshot so touched
      runtime and reporting paths do not rebuild completion from planning
@@ -281,8 +291,8 @@ The current shared building blocks for control-plane work are:
      `workflowProgressPhaseId`,
      `lastProgressAtMs`,
      and related observation fields,
-     but `actuation.state = completed` is only valid when the same snapshot no
-     longer requires a new recovery action
+     but `actuation.state = terminal_completed` is only valid when the same
+     snapshot no longer requires a new recovery action
    - is shared by priority-recovery observation snapshots and later
      admin/harness/reporting consumers so the touched path can discuss
      owner handoff, blocked-next-progress, and timeout-reconcile-due workflow

@@ -4,7 +4,7 @@ April 29 successor package: the frozen-publication visibility rerun reached
 `waitForControlPlaneQuiescence` again with publication and restart-recovery
 gates closed. This original owner-snapshot package remains done; the fresh
 active boundary is the stable-window contract in
-[Control plane quiescence stable window after publication closure](./active-20260429-control-plane-quiescence-stable-window-after-publication-closure.md).
+[Control plane quiescence stable window after publication closure](./done-20260429-control-plane-quiescence-stable-window-after-publication-closure.md).
 
 April 29 re-entry: the latest `rolling-restart --fast-local` report reaches
 `waitForControlPlaneQuiescence` again:

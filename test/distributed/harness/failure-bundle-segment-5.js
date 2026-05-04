@@ -8,6 +8,9 @@ import {
 import {
   CONTROL_PLANE_QUIESCENCE_CANDIDATE_WINDOW_RESET_REASON,
 } from './control-plane-quiescence-snapshot.js';
+import {
+  hasMeaningfulPriorityRecoveryProgressWitness,
+} from './priority-recovery-summary-normalization.js';
 import {FAILURE_BUNDLE_SEGMENT_4} from './failure-bundle-segment-4.js';
 const {
   FAILURE_BUNDLE_SCHEMA_VERSION,
@@ -260,6 +263,9 @@ const FAILURE_SIGNAL_PRIORITY_RECOVERY_REASON_PREFIX =
 const FAILURE_SIGNAL_PRIORITY_RECOVERY_BLOCKED_PARTITION_COUNT_PREFIX =
   'priorityRecoveryBlockedPartitionCount=';
 const FAILURE_SIGNAL_VALUE_SEPARATOR = '|';
+const ACTIVE_GATE_PUBLICATION_GATE_PREFIX = 'publication_gate=';
+const ACTIVE_GATE_REASON_PRIORITY_CONTROL_PLANE_SPREAD_PENDING =
+  'priority_control_plane_spread_pending';
 const FAILURE_BUNDLE_POST_REBALANCE_CLOSURE_UNAVAILABLE = null;
 const FAILURE_GUIDANCE_EMPTY = Object.freeze({
   failureAction: null,
@@ -427,29 +433,42 @@ function buildPublicationOwnerConvergenceBlockerEvidence({
 }) {
   const missingActiveNodeBlocked =
     hasPublicationMissingActiveNodeBlocker(publicationConvergence);
-  const publicationOwnerOpen =
-    publicationConvergence?.publicationPending === true ||
-    missingActiveNodeBlocked ||
+  const pendingAckBlocked =
     normalizeNonNegativeCount(publicationConvergence?.pendingAckCount) >
-      ZERO ||
+    ZERO;
+  const publicationNodeBlocked =
     normalizeNonNegativeCount(publicationConvergence?.blockedNodeCount) >
-      ZERO ||
-    publicationConvergence?.prioritySpreadPending === true ||
-    hasBlockingClosureRecord === true;
+    ZERO;
+  const publicationPending =
+    publicationConvergence?.publicationPending === true &&
+    missingActiveNodeBlocked !== true;
+  const publicationDebtOpen =
+    pendingAckBlocked ||
+    publicationNodeBlocked ||
+    missingActiveNodeBlocked ||
+    publicationPending;
+  const prioritySpreadPendingBlocked =
+    hasActiveGatePrioritySpreadPendingBlocker(publicationConvergence) &&
+    hasPriorityRecoveryOwnerBlocker !== true;
+  const closureRecordBlocked =
+    hasBlockingClosureRecord === true &&
+    (
+      hasPriorityRecoveryOwnerBlocker !== true ||
+      publicationDebtOpen === true
+    );
+  const publicationOwnerOpen =
+    publicationDebtOpen ||
+    prioritySpreadPendingBlocked ||
+    closureRecordBlocked;
   return {
-    pendingAckBlocked:
-      normalizeNonNegativeCount(publicationConvergence?.pendingAckCount) >
-      ZERO,
-    publicationNodeBlocked:
-      normalizeNonNegativeCount(publicationConvergence?.blockedNodeCount) >
-      ZERO,
+    pendingAckBlocked,
+    publicationNodeBlocked,
     missingActiveNodeBlocked,
-    publicationPending:
-      publicationConvergence?.publicationPending === true &&
-      missingActiveNodeBlocked !== true,
+    publicationPending,
+    prioritySpreadPendingBlocked,
     startupReadinessBlocked:
       hasStartupReadinessBlocker === true && publicationOwnerOpen,
-    closureRecordBlocked: hasBlockingClosureRecord === true,
+    closureRecordBlocked,
     priorityRecoveryOwnerBlocked:
       hasPriorityRecoveryOwnerBlocker === true,
   };
@@ -465,6 +484,7 @@ function hasPublicationOwnerConvergenceBlocker(options) {
     evidence.publicationNodeBlocked ||
     evidence.missingActiveNodeBlocked ||
     evidence.publicationPending ||
+    evidence.prioritySpreadPendingBlocked ||
     evidence.closureRecordBlocked ||
     (
       evidence.startupReadinessBlocked &&
@@ -483,6 +503,30 @@ function hasPriorityRecoverySpreadGap(publicationConvergence) {
     publicationConvergence?.prioritySpreadPending === true &&
     priorityPartitionSummary?.satisfied === false
   );
+}
+
+function normalizeActiveGatePublicationReason(reason) {
+  const normalizedReason = String(reason || '').trim();
+  return normalizedReason.startsWith(ACTIVE_GATE_PUBLICATION_GATE_PREFIX) ?
+    normalizedReason.slice(ACTIVE_GATE_PUBLICATION_GATE_PREFIX.length) :
+    normalizedReason;
+}
+
+function hasActiveGatePrioritySpreadPendingBlocker(publicationConvergence) {
+  const activeGateProgress =
+    publicationConvergence?.activeGateProgress ||
+    publicationConvergence?.activeGate?.progress ||
+    null;
+  return normalizeDistinctStringArray([
+    ...(Array.isArray(activeGateProgress?.gateReasons) ?
+      activeGateProgress.gateReasons :
+      []),
+    ...(Array.isArray(activeGateProgress?.blockers) ?
+      activeGateProgress.blockers :
+      []),
+  ])
+    .map((reason) => normalizeActiveGatePublicationReason(reason))
+    .includes(ACTIVE_GATE_REASON_PRIORITY_CONTROL_PLANE_SPREAD_PENDING);
 }
 
 function resolveFirstDistinctSignalValue(values) {
@@ -878,6 +922,16 @@ function appendPriorityRecoveryProgressSignals({
   }
   if (publicationConvergence.prioritySpreadPending === true) {
     signals.push(FAILURE_SIGNAL_PRIORITY_SPREAD_PENDING);
+  }
+  if (
+    typeof publicationConvergence.activeGateSnapshotCoverageBlocker ===
+      'string' &&
+    publicationConvergence.activeGateSnapshotCoverageBlocker.length > ZERO
+  ) {
+    appendSignalOnce(
+      signals,
+      publicationConvergence.activeGateSnapshotCoverageBlocker,
+    );
   }
   if (
     normalizeNonNegativeCount(
@@ -1485,8 +1539,24 @@ function buildFailureClassification({
       null;
   const readinessPriorityRecoveryBlocker =
     resolveReadinessPriorityRecoveryBlocker(controlPlane);
+  const hasPriorityRecoveryProgressBlockerEvidence =
+    hasPriorityRecoveryProgressBlocker(publicationConvergence);
+  const hasPriorityRecoveryOwnerProgressContract =
+    hasPriorityRecoveryProgressBlockerEvidence &&
+    hasMeaningfulPriorityRecoveryProgressWitness(dominantProgressWitness);
+  const hasPriorityRecoveryCountOnlyBlockerAfterSpreadClosure =
+    hasPriorityRecoveryProgressBlockerEvidence &&
+    hasPriorityRecoveryOwnerProgressContract !== true &&
+    hasPriorityRecoverySpreadGap(publicationConvergence) !== true;
+  const hasPriorityRecoveryFailureBarrier =
+    hasPriorityRecoveryProgressBlockerEvidence &&
+    failure?.failureBarrier?.phase === STABILITY_GATE_TYPE_RESTART_RECOVERY &&
+    failure?.failureBarrier?.dominantReason ===
+      STABILITY_GATE_BLOCKER_PRIORITY_SPREAD_PENDING;
   const hasPriorityRecoveryOwnerBlocker =
-    hasPriorityRecoveryProgressBlocker(publicationConvergence) ||
+    hasPriorityRecoveryOwnerProgressContract ||
+    hasPriorityRecoveryCountOnlyBlockerAfterSpreadClosure ||
+    hasPriorityRecoveryFailureBarrier ||
     Boolean(readinessPriorityRecoveryBlocker);
   const hasStartupReadinessBlocker =
     isStartupReadinessBlocked({

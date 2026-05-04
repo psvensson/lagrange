@@ -25,12 +25,62 @@ const {
   SERVICE_TYPE,
   SYSTEM_TABLE_NAME,
   TRANSPORT_ERROR_MSG,
+  TYPEOF,
   WORKFLOW_STEP,
   classifyTransportDeliveryOutcome,
   isCoordinatorOwnedOperationType,
   isDeliveredTransportDeliveryOutcome,
   isPriorityControlPlanePartition,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
+
+const DISPATCH_WAKE_PROGRESS_PREEMPT_STATUSES = Object.freeze(
+  new Set([
+    ReplicaStatus.SYNCING,
+    ReplicaStatus.ACTIVE,
+    ReplicaStatus.FAILED,
+  ]),
+);
+
+const DISPATCH_WAKE_PROGRESS_PREEMPT_STATE = Object.freeze({
+  OPERATION_UNAVAILABLE: 'operation_unavailable',
+  NON_CREATE_REARM: 'non_create_rearm',
+  NON_WAKE_INPUT: 'non_wake_input',
+  PROGRESS_RECONCILER_UNAVAILABLE: 'progress_reconciler_unavailable',
+  TARGET_PROGRESS_NOT_OBSERVED: 'target_progress_not_observed',
+  PREEMPT_RECONCILE: 'preempt_reconcile',
+});
+
+const DISPATCH_WAKE_PROGRESS_PREEMPT_STATE_TABLE = Object.freeze([
+  Object.freeze({
+    state: DISPATCH_WAKE_PROGRESS_PREEMPT_STATE.OPERATION_UNAVAILABLE,
+    matches: (evidence) => evidence.operationAvailable !== true,
+  }),
+  Object.freeze({
+    state: DISPATCH_WAKE_PROGRESS_PREEMPT_STATE.NON_CREATE_REARM,
+    matches: (evidence) => evidence.createRearmDispatchPhase !== true,
+  }),
+  Object.freeze({
+    state: DISPATCH_WAKE_PROGRESS_PREEMPT_STATE.NON_WAKE_INPUT,
+    matches: (evidence) => evidence.dispatchWakeInput !== true,
+  }),
+  Object.freeze({
+    state:
+      DISPATCH_WAKE_PROGRESS_PREEMPT_STATE.PROGRESS_RECONCILER_UNAVAILABLE,
+    matches: (evidence) => evidence.progressReconcilerAvailable !== true,
+  }),
+  Object.freeze({
+    state: DISPATCH_WAKE_PROGRESS_PREEMPT_STATE.TARGET_PROGRESS_NOT_OBSERVED,
+    matches: (evidence) => evidence.observedPreemptStatus !== true,
+  }),
+  Object.freeze({
+    state: DISPATCH_WAKE_PROGRESS_PREEMPT_STATE.PREEMPT_RECONCILE,
+    matches: () => true,
+  }),
+]);
+
+const DISPATCH_WAKE_PROGRESS_PREEMPT_ALLOWED_STATES = Object.freeze(
+  new Set([DISPATCH_WAKE_PROGRESS_PREEMPT_STATE.PREEMPT_RECONCILE]),
+);
 
 class OperationWorkflowOwnerSegment4 extends OperationWorkflowOwnerSegment3 {
   shouldFailRemoveSafetyHandoffResponse(removeSafetyEvaluation, response) {
@@ -118,7 +168,7 @@ class OperationWorkflowOwnerSegment4 extends OperationWorkflowOwnerSegment3 {
    * @param {string|Object} operationInput
    * @return {Promise<Object>}
    */
-  async dispatchOperation(operationInput) {
+  async dispatchOperation(operationInput, options = {}) {
     if (this.isShuttingDown || !this.isInitialized) {
       return this.buildSkippedOperationResult(
         OPERATION_WORKFLOW_OWNER_REASON.SHUTDOWN_IN_PROGRESS,
@@ -137,6 +187,7 @@ class OperationWorkflowOwnerSegment4 extends OperationWorkflowOwnerSegment3 {
       OPERATION_OWNER_ACTION.DISPATCH,
       operationInput,
       {
+        ...options,
         boundary: OPERATION_WORKFLOW_OWNER_LITERAL.DISPATCH,
       },
     );
@@ -232,7 +283,7 @@ class OperationWorkflowOwnerSegment4 extends OperationWorkflowOwnerSegment3 {
    * @param {string|Object} operationInput
    * @return {Promise<Object>}
    */
-  async dispatchOperationInternal(operationInput) {
+  async dispatchOperationInternal(operationInput, options = {}) {
     const operation = await this.resolveDispatchOperation(operationInput);
     const operationId = this.getOperationIdFromInput(operationInput);
 
@@ -255,6 +306,17 @@ class OperationWorkflowOwnerSegment4 extends OperationWorkflowOwnerSegment3 {
       this.repository.isReplaceRemoveDispatchPhase(operation);
     const dispatchableWorkflowStep = operation.workflowStep;
     const createRearmDispatchPhase = this.isCreateRearmDispatchPhase(operation);
+    if (
+      this.shouldPreemptCreateRearmWithObservedProgress(
+        operationInput,
+        operation,
+        createRearmDispatchPhase,
+        options,
+      ) &&
+      await this.reconcileDispatchWakeOperationProgress(operation)
+    ) {
+      return this.buildSuccessfulOperationResult(operation.operationId);
+    }
     if (replaceRemoveDispatchPhase) {
       if (
         dispatchableWorkflowStep !== WORKFLOW_STEP.ACTIVE &&
@@ -295,6 +357,9 @@ class OperationWorkflowOwnerSegment4 extends OperationWorkflowOwnerSegment3 {
       dispatchableWorkflowStep !== WORKFLOW_STEP.SENDING &&
       !createRearmDispatchPhase
     ) {
+      if (await this.reconcileDispatchWakeOperationProgress(operation)) {
+        return this.buildSuccessfulOperationResult(operation.operationId);
+      }
       return {
         success: false,
         skipped: true,
@@ -304,6 +369,139 @@ class OperationWorkflowOwnerSegment4 extends OperationWorkflowOwnerSegment3 {
     }
 
     return this.executeOperationInternal(dispatchOperation);
+  }
+
+  /**
+   * @param {string|Object} operationInput
+   * @return {boolean}
+   * @private
+   */
+  isOperationRowDispatchWakeInput(operationInput) {
+    return (
+      operationInput &&
+      typeof operationInput === OPERATION_WORKFLOW_OWNER_LITERAL.OBJECT &&
+      typeof operationInput.operation_id ===
+        OPERATION_WORKFLOW_OWNER_LITERAL.STRING &&
+      operationInput.operation_id.length > NUM.ZERO
+    );
+  }
+
+  /**
+   * @param {Object} options
+   * @return {boolean}
+   * @private
+   */
+  isExplicitDispatchWakeProgressInput(options) {
+    return (
+      options?.cause ===
+      OPERATION_WORKFLOW_OWNER_LITERAL.REPLICA_OPERATION_DISPATCH
+    );
+  }
+
+  /**
+   * @param {Object} operation
+   * @return {string}
+   * @private
+   */
+  getDispatchWakeObservedTargetStatus(operation) {
+    if (
+      typeof this.getObservedOperationRowTargetProgressStatus !==
+        TYPEOF.FUNCTION
+    ) {
+      return OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_STRING;
+    }
+    const observedTargetStatus =
+      this.getObservedOperationRowTargetProgressStatus(operation);
+    return typeof observedTargetStatus === TYPEOF.STRING ?
+      observedTargetStatus :
+      OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_STRING;
+  }
+
+  /**
+   * @param {string|Object} operationInput
+   * @param {Object} operation
+   * @param {boolean} createRearmDispatchPhase
+   * @param {Object} [options={}]
+   * @return {Object}
+   * @private
+   */
+  buildDispatchWakeProgressPreemptEvidence(
+    operationInput,
+    operation,
+    createRearmDispatchPhase,
+    options = {},
+  ) {
+    const observedTargetStatus =
+      this.getDispatchWakeObservedTargetStatus(operation);
+    return Object.freeze({
+      operationAvailable: Boolean(operation),
+      createRearmDispatchPhase: createRearmDispatchPhase === true,
+      dispatchWakeInput:
+        this.isOperationRowDispatchWakeInput(operationInput) ||
+        this.isExplicitDispatchWakeProgressInput(options),
+      progressReconcilerAvailable:
+        typeof this.reconcileOperationProgress === TYPEOF.FUNCTION,
+      observedPreemptStatus:
+        DISPATCH_WAKE_PROGRESS_PREEMPT_STATUSES.has(observedTargetStatus),
+      observedTargetStatus,
+    });
+  }
+
+  /**
+   * @param {Object} evidence
+   * @return {string}
+   * @private
+   */
+  resolveDispatchWakeProgressPreemptState(evidence) {
+    return (
+      DISPATCH_WAKE_PROGRESS_PREEMPT_STATE_TABLE.find((entry) =>
+        entry.matches(evidence),
+      )?.state ||
+      DISPATCH_WAKE_PROGRESS_PREEMPT_STATE.TARGET_PROGRESS_NOT_OBSERVED
+    );
+  }
+
+  /**
+   * @param {string|Object} operationInput
+   * @param {Object} operation
+   * @param {boolean} createRearmDispatchPhase
+   * @param {Object} [options={}]
+   * @return {boolean}
+   * @private
+   */
+  shouldPreemptCreateRearmWithObservedProgress(
+    operationInput,
+    operation,
+    createRearmDispatchPhase,
+    options = {},
+  ) {
+    const evidence = this.buildDispatchWakeProgressPreemptEvidence(
+      operationInput,
+      operation,
+      createRearmDispatchPhase,
+      options,
+    );
+    const state = this.resolveDispatchWakeProgressPreemptState(evidence);
+    return DISPATCH_WAKE_PROGRESS_PREEMPT_ALLOWED_STATES.has(state);
+  }
+
+  /**
+   * Dispatch wakeups can arrive after cache evidence has already moved the
+   * replica beyond the current durable step. Let the owner reconcile that
+   * progress before replaying create dispatch or classifying the wakeup as
+   * non-dispatchable.
+   *
+   * @param {Object} operation
+   * @return {Promise<boolean>}
+   * @private
+   */
+  async reconcileDispatchWakeOperationProgress(operation) {
+    if (typeof this.reconcileOperationProgress !== TYPEOF.FUNCTION) {
+      return false;
+    }
+    return this.reconcileOperationProgress(operation, {
+      cause: OPERATION_WORKFLOW_OWNER_LITERAL.OBSERVED_PROGRESS,
+    });
   }
 
   /**

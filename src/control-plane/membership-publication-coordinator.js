@@ -1688,11 +1688,14 @@ class MembershipPublicationCoordinator {
       preferAuthoritativeRead: preferAuthoritativeMembershipState,
       preloadedRows: options.partitionRows,
     });
-    const replicaOperationRows = Array.isArray(options.replicaOperationRows) ?
-      options.replicaOperationRows :
-      typeof this.systemTableCache?.getAll === TYPEOF.FUNCTION ?
-        this.systemTableCache.getAll(TABLES.REPLICA_OPERATIONS) || [] :
-        [];
+    const replicaOperationRows = await this.readTableRows(
+      TABLES.REPLICA_OPERATIONS,
+      {
+        ...planningReadOptions,
+        preferAuthoritativeRead: preferAuthoritativeMembershipState,
+        preloadedRows: options.replicaOperationRows,
+      },
+    );
     const readinessEntries = Array.isArray(options.readinessEntries) ?
       options.readinessEntries :
       this.controlPlaneReadinessService &&

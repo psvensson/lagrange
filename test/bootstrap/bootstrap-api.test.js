@@ -24,7 +24,11 @@ import {
   TABLES,
 } from '../../src/constants/index.js';
 import {BootstrapReadinessState} from '../../src/bootstrap/bootstrap-readiness-state.js';
-import {LIFECYCLE_REASON} from '../../src/bootstrap/lifecycle-controller-constants.js';
+import {
+  LIFECYCLE_LEGACY_STATE,
+  LIFECYCLE_PHASE,
+  LIFECYCLE_REASON,
+} from '../../src/bootstrap/lifecycle-controller-constants.js';
 import {STARTUP_JOIN_MODE} from '../../src/bootstrap/rejoin-hints-constants.js';
 import {
   STARTUP_RECOVERY_STAGE,
@@ -42,6 +46,7 @@ import {
 
 const TEST_BOOTSTRAP_JOIN_AUTHORITY_BLOCKER =
   'control_snapshot_authority_unavailable';
+const TEST_BOOTSTRAP_PHASE_CONTACTING_SEED = 'contacting_seed';
 const TEST_HTTP_METHOD_GET = 'GET';
 const TEST_HTTP_METHOD_POST = 'POST';
 const TEST_SEED_NODE_ID = 'seed-node-1';
@@ -51,6 +56,7 @@ const TEST_BOOTSTRAP_REQUEST_NODE_ID =
 const TEST_BOOTSTRAP_REQUEST_NODE_ADDRESS = 'ws://localhost:9210';
 const TEST_BOOTSTRAP_RESPONSE_GROUP_ID = 'mg-seed-authority';
 const TEST_READY_STABLE_WINDOW_MS = 0;
+const TEST_READY_RETRY_AFTER_MS = 250;
 const TEST_REGISTER_SERVICE_RETRY_AFTER_MS = 1000;
 const TEST_SQL_ENGINE_UNAVAILABLE_ERROR = 'SQL query engine not available';
 const TEST_REGISTER_SERVICE_NODE_ID = 'joiner-node-1';
@@ -95,6 +101,13 @@ const TEST_SEED_CONTACT_STARTUP_AUTHORITY = Object.freeze({
     state: TEST_STARTUP_AUTHORITY_FAILURE_STATE,
   }),
 });
+const TEST_BOOTSTRAP_INIT_RUNTIME_WIRING_RECOVERY_REASONS = Object.freeze([
+  LIFECYCLE_REASON.BOOTSTRAP_PHASE_INCOMPLETE,
+  LIFECYCLE_REASON.SQL_ENGINE_UNAVAILABLE,
+  BOOTSTRAP_PIPELINE_ERROR_CODE.LEADER_METADATA_INCOMPLETE,
+  BOOTSTRAP_PIPELINE_ERROR_CODE.BOOTSTRAP_NOT_READY,
+  LIFECYCLE_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
+]);
 
 // Initialize configuration and logging for tests
 function initializeTestEnvironment() {
@@ -1655,6 +1668,94 @@ test('BootstrapAPI - bootstrap join readiness uses startup-adapter seed-contact 
       bootstrapReadyBody.reasons,
       [],
       'bootstrap join readiness should clear tolerated retryable contact blockers',
+    );
+
+    await api.shutdown();
+  });
+
+test('BootstrapAPI - bootstrap join readiness uses seed-contact authority during bootstrap INIT runtime wiring',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const readinessSnapshot = {
+      ready: false,
+      phase: LIFECYCLE_PHASE.INIT,
+      state: LIFECYCLE_LEGACY_STATE.BOOTSTRAPPING,
+      reasons: TEST_BOOTSTRAP_INIT_RUNTIME_WIRING_RECOVERY_REASONS,
+      retryAfterMs: TEST_READY_RETRY_AFTER_MS,
+      timestamp: Date.now(),
+    };
+    const readinessState = {
+      evaluate() {
+        return readinessSnapshot;
+      },
+      getSnapshot() {
+        return readinessSnapshot;
+      },
+      recordProbeResult() {},
+    };
+    const startupAdapter = {
+      phase: TEST_BOOTSTRAP_PHASE_CONTACTING_SEED,
+      bootstrapResponse: null,
+      getSeedContactStartupAuthoritySnapshot() {
+        return TEST_SEED_CONTACT_STARTUP_AUTHORITY;
+      },
+    };
+
+    const api = new BootstrapAPI({
+      seedNodeId: TEST_SEED_NODE_ID,
+      seedNodeAddress: TEST_SEED_NODE_ADDRESS,
+      systemTableCache: createEmptySystemTableCache(),
+      bootstrapStartupAdapter: startupAdapter,
+      readinessState,
+      startupRecoveryCoordinator: new StartupRecoveryCoordinator({
+        readinessState,
+      }),
+    });
+
+    await api.initialize(TEST_READY_STABLE_WINDOW_MS, {listen: false});
+
+    const strictReadyResponse = await api.getFastify().inject({
+      method: TEST_HTTP_METHOD_GET,
+      url: BOOTSTRAP_API_ROUTE.READYZ,
+    });
+    t.equal(
+      strictReadyResponse.statusCode,
+      HTTP_STATUS.SERVICE_UNAVAILABLE,
+      'strict readiness should stay closed while runtime wiring is incomplete',
+    );
+
+    const bootstrapReadyResponse = await api.getFastify().inject({
+      method: TEST_HTTP_METHOD_GET,
+      url: BOOTSTRAP_API_ROUTE.BOOTSTRAP_READY,
+    });
+    t.equal(
+      bootstrapReadyResponse.statusCode,
+      HTTP_STATUS.OK,
+      'bootstrap join readiness should open from seed-contact authority during INIT',
+    );
+    const bootstrapReadyBody = JSON.parse(bootstrapReadyResponse.body);
+    t.equal(
+      bootstrapReadyBody.controlPlaneRecoveryReady,
+      true,
+      'startup recovery should classify seed-authorized INIT as recovery-ready',
+    );
+    t.equal(
+      bootstrapReadyBody.startupAuthorityAvailable,
+      true,
+      'readiness should expose the retained seed-contact startup authority',
+    );
+    t.same(
+      bootstrapReadyBody.reasons,
+      [],
+      'bootstrap join readiness should clear bootstrap-init recovery blockers',
+    );
+    t.equal(
+      bootstrapReadyBody[
+        BOOTSTRAP_API_READINESS_FIELD.BOOTSTRAP_JOIN_PROJECTION
+      ]?.canProjectReady,
+      true,
+      'bootstrap join projection should record the authorized INIT decision',
     );
 
     await api.shutdown();

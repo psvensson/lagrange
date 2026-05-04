@@ -49,6 +49,14 @@ const {
   resolvePositiveTimeoutMs,
 } = CLUSTER_SEGMENT_1;
 
+const PRIORITY_RECOVERY_DECISION_SNAPSHOT_PROGRESS_FIELD = Object.freeze({
+  COMPLETED_AT_MS: 'completedAtMs',
+  CREATED_AT_MS: 'createdAtMs',
+  LAST_PROGRESS_AT_MS: 'lastProgressAtMs',
+  TARGET_SERVICE_PROGRESS_AT_MS: 'targetServiceProgressAtMs',
+  UPDATED_AT_MS: 'updatedAtMs',
+});
+
 /**
  * Preserve a small but meaningful timeout floor for deadline-driven
  * observation probes so the last ACTIVE-wait attempt does not collapse into a
@@ -1120,10 +1128,39 @@ function resolvePriorityRecoveryExplicitSemanticState(
   return explicitSemanticStateByPartitionId.get(partitionId) || null;
 }
 
+function resolvePriorityRecoveryDecisionSnapshotProgressSortTimestamp(
+  snapshot,
+) {
+  const operation = snapshot?.coordinator?.operation || {};
+  const progressTimestampCandidates = [
+    operation[
+      PRIORITY_RECOVERY_DECISION_SNAPSHOT_PROGRESS_FIELD.COMPLETED_AT_MS
+    ],
+    operation[PRIORITY_RECOVERY_DECISION_SNAPSHOT_PROGRESS_FIELD.UPDATED_AT_MS],
+    operation[
+      PRIORITY_RECOVERY_DECISION_SNAPSHOT_PROGRESS_FIELD
+        .TARGET_SERVICE_PROGRESS_AT_MS
+    ],
+    snapshot?.progress?.[
+      PRIORITY_RECOVERY_DECISION_SNAPSHOT_PROGRESS_FIELD.LAST_PROGRESS_AT_MS
+    ],
+    operation[PRIORITY_RECOVERY_DECISION_SNAPSHOT_PROGRESS_FIELD.CREATED_AT_MS],
+  ]
+    .map((candidate) => Number(candidate))
+    .filter((candidate) => Number.isFinite(candidate) && candidate > ZERO);
+  return progressTimestampCandidates.length > ZERO ?
+    Math.max(...progressTimestampCandidates) :
+    ZERO;
+}
+
 function resolvePriorityRecoveryDecisionSnapshotSortTimestamp(snapshot) {
+  const progressTimestamp =
+    resolvePriorityRecoveryDecisionSnapshotProgressSortTimestamp(snapshot);
+  if (progressTimestamp > ZERO) {
+    return progressTimestamp;
+  }
   const updatedAtMs = Number(
-    snapshot?.coordinator?.operation?.updatedAtMs ??
-      snapshot?.observation?.provenance?.capturedAt ??
+    snapshot?.observation?.provenance?.capturedAt ??
       ZERO,
   );
   return Number.isFinite(updatedAtMs) ? updatedAtMs : ZERO;

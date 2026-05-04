@@ -1,12 +1,289 @@
 # Rolling Restart Operation Transition Pressure And Over-Target Trim
 
-April 30 contraction handoff: this package is queued again. The representative
-path is currently active in
-[Priority Recovery Actuation Contract Under Load](./active-20260430-priority-recovery-actuation-contract-under-load.md),
-which owns the narrower `sql_transactions-p1` workflow-progress blocker. This
-package remains the historical and queued owner for post-active operation drain,
-membership trim, and over-target cleanup after that actuation blocker closes or
-migrates.
+May 4 dispatch-wake progress update: the operation-transition owner path has
+focused proof for stale observed progress and dispatch-wake progress, but the
+representative `rolling-restart --fast-local` path migrated before durable
+over-target trim could be evaluated again.
+
+Implementation evidence now covers:
+
+1. stale failed target cache no longer overrides authoritative active target
+   status
+2. cache-observed active target progress can move a stale `CREATING` operation
+   row into source removal
+3. overdue critical `PENDING` dispatch rows are re-armed
+4. owner dispatch wakeups reconcile non-dispatchable `CREATING` progress when
+   target service rows have reached `syncing`, `active`, or `failed`
+5. remote-owned observed progress now wakes the operation owner instead of
+   being ignored by the local-owner filter
+
+Focused validation:
+
+1. `npm test -- test/rebalancer/rebalance-coordinator-stopping-reconcile.test.js`
+   passed, `87/87`
+2. `node --test test/rebalancer/replace-replica-workflow.test.js` passed,
+   `219/219`
+3. `node --test test/control-plane/replica-dispatch-node-state-update.test-part-5.js`
+   passed, `24/24`
+4. `npm test -- test/rebalancer/rebalance-coordinator-timeout-cache-visibility.test.js`
+   passed, `158/158`
+5. `npm test -- test/control-plane/priority-recovery-snapshot.test.js`
+   passed, `251/251`
+
+Representative rerun:
+
+1. `test-output/reports/rolling-restart-after-dispatch-wake-progress-20260504-codex.report.json`
+2. result: failed, `0/1` passed after `132.4s`
+3. terminal barrier: `Not all nodes reached ACTIVE state within 120000ms`
+4. root cause class: `startup`
+5. dominant reason: `BOOTSTRAP_PHASE_INCOMPLETE`
+6. failure class: `startup_recovery_blocked`
+7. publication epoch `2` is `PUBLISHED`
+8. pending ACK count is `0`
+9. active gate terminal active count is `2/5`; best progress reaches `3/5`
+10. selected snapshot coverage is `2/5`
+11. priority spread remains pending with gap `5`
+12. `sql_write_operations-p1` is unresolved with
+    `eligible_but_no_operation_created`
+13. `sql_transactions-p1` is unresolved with `recovering_in_flight` and
+    pending operation `2020e44b-de31-41e5-a55b-bdb0e539bb9a`
+14. publication convergence summary says missing published count `0`, while
+    the active-gate selected snapshot records three missing published nodes
+15. logs show the dispatch-wake progress fix working: observed replacement
+    operations for `sql_transaction_participants-p1` and `replica_operations-p1`
+    moved from `CREATING` to `ACTIVE`
+
+This package is queued again. Re-enter it only after the representative path
+reaches the post-active operation-transition / over-target trim boundary. The
+current executable owner is
+[Rolling Restart Startup Active Gate Priority Operation Creation Snapshot Coverage](./active-20260504-rolling-restart-startup-active-gate-priority-operation-creation-snapshot-coverage.md).
+
+May 4 operation-transition fix update: the stale `CREATING` operation-row
+boundary was repaired in the operation workflow owner. Target-status
+reconciliation now compares authoritative target status with cache-observed
+target progress and uses the cache-observed target when it is strictly ahead.
+This lets a cache-visible active replacement target drive a stale
+authoritative `CREATING` row into the REPLACE source-removal path instead of
+waiting for another authoritative services read.
+
+The focused regression added for this package covers a priority REPLACE where
+the target services cache is `active`, the authoritative target observation is
+still `creating`, and the durable operation row is still `CREATING`. The owner
+now advances the operation to `STOPPING`, persists `removing`, and dispatches
+one `REMOVE_REPLICA` to the source.
+
+Representative rerun:
+
+1. `test-output/reports/rolling-restart-operation-transition-cache-target-ahead-20260504-codex.report.json`
+2. result: failed, `0/1` passed after `132.1s`
+3. terminal barrier: `Not all nodes reached ACTIVE state within 120000ms`
+4. root cause class: `topology`
+5. dominant reason: `publication_epoch_pending`
+6. failure class: `topology_unstable`
+7. publication epoch `3` is `PUBLISHED`
+8. pending ACK count is `0`
+9. selected snapshot coverage is `3/5` at the terminal sample and `4/5` at
+   best progress
+10. active node progress is `3/5` at the terminal sample and `4/5` at best
+    progress
+11. failover, convergence, and restart-recovery gates are open on
+    `priority_spread_pending` and `startup_readiness_blocked`
+12. priority recovery invariants passed
+13. terminal priority recovery progress class is
+    `priority_operation_serial_wait` for `sql_transactions-p1` and
+    `sql_write_operations-p1`
+14. terminal semantic state is `needs_operation` for `sql_transactions-p1` and
+    `sql_write_operations-p1`
+15. best-progress priority recovery still includes
+    `operation_created_but_no_step_transitions` for `replica_operations-p1`
+16. the prior post-active convergence blocker with operation
+    `68e99f1c-4414-4273-a241-36d21a53b623` no longer appears in the terminal
+    representative path
+17. playback logs show the new replacement operation
+    `88e2a7c4-0981-4b49-a05e-05d8de0ca4f4` advancing from `CREATING` to
+    `ACTIVE` and then source-removal `STOPPING`
+
+This closes the stale target-status transition path for this package, but the
+representative scenario migrated before post-active over-target trim could be
+evaluated. The active owner boundary is again startup active-gate snapshot
+coverage / serial priority progress; re-enter this package only after the
+representative path reaches the post-active over-target boundary again.
+
+May 4 after-review execution update: after the review fixes for required-ACK
+set difference and failed target-service progress evidence, the fresh
+representative `rolling-restart --fast-local` path failed before reaching the
+post-active over-target boundary:
+
+1. `test-output/reports/rolling-restart-next-work-package-20260504-codex-after-review-fixes.report.json`
+2. result: failed, `0/1` passed after `302.4s`
+3. terminal barrier: restarted node
+   `35a891b8-c1a0-5064-9c6e-2acfba61c2a7` did not become recovery-ready
+   within `120000ms`
+4. root cause class: `startup`
+5. dominant reason: `admin_reachability_refused`
+6. failure class: `startup_recovery_blocked`
+7. failover and convergence gates are closed
+8. `restart_recovery` is open with blocker `admin_reachability_refused`
+9. publication epoch `4` is `PUBLISHED`
+10. pending ACK count is `0`, missing published count is `0`
+11. priority recovery has blocked partition count `0` and unresolved partition
+    count `0`
+12. priority recovery semantic state is `spread_satisfied_in_flight` for
+    `control_plane_publications-p1`, `replica_operations-p1`,
+    `sql_transaction_participants-p1`, `sql_transactions-p1`, and
+    `sql_write_operations-p1`
+13. all five priority witnesses are still owned by
+    `operation_workflow_owner` at the `workflow_progress` boundary in
+    event-driven wait mode
+14. the terminal restarted node is reachable by `bootstrap_health`, but
+    `adminReady=false`, `controlPlaneRecoveryReady=false`,
+    `readinessPhase=INIT`, `readinessStage=alive`, and
+    `bootstrapJoinProjectionBlocker=control_snapshot_authority_unavailable`
+
+This rerun does not close the operation-transition / over-target owner path.
+It re-enters the restart-recovery admin/control-snapshot authority boundary
+before durable trim can be evaluated.
+
+Status correction on May 4: this package is queued again. The repeated
+`restart_recovery` preemption closed by migration in
+[Rolling Restart Restart Recovery Control Snapshot Authority](./done-20260504-rolling-restart-restart-recovery-control-snapshot-authority.md),
+and the representative path now sits in
+[Rolling Restart Startup Snapshot Coverage And Serial Priority Progress](./done-20260504-rolling-restart-startup-snapshot-coverage-serial-priority-progress.md).
+Re-enter this operation-transition package only after the representative path
+reaches the post-active over-target boundary again.
+
+May 4 reactivation update: the startup snapshot coverage / serial priority
+progress package closed by migration. The latest representative
+`rolling-restart --fast-local` run no longer terminates on
+`eligible_but_no_operation_created`; terminal priority recovery reports
+`operation_created_but_no_step_transitions`, with
+`control_plane_publications-p1` stalled in target creation and
+`sql_write_operations-p1` waiting on the serial priority lane. This package is
+the active re-entry owner for operation transition timeout pressure before any
+durable over-target trim closure can be trusted.
+
+May 4 execution update: the publication ACK / selected-snapshot evidence
+regression was fixed before re-entering this active package. The representative
+`rolling-restart --fast-local` path now moves past publication, ACK debt,
+missing-published membership, selected-snapshot coverage, and priority recovery
+operation creation. The latest run reaches post-active topology convergence and
+fails on sustained over-target voters plus one stale priority operation
+transition:
+
+1. `test-output/reports/rolling-restart-next-work-package-20260504-codex.report.json`
+2. result: failed, `0/1` passed after `504.7s`
+3. terminal barrier: `Convergence timeout after 120000ms`
+4. failover, convergence, and restart-recovery stability gates are closed
+5. publication epoch `32` is `PUBLISHED`
+6. pending ACK count is `0`, pending ACK nodes are empty
+7. missing published count is `0`, missing published nodes are empty
+8. priority recovery has blocked partition count `0` and unresolved partition
+   count `0`
+9. priority recovery semantic states are `converged` for
+   `control_plane_publications-p1`, `replica_operations-p1`, and
+   `sql_transaction_participants-p1`
+10. `sql_transactions-p1` and `sql_write_operations-p1` are
+    `spread_satisfied_in_flight`
+11. dominant witness is `sql_write_operations-p1` with operation
+    `68e99f1c-4414-4273-a241-36d21a53b623`, latest workflow step
+    `CREATING`, latest status `creating`, `transition_deferred`,
+    `workflow_timeout`, wait mode `timeout_reconcile_due`, and next action
+    `reconcile_stale_operation_progress`
+12. max over-target duration is `142226ms`
+13. over-target voters remain on `control_plane_publications-p1`,
+    `replica_operations-p1`, `sql_transaction_participants-p1`,
+    `sql_transactions-p1`, and `sql_write_operations-p1`
+14. voter counts are `4` for `control_plane_publications-p1`,
+    `sql_transaction_participants-p1`, `sql_transactions-p1`, and
+    `sql_write_operations-p1`; `replica_operations-p1` is at `5`
+15. in-flight replica operation count is `1`, effective in-flight count is `0`
+16. in-flight statuses are `failed=1`, `removed=6`, `active=2`, and
+    `creating=1`
+17. post-rebalance closure is `soft_closed`, but strict convergence still
+    fails because the topology view remains over target
+
+The current executable boundary is therefore no longer publication evidence,
+selected-snapshot reachability, or priority recovery operation creation. It is
+the operation-transition / over-target owner path: timeout reconciliation must
+drive the cache-visible active target out of a stale `CREATING` operation row
+and durable trim must remove the remaining over-target voters under
+control-plane and CDC participant pressure.
+
+May 1 execution update: the first two blockers in this active slice were fixed
+and the representative path advanced to a new publication/snapshot visibility
+boundary under transport pressure:
+
+1. canonical publication evidence now lets closed ACK lists and current
+   selected-snapshot coverage retire stale pending-ACK and missing-published
+   debt
+2. publication planning now reads `replica_operations` through the same
+   authoritative owner-RPC path used for membership planning evidence, so fresh
+   durable operation rows are visible before the local cache catches up
+3. priority recovery now counts matching target service row creation/update
+   timestamps as operation progress, preventing stale operation-row timestamps
+   from manufacturing workflow timeouts while the target replica is actively
+   being created
+4. representative rerun:
+   `test-output/reports/rolling-restart-target-service-progress-20260501-codex.report.json`
+5. result: failed, `0/1` passed after `134.2s`
+6. publication epoch `3` is `PUBLISHED`
+7. pending ACK count is `0`, blocked publication node count is `0`
+8. current selected snapshot coverage is `3/5`
+9. selected snapshot has published active nodes `3/5`
+10. missing published nodes are
+    `8be8d30f-4499-5eed-865c-71b4d529a67a` and
+    `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`
+11. selected snapshot admin readiness is false with
+    `snapshot_reachability_timeout`
+12. `sql_write_operations-p1` moved to `spread_satisfied_in_flight`, closing
+    the stale target-service workflow-timeout class from the previous run
+13. remaining priority blocker includes `replica_operations-p1` with
+    workflow step `PENDING`, status `pending`, `operation_stalled`, and
+    `workflow_timeout`
+14. logs show message-router source pressure on the target path with saturated
+    outbound queue and critical in-flight work
+
+The next owner boundary is therefore selected-snapshot publication membership
+visibility under transport pressure, with a secondary `replica_operations-p1`
+operation workflow timeout once snapshot reachability is current.
+
+May 1 reactivation: the publication ACK / selected-snapshot reachability
+package closed by migration. The latest representative
+`rolling-restart --fast-local` run now reaches a clean publication owner
+boundary but still fails in load-mode active readiness on priority-spread
+recovery:
+
+1. `test-output/reports/rolling-restart-publication-ack-snapshot-reachability-ack-owner-20260501-codex.report.json`
+2. result: failed, `0/1` passed after `253.3s`
+3. terminal barrier:
+   `Cluster ACTIVE wait stalled with no meaningful progress for 8 attempts`
+4. publication epoch `5` is `PUBLISHED`
+5. published active nodes are `5/5`
+6. pending ACK count is `0`, pending ACK nodes are empty
+7. missing published count is `0`, missing published nodes are empty
+8. selected snapshot coverage is `5/5`
+9. readiness delay is a recoverable selected-snapshot reachability timeout for
+   `7493b0ab-a054-5fad-a91b-5e331db29304`
+10. closure witness is `CL-003` /
+    `publication_converged_priority_spread_pending`
+11. recovery protocol state is `priority_spread_pending`
+12. unresolved priority partition is `sql_write_operations-p1`
+13. progress class is `eligible_but_no_operation_created`
+14. semantic state is `needs_operation`
+15. next owner boundary is priority recovery operation scheduling under
+    control-plane pressure, before any post-active trim or over-target cleanup
+
+The current executable slice is therefore `sql_write_operations-p1` priority
+recovery operation creation / transition pressure after publication ACK,
+missing-published membership, and selected snapshot coverage have closed.
+
+April 30 contraction handoff: this package was queued again. The
+`sql_transactions-p1` workflow-progress blocker closed into
+[Priority Recovery Actuation Contract Under Load](./done-20260430-priority-recovery-actuation-contract-under-load.md).
+The representative path then moved through
+[Rolling Restart Publication ACK Snapshot Reachability Regression](./done-20260430-rolling-restart-publication-ack-snapshot-reachability-regression.md),
+which closed the migrated startup publication ACK / selected-snapshot
+reachability blocker.
 
 April 30 reactivation: the active publication missing-node package closed its
 terminal blocker. The latest representative `rolling-restart --fast-local` run
@@ -57,7 +334,7 @@ quiescence stable-window boundary:
 
 This package is queued again as the operation-transition history and re-entry
 owner. Active execution is now
-[Control plane quiescence stable window after publication closure](./active-20260429-control-plane-quiescence-stable-window-after-publication-closure.md).
+[Control plane quiescence stable window after publication closure](./done-20260429-control-plane-quiescence-stable-window-after-publication-closure.md).
 
 April 29 handoff: the latest representative report reaches the quiescence
 owner again after the April 28 trim/over-target work:
@@ -648,7 +925,7 @@ Representative migration:
 
 The original publication ACK and post-published endpoint-visibility blocker is
 closed. The current surprise is split as
-[Rolling restart priority follow-up under transport pressure](./active-20260427-rolling-restart-priority-follow-up-under-transport-pressure.md).
+[Rolling restart priority follow-up under transport pressure](./done-20260427-rolling-restart-priority-follow-up-under-transport-pressure.md).
 
 
 ## Scope Basis
@@ -838,11 +1115,11 @@ Closure requirements:
 - [x] `rolling-restart` passes or moves to a newly named owner boundary with
       the post-active transition-pressure loop closed. The active boundary is
       now
-      [Control plane quiescence stable window after publication closure](./active-20260429-control-plane-quiescence-stable-window-after-publication-closure.md).
+      [Control plane quiescence stable window after publication closure](./done-20260429-control-plane-quiescence-stable-window-after-publication-closure.md).
 - [ ] The load-readiness regression on
       `eligible_but_no_operation_created` under transport/query pressure is
       tracked in
-      [Rolling restart priority follow-up under transport pressure](./active-20260427-rolling-restart-priority-follow-up-under-transport-pressure.md).
+      [Rolling restart priority follow-up under transport pressure](./done-20260427-rolling-restart-priority-follow-up-under-transport-pressure.md).
 
 ## Validation
 
@@ -1143,6 +1420,36 @@ Executed before activation:
      `quiescence_candidate`, `canonicalBlocker=null`, `stableElapsedMs=0`,
      raw `inFlightCount=1`, `effectiveInFlightCount=0`, and one stale
      discounted operation.
+216. `node --check src/rebalancer/operation-workflow-owner-segment-7.js`
+217. Result: passed.
+218. `node --check test/rebalancer/rebalance-coordinator-stopping-reconcile.test.js`
+219. Result: passed.
+220. `npm test -- test/rebalancer/rebalance-coordinator-stopping-reconcile.test.js`
+221. Result: passed, `75/75`.
+222. `npm test -- test/rebalancer/rebalance-coordinator-timeout-cache-visibility.test.js`
+223. Result: passed, `158/158`.
+224. `npm test -- test/rebalancer/replace-replica-workflow.test.js`
+225. Result: passed, `219/219`.
+226. `node --check src/control-plane/priority-recovery-snapshot.js`
+227. Result: passed.
+228. `npm run audit:guideline:literals`
+229. Result: passed with `0` new violations.
+230. `npm run audit:guideline:decision-boundaries`
+231. Result: passed.
+232. `npm run audit:runtime-grammar`
+233. Result: passed, including `audit:state-machine-pressure`.
+234. `git diff --check`
+235. Result: passed.
+236. `npm test -- test/control-plane/priority-recovery-snapshot.test.js`
+237. Result: passed, `241/241`.
+238. `node --test test/distributed/harness/__tests__/failure-bundle.test.js`
+239. Result: passed, `63/63`.
+240. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --fast-local --output test-output/reports/rolling-restart-operation-transition-cache-target-ahead-20260504-codex.report.json --verbose`
+241. Result: failed by migration after `132.1s`. The previous post-active
+     stale `CREATING` operation boundary did not recur; the terminal owner
+     moved back to startup active-gate snapshot coverage / serial priority
+     progress with `priority_operation_serial_wait` for
+     `sql_transactions-p1` and `sql_write_operations-p1`.
 
 ## Done When
 

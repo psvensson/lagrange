@@ -57,6 +57,59 @@ const REBALANCE_PLANNING_GATE_DELAY_MULTIPLIER = Object.freeze({
   BACKPRESSURE: 1.5,
 });
 
+const TOPOLOGY_SETTLING_PLANNING_STATE = Object.freeze({
+  CLEAR: 'clear',
+  PRIORITY_RECOVERY_OPERATION_CREATION_REQUIRED:
+    'priority_recovery_operation_creation_required',
+  TOPOLOGY_OPERATION_TARGET_IN_FLIGHT:
+    'topology_operation_target_in_flight',
+  TOPOLOGY_SETTLING_BLOCKED: 'topology_settling_blocked',
+});
+
+const TOPOLOGY_SETTLING_PLANNING_ACTION = Object.freeze({
+  ALLOW_PLANNING: 'allow_planning',
+  DEFER_PLANNING: 'defer_planning',
+});
+
+const TOPOLOGY_SETTLING_PLANNING_STATE_TABLE = Object.freeze([
+  Object.freeze({
+    state: TOPOLOGY_SETTLING_PLANNING_STATE.CLEAR,
+    matches: (evidence) => evidence.blocked !== true,
+  }),
+  Object.freeze({
+    state:
+      TOPOLOGY_SETTLING_PLANNING_STATE
+        .TOPOLOGY_OPERATION_TARGET_IN_FLIGHT,
+    matches: (evidence) =>
+      evidence.topologySettlingBlockedByOperationCreationTarget === true,
+  }),
+  Object.freeze({
+    state:
+      TOPOLOGY_SETTLING_PLANNING_STATE
+        .PRIORITY_RECOVERY_OPERATION_CREATION_REQUIRED,
+    matches: (evidence) =>
+      evidence.priorityRecoveryOperationCreationRequired === true,
+  }),
+  Object.freeze({
+    state: TOPOLOGY_SETTLING_PLANNING_STATE.TOPOLOGY_SETTLING_BLOCKED,
+    matches: () => true,
+  }),
+]);
+
+const TOPOLOGY_SETTLING_PLANNING_ACTION_BY_STATE = Object.freeze({
+  [TOPOLOGY_SETTLING_PLANNING_STATE.CLEAR]:
+    TOPOLOGY_SETTLING_PLANNING_ACTION.ALLOW_PLANNING,
+  [
+  TOPOLOGY_SETTLING_PLANNING_STATE
+    .PRIORITY_RECOVERY_OPERATION_CREATION_REQUIRED
+  ]: TOPOLOGY_SETTLING_PLANNING_ACTION.ALLOW_PLANNING,
+  [
+  TOPOLOGY_SETTLING_PLANNING_STATE.TOPOLOGY_OPERATION_TARGET_IN_FLIGHT
+  ]: TOPOLOGY_SETTLING_PLANNING_ACTION.DEFER_PLANNING,
+  [TOPOLOGY_SETTLING_PLANNING_STATE.TOPOLOGY_SETTLING_BLOCKED]:
+    TOPOLOGY_SETTLING_PLANNING_ACTION.DEFER_PLANNING,
+});
+
 const LOCAL_MUTATION_READINESS_PLANNING_STATE = Object.freeze({
   CLEAR: 'clear',
   PRIORITY_RECOVERY_OPERATION_CREATION_REQUIRED:
@@ -546,12 +599,97 @@ class UnifiedRebalancerSegment5 extends UnifiedRebalancerSegment4 {
     });
   }
 
+  /**
+   * Return true when topology settling is already tracking in-flight work for
+   * the same partition that priority recovery would create work for.
+   * @param {Object|null} topologySettlingBlocker
+   * @param {Object|null} operationCreationGate
+   * @return {boolean}
+   * @private
+   */
+  hasTopologySettlingBlockerForOperationCreationTarget(
+    topologySettlingBlocker,
+    operationCreationGate,
+  ) {
+    const operationCreationPartitionId = String(
+      operationCreationGate?.operationCreationPartitionId ||
+        UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
+    ).trim();
+    if (operationCreationPartitionId.length === NUM.ZERO) {
+      return false;
+    }
+    const inFlightDetails = Array.isArray(
+      topologySettlingBlocker?.inFlightReplicaOperationDetails,
+    ) ?
+      topologySettlingBlocker.inFlightReplicaOperationDetails :
+      [];
+    return inFlightDetails.some((detail) => {
+      const detailPartitionId = String(
+        detail?.[PRIORITY_RECOVERY_PLANNING_GATE_FIELD.PARTITION_ID] ||
+          detail?.[
+            PRIORITY_RECOVERY_PLANNING_GATE_FIELD.PARTITION_ID_SNAKE
+          ] ||
+          UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
+      ).trim();
+      return detailPartitionId === operationCreationPartitionId;
+    });
+  }
+
+  /**
+   * Normalize topology-settling evidence before deciding whether priority
+   * recovery operation creation may continue planning.
+   * @param {Object|null} topologySettlingBlocker
+   * @return {Object}
+   * @private
+   */
+  buildTopologySettlingPlanningGateSnapshot(topologySettlingBlocker) {
+    const priorityRecoveryGateBypass =
+      this.buildPriorityRecoveryPlanningGateBypassSnapshot();
+    const priorityRecoveryOperationCreationRequired =
+      priorityRecoveryGateBypass.operationCreationGate
+        ?.operationCreationRequired === true;
+    const topologySettlingBlockedByOperationCreationTarget =
+      this.hasTopologySettlingBlockerForOperationCreationTarget(
+        topologySettlingBlocker,
+        priorityRecoveryGateBypass.operationCreationGate,
+      );
+    const evidence = Object.freeze({
+      blocked: !!topologySettlingBlocker,
+      priorityRecoveryOperationCreationRequired,
+      topologySettlingBlockedByOperationCreationTarget,
+    });
+    const planningState =
+      TOPOLOGY_SETTLING_PLANNING_STATE_TABLE.find((entry) =>
+        entry.matches(evidence),
+      )?.state ||
+      TOPOLOGY_SETTLING_PLANNING_STATE.TOPOLOGY_SETTLING_BLOCKED;
+    const planningAction =
+      TOPOLOGY_SETTLING_PLANNING_ACTION_BY_STATE[planningState] ||
+      TOPOLOGY_SETTLING_PLANNING_ACTION.DEFER_PLANNING;
+    return Object.freeze({
+      topologySettlingBlocker,
+      priorityRecoveryOperationCreationRequired,
+      evidence,
+      planningState,
+      planningAction,
+      shouldDefer:
+        planningAction === TOPOLOGY_SETTLING_PLANNING_ACTION.DEFER_PLANNING,
+    });
+  }
+
   async resolveTopologySettlingPlanningGateDecision() {
     const topologySettlingBlocker =
       await this.revalidateCriticalSystemTopologySettlingBlocker(
         this.getCriticalSystemTopologySettlingBlocker(),
       );
     if (!topologySettlingBlocker) {
+      return null;
+    }
+    const gateSnapshot =
+      this.buildTopologySettlingPlanningGateSnapshot(
+        topologySettlingBlocker,
+      );
+    if (gateSnapshot.shouldDefer !== true) {
       return null;
     }
     const scheduleDelayMs = this.increaseCurrentInterval(
@@ -565,6 +703,11 @@ class UnifiedRebalancerSegment5 extends UnifiedRebalancerSegment4 {
       logContext: {
         entityType: this.entityType,
         delayMs,
+        planningState: gateSnapshot.planningState,
+        priorityRecoveryOperationCreationRequired:
+          gateSnapshot.priorityRecoveryOperationCreationRequired,
+        topologySettlingBlockedByOperationCreationTarget:
+          gateSnapshot.evidence.topologySettlingBlockedByOperationCreationTarget,
         blockerReason: topologySettlingBlocker.reason || null,
         connectedNodeId:
           typeof topologySettlingBlocker.connectedNodeId === TYPEOF.STRING &&
@@ -613,6 +756,11 @@ class UnifiedRebalancerSegment5 extends UnifiedRebalancerSegment4 {
     if (!trafficReadinessBlocker) {
       return null;
     }
+    const priorityRecoveryGateBypass =
+      this.buildPriorityRecoveryPlanningGateBypassSnapshot();
+    if (priorityRecoveryGateBypass.shouldBypass === true) {
+      return null;
+    }
     const scheduleDelayMs = this.increaseCurrentInterval(
       REBALANCE_PLANNING_GATE_DELAY_MULTIPLIER.WAIT,
     );
@@ -646,6 +794,11 @@ class UnifiedRebalancerSegment5 extends UnifiedRebalancerSegment4 {
     const localServeReadinessBlocker =
       this.getCriticalSystemLocalServeReadinessBlocker();
     if (!localServeReadinessBlocker) {
+      return null;
+    }
+    const priorityRecoveryGateBypass =
+      this.buildPriorityRecoveryPlanningGateBypassSnapshot();
+    if (priorityRecoveryGateBypass.shouldBypass === true) {
       return null;
     }
     const scheduleDelayMs = this.increaseCurrentInterval(

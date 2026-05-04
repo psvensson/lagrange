@@ -156,6 +156,25 @@ const LOAD_READINESS_NO_PROGRESS_REASON = 'stalled_no_progress';
 const LOAD_READINESS_NO_PROGRESS_ACTIVE_GATE_STATE = 'stalled';
 const LOAD_READINESS_NO_PROGRESS_DOCKER_SOCKET = '/var/run/docker.sock';
 const LOAD_READINESS_NO_PROGRESS_IMAGE = 'distributed-db:test';
+const PRIORITY_RECOVERY_PROGRESS_PARTITION_ID =
+  'sql_transaction_participants-p1';
+const PRIORITY_RECOVERY_PROGRESS_OPERATION_ID =
+  'op-target-service-progress';
+const PRIORITY_RECOVERY_PROGRESS_EPOCH = 5;
+const PRIORITY_RECOVERY_PROGRESS_STALE_OPERATION_UPDATED_AT_MS = 1000;
+const PRIORITY_RECOVERY_PROGRESS_TARGET_PROGRESS_AT_MS = 34000;
+const PRIORITY_RECOVERY_PROGRESS_STALE_CAPTURED_AT_MS = 35000;
+const PRIORITY_RECOVERY_PROGRESS_TARGET_CAPTURED_AT_MS = 34500;
+const PRIORITY_RECOVERY_PROGRESS_OPERATION_BLOCKER =
+  'operation_created_but_no_step_transitions';
+const PRIORITY_RECOVERY_PROGRESS_OPERATION_STALLED =
+  'operation_stalled';
+const PRIORITY_RECOVERY_PROGRESS_SPREAD_SATISFIED =
+  'spread_satisfied_in_flight';
+const PRIORITY_RECOVERY_PROGRESS_CORRELATION_KEY =
+  PRIORITY_RECOVERY_PROGRESS_PARTITION_ID + '|' +
+  PRIORITY_RECOVERY_PROGRESS_EPOCH + '|' +
+  PRIORITY_RECOVERY_PROGRESS_OPERATION_ID;
 
 test(
   'Unit: summarizePriorityRecoveryProgressClasses uses the latest partition snapshot state',
@@ -209,6 +228,83 @@ test(
     );
     assert.deepEqual(
       summary.partitionIdsBySemanticState.recovering_in_flight,
+      [],
+    );
+  },
+);
+
+test(
+  'Unit: summarizePriorityRecoveryProgressClasses prefers target progress over stale captured blockers',
+  async () => {
+    const summary = summarizePriorityRecoveryProgressClasses({
+      snapshots: [{
+        partitionId: PRIORITY_RECOVERY_PROGRESS_PARTITION_ID,
+        epoch: PRIORITY_RECOVERY_PROGRESS_EPOCH,
+        correlationKey: PRIORITY_RECOVERY_PROGRESS_CORRELATION_KEY,
+        operationId: PRIORITY_RECOVERY_PROGRESS_OPERATION_ID,
+        semanticState: PRIORITY_RECOVERY_PROGRESS_SPREAD_SATISFIED,
+        blockerReasons: [],
+        spreadCompletion: {
+          satisfied: true,
+        },
+        coordinator: {
+          operationCount: 1,
+          operation: {
+            operationId: PRIORITY_RECOVERY_PROGRESS_OPERATION_ID,
+            updatedAtMs:
+              PRIORITY_RECOVERY_PROGRESS_STALE_OPERATION_UPDATED_AT_MS,
+            targetServiceProgressAtMs:
+              PRIORITY_RECOVERY_PROGRESS_TARGET_PROGRESS_AT_MS,
+          },
+        },
+        progress: {
+          lastProgressAtMs:
+            PRIORITY_RECOVERY_PROGRESS_TARGET_PROGRESS_AT_MS,
+        },
+        observation: {
+          provenance: {
+            capturedAt: PRIORITY_RECOVERY_PROGRESS_TARGET_CAPTURED_AT_MS,
+          },
+        },
+      }, {
+        partitionId: PRIORITY_RECOVERY_PROGRESS_PARTITION_ID,
+        epoch: PRIORITY_RECOVERY_PROGRESS_EPOCH,
+        correlationKey: PRIORITY_RECOVERY_PROGRESS_CORRELATION_KEY,
+        operationId: PRIORITY_RECOVERY_PROGRESS_OPERATION_ID,
+        semanticState: PRIORITY_RECOVERY_PROGRESS_OPERATION_STALLED,
+        blockerReasons: [
+          PRIORITY_RECOVERY_PROGRESS_OPERATION_BLOCKER,
+        ],
+        spreadCompletion: {
+          satisfied: false,
+        },
+        coordinator: {
+          operationCount: 1,
+          operation: {
+            operationId: PRIORITY_RECOVERY_PROGRESS_OPERATION_ID,
+            updatedAtMs:
+              PRIORITY_RECOVERY_PROGRESS_STALE_OPERATION_UPDATED_AT_MS,
+          },
+        },
+        observation: {
+          provenance: {
+            capturedAt: PRIORITY_RECOVERY_PROGRESS_STALE_CAPTURED_AT_MS,
+          },
+        },
+      }],
+    });
+
+    assert.deepEqual(summary.unresolvedSemanticStateIds, []);
+    assert.deepEqual(
+      summary.partitionIdsBySemanticState[
+        PRIORITY_RECOVERY_PROGRESS_SPREAD_SATISFIED
+      ],
+      [PRIORITY_RECOVERY_PROGRESS_PARTITION_ID],
+    );
+    assert.deepEqual(
+      summary.partitionIdsByClass[
+        PRIORITY_RECOVERY_PROGRESS_OPERATION_BLOCKER
+      ],
       [],
     );
   },
@@ -1072,6 +1168,160 @@ test('Unit: _waitForAllActive returns a terminal activeGate with the ' +
   assert.equal(activeGate.progress.inactiveNodeCount, 0);
   assert.equal(activeGate.progress.snapshotCoverageComplete, true);
   assert.equal(activeGate.progress.publicationStatus, 'PUBLISHED');
+});
+
+test('Unit: _waitForAllActive keeps the last meaningful startup blocker when' +
+  ' terminal snapshot coverage regresses to zero', async () => {
+  const TERMINAL_REGRESSION_CLUSTER_SIZE = 2;
+  const TERMINAL_REGRESSION_TIMEOUT_MS = 5;
+  const TERMINAL_REGRESSION_DOCKER_SOCKET_PATH = '/var/run/docker.sock';
+  const TERMINAL_REGRESSION_IMAGE = 'distributed-db:test';
+  const TERMINAL_REGRESSION_SEED_ID = 'seed-1';
+  const TERMINAL_REGRESSION_JOINER_ID = 'joiner-1';
+  const TERMINAL_REGRESSION_ACTIVE_STATE = 'active';
+  const TERMINAL_REGRESSION_PUBLICATION_STATUS = 'PUBLISHED';
+  const TERMINAL_REGRESSION_ADMIN_HEALTH_SOURCE = 'admin_health';
+  const TERMINAL_REGRESSION_PRIORITY_PARTITION_ID = 'replica_operations-p1';
+  const TERMINAL_REGRESSION_PRIORITY_BLOCKER =
+    'operation_created_but_no_step_transitions';
+  const TERMINAL_REGRESSION_PRIORITY_SEMANTIC_STATE = 'operation_stalled';
+  const TERMINAL_REGRESSION_SELECTED_ERROR =
+    'Admin API query timed out for node seed-1 on lane snapshot after 1ms';
+  const TERMINAL_REGRESSION_REACHABILITY_ERROR =
+    'Control snapshot reachability probe timed out for seed-1';
+  const TERMINAL_REGRESSION_EXPECTED_ERROR =
+    'Not all nodes reached ACTIVE state within';
+  const TERMINAL_REGRESSION_LAST_PROGRESS_COVERAGE_FRAGMENT = 'coverage=0/2';
+  const TERMINAL_REGRESSION_ZERO_COUNT = 0;
+  const TERMINAL_REGRESSION_SINGLE_COUNT = 1;
+
+  const cluster = createCluster({
+    size: TERMINAL_REGRESSION_CLUSTER_SIZE,
+    docker: {socketPath: TERMINAL_REGRESSION_DOCKER_SOCKET_PATH},
+    image: TERMINAL_REGRESSION_IMAGE,
+    timeouts: {
+      convergence: TERMINAL_REGRESSION_TIMEOUT_MS,
+    },
+  });
+
+  cluster._sleep = async () => {};
+  cluster._recordClusterStage = () => {};
+  cluster._collectFailureLogs = async () => {};
+
+  const activeNodeDiagnostics = Object.freeze([{
+    nodeId: TERMINAL_REGRESSION_SEED_ID,
+    active: true,
+    state: TERMINAL_REGRESSION_ACTIVE_STATE,
+  }, {
+    nodeId: TERMINAL_REGRESSION_JOINER_ID,
+    active: true,
+    state: TERMINAL_REGRESSION_ACTIVE_STATE,
+  }]);
+  const meaningfulProgressProbe = Object.freeze({
+    allActive: false,
+    nodeDiagnostics: activeNodeDiagnostics,
+    snapshotCoverage: {
+      completeCoverage: false,
+      expectedNodeCount: TERMINAL_REGRESSION_CLUSTER_SIZE,
+      bestCoverageNodeCount: TERMINAL_REGRESSION_SINGLE_COUNT,
+      selectedNodeId: TERMINAL_REGRESSION_SEED_ID,
+      selectedAdminReady: true,
+      selectedReachableBy: TERMINAL_REGRESSION_ADMIN_HEALTH_SOURCE,
+      selectedPublicationConvergence: {
+        publicationStatus: TERMINAL_REGRESSION_PUBLICATION_STATUS,
+        pendingAckNodeIds: [],
+        publishedActiveNodeIds: [TERMINAL_REGRESSION_SEED_ID],
+        priorityPartitionSummary: {
+          satisfied: false,
+          blockedPartitionCount: TERMINAL_REGRESSION_SINGLE_COUNT,
+          totalSpreadGap: TERMINAL_REGRESSION_SINGLE_COUNT,
+        },
+      },
+      selectedPriorityRecoveryDecisionSnapshots: {
+        snapshots: [{
+          partitionId: TERMINAL_REGRESSION_PRIORITY_PARTITION_ID,
+          blockerReasons: [TERMINAL_REGRESSION_PRIORITY_BLOCKER],
+          coordinator: {
+            operationCount: TERMINAL_REGRESSION_SINGLE_COUNT,
+          },
+        }],
+        partitionIdsBySemanticState: {
+          [TERMINAL_REGRESSION_PRIORITY_SEMANTIC_STATE]: [
+            TERMINAL_REGRESSION_PRIORITY_PARTITION_ID,
+          ],
+        },
+      },
+    },
+    publicationConvergenceGate: {
+      ready: true,
+      reasons: [],
+      publicationStatus: TERMINAL_REGRESSION_PUBLICATION_STATUS,
+      pendingAckNodeIds: [],
+      missingPublishedNodeIds: [],
+    },
+    priorityRecoveryInvariants: {
+      invariants: [],
+      failingInvariantIds: [],
+      passed: true,
+    },
+  });
+  const zeroCoverageTimeoutProbe = Object.freeze({
+    allActive: false,
+    nodeDiagnostics: activeNodeDiagnostics,
+    snapshotCoverage: {
+      completeCoverage: false,
+      expectedNodeCount: TERMINAL_REGRESSION_CLUSTER_SIZE,
+      bestCoverageNodeCount: TERMINAL_REGRESSION_ZERO_COUNT,
+      selectedNodeId: TERMINAL_REGRESSION_SEED_ID,
+      selectedAdminReady: false,
+      selectedError: TERMINAL_REGRESSION_SELECTED_ERROR,
+      selectedReachabilityError: TERMINAL_REGRESSION_REACHABILITY_ERROR,
+    },
+    publicationConvergenceGate: {
+      ready: true,
+      reasons: [],
+    },
+    priorityRecoveryInvariants: {
+      invariants: [],
+      failingInvariantIds: [],
+      passed: true,
+    },
+  });
+  let probeCallCount = TERMINAL_REGRESSION_ZERO_COUNT;
+  cluster._probeClusterActiveState = async () => {
+    probeCallCount += TERMINAL_REGRESSION_SINGLE_COUNT;
+    return probeCallCount === TERMINAL_REGRESSION_SINGLE_COUNT ?
+      meaningfulProgressProbe :
+      zeroCoverageTimeoutProbe;
+  };
+
+  let timeoutError = null;
+  await assert.rejects(
+    async () => {
+      await cluster._waitForAllActive();
+    },
+    (error) => {
+      timeoutError = error;
+      return typeof error?.message === 'string' &&
+        error.message.includes(TERMINAL_REGRESSION_EXPECTED_ERROR);
+    },
+  );
+
+  assert.equal(
+    timeoutError?.diagnostics?.activeGate?.progress?.snapshotCoverageNodeCount,
+    TERMINAL_REGRESSION_SINGLE_COUNT,
+  );
+  assert.deepEqual(
+    timeoutError?.diagnostics?.activeGate?.progress
+      ?.priorityRecoveryProgressClasses?.unresolvedClassIds,
+    [TERMINAL_REGRESSION_PRIORITY_BLOCKER],
+  );
+  assert.equal(
+    timeoutError?.diagnostics?.activeGate?.lastProgressEvent?.message.includes(
+      TERMINAL_REGRESSION_LAST_PROGRESS_COVERAGE_FRAGMENT,
+    ),
+    true,
+  );
 });
 
 test(

@@ -11,6 +11,7 @@ import {buildCanonicalPublicationRecoveryEvidence} from
 const TEST_PUBLICATION_EPOCH = 9;
 const TEST_EMPTY_PUBLICATION_DEBT_COUNT = 0;
 const TEST_PUBLICATION_DEBT_COUNT = 1;
+const TEST_PUBLISHED_ACTIVE_NODE_COUNT = 3;
 const TEST_EMPTY_NODE_IDS = Object.freeze([]);
 const TEST_PRIORITY_PARTITION_ID = 'replica_operations-p1';
 const TEST_NODE_ID = Object.freeze({
@@ -28,6 +29,11 @@ const TEST_NON_PRIORITY_PARTITION_ID =
   'tbl-b932fa03-3835-4a50-87b4-bd158daed0ea-p1';
 const TEST_DECISION_SNAPSHOT_ACK_TARGET_ASSERTION =
   'decision snapshot ACK targets should become canonical pending ACK evidence';
+const TEST_COUNT_ONLY_REENTRY_ACK_TARGET_ASSERTION =
+  'count-only canonical reentry should preserve explicit pending ACK targets';
+const TEST_COUNT_ONLY_REENTRY_ACK_TARGET_TEST_NAME =
+  'buildCanonicalPublicationRecoveryEvidence keeps pending ACK targets ' +
+  'when empty required lists are canonical reentry noise';
 const TEST_STALE_PRIORITY_PARTITION_SUMMARY = Object.freeze({
   satisfied: false,
   requiredDistinctNodeCount: 3,
@@ -358,6 +364,150 @@ test('buildCanonicalPublicationRecoveryEvidence lets an explicit empty required 
       TEST_EMPTY_NODE_IDS,
     );
     t.equal(evidence.publicationConvergence.publicationPending, false);
+    t.end();
+  });
+
+test(TEST_COUNT_ONLY_REENTRY_ACK_TARGET_TEST_NAME,
+  (t) => {
+    const evidence = buildCanonicalPublicationRecoveryEvidence({
+      publicationConvergence: {
+        publicationEpoch: TEST_PUBLICATION_EPOCH,
+        publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.ACK_PENDING,
+        recoveryProtocolState: RECOVERY_PROTOCOL_STATE.PUBLICATION_PENDING,
+        requiredAckNodeIds: TEST_EMPTY_NODE_IDS,
+        acknowledgedNodeIds: TEST_EMPTY_NODE_IDS,
+        pendingAckNodeIds: [TEST_NODE_ID.SECOND],
+        pendingAckCount: TEST_PUBLICATION_DEBT_COUNT,
+        priorityRecoveryReasonCodes: [TEST_PUBLICATION_PENDING_REASON_CODE],
+        priorityPartitionSummary: TEST_SATISFIED_PRIORITY_PARTITION_SUMMARY,
+      },
+    });
+
+    t.equal(
+      evidence.publicationConvergenceGate.pendingAckEvidenceState,
+      PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.COUNT_ONLY,
+    );
+    t.same(
+      evidence.publicationConvergenceGate.pendingAckNodeIds,
+      [TEST_NODE_ID.SECOND],
+      TEST_COUNT_ONLY_REENTRY_ACK_TARGET_ASSERTION,
+    );
+    t.equal(
+      evidence.publicationConvergenceGate.pendingAckCount,
+      TEST_PUBLICATION_DEBT_COUNT,
+    );
+    t.same(
+      evidence.priorityRecoveryObservation.pendingAckNodeIds,
+      [TEST_NODE_ID.SECOND],
+      TEST_COUNT_ONLY_REENTRY_ACK_TARGET_ASSERTION,
+    );
+    t.same(
+      evidence.publicationConvergence.pendingAckNodeIds,
+      [TEST_NODE_ID.SECOND],
+      TEST_COUNT_ONLY_REENTRY_ACK_TARGET_ASSERTION,
+    );
+    t.equal(
+      evidence.publicationConvergence.pendingAckEvidenceState,
+      PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.COUNT_ONLY,
+    );
+    t.end();
+  });
+
+test('buildCanonicalPublicationRecoveryEvidence lets closed ACK lists and selected coverage retire stale debt',
+  (t) => {
+    const activeGateProgress = {
+      expectedNodeCount: TEST_PUBLISHED_ACTIVE_NODE_COUNT,
+      selectedPublishedActiveNodeIds: [
+        TEST_NODE_ID.FIRST,
+        TEST_NODE_ID.SECOND,
+        TEST_NODE_ID.THIRD,
+      ],
+      selectedPublishedActiveCount: TEST_PUBLISHED_ACTIVE_NODE_COUNT,
+      selectedMissingPublishedNodeIds: TEST_EMPTY_NODE_IDS,
+      pendingAckCount: TEST_PUBLICATION_DEBT_COUNT,
+      missingPublishedCount: TEST_PUBLICATION_DEBT_COUNT,
+    };
+    const stalePublicationRecoveryGate = {
+      publicationEpoch: TEST_PUBLICATION_EPOCH,
+      publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+      requiredAckNodeIds: [
+        TEST_NODE_ID.FIRST,
+        TEST_NODE_ID.SECOND,
+        TEST_NODE_ID.THIRD,
+      ],
+      acknowledgedNodeIds: [
+        TEST_NODE_ID.FIRST,
+        TEST_NODE_ID.SECOND,
+        TEST_NODE_ID.THIRD,
+      ],
+      pendingAckNodeIds: [TEST_NODE_ID.SECOND],
+      pendingAckCount: TEST_PUBLICATION_DEBT_COUNT,
+      missingPublishedNodeIds: [TEST_NODE_ID.SECOND],
+      missingPublishedCount: TEST_PUBLICATION_DEBT_COUNT,
+    };
+    const evidence = buildCanonicalPublicationRecoveryEvidence({
+      publicationConvergence: {
+        publicationEpoch: TEST_PUBLICATION_EPOCH,
+        publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+        requiredAckNodeIds: [
+          TEST_NODE_ID.FIRST,
+          TEST_NODE_ID.SECOND,
+          TEST_NODE_ID.THIRD,
+        ],
+        acknowledgedNodeIds: [
+          TEST_NODE_ID.FIRST,
+          TEST_NODE_ID.SECOND,
+          TEST_NODE_ID.THIRD,
+        ],
+        pendingAckNodeIds: [TEST_NODE_ID.SECOND],
+        pendingAckCount: TEST_PUBLICATION_DEBT_COUNT,
+        missingPublishedNodeIds: [TEST_NODE_ID.SECOND],
+        missingPublishedCount: TEST_PUBLICATION_DEBT_COUNT,
+        publicationRecoveryGate: stalePublicationRecoveryGate,
+        priorityRecoveryReasonCodes: [],
+        priorityPartitionSummary: TEST_SATISFIED_PRIORITY_PARTITION_SUMMARY,
+      },
+      priorityRecoveryObservation: {
+        publicationEpoch: TEST_PUBLICATION_EPOCH,
+        publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+        pendingAckNodeIds: [TEST_NODE_ID.SECOND],
+        pendingAckCount: TEST_PUBLICATION_DEBT_COUNT,
+        missingPublishedNodeIds: [TEST_NODE_ID.SECOND],
+        missingPublishedCount: TEST_PUBLICATION_DEBT_COUNT,
+      },
+      activeGateProgress,
+    });
+
+    t.equal(evidence.publicationConvergenceGate.pendingAckCount, 0);
+    t.same(
+      evidence.publicationConvergenceGate.pendingAckNodeIds,
+      TEST_EMPTY_NODE_IDS,
+    );
+    t.equal(evidence.publicationConvergenceGate.missingPublishedCount, 0);
+    t.same(
+      evidence.publicationConvergenceGate.missingPublishedNodeIds,
+      TEST_EMPTY_NODE_IDS,
+    );
+    t.equal(evidence.priorityRecoveryObservation.pendingAckCount, 0);
+    t.same(
+      evidence.priorityRecoveryObservation.pendingAckNodeIds,
+      TEST_EMPTY_NODE_IDS,
+    );
+    t.equal(evidence.priorityRecoveryObservation.missingPublishedCount, 0);
+    t.same(
+      evidence.priorityRecoveryObservation.missingPublishedNodeIds,
+      TEST_EMPTY_NODE_IDS,
+    );
+    t.equal(evidence.publicationConvergence.pendingAckCount, 0);
+    t.same(
+      evidence.publicationConvergence.pendingAckNodeIds,
+      TEST_EMPTY_NODE_IDS,
+    );
+    t.equal(evidence.publicationConvergence.missingPublishedCount, 0);
+    t.same(
+      evidence.publicationConvergence.missingPublishedNodeIds,
+      TEST_EMPTY_NODE_IDS,
+    );
     t.end();
   });
 

@@ -95,6 +95,22 @@ const LOAD_READINESS_STABLE_WINDOW_DECISION_TABLE = Object.freeze([
     matches: () => true,
   }),
 ]);
+const ACTIVE_WAIT_TERMINAL_PROGRESS_DECISION_CURRENT = 'current';
+const ACTIVE_WAIT_TERMINAL_PROGRESS_DECISION_LAST_MEANINGFUL =
+  'last_meaningful';
+const ACTIVE_WAIT_TERMINAL_PROGRESS_DECISION_TABLE = Object.freeze([
+  Object.freeze({
+    decision: ACTIVE_WAIT_TERMINAL_PROGRESS_DECISION_LAST_MEANINGFUL,
+    matches: (evidence) =>
+      evidence.currentSnapshotZeroCoverageRegression === true &&
+      evidence.lastMeaningfulCoverageNodeCount >
+        evidence.currentSnapshotCoverageNodeCount,
+  }),
+  Object.freeze({
+    decision: ACTIVE_WAIT_TERMINAL_PROGRESS_DECISION_CURRENT,
+    matches: () => true,
+  }),
+]);
 
 function normalizeStableWindowTimestamp(timestampMs) {
   if (!Number.isFinite(timestampMs)) {
@@ -312,6 +328,68 @@ function buildActiveWaitReadinessFailure({
         readinessDelay.error :
         null,
   };
+}
+
+function isActiveWaitProgressSnapshot(value) {
+  return value && typeof value === 'object' && Array.isArray(value) !== true;
+}
+
+function normalizeActiveWaitProgressCoverageNodeCount(progressSnapshot) {
+  return Number.isInteger(progressSnapshot?.snapshotCoverageNodeCount) &&
+    progressSnapshot.snapshotCoverageNodeCount > ZERO ?
+    progressSnapshot.snapshotCoverageNodeCount :
+    ZERO;
+}
+
+function buildTerminalActiveWaitProgressEvidence({
+  currentProgressSnapshot = null,
+  lastMeaningfulProgressSnapshot = null,
+} = {}) {
+  const currentSnapshotCoverageNodeCount =
+    normalizeActiveWaitProgressCoverageNodeCount(currentProgressSnapshot);
+  const lastMeaningfulCoverageNodeCount =
+    normalizeActiveWaitProgressCoverageNodeCount(
+      lastMeaningfulProgressSnapshot,
+    );
+  const currentSnapshotErrorPresent =
+    typeof currentProgressSnapshot?.selectedSnapshotError === 'string' &&
+    currentProgressSnapshot.selectedSnapshotError.length > ZERO;
+  return {
+    currentProgressPresent:
+      isActiveWaitProgressSnapshot(currentProgressSnapshot),
+    lastMeaningfulProgressPresent:
+      isActiveWaitProgressSnapshot(lastMeaningfulProgressSnapshot),
+    currentSnapshotCoverageNodeCount,
+    lastMeaningfulCoverageNodeCount,
+    currentSnapshotZeroCoverageRegression:
+      isActiveWaitProgressSnapshot(currentProgressSnapshot) &&
+      isActiveWaitProgressSnapshot(lastMeaningfulProgressSnapshot) &&
+      currentProgressSnapshot.snapshotCoverageComplete !== true &&
+      currentSnapshotCoverageNodeCount === ZERO &&
+      currentSnapshotErrorPresent === true,
+  };
+}
+
+function selectTerminalActiveWaitProgressSnapshot({
+  currentProgressSnapshot = null,
+  lastMeaningfulProgressSnapshot = null,
+} = {}) {
+  const evidence = buildTerminalActiveWaitProgressEvidence({
+    currentProgressSnapshot,
+    lastMeaningfulProgressSnapshot,
+  });
+  if (evidence.currentProgressPresent !== true) {
+    return evidence.lastMeaningfulProgressPresent === true ?
+      lastMeaningfulProgressSnapshot :
+      null;
+  }
+  const decision = ACTIVE_WAIT_TERMINAL_PROGRESS_DECISION_TABLE.find((entry) =>
+    entry.matches(evidence),
+  );
+  return decision?.decision ===
+    ACTIVE_WAIT_TERMINAL_PROGRESS_DECISION_LAST_MEANINGFUL ?
+    lastMeaningfulProgressSnapshot :
+    currentProgressSnapshot;
 }
 
 class Cluster extends Cluster5 {
@@ -885,13 +963,17 @@ class Cluster extends Cluster5 {
     const priorityRecoveryInvariantBreaches = summarizeInvariantBreaches(
       pollResult.lastResult?.priorityRecoveryInvariants?.invariants,
     );
-    const finalProgressSnapshot =
+    const observedFinalProgressSnapshot =
       lastObservedProgressSnapshot ||
       buildActiveWaitProgressSnapshot(
         pollResult.lastResult || {},
         this._nodes.size,
         {readinessMode},
       );
+    const finalProgressSnapshot = selectTerminalActiveWaitProgressSnapshot({
+      currentProgressSnapshot: observedFinalProgressSnapshot,
+      lastMeaningfulProgressSnapshot,
+    });
     const finalAttemptsSinceProgress = Math.max(
       ZERO,
       pollResult.attempts - (lastMeaningfulProgressAttempt || ZERO),

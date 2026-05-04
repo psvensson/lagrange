@@ -20,6 +20,61 @@ const {
   isRetryableControlPlaneError,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
 
+const DISPATCH_REARM_RECONCILE_BLOCKING_STATUSES = Object.freeze(
+  new Set([
+    ReplicaStatus.SYNCING,
+    ReplicaStatus.ACTIVE,
+    ReplicaStatus.FAILED,
+  ]),
+);
+
+const DISPATCH_REARM_RECONCILE_STATE = Object.freeze({
+  OPERATION_UNAVAILABLE: 'operation_unavailable',
+  CREATING_WITHOUT_CREATE_REARM: 'creating_without_create_rearm',
+  OBSERVED_BLOCKING_STATUS: 'observed_blocking_status',
+  NON_DISPATCH_RETRYABLE_STEP: 'non_dispatch_retryable_step',
+  NON_CRITICAL_PARTITION: 'non_critical_partition',
+  DISPATCH_REARM_BUDGET_EXHAUSTED: 'dispatch_rearm_budget_exhausted',
+  REARM_DISPATCH: 'rearm_dispatch',
+});
+
+const DISPATCH_REARM_RECONCILE_STATE_TABLE = Object.freeze([
+  Object.freeze({
+    state: DISPATCH_REARM_RECONCILE_STATE.OPERATION_UNAVAILABLE,
+    matches: (evidence) => evidence.operationAvailable !== true,
+  }),
+  Object.freeze({
+    state: DISPATCH_REARM_RECONCILE_STATE.CREATING_WITHOUT_CREATE_REARM,
+    matches: (evidence) =>
+      evidence.observedCreatingWithoutCreateRearm === true,
+  }),
+  Object.freeze({
+    state: DISPATCH_REARM_RECONCILE_STATE.OBSERVED_BLOCKING_STATUS,
+    matches: (evidence) => evidence.observedBlockingStatus === true,
+  }),
+  Object.freeze({
+    state: DISPATCH_REARM_RECONCILE_STATE.NON_DISPATCH_RETRYABLE_STEP,
+    matches: (evidence) =>
+      evidence.dispatchRetryableWorkflowStep !== true,
+  }),
+  Object.freeze({
+    state: DISPATCH_REARM_RECONCILE_STATE.NON_CRITICAL_PARTITION,
+    matches: (evidence) => evidence.criticalSystemPartition !== true,
+  }),
+  Object.freeze({
+    state: DISPATCH_REARM_RECONCILE_STATE.DISPATCH_REARM_BUDGET_EXHAUSTED,
+    matches: (evidence) => evidence.dispatchRearmBudgetAvailable !== true,
+  }),
+  Object.freeze({
+    state: DISPATCH_REARM_RECONCILE_STATE.REARM_DISPATCH,
+    matches: () => true,
+  }),
+]);
+
+const DISPATCH_REARM_RECONCILE_ALLOWED_STATES = Object.freeze(
+  new Set([DISPATCH_REARM_RECONCILE_STATE.REARM_DISPATCH]),
+);
+
 class OperationWorkflowOwnerSegment1 {
   /**
    * @param {Function} options.allocateCanonicalReplicaId -
@@ -495,38 +550,77 @@ class OperationWorkflowOwnerSegment1 {
    *
    * @param {Object} operation
    * @param {string|null} actualStatus
-   * @return {boolean}
+   * @param {Object} [options={}]
+   * @return {Object}
    * @private
    */
-  shouldRearmDispatchFromProgressReconcile(operation, actualStatus) {
-    if (!operation) {
-      return false;
-    }
+  buildDispatchRearmFromProgressReconcileEvidence(
+    operation,
+    actualStatus,
+    options = {},
+  ) {
+    const now = Number.isFinite(options.now) ? options.now : Date.now();
     const normalizedActualStatus =
       typeof actualStatus === TYPEOF.STRING ?
         actualStatus.toLowerCase() :
         actualStatus;
     const createRearmPhase = this.isCreateRearmDispatchPhase(operation);
-    if (
-      normalizedActualStatus === ReplicaStatus.CREATING &&
-      !createRearmPhase
-    ) {
-      return false;
-    }
-    if (
-      normalizedActualStatus === ReplicaStatus.SYNCING ||
-      normalizedActualStatus === ReplicaStatus.ACTIVE ||
-      normalizedActualStatus === ReplicaStatus.FAILED
-    ) {
-      return false;
-    }
-    if (!this.isDispatchRetryableWorkflowStep(operation)) {
-      return false;
-    }
-    if (this.isOperationStepTimedOut(operation)) {
-      return false;
-    }
-    return this.isCriticalSystemPartition(operation.partitionId);
+    const timeoutDecision =
+      this.buildCoordinatorCreatedRemoteHandoffTimeoutDecision(operation, now);
+
+    return Object.freeze({
+      operationAvailable: Boolean(operation),
+      observedCreatingWithoutCreateRearm:
+        normalizedActualStatus === ReplicaStatus.CREATING &&
+        !createRearmPhase,
+      observedBlockingStatus:
+        DISPATCH_REARM_RECONCILE_BLOCKING_STATUSES.has(
+          normalizedActualStatus,
+        ),
+      dispatchRetryableWorkflowStep:
+        this.isDispatchRetryableWorkflowStep(operation),
+      criticalSystemPartition:
+        this.isCriticalSystemPartition(operation?.partitionId || null),
+      dispatchRearmBudgetAvailable:
+        timeoutDecision.stepTimedOut !== true ||
+        timeoutDecision.operationBudgetActive === true,
+    });
+  }
+
+  /**
+   * @param {Object} evidence
+   * @return {string}
+   * @private
+   */
+  resolveDispatchRearmFromProgressReconcileState(evidence) {
+    return (
+      DISPATCH_REARM_RECONCILE_STATE_TABLE.find((entry) =>
+        entry.matches(evidence),
+      )?.state ||
+      DISPATCH_REARM_RECONCILE_STATE.DISPATCH_REARM_BUDGET_EXHAUSTED
+    );
+  }
+
+  /**
+   * @param {Object} operation
+   * @param {string|null} actualStatus
+   * @param {Object} [options={}]
+   * @return {boolean}
+   * @private
+   */
+  shouldRearmDispatchFromProgressReconcile(
+    operation,
+    actualStatus,
+    options = {},
+  ) {
+    const evidence = this.buildDispatchRearmFromProgressReconcileEvidence(
+      operation,
+      actualStatus,
+      options,
+    );
+    const state =
+      this.resolveDispatchRearmFromProgressReconcileState(evidence);
+    return DISPATCH_REARM_RECONCILE_ALLOWED_STATES.has(state);
   }
 
   /**
