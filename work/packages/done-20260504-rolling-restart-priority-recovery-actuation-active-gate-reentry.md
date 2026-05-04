@@ -155,7 +155,7 @@ Executed on May 4, 2026:
 4. The fresh representative rerun progressed beyond
    `eligible_but_no_operation_created`; the remaining runtime blocker is split
    to
-   [Rolling Restart Operation Workflow Publication ACK Reentry](./todo-20260504-rolling-restart-operation-workflow-publication-ack-reentry.md).
+   [Rolling Restart Operation Workflow Publication ACK Reentry](./done-20260504-rolling-restart-operation-workflow-publication-ack-reentry.md).
 
 ## Done When
 

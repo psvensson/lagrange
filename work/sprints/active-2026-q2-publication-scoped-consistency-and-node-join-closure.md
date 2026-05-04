@@ -79,14 +79,19 @@ Secondary after the primary path is stable:
 
 ## Active Packages
 
-1. [Rolling Restart Priority Recovery Actuation Active Gate Reentry](../packages/active-20260504-rolling-restart-priority-recovery-actuation-active-gate-reentry.md)
+No package is currently open as `active-...` after the May 4 startup snapshot
+reachability cleanup. The current residual re-entry is queued as:
+
+1. [Rolling Restart Priority Recovery Workflow Transition Deferred Reentry](../packages/todo-20260504-rolling-restart-priority-recovery-workflow-transition-deferred-reentry.md)
 
 ## Queued Packages
 
 The operation-transition status-authority follow-up, the startup active-gate
-presentation reentry, and the startup rejoin seed-contact package executed.
-The latest representative path now migrates to active-gate priority-recovery
-actuation.
+presentation reentry, the startup rejoin seed-contact package, the active-gate
+priority-recovery actuation package, the operation-workflow ACK reentry
+package, and the startup snapshot reachability workflow-progress package
+executed. The latest representative residual is now split to priority recovery
+workflow transition-deferred and operation scheduling.
 
 All final consistency recommendation packages are complete or queued outside
 the current execution path.
@@ -96,7 +101,7 @@ Other secondary matrix failures become active packages only after the
 
 Current re-entry package:
 
-1. [Rolling Restart Priority Recovery Actuation Active Gate Reentry](../packages/active-20260504-rolling-restart-priority-recovery-actuation-active-gate-reentry.md)
+1. [Rolling Restart Priority Recovery Workflow Transition Deferred Reentry](../packages/todo-20260504-rolling-restart-priority-recovery-workflow-transition-deferred-reentry.md)
 
 Queued convergence-grammar packages:
 
@@ -115,19 +120,23 @@ Queued cleanup packages:
 
 1. Current execution blocker:
    The latest May 4 representative rerun is
-   `test-output/reports/rolling-restart-startup-seed-contact-owner-20260504-codex.report.json`.
-   Publication convergence remains closed after failure-bundle regeneration:
-   publication pending `false`, pending ACK `0`, missing published `0`.
-   The startup seed-contact owner is now named and stale pre-decision retry
-   artifacts are filtered from current startup decisions. The representative
-   path migrated to `topology_unstable` with dominant reason
-   `priority_recovery_actuation_state_action_required`, active-gate blockers
-   `inactive_nodes=2`, `snapshot_coverage=2/5`, and
-   `priority_recovery_progress_class=eligible_but_no_operation_created`.
+   `test-output/reports/rolling-restart-startup-snapshot-workflow-progress-reentry-fastlocal-20260504-codex.report.json`.
+   Publication ACK reentry remains closed after failure-bundle playback:
+   publication `PUBLISHED`, pending ACK `0`, blocked nodes `0`, and missing
+   published count `0`. The selected snapshot is now reachable by
+   `admin_health`; the representative path fails with readiness
+   `no_progress_terminal`, selected snapshot coverage `2/5`, and priority
+   recovery owner
+   `operation_workflow_owner / workflow_progress / wait_for_operation_progress`
+   for `sql_transactions-p1`. Supporting unresolved witnesses include
+   `replica_operations-p1` under `operation_scheduling` /
+   `create_recovery_operation` and `sql_write_operations-p1` under
+   `workflow_progress` / `wait_for_operation_progress`.
 2. Next active investigation:
    execute
-   [Rolling Restart Priority Recovery Actuation Active Gate Reentry](../packages/active-20260504-rolling-restart-priority-recovery-actuation-active-gate-reentry.md)
-   against the active-gate priority-recovery actuation owner boundary.
+   [Rolling Restart Priority Recovery Workflow Transition Deferred Reentry](../packages/todo-20260504-rolling-restart-priority-recovery-workflow-transition-deferred-reentry.md)
+   against the priority recovery workflow transition-deferred and operation
+   scheduling owner boundary.
 3. Harness classification:
    terminal barrier evidence wins over stale playback reconstruction for
    active, restart-recovery, load-readiness, convergence, and quiescence
@@ -135,16 +144,18 @@ Queued cleanup packages:
    count-only ACK and top-level missing-published evidence no longer override
    current active-gate owner evidence. The stale publication-classification
    branch is closed for priority-spread publication closure records; the
-   startup seed-contact boundary is now named, and the latest terminal owner
-   boundary is priority recovery actuation.
+   startup seed-contact, active-gate actuation, operation-workflow ACK, and
+   startup snapshot reachability boundaries are now named. The latest terminal
+   owner boundary is priority recovery workflow transition-deferred plus
+   operation scheduling.
 4. Final consistency:
    the final leader-map consistency package is complete for this sprint
    because the rerun moved to a freshly split non-final blocker.
 5. Residual cleanup:
    fence or delete superseded local reconstruction and caller-local pressure
-   exception paths through queued packages only after the current startup
-   active-gate priority operation-creation / snapshot coverage blocker closes or
-   migrates.
+   exception paths through queued packages only after the current priority
+   recovery workflow transition-deferred / operation-scheduling blocker closes
+   or migrates.
 6. Matrix re-entry:
    after `rolling-restart` passes or moves to a stable named blocker,
    continue with `seven-node-read-write-load-transaction-recovery`, then
@@ -205,6 +216,9 @@ representative failure forward.
 46. [Rolling Restart Readiness Gate Priority Operation Creation Reentry](../packages/done-20260504-rolling-restart-readiness-gate-priority-operation-creation-reentry.md)
 47. [Rolling Restart Startup Snapshot Coverage And Serial Priority Progress](../packages/done-20260504-rolling-restart-startup-snapshot-coverage-serial-priority-progress.md)
 48. [Rolling Restart Startup Rejoin Seed Contact Snapshot Coverage](../packages/done-20260504-rolling-restart-startup-rejoin-seed-contact-snapshot-coverage.md)
+49. [Rolling Restart Priority Recovery Actuation Active Gate Reentry](../packages/done-20260504-rolling-restart-priority-recovery-actuation-active-gate-reentry.md)
+50. [Rolling Restart Operation Workflow Publication ACK Reentry](../packages/done-20260504-rolling-restart-operation-workflow-publication-ack-reentry.md)
+51. [Rolling Restart Startup Snapshot Reachability Operation Workflow Progress Reentry](../packages/done-20260504-rolling-restart-startup-snapshot-reachability-operation-workflow-progress-reentry.md)
 
 ## Parked Work
 

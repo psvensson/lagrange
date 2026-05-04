@@ -193,6 +193,26 @@ const {
   mergeByNodeIdMaps,
 } = FAILURE_BUNDLE_SEGMENT_3;
 
+const PRIORITY_RECOVERY_WORKFLOW_PROGRESS_ACTUATION_STATES = Object.freeze([
+  PRIORITY_RECOVERY_ACTUATION_STATE.PERSISTED_NOT_DISPATCHED,
+  PRIORITY_RECOVERY_ACTUATION_STATE.DISPATCHED_WAITING_PROGRESS,
+]);
+const EMPTY_STRING = '';
+const ONE = 1;
+const JS_OBJECT_TYPE = 'object';
+const LOAD_WAIT_REASON_ATTEMPT_ERRORS = 'attemptErrors';
+const LOAD_WAIT_REASON_HARD_LOAD_FAILURES = 'hardLoadFailures';
+const READINESS_DIMENSION_REPAIR_ELIGIBLE = 'repairEligible';
+const READINESS_DIMENSION_CONTROL_PLANE_RECOVERY_ELIGIBLE =
+  'controlPlaneRecoveryEligible';
+const READINESS_REASON_CONTROL_PLANE_WRITE_UNHEALTHY =
+  'control_plane_write_unhealthy';
+const READINESS_REASON_CONTROL_PLANE_PUBLICATION_PENDING =
+  'control_plane_publication_pending';
+const READINESS_REASON_PUBLISHED_CONVERGENCE_PENDING =
+  'publishedConvergencePending';
+const READINESS_REASON_RECOVERY_ELIGIBILITY_PENDING =
+  'recovery_eligibility_pending';
 const FINAL_CONSISTENCY_LEADER_MISMATCH_MESSAGE_PREFIX =
   'Leader identities disagree';
 const FINAL_CONSISTENCY_REASON_LEADER_IDENTITIES_DISAGREE =
@@ -620,10 +640,10 @@ function mapFirstFaultMarkerToReason(marker) {
     return LOAD_WAIT_REASON_NODE_SLOT_UNAVAILABLE;
   }
   if (marker === FIRST_FAULT_MARKER_ATTEMPT_ERRORS) {
-    return 'attemptErrors';
+    return LOAD_WAIT_REASON_ATTEMPT_ERRORS;
   }
   if (marker === FIRST_FAULT_MARKER_HARD_FAILURE) {
-    return 'hardLoadFailures';
+    return LOAD_WAIT_REASON_HARD_LOAD_FAILURES;
   }
   return null;
 }
@@ -666,34 +686,45 @@ function resolveFinalConsistencyRootCauseClass(finalConsistency) {
 function resolveStructuredFinalConsistencyFailure(controlPlane) {
   const finalConsistency =
     controlPlane?.finalConsistency &&
-    typeof controlPlane.finalConsistency === 'object' &&
+    typeof controlPlane.finalConsistency === JS_OBJECT_TYPE &&
     !Array.isArray(controlPlane.finalConsistency) ?
       controlPlane.finalConsistency :
       null;
-  if (finalConsistency) {
-    const finalConsistencyReason = String(
+  const finalConsistencyReason = finalConsistency ?
+    String(
       finalConsistency.reasonCode ||
         finalConsistency.state ||
         FINAL_CONSISTENCY_REASON_UNCLASSIFIED,
-    ).trim();
-    return {
-      dominantReason: finalConsistencyReason,
-      rootCauseClass: resolveFinalConsistencyRootCauseClass({
+    ).trim() :
+    null;
+  const mismatchReason = String(
+    controlPlane?.mismatch?.reasonCode || EMPTY_STRING,
+  ).trim();
+  const finalConsistencyCandidate = finalConsistencyReason ?
+    {
+      reasonCode: finalConsistencyReason,
+      rootCauseEvidence: {
         ...finalConsistency,
         reasonCode: finalConsistencyReason,
-      }),
-    };
-  }
-  const mismatchReason = String(controlPlane?.mismatch?.reasonCode || '').trim();
-  if (mismatchReason.length > ZERO) {
-    return {
-      dominantReason: mismatchReason,
-      rootCauseClass: resolveFinalConsistencyRootCauseClass({
+      },
+    } :
+    null;
+  const mismatchCandidate =
+    !finalConsistencyCandidate && mismatchReason.length > ZERO ?
+      {
         reasonCode: mismatchReason,
-      }),
-    };
-  }
-  return null;
+        rootCauseEvidence: {reasonCode: mismatchReason},
+      } :
+      null;
+  const selectedCandidate = finalConsistencyCandidate || mismatchCandidate;
+  return selectedCandidate ?
+    {
+      dominantReason: selectedCandidate.reasonCode,
+      rootCauseClass: resolveFinalConsistencyRootCauseClass(
+        selectedCandidate.rootCauseEvidence,
+      ),
+    } :
+    null;
 }
 
 function resolveLegacyFinalConsistencyFailureFromMessage(entry) {
@@ -1065,19 +1096,19 @@ function hasClosedPublicationConvergenceEvidence(publicationConvergence) {
 }
 
 function hasConvergenceTimeoutError(entry) {
-  return String(entry?.error || '').startsWith(
+  return String(entry?.error || EMPTY_STRING).startsWith(
     FAILURE_BARRIER_ERROR_PREFIX_CONVERGENCE_TIMEOUT,
   );
 }
 
 function hasRestartRecoveryTimeoutError(entry) {
-  return String(entry?.error || '').startsWith(
+  return String(entry?.error || EMPTY_STRING).startsWith(
     FAILURE_BARRIER_ERROR_PREFIX_RESTART_RECOVERY_TIMEOUT,
   );
 }
 
 function normalizeRestartRecoveryReadinessFieldValue(value) {
-  const normalizedValue = String(value ?? '').trim();
+  const normalizedValue = String(value ?? EMPTY_STRING).trim();
   if (normalizedValue === RESTART_RECOVERY_READINESS_BOOLEAN_TRUE) {
     return true;
   }
@@ -1121,7 +1152,7 @@ function parseRestartRecoveryReadinessFieldMap(observationText) {
 }
 
 function isRestartRecoveryAdminReachabilityRefused(lastError) {
-  return String(lastError || '')
+  return String(lastError || EMPTY_STRING)
     .toLowerCase()
     .includes(RESTART_RECOVERY_READINESS_ADMIN_REFUSED_FRAGMENT);
 }
@@ -1507,8 +1538,9 @@ function buildPriorityRecoveryActuationWitnessEvidence(witness) {
         PRIORITY_RECOVERY_BLOCKING_BOUNDARY.WORKFLOW_PROGRESS &&
       witness?.nextRequiredAction ===
         PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.WAIT_FOR_OPERATION_PROGRESS &&
-      witness?.actuationState ===
-        PRIORITY_RECOVERY_ACTUATION_STATE.DISPATCHED_WAITING_PROGRESS,
+      PRIORITY_RECOVERY_WORKFLOW_PROGRESS_ACTUATION_STATES.includes(
+        witness?.actuationState,
+      ),
     actuationState:
       witness?.actuationState ===
         PRIORITY_RECOVERY_ACTUATION_STATE.ACTION_REQUIRED,
@@ -1835,7 +1867,7 @@ function buildFailureArtifact({
         timelineDominantReason ||
         null);
   if (dominantReason && !Object.hasOwn(reasonCounts, dominantReason)) {
-    reasonCounts[dominantReason] = 1;
+    reasonCounts[dominantReason] = ONE;
   }
   const rootCauseClass = finalConsistencyFailure ?
     finalConsistencyFailure.rootCauseClass :
@@ -2050,7 +2082,8 @@ function buildPublicationConvergenceSummary(controlPlane) {
     }
     blockedNodeIds.push(nodeId);
     for (const reason of publicationReasons) {
-      blockingReasonCounts[reason] = (blockingReasonCounts[reason] || ZERO) + 1;
+      blockingReasonCounts[reason] =
+        (blockingReasonCounts[reason] || ZERO) + ONE;
     }
   }
   const activeGate = normalizePriorityRecoveryActiveGateSnapshot({
@@ -2519,7 +2552,7 @@ function collectReadinessReasonCodes(readinessSnapshot) {
     readinessSnapshot.reasons :
     [];
   return reasons
-    .map((reason) => String(reason?.code || '').trim())
+    .map((reason) => String(reason?.code || EMPTY_STRING).trim())
     .filter((reason) => reason.length > ZERO);
 }
 
@@ -2534,16 +2567,20 @@ function buildRecoveryReadinessSummary({
     nodeDiagnostics || {},
   )) {
     const decisionDimension = String(
-      nodeDiagnostic?.routingDiagnostics?.routingReadinessDimension || '',
+      nodeDiagnostic?.routingDiagnostics?.routingReadinessDimension ||
+        EMPTY_STRING,
     ).trim();
     if (decisionDimension.length === ZERO) {
       continue;
     }
     routingDimensionCounts[decisionDimension] =
-      (routingDimensionCounts[decisionDimension] || ZERO) + 1;
-    if (decisionDimension === 'repairEligible') {
+      (routingDimensionCounts[decisionDimension] || ZERO) + ONE;
+    if (decisionDimension === READINESS_DIMENSION_REPAIR_ELIGIBLE) {
       repairRoutedNodeIds.push(nodeId);
-    } else if (decisionDimension === 'controlPlaneRecoveryEligible') {
+    } else if (
+      decisionDimension ===
+        READINESS_DIMENSION_CONTROL_PLANE_RECOVERY_ELIGIBLE
+    ) {
       recoveryRoutedNodeIds.push(nodeId);
     }
   }
@@ -2553,13 +2590,13 @@ function buildRecoveryReadinessSummary({
   const publicationBlockedNodeIds = [];
   const readinessByNodeId =
     controlPlane?.readinessByNodeId &&
-    typeof controlPlane.readinessByNodeId === 'object' ?
+    typeof controlPlane.readinessByNodeId === JS_OBJECT_TYPE ?
       controlPlane.readinessByNodeId :
       {};
 
   for (const [nodeId, readiness] of Object.entries(readinessByNodeId)) {
     const dimensions =
-      readiness?.dimensions && typeof readiness.dimensions === 'object' ?
+      readiness?.dimensions && typeof readiness.dimensions === JS_OBJECT_TYPE ?
         readiness.dimensions :
         {};
     const repairEligible = dimensions.repairEligible === true;
@@ -2569,13 +2606,15 @@ function buildRecoveryReadinessSummary({
     }
 
     const reasonCodes = collectReadinessReasonCodes(readiness);
-    if (reasonCodes.includes('control_plane_write_unhealthy')) {
+    if (reasonCodes.includes(READINESS_REASON_CONTROL_PLANE_WRITE_UNHEALTHY)) {
       writeUnhealthyNodeIds.push(nodeId);
     }
     if (
-      reasonCodes.includes('control_plane_publication_pending') ||
-      reasonCodes.includes('publishedConvergencePending') ||
-      reasonCodes.includes('recovery_eligibility_pending')
+      reasonCodes.includes(
+        READINESS_REASON_CONTROL_PLANE_PUBLICATION_PENDING,
+      ) ||
+      reasonCodes.includes(READINESS_REASON_PUBLISHED_CONVERGENCE_PENDING) ||
+      reasonCodes.includes(READINESS_REASON_RECOVERY_ELIGIBILITY_PENDING)
     ) {
       publicationBlockedNodeIds.push(nodeId);
     }
@@ -2600,12 +2639,12 @@ function buildRecoveryReadinessSummary({
   const pendingAckBlockedNodeIds = [];
   for (const nodeId of pendingAckNodeIds) {
     const readiness = readinessByNodeId[nodeId];
-    if (!readiness || typeof readiness !== 'object') {
+    if (!readiness || typeof readiness !== JS_OBJECT_TYPE) {
       pendingAckBlockedNodeIds.push(nodeId);
       continue;
     }
     const dimensions =
-      readiness.dimensions && typeof readiness.dimensions === 'object' ?
+      readiness.dimensions && typeof readiness.dimensions === JS_OBJECT_TYPE ?
         readiness.dimensions :
         {};
     const repairEligible = dimensions.repairEligible === true;

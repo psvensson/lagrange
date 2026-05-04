@@ -66,6 +66,38 @@ guarantees.
    terminal `snapshot_reachability_timeout` startup readiness blocker with
    `priorityRecoveryOwner=operation_workflow_owner` and
    `priorityRecoveryBoundary=workflow_progress`.
+5. Review follow-up playback artifact check:
+   `jq -e '.summary.failureClassification.failureClass == "priority_recovery_progress_blocked" and .summary.dominantReason == "priority_recovery_workflow_progress_event_driven" and .summary.readinessFailure.classCode == "snapshot_reachability_timeout" and .summary.publicationConvergence.publicationStatus == "PUBLISHED" and .summary.publicationConvergence.pendingAckCount == 0 and (.summary.failureClassification.signals | index("priorityRecoveryOwner=operation_workflow_owner") != null) and (.summary.failureClassification.signals | index("priorityRecoveryBoundary=workflow_progress") != null)' test-output/reports/.playback/rolling-restart-priority-op-workflow-ack-reentry-fastlocal-20260504-codex2/rolling-restart/failure-bundle.json`
+   returned `true`.
+6. The review follow-up did not rerun the full representative scenario or
+   regenerate playback; it verified the existing final playback bundle because
+   this review scope is package metadata and tracker links only.
+
+## Static Drift Ledger
+
+Retrospective ledger added on May 4, 2026 because the closed package did not
+carry a dedicated static-drift section.
+
+Preflight:
+
+- [x] Relevant guardrails were selected for the declared touched test surface:
+      literal ownership, decision-boundary audit, runtime grammar, syntax check,
+      and diff whitespace.
+- [x] No package-specific pre-implementation static baseline was recorded in
+      this file before the already-closed implementation edits.
+
+Closure:
+
+- [x] `node --check test/distributed/harness/__tests__/failure-bundle.test.js`
+      passed as recorded above.
+- [x] `node scripts/check-guideline-literals.js test/distributed/harness/__tests__/failure-bundle.test.js`:
+      `0` new literal-guideline violations and `0` inherited baseline
+      violations.
+- [x] `node scripts/check-guideline-decision-boundaries.js test/distributed/harness/__tests__/failure-bundle.test.js`:
+      `0` decision-boundary guideline violations.
+- [x] `node scripts/check-runtime-grammar-contracts.js test/distributed/harness/__tests__/failure-bundle.test.js`:
+      `0` runtime-grammar-contract violations.
+- [x] `git diff --check` passed before these metadata edits.
 
 ## Residual Closure Inventory
 
@@ -73,10 +105,10 @@ guarantees.
   operation workflow progress is dominant and snapshot coverage is incomplete.
 - [x] Active-gate no-operation actuation classification was preserved while
   operation-workflow evidence moved the failure boundary.
-- [ ] Representative path still times out on `snapshot_reachability_timeout` with
+- [x] Representative path still times out on `snapshot_reachability_timeout` with
   `sql_write_operations-p1` in `recovering_in_flight`; follow-up package
-  boundary remains in the existing startup snapshot/operation-workflow follow-up
-  stream.
+  boundary is split to
+  [Rolling Restart Startup Snapshot Reachability Operation Workflow Progress Reentry](./done-20260504-rolling-restart-startup-snapshot-reachability-operation-workflow-progress-reentry.md).
 
 ## Done When
 
