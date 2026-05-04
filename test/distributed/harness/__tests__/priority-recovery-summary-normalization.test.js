@@ -19,8 +19,14 @@ import {
 
 const TEST_NAME =
   'operation scheduling dominates workflow transition-deferred serial waits';
+const WORKFLOW_TIMEOUT_TEST_NAME =
+  'workflow timeout outranks actionable operation scheduling';
+const SAME_BOUNDARY_TEST_NAME =
+  'same-boundary transition-deferred actuation outranks actionable scheduling';
 const OPERATION_SCHEDULING_PARTITION_ID = 'replica_operations-p1';
 const SERIAL_WAIT_PARTITION_ID = 'sql_transactions-p1';
+const WORKFLOW_TIMEOUT_PARTITION_ID = 'sql_transactions-p2';
+const SAME_BOUNDARY_DEFERRED_PARTITION_ID = 'replica_operations-p2';
 const SAMPLE_CAPTURED_AT_MS = 1777919035255;
 const EXPECTED_PARTITION_COUNT = 2;
 const EXPECTED_OWNER_COUNTS = Object.freeze({
@@ -71,6 +77,42 @@ const OPERATION_SCHEDULING_WITNESS = Object.freeze({
     PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.CREATE_RECOVERY_OPERATION,
   lastProgressAtMs: SAMPLE_CAPTURED_AT_MS,
 });
+const WORKFLOW_TIMEOUT_WITNESS = Object.freeze({
+  partitionId: WORKFLOW_TIMEOUT_PARTITION_ID,
+  semanticStateId: PRIORITY_RECOVERY_SEMANTIC_STATE.OPERATION_STALLED,
+  progressClassIds: Object.freeze([
+    PRIORITY_RECOVERY_BLOCKER_REASON.OPERATION_NO_TRANSITIONS,
+  ]),
+  blockerReasonCodes: Object.freeze([
+    PRIORITY_RECOVERY_BLOCKER_REASON.OPERATION_NO_TRANSITIONS,
+  ]),
+  progressContractState: OWNER_CONTRACT_STATE.PENDING,
+  actuationState: PRIORITY_RECOVERY_ACTUATION_STATE.TRANSITION_DEFERRED,
+  currentOwner: PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER,
+  blockingBoundary: PRIORITY_RECOVERY_BLOCKING_BOUNDARY.WORKFLOW_TIMEOUT,
+  waitMode: PRIORITY_RECOVERY_WAIT_MODE.TIMEOUT_RECONCILE_DUE,
+  nextRequiredAction:
+    PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.RECONCILE_STALE_OPERATION_PROGRESS,
+  lastProgressAtMs: SAMPLE_CAPTURED_AT_MS,
+});
+const SAME_BOUNDARY_TRANSITION_DEFERRED_WITNESS = Object.freeze({
+  partitionId: SAME_BOUNDARY_DEFERRED_PARTITION_ID,
+  semanticStateId: PRIORITY_RECOVERY_SEMANTIC_STATE.NEEDS_OPERATION,
+  progressClassIds: Object.freeze([
+    PRIORITY_RECOVERY_BLOCKER_REASON.ELIGIBLE_NO_OPERATION,
+  ]),
+  blockerReasonCodes: Object.freeze([
+    PRIORITY_RECOVERY_BLOCKER_REASON.ELIGIBLE_NO_OPERATION,
+  ]),
+  progressContractState: OWNER_CONTRACT_STATE.PENDING,
+  actuationState: PRIORITY_RECOVERY_ACTUATION_STATE.TRANSITION_DEFERRED,
+  currentOwner: PRIORITY_RECOVERY_PROGRESS_OWNER.REBALANCER_LEADER,
+  blockingBoundary: PRIORITY_RECOVERY_BLOCKING_BOUNDARY.OPERATION_SCHEDULING,
+  waitMode: PRIORITY_RECOVERY_WAIT_MODE.EVENT_DRIVEN,
+  nextRequiredAction:
+    PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.CREATE_RECOVERY_OPERATION,
+  lastProgressAtMs: SAMPLE_CAPTURED_AT_MS,
+});
 
 test(TEST_NAME, () => {
   const progressSummary = buildPriorityRecoveryProgressSummary({
@@ -105,5 +147,53 @@ test(TEST_NAME, () => {
   assert.equal(
     progressSummary.dominantWitness.nextRequiredAction,
     PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.CREATE_RECOVERY_OPERATION,
+  );
+});
+
+test(WORKFLOW_TIMEOUT_TEST_NAME, () => {
+  const progressSummary = buildPriorityRecoveryProgressSummary({
+    priorityRecoveryPartitionWitnesses: Object.freeze([
+      OPERATION_SCHEDULING_WITNESS,
+      WORKFLOW_TIMEOUT_WITNESS,
+    ]),
+  });
+
+  assert.equal(
+    progressSummary.dominantWitness.partitionId,
+    WORKFLOW_TIMEOUT_PARTITION_ID,
+  );
+  assert.equal(
+    progressSummary.dominantWitness.blockingBoundary,
+    PRIORITY_RECOVERY_BLOCKING_BOUNDARY.WORKFLOW_TIMEOUT,
+  );
+  assert.equal(
+    progressSummary.dominantWitness.waitMode,
+    PRIORITY_RECOVERY_WAIT_MODE.TIMEOUT_RECONCILE_DUE,
+  );
+  assert.equal(
+    progressSummary.dominantWitness.nextRequiredAction,
+    PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.RECONCILE_STALE_OPERATION_PROGRESS,
+  );
+});
+
+test(SAME_BOUNDARY_TEST_NAME, () => {
+  const progressSummary = buildPriorityRecoveryProgressSummary({
+    priorityRecoveryPartitionWitnesses: Object.freeze([
+      OPERATION_SCHEDULING_WITNESS,
+      SAME_BOUNDARY_TRANSITION_DEFERRED_WITNESS,
+    ]),
+  });
+
+  assert.equal(
+    progressSummary.dominantWitness.partitionId,
+    SAME_BOUNDARY_DEFERRED_PARTITION_ID,
+  );
+  assert.equal(
+    progressSummary.dominantWitness.blockingBoundary,
+    PRIORITY_RECOVERY_BLOCKING_BOUNDARY.OPERATION_SCHEDULING,
+  );
+  assert.equal(
+    progressSummary.dominantWitness.actuationState,
+    PRIORITY_RECOVERY_ACTUATION_STATE.TRANSITION_DEFERRED,
   );
 });

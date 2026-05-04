@@ -25,6 +25,8 @@ const REPLICA_OPERATION_CRITICAL_RECOVERY_QUERY_TIMEOUT_MS = 15_000;
 const INCOMPLETE_OPERATION_OWNER_QUERY_SQL_FRAGMENT =
   'source_node_id = ? OR target_node_id = ?';
 const PRIORITY_PENDING_EXHAUSTED_OPERATION_BUDGET_OVERRUN_MS = 1000;
+const STALE_PRIORITY_PENDING_CACHE_ACTIVE_TIMEOUT_RECONCILE_TEST_NAME =
+  'checkTimeouts reconciles stale priority PENDING from cached active target without unsafe trim';
 
 function buildTransactionCoordinator() {
   return {
@@ -857,6 +859,260 @@ test('checkTimeouts fails stale priority PENDING recovery operations once the di
       operationRow.error_message,
       /Timeout in PENDING step/i,
       'timeout failure should explain the exhausted dispatch budget',
+    );
+  });
+
+test(STALE_PRIORITY_PENDING_CACHE_ACTIVE_TIMEOUT_RECONCILE_TEST_NAME,
+  async (t) => {
+    const TEST_OPERATION_ID =
+      'op-timeout-reconcile-pending-cache-active-target';
+    const TEST_OPERATION_TYPE_REPLACE = 'REPLACE';
+    const TEST_PARTITION_ID = 'sql_transactions-p1';
+    const TEST_REPLICA_ID = 'sql_transactions-p1-r4';
+    const TEST_SOURCE_REPLICA_ID = 'sql_transactions-p1-r1';
+    const TEST_SOURCE_NODE_ID = 'node-1';
+    const TEST_TARGET_NODE_ID = 'node-4';
+    const TEST_ENTITY_TYPE_PARTITION = 'partition';
+    const TEST_WORKFLOW_STEP_PENDING = 'PENDING';
+    const TEST_WORKFLOW_STEP_ACTIVE = 'ACTIVE';
+    const TEST_STATUS_PENDING = 'pending';
+    const TEST_REPLICA_OPERATIONS_TABLE = 'replica_operations';
+    const TEST_SERVICES_TABLE = 'services';
+    const TEST_RAFT_ROLE_FOLLOWER = 'follower';
+    const TEST_LOCAL_SOURCE = 'local_partition_replica';
+    const TEST_UPDATE_OPERATION_SQL_PREFIX =
+      'UPDATE replica_operations SET';
+    const TEST_SELECT_SERVICE_ID_FRAGMENT = 'WHERE service_id = ?';
+    const TEST_SELECT_PARTITION_NODE_FRAGMENT =
+      'WHERE partition_id = ? AND node_id = ?';
+    const TEST_ADDRESS_SEPARATOR = '/';
+    const TEST_STEP_STALE_MS = 65_000;
+    const TEST_CREATED_LAG_MS = 5_000;
+    const TEST_STEP_HISTORY_LAG_MS = 1_000;
+    const TEST_MIN_REPLICA_COUNT = 3;
+    const TEST_AFFECTED_ROW_COUNT = 1;
+    const TEST_EMPTY_AFFECTED_ROW_COUNT = 0;
+    const TEST_EMPTY_VALUE = null;
+    const TEST_ASSERT_NO_TIMEOUT_FAILURE =
+      'cache-visible active target should reconcile before timeout failure';
+    const TEST_ASSERT_ACTIVE_STEP =
+      'timeout reconciliation should advance the stale PENDING operation to ACTIVE';
+    const TEST_ASSERT_NO_UNSAFE_TRIM =
+      'source removal should wait while the over-target source row remains cache-visible';
+
+    const nowMs = Date.now();
+    const staleUpdatedAtMs = nowMs - TEST_STEP_STALE_MS;
+    const operationRow = {
+      operation_id: TEST_OPERATION_ID,
+      type: TEST_OPERATION_TYPE_REPLACE,
+      partition_id: TEST_PARTITION_ID,
+      replica_id: TEST_REPLICA_ID,
+      source_node_id: TEST_SOURCE_NODE_ID,
+      target_node_id: TEST_TARGET_NODE_ID,
+      status: TEST_STATUS_PENDING,
+      workflow_step: TEST_WORKFLOW_STEP_PENDING,
+      created_at: staleUpdatedAtMs - TEST_CREATED_LAG_MS,
+      updated_at: staleUpdatedAtMs,
+      completed_at: TEST_EMPTY_VALUE,
+      error_message: TEST_EMPTY_VALUE,
+      steps_history: JSON.stringify([{
+        step: TEST_WORKFLOW_STEP_PENDING,
+        timestamp: staleUpdatedAtMs - TEST_STEP_HISTORY_LAG_MS,
+        sourceReplicaId: TEST_SOURCE_REPLICA_ID,
+      }]),
+      entity_type: TEST_ENTITY_TYPE_PARTITION,
+      entity_id: TEST_PARTITION_ID,
+    };
+    const targetServiceRow = {
+      service_id: TEST_REPLICA_ID,
+      replica_id: TEST_REPLICA_ID,
+      partition_id: TEST_PARTITION_ID,
+      node_id: TEST_TARGET_NODE_ID,
+      service_type: TEST_ENTITY_TYPE_PARTITION,
+      status: ReplicaStatus.ACTIVE,
+      raft_role: TEST_RAFT_ROLE_FOLLOWER,
+      address: [
+        TEST_TARGET_NODE_ID,
+        TEST_ENTITY_TYPE_PARTITION,
+        TEST_REPLICA_ID,
+      ].join(TEST_ADDRESS_SEPARATOR),
+    };
+    const sourceServiceRow = {
+      service_id: TEST_SOURCE_REPLICA_ID,
+      replica_id: TEST_SOURCE_REPLICA_ID,
+      partition_id: TEST_PARTITION_ID,
+      node_id: TEST_SOURCE_NODE_ID,
+      service_type: TEST_ENTITY_TYPE_PARTITION,
+      status: ReplicaStatus.ACTIVE,
+      raft_role: TEST_RAFT_ROLE_FOLLOWER,
+      address: [
+        TEST_SOURCE_NODE_ID,
+        TEST_ENTITY_TYPE_PARTITION,
+        TEST_SOURCE_REPLICA_ID,
+      ].join(TEST_ADDRESS_SEPARATOR),
+    };
+    const serviceRows = [sourceServiceRow, targetServiceRow];
+    const dispatchedMessages = [];
+
+    const cdcIntegrationService = {
+      async waitForCacheUpdate() {},
+      async executeAuthoritativeSystemTableRead(
+        tableName,
+        sql,
+        params = [],
+        options = {},
+      ) {
+        if (tableName === TEST_REPLICA_OPERATIONS_TABLE) {
+          return {
+            success: true,
+            source: TEST_LOCAL_SOURCE,
+            rows: [],
+          };
+        }
+        if (tableName === TEST_SERVICES_TABLE) {
+          if (String(sql).includes(TEST_SELECT_SERVICE_ID_FRAGMENT)) {
+            const [requestedReplicaId] = params;
+            return {
+              success: true,
+              source: TEST_LOCAL_SOURCE,
+              rows: serviceRows.filter((row) =>
+                row.service_id === requestedReplicaId,
+              ),
+            };
+          }
+          if (String(sql).includes(TEST_SELECT_PARTITION_NODE_FRAGMENT)) {
+            const [requestedPartitionId, requestedNodeId] = params;
+            return {
+              success: true,
+              source: TEST_LOCAL_SOURCE,
+              rows: serviceRows.filter((row) =>
+                row.partition_id === requestedPartitionId &&
+                row.node_id === requestedNodeId,
+              ),
+            };
+          }
+        }
+        return {
+          success: true,
+          source: TEST_LOCAL_SOURCE,
+          rows: [],
+        };
+      },
+    };
+    const controlPlaneSystemTableGateway = {
+      async readRows(tableName, sql, params = [], options = {}) {
+        return cdcIntegrationService.executeAuthoritativeSystemTableRead(
+          tableName,
+          sql,
+          params,
+          options,
+        );
+      },
+      async readAuthoritativeRows(tableName, sql, params = [], options = {}) {
+        return cdcIntegrationService.executeAuthoritativeSystemTableRead(
+          tableName,
+          sql,
+          params,
+          options,
+        );
+      },
+      async executeQuery(sql, params = []) {
+        if (String(sql).startsWith(TEST_UPDATE_OPERATION_SQL_PREFIX)) {
+          const [
+            nextStatus,
+            nextWorkflowStep,
+            nextUpdatedAt,
+            nextCompletedAt,
+            nextErrorMessage,
+            nextStepsHistory,
+            nextReplicaId,
+          ] = params;
+          operationRow.status = nextStatus;
+          operationRow.workflow_step = nextWorkflowStep;
+          operationRow.updated_at = nextUpdatedAt;
+          operationRow.completed_at = nextCompletedAt;
+          operationRow.error_message = nextErrorMessage;
+          operationRow.steps_history = nextStepsHistory;
+          operationRow.replica_id = nextReplicaId;
+          return {
+            success: true,
+            affectedRows: TEST_AFFECTED_ROW_COUNT,
+          };
+        }
+        return {
+          success: true,
+          rows: [],
+          affectedRows: TEST_EMPTY_AFFECTED_ROW_COUNT,
+        };
+      },
+    };
+    const coordinator = createCoordinator({
+      nodeId: TEST_TARGET_NODE_ID,
+      transactionCoordinator: buildTransactionCoordinator(),
+      systemTableCache: {
+        get(tableName, key) {
+          if (tableName === TEST_REPLICA_OPERATIONS_TABLE) {
+            return key === operationRow.operation_id ?
+              operationRow :
+              TEST_EMPTY_VALUE;
+          }
+          if (tableName === TEST_SERVICES_TABLE) {
+            return serviceRows.find((row) =>
+              row.service_id === key,
+            ) || TEST_EMPTY_VALUE;
+          }
+          return TEST_EMPTY_VALUE;
+        },
+        getAll(tableName) {
+          if (tableName === TEST_REPLICA_OPERATIONS_TABLE) {
+            return [operationRow];
+          }
+          if (tableName === TEST_SERVICES_TABLE) {
+            return serviceRows;
+          }
+          return [];
+        },
+        filter(tableName, predicate) {
+          return this.getAll(tableName).filter(predicate);
+        },
+      },
+      cdcIntegrationService,
+      controlPlaneSystemTableGateway,
+      messageRouter: {
+        async deliver(target, request) {
+          dispatchedMessages.push({target, request});
+          return {acknowledged: true, status: 'initiated'};
+        },
+      },
+      tablePolicyService: {
+        async getPolicyForPartition() {
+          return {minReplicaCount: TEST_MIN_REPLICA_COUNT};
+        },
+      },
+      enableTimeouts: false,
+    });
+
+    coordinator.initialize();
+    try {
+      await coordinator.checkTimeouts();
+    } finally {
+      await coordinator.shutdown();
+    }
+
+    t.equal(
+      operationRow.error_message,
+      TEST_EMPTY_VALUE,
+      TEST_ASSERT_NO_TIMEOUT_FAILURE,
+    );
+    t.equal(
+      operationRow.workflow_step,
+      TEST_WORKFLOW_STEP_ACTIVE,
+      TEST_ASSERT_ACTIVE_STEP,
+    );
+    t.same(
+      dispatchedMessages,
+      [],
+      TEST_ASSERT_NO_UNSAFE_TRIM,
     );
   });
 

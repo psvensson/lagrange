@@ -61,7 +61,7 @@ Sprint:
 
 Supersedes current active execution of:
 
-1. [Rolling Restart Operation Transition Pressure And Over-Target Trim](./todo-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md)
+1. [Rolling Restart Operation Transition Pressure And Over-Target Trim](./active-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md)
 
 That package remains queued history for post-active operation drain and trim.
 This package owns only the current load-readiness priority recovery actuation

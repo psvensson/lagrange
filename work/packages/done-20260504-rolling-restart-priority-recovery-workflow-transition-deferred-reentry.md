@@ -4,7 +4,7 @@ Opened on May 4, 2026 as the migrated blocker from
 [Rolling Restart Startup Snapshot Reachability Operation Workflow Progress Reentry](./done-20260504-rolling-restart-startup-snapshot-reachability-operation-workflow-progress-reentry.md).
 
 Closed May 4, 2026 by migration back into
-[Rolling Restart Operation Transition Pressure And Over-Target Trim](./todo-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md).
+[Rolling Restart Operation Transition Pressure And Over-Target Trim](./active-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md).
 
 ## Current Evidence
 
@@ -66,6 +66,36 @@ Sprint:
    new evidence shows they are current debt.
 4. Pro or Enterprise behavior.
 
+## Progress Grammar
+
+Boundary axes:
+
+1. Priority-recovery workflow progress.
+2. Operation-scheduling actuation.
+3. Harness dominant-witness presentation.
+
+Canonical vocabulary:
+
+1. `ready` means no meaningful priority-recovery progress witness remains.
+2. `blocked` means a witness names one owner, blocking boundary, next required
+   action, and reason-code set.
+3. `deferred` means actuation or workflow progress is held by a named owner
+   state such as `transition_deferred`.
+4. `retryable` means wait mode is `retry_scheduled`,
+   `timeout_reconcile_due`, or another bounded reconcile/wait mode.
+5. `terminal` means the representative scenario reaches its deadline and the
+   harness selects the strongest remaining normalized owner witness.
+
+Evidence precedence:
+
+1. Workflow timeout or stalled wait modes outrank actionable operation
+   scheduling.
+2. Stronger contract states outrank the scheduling override.
+3. Actionable operation scheduling outranks only supporting workflow
+   serial-wait deferrals with equal wait-mode and contract severity.
+4. Same-boundary actuation specificity remains authoritative; the scheduling
+   override must not demote `transition_deferred` operation-scheduling evidence.
+
 ## Residual Closure Inventory
 
 - [x] Classify `transition_deferred` workflow progress as dominant owner
@@ -124,7 +154,7 @@ Sprint:
    `admin_health` reachability; the failure bundle keeps the canonical
    priority-recovery workflow-timeout owner.
 9. The migrated operation-transition timeout owner is handed off to
-   [Rolling Restart Operation Transition Pressure And Over-Target Trim](./todo-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md).
+   [Rolling Restart Operation Transition Pressure And Over-Target Trim](./active-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md).
 
 ## Static Drift Ledger
 
@@ -187,6 +217,19 @@ Closure:
    static drift ledger.
 7. Representative `rolling-restart --fast-local` rerun: failed by migration to
    `priority_recovery_workflow_timeout_transition_deferred`.
+
+## Deep-Dive Review
+
+1. Reviewed the priority-recovery progress summary normalization comparator,
+   direct focused tests, and the runtime owner vocabulary that feeds the
+   harness witness fields.
+2. Runtime owner evidence already distinguishes workflow progress,
+   workflow-timeout reconciliation, and operation scheduling; this package does
+   not claim a runtime owner change.
+3. The review finding is harness presentation scope: the actionable
+   operation-scheduling witness rank was too broad and must remain subordinate
+   to stronger wait-mode, contract, and same-boundary actuation evidence.
+4. No additional representative scenario result is claimed by this section.
 
 ## Done When
 

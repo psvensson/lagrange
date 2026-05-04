@@ -79,11 +79,9 @@ Secondary after the primary path is stable:
 
 ## Active Packages
 
-No package is currently open as `active-...` after the May 4 priority recovery
-workflow transition-deferred cleanup. The current residual re-entry is queued
-as:
+The current active residual re-entry package is:
 
-1. [Rolling Restart Operation Transition Pressure And Over-Target Trim](../packages/todo-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md)
+1. [Rolling Restart Operation Transition Pressure And Over-Target Trim](../packages/active-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md)
 
 ## Queued Packages
 
@@ -92,7 +90,9 @@ presentation reentry, the startup rejoin seed-contact package, the active-gate
 priority-recovery actuation package, the operation-workflow ACK reentry
 package, and the startup snapshot reachability workflow-progress package
 executed. The priority recovery workflow transition-deferred package then
-closed by migration into operation workflow timeout reconciliation.
+closed by migration into operation workflow timeout reconciliation. The current
+operation-transition package remains active after the May 4 owner fixture and
+representative rerun because residual closure inventory is incomplete.
 
 All final consistency recommendation packages are complete or queued outside
 the current execution path.
@@ -102,16 +102,15 @@ Other secondary matrix failures become active packages only after the
 
 Current re-entry package:
 
-1. [Rolling Restart Operation Transition Pressure And Over-Target Trim](../packages/todo-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md)
+1. [Rolling Restart Operation Transition Pressure And Over-Target Trim](../packages/active-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md)
 
 Queued convergence-grammar packages:
 
-1. [Rolling Restart Operation Transition Pressure And Over-Target Trim](../packages/todo-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md)
-2. [Rolling restart post-active convergence timeout](../packages/todo-20260424-rolling-restart-post-active-convergence-timeout.md)
-3. [Admin observation owner cutover and repair fencing](../packages/todo-20260424-admin-observation-owner-cutover-and-repair-fencing.md)
-4. [Critical pressure workload taxonomy audit](../packages/todo-20260424-critical-pressure-workload-taxonomy-audit.md)
-5. [Critical replace operation lifecycle convergence owner](../packages/todo-20260424-critical-replace-operation-lifecycle-convergence-owner.md)
-6. [Rolling restart in-flight operation drain and CDC pressure](../packages/todo-20260425-rolling-restart-inflight-operation-drain-and-cdc-pressure.md)
+1. [Rolling restart post-active convergence timeout](../packages/todo-20260424-rolling-restart-post-active-convergence-timeout.md)
+2. [Admin observation owner cutover and repair fencing](../packages/todo-20260424-admin-observation-owner-cutover-and-repair-fencing.md)
+3. [Critical pressure workload taxonomy audit](../packages/todo-20260424-critical-pressure-workload-taxonomy-audit.md)
+4. [Critical replace operation lifecycle convergence owner](../packages/todo-20260424-critical-replace-operation-lifecycle-convergence-owner.md)
+5. [Rolling restart in-flight operation drain and CDC pressure](../packages/todo-20260425-rolling-restart-inflight-operation-drain-and-cdc-pressure.md)
 
 Queued cleanup packages:
 
@@ -121,24 +120,28 @@ Queued cleanup packages:
 
 1. Current execution blocker:
    The latest May 4 representative rerun is
-   `test-output/reports/rolling-restart-priority-recovery-transition-deferred-reentry-fastlocal-20260504-codex.report.json`.
-   Publication ACK reentry remains closed after failure-bundle playback:
-   publication `PUBLISHED`, pending ACK `0`, blocked nodes `0`, missing
-   published count `0`, and `prioritySpreadPending=false`. All five nodes are
-   active in node diagnostics. The representative path fails with startup
-   selected-snapshot coverage `4/5`; terminal readiness reports
-   `snapshot_reachability_timeout`, while best progress still had
-   `admin_health` selected-snapshot reachability. The canonical priority
-   recovery owner is now
+   `test-output/reports/rolling-restart-operation-transition-pressure-overtarget-trim-20260504-codex.report.json`.
+   The owner fixture proved timeout reconciliation consumes cache-visible
+   active target progress and defers unsafe over-target source trim, so no
+   production runtime change was made for that slice. The representative path
+   still fails with
+   `priority_recovery_workflow_timeout_transition_deferred`: publication epoch
+   `4` is `ACK_PENDING`, normalized pending ACK count is `0`, active-gate
+   progress still reports `pendingAck=1`, active `4/5`, missing published
+   `1`, and selected snapshot coverage `3/5`. The canonical witness is
    `operation_workflow_owner / workflow_timeout / timeout_reconcile_due` for
    `sql_transactions-p1`, with next action
-   `reconcile_stale_operation_progress` and progress class
-   `operation_created_but_no_step_transitions`.
+   `reconcile_stale_operation_progress`, workflow step `PENDING`, status
+   `pending`, and progress class
+   `operation_created_but_no_step_transitions`. Playback logs later show the
+   same operation advanced to `SENDING` and then deferred at retryable
+   `coordinator_created_remote_handoff`.
 2. Next active investigation:
-   execute
-   [Rolling Restart Operation Transition Pressure And Over-Target Trim](../packages/todo-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md)
-   against the operation workflow timeout reconciliation and over-target trim
-   owner boundary.
+   continue
+   [Rolling Restart Operation Transition Pressure And Over-Target Trim](../packages/active-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md)
+   by reconciling stale selected-snapshot workflow-timeout evidence with the
+   later retryable remote-handoff owner evidence while preserving publication
+   ACK and startup selected-snapshot reachability closure.
 3. Harness classification:
    terminal barrier evidence wins over stale playback reconstruction for
    active, restart-recovery, load-readiness, convergence, and quiescence
@@ -318,7 +321,7 @@ Current secondary evidence:
     `control_plane_publications-p1`, `logs-p1`,
     `sql_transaction_participants-p1`, and `replica_operations-p1`.
 17. That execution split is now queued as
-    [Rolling restart operation transition pressure and over-target trim](../packages/todo-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md).
+    [Rolling restart operation transition pressure and over-target trim](../packages/active-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md).
 18. `test-output/reports/runtime-stability-rolling-restart-20260425-codex-stopping-visibility-defer.report.json`
     moved the blocker again after the STOPPING visibility-pressure fix: all
     voter counts are target, `Max over-target` is `0ms`, over-target durations
@@ -340,7 +343,7 @@ Current secondary evidence:
     `topology_unstable` / `convergence_timeout` after admin diagnostics,
     publication convergence, and restart recovery were available.
 23. The queued post-active execution split is
-    [Rolling restart operation transition pressure and over-target trim](../packages/todo-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md).
+    [Rolling restart operation transition pressure and over-target trim](../packages/active-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md).
 24. `test-output/reports/runtime-stability-rolling-restart-20260425-codex-system-replace-target-owner.report.json`
     moved the post-active blocker forward again: current in-flight replica
     operations drained to `0`; `service_timers-p1`,
@@ -408,7 +411,7 @@ Current secondary evidence:
     `replica_operations-p1`, and post-rebalance closure is open on operation
     drain, membership trim, and no-over-target evidence.
 38. The active package is again
-    [Rolling restart operation transition pressure and over-target trim](../packages/todo-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md).
+    [Rolling restart operation transition pressure and over-target trim](../packages/active-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md).
 39. The post-review continuation run in `test-output/report.json` moves the
     blocker again. It fails in `waitForControlPlaneQuiescence` after
     `120000ms`, with failover, convergence, restart recovery, and publication
@@ -478,7 +481,7 @@ Current secondary evidence:
     four replica operations remained in flight and post-rebalance closure stayed
     open on operation drain, membership trim, and no-over-target evidence. The
     active package is again
-    [Rolling restart operation transition pressure and over-target trim](../packages/todo-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md).
+    [Rolling restart operation transition pressure and over-target trim](../packages/active-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md).
 50. The April 30 fast-fail continuation changed the failure shape from an outer
     load-readiness timeout to owner-state no-progress. The representative run
     `test-output/reports/runtime-stability-rolling-restart-20260430-codex-fast-fail-load-readiness.report.json`

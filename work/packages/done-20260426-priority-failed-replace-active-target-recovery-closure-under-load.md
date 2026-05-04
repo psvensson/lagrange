@@ -82,7 +82,7 @@ Sprint:
 Depends on:
 
 1. [Priority spread recovery operation creation under load](./done-20260426-priority-spread-recovery-operation-creation-under-load.md)
-2. [Rolling restart operation transition pressure and over-target trim](./todo-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md)
+2. [Rolling restart operation transition pressure and over-target trim](./active-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md)
 3. [Critical recovery pressure reserve and admission contract](./done-20260424-critical-recovery-pressure-reserve-and-admission-contract.md)
 
 ## In Scope

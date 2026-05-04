@@ -83,7 +83,7 @@ operation is still in flight, and post-rebalance closure remains open on
 operation drain, membership trim, and over-target evidence.
 
 The active handoff is:
-[Rolling restart operation transition pressure and over-target trim](./todo-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md).
+[Rolling restart operation transition pressure and over-target trim](./active-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md).
 
 ## Scope Basis
 
@@ -101,7 +101,7 @@ Depends on:
 
 1. [Priority recovery follow-up operation creation](./done-20260424-priority-recovery-followup-operation-creation.md)
 2. [Critical recovery pressure reserve and admission contract](./done-20260424-critical-recovery-pressure-reserve-and-admission-contract.md)
-3. [Rolling restart operation transition pressure and over-target trim](./todo-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md)
+3. [Rolling restart operation transition pressure and over-target trim](./active-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md)
 
 ## In Scope
 

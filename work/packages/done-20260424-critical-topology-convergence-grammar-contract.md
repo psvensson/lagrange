@@ -116,7 +116,7 @@ The canonical reason vocabulary for the current slice is:
 5. Queue the pressure taxonomy audit package:
    [Critical pressure workload taxonomy audit](./todo-20260424-critical-pressure-workload-taxonomy-audit.md).
 6. Continue the migrated runtime split as
-   [Rolling restart operation transition pressure and over-target trim](./todo-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md).
+   [Rolling restart operation transition pressure and over-target trim](./active-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md).
 7. Continue the post-over-target runtime split as
    [Rolling restart in-flight operation drain and CDC pressure](./todo-20260425-rolling-restart-inflight-operation-drain-and-cdc-pressure.md).
 

@@ -1,6 +1,7 @@
 import {
   PRIORITY_RECOVERY_ACTUATION_STATE,
   PRIORITY_RECOVERY_BLOCKING_BOUNDARY,
+  PRIORITY_RECOVERY_BLOCKER_REASON,
   PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION,
   PRIORITY_RECOVERY_OBSERVATION_STATE_VALUE,
   PRIORITY_RECOVERY_PROGRESS_OWNER,
@@ -8,6 +9,11 @@ import {
 } from '../../../src/control-plane/priority-recovery-diagnostics-constants.js';
 
 const ZERO = 0;
+const ONE = 1;
+const COMPARISON_LEFT_PRECEDES_RIGHT = -1;
+const COMPARISON_RIGHT_PRECEDES_LEFT = 1;
+const EMPTY_STRING = '';
+const TYPEOF_OBJECT = 'object';
 const PRIORITY_RECOVERY_PROGRESS_NONE = 'none';
 const PRIORITY_RECOVERY_WAIT_MODE_PRECEDENCE = Object.freeze([
   'stalled',
@@ -40,13 +46,65 @@ const PRIORITY_RECOVERY_NON_BLOCKING_PROGRESS_SEMANTIC_STATES = new Set([
 ]);
 const PRIORITY_RECOVERY_DOMINANT_WITNESS_CLASS = Object.freeze({
   ACTIONABLE_OPERATION_SCHEDULING: 'actionable_operation_scheduling',
-  DEFAULT: 'default',
+  SUPPORTING_WORKFLOW_SERIAL_WAIT_DEFERRAL:
+    'supporting_workflow_serial_wait_deferral',
 });
-const PRIORITY_RECOVERY_DOMINANT_WITNESS_RANK = Object.freeze({
-  [PRIORITY_RECOVERY_DOMINANT_WITNESS_CLASS.ACTIONABLE_OPERATION_SCHEDULING]:
-    ZERO,
-  [PRIORITY_RECOVERY_DOMINANT_WITNESS_CLASS.DEFAULT]: 1,
-});
+const PRIORITY_RECOVERY_DOMINANT_WITNESS_PAIR_RULES = Object.freeze([
+  Object.freeze({
+    leftClassId:
+      PRIORITY_RECOVERY_DOMINANT_WITNESS_CLASS.ACTIONABLE_OPERATION_SCHEDULING,
+    rightClassId:
+      PRIORITY_RECOVERY_DOMINANT_WITNESS_CLASS
+        .SUPPORTING_WORKFLOW_SERIAL_WAIT_DEFERRAL,
+    rankDelta: COMPARISON_LEFT_PRECEDES_RIGHT,
+  }),
+  Object.freeze({
+    leftClassId:
+      PRIORITY_RECOVERY_DOMINANT_WITNESS_CLASS
+        .SUPPORTING_WORKFLOW_SERIAL_WAIT_DEFERRAL,
+    rightClassId:
+      PRIORITY_RECOVERY_DOMINANT_WITNESS_CLASS.ACTIONABLE_OPERATION_SCHEDULING,
+    rankDelta: COMPARISON_RIGHT_PRECEDES_LEFT,
+  }),
+]);
+const PRIORITY_RECOVERY_DOMINANT_WITNESS_PRIORITY_DIMENSIONS = Object.freeze([
+  Object.freeze({
+    rankDelta: (left, right) =>
+      resolvePrecedenceRank(
+        left?.waitMode,
+        PRIORITY_RECOVERY_WAIT_MODE_PRECEDENCE,
+      ) -
+      resolvePrecedenceRank(
+        right?.waitMode,
+        PRIORITY_RECOVERY_WAIT_MODE_PRECEDENCE,
+      ),
+  }),
+  Object.freeze({
+    rankDelta: (left, right) =>
+      resolvePrecedenceRank(
+        left?.progressContractState,
+        PRIORITY_RECOVERY_CONTRACT_STATE_PRECEDENCE,
+      ) -
+      resolvePrecedenceRank(
+        right?.progressContractState,
+        PRIORITY_RECOVERY_CONTRACT_STATE_PRECEDENCE,
+      ),
+  }),
+  Object.freeze({
+    rankDelta: resolveDominantWitnessPairClassRankDelta,
+  }),
+  Object.freeze({
+    rankDelta: (left, right) =>
+      resolvePrecedenceRank(
+        left?.actuationState,
+        PRIORITY_RECOVERY_ACTUATION_STATE_PRECEDENCE,
+      ) -
+      resolvePrecedenceRank(
+        right?.actuationState,
+        PRIORITY_RECOVERY_ACTUATION_STATE_PRECEDENCE,
+      ),
+  }),
+]);
 const PRIORITY_RECOVERY_DOMINANT_WITNESS_RULES = Object.freeze([
   Object.freeze({
     classId:
@@ -62,8 +120,22 @@ const PRIORITY_RECOVERY_DOMINANT_WITNESS_RULES = Object.freeze([
         PRIORITY_RECOVERY_ACTUATION_STATE.ACTION_REQUIRED,
   }),
   Object.freeze({
-    classId: PRIORITY_RECOVERY_DOMINANT_WITNESS_CLASS.DEFAULT,
-    matches: () => true,
+    classId:
+      PRIORITY_RECOVERY_DOMINANT_WITNESS_CLASS
+        .SUPPORTING_WORKFLOW_SERIAL_WAIT_DEFERRAL,
+    matches: (evidence) =>
+      evidence.currentOwner ===
+        PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER &&
+      evidence.blockingBoundary ===
+        PRIORITY_RECOVERY_BLOCKING_BOUNDARY.WORKFLOW_PROGRESS &&
+      evidence.nextRequiredAction ===
+        PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.WAIT_FOR_OPERATION_PROGRESS &&
+      evidence.actuationState ===
+        PRIORITY_RECOVERY_ACTUATION_STATE.TRANSITION_DEFERRED &&
+      priorityRecoveryDominantWitnessEvidenceHasBlockerReason(
+        evidence,
+        PRIORITY_RECOVERY_BLOCKER_REASON.SERIAL_OPERATION_WAIT,
+      ),
   }),
 ]);
 
@@ -85,7 +157,7 @@ function normalizeDistinctStringArray(values) {
   }
   return [...new Set(
     values
-      .map((value) => String(value || '').trim())
+      .map((value) => String(value || EMPTY_STRING).trim())
       .filter((value) => value.length > ZERO),
   )];
 }
@@ -484,7 +556,7 @@ function addCount(map, value) {
   ) {
     return;
   }
-  map[normalizedValue] = (map[normalizedValue] || ZERO) + 1;
+  map[normalizedValue] = (map[normalizedValue] || ZERO) + ONE;
 }
 
 function resolvePrecedenceRank(value, precedence) {
@@ -499,17 +571,47 @@ function buildPriorityRecoveryDominantWitnessEvidence(witness) {
     blockingBoundary: normalizeStringField(witness?.blockingBoundary),
     nextRequiredAction: normalizeStringField(witness?.nextRequiredAction),
     actuationState: normalizeStringField(witness?.actuationState),
+    progressClassIds: normalizeDistinctStringArray(witness?.progressClassIds),
+    blockerReasonCodes: normalizeDistinctStringArray(
+      witness?.blockerReasonCodes,
+    ),
   });
 }
 
-function resolveDominantWitnessClassRank(witness) {
-  const evidence = buildPriorityRecoveryDominantWitnessEvidence(witness);
-  const selectedRule = PRIORITY_RECOVERY_DOMINANT_WITNESS_RULES.find((rule) =>
-    rule.matches(evidence),
+function priorityRecoveryDominantWitnessEvidenceHasBlockerReason(
+  evidence,
+  blockerReason,
+) {
+  return (
+    evidence.progressClassIds.includes(blockerReason) ||
+    evidence.blockerReasonCodes.includes(blockerReason)
   );
-  return PRIORITY_RECOVERY_DOMINANT_WITNESS_RANK[
-    selectedRule.classId
-  ];
+}
+
+function resolveDominantWitnessClassIds(witness) {
+  const evidence = buildPriorityRecoveryDominantWitnessEvidence(witness);
+  return PRIORITY_RECOVERY_DOMINANT_WITNESS_RULES
+    .filter((rule) => rule.matches(evidence))
+    .map((rule) => rule.classId);
+}
+
+function resolveDominantWitnessPairClassRankDelta(left, right) {
+  const leftClassIds = resolveDominantWitnessClassIds(left);
+  const rightClassIds = resolveDominantWitnessClassIds(right);
+  const selectedRule = PRIORITY_RECOVERY_DOMINANT_WITNESS_PAIR_RULES.find(
+    (rule) =>
+      leftClassIds.includes(rule.leftClassId) &&
+      rightClassIds.includes(rule.rightClassId),
+  );
+  return selectedRule ? selectedRule.rankDelta : ZERO;
+}
+
+function resolveDominantWitnessPriorityRankDelta(left, right) {
+  const selectedRankDelta =
+    PRIORITY_RECOVERY_DOMINANT_WITNESS_PRIORITY_DIMENSIONS
+      .map((dimension) => dimension.rankDelta(left, right))
+      .find((rankDelta) => rankDelta !== ZERO);
+  return selectedRankDelta || ZERO;
 }
 
 function hasMeaningfulPriorityRecoveryProgressWitness(witness) {
@@ -548,44 +650,9 @@ function hasMeaningfulPriorityRecoveryProgressWitness(witness) {
 }
 
 function comparePriorityRecoveryPartitionWitnessPriority(left, right) {
-  const dominantWitnessClassRankDelta =
-    resolveDominantWitnessClassRank(left) -
-    resolveDominantWitnessClassRank(right);
-  if (dominantWitnessClassRankDelta !== ZERO) {
-    return dominantWitnessClassRankDelta;
-  }
-  const waitModeRankDelta =
-    resolvePrecedenceRank(left?.waitMode, PRIORITY_RECOVERY_WAIT_MODE_PRECEDENCE) -
-    resolvePrecedenceRank(
-      right?.waitMode,
-      PRIORITY_RECOVERY_WAIT_MODE_PRECEDENCE,
-    );
-  if (waitModeRankDelta !== ZERO) {
-    return waitModeRankDelta;
-  }
-  const contractStateRankDelta =
-    resolvePrecedenceRank(
-      left?.progressContractState,
-      PRIORITY_RECOVERY_CONTRACT_STATE_PRECEDENCE,
-    ) -
-    resolvePrecedenceRank(
-      right?.progressContractState,
-      PRIORITY_RECOVERY_CONTRACT_STATE_PRECEDENCE,
-    );
-  if (contractStateRankDelta !== ZERO) {
-    return contractStateRankDelta;
-  }
-  const actuationStateRankDelta =
-    resolvePrecedenceRank(
-      left?.actuationState,
-      PRIORITY_RECOVERY_ACTUATION_STATE_PRECEDENCE,
-    ) -
-    resolvePrecedenceRank(
-      right?.actuationState,
-      PRIORITY_RECOVERY_ACTUATION_STATE_PRECEDENCE,
-    );
-  if (actuationStateRankDelta !== ZERO) {
-    return actuationStateRankDelta;
+  const priorityRankDelta = resolveDominantWitnessPriorityRankDelta(left, right);
+  if (priorityRankDelta !== ZERO) {
+    return priorityRankDelta;
   }
   const leftLastProgressAtMs = normalizeNonNegativeInteger(left?.lastProgressAtMs);
   const rightLastProgressAtMs = normalizeNonNegativeInteger(
@@ -596,12 +663,12 @@ function comparePriorityRecoveryPartitionWitnessPriority(left, right) {
       return leftLastProgressAtMs - rightLastProgressAtMs;
     }
   } else if (leftLastProgressAtMs !== null) {
-    return -1;
+    return COMPARISON_LEFT_PRECEDES_RIGHT;
   } else if (rightLastProgressAtMs !== null) {
-    return 1;
+    return COMPARISON_RIGHT_PRECEDES_LEFT;
   }
-  return String(left?.partitionId || '').localeCompare(
-    String(right?.partitionId || ''),
+  return String(left?.partitionId || EMPTY_STRING).localeCompare(
+    String(right?.partitionId || EMPTY_STRING),
   );
 }
 
@@ -672,7 +739,7 @@ function buildPriorityRecoveryProgressSummary(priorityRecoveryObservation) {
 }
 
 function normalizePriorityPartitionSummaryForDiagnostics(summary) {
-  if (!summary || typeof summary !== 'object' || Array.isArray(summary)) {
+  if (!summary || typeof summary !== TYPEOF_OBJECT || Array.isArray(summary)) {
     return null;
   }
   const blockedPartitions = normalizePriorityRecoveryBlockedPartitions(
