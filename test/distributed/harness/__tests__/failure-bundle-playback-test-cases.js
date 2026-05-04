@@ -803,9 +803,15 @@ export function registerFailureBundlePlaybackTests({
     const RETRY_HANDOFF_DELAY_MS = 250;
     const PUBLICATION_EPOCH = 4;
     const PARTITION_ID = 'sql_transactions-p1';
+    const ACTIVE_REPLACE_PARTITION_ID = 'sql_write_operations-p1';
+    const SAFETY_RETRY_PARTITION_ID = 'zz_safety_retry-p1';
     const OPERATION_ID = 'op-retry-handoff';
+    const ACTIVE_REPLACE_OPERATION_ID = 'op-active-replace-retry';
+    const SAFETY_RETRY_OPERATION_ID = 'op-safety-retry';
     const TARGET_NODE_ID = 'target-node-1';
     const CORRELATION_KEY = 'sql_transactions-p1|4|op-retry-handoff';
+    const ACTIVE_REPLACE_CORRELATION_KEY =
+      'sql_write_operations-p1|4|op-active-replace-retry';
     const PUBLICATION_STATUS_PUBLISHED = 'PUBLISHED';
     const WORKFLOW_STEP_PENDING = 'PENDING';
     const WORKFLOW_STEP_SENDING = 'SENDING';
@@ -819,6 +825,7 @@ export function registerFailureBundlePlaybackTests({
     const ACTUATION_STATE_DISPATCHED_WAITING_PROGRESS =
       'dispatched_waiting_progress';
     const BOUNDARY_WORKFLOW_TIMEOUT = 'workflow_timeout';
+    const BOUNDARY_WORKFLOW_PROGRESS = 'workflow_progress';
     const BOUNDARY_REBALANCER_HANDOFF = 'rebalancer_handoff';
     const WAIT_MODE_TIMEOUT_RECONCILE_DUE = 'timeout_reconcile_due';
     const WAIT_MODE_RETRY_SCHEDULED = 'retry_scheduled';
@@ -830,11 +837,14 @@ export function registerFailureBundlePlaybackTests({
       'Deferred retryable replica operation dispatch failure';
     const OPERATION_WORKFLOW_BOUNDARY_COORDINATOR_CREATED_REMOTE_HANDOFF =
       'coordinator_created_remote_handoff';
+    const OPERATION_WORKFLOW_BOUNDARY_PRIORITY_ACTIVE_REPLACE_RESUME =
+      'priority_active_replace_resume';
     const RETRYABLE_ERROR_MESSAGE =
       'Connection closed before message acknowledgement';
     const EXPECTED_NODE_COUNT = 5;
     const ACTIVE_NODE_COUNT = 4;
     const SNAPSHOT_COVERAGE_NODE_COUNT = 3;
+    const EXPECTED_PROGRESS_WITNESS_COUNT = 2;
     const ZERO_COUNT = 0;
     const ONE_COUNT = 1;
     const scenarioDir = join(state.outputDir, SCENARIO_NAME);
@@ -876,7 +886,11 @@ export function registerFailureBundlePlaybackTests({
                 capturedAt: STALE_SNAPSHOT_CAPTURED_AT_MS,
                 priorityPartitionSummary: {
                   satisfied: false,
-                  blockedPartitionCount: ONE_COUNT,
+                  missingPartitionIds: [
+                    PARTITION_ID,
+                    ACTIVE_REPLACE_PARTITION_ID,
+                  ],
+                  blockedPartitionCount: EXPECTED_PROGRESS_WITNESS_COUNT,
                 },
                 snapshots: [{
                   partitionId: PARTITION_ID,
@@ -889,6 +903,22 @@ export function registerFailureBundlePlaybackTests({
                     operationIds: [OPERATION_ID],
                     operation: {
                       operationId: OPERATION_ID,
+                      status: OPERATION_STATUS_PENDING,
+                      workflowStep: WORKFLOW_STEP_PENDING,
+                      updatedAtMs: STALE_OPERATION_PROGRESS_AT_MS,
+                    },
+                  },
+                }, {
+                  partitionId: ACTIVE_REPLACE_PARTITION_ID,
+                  epoch: PUBLICATION_EPOCH,
+                  operationId: ACTIVE_REPLACE_OPERATION_ID,
+                  correlationKey: ACTIVE_REPLACE_CORRELATION_KEY,
+                  semanticState: SEMANTIC_STATE_OPERATION_STALLED,
+                  blockerReasons: [BLOCKER_OPERATION_NO_TRANSITIONS],
+                  coordinator: {
+                    operationIds: [ACTIVE_REPLACE_OPERATION_ID],
+                    operation: {
+                      operationId: ACTIVE_REPLACE_OPERATION_ID,
                       status: OPERATION_STATUS_PENDING,
                       workflowStep: WORKFLOW_STEP_PENDING,
                       updatedAtMs: STALE_OPERATION_PROGRESS_AT_MS,
@@ -929,7 +959,7 @@ export function registerFailureBundlePlaybackTests({
                   ],
                   unresolvedSemanticStateCount: ONE_COUNT,
                   blockedPartitionIds: [PARTITION_ID],
-                  blockedPartitionCount: ONE_COUNT,
+                  blockedPartitionCount: EXPECTED_PROGRESS_WITNESS_COUNT,
                 },
                 blockers: [SNAPSHOT_COVERAGE_BLOCKER],
               },
@@ -940,18 +970,45 @@ export function registerFailureBundlePlaybackTests({
     );
     await writeFile(
       join(scenarioDir, NODE_LOG_FILENAME),
-      JSON.stringify({
-        time: RETRY_HANDOFF_PROGRESS_TIME,
-        subsystem: LOG_SUBSYSTEM_REBALANCE_COORDINATOR,
-        msg: LOG_MESSAGE_OPERATION_DISPATCH_RETRY_DEFERRED,
-        operationId: OPERATION_ID,
-        partitionId: PARTITION_ID,
-        targetNodeId: TARGET_NODE_ID,
-        workflowStep: WORKFLOW_STEP_SENDING,
-        delayMs: RETRY_HANDOFF_DELAY_MS,
-        errorMessage: RETRYABLE_ERROR_MESSAGE,
-        boundary: OPERATION_WORKFLOW_BOUNDARY_COORDINATOR_CREATED_REMOTE_HANDOFF,
-      }) + LINE_SEPARATOR,
+      [
+        JSON.stringify({
+          time: RETRY_HANDOFF_PROGRESS_TIME,
+          subsystem: LOG_SUBSYSTEM_REBALANCE_COORDINATOR,
+          msg: LOG_MESSAGE_OPERATION_DISPATCH_RETRY_DEFERRED,
+          operationId: OPERATION_ID,
+          partitionId: PARTITION_ID,
+          targetNodeId: TARGET_NODE_ID,
+          workflowStep: WORKFLOW_STEP_SENDING,
+          delayMs: RETRY_HANDOFF_DELAY_MS,
+          errorMessage: RETRYABLE_ERROR_MESSAGE,
+          boundary:
+            OPERATION_WORKFLOW_BOUNDARY_COORDINATOR_CREATED_REMOTE_HANDOFF,
+        }),
+        JSON.stringify({
+          time: RETRY_HANDOFF_PROGRESS_TIME,
+          subsystem: LOG_SUBSYSTEM_REBALANCE_COORDINATOR,
+          msg: LOG_MESSAGE_OPERATION_DISPATCH_RETRY_DEFERRED,
+          operationId: ACTIVE_REPLACE_OPERATION_ID,
+          partitionId: ACTIVE_REPLACE_PARTITION_ID,
+          targetNodeId: TARGET_NODE_ID,
+          workflowStep: WORKFLOW_STEP_SENDING,
+          delayMs: RETRY_HANDOFF_DELAY_MS,
+          errorMessage: RETRYABLE_ERROR_MESSAGE,
+          boundary:
+            OPERATION_WORKFLOW_BOUNDARY_PRIORITY_ACTIVE_REPLACE_RESUME,
+        }),
+        JSON.stringify({
+          time: RETRY_HANDOFF_PROGRESS_TIME,
+          subsystem: LOG_SUBSYSTEM_REBALANCE_COORDINATOR,
+          msg: LOG_MESSAGE_OPERATION_DISPATCH_RETRY_DEFERRED,
+          operationId: SAFETY_RETRY_OPERATION_ID,
+          partitionId: SAFETY_RETRY_PARTITION_ID,
+          targetNodeId: TARGET_NODE_ID,
+          workflowStep: WORKFLOW_STEP_SENDING,
+          delayMs: RETRY_HANDOFF_DELAY_MS,
+          errorMessage: RETRYABLE_ERROR_MESSAGE,
+        }),
+      ].join(LINE_SEPARATOR) + LINE_SEPARATOR,
     );
 
     const scenarioResult = buildPlaybackDerivedFailureResult();
@@ -994,6 +1051,25 @@ export function registerFailureBundlePlaybackTests({
           lastProgressAtMs: STALE_OPERATION_PROGRESS_AT_MS,
           latestOperationWorkflowStep: WORKFLOW_STEP_PENDING,
           latestOperationStatus: OPERATION_STATUS_PENDING,
+        }, {
+          partitionId: ACTIVE_REPLACE_PARTITION_ID,
+          semanticStateId: SEMANTIC_STATE_OPERATION_STALLED,
+          progressClassIds: [BLOCKER_OPERATION_NO_TRANSITIONS],
+          blockerReasonCodes: [BLOCKER_OPERATION_NO_TRANSITIONS],
+          progressContractState: OPERATION_STATUS_PENDING,
+          actuationState: ACTUATION_STATE_TRANSITION_DEFERRED,
+          currentOwner: OWNER_OPERATION_WORKFLOW,
+          actuationOwner: OWNER_OPERATION_WORKFLOW,
+          blockingBoundary: BOUNDARY_WORKFLOW_TIMEOUT,
+          waitMode: WAIT_MODE_TIMEOUT_RECONCILE_DUE,
+          nextRequiredAction:
+            NEXT_ACTION_RECONCILE_STALE_OPERATION_PROGRESS,
+          operationIds: [ACTIVE_REPLACE_OPERATION_ID],
+          witnessIds: [ACTIVE_REPLACE_OPERATION_ID],
+          correlationKey: ACTIVE_REPLACE_CORRELATION_KEY,
+          lastProgressAtMs: STALE_OPERATION_PROGRESS_AT_MS,
+          latestOperationWorkflowStep: WORKFLOW_STEP_PENDING,
+          latestOperationStatus: OPERATION_STATUS_PENDING,
         }],
       },
     };
@@ -1020,7 +1096,28 @@ export function registerFailureBundlePlaybackTests({
     const dominantWitness =
       scenarioBundle.publicationConvergence.priorityRecoveryProgressSummary
         .dominantWitness;
+    const progressSummary =
+      scenarioBundle.publicationConvergence.priorityRecoveryProgressSummary;
 
+    assert.equal(
+      progressSummary.partitionCount,
+      EXPECTED_PROGRESS_WITNESS_COUNT,
+    );
+    assert.equal(
+      progressSummary.blockingBoundaryCounts[BOUNDARY_REBALANCER_HANDOFF],
+      ONE_COUNT,
+    );
+    assert.equal(
+      progressSummary.blockingBoundaryCounts[BOUNDARY_WORKFLOW_PROGRESS],
+      ONE_COUNT,
+    );
+    assert.equal(
+      Object.hasOwn(
+        progressSummary.blockingBoundaryCounts,
+        BOUNDARY_WORKFLOW_TIMEOUT,
+      ),
+      false,
+    );
     assert.equal(dominantWitness.partitionId, PARTITION_ID);
     assert.equal(dominantWitness.blockingBoundary, BOUNDARY_REBALANCER_HANDOFF);
     assert.equal(dominantWitness.waitMode, WAIT_MODE_RETRY_SCHEDULED);

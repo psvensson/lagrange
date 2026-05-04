@@ -781,6 +781,8 @@ function buildPriorityRecoveryProgressSummary(priorityRecoveryObservation) {
   if (partitionWitnesses.length === ZERO) {
     return null;
   }
+  const currentPartitionWitnesses =
+    selectFreshestPriorityRecoveryWitnessesByOperation(partitionWitnesses);
   const currentOwnerCounts = {};
   const actuationStateCounts = {};
   const blockingBoundaryCounts = {};
@@ -788,7 +790,7 @@ function buildPriorityRecoveryProgressSummary(priorityRecoveryObservation) {
   const nextRequiredActionCounts = {};
   const progressContractStateCounts = {};
   const pressureStateCounts = {};
-  for (const witness of partitionWitnesses) {
+  for (const witness of currentPartitionWitnesses) {
     addCount(actuationStateCounts, witness.actuationState);
     addCount(currentOwnerCounts, witness.currentOwner);
     addCount(blockingBoundaryCounts, witness.blockingBoundary);
@@ -798,9 +800,9 @@ function buildPriorityRecoveryProgressSummary(priorityRecoveryObservation) {
     addCount(pressureStateCounts, witness.pressureState);
   }
   return {
-    partitionCount: partitionWitnesses.length,
+    partitionCount: currentPartitionWitnesses.length,
     dominantWitness: selectDominantPriorityRecoveryPartitionWitness(
-      partitionWitnesses,
+      currentPartitionWitnesses,
     ),
     ...(Object.keys(actuationStateCounts).length > ZERO ?
       {actuationStateCounts} :

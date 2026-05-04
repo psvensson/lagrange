@@ -200,6 +200,34 @@ const DECISION_ARTIFACT_OPERATION_ID_FIELD = 'operationId';
 const DECISION_ARTIFACT_PARTITION_ID_FIELD = 'partitionId';
 const DECISION_ARTIFACT_WORKFLOW_STEP_FIELD = 'workflowStep';
 const DECISION_ARTIFACT_DELAY_MS_FIELD = 'delayMs';
+const DECISION_ARTIFACT_BOUNDARY_FIELD = 'boundary';
+const PRIORITY_RECOVERY_LOG_DISPATCH_RETRY_BOUNDARY = Object.freeze({
+  COORDINATOR_CREATED_REMOTE_HANDOFF: 'coordinator_created_remote_handoff',
+  PRIORITY_ACTIVE_REPLACE_RESUME: 'priority_active_replace_resume',
+});
+const PRIORITY_RECOVERY_LOG_DISPATCH_RETRY_BOUNDARY_WITNESS_BY_BOUNDARY =
+  Object.freeze({
+    [PRIORITY_RECOVERY_LOG_DISPATCH_RETRY_BOUNDARY
+      .COORDINATOR_CREATED_REMOTE_HANDOFF]: Object.freeze({
+      blockingBoundary:
+        PRIORITY_RECOVERY_BLOCKING_BOUNDARY.REBALANCER_HANDOFF,
+      waitMode: PRIORITY_RECOVERY_WAIT_MODE.RETRY_SCHEDULED,
+      nextRequiredAction:
+        PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.WAIT_FOR_OPERATION_PROGRESS,
+      workflowProgressPhaseId:
+        PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.DISPATCH_PENDING,
+    }),
+    [PRIORITY_RECOVERY_LOG_DISPATCH_RETRY_BOUNDARY
+      .PRIORITY_ACTIVE_REPLACE_RESUME]: Object.freeze({
+      blockingBoundary:
+        PRIORITY_RECOVERY_BLOCKING_BOUNDARY.WORKFLOW_PROGRESS,
+      waitMode: PRIORITY_RECOVERY_WAIT_MODE.RETRY_SCHEDULED,
+      nextRequiredAction:
+        PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.ADVANCE_EXISTING_OPERATION,
+      workflowProgressPhaseId:
+        PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.SOURCE_REMOVAL,
+    }),
+  });
 const EMPTY_STRING = '';
 
 function buildPlaybackControlPlaneFallback(events) {
@@ -374,8 +402,24 @@ function resolveDecisionArtifactProgressAtMs(artifact = null) {
   return Number.isFinite(timestampMs) ? timestampMs : null;
 }
 
+function resolvePriorityRecoveryLogDispatchRetryBoundaryWitness(artifact = null) {
+  const boundary = String(
+    artifact?.[DECISION_ARTIFACT_BOUNDARY_FIELD] || EMPTY_STRING,
+  ).trim();
+  return boundary.length > ZERO ?
+    PRIORITY_RECOVERY_LOG_DISPATCH_RETRY_BOUNDARY_WITNESS_BY_BOUNDARY[
+      boundary
+    ] || null :
+    null;
+}
+
 function buildPriorityRecoveryLogWitnessFromDispatchRetryDeferral(artifact) {
   if (!isRecord(artifact)) {
+    return null;
+  }
+  const boundaryWitness =
+    resolvePriorityRecoveryLogDispatchRetryBoundaryWitness(artifact);
+  if (!boundaryWitness) {
     return null;
   }
   const partitionId = String(
@@ -402,12 +446,10 @@ function buildPriorityRecoveryLogWitnessFromDispatchRetryDeferral(artifact) {
       PRIORITY_RECOVERY_ACTUATION_STATE.DISPATCHED_WAITING_PROGRESS,
     currentOwner: PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER,
     actuationOwner: PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER,
-    blockingBoundary: PRIORITY_RECOVERY_BLOCKING_BOUNDARY.REBALANCER_HANDOFF,
-    waitMode: PRIORITY_RECOVERY_WAIT_MODE.RETRY_SCHEDULED,
-    nextRequiredAction:
-      PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.WAIT_FOR_OPERATION_PROGRESS,
-    workflowProgressPhaseId:
-      PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.DISPATCH_PENDING,
+    blockingBoundary: boundaryWitness.blockingBoundary,
+    waitMode: boundaryWitness.waitMode,
+    nextRequiredAction: boundaryWitness.nextRequiredAction,
+    workflowProgressPhaseId: boundaryWitness.workflowProgressPhaseId,
     operationIds: [operationId],
     witnessIds: [operationId],
     correlationKey: buildPriorityRecoveryCorrelationKey({

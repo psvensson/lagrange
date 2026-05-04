@@ -2136,6 +2136,8 @@ function buildActiveGatePendingAckEvidence(progress = null) {
     requiredAckListOpen:
       pendingRequiredAckNodeIds !== null &&
       pendingRequiredAckNodeIds.length > ZERO,
+    ackStatusCountOpen:
+      normalizeNonNegativeCount(progress.pendingAckCount) > ZERO,
   });
 }
 
@@ -2150,7 +2152,8 @@ function shouldSuppressActiveGateSnapshotPublicationDebt({
     buildActiveGatePendingAckEvidence(activeGateProgress);
   return (
     pendingAckEvidence.explicitNodeListOpen !== true &&
-    pendingAckEvidence.requiredAckListOpen !== true
+    pendingAckEvidence.requiredAckListOpen !== true &&
+    pendingAckEvidence.ackStatusCountOpen !== true
   );
 }
 

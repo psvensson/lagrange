@@ -184,13 +184,17 @@ Preflight:
 
 Closure:
 
-- [x] Reran the same guardrails after implementation.
-- [x] No relevant guardrail count increased. The literal guard still reports
-      the same 148 existing new literal-guideline violations across the
-      rebalancer test files and 0 inherited baseline violations.
+- [x] Reran the non-literal guardrails after implementation.
+- [ ] Full file-scoped literal guard closure is still red. The earlier
+      rebalancer-slice literal run still reports the same 148 file-scoped
+      new literal-guideline violations across the rebalancer test files and
+      0 inherited baseline violations; that is open package guardrail debt,
+      not passed literal closure.
 - [x] No touched-file owner-path, decision-boundary, runtime-grammar, or
       metadata-gateway violation remains.
-- [x] The inherited literal debt is unchanged and outside this owner slice.
+- [ ] Literal guardrail debt remains in the active package because the
+      touched-file literal guard is file-scoped red; only the diff-aware
+      added-line slice is clean.
 - [x] `node --check` passed for the touched harness and rebalancer test files:
       `test/distributed/harness/priority-recovery-summary-normalization.js`,
       `test/distributed/harness/failure-bundle-segment-1.js`,
@@ -218,8 +222,16 @@ Closure:
 - [x] Diff-aware filtering of that exact guard report against currently added
       lines reports `0` literal-guideline violations on added lines. The
       checker is file-scoped but not diff-scoped, and the literal baseline has
-      no inherited entries for these test/harness paths, so the remaining red
-      result is not a newly introduced package literal blocker.
+      no inherited entries for these test/harness paths. This proves the
+      added-line slice is clean only; it does not close the full file-scoped
+      literal guard.
+- [ ] Review-fix rerun for the six currently touched harness JS files:
+      `node scripts/check-guideline-literals.js --include-tests test/distributed/harness/priority-recovery-summary-normalization.js test/distributed/harness/failure-bundle-segment-3.js test/distributed/harness/failure-bundle-segment-4.js test/distributed/harness/__tests__/priority-recovery-summary-normalization.test.js test/distributed/harness/__tests__/failure-bundle-playback-test-cases.js test/distributed/harness/__tests__/failure-bundle.test.js`
+      remains file-scoped red with `1817` new literal-guideline violations
+      and `0` inherited baseline violations. Top residual files are
+      `failure-bundle.test.js` `1242`,
+      `failure-bundle-playback-test-cases.js` `549`, and
+      `failure-bundle-segment-3.js` `26`.
 
 ## Implementation Tasks
 
@@ -251,8 +263,9 @@ Closure:
 5. Rebalancer cache-visible target proof:
    `node --test test/rebalancer/rebalance-coordinator-timeout-cache-visibility.test.js`
    passed.
-6. Static guardrails for touched files passed or remained unchanged as recorded
-   in the static drift ledger.
+6. Non-literal static guardrails for touched files passed as recorded in the
+   static drift ledger; full file-scoped literal guard closure remains open
+   with a clean diff-aware added-line slice.
 7. Representative `rolling-restart --fast-local` rerun failed by residual
    blocker and kept this package active.
 

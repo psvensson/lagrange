@@ -38,6 +38,7 @@ const STALE_WORKFLOW_TIMEOUT_PROGRESS_AT_MS = 1777922869705;
 const RETRY_HANDOFF_PROGRESS_AT_MS = 1777922930548;
 const RETRY_HANDOFF_DELAY_MS = 250;
 const EXPECTED_PARTITION_COUNT = 2;
+const EXPECTED_FRESHENED_PARTITION_COUNT = 1;
 const WORKFLOW_STEP_PENDING = 'PENDING';
 const WORKFLOW_STEP_SENDING = 'SENDING';
 const OPERATION_STATUS_PENDING = 'pending';
@@ -263,6 +264,22 @@ test(SAME_OPERATION_FRESHNESS_TEST_NAME, () => {
     ]),
   });
 
+  assert.equal(
+    progressSummary.partitionCount,
+    EXPECTED_FRESHENED_PARTITION_COUNT,
+  );
+  assert.deepEqual(progressSummary.blockingBoundaryCounts, {
+    [PRIORITY_RECOVERY_BLOCKING_BOUNDARY.REBALANCER_HANDOFF]:
+      EXPECTED_FRESHENED_PARTITION_COUNT,
+  });
+  assert.deepEqual(progressSummary.waitModeCounts, {
+    [PRIORITY_RECOVERY_WAIT_MODE.RETRY_SCHEDULED]:
+      EXPECTED_FRESHENED_PARTITION_COUNT,
+  });
+  assert.deepEqual(progressSummary.nextRequiredActionCounts, {
+    [PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.WAIT_FOR_OPERATION_PROGRESS]:
+      EXPECTED_FRESHENED_PARTITION_COUNT,
+  });
   assert.equal(
     progressSummary.dominantWitness.partitionId,
     STALE_WORKFLOW_TIMEOUT_PARTITION_ID,
