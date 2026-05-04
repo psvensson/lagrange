@@ -31,8 +31,35 @@ The last post-active evidence before later migrations was:
     `replica_operations-p1`, `sql_transaction_participants-p1`,
     `sql_transactions-p1`, and `sql_write_operations-p1`.
 
-The current active representative blocker is owned by
-[Rolling Restart Startup Rejoin Seed Contact Snapshot Coverage](./done-20260504-rolling-restart-startup-rejoin-seed-contact-snapshot-coverage.md).
+The representative path reached this boundary again on May 4 after
+[Rolling Restart Priority Recovery Workflow Transition Deferred Reentry](./done-20260504-rolling-restart-priority-recovery-workflow-transition-deferred-reentry.md)
+closed:
+
+1. `test-output/reports/rolling-restart-priority-recovery-transition-deferred-reentry-fastlocal-20260504-codex.report.json`
+2. Result: failed, `0/1` passed after `134.9s`.
+3. Terminal barrier:
+   `Not all nodes reached ACTIVE state within 120000ms`.
+4. Publication remains closed in the normalized failure bundle:
+   `PUBLISHED`, pending ACK count `0`, blocked node count `0`, missing
+   published count `0`, and `prioritySpreadPending=false`.
+5. All five nodes reached active node diagnostics.
+6. Active-gate selected snapshot coverage is `4/5`; terminal readiness reports
+   `snapshot_reachability_timeout`, while best progress still had
+   `admin_health` selected-snapshot reachability.
+7. The only unresolved priority-recovery partition is `sql_transactions-p1`.
+8. Dominant reason:
+   `priority_recovery_workflow_timeout_transition_deferred`.
+9. Dominant witness:
+   `operation_workflow_owner / workflow_timeout / timeout_reconcile_due` with
+   next action `reconcile_stale_operation_progress`, workflow step `PENDING`,
+   status `pending`, and progress class
+   `operation_created_but_no_step_transitions`.
+10. `replica_operations-p1`, `sql_write_operations-p1`,
+    `control_plane_publications-p1`, and `sql_transaction_participants-p1` are
+    `spread_satisfied_in_flight`.
+
+This package is now the queued re-entry owner for the current
+operation-transition workflow-timeout boundary.
 
 ## Scope Basis
 

@@ -3,6 +3,13 @@
 Opened on May 4, 2026 as the explicit residual split from
 [Rolling Restart Operation Workflow Publication ACK Reentry](./done-20260504-rolling-restart-operation-workflow-publication-ack-reentry.md).
 
+## Package Process Note
+
+This package originated as the immediate todo split from the prior package and
+was executed through `todo-` -> `active-` -> `done-` in the sub-agent work cycle
+before commit. Commit history therefore shows the file entering as `done-`; the
+current filename remains the filename-first truth for the closed package.
+
 ## Current Evidence
 
 1. Representative report:
@@ -72,6 +79,48 @@ Sprint:
 3. Static guardrails for touched files.
 4. One representative `rolling-restart --fast-local` rerun.
 
+## Progress Grammar
+
+Boundary axes:
+
+1. Startup selected-snapshot reachability.
+2. Priority-recovery operation workflow progress.
+
+Canonical vocabulary:
+
+1. `ready`: publication is `PUBLISHED` with no pending ACK, blocked-node, or
+   missing-published debt, selected snapshot is reachable by the current
+   startup probe, and the priority-recovery workflow has no outstanding
+   deferred, retryable, or terminal blocker.
+2. `blocked`: a meaningful priority-recovery workflow witness exists and the
+   canonical owner outcome is `priority_recovery_progress_blocked`.
+3. `deferred`: workflow progress reports a named transition hold such as
+   `priority_recovery_workflow_progress_transition_deferred`; this is a
+   first-class migrated owner boundary, not publication debt.
+4. `retryable`: startup reachability or workflow dispatch can continue with a
+   bounded retry/reconcile action and must stay supporting evidence while a
+   stronger owner witness exists.
+5. `terminal`: the scenario deadline reports `snapshot_reachability_timeout` or
+   `no_progress_terminal`; terminal evidence selects the final outcome only
+   after stronger publication and workflow owner witnesses are normalized.
+
+Evidence precedence:
+
+1. Closed publication convergence wins over stale publication ACK or
+   missing-published presentation debt.
+2. Runtime priority-recovery workflow witnesses outrank startup
+   selected-snapshot timeout evidence when they name
+   `operation_workflow_owner / workflow_progress`.
+3. Fresh startup reachability, including `admin_health`, closes
+   `snapshot_reachability_timeout` as the dominant boundary but does not clear
+   workflow progress debt.
+4. Cache or storage snapshots may support the decision, but cannot promote a
+   partition to `ready` when runtime workflow evidence is `blocked`,
+   `deferred`, or `retryable`.
+5. Transport/contact failures are supporting startup evidence unless they are
+   the only remaining normalized blocker after publication and workflow
+   evidence are closed.
+
 ## Closure Evidence
 
 1. Added focused regression coverage in
@@ -100,7 +149,7 @@ Sprint:
    canonical failure became
    `priority_recovery_workflow_progress_transition_deferred`.
 7. The migrated blocker is split to
-   [Rolling Restart Priority Recovery Workflow Transition Deferred Reentry](./todo-20260504-rolling-restart-priority-recovery-workflow-transition-deferred-reentry.md).
+   [Rolling Restart Priority Recovery Workflow Transition Deferred Reentry](./done-20260504-rolling-restart-priority-recovery-workflow-transition-deferred-reentry.md).
 
 ## Static Drift Ledger
 
@@ -115,6 +164,23 @@ Preflight:
       `0` decision-boundary guideline violations before implementation.
 - [x] `node scripts/check-runtime-grammar-contracts.js test/distributed/harness/__tests__/failure-bundle.test.js`:
       `0` runtime-grammar-contract violations before implementation.
+- [x] Retrospective segment-4 preflight note added after package closure because
+      the implementation also touched
+      `test/distributed/harness/failure-bundle-segment-4.js`, but the original
+      preflight ledger only recorded
+      `test/distributed/harness/__tests__/failure-bundle.test.js`. No
+      pre-implementation segment-4 baseline was recorded before the already
+      closed implementation edits, so this entry is explicitly after-the-fact.
+      The May 4 review guardrails run against segment 4 now show:
+      `node --check test/distributed/harness/failure-bundle-segment-4.js`
+      passed;
+      `node scripts/check-guideline-literals.js test/distributed/harness/failure-bundle-segment-4.js`
+      reported `0` new literal-guideline violations and `0` inherited baseline
+      violations;
+      `node scripts/check-guideline-decision-boundaries.js test/distributed/harness/failure-bundle-segment-4.js`
+      reported `0` decision-boundary guideline violations; and
+      `node scripts/check-runtime-grammar-contracts.js test/distributed/harness/failure-bundle-segment-4.js`
+      reported `0` runtime-grammar-contract violations.
 
 Closure:
 
@@ -131,6 +197,11 @@ Closure:
       `0` decision-boundary guideline violations.
 - [x] `node scripts/check-runtime-grammar-contracts.js test/distributed/harness/failure-bundle-segment-4.js test/distributed/harness/__tests__/failure-bundle.test.js`:
       `0` runtime-grammar-contract violations.
+- [x] Retrospective segment-4 closure note: the original closure ledger did
+      record segment-4 syntax, ESLint, literal, decision-boundary, and
+      runtime-grammar checks. The May 4 review reran the narrow segment-4
+      syntax and static guardrails after package closure; no segment-4
+      guardrail failure was found.
 - [x] `node --test --test-name-pattern "keeps startup snapshot reachability subordinate to workflow progress" test/distributed/harness/__tests__/failure-bundle.test.js`
       passed.
 - [x] `node --test test/distributed/harness/__tests__/failure-bundle.test.js`

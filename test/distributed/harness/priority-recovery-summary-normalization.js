@@ -1,6 +1,9 @@
 import {
   PRIORITY_RECOVERY_ACTUATION_STATE,
+  PRIORITY_RECOVERY_BLOCKING_BOUNDARY,
+  PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION,
   PRIORITY_RECOVERY_OBSERVATION_STATE_VALUE,
+  PRIORITY_RECOVERY_PROGRESS_OWNER,
   PRIORITY_RECOVERY_SEMANTIC_STATE,
 } from '../../../src/control-plane/priority-recovery-diagnostics-constants.js';
 
@@ -34,6 +37,34 @@ const PRIORITY_RECOVERY_ACTUATION_STATE_PRECEDENCE = Object.freeze([
 const PRIORITY_RECOVERY_NON_BLOCKING_PROGRESS_SEMANTIC_STATES = new Set([
   PRIORITY_RECOVERY_SEMANTIC_STATE.CONVERGED,
   PRIORITY_RECOVERY_SEMANTIC_STATE.SPREAD_SATISFIED_IN_FLIGHT,
+]);
+const PRIORITY_RECOVERY_DOMINANT_WITNESS_CLASS = Object.freeze({
+  ACTIONABLE_OPERATION_SCHEDULING: 'actionable_operation_scheduling',
+  DEFAULT: 'default',
+});
+const PRIORITY_RECOVERY_DOMINANT_WITNESS_RANK = Object.freeze({
+  [PRIORITY_RECOVERY_DOMINANT_WITNESS_CLASS.ACTIONABLE_OPERATION_SCHEDULING]:
+    ZERO,
+  [PRIORITY_RECOVERY_DOMINANT_WITNESS_CLASS.DEFAULT]: 1,
+});
+const PRIORITY_RECOVERY_DOMINANT_WITNESS_RULES = Object.freeze([
+  Object.freeze({
+    classId:
+      PRIORITY_RECOVERY_DOMINANT_WITNESS_CLASS.ACTIONABLE_OPERATION_SCHEDULING,
+    matches: (evidence) =>
+      evidence.currentOwner ===
+        PRIORITY_RECOVERY_PROGRESS_OWNER.REBALANCER_LEADER &&
+      evidence.blockingBoundary ===
+        PRIORITY_RECOVERY_BLOCKING_BOUNDARY.OPERATION_SCHEDULING &&
+      evidence.nextRequiredAction ===
+        PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.CREATE_RECOVERY_OPERATION &&
+      evidence.actuationState ===
+        PRIORITY_RECOVERY_ACTUATION_STATE.ACTION_REQUIRED,
+  }),
+  Object.freeze({
+    classId: PRIORITY_RECOVERY_DOMINANT_WITNESS_CLASS.DEFAULT,
+    matches: () => true,
+  }),
 ]);
 
 function normalizeNonNegativeInteger(value) {
@@ -462,6 +493,25 @@ function resolvePrecedenceRank(value, precedence) {
   return index >= ZERO ? index : precedence.length;
 }
 
+function buildPriorityRecoveryDominantWitnessEvidence(witness) {
+  return Object.freeze({
+    currentOwner: normalizeStringField(witness?.currentOwner),
+    blockingBoundary: normalizeStringField(witness?.blockingBoundary),
+    nextRequiredAction: normalizeStringField(witness?.nextRequiredAction),
+    actuationState: normalizeStringField(witness?.actuationState),
+  });
+}
+
+function resolveDominantWitnessClassRank(witness) {
+  const evidence = buildPriorityRecoveryDominantWitnessEvidence(witness);
+  const selectedRule = PRIORITY_RECOVERY_DOMINANT_WITNESS_RULES.find((rule) =>
+    rule.matches(evidence),
+  );
+  return PRIORITY_RECOVERY_DOMINANT_WITNESS_RANK[
+    selectedRule.classId
+  ];
+}
+
 function hasMeaningfulPriorityRecoveryProgressWitness(witness) {
   const progressClassIds = normalizeDistinctStringArray(
     witness?.progressClassIds,
@@ -498,6 +548,12 @@ function hasMeaningfulPriorityRecoveryProgressWitness(witness) {
 }
 
 function comparePriorityRecoveryPartitionWitnessPriority(left, right) {
+  const dominantWitnessClassRankDelta =
+    resolveDominantWitnessClassRank(left) -
+    resolveDominantWitnessClassRank(right);
+  if (dominantWitnessClassRankDelta !== ZERO) {
+    return dominantWitnessClassRankDelta;
+  }
   const waitModeRankDelta =
     resolvePrecedenceRank(left?.waitMode, PRIORITY_RECOVERY_WAIT_MODE_PRECEDENCE) -
     resolvePrecedenceRank(
