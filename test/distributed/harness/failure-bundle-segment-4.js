@@ -2157,21 +2157,36 @@ function shouldSuppressActiveGateSnapshotPublicationDebt({
   );
 }
 
+function hasActiveGatePendingAckDebt(progress = null) {
+  const pendingAckEvidence = buildActiveGatePendingAckEvidence(progress);
+  return (
+    pendingAckEvidence.explicitNodeListOpen === true ||
+    pendingAckEvidence.requiredAckListOpen === true ||
+    pendingAckEvidence.ackStatusCountOpen === true
+  );
+}
+
 function resolveActiveGatePublicationDebtSuppressionProgress({
   controlPlane = null,
   priorityRecoveryObservation = null,
   activeGateProgress = null,
 } = {}) {
-  const activeGateProgressSources = [
-    controlPlane?.activeGateProgress,
-    controlPlane?.activeGate?.progress,
+  const rawActiveGateProgressSources = [
     controlPlane?.priorityRecoveryObservation?.activeGate?.progress,
     controlPlane?.priorityRecoveryObservation?.activeGateProgress,
+    controlPlane?.activeGate?.progress,
+    controlPlane?.activeGateProgress,
+  ].filter((progress) => isRecord(progress));
+  const canonicalActiveGateProgressSources = [
     priorityRecoveryObservation?.activeGate?.progress,
     priorityRecoveryObservation?.activeGateProgress,
     activeGateProgress,
-  ];
-  return activeGateProgressSources.find((progress) => isRecord(progress)) || null;
+  ].filter((progress) => isRecord(progress));
+  return rawActiveGateProgressSources.find(hasActiveGatePendingAckDebt) ||
+    rawActiveGateProgressSources[ZERO] ||
+    canonicalActiveGateProgressSources.find(hasActiveGatePendingAckDebt) ||
+    canonicalActiveGateProgressSources[ZERO] ||
+    null;
 }
 
 function resolveCurrentPendingAckNodeIds({

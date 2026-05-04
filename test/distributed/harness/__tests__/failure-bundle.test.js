@@ -8089,6 +8089,17 @@ describe('failure-bundle', () => {
             },
           },
         },
+        activeGateProgress: {
+          expectedNodeCount: EXPECTED_NODE_COUNT,
+          activeNodeCount: ACTIVE_NODE_COUNT,
+          inactiveNodeCount: INACTIVE_NODE_COUNT,
+          snapshotCoverageNodeCount: SNAPSHOT_COVERAGE_NODE_COUNT,
+          snapshotCoverageComplete: false,
+          publicationStatus: PUBLICATION_STATUS_PUBLISHED,
+          publicationEpoch: PUBLICATION_EPOCH,
+          pendingAckCount: ZERO_COUNT,
+          missingPublishedCount: ZERO_COUNT,
+        },
       };
 
       const publicationConvergence =
