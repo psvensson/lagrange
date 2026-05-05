@@ -533,7 +533,7 @@ Sprint:
       and the split priority-recovery witnesses
       `sql_transaction_participants-p1` / operation scheduling and
       `sql_write_operations-p1` / workflow timeout.
-- [ ] Add the smallest focused ACK-pending operation-workflow timeout
+- [x] Add the smallest focused ACK-pending operation-workflow timeout
       probe/fixture for the `20260505T123850Z` shape: preserve publication
       epoch `3` `ACK_PENDING`, required-ACK pending node
       `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`, selected snapshot reachability
@@ -545,6 +545,10 @@ Sprint:
       `timeout_reconcile_due` evidence; prove whether the operation workflow
       owner enqueues or performs `reconcile_stale_operation_progress` without
       raising timeouts or broadening the distributed matrix.
+- [ ] Rerun the representative `rolling-restart --fast-local` gate after the
+      ACK-pending operation-workflow timeout fixture and record whether the
+      blocker stays on ACK-pending startup reachability, closes ACK debt and
+      promotes `sql_write_operations-p1` workflow timeout, or migrates again.
 
 ## May 5 Regression Validation
 
@@ -1424,6 +1428,67 @@ drives `reconcile_stale_operation_progress` while publication is still
 `ACK_PENDING`, preserving the `sql_transaction_participants-p1`
 operation-scheduling witness as separate pressure evidence.
 
+## May 5 ACK-Pending Operation-Workflow Timeout Fixture
+
+The next package task added a focused replay fixture without a distributed
+scenario rerun:
+
+1. `test/distributed/harness/publication-evidence-replay.js` now preserves the
+   full `priorityRecoveryWitnesses` array in replay output while retaining the
+   existing `supportingPriorityRecoveryWitness` compatibility field. It also
+   carries `selectedSnapshotReachabilityError` through selected snapshot
+   observation evidence.
+2. `test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+   adds `keeps the 123850Z ACK-pending workflow-timeout replay blocked`.
+   The fixture pins publication epoch `3` / `ACK_PENDING`, pending ACK node
+   `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`, selected terminal snapshot node
+   `11601fe0-72d6-5853-8590-ec2881853e72`, selected reachability timeout,
+   selected snapshot observation `repair_deferred` / `stale_usable`, selected
+   coverage `2/5`, row counts `nodes=3`, `nodeEndpoints=0`, `partitions=33`,
+   and `services=102`.
+3. The fixture preserves both split priority-recovery witnesses:
+   `sql_transaction_participants-p1` remains `needs_operation` at
+   `rebalancer_leader / operation_scheduling / event_driven` with next action
+   `create_recovery_operation`, while `sql_write_operations-p1` operation
+   `df4f18e8-6b08-46b5-ba02-c770936ede32` remains `operation_stalled` at
+   `operation_workflow_owner / workflow_timeout / timeout_reconcile_due` with
+   next action `reconcile_stale_operation_progress`, step age `77931ms`, and
+   step timeout `30000ms`.
+4. Replay of the real `123850Z` playback now prints both witnesses. The single
+   supporting witness is still the scheduling witness, while the workflow
+   timeout witness is retained as subordinate operation-owner evidence.
+5. Outcome: the operation workflow timeout is not the canonical top-level
+   boundary while publication remains `ACK_PENDING` with pending ACK,
+   selected reachability timeout, and selected coverage `2/5`. It is preserved
+   as the candidate next runtime owner boundary once ACK/startup publication
+   debt closes; the existing publication-closed priority-actuation regression
+   still covers that later classification path.
+
+Validation:
+
+1. Red-first:
+   `node --test --test-name-pattern "keeps the 123850Z ACK-pending workflow-timeout replay blocked" test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+   failed before the replay helper exposed `priorityRecoveryWitnesses`.
+2. `node --check test/distributed/harness/publication-evidence-replay.js`
+3. `node --check test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+4. `node --test --test-name-pattern "keeps the 123850Z ACK-pending workflow-timeout replay blocked" test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+5. `node --test test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+6. `node test/distributed/harness/publication-evidence-replay.js test-output/reports/.playback/rolling-restart-after-owner-rpc-cache-repair-probe-20260505T123850Z/rolling-restart`
+   passed and printed `priorityRecoveryWitnesses` for both
+   `sql_transaction_participants-p1` and `sql_write_operations-p1`.
+7. `npx eslint test/distributed/harness/publication-evidence-replay.js test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+8. `node scripts/check-guideline-decision-boundaries.js test/distributed/harness/publication-evidence-replay.js test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+   reported `0` decision-boundary guideline violations.
+9. `node scripts/check-runtime-grammar-contracts.js test/distributed/harness/publication-evidence-replay.js test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+   reported `0` runtime-grammar-contract violations.
+10. `node scripts/check-guideline-boundary-mode-contracts.js test/distributed/harness/publication-evidence-replay.js test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+    reported `0` boundary-mode-contract hotspot violations.
+11. `node scripts/check-guideline-literals.js test/distributed/harness/publication-evidence-replay.js test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+    reported `0` new and `0` inherited literal-guideline violations.
+12. `node scripts/check-guideline-literals.js --include-tests test/distributed/harness/publication-evidence-replay.js test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+    reported `0` new and `0` inherited literal-guideline violations after the
+    moved suite/test strings were assigned named constants.
+
 ## Validation
 
 1. Focused owner or harness fixture for topology publication membership
@@ -1477,10 +1542,10 @@ action `reconcile_stale_operation_progress`, operation
 `df4f18e8-6b08-46b5-ba02-c770936ede32`, latest step `PENDING`, and latest
 status `pending`.
 
-The `20260505T123850Z` trace is complete. The current next unchecked task is
-to add the smallest focused ACK-pending operation-workflow timeout
-probe/fixture for operation `df4f18e8-6b08-46b5-ba02-c770936ede32`, preserving
-the selected snapshot reachability timeout, pending ACK evidence, and split
-priority-recovery witnesses while proving whether
-`reconcile_stale_operation_progress` is enqueued or performed without raising
-timeouts or broadening the matrix.
+The `20260505T123850Z` trace and focused ACK-pending operation-workflow timeout
+fixture are complete. The fixture proves the workflow timeout is retained as
+subordinate evidence while publication remains `ACK_PENDING`; the current next
+unchecked task is the representative `rolling-restart --fast-local` rerun after
+this fixture, to record whether ACK/startup debt still dominates, the
+`sql_write_operations-p1` timeout becomes the next runtime owner boundary after
+ACK closure, or the representative path migrates again.

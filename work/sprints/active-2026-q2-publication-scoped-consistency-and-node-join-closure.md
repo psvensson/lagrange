@@ -205,21 +205,17 @@ Queued cleanup packages:
    next action `reconcile_stale_operation_progress`. Artifact replay passed
    and stayed
    `replayed_blocked` with row counts `nodes=3`, `nodeEndpoints=0`,
-   `partitions=33`, and `services=102`; `git diff --check` passed for the
-   documentation update.
+   `partitions=33`, and `services=102`; the focused replay fixture now
+   preserves both split priority witnesses and keeps the workflow-timeout
+   operation subordinate while publication remains `ACK_PENDING`.
 2. Next active investigation:
    continue
    [Rolling Restart Topology Publication Snapshot Reachability Reentry](../packages/active-20260505-rolling-restart-topology-publication-snapshot-reachability-reentry.md)
-   by adding the smallest focused ACK-pending operation-workflow timeout
-   probe/fixture for the `20260505T123850Z` shape. Preserve publication epoch
-   `3` `ACK_PENDING`, pending ACK node
-   `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`, selected snapshot reachability
-   timeout on `11601fe0-72d6-5853-8590-ec2881853e72`, active-gate coverage
-   `2/5`, `sql_transaction_participants-p1` operation-scheduling evidence,
-   and `sql_write_operations-p1` workflow-timeout operation
-   `df4f18e8-6b08-46b5-ba02-c770936ede32`; prove whether the operation
-   workflow owner enqueues or performs `reconcile_stale_operation_progress`
-   without raising timeouts or broadening the matrix.
+   by rerunning the representative `rolling-restart --fast-local` gate after
+   the ACK-pending operation-workflow timeout fixture. Record whether the
+   blocker stays on ACK-pending startup reachability, closes ACK debt and
+   promotes `sql_write_operations-p1` workflow timeout as the next runtime
+   owner boundary, or migrates again.
 3. Harness classification:
    terminal barrier evidence wins over stale playback reconstruction for
    active, restart-recovery, load-readiness, convergence, and quiescence
@@ -236,8 +232,10 @@ Queued cleanup packages:
    timeout after publication closure remains historical residual context; the
    current `sql_write_operations-p1` timeout is operation
    `df4f18e8-6b08-46b5-ba02-c770936ede32` before publication closure, and must
-   stay subordinate to the ACK-pending startup boundary unless the focused
-   probe proves operation-workflow ownership is the next canonical blocker.
+   stay subordinate to the ACK-pending startup boundary. The focused replay
+   fixture now preserves the operation-workflow timeout witness explicitly; it
+   becomes the candidate next canonical blocker only after ACK/startup
+   publication debt closes.
    A narrow harness formatter fix now prevents
    `publicationConvergence=ready` when the same active-gate evidence carries
    `ACK_PENDING`, pending ACK, or missing-published debt; this is

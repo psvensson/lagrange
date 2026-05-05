@@ -69,6 +69,7 @@ const PUBLICATION_EVIDENCE_REPLAY_LINE = Object.freeze({
   REPLAYED: 'replayed',
   SELECTED_SNAPSHOT_OBSERVATION: 'selectedSnapshotObservation',
   OWNER_RPC_CACHE_REPAIR: 'ownerRpcCacheRepair',
+  PRIORITY_RECOVERY_WITNESSES: 'priorityRecoveryWitnesses',
   SUPPORTING_PRIORITY_RECOVERY_WITNESS: 'supportingPriorityRecoveryWitness',
   COMPARISON: 'comparison',
 });
@@ -92,6 +93,7 @@ const PUBLICATION_EVIDENCE_REPLAY_OBSERVATION_FIELD = Object.freeze({
     'selectedSnapshotObservationRefreshState',
   SELECTED_SNAPSHOT_OBSERVATION_STATE: 'selectedSnapshotObservationState',
   SELECTED_SNAPSHOT_REACHABLE_BY: 'selectedSnapshotReachableBy',
+  SELECTED_SNAPSHOT_REACHABILITY_ERROR: 'selectedSnapshotReachabilityError',
   SELECTED_SNAPSHOT_REPAIR_DEFERRED: 'selectedSnapshotRepairDeferred',
 });
 const PUBLICATION_EVIDENCE_REPLAY_REPAIR_FIELD = Object.freeze({
@@ -119,7 +121,10 @@ const PUBLICATION_EVIDENCE_REPLAY_PRIORITY_WITNESS_FIELD = Object.freeze({
   NEXT_REQUIRED_ACTION: 'nextRequiredAction',
   OPERATION_ID: 'operationId',
   PARTITION_ID: 'partitionId',
+  PROGRESS_CLASS_IDS: 'progressClassIds',
   SEMANTIC_STATE_ID: 'semanticStateId',
+  STEP_AGE_MS: 'stepAgeMs',
+  STEP_TIMEOUT_MS: 'stepTimeoutMs',
   WAIT_MODE: 'waitMode',
   WORKFLOW_PROGRESS_PHASE_ID: 'workflowProgressPhaseId',
 });
@@ -362,6 +367,14 @@ function readSelectedSnapshotObservationFromFailureBundle(failureBundle = {}) {
           PUBLICATION_EVIDENCE_REPLAY_OBSERVATION_FIELD.SELECTED_SNAPSHOT_REACHABLE_BY
         ],
       ),
+    [PUBLICATION_EVIDENCE_REPLAY_OBSERVATION_FIELD
+      .SELECTED_SNAPSHOT_REACHABILITY_ERROR]:
+      normalizeText(
+        coverage[
+          PUBLICATION_EVIDENCE_REPLAY_OBSERVATION_FIELD
+            .SELECTED_SNAPSHOT_REACHABILITY_ERROR
+        ],
+      ),
     [PUBLICATION_EVIDENCE_REPLAY_OBSERVATION_FIELD.SELECTED_SNAPSHOT_OBSERVATION_MODE]:
       normalizeText(
         coverage[
@@ -568,7 +581,7 @@ function summarizeOwnerRpcCacheRepairDeferrals({
   };
 }
 
-function summarizeSupportingPriorityRecoveryWitness(failureBundle = {}) {
+function readPriorityRecoveryWitnessCandidates(failureBundle = {}) {
   const controlPlaneState = readRecordField(
     failureBundle,
     PUBLICATION_EVIDENCE_REPLAY_FIELD.CONTROL_PLANE,
@@ -577,15 +590,60 @@ function summarizeSupportingPriorityRecoveryWitness(failureBundle = {}) {
     controlPlaneState.value,
     PUBLICATION_EVIDENCE_REPLAY_FIELD.PRIORITY_RECOVERY_OBSERVATION,
   );
-  const witnessCandidate = readArrayField(
+  return readArrayField(
     observationState.value,
     PUBLICATION_EVIDENCE_REPLAY_FIELD.PRIORITY_RECOVERY_PARTITION_WITNESSES,
     PUBLICATION_EVIDENCE_REPLAY_FIELD.PARTITION_WITNESSES,
-  ).find(isRecord);
+  ).filter(isRecord);
+}
+
+function appendPriorityWitnessIntegerField(target, fieldName, value) {
+  const normalizedValue = Number(value);
+  if (Number.isFinite(normalizedValue)) {
+    target[fieldName] = Math.trunc(normalizedValue);
+  }
+  return target;
+}
+
+function buildMissingPriorityRecoveryWitness() {
+  return {
+    [PUBLICATION_EVIDENCE_REPLAY_PRIORITY_WITNESS_FIELD.AVAILABILITY]:
+      PUBLICATION_EVIDENCE_REPLAY_AVAILABILITY.MISSING,
+    [PUBLICATION_EVIDENCE_REPLAY_PRIORITY_WITNESS_FIELD.PARTITION_ID]:
+      PUBLICATION_EVIDENCE_REPLAY_EMPTY_TEXT,
+    [PUBLICATION_EVIDENCE_REPLAY_PRIORITY_WITNESS_FIELD.SEMANTIC_STATE_ID]:
+      PUBLICATION_EVIDENCE_REPLAY_EMPTY_TEXT,
+    [PUBLICATION_EVIDENCE_REPLAY_PRIORITY_WITNESS_FIELD.OPERATION_ID]:
+      PUBLICATION_EVIDENCE_REPLAY_EMPTY_TEXT,
+    [PUBLICATION_EVIDENCE_REPLAY_PRIORITY_WITNESS_FIELD.CORRELATION_KEY]:
+      PUBLICATION_EVIDENCE_REPLAY_EMPTY_TEXT,
+    [PUBLICATION_EVIDENCE_REPLAY_PRIORITY_WITNESS_FIELD.CURRENT_OWNER]:
+      PUBLICATION_EVIDENCE_REPLAY_EMPTY_TEXT,
+    [PUBLICATION_EVIDENCE_REPLAY_PRIORITY_WITNESS_FIELD.BLOCKING_BOUNDARY]:
+      PUBLICATION_EVIDENCE_REPLAY_EMPTY_TEXT,
+    [PUBLICATION_EVIDENCE_REPLAY_PRIORITY_WITNESS_FIELD.WAIT_MODE]:
+      PUBLICATION_EVIDENCE_REPLAY_EMPTY_TEXT,
+    [PUBLICATION_EVIDENCE_REPLAY_PRIORITY_WITNESS_FIELD.NEXT_REQUIRED_ACTION]:
+      PUBLICATION_EVIDENCE_REPLAY_EMPTY_TEXT,
+    [PUBLICATION_EVIDENCE_REPLAY_PRIORITY_WITNESS_FIELD.ACTUATION_STATE]:
+      PUBLICATION_EVIDENCE_REPLAY_EMPTY_TEXT,
+    [PUBLICATION_EVIDENCE_REPLAY_PRIORITY_WITNESS_FIELD.WORKFLOW_PROGRESS_PHASE_ID]:
+      PUBLICATION_EVIDENCE_REPLAY_EMPTY_TEXT,
+    [PUBLICATION_EVIDENCE_REPLAY_PRIORITY_WITNESS_FIELD
+      .LATEST_OPERATION_WORKFLOW_STEP]:
+      PUBLICATION_EVIDENCE_REPLAY_EMPTY_TEXT,
+    [PUBLICATION_EVIDENCE_REPLAY_PRIORITY_WITNESS_FIELD.LATEST_OPERATION_STATUS]:
+      PUBLICATION_EVIDENCE_REPLAY_EMPTY_TEXT,
+    [PUBLICATION_EVIDENCE_REPLAY_PRIORITY_WITNESS_FIELD.PROGRESS_CLASS_IDS]:
+      [],
+  };
+}
+
+function summarizePriorityRecoveryWitness(witnessCandidate) {
   const witness = isRecord(witnessCandidate) ? witnessCandidate : {};
   const operationId = normalizeList(witness.operationIds)[NUM.ZERO] ||
     PUBLICATION_EVIDENCE_REPLAY_EMPTY_TEXT;
-  return {
+  const summary = {
     [PUBLICATION_EVIDENCE_REPLAY_PRIORITY_WITNESS_FIELD.AVAILABILITY]:
       isRecord(witnessCandidate) ?
         PUBLICATION_EVIDENCE_REPLAY_AVAILABILITY.AVAILABLE :
@@ -615,7 +673,38 @@ function summarizeSupportingPriorityRecoveryWitness(failureBundle = {}) {
       normalizeText(witness.latestOperationWorkflowStep),
     [PUBLICATION_EVIDENCE_REPLAY_PRIORITY_WITNESS_FIELD.LATEST_OPERATION_STATUS]:
       normalizeText(witness.latestOperationStatus),
+    [PUBLICATION_EVIDENCE_REPLAY_PRIORITY_WITNESS_FIELD.PROGRESS_CLASS_IDS]:
+      normalizeList(
+        readArrayField(
+          witness,
+          PUBLICATION_EVIDENCE_REPLAY_PRIORITY_WITNESS_FIELD.PROGRESS_CLASS_IDS,
+        ),
+      ),
   };
+  appendPriorityWitnessIntegerField(
+    summary,
+    PUBLICATION_EVIDENCE_REPLAY_PRIORITY_WITNESS_FIELD.STEP_AGE_MS,
+    witness.stepAgeMs,
+  );
+  appendPriorityWitnessIntegerField(
+    summary,
+    PUBLICATION_EVIDENCE_REPLAY_PRIORITY_WITNESS_FIELD.STEP_TIMEOUT_MS,
+    witness.stepTimeoutMs,
+  );
+  return summary;
+}
+
+function summarizePriorityRecoveryWitnesses(failureBundle = {}) {
+  return readPriorityRecoveryWitnessCandidates(failureBundle)
+    .map((witnessCandidate) =>
+      summarizePriorityRecoveryWitness(witnessCandidate),
+    );
+}
+
+function selectSupportingPriorityRecoveryWitness(priorityRecoveryWitnesses = []) {
+  return priorityRecoveryWitnesses.length > NUM.ZERO ?
+    priorityRecoveryWitnesses[NUM.ZERO] :
+    buildMissingPriorityRecoveryWitness();
 }
 
 function readPublicationConvergenceFromFailureBundle(failureBundle = {}) {
@@ -1143,6 +1232,8 @@ async function replayPublicationPriorityEvidenceFromReportDir(reportDir) {
   );
   const selectedSnapshotObservation =
     readSelectedSnapshotObservationFromFailureBundle(failureBundle);
+  const priorityRecoveryWitnesses =
+    summarizePriorityRecoveryWitnesses(failureBundle);
   const nodeEndpointRows = [
     ...readArrayField(
       latestSnapshot,
@@ -1167,8 +1258,9 @@ async function replayPublicationPriorityEvidenceFromReportDir(reportDir) {
           PUBLICATION_EVIDENCE_REPLAY_OBSERVATION_FIELD.SELECTED_SNAPSHOT_NODE_ID
         ],
     }),
+    priorityRecoveryWitnesses,
     supportingPriorityRecoveryWitness:
-      summarizeSupportingPriorityRecoveryWitness(failureBundle),
+      selectSupportingPriorityRecoveryWitness(priorityRecoveryWitnesses),
     ...replayPublicationPriorityEvidenceFromRows({
       publicationConvergenceState,
       latestPublicationRowState,
@@ -1207,6 +1299,10 @@ function formatPublicationEvidenceReplaySummary(summary = {}) {
     formatJsonLine(
       PUBLICATION_EVIDENCE_REPLAY_LINE.OWNER_RPC_CACHE_REPAIR,
       summary.ownerRpcCacheRepair,
+    ),
+    formatJsonLine(
+      PUBLICATION_EVIDENCE_REPLAY_LINE.PRIORITY_RECOVERY_WITNESSES,
+      summary.priorityRecoveryWitnesses,
     ),
     formatJsonLine(
       PUBLICATION_EVIDENCE_REPLAY_LINE.SUPPORTING_PRIORITY_RECOVERY_WITNESS,
