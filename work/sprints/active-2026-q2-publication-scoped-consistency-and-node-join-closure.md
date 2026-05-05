@@ -40,6 +40,11 @@ spread gap `10`, and selected snapshot observation
 `repair_deferred` / `stale_usable`. The latest failure-bundle fixes now keep
 canonical missing-published debt visible during active-gate snapshot coverage
 lag without duplicating the explicit reason into raw recovery-gate fixture data.
+The May 5 trace of this artifact is complete: replay still reports
+`driftClassification=replayed_blocked` with only three node rows, no node
+endpoints, and epoch `3` `PUBLISHED`, while the selected admin-ready witness
+remains stale because authoritative discovery repair on `nodes` defers through
+`owner_rpc_lane` / `control_plane_backpressure`.
 
 The active failure chain is now:
 
@@ -50,7 +55,8 @@ The active failure chain is now:
    terminal; the latest selected snapshot node
    `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58` is `admin_health` reachable and now
    reports deferred owner observation through `repair_deferred` /
-   `stale_usable`
+   `stale_usable`; this observation is explicit owner-contract evidence, not
+   publication closure
 3. subordinate priority recovery evidence now selects `sql_write_operations-p1`
    as `recovering_in_flight` with actuation `persisted_not_dispatched` at
    `operation_workflow_owner / workflow_progress / event_driven`
@@ -61,9 +67,10 @@ The active failure chain is now:
 5. the prior `052328Z` `sql_write_operations-p1` workflow-timeout residual is
    not closed; the latest rerun reached a different same-partition
    workflow-progress shape
-6. control-plane write pressure and transient transport churn remain relevant
-   context, but broad matrix work stays out of scope until the representative
-   boundary is stable
+6. control-plane write pressure and transient transport churn now narrow to an
+   owner-RPC/cache-repair slice: repeated reconnects to the seed fail, and
+   authoritative discovery repair for `nodes` records pressure-or-timeout
+   deferrals before the selected witness can catch up
 
 This sprint keeps the old filename for continuity with the active branch, but
 the execution scope is now runtime stability and harness determinism.
@@ -184,21 +191,27 @@ Queued cleanup packages:
    `admin_health`; it now reports `repair_deferred` / `stale_usable`
    observation with pending contract state, idle refresh, next action `wait`,
    and reason codes `cache_stale_watermark`, `discovery_node_coverage_gap`,
-   and `stale_replica_operations_in_flight`.
+   and `stale_replica_operations_in_flight`. The completed trace shows that
+   the selected witness's row-local publication gate is ACK-complete for its
+   three durable nodes, but the active-gate/failure-bundle gate remains open
+   because the selected durable publication omits the two expected active
+   nodes. Artifact replay passed and stayed `replayed_blocked` with row counts
+   `nodes=3`, `nodeEndpoints=0`, `partitions=33`, and `services=103`.
 2. Next active investigation:
    continue
    [Rolling Restart Topology Publication Snapshot Reachability Reentry](../packages/active-20260505-rolling-restart-topology-publication-snapshot-reachability-reentry.md)
-   by tracing the `20260505T114859Z` artifact through active-gate selected
-   snapshot observation, publication gate, and owner-RPC/cache-repair evidence
-   for why `repair_deferred` / `stale_usable` still leaves publication epoch
-   `3` `PUBLISHED` with pending ACK count `0`, terminal active `5/5`,
-   selected snapshot coverage `4/5`, selected published active `3/5`, selected
-   missing published count `2`, selected missing published nodes
+   by adding the smallest owner-RPC/cache-repair replay fixture or probe for
+   the `20260505T114859Z` shape. The fixture must preserve the selected
+   admin-ready witness
+   `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58` as `repair_deferred` /
+   `stale_usable`, the final replay row shape of three node rows and no node
+   endpoints, authoritative discovery repair deferral on `nodes` through
+   `owner_rpc_lane` / `control_plane_backpressure`, publication epoch `3`
+   `PUBLISHED` at selected published-active `3/5`, missing nodes
    `11601fe0-72d6-5853-8590-ec2881853e72` and
-   `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`, priority spread gap `10`, and
-   closure witness `CL-006` / `startup_active_publication_lag`. The smallest
-   next owner slice must preserve `sql_write_operations-p1` as subordinate
-   `recovering_in_flight` evidence at
+   `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`, and closure witness `CL-006` /
+   `startup_active_publication_lag`. It must also preserve
+   `sql_write_operations-p1` as subordinate `recovering_in_flight` evidence at
    `operation_workflow_owner / workflow_progress / event_driven`, with
    correlation key
    `sql_write_operations-p1|3|b4e4c126-7b34-42dc-9234-ee9b7e3b6af2`.
@@ -213,8 +226,9 @@ Queued cleanup packages:
    path explains the topology debt; the `074739Z` selected snapshot
    reachability timeout is historical rather than the current terminal
    blocker. The latest terminal owner boundary is topology publication
-   missing-active-node debt with deferred selected-snapshot observation and
-   subordinate `sql_write_operations-p1` workflow-progress evidence; the
+   missing-active-node debt with deferred selected-snapshot observation,
+   owner-RPC/cache-repair pressure on authoritative discovery `nodes` repair,
+   and subordinate `sql_write_operations-p1` workflow-progress evidence; the
    previous `052328Z` `sql_write_operations-p1` PENDING dispatch timeout after
    publication closure remains residual but is not the latest selected boundary.
    A narrow harness formatter fix now prevents

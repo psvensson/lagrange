@@ -496,13 +496,22 @@ Sprint:
       deferred selected-snapshot observation probe and record whether the blocker
       closes, stays on publication missing-active-node evidence, or migrates to
       one newly named owner boundary.
-- [ ] Trace the `20260505T114859Z` deferred-observation artifact through
+- [x] Trace the `20260505T114859Z` deferred-observation artifact through
       active-gate selected snapshot observation, publication gate, and
       owner-RPC/cache-repair evidence for why `repair_deferred` /
       `stale_usable` still leaves publication epoch `3` at published-active
       `3/5`, missing nodes `11601fe0-72d6-5853-8590-ec2881853e72` and
       `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`, and closure witness
       `CL-006` / `startup_active_publication_lag`.
+- [ ] Add the smallest owner-RPC/cache-repair replay fixture or probe for the
+      `20260505T114859Z` shape: selected admin-ready snapshot witness
+      `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58` remains
+      `repair_deferred` / `stale_usable`, final owner-row replay still has
+      only three node rows and no node endpoints, authoritative discovery
+      repair keeps deferring after `nodes` repair fails through
+      `owner_rpc_lane` / `control_plane_backpressure`, and publication epoch
+      `3` stays published-active `3/5` with the two expected active nodes
+      missing from durable publication.
 
 ## May 5 Regression Validation
 
@@ -962,6 +971,118 @@ step `PENDING`, latest status `pending`, operation
 `sql_write_operations-p1|3|b4e4c126-7b34-42dc-9234-ee9b7e3b6af2`, and next
 action `wait_for_operation_progress`.
 
+## May 5 114859Z Deferred Observation Trace
+
+The latest artifact now traces to a deferred owner-RPC/cache-repair boundary,
+not to an ACK owner bug, selected-snapshot selector bug, or fresh
+priority-recovery owner migration.
+
+Evidence:
+
+1. The active-gate selected snapshot is
+   `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`. It is admin-ready through
+   `admin_health`, has no selected snapshot query error, no selected
+   reachability error, observes `4/5` expected nodes, and carries
+   publication epoch `3` / `PUBLISHED` with published-active nodes
+   `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`,
+   `7493b0ab-a054-5fad-a91b-5e331db29304`, and
+   `8be8d30f-4499-5eed-865c-71b4d529a67a`.
+2. The same selected witness explicitly reports owner observation
+   `repair_deferred` / `stale_usable`: contract state `pending`, refresh state
+   `idle`, next action `wait`, repair deferred `true`, and reason codes
+   `cache_stale_watermark`, `discovery_node_coverage_gap`, and
+   `stale_replica_operations_in_flight`.
+3. The selected witness's row-local publication recovery gate is internally
+   ACK-complete for its three durable published-active nodes: required ACK,
+   acknowledged, and pending ACK counts are `3`, `3`, and `0`; row-local
+   missing-published count is `0`; row-local gate state is
+   `priority_spread_pending`.
+4. The harness publication gate remains open because active-gate expected
+   membership is five nodes while the selected durable publication contains
+   only three. `buildActiveWaitProgressSnapshot(...)` therefore carries
+   selected published active `3/5`, selected missing published nodes
+   `11601fe0-72d6-5853-8590-ec2881853e72` and
+   `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`, selected snapshot coverage `4/5`,
+   pending ACK count `0`, priority spread gap `10`, and blocker
+   `snapshot_coverage=4/5`.
+5. The failure-bundle publication convergence summary promotes that
+   expected-node debt into canonical topology evidence: root cause class
+   `topology`, failure class `publication_convergence_blocked`, dominant
+   reason
+   `publication_missing_active_node=11601fe0-72d6-5853-8590-ec2881853e72`,
+   recovery protocol state `publication_pending`, publication gate reasons
+   `priority_partitions_not_spread`, `snapshot_coverage=4/5`, and both
+   explicit `publication_missing_active_node=<node>` reasons.
+6. `CL-006` is explained by the active-gate closure classifier: startup mode
+   has active `5/5`, inactive `0`, incomplete snapshot coverage, no gate
+   reasons on the progress snapshot, `PUBLISHED` publication, pending ACK
+   count `0`, missing published count greater than zero, no timeout-shaped
+   selected snapshot error, and a strong admin witness. That produces
+   `startup_active_publication_lag`.
+7. Artifact replay stays blocked at the same owner boundary:
+   `node test/distributed/harness/publication-evidence-replay.js
+   test-output/reports/.playback/rolling-restart-after-deferred-snapshot-observation-20260505T114859Z/rolling-restart`
+   passed with row counts `nodes=3`, `nodeEndpoints=0`, `partitions=33`,
+   `services=103`, durable epoch `3` / `PUBLISHED`, durable
+   `CL-006` / `startup_active_publication_lag`, replayed epoch `3` /
+   `PUBLISHED`, `recoveryProtocolState=priority_spread_pending`, and
+   `driftClassification=replayed_blocked`.
+8. The terminal raw owner rows match the selected stale publication shape:
+   final snapshot timestamp `1777981883760` has node rows only for
+   `7493b0ab-a054-5fad-a91b-5e331db29304`,
+   `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`, and
+   `8be8d30f-4499-5eed-865c-71b4d529a67a`; service rows are `99` active on
+   the seed, `3` active on `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`, and `1`
+   active on `8be8d30f-4499-5eed-865c-71b4d529a67a`; there are no final node
+   rows or service rows for
+   `11601fe0-72d6-5853-8590-ec2881853e72` or
+   `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`.
+9. The owner-RPC/cache-repair logs explain why the selected admin-ready
+   witness can remain stale: `35a891b8-c1a0-5064-9c6e-2acfba61c2a7` failed
+   `control_snapshot` authoritative discovery repair on table `nodes` through
+   `owner_rpc_lane` with `control_plane_backpressure`, failure class
+   `pressure_or_timeout`, failure count `4`, and retry after `32000ms`.
+   The selected node
+   `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58` later failed the same repair on
+   table `nodes` through `owner_rpc_lane` with `control_plane_backpressure`,
+   failure class `pressure_or_timeout`, failure count `1`, and retry after
+   `8000ms`, while repeated message-router reconnects to the seed timed out or
+   closed.
+10. `src/control-plane/control-plane-snapshot-owner.js` owns the
+    observation contract: when authoritative repair is unavailable, already in
+    flight, scheduled, failed, or deferred, it attaches a stale/deferred
+    `snapshotObservation` with owner-contract state and next action instead of
+    silently treating the snapshot as fresh.
+    `src/admin/admin-service-discovery-repair-methods.js` owns the
+    non-blocking repair schedule decision and
+    records recent repair failures as deferred repair windows. The artifact is
+    on that path.
+11. The priority-recovery witness remains subordinate context. The canonical
+    witness is `sql_write_operations-p1` as `recovering_in_flight` with
+    `persisted_not_dispatched`, owner `operation_workflow_owner`, boundary
+    `workflow_progress`, wait mode `event_driven`, operation
+    `b4e4c126-7b34-42dc-9234-ee9b7e3b6af2`, correlation key
+    `sql_write_operations-p1|3|b4e4c126-7b34-42dc-9234-ee9b7e3b6af2`, latest
+    workflow step `PENDING`, and latest status `pending`. It does not replace
+    the topology publication owner while selected durable publication still
+    omits two expected active nodes.
+
+Conclusion: `repair_deferred` / `stale_usable` is now an explicit owner
+contract for a stale selected admin-ready witness. It does not by itself close
+publication, because the selected durable publication and final replayable
+owner rows still contain only three publishable nodes and no node endpoints.
+The next smallest runtime slice is an owner-RPC/cache-repair replay fixture or
+probe for this shape: prove whether recent `owner_rpc_lane` /
+`control_plane_backpressure` repair deferral should retry and converge the
+selected witness after pressure clears, or whether the active-gate/failure
+bundle should surface a more specific deferred-repair closure witness while
+keeping `publication_missing_active_node` canonical.
+
+Trace validation:
+
+1. `node test/distributed/harness/publication-evidence-replay.js test-output/reports/.playback/rolling-restart-after-deferred-snapshot-observation-20260505T114859Z/rolling-restart`
+   passed with `driftClassification=replayed_blocked`.
+
 ## Validation
 
 1. Focused owner or harness fixture for topology publication membership
@@ -1018,9 +1139,10 @@ as `recovering_in_flight` at
 `b4e4c126-7b34-42dc-9234-ee9b7e3b6af2`, and correlation key
 `sql_write_operations-p1|3|b4e4c126-7b34-42dc-9234-ee9b7e3b6af2`.
 
-The next unchecked task is to trace the `20260505T114859Z`
-deferred-observation artifact through active-gate selected snapshot
-observation, publication gate, and owner-RPC/cache-repair evidence for why
-`repair_deferred` / `stale_usable` still leaves publication epoch `3` at
-published-active `3/5`, two missing published nodes, and closure witness
-`CL-006` / `startup_active_publication_lag`.
+The current trace concludes that the smallest next unchecked task is an
+owner-RPC/cache-repair replay fixture or probe for the `20260505T114859Z`
+shape. It must keep AGPL scope, preserve `publication_missing_active_node` as
+canonical while durable publication omits the two expected active nodes, and
+decide whether deferred authoritative discovery repair should retry and
+converge the selected admin-ready witness after pressure clears or surface a
+more specific deferred-repair closure witness.
