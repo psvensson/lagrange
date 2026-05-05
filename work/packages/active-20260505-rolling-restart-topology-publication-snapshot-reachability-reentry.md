@@ -354,8 +354,19 @@ Expected canonical outcome:
    `publication_missing_active_node` open, with convergence and
    restart-recovery also retaining `priority_spread_pending`.
 5. Serial-wait evidence is preserved in the publication convergence witness
-   fields but does not replace the topology/publication owner while
-   missing-active publication debt is open.
+   fields and in failure-bundle / triage failure-class signals:
+   `priorityRecoveryOwner=operation_workflow_owner`,
+   `priorityRecoveryBoundary=workflow_progress`,
+   `priorityRecoveryWaitMode=event_driven`, and
+   `priorityRecoveryNextAction=wait_for_operation_progress`. These signals do
+   not replace the topology/publication owner while missing-active publication
+   debt is open.
+
+The focused regression was corrected after review to match the real `074739Z`
+diagnostic contract: the canonical owner remains topology/publication
+missing-active-node, and the subordinate priority-recovery owner, boundary,
+wait-mode, and next-action signals remain present in both the failure bundle
+and triage summary.
 
 ## Scope Basis
 
@@ -435,18 +446,25 @@ Sprint:
 
 ## May 5 Regression Validation
 
+The corrected focused regression asserts that the subordinate
+`priorityRecoveryOwner`, `priorityRecoveryBoundary`,
+`priorityRecoveryWaitMode`, and `priorityRecoveryNextAction` failure-class
+signals are retained while `publication_convergence_blocked` and the first
+`publication_missing_active_node=<node>` remain canonical.
+
 Passed:
 
 1. `node --check test/distributed/harness/__tests__/failure-bundle.test.js`
 2. `node --test --test-name-pattern "keeps missing-active publication debt canonical over reachability and serial wait" test/distributed/harness/__tests__/failure-bundle.test.js`
 3. `node --test --test-name-pattern "keeps startup snapshot reachability subordinate to workflow progress" test/distributed/harness/__tests__/failure-bundle.test.js`
-4. `node scripts/check-guideline-literals.js test/distributed/harness/__tests__/failure-bundle.test.js`
+4. `node --test --test-name-pattern "classifies publication-closed priority actuation as workflow progress" test/distributed/harness/__tests__/failure-bundle.test.js`
+5. `node scripts/check-guideline-literals.js test/distributed/harness/__tests__/failure-bundle.test.js`
    reported `0` new and `0` inherited literal-guideline violations.
-5. `node scripts/check-guideline-decision-boundaries.js test/distributed/harness/__tests__/failure-bundle.test.js`
+6. `node scripts/check-guideline-decision-boundaries.js test/distributed/harness/__tests__/failure-bundle.test.js`
    reported `0` decision-boundary guideline violations.
-6. `node scripts/check-guideline-boundary-mode-contracts.js test/distributed/harness/__tests__/failure-bundle.test.js`
+7. `node scripts/check-guideline-boundary-mode-contracts.js test/distributed/harness/__tests__/failure-bundle.test.js`
    reported `0` boundary-mode-contract hotspot violations.
-7. `git diff --check`
+8. `git diff --check`
 
 Blocked/inherited:
 

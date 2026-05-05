@@ -9527,7 +9527,6 @@ describe('failure-bundle', () => {
       const PRIORITY_RECOVERY_VISIBILITY_NONE = 'none';
       const PRIORITY_RECOVERY_CONVERGENCE_SPREAD_GAP = 'spread_gap';
       const PRIORITY_RECOVERY_WORKFLOW_STEP_UNAVAILABLE = 'unavailable';
-      const PRIORITY_RECOVERY_OPERATION_STATUS_UNAVAILABLE = 'unavailable';
       const PRIORITY_RECOVERY_PROGRESS_BLOCKER =
         'priority_recovery_progress_class=' + PRIORITY_RECOVERY_PROGRESS_CLASS;
       const PRIORITY_RECOVERY_OWNER_SIGNAL =
@@ -9633,106 +9632,70 @@ describe('failure-bundle', () => {
                 reasons: PUBLICATION_GATE_REASONS,
                 reasonCodes: PUBLICATION_GATE_REASONS,
               },
-              priorityRecoveryObservation: {
+              priorityRecoveryDecisionSnapshots: {
+                capturedAt: PRIORITY_RECOVERY_LAST_PROGRESS_AT_MS,
                 publicationEpoch: PUBLICATION_EPOCH,
-                publicationStatus: PUBLICATION_STATUS_PUBLISHED,
-                pendingAckNodeIds: [],
-                pendingAckCount: ZERO_COUNT,
-                blockedNodeIds: [],
-                blockedNodeCount: ZERO_COUNT,
-                missingPublishedNodeIds: MISSING_NODE_IDS,
-                missingPublishedCount: TWO_COUNT,
-                publicationPending: true,
-                prioritySpreadPending: true,
-                recoveryProtocolState:
-                  RECOVERY_PROTOCOL_PRIORITY_SPREAD_PENDING,
-                priorityRecoveryReasonCodes: [PRIORITY_SPREAD_REASON],
-                publicationConvergenceGateReasons: PUBLICATION_GATE_REASONS,
-                priorityRecoveryProgressClassIds: [
-                  PRIORITY_RECOVERY_PROGRESS_CLASS,
-                ],
-                priorityRecoveryProgressClassCount: ONE_COUNT,
-                priorityRecoverySemanticStateIds: [
-                  PRIORITY_RECOVERY_SEMANTIC_STATE_ID,
-                ],
-                priorityRecoverySemanticStateCount: ONE_COUNT,
-                priorityRecoveryBlockedPartitionIds: [
-                  PRIORITY_RECOVERY_PARTITION_ID,
-                ],
-                priorityRecoveryBlockedPartitionCount: ONE_COUNT,
-                priorityRecoveryUnresolvedPartitionIds: [
-                  PRIORITY_RECOVERY_PARTITION_ID,
-                ],
-                priorityRecoveryUnresolvedPartitionCount: ONE_COUNT,
-                priorityRecoveryBlockerPartitionIdsByReason: {
-                  [PRIORITY_RECOVERY_PROGRESS_CLASS]: [
-                    PRIORITY_RECOVERY_PARTITION_ID,
-                  ],
-                },
-                priorityRecoveryPartitionIdsBySemanticState: {
-                  [PRIORITY_RECOVERY_SEMANTIC_STATE_ID]: [
-                    PRIORITY_RECOVERY_PARTITION_ID,
-                  ],
-                },
-                priorityRecoveryPartitionWitnesses: [{
+                snapshots: [{
                   partitionId: PRIORITY_RECOVERY_PARTITION_ID,
-                  operationId: PRIORITY_RECOVERY_OPERATION_ID,
-                  operationIds: [PRIORITY_RECOVERY_OPERATION_ID],
-                  semanticStateId: PRIORITY_RECOVERY_SEMANTIC_STATE_ID,
-                  spreadGap: SERIAL_WAIT_SPREAD_GAP,
-                  readyDistinctNodeCount: READY_DISTINCT_NODE_COUNT,
-                  requiredDistinctNodeCount: REQUIRED_DISTINCT_NODE_COUNT,
-                  progressClassIds: [PRIORITY_RECOVERY_PROGRESS_CLASS],
-                  blockerReasonCodes: [PRIORITY_RECOVERY_PROGRESS_CLASS],
-                  progressContractState:
-                    PRIORITY_RECOVERY_PROGRESS_CONTRACT_PENDING,
-                  progressNextAction:
-                    PRIORITY_RECOVERY_PROGRESS_NEXT_ACTION_WAIT,
-                  actuationState:
-                    PRIORITY_RECOVERY_ACTUATION_TRANSITION_DEFERRED,
-                  actuationOwner:
-                    PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER,
-                  currentOwner:
-                    PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER,
-                  blockingBoundary:
-                    PRIORITY_RECOVERY_BLOCKING_BOUNDARY.WORKFLOW_PROGRESS,
-                  waitMode: PRIORITY_RECOVERY_WAIT_MODE.EVENT_DRIVEN,
-                  nextRequiredAction:
-                    PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION
-                      .WAIT_FOR_OPERATION_PROGRESS,
+                  epoch: PUBLICATION_EPOCH,
                   correlationKey: PRIORITY_RECOVERY_CORRELATION_KEY,
-                  serialWaitOperationIds: [
-                    SERIAL_WAIT_OPERATION_ONE,
-                    SERIAL_WAIT_OPERATION_TWO,
-                  ],
-                  serialWaitPartitionIds: [
-                    SERIAL_WAIT_PARTITION_ONE,
-                    SERIAL_WAIT_PARTITION_TWO,
-                  ],
-                  lastProgressAtMs: PRIORITY_RECOVERY_LAST_PROGRESS_AT_MS,
-                  completionState: PRIORITY_RECOVERY_COMPLETION_BLOCKED,
-                  workflowState: PRIORITY_RECOVERY_WORKFLOW_STATE_NONE,
-                  visibilityState: PRIORITY_RECOVERY_VISIBILITY_NONE,
-                  convergenceState: PRIORITY_RECOVERY_CONVERGENCE_SPREAD_GAP,
-                  latestOperationWorkflowStep:
-                    PRIORITY_RECOVERY_WORKFLOW_STEP_UNAVAILABLE,
-                  latestOperationStatus:
-                    PRIORITY_RECOVERY_OPERATION_STATUS_UNAVAILABLE,
-                }],
-                priorityPartitionSummary: {
-                  satisfied: false,
-                  requiredDistinctNodeCount: REQUIRED_DISTINCT_NODE_COUNT,
-                  readyDistinctNodeCount: READY_DISTINCT_NODE_COUNT,
-                  blockedPartitionCount: ONE_COUNT,
-                  largestSpreadGap: PRIORITY_SPREAD_GAP,
-                  totalSpreadGap: PRIORITY_SPREAD_GAP,
-                  blockedPartitions: [{
-                    partitionId: PRIORITY_RECOVERY_PARTITION_ID,
+                  semanticStateId: PRIORITY_RECOVERY_SEMANTIC_STATE_ID,
+                  blockerReasons: [PRIORITY_RECOVERY_PROGRESS_CLASS],
+                  planner: {
                     spreadGap: SERIAL_WAIT_SPREAD_GAP,
                     readyDistinctNodeCount: READY_DISTINCT_NODE_COUNT,
                     requiredDistinctNodeCount: REQUIRED_DISTINCT_NODE_COUNT,
-                  }],
-                },
+                  },
+                  progress: {
+                    contractState:
+                      PRIORITY_RECOVERY_PROGRESS_CONTRACT_PENDING,
+                    nextAction: PRIORITY_RECOVERY_PROGRESS_NEXT_ACTION_WAIT,
+                    currentOwner:
+                      PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER,
+                    blockingBoundary:
+                      PRIORITY_RECOVERY_BLOCKING_BOUNDARY.WORKFLOW_PROGRESS,
+                    waitMode: PRIORITY_RECOVERY_WAIT_MODE.EVENT_DRIVEN,
+                    nextRequiredAction:
+                      PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION
+                        .WAIT_FOR_OPERATION_PROGRESS,
+                    workflowProgressPhaseId:
+                      PRIORITY_RECOVERY_WORKFLOW_STATE_NONE,
+                    lastProgressAtMs: PRIORITY_RECOVERY_LAST_PROGRESS_AT_MS,
+                    stepAgeMs: PRIORITY_RECOVERY_LAST_PROGRESS_AT_MS,
+                  },
+                  actuation: {
+                    state: PRIORITY_RECOVERY_ACTUATION_TRANSITION_DEFERRED,
+                    owner:
+                      PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER,
+                  },
+                  completion: {
+                    state: PRIORITY_RECOVERY_COMPLETION_BLOCKED,
+                  },
+                  observation: {
+                    visibilityState: PRIORITY_RECOVERY_VISIBILITY_NONE,
+                    workflowState: PRIORITY_RECOVERY_WORKFLOW_STATE_NONE,
+                    convergenceState:
+                      PRIORITY_RECOVERY_CONVERGENCE_SPREAD_GAP,
+                    provenance: {
+                      capturedAt: PRIORITY_RECOVERY_LAST_PROGRESS_AT_MS,
+                    },
+                  },
+                  admission: {
+                    decisionDimension:
+                      PRIORITY_RECOVERY_WORKFLOW_STEP_UNAVAILABLE,
+                  },
+                  coordinator: {
+                    operationIds: [PRIORITY_RECOVERY_OPERATION_ID],
+                    serialWaitOperationIds: [
+                      SERIAL_WAIT_OPERATION_ONE,
+                      SERIAL_WAIT_OPERATION_TWO,
+                    ],
+                    serialWaitPartitionIds: [
+                      SERIAL_WAIT_PARTITION_ONE,
+                      SERIAL_WAIT_PARTITION_TWO,
+                    ],
+                  },
+                }],
               },
               activeGate: {
                 mode: ACTIVE_GATE_MODE_STARTUP,
@@ -9858,6 +9821,9 @@ describe('failure-bundle', () => {
       );
       const publicationConvergence = scenarioBundle.publicationConvergence;
       const activeGateProgress = publicationConvergence.activeGate.progress;
+      const progressSummary =
+        publicationConvergence.priorityRecoveryProgressSummary;
+      const dominantWitness = progressSummary.dominantWitness;
       const priorityRecoveryWitness =
         publicationConvergence.priorityRecoveryPartitionWitnesses[ZERO_COUNT];
       const failureClassification =
@@ -9915,6 +9881,34 @@ describe('failure-bundle', () => {
         [PRIORITY_RECOVERY_PARTITION_ID],
       );
       assert.equal(
+        dominantWitness.partitionId,
+        PRIORITY_RECOVERY_PARTITION_ID,
+      );
+      assert.equal(
+        dominantWitness.currentOwner,
+        PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER,
+      );
+      assert.equal(
+        dominantWitness.blockingBoundary,
+        PRIORITY_RECOVERY_BLOCKING_BOUNDARY.WORKFLOW_PROGRESS,
+      );
+      assert.equal(
+        dominantWitness.waitMode,
+        PRIORITY_RECOVERY_WAIT_MODE.EVENT_DRIVEN,
+      );
+      assert.equal(
+        dominantWitness.nextRequiredAction,
+        PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.WAIT_FOR_OPERATION_PROGRESS,
+      );
+      assert.equal(
+        dominantWitness.correlationKey,
+        PRIORITY_RECOVERY_CORRELATION_KEY,
+      );
+      assert.deepEqual(
+        dominantWitness.operationIds,
+        [PRIORITY_RECOVERY_OPERATION_ID],
+      );
+      assert.equal(
         priorityRecoveryWitness.partitionId,
         PRIORITY_RECOVERY_PARTITION_ID,
       );
@@ -9929,6 +9923,14 @@ describe('failure-bundle', () => {
       assert.equal(
         priorityRecoveryWitness.blockingBoundary,
         PRIORITY_RECOVERY_BLOCKING_BOUNDARY.WORKFLOW_PROGRESS,
+      );
+      assert.equal(
+        priorityRecoveryWitness.correlationKey,
+        PRIORITY_RECOVERY_CORRELATION_KEY,
+      );
+      assert.deepEqual(
+        priorityRecoveryWitness.operationIds,
+        [PRIORITY_RECOVERY_OPERATION_ID],
       );
       assert.deepEqual(
         priorityRecoveryWitness.serialWaitOperationIds,
@@ -9967,21 +9969,17 @@ describe('failure-bundle', () => {
           'priorityRecoveryProgressClassCount=' + ONE_COUNT,
         ),
       );
-      assert.equal(
+      assert.ok(
         failureClassification.signals.includes(PRIORITY_RECOVERY_OWNER_SIGNAL),
-        false,
       );
-      assert.equal(
+      assert.ok(
         failureClassification.signals.includes(PRIORITY_RECOVERY_BOUNDARY_SIGNAL),
-        false,
       );
-      assert.equal(
+      assert.ok(
         failureClassification.signals.includes(PRIORITY_RECOVERY_WAIT_MODE_SIGNAL),
-        false,
       );
-      assert.equal(
+      assert.ok(
         failureClassification.signals.includes(PRIORITY_RECOVERY_NEXT_ACTION_SIGNAL),
-        false,
       );
       assert.equal(
         scenarioBundle.summary.stabilityGates.failover.blockers.includes(
@@ -10017,6 +10015,26 @@ describe('failure-bundle', () => {
       assert.deepEqual(
         triageSummary.publicationConvergence.missingPublishedNodeIds,
         MISSING_NODE_IDS,
+      );
+      assert.ok(
+        triageSummary.summary.failureClassSignals.includes(
+          PRIORITY_RECOVERY_OWNER_SIGNAL,
+        ),
+      );
+      assert.ok(
+        triageSummary.summary.failureClassSignals.includes(
+          PRIORITY_RECOVERY_BOUNDARY_SIGNAL,
+        ),
+      );
+      assert.ok(
+        triageSummary.summary.failureClassSignals.includes(
+          PRIORITY_RECOVERY_WAIT_MODE_SIGNAL,
+        ),
+      );
+      assert.ok(
+        triageSummary.summary.failureClassSignals.includes(
+          PRIORITY_RECOVERY_NEXT_ACTION_SIGNAL,
+        ),
       );
     },
   );
