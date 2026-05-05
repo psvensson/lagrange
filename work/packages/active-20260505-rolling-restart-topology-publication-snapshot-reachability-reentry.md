@@ -320,6 +320,43 @@ keeps `57aa5679-15ad-4ea9-84f6-c6e5f906abf0` moving out of
 `persisted_not_dispatched` without relying on stale or lower-coverage
 operation visibility.
 
+## May 5 Focused Owner Regression
+
+The fifth package task added a focused harness regression in
+`test/distributed/harness/__tests__/failure-bundle.test.js`:
+`keeps missing-active publication debt canonical over reachability and serial wait`.
+
+The fixture locks the `074739Z` owner shape without adding a broad distributed
+scenario:
+
+1. Publication epoch `3` is `PUBLISHED` with pending ACK count `0`.
+2. Publication recovery remains `publication_pending` with missing published
+   active nodes
+   `8be8d30f-4499-5eed-865c-71b4d529a67a` and
+   `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`.
+3. Selected startup active-gate progress is active `2/5`, selected snapshot
+   coverage `4/5`, selected published active `3/5`, and selected snapshot
+   reachability times out through `selectedSnapshotReachabilityError`.
+4. The `sql_write_operations-p1` witness remains
+   `priority_operation_serial_wait` / `needs_operation` with
+   `operation_workflow_owner`, `workflow_progress`, `event_driven`, and
+   `wait_for_operation_progress`, plus the serial-wait operation and partition
+   ids.
+
+Expected canonical outcome:
+
+1. Failure class remains `publication_convergence_blocked`.
+2. Dominant reason remains
+   `publication_missing_active_node=8be8d30f-4499-5eed-865c-71b4d529a67a`.
+3. Failure-bundle and triage-summary outputs preserve the missing-published
+   node list.
+4. Failover, convergence, and restart-recovery stability gates keep
+   `publication_missing_active_node` open, with convergence and
+   restart-recovery also retaining `priority_spread_pending`.
+5. Serial-wait evidence is preserved in the publication convergence witness
+   fields but does not replace the topology/publication owner while
+   missing-active publication debt is open.
+
 ## Scope Basis
 
 Roadmap Phase `0.1 - Internal Coherence` maintenance/refactoring scope under:
@@ -389,12 +426,35 @@ Sprint:
 - [x] Trace the `sql_write_operations-p1` serial-wait witness through operation
       `57aa5679-15ad-4ea9-84f6-c6e5f906abf0` and serial-wait partitions
       `sql_transaction_participants-p1` and `sql_transactions-p1`.
-- [ ] Add the smallest focused runtime or harness regression needed for the
+- [x] Add the smallest focused runtime or harness regression needed for the
       selected owner decision.
-- [ ] Run touched-file syntax, relevant focused tests, non-literal guardrails,
+- [x] Run touched-file syntax, relevant focused tests, non-literal guardrails,
       and `git diff --check`.
 - [ ] Rerun the representative `rolling-restart --fast-local` gate and record
       closure or the next migrated named boundary.
+
+## May 5 Regression Validation
+
+Passed:
+
+1. `node --check test/distributed/harness/__tests__/failure-bundle.test.js`
+2. `node --test --test-name-pattern "keeps missing-active publication debt canonical over reachability and serial wait" test/distributed/harness/__tests__/failure-bundle.test.js`
+3. `node --test --test-name-pattern "keeps startup snapshot reachability subordinate to workflow progress" test/distributed/harness/__tests__/failure-bundle.test.js`
+4. `node scripts/check-guideline-literals.js test/distributed/harness/__tests__/failure-bundle.test.js`
+   reported `0` new and `0` inherited literal-guideline violations.
+5. `node scripts/check-guideline-decision-boundaries.js test/distributed/harness/__tests__/failure-bundle.test.js`
+   reported `0` decision-boundary guideline violations.
+6. `node scripts/check-guideline-boundary-mode-contracts.js test/distributed/harness/__tests__/failure-bundle.test.js`
+   reported `0` boundary-mode-contract hotspot violations.
+7. `git diff --check`
+
+Blocked/inherited:
+
+1. `node scripts/check-guidelines-llm.js test/distributed/harness/__tests__/failure-bundle.test.js`
+   is blocked by the local OpenAI API key with `401 invalid_api_key`.
+2. `npx eslint test/distributed/harness/__tests__/failure-bundle.test.js`
+   remains pre-existing red on unused constants later in the file; the new
+   regression did not add those unused constants.
 
 ## Validation
 
