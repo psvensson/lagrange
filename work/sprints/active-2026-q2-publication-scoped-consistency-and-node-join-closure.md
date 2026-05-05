@@ -240,11 +240,34 @@ Queued cleanup packages:
    `node test/distributed/harness/publication-evidence-replay.js test-output/reports/.playback/rolling-restart-after-132033z-selected-snapshot-replay-fixture-20260505T140646Z/rolling-restart`
    passed with `driftClassification=replayed_blocked`, the touched-file
    syntax, ESLint, decision-boundary, runtime-grammar, boundary-mode, and
-   literal guardrails passed. The next unchecked package task is to trace the
-   `20260505T145246Z` artifact through active-gate coverage, publication
-   convergence, replayed priority-spread drift, and
+   literal guardrails passed. The `20260505T145246Z` trace is now complete:
+   active-gate coverage is selected from
+   `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`, the only probe witness that
+   returned a snapshot, with observed nodes
+   `11601fe0-72d6-5853-8590-ec2881853e72` and
+   `7493b0ab-a054-5fad-a91b-5e331db29304`; terminal and best progress agree
+   on active `4/5`, selected coverage `2/5`, epoch `2` `PUBLISHED`, selected
+   published active `2/5`, pending ACK `0`, missing published `3`, and
+   priority spread gap `5`. Bounded replay passed and reported
+   `driftClassification=replayed_blocked`, `summaryChanged=true`, and
+   `blockedPartitionIdsMatch=false`; durable blocked partition ids are empty
+   while replayed blocked partition ids are `control_plane_publications-p1`,
+   `replica_operations-p1`, and `sql_write_operations-p1`. The terminal
+   publication-convergence witness remains `control_plane_publications-p1`
+   operation `396c2fda-2639-4b3d-ad8d-7c148dc90936` at `FAILED` / `failed`,
+   current owner `rebalancer_leader`, boundary `rebalancer_handoff`, wait mode
+   `stalled`, actuation `terminal_failed`, and next action
+   `schedule_followup_rebalance`; owner-RPC/cache-repair availability is
+   `missing`. Validation for the trace:
+   `node test/distributed/harness/publication-evidence-replay.js test-output/reports/.playback/rolling-restart-after-140646z-publication-pending-replay-fixture-20260505T145246Z/rolling-restart`
+   passed, and `git diff --check` passed.
+   The next unchecked package task is to add the smallest focused
+   `20260505T145246Z` replay fixture or runtime owner probe for selected
+   coverage `2/5`, missing published `3`, replayed priority-spread drift,
+   owner-RPC/cache-repair absence, and
    `control_plane_publications-p1` rebalancer-handoff terminal-failed evidence,
-   then decide the next smallest focused fixture or runtime owner probe.
+   then decide whether the runtime owner is selected-snapshot repair evidence
+   recovery or rebalancer follow-up after terminal failed operation.
 3. Harness classification:
    terminal barrier evidence wins over stale playback reconstruction for
    active, restart-recovery, load-readiness, convergence, and quiescence
