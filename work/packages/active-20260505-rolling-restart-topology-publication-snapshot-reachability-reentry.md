@@ -952,7 +952,6 @@ key `sql_transaction_participants-p1|2|operation_unknown`, serial-wait operation
 `sql_transactions-p1`. `replica_operations-p1` and `sql_write_operations-p1`
 remain blocked as `recovering_in_flight`.
 
-The next unchecked task is to add the smallest runtime owner repair/probe that
 The next unchecked task is to rerun the representative
 `rolling-restart --fast-local` gate after the deferred selected-snapshot
 observation probe and record whether the blocker closes, remains on publication
