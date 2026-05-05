@@ -13,8 +13,8 @@ adjacent sweep debt recorded in the closure inventory below. It is no longer
 the representative re-entry owner. The historical May 5 `074739Z` topology
 handoff migrated earlier into
 [Rolling Restart Topology Publication Snapshot Reachability Reentry](./active-20260505-rolling-restart-topology-publication-snapshot-reachability-reentry.md).
-That handoff has since been superseded by the latest May 5 `093109Z`
-topology-package state.
+That handoff and the later May 5 `093109Z` topology-package state are now
+historical after the May 5 `102455Z` reconcile-probe topology-package state.
 Representative runtime work should return here after the representative path
 again reaches post-publication operation workflow timeout reconciliation or
 over-target trim; current topology publication membership plus selected
@@ -463,7 +463,8 @@ guarantees.
 ## Out Of Scope
 
 1. Current topology publication membership plus selected snapshot coverage
-   residuals, and `sql_write_operations-p1` priority serial-wait re-entry.
+   residuals, and subordinate `sql_transaction_participants-p1` priority
+   serial-wait re-entry.
    Those are owned by
    [Rolling Restart Topology Publication Snapshot Reachability Reentry](./active-20260505-rolling-restart-topology-publication-snapshot-reachability-reentry.md).
 2. Broad matrix continuation before the current five-node representative
@@ -823,17 +824,16 @@ Closure:
 
 The current representative continuation has migrated to
 [Rolling Restart Topology Publication Snapshot Reachability Reentry](./active-20260505-rolling-restart-topology-publication-snapshot-reachability-reentry.md).
-That package owns the latest post-`e274126c` May 5 `093109Z` topology
-publication membership plus snapshot coverage residual: terminal active
-`2/5`, best active `5/5`, selected snapshot coverage `4/5`, selected published
-active `3/5`, missing nodes
-`11601fe0-72d6-5853-8590-ec2881853e72` and
-`ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`, terminal readiness
-`no_progress_terminal`, and no selected reachability error. The
-`sql_write_operations-p1` priority serial-wait witness remains supporting
-evidence there. The post-`e0344113` `074739Z` reachability-timeout shape
-recorded above is historical handoff evidence, not the current topology
-package state.
+That package owns the current May 5 `102455Z` topology publication membership
+plus snapshot coverage residual recorded in
+`test-output/reports/rolling-restart-after-reconcile-probe-20260505T102455Z.report.json`:
+terminal active `5/5`, terminal selected snapshot coverage `3/5`, best
+selected snapshot coverage `4/5`, selected publication epoch `2` `PUBLISHED`,
+selected published active `2/5`, and missing published count `3`. The
+`sql_transaction_participants-p1` priority serial-wait witness is subordinate
+evidence there. The post-`e0344113` `074739Z` reachability-timeout shape and
+the later `093109Z` topology-package state are historical handoff evidence,
+not the current topology package state.
 
 This operation-transition package remains active for retained residuals rather
 than for the current representative blocker. The retained work is the prior
