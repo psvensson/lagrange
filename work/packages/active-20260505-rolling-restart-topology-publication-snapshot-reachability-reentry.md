@@ -50,6 +50,57 @@ and a `sql_write_operations-p1` priority serial-wait witness.
     operation-transition package for later revisit, but it is not the current
     selected representative blocker.
 
+## May 5 `074739Z` Evidence Trace
+
+The first package task traced the failure bundle into one normalized evidence
+snapshot:
+
+1. Classification is `topology` /
+   `publication_convergence_blocked`, with dominant reason
+   `publication_missing_active_node=8be8d30f-4499-5eed-865c-71b4d529a67a`.
+2. Publication epoch `3` is `PUBLISHED`, but accepted convergence evidence
+   remains `publication_pending` with pending ACK count `0`, missing published
+   count `2`, and missing published nodes
+   `8be8d30f-4499-5eed-865c-71b4d529a67a` and
+   `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`.
+3. Publication gate reasons are `priority_partitions_not_spread`,
+   `snapshot_coverage=4/5`, and the two explicit
+   `publication_missing_active_node=<node>` reasons.
+4. Terminal active-gate progress is active `2/5`, selected snapshot coverage
+   `4/5`, selected published active `3/5`, selected missing published nodes
+   matching the publication convergence summary, priority spread gap `10`, and
+   a blocker signature made from `inactive_nodes=3`,
+   `snapshot_coverage=4/5`, and
+   `priority_recovery_progress_class=priority_operation_serial_wait`.
+5. Best active-gate progress was active `3/5` with the same selected snapshot
+   coverage `4/5`, the same selected missing published nodes, and selected
+   snapshot node `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58` reachable by
+   `admin_health`.
+6. Terminal selected snapshot reachability is the terminal readiness failure:
+   `snapshot_reachability_timeout` from `selectedSnapshotReachabilityError`
+   against `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`, recoverability
+   `terminal`, attempts since progress `3`, terminal reason
+   `stalled_no_progress`.
+7. Structured priority-recovery summary selects `sql_write_operations-p1` as
+   `needs_operation` with progress class `priority_operation_serial_wait`,
+   owner `operation_workflow_owner`, boundary `workflow_progress`, wait mode
+   `event_driven`, next action `wait_for_operation_progress`, correlation key
+   `sql_write_operations-p1|3|operation_unknown`, and current operation
+   `57aa5679-15ad-4ea9-84f6-c6e5f906abf0`.
+8. Serial-wait evidence is behind operations
+   `4c37459a-ceb9-4745-a10a-0169ca521f50` and
+   `f4cadbdd-f27f-4660-b1a8-556e19ec4271` on partitions
+   `sql_transaction_participants-p1` and `sql_transactions-p1`.
+9. Stability gates keep failover open on `publication_missing_active_node`;
+   convergence and restart recovery are open on
+   `publication_missing_active_node|priority_spread_pending`.
+10. The canonical next owner question is why the publication/topology owner
+    accepts `PUBLISHED` plus pending ACK count `0` while still carrying
+    `publication_pending`, explicit missing-active-node debt, and selected
+    snapshot reachability debt. The priority serial-wait witness is supporting
+    pressure evidence unless that topology debt is first closed or made
+    subordinate by the owner path.
+
 ## Scope Basis
 
 Roadmap Phase `0.1 - Internal Coherence` maintenance/refactoring scope under:
@@ -108,7 +159,7 @@ Sprint:
 
 ## Implementation Tasks
 
-- [ ] Trace the `074739Z` failure bundle from active-gate progress,
+- [x] Trace the `074739Z` failure bundle from active-gate progress,
       publication convergence, selected snapshot reachability, and
       priority-recovery summaries into one normalized evidence snapshot.
 - [ ] Identify the owner path for inactive nodes and explicit
