@@ -285,9 +285,13 @@ Queued cleanup packages:
    rebalancing pass at `2026-05-05T14:55:04.771Z` with `moveCount=1`. The
    action was retained and enqueued, not suppressed, while the epoch `2`
    `PUBLISHED` missing-active selected-snapshot topology debt remains
-   canonical. The next unchecked package task is to trace whether the enqueued
-   `control_plane_publications-p1` follow-up move persisted a new operation or
-   was blocked during move execution.
+   canonical. The follow-up execution trace is now complete: replay reports
+   `postTerminalFollowUpExecutionState=not_executed_after_enqueue`, with no
+   post-terminal same-partition `Executing rebalancing move`, no move-level
+   blocked record, and no newer persisted `replicaOperations` row after the
+   follow-up start. The next unchecked package task is to trace why the
+   enqueued follow-up did not reach logged move execution after
+   `Starting rebalancing`.
 3. Harness classification:
    terminal barrier evidence wins over stale playback reconstruction for
    active, restart-recovery, load-readiness, convergence, and quiescence

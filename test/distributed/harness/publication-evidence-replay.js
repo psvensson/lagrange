@@ -63,6 +63,8 @@ const PUBLICATION_EVIDENCE_REPLAY_FIELD = Object.freeze({
   PUBLICATION_EPOCH: 'publicationEpoch',
   PUBLICATION_STATUS: 'publicationStatus',
   PUBLISHED_ACTIVE_NODE_IDS: 'publishedActiveNodeIds',
+  REPLICA_OPERATIONS: 'replicaOperations',
+  REPLICA_OPERATIONS_SNAKE: 'replica_operations',
   REQUIRED_ACK_NODE_IDS: 'requiredAckNodeIds',
   SERVICES: 'services',
   STANDARD_SUMMARY: 'standardSummary',
@@ -164,6 +166,17 @@ const PUBLICATION_EVIDENCE_REPLAY_REBALANCER_HANDOFF_FIELD = Object.freeze({
   POST_TERMINAL_REBALANCE_MOVE_COUNT: 'postTerminalRebalanceMoveCount',
   POST_TERMINAL_REBALANCE_OBSERVED: 'postTerminalRebalanceObserved',
   POST_TERMINAL_REBALANCE_TIME_MS: 'postTerminalRebalanceTimeMs',
+  POST_TERMINAL_FOLLOW_UP_EXECUTION_STATE:
+    'postTerminalFollowUpExecutionState',
+  POST_TERMINAL_MOVE_BLOCKED_OBSERVED: 'postTerminalMoveBlockedObserved',
+  POST_TERMINAL_MOVE_BLOCKED_REASON: 'postTerminalMoveBlockedReason',
+  POST_TERMINAL_MOVE_EXECUTION_OBSERVED: 'postTerminalMoveExecutionObserved',
+  POST_TERMINAL_MOVE_EXECUTION_TIME_MS: 'postTerminalMoveExecutionTimeMs',
+  POST_TERMINAL_PERSISTED_OPERATION_CREATED_AT_MS:
+    'postTerminalPersistedOperationCreatedAtMs',
+  POST_TERMINAL_PERSISTED_OPERATION_ID: 'postTerminalPersistedOperationId',
+  POST_TERMINAL_PERSISTED_OPERATION_OBSERVED:
+    'postTerminalPersistedOperationObserved',
   POST_TERMINAL_SUPPRESSION_OBSERVED: 'postTerminalSuppressionObserved',
   POST_TERMINAL_SUPPRESSION_REASON: 'postTerminalSuppressionReason',
   RETAINED_BY_WITNESS: 'retainedByWitness',
@@ -227,6 +240,14 @@ const PUBLICATION_EVIDENCE_REPLAY_REBALANCER_HANDOFF_STATE = Object.freeze({
   RETAINED: 'retained',
   SUPPRESSED: 'suppressed',
 });
+const PUBLICATION_EVIDENCE_REPLAY_REBALANCER_FOLLOW_UP_EXECUTION_STATE =
+  Object.freeze({
+    BLOCKED_DURING_MOVE_EXECUTION: 'blocked_during_move_execution',
+    EXECUTED_WITHOUT_PERSISTED_OPERATION: 'executed_without_persisted_operation',
+    MISSING: 'missing',
+    NOT_EXECUTED_AFTER_ENQUEUE: 'not_executed_after_enqueue',
+    PERSISTED_NEW_OPERATION: 'persisted_new_operation',
+  });
 const PUBLICATION_EVIDENCE_REPLAY_REPAIR_EVIDENCE_RECOVERY_RULES = Object.freeze([
   Object.freeze({
     evidenceState:
@@ -293,11 +314,30 @@ const PUBLICATION_EVIDENCE_REPLAY_REPAIR_LOG_FIELD = Object.freeze({
 });
 const PUBLICATION_EVIDENCE_REPLAY_REBALANCER_LOG_FIELD = Object.freeze({
   ENTITY_ID: 'entityId',
+  ERROR: 'error',
+  ERROR_MESSAGE: 'errorMessage',
   MOVE_COUNT: 'moveCount',
+  MOVE_TYPE: 'moveType',
   MSG: 'msg',
   OPERATION_ID: 'operationId',
   PARTITION_ID: 'partitionId',
+  REASON: 'reason',
+  REPLICA_ID: 'replicaId',
+  SKIP_DETAIL: 'skipDetail',
   TIME: 'time',
+});
+const PUBLICATION_EVIDENCE_REPLAY_REPLICA_OPERATION_ROW_FIELD = Object.freeze({
+  CREATED_AT: 'createdAt',
+  CREATED_AT_SNAKE: 'created_at',
+  OPERATION_ID: 'operationId',
+  OPERATION_ID_SNAKE: 'operation_id',
+  PARTITION_ID: 'partitionId',
+  PARTITION_ID_SNAKE: 'partition_id',
+  STATUS: 'status',
+  UPDATED_AT: 'updatedAt',
+  UPDATED_AT_SNAKE: 'updated_at',
+  WORKFLOW_STEP: 'workflowStep',
+  WORKFLOW_STEP_SNAKE: 'workflow_step',
 });
 const PUBLICATION_EVIDENCE_REPLAY_REBALANCER_SUPPRESSION_MESSAGES = Object.freeze([
   REBALANCER_LOG_MSG.NO_REBALANCE_NEEDED,
@@ -305,6 +345,18 @@ const PUBLICATION_EVIDENCE_REPLAY_REBALANCER_SUPPRESSION_MESSAGES = Object.freez
   REBALANCER_LOG_MSG.SKIP_UNREADY_NODE,
   REBALANCER_LOG_MSG.SKIP_BATCH_UNREADY,
 ]);
+const PUBLICATION_EVIDENCE_REPLAY_REBALANCER_MOVE_BLOCKED_MESSAGES =
+  Object.freeze([
+    REBALANCER_LOG_MSG.MOVE_FAILED,
+    REBALANCER_LOG_MSG.MOVE_SKIPPED,
+    REBALANCER_LOG_MSG.SKIP_BATCH_UNREADY,
+    REBALANCER_LOG_MSG.SKIP_UNREADY_NODE,
+    REBALANCER_LOG_MSG.MOVE_BLOCKED_BY_SAFETY_POLICY,
+    REBALANCE_COORDINATOR_LOG_MSG.OPERATION_BLOCKED_BY_SAFETY_POLICY,
+    REBALANCE_COORDINATOR_LOG_MSG.OPERATION_DEFERRED_BY_SAFETY_POLICY,
+    REBALANCE_COORDINATOR_LOG_MSG.PERSIST_FAILED,
+    REBALANCE_COORDINATOR_LOG_MSG.PROVISIONING_ADMISSION_DENIED,
+  ]);
 const PUBLICATION_EVIDENCE_REPLAY_REPAIR_DEFERRAL_RULES = Object.freeze([
   Object.freeze({
     matches: (evidence) =>
@@ -1007,6 +1059,24 @@ function normalizeRebalancerHandoffLogEvidence(record = {}) {
     operationId: normalizeText(
       record[PUBLICATION_EVIDENCE_REPLAY_REBALANCER_LOG_FIELD.OPERATION_ID],
     ),
+    replicaId: normalizeText(
+      record[PUBLICATION_EVIDENCE_REPLAY_REBALANCER_LOG_FIELD.REPLICA_ID],
+    ),
+    moveType: normalizeText(
+      record[PUBLICATION_EVIDENCE_REPLAY_REBALANCER_LOG_FIELD.MOVE_TYPE],
+    ),
+    reason: normalizeText(
+      record[PUBLICATION_EVIDENCE_REPLAY_REBALANCER_LOG_FIELD.REASON],
+    ),
+    error: normalizeText(
+      record[PUBLICATION_EVIDENCE_REPLAY_REBALANCER_LOG_FIELD.ERROR],
+    ),
+    errorMessage: normalizeText(
+      record[PUBLICATION_EVIDENCE_REPLAY_REBALANCER_LOG_FIELD.ERROR_MESSAGE],
+    ),
+    skipDetail: normalizeText(
+      record[PUBLICATION_EVIDENCE_REPLAY_REBALANCER_LOG_FIELD.SKIP_DETAIL],
+    ),
     timeMs: normalizeTimestampMs(
       record[PUBLICATION_EVIDENCE_REPLAY_REBALANCER_LOG_FIELD.TIME],
     ),
@@ -1024,6 +1094,12 @@ function selectLatestRebalancerHandoffLog(records = []) {
       entityId: PUBLICATION_EVIDENCE_REPLAY_EMPTY_TEXT,
       partitionId: PUBLICATION_EVIDENCE_REPLAY_EMPTY_TEXT,
       operationId: PUBLICATION_EVIDENCE_REPLAY_EMPTY_TEXT,
+      replicaId: PUBLICATION_EVIDENCE_REPLAY_EMPTY_TEXT,
+      moveType: PUBLICATION_EVIDENCE_REPLAY_EMPTY_TEXT,
+      reason: PUBLICATION_EVIDENCE_REPLAY_EMPTY_TEXT,
+      error: PUBLICATION_EVIDENCE_REPLAY_EMPTY_TEXT,
+      errorMessage: PUBLICATION_EVIDENCE_REPLAY_EMPTY_TEXT,
+      skipDetail: PUBLICATION_EVIDENCE_REPLAY_EMPTY_TEXT,
       timeMs: NUM.ZERO,
       moveCount: NUM.ZERO,
     }),
@@ -1035,6 +1111,95 @@ function readRebalancerHandoffLogEvidence(failureBundle = {}) {
     .map(parseRepairLogRecordFromLine)
     .filter(isRecord)
     .map(normalizeRebalancerHandoffLogEvidence);
+}
+
+function normalizeReplicaOperationRow(row = {}) {
+  return {
+    operationId: normalizeText(
+      row[
+        PUBLICATION_EVIDENCE_REPLAY_REPLICA_OPERATION_ROW_FIELD.OPERATION_ID
+      ] ||
+        row[
+          PUBLICATION_EVIDENCE_REPLAY_REPLICA_OPERATION_ROW_FIELD
+            .OPERATION_ID_SNAKE
+        ],
+    ),
+    partitionId: normalizeText(
+      row[
+        PUBLICATION_EVIDENCE_REPLAY_REPLICA_OPERATION_ROW_FIELD.PARTITION_ID
+      ] ||
+        row[
+          PUBLICATION_EVIDENCE_REPLAY_REPLICA_OPERATION_ROW_FIELD
+            .PARTITION_ID_SNAKE
+        ],
+    ),
+    status: normalizeText(
+      row[PUBLICATION_EVIDENCE_REPLAY_REPLICA_OPERATION_ROW_FIELD.STATUS],
+    ),
+    workflowStep: normalizeText(
+      row[
+        PUBLICATION_EVIDENCE_REPLAY_REPLICA_OPERATION_ROW_FIELD.WORKFLOW_STEP
+      ] ||
+        row[
+          PUBLICATION_EVIDENCE_REPLAY_REPLICA_OPERATION_ROW_FIELD
+            .WORKFLOW_STEP_SNAKE
+        ],
+    ),
+    createdAtMs: normalizeInteger(
+      row[PUBLICATION_EVIDENCE_REPLAY_REPLICA_OPERATION_ROW_FIELD.CREATED_AT] ||
+        row[
+          PUBLICATION_EVIDENCE_REPLAY_REPLICA_OPERATION_ROW_FIELD
+            .CREATED_AT_SNAKE
+        ],
+    ),
+    updatedAtMs: normalizeInteger(
+      row[PUBLICATION_EVIDENCE_REPLAY_REPLICA_OPERATION_ROW_FIELD.UPDATED_AT] ||
+        row[
+          PUBLICATION_EVIDENCE_REPLAY_REPLICA_OPERATION_ROW_FIELD
+            .UPDATED_AT_SNAKE
+        ],
+    ),
+  };
+}
+
+function readReplicaOperationRowsFromSnapshotStates(snapshotStates = []) {
+  return snapshotStates
+    .filter((snapshotState) =>
+      snapshotState?.availability ===
+        PUBLICATION_EVIDENCE_REPLAY_AVAILABILITY.AVAILABLE,
+    )
+    .map((snapshotState) => snapshotState.value)
+    .filter(isRecord)
+    .flatMap((snapshot) => [
+      ...readArrayField(
+        snapshot,
+        PUBLICATION_EVIDENCE_REPLAY_FIELD.REPLICA_OPERATIONS,
+      ),
+      ...readArrayField(
+        snapshot,
+        PUBLICATION_EVIDENCE_REPLAY_FIELD.REPLICA_OPERATIONS_SNAKE,
+      ),
+    ])
+    .map((row) => normalizeReplicaOperationRow(row))
+    .filter((row) => row.operationId.length > NUM.ZERO);
+}
+
+function selectLatestReplicaOperationRow(rows = []) {
+  return rows.reduce(
+    (selected, row) => {
+      const rowTime = Math.max(row.createdAtMs, row.updatedAtMs);
+      const selectedTime = Math.max(selected.createdAtMs, selected.updatedAtMs);
+      return rowTime >= selectedTime ? row : selected;
+    },
+    Object.freeze({
+      operationId: PUBLICATION_EVIDENCE_REPLAY_EMPTY_TEXT,
+      partitionId: PUBLICATION_EVIDENCE_REPLAY_EMPTY_TEXT,
+      status: PUBLICATION_EVIDENCE_REPLAY_EMPTY_TEXT,
+      workflowStep: PUBLICATION_EVIDENCE_REPLAY_EMPTY_TEXT,
+      createdAtMs: NUM.ZERO,
+      updatedAtMs: NUM.ZERO,
+    }),
+  );
 }
 
 function isTerminalOperationFailureLog(evidence, witness) {
@@ -1057,6 +1222,42 @@ function isPostTerminalRebalanceStartLog(evidence, witness, terminalFailure) {
   );
 }
 
+function isPostTerminalMoveExecutionLog(evidence, witness, postTerminalRebalance) {
+  return (
+    evidence.message === REBALANCER_LOG_MSG.EXECUTE_MOVE &&
+    evidence.entityId ===
+      witness[PUBLICATION_EVIDENCE_REPLAY_PRIORITY_WITNESS_FIELD.PARTITION_ID] &&
+    evidence.timeMs > postTerminalRebalance.timeMs
+  );
+}
+
+function isPostTerminalMoveBlockedLog(evidence, witness, postTerminalRebalance) {
+  const partitionId =
+    witness[PUBLICATION_EVIDENCE_REPLAY_PRIORITY_WITNESS_FIELD.PARTITION_ID];
+  return (
+    PUBLICATION_EVIDENCE_REPLAY_REBALANCER_MOVE_BLOCKED_MESSAGES.includes(
+      evidence.message,
+    ) &&
+    (evidence.entityId === partitionId || evidence.partitionId === partitionId) &&
+    evidence.timeMs > postTerminalRebalance.timeMs
+  );
+}
+
+function isPostTerminalPersistedReplicaOperation(
+  operation,
+  witness,
+  postTerminalRebalance,
+) {
+  return (
+    operation.partitionId ===
+      witness[PUBLICATION_EVIDENCE_REPLAY_PRIORITY_WITNESS_FIELD.PARTITION_ID] &&
+    operation.operationId !==
+      witness[PUBLICATION_EVIDENCE_REPLAY_PRIORITY_WITNESS_FIELD.OPERATION_ID] &&
+    operation.createdAtMs >= postTerminalRebalance.timeMs &&
+    postTerminalRebalance.timeMs > NUM.ZERO
+  );
+}
+
 function isPostTerminalSuppressionLog(evidence, witness, terminalFailure) {
   return (
     PUBLICATION_EVIDENCE_REPLAY_REBALANCER_SUPPRESSION_MESSAGES.includes(
@@ -1066,6 +1267,17 @@ function isPostTerminalSuppressionLog(evidence, witness, terminalFailure) {
       witness[PUBLICATION_EVIDENCE_REPLAY_PRIORITY_WITNESS_FIELD.PARTITION_ID] &&
     evidence.timeMs > terminalFailure.timeMs
   );
+}
+
+function selectRebalancerMoveBlockedReason(evidence = {}) {
+  return [
+    evidence.reason,
+    evidence.errorMessage,
+    evidence.error,
+    evidence.skipDetail,
+    evidence.message,
+  ].find((value) => normalizeText(value).length > NUM.ZERO) ||
+    PUBLICATION_EVIDENCE_REPLAY_EMPTY_TEXT;
 }
 
 function resolveRebalancerHandoffFollowUpState(evidence = {}) {
@@ -1097,9 +1309,48 @@ function resolveRebalancerHandoffFollowUpState(evidence = {}) {
   return state || PUBLICATION_EVIDENCE_REPLAY_REBALANCER_HANDOFF_STATE.MISSING;
 }
 
+function resolveRebalancerFollowUpExecutionState(evidence = {}) {
+  const state = [
+    Object.freeze({
+      state: PUBLICATION_EVIDENCE_REPLAY_REBALANCER_FOLLOW_UP_EXECUTION_STATE
+        .PERSISTED_NEW_OPERATION,
+      matches: (executionEvidence) =>
+        executionEvidence.persistedOperationObserved === true,
+    }),
+    Object.freeze({
+      state: PUBLICATION_EVIDENCE_REPLAY_REBALANCER_FOLLOW_UP_EXECUTION_STATE
+        .BLOCKED_DURING_MOVE_EXECUTION,
+      matches: (executionEvidence) =>
+        executionEvidence.moveExecutionObserved === true &&
+        executionEvidence.moveBlockedObserved === true,
+    }),
+    Object.freeze({
+      state: PUBLICATION_EVIDENCE_REPLAY_REBALANCER_FOLLOW_UP_EXECUTION_STATE
+        .EXECUTED_WITHOUT_PERSISTED_OPERATION,
+      matches: (executionEvidence) =>
+        executionEvidence.moveExecutionObserved === true,
+    }),
+    Object.freeze({
+      state: PUBLICATION_EVIDENCE_REPLAY_REBALANCER_FOLLOW_UP_EXECUTION_STATE
+        .NOT_EXECUTED_AFTER_ENQUEUE,
+      matches: (executionEvidence) =>
+        executionEvidence.followUpState ===
+          PUBLICATION_EVIDENCE_REPLAY_REBALANCER_HANDOFF_STATE.ENQUEUED,
+    }),
+    Object.freeze({
+      state: PUBLICATION_EVIDENCE_REPLAY_REBALANCER_FOLLOW_UP_EXECUTION_STATE
+        .MISSING,
+      matches: () => true,
+    }),
+  ].find((entry) => entry.matches(evidence))?.state;
+  return state ||
+    PUBLICATION_EVIDENCE_REPLAY_REBALANCER_FOLLOW_UP_EXECUTION_STATE.MISSING;
+}
+
 function summarizeRebalancerFollowUpHandoff({
   failureBundle = {},
   priorityRecoveryWitnesses = [],
+  snapshotStates = [],
 } = {}) {
   const witness = selectRebalancerFollowUpWitness(priorityRecoveryWitnesses);
   const retainedByWitness =
@@ -1123,6 +1374,26 @@ function summarizeRebalancerFollowUpHandoff({
       isPostTerminalSuppressionLog(evidence, witness, terminalFailure),
     ),
   );
+  const postTerminalMoveExecution = selectLatestRebalancerHandoffLog(
+    logEvidence.filter((evidence) =>
+      isPostTerminalMoveExecutionLog(evidence, witness, postTerminalRebalance),
+    ),
+  );
+  const postTerminalMoveBlocked = selectLatestRebalancerHandoffLog(
+    logEvidence.filter((evidence) =>
+      isPostTerminalMoveBlockedLog(evidence, witness, postTerminalRebalance),
+    ),
+  );
+  const postTerminalPersistedOperation = selectLatestReplicaOperationRow(
+    readReplicaOperationRowsFromSnapshotStates(snapshotStates)
+      .filter((operation) =>
+        isPostTerminalPersistedReplicaOperation(
+          operation,
+          witness,
+          postTerminalRebalance,
+        ),
+      ),
+  );
   const handoffEvidence = Object.freeze({
     retainedByWitness,
     terminalFailureObserved,
@@ -1130,6 +1401,15 @@ function summarizeRebalancerFollowUpHandoff({
     postTerminalSuppressionObserved: postTerminalSuppression.timeMs > NUM.ZERO,
   });
   const followUpState = resolveRebalancerHandoffFollowUpState(handoffEvidence);
+  const executionEvidence = Object.freeze({
+    followUpState,
+    moveExecutionObserved: postTerminalMoveExecution.timeMs > NUM.ZERO,
+    moveBlockedObserved: postTerminalMoveBlocked.timeMs > NUM.ZERO,
+    persistedOperationObserved:
+      postTerminalPersistedOperation.operationId.length > NUM.ZERO,
+  });
+  const followUpExecutionState =
+    resolveRebalancerFollowUpExecutionState(executionEvidence);
   return {
     [PUBLICATION_EVIDENCE_REPLAY_REBALANCER_HANDOFF_FIELD.AVAILABILITY]:
       followUpState === PUBLICATION_EVIDENCE_REPLAY_REBALANCER_HANDOFF_STATE
@@ -1164,6 +1444,30 @@ function summarizeRebalancerFollowUpHandoff({
     [PUBLICATION_EVIDENCE_REPLAY_REBALANCER_HANDOFF_FIELD
       .POST_TERMINAL_REBALANCE_MOVE_COUNT]:
       postTerminalRebalance.moveCount,
+    [PUBLICATION_EVIDENCE_REPLAY_REBALANCER_HANDOFF_FIELD
+      .POST_TERMINAL_FOLLOW_UP_EXECUTION_STATE]:
+      followUpExecutionState,
+    [PUBLICATION_EVIDENCE_REPLAY_REBALANCER_HANDOFF_FIELD
+      .POST_TERMINAL_MOVE_EXECUTION_OBSERVED]:
+      postTerminalMoveExecution.timeMs > NUM.ZERO,
+    [PUBLICATION_EVIDENCE_REPLAY_REBALANCER_HANDOFF_FIELD
+      .POST_TERMINAL_MOVE_EXECUTION_TIME_MS]:
+      postTerminalMoveExecution.timeMs,
+    [PUBLICATION_EVIDENCE_REPLAY_REBALANCER_HANDOFF_FIELD
+      .POST_TERMINAL_MOVE_BLOCKED_OBSERVED]:
+      postTerminalMoveBlocked.timeMs > NUM.ZERO,
+    [PUBLICATION_EVIDENCE_REPLAY_REBALANCER_HANDOFF_FIELD
+      .POST_TERMINAL_MOVE_BLOCKED_REASON]:
+      selectRebalancerMoveBlockedReason(postTerminalMoveBlocked),
+    [PUBLICATION_EVIDENCE_REPLAY_REBALANCER_HANDOFF_FIELD
+      .POST_TERMINAL_PERSISTED_OPERATION_OBSERVED]:
+      postTerminalPersistedOperation.operationId.length > NUM.ZERO,
+    [PUBLICATION_EVIDENCE_REPLAY_REBALANCER_HANDOFF_FIELD
+      .POST_TERMINAL_PERSISTED_OPERATION_ID]:
+      postTerminalPersistedOperation.operationId,
+    [PUBLICATION_EVIDENCE_REPLAY_REBALANCER_HANDOFF_FIELD
+      .POST_TERMINAL_PERSISTED_OPERATION_CREATED_AT_MS]:
+      postTerminalPersistedOperation.createdAtMs,
     [PUBLICATION_EVIDENCE_REPLAY_REBALANCER_HANDOFF_FIELD
       .POST_TERMINAL_SUPPRESSION_OBSERVED]:
       postTerminalSuppression.timeMs > NUM.ZERO,
@@ -1710,6 +2014,7 @@ async function replayPublicationPriorityEvidenceFromReportDir(reportDir) {
   const rebalancerFollowUpHandoff = summarizeRebalancerFollowUpHandoff({
     failureBundle,
     priorityRecoveryWitnesses,
+    snapshotStates,
   });
   const nodeEndpointRows = [
     ...readArrayField(
@@ -1823,6 +2128,7 @@ export {
   PUBLICATION_EVIDENCE_REPLAY_AVAILABILITY,
   PUBLICATION_EVIDENCE_REPLAY_CLOSURE_WITNESS_CLASSIFICATION,
   PUBLICATION_EVIDENCE_REPLAY_DRIFT_CLASSIFICATION,
+  PUBLICATION_EVIDENCE_REPLAY_REBALANCER_FOLLOW_UP_EXECUTION_STATE,
   PUBLICATION_EVIDENCE_REPLAY_REBALANCER_HANDOFF_STATE,
   formatPublicationEvidenceReplaySummary,
   replayPublicationPriorityEvidenceFromReportDir,

@@ -669,10 +669,16 @@ Sprint:
       `schedule_followup_rebalance` is retained, enqueued, or suppressed after
       the terminal `FAILED` / `failed` handoff, while keeping the epoch `2`
       `PUBLISHED` missing-active selected-snapshot topology debt canonical.
-- [ ] Trace whether the post-terminal enqueued
+- [x] Trace whether the post-terminal enqueued
       `control_plane_publications-p1` follow-up move persisted a new operation
       or was blocked during move execution, without promoting it over the epoch
       `2` `PUBLISHED` missing-active selected-snapshot topology debt.
+- [ ] Trace why the post-terminal enqueued
+      `control_plane_publications-p1` follow-up did not reach logged move
+      execution after `Starting rebalancing`: inspect move-limit, budget,
+      admission, leadership, and scheduler handoff evidence while keeping the
+      epoch `2` `PUBLISHED` missing-active selected-snapshot topology debt
+      canonical.
 
 ## May 5 Regression Validation
 
@@ -2741,8 +2747,7 @@ canonical blocker stays the epoch `2` `PUBLISHED` missing-active
 selected-snapshot topology debt: terminal active `4/5`, selected coverage
 `2/5`, selected published active `2/5`, missing published `3`, selected
 witness reachability timeout, and priority spread pending. The package remains
-active. The next unchecked task is to trace whether the enqueued follow-up
-move persisted a new operation or was blocked during move execution.
+active. This led to the follow-up move execution trace below.
 
 Validation:
 
@@ -2756,6 +2761,78 @@ Validation:
    passed: `7` tests, `1` suite.
 5. `node test/distributed/harness/publication-evidence-replay.js test-output/reports/.playback/rolling-restart-after-140646z-publication-pending-replay-fixture-20260505T145246Z/rolling-restart`
    passed and reported `followUpState=enqueued`.
+6. `npx eslint test/distributed/harness/publication-evidence-replay.js test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+   passed.
+7. `node scripts/check-guideline-decision-boundaries.js test/distributed/harness/publication-evidence-replay.js test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+   reported `0` decision-boundary guideline violations.
+8. `node scripts/check-runtime-grammar-contracts.js test/distributed/harness/publication-evidence-replay.js test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+   reported `0` runtime-grammar-contract violations.
+9. `node scripts/check-guideline-boundary-mode-contracts.js test/distributed/harness/publication-evidence-replay.js test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+   reported `0` boundary-mode-contract hotspot violations.
+10. `node scripts/check-guideline-literals.js test/distributed/harness/publication-evidence-replay.js test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+    reported `0` new and `0` inherited literal-guideline violations.
+11. `node scripts/check-guideline-literals.js --include-tests test/distributed/harness/publication-evidence-replay.js test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+    reported `0` new and `0` inherited literal-guideline violations.
+12. `git diff --check` passed.
+
+## May 5 145246Z Follow-Up Move Execution Trace
+
+The subordinate post-terminal `control_plane_publications-p1` follow-up now has
+an explicit persisted-vs-blocked replay outcome.
+
+Implementation:
+
+1. `test/distributed/harness/publication-evidence-replay.js` extends
+   `rebalancerFollowUpHandoff` with a post-terminal follow-up execution state.
+   It now checks the retained `schedule_followup_rebalance` witness, the
+   terminal `Operation failed` log, the later `Starting rebalancing` log, any
+   same-partition `Executing rebalancing move` / move-blocked logs, and
+   `replicaOperations` snapshot rows for a newer same-partition operation after
+   the follow-up start.
+2. `test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+   extends the `145246Z` fixture with the captured failed
+   `control_plane_publications-p1` operation row so the probe proves the old
+   terminal operation does not count as a newly persisted follow-up operation.
+
+Evidence:
+
+1. The real `145246Z` replay now reports
+   `rebalancerFollowUpHandoff.postTerminalFollowUpExecutionState=not_executed_after_enqueue`.
+2. The follow-up remains `followUpState=enqueued` with the
+   `Starting rebalancing` record at `2026-05-05T14:55:04.771Z` and
+   `moveCount=1`.
+3. No post-terminal `Executing rebalancing move` record is observed for
+   `control_plane_publications-p1`.
+4. No post-terminal move-level blocked record is observed for
+   `control_plane_publications-p1`.
+5. No newer same-partition `replicaOperations` row is captured after the
+   follow-up start. The only captured `control_plane_publications-p1` operation
+   is the prior failed operation
+   `396c2fda-2639-4b3d-ad8d-7c148dc90936`.
+
+Outcome: the subordinate follow-up did not persist a new operation and was not
+blocked during logged move execution in the captured evidence. It was enqueued
+into a rebalancing pass that did not reach a logged move execution before the
+artifact ended. The canonical blocker remains the epoch `2` `PUBLISHED`
+missing-active selected-snapshot topology debt: active `4/5`, selected
+coverage `2/5`, selected published active `2/5`, missing published `3`, the
+selected witness reachability timeout, and priority spread pending. The
+package remains active. The next unchecked task is to trace why the enqueued
+follow-up did not reach logged move execution after `Starting rebalancing`.
+
+Validation:
+
+1. `node --check test/distributed/harness/publication-evidence-replay.js`
+   passed.
+2. `node --check test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+   passed.
+3. `node --test --test-name-pattern "keeps the 145246Z PUBLISHED reachability and rebalancer replay blocked" test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+   passed.
+4. `node --test test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+   passed: `7` tests, `1` suite.
+5. `node test/distributed/harness/publication-evidence-replay.js test-output/reports/.playback/rolling-restart-after-140646z-publication-pending-replay-fixture-20260505T145246Z/rolling-restart`
+   passed and reported
+   `postTerminalFollowUpExecutionState=not_executed_after_enqueue`.
 6. `npx eslint test/distributed/harness/publication-evidence-replay.js test/distributed/harness/__tests__/publication-evidence-replay.test.js`
    passed.
 7. `node scripts/check-guideline-decision-boundaries.js test/distributed/harness/publication-evidence-replay.js test/distributed/harness/__tests__/publication-evidence-replay.test.js`
@@ -2844,7 +2921,11 @@ selected-snapshot repair evidence when `selectedWitnessDeferralCount` is `0`.
 The rebalancer-handoff probe proves that
 `schedule_followup_rebalance` for `control_plane_publications-p1` operation
 `396c2fda-2639-4b3d-ad8d-7c148dc90936` was retained and enqueued into a
-post-terminal rebalancing pass with `moveCount=1`, not suppressed. The next
-unchecked task is to trace whether that enqueued follow-up move persisted a new
-operation or was blocked during move execution, while keeping the epoch `2`
-`PUBLISHED` missing-active selected-snapshot topology debt canonical.
+post-terminal rebalancing pass with `moveCount=1`, not suppressed. The
+follow-up execution probe proves the captured evidence has no post-terminal
+same-partition `Executing rebalancing move`, no move-level blocked record, and
+no newer persisted `replicaOperations` row after the follow-up start; the state
+is `not_executed_after_enqueue`. The next unchecked task is to trace why that
+enqueued follow-up did not reach logged move execution after
+`Starting rebalancing`, while keeping the epoch `2` `PUBLISHED`
+missing-active selected-snapshot topology debt canonical.

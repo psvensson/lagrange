@@ -32,6 +32,7 @@ import {
   formatPublicationEvidenceReplaySummary,
   PUBLICATION_EVIDENCE_REPLAY_CLOSURE_WITNESS_CLASSIFICATION,
   PUBLICATION_EVIDENCE_REPLAY_DRIFT_CLASSIFICATION,
+  PUBLICATION_EVIDENCE_REPLAY_REBALANCER_FOLLOW_UP_EXECUTION_STATE,
   PUBLICATION_EVIDENCE_REPLAY_REBALANCER_HANDOFF_STATE,
   replayPublicationPriorityEvidenceFromReportDir,
 } from '../publication-evidence-replay.js';
@@ -806,6 +807,9 @@ const REPLAY_TEST_145246Z_OPERATION_STATUS_UNAVAILABLE = 'unavailable';
 const REPLAY_TEST_145246Z_CLOSURE_PENDING = 'closure_pending';
 const REPLAY_TEST_145246Z_REBALANCER_OPERATION_ID =
   '396c2fda-2639-4b3d-ad8d-7c148dc90936';
+const REPLAY_TEST_145246Z_REBALANCER_REPLICA_ID =
+  'control_plane_publications-p1-r4';
+const REPLAY_TEST_145246Z_REBALANCER_OPERATION_CREATED_AT_MS = 1777992808355;
 const REPLAY_TEST_145246Z_OPERATION_FAILED_TIME =
   '2026-05-05T14:55:04.403Z';
 const REPLAY_TEST_145246Z_FOLLOWUP_REBALANCE_TIME =
@@ -2274,6 +2278,22 @@ function build145246ZServiceRows(partitionRows) {
   return serviceRows;
 }
 
+function build145246ZReplicaOperationRows() {
+  return [
+    {
+      operation_id: REPLAY_TEST_145246Z_REBALANCER_OPERATION_ID,
+      partition_id: REPLAY_TEST_145246Z_CONTROL_PLANE_PUBLICATIONS_PARTITION_ID,
+      replica_id: REPLAY_TEST_145246Z_REBALANCER_REPLICA_ID,
+      source_node_id: REPLAY_TEST_145246Z_NODE_ID.SEED,
+      target_node_id: REPLAY_TEST_145246Z_NODE_ID.BASELINE,
+      status: REPLAY_TEST_145246Z_OPERATION_STATUS_FAILED,
+      workflow_step: REPLAY_TEST_145246Z_WORKFLOW_STEP_FAILED,
+      created_at: REPLAY_TEST_145246Z_REBALANCER_OPERATION_CREATED_AT_MS,
+      updated_at: REPLAY_TEST_145246Z_OPERATION_FAILED_TIME_MS,
+    },
+  ];
+}
+
 function build145246ZBlockedPartition(partitionId) {
   return {
     partitionId,
@@ -2530,6 +2550,7 @@ function build145246ZSnapshot() {
     nodes: build145246ZNodeRows(),
     nodeEndpoints: REPLAY_TEST_145246Z_NODE_ENDPOINT_ROWS,
     partitions: partitionRows,
+    replicaOperations: build145246ZReplicaOperationRows(),
     services: build145246ZServiceRows(partitionRows),
   };
 }
@@ -4418,6 +4439,29 @@ describe(REPLAY_TEST_SUITE_NAME, () => {
     assert.equal(
       replaySummary.rebalancerFollowUpHandoff.postTerminalRebalanceMoveCount,
       NUM.ONE,
+    );
+    assert.equal(
+      replaySummary.rebalancerFollowUpHandoff
+        .postTerminalFollowUpExecutionState,
+      PUBLICATION_EVIDENCE_REPLAY_REBALANCER_FOLLOW_UP_EXECUTION_STATE
+        .NOT_EXECUTED_AFTER_ENQUEUE,
+    );
+    assert.equal(
+      replaySummary.rebalancerFollowUpHandoff.postTerminalMoveExecutionObserved,
+      false,
+    );
+    assert.equal(
+      replaySummary.rebalancerFollowUpHandoff.postTerminalMoveBlockedObserved,
+      false,
+    );
+    assert.equal(
+      replaySummary.rebalancerFollowUpHandoff
+        .postTerminalPersistedOperationObserved,
+      false,
+    );
+    assert.equal(
+      replaySummary.rebalancerFollowUpHandoff.postTerminalPersistedOperationId,
+      REPLAY_TEST_145246Z_EMPTY_OPERATION_ID,
     );
     assert.equal(
       replaySummary.rebalancerFollowUpHandoff.postTerminalSuppressionObserved,
