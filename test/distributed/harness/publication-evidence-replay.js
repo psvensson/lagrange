@@ -69,6 +69,8 @@ const PUBLICATION_EVIDENCE_REPLAY_LINE = Object.freeze({
   REPLAYED: 'replayed',
   SELECTED_SNAPSHOT_OBSERVATION: 'selectedSnapshotObservation',
   OWNER_RPC_CACHE_REPAIR: 'ownerRpcCacheRepair',
+  SELECTED_SNAPSHOT_REPAIR_EVIDENCE_RECOVERY:
+    'selectedSnapshotRepairEvidenceRecovery',
   PRIORITY_RECOVERY_WITNESSES: 'priorityRecoveryWitnesses',
   SUPPORTING_PRIORITY_RECOVERY_WITNESS: 'supportingPriorityRecoveryWitness',
   COMPARISON: 'comparison',
@@ -108,6 +110,20 @@ const PUBLICATION_EVIDENCE_REPLAY_REPAIR_FIELD = Object.freeze({
   READ_SOURCES: 'readSources',
   SELECTED_WITNESS_DEFERRAL_COUNT: 'selectedWitnessDeferralCount',
   SELECTED_WITNESS_LATEST_RETRY_AFTER_MS: 'selectedWitnessLatestRetryAfterMs',
+  SELECTED_WITNESS_NODE_ID: 'selectedWitnessNodeId',
+});
+const PUBLICATION_EVIDENCE_REPLAY_REPAIR_EVIDENCE_FIELD = Object.freeze({
+  AVAILABILITY: 'availability',
+  EVIDENCE_STATE: 'evidenceState',
+  RECONSTRUCTED_CAUSE_CHAIN: 'reconstructedCauseChain',
+  RECONSTRUCTED_FAILED_TABLE_NAMES: 'reconstructedFailedTableNames',
+  RECONSTRUCTED_OWNER_RPC_AVAILABILITY: 'reconstructedOwnerRpcAvailability',
+  RECONSTRUCTED_OWNER_RPC_DEFERRAL_STATE: 'reconstructedOwnerRpcDeferralState',
+  RECONSTRUCTED_READ_SOURCES: 'reconstructedReadSources',
+  RETAINED_OBSERVATION_AVAILABILITY: 'retainedObservationAvailability',
+  RETAINED_OBSERVATION_DEFERRAL_STATE: 'retainedObservationDeferralState',
+  RETAINED_OBSERVATION_REASON_CODES: 'retainedObservationReasonCodes',
+  RETAINED_OBSERVATION_STATE: 'retainedObservationState',
   SELECTED_WITNESS_NODE_ID: 'selectedWitnessNodeId',
 });
 const PUBLICATION_EVIDENCE_REPLAY_PRIORITY_WITNESS_FIELD = Object.freeze({
@@ -172,6 +188,41 @@ const PUBLICATION_EVIDENCE_REPLAY_REPAIR_DEFERRAL_STATE = Object.freeze({
   MISSING: 'missing',
   REPAIR_DEFERRED: 'repair_deferred',
 });
+const PUBLICATION_EVIDENCE_REPLAY_REPAIR_EVIDENCE_RECOVERY_STATE = Object.freeze({
+  MISSING: 'missing',
+  RECONSTRUCTED_OWNER_RPC_CACHE_REPAIR: 'reconstructed_owner_rpc_cache_repair',
+  RETAINED_AND_RECONSTRUCTED:
+    'retained_selected_snapshot_and_reconstructed_owner_rpc',
+  RETAINED_SELECTED_SNAPSHOT_OBSERVATION:
+    'retained_selected_snapshot_observation',
+});
+const PUBLICATION_EVIDENCE_REPLAY_REPAIR_EVIDENCE_RECOVERY_RULES = Object.freeze([
+  Object.freeze({
+    evidenceState:
+      PUBLICATION_EVIDENCE_REPLAY_REPAIR_EVIDENCE_RECOVERY_STATE
+        .RETAINED_AND_RECONSTRUCTED,
+    matches: (evidence) =>
+      evidence.hasRetainedObservation === true &&
+      evidence.hasReconstructedOwnerRpc === true,
+  }),
+  Object.freeze({
+    evidenceState:
+      PUBLICATION_EVIDENCE_REPLAY_REPAIR_EVIDENCE_RECOVERY_STATE
+        .RETAINED_SELECTED_SNAPSHOT_OBSERVATION,
+    matches: (evidence) => evidence.hasRetainedObservation === true,
+  }),
+  Object.freeze({
+    evidenceState:
+      PUBLICATION_EVIDENCE_REPLAY_REPAIR_EVIDENCE_RECOVERY_STATE
+        .RECONSTRUCTED_OWNER_RPC_CACHE_REPAIR,
+    matches: (evidence) => evidence.hasReconstructedOwnerRpc === true,
+  }),
+  Object.freeze({
+    evidenceState:
+      PUBLICATION_EVIDENCE_REPLAY_REPAIR_EVIDENCE_RECOVERY_STATE.MISSING,
+    matches: () => true,
+  }),
+]);
 const PUBLICATION_EVIDENCE_REPLAY_DURABLE_FIELD = Object.freeze({
   CLOSURE_RECORD_ID: 'closureRecordId',
   CLOSURE_WITNESS_CLASS: 'closureWitnessClass',
@@ -580,6 +631,155 @@ function summarizeOwnerRpcCacheRepairDeferrals({
       normalizeList(repairDeferrals.map((evidence) => evidence.readSource)),
     [PUBLICATION_EVIDENCE_REPLAY_REPAIR_FIELD.FAILURE_CLASSES]:
       normalizeList(repairDeferrals.map((evidence) => evidence.failureClass)),
+  };
+}
+
+function hasRetainedSelectedSnapshotRepairEvidence(
+  selectedSnapshotObservation = {},
+) {
+  return (
+    selectedSnapshotObservation[
+      PUBLICATION_EVIDENCE_REPLAY_OBSERVATION_FIELD.AVAILABILITY
+    ] === PUBLICATION_EVIDENCE_REPLAY_AVAILABILITY.AVAILABLE &&
+    (
+      selectedSnapshotObservation[
+        PUBLICATION_EVIDENCE_REPLAY_OBSERVATION_FIELD
+          .SELECTED_SNAPSHOT_REPAIR_DEFERRED
+      ] === true ||
+      selectedSnapshotObservation[
+        PUBLICATION_EVIDENCE_REPLAY_OBSERVATION_FIELD
+          .SELECTED_SNAPSHOT_OBSERVATION_MODE
+      ] ===
+        PUBLICATION_EVIDENCE_REPLAY_REPAIR_DEFERRAL_STATE.REPAIR_DEFERRED
+    )
+  );
+}
+
+function hasReconstructedOwnerRpcRepairEvidence(ownerRpcCacheRepair = {}) {
+  return (
+    ownerRpcCacheRepair[
+      PUBLICATION_EVIDENCE_REPLAY_REPAIR_FIELD.AVAILABILITY
+    ] === PUBLICATION_EVIDENCE_REPLAY_AVAILABILITY.AVAILABLE &&
+    ownerRpcCacheRepair[
+      PUBLICATION_EVIDENCE_REPLAY_REPAIR_FIELD.DEFERRAL_STATE
+    ] === PUBLICATION_EVIDENCE_REPLAY_REPAIR_DEFERRAL_STATE.REPAIR_DEFERRED &&
+    normalizeInteger(
+      ownerRpcCacheRepair[
+        PUBLICATION_EVIDENCE_REPLAY_REPAIR_FIELD.MATCHING_DEFERRAL_COUNT
+      ],
+    ) > NUM.ZERO
+  );
+}
+
+function resolveSelectedSnapshotRepairEvidenceRecoveryState(evidence = {}) {
+  return PUBLICATION_EVIDENCE_REPLAY_REPAIR_EVIDENCE_RECOVERY_RULES
+    .find((rule) => rule.matches(evidence))
+    .evidenceState;
+}
+
+function summarizeSelectedSnapshotRepairEvidenceRecovery({
+  selectedSnapshotObservation = {},
+  ownerRpcCacheRepair = {},
+} = {}) {
+  const hasRetainedObservation =
+    hasRetainedSelectedSnapshotRepairEvidence(selectedSnapshotObservation);
+  const hasReconstructedOwnerRpc =
+    hasReconstructedOwnerRpcRepairEvidence(ownerRpcCacheRepair);
+  const evidenceState = resolveSelectedSnapshotRepairEvidenceRecoveryState({
+    hasRetainedObservation,
+    hasReconstructedOwnerRpc,
+  });
+  const selectedObservationNodeId = normalizeText(
+    selectedSnapshotObservation[
+      PUBLICATION_EVIDENCE_REPLAY_OBSERVATION_FIELD.SELECTED_SNAPSHOT_NODE_ID
+    ],
+  );
+  const selectedRepairNodeId = normalizeText(
+    ownerRpcCacheRepair[
+      PUBLICATION_EVIDENCE_REPLAY_REPAIR_FIELD.SELECTED_WITNESS_NODE_ID
+    ],
+  );
+  return {
+    [PUBLICATION_EVIDENCE_REPLAY_REPAIR_EVIDENCE_FIELD.AVAILABILITY]:
+      evidenceState ===
+        PUBLICATION_EVIDENCE_REPLAY_REPAIR_EVIDENCE_RECOVERY_STATE.MISSING ?
+        PUBLICATION_EVIDENCE_REPLAY_AVAILABILITY.MISSING :
+        PUBLICATION_EVIDENCE_REPLAY_AVAILABILITY.AVAILABLE,
+    [PUBLICATION_EVIDENCE_REPLAY_REPAIR_EVIDENCE_FIELD.EVIDENCE_STATE]:
+      evidenceState,
+    [PUBLICATION_EVIDENCE_REPLAY_REPAIR_EVIDENCE_FIELD.SELECTED_WITNESS_NODE_ID]:
+      selectedObservationNodeId || selectedRepairNodeId,
+    [PUBLICATION_EVIDENCE_REPLAY_REPAIR_EVIDENCE_FIELD
+      .RETAINED_OBSERVATION_AVAILABILITY]:
+      hasRetainedObservation ?
+        PUBLICATION_EVIDENCE_REPLAY_AVAILABILITY.AVAILABLE :
+        PUBLICATION_EVIDENCE_REPLAY_AVAILABILITY.MISSING,
+    [PUBLICATION_EVIDENCE_REPLAY_REPAIR_EVIDENCE_FIELD
+      .RECONSTRUCTED_OWNER_RPC_AVAILABILITY]:
+      hasReconstructedOwnerRpc ?
+        PUBLICATION_EVIDENCE_REPLAY_AVAILABILITY.AVAILABLE :
+        PUBLICATION_EVIDENCE_REPLAY_AVAILABILITY.MISSING,
+    [PUBLICATION_EVIDENCE_REPLAY_REPAIR_EVIDENCE_FIELD
+      .RETAINED_OBSERVATION_DEFERRAL_STATE]:
+      hasRetainedObservation ?
+        normalizeText(
+          selectedSnapshotObservation[
+            PUBLICATION_EVIDENCE_REPLAY_OBSERVATION_FIELD
+              .SELECTED_SNAPSHOT_OBSERVATION_MODE
+          ],
+        ) :
+        PUBLICATION_EVIDENCE_REPLAY_REPAIR_DEFERRAL_STATE.MISSING,
+    [PUBLICATION_EVIDENCE_REPLAY_REPAIR_EVIDENCE_FIELD
+      .RECONSTRUCTED_OWNER_RPC_DEFERRAL_STATE]:
+      normalizeText(
+        ownerRpcCacheRepair[
+          PUBLICATION_EVIDENCE_REPLAY_REPAIR_FIELD.DEFERRAL_STATE
+        ],
+      ) || PUBLICATION_EVIDENCE_REPLAY_REPAIR_DEFERRAL_STATE.MISSING,
+    [PUBLICATION_EVIDENCE_REPLAY_REPAIR_EVIDENCE_FIELD.RETAINED_OBSERVATION_STATE]:
+      hasRetainedObservation ?
+        normalizeText(
+          selectedSnapshotObservation[
+            PUBLICATION_EVIDENCE_REPLAY_OBSERVATION_FIELD
+              .SELECTED_SNAPSHOT_OBSERVATION_STATE
+          ],
+        ) :
+        PUBLICATION_EVIDENCE_REPLAY_EMPTY_TEXT,
+    [PUBLICATION_EVIDENCE_REPLAY_REPAIR_EVIDENCE_FIELD
+      .RETAINED_OBSERVATION_REASON_CODES]:
+      hasRetainedObservation ?
+        normalizeList(
+          selectedSnapshotObservation[
+            PUBLICATION_EVIDENCE_REPLAY_OBSERVATION_FIELD
+              .SELECTED_SNAPSHOT_OBSERVATION_REASON_CODES
+          ],
+        ) :
+        [],
+    [PUBLICATION_EVIDENCE_REPLAY_REPAIR_EVIDENCE_FIELD
+      .RECONSTRUCTED_FAILED_TABLE_NAMES]:
+      hasReconstructedOwnerRpc ?
+        normalizeList(
+          ownerRpcCacheRepair[
+            PUBLICATION_EVIDENCE_REPLAY_REPAIR_FIELD.FAILED_TABLE_NAMES
+          ],
+        ) :
+        [],
+    [PUBLICATION_EVIDENCE_REPLAY_REPAIR_EVIDENCE_FIELD.RECONSTRUCTED_READ_SOURCES]:
+      hasReconstructedOwnerRpc ?
+        normalizeList(
+          ownerRpcCacheRepair[
+            PUBLICATION_EVIDENCE_REPLAY_REPAIR_FIELD.READ_SOURCES
+          ],
+        ) :
+        [],
+    [PUBLICATION_EVIDENCE_REPLAY_REPAIR_EVIDENCE_FIELD.RECONSTRUCTED_CAUSE_CHAIN]:
+      hasReconstructedOwnerRpc ?
+        normalizeList(
+          ownerRpcCacheRepair[
+            PUBLICATION_EVIDENCE_REPLAY_REPAIR_FIELD.CAUSE_CHAIN
+          ],
+        ) :
+        [],
   };
 }
 
@@ -1254,6 +1454,13 @@ async function replayPublicationPriorityEvidenceFromReportDir(reportDir) {
   );
   const selectedSnapshotObservation =
     readSelectedSnapshotObservationFromFailureBundle(failureBundle);
+  const ownerRpcCacheRepair = summarizeOwnerRpcCacheRepairDeferrals({
+    failureBundle,
+    selectedSnapshotNodeId:
+      selectedSnapshotObservation[
+        PUBLICATION_EVIDENCE_REPLAY_OBSERVATION_FIELD.SELECTED_SNAPSHOT_NODE_ID
+      ],
+  });
   const priorityRecoveryWitnesses =
     summarizePriorityRecoveryWitnesses(failureBundle);
   const nodeEndpointRows = [
@@ -1273,13 +1480,12 @@ async function replayPublicationPriorityEvidenceFromReportDir(reportDir) {
       latestSnapshot[PUBLICATION_EVIDENCE_REPLAY_FIELD.TIMESTAMP],
     ),
     selectedSnapshotObservation,
-    ownerRpcCacheRepair: summarizeOwnerRpcCacheRepairDeferrals({
-      failureBundle,
-      selectedSnapshotNodeId:
-        selectedSnapshotObservation[
-          PUBLICATION_EVIDENCE_REPLAY_OBSERVATION_FIELD.SELECTED_SNAPSHOT_NODE_ID
-        ],
-    }),
+    ownerRpcCacheRepair,
+    selectedSnapshotRepairEvidenceRecovery:
+      summarizeSelectedSnapshotRepairEvidenceRecovery({
+        selectedSnapshotObservation,
+        ownerRpcCacheRepair,
+      }),
     priorityRecoveryWitnesses,
     supportingPriorityRecoveryWitness:
       selectSupportingPriorityRecoveryWitness(priorityRecoveryWitnesses),
@@ -1321,6 +1527,10 @@ function formatPublicationEvidenceReplaySummary(summary = {}) {
     formatJsonLine(
       PUBLICATION_EVIDENCE_REPLAY_LINE.OWNER_RPC_CACHE_REPAIR,
       summary.ownerRpcCacheRepair,
+    ),
+    formatJsonLine(
+      PUBLICATION_EVIDENCE_REPLAY_LINE.SELECTED_SNAPSHOT_REPAIR_EVIDENCE_RECOVERY,
+      summary.selectedSnapshotRepairEvidenceRecovery,
     ),
     formatJsonLine(
       PUBLICATION_EVIDENCE_REPLAY_LINE.PRIORITY_RECOVERY_WITNESSES,

@@ -766,6 +766,8 @@ const REPLAY_TEST_145246Z_DISCOVERY_NODE_COVERAGE_GAP =
 const REPLAY_TEST_145246Z_STALE_REPLICA_OPERATIONS_IN_FLIGHT =
   'stale_replica_operations_in_flight';
 const REPLAY_TEST_145246Z_REPAIR_DEFERRAL_STATE = 'missing';
+const REPLAY_TEST_145246Z_REPAIR_EVIDENCE_RECOVERY_STATE =
+  'retained_selected_snapshot_observation';
 const REPLAY_TEST_145246Z_SERVICE_STATUS_SYNCING = 'syncing';
 const REPLAY_TEST_145246Z_REACHABILITY_ERROR_PREFIX =
   'Control snapshot reachability probe timed out for ';
@@ -4198,6 +4200,58 @@ describe(REPLAY_TEST_SUITE_NAME, () => {
     assert.deepEqual(replaySummary.ownerRpcCacheRepair.failedTableNames, []);
     assert.deepEqual(replaySummary.ownerRpcCacheRepair.causeChain, []);
     assert.deepEqual(replaySummary.ownerRpcCacheRepair.readSources, []);
+    assert.equal(
+      replaySummary.selectedSnapshotRepairEvidenceRecovery.availability,
+      PUBLICATION_EVIDENCE_REPLAY_AVAILABILITY.AVAILABLE,
+    );
+    assert.equal(
+      replaySummary.selectedSnapshotRepairEvidenceRecovery.evidenceState,
+      REPLAY_TEST_145246Z_REPAIR_EVIDENCE_RECOVERY_STATE,
+    );
+    assert.equal(
+      replaySummary.selectedSnapshotRepairEvidenceRecovery.selectedWitnessNodeId,
+      REPLAY_TEST_145246Z_NODE_ID.SELECTED,
+    );
+    assert.equal(
+      replaySummary.selectedSnapshotRepairEvidenceRecovery
+        .retainedObservationAvailability,
+      PUBLICATION_EVIDENCE_REPLAY_AVAILABILITY.AVAILABLE,
+    );
+    assert.equal(
+      replaySummary.selectedSnapshotRepairEvidenceRecovery
+        .reconstructedOwnerRpcAvailability,
+      PUBLICATION_EVIDENCE_REPLAY_AVAILABILITY.MISSING,
+    );
+    assert.equal(
+      replaySummary.selectedSnapshotRepairEvidenceRecovery
+        .retainedObservationDeferralState,
+      ADMIN_CONTROL_SNAPSHOT_OBSERVATION_MODE.REPAIR_DEFERRED,
+    );
+    assert.equal(
+      replaySummary.selectedSnapshotRepairEvidenceRecovery
+        .reconstructedOwnerRpcDeferralState,
+      REPLAY_TEST_145246Z_REPAIR_DEFERRAL_STATE,
+    );
+    assert.deepEqual(
+      replaySummary.selectedSnapshotRepairEvidenceRecovery
+        .retainedObservationReasonCodes,
+      REPLAY_TEST_145246Z_OBSERVATION_REASON_CODES,
+    );
+    assert.deepEqual(
+      replaySummary.selectedSnapshotRepairEvidenceRecovery
+        .reconstructedFailedTableNames,
+      [],
+    );
+    assert.deepEqual(
+      replaySummary.selectedSnapshotRepairEvidenceRecovery
+        .reconstructedReadSources,
+      [],
+    );
+    assert.deepEqual(
+      replaySummary.selectedSnapshotRepairEvidenceRecovery
+        .reconstructedCauseChain,
+      [],
+    );
     assert.equal(
       replaySummary.supportingPriorityRecoveryWitness.partitionId,
       REPLAY_TEST_145246Z_CONTROL_PLANE_PUBLICATIONS_PARTITION_ID,

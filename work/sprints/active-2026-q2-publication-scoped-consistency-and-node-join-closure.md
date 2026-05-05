@@ -68,8 +68,9 @@ The active failure chain is now:
    `needs_operation` with `priority_operation_serial_wait`, `operation_unknown`,
    and serial-wait behind operation `e37bed88-1e78-42e7-a667-4248a3f85529` on
    `sql_transactions-p1`
-6. owner-RPC/cache-repair replay no longer carries the selected deferral; the
-   representative runtime boundary is now epoch `2` `PUBLISHED`
+6. selected-snapshot repair deferral evidence is retained on the selected
+   snapshot owner observation, while owner-RPC/cache-repair reconstruction is
+   missing; the representative runtime boundary is now epoch `2` `PUBLISHED`
    missing-active selected-snapshot reachability with priority spread pending
    and `control_plane_publications-p1` rebalancer-handoff terminal-failed
    evidence
@@ -264,16 +265,18 @@ Queued cleanup packages:
    current owner `rebalancer_leader`, boundary `rebalancer_handoff`, wait mode
    `stalled`, actuation `terminal_failed`, and next action
    `schedule_followup_rebalance`; owner-RPC/cache-repair availability is
-   `missing`. The focused `145246Z` replay fixture is complete and passed the
-   touched replay test file plus syntax, ESLint, guardrails, artifact replay,
-   and `git diff --check`. The next unchecked package task is selected-snapshot
-   repair evidence recovery: selected witness
-   `35a891b8-c1a0-5064-9c6e-2acfba61c2a7` reports `repair_deferred` /
-   `stale_usable` and repair deferred `true`, but owner-RPC/cache-repair replay
-   has no retained deferral row, failed table, read source, or cause chain.
-   Rebalancer follow-up after operation
-   `396c2fda-2639-4b3d-ad8d-7c148dc90936` remains subordinate until that
-   selected-snapshot repair evidence path is pinned.
+   `missing`. The focused `145246Z` replay fixture and selected-snapshot repair
+   evidence recovery probe are complete and passed the touched replay test file
+   plus syntax, ESLint, guardrails, artifact replay, and `git diff --check`.
+   The probe reports
+   `selectedSnapshotRepairEvidenceRecovery.evidenceState=retained_selected_snapshot_observation`:
+   selected witness `35a891b8-c1a0-5064-9c6e-2acfba61c2a7` retains
+   `repair_deferred` / `stale_usable` and repair deferred `true` on the
+   selected snapshot observation, while owner-RPC/cache-repair reconstruction
+   remains `missing` with no deferral row, failed table, read source, or cause
+   chain. The next unchecked package task is the subordinate
+   `control_plane_publications-p1` rebalancer-handoff terminal-failed owner
+   path after operation `396c2fda-2639-4b3d-ad8d-7c148dc90936`.
 3. Harness classification:
    terminal barrier evidence wins over stale playback reconstruction for
    active, restart-recovery, load-readiness, convergence, and quiescence
