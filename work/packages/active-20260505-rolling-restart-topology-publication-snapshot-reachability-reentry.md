@@ -659,6 +659,10 @@ Sprint:
       deferral evidence is retained or reconstructed before chasing the
       subordinate `control_plane_publications-p1` rebalancer-handoff
       terminal-failed follow-up.
+- [x] Fix the selected-snapshot repair evidence recovery review finding:
+      historical `132033Z` owner-RPC/cache-repair logs have global repair
+      deferrals but selected-witness deferral count `0`, so reconstruction must
+      not be classified as selected-witness owner-RPC evidence.
 - [ ] Trace the subordinate `control_plane_publications-p1`
       rebalancer-handoff terminal-failed owner path for operation
       `396c2fda-2639-4b3d-ad8d-7c148dc90936`: prove whether
@@ -2620,6 +2624,74 @@ Validation:
     reported `0` new and `0` inherited literal-guideline violations.
 14. `git diff --check` passed.
 
+## May 5 132033Z Selected-Witness Reconstruction Review Fix
+
+Review found that selected-snapshot repair evidence recovery treated
+owner-RPC/cache-repair reconstruction as present when global
+`matchingDeferralCount` was greater than `0`. The historical `132033Z` shape
+has two global repair deferrals, but both belong to nodes other than the
+selected snapshot witness; `selectedWitnessDeferralCount` is `0`.
+
+Implementation:
+
+1. `hasReconstructedOwnerRpcRepairEvidence(...)` now requires
+   `selectedWitnessDeferralCount > 0` before owner-RPC/cache-repair evidence
+   can reconstruct selected-snapshot repair evidence.
+2. The `132033Z` fixture now pins the review shape as
+   `retained_selected_snapshot_observation`, with reconstructed owner-RPC
+   availability `missing` and empty reconstructed failed-table, read-source,
+   and cause-chain evidence.
+3. The existing `145246Z` fixture still reports
+   `retained_selected_snapshot_observation` with owner-RPC/cache-repair
+   reconstruction `missing`.
+
+Outcome: global owner-RPC repair availability is still reported on
+`ownerRpcCacheRepair` for the historical `132033Z` artifact, but it no longer
+promotes selected-snapshot repair evidence recovery unless the selected
+witness itself has a matching repair deferral. The package remains active; the
+next unchecked task stays the subordinate `control_plane_publications-p1`
+rebalancer-handoff terminal-failed owner path.
+
+Validation:
+
+1. Red-first:
+   `node --test --test-name-pattern "keeps the 132033Z post-ACK PUBLISHED selected-snapshot replay blocked" test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+   failed before the fix with actual
+   `retained_selected_snapshot_and_reconstructed_owner_rpc`.
+2. `node --test --test-name-pattern "keeps the 132033Z post-ACK PUBLISHED selected-snapshot replay blocked" test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+   passed.
+3. `node --test --test-name-pattern "keeps the 145246Z PUBLISHED reachability and rebalancer replay blocked" test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+   passed.
+4. `node --check test/distributed/harness/publication-evidence-replay.js`
+   passed.
+5. `node --check test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+   passed.
+6. `node --test test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+   passed: `7` tests, `1` suite.
+7. `node test/distributed/harness/publication-evidence-replay.js test-output/reports/.playback/rolling-restart-after-ack-pending-workflow-timeout-probe-20260505T132033Z/rolling-restart`
+   passed and reported
+   `evidenceState=retained_selected_snapshot_observation` with
+   `reconstructedOwnerRpcAvailability=missing`.
+8. `node test/distributed/harness/publication-evidence-replay.js test-output/reports/.playback/rolling-restart-after-140646z-publication-pending-replay-fixture-20260505T145246Z/rolling-restart`
+   passed and preserved
+   `evidenceState=retained_selected_snapshot_observation` with
+   `reconstructedOwnerRpcAvailability=missing`.
+9. `npx eslint test/distributed/harness/publication-evidence-replay.js test/distributed/harness/__tests__/publication-evidence-replay.test.js --ignore-pattern 'test/.gitkeep'`
+   passed.
+10. Repo-wide `npm run lint` was attempted and failed on inherited unrelated
+    lint debt outside the touched files; touched-file ESLint passed.
+11. `node scripts/check-guideline-decision-boundaries.js test/distributed/harness/publication-evidence-replay.js test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+    reported `0` decision-boundary guideline violations.
+12. `node scripts/check-runtime-grammar-contracts.js test/distributed/harness/publication-evidence-replay.js test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+    reported `0` runtime-grammar-contract violations.
+13. `node scripts/check-guideline-boundary-mode-contracts.js test/distributed/harness/publication-evidence-replay.js test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+    reported `0` boundary-mode-contract hotspot violations.
+14. `node scripts/check-guideline-literals.js test/distributed/harness/publication-evidence-replay.js test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+    reported `0` new and `0` inherited literal-guideline violations.
+15. `node scripts/check-guideline-literals.js --include-tests test/distributed/harness/publication-evidence-replay.js test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+    reported `0` new and `0` inherited literal-guideline violations.
+16. `git diff --check` passed.
+
 ## Validation
 
 1. Focused owner or harness fixture for topology publication membership
@@ -2687,9 +2759,11 @@ reachability trace, `20260505T145246Z` replay fixture, and selected-snapshot
 repair evidence recovery probe are complete. The probe proves that the current
 selected repair deferral evidence is retained by the selected snapshot owner
 observation as `retained_selected_snapshot_observation`; it is not
-reconstructed from owner-RPC/cache-repair logs, which remain `missing` with no
-deferral row, failed tables, read sources, or cause chain. The next unchecked
-task is the subordinate `control_plane_publications-p1` rebalancer-handoff
-terminal-failed owner path for operation
+reconstructed from owner-RPC/cache-repair logs. The `132033Z` review fix also
+pins the historical global-owner-RPC-deferral shape: global repair deferrals do
+not reconstruct selected-snapshot repair evidence when
+`selectedWitnessDeferralCount` is `0`. The next unchecked task is the
+subordinate `control_plane_publications-p1` rebalancer-handoff terminal-failed
+owner path for operation
 `396c2fda-2639-4b3d-ad8d-7c148dc90936`, while keeping the epoch `2`
 `PUBLISHED` missing-active selected-snapshot topology debt canonical.

@@ -274,7 +274,11 @@ Queued cleanup packages:
    `repair_deferred` / `stale_usable` and repair deferred `true` on the
    selected snapshot observation, while owner-RPC/cache-repair reconstruction
    remains `missing` with no deferral row, failed table, read source, or cause
-   chain. The next unchecked package task is the subordinate
+   chain. The `132033Z` review fix now also proves that global
+   owner-RPC/cache-repair deferrals do not reconstruct selected-snapshot repair
+   evidence when the selected-witness deferral count is `0`; `145246Z` remains
+   retained-observation-only with owner-RPC reconstruction `missing`. The next
+   unchecked package task is the subordinate
    `control_plane_publications-p1` rebalancer-handoff terminal-failed owner
    path after operation `396c2fda-2639-4b3d-ad8d-7c148dc90936`.
 3. Harness classification:

@@ -415,6 +415,8 @@ const REPLAY_TEST_132033Z_DURABLE_RECOVERY_STATE = 'steady_published';
 const REPLAY_TEST_132033Z_PRIORITY_RECOVERY_REASON =
   'priority_partitions_not_spread';
 const REPLAY_TEST_132033Z_REPAIR_DEFERRAL_STATE = 'repair_deferred';
+const REPLAY_TEST_132033Z_REPAIR_EVIDENCE_RECOVERY_STATE =
+  'retained_selected_snapshot_observation';
 const REPLAY_TEST_132033Z_OWNER_RPC_LANE = 'owner_rpc_lane';
 const REPLAY_TEST_132033Z_CONTROL_PLANE_BACKPRESSURE =
   'control_plane_backpressure';
@@ -3428,6 +3430,30 @@ describe(REPLAY_TEST_SUITE_NAME, () => {
       [
         REPLAY_TEST_132033Z_PRESSURE_OR_TIMEOUT,
       ],
+    );
+    assert.equal(
+      replaySummary.selectedSnapshotRepairEvidenceRecovery.evidenceState,
+      REPLAY_TEST_132033Z_REPAIR_EVIDENCE_RECOVERY_STATE,
+    );
+    assert.equal(
+      replaySummary.selectedSnapshotRepairEvidenceRecovery
+        .reconstructedOwnerRpcAvailability,
+      PUBLICATION_EVIDENCE_REPLAY_AVAILABILITY.MISSING,
+    );
+    assert.deepEqual(
+      replaySummary.selectedSnapshotRepairEvidenceRecovery
+        .reconstructedFailedTableNames,
+      [],
+    );
+    assert.deepEqual(
+      replaySummary.selectedSnapshotRepairEvidenceRecovery
+        .reconstructedReadSources,
+      [],
+    );
+    assert.deepEqual(
+      replaySummary.selectedSnapshotRepairEvidenceRecovery
+        .reconstructedCauseChain,
+      [],
     );
     assert.equal(
       replaySummary.supportingPriorityRecoveryWitness.partitionId,

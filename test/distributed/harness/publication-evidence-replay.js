@@ -665,7 +665,7 @@ function hasReconstructedOwnerRpcRepairEvidence(ownerRpcCacheRepair = {}) {
     ] === PUBLICATION_EVIDENCE_REPLAY_REPAIR_DEFERRAL_STATE.REPAIR_DEFERRED &&
     normalizeInteger(
       ownerRpcCacheRepair[
-        PUBLICATION_EVIDENCE_REPLAY_REPAIR_FIELD.MATCHING_DEFERRAL_COUNT
+        PUBLICATION_EVIDENCE_REPLAY_REPAIR_FIELD.SELECTED_WITNESS_DEFERRAL_COUNT
       ],
     ) > NUM.ZERO
   );
