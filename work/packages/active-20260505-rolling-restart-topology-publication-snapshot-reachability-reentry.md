@@ -5,94 +5,102 @@ Opened on May 5, 2026 as the current representative split from
 The fresh representative path migrated away from post-active
 operation-transition / over-target trim and is now blocked earlier by startup
 active-gate publication, selected snapshot reachability, and missing published
-active-node evidence, most recently on the `20260505T132033Z`
-ACK-pending workflow-fixture rerun.
+active-node evidence. The latest representative rerun after the `132033Z`
+replay fixture migrated again on `20260505T140646Z`.
 
 ## Current Evidence
 
-1. Fresh representative rerun after the ACK-pending operation-workflow timeout
-   fixture:
-   `test-output/reports/rolling-restart-after-ack-pending-workflow-timeout-probe-20260505T132033Z.report.json`.
+1. Fresh representative rerun after the `132033Z` post-ACK replay fixture:
+   `test-output/reports/rolling-restart-after-132033z-selected-snapshot-replay-fixture-20260505T140646Z.report.json`.
 2. Playback directory:
-   `test-output/reports/.playback/rolling-restart-after-ack-pending-workflow-timeout-probe-20260505T132033Z/rolling-restart/`.
+   `test-output/reports/.playback/rolling-restart-after-132033z-selected-snapshot-replay-fixture-20260505T140646Z/rolling-restart/`.
 3. Failure bundle:
-   `test-output/reports/.playback/rolling-restart-after-ack-pending-workflow-timeout-probe-20260505T132033Z/rolling-restart/failure-bundle.json`.
+   `test-output/reports/.playback/rolling-restart-after-132033z-selected-snapshot-replay-fixture-20260505T140646Z/rolling-restart/failure-bundle.json`.
 4. Triage summary:
-   `test-output/reports/.playback/rolling-restart-after-ack-pending-workflow-timeout-probe-20260505T132033Z/rolling-restart/triage-summary.md`.
+   `test-output/reports/.playback/rolling-restart-after-132033z-selected-snapshot-replay-fixture-20260505T140646Z/rolling-restart/triage-summary.md`.
 5. Command:
-   `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-after-ack-pending-workflow-timeout-probe-20260505T132033Z.report.json --fast-local --verbose`.
-6. Result: failed, `0/1` passed after `131.2s`.
+   `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-after-132033z-selected-snapshot-replay-fixture-20260505T140646Z.report.json --fast-local --verbose`.
+6. Result: failed, `0/1` passed after `130.3s`.
 7. Terminal barrier:
    `Not all nodes reached ACTIVE state within 120000ms`.
 8. Triage root cause class is `topology`, dominant reason is
-   `publication_missing_active_node=11601fe0-72d6-5853-8590-ec2881853e72`,
-   and failure class remains `publication_convergence_blocked`.
-9. Terminal readiness failure is `snapshot_reachability_timeout` from
-   `selectedSnapshotReachabilityError`, recoverability `terminal`, terminal
-   reason `stalled_no_progress`, attempts since progress `5`, and selected
-   witness `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`.
-10. Publication epoch `3` is `PUBLISHED`, recovery protocol state is
-    `steady_published`, pending ACK count is `0`, missing published count is
-    `2`, and the missing published nodes are
+   `publication_epoch_pending`, and failure class remains
+   `publication_convergence_blocked`.
+9. Terminal readiness failure is `no_progress_terminal` in startup mode with
+   terminal reason `stalled_no_progress`, attempts since progress `3`, and no
+   selected-snapshot reachability error; the selected witness is reachable by
+   `admin_health`.
+10. Publication epoch `5` is `OPEN`, recovery protocol state is
+    `publication_pending`, pending ACK count is `2`, pending ACK nodes are
     `11601fe0-72d6-5853-8590-ec2881853e72` and
-    `8be8d30f-4499-5eed-865c-71b4d529a67a`.
-11. Publication gate reasons are `snapshot_coverage=3/5`,
-    `publication_missing_active_node=11601fe0-72d6-5853-8590-ec2881853e72`,
-    and `publication_missing_active_node=8be8d30f-4499-5eed-865c-71b4d529a67a`.
+    `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`, and missing published count is
+    `0`.
+11. Publication gate reasons are `priority_partitions_not_spread`,
+    `publication_epoch_pending`, and `snapshot_coverage=3/5`. The unresolved
+    priority partitions are `sql_transactions-p1` and
+    `sql_write_operations-p1`.
 12. Terminal active-gate progress is active `5/5`, inactive `0`, selected
-    snapshot coverage `3/5`, selected published active `3/5`, pending ACK
-    `0`, priority spread ready with gap `0`, and owner queue pending writes
-    `9`; selected snapshot node
-    `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58` is not admin-ready at terminal
-    progress because the reachability probe timed out.
-13. Best progress was active `5/5`, selected coverage `4/5`, selected witness
-    `11601fe0-72d6-5853-8590-ec2881853e72` reachable through
-    `admin_health`, priority spread not yet satisfied with gap `10`, and
+    snapshot coverage `3/5`, selected witness
+    `8be8d30f-4499-5eed-865c-71b4d529a67a` reachable through `admin_health`,
+    selected published active `5/5`, pending ACK `2`, missing published `0`,
+    CDC replay lag `0`, publication disagreement nodes `4`, priority spread
+    pending with gap `7`, priority blocked partition count `2`, and blockers
+    `snapshot_coverage=3/5` plus
+    `priority_recovery_progress_class=priority_operation_serial_wait`.
+13. Best progress in the same run was active `5/5`, selected coverage `4/5`,
+    selected witness `11601fe0-72d6-5853-8590-ec2881853e72` reachable through
+    `admin_health`, publication epoch `5` `OPEN`, pending ACK `2`, selected
+    published active `3/5`, selected missing published nodes
+    `11601fe0-72d6-5853-8590-ec2881853e72` and
+    `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`, priority spread gap `7`, and
     blockers `snapshot_coverage=4/5` plus
-    `priority_recovery_progress_class=operation_created_but_no_step_transitions`.
-14. Probe witnesses explain terminal coverage: only
-    `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58` returned the selected epoch `3`
-    snapshot with observed `3/5`; `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`
-    returned an admin-ready stale epoch `1` snapshot with observed `1/5`;
-    the seed, `11601fe0-72d6-5853-8590-ec2881853e72`, and
-    `8be8d30f-4499-5eed-865c-71b4d529a67a` timed out during snapshot
-    reachability or query.
-15. The selected snapshot observation remains explicit owner-contract evidence:
+    `priority_recovery_progress_class=priority_operation_serial_wait`.
+14. Last meaningful progress still captured the prior-style epoch `3`
+    `PUBLISHED` shape with pending ACK `0`, selected coverage `4/5`, selected
+    missing published nodes `11601fe0-72d6-5853-8590-ec2881853e72` and
+    `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`, priority spread gap `10`, and
+    `priority_recovery_progress_class=operation_created_but_no_step_transitions`;
+    terminal evidence moved forward to epoch `5` `OPEN`.
+15. Probe witnesses explain terminal coverage: the selected witness
+    `8be8d30f-4499-5eed-865c-71b4d529a67a` is admin-ready, reachable through
+    `admin_health`, and observed `3/5` from an `OPEN` publication; the seed
+    observed `3/5` but timed out for reachability; nodes
+    `11601fe0-72d6-5853-8590-ec2881853e72` and
+    `35a891b8-c1a0-5064-9c6e-2acfba61c2a7` were admin-ready `3/5`
+    `PUBLISHED` witnesses; `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58` was an
+    admin-ready `1/5` `PUBLISHED` witness.
+16. The selected snapshot observation remains explicit owner-contract evidence:
     `repair_deferred` / `stale_usable`, contract state `pending`, refresh state
     `idle`, next action `wait`, repair deferred `true`, and reason codes
-    `cache_stale_watermark` and `discovery_node_coverage_gap`.
-16. Priority recovery did not promote the old `sql_write_operations-p1`
-    workflow timeout. Terminal priority spread is satisfied, unresolved
-    priority-recovery class counts are `0`, and the remaining witnesses are
-    subordinate workflow-progress evidence: `control_plane_publications-p1` as
-    `spread_satisfied_in_flight`, operation
-    `d762a1d8-0271-481a-a170-25e63cb80694`, latest step `ACTIVE`, latest
-    status `active`, and `sql_write_operations-p1` as
-    `spread_satisfied_in_flight`, operation
-    `df7c307a-2e59-4ec4-8c2a-55cd39b2d87e`, latest step `STOPPING`, latest
-    status `removing`; both are owned by `operation_workflow_owner` at
-    `workflow_progress` / `event_driven`, next action
-    `wait_for_operation_progress`, with `write_backlog` pressure.
-17. Playback replay passed and stayed `replayed_blocked` with row counts
-    `nodes=3`, `nodeEndpoints=0`, `partitions=33`, and `services=104`; replay
-    reports durable epoch `3` / `PUBLISHED` with priority spread satisfied, but
-    the replayed candidate remains epoch `3` / `PUBLISHED` with
-    `recoveryProtocolState=priority_spread_pending`,
-    `priorityRecoveryReasonCodes=["priority_partitions_not_spread"]`, and all
-    five priority partitions blocked at spread gap `1`.
-18. Replay preserved selected snapshot observation `repair_deferred` /
+    `cache_stale_watermark`, `discovery_node_coverage_gap`, and
+    `stale_replica_operations_in_flight`.
+17. Priority recovery migrated to explicit workflow-timeout and serial-wait
+    evidence: `sql_transactions-p1` is `recovering_in_flight`, operation
+    `0c78d9d7-3672-490e-87af-3b9acebd5801`, latest step `SENDING`, latest
+    status `pending`, boundary `workflow_timeout`, wait mode
+    `timeout_reconcile_due`, next action `reconcile_stale_operation_progress`;
+    `sql_write_operations-p1` is `needs_operation` with
+    `priority_operation_serial_wait`, `operation_unknown`, boundary
+    `workflow_progress`, wait mode `event_driven`, next action
+    `wait_for_operation_progress`, serial-waiting behind
+    `sql_transactions-p1`.
+18. Playback replay passed and stayed `replayed_blocked` with row counts
+    `nodes=5`, `nodeEndpoints=0`, `partitions=33`, and `services=102`; durable
+    and replayed evidence both remain epoch `5` / `OPEN`, priority spread
+    pending, and replayed recovery protocol state `publication_pending` with
+    reason codes `priority_partitions_not_spread` and
+    `publication_epoch_pending`.
+19. Replay preserved selected snapshot observation `repair_deferred` /
     `stale_usable` and owner-RPC/cache-repair deferral on `nodes` through
-    `owner_rpc_lane` / `control_plane_backpressure`; matching deferral count is
-    `2`, selected witness deferral count is `0`, latest retry-after is
-    `16000ms`, and the deferral nodes are
-    `11601fe0-72d6-5853-8590-ec2881853e72` and
+    `owner_rpc_lane` under `control_plane_backpressure` /
+    `query_timeout`; matching deferral count is `2`, selected witness deferral
+    count is `1`, latest retry-after is `16000ms`, and the deferral nodes are
+    `35a891b8-c1a0-5064-9c6e-2acfba61c2a7` and
     `8be8d30f-4499-5eed-865c-71b4d529a67a`.
-19. Outcome: ACK debt closed and did not promote the previous
-    `sql_write_operations-p1` timeout. The blocker migrated again to a
-    post-ACK `PUBLISHED` missing-active publication boundary with selected
-    snapshot coverage `3/5`, terminal reachability timeout on
-    `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`, and subordinate operation
-    workflow-progress evidence.
+20. Outcome: the post-ACK `PUBLISHED` selected-snapshot/cache-repair boundary
+    did not close. It migrated to a new epoch `5` `OPEN` publication-pending
+    boundary with pending ACK `2`, selected snapshot coverage `3/5`, priority
+    spread pending, and operation-workflow timeout/serial-wait evidence.
 
 ## May 5 `074739Z` Evidence Trace
 
@@ -430,24 +438,26 @@ Sprint:
 ## In Scope
 
 1. Reconcile the current deferred selected-snapshot observation publication
-   membership/snapshot coverage residual: publication epoch `3` is
-   `PUBLISHED`, pending ACK count is `0`, recovery remains
-   `publication_pending`, terminal active is `5/5`, terminal selected snapshot
-   coverage is `4/5`, selected published active is `3/5`, selected missing
-   published count is `2`, and selected snapshot observation reports
-   `repair_deferred` / `stale_usable`.
+   membership/snapshot coverage residual: publication epoch `5` is `OPEN`,
+   pending ACK count is `2`, recovery remains `publication_pending`, terminal
+   active is `5/5`, terminal selected snapshot coverage is `3/5`, selected
+   published active is `5/5`, selected missing published count is `0`, and
+   selected snapshot observation reports `repair_deferred` / `stale_usable`.
 2. Explain why the latest selected snapshot node
-   `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58` is reachable through
-   `admin_health` while explicit missing-active-node publication debt remains
-   open for that node and
-   `11601fe0-72d6-5853-8590-ec2881853e72`.
+   `8be8d30f-4499-5eed-865c-71b4d529a67a` is reachable through
+   `admin_health` while pending ACK remains open for
+   `11601fe0-72d6-5853-8590-ec2881853e72` and
+   `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`, selected snapshot coverage remains
+   `3/5`, and priority spread remains pending.
 3. Keep the `074739Z` selected snapshot reachability timeout on
    `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58` as historical evidence only; it no
    longer competes with the current terminal boundary.
 4. Preserve and classify subordinate priority-recovery workflow-progress
-   evidence, most recently `sql_write_operations-p1` as
-   `recovering_in_flight` with actuation `persisted_not_dispatched`, without
-   treating it as post-active trim while topology debt remains open.
+   evidence, most recently `sql_transactions-p1` as `recovering_in_flight`
+   under `workflow_timeout` / `timeout_reconcile_due` and
+   `sql_write_operations-p1` as `needs_operation` with
+   `priority_operation_serial_wait`, without treating it as post-active trim
+   while topology debt remains open.
 5. Keep the failure bundle anchored to one canonical owner outcome across
    publication, active-gate, selected snapshot, and priority-recovery evidence.
 6. Rerun the representative `rolling-restart --fast-local` scenario after the
@@ -472,13 +482,14 @@ Sprint:
 2. Pending ACK count `0` does not prove publication closure when the accepted
    evidence still reports `publication_pending` and explicit
    `publication_missing_active_node=<node>` reasons.
-3. Selected snapshot coverage and selected missing-published debt must be
-   explained even when the selected node is reachable through `admin_health`;
-   the `074739Z` reachability timeout remains historical unless a fresh
-   artifact reintroduces it.
-4. Serial-wait evidence remains owned by the operation workflow owner and must
-   not replace topology missing-active-node evidence unless topology debt is
-   first closed or deliberately made subordinate.
+3. Selected snapshot coverage, pending ACK debt, and priority-spread debt must
+   be explained even when the selected node is reachable through
+   `admin_health`; the `074739Z` reachability timeout and `132033Z`
+   post-ACK missing-active boundary remain historical unless a fresh artifact
+   reintroduces them.
+4. Workflow-timeout and serial-wait evidence remain owned by the operation
+   workflow owner and must not replace topology publication-pending evidence
+   unless topology debt is first closed or deliberately made subordinate.
 
 ## Implementation Tasks
 
@@ -591,10 +602,15 @@ Sprint:
       `nodes`, and subordinate `spread_satisfied_in_flight`
       workflow-progress witnesses on `control_plane_publications-p1` and
       `sql_write_operations-p1`.
-- [ ] Rerun the representative `rolling-restart --fast-local` gate after the
+- [x] Rerun the representative `rolling-restart --fast-local` gate after the
       `132033Z` replay fixture and record whether the blocker closes, stays on
       post-ACK `PUBLISHED` selected-snapshot coverage / owner-RPC cache-repair
       deferral, or migrates to one newly named owner boundary.
+- [ ] Trace the `20260505T140646Z` epoch `5` `OPEN` publication-pending
+      artifact through pending ACK, selected-snapshot coverage, priority
+      spread, owner-RPC/cache-repair deferral, and priority-recovery
+      workflow-timeout / serial-wait evidence, then decide the next smallest
+      focused fixture or runtime owner probe.
 
 ## May 5 Regression Validation
 
@@ -1869,6 +1885,115 @@ Validation:
 9. `git diff --check`
    passed.
 
+## May 5 Representative Rerun After 132033Z Replay Fixture
+
+The representative gate after the focused `132033Z` replay fixture was:
+
+1. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-after-132033z-selected-snapshot-replay-fixture-20260505T140646Z.report.json --fast-local --verbose`
+2. Report:
+   `test-output/reports/rolling-restart-after-132033z-selected-snapshot-replay-fixture-20260505T140646Z.report.json`
+3. Playback directory:
+   `test-output/reports/.playback/rolling-restart-after-132033z-selected-snapshot-replay-fixture-20260505T140646Z/rolling-restart/`
+4. Failure bundle:
+   `test-output/reports/.playback/rolling-restart-after-132033z-selected-snapshot-replay-fixture-20260505T140646Z/rolling-restart/failure-bundle.json`
+5. Triage summary:
+   `test-output/reports/.playback/rolling-restart-after-132033z-selected-snapshot-replay-fixture-20260505T140646Z/rolling-restart/triage-summary.md`
+6. Result: failed, `0/1` passed after `130.3s`; the command exited `1`.
+
+Outcome: the blocker did not close and did not stay on the post-ACK
+`PUBLISHED` selected-snapshot / owner-RPC-cache-repair boundary. It migrated
+to a fresh epoch `5` `OPEN` publication-pending boundary with pending ACK
+debt, selected snapshot coverage `3/5`, priority spread pending, and
+operation-workflow timeout / serial-wait evidence.
+
+Evidence:
+
+1. Triage reports root cause class `topology`, dominant reason
+   `publication_epoch_pending`, failure class
+   `publication_convergence_blocked`, and readiness failure
+   `no_progress_terminal` with terminal reason `stalled_no_progress`.
+2. Publication epoch `5` is `OPEN`, recovery protocol state is
+   `publication_pending`, pending ACK count is `2`, pending ACK nodes are
+   `11601fe0-72d6-5853-8590-ec2881853e72` and
+   `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`, published active is `5/5`, and
+   missing published count is `0`.
+3. Publication gate reasons are `priority_partitions_not_spread`,
+   `publication_epoch_pending`, and `snapshot_coverage=3/5`; stability gates
+   `failover`, `convergence`, and `restart_recovery` remain open on
+   `pending_ack_nodes`, `priority_spread_pending`, and
+   `startup_readiness_blocked` as applicable.
+4. Terminal active-gate progress is active `5/5`, inactive `0`, selected
+   snapshot coverage `3/5`, selected witness
+   `8be8d30f-4499-5eed-865c-71b4d529a67a`, admin-ready and reachable through
+   `admin_health`, selected published active `5/5`, pending ACK `2`, missing
+   published `0`, priority spread pending with gap `7`, and blockers
+   `snapshot_coverage=3/5` plus
+   `priority_recovery_progress_class=priority_operation_serial_wait`.
+5. Best progress in the same run was active `5/5`, selected coverage `4/5`,
+   selected witness `11601fe0-72d6-5853-8590-ec2881853e72` reachable through
+   `admin_health`, publication epoch `5` `OPEN`, pending ACK `2`, selected
+   published active `3/5`, selected missing published nodes
+   `11601fe0-72d6-5853-8590-ec2881853e72` and
+   `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`, priority spread gap `7`, and the
+   same `priority_operation_serial_wait` blocker.
+6. Last meaningful progress still captured an epoch `3` `PUBLISHED` shape
+   with pending ACK `0`, selected coverage `4/5`, missing published nodes
+   `11601fe0-72d6-5853-8590-ec2881853e72` and
+   `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`, priority spread gap `10`, and
+   `priority_recovery_progress_class=operation_created_but_no_step_transitions`;
+   terminal evidence moved forward to epoch `5` `OPEN`.
+7. Probe witnesses explain terminal coverage: the selected
+   `8be8d30f-4499-5eed-865c-71b4d529a67a` witness observed `3/5` from an
+   `OPEN` publication and was admin-ready; the seed observed `3/5` but timed
+   out for reachability; `11601fe0-72d6-5853-8590-ec2881853e72` and
+   `35a891b8-c1a0-5064-9c6e-2acfba61c2a7` were admin-ready `3/5`
+   `PUBLISHED` witnesses; `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58` was an
+   admin-ready `1/5` `PUBLISHED` witness.
+8. Selected snapshot observation remains `repair_deferred` / `stale_usable`,
+   contract state `pending`, refresh state `idle`, next action `wait`, repair
+   deferred `true`, and reason codes `cache_stale_watermark`,
+   `discovery_node_coverage_gap`, and `stale_replica_operations_in_flight`.
+9. Priority recovery now has two explicit unresolved witnesses:
+   `sql_transactions-p1` is `recovering_in_flight` on operation
+   `0c78d9d7-3672-490e-87af-3b9acebd5801`, latest step `SENDING`, latest
+   status `pending`, boundary `workflow_timeout`, wait mode
+   `timeout_reconcile_due`, and next action
+   `reconcile_stale_operation_progress`; `sql_write_operations-p1` is
+   `needs_operation` with `priority_operation_serial_wait`, `operation_unknown`,
+   boundary `workflow_progress`, wait mode `event_driven`, next action
+   `wait_for_operation_progress`, and serial-wait dependency on
+   `sql_transactions-p1`.
+10. Replay validation passed and stayed `replayed_blocked` with row counts
+    `nodes=5`, `nodeEndpoints=0`, `partitions=33`, and `services=102`.
+    Durable and replayed evidence both remain epoch `5` / `OPEN` with priority
+    spread pending; replayed recovery protocol state is `publication_pending`
+    with reason codes `priority_partitions_not_spread` and
+    `publication_epoch_pending`.
+11. Replay preserved owner-RPC/cache-repair deferral on `nodes`: matching
+    deferral count `2`, selected witness deferral count `1`, latest
+    retry-after `16000ms`, deferral nodes
+    `35a891b8-c1a0-5064-9c6e-2acfba61c2a7` and
+    `8be8d30f-4499-5eed-865c-71b4d529a67a`, read source `owner_rpc_lane`,
+    cause chain `control_plane_backpressure` / `query_timeout`, and failure
+    class `pressure_or_timeout`.
+
+Replay validation:
+
+1. `node test/distributed/harness/publication-evidence-replay.js test-output/reports/.playback/rolling-restart-after-132033z-selected-snapshot-replay-fixture-20260505T140646Z/rolling-restart`
+   passed.
+
+Validation:
+
+1. `git diff --check` passed for this documentation-only update.
+
+Conclusion: the representative rerun task is recorded and complete, but the
+package remains active. The next unchecked task is to trace the
+`20260505T140646Z` epoch `5` `OPEN` publication-pending artifact through
+pending ACK, selected-snapshot coverage, priority spread,
+owner-RPC/cache-repair deferral, and priority-recovery workflow-timeout /
+serial-wait evidence, then decide the next smallest focused fixture or runtime
+owner probe.
+
 ## Validation
 
 1. Focused owner or harness fixture for topology publication membership
@@ -1897,38 +2022,39 @@ Validation:
 
 ## Residual Active Blocker
 
-The current blocker is the post-ACK workflow-fixture May 5 rerun recorded in
-`test-output/reports/rolling-restart-after-ack-pending-workflow-timeout-probe-20260505T132033Z.report.json`.
-It failed after `131.2s` with terminal active `5/5`, inactive `0`, selected
-snapshot coverage `3/5`, publication epoch `3` `PUBLISHED`, recovery protocol
-state `steady_published`, pending ACK count `0`, selected published active
-`3/5`, active-gate selected missing published count `2`, priority spread ready
-with gap `0`, and owner queue pending writes `9`.
+The current blocker is the post-`132033Z` replay-fixture May 5 rerun recorded
+in
+`test-output/reports/rolling-restart-after-132033z-selected-snapshot-replay-fixture-20260505T140646Z.report.json`.
+It failed after `130.3s` with terminal active `5/5`, inactive `0`, selected
+snapshot coverage `3/5`, publication epoch `5` `OPEN`, recovery protocol
+state `publication_pending`, pending ACK count `2`, selected published active
+`5/5`, active-gate selected missing published count `0`, priority spread
+pending with gap `7`, and priority blocked partition count `2`.
 
 The selected terminal snapshot node
-`ebc4aa0b-06c6-506d-93ea-1dd2deca3f58` timed out for reachability after best
-progress had selected `11601fe0-72d6-5853-8590-ec2881853e72` as reachable
-through `admin_health` with coverage `4/5`. The terminal selected snapshot
-observation is `repair_deferred` / `stale_usable` with pending contract state,
-idle refresh, next action `wait`, repair deferred `true`, and reason codes
-`cache_stale_watermark` and `discovery_node_coverage_gap`.
+`8be8d30f-4499-5eed-865c-71b4d529a67a` is admin-ready and reachable through
+`admin_health`. The terminal selected snapshot observation is
+`repair_deferred` / `stale_usable` with pending contract state, idle refresh,
+next action `wait`, repair deferred `true`, and reason codes
+`cache_stale_watermark`, `discovery_node_coverage_gap`, and
+`stale_replica_operations_in_flight`.
 
-The ACK-pending priority workflow-timeout residual did not promote. Terminal
-priority recovery has no unresolved class count and no blocked partition count;
-`control_plane_publications-p1` and `sql_write_operations-p1` are subordinate
-`spread_satisfied_in_flight` workflow-progress witnesses at
-`operation_workflow_owner / workflow_progress / event_driven`, next action
-`wait_for_operation_progress`. `control_plane_publications-p1` operation
-`d762a1d8-0271-481a-a170-25e63cb80694` is latest step `ACTIVE` / status
-`active`; `sql_write_operations-p1` operation
-`df7c307a-2e59-4ec4-8c2a-55cd39b2d87e` is latest step `STOPPING` / status
-`removing`.
+The post-ACK `PUBLISHED` selected-snapshot/cache-repair boundary migrated.
+Priority recovery now carries explicit unresolved operation-workflow evidence:
+`sql_transactions-p1` is `recovering_in_flight` on operation
+`0c78d9d7-3672-490e-87af-3b9acebd5801`, latest step `SENDING` / status
+`pending`, under `workflow_timeout` / `timeout_reconcile_due`, next action
+`reconcile_stale_operation_progress`; `sql_write_operations-p1` is
+`needs_operation` with `priority_operation_serial_wait`, `operation_unknown`,
+under `workflow_progress` / `event_driven`, next action
+`wait_for_operation_progress`, serial-waiting behind `sql_transactions-p1`.
 
 The `20260505T123850Z` trace, focused ACK-pending operation-workflow timeout
-fixture, `20260505T132033Z` representative rerun, and `20260505T132033Z`
-post-ACK `PUBLISHED` missing-active selected-snapshot trace and replay fixture
-are complete. The current next unchecked task is to rerun the representative
-`rolling-restart --fast-local` gate after the `132033Z` fixture and record
-whether the blocker closes, stays on post-ACK `PUBLISHED` selected-snapshot
-coverage / owner-RPC cache-repair deferral, or migrates to one newly named
-owner boundary.
+fixture, `20260505T132033Z` representative rerun, `20260505T132033Z`
+post-ACK `PUBLISHED` missing-active selected-snapshot trace and replay fixture,
+and `20260505T140646Z` representative rerun are complete. The current next
+unchecked task is to trace the `20260505T140646Z` epoch `5` `OPEN`
+publication-pending artifact through pending ACK, selected-snapshot coverage,
+priority spread, owner-RPC/cache-repair deferral, and priority-recovery
+workflow-timeout / serial-wait evidence, then decide the next smallest focused
+fixture or runtime owner probe.
