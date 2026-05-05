@@ -538,6 +538,186 @@ const REPLAY_TEST_132033Z_PUBLICATION_GATE_REASONS = Object.freeze([
     REPLAY_TEST_132033Z_NODE_ID.MISSING_REPAIR_TWO,
 ]);
 const REPLAY_TEST_132033Z_NODE_ENDPOINT_ROWS = Object.freeze([]);
+const REPLAY_TEST_140646Z_TIMESTAMP_MS = 1777990142751;
+const REPLAY_TEST_140646Z_READY_LEASE_EXTENSION_MS = 60000;
+const REPLAY_TEST_140646Z_PUBLICATION_EPOCH = 5;
+const REPLAY_TEST_140646Z_EXPECTED_NODE_COUNT = 5;
+const REPLAY_TEST_140646Z_TERMINAL_ACTIVE_NODE_COUNT = 5;
+const REPLAY_TEST_140646Z_TERMINAL_INACTIVE_NODE_COUNT = 0;
+const REPLAY_TEST_140646Z_SELECTED_SNAPSHOT_COVERAGE_NODE_COUNT = 3;
+const REPLAY_TEST_140646Z_PARTITION_ROW_COUNT = 33;
+const REPLAY_TEST_140646Z_SERVICE_ROW_COUNT = 102;
+const REPLAY_TEST_140646Z_NODE_ENDPOINT_ROW_COUNT = 0;
+const REPLAY_TEST_140646Z_REQUIRED_DISTINCT_NODE_COUNT = 3;
+const REPLAY_TEST_140646Z_READY_ELIGIBLE_NODE_COUNT = 3;
+const REPLAY_TEST_140646Z_READY_DISTINCT_NODE_COUNT_HIGH = 2;
+const REPLAY_TEST_140646Z_READY_DISTINCT_NODE_COUNT_LOW = 1;
+const REPLAY_TEST_140646Z_READY_REPLICA_COUNT_HIGH = 4;
+const REPLAY_TEST_140646Z_READY_REPLICA_COUNT_LOW = 3;
+const REPLAY_TEST_140646Z_REPLAY_SPREAD_GAP_HIGH = 2;
+const REPLAY_TEST_140646Z_REPLAY_SPREAD_GAP_LOW = 1;
+const REPLAY_TEST_140646Z_PRIORITY_SPREAD_GAP = 7;
+const REPLAY_TEST_140646Z_PENDING_ACK_COUNT = 2;
+const REPLAY_TEST_140646Z_REPAIR_RETRY_AFTER_MS = 16000;
+const REPLAY_TEST_140646Z_REPAIR_DEFERRAL_COUNT = 2;
+const REPLAY_TEST_140646Z_SELECTED_REPAIR_DEFERRAL_COUNT = 1;
+const REPLAY_TEST_140646Z_SQL_TRANSACTIONS_STEP_AGE_MS = 36697;
+const REPLAY_TEST_140646Z_SQL_TRANSACTIONS_STEP_TIMEOUT_MS = 30000;
+const REPLAY_TEST_140646Z_SQL_WRITE_STEP_AGE_MS = 1777990143167;
+const REPLAY_TEST_140646Z_SQL_WRITE_STEP_TIMEOUT_MS = 0;
+const REPLAY_TEST_140646Z_SEED_ACTIVE_SERVICE_ROW_COUNT = 99;
+const REPLAY_TEST_140646Z_SELECTED_ACTIVE_SERVICE_ROW_COUNT = 2;
+const REPLAY_TEST_140646Z_STALE_ACTIVE_SERVICE_ROW_COUNT = 1;
+const REPLAY_TEST_140646Z_TEST_NAME =
+  'keeps the 140646Z OPEN publication-pending replay blocked';
+const REPLAY_TEST_140646Z_FILLER_TABLE_PREFIX = 'fixture_140646_table_';
+const REPLAY_TEST_140646Z_FILLER_PARTITION_SUFFIX = '-p1';
+const REPLAY_TEST_140646Z_PUBLICATION_RECOVERY_STATE =
+  'publication_pending';
+const REPLAY_TEST_140646Z_PRIORITY_RECOVERY_REASON =
+  'priority_partitions_not_spread';
+const REPLAY_TEST_140646Z_PUBLICATION_EPOCH_PENDING_REASON =
+  'publication_epoch_pending';
+const REPLAY_TEST_140646Z_REPAIR_DEFERRAL_STATE = 'repair_deferred';
+const REPLAY_TEST_140646Z_OWNER_RPC_LANE = 'owner_rpc_lane';
+const REPLAY_TEST_140646Z_CONTROL_PLANE_BACKPRESSURE =
+  'control_plane_backpressure';
+const REPLAY_TEST_140646Z_QUERY_TIMEOUT = 'query_timeout';
+const REPLAY_TEST_140646Z_PRESSURE_OR_TIMEOUT = 'pressure_or_timeout';
+const REPLAY_TEST_140646Z_NODES_TABLE = 'nodes';
+const REPLAY_TEST_140646Z_AUTHORITATIVE_REPAIR_FAILED =
+  'Authoritative discovery cache repair failed';
+const REPLAY_TEST_140646Z_REPAIR_REASON = 'control_snapshot';
+const REPLAY_TEST_140646Z_CACHE_STALE_WATERMARK = 'cache_stale_watermark';
+const REPLAY_TEST_140646Z_DISCOVERY_NODE_COVERAGE_GAP =
+  'discovery_node_coverage_gap';
+const REPLAY_TEST_140646Z_STALE_REPLICA_OPERATIONS_IN_FLIGHT =
+  'stale_replica_operations_in_flight';
+const REPLAY_TEST_140646Z_ADMIN_HEALTH = 'admin_health';
+const REPLAY_TEST_140646Z_EMPTY_REACHABILITY_ERROR = '';
+const REPLAY_TEST_140646Z_EMPTY_OPERATION_ID = '';
+const REPLAY_TEST_140646Z_SNAPSHOT_COVERAGE_REASON = 'snapshot_coverage=3/5';
+const REPLAY_TEST_140646Z_RECOVERING_IN_FLIGHT = 'recovering_in_flight';
+const REPLAY_TEST_140646Z_NEEDS_OPERATION = 'needs_operation';
+const REPLAY_TEST_140646Z_SPREAD_SATISFIED_IN_FLIGHT =
+  'spread_satisfied_in_flight';
+const REPLAY_TEST_140646Z_PRIORITY_OPERATION_SERIAL_WAIT =
+  'priority_operation_serial_wait';
+const REPLAY_TEST_140646Z_OPERATION_WORKFLOW_OWNER =
+  'operation_workflow_owner';
+const REPLAY_TEST_140646Z_WORKFLOW_TIMEOUT_BOUNDARY = 'workflow_timeout';
+const REPLAY_TEST_140646Z_WORKFLOW_PROGRESS_BOUNDARY = 'workflow_progress';
+const REPLAY_TEST_140646Z_TIMEOUT_RECONCILE_DUE =
+  'timeout_reconcile_due';
+const REPLAY_TEST_140646Z_EVENT_DRIVEN_WAIT_MODE = 'event_driven';
+const REPLAY_TEST_140646Z_RECONCILE_STALE_OPERATION =
+  'reconcile_stale_operation_progress';
+const REPLAY_TEST_140646Z_WAIT_FOR_OPERATION_PROGRESS =
+  'wait_for_operation_progress';
+const REPLAY_TEST_140646Z_TRANSITION_DEFERRED = 'transition_deferred';
+const REPLAY_TEST_140646Z_DISPATCH_PENDING = 'dispatch_pending';
+const REPLAY_TEST_140646Z_WORKFLOW_PHASE_NONE = 'none';
+const REPLAY_TEST_140646Z_WORKFLOW_STEP_SENDING = 'SENDING';
+const REPLAY_TEST_140646Z_OPERATION_STATUS_PENDING = 'pending';
+const REPLAY_TEST_140646Z_OPERATION_STATUS_UNAVAILABLE = 'unavailable';
+const REPLAY_TEST_140646Z_CLOSURE_PENDING = 'closure_pending';
+const REPLAY_TEST_140646Z_SQL_TRANSACTIONS_OPERATION_ID =
+  '0c78d9d7-3672-490e-87af-3b9acebd5801';
+const REPLAY_TEST_140646Z_OPERATION_UNKNOWN = 'operation_unknown';
+const REPLAY_TEST_140646Z_NODE_ID = Object.freeze({
+  SEED: '7493b0ab-a054-5fad-a91b-5e331db29304',
+  PENDING_ACK_ONE: '11601fe0-72d6-5853-8590-ec2881853e72',
+  PENDING_ACK_TWO: '35a891b8-c1a0-5064-9c6e-2acfba61c2a7',
+  SELECTED: '8be8d30f-4499-5eed-865c-71b4d529a67a',
+  STALE: 'ebc4aa0b-06c6-506d-93ea-1dd2deca3f58',
+});
+const REPLAY_TEST_140646Z_NODE_IDS = Object.freeze([
+  REPLAY_TEST_140646Z_NODE_ID.SEED,
+  REPLAY_TEST_140646Z_NODE_ID.STALE,
+  REPLAY_TEST_140646Z_NODE_ID.SELECTED,
+  REPLAY_TEST_140646Z_NODE_ID.PENDING_ACK_ONE,
+  REPLAY_TEST_140646Z_NODE_ID.PENDING_ACK_TWO,
+]);
+const REPLAY_TEST_140646Z_PUBLISHED_NODE_IDS = Object.freeze([
+  REPLAY_TEST_140646Z_NODE_ID.PENDING_ACK_ONE,
+  REPLAY_TEST_140646Z_NODE_ID.PENDING_ACK_TWO,
+  REPLAY_TEST_140646Z_NODE_ID.SEED,
+  REPLAY_TEST_140646Z_NODE_ID.SELECTED,
+  REPLAY_TEST_140646Z_NODE_ID.STALE,
+]);
+const REPLAY_TEST_140646Z_ACKNOWLEDGED_NODE_IDS = Object.freeze([
+  REPLAY_TEST_140646Z_NODE_ID.SEED,
+  REPLAY_TEST_140646Z_NODE_ID.SELECTED,
+  REPLAY_TEST_140646Z_NODE_ID.STALE,
+]);
+const REPLAY_TEST_140646Z_PENDING_ACK_NODE_IDS = Object.freeze([
+  REPLAY_TEST_140646Z_NODE_ID.PENDING_ACK_ONE,
+  REPLAY_TEST_140646Z_NODE_ID.PENDING_ACK_TWO,
+]);
+const REPLAY_TEST_140646Z_EMPTY_MISSING_PUBLISHED_NODE_IDS = Object.freeze([]);
+const REPLAY_TEST_140646Z_OBSERVATION_REASON_CODES = Object.freeze([
+  REPLAY_TEST_140646Z_CACHE_STALE_WATERMARK,
+  REPLAY_TEST_140646Z_DISCOVERY_NODE_COVERAGE_GAP,
+  REPLAY_TEST_140646Z_STALE_REPLICA_OPERATIONS_IN_FLIGHT,
+]);
+const REPLAY_TEST_140646Z_SEED_REPLICA_ORDINALS = Object.freeze([
+  NUM.ONE,
+  NUM.TWO,
+  NUM.THREE,
+]);
+const REPLAY_TEST_140646Z_EXTRA_REPLICA_ORDINAL = NUM.FOUR;
+const REPLAY_TEST_140646Z_CONTROL_PLANE_PUBLICATIONS_PARTITION_ID =
+  INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS];
+const REPLAY_TEST_140646Z_REPLICA_OPERATIONS_PARTITION_ID =
+  INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.REPLICA_OPERATIONS];
+const REPLAY_TEST_140646Z_SQL_TRANSACTION_PARTICIPANTS_PARTITION_ID =
+  INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SQL_TRANSACTION_PARTICIPANTS];
+const REPLAY_TEST_140646Z_SQL_TRANSACTIONS_PARTITION_ID =
+  INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SQL_TRANSACTIONS];
+const REPLAY_TEST_140646Z_SQL_WRITE_PARTITION_ID =
+  INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SQL_WRITE_OPERATIONS];
+const REPLAY_TEST_140646Z_SELECTED_ACTIVE_PRIORITY_TABLE_IDS = Object.freeze([
+  SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+  SYSTEM_TABLE_NAME.SQL_TRANSACTION_PARTICIPANTS,
+]);
+const REPLAY_TEST_140646Z_STALE_ACTIVE_PRIORITY_TABLE_IDS = Object.freeze([
+  SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS,
+]);
+const REPLAY_TEST_140646Z_PRIORITY_PARTITION_IDS = Object.freeze(
+  [...PRIORITY_CONTROL_PLANE_TABLE_IDS].map((tableId) =>
+    INITIAL_PARTITION_IDS[tableId],
+  ).sort((left, right) => left.localeCompare(right)),
+);
+const REPLAY_TEST_140646Z_LOW_GAP_PARTITION_IDS = Object.freeze([
+  REPLAY_TEST_140646Z_CONTROL_PLANE_PUBLICATIONS_PARTITION_ID,
+  REPLAY_TEST_140646Z_REPLICA_OPERATIONS_PARTITION_ID,
+  REPLAY_TEST_140646Z_SQL_TRANSACTION_PARTICIPANTS_PARTITION_ID,
+]);
+const REPLAY_TEST_140646Z_HIGH_GAP_PARTITION_IDS = Object.freeze([
+  REPLAY_TEST_140646Z_SQL_TRANSACTIONS_PARTITION_ID,
+  REPLAY_TEST_140646Z_SQL_WRITE_PARTITION_ID,
+]);
+const REPLAY_TEST_140646Z_SPREAD_SATISFIED_PARTITION_IDS = Object.freeze([
+  REPLAY_TEST_140646Z_CONTROL_PLANE_PUBLICATIONS_PARTITION_ID,
+  REPLAY_TEST_140646Z_REPLICA_OPERATIONS_PARTITION_ID,
+  REPLAY_TEST_140646Z_SQL_TRANSACTION_PARTICIPANTS_PARTITION_ID,
+]);
+const REPLAY_TEST_140646Z_NODE_ENDPOINT_ROWS = Object.freeze([]);
+const REPLAY_TEST_140646Z_SQL_TRANSACTIONS_CORRELATION_KEY = [
+  REPLAY_TEST_140646Z_SQL_TRANSACTIONS_PARTITION_ID,
+  REPLAY_TEST_140646Z_PUBLICATION_EPOCH,
+  REPLAY_TEST_140646Z_SQL_TRANSACTIONS_OPERATION_ID,
+].join(REPLAY_TEST_CORRELATION_KEY_SEPARATOR);
+const REPLAY_TEST_140646Z_SQL_WRITE_CORRELATION_KEY = [
+  REPLAY_TEST_140646Z_SQL_WRITE_PARTITION_ID,
+  REPLAY_TEST_140646Z_PUBLICATION_EPOCH,
+  REPLAY_TEST_140646Z_OPERATION_UNKNOWN,
+].join(REPLAY_TEST_CORRELATION_KEY_SEPARATOR);
+const REPLAY_TEST_140646Z_PUBLICATION_GATE_REASONS = Object.freeze([
+  REPLAY_TEST_140646Z_PRIORITY_RECOVERY_REASON,
+  REPLAY_TEST_140646Z_PUBLICATION_EPOCH_PENDING_REASON,
+  REPLAY_TEST_140646Z_SNAPSHOT_COVERAGE_REASON,
+]);
 
 function buildNodeRows() {
   return REPLAY_TEST_NODE_IDS.map((nodeId) => ({
@@ -1478,6 +1658,351 @@ function build132033ZSnapshot() {
     nodeEndpoints: REPLAY_TEST_132033Z_NODE_ENDPOINT_ROWS,
     partitions: partitionRows,
     services: build132033ZServiceRows(partitionRows),
+  };
+}
+
+function build140646ZNodeRows() {
+  return REPLAY_TEST_140646Z_NODE_IDS.map((nodeId) => ({
+    node_id: nodeId,
+    status: SERVICE_STATUS.ACTIVE,
+    connection_state: STATE.READY,
+    last_heartbeat: REPLAY_TEST_140646Z_TIMESTAMP_MS,
+    ready_lease_expires_at:
+      REPLAY_TEST_140646Z_TIMESTAMP_MS +
+      REPLAY_TEST_140646Z_READY_LEASE_EXTENSION_MS,
+  }));
+}
+
+function build140646ZPartitionRows() {
+  const partitionRows = buildPriorityPartitionRows();
+  for (
+    let index = partitionRows.length;
+    index < REPLAY_TEST_140646Z_PARTITION_ROW_COUNT;
+    index += NUM.ONE
+  ) {
+    const ordinal = index + NUM.ONE;
+    const tableId = `${REPLAY_TEST_140646Z_FILLER_TABLE_PREFIX}${ordinal}`;
+    partitionRows.push({
+      table_id: tableId,
+      table_name: tableId,
+      partition_id: `${tableId}${REPLAY_TEST_140646Z_FILLER_PARTITION_SUFFIX}`,
+      state: REPLAY_TEST_PARTITION_STATE_NORMAL,
+    });
+  }
+  return partitionRows;
+}
+
+function build140646ZServiceRows(partitionRows) {
+  const serviceRows = [];
+  for (const partitionRow of partitionRows) {
+    for (const replicaOrdinal of REPLAY_TEST_140646Z_SEED_REPLICA_ORDINALS) {
+      serviceRows.push(buildReplayServiceRow({
+        nodeId: REPLAY_TEST_140646Z_NODE_ID.SEED,
+        partitionId: partitionRow.partition_id,
+        replicaOrdinal,
+        raftRole: RAFT_ROLE.FOLLOWER,
+        status: SERVICE_STATUS.ACTIVE,
+      }));
+    }
+  }
+  for (const tableId of REPLAY_TEST_140646Z_SELECTED_ACTIVE_PRIORITY_TABLE_IDS) {
+    serviceRows.push(buildReplayServiceRow({
+      nodeId: REPLAY_TEST_140646Z_NODE_ID.SELECTED,
+      partitionId: INITIAL_PARTITION_IDS[tableId],
+      replicaOrdinal: REPLAY_TEST_140646Z_EXTRA_REPLICA_ORDINAL,
+      raftRole: RAFT_ROLE.FOLLOWER,
+      status: SERVICE_STATUS.ACTIVE,
+    }));
+  }
+  for (const tableId of REPLAY_TEST_140646Z_STALE_ACTIVE_PRIORITY_TABLE_IDS) {
+    serviceRows.push(buildReplayServiceRow({
+      nodeId: REPLAY_TEST_140646Z_NODE_ID.STALE,
+      partitionId: INITIAL_PARTITION_IDS[tableId],
+      replicaOrdinal: REPLAY_TEST_140646Z_EXTRA_REPLICA_ORDINAL,
+      raftRole: RAFT_ROLE.FOLLOWER,
+      status: SERVICE_STATUS.ACTIVE,
+    }));
+  }
+  return serviceRows;
+}
+
+function build140646ZRepairLogLine(nodeId, causeChain) {
+  return JSON.stringify({
+    nodeId,
+    reason: REPLAY_TEST_140646Z_REPAIR_REASON,
+    failedTables: [
+      REPLAY_TEST_140646Z_NODES_TABLE,
+    ],
+    causeChain,
+    failureClass: REPLAY_TEST_140646Z_PRESSURE_OR_TIMEOUT,
+    failureCount: REPLAY_TEST_140646Z_REPAIR_DEFERRAL_COUNT,
+    retryAfterMs: REPLAY_TEST_140646Z_REPAIR_RETRY_AFTER_MS,
+    readSource: REPLAY_TEST_140646Z_OWNER_RPC_LANE,
+    msg: REPLAY_TEST_140646Z_AUTHORITATIVE_REPAIR_FAILED,
+  });
+}
+
+function build140646ZLowGapBlockedPartition(partitionId) {
+  return {
+    partitionId,
+    requiredDistinctNodeCount:
+      REPLAY_TEST_140646Z_REQUIRED_DISTINCT_NODE_COUNT,
+    readyDistinctNodeCount:
+      REPLAY_TEST_140646Z_READY_DISTINCT_NODE_COUNT_HIGH,
+    readyReplicaCount: REPLAY_TEST_140646Z_READY_REPLICA_COUNT_HIGH,
+    spreadGap: REPLAY_TEST_140646Z_REPLAY_SPREAD_GAP_LOW,
+  };
+}
+
+function build140646ZHighGapBlockedPartition(partitionId) {
+  return {
+    partitionId,
+    requiredDistinctNodeCount:
+      REPLAY_TEST_140646Z_REQUIRED_DISTINCT_NODE_COUNT,
+    readyDistinctNodeCount:
+      REPLAY_TEST_140646Z_READY_DISTINCT_NODE_COUNT_LOW,
+    readyReplicaCount: REPLAY_TEST_140646Z_READY_REPLICA_COUNT_LOW,
+    spreadGap: REPLAY_TEST_140646Z_REPLAY_SPREAD_GAP_HIGH,
+  };
+}
+
+function build140646ZBlockedPartitions() {
+  return [
+    ...REPLAY_TEST_140646Z_LOW_GAP_PARTITION_IDS.map((partitionId) =>
+      build140646ZLowGapBlockedPartition(partitionId),
+    ),
+    ...REPLAY_TEST_140646Z_HIGH_GAP_PARTITION_IDS.map((partitionId) =>
+      build140646ZHighGapBlockedPartition(partitionId),
+    ),
+  ];
+}
+
+function build140646ZSqlTransactionsWitness() {
+  return {
+    partitionId: REPLAY_TEST_140646Z_SQL_TRANSACTIONS_PARTITION_ID,
+    semanticStateId: REPLAY_TEST_140646Z_RECOVERING_IN_FLIGHT,
+    spreadGap: REPLAY_TEST_140646Z_REPLAY_SPREAD_GAP_HIGH,
+    readyDistinctNodeCount:
+      REPLAY_TEST_140646Z_READY_DISTINCT_NODE_COUNT_LOW,
+    requiredDistinctNodeCount:
+      REPLAY_TEST_140646Z_REQUIRED_DISTINCT_NODE_COUNT,
+    progressClassIds: [],
+    blockerReasonCodes: [],
+    actuationState: REPLAY_TEST_140646Z_TRANSITION_DEFERRED,
+    currentOwner: REPLAY_TEST_140646Z_OPERATION_WORKFLOW_OWNER,
+    actuationOwner: REPLAY_TEST_140646Z_OPERATION_WORKFLOW_OWNER,
+    nextRequiredAction: REPLAY_TEST_140646Z_RECONCILE_STALE_OPERATION,
+    blockingBoundary: REPLAY_TEST_140646Z_WORKFLOW_TIMEOUT_BOUNDARY,
+    waitMode: REPLAY_TEST_140646Z_TIMEOUT_RECONCILE_DUE,
+    workflowProgressPhaseId: REPLAY_TEST_140646Z_DISPATCH_PENDING,
+    stepAgeMs: REPLAY_TEST_140646Z_SQL_TRANSACTIONS_STEP_AGE_MS,
+    stepTimeoutMs: REPLAY_TEST_140646Z_SQL_TRANSACTIONS_STEP_TIMEOUT_MS,
+    latestOperationWorkflowStep: REPLAY_TEST_140646Z_WORKFLOW_STEP_SENDING,
+    latestOperationStatus: REPLAY_TEST_140646Z_OPERATION_STATUS_PENDING,
+    operationIds: [
+      REPLAY_TEST_140646Z_SQL_TRANSACTIONS_OPERATION_ID,
+    ],
+    serialWaitOperationIds: [],
+    serialWaitPartitionIds: [],
+    correlationKey: REPLAY_TEST_140646Z_SQL_TRANSACTIONS_CORRELATION_KEY,
+  };
+}
+
+function build140646ZSqlWriteWitness() {
+  return {
+    partitionId: REPLAY_TEST_140646Z_SQL_WRITE_PARTITION_ID,
+    semanticStateId: REPLAY_TEST_140646Z_NEEDS_OPERATION,
+    spreadGap: REPLAY_TEST_140646Z_REPLAY_SPREAD_GAP_HIGH,
+    readyDistinctNodeCount:
+      REPLAY_TEST_140646Z_READY_DISTINCT_NODE_COUNT_LOW,
+    requiredDistinctNodeCount:
+      REPLAY_TEST_140646Z_REQUIRED_DISTINCT_NODE_COUNT,
+    progressClassIds: [
+      REPLAY_TEST_140646Z_PRIORITY_OPERATION_SERIAL_WAIT,
+    ],
+    blockerReasonCodes: [
+      REPLAY_TEST_140646Z_PRIORITY_OPERATION_SERIAL_WAIT,
+    ],
+    actuationState: REPLAY_TEST_140646Z_TRANSITION_DEFERRED,
+    currentOwner: REPLAY_TEST_140646Z_OPERATION_WORKFLOW_OWNER,
+    actuationOwner: REPLAY_TEST_140646Z_OPERATION_WORKFLOW_OWNER,
+    nextRequiredAction: REPLAY_TEST_140646Z_WAIT_FOR_OPERATION_PROGRESS,
+    blockingBoundary: REPLAY_TEST_140646Z_WORKFLOW_PROGRESS_BOUNDARY,
+    waitMode: REPLAY_TEST_140646Z_EVENT_DRIVEN_WAIT_MODE,
+    workflowProgressPhaseId: REPLAY_TEST_140646Z_WORKFLOW_PHASE_NONE,
+    stepAgeMs: REPLAY_TEST_140646Z_SQL_WRITE_STEP_AGE_MS,
+    stepTimeoutMs: REPLAY_TEST_140646Z_SQL_WRITE_STEP_TIMEOUT_MS,
+    latestOperationWorkflowStep: REPLAY_TEST_140646Z_OPERATION_STATUS_UNAVAILABLE,
+    latestOperationStatus: REPLAY_TEST_140646Z_OPERATION_STATUS_UNAVAILABLE,
+    operationIds: [],
+    serialWaitOperationIds: [
+      REPLAY_TEST_140646Z_SQL_TRANSACTIONS_OPERATION_ID,
+    ],
+    serialWaitPartitionIds: [
+      REPLAY_TEST_140646Z_SQL_TRANSACTIONS_PARTITION_ID,
+    ],
+    correlationKey: REPLAY_TEST_140646Z_SQL_WRITE_CORRELATION_KEY,
+  };
+}
+
+function build140646ZFailureBundle() {
+  return {
+    publicationConvergence: {
+      publicationEpoch: REPLAY_TEST_140646Z_PUBLICATION_EPOCH,
+      publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.OPEN,
+      recoveryProtocolState: REPLAY_TEST_140646Z_PUBLICATION_RECOVERY_STATE,
+      priorityRecoveryReasonCodes: [
+        REPLAY_TEST_140646Z_PRIORITY_RECOVERY_REASON,
+        REPLAY_TEST_140646Z_PUBLICATION_EPOCH_PENDING_REASON,
+      ],
+      publishedActiveNodeIds: REPLAY_TEST_140646Z_PUBLISHED_NODE_IDS,
+      requiredAckNodeIds: REPLAY_TEST_140646Z_PUBLISHED_NODE_IDS,
+      acknowledgedNodeIds: REPLAY_TEST_140646Z_ACKNOWLEDGED_NODE_IDS,
+      pendingAckNodeIds: REPLAY_TEST_140646Z_PENDING_ACK_NODE_IDS,
+      pendingAckCount: REPLAY_TEST_140646Z_PENDING_ACK_COUNT,
+      missingPublishedNodeIds:
+        REPLAY_TEST_140646Z_EMPTY_MISSING_PUBLISHED_NODE_IDS,
+      missingPublishedCount:
+        REPLAY_TEST_140646Z_EMPTY_MISSING_PUBLISHED_NODE_IDS.length,
+      prioritySpreadPending: true,
+      publicationConvergenceGateReasons:
+        REPLAY_TEST_140646Z_PUBLICATION_GATE_REASONS,
+      priorityPartitionSummary: {
+        satisfied: false,
+        readyEligibleNodeCount:
+          REPLAY_TEST_140646Z_READY_ELIGIBLE_NODE_COUNT,
+        blockedPartitionCount: PRIORITY_CONTROL_PLANE_TABLE_IDS.size,
+        largestSpreadGap: REPLAY_TEST_140646Z_PRIORITY_SPREAD_GAP,
+        totalSpreadGap: REPLAY_TEST_140646Z_PRIORITY_SPREAD_GAP,
+      },
+    },
+    controlPlane: {
+      activeGateProgress: {
+        expectedNodeCount: REPLAY_TEST_140646Z_EXPECTED_NODE_COUNT,
+        activeNodeCount: REPLAY_TEST_140646Z_TERMINAL_ACTIVE_NODE_COUNT,
+        inactiveNodeCount: REPLAY_TEST_140646Z_TERMINAL_INACTIVE_NODE_COUNT,
+        snapshotCoverageNodeCount:
+          REPLAY_TEST_140646Z_SELECTED_SNAPSHOT_COVERAGE_NODE_COUNT,
+        publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.OPEN,
+        publicationEpoch: REPLAY_TEST_140646Z_PUBLICATION_EPOCH,
+        recoveryProtocolState: REPLAY_TEST_140646Z_PUBLICATION_RECOVERY_STATE,
+        selectedSnapshotNodeId: REPLAY_TEST_140646Z_NODE_ID.SELECTED,
+        selectedSnapshotAdminReady: true,
+        selectedSnapshotReachableBy: REPLAY_TEST_140646Z_ADMIN_HEALTH,
+        selectedSnapshotReachabilityError:
+          REPLAY_TEST_140646Z_EMPTY_REACHABILITY_ERROR,
+        selectedPublishedActiveNodeIds:
+          REPLAY_TEST_140646Z_PUBLISHED_NODE_IDS,
+        selectedMissingPublishedNodeIds:
+          REPLAY_TEST_140646Z_EMPTY_MISSING_PUBLISHED_NODE_IDS,
+        pendingAckCount: REPLAY_TEST_140646Z_PENDING_ACK_COUNT,
+        missingPublishedCount:
+          REPLAY_TEST_140646Z_EMPTY_MISSING_PUBLISHED_NODE_IDS.length,
+        prioritySpreadSatisfied: false,
+        prioritySpreadGap: REPLAY_TEST_140646Z_PRIORITY_SPREAD_GAP,
+        priorityBlockedPartitionCount:
+          REPLAY_TEST_140646Z_HIGH_GAP_PARTITION_IDS.length,
+        pendingAckNodeIds: REPLAY_TEST_140646Z_PENDING_ACK_NODE_IDS,
+      },
+      activeGateSnapshotCoverage: {
+        expectedNodeCount: REPLAY_TEST_140646Z_EXPECTED_NODE_COUNT,
+        bestCoverageNodeCount:
+          REPLAY_TEST_140646Z_SELECTED_SNAPSHOT_COVERAGE_NODE_COUNT,
+        selectedSnapshotNodeId: REPLAY_TEST_140646Z_NODE_ID.SELECTED,
+        selectedAdminReady: true,
+        selectedSnapshotAdminReady: true,
+        selectedReachableBy: REPLAY_TEST_140646Z_ADMIN_HEALTH,
+        selectedSnapshotReachableBy: REPLAY_TEST_140646Z_ADMIN_HEALTH,
+        selectedSnapshotReachabilityError:
+          REPLAY_TEST_140646Z_EMPTY_REACHABILITY_ERROR,
+        selectedSnapshotObservationMode:
+          ADMIN_CONTROL_SNAPSHOT_OBSERVATION_MODE.REPAIR_DEFERRED,
+        selectedSnapshotObservationState:
+          CONTROL_PLANE_SNAPSHOT_OBSERVATION_STATE.STALE_BUT_USABLE,
+        selectedSnapshotObservationContractState: OWNER_CONTRACT_STATE.PENDING,
+        selectedSnapshotObservationRefreshState:
+          CONTROL_PLANE_SNAPSHOT_REFRESH_STATE.IDLE,
+        selectedSnapshotObservationNextAction: OWNER_CONTRACT_NEXT_ACTION.WAIT,
+        selectedSnapshotObservationReasonCodes:
+          REPLAY_TEST_140646Z_OBSERVATION_REASON_CODES,
+        selectedSnapshotRepairDeferred: true,
+        selectedPublishedActiveNodeIds:
+          REPLAY_TEST_140646Z_PUBLISHED_NODE_IDS,
+        selectedMissingPublishedNodeIds:
+          REPLAY_TEST_140646Z_EMPTY_MISSING_PUBLISHED_NODE_IDS,
+      },
+      priorityRecoveryObservation: {
+        publicationEpoch: REPLAY_TEST_140646Z_PUBLICATION_EPOCH,
+        priorityRecoveryPartitionWitnesses: [
+          build140646ZSqlTransactionsWitness(),
+          build140646ZSqlWriteWitness(),
+        ],
+      },
+      priorityRecoveryDecisionSnapshots: {
+        publicationEpoch: REPLAY_TEST_140646Z_PUBLICATION_EPOCH,
+        partitionIdsBySemanticState: {
+          [REPLAY_TEST_140646Z_SPREAD_SATISFIED_IN_FLIGHT]:
+            REPLAY_TEST_140646Z_SPREAD_SATISFIED_PARTITION_IDS,
+          [REPLAY_TEST_140646Z_RECOVERING_IN_FLIGHT]: [
+            REPLAY_TEST_140646Z_SQL_TRANSACTIONS_PARTITION_ID,
+          ],
+          [REPLAY_TEST_140646Z_NEEDS_OPERATION]: [
+            REPLAY_TEST_140646Z_SQL_WRITE_PARTITION_ID,
+          ],
+        },
+        blockerPartitionIdsByReason: {
+          [REPLAY_TEST_140646Z_PRIORITY_OPERATION_SERIAL_WAIT]: [
+            REPLAY_TEST_140646Z_SQL_WRITE_PARTITION_ID,
+          ],
+        },
+        priorityPartitionSummary: {
+          satisfied: false,
+          readyEligibleNodeCount:
+            REPLAY_TEST_140646Z_READY_ELIGIBLE_NODE_COUNT,
+          blockedPartitionCount: REPLAY_TEST_140646Z_PRIORITY_PARTITION_IDS.length,
+          largestSpreadGap: REPLAY_TEST_140646Z_PRIORITY_SPREAD_GAP,
+          totalSpreadGap: REPLAY_TEST_140646Z_PRIORITY_SPREAD_GAP,
+        },
+        closureWitness: {
+          state: REPLAY_TEST_140646Z_CLOSURE_PENDING,
+          prioritySpreadPending: true,
+          publicationRefreshRequired: false,
+          blockedPartitionIds: REPLAY_TEST_140646Z_HIGH_GAP_PARTITION_IDS,
+        },
+      },
+    },
+    logs: {
+      excerptsByNodeId: {
+        [REPLAY_TEST_140646Z_NODE_ID.PENDING_ACK_TWO]: [
+          build140646ZRepairLogLine(
+            REPLAY_TEST_140646Z_NODE_ID.PENDING_ACK_TWO,
+            [
+              REPLAY_TEST_140646Z_CONTROL_PLANE_BACKPRESSURE,
+            ],
+          ),
+        ],
+        [REPLAY_TEST_140646Z_NODE_ID.SELECTED]: [
+          build140646ZRepairLogLine(
+            REPLAY_TEST_140646Z_NODE_ID.SELECTED,
+            [
+              REPLAY_TEST_140646Z_CONTROL_PLANE_BACKPRESSURE,
+              REPLAY_TEST_140646Z_QUERY_TIMEOUT,
+            ],
+          ),
+        ],
+      },
+    },
+  };
+}
+
+function build140646ZSnapshot() {
+  const partitionRows = build140646ZPartitionRows();
+  return {
+    timestamp: REPLAY_TEST_140646Z_TIMESTAMP_MS,
+    nodes: build140646ZNodeRows(),
+    nodeEndpoints: REPLAY_TEST_140646Z_NODE_ENDPOINT_ROWS,
+    partitions: partitionRows,
+    services: build140646ZServiceRows(partitionRows),
   };
 }
 
@@ -2527,6 +3052,401 @@ describe(REPLAY_TEST_SUITE_NAME, () => {
     assert.equal(
       sqlWriteWitness.correlationKey,
       REPLAY_TEST_132033Z_SQL_WRITE_CORRELATION_KEY,
+    );
+  });
+
+  it(REPLAY_TEST_140646Z_TEST_NAME, async () => {
+    const snapshot = build140646ZSnapshot();
+    const failureBundle = build140646ZFailureBundle();
+
+    await writeFile(
+      join(tempDir, REPLAY_TEST_FAILURE_BUNDLE_FILE),
+      JSON.stringify(failureBundle),
+      REPLAY_TEST_ENCODING,
+    );
+    await writeFile(
+      join(tempDir, REPLAY_TEST_SNAPSHOTS_FILE),
+      JSON.stringify(snapshot),
+      REPLAY_TEST_ENCODING,
+    );
+
+    const replaySummary = await replayPublicationPriorityEvidenceFromReportDir(tempDir);
+    const sqlTransactionsWitness =
+      replaySummary.priorityRecoveryWitnesses.find((witness) =>
+        witness.partitionId ===
+        REPLAY_TEST_140646Z_SQL_TRANSACTIONS_PARTITION_ID,
+      );
+    const sqlWriteWitness =
+      replaySummary.priorityRecoveryWitnesses.find((witness) =>
+        witness.partitionId === REPLAY_TEST_140646Z_SQL_WRITE_PARTITION_ID,
+      );
+
+    assert.equal(
+      failureBundle.controlPlane.activeGateProgress.activeNodeCount,
+      REPLAY_TEST_140646Z_TERMINAL_ACTIVE_NODE_COUNT,
+    );
+    assert.equal(
+      failureBundle.controlPlane.activeGateProgress.inactiveNodeCount,
+      REPLAY_TEST_140646Z_TERMINAL_INACTIVE_NODE_COUNT,
+    );
+    assert.equal(
+      failureBundle.controlPlane.activeGateProgress.snapshotCoverageNodeCount,
+      REPLAY_TEST_140646Z_SELECTED_SNAPSHOT_COVERAGE_NODE_COUNT,
+    );
+    assert.deepEqual(
+      failureBundle.publicationConvergence.publicationConvergenceGateReasons,
+      REPLAY_TEST_140646Z_PUBLICATION_GATE_REASONS,
+    );
+    assert.deepEqual(
+      collectPriorityServicePartitionIds(
+        snapshot.services,
+        REPLAY_TEST_140646Z_PRIORITY_PARTITION_IDS,
+      ),
+      REPLAY_TEST_140646Z_PRIORITY_PARTITION_IDS,
+    );
+    assert.equal(
+      countReplayServiceRows(snapshot.services, {
+        nodeId: REPLAY_TEST_140646Z_NODE_ID.SEED,
+        status: SERVICE_STATUS.ACTIVE,
+      }),
+      REPLAY_TEST_140646Z_SEED_ACTIVE_SERVICE_ROW_COUNT,
+    );
+    assert.equal(
+      countReplayServiceRows(snapshot.services, {
+        nodeId: REPLAY_TEST_140646Z_NODE_ID.SELECTED,
+        status: SERVICE_STATUS.ACTIVE,
+      }),
+      REPLAY_TEST_140646Z_SELECTED_ACTIVE_SERVICE_ROW_COUNT,
+    );
+    assert.equal(
+      countReplayServiceRows(snapshot.services, {
+        nodeId: REPLAY_TEST_140646Z_NODE_ID.STALE,
+        status: SERVICE_STATUS.ACTIVE,
+      }),
+      REPLAY_TEST_140646Z_STALE_ACTIVE_SERVICE_ROW_COUNT,
+    );
+    assert.equal(
+      replaySummary.rowCounts.nodes,
+      REPLAY_TEST_140646Z_NODE_IDS.length,
+    );
+    assert.equal(
+      replaySummary.rowCounts.nodeEndpoints,
+      REPLAY_TEST_140646Z_NODE_ENDPOINT_ROW_COUNT,
+    );
+    assert.equal(
+      replaySummary.rowCounts.partitions,
+      REPLAY_TEST_140646Z_PARTITION_ROW_COUNT,
+    );
+    assert.equal(
+      replaySummary.rowCounts.services,
+      REPLAY_TEST_140646Z_SERVICE_ROW_COUNT,
+    );
+    assert.equal(
+      replaySummary.durablePublication.epoch,
+      REPLAY_TEST_140646Z_PUBLICATION_EPOCH,
+    );
+    assert.equal(
+      replaySummary.durablePublication.status,
+      CONTROL_PLANE_PUBLICATION_STATUS.OPEN,
+    );
+    assert.equal(
+      replaySummary.durablePublication.prioritySpreadPending,
+      true,
+    );
+    assert.equal(
+      replaySummary.replayedPublication.epoch,
+      REPLAY_TEST_140646Z_PUBLICATION_EPOCH,
+    );
+    assert.equal(
+      replaySummary.replayedPublication.status,
+      CONTROL_PLANE_PUBLICATION_STATUS.OPEN,
+    );
+    assert.equal(
+      replaySummary.replayedPublication.recoveryProtocolState,
+      REPLAY_TEST_140646Z_PUBLICATION_RECOVERY_STATE,
+    );
+    assert.deepEqual(
+      replaySummary.replayedPublication.priorityRecoveryReasonCodes,
+      [
+        REPLAY_TEST_140646Z_PRIORITY_RECOVERY_REASON,
+        REPLAY_TEST_140646Z_PUBLICATION_EPOCH_PENDING_REASON,
+      ],
+    );
+    assert.equal(replaySummary.comparison.durableSatisfied, false);
+    assert.equal(replaySummary.comparison.replayedSatisfied, false);
+    assert.equal(
+      replaySummary.comparison.driftClassification,
+      PUBLICATION_EVIDENCE_REPLAY_DRIFT_CLASSIFICATION.REPLAYED_BLOCKED,
+    );
+    assert.deepEqual(
+      replaySummary.comparison.replayedBlockedPartitionIds,
+      REPLAY_TEST_140646Z_PRIORITY_PARTITION_IDS,
+    );
+    assert.deepEqual(
+      replaySummary.replayedPublication.summary.blockedPartitions,
+      build140646ZBlockedPartitions(),
+    );
+    assert.equal(
+      replaySummary.comparison.closureWitnessClassification,
+      PUBLICATION_EVIDENCE_REPLAY_CLOSURE_WITNESS_CLASSIFICATION.PENDING,
+    );
+    assert.equal(
+      replaySummary.replayedPublication.closureWitness.state,
+      REPLAY_TEST_140646Z_CLOSURE_PENDING,
+    );
+    assert.deepEqual(
+      replaySummary.replayedPublication.closureWitness.blockedPartitionIds,
+      REPLAY_TEST_140646Z_HIGH_GAP_PARTITION_IDS,
+    );
+    assert.equal(
+      replaySummary.selectedSnapshotObservation.availability,
+      PUBLICATION_EVIDENCE_REPLAY_AVAILABILITY.AVAILABLE,
+    );
+    assert.equal(
+      replaySummary.selectedSnapshotObservation.selectedSnapshotNodeId,
+      REPLAY_TEST_140646Z_NODE_ID.SELECTED,
+    );
+    assert.equal(
+      replaySummary.selectedSnapshotObservation.selectedAdminReady,
+      true,
+    );
+    assert.equal(
+      replaySummary.selectedSnapshotObservation.selectedSnapshotAdminReady,
+      true,
+    );
+    assert.equal(
+      replaySummary.selectedSnapshotObservation.selectedSnapshotReachableBy,
+      REPLAY_TEST_140646Z_ADMIN_HEALTH,
+    );
+    assert.equal(
+      replaySummary.selectedSnapshotObservation
+        .selectedSnapshotReachabilityError,
+      REPLAY_TEST_140646Z_EMPTY_REACHABILITY_ERROR,
+    );
+    assert.equal(
+      replaySummary.selectedSnapshotObservation.bestCoverageNodeCount,
+      REPLAY_TEST_140646Z_SELECTED_SNAPSHOT_COVERAGE_NODE_COUNT,
+    );
+    assert.equal(
+      replaySummary.selectedSnapshotObservation.expectedNodeCount,
+      REPLAY_TEST_140646Z_EXPECTED_NODE_COUNT,
+    );
+    assert.equal(
+      replaySummary.selectedSnapshotObservation.selectedSnapshotObservationMode,
+      ADMIN_CONTROL_SNAPSHOT_OBSERVATION_MODE.REPAIR_DEFERRED,
+    );
+    assert.equal(
+      replaySummary.selectedSnapshotObservation.selectedSnapshotObservationState,
+      CONTROL_PLANE_SNAPSHOT_OBSERVATION_STATE.STALE_BUT_USABLE,
+    );
+    assert.equal(
+      replaySummary.selectedSnapshotObservation
+        .selectedSnapshotObservationContractState,
+      OWNER_CONTRACT_STATE.PENDING,
+    );
+    assert.equal(
+      replaySummary.selectedSnapshotObservation
+        .selectedSnapshotObservationRefreshState,
+      CONTROL_PLANE_SNAPSHOT_REFRESH_STATE.IDLE,
+    );
+    assert.equal(
+      replaySummary.selectedSnapshotObservation.selectedSnapshotObservationNextAction,
+      OWNER_CONTRACT_NEXT_ACTION.WAIT,
+    );
+    assert.deepEqual(
+      replaySummary.selectedSnapshotObservation
+        .selectedSnapshotObservationReasonCodes,
+      REPLAY_TEST_140646Z_OBSERVATION_REASON_CODES,
+    );
+    assert.equal(
+      replaySummary.selectedSnapshotObservation.selectedSnapshotRepairDeferred,
+      true,
+    );
+    assert.deepEqual(
+      replaySummary.selectedSnapshotObservation.selectedPublishedActiveNodeIds,
+      REPLAY_TEST_140646Z_PUBLISHED_NODE_IDS,
+    );
+    assert.deepEqual(
+      replaySummary.selectedSnapshotObservation.selectedMissingPublishedNodeIds,
+      REPLAY_TEST_140646Z_EMPTY_MISSING_PUBLISHED_NODE_IDS,
+    );
+    assert.equal(
+      replaySummary.ownerRpcCacheRepair.availability,
+      PUBLICATION_EVIDENCE_REPLAY_AVAILABILITY.AVAILABLE,
+    );
+    assert.equal(
+      replaySummary.ownerRpcCacheRepair.deferralState,
+      REPLAY_TEST_140646Z_REPAIR_DEFERRAL_STATE,
+    );
+    assert.equal(
+      replaySummary.ownerRpcCacheRepair.matchingDeferralCount,
+      REPLAY_TEST_140646Z_REPAIR_DEFERRAL_COUNT,
+    );
+    assert.equal(
+      replaySummary.ownerRpcCacheRepair.selectedWitnessDeferralCount,
+      REPLAY_TEST_140646Z_SELECTED_REPAIR_DEFERRAL_COUNT,
+    );
+    assert.equal(
+      replaySummary.ownerRpcCacheRepair.latestRetryAfterMs,
+      REPLAY_TEST_140646Z_REPAIR_RETRY_AFTER_MS,
+    );
+    assert.equal(
+      replaySummary.ownerRpcCacheRepair.selectedWitnessLatestRetryAfterMs,
+      REPLAY_TEST_140646Z_REPAIR_RETRY_AFTER_MS,
+    );
+    assert.deepEqual(
+      replaySummary.ownerRpcCacheRepair.nodeIds,
+      [
+        REPLAY_TEST_140646Z_NODE_ID.PENDING_ACK_TWO,
+        REPLAY_TEST_140646Z_NODE_ID.SELECTED,
+      ],
+    );
+    assert.deepEqual(
+      replaySummary.ownerRpcCacheRepair.failedTableNames,
+      [
+        REPLAY_TEST_140646Z_NODES_TABLE,
+      ],
+    );
+    assert.deepEqual(
+      replaySummary.ownerRpcCacheRepair.readSources,
+      [
+        REPLAY_TEST_140646Z_OWNER_RPC_LANE,
+      ],
+    );
+    assert.deepEqual(
+      replaySummary.ownerRpcCacheRepair.causeChain,
+      [
+        REPLAY_TEST_140646Z_CONTROL_PLANE_BACKPRESSURE,
+        REPLAY_TEST_140646Z_QUERY_TIMEOUT,
+      ],
+    );
+    assert.deepEqual(
+      replaySummary.ownerRpcCacheRepair.failureClasses,
+      [
+        REPLAY_TEST_140646Z_PRESSURE_OR_TIMEOUT,
+      ],
+    );
+    assert.equal(
+      replaySummary.supportingPriorityRecoveryWitness.partitionId,
+      REPLAY_TEST_140646Z_SQL_TRANSACTIONS_PARTITION_ID,
+    );
+    assert.ok(sqlTransactionsWitness);
+    assert.equal(
+      sqlTransactionsWitness.semanticStateId,
+      REPLAY_TEST_140646Z_RECOVERING_IN_FLIGHT,
+    );
+    assert.equal(
+      sqlTransactionsWitness.currentOwner,
+      REPLAY_TEST_140646Z_OPERATION_WORKFLOW_OWNER,
+    );
+    assert.equal(
+      sqlTransactionsWitness.blockingBoundary,
+      REPLAY_TEST_140646Z_WORKFLOW_TIMEOUT_BOUNDARY,
+    );
+    assert.equal(
+      sqlTransactionsWitness.waitMode,
+      REPLAY_TEST_140646Z_TIMEOUT_RECONCILE_DUE,
+    );
+    assert.equal(
+      sqlTransactionsWitness.nextRequiredAction,
+      REPLAY_TEST_140646Z_RECONCILE_STALE_OPERATION,
+    );
+    assert.equal(
+      sqlTransactionsWitness.actuationState,
+      REPLAY_TEST_140646Z_TRANSITION_DEFERRED,
+    );
+    assert.equal(
+      sqlTransactionsWitness.workflowProgressPhaseId,
+      REPLAY_TEST_140646Z_DISPATCH_PENDING,
+    );
+    assert.equal(
+      sqlTransactionsWitness.latestOperationWorkflowStep,
+      REPLAY_TEST_140646Z_WORKFLOW_STEP_SENDING,
+    );
+    assert.equal(
+      sqlTransactionsWitness.latestOperationStatus,
+      REPLAY_TEST_140646Z_OPERATION_STATUS_PENDING,
+    );
+    assert.equal(
+      sqlTransactionsWitness.stepAgeMs,
+      REPLAY_TEST_140646Z_SQL_TRANSACTIONS_STEP_AGE_MS,
+    );
+    assert.equal(
+      sqlTransactionsWitness.stepTimeoutMs,
+      REPLAY_TEST_140646Z_SQL_TRANSACTIONS_STEP_TIMEOUT_MS,
+    );
+    assert.equal(
+      sqlTransactionsWitness.operationId,
+      REPLAY_TEST_140646Z_SQL_TRANSACTIONS_OPERATION_ID,
+    );
+    assert.equal(
+      sqlTransactionsWitness.correlationKey,
+      REPLAY_TEST_140646Z_SQL_TRANSACTIONS_CORRELATION_KEY,
+    );
+    assert.deepEqual(sqlTransactionsWitness.serialWaitOperationIds, []);
+    assert.deepEqual(sqlTransactionsWitness.serialWaitPartitionIds, []);
+    assert.ok(sqlWriteWitness);
+    assert.equal(
+      sqlWriteWitness.semanticStateId,
+      REPLAY_TEST_140646Z_NEEDS_OPERATION,
+    );
+    assert.equal(
+      sqlWriteWitness.currentOwner,
+      REPLAY_TEST_140646Z_OPERATION_WORKFLOW_OWNER,
+    );
+    assert.equal(
+      sqlWriteWitness.blockingBoundary,
+      REPLAY_TEST_140646Z_WORKFLOW_PROGRESS_BOUNDARY,
+    );
+    assert.equal(
+      sqlWriteWitness.waitMode,
+      REPLAY_TEST_140646Z_EVENT_DRIVEN_WAIT_MODE,
+    );
+    assert.equal(
+      sqlWriteWitness.nextRequiredAction,
+      REPLAY_TEST_140646Z_WAIT_FOR_OPERATION_PROGRESS,
+    );
+    assert.equal(
+      sqlWriteWitness.actuationState,
+      REPLAY_TEST_140646Z_TRANSITION_DEFERRED,
+    );
+    assert.equal(
+      sqlWriteWitness.workflowProgressPhaseId,
+      REPLAY_TEST_140646Z_WORKFLOW_PHASE_NONE,
+    );
+    assert.equal(
+      sqlWriteWitness.latestOperationWorkflowStep,
+      REPLAY_TEST_140646Z_OPERATION_STATUS_UNAVAILABLE,
+    );
+    assert.equal(
+      sqlWriteWitness.latestOperationStatus,
+      REPLAY_TEST_140646Z_OPERATION_STATUS_UNAVAILABLE,
+    );
+    assert.deepEqual(
+      sqlWriteWitness.progressClassIds,
+      [
+        REPLAY_TEST_140646Z_PRIORITY_OPERATION_SERIAL_WAIT,
+      ],
+    );
+    assert.equal(
+      sqlWriteWitness.operationId,
+      REPLAY_TEST_140646Z_EMPTY_OPERATION_ID,
+    );
+    assert.equal(
+      sqlWriteWitness.correlationKey,
+      REPLAY_TEST_140646Z_SQL_WRITE_CORRELATION_KEY,
+    );
+    assert.deepEqual(
+      sqlWriteWitness.serialWaitOperationIds,
+      [
+        REPLAY_TEST_140646Z_SQL_TRANSACTIONS_OPERATION_ID,
+      ],
+    );
+    assert.deepEqual(
+      sqlWriteWitness.serialWaitPartitionIds,
+      [
+        REPLAY_TEST_140646Z_SQL_TRANSACTIONS_PARTITION_ID,
+      ],
     );
   });
 });

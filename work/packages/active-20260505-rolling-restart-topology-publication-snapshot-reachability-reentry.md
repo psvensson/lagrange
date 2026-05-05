@@ -611,7 +611,7 @@ Sprint:
       spread, owner-RPC/cache-repair deferral, and priority-recovery
       workflow-timeout / serial-wait evidence, then decide the next smallest
       focused fixture or runtime owner probe.
-- [ ] Add the smallest focused epoch `5` `OPEN` publication-pending selected
+- [x] Add the smallest focused epoch `5` `OPEN` publication-pending selected
       snapshot / owner-RPC-cache-repair replay fixture or runtime owner probe
       for the `20260505T140646Z` shape: terminal active `5/5`, selected
       coverage `3/5`, pending ACK `2`, selected published active `5/5`,
@@ -619,6 +619,11 @@ Sprint:
       `sql_transactions-p1` workflow-timeout evidence, and
       `sql_write_operations-p1` serial-wait evidence behind
       `sql_transactions-p1`.
+- [ ] Rerun the representative `rolling-restart --fast-local` gate after the
+      `140646Z` replay fixture and record whether epoch `5` `OPEN`
+      publication-pending debt closes, stays on pending ACK / selected coverage
+      / owner-RPC repair / priority spread, or migrates to one newly named
+      owner boundary.
 
 ## May 5 Regression Validation
 
@@ -2143,6 +2148,73 @@ Trace validation:
 2. `git diff --check`
    passed for this documentation-only update.
 
+## May 5 `140646Z` Open Publication-Pending Replay Fixture
+
+The next package task added the smallest focused replay fixture for the fresh
+epoch `5` / `OPEN` shape:
+
+1. `test/distributed/harness/publication-evidence-replay.js` now preserves
+   `serialWaitOperationIds` and `serialWaitPartitionIds` on each replayed
+   priority-recovery witness. This keeps the `sql_write_operations-p1`
+   serial wait explicitly tied to the timed-out `sql_transactions-p1`
+   operation instead of only preserving the generic
+   `priority_operation_serial_wait` progress class.
+2. `test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+   adds `keeps the 140646Z OPEN publication-pending replay blocked`.
+   The fixture pins terminal active `5/5`, selected coverage `3/5`,
+   publication epoch `5` / `OPEN`, recovery protocol state
+   `publication_pending`, pending ACK count `2`, selected published active
+   `5/5`, missing published `0`, and gate reasons
+   `priority_partitions_not_spread`, `publication_epoch_pending`, and
+   `snapshot_coverage=3/5`.
+3. The synthetic replay rows match the artifact shape: `nodes=5`,
+   `nodeEndpoints=0`, `partitions=33`, and `services=102`. The seed carries
+   the broad service evidence, the selected witness carries two active
+   priority rows, and the stale witness carries one active priority row. Replay
+   remains `replayed_blocked` with all five priority partitions blocked; the
+   `sql_transactions-p1` and `sql_write_operations-p1` rows retain spread gap
+   `2`.
+4. The fixture preserves selected snapshot observation
+   `repair_deferred` / `stale_usable`, selected witness
+   `8be8d30f-4499-5eed-865c-71b4d529a67a` reachable through `admin_health`,
+   owner-RPC/cache-repair deferral on `nodes` through `owner_rpc_lane`, and
+   cause chain `control_plane_backpressure` / `query_timeout`.
+5. The priority-recovery witnesses now prove the exact current dependency:
+   `sql_transactions-p1` operation
+   `0c78d9d7-3672-490e-87af-3b9acebd5801` remains
+   `recovering_in_flight` at `workflow_timeout` /
+   `timeout_reconcile_due`, while `sql_write_operations-p1` remains
+   `needs_operation` with `priority_operation_serial_wait` behind that same
+   operation and partition.
+
+Outcome: the fixture does not close the runtime blocker. It locks the current
+owner contract before a runtime change: selected publication membership has
+caught up to `5/5`, but pending ACK, selected coverage, owner-RPC repair,
+priority spread, and operation-workflow progress remain open.
+
+Validation:
+
+1. `node --check test/distributed/harness/publication-evidence-replay.js`
+2. `node --check test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+3. `node --test --test-name-pattern "keeps the 140646Z OPEN publication-pending replay blocked" test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+4. `node --test test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+5. `node test/distributed/harness/publication-evidence-replay.js test-output/reports/.playback/rolling-restart-after-132033z-selected-snapshot-replay-fixture-20260505T140646Z/rolling-restart`
+   passed and now prints serial-wait operation and partition ids for
+   `sql_write_operations-p1`.
+6. `npx eslint test/distributed/harness/publication-evidence-replay.js test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+7. `node scripts/check-guideline-decision-boundaries.js test/distributed/harness/publication-evidence-replay.js test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+   reported `0` decision-boundary guideline violations.
+8. `node scripts/check-runtime-grammar-contracts.js test/distributed/harness/publication-evidence-replay.js test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+   reported `0` runtime-grammar-contract violations.
+9. `node scripts/check-guideline-boundary-mode-contracts.js test/distributed/harness/publication-evidence-replay.js test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+   reported `0` boundary-mode-contract hotspot violations.
+10. `node scripts/check-guideline-literals.js test/distributed/harness/publication-evidence-replay.js test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+    reported `0` new and `0` inherited literal-guideline violations.
+11. `node scripts/check-guideline-literals.js --include-tests test/distributed/harness/publication-evidence-replay.js test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+    reported `0` new and `0` inherited literal-guideline violations.
+12. `git diff --check`
+    passed.
+
 ## Validation
 
 1. Focused owner or harness fixture for topology publication membership
@@ -2202,7 +2274,9 @@ The `20260505T123850Z` trace, focused ACK-pending operation-workflow timeout
 fixture, `20260505T132033Z` representative rerun, `20260505T132033Z`
 post-ACK `PUBLISHED` missing-active selected-snapshot trace and replay fixture,
 `20260505T140646Z` representative rerun, and `20260505T140646Z` epoch `5`
-`OPEN` publication-pending trace are complete. The current next unchecked task
-is to add the smallest focused epoch `5` `OPEN` publication-pending selected
-snapshot / owner-RPC-cache-repair replay fixture or runtime owner probe for
-the `20260505T140646Z` shape.
+`OPEN` publication-pending trace and replay fixture are complete. The current
+next unchecked task is to rerun the representative `rolling-restart
+--fast-local` gate after the `140646Z` replay fixture and record whether epoch
+`5` `OPEN` publication-pending debt closes, stays on pending ACK / selected
+coverage / owner-RPC repair / priority spread, or migrates to one newly named
+owner boundary.

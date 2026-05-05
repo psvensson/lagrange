@@ -122,6 +122,8 @@ const PUBLICATION_EVIDENCE_REPLAY_PRIORITY_WITNESS_FIELD = Object.freeze({
   OPERATION_ID: 'operationId',
   PARTITION_ID: 'partitionId',
   PROGRESS_CLASS_IDS: 'progressClassIds',
+  SERIAL_WAIT_OPERATION_IDS: 'serialWaitOperationIds',
+  SERIAL_WAIT_PARTITION_IDS: 'serialWaitPartitionIds',
   SEMANTIC_STATE_ID: 'semanticStateId',
   STEP_AGE_MS: 'stepAgeMs',
   STEP_TIMEOUT_MS: 'stepTimeoutMs',
@@ -636,6 +638,10 @@ function buildMissingPriorityRecoveryWitness() {
       PUBLICATION_EVIDENCE_REPLAY_EMPTY_TEXT,
     [PUBLICATION_EVIDENCE_REPLAY_PRIORITY_WITNESS_FIELD.PROGRESS_CLASS_IDS]:
       [],
+    [PUBLICATION_EVIDENCE_REPLAY_PRIORITY_WITNESS_FIELD.SERIAL_WAIT_OPERATION_IDS]:
+      [],
+    [PUBLICATION_EVIDENCE_REPLAY_PRIORITY_WITNESS_FIELD.SERIAL_WAIT_PARTITION_IDS]:
+      [],
   };
 }
 
@@ -678,6 +684,22 @@ function summarizePriorityRecoveryWitness(witnessCandidate) {
         readArrayField(
           witness,
           PUBLICATION_EVIDENCE_REPLAY_PRIORITY_WITNESS_FIELD.PROGRESS_CLASS_IDS,
+        ),
+      ),
+    [PUBLICATION_EVIDENCE_REPLAY_PRIORITY_WITNESS_FIELD.SERIAL_WAIT_OPERATION_IDS]:
+      normalizeList(
+        readArrayField(
+          witness,
+          PUBLICATION_EVIDENCE_REPLAY_PRIORITY_WITNESS_FIELD
+            .SERIAL_WAIT_OPERATION_IDS,
+        ),
+      ),
+    [PUBLICATION_EVIDENCE_REPLAY_PRIORITY_WITNESS_FIELD.SERIAL_WAIT_PARTITION_IDS]:
+      normalizeList(
+        readArrayField(
+          witness,
+          PUBLICATION_EVIDENCE_REPLAY_PRIORITY_WITNESS_FIELD
+            .SERIAL_WAIT_PARTITION_IDS,
         ),
       ),
   };

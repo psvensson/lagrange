@@ -231,13 +231,26 @@ Queued cleanup packages:
    through `owner_rpc_lane` under `control_plane_backpressure` /
    `query_timeout`, `sql_transactions-p1` workflow-timeout evidence, and
    `sql_write_operations-p1` serial-wait evidence behind
-   `sql_transactions-p1`. Validation:
+   `sql_transactions-p1`. The focused `140646Z` replay fixture is now also
+   complete: `test/distributed/harness/publication-evidence-replay.js`
+   preserves serial-wait operation and partition ids, and
+   `test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+   pins the epoch `5` `OPEN` fixture with pending ACK `2`, selected coverage
+   `3/5`, selected published active `5/5`, missing published `0`,
+   owner-RPC/cache-repair deferral on `nodes`, the `sql_transactions-p1`
+   workflow-timeout witness, and the `sql_write_operations-p1` serial wait
+   behind it. Validation:
+   `node --test --test-name-pattern "keeps the 140646Z OPEN publication-pending replay blocked" test/distributed/harness/__tests__/publication-evidence-replay.test.js`,
+   `node --test test/distributed/harness/__tests__/publication-evidence-replay.test.js`,
    `node test/distributed/harness/publication-evidence-replay.js test-output/reports/.playback/rolling-restart-after-132033z-selected-snapshot-replay-fixture-20260505T140646Z/rolling-restart`
-   passed with `driftClassification=replayed_blocked`, and `git diff --check`
-   passed for the documentation update. The next unchecked package task is to
-   add the smallest focused epoch `5` `OPEN` publication-pending selected
-   snapshot / owner-RPC-cache-repair replay fixture or runtime owner probe for
-   this `20260505T140646Z` shape.
+   passed with `driftClassification=replayed_blocked`, the touched-file
+   syntax, ESLint, decision-boundary, runtime-grammar, boundary-mode, and
+   literal guardrails passed, and `git diff --check` passed. The next
+   unchecked package task is to rerun the representative `rolling-restart
+   --fast-local` gate after the `140646Z` replay fixture and record whether
+   epoch `5` `OPEN` publication-pending debt closes, stays on pending ACK /
+   selected coverage / owner-RPC repair / priority spread, or migrates to one
+   newly named owner boundary.
 3. Harness classification:
    terminal barrier evidence wins over stale playback reconstruction for
    active, restart-recovery, load-readiness, convergence, and quiescence
