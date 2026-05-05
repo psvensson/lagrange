@@ -652,6 +652,23 @@ Current secondary evidence:
     active-gate snapshot coverage lag while preserving stale selected
     active-gate debt and stale closure replay suppression. No representative
     scenario rerun was run for this harness-only slice.
+64. May 5 diagnostic-contract regression correction and representative rerun:
+    `node --check test/distributed/harness/__tests__/failure-bundle.test.js`,
+    the focused missing-active publication regression, the adjacent
+    reachability and workflow regressions, file-scoped literal,
+    decision-boundary, and boundary-mode-contract guardrails, `git diff --check`,
+    and `git diff --cached --check` passed. The representative rerun
+    `test-output/reports/rolling-restart-topology-publication-snapshot-reachability-reentry-after-diagnostic-contract-20260505T093109Z.report.json`
+    failed after `130.1s` with failure class
+    `publication_convergence_blocked`, dominant reason
+    `publication_missing_active_node=11601fe0-72d6-5853-8590-ec2881853e72`,
+    publication epoch `3` `PUBLISHED`, pending ACK count `0`, missing
+    published count `2`, selected snapshot coverage `4/5`, terminal active
+    `2/5`, best active `5/5`, and priority spread gap `10`. The selected
+    snapshot reachability timeout from `074739Z` is no longer terminal; the
+    residual is publication missing-active membership/snapshot coverage with
+    subordinate `sql_write_operations-p1` serial wait at
+    `operation_workflow_owner / workflow_progress / event_driven`.
 
 ## Progress Grammar
 
