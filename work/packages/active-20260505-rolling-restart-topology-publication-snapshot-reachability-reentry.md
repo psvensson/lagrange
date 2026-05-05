@@ -236,6 +236,90 @@ unclosed. No small runtime or harness fix is indicated from this slice alone;
 the next task should trace the `sql_write_operations-p1` serial-wait owner path
 and the owner-RPC pressure around `7493b0ab-a054-5fad-a91b-5e331db29304`.
 
+## May 5 Serial-Wait Witness Owner Path
+
+The fourth package task traced the `sql_write_operations-p1` serial-wait
+witness without runtime edits:
+
+1. `src/control-plane/priority-recovery-snapshot.js` owns the runtime priority
+   recovery decision snapshots. `buildPriorityRecoveryDecisionSnapshots(...)`
+   builds operation contexts, computes ordinary serial-lane operation contexts
+   for tracked non-emergency priority partitions, then emits one decision
+   snapshot per tracked partition and operation.
+2. `buildPriorityRecoveryPartitionAssessment(...)` is the decision point for
+   `priority_operation_serial_wait`: when a partition is eligible, not spread,
+   has no current active/completed placement operation in that snapshot, and
+   another ordinary serial-lane operation exists, it emits
+   `priority_operation_serial_wait`. The progress contract maps that state to
+   `operation_workflow_owner`, `workflow_progress`, `event_driven`, and
+   `wait_for_operation_progress`.
+3. The `074739Z` artifact has two `sql_write_operations-p1` decision snapshots.
+   The operation-specific snapshot is keyed by
+   `sql_write_operations-p1|3|57aa5679-15ad-4ea9-84f6-c6e5f906abf0` and shows
+   operation `57aa5679-15ad-4ea9-84f6-c6e5f906abf0` as a `REPLACE` for
+   `sql_write_operations-p1-r4`, moving from
+   `7493b0ab-a054-5fad-a91b-5e331db29304` to
+   `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`. It is `pending` / `PENDING`,
+   `persisted_not_dispatched`, `dispatch_pending`, age `9078ms` against a
+   `30000ms` step timeout, target visibility `absent`, and
+   `timeoutReconcileDue=false`.
+4. The later selected-current snapshot is keyed by
+   `sql_write_operations-p1|3|operation_unknown`. It sees planner spread gap
+   `2`, ready distinct node count `1/3`, no current operation context, and
+   emits `needs_operation` with blocker `priority_operation_serial_wait`.
+   Its serial-wait operation ids are
+   `4c37459a-ceb9-4745-a10a-0169ca521f50` and
+   `f4cadbdd-f27f-4660-b1a8-556e19ec4271`; its serial-wait partition ids are
+   `sql_transaction_participants-p1` and `sql_transactions-p1`.
+5. `src/control-plane/priority-recovery-observation-snapshot.js` owns the
+   witness roll-up. It selects the latest related partition snapshot for the
+   visible state, but preserves related `operationIds`,
+   `serialWaitOperationIds`, `serialWaitPartitionIds`, and `witnessIds`. That
+   is why the report-side witness correlation key is
+   `sql_write_operations-p1|3|operation_unknown` while the same witness still
+   carries operation `57aa5679-15ad-4ea9-84f6-c6e5f906abf0`.
+6. `sql_transaction_participants-p1` is no longer the selected current blocker
+   in the failure bundle. Its final decision snapshot is
+   `spread_satisfied_in_flight` with operation
+   `4c37459a-ceb9-4745-a10a-0169ca521f50` at `CREATING`, target visibility
+   `active_operational`, `target_creation`, event-driven workflow progress,
+   and no blocker reason. The timeline still records supporting pressure:
+   the target handled `CREATE_REPLICA`, reported the replica already active,
+   and later released the orphan reservation during reconciliation.
+7. `sql_transactions-p1` is also no longer the selected current blocker. Its
+   final decision snapshot is `spread_satisfied_in_flight` with operation
+   `f4cadbdd-f27f-4660-b1a8-556e19ec4271` terminal at `REMOVED`, target
+   visibility `active_operational`, and ready progress. Its timeline records
+   the earlier `CREATING -> ACTIVE` step, an authoritative-operation visibility
+   warning, a deferred retryable `ACTIVE` dispatch failure with message
+   timeout, and source-removal handling on
+   `7493b0ab-a054-5fad-a91b-5e331db29304`.
+8. `test/distributed/harness/priority-recovery-summary-normalization.js`
+   classifies this final witness shape as a supporting workflow serial-wait
+   deferral. The failure bundle and triage summary therefore select
+   `sql_write_operations-p1` as the current priority-recovery witness and keep
+   `priorityRecoveryOwner=operation_workflow_owner`,
+   `priorityRecoveryBoundary=workflow_progress`,
+   `priorityRecoveryWaitMode=event_driven`, and
+   `priorityRecoveryNextAction=wait_for_operation_progress`.
+9. The older active-gate blocker history still preserves the previous
+   `operation_created_but_no_step_transitions` pressure around
+   `sql_transaction_participants-p1`, but the canonical terminal
+   `publicationConvergence`, `controlPlane.activeGateProgress`, failure
+   classification signals, and triage summary all agree on the current
+   `sql_write_operations-p1` serial-wait witness.
+
+Conclusion: this slice does not indicate a small runtime owner fix or a
+current harness classification bug. The serial-wait evidence is supporting
+operation-workflow pressure under the already-open topology publication debt:
+publication remains `publication_pending` with missing published active nodes,
+selected snapshot coverage remains `4/5`, and selected snapshot reachability
+still times out. If topology publication debt closes and this witness persists,
+the next smallest runtime question is whether the operation-workflow owner
+keeps `57aa5679-15ad-4ea9-84f6-c6e5f906abf0` moving out of
+`persisted_not_dispatched` without relying on stale or lower-coverage
+operation visibility.
+
 ## Scope Basis
 
 Roadmap Phase `0.1 - Internal Coherence` maintenance/refactoring scope under:
@@ -302,7 +386,7 @@ Sprint:
       `PUBLISHED` and pending ACK count is `0`.
 - [x] Reconcile selected snapshot coverage `4/5` and the reachability timeout
       for `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`.
-- [ ] Trace the `sql_write_operations-p1` serial-wait witness through operation
+- [x] Trace the `sql_write_operations-p1` serial-wait witness through operation
       `57aa5679-15ad-4ea9-84f6-c6e5f906abf0` and serial-wait partitions
       `sql_transaction_participants-p1` and `sql_transactions-p1`.
 - [ ] Add the smallest focused runtime or harness regression needed for the
