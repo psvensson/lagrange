@@ -580,7 +580,7 @@ Sprint:
       subordinate workflow-progress witnesses on `control_plane_publications-p1`
       and `sql_write_operations-p1`, then decide the next smallest runtime
       owner/probe.
-- [ ] Add the smallest focused post-ACK `PUBLISHED` selected-snapshot /
+- [x] Add the smallest focused post-ACK `PUBLISHED` selected-snapshot /
       owner-RPC-cache-repair replay fixture or probe for the `20260505T132033Z`
       shape: terminal active `5/5`, selected coverage `3/5`, publication epoch
       `3` `PUBLISHED`, pending ACK `0`, active-gate missing published nodes
@@ -591,6 +591,10 @@ Sprint:
       `nodes`, and subordinate `spread_satisfied_in_flight`
       workflow-progress witnesses on `control_plane_publications-p1` and
       `sql_write_operations-p1`.
+- [ ] Rerun the representative `rolling-restart --fast-local` gate after the
+      `132033Z` replay fixture and record whether the blocker closes, stays on
+      post-ACK `PUBLISHED` selected-snapshot coverage / owner-RPC cache-repair
+      deferral, or migrates to one newly named owner boundary.
 
 ## May 5 Regression Validation
 
@@ -1792,10 +1796,78 @@ missing-active publication debt: all five expected nodes are active at the
 startup gate, but the selected terminal epoch `3` snapshot is only `3/5`, its
 publication membership is the same three-node cohort, owner-RPC repair is
 deferred on `nodes`, and selected reachability times out. Priority recovery is
-supporting pressure only. The next smallest task is a focused post-ACK
-`PUBLISHED` selected-snapshot / owner-RPC-cache-repair replay fixture or probe
-for this exact `132033Z` shape before any broad scenario rerun or timeout
-change.
+supporting pressure only. The follow-up fixture below locks this exact
+`132033Z` shape before the next representative rerun.
+
+## May 5 132033Z Post-ACK Published Replay Fixture
+
+The next package task added a focused replay fixture in
+`test/distributed/harness/__tests__/publication-evidence-replay.test.js`:
+`keeps the 132033Z post-ACK PUBLISHED selected-snapshot replay blocked`.
+
+The fixture preserves the current post-ACK owner shape without running a broad
+distributed scenario:
+
+1. Terminal active-gate progress remains active `5/5`, inactive `0`, selected
+   snapshot coverage `3/5`, publication epoch `3` `PUBLISHED`, recovery
+   protocol state `steady_published`, pending ACK count `0`, priority spread
+   ready with gap `0`, and publication gate reasons
+   `snapshot_coverage=3/5`,
+   `publication_missing_active_node=11601fe0-72d6-5853-8590-ec2881853e72`,
+   and
+   `publication_missing_active_node=8be8d30f-4499-5eed-865c-71b4d529a67a`.
+2. The selected terminal witness is
+   `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`, admin not ready, with
+   `selectedSnapshotReachabilityError` carrying the snapshot reachability
+   timeout. Its selected observation remains `repair_deferred` /
+   `stale_usable`, contract state `pending`, refresh state `idle`, next action
+   `wait`, repair deferred `true`, and reason codes
+   `cache_stale_watermark` and `discovery_node_coverage_gap`.
+3. The synthetic replay rows match the artifact row shape:
+   `nodes=3`, `nodeEndpoints=0`, `partitions=33`, `services=104`, and the
+   replayed candidate remains epoch `3` / `PUBLISHED` but
+   `priority_spread_pending`, with
+   `priorityRecoveryReasonCodes=["priority_partitions_not_spread"]`, all five
+   priority partitions blocked at spread gap `1`, and
+   `driftClassification=replayed_blocked`.
+4. Owner-RPC/cache-repair evidence is preserved from failure-bundle log
+   excerpts: `nodes` repair defers through `owner_rpc_lane` /
+   `control_plane_backpressure`, matching deferral count is `2`, selected
+   witness deferral count is `0`, latest retry-after is `16000ms`, and the
+   deferral nodes are `11601fe0-72d6-5853-8590-ec2881853e72` and
+   `8be8d30f-4499-5eed-865c-71b4d529a67a`.
+5. Subordinate priority-recovery witnesses stay
+   `spread_satisfied_in_flight` workflow-progress evidence. The fixture keeps
+   `control_plane_publications-p1` operation
+   `d762a1d8-0271-481a-a170-25e63cb80694` at `ACTIVE` / `active`, and
+   `sql_write_operations-p1` operation
+   `df7c307a-2e59-4ec4-8c2a-55cd39b2d87e` at `STOPPING` / `removing`, both
+   under `operation_workflow_owner` / `workflow_progress` / `event_driven`,
+   next action `wait_for_operation_progress`.
+
+Outcome: the fixture proves the replay owner surface keeps the current
+post-ACK `PUBLISHED` selected-snapshot / owner-RPC-cache-repair boundary
+blocked, with priority recovery preserved as supporting workflow-progress
+pressure rather than a promoted workflow-timeout blocker. The package remains
+active; the next unchecked task is the representative
+`rolling-restart --fast-local` rerun after this fixture.
+
+Validation:
+
+1. `node --check test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+2. `node --check test/distributed/harness/publication-evidence-replay.js`
+3. `node --test --test-name-pattern "keeps the 132033Z post-ACK PUBLISHED selected-snapshot replay blocked" test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+4. `node --test test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+5. `node scripts/check-guideline-literals.js test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+   reported `0` new and `0` inherited literal-guideline violations.
+6. `node scripts/check-guideline-decision-boundaries.js test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+   reported `0` decision-boundary guideline violations.
+7. `node scripts/check-guideline-boundary-mode-contracts.js test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+   reported `0` boundary-mode-contract hotspot violations.
+8. `node scripts/check-runtime-grammar-contracts.js test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+   reported `0` runtime-grammar-contract violations.
+9. `git diff --check`
+   passed.
 
 ## Validation
 
@@ -1854,7 +1926,9 @@ priority recovery has no unresolved class count and no blocked partition count;
 
 The `20260505T123850Z` trace, focused ACK-pending operation-workflow timeout
 fixture, `20260505T132033Z` representative rerun, and `20260505T132033Z`
-post-ACK `PUBLISHED` missing-active selected-snapshot trace are complete. The
-current next unchecked task is to add the smallest focused post-ACK `PUBLISHED`
-selected-snapshot / owner-RPC-cache-repair replay fixture or probe for this
-exact `132033Z` shape.
+post-ACK `PUBLISHED` missing-active selected-snapshot trace and replay fixture
+are complete. The current next unchecked task is to rerun the representative
+`rolling-restart --fast-local` gate after the `132033Z` fixture and record
+whether the blocker closes, stays on post-ACK `PUBLISHED` selected-snapshot
+coverage / owner-RPC cache-repair deferral, or migrates to one newly named
+owner boundary.

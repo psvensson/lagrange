@@ -219,33 +219,34 @@ Queued cleanup packages:
    gap `1`. Validation for this documentation-only update:
    `node test/distributed/harness/publication-evidence-replay.js test-output/reports/.playback/rolling-restart-after-ack-pending-workflow-timeout-probe-20260505T132033Z/rolling-restart`
    passed, and `git diff --check` passed.
-2. Completed trace and next active task:
+2. Completed trace, fixture, and next active task:
    the
    [Rolling Restart Topology Publication Snapshot Reachability Reentry](../packages/active-20260505-rolling-restart-topology-publication-snapshot-reachability-reentry.md)
-   package now traces the `20260505T132033Z` post-ACK `PUBLISHED`
-   missing-active selected-snapshot boundary through active-gate coverage,
-   selected snapshot observation, owner-RPC/cache-repair deferral, and the
-   subordinate workflow-progress witnesses on `control_plane_publications-p1`
-   and `sql_write_operations-p1`. The trace conclusion is that ACK debt is
-   closed and priority recovery is supporting pressure only: all five expected
-   nodes are active at the startup gate, but the selected terminal epoch `3`
-   snapshot is only `3/5`, its durable publication membership is the same
-   three-node cohort, the selected witness times out for reachability while
-   `repair_deferred` / `stale_usable`, and owner-RPC repair is deferred on
-   `nodes` under `control_plane_backpressure`. The replay proof reports
-   selected snapshot reachability timeout, matching owner-RPC/cache-repair
-   deferral count `2`, selected-witness deferral count `0`, deferral nodes
-   `11601fe0-72d6-5853-8590-ec2881853e72` and
-   `8be8d30f-4499-5eed-865c-71b4d529a67a`, and both
+   package now traces and fixtures the `20260505T132033Z` post-ACK
+   `PUBLISHED` missing-active selected-snapshot boundary through active-gate
+   coverage, selected snapshot observation, owner-RPC/cache-repair deferral,
+   replay reconstruction, and the subordinate workflow-progress witnesses on
+   `control_plane_publications-p1` and `sql_write_operations-p1`. The focused
+   fixture in
+   `test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+   preserves terminal active `5/5`, selected coverage `3/5`, publication
+   epoch `3` `PUBLISHED`, pending ACK count `0`, selected missing published
+   nodes `11601fe0-72d6-5853-8590-ec2881853e72` and
+   `8be8d30f-4499-5eed-865c-71b4d529a67a`, selected witness
+   `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58` timing out for reachability while
+   `repair_deferred` / `stale_usable`, owner-RPC/cache-repair deferral count
+   `2` on `nodes`, replayed `priority_spread_pending` with all five priority
+   partitions blocked at spread gap `1`, and both
    `spread_satisfied_in_flight` workflow-progress witnesses:
    `control_plane_publications-p1` operation
    `d762a1d8-0271-481a-a170-25e63cb80694` at `ACTIVE` / `active`, and
    `sql_write_operations-p1` operation
    `df7c307a-2e59-4ec4-8c2a-55cd39b2d87e` at `STOPPING` / `removing`.
-   The next unchecked package task is to add the smallest focused post-ACK
-   `PUBLISHED` selected-snapshot / owner-RPC-cache-repair replay fixture or
-   probe for this exact `132033Z` shape, without broadening matrix scope or
-   changing timeouts.
+   Focused replay tests and guideline guards pass. The next unchecked package
+   task is to rerun the representative `rolling-restart --fast-local` gate
+   after the fixture and record whether the blocker closes, stays on the same
+   post-ACK `PUBLISHED` selected-snapshot / owner-RPC-cache-repair boundary, or
+   migrates to one newly named owner boundary.
 3. Harness classification:
    terminal barrier evidence wins over stale playback reconstruction for
    active, restart-recovery, load-readiness, convergence, and quiescence
