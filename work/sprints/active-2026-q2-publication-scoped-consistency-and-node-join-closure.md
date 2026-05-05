@@ -289,9 +289,16 @@ Queued cleanup packages:
    `postTerminalFollowUpExecutionState=not_executed_after_enqueue`, with no
    post-terminal same-partition `Executing rebalancing move`, no move-level
    blocked record, and no newer persisted `replicaOperations` row after the
-   follow-up start. The next unchecked package task is to trace why the
-   enqueued follow-up did not reach logged move execution after
-   `Starting rebalancing`.
+   follow-up start. The post-start handoff trace is also complete: replay now
+   reports `postTerminalExecutionGapState=started_with_pre_execution_gap` and
+   `postTerminalMoveLimitEvidenceState=move_count_available` with
+   `moveCount=1`; the feasibility filter retained `feasibleCount=2`,
+   `rejectedCount=3`, and `cluster_member_unhealthy`; storage admission allowed
+   the follow-up with no denial; no budget block, same-partition leadership
+   loss, or scheduler handoff was captured. The later control-plane pressure
+   query and sibling leadership loss remain subordinate evidence. The next
+   unchecked package task is to add the smallest runtime rebalancer
+   pre-execution handoff diagnostic for the post-`Starting rebalancing` path.
 3. Harness classification:
    terminal barrier evidence wins over stale playback reconstruction for
    active, restart-recovery, load-readiness, convergence, and quiescence

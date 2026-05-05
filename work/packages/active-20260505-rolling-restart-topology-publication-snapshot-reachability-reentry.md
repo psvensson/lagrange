@@ -673,11 +673,17 @@ Sprint:
       `control_plane_publications-p1` follow-up move persisted a new operation
       or was blocked during move execution, without promoting it over the epoch
       `2` `PUBLISHED` missing-active selected-snapshot topology debt.
-- [ ] Trace why the post-terminal enqueued
+- [x] Trace why the post-terminal enqueued
       `control_plane_publications-p1` follow-up did not reach logged move
       execution after `Starting rebalancing`: inspect move-limit, budget,
       admission, leadership, and scheduler handoff evidence while keeping the
       epoch `2` `PUBLISHED` missing-active selected-snapshot topology debt
+      canonical.
+- [ ] Add the smallest runtime rebalancer pre-execution handoff diagnostic for
+      the same `control_plane_publications-p1` follow-up after
+      `Starting rebalancing`: capture limited move count, move-limit, readiness
+      grouping, and any pre-`executeMove` skip or return state while keeping
+      the epoch `2` `PUBLISHED` missing-active selected-snapshot topology debt
       canonical.
 
 ## May 5 Regression Validation
@@ -2833,6 +2839,90 @@ Validation:
 5. `node test/distributed/harness/publication-evidence-replay.js test-output/reports/.playback/rolling-restart-after-140646z-publication-pending-replay-fixture-20260505T145246Z/rolling-restart`
    passed and reported
    `postTerminalFollowUpExecutionState=not_executed_after_enqueue`.
+6. `npx eslint test/distributed/harness/publication-evidence-replay.js test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+   passed.
+7. `node scripts/check-guideline-decision-boundaries.js test/distributed/harness/publication-evidence-replay.js test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+   reported `0` decision-boundary guideline violations.
+8. `node scripts/check-runtime-grammar-contracts.js test/distributed/harness/publication-evidence-replay.js test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+   reported `0` runtime-grammar-contract violations.
+9. `node scripts/check-guideline-boundary-mode-contracts.js test/distributed/harness/publication-evidence-replay.js test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+   reported `0` boundary-mode-contract hotspot violations.
+10. `node scripts/check-guideline-literals.js test/distributed/harness/publication-evidence-replay.js test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+    reported `0` new and `0` inherited literal-guideline violations.
+11. `node scripts/check-guideline-literals.js --include-tests test/distributed/harness/publication-evidence-replay.js test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+    reported `0` new and `0` inherited literal-guideline violations.
+12. `git diff --check` passed.
+
+## May 5 145246Z Follow-Up Pre-Execution Gap Trace
+
+The subordinate post-terminal `control_plane_publications-p1` follow-up now has
+focused move-limit, budget, admission, leadership, and scheduler handoff
+evidence for the gap after `Starting rebalancing`.
+
+Implementation:
+
+1. `test/distributed/harness/publication-evidence-replay.js` now reads the
+   optional `_timeline.log` beside the failure bundle and extends
+   `rebalancerFollowUpHandoff` with post-terminal feasibility-filter,
+   admission, budget-block, budget-pressure, leadership-loss, scheduler-handoff,
+   move-limit, and execution-gap fields.
+2. `test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+   extends the `145246Z` fixture with the captured capacity feasibility filter,
+   storage admission, in-flight operation owner pressure query, and sibling
+   leadership-loss evidence.
+
+Evidence:
+
+1. The real `145246Z` replay reports
+   `rebalancerFollowUpHandoff.followUpState=enqueued`,
+   `postTerminalFollowUpExecutionState=not_executed_after_enqueue`, and
+   `postTerminalExecutionGapState=started_with_pre_execution_gap`.
+2. Move-limit evidence is available, not missing:
+   `postTerminalMoveLimitEvidenceState=move_count_available` with
+   `postTerminalRebalanceMoveCount=1`.
+3. Candidate feasibility did not reduce the move set to zero. The post-terminal
+   feasibility filter observed `totalCandidates=5`, `feasibleCount=2`,
+   `rejectedCount=3`, and rejected reason
+   `cluster_member_unhealthy`.
+4. Storage admission did not deny the follow-up before start:
+   `postTerminalAdmissionAllowedObserved=true`,
+   `postTerminalAdmissionAllowedCount=9`, and
+   `postTerminalAdmissionDeniedObserved=false`.
+5. No budget block evidence is captured:
+   `postTerminalBudgetBlockObserved=false`. The later in-flight operation
+   owner pressure query is captured at `2026-05-05T14:55:05.960Z` with
+   `queryDurationMs=12834` and `rowCount=3`, after the follow-up start.
+6. No same-partition leadership loss is captured after the follow-up start:
+   `postTerminalLeadershipLossObserved=false`. A sibling leadership loss is
+   captured at `2026-05-05T14:55:05.983Z`.
+7. No same-partition scheduler handoff is captured after the follow-up start:
+   `postTerminalSchedulerHandoffObserved=false`.
+
+Outcome: the captured artifact evidence does not explain the missing logged move
+execution through move-limit exhaustion, budget block, admission denial,
+same-partition leadership loss, or scheduler handoff. It narrows the subordinate
+failure to the pre-`executeMove` execution path after `Starting rebalancing`,
+or to missing instrumentation in that path. The canonical blocker remains the
+epoch `2` `PUBLISHED` missing-active selected-snapshot topology debt: active
+`4/5`, selected coverage `2/5`, selected published active `2/5`, missing
+published `3`, the selected witness reachability timeout, and priority spread
+pending. The package remains active. The next unchecked task is to add the
+smallest runtime rebalancer pre-execution handoff diagnostic for the
+post-`Starting rebalancing` path.
+
+Validation:
+
+1. `node --check test/distributed/harness/publication-evidence-replay.js`
+   passed.
+2. `node --check test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+   passed.
+3. `node --test --test-name-pattern "keeps the 145246Z PUBLISHED reachability and rebalancer replay blocked" test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+   passed.
+4. `node --test test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+   passed: `7` tests, `1` suite.
+5. `node test/distributed/harness/publication-evidence-replay.js test-output/reports/.playback/rolling-restart-after-140646z-publication-pending-replay-fixture-20260505T145246Z/rolling-restart`
+   passed and reported
+   `postTerminalExecutionGapState=started_with_pre_execution_gap`.
 6. `npx eslint test/distributed/harness/publication-evidence-replay.js test/distributed/harness/__tests__/publication-evidence-replay.test.js`
    passed.
 7. `node scripts/check-guideline-decision-boundaries.js test/distributed/harness/publication-evidence-replay.js test/distributed/harness/__tests__/publication-evidence-replay.test.js`

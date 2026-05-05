@@ -28,6 +28,9 @@ import {
   REBALANCER_LOG_MSG,
 } from '../../../../src/rebalancer/rebalancer-constants.js';
 import {
+  STORAGE_CAPACITY_LOG_MSG,
+} from '../../../../src/rebalancer/storage-capacity-constants.js';
+import {
   PUBLICATION_EVIDENCE_REPLAY_AVAILABILITY,
   formatPublicationEvidenceReplaySummary,
   PUBLICATION_EVIDENCE_REPLAY_CLOSURE_WITNESS_CLASSIFICATION,
@@ -812,14 +815,42 @@ const REPLAY_TEST_145246Z_REBALANCER_REPLICA_ID =
 const REPLAY_TEST_145246Z_REBALANCER_OPERATION_CREATED_AT_MS = 1777992808355;
 const REPLAY_TEST_145246Z_OPERATION_FAILED_TIME =
   '2026-05-05T14:55:04.403Z';
+const REPLAY_TEST_145246Z_FEASIBILITY_FILTER_TIME =
+  '2026-05-05T14:55:04.426Z';
 const REPLAY_TEST_145246Z_FOLLOWUP_REBALANCE_TIME =
   '2026-05-05T14:55:04.771Z';
+const REPLAY_TEST_145246Z_BUDGET_PRESSURE_TIME =
+  '2026-05-05T14:55:05.960Z';
+const REPLAY_TEST_145246Z_SIBLING_LEADERSHIP_LOSS_TIME =
+  '2026-05-05T14:55:05.983Z';
 const REPLAY_TEST_145246Z_OPERATION_FAILED_TIME_MS = Date.parse(
   REPLAY_TEST_145246Z_OPERATION_FAILED_TIME,
 );
 const REPLAY_TEST_145246Z_FOLLOWUP_REBALANCE_TIME_MS = Date.parse(
   REPLAY_TEST_145246Z_FOLLOWUP_REBALANCE_TIME,
 );
+const REPLAY_TEST_145246Z_BUDGET_PRESSURE_TIME_MS = Date.parse(
+  REPLAY_TEST_145246Z_BUDGET_PRESSURE_TIME,
+);
+const REPLAY_TEST_145246Z_SIBLING_LEADERSHIP_LOSS_TIME_MS = Date.parse(
+  REPLAY_TEST_145246Z_SIBLING_LEADERSHIP_LOSS_TIME,
+);
+const REPLAY_TEST_145246Z_FEASIBLE_CANDIDATE_COUNT = 2;
+const REPLAY_TEST_145246Z_REJECTED_CANDIDATE_COUNT = 3;
+const REPLAY_TEST_145246Z_TOTAL_CANDIDATE_COUNT = 5;
+const REPLAY_TEST_145246Z_ADMISSION_ALLOWED_COUNT = 1;
+const REPLAY_TEST_145246Z_BUDGET_PRESSURE_QUERY_DURATION_MS = 12834;
+const REPLAY_TEST_145246Z_BUDGET_PRESSURE_ROW_COUNT = 3;
+const REPLAY_TEST_145246Z_CLUSTER_MEMBER_UNHEALTHY =
+  'cluster_member_unhealthy';
+const REPLAY_TEST_145246Z_ADMISSION_ALLOW_DECISION = 'allow';
+const REPLAY_TEST_145246Z_CAPACITY_AVAILABLE = 'capacity_available';
+const REPLAY_TEST_145246Z_MOVE_LIMIT_STATE =
+  'move_count_available';
+const REPLAY_TEST_145246Z_EXECUTION_GAP_STATE =
+  'started_with_pre_execution_gap';
+const REPLAY_TEST_145246Z_OWNER_QUERY_PRESSURE_LOG =
+  'In-flight operation owner query indicates control-plane pressure';
 const REPLAY_TEST_145246Z_SERIAL_WAIT_OPERATION_ID =
   'e37bed88-1e78-42e7-a667-4248a3f85529';
 const REPLAY_TEST_145246Z_SQL_PARTICIPANTS_OPERATION_ID =
@@ -2396,11 +2427,47 @@ function build145246ZRebalancerHandoffLogLines() {
       msg: REBALANCE_COORDINATOR_LOG_MSG.OPERATION_FAILED,
     },
     {
+      time: REPLAY_TEST_145246Z_FEASIBILITY_FILTER_TIME,
+      entityId: REPLAY_TEST_145246Z_CONTROL_PLANE_PUBLICATIONS_PARTITION_ID,
+      entityType: SERVICE_TYPE.PARTITION,
+      totalCandidates: REPLAY_TEST_145246Z_TOTAL_CANDIDATE_COUNT,
+      feasibleCount: REPLAY_TEST_145246Z_FEASIBLE_CANDIDATE_COUNT,
+      rejectedCount: REPLAY_TEST_145246Z_REJECTED_CANDIDATE_COUNT,
+      rejectionsByReason: {
+        [REPLAY_TEST_145246Z_CLUSTER_MEMBER_UNHEALTHY]:
+          REPLAY_TEST_145246Z_REJECTED_CANDIDATE_COUNT,
+      },
+      msg: STORAGE_CAPACITY_LOG_MSG.CAPACITY_FILTER_APPLIED,
+    },
+    {
+      time: REPLAY_TEST_145246Z_FEASIBILITY_FILTER_TIME,
+      nodeId: REPLAY_TEST_145246Z_NODE_ID.SEED,
+      targetNodeId: REPLAY_TEST_145246Z_NODE_ID.BASELINE,
+      decision: REPLAY_TEST_145246Z_ADMISSION_ALLOW_DECISION,
+      reason: REPLAY_TEST_145246Z_CAPACITY_AVAILABLE,
+      msg: STORAGE_CAPACITY_LOG_MSG.ADMISSION_ALLOWED,
+    },
+    {
       time: REPLAY_TEST_145246Z_FOLLOWUP_REBALANCE_TIME,
+      nodeId: REPLAY_TEST_145246Z_NODE_ID.SEED,
       entityId: REPLAY_TEST_145246Z_CONTROL_PLANE_PUBLICATIONS_PARTITION_ID,
       entityType: SERVICE_TYPE.PARTITION,
       moveCount: NUM.ONE,
       msg: REBALANCER_LOG_MSG.START_REBALANCE,
+    },
+    {
+      time: REPLAY_TEST_145246Z_BUDGET_PRESSURE_TIME,
+      nodeId: REPLAY_TEST_145246Z_NODE_ID.BASELINE,
+      queryDurationMs: REPLAY_TEST_145246Z_BUDGET_PRESSURE_QUERY_DURATION_MS,
+      rowCount: REPLAY_TEST_145246Z_BUDGET_PRESSURE_ROW_COUNT,
+      msg: REPLAY_TEST_145246Z_OWNER_QUERY_PRESSURE_LOG,
+    },
+    {
+      time: REPLAY_TEST_145246Z_SIBLING_LEADERSHIP_LOSS_TIME,
+      nodeId: REPLAY_TEST_145246Z_NODE_ID.BASELINE,
+      entityId: REPLAY_TEST_145246Z_SQL_TRANSACTION_PARTICIPANTS_PARTITION_ID,
+      entityType: SERVICE_TYPE.PARTITION,
+      msg: REBALANCER_LOG_MSG.LEADER_STOP,
     },
   ].map((record) => JSON.stringify(record));
 }
@@ -4442,9 +4509,99 @@ describe(REPLAY_TEST_SUITE_NAME, () => {
     );
     assert.equal(
       replaySummary.rebalancerFollowUpHandoff
+        .postTerminalMoveLimitEvidenceState,
+      REPLAY_TEST_145246Z_MOVE_LIMIT_STATE,
+    );
+    assert.equal(
+      replaySummary.rebalancerFollowUpHandoff
         .postTerminalFollowUpExecutionState,
       PUBLICATION_EVIDENCE_REPLAY_REBALANCER_FOLLOW_UP_EXECUTION_STATE
         .NOT_EXECUTED_AFTER_ENQUEUE,
+    );
+    assert.equal(
+      replaySummary.rebalancerFollowUpHandoff.postTerminalExecutionGapState,
+      REPLAY_TEST_145246Z_EXECUTION_GAP_STATE,
+    );
+    assert.equal(
+      replaySummary.rebalancerFollowUpHandoff
+        .postTerminalFeasibilityFilterObserved,
+      true,
+    );
+    assert.equal(
+      replaySummary.rebalancerFollowUpHandoff
+        .postTerminalFeasibleCandidateCount,
+      REPLAY_TEST_145246Z_FEASIBLE_CANDIDATE_COUNT,
+    );
+    assert.equal(
+      replaySummary.rebalancerFollowUpHandoff
+        .postTerminalRejectedCandidateCount,
+      REPLAY_TEST_145246Z_REJECTED_CANDIDATE_COUNT,
+    );
+    assert.deepEqual(
+      replaySummary.rebalancerFollowUpHandoff
+        .postTerminalFeasibilityRejectedReasonCodes,
+      [
+        REPLAY_TEST_145246Z_CLUSTER_MEMBER_UNHEALTHY,
+      ],
+    );
+    assert.equal(
+      replaySummary.rebalancerFollowUpHandoff
+        .postTerminalAdmissionAllowedObserved,
+      true,
+    );
+    assert.equal(
+      replaySummary.rebalancerFollowUpHandoff
+        .postTerminalAdmissionAllowedCount,
+      REPLAY_TEST_145246Z_ADMISSION_ALLOWED_COUNT,
+    );
+    assert.equal(
+      replaySummary.rebalancerFollowUpHandoff
+        .postTerminalAdmissionDeniedObserved,
+      false,
+    );
+    assert.equal(
+      replaySummary.rebalancerFollowUpHandoff.postTerminalBudgetBlockObserved,
+      false,
+    );
+    assert.equal(
+      replaySummary.rebalancerFollowUpHandoff
+        .postTerminalBudgetPressureObserved,
+      true,
+    );
+    assert.equal(
+      replaySummary.rebalancerFollowUpHandoff
+        .postTerminalBudgetPressureTimeMs,
+      REPLAY_TEST_145246Z_BUDGET_PRESSURE_TIME_MS,
+    );
+    assert.equal(
+      replaySummary.rebalancerFollowUpHandoff
+        .postTerminalBudgetPressureQueryDurationMs,
+      REPLAY_TEST_145246Z_BUDGET_PRESSURE_QUERY_DURATION_MS,
+    );
+    assert.equal(
+      replaySummary.rebalancerFollowUpHandoff
+        .postTerminalBudgetPressureRowCount,
+      REPLAY_TEST_145246Z_BUDGET_PRESSURE_ROW_COUNT,
+    );
+    assert.equal(
+      replaySummary.rebalancerFollowUpHandoff
+        .postTerminalLeadershipLossObserved,
+      false,
+    );
+    assert.equal(
+      replaySummary.rebalancerFollowUpHandoff
+        .postTerminalSiblingLeadershipLossObserved,
+      true,
+    );
+    assert.equal(
+      replaySummary.rebalancerFollowUpHandoff
+        .postTerminalSiblingLeadershipLossTimeMs,
+      REPLAY_TEST_145246Z_SIBLING_LEADERSHIP_LOSS_TIME_MS,
+    );
+    assert.equal(
+      replaySummary.rebalancerFollowUpHandoff
+        .postTerminalSchedulerHandoffObserved,
+      false,
     );
     assert.equal(
       replaySummary.rebalancerFollowUpHandoff.postTerminalMoveExecutionObserved,
