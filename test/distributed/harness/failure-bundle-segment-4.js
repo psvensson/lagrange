@@ -299,8 +299,7 @@ const PUBLICATION_MISSING_PUBLISHED_EVIDENCE_RULES = Object.freeze([
       evidence.activeGateSnapshotCoveragePending === true &&
       evidence.activeGatePriorityRecoveryActuationEvidenceOpen === true &&
       evidence.hasExplicitPriorityRecoveryObservation === true &&
-      evidence.coverageCanonicalNodeIds.length === ZERO &&
-      evidence.coverageCanonicalCount === ZERO,
+      evidence.hasCoverageCanonicalMissingActiveNodeGateDebt !== true,
     select: () => Object.freeze({
       nodeIds: [],
       count: ZERO,
@@ -312,7 +311,8 @@ const PUBLICATION_MISSING_PUBLISHED_EVIDENCE_RULES = Object.freeze([
         .SUPPRESSED_STALE_CLOSURE_DURING_COVERAGE_LAG,
     matches: (evidence) =>
       evidence.activeGateSnapshotCoveragePending === true &&
-      evidence.stalePublicationClosureEvidence === true,
+      evidence.stalePublicationClosureEvidence === true &&
+      evidence.hasCoverageCanonicalMissingActiveNodeGateDebt !== true,
     select: () => Object.freeze({
       nodeIds: [],
       count: ZERO,
@@ -950,6 +950,41 @@ function isPublicationMissingActiveNodeReason(reason) {
   return normalizeActiveGateBlockerReason(reason).startsWith(
     FAILURE_ARTIFACT_PUBLICATION_MISSING_ACTIVE_NODE_REASON_PREFIX,
   );
+}
+
+function resolvePublicationMissingActiveNodeReasonNodeIds(reasonSources = []) {
+  const reasonNodeIds = [];
+  for (const source of reasonSources) {
+    const reasons = normalizeDistinctStringArray([
+      ...(Array.isArray(source?.publicationConvergenceGateReasons) ?
+        source.publicationConvergenceGateReasons :
+        []),
+      ...(Array.isArray(source?.priorityRecoveryReasonCodes) ?
+        source.priorityRecoveryReasonCodes :
+        []),
+      ...(Array.isArray(source?.reasons) ? source.reasons : []),
+      ...(Array.isArray(source?.reasonCodes) ? source.reasonCodes : []),
+      ...(Array.isArray(source?.gateReasons) ? source.gateReasons : []),
+      ...(Array.isArray(source?.blockers) ? source.blockers : []),
+    ]);
+    for (const reason of reasons) {
+      const normalizedReason = normalizeActiveGateBlockerReason(reason);
+      if (
+        !normalizedReason.startsWith(
+          FAILURE_ARTIFACT_PUBLICATION_MISSING_ACTIVE_NODE_REASON_PREFIX,
+        )
+      ) {
+        continue;
+      }
+      const nodeId = normalizedReason.slice(
+        FAILURE_ARTIFACT_PUBLICATION_MISSING_ACTIVE_NODE_REASON_PREFIX.length,
+      );
+      if (nodeId.length > ZERO) {
+        reasonNodeIds.push(nodeId);
+      }
+    }
+  }
+  return normalizeDistinctStringArray(reasonNodeIds);
 }
 
 function resolveActiveGateSnapshotCoverageBlocker(progress = null) {
@@ -2245,6 +2280,25 @@ function buildPublicationMissingPublishedEvidence({
     normalizeNonNegativeCount(rawPublicationConvergenceGate?.missingPublishedCount),
     normalizeNonNegativeCount(rawPublicationConvergence?.missingPublishedCount),
   );
+  const coverageCanonicalMissingActiveNodeReasonNodeIds =
+    resolvePublicationMissingActiveNodeReasonNodeIds([
+      rawPublicationConvergenceGate,
+      rawPublicationConvergence,
+      publicationConvergenceGate,
+      publicationConvergence,
+    ]);
+  const hasCoverageCanonicalMissingPublishedDebt =
+    coverageCanonicalNodeIds.length > ZERO ||
+    coverageCanonicalCount > ZERO;
+  const hasCoverageCanonicalMissingActiveNodeGateDebt =
+    hasCoverageCanonicalMissingPublishedDebt === true &&
+    (
+      coverageCanonicalNodeIds.length === ZERO ?
+        coverageCanonicalMissingActiveNodeReasonNodeIds.length > ZERO :
+        coverageCanonicalNodeIds.some((nodeId) =>
+          coverageCanonicalMissingActiveNodeReasonNodeIds.includes(nodeId),
+        )
+    );
   const canonicalNodeIds = normalizeDistinctStringArray([
     ...(Array.isArray(publicationConvergenceGate?.missingPublishedNodeIds) ?
       publicationConvergenceGate.missingPublishedNodeIds :
@@ -2277,6 +2331,7 @@ function buildPublicationMissingPublishedEvidence({
     stalePublicationClosureEvidence,
     coverageCanonicalNodeIds,
     coverageCanonicalCount,
+    hasCoverageCanonicalMissingActiveNodeGateDebt,
     canonicalNodeIds,
     canonicalCount,
     mergedNodeIds,

@@ -355,14 +355,12 @@ May 5 failure-bundle missing-published coverage-lag fix:
    hide explicit current canonical publication-gate missing-published debt.
 2. The harness summary now builds one missing-published evidence snapshot and
    selects the canonical outcome through a decision table. Snapshot coverage lag
-   still suppresses stale selected active-gate publication debt, but canonical
-   publication-convergence or publication-recovery-gate missing-published debt
-   remains visible.
-3. Added focused regression coverage for active-gate snapshot coverage pending,
-   pending ACK count `1`, and canonical missing published count `2`; the
-   resulting failure-bundle summary keeps pending ACK debt, missing-published
-   node ids, publication pending, priority spread pending, and the publication
-   missing-active-node blocker.
+   still suppresses stale selected active-gate publication debt when coverage
+   canonical debt is not tied to an explicit missing-active-node gate reason.
+3. Regression coverage now covers active-gate snapshot coverage pending with
+   explicit `publication_missing_active_node` canonical debt and retained stale
+   closure metadata; the summary keeps missing-published node ids, publication
+   pending, and the publication missing-active-node blocker.
 4. This is a harness classification fix only. No representative
    `rolling-restart` rerun was run for this slice, and the package remains
    active because startup/publication pending ACK, inactive nodes,
@@ -571,11 +569,11 @@ Closure:
       `test/distributed/harness/__tests__/failure-bundle.test.js`.
 - [x] May 5 failure-bundle missing-published coverage-lag focused regression
       passed:
-      `node --test --test-name-pattern "keeps canonical missing published debt during active-gate coverage lag" test/distributed/harness/__tests__/failure-bundle.test.js`
+      `node --test --test-name-pattern "keeps canonical missing published debt during retained stale closure coverage lag" test/distributed/harness/__tests__/failure-bundle.test.js`
       reported `1` test passed.
 - [x] Adjacent stale-publication regression sweep passed:
-      `node --test --test-name-pattern "lets current selected active-gate coverage clear stale missing publication nodes|keeps canonical missing published debt during active-gate coverage lag|keeps startup active-gate snapshot coverage from restoring stale publication debt" test/distributed/harness/__tests__/failure-bundle.test.js`
-      reported `3` tests passed.
+      `node --test --test-name-pattern "lets current selected active-gate coverage clear stale missing publication nodes|keeps canonical missing published debt during active-gate coverage lag|keeps canonical missing published debt during retained stale closure coverage lag|keeps startup active-gate snapshot coverage from restoring stale publication debt|keeps current publication gate debt when stale closure witness is retained|clears stale generic publication epoch gate when closure witness is retained|keeps explicit active-gate pending ACK while priority actuation remains open" test/distributed/harness/__tests__/failure-bundle.test.js`
+      reported `7` tests passed.
 - [x] May 5 failure-bundle missing-published coverage-lag non-literal
       guardrails passed:
       `node scripts/check-guideline-decision-boundaries.js --include-tests test/distributed/harness/failure-bundle-segment-4.js test/distributed/harness/__tests__/failure-bundle.test.js`
