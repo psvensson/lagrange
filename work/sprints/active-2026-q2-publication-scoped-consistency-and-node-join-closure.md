@@ -220,11 +220,24 @@ Queued cleanup packages:
    representative rerun. The rerun migrated to the `20260505T140646Z` epoch
    `5` `OPEN` publication-pending boundary with pending ACK `2`, selected
    coverage `3/5`, priority spread pending, owner-RPC/cache-repair deferral,
-   and priority-recovery workflow-timeout / serial-wait evidence. The next
-   unchecked package task is to trace that `140646Z` artifact through pending
-   ACK, selected-snapshot coverage, priority spread, owner-RPC/cache-repair
-   deferral, and priority-recovery workflow-timeout / serial-wait evidence,
-   then decide the next smallest focused fixture or runtime owner probe.
+   and priority-recovery workflow-timeout / serial-wait evidence. That
+   `140646Z` trace is now complete from the report, failure bundle, triage
+   summary, playback logs, replay CLI, and owner-path reads. It confirmed
+   epoch `5` `OPEN`, recovery protocol state `publication_pending`, pending
+   ACK count `2` on nodes `11601fe0-72d6-5853-8590-ec2881853e72` and
+   `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`, terminal selected coverage `3/5`,
+   terminal selected published active `5/5`, missing published `0`, priority
+   spread pending with gap `7`, owner-RPC/cache-repair deferral on `nodes`
+   through `owner_rpc_lane` under `control_plane_backpressure` /
+   `query_timeout`, `sql_transactions-p1` workflow-timeout evidence, and
+   `sql_write_operations-p1` serial-wait evidence behind
+   `sql_transactions-p1`. Validation:
+   `node test/distributed/harness/publication-evidence-replay.js test-output/reports/.playback/rolling-restart-after-132033z-selected-snapshot-replay-fixture-20260505T140646Z/rolling-restart`
+   passed with `driftClassification=replayed_blocked`, and `git diff --check`
+   passed for the documentation update. The next unchecked package task is to
+   add the smallest focused epoch `5` `OPEN` publication-pending selected
+   snapshot / owner-RPC-cache-repair replay fixture or runtime owner probe for
+   this `20260505T140646Z` shape.
 3. Harness classification:
    terminal barrier evidence wins over stale playback reconstruction for
    active, restart-recovery, load-readiness, convergence, and quiescence
