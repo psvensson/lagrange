@@ -126,10 +126,11 @@ operation-transition package remains active as a retained post-publication
 operation-workflow timeout residual plus its documented package-local
 guardrail and adjacent sweep debt. The current representative path remains in
 the topology publication/snapshot-reachability package after the
-post-`e274126c` May 5 rerun failed on missing-active-node debt, selected
-snapshot coverage, priority spread, and a `sql_write_operations-p1` priority
-serial-wait residual. The `074739Z` selected snapshot reachability timeout is
-now historical rather than the terminal boundary. The previous
+after-reconcile-probe May 5 rerun failed on missing-active-node debt, selected
+snapshot coverage, priority spread, and a
+`sql_transaction_participants-p1` priority serial-wait residual. The `074739Z`
+selected snapshot reachability timeout is now historical rather than the
+terminal boundary. The previous
 `sql_write_operations-p1` operation-workflow timeout residual remains unclosed
 until the path reaches that shape again.
 
