@@ -22,6 +22,7 @@ import {
 import {
   REPLICA_OPERATION_VISIBILITY_READ_MODE,
 } from '../../src/rebalancer/replica-operation-repository.js';
+import {NUM, TABLES} from '../../src/constants/index.js';
 import {ControlPlanePublicationsOwner} from
   '../../src/control-plane/owners/control-plane-publications-owner.js';
 import {registerMembershipPublicationCoordinatorTailTests} from './membership-publication-coordinator-tail-test-cases.js';
@@ -83,6 +84,56 @@ const MEMBERSHIP_PUBLICATION_TRIM_STALE_PUBLISHED_NODE_IDS = Object.freeze([
   MEMBERSHIP_PUBLICATION_TRIM_STALE_NODE_FOUR_ID,
   MEMBERSHIP_PUBLICATION_TRIM_STALE_NODE_FIVE_ID,
 ]);
+const MEMBERSHIP_PUBLICATION_RECONCILE_PUBLICATION_ID = 'publication-epoch-3';
+const MEMBERSHIP_PUBLICATION_RECONCILE_KIND = 'cluster_membership';
+const MEMBERSHIP_PUBLICATION_RECONCILE_RECOVERY_ACTIVE_SOURCE =
+  'published_membership';
+const MEMBERSHIP_PUBLICATION_RECONCILE_TEST_NAME =
+  'reconcileClusterMembership keeps epoch 3 published-active 3/5 when ' +
+  'active-gate best progress observes 5/5';
+const MEMBERSHIP_PUBLICATION_RECONCILE_READINESS_ASSERTION =
+  'the fixture should expose five active-gate-ready nodes to planning readiness';
+const MEMBERSHIP_PUBLICATION_RECONCILE_TARGET_ASSERTION =
+  'the publication target should stay on the durable owner baseline';
+const MEMBERSHIP_PUBLICATION_RECONCILE_PERSIST_ASSERTION =
+  'unchanged membership should not persist a widened or refreshed epoch';
+const MEMBERSHIP_PUBLICATION_RECONCILE_ROW_ASSERTION =
+  'the reconcile result should return the existing published epoch';
+const MEMBERSHIP_PUBLICATION_RECONCILE_PUBLICATION_EPOCH = 3;
+const MEMBERSHIP_PUBLICATION_RECONCILE_ROW_UPDATED_AT_MS = 3000;
+const MEMBERSHIP_PUBLICATION_RECONCILE_NOW_MS = 3500;
+const MEMBERSHIP_PUBLICATION_RECONCILE_EMPTY_ROWS = Object.freeze([]);
+const MEMBERSHIP_PUBLICATION_RECONCILE_BASELINE_NODE_IDS = Object.freeze([
+  MEMBERSHIP_PUBLICATION_TRIM_NODE_ONE_ID,
+  MEMBERSHIP_PUBLICATION_TRIM_NODE_TWO_ID,
+  MEMBERSHIP_PUBLICATION_TRIM_NODE_THREE_ID,
+]);
+const MEMBERSHIP_PUBLICATION_RECONCILE_ACTIVE_GATE_NODE_IDS = Object.freeze([
+  ...MEMBERSHIP_PUBLICATION_RECONCILE_BASELINE_NODE_IDS,
+  MEMBERSHIP_PUBLICATION_TRIM_STALE_NODE_FOUR_ID,
+  MEMBERSHIP_PUBLICATION_TRIM_STALE_NODE_FIVE_ID,
+]);
+
+function buildMembershipPublicationReconcileBaselineRow() {
+  return {
+    publication_id: MEMBERSHIP_PUBLICATION_RECONCILE_PUBLICATION_ID,
+    publication_kind: MEMBERSHIP_PUBLICATION_RECONCILE_KIND,
+    publication_epoch: MEMBERSHIP_PUBLICATION_RECONCILE_PUBLICATION_EPOCH,
+    published_active_node_ids: [
+      ...MEMBERSHIP_PUBLICATION_RECONCILE_BASELINE_NODE_IDS,
+    ],
+    required_ack_node_ids: [
+      ...MEMBERSHIP_PUBLICATION_RECONCILE_BASELINE_NODE_IDS,
+    ],
+    acknowledged_node_ids: [
+      ...MEMBERSHIP_PUBLICATION_RECONCILE_BASELINE_NODE_IDS,
+    ],
+    status: MEMBERSHIP_PUBLICATION_TRIM_STATUS_PUBLISHED,
+    updated_at: MEMBERSHIP_PUBLICATION_RECONCILE_ROW_UPDATED_AT_MS,
+    published_at: MEMBERSHIP_PUBLICATION_RECONCILE_ROW_UPDATED_AT_MS,
+    closed_at: MEMBERSHIP_PUBLICATION_RECONCILE_ROW_UPDATED_AT_MS,
+  };
+}
 
 function buildMembershipPublicationTrimPriorityPartitionSummary() {
   return {
@@ -2091,6 +2142,105 @@ async (t) => {
       acknowledged_node_ids: ['node-1', 'node-2'],
     },
     'the reopened durable row should preserve overlapping acknowledgements while waiting for the new node',
+  );
+});
+
+test(MEMBERSHIP_PUBLICATION_RECONCILE_TEST_NAME, async (t) => {
+  const latestPublicationRow = buildMembershipPublicationReconcileBaselineRow();
+  const persistedRows = [];
+  const readinessProbeNodeIds = [];
+  const coordinator = new MembershipPublicationCoordinator({
+    nodeId: MEMBERSHIP_PUBLICATION_TRIM_NODE_ONE_ID,
+    controlPlanePublicationsOwner: {
+      async listPublications() {
+        return {rows: [latestPublicationRow]};
+      },
+      async upsertPublication(row) {
+        persistedRows.push(row);
+      },
+    },
+    controlPlaneReadinessService: {
+      async getAllNodeReadiness() {
+        const readinessEntries =
+          MEMBERSHIP_PUBLICATION_RECONCILE_ACTIVE_GATE_NODE_IDS.map(
+            buildMembershipPublicationTrimReadinessEntry,
+          );
+        readinessProbeNodeIds.push(
+          ...readinessEntries.map((entry) => entry.nodeId),
+        );
+        return readinessEntries;
+      },
+      getRecoveryEpochHistoryByNodeId() {
+        return {};
+      },
+      messageRouter: {
+        getConnectedNodes() {
+          return MEMBERSHIP_PUBLICATION_RECONCILE_EMPTY_ROWS;
+        },
+      },
+    },
+    systemTableCache: {
+      getAll(tableName) {
+        if (tableName === TABLES.NODES) {
+          return MEMBERSHIP_PUBLICATION_RECONCILE_BASELINE_NODE_IDS.map(
+            buildMembershipPublicationTrimNodeRow,
+          );
+        }
+        if (tableName === TABLES.SERVICES) {
+          return MEMBERSHIP_PUBLICATION_RECONCILE_BASELINE_NODE_IDS.map(
+            buildMembershipPublicationTrimServiceRow,
+          );
+        }
+        if (tableName === TABLES.CONTROL_PLANE_PUBLICATIONS) {
+          return [latestPublicationRow];
+        }
+        return MEMBERSHIP_PUBLICATION_RECONCILE_EMPTY_ROWS;
+      },
+    },
+    now: () => MEMBERSHIP_PUBLICATION_RECONCILE_NOW_MS,
+  });
+
+  const result = await coordinator.reconcileClusterMembership();
+
+  t.same(
+    readinessProbeNodeIds,
+    MEMBERSHIP_PUBLICATION_RECONCILE_ACTIVE_GATE_NODE_IDS,
+    MEMBERSHIP_PUBLICATION_RECONCILE_READINESS_ASSERTION,
+  );
+  t.match(
+    result.candidate,
+    {
+      publicationEpoch: MEMBERSHIP_PUBLICATION_RECONCILE_PUBLICATION_EPOCH,
+      publicationStatus: MEMBERSHIP_PUBLICATION_TRIM_STATUS_PUBLISHED,
+      publishedActiveNodeIds:
+        MEMBERSHIP_PUBLICATION_RECONCILE_BASELINE_NODE_IDS,
+      projectedServingNodeIds:
+        MEMBERSHIP_PUBLICATION_RECONCILE_BASELINE_NODE_IDS,
+      recoveryActiveNodeIds:
+        MEMBERSHIP_PUBLICATION_RECONCILE_BASELINE_NODE_IDS,
+      recoveryActiveNodeSource:
+        MEMBERSHIP_PUBLICATION_RECONCILE_RECOVERY_ACTIVE_SOURCE,
+      missingPublishedRecoveryActiveNodeIds:
+        MEMBERSHIP_PUBLICATION_RECONCILE_EMPTY_ROWS,
+      changed: false,
+      priorityPartitionSummaryChanged: false,
+    },
+    MEMBERSHIP_PUBLICATION_RECONCILE_TARGET_ASSERTION,
+  );
+  t.equal(
+    persistedRows.length,
+    NUM.ZERO,
+    MEMBERSHIP_PUBLICATION_RECONCILE_PERSIST_ASSERTION,
+  );
+  t.match(
+    result.publicationRow,
+    {
+      publicationEpoch: MEMBERSHIP_PUBLICATION_RECONCILE_PUBLICATION_EPOCH,
+      status: MEMBERSHIP_PUBLICATION_TRIM_STATUS_PUBLISHED,
+      publishedActiveNodeIds:
+        MEMBERSHIP_PUBLICATION_RECONCILE_BASELINE_NODE_IDS,
+    },
+    MEMBERSHIP_PUBLICATION_RECONCILE_ROW_ASSERTION,
   );
 });
 

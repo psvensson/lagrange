@@ -458,11 +458,15 @@ Sprint:
       publication remains published-active `3/5` with missing nodes
       `11601fe0-72d6-5853-8590-ec2881853e72` and
       `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`.
-- [ ] Add the smallest membership-publication reconcile probe or fixture that
+- [x] Add the smallest membership-publication reconcile probe or fixture that
       proves why the candidate after active-gate best progress still carries
       published-active `3/5`: capture baseline, projected recovery membership,
       publication target, candidate `changed`, and refresh/persist decision for
       epoch `3` without raising timeouts or broadening the matrix.
+- [ ] Rerun the representative `rolling-restart --fast-local` gate after the
+      reconcile probe and record whether the blocker closes, stays on
+      membership-publication owner rows/transport/service evidence, or migrates
+      to one newly named owner boundary.
 
 ## May 5 Regression Validation
 
@@ -590,6 +594,59 @@ fixture for the post-best-progress membership candidate: record
 `publishedBaselineNodeIds`, projected recovery membership, publication target
 node ids, candidate `changed`, and whether `reconcileClusterMembership(...)`
 refreshes or persists after active-gate best progress reaches `5/5`.
+
+## May 5 Reconcile Probe Fixture
+
+The next package task added a focused owner fixture in
+`test/control-plane/membership-publication-coordinator.test.js`:
+`reconcileClusterMembership keeps epoch 3 published-active 3/5 when active-gate best progress observes 5/5`.
+
+Fixture shape:
+
+1. Latest durable membership row is epoch `3`, `PUBLISHED`, acknowledged, and
+   has published-active baseline `node-1`, `node-2`, and `node-3`.
+2. Readiness planning input exposes five active-gate-ready nodes:
+   `node-1` through `node-5`.
+3. Membership-publication owner rows expose publishable node and service rows
+   only for the durable baseline `node-1`, `node-2`, and `node-3`; endpoint and
+   connected-node evidence are absent.
+
+Expected owner outcome:
+
+1. The candidate remains epoch `3` / `PUBLISHED`.
+2. Publication target, projected serving membership, and recovery-active
+   membership all remain the durable baseline `3/5`.
+3. Recovery-active source remains `published_membership`, with no
+   missing-published recovery-active nodes.
+4. Candidate `changed` is `false`, priority metadata refresh is not requested,
+   and `reconcileClusterMembership(...)` performs no persistence.
+
+Conclusion: active-gate readiness observation by itself does not widen durable
+publication membership. The runtime owner still requires publishable owner-row,
+service, endpoint, connected-node, recovery-eligible, or liveness-fallback
+evidence before epoch `3` can advance beyond published-active `3/5`.
+
+## May 5 Reconcile Probe Validation
+
+Passed:
+
+1. `node --check test/control-plane/membership-publication-coordinator.test.js`
+2. `node --test --test-name-pattern "reconcileClusterMembership keeps epoch 3 published-active 3/5 when active-gate best progress observes 5/5" test/control-plane/membership-publication-coordinator.test.js`
+   ran the full file under the local TAP bridge and passed: `224` tests,
+   `70` suites.
+3. `node scripts/check-guideline-literals.js test/control-plane/membership-publication-coordinator.test.js`
+   reported `0` new literal-guideline violations.
+4. `node scripts/check-guideline-decision-boundaries.js test/control-plane/membership-publication-coordinator.test.js`
+   reported `0` decision-boundary guideline violations.
+5. `node scripts/check-runtime-grammar-contracts.js test/control-plane/membership-publication-coordinator.test.js`
+   reported `0` runtime-grammar-contract violations.
+
+Inherited / unchanged:
+
+1. `node scripts/check-guideline-literals.js --include-tests test/control-plane/membership-publication-coordinator.test.js`
+   remains red with `171` whole-file test-literal violations. A comparison
+   against the `HEAD` copy of the same file also reported `171`, so this probe
+   did not increase test-inclusive literal debt.
 
 ## Validation
 
