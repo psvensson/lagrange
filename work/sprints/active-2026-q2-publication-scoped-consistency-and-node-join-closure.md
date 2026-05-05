@@ -38,7 +38,10 @@ still stays open until reconciled, but the stale `publicationConvergence=ready`
 presentation is no longer the terminal timeout summary. A follow-up harness
 classification fix also keeps the last meaningful same-partition
 `operation_stalled` witness when a later lower-coverage terminal poll regresses
-to `needs_operation`.
+to `needs_operation`. The latest harness-only failure-bundle fix also keeps
+canonical missing-published debt visible during active-gate snapshot coverage
+lag while still suppressing stale selected active-gate missing-publication
+debt; no representative rerun has been run after that fix.
 
 The active failure chain is now:
 
@@ -190,12 +193,15 @@ Queued cleanup packages:
    not the latest selected boundary. A narrow harness formatter fix now prevents
    `publicationConvergence=ready` when the same active-gate evidence carries
    `ACK_PENDING`, pending ACK, or missing-published debt; this is
-   classification-only and does not close the runtime owner blocker. A review
-   follow-up also keeps ACTIVE timeout publication summaries bound to the
-   selected terminal progress snapshot when the final poll regresses to stale
-   ready publication evidence, and keeps same-partition operation-stalled
-   priority-recovery evidence ahead of a later lower-coverage needs-operation
-   reconstruction.
+   classification-only and does not close the runtime owner blocker. A later
+   failure-bundle fix preserves canonical missing-published debt during
+   active-gate snapshot coverage lag, but the May 5 representative artifact
+   predates that focused proof and has not been replaced by a fresh scenario
+   rerun. A review follow-up also keeps ACTIVE timeout publication summaries
+   bound to the selected terminal progress snapshot when the final poll
+   regresses to stale ready publication evidence, and keeps same-partition
+   operation-stalled priority-recovery evidence ahead of a later lower-coverage
+   needs-operation reconstruction.
 4. Final consistency:
    the final leader-map consistency package is complete for this sprint
    because the rerun moved to a freshly split non-final blocker.
@@ -621,6 +627,23 @@ Current secondary evidence:
     `operation_workflow_owner / workflow_progress / event_driven`.
 62. Documentation-only evidence ledger update touched no JS files. Required
     whitespace verification `git diff --check` passed.
+63. May 5 failure-bundle missing-published coverage-lag fix:
+    `node --check test/distributed/harness/failure-bundle-segment-4.js`;
+    `node --check test/distributed/harness/__tests__/failure-bundle.test.js`;
+    `node --test --test-name-pattern "keeps canonical missing published debt during active-gate coverage lag" test/distributed/harness/__tests__/failure-bundle.test.js`;
+    `node --test --test-name-pattern "lets current selected active-gate coverage clear stale missing publication nodes|keeps canonical missing published debt during active-gate coverage lag|keeps startup active-gate snapshot coverage from restoring stale publication debt" test/distributed/harness/__tests__/failure-bundle.test.js`;
+    `node scripts/check-guideline-decision-boundaries.js --include-tests test/distributed/harness/failure-bundle-segment-4.js test/distributed/harness/__tests__/failure-bundle.test.js`;
+    `node scripts/check-runtime-grammar-contracts.js test/distributed/harness/failure-bundle-segment-4.js test/distributed/harness/__tests__/failure-bundle.test.js`;
+    `git diff --check`
+    passed. The exact touched-file literal guard remains red:
+    `node scripts/check-guideline-literals.js --include-tests test/distributed/harness/failure-bundle-segment-4.js test/distributed/harness/__tests__/failure-bundle.test.js`
+    reports `1242` new literal-guideline violations, all in
+    `failure-bundle.test.js`, and `0` inherited baseline violations;
+    diff-aware added-line filtering reports `0` literal violations. The fix
+    keeps canonical publication-gate missing-published debt visible during
+    active-gate snapshot coverage lag while preserving stale selected
+    active-gate debt and stale closure replay suppression. No representative
+    scenario rerun was run for this harness-only slice.
 
 ## Progress Grammar
 

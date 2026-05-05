@@ -347,6 +347,28 @@ May 5 representative rerun after terminal priority-recovery witness fix:
     nodes, selected-snapshot coverage, selected missing-published disagreement,
     and priority-spread recovery in flight. The package remains active.
 
+May 5 failure-bundle missing-published coverage-lag fix:
+
+1. Verified the review/execution handoff issue in
+   `buildPublicationConvergenceSummary()`: active-gate snapshot coverage lag
+   could suppress stale selected active-gate missing-publication debt and also
+   hide explicit current canonical publication-gate missing-published debt.
+2. The harness summary now builds one missing-published evidence snapshot and
+   selects the canonical outcome through a decision table. Snapshot coverage lag
+   still suppresses stale selected active-gate publication debt, but canonical
+   publication-convergence or publication-recovery-gate missing-published debt
+   remains visible.
+3. Added focused regression coverage for active-gate snapshot coverage pending,
+   pending ACK count `1`, and canonical missing published count `2`; the
+   resulting failure-bundle summary keeps pending ACK debt, missing-published
+   node ids, publication pending, priority spread pending, and the publication
+   missing-active-node blocker.
+4. This is a harness classification fix only. No representative
+   `rolling-restart` rerun was run for this slice, and the package remains
+   active because startup/publication pending ACK, inactive nodes,
+   selected-snapshot coverage, selected missing-published disagreement, and the
+   in-flight `sql_transactions-p1` workflow progress residual remain open.
+
 ## Scope Basis
 
 Roadmap Phase `0.1 - Internal Coherence` maintenance/refactoring scope under
@@ -544,6 +566,32 @@ Closure:
       priority-recovery witness review fix reports `0` literal-guideline
       violations on added lines.
 - [x] May 5 terminal priority-recovery witness `git diff --check` passed.
+- [x] May 5 failure-bundle missing-published coverage-lag fix `node --check`
+      passed for `test/distributed/harness/failure-bundle-segment-4.js` and
+      `test/distributed/harness/__tests__/failure-bundle.test.js`.
+- [x] May 5 failure-bundle missing-published coverage-lag focused regression
+      passed:
+      `node --test --test-name-pattern "keeps canonical missing published debt during active-gate coverage lag" test/distributed/harness/__tests__/failure-bundle.test.js`
+      reported `1` test passed.
+- [x] Adjacent stale-publication regression sweep passed:
+      `node --test --test-name-pattern "lets current selected active-gate coverage clear stale missing publication nodes|keeps canonical missing published debt during active-gate coverage lag|keeps startup active-gate snapshot coverage from restoring stale publication debt" test/distributed/harness/__tests__/failure-bundle.test.js`
+      reported `3` tests passed.
+- [x] May 5 failure-bundle missing-published coverage-lag non-literal
+      guardrails passed:
+      `node scripts/check-guideline-decision-boundaries.js --include-tests test/distributed/harness/failure-bundle-segment-4.js test/distributed/harness/__tests__/failure-bundle.test.js`
+      and
+      `node scripts/check-runtime-grammar-contracts.js test/distributed/harness/failure-bundle-segment-4.js test/distributed/harness/__tests__/failure-bundle.test.js`
+      both reported `0` violations across the two touched JS files.
+- [ ] May 5 failure-bundle missing-published coverage-lag exact touched-file
+      literal guard remains file-scoped red:
+      `node scripts/check-guideline-literals.js --include-tests test/distributed/harness/failure-bundle-segment-4.js test/distributed/harness/__tests__/failure-bundle.test.js`
+      reports `1242` new literal-guideline violations, all in
+      `test/distributed/harness/__tests__/failure-bundle.test.js`, and `0`
+      inherited baseline violations. This is existing whole-file harness
+      fixture debt; diff-aware added-line filtering reports `0`
+      literal-guideline violations on added lines.
+- [x] May 5 failure-bundle missing-published coverage-lag `git diff --check`
+      passed.
 
 ## Implementation Tasks
 
@@ -565,6 +613,9 @@ Closure:
 - [x] Preserve operation-stalled terminal priority-recovery evidence when a
       later same-partition needs-operation poll regresses with lower selected
       snapshot coverage.
+- [x] Preserve canonical missing-published publication debt during active-gate
+      snapshot coverage lag while still suppressing stale selected active-gate
+      missing-publication debt.
 - [x] Rerun the representative path after the terminal publication evidence
       review fix and record whether the blocker closes or migrates.
 - [x] Rerun the representative path after the terminal priority-recovery witness
@@ -629,6 +680,12 @@ Closure:
     update.
 14. Documentation-only evidence ledger update touched no JS files. Required
     whitespace verification `git diff --check` passed.
+15. Failure-bundle missing-published coverage-lag harness coverage passed as
+    recorded in the static drift ledger. The fix prevents active-gate snapshot
+    coverage lag from suppressing explicit canonical publication-gate
+    missing-published debt while preserving stale selected active-gate debt
+    suppression, including stale closure replay evidence. No representative
+    scenario rerun was run for this harness-only slice.
 
 ## Done When
 
@@ -645,6 +702,12 @@ after `130.5s` and migrated back to startup/publication convergence:
 publication epoch `3` is `ACK_PENDING`, pending ACK count is `1`, pending ACK
 node is `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`, and recovery protocol state is
 `publication_pending`.
+
+The published May 5 representative artifact predated the latest
+failure-bundle coverage-lag fix, so its normalized missing-published summary is
+not replaced here. Focused harness proof now keeps canonical missing-published
+debt in that coverage-lag class, but a fresh representative rerun is still
+required before updating the runtime blocker evidence.
 
 Active-gate progress reports active `3/5`, selected snapshot coverage `2/5`,
 selected published active `3/5`, selected missing published count `2`, selected
