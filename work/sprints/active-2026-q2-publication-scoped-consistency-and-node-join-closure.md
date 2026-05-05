@@ -299,11 +299,17 @@ Queued cleanup packages:
    `replica_operations-p1` and `sql_write_operations-p1` admission records are
    not follow-up proof. No budget block, same-partition leadership loss, or
    scheduler handoff was captured. The later control-plane pressure query and
-   sibling leadership loss remain subordinate evidence. The next unchecked
-   package task is to add the smallest runtime rebalancer pre-execution handoff
-   diagnostic for the post-`Starting rebalancing` path so `limitedMoves`,
-   move-limit, readiness grouping, and pre-`executeMove` skip/return state are
-   explicit.
+   sibling leadership loss remain subordinate evidence. The runtime
+   pre-execution handoff diagnostic is now implemented: future artifacts will
+   log `limitedMoveCount`, `moveLimit`, readiness grouping, pre-execute skip
+   reasons, `preExecutionHandoffState`, and `preExecuteReturnState` after
+   `Starting rebalancing` and before `executeMove(...)`. Focused validation
+   passed for the runtime diagnostic, replay parser, touched-file ESLint,
+   syntax checks, decision-boundary, runtime-grammar, boundary-mode, and
+   literal guardrails. The next unchecked package task is the representative
+   `rolling-restart --fast-local` rerun after the diagnostic, while keeping the
+   epoch `2` `PUBLISHED` missing-active selected-snapshot topology debt
+   canonical.
 3. Harness classification:
    terminal barrier evidence wins over stale playback reconstruction for
    active, restart-recovery, load-readiness, convergence, and quiescence

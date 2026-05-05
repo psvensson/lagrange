@@ -679,12 +679,18 @@ Sprint:
       admission, leadership, and scheduler handoff evidence while keeping the
       epoch `2` `PUBLISHED` missing-active selected-snapshot topology debt
       canonical.
-- [ ] Add the smallest runtime rebalancer pre-execution handoff diagnostic for
+- [x] Add the smallest runtime rebalancer pre-execution handoff diagnostic for
       the same `control_plane_publications-p1` follow-up after
       `Starting rebalancing`: capture limited move count, move-limit, readiness
       grouping, and any pre-`executeMove` skip or return state while keeping
       the epoch `2` `PUBLISHED` missing-active selected-snapshot topology debt
       canonical.
+- [ ] Rerun the representative `rolling-restart --fast-local` gate after the
+      runtime pre-execution handoff diagnostic and record whether the new
+      post-`Starting rebalancing` evidence closes the subordinate
+      `control_plane_publications-p1` handoff gap, keeps it on pre-`executeMove`
+      skip/return state, or migrates while preserving the epoch `2`
+      `PUBLISHED` missing-active selected-snapshot topology debt as canonical.
 
 ## May 5 Regression Validation
 
@@ -2915,9 +2921,9 @@ that path. The canonical blocker remains the
 epoch `2` `PUBLISHED` missing-active selected-snapshot topology debt: active
 `4/5`, selected coverage `2/5`, selected published active `2/5`, missing
 published `3`, the selected witness reachability timeout, and priority spread
-pending. The package remains active. The next unchecked task is to add the
-smallest runtime rebalancer pre-execution handoff diagnostic for the
-post-`Starting rebalancing` path.
+pending. The package remains active. The next section records the runtime
+pre-execution handoff diagnostic added for the post-`Starting rebalancing`
+path.
 
 Validation:
 
@@ -2954,6 +2960,80 @@ Validation:
 14. `node scripts/check-guidelines-llm.js test/distributed/harness/publication-evidence-replay.js test/distributed/harness/__tests__/publication-evidence-replay.test.js`
     was attempted and failed with an OpenAI API `401` invalid-key response.
 15. `git diff --check` passed.
+
+## May 5 Runtime Pre-Execution Handoff Diagnostic
+
+The next package task added the runtime diagnostic needed by the previous
+trace. The broad representative scenario was not rerun in this slice.
+
+Implementation:
+
+1. `src/rebalancer/unified-rebalancer-segment-4.js` now builds one normalized
+   pre-execution handoff snapshot immediately after move limiting and before
+   any `executeMove(...)` call. The snapshot uses an explicit state table and
+   records planned move count, `moveLimit`, `limitedMoveCount`,
+   `executableMoveCount`, `preExecuteSkippedMoveCount`, readiness group counts,
+   full readiness groups, pre-execute skip reasons,
+   `preExecutionHandoffState`, and `preExecuteReturnState`.
+2. `src/rebalancer/rebalancer-constants.js` owns the new runtime log message
+   `Rebalancer pre-execution handoff`.
+3. `test/rebalancer/rebalancer-pre-execution-handoff-diagnostic.test.js`
+   proves the all-skipped pre-execution path logs limited move count, move
+   limit, readiness grouping, `awaiting_ready_add_capacity`,
+   `node_not_ready`, `pre_execution_skips_only`, and
+   `return_pre_execution_skips` before the coordinator is called.
+4. `test/distributed/harness/publication-evidence-replay.js` now parses the
+   new runtime log when present and promotes move-limit evidence from
+   `planned_move_count_available` to `limited_moves_available`. It also
+   exposes the post-terminal move limit, limited move count, executable move
+   count, skipped-before-execute count, readiness groups, skip reasons, and
+   pre-execution state fields under `rebalancerFollowUpHandoff`.
+5. The synthetic `145246Z` replay fixture now includes the new post-start
+   diagnostic for `control_plane_publications-p1`: `moveLimit=1`,
+   `limitedMoveCount=1`, `executableMoveCount=1`, no pre-execute skips, one
+   ready readiness group for the target node, `ready_to_execute`, and
+   `continue`.
+
+Outcome: the runtime owner will now emit the missing post-limit handoff
+diagnostic in the next representative artifact. Existing `145246Z` replay
+artifacts still report `planned_move_count_available` because they predate the
+runtime log. The canonical blocker remains the epoch `2` `PUBLISHED`
+missing-active selected-snapshot topology debt: active `4/5`, selected
+coverage `2/5`, selected published active `2/5`, missing published `3`,
+selected witness reachability timeout, and priority spread pending. The next
+unchecked task is the representative `rolling-restart --fast-local` rerun
+after this diagnostic.
+
+Validation:
+
+1. Red-first:
+   `node --test test/rebalancer/rebalancer-pre-execution-handoff-diagnostic.test.js`
+   failed before the runtime diagnostic because the pre-execution handoff log
+   was absent.
+2. `node --check src/rebalancer/unified-rebalancer-segment-4.js`
+3. `node --check src/rebalancer/rebalancer-constants.js`
+4. `node --check test/rebalancer/rebalancer-pre-execution-handoff-diagnostic.test.js`
+5. `node --check test/distributed/harness/publication-evidence-replay.js`
+6. `node --check test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+7. `node --test test/rebalancer/rebalancer-pre-execution-handoff-diagnostic.test.js`
+8. `node --test --test-name-pattern "keeps the 145246Z PUBLISHED reachability and rebalancer replay blocked" test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+9. `node --test test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+10. `node test/distributed/harness/publication-evidence-replay.js test-output/reports/.playback/rolling-restart-after-140646z-publication-pending-replay-fixture-20260505T145246Z/rolling-restart`
+    passed and still reports `postTerminalMoveLimitEvidenceState=planned_move_count_available`
+    on the historical artifact because the new runtime diagnostic was not
+    present in that run.
+11. `npx eslint src/rebalancer/unified-rebalancer-segment-4.js src/rebalancer/rebalancer-constants.js test/rebalancer/rebalancer-pre-execution-handoff-diagnostic.test.js test/distributed/harness/publication-evidence-replay.js test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+12. `node scripts/check-guideline-decision-boundaries.js src/rebalancer/unified-rebalancer-segment-4.js test/distributed/harness/publication-evidence-replay.js test/distributed/harness/__tests__/publication-evidence-replay.test.js test/rebalancer/rebalancer-pre-execution-handoff-diagnostic.test.js`
+    reported `0` decision-boundary guideline violations.
+13. `node scripts/check-runtime-grammar-contracts.js src/rebalancer/unified-rebalancer-segment-4.js test/distributed/harness/publication-evidence-replay.js test/distributed/harness/__tests__/publication-evidence-replay.test.js test/rebalancer/rebalancer-pre-execution-handoff-diagnostic.test.js`
+    reported `0` runtime-grammar-contract violations.
+14. `node scripts/check-guideline-boundary-mode-contracts.js src/rebalancer/unified-rebalancer-segment-4.js test/distributed/harness/publication-evidence-replay.js test/distributed/harness/__tests__/publication-evidence-replay.test.js test/rebalancer/rebalancer-pre-execution-handoff-diagnostic.test.js`
+    reported `0` boundary-mode-contract hotspot violations.
+15. `node scripts/check-guideline-literals.js src/rebalancer/unified-rebalancer-segment-4.js src/rebalancer/rebalancer-constants.js test/distributed/harness/publication-evidence-replay.js test/distributed/harness/__tests__/publication-evidence-replay.test.js test/rebalancer/rebalancer-pre-execution-handoff-diagnostic.test.js`
+    reported `0` new and `0` inherited literal-guideline violations.
+16. `node scripts/check-guideline-literals.js --include-tests src/rebalancer/unified-rebalancer-segment-4.js src/rebalancer/rebalancer-constants.js test/distributed/harness/publication-evidence-replay.js test/distributed/harness/__tests__/publication-evidence-replay.test.js test/rebalancer/rebalancer-pre-execution-handoff-diagnostic.test.js`
+    reported `0` new and `0` inherited literal-guideline violations.
+17. `git diff --check` passed.
 
 ## Validation
 
@@ -3037,7 +3117,11 @@ start; the state is `not_executed_after_enqueue`. The post-start handoff
 evidence now classifies that move count as
 `planned_move_count_available`, scopes admission to the matching
 `control_plane_publications-p1` feasibility batch, and leaves move-limit
-survival unresolved until runtime logs the post-limit handoff. The next
-unchecked task is to add that runtime rebalancer pre-execution handoff
-diagnostic while keeping the epoch `2` `PUBLISHED` missing-active
-selected-snapshot topology debt canonical.
+survival unresolved in the historical artifact because it predates the runtime
+post-limit handoff log. The runtime pre-execution diagnostic is now complete:
+future artifacts will expose `limitedMoveCount`, `moveLimit`, readiness
+groups, pre-execute skip reasons, `preExecutionHandoffState`, and
+`preExecuteReturnState`. The next unchecked task is the representative
+`rolling-restart --fast-local` rerun after that diagnostic while keeping the
+epoch `2` `PUBLISHED` missing-active selected-snapshot topology debt
+canonical.

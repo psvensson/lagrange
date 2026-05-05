@@ -183,6 +183,58 @@ const PRIORITY_RECOVERY_CLOSURE_WITNESS_FOLLOW_UP_STATE_TABLE =
       matches: () => true,
     }),
   ]);
+const REBALANCER_PRE_EXECUTION_READINESS_NODE_ID = Object.freeze({
+  UNTARGETED: 'untargeted',
+});
+const REBALANCER_PRE_EXECUTION_READINESS_STATE = Object.freeze({
+  BLOCKED: 'blocked',
+  READY: 'ready',
+});
+const REBALANCER_PRE_EXECUTION_SKIP_DETAIL = Object.freeze({
+  NONE: 'none',
+});
+const REBALANCER_PRE_EXECUTION_HANDOFF_STATE = Object.freeze({
+  NO_LIMITED_MOVES: 'no_limited_moves',
+  PRE_EXECUTION_SKIPS_ONLY: 'pre_execution_skips_only',
+  READY_TO_EXECUTE: 'ready_to_execute',
+  SHUTDOWN: 'shutdown',
+});
+const REBALANCER_PRE_EXECUTION_RETURN_STATE = Object.freeze({
+  CONTINUE: 'continue',
+  RETURN_NO_LIMITED_MOVES: 'return_no_limited_moves',
+  RETURN_PRE_EXECUTION_SKIPS: 'return_pre_execution_skips',
+  RETURN_SHUTDOWN: 'return_shutdown',
+});
+const REBALANCER_PRE_EXECUTION_HANDOFF_STATE_TABLE = Object.freeze([
+  Object.freeze({
+    state: REBALANCER_PRE_EXECUTION_HANDOFF_STATE.SHUTDOWN,
+    matches: (evidence) => evidence.shuttingDown === true,
+  }),
+  Object.freeze({
+    state: REBALANCER_PRE_EXECUTION_HANDOFF_STATE.NO_LIMITED_MOVES,
+    matches: (evidence) => evidence.limitedMoveCount === NUM.ZERO,
+  }),
+  Object.freeze({
+    state: REBALANCER_PRE_EXECUTION_HANDOFF_STATE.PRE_EXECUTION_SKIPS_ONLY,
+    matches: (evidence) =>
+      evidence.executableMoveCount === NUM.ZERO &&
+      evidence.preExecuteSkippedMoveCount > NUM.ZERO,
+  }),
+  Object.freeze({
+    state: REBALANCER_PRE_EXECUTION_HANDOFF_STATE.READY_TO_EXECUTE,
+    matches: () => true,
+  }),
+]);
+const REBALANCER_PRE_EXECUTION_RETURN_STATE_BY_HANDOFF_STATE = Object.freeze({
+  [REBALANCER_PRE_EXECUTION_HANDOFF_STATE.NO_LIMITED_MOVES]:
+    REBALANCER_PRE_EXECUTION_RETURN_STATE.RETURN_NO_LIMITED_MOVES,
+  [REBALANCER_PRE_EXECUTION_HANDOFF_STATE.PRE_EXECUTION_SKIPS_ONLY]:
+    REBALANCER_PRE_EXECUTION_RETURN_STATE.RETURN_PRE_EXECUTION_SKIPS,
+  [REBALANCER_PRE_EXECUTION_HANDOFF_STATE.READY_TO_EXECUTE]:
+    REBALANCER_PRE_EXECUTION_RETURN_STATE.CONTINUE,
+  [REBALANCER_PRE_EXECUTION_HANDOFF_STATE.SHUTDOWN]:
+    REBALANCER_PRE_EXECUTION_RETURN_STATE.RETURN_SHUTDOWN,
+});
 
 class UnifiedRebalancerSegment4 extends UnifiedRebalancerSegment3 {
   isAddLikeInFlightOperation(operation) {
@@ -846,10 +898,10 @@ class UnifiedRebalancerSegment4 extends UnifiedRebalancerSegment3 {
         .filter((partitionId) => partitionId.length > NUM.ZERO) :
       [];
     const candidatePartitionIds = rawCandidatePartitionIds
-        .filter(
-          (partitionId) =>
-            !topologyBlockingPartitionIds.has(partitionId),
-        );
+      .filter(
+        (partitionId) =>
+          !topologyBlockingPartitionIds.has(partitionId),
+      );
     return Object.freeze({
       followUpRequired:
         followUpRequired,
@@ -1586,12 +1638,12 @@ class UnifiedRebalancerSegment4 extends UnifiedRebalancerSegment3 {
         PRIORITY_RECOVERY_FOLLOW_UP_MOVE_STATE.MOVE_CREATED,
         PRIORITY_RECOVERY_FOLLOW_UP_MOVE_REASON.ADD_FOLLOW_UP_CREATED,
         Object.freeze({
-        type: MoveType.ADD,
-        partitionId,
-        entityType: EntityType.PARTITION,
-        entityId: partitionId,
-        nodeId: targetNodeId,
-        reason: MOVE_REASON.INCREASE_REPLICA_COUNT,
+          type: MoveType.ADD,
+          partitionId,
+          entityType: EntityType.PARTITION,
+          entityId: partitionId,
+          nodeId: targetNodeId,
+          reason: MOVE_REASON.INCREASE_REPLICA_COUNT,
         }),
       );
     }
@@ -1610,12 +1662,12 @@ class UnifiedRebalancerSegment4 extends UnifiedRebalancerSegment3 {
         PRIORITY_RECOVERY_FOLLOW_UP_MOVE_STATE.SOURCE_FALLBACK_ADD_CREATED,
         PRIORITY_RECOVERY_FOLLOW_UP_MOVE_REASON.SOURCE_UNAVAILABLE,
         Object.freeze({
-        type: MoveType.ADD,
-        partitionId,
-        entityType: EntityType.PARTITION,
-        entityId: partitionId,
-        nodeId: targetNodeId,
-        reason: MOVE_REASON.INCREASE_REPLICA_COUNT,
+          type: MoveType.ADD,
+          partitionId,
+          entityType: EntityType.PARTITION,
+          entityId: partitionId,
+          nodeId: targetNodeId,
+          reason: MOVE_REASON.INCREASE_REPLICA_COUNT,
         }),
       );
     }
@@ -2002,62 +2054,265 @@ class UnifiedRebalancerSegment4 extends UnifiedRebalancerSegment3 {
   }
 
   /**
-   * Execute move operations with per-node batching and backpressure.
-   * @param {Array<Object>} moves - Move operations.
-   * @return {Promise<Array<Object>>} Execution results.
+   * @param {Object} move
+   * @return {string}
    * @private
    */
-  async executeRebalancingMoves(moves) {
-    if (this.isShuttingDown) {
-      return [];
+  resolvePreExecutionReadinessNodeId(move = {}) {
+    const nodeId = String(
+      move?.nodeId || UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
+    ).trim();
+    return nodeId.length > NUM.ZERO ?
+      nodeId :
+      REBALANCER_PRE_EXECUTION_READINESS_NODE_ID.UNTARGETED;
+  }
+
+  /**
+   * @param {string} skipDetail
+   * @return {string}
+   * @private
+   */
+  resolvePreExecutionReadinessState(skipDetail) {
+    return skipDetail === REBALANCER_PRE_EXECUTION_SKIP_DETAIL.NONE ?
+      REBALANCER_PRE_EXECUTION_READINESS_STATE.READY :
+      REBALANCER_PRE_EXECUTION_READINESS_STATE.BLOCKED;
+  }
+
+  /**
+   * @param {*} skipDetail
+   * @return {string}
+   * @private
+   */
+  normalizePreExecutionSkipDetail(skipDetail) {
+    const normalizedSkipDetail = typeof skipDetail === TYPEOF.STRING ?
+      skipDetail.trim() :
+      UNIFIED_REBALANCER_LITERAL.EMPTY_STRING;
+    return normalizedSkipDetail.length > NUM.ZERO ?
+      normalizedSkipDetail :
+      REBALANCER_PRE_EXECUTION_SKIP_DETAIL.NONE;
+  }
+
+  /**
+   * @param {Array<Object>} moves
+   * @param {Map<string, string>} readinessByNodeId
+   * @return {Array<Object>}
+   * @private
+   */
+  buildPreExecutionReadinessGroups(moves = [], readinessByNodeId = new Map()) {
+    const groupsByNodeId = new Map();
+    for (const move of moves) {
+      const nodeId = this.resolvePreExecutionReadinessNodeId(move);
+      const current = groupsByNodeId.get(nodeId) || {
+        nodeId,
+        moveCount: NUM.ZERO,
+        addLikeMoveCount: NUM.ZERO,
+        removeMoveCount: NUM.ZERO,
+        otherMoveCount: NUM.ZERO,
+      };
+      const addLikeMoveCount =
+        move?.type === MoveType.ADD || move?.type === MoveType.REPLACE ?
+          current.addLikeMoveCount + NUM.ONE :
+          current.addLikeMoveCount;
+      const removeMoveCount = move?.type === MoveType.REMOVE ?
+        current.removeMoveCount + NUM.ONE :
+        current.removeMoveCount;
+      const otherMoveCount =
+        move?.type !== MoveType.ADD &&
+        move?.type !== MoveType.REPLACE &&
+        move?.type !== MoveType.REMOVE ?
+          current.otherMoveCount + NUM.ONE :
+          current.otherMoveCount;
+      groupsByNodeId.set(nodeId, {
+        nodeId,
+        moveCount: current.moveCount + NUM.ONE,
+        addLikeMoveCount,
+        removeMoveCount,
+        otherMoveCount,
+      });
     }
 
+    return [...groupsByNodeId.values()].map((group) => {
+      const skipDetail = readinessByNodeId.has(group.nodeId) ?
+        readinessByNodeId.get(group.nodeId) :
+        REBALANCER_PRE_EXECUTION_SKIP_DETAIL.NONE;
+      return {
+        ...group,
+        readinessState: this.resolvePreExecutionReadinessState(skipDetail),
+        skipDetail: this.normalizePreExecutionSkipDetail(skipDetail),
+      };
+    });
+  }
+
+  /**
+   * @param {Array<Object>} skippedResults
+   * @return {Array<string>}
+   * @private
+   */
+  buildPreExecutionSkipReasons(skippedResults = []) {
+    return [...new Set(
+      skippedResults
+        .map((result) =>
+          String(
+            result?.reason || UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
+          ).trim(),
+        )
+        .filter((reason) => reason.length > NUM.ZERO),
+    )].sort((left, right) => left.localeCompare(right));
+  }
+
+  /**
+   * @param {Object} evidence
+   * @return {string}
+   * @private
+   */
+  resolvePreExecutionHandoffState(evidence = {}) {
+    const entry = REBALANCER_PRE_EXECUTION_HANDOFF_STATE_TABLE.find((rule) =>
+      rule.matches(evidence),
+    );
+    return entry?.state ||
+      REBALANCER_PRE_EXECUTION_HANDOFF_STATE.READY_TO_EXECUTE;
+  }
+
+  /**
+   * @param {string} handoffState
+   * @return {string}
+   * @private
+   */
+  resolvePreExecutionReturnState(handoffState) {
+    return REBALANCER_PRE_EXECUTION_RETURN_STATE_BY_HANDOFF_STATE[
+      handoffState
+    ] || REBALANCER_PRE_EXECUTION_RETURN_STATE.CONTINUE;
+  }
+
+  /**
+   * @param {Array<Object>} moves
+   * @param {Object} context
+   * @param {Array<Object>} executableGroups
+   * @param {Array<Object>} skippedResults
+   * @param {Array<Object>} readinessGroups
+   * @return {Object}
+   * @private
+   */
+  buildPreExecutionHandoffSnapshot({
+    moves = [],
+    context = {},
+    executableGroups = [],
+    skippedResults = [],
+    readinessGroups = [],
+  } = {}) {
+    const executableMoveCount = executableGroups.reduce(
+      (count, group) => count + group.nodeMoves.length,
+      NUM.ZERO,
+    );
+    const evidence = Object.freeze({
+      shuttingDown: this.isShuttingDown === true,
+      limitedMoveCount: moves.length,
+      executableMoveCount,
+      preExecuteSkippedMoveCount: skippedResults.length,
+    });
+    const preExecutionHandoffState =
+      this.resolvePreExecutionHandoffState(evidence);
+    const preExecuteReturnState =
+      this.resolvePreExecutionReturnState(preExecutionHandoffState);
+    const readyReadinessGroupCount = readinessGroups.filter((group) =>
+      group.readinessState === REBALANCER_PRE_EXECUTION_READINESS_STATE.READY,
+    ).length;
+    const blockedReadinessGroupCount = readinessGroups.filter((group) =>
+      group.readinessState === REBALANCER_PRE_EXECUTION_READINESS_STATE.BLOCKED,
+    ).length;
+
+    return {
+      trigger: String(
+        context.trigger || UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
+      ).trim(),
+      plannedMoveCount: Number.isFinite(context.plannedMoveCount) ?
+        Math.trunc(context.plannedMoveCount) :
+        moves.length,
+      moveLimit: Number.isFinite(context.moveLimit) ?
+        Math.trunc(context.moveLimit) :
+        moves.length,
+      limitedMoveCount: moves.length,
+      executableMoveCount,
+      preExecuteSkippedMoveCount: skippedResults.length,
+      readinessGroupCount: readinessGroups.length,
+      readyReadinessGroupCount,
+      blockedReadinessGroupCount,
+      readinessGroups,
+      preExecuteSkipReasons: this.buildPreExecutionSkipReasons(skippedResults),
+      preExecutionHandoffState,
+      preExecuteReturnState,
+    };
+  }
+
+  /**
+   * @param {Object} snapshot
+   * @private
+   */
+  logPreExecutionHandoff(snapshot = {}) {
+    this.logger.info(REBALANCER_LOG_MSG.PRE_EXECUTION_HANDOFF, {
+      entityId: this.entityId,
+      entityType: this.entityType,
+      ...snapshot,
+    });
+  }
+
+  /**
+   * @param {Array<Object>} moves
+   * @param {Object} context
+   * @return {Promise<Object>}
+   * @private
+   */
+  async buildPreExecutionHandoffPlan(moves = [], context = {}) {
     const results = [];
-    const batchSize =
-      Number.isFinite(this.moveBatchSize) && this.moveBatchSize > 0 ?
-        Math.floor(this.moveBatchSize) :
-        1;
-    const interBatchDelayMs =
-      Number.isFinite(this.interBatchDelayMs) && this.interBatchDelayMs > 0 ?
-        this.interBatchDelayMs :
-        0;
     const readinessByNodeId = new Map();
     const getSkipReasonCached = async (nodeId) => {
       if (!nodeId) {
-        return null;
+        return REBALANCER_PRE_EXECUTION_SKIP_DETAIL.NONE;
       }
       if (readinessByNodeId.has(nodeId)) {
         return readinessByNodeId.get(nodeId);
       }
-      const skipDetail = await this.getNodeReadinessSkipReason(nodeId);
+      const skipDetail = this.normalizePreExecutionSkipDetail(
+        await this.getNodeReadinessSkipReason(nodeId),
+      );
       readinessByNodeId.set(nodeId, skipDetail);
       return skipDetail;
     };
-
-    const movesToExecute = [];
     const blockedAddNodeIds = new Set();
     for (const move of moves) {
       if (this.isShuttingDown) {
-        return results;
+        const readinessGroups = this.buildPreExecutionReadinessGroups(
+          moves,
+          readinessByNodeId,
+        );
+        return {
+          executableGroups: [],
+          results,
+          snapshot: this.buildPreExecutionHandoffSnapshot({
+            moves,
+            context,
+            executableGroups: [],
+            skippedResults: results,
+            readinessGroups,
+          }),
+        };
       }
       if (
         (move?.type === MoveType.ADD || move?.type === MoveType.REPLACE) &&
         move?.nodeId
       ) {
         const skipDetail = await getSkipReasonCached(move.nodeId);
-        if (skipDetail !== null) {
+        if (skipDetail !== REBALANCER_PRE_EXECUTION_SKIP_DETAIL.NONE) {
           blockedAddNodeIds.add(move.nodeId);
         }
       }
     }
 
+    const movesToExecute = [];
     for (const move of moves) {
-      if (this.isShuttingDown) {
-        return results;
-      }
       const isDeferrableRemove =
         move?.type === MoveType.REMOVE &&
-        move?.reason !== 'replica_failed' &&
+        move?.reason !== MOVE_REASON.REPLICA_FAILED &&
         move?.standaloneSafe !== true;
       if (
         blockedAddNodeIds.size > UNIFIED_REBALANCER_LITERAL.ZERO &&
@@ -2077,33 +2332,120 @@ class UnifiedRebalancerSegment4 extends UnifiedRebalancerSegment3 {
     }
 
     const groupedMoves = this.groupMovesByTargetNode(movesToExecute);
-
+    const executableGroups = [];
     for (const [nodeId, nodeMoves] of groupedMoves.entries()) {
       if (this.isShuttingDown) {
         break;
       }
-      if (nodeId) {
-        const skipDetail = await getSkipReasonCached(nodeId);
-        if (skipDetail !== null) {
-          this.logger.debug(REBALANCER_LOG_MSG.SKIP_BATCH_UNREADY, {
-            entityId: this.entityId,
-            nodeId,
-            moveCount: nodeMoves.length,
+      const skipDetail = nodeId ?
+        await getSkipReasonCached(nodeId) :
+        REBALANCER_PRE_EXECUTION_SKIP_DETAIL.NONE;
+      if (skipDetail !== REBALANCER_PRE_EXECUTION_SKIP_DETAIL.NONE) {
+        executableGroups.push({
+          nodeId,
+          nodeMoves,
+          skipDetail,
+          skipBeforeExecute: true,
+        });
+        continue;
+      }
+      executableGroups.push({
+        nodeId,
+        nodeMoves,
+        skipDetail: REBALANCER_PRE_EXECUTION_SKIP_DETAIL.NONE,
+        skipBeforeExecute: false,
+      });
+    }
+
+    const preExecuteSkippedResults = [
+      ...results,
+      ...executableGroups
+        .filter((group) => group.skipBeforeExecute === true)
+        .flatMap((group) => group.nodeMoves.map((move) => ({
+          success: false,
+          skipped: true,
+          reason: REBALANCER_SKIP_REASON.NODE_NOT_READY,
+          skipDetail: group.skipDetail,
+          operation: move.type,
+          nodeId: move.nodeId,
+          replicaId: move.replicaId,
+        }))),
+    ];
+    const readinessGroups = this.buildPreExecutionReadinessGroups(
+      moves,
+      readinessByNodeId,
+    );
+    return {
+      executableGroups,
+      results,
+      snapshot: this.buildPreExecutionHandoffSnapshot({
+        moves,
+        context,
+        executableGroups: executableGroups.filter(
+          (group) => group.skipBeforeExecute !== true,
+        ),
+        skippedResults: preExecuteSkippedResults,
+        readinessGroups,
+      }),
+    };
+  }
+
+  /**
+   * Execute move operations with per-node batching and backpressure.
+   * @param {Array<Object>} moves - Move operations.
+   * @param {Object} [context={}] - Pre-execution diagnostic context.
+   * @return {Promise<Array<Object>>} Execution results.
+   * @private
+   */
+  async executeRebalancingMoves(moves, context = {}) {
+    const normalizedMoves = Array.isArray(moves) ? moves : [];
+    const batchSize =
+      Number.isFinite(this.moveBatchSize) && this.moveBatchSize > 0 ?
+        Math.floor(this.moveBatchSize) :
+        1;
+    const interBatchDelayMs =
+      Number.isFinite(this.interBatchDelayMs) && this.interBatchDelayMs > 0 ?
+        this.interBatchDelayMs :
+        0;
+    const handoffPlan = await this.buildPreExecutionHandoffPlan(
+      normalizedMoves,
+      context,
+    );
+    this.logPreExecutionHandoff(handoffPlan.snapshot);
+    const results = [...handoffPlan.results];
+    if (
+      handoffPlan.snapshot.preExecuteReturnState ===
+        REBALANCER_PRE_EXECUTION_RETURN_STATE.RETURN_NO_LIMITED_MOVES ||
+      handoffPlan.snapshot.preExecuteReturnState ===
+        REBALANCER_PRE_EXECUTION_RETURN_STATE.RETURN_SHUTDOWN
+    ) {
+      return results;
+    }
+
+    for (const group of handoffPlan.executableGroups) {
+      const {nodeId, nodeMoves, skipBeforeExecute, skipDetail} = group;
+      if (this.isShuttingDown) {
+        break;
+      }
+      if (skipBeforeExecute === true) {
+        this.logger.debug(REBALANCER_LOG_MSG.SKIP_BATCH_UNREADY, {
+          entityId: this.entityId,
+          nodeId,
+          moveCount: nodeMoves.length,
+          skipDetail,
+        });
+        for (const move of nodeMoves) {
+          results.push({
+            success: false,
+            skipped: true,
+            reason: REBALANCER_SKIP_REASON.NODE_NOT_READY,
             skipDetail,
+            operation: move.type,
+            nodeId: move.nodeId,
+            replicaId: move.replicaId,
           });
-          for (const move of nodeMoves) {
-            results.push({
-              success: false,
-              skipped: true,
-              reason: REBALANCER_SKIP_REASON.NODE_NOT_READY,
-              skipDetail,
-              operation: move.type,
-              nodeId: move.nodeId,
-              replicaId: move.replicaId,
-            });
-          }
-          continue;
         }
+        continue;
       }
 
       for (
@@ -2241,7 +2583,7 @@ class UnifiedRebalancerSegment4 extends UnifiedRebalancerSegment3 {
     }
 
     let availableBudget = this.maxConcurrentMoves;
-    let shouldPrioritizeBudgetedTopologyCleanup =
+    const shouldPrioritizeBudgetedTopologyCleanup =
       this.hasPriorityTopologyCleanupBudgetBypassCandidateMove(moves);
     try {
       const configuredBudget = await this.getConfiguredRebalanceBudget();
@@ -2320,7 +2662,11 @@ class UnifiedRebalancerSegment4 extends UnifiedRebalancerSegment3 {
         membershipPublicationEpoch: planningMembershipPublicationEpoch,
       };
     });
-    const results = await this.executeRebalancingMoves(limitedMoves);
+    const results = await this.executeRebalancingMoves(limitedMoves, {
+      trigger,
+      plannedMoveCount: moves.length,
+      moveLimit,
+    });
 
     this.lastRebalanceTime = Date.now();
     this.rebalanceCount++;

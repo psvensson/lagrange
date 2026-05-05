@@ -185,16 +185,37 @@ const PUBLICATION_EVIDENCE_REPLAY_REBALANCER_HANDOFF_FIELD = Object.freeze({
     'postTerminalFeasibilityRejectedReasonCodes',
   POST_TERMINAL_FEASIBLE_CANDIDATE_COUNT:
     'postTerminalFeasibleCandidateCount',
+  POST_TERMINAL_BLOCKED_READINESS_GROUP_COUNT:
+    'postTerminalBlockedReadinessGroupCount',
   AVAILABILITY: 'availability',
   FOLLOW_UP_STATE: 'followUpState',
   OPERATION_ID: 'operationId',
+  POST_TERMINAL_EXECUTABLE_MOVE_COUNT: 'postTerminalExecutableMoveCount',
+  POST_TERMINAL_LIMITED_MOVE_COUNT: 'postTerminalLimitedMoveCount',
   POST_TERMINAL_LEADERSHIP_LOSS_OBSERVED:
     'postTerminalLeadershipLossObserved',
   POST_TERMINAL_LEADERSHIP_LOSS_TIME_MS:
     'postTerminalLeadershipLossTimeMs',
+  POST_TERMINAL_MOVE_LIMIT: 'postTerminalMoveLimit',
   POST_TERMINAL_MOVE_LIMIT_EVIDENCE_STATE:
     'postTerminalMoveLimitEvidenceState',
   PARTITION_ID: 'partitionId',
+  POST_TERMINAL_PRE_EXECUTE_RETURN_STATE:
+    'postTerminalPreExecuteReturnState',
+  POST_TERMINAL_PRE_EXECUTE_SKIP_REASONS:
+    'postTerminalPreExecuteSkipReasons',
+  POST_TERMINAL_PRE_EXECUTE_SKIPPED_MOVE_COUNT:
+    'postTerminalPreExecuteSkippedMoveCount',
+  POST_TERMINAL_PRE_EXECUTION_HANDOFF_OBSERVED:
+    'postTerminalPreExecutionHandoffObserved',
+  POST_TERMINAL_PRE_EXECUTION_HANDOFF_STATE:
+    'postTerminalPreExecutionHandoffState',
+  POST_TERMINAL_PRE_EXECUTION_HANDOFF_TIME_MS:
+    'postTerminalPreExecutionHandoffTimeMs',
+  POST_TERMINAL_READINESS_GROUP_COUNT: 'postTerminalReadinessGroupCount',
+  POST_TERMINAL_READINESS_GROUPS: 'postTerminalReadinessGroups',
+  POST_TERMINAL_READY_READINESS_GROUP_COUNT:
+    'postTerminalReadyReadinessGroupCount',
   POST_TERMINAL_REJECTED_CANDIDATE_COUNT:
     'postTerminalRejectedCandidateCount',
   POST_TERMINAL_REBALANCE_MOVE_COUNT: 'postTerminalRebalanceMoveCount',
@@ -292,6 +313,7 @@ const PUBLICATION_EVIDENCE_REPLAY_REBALANCER_FOLLOW_UP_EXECUTION_STATE =
   });
 const PUBLICATION_EVIDENCE_REPLAY_REBALANCER_MOVE_LIMIT_STATE = Object.freeze({
   BUDGET_BLOCKED: 'budget_blocked',
+  LIMITED_MOVES_AVAILABLE: 'limited_moves_available',
   MISSING: 'missing',
   PLANNED_MOVE_COUNT_AVAILABLE: 'planned_move_count_available',
 });
@@ -369,23 +391,39 @@ const PUBLICATION_EVIDENCE_REPLAY_REPAIR_LOG_FIELD = Object.freeze({
   RETRY_AFTER_MS: 'retryAfterMs',
 });
 const PUBLICATION_EVIDENCE_REPLAY_REBALANCER_LOG_FIELD = Object.freeze({
+  ADD_LIKE_MOVE_COUNT: 'addLikeMoveCount',
+  BLOCKED_READINESS_GROUP_COUNT: 'blockedReadinessGroupCount',
   DECISION: 'decision',
   ENTITY_ID: 'entityId',
   ERROR: 'error',
   ERROR_MESSAGE: 'errorMessage',
+  EXECUTABLE_MOVE_COUNT: 'executableMoveCount',
   FEASIBLE_COUNT: 'feasibleCount',
   HAS_COORDINATOR: 'hasCoordinator',
+  LIMITED_MOVE_COUNT: 'limitedMoveCount',
   MOVE_COUNT: 'moveCount',
+  MOVE_LIMIT: 'moveLimit',
   MOVE_TYPE: 'moveType',
   MSG: 'msg',
   NODE_ID: 'nodeId',
   OPERATION_ID: 'operationId',
+  OTHER_MOVE_COUNT: 'otherMoveCount',
   PARTITION_ID: 'partitionId',
+  PLANNED_MOVE_COUNT: 'plannedMoveCount',
+  PRE_EXECUTE_RETURN_STATE: 'preExecuteReturnState',
+  PRE_EXECUTE_SKIP_REASONS: 'preExecuteSkipReasons',
+  PRE_EXECUTE_SKIPPED_MOVE_COUNT: 'preExecuteSkippedMoveCount',
+  PRE_EXECUTION_HANDOFF_STATE: 'preExecutionHandoffState',
   QUERY_DURATION_MS: 'queryDurationMs',
+  READINESS_GROUP_COUNT: 'readinessGroupCount',
+  READINESS_GROUPS: 'readinessGroups',
+  READINESS_STATE: 'readinessState',
+  READY_READINESS_GROUP_COUNT: 'readyReadinessGroupCount',
   REASON: 'reason',
   REPLICA_ID: 'replicaId',
   REJECTED_COUNT: 'rejectedCount',
   REJECTIONS_BY_REASON: 'rejectionsByReason',
+  REMOVE_MOVE_COUNT: 'removeMoveCount',
   ROW_COUNT: 'rowCount',
   SKIP_DETAIL: 'skipDetail',
   TARGET_NODE_ID: 'targetNodeId',
@@ -1119,6 +1157,40 @@ function selectRebalancerFollowUpWitness(priorityRecoveryWitnesses = []) {
   ) || buildMissingPriorityRecoveryWitness();
 }
 
+function normalizeRebalancerReadinessGroup(record = {}) {
+  return {
+    nodeId: normalizeText(
+      record[PUBLICATION_EVIDENCE_REPLAY_REBALANCER_LOG_FIELD.NODE_ID],
+    ),
+    moveCount: normalizeInteger(
+      record[PUBLICATION_EVIDENCE_REPLAY_REBALANCER_LOG_FIELD.MOVE_COUNT],
+    ),
+    addLikeMoveCount: normalizeInteger(
+      record[
+        PUBLICATION_EVIDENCE_REPLAY_REBALANCER_LOG_FIELD.ADD_LIKE_MOVE_COUNT
+      ],
+    ),
+    removeMoveCount: normalizeInteger(
+      record[PUBLICATION_EVIDENCE_REPLAY_REBALANCER_LOG_FIELD.REMOVE_MOVE_COUNT],
+    ),
+    otherMoveCount: normalizeInteger(
+      record[PUBLICATION_EVIDENCE_REPLAY_REBALANCER_LOG_FIELD.OTHER_MOVE_COUNT],
+    ),
+    readinessState: normalizeText(
+      record[PUBLICATION_EVIDENCE_REPLAY_REBALANCER_LOG_FIELD.READINESS_STATE],
+    ),
+    skipDetail: normalizeText(
+      record[PUBLICATION_EVIDENCE_REPLAY_REBALANCER_LOG_FIELD.SKIP_DETAIL],
+    ),
+  };
+}
+
+function normalizeRebalancerReadinessGroups(records = []) {
+  return (Array.isArray(records) ? records : [])
+    .filter(isRecord)
+    .map((record) => normalizeRebalancerReadinessGroup(record));
+}
+
 function normalizeRebalancerHandoffLogEvidence(record = {}) {
   return {
     message: normalizeText(
@@ -1162,6 +1234,68 @@ function normalizeRebalancerHandoffLogEvidence(record = {}) {
     ),
     moveCount: normalizeInteger(
       record[PUBLICATION_EVIDENCE_REPLAY_REBALANCER_LOG_FIELD.MOVE_COUNT],
+    ),
+    plannedMoveCount: normalizeInteger(
+      record[
+        PUBLICATION_EVIDENCE_REPLAY_REBALANCER_LOG_FIELD.PLANNED_MOVE_COUNT
+      ],
+    ),
+    moveLimit: normalizeInteger(
+      record[PUBLICATION_EVIDENCE_REPLAY_REBALANCER_LOG_FIELD.MOVE_LIMIT],
+    ),
+    limitedMoveCount: normalizeInteger(
+      record[
+        PUBLICATION_EVIDENCE_REPLAY_REBALANCER_LOG_FIELD.LIMITED_MOVE_COUNT
+      ],
+    ),
+    executableMoveCount: normalizeInteger(
+      record[
+        PUBLICATION_EVIDENCE_REPLAY_REBALANCER_LOG_FIELD.EXECUTABLE_MOVE_COUNT
+      ],
+    ),
+    preExecuteSkippedMoveCount: normalizeInteger(
+      record[
+        PUBLICATION_EVIDENCE_REPLAY_REBALANCER_LOG_FIELD
+          .PRE_EXECUTE_SKIPPED_MOVE_COUNT
+      ],
+    ),
+    readinessGroupCount: normalizeInteger(
+      record[
+        PUBLICATION_EVIDENCE_REPLAY_REBALANCER_LOG_FIELD.READINESS_GROUP_COUNT
+      ],
+    ),
+    readyReadinessGroupCount: normalizeInteger(
+      record[
+        PUBLICATION_EVIDENCE_REPLAY_REBALANCER_LOG_FIELD
+          .READY_READINESS_GROUP_COUNT
+      ],
+    ),
+    blockedReadinessGroupCount: normalizeInteger(
+      record[
+        PUBLICATION_EVIDENCE_REPLAY_REBALANCER_LOG_FIELD
+          .BLOCKED_READINESS_GROUP_COUNT
+      ],
+    ),
+    readinessGroups: normalizeRebalancerReadinessGroups(
+      record[PUBLICATION_EVIDENCE_REPLAY_REBALANCER_LOG_FIELD.READINESS_GROUPS],
+    ),
+    preExecuteSkipReasons: normalizeList(
+      record[
+        PUBLICATION_EVIDENCE_REPLAY_REBALANCER_LOG_FIELD
+          .PRE_EXECUTE_SKIP_REASONS
+      ],
+    ),
+    preExecutionHandoffState: normalizeText(
+      record[
+        PUBLICATION_EVIDENCE_REPLAY_REBALANCER_LOG_FIELD
+          .PRE_EXECUTION_HANDOFF_STATE
+      ],
+    ),
+    preExecuteReturnState: normalizeText(
+      record[
+        PUBLICATION_EVIDENCE_REPLAY_REBALANCER_LOG_FIELD
+          .PRE_EXECUTE_RETURN_STATE
+      ],
     ),
     totalCandidates: normalizeInteger(
       record[
@@ -1214,6 +1348,18 @@ function selectLatestRebalancerHandoffLog(records = []) {
       skipDetail: PUBLICATION_EVIDENCE_REPLAY_EMPTY_TEXT,
       timeMs: NUM.ZERO,
       moveCount: NUM.ZERO,
+      plannedMoveCount: NUM.ZERO,
+      moveLimit: NUM.ZERO,
+      limitedMoveCount: NUM.ZERO,
+      executableMoveCount: NUM.ZERO,
+      preExecuteSkippedMoveCount: NUM.ZERO,
+      readinessGroupCount: NUM.ZERO,
+      readyReadinessGroupCount: NUM.ZERO,
+      blockedReadinessGroupCount: NUM.ZERO,
+      readinessGroups: Object.freeze([]),
+      preExecuteSkipReasons: Object.freeze([]),
+      preExecutionHandoffState: PUBLICATION_EVIDENCE_REPLAY_EMPTY_TEXT,
+      preExecuteReturnState: PUBLICATION_EVIDENCE_REPLAY_EMPTY_TEXT,
       totalCandidates: NUM.ZERO,
       feasibleCount: NUM.ZERO,
       rejectedCount: NUM.ZERO,
@@ -1344,6 +1490,19 @@ function isPostTerminalRebalanceStartLog(evidence, witness, terminalFailure) {
       witness[PUBLICATION_EVIDENCE_REPLAY_PRIORITY_WITNESS_FIELD.PARTITION_ID] &&
     evidence.timeMs > terminalFailure.timeMs &&
     evidence.moveCount > NUM.ZERO
+  );
+}
+
+function isPostTerminalPreExecutionHandoffLog(
+  evidence,
+  witness,
+  postTerminalRebalance,
+) {
+  return (
+    evidence.message === REBALANCER_LOG_MSG.PRE_EXECUTION_HANDOFF &&
+    evidence.entityId ===
+      witness[PUBLICATION_EVIDENCE_REPLAY_PRIORITY_WITNESS_FIELD.PARTITION_ID] &&
+    evidence.timeMs > postTerminalRebalance.timeMs
   );
 }
 
@@ -1607,6 +1766,13 @@ function resolveRebalancerMoveLimitEvidenceState(evidence = {}) {
     Object.freeze({
       state:
         PUBLICATION_EVIDENCE_REPLAY_REBALANCER_MOVE_LIMIT_STATE
+          .LIMITED_MOVES_AVAILABLE,
+      matches: (moveLimitEvidence) =>
+        moveLimitEvidence.limitedMoveCount > NUM.ZERO,
+    }),
+    Object.freeze({
+      state:
+        PUBLICATION_EVIDENCE_REPLAY_REBALANCER_MOVE_LIMIT_STATE
           .PLANNED_MOVE_COUNT_AVAILABLE,
       matches: (moveLimitEvidence) =>
         moveLimitEvidence.postTerminalRebalanceMoveCount > NUM.ZERO,
@@ -1698,6 +1864,15 @@ function summarizeRebalancerFollowUpHandoff({
   const postTerminalRebalance = selectLatestRebalancerHandoffLog(
     logEvidence.filter((evidence) =>
       isPostTerminalRebalanceStartLog(evidence, witness, terminalFailure),
+    ),
+  );
+  const postTerminalPreExecutionHandoff = selectLatestRebalancerHandoffLog(
+    logEvidence.filter((evidence) =>
+      isPostTerminalPreExecutionHandoffLog(
+        evidence,
+        witness,
+        postTerminalRebalance,
+      ),
     ),
   );
   const postTerminalSuppression = selectLatestRebalancerHandoffLog(
@@ -1808,6 +1983,7 @@ function summarizeRebalancerFollowUpHandoff({
     followUpState,
     postTerminalRebalanceObserved: postTerminalRebalance.timeMs > NUM.ZERO,
     postTerminalRebalanceMoveCount: postTerminalRebalance.moveCount,
+    limitedMoveCount: postTerminalPreExecutionHandoff.limitedMoveCount,
     moveExecutionObserved: postTerminalMoveExecution.timeMs > NUM.ZERO,
     moveBlockedObserved: postTerminalMoveBlocked.timeMs > NUM.ZERO,
     budgetBlockObserved: postTerminalBudgetBlock.timeMs > NUM.ZERO,
@@ -1856,6 +2032,45 @@ function summarizeRebalancerFollowUpHandoff({
     [PUBLICATION_EVIDENCE_REPLAY_REBALANCER_HANDOFF_FIELD
       .POST_TERMINAL_REBALANCE_MOVE_COUNT]:
       postTerminalRebalance.moveCount,
+    [PUBLICATION_EVIDENCE_REPLAY_REBALANCER_HANDOFF_FIELD
+      .POST_TERMINAL_PRE_EXECUTION_HANDOFF_OBSERVED]:
+      postTerminalPreExecutionHandoff.timeMs > NUM.ZERO,
+    [PUBLICATION_EVIDENCE_REPLAY_REBALANCER_HANDOFF_FIELD
+      .POST_TERMINAL_PRE_EXECUTION_HANDOFF_TIME_MS]:
+      postTerminalPreExecutionHandoff.timeMs,
+    [PUBLICATION_EVIDENCE_REPLAY_REBALANCER_HANDOFF_FIELD
+      .POST_TERMINAL_MOVE_LIMIT]:
+      postTerminalPreExecutionHandoff.moveLimit,
+    [PUBLICATION_EVIDENCE_REPLAY_REBALANCER_HANDOFF_FIELD
+      .POST_TERMINAL_LIMITED_MOVE_COUNT]:
+      postTerminalPreExecutionHandoff.limitedMoveCount,
+    [PUBLICATION_EVIDENCE_REPLAY_REBALANCER_HANDOFF_FIELD
+      .POST_TERMINAL_EXECUTABLE_MOVE_COUNT]:
+      postTerminalPreExecutionHandoff.executableMoveCount,
+    [PUBLICATION_EVIDENCE_REPLAY_REBALANCER_HANDOFF_FIELD
+      .POST_TERMINAL_PRE_EXECUTE_SKIPPED_MOVE_COUNT]:
+      postTerminalPreExecutionHandoff.preExecuteSkippedMoveCount,
+    [PUBLICATION_EVIDENCE_REPLAY_REBALANCER_HANDOFF_FIELD
+      .POST_TERMINAL_READINESS_GROUP_COUNT]:
+      postTerminalPreExecutionHandoff.readinessGroupCount,
+    [PUBLICATION_EVIDENCE_REPLAY_REBALANCER_HANDOFF_FIELD
+      .POST_TERMINAL_READY_READINESS_GROUP_COUNT]:
+      postTerminalPreExecutionHandoff.readyReadinessGroupCount,
+    [PUBLICATION_EVIDENCE_REPLAY_REBALANCER_HANDOFF_FIELD
+      .POST_TERMINAL_BLOCKED_READINESS_GROUP_COUNT]:
+      postTerminalPreExecutionHandoff.blockedReadinessGroupCount,
+    [PUBLICATION_EVIDENCE_REPLAY_REBALANCER_HANDOFF_FIELD
+      .POST_TERMINAL_READINESS_GROUPS]:
+      postTerminalPreExecutionHandoff.readinessGroups,
+    [PUBLICATION_EVIDENCE_REPLAY_REBALANCER_HANDOFF_FIELD
+      .POST_TERMINAL_PRE_EXECUTE_SKIP_REASONS]:
+      postTerminalPreExecutionHandoff.preExecuteSkipReasons,
+    [PUBLICATION_EVIDENCE_REPLAY_REBALANCER_HANDOFF_FIELD
+      .POST_TERMINAL_PRE_EXECUTION_HANDOFF_STATE]:
+      postTerminalPreExecutionHandoff.preExecutionHandoffState,
+    [PUBLICATION_EVIDENCE_REPLAY_REBALANCER_HANDOFF_FIELD
+      .POST_TERMINAL_PRE_EXECUTE_RETURN_STATE]:
+      postTerminalPreExecutionHandoff.preExecuteReturnState,
     [PUBLICATION_EVIDENCE_REPLAY_REBALANCER_HANDOFF_FIELD
       .POST_TERMINAL_MOVE_LIMIT_EVIDENCE_STATE]:
       moveLimitEvidenceState,

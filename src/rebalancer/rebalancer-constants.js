@@ -179,6 +179,7 @@ const REBALANCER_LOG_MSG = Object.freeze({
   NO_AVAILABLE_NODES: 'Skipping rebalance - no available nodes in cache',
   NO_REBALANCE_NEEDED: 'No rebalancing needed',
   START_REBALANCE: 'Starting rebalancing',
+  PRE_EXECUTION_HANDOFF: 'Rebalancer pre-execution handoff',
   SCHEDULE_NEXT: 'Scheduled next rebalance check',
   CACHE_UNAVAILABLE: 'System table cache not available, skipping rebalance check',
   WAIT_STABILIZATION: 'Waiting for stabilization period to complete',
