@@ -27,32 +27,34 @@ dominant blocker. Earlier artifacts showed:
 3. readiness/planning same-epoch contradictions are closed
 4. the remaining failures are runtime liveness and pressure failures
 
-The latest post-`e274126c` May 5 representative rerun is
-`test-output/reports/rolling-restart-topology-publication-snapshot-reachability-reentry-after-diagnostic-contract-20260505T093109Z.report.json`.
-It failed after `130.1s` and keeps topology publication convergence as the
+The latest after-reconcile-probe May 5 representative rerun is
+`test-output/reports/rolling-restart-after-reconcile-probe-20260505T102455Z.report.json`.
+It failed after `133.0s` and keeps topology publication convergence as the
 canonical blocker: failure class `publication_convergence_blocked`, dominant
 reason
-`publication_missing_active_node=11601fe0-72d6-5853-8590-ec2881853e72`,
-terminal active `2/5`, best active `5/5`, selected snapshot coverage `4/5`,
-publication epoch `3` `PUBLISHED`, pending ACK count `0`, missing published
-count `2`, selected published active `3/5`, and priority spread gap `10`. The
-latest failure-bundle fixes now keep canonical missing-published debt visible
-during active-gate snapshot coverage lag without duplicating the explicit
-reason into raw recovery-gate fixture data.
+`publication_missing_active_node=35a891b8-c1a0-5064-9c6e-2acfba61c2a7`,
+terminal active `5/5`, terminal selected snapshot coverage `3/5`, best selected
+snapshot coverage `4/5`, publication epoch `2` `PUBLISHED`, pending ACK count
+`0`, missing published count `3`, selected published active `2/5`, and priority
+spread gap `5`. The latest failure-bundle fixes now keep canonical
+missing-published debt visible during active-gate snapshot coverage lag without
+duplicating the explicit reason into raw recovery-gate fixture data.
 
 The active failure chain is now:
 
-1. ACTIVE convergence is blocked before publication closure by inactive nodes,
-   selected snapshot coverage, and explicit missing-active-node publication debt
+1. ACTIVE convergence is blocked before publication closure by selected snapshot
+   coverage and explicit missing-active-node publication debt, even when the
+   terminal active-gate progress snapshot reaches active `5/5`
 2. selected snapshot reachability timeout from the `074739Z` run is no longer
    terminal; the latest selected snapshot node
-   `11601fe0-72d6-5853-8590-ec2881853e72` is `admin_health` reachable
-3. subordinate priority recovery evidence remains on `sql_write_operations-p1` as
+   `35a891b8-c1a0-5064-9c6e-2acfba61c2a7` is `admin_health` reachable
+3. subordinate priority recovery evidence now selects
+   `sql_transaction_participants-p1` as
    `priority_operation_serial_wait` / `needs_operation` at
    `operation_workflow_owner / workflow_progress / event_driven`
 4. the current priority-recovery witness keeps correlation key
-   `sql_write_operations-p1|3|operation_unknown`, serial-wait operation
-   `209eb9f7-3c77-4a0f-ad17-675e37681201`, and serial-wait partition
+   `sql_transaction_participants-p1|2|operation_unknown`, serial-wait operation
+   `74154dc2-e602-43a8-8dc7-58e32e3424b8`, and serial-wait partition
    `sql_transactions-p1`
 5. the prior `052328Z` `sql_write_operations-p1` workflow-timeout residual is
    not closed; the latest rerun reached a different same-partition serial-wait
@@ -156,57 +158,61 @@ Queued cleanup packages:
 ## Remaining Work Summary
 
 1. Current execution blocker:
-   The latest May 5 representative rerun is
-   `test-output/reports/rolling-restart-topology-publication-snapshot-reachability-reentry-after-diagnostic-contract-20260505T093109Z.report.json`.
-   Result: failed, `0/1` passed after `130.1s`; terminal barrier:
+   The latest May 5 after-reconcile-probe representative rerun is
+   `test-output/reports/rolling-restart-after-reconcile-probe-20260505T102455Z.report.json`.
+   Result: failed, `0/1` passed after `133.0s`; terminal barrier:
    `Not all nodes reached ACTIVE state within 120000ms`. The failure bundle is
-   `test-output/reports/.playback/rolling-restart-topology-publication-snapshot-reachability-reentry-after-diagnostic-contract-20260505T093109Z/rolling-restart/failure-bundle.json`;
+   `test-output/reports/.playback/rolling-restart-after-reconcile-probe-20260505T102455Z/rolling-restart/failure-bundle.json`;
    the triage summary is
-   `test-output/reports/.playback/rolling-restart-topology-publication-snapshot-reachability-reentry-after-diagnostic-contract-20260505T093109Z/rolling-restart/triage-summary.md`.
+   `test-output/reports/.playback/rolling-restart-after-reconcile-probe-20260505T102455Z/rolling-restart/triage-summary.md`.
    The representative path now reports root cause class `topology`, dominant
    reason
-   `publication_missing_active_node=11601fe0-72d6-5853-8590-ec2881853e72`,
-   failure class `publication_convergence_blocked`, publication epoch `3`
+   `publication_missing_active_node=35a891b8-c1a0-5064-9c6e-2acfba61c2a7`,
+   failure class `publication_convergence_blocked`, publication epoch `2`
    `PUBLISHED`, recovery protocol state `publication_pending`, pending ACK count
-   `0`, missing published count `2`, selected published active `3/5`,
-   selected snapshot coverage `4/5`, terminal active `2/5`, best active `5/5`,
-   priority spread gap `10`, and missing published nodes
-   `11601fe0-72d6-5853-8590-ec2881853e72` and
+   `0`, missing published count `3`, selected published active `2/5`,
+   terminal selected snapshot coverage `3/5`, best selected snapshot coverage
+   `4/5`, terminal active `5/5`, priority spread gap `5`, and missing published
+   nodes `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`,
+   `8be8d30f-4499-5eed-865c-71b4d529a67a`, and
    `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`. The latest selected snapshot node
-   `11601fe0-72d6-5853-8590-ec2881853e72` is reachable through
+   `35a891b8-c1a0-5064-9c6e-2acfba61c2a7` is reachable through
    `admin_health`; the selected snapshot reachability timeout from `074739Z`
    is no longer terminal, and subordinate priority-recovery signals remain
    preserved.
 2. Next active investigation:
    continue
    [Rolling Restart Topology Publication Snapshot Reachability Reentry](../packages/active-20260505-rolling-restart-topology-publication-snapshot-reachability-reentry.md)
-   by reconciling publication epoch `3` `PUBLISHED`, pending ACK count `0`,
-   terminal active `2/5`, best active `5/5`, selected snapshot coverage `4/5`,
-   selected published active `3/5`, selected missing published count `2`,
-   selected missing published nodes
-   `11601fe0-72d6-5853-8590-ec2881853e72` and
-   `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`, and priority spread gap `10`.
+   by tracing the `20260505T102455Z` artifact through membership-publication
+   owner-row, transport, and service evidence for why publication epoch `2`
+   remains `PUBLISHED` with pending ACK count `0`, terminal active `5/5`,
+   terminal selected snapshot coverage `3/5`, best selected snapshot coverage
+   `4/5`, selected published active `2/5`, selected missing published count
+   `3`, selected missing published nodes
+   `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`,
+   `8be8d30f-4499-5eed-865c-71b4d529a67a`, and
+   `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`, and priority spread gap `5`.
    The selected snapshot reachability timeout on
    `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58` is a historical `074739Z` symptom,
    not the latest terminal boundary; the latest selected snapshot node
-   `11601fe0-72d6-5853-8590-ec2881853e72` is reachable through
+   `35a891b8-c1a0-5064-9c6e-2acfba61c2a7` is reachable through
    `admin_health`. The smallest next owner slice must preserve
-   `sql_write_operations-p1` as subordinate `priority_operation_serial_wait` /
-   `needs_operation` evidence at
+   `sql_transaction_participants-p1` as subordinate
+   `priority_operation_serial_wait` / `needs_operation` evidence at
    `operation_workflow_owner / workflow_progress / event_driven`, with
-   correlation key `sql_write_operations-p1|3|operation_unknown`.
+   correlation key `sql_transaction_participants-p1|2|operation_unknown`.
 3. Harness classification:
    terminal barrier evidence wins over stale playback reconstruction for
    active, restart-recovery, load-readiness, convergence, and quiescence
    failures. Earlier publication ACK and missing-published drift fixes remain
-   historical proof. Current May 5 post-`e274126c` evidence keeps normalized
-   publication missing published count `2` and preserves both explicit
-   `publication_missing_active_node=<node>` reasons. Do not treat
+   historical proof. Current May 5 after-reconcile-probe evidence keeps
+   normalized publication missing published count `3` and preserves all three
+   explicit `publication_missing_active_node=<node>` reasons. Do not treat
    missing-published or selected-snapshot coverage as closed until one owner
    path explains the topology debt; the `074739Z` selected snapshot
    reachability timeout is historical rather than the current terminal
    blocker. The latest terminal owner boundary is topology publication
-   missing-active-node debt with `sql_write_operations-p1` priority
+   missing-active-node debt with `sql_transaction_participants-p1` priority
    serial-wait; the previous
    `052328Z` `sql_write_operations-p1` PENDING dispatch timeout after
    publication closure remains residual but is not the latest selected boundary.
@@ -681,6 +687,18 @@ Current secondary evidence:
     snapshot reachability timeout from `074739Z` is no longer terminal; the
     residual is publication missing-active membership/snapshot coverage with
     subordinate `sql_write_operations-p1` serial wait at
+    `operation_workflow_owner / workflow_progress / event_driven`.
+65. May 5 after-reconcile-probe representative rerun:
+    `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-after-reconcile-probe-20260505T102455Z.report.json --fast-local --verbose`
+    failed after `133.0s` with failure class
+    `publication_convergence_blocked`, dominant reason
+    `publication_missing_active_node=35a891b8-c1a0-5064-9c6e-2acfba61c2a7`,
+    publication epoch `2` `PUBLISHED`, pending ACK count `0`, missing published
+    count `3`, terminal active `5/5`, terminal selected snapshot coverage
+    `3/5`, best selected snapshot coverage `4/5`, selected published active
+    `2/5`, and priority spread gap `5`. The blocker did not close or migrate:
+    it remains on membership-publication owner-row, transport, and service
+    evidence, with subordinate `sql_transaction_participants-p1` serial wait at
     `operation_workflow_owner / workflow_progress / event_driven`.
 
 ## Progress Grammar
