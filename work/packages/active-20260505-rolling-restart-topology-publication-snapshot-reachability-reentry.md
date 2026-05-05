@@ -111,10 +111,13 @@ runtime edits:
    `deriveMembershipPublicationCandidate(...)`. The candidate passes
    publication status, published active membership, ACK lists, priority
    recovery summary, and membership lifecycle projection evidence into
-   `buildRecoveryProtocolSnapshot(...)`, then carries
+   `buildRecoveryProtocolSnapshot(...)`, then carries the durable snapshot
+   fields actually returned on the publication row:
    `missingPublishedRecoveryActiveNodeIds`,
-   `recoveryProtocolState`, `publicationRecoveryGate`, and
-   `priorityRecoveryReasonCodes` back onto the publication row.
+   `recoveryProtocolState`, and `priorityRecoveryReasonCodes`.
+   `publicationRecoveryGate` is built and exposed by
+   `buildRecoveryProtocolSnapshot(...)` as part of the recovery protocol
+   snapshot, not carried back as a publication row field.
 2. `src/control-plane/recovery-protocol-snapshot.js` owns the durable
    publication/recovery snapshot. For a `PUBLISHED` membership row, durable
    membership is `publishedActiveNodeIds`; recovery-active membership is
