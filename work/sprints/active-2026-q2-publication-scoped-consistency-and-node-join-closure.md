@@ -27,53 +27,55 @@ dominant blocker. Earlier artifacts showed:
 3. readiness/planning same-epoch contradictions are closed
 4. the remaining failures are runtime liveness and pressure failures
 
-The latest May 5 representative rerun after the `140646Z` replay fixture is
-`test-output/reports/rolling-restart-after-140646z-publication-pending-replay-fixture-20260505T145246Z.report.json`.
-It failed after `133.5s` and migrated the active blocker out of the epoch `5`
-`OPEN` publication-pending boundary into an epoch `2` `PUBLISHED`
-missing-active selected-snapshot reachability boundary: failure class
-`publication_convergence_blocked`, root cause class `topology`, dominant reason
-`publication_missing_active_node=35a891b8-c1a0-5064-9c6e-2acfba61c2a7`,
-terminal active `4/5`, terminal selected snapshot coverage `2/5`, selected
-witness `35a891b8-c1a0-5064-9c6e-2acfba61c2a7` not admin-ready with a
-reachability timeout, publication epoch `2` `PUBLISHED`, publication
-convergence recovery protocol state `publication_pending`, pending ACK count
-`0`, selected missing published count `3`, selected published active `2/5`,
-priority spread pending with gap `5`, and terminal readiness failure
-`snapshot_reachability_timeout` with reason `stalled_no_progress`. Replay
-reports `driftClassification=replayed_blocked` with row counts `nodes=5`,
-`nodeEndpoints=0`, `partitions=33`, and `services=102`, while selected snapshot
+The latest May 5 representative rerun after the runtime pre-execution handoff
+diagnostic is
+`test-output/reports/rolling-restart-after-pre-execution-handoff-diagnostic-20260505T175220Z.report.json`.
+It failed after `130.2s` and migrated the active blocker out of the epoch `2`
+`PUBLISHED` missing-active selected-snapshot reachability boundary into an
+epoch `3` `PUBLISHED` missing-active selected-snapshot topology boundary:
+failure class `publication_convergence_blocked`, root cause class `topology`,
+dominant reason
+`publication_missing_active_node=11601fe0-72d6-5853-8590-ec2881853e72`,
+terminal active `3/5`, terminal selected snapshot coverage `3/5`, selected
+witness `35a891b8-c1a0-5064-9c6e-2acfba61c2a7` admin-ready via
+`admin_health`, publication epoch `3` `PUBLISHED`, pending ACK count `0`,
+selected missing published count `2`, selected published active `3/5`,
+priority spread pending with gap `6`, and terminal readiness failure
+`no_progress_terminal` with reason `stalled_no_progress`. Replay reports
+`driftClassification=replayed_blocked` with row counts `nodes=3`,
+`nodeEndpoints=0`, `partitions=33`, and `services=104`, while selected snapshot
 observation remains explicitly `repair_deferred` / `stale_usable`.
 
 The active failure chain is now:
 
-1. ACTIVE convergence reaches active `4/5`, but the startup active gate still
-   times out on selected snapshot coverage: terminal coverage is `2/5`, and
-   selected witness `35a891b8-c1a0-5064-9c6e-2acfba61c2a7` is not admin-ready
-   and times out for reachability
-2. publication convergence is `PUBLISHED` at epoch `2`, pending ACK count is
-   `0`, selected published active is `2/5`, and missing published count is `3`
-   for `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`,
-   `8be8d30f-4499-5eed-865c-71b4d529a67a`, and
+1. ACTIVE convergence reaches active `3/5`, but the startup active gate still
+   times out on selected snapshot coverage: terminal coverage is `3/5`, and
+   selected witness `35a891b8-c1a0-5064-9c6e-2acfba61c2a7` is admin-ready via
+   `admin_health`
+2. publication convergence is `PUBLISHED` at epoch `3`, pending ACK count is
+   `0`, selected published active is `3/5`, and missing published count is `2`
+   for `11601fe0-72d6-5853-8590-ec2881853e72` and
    `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`
 3. selected snapshot observation remains owner-contract evidence:
    `repair_deferred` / `stale_usable`, pending contract state, idle refresh,
-   next action `wait`, and reason codes `cache_stale_watermark` and
-   `discovery_node_coverage_gap` plus `stale_replica_operations_in_flight`
-4. priority spread is pending again; the new dominant priority-recovery
-   witness is `control_plane_publications-p1` as `blocked_unclassified` /
-   `terminal_failed` under `rebalancer_handoff`, next action
-   `schedule_followup_rebalance`
-5. `sql_transaction_participants-p1` and `sql_write_operations-p1` both remain
-   `needs_operation` with `priority_operation_serial_wait`, `operation_unknown`,
-   and serial-wait behind operation `e37bed88-1e78-42e7-a667-4248a3f85529` on
-   `sql_transactions-p1`
+   next action `wait`, repair deferred `true`, and reason code
+   `cache_stale_watermark`
+4. priority spread is pending again; the previous
+   `control_plane_publications-p1` rebalancer-handoff terminal-failed witness
+   migrated to `spread_satisfied_in_flight` / `terminal_completed` and is no
+   longer the selected blocker
+5. `sql_write_operations-p1` is now the selected priority-recovery witness:
+   `recovering_in_flight`, operation
+   `c3fedf19-19e4-4792-8a9f-8e4734cb88ad`,
+   `operation_workflow_owner` / `workflow_progress` / `event_driven`,
+   `persisted_not_dispatched`, next action `wait_for_operation_progress`, and
+   serial-wait behind operation `99dfca41-8b3e-4d05-845d-6ccb71c89a0d` on
+   `sql_transaction_participants-p1`
 6. selected-snapshot repair deferral evidence is retained on the selected
    snapshot owner observation, while owner-RPC/cache-repair reconstruction is
-   missing; the representative runtime boundary is now epoch `2` `PUBLISHED`
-   missing-active selected-snapshot reachability with priority spread pending
-   and `control_plane_publications-p1` rebalancer-handoff terminal-failed
-   evidence
+   missing; the representative runtime boundary is now epoch `3` `PUBLISHED`
+   missing-active selected-snapshot topology debt with priority spread pending
+   and subordinate `sql_write_operations-p1` workflow-progress evidence
 
 This sprint keeps the old filename for continuity with the active branch, but
 the execution scope is now runtime stability and harness determinism.
@@ -137,21 +139,24 @@ closed by migration into operation workflow timeout reconciliation. The
 operation-transition package remains active as a retained post-publication
 operation-workflow timeout residual plus its documented package-local
 guardrail and adjacent sweep debt. The current representative path remains in
-the topology publication/snapshot-reachability package after the `140646Z`
-replay-fixture rerun migrated again to epoch `2` `PUBLISHED`, selected
-snapshot coverage `2/5`, pending ACK count `0`, missing published count `3`,
-priority spread pending with gap `5`, and priority-recovery
-rebalancer-handoff terminal-failed evidence on
-`control_plane_publications-p1` plus serial-wait evidence on
-`sql_transaction_participants-p1` and `sql_write_operations-p1`.
+the topology publication/snapshot-reachability package after the
+pre-execution-diagnostic rerun migrated again to epoch `3` `PUBLISHED`,
+selected snapshot coverage `3/5`, pending ACK count `0`, missing published
+count `2`, priority spread pending with gap `6`, and subordinate
+`sql_write_operations-p1` workflow-progress evidence. The previous
+`control_plane_publications-p1` rebalancer-handoff terminal-failed evidence
+has migrated to `spread_satisfied_in_flight` / `terminal_completed` and is no
+longer the selected blocker.
 The `074739Z` selected snapshot reachability timeout, the `102455Z`
 `sql_transaction_participants-p1` serial-wait residual, the `114859Z`
 admin-ready `PUBLISHED` deferred-repair boundary, the `123850Z` ACK-pending
 workflow-timeout shape, the `132033Z` post-ACK `PUBLISHED` missing-active
 selected-snapshot boundary, and the `140646Z` epoch `5` `OPEN`
-publication-pending boundary are now historical rather than the terminal
-boundary. The previous `052328Z` `sql_write_operations-p1` operation-workflow
-timeout residual remains unclosed until the path reaches that shape again.
+publication-pending boundary, and the `145246Z` epoch `2` `PUBLISHED`
+missing-active selected-snapshot reachability boundary are now historical
+rather than the terminal boundary. The previous `052328Z`
+`sql_write_operations-p1` operation-workflow timeout residual remains unclosed
+until the path reaches that shape again.
 
 All final consistency recommendation packages are complete or queued outside
 the current execution path.
@@ -178,172 +183,83 @@ Queued cleanup packages:
 ## Remaining Work Summary
 
 1. Current execution blocker:
-   The latest May 5 representative rerun after the `140646Z` replay fixture
-   used
-   `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-after-140646z-publication-pending-replay-fixture-20260505T145246Z.report.json --fast-local --verbose`.
+   The latest May 5 representative rerun after the runtime pre-execution
+   handoff diagnostic used
+   `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-after-pre-execution-handoff-diagnostic-20260505T175220Z.report.json --fast-local --verbose`.
    Report:
-   `test-output/reports/rolling-restart-after-140646z-publication-pending-replay-fixture-20260505T145246Z.report.json`.
-   Result: failed, `0/1` passed after `133.5s`; terminal barrier:
+   `test-output/reports/rolling-restart-after-pre-execution-handoff-diagnostic-20260505T175220Z.report.json`.
+   Result: failed, `0/1` passed after `130.2s`; terminal barrier:
    `Not all nodes reached ACTIVE state within 120000ms`, attempts `10`,
-   elapsed `122931ms`. The failure bundle is
-   `test-output/reports/.playback/rolling-restart-after-140646z-publication-pending-replay-fixture-20260505T145246Z/rolling-restart/failure-bundle.json`;
+   elapsed `120091ms`. The failure bundle is
+   `test-output/reports/.playback/rolling-restart-after-pre-execution-handoff-diagnostic-20260505T175220Z/rolling-restart/failure-bundle.json`;
    the triage summary is
-   `test-output/reports/.playback/rolling-restart-after-140646z-publication-pending-replay-fixture-20260505T145246Z/rolling-restart/triage-summary.md`.
+   `test-output/reports/.playback/rolling-restart-after-pre-execution-handoff-diagnostic-20260505T175220Z/rolling-restart/triage-summary.md`.
    The representative path reports root cause class `topology`, dominant reason
-   `publication_missing_active_node=35a891b8-c1a0-5064-9c6e-2acfba61c2a7`,
+   `publication_missing_active_node=11601fe0-72d6-5853-8590-ec2881853e72`,
    failure class `publication_convergence_blocked`, readiness failure
-   `snapshot_reachability_timeout`, publication epoch `2` `PUBLISHED`,
-   publication convergence recovery protocol state `publication_pending`,
-   pending ACK count `0`, selected published active `2/5`, terminal selected
-   snapshot coverage `2/5`, terminal active `4/5`, priority spread pending
-   with gap `5`, and active-gate selected missing published count `3`. The
-   selected terminal snapshot node
-   `35a891b8-c1a0-5064-9c6e-2acfba61c2a7` is not admin-ready and timed out for
-   reachability; selected observation remains `repair_deferred` /
-   `stale_usable` with pending contract state, idle refresh, next action
-   `wait`, and reason codes `cache_stale_watermark`,
-   `discovery_node_coverage_gap`, and `stale_replica_operations_in_flight`.
-   The current priority-recovery dominant witness is
-   `control_plane_publications-p1` operation
-   `396c2fda-2639-4b3d-ad8d-7c148dc90936` at `FAILED` / `failed` under
-   `rebalancer_handoff` / `stalled`, next action
-   `schedule_followup_rebalance`; `sql_transaction_participants-p1` and
-   `sql_write_operations-p1` remain `needs_operation` /
-   `priority_operation_serial_wait` behind operation
-   `e37bed88-1e78-42e7-a667-4248a3f85529` on `sql_transactions-p1`. Artifact
-   replay passed and stayed `replayed_blocked` with row counts `nodes=5`,
-   `nodeEndpoints=0`, `partitions=33`, and `services=102`; durable and replayed
-   evidence both remain epoch `2` / `PUBLISHED` with priority spread pending,
-   replayed recovery protocol state `priority_spread_pending`,
-   `summaryChanged=true`, and `blockedPartitionIdsMatch=false`. The focused
-   `145246Z` replay fixture now pins this shape in
-   `test/distributed/harness/__tests__/publication-evidence-replay.test.js`,
-   including owner-RPC/cache-repair availability `missing` and the terminal
-   `control_plane_publications-p1` rebalancer-handoff witness. Validation:
-   `node --test --test-name-pattern "keeps the 145246Z PUBLISHED reachability and rebalancer replay blocked" test/distributed/harness/__tests__/publication-evidence-replay.test.js`,
-   `node --test test/distributed/harness/__tests__/publication-evidence-replay.test.js`,
-   `node test/distributed/harness/publication-evidence-replay.js test-output/reports/.playback/rolling-restart-after-140646z-publication-pending-replay-fixture-20260505T145246Z/rolling-restart`,
-   ESLint, decision-boundary, runtime-grammar, boundary-mode, literal
-   guardrails, and `git diff --check` passed.
+   `no_progress_terminal`, publication epoch `3` `PUBLISHED`, pending ACK
+   count `0`, selected published active `3/5`, terminal selected snapshot
+   coverage `3/5`, terminal active `3/5`, priority spread pending with gap
+   `6`, and active-gate selected missing published count `2`. The selected
+   terminal snapshot node `35a891b8-c1a0-5064-9c6e-2acfba61c2a7` is
+   admin-ready via `admin_health`; selected observation remains
+   `repair_deferred` / `stale_usable` with pending contract state, idle
+   refresh, next action `wait`, repair deferred `true`, and reason code
+   `cache_stale_watermark`. The current priority-recovery selected witness is
+   `sql_write_operations-p1` operation
+   `c3fedf19-19e4-4792-8a9f-8e4734cb88ad` as `recovering_in_flight` /
+   `persisted_not_dispatched` under `operation_workflow_owner` /
+   `workflow_progress` / `event_driven`, next action
+   `wait_for_operation_progress`; `control_plane_publications-p1` has migrated
+   to `spread_satisfied_in_flight` / `terminal_completed`. Artifact replay
+   passed and stayed `replayed_blocked` with row counts `nodes=3`,
+   `nodeEndpoints=0`, `partitions=33`, and `services=104`; durable and
+   replayed evidence both remain epoch `3` / `PUBLISHED` with priority spread
+   pending, `summaryChanged=true`, and `blockedPartitionIdsMatch=false`.
 2. Completed trace, fixture, and next active task:
    the
    [Rolling Restart Topology Publication Snapshot Reachability Reentry](../packages/active-20260505-rolling-restart-topology-publication-snapshot-reachability-reentry.md)
-   package has completed the `20260505T140646Z` trace, replay fixture, and
-   representative rerun. The rerun migrated to the `20260505T145246Z` epoch
-   `2` `PUBLISHED` missing-active selected-snapshot reachability boundary with
-   missing published `3`, selected coverage `2/5`, priority spread pending,
-   and a new dominant `control_plane_publications-p1` rebalancer-handoff
-   terminal-failed witness. The focused `140646Z` replay fixture remains the
-   prior completed owner contract: `test/distributed/harness/publication-evidence-replay.js`
-   preserves serial-wait operation and partition ids, and
-   `test/distributed/harness/__tests__/publication-evidence-replay.test.js`
-   pins the epoch `5` `OPEN` fixture with pending ACK `2`, selected coverage
-   `3/5`, selected published active `5/5`, missing published `0`,
-   owner-RPC/cache-repair deferral on `nodes`, the `sql_transactions-p1`
-   workflow-timeout witness, and the `sql_write_operations-p1` serial wait
-   behind it. Prior fixture validation:
-   `node --test --test-name-pattern "keeps the 140646Z OPEN publication-pending replay blocked" test/distributed/harness/__tests__/publication-evidence-replay.test.js`,
-   `node --test test/distributed/harness/__tests__/publication-evidence-replay.test.js`,
-   `node test/distributed/harness/publication-evidence-replay.js test-output/reports/.playback/rolling-restart-after-132033z-selected-snapshot-replay-fixture-20260505T140646Z/rolling-restart`
-   passed with `driftClassification=replayed_blocked`, the touched-file
-   syntax, ESLint, decision-boundary, runtime-grammar, boundary-mode, and
-   literal guardrails passed. The `20260505T145246Z` trace is now complete:
-   active-gate coverage is selected from
-   `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`, the only probe witness that
-   returned a snapshot, with observed nodes
-   `11601fe0-72d6-5853-8590-ec2881853e72` and
-   `7493b0ab-a054-5fad-a91b-5e331db29304`; terminal and best progress agree
-   on active `4/5`, selected coverage `2/5`, epoch `2` `PUBLISHED`, selected
-   published active `2/5`, pending ACK `0`, missing published `3`, and
-   priority spread gap `5`. Bounded replay passed and reported
-   `driftClassification=replayed_blocked`, `summaryChanged=true`, and
-   `blockedPartitionIdsMatch=false`; durable blocked partition ids are empty
-   while replayed blocked partition ids are `control_plane_publications-p1`,
-   `replica_operations-p1`, and `sql_write_operations-p1`. The terminal
-   publication-convergence witness remains `control_plane_publications-p1`
-   operation `396c2fda-2639-4b3d-ad8d-7c148dc90936` at `FAILED` / `failed`,
-   current owner `rebalancer_leader`, boundary `rebalancer_handoff`, wait mode
-   `stalled`, actuation `terminal_failed`, and next action
-   `schedule_followup_rebalance`; owner-RPC/cache-repair availability is
-   `missing`. The focused `145246Z` replay fixture and selected-snapshot repair
-   evidence recovery probe are complete and passed the touched replay test file
-   plus syntax, ESLint, guardrails, artifact replay, and `git diff --check`.
-   The probe reports
-   `selectedSnapshotRepairEvidenceRecovery.evidenceState=retained_selected_snapshot_observation`:
-   selected witness `35a891b8-c1a0-5064-9c6e-2acfba61c2a7` retains
-   `repair_deferred` / `stale_usable` and repair deferred `true` on the
-   selected snapshot observation, while owner-RPC/cache-repair reconstruction
-   remains `missing` with no deferral row, failed table, read source, or cause
-   chain. The `132033Z` review fix now also proves that global
-   owner-RPC/cache-repair deferrals do not reconstruct selected-snapshot repair
-   evidence when the selected-witness deferral count is `0`; `145246Z` remains
-   retained-observation-only with owner-RPC reconstruction `missing`. The
-   subordinate rebalancer-handoff trace is also complete: replay now reports
-   `rebalancerFollowUpHandoff.followUpState=enqueued`, with operation
-   `396c2fda-2639-4b3d-ad8d-7c148dc90936` failing at
-   `2026-05-05T14:55:04.403Z` and the same partition starting a post-terminal
-   rebalancing pass at `2026-05-05T14:55:04.771Z` with `moveCount=1`. The
-   action was retained and enqueued, not suppressed, while the epoch `2`
-   `PUBLISHED` missing-active selected-snapshot topology debt remains
-   canonical. The follow-up execution trace is now complete: replay reports
-   `postTerminalFollowUpExecutionState=not_executed_after_enqueue`, with no
-   post-terminal same-partition `Executing rebalancing move`, no move-level
-   blocked record, and no newer persisted `replicaOperations` row after the
-   follow-up start. The post-start handoff trace is also complete: replay now
-   reports `postTerminalExecutionGapState=started_with_pre_execution_gap` and
-   `postTerminalMoveLimitEvidenceState=planned_move_count_available` with
-   pre-limit planned `moveCount=1`; the feasibility filter retained
-   `feasibleCount=2`, `rejectedCount=3`, and `cluster_member_unhealthy`.
-   Storage admission is scoped to the matching feasibility batch with
-   `postTerminalAdmissionAllowedCount=4` and no denial; later
-   `replica_operations-p1` and `sql_write_operations-p1` admission records are
-   not follow-up proof. No budget block, same-partition leadership loss, or
-   scheduler handoff was captured. The later control-plane pressure query and
-   sibling leadership loss remain subordinate evidence. The runtime
-   pre-execution handoff diagnostic is now implemented: future artifacts will
-   log `limitedMoveCount`, `moveLimit`, readiness grouping, pre-execute skip
-   reasons, `preExecutionHandoffState`, and `preExecuteReturnState` after
-   `Starting rebalancing` and before `executeMove(...)`. A review follow-up now
-   separates evidence roles: the historical `145246Z` replay fixture asserts
-   `postTerminalPreExecutionHandoffObserved=false` and
-   `planned_move_count_available`, while the separately named synthetic
-   future-diagnostic replay asserts the new parser behavior with
-   `limited_moves_available`, move-limit, readiness grouping, and pre-execute
-   skip/return fields. Focused validation passed for the runtime diagnostic,
-   replay parser, touched-file ESLint, syntax checks, decision-boundary,
-   runtime-grammar, boundary-mode, and literal guardrails. The next unchecked
-   package task is the representative `rolling-restart --fast-local` rerun after
-   the diagnostic, while keeping the epoch `2` `PUBLISHED` missing-active
-   selected-snapshot topology debt canonical.
+   package has completed the `20260505T145246Z` trace, replay fixture,
+   selected-snapshot repair evidence recovery probe, rebalancer-handoff
+   follow-up traces, runtime pre-execution diagnostic, diagnostic replay review
+   fix, and `20260505T175220Z` representative rerun. The rerun observed the
+   new post-`Starting rebalancing` diagnostic in a fresh artifact, but the
+   `control_plane_publications-p1` handoff gap migrated rather than staying on
+   a pre-`executeMove` skip/return state. The current unchecked package task is
+   to trace the `175220Z` epoch `3` `PUBLISHED` missing-active
+   selected-snapshot artifact and the subordinate `sql_write_operations-p1`
+   workflow-progress / `persisted_not_dispatched` witness.
 3. Harness classification:
    terminal barrier evidence wins over stale playback reconstruction for
    active, restart-recovery, load-readiness, convergence, and quiescence
    failures. Earlier publication ACK and missing-published drift fixes remain
-   historical proof. Current May 5 rerun evidence keeps terminal epoch `2`
-   `PUBLISHED`, missing published `3`, selected coverage `2/5`, priority
-   spread pending, and rebalancer-handoff terminal-failed evidence ahead of the
-   previous `140646Z` epoch `5` `OPEN` pending-ACK shape. Do not treat
-   selected-snapshot coverage as closed until the `2/5` active-gate coverage,
-   missing-published trio, priority-spread gap, and
-   `control_plane_publications-p1` witness are explained. The previous
+   historical proof. Current May 5 rerun evidence keeps terminal epoch `3`
+   `PUBLISHED`, missing published `2`, selected coverage `3/5`, priority
+   spread pending, and subordinate `sql_write_operations-p1`
+   workflow-progress evidence ahead of the previous `145246Z` epoch `2`
+   `PUBLISHED` shape. Do not treat selected-snapshot coverage as closed until
+   the `3/5` active-gate coverage, missing-published pair, priority-spread
+   gap, and `sql_write_operations-p1` witness are explained. The previous
    `114859Z` publication missing-active-node deferred-repair boundary,
    `123850Z` ACK-pending startup boundary, `132033Z` post-ACK `PUBLISHED`
-   missing-active selected-snapshot boundary, and `140646Z` epoch `5` `OPEN`
-   publication-pending boundary are historical; the current terminal boundary
-   is epoch `2` `PUBLISHED` missing-active selected-snapshot reachability with
-   priority-recovery rebalancer-handoff terminal-failed evidence. The previous
-   `052328Z` `sql_write_operations-p1` PENDING dispatch timeout after
-   publication closure remains historical residual context; the current
-   `sql_write_operations-p1` witness is `operation_unknown` and serial-waits
-   behind `sql_transactions-p1`.
+   missing-active selected-snapshot boundary, `140646Z` epoch `5` `OPEN`
+   publication-pending boundary, and `145246Z` epoch `2` `PUBLISHED`
+   missing-active selected-snapshot reachability boundary are historical; the
+   current terminal boundary is epoch `3` `PUBLISHED` missing-active
+   selected-snapshot topology debt with priority-recovery workflow-progress
+   evidence. The previous `052328Z` `sql_write_operations-p1` PENDING dispatch
+   timeout after publication closure remains historical residual context; the
+   current `sql_write_operations-p1` witness is `PENDING` /
+   `persisted_not_dispatched` and serial-waits behind
+   `sql_transaction_participants-p1`.
    A narrow harness formatter fix now prevents
    `publicationConvergence=ready` when the same active-gate evidence carries
    `ACK_PENDING`, pending ACK, or missing-published debt; this is
    classification-only and does not close the runtime owner blocker. A later
    failure-bundle fix preserves canonical missing-published debt during
    active-gate snapshot coverage lag; the fresh representative artifact has
-   moved back to missing-published debt with selected reachability timeout,
-   priority spread, and rebalancer-handoff debt. A review follow-up also keeps
+   moved back to missing-published debt with selected-snapshot coverage lag,
+   priority spread, and workflow-progress debt. A review follow-up also keeps
    ACTIVE timeout
    publication summaries bound to the selected terminal progress snapshot when
    the final poll regresses to stale ready publication evidence, and keeps
