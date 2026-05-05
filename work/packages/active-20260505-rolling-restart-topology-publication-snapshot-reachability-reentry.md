@@ -5,54 +5,59 @@ Opened on May 5, 2026 as the current representative split from
 The fresh representative path migrated away from post-active
 operation-transition / over-target trim and is now blocked earlier by topology
 publication membership missing-active-node debt, selected snapshot coverage,
-and priority-recovery serial-wait evidence, most recently on
-`sql_transaction_participants-p1`.
+and priority-recovery workflow-progress evidence, most recently on
+`sql_write_operations-p1`.
 
 ## Current Evidence
 
-1. Fresh representative rerun after the May 5 reconcile probe:
-   `test-output/reports/rolling-restart-after-reconcile-probe-20260505T102455Z.report.json`.
+1. Fresh representative rerun after the deferred selected-snapshot observation
+   probe:
+   `test-output/reports/rolling-restart-after-deferred-snapshot-observation-20260505T114859Z.report.json`.
 2. Playback directory:
-   `test-output/reports/.playback/rolling-restart-after-reconcile-probe-20260505T102455Z/rolling-restart/`.
+   `test-output/reports/.playback/rolling-restart-after-deferred-snapshot-observation-20260505T114859Z/rolling-restart/`.
 3. Failure bundle:
-   `test-output/reports/.playback/rolling-restart-after-reconcile-probe-20260505T102455Z/rolling-restart/failure-bundle.json`.
+   `test-output/reports/.playback/rolling-restart-after-deferred-snapshot-observation-20260505T114859Z/rolling-restart/failure-bundle.json`.
 4. Triage summary:
-   `test-output/reports/.playback/rolling-restart-after-reconcile-probe-20260505T102455Z/rolling-restart/triage-summary.md`.
-5. Result: failed, `0/1` passed after `133.0s`.
+   `test-output/reports/.playback/rolling-restart-after-deferred-snapshot-observation-20260505T114859Z/rolling-restart/triage-summary.md`.
+5. Result: failed, `0/1` passed after `132.3s`.
 6. Terminal barrier:
    `Not all nodes reached ACTIVE state within 120000ms`.
 7. Root cause class is `topology`; failure class is
    `publication_convergence_blocked`.
 8. Dominant reason:
-   `publication_missing_active_node=35a891b8-c1a0-5064-9c6e-2acfba61c2a7`.
-9. Publication epoch `2` is `PUBLISHED`, recovery protocol state is
+   `publication_missing_active_node=11601fe0-72d6-5853-8590-ec2881853e72`.
+9. Publication epoch `3` is `PUBLISHED`, recovery protocol state is
    `publication_pending`, pending ACK count is `0`, missing published count is
-   `3`, and missing published nodes are
-   `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`,
-   `8be8d30f-4499-5eed-865c-71b4d529a67a`, and
+   `2`, and missing published nodes are
+   `11601fe0-72d6-5853-8590-ec2881853e72` and
    `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`.
 10. Publication gate reasons include `priority_partitions_not_spread`,
-    `snapshot_coverage=3/5`, and all three explicit
+    `snapshot_coverage=4/5`, and both explicit
     `publication_missing_active_node=<node>` reasons.
 11. Terminal active-gate progress is active `5/5` with selected snapshot
-    coverage `3/5`; best progress was active `5/5` with selected snapshot
+    coverage `4/5`; best progress was active `5/5` with selected snapshot
     coverage `4/5`.
-12. Selected published active is `2/5`, priority spread gap is `5`, selected
-    snapshot node `35a891b8-c1a0-5064-9c6e-2acfba61c2a7` is admin-ready through
+12. Selected published active is `3/5`, priority spread gap is `10`, selected
+    snapshot node `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58` is admin-ready through
     `admin_health`, and terminal readiness remains `no_progress_terminal`
     rather than selected snapshot reachability timeout.
-13. The selected priority-recovery boundary is
-    `sql_transaction_participants-p1`:
-    progress class `priority_operation_serial_wait`, semantic state
-    `needs_operation`, owner `operation_workflow_owner`, boundary
-    `workflow_progress`, wait mode `event_driven`, correlation key
-    `sql_transaction_participants-p1|2|operation_unknown`, serial-wait
-    operation `74154dc2-e602-43a8-8dc7-58e32e3424b8`, and serial-wait partition
-    `sql_transactions-p1`.
-14. `replica_operations-p1` and `sql_write_operations-p1` remain blocked as
-    `recovering_in_flight`; the previous `052328Z` `sql_write_operations-p1`
-    PENDING dispatch-timeout residual is still historical and not the current
-    selected representative blocker.
+13. The deferred selected-snapshot observation probe is active in the terminal
+    control-plane diagnostics: observation mode `repair_deferred`, observation
+    state `stale_usable`, contract state `pending`, refresh state `idle`, next
+    action `wait`, repair deferred `true`, and reason codes
+    `cache_stale_watermark`, `discovery_node_coverage_gap`, and
+    `stale_replica_operations_in_flight`.
+14. The selected priority-recovery residual is now `sql_write_operations-p1` as
+    `recovering_in_flight` with owner `operation_workflow_owner`, boundary
+    `workflow_progress`, wait mode `event_driven`, actuation state
+    `persisted_not_dispatched`, workflow phase `dispatch_pending`, latest step
+    `PENDING`, latest status `pending`, operation
+    `b4e4c126-7b34-42dc-9234-ee9b7e3b6af2`, and correlation key
+    `sql_write_operations-p1|3|b4e4c126-7b34-42dc-9234-ee9b7e3b6af2`.
+15. Outcome: the blocker did not close and did not migrate to a new top-level
+    owner boundary. It remains blocked on publication missing-active-node
+    evidence, now with explicit deferred selected-snapshot observation evidence
+    and a subordinate `sql_write_operations-p1` workflow-progress residual.
 
 ## May 5 `074739Z` Evidence Trace
 
@@ -389,28 +394,29 @@ Sprint:
 
 ## In Scope
 
-1. Reconcile the current after-reconcile-probe publication membership/snapshot
-   coverage residual: publication epoch `2` is `PUBLISHED`, pending ACK count
-   is `0`, recovery remains `publication_pending`, terminal active is `5/5`,
-   terminal selected snapshot coverage is `3/5`, best selected snapshot coverage
-   is `4/5`, selected published active is `2/5`, and selected missing published
-   count is `3`.
+1. Reconcile the current deferred selected-snapshot observation publication
+   membership/snapshot coverage residual: publication epoch `3` is
+   `PUBLISHED`, pending ACK count is `0`, recovery remains
+   `publication_pending`, terminal active is `5/5`, terminal selected snapshot
+   coverage is `4/5`, selected published active is `3/5`, selected missing
+   published count is `2`, and selected snapshot observation reports
+   `repair_deferred` / `stale_usable`.
 2. Explain why the latest selected snapshot node
-   `35a891b8-c1a0-5064-9c6e-2acfba61c2a7` is reachable through
+   `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58` is reachable through
    `admin_health` while explicit missing-active-node publication debt remains
-   open for that node,
-   `8be8d30f-4499-5eed-865c-71b4d529a67a`, and
-   `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`.
+   open for that node and
+   `11601fe0-72d6-5853-8590-ec2881853e72`.
 3. Keep the `074739Z` selected snapshot reachability timeout on
    `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58` as historical evidence only; it no
    longer competes with the current terminal boundary.
-4. Preserve and classify priority-recovery serial-wait evidence, most recently
-   on `sql_transaction_participants-p1`, without collapsing it into
-   current-partition operation identity or treating it as post-active trim.
+4. Preserve and classify subordinate priority-recovery workflow-progress
+   evidence, most recently `sql_write_operations-p1` as
+   `recovering_in_flight` with actuation `persisted_not_dispatched`, without
+   treating it as post-active trim while topology debt remains open.
 5. Keep the failure bundle anchored to one canonical owner outcome across
    publication, active-gate, selected snapshot, and priority-recovery evidence.
 6. Rerun the representative `rolling-restart --fast-local` scenario after the
-   smallest owner fix and record whether the blocker closes or migrates.
+   smallest owner slice and record whether the blocker closes or migrates.
 
 ## Out Of Scope
 
@@ -486,10 +492,17 @@ Sprint:
       publication evidence, or emit an explicit deferred stale-observation
       outcome, when owner-row/service evidence is partial and owner-RPC repair
       is backpressured.
-- [ ] Rerun the representative `rolling-restart --fast-local` gate after the
+- [x] Rerun the representative `rolling-restart --fast-local` gate after the
       deferred selected-snapshot observation probe and record whether the blocker
       closes, stays on publication missing-active-node evidence, or migrates to
       one newly named owner boundary.
+- [ ] Trace the `20260505T114859Z` deferred-observation artifact through
+      active-gate selected snapshot observation, publication gate, and
+      owner-RPC/cache-repair evidence for why `repair_deferred` /
+      `stale_usable` still leaves publication epoch `3` at published-active
+      `3/5`, missing nodes `11601fe0-72d6-5853-8590-ec2881853e72` and
+      `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`, and closure witness
+      `CL-006` / `startup_active_publication_lag`.
 
 ## May 5 Regression Validation
 
@@ -898,12 +911,63 @@ Validation:
     this slice did not increase literal debt.
 11. `git diff --check`
 
+## May 5 Deferred Selected-Snapshot Observation Rerun
+
+The next representative gate was:
+
+1. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-after-deferred-snapshot-observation-20260505T114859Z.report.json --fast-local --verbose`
+2. Report:
+   `test-output/reports/rolling-restart-after-deferred-snapshot-observation-20260505T114859Z.report.json`
+3. Failure bundle:
+   `test-output/reports/.playback/rolling-restart-after-deferred-snapshot-observation-20260505T114859Z/rolling-restart/failure-bundle.json`
+4. Triage summary:
+   `test-output/reports/.playback/rolling-restart-after-deferred-snapshot-observation-20260505T114859Z/rolling-restart/triage-summary.md`
+5. Result: failed, `0/1` passed after `132.3s`.
+
+Outcome: the blocker remains on publication missing-active-node evidence. It
+did not close and did not migrate to a new top-level owner boundary.
+
+The terminal evidence keeps `topology` /
+`publication_convergence_blocked` with dominant reason
+`publication_missing_active_node=11601fe0-72d6-5853-8590-ec2881853e72`.
+Publication epoch `3` is `PUBLISHED`, recovery protocol state is
+`publication_pending`, pending ACK count is `0`, missing published count is
+`2`, and missing published nodes are
+`11601fe0-72d6-5853-8590-ec2881853e72` and
+`ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`. Publication gate reasons are
+`priority_partitions_not_spread`, `snapshot_coverage=4/5`, and both explicit
+`publication_missing_active_node=<node>` reasons.
+
+Active-gate progress reaches active `5/5` with selected snapshot coverage
+`4/5`, selected published active `3/5`, priority spread gap `10`, and selected
+snapshot node `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58` reachable through
+`admin_health`. The selected snapshot reachability timeout remains historical.
+
+The deferred observation probe is now visible in the control-plane diagnostics:
+the selected snapshot reports `selectedSnapshotObservationMode=repair_deferred`,
+`selectedSnapshotObservationState=stale_usable`,
+`selectedSnapshotObservationContractState=pending`,
+`selectedSnapshotObservationRefreshState=idle`,
+`selectedSnapshotObservationNextAction=wait`, and repair deferred `true`.
+Reason codes are `cache_stale_watermark`, `discovery_node_coverage_gap`, and
+`stale_replica_operations_in_flight`.
+
+The subordinate priority-recovery witness changed from the prior
+`sql_transaction_participants-p1` serial wait to `sql_write_operations-p1` as
+`recovering_in_flight`: owner `operation_workflow_owner`, boundary
+`workflow_progress`, wait mode `event_driven`, actuation
+`persisted_not_dispatched`, workflow phase `dispatch_pending`, latest workflow
+step `PENDING`, latest status `pending`, operation
+`b4e4c126-7b34-42dc-9234-ee9b7e3b6af2`, correlation key
+`sql_write_operations-p1|3|b4e4c126-7b34-42dc-9234-ee9b7e3b6af2`, and next
+action `wait_for_operation_progress`.
+
 ## Validation
 
 1. Focused owner or harness fixture for topology publication membership
    missing-active-node debt with selected snapshot coverage lag.
 2. Focused priority-recovery fixture, if the selected owner decision depends on
-   priority-recovery serial-wait classification.
+   priority-recovery workflow-progress or serial-wait classification.
 3. Touched-file syntax checks and relevant focused tests.
 4. Non-literal static guardrails for touched runtime or harness files; document
    any inherited file-scoped literal debt separately.
@@ -917,42 +981,46 @@ Validation:
    selected snapshot coverage debt are explained.
 2. The failure bundle emits one canonical outcome for publication state,
    missing-active-node debt, selected snapshot coverage, and
-   priority-recovery serial wait.
-3. Priority-recovery serial-wait evidence is either resolved, deliberately made
-   subordinate to topology publication debt, or promoted into its own named
-   follow-up package after topology closure.
+   priority-recovery evidence.
+3. Priority-recovery workflow-progress or serial-wait evidence is either
+   resolved, deliberately made subordinate to topology publication debt, or
+   promoted into its own named follow-up package after topology closure.
 4. The prior post-publication operation-workflow timeout residual remains
    preserved for later revisit and is not mistaken for the current blocker.
 
 ## Residual Active Blocker
 
-The current blocker is the after-reconcile-probe May 5 topology publication and
-snapshot coverage failure recorded in the `20260505T102455Z` rerun: terminal
-active `5/5`, terminal selected snapshot coverage `3/5`, best selected snapshot
-coverage `4/5`, publication epoch `2` `PUBLISHED`, recovery protocol state
-`publication_pending`, pending ACK count `0`, missing published count `3`,
-selected published active `2/5`, priority spread gap `5`, and explicit
-missing-active-node publication debt for
-`35a891b8-c1a0-5064-9c6e-2acfba61c2a7`,
-`8be8d30f-4499-5eed-865c-71b4d529a67a`, and
+The current blocker is the deferred selected-snapshot observation May 5
+topology publication and snapshot coverage failure recorded in the
+`20260505T114859Z` rerun: terminal active `5/5`, terminal selected snapshot
+coverage `4/5`, best selected snapshot coverage `4/5`, publication epoch `3`
+`PUBLISHED`, recovery protocol state `publication_pending`, pending ACK count
+`0`, missing published count `2`, selected published active `3/5`, priority
+spread gap `10`, and explicit missing-active-node publication debt for
+`11601fe0-72d6-5853-8590-ec2881853e72` and
 `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`.
 
 The selected snapshot reachability timeout from `074739Z` remains historical.
 The latest selected snapshot node
-`35a891b8-c1a0-5064-9c6e-2acfba61c2a7` is admin-ready through `admin_health`
-with no selected reachability error, while failure classification remains
-anchored to publication missing-active-node debt.
+`ebc4aa0b-06c6-506d-93ea-1dd2deca3f58` is admin-ready through
+`admin_health` with no selected reachability error, while failure
+classification remains anchored to publication missing-active-node debt.
 
-The supporting priority-recovery residual now selects
-`sql_transaction_participants-p1` in `priority_operation_serial_wait` /
-`needs_operation` at
-`operation_workflow_owner / workflow_progress / event_driven`, with correlation
-key `sql_transaction_participants-p1|2|operation_unknown`, serial-wait operation
-`74154dc2-e602-43a8-8dc7-58e32e3424b8`, and serial-wait partition
-`sql_transactions-p1`. `replica_operations-p1` and `sql_write_operations-p1`
-remain blocked as `recovering_in_flight`.
+The selected snapshot now explicitly reports deferred owner observation:
+`repair_deferred` / `stale_usable` with pending contract state, idle refresh,
+next action `wait`, and reason codes `cache_stale_watermark`,
+`discovery_node_coverage_gap`, and `stale_replica_operations_in_flight`.
 
-The next unchecked task is to rerun the representative
-`rolling-restart --fast-local` gate after the deferred selected-snapshot
-observation probe and record whether the blocker closes, remains on publication
-missing-active-node evidence, or migrates to one newly named owner boundary.
+The supporting priority-recovery residual now selects `sql_write_operations-p1`
+as `recovering_in_flight` at
+`operation_workflow_owner / workflow_progress / event_driven`, with actuation
+`persisted_not_dispatched`, operation
+`b4e4c126-7b34-42dc-9234-ee9b7e3b6af2`, and correlation key
+`sql_write_operations-p1|3|b4e4c126-7b34-42dc-9234-ee9b7e3b6af2`.
+
+The next unchecked task is to trace the `20260505T114859Z`
+deferred-observation artifact through active-gate selected snapshot
+observation, publication gate, and owner-RPC/cache-repair evidence for why
+`repair_deferred` / `stale_usable` still leaves publication epoch `3` at
+published-active `3/5`, two missing published nodes, and closure witness
+`CL-006` / `startup_active_publication_lag`.
