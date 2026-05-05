@@ -1853,8 +1853,8 @@ priority recovery has no unresolved class count and no blocked partition count;
 `removing`.
 
 The `20260505T123850Z` trace, focused ACK-pending operation-workflow timeout
-fixture, and `20260505T132033Z` representative rerun are complete. The current
-next unchecked task is to trace the `20260505T132033Z` post-ACK `PUBLISHED`
-missing-active selected-snapshot boundary through active-gate coverage,
-selected snapshot observation, owner-RPC/cache-repair deferral, and subordinate
-workflow-progress witnesses, then decide the next smallest runtime owner/probe.
+fixture, `20260505T132033Z` representative rerun, and `20260505T132033Z`
+post-ACK `PUBLISHED` missing-active selected-snapshot trace are complete. The
+current next unchecked task is to add the smallest focused post-ACK `PUBLISHED`
+selected-snapshot / owner-RPC-cache-repair replay fixture or probe for this
+exact `132033Z` shape.
