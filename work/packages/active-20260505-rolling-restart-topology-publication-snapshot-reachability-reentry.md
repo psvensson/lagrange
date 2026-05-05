@@ -101,6 +101,62 @@ snapshot:
     pressure evidence unless that topology debt is first closed or made
     subordinate by the owner path.
 
+## May 5 Missing-Active Owner Path
+
+The second package task traced the publication missing-active-node path without
+runtime edits:
+
+1. Runtime publication candidates are assembled in
+   `src/control-plane/membership-publication-planning.js` by
+   `deriveMembershipPublicationCandidate(...)`. The candidate passes
+   publication status, published active membership, ACK lists, priority
+   recovery summary, and membership lifecycle projection evidence into
+   `buildRecoveryProtocolSnapshot(...)`, then carries
+   `missingPublishedRecoveryActiveNodeIds`,
+   `recoveryProtocolState`, `publicationRecoveryGate`, and
+   `priorityRecoveryReasonCodes` back onto the publication row.
+2. `src/control-plane/recovery-protocol-snapshot.js` owns the durable
+   publication/recovery snapshot. For a `PUBLISHED` membership row, durable
+   membership is `publishedActiveNodeIds`; recovery-active membership is
+   resolved from explicit recovery-active IDs, locally eligible or projected
+   serving nodes, and recovery-eligible projection evidence. Any
+   recovery-active node outside durable published membership becomes
+   `missingPublishedRecoveryActiveNodeIds`.
+3. `src/control-plane/publication-recovery-gate.js` owns the publication gate
+   decision. `missingPublishedNodeIds` and `missingPublishedCount` keep
+   `publicationPending` true before priority-spread state is considered, so
+   `PUBLISHED` plus pending ACK count `0` can still produce a gate state of
+   `publication_pending`. That is separate from ACK closure and is the
+   intended owner path for missing published active members.
+4. The `074739Z` artifact follows that path: the control-plane publication
+   convergence gate reports `state=publication_pending`,
+   `publicationStatus=PUBLISHED`, `pendingAckCount=0`,
+   `missingPublishedCount=2`, missing nodes
+   `8be8d30f-4499-5eed-865c-71b4d529a67a` and
+   `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`, and
+   `prioritySpreadPending=true`. Its recovery protocol state is
+   `priority_spread_pending`, while the top-level failure summary reports the
+   open gate as `publication_pending`.
+5. The active-gate harness in
+   `test/distributed/harness/cluster-segment-2.js` consumes the selected
+   publication convergence gate. It compares expected nodes to
+   `publishedActiveNodeIds`, merges the gate's `missingPublishedNodeIds`, and
+   emits `publication_missing_active_node=<node>` reasons independently from
+   pending ACK reasons.
+6. The failure-bundle owner in
+   `test/distributed/harness/failure-bundle-segment-4.js` preserves canonical
+   missing-published debt during active-gate coverage lag and promotes the
+   first explicit `publication_missing_active_node=<node>` reason as the
+   dominant reason. In the `074739Z` artifact that reason is
+   `publication_missing_active_node=8be8d30f-4499-5eed-865c-71b4d529a67a`.
+
+Conclusion: the open missing-active-node publication debt is not an ACK owner
+bug. The next runtime question is why the selected topology snapshot remains
+at coverage `4/5` and why
+`ebc4aa0b-06c6-506d-93ea-1dd2deca3f58` moves from best-progress
+`admin_health` reachability to terminal `snapshot_reachability_timeout` while
+the publication gate still carries the two missing published active nodes.
+
 ## Scope Basis
 
 Roadmap Phase `0.1 - Internal Coherence` maintenance/refactoring scope under:
@@ -162,7 +218,7 @@ Sprint:
 - [x] Trace the `074739Z` failure bundle from active-gate progress,
       publication convergence, selected snapshot reachability, and
       priority-recovery summaries into one normalized evidence snapshot.
-- [ ] Identify the owner path for inactive nodes and explicit
+- [x] Identify the owner path for inactive nodes and explicit
       missing-active-node publication debt when publication status is
       `PUBLISHED` and pending ACK count is `0`.
 - [ ] Reconcile selected snapshot coverage `4/5` and the reachability timeout
