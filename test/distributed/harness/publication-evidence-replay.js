@@ -32,18 +32,24 @@ const PUBLICATION_EVIDENCE_REPLAY_SOURCE = Object.freeze({
 });
 const PUBLICATION_EVIDENCE_REPLAY_FIELD = Object.freeze({
   ACKNOWLEDGED_NODE_IDS: 'acknowledgedNodeIds',
+  ACTIVE_GATE_SNAPSHOT_COVERAGE: 'activeGateSnapshotCoverage',
   BLOCKED_PARTITIONS: 'blockedPartitions',
   CONTROL_PLANE: 'controlPlane',
   CONTROL_PLANE_PUBLICATIONS: 'controlPlanePublications',
   CONTROL_PLANE_PUBLICATIONS_SNAKE: 'control_plane_publications',
+  EXCERPTS_BY_NODE_ID: 'excerptsByNodeId',
   LATEST_PUBLICATION_ROW: 'latestPublicationRow',
+  LOGS: 'logs',
   MISSING_PARTITION_IDS: 'missingPartitionIds',
   NODE_ENDPOINTS: 'nodeEndpoints',
   NODE_ENDPOINTS_SNAKE: 'node_endpoints',
   NODES: 'nodes',
   PARTITIONS: 'partitions',
   PENDING_ACK_NODE_IDS: 'pendingAckNodeIds',
+  PARTITION_WITNESSES: 'partitionWitnesses',
   PRIORITY_PARTITION_SUMMARY: 'priorityPartitionSummary',
+  PRIORITY_RECOVERY_OBSERVATION: 'priorityRecoveryObservation',
+  PRIORITY_RECOVERY_PARTITION_WITNESSES: 'priorityRecoveryPartitionWitnesses',
   PUBLICATION_CONVERGENCE: 'publicationConvergence',
   PUBLICATION_EPOCH: 'publicationEpoch',
   PUBLICATION_STATUS: 'publicationStatus',
@@ -61,7 +67,61 @@ const PUBLICATION_EVIDENCE_REPLAY_LINE = Object.freeze({
   ROW_COUNTS: 'rowCounts',
   DURABLE: 'durable',
   REPLAYED: 'replayed',
+  SELECTED_SNAPSHOT_OBSERVATION: 'selectedSnapshotObservation',
+  OWNER_RPC_CACHE_REPAIR: 'ownerRpcCacheRepair',
+  SUPPORTING_PRIORITY_RECOVERY_WITNESS: 'supportingPriorityRecoveryWitness',
   COMPARISON: 'comparison',
+});
+const PUBLICATION_EVIDENCE_REPLAY_OBSERVATION_FIELD = Object.freeze({
+  AVAILABILITY: 'availability',
+  BEST_COVERAGE_NODE_COUNT: 'bestCoverageNodeCount',
+  EXPECTED_NODE_COUNT: 'expectedNodeCount',
+  SELECTED_ADMIN_READY: 'selectedAdminReady',
+  SELECTED_MISSING_PUBLISHED_NODE_IDS: 'selectedMissingPublishedNodeIds',
+  SELECTED_PUBLISHED_ACTIVE_NODE_IDS: 'selectedPublishedActiveNodeIds',
+  SELECTED_REACHABLE_BY: 'selectedReachableBy',
+  SELECTED_SNAPSHOT_ADMIN_READY: 'selectedSnapshotAdminReady',
+  SELECTED_SNAPSHOT_NODE_ID: 'selectedSnapshotNodeId',
+  SELECTED_SNAPSHOT_OBSERVATION_CONTRACT_STATE:
+    'selectedSnapshotObservationContractState',
+  SELECTED_SNAPSHOT_OBSERVATION_MODE: 'selectedSnapshotObservationMode',
+  SELECTED_SNAPSHOT_OBSERVATION_NEXT_ACTION: 'selectedSnapshotObservationNextAction',
+  SELECTED_SNAPSHOT_OBSERVATION_REASON_CODES:
+    'selectedSnapshotObservationReasonCodes',
+  SELECTED_SNAPSHOT_OBSERVATION_REFRESH_STATE:
+    'selectedSnapshotObservationRefreshState',
+  SELECTED_SNAPSHOT_OBSERVATION_STATE: 'selectedSnapshotObservationState',
+  SELECTED_SNAPSHOT_REACHABLE_BY: 'selectedSnapshotReachableBy',
+  SELECTED_SNAPSHOT_REPAIR_DEFERRED: 'selectedSnapshotRepairDeferred',
+});
+const PUBLICATION_EVIDENCE_REPLAY_REPAIR_FIELD = Object.freeze({
+  AVAILABILITY: 'availability',
+  CAUSE_CHAIN: 'causeChain',
+  DEFERRAL_STATE: 'deferralState',
+  FAILED_TABLE_NAMES: 'failedTableNames',
+  FAILURE_CLASSES: 'failureClasses',
+  LATEST_RETRY_AFTER_MS: 'latestRetryAfterMs',
+  MATCHING_DEFERRAL_COUNT: 'matchingDeferralCount',
+  NODE_IDS: 'nodeIds',
+  READ_SOURCES: 'readSources',
+  SELECTED_WITNESS_DEFERRAL_COUNT: 'selectedWitnessDeferralCount',
+  SELECTED_WITNESS_LATEST_RETRY_AFTER_MS: 'selectedWitnessLatestRetryAfterMs',
+  SELECTED_WITNESS_NODE_ID: 'selectedWitnessNodeId',
+});
+const PUBLICATION_EVIDENCE_REPLAY_PRIORITY_WITNESS_FIELD = Object.freeze({
+  ACTUATION_STATE: 'actuationState',
+  AVAILABILITY: 'availability',
+  BLOCKING_BOUNDARY: 'blockingBoundary',
+  CORRELATION_KEY: 'correlationKey',
+  CURRENT_OWNER: 'currentOwner',
+  LATEST_OPERATION_STATUS: 'latestOperationStatus',
+  LATEST_OPERATION_WORKFLOW_STEP: 'latestOperationWorkflowStep',
+  NEXT_REQUIRED_ACTION: 'nextRequiredAction',
+  OPERATION_ID: 'operationId',
+  PARTITION_ID: 'partitionId',
+  SEMANTIC_STATE_ID: 'semanticStateId',
+  WAIT_MODE: 'waitMode',
+  WORKFLOW_PROGRESS_PHASE_ID: 'workflowProgressPhaseId',
 });
 const PUBLICATION_EVIDENCE_REPLAY_COMPARISON_FIELD = Object.freeze({
   BLOCKED_PARTITION_IDS_MATCH: 'blockedPartitionIdsMatch',
@@ -101,6 +161,10 @@ const PUBLICATION_EVIDENCE_REPLAY_DRIFT_CLASSIFICATION = Object.freeze({
   DURABLE_STALE_REPLAYED_SATISFIED: 'durable_stale_replayed_satisfied',
   REPLAYED_BLOCKED: 'replayed_blocked',
 });
+const PUBLICATION_EVIDENCE_REPLAY_REPAIR_DEFERRAL_STATE = Object.freeze({
+  MISSING: 'missing',
+  REPAIR_DEFERRED: 'repair_deferred',
+});
 const PUBLICATION_EVIDENCE_REPLAY_DURABLE_FIELD = Object.freeze({
   CLOSURE_RECORD_ID: 'closureRecordId',
   CLOSURE_WITNESS_CLASS: 'closureWitnessClass',
@@ -120,6 +184,49 @@ const PUBLICATION_EVIDENCE_REPLAY_REPLAYED_FIELD = Object.freeze({
 const PUBLICATION_EVIDENCE_REPLAY_ERROR_MESSAGE = Object.freeze({
   REPORT_DIR_REQUIRED: 'report directory is required',
 });
+const PUBLICATION_EVIDENCE_REPLAY_REPAIR_LOG = Object.freeze({
+  AUTHORITATIVE_DISCOVERY_REPAIR_FAILED:
+    'Authoritative discovery cache repair failed',
+  CONTROL_PLANE_BACKPRESSURE: 'control_plane_backpressure',
+  JSON_END: '}',
+  JSON_START: '{',
+  NODES_TABLE: 'nodes',
+  OWNER_RPC_LANE: 'owner_rpc_lane',
+});
+const PUBLICATION_EVIDENCE_REPLAY_REPAIR_LOG_FIELD = Object.freeze({
+  CAUSE_CHAIN: 'causeChain',
+  FAILED_TABLES: 'failedTables',
+  FAILURE_CLASS: 'failureClass',
+  MSG: 'msg',
+  NODE_ID: 'nodeId',
+  READ_SOURCE: 'readSource',
+  RETRY_AFTER_MS: 'retryAfterMs',
+});
+const PUBLICATION_EVIDENCE_REPLAY_REPAIR_DEFERRAL_RULES = Object.freeze([
+  Object.freeze({
+    matches: (evidence) =>
+      evidence.message ===
+      PUBLICATION_EVIDENCE_REPLAY_REPAIR_LOG
+        .AUTHORITATIVE_DISCOVERY_REPAIR_FAILED,
+  }),
+  Object.freeze({
+    matches: (evidence) =>
+      evidence.readSource ===
+      PUBLICATION_EVIDENCE_REPLAY_REPAIR_LOG.OWNER_RPC_LANE,
+  }),
+  Object.freeze({
+    matches: (evidence) =>
+      evidence.failedTableNames.includes(
+        PUBLICATION_EVIDENCE_REPLAY_REPAIR_LOG.NODES_TABLE,
+      ),
+  }),
+  Object.freeze({
+    matches: (evidence) =>
+      evidence.causeChain.includes(
+        PUBLICATION_EVIDENCE_REPLAY_REPAIR_LOG.CONTROL_PLANE_BACKPRESSURE,
+      ),
+  }),
+]);
 
 function isRecord(value) {
   return Boolean(value) && typeof value === TYPEOF.OBJECT && !Array.isArray(value);
@@ -213,6 +320,301 @@ function readFirstAvailableRecord(...recordStates) {
   return {
     availability: PUBLICATION_EVIDENCE_REPLAY_AVAILABILITY.MISSING,
     value: {},
+  };
+}
+
+function readSelectedSnapshotObservationFromFailureBundle(failureBundle = {}) {
+  const controlPlaneState = readRecordField(
+    failureBundle,
+    PUBLICATION_EVIDENCE_REPLAY_FIELD.CONTROL_PLANE,
+  );
+  const coverageState = readRecordField(
+    controlPlaneState.value,
+    PUBLICATION_EVIDENCE_REPLAY_FIELD.ACTIVE_GATE_SNAPSHOT_COVERAGE,
+  );
+  const coverage = coverageState.value;
+  return {
+    [PUBLICATION_EVIDENCE_REPLAY_OBSERVATION_FIELD.AVAILABILITY]:
+      coverageState.availability,
+    [PUBLICATION_EVIDENCE_REPLAY_OBSERVATION_FIELD.SELECTED_SNAPSHOT_NODE_ID]:
+      normalizeText(
+        coverage[
+          PUBLICATION_EVIDENCE_REPLAY_OBSERVATION_FIELD.SELECTED_SNAPSHOT_NODE_ID
+        ],
+      ),
+    [PUBLICATION_EVIDENCE_REPLAY_OBSERVATION_FIELD.SELECTED_ADMIN_READY]:
+      coverage[
+        PUBLICATION_EVIDENCE_REPLAY_OBSERVATION_FIELD.SELECTED_ADMIN_READY
+      ] === true,
+    [PUBLICATION_EVIDENCE_REPLAY_OBSERVATION_FIELD.SELECTED_SNAPSHOT_ADMIN_READY]:
+      coverage[
+        PUBLICATION_EVIDENCE_REPLAY_OBSERVATION_FIELD.SELECTED_SNAPSHOT_ADMIN_READY
+      ] === true,
+    [PUBLICATION_EVIDENCE_REPLAY_OBSERVATION_FIELD.SELECTED_REACHABLE_BY]:
+      normalizeText(
+        coverage[
+          PUBLICATION_EVIDENCE_REPLAY_OBSERVATION_FIELD.SELECTED_REACHABLE_BY
+        ],
+      ),
+    [PUBLICATION_EVIDENCE_REPLAY_OBSERVATION_FIELD.SELECTED_SNAPSHOT_REACHABLE_BY]:
+      normalizeText(
+        coverage[
+          PUBLICATION_EVIDENCE_REPLAY_OBSERVATION_FIELD.SELECTED_SNAPSHOT_REACHABLE_BY
+        ],
+      ),
+    [PUBLICATION_EVIDENCE_REPLAY_OBSERVATION_FIELD.SELECTED_SNAPSHOT_OBSERVATION_MODE]:
+      normalizeText(
+        coverage[
+          PUBLICATION_EVIDENCE_REPLAY_OBSERVATION_FIELD
+            .SELECTED_SNAPSHOT_OBSERVATION_MODE
+        ],
+      ),
+    [PUBLICATION_EVIDENCE_REPLAY_OBSERVATION_FIELD.SELECTED_SNAPSHOT_OBSERVATION_STATE]:
+      normalizeText(
+        coverage[
+          PUBLICATION_EVIDENCE_REPLAY_OBSERVATION_FIELD
+            .SELECTED_SNAPSHOT_OBSERVATION_STATE
+        ],
+      ),
+    [PUBLICATION_EVIDENCE_REPLAY_OBSERVATION_FIELD
+      .SELECTED_SNAPSHOT_OBSERVATION_CONTRACT_STATE]:
+      normalizeText(
+        coverage[
+          PUBLICATION_EVIDENCE_REPLAY_OBSERVATION_FIELD
+            .SELECTED_SNAPSHOT_OBSERVATION_CONTRACT_STATE
+        ],
+      ),
+    [PUBLICATION_EVIDENCE_REPLAY_OBSERVATION_FIELD
+      .SELECTED_SNAPSHOT_OBSERVATION_REFRESH_STATE]:
+      normalizeText(
+        coverage[
+          PUBLICATION_EVIDENCE_REPLAY_OBSERVATION_FIELD
+            .SELECTED_SNAPSHOT_OBSERVATION_REFRESH_STATE
+        ],
+      ),
+    [PUBLICATION_EVIDENCE_REPLAY_OBSERVATION_FIELD
+      .SELECTED_SNAPSHOT_OBSERVATION_NEXT_ACTION]:
+      normalizeText(
+        coverage[
+          PUBLICATION_EVIDENCE_REPLAY_OBSERVATION_FIELD
+            .SELECTED_SNAPSHOT_OBSERVATION_NEXT_ACTION
+        ],
+      ),
+    [PUBLICATION_EVIDENCE_REPLAY_OBSERVATION_FIELD
+      .SELECTED_SNAPSHOT_OBSERVATION_REASON_CODES]:
+      normalizeList(
+        readArrayField(
+          coverage,
+          PUBLICATION_EVIDENCE_REPLAY_OBSERVATION_FIELD
+            .SELECTED_SNAPSHOT_OBSERVATION_REASON_CODES,
+        ),
+      ),
+    [PUBLICATION_EVIDENCE_REPLAY_OBSERVATION_FIELD.SELECTED_SNAPSHOT_REPAIR_DEFERRED]:
+      coverage[
+        PUBLICATION_EVIDENCE_REPLAY_OBSERVATION_FIELD
+          .SELECTED_SNAPSHOT_REPAIR_DEFERRED
+      ] === true,
+    [PUBLICATION_EVIDENCE_REPLAY_OBSERVATION_FIELD.EXPECTED_NODE_COUNT]:
+      normalizeInteger(
+        coverage[PUBLICATION_EVIDENCE_REPLAY_OBSERVATION_FIELD.EXPECTED_NODE_COUNT],
+      ),
+    [PUBLICATION_EVIDENCE_REPLAY_OBSERVATION_FIELD.BEST_COVERAGE_NODE_COUNT]:
+      normalizeInteger(
+        coverage[
+          PUBLICATION_EVIDENCE_REPLAY_OBSERVATION_FIELD.BEST_COVERAGE_NODE_COUNT
+        ],
+      ),
+    [PUBLICATION_EVIDENCE_REPLAY_OBSERVATION_FIELD.SELECTED_PUBLISHED_ACTIVE_NODE_IDS]:
+      normalizeList(
+        readArrayField(
+          coverage,
+          PUBLICATION_EVIDENCE_REPLAY_OBSERVATION_FIELD
+            .SELECTED_PUBLISHED_ACTIVE_NODE_IDS,
+        ),
+      ),
+    [PUBLICATION_EVIDENCE_REPLAY_OBSERVATION_FIELD.SELECTED_MISSING_PUBLISHED_NODE_IDS]:
+      normalizeList(
+        readArrayField(
+          coverage,
+          PUBLICATION_EVIDENCE_REPLAY_OBSERVATION_FIELD
+            .SELECTED_MISSING_PUBLISHED_NODE_IDS,
+        ),
+      ),
+  };
+}
+
+function parseRepairLogRecordFromLine(line) {
+  const normalizedLine = normalizeText(line);
+  const jsonStartIndex = normalizedLine.indexOf(
+    PUBLICATION_EVIDENCE_REPLAY_REPAIR_LOG.JSON_START,
+  );
+  const jsonEndIndex = normalizedLine.lastIndexOf(
+    PUBLICATION_EVIDENCE_REPLAY_REPAIR_LOG.JSON_END,
+  );
+  if (jsonStartIndex < NUM.ZERO || jsonEndIndex <= jsonStartIndex) {
+    return {};
+  }
+  try {
+    const parsed = JSON.parse(normalizedLine.slice(jsonStartIndex, jsonEndIndex + NUM.ONE));
+    return isRecord(parsed) ? parsed : {};
+  } catch (_error) {
+    return {};
+  }
+}
+
+function readFailureBundleLogExcerptLines(failureBundle = {}) {
+  const logsState = readRecordField(
+    failureBundle,
+    PUBLICATION_EVIDENCE_REPLAY_FIELD.LOGS,
+  );
+  const excerptsByNodeState = readRecordField(
+    logsState.value,
+    PUBLICATION_EVIDENCE_REPLAY_FIELD.EXCERPTS_BY_NODE_ID,
+  );
+  return Object.values(excerptsByNodeState.value)
+    .flatMap((lines) => Array.isArray(lines) ? lines : [])
+    .filter((line) => typeof line === TYPEOF.STRING);
+}
+
+function normalizeRepairLogEvidence(record = {}) {
+  return {
+    message: normalizeText(
+      record[PUBLICATION_EVIDENCE_REPLAY_REPAIR_LOG_FIELD.MSG],
+    ),
+    nodeId: normalizeText(
+      record[PUBLICATION_EVIDENCE_REPLAY_REPAIR_LOG_FIELD.NODE_ID],
+    ),
+    readSource: normalizeText(
+      record[PUBLICATION_EVIDENCE_REPLAY_REPAIR_LOG_FIELD.READ_SOURCE],
+    ),
+    failedTableNames: normalizeList(
+      readArrayField(
+        record,
+        PUBLICATION_EVIDENCE_REPLAY_REPAIR_LOG_FIELD.FAILED_TABLES,
+      ),
+    ),
+    causeChain: normalizeList(
+      readArrayField(
+        record,
+        PUBLICATION_EVIDENCE_REPLAY_REPAIR_LOG_FIELD.CAUSE_CHAIN,
+      ),
+    ),
+    failureClass: normalizeText(
+      record[PUBLICATION_EVIDENCE_REPLAY_REPAIR_LOG_FIELD.FAILURE_CLASS],
+    ),
+    retryAfterMs: normalizeInteger(
+      record[PUBLICATION_EVIDENCE_REPLAY_REPAIR_LOG_FIELD.RETRY_AFTER_MS],
+    ),
+  };
+}
+
+function isOwnerRpcCacheRepairDeferral(evidence = {}) {
+  return PUBLICATION_EVIDENCE_REPLAY_REPAIR_DEFERRAL_RULES.every((rule) =>
+    rule.matches(evidence),
+  );
+}
+
+function maxRetryAfterMs(evidenceRecords = []) {
+  return evidenceRecords.reduce(
+    (maxRetryAfter, evidence) => Math.max(maxRetryAfter, evidence.retryAfterMs),
+    NUM.ZERO,
+  );
+}
+
+function summarizeOwnerRpcCacheRepairDeferrals({
+  failureBundle = {},
+  selectedSnapshotNodeId = PUBLICATION_EVIDENCE_REPLAY_EMPTY_TEXT,
+} = {}) {
+  const repairDeferrals = readFailureBundleLogExcerptLines(failureBundle)
+    .map(parseRepairLogRecordFromLine)
+    .filter(isRecord)
+    .map(normalizeRepairLogEvidence)
+    .filter(isOwnerRpcCacheRepairDeferral);
+  const selectedNodeId = normalizeText(selectedSnapshotNodeId);
+  const selectedWitnessDeferrals = repairDeferrals.filter((evidence) =>
+    evidence.nodeId === selectedNodeId,
+  );
+  const matchingDeferralCount = repairDeferrals.length;
+  return {
+    [PUBLICATION_EVIDENCE_REPLAY_REPAIR_FIELD.AVAILABILITY]:
+      matchingDeferralCount > NUM.ZERO ?
+        PUBLICATION_EVIDENCE_REPLAY_AVAILABILITY.AVAILABLE :
+        PUBLICATION_EVIDENCE_REPLAY_AVAILABILITY.MISSING,
+    [PUBLICATION_EVIDENCE_REPLAY_REPAIR_FIELD.DEFERRAL_STATE]:
+      matchingDeferralCount > NUM.ZERO ?
+        PUBLICATION_EVIDENCE_REPLAY_REPAIR_DEFERRAL_STATE.REPAIR_DEFERRED :
+        PUBLICATION_EVIDENCE_REPLAY_REPAIR_DEFERRAL_STATE.MISSING,
+    [PUBLICATION_EVIDENCE_REPLAY_REPAIR_FIELD.SELECTED_WITNESS_NODE_ID]:
+      selectedNodeId,
+    [PUBLICATION_EVIDENCE_REPLAY_REPAIR_FIELD.MATCHING_DEFERRAL_COUNT]:
+      matchingDeferralCount,
+    [PUBLICATION_EVIDENCE_REPLAY_REPAIR_FIELD.SELECTED_WITNESS_DEFERRAL_COUNT]:
+      selectedWitnessDeferrals.length,
+    [PUBLICATION_EVIDENCE_REPLAY_REPAIR_FIELD.LATEST_RETRY_AFTER_MS]:
+      maxRetryAfterMs(repairDeferrals),
+    [PUBLICATION_EVIDENCE_REPLAY_REPAIR_FIELD
+      .SELECTED_WITNESS_LATEST_RETRY_AFTER_MS]:
+      maxRetryAfterMs(selectedWitnessDeferrals),
+    [PUBLICATION_EVIDENCE_REPLAY_REPAIR_FIELD.NODE_IDS]:
+      normalizeList(repairDeferrals.map((evidence) => evidence.nodeId)),
+    [PUBLICATION_EVIDENCE_REPLAY_REPAIR_FIELD.FAILED_TABLE_NAMES]:
+      normalizeList(repairDeferrals.flatMap((evidence) => evidence.failedTableNames)),
+    [PUBLICATION_EVIDENCE_REPLAY_REPAIR_FIELD.CAUSE_CHAIN]:
+      normalizeList(repairDeferrals.flatMap((evidence) => evidence.causeChain)),
+    [PUBLICATION_EVIDENCE_REPLAY_REPAIR_FIELD.READ_SOURCES]:
+      normalizeList(repairDeferrals.map((evidence) => evidence.readSource)),
+    [PUBLICATION_EVIDENCE_REPLAY_REPAIR_FIELD.FAILURE_CLASSES]:
+      normalizeList(repairDeferrals.map((evidence) => evidence.failureClass)),
+  };
+}
+
+function summarizeSupportingPriorityRecoveryWitness(failureBundle = {}) {
+  const controlPlaneState = readRecordField(
+    failureBundle,
+    PUBLICATION_EVIDENCE_REPLAY_FIELD.CONTROL_PLANE,
+  );
+  const observationState = readRecordField(
+    controlPlaneState.value,
+    PUBLICATION_EVIDENCE_REPLAY_FIELD.PRIORITY_RECOVERY_OBSERVATION,
+  );
+  const witnessCandidate = readArrayField(
+    observationState.value,
+    PUBLICATION_EVIDENCE_REPLAY_FIELD.PRIORITY_RECOVERY_PARTITION_WITNESSES,
+    PUBLICATION_EVIDENCE_REPLAY_FIELD.PARTITION_WITNESSES,
+  ).find(isRecord);
+  const witness = isRecord(witnessCandidate) ? witnessCandidate : {};
+  const operationId = normalizeList(witness.operationIds)[NUM.ZERO] ||
+    PUBLICATION_EVIDENCE_REPLAY_EMPTY_TEXT;
+  return {
+    [PUBLICATION_EVIDENCE_REPLAY_PRIORITY_WITNESS_FIELD.AVAILABILITY]:
+      isRecord(witnessCandidate) ?
+        PUBLICATION_EVIDENCE_REPLAY_AVAILABILITY.AVAILABLE :
+        PUBLICATION_EVIDENCE_REPLAY_AVAILABILITY.MISSING,
+    [PUBLICATION_EVIDENCE_REPLAY_PRIORITY_WITNESS_FIELD.PARTITION_ID]:
+      normalizeText(witness.partitionId),
+    [PUBLICATION_EVIDENCE_REPLAY_PRIORITY_WITNESS_FIELD.SEMANTIC_STATE_ID]:
+      normalizeText(witness.semanticStateId),
+    [PUBLICATION_EVIDENCE_REPLAY_PRIORITY_WITNESS_FIELD.OPERATION_ID]:
+      operationId,
+    [PUBLICATION_EVIDENCE_REPLAY_PRIORITY_WITNESS_FIELD.CORRELATION_KEY]:
+      normalizeText(witness.correlationKey),
+    [PUBLICATION_EVIDENCE_REPLAY_PRIORITY_WITNESS_FIELD.CURRENT_OWNER]:
+      normalizeText(witness.currentOwner),
+    [PUBLICATION_EVIDENCE_REPLAY_PRIORITY_WITNESS_FIELD.BLOCKING_BOUNDARY]:
+      normalizeText(witness.blockingBoundary),
+    [PUBLICATION_EVIDENCE_REPLAY_PRIORITY_WITNESS_FIELD.WAIT_MODE]:
+      normalizeText(witness.waitMode),
+    [PUBLICATION_EVIDENCE_REPLAY_PRIORITY_WITNESS_FIELD.NEXT_REQUIRED_ACTION]:
+      normalizeText(witness.nextRequiredAction),
+    [PUBLICATION_EVIDENCE_REPLAY_PRIORITY_WITNESS_FIELD.ACTUATION_STATE]:
+      normalizeText(witness.actuationState),
+    [PUBLICATION_EVIDENCE_REPLAY_PRIORITY_WITNESS_FIELD.WORKFLOW_PROGRESS_PHASE_ID]:
+      normalizeText(witness.workflowProgressPhaseId),
+    [PUBLICATION_EVIDENCE_REPLAY_PRIORITY_WITNESS_FIELD
+      .LATEST_OPERATION_WORKFLOW_STEP]:
+      normalizeText(witness.latestOperationWorkflowStep),
+    [PUBLICATION_EVIDENCE_REPLAY_PRIORITY_WITNESS_FIELD.LATEST_OPERATION_STATUS]:
+      normalizeText(witness.latestOperationStatus),
   };
 }
 
@@ -739,6 +1141,8 @@ async function replayPublicationPriorityEvidenceFromReportDir(reportDir) {
     latestSnapshot,
     publicationConvergenceState,
   );
+  const selectedSnapshotObservation =
+    readSelectedSnapshotObservationFromFailureBundle(failureBundle);
   const nodeEndpointRows = [
     ...readArrayField(
       latestSnapshot,
@@ -755,6 +1159,16 @@ async function replayPublicationPriorityEvidenceFromReportDir(reportDir) {
     snapshotTimestamp: normalizeInteger(
       latestSnapshot[PUBLICATION_EVIDENCE_REPLAY_FIELD.TIMESTAMP],
     ),
+    selectedSnapshotObservation,
+    ownerRpcCacheRepair: summarizeOwnerRpcCacheRepairDeferrals({
+      failureBundle,
+      selectedSnapshotNodeId:
+        selectedSnapshotObservation[
+          PUBLICATION_EVIDENCE_REPLAY_OBSERVATION_FIELD.SELECTED_SNAPSHOT_NODE_ID
+        ],
+    }),
+    supportingPriorityRecoveryWitness:
+      summarizeSupportingPriorityRecoveryWitness(failureBundle),
     ...replayPublicationPriorityEvidenceFromRows({
       publicationConvergenceState,
       latestPublicationRowState,
@@ -786,6 +1200,18 @@ function formatPublicationEvidenceReplaySummary(summary = {}) {
     formatJsonLine(PUBLICATION_EVIDENCE_REPLAY_LINE.ROW_COUNTS, summary.rowCounts),
     formatJsonLine(PUBLICATION_EVIDENCE_REPLAY_LINE.DURABLE, summary.durablePublication),
     formatJsonLine(PUBLICATION_EVIDENCE_REPLAY_LINE.REPLAYED, summary.replayedPublication),
+    formatJsonLine(
+      PUBLICATION_EVIDENCE_REPLAY_LINE.SELECTED_SNAPSHOT_OBSERVATION,
+      summary.selectedSnapshotObservation,
+    ),
+    formatJsonLine(
+      PUBLICATION_EVIDENCE_REPLAY_LINE.OWNER_RPC_CACHE_REPAIR,
+      summary.ownerRpcCacheRepair,
+    ),
+    formatJsonLine(
+      PUBLICATION_EVIDENCE_REPLAY_LINE.SUPPORTING_PRIORITY_RECOVERY_WITNESS,
+      summary.supportingPriorityRecoveryWitness,
+    ),
     formatJsonLine(PUBLICATION_EVIDENCE_REPLAY_LINE.COMPARISON, summary.comparison),
   ].join(PUBLICATION_EVIDENCE_REPLAY_NEWLINE);
 }

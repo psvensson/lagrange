@@ -503,7 +503,7 @@ Sprint:
       `3/5`, missing nodes `11601fe0-72d6-5853-8590-ec2881853e72` and
       `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`, and closure witness
       `CL-006` / `startup_active_publication_lag`.
-- [ ] Add the smallest owner-RPC/cache-repair replay fixture or probe for the
+- [x] Add the smallest owner-RPC/cache-repair replay fixture or probe for the
       `20260505T114859Z` shape: selected admin-ready snapshot witness
       `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58` remains
       `repair_deferred` / `stale_usable`, final owner-row replay still has
@@ -512,6 +512,10 @@ Sprint:
       `owner_rpc_lane` / `control_plane_backpressure`, and publication epoch
       `3` stays published-active `3/5` with the two expected active nodes
       missing from durable publication.
+- [ ] Rerun the representative `rolling-restart --fast-local` gate after the
+      owner-RPC/cache-repair replay probe and record whether the blocker closes,
+      stays on deferred repair plus publication missing-active-node debt, or
+      migrates to one newly named runtime owner boundary.
 
 ## May 5 Regression Validation
 
@@ -1083,6 +1087,82 @@ Trace validation:
 1. `node test/distributed/harness/publication-evidence-replay.js test-output/reports/.playback/rolling-restart-after-deferred-snapshot-observation-20260505T114859Z/rolling-restart`
    passed with `driftClassification=replayed_blocked`.
 
+## May 5 Owner-RPC/Cache-Repair Replay Fixture
+
+The next owner slice added a bounded replay probe in
+`test/distributed/harness/publication-evidence-replay.js` and a synthetic
+`114859Z` fixture in
+`test/distributed/harness/__tests__/publication-evidence-replay.test.js`.
+
+Implementation:
+
+1. The replay summary now carries selected active-gate snapshot observation
+   evidence from the failure bundle: selected witness
+   `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`, admin-ready
+   `admin_health`, `repair_deferred` / `stale_usable`, contract state
+   `pending`, refresh state `idle`, next action `wait`, repair deferred
+   `true`, expected `5`, selected coverage `4`, selected published active
+   `3`, and missing published nodes
+   `11601fe0-72d6-5853-8590-ec2881853e72` and
+   `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`.
+2. The replay probe parses failure-bundle log excerpts for authoritative
+   discovery cache-repair deferrals where `nodes` repair failed through
+   `owner_rpc_lane` with `control_plane_backpressure`. On the real
+   `114859Z` playback it reports four matching deferrals, including two on the
+   selected witness, selected-witness retry after `16000ms`, and max retry
+   after `32000ms`.
+3. The replay summary now preserves the subordinate priority-recovery witness:
+   `sql_write_operations-p1` as `recovering_in_flight` with operation
+   `b4e4c126-7b34-42dc-9234-ee9b7e3b6af2`, correlation key
+   `sql_write_operations-p1|3|b4e4c126-7b34-42dc-9234-ee9b7e3b6af2`,
+   owner `operation_workflow_owner`, boundary `workflow_progress`, wait mode
+   `event_driven`, actuation `persisted_not_dispatched`, workflow phase
+   `dispatch_pending`, latest step `PENDING`, latest status `pending`, and
+   next action `wait_for_operation_progress`.
+4. The synthetic replay fixture keeps the final owner-row shape at three node
+   rows, zero node endpoint rows, thirty-three partition rows, and one hundred
+   three service rows. Replay remains blocked at publication epoch `3` /
+   `PUBLISHED`, `priority_spread_pending`, selected published active `3/5`,
+   closure witness `CL-006` / `startup_active_publication_lag`, and drift
+   classification `replayed_blocked`.
+
+Outcome: the probe preserves the current owner-RPC/cache-repair boundary
+without widening timeouts or the distributed matrix. It does not close the
+runtime blocker; it proves the selected admin-ready witness remains explicitly
+stale/deferred while durable publication still omits the two expected active
+nodes. The next package task is the representative `rolling-restart
+--fast-local` rerun after this replay probe to see whether the blocker stays
+on deferred repair plus publication missing-active-node debt or migrates.
+
+Validation:
+
+1. `node --check test/distributed/harness/publication-evidence-replay.js`
+2. `node --check test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+3. `node --test --test-name-pattern "keeps the 114859Z owner-RPC cache-repair replay blocked" test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+4. `node --test test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+5. `node test/distributed/harness/publication-evidence-replay.js test-output/reports/.playback/rolling-restart-after-deferred-snapshot-observation-20260505T114859Z/rolling-restart`
+   passed and now prints `selectedSnapshotObservation`, `ownerRpcCacheRepair`,
+   and `supportingPriorityRecoveryWitness` sections alongside the existing
+   `replayed_blocked` comparison.
+6. `npx eslint test/distributed/harness/publication-evidence-replay.js test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+7. `node scripts/check-guideline-decision-boundaries.js test/distributed/harness/publication-evidence-replay.js test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+   reported `0` decision-boundary guideline violations.
+8. `node scripts/check-runtime-grammar-contracts.js test/distributed/harness/publication-evidence-replay.js test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+   reported `0` runtime-grammar-contract violations.
+9. `node scripts/check-guideline-boundary-mode-contracts.js test/distributed/harness/publication-evidence-replay.js test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+   reported `0` boundary-mode-contract hotspot violations.
+10. `node scripts/check-guideline-literals.js test/distributed/harness/publication-evidence-replay.js test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+    reported `0` new literal-guideline violations.
+11. `git diff --check`
+
+Inherited / unchanged:
+
+1. `node scripts/check-guideline-literals.js --include-tests test/distributed/harness/publication-evidence-replay.js test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+   remains red with `2` test-inclusive literal-guideline findings in
+   `publication-evidence-replay.test.js`. The same command reported `2`
+   before this slice, so the fixture did not increase test-inclusive literal
+   debt.
+
 ## Validation
 
 1. Focused owner or harness fixture for topology publication membership
@@ -1139,10 +1219,10 @@ as `recovering_in_flight` at
 `b4e4c126-7b34-42dc-9234-ee9b7e3b6af2`, and correlation key
 `sql_write_operations-p1|3|b4e4c126-7b34-42dc-9234-ee9b7e3b6af2`.
 
-The current trace concludes that the smallest next unchecked task is an
-owner-RPC/cache-repair replay fixture or probe for the `20260505T114859Z`
-shape. It must keep AGPL scope, preserve `publication_missing_active_node` as
-canonical while durable publication omits the two expected active nodes, and
-decide whether deferred authoritative discovery repair should retry and
-converge the selected admin-ready witness after pressure clears or surface a
-more specific deferred-repair closure witness.
+The owner-RPC/cache-repair replay probe now preserves the `20260505T114859Z`
+shape and proves replay remains blocked with the selected admin-ready witness
+explicitly stale/deferred. The current next unchecked task is to rerun the
+representative `rolling-restart --fast-local` gate and record whether the
+runtime blocker stays on deferred repair plus
+`publication_missing_active_node` debt or migrates to a newly named owner
+boundary.

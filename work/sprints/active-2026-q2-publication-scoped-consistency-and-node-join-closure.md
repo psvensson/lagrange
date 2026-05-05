@@ -196,25 +196,19 @@ Queued cleanup packages:
    three durable nodes, but the active-gate/failure-bundle gate remains open
    because the selected durable publication omits the two expected active
    nodes. Artifact replay passed and stayed `replayed_blocked` with row counts
-   `nodes=3`, `nodeEndpoints=0`, `partitions=33`, and `services=103`.
+   `nodes=3`, `nodeEndpoints=0`, `partitions=33`, and `services=103`. The
+   owner-RPC/cache-repair replay probe now also prints selected observation
+   evidence, four authoritative discovery `nodes` repair deferrals through
+   `owner_rpc_lane` / `control_plane_backpressure`, two deferrals on the
+   selected witness, and the subordinate `sql_write_operations-p1`
+   workflow-progress witness.
 2. Next active investigation:
    continue
    [Rolling Restart Topology Publication Snapshot Reachability Reentry](../packages/active-20260505-rolling-restart-topology-publication-snapshot-reachability-reentry.md)
-   by adding the smallest owner-RPC/cache-repair replay fixture or probe for
-   the `20260505T114859Z` shape. The fixture must preserve the selected
-   admin-ready witness
-   `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58` as `repair_deferred` /
-   `stale_usable`, the final replay row shape of three node rows and no node
-   endpoints, authoritative discovery repair deferral on `nodes` through
-   `owner_rpc_lane` / `control_plane_backpressure`, publication epoch `3`
-   `PUBLISHED` at selected published-active `3/5`, missing nodes
-   `11601fe0-72d6-5853-8590-ec2881853e72` and
-   `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`, and closure witness `CL-006` /
-   `startup_active_publication_lag`. It must also preserve
-   `sql_write_operations-p1` as subordinate `recovering_in_flight` evidence at
-   `operation_workflow_owner / workflow_progress / event_driven`, with
-   correlation key
-   `sql_write_operations-p1|3|b4e4c126-7b34-42dc-9234-ee9b7e3b6af2`.
+   by rerunning the representative `rolling-restart --fast-local` gate after
+   the owner-RPC/cache-repair replay probe. Record whether the blocker closes,
+   stays on deferred repair plus publication missing-active-node debt, or
+   migrates to one newly named runtime owner boundary.
 3. Harness classification:
    terminal barrier evidence wins over stale playback reconstruction for
    active, restart-recovery, load-readiness, convergence, and quiescence
@@ -229,6 +223,8 @@ Queued cleanup packages:
    missing-active-node debt with deferred selected-snapshot observation,
    owner-RPC/cache-repair pressure on authoritative discovery `nodes` repair,
    and subordinate `sql_write_operations-p1` workflow-progress evidence; the
+   replay probe now preserves those three evidence surfaces in one bounded
+   fixture without broadening distributed timeouts or the matrix. The
    previous `052328Z` `sql_write_operations-p1` PENDING dispatch timeout after
    publication closure remains residual but is not the latest selected boundary.
    A narrow harness formatter fix now prevents
