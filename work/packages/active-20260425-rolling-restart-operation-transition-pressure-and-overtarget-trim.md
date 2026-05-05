@@ -230,6 +230,53 @@ May 5 harness publication-summary classification fix:
    coverage `2/5`, active `3/5`, serial-wait witness, and
    `replica_operations-p1` follow-up rebalance residual remain open.
 
+May 5 terminal publication evidence rerun after classification fixes:
+
+1. Fresh representative rerun after `8fd72452` and `a3c34d27`:
+   `test-output/reports/rolling-restart-terminal-publication-evidence-rerun-20260505T052328Z.report.json`.
+2. Companion log:
+   `test-output/reports/rolling-restart-terminal-publication-evidence-rerun-20260505T052328Z.log`.
+3. Failure bundle:
+   `test-output/reports/.playback/rolling-restart-terminal-publication-evidence-rerun-20260505T052328Z/rolling-restart/failure-bundle.json`.
+4. Triage summary:
+   `test-output/reports/.playback/rolling-restart-terminal-publication-evidence-rerun-20260505T052328Z/rolling-restart/triage-summary.md`.
+5. Result: failed, `0/1` passed after `131.7s`.
+6. Terminal barrier:
+   `Not all nodes reached ACTIVE state within 120000ms`.
+7. The timeout summary now preserves terminal publication debt instead of
+   reporting stale `publicationConvergence=ready`: the scenario error reports
+   `publicationConvergence=blocked#recovery=priority_spread_pending#missingPublished=2`.
+8. The runtime blocker migrated forward from the canonical `042441Z`
+   startup/publication pending ACK shape. All five nodes report active,
+   publication epoch `3` is `PUBLISHED`, pending ACK count is `0`, and
+   publication recovery protocol state is `steady_published`.
+9. Active-gate progress remains not closed: selected snapshot coverage is
+   `3/5` at the terminal poll, best progress was `4/5`, selected published
+   active is `3/5`, selected missing published count is `2`, and selected
+   missing published nodes are `35a891b8-c1a0-5064-9c6e-2acfba61c2a7` and
+   `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`.
+10. Root cause class is now `topology`; dominant reason is
+    `priority_recovery_workflow_timeout_transition_deferred`; failure class is
+    `priority_recovery_progress_blocked`.
+11. Priority recovery narrowed to one blocked and unresolved partition:
+    `sql_write_operations-p1`.
+12. Dominant witness:
+    `operation_workflow_owner / workflow_timeout / timeout_reconcile_due` with
+    next action `reconcile_stale_operation_progress`, progress class
+    `operation_created_but_no_step_transitions`, semantic state
+    `operation_stalled`, workflow phase `dispatch_pending`, operation
+    `1a2d029d-5c00-45a8-bd71-ac4e34b318eb`, workflow step `PENDING`, status
+    `pending`, step age `56239ms`, step timeout `30000ms`, target visibility
+    `absent`, and no serial-wait blockers.
+13. `control_plane_publications-p1`, `replica_operations-p1`,
+    `sql_transaction_participants-p1`, and `sql_transactions-p1` are now
+    `spread_satisfied_in_flight`.
+14. This package remains active. The pending ACK owner blocker is no longer
+    the dominant terminal evidence in this rerun, but the representative path
+    still fails on selected snapshot coverage, selected missing-published
+    disagreement, and the `sql_write_operations-p1` PENDING dispatch timeout
+    owner boundary.
+
 ## Scope Basis
 
 Roadmap Phase `0.1 - Internal Coherence` maintenance/refactoring scope under
@@ -420,11 +467,14 @@ Closure:
 - [x] Preserve the selected terminal ACTIVE progress snapshot as publication
       summary evidence when the final timeout poll regresses to stale-ready
       publication state.
-- [ ] Reconcile the May 5 startup/publication pending ACK blocker, selected
-      snapshot coverage `2/5`, active `3/5`, pending ACK node
-      `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`, and
-      `replica_operations-p1` follow-up rebalance residual before closing this
-      package.
+- [x] Rerun the representative path after the terminal publication evidence
+      review fix and record whether the blocker closes or migrates.
+- [ ] Reconcile the May 5 migrated operation-workflow owner blocker:
+      selected snapshot coverage `3/5`, selected missing published count `2`,
+      priority spread gap `6`, and `sql_write_operations-p1` operation
+      `1a2d029d-5c00-45a8-bd71-ac4e34b318eb` stuck
+      `PENDING/pending` at `operation_workflow_owner / workflow_timeout /
+      timeout_reconcile_due`.
 
 ## Validation
 
@@ -459,6 +509,10 @@ Closure:
     static drift ledger. The fix prevents stale final ready probes from
     overriding the selected terminal ACTIVE progress snapshot in timeout
     publication summaries.
+11. Post-review representative rerun
+    `test-output/reports/rolling-restart-terminal-publication-evidence-rerun-20260505T052328Z.report.json`
+    failed by the migrated runtime owner blocker recorded above. No production
+    code was changed for this documentation-only evidence update.
 
 ## Done When
 
@@ -470,35 +524,27 @@ Closure:
 
 ## Residual Active Blocker
 
-The current blocker is not closed. The canonical May 5 rerun fails at startup
-ACTIVE convergence with active `3/5`, selected snapshot coverage `2/5`, and
-publication epoch `3` stuck `ACK_PENDING`. Publication convergence reports one
-pending ACK node, `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`, blocked node count
-`0`, and normalized missing published count `0`. Active-gate progress reports
-pending ACK count `1`, selected published active `3/5`, missing published
-count `2`, missing published nodes
-`8be8d30f-4499-5eed-865c-71b4d529a67a` and
-`ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`, priority spread gap `9`, and no
-progress for six coordinator cycles.
+The current blocker is not closed. The fresh May 5 post-review rerun failed
+after `131.7s` with all five nodes reporting active, publication epoch `3`
+`PUBLISHED`, pending ACK count `0`, and recovery protocol state
+`steady_published`. The timeout summary correctly reports
+`publicationConvergence=blocked#recovery=priority_spread_pending#missingPublished=2`.
 
-The timeout-summary classification no longer treats that shape as ready when
-the same active-gate evidence carries open publication debt. That presentation
-fix does not close the runtime owner disagreement.
+Active-gate progress still reports selected snapshot coverage `3/5`, best
+coverage `4/5`, selected published active `3/5`, selected missing published
+count `2`, selected missing published nodes
+`35a891b8-c1a0-5064-9c6e-2acfba61c2a7` and
+`ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`, and priority spread gap `6`.
 
-The serial-wait evidence preservation worked: the bundle now exposes
-`sql_write_operations-p1` as `needs_operation /
-priority_operation_serial_wait`, with no current operation IDs and explicit
-serial-wait metadata pointing to operation
-`1ba3f99e-e1e6-4c15-b09d-d65364b60e22` on
-`sql_transaction_participants-p1`. The previous May 4
-`sql_transactions-p1` serial-wait witness has moved to
-`spread_satisfied_in_flight` with operation
-`10b5432a-61f1-4b26-b735-7fc731b7997e`. A second priority residual remains:
-`replica_operations-p1` is cache-visible, terminal `FAILED`,
-`blocked_unclassified`, owned by `rebalancer_leader`, and requires
-`schedule_followup_rebalance`.
+The dominant runtime owner boundary is now `sql_write_operations-p1`:
+operation `1a2d029d-5c00-45a8-bd71-ac4e34b318eb` remains
+`PENDING/pending` with target visibility `absent`, no serial-wait blockers,
+workflow phase `dispatch_pending`, step age `56239ms`, step timeout `30000ms`,
+and required action `reconcile_stale_operation_progress`. The previous
+`042441Z` pending ACK node and `replica_operations-p1` follow-up rebalance
+shape are no longer the terminal selected residual in this rerun.
 
 The next continuation must not broaden the matrix or raise timeouts. It must
-choose the smallest owner slice that reconciles startup publication pending ACK
-and selected-snapshot coverage with the retained serial-wait metadata and the
-`replica_operations-p1` follow-up rebalance residual.
+choose the smallest owner slice that reconciles selected snapshot coverage and
+selected missing-published disagreement with the `sql_write_operations-p1`
+PENDING dispatch timeout owner path.
