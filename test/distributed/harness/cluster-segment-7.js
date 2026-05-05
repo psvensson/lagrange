@@ -956,6 +956,7 @@ class Cluster extends Cluster5 {
     );
     const publicationConvergenceSummary = formatPublicationConvergenceGate(
       pollResult.lastResult?.publicationConvergenceGate || null,
+      pollResult.lastResult,
     );
     const priorityRecoveryFailingInvariantIds = normalizeDistinctStringArray(
       pollResult.lastResult?.priorityRecoveryInvariants?.failingInvariantIds,
@@ -1575,6 +1576,7 @@ class Cluster extends Cluster5 {
     );
     const publicationConvergenceSummary = formatPublicationConvergenceGate(
       pollResult.lastResult?.publicationConvergenceGate || null,
+      pollResult.lastResult,
     );
     const finalProgressSnapshot =
       lastObservedProgressSnapshot ||

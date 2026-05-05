@@ -204,6 +204,27 @@ May 5 canonical serial-wait evidence rerun:
     active `3/5`, one pending ACK node, and the `replica_operations-p1`
     follow-up rebalance residual must be reconciled before broad matrix work.
 
+May 5 harness publication-summary classification fix:
+
+1. Reproduced the narrow harness presentation bug with
+   `test/distributed/harness/__tests__/cluster.test-part-6.js`: a stale
+   `publicationConvergenceGate.ready=true` record plus selected-snapshot
+   `ACK_PENDING`, pending ACK `1`, and missing published `2` first formatted as
+   `ready`.
+2. `formatPublicationConvergenceGate()` now builds one normalized summary
+   evidence snapshot from the gate record plus active-gate/snapshot progress
+   context, then uses one decision table where explicit reasons and open
+   publication debt block before `ready`.
+3. ACTIVE and load-readiness timeout formatting now pass the current poll
+   result into the formatter, so same-boundary progress evidence can prevent
+   stale `publicationConvergence=ready` summaries.
+4. Focused regression now expects
+   `blocked#status=ACK_PENDING#recovery=publication_pending#pendingAck=1#missingPublished=2`.
+5. This is a harness classification fix only. The package remains active
+   because the startup/publication pending ACK owner blocker, selected-snapshot
+   coverage `2/5`, active `3/5`, serial-wait witness, and
+   `replica_operations-p1` follow-up rebalance residual remain open.
+
 ## Scope Basis
 
 Roadmap Phase `0.1 - Internal Coherence` maintenance/refactoring scope under
@@ -331,6 +352,25 @@ Closure:
       added-line filtering for this slice reports `0` literal-guideline
       violations on added lines.
 - [x] May 4 serial-wait evidence slice `git diff --check` passed.
+- [x] May 5 harness classification `node --check` passed for
+      `test/distributed/harness/cluster-segment-2.js`,
+      `test/distributed/harness/cluster-segment-7.js`, and
+      `test/distributed/harness/__tests__/cluster.test-part-6.js`.
+- [x] May 5 harness classification focused regression was red before the fix
+      (`ready` instead of the expected blocked summary), then passed:
+      `node --test test/distributed/harness/__tests__/cluster.test-part-6.js --test-name-pattern "formatPublicationConvergenceGate"`.
+- [x] May 5 harness classification non-literal guardrails passed:
+      `node scripts/check-guideline-decision-boundaries.js ...` and
+      `node scripts/check-runtime-grammar-contracts.js ...` both reported `0`
+      violations across the three touched JS files.
+- [ ] May 5 harness classification exact touched-file literal guard remains
+      file-scoped red:
+      `node scripts/check-guideline-literals.js --include-tests test/distributed/harness/cluster-segment-2.js test/distributed/harness/cluster-segment-7.js test/distributed/harness/__tests__/cluster.test-part-6.js`
+      reports `374` new literal-guideline violations and `0` inherited
+      baseline violations. Top residual files are existing whole-file harness
+      fixture debt: `cluster.test-part-6.js` `289`,
+      `cluster-segment-2.js` `55`, and `cluster-segment-7.js` `30`.
+- [x] May 5 harness classification `git diff --check` passed.
 
 ## Implementation Tasks
 
@@ -344,6 +384,8 @@ Closure:
       into current-partition operation identity.
 - [x] Rerun the representative path after serial-wait metadata preservation and
       record the migrated owner evidence.
+- [x] Preserve open publication debt in ACTIVE/load-readiness timeout
+      publication summaries when the gate record is stale-ready.
 - [ ] Reconcile the May 5 startup/publication pending ACK blocker, selected
       snapshot coverage `2/5`, active `3/5`, pending ACK node
       `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`, and
@@ -375,6 +417,10 @@ Closure:
 8. Serial-wait evidence slice checks passed as recorded in the static drift
    ledger. The representative path has been rerun with canonical May 5
    evidence and migrated back to startup/publication pending ACK.
+9. Harness publication-summary classification coverage passed as recorded in
+   the static drift ledger. The fix prevents the May 5 same-boundary
+   `publicationConvergence=ready` contradiction from hiding open ACK or
+   missing-published debt.
 
 ## Done When
 
@@ -396,6 +442,10 @@ count `2`, missing published nodes
 `8be8d30f-4499-5eed-865c-71b4d529a67a` and
 `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`, priority spread gap `9`, and no
 progress for six coordinator cycles.
+
+The timeout-summary classification no longer treats that shape as ready when
+the same active-gate evidence carries open publication debt. That presentation
+fix does not close the runtime owner disagreement.
 
 The serial-wait evidence preservation worked: the bundle now exposes
 `sql_write_operations-p1` as `needs_operation /

@@ -56,6 +56,44 @@ const PRIORITY_RECOVERY_DECISION_SNAPSHOT_PROGRESS_FIELD = Object.freeze({
   TARGET_SERVICE_PROGRESS_AT_MS: 'targetServiceProgressAtMs',
   UPDATED_AT_MS: 'updatedAtMs',
 });
+const PUBLICATION_CONVERGENCE_GATE_EMPTY_RECORD = Object.freeze({});
+const PUBLICATION_CONVERGENCE_GATE_SUMMARY_TEXT = Object.freeze({
+  BLOCKED: 'blocked',
+  DETAIL_SEPARATOR: '#',
+  EMPTY: '',
+  MISSING_PUBLISHED_PREFIX: 'missingPublished=',
+  NONE: 'none',
+  OBJECT_TYPE: 'object',
+  PENDING_ACK_PREFIX: 'pendingAck=',
+  READY: 'ready',
+  REASON_SEPARATOR: ',',
+  RECOVERY_PREFIX: 'recovery=',
+  REASONS: 'reasons',
+  STATUS_PREFIX: 'status=',
+  STRING_TYPE: 'string',
+});
+const PUBLICATION_CONVERGENCE_GATE_SUMMARY_DECISION_TABLE = Object.freeze([
+  Object.freeze({
+    summary: PUBLICATION_CONVERGENCE_GATE_SUMMARY_TEXT.NONE,
+    matches: (evidence) => evidence.recordPresent !== true,
+  }),
+  Object.freeze({
+    summary: PUBLICATION_CONVERGENCE_GATE_SUMMARY_TEXT.REASONS,
+    matches: (evidence) => evidence.reasons.length > ZERO,
+  }),
+  Object.freeze({
+    summary: PUBLICATION_CONVERGENCE_GATE_SUMMARY_TEXT.BLOCKED,
+    matches: (evidence) => evidence.openDebtPresent === true,
+  }),
+  Object.freeze({
+    summary: PUBLICATION_CONVERGENCE_GATE_SUMMARY_TEXT.READY,
+    matches: (evidence) => evidence.ready === true,
+  }),
+  Object.freeze({
+    summary: PUBLICATION_CONVERGENCE_GATE_SUMMARY_TEXT.BLOCKED,
+    matches: () => true,
+  }),
+]);
 
 /**
  * Preserve a small but meaningful timeout floor for deadline-driven
@@ -693,23 +731,234 @@ function evaluatePriorityRecoveryCrossServiceInvariants(options = {}) {
   };
 }
 
-function formatPublicationConvergenceGate(publicationConvergenceGate) {
+function normalizePublicationConvergenceGateText(value) {
+  if (typeof value !==
+      PUBLICATION_CONVERGENCE_GATE_SUMMARY_TEXT.STRING_TYPE) {
+    return PUBLICATION_CONVERGENCE_GATE_SUMMARY_TEXT.EMPTY;
+  }
+  const trimmed = value.trim();
+  return trimmed.length > ZERO ?
+    trimmed :
+    PUBLICATION_CONVERGENCE_GATE_SUMMARY_TEXT.EMPTY;
+}
+
+function normalizePublicationConvergenceGateRecord(value) {
   if (
-    !publicationConvergenceGate ||
-    typeof publicationConvergenceGate !== 'object'
+    value &&
+    typeof value === PUBLICATION_CONVERGENCE_GATE_SUMMARY_TEXT.OBJECT_TYPE
   ) {
-    return 'none';
+    return value;
   }
-  if (publicationConvergenceGate.ready === true) {
-    return 'ready';
+  return PUBLICATION_CONVERGENCE_GATE_EMPTY_RECORD;
+}
+
+function isPublicationConvergenceGateRecordPresent(value) {
+  return normalizePublicationConvergenceGateRecord(value) !==
+    PUBLICATION_CONVERGENCE_GATE_EMPTY_RECORD;
+}
+
+function selectPublicationConvergenceGateStatus(candidates) {
+  const normalizedStatuses = candidates
+    .map((candidate) => normalizeActiveWaitPublicationStatus(candidate))
+    .filter((candidate) => candidate);
+  if (normalizedStatuses.length === ZERO) {
+    return PUBLICATION_CONVERGENCE_GATE_SUMMARY_TEXT.EMPTY;
   }
-  const reasons = Array.isArray(publicationConvergenceGate.reasons) ?
-    publicationConvergenceGate.reasons :
+  return normalizedStatuses.sort(comparePublicationConvergenceGateStatusDebt)[
+    ZERO
+  ];
+}
+
+function comparePublicationConvergenceGateStatusDebt(left, right) {
+  const leftRank = resolveActiveWaitPublicationStatusRank(left);
+  const rightRank = resolveActiveWaitPublicationStatusRank(right);
+  if (leftRank !== rightRank) {
+    return leftRank - rightRank;
+  }
+  return left.localeCompare(right);
+}
+
+function selectPublicationConvergenceGateText(candidates) {
+  for (const candidate of candidates) {
+    const normalizedText = normalizePublicationConvergenceGateText(candidate);
+    if (normalizedText.length > ZERO) {
+      return normalizedText;
+    }
+  }
+  return PUBLICATION_CONVERGENCE_GATE_SUMMARY_TEXT.EMPTY;
+}
+
+function normalizePublicationConvergenceGateCount(countCandidates, nodeIdGroups) {
+  const explicitCount = countCandidates.find((candidate) =>
+    Number.isInteger(candidate) && candidate > ZERO,
+  );
+  if (Number.isInteger(explicitCount) && explicitCount > ZERO) {
+    return explicitCount;
+  }
+  return normalizeDistinctStringArray(nodeIdGroups.flat()).length;
+}
+
+function buildPublicationConvergenceGateSummaryEvidence(
+  publicationConvergenceGate,
+  activeGateEvidence = PUBLICATION_CONVERGENCE_GATE_EMPTY_RECORD,
+) {
+  const gateRecordPresent = isPublicationConvergenceGateRecordPresent(
+    publicationConvergenceGate,
+  );
+  const gateRecord = normalizePublicationConvergenceGateRecord(
+    publicationConvergenceGate,
+  );
+  const evidenceRecord = normalizePublicationConvergenceGateRecord(
+    activeGateEvidence,
+  );
+  const progressSnapshot = normalizePublicationConvergenceGateRecord(
+    evidenceRecord.progressSnapshot,
+  );
+  const snapshotCoverage = isPublicationConvergenceGateRecordPresent(
+    evidenceRecord.snapshotCoverage,
+  ) ?
+    normalizePublicationConvergenceGateRecord(evidenceRecord.snapshotCoverage) :
+    evidenceRecord;
+  const selectedPublicationConvergenceGate =
+    normalizePublicationConvergenceGateRecord(
+      snapshotCoverage.selectedPublicationConvergenceGate,
+    );
+  const selectedPublicationConvergence =
+    normalizePublicationConvergenceGateRecord(
+      snapshotCoverage.selectedPublicationConvergence,
+    );
+  const reasons = gateRecordPresent ?
+    normalizeDistinctStringArray(gateRecord.reasons) :
     [];
-  if (reasons.length > ZERO) {
-    return reasons.join(',');
+  const status = selectPublicationConvergenceGateStatus([
+    gateRecord.publicationStatus,
+    progressSnapshot.publicationStatus,
+    selectedPublicationConvergenceGate.publicationStatus,
+    selectedPublicationConvergence.publicationStatus,
+    selectedPublicationConvergence.status,
+  ]);
+  const recoveryProtocolState = selectPublicationConvergenceGateText([
+    gateRecord.recoveryProtocolState,
+    progressSnapshot.recoveryProtocolState,
+    selectedPublicationConvergenceGate.recoveryProtocolState,
+    selectedPublicationConvergence.recoveryProtocolState,
+  ]);
+  const pendingAckCount = normalizePublicationConvergenceGateCount(
+    [
+      gateRecord.pendingAckCount,
+      progressSnapshot.pendingAckCount,
+      selectedPublicationConvergenceGate.pendingAckCount,
+      selectedPublicationConvergence.pendingAckCount,
+    ],
+    [
+      gateRecord.pendingAckNodeIds,
+      progressSnapshot.pendingAckNodeIds,
+      snapshotCoverage.selectedPendingAckNodeIds,
+      selectedPublicationConvergenceGate.pendingAckNodeIds,
+      selectedPublicationConvergence.pendingAckNodeIds,
+    ],
+  );
+  const missingPublishedCount = normalizePublicationConvergenceGateCount(
+    [
+      gateRecord.missingPublishedCount,
+      progressSnapshot.missingPublishedCount,
+      selectedPublicationConvergenceGate.missingPublishedCount,
+      selectedPublicationConvergence.missingPublishedCount,
+    ],
+    [
+      gateRecord.missingPublishedNodeIds,
+      progressSnapshot.selectedMissingPublishedNodeIds,
+      snapshotCoverage.selectedMissingPublishedNodeIds,
+      selectedPublicationConvergenceGate.missingPublishedNodeIds,
+      selectedPublicationConvergence.missingPublishedNodeIds,
+    ],
+  );
+  const statusOpen =
+    status.length > ZERO &&
+    status !== ACTIVE_WAIT_PUBLICATION_STATUS_PUBLISHED;
+  return {
+    recordPresent: gateRecordPresent,
+    ready:
+      gateRecordPresent &&
+      gateRecord.ready === true &&
+      reasons.length === ZERO &&
+      statusOpen !== true &&
+      pendingAckCount === ZERO &&
+      missingPublishedCount === ZERO,
+    reasons,
+    status,
+    recoveryProtocolState,
+    pendingAckCount,
+    missingPublishedCount,
+    statusOpen,
+    openDebtPresent:
+      statusOpen ||
+      pendingAckCount > ZERO ||
+      missingPublishedCount > ZERO,
+  };
+}
+
+function formatPublicationConvergenceGateDetails(evidence) {
+  return [
+    {
+      include: evidence.statusOpen === true,
+      value:
+        PUBLICATION_CONVERGENCE_GATE_SUMMARY_TEXT.STATUS_PREFIX +
+        evidence.status,
+    },
+    {
+      include:
+        evidence.openDebtPresent === true &&
+        evidence.recoveryProtocolState.length > ZERO,
+      value:
+        PUBLICATION_CONVERGENCE_GATE_SUMMARY_TEXT.RECOVERY_PREFIX +
+        evidence.recoveryProtocolState,
+    },
+    {
+      include: evidence.pendingAckCount > ZERO,
+      value:
+        PUBLICATION_CONVERGENCE_GATE_SUMMARY_TEXT.PENDING_ACK_PREFIX +
+        String(evidence.pendingAckCount),
+    },
+    {
+      include: evidence.missingPublishedCount > ZERO,
+      value:
+        PUBLICATION_CONVERGENCE_GATE_SUMMARY_TEXT.MISSING_PUBLISHED_PREFIX +
+        String(evidence.missingPublishedCount),
+    },
+  ]
+    .filter((detail) => detail.include === true)
+    .map((detail) => detail.value);
+}
+
+function formatPublicationConvergenceGate(
+  publicationConvergenceGate,
+  activeGateEvidence = PUBLICATION_CONVERGENCE_GATE_EMPTY_RECORD,
+) {
+  const evidence = buildPublicationConvergenceGateSummaryEvidence(
+    publicationConvergenceGate,
+    activeGateEvidence,
+  );
+  const decision =
+    PUBLICATION_CONVERGENCE_GATE_SUMMARY_DECISION_TABLE.find((entry) =>
+      entry.matches(evidence),
+    );
+  const summary =
+    decision?.summary === PUBLICATION_CONVERGENCE_GATE_SUMMARY_TEXT.REASONS ?
+      evidence.reasons.join(
+        PUBLICATION_CONVERGENCE_GATE_SUMMARY_TEXT.REASON_SEPARATOR,
+      ) :
+      decision?.summary ||
+        PUBLICATION_CONVERGENCE_GATE_SUMMARY_TEXT.BLOCKED;
+  const details = formatPublicationConvergenceGateDetails(evidence);
+  if (details.length === ZERO) {
+    return summary;
   }
-  return 'blocked';
+  return summary +
+    PUBLICATION_CONVERGENCE_GATE_SUMMARY_TEXT.DETAIL_SEPARATOR +
+    details.join(
+      PUBLICATION_CONVERGENCE_GATE_SUMMARY_TEXT.DETAIL_SEPARATOR,
+    );
 }
 
 function normalizeActiveWaitPublicationStatus(status) {

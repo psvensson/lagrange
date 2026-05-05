@@ -166,7 +166,10 @@ Queued cleanup packages:
    explains that disagreement. The latest terminal owner boundary is startup
    publication pending ACK plus priority recovery serial wait on
    `sql_write_operations-p1`, not the previous May 4 `sql_transactions-p1`
-   witness.
+   witness. A narrow harness formatter fix now prevents
+   `publicationConvergence=ready` when the same active-gate evidence carries
+   `ACK_PENDING`, pending ACK, or missing-published debt; this is
+   classification-only and does not close the runtime owner blocker.
 4. Final consistency:
    the final leader-map consistency package is complete for this sprint
    because the rerun moved to a freshly split non-final blocker.

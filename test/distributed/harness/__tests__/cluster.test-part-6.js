@@ -31,6 +31,9 @@ import {
 } from './cluster-test-helpers.js';
 
 const {
+  ACTIVE_WAIT_PUBLICATION_STATUS_ACK_PENDING,
+  ACTIVE_WAIT_PUBLICATION_STATUS_PUBLISHED,
+  formatPublicationConvergenceGate,
   summarizePriorityRecoveryProgressClasses,
 } = CLUSTER_SEGMENT_2;
 
@@ -175,6 +178,48 @@ const PRIORITY_RECOVERY_PROGRESS_CORRELATION_KEY =
   PRIORITY_RECOVERY_PROGRESS_PARTITION_ID + '|' +
   PRIORITY_RECOVERY_PROGRESS_EPOCH + '|' +
   PRIORITY_RECOVERY_PROGRESS_OPERATION_ID;
+const PUBLICATION_GATE_SUMMARY_RECOVERY_PENDING = 'publication_pending';
+const PUBLICATION_GATE_SUMMARY_PENDING_NODE_ID = 'pending-ack-node';
+const PUBLICATION_GATE_SUMMARY_PENDING_NODE_IDS = Object.freeze([
+  PUBLICATION_GATE_SUMMARY_PENDING_NODE_ID,
+]);
+const PUBLICATION_GATE_SUMMARY_MISSING_NODE_ID_A = 'missing-published-node-a';
+const PUBLICATION_GATE_SUMMARY_MISSING_NODE_ID_B = 'missing-published-node-b';
+const PUBLICATION_GATE_SUMMARY_MISSING_NODE_IDS = Object.freeze([
+  PUBLICATION_GATE_SUMMARY_MISSING_NODE_ID_A,
+  PUBLICATION_GATE_SUMMARY_MISSING_NODE_ID_B,
+]);
+const PUBLICATION_GATE_SUMMARY_EXPECTED =
+  'blocked#status=ACK_PENDING#recovery=publication_pending#pendingAck=1' +
+  '#missingPublished=2';
+const PUBLICATION_GATE_SUMMARY_TEST_NAME =
+  'Unit: formatPublicationConvergenceGate blocks ready with open debt';
+
+test(
+  PUBLICATION_GATE_SUMMARY_TEST_NAME,
+  async (t) => {
+    const formatted = formatPublicationConvergenceGate(
+      {
+        ready: true,
+        reasons: [],
+        publicationStatus: ACTIVE_WAIT_PUBLICATION_STATUS_PUBLISHED,
+      },
+      {
+        snapshotCoverage: {
+          selectedPublicationConvergence: {
+            publicationStatus: ACTIVE_WAIT_PUBLICATION_STATUS_ACK_PENDING,
+            recoveryProtocolState: PUBLICATION_GATE_SUMMARY_RECOVERY_PENDING,
+          },
+          selectedPendingAckNodeIds: PUBLICATION_GATE_SUMMARY_PENDING_NODE_IDS,
+          selectedMissingPublishedNodeIds:
+            PUBLICATION_GATE_SUMMARY_MISSING_NODE_IDS,
+        },
+      },
+    );
+
+    t.equal(formatted, PUBLICATION_GATE_SUMMARY_EXPECTED);
+  },
+);
 
 test(
   'Unit: summarizePriorityRecoveryProgressClasses uses the latest partition snapshot state',
