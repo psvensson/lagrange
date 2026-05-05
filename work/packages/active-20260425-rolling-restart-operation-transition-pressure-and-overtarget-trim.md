@@ -7,8 +7,12 @@ into startup active-gate selected-snapshot evidence.
 
 ## Current Evidence
 
-This package is the executable re-entry owner for the post-active
-operation-transition / over-target boundary.
+This package remains active as the prior post-active operation-transition /
+over-target residual owner. It is no longer the current representative
+re-entry owner: the fresh May 5 `074739Z` path migrated earlier into
+[Rolling Restart Topology Publication Snapshot Reachability Reentry](./active-20260505-rolling-restart-topology-publication-snapshot-reachability-reentry.md).
+Future work should return here only after the representative path again reaches
+post-publication operation workflow timeout reconciliation or over-target trim.
 
 The last post-active evidence before later migrations was:
 
@@ -198,11 +202,11 @@ May 5 canonical serial-wait evidence rerun:
 16. The earlier duplicate timestamped rerun is not canonical evidence for this
     package. The canonical fresh evidence is the
     `20260505T042441Z` report and playback bundle above.
-17. This package remains active. The post-active operation-transition loop is
-    not proven closed because the representative path migrated earlier again:
-    startup/publication pending ACK, selected-snapshot coverage `2/5`,
+17. This rerun did not prove the post-active operation-transition residual
+    closed. It instead showed the representative path had migrated earlier
+    again to startup/publication ACK debt, selected-snapshot coverage `2/5`,
     active `3/5`, one pending ACK node, and the `replica_operations-p1`
-    follow-up rebalance residual must be reconciled before broad matrix work.
+    follow-up rebalance residual before broad matrix work.
 
 May 5 harness publication-summary classification fix:
 
@@ -225,10 +229,11 @@ May 5 harness publication-summary classification fix:
    the publication-convergence formatter.
 5. Focused regressions now expect
    `blocked#status=ACK_PENDING#recovery=publication_pending#pendingAck=1#missingPublished=2`.
-6. This is a harness classification fix only. The package remains active
-   because the startup/publication pending ACK owner blocker, selected-snapshot
+6. This is a harness classification fix only. It did not close the prior
+   post-publication operation-workflow residual, and the representative path at
+   that point still carried startup/publication ACK debt, selected-snapshot
    coverage `2/5`, active `3/5`, serial-wait witness, and
-   `replica_operations-p1` follow-up rebalance residual remain open.
+   `replica_operations-p1` follow-up rebalance residuals.
 
 May 5 terminal publication evidence rerun after classification fixes:
 
@@ -362,10 +367,11 @@ May 5 failure-bundle missing-published coverage-lag fix:
    closure metadata; the summary keeps missing-published node ids, publication
    pending, and the publication missing-active-node blocker.
 4. This is a harness classification fix only. No representative
-   `rolling-restart` rerun was run for this slice, and the package remains
-   active because startup/publication pending ACK, inactive nodes,
+   `rolling-restart` rerun was run for this slice. It did not close the prior
+   post-publication operation-workflow residual, and the representative path at
+   that point still carried startup/publication ACK debt, inactive nodes,
    selected-snapshot coverage, selected missing-published disagreement, and the
-   in-flight `sql_transactions-p1` workflow progress residual remain open.
+   in-flight `sql_transactions-p1` workflow progress residual.
 
 May 5 missing-published reason-source review follow-up:
 
@@ -423,11 +429,11 @@ May 5 representative rerun after missing-published reason-source fix:
     `sql_write_operations-p1|3|operation_unknown`,
     operation id `57aa5679-15ad-4ea9-84f6-c6e5f906abf0`, and serial-wait
     partition ids `sql_transaction_participants-p1` and `sql_transactions-p1`.
-12. This rerun replaces the stale pending-ACK evidence in this package's current
-    blocker. It does not close the previous `052328Z` `sql_write_operations-p1`
-    PENDING dispatch-timeout residual; the current blocker is an earlier
-    topology publication-missing/snapshot-reachability and priority serial-wait
-    boundary.
+12. This rerun supersedes the stale pending-ACK evidence as the representative
+    blocker and has been split to
+    [Rolling Restart Topology Publication Snapshot Reachability Reentry](./active-20260505-rolling-restart-topology-publication-snapshot-reachability-reentry.md).
+    It does not close the previous `052328Z` `sql_write_operations-p1` PENDING
+    dispatch-timeout residual retained by this package.
 
 ## Scope Basis
 
@@ -437,21 +443,25 @@ guarantees.
 
 ## In Scope
 
-1. Timeout reconciliation must drive cache-visible trustworthy target progress
+1. Preserve the prior post-active operation-workflow timeout residual for
+   later revisit when the representative path reaches this boundary again.
+2. Timeout reconciliation must drive cache-visible trustworthy target progress
    out of stale operation rows.
-2. Authoritative terminal target status must not be overridden by stale
+3. Authoritative terminal target status must not be overridden by stale
    cache-observed target progress.
-3. Durable trim must remove remaining over-target voters once operation
+4. Durable trim must remove remaining over-target voters once operation
    lifecycle evidence has converged.
-4. The package must rerun the representative scenario and record whether the
-   blocker closes or migrates.
+5. Record migrations out of this boundary without treating earlier topology
+   publication debt as operation-transition scope.
 
 ## Out Of Scope
 
-1. Startup active-gate selected-snapshot recovery before the representative
-   path reaches post-active convergence.
-2. Broad matrix continuation before this five-node representative boundary
-   closes or migrates.
+1. Current topology publication missing-active-node debt, selected snapshot
+   coverage/reachability, and `sql_write_operations-p1` priority serial-wait
+   re-entry. Those are owned by
+   [Rolling Restart Topology Publication Snapshot Reachability Reentry](./active-20260505-rolling-restart-topology-publication-snapshot-reachability-reentry.md).
+2. Broad matrix continuation before the current five-node representative
+   boundary closes or migrates.
 3. Pro or Enterprise behavior.
 
 ## Invariants
@@ -714,7 +724,8 @@ Closure:
       review fix and record whether the blocker closes or migrates.
 - [x] Rerun the representative path after the missing-published reason-source
       review fix and record whether the blocker closes or migrates.
-- [ ] Reconcile the latest May 5 migrated topology publication blocker:
+- [x] Split the latest May 5 migrated topology publication blocker to
+      [Rolling Restart Topology Publication Snapshot Reachability Reentry](./active-20260505-rolling-restart-topology-publication-snapshot-reachability-reentry.md):
       terminal active `2/5`, best active `3/5`, selected snapshot coverage
       `4/5`, pending ACK count `0`, selected missing published debt count `2`,
       priority spread gap `10`, snapshot reachability timeout on
@@ -722,8 +733,8 @@ Closure:
       `priority_operation_serial_wait` at
       `operation_workflow_owner / workflow_progress / event_driven`.
 - [ ] Revisit the prior May 5 post-publication operation-workflow timeout
-      residual once startup/publication convergence reaches that boundary
-      again: `sql_write_operations-p1` operation
+      residual once the representative path reaches that boundary again:
+      `sql_write_operations-p1` operation
       `1a2d029d-5c00-45a8-bd71-ac4e34b318eb` at
       `operation_workflow_owner / workflow_timeout / timeout_reconcile_due`.
 
@@ -750,8 +761,9 @@ Closure:
 7. Representative `rolling-restart --fast-local` reruns failed by residual
    blockers and kept this package active.
 8. Serial-wait evidence slice checks passed as recorded in the static drift
-   ledger. The representative path has been rerun with canonical May 5
-   evidence and migrated back to startup/publication pending ACK.
+   ledger. The representative path was rerun with canonical May 5 evidence and
+   migrated away from post-active operation-transition scope into earlier
+   publication and selected-snapshot blockers.
 9. Harness publication-summary classification coverage passed as recorded in
    the static drift ledger. The fix prevents the May 5 same-boundary
    `publicationConvergence=ready` contradiction from hiding open ACK or
@@ -770,9 +782,9 @@ Closure:
     `operation_stalled` terminal progress evidence.
 13. Post-`c17c23a9` representative rerun
     `test-output/reports/rolling-restart-after-terminal-witness-rerun-20260505T060935Z.report.json`
-    failed by the migrated startup/publication pending ACK blocker recorded
-    above. No production code was changed for this documentation-only evidence
-    update.
+    failed by the migrated startup/publication ACK debt recorded as historical
+    migration evidence above. No production code was changed for this
+    documentation-only evidence update.
 14. Documentation-only evidence ledger update touched no JS files. Required
     whitespace verification `git diff --check` passed.
 15. Failure-bundle missing-published coverage-lag harness coverage passed as
@@ -789,40 +801,28 @@ Closure:
 
 ## Done When
 
-1. The post-active operation workflow emits one canonical outcome for
+1. The prior post-publication `sql_write_operations-p1` operation-workflow
+   timeout residual is re-entered, closed, or deliberately split to a more
+   precise package after the current topology publication blocker clears.
+2. The post-active operation workflow emits one canonical outcome for
    transition pressure, failed or removed terminal targets, source-removal
    progress, and over-target voter trim.
-2. The representative path either passes convergence or migrates to one newly
-   named owner boundary with this transition-pressure loop closed.
+3. The representative path reaches this boundary again before broad matrix
+   continuation treats operation-transition pressure as closed.
 
-## Residual Active Blocker
+## Representative Handoff And Residuals
 
-The current blocker is not closed. The fresh post-`e0344113` May 5 rerun failed
-after `132.4s` and reports topology publication convergence blocked by explicit
-missing-active-node debt: publication epoch `3` is `PUBLISHED`, recovery
-protocol state is `publication_pending`, pending ACK count is `0`, missing
-published count is `2`, and missing published nodes are
-`8be8d30f-4499-5eed-865c-71b4d529a67a` and
-`ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`.
+The current representative continuation has migrated to
+[Rolling Restart Topology Publication Snapshot Reachability Reentry](./active-20260505-rolling-restart-topology-publication-snapshot-reachability-reentry.md).
+That package owns the post-`e0344113` May 5 topology publication
+missing-active-node blocker, selected snapshot coverage/reachability timeout,
+and `sql_write_operations-p1` priority serial-wait witness from the `074739Z`
+rerun.
 
-Active-gate progress reports terminal active `2/5`, best active `3/5`, selected
-snapshot coverage `4/5`, selected published active `3/5`, selected missing
-published count `2`, selected missing published nodes
-`8be8d30f-4499-5eed-865c-71b4d529a67a` and
-`ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`, priority spread gap `10`, and terminal
-`snapshot_reachability_timeout` for selected snapshot node
-`ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`.
-
-The latest selected runtime owner boundary is `sql_write_operations-p1`:
-progress class `priority_operation_serial_wait`, semantic state
-`needs_operation`, actuation state `transition_deferred`, correlation key
-`sql_write_operations-p1|3|operation_unknown`, operation id
-`57aa5679-15ad-4ea9-84f6-c6e5f906abf0`, and serial-wait partition ids
-`sql_transaction_participants-p1` and `sql_transactions-p1`. The previous
-`052328Z` `sql_write_operations-p1` PENDING dispatch timeout residual is not
-closed; this rerun reached a different same-partition serial-wait shape.
-
-The next continuation must not broaden the matrix or raise timeouts. It must
-choose the smallest owner slice that reconciles inactive nodes, selected
-snapshot coverage, selected missing-published debt, and the
-`sql_write_operations-p1` priority serial-wait witness.
+This operation-transition package remains active only because the prior
+post-publication operation-workflow timeout residual is not closed:
+`sql_write_operations-p1` operation
+`1a2d029d-5c00-45a8-bd71-ac4e34b318eb` at
+`operation_workflow_owner / workflow_timeout / timeout_reconcile_due` from the
+`052328Z` rerun. Do not mark this package done until that residual is
+re-entered, closed, or explicitly moved to its own named follow-up package.

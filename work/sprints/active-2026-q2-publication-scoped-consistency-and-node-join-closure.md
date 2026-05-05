@@ -101,7 +101,11 @@ Secondary after the primary path is stable:
 
 ## Active Packages
 
-The current active residual re-entry package is:
+The current active representative re-entry package is:
+
+1. [Rolling Restart Topology Publication Snapshot Reachability Reentry](../packages/active-20260505-rolling-restart-topology-publication-snapshot-reachability-reentry.md)
+
+Retained active residual package:
 
 1. [Rolling Restart Operation Transition Pressure And Over-Target Trim](../packages/active-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md)
 
@@ -112,14 +116,15 @@ presentation reentry, the startup rejoin seed-contact package, the active-gate
 priority-recovery actuation package, the operation-workflow ACK reentry
 package, and the startup snapshot reachability workflow-progress package
 executed. The priority recovery workflow transition-deferred package then
-closed by migration into operation workflow timeout reconciliation. The current
-operation-transition package remains active after the post-`e0344113` May 5
-rerun because the representative path still fails on topology publication
-missing-active-node debt, selected snapshot coverage, selected snapshot
-reachability timeout, priority spread, and a `sql_write_operations-p1` priority
-serial-wait residual. The previous `sql_write_operations-p1`
-operation-workflow timeout residual remains unclosed until the path reaches that
-shape again.
+closed by migration into operation workflow timeout reconciliation. The
+operation-transition package remains active only as a retained post-publication
+operation-workflow timeout residual. The current representative path is split
+to the topology publication/snapshot-reachability package after the
+post-`e0344113` May 5 rerun failed on missing-active-node debt, selected
+snapshot coverage, selected snapshot reachability timeout, priority spread, and
+a `sql_write_operations-p1` priority serial-wait residual. The previous
+`sql_write_operations-p1` operation-workflow timeout residual remains unclosed
+until the path reaches that shape again.
 
 All final consistency recommendation packages are complete or queued outside
 the current execution path.
@@ -129,7 +134,7 @@ Other secondary matrix failures become active packages only after the
 
 Current re-entry package:
 
-1. [Rolling Restart Operation Transition Pressure And Over-Target Trim](../packages/active-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md)
+1. [Rolling Restart Topology Publication Snapshot Reachability Reentry](../packages/active-20260505-rolling-restart-topology-publication-snapshot-reachability-reentry.md)
 
 Queued convergence-grammar packages:
 
@@ -165,7 +170,7 @@ Queued cleanup packages:
    `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`.
 2. Next active investigation:
    continue
-   [Rolling Restart Operation Transition Pressure And Over-Target Trim](../packages/active-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md)
+   [Rolling Restart Topology Publication Snapshot Reachability Reentry](../packages/active-20260505-rolling-restart-topology-publication-snapshot-reachability-reentry.md)
    by reconciling active-gate terminal active `2/5`, best active `3/5`,
    selected snapshot coverage `4/5`, selected missing published count `2`,
    selected missing published nodes
@@ -208,9 +213,9 @@ Queued cleanup packages:
 5. Residual cleanup:
    fence or delete superseded local reconstruction and caller-local pressure
    exception paths through queued packages only after the current
-   startup/publication pending-ACK blocker closes or migrates; keep the
-   previous `052328Z` `sql_write_operations-p1` operation-workflow timeout as
-   a prior residual, not the current blocker.
+   topology publication/snapshot-reachability blocker closes or migrates; keep
+   the previous `052328Z` `sql_write_operations-p1` operation-workflow timeout
+   as a prior residual, not the current blocker.
 6. Matrix re-entry:
    after `rolling-restart` passes or moves to a stable named blocker,
    continue with `seven-node-read-write-load-transaction-recovery`, then
@@ -582,11 +587,12 @@ Current secondary evidence:
     priority_operation_serial_wait` waiting behind serial-lane operation
     `1ba3f99e-e1e6-4c15-b09d-d65364b60e22` on
     `sql_transaction_participants-p1`.
-58. The active package remains
+58. The representative path has since split to
+    [Rolling Restart Topology Publication Snapshot Reachability Reentry](../packages/active-20260505-rolling-restart-topology-publication-snapshot-reachability-reentry.md)
+    for topology publication/snapshot-reachability and serial-wait ownership.
     [Rolling Restart Operation Transition Pressure And Over-Target Trim](../packages/active-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md)
-    until startup/publication pending ACK, selected-snapshot coverage, retained
-    serial-wait evidence, and the `replica_operations-p1` follow-up rebalance
-    residual are reconciled or split into a newly named owner boundary.
+    remains active only as the retained post-publication operation-workflow
+    timeout residual.
 59. May 5 terminal publication evidence review fix:
     `./node_modules/.bin/tap test/distributed/harness/__tests__/cluster.test-part-6.js --grep "timeout publication summary uses terminal progress evidence"`
     passed, `node --test test/distributed/harness/__tests__/cluster.test-part-6.js`
