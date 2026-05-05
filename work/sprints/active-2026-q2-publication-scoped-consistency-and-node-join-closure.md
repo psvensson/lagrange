@@ -217,20 +217,25 @@ Queued cleanup packages:
    replayed evidence both remain epoch `3` / `PUBLISHED` with priority spread
    pending, `summaryChanged=true`, and `blockedPartitionIdsMatch=false`.
    `git diff --check 4a0be30ced9b76bad07220c9f0a1d5fb294026ac^ 4a0be30ced9b76bad07220c9f0a1d5fb294026ac`
-   passed for the recorded `175220Z` validation update.
+   passed for the recorded `175220Z` validation update. The current docs-only
+   trace reran bounded replay and kept the package active on the same
+   canonical blocker.
 2. Completed trace, fixture, and next active task:
    the
    [Rolling Restart Topology Publication Snapshot Reachability Reentry](../packages/active-20260505-rolling-restart-topology-publication-snapshot-reachability-reentry.md)
    package has completed the `20260505T145246Z` trace, replay fixture,
    selected-snapshot repair evidence recovery probe, rebalancer-handoff
    follow-up traces, runtime pre-execution diagnostic, diagnostic replay review
-   fix, and `20260505T175220Z` representative rerun. The rerun observed the
-   new post-`Starting rebalancing` diagnostic in a fresh artifact, but the
-   `control_plane_publications-p1` handoff gap migrated rather than staying on
-   a pre-`executeMove` skip/return state. The current unchecked package task is
-   to trace the `175220Z` epoch `3` `PUBLISHED` missing-active
-   selected-snapshot artifact and the subordinate `sql_write_operations-p1`
-   workflow-progress / `persisted_not_dispatched` witness.
+   fix, `20260505T175220Z` representative rerun, and `20260505T175220Z`
+   evidence trace. The rerun observed the new post-`Starting rebalancing`
+   diagnostic in a fresh artifact, but the `control_plane_publications-p1`
+   handoff gap migrated rather than staying on a pre-`executeMove` skip/return
+   state. The trace preserves the canonical blocker as epoch `3` `PUBLISHED`
+   missing-active selected-snapshot topology debt, with retained
+   selected-snapshot repair evidence and subordinate `sql_write_operations-p1`
+   workflow-progress / `persisted_not_dispatched` evidence. The current
+   unchecked package task is the smallest focused `175220Z` replay fixture or
+   runtime owner probe for that shape.
 3. Harness classification:
    terminal barrier evidence wins over stale playback reconstruction for
    active, restart-recovery, load-readiness, convergence, and quiescence
@@ -239,9 +244,11 @@ Queued cleanup packages:
    `PUBLISHED`, missing published `2`, selected coverage `3/5`, priority
    spread pending, and subordinate `sql_write_operations-p1`
    workflow-progress evidence ahead of the previous `145246Z` epoch `2`
-   `PUBLISHED` shape. Do not treat selected-snapshot coverage as closed until
-   the `3/5` active-gate coverage, missing-published pair, priority-spread
-   gap, and `sql_write_operations-p1` witness are explained. The previous
+   `PUBLISHED` shape. The trace explains the current evidence shape but does
+   not close it; do not treat selected-snapshot coverage as closed until the
+   focused `175220Z` fixture or owner probe proves whether
+   `sql_write_operations-p1` dispatch progress is subordinate or newly
+   canonical. The previous
    `114859Z` publication missing-active-node deferred-repair boundary,
    `123850Z` ACK-pending startup boundary, `132033Z` post-ACK `PUBLISHED`
    missing-active selected-snapshot boundary, `140646Z` epoch `5` `OPEN`

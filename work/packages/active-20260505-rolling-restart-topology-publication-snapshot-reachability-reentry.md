@@ -454,27 +454,27 @@ Sprint:
 ## In Scope
 
 1. Reconcile the current deferred selected-snapshot observation publication
-   membership/snapshot coverage residual: publication epoch `2` is
+   membership/snapshot coverage residual: publication epoch `3` is
    `PUBLISHED`, pending ACK count is `0`, recovery remains
-   `publication_pending`, terminal active is `4/5`, terminal selected snapshot
-   coverage is `2/5`, selected published active is `2/5`, selected missing
-   published count is `3`, and selected snapshot observation reports
-   `repair_deferred` / `stale_usable`.
+   `publication_pending` at the failure-class surface, terminal active is
+   `3/5`, terminal selected snapshot coverage is `3/5`, selected published
+   active is `3/5`, selected missing published count is `2`, and selected
+   snapshot observation reports `repair_deferred` / `stale_usable`.
 2. Explain why the latest selected snapshot node
-   `35a891b8-c1a0-5064-9c6e-2acfba61c2a7` is not admin-ready and times out
-   for reachability while publication remains `PUBLISHED` with three missing
-   published active nodes, priority spread pending, and
-   `control_plane_publications-p1` terminal at `rebalancer_handoff`.
+   `35a891b8-c1a0-5064-9c6e-2acfba61c2a7` is admin-ready via
+   `admin_health` but still carries retained stale-repair evidence while
+   nodes `11601fe0-72d6-5853-8590-ec2881853e72` and
+   `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58` remain outside selected active
+   coverage and durable published active membership.
 3. Keep the `074739Z` selected snapshot reachability timeout on
    `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58` as historical evidence only; it no
    longer competes with the current terminal boundary.
-4. Preserve and classify priority-recovery evidence, most recently
-   `control_plane_publications-p1` as `blocked_unclassified` /
-   `terminal_failed` under `rebalancer_handoff` plus
-   `sql_transaction_participants-p1` and `sql_write_operations-p1` as
-   `needs_operation` with `priority_operation_serial_wait`, without treating
-   the operation-workflow witnesses as post-active trim while topology debt
-   remains open.
+4. Preserve and classify priority-recovery evidence: keep the
+   `control_plane_publications-p1` handoff evidence as migrated historical
+   evidence, and keep the current `sql_write_operations-p1`
+   `recovering_in_flight` / `persisted_not_dispatched` workflow-progress
+   witness subordinate to topology debt unless a focused owner probe proves it
+   has become the owner boundary.
 5. Keep the failure bundle anchored to one canonical owner outcome across
    publication, active-gate, selected snapshot, and priority-recovery evidence.
 6. Rerun the representative `rolling-restart --fast-local` scenario after the
@@ -705,13 +705,29 @@ Sprint:
       `control_plane_publications-p1` handoff gap, keeps it on pre-`executeMove`
       skip/return state, or migrates while preserving the epoch `2`
       `PUBLISHED` missing-active selected-snapshot topology debt as canonical.
-- [ ] Trace the `20260505T175220Z` epoch `3` `PUBLISHED` missing-active
+- [x] Trace the `20260505T175220Z` epoch `3` `PUBLISHED` missing-active
       selected-snapshot artifact through active-gate coverage, publication
       convergence, retained selected-snapshot repair evidence, and the new
       subordinate `sql_write_operations-p1` workflow-progress /
       `persisted_not_dispatched` witness. Preserve the
       `control_plane_publications-p1` handoff as migrated historical evidence
       unless the trace proves a still-open owner boundary.
+- [ ] Add the smallest focused `20260505T175220Z` replay fixture or runtime
+      owner probe for the epoch `3` `PUBLISHED` shape: terminal active `3/5`,
+      selected coverage `3/5`, pending ACK `0`, selected published active
+      `3/5`, missing published nodes
+      `11601fe0-72d6-5853-8590-ec2881853e72` and
+      `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`, selected witness
+      `35a891b8-c1a0-5064-9c6e-2acfba61c2a7` admin-ready via
+      `admin_health` with retained `repair_deferred` / `stale_usable`
+      evidence and owner-RPC/cache-repair reconstruction `missing`, priority
+      spread pending with gap `6`, and `sql_write_operations-p1` operation
+      `c3fedf19-19e4-4792-8a9f-8e4734cb88ad` as
+      `recovering_in_flight` / `persisted_not_dispatched`. Prove whether the
+      operation-workflow owner should wake or dispatch after
+      `control_plane_pressure_degraded`, or whether the selected-snapshot
+      repair / missing-active topology owner must close first, without
+      promoting the migrated `control_plane_publications-p1` handoff evidence.
 
 ## May 5 Regression Validation
 
@@ -3190,6 +3206,118 @@ Validation:
 3. `git diff --check 4a0be30ced9b76bad07220c9f0a1d5fb294026ac^ 4a0be30ced9b76bad07220c9f0a1d5fb294026ac`
    passed.
 
+## May 5 `175220Z` Evidence Trace
+
+Trace evidence:
+
+1. The representative report and failure bundle agree on the terminal barrier:
+   `Not all nodes reached ACTIVE state within 120000ms`, attempts `10`,
+   elapsed `120091ms`, and failed `0/1` after `130.2s`.
+2. Failure classification remains topology-owned:
+   `publication_convergence_blocked`, dominant reason
+   `publication_missing_active_node=11601fe0-72d6-5853-8590-ec2881853e72`,
+   readiness class `no_progress_terminal`, startup mode, terminal reason
+   `stalled_no_progress`, attempts since progress `2`, and no terminal
+   selected-snapshot reachability error.
+3. Active-gate terminal and best progress are the same normalized snapshot:
+   expected `5`, active `3`, inactive `2`, selected coverage `3/5`,
+   publication epoch `3` `PUBLISHED`, selected published active `3/5`,
+   selected missing published `2`, pending ACK `0`, priority spread gap `6`,
+   priority blocked partition count `1`, and blockers
+   `inactive_nodes=2` plus `snapshot_coverage=3/5`.
+4. Selected snapshot coverage is owned by
+   `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`: observed nodes are
+   `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`,
+   `7493b0ab-a054-5fad-a91b-5e331db29304`, and
+   `8be8d30f-4499-5eed-865c-71b4d529a67a`. The missing expected nodes are the
+   same two active-gate missing-published nodes,
+   `11601fe0-72d6-5853-8590-ec2881853e72` and
+   `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`.
+5. Probe witnesses keep the selected node admin-ready via `admin_health`.
+   `7493b0ab-a054-5fad-a91b-5e331db29304` also sees `3/5` coverage but its
+   reachability probe timed out; `8be8d30f-4499-5eed-865c-71b4d529a67a` sees
+   `2/5`; `11601fe0-72d6-5853-8590-ec2881853e72` and
+   `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58` are only bootstrap-reachable and
+   their admin snapshot queries fail with `ECONNREFUSED`.
+6. Retained selected-snapshot repair evidence remains the owner-contract
+   evidence: `repair_deferred` / `stale_usable`, contract state `pending`,
+   refresh state `idle`, next action `wait`, repair deferred `true`, and
+   reason code `cache_stale_watermark`. Bounded replay reports
+   owner-RPC/cache-repair availability `missing`, matching deferral count `0`,
+   selected-witness deferral count `0`, no failed tables, no read sources, and
+   `selectedSnapshotRepairEvidenceRecovery.evidenceState` as
+   `retained_selected_snapshot_observation`.
+7. Publication convergence remains open even though ACK debt is closed:
+   publication epoch `3`, status `PUBLISHED`, pending ACK count `0`, blocked
+   node count `0`, missing published count `2`, missing nodes
+   `11601fe0-72d6-5853-8590-ec2881853e72` and
+   `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`, gate reasons
+   `priority_partitions_not_spread`, `snapshot_coverage=3/5`, and both
+   explicit `publication_missing_active_node=<node>` reasons. Triage reports
+   recovery protocol state `publication_pending`; durable and replayed
+   priority-recovery evidence remain `priority_spread_pending`.
+8. Stability gates preserve the same owner outcome: failover is open only on
+   `publication_missing_active_node`, while convergence and restart recovery
+   are open on `publication_missing_active_node` plus
+   `priority_spread_pending`. None of the gates promote workflow-progress
+   evidence over missing-active topology debt.
+9. Priority recovery now selects `sql_write_operations-p1` as the subordinate
+   witness: semantic state `recovering_in_flight`, operation
+   `c3fedf19-19e4-4792-8a9f-8e4734cb88ad`, correlation key
+   `sql_write_operations-p1|3|c3fedf19-19e4-4792-8a9f-8e4734cb88ad`,
+   spread gap `2`, ready distinct node count `1/3`, workflow source
+   `system_table_cache`, latest step `PENDING`, latest status `pending`, step
+   age `13893ms` against a `30000ms` timeout, progress contract `pending`,
+   actuation `persisted_not_dispatched`, and next action
+   `wait_for_operation_progress`.
+10. The operation-workflow timeline explains why this is not yet a workflow
+    timeout: operation `c3fedf19-19e4-4792-8a9f-8e4734cb88ad` is a `REPLACE`
+    for `sql_write_operations-p1-r4` from
+    `7493b0ab-a054-5fad-a91b-5e331db29304` to
+    `8be8d30f-4499-5eed-865c-71b4d529a67a`; dispatch was deferred with
+    `control_plane_pressure_degraded` while claiming the priority dispatch
+    transition, then its reservation was released during reconciliation. The
+    serial-wait operation
+    `99dfca41-8b3e-4d05-845d-6ccb71c89a0d` on
+    `sql_transaction_participants-p1` progressed through `PENDING` ->
+    `SENDING`, reached `CREATING`, and completed replica creation, so the
+    selected `sql_write_operations-p1` witness is the remaining
+    dispatch-pending spread gap.
+11. `control_plane_publications-p1` no longer proves a still-open owner
+    boundary in this artifact. Decision snapshots classify operations
+    `57250fe0-54f3-41d9-a16b-2d763a904906` and
+    `f688f821-c6e0-4221-aaf3-77c227aeb35e` as
+    `spread_satisfied_in_flight`; the latest workflow step is `REMOVED`,
+    status `removed`, actuation `terminal_completed`, progress contract
+    `ready`, and next required action `none`. The retained source-handoff and
+    `replace_remove_safety_blocked` log lines are supporting historical
+    evidence, not the selected blocker.
+12. Bounded replay passed as `replayed_blocked` with row counts `nodes=3`,
+    `nodeEndpoints=0`, `partitions=33`, and `services=104`. Durable and
+    replayed evidence both remain epoch `3` / `PUBLISHED` with priority spread
+    pending. Replay reports `summaryChanged=true`,
+    `blockedPartitionIdsMatch=false`, durable blocked partition ids empty, and
+    replayed blocked partition ids `control_plane_publications-p1`,
+    `replica_operations-p1`, `sql_transactions-p1`, and
+    `sql_write_operations-p1`.
+
+Conclusion: the `175220Z` trace does not close or migrate the representative
+package. It preserves the canonical blocker as epoch `3` `PUBLISHED`
+missing-active selected-snapshot topology debt with selected coverage `3/5`,
+missing published `2`, retained selected-snapshot repair evidence, priority
+spread gap `6`, and subordinate `sql_write_operations-p1`
+`persisted_not_dispatched` workflow-progress evidence. The next smallest
+owner probe should lock this artifact shape and decide whether the
+operation-workflow owner must wake the `sql_write_operations-p1` dispatch
+after `control_plane_pressure_degraded`, or whether selected-snapshot repair
+and missing-active publication topology debt must close first.
+
+Trace validation:
+
+1. `node test/distributed/harness/publication-evidence-replay.js test-output/reports/.playback/rolling-restart-after-pre-execution-handoff-diagnostic-20260505T175220Z/rolling-restart`
+   passed and reported `driftClassification=replayed_blocked`.
+2. `git diff --check` passed for this docs-only trace update.
+
 ## Validation
 
 1. Focused owner or harness fixture for topology publication membership
@@ -3266,7 +3394,10 @@ post-ACK `PUBLISHED` missing-active selected-snapshot trace and replay fixture,
 `20260505T145246Z` epoch `2` `PUBLISHED` missing-active selected-snapshot
 reachability trace, `20260505T145246Z` replay fixture, selected-snapshot
 repair evidence recovery probe, rebalancer-handoff follow-up traces, runtime
-pre-execution diagnostic, review fix, and `20260505T175220Z` representative
-rerun are complete. The next unchecked task is to trace the `175220Z` artifact
-through epoch `3` `PUBLISHED` missing-active selected-snapshot topology debt
-and the new `sql_write_operations-p1` workflow-progress witness.
+pre-execution diagnostic, review fix, `20260505T175220Z` representative
+rerun, and `20260505T175220Z` evidence trace are complete. The package remains
+active. The next unchecked task is the smallest focused `175220Z` replay
+fixture or runtime owner probe for the epoch `3` `PUBLISHED`
+missing-active selected-snapshot shape and the subordinate
+`sql_write_operations-p1` `persisted_not_dispatched` workflow-progress
+witness.
