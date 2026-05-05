@@ -640,6 +640,7 @@ Passed:
    reported `0` decision-boundary guideline violations.
 5. `node scripts/check-runtime-grammar-contracts.js test/control-plane/membership-publication-coordinator.test.js`
    reported `0` runtime-grammar-contract violations.
+6. `git diff --check` passed.
 
 Inherited / unchanged:
 
@@ -699,7 +700,7 @@ partition ids `sql_transactions-p1`. The latest witness has no canonical
 operation ids and retains serial-wait operation id
 `209eb9f7-3c77-4a0f-ad17-675e37681201` only as serial-wait evidence.
 
-The next unchecked task is a membership-publication reconcile probe or focused
-fixture that explains why the epoch `3` candidate does not advance from the
-durable published-active `3/5` baseline after the harness observes active
-`5/5`.
+The next unchecked task is to rerun the representative
+`rolling-restart --fast-local` gate after the reconcile probe and record whether
+the blocker closes, remains on membership-publication owner-row, transport, or
+service evidence, or migrates to one newly named owner boundary.
