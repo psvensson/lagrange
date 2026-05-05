@@ -472,10 +472,15 @@ Sprint:
       reconcile probe and record whether the blocker closes, stays on
       membership-publication owner rows/transport/service evidence, or migrates
       to one newly named owner boundary.
-- [ ] Trace the `20260505T102455Z` after-reconcile-probe artifact through
+- [x] Trace the `20260505T102455Z` after-reconcile-probe artifact through
       membership-publication owner-row, transport, and service evidence for why
       active-gate progress reaches active `5/5` while selected publication epoch
       `2` remains published-active `2/5` with three missing published nodes.
+- [ ] Add the smallest selected-snapshot/replay fixture for the `102455Z` shape
+      to decide whether same-coverage active-gate selection should prefer the
+      stronger publication witness over an admin-ready but stale publication
+      witness, or document the runtime owner repair that must make the
+      admin-ready witness catch up.
 
 ## May 5 Regression Validation
 
@@ -696,6 +701,81 @@ selects `sql_transaction_participants-p1` as `priority_operation_serial_wait` /
 `74154dc2-e602-43a8-8dc7-58e32e3424b8`, and serial-wait partition
 `sql_transactions-p1`.
 
+## May 5 102455Z Owner-Row, Transport, And Service Trace
+
+The `20260505T102455Z` artifact traces to a stale selected publication witness
+under partial owner-row, transport, and service evidence:
+
+1. Active `5/5` is active-gate readiness evidence from the harness
+   process/bootstrap/status probes, not durable publication membership. The
+   terminal event has all five nodes counted active while the selected
+   publication view remains published-active `2/5`.
+2. The active-gate selected control snapshot is
+   `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`. It is admin-ready through
+   `admin_health`, observes `3/5`, and carries publication epoch `2`
+   `PUBLISHED` with published-active nodes
+   `11601fe0-72d6-5853-8590-ec2881853e72` and
+   `7493b0ab-a054-5fad-a91b-5e331db29304`. Its missing published nodes are
+   `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`,
+   `8be8d30f-4499-5eed-865c-71b4d529a67a`, and
+   `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`.
+3. The probe witnesses disagree. The seed
+   `7493b0ab-a054-5fad-a91b-5e331db29304` has the stronger publication view:
+   epoch `3` `PUBLISHED`, published-active `3/5`, and only two missing
+   published nodes. It is not selected because its reachability probe times
+   out and it is not admin-ready. The admin-ready witnesses carry the stale
+   epoch `2` / published-active `2/5` view.
+4. The selected owner row is internally consistent rather than ACK-stuck:
+   published-active and recovery-active membership contain only
+   `11601fe0-72d6-5853-8590-ec2881853e72` and
+   `7493b0ab-a054-5fad-a91b-5e331db29304`, participation evidence exists only
+   for those two nodes, required ACK and acknowledged node lists match those two
+   nodes, pending ACK count is `0`, and the row-local
+   `missingPublishedCount` is `0`. The harness missing-published count of `3`
+   comes from comparing expected five-node membership to that selected durable
+   published-active list.
+5. Playback replay from the failure bundle produced durable row counts of
+   `nodes=3`, `nodeEndpoints=0`, `partitions=33`, and `services=103`. The
+   replayed candidate advanced to epoch `3` `OPEN`, but stayed blocked with
+   `driftClassification=replayed_blocked`; it did not produce all-five
+   published membership.
+6. The final raw snapshot has node rows for
+   `7493b0ab-a054-5fad-a91b-5e331db29304`,
+   `11601fe0-72d6-5853-8590-ec2881853e72`, and
+   `8be8d30f-4499-5eed-865c-71b4d529a67a`. Service rows exist only on the
+   seed and `11601fe0-72d6-5853-8590-ec2881853e72`: the seed has `99` active
+   rows, and `11601fe0-72d6-5853-8590-ec2881853e72` has `3` active rows plus
+   `1` syncing learner. There are no final service rows for
+   `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`,
+   `8be8d30f-4499-5eed-865c-71b4d529a67a`, or
+   `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`.
+7. Transport evidence explains why admin-ready witnesses can stay behind the
+   seed publication view. Nodes `35a891b8-c1a0-5064-9c6e-2acfba61c2a7` and
+   `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58` repeatedly reconnect to the seed,
+   then fail `control_snapshot` cache repair on `nodes` through
+   `owner_rpc_lane` / `control_plane_backpressure`. Node
+   `8be8d30f-4499-5eed-865c-71b4d529a67a` later fails authoritative repair on
+   `service_endpoints` through the same owner-RPC pressure.
+8. Routing and service evidence points at priority recovery pressure rather
+   than a closed publication path. Node
+   `8be8d30f-4499-5eed-865c-71b4d529a67a` logs
+   `all_services_filtered_by_readiness` for `config-p1`; the canonical leader
+   is the seed, and the route is denied by
+   `PRIORITY_CONTROL_PLANE_RECOVERY_PENDING`.
+9. Conclusion: active-gate progress reaching active `5/5` does not make the
+   selected durable publication view publish all five nodes. The selected
+   admin-ready witness is stale relative to the seed and replayed candidate,
+   while the runtime owner-row/service evidence remains partial. The next
+   smallest task is a selected-snapshot/replay fixture that decides whether the
+   same-coverage selector should prefer stronger publication evidence over an
+   admin-ready stale witness, or whether the runtime owner repair must first
+   make admin-ready witnesses catch up.
+
+Trace validation:
+
+1. `node test/distributed/harness/publication-evidence-replay.js test-output/reports/.playback/rolling-restart-after-reconcile-probe-20260505T102455Z/rolling-restart`
+   passed and reported `driftClassification=replayed_blocked`.
+
 ## Validation
 
 1. Focused owner or harness fixture for topology publication membership
@@ -750,8 +830,8 @@ key `sql_transaction_participants-p1|2|operation_unknown`, serial-wait operation
 `sql_transactions-p1`. `replica_operations-p1` and `sql_write_operations-p1`
 remain blocked as `recovering_in_flight`.
 
-The next unchecked task is to trace the `20260505T102455Z`
-after-reconcile-probe artifact through membership-publication owner-row,
-transport, and service evidence for why active-gate progress reaches active
-`5/5` while selected publication epoch `2` remains published-active `2/5` with
-three missing published nodes.
+The next unchecked task is to add the smallest selected-snapshot/replay fixture
+for the `102455Z` shape to decide whether same-coverage active-gate selection
+should prefer the stronger publication witness over an admin-ready but stale
+publication witness, or document the runtime owner repair that must make the
+admin-ready witness catch up.
