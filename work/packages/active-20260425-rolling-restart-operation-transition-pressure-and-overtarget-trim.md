@@ -382,7 +382,52 @@ May 5 missing-published reason-source review follow-up:
    table still suppresses stale selected active-gate debt when no explicit
    canonical missing-publication reason is present.
 3. This is a harness classification fix only. No representative
-   `rolling-restart` rerun was run for this review follow-up.
+   `rolling-restart` rerun was run before the review-fix commit; the
+   post-commit representative rerun is recorded below.
+
+May 5 representative rerun after missing-published reason-source fix:
+
+1. Fresh representative rerun after `e0344113`:
+   `test-output/reports/rolling-restart-after-missing-published-reason-source-rerun-20260505T074739Z.report.json`.
+2. Companion log:
+   `test-output/reports/rolling-restart-after-missing-published-reason-source-rerun-20260505T074739Z.log`.
+3. Failure bundle:
+   `test-output/reports/.playback/rolling-restart-after-missing-published-reason-source-rerun-20260505T074739Z/rolling-restart/failure-bundle.json`.
+4. Triage summary:
+   `test-output/reports/.playback/rolling-restart-after-missing-published-reason-source-rerun-20260505T074739Z/rolling-restart/triage-summary.md`.
+5. Result: failed, `0/1` passed after `132.4s`.
+6. Terminal barrier:
+   `Not all nodes reached ACTIVE state within 120000ms`.
+7. The blocker did not close. The representative path now reports root cause
+   class `topology`, dominant reason
+   `publication_missing_active_node=8be8d30f-4499-5eed-865c-71b4d529a67a`,
+   and failure class `publication_convergence_blocked`.
+8. Publication epoch `3` is `PUBLISHED`, recovery protocol state is
+   `publication_pending`, pending ACK count is `0`, missing published count is
+   `2`, and missing published nodes are
+   `8be8d30f-4499-5eed-865c-71b4d529a67a` and
+   `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`.
+9. Publication gate reasons now include `priority_partitions_not_spread`,
+   `snapshot_coverage=4/5`, and both explicit
+   `publication_missing_active_node=<node>` reasons, so the latest
+   failure-bundle artifact no longer hides the canonical missing-published debt.
+10. Terminal active-gate progress is active `2/5`, best progress was active
+    `3/5`, selected snapshot coverage is `4/5`, selected published active is
+    `3/5`, priority spread gap is `10`, and terminal readiness failed on
+    `snapshot_reachability_timeout` for selected snapshot node
+    `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`.
+11. The selected priority-recovery boundary is now `sql_write_operations-p1`:
+    progress class `priority_operation_serial_wait`, semantic state
+    `needs_operation`, owner `operation_workflow_owner`, boundary
+    `workflow_progress`, wait mode `event_driven`, correlation key
+    `sql_write_operations-p1|3|operation_unknown`,
+    operation id `57aa5679-15ad-4ea9-84f6-c6e5f906abf0`, and serial-wait
+    partition ids `sql_transaction_participants-p1` and `sql_transactions-p1`.
+12. This rerun replaces the stale pending-ACK evidence in this package's current
+    blocker. It does not close the previous `052328Z` `sql_write_operations-p1`
+    PENDING dispatch-timeout residual; the current blocker is an earlier
+    topology publication-missing/snapshot-reachability and priority serial-wait
+    boundary.
 
 ## Scope Basis
 
@@ -667,11 +712,14 @@ Closure:
       review fix and record whether the blocker closes or migrates.
 - [x] Rerun the representative path after the terminal priority-recovery witness
       review fix and record whether the blocker closes or migrates.
-- [ ] Reconcile the latest May 5 migrated startup/publication owner blocker:
-      active `3/5`, selected snapshot coverage `2/5`, pending ACK count `1`,
-      selected missing published count `2`, priority spread gap `6`, and
-      `sql_transactions-p1` operation
-      `e588045c-356c-473a-b553-752423aebc07` in `PENDING/pending` at
+- [x] Rerun the representative path after the missing-published reason-source
+      review fix and record whether the blocker closes or migrates.
+- [ ] Reconcile the latest May 5 migrated topology publication blocker:
+      terminal active `2/5`, best active `3/5`, selected snapshot coverage
+      `4/5`, pending ACK count `0`, selected missing published debt count `2`,
+      priority spread gap `10`, snapshot reachability timeout on
+      `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`, and `sql_write_operations-p1`
+      `priority_operation_serial_wait` at
       `operation_workflow_owner / workflow_progress / event_driven`.
 - [ ] Revisit the prior May 5 post-publication operation-workflow timeout
       residual once startup/publication convergence reaches that boundary
@@ -733,6 +781,11 @@ Closure:
     missing-published debt while preserving stale selected active-gate debt
     suppression, including stale closure replay evidence. No representative
     scenario rerun was run for this harness-only slice.
+16. Post-`e0344113` representative rerun
+    `test-output/reports/rolling-restart-after-missing-published-reason-source-rerun-20260505T074739Z.report.json`
+    failed by the migrated topology publication-missing/snapshot-reachability
+    and priority serial-wait blocker recorded above. No production code was
+    changed for this documentation-only evidence update.
 
 ## Done When
 
@@ -744,32 +797,32 @@ Closure:
 
 ## Residual Active Blocker
 
-The current blocker is not closed. The fresh post-`c17c23a9` May 5 rerun failed
-after `130.5s` and migrated back to startup/publication convergence:
-publication epoch `3` is `ACK_PENDING`, pending ACK count is `1`, pending ACK
-node is `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`, and recovery protocol state is
-`publication_pending`.
+The current blocker is not closed. The fresh post-`e0344113` May 5 rerun failed
+after `132.4s` and reports topology publication convergence blocked by explicit
+missing-active-node debt: publication epoch `3` is `PUBLISHED`, recovery
+protocol state is `publication_pending`, pending ACK count is `0`, missing
+published count is `2`, and missing published nodes are
+`8be8d30f-4499-5eed-865c-71b4d529a67a` and
+`ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`.
 
-The published May 5 representative artifact predated the latest
-failure-bundle coverage-lag fix, so its normalized missing-published summary is
-not replaced here. Focused harness proof now keeps canonical missing-published
-debt in that coverage-lag class, but a fresh representative rerun is still
-required before updating the runtime blocker evidence.
+Active-gate progress reports terminal active `2/5`, best active `3/5`, selected
+snapshot coverage `4/5`, selected published active `3/5`, selected missing
+published count `2`, selected missing published nodes
+`8be8d30f-4499-5eed-865c-71b4d529a67a` and
+`ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`, priority spread gap `10`, and terminal
+`snapshot_reachability_timeout` for selected snapshot node
+`ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`.
 
-Active-gate progress reports active `3/5`, selected snapshot coverage `2/5`,
-selected published active `3/5`, selected missing published count `2`, selected
-missing published nodes `35a891b8-c1a0-5064-9c6e-2acfba61c2a7` and
-`8be8d30f-4499-5eed-865c-71b4d529a67a`, and priority spread gap `6`.
-
-The latest selected runtime owner boundary is `sql_transactions-p1`:
-operation `e588045c-356c-473a-b553-752423aebc07` remains `PENDING/pending`,
-semantic state `recovering_in_flight`, cache-visible, workflow phase
-`dispatch_pending`, step age `11225ms`, step timeout `30000ms`, and required
-action `wait_for_operation_progress`. The previous `052328Z`
-`sql_write_operations-p1` PENDING dispatch timeout residual is not closed; this
-rerun did not reach that post-publication boundary.
+The latest selected runtime owner boundary is `sql_write_operations-p1`:
+progress class `priority_operation_serial_wait`, semantic state
+`needs_operation`, actuation state `transition_deferred`, correlation key
+`sql_write_operations-p1|3|operation_unknown`, operation id
+`57aa5679-15ad-4ea9-84f6-c6e5f906abf0`, and serial-wait partition ids
+`sql_transaction_participants-p1` and `sql_transactions-p1`. The previous
+`052328Z` `sql_write_operations-p1` PENDING dispatch timeout residual is not
+closed; this rerun reached a different same-partition serial-wait shape.
 
 The next continuation must not broaden the matrix or raise timeouts. It must
-choose the smallest owner slice that reconciles startup pending ACK, inactive
-nodes, selected snapshot coverage, selected missing-published disagreement, and
-the `sql_transactions-p1` in-flight workflow progress witness.
+choose the smallest owner slice that reconciles inactive nodes, selected
+snapshot coverage, selected missing-published debt, and the
+`sql_write_operations-p1` priority serial-wait witness.

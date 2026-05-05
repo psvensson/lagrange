@@ -27,36 +27,34 @@ dominant blocker. Earlier artifacts showed:
 3. readiness/planning same-epoch contradictions are closed
 4. the remaining failures are runtime liveness and pressure failures
 
-The latest post-`c17c23a9` May 5 representative rerun is
-`test-output/reports/rolling-restart-after-terminal-witness-rerun-20260505T060935Z.report.json`.
-It failed after `130.5s` and migrated back from the previous post-publication
-operation timeout shape to startup/publication convergence: active `3/5`,
-selected snapshot coverage `2/5`, publication epoch `3` `ACK_PENDING`, pending
-ACK count `1`, selected missing published count `2`, and priority spread gap
-`6`. The publication summary versus active-gate missing-published disagreement
-still stays open until reconciled, but the stale `publicationConvergence=ready`
-presentation is no longer the terminal timeout summary. A follow-up harness
-classification fix also keeps the last meaningful same-partition
-`operation_stalled` witness when a later lower-coverage terminal poll regresses
-to `needs_operation`. The latest harness-only failure-bundle fix also keeps
-canonical missing-published debt visible during active-gate snapshot coverage
-lag while still suppressing stale selected active-gate missing-publication
-debt; no representative rerun has been run after that fix.
+The latest post-`e0344113` May 5 representative rerun is
+`test-output/reports/rolling-restart-after-missing-published-reason-source-rerun-20260505T074739Z.report.json`.
+It failed after `132.4s` and now reports topology publication convergence:
+active `2/5` terminal, active `3/5` best progress, selected snapshot coverage
+`4/5`, publication epoch `3` `PUBLISHED`, pending ACK count `0`, selected
+missing published count `2`, priority spread gap `10`, and dominant reason
+`publication_missing_active_node=8be8d30f-4499-5eed-865c-71b4d529a67a`.
+The latest failure-bundle fixes now keep canonical missing-published debt
+visible during active-gate snapshot coverage lag without duplicating the
+explicit reason into raw recovery-gate fixture data.
 
 The active failure chain is now:
 
 1. ACTIVE convergence is blocked before publication closure by inactive nodes,
-   selected snapshot coverage, pending ACK, and selected missing-published
-   disagreement
-2. priority recovery is blocked on `sql_transactions-p1` as
-   `recovering_in_flight` at
+   selected snapshot coverage, and explicit missing-active-node publication debt
+2. selected snapshot reachability times out on
+   `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`
+3. priority recovery is blocked on `sql_write_operations-p1` as
+   `priority_operation_serial_wait` / `needs_operation` at
    `operation_workflow_owner / workflow_progress / event_driven`
-3. the operation `e588045c-356c-473a-b553-752423aebc07` remains
-   `PENDING/pending`, cache-visible, persisted-not-dispatched, and waiting for
-   workflow progress
-4. the prior `052328Z` `sql_write_operations-p1` workflow-timeout residual is
-   not closed; the latest rerun did not reach that post-publication boundary
-5. control-plane write pressure and transient transport churn remain relevant
+4. the current selected operation id is
+   `57aa5679-15ad-4ea9-84f6-c6e5f906abf0`, with correlation key
+   `sql_write_operations-p1|3|operation_unknown` and serial-wait partition ids
+   `sql_transaction_participants-p1` and `sql_transactions-p1`
+5. the prior `052328Z` `sql_write_operations-p1` workflow-timeout residual is
+   not closed; the latest rerun reached a different same-partition serial-wait
+   shape
+6. control-plane write pressure and transient transport churn remain relevant
    context, but broad matrix work stays out of scope until the representative
    boundary is stable
 
@@ -115,12 +113,13 @@ priority-recovery actuation package, the operation-workflow ACK reentry
 package, and the startup snapshot reachability workflow-progress package
 executed. The priority recovery workflow transition-deferred package then
 closed by migration into operation workflow timeout reconciliation. The current
-operation-transition package remains active after the post-`c17c23a9` May 5
-rerun because the representative path still fails on startup/publication pending
-ACK, selected snapshot coverage, selected missing-published disagreement,
-priority spread, and an in-flight `sql_transactions-p1` operation-workflow
-progress residual. The previous `sql_write_operations-p1` operation-workflow
-timeout residual remains unclosed until the path reaches that boundary again.
+operation-transition package remains active after the post-`e0344113` May 5
+rerun because the representative path still fails on topology publication
+missing-active-node debt, selected snapshot coverage, selected snapshot
+reachability timeout, priority spread, and a `sql_write_operations-p1` priority
+serial-wait residual. The previous `sql_write_operations-p1`
+operation-workflow timeout residual remains unclosed until the path reaches that
+shape again.
 
 All final consistency recommendation packages are complete or queued outside
 the current execution path.
@@ -148,60 +147,61 @@ Queued cleanup packages:
 
 1. Current execution blocker:
    The latest May 5 representative rerun is
-   `test-output/reports/rolling-restart-after-terminal-witness-rerun-20260505T060935Z.report.json`.
-   Result: failed, `0/1` passed after `130.5s`; terminal barrier:
+   `test-output/reports/rolling-restart-after-missing-published-reason-source-rerun-20260505T074739Z.report.json`.
+   Result: failed, `0/1` passed after `132.4s`; terminal barrier:
    `Not all nodes reached ACTIVE state within 120000ms`. The companion log is
-   `test-output/reports/rolling-restart-after-terminal-witness-rerun-20260505T060935Z.log`;
+   `test-output/reports/rolling-restart-after-missing-published-reason-source-rerun-20260505T074739Z.log`;
    the failure bundle is
-   `test-output/reports/.playback/rolling-restart-after-terminal-witness-rerun-20260505T060935Z/rolling-restart/failure-bundle.json`;
+   `test-output/reports/.playback/rolling-restart-after-missing-published-reason-source-rerun-20260505T074739Z/rolling-restart/failure-bundle.json`;
    the triage summary is
-   `test-output/reports/.playback/rolling-restart-after-terminal-witness-rerun-20260505T060935Z/rolling-restart/triage-summary.md`.
-   The representative path migrated back from the `052328Z` post-publication
-   operation timeout shape to startup/publication convergence: root cause class
-   `startup`, dominant reason `BOOTSTRAP_PHASE_INCOMPLETE`, failure class
-   `publication_convergence_blocked`, publication epoch `3` `ACK_PENDING`,
-   recovery protocol state `publication_pending`, pending ACK count `1`,
-   pending ACK node `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`, and blocked node
-   count `0`.
+   `test-output/reports/.playback/rolling-restart-after-missing-published-reason-source-rerun-20260505T074739Z/rolling-restart/triage-summary.md`.
+   The representative path now reports root cause class `topology`, dominant
+   reason
+   `publication_missing_active_node=8be8d30f-4499-5eed-865c-71b4d529a67a`,
+   failure class `publication_convergence_blocked`, publication epoch `3`
+   `PUBLISHED`, recovery protocol state `publication_pending`, pending ACK count
+   `0`, missing published count `2`, and missing published nodes
+   `8be8d30f-4499-5eed-865c-71b4d529a67a` and
+   `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`.
 2. Next active investigation:
    continue
    [Rolling Restart Operation Transition Pressure And Over-Target Trim](../packages/active-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md)
-   by reconciling active gate progress active `3/5`, selected snapshot coverage
-   `2/5`, pending ACK count `1`, selected missing published count `2`,
+   by reconciling active-gate terminal active `2/5`, best active `3/5`,
+   selected snapshot coverage `4/5`, selected missing published count `2`,
    selected missing published nodes
-   `35a891b8-c1a0-5064-9c6e-2acfba61c2a7` and
-   `8be8d30f-4499-5eed-865c-71b4d529a67a`, and priority spread gap `6`. The
-   smallest next owner slice must account for `sql_transactions-p1` as
-   `recovering_in_flight` at
+   `8be8d30f-4499-5eed-865c-71b4d529a67a` and
+   `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`, priority spread gap `10`, and
+   selected snapshot reachability timeout on
+   `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`. The smallest next owner slice must
+   account for `sql_write_operations-p1` as `priority_operation_serial_wait` /
+   `needs_operation` at
    `operation_workflow_owner / workflow_progress / event_driven`, with
-   operation `e588045c-356c-473a-b553-752423aebc07` stuck
-   `PENDING/pending`, cache-visible, step age `11225ms`, step timeout
-   `30000ms`, and no serial-wait blockers.
+   operation `57aa5679-15ad-4ea9-84f6-c6e5f906abf0` and correlation key
+   `sql_write_operations-p1|3|operation_unknown`.
 3. Harness classification:
    terminal barrier evidence wins over stale playback reconstruction for
    active, restart-recovery, load-readiness, convergence, and quiescence
    failures. Earlier publication ACK and missing-published drift fixes remain
-   historical proof. Current May 5 post-`c17c23a9` evidence still has
-   active-gate selected missing-published disagreement: normalized publication
-   reports missing published count `0`, while active-gate progress reports
-   selected missing published count `2` and selected snapshot coverage `2/5`.
-   Do not treat missing-published or selected-snapshot reachability as closed
-   until one owner path explains that disagreement. The latest terminal owner
-   boundary is startup/publication pending ACK with `sql_transactions-p1`
-   recovering in flight; the previous `052328Z` `sql_write_operations-p1`
-   PENDING dispatch timeout after publication closure remains residual but is
-   not the latest selected boundary. A narrow harness formatter fix now prevents
+   historical proof. Current May 5 post-`e0344113` evidence keeps normalized
+   publication missing published count `2` and preserves both explicit
+   `publication_missing_active_node=<node>` reasons. Do not treat
+   missing-published, selected-snapshot coverage, or selected-snapshot
+   reachability as closed until one owner path explains the topology debt. The
+   latest terminal owner boundary is topology publication missing-active-node
+   debt with `sql_write_operations-p1` priority serial-wait; the previous
+   `052328Z` `sql_write_operations-p1` PENDING dispatch timeout after
+   publication closure remains residual but is not the latest selected boundary.
+   A narrow harness formatter fix now prevents
    `publicationConvergence=ready` when the same active-gate evidence carries
    `ACK_PENDING`, pending ACK, or missing-published debt; this is
    classification-only and does not close the runtime owner blocker. A later
    failure-bundle fix preserves canonical missing-published debt during
-   active-gate snapshot coverage lag, but the May 5 representative artifact
-   predates that focused proof and has not been replaced by a fresh scenario
-   rerun. A review follow-up also keeps ACTIVE timeout publication summaries
-   bound to the selected terminal progress snapshot when the final poll
-   regresses to stale ready publication evidence, and keeps same-partition
-   operation-stalled priority-recovery evidence ahead of a later lower-coverage
-   needs-operation reconstruction.
+   active-gate snapshot coverage lag, and the fresh representative artifact
+   now reflects that debt. A review follow-up also keeps ACTIVE timeout
+   publication summaries bound to the selected terminal progress snapshot when
+   the final poll regresses to stale ready publication evidence, and keeps
+   same-partition operation-stalled priority-recovery evidence ahead of a later
+   lower-coverage needs-operation reconstruction.
 4. Final consistency:
    the final leader-map consistency package is complete for this sprint
    because the rerun moved to a freshly split non-final blocker.
