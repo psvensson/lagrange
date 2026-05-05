@@ -476,11 +476,16 @@ Sprint:
       membership-publication owner-row, transport, and service evidence for why
       active-gate progress reaches active `5/5` while selected publication epoch
       `2` remains published-active `2/5` with three missing published nodes.
-- [ ] Add the smallest selected-snapshot/replay fixture for the `102455Z` shape
+- [x] Add the smallest selected-snapshot/replay fixture for the `102455Z` shape
       to decide whether same-coverage active-gate selection should prefer the
       stronger publication witness over an admin-ready but stale publication
       witness, or document the runtime owner repair that must make the
       admin-ready witness catch up.
+- [ ] Add the smallest runtime owner repair/probe that makes an admin-ready
+      selected control-snapshot witness catch up to the stronger seed
+      publication evidence, or emit an explicit deferred stale-observation
+      outcome, when owner-row/service evidence is partial and owner-RPC repair
+      is backpressured.
 
 ## May 5 Regression Validation
 
@@ -776,6 +781,67 @@ Trace validation:
 1. `node test/distributed/harness/publication-evidence-replay.js test-output/reports/.playback/rolling-restart-after-reconcile-probe-20260505T102455Z/rolling-restart`
    passed and reported `driftClassification=replayed_blocked`.
 
+## May 5 Selected-Snapshot/Replay Fixture
+
+The next package task added two narrow fixtures without a broad distributed
+scenario:
+
+1. `test/distributed/harness/__tests__/cluster.test-part-5.js` now pins the
+   `102455Z` same-coverage selector shape. The seed witness has snapshot
+   coverage `3/5`, publication epoch `3`, published-active `3/5`, and two
+   missing published nodes, but is not admin-ready and has a reachability
+   timeout. The selected admin-ready witness has the same snapshot coverage,
+   publication epoch `2`, published-active `2/5`, and three missing published
+   nodes.
+2. Expected selector outcome: when coverage and diagnostics availability tie,
+   active-gate selection keeps the admin-ready authority witness. The stronger
+   seed publication witness remains preserved in `probeWitnesses`, but does not
+   become the selected active-gate authority.
+3. `test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+   now pins the row-replay side of the same shape: `nodes=3`,
+   `nodeEndpoints=0`, `partitions=33`, and `services=103`.
+4. Expected replay outcome: the replayed candidate advances to epoch `3`
+   `OPEN`, but remains `replayed_blocked` with
+   `recoveryProtocolState=publication_pending`; it does not prove all-five
+   publication closure from the partial owner-row/service evidence.
+
+Conclusion: the small fixtures do not indicate a harness selector policy bug.
+Preferring the non-admin-ready seed would trade an authority/reachability
+weaker selected witness for only a partially stronger publication view, while
+runtime replay still remains blocked. The next owner step is a runtime repair
+probe at the control-snapshot/membership-publication boundary: an admin-ready
+selected witness must either catch up to the stronger seed publication evidence
+through owned row/cache repair, or expose an explicit deferred stale-observation
+outcome instead of silently carrying epoch `2` publication state.
+
+## May 5 Selected-Snapshot/Replay Fixture Validation
+
+Passed:
+
+1. `node --check test/distributed/harness/__tests__/cluster.test-part-5.js`
+2. `node --check test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+3. `node --test --test-name-pattern "keeps admin-ready authority over stronger publication" test/distributed/harness/__tests__/cluster.test-part-5.js`
+4. `node --test --test-name-pattern "prefers the strongest publication witness when coverage ties|prefers authoritative admin-ready witnesses when coverage ties" test/distributed/harness/__tests__/cluster.test-part-5.js`
+5. `node --test --test-name-pattern "keeps the 102455Z partial owner-row replay blocked" test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+6. `node --test test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+7. `node scripts/check-guideline-decision-boundaries.js test/distributed/harness/__tests__/cluster.test-part-5.js test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+   reported `0` decision-boundary guideline violations.
+8. `node scripts/check-runtime-grammar-contracts.js test/distributed/harness/__tests__/cluster.test-part-5.js test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+   reported `0` runtime-grammar-contract violations.
+9. `node scripts/check-guideline-boundary-mode-contracts.js test/distributed/harness/__tests__/cluster.test-part-5.js test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+   reported `0` boundary-mode-contract hotspot violations.
+10. `git diff --check`
+
+Inherited / unchanged:
+
+1. `node scripts/check-guideline-literals.js test/distributed/harness/__tests__/cluster.test-part-5.js test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+   remains red with `438` existing test-literal violations in
+   `cluster.test-part-5.js`.
+2. `node scripts/check-guideline-literals.js --include-tests test/distributed/harness/__tests__/cluster.test-part-5.js test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+   remains red with `440` whole-file test-literal violations. A comparison
+   against the `HEAD` copies of the same two files also reported `440`, so this
+   fixture did not increase test-inclusive literal debt.
+
 ## Validation
 
 1. Focused owner or harness fixture for topology publication membership
@@ -830,8 +896,8 @@ key `sql_transaction_participants-p1|2|operation_unknown`, serial-wait operation
 `sql_transactions-p1`. `replica_operations-p1` and `sql_write_operations-p1`
 remain blocked as `recovering_in_flight`.
 
-The next unchecked task is to add the smallest selected-snapshot/replay fixture
-for the `102455Z` shape to decide whether same-coverage active-gate selection
-should prefer the stronger publication witness over an admin-ready but stale
-publication witness, or document the runtime owner repair that must make the
-admin-ready witness catch up.
+The next unchecked task is to add the smallest runtime owner repair/probe that
+makes an admin-ready selected control-snapshot witness catch up to the stronger
+seed publication evidence, or emit an explicit deferred stale-observation
+outcome, when owner-row/service evidence is partial and owner-RPC repair is
+backpressured.

@@ -9,10 +9,79 @@
 
 import {test} from '../../../../src/test-helpers/tap.js';
 import assert from 'node:assert';
+import {CONTROL_PLANE_PUBLICATION_STATUS} from
+  '../../../../src/control-plane/control-plane-publication-merge.js';
+import {SERVICE_STATUS} from '../../../../src/constants/index.js';
 import {
   createCluster,
   NODE_ROLES,
 } from './cluster-test-helpers.js';
+
+const SNAPSHOT_REPLAY_TEST_CLUSTER_SIZE = 5;
+const SNAPSHOT_REPLAY_TEST_DEADLINE_EXTENSION_MS = 5000;
+const SNAPSHOT_REPLAY_TEST_SEED_CAPTURED_AT_MS = 1777976837236;
+const SNAPSHOT_REPLAY_TEST_ADMIN_CAPTURED_AT_MS = 1777976838250;
+const SNAPSHOT_REPLAY_TEST_STALE_PUBLICATION_EPOCH = 2;
+const SNAPSHOT_REPLAY_TEST_STRONG_PUBLICATION_EPOCH = 3;
+const SNAPSHOT_REPLAY_TEST_DOCKER_SOCKET_PATH = '/var/run/docker.sock';
+const SNAPSHOT_REPLAY_TEST_IMAGE = 'distributed-db:test';
+const SNAPSHOT_REPLAY_TEST_EMPTY_LOG = '';
+const SNAPSHOT_REPLAY_TEST_ADMIN_HEALTH_SOURCE = 'admin_health';
+const SNAPSHOT_REPLAY_TEST_SEED_REACHABILITY_ERROR =
+  'Control snapshot reachability probe timed out for ' +
+  '7493b0ab-a054-5fad-a91b-5e331db29304';
+const SNAPSHOT_REPLAY_TEST_AUTHORITY_TEST_NAME =
+  'Unit: _probeControlSnapshotCoverage keeps admin-ready authority over ' +
+  'stronger publication when 102455Z coverage ties';
+const SNAPSHOT_REPLAY_TEST_AUTHORITY_ASSERTION =
+  'same-coverage active-gate selection should keep the admin-ready authority ' +
+  'witness';
+const SNAPSHOT_REPLAY_TEST_NODE_ID = Object.freeze({
+  SEED: '7493b0ab-a054-5fad-a91b-5e331db29304',
+  BASELINE: '11601fe0-72d6-5853-8590-ec2881853e72',
+  ADMIN_READY_STALE: '35a891b8-c1a0-5064-9c6e-2acfba61c2a7',
+  STRONG_EXTRA: '8be8d30f-4499-5eed-865c-71b4d529a67a',
+  STALE_EXTRA: 'ebc4aa0b-06c6-506d-93ea-1dd2deca3f58',
+});
+const SNAPSHOT_REPLAY_TEST_EXPECTED_NODE_IDS = Object.freeze([
+  SNAPSHOT_REPLAY_TEST_NODE_ID.SEED,
+  SNAPSHOT_REPLAY_TEST_NODE_ID.BASELINE,
+  SNAPSHOT_REPLAY_TEST_NODE_ID.ADMIN_READY_STALE,
+  SNAPSHOT_REPLAY_TEST_NODE_ID.STRONG_EXTRA,
+  SNAPSHOT_REPLAY_TEST_NODE_ID.STALE_EXTRA,
+]);
+const SNAPSHOT_REPLAY_TEST_STRONG_OBSERVED_NODE_IDS = Object.freeze([
+  SNAPSHOT_REPLAY_TEST_NODE_ID.SEED,
+  SNAPSHOT_REPLAY_TEST_NODE_ID.BASELINE,
+  SNAPSHOT_REPLAY_TEST_NODE_ID.STRONG_EXTRA,
+]);
+const SNAPSHOT_REPLAY_TEST_STALE_OBSERVED_NODE_IDS = Object.freeze([
+  SNAPSHOT_REPLAY_TEST_NODE_ID.SEED,
+  SNAPSHOT_REPLAY_TEST_NODE_ID.BASELINE,
+  SNAPSHOT_REPLAY_TEST_NODE_ID.ADMIN_READY_STALE,
+]);
+const SNAPSHOT_REPLAY_TEST_LOWER_COVERAGE_OBSERVED_NODE_IDS = Object.freeze([
+  SNAPSHOT_REPLAY_TEST_NODE_ID.SEED,
+  SNAPSHOT_REPLAY_TEST_NODE_ID.BASELINE,
+]);
+const SNAPSHOT_REPLAY_TEST_STRONG_PUBLISHED_NODE_IDS = Object.freeze([
+  SNAPSHOT_REPLAY_TEST_NODE_ID.BASELINE,
+  SNAPSHOT_REPLAY_TEST_NODE_ID.SEED,
+  SNAPSHOT_REPLAY_TEST_NODE_ID.STRONG_EXTRA,
+]);
+const SNAPSHOT_REPLAY_TEST_STALE_PUBLISHED_NODE_IDS = Object.freeze([
+  SNAPSHOT_REPLAY_TEST_NODE_ID.BASELINE,
+  SNAPSHOT_REPLAY_TEST_NODE_ID.SEED,
+]);
+const SNAPSHOT_REPLAY_TEST_STRONG_MISSING_NODE_IDS = Object.freeze([
+  SNAPSHOT_REPLAY_TEST_NODE_ID.ADMIN_READY_STALE,
+  SNAPSHOT_REPLAY_TEST_NODE_ID.STALE_EXTRA,
+]);
+const SNAPSHOT_REPLAY_TEST_STALE_MISSING_NODE_IDS = Object.freeze([
+  SNAPSHOT_REPLAY_TEST_NODE_ID.ADMIN_READY_STALE,
+  SNAPSHOT_REPLAY_TEST_NODE_ID.STRONG_EXTRA,
+  SNAPSHOT_REPLAY_TEST_NODE_ID.STALE_EXTRA,
+]);
 
 
 /**
@@ -960,6 +1029,178 @@ test('Unit: _probeControlSnapshotCoverage prefers the strongest publication ' +
   assert.deepStrictEqual(
     coverage.selectedMissingPublishedNodeIds,
     ['node-c'],
+  );
+});
+
+test(SNAPSHOT_REPLAY_TEST_AUTHORITY_TEST_NAME, async () => {
+  const cluster = createCluster({
+    size: SNAPSHOT_REPLAY_TEST_CLUSTER_SIZE,
+    docker: {socketPath: SNAPSHOT_REPLAY_TEST_DOCKER_SOCKET_PATH},
+    image: SNAPSHOT_REPLAY_TEST_IMAGE,
+  });
+
+  const createNode = (
+    nodeId,
+    role,
+    options,
+  ) => ({
+    id: nodeId,
+    role,
+    async getStatus() {
+      return {rows: [{status: SERVICE_STATUS.ACTIVE}]};
+    },
+    async getReachabilityDiagnostics() {
+      return {
+        reachable: options.reachable,
+        adminReady: options.adminReady,
+        ...(options.reachableBy ? {reachableBy: options.reachableBy} : {}),
+        ...(options.reachabilityError ?
+          {lastError: options.reachabilityError} :
+          {}),
+      };
+    },
+    async getControlSnapshot() {
+      return {
+        rows: [{
+          nodes: options.observedNodeIds,
+          capturedAtMs: options.capturedAtMs,
+          controlPlaneDiagnostics: {
+            publicationConvergence: {
+              publicationEpoch: options.publicationEpoch,
+              publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+              publishedActiveNodeIds: options.publishedActiveNodeIds,
+              pendingAckNodeIds: [],
+              acknowledgedNodeIds: options.publishedActiveNodeIds,
+            },
+          },
+        }],
+      };
+    },
+    async getLogs() {
+      return SNAPSHOT_REPLAY_TEST_EMPTY_LOG;
+    },
+  });
+
+  cluster._nodes.set(
+    SNAPSHOT_REPLAY_TEST_NODE_ID.SEED,
+    createNode(
+      SNAPSHOT_REPLAY_TEST_NODE_ID.SEED,
+      NODE_ROLES.SEED,
+      {
+        reachable: false,
+        adminReady: false,
+        reachabilityError: SNAPSHOT_REPLAY_TEST_SEED_REACHABILITY_ERROR,
+        observedNodeIds: SNAPSHOT_REPLAY_TEST_STRONG_OBSERVED_NODE_IDS,
+        capturedAtMs: SNAPSHOT_REPLAY_TEST_SEED_CAPTURED_AT_MS,
+        publicationEpoch: SNAPSHOT_REPLAY_TEST_STRONG_PUBLICATION_EPOCH,
+        publishedActiveNodeIds:
+          SNAPSHOT_REPLAY_TEST_STRONG_PUBLISHED_NODE_IDS,
+      },
+    ),
+  );
+  cluster._nodes.set(
+    SNAPSHOT_REPLAY_TEST_NODE_ID.BASELINE,
+    createNode(
+      SNAPSHOT_REPLAY_TEST_NODE_ID.BASELINE,
+      NODE_ROLES.JOINER,
+      {
+        reachable: true,
+        adminReady: true,
+        reachableBy: SNAPSHOT_REPLAY_TEST_ADMIN_HEALTH_SOURCE,
+        observedNodeIds: SNAPSHOT_REPLAY_TEST_LOWER_COVERAGE_OBSERVED_NODE_IDS,
+        capturedAtMs: SNAPSHOT_REPLAY_TEST_ADMIN_CAPTURED_AT_MS,
+        publicationEpoch: SNAPSHOT_REPLAY_TEST_STALE_PUBLICATION_EPOCH,
+        publishedActiveNodeIds:
+          SNAPSHOT_REPLAY_TEST_STALE_PUBLISHED_NODE_IDS,
+      },
+    ),
+  );
+  cluster._nodes.set(
+    SNAPSHOT_REPLAY_TEST_NODE_ID.ADMIN_READY_STALE,
+    createNode(
+      SNAPSHOT_REPLAY_TEST_NODE_ID.ADMIN_READY_STALE,
+      NODE_ROLES.JOINER,
+      {
+        reachable: true,
+        adminReady: true,
+        reachableBy: SNAPSHOT_REPLAY_TEST_ADMIN_HEALTH_SOURCE,
+        observedNodeIds: SNAPSHOT_REPLAY_TEST_STALE_OBSERVED_NODE_IDS,
+        capturedAtMs: SNAPSHOT_REPLAY_TEST_ADMIN_CAPTURED_AT_MS,
+        publicationEpoch: SNAPSHOT_REPLAY_TEST_STALE_PUBLICATION_EPOCH,
+        publishedActiveNodeIds:
+          SNAPSHOT_REPLAY_TEST_STALE_PUBLISHED_NODE_IDS,
+      },
+    ),
+  );
+  cluster._nodes.set(
+    SNAPSHOT_REPLAY_TEST_NODE_ID.STRONG_EXTRA,
+    createNode(
+      SNAPSHOT_REPLAY_TEST_NODE_ID.STRONG_EXTRA,
+      NODE_ROLES.JOINER,
+      {
+        reachable: true,
+        adminReady: true,
+        reachableBy: SNAPSHOT_REPLAY_TEST_ADMIN_HEALTH_SOURCE,
+        observedNodeIds: SNAPSHOT_REPLAY_TEST_LOWER_COVERAGE_OBSERVED_NODE_IDS,
+        capturedAtMs: SNAPSHOT_REPLAY_TEST_ADMIN_CAPTURED_AT_MS,
+        publicationEpoch: SNAPSHOT_REPLAY_TEST_STALE_PUBLICATION_EPOCH,
+        publishedActiveNodeIds:
+          SNAPSHOT_REPLAY_TEST_STALE_PUBLISHED_NODE_IDS,
+      },
+    ),
+  );
+  cluster._nodes.set(
+    SNAPSHOT_REPLAY_TEST_NODE_ID.STALE_EXTRA,
+    createNode(
+      SNAPSHOT_REPLAY_TEST_NODE_ID.STALE_EXTRA,
+      NODE_ROLES.JOINER,
+      {
+        reachable: true,
+        adminReady: true,
+        reachableBy: SNAPSHOT_REPLAY_TEST_ADMIN_HEALTH_SOURCE,
+        observedNodeIds: SNAPSHOT_REPLAY_TEST_STALE_OBSERVED_NODE_IDS,
+        capturedAtMs: SNAPSHOT_REPLAY_TEST_ADMIN_CAPTURED_AT_MS,
+        publicationEpoch: SNAPSHOT_REPLAY_TEST_STALE_PUBLICATION_EPOCH,
+        publishedActiveNodeIds:
+          SNAPSHOT_REPLAY_TEST_STALE_PUBLISHED_NODE_IDS,
+      },
+    ),
+  );
+
+  const coverage = await cluster._probeControlSnapshotCoverage(
+    Date.now() + SNAPSHOT_REPLAY_TEST_DEADLINE_EXTENSION_MS,
+    SNAPSHOT_REPLAY_TEST_EXPECTED_NODE_IDS,
+  );
+  const seedWitness = coverage.probeWitnesses.find((witness) =>
+    witness.nodeId === SNAPSHOT_REPLAY_TEST_NODE_ID.SEED,
+  );
+
+  assert.strictEqual(
+    coverage.selectedNodeId,
+    SNAPSHOT_REPLAY_TEST_NODE_ID.ADMIN_READY_STALE,
+    SNAPSHOT_REPLAY_TEST_AUTHORITY_ASSERTION,
+  );
+  assert.strictEqual(coverage.selectedSnapshotAdminReady, true);
+  assert.deepStrictEqual(
+    coverage.selectedPublishedActiveNodeIds,
+    SNAPSHOT_REPLAY_TEST_STALE_PUBLISHED_NODE_IDS,
+  );
+  assert.deepStrictEqual(
+    coverage.selectedMissingPublishedNodeIds,
+    SNAPSHOT_REPLAY_TEST_STALE_MISSING_NODE_IDS,
+  );
+  assert.ok(seedWitness);
+  assert.strictEqual(
+    seedWitness.publicationEpoch,
+    SNAPSHOT_REPLAY_TEST_STRONG_PUBLICATION_EPOCH,
+  );
+  assert.deepStrictEqual(
+    seedWitness.publishedActiveNodeIds,
+    SNAPSHOT_REPLAY_TEST_STRONG_PUBLISHED_NODE_IDS,
+  );
+  assert.deepStrictEqual(
+    seedWitness.missingPublishedNodeIds,
+    SNAPSHOT_REPLAY_TEST_STRONG_MISSING_NODE_IDS,
   );
 });
 

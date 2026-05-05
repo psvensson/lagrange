@@ -48,6 +48,39 @@ const REPLAY_TEST_PRIORITY_RECOVERY_SEMANTIC_STATE_CONVERGED = 'converged';
 const REPLAY_TEST_DURABLE_BLOCKED_PARTITION_ID =
   INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS];
 const REPLAY_TEST_COMPARISON_LABEL_PATTERN = /comparison/;
+const REPLAY_TEST_102455Z_TIMESTAMP_MS = 1777976838861;
+const REPLAY_TEST_102455Z_READY_LEASE_EXTENSION_MS = 60000;
+const REPLAY_TEST_102455Z_DURABLE_PUBLICATION_EPOCH = 2;
+const REPLAY_TEST_102455Z_REPLAYED_PUBLICATION_EPOCH = 3;
+const REPLAY_TEST_102455Z_PARTITION_ROW_COUNT = 33;
+const REPLAY_TEST_102455Z_SERVICE_ROW_COUNT = 103;
+const REPLAY_TEST_102455Z_NODE_ENDPOINT_ROW_COUNT = 0;
+const REPLAY_TEST_102455Z_REQUIRED_DISTINCT_NODE_COUNT = 3;
+const REPLAY_TEST_102455Z_READY_ELIGIBLE_NODE_COUNT = 3;
+const REPLAY_TEST_102455Z_READY_DISTINCT_NODE_COUNT = 1;
+const REPLAY_TEST_102455Z_SPREAD_GAP = 2;
+const REPLAY_TEST_102455Z_PUBLICATION_RECOVERY_STATE =
+  'publication_pending';
+const REPLAY_TEST_102455Z_CLOSURE_RECORD_ID = 'CL-006';
+const REPLAY_TEST_102455Z_CLOSURE_WITNESS_CLASS =
+  'startup_active_publication_lag';
+const REPLAY_TEST_102455Z_TEST_NAME =
+  'keeps the 102455Z partial owner-row replay blocked';
+const REPLAY_TEST_102455Z_FILLER_TABLE_PREFIX = 'fixture_table_';
+const REPLAY_TEST_102455Z_FILLER_PARTITION_SUFFIX = '-p1';
+const REPLAY_TEST_102455Z_SERVICE_ID_PREFIX = 'fixture-service-';
+const REPLAY_TEST_102455Z_NODE_ENDPOINT_ROWS = Object.freeze([]);
+const REPLAY_TEST_102455Z_NODE_IDS = Object.freeze([
+  '7493b0ab-a054-5fad-a91b-5e331db29304',
+  '11601fe0-72d6-5853-8590-ec2881853e72',
+  '8be8d30f-4499-5eed-865c-71b4d529a67a',
+]);
+const REPLAY_TEST_102455Z_PUBLISHED_NODE_IDS = Object.freeze([
+  '11601fe0-72d6-5853-8590-ec2881853e72',
+  '7493b0ab-a054-5fad-a91b-5e331db29304',
+]);
+const REPLAY_TEST_102455Z_REPLAYED_BLOCKED_PARTITION_ID =
+  INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.REPLICA_OPERATIONS];
 
 function buildNodeRows() {
   return REPLAY_TEST_NODE_IDS.map((nodeId) => ({
@@ -144,6 +177,110 @@ function buildSnapshot(timestamp, serviceRows) {
   };
 }
 
+function build102455ZNodeRows() {
+  return REPLAY_TEST_102455Z_NODE_IDS.map((nodeId) => ({
+    node_id: nodeId,
+    status: SERVICE_STATUS.ACTIVE,
+    connection_state: STATE.READY,
+    last_heartbeat: REPLAY_TEST_102455Z_TIMESTAMP_MS,
+    ready_lease_expires_at:
+      REPLAY_TEST_102455Z_TIMESTAMP_MS +
+      REPLAY_TEST_102455Z_READY_LEASE_EXTENSION_MS,
+  }));
+}
+
+function build102455ZPartitionRows() {
+  const partitionRows = buildPriorityPartitionRows();
+  for (
+    let index = partitionRows.length;
+    index < REPLAY_TEST_102455Z_PARTITION_ROW_COUNT;
+    index += NUM.ONE
+  ) {
+    const ordinal = index + NUM.ONE;
+    const tableId = `${REPLAY_TEST_102455Z_FILLER_TABLE_PREFIX}${ordinal}`;
+    partitionRows.push({
+      table_id: tableId,
+      table_name: tableId,
+      partition_id: `${tableId}${REPLAY_TEST_102455Z_FILLER_PARTITION_SUFFIX}`,
+      state: REPLAY_TEST_PARTITION_STATE_NORMAL,
+    });
+  }
+  return partitionRows;
+}
+
+function build102455ZServiceRows(partitionRows) {
+  const fillerPartitionRows = partitionRows.filter((partitionRow) =>
+    !PRIORITY_CONTROL_PLANE_TABLE_IDS.has(partitionRow.table_id),
+  );
+  const serviceRows = [];
+  for (
+    let index = NUM.ZERO;
+    index < REPLAY_TEST_102455Z_SERVICE_ROW_COUNT;
+    index += NUM.ONE
+  ) {
+    const ordinal = index + NUM.ONE;
+    const nodeId =
+      REPLAY_TEST_102455Z_NODE_IDS[index % REPLAY_TEST_102455Z_NODE_IDS.length];
+    const partitionRow = fillerPartitionRows[index % fillerPartitionRows.length];
+    const replicaId = `${partitionRow.partition_id}` +
+      `${REPLAY_TEST_REPLICA_SEPARATOR}${ordinal}`;
+    serviceRows.push({
+      service_id: `${REPLAY_TEST_102455Z_SERVICE_ID_PREFIX}${ordinal}`,
+      service_type: SERVICE_TYPE.PARTITION,
+      node_id: nodeId,
+      partition_id: partitionRow.partition_id,
+      replica_id: replicaId,
+      raft_role: RAFT_ROLE.FOLLOWER,
+      status: SERVICE_STATUS.ACTIVE,
+      address: `${nodeId}${REPLAY_TEST_ADDRESS_PARTITION_SEGMENT}${replicaId}`,
+    });
+  }
+  return serviceRows;
+}
+
+function build102455ZFailureBundle() {
+  const blockedPartitions = [...PRIORITY_CONTROL_PLANE_TABLE_IDS].map((tableId) => ({
+    partitionId: INITIAL_PARTITION_IDS[tableId],
+    requiredDistinctNodeCount: REPLAY_TEST_102455Z_REQUIRED_DISTINCT_NODE_COUNT,
+    readyDistinctNodeCount: REPLAY_TEST_102455Z_READY_DISTINCT_NODE_COUNT,
+    spreadGap: REPLAY_TEST_102455Z_SPREAD_GAP,
+  }));
+  return {
+    publicationConvergence: {
+      publicationEpoch: REPLAY_TEST_102455Z_DURABLE_PUBLICATION_EPOCH,
+      publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+      publishedActiveNodeIds: REPLAY_TEST_102455Z_PUBLISHED_NODE_IDS,
+      pendingAckNodeIds: [],
+      acknowledgedNodeIds: REPLAY_TEST_102455Z_PUBLISHED_NODE_IDS,
+      prioritySpreadPending: true,
+      closureRecordId: REPLAY_TEST_102455Z_CLOSURE_RECORD_ID,
+      closureWitnessClass: REPLAY_TEST_102455Z_CLOSURE_WITNESS_CLASS,
+      priorityPartitionSummary: {
+        satisfied: false,
+        requiredDistinctNodeCount:
+          REPLAY_TEST_102455Z_REQUIRED_DISTINCT_NODE_COUNT,
+        readyEligibleNodeCount: REPLAY_TEST_102455Z_READY_ELIGIBLE_NODE_COUNT,
+        totalPriorityPartitionCount: PRIORITY_CONTROL_PLANE_TABLE_IDS.size,
+        missingPartitionIds: blockedPartitions.map((blockedPartition) =>
+          blockedPartition.partitionId,
+        ),
+        blockedPartitions,
+      },
+    },
+  };
+}
+
+function build102455ZSnapshot() {
+  const partitionRows = build102455ZPartitionRows();
+  return {
+    timestamp: REPLAY_TEST_102455Z_TIMESTAMP_MS,
+    nodes: build102455ZNodeRows(),
+    nodeEndpoints: REPLAY_TEST_102455Z_NODE_ENDPOINT_ROWS,
+    partitions: partitionRows,
+    services: build102455ZServiceRows(partitionRows),
+  };
+}
+
 describe('publication evidence replay', () => {
   let tempDir;
 
@@ -218,6 +355,64 @@ describe('publication evidence replay', () => {
     assert.match(
       formatPublicationEvidenceReplaySummary(replaySummary),
       REPLAY_TEST_COMPARISON_LABEL_PATTERN,
+    );
+  });
+
+  it(REPLAY_TEST_102455Z_TEST_NAME, async () => {
+    await writeFile(
+      join(tempDir, REPLAY_TEST_FAILURE_BUNDLE_FILE),
+      JSON.stringify(build102455ZFailureBundle()),
+      REPLAY_TEST_ENCODING,
+    );
+    await writeFile(
+      join(tempDir, REPLAY_TEST_SNAPSHOTS_FILE),
+      JSON.stringify(build102455ZSnapshot()),
+      REPLAY_TEST_ENCODING,
+    );
+
+    const replaySummary = await replayPublicationPriorityEvidenceFromReportDir(tempDir);
+
+    assert.equal(
+      replaySummary.rowCounts.nodes,
+      REPLAY_TEST_102455Z_NODE_IDS.length,
+    );
+    assert.equal(
+      replaySummary.rowCounts.nodeEndpoints,
+      REPLAY_TEST_102455Z_NODE_ENDPOINT_ROW_COUNT,
+    );
+    assert.equal(
+      replaySummary.rowCounts.partitions,
+      REPLAY_TEST_102455Z_PARTITION_ROW_COUNT,
+    );
+    assert.equal(
+      replaySummary.rowCounts.services,
+      REPLAY_TEST_102455Z_SERVICE_ROW_COUNT,
+    );
+    assert.equal(
+      replaySummary.durablePublication.epoch,
+      REPLAY_TEST_102455Z_DURABLE_PUBLICATION_EPOCH,
+    );
+    assert.equal(
+      replaySummary.replayedPublication.epoch,
+      REPLAY_TEST_102455Z_REPLAYED_PUBLICATION_EPOCH,
+    );
+    assert.equal(
+      replaySummary.replayedPublication.status,
+      CONTROL_PLANE_PUBLICATION_STATUS.OPEN,
+    );
+    assert.equal(
+      replaySummary.replayedPublication.recoveryProtocolState,
+      REPLAY_TEST_102455Z_PUBLICATION_RECOVERY_STATE,
+    );
+    assert.equal(replaySummary.comparison.replayedSatisfied, false);
+    assert.equal(
+      replaySummary.comparison.driftClassification,
+      PUBLICATION_EVIDENCE_REPLAY_DRIFT_CLASSIFICATION.REPLAYED_BLOCKED,
+    );
+    assert.ok(
+      replaySummary.comparison.replayedBlockedPartitionIds.includes(
+        REPLAY_TEST_102455Z_REPLAYED_BLOCKED_PARTITION_ID,
+      ),
     );
   });
 });
