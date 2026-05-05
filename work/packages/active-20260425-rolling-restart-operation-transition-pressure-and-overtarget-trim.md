@@ -367,6 +367,23 @@ May 5 failure-bundle missing-published coverage-lag fix:
    selected-snapshot coverage, selected missing-published disagreement, and the
    in-flight `sql_transactions-p1` workflow progress residual remain open.
 
+May 5 missing-published reason-source review follow-up:
+
+1. Reproduced the review repro by removing the explicit
+   `publication_missing_active_node=<node>` reason from raw
+   `publicationRecoveryGate.reasons` / `reasonCodes` while keeping the same
+   reason only on `priorityRecoveryObservation.publicationConvergenceGateReasons`
+   and `activeGate.progress.gateReasons`. Before the fix, the focused
+   regression returned missing-published count `0` instead of `1`.
+2. `buildPublicationMissingPublishedEvidence()` now resolves the explicit
+   missing-active-node reason from the same priority-recovery observation and
+   active-gate progress evidence accepted later by the
+   `publicationConvergenceGateReasons` summary, while the existing decision
+   table still suppresses stale selected active-gate debt when no explicit
+   canonical missing-publication reason is present.
+3. This is a harness classification fix only. No representative
+   `rolling-restart` rerun was run for this review follow-up.
+
 ## Scope Basis
 
 Roadmap Phase `0.1 - Internal Coherence` maintenance/refactoring scope under
@@ -590,6 +607,38 @@ Closure:
       literal-guideline violations on added lines.
 - [x] May 5 failure-bundle missing-published coverage-lag `git diff --check`
       passed.
+- [x] May 5 missing-published reason-source review follow-up was red before
+      the fix and green after it:
+      `node --test --test-name-pattern "keeps canonical missing published debt during retained stale closure coverage lag" test/distributed/harness/__tests__/failure-bundle.test.js`
+      first failed with `0 !== 1`, then reported `1` test passed.
+- [x] May 5 missing-published reason-source stale/current subset passed:
+      `node --test --test-name-pattern "lets current selected active-gate coverage clear stale missing publication nodes|keeps canonical missing published debt during retained stale closure coverage lag|keeps publication debt cleared while waiting for operation-workflow progress|ignores stale best-progress missing publication evidence when current active-gate progress is clean|keeps startup active-gate snapshot coverage from restoring stale publication debt|clears stale generic publication epoch gate when closure witness is retained" test/distributed/harness/__tests__/failure-bundle.test.js`
+      reported `6` tests passed.
+- [ ] A broader adjacent sweep remains red on inherited classification
+      assertions outside this fix:
+      `separates active-gate snapshot coverage from serial priority recovery progress`
+      still reports missing published count `1` instead of `0`, and
+      `keeps current active-gate ACK closure ahead of stale best-progress debt`
+      still reports `publication_convergence_blocked` instead of
+      `priority_recovery_progress_blocked`; both failures reproduced in a
+      detached `e56e37f9` worktree without this review-follow-up diff.
+- [x] May 5 missing-published reason-source review follow-up `node --check`
+      passed for `test/distributed/harness/failure-bundle-segment-4.js` and
+      `test/distributed/harness/__tests__/failure-bundle.test.js`.
+- [x] May 5 missing-published reason-source review follow-up non-literal
+      guardrails passed:
+      `node scripts/check-guideline-decision-boundaries.js test/distributed/harness/failure-bundle-segment-4.js test/distributed/harness/__tests__/failure-bundle.test.js --include-tests`
+      and
+      `node scripts/check-runtime-grammar-contracts.js test/distributed/harness/failure-bundle-segment-4.js test/distributed/harness/__tests__/failure-bundle.test.js`
+      both reported `0` violations.
+- [ ] May 5 missing-published reason-source review follow-up exact
+      test-file literal guard remains file-scoped red:
+      `node scripts/check-guideline-literals.js test/distributed/harness/__tests__/failure-bundle.test.js --include-tests`
+      reports `1242` new literal-guideline violations and `0` inherited
+      baseline violations. The touched runtime file is clean:
+      `node scripts/check-guideline-literals.js test/distributed/harness/failure-bundle-segment-4.js`
+      reports `0` new literal-guideline violations, and the review-follow-up
+      added lines contain no new literals.
 
 ## Implementation Tasks
 

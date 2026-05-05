@@ -7654,8 +7654,6 @@ describe('failure-bundle', () => {
             missingPublishedCount: ONE_COUNT,
             publicationPending: true,
             prioritySpreadPending: true,
-            reasons: [PUBLICATION_GATE_REASON],
-            reasonCodes: [PUBLICATION_GATE_REASON],
             closureRecordId: CLOSURE_RECORD_ID,
             closureWitnessClass: CLOSURE_WITNESS_CLASS,
           },

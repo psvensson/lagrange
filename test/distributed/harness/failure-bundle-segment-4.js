@@ -2286,6 +2286,8 @@ function buildPublicationMissingPublishedEvidence({
       rawPublicationConvergence,
       publicationConvergenceGate,
       publicationConvergence,
+      priorityRecoveryObservation,
+      activeGateProgress,
     ]);
   const hasCoverageCanonicalMissingPublishedDebt =
     coverageCanonicalNodeIds.length > ZERO ||
