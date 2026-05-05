@@ -448,11 +448,16 @@ Sprint:
       and `git diff --check`.
 - [x] Rerun the representative `rolling-restart --fast-local` gate and record
       closure or the next migrated named boundary.
-- [ ] Trace the post-`e274126c` publication membership owner path for epoch
+- [x] Trace the post-`e274126c` publication membership owner path for epoch
       `3` when best progress reaches active `5/5` but terminal selected
       publication remains published-active `3/5` with missing nodes
       `11601fe0-72d6-5853-8590-ec2881853e72` and
       `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`.
+- [ ] Add the smallest membership-publication reconcile probe or fixture that
+      proves why the candidate after active-gate best progress still carries
+      published-active `3/5`: capture baseline, projected recovery membership,
+      publication target, candidate `changed`, and refresh/persist decision for
+      epoch `3` without raising timeouts or broadening the matrix.
 
 ## May 5 Regression Validation
 
@@ -516,6 +521,71 @@ at `operation_workflow_owner / workflow_progress / event_driven`, waiting on
 serial operation `209eb9f7-3c77-4a0f-ad17-675e37681201` for
 `sql_transactions-p1`.
 
+## May 5 Post-`e274126c` Publication Membership Owner Path
+
+The latest `093109Z` artifact traces to a membership publication owner path,
+not an ACK owner or selected-snapshot reachability boundary:
+
+1. The report, failure bundle, and triage summary agree on
+   `publication_convergence_blocked` with publication epoch `3` `PUBLISHED`,
+   pending ACK count `0`, missing published count `2`, and missing published
+   nodes `11601fe0-72d6-5853-8590-ec2881853e72` and
+   `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`.
+2. Active-gate best progress and terminal progress both select control
+   snapshot node `11601fe0-72d6-5853-8590-ec2881853e72`. Best progress reaches
+   active `5/5`, but selected snapshot coverage remains `4/5`, selected
+   published active remains `3/5`, selected missing published remains the same
+   two nodes, and selected reachability remains `admin_health`.
+3. The active count is harness readiness evidence from
+   `buildActiveWaitProgressSnapshot(...)`, while selected publication
+   membership is the selected control snapshot's
+   `publicationConvergence.publishedActiveNodeIds`. Active `5/5` therefore
+   does not itself promote durable publication membership to `5/5`.
+4. Runtime membership publication ownership starts at
+   `MembershipPublicationCoordinator.reconcileClusterMembership(...)`, which
+   runs through the publication reconcile lane and the workflow coordinator's
+   owner key. It derives a candidate through
+   `deriveMembershipPublicationCandidate(...)`, then persists row fields through
+   `buildMembershipPublicationRow(...)`.
+5. `deriveMembershipPublicationCandidate(...)` carries the latest durable
+   publication baseline into `publishedActiveNodeIds`, `requiredAckNodeIds`,
+   and `acknowledgedNodeIds`, then passes the candidate through
+   `buildRecoveryProtocolSnapshot(...)`. For a `PUBLISHED` row, the durable
+   published membership is the row's `published_active_node_ids`.
+6. `buildRecoveryProtocolSnapshot(...)` and
+   `buildPublicationRecoveryGateSnapshot(...)` keep missing published members
+   as publication-pending evidence when recovery-active or target-node evidence
+   is outside durable published membership. In the selected `093109Z` control
+   snapshot, the runtime `publishedMembershipObservation` itself reports
+   recovery-active source `published_membership` and no runtime
+   `missingPublishedRecoveryActiveNodeIds`; the harness computes the selected
+   missing-published list by comparing expected nodes to the selected durable
+   published-active list while snapshot coverage remains incomplete.
+7. `_probeControlSnapshotCoverage(...)` owns that selected snapshot view. It
+   extracts selected publication diagnostics from each reachable control
+   snapshot, selects the best witness by coverage and diagnostics tie-breaks,
+   and emits `selectedPublishedActiveNodeIds` plus
+   `selectedMissingPublishedNodeIds`. `buildActiveWaitProgressSnapshot(...)`
+   then combines those selected publication fields with per-node readiness
+   probe counts into one active-gate progress snapshot.
+8. The `093109Z` logs show the adjacent runtime pressure on the same owner
+   area: `control_plane_publications-p1-r4` is created and reaches active on
+   `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`, while control-snapshot
+   authoritative cache repair on `nodes` repeatedly fails through
+   `owner_rpc_lane` with `control_plane_backpressure` when contacting
+   `7493b0ab-a054-5fad-a91b-5e331db29304`. This explains stale selected
+   membership/coverage pressure but does not prove which reconcile input kept
+   the candidate at published-active `3/5`.
+
+Conclusion: the owner path is runtime membership publication candidate
+derivation and row persistence, observed by the active-gate selected snapshot
+path. The bounded evidence does not justify a harness exemption or a timeout
+change. The next smallest runtime task is to add a focused reconcile probe or
+fixture for the post-best-progress membership candidate: record
+`publishedBaselineNodeIds`, projected recovery membership, publication target
+node ids, candidate `changed`, and whether `reconcileClusterMembership(...)`
+refreshes or persists after active-gate best progress reaches `5/5`.
+
 ## Validation
 
 1. Focused owner or harness fixture for topology publication missing-active-node
@@ -566,3 +636,8 @@ correlation key `sql_write_operations-p1|3|operation_unknown`, and serial-wait
 partition ids `sql_transactions-p1`. The latest witness has no canonical
 operation ids and retains serial-wait operation id
 `209eb9f7-3c77-4a0f-ad17-675e37681201` only as serial-wait evidence.
+
+The next unchecked task is a membership-publication reconcile probe or focused
+fixture that explains why the epoch `3` candidate does not advance from the
+durable published-active `3/5` baseline after the harness observes active
+`5/5`.
