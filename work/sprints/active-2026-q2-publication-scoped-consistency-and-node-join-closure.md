@@ -117,9 +117,10 @@ priority-recovery actuation package, the operation-workflow ACK reentry
 package, and the startup snapshot reachability workflow-progress package
 executed. The priority recovery workflow transition-deferred package then
 closed by migration into operation workflow timeout reconciliation. The
-operation-transition package remains active only as a retained post-publication
-operation-workflow timeout residual. The current representative path is split
-to the topology publication/snapshot-reachability package after the
+operation-transition package remains active as a retained post-publication
+operation-workflow timeout residual plus its documented package-local
+guardrail and adjacent sweep debt. The current representative path is split to
+the topology publication/snapshot-reachability package after the
 post-`e0344113` May 5 rerun failed on missing-active-node debt, selected
 snapshot coverage, selected snapshot reachability timeout, priority spread, and
 a `sql_write_operations-p1` priority serial-wait residual. The previous
@@ -591,8 +592,9 @@ Current secondary evidence:
     [Rolling Restart Topology Publication Snapshot Reachability Reentry](../packages/active-20260505-rolling-restart-topology-publication-snapshot-reachability-reentry.md)
     for topology publication/snapshot-reachability and serial-wait ownership.
     [Rolling Restart Operation Transition Pressure And Over-Target Trim](../packages/active-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md)
-    remains active only as the retained post-publication operation-workflow
-    timeout residual.
+    remains active as the retained post-publication operation-workflow timeout
+    residual plus its documented package-local guardrail and adjacent sweep
+    debt, and does not own the current representative topology blocker.
 59. May 5 terminal publication evidence review fix:
     `./node_modules/.bin/tap test/distributed/harness/__tests__/cluster.test-part-6.js --grep "timeout publication summary uses terminal progress evidence"`
     passed, `node --test test/distributed/harness/__tests__/cluster.test-part-6.js`

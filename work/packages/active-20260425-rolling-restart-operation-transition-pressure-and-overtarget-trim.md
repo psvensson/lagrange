@@ -8,11 +8,15 @@ into startup active-gate selected-snapshot evidence.
 ## Current Evidence
 
 This package remains active as the prior post-active operation-transition /
-over-target residual owner. It is no longer the current representative
-re-entry owner: the fresh May 5 `074739Z` path migrated earlier into
+over-target residual owner, and it also retains the package-local guardrail and
+adjacent sweep debt recorded in the closure inventory below. It is no longer
+the current representative re-entry owner: the fresh May 5 `074739Z` path
+migrated earlier into
 [Rolling Restart Topology Publication Snapshot Reachability Reentry](./active-20260505-rolling-restart-topology-publication-snapshot-reachability-reentry.md).
-Future work should return here only after the representative path again reaches
-post-publication operation workflow timeout reconciliation or over-target trim.
+Representative runtime work should return here after the representative path
+again reaches post-publication operation workflow timeout reconciliation or
+over-target trim; current topology publication, selected snapshot coverage,
+and snapshot-reachability blockers belong to the topology re-entry package.
 
 The last post-active evidence before later migrations was:
 
@@ -807,7 +811,9 @@ Closure:
 2. The post-active operation workflow emits one canonical outcome for
    transition pressure, failed or removed terminal targets, source-removal
    progress, and over-target voter trim.
-3. The representative path reaches this boundary again before broad matrix
+3. Package-local literal guardrail debt and the documented adjacent red sweep
+   residuals are closed or explicitly split to a named follow-up package.
+4. The representative path reaches this boundary again before broad matrix
    continuation treats operation-transition pressure as closed.
 
 ## Representative Handoff And Residuals
@@ -819,10 +825,13 @@ missing-active-node blocker, selected snapshot coverage/reachability timeout,
 and `sql_write_operations-p1` priority serial-wait witness from the `074739Z`
 rerun.
 
-This operation-transition package remains active only because the prior
-post-publication operation-workflow timeout residual is not closed:
+This operation-transition package remains active for retained residuals rather
+than for the current representative blocker. The retained work is the prior
+post-publication operation-workflow timeout residual,
 `sql_write_operations-p1` operation
 `1a2d029d-5c00-45a8-bd71-ac4e34b318eb` at
 `operation_workflow_owner / workflow_timeout / timeout_reconcile_due` from the
-`052328Z` rerun. Do not mark this package done until that residual is
-re-entered, closed, or explicitly moved to its own named follow-up package.
+`052328Z` rerun, plus the package-local literal guardrail debt and adjacent
+red sweep residuals recorded in the closure inventory. Do not mark this
+package done until those residuals are re-entered, closed, or explicitly moved
+to named follow-up packages.
