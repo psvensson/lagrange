@@ -201,8 +201,10 @@ Queued cleanup packages:
    because the rerun moved to a freshly split non-final blocker.
 5. Residual cleanup:
    fence or delete superseded local reconstruction and caller-local pressure
-   exception paths through queued packages only after the current operation
-   workflow timeout reconciliation blocker closes or migrates.
+   exception paths through queued packages only after the current
+   startup/publication pending-ACK blocker closes or migrates; keep the
+   previous `052328Z` `sql_write_operations-p1` operation-workflow timeout as
+   a prior residual, not the current blocker.
 6. Matrix re-entry:
    after `rolling-restart` passes or moves to a stable named blocker,
    continue with `seven-node-read-write-load-transaction-recovery`, then
