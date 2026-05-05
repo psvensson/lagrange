@@ -799,7 +799,11 @@ scenario:
    become the selected active-gate authority.
 3. `test/distributed/harness/__tests__/publication-evidence-replay.test.js`
    now pins the row-replay side of the same shape: `nodes=3`,
-   `nodeEndpoints=0`, `partitions=33`, and `services=103`.
+   `nodeEndpoints=0`, `partitions=33`, and `services=103`. The service rows
+   preserve the partial artifact shape: priority partition services are
+   present, the seed owns the broad active evidence, the published baseline
+   contributes only three active priority rows plus one syncing learner, and
+   the third replay node has no service rows.
 4. Expected replay outcome: the replayed candidate advances to epoch `3`
    `OPEN`, but remains `replayed_blocked` with
    `recoveryProtocolState=publication_pending`; it does not prove all-five
@@ -820,17 +824,19 @@ Passed:
 
 1. `node --check test/distributed/harness/__tests__/cluster.test-part-5.js`
 2. `node --check test/distributed/harness/__tests__/publication-evidence-replay.test.js`
-3. `node --test --test-name-pattern "keeps admin-ready authority over stronger publication" test/distributed/harness/__tests__/cluster.test-part-5.js`
-4. `node --test --test-name-pattern "prefers the strongest publication witness when coverage ties|prefers authoritative admin-ready witnesses when coverage ties" test/distributed/harness/__tests__/cluster.test-part-5.js`
-5. `node --test --test-name-pattern "keeps the 102455Z partial owner-row replay blocked" test/distributed/harness/__tests__/publication-evidence-replay.test.js`
-6. `node --test test/distributed/harness/__tests__/publication-evidence-replay.test.js`
-7. `node scripts/check-guideline-decision-boundaries.js test/distributed/harness/__tests__/cluster.test-part-5.js test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+3. `npx tap --grep "keeps admin-ready authority over stronger publication|prefers the strongest publication witness when coverage ties|prefers authoritative admin-ready witnesses when coverage ties" test/distributed/harness/__tests__/cluster.test-part-5.js`
+   ran the TAP-backed cluster shard fixture and adjacent selector tests. The
+   cluster shard must not use `node --test` as validation proof because its
+   tests are registered through the repo TAP bridge.
+4. `node --test --test-name-pattern "keeps the 102455Z partial owner-row replay blocked" test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+5. `node --test test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+6. `node scripts/check-guideline-decision-boundaries.js test/distributed/harness/__tests__/cluster.test-part-5.js test/distributed/harness/__tests__/publication-evidence-replay.test.js`
    reported `0` decision-boundary guideline violations.
-8. `node scripts/check-runtime-grammar-contracts.js test/distributed/harness/__tests__/cluster.test-part-5.js test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+7. `node scripts/check-runtime-grammar-contracts.js test/distributed/harness/__tests__/cluster.test-part-5.js test/distributed/harness/__tests__/publication-evidence-replay.test.js`
    reported `0` runtime-grammar-contract violations.
-9. `node scripts/check-guideline-boundary-mode-contracts.js test/distributed/harness/__tests__/cluster.test-part-5.js test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+8. `node scripts/check-guideline-boundary-mode-contracts.js test/distributed/harness/__tests__/cluster.test-part-5.js test/distributed/harness/__tests__/publication-evidence-replay.test.js`
    reported `0` boundary-mode-contract hotspot violations.
-10. `git diff --check`
+9. `git diff --check`
 
 Inherited / unchanged:
 

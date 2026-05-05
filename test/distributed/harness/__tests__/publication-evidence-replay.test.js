@@ -68,19 +68,46 @@ const REPLAY_TEST_102455Z_TEST_NAME =
   'keeps the 102455Z partial owner-row replay blocked';
 const REPLAY_TEST_102455Z_FILLER_TABLE_PREFIX = 'fixture_table_';
 const REPLAY_TEST_102455Z_FILLER_PARTITION_SUFFIX = '-p1';
-const REPLAY_TEST_102455Z_SERVICE_ID_PREFIX = 'fixture-service-';
+const REPLAY_TEST_102455Z_SEED_ACTIVE_SERVICE_ROW_COUNT = 99;
+const REPLAY_TEST_102455Z_BASELINE_ACTIVE_SERVICE_ROW_COUNT = 3;
+const REPLAY_TEST_102455Z_SYNCING_LEARNER_SERVICE_ROW_COUNT = 1;
+const REPLAY_TEST_102455Z_SERVICE_STATUS_SYNCING = 'syncing';
+const REPLAY_TEST_102455Z_SERVICE_ROW_FIELD_RAFT_ROLE = 'raftRole';
+const REPLAY_TEST_102455Z_SEED_REPLICA_ORDINALS = Object.freeze([
+  NUM.ONE,
+  NUM.TWO,
+  NUM.THREE,
+]);
+const REPLAY_TEST_102455Z_BASELINE_REPLICA_ORDINAL = NUM.FOUR;
 const REPLAY_TEST_102455Z_NODE_ENDPOINT_ROWS = Object.freeze([]);
+const REPLAY_TEST_102455Z_NODE_ID = Object.freeze({
+  SEED: '7493b0ab-a054-5fad-a91b-5e331db29304',
+  BASELINE: '11601fe0-72d6-5853-8590-ec2881853e72',
+  STRONG_EXTRA: '8be8d30f-4499-5eed-865c-71b4d529a67a',
+});
 const REPLAY_TEST_102455Z_NODE_IDS = Object.freeze([
-  '7493b0ab-a054-5fad-a91b-5e331db29304',
-  '11601fe0-72d6-5853-8590-ec2881853e72',
-  '8be8d30f-4499-5eed-865c-71b4d529a67a',
+  REPLAY_TEST_102455Z_NODE_ID.SEED,
+  REPLAY_TEST_102455Z_NODE_ID.BASELINE,
+  REPLAY_TEST_102455Z_NODE_ID.STRONG_EXTRA,
 ]);
 const REPLAY_TEST_102455Z_PUBLISHED_NODE_IDS = Object.freeze([
-  '11601fe0-72d6-5853-8590-ec2881853e72',
-  '7493b0ab-a054-5fad-a91b-5e331db29304',
+  REPLAY_TEST_102455Z_NODE_ID.BASELINE,
+  REPLAY_TEST_102455Z_NODE_ID.SEED,
 ]);
 const REPLAY_TEST_102455Z_REPLAYED_BLOCKED_PARTITION_ID =
   INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.REPLICA_OPERATIONS];
+const REPLAY_TEST_102455Z_BASELINE_ACTIVE_PRIORITY_TABLE_IDS = Object.freeze([
+  SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS,
+  SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+  SYSTEM_TABLE_NAME.SQL_TRANSACTIONS,
+]);
+const REPLAY_TEST_102455Z_SYNCING_LEARNER_TABLE_ID =
+  SYSTEM_TABLE_NAME.SQL_WRITE_OPERATIONS;
+const REPLAY_TEST_102455Z_PRIORITY_PARTITION_IDS = Object.freeze(
+  [...PRIORITY_CONTROL_PLANE_TABLE_IDS].map((tableId) =>
+    INITIAL_PARTITION_IDS[tableId],
+  ).sort((left, right) => left.localeCompare(right)),
+);
 
 function buildNodeRows() {
   return REPLAY_TEST_NODE_IDS.map((nodeId) => ({
@@ -209,33 +236,77 @@ function build102455ZPartitionRows() {
 }
 
 function build102455ZServiceRows(partitionRows) {
-  const fillerPartitionRows = partitionRows.filter((partitionRow) =>
-    !PRIORITY_CONTROL_PLANE_TABLE_IDS.has(partitionRow.table_id),
-  );
   const serviceRows = [];
-  for (
-    let index = NUM.ZERO;
-    index < REPLAY_TEST_102455Z_SERVICE_ROW_COUNT;
-    index += NUM.ONE
-  ) {
-    const ordinal = index + NUM.ONE;
-    const nodeId =
-      REPLAY_TEST_102455Z_NODE_IDS[index % REPLAY_TEST_102455Z_NODE_IDS.length];
-    const partitionRow = fillerPartitionRows[index % fillerPartitionRows.length];
-    const replicaId = `${partitionRow.partition_id}` +
-      `${REPLAY_TEST_REPLICA_SEPARATOR}${ordinal}`;
-    serviceRows.push({
-      service_id: `${REPLAY_TEST_102455Z_SERVICE_ID_PREFIX}${ordinal}`,
-      service_type: SERVICE_TYPE.PARTITION,
-      node_id: nodeId,
-      partition_id: partitionRow.partition_id,
-      replica_id: replicaId,
-      raft_role: RAFT_ROLE.FOLLOWER,
-      status: SERVICE_STATUS.ACTIVE,
-      address: `${nodeId}${REPLAY_TEST_ADDRESS_PARTITION_SEGMENT}${replicaId}`,
-    });
+  for (const partitionRow of partitionRows) {
+    for (const replicaOrdinal of REPLAY_TEST_102455Z_SEED_REPLICA_ORDINALS) {
+      serviceRows.push(build102455ZServiceRow({
+        nodeId: REPLAY_TEST_102455Z_NODE_ID.SEED,
+        partitionId: partitionRow.partition_id,
+        replicaOrdinal,
+        raftRole: RAFT_ROLE.FOLLOWER,
+        status: SERVICE_STATUS.ACTIVE,
+      }));
+    }
   }
+  for (const tableId of REPLAY_TEST_102455Z_BASELINE_ACTIVE_PRIORITY_TABLE_IDS) {
+    serviceRows.push(build102455ZServiceRow({
+      nodeId: REPLAY_TEST_102455Z_NODE_ID.BASELINE,
+      partitionId: INITIAL_PARTITION_IDS[tableId],
+      replicaOrdinal: REPLAY_TEST_102455Z_BASELINE_REPLICA_ORDINAL,
+      raftRole: RAFT_ROLE.FOLLOWER,
+      status: SERVICE_STATUS.ACTIVE,
+    }));
+  }
+  serviceRows.push(build102455ZServiceRow({
+    nodeId: REPLAY_TEST_102455Z_NODE_ID.BASELINE,
+    partitionId: INITIAL_PARTITION_IDS[
+      REPLAY_TEST_102455Z_SYNCING_LEARNER_TABLE_ID
+    ],
+    replicaOrdinal: REPLAY_TEST_102455Z_BASELINE_REPLICA_ORDINAL,
+    raftRole: RAFT_ROLE.LEARNER,
+    status: REPLAY_TEST_102455Z_SERVICE_STATUS_SYNCING,
+  }));
   return serviceRows;
+}
+
+function build102455ZServiceRow(options) {
+  const replicaId = `${options.partitionId}` +
+    `${REPLAY_TEST_REPLICA_SEPARATOR}${options.replicaOrdinal}`;
+  return {
+    service_id: replicaId,
+    service_type: SERVICE_TYPE.PARTITION,
+    node_id: options.nodeId,
+    partition_id: options.partitionId,
+    replica_id: replicaId,
+    raft_role: options.raftRole,
+    status: options.status,
+    address: `${options.nodeId}` +
+      `${REPLAY_TEST_ADDRESS_PARTITION_SEGMENT}${replicaId}`,
+  };
+}
+
+function collect102455ZPriorityServicePartitionIds(serviceRows) {
+  const priorityPartitionIds = new Set(REPLAY_TEST_102455Z_PRIORITY_PARTITION_IDS);
+  return [...new Set(
+    serviceRows
+      .map((serviceRow) => serviceRow.partition_id)
+      .filter((partitionId) => priorityPartitionIds.has(partitionId)),
+  )].sort((left, right) => left.localeCompare(right));
+}
+
+function count102455ZServiceRows(serviceRows, options) {
+  const shouldMatchRaftRole = Object.hasOwn(
+    options,
+    REPLAY_TEST_102455Z_SERVICE_ROW_FIELD_RAFT_ROLE,
+  );
+  return serviceRows.filter((serviceRow) =>
+    serviceRow.node_id === options.nodeId &&
+    serviceRow.status === options.status &&
+    (
+      !shouldMatchRaftRole ||
+      serviceRow.raft_role === options.raftRole
+    ),
+  ).length;
 }
 
 function build102455ZFailureBundle() {
@@ -359,6 +430,8 @@ describe('publication evidence replay', () => {
   });
 
   it(REPLAY_TEST_102455Z_TEST_NAME, async () => {
+    const snapshot = build102455ZSnapshot();
+
     await writeFile(
       join(tempDir, REPLAY_TEST_FAILURE_BUNDLE_FILE),
       JSON.stringify(build102455ZFailureBundle()),
@@ -366,12 +439,38 @@ describe('publication evidence replay', () => {
     );
     await writeFile(
       join(tempDir, REPLAY_TEST_SNAPSHOTS_FILE),
-      JSON.stringify(build102455ZSnapshot()),
+      JSON.stringify(snapshot),
       REPLAY_TEST_ENCODING,
     );
 
     const replaySummary = await replayPublicationPriorityEvidenceFromReportDir(tempDir);
 
+    assert.deepEqual(
+      collect102455ZPriorityServicePartitionIds(snapshot.services),
+      REPLAY_TEST_102455Z_PRIORITY_PARTITION_IDS,
+    );
+    assert.equal(
+      count102455ZServiceRows(snapshot.services, {
+        nodeId: REPLAY_TEST_102455Z_NODE_ID.SEED,
+        status: SERVICE_STATUS.ACTIVE,
+      }),
+      REPLAY_TEST_102455Z_SEED_ACTIVE_SERVICE_ROW_COUNT,
+    );
+    assert.equal(
+      count102455ZServiceRows(snapshot.services, {
+        nodeId: REPLAY_TEST_102455Z_NODE_ID.BASELINE,
+        status: SERVICE_STATUS.ACTIVE,
+      }),
+      REPLAY_TEST_102455Z_BASELINE_ACTIVE_SERVICE_ROW_COUNT,
+    );
+    assert.equal(
+      count102455ZServiceRows(snapshot.services, {
+        nodeId: REPLAY_TEST_102455Z_NODE_ID.BASELINE,
+        status: REPLAY_TEST_102455Z_SERVICE_STATUS_SYNCING,
+        raftRole: RAFT_ROLE.LEARNER,
+      }),
+      REPLAY_TEST_102455Z_SYNCING_LEARNER_SERVICE_ROW_COUNT,
+    );
     assert.equal(
       replaySummary.rowCounts.nodes,
       REPLAY_TEST_102455Z_NODE_IDS.length,

@@ -27,9 +27,6 @@ const SNAPSHOT_REPLAY_TEST_DOCKER_SOCKET_PATH = '/var/run/docker.sock';
 const SNAPSHOT_REPLAY_TEST_IMAGE = 'distributed-db:test';
 const SNAPSHOT_REPLAY_TEST_EMPTY_LOG = '';
 const SNAPSHOT_REPLAY_TEST_ADMIN_HEALTH_SOURCE = 'admin_health';
-const SNAPSHOT_REPLAY_TEST_SEED_REACHABILITY_ERROR =
-  'Control snapshot reachability probe timed out for ' +
-  '7493b0ab-a054-5fad-a91b-5e331db29304';
 const SNAPSHOT_REPLAY_TEST_AUTHORITY_TEST_NAME =
   'Unit: _probeControlSnapshotCoverage keeps admin-ready authority over ' +
   'stronger publication when 102455Z coverage ties';
@@ -43,6 +40,9 @@ const SNAPSHOT_REPLAY_TEST_NODE_ID = Object.freeze({
   STRONG_EXTRA: '8be8d30f-4499-5eed-865c-71b4d529a67a',
   STALE_EXTRA: 'ebc4aa0b-06c6-506d-93ea-1dd2deca3f58',
 });
+const SNAPSHOT_REPLAY_TEST_SEED_REACHABILITY_ERROR =
+  'Control snapshot reachability probe timed out for ' +
+  SNAPSHOT_REPLAY_TEST_NODE_ID.SEED;
 const SNAPSHOT_REPLAY_TEST_EXPECTED_NODE_IDS = Object.freeze([
   SNAPSHOT_REPLAY_TEST_NODE_ID.SEED,
   SNAPSHOT_REPLAY_TEST_NODE_ID.BASELINE,
