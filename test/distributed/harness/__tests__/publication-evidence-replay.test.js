@@ -24,10 +24,15 @@ import {
 import {NUM, SERVICE_STATUS, SERVICE_TYPE, STATE} from '../../../../src/constants/index.js';
 import {RAFT_ROLE} from '../../../../src/raft/constants.js';
 import {
+  REBALANCE_COORDINATOR_LOG_MSG,
+  REBALANCER_LOG_MSG,
+} from '../../../../src/rebalancer/rebalancer-constants.js';
+import {
   PUBLICATION_EVIDENCE_REPLAY_AVAILABILITY,
   formatPublicationEvidenceReplaySummary,
   PUBLICATION_EVIDENCE_REPLAY_CLOSURE_WITNESS_CLASSIFICATION,
   PUBLICATION_EVIDENCE_REPLAY_DRIFT_CLASSIFICATION,
+  PUBLICATION_EVIDENCE_REPLAY_REBALANCER_HANDOFF_STATE,
   replayPublicationPriorityEvidenceFromReportDir,
 } from '../publication-evidence-replay.js';
 
@@ -801,6 +806,16 @@ const REPLAY_TEST_145246Z_OPERATION_STATUS_UNAVAILABLE = 'unavailable';
 const REPLAY_TEST_145246Z_CLOSURE_PENDING = 'closure_pending';
 const REPLAY_TEST_145246Z_REBALANCER_OPERATION_ID =
   '396c2fda-2639-4b3d-ad8d-7c148dc90936';
+const REPLAY_TEST_145246Z_OPERATION_FAILED_TIME =
+  '2026-05-05T14:55:04.403Z';
+const REPLAY_TEST_145246Z_FOLLOWUP_REBALANCE_TIME =
+  '2026-05-05T14:55:04.771Z';
+const REPLAY_TEST_145246Z_OPERATION_FAILED_TIME_MS = Date.parse(
+  REPLAY_TEST_145246Z_OPERATION_FAILED_TIME,
+);
+const REPLAY_TEST_145246Z_FOLLOWUP_REBALANCE_TIME_MS = Date.parse(
+  REPLAY_TEST_145246Z_FOLLOWUP_REBALANCE_TIME,
+);
 const REPLAY_TEST_145246Z_SERIAL_WAIT_OPERATION_ID =
   'e37bed88-1e78-42e7-a667-4248a3f85529';
 const REPLAY_TEST_145246Z_SQL_PARTICIPANTS_OPERATION_ID =
@@ -2351,6 +2366,25 @@ function build145246ZSqlWriteWitness() {
   });
 }
 
+function build145246ZRebalancerHandoffLogLines() {
+  return [
+    {
+      time: REPLAY_TEST_145246Z_OPERATION_FAILED_TIME,
+      operationId: REPLAY_TEST_145246Z_REBALANCER_OPERATION_ID,
+      partitionId: REPLAY_TEST_145246Z_CONTROL_PLANE_PUBLICATIONS_PARTITION_ID,
+      targetNodeId: REPLAY_TEST_145246Z_NODE_ID.BASELINE,
+      msg: REBALANCE_COORDINATOR_LOG_MSG.OPERATION_FAILED,
+    },
+    {
+      time: REPLAY_TEST_145246Z_FOLLOWUP_REBALANCE_TIME,
+      entityId: REPLAY_TEST_145246Z_CONTROL_PLANE_PUBLICATIONS_PARTITION_ID,
+      entityType: SERVICE_TYPE.PARTITION,
+      moveCount: NUM.ONE,
+      msg: REBALANCER_LOG_MSG.START_REBALANCE,
+    },
+  ].map((record) => JSON.stringify(record));
+}
+
 function build145246ZFailureBundle() {
   return {
     publicationConvergence: {
@@ -2478,6 +2512,12 @@ function build145246ZFailureBundle() {
           blockedPartitionIds:
             REPLAY_TEST_145246Z_CLOSURE_BLOCKED_PARTITION_IDS,
         },
+      },
+    },
+    logs: {
+      excerptsByNodeId: {
+        [REPLAY_TEST_145246Z_NODE_ID.SEED]:
+          build145246ZRebalancerHandoffLogLines(),
       },
     },
   };
@@ -4334,6 +4374,54 @@ describe(REPLAY_TEST_SUITE_NAME, () => {
     assert.equal(
       rebalancerWitness.correlationKey,
       REPLAY_TEST_145246Z_REBALANCER_CORRELATION_KEY,
+    );
+    assert.equal(
+      replaySummary.rebalancerFollowUpHandoff.availability,
+      PUBLICATION_EVIDENCE_REPLAY_AVAILABILITY.AVAILABLE,
+    );
+    assert.equal(
+      replaySummary.rebalancerFollowUpHandoff.followUpState,
+      PUBLICATION_EVIDENCE_REPLAY_REBALANCER_HANDOFF_STATE.ENQUEUED,
+    );
+    assert.equal(
+      replaySummary.rebalancerFollowUpHandoff.partitionId,
+      REPLAY_TEST_145246Z_CONTROL_PLANE_PUBLICATIONS_PARTITION_ID,
+    );
+    assert.equal(
+      replaySummary.rebalancerFollowUpHandoff.operationId,
+      REPLAY_TEST_145246Z_REBALANCER_OPERATION_ID,
+    );
+    assert.equal(
+      replaySummary.rebalancerFollowUpHandoff.retainedByWitness,
+      true,
+    );
+    assert.equal(
+      replaySummary.rebalancerFollowUpHandoff.retainedNextRequiredAction,
+      REPLAY_TEST_145246Z_SCHEDULE_FOLLOWUP_REBALANCE,
+    );
+    assert.equal(
+      replaySummary.rebalancerFollowUpHandoff.terminalFailureObserved,
+      true,
+    );
+    assert.equal(
+      replaySummary.rebalancerFollowUpHandoff.terminalFailureTimeMs,
+      REPLAY_TEST_145246Z_OPERATION_FAILED_TIME_MS,
+    );
+    assert.equal(
+      replaySummary.rebalancerFollowUpHandoff.postTerminalRebalanceObserved,
+      true,
+    );
+    assert.equal(
+      replaySummary.rebalancerFollowUpHandoff.postTerminalRebalanceTimeMs,
+      REPLAY_TEST_145246Z_FOLLOWUP_REBALANCE_TIME_MS,
+    );
+    assert.equal(
+      replaySummary.rebalancerFollowUpHandoff.postTerminalRebalanceMoveCount,
+      NUM.ONE,
+    );
+    assert.equal(
+      replaySummary.rebalancerFollowUpHandoff.postTerminalSuppressionObserved,
+      false,
     );
     assert.ok(sqlParticipantsWitness);
     assert.deepEqual(

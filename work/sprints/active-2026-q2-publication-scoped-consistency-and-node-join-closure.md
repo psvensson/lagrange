@@ -277,10 +277,17 @@ Queued cleanup packages:
    chain. The `132033Z` review fix now also proves that global
    owner-RPC/cache-repair deferrals do not reconstruct selected-snapshot repair
    evidence when the selected-witness deferral count is `0`; `145246Z` remains
-   retained-observation-only with owner-RPC reconstruction `missing`. The next
-   unchecked package task is the subordinate
-   `control_plane_publications-p1` rebalancer-handoff terminal-failed owner
-   path after operation `396c2fda-2639-4b3d-ad8d-7c148dc90936`.
+   retained-observation-only with owner-RPC reconstruction `missing`. The
+   subordinate rebalancer-handoff trace is also complete: replay now reports
+   `rebalancerFollowUpHandoff.followUpState=enqueued`, with operation
+   `396c2fda-2639-4b3d-ad8d-7c148dc90936` failing at
+   `2026-05-05T14:55:04.403Z` and the same partition starting a post-terminal
+   rebalancing pass at `2026-05-05T14:55:04.771Z` with `moveCount=1`. The
+   action was retained and enqueued, not suppressed, while the epoch `2`
+   `PUBLISHED` missing-active selected-snapshot topology debt remains
+   canonical. The next unchecked package task is to trace whether the enqueued
+   `control_plane_publications-p1` follow-up move persisted a new operation or
+   was blocked during move execution.
 3. Harness classification:
    terminal barrier evidence wins over stale playback reconstruction for
    active, restart-recovery, load-readiness, convergence, and quiescence

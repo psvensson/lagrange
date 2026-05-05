@@ -8,6 +8,15 @@ import {
   PRIORITY_RECOVERY_CLOSURE_WITNESS_STATE,
 } from
   '../../../src/control-plane/priority-recovery-snapshot.js';
+import {
+  PRIORITY_RECOVERY_ACTUATION_STATE,
+  PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION,
+} from
+  '../../../src/control-plane/priority-recovery-diagnostics-constants.js';
+import {
+  REBALANCE_COORDINATOR_LOG_MSG,
+  REBALANCER_LOG_MSG,
+} from '../../../src/rebalancer/rebalancer-constants.js';
 import {NUM, TYPEOF} from '../../../src/constants/index.js';
 
 const PUBLICATION_EVIDENCE_REPLAY_FILE = Object.freeze({
@@ -71,6 +80,7 @@ const PUBLICATION_EVIDENCE_REPLAY_LINE = Object.freeze({
   OWNER_RPC_CACHE_REPAIR: 'ownerRpcCacheRepair',
   SELECTED_SNAPSHOT_REPAIR_EVIDENCE_RECOVERY:
     'selectedSnapshotRepairEvidenceRecovery',
+  REBALANCER_FOLLOW_UP_HANDOFF: 'rebalancerFollowUpHandoff',
   PRIORITY_RECOVERY_WITNESSES: 'priorityRecoveryWitnesses',
   SUPPORTING_PRIORITY_RECOVERY_WITNESS: 'supportingPriorityRecoveryWitness',
   COMPARISON: 'comparison',
@@ -146,6 +156,21 @@ const PUBLICATION_EVIDENCE_REPLAY_PRIORITY_WITNESS_FIELD = Object.freeze({
   WAIT_MODE: 'waitMode',
   WORKFLOW_PROGRESS_PHASE_ID: 'workflowProgressPhaseId',
 });
+const PUBLICATION_EVIDENCE_REPLAY_REBALANCER_HANDOFF_FIELD = Object.freeze({
+  AVAILABILITY: 'availability',
+  FOLLOW_UP_STATE: 'followUpState',
+  OPERATION_ID: 'operationId',
+  PARTITION_ID: 'partitionId',
+  POST_TERMINAL_REBALANCE_MOVE_COUNT: 'postTerminalRebalanceMoveCount',
+  POST_TERMINAL_REBALANCE_OBSERVED: 'postTerminalRebalanceObserved',
+  POST_TERMINAL_REBALANCE_TIME_MS: 'postTerminalRebalanceTimeMs',
+  POST_TERMINAL_SUPPRESSION_OBSERVED: 'postTerminalSuppressionObserved',
+  POST_TERMINAL_SUPPRESSION_REASON: 'postTerminalSuppressionReason',
+  RETAINED_BY_WITNESS: 'retainedByWitness',
+  RETAINED_NEXT_REQUIRED_ACTION: 'retainedNextRequiredAction',
+  TERMINAL_FAILURE_OBSERVED: 'terminalFailureObserved',
+  TERMINAL_FAILURE_TIME_MS: 'terminalFailureTimeMs',
+});
 const PUBLICATION_EVIDENCE_REPLAY_COMPARISON_FIELD = Object.freeze({
   BLOCKED_PARTITION_IDS_MATCH: 'blockedPartitionIdsMatch',
   CLOSURE_RECORD_ID: 'closureRecordId',
@@ -195,6 +220,12 @@ const PUBLICATION_EVIDENCE_REPLAY_REPAIR_EVIDENCE_RECOVERY_STATE = Object.freeze
     'retained_selected_snapshot_and_reconstructed_owner_rpc',
   RETAINED_SELECTED_SNAPSHOT_OBSERVATION:
     'retained_selected_snapshot_observation',
+});
+const PUBLICATION_EVIDENCE_REPLAY_REBALANCER_HANDOFF_STATE = Object.freeze({
+  ENQUEUED: 'enqueued',
+  MISSING: 'missing',
+  RETAINED: 'retained',
+  SUPPRESSED: 'suppressed',
 });
 const PUBLICATION_EVIDENCE_REPLAY_REPAIR_EVIDENCE_RECOVERY_RULES = Object.freeze([
   Object.freeze({
@@ -260,6 +291,20 @@ const PUBLICATION_EVIDENCE_REPLAY_REPAIR_LOG_FIELD = Object.freeze({
   READ_SOURCE: 'readSource',
   RETRY_AFTER_MS: 'retryAfterMs',
 });
+const PUBLICATION_EVIDENCE_REPLAY_REBALANCER_LOG_FIELD = Object.freeze({
+  ENTITY_ID: 'entityId',
+  MOVE_COUNT: 'moveCount',
+  MSG: 'msg',
+  OPERATION_ID: 'operationId',
+  PARTITION_ID: 'partitionId',
+  TIME: 'time',
+});
+const PUBLICATION_EVIDENCE_REPLAY_REBALANCER_SUPPRESSION_MESSAGES = Object.freeze([
+  REBALANCER_LOG_MSG.NO_REBALANCE_NEEDED,
+  REBALANCER_LOG_MSG.MOVE_SKIPPED,
+  REBALANCER_LOG_MSG.SKIP_UNREADY_NODE,
+  REBALANCER_LOG_MSG.SKIP_BATCH_UNREADY,
+]);
 const PUBLICATION_EVIDENCE_REPLAY_REPAIR_DEFERRAL_RULES = Object.freeze([
   Object.freeze({
     matches: (evidence) =>
@@ -309,6 +354,11 @@ function normalizeScalarText(value) {
 function normalizeInteger(value, fallback = NUM.ZERO) {
   const normalized = Number(value);
   return Number.isFinite(normalized) ? Math.trunc(normalized) : fallback;
+}
+
+function normalizeTimestampMs(value, fallback = NUM.ZERO) {
+  const normalizedTime = Date.parse(normalizeText(value));
+  return Number.isFinite(normalizedTime) ? normalizedTime : fallback;
 }
 
 function normalizeList(values = []) {
@@ -929,6 +979,200 @@ function selectSupportingPriorityRecoveryWitness(priorityRecoveryWitnesses = [])
     buildMissingPriorityRecoveryWitness();
 }
 
+function selectRebalancerFollowUpWitness(priorityRecoveryWitnesses = []) {
+  return priorityRecoveryWitnesses.find((witness) =>
+    witness[
+      PUBLICATION_EVIDENCE_REPLAY_PRIORITY_WITNESS_FIELD.NEXT_REQUIRED_ACTION
+    ] === PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.SCHEDULE_FOLLOWUP_REBALANCE &&
+    witness[
+      PUBLICATION_EVIDENCE_REPLAY_PRIORITY_WITNESS_FIELD.ACTUATION_STATE
+    ] === PRIORITY_RECOVERY_ACTUATION_STATE.TERMINAL_FAILED &&
+    witness[
+      PUBLICATION_EVIDENCE_REPLAY_PRIORITY_WITNESS_FIELD.OPERATION_ID
+    ].length > NUM.ZERO,
+  ) || buildMissingPriorityRecoveryWitness();
+}
+
+function normalizeRebalancerHandoffLogEvidence(record = {}) {
+  return {
+    message: normalizeText(
+      record[PUBLICATION_EVIDENCE_REPLAY_REBALANCER_LOG_FIELD.MSG],
+    ),
+    entityId: normalizeText(
+      record[PUBLICATION_EVIDENCE_REPLAY_REBALANCER_LOG_FIELD.ENTITY_ID],
+    ),
+    partitionId: normalizeText(
+      record[PUBLICATION_EVIDENCE_REPLAY_REBALANCER_LOG_FIELD.PARTITION_ID],
+    ),
+    operationId: normalizeText(
+      record[PUBLICATION_EVIDENCE_REPLAY_REBALANCER_LOG_FIELD.OPERATION_ID],
+    ),
+    timeMs: normalizeTimestampMs(
+      record[PUBLICATION_EVIDENCE_REPLAY_REBALANCER_LOG_FIELD.TIME],
+    ),
+    moveCount: normalizeInteger(
+      record[PUBLICATION_EVIDENCE_REPLAY_REBALANCER_LOG_FIELD.MOVE_COUNT],
+    ),
+  };
+}
+
+function selectLatestRebalancerHandoffLog(records = []) {
+  return records.reduce(
+    (selected, record) => record.timeMs >= selected.timeMs ? record : selected,
+    Object.freeze({
+      message: PUBLICATION_EVIDENCE_REPLAY_EMPTY_TEXT,
+      entityId: PUBLICATION_EVIDENCE_REPLAY_EMPTY_TEXT,
+      partitionId: PUBLICATION_EVIDENCE_REPLAY_EMPTY_TEXT,
+      operationId: PUBLICATION_EVIDENCE_REPLAY_EMPTY_TEXT,
+      timeMs: NUM.ZERO,
+      moveCount: NUM.ZERO,
+    }),
+  );
+}
+
+function readRebalancerHandoffLogEvidence(failureBundle = {}) {
+  return readFailureBundleLogExcerptLines(failureBundle)
+    .map(parseRepairLogRecordFromLine)
+    .filter(isRecord)
+    .map(normalizeRebalancerHandoffLogEvidence);
+}
+
+function isTerminalOperationFailureLog(evidence, witness) {
+  return (
+    evidence.message === REBALANCE_COORDINATOR_LOG_MSG.OPERATION_FAILED &&
+    evidence.operationId ===
+      witness[PUBLICATION_EVIDENCE_REPLAY_PRIORITY_WITNESS_FIELD.OPERATION_ID] &&
+    evidence.partitionId ===
+      witness[PUBLICATION_EVIDENCE_REPLAY_PRIORITY_WITNESS_FIELD.PARTITION_ID]
+  );
+}
+
+function isPostTerminalRebalanceStartLog(evidence, witness, terminalFailure) {
+  return (
+    evidence.message === REBALANCER_LOG_MSG.START_REBALANCE &&
+    evidence.entityId ===
+      witness[PUBLICATION_EVIDENCE_REPLAY_PRIORITY_WITNESS_FIELD.PARTITION_ID] &&
+    evidence.timeMs > terminalFailure.timeMs &&
+    evidence.moveCount > NUM.ZERO
+  );
+}
+
+function isPostTerminalSuppressionLog(evidence, witness, terminalFailure) {
+  return (
+    PUBLICATION_EVIDENCE_REPLAY_REBALANCER_SUPPRESSION_MESSAGES.includes(
+      evidence.message,
+    ) &&
+    evidence.entityId ===
+      witness[PUBLICATION_EVIDENCE_REPLAY_PRIORITY_WITNESS_FIELD.PARTITION_ID] &&
+    evidence.timeMs > terminalFailure.timeMs
+  );
+}
+
+function resolveRebalancerHandoffFollowUpState(evidence = {}) {
+  const state = [
+    Object.freeze({
+      state: PUBLICATION_EVIDENCE_REPLAY_REBALANCER_HANDOFF_STATE.ENQUEUED,
+      matches: (handoffEvidence) =>
+        handoffEvidence.retainedByWitness === true &&
+        handoffEvidence.terminalFailureObserved === true &&
+        handoffEvidence.postTerminalRebalanceObserved === true,
+    }),
+    Object.freeze({
+      state: PUBLICATION_EVIDENCE_REPLAY_REBALANCER_HANDOFF_STATE.SUPPRESSED,
+      matches: (handoffEvidence) =>
+        handoffEvidence.retainedByWitness === true &&
+        handoffEvidence.terminalFailureObserved === true &&
+        handoffEvidence.postTerminalSuppressionObserved === true,
+    }),
+    Object.freeze({
+      state: PUBLICATION_EVIDENCE_REPLAY_REBALANCER_HANDOFF_STATE.RETAINED,
+      matches: (handoffEvidence) =>
+        handoffEvidence.retainedByWitness === true,
+    }),
+    Object.freeze({
+      state: PUBLICATION_EVIDENCE_REPLAY_REBALANCER_HANDOFF_STATE.MISSING,
+      matches: () => true,
+    }),
+  ].find((entry) => entry.matches(evidence))?.state;
+  return state || PUBLICATION_EVIDENCE_REPLAY_REBALANCER_HANDOFF_STATE.MISSING;
+}
+
+function summarizeRebalancerFollowUpHandoff({
+  failureBundle = {},
+  priorityRecoveryWitnesses = [],
+} = {}) {
+  const witness = selectRebalancerFollowUpWitness(priorityRecoveryWitnesses);
+  const retainedByWitness =
+    witness[
+      PUBLICATION_EVIDENCE_REPLAY_PRIORITY_WITNESS_FIELD.AVAILABILITY
+    ] === PUBLICATION_EVIDENCE_REPLAY_AVAILABILITY.AVAILABLE;
+  const logEvidence = readRebalancerHandoffLogEvidence(failureBundle);
+  const terminalFailure = selectLatestRebalancerHandoffLog(
+    logEvidence.filter((evidence) =>
+      isTerminalOperationFailureLog(evidence, witness),
+    ),
+  );
+  const terminalFailureObserved = terminalFailure.timeMs > NUM.ZERO;
+  const postTerminalRebalance = selectLatestRebalancerHandoffLog(
+    logEvidence.filter((evidence) =>
+      isPostTerminalRebalanceStartLog(evidence, witness, terminalFailure),
+    ),
+  );
+  const postTerminalSuppression = selectLatestRebalancerHandoffLog(
+    logEvidence.filter((evidence) =>
+      isPostTerminalSuppressionLog(evidence, witness, terminalFailure),
+    ),
+  );
+  const handoffEvidence = Object.freeze({
+    retainedByWitness,
+    terminalFailureObserved,
+    postTerminalRebalanceObserved: postTerminalRebalance.timeMs > NUM.ZERO,
+    postTerminalSuppressionObserved: postTerminalSuppression.timeMs > NUM.ZERO,
+  });
+  const followUpState = resolveRebalancerHandoffFollowUpState(handoffEvidence);
+  return {
+    [PUBLICATION_EVIDENCE_REPLAY_REBALANCER_HANDOFF_FIELD.AVAILABILITY]:
+      followUpState === PUBLICATION_EVIDENCE_REPLAY_REBALANCER_HANDOFF_STATE
+        .MISSING ?
+        PUBLICATION_EVIDENCE_REPLAY_AVAILABILITY.MISSING :
+        PUBLICATION_EVIDENCE_REPLAY_AVAILABILITY.AVAILABLE,
+    [PUBLICATION_EVIDENCE_REPLAY_REBALANCER_HANDOFF_FIELD.FOLLOW_UP_STATE]:
+      followUpState,
+    [PUBLICATION_EVIDENCE_REPLAY_REBALANCER_HANDOFF_FIELD.PARTITION_ID]:
+      witness[PUBLICATION_EVIDENCE_REPLAY_PRIORITY_WITNESS_FIELD.PARTITION_ID],
+    [PUBLICATION_EVIDENCE_REPLAY_REBALANCER_HANDOFF_FIELD.OPERATION_ID]:
+      witness[PUBLICATION_EVIDENCE_REPLAY_PRIORITY_WITNESS_FIELD.OPERATION_ID],
+    [PUBLICATION_EVIDENCE_REPLAY_REBALANCER_HANDOFF_FIELD.RETAINED_BY_WITNESS]:
+      retainedByWitness,
+    [PUBLICATION_EVIDENCE_REPLAY_REBALANCER_HANDOFF_FIELD
+      .RETAINED_NEXT_REQUIRED_ACTION]:
+      witness[
+        PUBLICATION_EVIDENCE_REPLAY_PRIORITY_WITNESS_FIELD.NEXT_REQUIRED_ACTION
+      ],
+    [PUBLICATION_EVIDENCE_REPLAY_REBALANCER_HANDOFF_FIELD
+      .TERMINAL_FAILURE_OBSERVED]:
+      terminalFailureObserved,
+    [PUBLICATION_EVIDENCE_REPLAY_REBALANCER_HANDOFF_FIELD
+      .TERMINAL_FAILURE_TIME_MS]:
+      terminalFailure.timeMs,
+    [PUBLICATION_EVIDENCE_REPLAY_REBALANCER_HANDOFF_FIELD
+      .POST_TERMINAL_REBALANCE_OBSERVED]:
+      postTerminalRebalance.timeMs > NUM.ZERO,
+    [PUBLICATION_EVIDENCE_REPLAY_REBALANCER_HANDOFF_FIELD
+      .POST_TERMINAL_REBALANCE_TIME_MS]:
+      postTerminalRebalance.timeMs,
+    [PUBLICATION_EVIDENCE_REPLAY_REBALANCER_HANDOFF_FIELD
+      .POST_TERMINAL_REBALANCE_MOVE_COUNT]:
+      postTerminalRebalance.moveCount,
+    [PUBLICATION_EVIDENCE_REPLAY_REBALANCER_HANDOFF_FIELD
+      .POST_TERMINAL_SUPPRESSION_OBSERVED]:
+      postTerminalSuppression.timeMs > NUM.ZERO,
+    [PUBLICATION_EVIDENCE_REPLAY_REBALANCER_HANDOFF_FIELD
+      .POST_TERMINAL_SUPPRESSION_REASON]:
+      postTerminalSuppression.message,
+  };
+}
+
 function readPublicationConvergenceFromFailureBundle(failureBundle = {}) {
   const directSummaryState = readRecordField(
     failureBundle,
@@ -1463,6 +1707,10 @@ async function replayPublicationPriorityEvidenceFromReportDir(reportDir) {
   });
   const priorityRecoveryWitnesses =
     summarizePriorityRecoveryWitnesses(failureBundle);
+  const rebalancerFollowUpHandoff = summarizeRebalancerFollowUpHandoff({
+    failureBundle,
+    priorityRecoveryWitnesses,
+  });
   const nodeEndpointRows = [
     ...readArrayField(
       latestSnapshot,
@@ -1487,6 +1735,7 @@ async function replayPublicationPriorityEvidenceFromReportDir(reportDir) {
         ownerRpcCacheRepair,
       }),
     priorityRecoveryWitnesses,
+    rebalancerFollowUpHandoff,
     supportingPriorityRecoveryWitness:
       selectSupportingPriorityRecoveryWitness(priorityRecoveryWitnesses),
     ...replayPublicationPriorityEvidenceFromRows({
@@ -1537,6 +1786,10 @@ function formatPublicationEvidenceReplaySummary(summary = {}) {
       summary.priorityRecoveryWitnesses,
     ),
     formatJsonLine(
+      PUBLICATION_EVIDENCE_REPLAY_LINE.REBALANCER_FOLLOW_UP_HANDOFF,
+      summary.rebalancerFollowUpHandoff,
+    ),
+    formatJsonLine(
       PUBLICATION_EVIDENCE_REPLAY_LINE.SUPPORTING_PRIORITY_RECOVERY_WITNESS,
       summary.supportingPriorityRecoveryWitness,
     ),
@@ -1570,6 +1823,7 @@ export {
   PUBLICATION_EVIDENCE_REPLAY_AVAILABILITY,
   PUBLICATION_EVIDENCE_REPLAY_CLOSURE_WITNESS_CLASSIFICATION,
   PUBLICATION_EVIDENCE_REPLAY_DRIFT_CLASSIFICATION,
+  PUBLICATION_EVIDENCE_REPLAY_REBALANCER_HANDOFF_STATE,
   formatPublicationEvidenceReplaySummary,
   replayPublicationPriorityEvidenceFromReportDir,
   replayPublicationPriorityEvidenceFromRows,
