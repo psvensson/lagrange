@@ -42,11 +42,79 @@ const {
   normalizeDistinctStringArray,
   normalizeProbeError,
   normalizeReplicaOperationPartitionGroupInFlight,
+  parseFiniteNumberField,
   resolveMeaningfulProbeTimeoutMs,
   resolveSequentialProbeTimeoutMs,
   withTimeout,
 } = CLUSTER_SEGMENT_7_CLASS_SHARED;
 import {Cluster4} from './cluster-segment-7-class-4.js';
+
+const TYPEOF_OBJECT = 'object';
+const TYPEOF_STRING = 'string';
+const CONTROL_SNAPSHOT_OBSERVATION_MODE_FIELD = 'observationMode';
+const CONTROL_SNAPSHOT_ADMIN_OBSERVATION_FIELD = 'adminObservation';
+const CONTROL_SNAPSHOT_ADMIN_OBSERVATION_REPAIR_FIELD = 'repair';
+const CONTROL_SNAPSHOT_ADMIN_OBSERVATION_REPAIR_DEFERRED_FIELD = 'deferred';
+const CONTROL_SNAPSHOT_OBSERVATION_FIELD = 'snapshotObservation';
+const CONTROL_SNAPSHOT_OBSERVATION_STATE_FIELD = 'state';
+const CONTROL_SNAPSHOT_OBSERVATION_CONTRACT_STATE_FIELD = 'contractState';
+const CONTROL_SNAPSHOT_OBSERVATION_REFRESH_STATE_FIELD = 'refreshState';
+const CONTROL_SNAPSHOT_OBSERVATION_NEXT_ACTION_FIELD = 'nextAction';
+const CONTROL_SNAPSHOT_OBSERVATION_REASON_CODES_FIELD = 'reasonCodes';
+const CONTROL_SNAPSHOT_OBSERVATION_RETRY_AFTER_MS_FIELD = 'retryAfterMs';
+
+function normalizeControlSnapshotObservationString(value) {
+  return typeof value === TYPEOF_STRING && value.length > ZERO ? value : null;
+}
+
+function buildControlSnapshotObservationSummary(snapshotPayload = null) {
+  const snapshotObservation =
+    snapshotPayload?.[CONTROL_SNAPSHOT_OBSERVATION_FIELD] &&
+    typeof snapshotPayload[CONTROL_SNAPSHOT_OBSERVATION_FIELD] ===
+      TYPEOF_OBJECT ?
+      snapshotPayload[CONTROL_SNAPSHOT_OBSERVATION_FIELD] :
+      null;
+  const adminObservation =
+    snapshotPayload?.[CONTROL_SNAPSHOT_ADMIN_OBSERVATION_FIELD] &&
+    typeof snapshotPayload[CONTROL_SNAPSHOT_ADMIN_OBSERVATION_FIELD] ===
+      TYPEOF_OBJECT ?
+      snapshotPayload[CONTROL_SNAPSHOT_ADMIN_OBSERVATION_FIELD] :
+      null;
+  const adminRepair =
+    adminObservation?.[CONTROL_SNAPSHOT_ADMIN_OBSERVATION_REPAIR_FIELD] &&
+    typeof adminObservation[CONTROL_SNAPSHOT_ADMIN_OBSERVATION_REPAIR_FIELD] ===
+      TYPEOF_OBJECT ?
+      adminObservation[CONTROL_SNAPSHOT_ADMIN_OBSERVATION_REPAIR_FIELD] :
+      null;
+  return {
+    snapshotObservationMode: normalizeControlSnapshotObservationString(
+      snapshotPayload?.[CONTROL_SNAPSHOT_OBSERVATION_MODE_FIELD],
+    ),
+    snapshotObservationState: normalizeControlSnapshotObservationString(
+      snapshotObservation?.[CONTROL_SNAPSHOT_OBSERVATION_STATE_FIELD],
+    ),
+    snapshotObservationContractState:
+      normalizeControlSnapshotObservationString(
+        snapshotObservation?.[CONTROL_SNAPSHOT_OBSERVATION_CONTRACT_STATE_FIELD],
+      ),
+    snapshotObservationRefreshState:
+      normalizeControlSnapshotObservationString(
+        snapshotObservation?.[CONTROL_SNAPSHOT_OBSERVATION_REFRESH_STATE_FIELD],
+      ),
+    snapshotObservationNextAction: normalizeControlSnapshotObservationString(
+      snapshotObservation?.[CONTROL_SNAPSHOT_OBSERVATION_NEXT_ACTION_FIELD],
+    ),
+    snapshotObservationReasonCodes: normalizeDistinctStringArray(
+      snapshotObservation?.[CONTROL_SNAPSHOT_OBSERVATION_REASON_CODES_FIELD],
+    ),
+    snapshotObservationRetryAfterMs: parseFiniteNumberField(
+      snapshotObservation?.[CONTROL_SNAPSHOT_OBSERVATION_RETRY_AFTER_MS_FIELD],
+    ),
+    snapshotRepairDeferred:
+      adminRepair?.[CONTROL_SNAPSHOT_ADMIN_OBSERVATION_REPAIR_DEFERRED_FIELD] ===
+        true,
+  };
+}
 
 class Cluster5 extends Cluster4 {
   async _probeControlSnapshotCoverage(
@@ -138,8 +206,12 @@ class Cluster5 extends Cluster4 {
           }
         }
         await probeReachabilityDiagnostics();
+        const snapshotPayload =
+          this._extractControlSnapshotPayload(snapshotResult);
         const snapshotSummary =
           this._extractControlSnapshotSummary(snapshotResult);
+        const snapshotObservationSummary =
+          buildControlSnapshotObservationSummary(snapshotPayload);
         const snapshotDiagnostics =
           this._extractControlSnapshotCoverageDiagnostics(snapshotResult);
         const publicationConvergence =
@@ -192,6 +264,7 @@ class Cluster5 extends Cluster4 {
             snapshotSummary.snapshotExpectedMinimumRevision,
           snapshotRevisionGap: snapshotSummary.snapshotRevisionGap,
           snapshotResumeToken: snapshotSummary.snapshotResumeToken,
+          ...snapshotObservationSummary,
           observedNodeIds,
           controlPlaneDiagnosticsAvailable:
             snapshotDiagnostics.controlPlaneDiagnosticsAvailable,
@@ -238,6 +311,7 @@ class Cluster5 extends Cluster4 {
           snapshotExpectedMinimumRevision: null,
           snapshotRevisionGap: null,
           snapshotResumeToken: null,
+          ...buildControlSnapshotObservationSummary(),
           observedNodeIds: [],
           controlPlaneDiagnosticsAvailable: false,
           publicationConvergence: null,
@@ -474,6 +548,28 @@ class Cluster5 extends Cluster4 {
         selectedResult.snapshotResumeToken.length > ZERO ?
           selectedResult.snapshotResumeToken :
           null,
+      selectedSnapshotObservationMode:
+        selectedResult?.snapshotObservationMode || null,
+      selectedSnapshotObservationState:
+        selectedResult?.snapshotObservationState || null,
+      selectedSnapshotObservationContractState:
+        selectedResult?.snapshotObservationContractState || null,
+      selectedSnapshotObservationRefreshState:
+        selectedResult?.snapshotObservationRefreshState || null,
+      selectedSnapshotObservationNextAction:
+        selectedResult?.snapshotObservationNextAction || null,
+      selectedSnapshotObservationReasonCodes: Array.isArray(
+        selectedResult?.snapshotObservationReasonCodes,
+      ) ?
+        [...selectedResult.snapshotObservationReasonCodes] :
+        [],
+      selectedSnapshotObservationRetryAfterMs: Number.isFinite(
+        selectedResult?.snapshotObservationRetryAfterMs,
+      ) ?
+        Math.floor(selectedResult.snapshotObservationRetryAfterMs) :
+        null,
+      selectedSnapshotRepairDeferred:
+        selectedResult?.snapshotRepairDeferred === true,
       selectedObservedNodeIds: Array.isArray(selectedResult?.observedNodeIds) ?
         [...selectedResult.observedNodeIds] :
         [],
@@ -538,6 +634,25 @@ class Cluster5 extends Cluster4 {
           snapshotRevisionGap: Number.isFinite(result.snapshotRevisionGap) ?
             Math.floor(result.snapshotRevisionGap) :
             null,
+          snapshotObservationMode: result.snapshotObservationMode || null,
+          snapshotObservationState: result.snapshotObservationState || null,
+          snapshotObservationContractState:
+            result.snapshotObservationContractState || null,
+          snapshotObservationRefreshState:
+            result.snapshotObservationRefreshState || null,
+          snapshotObservationNextAction:
+            result.snapshotObservationNextAction || null,
+          snapshotObservationReasonCodes: Array.isArray(
+            result.snapshotObservationReasonCodes,
+          ) ?
+            [...result.snapshotObservationReasonCodes] :
+            [],
+          snapshotObservationRetryAfterMs: Number.isFinite(
+            result.snapshotObservationRetryAfterMs,
+          ) ?
+            Math.floor(result.snapshotObservationRetryAfterMs) :
+            null,
+          snapshotRepairDeferred: result.snapshotRepairDeferred === true,
           publicationEpoch: Number.isFinite(
             result?.publicationConvergence?.publicationEpoch,
           ) ?

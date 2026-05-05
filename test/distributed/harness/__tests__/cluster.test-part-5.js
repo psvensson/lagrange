@@ -9,8 +9,18 @@
 
 import {test} from '../../../../src/test-helpers/tap.js';
 import assert from 'node:assert';
+import {ADMIN_CONTROL_SNAPSHOT_OBSERVATION_MODE} from
+  '../../../../src/admin/admin-constants.js';
 import {CONTROL_PLANE_PUBLICATION_STATUS} from
   '../../../../src/control-plane/control-plane-publication-merge.js';
+import {
+  CONTROL_PLANE_SNAPSHOT_OBSERVATION_STATE,
+  CONTROL_PLANE_SNAPSHOT_REFRESH_STATE,
+} from '../../../../src/control-plane/control-plane-snapshot-owner.js';
+import {
+  OWNER_CONTRACT_NEXT_ACTION,
+  OWNER_CONTRACT_STATE,
+} from '../../../../src/control-plane/owner-contract-outcome.js';
 import {SERVICE_STATUS} from '../../../../src/constants/index.js';
 import {
   createCluster,
@@ -27,9 +37,15 @@ const SNAPSHOT_REPLAY_TEST_DOCKER_SOCKET_PATH = '/var/run/docker.sock';
 const SNAPSHOT_REPLAY_TEST_IMAGE = 'distributed-db:test';
 const SNAPSHOT_REPLAY_TEST_EMPTY_LOG = '';
 const SNAPSHOT_REPLAY_TEST_ADMIN_HEALTH_SOURCE = 'admin_health';
+const SNAPSHOT_REPLAY_TEST_REPAIR_TRIGGER_CODE =
+  'discovery_node_coverage_gap';
+const SNAPSHOT_REPLAY_TEST_REPAIR_RETRY_AFTER_MS = 250;
 const SNAPSHOT_REPLAY_TEST_AUTHORITY_TEST_NAME =
   'Unit: _probeControlSnapshotCoverage keeps admin-ready authority over ' +
   'stronger publication when 102455Z coverage ties';
+const SNAPSHOT_REPLAY_TEST_DEFERRED_AUTHORITY_TEST_NAME =
+  'Unit: _probeControlSnapshotCoverage exposes deferred owner observation ' +
+  'for admin-ready stale 102455Z witness';
 const SNAPSHOT_REPLAY_TEST_AUTHORITY_ASSERTION =
   'same-coverage active-gate selection should keep the admin-ready authority ' +
   'witness';
@@ -1202,6 +1218,174 @@ test(SNAPSHOT_REPLAY_TEST_AUTHORITY_TEST_NAME, async () => {
     seedWitness.missingPublishedNodeIds,
     SNAPSHOT_REPLAY_TEST_STRONG_MISSING_NODE_IDS,
   );
+});
+
+test(SNAPSHOT_REPLAY_TEST_DEFERRED_AUTHORITY_TEST_NAME, async () => {
+  const cluster = createCluster({
+    size: SNAPSHOT_REPLAY_TEST_CLUSTER_SIZE,
+    docker: {socketPath: SNAPSHOT_REPLAY_TEST_DOCKER_SOCKET_PATH},
+    image: SNAPSHOT_REPLAY_TEST_IMAGE,
+  });
+
+  const createNode = (
+    nodeId,
+    role,
+    options,
+  ) => ({
+    id: nodeId,
+    role,
+    async getStatus() {
+      return {rows: [{status: SERVICE_STATUS.ACTIVE}]};
+    },
+    async getReachabilityDiagnostics() {
+      return {
+        reachable: options.reachable,
+        adminReady: options.adminReady,
+        ...(options.reachableBy ? {reachableBy: options.reachableBy} : {}),
+        ...(options.reachabilityError ?
+          {lastError: options.reachabilityError} :
+          {}),
+      };
+    },
+    async getControlSnapshot() {
+      return {
+        rows: [{
+          nodes: options.observedNodeIds,
+          capturedAtMs: options.capturedAtMs,
+          ...(options.observationMode ?
+            {observationMode: options.observationMode} :
+            {}),
+          ...(options.snapshotObservation ?
+            {snapshotObservation: options.snapshotObservation} :
+            {}),
+          ...(options.adminObservation ?
+            {adminObservation: options.adminObservation} :
+            {}),
+          controlPlaneDiagnostics: {
+            publicationConvergence: {
+              publicationEpoch: options.publicationEpoch,
+              publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+              publishedActiveNodeIds: options.publishedActiveNodeIds,
+              pendingAckNodeIds: [],
+              acknowledgedNodeIds: options.publishedActiveNodeIds,
+            },
+          },
+        }],
+      };
+    },
+    async getLogs() {
+      return SNAPSHOT_REPLAY_TEST_EMPTY_LOG;
+    },
+  });
+
+  cluster._nodes.set(
+    SNAPSHOT_REPLAY_TEST_NODE_ID.SEED,
+    createNode(
+      SNAPSHOT_REPLAY_TEST_NODE_ID.SEED,
+      NODE_ROLES.SEED,
+      {
+        reachable: false,
+        adminReady: false,
+        reachabilityError: SNAPSHOT_REPLAY_TEST_SEED_REACHABILITY_ERROR,
+        observedNodeIds: SNAPSHOT_REPLAY_TEST_STRONG_OBSERVED_NODE_IDS,
+        capturedAtMs: SNAPSHOT_REPLAY_TEST_SEED_CAPTURED_AT_MS,
+        publicationEpoch: SNAPSHOT_REPLAY_TEST_STRONG_PUBLICATION_EPOCH,
+        publishedActiveNodeIds:
+          SNAPSHOT_REPLAY_TEST_STRONG_PUBLISHED_NODE_IDS,
+      },
+    ),
+  );
+  cluster._nodes.set(
+    SNAPSHOT_REPLAY_TEST_NODE_ID.ADMIN_READY_STALE,
+    createNode(
+      SNAPSHOT_REPLAY_TEST_NODE_ID.ADMIN_READY_STALE,
+      NODE_ROLES.JOINER,
+      {
+        reachable: true,
+        adminReady: true,
+        reachableBy: SNAPSHOT_REPLAY_TEST_ADMIN_HEALTH_SOURCE,
+        observedNodeIds: SNAPSHOT_REPLAY_TEST_STALE_OBSERVED_NODE_IDS,
+        capturedAtMs: SNAPSHOT_REPLAY_TEST_ADMIN_CAPTURED_AT_MS,
+        observationMode:
+          ADMIN_CONTROL_SNAPSHOT_OBSERVATION_MODE.REPAIR_DEFERRED,
+        snapshotObservation: {
+          state:
+            CONTROL_PLANE_SNAPSHOT_OBSERVATION_STATE.DEFERRED_REFRESH,
+          contractState: OWNER_CONTRACT_STATE.DEFERRED,
+          nextAction: OWNER_CONTRACT_NEXT_ACTION.RETRY,
+          reasonCodes: [SNAPSHOT_REPLAY_TEST_REPAIR_TRIGGER_CODE],
+          retryAfterMs: SNAPSHOT_REPLAY_TEST_REPAIR_RETRY_AFTER_MS,
+          refreshState: CONTROL_PLANE_SNAPSHOT_REFRESH_STATE.DEFERRED,
+        },
+        adminObservation: {
+          repair: {
+            deferred: true,
+            triggerCodes: [SNAPSHOT_REPLAY_TEST_REPAIR_TRIGGER_CODE],
+          },
+        },
+        publicationEpoch: SNAPSHOT_REPLAY_TEST_STALE_PUBLICATION_EPOCH,
+        publishedActiveNodeIds:
+          SNAPSHOT_REPLAY_TEST_STALE_PUBLISHED_NODE_IDS,
+      },
+    ),
+  );
+
+  const coverage = await cluster._probeControlSnapshotCoverage(
+    Date.now() + SNAPSHOT_REPLAY_TEST_DEADLINE_EXTENSION_MS,
+    SNAPSHOT_REPLAY_TEST_EXPECTED_NODE_IDS,
+  );
+  const seedWitness = coverage.probeWitnesses.find((witness) =>
+    witness.nodeId === SNAPSHOT_REPLAY_TEST_NODE_ID.SEED,
+  );
+  const selectedWitness = coverage.probeWitnesses.find((witness) =>
+    witness.nodeId === SNAPSHOT_REPLAY_TEST_NODE_ID.ADMIN_READY_STALE,
+  );
+
+  assert.strictEqual(
+    coverage.selectedNodeId,
+    SNAPSHOT_REPLAY_TEST_NODE_ID.ADMIN_READY_STALE,
+    SNAPSHOT_REPLAY_TEST_AUTHORITY_ASSERTION,
+  );
+  assert.strictEqual(
+    coverage.selectedSnapshotObservationMode,
+    ADMIN_CONTROL_SNAPSHOT_OBSERVATION_MODE.REPAIR_DEFERRED,
+  );
+  assert.strictEqual(
+    coverage.selectedSnapshotObservationState,
+    CONTROL_PLANE_SNAPSHOT_OBSERVATION_STATE.DEFERRED_REFRESH,
+  );
+  assert.strictEqual(
+    coverage.selectedSnapshotObservationContractState,
+    OWNER_CONTRACT_STATE.DEFERRED,
+  );
+  assert.strictEqual(
+    coverage.selectedSnapshotObservationNextAction,
+    OWNER_CONTRACT_NEXT_ACTION.RETRY,
+  );
+  assert.strictEqual(
+    coverage.selectedSnapshotObservationRefreshState,
+    CONTROL_PLANE_SNAPSHOT_REFRESH_STATE.DEFERRED,
+  );
+  assert.deepStrictEqual(
+    coverage.selectedSnapshotObservationReasonCodes,
+    [SNAPSHOT_REPLAY_TEST_REPAIR_TRIGGER_CODE],
+  );
+  assert.strictEqual(
+    coverage.selectedSnapshotObservationRetryAfterMs,
+    SNAPSHOT_REPLAY_TEST_REPAIR_RETRY_AFTER_MS,
+  );
+  assert.strictEqual(coverage.selectedSnapshotRepairDeferred, true);
+  assert.ok(seedWitness);
+  assert.strictEqual(
+    seedWitness.publicationEpoch,
+    SNAPSHOT_REPLAY_TEST_STRONG_PUBLICATION_EPOCH,
+  );
+  assert.ok(selectedWitness);
+  assert.strictEqual(
+    selectedWitness.snapshotObservationMode,
+    ADMIN_CONTROL_SNAPSHOT_OBSERVATION_MODE.REPAIR_DEFERRED,
+  );
+  assert.strictEqual(selectedWitness.snapshotRepairDeferred, true);
 });
 
 test('Unit: _waitForAllActive carries selected snapshot witness into no-progress diagnostics',

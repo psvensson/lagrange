@@ -481,11 +481,15 @@ Sprint:
       stronger publication witness over an admin-ready but stale publication
       witness, or document the runtime owner repair that must make the
       admin-ready witness catch up.
-- [ ] Add the smallest runtime owner repair/probe that makes an admin-ready
+- [x] Add the smallest runtime owner repair/probe that makes an admin-ready
       selected control-snapshot witness catch up to the stronger seed
       publication evidence, or emit an explicit deferred stale-observation
       outcome, when owner-row/service evidence is partial and owner-RPC repair
       is backpressured.
+- [ ] Rerun the representative `rolling-restart --fast-local` gate after the
+      deferred selected-snapshot observation probe and record whether the blocker
+      closes, stays on publication missing-active-node evidence, or migrates to
+      one newly named owner boundary.
 
 ## May 5 Regression Validation
 
@@ -848,6 +852,52 @@ Inherited / unchanged:
    against the `HEAD` copies of the same two files also reported `440`, so this
    fixture did not increase test-inclusive literal debt.
 
+## May 5 Deferred Selected-Snapshot Observation Probe
+
+The next owner slice added the smallest active-gate probe for the deferred
+observation path instead of changing same-coverage selector policy:
+
+1. `test/distributed/harness/cluster-segment-7-class-5.js` now carries
+   control-snapshot owner observation evidence from the selected snapshot row
+   into active-gate coverage: `observationMode`, `snapshotObservation.state`,
+   contract state, next action, refresh state, reason codes, retry hint, and the
+   admin repair-deferred bit.
+2. `test/distributed/harness/__tests__/cluster.test-part-5.js` pins the
+   `102455Z` shape where the selected admin-ready witness remains older than the
+   seed publication witness, but now emits
+   `selectedSnapshotObservationMode=repair_deferred` and
+   `selectedSnapshotObservationState=deferred_refresh`.
+3. The seed's stronger publication evidence remains preserved in
+   `probeWitnesses`; the selected admin-ready witness is no longer silent about
+   deferred owner repair/backpressure.
+4. The propagated snapshot/admin observation field names are file-private to
+   the active-gate coverage extractor because no other harness owner consumes
+   them yet.
+
+Validation:
+
+1. Red-first probe:
+   `npx tap --grep "exposes deferred owner observation" test/distributed/harness/__tests__/cluster.test-part-5.js`
+   initially failed because `selectedSnapshotObservationMode` was `undefined`.
+2. `node --check test/distributed/harness/cluster-segment-7-class-5.js`
+3. `node --check test/distributed/harness/__tests__/cluster.test-part-5.js`
+4. `npx tap --grep "exposes deferred owner observation" test/distributed/harness/__tests__/cluster.test-part-5.js`
+   passed after the active-gate observation extraction.
+5. `npx tap --grep "exposes deferred owner observation|keeps admin-ready authority over stronger publication|prefers the strongest publication witness when coverage ties|prefers authoritative admin-ready witnesses when coverage ties" test/distributed/harness/__tests__/cluster.test-part-5.js`
+   passed the deferred-observation probe and the adjacent selector fixtures.
+6. `node scripts/check-guideline-decision-boundaries.js test/distributed/harness/cluster-segment-7-class-5.js test/distributed/harness/__tests__/cluster.test-part-5.js`
+   reported `0` decision-boundary guideline violations.
+7. `node scripts/check-runtime-grammar-contracts.js test/distributed/harness/cluster-segment-7-class-5.js test/distributed/harness/__tests__/cluster.test-part-5.js`
+   reported `0` runtime-grammar-contract violations.
+8. `node scripts/check-guideline-boundary-mode-contracts.js test/distributed/harness/cluster-segment-7-class-5.js test/distributed/harness/__tests__/cluster.test-part-5.js`
+   reported `0` boundary-mode-contract hotspot violations.
+9. `node scripts/check-guideline-literals.js test/distributed/harness/cluster-segment-7-class-5.js test/distributed/harness/__tests__/cluster.test-part-5.js`
+   remains red with `449` inherited file-scoped literal violations.
+10. `node scripts/check-guideline-literals.js --include-tests test/distributed/harness/cluster-segment-7-class-5.js test/distributed/harness/__tests__/cluster.test-part-5.js`
+    remains red with `449`; the same two `HEAD` files also reported `449`, so
+    this slice did not increase literal debt.
+11. `git diff --check`
+
 ## Validation
 
 1. Focused owner or harness fixture for topology publication membership
@@ -903,7 +953,7 @@ key `sql_transaction_participants-p1|2|operation_unknown`, serial-wait operation
 remain blocked as `recovering_in_flight`.
 
 The next unchecked task is to add the smallest runtime owner repair/probe that
-makes an admin-ready selected control-snapshot witness catch up to the stronger
-seed publication evidence, or emit an explicit deferred stale-observation
-outcome, when owner-row/service evidence is partial and owner-RPC repair is
-backpressured.
+The next unchecked task is to rerun the representative
+`rolling-restart --fast-local` gate after the deferred selected-snapshot
+observation probe and record whether the blocker closes, remains on publication
+missing-active-node evidence, or migrates to one newly named owner boundary.
