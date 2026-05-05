@@ -160,6 +160,82 @@ at coverage `4/5` and why
 `admin_health` reachability to terminal `snapshot_reachability_timeout` while
 the publication gate still carries the two missing published active nodes.
 
+## May 5 Selected Snapshot Coverage And Reachability Owner Path
+
+The third package task traced selected snapshot coverage and reachability
+without runtime edits:
+
+1. `test/distributed/harness/cluster-segment-7-class-5.js` owns selected
+   control-snapshot coverage through `_probeControlSnapshotCoverage(...)`.
+   It probes the seed first, then probes the remaining nodes when the seed
+   snapshot is incomplete. Coverage is the selected control snapshot's observed
+   expected-node count, not the publication row's durable active membership.
+2. Selection is coverage-first. The harness selects the result with the lowest
+   `missingExpectedNodeCount`, then breaks ties with observed count,
+   control-plane diagnostics availability, admin readiness, reachability,
+   healthy readiness count, missing-published count, pending ACK count,
+   published-active count, and captured timestamp.
+3. In the `074739Z` artifact, the terminal
+   `controlPlane.activeGateSnapshotCoverage.probeWitnesses` explain the
+   selected `4/5` coverage:
+   - `7493b0ab-a054-5fad-a91b-5e331db29304`: snapshot query failed,
+     observed `0/5`, reachability timed out.
+   - `11601fe0-72d6-5853-8590-ec2881853e72`: snapshot query succeeded,
+     observed `3/5`, reachability timed out.
+   - `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`: snapshot query succeeded,
+     observed `3/5`, reachability timed out.
+   - `8be8d30f-4499-5eed-865c-71b4d529a67a`: snapshot query failed,
+     observed `0/5`, reachable only by `bootstrap_health`, admin lane refused.
+   - `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`: snapshot query succeeded,
+     observed `4/5`, reachability timed out.
+4. `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58` is therefore selected because it
+   has the best expected-node coverage. Its selected observed nodes are
+   `11601fe0-72d6-5853-8590-ec2881853e72`,
+   `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`,
+   `7493b0ab-a054-5fad-a91b-5e331db29304`, and
+   `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`, so the only missing observed
+   expected node is `8be8d30f-4499-5eed-865c-71b4d529a67a`.
+5. The selected snapshot's publication row still has durable published active
+   membership of only `11601fe0-72d6-5853-8590-ec2881853e72`,
+   `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`, and
+   `7493b0ab-a054-5fad-a91b-5e331db29304`. That is why selected snapshot
+   coverage is `4/5` while selected published active remains `3/5`, and why
+   selected missing published nodes remain
+   `8be8d30f-4499-5eed-865c-71b4d529a67a` and
+   `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`.
+6. `test/distributed/harness/cluster-segment-2.js` owns the active-gate
+   projection via `buildActiveWaitProgressSnapshot(...)`. It carries the
+   selected coverage fields into the active-gate progress snapshot, emits
+   `snapshot_coverage=4/5`, and preserves
+   `selectedSnapshotReachabilityError` separately from snapshot query success.
+7. `test/distributed/harness/startup-readiness-evidence.js` owns readiness
+   delay classification. In startup mode,
+   `classifyActiveGateReadinessDelay(...)` treats a timeout-shaped
+   `selectedSnapshotReachabilityError` as terminal
+   `snapshot_reachability_timeout`.
+8. The terminal selected snapshot query itself succeeded and exposed
+   control-plane diagnostics. The reachability timeout comes from the separate
+   `getReachabilityDiagnostics(...)` probe after the snapshot query. The same
+   selected node was `admin_health` reachable at best progress, then timed out
+   at terminal progress.
+9. The selected node log points at owner-RPC/cache-repair pressure rather than
+   an isolated selected-snapshot selection bug: repeated message-router
+   reconnects to `7493b0ab-a054-5fad-a91b-5e331db29304` timed out, the
+   terminal `control_snapshot` cache repair failed on the `nodes` table with
+   `control_plane_backpressure`, and a default-lane admin client connected
+   shortly after the failure.
+
+Conclusion: selected snapshot coverage `4/5` is explained by the harness
+selecting the best observed expected-node snapshot, while selected published
+active `3/5` is the durable publication membership from that same selected
+snapshot. The reachability timeout on
+`ebc4aa0b-06c6-506d-93ea-1dd2deca3f58` is a terminal active-gate probe symptom
+on the selected witness, but it is subordinate to the open topology debt:
+missing published active nodes and priority spread/serial-wait pressure remain
+unclosed. No small runtime or harness fix is indicated from this slice alone;
+the next task should trace the `sql_write_operations-p1` serial-wait owner path
+and the owner-RPC pressure around `7493b0ab-a054-5fad-a91b-5e331db29304`.
+
 ## Scope Basis
 
 Roadmap Phase `0.1 - Internal Coherence` maintenance/refactoring scope under:
@@ -224,7 +300,7 @@ Sprint:
 - [x] Identify the owner path for inactive nodes and explicit
       missing-active-node publication debt when publication status is
       `PUBLISHED` and pending ACK count is `0`.
-- [ ] Reconcile selected snapshot coverage `4/5` and the reachability timeout
+- [x] Reconcile selected snapshot coverage `4/5` and the reachability timeout
       for `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`.
 - [ ] Trace the `sql_write_operations-p1` serial-wait witness through operation
       `57aa5679-15ad-4ea9-84f6-c6e5f906abf0` and serial-wait partitions
