@@ -526,13 +526,25 @@ Sprint:
       owner-RPC/cache-repair replay probe and record whether the blocker closes,
       stays on deferred repair plus publication missing-active-node debt, or
       migrates to one newly named runtime owner boundary.
-- [ ] Trace the `20260505T123850Z` post-owner-RPC/cache-repair rerun through
+- [x] Trace the `20260505T123850Z` post-owner-RPC/cache-repair rerun through
       `ACK_PENDING` publication convergence, selected snapshot reachability
       timeout on `11601fe0-72d6-5853-8590-ec2881853e72`, pending ACK on
       `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`, active-gate coverage `2/5`,
       and the split priority-recovery witnesses
       `sql_transaction_participants-p1` / operation scheduling and
       `sql_write_operations-p1` / workflow timeout.
+- [ ] Add the smallest focused ACK-pending operation-workflow timeout
+      probe/fixture for the `20260505T123850Z` shape: preserve publication
+      epoch `3` `ACK_PENDING`, required-ACK pending node
+      `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`, selected snapshot reachability
+      timeout on target node `11601fe0-72d6-5853-8590-ec2881853e72`,
+      selected coverage `2/5`, `sql_transaction_participants-p1` as
+      operation-scheduling action-required evidence, and
+      `sql_write_operations-p1` operation
+      `df4f18e8-6b08-46b5-ba02-c770936ede32` as workflow-timeout
+      `timeout_reconcile_due` evidence; prove whether the operation workflow
+      owner enqueues or performs `reconcile_stale_operation_progress` without
+      raising timeouts or broadening the distributed matrix.
 
 ## May 5 Regression Validation
 
@@ -1253,10 +1265,164 @@ Trace validation:
    `operation_scheduling`.
 3. `git diff --check` passed for the documentation update.
 
-Conclusion: this is a migrated runtime boundary, not a closure. The next
-smallest task is to trace the `20260505T123850Z` artifact through ACK-pending
-publication, selected snapshot reachability timeout, and the two
-priority-recovery witnesses before making any runtime change.
+Conclusion: this was a migrated runtime boundary, not a closure. The follow-up
+trace below records the `20260505T123850Z` ACK-pending publication, selected
+snapshot reachability timeout, and split priority-recovery witnesses before any
+runtime change.
+
+## May 5 123850Z ACK-Pending Publication And Recovery Trace
+
+The trace task completed with bounded artifact inspection, replay CLI output,
+focused `jq` extraction, log searches, and code-owner reads. No broad
+distributed scenario was rerun and no runtime files were changed.
+
+Evidence:
+
+1. The report, failure bundle, failure-bundle markdown, and triage summary all
+   point at the same terminal barrier:
+   `Not all nodes reached ACTIVE state within 120000ms`. The failure class is
+   `publication_convergence_blocked`, root cause class is `startup`, dominant
+   reason is `BOOTSTRAP_PHASE_INCOMPLETE`, and readiness failure is
+   `snapshot_reachability_timeout` from `selectedSnapshotReachabilityError`.
+2. The selected publication row is epoch `3` / `ACK_PENDING`. Its selected
+   publication recovery gate is `ack_pending`, with required ACK nodes
+   `11601fe0-72d6-5853-8590-ec2881853e72`,
+   `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`, and
+   `7493b0ab-a054-5fad-a91b-5e331db29304`; acknowledged nodes
+   `11601fe0-72d6-5853-8590-ec2881853e72` and
+   `7493b0ab-a054-5fad-a91b-5e331db29304`; pending ACK node
+   `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`; and
+   `pendingAckEvidenceState=required_ack_node_list`.
+3. The selected row-local missing-published recovery-active list is empty:
+   published-active, recovery-active, and concrete-eligible membership are all
+   the three-node set
+   `11601fe0-72d6-5853-8590-ec2881853e72`,
+   `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`, and
+   `7493b0ab-a054-5fad-a91b-5e331db29304`. The active-gate selected
+   expected-node surface separately reports missing published nodes
+   `8be8d30f-4499-5eed-865c-71b4d529a67a` and
+   `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58` because the harness still expects
+   five nodes while the selected durable publication contains three.
+4. The top-level stability gates therefore stay open on pending ACK and
+   startup readiness, not on top-level missing-published row debt: failover is
+   open on `pending_ack_nodes|startup_readiness_blocked`; convergence and
+   restart recovery are open on
+   `pending_ack_nodes|priority_spread_pending|startup_readiness_blocked`.
+5. Terminal active-gate progress is active `3/5`, inactive `2`, selected
+   snapshot coverage `2/5`, selected published active `3/5`, pending ACK
+   count `1`, selected missing-published count `2`, priority spread gap `2`,
+   and blocker signature
+   `inactive_nodes=2|snapshot_coverage=2/5|priority_recovery_progress_class=eligible_but_no_operation_created|priority_recovery_progress_class=operation_created_but_no_step_transitions`.
+6. Best progress did not improve active count or coverage. It was still
+   active `3/5` and selected coverage `2/5`, with the same selected node
+   `11601fe0-72d6-5853-8590-ec2881853e72`, but that node was then reachable
+   through `admin_health`. Terminal progress later selected the same node with
+   `adminReady=false` and
+   `Control snapshot reachability probe timed out for
+   11601fe0-72d6-5853-8590-ec2881853e72`.
+7. Probe witnesses explain the selected coverage. The seed
+   `7493b0ab-a054-5fad-a91b-5e331db29304`,
+   `11601fe0-72d6-5853-8590-ec2881853e72`, and
+   `35a891b8-c1a0-5064-9c6e-2acfba61c2a7` each returned a snapshot with
+   observed `2/5` and reachability timeout. The remaining expected nodes
+   `8be8d30f-4499-5eed-865c-71b4d529a67a` and
+   `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58` were reachable only by
+   `bootstrap_health`; their admin snapshot queries failed with
+   `ECONNREFUSED`.
+8. The selected witness remains explicitly stale/deferred owner-contract
+   evidence: `selectedSnapshotObservationMode=repair_deferred`,
+   `selectedSnapshotObservationState=stale_usable`, contract state `pending`,
+   refresh state `idle`, next action `wait`, repair deferred `true`, and reason
+   codes `cache_stale_watermark` and `discovery_node_coverage_gap`.
+9. `test/distributed/harness/cluster-segment-7-class-5.js` owns the selected
+   coverage extraction and records the snapshot query, reachability,
+   publication gate, and snapshot observation fields.
+   `test/distributed/harness/cluster-segment-2.js` owns
+   `buildActiveWaitProgressSnapshot(...)`, where selected publication,
+   pending ACK, missing-published, reachability, and priority-recovery classes
+   are normalized into one active-gate progress snapshot.
+10. `test/distributed/harness/startup-readiness-evidence.js` owns the startup
+    readiness delay contract. In startup mode, the timeout-shaped
+    `selectedSnapshotReachabilityError` maps to terminal
+    `snapshot_reachability_timeout`; it is not treated as a recoverable
+    load-mode delay.
+11. `src/control-plane/recovery-protocol-snapshot.js` and
+    `src/control-plane/publication-recovery-gate.js` own the runtime
+    publication recovery gate. The `ACK_PENDING` row remains active because
+    pending ACK count is greater than zero, while priority spread remains open
+    from the closure witness on
+    `sql_transaction_participants-p1` and `sql_write_operations-p1`.
+12. Priority recovery is split in the canonical failure bundle and report:
+    `sql_transaction_participants-p1` is `needs_operation` /
+    `eligible_but_no_operation_created` with planner ready distinct
+    `1/2`, spread gap `1`, no active operation, owner
+    `rebalancer_leader`, blocking boundary `operation_scheduling`, wait mode
+    `event_driven`, and next required action `create_recovery_operation`.
+13. `sql_write_operations-p1` is `operation_stalled` /
+    `operation_created_but_no_step_transitions`, with cache-visible operation
+    `df4f18e8-6b08-46b5-ba02-c770936ede32`. The operation is a `REPLACE` for
+    `sql_write_operations-p1-r4` from
+    `7493b0ab-a054-5fad-a91b-5e331db29304` to the selected snapshot node
+    `11601fe0-72d6-5853-8590-ec2881853e72`; latest workflow step `PENDING`,
+    status `pending`, target visibility `absent`, no timeline transitions,
+    step age `77931ms` against timeout `30000ms`,
+    `timeoutReconcileDue=true`, owner `operation_workflow_owner`, boundary
+    `workflow_timeout`, wait mode `timeout_reconcile_due`, and next action
+    `reconcile_stale_operation_progress`.
+14. `src/control-plane/priority-recovery-snapshot.js` owns both witness
+    shapes. `buildPriorityRecoveryDecisionSnapshots(...)` constructs the
+    partition and operation contexts; `buildPriorityRecoveryPartitionAssessment(...)`
+    emits `eligible_but_no_operation_created` when a spread gap has eligible
+    placement but no active/completed operation, and emits
+    `operation_created_but_no_step_transitions` when an active blocking
+    operation has no owned transitions past its timeout. The in-flight progress
+    contract maps timeout-due workflow-owned work to
+    `operation_workflow_owner` / `workflow_timeout` /
+    `reconcile_stale_operation_progress`.
+15. Replay validation preserved the row shape and confirmed this was not a
+    closed publication path. The command
+    `node test/distributed/harness/publication-evidence-replay.js
+    test-output/reports/.playback/rolling-restart-after-owner-rpc-cache-repair-probe-20260505T123850Z/rolling-restart`
+    passed with row counts `nodes=3`, `nodeEndpoints=0`, `partitions=33`,
+    `services=102`, durable and replayed epoch `3` / `ACK_PENDING`,
+    `recoveryProtocolState=publication_pending`, and
+    `driftClassification=replayed_blocked`.
+16. Replay also preserved selected snapshot observation
+    `repair_deferred` / `stale_usable` and reported one owner-RPC/cache-repair
+    deferral on table `nodes`, through `owner_rpc_lane` /
+    `control_plane_backpressure`, on
+    `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`. The replay helper's single
+    `supportingPriorityRecoveryWitness` selected
+    `sql_transaction_participants-p1`; the complete report and failure bundle
+    still carry both split witnesses, including the `sql_write_operations-p1`
+    workflow timeout.
+17. Log evidence matches the replay pressure shape. The
+    `35a891b8-c1a0-5064-9c6e-2acfba61c2a7` log has repeated
+    authoritative discovery cache-repair failures on `nodes` through
+    `owner_rpc_lane` / `control_plane_backpressure`, ending with retry after
+    `32000ms`. The selected node
+    `11601fe0-72d6-5853-8590-ec2881853e72` has an authoritative discovery
+    cache-repair failure on `services` through
+    `query_timeout|control_plane_backpressure`, an in-flight operation owner
+    query pressure warning, orphan reservation release for operation
+    `df4f18e8-6b08-46b5-ba02-c770936ede32`, and
+    `control_plane_publications-p1` source-removal deferral while publication
+    remains `ACK_PENDING`.
+18. `test/distributed/harness/publication-evidence-replay.js` owns the bounded
+    replay proof and now prints `selectedSnapshotObservation`,
+    `ownerRpcCacheRepair`, and a supporting priority-recovery witness. It is
+    useful validation, but it is not the complete priority witness set for this
+    artifact.
+
+Conclusion: the `123850Z` trace is complete and the package is not done. The
+current runtime boundary is ACK-pending startup active-gate convergence with
+terminal selected-snapshot reachability timeout and selected coverage `2/5`.
+The priority-recovery evidence is subordinate but actionable: the next smallest
+fixture/probe should focus on the current `sql_write_operations-p1`
+workflow-timeout operation and prove whether the operation workflow owner
+drives `reconcile_stale_operation_progress` while publication is still
+`ACK_PENDING`, preserving the `sql_transaction_participants-p1`
+operation-scheduling witness as separate pressure evidence.
 
 ## Validation
 
@@ -1311,6 +1477,10 @@ action `reconcile_stale_operation_progress`, operation
 `df4f18e8-6b08-46b5-ba02-c770936ede32`, latest step `PENDING`, and latest
 status `pending`.
 
-The current next unchecked task is to trace the `20260505T123850Z` artifact
-through ACK-pending publication, selected snapshot reachability timeout, and
-the split priority-recovery witnesses before making a runtime change.
+The `20260505T123850Z` trace is complete. The current next unchecked task is
+to add the smallest focused ACK-pending operation-workflow timeout
+probe/fixture for operation `df4f18e8-6b08-46b5-ba02-c770936ede32`, preserving
+the selected snapshot reachability timeout, pending ACK evidence, and split
+priority-recovery witnesses while proving whether
+`reconcile_stale_operation_progress` is enqueued or performed without raising
+timeouts or broadening the matrix.

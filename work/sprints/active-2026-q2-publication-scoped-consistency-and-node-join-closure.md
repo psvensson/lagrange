@@ -192,18 +192,34 @@ Queued cleanup packages:
    same node reachable through `admin_health`; it reports `repair_deferred` /
    `stale_usable` observation with pending contract state, idle refresh, next
    action `wait`, and reason codes `cache_stale_watermark` and
-   `discovery_node_coverage_gap`. Artifact replay passed and stayed
+   `discovery_node_coverage_gap`. The completed trace separates selected
+   row-local publication debt from active-gate expected-node debt: the selected
+   row has required ACK evidence for three published nodes and pending ACK
+   `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`, while active-gate selected
+   publication still reports the expected-node missing-published pair
+   `8be8d30f-4499-5eed-865c-71b4d529a67a` and
+   `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`. The canonical priority-recovery
+   witnesses are split: `sql_transaction_participants-p1` needs operation
+   scheduling, and `sql_write_operations-p1` has operation
+   `df4f18e8-6b08-46b5-ba02-c770936ede32` stalled at workflow timeout with
+   next action `reconcile_stale_operation_progress`. Artifact replay passed
+   and stayed
    `replayed_blocked` with row counts `nodes=3`, `nodeEndpoints=0`,
    `partitions=33`, and `services=102`; `git diff --check` passed for the
    documentation update.
 2. Next active investigation:
    continue
    [Rolling Restart Topology Publication Snapshot Reachability Reentry](../packages/active-20260505-rolling-restart-topology-publication-snapshot-reachability-reentry.md)
-   by tracing the `20260505T123850Z` artifact through ACK-pending publication,
-   selected snapshot reachability timeout, pending ACK evidence, active-gate
-   coverage `2/5`, and the split priority-recovery witnesses:
-   `sql_transaction_participants-p1` at operation scheduling and
-   `sql_write_operations-p1` at workflow timeout.
+   by adding the smallest focused ACK-pending operation-workflow timeout
+   probe/fixture for the `20260505T123850Z` shape. Preserve publication epoch
+   `3` `ACK_PENDING`, pending ACK node
+   `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`, selected snapshot reachability
+   timeout on `11601fe0-72d6-5853-8590-ec2881853e72`, active-gate coverage
+   `2/5`, `sql_transaction_participants-p1` operation-scheduling evidence,
+   and `sql_write_operations-p1` workflow-timeout operation
+   `df4f18e8-6b08-46b5-ba02-c770936ede32`; prove whether the operation
+   workflow owner enqueues or performs `reconcile_stale_operation_progress`
+   without raising timeouts or broadening the matrix.
 3. Harness classification:
    terminal barrier evidence wins over stale playback reconstruction for
    active, restart-recovery, load-readiness, convergence, and quiescence
@@ -217,8 +233,11 @@ Queued cleanup packages:
    `PUBLISHED` / active `5/5`; the current terminal boundary is ACK-pending
    startup snapshot reachability with priority recovery scheduling/timeout
    evidence. The previous `052328Z` `sql_write_operations-p1` PENDING dispatch
-   timeout after publication closure remains residual but is not the latest
-   selected boundary.
+   timeout after publication closure remains historical residual context; the
+   current `sql_write_operations-p1` timeout is operation
+   `df4f18e8-6b08-46b5-ba02-c770936ede32` before publication closure, and must
+   stay subordinate to the ACK-pending startup boundary unless the focused
+   probe proves operation-workflow ownership is the next canonical blocker.
    A narrow harness formatter fix now prevents
    `publicationConvergence=ready` when the same active-gate evidence carries
    `ACK_PENDING`, pending ACK, or missing-published debt; this is
