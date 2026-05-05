@@ -685,6 +685,10 @@ Sprint:
       grouping, and any pre-`executeMove` skip or return state while keeping
       the epoch `2` `PUBLISHED` missing-active selected-snapshot topology debt
       canonical.
+- [x] Fix the pre-execution diagnostic replay review finding: keep the
+      historical `145246Z` replay assertion bound to the old artifact shape,
+      and keep parser coverage for the new diagnostic in a separately named
+      synthetic future-diagnostic fixture.
 - [ ] Rerun the representative `rolling-restart --fast-local` gate after the
       runtime pre-execution handoff diagnostic and record whether the new
       post-`Starting rebalancing` evidence closes the subordinate
@@ -2988,11 +2992,13 @@ Implementation:
    exposes the post-terminal move limit, limited move count, executable move
    count, skipped-before-execute count, readiness groups, skip reasons, and
    pre-execution state fields under `rebalancerFollowUpHandoff`.
-5. The synthetic `145246Z` replay fixture now includes the new post-start
-   diagnostic for `control_plane_publications-p1`: `moveLimit=1`,
-   `limitedMoveCount=1`, `executableMoveCount=1`, no pre-execute skips, one
-   ready readiness group for the target node, `ready_to_execute`, and
-   `continue`.
+5. A separately named synthetic future-diagnostic replay test extends the
+   `145246Z` shape with the new post-start diagnostic for
+   `control_plane_publications-p1`: `moveLimit=2`, `limitedMoveCount=2`,
+   `executableMoveCount=0`, `preExecuteSkippedMoveCount=2`, one blocked
+   target-node readiness group, one ready source-node readiness group,
+   `awaiting_ready_add_capacity`, `node_not_ready`,
+   `pre_execution_skips_only`, and `return_pre_execution_skips`.
 
 Outcome: the runtime owner will now emit the missing post-limit handoff
 diagnostic in the next representative artifact. Existing `145246Z` replay
@@ -3034,6 +3040,64 @@ Validation:
 16. `node scripts/check-guideline-literals.js --include-tests src/rebalancer/unified-rebalancer-segment-4.js src/rebalancer/rebalancer-constants.js test/distributed/harness/publication-evidence-replay.js test/distributed/harness/__tests__/publication-evidence-replay.test.js test/rebalancer/rebalancer-pre-execution-handoff-diagnostic.test.js`
     reported `0` new and `0` inherited literal-guideline violations.
 17. `git diff --check` passed.
+
+## May 5 `145246Z` Diagnostic Replay Review Fix
+
+The review found that the replay test had injected the new
+`Rebalancer pre-execution handoff` runtime diagnostic into the historical
+`20260505T145246Z` fixture and then asserted the future diagnostic result as if
+the old artifact contained it.
+
+Fix:
+
+1. `test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+   now keeps the historical `145246Z` fixture on the old artifact contract:
+   `postTerminalPreExecutionHandoffObserved=false`,
+   `postTerminalMoveLimit=0`, `postTerminalLimitedMoveCount=0`, empty
+   pre-execution readiness and skip arrays, empty pre-execution state fields,
+   and `postTerminalMoveLimitEvidenceState=planned_move_count_available`.
+2. The parser coverage for the new runtime diagnostic moved to the separately
+   named synthetic future-diagnostic test
+   `parses a future 145246Z pre-execution handoff diagnostic replay`. That
+   fixture layers in `PRE_EXECUTION_HANDOFF` and asserts
+   `limited_moves_available`, move limit, limited move count, readiness groups,
+   pre-execute skip reasons, `pre_execution_skips_only`, and
+   `return_pre_execution_skips`.
+3. The real historical playback remains unchanged and still reports
+   `postTerminalPreExecutionHandoffObserved=false` and
+   `postTerminalMoveLimitEvidenceState=planned_move_count_available`.
+
+Validation:
+
+1. `node --check test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+2. `node --check test/distributed/harness/publication-evidence-replay.js`
+3. `node --check test/rebalancer/rebalancer-pre-execution-handoff-diagnostic.test.js`
+4. `node --test --test-name-pattern "keeps the 145246Z PUBLISHED reachability and rebalancer replay blocked" test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+5. `node --test --test-name-pattern "parses a future 145246Z pre-execution handoff diagnostic replay" test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+6. `node --test test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+   passed: `8` tests, `1` suite.
+7. `node --test test/rebalancer/rebalancer-pre-execution-handoff-diagnostic.test.js`
+   passed: `15` tests, `1` suite.
+8. `node test/distributed/harness/publication-evidence-replay.js test-output/reports/.playback/rolling-restart-after-140646z-publication-pending-replay-fixture-20260505T145246Z/rolling-restart`
+   passed and reported `postTerminalPreExecutionHandoffObserved=false` and
+   `postTerminalMoveLimitEvidenceState=planned_move_count_available`.
+9. `npx eslint test/distributed/harness/__tests__/publication-evidence-replay.test.js test/distributed/harness/publication-evidence-replay.js test/rebalancer/rebalancer-pre-execution-handoff-diagnostic.test.js`
+   passed.
+10. `npm run lint` was attempted and still fails on inherited lint debt outside
+    this change; the touched files are not in the failure list and touched-file
+    ESLint passed.
+11. `node scripts/check-guideline-decision-boundaries.js test/distributed/harness/publication-evidence-replay.js test/distributed/harness/__tests__/publication-evidence-replay.test.js test/rebalancer/rebalancer-pre-execution-handoff-diagnostic.test.js`
+    reported `0` decision-boundary guideline violations.
+12. `node scripts/check-runtime-grammar-contracts.js test/distributed/harness/publication-evidence-replay.js test/distributed/harness/__tests__/publication-evidence-replay.test.js test/rebalancer/rebalancer-pre-execution-handoff-diagnostic.test.js`
+    reported `0` runtime-grammar-contract violations.
+13. `node scripts/check-guideline-boundary-mode-contracts.js test/distributed/harness/publication-evidence-replay.js test/distributed/harness/__tests__/publication-evidence-replay.test.js test/rebalancer/rebalancer-pre-execution-handoff-diagnostic.test.js`
+    reported `0` boundary-mode-contract hotspot violations.
+14. `node scripts/check-guideline-literals.js test/distributed/harness/publication-evidence-replay.js test/distributed/harness/__tests__/publication-evidence-replay.test.js test/rebalancer/rebalancer-pre-execution-handoff-diagnostic.test.js`
+    reported `0` new and `0` inherited literal-guideline violations.
+15. `node scripts/check-guideline-literals.js --include-tests test/distributed/harness/publication-evidence-replay.js test/distributed/harness/__tests__/publication-evidence-replay.test.js test/rebalancer/rebalancer-pre-execution-handoff-diagnostic.test.js`
+    reported `0` new and `0` inherited literal-guideline violations.
+16. `node scripts/check-guidelines-llm.js test/distributed/harness/publication-evidence-replay.js test/distributed/harness/__tests__/publication-evidence-replay.test.js test/rebalancer/rebalancer-pre-execution-handoff-diagnostic.test.js`
+    was attempted and failed with an OpenAI API `401` invalid-key response.
 
 ## Validation
 
@@ -3118,7 +3182,9 @@ evidence now classifies that move count as
 `planned_move_count_available`, scopes admission to the matching
 `control_plane_publications-p1` feasibility batch, and leaves move-limit
 survival unresolved in the historical artifact because it predates the runtime
-post-limit handoff log. The runtime pre-execution diagnostic is now complete:
+post-limit handoff log. The review fix keeps that historical assertion exact
+and moves the new diagnostic parser proof into a separately named synthetic
+future-diagnostic replay. The runtime pre-execution diagnostic is now complete:
 future artifacts will expose `limitedMoveCount`, `moveLimit`, readiness
 groups, pre-execute skip reasons, `preExecutionHandoffState`, and
 `preExecuteReturnState`. The next unchecked task is the representative

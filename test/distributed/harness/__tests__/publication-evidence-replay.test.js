@@ -24,8 +24,10 @@ import {
 import {NUM, SERVICE_STATUS, SERVICE_TYPE, STATE} from '../../../../src/constants/index.js';
 import {RAFT_ROLE} from '../../../../src/raft/constants.js';
 import {
+  READINESS_SKIP_DETAIL,
   REBALANCE_COORDINATOR_LOG_MSG,
   REBALANCER_LOG_MSG,
+  REBALANCER_SKIP_REASON,
 } from '../../../../src/rebalancer/rebalancer-constants.js';
 import {
   STORAGE_CAPACITY_LOG_MSG,
@@ -757,9 +759,12 @@ const REPLAY_TEST_145246Z_REBALANCER_STEP_TIMEOUT_MS = 0;
 const REPLAY_TEST_145246Z_SERIAL_WAIT_STEP_AGE_MS = 1777992906629;
 const REPLAY_TEST_145246Z_SERIAL_WAIT_STEP_TIMEOUT_MS = 0;
 const REPLAY_TEST_145246Z_EMPTY_REACHABLE_BY = '';
+const REPLAY_TEST_145246Z_EMPTY_TEXT = '';
 const REPLAY_TEST_145246Z_EMPTY_OPERATION_ID = '';
 const REPLAY_TEST_145246Z_TEST_NAME =
   'keeps the 145246Z PUBLISHED reachability and rebalancer replay blocked';
+const REPLAY_TEST_145246Z_SYNTHETIC_PRE_EXECUTION_TEST_NAME =
+  'parses a future 145246Z pre-execution handoff diagnostic replay';
 const REPLAY_TEST_145246Z_FILLER_TABLE_PREFIX = 'fixture_145246_table_';
 const REPLAY_TEST_145246Z_FILLER_PARTITION_SUFFIX = '-p1';
 const REPLAY_TEST_145246Z_PUBLICATION_RECOVERY_STATE =
@@ -823,7 +828,7 @@ const REPLAY_TEST_145246Z_UNRELATED_FEASIBILITY_FILTER_TIME =
   '2026-05-05T14:55:04.659Z';
 const REPLAY_TEST_145246Z_FOLLOWUP_REBALANCE_TIME =
   '2026-05-05T14:55:04.771Z';
-const REPLAY_TEST_145246Z_PRE_EXECUTION_HANDOFF_TIME =
+const REPLAY_TEST_145246Z_SYNTHETIC_PRE_EXECUTION_HANDOFF_TIME =
   '2026-05-05T14:55:04.772Z';
 const REPLAY_TEST_145246Z_BUDGET_PRESSURE_TIME =
   '2026-05-05T14:55:05.960Z';
@@ -835,8 +840,8 @@ const REPLAY_TEST_145246Z_OPERATION_FAILED_TIME_MS = Date.parse(
 const REPLAY_TEST_145246Z_FOLLOWUP_REBALANCE_TIME_MS = Date.parse(
   REPLAY_TEST_145246Z_FOLLOWUP_REBALANCE_TIME,
 );
-const REPLAY_TEST_145246Z_PRE_EXECUTION_HANDOFF_TIME_MS = Date.parse(
-  REPLAY_TEST_145246Z_PRE_EXECUTION_HANDOFF_TIME,
+const REPLAY_TEST_145246Z_SYNTHETIC_PRE_EXECUTION_HANDOFF_TIME_MS = Date.parse(
+  REPLAY_TEST_145246Z_SYNTHETIC_PRE_EXECUTION_HANDOFF_TIME,
 );
 const REPLAY_TEST_145246Z_BUDGET_PRESSURE_TIME_MS = Date.parse(
   REPLAY_TEST_145246Z_BUDGET_PRESSURE_TIME,
@@ -848,13 +853,16 @@ const REPLAY_TEST_145246Z_FEASIBLE_CANDIDATE_COUNT = 2;
 const REPLAY_TEST_145246Z_REJECTED_CANDIDATE_COUNT = 3;
 const REPLAY_TEST_145246Z_TOTAL_CANDIDATE_COUNT = 5;
 const REPLAY_TEST_145246Z_ADMISSION_ALLOWED_COUNT = 1;
-const REPLAY_TEST_145246Z_PRE_EXECUTION_MOVE_LIMIT = 1;
-const REPLAY_TEST_145246Z_PRE_EXECUTION_LIMITED_MOVE_COUNT = 1;
-const REPLAY_TEST_145246Z_PRE_EXECUTION_EXECUTABLE_MOVE_COUNT = 1;
-const REPLAY_TEST_145246Z_PRE_EXECUTION_SKIPPED_MOVE_COUNT = 0;
-const REPLAY_TEST_145246Z_PRE_EXECUTION_READINESS_GROUP_COUNT = 1;
-const REPLAY_TEST_145246Z_PRE_EXECUTION_READY_GROUP_COUNT = 1;
-const REPLAY_TEST_145246Z_PRE_EXECUTION_BLOCKED_GROUP_COUNT = 0;
+const REPLAY_TEST_145246Z_SYNTHETIC_PRE_EXECUTION_MOVE_LIMIT = NUM.TWO;
+const REPLAY_TEST_145246Z_SYNTHETIC_PRE_EXECUTION_LIMITED_MOVE_COUNT = NUM.TWO;
+const REPLAY_TEST_145246Z_SYNTHETIC_PRE_EXECUTION_EXECUTABLE_MOVE_COUNT =
+  NUM.ZERO;
+const REPLAY_TEST_145246Z_SYNTHETIC_PRE_EXECUTION_SKIPPED_MOVE_COUNT = NUM.TWO;
+const REPLAY_TEST_145246Z_SYNTHETIC_PRE_EXECUTION_READINESS_GROUP_COUNT =
+  NUM.TWO;
+const REPLAY_TEST_145246Z_SYNTHETIC_PRE_EXECUTION_READY_GROUP_COUNT = NUM.ONE;
+const REPLAY_TEST_145246Z_SYNTHETIC_PRE_EXECUTION_BLOCKED_GROUP_COUNT =
+  NUM.ONE;
 const REPLAY_TEST_145246Z_BUDGET_PRESSURE_QUERY_DURATION_MS = 12834;
 const REPLAY_TEST_145246Z_BUDGET_PRESSURE_ROW_COUNT = 3;
 const REPLAY_TEST_145246Z_CLUSTER_MEMBER_UNHEALTHY =
@@ -864,14 +872,21 @@ const REPLAY_TEST_145246Z_ADMISSION_DENY_DECISION = 'deny';
 const REPLAY_TEST_145246Z_CAPACITY_AVAILABLE = 'capacity_available';
 const REPLAY_TEST_145246Z_UNRELATED_CAPACITY_REJECTED =
   'unrelated_capacity_rejected';
-const REPLAY_TEST_145246Z_MOVE_LIMIT_STATE =
+const REPLAY_TEST_145246Z_HISTORICAL_MOVE_LIMIT_STATE =
+  'planned_move_count_available';
+const REPLAY_TEST_145246Z_SYNTHETIC_MOVE_LIMIT_STATE =
   'limited_moves_available';
 const REPLAY_TEST_145246Z_EXECUTION_GAP_STATE =
   'started_with_pre_execution_gap';
-const REPLAY_TEST_145246Z_PRE_EXECUTION_HANDOFF_STATE = 'ready_to_execute';
-const REPLAY_TEST_145246Z_PRE_EXECUTION_RETURN_STATE = 'continue';
-const REPLAY_TEST_145246Z_PRE_EXECUTION_READINESS_STATE = 'ready';
-const REPLAY_TEST_145246Z_PRE_EXECUTION_SKIP_DETAIL = 'none';
+const REPLAY_TEST_145246Z_SYNTHETIC_PRE_EXECUTION_HANDOFF_STATE =
+  'pre_execution_skips_only';
+const REPLAY_TEST_145246Z_SYNTHETIC_PRE_EXECUTION_RETURN_STATE =
+  'return_pre_execution_skips';
+const REPLAY_TEST_145246Z_SYNTHETIC_PRE_EXECUTION_READY_READINESS_STATE =
+  'ready';
+const REPLAY_TEST_145246Z_SYNTHETIC_PRE_EXECUTION_BLOCKED_READINESS_STATE =
+  'blocked';
+const REPLAY_TEST_145246Z_SYNTHETIC_PRE_EXECUTION_READY_SKIP_DETAIL = 'none';
 const REPLAY_TEST_145246Z_OWNER_QUERY_PRESSURE_LOG =
   'In-flight operation owner query indicates control-plane pressure';
 const REPLAY_TEST_145246Z_SERIAL_WAIT_OPERATION_ID =
@@ -975,17 +990,37 @@ const REPLAY_TEST_145246Z_PUBLICATION_GATE_REASONS = Object.freeze([
   REPLAY_TEST_145246Z_PUBLICATION_MISSING_ACTIVE_PREFIX +
     REPLAY_TEST_145246Z_NODE_ID.MISSING_REPAIR_TWO,
 ]);
-const REPLAY_TEST_145246Z_PRE_EXECUTION_READINESS_GROUPS = Object.freeze([
-  Object.freeze({
-    nodeId: REPLAY_TEST_145246Z_NODE_ID.BASELINE,
-    moveCount: NUM.ONE,
-    addLikeMoveCount: NUM.ONE,
-    removeMoveCount: NUM.ZERO,
-    otherMoveCount: NUM.ZERO,
-    readinessState: REPLAY_TEST_145246Z_PRE_EXECUTION_READINESS_STATE,
-    skipDetail: REPLAY_TEST_145246Z_PRE_EXECUTION_SKIP_DETAIL,
-  }),
+const REPLAY_TEST_145246Z_SYNTHETIC_PRE_EXECUTION_SKIP_REASONS = Object.freeze([
+  REBALANCER_SKIP_REASON.AWAITING_READY_ADD_CAPACITY,
+  REBALANCER_SKIP_REASON.NODE_NOT_READY,
 ]);
+const REPLAY_TEST_145246Z_SYNTHETIC_PRE_EXECUTION_READINESS_GROUPS =
+  Object.freeze([
+    Object.freeze({
+      nodeId: REPLAY_TEST_145246Z_NODE_ID.BASELINE,
+      moveCount: NUM.ONE,
+      addLikeMoveCount: NUM.ONE,
+      removeMoveCount: NUM.ZERO,
+      otherMoveCount: NUM.ZERO,
+      readinessState:
+        REPLAY_TEST_145246Z_SYNTHETIC_PRE_EXECUTION_BLOCKED_READINESS_STATE,
+      skipDetail: READINESS_SKIP_DETAIL.REPAIR_INELIGIBLE,
+    }),
+    Object.freeze({
+      nodeId: REPLAY_TEST_145246Z_NODE_ID.SEED,
+      moveCount: NUM.ONE,
+      addLikeMoveCount: NUM.ZERO,
+      removeMoveCount: NUM.ONE,
+      otherMoveCount: NUM.ZERO,
+      readinessState:
+        REPLAY_TEST_145246Z_SYNTHETIC_PRE_EXECUTION_READY_READINESS_STATE,
+      skipDetail: REPLAY_TEST_145246Z_SYNTHETIC_PRE_EXECUTION_READY_SKIP_DETAIL,
+    }),
+  ]);
+const REPLAY_TEST_145246Z_HISTORICAL_PRE_EXECUTION_READINESS_GROUPS =
+  Object.freeze([]);
+const REPLAY_TEST_145246Z_HISTORICAL_PRE_EXECUTION_SKIP_REASONS =
+  Object.freeze([]);
 
 function buildNodeRows() {
   return REPLAY_TEST_NODE_IDS.map((nodeId) => ({
@@ -2451,7 +2486,7 @@ function build145246ZSqlWriteWitness() {
   });
 }
 
-function build145246ZRebalancerHandoffLogLines() {
+function build145246ZRebalancerHandoffLogRecords() {
   return [
     {
       time: REPLAY_TEST_145246Z_OPERATION_FAILED_TIME,
@@ -2535,32 +2570,6 @@ function build145246ZRebalancerHandoffLogLines() {
       msg: REBALANCER_LOG_MSG.START_REBALANCE,
     },
     {
-      time: REPLAY_TEST_145246Z_PRE_EXECUTION_HANDOFF_TIME,
-      nodeId: REPLAY_TEST_145246Z_NODE_ID.SEED,
-      entityId: REPLAY_TEST_145246Z_CONTROL_PLANE_PUBLICATIONS_PARTITION_ID,
-      entityType: SERVICE_TYPE.PARTITION,
-      plannedMoveCount: NUM.ONE,
-      moveLimit: REPLAY_TEST_145246Z_PRE_EXECUTION_MOVE_LIMIT,
-      limitedMoveCount: REPLAY_TEST_145246Z_PRE_EXECUTION_LIMITED_MOVE_COUNT,
-      executableMoveCount:
-        REPLAY_TEST_145246Z_PRE_EXECUTION_EXECUTABLE_MOVE_COUNT,
-      preExecuteSkippedMoveCount:
-        REPLAY_TEST_145246Z_PRE_EXECUTION_SKIPPED_MOVE_COUNT,
-      readinessGroupCount:
-        REPLAY_TEST_145246Z_PRE_EXECUTION_READINESS_GROUP_COUNT,
-      readyReadinessGroupCount:
-        REPLAY_TEST_145246Z_PRE_EXECUTION_READY_GROUP_COUNT,
-      blockedReadinessGroupCount:
-        REPLAY_TEST_145246Z_PRE_EXECUTION_BLOCKED_GROUP_COUNT,
-      readinessGroups: REPLAY_TEST_145246Z_PRE_EXECUTION_READINESS_GROUPS,
-      preExecuteSkipReasons: [],
-      preExecutionHandoffState:
-        REPLAY_TEST_145246Z_PRE_EXECUTION_HANDOFF_STATE,
-      preExecuteReturnState:
-        REPLAY_TEST_145246Z_PRE_EXECUTION_RETURN_STATE,
-      msg: REBALANCER_LOG_MSG.PRE_EXECUTION_HANDOFF,
-    },
-    {
       time: REPLAY_TEST_145246Z_BUDGET_PRESSURE_TIME,
       nodeId: REPLAY_TEST_145246Z_NODE_ID.BASELINE,
       queryDurationMs: REPLAY_TEST_145246Z_BUDGET_PRESSURE_QUERY_DURATION_MS,
@@ -2574,6 +2583,51 @@ function build145246ZRebalancerHandoffLogLines() {
       entityType: SERVICE_TYPE.PARTITION,
       msg: REBALANCER_LOG_MSG.LEADER_STOP,
     },
+  ];
+}
+
+function build145246ZSyntheticPreExecutionHandoffLogRecord() {
+  return {
+    time: REPLAY_TEST_145246Z_SYNTHETIC_PRE_EXECUTION_HANDOFF_TIME,
+    nodeId: REPLAY_TEST_145246Z_NODE_ID.SEED,
+    entityId: REPLAY_TEST_145246Z_CONTROL_PLANE_PUBLICATIONS_PARTITION_ID,
+    entityType: SERVICE_TYPE.PARTITION,
+    plannedMoveCount:
+      REPLAY_TEST_145246Z_SYNTHETIC_PRE_EXECUTION_LIMITED_MOVE_COUNT,
+    moveLimit: REPLAY_TEST_145246Z_SYNTHETIC_PRE_EXECUTION_MOVE_LIMIT,
+    limitedMoveCount:
+      REPLAY_TEST_145246Z_SYNTHETIC_PRE_EXECUTION_LIMITED_MOVE_COUNT,
+    executableMoveCount:
+      REPLAY_TEST_145246Z_SYNTHETIC_PRE_EXECUTION_EXECUTABLE_MOVE_COUNT,
+    preExecuteSkippedMoveCount:
+      REPLAY_TEST_145246Z_SYNTHETIC_PRE_EXECUTION_SKIPPED_MOVE_COUNT,
+    readinessGroupCount:
+      REPLAY_TEST_145246Z_SYNTHETIC_PRE_EXECUTION_READINESS_GROUP_COUNT,
+    readyReadinessGroupCount:
+      REPLAY_TEST_145246Z_SYNTHETIC_PRE_EXECUTION_READY_GROUP_COUNT,
+    blockedReadinessGroupCount:
+      REPLAY_TEST_145246Z_SYNTHETIC_PRE_EXECUTION_BLOCKED_GROUP_COUNT,
+    readinessGroups:
+      REPLAY_TEST_145246Z_SYNTHETIC_PRE_EXECUTION_READINESS_GROUPS,
+    preExecuteSkipReasons:
+      REPLAY_TEST_145246Z_SYNTHETIC_PRE_EXECUTION_SKIP_REASONS,
+    preExecutionHandoffState:
+      REPLAY_TEST_145246Z_SYNTHETIC_PRE_EXECUTION_HANDOFF_STATE,
+    preExecuteReturnState:
+      REPLAY_TEST_145246Z_SYNTHETIC_PRE_EXECUTION_RETURN_STATE,
+    msg: REBALANCER_LOG_MSG.PRE_EXECUTION_HANDOFF,
+  };
+}
+
+function build145246ZRebalancerHandoffLogLines() {
+  return build145246ZRebalancerHandoffLogRecords()
+    .map((record) => JSON.stringify(record));
+}
+
+function build145246ZSyntheticPreExecutionHandoffLogLines() {
+  return [
+    ...build145246ZRebalancerHandoffLogRecords(),
+    build145246ZSyntheticPreExecutionHandoffLogRecord(),
   ].map((record) => JSON.stringify(record));
 }
 
@@ -2710,6 +2764,19 @@ function build145246ZFailureBundle() {
       excerptsByNodeId: {
         [REPLAY_TEST_145246Z_NODE_ID.SEED]:
           build145246ZRebalancerHandoffLogLines(),
+      },
+    },
+  };
+}
+
+function build145246ZSyntheticPreExecutionFailureBundle() {
+  const failureBundle = build145246ZFailureBundle();
+  return {
+    ...failureBundle,
+    logs: {
+      excerptsByNodeId: {
+        [REPLAY_TEST_145246Z_NODE_ID.SEED]:
+          build145246ZSyntheticPreExecutionHandoffLogLines(),
       },
     },
   };
@@ -4615,66 +4682,66 @@ describe(REPLAY_TEST_SUITE_NAME, () => {
     assert.equal(
       replaySummary.rebalancerFollowUpHandoff
         .postTerminalPreExecutionHandoffObserved,
-      true,
+      false,
     );
     assert.equal(
       replaySummary.rebalancerFollowUpHandoff
         .postTerminalPreExecutionHandoffTimeMs,
-      REPLAY_TEST_145246Z_PRE_EXECUTION_HANDOFF_TIME_MS,
+      NUM.ZERO,
     );
     assert.equal(
       replaySummary.rebalancerFollowUpHandoff.postTerminalMoveLimit,
-      REPLAY_TEST_145246Z_PRE_EXECUTION_MOVE_LIMIT,
+      NUM.ZERO,
     );
     assert.equal(
       replaySummary.rebalancerFollowUpHandoff.postTerminalLimitedMoveCount,
-      REPLAY_TEST_145246Z_PRE_EXECUTION_LIMITED_MOVE_COUNT,
+      NUM.ZERO,
     );
     assert.equal(
       replaySummary.rebalancerFollowUpHandoff.postTerminalExecutableMoveCount,
-      REPLAY_TEST_145246Z_PRE_EXECUTION_EXECUTABLE_MOVE_COUNT,
+      NUM.ZERO,
     );
     assert.equal(
       replaySummary.rebalancerFollowUpHandoff
         .postTerminalPreExecuteSkippedMoveCount,
-      REPLAY_TEST_145246Z_PRE_EXECUTION_SKIPPED_MOVE_COUNT,
+      NUM.ZERO,
     );
     assert.equal(
       replaySummary.rebalancerFollowUpHandoff.postTerminalReadinessGroupCount,
-      REPLAY_TEST_145246Z_PRE_EXECUTION_READINESS_GROUP_COUNT,
+      NUM.ZERO,
     );
     assert.equal(
       replaySummary.rebalancerFollowUpHandoff
         .postTerminalReadyReadinessGroupCount,
-      REPLAY_TEST_145246Z_PRE_EXECUTION_READY_GROUP_COUNT,
+      NUM.ZERO,
     );
     assert.equal(
       replaySummary.rebalancerFollowUpHandoff
         .postTerminalBlockedReadinessGroupCount,
-      REPLAY_TEST_145246Z_PRE_EXECUTION_BLOCKED_GROUP_COUNT,
+      NUM.ZERO,
     );
     assert.deepEqual(
       replaySummary.rebalancerFollowUpHandoff.postTerminalReadinessGroups,
-      REPLAY_TEST_145246Z_PRE_EXECUTION_READINESS_GROUPS,
+      REPLAY_TEST_145246Z_HISTORICAL_PRE_EXECUTION_READINESS_GROUPS,
     );
     assert.deepEqual(
       replaySummary.rebalancerFollowUpHandoff
         .postTerminalPreExecuteSkipReasons,
-      [],
+      REPLAY_TEST_145246Z_HISTORICAL_PRE_EXECUTION_SKIP_REASONS,
     );
     assert.equal(
       replaySummary.rebalancerFollowUpHandoff
         .postTerminalPreExecutionHandoffState,
-      REPLAY_TEST_145246Z_PRE_EXECUTION_HANDOFF_STATE,
+      REPLAY_TEST_145246Z_EMPTY_TEXT,
     );
     assert.equal(
       replaySummary.rebalancerFollowUpHandoff.postTerminalPreExecuteReturnState,
-      REPLAY_TEST_145246Z_PRE_EXECUTION_RETURN_STATE,
+      REPLAY_TEST_145246Z_EMPTY_TEXT,
     );
     assert.equal(
       replaySummary.rebalancerFollowUpHandoff
         .postTerminalMoveLimitEvidenceState,
-      REPLAY_TEST_145246Z_MOVE_LIMIT_STATE,
+      REPLAY_TEST_145246Z_HISTORICAL_MOVE_LIMIT_STATE,
     );
     assert.equal(
       replaySummary.rebalancerFollowUpHandoff
@@ -4816,5 +4883,92 @@ describe(REPLAY_TEST_SUITE_NAME, () => {
         REPLAY_TEST_145246Z_SQL_TRANSACTIONS_PARTITION_ID,
       ],
     );
+  });
+
+  it(REPLAY_TEST_145246Z_SYNTHETIC_PRE_EXECUTION_TEST_NAME, async () => {
+    const snapshot = build145246ZSnapshot();
+    const failureBundle = build145246ZSyntheticPreExecutionFailureBundle();
+
+    await writeFile(
+      join(tempDir, REPLAY_TEST_FAILURE_BUNDLE_FILE),
+      JSON.stringify(failureBundle),
+      REPLAY_TEST_ENCODING,
+    );
+    await writeFile(
+      join(tempDir, REPLAY_TEST_SNAPSHOTS_FILE),
+      JSON.stringify(snapshot),
+      REPLAY_TEST_ENCODING,
+    );
+
+    const replaySummary = await replayPublicationPriorityEvidenceFromReportDir(tempDir);
+    const handoff = replaySummary.rebalancerFollowUpHandoff;
+
+    assert.equal(
+      handoff.followUpState,
+      PUBLICATION_EVIDENCE_REPLAY_REBALANCER_HANDOFF_STATE.ENQUEUED,
+    );
+    assert.equal(handoff.postTerminalPreExecutionHandoffObserved, true);
+    assert.equal(
+      handoff.postTerminalPreExecutionHandoffTimeMs,
+      REPLAY_TEST_145246Z_SYNTHETIC_PRE_EXECUTION_HANDOFF_TIME_MS,
+    );
+    assert.equal(
+      handoff.postTerminalMoveLimit,
+      REPLAY_TEST_145246Z_SYNTHETIC_PRE_EXECUTION_MOVE_LIMIT,
+    );
+    assert.equal(
+      handoff.postTerminalLimitedMoveCount,
+      REPLAY_TEST_145246Z_SYNTHETIC_PRE_EXECUTION_LIMITED_MOVE_COUNT,
+    );
+    assert.equal(
+      handoff.postTerminalExecutableMoveCount,
+      REPLAY_TEST_145246Z_SYNTHETIC_PRE_EXECUTION_EXECUTABLE_MOVE_COUNT,
+    );
+    assert.equal(
+      handoff.postTerminalPreExecuteSkippedMoveCount,
+      REPLAY_TEST_145246Z_SYNTHETIC_PRE_EXECUTION_SKIPPED_MOVE_COUNT,
+    );
+    assert.equal(
+      handoff.postTerminalReadinessGroupCount,
+      REPLAY_TEST_145246Z_SYNTHETIC_PRE_EXECUTION_READINESS_GROUP_COUNT,
+    );
+    assert.equal(
+      handoff.postTerminalReadyReadinessGroupCount,
+      REPLAY_TEST_145246Z_SYNTHETIC_PRE_EXECUTION_READY_GROUP_COUNT,
+    );
+    assert.equal(
+      handoff.postTerminalBlockedReadinessGroupCount,
+      REPLAY_TEST_145246Z_SYNTHETIC_PRE_EXECUTION_BLOCKED_GROUP_COUNT,
+    );
+    assert.deepEqual(
+      handoff.postTerminalReadinessGroups,
+      REPLAY_TEST_145246Z_SYNTHETIC_PRE_EXECUTION_READINESS_GROUPS,
+    );
+    assert.deepEqual(
+      handoff.postTerminalPreExecuteSkipReasons,
+      REPLAY_TEST_145246Z_SYNTHETIC_PRE_EXECUTION_SKIP_REASONS,
+    );
+    assert.equal(
+      handoff.postTerminalPreExecutionHandoffState,
+      REPLAY_TEST_145246Z_SYNTHETIC_PRE_EXECUTION_HANDOFF_STATE,
+    );
+    assert.equal(
+      handoff.postTerminalPreExecuteReturnState,
+      REPLAY_TEST_145246Z_SYNTHETIC_PRE_EXECUTION_RETURN_STATE,
+    );
+    assert.equal(
+      handoff.postTerminalMoveLimitEvidenceState,
+      REPLAY_TEST_145246Z_SYNTHETIC_MOVE_LIMIT_STATE,
+    );
+    assert.equal(
+      handoff.postTerminalFollowUpExecutionState,
+      PUBLICATION_EVIDENCE_REPLAY_REBALANCER_FOLLOW_UP_EXECUTION_STATE
+        .NOT_EXECUTED_AFTER_ENQUEUE,
+    );
+    assert.equal(
+      handoff.postTerminalExecutionGapState,
+      REPLAY_TEST_145246Z_EXECUTION_GAP_STATE,
+    );
+    assert.equal(handoff.postTerminalMoveExecutionObserved, false);
   });
 });

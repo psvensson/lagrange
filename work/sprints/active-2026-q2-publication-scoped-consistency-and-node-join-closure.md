@@ -303,13 +303,18 @@ Queued cleanup packages:
    pre-execution handoff diagnostic is now implemented: future artifacts will
    log `limitedMoveCount`, `moveLimit`, readiness grouping, pre-execute skip
    reasons, `preExecutionHandoffState`, and `preExecuteReturnState` after
-   `Starting rebalancing` and before `executeMove(...)`. Focused validation
-   passed for the runtime diagnostic, replay parser, touched-file ESLint,
-   syntax checks, decision-boundary, runtime-grammar, boundary-mode, and
-   literal guardrails. The next unchecked package task is the representative
-   `rolling-restart --fast-local` rerun after the diagnostic, while keeping the
-   epoch `2` `PUBLISHED` missing-active selected-snapshot topology debt
-   canonical.
+   `Starting rebalancing` and before `executeMove(...)`. A review follow-up now
+   separates evidence roles: the historical `145246Z` replay fixture asserts
+   `postTerminalPreExecutionHandoffObserved=false` and
+   `planned_move_count_available`, while the separately named synthetic
+   future-diagnostic replay asserts the new parser behavior with
+   `limited_moves_available`, move-limit, readiness grouping, and pre-execute
+   skip/return fields. Focused validation passed for the runtime diagnostic,
+   replay parser, touched-file ESLint, syntax checks, decision-boundary,
+   runtime-grammar, boundary-mode, and literal guardrails. The next unchecked
+   package task is the representative `rolling-restart --fast-local` rerun after
+   the diagnostic, while keeping the epoch `2` `PUBLISHED` missing-active
+   selected-snapshot topology debt canonical.
 3. Harness classification:
    terminal barrier evidence wins over stale playback reconstruction for
    active, restart-recovery, load-readiness, convergence, and quiescence
