@@ -300,6 +300,53 @@ May 5 terminal priority-recovery witness classification fix:
    closure, plus selected snapshot coverage and selected missing-published
    disagreement.
 
+May 5 representative rerun after terminal priority-recovery witness fix:
+
+1. Fresh representative rerun after `c17c23a9`:
+   `test-output/reports/rolling-restart-after-terminal-witness-rerun-20260505T060935Z.report.json`.
+2. Companion log:
+   `test-output/reports/rolling-restart-after-terminal-witness-rerun-20260505T060935Z.log`.
+3. Failure bundle:
+   `test-output/reports/.playback/rolling-restart-after-terminal-witness-rerun-20260505T060935Z/rolling-restart/failure-bundle.json`.
+4. Triage summary:
+   `test-output/reports/.playback/rolling-restart-after-terminal-witness-rerun-20260505T060935Z/rolling-restart/triage-summary.md`.
+5. Result: failed, `0/1` passed after `130.5s`.
+6. Terminal barrier:
+   `Not all nodes reached ACTIVE state within 120000ms`.
+7. The representative path migrated back from the `052328Z` post-publication
+   operation timeout shape to startup/publication convergence. Root cause class
+   is `startup`, dominant reason is `BOOTSTRAP_PHASE_INCOMPLETE`, and failure
+   class is `publication_convergence_blocked`.
+8. Publication epoch `3` is `ACK_PENDING`, pending ACK count is `1`, pending ACK
+   node is `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`, blocked node count is `0`,
+   normalized missing published count is `0`, and recovery protocol state is
+   `publication_pending`.
+9. Active-gate progress is active `3/5`, selected snapshot coverage `2/5`,
+   selected missing published count `2`, selected missing published nodes
+   `35a891b8-c1a0-5064-9c6e-2acfba61c2a7` and
+   `8be8d30f-4499-5eed-865c-71b4d529a67a`, selected published active `3/5`,
+   per-node publication disagreement across one reporter, and priority spread
+   gap `6`.
+10. Stability gates remain open on `pending_ack_nodes` and
+    `startup_readiness_blocked` for failover, convergence, and
+    restart-recovery.
+11. Priority recovery no longer selects the previous `sql_write_operations-p1`
+    operation timeout witness in this rerun. The blocked and unresolved
+    partition is `sql_transactions-p1`, semantic state `recovering_in_flight`,
+    with witness operation `e588045c-356c-473a-b553-752423aebc07`.
+12. The `sql_transactions-p1` witness is cache-visible, spread gap `2`, ready
+    distinct node count `1`, required distinct node count `3`,
+    `operation_workflow_owner / workflow_progress / event_driven`, workflow
+    phase `dispatch_pending`, actuation state `persisted_not_dispatched`, next
+    action `wait_for_operation_progress`, workflow step `PENDING`, status
+    `pending`, step age `11225ms`, step timeout `30000ms`, and no serial-wait
+    blockers.
+13. This rerun does not close the earlier `052328Z` `sql_write_operations-p1`
+    PENDING dispatch timeout residual. It shows the representative path is still
+    nondeterministically gated earlier by startup publication ACK, inactive
+    nodes, selected-snapshot coverage, selected missing-published disagreement,
+    and priority-spread recovery in flight. The package remains active.
+
 ## Scope Basis
 
 Roadmap Phase `0.1 - Internal Coherence` maintenance/refactoring scope under
@@ -520,12 +567,19 @@ Closure:
       snapshot coverage.
 - [x] Rerun the representative path after the terminal publication evidence
       review fix and record whether the blocker closes or migrates.
-- [ ] Reconcile the May 5 migrated operation-workflow owner blocker:
-      selected snapshot coverage `3/5`, selected missing published count `2`,
-      priority spread gap `6`, and `sql_write_operations-p1` operation
-      `1a2d029d-5c00-45a8-bd71-ac4e34b318eb` stuck
-      `PENDING/pending` at `operation_workflow_owner / workflow_timeout /
-      timeout_reconcile_due`.
+- [x] Rerun the representative path after the terminal priority-recovery witness
+      review fix and record whether the blocker closes or migrates.
+- [ ] Reconcile the latest May 5 migrated startup/publication owner blocker:
+      active `3/5`, selected snapshot coverage `2/5`, pending ACK count `1`,
+      selected missing published count `2`, priority spread gap `6`, and
+      `sql_transactions-p1` operation
+      `e588045c-356c-473a-b553-752423aebc07` in `PENDING/pending` at
+      `operation_workflow_owner / workflow_progress / event_driven`.
+- [ ] Revisit the prior May 5 post-publication operation-workflow timeout
+      residual once startup/publication convergence reaches that boundary
+      again: `sql_write_operations-p1` operation
+      `1a2d029d-5c00-45a8-bd71-ac4e34b318eb` at
+      `operation_workflow_owner / workflow_timeout / timeout_reconcile_due`.
 
 ## Validation
 
@@ -568,6 +622,13 @@ Closure:
     in the static drift ledger. The fix prevents a lower-coverage terminal
     `needs_operation` reconstruction from overriding same-partition
     `operation_stalled` terminal progress evidence.
+13. Post-`c17c23a9` representative rerun
+    `test-output/reports/rolling-restart-after-terminal-witness-rerun-20260505T060935Z.report.json`
+    failed by the migrated startup/publication pending ACK blocker recorded
+    above. No production code was changed for this documentation-only evidence
+    update.
+14. Documentation-only evidence ledger update touched no JS files. Required
+    whitespace verification `git diff --check` passed.
 
 ## Done When
 
@@ -579,27 +640,26 @@ Closure:
 
 ## Residual Active Blocker
 
-The current blocker is not closed. The fresh May 5 post-review rerun failed
-after `131.7s` with all five nodes reporting active, publication epoch `3`
-`PUBLISHED`, pending ACK count `0`, and recovery protocol state
-`steady_published`. The timeout summary correctly reports
-`publicationConvergence=blocked#recovery=priority_spread_pending#missingPublished=2`.
+The current blocker is not closed. The fresh post-`c17c23a9` May 5 rerun failed
+after `130.5s` and migrated back to startup/publication convergence:
+publication epoch `3` is `ACK_PENDING`, pending ACK count is `1`, pending ACK
+node is `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`, and recovery protocol state is
+`publication_pending`.
 
-Active-gate progress still reports selected snapshot coverage `3/5`, best
-coverage `4/5`, selected published active `3/5`, selected missing published
-count `2`, selected missing published nodes
-`35a891b8-c1a0-5064-9c6e-2acfba61c2a7` and
-`ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`, and priority spread gap `6`.
+Active-gate progress reports active `3/5`, selected snapshot coverage `2/5`,
+selected published active `3/5`, selected missing published count `2`, selected
+missing published nodes `35a891b8-c1a0-5064-9c6e-2acfba61c2a7` and
+`8be8d30f-4499-5eed-865c-71b4d529a67a`, and priority spread gap `6`.
 
-The dominant runtime owner boundary is now `sql_write_operations-p1`:
-operation `1a2d029d-5c00-45a8-bd71-ac4e34b318eb` remains
-`PENDING/pending` with target visibility `absent`, no serial-wait blockers,
-workflow phase `dispatch_pending`, step age `56239ms`, step timeout `30000ms`,
-and required action `reconcile_stale_operation_progress`. The previous
-`042441Z` pending ACK node and `replica_operations-p1` follow-up rebalance
-shape are no longer the terminal selected residual in this rerun.
+The latest selected runtime owner boundary is `sql_transactions-p1`:
+operation `e588045c-356c-473a-b553-752423aebc07` remains `PENDING/pending`,
+semantic state `recovering_in_flight`, cache-visible, workflow phase
+`dispatch_pending`, step age `11225ms`, step timeout `30000ms`, and required
+action `wait_for_operation_progress`. The previous `052328Z`
+`sql_write_operations-p1` PENDING dispatch timeout residual is not closed; this
+rerun did not reach that post-publication boundary.
 
 The next continuation must not broaden the matrix or raise timeouts. It must
-choose the smallest owner slice that reconciles selected snapshot coverage and
-selected missing-published disagreement with the `sql_write_operations-p1`
-PENDING dispatch timeout owner path.
+choose the smallest owner slice that reconciles startup pending ACK, inactive
+nodes, selected snapshot coverage, selected missing-published disagreement, and
+the `sql_transactions-p1` in-flight workflow progress witness.
