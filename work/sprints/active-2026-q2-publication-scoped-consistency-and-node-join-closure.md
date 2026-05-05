@@ -214,10 +214,16 @@ Queued cleanup packages:
    `nodeEndpoints=0`, `partitions=33`, and `services=102`; durable and replayed
    evidence both remain epoch `2` / `PUBLISHED` with priority spread pending,
    replayed recovery protocol state `priority_spread_pending`,
-   `summaryChanged=true`, and `blockedPartitionIdsMatch=false`. Validation
-   for this documentation-only update:
-   `node test/distributed/harness/publication-evidence-replay.js test-output/reports/.playback/rolling-restart-after-140646z-publication-pending-replay-fixture-20260505T145246Z/rolling-restart`
-   passed, and `git diff --check` passed.
+   `summaryChanged=true`, and `blockedPartitionIdsMatch=false`. The focused
+   `145246Z` replay fixture now pins this shape in
+   `test/distributed/harness/__tests__/publication-evidence-replay.test.js`,
+   including owner-RPC/cache-repair availability `missing` and the terminal
+   `control_plane_publications-p1` rebalancer-handoff witness. Validation:
+   `node --test --test-name-pattern "keeps the 145246Z PUBLISHED reachability and rebalancer replay blocked" test/distributed/harness/__tests__/publication-evidence-replay.test.js`,
+   `node --test test/distributed/harness/__tests__/publication-evidence-replay.test.js`,
+   `node test/distributed/harness/publication-evidence-replay.js test-output/reports/.playback/rolling-restart-after-140646z-publication-pending-replay-fixture-20260505T145246Z/rolling-restart`,
+   ESLint, decision-boundary, runtime-grammar, boundary-mode, literal
+   guardrails, and `git diff --check` passed.
 2. Completed trace, fixture, and next active task:
    the
    [Rolling Restart Topology Publication Snapshot Reachability Reentry](../packages/active-20260505-rolling-restart-topology-publication-snapshot-reachability-reentry.md)
@@ -258,16 +264,16 @@ Queued cleanup packages:
    current owner `rebalancer_leader`, boundary `rebalancer_handoff`, wait mode
    `stalled`, actuation `terminal_failed`, and next action
    `schedule_followup_rebalance`; owner-RPC/cache-repair availability is
-   `missing`. Validation for the trace:
-   `node test/distributed/harness/publication-evidence-replay.js test-output/reports/.playback/rolling-restart-after-140646z-publication-pending-replay-fixture-20260505T145246Z/rolling-restart`
-   passed, and `git diff --check` passed.
-   The next unchecked package task is to add the smallest focused
-   `20260505T145246Z` replay fixture or runtime owner probe for selected
-   coverage `2/5`, missing published `3`, replayed priority-spread drift,
-   owner-RPC/cache-repair absence, and
-   `control_plane_publications-p1` rebalancer-handoff terminal-failed evidence,
-   then decide whether the runtime owner is selected-snapshot repair evidence
-   recovery or rebalancer follow-up after terminal failed operation.
+   `missing`. The focused `145246Z` replay fixture is complete and passed the
+   touched replay test file plus syntax, ESLint, guardrails, artifact replay,
+   and `git diff --check`. The next unchecked package task is selected-snapshot
+   repair evidence recovery: selected witness
+   `35a891b8-c1a0-5064-9c6e-2acfba61c2a7` reports `repair_deferred` /
+   `stale_usable` and repair deferred `true`, but owner-RPC/cache-repair replay
+   has no retained deferral row, failed table, read source, or cause chain.
+   Rebalancer follow-up after operation
+   `396c2fda-2639-4b3d-ad8d-7c148dc90936` remains subordinate until that
+   selected-snapshot repair evidence path is pinned.
 3. Harness classification:
    terminal barrier evidence wins over stale playback reconstruction for
    active, restart-recovery, load-readiness, convergence, and quiescence

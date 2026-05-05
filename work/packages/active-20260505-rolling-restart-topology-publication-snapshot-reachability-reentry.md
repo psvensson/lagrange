@@ -637,7 +637,7 @@ Sprint:
       `control_plane_publications-p1` rebalancer-handoff terminal-failed
       evidence, then decide the next smallest focused fixture or runtime owner
       probe.
-- [ ] Add the smallest focused `20260505T145246Z` replay fixture or runtime
+- [x] Add the smallest focused `20260505T145246Z` replay fixture or runtime
       owner probe for the epoch `2` `PUBLISHED` shape: terminal active `4/5`,
       selected coverage `2/5`, pending ACK `0`, missing published `3`,
       selected witness `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`
@@ -649,6 +649,16 @@ Sprint:
       under `rebalancer_handoff`; decide whether the next runtime owner probe
       is selected-snapshot repair evidence recovery or rebalancer follow-up
       after terminal failed operation, without rerunning the broad scenario.
+- [ ] Add the smallest selected-snapshot repair evidence recovery runtime owner
+      probe for the current epoch `2` `PUBLISHED` boundary: selected witness
+      `35a891b8-c1a0-5064-9c6e-2acfba61c2a7` reports
+      `repair_deferred` / `stale_usable` and repair deferred `true`, but replay
+      has owner-RPC/cache-repair availability `missing`, matching deferral
+      count `0`, selected-witness deferral count `0`, no failed tables, no
+      read sources, and no cause chain. Prove whether selected snapshot repair
+      deferral evidence is retained or reconstructed before chasing the
+      subordinate `control_plane_publications-p1` rebalancer-handoff
+      terminal-failed follow-up.
 
 ## May 5 Regression Validation
 
@@ -2438,18 +2448,94 @@ publication-pending boundary did not stay; it migrated to epoch `2`
 selected coverage `2/5`, pending ACK `0`, missing published `3`, priority
 spread gap `5`, replayed priority-spread drift, and a terminal
 `control_plane_publications-p1` rebalancer-handoff witness. The trace does not
-justify a broad scenario rerun yet. The next smallest task is a focused
-`145246Z` replay fixture or runtime owner probe that pins the selected
-snapshot observation, owner-RPC/cache-repair absence, replayed blocked-id
-drift, and terminal rebalancer-handoff evidence before deciding whether the
-runtime owner is selected-snapshot repair evidence recovery or rebalancer
-follow-up after terminal failed operation.
+justify a broad scenario rerun yet. This trace led to the focused `145246Z`
+replay fixture below, which pins the selected snapshot observation,
+owner-RPC/cache-repair absence, replayed blocked-id drift, and terminal
+rebalancer-handoff evidence before selecting the next runtime owner probe.
 
 Validation:
 
 1. `node test/distributed/harness/publication-evidence-replay.js test-output/reports/.playback/rolling-restart-after-140646z-publication-pending-replay-fixture-20260505T145246Z/rolling-restart`
    passed.
 2. `git diff --check` passed.
+
+## May 5 `145246Z` Replay Fixture
+
+The next package task added a focused replay fixture in
+`test/distributed/harness/__tests__/publication-evidence-replay.test.js`:
+`keeps the 145246Z PUBLISHED reachability and rebalancer replay blocked`.
+It did not rerun the broad distributed scenario.
+
+Fixture shape:
+
+1. Publication epoch `2` is `PUBLISHED` with pending ACK count `0`, selected
+   published active nodes
+   `11601fe0-72d6-5853-8590-ec2881853e72` and
+   `7493b0ab-a054-5fad-a91b-5e331db29304`, and selected missing published
+   nodes `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`,
+   `8be8d30f-4499-5eed-865c-71b4d529a67a`, and
+   `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`.
+2. Terminal active-gate evidence is active `4/5`, inactive `1`, selected
+   coverage `2/5`, selected witness
+   `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`, and selected reachability timeout.
+3. The selected witness keeps the owner-observation contract:
+   `repair_deferred` / `stale_usable`, contract state `pending`, refresh
+   state `idle`, next action `wait`, repair deferred `true`, and reason codes
+   `cache_stale_watermark`, `discovery_node_coverage_gap`, and
+   `stale_replica_operations_in_flight`.
+4. Row replay stays epoch `2` / `PUBLISHED`, reports row counts `nodes=5`,
+   `nodeEndpoints=0`, `partitions=33`, and `services=102`, and preserves
+   `summaryChanged=true`, `blockedPartitionIdsMatch=false`, durable blocked
+   partition ids empty, and replayed blocked partition ids
+   `control_plane_publications-p1`, `replica_operations-p1`, and
+   `sql_write_operations-p1`.
+5. Owner-RPC/cache-repair availability is explicitly `missing`: matching
+   deferral count `0`, selected-witness deferral count `0`, no failed tables,
+   no read sources, and no cause chain.
+6. The dominant priority-recovery witness remains
+   `control_plane_publications-p1` operation
+   `396c2fda-2639-4b3d-ad8d-7c148dc90936` as `blocked_unclassified` with
+   latest workflow step `FAILED`, latest status `failed`, current owner
+   `rebalancer_leader`, actuation `terminal_failed`, boundary
+   `rebalancer_handoff`, wait mode `stalled`, and next action
+   `schedule_followup_rebalance`. The serial-wait witnesses on
+   `sql_transaction_participants-p1` and `sql_write_operations-p1` remain
+   supporting evidence behind `sql_transactions-p1`.
+
+Decision: the next runtime owner probe is selected-snapshot repair evidence
+recovery, not rebalancer follow-up yet. The fixture pins an explicit selected
+snapshot `repair_deferred` owner contract while the replay evidence has lost
+the owner-RPC/cache-repair deferral row. The rebalancer terminal-failed
+witness is real, but it remains subordinate until the selected snapshot repair
+evidence path can prove whether repair deferral evidence is retained,
+reconstructed, or legitimately unavailable.
+
+Validation:
+
+1. `node --check test/distributed/harness/publication-evidence-replay.js`
+   passed.
+2. `node --check test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+   passed.
+3. `node --test --test-name-pattern "keeps the 145246Z PUBLISHED reachability and rebalancer replay blocked" test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+   passed.
+4. `node --test test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+   passed: `7` tests, `1` suite.
+5. `node test/distributed/harness/publication-evidence-replay.js test-output/reports/.playback/rolling-restart-after-140646z-publication-pending-replay-fixture-20260505T145246Z/rolling-restart`
+   passed and reported `driftClassification=replayed_blocked`,
+   `summaryChanged=true`, and `blockedPartitionIdsMatch=false`.
+6. `npx eslint test/distributed/harness/__tests__/publication-evidence-replay.test.js test/distributed/harness/publication-evidence-replay.js`
+   passed.
+7. `node scripts/check-guideline-decision-boundaries.js test/distributed/harness/__tests__/publication-evidence-replay.test.js test/distributed/harness/publication-evidence-replay.js`
+   reported `0` decision-boundary guideline violations.
+8. `node scripts/check-runtime-grammar-contracts.js test/distributed/harness/__tests__/publication-evidence-replay.test.js test/distributed/harness/publication-evidence-replay.js`
+   reported `0` runtime-grammar-contract violations.
+9. `node scripts/check-guideline-boundary-mode-contracts.js test/distributed/harness/__tests__/publication-evidence-replay.test.js test/distributed/harness/publication-evidence-replay.js`
+   reported `0` boundary-mode-contract hotspot violations.
+10. `node scripts/check-guideline-literals.js test/distributed/harness/__tests__/publication-evidence-replay.test.js test/distributed/harness/publication-evidence-replay.js`
+    reported `0` new and `0` inherited literal-guideline violations.
+11. `node scripts/check-guideline-literals.js --include-tests test/distributed/harness/__tests__/publication-evidence-replay.test.js test/distributed/harness/publication-evidence-replay.js`
+    reported `0` new and `0` inherited literal-guideline violations.
+12. `git diff --check` passed.
 
 ## Validation
 
@@ -2512,10 +2598,13 @@ The `20260505T123850Z` trace, focused ACK-pending operation-workflow timeout
 fixture, `20260505T132033Z` representative rerun, `20260505T132033Z`
 post-ACK `PUBLISHED` missing-active selected-snapshot trace and replay fixture,
 `20260505T140646Z` representative rerun, `20260505T140646Z` epoch `5`
-`OPEN` publication-pending trace, replay fixture, representative rerun, and
+`OPEN` publication-pending trace, replay fixture, representative rerun,
 `20260505T145246Z` epoch `2` `PUBLISHED` missing-active selected-snapshot
-reachability trace are complete. The current next unchecked task is to add the
-smallest focused `20260505T145246Z` replay fixture or runtime owner probe for
-the selected coverage `2/5`, missing published `3`, replayed priority-spread
-drift, owner-RPC/cache-repair absence, and
-`control_plane_publications-p1` rebalancer-handoff terminal-failed evidence.
+reachability trace, and `20260505T145246Z` replay fixture are complete. The
+current next unchecked task is selected-snapshot repair evidence recovery: the
+selected witness reports `repair_deferred` / `stale_usable` and repair
+deferred `true`, but replay owner-RPC/cache-repair availability is `missing`
+with no deferral row, failed tables, read sources, or cause chain. The
+`control_plane_publications-p1` rebalancer-handoff terminal-failed operation
+remains real supporting evidence, but should not be promoted ahead of the
+missing selected-snapshot repair evidence until that owner path is pinned.
