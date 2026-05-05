@@ -292,8 +292,8 @@ const PUBLICATION_EVIDENCE_REPLAY_REBALANCER_FOLLOW_UP_EXECUTION_STATE =
   });
 const PUBLICATION_EVIDENCE_REPLAY_REBALANCER_MOVE_LIMIT_STATE = Object.freeze({
   BUDGET_BLOCKED: 'budget_blocked',
-  MOVE_COUNT_AVAILABLE: 'move_count_available',
   MISSING: 'missing',
+  PLANNED_MOVE_COUNT_AVAILABLE: 'planned_move_count_available',
 });
 const PUBLICATION_EVIDENCE_REPLAY_REBALANCER_EXECUTION_GAP_STATE = Object.freeze({
   ADMISSION_DENIED: 'admission_denied',
@@ -1383,17 +1383,48 @@ function isPostTerminalFeasibilityFilterLog(
   );
 }
 
+function isPrecedingCapacityFeasibilityFilterLog(
+  evidence,
+  postTerminalFeasibilityFilter,
+) {
+  return (
+    evidence.message === STORAGE_CAPACITY_LOG_MSG.CAPACITY_FILTER_APPLIED &&
+    evidence.nodeId === postTerminalFeasibilityFilter.nodeId &&
+    evidence.timeMs < postTerminalFeasibilityFilter.timeMs
+  );
+}
+
+function selectRebalancerAdmissionBatchStartTimeMs(
+  logEvidence = [],
+  postTerminalFeasibilityFilter = {},
+) {
+  return selectLatestRebalancerHandoffLog(
+    logEvidence.filter((evidence) =>
+      isPrecedingCapacityFeasibilityFilterLog(
+        evidence,
+        postTerminalFeasibilityFilter,
+      ),
+    ),
+  ).timeMs;
+}
+
 function isPostTerminalAdmissionLog(
   evidence,
   terminalFailure,
-  postTerminalRebalance,
+  postTerminalFeasibilityFilter,
+  admissionBatchStartTimeMs,
   message,
 ) {
+  const admissionWindowStartTimeMs = Math.max(
+    terminalFailure.timeMs,
+    admissionBatchStartTimeMs,
+  );
   return (
+    postTerminalFeasibilityFilter.timeMs > NUM.ZERO &&
     evidence.message === message &&
-    evidence.nodeId === postTerminalRebalance.nodeId &&
-    evidence.timeMs > terminalFailure.timeMs &&
-    evidence.timeMs <= postTerminalRebalance.timeMs
+    evidence.nodeId === postTerminalFeasibilityFilter.nodeId &&
+    evidence.timeMs > admissionWindowStartTimeMs &&
+    evidence.timeMs <= postTerminalFeasibilityFilter.timeMs
   );
 }
 
@@ -1576,7 +1607,7 @@ function resolveRebalancerMoveLimitEvidenceState(evidence = {}) {
     Object.freeze({
       state:
         PUBLICATION_EVIDENCE_REPLAY_REBALANCER_MOVE_LIMIT_STATE
-          .MOVE_COUNT_AVAILABLE,
+          .PLANNED_MOVE_COUNT_AVAILABLE,
       matches: (moveLimitEvidence) =>
         moveLimitEvidence.postTerminalRebalanceMoveCount > NUM.ZERO,
     }),
@@ -1694,11 +1725,17 @@ function summarizeRebalancerFollowUpHandoff({
       ),
     ),
   );
+  const postTerminalAdmissionBatchStartTimeMs =
+    selectRebalancerAdmissionBatchStartTimeMs(
+      logEvidence,
+      postTerminalFeasibilityFilter,
+    );
   const postTerminalAdmissionAllowed = logEvidence.filter((evidence) =>
     isPostTerminalAdmissionLog(
       evidence,
       terminalFailure,
-      postTerminalRebalance,
+      postTerminalFeasibilityFilter,
+      postTerminalAdmissionBatchStartTimeMs,
       STORAGE_CAPACITY_LOG_MSG.ADMISSION_ALLOWED,
     ),
   );
@@ -1707,7 +1744,8 @@ function summarizeRebalancerFollowUpHandoff({
       isPostTerminalAdmissionLog(
         evidence,
         terminalFailure,
-        postTerminalRebalance,
+        postTerminalFeasibilityFilter,
+        postTerminalAdmissionBatchStartTimeMs,
         STORAGE_CAPACITY_LOG_MSG.ADMISSION_DENIED,
       ),
     ),
