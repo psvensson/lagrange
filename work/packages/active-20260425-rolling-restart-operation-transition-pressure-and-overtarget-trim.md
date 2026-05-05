@@ -146,6 +146,64 @@ May 4 serial-wait evidence continuation:
    been rerun after this diagnostic-evidence slice, and the publication
    summary versus active-gate missing-published disagreement remains open.
 
+May 5 canonical serial-wait evidence rerun:
+
+1. Fresh representative rerun:
+   `test-output/reports/rolling-restart-serial-wait-evidence-rerun-20260505T042441Z.report.json`.
+2. Companion log:
+   `test-output/reports/rolling-restart-serial-wait-evidence-rerun-20260505T042441Z.log`.
+3. Failure bundle:
+   `test-output/reports/.playback/rolling-restart-serial-wait-evidence-rerun-20260505T042441Z/rolling-restart/failure-bundle.json`.
+4. Triage summary:
+   `test-output/reports/.playback/rolling-restart-serial-wait-evidence-rerun-20260505T042441Z/rolling-restart/triage-summary.md`.
+5. Result: failed, `0/1` passed after `189.4s`.
+6. Terminal barrier:
+   `Not all nodes reached ACTIVE state within 120000ms`.
+7. Root cause class migrated back to `startup`; dominant reason is
+   `BOOTSTRAP_PHASE_INCOMPLETE`; failure class is
+   `publication_convergence_blocked`.
+8. Active gate progress is active `3/5`, selected snapshot coverage `2/5`,
+   publication `ACK_PENDING`, pending ACK count `1`, missing published count
+   `2`, priority spread pending with gap `9`, and no progress for six
+   coordinator cycles.
+9. Publication convergence reports epoch `3`, status `ACK_PENDING`,
+   recovery protocol state `publication_pending`, pending ACK node
+   `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`, blocked node count `0`, and
+   normalized missing published count `0`.
+10. Active-gate publication view still reports selected missing published
+    nodes `8be8d30f-4499-5eed-865c-71b4d529a67a` and
+    `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`, with publication disagreement
+    across three selected-snapshot reporters.
+11. Stability gates remain open: failover on
+    `pending_ack_nodes|startup_readiness_blocked`, convergence on
+    `pending_ack_nodes|priority_spread_pending|startup_readiness_blocked`, and
+    restart recovery on
+    `pending_ack_nodes|priority_spread_pending|startup_readiness_blocked`.
+12. Priority recovery blocked and unresolved partitions are now
+    `replica_operations-p1` and `sql_write_operations-p1`.
+13. `replica_operations-p1` is `blocked_unclassified`, cache-visible,
+    terminal `FAILED`, owned by `rebalancer_leader`, and requires
+    `schedule_followup_rebalance` at the `rebalancer_handoff` boundary.
+14. `sql_write_operations-p1` is the serial-wait witness:
+    semantic state `needs_operation`, progress class
+    `priority_operation_serial_wait`, boundary `workflow_progress`, wait mode
+    `event_driven`, no current operation IDs, correlation key
+    `sql_write_operations-p1|3|operation_unknown`, serial-wait operation
+    `1ba3f99e-e1e6-4c15-b09d-d65364b60e22`, and serial-wait partition
+    `sql_transaction_participants-p1`.
+15. `sql_transactions-p1`, the May 4 selected serial-wait partition, is now
+    `spread_satisfied_in_flight` with operation
+    `10b5432a-61f1-4b26-b735-7fc731b7997e`, workflow step `CREATING`, and
+    target visibility `active_operational`.
+16. The earlier duplicate timestamped rerun is not canonical evidence for this
+    package. The canonical fresh evidence is the
+    `20260505T042441Z` report and playback bundle above.
+17. This package remains active. The post-active operation-transition loop is
+    not proven closed because the representative path migrated earlier again:
+    startup/publication pending ACK, selected-snapshot coverage `2/5`,
+    active `3/5`, one pending ACK node, and the `replica_operations-p1`
+    follow-up rebalance residual must be reconciled before broad matrix work.
+
 ## Scope Basis
 
 Roadmap Phase `0.1 - Internal Coherence` maintenance/refactoring scope under
@@ -284,10 +342,13 @@ Closure:
       converged enough for safe voter removal.
 - [x] Preserve serial-wait operation and partition evidence without folding it
       into current-partition operation identity.
-- [ ] Close or migrate the residual representative blocker after the
-      `sql_transactions-p1` `operation_unknown` serial-wait witness,
-      publication summary versus active-gate missing-published disagreement,
-      and retained retryable dispatch evidence are reconciled.
+- [x] Rerun the representative path after serial-wait metadata preservation and
+      record the migrated owner evidence.
+- [ ] Reconcile the May 5 startup/publication pending ACK blocker, selected
+      snapshot coverage `2/5`, active `3/5`, pending ACK node
+      `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`, and
+      `replica_operations-p1` follow-up rebalance residual before closing this
+      package.
 
 ## Validation
 
@@ -309,11 +370,11 @@ Closure:
 6. Non-literal static guardrails for touched files passed as recorded in the
    static drift ledger; full file-scoped literal guard closure remains open
    with a clean diff-aware added-line slice.
-7. Representative `rolling-restart --fast-local` rerun failed by residual
-   blocker and kept this package active.
+7. Representative `rolling-restart --fast-local` reruns failed by residual
+   blockers and kept this package active.
 8. Serial-wait evidence slice checks passed as recorded in the static drift
-   ledger. The representative path still needs a rerun after this metadata
-   preservation change.
+   ledger. The representative path has been rerun with canonical May 5
+   evidence and migrated back to startup/publication pending ACK.
 
 ## Done When
 
@@ -325,25 +386,31 @@ Closure:
 
 ## Residual Active Blocker
 
-The current blocker is not closed. The final May 4 rerun fails at startup
-ACTIVE convergence with active `4/5`, snapshot coverage `4/5`, and one
-degraded node reporting `OBSERVABILITY_BACKLOG` plus
-`PRIORITY_CONTROL_PLANE_RECOVERY_PENDING`. Normalized publication reports epoch
-`3` as `PUBLISHED`, pending ACK count `0`, and missing published count `0`,
-while active-gate progress reports selected published active `3/5`, missing
-published count `2`, and publication disagreement across four nodes.
+The current blocker is not closed. The canonical May 5 rerun fails at startup
+ACTIVE convergence with active `3/5`, selected snapshot coverage `2/5`, and
+publication epoch `3` stuck `ACK_PENDING`. Publication convergence reports one
+pending ACK node, `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`, blocked node count
+`0`, and normalized missing published count `0`. Active-gate progress reports
+pending ACK count `1`, selected published active `3/5`, missing published
+count `2`, missing published nodes
+`8be8d30f-4499-5eed-865c-71b4d529a67a` and
+`ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`, priority spread gap `9`, and no
+progress for six coordinator cycles.
 
-The dominant priority-recovery witness is now `sql_transactions-p1` as
-`needs_operation / priority_operation_serial_wait` at
-`operation_workflow_owner / workflow_progress / event_driven`, with next action
-`wait_for_operation_progress`, correlation key
-`sql_transactions-p1|3|operation_unknown`, no operation IDs, workflow source
-`none`, latest workflow step `unavailable`, and latest status `unavailable`.
-The serial-wait evidence slice now preserves blocking serial-lane operation
-and partition metadata for future failure bundles, while intentionally keeping
-the current partition operation identity empty. The next continuation must
-rerun the representative path, use the retained serial-wait metadata to
-reconcile the waiting partition against sibling retryable operation-dispatch
-evidence, and reconcile the publication summary versus active-gate
-missing-published disagreement before recording publication or
-selected-snapshot closure.
+The serial-wait evidence preservation worked: the bundle now exposes
+`sql_write_operations-p1` as `needs_operation /
+priority_operation_serial_wait`, with no current operation IDs and explicit
+serial-wait metadata pointing to operation
+`1ba3f99e-e1e6-4c15-b09d-d65364b60e22` on
+`sql_transaction_participants-p1`. The previous May 4
+`sql_transactions-p1` serial-wait witness has moved to
+`spread_satisfied_in_flight` with operation
+`10b5432a-61f1-4b26-b735-7fc731b7997e`. A second priority residual remains:
+`replica_operations-p1` is cache-visible, terminal `FAILED`,
+`blocked_unclassified`, owned by `rebalancer_leader`, and requires
+`schedule_followup_rebalance`.
+
+The next continuation must not broaden the matrix or raise timeouts. It must
+choose the smallest owner slice that reconciles startup publication pending ACK
+and selected-snapshot coverage with the retained serial-wait metadata and the
+`replica_operations-p1` follow-up rebalance residual.

@@ -27,17 +27,21 @@ dominant blocker. Earlier artifacts showed:
 3. readiness/planning same-epoch contradictions are closed
 4. the remaining failures are runtime liveness and pressure failures
 
-The latest May 4 operation-transition evidence records a publication summary
-versus active-gate missing-published contradiction that must stay open until
-reconciled.
+The latest canonical May 5 operation-transition rerun moved the representative
+path earlier again: startup ACTIVE convergence is blocked by publication epoch
+`3` `ACK_PENDING`, one pending ACK node, selected snapshot coverage `2/5`, and
+active `3/5`. The publication summary versus active-gate missing-published
+disagreement still stays open until reconciled.
 
 The active failure chain is now:
 
-1. critical `REPLACE` operations remain in flight at convergence timeout
-2. source removal waits on explicit replacement leader ownership
-3. control-plane write pressure and transient transport churn delay progress
-4. harness classification can still describe the symptom with stale
-   publication-oriented labels
+1. startup publication pending ACK blocks ACTIVE convergence
+2. selected snapshot coverage and published-active membership disagree
+3. priority recovery retains a serial-wait witness and a terminal failed
+   `replica_operations-p1` follow-up rebalance residual
+4. control-plane write pressure and transient transport churn remain relevant
+   context, but broad matrix work stays out of scope until the representative
+   boundary is stable
 
 This sprint keeps the old filename for continuity with the active branch, but
 the execution scope is now runtime stability and harness determinism.
@@ -94,8 +98,9 @@ priority-recovery actuation package, the operation-workflow ACK reentry
 package, and the startup snapshot reachability workflow-progress package
 executed. The priority recovery workflow transition-deferred package then
 closed by migration into operation workflow timeout reconciliation. The current
-operation-transition package remains active after the May 4 owner fixture and
-representative rerun because residual closure inventory is incomplete.
+operation-transition package remains active after the May 5 canonical rerun
+because the representative path migrated to startup/publication pending ACK and
+the residual closure inventory is incomplete.
 
 All final consistency recommendation packages are complete or queued outside
 the current execution path.
@@ -122,49 +127,46 @@ Queued cleanup packages:
 ## Remaining Work Summary
 
 1. Current execution blocker:
-   The latest May 4 representative rerun is
-   `test-output/reports/rolling-restart-operation-transition-pressure-overtarget-trim-20260504-final.report.json`.
-   The owner fixture proved timeout reconciliation consumes cache-visible
-   active target progress and defers unsafe over-target source trim, so no
-   production runtime change was made for that slice. The representative path
-   still fails with
-   `priority_recovery_workflow_progress_transition_deferred`: publication
-   epoch `3` is `PUBLISHED`, normalized pending ACK count is `0`, normalized
-   missing published count is `0`, active-gate progress reports active `4/5`,
-   selected snapshot coverage `4/5`, selected published active `3/5`, missing
-   published `2`, and four nodes with publication disagreement. The canonical
-   witness is `operation_workflow_owner / workflow_progress / event_driven`
-   for `sql_transactions-p1`, with next action
-   `wait_for_operation_progress`, no operation IDs, workflow source `none`,
-   latest workflow step `unavailable`, latest status `unavailable`, semantic
-   state `needs_operation`, and progress class
-   `priority_operation_serial_wait`. Playback logs retain retryable
-   operation-dispatch deferral witnesses for other priority partitions, but
-   those are not the final dominant selected partition.
+   The latest canonical May 5 representative rerun is
+   `test-output/reports/rolling-restart-serial-wait-evidence-rerun-20260505T042441Z.report.json`.
+   Result: failed, `0/1` passed after `189.4s`; terminal barrier:
+   `Not all nodes reached ACTIVE state within 120000ms`. The failure bundle is
+   `test-output/reports/.playback/rolling-restart-serial-wait-evidence-rerun-20260505T042441Z/rolling-restart/failure-bundle.json`;
+   the triage summary is
+   `test-output/reports/.playback/rolling-restart-serial-wait-evidence-rerun-20260505T042441Z/rolling-restart/triage-summary.md`.
+   The representative path migrated back to startup/publication convergence:
+   root cause class `startup`, dominant reason `BOOTSTRAP_PHASE_INCOMPLETE`,
+   failure class `publication_convergence_blocked`, publication epoch `3`
+   `ACK_PENDING`, recovery protocol state `publication_pending`, one pending
+   ACK node `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`, blocked node count `0`,
+   and normalized missing published count `0`.
 2. Next active investigation:
    continue
    [Rolling Restart Operation Transition Pressure And Over-Target Trim](../packages/active-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md)
-   by reconciling why `sql_transactions-p1` has only an `operation_unknown`
-   serial-wait witness while sibling priority partitions have in-flight or
-   retry-deferred operation evidence. The continuation must also reconcile the
-   publication summary versus active-gate missing-published disagreement
-   instead of preserving publication and selected-snapshot closure.
+   by reconciling active gate progress active `3/5`, selected snapshot coverage
+   `2/5`, pending ACK count `1`, missing published count `2`, selected missing
+   published nodes `8be8d30f-4499-5eed-865c-71b4d529a67a` and
+   `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`, priority spread gap `9`, and no
+   progress for six coordinator cycles. The smallest next owner slice must also
+   account for `replica_operations-p1` as cache-visible terminal `FAILED` /
+   `blocked_unclassified` requiring `schedule_followup_rebalance`, and
+   `sql_write_operations-p1` as `needs_operation /
+   priority_operation_serial_wait` waiting behind serial-lane operation
+   `1ba3f99e-e1e6-4c15-b09d-d65364b60e22` on
+   `sql_transaction_participants-p1`.
 3. Harness classification:
    terminal barrier evidence wins over stale playback reconstruction for
    active, restart-recovery, load-readiness, convergence, and quiescence
    failures. Earlier publication ACK and missing-published drift fixes remain
-   historical proof, but current May 4 evidence is contradictory: normalized
-   publication reports epoch `3` as `PUBLISHED` with pending ACK count `0` and
-   missing published count `0`, while active-gate progress reports selected
-   published active `3/5`, missing published `2`, active `4/5`, and selected
-   snapshot coverage `4/5`. Do not treat publication, missing-published, or
+   historical proof, but current May 5 evidence is contradictory in a new way:
+   normalized publication reports missing published count `0`, while active
+   gate progress reports selected missing published count `2` and selected
+   snapshot coverage `2/5`. Do not treat publication, missing-published, or
    startup selected-snapshot reachability as closed until one owner path
-   explains that disagreement. The stale publication-
-   classification branch is closed for priority-spread publication closure
-   records; the startup seed-contact, active-gate actuation, operation-workflow
-   ACK, startup snapshot reachability, and priority transition-deferred
-   boundaries are now named. The latest terminal owner boundary is priority
-   recovery workflow progress serial wait on `sql_transactions-p1`.
+   explains that disagreement. The latest terminal owner boundary is startup
+   publication pending ACK plus priority recovery serial wait on
+   `sql_write_operations-p1`, not the previous May 4 `sql_transactions-p1`
+   witness.
 4. Final consistency:
    the final leader-map consistency package is complete for this sprint
    because the rerun moved to a freshly split non-final blocker.
@@ -526,6 +528,28 @@ Current secondary evidence:
     partition counts are `0`, and `needs_operation` is empty.
 54. The active package is now
     [Rolling Restart Quiescence Stale In Flight Canonical Blocker](../packages/done-20260430-rolling-restart-quiescence-stale-inflight-canonical-blocker.md).
+55. The May 4 operation-transition package re-entry and owner fixtures moved
+    the representative path through transition-deferred timeout evidence and
+    then exposed serial-wait metadata gaps. Those slices are recorded in
+    [Rolling Restart Operation Transition Pressure And Over-Target Trim](../packages/active-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md).
+56. The canonical May 5 rerun after serial-wait metadata preservation is
+    `test-output/reports/rolling-restart-serial-wait-evidence-rerun-20260505T042441Z.report.json`.
+    It failed after `189.4s` at startup ACTIVE convergence with active `3/5`,
+    selected snapshot coverage `2/5`, publication epoch `3` `ACK_PENDING`,
+    pending ACK node `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`, priority spread
+    gap `9`, and no progress for six coordinator cycles.
+57. Priority recovery residuals in that May 5 bundle are
+    `replica_operations-p1` as terminal `FAILED` /
+    `blocked_unclassified` requiring `schedule_followup_rebalance`, and
+    `sql_write_operations-p1` as `needs_operation /
+    priority_operation_serial_wait` waiting behind serial-lane operation
+    `1ba3f99e-e1e6-4c15-b09d-d65364b60e22` on
+    `sql_transaction_participants-p1`.
+58. The active package remains
+    [Rolling Restart Operation Transition Pressure And Over-Target Trim](../packages/active-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md)
+    until startup/publication pending ACK, selected-snapshot coverage, retained
+    serial-wait evidence, and the `replica_operations-p1` follow-up rebalance
+    residual are reconciled or split into a newly named owner boundary.
 
 ## Progress Grammar
 
