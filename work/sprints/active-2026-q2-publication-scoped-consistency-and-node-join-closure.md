@@ -216,6 +216,8 @@ Queued cleanup packages:
    `nodeEndpoints=0`, `partitions=33`, and `services=104`; durable and
    replayed evidence both remain epoch `3` / `PUBLISHED` with priority spread
    pending, `summaryChanged=true`, and `blockedPartitionIdsMatch=false`.
+   `git diff --check 4a0be30ced9b76bad07220c9f0a1d5fb294026ac^ 4a0be30ced9b76bad07220c9f0a1d5fb294026ac`
+   passed for the recorded `175220Z` validation update.
 2. Completed trace, fixture, and next active task:
    the
    [Rolling Restart Topology Publication Snapshot Reachability Reentry](../packages/active-20260505-rolling-restart-topology-publication-snapshot-reachability-reentry.md)

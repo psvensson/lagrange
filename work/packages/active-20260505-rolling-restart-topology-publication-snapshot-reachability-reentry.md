@@ -3187,6 +3187,8 @@ Validation:
 1. Representative command above: expected failure, `0/1` passed after `130.2s`.
 2. `node test/distributed/harness/publication-evidence-replay.js test-output/reports/.playback/rolling-restart-after-pre-execution-handoff-diagnostic-20260505T175220Z/rolling-restart`
    passed and reported `driftClassification=replayed_blocked`.
+3. `git diff --check 4a0be30ced9b76bad07220c9f0a1d5fb294026ac^ 4a0be30ced9b76bad07220c9f0a1d5fb294026ac`
+   passed.
 
 ## Validation
 
