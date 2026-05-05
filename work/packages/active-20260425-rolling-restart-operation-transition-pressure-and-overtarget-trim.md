@@ -277,6 +277,29 @@ May 5 terminal publication evidence rerun after classification fixes:
     disagreement, and the `sql_write_operations-p1` PENDING dispatch timeout
     owner boundary.
 
+May 5 terminal priority-recovery witness classification fix:
+
+1. Verified the review/execution handoff issue in the ACTIVE timeout terminal
+   progress selector: a later lower-coverage poll can report the same
+   partition as `needs_operation` /
+   `eligible_but_no_operation_created` after the last meaningful selected
+   snapshot reported `operation_stalled` /
+   `operation_created_but_no_step_transitions`.
+2. `_waitForAllActive()` terminal progress selection now compares canonical
+   priority-recovery progress-class partition ids and semantic-state partition
+   ids, detects same-partition regression from operation-stalled evidence to
+   needs-operation evidence, and keeps the last meaningful stalled witness
+   when selected snapshot coverage also regressed.
+3. Added focused part-6 harness regression coverage proving the timeout
+   summary and diagnostics retain `operation_stalled` and
+   `operation_created_but_no_step_transitions`, and do not replace them with
+   `needs_operation` or `eligible_but_no_operation_created`.
+4. This is a harness classification fix only. The package remains active
+   because the representative runtime owner blocker recorded above is still
+   `sql_write_operations-p1` PENDING dispatch timeout after publication
+   closure, plus selected snapshot coverage and selected missing-published
+   disagreement.
+
 ## Scope Basis
 
 Roadmap Phase `0.1 - Internal Coherence` maintenance/refactoring scope under
@@ -449,6 +472,31 @@ Closure:
       evidence review fix reports `0` literal-guideline violations on added
       lines.
 - [x] May 5 terminal publication evidence `git diff --check` passed.
+- [x] May 5 terminal priority-recovery witness review fix `node --check`
+      passed for `test/distributed/harness/cluster-segment-7.js` and
+      `test/distributed/harness/__tests__/cluster.test-part-6.js`.
+- [x] May 5 terminal priority-recovery witness focused regression passed:
+      `./node_modules/.bin/tap test/distributed/harness/__tests__/cluster.test-part-6.js --grep "operation-stalled terminal progress"`.
+      The selected TAP subtest uses Node assertions and reports `ok` with
+      `1..0`.
+- [x] May 5 terminal priority-recovery witness full TAP check passed:
+      `./node_modules/.bin/tap test/distributed/harness/__tests__/cluster.test-part-6.js`
+      reported `38` tests passed.
+- [x] May 5 terminal priority-recovery witness non-literal guardrails passed:
+      `node scripts/check-guideline-decision-boundaries.js ...` and
+      `node scripts/check-runtime-grammar-contracts.js ...` both reported `0`
+      violations across the two touched JS files.
+- [ ] May 5 terminal priority-recovery witness exact touched-file literal
+      guard remains file-scoped red:
+      `node scripts/check-guideline-literals.js --include-tests test/distributed/harness/cluster-segment-7.js test/distributed/harness/__tests__/cluster.test-part-6.js`
+      reports `319` new literal-guideline violations and `0` inherited
+      baseline violations. Top residual files are existing whole-file
+      test/harness fixture debt: `cluster.test-part-6.js` `289` and
+      `cluster-segment-7.js` `30`.
+- [x] Diff-aware added-line filtering for the May 5 terminal
+      priority-recovery witness review fix reports `0` literal-guideline
+      violations on added lines.
+- [x] May 5 terminal priority-recovery witness `git diff --check` passed.
 
 ## Implementation Tasks
 
@@ -467,6 +515,9 @@ Closure:
 - [x] Preserve the selected terminal ACTIVE progress snapshot as publication
       summary evidence when the final timeout poll regresses to stale-ready
       publication state.
+- [x] Preserve operation-stalled terminal priority-recovery evidence when a
+      later same-partition needs-operation poll regresses with lower selected
+      snapshot coverage.
 - [x] Rerun the representative path after the terminal publication evidence
       review fix and record whether the blocker closes or migrates.
 - [ ] Reconcile the May 5 migrated operation-workflow owner blocker:
@@ -513,6 +564,10 @@ Closure:
     `test-output/reports/rolling-restart-terminal-publication-evidence-rerun-20260505T052328Z.report.json`
     failed by the migrated runtime owner blocker recorded above. No production
     code was changed for this documentation-only evidence update.
+12. Terminal priority-recovery witness review-fix coverage passed as recorded
+    in the static drift ledger. The fix prevents a lower-coverage terminal
+    `needs_operation` reconstruction from overriding same-partition
+    `operation_stalled` terminal progress evidence.
 
 ## Done When
 

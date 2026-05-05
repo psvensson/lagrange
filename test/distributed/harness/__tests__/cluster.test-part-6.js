@@ -31,9 +31,11 @@ import {
 } from './cluster-test-helpers.js';
 
 const {
+  ACTIVE_WAIT_PRIORITY_RECOVERY_PROGRESS_CLASS,
   ACTIVE_WAIT_PUBLICATION_STATUS_ACK_PENDING,
   ACTIVE_WAIT_PUBLICATION_STATUS_PUBLISHED,
   formatPublicationConvergenceGate,
+  PRIORITY_RECOVERY_SEMANTIC_STATE,
   summarizePriorityRecoveryProgressClasses,
 } = CLUSTER_SEGMENT_2;
 
@@ -194,6 +196,79 @@ const PUBLICATION_GATE_SUMMARY_EXPECTED =
   '#missingPublished=2';
 const PUBLICATION_GATE_SUMMARY_TEST_NAME =
   'Unit: formatPublicationConvergenceGate blocks ready with open debt';
+const TERMINAL_PRIORITY_REGRESSION_TEST_NAME =
+  'Unit: _waitForAllActive preserves operation-stalled terminal progress' +
+  ' when later coverage regresses';
+const TERMINAL_PRIORITY_REGRESSION_CLUSTER_SIZE = 5;
+const TERMINAL_PRIORITY_REGRESSION_TIMEOUT_MS = 5;
+const TERMINAL_PRIORITY_REGRESSION_DOCKER_SOCKET = '/var/run/docker.sock';
+const TERMINAL_PRIORITY_REGRESSION_IMAGE = 'distributed-db:test';
+const TERMINAL_PRIORITY_REGRESSION_ACTIVE_STATE = 'active';
+const TERMINAL_PRIORITY_REGRESSION_ADMIN_HEALTH = 'admin_health';
+const TERMINAL_PRIORITY_REGRESSION_PUBLICATION_STATUS = 'PUBLISHED';
+const TERMINAL_PRIORITY_REGRESSION_SEED_ID =
+  'priority-regression-seed';
+const TERMINAL_PRIORITY_REGRESSION_JOINER_A_ID =
+  'priority-regression-joiner-a';
+const TERMINAL_PRIORITY_REGRESSION_JOINER_B_ID =
+  'priority-regression-joiner-b';
+const TERMINAL_PRIORITY_REGRESSION_JOINER_C_ID =
+  'priority-regression-joiner-c';
+const TERMINAL_PRIORITY_REGRESSION_JOINER_D_ID =
+  'priority-regression-joiner-d';
+const TERMINAL_PRIORITY_REGRESSION_PARTITION_ID =
+  'sql_write_operations-p1';
+const TERMINAL_PRIORITY_REGRESSION_OPERATION_ID =
+  'priority-regression-operation';
+const TERMINAL_PRIORITY_REGRESSION_UNKNOWN_OPERATION_ID =
+  'operation_unknown';
+const TERMINAL_PRIORITY_REGRESSION_CORRELATION_SEPARATOR = '|';
+const TERMINAL_PRIORITY_REGRESSION_EPOCH = 3;
+const TERMINAL_PRIORITY_REGRESSION_OPERATION_CORRELATION_KEY =
+  TERMINAL_PRIORITY_REGRESSION_PARTITION_ID +
+  TERMINAL_PRIORITY_REGRESSION_CORRELATION_SEPARATOR +
+  TERMINAL_PRIORITY_REGRESSION_EPOCH +
+  TERMINAL_PRIORITY_REGRESSION_CORRELATION_SEPARATOR +
+  TERMINAL_PRIORITY_REGRESSION_OPERATION_ID;
+const TERMINAL_PRIORITY_REGRESSION_NEEDS_OPERATION_CORRELATION_KEY =
+  TERMINAL_PRIORITY_REGRESSION_PARTITION_ID +
+  TERMINAL_PRIORITY_REGRESSION_CORRELATION_SEPARATOR +
+  TERMINAL_PRIORITY_REGRESSION_EPOCH +
+  TERMINAL_PRIORITY_REGRESSION_CORRELATION_SEPARATOR +
+  TERMINAL_PRIORITY_REGRESSION_UNKNOWN_OPERATION_ID;
+const TERMINAL_PRIORITY_REGRESSION_STALLED_COVERAGE = 4;
+const TERMINAL_PRIORITY_REGRESSION_REGRESSED_COVERAGE = 3;
+const TERMINAL_PRIORITY_REGRESSION_BLOCKED_PARTITION_COUNT = 1;
+const TERMINAL_PRIORITY_REGRESSION_SPREAD_GAP = 1;
+const TERMINAL_PRIORITY_REGRESSION_ZERO_COUNT = 0;
+const TERMINAL_PRIORITY_REGRESSION_SINGLE_COUNT = 1;
+const TERMINAL_PRIORITY_REGRESSION_OPERATION_STATUS = 'pending';
+const TERMINAL_PRIORITY_REGRESSION_OPERATION_STEP = 'PENDING';
+const TERMINAL_PRIORITY_REGRESSION_UPDATED_AT_MS = 1000;
+const TERMINAL_PRIORITY_REGRESSION_OPERATION_CLASS =
+  ACTIVE_WAIT_PRIORITY_RECOVERY_PROGRESS_CLASS.OPERATION_NO_TRANSITIONS;
+const TERMINAL_PRIORITY_REGRESSION_NEEDS_OPERATION_CLASS =
+  ACTIVE_WAIT_PRIORITY_RECOVERY_PROGRESS_CLASS.ELIGIBLE_NO_OPERATION;
+const TERMINAL_PRIORITY_REGRESSION_OPERATION_STATE =
+  PRIORITY_RECOVERY_SEMANTIC_STATE.OPERATION_STALLED;
+const TERMINAL_PRIORITY_REGRESSION_NEEDS_OPERATION_STATE =
+  PRIORITY_RECOVERY_SEMANTIC_STATE.NEEDS_OPERATION;
+const TERMINAL_PRIORITY_REGRESSION_EXPECTED_ERROR_PATTERN =
+  /Not all nodes reached ACTIVE state within/;
+const TERMINAL_PRIORITY_REGRESSION_OPERATION_FRAGMENT =
+  'priorityRecovery=operation_created_but_no_step_transitions';
+const TERMINAL_PRIORITY_REGRESSION_OPERATION_STATE_FRAGMENT =
+  'priorityRecoveryState=operation_stalled';
+const TERMINAL_PRIORITY_REGRESSION_NEEDS_OPERATION_FRAGMENT =
+  'priorityRecovery=eligible_but_no_operation_created';
+const TERMINAL_PRIORITY_REGRESSION_NEEDS_OPERATION_STATE_FRAGMENT =
+  'priorityRecoveryState=needs_operation';
+const TERMINAL_PRIORITY_REGRESSION_OPERATION_ASSERTION =
+  'timeout summary should keep the operation-stalled witness';
+const TERMINAL_PRIORITY_REGRESSION_NEEDS_OPERATION_ASSERTION =
+  'regressed needs-operation evidence must not replace the stalled witness';
+const TERMINAL_PRIORITY_REGRESSION_DIAGNOSTIC_ASSERTION =
+  'timeout diagnostics should use the operation-stalled terminal snapshot';
 
 test(
   PUBLICATION_GATE_SUMMARY_TEST_NAME,
@@ -1366,6 +1441,241 @@ test('Unit: _waitForAllActive keeps the last meaningful startup blocker when' +
       TERMINAL_REGRESSION_LAST_PROGRESS_COVERAGE_FRAGMENT,
     ),
     true,
+  );
+});
+
+test(TERMINAL_PRIORITY_REGRESSION_TEST_NAME, async () => {
+  const cluster = createCluster({
+    size: TERMINAL_PRIORITY_REGRESSION_CLUSTER_SIZE,
+    docker: {socketPath: TERMINAL_PRIORITY_REGRESSION_DOCKER_SOCKET},
+    image: TERMINAL_PRIORITY_REGRESSION_IMAGE,
+    timeouts: {
+      convergence: TERMINAL_PRIORITY_REGRESSION_TIMEOUT_MS,
+    },
+  });
+
+  cluster._sleep = async () => {};
+  cluster._recordClusterStage = () => {};
+  cluster._collectFailureLogs = async () => {};
+
+  const activeNodeDiagnostics = Object.freeze([{
+    nodeId: TERMINAL_PRIORITY_REGRESSION_SEED_ID,
+    active: true,
+    state: TERMINAL_PRIORITY_REGRESSION_ACTIVE_STATE,
+  }, {
+    nodeId: TERMINAL_PRIORITY_REGRESSION_JOINER_A_ID,
+    active: true,
+    state: TERMINAL_PRIORITY_REGRESSION_ACTIVE_STATE,
+  }, {
+    nodeId: TERMINAL_PRIORITY_REGRESSION_JOINER_B_ID,
+    active: true,
+    state: TERMINAL_PRIORITY_REGRESSION_ACTIVE_STATE,
+  }, {
+    nodeId: TERMINAL_PRIORITY_REGRESSION_JOINER_C_ID,
+    active: true,
+    state: TERMINAL_PRIORITY_REGRESSION_ACTIVE_STATE,
+  }, {
+    nodeId: TERMINAL_PRIORITY_REGRESSION_JOINER_D_ID,
+    active: true,
+    state: TERMINAL_PRIORITY_REGRESSION_ACTIVE_STATE,
+  }]);
+  const operationStalledProbe = Object.freeze({
+    allActive: false,
+    nodeDiagnostics: activeNodeDiagnostics,
+    snapshotCoverage: {
+      completeCoverage: false,
+      expectedNodeCount: TERMINAL_PRIORITY_REGRESSION_CLUSTER_SIZE,
+      bestCoverageNodeCount: TERMINAL_PRIORITY_REGRESSION_STALLED_COVERAGE,
+      selectedNodeId: TERMINAL_PRIORITY_REGRESSION_SEED_ID,
+      selectedAdminReady: true,
+      selectedReachableBy: TERMINAL_PRIORITY_REGRESSION_ADMIN_HEALTH,
+      selectedPublicationConvergence: {
+        publicationStatus: TERMINAL_PRIORITY_REGRESSION_PUBLICATION_STATUS,
+        publishedActiveNodeIds: [
+          TERMINAL_PRIORITY_REGRESSION_SEED_ID,
+          TERMINAL_PRIORITY_REGRESSION_JOINER_A_ID,
+          TERMINAL_PRIORITY_REGRESSION_JOINER_B_ID,
+        ],
+        priorityPartitionSummary: {
+          satisfied: false,
+          blockedPartitionCount:
+            TERMINAL_PRIORITY_REGRESSION_BLOCKED_PARTITION_COUNT,
+          totalSpreadGap: TERMINAL_PRIORITY_REGRESSION_SPREAD_GAP,
+        },
+      },
+      selectedPriorityRecoveryDecisionSnapshots: {
+        snapshots: [{
+          partitionId: TERMINAL_PRIORITY_REGRESSION_PARTITION_ID,
+          epoch: TERMINAL_PRIORITY_REGRESSION_EPOCH,
+          correlationKey:
+            TERMINAL_PRIORITY_REGRESSION_OPERATION_CORRELATION_KEY,
+          operationId: TERMINAL_PRIORITY_REGRESSION_OPERATION_ID,
+          semanticState: TERMINAL_PRIORITY_REGRESSION_OPERATION_STATE,
+          blockerReasons: [
+            TERMINAL_PRIORITY_REGRESSION_OPERATION_CLASS,
+          ],
+          spreadCompletion: {
+            satisfied: false,
+          },
+          coordinator: {
+            operationCount: TERMINAL_PRIORITY_REGRESSION_SINGLE_COUNT,
+            operation: {
+              operationId: TERMINAL_PRIORITY_REGRESSION_OPERATION_ID,
+              status: TERMINAL_PRIORITY_REGRESSION_OPERATION_STATUS,
+              step: TERMINAL_PRIORITY_REGRESSION_OPERATION_STEP,
+              updatedAtMs: TERMINAL_PRIORITY_REGRESSION_UPDATED_AT_MS,
+            },
+          },
+        }],
+        partitionIdsBySemanticState: {
+          [TERMINAL_PRIORITY_REGRESSION_OPERATION_STATE]: [
+            TERMINAL_PRIORITY_REGRESSION_PARTITION_ID,
+          ],
+        },
+      },
+    },
+    publicationConvergenceGate: {
+      ready: true,
+      reasons: [],
+      publicationStatus: TERMINAL_PRIORITY_REGRESSION_PUBLICATION_STATUS,
+      pendingAckNodeIds: [],
+      missingPublishedNodeIds: [],
+    },
+    priorityRecoveryInvariants: {
+      invariants: [],
+      failingInvariantIds: [
+        TERMINAL_PRIORITY_REGRESSION_OPERATION_CLASS,
+      ],
+      passed: false,
+    },
+  });
+  const needsOperationProbe = Object.freeze({
+    allActive: false,
+    nodeDiagnostics: activeNodeDiagnostics,
+    snapshotCoverage: {
+      completeCoverage: false,
+      expectedNodeCount: TERMINAL_PRIORITY_REGRESSION_CLUSTER_SIZE,
+      bestCoverageNodeCount: TERMINAL_PRIORITY_REGRESSION_REGRESSED_COVERAGE,
+      selectedNodeId: TERMINAL_PRIORITY_REGRESSION_SEED_ID,
+      selectedAdminReady: true,
+      selectedReachableBy: TERMINAL_PRIORITY_REGRESSION_ADMIN_HEALTH,
+      selectedPublicationConvergence: {
+        publicationStatus: TERMINAL_PRIORITY_REGRESSION_PUBLICATION_STATUS,
+        publishedActiveNodeIds: [
+          TERMINAL_PRIORITY_REGRESSION_SEED_ID,
+          TERMINAL_PRIORITY_REGRESSION_JOINER_A_ID,
+          TERMINAL_PRIORITY_REGRESSION_JOINER_B_ID,
+        ],
+        priorityPartitionSummary: {
+          satisfied: false,
+          blockedPartitionCount:
+            TERMINAL_PRIORITY_REGRESSION_BLOCKED_PARTITION_COUNT,
+          totalSpreadGap: TERMINAL_PRIORITY_REGRESSION_SPREAD_GAP,
+        },
+      },
+      selectedPriorityRecoveryDecisionSnapshots: {
+        snapshots: [{
+          partitionId: TERMINAL_PRIORITY_REGRESSION_PARTITION_ID,
+          epoch: TERMINAL_PRIORITY_REGRESSION_EPOCH,
+          correlationKey:
+            TERMINAL_PRIORITY_REGRESSION_NEEDS_OPERATION_CORRELATION_KEY,
+          semanticState: TERMINAL_PRIORITY_REGRESSION_NEEDS_OPERATION_STATE,
+          blockerReasons: [
+            TERMINAL_PRIORITY_REGRESSION_NEEDS_OPERATION_CLASS,
+          ],
+          spreadCompletion: {
+            satisfied: false,
+          },
+          coordinator: {
+            operationCount: TERMINAL_PRIORITY_REGRESSION_ZERO_COUNT,
+          },
+        }],
+        partitionIdsBySemanticState: {
+          [TERMINAL_PRIORITY_REGRESSION_NEEDS_OPERATION_STATE]: [
+            TERMINAL_PRIORITY_REGRESSION_PARTITION_ID,
+          ],
+        },
+      },
+    },
+    publicationConvergenceGate: {
+      ready: true,
+      reasons: [],
+      publicationStatus: TERMINAL_PRIORITY_REGRESSION_PUBLICATION_STATUS,
+      pendingAckNodeIds: [],
+      missingPublishedNodeIds: [],
+    },
+    priorityRecoveryInvariants: {
+      invariants: [],
+      failingInvariantIds: [
+        TERMINAL_PRIORITY_REGRESSION_NEEDS_OPERATION_CLASS,
+      ],
+      passed: false,
+    },
+  });
+  let probeCallCount = TERMINAL_PRIORITY_REGRESSION_ZERO_COUNT;
+  cluster._probeClusterActiveState = async () => {
+    const selectedProbe =
+      probeCallCount === TERMINAL_PRIORITY_REGRESSION_ZERO_COUNT ?
+        operationStalledProbe :
+        needsOperationProbe;
+    probeCallCount += TERMINAL_PRIORITY_REGRESSION_SINGLE_COUNT;
+    return selectedProbe;
+  };
+
+  const capturedErrors = [];
+  await assert.rejects(
+    async () => {
+      await cluster._waitForAllActive();
+    },
+    (error) => {
+      capturedErrors.push(error);
+      return TERMINAL_PRIORITY_REGRESSION_EXPECTED_ERROR_PATTERN.test(
+        error?.message,
+      );
+    },
+  );
+
+  const timeoutMessage =
+    capturedErrors[TERMINAL_PRIORITY_REGRESSION_ZERO_COUNT].message;
+  assert.equal(
+    timeoutMessage.includes(TERMINAL_PRIORITY_REGRESSION_OPERATION_FRAGMENT),
+    true,
+    TERMINAL_PRIORITY_REGRESSION_OPERATION_ASSERTION,
+  );
+  assert.equal(
+    timeoutMessage.includes(
+      TERMINAL_PRIORITY_REGRESSION_OPERATION_STATE_FRAGMENT,
+    ),
+    true,
+    TERMINAL_PRIORITY_REGRESSION_OPERATION_ASSERTION,
+  );
+  assert.equal(
+    timeoutMessage.includes(
+      TERMINAL_PRIORITY_REGRESSION_NEEDS_OPERATION_FRAGMENT,
+    ),
+    false,
+    TERMINAL_PRIORITY_REGRESSION_NEEDS_OPERATION_ASSERTION,
+  );
+  assert.equal(
+    timeoutMessage.includes(
+      TERMINAL_PRIORITY_REGRESSION_NEEDS_OPERATION_STATE_FRAGMENT,
+    ),
+    false,
+    TERMINAL_PRIORITY_REGRESSION_NEEDS_OPERATION_ASSERTION,
+  );
+  assert.deepEqual(
+    capturedErrors[TERMINAL_PRIORITY_REGRESSION_ZERO_COUNT]?.diagnostics
+      ?.activeGate?.progress?.priorityRecoveryProgressClasses
+      ?.unresolvedClassIds,
+    [TERMINAL_PRIORITY_REGRESSION_OPERATION_CLASS],
+    TERMINAL_PRIORITY_REGRESSION_DIAGNOSTIC_ASSERTION,
+  );
+  assert.deepEqual(
+    capturedErrors[TERMINAL_PRIORITY_REGRESSION_ZERO_COUNT]?.diagnostics
+      ?.activeGate?.progress?.priorityRecoveryProgressClasses
+      ?.unresolvedSemanticStateIds,
+    [TERMINAL_PRIORITY_REGRESSION_OPERATION_STATE],
+    TERMINAL_PRIORITY_REGRESSION_DIAGNOSTIC_ASSERTION,
   );
 });
 

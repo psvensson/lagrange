@@ -35,7 +35,9 @@ failed after `131.7s` with all five nodes reporting active, publication epoch
 selected missing published count `2`. The publication summary versus
 active-gate missing-published disagreement still stays open until reconciled,
 but the stale `publicationConvergence=ready` presentation is no longer the
-terminal timeout summary.
+terminal timeout summary. A follow-up harness classification fix also keeps the
+last meaningful same-partition `operation_stalled` witness when a later
+lower-coverage terminal poll regresses to `needs_operation`.
 
 The active failure chain is now:
 
@@ -184,7 +186,9 @@ Queued cleanup packages:
    classification-only and does not close the runtime owner blocker. A review
    follow-up also keeps ACTIVE timeout publication summaries bound to the
    selected terminal progress snapshot when the final poll regresses to stale
-   ready publication evidence.
+   ready publication evidence, and keeps same-partition operation-stalled
+   priority-recovery evidence ahead of a later lower-coverage needs-operation
+   reconstruction.
 4. Final consistency:
    the final leader-map consistency package is complete for this sprint
    because the rerun moved to a freshly split non-final blocker.
@@ -577,6 +581,21 @@ Current secondary evidence:
     remains red with `319` existing whole-file fixture violations and `0`
     inherited baseline violations, while diff-aware added-line filtering
     reports `0` literal violations.
+60. May 5 terminal priority-recovery witness review fix:
+    `node --check test/distributed/harness/cluster-segment-7.js`;
+    `node --check test/distributed/harness/__tests__/cluster.test-part-6.js`;
+    `./node_modules/.bin/tap test/distributed/harness/__tests__/cluster.test-part-6.js --grep "operation-stalled terminal progress"`;
+    `./node_modules/.bin/tap test/distributed/harness/__tests__/cluster.test-part-6.js`;
+    `node scripts/check-guideline-decision-boundaries.js test/distributed/harness/cluster-segment-7.js test/distributed/harness/__tests__/cluster.test-part-6.js`;
+    `node scripts/check-runtime-grammar-contracts.js test/distributed/harness/cluster-segment-7.js test/distributed/harness/__tests__/cluster.test-part-6.js`;
+    `git diff --check`
+    passed. The exact touched-file literal guard remains red with `319`
+    existing whole-file fixture violations and `0` inherited baseline
+    violations; diff-aware added-line filtering reports `0` literal
+    violations. The fix prevents a lower-coverage terminal
+    `needs_operation` / `eligible_but_no_operation_created` reconstruction
+    from replacing the earlier same-partition `operation_stalled` /
+    `operation_created_but_no_step_transitions` witness.
 
 ## Progress Grammar
 

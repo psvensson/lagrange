@@ -19,6 +19,7 @@ const {
   ACTIVE_WAIT_NO_PROGRESS_CLASS_CODE,
   ACTIVE_WAIT_NO_PROGRESS_REASON_CODE,
   ACTIVE_WAIT_NO_PROGRESS_REASON_CYCLES_PREFIX,
+  ACTIVE_WAIT_PRIORITY_RECOVERY_PROGRESS_CLASS,
   ACTIVE_WAIT_STALLED_MESSAGE_PREFIX,
   CLUSTER_READINESS_MODE_LOAD,
   CLUSTER_READINESS_MODE_STARTUP,
@@ -31,6 +32,7 @@ const {
   STARTUP_ADMISSION_STATE_BLOCKED,
   STARTUP_ADMISSION_STATE_DEGRADED,
   STARTUP_ADMISSION_STATE_STRONG_ACTIVE,
+  PRIORITY_RECOVERY_SEMANTIC_STATE,
   STATUS_ACTIVE_LOWER,
   TIMEOUTS,
   UNKNOWN_REASON,
@@ -105,6 +107,36 @@ const ACTIVE_WAIT_TERMINAL_PROGRESS_DECISION_TABLE = Object.freeze([
       evidence.currentSnapshotZeroCoverageRegression === true &&
       evidence.lastMeaningfulCoverageNodeCount >
         evidence.currentSnapshotCoverageNodeCount,
+  }),
+  Object.freeze({
+    decision: ACTIVE_WAIT_TERMINAL_PROGRESS_DECISION_LAST_MEANINGFUL,
+    matches: (evidence) =>
+      evidence.currentPriorityRecoveryOperationEvidenceRegression === true &&
+      evidence.lastMeaningfulCoverageNodeCount >
+        evidence.currentSnapshotCoverageNodeCount,
+  }),
+  Object.freeze({
+    decision: ACTIVE_WAIT_TERMINAL_PROGRESS_DECISION_CURRENT,
+    matches: () => true,
+  }),
+]);
+const ACTIVE_WAIT_TERMINAL_PRIORITY_RECOVERY_EVIDENCE = Object.freeze({
+  OPERATION_STALLED: Object.freeze({
+    progressClass:
+      ACTIVE_WAIT_PRIORITY_RECOVERY_PROGRESS_CLASS.OPERATION_NO_TRANSITIONS,
+    semanticState: PRIORITY_RECOVERY_SEMANTIC_STATE.OPERATION_STALLED,
+  }),
+  NEEDS_OPERATION: Object.freeze({
+    progressClass:
+      ACTIVE_WAIT_PRIORITY_RECOVERY_PROGRESS_CLASS.ELIGIBLE_NO_OPERATION,
+    semanticState: PRIORITY_RECOVERY_SEMANTIC_STATE.NEEDS_OPERATION,
+  }),
+});
+const ACTIVE_WAIT_TERMINAL_PRIORITY_RECOVERY_REGRESSION_TABLE = Object.freeze([
+  Object.freeze({
+    decision: ACTIVE_WAIT_TERMINAL_PROGRESS_DECISION_LAST_MEANINGFUL,
+    matches: (evidence) =>
+      evidence.sharedRegressedPartitionCount > ZERO,
   }),
   Object.freeze({
     decision: ACTIVE_WAIT_TERMINAL_PROGRESS_DECISION_CURRENT,
@@ -341,6 +373,64 @@ function normalizeActiveWaitProgressCoverageNodeCount(progressSnapshot) {
     ZERO;
 }
 
+function intersectNormalizedStringIds(leftIds, rightIds) {
+  const rightIdSet = new Set(normalizeDistinctStringArray(rightIds));
+  return normalizeDistinctStringArray(leftIds).filter((leftId) =>
+    rightIdSet.has(leftId),
+  );
+}
+
+function normalizeTerminalPriorityRecoveryEvidencePartitionIds(
+  progressSnapshot,
+  evidence,
+) {
+  const progressClasses =
+    progressSnapshot?.priorityRecoveryProgressClasses &&
+    typeof progressSnapshot.priorityRecoveryProgressClasses === 'object' ?
+      progressSnapshot.priorityRecoveryProgressClasses :
+      {};
+  const classPartitionIds = normalizeDistinctStringArray(
+    progressClasses?.partitionIdsByClass?.[evidence.progressClass],
+  );
+  const semanticStatePartitionIds = normalizeDistinctStringArray(
+    progressClasses?.partitionIdsBySemanticState?.[evidence.semanticState],
+  );
+  return intersectNormalizedStringIds(classPartitionIds, semanticStatePartitionIds);
+}
+
+function buildTerminalPriorityRecoveryRegressionEvidence(options = {}) {
+  const currentProgressSnapshot = options.currentProgressSnapshot;
+  const lastMeaningfulProgressSnapshot =
+    options.lastMeaningfulProgressSnapshot;
+  const currentNeedsOperationPartitionIds =
+    normalizeTerminalPriorityRecoveryEvidencePartitionIds(
+      currentProgressSnapshot,
+      ACTIVE_WAIT_TERMINAL_PRIORITY_RECOVERY_EVIDENCE.NEEDS_OPERATION,
+    );
+  const lastOperationStalledPartitionIds =
+    normalizeTerminalPriorityRecoveryEvidencePartitionIds(
+      lastMeaningfulProgressSnapshot,
+      ACTIVE_WAIT_TERMINAL_PRIORITY_RECOVERY_EVIDENCE.OPERATION_STALLED,
+    );
+  const sharedRegressedPartitionCount = intersectNormalizedStringIds(
+    currentNeedsOperationPartitionIds,
+    lastOperationStalledPartitionIds,
+  ).length;
+  const decision =
+    ACTIVE_WAIT_TERMINAL_PRIORITY_RECOVERY_REGRESSION_TABLE.find((entry) =>
+      entry.matches({sharedRegressedPartitionCount}),
+    );
+  return Object.freeze({
+    currentNeedsOperationPartitionIds,
+    lastOperationStalledPartitionIds,
+    sharedRegressedPartitionCount,
+    decision: decision.decision,
+    operationEvidenceRegression:
+      decision.decision ===
+        ACTIVE_WAIT_TERMINAL_PROGRESS_DECISION_LAST_MEANINGFUL,
+  });
+}
+
 function buildTerminalActiveWaitProgressEvidence({
   currentProgressSnapshot = null,
   lastMeaningfulProgressSnapshot = null,
@@ -354,6 +444,11 @@ function buildTerminalActiveWaitProgressEvidence({
   const currentSnapshotErrorPresent =
     typeof currentProgressSnapshot?.selectedSnapshotError === 'string' &&
     currentProgressSnapshot.selectedSnapshotError.length > ZERO;
+  const priorityRecoveryRegressionEvidence =
+    buildTerminalPriorityRecoveryRegressionEvidence({
+      currentProgressSnapshot,
+      lastMeaningfulProgressSnapshot,
+    });
   return {
     currentProgressPresent:
       isActiveWaitProgressSnapshot(currentProgressSnapshot),
@@ -367,6 +462,8 @@ function buildTerminalActiveWaitProgressEvidence({
       currentProgressSnapshot.snapshotCoverageComplete !== true &&
       currentSnapshotCoverageNodeCount === ZERO &&
       currentSnapshotErrorPresent === true,
+    currentPriorityRecoveryOperationEvidenceRegression:
+      priorityRecoveryRegressionEvidence.operationEvidenceRegression,
   };
 }
 
