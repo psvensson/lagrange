@@ -383,15 +383,19 @@ Sprint:
 
 ## In Scope
 
-1. Reconcile why publication epoch `3` is `PUBLISHED` with pending ACK count
-   `0` while recovery remains `publication_pending` with explicit
-   missing-active-node debt.
-2. Explain terminal active `2/5`, best active `3/5`, selected snapshot coverage
-   `4/5`, selected published active `3/5`, and selected missing published
-   count `2` as one topology owner outcome.
-3. Determine whether the selected snapshot reachability timeout on
-   `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58` is causal owner evidence or
-   subordinate topology evidence.
+1. Reconcile the current post-`e274126c` publication membership/snapshot
+   coverage residual: publication epoch `3` is `PUBLISHED`, pending ACK count
+   is `0`, recovery remains `publication_pending`, terminal active is `2/5`,
+   best active is `5/5`, selected snapshot coverage is `4/5`, selected
+   published active is `3/5`, and selected missing published count is `2`.
+2. Explain why the latest selected snapshot node
+   `11601fe0-72d6-5853-8590-ec2881853e72` is reachable through
+   `admin_health` while explicit missing-active-node publication debt remains
+   open for that node and
+   `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`.
+3. Keep the `074739Z` selected snapshot reachability timeout on
+   `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58` as historical evidence only; it no
+   longer competes with the current post-`e274126c` terminal boundary.
 4. Preserve and classify the `sql_write_operations-p1`
    `priority_operation_serial_wait` witness without collapsing it into
    current-partition operation identity or treating it as post-active trim.
