@@ -169,7 +169,10 @@ Queued cleanup packages:
    witness. A narrow harness formatter fix now prevents
    `publicationConvergence=ready` when the same active-gate evidence carries
    `ACK_PENDING`, pending ACK, or missing-published debt; this is
-   classification-only and does not close the runtime owner blocker.
+   classification-only and does not close the runtime owner blocker. A review
+   follow-up also keeps ACTIVE timeout publication summaries bound to the
+   selected terminal progress snapshot when the final poll regresses to stale
+   ready publication evidence.
 4. Final consistency:
    the final leader-map consistency package is complete for this sprint
    because the rerun moved to a freshly split non-final blocker.
@@ -553,6 +556,15 @@ Current secondary evidence:
     until startup/publication pending ACK, selected-snapshot coverage, retained
     serial-wait evidence, and the `replica_operations-p1` follow-up rebalance
     residual are reconciled or split into a newly named owner boundary.
+59. May 5 terminal publication evidence review fix:
+    `./node_modules/.bin/tap test/distributed/harness/__tests__/cluster.test-part-6.js --grep "timeout publication summary uses terminal progress evidence"`
+    passed, `node --test test/distributed/harness/__tests__/cluster.test-part-6.js`
+    passed with the existing file-level skip behavior, and file-scoped
+    decision-boundary and runtime-grammar guardrails reported `0` violations
+    across the two touched JS files. The exact touched-file literal guard
+    remains red with `319` existing whole-file fixture violations and `0`
+    inherited baseline violations, while diff-aware added-line filtering
+    reports `0` literal violations.
 
 ## Progress Grammar
 

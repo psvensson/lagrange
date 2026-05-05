@@ -218,9 +218,14 @@ May 5 harness publication-summary classification fix:
 3. ACTIVE and load-readiness timeout formatting now pass the current poll
    result into the formatter, so same-boundary progress evidence can prevent
    stale `publicationConvergence=ready` summaries.
-4. Focused regression now expects
+4. Review follow-up tightened the ACTIVE timeout path further: when the final
+   poll regresses to stale `ready` evidence after a meaningful terminal
+   progress snapshot still carries `ACK_PENDING` and missing-published debt,
+   timeout formatting now passes the selected terminal progress snapshot into
+   the publication-convergence formatter.
+5. Focused regressions now expect
    `blocked#status=ACK_PENDING#recovery=publication_pending#pendingAck=1#missingPublished=2`.
-5. This is a harness classification fix only. The package remains active
+6. This is a harness classification fix only. The package remains active
    because the startup/publication pending ACK owner blocker, selected-snapshot
    coverage `2/5`, active `3/5`, serial-wait witness, and
    `replica_operations-p1` follow-up rebalance residual remain open.
@@ -371,6 +376,32 @@ Closure:
       fixture debt: `cluster.test-part-6.js` `289`,
       `cluster-segment-2.js` `55`, and `cluster-segment-7.js` `30`.
 - [x] May 5 harness classification `git diff --check` passed.
+- [x] May 5 terminal publication evidence review fix `node --check` passed for
+      `test/distributed/harness/cluster-segment-7.js` and
+      `test/distributed/harness/__tests__/cluster.test-part-6.js`.
+- [x] May 5 terminal publication evidence focused regression passed:
+      `./node_modules/.bin/tap test/distributed/harness/__tests__/cluster.test-part-6.js --grep "timeout publication summary uses terminal progress evidence"`.
+      The selected TAP subtest uses Node assertions and reports `ok` with
+      `1..0`.
+- [x] May 5 terminal publication evidence full file check passed:
+      `node --test test/distributed/harness/__tests__/cluster.test-part-6.js`
+      reported `37` tests, `1` pass, `36` skipped under the existing
+      TAP/Node skip behavior for this file.
+- [x] May 5 terminal publication evidence non-literal guardrails passed:
+      `node scripts/check-guideline-decision-boundaries.js ...` and
+      `node scripts/check-runtime-grammar-contracts.js ...` both reported `0`
+      violations across the two touched JS files.
+- [ ] May 5 terminal publication evidence exact touched-file literal guard
+      remains file-scoped red:
+      `node scripts/check-guideline-literals.js --include-tests test/distributed/harness/cluster-segment-7.js test/distributed/harness/__tests__/cluster.test-part-6.js`
+      reports `319` new literal-guideline violations and `0` inherited
+      baseline violations. Top residual files are existing whole-file
+      test/harness fixture debt: `cluster.test-part-6.js` `289` and
+      `cluster-segment-7.js` `30`.
+- [x] Diff-aware added-line filtering for the May 5 terminal publication
+      evidence review fix reports `0` literal-guideline violations on added
+      lines.
+- [x] May 5 terminal publication evidence `git diff --check` passed.
 
 ## Implementation Tasks
 
@@ -386,6 +417,9 @@ Closure:
       record the migrated owner evidence.
 - [x] Preserve open publication debt in ACTIVE/load-readiness timeout
       publication summaries when the gate record is stale-ready.
+- [x] Preserve the selected terminal ACTIVE progress snapshot as publication
+      summary evidence when the final timeout poll regresses to stale-ready
+      publication state.
 - [ ] Reconcile the May 5 startup/publication pending ACK blocker, selected
       snapshot coverage `2/5`, active `3/5`, pending ACK node
       `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`, and
@@ -421,6 +455,10 @@ Closure:
    the static drift ledger. The fix prevents the May 5 same-boundary
    `publicationConvergence=ready` contradiction from hiding open ACK or
    missing-published debt.
+10. Terminal publication evidence review-fix coverage passed as recorded in the
+    static drift ledger. The fix prevents stale final ready probes from
+    overriding the selected terminal ACTIVE progress snapshot in timeout
+    publication summaries.
 
 ## Done When
 

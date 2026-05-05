@@ -954,10 +954,6 @@ class Cluster extends Cluster5 {
     const snapshotCoverageSummary = formatSnapshotCoverage(
       pollResult.lastResult?.snapshotCoverage || null,
     );
-    const publicationConvergenceSummary = formatPublicationConvergenceGate(
-      pollResult.lastResult?.publicationConvergenceGate || null,
-      pollResult.lastResult,
-    );
     const priorityRecoveryFailingInvariantIds = normalizeDistinctStringArray(
       pollResult.lastResult?.priorityRecoveryInvariants?.failingInvariantIds,
     );
@@ -975,6 +971,13 @@ class Cluster extends Cluster5 {
       currentProgressSnapshot: observedFinalProgressSnapshot,
       lastMeaningfulProgressSnapshot,
     });
+    const terminalPublicationConvergenceEvidence = {
+      progressSnapshot: finalProgressSnapshot,
+    };
+    const publicationConvergenceSummary = formatPublicationConvergenceGate(
+      pollResult.lastResult?.publicationConvergenceGate || null,
+      terminalPublicationConvergenceEvidence,
+    );
     const finalAttemptsSinceProgress = Math.max(
       ZERO,
       pollResult.attempts - (lastMeaningfulProgressAttempt || ZERO),

@@ -1369,6 +1369,195 @@ test('Unit: _waitForAllActive keeps the last meaningful startup blocker when' +
   );
 });
 
+const TERMINAL_PUBLICATION_TEST_NAME =
+  'Unit: _waitForAllActive timeout publication summary uses terminal' +
+  ' progress evidence';
+
+test(TERMINAL_PUBLICATION_TEST_NAME, async () => {
+  const TERMINAL_PUBLICATION_CLUSTER_SIZE = 3;
+  const TERMINAL_PUBLICATION_TIMEOUT_MS = 5;
+  const TERMINAL_PUBLICATION_DOCKER_SOCKET_PATH = '/var/run/docker.sock';
+  const TERMINAL_PUBLICATION_IMAGE = 'distributed-db:test';
+  const TERMINAL_PUBLICATION_SEED_ID = 'publication-summary-seed';
+  const TERMINAL_PUBLICATION_PENDING_NODE_ID =
+    'publication-summary-pending';
+  const TERMINAL_PUBLICATION_MISSING_NODE_ID_A =
+    'publication-summary-missing-a';
+  const TERMINAL_PUBLICATION_MISSING_NODE_ID_B =
+    'publication-summary-missing-b';
+  const TERMINAL_PUBLICATION_ACTIVE_STATE = 'active';
+  const TERMINAL_PUBLICATION_ADMIN_HEALTH_SOURCE = 'admin_health';
+  const TERMINAL_PUBLICATION_RECOVERY_PENDING = 'publication_pending';
+  const TERMINAL_PUBLICATION_SELECTED_ERROR =
+    'Admin API query timed out for node publication-summary-seed on lane ' +
+    'snapshot after 1ms';
+  const TERMINAL_PUBLICATION_REACHABILITY_ERROR =
+    'Control snapshot reachability probe timed out for ' +
+    'publication-summary-seed';
+  const TERMINAL_PUBLICATION_EXPECTED_ERROR_PATTERN =
+    /Not all nodes reached ACTIVE state within/;
+  const TERMINAL_PUBLICATION_BLOCKED_FRAGMENT =
+    'publicationConvergence=blocked#status=ACK_PENDING#recovery=' +
+    'publication_pending#pendingAck=1#missingPublished=2';
+  const TERMINAL_PUBLICATION_READY_FRAGMENT =
+    'publicationConvergence=ready';
+  const TERMINAL_PUBLICATION_PROGRESS_FRAGMENT =
+    'progress=active=3/3,coverage=3/3#complete,publication=ACK_PENDING';
+  const TERMINAL_PUBLICATION_BLOCKED_ASSERTION =
+    'timeout summary should classify publication debt from terminal progress';
+  const TERMINAL_PUBLICATION_READY_ASSERTION =
+    'stale final ready probe must not override terminal publication debt';
+  const TERMINAL_PUBLICATION_PROGRESS_ASSERTION =
+    'timeout progress should use the same terminal publication snapshot';
+  const TERMINAL_PUBLICATION_ZERO_COUNT = 0;
+  const TERMINAL_PUBLICATION_SINGLE_COUNT = 1;
+
+  const cluster = createCluster({
+    size: TERMINAL_PUBLICATION_CLUSTER_SIZE,
+    docker: {socketPath: TERMINAL_PUBLICATION_DOCKER_SOCKET_PATH},
+    image: TERMINAL_PUBLICATION_IMAGE,
+    timeouts: {
+      convergence: TERMINAL_PUBLICATION_TIMEOUT_MS,
+    },
+  });
+
+  cluster._sleep = async () => {};
+  cluster._recordClusterStage = () => {};
+  cluster._collectFailureLogs = async () => {};
+
+  const activeNodeDiagnostics = Object.freeze([{
+    nodeId: TERMINAL_PUBLICATION_SEED_ID,
+    active: true,
+    state: TERMINAL_PUBLICATION_ACTIVE_STATE,
+  }, {
+    nodeId: TERMINAL_PUBLICATION_PENDING_NODE_ID,
+    active: true,
+    state: TERMINAL_PUBLICATION_ACTIVE_STATE,
+  }, {
+    nodeId: TERMINAL_PUBLICATION_MISSING_NODE_ID_A,
+    active: true,
+    state: TERMINAL_PUBLICATION_ACTIVE_STATE,
+  }]);
+  const pendingAckNodeIds = Object.freeze([
+    TERMINAL_PUBLICATION_PENDING_NODE_ID,
+  ]);
+  const missingPublishedNodeIds = Object.freeze([
+    TERMINAL_PUBLICATION_MISSING_NODE_ID_A,
+    TERMINAL_PUBLICATION_MISSING_NODE_ID_B,
+  ]);
+  const publicationDebtProbe = Object.freeze({
+    allActive: false,
+    nodeDiagnostics: activeNodeDiagnostics,
+    snapshotCoverage: {
+      completeCoverage: true,
+      expectedNodeCount: TERMINAL_PUBLICATION_CLUSTER_SIZE,
+      bestCoverageNodeCount: TERMINAL_PUBLICATION_CLUSTER_SIZE,
+      selectedNodeId: TERMINAL_PUBLICATION_SEED_ID,
+      selectedAdminReady: true,
+      selectedReachableBy: TERMINAL_PUBLICATION_ADMIN_HEALTH_SOURCE,
+      selectedPublicationConvergence: {
+        publicationStatus: ACTIVE_WAIT_PUBLICATION_STATUS_ACK_PENDING,
+        recoveryProtocolState: TERMINAL_PUBLICATION_RECOVERY_PENDING,
+        pendingAckNodeIds,
+        publishedActiveNodeIds: [TERMINAL_PUBLICATION_SEED_ID],
+      },
+      selectedPendingAckNodeIds: pendingAckNodeIds,
+      selectedMissingPublishedNodeIds: missingPublishedNodeIds,
+    },
+    publicationConvergenceGate: {
+      ready: false,
+      reasons: [],
+      publicationStatus: ACTIVE_WAIT_PUBLICATION_STATUS_ACK_PENDING,
+      recoveryProtocolState: TERMINAL_PUBLICATION_RECOVERY_PENDING,
+      pendingAckNodeIds,
+      missingPublishedNodeIds,
+    },
+    priorityRecoveryInvariants: {
+      invariants: [],
+      failingInvariantIds: [],
+      passed: true,
+    },
+  });
+  const staleReadyProbe = Object.freeze({
+    allActive: false,
+    nodeDiagnostics: activeNodeDiagnostics,
+    snapshotCoverage: {
+      completeCoverage: false,
+      expectedNodeCount: TERMINAL_PUBLICATION_CLUSTER_SIZE,
+      bestCoverageNodeCount: TERMINAL_PUBLICATION_ZERO_COUNT,
+      selectedNodeId: TERMINAL_PUBLICATION_SEED_ID,
+      selectedAdminReady: false,
+      selectedError: TERMINAL_PUBLICATION_SELECTED_ERROR,
+      selectedReachabilityError: TERMINAL_PUBLICATION_REACHABILITY_ERROR,
+    },
+    publicationConvergenceGate: {
+      ready: true,
+      reasons: [],
+      publicationStatus: ACTIVE_WAIT_PUBLICATION_STATUS_PUBLISHED,
+      pendingAckNodeIds: [],
+      missingPublishedNodeIds: [],
+    },
+    priorityRecoveryInvariants: {
+      invariants: [],
+      failingInvariantIds: [],
+      passed: true,
+    },
+  });
+  let probeCallCount = TERMINAL_PUBLICATION_ZERO_COUNT;
+  cluster._probeClusterActiveState = async () => {
+    const selectedProbe =
+      probeCallCount === TERMINAL_PUBLICATION_ZERO_COUNT ?
+        publicationDebtProbe :
+        staleReadyProbe;
+    probeCallCount += TERMINAL_PUBLICATION_SINGLE_COUNT;
+    return selectedProbe;
+  };
+
+  const capturedErrors = [];
+  await assert.rejects(
+    async () => {
+      await cluster._waitForAllActive();
+    },
+    (error) => {
+      capturedErrors.push(error);
+      return TERMINAL_PUBLICATION_EXPECTED_ERROR_PATTERN.test(error?.message);
+    },
+  );
+
+  const timeoutMessage =
+    capturedErrors[TERMINAL_PUBLICATION_ZERO_COUNT].message;
+  assert.equal(
+    timeoutMessage.includes(TERMINAL_PUBLICATION_BLOCKED_FRAGMENT),
+    true,
+    TERMINAL_PUBLICATION_BLOCKED_ASSERTION,
+  );
+  assert.equal(
+    timeoutMessage.includes(TERMINAL_PUBLICATION_READY_FRAGMENT),
+    false,
+    TERMINAL_PUBLICATION_READY_ASSERTION,
+  );
+  assert.equal(
+    timeoutMessage.includes(TERMINAL_PUBLICATION_PROGRESS_FRAGMENT),
+    true,
+    TERMINAL_PUBLICATION_PROGRESS_ASSERTION,
+  );
+  assert.equal(
+    capturedErrors[TERMINAL_PUBLICATION_ZERO_COUNT]?.diagnostics?.activeGate
+      ?.progress?.publicationStatus,
+    ACTIVE_WAIT_PUBLICATION_STATUS_ACK_PENDING,
+  );
+  assert.equal(
+    capturedErrors[TERMINAL_PUBLICATION_ZERO_COUNT]?.diagnostics?.activeGate
+      ?.progress?.pendingAckCount,
+    TERMINAL_PUBLICATION_SINGLE_COUNT,
+  );
+  assert.equal(
+    capturedErrors[TERMINAL_PUBLICATION_ZERO_COUNT]?.diagnostics?.activeGate
+      ?.progress?.missingPublishedCount,
+    missingPublishedNodeIds.length,
+  );
+});
+
 test(
   'Unit: _extractControlSnapshotCoverageDiagnostics rebuilds stale embedded' +
     ' publication evidence from the canonical gate and closure witness',
