@@ -4,7 +4,7 @@ Opened on May 5, 2026 as the current representative split from
 [Rolling Restart Operation Transition Pressure And Over-Target Trim](./active-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md).
 The fresh representative path migrated away from post-active
 operation-transition / over-target trim and is now blocked earlier by topology
-publication missing-active-node debt, selected snapshot coverage/reachability,
+publication membership missing-active-node debt, selected snapshot coverage,
 and a `sql_write_operations-p1` priority serial-wait witness.
 
 ## Current Evidence
@@ -313,11 +313,14 @@ witness without runtime edits:
 Conclusion: this slice does not indicate a small runtime owner fix or a
 current harness classification bug. The serial-wait evidence is supporting
 operation-workflow pressure under the already-open topology publication debt:
-publication remains `publication_pending` with missing published active nodes,
-selected snapshot coverage remains `4/5`, and selected snapshot reachability
-still times out. If topology publication debt closes and this witness persists,
-the next smallest runtime question is whether the operation-workflow owner
-keeps `57aa5679-15ad-4ea9-84f6-c6e5f906abf0` moving out of
+in the historical `074739Z` artifact, publication remains
+`publication_pending` with missing published active nodes, selected snapshot
+coverage remains `4/5`, and selected snapshot reachability times out. The
+latest `093109Z` artifact supersedes that terminal reachability boundary with
+`no_progress_terminal` and no selected reachability error. If topology
+publication debt closes and this witness persists, the next smallest runtime
+question is whether the operation-workflow owner keeps
+`57aa5679-15ad-4ea9-84f6-c6e5f906abf0` moving out of
 `persisted_not_dispatched` without relying on stale or lower-coverage
 operation visibility.
 
@@ -423,8 +426,10 @@ Sprint:
 2. Pending ACK count `0` does not prove publication closure when the accepted
    evidence still reports `publication_pending` and explicit
    `publication_missing_active_node=<node>` reasons.
-3. Selected snapshot reachability cannot be marked closed while selected
-   coverage or selected missing-published debt remains unexplained.
+3. Selected snapshot coverage and selected missing-published debt must be
+   explained even when the selected node is reachable through `admin_health`;
+   the `074739Z` reachability timeout remains historical unless a fresh
+   artifact reintroduces it.
 4. Serial-wait evidence remains owned by the operation workflow owner and must
    not replace topology missing-active-node evidence unless topology debt is
    first closed or deliberately made subordinate.
@@ -588,8 +593,8 @@ refreshes or persists after active-gate best progress reaches `5/5`.
 
 ## Validation
 
-1. Focused owner or harness fixture for topology publication missing-active-node
-   debt with selected snapshot coverage/reachability lag.
+1. Focused owner or harness fixture for topology publication membership
+   missing-active-node debt with selected snapshot coverage lag.
 2. Focused priority-recovery fixture, if the selected owner decision depends on
    `sql_write_operations-p1` serial-wait classification.
 3. Touched-file syntax checks and relevant focused tests.
@@ -601,10 +606,10 @@ refreshes or persists after active-gate best progress reaches `5/5`.
 ## Done When
 
 1. The representative path either reaches ACTIVE convergence or migrates to one
-   newly named owner boundary after topology publication and selected snapshot
-   reachability debt is explained.
+   newly named owner boundary after topology publication membership and
+   selected snapshot coverage debt are explained.
 2. The failure bundle emits one canonical outcome for publication state,
-   missing-active-node debt, selected snapshot coverage/reachability, and
+   missing-active-node debt, selected snapshot coverage, and
    priority-recovery serial wait.
 3. `sql_write_operations-p1` serial-wait evidence is either resolved,
    deliberately made subordinate to topology publication debt, or promoted into

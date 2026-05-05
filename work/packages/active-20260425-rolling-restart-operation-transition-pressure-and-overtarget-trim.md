@@ -10,13 +10,15 @@ into startup active-gate selected-snapshot evidence.
 This package remains active as the prior post-active operation-transition /
 over-target residual owner, and it also retains the package-local guardrail and
 adjacent sweep debt recorded in the closure inventory below. It is no longer
-the current representative re-entry owner: the fresh May 5 `074739Z` path
-migrated earlier into
+the representative re-entry owner. The historical May 5 `074739Z` topology
+handoff migrated earlier into
 [Rolling Restart Topology Publication Snapshot Reachability Reentry](./active-20260505-rolling-restart-topology-publication-snapshot-reachability-reentry.md).
+That handoff has since been superseded by the latest May 5 `093109Z`
+topology-package state.
 Representative runtime work should return here after the representative path
 again reaches post-publication operation workflow timeout reconciliation or
-over-target trim; current topology publication, selected snapshot coverage,
-and snapshot-reachability blockers belong to the topology re-entry package.
+over-target trim; current topology publication membership plus selected
+snapshot coverage residuals belong to the topology re-entry package.
 
 The last post-active evidence before later migrations was:
 
@@ -460,9 +462,9 @@ guarantees.
 
 ## Out Of Scope
 
-1. Current topology publication missing-active-node debt, selected snapshot
-   coverage/reachability, and `sql_write_operations-p1` priority serial-wait
-   re-entry. Those are owned by
+1. Current topology publication membership plus selected snapshot coverage
+   residuals, and `sql_write_operations-p1` priority serial-wait re-entry.
+   Those are owned by
    [Rolling Restart Topology Publication Snapshot Reachability Reentry](./active-20260505-rolling-restart-topology-publication-snapshot-reachability-reentry.md).
 2. Broad matrix continuation before the current five-node representative
    boundary closes or migrates.
@@ -728,7 +730,8 @@ Closure:
       review fix and record whether the blocker closes or migrates.
 - [x] Rerun the representative path after the missing-published reason-source
       review fix and record whether the blocker closes or migrates.
-- [x] Split the latest May 5 migrated topology publication blocker to
+- [x] Split the historical May 5 `074739Z` migrated topology publication
+      blocker to
       [Rolling Restart Topology Publication Snapshot Reachability Reentry](./active-20260505-rolling-restart-topology-publication-snapshot-reachability-reentry.md):
       terminal active `2/5`, best active `3/5`, selected snapshot coverage
       `4/5`, pending ACK count `0`, selected missing published debt count `2`,
@@ -797,7 +800,7 @@ Closure:
     missing-published debt while preserving stale selected active-gate debt
     suppression, including stale closure replay evidence. No representative
     scenario rerun was run for this harness-only slice.
-16. Post-`e0344113` representative rerun
+16. Historical post-`e0344113` representative rerun
     `test-output/reports/rolling-restart-after-missing-published-reason-source-rerun-20260505T074739Z.report.json`
     failed by the migrated topology publication-missing/snapshot-reachability
     and priority serial-wait blocker recorded above. No production code was
@@ -820,10 +823,17 @@ Closure:
 
 The current representative continuation has migrated to
 [Rolling Restart Topology Publication Snapshot Reachability Reentry](./active-20260505-rolling-restart-topology-publication-snapshot-reachability-reentry.md).
-That package owns the post-`e0344113` May 5 topology publication
-missing-active-node blocker, selected snapshot coverage/reachability timeout,
-and `sql_write_operations-p1` priority serial-wait witness from the `074739Z`
-rerun.
+That package owns the latest post-`e274126c` May 5 `093109Z` topology
+publication membership plus snapshot coverage residual: terminal active
+`2/5`, best active `5/5`, selected snapshot coverage `4/5`, selected published
+active `3/5`, missing nodes
+`11601fe0-72d6-5853-8590-ec2881853e72` and
+`ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`, terminal readiness
+`no_progress_terminal`, and no selected reachability error. The
+`sql_write_operations-p1` priority serial-wait witness remains supporting
+evidence there. The post-`e0344113` `074739Z` reachability-timeout shape
+recorded above is historical handoff evidence, not the current topology
+package state.
 
 This operation-transition package remains active for retained residuals rather
 than for the current representative blocker. The retained work is the prior
