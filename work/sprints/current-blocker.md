@@ -4,38 +4,39 @@
 
 Sprint: `work/sprints/active-2026-q2-publication-scoped-consistency-and-node-join-closure.md`
 
-Package: `work/packages/active-20260506-rolling-restart-startup-active-gate-snapshot-coverage-priority-serial-wait-workflow-progress-reentry.md`
+Package: `work/packages/active-20260506-rolling-restart-startup-active-gate-publication-evidence-priority-recovery-consumer-alignment.md`
 
 Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/rolling-restart-after-mixed-summary-serial-wait-source-overlay-20260506T194741Z.report.json`
+Artifact: `test-output/reports/rolling-restart-after-mixed-summary-spread-satisfied-sibling-20260506T200801Z.report.json`
 
-Playback: `test-output/reports/.playback/rolling-restart-after-mixed-summary-serial-wait-source-overlay-20260506T194741Z/rolling-restart/`
+Playback: `test-output/reports/.playback/rolling-restart-after-mixed-summary-spread-satisfied-sibling-20260506T200801Z/rolling-restart/`
 
 ## Boundary
 
-Owner: `Startup active-gate snapshot coverage and priority workflow progress under serial wait`
+Owner: `Startup active-gate publication-evidence priority-recovery consumer alignment`
 
-Boundary: `Startup active-gate snapshot-coverage / priority serial-wait workflow-progress reentry`
+Boundary: `Startup active-gate / publication-convergence priority-recovery consumer alignment`
 
 Dominant reason: `priority_recovery_workflow_progress_transition_deferred`
 
-Current state: The mixed-summary operation-scheduling seam is closed. The representative rerun now reaches epoch 4 PUBLISHED with active 5/5 but snapshot coverage 3/5 on selected snapshot 11601..., while sql_transactions-p1 and sql_write_operations-p1 both wait on workflow-owned serial wait behind sql_transaction_participants-p1 and selected-snapshot coverage still disagrees on 11601... / 8be8... / ebc4... under reconnect and query-timeout pressure.
+Current state: The stage-3 serial-wait source seam is closed, but the representative rerun still times out at startup snapshot coverage 3/5 on selected snapshot 8be8... because publicationConvergence.activeGate.progress retains stale priority_operation_serial_wait even though canonical decision snapshots now show sql_transaction_participants-p1 spread_satisfied_in_flight, sql_transactions-p1 recovering_in_flight on its own pending replace, and sql_write_operations-p1 back on eligible_but_no_operation_created.
 
 ## Next Action
 
-Build the focused 194741Z epoch-4 startup active-gate / serial-wait workflow-progress fixture, then decide whether the repair belongs to workflow progress visibility, selected-snapshot coverage consumption, or startup transport/query pressure.
+Build the focused 200801Z consumer divergence fixture, decide whether the stale class is owned by publication-evidence current-summary selection, active-gate normalization, or a retained diagnostics merge, then repair only that consumer path.
 
 ## Proof Ladder
 
-1. `Focused 194741Z epoch-4 startup active-gate / serial-wait workflow-progress fixture`
-2. `Owner decision for workflow progress versus snapshot coverage versus transport/query pressure`
-3. `Touched-file static guardrails`
-4. `Representative rolling-restart --fast-local rerun`
+1. `Focused 200801Z publication-evidence / active-gate consumer divergence fixture`
+2. `Owner consumer regression`
+3. `Affected presentation tests`
+4. `Touched-file static guardrails`
+5. `Representative rolling-restart --fast-local rerun`
 
 ## Touched Files
 
-1. `src/control-plane/priority-recovery-snapshot-stage-3.js`
-2. `src/bootstrap/node-joining-service-segment-2.js`
-3. `test/control-plane/priority-recovery-snapshot.test.js`
-4. `test/distributed/harness/__tests__/failure-bundle-core-11-test-cases.js`
+1. `test/distributed/harness/publication-evidence-contract.js`
+2. `test/control-plane/publication-recovery-evidence.test.js`
+3. `test/distributed/harness/__tests__/failure-bundle-core-11-test-cases.js`
+4. `test/distributed/harness/__tests__/failure-bundle.test.js`
