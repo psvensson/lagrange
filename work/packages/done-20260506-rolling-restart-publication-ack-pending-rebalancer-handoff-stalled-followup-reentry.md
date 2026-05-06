@@ -12,7 +12,7 @@
   "boundary": "Publication ACK-pending rebalancer-handoff stalled follow-up progress",
   "dominantReason": "BOOTSTRAP_PHASE_INCOMPLETE",
   "currentState": "The epoch-5 ACK_PENDING follow-up seam is closed. The representative rerun no longer leaves sql_transaction_participants-p1 on rebalancer_handoff or replica_operations-p1 on workflow_timeout; instead it migrates to startup epoch 1 PUBLISHED with snapshot coverage 1/5 and control_plane_publications-p1 stuck on source_removal workflow progress.",
-  "nextAction": "Continue in work/packages/active-20260506-rolling-restart-startup-published-snapshot-coverage-control-plane-source-removal-workflow-progress-reentry.md to extract the epoch-1 PUBLISHED source-removal fixture and repair only that startup owner path.",
+  "nextAction": "Continue in work/packages/done-20260506-rolling-restart-startup-published-snapshot-coverage-control-plane-source-removal-workflow-progress-reentry.md to extract the epoch-1 PUBLISHED source-removal fixture and repair only that startup owner path.",
   "proof": [
     "Focused retained-carrier subordinated-source serial-wait regression",
     "Priority-recovery snapshot proof and summary-normalization timeout dominance proof",
@@ -26,14 +26,14 @@
   ],
   "predecessor": "work/packages/done-20260506-rolling-restart-publication-ack-pending-priority-serial-wait-workflow-progress-reentry.md",
   "closed": "2026-05-06",
-  "successor": "work/packages/active-20260506-rolling-restart-startup-published-snapshot-coverage-control-plane-source-removal-workflow-progress-reentry.md"
+  "successor": "work/packages/done-20260506-rolling-restart-startup-published-snapshot-coverage-control-plane-source-removal-workflow-progress-reentry.md"
 }
 -->
 
 Opened on May 6, 2026 after
 [Rolling Restart Publication ACK-Pending Priority Serial-Wait Workflow Progress Reentry](./done-20260506-rolling-restart-publication-ack-pending-priority-serial-wait-workflow-progress-reentry.md)
 closed by migration. Closed the same day by migration into
-[Rolling Restart Startup Published Snapshot Coverage Control Plane Source-Removal Workflow Progress Reentry](./active-20260506-rolling-restart-startup-published-snapshot-coverage-control-plane-source-removal-workflow-progress-reentry.md).
+[Rolling Restart Startup Published Snapshot Coverage Control Plane Source-Removal Workflow Progress Reentry](./done-20260506-rolling-restart-startup-published-snapshot-coverage-control-plane-source-removal-workflow-progress-reentry.md).
 
 ## Closure Summary
 

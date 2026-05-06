@@ -1205,6 +1205,75 @@ test('BootstrapAPI bootstrap admission defers on cached MOVE_REPLICA reservation
     );
   });
 
+test('BootstrapAPI blocking admission refreshes stale in-memory ' +
+  'MOVE_REPLICA reservation from durable terminal row when cache visibility is missing',
+async (t) => {
+  const fixture = await bootstrapMoveReplicaAssignment(t, {
+    joiningNodeId: '550e8400-e29b-41d4-a716-4466554403b9',
+  });
+  const {api, assignment, rows} = fixture;
+  const reservationRow = rows.replica_operations.find((row) =>
+    row.operation_id === assignment.assignmentId,
+  );
+  t.ok(reservationRow, 'fixture should persist MOVE_REPLICA reservation row');
+
+  const staleReservation = api.moveReplicaAssignmentReservations.get(
+    assignment.assignmentId,
+  );
+  t.equal(
+    staleReservation?.status,
+    BOOTSTRAP_API_HANDOFF_STATUS.PREPARING,
+    'fixture should keep the original in-memory reservation open',
+  );
+
+  const terminalUpdatedAt = Date.now();
+  reservationRow.status = BOOTSTRAP_API_HANDOFF_STATUS.FAILED;
+  reservationRow.workflow_step = WORKFLOW_STEP.FAILED;
+  reservationRow.updated_at = terminalUpdatedAt;
+  reservationRow.completed_at = terminalUpdatedAt;
+  reservationRow.error_message =
+    BOOTSTRAP_API_MOVE_REPLICA_ASSIGNMENT_ERROR.SOURCE_OWNER_UNAVAILABLE;
+
+  const systemTableCache = api.getSystemTableCache();
+  const originalFilter = systemTableCache.filter.bind(systemTableCache);
+  systemTableCache.filter = (tableName, predicate) => {
+    if (tableName === 'replica_operations') {
+      return [];
+    }
+    return originalFilter(tableName, predicate);
+  };
+
+  const originalExecute =
+    api.executeBootstrapControlPlaneQuery.bind(api);
+  let reservationSelectCount = 0;
+  api.executeBootstrapControlPlaneQuery = async (sql, params = []) => {
+    if (String(sql).includes('FROM replica_operations') &&
+        String(sql).includes('WHERE type = ?')) {
+      reservationSelectCount += 1;
+    }
+    return originalExecute(sql, params);
+  };
+
+  const blockingReservations =
+    await api.getBlockingMoveReplicaBootstrapAdmissions();
+
+  t.equal(
+    reservationSelectCount,
+    1,
+    'collector should refresh from durable replica_operations when cache visibility is missing',
+  );
+  t.equal(
+    blockingReservations.length,
+    0,
+    'durable failed reservation should clear the stale in-memory bootstrap blocker',
+  );
+  t.equal(
+    api.moveReplicaAssignmentReservations.get(assignment.assignmentId)?.status,
+    BOOTSTRAP_API_HANDOFF_STATUS.FAILED,
+    'durable terminal status should replace the stale local reservation snapshot',
+  );
+});
+
 test('BootstrapAPI MOVE_REPLICA reservation SQL fallback backs off after retryable lookup pressure',
   async (t) => {
     const fixture = await bootstrapMoveReplicaAssignment(t, {

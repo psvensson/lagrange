@@ -289,6 +289,7 @@ class MoveReplicaAssignmentOwner {
       Math.floor(options.now) :
       Date.now();
     const byAssignmentId = new Map();
+    const localReservationIds = new Set();
     const reservations = this.getMoveReplicaAssignmentReservations();
 
     for (const reservation of reservations?.values?.() || []) {
@@ -297,15 +298,28 @@ class MoveReplicaAssignmentOwner {
         continue;
       }
       byAssignmentId.set(normalized.assignmentId, normalized);
+      localReservationIds.add(normalized.assignmentId);
     }
 
     const cacheRows = this.getMoveReplicaAssignmentRowsFromCache();
+    const cacheCoveredAssignmentIds = new Set();
     if (Array.isArray(cacheRows) && cacheRows.length > NUM.ZERO) {
-      this.collectMoveReplicaAssignmentReservationsFromRows(cacheRows, byAssignmentId);
-      return [...byAssignmentId.values()];
-    }
-    if (byAssignmentId.size > NUM.ZERO) {
-      return [...byAssignmentId.values()];
+      for (const row of cacheRows) {
+        const normalized = this.normalizeMoveReplicaAssignmentReservationRow(row);
+        if (!normalized) {
+          continue;
+        }
+        cacheCoveredAssignmentIds.add(normalized.assignmentId);
+        byAssignmentId.set(normalized.assignmentId, normalized);
+        reservations?.set(normalized.assignmentId, normalized);
+      }
+      const hasLocallyUnconfirmedReservations =
+        [...localReservationIds].some((assignmentId) =>
+          cacheCoveredAssignmentIds.has(assignmentId) !== true,
+        );
+      if (!hasLocallyUnconfirmedReservations) {
+        return [...byAssignmentId.values()];
+      }
     }
 
     if (!this.getSqlQueryEngine() || !this.shouldAttemptReservationSqlRefresh(now)) {

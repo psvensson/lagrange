@@ -4,39 +4,39 @@
 
 Sprint: `work/sprints/active-2026-q2-publication-scoped-consistency-and-node-join-closure.md`
 
-Package: `work/packages/active-20260506-rolling-restart-startup-published-snapshot-coverage-control-plane-source-removal-workflow-progress-reentry.md`
+Package: `work/packages/active-20260506-rolling-restart-published-snapshot-coverage-priority-spread-serial-wait-workflow-progress-reentry.md`
 
 Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/rolling-restart-after-retained-carrier-subordinated-source-timeout-dominance-20260506T222400Z.report.json`
+Artifact: `test-output/reports/rolling-restart-after-stale-move-assignment-sql-refresh-20260506T224415Z.report.json`
 
-Playback: `test-output/reports/.playback/rolling-restart-after-retained-carrier-subordinated-source-timeout-dominance-20260506T222400Z/rolling-restart/`
+Playback: `test-output/reports/.playback/rolling-restart-after-stale-move-assignment-sql-refresh-20260506T224415Z/rolling-restart/`
 
 ## Boundary
 
-Owner: `Startup published snapshot-coverage convergence over control-plane publication source-removal workflow progress`
+Owner: `Publication recovery gate over priority spread convergence and workflow-owned serial wait / coordination-mismatch progress`
 
-Boundary: `Startup published snapshot coverage control-plane source-removal workflow progress`
+Boundary: `Published snapshot coverage priority spread serial-wait workflow progress`
 
-Dominant reason: `BOOTSTRAP_PHASE_INCOMPLETE`
+Dominant reason: `priority_recovery_workflow_progress_transition_deferred`
 
-Current state: The pending-ACK follow-up seam is closed: priority recovery now converges, publication is epoch 1 PUBLISHED with pendingAckCount 0, and the representative rerun stalls at active 2/5 with snapshot coverage 1/5. The live owner is control_plane_publications-p1 under operation_workflow_owner / workflow_progress in source_removal, with repeated replace_remove_safety_blocked deferrals and stale MOVE_REPLICA reservation invalidations marked source_owner_unavailable.
+Current state: The startup source-removal seam is closed: the representative rerun now reaches epoch 4 PUBLISHED with pendingAckCount 0, active 3/5, snapshot coverage 2/5, and recoveryProtocolState priority_spread_pending. The live owner is sql_write_operations-p1 under operation_workflow_owner / workflow_progress with priority_operation_serial_wait through sql_transactions-p1, while sql_transactions-p1 itself is blocked as publication_recovery_eligible_but_coordinator_excludes_node and seed transport saturation on sql_transaction_participants-p1-r4 remains supporting evidence.
 
 ## Next Action
 
-Extract the 222400Z epoch-1 PUBLISHED source-removal fixture for control_plane_publications-p1 and the mg-1-r1 MOVE_REPLICA assignment; decide whether replace-remove safety or stale source-owner invalidation is the canonical owner; then repair only that startup source-removal path.
+Extract the 224415Z epoch-4 PUBLISHED priority-spread fixture for sql_write_operations-p1 and sql_transactions-p1; decide whether workflow-owned serial wait or publication recovery coordinator exclusion is the canonical owner; then repair only that priority-spread workflow-progress path.
 
 ## Proof Ladder
 
-1. `Focused 222400Z startup source-removal fixture`
-2. `Owner regression for startup source-removal workflow progress or stale assignment invalidation`
+1. `Focused 224415Z published priority-spread fixture`
+2. `Owner regression for priority serial wait versus coordinator exclusion workflow progress`
 3. `Touched-file static guardrails`
 4. `Representative rolling-restart --fast-local rerun`
 
 ## Touched Files
 
-1. `src/bootstrap/owners/bootstrap-request-owner.js`
-2. `src/bootstrap/bootstrap-api-constants.js`
-3. `src/rebalancer/operation-workflow-owner-shared.js`
-4. `test/rebalancer/replace-replica-workflow.test.js`
+1. `src/control-plane/priority-recovery-snapshot-stage-3.js`
+2. `src/control-plane/priority-recovery-snapshot-stage-11.js`
+3. `src/rebalancer/operation-workflow-owner-segment-5.js`
+4. `test/control-plane/priority-recovery-snapshot.test.js`
 5. `test/distributed/harness/__tests__/failure-bundle.test.js`
