@@ -103,19 +103,20 @@ Secondary after the primary path is stable:
 
 The current active representative re-entry package is:
 
-1. [Rolling Restart Published Snapshot Coverage Priority Spread Serial-Wait Workflow Progress Reentry](../packages/active-20260506-rolling-restart-published-snapshot-coverage-priority-spread-serial-wait-workflow-progress-reentry.md)
+1. [Rolling Restart Startup Active Gate Snapshot Coverage Selected-Snapshot Timeout Bootstrap Readiness Reentry](../packages/active-20260506-rolling-restart-startup-active-gate-snapshot-coverage-selected-snapshot-timeout-bootstrap-readiness-reentry.md)
 
 Retained predecessor context file:
 
-1. [Rolling Restart Startup Active Gate Publication Evidence Priority Recovery Consumer Alignment](../packages/done-20260506-rolling-restart-startup-active-gate-publication-evidence-priority-recovery-consumer-alignment.md)
-2. [Rolling Restart Startup Active Gate Snapshot Coverage Priority Serial-Wait Workflow Progress Reentry](../packages/done-20260506-rolling-restart-startup-active-gate-snapshot-coverage-priority-serial-wait-workflow-progress-reentry.md)
-3. [Rolling Restart Startup Active Gate Priority Operation Creation Snapshot Coverage Reentry](../packages/done-20260506-rolling-restart-startup-active-gate-priority-operation-creation-snapshot-coverage-reentry.md)
-4. [Rolling Restart Published Snapshot Coverage Priority Serial-Wait Workflow Progress Reentry](../packages/done-20260506-rolling-restart-published-snapshot-coverage-priority-serial-wait-workflow-progress-reentry.md)
-5. [Rolling Restart Publication ACK-Pending Rebalancer Handoff Admission Reentry](../packages/done-20260506-rolling-restart-publication-ack-pending-rebalancer-handoff-admission-reentry.md)
-6. [Rolling Restart Startup Seed Transport Delivery-Source Saturation Reentry](../packages/done-20260506-rolling-restart-startup-seed-transport-delivery-source-saturation-reentry.md)
-7. [Rolling Restart Startup Publication ACK-Pending Owner-RPC Nodes Repair Reentry](../packages/done-20260506-rolling-restart-startup-publication-ack-pending-owner-rpc-nodes-repair-reentry.md)
-8. [Rolling Restart Topology Publication Snapshot Reachability Reentry](../packages/done-20260505-rolling-restart-topology-publication-snapshot-reachability-reentry.md)
-9. [Rolling Restart Operation Transition Pressure And Over-Target Trim](../packages/todo-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md)
+1. [Rolling Restart Published Snapshot Coverage Priority Spread Serial-Wait Workflow Progress Reentry](../packages/done-20260506-rolling-restart-published-snapshot-coverage-priority-spread-serial-wait-workflow-progress-reentry.md)
+2. [Rolling Restart Startup Active Gate Publication Evidence Priority Recovery Consumer Alignment](../packages/done-20260506-rolling-restart-startup-active-gate-publication-evidence-priority-recovery-consumer-alignment.md)
+3. [Rolling Restart Startup Active Gate Snapshot Coverage Priority Serial-Wait Workflow Progress Reentry](../packages/done-20260506-rolling-restart-startup-active-gate-snapshot-coverage-priority-serial-wait-workflow-progress-reentry.md)
+4. [Rolling Restart Startup Active Gate Priority Operation Creation Snapshot Coverage Reentry](../packages/done-20260506-rolling-restart-startup-active-gate-priority-operation-creation-snapshot-coverage-reentry.md)
+5. [Rolling Restart Published Snapshot Coverage Priority Serial-Wait Workflow Progress Reentry](../packages/done-20260506-rolling-restart-published-snapshot-coverage-priority-serial-wait-workflow-progress-reentry.md)
+6. [Rolling Restart Publication ACK-Pending Rebalancer Handoff Admission Reentry](../packages/done-20260506-rolling-restart-publication-ack-pending-rebalancer-handoff-admission-reentry.md)
+7. [Rolling Restart Startup Seed Transport Delivery-Source Saturation Reentry](../packages/done-20260506-rolling-restart-startup-seed-transport-delivery-source-saturation-reentry.md)
+8. [Rolling Restart Startup Publication ACK-Pending Owner-RPC Nodes Repair Reentry](../packages/done-20260506-rolling-restart-startup-publication-ack-pending-owner-rpc-nodes-repair-reentry.md)
+9. [Rolling Restart Topology Publication Snapshot Reachability Reentry](../packages/done-20260505-rolling-restart-topology-publication-snapshot-reachability-reentry.md)
+10. [Rolling Restart Operation Transition Pressure And Over-Target Trim](../packages/todo-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md)
 
 ## Queued Packages
 
@@ -184,6 +185,12 @@ epoch `5` `ACK_PENDING` publication with `sql_transaction_participants-p1`
 terminal `rebalancer_handoff`, `replica_operations-p1`
 `operation_created_but_no_step_transitions`, and `sql_write_operations-p1`
 still `recovering_in_flight`.
+The follow-up `20260506T230547Z` rerun then moved again after the direct
+source-versus-carrier owner repair: supporting serial-wait carriers no longer
+outrank their direct source blockers, terminal published priority-spread
+workflow debt is closed, and the live representative boundary is now startup
+selected-snapshot timeout on `11601...` plus three `fresh_join`
+bootstrap-incomplete nodes (`35a...`, `8be8...`, `ebc4...`).
 
 All final consistency recommendation packages are complete or queued outside
 the current execution path.
@@ -193,7 +200,7 @@ Other secondary matrix failures become active packages only after the
 
 Current re-entry package:
 
-1. [Rolling Restart Published Snapshot Coverage Priority Spread Serial-Wait Workflow Progress Reentry](../packages/active-20260506-rolling-restart-published-snapshot-coverage-priority-spread-serial-wait-workflow-progress-reentry.md)
+1. [Rolling Restart Startup Active Gate Snapshot Coverage Selected-Snapshot Timeout Bootstrap Readiness Reentry](../packages/active-20260506-rolling-restart-startup-active-gate-snapshot-coverage-selected-snapshot-timeout-bootstrap-readiness-reentry.md)
 
 Queued convergence-grammar packages:
 
@@ -210,125 +217,52 @@ Queued cleanup packages:
 ## Remaining Work Summary
 
 1. Current execution blocker:
-   The latest May 6 representative rerun after the stale local
-   `MOVE_REPLICA` reservation refresh repair used
-   `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-after-stale-move-assignment-sql-refresh-20260506T224415Z.report.json --fast-local --verbose`.
+   The latest May 6 representative rerun after the direct
+   source-versus-carrier owner repair used
+   `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-after-serial-wait-source-dominance-20260506T230547Z.report.json --fast-local --verbose`.
    Report:
-   `test-output/reports/rolling-restart-after-stale-move-assignment-sql-refresh-20260506T224415Z.report.json`.
-   Result: failed after `133.7s`; terminal barrier:
+   `test-output/reports/rolling-restart-after-serial-wait-source-dominance-20260506T230547Z.report.json`.
+   Result: failed after `131.4s`; terminal barrier:
    `Not all nodes reached ACTIVE state within 120000ms`.
-   The current report classifies as root cause class `topology`, failure class
-   `priority_recovery_progress_blocked`, and dominant reason
-   `priority_recovery_workflow_progress_transition_deferred`. Publication is
-   epoch `4` `PUBLISHED`, pending ACK count is `0`, blocked-node count is
-   `0`, missing published count is `0`, and recovery protocol state is
-   `priority_spread_pending`. Current active-gate progress ends at active
-   `3/5` with snapshot coverage `2/5` on selected node `11601...`; blocker
-   signature is now
-   `inactive_nodes=2|snapshot_coverage=2/5|priority_recovery_progress_class=priority_operation_serial_wait|priority_recovery_progress_class=publication_recovery_eligible_but_coordinator_excludes_node`.
-   The dominant summary witness is now `sql_write_operations-p1` under
-   `operation_workflow_owner / workflow_progress` with
-   `priority_operation_serial_wait`, supported by
-   `sql_transactions-p1` under
-   `publication_recovery_eligible_but_coordinator_excludes_node` and repeated
-   seed transport saturation on
-   `sql_transaction_participants-p1-r4`. The representative owner is
-   therefore published priority-spread workflow progress, not the closed
-   startup source-removal reservation path.
+   The current report classifies as root cause class `startup`, failure class
+   `startup_recovery_blocked`, and dominant reason
+   `BOOTSTRAP_PHASE_INCOMPLETE`. Publication already reaches epoch `4`
+   `PUBLISHED` with pending ACK count `0`, blocked-node count `0`, and
+   missing-published count `0`. Last meaningful startup progress still keeps
+   active `2/5`, snapshot coverage `2/5`, selected snapshot `11601...`, and
+   selected missing published nodes `35a...`, `8be8...`, and `ebc4...`, but
+   terminal current progress collapses to
+   `inactive_nodes=3|snapshot_coverage=0/5|snapshot_error` because admin
+   snapshot and default-lane queries on `11601...` both time out after
+   `100ms`. The top-level failure bundle no longer keeps published
+   priority-spread workflow debt as the live owner, although last meaningful
+   progress still preserves earlier `eligible_but_no_operation_created`
+   evidence on `sql_transactions-p1` and `sql_write_operations-p1`.
 2. Completed trace, fixture, and next active task:
    the
    [Rolling Restart Topology Publication Snapshot Reachability Reentry](../packages/done-20260505-rolling-restart-topology-publication-snapshot-reachability-reentry.md)
-   package has completed the `20260505T145246Z` trace, replay fixture,
-   selected-snapshot repair evidence recovery probe, rebalancer-handoff
-   follow-up traces, runtime pre-execution diagnostic, diagnostic replay review
-   fix, `20260505T175220Z` representative rerun, and `20260505T175220Z`
-   evidence trace, the focused `175220Z` pending-dispatch fixture, and the
-   `20260505T183911Z` representative rerun after that fixture, the
-   `20260505T183911Z` evidence trace, and the focused `183911Z`
-   coordination-mismatch fixture. The `175220Z` fixture proves the
-   `sql_write_operations-p1` pending-dispatch witness remains subordinate to
-   publication missing-active debt, and the `183911Z` fixture now proves the
-   same for the epoch `2` coordination-mismatch workflow witnesses. The epoch
-   `2` publication-membership owner trace is now also complete: recovery-eligible
-   projection is enabled but adds no node outside the durable baseline, ACK
-   readiness admits no extra node, target-state selection stays on
-   `recovery_cohort`, and priority recovery falls back to
-   `publication_membership` eligibility. The diagnostics publication owner-RPC
-   read fix is now complete too, and the follow-up harness slice is now
-   complete as well: the selected-snapshot reachability fast path removed the
-   synthetic `ebc4aa0b-...` outer reprobe timeout by skipping bootstrap
-   readiness for the selected coverage admin-only reprobe. The terminal
-   progress retention harness slice is now complete too: it keeps the
-   strongest last meaningful timeout witness in `activeGate.progress` when
-   coverage regresses without semantic publication improvement. The
-   ACK-pending publication classification slice is now complete too. The
-   publication owner-read safety fix and `20260506T071349Z` representative
-   rerun are predecessor context too: they closed only after the
-   control-snapshot repair fallback and `20260506T073557Z` representative
-   rerun reopened epoch `3` `PUBLISHED` missing-active debt on `11601...` /
-   `8be8...`, with terminal selected-snapshot reachability timeout on the
-   seed, retained `35a...` selected-snapshot staleness in replay, and
-   subordinate `sql_transaction_participants-p1` /
-   `sql_write_operations-p1` operation-scheduling and workflow-timeout
-   evidence. The `20260506T074733Z` representative rerun then sharpened that
-   debt to a workflow-owned serial-wait boundary, and the `20260506T075850Z`
-   rerun after the serial-wait release slice exposed the mixed-epoch
-   contradiction between concrete follow-up operations, durable epoch `5`
-   spread closure, and synthetic replay/summary scheduling debt. The
-   epoch-aware observation witness fix is now complete too: the
-   `20260506T082449Z` rerun closes that mixed-epoch contradiction. The
-   same-epoch witness-rank fix and `20260506T092319Z` representative rerun are
-   now historical proof. The `20260506T094635Z` failure-bundle
-   dominant-witness signal fixture is also complete and locks the canonical
-   signal set for that mixed-witness shape. The acknowledgement owner-RPC
-   publication-history repair is now complete too: `20260506T104727Z`
-   proved the old epoch `3` ACK-history fault is closed. The two critical
-   delivery-source transport slices are now complete as well:
-   `20260506T110108Z` capped the hot source pending queue at `48` and moved
-   the gate to epoch `4` `ACK_PENDING` seed-readiness / pending-ACK debt, and
-   `20260506T110828Z` reserved one critical in-flight slot away from the hot
-   source and restored seed `7493...` to ACTIVE. The follow-up
-   `20260506T123000Z` representative rerun is now the topology-slice closure
-   proof too: publication convergence remains epoch `3` `PUBLISHED`, pending
-   ACK `0`, missing published `0`, and the old
-   `control_plane_publications-p1` `replace_remove_safety_blocked` loop no
-   longer dominates. The bootstrap assignment-token / register-service slice
-   and the priority-recovery operation-scheduling slice are now complete too.
-   The current unchecked task has now migrated again: determine which queue
-   admission or dispatch rule lets one hot critical delivery source keep seed
-   `7493...` transport-backpressured, and prove whether the retained
-   `8be8...` `contacting_seed` and `ebc4...` selected `nodes` repair
-   participant failure are direct consequence, co-owner, or subordinate
-   evidence for that startup transport debt.
+   package and its May 6 successor slices have now completed the
+   selected-snapshot repair probe, publication owner-RPC repair, stale
+   `MOVE_REPLICA` reservation refresh, multiple priority-recovery owner
+   reclassifications, transport fairness, mixed-summary witness cleanup,
+   retained-carrier release, and the direct source-versus-carrier owner
+   repair. Each slice ended in a replayable representative rerun and moved the
+   live blocker forward. The latest closed slice proves published
+   priority-spread workflow debt is no longer the terminal owner. The current
+   unchecked task is therefore the freshly split startup package: determine
+   whether the direct owner is selected-snapshot query timeout on `11601...`,
+   fresh-join bootstrap/runtime readiness on `35a...` / `8be8...` /
+   `ebc4...`, or the crossover between retained last-meaningful progress and
+   terminal snapshot failure.
 3. Harness classification:
-   terminal barrier evidence wins over stale playback reconstruction for
-   active, restart-recovery, load-readiness, convergence, and quiescence
-   failures. Earlier publication ACK, missing-published drift, transport, and
-   publication owner-read/remove-safety fixes remain historical proof. The
-   current terminal boundary is now the `20260506T150932Z` startup seed
-   transport artifact: failure class `startup_recovery_blocked`, root cause
-   class `startup`, dominant reason
-   `readiness_probe_timeout_fallback=Node readiness probe timed out for 7493...`,
-   publication epoch `5` `PUBLISHED`, pending ACK count `0`, and selected
-   snapshot coverage `4/5` on `ebc4...`. Priority recovery and publication
-   closure are predecessor context now: replay keeps the recovery protocol on
-   `steady_published`, all tracked priority partitions on `converged` /
-   `spread_satisfied_in_flight`, serial-wait witnesses are gone, and
-   `sql_write_operations-p1` is terminal-completed on
-   `b3d55d51-363f-46cf-9ff2-f4aecfcf3de0`. The live owner seam is therefore
-   seed transport pressure on `7493...`, because authoritative discovery
-   repair now surfaces canonical SQL participant failure on
-   `7493.../partition/nodes-p1-r3`, while startup readiness timeout remains
-   the user-visible consequence.
-   The previous `133734Z` serial-wait witness, the previous `131802Z`
-   operation-scheduling witness, the previous `123000Z`
-   operation-progress witness, the previous `121614Z`
-   topology-settling witness, and the previous `124254Z` bootstrap
-   assignment-token witness now remain predecessor context in the done
-   representative package files. A narrow harness formatter fix still prevents
-   `publicationConvergence=ready` when the same active-gate evidence carries
-   `ACK_PENDING`, pending ACK, or missing-published debt; this remains
-   classification-only and does not close the runtime owner blocker.
+   terminal barrier evidence continues to win over stale playback
+   reconstruction for active, restart-recovery, load-readiness, convergence,
+   and quiescence failures. The latest harness slice preserves the last
+   meaningful startup state separately from the terminal `selectedSnapshotError`
+   collapse, so the current package can decide whether the live owner is the
+   snapshot query timeout itself or the earlier bootstrap-readiness stall.
+   Earlier publication ACK, transport, publication owner-read/remove-safety,
+   and priority-recovery witness fixes remain historical proof only.
 4. Final consistency:
    the final leader-map consistency package is complete for this sprint
    because the rerun moved to a freshly split non-final blocker.

@@ -29,17 +29,28 @@ const SAME_OPERATION_FRESHNESS_TEST_NAME =
   'same-operation retry handoff progress supersedes stale workflow timeout';
 const SERIAL_WAIT_METADATA_TEST_NAME =
   'serial wait operation metadata survives progress summary normalization';
+const SERIAL_WAIT_SOURCE_BLOCKER_TEST_NAME =
+  'direct source blockers outrank supporting serial-wait carriers';
 const OPERATION_SCHEDULING_PARTITION_ID = 'replica_operations-p1';
 const SERIAL_WAIT_PARTITION_ID = 'sql_transactions-p1';
 const SERIAL_WAIT_BLOCKING_PARTITION_ID = 'sql_transaction_participants-p1';
+const SERIAL_WAIT_SOURCE_BLOCKER_PARTITION_ID = 'sql_transactions-p3';
+const SERIAL_WAIT_SUPPORTING_CARRIER_PARTITION_ID = 'sql_write_operations-p3';
 const WORKFLOW_TIMEOUT_PARTITION_ID = 'sql_transactions-p2';
 const SAME_BOUNDARY_DEFERRED_PARTITION_ID = 'replica_operations-p2';
 const STALE_WORKFLOW_TIMEOUT_PARTITION_ID = 'sql_transactions-p1';
 const SERIAL_WAIT_BLOCKING_OPERATION_ID = 'op-serial-wait-owner';
+const SERIAL_WAIT_SOURCE_BLOCKER_OPERATION_ID =
+  'op-serial-wait-source-direct-blocker';
+const SERIAL_WAIT_SUPPORTING_CARRIER_OPERATION_ID =
+  'op-serial-wait-supporting-carrier';
 const STALE_WORKFLOW_TIMEOUT_OPERATION_ID = 'op-retry-handoff';
 const STALE_WORKFLOW_TIMEOUT_CORRELATION_KEY =
   'sql_transactions-p1|4|op-retry-handoff';
 const SAMPLE_CAPTURED_AT_MS = 1777919035255;
+const SERIAL_WAIT_SOURCE_BLOCKER_PROGRESS_AT_MS = SAMPLE_CAPTURED_AT_MS - 2000;
+const SERIAL_WAIT_SUPPORTING_CARRIER_PROGRESS_AT_MS =
+  SAMPLE_CAPTURED_AT_MS - 1000;
 const STALE_WORKFLOW_TIMEOUT_PROGRESS_AT_MS = 1777922869705;
 const RETRY_HANDOFF_PROGRESS_AT_MS = 1777922930548;
 const RETRY_HANDOFF_DELAY_MS = 250;
@@ -81,6 +92,62 @@ const SERIAL_WAIT_WITNESS = Object.freeze({
   serialWaitOperationIds: Object.freeze([SERIAL_WAIT_BLOCKING_OPERATION_ID]),
   serialWaitPartitionIds: Object.freeze([SERIAL_WAIT_BLOCKING_PARTITION_ID]),
   lastProgressAtMs: SAMPLE_CAPTURED_AT_MS,
+});
+const SERIAL_WAIT_SOURCE_DIRECT_BLOCKER_WITNESS = Object.freeze({
+  partitionId: SERIAL_WAIT_SOURCE_BLOCKER_PARTITION_ID,
+  semanticStateId: PRIORITY_RECOVERY_SEMANTIC_STATE.COORDINATION_MISMATCH,
+  progressClassIds: Object.freeze([
+    PRIORITY_RECOVERY_BLOCKER_REASON.RECOVERY_ELIGIBLE_EXCLUDED,
+  ]),
+  blockerReasonCodes: Object.freeze([
+    PRIORITY_RECOVERY_BLOCKER_REASON.RECOVERY_ELIGIBLE_EXCLUDED,
+  ]),
+  progressContractState: OWNER_CONTRACT_STATE.PENDING,
+  actuationState:
+    PRIORITY_RECOVERY_ACTUATION_STATE.DISPATCHED_WAITING_PROGRESS,
+  currentOwner: PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER,
+  blockingBoundary: PRIORITY_RECOVERY_BLOCKING_BOUNDARY.WORKFLOW_PROGRESS,
+  waitMode: PRIORITY_RECOVERY_WAIT_MODE.EVENT_DRIVEN,
+  nextRequiredAction:
+    PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.WAIT_FOR_OPERATION_PROGRESS,
+  operationIds: Object.freeze([SERIAL_WAIT_SOURCE_BLOCKER_OPERATION_ID]),
+  witnessIds: Object.freeze([SERIAL_WAIT_SOURCE_BLOCKER_OPERATION_ID]),
+  correlationKey:
+    SERIAL_WAIT_SOURCE_BLOCKER_PARTITION_ID + '|4|' +
+    SERIAL_WAIT_SOURCE_BLOCKER_OPERATION_ID,
+  lastProgressAtMs: SERIAL_WAIT_SOURCE_BLOCKER_PROGRESS_AT_MS,
+  latestOperationWorkflowStep: WORKFLOW_STEP_SENDING,
+  latestOperationStatus: OPERATION_STATUS_PENDING,
+});
+const SERIAL_WAIT_SUPPORTING_CARRIER_WITNESS = Object.freeze({
+  partitionId: SERIAL_WAIT_SUPPORTING_CARRIER_PARTITION_ID,
+  semanticStateId: PRIORITY_RECOVERY_SEMANTIC_STATE.NEEDS_OPERATION,
+  progressClassIds: Object.freeze([
+    PRIORITY_RECOVERY_BLOCKER_REASON.SERIAL_OPERATION_WAIT,
+  ]),
+  blockerReasonCodes: Object.freeze([
+    PRIORITY_RECOVERY_BLOCKER_REASON.SERIAL_OPERATION_WAIT,
+  ]),
+  progressContractState: OWNER_CONTRACT_STATE.PENDING,
+  actuationState: PRIORITY_RECOVERY_ACTUATION_STATE.TRANSITION_DEFERRED,
+  currentOwner: PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER,
+  blockingBoundary: PRIORITY_RECOVERY_BLOCKING_BOUNDARY.WORKFLOW_PROGRESS,
+  waitMode: PRIORITY_RECOVERY_WAIT_MODE.EVENT_DRIVEN,
+  nextRequiredAction:
+    PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.WAIT_FOR_OPERATION_PROGRESS,
+  serialWaitOperationIds: Object.freeze([SERIAL_WAIT_SOURCE_BLOCKER_OPERATION_ID]),
+  serialWaitPartitionIds: Object.freeze([SERIAL_WAIT_SOURCE_BLOCKER_PARTITION_ID]),
+  operationIds: Object.freeze([SERIAL_WAIT_SUPPORTING_CARRIER_OPERATION_ID]),
+  witnessIds: Object.freeze([
+    SERIAL_WAIT_SUPPORTING_CARRIER_OPERATION_ID,
+    SERIAL_WAIT_SOURCE_BLOCKER_OPERATION_ID,
+  ]),
+  correlationKey:
+    SERIAL_WAIT_SUPPORTING_CARRIER_PARTITION_ID + '|4|' +
+    SERIAL_WAIT_SUPPORTING_CARRIER_OPERATION_ID,
+  lastProgressAtMs: SERIAL_WAIT_SUPPORTING_CARRIER_PROGRESS_AT_MS,
+  latestOperationWorkflowStep: 'REMOVED',
+  latestOperationStatus: 'removed',
 });
 const OPERATION_SCHEDULING_WITNESS = Object.freeze({
   partitionId: OPERATION_SCHEDULING_PARTITION_ID,
@@ -240,6 +307,39 @@ test(SERIAL_WAIT_METADATA_TEST_NAME, () => {
   assert.deepEqual(
     dominantWitness.serialWaitPartitionIds,
     [SERIAL_WAIT_BLOCKING_PARTITION_ID],
+  );
+});
+
+test(SERIAL_WAIT_SOURCE_BLOCKER_TEST_NAME, () => {
+  const progressSummary = buildPriorityRecoveryProgressSummary({
+    priorityRecoveryPartitionWitnesses: Object.freeze([
+      SERIAL_WAIT_SOURCE_DIRECT_BLOCKER_WITNESS,
+      SERIAL_WAIT_SUPPORTING_CARRIER_WITNESS,
+    ]),
+  });
+  const dominantWitness = progressSummary.dominantWitness;
+
+  assert.equal(progressSummary.partitionCount, EXPECTED_PARTITION_COUNT);
+  assert.equal(
+    dominantWitness.partitionId,
+    SERIAL_WAIT_SOURCE_BLOCKER_PARTITION_ID,
+  );
+  assert.deepEqual(
+    dominantWitness.blockerReasonCodes,
+    [PRIORITY_RECOVERY_BLOCKER_REASON.RECOVERY_ELIGIBLE_EXCLUDED],
+  );
+  assert.deepEqual(
+    dominantWitness.operationIds,
+    [SERIAL_WAIT_SOURCE_BLOCKER_OPERATION_ID],
+  );
+  assert.deepEqual(dominantWitness.serialWaitPartitionIds, []);
+  assert.equal(
+    dominantWitness.latestOperationWorkflowStep,
+    WORKFLOW_STEP_SENDING,
+  );
+  assert.equal(
+    dominantWitness.latestOperationStatus,
+    OPERATION_STATUS_PENDING,
   );
 });
 

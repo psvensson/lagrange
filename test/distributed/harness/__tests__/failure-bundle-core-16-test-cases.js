@@ -24,9 +24,13 @@ export function registerFailureBundleCore16Tests(context) {
     tempDir = context.state.tempDir;
     reportPath = context.state.reportPath;
   };
+  const ACK_CLOSURE_TEST_NAME =
+    'keeps current active-gate ACK closure ahead of stale best-progress debt';
+  const DIRECT_BLOCKER_TEST_NAME =
+    'keeps direct workflow blockers canonical over supporting serial-wait carriers';
 
   it(
-    'keeps current active-gate ACK closure ahead of stale best-progress debt',
+    ACK_CLOSURE_TEST_NAME,
     async () => {
       refreshState();
       const SCENARIO_NAME = 'rolling-restart';
@@ -51,6 +55,9 @@ export function registerFailureBundleCore16Tests(context) {
       const PUBLISHED_NODE_THREE = 'published-node-three';
       const MISSING_NODE_ONE = 'missing-node-one';
       const MISSING_NODE_TWO = 'missing-node-two';
+      const MISSING_ACTIVE_NODE_REASON_PREFIX =
+        STABILITY_GATE_BLOCKER_PUBLICATION_MISSING_ACTIVE_NODE + '=';
+      const BENCHMARK_GATE_STATUS_SKIPPED = 'skipped';
       const PUBLICATION_EPOCH = 3;
       const EXPECTED_NODE_COUNT = 5;
       const ACTIVE_NODE_COUNT = 3;
@@ -227,7 +234,7 @@ export function registerFailureBundleCore16Tests(context) {
         outputDir: tempDir,
         reportSummary: {total: ONE_COUNT, fail: ONE_COUNT, pass: ZERO_COUNT},
         standardSummary: {scenarios: []},
-        benchmarkRegressionGate: {status: 'skipped'},
+        benchmarkRegressionGate: {status: BENCHMARK_GATE_STATUS_SKIPPED},
         workspaceRoot: tempDir,
       });
       const scenarioBundle = JSON.parse(
@@ -264,8 +271,7 @@ export function registerFailureBundleCore16Tests(context) {
       );
       assert.ok(
         publicationConvergence.publicationConvergenceGateReasons.includes(
-          STABILITY_GATE_BLOCKER_PUBLICATION_MISSING_ACTIVE_NODE + '=' +
-            MISSING_NODE_ONE,
+          MISSING_ACTIVE_NODE_REASON_PREFIX + MISSING_NODE_ONE,
         ),
       );
       assert.equal(
@@ -274,14 +280,335 @@ export function registerFailureBundleCore16Tests(context) {
       );
       assert.equal(
         failureClassification.dominantReason,
-        STABILITY_GATE_BLOCKER_PUBLICATION_MISSING_ACTIVE_NODE + '=' +
-          MISSING_NODE_ONE,
+        MISSING_ACTIVE_NODE_REASON_PREFIX + MISSING_NODE_ONE,
       );
       assert.equal(
         scenarioBundle.summary.stabilityGates.convergence.blockers.includes(
           STABILITY_GATE_BLOCKER_PUBLICATION_MISSING_ACTIVE_NODE,
         ),
         true,
+      );
+    },
+  );
+
+  it(
+    DIRECT_BLOCKER_TEST_NAME,
+    async () => {
+      refreshState();
+      const SCENARIO_NAME = 'rolling-restart';
+      const PUBLICATION_STATUS_PUBLISHED = 'PUBLISHED';
+      const RECOVERY_PROTOCOL_PRIORITY_SPREAD_PENDING =
+        'priority_spread_pending';
+      const ACTIVE_GATE_MODE_STARTUP = 'startup';
+      const ACTIVE_GATE_STATE_TIMED_OUT = 'timed_out';
+      const ACTIVE_GATE_TERMINAL_REASON = 'stalled_no_progress';
+      const ACTIVE_GATE_COVERAGE_BLOCKER = 'snapshot_coverage=2/5';
+      const ACTIVE_GATE_INACTIVE_BLOCKER = 'inactive_nodes=2';
+      const SCENARIO_ERROR =
+        'Not all nodes reached ACTIVE state within 120000ms';
+      const SOURCE_PARTITION_ID = 'sql_transactions-p3';
+      const CARRIER_PARTITION_ID = 'sql_write_operations-p3';
+      const SOURCE_OPERATION_ID = 'op-direct-source-blocker';
+      const CARRIER_OPERATION_ID = 'op-supporting-serial-wait-carrier';
+      const DIRECT_BLOCKER_DOMINANT_REASON =
+        'priority_recovery_workflow_progress_transition_deferred';
+      const PRIORITY_SPREAD_REASON = 'priority_partitions_not_spread';
+      const PRIORITY_RECOVERY_PROGRESS_CLASS_BLOCKER_PREFIX =
+        'priority_recovery_progress_class=';
+      const PROGRESS_CONTRACT_STATE_PENDING = 'pending';
+      const WORKFLOW_STEP_SENDING = 'SENDING';
+      const WORKFLOW_STEP_REMOVED = 'REMOVED';
+      const OPERATION_STATUS_PENDING = 'pending';
+      const OPERATION_STATUS_REMOVED = 'removed';
+      const BENCHMARK_GATE_STATUS_SKIPPED = 'skipped';
+      const PUBLICATION_EPOCH = 4;
+      const EXPECTED_NODE_COUNT = 5;
+      const ACTIVE_NODE_COUNT = 3;
+      const INACTIVE_NODE_COUNT = 2;
+      const SNAPSHOT_COVERAGE_COUNT = 2;
+      const PRIORITY_SPREAD_GAP = 3;
+      const SELECTED_PUBLISHED_ACTIVE_NODE_IDS = [
+        'published-node-one',
+        'published-node-two',
+      ];
+      const SELECTED_MISSING_PUBLISHED_NODE_IDS = [
+        'missing-node-one',
+        'missing-node-two',
+        'missing-node-three',
+      ];
+      const SELECTED_MISSING_PUBLISHED_COUNT =
+        SELECTED_MISSING_PUBLISHED_NODE_IDS.length;
+      const ZERO_COUNT = 0;
+      const ONE_COUNT = 1;
+      const TWO_COUNT = 2;
+      const SOURCE_LAST_PROGRESS_AT_MS = 1778107569901;
+      const CARRIER_LAST_PROGRESS_AT_MS = 1778107588977;
+      const SOURCE_CORRELATION_KEY =
+        SOURCE_PARTITION_ID + '|' + String(PUBLICATION_EPOCH) + '|' +
+        SOURCE_OPERATION_ID;
+      const CARRIER_CORRELATION_KEY =
+        CARRIER_PARTITION_ID + '|' + String(PUBLICATION_EPOCH) + '|' +
+        CARRIER_OPERATION_ID;
+      const SOURCE_PARTITION_SIGNAL =
+        'priorityRecoveryPartition=' + SOURCE_PARTITION_ID;
+      const CARRIER_PARTITION_SIGNAL =
+        'priorityRecoveryPartition=' + CARRIER_PARTITION_ID;
+      const scenarios = [{
+        scenario: SCENARIO_NAME,
+        passed: false,
+        error: SCENARIO_ERROR,
+        details: {
+          diagnostics: {
+            failure: {
+              rootCauseClass: ROOT_CAUSE_CLASS_TOPOLOGY,
+              dominantReason: DIRECT_BLOCKER_DOMINANT_REASON,
+              reasonCounts: {
+                [DIRECT_BLOCKER_DOMINANT_REASON]: ONE_COUNT,
+              },
+            },
+            controlPlaneDiagnostics: {
+              hasExplicitPriorityRecoveryObservation: true,
+              publicationConvergence: {
+                publicationEpoch: PUBLICATION_EPOCH,
+                publicationStatus: PUBLICATION_STATUS_PUBLISHED,
+                pendingAckNodeIds: [],
+                pendingAckCount: ZERO_COUNT,
+                missingPublishedNodeIds: [],
+                missingPublishedCount: ZERO_COUNT,
+                publicationPending: false,
+                prioritySpreadPending: true,
+                recoveryProtocolState:
+                  RECOVERY_PROTOCOL_PRIORITY_SPREAD_PENDING,
+                priorityRecoveryReasonCodes: [PRIORITY_SPREAD_REASON],
+                priorityPartitionSummary: {
+                  satisfied: false,
+                  blockedPartitionCount: TWO_COUNT,
+                  totalSpreadGap: PRIORITY_SPREAD_GAP,
+                },
+              },
+              priorityRecoveryObservation: {
+                publicationEpoch: PUBLICATION_EPOCH,
+                publicationStatus: PUBLICATION_STATUS_PUBLISHED,
+                pendingAckNodeIds: [],
+                pendingAckCount: ZERO_COUNT,
+                blockedNodeIds: [],
+                blockedNodeCount: ZERO_COUNT,
+                missingPublishedNodeIds: [],
+                missingPublishedCount: ZERO_COUNT,
+                publicationPending: false,
+                prioritySpreadPending: true,
+                recoveryProtocolState:
+                  RECOVERY_PROTOCOL_PRIORITY_SPREAD_PENDING,
+                priorityRecoveryReasonCodes: [PRIORITY_SPREAD_REASON],
+                priorityRecoveryProgressClassIds: [
+                  PRIORITY_RECOVERY_BLOCKER_REASON.SERIAL_OPERATION_WAIT,
+                  PRIORITY_RECOVERY_BLOCKER_REASON.RECOVERY_ELIGIBLE_EXCLUDED,
+                ],
+                priorityRecoveryProgressClassCount: TWO_COUNT,
+                priorityRecoverySemanticStateIds: [
+                  PRIORITY_RECOVERY_SEMANTIC_STATE.COORDINATION_MISMATCH,
+                  PRIORITY_RECOVERY_SEMANTIC_STATE.NEEDS_OPERATION,
+                ],
+                priorityRecoverySemanticStateCount: TWO_COUNT,
+                priorityRecoveryBlockedPartitionIds: [
+                  SOURCE_PARTITION_ID,
+                  CARRIER_PARTITION_ID,
+                ],
+                priorityRecoveryBlockedPartitionCount: TWO_COUNT,
+                priorityRecoveryUnresolvedPartitionIds: [
+                  SOURCE_PARTITION_ID,
+                  CARRIER_PARTITION_ID,
+                ],
+                priorityRecoveryUnresolvedPartitionCount: TWO_COUNT,
+                priorityRecoveryBlockerPartitionIdsByReason: {
+                  [PRIORITY_RECOVERY_BLOCKER_REASON.SERIAL_OPERATION_WAIT]: [
+                    CARRIER_PARTITION_ID,
+                  ],
+                  [PRIORITY_RECOVERY_BLOCKER_REASON.RECOVERY_ELIGIBLE_EXCLUDED]:
+                    [SOURCE_PARTITION_ID],
+                },
+                priorityRecoveryPartitionIdsBySemanticState: {
+                  [PRIORITY_RECOVERY_SEMANTIC_STATE.COORDINATION_MISMATCH]: [
+                    SOURCE_PARTITION_ID,
+                  ],
+                  [PRIORITY_RECOVERY_SEMANTIC_STATE.NEEDS_OPERATION]: [
+                    CARRIER_PARTITION_ID,
+                  ],
+                },
+                priorityRecoveryPartitionWitnesses: [{
+                  partitionId: SOURCE_PARTITION_ID,
+                  semanticStateId:
+                    PRIORITY_RECOVERY_SEMANTIC_STATE.COORDINATION_MISMATCH,
+                  progressClassIds: [
+                    PRIORITY_RECOVERY_BLOCKER_REASON
+                      .RECOVERY_ELIGIBLE_EXCLUDED,
+                  ],
+                  blockerReasonCodes: [
+                    PRIORITY_RECOVERY_BLOCKER_REASON
+                      .RECOVERY_ELIGIBLE_EXCLUDED,
+                  ],
+                  progressContractState: PROGRESS_CONTRACT_STATE_PENDING,
+                  actuationState:
+                    PRIORITY_RECOVERY_ACTUATION_STATE
+                      .DISPATCHED_WAITING_PROGRESS,
+                  currentOwner:
+                    PRIORITY_RECOVERY_PROGRESS_OWNER
+                      .OPERATION_WORKFLOW_OWNER,
+                  actuationOwner:
+                    PRIORITY_RECOVERY_PROGRESS_OWNER
+                      .OPERATION_WORKFLOW_OWNER,
+                  blockingBoundary:
+                    PRIORITY_RECOVERY_BLOCKING_BOUNDARY.WORKFLOW_PROGRESS,
+                  waitMode: PRIORITY_RECOVERY_WAIT_MODE.EVENT_DRIVEN,
+                  nextRequiredAction:
+                    PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION
+                      .WAIT_FOR_OPERATION_PROGRESS,
+                  operationIds: [SOURCE_OPERATION_ID],
+                  witnessIds: [SOURCE_OPERATION_ID],
+                  correlationKey: SOURCE_CORRELATION_KEY,
+                  lastProgressAtMs: SOURCE_LAST_PROGRESS_AT_MS,
+                  latestOperationWorkflowStep: WORKFLOW_STEP_SENDING,
+                  latestOperationStatus: OPERATION_STATUS_PENDING,
+                }, {
+                  partitionId: CARRIER_PARTITION_ID,
+                  semanticStateId:
+                    PRIORITY_RECOVERY_SEMANTIC_STATE.NEEDS_OPERATION,
+                  progressClassIds: [
+                    PRIORITY_RECOVERY_BLOCKER_REASON.SERIAL_OPERATION_WAIT,
+                  ],
+                  blockerReasonCodes: [
+                    PRIORITY_RECOVERY_BLOCKER_REASON.SERIAL_OPERATION_WAIT,
+                  ],
+                  progressContractState: PROGRESS_CONTRACT_STATE_PENDING,
+                  actuationState:
+                    PRIORITY_RECOVERY_ACTUATION_STATE.TRANSITION_DEFERRED,
+                  currentOwner:
+                    PRIORITY_RECOVERY_PROGRESS_OWNER
+                      .OPERATION_WORKFLOW_OWNER,
+                  actuationOwner:
+                    PRIORITY_RECOVERY_PROGRESS_OWNER
+                      .OPERATION_WORKFLOW_OWNER,
+                  blockingBoundary:
+                    PRIORITY_RECOVERY_BLOCKING_BOUNDARY.WORKFLOW_PROGRESS,
+                  waitMode: PRIORITY_RECOVERY_WAIT_MODE.EVENT_DRIVEN,
+                  nextRequiredAction:
+                    PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION
+                      .WAIT_FOR_OPERATION_PROGRESS,
+                  serialWaitOperationIds: [SOURCE_OPERATION_ID],
+                  serialWaitPartitionIds: [SOURCE_PARTITION_ID],
+                  operationIds: [CARRIER_OPERATION_ID],
+                  witnessIds: [
+                    CARRIER_OPERATION_ID,
+                    SOURCE_OPERATION_ID,
+                  ],
+                  correlationKey: CARRIER_CORRELATION_KEY,
+                  lastProgressAtMs: CARRIER_LAST_PROGRESS_AT_MS,
+                  latestOperationWorkflowStep: WORKFLOW_STEP_REMOVED,
+                  latestOperationStatus: OPERATION_STATUS_REMOVED,
+                }],
+              },
+              activeGate: {
+                mode: ACTIVE_GATE_MODE_STARTUP,
+                state: ACTIVE_GATE_STATE_TIMED_OUT,
+                ready: false,
+                reasonCode: ACTIVE_GATE_TERMINAL_REASON,
+                progress: {
+                  expectedNodeCount: EXPECTED_NODE_COUNT,
+                  activeNodeCount: ACTIVE_NODE_COUNT,
+                  inactiveNodeCount: INACTIVE_NODE_COUNT,
+                  snapshotCoverageNodeCount: SNAPSHOT_COVERAGE_COUNT,
+                  snapshotCoverageComplete: false,
+                  publicationStatus: PUBLICATION_STATUS_PUBLISHED,
+                  publicationEpoch: PUBLICATION_EPOCH,
+                  recoveryProtocolState:
+                    RECOVERY_PROTOCOL_PRIORITY_SPREAD_PENDING,
+                  selectedPublishedActiveNodeIds:
+                    SELECTED_PUBLISHED_ACTIVE_NODE_IDS,
+                  selectedMissingPublishedNodeIds:
+                    SELECTED_MISSING_PUBLISHED_NODE_IDS,
+                  pendingAckCount: ZERO_COUNT,
+                  missingPublishedCount: SELECTED_MISSING_PUBLISHED_COUNT,
+                  gateReasons: [],
+                  prioritySpreadSatisfied: false,
+                  prioritySpreadGap: PRIORITY_SPREAD_GAP,
+                  priorityBlockedPartitionCount: TWO_COUNT,
+                  priorityRecoveryProgressClasses: {
+                    unresolvedClassIds: [
+                      PRIORITY_RECOVERY_BLOCKER_REASON
+                        .SERIAL_OPERATION_WAIT,
+                      PRIORITY_RECOVERY_BLOCKER_REASON
+                        .RECOVERY_ELIGIBLE_EXCLUDED,
+                    ],
+                    unresolvedClassCount: TWO_COUNT,
+                    unresolvedSemanticStateIds: [
+                      PRIORITY_RECOVERY_SEMANTIC_STATE.COORDINATION_MISMATCH,
+                      PRIORITY_RECOVERY_SEMANTIC_STATE.NEEDS_OPERATION,
+                    ],
+                    unresolvedSemanticStateCount: TWO_COUNT,
+                    blockedPartitionIds: [
+                      SOURCE_PARTITION_ID,
+                      CARRIER_PARTITION_ID,
+                    ],
+                    blockedPartitionCount: TWO_COUNT,
+                  },
+                  blockers: [
+                    ACTIVE_GATE_INACTIVE_BLOCKER,
+                    ACTIVE_GATE_COVERAGE_BLOCKER,
+                    PRIORITY_RECOVERY_PROGRESS_CLASS_BLOCKER_PREFIX +
+                      PRIORITY_RECOVERY_BLOCKER_REASON
+                        .SERIAL_OPERATION_WAIT,
+                    PRIORITY_RECOVERY_PROGRESS_CLASS_BLOCKER_PREFIX +
+                      PRIORITY_RECOVERY_BLOCKER_REASON
+                        .RECOVERY_ELIGIBLE_EXCLUDED,
+                  ],
+                },
+              },
+            },
+          },
+        },
+      }];
+
+      const {scenarioBundles} = await writeFailureBundlesForReport({
+        scenarios,
+        reportOutputPath: reportPath,
+        outputDir: tempDir,
+        reportSummary: {total: ONE_COUNT, fail: ONE_COUNT, pass: ZERO_COUNT},
+        standardSummary: {scenarios: []},
+        benchmarkRegressionGate: {status: BENCHMARK_GATE_STATUS_SKIPPED},
+        workspaceRoot: tempDir,
+      });
+      const scenarioBundle = JSON.parse(
+        await readFile(
+          resolve(tempDir, scenarioBundles[ZERO_COUNT].links.jsonPath),
+          UTF8_ENCODING,
+        ),
+      );
+      const progressSummary =
+        scenarioBundle.publicationConvergence.priorityRecoveryProgressSummary;
+      const dominantWitness = progressSummary.dominantWitness;
+      const failureClassification =
+        scenarioBundle.summary.failureClassification;
+
+      assert.equal(progressSummary.partitionCount, TWO_COUNT);
+      assert.equal(dominantWitness.partitionId, SOURCE_PARTITION_ID);
+      assert.deepEqual(
+        dominantWitness.blockerReasonCodes,
+        [PRIORITY_RECOVERY_BLOCKER_REASON.RECOVERY_ELIGIBLE_EXCLUDED],
+      );
+      assert.equal(
+        dominantWitness.latestOperationWorkflowStep,
+        WORKFLOW_STEP_SENDING,
+      );
+      assert.equal(
+        dominantWitness.latestOperationStatus,
+        OPERATION_STATUS_PENDING,
+      );
+      assert.ok(
+        failureClassification.signals.includes(SOURCE_PARTITION_SIGNAL),
+      );
+      assert.equal(
+        failureClassification.signals.includes(CARRIER_PARTITION_SIGNAL),
+        false,
       );
     },
   );

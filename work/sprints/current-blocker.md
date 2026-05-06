@@ -4,39 +4,38 @@
 
 Sprint: `work/sprints/active-2026-q2-publication-scoped-consistency-and-node-join-closure.md`
 
-Package: `work/packages/active-20260506-rolling-restart-published-snapshot-coverage-priority-spread-serial-wait-workflow-progress-reentry.md`
+Package: `work/packages/active-20260506-rolling-restart-startup-active-gate-snapshot-coverage-selected-snapshot-timeout-bootstrap-readiness-reentry.md`
 
 Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/rolling-restart-after-stale-move-assignment-sql-refresh-20260506T224415Z.report.json`
+Artifact: `test-output/reports/rolling-restart-after-serial-wait-source-dominance-20260506T230547Z.report.json`
 
-Playback: `test-output/reports/.playback/rolling-restart-after-stale-move-assignment-sql-refresh-20260506T224415Z/rolling-restart/`
+Playback: `test-output/reports/.playback/rolling-restart-after-serial-wait-source-dominance-20260506T230547Z/rolling-restart/`
 
 ## Boundary
 
-Owner: `Publication recovery gate over priority spread convergence and workflow-owned serial wait / coordination-mismatch progress`
+Owner: `Startup active-gate selected-snapshot timeout over fresh-join bootstrap readiness and snapshot-coverage reentry`
 
-Boundary: `Published snapshot coverage priority spread serial-wait workflow progress`
+Boundary: `Startup active-gate snapshot coverage / selected-snapshot timeout bootstrap readiness`
 
-Dominant reason: `priority_recovery_workflow_progress_transition_deferred`
+Dominant reason: `BOOTSTRAP_PHASE_INCOMPLETE`
 
-Current state: The startup source-removal seam is closed: the representative rerun now reaches epoch 4 PUBLISHED with pendingAckCount 0, active 3/5, snapshot coverage 2/5, and recoveryProtocolState priority_spread_pending. The live owner is sql_write_operations-p1 under operation_workflow_owner / workflow_progress with priority_operation_serial_wait through sql_transactions-p1, while sql_transactions-p1 itself is blocked as publication_recovery_eligible_but_coordinator_excludes_node and seed transport saturation on sql_transaction_participants-p1-r4 remains supporting evidence.
+Current state: The published priority-spread workflow seam is closed. The representative rerun now fails as startup_recovery_blocked: selected snapshot node 11601... times out on admin snapshot queries after progress reached epoch 4 PUBLISHED with active 2/5 and snapshot coverage 2/5, while 35a..., 8be8..., and ebc4... remain fresh_join bootstrap-incomplete with SQL engine, leader-metadata, and control-plane recovery reasons still open.
 
 ## Next Action
 
-Extract the 224415Z epoch-4 PUBLISHED priority-spread fixture for sql_write_operations-p1 and sql_transactions-p1; decide whether workflow-owned serial wait or publication recovery coordinator exclusion is the canonical owner; then repair only that priority-spread workflow-progress path.
+Extract the 230547Z startup fixture for selectedSnapshotError, lastMeaningfulProgress, and fresh-join readiness reason counts; decide whether the canonical owner is selected-snapshot query timeout, join bootstrap/runtime readiness stall, or no-progress summary retention between them; then repair only that startup owner path.
 
 ## Proof Ladder
 
-1. `Focused 224415Z published priority-spread fixture`
-2. `Owner regression for priority serial wait versus coordinator exclusion workflow progress`
+1. `Focused 230547Z selected-snapshot timeout / bootstrap-readiness fixture`
+2. `Owner regression for terminal snapshot timeout versus retained last-meaningful progress`
 3. `Touched-file static guardrails`
 4. `Representative rolling-restart --fast-local rerun`
 
 ## Touched Files
 
-1. `src/control-plane/priority-recovery-snapshot-stage-3.js`
-2. `src/control-plane/priority-recovery-snapshot-stage-11.js`
-3. `src/rebalancer/operation-workflow-owner-segment-5.js`
-4. `test/control-plane/priority-recovery-snapshot.test.js`
-5. `test/distributed/harness/__tests__/failure-bundle.test.js`
+1. `test/distributed/harness/cluster-segment-1.js`
+2. `test/distributed/harness/failure-bundle-segment-4.js`
+3. `test/distributed/harness/__tests__/cluster.test-part-3.js`
+4. `test/distributed/harness/__tests__/failure-bundle.test.js`

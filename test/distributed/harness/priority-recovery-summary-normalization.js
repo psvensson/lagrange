@@ -76,6 +76,9 @@ const PRIORITY_RECOVERY_DOMINANT_WITNESS_PAIR_RULES = Object.freeze([
 ]);
 const PRIORITY_RECOVERY_DOMINANT_WITNESS_PRIORITY_DIMENSIONS = Object.freeze([
   Object.freeze({
+    rankDelta: resolveSerialWaitSourceDirectBlockerRankDelta,
+  }),
+  Object.freeze({
     rankDelta: (left, right) =>
       resolvePrecedenceRank(
         left?.waitMode,
@@ -601,6 +604,58 @@ function priorityRecoveryDominantWitnessEvidenceHasBlockerReason(
     evidence.progressClassIds.includes(blockerReason) ||
     evidence.blockerReasonCodes.includes(blockerReason)
   );
+}
+
+function resolvePriorityRecoveryDirectBlockerReasonIds(witness) {
+  return normalizeDistinctStringArray([
+    ...normalizeDistinctStringArray(witness?.progressClassIds),
+    ...normalizeDistinctStringArray(witness?.blockerReasonCodes),
+  ]).filter((blockerReason) =>
+    blockerReason !== PRIORITY_RECOVERY_BLOCKER_REASON.SERIAL_OPERATION_WAIT,
+  );
+}
+
+function isPriorityRecoverySupportingSerialWaitCarrierWitness(witness) {
+  const evidence = buildPriorityRecoveryDominantWitnessEvidence(witness);
+  return (
+    priorityRecoveryDominantWitnessEvidenceHasBlockerReason(
+      evidence,
+      PRIORITY_RECOVERY_BLOCKER_REASON.SERIAL_OPERATION_WAIT,
+    ) &&
+    normalizeDistinctStringArray(witness?.serialWaitPartitionIds)
+      .length > ZERO
+  );
+}
+
+function isPriorityRecoveryDirectSourceBlockerWitness(witness) {
+  return resolvePriorityRecoveryDirectBlockerReasonIds(witness)
+    .length > ZERO;
+}
+
+function resolveSerialWaitSourceDirectBlockerRankDelta(left, right) {
+  const leftPartitionId = normalizeStringField(left?.partitionId);
+  const rightPartitionId = normalizeStringField(right?.partitionId);
+  if (
+    leftPartitionId &&
+    rightPartitionId &&
+    isPriorityRecoveryDirectSourceBlockerWitness(left) === true &&
+    isPriorityRecoverySupportingSerialWaitCarrierWitness(right) === true &&
+    normalizeDistinctStringArray(right?.serialWaitPartitionIds)
+      .includes(leftPartitionId)
+  ) {
+    return COMPARISON_LEFT_PRECEDES_RIGHT;
+  }
+  if (
+    leftPartitionId &&
+    rightPartitionId &&
+    isPriorityRecoverySupportingSerialWaitCarrierWitness(left) === true &&
+    isPriorityRecoveryDirectSourceBlockerWitness(right) === true &&
+    normalizeDistinctStringArray(left?.serialWaitPartitionIds)
+      .includes(rightPartitionId)
+  ) {
+    return COMPARISON_RIGHT_PRECEDES_LEFT;
+  }
+  return ZERO;
 }
 
 function resolveDominantWitnessClassIds(witness) {

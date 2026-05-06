@@ -2,28 +2,27 @@
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
   "sprint": "work/sprints/active-2026-q2-publication-scoped-consistency-and-node-join-closure.md",
-  "package": "work/packages/active-20260506-rolling-restart-published-snapshot-coverage-priority-spread-serial-wait-workflow-progress-reentry.md",
+  "package": "work/packages/active-20260506-rolling-restart-startup-active-gate-snapshot-coverage-selected-snapshot-timeout-bootstrap-readiness-reentry.md",
   "status": "active",
   "scenario": "rolling-restart",
-  "artifact": "test-output/reports/rolling-restart-after-stale-move-assignment-sql-refresh-20260506T224415Z.report.json",
-  "playback": "test-output/reports/.playback/rolling-restart-after-stale-move-assignment-sql-refresh-20260506T224415Z/rolling-restart/",
-  "owner": "Publication recovery gate over priority spread convergence and workflow-owned serial wait / coordination-mismatch progress",
-  "boundary": "Published snapshot coverage priority spread serial-wait workflow progress",
-  "dominantReason": "priority_recovery_workflow_progress_transition_deferred",
-  "currentState": "The startup source-removal seam is closed: the representative rerun now reaches epoch 4 PUBLISHED with pendingAckCount 0, active 3/5, snapshot coverage 2/5, and recoveryProtocolState priority_spread_pending. The live owner is sql_write_operations-p1 under operation_workflow_owner / workflow_progress with priority_operation_serial_wait through sql_transactions-p1, while sql_transactions-p1 itself is blocked as publication_recovery_eligible_but_coordinator_excludes_node and seed transport saturation on sql_transaction_participants-p1-r4 remains supporting evidence.",
-  "nextAction": "Extract the 224415Z epoch-4 PUBLISHED priority-spread fixture for sql_write_operations-p1 and sql_transactions-p1; decide whether workflow-owned serial wait or publication recovery coordinator exclusion is the canonical owner; then repair only that priority-spread workflow-progress path.",
+  "artifact": "test-output/reports/rolling-restart-after-serial-wait-source-dominance-20260506T230547Z.report.json",
+  "playback": "test-output/reports/.playback/rolling-restart-after-serial-wait-source-dominance-20260506T230547Z/rolling-restart/",
+  "owner": "Startup active-gate selected-snapshot timeout over fresh-join bootstrap readiness and snapshot-coverage reentry",
+  "boundary": "Startup active-gate snapshot coverage / selected-snapshot timeout bootstrap readiness",
+  "dominantReason": "BOOTSTRAP_PHASE_INCOMPLETE",
+  "currentState": "The published priority-spread workflow seam is closed. The representative rerun now fails as startup_recovery_blocked: selected snapshot node 11601... times out on admin snapshot queries after progress reached epoch 4 PUBLISHED with active 2/5 and snapshot coverage 2/5, while 35a..., 8be8..., and ebc4... remain fresh_join bootstrap-incomplete with SQL engine, leader-metadata, and control-plane recovery reasons still open.",
+  "nextAction": "Extract the 230547Z startup fixture for selectedSnapshotError, lastMeaningfulProgress, and fresh-join readiness reason counts; decide whether the canonical owner is selected-snapshot query timeout, join bootstrap/runtime readiness stall, or no-progress summary retention between them; then repair only that startup owner path.",
   "proof": [
-    "Focused 224415Z published priority-spread fixture",
-    "Owner regression for priority serial wait versus coordinator exclusion workflow progress",
+    "Focused 230547Z selected-snapshot timeout / bootstrap-readiness fixture",
+    "Owner regression for terminal snapshot timeout versus retained last-meaningful progress",
     "Touched-file static guardrails",
     "Representative rolling-restart --fast-local rerun"
   ],
   "touchedFiles": [
-    "src/control-plane/priority-recovery-snapshot-stage-3.js",
-    "src/control-plane/priority-recovery-snapshot-stage-11.js",
-    "src/rebalancer/operation-workflow-owner-segment-5.js",
-    "test/control-plane/priority-recovery-snapshot.test.js",
+    "test/distributed/harness/cluster-segment-1.js",
+    "test/distributed/harness/failure-bundle-segment-4.js",
+    "test/distributed/harness/__tests__/cluster.test-part-3.js",
     "test/distributed/harness/__tests__/failure-bundle.test.js"
   ],
-  "predecessor": "work/packages/done-20260506-rolling-restart-startup-published-snapshot-coverage-control-plane-source-removal-workflow-progress-reentry.md"
+  "predecessor": "work/packages/done-20260506-rolling-restart-published-snapshot-coverage-priority-spread-serial-wait-workflow-progress-reentry.md"
 }
