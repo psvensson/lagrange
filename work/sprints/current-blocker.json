@@ -2,27 +2,28 @@
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
   "sprint": "work/sprints/active-2026-q2-publication-scoped-consistency-and-node-join-closure.md",
-  "package": "work/packages/active-20260506-rolling-restart-publication-ack-pending-priority-serial-wait-workflow-progress-reentry.md",
+  "package": "work/packages/active-20260506-rolling-restart-publication-ack-pending-rebalancer-handoff-stalled-followup-reentry.md",
   "status": "active",
   "scenario": "rolling-restart",
-  "artifact": "test-output/reports/rolling-restart-after-bootstrap-join-admission-recovery-projection-20260506T213144Z.report.json",
-  "playback": "test-output/reports/.playback/rolling-restart-after-bootstrap-join-admission-recovery-projection-20260506T213144Z/rolling-restart/",
-  "owner": "Publication recovery gate over pending ACK convergence and priority serial-wait workflow progress",
-  "boundary": "Publication ACK-pending priority serial-wait workflow progress",
+  "artifact": "test-output/reports/rolling-restart-after-retained-carrier-serial-wait-release-20260506T215236Z.report.json",
+  "playback": "test-output/reports/.playback/rolling-restart-after-retained-carrier-serial-wait-release-20260506T215236Z/rolling-restart/",
+  "owner": "Publication recovery gate over pending ACK convergence and priority rebalancer handoff / stalled follow-up progress",
+  "boundary": "Publication ACK-pending rebalancer-handoff stalled follow-up progress",
   "dominantReason": "pending_ack_nodes",
-  "currentState": "The bootstrap request startup-admission seam is closed: joiner ebc4... now reaches ACTIVE. The representative rerun migrates to epoch 4 ACK_PENDING with pending ACK node 11601..., active-gate best progress 3/5 and current progress 2/5 on selected snapshot ebc4... coverage 2/5. Priority recovery narrows to sql_transactions-p1 blocked by priority_operation_serial_wait behind sql_write_operations-p1 and sql_transaction_participants-p1 still recovering_in_flight, so the live owner is publication convergence over workflow progress, not join admission.",
-  "nextAction": "Extract the 213144Z epoch-4 ACK_PENDING priority workflow fixture, decide whether sql_transactions-p1 serial-wait or selected-snapshot publication disagreement is the canonical current owner, then repair only that publication/workflow path.",
+  "currentState": "The stale serial-wait workflow seam is closed: sql_transactions-p1 is now spread_satisfied_in_flight and priority_operation_serial_wait no longer dominates the representative report. The rerun migrates to epoch 5 ACK_PENDING with active-gate progress 3/5, snapshot coverage 2/5 on selected snapshot 11601..., and a new priority follow-up chain: sql_transaction_participants-p1 is terminal blocked_unclassified under rebalancer_leader / rebalancer_handoff, replica_operations-p1 is operation_stalled under operation_workflow_owner / workflow_timeout, and sql_write_operations-p1 remains recovering_in_flight.",
+  "nextAction": "Extract the 215236Z epoch-5 ACK_PENDING fixture for sql_transaction_participants-p1, replica_operations-p1, and sql_write_operations-p1; decide whether terminal rebalancer_handoff or stale workflow timeout is the canonical owner; then repair only that publication/follow-up path.",
   "proof": [
-    "Focused 213144Z publication ACK-pending fixture",
-    "Owner regression for pending-ACK serial-wait workflow progress",
+    "Focused 215236Z publication ACK-pending handoff/timeout fixture",
+    "Owner regression for pending-ACK rebalancer handoff or stale follow-up progress",
     "Touched-file static guardrails",
     "Representative rolling-restart --fast-local rerun"
   ],
   "touchedFiles": [
-    "src/control-plane/priority-recovery-snapshot-stage-3.js",
-    "src/control-plane/priority-recovery-snapshot-stage-shared.js",
+    "src/control-plane/priority-recovery-snapshot-stage-11.js",
+    "src/rebalancer/operation-workflow-owner-segment-5.js",
+    "src/rebalancer/unified-rebalancer-segment-4.js",
     "test/control-plane/priority-recovery-snapshot.test.js",
     "test/distributed/harness/__tests__/failure-bundle.test.js"
   ],
-  "predecessor": "work/packages/done-20260506-rolling-restart-startup-join-contacting-seed-bootstrap-readiness-reentry.md"
+  "predecessor": "work/packages/done-20260506-rolling-restart-publication-ack-pending-priority-serial-wait-workflow-progress-reentry.md"
 }

@@ -4,38 +4,39 @@
 
 Sprint: `work/sprints/active-2026-q2-publication-scoped-consistency-and-node-join-closure.md`
 
-Package: `work/packages/active-20260506-rolling-restart-publication-ack-pending-priority-serial-wait-workflow-progress-reentry.md`
+Package: `work/packages/active-20260506-rolling-restart-publication-ack-pending-rebalancer-handoff-stalled-followup-reentry.md`
 
 Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/rolling-restart-after-bootstrap-join-admission-recovery-projection-20260506T213144Z.report.json`
+Artifact: `test-output/reports/rolling-restart-after-retained-carrier-serial-wait-release-20260506T215236Z.report.json`
 
-Playback: `test-output/reports/.playback/rolling-restart-after-bootstrap-join-admission-recovery-projection-20260506T213144Z/rolling-restart/`
+Playback: `test-output/reports/.playback/rolling-restart-after-retained-carrier-serial-wait-release-20260506T215236Z/rolling-restart/`
 
 ## Boundary
 
-Owner: `Publication recovery gate over pending ACK convergence and priority serial-wait workflow progress`
+Owner: `Publication recovery gate over pending ACK convergence and priority rebalancer handoff / stalled follow-up progress`
 
-Boundary: `Publication ACK-pending priority serial-wait workflow progress`
+Boundary: `Publication ACK-pending rebalancer-handoff stalled follow-up progress`
 
 Dominant reason: `pending_ack_nodes`
 
-Current state: The bootstrap request startup-admission seam is closed: joiner ebc4... now reaches ACTIVE. The representative rerun migrates to epoch 4 ACK_PENDING with pending ACK node 11601..., active-gate best progress 3/5 and current progress 2/5 on selected snapshot ebc4... coverage 2/5. Priority recovery narrows to sql_transactions-p1 blocked by priority_operation_serial_wait behind sql_write_operations-p1 and sql_transaction_participants-p1 still recovering_in_flight, so the live owner is publication convergence over workflow progress, not join admission.
+Current state: The stale serial-wait workflow seam is closed: sql_transactions-p1 is now spread_satisfied_in_flight and priority_operation_serial_wait no longer dominates the representative report. The rerun migrates to epoch 5 ACK_PENDING with active-gate progress 3/5, snapshot coverage 2/5 on selected snapshot 11601..., and a new priority follow-up chain: sql_transaction_participants-p1 is terminal blocked_unclassified under rebalancer_leader / rebalancer_handoff, replica_operations-p1 is operation_stalled under operation_workflow_owner / workflow_timeout, and sql_write_operations-p1 remains recovering_in_flight.
 
 ## Next Action
 
-Extract the 213144Z epoch-4 ACK_PENDING priority workflow fixture, decide whether sql_transactions-p1 serial-wait or selected-snapshot publication disagreement is the canonical current owner, then repair only that publication/workflow path.
+Extract the 215236Z epoch-5 ACK_PENDING fixture for sql_transaction_participants-p1, replica_operations-p1, and sql_write_operations-p1; decide whether terminal rebalancer_handoff or stale workflow timeout is the canonical owner; then repair only that publication/follow-up path.
 
 ## Proof Ladder
 
-1. `Focused 213144Z publication ACK-pending fixture`
-2. `Owner regression for pending-ACK serial-wait workflow progress`
+1. `Focused 215236Z publication ACK-pending handoff/timeout fixture`
+2. `Owner regression for pending-ACK rebalancer handoff or stale follow-up progress`
 3. `Touched-file static guardrails`
 4. `Representative rolling-restart --fast-local rerun`
 
 ## Touched Files
 
-1. `src/control-plane/priority-recovery-snapshot-stage-3.js`
-2. `src/control-plane/priority-recovery-snapshot-stage-shared.js`
-3. `test/control-plane/priority-recovery-snapshot.test.js`
-4. `test/distributed/harness/__tests__/failure-bundle.test.js`
+1. `src/control-plane/priority-recovery-snapshot-stage-11.js`
+2. `src/rebalancer/operation-workflow-owner-segment-5.js`
+3. `src/rebalancer/unified-rebalancer-segment-4.js`
+4. `test/control-plane/priority-recovery-snapshot.test.js`
+5. `test/distributed/harness/__tests__/failure-bundle.test.js`

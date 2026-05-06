@@ -611,6 +611,20 @@ function isPriorityRecoveryRetainedSerialWaitCarrierDecisionSnapshot(
   );
 }
 
+function isPriorityRecoverySyntheticSerialWaitOnlyDecisionSnapshot(
+  snapshot,
+) {
+  const blockerReasons = normalizePriorityRecoveryStringList(
+    snapshot?.[PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.BLOCKER_REASONS],
+  );
+  return (
+    blockerReasons.length === NUM.ONE &&
+    blockerReasons[NUM.ZERO] ===
+      PRIORITY_RECOVERY_BLOCKER_REASON.SERIAL_OPERATION_WAIT &&
+    hasPriorityRecoveryDecisionSnapshotOperationEvidence(snapshot) !== true
+  );
+}
+
 function buildPriorityRecoverySubordinatedSerialWaitSourcePartitionIdSet(
   snapshots = [],
 ) {
@@ -649,11 +663,15 @@ function normalizePriorityRecoverySyntheticSerialWaitSnapshots(snapshots = []) {
     return normalizedSnapshots;
   }
   return normalizedSnapshots.map((snapshot) => {
+    const syntheticNoOperationSnapshot =
+      isPriorityRecoverySyntheticNoOperationDecisionSnapshot(snapshot) ===
+      true;
+    const retainedSerialWaitCarrierSnapshot =
+      isPriorityRecoveryRetainedSerialWaitCarrierDecisionSnapshot(snapshot) ===
+      true;
     if (
-      isPriorityRecoverySyntheticNoOperationDecisionSnapshot(snapshot) !==
-        true &&
-      isPriorityRecoveryRetainedSerialWaitCarrierDecisionSnapshot(snapshot) !==
-        true
+      syntheticNoOperationSnapshot !== true &&
+      retainedSerialWaitCarrierSnapshot !== true
     ) {
       return snapshot;
     }
@@ -669,7 +687,11 @@ function normalizePriorityRecoverySyntheticSerialWaitSnapshots(snapshots = []) {
             ?.effectiveEligibleNodeIds,
       });
     if (serialWaitOperationContexts.length === NUM.ZERO) {
-      return snapshot;
+      return isPriorityRecoverySyntheticSerialWaitOnlyDecisionSnapshot(
+        snapshot,
+      ) ?
+        releasePriorityRecoverySerialWaitSnapshot(snapshot) :
+        snapshot;
     }
     return buildPriorityRecoverySyntheticSerialWaitSnapshot(
       snapshot,

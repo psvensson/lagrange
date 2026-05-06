@@ -103,7 +103,7 @@ Secondary after the primary path is stable:
 
 The current active representative re-entry package is:
 
-1. [Rolling Restart Publication ACK-Pending Priority Serial-Wait Workflow Progress Reentry](../packages/active-20260506-rolling-restart-publication-ack-pending-priority-serial-wait-workflow-progress-reentry.md)
+1. [Rolling Restart Publication ACK-Pending Rebalancer Handoff Stalled Followup Reentry](../packages/active-20260506-rolling-restart-publication-ack-pending-rebalancer-handoff-stalled-followup-reentry.md)
 
 Retained predecessor context file:
 
@@ -177,6 +177,13 @@ returns to `eligible_but_no_operation_created`. The live representative seam
 is now consumer alignment: `publicationConvergence.activeGate.progress` still
 retains stale `priority_operation_serial_wait` under startup snapshot
 coverage `3/5` on selected snapshot `8be8...`.
+The follow-up `20260506T215236Z` rerun then moved again after the retained
+carrier release slice: the stale serial-wait seam is closed, `sql_transactions-p1`
+is `spread_satisfied_in_flight`, and the live representative boundary is now
+epoch `5` `ACK_PENDING` publication with `sql_transaction_participants-p1`
+terminal `rebalancer_handoff`, `replica_operations-p1`
+`operation_created_but_no_step_transitions`, and `sql_write_operations-p1`
+still `recovering_in_flight`.
 
 All final consistency recommendation packages are complete or queued outside
 the current execution path.
@@ -186,7 +193,7 @@ Other secondary matrix failures become active packages only after the
 
 Current re-entry package:
 
-1. [Rolling Restart Publication ACK-Pending Priority Serial-Wait Workflow Progress Reentry](../packages/active-20260506-rolling-restart-publication-ack-pending-priority-serial-wait-workflow-progress-reentry.md)
+1. [Rolling Restart Publication ACK-Pending Rebalancer Handoff Stalled Followup Reentry](../packages/active-20260506-rolling-restart-publication-ack-pending-rebalancer-handoff-stalled-followup-reentry.md)
 
 Queued convergence-grammar packages:
 
@@ -203,26 +210,29 @@ Queued cleanup packages:
 ## Remaining Work Summary
 
 1. Current execution blocker:
-   The latest May 6 representative rerun after the bootstrap join-admission
-   recovery projection used
-   `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-after-bootstrap-join-admission-recovery-projection-20260506T213144Z.report.json --fast-local --verbose`.
+   The latest May 6 representative rerun after the retained-carrier stale
+   serial-wait release used
+   `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-after-retained-carrier-serial-wait-release-20260506T215236Z.report.json --fast-local --verbose`.
    Report:
-   `test-output/reports/rolling-restart-after-bootstrap-join-admission-recovery-projection-20260506T213144Z.report.json`.
-   Result: failed after `132.8s`; terminal barrier:
+   `test-output/reports/rolling-restart-after-retained-carrier-serial-wait-release-20260506T215236Z.report.json`.
+   Result: failed after `134.4s`; terminal barrier:
    `Not all nodes reached ACTIVE state within 120000ms`.
    The current report classifies as root cause class `topology`, failure class
    `publication_convergence_blocked`, and dominant reason
-   `pending_ack_nodes`. Publication is epoch `4` `ACK_PENDING`, pending ACK
-   node is `11601...`, blocked-node count is `0`, missing published count is
-   `0`, and recovery protocol state is `publication_pending`. Current
-   active-gate progress ends at active `2/5` with snapshot coverage `2/5` on
-   selected node `ebc4...`; best progress reaches active `3/5`. Priority
-   recovery is narrowed to `sql_transaction_participants-p1`
-   `recovering_in_flight` and `sql_transactions-p1`
-   `priority_operation_serial_wait`, while the repaired startup
-   bootstrap-admission seam moved `ebc4...` to `ACTIVE`. The representative
-   owner is therefore publication ACK-pending workflow progress, not startup
-   join admission.
+   `pending_ack_nodes`. Publication is epoch `5` `ACK_PENDING`, pending ACK
+   count is `1`, blocked-node count is `0`, missing published count is `0`,
+   and recovery protocol state is `publication_pending`. Current active-gate
+   progress ends at active `3/5` with snapshot coverage `2/5` on selected
+   node `11601...`; blocker signature is now
+   `inactive_nodes=2|snapshot_coverage=2/5|priority_recovery_progress_class=operation_created_but_no_step_transitions`.
+   Priority recovery no longer selects `priority_operation_serial_wait`.
+   `sql_transaction_participants-p1` is now the dominant witness under
+   `rebalancer_leader / rebalancer_handoff`,
+   `replica_operations-p1` is supporting timeout-follow-up debt under
+   `operation_workflow_owner / workflow_timeout`, and
+   `sql_transactions-p1` is already `spread_satisfied_in_flight`. The
+   representative owner is therefore publication ACK-pending follow-up
+   progress, not serial-wait workflow progress.
 2. Completed trace, fixture, and next active task:
    the
    [Rolling Restart Topology Publication Snapshot Reachability Reentry](../packages/done-20260505-rolling-restart-topology-publication-snapshot-reachability-reentry.md)
