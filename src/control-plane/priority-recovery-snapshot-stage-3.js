@@ -551,6 +551,7 @@ function resolvePriorityRecoverySyntheticSerialWaitSourceContext(
 
 function buildPriorityRecoverySyntheticSerialWaitSourceContexts(
   snapshots = [],
+  options = {},
 ) {
   const operationSnapshotsByPartitionId =
     buildPriorityRecoveryDecisionSnapshotOperationSnapshotsByPartitionId(
@@ -563,13 +564,18 @@ function buildPriorityRecoverySyntheticSerialWaitSourceContexts(
     buildPriorityRecoverySubordinatedSerialWaitSourcePartitionIdSet(
       latestSnapshots,
     );
+  const suppressSubordinatedSources =
+    options?.allowSubordinatedSourcePartitions !== true;
   const serialWaitOperationContexts = [];
   for (const snapshot of latestSnapshots) {
     const partitionId = String(
       snapshot?.[PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.PARTITION_ID] ||
         LOCAL_STR_EMPTY,
     ).trim();
-    if (subordinatedSourcePartitionIds.has(partitionId)) {
+    if (
+      suppressSubordinatedSources === true &&
+      subordinatedSourcePartitionIds.has(partitionId)
+    ) {
       continue;
     }
     const operationContext =
@@ -655,11 +661,21 @@ function buildPriorityRecoverySubordinatedSerialWaitSourcePartitionIdSet(
 
 function normalizePriorityRecoverySyntheticSerialWaitSnapshots(snapshots = []) {
   const normalizedSnapshots = Array.isArray(snapshots) ? snapshots : [];
-  const serialWaitSourceContexts =
+  const syntheticSerialWaitSourceContexts =
     buildPriorityRecoverySyntheticSerialWaitSourceContexts(
       normalizedSnapshots,
     );
-  if (serialWaitSourceContexts.length === NUM.ZERO) {
+  const retainedSerialWaitSourceContexts =
+    buildPriorityRecoverySyntheticSerialWaitSourceContexts(
+      normalizedSnapshots,
+      {
+        allowSubordinatedSourcePartitions: true,
+      },
+    );
+  if (
+    syntheticSerialWaitSourceContexts.length === NUM.ZERO &&
+    retainedSerialWaitSourceContexts.length === NUM.ZERO
+  ) {
     return normalizedSnapshots;
   }
   return normalizedSnapshots.map((snapshot) => {
@@ -668,13 +684,18 @@ function normalizePriorityRecoverySyntheticSerialWaitSnapshots(snapshots = []) {
       true;
     const retainedSerialWaitCarrierSnapshot =
       isPriorityRecoveryRetainedSerialWaitCarrierDecisionSnapshot(snapshot) ===
-      true;
+        true &&
+      isPriorityRecoverySpreadProgressDecisionSnapshot(snapshot) !== true;
     if (
       syntheticNoOperationSnapshot !== true &&
       retainedSerialWaitCarrierSnapshot !== true
     ) {
       return snapshot;
     }
+    const serialWaitSourceContexts =
+      retainedSerialWaitCarrierSnapshot === true ?
+        retainedSerialWaitSourceContexts :
+        syntheticSerialWaitSourceContexts;
     const serialWaitOperationContexts =
       buildPriorityRecoverySerialWaitOperationContexts({
         partitionId:

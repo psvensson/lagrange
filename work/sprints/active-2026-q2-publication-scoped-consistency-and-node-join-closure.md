@@ -103,7 +103,7 @@ Secondary after the primary path is stable:
 
 The current active representative re-entry package is:
 
-1. [Rolling Restart Publication ACK-Pending Rebalancer Handoff Stalled Followup Reentry](../packages/active-20260506-rolling-restart-publication-ack-pending-rebalancer-handoff-stalled-followup-reentry.md)
+1. [Rolling Restart Startup Published Snapshot Coverage Control Plane Source-Removal Workflow Progress Reentry](../packages/active-20260506-rolling-restart-startup-published-snapshot-coverage-control-plane-source-removal-workflow-progress-reentry.md)
 
 Retained predecessor context file:
 
@@ -193,7 +193,7 @@ Other secondary matrix failures become active packages only after the
 
 Current re-entry package:
 
-1. [Rolling Restart Publication ACK-Pending Rebalancer Handoff Stalled Followup Reentry](../packages/active-20260506-rolling-restart-publication-ack-pending-rebalancer-handoff-stalled-followup-reentry.md)
+1. [Rolling Restart Startup Published Snapshot Coverage Control Plane Source-Removal Workflow Progress Reentry](../packages/active-20260506-rolling-restart-startup-published-snapshot-coverage-control-plane-source-removal-workflow-progress-reentry.md)
 
 Queued convergence-grammar packages:
 
@@ -210,29 +210,30 @@ Queued cleanup packages:
 ## Remaining Work Summary
 
 1. Current execution blocker:
-   The latest May 6 representative rerun after the retained-carrier stale
-   serial-wait release used
-   `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-after-retained-carrier-serial-wait-release-20260506T215236Z.report.json --fast-local --verbose`.
+   The latest May 6 representative rerun after the retained-carrier
+   subordinated-source timeout-dominance repair used
+   `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-after-retained-carrier-subordinated-source-timeout-dominance-20260506T222400Z.report.json --fast-local --verbose`.
    Report:
-   `test-output/reports/rolling-restart-after-retained-carrier-serial-wait-release-20260506T215236Z.report.json`.
-   Result: failed after `134.4s`; terminal barrier:
+   `test-output/reports/rolling-restart-after-retained-carrier-subordinated-source-timeout-dominance-20260506T222400Z.report.json`.
+   Result: failed after `135.3s`; terminal barrier:
    `Not all nodes reached ACTIVE state within 120000ms`.
-   The current report classifies as root cause class `topology`, failure class
-   `publication_convergence_blocked`, and dominant reason
-   `pending_ack_nodes`. Publication is epoch `5` `ACK_PENDING`, pending ACK
-   count is `1`, blocked-node count is `0`, missing published count is `0`,
-   and recovery protocol state is `publication_pending`. Current active-gate
-   progress ends at active `3/5` with snapshot coverage `2/5` on selected
-   node `11601...`; blocker signature is now
-   `inactive_nodes=2|snapshot_coverage=2/5|priority_recovery_progress_class=operation_created_but_no_step_transitions`.
-   Priority recovery no longer selects `priority_operation_serial_wait`.
-   `sql_transaction_participants-p1` is now the dominant witness under
-   `rebalancer_leader / rebalancer_handoff`,
-   `replica_operations-p1` is supporting timeout-follow-up debt under
-   `operation_workflow_owner / workflow_timeout`, and
-   `sql_transactions-p1` is already `spread_satisfied_in_flight`. The
-   representative owner is therefore publication ACK-pending follow-up
-   progress, not serial-wait workflow progress.
+   The current report classifies as root cause class `startup`, failure class
+   `startup_recovery_blocked`, and dominant reason
+   `BOOTSTRAP_PHASE_INCOMPLETE`. Publication is epoch `1` `PUBLISHED`,
+   pending ACK count is `0`, blocked-node count is `0`, missing published
+   count is `0`, and recovery protocol state is `steady_published`. Current
+   active-gate progress ends at active `2/5` with snapshot coverage `1/5` on
+   selected node `35a...`; blocker signature is now
+   `inactive_nodes=3|snapshot_coverage=1/5`. Priority recovery no longer has
+   unresolved partitions. The dominant summary witness is now
+   `control_plane_publications-p1` under
+   `operation_workflow_owner / workflow_progress` in
+   `source_removal`, with supporting runtime evidence from
+   `replace_remove_safety_blocked`,
+   `source_owner_unavailable`, and
+   `move_replica_handoff_stabilizing`. The representative owner is therefore
+   startup published snapshot-coverage source-removal progress, not the
+   closed pending-ACK follow-up path.
 2. Completed trace, fixture, and next active task:
    the
    [Rolling Restart Topology Publication Snapshot Reachability Reentry](../packages/done-20260505-rolling-restart-topology-publication-snapshot-reachability-reentry.md)

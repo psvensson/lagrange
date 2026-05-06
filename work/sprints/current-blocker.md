@@ -4,39 +4,39 @@
 
 Sprint: `work/sprints/active-2026-q2-publication-scoped-consistency-and-node-join-closure.md`
 
-Package: `work/packages/active-20260506-rolling-restart-publication-ack-pending-rebalancer-handoff-stalled-followup-reentry.md`
+Package: `work/packages/active-20260506-rolling-restart-startup-published-snapshot-coverage-control-plane-source-removal-workflow-progress-reentry.md`
 
 Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/rolling-restart-after-retained-carrier-serial-wait-release-20260506T215236Z.report.json`
+Artifact: `test-output/reports/rolling-restart-after-retained-carrier-subordinated-source-timeout-dominance-20260506T222400Z.report.json`
 
-Playback: `test-output/reports/.playback/rolling-restart-after-retained-carrier-serial-wait-release-20260506T215236Z/rolling-restart/`
+Playback: `test-output/reports/.playback/rolling-restart-after-retained-carrier-subordinated-source-timeout-dominance-20260506T222400Z/rolling-restart/`
 
 ## Boundary
 
-Owner: `Publication recovery gate over pending ACK convergence and priority rebalancer handoff / stalled follow-up progress`
+Owner: `Startup published snapshot-coverage convergence over control-plane publication source-removal workflow progress`
 
-Boundary: `Publication ACK-pending rebalancer-handoff stalled follow-up progress`
+Boundary: `Startup published snapshot coverage control-plane source-removal workflow progress`
 
-Dominant reason: `pending_ack_nodes`
+Dominant reason: `BOOTSTRAP_PHASE_INCOMPLETE`
 
-Current state: The stale serial-wait workflow seam is closed: sql_transactions-p1 is now spread_satisfied_in_flight and priority_operation_serial_wait no longer dominates the representative report. The rerun migrates to epoch 5 ACK_PENDING with active-gate progress 3/5, snapshot coverage 2/5 on selected snapshot 11601..., and a new priority follow-up chain: sql_transaction_participants-p1 is terminal blocked_unclassified under rebalancer_leader / rebalancer_handoff, replica_operations-p1 is operation_stalled under operation_workflow_owner / workflow_timeout, and sql_write_operations-p1 remains recovering_in_flight.
+Current state: The pending-ACK follow-up seam is closed: priority recovery now converges, publication is epoch 1 PUBLISHED with pendingAckCount 0, and the representative rerun stalls at active 2/5 with snapshot coverage 1/5. The live owner is control_plane_publications-p1 under operation_workflow_owner / workflow_progress in source_removal, with repeated replace_remove_safety_blocked deferrals and stale MOVE_REPLICA reservation invalidations marked source_owner_unavailable.
 
 ## Next Action
 
-Extract the 215236Z epoch-5 ACK_PENDING fixture for sql_transaction_participants-p1, replica_operations-p1, and sql_write_operations-p1; decide whether terminal rebalancer_handoff or stale workflow timeout is the canonical owner; then repair only that publication/follow-up path.
+Extract the 222400Z epoch-1 PUBLISHED source-removal fixture for control_plane_publications-p1 and the mg-1-r1 MOVE_REPLICA assignment; decide whether replace-remove safety or stale source-owner invalidation is the canonical owner; then repair only that startup source-removal path.
 
 ## Proof Ladder
 
-1. `Focused 215236Z publication ACK-pending handoff/timeout fixture`
-2. `Owner regression for pending-ACK rebalancer handoff or stale follow-up progress`
+1. `Focused 222400Z startup source-removal fixture`
+2. `Owner regression for startup source-removal workflow progress or stale assignment invalidation`
 3. `Touched-file static guardrails`
 4. `Representative rolling-restart --fast-local rerun`
 
 ## Touched Files
 
-1. `src/control-plane/priority-recovery-snapshot-stage-11.js`
-2. `src/rebalancer/operation-workflow-owner-segment-5.js`
-3. `src/rebalancer/unified-rebalancer-segment-4.js`
-4. `test/control-plane/priority-recovery-snapshot.test.js`
+1. `src/bootstrap/owners/bootstrap-request-owner.js`
+2. `src/bootstrap/bootstrap-api-constants.js`
+3. `src/rebalancer/operation-workflow-owner-shared.js`
+4. `test/rebalancer/replace-replica-workflow.test.js`
 5. `test/distributed/harness/__tests__/failure-bundle.test.js`

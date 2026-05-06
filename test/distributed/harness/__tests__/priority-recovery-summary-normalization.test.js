@@ -21,6 +21,8 @@ const TEST_NAME =
   'operation scheduling dominates workflow transition-deferred serial waits';
 const WORKFLOW_TIMEOUT_TEST_NAME =
   'workflow timeout outranks actionable operation scheduling';
+const WORKFLOW_TIMEOUT_SERIAL_WAIT_TEST_NAME =
+  'workflow timeout outranks workflow-owned serial-wait waits';
 const SAME_BOUNDARY_TEST_NAME =
   'same-boundary transition-deferred actuation outranks actionable scheduling';
 const SAME_OPERATION_FRESHNESS_TEST_NAME =
@@ -245,6 +247,32 @@ test(WORKFLOW_TIMEOUT_TEST_NAME, () => {
   const progressSummary = buildPriorityRecoveryProgressSummary({
     priorityRecoveryPartitionWitnesses: Object.freeze([
       OPERATION_SCHEDULING_WITNESS,
+      WORKFLOW_TIMEOUT_WITNESS,
+    ]),
+  });
+
+  assert.equal(
+    progressSummary.dominantWitness.partitionId,
+    WORKFLOW_TIMEOUT_PARTITION_ID,
+  );
+  assert.equal(
+    progressSummary.dominantWitness.blockingBoundary,
+    PRIORITY_RECOVERY_BLOCKING_BOUNDARY.WORKFLOW_TIMEOUT,
+  );
+  assert.equal(
+    progressSummary.dominantWitness.waitMode,
+    PRIORITY_RECOVERY_WAIT_MODE.TIMEOUT_RECONCILE_DUE,
+  );
+  assert.equal(
+    progressSummary.dominantWitness.nextRequiredAction,
+    PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.RECONCILE_STALE_OPERATION_PROGRESS,
+  );
+});
+
+test(WORKFLOW_TIMEOUT_SERIAL_WAIT_TEST_NAME, () => {
+  const progressSummary = buildPriorityRecoveryProgressSummary({
+    priorityRecoveryPartitionWitnesses: Object.freeze([
+      SERIAL_WAIT_WITNESS,
       WORKFLOW_TIMEOUT_WITNESS,
     ]),
   });
