@@ -25,7 +25,7 @@ import {
   PRIORITY_RECOVERY_DECISION_SNAPSHOT_FRESHNESS_FIELD,
 } from './priority-recovery-snapshot-stage-shared.js';
 import {filterPriorityRecoveryTrackedPartitionIds, isPriorityRecoverySpreadSatisfyingOperationContext, isPriorityRecoveryTrackedPartitionId, resolvePriorityRecoverySemanticState} from './priority-recovery-snapshot-stage-1.js';
-import {buildPriorityRecoveryReleasedSerialWaitFreshnessByOperationId, buildReleasedPriorityRecoverySerialWaitAssessment, filterPriorityRecoveryStaleOperationProgressConflicts, filterPriorityRecoverySyntheticNoOperationConflicts, isPriorityRecoverySyntheticNoOperationDecisionSnapshot, resolvePriorityRecoveryDecisionSnapshotAdmission, resolvePriorityRecoveryDecisionSnapshotCapturedAt, resolvePriorityRecoveryDecisionSnapshotFreshnessMs, resolvePriorityRecoveryDecisionSnapshotOperationContexts, resolvePriorityRecoveryDecisionSnapshotProgressFreshnessMs, shouldReleasePriorityRecoverySerialWaitSnapshot} from './priority-recovery-snapshot-stage-2.js';
+import {buildPriorityRecoveryReleasedSerialWaitFreshnessByOperationId, buildReleasedPriorityRecoverySerialWaitAssessment, filterPriorityRecoveryStaleOperationProgressConflicts, filterPriorityRecoverySyntheticNoOperationConflicts, isPriorityRecoverySpreadProgressDecisionSnapshot, isPriorityRecoverySyntheticNoOperationDecisionSnapshot, resolvePriorityRecoveryDecisionSnapshotAdmission, resolvePriorityRecoveryDecisionSnapshotCapturedAt, resolvePriorityRecoveryDecisionSnapshotFreshnessMs, resolvePriorityRecoveryDecisionSnapshotOperationContexts, resolvePriorityRecoveryDecisionSnapshotProgressFreshnessMs, shouldReleasePriorityRecoverySerialWaitSnapshot} from './priority-recovery-snapshot-stage-2.js';
 import {isPriorityRecoveryOperationContextTerminal} from './priority-recovery-snapshot-stage-6.js';
 import {buildPriorityRecoveryConditionsContract} from './priority-recovery-snapshot-stage-7.js';
 import {buildPriorityRecoveryActuationContract} from './priority-recovery-snapshot-stage-8.js';
@@ -559,8 +559,19 @@ function buildPriorityRecoverySyntheticSerialWaitSourceContexts(
   const latestSnapshots = selectPriorityRecoveryDecisionSnapshotSummarySnapshots(
     snapshots,
   );
+  const subordinatedSourcePartitionIds =
+    buildPriorityRecoverySubordinatedSerialWaitSourcePartitionIdSet(
+      latestSnapshots,
+    );
   const serialWaitOperationContexts = [];
   for (const snapshot of latestSnapshots) {
+    const partitionId = String(
+      snapshot?.[PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.PARTITION_ID] ||
+        LOCAL_STR_EMPTY,
+    ).trim();
+    if (subordinatedSourcePartitionIds.has(partitionId)) {
+      continue;
+    }
     const operationContext =
       resolvePriorityRecoverySyntheticSerialWaitSourceContext(
         snapshot,
@@ -572,6 +583,34 @@ function buildPriorityRecoverySyntheticSerialWaitSourceContexts(
     serialWaitOperationContexts.push(operationContext);
   }
   return serialWaitOperationContexts;
+}
+
+function buildPriorityRecoverySubordinatedSerialWaitSourcePartitionIdSet(
+  snapshots = [],
+) {
+  const subordinatedPartitionIds = new Set();
+  for (const snapshot of Array.isArray(snapshots) ? snapshots : []) {
+    if (isPriorityRecoverySpreadProgressDecisionSnapshot(snapshot) !== true) {
+      continue;
+    }
+    const partitionId = String(
+      snapshot?.[PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.PARTITION_ID] ||
+        LOCAL_STR_EMPTY,
+    ).trim();
+    for (const sourcePartitionId of normalizePriorityRecoveryStringList(
+      snapshot?.[PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.COORDINATOR]?.[
+        PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.SERIAL_WAIT_PARTITION_IDS
+      ],
+    )) {
+      if (
+        sourcePartitionId.length > NUM.ZERO &&
+        sourcePartitionId !== partitionId
+      ) {
+        subordinatedPartitionIds.add(sourcePartitionId);
+      }
+    }
+  }
+  return subordinatedPartitionIds;
 }
 
 function normalizePriorityRecoverySyntheticSerialWaitSnapshots(snapshots = []) {

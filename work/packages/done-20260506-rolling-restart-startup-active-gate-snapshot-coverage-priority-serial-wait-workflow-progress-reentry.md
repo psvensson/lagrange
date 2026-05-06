@@ -12,7 +12,7 @@
   "boundary": "Startup active-gate snapshot-coverage / priority serial-wait workflow-progress reentry",
   "dominantReason": "priority_recovery_workflow_progress_transition_deferred",
   "currentState": "The stage-3 mixed-summary serial-wait source seam is closed. The representative rerun still times out at startup snapshot coverage 3/5, but canonical decision snapshots now show sql_transaction_participants-p1 spread_satisfied_in_flight, sql_transactions-p1 recovering_in_flight on its own pending replace, and sql_write_operations-p1 back on eligible_but_no_operation_created. publicationConvergence.activeGate.progress still retains stale priority_operation_serial_wait consumer data, so the representative owner migrated away from snapshot-stage-3 workflow-progress synthesis.",
-  "nextAction": "Continue in work/packages/active-20260506-rolling-restart-startup-active-gate-publication-evidence-priority-recovery-consumer-alignment.md to lock the 200801Z consumer divergence fixture and repair publication-evidence / active-gate consumption.",
+  "nextAction": "Continue in work/packages/done-20260506-rolling-restart-startup-active-gate-publication-evidence-priority-recovery-consumer-alignment.md to lock the 200801Z consumer divergence fixture and repair publication-evidence / active-gate consumption.",
   "proof": [
     "Focused mixed-summary spread-satisfied sibling regression",
     "Touched-file static guardrails",
@@ -24,14 +24,14 @@
     "test/control-plane/priority-recovery-snapshot.test.js"
   ],
   "predecessor": "work/packages/done-20260506-rolling-restart-startup-active-gate-priority-operation-creation-snapshot-coverage-reentry.md",
-  "successor": "work/packages/active-20260506-rolling-restart-startup-active-gate-publication-evidence-priority-recovery-consumer-alignment.md"
+  "successor": "work/packages/done-20260506-rolling-restart-startup-active-gate-publication-evidence-priority-recovery-consumer-alignment.md"
 }
 -->
 
 Opened on May 6, 2026 after
 [Rolling Restart Startup Active Gate Priority Operation Creation Snapshot Coverage Reentry](./done-20260506-rolling-restart-startup-active-gate-priority-operation-creation-snapshot-coverage-reentry.md)
 closed by migration. Closed the same day by migration into
-[Rolling Restart Startup Active Gate Publication Evidence Priority Recovery Consumer Alignment](./active-20260506-rolling-restart-startup-active-gate-publication-evidence-priority-recovery-consumer-alignment.md).
+[Rolling Restart Startup Active Gate Publication Evidence Priority Recovery Consumer Alignment](./done-20260506-rolling-restart-startup-active-gate-publication-evidence-priority-recovery-consumer-alignment.md).
 
 ## Closure Summary
 

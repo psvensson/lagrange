@@ -103,18 +103,19 @@ Secondary after the primary path is stable:
 
 The current active representative re-entry package is:
 
-1. [Rolling Restart Startup Active Gate Publication Evidence Priority Recovery Consumer Alignment](../packages/active-20260506-rolling-restart-startup-active-gate-publication-evidence-priority-recovery-consumer-alignment.md)
+1. [Rolling Restart Startup Active Gate Priority Recovery Rebalancer Handoff Stall Reentry](../packages/active-20260506-rolling-restart-startup-active-gate-priority-recovery-rebalancer-handoff-stall-reentry.md)
 
 Retained predecessor context file:
 
-1. [Rolling Restart Startup Active Gate Snapshot Coverage Priority Serial-Wait Workflow Progress Reentry](../packages/done-20260506-rolling-restart-startup-active-gate-snapshot-coverage-priority-serial-wait-workflow-progress-reentry.md)
-2. [Rolling Restart Startup Active Gate Priority Operation Creation Snapshot Coverage Reentry](../packages/done-20260506-rolling-restart-startup-active-gate-priority-operation-creation-snapshot-coverage-reentry.md)
-3. [Rolling Restart Published Snapshot Coverage Priority Serial-Wait Workflow Progress Reentry](../packages/done-20260506-rolling-restart-published-snapshot-coverage-priority-serial-wait-workflow-progress-reentry.md)
-4. [Rolling Restart Publication ACK-Pending Rebalancer Handoff Admission Reentry](../packages/done-20260506-rolling-restart-publication-ack-pending-rebalancer-handoff-admission-reentry.md)
-5. [Rolling Restart Startup Seed Transport Delivery-Source Saturation Reentry](../packages/done-20260506-rolling-restart-startup-seed-transport-delivery-source-saturation-reentry.md)
-6. [Rolling Restart Startup Publication ACK-Pending Owner-RPC Nodes Repair Reentry](../packages/done-20260506-rolling-restart-startup-publication-ack-pending-owner-rpc-nodes-repair-reentry.md)
-7. [Rolling Restart Topology Publication Snapshot Reachability Reentry](../packages/done-20260505-rolling-restart-topology-publication-snapshot-reachability-reentry.md)
-8. [Rolling Restart Operation Transition Pressure And Over-Target Trim](../packages/todo-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md)
+1. [Rolling Restart Startup Active Gate Publication Evidence Priority Recovery Consumer Alignment](../packages/done-20260506-rolling-restart-startup-active-gate-publication-evidence-priority-recovery-consumer-alignment.md)
+2. [Rolling Restart Startup Active Gate Snapshot Coverage Priority Serial-Wait Workflow Progress Reentry](../packages/done-20260506-rolling-restart-startup-active-gate-snapshot-coverage-priority-serial-wait-workflow-progress-reentry.md)
+3. [Rolling Restart Startup Active Gate Priority Operation Creation Snapshot Coverage Reentry](../packages/done-20260506-rolling-restart-startup-active-gate-priority-operation-creation-snapshot-coverage-reentry.md)
+4. [Rolling Restart Published Snapshot Coverage Priority Serial-Wait Workflow Progress Reentry](../packages/done-20260506-rolling-restart-published-snapshot-coverage-priority-serial-wait-workflow-progress-reentry.md)
+5. [Rolling Restart Publication ACK-Pending Rebalancer Handoff Admission Reentry](../packages/done-20260506-rolling-restart-publication-ack-pending-rebalancer-handoff-admission-reentry.md)
+6. [Rolling Restart Startup Seed Transport Delivery-Source Saturation Reentry](../packages/done-20260506-rolling-restart-startup-seed-transport-delivery-source-saturation-reentry.md)
+7. [Rolling Restart Startup Publication ACK-Pending Owner-RPC Nodes Repair Reentry](../packages/done-20260506-rolling-restart-startup-publication-ack-pending-owner-rpc-nodes-repair-reentry.md)
+8. [Rolling Restart Topology Publication Snapshot Reachability Reentry](../packages/done-20260505-rolling-restart-topology-publication-snapshot-reachability-reentry.md)
+9. [Rolling Restart Operation Transition Pressure And Over-Target Trim](../packages/todo-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md)
 
 ## Queued Packages
 
@@ -185,7 +186,7 @@ Other secondary matrix failures become active packages only after the
 
 Current re-entry package:
 
-1. [Rolling Restart Startup Active Gate Publication Evidence Priority Recovery Consumer Alignment](../packages/active-20260506-rolling-restart-startup-active-gate-publication-evidence-priority-recovery-consumer-alignment.md)
+1. [Rolling Restart Startup Active Gate Priority Recovery Rebalancer Handoff Stall Reentry](../packages/active-20260506-rolling-restart-startup-active-gate-priority-recovery-rebalancer-handoff-stall-reentry.md)
 
 Queued convergence-grammar packages:
 
@@ -202,28 +203,27 @@ Queued cleanup packages:
 ## Remaining Work Summary
 
 1. Current execution blocker:
-   The latest May 6 representative rerun after the mixed-summary
-   spread-satisfied sibling repair used
-   `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-after-mixed-summary-spread-satisfied-sibling-20260506T200801Z.report.json --fast-local --verbose`.
+   The latest May 6 representative rerun after the subordinated serial-wait
+   suppression repair used
+   `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-after-subordinated-serial-wait-suppression-20260506T204812Z.report.json --fast-local --verbose`.
    Report:
-   `test-output/reports/rolling-restart-after-mixed-summary-spread-satisfied-sibling-20260506T200801Z.report.json`.
-   Result: failed after `131.3s`; terminal barrier:
+   `test-output/reports/rolling-restart-after-subordinated-serial-wait-suppression-20260506T204812Z.report.json`.
+   Result: failed after `131.4s`; terminal barrier:
    `Not all nodes reached ACTIVE state within 120000ms`.
-   The current report still classifies as root cause class `topology`,
-   failure class `priority_recovery_progress_blocked`, and dominant reason
-   `priority_recovery_workflow_progress_transition_deferred`, but the live
-   owner seam has narrowed. Publication is epoch `2` `PUBLISHED`, pending ACK
-   count `0`, and recovery protocol state `priority_spread_pending`.
-   Canonical decision snapshots now show
+   The current report classifies as root cause class `topology`, failure class
+   `priority_recovery_progress_blocked`, and dominant reason
+   `priority_recovery_rebalancer_handoff_stalled`. Publication is epoch `4`
+   `PUBLISHED`, pending ACK count `0`, missing published count `0`, and
+   recovery protocol state `priority_spread_pending`. Current canonical
+   priority-recovery evidence now shows
    `sql_transaction_participants-p1` `spread_satisfied_in_flight`,
-   `sql_transactions-p1` `recovering_in_flight` on pending operation
-   `1755aa39-c33e-4758-9567-bac16566b522`, and
-   `sql_write_operations-p1` `needs_operation` /
-   `eligible_but_no_operation_created`. The selected active-gate consumer view
-   still reports snapshot coverage `3/5` on selected snapshot `8be8...` and
-   stale `priority_operation_serial_wait`, so the new representative owner is
-   publication-evidence / active-gate consumer alignment rather than
-   snapshot-stage-3 serial-wait synthesis.
+   `sql_transactions-p1` `recovering_in_flight`, and
+   `sql_write_operations-p1` `blocked_unclassified` on
+   `rebalancer_leader / rebalancer_handoff`. Supporting retained no-progress
+   evidence still surfaces an older selected-snapshot
+   `operation_created_but_no_step_transitions` witness, so the new
+   representative owner is epoch-4 startup active-gate rebalancer handoff
+   versus retained stale selected-snapshot timeout evidence.
 2. Completed trace, fixture, and next active task:
    the
    [Rolling Restart Topology Publication Snapshot Reachability Reentry](../packages/done-20260505-rolling-restart-topology-publication-snapshot-reachability-reentry.md)

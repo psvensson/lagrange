@@ -4,39 +4,38 @@
 
 Sprint: `work/sprints/active-2026-q2-publication-scoped-consistency-and-node-join-closure.md`
 
-Package: `work/packages/active-20260506-rolling-restart-startup-active-gate-publication-evidence-priority-recovery-consumer-alignment.md`
+Package: `work/packages/active-20260506-rolling-restart-startup-active-gate-priority-recovery-rebalancer-handoff-stall-reentry.md`
 
 Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/rolling-restart-after-mixed-summary-spread-satisfied-sibling-20260506T200801Z.report.json`
+Artifact: `test-output/reports/rolling-restart-after-subordinated-serial-wait-suppression-20260506T204812Z.report.json`
 
-Playback: `test-output/reports/.playback/rolling-restart-after-mixed-summary-spread-satisfied-sibling-20260506T200801Z/rolling-restart/`
+Playback: `test-output/reports/.playback/rolling-restart-after-subordinated-serial-wait-suppression-20260506T204812Z/rolling-restart/`
 
 ## Boundary
 
-Owner: `Startup active-gate publication-evidence priority-recovery consumer alignment`
+Owner: `Startup active-gate priority-recovery rebalancer handoff stall and stale no-progress retention`
 
-Boundary: `Startup active-gate / publication-convergence priority-recovery consumer alignment`
+Boundary: `Startup active-gate / priority-recovery rebalancer-handoff stall retention`
 
-Dominant reason: `priority_recovery_workflow_progress_transition_deferred`
+Dominant reason: `priority_recovery_rebalancer_handoff_stalled`
 
-Current state: The stage-3 serial-wait source seam is closed, but the representative rerun still times out at startup snapshot coverage 3/5 on selected snapshot 8be8... because publicationConvergence.activeGate.progress retains stale priority_operation_serial_wait even though canonical decision snapshots now show sql_transaction_participants-p1 spread_satisfied_in_flight, sql_transactions-p1 recovering_in_flight on its own pending replace, and sql_write_operations-p1 back on eligible_but_no_operation_created.
+Current state: The publication-evidence stale serial-wait consumer seam is closed. The representative rerun now reaches epoch 4 PUBLISHED with startup active 3/5 and snapshot coverage 3/5 on selected snapshot ebc4..., while the current canonical priority-recovery view has sql_transactions-p1 recovering_in_flight and sql_write_operations-p1 blocked_unclassified on rebalancer_leader / rebalancer_handoff. Supporting no-progress retention still surfaces an older selected-snapshot operation_created_but_no_step_transitions witness, so the live owner must be separated between current handoff state and retained stale selected-snapshot evidence.
 
 ## Next Action
 
-Build the focused 200801Z consumer divergence fixture, decide whether the stale class is owned by publication-evidence current-summary selection, active-gate normalization, or a retained diagnostics merge, then repair only that consumer path.
+Extract the 204812Z current-versus-retained priority-recovery fixture, decide whether the blocking owner is current rebalancer handoff, stale selected-snapshot/no-progress retention, or startup transport/query pressure, then repair only that selected boundary.
 
 ## Proof Ladder
 
-1. `Focused 200801Z publication-evidence / active-gate consumer divergence fixture`
-2. `Owner consumer regression`
-3. `Affected presentation tests`
-4. `Touched-file static guardrails`
-5. `Representative rolling-restart --fast-local rerun`
+1. `Focused 204812Z current-versus-retained priority-recovery fixture`
+2. `Owner regression for current handoff versus retained stale timeout evidence`
+3. `Touched-file static guardrails`
+4. `Representative rolling-restart --fast-local rerun`
 
 ## Touched Files
 
-1. `test/distributed/harness/publication-evidence-contract.js`
-2. `test/control-plane/publication-recovery-evidence.test.js`
-3. `test/distributed/harness/__tests__/failure-bundle-core-11-test-cases.js`
+1. `src/control-plane/priority-recovery-snapshot-stage-8.js`
+2. `src/control-plane/priority-recovery-snapshot-stage-9.js`
+3. `test/control-plane/priority-recovery-snapshot.test.js`
 4. `test/distributed/harness/__tests__/failure-bundle.test.js`
