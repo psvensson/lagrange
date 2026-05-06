@@ -12,7 +12,7 @@
   "boundary": "Startup publication ACK-pending rebalancer handoff/admission reentry",
   "dominantReason": "pending_ack_nodes",
   "currentState": "Publication-owned fallback eligibility now excludes projection-rejected pending-ACK nodes, and the representative rerun closed the epoch 5 ACK_PENDING admission boundary. The blocker migrated to epoch 6 PUBLISHED with snapshot coverage 3/5 and priority serial-wait workflow progress on sql_write_operations-p1 behind sql_transaction_participants-p1.",
-  "nextAction": "Continue in active-20260506-rolling-restart-published-snapshot-coverage-priority-serial-wait-workflow-progress-reentry.md for the epoch 6 PUBLISHED snapshot-coverage / workflow-progress boundary.",
+  "nextAction": "Continue in done-20260506-rolling-restart-published-snapshot-coverage-priority-serial-wait-workflow-progress-reentry.md for the epoch 6 PUBLISHED snapshot-coverage / workflow-progress boundary.",
   "proof": [
     "Focused terminal rebalancer-handoff/admission fixture",
     "Owner decision for admission versus transport visibility",
@@ -29,7 +29,7 @@
   ],
   "predecessor": "work/packages/done-20260506-rolling-restart-publication-ack-pending-priority-recovery-reentry.md",
   "closed": "2026-05-06",
-  "successor": "work/packages/active-20260506-rolling-restart-published-snapshot-coverage-priority-serial-wait-workflow-progress-reentry.md"
+  "successor": "work/packages/done-20260506-rolling-restart-published-snapshot-coverage-priority-serial-wait-workflow-progress-reentry.md"
 }
 -->
 

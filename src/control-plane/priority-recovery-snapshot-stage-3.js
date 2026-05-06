@@ -205,8 +205,11 @@ function buildPriorityRecoverySyntheticSerialWaitSnapshot(
 function buildPriorityRecoverySyntheticSerialWaitSourceContexts(
   snapshots = [],
 ) {
+  const latestSnapshots = selectPriorityRecoveryDecisionSnapshotSummarySnapshots(
+    snapshots,
+  );
   const serialWaitOperationContexts = [];
-  for (const snapshot of Array.isArray(snapshots) ? snapshots : []) {
+  for (const snapshot of latestSnapshots) {
     const operationContext =
       snapshot?.[PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.COORDINATOR]?.[
         PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.OPERATION

@@ -2,29 +2,29 @@
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
   "sprint": "work/sprints/active-2026-q2-publication-scoped-consistency-and-node-join-closure.md",
-  "package": "work/packages/active-20260506-rolling-restart-published-snapshot-coverage-priority-serial-wait-workflow-progress-reentry.md",
+  "package": "work/packages/active-20260506-rolling-restart-startup-active-gate-priority-operation-creation-snapshot-coverage-reentry.md",
   "status": "active",
   "scenario": "rolling-restart",
-  "artifact": "test-output/reports/rolling-restart-after-priority-recovery-publication-exclusion-filter-20260506T184523Z.report.json",
-  "playback": "test-output/reports/.playback/rolling-restart-after-priority-recovery-publication-exclusion-filter-20260506T184523Z/rolling-restart/",
-  "owner": "Startup snapshot coverage and priority workflow progress under published closure",
-  "boundary": "Startup published snapshot-coverage / priority serial-wait workflow-progress reentry",
-  "dominantReason": "priority_recovery_workflow_progress_transition_deferred",
-  "currentState": "The publication ACK-pending admission blocker is closed: rolling-restart now reaches epoch 6 PUBLISHED with pending ACK count 0 and replica_operations-p1 spread-satisfied, but the active gate still times out at snapshot coverage 3/5 while sql_write_operations-p1 is held in priority serial wait behind sql_transaction_participants-p1 and the joiner at 8be8 repeatedly times out connecting to the seed and local parallel queries.",
-  "nextAction": "Build the focused 184523Z published snapshot-coverage / priority serial-wait fixture, then decide whether the repair belongs to operation workflow progress visibility, startup snapshot reachability, or transport/query pressure.",
+  "artifact": "test-output/reports/rolling-restart-after-priority-recovery-stale-serial-wait-source-filter-20260506T204900Z.report.json",
+  "playback": "test-output/reports/.playback/rolling-restart-after-priority-recovery-stale-serial-wait-source-filter-20260506T204900Z/rolling-restart/",
+  "owner": "Startup active-gate snapshot coverage and priority operation scheduling",
+  "boundary": "Startup active-gate snapshot-coverage / priority operation scheduling reentry",
+  "dominantReason": "priority_recovery_operation_scheduling_event_driven",
+  "currentState": "The stale serial-wait workflow blocker is closed: sql_write_operations-p1 no longer owns the representative failure. The fresh rerun regressed earlier to epoch 2 PUBLISHED with snapshot coverage 2/5 while sql_transaction_participants-p1 returns to actionable eligible_but_no_operation_created, sql_transactions-p1 stays recovering_in_flight, and joiner 8be8 / seed 7493 still show reconnect and query-timeout pressure.",
+  "nextAction": "Build the focused 204900Z epoch-2 startup active-gate / operation-scheduling fixture, then decide whether the repair belongs to priority operation scheduling, selected-snapshot coverage consumption, or startup transport/query pressure.",
   "proof": [
-    "Focused 184523Z published snapshot-coverage / serial-wait fixture",
-    "Owner decision for workflow progress versus snapshot reachability",
+    "Focused 204900Z epoch-2 startup active-gate / operation-scheduling fixture",
+    "Owner decision for operation scheduling versus snapshot coverage versus transport/query pressure",
     "Touched-file static guardrails",
     "Representative rolling-restart --fast-local rerun"
   ],
   "touchedFiles": [
     "src/control-plane/priority-recovery-snapshot-stage-9.js",
-    "src/control-plane/priority-recovery-snapshot-stage-10.js",
-    "src/control-plane/priority-recovery-snapshot-stage-11.js",
-    "src/transport/message-router-shared.js",
-    "test/control-plane/priority-recovery-snapshot-core-08-test-cases.js",
-    "test/control-plane/priority-recovery-snapshot.test.js"
+    "src/control-plane/priority-recovery-observation-snapshot-stage-4.js",
+    "src/rebalancer/unified-rebalancer-segment-4.js",
+    "src/bootstrap/node-joining-service-segment-2.js",
+    "test/control-plane/priority-recovery-snapshot.test.js",
+    "test/distributed/harness/__tests__/failure-bundle-core-11-test-cases.js"
   ],
-  "predecessor": "work/packages/done-20260506-rolling-restart-publication-ack-pending-rebalancer-handoff-admission-reentry.md"
+  "predecessor": "work/packages/done-20260506-rolling-restart-published-snapshot-coverage-priority-serial-wait-workflow-progress-reentry.md"
 }

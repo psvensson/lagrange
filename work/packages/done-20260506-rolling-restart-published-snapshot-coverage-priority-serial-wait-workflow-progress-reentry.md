@@ -3,16 +3,16 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-06",
   "scenario": "rolling-restart",
-  "artifact": "test-output/reports/rolling-restart-after-priority-recovery-publication-exclusion-filter-20260506T184523Z.report.json",
-  "playback": "test-output/reports/.playback/rolling-restart-after-priority-recovery-publication-exclusion-filter-20260506T184523Z/rolling-restart/",
+  "artifact": "test-output/reports/rolling-restart-after-priority-recovery-stale-serial-wait-source-filter-20260506T204900Z.report.json",
+  "playback": "test-output/reports/.playback/rolling-restart-after-priority-recovery-stale-serial-wait-source-filter-20260506T204900Z/rolling-restart/",
   "owner": "Startup snapshot coverage and priority workflow progress under published closure",
   "boundary": "Startup published snapshot-coverage / priority serial-wait workflow-progress reentry",
   "dominantReason": "priority_recovery_workflow_progress_transition_deferred",
-  "currentState": "The publication ACK-pending admission blocker is closed: rolling-restart now reaches epoch 6 PUBLISHED with pending ACK count 0 and replica_operations-p1 spread-satisfied, but the active gate still times out at snapshot coverage 3/5 while sql_write_operations-p1 is held in priority serial wait behind sql_transaction_participants-p1 and the joiner at 8be8 repeatedly times out connecting to the seed and local parallel queries.",
-  "nextAction": "Build the focused 184523Z published snapshot-coverage / priority serial-wait fixture, then decide whether the repair belongs to operation workflow progress visibility, startup snapshot reachability, or transport/query pressure.",
+  "currentState": "Stale synthetic serial-wait promotion now respects current per-partition workflow evidence, and sql_write_operations-p1 no longer owns the representative blocker. The fresh rerun migrated earlier to epoch 2 PUBLISHED with snapshot coverage 2/5 while sql_transaction_participants-p1 returns to actionable eligible_but_no_operation_created under startup reachability and transport/query pressure.",
+  "nextAction": "Use successor startup active-gate priority operation creation snapshot-coverage reentry package for the current representative blocker.",
   "proof": [
     "Focused 184523Z published snapshot-coverage / serial-wait fixture",
     "Owner decision for workflow progress versus snapshot reachability",
@@ -20,14 +20,12 @@
     "Representative rolling-restart --fast-local rerun"
   ],
   "touchedFiles": [
-    "src/control-plane/priority-recovery-snapshot-stage-9.js",
-    "src/control-plane/priority-recovery-snapshot-stage-10.js",
-    "src/control-plane/priority-recovery-snapshot-stage-11.js",
-    "src/transport/message-router-shared.js",
-    "test/control-plane/priority-recovery-snapshot-core-08-test-cases.js",
+    "src/control-plane/priority-recovery-snapshot-stage-3.js",
     "test/control-plane/priority-recovery-snapshot.test.js"
   ],
-  "predecessor": "work/packages/done-20260506-rolling-restart-publication-ack-pending-rebalancer-handoff-admission-reentry.md"
+  "predecessor": "work/packages/done-20260506-rolling-restart-publication-ack-pending-rebalancer-handoff-admission-reentry.md",
+  "closed": "2026-05-06",
+  "successor": "work/packages/active-20260506-rolling-restart-startup-active-gate-priority-operation-creation-snapshot-coverage-reentry.md"
 }
 -->
 
@@ -37,6 +35,19 @@ closed by migration. The publication-owned eligibility repair removed the epoch
 `5` `ACK_PENDING` admission blocker, but the representative rerun now fails
 later with `PUBLISHED` closure, incomplete snapshot coverage, and workflow-owned
 serial wait still open.
+
+Closure update on May 6, 2026: the focused stale serial-wait normalization now
+uses the current source-partition snapshot instead of stale in-flight workflow
+context. The representative rerun
+`test-output/reports/rolling-restart-after-priority-recovery-stale-serial-wait-source-filter-20260506T204900Z.report.json`
+no longer selects `sql_write_operations-p1` as the blocked serial-wait
+partition. The live blocker migrated earlier to epoch `2` `PUBLISHED` startup
+active-gate recovery: snapshot coverage is `2/5`, `sql_transaction_participants-p1`
+returns to actionable `eligible_but_no_operation_created`,
+`sql_transactions-p1` remains `recovering_in_flight`, and joiner
+transport/query pressure is supporting evidence only. That new owner boundary is
+tracked in
+[Rolling Restart Startup Active Gate Priority Operation Creation Snapshot Coverage Reentry](./active-20260506-rolling-restart-startup-active-gate-priority-operation-creation-snapshot-coverage-reentry.md).
 
 ## Current Evidence
 
@@ -133,11 +144,11 @@ Canonical contract shape:
 
 ## Residual Closure Inventory
 
-- [ ] Extract the `184523Z` published snapshot-coverage / serial-wait fixture.
-- [ ] Decide the owner boundary: workflow progress, snapshot reachability, or
+- [x] Extract the `184523Z` published snapshot-coverage / serial-wait fixture.
+- [x] Decide the owner boundary: workflow progress, snapshot reachability, or
       transport/query pressure.
-- [ ] Add the focused regression and repair the selected owner path.
-- [ ] Rerun focused tests, touched-file guardrails, and one representative
+- [x] Add the focused regression and repair the selected owner path.
+- [x] Rerun focused tests, touched-file guardrails, and one representative
       `rolling-restart` scenario.
 
 ## Progress Notes
@@ -156,6 +167,20 @@ May 6 migration from publication ACK-pending admission:
    `rolling-restart-after-priority-recovery-publication-exclusion-filter-20260506T184523Z`
    failed by migration: publication closed, but snapshot coverage remained
    `3/5` and priority recovery shifted to workflow-owned serial wait.
+5. Added a tracked-snapshot regression proving stale source-partition workflow
+   evidence must not promote a synthetic no-operation snapshot to
+   `priority_operation_serial_wait`.
+6. Repaired tracked serial-wait normalization in
+   `src/control-plane/priority-recovery-snapshot-stage-3.js` so source
+   operation contexts are selected from the latest snapshot per tracked
+   partition.
+7. Focused proof and touched-file guardrails passed after the repair.
+8. Representative rerun
+   `rolling-restart-after-priority-recovery-stale-serial-wait-source-filter-20260506T204900Z`
+   failed by migration: the serial-wait workflow boundary closed, and the
+   active blocker moved earlier to epoch `2` `PUBLISHED` startup active-gate
+   recovery with snapshot coverage `2/5` and actionable operation scheduling on
+   `sql_transaction_participants-p1`.
 
 ## Validation
 

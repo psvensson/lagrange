@@ -4,40 +4,40 @@
 
 Sprint: `work/sprints/active-2026-q2-publication-scoped-consistency-and-node-join-closure.md`
 
-Package: `work/packages/active-20260506-rolling-restart-published-snapshot-coverage-priority-serial-wait-workflow-progress-reentry.md`
+Package: `work/packages/active-20260506-rolling-restart-startup-active-gate-priority-operation-creation-snapshot-coverage-reentry.md`
 
 Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/rolling-restart-after-priority-recovery-publication-exclusion-filter-20260506T184523Z.report.json`
+Artifact: `test-output/reports/rolling-restart-after-priority-recovery-stale-serial-wait-source-filter-20260506T204900Z.report.json`
 
-Playback: `test-output/reports/.playback/rolling-restart-after-priority-recovery-publication-exclusion-filter-20260506T184523Z/rolling-restart/`
+Playback: `test-output/reports/.playback/rolling-restart-after-priority-recovery-stale-serial-wait-source-filter-20260506T204900Z/rolling-restart/`
 
 ## Boundary
 
-Owner: `Startup snapshot coverage and priority workflow progress under published closure`
+Owner: `Startup active-gate snapshot coverage and priority operation scheduling`
 
-Boundary: `Startup published snapshot-coverage / priority serial-wait workflow-progress reentry`
+Boundary: `Startup active-gate snapshot-coverage / priority operation scheduling reentry`
 
-Dominant reason: `priority_recovery_workflow_progress_transition_deferred`
+Dominant reason: `priority_recovery_operation_scheduling_event_driven`
 
-Current state: The publication ACK-pending admission blocker is closed: rolling-restart now reaches epoch 6 PUBLISHED with pending ACK count 0 and replica_operations-p1 spread-satisfied, but the active gate still times out at snapshot coverage 3/5 while sql_write_operations-p1 is held in priority serial wait behind sql_transaction_participants-p1 and the joiner at 8be8 repeatedly times out connecting to the seed and local parallel queries.
+Current state: The stale serial-wait workflow blocker is closed: sql_write_operations-p1 no longer owns the representative failure. The fresh rerun regressed earlier to epoch 2 PUBLISHED with snapshot coverage 2/5 while sql_transaction_participants-p1 returns to actionable eligible_but_no_operation_created, sql_transactions-p1 stays recovering_in_flight, and joiner 8be8 / seed 7493 still show reconnect and query-timeout pressure.
 
 ## Next Action
 
-Build the focused 184523Z published snapshot-coverage / priority serial-wait fixture, then decide whether the repair belongs to operation workflow progress visibility, startup snapshot reachability, or transport/query pressure.
+Build the focused 204900Z epoch-2 startup active-gate / operation-scheduling fixture, then decide whether the repair belongs to priority operation scheduling, selected-snapshot coverage consumption, or startup transport/query pressure.
 
 ## Proof Ladder
 
-1. `Focused 184523Z published snapshot-coverage / serial-wait fixture`
-2. `Owner decision for workflow progress versus snapshot reachability`
+1. `Focused 204900Z epoch-2 startup active-gate / operation-scheduling fixture`
+2. `Owner decision for operation scheduling versus snapshot coverage versus transport/query pressure`
 3. `Touched-file static guardrails`
 4. `Representative rolling-restart --fast-local rerun`
 
 ## Touched Files
 
 1. `src/control-plane/priority-recovery-snapshot-stage-9.js`
-2. `src/control-plane/priority-recovery-snapshot-stage-10.js`
-3. `src/control-plane/priority-recovery-snapshot-stage-11.js`
-4. `src/transport/message-router-shared.js`
-5. `test/control-plane/priority-recovery-snapshot-core-08-test-cases.js`
-6. `test/control-plane/priority-recovery-snapshot.test.js`
+2. `src/control-plane/priority-recovery-observation-snapshot-stage-4.js`
+3. `src/rebalancer/unified-rebalancer-segment-4.js`
+4. `src/bootstrap/node-joining-service-segment-2.js`
+5. `test/control-plane/priority-recovery-snapshot.test.js`
+6. `test/distributed/harness/__tests__/failure-bundle-core-11-test-cases.js`
