@@ -64,6 +64,9 @@ function resolvePriorityRecoveryDecisionAdmission(options = {}) {
     {
       publicationEligibleNodeIds:
         options.publicationContext.concreteEligibleNodeIds,
+      publicationExcludedNodeIds: Object.keys(
+        options.publicationNodeDecisions.exclusionReasonsByNodeId || {},
+      ),
       recoveryEligibleIncludedNodeIds:
         options.publicationContext.recoveryEligibleIncludedNodeIds,
       prioritySummaryReadyEligibleNodeCount:
@@ -258,6 +261,7 @@ function buildPriorityRecoveryDecisionSnapshot(options = {}) {
     admission: options.admission,
     workflowAdmission: options.workflowAdmission,
     publicationContext,
+    publicationNodeDecisions,
     priorityPartitionSummary,
   });
   const learnerPromotion = resolvePriorityRecoveryDecisionLearnerPromotion({

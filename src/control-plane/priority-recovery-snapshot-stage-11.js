@@ -97,6 +97,9 @@ function buildPriorityRecoveryDecisionSnapshots(options = {}) {
       admissionByPartitionId[partitionId] || null,
       {
         publicationEligibleNodeIds: publicationContext.concreteEligibleNodeIds,
+        publicationExcludedNodeIds: Object.keys(
+          publicationNodeDecisions.exclusionReasonsByNodeId || {},
+        ),
         recoveryEligibleIncludedNodeIds:
           publicationContext.recoveryEligibleIncludedNodeIds,
         prioritySummaryReadyEligibleNodeCount:

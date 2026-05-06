@@ -480,18 +480,37 @@ function buildPriorityRecoveryPublicationNodeDecisions(publicationConvergence) {
   };
 }
 
+function normalizePriorityRecoveryFallbackEligibleNodeIds(
+  candidateNodeIds = [],
+  excludedNodeIds = [],
+) {
+  const excludedNodeIdSet = new Set(
+    normalizePriorityRecoveryStringList(excludedNodeIds),
+  );
+  return normalizePriorityRecoveryStringList(candidateNodeIds).filter(
+    (nodeId) => !excludedNodeIdSet.has(nodeId),
+  );
+}
+
 function buildEffectivePriorityRecoveryAdmission(admission, options = {}) {
   const normalizedAdmission =
     admission && typeof admission === TYPEOF.OBJECT ? admission : {};
+  const publicationExcludedNodeIds = normalizePriorityRecoveryStringList(
+    options.publicationExcludedNodeIds,
+  );
   const explicitEligibleNodeIds = normalizePriorityRecoveryStringList(
     normalizedAdmission.eligibleNodeIds,
   );
-  const publicationEligibleNodeIds = normalizePriorityRecoveryStringList(
-    options.publicationEligibleNodeIds,
-  );
-  const projectionEligibleNodeIds = normalizePriorityRecoveryStringList(
-    options.recoveryEligibleIncludedNodeIds,
-  );
+  const publicationEligibleNodeIds =
+    normalizePriorityRecoveryFallbackEligibleNodeIds(
+      options.publicationEligibleNodeIds,
+      publicationExcludedNodeIds,
+    );
+  const projectionEligibleNodeIds =
+    normalizePriorityRecoveryFallbackEligibleNodeIds(
+      options.recoveryEligibleIncludedNodeIds,
+      publicationExcludedNodeIds,
+    );
   const readyEligibleNodeCount = Math.max(
     NUM.ZERO,
     normalizePriorityRecoveryInteger(

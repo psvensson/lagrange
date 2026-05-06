@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-06",
   "scenario": "rolling-restart",
   "artifact": "test-output/reports/rolling-restart-after-priority-owner-normalization-20260506T161610Z.report.json",
@@ -11,8 +11,8 @@
   "owner": "Priority recovery rebalancer handoff and admission under publication pending",
   "boundary": "Startup publication ACK-pending rebalancer handoff/admission reentry",
   "dominantReason": "pending_ack_nodes",
-  "currentState": "After priority owner normalization, rolling-restart advanced to epoch 5 ACK_PENDING: sql_transactions-p1 converged, sql_write_operations-p1 is workflow-owned in flight, and replica_operations-p1 plus sql_transaction_participants-p1 are terminal rebalancer-handoff witnesses with spread still unsatisfied. The seed rebalancer follow-up for replica_operations-p1 is blocked by insufficient placement eligible nodes and control_plane_write_unhealthy while transport participant failures to 7493 persist.",
-  "nextAction": "Build the focused 161610Z terminal handoff/admission fixture, then decide whether the repair belongs to rebalancer follow-up admission, publication recovery eligibility, or transport/CDC visibility.",
+  "currentState": "Publication-owned fallback eligibility now excludes projection-rejected pending-ACK nodes, and the representative rerun closed the epoch 5 ACK_PENDING admission boundary. The blocker migrated to epoch 6 PUBLISHED with snapshot coverage 3/5 and priority serial-wait workflow progress on sql_write_operations-p1 behind sql_transaction_participants-p1.",
+  "nextAction": "Continue in active-20260506-rolling-restart-published-snapshot-coverage-priority-serial-wait-workflow-progress-reentry.md for the epoch 6 PUBLISHED snapshot-coverage / workflow-progress boundary.",
   "proof": [
     "Focused terminal rebalancer-handoff/admission fixture",
     "Owner decision for admission versus transport visibility",
@@ -27,7 +27,9 @@
     "src/transport/message-router-shared.js",
     "test/control-plane/priority-recovery-snapshot.test.js"
   ],
-  "predecessor": "work/packages/done-20260506-rolling-restart-publication-ack-pending-priority-recovery-reentry.md"
+  "predecessor": "work/packages/done-20260506-rolling-restart-publication-ack-pending-priority-recovery-reentry.md",
+  "closed": "2026-05-06",
+  "successor": "work/packages/active-20260506-rolling-restart-published-snapshot-coverage-priority-serial-wait-workflow-progress-reentry.md"
 }
 -->
 
@@ -125,11 +127,11 @@ Canonical contract shape:
 
 ## Residual Closure Inventory
 
-- [ ] Extract the `161610Z` terminal handoff/admission fixture.
-- [ ] Decide the owner boundary: admission, publication eligibility, or
+- [x] Extract the `161610Z` terminal handoff/admission fixture.
+- [x] Decide the owner boundary: admission, publication eligibility, or
       transport/CDC visibility.
-- [ ] Add the focused regression and repair the selected owner path.
-- [ ] Rerun focused tests, touched-file guardrails, and one representative
+- [x] Add the focused regression and repair the selected owner path.
+- [x] Rerun focused tests, touched-file guardrails, and one representative
       `rolling-restart` scenario.
 
 ## Progress Notes
@@ -155,6 +157,31 @@ May 6 central priority-recovery snapshot simplification:
 7. File-scoped complexity probe still has inherited violations in
    `src/control-plane/priority-recovery-snapshot.js`, but the refactored
    serial-wait, actuation, and progress helpers are no longer among them.
+
+May 6 publication ACK-pending admission follow-up:
+
+1. Added the focused regression
+   `priority recovery decision snapshots exclude projection-rejected pending-ACK nodes from follow-up eligibility`
+   in `test/control-plane/priority-recovery-snapshot-core-08-test-cases.js`.
+2. Filtered publication-membership fallback eligibility through publication
+   exclusion decisions in
+   `src/control-plane/priority-recovery-snapshot-stage-9.js`,
+   `src/control-plane/priority-recovery-snapshot-stage-10.js`, and
+   `src/control-plane/priority-recovery-snapshot-stage-11.js`.
+3. Focused proof passed:
+   `./node_modules/.bin/tap test/control-plane/priority-recovery-snapshot.test.js`.
+4. Scoped guardrails passed:
+   `node scripts/check-guideline-literals.js test/control-plane/priority-recovery-snapshot-core-08-test-cases.js`;
+   `node scripts/check-guideline-literals.js src/control-plane/priority-recovery-snapshot-stage-9.js src/control-plane/priority-recovery-snapshot-stage-10.js src/control-plane/priority-recovery-snapshot-stage-11.js`;
+   `node scripts/check-guideline-decision-boundaries.js src/control-plane/priority-recovery-snapshot-stage-9.js src/control-plane/priority-recovery-snapshot-stage-10.js src/control-plane/priority-recovery-snapshot-stage-11.js`;
+   `node scripts/check-runtime-grammar-contracts.js src/control-plane/priority-recovery-snapshot-stage-9.js src/control-plane/priority-recovery-snapshot-stage-10.js src/control-plane/priority-recovery-snapshot-stage-11.js`;
+   `npx eslint src/control-plane/priority-recovery-snapshot-stage-9.js src/control-plane/priority-recovery-snapshot-stage-10.js src/control-plane/priority-recovery-snapshot-stage-11.js test/control-plane/priority-recovery-snapshot-core-08-test-cases.js`;
+   `git diff --check`.
+5. Representative rerun:
+   `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-after-priority-recovery-publication-exclusion-filter-20260506T184523Z.report.json --fast-local --verbose`
+   failed after `132.7s`, but the blocker migrated to epoch `6` `PUBLISHED`
+   snapshot coverage `3/5` with `priority_operation_serial_wait` on
+   `sql_write_operations-p1`.
 
 ## Validation
 

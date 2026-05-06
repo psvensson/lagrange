@@ -12,7 +12,7 @@
   "boundary": "Startup publication ACK-pending priority recovery reentry",
   "dominantReason": "pending_ack_nodes",
   "currentState": "The 155451Z owner decision was repaired: sql_transactions-p1 remains workflow-owned while fresh, and later sql_write_operations-p1 synthetic no-operation evidence yields to serial/workflow progress. The representative rerun migrated to epoch 5 rebalancer handoff/admission.",
-  "nextAction": "Migrated to active-20260506-rolling-restart-publication-ack-pending-rebalancer-handoff-admission-reentry.md for the epoch 5 rebalancer handoff/admission boundary.",
+  "nextAction": "Migrated to done-20260506-rolling-restart-publication-ack-pending-rebalancer-handoff-admission-reentry.md for the epoch 5 rebalancer handoff/admission boundary.",
   "proof": [
     "Focused priority recovery publication-ACK fixture",
     "Operation scheduling or workflow owner regression",
@@ -25,7 +25,7 @@
   ],
   "predecessor": "work/packages/done-20260506-rolling-restart-startup-seed-transport-delivery-source-saturation-reentry.md",
   "closed": "2026-05-06",
-  "successor": "work/packages/active-20260506-rolling-restart-publication-ack-pending-rebalancer-handoff-admission-reentry.md"
+  "successor": "work/packages/done-20260506-rolling-restart-publication-ack-pending-rebalancer-handoff-admission-reentry.md"
 }
 -->
 
@@ -176,5 +176,5 @@ Canonical contract shape:
 This package closes by migration. The repaired boundary was the stale
 owner-decision snapshot around `sql_transactions-p1` and
 `sql_write_operations-p1` from the `155451Z` artifact. The successor package is
-[Rolling Restart Publication ACK-Pending Rebalancer Handoff Admission Reentry](./active-20260506-rolling-restart-publication-ack-pending-rebalancer-handoff-admission-reentry.md),
+[Rolling Restart Publication ACK-Pending Rebalancer Handoff Admission Reentry](./done-20260506-rolling-restart-publication-ack-pending-rebalancer-handoff-admission-reentry.md),
 which owns the `161610Z` epoch `5` rebalancer handoff/admission evidence.

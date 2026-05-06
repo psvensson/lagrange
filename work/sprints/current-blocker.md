@@ -4,40 +4,40 @@
 
 Sprint: `work/sprints/active-2026-q2-publication-scoped-consistency-and-node-join-closure.md`
 
-Package: `work/packages/active-20260506-rolling-restart-publication-ack-pending-rebalancer-handoff-admission-reentry.md`
+Package: `work/packages/active-20260506-rolling-restart-published-snapshot-coverage-priority-serial-wait-workflow-progress-reentry.md`
 
 Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/rolling-restart-after-priority-owner-normalization-20260506T161610Z.report.json`
+Artifact: `test-output/reports/rolling-restart-after-priority-recovery-publication-exclusion-filter-20260506T184523Z.report.json`
 
-Playback: `test-output/reports/.playback/rolling-restart-after-priority-owner-normalization-20260506T161610Z/rolling-restart/`
+Playback: `test-output/reports/.playback/rolling-restart-after-priority-recovery-publication-exclusion-filter-20260506T184523Z/rolling-restart/`
 
 ## Boundary
 
-Owner: `Priority recovery rebalancer handoff and admission under publication pending`
+Owner: `Startup snapshot coverage and priority workflow progress under published closure`
 
-Boundary: `Startup publication ACK-pending rebalancer handoff/admission reentry`
+Boundary: `Startup published snapshot-coverage / priority serial-wait workflow-progress reentry`
 
-Dominant reason: `pending_ack_nodes`
+Dominant reason: `priority_recovery_workflow_progress_transition_deferred`
 
-Current state: After priority owner normalization, rolling-restart advanced to epoch 5 ACK_PENDING: sql_transactions-p1 converged, sql_write_operations-p1 is workflow-owned in flight, and replica_operations-p1 plus sql_transaction_participants-p1 are terminal rebalancer-handoff witnesses with spread still unsatisfied. The seed rebalancer follow-up for replica_operations-p1 is blocked by insufficient placement eligible nodes and control_plane_write_unhealthy while transport participant failures to 7493 persist.
+Current state: The publication ACK-pending admission blocker is closed: rolling-restart now reaches epoch 6 PUBLISHED with pending ACK count 0 and replica_operations-p1 spread-satisfied, but the active gate still times out at snapshot coverage 3/5 while sql_write_operations-p1 is held in priority serial wait behind sql_transaction_participants-p1 and the joiner at 8be8 repeatedly times out connecting to the seed and local parallel queries.
 
 ## Next Action
 
-Build the focused 161610Z terminal handoff/admission fixture, then decide whether the repair belongs to rebalancer follow-up admission, publication recovery eligibility, or transport/CDC visibility.
+Build the focused 184523Z published snapshot-coverage / priority serial-wait fixture, then decide whether the repair belongs to operation workflow progress visibility, startup snapshot reachability, or transport/query pressure.
 
 ## Proof Ladder
 
-1. `Focused terminal rebalancer-handoff/admission fixture`
-2. `Owner decision for admission versus transport visibility`
+1. `Focused 184523Z published snapshot-coverage / serial-wait fixture`
+2. `Owner decision for workflow progress versus snapshot reachability`
 3. `Touched-file static guardrails`
 4. `Representative rolling-restart --fast-local rerun`
 
 ## Touched Files
 
-1. `src/control-plane/priority-recovery-snapshot.js`
-2. `src/control-plane/priority-recovery-observation-snapshot.js`
-3. `src/rebalancer/unified-rebalancer-segment-4.js`
-4. `src/rebalancer/operation-workflow-owner-segment-5.js`
-5. `src/transport/message-router-shared.js`
+1. `src/control-plane/priority-recovery-snapshot-stage-9.js`
+2. `src/control-plane/priority-recovery-snapshot-stage-10.js`
+3. `src/control-plane/priority-recovery-snapshot-stage-11.js`
+4. `src/transport/message-router-shared.js`
+5. `test/control-plane/priority-recovery-snapshot-core-08-test-cases.js`
 6. `test/control-plane/priority-recovery-snapshot.test.js`
