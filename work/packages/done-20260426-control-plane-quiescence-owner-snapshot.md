@@ -119,7 +119,7 @@ Sprint:
 
 Depends on:
 
-1. [Rolling restart operation transition pressure and over-target trim](./active-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md)
+1. [Rolling restart operation transition pressure and over-target trim](./todo-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md)
 2. [Rolling restart in-flight operation drain and CDC pressure](./todo-20260425-rolling-restart-inflight-operation-drain-and-cdc-pressure.md)
 3. [MOVE_ASSIGNMENT liveness proof hardening](./done-20260426-move-assignment-liveness-proof-hardening.md)
 

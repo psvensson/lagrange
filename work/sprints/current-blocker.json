@@ -1,0 +1,30 @@
+{
+  "schema": "current-blocker-v1",
+  "generatedBy": "scripts/work-tracker.js",
+  "sprint": "work/sprints/active-2026-q2-publication-scoped-consistency-and-node-join-closure.md",
+  "package": "work/packages/active-20260506-rolling-restart-publication-ack-pending-rebalancer-handoff-admission-reentry.md",
+  "status": "active",
+  "scenario": "rolling-restart",
+  "artifact": "test-output/reports/rolling-restart-after-priority-owner-normalization-20260506T161610Z.report.json",
+  "playback": "test-output/reports/.playback/rolling-restart-after-priority-owner-normalization-20260506T161610Z/rolling-restart/",
+  "owner": "Priority recovery rebalancer handoff and admission under publication pending",
+  "boundary": "Startup publication ACK-pending rebalancer handoff/admission reentry",
+  "dominantReason": "pending_ack_nodes",
+  "currentState": "After priority owner normalization, rolling-restart advanced to epoch 5 ACK_PENDING: sql_transactions-p1 converged, sql_write_operations-p1 is workflow-owned in flight, and replica_operations-p1 plus sql_transaction_participants-p1 are terminal rebalancer-handoff witnesses with spread still unsatisfied. The seed rebalancer follow-up for replica_operations-p1 is blocked by insufficient placement eligible nodes and control_plane_write_unhealthy while transport participant failures to 7493 persist.",
+  "nextAction": "Build the focused 161610Z terminal handoff/admission fixture, then decide whether the repair belongs to rebalancer follow-up admission, publication recovery eligibility, or transport/CDC visibility.",
+  "proof": [
+    "Focused terminal rebalancer-handoff/admission fixture",
+    "Owner decision for admission versus transport visibility",
+    "Touched-file static guardrails",
+    "Representative rolling-restart --fast-local rerun"
+  ],
+  "touchedFiles": [
+    "src/control-plane/priority-recovery-snapshot.js",
+    "src/control-plane/priority-recovery-observation-snapshot.js",
+    "src/rebalancer/unified-rebalancer-segment-4.js",
+    "src/rebalancer/operation-workflow-owner-segment-5.js",
+    "src/transport/message-router-shared.js",
+    "test/control-plane/priority-recovery-snapshot.test.js"
+  ],
+  "predecessor": "work/packages/done-20260506-rolling-restart-publication-ack-pending-priority-recovery-reentry.md"
+}

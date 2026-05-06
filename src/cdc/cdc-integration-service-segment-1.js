@@ -39,6 +39,13 @@ const {
   resolveNodeWebSocketAddress,
 } = CDC_INTEGRATION_SERVICE_SHARED;
 
+const AUTHORITATIVE_SQL_FALLBACK_SOURCE = 'sql_query_engine';
+const AUTHORITATIVE_SQL_FALLBACK_SESSION_SUFFIX = ':owner-rpc-recovery';
+const AUTHORITATIVE_SQL_FALLBACK_RETRYABLE_ERROR_CODES = Object.freeze([
+  QUERY_ERROR_CODE.ROUTER_CONNECTION_CLOSED,
+  QUERY_ERROR_CODE.ROUTER_MESSAGE_TIMEOUT,
+]);
+
 class CDCIntegrationServiceSegment1 extends EventEmitter {
   constructor(options = {}) {
     super();
@@ -816,6 +823,115 @@ class CDCIntegrationServiceSegment1 extends EventEmitter {
     });
   }
 
+  normalizeAuthoritativeReadLocalQueryTransport(
+    localQueryTransportReadiness = null,
+  ) {
+    return localQueryTransportReadiness &&
+      typeof localQueryTransportReadiness === TYPEOF.OBJECT ?
+      {
+        state: localQueryTransportReadiness.state || null,
+        ready: localQueryTransportReadiness.ready === true,
+        reason: localQueryTransportReadiness.reason || null,
+        retryAfterMs: localQueryTransportReadiness.retryAfterMs || NUM.ZERO,
+      } :
+      null;
+  }
+
+  shouldRetryOwnerRpcReadViaSqlFallback(
+    ownerRpcResult,
+    options = {},
+    localQueryTransportReadiness = null,
+  ) {
+    if (ownerRpcResult?.success === true || options?.allowSqlFallback !== true) {
+      return false;
+    }
+    if (options?.requireOwnerRpcRead === true) {
+      return false;
+    }
+    if (localQueryTransportReadiness?.ready === false) {
+      return false;
+    }
+    const errorCode = String(
+      ownerRpcResult?.errorCode || ownerRpcResult?.code || '',
+    ).toUpperCase();
+    return (
+      AUTHORITATIVE_SQL_FALLBACK_RETRYABLE_ERROR_CODES.includes(errorCode) ||
+      ownerRpcResult?.deferRetry === true ||
+      (
+        Number.isFinite(ownerRpcResult?.retryAfterMs) &&
+        ownerRpcResult.retryAfterMs > NUM.ZERO
+      )
+    );
+  }
+
+  buildOwnerRpcSqlFallbackQueryOptions(queryOptions = {}, baseDiagnostics = {}) {
+    const resolvedQueryOptions =
+      queryOptions && typeof queryOptions === TYPEOF.OBJECT ? queryOptions : {};
+    const sessionId =
+      typeof resolvedQueryOptions.sessionId === TYPEOF.STRING &&
+        resolvedQueryOptions.sessionId.length > NUM.ZERO ?
+        `${resolvedQueryOptions.sessionId}${
+          AUTHORITATIVE_SQL_FALLBACK_SESSION_SUFFIX
+        }` :
+        null;
+    return {
+      ...resolvedQueryOptions,
+      routingReadinessDimension:
+        resolvedQueryOptions.routingReadinessDimension ||
+        baseDiagnostics.routingReadinessDimension ||
+        CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+      ...(sessionId ? {sessionId} : {}),
+    };
+  }
+
+  async executeAuthoritativeSqlFallbackRead(
+    tableName,
+    statement,
+    params,
+    options,
+    baseDiagnostics,
+    localQueryTransportReadiness = null,
+  ) {
+    if (typeof this.sqlQueryEngine?.executeQuery !== TYPEOF.FUNCTION) {
+      return null;
+    }
+    const queryResult = await this.sqlQueryEngine.executeQuery(
+      statement,
+      params,
+      this.buildOwnerRpcSqlFallbackQueryOptions(
+        options?.queryOptions,
+        baseDiagnostics,
+      ),
+    );
+    return {
+      ...(queryResult || {
+        success: false,
+        error: CDC_INTEGRATION_SERVICE_LITERAL.AUTHORITATIVE_QUERY_FAILED,
+        rows: [],
+      }),
+      rows: Array.isArray(queryResult?.rows) ? queryResult.rows : [],
+      rowCount: Array.isArray(queryResult?.rows) ?
+        queryResult.rows.length :
+        NUM.ZERO,
+      source: AUTHORITATIVE_SQL_FALLBACK_SOURCE,
+      usedSqlFallback: true,
+      localReadHit: false,
+      localReplicaFallbackHit: false,
+      queryTimeoutMs: baseDiagnostics.queryTimeoutMs,
+      localQueryTransport:
+        this.normalizeAuthoritativeReadLocalQueryTransport(
+          localQueryTransportReadiness,
+        ),
+      systemTableDiagnostics: {
+        ...baseDiagnostics,
+        localReadHit: false,
+        localReplicaFallbackHit: false,
+        routedToNode: baseDiagnostics.leaderNodeId || null,
+        deniedByReadiness: baseDiagnostics.deniedByReadiness === true,
+      },
+    };
+  }
+
   /**
    * Execute an authoritative system-table read. Prefers local partition
    * replicas and falls back to the routed SQL engine when necessary.
@@ -988,6 +1104,26 @@ class CDCIntegrationServiceSegment1 extends EventEmitter {
       ) {
         return buildLocalReadResult();
       }
+      if (
+        this.shouldRetryOwnerRpcReadViaSqlFallback(
+          ownerRpcResult,
+          options,
+          localQueryTransportReadiness,
+        )
+      ) {
+        const sqlFallbackResult =
+          await this.executeAuthoritativeSqlFallbackRead(
+            tableName,
+            statement,
+            params,
+            options,
+            baseDiagnostics,
+            localQueryTransportReadiness,
+          );
+        if (sqlFallbackResult !== null) {
+          return sqlFallbackResult;
+        }
+      }
       return ownerRpcResult;
     }
     if (preferOwnerRpcRead && localRead.available && !requireOwnerRpcRead) {
@@ -1105,16 +1241,9 @@ class CDCIntegrationServiceSegment1 extends EventEmitter {
             localReplicaFallbackHit: false,
             queryTimeoutMs: baseDiagnostics.queryTimeoutMs,
             localQueryTransport:
-              localQueryTransportReadiness &&
-              typeof localQueryTransportReadiness === TYPEOF.OBJECT ?
-                {
-                  state: localQueryTransportReadiness.state || null,
-                  ready: localQueryTransportReadiness.ready === true,
-                  reason: localQueryTransportReadiness.reason || null,
-                  retryAfterMs:
-                      localQueryTransportReadiness.retryAfterMs || NUM.ZERO,
-                } :
-                null,
+              this.normalizeAuthoritativeReadLocalQueryTransport(
+                localQueryTransportReadiness,
+              ),
             systemTableDiagnostics: {
               ...baseDiagnostics,
               localReadHit: false,
@@ -1140,16 +1269,9 @@ class CDCIntegrationServiceSegment1 extends EventEmitter {
           localReplicaFallbackHit: false,
           queryTimeoutMs: baseDiagnostics.queryTimeoutMs,
           localQueryTransport:
-            localQueryTransportReadiness &&
-            typeof localQueryTransportReadiness === TYPEOF.OBJECT ?
-              {
-                state: localQueryTransportReadiness.state || null,
-                ready: localQueryTransportReadiness.ready === true,
-                reason: localQueryTransportReadiness.reason || null,
-                retryAfterMs:
-                    localQueryTransportReadiness.retryAfterMs || NUM.ZERO,
-              } :
-              null,
+            this.normalizeAuthoritativeReadLocalQueryTransport(
+              localQueryTransportReadiness,
+            ),
           systemTableDiagnostics: {
             ...baseDiagnostics,
             localReadHit: false,
@@ -1178,16 +1300,9 @@ class CDCIntegrationServiceSegment1 extends EventEmitter {
         localReplicaFallbackHit: false,
         queryTimeoutMs: baseDiagnostics.queryTimeoutMs,
         localQueryTransport:
-          localQueryTransportReadiness &&
-          typeof localQueryTransportReadiness === TYPEOF.OBJECT ?
-            {
-              state: localQueryTransportReadiness.state || null,
-              ready: localQueryTransportReadiness.ready === true,
-              reason: localQueryTransportReadiness.reason || null,
-              retryAfterMs:
-                  localQueryTransportReadiness.retryAfterMs || NUM.ZERO,
-            } :
-            null,
+          this.normalizeAuthoritativeReadLocalQueryTransport(
+            localQueryTransportReadiness,
+          ),
         systemTableDiagnostics: {
           ...baseDiagnostics,
           localReadHit: false,
@@ -1213,16 +1328,9 @@ class CDCIntegrationServiceSegment1 extends EventEmitter {
       localReplicaFallbackHit: false,
       queryTimeoutMs: baseDiagnostics.queryTimeoutMs,
       localQueryTransport:
-        localQueryTransportReadiness &&
-        typeof localQueryTransportReadiness === TYPEOF.OBJECT ?
-          {
-            state: localQueryTransportReadiness.state || null,
-            ready: localQueryTransportReadiness.ready === true,
-            reason: localQueryTransportReadiness.reason || null,
-            retryAfterMs:
-                localQueryTransportReadiness.retryAfterMs || NUM.ZERO,
-          } :
-          null,
+        this.normalizeAuthoritativeReadLocalQueryTransport(
+          localQueryTransportReadiness,
+        ),
       systemTableDiagnostics: {
         ...baseDiagnostics,
         localReadHit: false,

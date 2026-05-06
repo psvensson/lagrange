@@ -33,7 +33,7 @@ Sprint:
 
 Depends on:
 
-1. [Rolling restart operation transition pressure and over-target trim](./active-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md)
+1. [Rolling restart operation transition pressure and over-target trim](./todo-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md)
 
 ## In Scope
 

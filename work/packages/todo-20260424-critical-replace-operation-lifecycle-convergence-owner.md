@@ -30,7 +30,7 @@ while carrying a failed `REPLACE` `STOPPING` timeout. The remaining over-target
 set is now `control_plane_publications-p1`, `logs-p1`,
 `sql_transaction_participants-p1`, and `replica_operations-p1`, with repeated
 owner-query and transition-pressure evidence. The current execution split is
-[Rolling restart operation transition pressure and over-target trim](./active-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md).
+[Rolling restart operation transition pressure and over-target trim](./todo-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md).
 
 The next April 25 rerun after the STOPPING visibility-pressure fix closed the
 over-target voter symptom in the representative artifact: all voter counts are
@@ -45,7 +45,7 @@ deferred.
 The seed-contact startup-authority continuation moved `rolling-restart` past
 restart readiness and back to post-active convergence. The current execution
 split is again
-[Rolling restart operation transition pressure and over-target trim](./active-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md),
+[Rolling restart operation transition pressure and over-target trim](./todo-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md),
 now with over-target evidence on `control_plane_publications-p1` and
 `service_timers-p1`.
 

@@ -83,7 +83,7 @@ operation is still in flight, and post-rebalance closure remains open on
 operation drain, membership trim, and over-target evidence.
 
 The active handoff is:
-[Rolling restart operation transition pressure and over-target trim](./active-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md).
+[Rolling restart operation transition pressure and over-target trim](./todo-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md).
 
 ## Scope Basis
 
@@ -101,7 +101,7 @@ Depends on:
 
 1. [Priority recovery follow-up operation creation](./done-20260424-priority-recovery-followup-operation-creation.md)
 2. [Critical recovery pressure reserve and admission contract](./done-20260424-critical-recovery-pressure-reserve-and-admission-contract.md)
-3. [Rolling restart operation transition pressure and over-target trim](./active-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md)
+3. [Rolling restart operation transition pressure and over-target trim](./todo-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md)
 
 ## In Scope
 
@@ -184,7 +184,7 @@ Depends on:
 4. `npm test -- test/rebalancer/unified-rebalancer.test.js`
 5. `npm test -- test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js`
 6. `node scripts/check-guideline-decision-boundaries.js --json src/rebalancer/unified-rebalancer-segment-4.js src/rebalancer/operation-workflow-owner-segment-1.js src/control-plane/membership-publication-planning.js src/control-plane/priority-recovery-snapshot.js`
-7. `git diff --check -- src/control-plane/membership-publication-planning.js src/control-plane/membership-publication-coordinator.js src/control-plane/priority-recovery-snapshot.js src/rebalancer/unified-rebalancer-segment-4.js src/rebalancer/operation-workflow-owner-segment-1.js test/rebalancer/unified-rebalancer.test.js test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js work/sprints/active-2026-q2-publication-scoped-consistency-and-node-join-closure.md work/packages/done-20260426-priority-spread-recovery-operation-creation-under-load.md work/packages/active-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md`
+7. `git diff --check -- src/control-plane/membership-publication-planning.js src/control-plane/membership-publication-coordinator.js src/control-plane/priority-recovery-snapshot.js src/rebalancer/unified-rebalancer-segment-4.js src/rebalancer/operation-workflow-owner-segment-1.js test/rebalancer/unified-rebalancer.test.js test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js work/sprints/active-2026-q2-publication-scoped-consistency-and-node-join-closure.md work/packages/done-20260426-priority-spread-recovery-operation-creation-under-load.md work/packages/todo-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md`
 8. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/runtime-stability-rolling-restart-20260426-codex-priority-remote-handoff-retry.report.json --fast-local --verbose`
 9. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/runtime-stability-rolling-restart-20260426-codex-priority-cleanup-remove-budget.report.json --fast-local --verbose`
 

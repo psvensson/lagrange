@@ -11,6 +11,7 @@ import {
   BOOTSTRAP_PIPELINE_ERROR_CODE,
 } from '../bootstrap-constants.js';
 import {
+  BOOTSTRAP_API_REGISTER_SERVICE_ERROR_CODE,
   BOOTSTRAP_API_RESPONSE_FIELD,
 } from '../bootstrap-api-constants.js';
 import {
@@ -384,7 +385,9 @@ class ContactSeedPhase {
         .LEADER_METADATA_INCOMPLETE ||
       code === BOOTSTRAP_PIPELINE_ERROR_CODE.BOOTSTRAP_NOT_READY ||
       code === BOOTSTRAP_PIPELINE_ERROR_CODE
-        .SERVICE_REGISTRATION_CACHE_VISIBILITY_TIMEOUT;
+        .SERVICE_REGISTRATION_CACHE_VISIBILITY_TIMEOUT ||
+      code === BOOTSTRAP_API_REGISTER_SERVICE_ERROR_CODE
+        .ASSIGNMENT_TOKEN_UNKNOWN;
     const retryableTimeout =
       error?.message === retryableTimeoutErrorMessage;
     const retryableStatus =

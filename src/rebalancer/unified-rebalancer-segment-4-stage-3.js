@@ -1,0 +1,459 @@
+import {UnifiedRebalancerSegment4Stage2} from './unified-rebalancer-segment-4-stage-2.js';
+import {UNIFIED_REBALANCER_SEGMENT_4_STAGE_SHARED as SHARED} from './unified-rebalancer-segment-4-stage-shared.js';
+
+const {
+  EntityType,
+  MOVE_REASON,
+  MoveType,
+  NUM,
+  PRIORITY_RECOVERY_FOLLOW_UP_AUGMENTATION_ACTION,
+  PRIORITY_RECOVERY_FOLLOW_UP_AUGMENTATION_ACTION_BY_STATE,
+  PRIORITY_RECOVERY_FOLLOW_UP_AUGMENTATION_STATE,
+  PRIORITY_RECOVERY_FOLLOW_UP_AUGMENTATION_STATE_TABLE,
+  PRIORITY_RECOVERY_FOLLOW_UP_FIELD,
+  PRIORITY_RECOVERY_FOLLOW_UP_MOVE_FIELD,
+  PRIORITY_RECOVERY_FOLLOW_UP_MOVE_REASON,
+  PRIORITY_RECOVERY_FOLLOW_UP_MOVE_STATE,
+  PRIORITY_RECOVERY_FOLLOW_UP_UNOCCUPIED_SERVICE_STATUSES,
+  REBALANCER_ERROR_MSG,
+  REBALANCER_LOG_MSG,
+  REBALANCER_MOVE_FIELD,
+  REBALANCER_RUNTIME_REASON,
+  REBALANCER_SKIP_REASON,
+  REBALANCER_TARGET_READINESS_MODE,
+  ReplicaStatus,
+  TYPEOF,
+  UNIFIED_REBALANCER_LITERAL,
+} = SHARED;
+
+class UnifiedRebalancerSegment4Stage3 extends UnifiedRebalancerSegment4Stage2 {
+  buildPriorityRecoveryFollowUpHealthyNodeSet(currentReplicas = []) {
+    return new Set(
+      this.getHealthyReplicas(currentReplicas)
+        .map((replica) =>
+          String(
+            replica?.[PRIORITY_RECOVERY_FOLLOW_UP_FIELD.NODE_ID] ||
+              replica?.[PRIORITY_RECOVERY_FOLLOW_UP_FIELD.NODE_ID_CAMEL] ||
+              UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
+          ).trim(),
+        )
+        .filter((nodeId) => nodeId.length > NUM.ZERO),
+    );
+  }
+
+  buildPriorityRecoveryFollowUpOccupiedNodeSet(currentReplicas = []) {
+    const occupiedNodeIds = new Set();
+    const replicas = Array.isArray(currentReplicas) ? currentReplicas : [];
+    for (const replica of replicas) {
+      const nodeId = String(
+        replica?.[PRIORITY_RECOVERY_FOLLOW_UP_FIELD.NODE_ID] ||
+          replica?.[PRIORITY_RECOVERY_FOLLOW_UP_FIELD.NODE_ID_CAMEL] ||
+          UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
+      ).trim();
+      if (nodeId.length === NUM.ZERO) {
+        continue;
+      }
+      const status = String(
+        replica?.[PRIORITY_RECOVERY_FOLLOW_UP_FIELD.STATUS] ??
+          ReplicaStatus.ACTIVE,
+      ).toLowerCase();
+      if (PRIORITY_RECOVERY_FOLLOW_UP_UNOCCUPIED_SERVICE_STATUSES.has(status)) {
+        continue;
+      }
+      occupiedNodeIds.add(nodeId);
+    }
+    return occupiedNodeIds;
+  }
+
+  buildPriorityRecoveryFollowUpPendingTargetNodeSet() {
+    return new Set(
+      this.getTopologyBlockingInFlightOperations()
+        .map((operation) =>
+          String(
+            operation?.target_node_id ||
+              operation?.targetNodeId ||
+              UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
+          ).trim(),
+        )
+        .filter((nodeId) => nodeId.length > NUM.ZERO),
+    );
+  }
+
+  selectPriorityRecoveryFollowUpTargetNodeId(decision, currentReplicas = []) {
+    const eligibleNodeIds =
+      this.resolvePriorityRecoveryFollowUpEligibleNodeIds(decision);
+    const healthyNodeIds =
+      this.buildPriorityRecoveryFollowUpHealthyNodeSet(currentReplicas);
+    const occupiedNodeIds =
+      this.buildPriorityRecoveryFollowUpOccupiedNodeSet(currentReplicas);
+    const pendingTargetNodeIds =
+      this.buildPriorityRecoveryFollowUpPendingTargetNodeSet();
+    const previousFailedTargetNodeId = String(
+      decision?.decisionSnapshot?.coordinator?.operation?.[
+        PRIORITY_RECOVERY_FOLLOW_UP_FIELD.TARGET_NODE_ID
+      ] || UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
+    ).trim();
+    const unusedEligibleNodeIds = eligibleNodeIds.filter(
+      (nodeId) =>
+        !healthyNodeIds.has(nodeId) &&
+        !occupiedNodeIds.has(nodeId) &&
+        !pendingTargetNodeIds.has(nodeId),
+    );
+    const preferredUnusedEligibleNodeId = unusedEligibleNodeIds.find(
+      (nodeId) => nodeId !== previousFailedTargetNodeId,
+    );
+    if (preferredUnusedEligibleNodeId) {
+      return preferredUnusedEligibleNodeId;
+    }
+    if (unusedEligibleNodeIds.length > NUM.ZERO) {
+      return unusedEligibleNodeIds[NUM.ZERO];
+    }
+    return (
+      eligibleNodeIds.find(
+        (nodeId) =>
+          !occupiedNodeIds.has(nodeId) && !pendingTargetNodeIds.has(nodeId),
+      ) ||
+      null
+    );
+  }
+
+  selectPriorityRecoveryFollowUpSourceReplica(
+    healthyReplicas = [],
+    targetNodeId = UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
+  ) {
+    const replicasByNodeId = new Map();
+    for (const replica of healthyReplicas) {
+      const nodeId = String(
+        replica?.[PRIORITY_RECOVERY_FOLLOW_UP_FIELD.NODE_ID] ||
+          replica?.[PRIORITY_RECOVERY_FOLLOW_UP_FIELD.NODE_ID_CAMEL] ||
+          UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
+      ).trim();
+      if (nodeId.length === NUM.ZERO) {
+        continue;
+      }
+      if (!replicasByNodeId.has(nodeId)) {
+        replicasByNodeId.set(nodeId, []);
+      }
+      replicasByNodeId.get(nodeId).push(replica);
+    }
+    for (const [nodeId, replicas] of replicasByNodeId.entries()) {
+      if (nodeId === targetNodeId || replicas.length <= NUM.ONE) {
+        continue;
+      }
+      return replicas[NUM.ZERO];
+    }
+    return (
+      healthyReplicas.find((replica) => {
+        const nodeId = String(
+          replica?.[PRIORITY_RECOVERY_FOLLOW_UP_FIELD.NODE_ID] ||
+            replica?.[PRIORITY_RECOVERY_FOLLOW_UP_FIELD.NODE_ID_CAMEL] ||
+            UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
+        ).trim();
+        return nodeId.length > NUM.ZERO && nodeId !== targetNodeId;
+      }) || null
+    );
+  }
+
+  buildPriorityRecoveryFollowUpMoveOutcome(
+    state,
+    reason,
+    move = undefined,
+  ) {
+    const moveFields =
+      move && typeof move === TYPEOF.OBJECT ?
+        move :
+        {};
+    return Object.freeze({
+      ...moveFields,
+      [PRIORITY_RECOVERY_FOLLOW_UP_MOVE_FIELD.STATE]: state,
+      [PRIORITY_RECOVERY_FOLLOW_UP_MOVE_FIELD.REASON]: reason,
+    });
+  }
+
+  isPriorityRecoveryFollowUpMoveCreated(followUpMove = undefined) {
+    return (
+      followUpMove?.[PRIORITY_RECOVERY_FOLLOW_UP_MOVE_FIELD.STATE] ===
+        PRIORITY_RECOVERY_FOLLOW_UP_MOVE_STATE.MOVE_CREATED ||
+      followUpMove?.[PRIORITY_RECOVERY_FOLLOW_UP_MOVE_FIELD.STATE] ===
+        PRIORITY_RECOVERY_FOLLOW_UP_MOVE_STATE.SOURCE_FALLBACK_ADD_CREATED ||
+      (
+        followUpMove?.[PRIORITY_RECOVERY_FOLLOW_UP_MOVE_FIELD.STATE] ===
+          undefined &&
+        typeof followUpMove?.type === TYPEOF.STRING
+      )
+    );
+  }
+
+  buildPriorityRecoveryFollowUpMove(context = {}) {
+    const decision = context.decision || null;
+    if (
+      !this.isPriorityRecoveryFollowUpOperationRequired(
+        decision?.decisionSnapshot || null,
+      )
+    ) {
+      return this.buildPriorityRecoveryFollowUpMoveOutcome(
+        PRIORITY_RECOVERY_FOLLOW_UP_MOVE_STATE.NOT_REQUIRED,
+        PRIORITY_RECOVERY_FOLLOW_UP_MOVE_REASON.NOT_REQUIRED,
+      );
+    }
+    const partitionId =
+      this.resolvePriorityRecoveryFollowUpPartitionId(decision);
+    const currentReplicas =
+      this.resolvePriorityRecoveryFollowUpCurrentReplicas(
+        decision,
+        context.currentReplicas,
+      );
+    const targetNodeId = this.selectPriorityRecoveryFollowUpTargetNodeId(
+      decision,
+      currentReplicas,
+    );
+    if (!targetNodeId) {
+      return this.buildPriorityRecoveryFollowUpMoveOutcome(
+        PRIORITY_RECOVERY_FOLLOW_UP_MOVE_STATE.TARGET_UNAVAILABLE,
+        PRIORITY_RECOVERY_FOLLOW_UP_MOVE_REASON.TARGET_UNAVAILABLE,
+      );
+    }
+    const healthyReplicas = this.getHealthyReplicas(currentReplicas);
+    const targetReplicaCount =
+      this.resolvePriorityRecoveryFollowUpTargetReplicaCount(
+        decision,
+        context.targetState,
+      );
+    const sourceReplica = this.selectPriorityRecoveryFollowUpSourceReplica(
+      healthyReplicas,
+      targetNodeId,
+    );
+    const shouldReplace =
+      healthyReplicas.length >= targetReplicaCount && !!sourceReplica;
+    if (!shouldReplace) {
+      return this.buildPriorityRecoveryFollowUpMoveOutcome(
+        PRIORITY_RECOVERY_FOLLOW_UP_MOVE_STATE.MOVE_CREATED,
+        PRIORITY_RECOVERY_FOLLOW_UP_MOVE_REASON.ADD_FOLLOW_UP_CREATED,
+        Object.freeze({
+          type: MoveType.ADD,
+          partitionId,
+          entityType: EntityType.PARTITION,
+          entityId: partitionId,
+          nodeId: targetNodeId,
+          reason: MOVE_REASON.INCREASE_REPLICA_COUNT,
+          [REBALANCER_MOVE_FIELD.TARGET_READINESS_MODE]:
+            REBALANCER_TARGET_READINESS_MODE.DEFER_TO_WORKFLOW_OWNER,
+        }),
+      );
+    }
+    const sourceNodeId = String(
+      sourceReplica?.[PRIORITY_RECOVERY_FOLLOW_UP_FIELD.NODE_ID] ||
+        sourceReplica?.[PRIORITY_RECOVERY_FOLLOW_UP_FIELD.NODE_ID_CAMEL] ||
+        UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
+    ).trim();
+    const replicaId = String(
+      sourceReplica?.[PRIORITY_RECOVERY_FOLLOW_UP_FIELD.REPLICA_ID] ||
+        sourceReplica?.[PRIORITY_RECOVERY_FOLLOW_UP_FIELD.SERVICE_ID] ||
+        UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
+    ).trim();
+    if (sourceNodeId.length === NUM.ZERO || replicaId.length === NUM.ZERO) {
+      return this.buildPriorityRecoveryFollowUpMoveOutcome(
+        PRIORITY_RECOVERY_FOLLOW_UP_MOVE_STATE.SOURCE_FALLBACK_ADD_CREATED,
+        PRIORITY_RECOVERY_FOLLOW_UP_MOVE_REASON.SOURCE_UNAVAILABLE,
+        Object.freeze({
+          type: MoveType.ADD,
+          partitionId,
+          entityType: EntityType.PARTITION,
+          entityId: partitionId,
+          nodeId: targetNodeId,
+          reason: MOVE_REASON.INCREASE_REPLICA_COUNT,
+          [REBALANCER_MOVE_FIELD.TARGET_READINESS_MODE]:
+            REBALANCER_TARGET_READINESS_MODE.DEFER_TO_WORKFLOW_OWNER,
+        }),
+      );
+    }
+    return this.buildPriorityRecoveryFollowUpMoveOutcome(
+      PRIORITY_RECOVERY_FOLLOW_UP_MOVE_STATE.MOVE_CREATED,
+      PRIORITY_RECOVERY_FOLLOW_UP_MOVE_REASON.REPLACE_FOLLOW_UP_CREATED,
+      Object.freeze({
+        type: MoveType.REPLACE,
+        partitionId,
+        entityType: EntityType.PARTITION,
+        entityId: partitionId,
+        nodeId: targetNodeId,
+        sourceNodeId,
+        replicaId,
+        reason: MOVE_REASON.REPLACE_REPLICA,
+        [REBALANCER_MOVE_FIELD.TARGET_READINESS_MODE]:
+          REBALANCER_TARGET_READINESS_MODE.DEFER_TO_WORKFLOW_OWNER,
+      }),
+    );
+  }
+
+  buildPriorityRecoveryFollowUpAugmentationEvidence({
+    moves = [],
+    followUpMove = null,
+  } = {}) {
+    const followUpMoveCreated =
+      this.isPriorityRecoveryFollowUpMoveCreated(followUpMove);
+    const followUpPartitionId = String(
+      followUpMoveCreated ?
+        followUpMove?.[PRIORITY_RECOVERY_FOLLOW_UP_FIELD.PARTITION_ID] ||
+          followUpMove?.[PRIORITY_RECOVERY_FOLLOW_UP_FIELD.PARTITION_ID_SNAKE] ||
+          followUpMove?.[PRIORITY_RECOVERY_FOLLOW_UP_FIELD.ENTITY_ID] ||
+          UNIFIED_REBALANCER_LITERAL.EMPTY_STRING :
+        UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
+    ).trim();
+    return Object.freeze({
+      hasFollowUpMove: followUpMoveCreated,
+      hasAddLikeCalculatedMove:
+        this.hasPriorityBudgetBypassCandidateMove(moves),
+      followUpPartitionId,
+      followUpTargetsCurrentEntity:
+        followUpPartitionId.length > NUM.ZERO &&
+        followUpPartitionId === this.entityId,
+    });
+  }
+
+  resolvePriorityRecoveryFollowUpAugmentationState(evidence = {}) {
+    const tableEntry =
+      PRIORITY_RECOVERY_FOLLOW_UP_AUGMENTATION_STATE_TABLE.find((entry) =>
+        entry.matches(evidence),
+      );
+    return tableEntry ?
+      tableEntry.state :
+      PRIORITY_RECOVERY_FOLLOW_UP_AUGMENTATION_STATE.NO_FOLLOW_UP;
+  }
+
+  resolvePriorityRecoveryFollowUpAugmentationAction(evidence = {}) {
+    const state =
+      this.resolvePriorityRecoveryFollowUpAugmentationState(evidence);
+    return (
+      PRIORITY_RECOVERY_FOLLOW_UP_AUGMENTATION_ACTION_BY_STATE[state] ||
+      PRIORITY_RECOVERY_FOLLOW_UP_AUGMENTATION_ACTION.KEEP_MOVES
+    );
+  }
+
+  async augmentMovesWithPriorityRecoveryFollowUp(moves = [], context = {}) {
+    const normalizedMoves = Array.isArray(moves) ? moves : [];
+    if (!this.isControlPlanePriorityPartition()) {
+      return normalizedMoves;
+    }
+    const decision =
+      context.decision ||
+      (await this.getCurrentPriorityRecoveryFollowUpDecisionSnapshot());
+    let followUpMove = this.buildPriorityRecoveryFollowUpMove({
+      ...context,
+      decision,
+    });
+    if (!this.isPriorityRecoveryFollowUpMoveCreated(followUpMove)) {
+      const planningSnapshot =
+        decision?.planningSnapshot ||
+        await this.getPriorityRecoveryPlanningSnapshot({
+          partitionId: this.entityId,
+        });
+      followUpMove = this.buildPriorityRecoveryFollowUpMove({
+        ...context,
+        decision: this.buildPriorityRecoverySurrogateFollowUpDecision(
+          planningSnapshot,
+        ),
+      });
+    }
+    if (!this.isPriorityRecoveryFollowUpMoveCreated(followUpMove)) {
+      return normalizedMoves;
+    }
+    const augmentationEvidence =
+      this.buildPriorityRecoveryFollowUpAugmentationEvidence({
+        moves: normalizedMoves,
+        followUpMove,
+      });
+    const augmentationAction =
+      this.resolvePriorityRecoveryFollowUpAugmentationAction(
+        augmentationEvidence,
+      );
+    if (
+      augmentationAction ===
+      PRIORITY_RECOVERY_FOLLOW_UP_AUGMENTATION_ACTION.PREPEND_FOLLOW_UP
+    ) {
+      return [followUpMove, ...normalizedMoves];
+    }
+    return normalizedMoves;
+  }
+
+  async executeMove(move) {
+    if (this.isShuttingDown) {
+      return this.buildSkippedMoveResult(
+        REBALANCER_RUNTIME_REASON.SHUTDOWN_IN_PROGRESS,
+        move,
+      );
+    }
+
+    this.logger.info(REBALANCER_LOG_MSG.EXECUTE_MOVE, {
+      entityId: this.entityId,
+      entityType: this.entityType,
+      moveType: move.type,
+      nodeId: move.nodeId,
+      reason: move.reason,
+      usingCoordinator: !!this.rebalanceCoordinator,
+    });
+
+    try {
+      if (
+        move?.nodeId &&
+        this.shouldRequireMoveTargetReadiness(move)
+      ) {
+        const skipDetail = await this.getNodeReadinessSkipReason(move.nodeId);
+        if (skipDetail !== null) {
+          this.logger.debug(REBALANCER_LOG_MSG.SKIP_UNREADY_NODE, {
+            entityId: this.entityId,
+            nodeId: move.nodeId,
+            moveType: move.type,
+            skipDetail,
+          });
+          return this.buildSkippedMoveResult(
+            REBALANCER_SKIP_REASON.NODE_NOT_READY,
+            move,
+            {
+              skipDetail,
+            },
+          );
+        }
+      }
+
+      if (!this.rebalanceCoordinator) {
+        throw new Error(REBALANCER_ERROR_MSG.COORDINATOR_REQUIRED);
+      }
+
+      const outcome = await this.executeMoveViaCoordinator(move);
+      if (outcome?.skipped === true) {
+        const admissionBlockingReasonCodes = Array.isArray(
+          outcome?.admission?.blockingReasons,
+        ) ?
+          outcome.admission.blockingReasons
+            .map((reason) =>
+              String(reason?.code || reason?.reason || reason || '').trim(),
+            )
+            .filter((reason) => reason.length > NUM.ZERO) :
+          [];
+        this.logger.info(REBALANCER_LOG_MSG.MOVE_SKIPPED, {
+          entityId: this.entityId,
+          entityType: this.entityType,
+          moveType: move.type,
+          nodeId: move.nodeId,
+          replicaId: move.replicaId || null,
+          reason: outcome.reason || null,
+          error: outcome.error || null,
+          admissionDecisionType: outcome?.admission?.decisionType || null,
+          admissionReason: outcome?.admission?.reason || null,
+          admissionBlockingReasonCodes,
+        });
+      }
+      return outcome;
+    } catch (error) {
+      this.logger.error(REBALANCER_LOG_MSG.MOVE_FAILED, {
+        entityId: this.entityId,
+        moveType: move.type,
+        nodeId: move.nodeId,
+        error: error.message,
+      });
+      throw error;
+    }
+  }
+}
+
+export {UnifiedRebalancerSegment4Stage3};

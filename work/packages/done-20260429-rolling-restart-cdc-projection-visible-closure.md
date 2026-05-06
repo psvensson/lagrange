@@ -44,7 +44,7 @@ Sprint:
 Depends on:
 
 1. [Control Plane Quiescence Stable Window After Publication Closure](./done-20260429-control-plane-quiescence-stable-window-after-publication-closure.md)
-2. [Rolling Restart Operation Transition Pressure And Over-Target Trim](./active-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md)
+2. [Rolling Restart Operation Transition Pressure And Over-Target Trim](./todo-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md)
 
 ## In Scope
 

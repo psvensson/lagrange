@@ -1,16 +1,97 @@
 # Rolling Restart Topology Publication Snapshot Reachability Reentry
 
 Opened on May 5, 2026 as the current representative split from
-[Rolling Restart Operation Transition Pressure And Over-Target Trim](./active-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md).
+[Rolling Restart Operation Transition Pressure And Over-Target Trim](./todo-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md).
 The fresh representative path migrated away from post-active
-operation-transition / over-target trim and is now blocked earlier by startup
-active-gate publication, selected snapshot reachability, and missing published
-active-node evidence. The latest representative rerun after the `140646Z`
-replay fixture migrated again on `20260505T145246Z`, and the follow-up rerun
-after the runtime pre-execution handoff diagnostic migrated again on
-`20260505T175220Z`.
+operation-transition / over-target trim and then migrated through startup
+active-gate publication, selected snapshot topology staleness, and missing
+published active-node evidence. The latest representative rerun after the
+`140646Z` replay fixture migrated again on `20260505T145246Z`, and the
+follow-up rerun after the runtime pre-execution handoff diagnostic migrated
+again on `20260505T175220Z`; the latest post-fixture representative rerun
+migrated again on `20260505T183911Z`; the post-diagnostics representative
+rerun migrated again on `20260506T043103Z`; the post-fast-path rerun migrated
+again on `20260506T055246Z`; and the post-terminal-retention rerun migrated
+again on `20260506T053215Z`; the follow-up rerun after the ACK-pending
+publication classification slice migrated again on `20260506T061618Z`; the
+follow-up rerun after the publication owner-read safety fix migrated again on
+`20260506T071349Z`; the follow-up rerun after the control-snapshot repair
+fallback migrated again on `20260506T073557Z`; the follow-up rerun after the
+membership-evidence read fallback migrated again on `20260506T074733Z`; and
+the follow-up rerun after the serial-wait release migrated again on
+`20260506T075850Z`; and the follow-up rerun after the epoch-aware observation
+witness fix migrated again on `20260506T082449Z`; and the follow-up rerun
+after the same-epoch witness-rank fix migrated again on
+`20260506T092319Z`; the follow-up rerun after the acknowledgement owner-RPC
+publication-history repair migrated again on `20260506T104727Z`; the
+follow-up rerun after the critical delivery-source pending-cap repair
+migrated again on `20260506T110108Z`; and the follow-up rerun after the
+critical delivery-source in-flight reservation migrated again on
+`20260506T110828Z`; the follow-up rerun after the publication owner-read
+remove-safety repair migrated again on `20260506T123000Z`. That latest rerun
+closes this package as the representative owner path: publication
+owner-read/remove-safety debt is now predecessor proof, and the dominant
+runtime blocker has migrated back to
+[Rolling Restart Operation Transition Pressure And Over-Target Trim](./todo-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md)
+on a post-publication workflow-progress / target-creation boundary.
+
+Closure update on May 6, 2026: the later representative rerun
+`test-output/reports/rolling-restart-after-pending-rearm-restore-20260506T121614Z.report.json`
+showed that the interim operation-progress handoff did not remain the live
+boundary either. The current representative owner is now
+[Rolling Restart Priority Recovery Serial-Wait Workflow Progress Reentry](./done-20260506-rolling-restart-priority-recovery-serial-wait-workflow-progress-reentry.md),
+while this file stays done as predecessor proof for the May 5 to May 6
+publication/snapshot closure chain through `20260506T123000Z`.
 
 ## Current Evidence
+
+Latest representative rerun after the publication owner-read remove-safety
+repair:
+`test-output/reports/rolling-restart-after-publication-owner-read-remove-safety-20260506T123000Z.report.json`.
+It failed after `131.6s`. This rerun closes the old publication
+owner-read/remove-safety blocker and hands representative ownership back to
+the operation-transition package:
+
+1. Publication convergence is epoch `3` `PUBLISHED`, pending ACK `0`, blocked
+   node count `0`, missing published count `0`, and
+   `publicationPending=false`.
+2. The old `control_plane_publications-p1`
+   `replace_remove_safety_blocked` loop is no longer the dominant or selected
+   witness. Replay now keeps `control_plane_publications-p1`,
+   `replica_operations-p1`, `sql_transactions-p1`, and
+   `sql_write_operations-p1` as `spread_satisfied_in_flight` supporting
+   context.
+3. The dominant reason is now
+   `priority_recovery_workflow_progress_event_driven`.
+4. The dominant witness is `sql_transaction_participants-p1`, operation
+   `867cbc80-93f3-4121-8bca-2fc0c5d5072a`, semantic state
+   `recovering_in_flight`, owner `operation_workflow_owner`, boundary
+   `workflow_progress`, wait mode `event_driven`, next action
+   `wait_for_operation_progress`, workflow step `CREATING`, and status
+   `creating`.
+5. Runtime log evidence on `35a...` shows
+   `sql_transaction_participants-p1-r4` receiving `CREATE_REPLICA`, entering
+   `[replica-create] stage=starting peers=0/0`, and later transitioning
+   `previousState=null` -> `newState=pending` without later visible progress
+   before the scenario timeout.
+6. Selected-snapshot observation remains supporting context rather than the
+   selected blocker: `8be8...` is still `repair_deferred` /
+   `stale_usable`, selected missing-published nodes remain `8be8...` /
+   `ebc4...`, and owner-RPC `nodes` repair still defers through
+   `control_plane_backpressure` / `query_timeout`.
+7. Seed `7493...` still times out on readiness and keeps active convergence at
+   `4/5`, but the selected failure class is now priority-recovery progress,
+   not publication convergence.
+
+Next focused task: keep this package as predecessor proof for the closed
+publication slice, and continue representative execution in
+[Rolling Restart Operation Transition Pressure And Over-Target Trim](./todo-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md)
+to trace why `reconcileOperationProgress(...)` /
+`applyReconciledReplicaStatus(...)` leaves
+`sql_transaction_participants-p1-r4` at `pending` during `CREATING`.
+
+The predecessor evidence retained below covers the completed `175220Z` and
+`183911Z` slices:
 
 1. Fresh representative rerun after the runtime pre-execution handoff
    diagnostic:
@@ -113,10 +194,11 @@ after the runtime pre-execution handoff diagnostic migrated again on
     `sql_transactions-p1`, and `sql_write_operations-p1`.
 22. Outcome: the prior epoch `2` `PUBLISHED` missing-active selected-snapshot
     reachability debt genuinely migrated in the fresh representative artifact.
-    The current canonical blocker is now epoch `3` `PUBLISHED` missing-active
-    selected-snapshot topology debt with missing published `2`, selected
-    coverage `3/5`, priority spread pending with gap `6`, and subordinate
-    `sql_write_operations-p1` workflow-progress evidence.
+    At that predecessor point, the canonical blocker was epoch `3`
+    `PUBLISHED` missing-active selected-snapshot topology debt with missing
+    published `2`, selected coverage `3/5`, priority spread pending with gap
+    `6`, and subordinate `sql_write_operations-p1` workflow-progress
+    evidence.
 
 ## May 5 `074739Z` Evidence Trace
 
@@ -457,24 +539,25 @@ Sprint:
    membership/snapshot coverage residual: publication epoch `3` is
    `PUBLISHED`, pending ACK count is `0`, recovery remains
    `publication_pending` at the failure-class surface, terminal active is
-   `3/5`, terminal selected snapshot coverage is `3/5`, selected published
+   `4/5`, terminal selected snapshot coverage is `4/5`, selected published
    active is `3/5`, selected missing published count is `2`, and selected
    snapshot observation reports `repair_deferred` / `stale_usable`.
 2. Explain why the latest selected snapshot node
-   `35a891b8-c1a0-5064-9c6e-2acfba61c2a7` is admin-ready via
-   `admin_health` but still carries retained stale-repair evidence while
-   nodes `11601fe0-72d6-5853-8590-ec2881853e72` and
-   `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58` remain outside selected active
-   coverage and durable published active membership.
+   `11601fe0-72d6-5853-8590-ec2881853e72` is admin-ready via
+   `admin_health`, why the authoritative epoch `3` published cohort already
+   closes on `35a...` / `7493...` / `8be8...`, and why the selected
+   coverage-only misses on `11601...` / `ebc4...` must remain snapshot debt
+   rather than reopening canonical publication pending.
 3. Keep the `074739Z` selected snapshot reachability timeout on
    `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58` as historical evidence only; it no
    longer competes with the current terminal boundary.
 4. Preserve and classify priority-recovery evidence: keep the
    `control_plane_publications-p1` handoff evidence as migrated historical
-   evidence, and keep the current `sql_write_operations-p1`
-   `recovering_in_flight` / `persisted_not_dispatched` workflow-progress
-   witness subordinate to topology debt unless a focused owner probe proves it
-   has become the owner boundary.
+   evidence, keep `replica_operations-p1` on concrete workflow progress, and
+   keep the same-epoch `sql_transaction_participants-p1` /
+   `sql_write_operations-p1` scheduling witnesses subordinate to the current
+   publication/snapshot debt unless a focused owner probe proves they have
+   become the owner boundary.
 5. Keep the failure bundle anchored to one canonical owner outcome across
    publication, active-gate, selected snapshot, and priority-recovery evidence.
 6. Rerun the representative `rolling-restart --fast-local` scenario after the
@@ -712,7 +795,7 @@ Sprint:
       `persisted_not_dispatched` witness. Preserve the
       `control_plane_publications-p1` handoff as migrated historical evidence
       unless the trace proves a still-open owner boundary.
-- [ ] Add the smallest focused `20260505T175220Z` replay fixture or runtime
+- [x] Add the smallest focused `20260505T175220Z` replay fixture or runtime
       owner probe for the epoch `3` `PUBLISHED` shape: terminal active `3/5`,
       selected coverage `3/5`, pending ACK `0`, selected published active
       `3/5`, missing published nodes
@@ -728,6 +811,99 @@ Sprint:
       `control_plane_pressure_degraded`, or whether the selected-snapshot
       repair / missing-active topology owner must close first, without
       promoting the migrated `control_plane_publications-p1` handoff evidence.
+- [x] Rerun the representative `rolling-restart --fast-local` gate after the
+      `175220Z` pending-dispatch fixture and record whether the blocker closes
+      or migrates.
+- [x] Trace the `20260505T183911Z` post-fixture artifact through selected
+      snapshot observation, owner-RPC/cache-repair failure evidence,
+      publication epoch `2` missing-active debt, and the new
+      `sql_transaction_participants-p1` coordination-mismatch /
+      dispatched-waiting-progress witness before making another runtime change.
+- [x] Add the smallest focused `20260505T183911Z` regression fixture that
+      keeps epoch `2` `PUBLISHED` missing-active topology debt canonical over
+      the `sql_transaction_participants-p1` / `sql_write_operations-p1`
+      coordination-mismatch workflow-progress witnesses.
+- [x] Trace the epoch `2` publication-membership owner path through the
+      selected admin-ready witness and the reduced two-node
+      `publication_membership` eligibility cohort before changing runtime
+      behavior.
+- [x] Trace why the selected publication observation and owner-RPC /
+      cache-repair path still cap `projectedServingNodeIds` /
+      `locallyEligibleNodeIds` at the same two durable published nodes despite
+      active-gate coverage observing four active nodes.
+- [x] Restore diagnostics publication-history reads so
+      `preferAuthoritativePublicationRead` keeps
+      `control_plane_publications` on the owner-RPC diagnostics path, then
+      rerun the representative `rolling-restart --fast-local` gate.
+- [x] Trace the `20260506T043103Z` epoch `3` `PUBLISHED`
+      selected-snapshot reachability timeout on
+      `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`, land the smallest harness fix
+      that removes the synthetic outer reprobe timeout, and rerun the
+      representative `rolling-restart --fast-local` gate.
+- [x] Trace why the `20260506T055246Z` epoch `3` `PUBLISHED` blocker regresses
+      from last meaningful `8be8d30f-4499-5eed-865c-71b4d529a67a`
+      admin-ready coverage `4/5` to terminal selected witness
+      `35a891b8-c1a0-5064-9c6e-2acfba61c2a7` coverage `3/5` while missing
+      published nodes remain `8be8d30f-4499-5eed-865c-71b4d529a67a` and
+      `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`, owner-RPC repair on `nodes`
+      stays deferred, and `sql_write_operations-p1` remains the only
+      unresolved recovering-in-flight witness.
+- [x] Trace why the `20260506T053215Z` epoch `4` `ACK_PENDING` blocker stays on
+      selected witness `11601fe0-72d6-5853-8590-ec2881853e72` with pending ACK
+      count `2`, selected snapshot timeout fallback, replay-blocked
+      `sql_transactions-p1`, and `control_plane_publications-p1`
+      `replace_remove_safety_blocked` removal while durable publication state
+      remains `publication_pending`.
+- [x] Trace why the `20260506T061618Z` representative rerun still stalls in
+      startup recovery with active `5/5`, selected snapshot coverage `4/5`,
+      `recoveryProtocolState=steady_published`, pending ACK count `0`, missing
+      published count `0`, active-gate blocker signature
+      `snapshot_coverage=4/5`, dominant readiness timeout fallback on
+      `7493b0ab-a054-5fad-a91b-5e331db29304`, and terminal
+      `selectedSnapshotError` timeouts on
+      `11601fe0-72d6-5853-8590-ec2881853e72`, without promoting the now
+      `spread_satisfied_in_flight`
+      `control_plane_publications-p1` / `sql_transactions-p1` witnesses back
+      into the current blocker.
+- [x] Trace why the `20260506T083055Z` representative rerun still selects
+      `8be8d30f-4499-5eed-865c-71b4d529a67a` at coverage `3/5` with selected
+      published active `3/5`, missing published nodes
+      `35a891b8-c1a0-5064-9c6e-2acfba61c2a7` /
+      `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`, priority spread gap `7`,
+      blocked partitions `sql_transactions-p1` / `sql_write_operations-p1`,
+      retained `repair_deferred` selected-snapshot observation, and replayed
+      `replace_remove_safety_blocked` handoff pressure on
+      `control_plane_publications-p1`.
+- [x] Trace why the `20260506T071349Z` representative rerun still stalls at
+      epoch `3` `ACK_PENDING` with pending ACK node
+      `8be8d30f-4499-5eed-865c-71b4d529a67a`, missing published nodes
+      `11601fe0-72d6-5853-8590-ec2881853e72` /
+      `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`, while owner-RPC `nodes` repair
+      and selected snapshot coverage stay deferred together and the seed
+      `7493b0ab-a054-5fad-a91b-5e331db29304` falls back to
+      `readiness_probe_timeout_fallback`.
+- [x] Trace why the `20260506T073557Z` representative rerun closes the prior
+      `ACK_PENDING` / owner-RPC repair boundary but reopens epoch `3`
+      `PUBLISHED` missing-active debt on
+      `11601fe0-72d6-5853-8590-ec2881853e72` /
+      `8be8d30f-4499-5eed-865c-71b4d529a67a`, with terminal selected-snapshot
+      reachability timeout on `7493b0ab-a054-5fad-a91b-5e331db29304`, replay
+      retaining `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`
+      `repair_deferred` / `stale_usable`, and subordinate
+      `sql_transaction_participants-p1` / `sql_write_operations-p1`
+      operation-scheduling and workflow-timeout witnesses.
+- [x] Add the replayable owner-decision fixture for the `20260506T075850Z`
+      mixed-epoch contradiction where serial-wait is closed, follow-up
+      operation ids are concrete, durable epoch `5` spread closure is
+      satisfied, but replay and tracked summaries still emit synthetic
+      `eligible_but_no_operation_created` blockers from a stale lower-epoch
+      selected snapshot.
+- [ ] Add the replayable owner-decision fixture for the `20260506T082449Z`
+      same-epoch boundary where `replica_operations-p1` remains on concrete
+      workflow progress, but `sql_transaction_participants-p1` /
+      `sql_write_operations-p1` still collapse to
+      `eligible_but_no_operation_created` and `operation_unknown` despite
+      concrete operation ids and retained sibling serial-wait evidence.
 
 ## May 5 Regression Validation
 
@@ -3318,73 +3494,617 @@ Trace validation:
    passed and reported `driftClassification=replayed_blocked`.
 2. `git diff --check` passed for this docs-only trace update.
 
+## May 5 `175220Z` Pending-Dispatch Fixture
+
+Added the focused failure-bundle regression
+`keeps 175220Z missing-active debt canonical over pending dispatch progress` in
+`test/distributed/harness/__tests__/failure-bundle.test.js`.
+
+The fixture locks the epoch `3` `PUBLISHED` predecessor shape:
+
+1. terminal active `3/5`, inactive `2`, selected coverage `3/5`, selected
+   witness `35a891b8-c1a0-5064-9c6e-2acfba61c2a7` admin-ready through
+   `admin_health`, and no selected-snapshot reachability timeout
+2. pending ACK count `0`, missing published count `2`, with missing nodes
+   `11601fe0-72d6-5853-8590-ec2881853e72` and
+   `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`
+3. subordinate `sql_write_operations-p1` operation
+   `c3fedf19-19e4-4792-8a9f-8e4734cb88ad` as
+   `recovering_in_flight` / `persisted_not_dispatched` under
+   `operation_workflow_owner` / `workflow_progress` / `event_driven`
+
+Expected outcome: the failure class remains
+`publication_convergence_blocked`, the dominant reason remains
+`publication_missing_active_node=11601fe0-72d6-5853-8590-ec2881853e72`, and
+the operation-workflow owner, boundary, wait mode, and next-action signals are
+retained as subordinate evidence. This proves the `175220Z` pending-dispatch
+witness should not replace selected-snapshot repair / missing-active topology
+debt as the canonical owner while missing-active publication debt remains open.
+
+Validation:
+
+1. `node --check test/distributed/harness/__tests__/failure-bundle.test.js`
+2. `node --test --test-name-pattern "keeps 175220Z missing-active debt canonical over pending dispatch progress" test/distributed/harness/__tests__/failure-bundle.test.js`
+3. `node --test --test-name-pattern "keeps missing-active publication debt canonical over reachability and serial wait|keeps 175220Z missing-active debt canonical over pending dispatch progress|keeps startup snapshot reachability subordinate to workflow progress" test/distributed/harness/__tests__/failure-bundle.test.js`
+4. `node scripts/check-guideline-literals.js test/distributed/harness/__tests__/failure-bundle.test.js`
+5. `node scripts/check-guideline-decision-boundaries.js test/distributed/harness/__tests__/failure-bundle.test.js`
+6. `node scripts/check-guideline-boundary-mode-contracts.js test/distributed/harness/__tests__/failure-bundle.test.js`
+7. `git diff --check`
+
+Result: all passed.
+
+## May 5 `183911Z` Representative Rerun After `175220Z` Fixture
+
+Command:
+
+`node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-after-175220Z-pending-dispatch-fixture-20260505T183911Z.report.json --fast-local --verbose`
+
+Report:
+`test-output/reports/rolling-restart-after-175220Z-pending-dispatch-fixture-20260505T183911Z.report.json`.
+
+Playback:
+`test-output/reports/.playback/rolling-restart-after-175220Z-pending-dispatch-fixture-20260505T183911Z/rolling-restart/`.
+
+Outcome: failed `0/1` after `129.9s`. The terminal barrier remains
+`Not all nodes reached ACTIVE state within 120000ms`, attempts `12`, elapsed
+`121019ms`. The canonical failure class remains
+`publication_convergence_blocked`, root cause class `topology`, dominant
+reason
+`publication_missing_active_node=11601fe0-72d6-5853-8590-ec2881853e72`, and
+readiness failure `no_progress_terminal`.
+
+The representative path migrated again:
+
+1. publication epoch is now `2` `PUBLISHED`, pending ACK count `0`, missing
+   published count `3`, selected published active `2/5`, terminal active
+   `4/5`, inactive `1`, selected snapshot coverage `3/5`, and priority spread
+   pending with gap `5`
+2. missing published nodes are
+   `11601fe0-72d6-5853-8590-ec2881853e72`,
+   `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`, and
+   `8be8d30f-4499-5eed-865c-71b4d529a67a`
+3. selected snapshot witness remains
+   `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`, admin-ready via `admin_health`,
+   with `repair_deferred` / `stale_usable` observation evidence
+4. owner-RPC/cache-repair failure evidence is now directly visible on the
+   selected witness: deferral state `repair_deferred`, failed table `nodes`,
+   read source `owner_rpc_lane`, and cause chain
+   `control_plane_backpressure`
+5. the selected witness now carries both retained snapshot observation and
+   explicit owner-RPC/cache-repair failure evidence in the same artifact
+6. dominant priority witness moved to `sql_transaction_participants-p1`:
+   `coordination_mismatch`, operation
+   `834b0fe6-bf43-4f4e-8dec-2890cd5843f2`,
+   `dispatched_waiting_progress`, workflow phase `source_removal`, step
+   `ACTIVE`, status `active`, progress classes
+   `operation_created_but_no_step_transitions` and
+   `publication_recovery_eligible_but_coordinator_excludes_node`, with serial
+   wait on `sql_write_operations-p1`
+7. `sql_write_operations-p1` is now a supporting witness:
+   `coordination_mismatch`, operation
+   `2b6d5fd0-3cea-406f-bd84-a580f41098a1`,
+   `dispatched_waiting_progress`, workflow phase `dispatch_pending`, step
+   `SENDING`, status `pending`
+8. bounded replay passed as `replayed_blocked`, with row counts `nodes=4`,
+   `nodeEndpoints=0`, `partitions=33`, and `services=104`; durable evidence
+   is epoch `2` `PUBLISHED`, while replayed evidence is epoch `3` `OPEN`
+
+The next focused task is the epoch `2` publication-membership owner trace
+before changing runtime behavior. The current question is no longer the
+`175220Z` `persisted_not_dispatched` wake/dispatch shape; it is why epoch `2`
+`PUBLISHED` selected-snapshot publication remains missing three active nodes
+while the same selected witness shows both retained observation debt and
+explicit owner-RPC/cache-repair failure evidence, with the dominant workflow
+witness moved to `sql_transaction_participants-p1` coordination mismatch.
+
+## May 5 `183911Z` Evidence Trace
+
+The post-fixture representative artifact keeps one canonical blocker and one
+subordinate workflow story:
+
+1. The selected active-gate witness remains
+   `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`, admin-ready via `admin_health`,
+   with terminal active `4/5`, current selected coverage `3/5`, best selected
+   coverage `4/5`, selected published active `2/5`, and selected missing
+   published nodes
+   `11601fe0-72d6-5853-8590-ec2881853e72`,
+   `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`, and
+   `8be8d30f-4499-5eed-865c-71b4d529a67a`.
+2. The selected witness's own authoritative publication view is narrower than
+   the cluster-level active-gate summary: epoch `2` is `PUBLISHED`, published
+   active and recovery-active membership are only
+   `7493b0ab-a054-5fad-a91b-5e331db29304` and
+   `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`, required ACK count is `2`,
+   acknowledged count is `2`, and the row-local selected publication view
+   reports missing published count `0`.
+3. The same selected witness still reports owner-observation debt:
+   `repair_deferred` / `stale_usable`, pending contract state, idle refresh,
+   next action `wait`, and reason codes `cache_stale_watermark`,
+   `discovery_node_coverage_gap`, and
+   `stale_replica_operations_in_flight`.
+4. Log excerpts on the selected witness make the owner-RPC/cache-repair
+   evidence explicit without another runtime change: the admin websocket
+   `control_snapshot` repair failed on table `nodes`, read source
+   `owner_rpc_lane`, error `Connection to node 7493b0ab-a054-5fad-a91b-5e331db29304 closed`,
+   and cause chain `control_plane_backpressure`.
+5. The cluster-level publication convergence owner still treats the run as
+   epoch `2` `PUBLISHED` but `publication_pending`: pending ACK count `0`,
+   missing published count `3`, gate reasons
+   `priority_partitions_not_spread`, `snapshot_coverage=3/5`, and the three
+   explicit `publication_missing_active_node=<node>` reasons above. Closure
+   witness remains pending on `sql_transaction_participants-p1` and
+   `sql_write_operations-p1`.
+6. The dominant workflow witness is subordinate to that durable publication
+   cohort, not independent from it. Both
+   `sql_transaction_participants-p1` and `sql_write_operations-p1` decision
+   snapshots still use `effectiveEligibleNodeIds`
+   `7493b0ab-a054-5fad-a91b-5e331db29304` and
+   `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58` from
+   `publication_membership`, with no extra recovery-eligible nodes admitted.
+7. `sql_transaction_participants-p1` is the dominant subordinate witness only
+   because it is the strongest blocked workflow inside that reduced cohort:
+   semantic state `coordination_mismatch`, blocker reasons
+   `operation_created_but_no_step_transitions` and
+   `publication_recovery_eligible_but_coordinator_excludes_node`, active
+   operation `834b0fe6-bf43-4f4e-8dec-2890cd5843f2`, actuation
+   `dispatched_waiting_progress`, workflow phase `source_removal`, target node
+   `11601fe0-72d6-5853-8590-ec2881853e72` already `active_operational`, and
+   serial wait on `sql_write_operations-p1`.
+8. `sql_write_operations-p1` is supporting evidence with the same
+   `coordination_mismatch` semantic state, operation
+   `2b6d5fd0-3cea-406f-bd84-a580f41098a1`, actuation
+   `dispatched_waiting_progress`, workflow phase `dispatch_pending`, step
+   `SENDING`, and the same two-node published-membership eligibility cohort.
+
+Conclusion: the `183911Z` artifact does not promote the workflow-progress
+witness above topology publication debt. The next owner question is why the
+cluster-level publication owner still keeps a two-node durable published
+membership while the selected admin-ready witness can observe node
+`11601fe0-72d6-5853-8590-ec2881853e72` and remains itself missing from the
+same published-active set.
+
+## May 5 `183911Z` Coordination-Mismatch Fixture
+
+The next focused regression keeps the `183911Z` shape stable while the runtime
+owner path is traced:
+
+1. Added
+   `keeps 183911Z missing-active debt canonical over coordination-mismatch workflow progress`
+   in `test/distributed/harness/__tests__/failure-bundle.test.js`.
+2. The fixture locks epoch `2` `PUBLISHED` / `publication_pending`, missing
+   published nodes
+   `11601fe0-72d6-5853-8590-ec2881853e72`,
+   `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`, and
+   `8be8d30f-4499-5eed-865c-71b4d529a67a`, selected coverage `3/5`, selected
+   published active `2/5`, dominant `sql_transaction_participants-p1`
+   coordination mismatch, and supporting `sql_write_operations-p1`
+   coordination mismatch.
+3. Expected outcome: failure class remains
+   `publication_convergence_blocked`, dominant reason remains
+   `publication_missing_active_node=11601fe0-72d6-5853-8590-ec2881853e72`,
+   and the owner / boundary / wait-mode / next-action workflow signals remain
+   subordinate evidence.
+
+Validation:
+
+1. `node --check test/distributed/harness/__tests__/failure-bundle.test.js`
+2. `node --test --test-name-pattern "keeps 183911Z missing-active debt canonical over coordination-mismatch workflow progress" test/distributed/harness/__tests__/failure-bundle.test.js`
+
+Validation:
+
+1. Representative rerun above: expected failure, `0/1` passed after `129.9s`.
+2. `node test/distributed/harness/publication-evidence-replay.js test-output/reports/.playback/rolling-restart-after-175220Z-pending-dispatch-fixture-20260505T183911Z/rolling-restart`
+   passed and reported `driftClassification=replayed_blocked`.
+
+## May 6 Epoch `2` Publication-Membership Owner Trace
+
+The next owner slice closed the publication-membership question before another
+runtime edit:
+
+1. `src/control-plane/membership-publication-planning.js` starts from the
+   latest durable `PUBLISHED` baseline and only widens publication membership
+   through one explicit chain: enable recovery-eligible projection, build
+   `activeNodeViews`, resolve the recovery-active cohort, filter it through
+   ACK readiness, then pick one publication target state. In the `183911Z`
+   artifact the baseline is already the two-node epoch `2` published set
+   `7493b0ab-a054-5fad-a91b-5e331db29304` and
+   `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`.
+2. The selected publication artifact shows that projection never grows beyond
+   that baseline. Its `publishedActiveNodeIds`, `projectedServingNodeIds`,
+   `locallyEligibleNodeIds`, and `recoveryActiveNodeIds` are all the same two
+   nodes; `missingPublishedRecoveryActiveNodeIds` is empty; and the only
+   projected recovery-eligible node is `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`,
+   which is already inside the durable published set.
+3. `src/control-plane/active-node-projection.js` keeps the recovery-active
+   source on `locally_eligible_projection`, but that label does not imply a
+   larger cohort. `resolvePriorityRecoveryActiveNodeCohort(...)` only widens
+   `activeNodeIds` when projected or recovery-eligible evidence adds a node
+   outside `publishedActiveNodeIds`. Here the projected and locally eligible
+   sets are identical to the baseline, so the selected publication witness
+   keeps the same two node IDs even though projection evidence is present.
+4. `buildPublicationAckTargetSnapshot(...)` then has no extra recovery-active
+   node to admit or defer. Because every recovery-active node is already in
+   the durable baseline, required ACKs and acknowledgements remain the same two
+   node IDs and ACK completion stays closed.
+5. `buildMembershipPublicationTargetSnapshot(...)` therefore chooses the
+   `recovery_cohort` target rather than `observed_active`. The
+   `projected_steady_trim` path is disabled while the priority spread gap is
+   still pending, and `observed_active` stays lower priority than any existing
+   durable baseline. That keeps `publishedActiveNodeIds` and
+   `durablePublishedActiveNodeIds` on the same two-node cohort.
+6. `src/control-plane/priority-recovery-snapshot.js` then inherits that
+   publication context. When workflow admission is missing,
+   `buildEffectivePriorityRecoveryAdmission(...)` falls back to
+   `publication_membership`, so both
+   `sql_transaction_participants-p1` and `sql_write_operations-p1` keep
+   `effectiveEligibleNodeIds` on the same two-node cohort.
+7. The three missing-active nodes come from a different boundary, not from the
+   publication row widening logic. `test/distributed/harness/cluster-segment-2.js`
+   compares the cluster active-gate expected node set against the selected
+   publication row's `publishedActiveNodeIds` and `recoveryActiveNodeIds`, then
+   emits `publication_missing_active_node=<node>` reasons for nodes absent from
+   that row-local cohort. That is why the artifact can show active `4/5` with
+   missing published nodes `11601fe0-72d6-5853-8590-ec2881853e72`,
+   `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`, and
+   `8be8d30f-4499-5eed-865c-71b4d529a67a` while the selected publication row
+   still reports no row-local missing recovery-active nodes.
+8. The selected witness being admin-ready does not widen publication
+   membership. The owner path above never consults `admin_health` or selected
+   snapshot reachability when it chooses `publishedActiveNodeIds`; those
+   signals live in the harness/observation boundary, not in the publication
+   target-state decision.
+
+Conclusion: the epoch `2` two-node durable cohort is currently preserved by
+the intended publication target-state path, not by a downstream
+priority-recovery or ACK bug. The next owner question moves earlier in the
+chain: why the selected publication observation on
+`35a891b8-c1a0-5064-9c6e-2acfba61c2a7` still reports only the two-node
+projection inputs despite admin-ready reachability, wider cluster activity,
+and direct owner-RPC/cache-repair failure evidence.
+
+## May 6 Diagnostics Publication Owner-RPC Read
+
+The next owner slice closed that publication-read boundary and moved the
+representative gate before another package split:
+
+1. `src/admin/admin-control-snapshot-class-part-1.js`,
+   `src/admin/admin-control-snapshot-class-part-2.js`, and
+   `src/control-plane/control-plane-snapshot-owner.js` already request
+   `preferAuthoritativePublicationRead` during diagnostics or repair rebuilds,
+   but `src/control-plane/membership-publication-coordinator.js` still forced
+   `CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY` for
+   `control_plane_publications` list reads.
+2. That meant diagnostics publication history bypassed the owner-RPC
+   authoritative view even when the caller explicitly requested diagnostics
+   reads. The selected `183911Z` witness could therefore preserve the stale
+   two-node durable publication cohort through owner-local publication history
+   while discovery-table repair kept failing on `nodes`.
+3. The runtime fix now preserves the existing diagnostics contract in
+   `buildPublicationListReadOptions(...)`: diagnostics publication history uses
+   the `OWNER_RPC_REQUIRED` mode already implied by
+   `buildPublicationReadOptions(...)`, while planning and reconcile paths stay
+   on owner-local publication list reads.
+4. Added focused coverage in
+   `test/control-plane/membership-publication-coordinator-diagnostics-read-mode.test.js`
+   to assert both `getLatestClusterPublication(...)` and
+   `getLatestPublishedClusterPublication(...)` request
+   `OWNER_RPC_REQUIRED` when `readProfile='diagnostics'`.
+5. Verification passed:
+   `node --check src/control-plane/membership-publication-coordinator.js`,
+   `node --check test/control-plane/membership-publication-coordinator-diagnostics-read-mode.test.js`,
+   `node --test test/control-plane/membership-publication-coordinator-diagnostics-read-mode.test.js`,
+   `node scripts/check-guideline-literals.js src/control-plane/membership-publication-coordinator.js test/control-plane/membership-publication-coordinator-diagnostics-read-mode.test.js`,
+   `node scripts/check-guideline-decision-boundaries.js src/control-plane/membership-publication-coordinator.js`,
+   `node scripts/check-guideline-boundary-mode-contracts.js src/control-plane/membership-publication-coordinator.js`,
+   and `git diff --check`.
+
+## May 6 `043103Z` Representative Rerun
+
+The post-fix representative rerun confirmed the change moved the blocker:
+
+1. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-after-diagnostics-publication-owner-rpc-read-20260506T043103Z.report.json --fast-local --verbose`
+   failed as expected after `132.5s`.
+2. Replay on
+   `test-output/reports/.playback/rolling-restart-after-diagnostics-publication-owner-rpc-read-20260506T043103Z/rolling-restart`
+   passed and reported `driftClassification=replayed_blocked`.
+3. The representative blocker migrated to epoch `3` `PUBLISHED` with active
+   `5/5`, selected coverage `4/5`, selected published active `3/5`, missing
+   published nodes
+   `11601fe0-72d6-5853-8590-ec2881853e72` and
+   `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`, and priority spread gap `10`.
+4. The selected witness moved from
+   `35a891b8-c1a0-5064-9c6e-2acfba61c2a7` to
+   `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`. The last meaningful change still
+   had that node admin-ready via `admin_health`, but the terminal barrier is
+   now a control-snapshot reachability timeout on the same node with
+   `selectedSnapshotObservationMode=repair_deferred`,
+   `selectedSnapshotObservationState=stale_usable`, and the same reason-code
+   triad `cache_stale_watermark`,
+   `discovery_node_coverage_gap`, and
+   `stale_replica_operations_in_flight`.
+5. Owner-RPC/cache-repair evidence remains explicit and is now reconstructed on
+   both `11601fe0-72d6-5853-8590-ec2881853e72` and
+   `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`: failed table `nodes`, read source
+   `owner_rpc_lane`, cause chain `control_plane_backpressure`, retry after
+   `16000ms`.
+6. Priority recovery also migrated: the dominant subordinate witness is now
+   `sql_transactions-p1` as `needs_operation` /
+   `transition_deferred` under `operation_workflow_owner` /
+   `workflow_progress` / `event_driven`, with serial wait on
+   `sql_transaction_participants-p1`. `sql_write_operations-p1` is supporting
+   evidence with the same `needs_operation` / `transition_deferred` shape.
+
+## May 6 Snapshot Reachability Fast Path
+
+The selected-snapshot reachability owner slice closed in the harness and moved
+the representative gate again:
+
+1. `test/distributed/harness/cluster-segment-7-class-5.js` probes control
+   snapshot coverage by fetching `getControlSnapshot(...)` and then wrapping
+   `getReachabilityDiagnostics(...)` in a separate timeout. That outer timeout
+   generated the terminal
+   `Control snapshot reachability probe timed out for <node>` boundary even
+   when the selected snapshot itself was already returned and retained as
+   `repair_deferred` / `stale_usable`.
+2. `test/distributed/harness/cluster-segment-5.js` made that reprobe too
+   expensive for the selected coverage caller because the reachability method
+   still spent budget on bootstrap health, bootstrap join-readiness, and only
+   then admin health. The selected coverage path only needed reachability and
+   admin readiness, not bootstrap readiness metadata.
+3. The harness fix now adds a fast path to
+   `getReachabilityDiagnostics({skipBootstrapReadiness: true})` and uses that
+   option only from the selected coverage reprobe in
+   `cluster-segment-7-class-5.js`. Default diagnostics behavior is unchanged.
+4. Added focused regressions in
+   `test/distributed/harness/__tests__/cluster.test-part-2.js` and
+   `test/distributed/harness/__tests__/cluster.test-part-5.js` to lock the
+   admin-only fast path and the selected coverage call-site propagation.
+5. Verification passed:
+   `node --check test/distributed/harness/cluster-segment-5.js`,
+   `node --check test/distributed/harness/cluster-segment-7-class-5.js`,
+   `node --check test/distributed/harness/__tests__/cluster.test-part-2.js`,
+   `node --check test/distributed/harness/__tests__/cluster.test-part-5.js`,
+   `node test/distributed/harness/__tests__/cluster.test-part-2.js`,
+   `node test/distributed/harness/__tests__/cluster.test-part-5.js`,
+   `node scripts/check-guideline-decision-boundaries.js test/distributed/harness/cluster-segment-5.js test/distributed/harness/cluster-segment-7-class-5.js`,
+   `node scripts/check-guideline-boundary-mode-contracts.js test/distributed/harness/cluster-segment-5.js test/distributed/harness/cluster-segment-7-class-5.js`,
+   and `git diff --check`.
+
+## May 6 `055246Z` Representative Rerun
+
+The post-fast-path representative rerun confirmed the blocker migrated:
+
+1. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-after-snapshot-reachability-fast-path-20260506T055246Z.report.json --fast-local --verbose`
+   failed after `133.5s`.
+2. Replay on
+   `test-output/reports/.playback/rolling-restart-after-snapshot-reachability-fast-path-20260506T055246Z/rolling-restart`
+   passed and reported `driftClassification=replayed_blocked`.
+3. The synthetic selected
+   `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58` outer reachability timeout is no
+   longer terminal. The rerun now stops earlier at active `4/5`, selected
+   coverage `3/5`, publication epoch `3` `PUBLISHED`, selected published
+   active `3/5`, missing published nodes
+   `8be8d30f-4499-5eed-865c-71b4d529a67a` and
+   `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`, and priority spread gap `6`.
+4. The selected terminal witness regressed to
+   `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`, still admin-ready via
+   `admin_health`, with selected snapshot observation
+   `repair_deferred` / `stale_usable`. The owner-RPC/cache-repair evidence now
+   reconstructs on `35a891b8-c1a0-5064-9c6e-2acfba61c2a7` and
+   `8be8d30f-4499-5eed-865c-71b4d529a67a`: failed table `nodes`, read source
+   `owner_rpc_lane`, cause chain
+   `query_timeout|control_plane_backpressure`, latest retry after `32000ms`.
+5. The last meaningful change is earlier and stronger than the terminal
+   witness: `8be8d30f-4499-5eed-865c-71b4d529a67a` reached active `4/5`,
+   selected coverage `4/5`, admin-ready via `admin_health`, and the same
+   missing published set, but the final selected witness regressed to
+   `35a891b8-c1a0-5064-9c6e-2acfba61c2a7` coverage `3/5`.
+6. Priority recovery narrowed further. Replay now leaves a single unresolved
+   witness, `sql_write_operations-p1`, as `recovering_in_flight` /
+   `dispatched_waiting_progress` under `operation_workflow_owner` /
+   `workflow_progress` / `event_driven`, with serial wait on
+   `sql_transactions-p1`.
+7. The supporting logs also tightened the owner question. `8be8d30f-...`
+   eventually reconnects to the seed, registers its node endpoint, and reaches
+   admin websocket connectivity, but still shows `nodes` repair failure on
+   `owner_rpc_lane`, `ACK timeout` connection quarantine to the seed, and
+   `No handler registered for partition service` on `replica_operations-p1`.
+   Meanwhile `35a891b8-...` retains query-timeout `nodes` repair evidence and
+   `replica_operations-p1` safety-blocked replace-removal progress. The next
+   owner slice moves away from selected reachability timeout and back onto
+   publication/topology progression under control-plane pressure.
+
+## May 6 Terminal Progress Retention
+
+The `055246Z` witness-regression owner slice closed in the harness and moved
+the representative gate again:
+
+1. `test/distributed/harness/cluster-segment-7.js` now retains the strongest
+   last meaningful timeout witness when snapshot coverage regresses without any
+   semantic publication improvement. The terminal `activeGate.progress` stays
+   on the stronger retained witness while `noProgress.currentProgress` and
+   `lastProgressEvent` still preserve the weaker observed final probe.
+2. Added a focused regression in
+   `test/distributed/harness/__tests__/cluster.test-part-6.js` to lock that
+   timeout split.
+3. Verification passed:
+   `node --check test/distributed/harness/cluster-segment-7.js`,
+   `node --check test/distributed/harness/__tests__/cluster.test-part-6.js`,
+   `node test/distributed/harness/__tests__/cluster.test-part-6.js`,
+   `node scripts/check-guideline-decision-boundaries.js test/distributed/harness/cluster-segment-7.js`,
+   `node scripts/check-guideline-boundary-mode-contracts.js test/distributed/harness/cluster-segment-7.js`,
+   and `git diff --check`.
+4. Representative rerun:
+   `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-after-terminal-progress-retention-20260506T053215Z.report.json --fast-local --verbose`
+   failed after `134.1s`.
+5. The rerun retired the misleading `8be8 -> 35a891` downgrade and exposed a
+   new startup owner boundary: epoch `4`, publication status `ACK_PENDING`,
+   active `4/5`, selected coverage `3/5`, selected witness
+   `11601fe0-72d6-5853-8590-ec2881853e72`, pending ACK count `2`, selected
+   published active `5/5`, and no missing published nodes.
+6. Failure-class signals moved away from missing-active topology debt and onto
+   startup selected-snapshot timeout plus pending-publication debt: readiness
+   failure `snapshot_timeout` / `selectedSnapshotError`, recovery protocol
+   state `publication_pending`, dominant reason
+   `priority_recovery_rebalancer_handoff_retry_scheduled`, and publication
+   gate reasons `priority_partitions_not_spread`,
+   `publication_epoch_pending`, and `snapshot_coverage=3/5`.
+7. Replay on
+   `test-output/reports/.playback/rolling-restart-after-terminal-progress-retention-20260506T053215Z/rolling-restart`
+   passed and stayed `driftClassification=replayed_blocked`. Durable state is
+   epoch `4` `ACK_PENDING` with spread gap `1`; replay reconstructs epoch `4`
+   `PUBLISHED` with closure pending and blocked partition
+   `sql_transactions-p1`; owner-RPC/cache-repair is reconstructed on
+   `11601fe0-72d6-5853-8590-ec2881853e72` with failed table `nodes`,
+   read source `owner_rpc_lane`, cause chain
+   `control_plane_backpressure|query_timeout`, and retry after `32000ms`.
+
+## May 6 ACK-Pending Publication Classification
+
+The follow-up ACK-pending publication classification slice is complete, but it
+did not reveal a real startup owner boundary. It exposed stale closure
+bookkeeping in the failure bundle:
+
+1. Representative rerun:
+   `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-after-ack-pending-publication-classification-20260506T061618Z.report.json --fast-local --verbose`
+   failed after `134.7s`.
+2. Failure bundle:
+   `test-output/reports/.playback/rolling-restart-after-ack-pending-publication-classification-20260506T061618Z/rolling-restart/failure-bundle.json`.
+3. That artifact temporarily reported `startup_recovery_blocked` /
+   `startup`, with dominant reason
+   `readiness_probe_timeout_fallback=Node readiness probe timed out for 7493b0ab-a054-5fad-a91b-5e331db29304`,
+   even though the selected publication witness still carried unresolved
+   selected published-membership debt in the same owner path.
+4. The stale shape came from two harness gaps: current selected
+   missing-published ids were dropped when the explicit selected list was
+   empty, and stale publication-closure suppression still fired even when raw
+   publication-gate evidence for the current coverage lag was absent.
+5. The completed harness fix now derives current selected missing-published
+   ids from publication disagreement evidence, preserves that deficit in both
+   canonical publication evidence and failure-class evidence, and keeps
+   `publication_convergence_blocked` on root-cause class `topology` when that
+   owner outcome remains canonical.
+
+## Historical Draft Note: May 6 Stale-Closure Publication-Membership-Deficit Fix
+
+This retained note is historical package background only. It is not part of
+the current representative rerun chronology, which now runs through
+`20260506T082449Z`.
+
+1. Focused harness/runtime edits landed in
+   `test/distributed/harness/publication-evidence-contract.js`,
+   `test/distributed/harness/failure-bundle-segment-4.js`,
+   `test/distributed/harness/failure-bundle-segment-5.js`, and
+   `test/distributed/harness/__tests__/failure-bundle.test.js`.
+2. The new representative rerun:
+   `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-after-stale-closure-publication-membership-deficit-fix-20260506T083055Z.report.json --fast-local --verbose`
+   failed after `131.8s`.
+3. Failure bundle:
+   `test-output/reports/.playback/rolling-restart-after-stale-closure-publication-membership-deficit-fix-20260506T083055Z/rolling-restart/failure-bundle.json`.
+4. The current failure class is restored to `publication_convergence_blocked`,
+   root cause class `topology`, dominant reason
+   `publication_missing_active_node=35a891b8-c1a0-5064-9c6e-2acfba61c2a7`,
+   and terminal readiness failure `no_progress_terminal` with terminal reason
+   `stalled_no_progress`.
+5. Publication convergence is open again in the failure bundle: epoch `3`
+   `PUBLISHED`, `recoveryProtocolState=publication_pending`, pending ACK count
+   `0`, missing published count `2`, selected missing published nodes
+   `35a891b8-c1a0-5064-9c6e-2acfba61c2a7` /
+   `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`, and publication gate reasons
+   `priority_partitions_not_spread`, `snapshot_coverage=3/5`, and the two
+   explicit `publication_missing_active_node=<node>` reasons.
+6. The current selected witness remains
+   `8be8d30f-4499-5eed-865c-71b4d529a67a`, admin-ready via `admin_health`,
+   with retained selected-snapshot observation state `repair_deferred` /
+   `stale_usable`; selected published active membership remains
+   `11601fe0-72d6-5853-8590-ec2881853e72`,
+   `7493b0ab-a054-5fad-a91b-5e331db29304`, and
+   `8be8d30f-4499-5eed-865c-71b4d529a67a`.
+7. Priority spread remains open. The accepted failure-class signal keeps
+   blocked partitions on `sql_transactions-p1` and `sql_write_operations-p1`
+   with spread gap `7`, while replay stays `replayed_blocked` and still
+   reconstructs broader spread pressure on
+   `control_plane_publications-p1`, `replica_operations-p1`,
+   `sql_transaction_participants-p1`, `sql_transactions-p1`, and
+   `sql_write_operations-p1`, plus retained
+   `replace_remove_safety_blocked` handoff pressure.
+
 ## Validation
 
-1. Focused owner or harness fixture for topology publication membership
-   missing-active-node debt with selected snapshot coverage lag.
-2. Focused priority-recovery fixture, if the selected owner decision depends on
-   priority-recovery workflow-progress or serial-wait classification.
-3. Touched-file syntax checks and relevant focused tests.
-4. Non-literal static guardrails for touched runtime or harness files; document
-   any inherited file-scoped literal debt separately.
-5. `git diff --check`.
-6. Representative `rolling-restart --fast-local` rerun after the owner slice.
+Executed:
+
+1. `node --check test/distributed/harness/publication-evidence-contract.js`
+2. `node --check test/distributed/harness/failure-bundle-segment-4.js`
+3. `node --check test/distributed/harness/failure-bundle-segment-5.js`
+4. `node --check test/distributed/harness/__tests__/failure-bundle.test.js`
+5. `node --test --test-name-pattern "keeps current selected publication-membership deficit over stale closure when raw publication gate is absent|classifies current selected publication-membership deficit ahead of stale startup closure|clears stale generic publication epoch gate when closure witness is retained" test/distributed/harness/__tests__/failure-bundle.test.js`
+6. `node --test test/distributed/harness/__tests__/failure-bundle.test.js`
+7. `node test/distributed/harness/publication-evidence-replay.js test-output/reports/.playback/rolling-restart-after-stale-closure-publication-membership-deficit-fix-20260506T083055Z/rolling-restart`
+8. `node scripts/check-guideline-boundary-mode-contracts.js test/distributed/harness/publication-evidence-contract.js test/distributed/harness/failure-bundle-segment-4.js test/distributed/harness/failure-bundle-segment-5.js`
+9. `./node_modules/.bin/tap test/control-plane/priority-recovery-snapshot.test.js --grep "serial-wait|active target satisfies spread"`
+10. `node scripts/check-guideline-literals.js /media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/control-plane/priority-recovery-snapshot.js /media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/control-plane/priority-recovery-snapshot.test.js`
+11. `node scripts/check-guideline-boundary-mode-contracts.js /media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/control-plane/priority-recovery-snapshot.js /media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/control-plane/priority-recovery-snapshot.test.js`
+12. `node test/distributed/harness/publication-evidence-replay.js test-output/reports/.playback/rolling-restart-after-serial-wait-release-20260506T075850Z/rolling-restart`
+13. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-after-serial-wait-release-20260506T075850Z.report.json --fast-local --verbose`
+14. `git diff --check`
+15. `node --check src/control-plane/priority-recovery-observation-snapshot.js`
+16. `node --check test/control-plane/priority-recovery-snapshot.test.js`
+17. `./node_modules/.bin/tap test/control-plane/priority-recovery-snapshot.test.js --grep "higher publication epoch|serial-wait|explicit semantic-state indexes"`
+18. `node scripts/check-guideline-literals.js src/control-plane/priority-recovery-observation-snapshot.js test/control-plane/priority-recovery-snapshot.test.js`
+19. `node scripts/check-guideline-boundary-mode-contracts.js src/control-plane/priority-recovery-observation-snapshot.js test/control-plane/priority-recovery-snapshot.test.js`
+20. `node scripts/check-guideline-decision-boundaries.js src/control-plane/priority-recovery-observation-snapshot.js test/control-plane/priority-recovery-snapshot.test.js`
+21. `node test/distributed/harness/publication-evidence-replay.js test-output/reports/.playback/rolling-restart-after-priority-recovery-epoch-aware-observation-20260506T082449Z/rolling-restart`
+22. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-after-priority-recovery-epoch-aware-observation-20260506T082449Z.report.json --fast-local --verbose`
+
+Inherited / unchanged file debt:
+
+1. `node scripts/check-guideline-literals.js test/distributed/harness/failure-bundle-segment-5.js`
+   still reports the same inherited literal-guideline count as `HEAD`.
+2. `node scripts/check-guideline-decision-boundaries.js test/distributed/harness/failure-bundle-segment-5.js`
+   still reports the same inherited decision-boundary hotspots as `HEAD`.
+3. `node scripts/check-guideline-decision-boundaries.js /media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/src/control-plane/priority-recovery-snapshot.js`
+   still reports the inherited hotspot in
+   `buildTrackedPriorityRecoveryDecisionSnapshots` at line `1485`.
 
 ## Done When
 
 1. The representative path either reaches ACTIVE convergence or migrates to one
-   newly named owner boundary after topology publication membership and
-   selected snapshot coverage debt are explained.
+   newly named owner boundary after the current selected
+   publication-membership deficit on
+   `11601fe0-72d6-5853-8590-ec2881853e72` /
+   `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58` is explained.
 2. The failure bundle emits one canonical outcome for publication state,
-   missing-active-node debt, selected snapshot coverage, and
-   priority-recovery evidence.
-3. Priority-recovery workflow-progress or serial-wait evidence is either
-   resolved, deliberately made subordinate to topology publication debt, or
-   promoted into its own named follow-up package after topology closure.
+   selected missing-published debt, selected-snapshot observation, and
+   priority-spread / workflow-progress evidence without stale closure drift.
+3. Priority-recovery workflow-progress and replayed
+   `replace_remove_safety_blocked` handoff evidence are either resolved,
+   deliberately made subordinate to the current publication-membership debt, or
+   promoted into one newly named follow-up package after topology closure.
 4. The prior post-publication operation-workflow timeout residual remains
    preserved for later revisit and is not mistaken for the current blocker.
 
 ## Residual Active Blocker
 
-The current blocker is the post-pre-execution-diagnostic May 5 rerun recorded
-in
-`test-output/reports/rolling-restart-after-pre-execution-handoff-diagnostic-20260505T175220Z.report.json`.
-It failed after `130.2s` with terminal active `3/5`, inactive `2`, selected
-snapshot coverage `3/5`, publication epoch `3` `PUBLISHED`, pending ACK count
-`0`, selected published active `3/5`, active-gate selected missing published
-count `2`, priority spread pending with gap `6`, and priority blocked
-partition count `1`.
+The blocker that previously kept this package representative was the May 6
+publication owner-read/remove-safety chain ending at
+`test-output/reports/rolling-restart-after-critical-inflight-source-reservation-20260506T110828Z.report.json`.
+That slice is now complete. The fresh
+`test-output/reports/rolling-restart-after-publication-owner-read-remove-safety-20260506T123000Z.report.json`
+rerun proves the migration:
 
-The selected terminal snapshot node
-`35a891b8-c1a0-5064-9c6e-2acfba61c2a7` is admin-ready via `admin_health` and
-does not carry a selected reachability timeout. Its selected snapshot
-observation is still `repair_deferred` / `stale_usable` with pending contract
-state, idle refresh, next action `wait`, repair deferred `true`, and reason
-code `cache_stale_watermark`. Owner-RPC/cache-repair reconstruction remains
-`missing`, so the selected repair evidence is still retained owner-observation
-evidence.
-
-The prior epoch `2` `PUBLISHED` missing-active selected-snapshot reachability
-boundary genuinely migrated. The current canonical blocker is epoch `3`
-`PUBLISHED` missing-active selected-snapshot topology debt with missing
-published nodes `11601fe0-72d6-5853-8590-ec2881853e72` and
-`ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`. The subordinate
-`control_plane_publications-p1` handoff gap also migrated: current
-priority-recovery snapshots classify it as `spread_satisfied_in_flight` /
-`terminal_completed`, with no next required action. Supporting logs retain
-source-handoff and `replace_remove_safety_blocked` evidence, but that evidence
-is no longer the selected blocker and does not keep the package on a
-pre-`executeMove` skip or return state.
-
-Priority recovery now carries `sql_write_operations-p1` as the selected
-subordinate witness: semantic state `recovering_in_flight`, operation
-`c3fedf19-19e4-4792-8a9f-8e4734cb88ad`, owner
-`operation_workflow_owner`, boundary `workflow_progress`, wait mode
-`event_driven`, next action `wait_for_operation_progress`, actuation
-`persisted_not_dispatched`, workflow phase `dispatch_pending`, latest step
-`PENDING`, latest status `pending`, and serial-wait operation
-`99dfca41-8b3e-4d05-845d-6ccb71c89a0d` on
-`sql_transaction_participants-p1`.
+1. Publication convergence remains epoch `3` `PUBLISHED`, pending ACK `0`,
+   blocked node count `0`, and missing published count `0`.
+2. The old `control_plane_publications-p1`
+   `replace_remove_safety_blocked` loop no longer dominates or selects the
+   failure class.
+3. The new dominant witness is `sql_transaction_participants-p1`, operation
+   `867cbc80-93f3-4121-8bca-2fc0c5d5072a`, at
+   `operation_workflow_owner / workflow_progress / event_driven`, next action
+   `wait_for_operation_progress`, workflow step `CREATING`, status
+   `creating`.
+4. Selected-snapshot `repair_deferred` / `stale_usable`, owner-RPC `nodes`
+   repair, and the seed readiness timeout remain supporting context, not the
+   owner boundary that this package should continue to carry.
 
 The `20260505T123850Z` trace, focused ACK-pending operation-workflow timeout
 fixture, `20260505T132033Z` representative rerun, `20260505T132033Z`
@@ -3395,9 +4115,96 @@ post-ACK `PUBLISHED` missing-active selected-snapshot trace and replay fixture,
 reachability trace, `20260505T145246Z` replay fixture, selected-snapshot
 repair evidence recovery probe, rebalancer-handoff follow-up traces, runtime
 pre-execution diagnostic, review fix, `20260505T175220Z` representative
-rerun, and `20260505T175220Z` evidence trace are complete. The package remains
-active. The next unchecked task is the smallest focused `175220Z` replay
-fixture or runtime owner probe for the epoch `3` `PUBLISHED`
-missing-active selected-snapshot shape and the subordinate
-`sql_write_operations-p1` `persisted_not_dispatched` workflow-progress
-witness.
+rerun, `20260505T175220Z` evidence trace, focused `175220Z` pending-dispatch
+fixture, `20260505T183911Z` representative rerun, the focused
+coordination-mismatch fixture, epoch `2` publication-membership owner trace,
+diagnostics publication owner-RPC read fix, `20260506T043103Z`
+representative rerun, selected-snapshot reachability fast path, terminal
+progress retention harness slice, ACK-pending publication classification
+slice, stale-closure publication-membership-deficit fix, publication
+owner-read safety fix, the control-snapshot repair fallback,
+`20260506T073557Z`, `20260506T074733Z`, `20260506T075850Z`,
+`20260506T082449Z`, `20260506T092319Z`, `20260506T094635Z`,
+`20260506T104727Z`, `20260506T110108Z`, `20260506T110828Z`, and the fresh
+`20260506T123000Z` closure rerun are now complete. The next unchecked task is
+no longer in this package: representative execution later continued through
+[Rolling Restart Priority Recovery Serial-Wait Workflow Progress Reentry](./done-20260506-rolling-restart-priority-recovery-serial-wait-workflow-progress-reentry.md)
+and is now tracked in
+[Rolling Restart Startup Publication ACK-Pending Owner-RPC Nodes Repair Reentry](./done-20260506-rolling-restart-startup-publication-ack-pending-owner-rpc-nodes-repair-reentry.md).
+
+## May 6 Failure-Bundle Dominant-Witness Signal Fixture
+
+The current harness slice locks the mixed-witness failure-classification shape
+before the runtime owner path changes:
+
+1. Added
+   `keeps dominant priority recovery timeout witness signals coherent when aggregate arrays include secondary scheduling blockers`
+   in `test/distributed/harness/__tests__/failure-bundle.test.js`.
+2. The fixture keeps the post-publication fallback shape closed on
+   publication debt, orders aggregate progress arrays and partition maps with
+   the secondary scheduling witness first, and then proves the emitted
+   failure-classification signals stay coherent with the dominant
+   `sql_transactions-p1` workflow-timeout witness.
+3. Expected outcome: the failure class remains
+   `priority_recovery_progress_blocked`, dominant reason remains
+   `priority_recovery_workflow_timeout_transition_deferred`, emitted signals
+   keep the dominant progress class / semantic state / partition / owner /
+   boundary / wait mode / next action, and the secondary
+   `sql_write_operations-p1` partition does not leak back into the canonical
+   signal set.
+
+Validation:
+
+1. `./node_modules/.bin/tap test/distributed/harness/__tests__/failure-bundle.test.js`
+2. `node --check test/distributed/harness/failure-bundle-segment-5.js`
+3. `node --check test/distributed/harness/__tests__/failure-bundle.test.js`
+4. `git diff --check`
+
+Guardrail note: the touched-file literal and decision-boundary scripts still
+report pre-existing whole-file debt in the already-dirty
+`test/distributed/harness/failure-bundle-segment-5.js`; no new script-clean
+baseline was established in this slice.
+
+Historical predecessor blocker before this update was recorded
+in
+`test-output/reports/rolling-restart-after-terminal-progress-retention-20260506T053215Z.report.json`.
+It failed after `134.1s` with terminal active `4/5`, inactive `1`, selected
+snapshot coverage `3/5`, publication epoch `4`, publication status
+`ACK_PENDING`, pending ACK count `2`, selected published active `5/5`,
+missing published count `0`, priority spread gap `1`, and priority blocked
+partition count `1`.
+
+The selected terminal snapshot node
+`11601fe0-72d6-5853-8590-ec2881853e72` stayed admin-ready via `admin_health`,
+but the terminal readiness failure was `snapshot_timeout` from
+`selectedSnapshotError`. The final observed probe fell back to coverage `0/5`
+on the same node, while the retained last meaningful change kept the stronger
+epoch `4` `ACK_PENDING` witness: coverage `3/5`, selected published active
+`5/5`, pending ACK `2`, missing published `0`, and priority spread gap `1`.
+Owner-RPC/cache-repair evidence was reconstructed on failed table `nodes`
+through `owner_rpc_lane` / `control_plane_backpressure|query_timeout`.
+
+At that predecessor point, priority recovery still carried
+`sql_transactions-p1` as `recovering_in_flight` under
+`operation_workflow_owner` / `workflow_progress` / `event_driven`, with
+same-partition `rebalancer_handoff` / `retry_scheduled` evidence. The
+follow-up ACK-pending publication classification slice and stale-closure
+publication-membership-deficit fix are now complete and show that the real
+owner path never left publication/topology debt: the repaired `083055Z`
+failure bundle restores the predecessor epoch `3` `PUBLISHED` /
+`publication_pending` publication-topology shape with selected missing
+published count `2` and explicit
+`publication_missing_active_node=<node>` reasons.
+
+The `20260505T123850Z` trace, focused ACK-pending operation-workflow timeout
+fixture, `20260505T132033Z` representative rerun, `20260505T132033Z`
+post-ACK `PUBLISHED` missing-active selected-snapshot trace and replay fixture,
+`20260505T140646Z` representative rerun, `20260505T140646Z` epoch `5`
+`OPEN` publication-pending trace, replay fixture, representative rerun,
+`20260505T145246Z` epoch `2` `PUBLISHED` missing-active selected-snapshot
+reachability trace, `20260505T145246Z` replay fixture, selected-snapshot
+repair evidence recovery probe, rebalancer-handoff follow-up traces, runtime
+pre-execution diagnostic, review fix, `20260505T175220Z` representative
+rerun, and `20260505T175220Z` evidence trace are complete. This predecessor
+block remains only as historical context for the completed ACK-pending
+classification slice and stale-closure repair.

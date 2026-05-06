@@ -71,7 +71,7 @@ Sprint:
 Depends on:
 
 1. [Control plane quiescence owner snapshot](./done-20260426-control-plane-quiescence-owner-snapshot.md)
-2. [Rolling restart operation transition pressure and over-target trim](./active-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md)
+2. [Rolling restart operation transition pressure and over-target trim](./todo-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md)
 
 ## In Scope
 

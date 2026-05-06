@@ -1453,6 +1453,196 @@ export function registerQuorumConditionedRemoveSafetyTailMoreTests({
       }
     });
 
+  test(
+    'RebalanceCoordinator - dispatches priority REPLACE source removal when ' +
+      'the direct published membership row outruns a stale planning ' +
+      'publication status',
+    async (t) => {
+      ConfigurationManager.resetInstance();
+      LoggingService.resetInstance();
+      ConfigurationManager.getInstance().initialize({});
+      LoggingService.getInstance().initialize({level: TEST_LOG_LEVEL_ERROR});
+
+      const testPublicationEpoch = 7;
+      const testDeliveries = [];
+      const testPublishedActiveNodeIds = Object.freeze([
+        TEST_NODE_A,
+        TEST_NODE_B,
+        TEST_NODE_C,
+        TEST_NODE_D,
+      ]);
+      const testSatisfiedPriorityPartitionSummary = Object.freeze({
+        satisfied: true,
+        requiredDistinctNodeCount: TEST_PRIORITY_REQUIRED_DISTINCT_NODE_COUNT,
+        missingPartitionIds: Object.freeze([]),
+      });
+      const testCurrentPublicationRow = Object.freeze({
+        status: TEST_PUBLICATION_STATUS_PUBLISHED,
+        publicationEpoch: testPublicationEpoch,
+        publishedActiveNodeIds: testPublishedActiveNodeIds,
+        priorityPartitionSummary: testSatisfiedPriorityPartitionSummary,
+      });
+      const testStalePlanningSnapshot = Object.freeze({
+        publicationEpoch: testPublicationEpoch,
+        publicationStatus: TEST_PUBLICATION_STATUS_ACK_PENDING,
+        publishedActiveNodeIdsPresent: true,
+        publishedActiveNodeIds: testPublishedActiveNodeIds,
+        recoveryActiveNodeIds: testPublishedActiveNodeIds,
+        projectedServingNodeIds: testPublishedActiveNodeIds,
+        locallyEligibleNodeIds: testPublishedActiveNodeIds,
+        publishedMembershipIncludesTargetNode: true,
+        priorityPartitionSummary: testSatisfiedPriorityPartitionSummary,
+      });
+      const coordinator = createTestCoordinator({
+        nodeId: TEST_NODE_D,
+        enableTimeouts: false,
+        messageRouter: {
+          deliver: async () => {
+            testDeliveries.push(TEST_DELIVERY_SENT);
+            return {
+              acknowledged: true,
+              status: TEST_REPLICA_OPERATION_RESPONSE_INITIATED,
+            };
+          },
+          getConnectionState: () => TEST_CONNECTION_STATE_CONNECTED,
+          pingNode: async () => true,
+          isOutboundQueueAvailable: () => true,
+        },
+        controlPlaneReadinessService: {
+          membershipPublicationService: {
+            getLatestClusterPublicationSync() {
+              return testCurrentPublicationRow;
+            },
+            getLatestPublishedClusterPublicationSync() {
+              return testCurrentPublicationRow;
+            },
+          },
+          getNodeReadinessSync(nodeId) {
+            return {
+              nodeId,
+              dimensions: {
+                controlPlaneRecoveryEligible: true,
+                repairEligible: true,
+                serveEligible: true,
+              },
+            };
+          },
+          async getPriorityRecoveryPlanningAnswerForOwnerRead() {
+            return {
+              publicationEpoch: testPublicationEpoch,
+              publicationStatus: TEST_PUBLICATION_STATUS_PUBLISHED,
+              publishedActiveNodeIdsPresent: true,
+              publishedActiveNodeIds: testPublishedActiveNodeIds,
+              recoveryActiveNodeIds: testPublishedActiveNodeIds,
+              projectedServingNodeIds: testPublishedActiveNodeIds,
+              locallyEligibleNodeIds: testPublishedActiveNodeIds,
+              publishedMembershipIncludesTargetNode: true,
+              priorityPartitionSummary: testSatisfiedPriorityPartitionSummary,
+            };
+          },
+          async getMembershipPublicationPlanningSnapshotBestEffort() {
+            return testStalePlanningSnapshot;
+          },
+          async getMembershipPublicationPlanningSnapshot() {
+            return testStalePlanningSnapshot;
+          },
+          getMembershipPublicationPlanningSnapshotSync() {
+            return testStalePlanningSnapshot;
+          },
+        },
+        tablePolicyService: {
+          getPolicyForPartition: () => ({
+            minReplicaCount: TEST_MIN_REPLICA_COUNT,
+          }),
+        },
+        cacheData: {
+          nodes: [
+            createReadyNode(TEST_NODE_A),
+            createReadyNode(TEST_NODE_B),
+            createReadyNode(TEST_NODE_C),
+            createReadyNode(TEST_NODE_D),
+          ],
+          services: [
+            createCriticalPartitionServiceRow({
+              partitionId: TEST_CONTROL_PLANE_PUBLICATIONS_PARTITION_ID,
+              replicaId: TEST_CONTROL_PLANE_PUBLICATIONS_SOURCE_REPLICA_ID,
+              nodeId: TEST_NODE_A,
+              raftRole: TEST_RAFT_ROLE_FOLLOWER,
+            }),
+            createCriticalPartitionServiceRow({
+              partitionId: TEST_CONTROL_PLANE_PUBLICATIONS_PARTITION_ID,
+              replicaId: TEST_CONTROL_PLANE_PUBLICATIONS_PEER_REPLICA_ID,
+              nodeId: TEST_NODE_B,
+              raftRole: TEST_RAFT_ROLE_FOLLOWER,
+            }),
+            createCriticalPartitionServiceRow({
+              partitionId: TEST_CONTROL_PLANE_PUBLICATIONS_PARTITION_ID,
+              replicaId: TEST_CONTROL_PLANE_PUBLICATIONS_OTHER_REPLICA_ID,
+              nodeId: TEST_NODE_C,
+              raftRole: TEST_RAFT_ROLE_FOLLOWER,
+            }),
+            createCriticalPartitionServiceRow({
+              partitionId: TEST_CONTROL_PLANE_PUBLICATIONS_PARTITION_ID,
+              replicaId: TEST_CONTROL_PLANE_PUBLICATIONS_REPLACEMENT_REPLICA_ID,
+              nodeId: TEST_NODE_D,
+              raftRole: TEST_RAFT_ROLE_LEADER,
+            }),
+          ],
+        },
+      });
+
+      coordinator.initialize();
+      try {
+        coordinator.systemTableCache.merge(
+          TEST_PARTITIONS_TABLE_NAME,
+          TEST_CONTROL_PLANE_PUBLICATIONS_PARTITION_ID,
+          createCriticalPartitionRow({
+            partitionId: TEST_CONTROL_PLANE_PUBLICATIONS_PARTITION_ID,
+            leaderNodeId: TEST_NODE_D,
+          }),
+        );
+
+        const operation = await coordinator.createOperation({
+          type: OperationType.REPLACE,
+          partitionId: TEST_CONTROL_PLANE_PUBLICATIONS_PARTITION_ID,
+          nodeId: TEST_NODE_D,
+          sourceNodeId: TEST_NODE_A,
+          replicaId: TEST_CONTROL_PLANE_PUBLICATIONS_SOURCE_REPLICA_ID,
+        });
+
+        operation.replicaId =
+          TEST_CONTROL_PLANE_PUBLICATIONS_REPLACEMENT_REPLICA_ID;
+        operation.workflowStep = WORKFLOW_STEP.ACTIVE;
+        operation.status = TEST_OPERATION_STATUS_ACTIVE;
+
+        const result = await coordinator.executeOperation(operation);
+
+        t.equal(
+          result.success,
+          true,
+          'priority publication source removal should advance when the ' +
+            'current published membership row already confirms the same ' +
+            'epoch as published',
+        );
+        t.equal(
+          testDeliveries.length,
+          TEST_EXPECTED_REPLACEMENT_ELECTION_DELIVERY_COUNT,
+          'remove safety should prefer the direct current published ' +
+            'membership row over the stale planning witness',
+        );
+        t.equal(
+          operation.workflowStep,
+          WORKFLOW_STEP.STOPPING,
+          'the replace workflow should leave ACTIVE once the current ' +
+            'membership publication row clears the publication gate',
+        );
+      } finally {
+        await coordinator.shutdown();
+        ConfigurationManager.resetInstance();
+        LoggingService.resetInstance();
+      }
+    });
+
   test('RebalanceCoordinator - dispatches priority REPLACE source removal when projected serving augments a stale explicit recovery cohort',
     async (t) => {
       ConfigurationManager.resetInstance();

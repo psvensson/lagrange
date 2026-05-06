@@ -30,7 +30,7 @@ Representative migration proof:
    `sql_write_operations-p1`, `eligible_but_no_operation_created`,
    `needs_operation`
 9. handoff package:
-   [Rolling Restart Operation Transition Pressure And Over-Target Trim](./active-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md)
+   [Rolling Restart Operation Transition Pressure And Over-Target Trim](./todo-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md)
 
 ## Why
 

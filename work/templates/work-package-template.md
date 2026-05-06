@@ -1,5 +1,30 @@
 # Title
 
+<!-- work-package
+{
+  "schema": "work-package-v1",
+  "status": "active",
+  "opened": "YYYY-MM-DD",
+  "scenario": "scenario-or-none",
+  "artifact": "path/to/latest.report.json",
+  "playback": "path/to/playback-or-none",
+  "owner": "canonical owner",
+  "boundary": "current boundary",
+  "dominantReason": "current dominant reason",
+  "currentState": "one-line current state",
+  "nextAction": "next proof or implementation action",
+  "proof": [
+    "Focused owner test",
+    "Representative scenario rerun"
+  ],
+  "touchedFiles": [
+    "src/example.js",
+    "test/example.test.js"
+  ],
+  "predecessor": "work/packages/done-predecessor.md"
+}
+-->
+
 ## Why
 
 Describe the problem being solved.

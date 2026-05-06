@@ -1,3 +1,11 @@
+/**
+ * Owner contract:
+ * Owner: UnifiedRebalancer owns rebalance planning and execution orchestration.
+ * Inputs: topology snapshots, policies, readiness, budgets, coordinator operations.
+ * Canonical output: rebalance results and coordinator operation requests.
+ * Prohibited fallbacks: no direct operation creation outside the coordinator owner.
+ * Primary tests: test/rebalancer/unified-rebalancer.test.js.
+ */
 import {REBALANCER_DEFAULT_POLICY} from './rebalancer-constants.js';
 
 export {

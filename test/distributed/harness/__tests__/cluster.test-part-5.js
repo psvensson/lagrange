@@ -243,6 +243,90 @@ test('Unit: _probeControlSnapshotCoverage falls back to default lane after snaps
     );
   });
 
+test(
+  'Unit: _probeControlSnapshotCoverage uses the admin-only reachability fast path',
+  async () => {
+    const cluster = createCluster({
+      size: 1,
+      docker: {socketPath: '/var/run/docker.sock'},
+      image: 'distributed-db:test',
+    });
+    const nodeId = 'node-fast-path';
+    const reachabilityError =
+      'Control snapshot reachability probe timed out for ' + nodeId;
+    const reachabilityProbeCalls = [];
+
+    cluster._nodes.set(nodeId, {
+      id: nodeId,
+      role: NODE_ROLES.SEED,
+      async getStatus() {
+        return {rows: [{status: 'active'}]};
+      },
+      async getReachabilityDiagnostics(options = {}) {
+        reachabilityProbeCalls.push({
+          timeoutMs: options.timeoutMs,
+          skipBootstrapReadiness: options.skipBootstrapReadiness === true,
+        });
+        if (options.skipBootstrapReadiness === true) {
+          return {
+            reachable: true,
+            adminReady: true,
+            reachableBy: 'admin_health',
+            lastError: null,
+          };
+        }
+        return new Promise((resolve) => {
+          setTimeout(() => {
+            resolve({
+              reachable: false,
+              adminReady: false,
+              reachableBy: null,
+              lastError: reachabilityError,
+            });
+          }, Number(options.timeoutMs || 0) + 50);
+        });
+      },
+      async getControlSnapshot() {
+        return {
+          rows: [{
+            nodes: [nodeId],
+            capturedAtMs: 789,
+          }],
+        };
+      },
+      async getLogs(_options) {
+        return '';
+      },
+    });
+
+    const coverage = await cluster._probeControlSnapshotCoverage(
+      Date.now() + 1000,
+      [nodeId],
+    );
+
+    assert.deepStrictEqual(
+      reachabilityProbeCalls.map((call) => call.skipBootstrapReadiness),
+      [true],
+      'selected coverage should request the admin-only fast path',
+    );
+    assert.strictEqual(
+      coverage.selectedSnapshotAdminReady,
+      true,
+      'fast path should preserve the admin-backed selected witness',
+    );
+    assert.strictEqual(
+      coverage.selectedSnapshotReachabilityError,
+      null,
+      'fast path should avoid converting bootstrap-readiness latency into a selected reachability timeout',
+    );
+    assert.strictEqual(
+      coverage.selectedSnapshotReachableBy,
+      'admin_health',
+      'fast path should preserve the admin-health source on the selected witness',
+    );
+  },
+);
+
 test('Unit: _probeControlSnapshotCoverage prefers authoritative admin-ready witnesses when coverage ties',
   async () => {
     const cluster = createCluster({
@@ -805,6 +889,14 @@ test('Unit: _probeControlSnapshotCoverage surfaces publication diagnostics from 
         snapshotRevision: null,
         snapshotRevisionState: null,
         snapshotRevisionGap: null,
+        snapshotObservationMode: null,
+        snapshotObservationState: null,
+        snapshotObservationContractState: null,
+        snapshotObservationRefreshState: null,
+        snapshotObservationNextAction: null,
+        snapshotObservationReasonCodes: [],
+        snapshotObservationRetryAfterMs: null,
+        snapshotRepairDeferred: false,
         publicationEpoch: 18,
         publicationStatus: 'OPEN',
         publishedActiveNodeIds: ['node-a', 'node-b'],

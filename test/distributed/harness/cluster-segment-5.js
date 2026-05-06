@@ -1068,6 +1068,7 @@ class NodeHandle {
       options.timeoutMs,
       FETCH_TIMEOUT_MS,
     );
+    const skipBootstrapReadiness = options?.skipBootstrapReadiness === true;
     const deadlineMs = Date.now() + probeTimeoutMs;
     const remainingProbeBudgetMs = () => {
       return Math.max(MIN_TIMEOUT_MS, deadlineMs - Date.now());
@@ -1134,41 +1135,43 @@ class NodeHandle {
       diagnostics.lastError = diagnostics.bootstrapHealth.error;
     }
 
-    try {
-      const bootstrapReadiness = await this.probeBootstrapReadiness({
-        timeoutMs: reachabilityHttpProbeTimeoutMs(),
-      });
-      diagnostics.bootstrapReadiness = bootstrapReadiness;
-      diagnostics.controlPlaneRecoveryReady =
-        isControlPlaneRecoveryReadyProbe(bootstrapReadiness);
-      diagnostics.publishedControlPlaneEpoch = Number.isFinite(
-        bootstrapReadiness?.publishedControlPlaneEpoch,
-      ) ?
-        Math.max(
-          ZERO,
-          Math.floor(bootstrapReadiness.publishedControlPlaneEpoch),
-        ) :
-        null;
-      diagnostics.readinessStage =
-        typeof bootstrapReadiness?.readinessStage === 'string' ?
-          bootstrapReadiness.readinessStage :
+    if (!skipBootstrapReadiness) {
+      try {
+        const bootstrapReadiness = await this.probeBootstrapReadiness({
+          timeoutMs: reachabilityHttpProbeTimeoutMs(),
+        });
+        diagnostics.bootstrapReadiness = bootstrapReadiness;
+        diagnostics.controlPlaneRecoveryReady =
+          isControlPlaneRecoveryReadyProbe(bootstrapReadiness);
+        diagnostics.publishedControlPlaneEpoch = Number.isFinite(
+          bootstrapReadiness?.publishedControlPlaneEpoch,
+        ) ?
+          Math.max(
+            ZERO,
+            Math.floor(bootstrapReadiness.publishedControlPlaneEpoch),
+          ) :
           null;
-      diagnostics.readinessStageRank = Number.isFinite(
-        bootstrapReadiness?.readinessStageRank,
-      ) ?
-        Math.max(ZERO, Math.floor(bootstrapReadiness.readinessStageRank)) :
-        null;
-      diagnostics.recoveryStage =
-        typeof bootstrapReadiness?.recoveryStage === 'string' ?
-          bootstrapReadiness.recoveryStage :
+        diagnostics.readinessStage =
+          typeof bootstrapReadiness?.readinessStage === 'string' ?
+            bootstrapReadiness.readinessStage :
+            null;
+        diagnostics.readinessStageRank = Number.isFinite(
+          bootstrapReadiness?.readinessStageRank,
+        ) ?
+          Math.max(ZERO, Math.floor(bootstrapReadiness.readinessStageRank)) :
           null;
-      diagnostics.recoveryStageRank = Number.isFinite(
-        bootstrapReadiness?.recoveryStageRank,
-      ) ?
-        Math.max(ZERO, Math.floor(bootstrapReadiness.recoveryStageRank)) :
-        null;
-    } catch (_error) {
-      diagnostics.bootstrapReadiness = null;
+        diagnostics.recoveryStage =
+          typeof bootstrapReadiness?.recoveryStage === 'string' ?
+            bootstrapReadiness.recoveryStage :
+            null;
+        diagnostics.recoveryStageRank = Number.isFinite(
+          bootstrapReadiness?.recoveryStageRank,
+        ) ?
+          Math.max(ZERO, Math.floor(bootstrapReadiness.recoveryStageRank)) :
+          null;
+      } catch (_error) {
+        diagnostics.bootstrapReadiness = null;
+      }
     }
 
     const adminStatus = await httpGet(

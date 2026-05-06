@@ -454,7 +454,38 @@ function evaluateLoadPublishedConvergence(
           typeof publicationConvergence.priorityPartitionSummary === 'object' ?
         publicationConvergence.priorityPartitionSummary :
         null;
-  const missingPublishedNodeIds = expectedPublishedNodeIds.filter((nodeId) => {
+  const requiredPublishedNodeIds = normalizeDistinctStringArray([
+    ...normalizeDistinctStringArray(publicationRecoveryGate?.requiredAckNodeIds),
+    ...normalizeDistinctStringArray(
+      publicationRecoveryGate?.acknowledgedNodeIds,
+    ),
+    ...normalizeDistinctStringArray(publicationRecoveryGate?.pendingAckNodeIds),
+    ...normalizeDistinctStringArray(
+      publicationRecoveryGate?.missingPublishedNodeIds,
+    ),
+    ...normalizeDistinctStringArray(publicationConvergence?.requiredAckNodeIds),
+    ...normalizeDistinctStringArray(
+      publicationConvergence?.acknowledgedNodeIds,
+    ),
+    ...normalizeDistinctStringArray(publicationConvergence?.pendingAckNodeIds),
+    ...normalizeDistinctStringArray(publicationConvergence?.missingPublishedNodeIds),
+    ...normalizeDistinctStringArray(publicationConvergence?.publishedActiveNodeIds),
+    ...normalizeDistinctStringArray(publicationConvergence?.recoveryActiveNodeIds),
+    ...normalizeDistinctStringArray(
+      publicationConvergence?.membershipLifecycleSummary?.recoveryActiveNodeIds,
+    ),
+    ...normalizeDistinctStringArray(
+      publicationConvergence?.membershipLifecycleSummary?.locallyEligibleNodeIds,
+    ),
+    ...normalizeDistinctStringArray(
+      publicationConvergence?.membershipLifecycleSummary?.projectedServingNodeIds,
+    ),
+  ]);
+  const effectivePublishedNodeIds =
+    requiredPublishedNodeIds.length > ZERO ?
+      requiredPublishedNodeIds :
+      expectedPublishedNodeIds;
+  const missingPublishedNodeIds = effectivePublishedNodeIds.filter((nodeId) => {
     return !publishedActiveNodeIds.includes(nodeId);
   });
   const publicationRecoveryGateMissingPublishedNodeIds =
@@ -480,7 +511,7 @@ function evaluateLoadPublishedConvergence(
         String(pendingAckNodeIds.length),
     );
   }
-  const missingRecoveryActiveNodeIds = expectedPublishedNodeIds.filter(
+  const missingRecoveryActiveNodeIds = effectivePublishedNodeIds.filter(
     (nodeId) => !recoveryActiveNodeIds.includes(nodeId),
   );
   for (const nodeId of missingRecoveryActiveNodeIds) {
@@ -1105,19 +1136,25 @@ function buildActiveWaitProgressSnapshot(
     snapshotCoverage?.selectedPublishedActiveNodeIds ||
       publicationConvergence?.publishedActiveNodeIds,
   );
+  const selectedMissingPublishedNodeIds =
+    Array.isArray(snapshotCoverage?.selectedMissingPublishedNodeIds) ?
+      normalizeDistinctStringArray(snapshotCoverage.selectedMissingPublishedNodeIds) :
+      normalizeDistinctStringArray(publicationConvergenceGate?.missingPublishedNodeIds);
   const pendingAckNodeIds = normalizeDistinctStringArray(
     snapshotCoverage?.selectedPendingAckNodeIds ||
       publicationConvergenceGate?.pendingAckNodeIds ||
       publicationConvergence?.pendingAckNodeIds,
   );
-  const missingPublishedNodeIds = normalizeDistinctStringArray([
-    ...(Array.isArray(snapshotCoverage?.selectedMissingPublishedNodeIds) ?
-      snapshotCoverage.selectedMissingPublishedNodeIds :
-      []),
-    ...(Array.isArray(publicationConvergenceGate?.missingPublishedNodeIds) ?
-      publicationConvergenceGate.missingPublishedNodeIds :
-      []),
-  ]);
+  const missingPublishedNodeIds = normalizeDistinctStringArray(
+    publicationConvergenceGate?.missingPublishedNodeIds,
+  );
+  const missingPublishedCount = Math.max(
+    missingPublishedNodeIds.length,
+    Number.isInteger(publicationConvergenceGate?.missingPublishedCount) &&
+      publicationConvergenceGate.missingPublishedCount >= ZERO ?
+      publicationConvergenceGate.missingPublishedCount :
+      ZERO,
+  );
   const gateReasons = normalizeDistinctStringArray(
     publicationConvergenceGate?.reasons,
   ).sort();
@@ -1203,7 +1240,7 @@ function buildActiveWaitProgressSnapshot(
       publicationStatus,
       recoveryProtocolState,
       pendingAckCount: pendingAckNodeIds.length,
-      missingPublishedCount: missingPublishedNodeIds.length,
+      missingPublishedCount,
       gateReasons,
       prioritySpreadSatisfied,
       priorityRecoveryDecisionSnapshots,
@@ -1266,9 +1303,9 @@ function buildActiveWaitProgressSnapshot(
     perNodePublicationDisagreementSet,
     selectedPublishedActiveNodeIds,
     selectedPublishedActiveCount: selectedPublishedActiveNodeIds.length,
-    selectedMissingPublishedNodeIds: missingPublishedNodeIds,
+    selectedMissingPublishedNodeIds,
     pendingAckCount: pendingAckNodeIds.length,
-    missingPublishedCount: missingPublishedNodeIds.length,
+    missingPublishedCount,
     gateReasonCount: gateReasons.length,
     gateReasons,
     prioritySpreadSatisfied,

@@ -96,6 +96,14 @@ Mandatory rules:
 8. Do not archive package files into a second package-status directory. Package
    status is carried by the filename; sprint archival is the exception used to
    keep the live sprint root small and readable.
+9. In a scenario-driven sprint, exactly one package may own the current
+   representative re-entry gate at a time.
+10. If an `active-...` package is retained only as a dormant residual after the
+    representative path migrates away from its boundary, rename it to `todo-...`
+    or `superseded-...` before continuing the new representative package.
+11. A second `active-...` package is allowed only when it is being executed now
+    and has explicitly disjoint file scope, owner scope, and proof scope from
+    the current representative package.
 
 ### 0.1.2 Package Closure Deep-Dive Review
 
@@ -211,6 +219,18 @@ Mandatory rules:
    - the hypothesis for why the new blocker remained latent
 5. Do not close a scenario-driven package or sprint on “hot path fixed” while
    the original scenario still fails and the new dominant blocker is unnamed.
+6. Do not open a new package merely because a fresh artifact has a different
+   epoch, node id set, count, timestamp, or presentation shape while the same
+   semantic owner and boundary still dominate.
+7. Open or activate a new package only when the canonical owner boundary,
+   current semantic owner, or required next action changes materially.
+8. When the owner boundary has not changed, append the new normalized evidence
+   to the current package and update the sprint's current blocker snapshot
+   instead of widening package churn.
+9. Evidence copied from distributed or integration artifacts must be derived
+   from the artifact whenever a canonical extractor or script exists. Manual
+   summaries must still name the source artifact paths and the normalized
+   fields that make the blocker canonical.
 
 ### 0.1.6 Progress Grammar Declaration For Lifecycle Boundaries
 
@@ -316,6 +336,58 @@ Mandatory rules:
 12. Broad representative reruns are acceptance proof only after the replayable
     owner fixture, focused owner tests, and affected presentation tests are
     green.
+13. Every active scenario-driven sprint must keep a compact current blocker
+    snapshot near the top of the sprint document.
+14. Before resuming LLM-driven sprint or package work, run
+    `npm run work:context` and use its current blocker, first-read files,
+    proof ladder, useful commands, and dirty-worktree summary as the starting
+    handoff. If the context is stale, run `npm run work:current-blocker` first
+    and then rerun `npm run work:context`.
+15. The current blocker snapshot must name:
+    - latest artifact or replay directory
+    - representative gate or scenario
+    - current representative package
+    - primary semantic owner and boundary
+    - canonical blocker or dominant reason
+    - prior blocker that just closed or migrated
+    - subordinate evidence that must not drive the edit scope
+    - next required owner proof or action
+16. Long migration history belongs below the snapshot as a ledger. It must not
+    force readers or sub-agents to reconstruct the current blocker from old
+    package narratives.
+17. A sprint continuation must start by refreshing or confirming the current
+    blocker snapshot before runtime implementation resumes.
+18. If the snapshot shows the same owner boundary with a new artifact shape,
+    continue the current package. If it shows a new owner boundary, split or
+    activate exactly one new representative package.
+19. Sub-agent work inside a sprint must be sequential at owner boundaries:
+    first extract canonical evidence from the latest artifact, then map the
+    owner path and smallest proof surface, then implement the bounded change.
+20. Sub-agents may run in parallel only for independent sidecar questions with
+    disjoint owner or file scope. They must not each chase separate
+    interpretations of the same current blocker.
+21. Runtime edits must not start from a sub-agent until the current blocker
+    snapshot names the canonical owner boundary and the smallest focused proof
+    surface.
+22. The main agent remains responsible for integrating sub-agent findings,
+    choosing whether the owner boundary changed, and keeping package status
+    filename-first.
+23. When starting or continuing package execution in a sprint, the first
+    sub-agent task must review the most recently executed package on the same
+    sprint or owner boundary.
+24. The package-review sub-agent must check whether the last package actually
+    closed its stated blocker, left stale status, widened scope, missed
+    residual closure, introduced guardrail drift, or left the sprint snapshot
+    inconsistent with current evidence.
+25. If that review finds actionable problems, the next sub-agent task must be
+    a bounded fix for those problems before any new package implementation
+    begins.
+26. Only after the previous package is clean or its review findings are fixed
+    may a new implementation sub-agent start work on the current package.
+27. The review, fix, and implementation sub-agents must be sequential unless
+    their file and owner scopes are explicitly disjoint. The default workflow
+    is review previous package, fix previous-package defects if any, then
+    implement the current package.
 
 ### 0.1.9 Roadmap And Work-Tracker Truth Reconciliation
 

@@ -795,7 +795,7 @@ async (t) => {
   const membershipPublicationRow = {
     publicationId: 'membership-publication:18:test',
     status: TEST_MEMBERSHIP_PUBLICATION_STATUS.ACK_PENDING,
-    requiredAckNodeIds: ['node-1'],
+    requiredAckNodeIds: ['node-inflight-publication-gap'],
     publishedActiveNodeIds: ['node-1'],
   };
   const membershipPublicationService = {
@@ -831,6 +831,11 @@ async (t) => {
     setTimeout(resolve, 0);
   });
 
+  t.same(
+    membershipPublicationRow.requiredAckNodeIds,
+    ['node-inflight-publication-gap'],
+    'fixture should keep the READY node in the required acknowledgement set even when per-node cache visibility is stale',
+  );
   t.equal(
     reconcileCalls.length,
     1,

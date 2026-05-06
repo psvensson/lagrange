@@ -33,6 +33,7 @@ The doctrine is intentionally simple:
 5. slower under pressure, never less correct
 6. shrink porous boundaries when bugs cluster
 7. sharpen work before changing code
+8. keep sprint execution on one current owner boundary
 
 ## 1. One Semantic Owner Per Concern
 
@@ -321,3 +322,39 @@ Prefer:
 Do not treat hot-path green tests as analysis closure while the original
 scenario now fails for a different named reason. Failure migration is often
 proof that the previous fix worked and exposed the next missing contract.
+
+## 17. Sprint Execution Has One Current Boundary
+
+An active sprint may have a long history, but execution must start from one
+current blocker snapshot.
+
+Prefer:
+
+- one current representative package
+- one canonical blocker derived from the latest artifact
+- one semantic owner and owner boundary
+- one smallest focused proof surface before broad reruns
+- one integrated handoff from sub-agent findings back into the package
+
+Do not let old migration history, stale residual packages, or several
+sub-agents create competing active interpretations of the same blocker.
+
+If a fresh artifact changes only counts, nodes, epochs, or timing while the
+same owner boundary still dominates, continue the current package. If the
+semantic owner, owner boundary, or next required action changes, split or
+activate one new representative package and make the old boundary historical.
+
+Sub-agents should accelerate this sequence, not replace it. Use them first to
+review the most recently executed package on the same sprint or owner boundary.
+If that review finds closure, evidence, residual, guardrail, or snapshot
+problems, use the next sub-agent to fix those problems before new
+implementation begins. Then use a separate implementation sub-agent for the
+current package.
+
+The normal sequence is:
+
+1. review the last package
+2. fix review findings if any
+3. extract current artifact truth
+4. map the owner path or focused proof surface
+5. implement the current package with bounded file ownership

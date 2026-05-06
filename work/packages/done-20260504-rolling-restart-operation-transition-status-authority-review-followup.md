@@ -65,7 +65,7 @@ Closure:
    `REMOVED` over stale cache `ACTIVE`.
 3. Operation-transition residuals not evaluated by the migrated representative
    path are explicitly queued in
-   [Rolling Restart Operation Transition Pressure And Over-Target Trim](./active-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md).
+   [Rolling Restart Operation Transition Pressure And Over-Target Trim](./todo-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md).
 4. The status-authority follow-up first migrated to
    [Rolling Restart Startup Active Gate Snapshot Coverage Operation Progress Reentry](./done-20260504-rolling-restart-startup-active-gate-snapshot-coverage-operation-progress-reentry.md),
    which then migrated to

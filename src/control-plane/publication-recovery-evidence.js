@@ -263,22 +263,6 @@ function resolveActiveGateSelectedMissingPublishedEvidenceFromProgress(
   if (!isRecord(progress)) {
     return PUBLICATION_RECOVERY_SELECTED_MISSING_EVIDENCE.UNAVAILABLE;
   }
-  if (
-    Array.isArray(
-      progress[
-        PUBLICATION_RECOVERY_ACTIVE_GATE_PROGRESS_FIELD
-          .SELECTED_MISSING_PUBLISHED_NODE_IDS
-      ],
-    )
-  ) {
-    return buildPublicationRecoverySelectedMissingEvidence(
-      PUBLICATION_RECOVERY_SELECTED_MISSING_EVIDENCE_STATE.EXPLICIT_NODE_LIST,
-      progress[
-        PUBLICATION_RECOVERY_ACTIVE_GATE_PROGRESS_FIELD
-          .SELECTED_MISSING_PUBLISHED_NODE_IDS
-      ],
-    );
-  }
   const expectedNodeCount = normalizeNonNegativeInteger(
     progress[PUBLICATION_RECOVERY_ACTIVE_GATE_PROGRESS_FIELD.EXPECTED_NODE_COUNT],
   );
@@ -291,12 +275,39 @@ function resolveActiveGateSelectedMissingPublishedEvidenceFromProgress(
   const selectedPublishedActiveCount = Math.max(
     normalizeNonNegativeInteger(
       progress[
-        PUBLICATION_RECOVERY_ACTIVE_GATE_PROGRESS_FIELD
-          .SELECTED_PUBLISHED_ACTIVE_COUNT
+      PUBLICATION_RECOVERY_ACTIVE_GATE_PROGRESS_FIELD
+        .SELECTED_PUBLISHED_ACTIVE_COUNT
       ],
     ),
     selectedPublishedActiveNodeIds.length,
   );
+  if (
+    Array.isArray(
+      progress[
+        PUBLICATION_RECOVERY_ACTIVE_GATE_PROGRESS_FIELD
+          .SELECTED_MISSING_PUBLISHED_NODE_IDS
+      ],
+    )
+  ) {
+    const explicitSelectedMissingPublishedNodeIds = normalizeDistinctStringArray(
+      progress[
+        PUBLICATION_RECOVERY_ACTIVE_GATE_PROGRESS_FIELD
+          .SELECTED_MISSING_PUBLISHED_NODE_IDS
+      ],
+    );
+    return explicitSelectedMissingPublishedNodeIds.length === NUM.ZERO &&
+      expectedNodeCount > NUM.ZERO &&
+      selectedPublishedActiveCount === expectedNodeCount ?
+      buildPublicationRecoverySelectedMissingEvidence(
+        PUBLICATION_RECOVERY_SELECTED_MISSING_EVIDENCE_STATE
+          .FULL_SELECTED_COVERAGE,
+        PUBLICATION_RECOVERY_EVIDENCE_EMPTY_LIST,
+      ) :
+      buildPublicationRecoverySelectedMissingEvidence(
+        PUBLICATION_RECOVERY_SELECTED_MISSING_EVIDENCE_STATE.EXPLICIT_NODE_LIST,
+        explicitSelectedMissingPublishedNodeIds,
+      );
+  }
   return expectedNodeCount > NUM.ZERO &&
     selectedPublishedActiveCount === expectedNodeCount ?
     buildPublicationRecoverySelectedMissingEvidence(
@@ -432,6 +443,63 @@ function resolvePriorityRecoveryClosureWitness(
   return null;
 }
 
+function resolveAuthoritativePublicationMembershipNodeIds({
+  publicationConvergence = null,
+  publicationConvergenceGate = null,
+  requiredAckNodeIds = PUBLICATION_RECOVERY_EVIDENCE_EMPTY_LIST,
+  acknowledgedNodeIds = PUBLICATION_RECOVERY_EVIDENCE_EMPTY_LIST,
+  pendingAckNodeIds = PUBLICATION_RECOVERY_EVIDENCE_EMPTY_LIST,
+} = {}) {
+  return normalizeDistinctStringArray([
+    ...normalizeDistinctStringArray(requiredAckNodeIds),
+    ...normalizeDistinctStringArray(acknowledgedNodeIds),
+    ...normalizeDistinctStringArray(pendingAckNodeIds),
+    ...normalizeDistinctStringArray(
+      publicationConvergenceGate?.missingPublishedNodeIds,
+    ),
+    ...normalizeDistinctStringArray(publicationConvergence?.missingPublishedNodeIds),
+    ...normalizeDistinctStringArray(
+      publicationConvergence?.missingPublishedRecoveryActiveNodeIds,
+    ),
+    ...normalizeDistinctStringArray(publicationConvergence?.publishedActiveNodeIds),
+  ]);
+}
+
+function resolveRelevantPublicationMembershipNodeIds(
+  nodeIds = PUBLICATION_RECOVERY_EVIDENCE_EMPTY_LIST,
+  authoritativePublicationMembershipNodeIds =
+    PUBLICATION_RECOVERY_EVIDENCE_EMPTY_LIST,
+) {
+  const normalizedNodeIds = normalizeDistinctStringArray(nodeIds);
+  const authoritativeNodeIdSet = new Set(
+    normalizeDistinctStringArray(authoritativePublicationMembershipNodeIds),
+  );
+  return authoritativeNodeIdSet.size > NUM.ZERO ?
+    normalizeDistinctStringArray(
+      normalizedNodeIds.filter((nodeId) => authoritativeNodeIdSet.has(nodeId)),
+    ) :
+    normalizedNodeIds;
+}
+
+function resolvePublicationRecoveryPublicationPending({
+  authoritativePublicationPending = false,
+  observedPublicationPending = false,
+  pendingAckCount = NUM.ZERO,
+  missingPublishedCount = NUM.ZERO,
+  authoritativePublicationMembershipNodeIds =
+    PUBLICATION_RECOVERY_EVIDENCE_EMPTY_LIST,
+} = {}) {
+  if (pendingAckCount > NUM.ZERO || missingPublishedCount > NUM.ZERO) {
+    return true;
+  }
+  return normalizeDistinctStringArray(
+    authoritativePublicationMembershipNodeIds,
+  ).length > NUM.ZERO ?
+    authoritativePublicationPending === true :
+    authoritativePublicationPending === true ||
+      observedPublicationPending === true;
+}
+
 function buildCanonicalPublicationConvergenceGate(options = {}) {
   const publicationConvergence = isRecord(options.publicationConvergence) ?
     options.publicationConvergence :
@@ -544,31 +612,73 @@ function buildCanonicalPublicationConvergenceGate(options = {}) {
       ),
     ],
   });
-  const missingPublishedNodeIds = selectedMissingPublishedEvidenceAvailable ?
-    selectedMissingPublishedEvidence.nodeIds :
-    normalizeDistinctStringArray([
-      ...normalizeDistinctStringArray(rawPublicationConvergenceGate
-        ?.missingPublishedNodeIds),
-      ...normalizeDistinctStringArray(publicationConvergence
-        ?.missingPublishedNodeIds),
-      ...normalizeDistinctStringArray(publicationConvergence
-        ?.missingPublishedRecoveryActiveNodeIds),
-      ...normalizeDistinctStringArray(priorityRecoveryObservation
-        ?.missingPublishedNodeIds),
-      ...activeGateMissingPublishedNodeIds,
-    ]);
-  const missingPublishedCount = selectedMissingPublishedEvidenceAvailable ?
-    missingPublishedNodeIds.length :
-    normalizeMaximumNonNegativeInteger([
-      rawPublicationConvergenceGate?.missingPublishedCount,
-      publicationConvergence?.missingPublishedCount,
-      priorityRecoveryObservation?.missingPublishedCount,
-      activeGateMissingPublishedNodeIds.length,
-      normalizeActiveGateProgressCount(
-        activeGateProgressRecords,
-        PUBLICATION_RECOVERY_ACTIVE_GATE_PROGRESS_FIELD.MISSING_PUBLISHED_COUNT,
-      ),
-    ]);
+  const authoritativePublicationMembershipNodeIds =
+    resolveAuthoritativePublicationMembershipNodeIds({
+      publicationConvergence,
+      publicationConvergenceGate: rawPublicationConvergenceGate,
+      requiredAckNodeIds: pendingAckEvidence.requiredAckNodeIds,
+      acknowledgedNodeIds: pendingAckEvidence.acknowledgedNodeIds,
+      pendingAckNodeIds: pendingAckEvidence.pendingAckNodeIds,
+    });
+  const authoritativePublicationMembershipAvailable =
+    authoritativePublicationMembershipNodeIds.length > NUM.ZERO;
+  const authoritativeMissingPublishedNodeIds = normalizeDistinctStringArray([
+    ...normalizeDistinctStringArray(rawPublicationConvergenceGate
+      ?.missingPublishedNodeIds),
+    ...normalizeDistinctStringArray(publicationConvergence
+      ?.missingPublishedNodeIds),
+    ...normalizeDistinctStringArray(publicationConvergence
+      ?.missingPublishedRecoveryActiveNodeIds),
+  ]);
+  const observedMissingPublishedNodeIds = normalizeDistinctStringArray([
+    ...normalizeDistinctStringArray(priorityRecoveryObservation
+      ?.missingPublishedNodeIds),
+    ...activeGateMissingPublishedNodeIds,
+    ...(selectedMissingPublishedEvidenceAvailable ?
+      selectedMissingPublishedEvidence.nodeIds :
+      PUBLICATION_RECOVERY_EVIDENCE_EMPTY_LIST),
+  ]);
+  const relevantObservedMissingPublishedNodeIds =
+    resolveRelevantPublicationMembershipNodeIds(
+      observedMissingPublishedNodeIds,
+      authoritativePublicationMembershipNodeIds,
+    );
+  const hasSelectedFullCoverageClosure =
+    selectedMissingPublishedEvidence.state ===
+      PUBLICATION_RECOVERY_SELECTED_MISSING_EVIDENCE_STATE
+        .FULL_SELECTED_COVERAGE &&
+    pendingAckEvidence.pendingAckCount === NUM.ZERO;
+  const missingPublishedNodeIds = hasSelectedFullCoverageClosure ?
+    PUBLICATION_RECOVERY_EVIDENCE_EMPTY_LIST :
+    authoritativePublicationMembershipAvailable ?
+      normalizeDistinctStringArray([
+        ...authoritativeMissingPublishedNodeIds,
+        ...relevantObservedMissingPublishedNodeIds,
+      ]) :
+      normalizeDistinctStringArray([
+        ...authoritativeMissingPublishedNodeIds,
+        ...observedMissingPublishedNodeIds,
+      ]);
+  const missingPublishedCount = hasSelectedFullCoverageClosure ?
+    NUM.ZERO :
+    authoritativePublicationMembershipAvailable ?
+      normalizeMaximumNonNegativeInteger([
+        missingPublishedNodeIds.length,
+        rawPublicationConvergenceGate?.missingPublishedCount,
+        publicationConvergence?.missingPublishedCount,
+      ]) :
+      normalizeMaximumNonNegativeInteger([
+        missingPublishedNodeIds.length,
+        rawPublicationConvergenceGate?.missingPublishedCount,
+        publicationConvergence?.missingPublishedCount,
+        priorityRecoveryObservation?.missingPublishedCount,
+        activeGateMissingPublishedNodeIds.length,
+        normalizeActiveGateProgressCount(
+          activeGateProgressRecords,
+          PUBLICATION_RECOVERY_ACTIVE_GATE_PROGRESS_FIELD
+            .MISSING_PUBLISHED_COUNT,
+        ),
+      ]);
 
   if (
     !publicationConvergence &&
@@ -1086,31 +1196,79 @@ function buildCanonicalPublicationConvergence(options = {}) {
       ),
     ],
   });
-  const missingPublishedNodeIds = selectedMissingPublishedEvidenceAvailable ?
-    selectedMissingPublishedEvidence.nodeIds :
-    normalizeDistinctStringArray([
-      ...normalizeDistinctStringArray(publicationConvergenceGate
-        ?.missingPublishedNodeIds),
-      ...normalizeDistinctStringArray(rawPublicationConvergence
-        ?.missingPublishedNodeIds),
-      ...normalizeDistinctStringArray(rawPublicationConvergence
-        ?.missingPublishedRecoveryActiveNodeIds),
-      ...normalizeDistinctStringArray(priorityRecoveryObservation
-        ?.missingPublishedNodeIds),
-      ...activeGateMissingPublishedNodeIds,
-    ]);
-  const missingPublishedCount = selectedMissingPublishedEvidenceAvailable ?
-    missingPublishedNodeIds.length :
+  const authoritativePublicationMembershipNodeIds =
+    resolveAuthoritativePublicationMembershipNodeIds({
+      publicationConvergence: rawPublicationConvergence,
+      publicationConvergenceGate,
+      requiredAckNodeIds: pendingAckEvidence.requiredAckNodeIds,
+      acknowledgedNodeIds: pendingAckEvidence.acknowledgedNodeIds,
+      pendingAckNodeIds: pendingAckEvidence.pendingAckNodeIds,
+    });
+  const authoritativePublicationMembershipAvailable =
+    authoritativePublicationMembershipNodeIds.length > NUM.ZERO;
+  const authoritativeGateClosesPublicationMembership =
+    publicationConvergenceGate?.publicationPending !== true &&
+    pendingAckEvidence.pendingAckCount === NUM.ZERO &&
     normalizeMaximumNonNegativeInteger([
-      missingPublishedNodeIds.length,
-      priorityRecoveryObservation?.missingPublishedCount,
       publicationConvergenceGate?.missingPublishedCount,
-      rawPublicationConvergence?.missingPublishedCount,
-      normalizeActiveGateProgressCount(
-        activeGateProgressRecords,
-        PUBLICATION_RECOVERY_ACTIVE_GATE_PROGRESS_FIELD.MISSING_PUBLISHED_COUNT,
-      ),
-    ]);
+      normalizeDistinctStringArray(
+        publicationConvergenceGate?.missingPublishedNodeIds,
+      ).length,
+    ]) === NUM.ZERO;
+  const authoritativeMissingPublishedNodeIds = normalizeDistinctStringArray([
+    ...normalizeDistinctStringArray(publicationConvergenceGate
+      ?.missingPublishedNodeIds),
+    ...(authoritativeGateClosesPublicationMembership ?
+      PUBLICATION_RECOVERY_EVIDENCE_EMPTY_LIST :
+      normalizeDistinctStringArray(rawPublicationConvergence
+        ?.missingPublishedNodeIds)),
+    ...(authoritativeGateClosesPublicationMembership ?
+      PUBLICATION_RECOVERY_EVIDENCE_EMPTY_LIST :
+      normalizeDistinctStringArray(rawPublicationConvergence
+        ?.missingPublishedRecoveryActiveNodeIds)),
+  ]);
+  const observedMissingPublishedNodeIds = normalizeDistinctStringArray([
+    ...normalizeDistinctStringArray(priorityRecoveryObservation
+      ?.missingPublishedNodeIds),
+    ...activeGateMissingPublishedNodeIds,
+    ...(selectedMissingPublishedEvidenceAvailable ?
+      selectedMissingPublishedEvidence.nodeIds :
+      PUBLICATION_RECOVERY_EVIDENCE_EMPTY_LIST),
+  ]);
+  const relevantObservedMissingPublishedNodeIds =
+    resolveRelevantPublicationMembershipNodeIds(
+      observedMissingPublishedNodeIds,
+      authoritativePublicationMembershipNodeIds,
+    );
+  const missingPublishedNodeIds = authoritativeGateClosesPublicationMembership ?
+    normalizeDistinctStringArray(publicationConvergenceGate?.missingPublishedNodeIds) :
+    authoritativePublicationMembershipAvailable ?
+      normalizeDistinctStringArray([
+        ...authoritativeMissingPublishedNodeIds,
+        ...relevantObservedMissingPublishedNodeIds,
+      ]) :
+      normalizeDistinctStringArray([
+        ...authoritativeMissingPublishedNodeIds,
+        ...observedMissingPublishedNodeIds,
+      ]);
+  const missingPublishedCount = authoritativeGateClosesPublicationMembership ?
+    NUM.ZERO :
+    authoritativePublicationMembershipAvailable ?
+      normalizeMaximumNonNegativeInteger([
+        missingPublishedNodeIds.length,
+        publicationConvergenceGate?.missingPublishedCount,
+        rawPublicationConvergence?.missingPublishedCount,
+      ]) :
+      normalizeMaximumNonNegativeInteger([
+        missingPublishedNodeIds.length,
+        priorityRecoveryObservation?.missingPublishedCount,
+        publicationConvergenceGate?.missingPublishedCount,
+        rawPublicationConvergence?.missingPublishedCount,
+        normalizeActiveGateProgressCount(
+          activeGateProgressRecords,
+          PUBLICATION_RECOVERY_ACTIVE_GATE_PROGRESS_FIELD.MISSING_PUBLISHED_COUNT,
+        ),
+      ]);
   const closureRecordId =
     normalizeOptionalString(priorityRecoveryObservation?.closureRecordId) ||
     normalizeOptionalString(publicationConvergenceGate?.closureRecordId) ||
@@ -1150,8 +1308,15 @@ function buildCanonicalPublicationConvergence(options = {}) {
     missingPublishedNodeIds,
     missingPublishedCount,
     publicationPending:
-      priorityRecoveryObservation?.publicationPending === true ||
-      publicationConvergenceGate?.publicationPending === true,
+      resolvePublicationRecoveryPublicationPending({
+        authoritativePublicationPending:
+          publicationConvergenceGate?.publicationPending === true,
+        observedPublicationPending:
+          priorityRecoveryObservation?.publicationPending === true,
+        pendingAckCount: pendingAckEvidence.pendingAckCount,
+        missingPublishedCount,
+        authoritativePublicationMembershipNodeIds,
+      }),
     prioritySpreadPending:
       priorityRecoveryObservation?.prioritySpreadPending === true ||
       publicationConvergenceGate?.prioritySpreadPending === true,

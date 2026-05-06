@@ -1,3 +1,11 @@
+/**
+ * Owner contract:
+ * Owner: MessageRouter owns transport connection, queue, ACK, and reconnect behavior.
+ * Inputs: normalized router messages, delivery sources, WebSocket state, node routing.
+ * Canonical output: delivery outcomes, queue stats, connection state, transport events.
+ * Prohibited fallbacks: no ad hoc ACK, reconnect, or backpressure classification.
+ * Primary tests: test/transport/message-router.test.js.
+ */
 import {MESSAGE_ROUTER_SHARED} from './message-router-shared.js';
 import {MessageRouterSegment3} from './message-router-segment-3.js';
 
@@ -184,4 +192,3 @@ export {
   MessageRouter,
   RouterMessageType,
 };
-

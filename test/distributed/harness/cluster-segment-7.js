@@ -112,8 +112,12 @@ const ACTIVE_WAIT_TERMINAL_PROGRESS_DECISION_TABLE = Object.freeze([
     decision: ACTIVE_WAIT_TERMINAL_PROGRESS_DECISION_LAST_MEANINGFUL,
     matches: (evidence) =>
       evidence.currentPriorityRecoveryOperationEvidenceRegression === true &&
-      evidence.lastMeaningfulCoverageNodeCount >
-        evidence.currentSnapshotCoverageNodeCount,
+      evidence.activeRegressionWithoutPublicationImprovement === true,
+  }),
+  Object.freeze({
+    decision: ACTIVE_WAIT_TERMINAL_PROGRESS_DECISION_LAST_MEANINGFUL,
+    matches: (evidence) =>
+      evidence.coverageRegressionWithoutPublicationImprovement === true,
   }),
   Object.freeze({
     decision: ACTIVE_WAIT_TERMINAL_PROGRESS_DECISION_CURRENT,
@@ -125,6 +129,10 @@ const ACTIVE_WAIT_TERMINAL_PRIORITY_RECOVERY_EVIDENCE = Object.freeze({
     progressClass:
       ACTIVE_WAIT_PRIORITY_RECOVERY_PROGRESS_CLASS.OPERATION_NO_TRANSITIONS,
     semanticState: PRIORITY_RECOVERY_SEMANTIC_STATE.OPERATION_STALLED,
+  }),
+  RECOVERING_IN_FLIGHT: Object.freeze({
+    progressClass: null,
+    semanticState: PRIORITY_RECOVERY_SEMANTIC_STATE.RECOVERING_IN_FLIGHT,
   }),
   NEEDS_OPERATION: Object.freeze({
     progressClass:
@@ -373,6 +381,51 @@ function normalizeActiveWaitProgressCoverageNodeCount(progressSnapshot) {
     ZERO;
 }
 
+function normalizeActiveWaitProgressPublicationStatusRank(progressSnapshot) {
+  return Number.isInteger(progressSnapshot?.publicationStatusRank) &&
+    progressSnapshot.publicationStatusRank >= ZERO ?
+    progressSnapshot.publicationStatusRank :
+    ZERO;
+}
+
+function normalizeActiveWaitProgressPublishedActiveCount(progressSnapshot) {
+  return Number.isInteger(progressSnapshot?.selectedPublishedActiveCount) &&
+    progressSnapshot.selectedPublishedActiveCount >= ZERO ?
+    progressSnapshot.selectedPublishedActiveCount :
+    ZERO;
+}
+
+function normalizeActiveWaitProgressActiveNodeCount(progressSnapshot) {
+  return Number.isInteger(progressSnapshot?.activeNodeCount) &&
+    progressSnapshot.activeNodeCount >= ZERO ?
+    progressSnapshot.activeNodeCount :
+    ZERO;
+}
+
+function normalizeActiveWaitProgressMissingPublishedCount(progressSnapshot) {
+  return Number.isInteger(progressSnapshot?.missingPublishedCount) &&
+    progressSnapshot.missingPublishedCount >= ZERO ?
+    progressSnapshot.missingPublishedCount :
+    ZERO;
+}
+
+function normalizeActiveWaitProgressPendingAckCount(progressSnapshot) {
+  return Number.isInteger(progressSnapshot?.pendingAckCount) &&
+    progressSnapshot.pendingAckCount >= ZERO ?
+    progressSnapshot.pendingAckCount :
+    ZERO;
+}
+
+function hasActiveWaitProgressClosureEvidence(progressSnapshot) {
+  return (
+    typeof progressSnapshot?.closureRecordId === 'string' &&
+      progressSnapshot.closureRecordId.length > ZERO
+  ) || (
+    typeof progressSnapshot?.closureWitnessClass === 'string' &&
+      progressSnapshot.closureWitnessClass.length > ZERO
+  );
+}
+
 function intersectNormalizedStringIds(leftIds, rightIds) {
   const rightIdSet = new Set(normalizeDistinctStringArray(rightIds));
   return normalizeDistinctStringArray(leftIds).filter((leftId) =>
@@ -389,11 +442,14 @@ function normalizeTerminalPriorityRecoveryEvidencePartitionIds(
     typeof progressSnapshot.priorityRecoveryProgressClasses === 'object' ?
       progressSnapshot.priorityRecoveryProgressClasses :
       {};
-  const classPartitionIds = normalizeDistinctStringArray(
-    progressClasses?.partitionIdsByClass?.[evidence.progressClass],
-  );
   const semanticStatePartitionIds = normalizeDistinctStringArray(
     progressClasses?.partitionIdsBySemanticState?.[evidence.semanticState],
+  );
+  if (typeof evidence.progressClass !== 'string') {
+    return semanticStatePartitionIds;
+  }
+  const classPartitionIds = normalizeDistinctStringArray(
+    progressClasses?.partitionIdsByClass?.[evidence.progressClass],
   );
   return intersectNormalizedStringIds(classPartitionIds, semanticStatePartitionIds);
 }
@@ -412,9 +468,18 @@ function buildTerminalPriorityRecoveryRegressionEvidence(options = {}) {
       lastMeaningfulProgressSnapshot,
       ACTIVE_WAIT_TERMINAL_PRIORITY_RECOVERY_EVIDENCE.OPERATION_STALLED,
     );
+  const lastRecoveringInFlightPartitionIds =
+    normalizeTerminalPriorityRecoveryEvidencePartitionIds(
+      lastMeaningfulProgressSnapshot,
+      ACTIVE_WAIT_TERMINAL_PRIORITY_RECOVERY_EVIDENCE.RECOVERING_IN_FLIGHT,
+    );
+  const lastStrongOperationPartitionIds = normalizeDistinctStringArray([
+    ...lastOperationStalledPartitionIds,
+    ...lastRecoveringInFlightPartitionIds,
+  ]);
   const sharedRegressedPartitionCount = intersectNormalizedStringIds(
     currentNeedsOperationPartitionIds,
-    lastOperationStalledPartitionIds,
+    lastStrongOperationPartitionIds,
   ).length;
   const decision =
     ACTIVE_WAIT_TERMINAL_PRIORITY_RECOVERY_REGRESSION_TABLE.find((entry) =>
@@ -423,6 +488,8 @@ function buildTerminalPriorityRecoveryRegressionEvidence(options = {}) {
   return Object.freeze({
     currentNeedsOperationPartitionIds,
     lastOperationStalledPartitionIds,
+    lastRecoveringInFlightPartitionIds,
+    lastStrongOperationPartitionIds,
     sharedRegressedPartitionCount,
     decision: decision.decision,
     operationEvidenceRegression:
@@ -431,10 +498,54 @@ function buildTerminalPriorityRecoveryRegressionEvidence(options = {}) {
   });
 }
 
+function buildTerminalPublicationImprovementEvidence(options = {}) {
+  const currentProgressSnapshot = options.currentProgressSnapshot;
+  const lastMeaningfulProgressSnapshot =
+    options.lastMeaningfulProgressSnapshot;
+  const closureEvidenceImproved =
+    hasActiveWaitProgressClosureEvidence(currentProgressSnapshot) === true &&
+    hasActiveWaitProgressClosureEvidence(lastMeaningfulProgressSnapshot) !==
+      true;
+  const publicationStatusImproved =
+    normalizeActiveWaitProgressPublicationStatusRank(currentProgressSnapshot) >
+    normalizeActiveWaitProgressPublicationStatusRank(
+      lastMeaningfulProgressSnapshot,
+    );
+  const publishedActiveCountImproved =
+    normalizeActiveWaitProgressPublishedActiveCount(currentProgressSnapshot) >
+    normalizeActiveWaitProgressPublishedActiveCount(
+      lastMeaningfulProgressSnapshot,
+    );
+  const missingPublishedCountImproved =
+    normalizeActiveWaitProgressMissingPublishedCount(currentProgressSnapshot) <
+    normalizeActiveWaitProgressMissingPublishedCount(
+      lastMeaningfulProgressSnapshot,
+    );
+  const pendingAckCountImproved =
+    normalizeActiveWaitProgressPendingAckCount(currentProgressSnapshot) <
+    normalizeActiveWaitProgressPendingAckCount(
+      lastMeaningfulProgressSnapshot,
+    );
+  return Object.freeze({
+    semanticPublicationImproved:
+      closureEvidenceImproved === true ||
+      publicationStatusImproved === true ||
+      publishedActiveCountImproved === true ||
+      missingPublishedCountImproved === true ||
+      pendingAckCountImproved === true,
+  });
+}
+
 function buildTerminalActiveWaitProgressEvidence({
   currentProgressSnapshot = null,
   lastMeaningfulProgressSnapshot = null,
 } = {}) {
+  const currentActiveNodeCount =
+    normalizeActiveWaitProgressActiveNodeCount(currentProgressSnapshot);
+  const lastMeaningfulActiveNodeCount =
+    normalizeActiveWaitProgressActiveNodeCount(
+      lastMeaningfulProgressSnapshot,
+    );
   const currentSnapshotCoverageNodeCount =
     normalizeActiveWaitProgressCoverageNodeCount(currentProgressSnapshot);
   const lastMeaningfulCoverageNodeCount =
@@ -449,11 +560,18 @@ function buildTerminalActiveWaitProgressEvidence({
       currentProgressSnapshot,
       lastMeaningfulProgressSnapshot,
     });
+  const publicationImprovementEvidence =
+    buildTerminalPublicationImprovementEvidence({
+      currentProgressSnapshot,
+      lastMeaningfulProgressSnapshot,
+    });
   return {
     currentProgressPresent:
       isActiveWaitProgressSnapshot(currentProgressSnapshot),
     lastMeaningfulProgressPresent:
       isActiveWaitProgressSnapshot(lastMeaningfulProgressSnapshot),
+    currentActiveNodeCount,
+    lastMeaningfulActiveNodeCount,
     currentSnapshotCoverageNodeCount,
     lastMeaningfulCoverageNodeCount,
     currentSnapshotZeroCoverageRegression:
@@ -462,6 +580,16 @@ function buildTerminalActiveWaitProgressEvidence({
       currentProgressSnapshot.snapshotCoverageComplete !== true &&
       currentSnapshotCoverageNodeCount === ZERO &&
       currentSnapshotErrorPresent === true,
+    coverageRegressionWithoutPublicationImprovement:
+      isActiveWaitProgressSnapshot(currentProgressSnapshot) &&
+      isActiveWaitProgressSnapshot(lastMeaningfulProgressSnapshot) &&
+      currentSnapshotCoverageNodeCount < lastMeaningfulCoverageNodeCount &&
+      publicationImprovementEvidence.semanticPublicationImproved !== true,
+    activeRegressionWithoutPublicationImprovement:
+      isActiveWaitProgressSnapshot(currentProgressSnapshot) &&
+      isActiveWaitProgressSnapshot(lastMeaningfulProgressSnapshot) &&
+      currentActiveNodeCount < lastMeaningfulActiveNodeCount &&
+      publicationImprovementEvidence.semanticPublicationImproved !== true,
     currentPriorityRecoveryOperationEvidenceRegression:
       priorityRecoveryRegressionEvidence.operationEvidenceRegression,
   };
@@ -1064,12 +1192,12 @@ class Cluster extends Cluster5 {
         this._nodes.size,
         {readinessMode},
       );
-    const finalProgressSnapshot = selectTerminalActiveWaitProgressSnapshot({
+    const terminalProgressSnapshot = selectTerminalActiveWaitProgressSnapshot({
       currentProgressSnapshot: observedFinalProgressSnapshot,
       lastMeaningfulProgressSnapshot,
     });
     const terminalPublicationConvergenceEvidence = {
-      progressSnapshot: finalProgressSnapshot,
+      progressSnapshot: terminalProgressSnapshot,
     };
     const publicationConvergenceSummary = formatPublicationConvergenceGate(
       pollResult.lastResult?.publicationConvergenceGate || null,
@@ -1083,7 +1211,7 @@ class Cluster extends Cluster5 {
       pollResult.attempts,
       pollResult.elapsedMs,
       false,
-      finalProgressSnapshot,
+      observedFinalProgressSnapshot,
     );
     const finalNoProgressWithReasonCode = finalNoProgress ?
       {
@@ -1110,7 +1238,7 @@ class Cluster extends Cluster5 {
       state: PRIORITY_RECOVERY_ACTIVE_GATE_STATE.TIMED_OUT,
       attempts: pollResult.attempts,
       elapsedMs: pollResult.elapsedMs,
-      progressSnapshot: finalProgressSnapshot,
+      progressSnapshot: terminalProgressSnapshot,
       noProgress: finalNoProgressWithReasonCode,
       readinessFailure: finalReadinessFailure,
       reasonCode: ACTIVE_WAIT_NO_PROGRESS_REASON_CODE,
@@ -1182,7 +1310,7 @@ class Cluster extends Cluster5 {
           priorityRecoveryFailingInvariantIds.join('|') :
           'passed') +
         ', progress=' +
-        formatActiveWaitProgressSnapshot(finalProgressSnapshot) +
+        formatActiveWaitProgressSnapshot(terminalProgressSnapshot) +
         (Number.isInteger(noProgressMaxAttempts) && noProgressMaxAttempts > ZERO ?
           ', attemptsSinceProgress=' +
             String(finalAttemptsSinceProgress) +

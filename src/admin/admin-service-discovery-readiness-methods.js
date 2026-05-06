@@ -499,6 +499,9 @@ function assignAdminServiceDiscoveryReadinessMethods(
           AUTHORITATIVE_DISCOVERY_REPAIR_REASON_SERVICE_DISCOVERY_SNAPSHOT &&
         (typeof options.tableName === TYPEOF.STRING ||
           typeof options.tableId === TYPEOF.STRING);
+      const allowRoutedAuthoritativeFallback =
+        controlSnapshotRepairRead === true ||
+        tableScopedDiscoveryRepair === true;
       const transportProfile =
         this.resolveAuthoritativeDiscoveryReadTransportProfile(
           controlSnapshotRepairRead,
@@ -509,7 +512,7 @@ function assignAdminServiceDiscoveryReadinessMethods(
         readProfile: LOCAL_STR_REPAIR_REQUIRED,
         queryTimeoutMs: AUTHORITATIVE_DISCOVERY_REPAIR.QUERY_TIMEOUT_MS,
         sessionId: `${reason || LOCAL_STR_REPAIR}:${tableName}:${now}`,
-        allowSqlFallback: tableScopedDiscoveryRepair === true,
+        allowSqlFallback: allowRoutedAuthoritativeFallback,
         allowPressureDegrade: transportProfile.allowPressureDegrade,
         allowPressureDefer: transportProfile.allowPressureDefer,
         workloadClass: transportProfile.workloadClass,

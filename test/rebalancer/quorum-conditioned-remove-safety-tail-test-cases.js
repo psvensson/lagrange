@@ -864,6 +864,315 @@ export function registerQuorumConditionedRemoveSafetyTailTests({
       }
     });
 
+  test('RebalanceCoordinator - prefers the owner-read publication answer over a stale best-effort planning witness for control_plane_publications leader removal',
+    async (t) => {
+      ConfigurationManager.resetInstance();
+      LoggingService.resetInstance();
+      ConfigurationManager.getInstance().initialize({});
+      LoggingService.getInstance().initialize({level: 'error'});
+
+      const TEST_CONTROL_PLANE_PUBLICATIONS_PARTITION_ID =
+        'control_plane_publications-p1';
+      const TEST_SOURCE_REPLICA_ID = 'control_plane_publications-p1-r1';
+      const TEST_PEER_REPLICA_ID = 'control_plane_publications-p1-r2';
+      const TEST_OTHER_REPLICA_ID = 'control_plane_publications-p1-r3';
+      const TEST_REPLACEMENT_REPLICA_ID = 'control_plane_publications-p1-r4';
+      const TEST_ALL_ACTIVE_NODE_IDS = Object.freeze([
+        'node-a',
+        'node-b',
+        'node-c',
+        'node-d',
+      ]);
+      const TEST_STALE_PRIORITY_PARTITION_SUMMARY = Object.freeze({
+        satisfied: false,
+        requiredDistinctNodeCount: 2,
+        missingPartitionIds: ['replica_operations-p1'],
+      });
+      const deliveries = [];
+      const coordinator = createTestCoordinator({
+        nodeId: 'node-d',
+        enableTimeouts: false,
+        messageRouter: {
+          deliver: async (target, payload, options) => {
+            deliveries.push({target, payload, options});
+            return {acknowledged: true, status: 'initiated'};
+          },
+          getConnectionState: () => 'connected',
+          pingNode: async () => true,
+          isOutboundQueueAvailable: () => true,
+        },
+        controlPlaneReadinessService: {
+          getNodeReadinessSync(nodeId) {
+            return {
+              nodeId,
+              dimensions: {
+                controlPlaneRecoveryEligible: true,
+                repairEligible: true,
+                serveEligible: true,
+              },
+            };
+          },
+          async getPriorityRecoveryPlanningAnswerForOwnerRead(nodeId) {
+            return {
+              publicationStatus: TEST_PUBLICATION_STATUS_PUBLISHED,
+              publishedActiveNodeIdsPresent: true,
+              publishedActiveNodeIds: TEST_ALL_ACTIVE_NODE_IDS,
+              recoveryActiveNodeIds: TEST_ALL_ACTIVE_NODE_IDS,
+              projectedServingNodeIds: TEST_ALL_ACTIVE_NODE_IDS,
+              publishedMembershipIncludesTargetNode: nodeId === 'node-d',
+              priorityPartitionSummary: TEST_STALE_PRIORITY_PARTITION_SUMMARY,
+            };
+          },
+          async getPriorityRecoveryPlanningAnswerBestEffort(nodeId) {
+            return {
+              publicationStatus: TEST_PUBLICATION_STATUS_ACK_PENDING,
+              publishedActiveNodeIdsPresent: true,
+              publishedActiveNodeIds: TEST_ALL_ACTIVE_NODE_IDS,
+              recoveryActiveNodeIds: TEST_ALL_ACTIVE_NODE_IDS,
+              projectedServingNodeIds: TEST_ALL_ACTIVE_NODE_IDS,
+              publishedMembershipIncludesTargetNode: nodeId === 'node-d',
+              priorityPartitionSummary: TEST_STALE_PRIORITY_PARTITION_SUMMARY,
+            };
+          },
+        },
+        tablePolicyService: {
+          getPolicyForPartition: () => ({minReplicaCount: 3}),
+        },
+        cacheData: {
+          nodes: [
+            createReadyNode('node-a'),
+            createReadyNode('node-b'),
+            createReadyNode('node-c'),
+            createReadyNode('node-d'),
+          ],
+          services: [
+            createCriticalPartitionServiceRow({
+              partitionId: TEST_CONTROL_PLANE_PUBLICATIONS_PARTITION_ID,
+              replicaId: TEST_SOURCE_REPLICA_ID,
+              nodeId: 'node-a',
+              raftRole: 'leader',
+            }),
+            createCriticalPartitionServiceRow({
+              partitionId: TEST_CONTROL_PLANE_PUBLICATIONS_PARTITION_ID,
+              replicaId: TEST_PEER_REPLICA_ID,
+              nodeId: 'node-b',
+              raftRole: 'follower',
+            }),
+            createCriticalPartitionServiceRow({
+              partitionId: TEST_CONTROL_PLANE_PUBLICATIONS_PARTITION_ID,
+              replicaId: TEST_OTHER_REPLICA_ID,
+              nodeId: 'node-c',
+              raftRole: 'follower',
+            }),
+            createCriticalPartitionServiceRow({
+              partitionId: TEST_CONTROL_PLANE_PUBLICATIONS_PARTITION_ID,
+              replicaId: TEST_REPLACEMENT_REPLICA_ID,
+              nodeId: 'node-d',
+              raftRole: 'follower',
+            }),
+          ],
+        },
+      });
+
+      coordinator.initialize();
+      try {
+        const operation = await coordinator.createOperation({
+          type: OperationType.REPLACE,
+          partitionId: TEST_CONTROL_PLANE_PUBLICATIONS_PARTITION_ID,
+          nodeId: 'node-d',
+          sourceNodeId: 'node-a',
+          replicaId: TEST_SOURCE_REPLICA_ID,
+        });
+
+        operation.replicaId = TEST_REPLACEMENT_REPLICA_ID;
+        operation.workflowStep = WORKFLOW_STEP.ACTIVE;
+        operation.status = 'active';
+
+        const handoffResult = await coordinator.executeOperation(operation);
+
+        t.equal(
+          handoffResult.success,
+          false,
+          'control-plane publication leader removal should still defer until source leader handoff closes',
+        );
+        t.equal(
+          deliveries.length,
+          1,
+          'the workflow should prefer the owner-read published answer and dispatch leader handoff',
+        );
+        t.equal(
+          deliveries[0].payload.type,
+          ReplicaOperationMessageType.STEP_DOWN_REPLICA,
+          'the first dispatch should request source leader handoff',
+        );
+        t.match(
+          handoffResult.error,
+          /handoff pending before safe removal/i,
+          'the defer should reflect leader handoff rather than a stale publication-status block',
+        );
+        t.notMatch(
+          String(handoffResult.error || ''),
+          /publication status is ACK_PENDING/i,
+          'stale best-effort publication debt must not override the owner-read answer',
+        );
+      } finally {
+        await coordinator.shutdown();
+        ConfigurationManager.resetInstance();
+        LoggingService.resetInstance();
+      }
+    });
+
+  test('RebalanceCoordinator - reaches the control_plane_publications owner-read publication answer without legacy planning hooks',
+    async (t) => {
+      ConfigurationManager.resetInstance();
+      LoggingService.resetInstance();
+      ConfigurationManager.getInstance().initialize({});
+      LoggingService.getInstance().initialize({level: 'error'});
+
+      const TEST_CONTROL_PLANE_PUBLICATIONS_PARTITION_ID =
+        'control_plane_publications-p1';
+      const TEST_SOURCE_REPLICA_ID = 'control_plane_publications-p1-r1';
+      const TEST_PEER_REPLICA_ID = 'control_plane_publications-p1-r2';
+      const TEST_OTHER_REPLICA_ID = 'control_plane_publications-p1-r3';
+      const TEST_REPLACEMENT_REPLICA_ID = 'control_plane_publications-p1-r4';
+      const TEST_ALL_ACTIVE_NODE_IDS = Object.freeze([
+        'node-a',
+        'node-b',
+        'node-c',
+        'node-d',
+      ]);
+      const TEST_STALE_PRIORITY_PARTITION_SUMMARY = Object.freeze({
+        satisfied: false,
+        requiredDistinctNodeCount: 2,
+        missingPartitionIds: ['replica_operations-p1'],
+      });
+      const deliveries = [];
+      const coordinator = createTestCoordinator({
+        nodeId: 'node-d',
+        enableTimeouts: false,
+        messageRouter: {
+          deliver: async (target, payload, options) => {
+            deliveries.push({target, payload, options});
+            return {acknowledged: true, status: 'initiated'};
+          },
+          getConnectionState: () => 'connected',
+          pingNode: async () => true,
+          isOutboundQueueAvailable: () => true,
+        },
+        controlPlaneReadinessService: {
+          getNodeReadinessSync(nodeId) {
+            return {
+              nodeId,
+              dimensions: {
+                controlPlaneRecoveryEligible: true,
+                repairEligible: true,
+                serveEligible: true,
+              },
+            };
+          },
+          async getPriorityRecoveryPlanningAnswerForOwnerRead(nodeId) {
+            return {
+              publicationStatus: TEST_PUBLICATION_STATUS_PUBLISHED,
+              publishedActiveNodeIdsPresent: true,
+              publishedActiveNodeIds: TEST_ALL_ACTIVE_NODE_IDS,
+              recoveryActiveNodeIds: TEST_ALL_ACTIVE_NODE_IDS,
+              projectedServingNodeIds: TEST_ALL_ACTIVE_NODE_IDS,
+              publishedMembershipIncludesTargetNode: nodeId === 'node-d',
+              priorityPartitionSummary: TEST_STALE_PRIORITY_PARTITION_SUMMARY,
+            };
+          },
+        },
+        tablePolicyService: {
+          getPolicyForPartition: () => ({minReplicaCount: 3}),
+        },
+        cacheData: {
+          nodes: [
+            createReadyNode('node-a'),
+            createReadyNode('node-b'),
+            createReadyNode('node-c'),
+            createReadyNode('node-d'),
+          ],
+          services: [
+            createCriticalPartitionServiceRow({
+              partitionId: TEST_CONTROL_PLANE_PUBLICATIONS_PARTITION_ID,
+              replicaId: TEST_SOURCE_REPLICA_ID,
+              nodeId: 'node-a',
+              raftRole: 'leader',
+            }),
+            createCriticalPartitionServiceRow({
+              partitionId: TEST_CONTROL_PLANE_PUBLICATIONS_PARTITION_ID,
+              replicaId: TEST_PEER_REPLICA_ID,
+              nodeId: 'node-b',
+              raftRole: 'follower',
+            }),
+            createCriticalPartitionServiceRow({
+              partitionId: TEST_CONTROL_PLANE_PUBLICATIONS_PARTITION_ID,
+              replicaId: TEST_OTHER_REPLICA_ID,
+              nodeId: 'node-c',
+              raftRole: 'follower',
+            }),
+            createCriticalPartitionServiceRow({
+              partitionId: TEST_CONTROL_PLANE_PUBLICATIONS_PARTITION_ID,
+              replicaId: TEST_REPLACEMENT_REPLICA_ID,
+              nodeId: 'node-d',
+              raftRole: 'follower',
+            }),
+          ],
+        },
+      });
+
+      coordinator.initialize();
+      try {
+        const operation = await coordinator.createOperation({
+          type: OperationType.REPLACE,
+          partitionId: TEST_CONTROL_PLANE_PUBLICATIONS_PARTITION_ID,
+          nodeId: 'node-d',
+          sourceNodeId: 'node-a',
+          replicaId: TEST_SOURCE_REPLICA_ID,
+        });
+
+        operation.replicaId = TEST_REPLACEMENT_REPLICA_ID;
+        operation.workflowStep = WORKFLOW_STEP.ACTIVE;
+        operation.status = 'active';
+        const handoffResult = await coordinator.executeOperation(operation);
+
+        t.equal(
+          deliveries.length,
+          1,
+          'control-plane publication leader removal should still reach the owner-read handoff path without legacy planning hooks',
+        );
+        t.equal(
+          deliveries[0].payload.type,
+          ReplicaOperationMessageType.STEP_DOWN_REPLICA,
+          'the owner-read path should still request source leader handoff',
+        );
+        t.equal(
+          handoffResult?.skipped,
+          true,
+          'the owner-read path should keep the control-plane publication source-removal defer retryable',
+        );
+        t.equal(
+          handoffResult?.deferReason,
+          REBALANCE_COORDINATOR_DEFER_REASON.REPLACE_REMOVE_SAFETY_BLOCKED,
+          'the owner-read path should preserve the canonical replace-remove defer reason',
+        );
+        t.match(
+          String(handoffResult?.error || ''),
+          /handoff pending before safe removal/i,
+          'the owner-read path should defer on leader handoff rather than publication status',
+        );
+        t.notMatch(
+          String(handoffResult?.error || ''),
+          /publication status is (ACK_PENDING|OPEN)/i,
+          'missing legacy planning hooks must not drop the owner-read publication answer back to stale publication debt',
+        );
+      } finally {
+        await coordinator.shutdown();
+        ConfigurationManager.resetInstance();
+        LoggingService.resetInstance();
+      }
+    });
+
   test('RebalanceCoordinator - nudges sql_transactions replacement election when source follower evidence outruns partition leader ownership',
     async (t) => {
       ConfigurationManager.resetInstance();

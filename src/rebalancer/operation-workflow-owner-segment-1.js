@@ -22,6 +22,8 @@ const {
 
 const DISPATCH_REARM_RECONCILE_BLOCKING_STATUSES = Object.freeze(
   new Set([
+    ReplicaStatus.PENDING,
+    ReplicaStatus.CREATING,
     ReplicaStatus.SYNCING,
     ReplicaStatus.ACTIVE,
     ReplicaStatus.FAILED,
@@ -574,6 +576,10 @@ class OperationWorkflowOwnerSegment1 {
         normalizedActualStatus === ReplicaStatus.CREATING &&
         !createRearmPhase,
       observedBlockingStatus:
+        !(
+          normalizedActualStatus === ReplicaStatus.PENDING &&
+          operation?.workflowStep === WORKFLOW_STEP.PENDING
+        ) &&
         DISPATCH_REARM_RECONCILE_BLOCKING_STATUSES.has(
           normalizedActualStatus,
         ),

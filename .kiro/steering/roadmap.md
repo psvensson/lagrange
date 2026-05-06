@@ -75,6 +75,18 @@ Use the paths as follows:
 Use `work/sprints/` only to group multiple active packages. Sprint files do not
 replace work packages.
 
+Scenario-driven sprint files must keep a compact current blocker snapshot near
+the top of the document. The snapshot is the handoff point for agents and
+sub-agents when starting or continuing the sprint. It must identify the latest
+artifact, representative gate, current representative package, owner boundary,
+canonical blocker, prior blocker status, subordinate evidence, and next focused
+proof surface.
+
+At most one package in a sprint may own the current representative re-entry
+gate. Residual packages that are not currently being executed must be renamed
+to `todo-...` or `superseded-...` unless they are actively worked with
+explicitly disjoint owner and file scope.
+
 `docs/` is reserved for end-user or operator-facing documentation. Internal
 planning, work-package execution, and sprint tracking must not live there.
 
@@ -139,6 +151,37 @@ Required workflow:
 6. If a broad row is marked complete but still has known guardrail failures in
    the owner path it claims to close, the row must either name the remaining
    guardrail package or be downgraded to a capability-only status.
+
+## Sprint Continuation And Package Split Policy
+
+When a sprint is started or resumed, the current blocker snapshot is the
+execution source of truth for work sequencing.
+
+Required workflow:
+
+1. Refresh or confirm the snapshot before activating implementation work.
+2. Keep artifact-derived evidence attached to the current package while the
+   semantic owner, owner boundary, and next required action remain the same.
+3. Do not create a new package solely for changed artifact timestamps, epochs,
+   node ids, counters, or presentation-only shape.
+4. Split or activate a new package only when the normalized evidence identifies
+   a new owner boundary or materially different next action.
+5. Use sub-agents in sequence across owner-boundary work: artifact evidence
+   extraction, owner-path mapping, focused proof design, then bounded
+   implementation.
+6. When starting or continuing a work package, first assign a sub-agent to
+   review the most recently executed package on the same sprint or owner
+   boundary.
+7. If that review finds stale status, incomplete closure, missing residual
+   split, guardrail drift, evidence mismatch, or package-snapshot
+   inconsistency, assign the next sub-agent to fix those findings before
+   implementation of the new package starts.
+8. Assign the implementation sub-agent for the current package only after the
+   previous-package review is clean or the review findings have been fixed.
+9. Parallel sub-agents are allowed only for independent sidecar questions with
+   disjoint owner or file scope.
+10. The main package owner must reconcile sub-agent results into one package
+   status update rather than creating parallel status narratives.
 
 ## Audit Procedure
 

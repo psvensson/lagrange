@@ -1,0 +1,539 @@
+import {NUM} from '../constants/index.js';
+import {
+  PRIORITY_RECOVERY_OBSERVATION_STATE_VALUE,
+  PRIORITY_RECOVERY_PRESSURE_STATE,
+  PRIORITY_RECOVERY_SEMANTIC_STATE,
+} from './priority-recovery-diagnostics-constants.js';
+import {
+  buildPriorityRecoveryCorrelationKey,
+  buildPriorityRecoveryPressureConditions,
+} from './priority-recovery-helpers.js';
+import {LOCAL_EMPTY_LIST, LOCAL_NUM_ONE, LOCAL_NUM_TWO, LOCAL_NUM_ZERO, LOCAL_STR_BLOCKERREASONCODES, LOCAL_STR_EMPTY, LOCAL_STR_SEMANTICSTATEIDS, PRIORITY_RECOVERY_OPERATION_ID_FIELD, PRIORITY_RECOVERY_SNAPSHOT_PROGRESS_FIELD, buildPriorityRecoveryExplicitSemanticStateByPartitionId, collectPriorityRecoveryPartitionIndexes, isRecord, normalizeDistinctStringArray, normalizeNonNegativeInteger, normalizePriorityRecoveryBlockedClassIds, normalizePriorityRecoveryObservationStateValue, normalizePriorityRecoverySemanticStatePartitions, resolvePriorityRecoverySnapshotSemanticState, shouldAllowLegacyPriorityRecoverySemanticStateInference} from './priority-recovery-observation-snapshot-stage-1.js';
+
+function resolvePriorityRecoveryWitnessPartitionIds(
+  blockedClassIds,
+  semanticStatePartitions,
+) {
+  const unresolvedPartitionIds = Array.isArray(
+    semanticStatePartitions?.blockedPartitionIds,
+  ) ?
+    semanticStatePartitions.blockedPartitionIds :
+    [];
+  if (unresolvedPartitionIds.length > NUM.ZERO) {
+    return Object.freeze([...unresolvedPartitionIds]);
+  }
+  const fallbackWitnessPartitionIds = Array.isArray(
+    blockedClassIds?.blockedPartitionIds,
+  ) ?
+    blockedClassIds.blockedPartitionIds :
+    [];
+  if (fallbackWitnessPartitionIds.length > NUM.ZERO) {
+    return Object.freeze([...fallbackWitnessPartitionIds]);
+  }
+  const nonBlockingInFlightWitnessPartitionIds = Array.isArray(
+    semanticStatePartitions?.partitionIdsBySemanticState?.[
+      PRIORITY_RECOVERY_SEMANTIC_STATE.SPREAD_SATISFIED_IN_FLIGHT
+    ],
+  ) ?
+    semanticStatePartitions.partitionIdsBySemanticState[
+      PRIORITY_RECOVERY_SEMANTIC_STATE.SPREAD_SATISFIED_IN_FLIGHT
+    ] :
+    [];
+  if (nonBlockingInFlightWitnessPartitionIds.length > NUM.ZERO) {
+    return Object.freeze([...nonBlockingInFlightWitnessPartitionIds]);
+  }
+  return Object.freeze([]);
+}
+
+function buildPriorityRecoveryPartitionHistory(
+  historyByPartitionId,
+  outputField,
+) {
+  return Object.freeze(
+    Object.entries(historyByPartitionId)
+      .map(([partitionId, values]) => ({
+        partitionId,
+        [outputField]: Object.freeze(normalizeDistinctStringArray(values)),
+      }))
+      .sort((left, right) => left.partitionId.localeCompare(right.partitionId)),
+  );
+}
+
+function resolvePriorityRecoverySnapshotSortProgressTimestamp(snapshot) {
+  const operation = isRecord(snapshot?.coordinator?.operation) ?
+    snapshot.coordinator.operation :
+    {};
+  const progressTimestampCandidates = [
+    operation[PRIORITY_RECOVERY_SNAPSHOT_PROGRESS_FIELD.COMPLETED_AT_MS],
+    operation[PRIORITY_RECOVERY_SNAPSHOT_PROGRESS_FIELD.UPDATED_AT_MS],
+    operation[
+      PRIORITY_RECOVERY_SNAPSHOT_PROGRESS_FIELD.TARGET_SERVICE_PROGRESS_AT_MS
+    ],
+    snapshot?.progress?.[
+      PRIORITY_RECOVERY_SNAPSHOT_PROGRESS_FIELD.LAST_PROGRESS_AT_MS
+    ],
+    operation[PRIORITY_RECOVERY_SNAPSHOT_PROGRESS_FIELD.CREATED_AT_MS],
+  ]
+    .map((candidate) => normalizeNonNegativeInteger(candidate))
+    .filter((candidate) =>
+      Number.isFinite(candidate) && candidate > NUM.ZERO,
+    );
+  return progressTimestampCandidates.length > NUM.ZERO ?
+    Math.max(...progressTimestampCandidates) :
+    NUM.ZERO;
+}
+
+function resolvePriorityRecoverySnapshotSortTimestamp(
+  snapshot,
+  decisionSnapshots,
+) {
+  const progressTimestamp =
+    resolvePriorityRecoverySnapshotSortProgressTimestamp(snapshot);
+  if (progressTimestamp > NUM.ZERO) {
+    return progressTimestamp;
+  }
+  return Number(
+    snapshot?.observation?.provenance?.capturedAt ??
+      decisionSnapshots?.capturedAt ??
+      NUM.ZERO,
+  );
+}
+
+function resolvePriorityRecoverySnapshotEvidenceRank(snapshot) {
+  const operationCount = normalizeNonNegativeInteger(
+    snapshot?.coordinator?.operationCount,
+  );
+  if (
+    (Number.isFinite(operationCount) && operationCount > NUM.ZERO) ||
+    resolvePriorityRecoverySnapshotOperationIds(snapshot).length > NUM.ZERO
+  ) {
+    return LOCAL_NUM_TWO;
+  }
+  const workflowState = normalizePriorityRecoveryObservationStateValue(
+    snapshot?.observation?.workflowState,
+    LOCAL_STR_EMPTY,
+  );
+  const visibilityState = normalizePriorityRecoveryObservationStateValue(
+    snapshot?.observation?.visibilityState,
+    LOCAL_STR_EMPTY,
+  );
+  if (
+    (workflowState.length > NUM.ZERO &&
+      workflowState !== PRIORITY_RECOVERY_OBSERVATION_STATE_VALUE.NONE) ||
+    (visibilityState.length > NUM.ZERO &&
+      visibilityState !== PRIORITY_RECOVERY_OBSERVATION_STATE_VALUE.NONE)
+  ) {
+    return LOCAL_NUM_ONE;
+  }
+  return LOCAL_NUM_ZERO;
+}
+
+function resolvePriorityRecoverySnapshotSortEpoch(
+  snapshot,
+  decisionSnapshots,
+) {
+  return normalizeNonNegativeInteger(
+    snapshot?.epoch ?? decisionSnapshots?.publicationEpoch,
+  ) ?? NUM.ZERO;
+}
+
+function selectLatestPriorityRecoveryPartitionSnapshot(
+  partitionSnapshots = [],
+  decisionSnapshots = null,
+) {
+  return partitionSnapshots
+    .filter((snapshot) => isRecord(snapshot))
+    .sort((left, right) => {
+      const leftEpoch = resolvePriorityRecoverySnapshotSortEpoch(
+        left,
+        decisionSnapshots,
+      );
+      const rightEpoch = resolvePriorityRecoverySnapshotSortEpoch(
+        right,
+        decisionSnapshots,
+      );
+      if (leftEpoch !== rightEpoch) {
+        return rightEpoch - leftEpoch;
+      }
+      const leftEvidenceRank =
+        resolvePriorityRecoverySnapshotEvidenceRank(left);
+      const rightEvidenceRank =
+        resolvePriorityRecoverySnapshotEvidenceRank(right);
+      if (leftEvidenceRank !== rightEvidenceRank) {
+        return rightEvidenceRank - leftEvidenceRank;
+      }
+      const leftUpdatedAtMs = resolvePriorityRecoverySnapshotSortTimestamp(
+        left,
+        decisionSnapshots,
+      );
+      const rightUpdatedAtMs = resolvePriorityRecoverySnapshotSortTimestamp(
+        right,
+        decisionSnapshots,
+      );
+      if (leftUpdatedAtMs !== rightUpdatedAtMs) {
+        return rightUpdatedAtMs - leftUpdatedAtMs;
+      }
+      return String(right?.correlationKey || LOCAL_STR_EMPTY).localeCompare(
+        String(left?.correlationKey || LOCAL_STR_EMPTY),
+      );
+    })[LOCAL_NUM_ZERO] || null;
+}
+
+function collectPriorityRecoveryRelatedSnapshots(
+  snapshots = [],
+  partitionId,
+) {
+  return snapshots.filter((snapshot) => {
+    return String(snapshot?.partitionId || LOCAL_STR_EMPTY).trim() === partitionId;
+  });
+}
+
+function resolvePriorityRecoverySnapshotOperationIds(snapshot = null) {
+  return normalizeDistinctStringArray([
+    snapshot?.[PRIORITY_RECOVERY_OPERATION_ID_FIELD.CAMEL],
+    snapshot?.[PRIORITY_RECOVERY_OPERATION_ID_FIELD.SNAKE],
+    snapshot?.coordinator?.operation?.[PRIORITY_RECOVERY_OPERATION_ID_FIELD.CAMEL],
+    snapshot?.coordinator?.operation?.[PRIORITY_RECOVERY_OPERATION_ID_FIELD.SNAKE],
+  ]);
+}
+
+function resolvePriorityRecoveryOperationIds(relatedSnapshots = []) {
+  return normalizeDistinctStringArray(
+    relatedSnapshots.flatMap((snapshot) => {
+      return [
+        ...(Array.isArray(snapshot?.coordinator?.operationIds) ?
+          snapshot.coordinator.operationIds :
+          []),
+        ...resolvePriorityRecoverySnapshotOperationIds(snapshot),
+      ];
+    }),
+  );
+}
+
+function resolvePriorityRecoverySerialWaitOperationIds(relatedSnapshots = []) {
+  return normalizeDistinctStringArray(
+    relatedSnapshots.flatMap((snapshot) =>
+      Array.isArray(snapshot?.coordinator?.serialWaitOperationIds) ?
+        snapshot.coordinator.serialWaitOperationIds :
+        LOCAL_EMPTY_LIST,
+    ),
+  );
+}
+
+function resolvePriorityRecoverySerialWaitPartitionIds(relatedSnapshots = []) {
+  return normalizeDistinctStringArray(
+    relatedSnapshots.flatMap((snapshot) =>
+      Array.isArray(snapshot?.coordinator?.serialWaitPartitionIds) ?
+        snapshot.coordinator.serialWaitPartitionIds :
+        LOCAL_EMPTY_LIST,
+    ),
+  );
+}
+
+function resolvePriorityRecoveryEligibleNodeIds(latestPartitionSnapshot) {
+  const effectiveEligibleNodeIds = Array.isArray(
+    latestPartitionSnapshot?.admission?.effectiveEligibleNodeIds,
+  ) ?
+    latestPartitionSnapshot.admission.effectiveEligibleNodeIds :
+    [];
+  return Object.freeze(
+    normalizeDistinctStringArray(
+      effectiveEligibleNodeIds.length > NUM.ZERO ?
+        effectiveEligibleNodeIds :
+        latestPartitionSnapshot?.admission?.eligibleNodeIds,
+    ),
+  );
+}
+
+function buildPriorityRecoveryPartitionSnapshot(
+  partitionId,
+  snapshots,
+  decisionSnapshots,
+  explicitSemanticStateByPartitionId = null,
+  allowLegacySemanticStateInference = false,
+) {
+  const relatedSnapshots = collectPriorityRecoveryRelatedSnapshots(
+    snapshots,
+    partitionId,
+  );
+  const latestPartitionSnapshot = selectLatestPriorityRecoveryPartitionSnapshot(
+    relatedSnapshots,
+    decisionSnapshots,
+  );
+  const blockerReasonCodes = normalizeDistinctStringArray(
+    latestPartitionSnapshot?.blockerReasons,
+  );
+  const operationIds = resolvePriorityRecoveryOperationIds(relatedSnapshots);
+  const serialWaitOperationIds =
+    resolvePriorityRecoverySerialWaitOperationIds(relatedSnapshots);
+  const serialWaitPartitionIds =
+    resolvePriorityRecoverySerialWaitPartitionIds(relatedSnapshots);
+  const latestOperation = isRecord(latestPartitionSnapshot?.coordinator?.operation) ?
+    latestPartitionSnapshot.coordinator.operation :
+    null;
+  const pressureConditions = buildPriorityRecoveryPressureConditions(
+    latestPartitionSnapshot?.conditions?.pressure,
+  );
+  return Object.freeze({
+    partitionId,
+    semanticStateId: resolvePriorityRecoverySnapshotSemanticState(
+      latestPartitionSnapshot,
+      blockerReasonCodes,
+      explicitSemanticStateByPartitionId,
+      allowLegacySemanticStateInference,
+    ) || null,
+    progressClassIds: Object.freeze(blockerReasonCodes),
+    blockerReasonCodes: Object.freeze(blockerReasonCodes),
+    spreadGap: normalizeNonNegativeInteger(
+      latestPartitionSnapshot?.planner?.spreadGap,
+    ),
+    readyDistinctNodeCount: normalizeNonNegativeInteger(
+      latestPartitionSnapshot?.planner?.readyDistinctNodeCount,
+    ),
+    requiredDistinctNodeCount: normalizeNonNegativeInteger(
+      latestPartitionSnapshot?.planner?.requiredDistinctNodeCount,
+    ),
+    authoritativeVisibilityState:
+      normalizePriorityRecoveryObservationStateValue(
+        latestPartitionSnapshot?.observation?.visibilityState,
+      ),
+    removeSafetyState:
+      normalizePriorityRecoveryObservationStateValue(
+        latestPartitionSnapshot?.completion?.state,
+      ),
+    transportPressureState:
+      pressureConditions?.pressureState ===
+        PRIORITY_RECOVERY_PRESSURE_STATE.NONE ?
+        PRIORITY_RECOVERY_OBSERVATION_STATE_VALUE.NONE :
+        normalizePriorityRecoveryObservationStateValue(
+          pressureConditions?.pressureState,
+        ),
+    witnessIds: Object.freeze(
+      normalizeDistinctStringArray([
+        latestPartitionSnapshot?.correlationKey,
+        ...operationIds,
+        ...serialWaitOperationIds,
+      ]),
+    ),
+    retryAfterMs: normalizeNonNegativeInteger(
+      latestPartitionSnapshot?.completion?.retryAfterMs,
+    ),
+    progressContractState:
+      normalizePriorityRecoveryObservationStateValue(
+        latestPartitionSnapshot?.progress?.contractState,
+      ),
+    progressNextAction:
+      normalizePriorityRecoveryObservationStateValue(
+        latestPartitionSnapshot?.progress?.nextAction,
+      ),
+    actuationState:
+      normalizePriorityRecoveryObservationStateValue(
+        latestPartitionSnapshot?.actuation?.state,
+      ),
+    actuationOwner:
+      normalizePriorityRecoveryObservationStateValue(
+        latestPartitionSnapshot?.actuation?.owner,
+      ),
+    currentOwner:
+      normalizePriorityRecoveryObservationStateValue(
+        latestPartitionSnapshot?.progress?.currentOwner,
+      ),
+    nextRequiredAction:
+      normalizePriorityRecoveryObservationStateValue(
+        latestPartitionSnapshot?.progress?.nextRequiredAction,
+      ),
+    blockingBoundary:
+      normalizePriorityRecoveryObservationStateValue(
+        latestPartitionSnapshot?.progress?.blockingBoundary,
+      ),
+    waitMode:
+      normalizePriorityRecoveryObservationStateValue(
+        latestPartitionSnapshot?.progress?.waitMode,
+      ),
+    workflowProgressPhaseId:
+      normalizePriorityRecoveryObservationStateValue(
+        latestPartitionSnapshot?.progress?.workflowProgressPhaseId,
+      ),
+    stepAgeMs: normalizeNonNegativeInteger(
+      latestPartitionSnapshot?.progress?.stepAgeMs,
+    ),
+    stepTimeoutMs: normalizeNonNegativeInteger(
+      latestPartitionSnapshot?.progress?.stepTimeoutMs,
+    ),
+    pressureState:
+      normalizePriorityRecoveryObservationStateValue(
+        pressureConditions?.pressureState,
+        PRIORITY_RECOVERY_OBSERVATION_STATE_VALUE.NONE,
+      ),
+    blocksCriticalRecoveryActuation:
+      pressureConditions?.blocksCriticalRecoveryActuation === true,
+    pendingWrites: normalizeNonNegativeInteger(
+      pressureConditions?.pendingWrites,
+    ),
+    pendingWriteGrowthCount: normalizeNonNegativeInteger(
+      pressureConditions?.pendingWriteGrowthCount,
+    ),
+    retainedBacklogGrowthCount: normalizeNonNegativeInteger(
+      pressureConditions?.retainedBacklogGrowthCount,
+    ),
+    lastProgressAtMs: normalizeNonNegativeInteger(
+      latestPartitionSnapshot?.progress?.lastProgressAtMs,
+    ),
+    progressEvidenceSourceIds: Object.freeze(
+      normalizeDistinctStringArray(
+        latestPartitionSnapshot?.progress?.evidenceSourceIds,
+      ),
+    ),
+    decisionDimension:
+      normalizePriorityRecoveryObservationStateValue(
+        latestPartitionSnapshot?.admission?.decisionDimension,
+      ),
+    eligibleNodeIds:
+      resolvePriorityRecoveryEligibleNodeIds(latestPartitionSnapshot),
+    recoveryEligibleExcludedNodeIds: Object.freeze(
+      normalizeDistinctStringArray(
+        latestPartitionSnapshot?.admission?.recoveryEligibleExcludedNodeIds,
+      ),
+    ),
+    activeLearnerNodeIds: Object.freeze(
+      normalizeDistinctStringArray(
+        latestPartitionSnapshot?.readiness?.learnerPromotion?.activeLearnerNodeIds,
+      ),
+    ),
+    promotableLearnerNodeIds: Object.freeze(
+      normalizeDistinctStringArray(
+        latestPartitionSnapshot?.readiness?.learnerPromotion?.promotableLearnerNodeIds,
+      ),
+    ),
+    operationIds: Object.freeze(operationIds),
+    serialWaitOperationIds: Object.freeze(serialWaitOperationIds),
+    serialWaitPartitionIds: Object.freeze(serialWaitPartitionIds),
+    completionState:
+      normalizePriorityRecoveryObservationStateValue(
+        latestPartitionSnapshot?.completion?.state,
+      ),
+    workflowState:
+      normalizePriorityRecoveryObservationStateValue(
+        latestPartitionSnapshot?.observation?.workflowState,
+      ),
+    visibilityState:
+      normalizePriorityRecoveryObservationStateValue(
+        latestPartitionSnapshot?.observation?.visibilityState,
+      ),
+    convergenceState:
+      normalizePriorityRecoveryObservationStateValue(
+        latestPartitionSnapshot?.observation?.convergenceState,
+      ),
+    workflowSource:
+      normalizePriorityRecoveryObservationStateValue(
+        latestPartitionSnapshot?.observation?.provenance?.workflowSource,
+      ),
+    snapshotCapturedAt: normalizeNonNegativeInteger(
+      latestPartitionSnapshot?.observation?.provenance?.capturedAt ??
+        decisionSnapshots?.capturedAt,
+    ),
+    latestOperationWorkflowStep:
+      normalizePriorityRecoveryObservationStateValue(
+        latestOperation?.workflowStep,
+      ),
+    latestOperationStatus:
+      normalizePriorityRecoveryObservationStateValue(
+        latestOperation?.status,
+      ),
+    correlationKey: buildPriorityRecoveryCorrelationKey(
+      partitionId,
+      latestPartitionSnapshot?.epoch ?? decisionSnapshots?.publicationEpoch ?? null,
+      latestPartitionSnapshot?.operationId || null,
+    ),
+  });
+}
+
+function buildPriorityRecoveryPartitionWitnesses(decisionSnapshots = null) {
+  const snapshots = Array.isArray(decisionSnapshots?.snapshots) ?
+    decisionSnapshots.snapshots :
+    [];
+  const allowLegacySemanticStateInference =
+    shouldAllowLegacyPriorityRecoverySemanticStateInference(
+      decisionSnapshots?.partitionIdsBySemanticState,
+    );
+  const explicitSemanticStateByPartitionId =
+    buildPriorityRecoveryExplicitSemanticStateByPartitionId(
+      decisionSnapshots?.partitionIdsBySemanticState,
+    );
+  const indexes = collectPriorityRecoveryPartitionIndexes(
+    snapshots,
+    decisionSnapshots?.partitionIdsBySemanticState,
+  );
+  const blockedClassIds = normalizePriorityRecoveryBlockedClassIds(
+    indexes.partitionIdsByReason,
+  );
+  const semanticStatePartitions =
+    normalizePriorityRecoverySemanticStatePartitions(
+      indexes.partitionIdsBySemanticState,
+    );
+  const witnessPartitionIds = resolvePriorityRecoveryWitnessPartitionIds(
+    blockedClassIds,
+    semanticStatePartitions,
+  );
+  const partitionSnapshots = Object.freeze(
+    witnessPartitionIds.map((partitionId) => {
+      return buildPriorityRecoveryPartitionSnapshot(
+        partitionId,
+        snapshots,
+        decisionSnapshots,
+        explicitSemanticStateByPartitionId,
+        allowLegacySemanticStateInference,
+      );
+    }),
+  );
+  return Object.freeze({
+    blockerPartitionIdsByReason:
+      blockedClassIds.blockerPartitionIdsByReason,
+    partitionIdsBySemanticState:
+      semanticStatePartitions.partitionIdsBySemanticState,
+    unresolvedClassIds: blockedClassIds.unresolvedClassIds,
+    unresolvedClassCount: blockedClassIds.unresolvedClassIds.length,
+    unresolvedSemanticStateIds:
+      semanticStatePartitions.unresolvedSemanticStateIds,
+    unresolvedSemanticStateCount:
+      semanticStatePartitions.unresolvedSemanticStateIds.length,
+    blockedPartitionIds: Object.freeze(
+      [...semanticStatePartitions.blockedPartitionIds],
+    ),
+    blockedPartitionCount:
+      semanticStatePartitions.blockedPartitionIds.length,
+    witnessPartitionIds,
+    witnessPartitionCount: witnessPartitionIds.length,
+    partitionBlockerHistory: buildPriorityRecoveryPartitionHistory(
+      indexes.blockerReasonHistoryByPartitionId,
+      LOCAL_STR_BLOCKERREASONCODES,
+    ),
+    partitionSemanticStateHistory: buildPriorityRecoveryPartitionHistory(
+      indexes.semanticStateHistoryByPartitionId,
+      LOCAL_STR_SEMANTICSTATEIDS,
+    ),
+    partitionSnapshots,
+    partitionWitnesses: partitionSnapshots,
+    admissionDecisionDimensions: Object.freeze(
+      [...indexes.decisionDimensions].sort(),
+    ),
+  });
+}
+
+export {
+  buildPriorityRecoveryPartitionHistory,
+  buildPriorityRecoveryPartitionSnapshot,
+  buildPriorityRecoveryPartitionWitnesses,
+  collectPriorityRecoveryRelatedSnapshots,
+  resolvePriorityRecoveryEligibleNodeIds,
+  resolvePriorityRecoveryOperationIds,
+  resolvePriorityRecoverySerialWaitOperationIds,
+  resolvePriorityRecoverySerialWaitPartitionIds,
+  resolvePriorityRecoverySnapshotEvidenceRank,
+  resolvePriorityRecoverySnapshotOperationIds,
+  resolvePriorityRecoverySnapshotSortEpoch,
+  resolvePriorityRecoverySnapshotSortProgressTimestamp,
+  resolvePriorityRecoverySnapshotSortTimestamp,
+  resolvePriorityRecoveryWitnessPartitionIds,
+  selectLatestPriorityRecoveryPartitionSnapshot,
+};

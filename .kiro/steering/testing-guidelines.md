@@ -85,6 +85,9 @@ Required workflow:
 3. If a repo-wide guard already fails, run the narrowest file-scoped or
    boundary-scoped form that covers the touched files and record the inherited
    count before the change.
+   Use `npm run test:metrics:scoped -- <files...>` when repo-wide complexity
+   output is too broad for focused work, and use the matching `:strict` command
+   only when the touched boundary is expected to have no local violations.
 4. After implementation and focused tests, rerun the same guardrails and record
    the after state.
 5. A package cannot close when:
@@ -101,6 +104,26 @@ Required workflow:
 
 The intent is to make drift visible at package scale. A large inherited
 repo-wide count is not a reason to allow new local debt.
+
+## File-Size Ratchet Policy
+
+Large owner files and large catch-all test files materially slow review,
+debugging, and LLM-assisted implementation. Runtime packages that touch already
+oversized files should record whether they are adding local size debt or
+extracting a smaller owner/helper boundary.
+
+Required workflow:
+
+1. Run `npm run audit:file-size` for broad runtime, control-plane, transport,
+   harness, and test-infrastructure packages.
+2. The default ratchet must not increase the inherited count of production
+   JavaScript files over `800` lines or test JavaScript files over `1200`
+   lines.
+3. If a package deliberately creates a new oversized file, it must name the
+   follow-on extraction package before closure.
+4. Use `npm run audit:file-size:strict` only for packages that explicitly own
+   file-size cleanup, because the repository still has inherited oversize
+   files.
 
 ## Scenario-Driven Failure Migration Validation Policy
 
@@ -134,6 +157,17 @@ Required workflow:
 9. If the representative scenario still fails after the fixture and focused
    tests pass, the package must record whether the fixture contract was
    correct and what new owner boundary now dominates.
+10. A fresh artifact with different counts, node ids, epochs, or timing does
+    not by itself prove blocker migration. Treat it as the same blocker until
+    the normalized evidence shows a different semantic owner, owner boundary,
+    or next required action.
+11. When the same owner boundary still dominates, validation must update the
+    active package and sprint current blocker snapshot instead of forcing a new
+    package split.
+12. If artifact-derived evidence tooling exists for the scenario, use it to
+    produce the validation handoff block before writing manual analysis.
+13. A representative rerun should not be the next debugging step while the
+    current owner-decision fixture or narrow blocker probe is missing.
 
 ## Runner Stability Boundary Policy
 
@@ -683,9 +717,55 @@ Required workflow:
 3. Use the consolidated diagnostics tooling before sampling raw node logs.
 4. Only after the artifact summaries have been read may raw container or node
    logs become the primary debugging surface.
+5. When the harness provides a report, playback bundle, failure bundle, or
+   triage summary, derive a compact evidence block from those artifacts before
+   assigning sub-agent work or changing runtime code.
+6. The evidence block must name the canonical blocker, owner boundary, source
+   artifact paths, prior blocker status, subordinate evidence, and next focused
+   proof surface.
+7. Manual evidence summaries are allowed only when no extractor exists, and
+   must preserve the normalized owner fields from the artifact rather than
+   reclassifying from raw logs.
 
 This keeps rerun cost low and prevents repeated raw-log spelunking from becoming
 an accidental substitute for canonical owner diagnostics.
+
+## Agent And Sub-Agent Validation Handoff Policy
+
+When an agent or sub-agent is used to continue a sprint, validation ownership
+must follow the same evidence ladder as package work.
+
+Required workflow:
+
+1. The first delegated or local analysis step must extract the canonical
+   evidence from the latest artifact and compare it with the sprint current
+   blocker snapshot.
+2. Before implementing a new or continued package, delegate a review of the
+   most recently executed package on the same sprint or owner boundary.
+3. The review must check package closure evidence, residual inventory,
+   guardrail ledger, blocker migration notes, sprint snapshot consistency, and
+   whether the last package's stated next action still matches current
+   artifact evidence.
+4. If that review finds actionable defects, delegate a bounded fix for those
+   defects and validate that fix before starting the new package
+   implementation.
+5. A separate implementation sub-agent may start the current work package only
+   after the previous-package review is clean or the review findings have been
+   fixed.
+6. A second analysis step may map the owner path, focused fixture, or affected
+   presentation surface, but must not broaden beyond the current snapshot.
+7. Implementation work should start only after the current owner boundary and
+   smallest proof surface are named.
+8. If several sub-agents are used, give each one a disjoint question or file
+   scope. Do not ask several workers to independently fix the same blocker.
+9. The final validation note must state whether the representative scenario
+   passed, stayed on the same owner boundary, or migrated to a new named
+   owner boundary.
+10. If the blocker stayed on the same owner boundary, update the current
+   package rather than opening a new package.
+11. If the blocker migrated, update the sprint current blocker snapshot and
+   activate exactly one new representative package before further runtime
+   edits.
 
 ## Structured Deferred-Outcome Regression Policy
 

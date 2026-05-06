@@ -1234,9 +1234,17 @@ export function registerMembershipPublicationCoordinatorTailFinalTests({
     });
 
     const snapshot = await coordinator.readPublicationPlanningSnapshot();
+    const nodeReadOptions =
+      authoritativeReadOptionsByTableName.get(TABLES.NODES);
     const serviceReadOptions =
       authoritativeReadOptionsByTableName.get(TABLES.SERVICES);
 
+    t.equal(
+      nodeReadOptions.authoritativeReadMode,
+      CONTROL_PLANE_AUTHORITATIVE_READ_MODE
+        .OWNER_RPC_PREFERRED_SQL_FALLBACK,
+      'published priority spread gaps should preserve fallback-capable authoritative node evidence',
+    );
     t.equal(
       serviceReadOptions.authoritativeReadMode,
       CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED,

@@ -18,6 +18,8 @@ const TEST_NODE_ID = Object.freeze({
   FIRST: 'node-a',
   SECOND: 'node-b',
   THIRD: 'node-c',
+  FOURTH: 'node-d',
+  FIFTH: 'node-e',
 });
 const TEST_CLOSURE_RECORD_ID = 'CL-003';
 const TEST_CLOSURE_WITNESS_CLASS =
@@ -34,6 +36,15 @@ const TEST_COUNT_ONLY_REENTRY_ACK_TARGET_ASSERTION =
 const TEST_COUNT_ONLY_REENTRY_ACK_TARGET_TEST_NAME =
   'buildCanonicalPublicationRecoveryEvidence keeps pending ACK targets ' +
   'when empty required lists are canonical reentry noise';
+const TEST_AUTHORITATIVE_PUBLISHED_NODE_IDS = Object.freeze([
+  TEST_NODE_ID.FIRST,
+  TEST_NODE_ID.SECOND,
+  TEST_NODE_ID.THIRD,
+]);
+const TEST_SELECTED_ONLY_MISSING_NODE_IDS = Object.freeze([
+  TEST_NODE_ID.FOURTH,
+  TEST_NODE_ID.FIFTH,
+]);
 const TEST_STALE_PRIORITY_PARTITION_SUMMARY = Object.freeze({
   satisfied: false,
   requiredDistinctNodeCount: 3,
@@ -257,6 +268,69 @@ test('buildCanonicalPublicationRecoveryEvidence rebuilds a stale observation fro
     );
     t.equal(evidence.publicationConvergence.prioritySpreadPending, false);
     t.same(evidence.publicationConvergence.priorityRecoveryReasonCodes, []);
+    t.end();
+  });
+
+test('buildCanonicalPublicationRecoveryEvidence does not reopen publication pending from selected-snapshot-only deficits outside the authoritative cohort',
+  (t) => {
+    const evidence = buildCanonicalPublicationRecoveryEvidence({
+      publicationConvergence: {
+        publicationEpoch: TEST_PUBLICATION_EPOCH,
+        publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+        recoveryProtocolState: RECOVERY_PROTOCOL_STATE.STEADY_PUBLISHED,
+        publishedActiveNodeIds: TEST_AUTHORITATIVE_PUBLISHED_NODE_IDS,
+        pendingAckNodeIds: [],
+        pendingAckCount: TEST_EMPTY_PUBLICATION_DEBT_COUNT,
+        priorityRecoveryReasonCodes: [],
+        missingPublishedNodeIds: [],
+        missingPublishedCount: TEST_EMPTY_PUBLICATION_DEBT_COUNT,
+      },
+      publicationConvergenceGate: {
+        ready: true,
+        publicationEpoch: TEST_PUBLICATION_EPOCH,
+        publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+        recoveryProtocolState: RECOVERY_PROTOCOL_STATE.STEADY_PUBLISHED,
+        requiredAckNodeIds: TEST_AUTHORITATIVE_PUBLISHED_NODE_IDS,
+        acknowledgedNodeIds: TEST_AUTHORITATIVE_PUBLISHED_NODE_IDS,
+        pendingAckNodeIds: [],
+        pendingAckCount: TEST_EMPTY_PUBLICATION_DEBT_COUNT,
+        missingPublishedNodeIds: [],
+        missingPublishedCount: TEST_EMPTY_PUBLICATION_DEBT_COUNT,
+        publicationPending: false,
+        prioritySpreadPending: false,
+      },
+      priorityRecoveryObservation: {
+        publicationEpoch: TEST_PUBLICATION_EPOCH,
+        publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+        recoveryProtocolState: RECOVERY_PROTOCOL_STATE.PUBLICATION_PENDING,
+        pendingAckNodeIds: [],
+        pendingAckCount: TEST_EMPTY_PUBLICATION_DEBT_COUNT,
+        missingPublishedNodeIds: TEST_SELECTED_ONLY_MISSING_NODE_IDS,
+        missingPublishedCount: TEST_SELECTED_ONLY_MISSING_NODE_IDS.length,
+        publicationPending: true,
+        prioritySpreadPending: false,
+      },
+      activeGate: {
+        progress: {
+          expectedNodeCount:
+            TEST_AUTHORITATIVE_PUBLISHED_NODE_IDS.length +
+            TEST_SELECTED_ONLY_MISSING_NODE_IDS.length,
+          selectedPublishedActiveNodeIds: TEST_AUTHORITATIVE_PUBLISHED_NODE_IDS,
+          selectedPublishedActiveCount:
+            TEST_AUTHORITATIVE_PUBLISHED_NODE_IDS.length,
+          selectedMissingPublishedNodeIds: TEST_SELECTED_ONLY_MISSING_NODE_IDS,
+          pendingAckCount: TEST_EMPTY_PUBLICATION_DEBT_COUNT,
+          missingPublishedCount: TEST_SELECTED_ONLY_MISSING_NODE_IDS.length,
+        },
+      },
+    });
+
+    t.equal(evidence.publicationConvergenceGate.publicationPending, false);
+    t.equal(evidence.publicationConvergenceGate.missingPublishedCount, 0);
+    t.same(evidence.publicationConvergenceGate.missingPublishedNodeIds, []);
+    t.equal(evidence.publicationConvergence.publicationPending, false);
+    t.equal(evidence.publicationConvergence.missingPublishedCount, 0);
+    t.same(evidence.publicationConvergence.missingPublishedNodeIds, []);
     t.end();
   });
 

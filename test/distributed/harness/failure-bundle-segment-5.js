@@ -624,6 +624,12 @@ function resolvePriorityRecoverySemanticStateSignal({
   publicationConvergence,
   dominantProgressWitness,
 }) {
+  const witnessSemanticStateId = resolveFirstDistinctSignalValue([
+    dominantProgressWitness?.semanticStateId,
+  ]);
+  if (witnessSemanticStateId) {
+    return witnessSemanticStateId;
+  }
   const directSemanticStateId = resolveFirstDistinctSignalValue(
     publicationConvergence?.priorityRecoverySemanticStateIds,
   );
@@ -651,6 +657,32 @@ function resolvePriorityRecoverySemanticStateSignal({
     }
   }
   return dominantProgressWitness?.semanticStateId || null;
+}
+
+function resolvePriorityRecoveryProgressClassSignal({
+  publicationConvergence,
+  dominantProgressWitness,
+}) {
+  const witnessProgressClassId = resolveFirstDistinctSignalValue([
+    ...normalizeDistinctStringArray(dominantProgressWitness?.progressClassIds),
+    ...normalizeDistinctStringArray(
+      dominantProgressWitness?.blockerReasonCodes,
+    ),
+  ]);
+  if (witnessProgressClassId) {
+    return witnessProgressClassId;
+  }
+  const directProgressClassId = resolveFirstDistinctSignalValue(
+    publicationConvergence?.priorityRecoveryProgressClassIds,
+  );
+  if (directProgressClassId) {
+    return directProgressClassId;
+  }
+  const activeGateProgressClasses =
+    resolveActiveGateProgressClasses(publicationConvergence);
+  return resolveFirstDistinctSignalValue(
+    activeGateProgressClasses?.unresolvedClassIds,
+  );
 }
 
 function resolvePriorityRecoveryMappedPartitionSignal({
@@ -980,9 +1012,10 @@ function appendPriorityRecoveryProgressSignals({
         ),
     );
   }
-  const progressClassId = resolveFirstDistinctSignalValue(
-    publicationConvergence.priorityRecoveryProgressClassIds,
-  );
+  const progressClassId = resolvePriorityRecoveryProgressClassSignal({
+    publicationConvergence,
+    dominantProgressWitness,
+  });
   if (progressClassId) {
     signals.push(
       FAILURE_SIGNAL_PRIORITY_RECOVERY_PROGRESS_CLASS_PREFIX +
@@ -1842,10 +1875,7 @@ function buildFailureClassification({
     return {
       failureClass: FAILURE_CLASS_PUBLICATION_CONVERGENCE_BLOCKED,
       confidence: FAILURE_CLASS_CONFIDENCE_HIGH,
-      rootCauseClass:
-        rootCauseClass && rootCauseClass !== ROOT_CAUSE_CLASS_UNKNOWN ?
-          rootCauseClass :
-          ROOT_CAUSE_CLASS_TOPOLOGY,
+      rootCauseClass: ROOT_CAUSE_CLASS_TOPOLOGY,
       dominantReason: dominantReason || null,
       signals,
     };

@@ -172,6 +172,7 @@ class Cluster5 extends Cluster4 {
           reachabilityDiagnostics = await withTimeout(
             node.getReachabilityDiagnostics({
               timeoutMs: reachabilityTimeoutMs,
+              skipBootstrapReadiness: true,
             }),
             reachabilityTimeoutMs,
             'Control snapshot reachability probe timed out for ' + node.id,

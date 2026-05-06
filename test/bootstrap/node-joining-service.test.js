@@ -65,6 +65,8 @@ const QUERY_STATE_SERVICE_REGISTRATION_SHORTCUT_OPTION =
   'preferControlPlaneUpsert';
 const QUERY_STATE_SERVICE_REGISTRATION_ADMISSION_TARGET =
   'create-self-hosted join metadata service registration';
+const ASSIGNMENT_TOKEN_UNKNOWN_ERROR_CODE =
+  'ASSIGNMENT_TOKEN_UNKNOWN';
 const TEST_SEED_CONTACT_AUTHORITY = Object.freeze({
   state: 'seed_locally_ready_unpublished',
   ready: false,
@@ -1113,6 +1115,97 @@ test('NodeJoiningService - retries register-service on cache visibility timeout 
       },
       'retry warning should preserve seed-provided timeout diagnostics',
     );
+  });
+
+test('NodeJoiningService - retries register-service on assignment token unknown',
+  async (t) => {
+    initializeTestEnvironment();
+
+    let attempts = 0;
+    const registerPayloads = [];
+    const retryDelays = [];
+    const warnEvents = [];
+    const service = new NodeJoiningService({
+      nodeId: '550e8400-e29b-41d4-a716-446655440107',
+      nodeAddress: 'ws://localhost:9090',
+      seedNodeAddress: 'http://localhost:8080',
+      config: {
+        httpTimeoutMs: 1000,
+        leadershipWaitTimeoutMs: 200,
+        leadershipWaitInitialDelayMs: 10,
+        leadershipWaitMaxDelayMs: 10,
+        leadershipWaitBackoffMultiplier: 2,
+        leadershipWaitJitterRatio: 0,
+      },
+      sleep: async (delayMs) => {
+        retryDelays.push(delayMs);
+      },
+      httpPost: async (url, payload) => {
+        if (!url.endsWith('/register-service')) {
+          throw new Error('unexpected URL in register-service retry test');
+        }
+        registerPayloads.push(payload);
+        attempts += 1;
+        if (attempts === 1) {
+          const error = new Error(
+            'HTTP 409: {"success":false,"error":"assignment token unknown",' +
+            `"code":"${ASSIGNMENT_TOKEN_UNKNOWN_ERROR_CODE}"}`,
+          );
+          error.statusCode = 409;
+          error.responseJson = {
+            success: false,
+            error: 'assignment token unknown',
+            code: ASSIGNMENT_TOKEN_UNKNOWN_ERROR_CODE,
+          };
+          throw error;
+        }
+        return {success: true};
+      },
+    });
+    service.bootstrapResponse = {
+      messageGroupAssignment: {
+        strategy: AssignmentStrategy.MOVE_REPLICA,
+        groupId: 'mg-1',
+        replicaToMove: 'mg-1-r2',
+        assignmentId: 'assignment-1',
+      },
+    };
+    service.logger = {
+      debug() {},
+      info() {},
+      warn(message, details) {
+        warnEvents.push({message, details});
+      },
+      error() {},
+    };
+
+    await service.registerMessageGroupService(
+      'mg-1',
+      'mg-1-r2',
+      {getRole: () => 'leader'},
+    );
+
+    t.equal(
+      attempts,
+      2,
+      'should retry register-service once after assignment token miss',
+    );
+    t.equal(
+      registerPayloads[0]?.assignment_id,
+      'assignment-1',
+      'first register attempt should carry the MOVE_REPLICA assignment token',
+    );
+    t.equal(
+      registerPayloads[1]?.assignment_id,
+      'assignment-1',
+      'retry should preserve the same MOVE_REPLICA assignment token',
+    );
+    t.same(retryDelays, [10], 'should apply configured retry delay before retry');
+    const retryEvent = warnEvents.find((event) =>
+      event.details &&
+      event.details.lastCode === ASSIGNMENT_TOKEN_UNKNOWN_ERROR_CODE,
+    );
+    t.ok(retryEvent, 'should emit retry warning for assignment token miss');
   });
 
 test('NodeJoiningService - includes assignment_id on MOVE_REPLICA register-service',

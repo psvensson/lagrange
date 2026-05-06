@@ -265,6 +265,7 @@ test('AdminServiceDiscovery control snapshot repair reads bypass pressure degrad
         async executeRead(readIntent, options) {
           readCalls.push({
             tableName: readIntent?.tableName,
+            allowSqlFallback: options?.allowSqlFallback,
             allowPressureDegrade: options?.allowPressureDegrade,
             workloadClass: options?.workloadClass,
             workClass: options?.workClass,
@@ -294,6 +295,11 @@ test('AdminServiceDiscovery control snapshot repair reads bypass pressure degrad
       readCalls.every((call) => call.allowPressureDegrade === false),
       true,
       'control snapshot repair should fail closed instead of degrading on pressure',
+    );
+    t.equal(
+      readCalls.every((call) => call.allowSqlFallback === true),
+      true,
+      'control snapshot repair should preserve the routed authoritative fallback path',
     );
     t.equal(
       readCalls.every((call) =>

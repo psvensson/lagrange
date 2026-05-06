@@ -117,7 +117,7 @@ Sprint:
     stale in-flight count was `0`, and over-target voters were limited to
     `replica_operations-p1` and `sql_transaction_participants-p1`.
 14. Follow-on owner:
-    [Rolling restart operation transition pressure and over-target trim](./active-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md)
+    [Rolling restart operation transition pressure and over-target trim](./todo-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md)
     owns the migrated post-active operation lifecycle and durable trim
     boundary.
 

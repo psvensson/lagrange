@@ -1353,6 +1353,109 @@ test(
 );
 
 test(
+  'Unit: NodeHandle.getReachabilityDiagnostics skips bootstrap readiness for ' +
+    'admin-only callers',
+  async () => {
+    const nodeId = 'node-1';
+    const containerId = 'container-1';
+    const nodeIp = '127.0.0.1';
+    const bootstrapHealthUrlFragment = ':8080/health';
+    const bootstrapReadinessUrlFragment = ':8080/bootstrap/ready';
+    const adminHealthUrlFragment = ':8081/health';
+    const node = new NodeHandle(
+      nodeId,
+      containerId,
+      nodeIp,
+      NODE_ROLES.JOINER,
+      {getContainerLogs: async () => ''},
+    );
+
+    const originalGet = http.get;
+    const originalQueryWithTimeout = node.queryWithTimeout;
+    const originalGetAdminSocket = node._getAdminSocket;
+    const calledUrls = [];
+    let sqlProbeCount = 0;
+    http.get = (url, _options, callback) => {
+      const normalizedUrl = String(url);
+      calledUrls.push(normalizedUrl);
+      const req = {
+        on: () => req,
+        destroy: () => {},
+      };
+      process.nextTick(() => {
+        callback({
+          statusCode:
+            normalizedUrl.includes(adminHealthUrlFragment) ? 200 :
+              normalizedUrl.includes(bootstrapHealthUrlFragment) ? 200 :
+                503,
+          resume: () => {},
+        });
+      });
+      return req;
+    };
+    node._getAdminSocket = async () => {
+      throw new Error('admin ws unavailable');
+    };
+    node.queryWithTimeout = async (sql) => {
+      if (sql === 'SELECT node_id FROM nodes LIMIT 1') {
+        sqlProbeCount += 1;
+      }
+      return {rows: [{ok: 1}]};
+    };
+
+    try {
+      const diagnostics = await node.getReachabilityDiagnostics({
+        skipBootstrapReadiness: true,
+      });
+      assert.strictEqual(
+        diagnostics.bootstrapHealth.ok,
+        true,
+        'bootstrap health probe should still execute',
+      );
+      assert.strictEqual(
+        diagnostics.bootstrapReadiness,
+        null,
+        'admin-only fast path should not spend budget on bootstrap readiness',
+      );
+      assert.strictEqual(
+        diagnostics.adminHealth.ok,
+        true,
+        'admin health probe should still execute on the fast path',
+      );
+      assert.strictEqual(
+        diagnostics.adminReady,
+        true,
+        'admin-only fast path should preserve admin readiness',
+      );
+      assert.strictEqual(
+        diagnostics.reachableBy,
+        'admin_health',
+        'admin-only fast path should preserve the admin-health witness',
+      );
+      assert.strictEqual(
+        sqlProbeCount,
+        0,
+        'fast path should not fall through to SQL once admin health succeeds',
+      );
+      assert.strictEqual(
+        calledUrls.some((entry) => entry.includes(bootstrapReadinessUrlFragment)),
+        false,
+        'admin-only fast path should skip the bootstrap readiness endpoint',
+      );
+      assert.strictEqual(
+        calledUrls.length,
+        2,
+        'fast path should only issue bootstrap health and admin health probes',
+      );
+    } finally {
+      http.get = originalGet;
+      node.queryWithTimeout = originalQueryWithTimeout;
+      node._getAdminSocket = originalGetAdminSocket;
+    }
+  },
+);
+
+test(
   'Unit: NodeHandle.getReachabilityDiagnostics applies a shared timeout budget across probes',
   async () => {
     const node = new NodeHandle(

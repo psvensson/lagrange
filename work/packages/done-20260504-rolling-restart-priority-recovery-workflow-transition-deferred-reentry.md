@@ -4,7 +4,7 @@ Opened on May 4, 2026 as the migrated blocker from
 [Rolling Restart Startup Snapshot Reachability Operation Workflow Progress Reentry](./done-20260504-rolling-restart-startup-snapshot-reachability-operation-workflow-progress-reentry.md).
 
 Closed May 4, 2026 by migration back into
-[Rolling Restart Operation Transition Pressure And Over-Target Trim](./active-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md).
+[Rolling Restart Operation Transition Pressure And Over-Target Trim](./todo-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md).
 
 ## Current Evidence
 
@@ -154,7 +154,7 @@ Evidence precedence:
    `admin_health` reachability; the failure bundle keeps the canonical
    priority-recovery workflow-timeout owner.
 9. The migrated operation-transition timeout owner is handed off to
-   [Rolling Restart Operation Transition Pressure And Over-Target Trim](./active-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md).
+   [Rolling Restart Operation Transition Pressure And Over-Target Trim](./todo-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md).
 
 ## Static Drift Ledger
 

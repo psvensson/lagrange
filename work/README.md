@@ -27,6 +27,23 @@ Use one simple path:
 4. Work the package until done.
 5. Rename the file to mark completion.
 
+Use the tracker utility for current sprint/package mechanics:
+
+1. `npm run work:current-blocker` regenerates the compact current-blocker
+   handoff files from the active package metadata.
+2. `npm run work:context` prints a compact human and LLM handoff with the
+   current blocker, first-read files, proof ladder, useful commands, and dirty
+   worktree summary.
+3. `npm run work:validate` checks active and metadata-bearing packages for
+   filename/header drift and stale open checklist items.
+4. `npm run work:package:close -- --write work/packages/active-...md` renames a
+   package to `done-...` only after open checklist items are closed.
+5. `npm run work:package:migrate -- --write work/packages/active-...md`
+   `work/packages/active-successor.md` performs the same closure gate while
+   recording a successor handoff.
+6. `npm run work:package:move -- --write work/packages/todo-...md --to active`
+   performs non-terminal state moves.
+
 ## Triage Rule
 
 An idea must become a `roadmap.md` item first when it does any of these:
@@ -72,6 +89,38 @@ Do not create parallel status systems in both directory names and filenames.
 The filename is the status.
 
 ## Package Rules
+
+Every active package should start with a machine-readable metadata comment:
+
+```md
+<!-- work-package
+{
+  "schema": "work-package-v1",
+  "status": "active",
+  "opened": "YYYY-MM-DD",
+  "scenario": "scenario-or-none",
+  "artifact": "path/to/latest.report.json",
+  "playback": "path/to/playback-or-none",
+  "owner": "canonical owner",
+  "boundary": "current boundary",
+  "dominantReason": "current dominant reason",
+  "currentState": "one-line current state",
+  "nextAction": "next proof or implementation action",
+  "proof": [
+    "Focused owner test",
+    "Representative scenario rerun"
+  ],
+  "touchedFiles": [
+    "src/example.js",
+    "test/example.test.js"
+  ],
+  "predecessor": "work/packages/done-predecessor.md"
+}
+-->
+```
+
+The header exists to make handoff and automation reliable. The prose package
+body remains the source for reasoning, context, and the checklist.
 
 Every work package should answer:
 
@@ -147,6 +196,16 @@ static guardrail in the same work cycle when the boundary contract is durable.
 Use a sprint file only when several active work packages must be coordinated.
 The sprint file should link packages; it should not replace them.
 
+Scenario-driven active sprints should keep their newest compact handoff in:
+
+1. `work/sprints/current-blocker.json`
+2. `work/sprints/current-blocker.md`
+
+These files are generated from the active package metadata by
+`npm run work:current-blocker`. Keep long migration narratives in package
+history or archived sprint notes; the current-blocker files are the starting
+point for humans and LLM agents.
+
 Recommended naming:
 
 - `active-2026-q2-control-plane-stability.md`
@@ -169,3 +228,34 @@ Avoid:
 2. Separate status fields and filename states that can drift.
 3. Large umbrella packages spanning unrelated concerns.
 4. Sprint docs that contain detailed execution steps better owned by packages.
+
+## Size Ratchet
+
+Implementation speed depends on keeping owner files small enough to inspect.
+
+Use `npm run audit:file-size` to keep the current inherited large-file count
+from increasing. The ratchet uses these thresholds:
+
+1. production JavaScript files over `800` lines
+2. test JavaScript files over `1200` lines
+
+Use `npm run audit:file-size:strict` when a package explicitly owns file-size
+cleanup and should fail on any remaining oversized file.
+
+## Scoped Static Ratchets
+
+Use scoped ratchets during focused work when the repo-wide complexity output is
+too large to be useful:
+
+1. `npm run test:complexity:scoped -- <files...>` reports cyclomatic
+   complexity only for the named files or directories.
+2. `npm run test:complexity:cognitive:scoped -- <files...>` reports cognitive
+   complexity only for the named files or directories.
+3. `npm run test:metrics:scoped -- <files...>` runs both scoped complexity
+   ratchets and writes compact reports under `test-output/analysis/`.
+4. Add `:strict` to fail on any scoped violation, for example
+   `npm run test:metrics:scoped:strict -- <files...>`.
+
+The default scoped commands do not fail on inherited local debt; use them to
+record before/after counts in the package static drift ledger. Strict scoped
+commands are for cleanup packages or touched boundaries expected to be clean.

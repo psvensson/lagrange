@@ -1,0 +1,513 @@
+import {OperationWorkflowOwnerSegment4} from './operation-workflow-owner-segment-4.js';
+import {OPERATION_WORKFLOW_OWNER_SEGMENT_5_STAGE_SHARED as SHARED} from './operation-workflow-owner-segment-5-stage-shared.js';
+
+const {
+  CONTROL_PLANE_READINESS_DIMENSION,
+  NUM,
+  OPERATION_WORKFLOW_OWNER_LITERAL,
+  PRIORITY_PUBLICATION_LEADER_HANDOFF_EVIDENCE,
+  PRIORITY_PUBLICATION_SOURCE_ROLE_STATE,
+  PRIORITY_RECOVERY_WORKFLOW_TIMEOUT_STEPS,
+  RAFT_ROLE,
+  REBALANCER_SKIP_REASON,
+  ReplicaOperationMessageType,
+  ReplicaOperationReason,
+  ReplicaOperationResponseStatus,
+  SERVICE_TYPE,
+  STOP_PHASE_SOURCE_ABSENT_RESPONSE_STATUSES,
+  SYSTEM_TABLE_NAME,
+  TYPEOF,
+  VOTER_READY_REPLICA_TOPOLOGY_STATUSES,
+  WORKFLOW_STEP,
+  isSystemTablePartition,
+  normalizePriorityRecoveryOperationPartitionId,
+} = SHARED;
+
+class OperationWorkflowOwnerSegment5Stage1 extends OperationWorkflowOwnerSegment4 {
+  buildPriorityRecoveryWorkflowStepTimeoutMap(operation = null) {
+    const timeoutMap = {};
+    for (const workflowStep of PRIORITY_RECOVERY_WORKFLOW_TIMEOUT_STEPS) {
+      const stepTimeoutMs = this.getTimeoutForStep(workflowStep, operation);
+      if (!Number.isFinite(stepTimeoutMs) || stepTimeoutMs <= NUM.ZERO) {
+        continue;
+      }
+      timeoutMap[workflowStep] = Math.floor(stepTimeoutMs);
+    }
+    return Object.freeze(timeoutMap);
+  }
+
+  async handleStopPhaseSatisfiedResponse(operation, responseStatus) {
+    try {
+      if (operation?.workflowStep !== WORKFLOW_STEP.STOPPING) {
+        await this.updateStep(operation, WORKFLOW_STEP.STOPPING);
+      }
+      if (STOP_PHASE_SOURCE_ABSENT_RESPONSE_STATUSES.has(responseStatus)) {
+        await this.completeOperation(operation);
+        return this.buildSuccessfulOperationResult(operation.operationId, {
+          status: responseStatus,
+        });
+      }
+      return this.buildSuccessfulOperationResult(operation.operationId, {
+        status: ReplicaOperationResponseStatus.IN_PROGRESS,
+      });
+    } catch (error) {
+      if (
+        this.deferObservedProgressRetry(
+          operation?.operationId || null,
+          SYSTEM_TABLE_NAME.SERVICES,
+          OPERATION_WORKFLOW_OWNER_LITERAL.DELETE,
+          error,
+        )
+      ) {
+        return this.buildSkippedOperationResult(
+          REBALANCER_SKIP_REASON.DEFERRED_RETRY_PENDING,
+          operation?.operationId || null,
+          {
+            error: this.normalizeErrorMessage(
+              error,
+              OPERATION_WORKFLOW_OWNER_LITERAL.RETRYABLE_CONTROL_DASH_PLANE_TRANSITION_FAILURE,
+            ),
+          },
+        );
+      }
+      throw error;
+    }
+  }
+
+  isCriticalSystemPartition(partitionId) {
+    return isSystemTablePartition({partitionId});
+  }
+
+  resolveOperationReadinessDecisionDimension(operationOrPartitionId = null) {
+    const partitionId =
+      typeof operationOrPartitionId === TYPEOF.STRING ?
+        operationOrPartitionId :
+        normalizePriorityRecoveryOperationPartitionId(operationOrPartitionId);
+    if (this.isCriticalSystemPartition(partitionId)) {
+      return CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE;
+    }
+    return CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE;
+  }
+
+  isReadinessDimensionSatisfied(readiness, decisionDimension) {
+    const dimensions =
+      readiness?.dimensions && typeof readiness.dimensions === 'object' ?
+        readiness.dimensions :
+        null;
+    if (!dimensions) {
+      return false;
+    }
+    if (dimensions[decisionDimension] === true) {
+      return true;
+    }
+    if (
+      decisionDimension !==
+      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE
+    ) {
+      return false;
+    }
+    return false;
+  }
+
+  isVoterReadyReplicaTopology(replicaRow) {
+    if (!replicaRow) {
+      return false;
+    }
+    if (!VOTER_READY_REPLICA_TOPOLOGY_STATUSES.has(replicaRow.status)) {
+      return false;
+    }
+    if (!replicaRow.address) {
+      return false;
+    }
+    const raftRole =
+      typeof replicaRow.raft_role === 'string' ?
+        replicaRow.raft_role.toLowerCase() :
+        null;
+    if (!raftRole || raftRole === RAFT_ROLE.LEARNER) {
+      return false;
+    }
+    return true;
+  }
+
+  isVoterReadyRoutableReplica(replicaRow, options = {}) {
+    if (!this.isVoterReadyReplicaTopology(replicaRow)) {
+      return false;
+    }
+    const partitionId =
+      options?.partitionId ||
+      replicaRow.partition_id ||
+      replicaRow.partitionId ||
+      null;
+    return this.isNodeReadyForRouting(replicaRow.node_id, {
+      partitionId,
+      decisionDimension: options?.decisionDimension || null,
+      participationKind: options?.participationKind || null,
+    });
+  }
+
+  isOperationReplicaRow(replicaRow, operation) {
+    if (!replicaRow || !operation) {
+      return false;
+    }
+    if (!operation.replicaId) {
+      return false;
+    }
+    return (
+      replicaRow.service_id === operation.replicaId ||
+      replicaRow.replica_id === operation.replicaId
+    );
+  }
+
+  getReplicaRowIdentity(replicaRow) {
+    const serviceId =
+      typeof replicaRow?.service_id === TYPEOF.STRING ?
+        replicaRow.service_id.trim() :
+        typeof replicaRow?.serviceId === TYPEOF.STRING ?
+          replicaRow.serviceId.trim() :
+          '';
+    if (serviceId.length > NUM.ZERO) {
+      return serviceId;
+    }
+    const replicaId =
+      typeof replicaRow?.replica_id === TYPEOF.STRING ?
+        replicaRow.replica_id.trim() :
+        typeof replicaRow?.replicaId === TYPEOF.STRING ?
+          replicaRow.replicaId.trim() :
+          '';
+    return replicaId.length > NUM.ZERO ? replicaId : null;
+  }
+
+  normalizeReplicaRowRaftRole(replicaRow) {
+    return typeof replicaRow?.raft_role === TYPEOF.STRING ?
+      replicaRow.raft_role.trim().toLowerCase() :
+      null;
+  }
+
+  isLeaderReplicaRow(replicaRow) {
+    return this.normalizeReplicaRowRaftRole(replicaRow) === RAFT_ROLE.LEADER;
+  }
+
+  getPriorityPublicationSourceRoleState(replicaRow) {
+    const normalizedRaftRole = this.normalizeReplicaRowRaftRole(replicaRow);
+    if (normalizedRaftRole === RAFT_ROLE.FOLLOWER) {
+      return PRIORITY_PUBLICATION_SOURCE_ROLE_STATE.FOLLOWER;
+    }
+    if (normalizedRaftRole === RAFT_ROLE.LEADER) {
+      return PRIORITY_PUBLICATION_SOURCE_ROLE_STATE.LEADER;
+    }
+    return PRIORITY_PUBLICATION_SOURCE_ROLE_STATE.UNKNOWN;
+  }
+
+  getPriorityPublicationReplacementRoleState(replicaRow) {
+    const normalizedRaftRole = this.normalizeReplicaRowRaftRole(replicaRow);
+    if (normalizedRaftRole === RAFT_ROLE.LEADER) {
+      return PRIORITY_PUBLICATION_SOURCE_ROLE_STATE.LEADER;
+    }
+    if (normalizedRaftRole === RAFT_ROLE.FOLLOWER) {
+      return PRIORITY_PUBLICATION_SOURCE_ROLE_STATE.FOLLOWER;
+    }
+    return PRIORITY_PUBLICATION_SOURCE_ROLE_STATE.UNKNOWN;
+  }
+
+  getCriticalPartitionLeaderNodeIdForSafety(partitionRow) {
+    const leaderNodeId =
+      typeof partitionRow?.leader_node_id === TYPEOF.STRING ?
+        partitionRow.leader_node_id.trim() :
+        null;
+    return leaderNodeId && leaderNodeId.length > NUM.ZERO ? leaderNodeId : null;
+  }
+
+  getPriorityPublicationLeaderHandoffEvidenceMap() {
+    if (
+      !(
+        this.priorityPublicationLeaderHandoffEvidenceByOperationId instanceof
+        Map
+      )
+    ) {
+      this.priorityPublicationLeaderHandoffEvidenceByOperationId = new Map();
+    }
+    return this.priorityPublicationLeaderHandoffEvidenceByOperationId;
+  }
+
+  getPriorityPublicationLeaderHandoffEvidence(operation, sourceReplicaId) {
+    const operationId =
+      typeof operation?.operationId === TYPEOF.STRING ?
+        operation.operationId.trim() :
+        null;
+    if (!operationId) {
+      return null;
+    }
+    const evidence =
+      this.getPriorityPublicationLeaderHandoffEvidenceMap().get(operationId) ||
+      null;
+    if (!evidence) {
+      return null;
+    }
+    const evidenceExpired =
+      !Number.isFinite(evidence.observedAt) ||
+      Date.now() - evidence.observedAt >
+        PRIORITY_PUBLICATION_LEADER_HANDOFF_EVIDENCE.STALE_AFTER_MS;
+    const evidenceMismatch =
+      typeof sourceReplicaId === TYPEOF.STRING &&
+      sourceReplicaId.length > NUM.ZERO &&
+      evidence.sourceReplicaId !== sourceReplicaId;
+    if (evidenceExpired || evidenceMismatch) {
+      this.getPriorityPublicationLeaderHandoffEvidenceMap().delete(operationId);
+      return null;
+    }
+    return evidence;
+  }
+
+  getPriorityPublicationReplacementLeaderElectionEvidenceMap() {
+    if (
+      !(
+        this.priorityPublicationReplacementLeaderElectionEvidenceByOperationId instanceof
+        Map
+      )
+    ) {
+      this.priorityPublicationReplacementLeaderElectionEvidenceByOperationId =
+        new Map();
+    }
+    return this.priorityPublicationReplacementLeaderElectionEvidenceByOperationId;
+  }
+
+  getPriorityPublicationReplacementLeaderElectionEvidence(
+    operation,
+    replacementReplicaId,
+  ) {
+    const operationId =
+      typeof operation?.operationId === TYPEOF.STRING ?
+        operation.operationId.trim() :
+        null;
+    if (!operationId) {
+      return null;
+    }
+    const evidence =
+      this.getPriorityPublicationReplacementLeaderElectionEvidenceMap().get(
+        operationId,
+      ) || null;
+    if (!evidence) {
+      return null;
+    }
+    const evidenceExpired =
+      !Number.isFinite(evidence.observedAt) ||
+      Date.now() - evidence.observedAt >
+        PRIORITY_PUBLICATION_LEADER_HANDOFF_EVIDENCE.STALE_AFTER_MS;
+    const notFoundReplicaIds = Array.isArray(evidence.notFoundReplicaIds) ?
+      evidence.notFoundReplicaIds :
+      [];
+    const completedReplicaIds = Array.isArray(evidence.completedReplicaIds) ?
+      evidence.completedReplicaIds :
+      [];
+    const evidenceReferencesReplacementReplica =
+      typeof replacementReplicaId === TYPEOF.STRING &&
+      replacementReplicaId.length > NUM.ZERO &&
+      (
+        (typeof evidence.replacementReplicaId === TYPEOF.STRING &&
+          evidence.replacementReplicaId === replacementReplicaId) ||
+        notFoundReplicaIds.includes(replacementReplicaId) ||
+        completedReplicaIds.includes(replacementReplicaId)
+      );
+    const evidenceMismatch =
+      typeof replacementReplicaId === TYPEOF.STRING &&
+      replacementReplicaId.length > NUM.ZERO &&
+      !evidenceReferencesReplacementReplica;
+    if (evidenceExpired) {
+      this.getPriorityPublicationReplacementLeaderElectionEvidenceMap().delete(
+        operationId,
+      );
+      return null;
+    }
+    if (evidenceMismatch) {
+      return null;
+    }
+    return evidence;
+  }
+
+  getFreshPriorityPublicationReplacementLeaderElectionEvidence(operation) {
+    const operationId =
+      typeof operation?.operationId === TYPEOF.STRING ?
+        operation.operationId.trim() :
+        null;
+    if (!operationId) {
+      return null;
+    }
+    const evidence =
+      this.getPriorityPublicationReplacementLeaderElectionEvidenceMap().get(
+        operationId,
+      ) || null;
+    if (!evidence) {
+      return null;
+    }
+    const evidenceExpired =
+      !Number.isFinite(evidence.observedAt) ||
+      Date.now() - evidence.observedAt >
+        PRIORITY_PUBLICATION_LEADER_HANDOFF_EVIDENCE.STALE_AFTER_MS;
+    if (evidenceExpired) {
+      this.getPriorityPublicationReplacementLeaderElectionEvidenceMap().delete(
+        operationId,
+      );
+      return null;
+    }
+    return evidence;
+  }
+
+  recordPriorityPublicationLeaderHandoffEvidence(
+    operation,
+    handoffRequest,
+    response,
+  ) {
+    if (
+      !operation ||
+      !handoffRequest ||
+      handoffRequest.messageType !==
+        ReplicaOperationMessageType.STEP_DOWN_REPLICA ||
+      handoffRequest.requestReason !==
+        ReplicaOperationReason.REPLACE_SOURCE_LEADER_HANDOFF ||
+      (response?.status !== ReplicaOperationResponseStatus.COMPLETED &&
+        response?.status !== ReplicaOperationResponseStatus.NOT_FOUND)
+    ) {
+      return;
+    }
+    const operationId =
+      typeof operation.operationId === TYPEOF.STRING ?
+        operation.operationId.trim() :
+        null;
+    const sourceReplicaId =
+      typeof handoffRequest.requestReplicaId === TYPEOF.STRING ?
+        handoffRequest.requestReplicaId.trim() :
+        null;
+    if (!operationId || !sourceReplicaId) {
+      return;
+    }
+    this.getPriorityPublicationLeaderHandoffEvidenceMap().set(
+      operationId,
+      Object.freeze({
+        observedAt: Date.now(),
+        sourceReplicaId,
+      }),
+    );
+  }
+
+  recordPriorityPublicationReplacementLeaderElectionEvidence(
+    operation,
+    handoffRequest,
+    response,
+  ) {
+    if (
+      !operation ||
+      !handoffRequest ||
+      handoffRequest.messageType !==
+        ReplicaOperationMessageType.STEP_DOWN_REPLICA ||
+      handoffRequest.requestReason !==
+        ReplicaOperationReason.REPLACE_TARGET_LEADER_ELECTION ||
+      (response?.status !== ReplicaOperationResponseStatus.COMPLETED &&
+        response?.status !== ReplicaOperationResponseStatus.NOT_FOUND)
+    ) {
+      return;
+    }
+    const operationId =
+      typeof operation.operationId === TYPEOF.STRING ?
+        operation.operationId.trim() :
+        null;
+    const replacementReplicaId =
+      typeof handoffRequest.requestReplicaId === TYPEOF.STRING ?
+        handoffRequest.requestReplicaId.trim() :
+        null;
+    if (!operationId || !replacementReplicaId) {
+      return;
+    }
+    const previousEvidence =
+      this.getPriorityPublicationReplacementLeaderElectionEvidenceMap().get(
+        operationId,
+      ) || null;
+    const previousNotFoundReplicaIds = Array.isArray(
+      previousEvidence?.notFoundReplicaIds,
+    ) ?
+      previousEvidence.notFoundReplicaIds :
+      [];
+    const previousCompletedReplicaIds = Array.isArray(
+      previousEvidence?.completedReplicaIds,
+    ) ?
+      previousEvidence.completedReplicaIds :
+      [];
+    const nextNotFoundReplicaIds = new Set(
+      previousNotFoundReplicaIds.filter(
+        (replicaId) => replicaId !== replacementReplicaId,
+      ),
+    );
+    const nextCompletedReplicaIds = new Set(previousCompletedReplicaIds);
+    if (response.status === ReplicaOperationResponseStatus.NOT_FOUND) {
+      nextNotFoundReplicaIds.add(replacementReplicaId);
+    }
+    if (response.status === ReplicaOperationResponseStatus.COMPLETED) {
+      nextCompletedReplicaIds.add(replacementReplicaId);
+    }
+    this.getPriorityPublicationReplacementLeaderElectionEvidenceMap().set(
+      operationId,
+      Object.freeze({
+        completedReplicaIds: Object.freeze([...nextCompletedReplicaIds]),
+        notFoundReplicaIds: Object.freeze([...nextNotFoundReplicaIds]),
+        observedAt: Date.now(),
+        replacementReplicaId,
+        responseStatus: response.status,
+      }),
+    );
+  }
+
+  isPriorityPublicationLeaderHandoffRetrySuppressed(evidence) {
+    return (
+      !!evidence &&
+      Number.isFinite(evidence.observedAt) &&
+      Date.now() - evidence.observedAt <=
+        PRIORITY_PUBLICATION_LEADER_HANDOFF_EVIDENCE.REQUEST_RETRY_AFTER_MS
+    );
+  }
+
+  resolvePriorityPublicationSourceRoleState(
+    operation,
+    sourceRoleState,
+    partitionRow,
+  ) {
+    if (sourceRoleState === PRIORITY_PUBLICATION_SOURCE_ROLE_STATE.FOLLOWER) {
+      return PRIORITY_PUBLICATION_SOURCE_ROLE_STATE.FOLLOWER;
+    }
+
+    const rawSourceNodeId =
+      typeof operation?.sourceNodeId === TYPEOF.STRING ?
+        operation.sourceNodeId.trim() :
+        null;
+    const sourceNodeId =
+      rawSourceNodeId && rawSourceNodeId.length > NUM.ZERO ?
+        rawSourceNodeId :
+        null;
+    const partitionLeaderNodeId =
+      this.getCriticalPartitionLeaderNodeIdForSafety(partitionRow);
+    if (sourceNodeId && partitionLeaderNodeId) {
+      return partitionLeaderNodeId === sourceNodeId ?
+        PRIORITY_PUBLICATION_SOURCE_ROLE_STATE.LEADER :
+        PRIORITY_PUBLICATION_SOURCE_ROLE_STATE.FOLLOWER;
+    }
+    return sourceRoleState;
+  }
+
+  getCachedCriticalReplicaRows(partitionId) {
+    const systemTableCache = this.repository.systemTableCache;
+    if (
+      !systemTableCache ||
+      typeof systemTableCache.filter !== TYPEOF.FUNCTION
+    ) {
+      return [];
+    }
+    return (
+      systemTableCache.filter(
+        SYSTEM_TABLE_NAME.SERVICES,
+        (row) =>
+          row.partition_id === partitionId &&
+          row.service_type === SERVICE_TYPE.PARTITION,
+      ) || []
+    );
+  }
+}
+
+export {OperationWorkflowOwnerSegment5Stage1};

@@ -1,0 +1,230 @@
+import {test} from '../../src/test-helpers/tap.js';
+import {
+  UnifiedRebalancer,
+  EntityType,
+} from '../../src/rebalancer/unified-rebalancer.js';
+import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {LoggingService} from '../../src/logging/logging-service.js';
+import {
+  CONTROL_PLANE_READINESS_DIMENSION,
+} from '../../src/control-plane/control-plane-readiness-constants.js';
+
+const TEST_SEED_NODE_ID = 'seed-node';
+const TEST_COHORT_NODE_ID_B = 'node-2';
+const TEST_COHORT_NODE_ID_C = 'node-3';
+const TEST_NON_COHORT_NODE_ID_D = 'node-4';
+const TEST_NON_COHORT_NODE_ID_E = 'node-5';
+const TEST_PARTITION_ID = 'control_plane_publications-p1';
+const TEST_TABLE_ID = 'control_plane_publications';
+const TEST_READY_LEASE_OFFSET_MS = 60000;
+const TEST_STALE_LEASE_OFFSET_MS = -60000;
+
+function initEnv() {
+  ConfigurationManager.resetInstance();
+  const config = ConfigurationManager.getInstance();
+  if (!config.isInitialized()) {
+    config.initialize({
+      node: {id: TEST_SEED_NODE_ID},
+      logging: {level: 'error'},
+    });
+  }
+  const logging = LoggingService.getInstance();
+  if (!logging.isInitialized()) {
+    logging.initialize({level: 'error'});
+  }
+}
+
+function createNodeRow(nodeId, readyLeaseOffsetMs) {
+  return {
+    node_id: nodeId,
+    status: 'active',
+    ready_lease_expires_at: Date.now() + readyLeaseOffsetMs,
+  };
+}
+
+function createNodeEndpoint(nodeId) {
+  return {
+    node_id: nodeId,
+    transport_type: 'ws',
+    status: 'active',
+  };
+}
+
+function createServiceEndpoint(nodeId) {
+  return {
+    node_id: nodeId,
+    service_id: 'sys-postgres-wire',
+    health_status: 'healthy',
+  };
+}
+
+function createCache() {
+  const rows = {
+    nodes: [
+      createNodeRow(TEST_SEED_NODE_ID, TEST_READY_LEASE_OFFSET_MS),
+      createNodeRow(TEST_COHORT_NODE_ID_B, TEST_READY_LEASE_OFFSET_MS),
+      createNodeRow(TEST_COHORT_NODE_ID_C, TEST_READY_LEASE_OFFSET_MS),
+      createNodeRow(TEST_NON_COHORT_NODE_ID_D, TEST_STALE_LEASE_OFFSET_MS),
+      createNodeRow(TEST_NON_COHORT_NODE_ID_E, TEST_STALE_LEASE_OFFSET_MS),
+    ],
+    partitions: [
+      {partition_id: TEST_PARTITION_ID, table_id: TEST_TABLE_ID},
+    ],
+    node_endpoints: [
+      createNodeEndpoint(TEST_SEED_NODE_ID),
+      createNodeEndpoint(TEST_COHORT_NODE_ID_B),
+      createNodeEndpoint(TEST_COHORT_NODE_ID_C),
+    ],
+    service_endpoints: [
+      createServiceEndpoint(TEST_SEED_NODE_ID),
+      createServiceEndpoint(TEST_COHORT_NODE_ID_B),
+      createServiceEndpoint(TEST_COHORT_NODE_ID_C),
+    ],
+    services: [],
+    tables: [],
+    replica_operations: [],
+  };
+  return {
+    get(tableName, key) {
+      const values = rows[tableName] || [];
+      return values.find((row) =>
+        row.partition_id === key || row.node_id === key
+      ) || null;
+    },
+    getAll(tableName) {
+      return rows[tableName] || [];
+    },
+    filter(tableName, predicate) {
+      return (rows[tableName] || []).filter(predicate);
+    },
+  };
+}
+
+function createReadinessService(cache) {
+  return {
+    getNodeReadinessSync(nodeId) {
+      const nodeRow = cache.get('nodes', nodeId);
+      const ready =
+        nodeRow !== null &&
+        Number(nodeRow.ready_lease_expires_at) > Date.now() &&
+        nodeRow.status === 'active';
+      return {
+        nodeId,
+        dimensions: {
+          [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: true,
+          [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: ready,
+          [CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY]: ready,
+          [CONTROL_PLANE_READINESS_DIMENSION.LOAD_READY]: ready,
+          [CONTROL_PLANE_READINESS_DIMENSION.PLACEMENT_ELIGIBLE]: ready,
+          [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]: ready,
+          [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: ready,
+          [CONTROL_PLANE_READINESS_DIMENSION
+            .CONTROL_PLANE_RECOVERY_ELIGIBLE]: ready,
+          [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: ready,
+        },
+        reasons: [],
+      };
+    },
+    getStartupAuthoritySnapshotSync() {
+      return {
+        authorityAvailable: true,
+        canonicalStartupNodeIds: [
+          TEST_SEED_NODE_ID,
+          TEST_COHORT_NODE_ID_B,
+          TEST_COHORT_NODE_ID_C,
+        ],
+      };
+    },
+  };
+}
+
+function createRebalancer() {
+  const cache = createCache();
+  return new UnifiedRebalancer({
+    entityId: TEST_PARTITION_ID,
+    entityType: EntityType.PARTITION,
+    nodeId: TEST_SEED_NODE_ID,
+    systemTableCache: cache,
+    cdcIntegrationService: {
+      insertSystemTableRow: async () => ({success: true}),
+      updateSystemTableRow: async () => ({success: true}),
+    },
+    tablePolicyService: {
+      getPolicyForPartition: () => ({targetReplicaCount: 3}),
+      getMessageGroupPolicy: async () => ({targetReplicaCount: 3}),
+    },
+    messageRouter: {
+      getConnectionState: () => 'connected',
+      isOutboundQueueAvailable: () => true,
+      getConnectedNodes: () => [],
+    },
+    rebalanceCoordinator: {
+      getMoveSafetyError: () => null,
+      createOperation: async () => ({}),
+      executeOperation: async () => ({success: true}),
+      canStartAddOperation: async () => true,
+      canStartRemoveOperation: async () => true,
+      getStats: () => ({inFlightOperations: 0, totalOperations: 0}),
+      storageAccountingService: {estimateReplicaBytes: () => 1},
+      storageAdmissionService: {
+        checkAdd: async () => ({decision: 'allow'}),
+        checkReplace: async () => ({decision: 'allow'}),
+      },
+    },
+    sqlQueryEngine: {
+      async executeQuery() {
+        return {success: true, rows: []};
+      },
+    },
+    controlPlaneReadinessService: createReadinessService(cache),
+  });
+}
+
+test(
+  'UnifiedRebalancer constrains critical-system topology settling to the startup-authority cohort',
+  async (t) => {
+    initEnv();
+    const rebalancer = createRebalancer();
+
+    t.equal(
+      rebalancer.getCriticalSystemTopologySettlingBlocker(),
+      null,
+      'non-cohort ACTIVE rows should not reopen topology settling once startup authority is available',
+    );
+    t.end();
+  },
+);
+
+test(
+  'UnifiedRebalancer checkRebalance reaches evaluation when only non-cohort ACTIVE rows are unready',
+  async (t) => {
+    initEnv();
+    const rebalancer = createRebalancer();
+
+    rebalancer.initialize();
+    rebalancer.isLeader = true;
+    rebalancer.clusterReadinessConfirmed = true;
+    rebalancer.isStabilized = () => true;
+    rebalancer.systemPartitionStartDelayMs = 0;
+    rebalancer.userPartitionStartDelayMs = 0;
+    rebalancer.rebalanceStartAtMs = Date.now() - 1;
+    rebalancer.getCriticalSystemTrafficReadinessBlocker = () => null;
+    rebalancer.getCriticalSystemLocalServeReadinessBlocker = () => null;
+    rebalancer.getLocalControlPlaneMutationReadinessBlocker = () => null;
+    rebalancer.scheduleNextCheck = () => {};
+
+    let evaluateStateCalls = 0;
+    rebalancer.evaluateState = async () => {
+      evaluateStateCalls += 1;
+      return false;
+    };
+
+    await rebalancer.checkRebalance();
+
+    t.equal(
+      evaluateStateCalls,
+      1,
+      'topology settling should not stall on unready non-cohort ACTIVE rows',
+    );
+  },
+);

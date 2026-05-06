@@ -318,6 +318,10 @@ class UnifiedRebalancerSegment2 extends UnifiedRebalancerSegment1 {
 
     let hasTransitionalNode = false;
     let hasFailedNode = false;
+    const startupAuthorityNodeIds = this.getStartupAuthorityNodeIdSet();
+    const constrainToStartupAuthority =
+      startupAuthorityNodeIds instanceof Set &&
+      startupAuthorityNodeIds.size > NUM.ZERO;
     const bypassPriorityStartupReadiness =
       this.shouldBypassLocalPriorityControlPlaneStartupReadiness();
     const readinessDecisionDimension =
@@ -328,6 +332,12 @@ class UnifiedRebalancerSegment2 extends UnifiedRebalancerSegment1 {
     for (const nodeRow of nodeRows) {
       const normalizedNode = normalizeNodeRow(nodeRow);
       const {status, nodeId} = normalizedNode;
+      if (
+        constrainToStartupAuthority &&
+        !startupAuthorityNodeIds.has(nodeId)
+      ) {
+        continue;
+      }
       if (!status) {
         continue;
       }
@@ -413,7 +423,12 @@ class UnifiedRebalancerSegment2 extends UnifiedRebalancerSegment1 {
           })
           .filter(
             (nodeId) =>
-              typeof nodeId === TYPEOF.STRING && nodeId.length > NUM.ZERO,
+              typeof nodeId === TYPEOF.STRING &&
+              nodeId.length > NUM.ZERO &&
+              (
+                !constrainToStartupAuthority ||
+                startupAuthorityNodeIds.has(nodeId)
+              ),
           ),
       );
       const requiredHealthyNodeCount =
@@ -427,6 +442,12 @@ class UnifiedRebalancerSegment2 extends UnifiedRebalancerSegment1 {
           this.getPublishedActiveNodeIdSet() :
           null;
       for (const connectedNodeId of connectedNodeIds) {
+        if (
+          constrainToStartupAuthority &&
+          !startupAuthorityNodeIds.has(connectedNodeId)
+        ) {
+          continue;
+        }
         if (knownNodeIds.has(connectedNodeId)) {
           continue;
         }

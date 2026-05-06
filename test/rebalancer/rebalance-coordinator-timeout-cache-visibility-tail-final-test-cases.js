@@ -450,6 +450,251 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests
     );
   });
 
+  test('observed progress keeps locally owned priority REPLACE in CREATING ' +
+  'when target visibility is already pending', async (t) => {
+    const TEST_OPERATION_ID =
+      'op-observed-progress-local-pending-target-status';
+    const TEST_PARTITION_ID = 'sql_transaction_participants-p1';
+    const TEST_REPLICA_ID = 'sql_transaction_participants-p1-r4';
+    const TEST_SOURCE_REPLICA_ID = 'sql_transaction_participants-p1-r1';
+    const TEST_SOURCE_NODE_ID = 'node-1';
+    const TEST_TARGET_NODE_ID = 'node-2';
+    const TEST_OPERATION_TYPE_REPLACE = 'REPLACE';
+    const TEST_ENTITY_TYPE_PARTITION = 'partition';
+    const TEST_WORKFLOW_STEP_PENDING = 'PENDING';
+    const TEST_WORKFLOW_STEP_SENDING = 'SENDING';
+    const TEST_WORKFLOW_STEP_CREATING = 'CREATING';
+    const TEST_RAFT_ROLE_FOLLOWER = 'follower';
+    const TEST_REPLICA_OPERATIONS_TABLE = 'replica_operations';
+    const TEST_SERVICES_TABLE = 'services';
+    const TEST_CACHE_OPERATION_UPSERT = 'UPSERT';
+    const TEST_UPDATE_OPERATION_SQL_PREFIX =
+      'UPDATE replica_operations SET';
+    const TEST_SELECT_SERVICE_ID_FRAGMENT = 'WHERE service_id = ?';
+    const TEST_SELECT_PARTITION_NODE_FRAGMENT =
+      'WHERE partition_id = ? AND node_id = ?';
+    const TEST_EMPTY_VALUE = null;
+    const nowMs = Date.now();
+    const operationRow = {
+      operation_id: TEST_OPERATION_ID,
+      type: TEST_OPERATION_TYPE_REPLACE,
+      partition_id: TEST_PARTITION_ID,
+      replica_id: TEST_REPLICA_ID,
+      source_node_id: TEST_SOURCE_NODE_ID,
+      target_node_id: TEST_TARGET_NODE_ID,
+      status: ReplicaStatus.CREATING,
+      workflow_step: TEST_WORKFLOW_STEP_CREATING,
+      created_at: nowMs - 5000,
+      updated_at: nowMs - 1000,
+      completed_at: TEST_EMPTY_VALUE,
+      error_message: TEST_EMPTY_VALUE,
+      entity_type: TEST_ENTITY_TYPE_PARTITION,
+      entity_id: TEST_PARTITION_ID,
+      steps_history: JSON.stringify([{
+        step: TEST_WORKFLOW_STEP_PENDING,
+        timestamp: nowMs - 5000,
+        sourceReplicaId: TEST_SOURCE_REPLICA_ID,
+      }, {
+        step: TEST_WORKFLOW_STEP_SENDING,
+        timestamp: nowMs - 3000,
+      }, {
+        step: TEST_WORKFLOW_STEP_CREATING,
+        timestamp: nowMs - 1000,
+      }]),
+    };
+    const serviceRow = {
+      service_id: TEST_REPLICA_ID,
+      replica_id: TEST_REPLICA_ID,
+      partition_id: TEST_PARTITION_ID,
+      node_id: TEST_TARGET_NODE_ID,
+      service_type: TEST_ENTITY_TYPE_PARTITION,
+      status: ReplicaStatus.PENDING,
+      raft_role: TEST_RAFT_ROLE_FOLLOWER,
+      address:
+        `${TEST_TARGET_NODE_ID}/partition/${TEST_REPLICA_ID}`,
+    };
+    const authoritativeReadCalls = [];
+    const dispatchedMessages = [];
+
+    const cdcIntegrationService = {
+      async waitForCacheUpdate() {},
+      async executeAuthoritativeSystemTableRead(
+        tableName,
+        sql,
+        params,
+        options = {},
+      ) {
+        authoritativeReadCalls.push({
+          tableName,
+          sql: String(sql),
+          params: [...(Array.isArray(params) ? params : [])],
+          options: {...options},
+        });
+
+        if (tableName === TEST_REPLICA_OPERATIONS_TABLE) {
+          return {
+            success: true,
+            source: 'local_partition_replica',
+            rows: [{...operationRow}],
+          };
+        }
+
+        if (tableName === TEST_SERVICES_TABLE) {
+          if (String(sql).includes(TEST_SELECT_SERVICE_ID_FRAGMENT)) {
+            return {
+              success: true,
+              source: 'local_partition_replica',
+              rows: [{...serviceRow}],
+            };
+          }
+          if (String(sql).includes(TEST_SELECT_PARTITION_NODE_FRAGMENT)) {
+            return {
+              success: true,
+              source: 'local_partition_replica',
+              rows:
+                serviceRow.partition_id === params?.[0] &&
+                  serviceRow.node_id === params?.[1] ?
+                  [{...serviceRow}] :
+                  [],
+            };
+          }
+        }
+
+        return {
+          success: true,
+          source: 'local_partition_replica',
+          rows: [],
+        };
+      },
+    };
+
+    const controlPlaneSystemTableGateway = {
+      async readRows(tableName, sql, params = [], options = {}) {
+        return cdcIntegrationService.executeAuthoritativeSystemTableRead(
+          tableName,
+          sql,
+          params,
+          options,
+        );
+      },
+      async readAuthoritativeRows(tableName, sql, params = [], options = {}) {
+        return cdcIntegrationService.executeAuthoritativeSystemTableRead(
+          tableName,
+          sql,
+          params,
+          options,
+        );
+      },
+      async executeQuery(sql, params = []) {
+        if (String(sql).startsWith(TEST_UPDATE_OPERATION_SQL_PREFIX)) {
+          operationRow.status = params[0];
+          operationRow.workflow_step = params[1];
+          operationRow.updated_at = params[2];
+          operationRow.completed_at = params[3];
+          operationRow.error_message = params[4];
+          operationRow.steps_history = params[5];
+          operationRow.replica_id = params[6];
+          return {
+            success: true,
+            affectedRows: 1,
+          };
+        }
+        return {
+          success: true,
+          rows: [],
+          affectedRows: 0,
+        };
+      },
+    };
+
+    const coordinator = createCoordinator({
+      nodeId: TEST_TARGET_NODE_ID,
+      transactionCoordinator: buildTransactionCoordinator(),
+      systemTableCache: {
+        get(tableName, key) {
+          if (tableName === TEST_REPLICA_OPERATIONS_TABLE) {
+            return key === operationRow.operation_id ?
+              operationRow :
+              TEST_EMPTY_VALUE;
+          }
+          if (tableName === TEST_SERVICES_TABLE) {
+            return key === serviceRow.service_id ?
+              serviceRow :
+              TEST_EMPTY_VALUE;
+          }
+          return TEST_EMPTY_VALUE;
+        },
+        getAll(tableName) {
+          if (tableName === TEST_REPLICA_OPERATIONS_TABLE) {
+            return [operationRow];
+          }
+          if (tableName === TEST_SERVICES_TABLE) {
+            return [serviceRow];
+          }
+          return [];
+        },
+        filter(tableName, predicate) {
+          return this.getAll(tableName).filter(predicate);
+        },
+      },
+      cdcIntegrationService,
+      controlPlaneSystemTableGateway,
+      messageRouter: {
+        async deliver(target, request) {
+          dispatchedMessages.push({target, request});
+          return {acknowledged: true, status: 'initiated'};
+        },
+      },
+      tablePolicyService: {
+        async getPolicyForPartition() {
+          return {minReplicaCount: 3};
+        },
+      },
+      enableTimeouts: false,
+    });
+
+    coordinator.initialize();
+    try {
+      coordinator.handleObservedReplicaStateChange(
+        TEST_SERVICES_TABLE,
+        TEST_CACHE_OPERATION_UPSERT,
+        serviceRow,
+      );
+      await new Promise((resolve) => setImmediate(resolve));
+      await new Promise((resolve) => setImmediate(resolve));
+    } finally {
+      await coordinator.shutdown();
+    }
+
+    t.equal(
+      operationRow.workflow_step,
+      TEST_WORKFLOW_STEP_CREATING,
+      'observed pending target visibility should keep the durable row in CREATING',
+    );
+    t.equal(
+      operationRow.status,
+      ReplicaStatus.CREATING,
+      'observed pending target visibility should preserve the creating status',
+    );
+    t.same(
+      dispatchedMessages.map(({target, request}) => ({
+        target,
+        type: request.type,
+        replicaId: request.replicaId,
+      })),
+      [],
+      'observed pending target visibility should not replay create dispatch from the owner lane',
+    );
+    t.ok(
+      authoritativeReadCalls.some((call) =>
+        call.tableName === TEST_SERVICES_TABLE &&
+        call.options.authoritativeReadMode ===
+          CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
+      ),
+      'observed pending target visibility should still reconcile through the local target-status owner read',
+    );
+  });
+
   test('replica operation row cache progress reconciles priority REPLACE ' +
   'when target service progress was already cached', async (t) => {
     const TEST_OPERATION_ID =

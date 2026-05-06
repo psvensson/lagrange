@@ -7,18 +7,53 @@ into startup active-gate selected-snapshot evidence.
 
 ## Current Evidence
 
-This package remains active as the prior post-active operation-transition /
-over-target residual owner, and it also retains the package-local guardrail and
-adjacent sweep debt recorded in the closure inventory below. It is no longer
-the representative re-entry owner. The historical May 5 `074739Z` topology
-handoff migrated earlier into
-[Rolling Restart Topology Publication Snapshot Reachability Reentry](./active-20260505-rolling-restart-topology-publication-snapshot-reachability-reentry.md).
-That handoff and the later May 5 `093109Z` topology-package state are now
-historical after the May 5 `102455Z` reconcile-probe topology-package state.
-Representative runtime work should return here after the representative path
-again reaches post-publication operation workflow timeout reconciliation or
-over-target trim; current topology publication membership plus selected
-snapshot coverage residuals belong to the topology re-entry package.
+Status update on May 6, 2026: this file is now a dormant residual, not the
+current representative package. The fresh representative rerun
+`test-output/reports/rolling-restart-after-pending-rearm-restore-20260506T121614Z.report.json`
+proved the prior post-publication operation-progress witness is no longer the
+selected blocker. The live owner boundary later moved through
+[Rolling Restart Priority Recovery Serial-Wait Workflow Progress Reentry](./done-20260506-rolling-restart-priority-recovery-serial-wait-workflow-progress-reentry.md)
+and is now tracked in
+[Rolling Restart Startup Publication ACK-Pending Owner-RPC Nodes Repair Reentry](./done-20260506-rolling-restart-startup-publication-ack-pending-owner-rpc-nodes-repair-reentry.md).
+
+The last period when this package was the representative owner was the
+publication owner-read/remove-safety follow-up on `20260506T123000Z`:
+
+1. Fresh representative rerun:
+   `test-output/reports/rolling-restart-after-publication-owner-read-remove-safety-20260506T123000Z.report.json`.
+2. Result: failed, `0/1` passed after `131.6s`.
+3. Terminal barrier:
+   `Not all nodes reached ACTIVE state within 120000ms`.
+4. Publication convergence stays on epoch `3` `PUBLISHED`, pending ACK count
+   `0`, blocked node count `0`, missing published count `0`, and
+   `publicationPending=false`.
+5. Active-gate progress stalls at active `4/5`, selected snapshot coverage
+   `4/5`, selected snapshot node
+   `8be8d30f-4499-5eed-865c-71b4d529a67a`, selected published active `3/5`,
+   and selected missing-published nodes
+   `8be8d30f-4499-5eed-865c-71b4d529a67a` /
+   `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`.
+6. Dominant reason is
+   `priority_recovery_workflow_progress_event_driven`.
+7. Dominant witness is `sql_transaction_participants-p1`, operation
+   `867cbc80-93f3-4121-8bca-2fc0c5d5072a`, semantic state
+   `recovering_in_flight`, owner `operation_workflow_owner`, boundary
+   `workflow_progress`, wait mode `event_driven`, next action
+   `wait_for_operation_progress`, workflow phase `target_creation`, workflow
+   step `CREATING`, status `creating`, and step age about `10.5s` against the
+   `60000ms` `CREATING` timeout.
+8. Runtime log evidence on `35a891b8-c1a0-5064-9c6e-2acfba61c2a7` shows
+   `sql_transaction_participants-p1-r4` handling `CREATE_REPLICA`, entering
+   `[replica-create] stage=starting peers=0/0`, and later transitioning
+   `previousState=null` -> `newState=pending` without later visible
+   `syncing` or `active` progress before the scenario timeout.
+9. Replay keeps `control_plane_publications-p1`, `replica_operations-p1`,
+   `sql_transactions-p1`, and `sql_write_operations-p1` as
+   `spread_satisfied_in_flight` supporting context, so this is not the old
+   workflow-timeout reconcile path yet.
+10. Selected-snapshot owner-RPC `nodes` repair still defers through
+    `control_plane_backpressure` / `query_timeout`, but that remains adjacent
+    evidence unless it is shown to block target progress visibility.
 
 The last post-active evidence before later migrations was:
 
@@ -437,7 +472,7 @@ May 5 representative rerun after missing-published reason-source fix:
     partition ids `sql_transaction_participants-p1` and `sql_transactions-p1`.
 12. This rerun supersedes the stale pending-ACK evidence as the representative
     blocker and has been split to
-    [Rolling Restart Topology Publication Snapshot Reachability Reentry](./active-20260505-rolling-restart-topology-publication-snapshot-reachability-reentry.md).
+    [Rolling Restart Topology Publication Snapshot Reachability Reentry](./done-20260505-rolling-restart-topology-publication-snapshot-reachability-reentry.md).
     It does not close the previous `052328Z` `sql_write_operations-p1` PENDING
     dispatch-timeout residual retained by this package.
 
@@ -466,7 +501,7 @@ guarantees.
    residuals, and subordinate `sql_transaction_participants-p1` priority
    serial-wait re-entry.
    Those are owned by
-   [Rolling Restart Topology Publication Snapshot Reachability Reentry](./active-20260505-rolling-restart-topology-publication-snapshot-reachability-reentry.md).
+   [Rolling Restart Topology Publication Snapshot Reachability Reentry](./done-20260505-rolling-restart-topology-publication-snapshot-reachability-reentry.md).
 2. Broad matrix continuation before the current five-node representative
    boundary closes or migrates.
 3. Pro or Enterprise behavior.
@@ -733,13 +768,22 @@ Closure:
       review fix and record whether the blocker closes or migrates.
 - [x] Split the historical May 5 `074739Z` migrated topology publication
       blocker to
-      [Rolling Restart Topology Publication Snapshot Reachability Reentry](./active-20260505-rolling-restart-topology-publication-snapshot-reachability-reentry.md):
+      [Rolling Restart Topology Publication Snapshot Reachability Reentry](./done-20260505-rolling-restart-topology-publication-snapshot-reachability-reentry.md):
       terminal active `2/5`, best active `3/5`, selected snapshot coverage
       `4/5`, pending ACK count `0`, selected missing published debt count `2`,
       priority spread gap `10`, snapshot reachability timeout on
       `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58`, and `sql_write_operations-p1`
       `priority_operation_serial_wait` at
       `operation_workflow_owner / workflow_progress / event_driven`.
+- [ ] Revisit the prior May 5 post-publication operation-workflow timeout
+      residual once the current event-driven target-creation blocker is either
+      closed or shown to migrate back to timeout reconcile:
+      `sql_transaction_participants-p1` operation
+      `867cbc80-93f3-4121-8bca-2fc0c5d5072a` at
+      `operation_workflow_owner / workflow_progress / event_driven`,
+      workflow step `CREATING`, target replica
+      `sql_transaction_participants-p1-r4`, and observed target state
+      `pending` after `CREATE_REPLICA`.
 - [ ] Revisit the prior May 5 post-publication operation-workflow timeout
       residual once the representative path reaches that boundary again:
       `sql_write_operations-p1` operation
@@ -809,9 +853,12 @@ Closure:
 
 ## Done When
 
-1. The prior post-publication `sql_write_operations-p1` operation-workflow
-   timeout residual is re-entered, closed, or deliberately split to a more
-   precise package after the current topology publication blocker clears.
+1. The current post-publication `sql_transaction_participants-p1`
+   target-creation progress residual from `20260506T123000Z` is explained and
+   either closed, made subordinate, or split to a more precise package, and
+   the prior `sql_write_operations-p1` operation-workflow timeout residual is
+   re-entered, closed, or deliberately split if the representative path
+   reaches that boundary again.
 2. The post-active operation workflow emits one canonical outcome for
    transition pressure, failed or removed terminal targets, source-removal
    progress, and over-target voter trim.
@@ -822,26 +869,21 @@ Closure:
 
 ## Representative Handoff And Residuals
 
-The current representative continuation has migrated to
-[Rolling Restart Topology Publication Snapshot Reachability Reentry](./active-20260505-rolling-restart-topology-publication-snapshot-reachability-reentry.md).
-That package owns the current May 5 `102455Z` topology publication membership
-plus snapshot coverage residual recorded in
-`test-output/reports/rolling-restart-after-reconcile-probe-20260505T102455Z.report.json`:
-terminal active `5/5`, terminal selected snapshot coverage `3/5`, best
-selected snapshot coverage `4/5`, selected publication epoch `2` `PUBLISHED`,
-selected published active `2/5`, and missing published count `3`. The
-`sql_transaction_participants-p1` priority serial-wait witness is subordinate
-evidence there. The post-`e0344113` `074739Z` reachability-timeout shape and
-the later `093109Z` topology-package state are historical handoff evidence,
-not the current topology package state.
+The current representative continuation has migrated back from
+[Rolling Restart Topology Publication Snapshot Reachability Reentry](./done-20260505-rolling-restart-topology-publication-snapshot-reachability-reentry.md)
+after the fresh `20260506T123000Z` rerun closed the publication
+owner-read/remove-safety slice there. That predecessor package now owns the
+historical proof for the May 5 to May 6 publication missing-active,
+selected-snapshot, transport, and publication owner-read closure chain.
 
-This operation-transition package remains active for retained residuals rather
-than for the current representative blocker. The retained work is the prior
-post-publication operation-workflow timeout residual,
-`sql_write_operations-p1` operation
-`1a2d029d-5c00-45a8-bd71-ac4e34b318eb` at
-`operation_workflow_owner / workflow_timeout / timeout_reconcile_due` from the
-`052328Z` rerun, plus the package-local literal guardrail debt and adjacent
-red sweep residuals recorded in the closure inventory. Do not mark this
-package done until those residuals are re-entered, closed, or explicitly moved
-to named follow-up packages.
+This file no longer owns the live blocker. It retains only dormant operation
+residuals: the direct owner regression gap for the `segment-1` `PENDING`
+exemption added in this cycle, the earlier `052328Z`
+`sql_write_operations-p1`
+`operation_workflow_owner / workflow_timeout / timeout_reconcile_due`
+adjacent residual, and the package-local literal guardrail debt or adjacent
+red-sweep residuals recorded in the closure inventory. Re-activate this file
+only if the representative path returns to an operation-workflow owner
+boundary after
+[Rolling Restart Priority Recovery Serial-Wait Workflow Progress Reentry](./done-20260506-rolling-restart-priority-recovery-serial-wait-workflow-progress-reentry.md)
+closes or migrates.

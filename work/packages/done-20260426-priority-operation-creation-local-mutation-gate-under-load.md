@@ -40,7 +40,7 @@ readiness and through the restart cycle:
    replica reached active state
 
 The active handoff is:
-[Rolling restart operation transition pressure and over-target trim](./active-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md).
+[Rolling restart operation transition pressure and over-target trim](./todo-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md).
 
 Migrated evidence:
 
@@ -85,7 +85,7 @@ Depends on:
 
 1. [Priority failed replace active-target recovery closure under load](./done-20260426-priority-failed-replace-active-target-recovery-closure-under-load.md)
 2. [Priority spread recovery operation creation under load](./done-20260426-priority-spread-recovery-operation-creation-under-load.md)
-3. [Rolling restart operation transition pressure and over-target trim](./active-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md)
+3. [Rolling restart operation transition pressure and over-target trim](./todo-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md)
 
 ## In Scope
 
