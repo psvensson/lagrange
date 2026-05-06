@@ -3,7 +3,7 @@
 Load for roadmap and edition-scope checks.
 
 Generated rules: 41
-Estimated tokens: 1484
+Estimated tokens: 1505
 Domains: governance
 
 ## Rules
@@ -41,7 +41,7 @@ Domains: governance
 31. [GOV-0031] Capture the idea in work/ideas/ as idea-YYYYMMDD-slug.md.
 32. [GOV-0032] If the idea changes scope, product direction, or starts a broad new implementation track, sharpen ../../roadmap.md first.
 33. [GOV-0033] If the idea is already within approved scope and is bounded enough to execute directly, create a work package in work/packages/.
-34. [GOV-0034] Completed work packages are renamed to done-... in the filename.
+34. [GOV-0034] Completed work packages are renamed to done-... in the filename, then committed and pushed as a focused package slice before the next slice starts.
 35. [GOV-0035] The work remains consistent with ../../roadmap.md and ../../edition-matrix.md.
 36. [GOV-0036] Refresh or confirm the snapshot before activating implementation work.
 37. [GOV-0037] Use sub-agents in sequence across owner-boundary work: artifact evidence extraction, owner-path mapping, focused proof design, then bounded implementation.

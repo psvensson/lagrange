@@ -70,7 +70,8 @@ Use the paths as follows:
 4. Active implementation work begins only from
    `work/packages/active-YYYYMMDD-slug.md` or from explicit roadmap-sharpening
    work that is creating such a package.
-5. Completed work packages are renamed to `done-...` in the filename.
+5. Completed work packages are renamed to `done-...` in the filename, then
+   committed and pushed as a focused package slice before the next slice starts.
 
 Use `work/sprints/` only to group multiple active packages. Sprint files do not
 replace work packages.

@@ -43,6 +43,14 @@ Use the tracker utility for current sprint/package mechanics:
    recording a successor handoff.
 6. `npm run work:package:move -- --write work/packages/todo-...md --to active`
    performs non-terminal state moves.
+7. After each completed package slice, create one focused git commit containing
+   only that slice's package-owned changes and push the current branch before
+   starting the next slice.
+8. If the slice cannot be pushed because the remote or credentials are
+   unavailable, record the unpushed commit SHA and reason in the package or
+   sprint handoff. If package-owned and unrelated dirty changes cannot be
+   separated safely, stop for human direction instead of committing a mixed
+   slice.
 
 ## Triage Rule
 
@@ -188,6 +196,25 @@ may stay queued as history or later re-entry work.
 Shared-boundary work is not done when only the implementation changes land.
 The package should update the relevant architecture record and any bounded
 static guardrail in the same work cycle when the boundary contract is durable.
+
+## Package Commit And Push
+
+A completed package slice is not closed until its package-owned changes are in
+a focused git commit and that commit has been pushed.
+
+Required workflow:
+
+1. Finish validation, static guardrails, residual closure, and the deep-dive
+   review first.
+2. Rename or migrate the work package with the tracker command.
+3. Review the dirty worktree and separate unrelated changes.
+4. Commit only the package-owned files, package-status updates, and sprint
+   handoff updates for the slice.
+5. Push the current branch before starting the next package slice.
+6. If push is blocked by remote or credential state, record the unpushed commit
+   SHA and reason in the package or sprint handoff.
+7. If unrelated dirty changes cannot be safely separated from package-owned
+   files, stop and ask for human direction before committing.
 
 ## Sprint Use
 

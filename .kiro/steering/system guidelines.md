@@ -104,11 +104,21 @@ Mandatory rules:
 11. A second `active-...` package is allowed only when it is being executed now
     and has explicitly disjoint file scope, owner scope, and proof scope from
     the current representative package.
+12. Every completed work-package slice MUST end in a focused git commit and
+    push before the next package slice starts.
+13. The commit MUST include only package-owned changes and package-status or
+    sprint-handoff updates that belong to that slice. Do not sweep unrelated
+    dirty worktree changes into the package commit.
+14. If a push is impossible because no remote is configured, credentials are
+    unavailable, or a human explicitly says not to push, record the unpushed
+    commit SHA and reason in the package or sprint handoff before continuing.
+15. If package-owned and unrelated changes cannot be separated safely, stop and
+    ask for human direction instead of committing a mixed slice.
 
 ### 0.1.2 Package Closure Deep-Dive Review
 
 Every work package MUST end with a deep-dive review of the affected code area
-before the package is renamed to `done-...`.
+before the package is renamed to `done-...`, committed, and pushed.
 
 Affected area means:
 

@@ -87,6 +87,8 @@ Closure:
 - [ ] No new touched-file owner-path, decision-boundary, runtime-grammar, or
       metadata-gateway violation remains.
 - [ ] Any out-of-scope inherited violation has a linked follow-on package.
+- [ ] Package-owned changes committed as one focused slice.
+- [ ] Slice commit pushed, or unpushed commit SHA and reason recorded.
 
 ## Failure Migration / Contraction
 
