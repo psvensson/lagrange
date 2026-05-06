@@ -62,6 +62,14 @@ class BootstrapRequestOwner {
     return this.delegates.getBootstrapService?.() || null;
   }
 
+  async getBootstrapJoinAdmissionSnapshot() {
+    const snapshot =
+      await this.delegates.getBootstrapJoinAdmissionSnapshot?.();
+    return snapshot && typeof snapshot === TYPEOF.OBJECT ?
+      snapshot :
+      null;
+  }
+
   isBootstrapRequestStartupComplete(bootstrapService) {
     if (!bootstrapService) {
       return true;
@@ -266,13 +274,25 @@ class BootstrapRequestOwner {
     }
 
     const bootstrapService = this.getBootstrapService();
-    if (!this.isBootstrapRequestStartupComplete(bootstrapService)) {
+    const bootstrapJoinAdmissionSnapshot =
+      await this.getBootstrapJoinAdmissionSnapshot();
+    if (
+      !this.isBootstrapRequestStartupComplete(bootstrapService) &&
+      bootstrapJoinAdmissionSnapshot?.ready !== true
+    ) {
+      const responseTimestamp = Date.now();
+      const startupAuthority =
+        this.getStartupAuthoritySnapshotForBootstrapResponse(
+          responseTimestamp,
+        );
       reply.code(HTTP_STATUS.SERVICE_UNAVAILABLE);
       return this.buildBootstrapNotReadyResponse({
         error: BOOTSTRAP_API_ERROR.BOOTSTRAP_NOT_READY,
         code: BOOTSTRAP_PIPELINE_ERROR_CODE.BOOTSTRAP_NOT_READY,
         phase: bootstrapService.phase,
         reasonCode: BOOTSTRAP_API_PROBE_REASON.BOOTSTRAP_PHASE_INCOMPLETE,
+        retryAfterMs: bootstrapJoinAdmissionSnapshot?.retryAfterMs,
+        startupAuthority,
       });
     }
 

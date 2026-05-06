@@ -95,6 +95,23 @@ const BOOTSTRAP_REQUEST_STARTUP_CONTRACT_EMPTY_TABLE_POLICIES =
 const BOOTSTRAP_REQUEST_STARTUP_CONTRACT_EMPTY_READY_NODES =
   Object.freeze([]);
 const BOOTSTRAP_REQUEST_STARTUP_CONTRACT_NO_HINTS = null;
+const BOOTSTRAP_REQUEST_STARTUP_RECOVERY_TEST_NAME =
+  'BootstrapAPI - bootstrap request admission honors recovery-authorized bootstrap join projection';
+const BOOTSTRAP_REQUEST_STARTUP_RECOVERY_JOINING_NODE_ID =
+  '550e8400-e29b-41d4-a716-446655440114';
+const BOOTSTRAP_REQUEST_STARTUP_RECOVERY_JOINING_NODE_ADDRESS =
+  'ws://localhost:9094';
+const BOOTSTRAP_REQUEST_STARTUP_RECOVERY_GROUP_ID = 'mg-startup-recovery';
+const BOOTSTRAP_REQUEST_STARTUP_RECOVERY_STATE = 'bootstrapping';
+const BOOTSTRAP_REQUEST_STARTUP_RECOVERY_PHASE = 'INIT';
+const BOOTSTRAP_REQUEST_STARTUP_RECOVERY_RETRY_AFTER_MS = 350;
+const BOOTSTRAP_REQUEST_STARTUP_RECOVERY_REASONS = Object.freeze([
+  BOOTSTRAP_API_PROBE_REASON.BOOTSTRAP_PHASE_INCOMPLETE,
+  BOOTSTRAP_PIPELINE_ERROR_CODE.SQL_ENGINE_UNAVAILABLE,
+  BOOTSTRAP_PIPELINE_ERROR_CODE.LEADER_METADATA_INCOMPLETE,
+  BOOTSTRAP_PIPELINE_ERROR_CODE.BOOTSTRAP_NOT_READY,
+  LIFECYCLE_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
+]);
 
 // Initialize configuration and logging for tests
 function initializeTestEnvironment() {
@@ -1398,6 +1415,94 @@ test(BOOTSTRAP_REQUEST_STARTUP_CONTRACT_TEST_NAME, async (t) => {
     response.statusCode,
     HTTP_STATUS.OK,
     'bootstrap request should use the adapter startup-complete contract',
+  );
+
+  await api.shutdown();
+});
+
+test(BOOTSTRAP_REQUEST_STARTUP_RECOVERY_TEST_NAME, async (t) => {
+  initializeTestEnvironment();
+
+  const readinessSnapshot = {
+    ready: false,
+    phase: BOOTSTRAP_REQUEST_STARTUP_RECOVERY_PHASE,
+    state: BOOTSTRAP_REQUEST_STARTUP_RECOVERY_STATE,
+    reasons: BOOTSTRAP_REQUEST_STARTUP_RECOVERY_REASONS,
+    retryAfterMs: BOOTSTRAP_REQUEST_STARTUP_RECOVERY_RETRY_AFTER_MS,
+    timestamp: Date.now(),
+  };
+  const readinessState = {
+    evaluate() {
+      return readinessSnapshot;
+    },
+    getSnapshot() {
+      return readinessSnapshot;
+    },
+    recordProbeResult() {},
+  };
+
+  const api = new BootstrapAPI({
+    seedNodeId: BOOTSTRAP_REQUEST_STARTUP_CONTRACT_SEED_NODE_ID,
+    seedNodeAddress: BOOTSTRAP_REQUEST_STARTUP_CONTRACT_SEED_NODE_ADDRESS,
+    systemTableCache: createEmptySystemTableCache(),
+    bootstrapStartupAdapter: {
+      phase: BOOTSTRAP_REQUEST_STARTUP_CONTRACT_INCOMPLETE_PHASE,
+      isBootstrapStartupComplete() {
+        return false;
+      },
+    },
+    readinessState,
+    controlPlaneReadinessService: {
+      getStartupAuthoritySnapshotSync() {
+        return BOOTSTRAP_LEADER_NOT_READY_STARTUP_AUTHORITY;
+      },
+    },
+  });
+
+  api.waitForServiceLeaders = async () =>
+    BOOTSTRAP_REQUEST_STARTUP_CONTRACT_LEADER_READY;
+  api.determineAndReserveMessageGroupAssignment = async () => ({
+    strategy: BootstrapStrategy.CREATE_SELF_HOSTED,
+    groupId: BOOTSTRAP_REQUEST_STARTUP_RECOVERY_GROUP_ID,
+  });
+  api.getClusterConfiguration = () =>
+    BOOTSTRAP_REQUEST_STARTUP_CONTRACT_EMPTY_CLUSTER_CONFIG;
+  api.getReadyNodes = () =>
+    BOOTSTRAP_REQUEST_STARTUP_CONTRACT_EMPTY_READY_NODES;
+  api.getTablePolicies = () =>
+    BOOTSTRAP_REQUEST_STARTUP_CONTRACT_EMPTY_TABLE_POLICIES;
+  api.getLatencyTopologyHints = () =>
+    BOOTSTRAP_REQUEST_STARTUP_CONTRACT_NO_HINTS;
+
+  await api.initialize(0, {
+    listen: BOOTSTRAP_ADMISSION_LEASE_TEST_LISTEN_DISABLED,
+  });
+
+  const response = await api.getFastify().inject({
+    method: 'POST',
+    url: BOOTSTRAP_API_ROUTE.BOOTSTRAP,
+    payload: {
+      nodeId: BOOTSTRAP_REQUEST_STARTUP_RECOVERY_JOINING_NODE_ID,
+      nodeAddress: BOOTSTRAP_REQUEST_STARTUP_RECOVERY_JOINING_NODE_ADDRESS,
+    },
+  });
+
+  t.equal(
+    response.statusCode,
+    HTTP_STATUS.OK,
+    'bootstrap request should admit recovery-authorized INIT startup',
+  );
+  const body = JSON.parse(response.body);
+  t.equal(body.success, true, 'bootstrap response should remain successful');
+  t.equal(
+    body.messageGroupAssignment.groupId,
+    BOOTSTRAP_REQUEST_STARTUP_RECOVERY_GROUP_ID,
+    'bootstrap response should still return the bounded assignment',
+  );
+  t.same(
+    body[BOOTSTRAP_API_RESPONSE_FIELD.STARTUP_AUTHORITY],
+    BOOTSTRAP_LEADER_NOT_READY_STARTUP_AUTHORITY,
+    'bootstrap response should preserve startup authority evidence',
   );
 
   await api.shutdown();

@@ -103,7 +103,7 @@ Secondary after the primary path is stable:
 
 The current active representative re-entry package is:
 
-1. [Rolling Restart Startup Join Contacting Seed Bootstrap Readiness Reentry](../packages/active-20260506-rolling-restart-startup-join-contacting-seed-bootstrap-readiness-reentry.md)
+1. [Rolling Restart Publication ACK-Pending Priority Serial-Wait Workflow Progress Reentry](../packages/active-20260506-rolling-restart-publication-ack-pending-priority-serial-wait-workflow-progress-reentry.md)
 
 Retained predecessor context file:
 
@@ -186,7 +186,7 @@ Other secondary matrix failures become active packages only after the
 
 Current re-entry package:
 
-1. [Rolling Restart Startup Join Contacting Seed Bootstrap Readiness Reentry](../packages/active-20260506-rolling-restart-startup-join-contacting-seed-bootstrap-readiness-reentry.md)
+1. [Rolling Restart Publication ACK-Pending Priority Serial-Wait Workflow Progress Reentry](../packages/active-20260506-rolling-restart-publication-ack-pending-priority-serial-wait-workflow-progress-reentry.md)
 
 Queued convergence-grammar packages:
 
@@ -203,24 +203,26 @@ Queued cleanup packages:
 ## Remaining Work Summary
 
 1. Current execution blocker:
-   The latest May 6 representative rerun after the terminal serial-wait
-   carrier normalization used
-   `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-after-terminal-serial-wait-carrier-normalization-20260506T211047Z.report.json --fast-local --verbose`.
+   The latest May 6 representative rerun after the bootstrap join-admission
+   recovery projection used
+   `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-after-bootstrap-join-admission-recovery-projection-20260506T213144Z.report.json --fast-local --verbose`.
    Report:
-   `test-output/reports/rolling-restart-after-terminal-serial-wait-carrier-normalization-20260506T211047Z.report.json`.
-   Result: failed after `132.6s`; terminal barrier:
+   `test-output/reports/rolling-restart-after-bootstrap-join-admission-recovery-projection-20260506T213144Z.report.json`.
+   Result: failed after `132.8s`; terminal barrier:
    `Not all nodes reached ACTIVE state within 120000ms`.
-   The current report classifies as root cause class `startup`, failure class
-   `startup_recovery_blocked`, and dominant reason
-   `BOOTSTRAP_PHASE_INCOMPLETE`. Publication is epoch `3` `PUBLISHED`,
-   pending ACK count `0`, missing published count `0`, and recovery protocol
-   state `steady_published`. Current startup active-gate progress stalls at
-   active `2/5` with snapshot coverage `2/5` on selected node `11601...`.
-   Joiners `ebc4...` and `8be8...` remain in bootstrap phase `INIT` with
-   `contacting_seed` as the latest recorded join phase, while current
-   priority-recovery evidence no longer exposes unresolved blocker classes.
-   The representative owner is therefore startup join/bootstrap readiness,
-   not priority-recovery handoff.
+   The current report classifies as root cause class `topology`, failure class
+   `publication_convergence_blocked`, and dominant reason
+   `pending_ack_nodes`. Publication is epoch `4` `ACK_PENDING`, pending ACK
+   node is `11601...`, blocked-node count is `0`, missing published count is
+   `0`, and recovery protocol state is `publication_pending`. Current
+   active-gate progress ends at active `2/5` with snapshot coverage `2/5` on
+   selected node `ebc4...`; best progress reaches active `3/5`. Priority
+   recovery is narrowed to `sql_transaction_participants-p1`
+   `recovering_in_flight` and `sql_transactions-p1`
+   `priority_operation_serial_wait`, while the repaired startup
+   bootstrap-admission seam moved `ebc4...` to `ACTIVE`. The representative
+   owner is therefore publication ACK-pending workflow progress, not startup
+   join admission.
 2. Completed trace, fixture, and next active task:
    the
    [Rolling Restart Topology Publication Snapshot Reachability Reentry](../packages/done-20260505-rolling-restart-topology-publication-snapshot-reachability-reentry.md)

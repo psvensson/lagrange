@@ -42,6 +42,7 @@ import {
   BOOTSTRAP_API_HEALTH_STATUS,
   BOOTSTRAP_API_HEALTH_STATUS_INITIALIZING,
   BOOTSTRAP_API_LOG_MSG,
+  BOOTSTRAP_API_PROBE_SCOPE,
   BOOTSTRAP_API_ROUTE,
   BOOTSTRAP_API_SUBSYSTEM,
 } from './bootstrap-api-constants.js';
@@ -459,6 +460,8 @@ class BootstrapAPI {
           getSeedNodeWsAddress: () => this.seedNodeWsAddress,
           getWsPort: () => this.wsPort,
           getBootstrapService: () => this.bootstrapStartupAdapter,
+          getBootstrapJoinAdmissionSnapshot: () =>
+            this.getBootstrapJoinAdmissionSnapshot(),
           getMaxConcurrentBootstrapRequests: () =>
             this.maxConcurrentBootstrapRequests,
           getBootstrapAdmissionRetryAfterMs: () =>
@@ -1213,6 +1216,17 @@ class BootstrapAPI {
   buildBootstrapNotReadyResponse(options = {}) {
     return this.bootstrapReadinessOwner
       .buildBootstrapNotReadyResponse(options);
+  }
+
+  /**
+   * Build one projected bootstrap-join admission snapshot for request gating.
+   * @return {Promise<Object>}
+   */
+  async getBootstrapJoinAdmissionSnapshot() {
+    return this.resolveReadinessSnapshotForScope(
+      await this.bootstrapReadinessOwner.evaluateReadinessSnapshotForProbe(),
+      BOOTSTRAP_API_PROBE_SCOPE.BOOTSTRAP_JOIN,
+    );
   }
 
   /**

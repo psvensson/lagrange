@@ -4,39 +4,38 @@
 
 Sprint: `work/sprints/active-2026-q2-publication-scoped-consistency-and-node-join-closure.md`
 
-Package: `work/packages/active-20260506-rolling-restart-startup-join-contacting-seed-bootstrap-readiness-reentry.md`
+Package: `work/packages/active-20260506-rolling-restart-publication-ack-pending-priority-serial-wait-workflow-progress-reentry.md`
 
 Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/rolling-restart-after-terminal-serial-wait-carrier-normalization-20260506T211047Z.report.json`
+Artifact: `test-output/reports/rolling-restart-after-bootstrap-join-admission-recovery-projection-20260506T213144Z.report.json`
 
-Playback: `test-output/reports/.playback/rolling-restart-after-terminal-serial-wait-carrier-normalization-20260506T211047Z/rolling-restart/`
+Playback: `test-output/reports/.playback/rolling-restart-after-bootstrap-join-admission-recovery-projection-20260506T213144Z/rolling-restart/`
 
 ## Boundary
 
-Owner: `Startup join contacting-seed bootstrap readiness stall and stale selected-snapshot coverage`
+Owner: `Publication recovery gate over pending ACK convergence and priority serial-wait workflow progress`
 
-Boundary: `Startup join / contacting-seed bootstrap readiness`
+Boundary: `Publication ACK-pending priority serial-wait workflow progress`
 
-Dominant reason: `BOOTSTRAP_PHASE_INCOMPLETE`
+Dominant reason: `pending_ack_nodes`
 
-Current state: The epoch-4 priority-recovery rebalancer-handoff seam is closed. The representative rerun now reaches epoch 3 PUBLISHED with steady_published recovery and no unresolved priority-recovery blocker classes, but startup still times out because joiners ebc4... and 8be8... remain in INIT/contacting_seed with BOOTSTRAP_PHASE_INCOMPLETE, SQL_ENGINE_UNAVAILABLE, LEADER_METADATA_INCOMPLETE, BOOTSTRAP_NOT_READY, and PRIORITY_CONTROL_PLANE_RECOVERY_PENDING. The selected stale-usable snapshot on 11601... reports only 2/5 observed nodes and selected missing published nodes 11601...|35a891...|8be8...|ebc4..., so the live owner must be separated between a real seed-contact/bootstrap stall and stale selected-snapshot coverage debt.
+Current state: The bootstrap request startup-admission seam is closed: joiner ebc4... now reaches ACTIVE. The representative rerun migrates to epoch 4 ACK_PENDING with pending ACK node 11601..., active-gate best progress 3/5 and current progress 2/5 on selected snapshot ebc4... coverage 2/5. Priority recovery narrows to sql_transactions-p1 blocked by priority_operation_serial_wait behind sql_write_operations-p1 and sql_transaction_participants-p1 still recovering_in_flight, so the live owner is publication convergence over workflow progress, not join admission.
 
 ## Next Action
 
-Extract the 211047Z join/contacting-seed fixture, decide whether the blocking owner is seed bootstrap request timeout, infrastructure/connect-websocket stall, or stale selected-snapshot coverage consumption, then repair only that startup owner path.
+Extract the 213144Z epoch-4 ACK_PENDING priority workflow fixture, decide whether sql_transactions-p1 serial-wait or selected-snapshot publication disagreement is the canonical current owner, then repair only that publication/workflow path.
 
 ## Proof Ladder
 
-1. `Focused 211047Z join/contacting-seed fixture`
-2. `Owner regression for startup bootstrap stall versus stale selected snapshot`
+1. `Focused 213144Z publication ACK-pending fixture`
+2. `Owner regression for pending-ACK serial-wait workflow progress`
 3. `Touched-file static guardrails`
 4. `Representative rolling-restart --fast-local rerun`
 
 ## Touched Files
 
-1. `src/bootstrap/phases/contact-seed-phase.js`
-2. `src/bootstrap/phases/connect-websocket-phase.js`
-3. `src/bootstrap/owners/bootstrap-request-owner.js`
-4. `test/bootstrap/node-joining-service.test-part-4.js`
-5. `test/distributed/harness/__tests__/failure-bundle.test.js`
+1. `src/control-plane/priority-recovery-snapshot-stage-3.js`
+2. `src/control-plane/priority-recovery-snapshot-stage-shared.js`
+3. `test/control-plane/priority-recovery-snapshot.test.js`
+4. `test/distributed/harness/__tests__/failure-bundle.test.js`
