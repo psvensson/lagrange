@@ -297,6 +297,16 @@ const FAILURE_GUIDANCE_EMPTY = Object.freeze({
   failureAction: null,
   operatorRecommendation: null,
 });
+const FAILURE_ACTION_STARTUP_READINESS_BLOCKED =
+  'Startup readiness is blocking convergence.';
+const OPERATOR_RECOMMENDATION_STARTUP_READINESS_BLOCKED =
+  'Inspect inactive-node bootstrap readiness, SQL engine availability, ' +
+  'leader metadata, and priority control-plane recovery before rerun.';
+const READINESS_FAILURE_CLASS_SNAPSHOT_TIMEOUT = 'snapshot_timeout';
+const READINESS_FAILURE_CLASS_SNAPSHOT_REACHABILITY_TIMEOUT =
+  'snapshot_reachability_timeout';
+const TIMEOUT_REASON_FRAGMENT = 'timeout';
+const TIMED_OUT_REASON_FRAGMENT = 'timed out';
 
 function buildRestartRecoveryStabilityGate({
   entry,
@@ -1520,7 +1530,31 @@ function appendControlPlaneQuiescenceSignals(signals, quiescence) {
 function resolveFailureClassificationGuidance({
   failureClassification,
   readinessFailureGuidance,
+  readinessFailure,
 }) {
+  const dominantReason = String(
+    failureClassification?.dominantReason || '',
+  ).trim();
+  const normalizedDominantReason = dominantReason.toLowerCase();
+  const readinessClassCode = String(readinessFailure?.classCode || '').trim();
+  const timeoutShapedDominantReason =
+    normalizedDominantReason.includes(TIMEOUT_REASON_FRAGMENT) ||
+    normalizedDominantReason.includes(TIMED_OUT_REASON_FRAGMENT);
+  const timeoutShapedReadinessFailure =
+    readinessClassCode === READINESS_FAILURE_CLASS_SNAPSHOT_TIMEOUT ||
+    readinessClassCode === READINESS_FAILURE_CLASS_SNAPSHOT_REACHABILITY_TIMEOUT;
+  if (
+    failureClassification?.failureClass === FAILURE_CLASS_STARTUP_RECOVERY_BLOCKED &&
+    timeoutShapedReadinessFailure === true &&
+    dominantReason.length > ZERO &&
+    timeoutShapedDominantReason !== true
+  ) {
+    return {
+      failureAction: FAILURE_ACTION_STARTUP_READINESS_BLOCKED,
+      operatorRecommendation:
+        OPERATOR_RECOMMENDATION_STARTUP_READINESS_BLOCKED,
+    };
+  }
   if (
     failureClassification?.failureClass ===
     PRIORITY_RECOVERY_PROGRESS_REASON_FALLBACK
@@ -2088,6 +2122,7 @@ function buildScenarioFailureBundle({
   const failureGuidance = resolveFailureClassificationGuidance({
     failureClassification,
     readinessFailureGuidance,
+    readinessFailure,
   });
   const summaryRootCauseClass = resolveSummaryRootCauseClass(
     failure,

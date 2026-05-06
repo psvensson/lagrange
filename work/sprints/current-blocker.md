@@ -4,38 +4,37 @@
 
 Sprint: `work/sprints/active-2026-q2-publication-scoped-consistency-and-node-join-closure.md`
 
-Package: `work/packages/active-20260506-rolling-restart-startup-active-gate-snapshot-coverage-selected-snapshot-timeout-bootstrap-readiness-reentry.md`
+Package: `work/packages/active-20260506-rolling-restart-publication-ack-pending-selected-membership-deficit-owner-reentry.md`
 
 Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/rolling-restart-after-serial-wait-source-dominance-20260506T230547Z.report.json`
+Artifact: `test-output/reports/rolling-restart-after-startup-guidance-owner-alignment-20260506T232850Z.report.json`
 
-Playback: `test-output/reports/.playback/rolling-restart-after-serial-wait-source-dominance-20260506T230547Z/rolling-restart/`
+Playback: `test-output/reports/.playback/rolling-restart-after-startup-guidance-owner-alignment-20260506T232850Z/rolling-restart/`
 
 ## Boundary
 
-Owner: `Startup active-gate selected-snapshot timeout over fresh-join bootstrap readiness and snapshot-coverage reentry`
+Owner: `Publication recovery gate selected-membership deficit over pending ACK convergence and priority-recovery no-progress retention`
 
-Boundary: `Startup active-gate snapshot coverage / selected-snapshot timeout bootstrap readiness`
+Boundary: `Publication ACK-pending selected-membership deficit / pending-ACK owner`
 
-Dominant reason: `BOOTSTRAP_PHASE_INCOMPLETE`
+Dominant reason: `pending_ack_nodes`
 
-Current state: The published priority-spread workflow seam is closed. The representative rerun now fails as startup_recovery_blocked: selected snapshot node 11601... times out on admin snapshot queries after progress reached epoch 4 PUBLISHED with active 2/5 and snapshot coverage 2/5, while 35a..., 8be8..., and ebc4... remain fresh_join bootstrap-incomplete with SQL engine, leader-metadata, and control-plane recovery reasons still open.
+Current state: The startup timeout guidance seam is closed. The representative rerun now fails as publication_convergence_blocked on epoch 5 ACK_PENDING with pending ACK node 35a..., but the selected snapshot on ebc4... still carries missing-published nodes 11601... and 8be8... while normalized publicationConvergence.missingPublishedCount collapses to 0 and last meaningful progress retains eligible_but_no_operation_created predecessor debt.
 
 ## Next Action
 
-Extract the 230547Z startup fixture for selectedSnapshotError, lastMeaningfulProgress, and fresh-join readiness reason counts; decide whether the canonical owner is selected-snapshot query timeout, join bootstrap/runtime readiness stall, or no-progress summary retention between them; then repair only that startup owner path.
+Extract the 232850Z publicationConvergence, activeGate progress, selectedMissingPublishedNodeIds, selectedPublishedActiveNodeIds, and lastMeaningfulProgress fixture; decide whether the canonical owner is current selected publication-membership deficit, pending ACK convergence, or stale authoritative-membership filtering between them; then repair only that owner path.
 
 ## Proof Ladder
 
-1. `Focused 230547Z selected-snapshot timeout / bootstrap-readiness fixture`
-2. `Owner regression for terminal snapshot timeout versus retained last-meaningful progress`
+1. `Focused 232850Z selected-membership deficit / pending-ACK fixture`
+2. `Owner regression for current selected missing-published evidence versus pending ACK dominance`
 3. `Touched-file static guardrails`
 4. `Representative rolling-restart --fast-local rerun`
 
 ## Touched Files
 
-1. `test/distributed/harness/cluster-segment-1.js`
-2. `test/distributed/harness/failure-bundle-segment-4.js`
-3. `test/distributed/harness/__tests__/cluster.test-part-3.js`
-4. `test/distributed/harness/__tests__/failure-bundle.test.js`
+1. `test/distributed/harness/failure-bundle-segment-4.js`
+2. `test/distributed/harness/__tests__/failure-bundle-publication-closure-tail-test-cases.js`
+3. `test/distributed/harness/__tests__/failure-bundle.test.js`
