@@ -5,6 +5,7 @@ import {
 import {
   PRIORITY_RECOVERY_BLOCKER_REASON,
   PRIORITY_RECOVERY_PROGRESS_CLASS_IDS,
+  PRIORITY_RECOVERY_PROGRESS_OWNER,
 } from './priority-recovery-diagnostics-constants.js';
 import {buildPriorityRecoveryCompletion} from './priority-recovery-completion.js';
 import {isPriorityRecoveryEmergencyPartition} from './priority-recovery-admission-constants.js';
@@ -29,6 +30,18 @@ import {isPriorityRecoveryOperationContextTerminal} from './priority-recovery-sn
 import {buildPriorityRecoveryConditionsContract} from './priority-recovery-snapshot-stage-7.js';
 import {buildPriorityRecoveryActuationContract} from './priority-recovery-snapshot-stage-8.js';
 import {buildPriorityRecoveryPartitionObservation, buildPriorityRecoveryProgressContract} from './priority-recovery-snapshot-stage-9.js';
+
+const PRIORITY_RECOVERY_SYNTHETIC_SERIAL_WAIT_SOURCE_FIELD = Object.freeze({
+  LATEST_OPERATION_ID: 'latestOperationId',
+  LATEST_OPERATION_STATUS: 'latestOperationStatus',
+  LATEST_OPERATION_WORKFLOW_STEP: 'latestOperationWorkflowStep',
+});
+
+const PRIORITY_RECOVERY_SYNTHETIC_SERIAL_WAIT_SOURCE_MODE = Object.freeze({
+  COORDINATOR_OPERATION: 'coordinator_operation',
+  WORKFLOW_SUMMARY_OVERLAY: 'workflow_summary_overlay',
+  NONE: 'none',
+});
 
 function resolvePriorityRecoveryDecisionSnapshotCoordinator(
   snapshot,
@@ -202,6 +215,189 @@ function buildPriorityRecoverySyntheticSerialWaitSnapshot(
   });
 }
 
+function buildPriorityRecoverySyntheticSerialWaitSourceEvidence(snapshot) {
+  const progress =
+    snapshot?.[PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.PROGRESS] &&
+    typeof snapshot[PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.PROGRESS] ===
+      TYPEOF.OBJECT ?
+      snapshot[PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.PROGRESS] :
+      null;
+  const conditions =
+    snapshot?.[PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.CONDITIONS] &&
+    typeof snapshot[PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.CONDITIONS] ===
+      TYPEOF.OBJECT ?
+      snapshot[PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.CONDITIONS] :
+      null;
+  const actuation =
+    snapshot?.[PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.ACTUATION] &&
+    typeof snapshot[PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.ACTUATION] ===
+      TYPEOF.OBJECT ?
+      snapshot[PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.ACTUATION] :
+      null;
+  const coordinatorOperation =
+    snapshot?.[PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.COORDINATOR]?.[
+      PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.OPERATION
+    ] &&
+    typeof snapshot[
+      PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.COORDINATOR
+    ]?.[PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.OPERATION] ===
+      TYPEOF.OBJECT ?
+      snapshot[PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.COORDINATOR][
+        PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.OPERATION
+      ] :
+      null;
+  return Object.freeze({
+    coordinatorOperation,
+    operationIds: normalizePriorityRecoveryStringList(
+      snapshot?.[PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.COORDINATOR]
+        ?.operationIds,
+    ),
+    partitionId: String(
+      snapshot?.[PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.PARTITION_ID] ||
+        LOCAL_STR_EMPTY,
+    ).trim(),
+    progressOwner: String(
+      progress?.[PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.CURRENT_OWNER] ||
+        LOCAL_STR_EMPTY,
+    ).trim(),
+    lastProgressAtMs: normalizePriorityRecoveryInteger(
+      progress?.[PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.LAST_PROGRESS_AT_MS],
+    ),
+    latestOperationId: String(
+      actuation?.[
+        PRIORITY_RECOVERY_SYNTHETIC_SERIAL_WAIT_SOURCE_FIELD
+          .LATEST_OPERATION_ID
+      ] || LOCAL_STR_EMPTY,
+    ).trim(),
+    latestOperationStatus: String(
+      conditions?.[
+        PRIORITY_RECOVERY_SYNTHETIC_SERIAL_WAIT_SOURCE_FIELD
+          .LATEST_OPERATION_STATUS
+      ] || LOCAL_STR_EMPTY,
+    ).trim(),
+    latestOperationWorkflowStep: String(
+      conditions?.[
+        PRIORITY_RECOVERY_SYNTHETIC_SERIAL_WAIT_SOURCE_FIELD
+          .LATEST_OPERATION_WORKFLOW_STEP
+      ] || LOCAL_STR_EMPTY,
+    ).trim(),
+    stepTimeoutMs: normalizePriorityRecoveryInteger(
+      actuation?.[PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.STEP_TIMEOUT_MS],
+    ),
+  });
+}
+
+function buildPriorityRecoverySyntheticSerialWaitWorkflowSummaryOperation(
+  sourceEvidence,
+) {
+  if (
+    !sourceEvidence ||
+    sourceEvidence.progressOwner !==
+      PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER ||
+    sourceEvidence.latestOperationId.length === NUM.ZERO ||
+    sourceEvidence.operationIds.includes(sourceEvidence.latestOperationId) !==
+      true
+  ) {
+    return null;
+  }
+  const coordinatorOperation = sourceEvidence.coordinatorOperation;
+  if (!coordinatorOperation || typeof coordinatorOperation !== TYPEOF.OBJECT) {
+    return null;
+  }
+  const coordinatorOperationId = String(
+    coordinatorOperation.operationId || LOCAL_STR_EMPTY,
+  ).trim();
+  if (
+    coordinatorOperationId.length === NUM.ZERO ||
+    coordinatorOperationId === sourceEvidence.latestOperationId
+  ) {
+    return null;
+  }
+  const summaryOperationContext = {
+    ...coordinatorOperation,
+  };
+  delete summaryOperationContext.ageMs;
+  delete summaryOperationContext.completedAtMs;
+  delete summaryOperationContext.latestTimelineStep;
+  return {
+    ...summaryOperationContext,
+    operationId: sourceEvidence.latestOperationId,
+    partitionId:
+      String(
+        coordinatorOperation.partitionId ||
+          sourceEvidence.partitionId ||
+          LOCAL_STR_EMPTY,
+      ).trim(),
+    status:
+      sourceEvidence.latestOperationStatus.length > NUM.ZERO ?
+        sourceEvidence.latestOperationStatus :
+        coordinatorOperation.status,
+    workflowStep:
+      sourceEvidence.latestOperationWorkflowStep.length > NUM.ZERO ?
+        sourceEvidence.latestOperationWorkflowStep :
+        coordinatorOperation.workflowStep,
+    ...(sourceEvidence.latestOperationWorkflowStep.length > NUM.ZERO ?
+      {latestTimelineStep: sourceEvidence.latestOperationWorkflowStep} :
+      {}),
+    ...(Number.isFinite(sourceEvidence.lastProgressAtMs) &&
+    sourceEvidence.lastProgressAtMs > NUM.ZERO ?
+      {updatedAtMs: sourceEvidence.lastProgressAtMs} :
+      {}),
+    ...(Number.isFinite(sourceEvidence.stepTimeoutMs) &&
+    sourceEvidence.stepTimeoutMs > NUM.ZERO ?
+      {stepTimeoutMs: sourceEvidence.stepTimeoutMs} :
+      {}),
+    latestTimelineInFlight: true,
+  };
+}
+
+function resolvePriorityRecoverySyntheticSerialWaitSourceMode(snapshot) {
+  const sourceEvidence =
+    buildPriorityRecoverySyntheticSerialWaitSourceEvidence(snapshot);
+  if (
+    isPriorityRecoveryOrdinarySerialLaneOperationContext(
+      sourceEvidence.coordinatorOperation,
+    ) === true
+  ) {
+    return PRIORITY_RECOVERY_SYNTHETIC_SERIAL_WAIT_SOURCE_MODE
+      .COORDINATOR_OPERATION;
+  }
+  if (
+    isPriorityRecoveryOrdinarySerialLaneOperationContext(
+      buildPriorityRecoverySyntheticSerialWaitWorkflowSummaryOperation(
+        sourceEvidence,
+      ),
+    ) === true
+  ) {
+    return PRIORITY_RECOVERY_SYNTHETIC_SERIAL_WAIT_SOURCE_MODE
+      .WORKFLOW_SUMMARY_OVERLAY;
+  }
+  return PRIORITY_RECOVERY_SYNTHETIC_SERIAL_WAIT_SOURCE_MODE.NONE;
+}
+
+function resolvePriorityRecoverySyntheticSerialWaitSourceContext(snapshot) {
+  const sourceEvidence =
+    buildPriorityRecoverySyntheticSerialWaitSourceEvidence(snapshot);
+  const sourceMode =
+    resolvePriorityRecoverySyntheticSerialWaitSourceMode(snapshot);
+  if (
+    sourceMode ===
+    PRIORITY_RECOVERY_SYNTHETIC_SERIAL_WAIT_SOURCE_MODE.COORDINATOR_OPERATION
+  ) {
+    return sourceEvidence.coordinatorOperation;
+  }
+  if (
+    sourceMode ===
+    PRIORITY_RECOVERY_SYNTHETIC_SERIAL_WAIT_SOURCE_MODE
+      .WORKFLOW_SUMMARY_OVERLAY
+  ) {
+    return buildPriorityRecoverySyntheticSerialWaitWorkflowSummaryOperation(
+      sourceEvidence,
+    );
+  }
+  return null;
+}
+
 function buildPriorityRecoverySyntheticSerialWaitSourceContexts(
   snapshots = [],
 ) {
@@ -211,14 +407,8 @@ function buildPriorityRecoverySyntheticSerialWaitSourceContexts(
   const serialWaitOperationContexts = [];
   for (const snapshot of latestSnapshots) {
     const operationContext =
-      snapshot?.[PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.COORDINATOR]?.[
-        PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.OPERATION
-      ];
-    if (
-      isPriorityRecoveryOrdinarySerialLaneOperationContext(
-        operationContext,
-      ) !== true
-    ) {
+      resolvePriorityRecoverySyntheticSerialWaitSourceContext(snapshot);
+    if (!operationContext) {
       continue;
     }
     serialWaitOperationContexts.push(operationContext);

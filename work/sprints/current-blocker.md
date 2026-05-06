@@ -4,40 +4,38 @@
 
 Sprint: `work/sprints/active-2026-q2-publication-scoped-consistency-and-node-join-closure.md`
 
-Package: `work/packages/active-20260506-rolling-restart-startup-active-gate-priority-operation-creation-snapshot-coverage-reentry.md`
+Package: `work/packages/active-20260506-rolling-restart-startup-active-gate-snapshot-coverage-priority-serial-wait-workflow-progress-reentry.md`
 
 Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/rolling-restart-after-priority-recovery-stale-serial-wait-source-filter-20260506T204900Z.report.json`
+Artifact: `test-output/reports/rolling-restart-after-mixed-summary-serial-wait-source-overlay-20260506T194741Z.report.json`
 
-Playback: `test-output/reports/.playback/rolling-restart-after-priority-recovery-stale-serial-wait-source-filter-20260506T204900Z/rolling-restart/`
+Playback: `test-output/reports/.playback/rolling-restart-after-mixed-summary-serial-wait-source-overlay-20260506T194741Z/rolling-restart/`
 
 ## Boundary
 
-Owner: `Startup active-gate snapshot coverage and priority operation scheduling`
+Owner: `Startup active-gate snapshot coverage and priority workflow progress under serial wait`
 
-Boundary: `Startup active-gate snapshot-coverage / priority operation scheduling reentry`
+Boundary: `Startup active-gate snapshot-coverage / priority serial-wait workflow-progress reentry`
 
-Dominant reason: `priority_recovery_operation_scheduling_event_driven`
+Dominant reason: `priority_recovery_workflow_progress_transition_deferred`
 
-Current state: The stale serial-wait workflow blocker is closed: sql_write_operations-p1 no longer owns the representative failure. The fresh rerun regressed earlier to epoch 2 PUBLISHED with snapshot coverage 2/5 while sql_transaction_participants-p1 returns to actionable eligible_but_no_operation_created, sql_transactions-p1 stays recovering_in_flight, and joiner 8be8 / seed 7493 still show reconnect and query-timeout pressure.
+Current state: The mixed-summary operation-scheduling seam is closed. The representative rerun now reaches epoch 4 PUBLISHED with active 5/5 but snapshot coverage 3/5 on selected snapshot 11601..., while sql_transactions-p1 and sql_write_operations-p1 both wait on workflow-owned serial wait behind sql_transaction_participants-p1 and selected-snapshot coverage still disagrees on 11601... / 8be8... / ebc4... under reconnect and query-timeout pressure.
 
 ## Next Action
 
-Build the focused 204900Z epoch-2 startup active-gate / operation-scheduling fixture, then decide whether the repair belongs to priority operation scheduling, selected-snapshot coverage consumption, or startup transport/query pressure.
+Build the focused 194741Z epoch-4 startup active-gate / serial-wait workflow-progress fixture, then decide whether the repair belongs to workflow progress visibility, selected-snapshot coverage consumption, or startup transport/query pressure.
 
 ## Proof Ladder
 
-1. `Focused 204900Z epoch-2 startup active-gate / operation-scheduling fixture`
-2. `Owner decision for operation scheduling versus snapshot coverage versus transport/query pressure`
+1. `Focused 194741Z epoch-4 startup active-gate / serial-wait workflow-progress fixture`
+2. `Owner decision for workflow progress versus snapshot coverage versus transport/query pressure`
 3. `Touched-file static guardrails`
 4. `Representative rolling-restart --fast-local rerun`
 
 ## Touched Files
 
-1. `src/control-plane/priority-recovery-snapshot-stage-9.js`
-2. `src/control-plane/priority-recovery-observation-snapshot-stage-4.js`
-3. `src/rebalancer/unified-rebalancer-segment-4.js`
-4. `src/bootstrap/node-joining-service-segment-2.js`
-5. `test/control-plane/priority-recovery-snapshot.test.js`
-6. `test/distributed/harness/__tests__/failure-bundle-core-11-test-cases.js`
+1. `src/control-plane/priority-recovery-snapshot-stage-3.js`
+2. `src/bootstrap/node-joining-service-segment-2.js`
+3. `test/control-plane/priority-recovery-snapshot.test.js`
+4. `test/distributed/harness/__tests__/failure-bundle-core-11-test-cases.js`

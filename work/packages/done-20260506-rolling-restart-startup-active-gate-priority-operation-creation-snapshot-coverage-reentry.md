@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-06",
   "scenario": "rolling-restart",
   "artifact": "test-output/reports/rolling-restart-after-priority-recovery-stale-serial-wait-source-filter-20260506T204900Z.report.json",
@@ -11,8 +11,8 @@
   "owner": "Startup active-gate snapshot coverage and priority operation scheduling",
   "boundary": "Startup active-gate snapshot-coverage / priority operation scheduling reentry",
   "dominantReason": "priority_recovery_operation_scheduling_event_driven",
-  "currentState": "The stale serial-wait workflow blocker is closed: sql_write_operations-p1 no longer owns the representative failure. The fresh rerun regressed earlier to epoch 2 PUBLISHED with snapshot coverage 2/5 while sql_transaction_participants-p1 returns to actionable eligible_but_no_operation_created, sql_transactions-p1 stays recovering_in_flight, and joiner 8be8 / seed 7493 still show reconnect and query-timeout pressure.",
-  "nextAction": "Build the focused 204900Z epoch-2 startup active-gate / operation-scheduling fixture, then decide whether the repair belongs to priority operation scheduling, selected-snapshot coverage consumption, or startup transport/query pressure.",
+  "currentState": "The mixed-summary operation-scheduling seam is closed: sql_transaction_participants-p1 no longer reopens as an actionable needs-operation gap when sql_transactions-p1 still has live workflow-owned progress. The representative rerun moved to epoch 4 PUBLISHED with active 5/5 but snapshot coverage 3/5 on selected snapshot 11601..., and the live blocker reverted to workflow-owned serial wait on sql_transactions-p1 and sql_write_operations-p1 under reconnect/query pressure.",
+  "nextAction": "Use the successor startup active-gate snapshot-coverage / priority serial-wait workflow-progress package for the current representative blocker.",
   "proof": [
     "Focused 204900Z epoch-2 startup active-gate / operation-scheduling fixture",
     "Owner decision for operation scheduling versus snapshot coverage versus transport/query pressure",
@@ -20,14 +20,13 @@
     "Representative rolling-restart --fast-local rerun"
   ],
   "touchedFiles": [
-    "src/control-plane/priority-recovery-snapshot-stage-9.js",
-    "src/control-plane/priority-recovery-observation-snapshot-stage-4.js",
-    "src/rebalancer/unified-rebalancer-segment-4.js",
-    "src/bootstrap/node-joining-service-segment-2.js",
+    "src/control-plane/priority-recovery-snapshot-stage-3.js",
     "test/control-plane/priority-recovery-snapshot.test.js",
-    "test/distributed/harness/__tests__/failure-bundle-core-11-test-cases.js"
+    "work/packages/done-20260506-rolling-restart-startup-active-gate-priority-operation-creation-snapshot-coverage-reentry.md"
   ],
-  "predecessor": "work/packages/done-20260506-rolling-restart-published-snapshot-coverage-priority-serial-wait-workflow-progress-reentry.md"
+  "predecessor": "work/packages/done-20260506-rolling-restart-published-snapshot-coverage-priority-serial-wait-workflow-progress-reentry.md",
+  "closed": "2026-05-06",
+  "successor": "work/packages/active-20260506-rolling-restart-startup-active-gate-snapshot-coverage-priority-serial-wait-workflow-progress-reentry.md"
 }
 -->
 
@@ -37,6 +36,18 @@ closed by migration. The stale workflow-progress promotion is fixed, but the
 representative rerun moved earlier into startup active-gate recovery with
 selected-snapshot coverage still open and priority operation creation
 incomplete.
+
+Closure update on May 6, 2026: the focused mixed-summary serial-wait repair
+now preserves live workflow-owned source context when the latest summary row is
+keyed by a newer removed operation. The representative rerun
+`test-output/reports/rolling-restart-after-mixed-summary-serial-wait-source-overlay-20260506T194741Z.report.json`
+no longer selects `sql_transaction_participants-p1` as an actionable
+`eligible_but_no_operation_created` gap. The live blocker migrated to epoch
+`4` `PUBLISHED` startup active-gate recovery with active `5/5`, snapshot
+coverage `3/5`, selected snapshot `11601...`, and workflow-owned
+`priority_operation_serial_wait` on `sql_transactions-p1` and
+`sql_write_operations-p1`. That new owner boundary is tracked in
+[Rolling Restart Startup Active Gate Snapshot Coverage Priority Serial-Wait Workflow Progress Reentry](./active-20260506-rolling-restart-startup-active-gate-snapshot-coverage-priority-serial-wait-workflow-progress-reentry.md).
 
 ## Current Evidence
 
@@ -134,12 +145,38 @@ Canonical contract shape:
 
 ## Residual Closure Inventory
 
-- [ ] Extract the `204900Z` epoch-2 startup active-gate / operation-scheduling fixture.
-- [ ] Decide the owner boundary: operation scheduling, snapshot coverage, or
+- [x] Extract the `204900Z` epoch-2 startup active-gate / operation-scheduling fixture.
+- [x] Decide the owner boundary: operation scheduling, snapshot coverage, or
       transport/query pressure.
-- [ ] Add the focused regression and repair the selected owner path.
-- [ ] Rerun focused tests, touched-file guardrails, and one representative
+- [x] Add the focused regression and repair the selected owner path.
+- [x] Rerun focused tests, touched-file guardrails, and one representative
       `rolling-restart` scenario.
+
+## Static Drift Ledger
+
+Preflight:
+
+- [x] Relevant guardrails selected by boundary: literal ownership,
+      decision-boundary audit, runtime grammar, and diff whitespace.
+- [x] File-scoped baseline recorded before production edits for
+      `src/control-plane/priority-recovery-snapshot-stage-3.js` and
+      `test/control-plane/priority-recovery-snapshot.test.js`.
+      Baseline result on May 6, 2026:
+      `node scripts/check-guideline-literals.js src/control-plane/priority-recovery-snapshot-stage-3.js test/control-plane/priority-recovery-snapshot.test.js`
+      -> `0 new literal-guideline violations`;
+      `node scripts/check-guideline-decision-boundaries.js src/control-plane/priority-recovery-snapshot-stage-3.js test/control-plane/priority-recovery-snapshot.test.js`
+      -> `0 decision-boundary guideline violations`;
+      `node scripts/check-runtime-grammar-contracts.js src/control-plane/priority-recovery-snapshot-stage-3.js test/control-plane/priority-recovery-snapshot.test.js`
+      -> `0 runtime-grammar-contract violations`;
+      `git diff --check` -> clean.
+
+Closure:
+
+- [x] Same guardrails rerun after implementation.
+- [x] No relevant guardrail count increased.
+- [x] No new touched-file owner-path, decision-boundary, runtime-grammar, or
+      metadata-gateway violation remains.
+- [x] Any out-of-scope inherited violation has a linked follow-on package.
 
 ## Progress Notes
 
@@ -155,6 +192,29 @@ May 6 migration from the serial-wait workflow-progress package:
    `PUBLISHED` startup active-gate recovery with snapshot coverage `2/5`,
    `sql_transaction_participants-p1` actionable operation scheduling, and
    subordinate joiner reconnect/query pressure.
+4. Current owner probe: the raw `204900Z` decision snapshots still carry a
+   live `sql_transactions-p1` in-flight operation on target `ebc4...`, but
+   the serial-wait normalizer reads only the latest summary row's
+   `coordinator.operation`. Because the latest row for `sql_transactions-p1`
+   is keyed by a newer removed operation while progress ownership still points
+   at the live `242c...` add, `sql_transaction_participants-p1` is demoted
+   from target-occupied serial wait back to actionable
+   `eligible_but_no_operation_created`.
+5. Added a tracked-snapshot regression proving mixed summary rows must retain
+   live workflow-owned source context when `actuation.latestOperationId`
+   points at a non-terminal operation but `coordinator.operation` is keyed by
+   a newer removed row.
+6. Repaired `src/control-plane/priority-recovery-snapshot-stage-3.js` so
+   synthetic serial-wait source extraction overlays canonical summary
+   workflow evidence onto mixed summary rows instead of dropping them as
+   terminal.
+7. Focused proof and touched-file guardrails passed after the repair.
+8. Representative rerun
+   `rolling-restart-after-mixed-summary-serial-wait-source-overlay-20260506T194741Z`
+   failed by migration: the selected actionable operation-scheduling seam
+   closed, and the live blocker reverted to startup active-gate snapshot
+   coverage `3/5` plus workflow-owned serial wait on `sql_transactions-p1`
+   and `sql_write_operations-p1`.
 
 ## Validation
 

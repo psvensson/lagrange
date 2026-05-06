@@ -25,7 +25,7 @@
   ],
   "predecessor": "work/packages/done-20260506-rolling-restart-publication-ack-pending-rebalancer-handoff-admission-reentry.md",
   "closed": "2026-05-06",
-  "successor": "work/packages/active-20260506-rolling-restart-startup-active-gate-priority-operation-creation-snapshot-coverage-reentry.md"
+  "successor": "work/packages/done-20260506-rolling-restart-startup-active-gate-priority-operation-creation-snapshot-coverage-reentry.md"
 }
 -->
 
@@ -47,7 +47,7 @@ returns to actionable `eligible_but_no_operation_created`,
 `sql_transactions-p1` remains `recovering_in_flight`, and joiner
 transport/query pressure is supporting evidence only. That new owner boundary is
 tracked in
-[Rolling Restart Startup Active Gate Priority Operation Creation Snapshot Coverage Reentry](./active-20260506-rolling-restart-startup-active-gate-priority-operation-creation-snapshot-coverage-reentry.md).
+[Rolling Restart Startup Active Gate Priority Operation Creation Snapshot Coverage Reentry](./done-20260506-rolling-restart-startup-active-gate-priority-operation-creation-snapshot-coverage-reentry.md).
 
 ## Current Evidence
 
