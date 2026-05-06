@@ -2,27 +2,28 @@
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
   "sprint": "work/sprints/active-2026-q2-publication-scoped-consistency-and-node-join-closure.md",
-  "package": "work/packages/active-20260506-rolling-restart-startup-active-gate-priority-recovery-rebalancer-handoff-stall-reentry.md",
+  "package": "work/packages/active-20260506-rolling-restart-startup-join-contacting-seed-bootstrap-readiness-reentry.md",
   "status": "active",
   "scenario": "rolling-restart",
-  "artifact": "test-output/reports/rolling-restart-after-subordinated-serial-wait-suppression-20260506T204812Z.report.json",
-  "playback": "test-output/reports/.playback/rolling-restart-after-subordinated-serial-wait-suppression-20260506T204812Z/rolling-restart/",
-  "owner": "Startup active-gate priority-recovery rebalancer handoff stall and stale no-progress retention",
-  "boundary": "Startup active-gate / priority-recovery rebalancer-handoff stall retention",
-  "dominantReason": "priority_recovery_rebalancer_handoff_stalled",
-  "currentState": "The publication-evidence stale serial-wait consumer seam is closed. The representative rerun now reaches epoch 4 PUBLISHED with startup active 3/5 and snapshot coverage 3/5 on selected snapshot ebc4..., while the current canonical priority-recovery view has sql_transactions-p1 recovering_in_flight and sql_write_operations-p1 blocked_unclassified on rebalancer_leader / rebalancer_handoff. Supporting no-progress retention still surfaces an older selected-snapshot operation_created_but_no_step_transitions witness, so the live owner must be separated between current handoff state and retained stale selected-snapshot evidence.",
-  "nextAction": "Extract the 204812Z current-versus-retained priority-recovery fixture, decide whether the blocking owner is current rebalancer handoff, stale selected-snapshot/no-progress retention, or startup transport/query pressure, then repair only that selected boundary.",
+  "artifact": "test-output/reports/rolling-restart-after-terminal-serial-wait-carrier-normalization-20260506T211047Z.report.json",
+  "playback": "test-output/reports/.playback/rolling-restart-after-terminal-serial-wait-carrier-normalization-20260506T211047Z/rolling-restart/",
+  "owner": "Startup join contacting-seed bootstrap readiness stall and stale selected-snapshot coverage",
+  "boundary": "Startup join / contacting-seed bootstrap readiness",
+  "dominantReason": "BOOTSTRAP_PHASE_INCOMPLETE",
+  "currentState": "The epoch-4 priority-recovery rebalancer-handoff seam is closed. The representative rerun now reaches epoch 3 PUBLISHED with steady_published recovery and no unresolved priority-recovery blocker classes, but startup still times out because joiners ebc4... and 8be8... remain in INIT/contacting_seed with BOOTSTRAP_PHASE_INCOMPLETE, SQL_ENGINE_UNAVAILABLE, LEADER_METADATA_INCOMPLETE, BOOTSTRAP_NOT_READY, and PRIORITY_CONTROL_PLANE_RECOVERY_PENDING. The selected stale-usable snapshot on 11601... reports only 2/5 observed nodes and selected missing published nodes 11601...|35a891...|8be8...|ebc4..., so the live owner must be separated between a real seed-contact/bootstrap stall and stale selected-snapshot coverage debt.",
+  "nextAction": "Extract the 211047Z join/contacting-seed fixture, decide whether the blocking owner is seed bootstrap request timeout, infrastructure/connect-websocket stall, or stale selected-snapshot coverage consumption, then repair only that startup owner path.",
   "proof": [
-    "Focused 204812Z current-versus-retained priority-recovery fixture",
-    "Owner regression for current handoff versus retained stale timeout evidence",
+    "Focused 211047Z join/contacting-seed fixture",
+    "Owner regression for startup bootstrap stall versus stale selected snapshot",
     "Touched-file static guardrails",
     "Representative rolling-restart --fast-local rerun"
   ],
   "touchedFiles": [
-    "src/control-plane/priority-recovery-snapshot-stage-8.js",
-    "src/control-plane/priority-recovery-snapshot-stage-9.js",
-    "test/control-plane/priority-recovery-snapshot.test.js",
+    "src/bootstrap/phases/contact-seed-phase.js",
+    "src/bootstrap/phases/connect-websocket-phase.js",
+    "src/bootstrap/owners/bootstrap-request-owner.js",
+    "test/bootstrap/node-joining-service.test-part-4.js",
     "test/distributed/harness/__tests__/failure-bundle.test.js"
   ],
-  "predecessor": "work/packages/done-20260506-rolling-restart-startup-active-gate-publication-evidence-priority-recovery-consumer-alignment.md"
+  "predecessor": "work/packages/done-20260506-rolling-restart-startup-active-gate-priority-recovery-rebalancer-handoff-stall-reentry.md"
 }

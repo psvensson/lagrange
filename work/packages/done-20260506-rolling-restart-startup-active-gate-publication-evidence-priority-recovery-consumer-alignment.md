@@ -12,7 +12,7 @@
   "boundary": "Startup active-gate / publication-convergence priority-recovery consumer alignment",
   "dominantReason": "priority_recovery_rebalancer_handoff_stalled",
   "currentState": "The stale publication-evidence serial-wait consumer seam is closed. The representative rerun now reaches epoch 4 PUBLISHED with startup active 3/5 and snapshot coverage 3/5 on selected snapshot ebc4..., while the current canonical priority-recovery view has sql_transactions-p1 recovering_in_flight and sql_write_operations-p1 blocked_unclassified on rebalancer_leader / rebalancer_handoff. The live owner migrated away from publication-evidence current-summary consumption into a new startup active-gate rebalancer-handoff / retained stale no-progress boundary.",
-  "nextAction": "Continue in work/packages/active-20260506-rolling-restart-startup-active-gate-priority-recovery-rebalancer-handoff-stall-reentry.md to separate current canonical handoff state from retained stale selected-snapshot timeout evidence.",
+  "nextAction": "Continue in work/packages/done-20260506-rolling-restart-startup-active-gate-priority-recovery-rebalancer-handoff-stall-reentry.md for the retained-terminal serial-wait carrier repair, then follow its successor package for the startup join/bootstrap boundary.",
   "proof": [
     "Focused subordinated serial-wait regression",
     "Touched-file static guardrails",
@@ -25,14 +25,14 @@
   ],
   "predecessor": "work/packages/done-20260506-rolling-restart-startup-active-gate-snapshot-coverage-priority-serial-wait-workflow-progress-reentry.md",
   "closed": "2026-05-06",
-  "successor": "work/packages/active-20260506-rolling-restart-startup-active-gate-priority-recovery-rebalancer-handoff-stall-reentry.md"
+  "successor": "work/packages/done-20260506-rolling-restart-startup-active-gate-priority-recovery-rebalancer-handoff-stall-reentry.md"
 }
 -->
 
 Opened on May 6, 2026 after
 [Rolling Restart Startup Active Gate Snapshot Coverage Priority Serial-Wait Workflow Progress Reentry](./done-20260506-rolling-restart-startup-active-gate-snapshot-coverage-priority-serial-wait-workflow-progress-reentry.md)
 closed by migration. Closed the same day by migration into
-[Rolling Restart Startup Active Gate Priority Recovery Rebalancer Handoff Stall Reentry](./active-20260506-rolling-restart-startup-active-gate-priority-recovery-rebalancer-handoff-stall-reentry.md).
+[Rolling Restart Startup Active Gate Priority Recovery Rebalancer Handoff Stall Reentry](./done-20260506-rolling-restart-startup-active-gate-priority-recovery-rebalancer-handoff-stall-reentry.md).
 
 ## Closure Summary
 
