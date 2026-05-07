@@ -15,6 +15,9 @@ import {
   MESSAGE_GROUP_ASSIGNMENT_STRATEGY as AssignmentStrategy,
 } from '../message-group-assignment.js';
 import {
+  BOOTSTRAP_API_REGISTER_SERVICE_ERROR_CODE,
+} from '../bootstrap-api-constants.js';
+import {
   JOIN_BACKFILL_QUERY,
   JOINING_ERROR_MSG,
   JOINING_LOG_MSG,
@@ -32,6 +35,7 @@ import {
   SERVICE_LIFECYCLE_STATE,
   SERVICE_STATUS,
   TABLES,
+  TYPEOF,
   UNIFIED_SERVICE_TYPE,
 } from '../../constants/index.js';
 
@@ -68,6 +72,66 @@ const MESSAGE_GROUP_SERVICE_REGISTRATION_ADMISSION_TARGET = Object.freeze({
 });
 const MESSAGE_GROUP_REGISTER_SHORTCUT_FAILED =
   'Message group service registration shortcut returned non-success';
+const MAX_RETRYABLE_MOVE_REPLICA_ASSIGNMENT_TOKEN_UNKNOWN_RETRIES = 1;
+const RETRYABLE_MESSAGE_GROUP_REGISTRATION_FAILURE_ACTION = Object.freeze({
+  RETRY: 'retry',
+  SURFACE: 'surface',
+  TERMINAL: 'terminal',
+});
+
+function isRetryableMoveReplicaAssignmentTokenUnknownFailure(options = {}) {
+  return typeof options.assignmentId === TYPEOF.STRING &&
+    options.assignmentId.length > NUM.ZERO &&
+    options.classification?.code ===
+      BOOTSTRAP_API_REGISTER_SERVICE_ERROR_CODE.ASSIGNMENT_TOKEN_UNKNOWN;
+}
+
+function resolveRetryableMessageGroupRegistrationFailureAction(options = {}) {
+  if (options.classification?.retryable !== true) {
+    return RETRYABLE_MESSAGE_GROUP_REGISTRATION_FAILURE_ACTION.TERMINAL;
+  }
+  const elapsedMs = Number.isFinite(options.elapsedMs) ?
+    Math.max(NUM.ZERO, Math.floor(options.elapsedMs)) :
+    NUM.ZERO;
+  const retryTimeoutMs = Number.isFinite(options.retryTimeoutMs) ?
+    Math.max(NUM.ZERO, Math.floor(options.retryTimeoutMs)) :
+    NUM.ZERO;
+  if (elapsedMs >= retryTimeoutMs) {
+    return RETRYABLE_MESSAGE_GROUP_REGISTRATION_FAILURE_ACTION.TERMINAL;
+  }
+  const retryableMoveReplicaAssignmentTokenUnknownBudgetExhausted =
+    isRetryableMoveReplicaAssignmentTokenUnknownFailure(options) &&
+    Number.isFinite(options.retryableMoveReplicaAssignmentTokenUnknownBudget) &&
+    options.retryableMoveReplicaAssignmentTokenUnknownBudget <= NUM.ZERO;
+  return retryableMoveReplicaAssignmentTokenUnknownBudgetExhausted === true ?
+    RETRYABLE_MESSAGE_GROUP_REGISTRATION_FAILURE_ACTION.SURFACE :
+    RETRYABLE_MESSAGE_GROUP_REGISTRATION_FAILURE_ACTION.RETRY;
+}
+
+function buildRetryableMessageGroupRegistrationError(error, classification) {
+  const retryableError = new Error(
+    error?.message || JOINING_ERROR_MSG.BOOTSTRAP_REQUEST_FAILED,
+  );
+  retryableError.deferRetry = true;
+  if (Number.isFinite(classification?.retryAfterMs) &&
+      classification.retryAfterMs > NUM.ZERO) {
+    retryableError.retryAfterMs = Math.floor(classification.retryAfterMs);
+  }
+  if (classification?.parsedError) {
+    retryableError.bootstrapResponse = classification.parsedError;
+  }
+  if (typeof classification?.code === TYPEOF.STRING &&
+      classification.code.length > NUM.ZERO) {
+    retryableError.code = classification.code;
+  }
+  if (Number.isFinite(classification?.statusCode)) {
+    retryableError.statusCode = Math.floor(classification.statusCode);
+  }
+  if (error) {
+    retryableError.cause = error;
+  }
+  return retryableError;
+}
 
 /**
  * Handles the create-self-hosted-message-group phase and
@@ -597,6 +661,10 @@ class CreateMessageGroupPhase {
     const startTime = nowFn();
     let attempt = NUM.ZERO;
     let lastError = null;
+    let retryableMoveReplicaAssignmentTokenUnknownBudget =
+      assignmentId ?
+        MAX_RETRYABLE_MOVE_REPLICA_ASSIGNMENT_TOKEN_UNKNOWN_RETRIES :
+        NUM.ZERO;
 
     while (nowFn() - startTime < retryTimeoutMs) {
       attempt += LOCAL_NUM_ONE;
@@ -660,10 +728,29 @@ class CreateMessageGroupPhase {
             error,
             retryableTimeoutErrorMessage,
           );
+        const retryAction =
+          resolveRetryableMessageGroupRegistrationFailureAction({
+            assignmentId,
+            classification,
+            elapsedMs,
+            retryTimeoutMs,
+            retryableMoveReplicaAssignmentTokenUnknownBudget,
+          });
         if (
-          classification.retryable &&
-          elapsedMs < retryTimeoutMs
+          retryAction ===
+          RETRYABLE_MESSAGE_GROUP_REGISTRATION_FAILURE_ACTION.RETRY
         ) {
+          if (
+            isRetryableMoveReplicaAssignmentTokenUnknownFailure({
+              assignmentId,
+              classification,
+            })
+          ) {
+            retryableMoveReplicaAssignmentTokenUnknownBudget = Math.max(
+              NUM.ZERO,
+              retryableMoveReplicaAssignmentTokenUnknownBudget - LOCAL_NUM_ONE,
+            );
+          }
           const nextDelayMs =
             this.delegates
               .computeSeedContactRetryDelayMs({
@@ -697,6 +784,15 @@ class CreateMessageGroupPhase {
             maxDelayMs,
           );
           continue;
+        }
+        if (
+          retryAction ===
+          RETRYABLE_MESSAGE_GROUP_REGISTRATION_FAILURE_ACTION.SURFACE
+        ) {
+          lastError = buildRetryableMessageGroupRegistrationError(
+            error,
+            classification,
+          );
         }
         break;
       }

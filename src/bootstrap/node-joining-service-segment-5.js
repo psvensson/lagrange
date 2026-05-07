@@ -331,12 +331,16 @@ class NodeJoiningServiceSegment5 extends NodeJoiningServiceSegment4 {
    * @return {Promise<Object>} Response body.
    * @private
    */
-  async httpPost(url, body) {
+  async httpPost(url, body, options = {}) {
+    const timeoutMs = Number.isFinite(options?.timeoutMs) &&
+      options.timeoutMs > NUM.ZERO ?
+      Math.floor(options.timeoutMs) :
+      this.config.httpTimeoutMs;
     // AbortController is a global in Node.js 22+
     const controller = new globalThis.AbortController();
     const timeoutId = setTimeout(
       () => controller.abort(),
-      this.config.httpTimeoutMs,
+      timeoutMs,
     );
     try {
       const response = await fetch(url, {
@@ -386,7 +390,7 @@ class NodeJoiningServiceSegment5 extends NodeJoiningServiceSegment4 {
       clearTimeout(timeoutId);
       if (error.name === JOINING_ERROR_NAME.ABORT) {
         const httpTimeoutError = JOINING_ERROR_MSG.httpTimeout;
-        throw new Error(httpTimeoutError(this.config.httpTimeoutMs));
+        throw new Error(httpTimeoutError(timeoutMs));
       }
       throw error;
     }

@@ -412,6 +412,7 @@ class NodeJoiningServiceSegment1 extends EventEmitter {
     }); // Bootstrap response from seed node
     this.bootstrapResponse = null; // Joining state
     this.seedContactStartupAuthority = null;
+    this.lastRetryableSeedContactEvidence = null;
     this.phase = JoiningPhase.NOT_STARTED;
     this.startTime = null;
     this.phaseStartTime = null; // Logging
@@ -560,6 +561,11 @@ class NodeJoiningServiceSegment1 extends EventEmitter {
         getBootstrapResponse: () => this.bootstrapResponse,
         setBootstrapResponse: (v) => {
           this.bootstrapResponse = v;
+        },
+        getLastRetryableSeedContactEvidence: () =>
+          this.lastRetryableSeedContactEvidence,
+        setLastRetryableSeedContactEvidence: (v) => {
+          this.lastRetryableSeedContactEvidence = v || null;
         },
         setSeedContactStartupAuthority: (v) => {
           this.seedContactStartupAuthority = v || null;

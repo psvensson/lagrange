@@ -11,13 +11,13 @@
   "owner": "LLM repository orientation and maintainability tooling",
   "boundary": "Documentation entrypoints, owner-card navigation, command discovery, and generation guardrails",
   "dominantReason": "llm_orientation_drift",
-  "currentState": "The repository has strong steering and work-tracker primitives, but agents still need to discover npm run work:context, subsystem owner boundaries, command help, and generated-rule/constant-name quality through scattered files.",
-  "nextAction": "Make the LLM entrypoint explicit, add owner cards for major runtime directories, add command discovery, harden generated steering tests, and add a focused opaque constant-name guardrail.",
+  "currentState": "The repository has strong steering and work-tracker primitives, but agents still need to discover npm run work:context, subsystem owner boundaries, command help, and generated-rule/constant-name quality through scattered files; unrelated concurrent runtime, test, and sprint changes are outside this package.",
+  "nextAction": "Make the LLM entrypoint explicit, add owner cards for major runtime directories, add command discovery, harden generated steering tests, add a focused opaque constant-name guardrail, and record only the documentation, script/tooling, package metadata, and focused test changes owned by this package.",
   "proof": [
     "npm run work:validate",
     "npm run commands",
     "npm run steering:llm:pack",
-    "npm test -- test/scripts/generate-steering-llm-pack.test.js test/scripts/check-guideline-literals.test.js test/scripts/list-commands.test.js"
+    "npm test -- test/scripts/generate-steering-llm-pack.test.js test/scripts/check-guideline-literals.test.js test/scripts/check-guideline-constant-names.test.js test/scripts/list-commands.test.js"
   ],
   "touchedFiles": [
     "AGENTS.md",
@@ -57,12 +57,16 @@ Phase `0.5 - External Usability` developer-workflow preparation.
 4. Harden compact steering-pack generation against incomplete rules.
 5. Add a focused guardrail for newly introduced opaque constant names.
 6. Align CLI documentation with current Lagrange and AGPL public naming.
+7. Record the package metadata for the documentation, script/tooling, generated
+   steering, and focused test updates made by this package.
 
 ## Out Of Scope
 
 1. Refactoring large runtime `segment` or `part` chains in this slice.
 2. Changing active rebalancer blocker behavior.
 3. Renaming the npm package or binary without the dedicated naming package.
+4. Unrelated concurrent runtime, test, or sprint-file changes present in the
+   worktree while this package was validated.
 
 ## Residual Closure Inventory
 
@@ -78,7 +82,11 @@ Phase `0.5 - External Usability` developer-workflow preparation.
 
 Preflight:
 
-- [x] Package scope is documentation and script/tooling only.
+- [x] Package scope covers documentation, script/tooling, package metadata,
+      generated steering output, and focused test updates owned by this
+      package.
+- [x] Unrelated concurrent runtime, test, and sprint-file worktree changes are
+      excluded from this package scope.
 - [x] Relevant guardrails are work tracker validation, focused tests, steering
       pack generation, and command discovery.
 
@@ -87,6 +95,8 @@ Closure:
 - [x] `npm run work:validate` passes.
 - [x] Focused script tests pass.
 - [x] `npm run steering:llm:pack` succeeds.
+- [x] `npm run steering:llm:pack` mutates generated steering `generatedAt`
+      timestamps; timestamp-only churn was restored after validation.
 - [x] No unrelated dirty worktree changes are modified.
 
 ## Validation
@@ -94,7 +104,7 @@ Closure:
 1. `npm run work:validate`
 2. `npm run commands`
 3. `npm run steering:llm:pack`
-4. Focused TAP tests for changed scripts.
+4. `npm test -- test/scripts/generate-steering-llm-pack.test.js test/scripts/check-guideline-literals.test.js test/scripts/check-guideline-constant-names.test.js test/scripts/list-commands.test.js`
 
 ## Done When
 

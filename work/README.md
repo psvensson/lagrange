@@ -35,7 +35,8 @@ Use the tracker utility for current sprint/package mechanics:
    current blocker, first-read files, proof ladder, useful commands, and dirty
    worktree summary.
 3. `npm run work:validate` checks active and metadata-bearing packages for
-   filename/header drift and stale open checklist items.
+   filename/header drift, stale open checklist items, and required Subagent
+   Sequencing Ledgers on active metadata-bearing packages.
 4. `npm run work:package:close -- --write work/packages/active-...md` renames a
    package to `done-...` only after open checklist items are closed.
 5. `npm run work:package:migrate -- --write work/packages/active-...md`
@@ -51,6 +52,42 @@ Use the tracker utility for current sprint/package mechanics:
    sprint handoff. If package-owned and unrelated dirty changes cannot be
    separated safely, stop for human direction instead of committing a mixed
    slice.
+
+## Mandatory Subagent Sequencing
+
+Every new or continued work package must make the implementation handoff
+sequential by default. Record the sequence in the package file before runtime,
+test, harness, documentation, or tracker implementation starts.
+
+Required sequence:
+
+1. Fresh review subagent: review the most recently executed package on the same
+   sprint or owner boundary.
+2. Fresh fix subagent, when needed: if the review finds fixes, a separate
+   subagent performs those fixes before implementation starts.
+3. Fresh implementation subagent: after review/fixes are clean, a separate
+   subagent implements the new/current package.
+
+The package must record:
+
+1. The review subagent identity or session marker, the package reviewed, the
+   shared sprint or owner boundary, and whether the result was clean or found
+   fixes.
+2. The fix subagent identity or session marker and fix summary, or an explicit
+   `not-needed` entry when the review was clean.
+3. The implementation subagent identity or session marker and confirmation that
+   implementation started only after the review/fix ledger was clean.
+
+Do not use parallel subagents for these roles unless a human explicitly changes
+the package sequencing contract. The default is review, then fixes if needed,
+then implementation.
+
+`npm run work:validate` requires this ledger for active metadata-bearing
+packages. Historical `done-...` packages without the ledger remain valid unless
+they add a ledger with open or incomplete required entries. Checked required
+entries must contain completed, truthful subagent/session records; template
+placeholders such as `<...>` and pending markers such as
+`pending-before-implementation-resumes` are validation failures.
 
 ## Triage Rule
 

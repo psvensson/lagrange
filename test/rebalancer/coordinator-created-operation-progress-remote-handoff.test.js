@@ -1,5 +1,7 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
+import {ReplicaDispatchService} from
+  '../../src/control-plane/replica-dispatch-service.js';
 import {NUM, SERVICE_TYPE, WORKFLOW_STEP} from '../../src/constants/index.js';
 import {
   OperationType,

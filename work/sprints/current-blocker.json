@@ -2,32 +2,28 @@
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
   "sprint": "work/sprints/active-2026-q2-publication-scoped-consistency-and-node-join-closure.md",
-  "package": "work/packages/active-20260507-rolling-restart-topology-publication-missing-active-publication-convergence-open-reentry.md",
+  "package": "work/packages/active-20260507-rolling-restart-topology-priority-recovery-workflow-progress-event-driven-reentry.md",
   "status": "active",
   "scenario": "rolling-restart",
-  "artifact": "test-output/reports/rolling-restart-after-retryable-create-handoff-preserve-20260507T053417Z.report.json",
-  "playback": "test-output/reports/.playback/rolling-restart-after-retryable-create-handoff-preserve-20260507T053417Z/rolling-restart/",
-  "owner": "Topology publication missing-active node over OPEN publication convergence and startup/join witness disagreement",
-  "boundary": "Topology publication missing-active node / publication convergence owner",
-  "dominantReason": "publication_missing_active_node=11601fe0-72d6-5853-8590-ec2881853e72",
-  "currentState": "The rebalancer handoff terminal-failed seam is closed. The representative rerun now fails at epoch 5 OPEN publication convergence with pendingAckCount 1 on ebc4..., missingPublishedCount 2 on 11601... and 8be8..., priority spread still pending across replica_operations-p1, sql_transactions-p1, and sql_write_operations-p1, and startup evidence split between fresh joiners stalled in contacting_seed and active nodes timing out on reconnect/query work.",
-  "nextAction": "Extract the 053417Z publication-convergence witness set for missing-active nodes 11601... and 8be8..., pending-ack node ebc4..., control_plane_publications-p1 source-removal deferral, and the supporting workflow-progress witnesses on replica_operations-p1, sql_transactions-p1, and sql_write_operations-p1; decide whether the direct owner is startup contacting-seed reachability, publication ACK persistence, or operation_workflow_owner / workflow_progress serial wait; add a focused regression for the selected boundary; and rerun one representative rolling-restart scenario.",
+  "artifact": "test-output/reports/rolling-restart-after-bounded-retryable-seed-contact-probe-20260507T072145Z.report.json",
+  "playback": "test-output/reports/.playback/rolling-restart-after-bounded-retryable-seed-contact-probe-20260507T072145Z/rolling-restart/",
+  "owner": "Priority recovery workflow progress no-dispatch behind topology publication PUBLISHED priority-spread convergence",
+  "boundary": "Operation workflow owner / workflow_progress",
+  "dominantReason": "priority_recovery_workflow_progress_event_driven",
+  "currentState": "The bounded retryable seed-contact probe repair closes the previous startup no-progress seam. The representative rerun now reaches epoch 4 PUBLISHED with pending ACK count 0 and moves the live blocker to sql_write_operations-p1, where operation 0e957d74-4bae-4a33-90b0-ccf53e765d01 remains durable PENDING on target 35a... with target visibility absent and no workflow-step transitions.",
+  "nextAction": "Extract the 072145Z sql_write_operations-p1 witness set, add a focused reproduction around remote-owned priority REPLACE wake-up and dispatch progression, repair the selected workflow-progress seam, and rerun one representative rolling-restart scenario.",
   "proof": [
-    "Focused 053417Z publication-convergence witness fixture",
-    "Focused publication missing-active owner-path regression",
+    "Focused 072145Z workflow-progress witness fixture or blocker probe",
+    "Focused remote-owned priority REPLACE wake-up or dispatch regression",
     "Touched-file static guardrails",
     "Representative rolling-restart --fast-local rerun"
   ],
   "touchedFiles": [
-    "src/bootstrap/phases/contact-seed-phase.js",
-    "src/bootstrap/node-joining-service-segment-2.js",
-    "src/control-plane/control-plane-publication-merge.js",
-    "src/control-plane/owners/control-plane-publications-owner.js",
-    "src/rebalancer/operation-workflow-owner-segment-7-stage-3.js",
-    "src/rebalancer/operation-workflow-owner-segment-7-stage-shared.js",
-    "test/bootstrap/bootstrap-api.test-part-4.js",
-    "test/distributed/harness/__tests__/publication-evidence-replay.test.js",
-    "work/packages/active-20260507-rolling-restart-topology-publication-missing-active-publication-convergence-open-reentry.md"
+    "src/rebalancer/operation-workflow-owner-segment-2.js",
+    "src/control-plane/replica-dispatch-service-segment-2.js",
+    "test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js",
+    "test/control-plane/replica-dispatch-atomic-claim.integration.test.js",
+    "work/packages/active-20260507-rolling-restart-topology-priority-recovery-workflow-progress-event-driven-reentry.md"
   ],
-  "predecessor": "work/packages/done-20260507-rolling-restart-topology-publication-missing-active-priority-recovery-rebalancer-handoff-terminal-failed-reentry.md"
+  "predecessor": "work/packages/done-20260507-rolling-restart-topology-publication-missing-active-publication-convergence-open-reentry.md"
 }

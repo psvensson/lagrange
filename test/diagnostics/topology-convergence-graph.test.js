@@ -1,0 +1,174 @@
+import {describe, it} from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import {
+  EDGE_STATE,
+  buildTopologyConvergenceGraph,
+  buildTopologyConvergenceGraphFromArtifacts,
+} from '../../src/diagnostics/topology-convergence-graph.js';
+
+const FIXTURE_SCENARIO = 'fixture-rolling-restart';
+const FIXTURE_PUBLICATION_EPOCH = 4;
+const FIXTURE_EXPECTED_NODE_COUNT = 5;
+const FIXTURE_SNAPSHOT_COVERAGE_COUNT = 2;
+const FIXTURE_PRIORITY_GAP = 2;
+const FIXTURE_ATTEMPTS = 7;
+const FIXTURE_ELAPSED_MS = 123292;
+const FIXTURE_DOMINANT_REASON = 'priority_recovery_workflow_progress_event_driven';
+const FIXTURE_FAILURE_CLASS = 'priority_recovery_progress_blocked';
+const FIXTURE_PARTITION_ID = 'sql_write_operations-p1';
+const FIXTURE_PRIORITY_SEMANTIC_STATE = 'recovering_in_flight';
+const FIXTURE_READINESS_MODE = 'startup';
+const FIXTURE_READINESS_CLASS = 'snapshot_reachability_timeout';
+const FIXTURE_READINESS_RECOVERABILITY = 'terminal';
+const FIXTURE_READINESS_CAUSE = 'snapshot_reachability_timeout';
+const FIXTURE_READINESS_SOURCE = 'selectedSnapshotReachabilityError';
+const FIXTURE_TOP_REASON = 'priority_partitions_not_spread';
+const FIXTURE_TOP_REASON_COUNT = 2;
+const ZERO_COUNT = 0;
+const ONE_COUNT = 1;
+const EXPECTED_EDGE_COUNT = 5;
+const MIN_FRONTIER_COUNT = 1;
+const JSON_ENCODING_UTF8 = 'utf8';
+const NULL_VALUE = null;
+const UNDEFINED_VALUE = undefined;
+const SCENARIO_ROLLING_RESTART = 'rolling-restart';
+const OWNER_OPERATION_WORKFLOW = 'operation_workflow_owner';
+const ACTIVE_GATE_STATE_TIMED_OUT = 'timed_out';
+const PUBLICATION_STATUS_PUBLISHED = 'PUBLISHED';
+const RECOVERY_PROTOCOL_PRIORITY_SPREAD_PENDING = 'priority_spread_pending';
+const EDGE_PRIORITY_RECOVERY = 'priority_recovery_partition_progress';
+const EDGE_SNAPSHOT_COVERAGE = 'active_gate_snapshot_coverage';
+const EDGE_READINESS = 'readiness_startup_support';
+const ARTIFACT_PATH_20260507 =
+  'test-output/reports/.playback/rolling-restart-after-bounded-retryable-seed-contact-probe-20260507T072145Z/rolling-restart/failure-bundle.json';
+const REPORT_ARTIFACT_PATH_20260507 =
+  'test-output/reports/rolling-restart-after-bounded-retryable-seed-contact-probe-20260507T072145Z.report.json';
+
+function buildFixtureFailureBundle() {
+  return {
+    scenario: FIXTURE_SCENARIO,
+    summary: {
+      dominantReason: FIXTURE_DOMINANT_REASON,
+      failureClass: FIXTURE_FAILURE_CLASS,
+      readinessFailure: {
+        mode: FIXTURE_READINESS_MODE,
+        classCode: FIXTURE_READINESS_CLASS,
+        recoverability: FIXTURE_READINESS_RECOVERABILITY,
+        cause: FIXTURE_READINESS_CAUSE,
+        source: FIXTURE_READINESS_SOURCE,
+      },
+      topReasons: [
+        {
+          reason: FIXTURE_TOP_REASON,
+          count: FIXTURE_TOP_REASON_COUNT,
+        },
+      ],
+    },
+    publicationConvergence: {
+      publicationEpoch: FIXTURE_PUBLICATION_EPOCH,
+      publicationStatus: PUBLICATION_STATUS_PUBLISHED,
+      pendingAckCount: ZERO_COUNT,
+      blockedNodeCount: ZERO_COUNT,
+      missingPublishedCount: ZERO_COUNT,
+      recoveryProtocolState: RECOVERY_PROTOCOL_PRIORITY_SPREAD_PENDING,
+      prioritySpreadPending: true,
+      activeGate: {
+        state: ACTIVE_GATE_STATE_TIMED_OUT,
+        ready: false,
+        attempts: FIXTURE_ATTEMPTS,
+        elapsedMs: FIXTURE_ELAPSED_MS,
+        progress: {
+          expectedNodeCount: FIXTURE_EXPECTED_NODE_COUNT,
+          snapshotCoverageNodeCount: FIXTURE_SNAPSHOT_COVERAGE_COUNT,
+          snapshotCoverageComplete: false,
+          prioritySpreadGap: FIXTURE_PRIORITY_GAP,
+          priorityBlockedPartitionCount: ONE_COUNT,
+          priorityRecoveryProgressClasses: {
+            unresolvedSemanticStateIds: [FIXTURE_PRIORITY_SEMANTIC_STATE],
+            blockedPartitionIds: [FIXTURE_PARTITION_ID],
+          },
+          blockers: ['snapshot_coverage=2/5'],
+        },
+      },
+    },
+  };
+}
+
+function findEdge(edges, edgeId) {
+  return edges.find((edge) => edge.id === edgeId);
+}
+
+function assertNoNullOrUndefined(value) {
+  assert.notEqual(value, NULL_VALUE);
+  assert.notEqual(value, UNDEFINED_VALUE);
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      assertNoNullOrUndefined(item);
+    }
+    return;
+  }
+  if (typeof value === 'object') {
+    for (const childValue of Object.values(value)) {
+      assertNoNullOrUndefined(childValue);
+    }
+  }
+}
+
+describe('TopologyConvergenceGraph', () => {
+  it('ranks the minimal unsatisfied frontier and projects the next frontier', () => {
+    const graph = buildTopologyConvergenceGraphFromArtifacts({
+      failureBundle: buildFixtureFailureBundle(),
+    });
+
+    assert.equal(graph.scenario, FIXTURE_SCENARIO);
+    assert.equal(graph.summary.firstFrontierEdgeId, EDGE_PRIORITY_RECOVERY);
+    assert.equal(findEdge(graph.edges, EDGE_PRIORITY_RECOVERY).state, EDGE_STATE.BLOCKED);
+    assert.equal(findEdge(graph.edges, EDGE_SNAPSHOT_COVERAGE).state, EDGE_STATE.BLOCKED);
+    assert.equal(findEdge(graph.edges, EDGE_READINESS).state, EDGE_STATE.TERMINAL_FAILED);
+    assert.deepEqual(
+      graph.frontier.map((edge) => edge.id),
+      [EDGE_PRIORITY_RECOVERY, EDGE_SNAPSHOT_COVERAGE],
+    );
+    assert.deepEqual(
+      graph.nextExpectedFrontier.map((edge) => edge.id),
+      [EDGE_SNAPSHOT_COVERAGE],
+    );
+    assertNoNullOrUndefined(graph);
+  });
+
+  it('accepts report-shaped input with an embedded failure bundle', () => {
+    const graph = buildTopologyConvergenceGraph({
+      failureBundle: buildFixtureFailureBundle(),
+    });
+
+    assert.equal(graph.summary.edgeCount, EXPECTED_EDGE_COUNT);
+    assert.equal(graph.frontier[ZERO_COUNT].owner, OWNER_OPERATION_WORKFLOW);
+  });
+
+  it('builds a graph for the 20260507 playback failure bundle artifact', () => {
+    const artifact = JSON.parse(fs.readFileSync(ARTIFACT_PATH_20260507, JSON_ENCODING_UTF8));
+    const graph = buildTopologyConvergenceGraphFromArtifacts({failureBundle: artifact});
+
+    assert.equal(graph.scenario, SCENARIO_ROLLING_RESTART);
+    assert.equal(graph.summary.firstFrontierEdgeId, EDGE_PRIORITY_RECOVERY);
+    assert.ok(graph.frontier.length >= MIN_FRONTIER_COUNT);
+    assert.ok(graph.nextExpectedFrontier.length >= MIN_FRONTIER_COUNT);
+    assertNoNullOrUndefined(graph);
+  });
+
+  it('uses scenario evidence from the direct 20260507 report artifact', () => {
+    const artifact = JSON.parse(
+      fs.readFileSync(REPORT_ARTIFACT_PATH_20260507, JSON_ENCODING_UTF8),
+    );
+    const graph = buildTopologyConvergenceGraph(artifact);
+
+    assert.equal(graph.scenario, SCENARIO_ROLLING_RESTART);
+    assert.equal(graph.summary.firstFrontierEdgeId, EDGE_PRIORITY_RECOVERY);
+    assert.deepEqual(
+      graph.nextExpectedFrontier.map((edge) => edge.id),
+      [EDGE_SNAPSHOT_COVERAGE],
+    );
+    assertNoNullOrUndefined(graph);
+  });
+});

@@ -72,6 +72,7 @@
     "test:task27:distributed-stall-gate": "bash scripts/run-task27-distributed-stall-gate.sh --verbose",
     "test:task27:ci": "npm run test:task27:invariant-suite && npm run test:task27:distributed-stall-gate",
     "analyze:pg-baseline": "node scripts/analyze-pg-baseline-report.js",
+    "analyze:topology-convergence": "node scripts/analyze-topology-convergence.js",
     "analyze:distributed-failure": "bash scripts/summarize-distributed-failure-report.sh",
     "summarize:harness": "node scripts/summarize-harness-runs.js",
     "debug:admin:ws": "node scripts/debug/admin-ws-connection-check.mjs",

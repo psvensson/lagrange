@@ -12,6 +12,25 @@ Use that output as the current handoff. It names the active blocker, first files
 to read, proof ladder, useful commands, and dirty worktree summary. Load the
 steering documents below after the handoff identifies the relevant boundary.
 
+## Mandatory Subagent Sequencing
+
+Before implementation starts for any new or continued work package, run the
+subagents sequentially and record the result in the package file:
+
+1. A fresh review subagent reviews the most recently executed package on the
+   same sprint or owner boundary.
+2. If that review finds fixes, a fresh and separate fix subagent performs those
+   fixes before implementation starts.
+3. A fresh and separate implementation subagent implements the new/current
+   package only after the review/fix ledger is clean.
+
+Do not parallelize or skip these roles by default. The package's Subagent
+Sequencing Ledger is the durable proof that the sequence happened. Active
+metadata-bearing packages must carry this ledger for `npm run work:validate`;
+historical `done-...` packages without one are not retroactively invalid.
+Checked required ledger entries must not contain template placeholders such as
+`<...>` or pending markers such as `pending-before-implementation-resumes`.
+
 Steering documents live under `.kiro/steering/`:
 - `.kiro/steering/system guidelines.md`
 - `.kiro/steering/code-style.md`

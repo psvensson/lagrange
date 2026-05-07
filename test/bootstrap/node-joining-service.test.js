@@ -1208,6 +1208,110 @@ test('NodeJoiningService - retries register-service on assignment token unknown'
     t.ok(retryEvent, 'should emit retry warning for assignment token miss');
   });
 
+test('NodeJoiningService - surfaces repeated assignment token unknown for outer retryable resume',
+  async (t) => {
+    initializeTestEnvironment();
+
+    let attempts = 0;
+    const registerPayloads = [];
+    const retryDelays = [];
+    const warnEvents = [];
+    const service = new NodeJoiningService({
+      nodeId: '550e8400-e29b-41d4-a716-44665544010a',
+      nodeAddress: 'ws://localhost:9090',
+      seedNodeAddress: 'http://localhost:8080',
+      config: {
+        httpTimeoutMs: 1000,
+        leadershipWaitTimeoutMs: 200,
+        leadershipWaitInitialDelayMs: 10,
+        leadershipWaitMaxDelayMs: 10,
+        leadershipWaitBackoffMultiplier: 2,
+        leadershipWaitJitterRatio: 0,
+      },
+      sleep: async (delayMs) => {
+        retryDelays.push(delayMs);
+      },
+      httpPost: async (url, payload) => {
+        if (!url.endsWith('/register-service')) {
+          throw new Error('unexpected URL in stale assignment token retry test');
+        }
+        registerPayloads.push(payload);
+        attempts += 1;
+        const error = new Error(
+          'HTTP 409: {"success":false,"error":"assignment token unknown",' +
+          `"code":"${ASSIGNMENT_TOKEN_UNKNOWN_ERROR_CODE}"}`,
+        );
+        error.statusCode = 409;
+        error.responseJson = {
+          success: false,
+          error: 'assignment token unknown',
+          code: ASSIGNMENT_TOKEN_UNKNOWN_ERROR_CODE,
+        };
+        throw error;
+      },
+    });
+    service.bootstrapResponse = {
+      messageGroupAssignment: {
+        strategy: AssignmentStrategy.MOVE_REPLICA,
+        groupId: 'mg-1',
+        replicaToMove: 'mg-1-r2',
+        assignmentId: 'assignment-1',
+      },
+    };
+    service.logger = {
+      debug() {},
+      info() {},
+      warn(message, details) {
+        warnEvents.push({message, details});
+      },
+      error() {},
+    };
+
+    const error = await t.rejects(
+      service.registerMessageGroupService(
+        'mg-1',
+        'mg-1-r2',
+        {getRole: () => 'leader'},
+      ),
+      'repeated stale assignment tokens should surface as retryable join failure',
+    );
+
+    t.equal(
+      attempts,
+      2,
+      'should stop local register-service retries after one bounded assignment-token retry',
+    );
+    t.same(
+      registerPayloads.map((payload) => payload?.assignment_id),
+      ['assignment-1', 'assignment-1'],
+      'bounded retries should preserve the original MOVE_REPLICA assignment token',
+    );
+    t.same(
+      retryDelays,
+      [10],
+      'should only spend one bounded delay before surfacing the stale token',
+    );
+    t.equal(
+      error?.deferRetry,
+      true,
+      'stale assignment token exhaustion should remain retryable for outer auto-resume',
+    );
+    t.equal(
+      error?.code,
+      ASSIGNMENT_TOKEN_UNKNOWN_ERROR_CODE,
+      'surfaced retryable error should preserve the assignment token code',
+    );
+    const retryEvents = warnEvents.filter((event) =>
+      event.details &&
+      event.details.lastCode === ASSIGNMENT_TOKEN_UNKNOWN_ERROR_CODE,
+    );
+    t.equal(
+      retryEvents.length,
+      1,
+      'should emit exactly one in-call retry warning before surfacing for outer resume',
+    );
+  });
+
 test('NodeJoiningService - includes assignment_id on MOVE_REPLICA register-service',
   async (t) => {
     initializeTestEnvironment();
@@ -1530,6 +1634,328 @@ test('NodeJoiningService - exhausted retryable seed-contact timeouts preserve ' 
   t.equal(error?.deferRetry, true, 'retryable timeout exhaustion should preserve retryability');
   t.equal(error?.retryAfterMs, 10, 'retryable timeout exhaustion should preserve retry delay hints');
   t.same(retryDelays, [10], 'phase should make one bounded retry before surfacing exhaustion');
+});
+
+test('NodeJoiningService - retryable seed-contact bootstrap authority ' +
+  'survives a later transport failure', async (t) => {
+  initializeTestEnvironment();
+
+  const TEST_RETRY_AFTER_MS = 5;
+  const TEST_RETRY_DELAY_MS = 10;
+  const TEST_HTTP_TIMEOUT_MS = 10;
+  const TEST_RETRY_TIMEOUT_MS = 25;
+  const TEST_BOOTSTRAP_PHASE = 'partitions';
+  const TEST_STARTUP_AUTHORITY = Object.freeze({
+    authorityAvailable: true,
+    source: 'bootstrap_ready',
+  });
+  const TEST_RETRYABLE_RESPONSE = Object.freeze({
+    success: false,
+    error: 'Bootstrap not ready',
+    code: 'BOOTSTRAP_NOT_READY',
+    phase: TEST_BOOTSTRAP_PHASE,
+    retryAfterMs: TEST_RETRY_AFTER_MS,
+    startupAuthority: TEST_STARTUP_AUTHORITY,
+  });
+
+  let attempts = 0;
+  let currentNow = 0;
+  const retryDelays = [];
+  const service = new NodeJoiningService({
+    nodeId: '550e8400-e29b-41d4-a716-446655440110',
+    nodeAddress: 'ws://localhost:9090',
+    seedNodeAddress: 'http://localhost:8080',
+    now: () => currentNow,
+    sleep: async (delayMs) => {
+      retryDelays.push(delayMs);
+      currentNow += delayMs;
+    },
+    config: {
+      httpTimeoutMs: TEST_HTTP_TIMEOUT_MS,
+      leadershipWaitTimeoutMs: TEST_RETRY_TIMEOUT_MS,
+      leadershipWaitInitialDelayMs: TEST_RETRY_DELAY_MS,
+      leadershipWaitMaxDelayMs: TEST_RETRY_DELAY_MS,
+      leadershipWaitBackoffMultiplier: 1,
+      leadershipWaitJitterRatio: 0,
+    },
+    httpPost: async (_url, _payload, options = {}) => {
+      attempts += 1;
+      const timeoutMs = Number.isFinite(options?.timeoutMs) ?
+        options.timeoutMs :
+        TEST_HTTP_TIMEOUT_MS;
+      currentNow += timeoutMs;
+      if (attempts === 1) {
+        const error = new Error(
+          `HTTP 503: ${JSON.stringify(TEST_RETRYABLE_RESPONSE)}`,
+        );
+        error.statusCode = 503;
+        throw error;
+      }
+      throw new Error('Request timeout after ' + timeoutMs + 'ms');
+    },
+  });
+
+  const error = await t.rejects(
+    service.phaseContactSeed(),
+    'retryable bootstrap authority should keep the failure resumable',
+  );
+
+  t.equal(attempts, 2, 'phase should perform one retry before surfacing the transport failure');
+  t.equal(
+    error?.message,
+    'Failed to contact seed node: Request timeout after ' +
+      TEST_RETRY_DELAY_MS + 'ms',
+    'phase should keep the transport-timeout context after switching to the bounded retryable probe timeout',
+  );
+  t.equal(
+    error?.deferRetry,
+    true,
+    'phase should preserve retryability for join auto-resume',
+  );
+  t.equal(
+    error?.retryAfterMs,
+    TEST_RETRY_DELAY_MS,
+    'phase should preserve the last retry delay hint',
+  );
+  t.same(
+    error?.bootstrapResponse,
+    {
+      ...TEST_RETRYABLE_RESPONSE,
+      statusCode: 503,
+    },
+    'phase should retain the last retryable bootstrap evidence',
+  );
+  t.same(
+    service.getSeedContactStartupAuthoritySnapshot(),
+    TEST_STARTUP_AUTHORITY,
+    'phase should retain startup authority from the retryable seed response',
+  );
+  t.same(
+    retryDelays,
+    [TEST_RETRY_DELAY_MS],
+    'phase should still use one bounded retry before surfacing the resumable failure',
+  );
+});
+
+test('NodeJoiningService - retained retryable seed-contact evidence ' +
+  'survives a later cross-attempt transport failure', async (t) => {
+  initializeTestEnvironment();
+
+  const TEST_RETRY_AFTER_MS = 5;
+  const TEST_HTTP_TIMEOUT_MS = 10;
+  const TEST_BOOTSTRAP_PHASE = 'partitions';
+  const TEST_STARTUP_AUTHORITY = Object.freeze({
+    authorityAvailable: true,
+    source: 'bootstrap_ready',
+  });
+  const TEST_RETRYABLE_RESPONSE = Object.freeze({
+    success: false,
+    error: 'Bootstrap not ready',
+    code: 'BOOTSTRAP_NOT_READY',
+    phase: TEST_BOOTSTRAP_PHASE,
+    retryAfterMs: TEST_RETRY_AFTER_MS,
+    startupAuthority: TEST_STARTUP_AUTHORITY,
+  });
+
+  let attempts = 0;
+  let currentNow = 0;
+  const observedTimeoutMs = [];
+  const service = new NodeJoiningService({
+    nodeId: '550e8400-e29b-41d4-a716-446655440111',
+    nodeAddress: 'ws://localhost:9090',
+    seedNodeAddress: 'http://localhost:8080',
+    now: () => currentNow,
+    sleep: async () => {},
+    config: {
+      httpTimeoutMs: TEST_HTTP_TIMEOUT_MS,
+      leadershipWaitTimeoutMs: TEST_HTTP_TIMEOUT_MS,
+      leadershipWaitInitialDelayMs: TEST_HTTP_TIMEOUT_MS,
+      leadershipWaitMaxDelayMs: TEST_HTTP_TIMEOUT_MS,
+      leadershipWaitBackoffMultiplier: 1,
+      leadershipWaitJitterRatio: 0,
+    },
+    httpPost: async (_url, _payload, options = {}) => {
+      attempts += 1;
+      const timeoutMs = Number.isFinite(options?.timeoutMs) ?
+        options.timeoutMs :
+        TEST_HTTP_TIMEOUT_MS;
+      observedTimeoutMs.push(timeoutMs);
+      currentNow += timeoutMs;
+      if (attempts === 1) {
+        const error = new Error(
+          `HTTP 503: ${JSON.stringify(TEST_RETRYABLE_RESPONSE)}`,
+        );
+        error.statusCode = 503;
+        throw error;
+      }
+      throw new Error('Request timeout after ' + timeoutMs + 'ms');
+    },
+  });
+
+  const firstError = await t.rejects(
+    service.phaseContactSeed(),
+    'first attempt should surface retryable bootstrap-not-ready evidence',
+  );
+  t.equal(
+    firstError?.message,
+    'Seed bootstrap not ready (phase: ' + TEST_BOOTSTRAP_PHASE + ')',
+    'first attempt should keep the canonical retryable bootstrap message',
+  );
+  t.equal(
+    firstError?.deferRetry,
+    true,
+    'first attempt should remain retryable for auto-resume',
+  );
+
+  const secondError = await t.rejects(
+    service.phaseContactSeed(),
+    'second attempt should preserve retained retryable seed-contact evidence',
+  );
+
+  t.equal(attempts, 2, 'phase should execute one request per cross-attempt check');
+  t.equal(
+    secondError?.message,
+    'Failed to contact seed node: Request timeout after ' +
+      TEST_RETRY_AFTER_MS + 'ms',
+    'later transport timeout should preserve contact-seed context while using the bounded retryable probe timeout',
+  );
+  t.equal(
+    secondError?.deferRetry,
+    true,
+    'retained retryable evidence should keep the later transport failure retryable',
+  );
+  t.equal(
+    secondError?.retryAfterMs,
+    TEST_RETRY_AFTER_MS,
+    'retained retryable evidence should keep the retry hint across attempts',
+  );
+  t.same(
+    secondError?.bootstrapResponse,
+    {
+      ...TEST_RETRYABLE_RESPONSE,
+      statusCode: 503,
+    },
+    'later transport failure should retain the earlier retryable bootstrap evidence',
+  );
+  t.same(
+    service.getSeedContactStartupAuthoritySnapshot(),
+    TEST_STARTUP_AUTHORITY,
+    'service should retain startup authority across attempts',
+  );
+  t.same(
+    observedTimeoutMs,
+    [TEST_HTTP_TIMEOUT_MS, TEST_RETRY_AFTER_MS],
+    'phase should bound the follow-up probe timeout once retryable seed evidence is retained',
+  );
+  t.equal(
+    currentNow,
+    TEST_HTTP_TIMEOUT_MS + TEST_RETRY_AFTER_MS,
+    'bounded cross-attempt probe timeout should avoid consuming the full original HTTP timeout again',
+  );
+});
+
+test('NodeJoiningService - surfaces retryable bootstrap authority after one ' +
+  'bounded in-call retry', async (t) => {
+  initializeTestEnvironment();
+
+  const TEST_RETRY_AFTER_MS = 5;
+  const TEST_RETRY_DELAY_MS = 10;
+  const TEST_HTTP_TIMEOUT_MS = 1;
+  const TEST_RETRY_TIMEOUT_MS = 100;
+  const TEST_BOOTSTRAP_PHASE = 'partitions';
+  const TEST_STARTUP_AUTHORITY = Object.freeze({
+    authorityAvailable: true,
+    source: 'bootstrap_ready',
+  });
+  const TEST_RETRYABLE_RESPONSE = Object.freeze({
+    success: false,
+    error: 'Bootstrap not ready',
+    code: 'BOOTSTRAP_NOT_READY',
+    phase: TEST_BOOTSTRAP_PHASE,
+    retryAfterMs: TEST_RETRY_AFTER_MS,
+    startupAuthority: TEST_STARTUP_AUTHORITY,
+  });
+
+  let attempts = 0;
+  let currentNow = 0;
+  const retryDelays = [];
+  const service = new NodeJoiningService({
+    nodeId: '550e8400-e29b-41d4-a716-446655440112',
+    nodeAddress: 'ws://localhost:9090',
+    seedNodeAddress: 'http://localhost:8080',
+    now: () => currentNow,
+    sleep: async (delayMs) => {
+      retryDelays.push(delayMs);
+      currentNow += delayMs;
+    },
+    config: {
+      httpTimeoutMs: TEST_HTTP_TIMEOUT_MS,
+      leadershipWaitTimeoutMs: TEST_RETRY_TIMEOUT_MS,
+      leadershipWaitInitialDelayMs: TEST_RETRY_DELAY_MS,
+      leadershipWaitMaxDelayMs: TEST_RETRY_DELAY_MS,
+      leadershipWaitBackoffMultiplier: 1,
+      leadershipWaitJitterRatio: 0,
+    },
+    httpPost: async () => {
+      attempts += 1;
+      currentNow += TEST_HTTP_TIMEOUT_MS;
+      const error = new Error(
+        `HTTP 503: ${JSON.stringify(TEST_RETRYABLE_RESPONSE)}`,
+      );
+      error.statusCode = 503;
+      throw error;
+    },
+  });
+
+  const error = await t.rejects(
+    service.phaseContactSeed(),
+    'phase should stop after one bounded retry once seed-owned retryable ' +
+      'authority is established',
+  );
+
+  t.equal(
+    attempts,
+    2,
+    'phase should perform only one bounded retry after canonical retryable ' +
+      'seed evidence',
+  );
+  t.equal(
+    error?.message,
+    'Seed bootstrap not ready (phase: ' + TEST_BOOTSTRAP_PHASE + ')',
+    'phase should preserve the canonical retryable bootstrap message',
+  );
+  t.equal(
+    error?.deferRetry,
+    true,
+    'phase should preserve retryability for join auto-resume',
+  );
+  t.equal(
+    error?.retryAfterMs,
+    TEST_RETRY_DELAY_MS,
+    'phase should preserve the retry hint from the retryable seed response',
+  );
+  t.same(
+    error?.bootstrapResponse,
+    {
+      ...TEST_RETRYABLE_RESPONSE,
+      statusCode: 503,
+    },
+    'phase should retain the last retryable bootstrap evidence',
+  );
+  t.same(
+    service.getSeedContactStartupAuthoritySnapshot(),
+    TEST_STARTUP_AUTHORITY,
+    'phase should retain startup authority from the retryable seed response',
+  );
+  t.same(
+    retryDelays,
+    [TEST_RETRY_DELAY_MS],
+    'phase should spend one bounded retry delay before surfacing the retryable outcome',
+  );
+  t.ok(
+    currentNow < TEST_RETRY_TIMEOUT_MS,
+    'phase should not consume the full contact-seed retry window after canonical retryable seed evidence',
+  );
 });
 
 test('NodeJoiningService - treats bootstrap validation/conflict failures as terminal',

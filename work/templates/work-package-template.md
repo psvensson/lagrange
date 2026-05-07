@@ -90,6 +90,21 @@ Closure:
 - [ ] Package-owned changes committed as one focused slice.
 - [ ] Slice commit pushed, or unpushed commit SHA and reason recorded.
 
+## Subagent Sequencing Ledger
+
+Required before implementation starts for every new or continued package.
+Active metadata-bearing packages fail `npm run work:validate` without this
+ledger. Do not check these items until real subagent/session values replace the
+template placeholders; checked placeholders or pending markers are invalid.
+
+- [ ] Review subagent recorded: `<fresh subagent/session>` reviewed
+      `<most recently executed package>` on `<same sprint or owner boundary>`;
+      result `<clean|fixes required>`.
+- [ ] Fix subagent recorded or explicitly not needed:
+      `<fresh separate subagent/session|not-needed>`; fixes `<summary|none>`.
+- [ ] Implementation subagent recorded: `<fresh separate subagent/session>`;
+      started only after review/fix ledger was clean.
+
 ## Failure Migration / Contraction
 
 Required for scenario-driven packages after blocker migration.
