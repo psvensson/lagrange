@@ -1,0 +1,28 @@
+{
+  "scenario": "rolling-restart",
+  "publicationConvergence": {
+    "publicationEpoch": 3,
+    "publicationStatus": "PUBLISHED",
+    "pendingAckCount": 0,
+    "blockedNodeCount": 0,
+    "missingPublishedCount": 0,
+    "activeGate": {
+      "state": "timed_out",
+      "ready": false,
+      "progress": {
+        "snapshotCoverageComplete": false,
+        "snapshotCoverageNodeCount": 4,
+        "expectedNodeCount": 5,
+        "priorityBlockedPartitionCount": 0,
+        "priorityRecoveryProgressClasses": {
+          "unresolvedSemanticStateIds": [],
+          "blockedPartitionIds": []
+        }
+      }
+    }
+  },
+  "summary": {
+    "dominantReason": "snapshot_coverage_incomplete",
+    "failureClass": "topology_convergence_timeout"
+  }
+}

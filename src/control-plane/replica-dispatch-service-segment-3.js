@@ -79,6 +79,33 @@ class ReplicaDispatchServiceSegment3 extends ReplicaDispatchServiceSegment2 {
     return true;
   }
 
+  replayReplicaOperationRow(row, reasons) {
+    if (!row || !row.operation_id) {
+      return false;
+    }
+    if (!isCoordinatorOwnedOperationType(row.type)) {
+      return false;
+    }
+    if (this.enqueueReplicaOperationRow(row, reasons)) {
+      return true;
+    }
+
+    const workflowStep = row.workflow_step;
+    const remoteReplayable =
+      workflowStep === WORKFLOW_STEP.PENDING ||
+      workflowStep === WORKFLOW_STEP.SENDING ||
+      (row.type === OperationType.REPLACE &&
+        workflowStep === WORKFLOW_STEP.ACTIVE);
+    if (!remoteReplayable || this.isReplicaOperationLocallyOwned(row)) {
+      return false;
+    }
+
+    this.sendDirectDispatchWakeup(this.buildOperationFromRow(row)).catch(
+      () => {},
+    );
+    return true;
+  }
+
   /**
    * Resolve node id from a system row shape.
    * @param {Object} record - Row object.

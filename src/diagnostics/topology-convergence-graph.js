@@ -14,6 +14,10 @@ const SOURCE_ORDER_BASE = 0;
 const FIRST_FRONTIER_INDEX = 0;
 const SCHEMA_VERSION_TOPOLOGY_CONVERGENCE_GRAPH_V1 =
   'topology-convergence-graph-v1';
+const SCHEMA_VERSION_TOPOLOGY_CONVERGENCE_DECISION_TABLE_V1 =
+  'topology-convergence-owner-decision-table-v1';
+const SCHEMA_VERSION_TOPOLOGY_CONVERGENCE_GLOSSARY_V1 =
+  'topology-convergence-owner-glossary-v1';
 const TYPE_OBJECT = 'object';
 const TYPE_STRING = 'string';
 const BOOLEAN_TRUE_TEXT = 'true';
@@ -132,6 +136,220 @@ const RANK = Object.freeze({
   TOP_FAILURES: 50,
 });
 
+const SEMANTIC_STATE = Object.freeze({
+  PRIORITY_RECOVERY_RECOVERING_IN_FLIGHT:
+    PRIORITY_RECOVERY_SEMANTIC_RECOVERING_IN_FLIGHT,
+});
+
+const DECISION_INPUT = Object.freeze({
+  PUBLICATION_STATUS: 'publicationStatus',
+  PENDING_ACK_COUNT: 'pendingAckCount',
+  BLOCKED_NODE_COUNT: 'blockedNodeCount',
+  MISSING_PUBLISHED_COUNT: 'missingPublishedCount',
+  PRIORITY_BLOCKED_PARTITION_COUNT: 'priorityBlockedPartitionCount',
+  UNRESOLVED_SEMANTIC_STATE_IDS: 'unresolvedSemanticStateIds',
+  ACTIVE_GATE_READY: 'activeGate.ready',
+  ACTIVE_GATE_STATE: 'activeGate.state',
+  SNAPSHOT_COVERAGE_COMPLETE: 'snapshotCoverageComplete',
+  READINESS_RECOVERABILITY: 'readiness.recoverability',
+  TOP_REASONS: 'topReasons',
+});
+
+const DECISION_CONDITION = Object.freeze({
+  PUBLICATION_NOT_PUBLISHED: 'publication status is not PUBLISHED',
+  PUBLICATION_PENDING_ACKS: 'pending acknowledgement count is positive',
+  PUBLICATION_BLOCKED_NODES: 'blocked publication node count is positive',
+  PUBLICATION_MISSING_PUBLISHED: 'missing published node count is positive',
+  PUBLICATION_CLOSED: 'published with no pending acknowledgement blockers',
+  PRIORITY_NO_UNRESOLVED_SEMANTIC_STATES:
+    'priority recovery has no unresolved semantic states',
+  PRIORITY_BLOCKED_PARTITIONS:
+    'priority recovery has blocked partitions',
+  PRIORITY_RECOVERING_IN_FLIGHT:
+    'priority recovery contains recovering_in_flight semantic state',
+  PRIORITY_UNRESOLVED_WITHOUT_IN_FLIGHT:
+    'priority recovery has unresolved semantic states without in-flight recovery',
+  ACTIVE_GATE_READY_OR_COVERED:
+    'active gate is ready or snapshot coverage is complete',
+  ACTIVE_GATE_TIMED_OUT_INCOMPLETE:
+    'active gate timed out before snapshot coverage completed',
+  ACTIVE_GATE_PROGRESS_MISSING:
+    'active gate progress evidence is missing',
+  ACTIVE_GATE_COVERAGE_DEFERRED:
+    'active gate progress exists but snapshot coverage is incomplete',
+  READINESS_ACTIVE_GATE_READY: 'active gate readiness is already satisfied',
+  READINESS_TERMINAL_FAILURE: 'readiness recoverability is terminal',
+  READINESS_EVIDENCE_MISSING: 'readiness failure evidence is missing',
+  READINESS_RETRYABLE_FAILURE: 'readiness failure evidence is retryable',
+  TOP_FAILURES_PRESENT: 'top failure reasons are present',
+  TOP_FAILURES_ABSENT: 'top failure reasons are absent',
+});
+
+const DECISION_TABLE_ROWS = Object.freeze([
+  Object.freeze({
+    edgeId: EDGE_ID.PUBLICATION_ACK_CONVERGENCE,
+    owner: OWNER.TOPOLOGY_PUBLICATION,
+    boundary: BOUNDARY.PUBLICATION_CONVERGENCE,
+    evidenceInputs: Object.freeze([
+      DECISION_INPUT.PUBLICATION_STATUS,
+      DECISION_INPUT.PENDING_ACK_COUNT,
+      DECISION_INPUT.BLOCKED_NODE_COUNT,
+      DECISION_INPUT.MISSING_PUBLISHED_COUNT,
+    ]),
+    outcomes: Object.freeze([
+      Object.freeze({
+        condition: DECISION_CONDITION.PUBLICATION_NOT_PUBLISHED,
+        state: EDGE_STATE.BLOCKED,
+        reasons: Object.freeze([REASON.PUBLICATION_PENDING]),
+      }),
+      Object.freeze({
+        condition: DECISION_CONDITION.PUBLICATION_PENDING_ACKS,
+        state: EDGE_STATE.BLOCKED,
+        reasons: Object.freeze([
+          REASON.PUBLICATION_PUBLISHED,
+          REASON.PENDING_ACKS,
+        ]),
+      }),
+      Object.freeze({
+        condition: DECISION_CONDITION.PUBLICATION_BLOCKED_NODES,
+        state: EDGE_STATE.BLOCKED,
+        reasons: Object.freeze([
+          REASON.PUBLICATION_PUBLISHED,
+          REASON.BLOCKED_NODES,
+        ]),
+      }),
+      Object.freeze({
+        condition: DECISION_CONDITION.PUBLICATION_MISSING_PUBLISHED,
+        state: EDGE_STATE.DEFERRED,
+        reasons: Object.freeze([
+          REASON.PUBLICATION_PUBLISHED,
+          REASON.MISSING_PUBLISHED,
+        ]),
+      }),
+      Object.freeze({
+        condition: DECISION_CONDITION.PUBLICATION_CLOSED,
+        state: EDGE_STATE.SATISFIED,
+        reasons: Object.freeze([REASON.PUBLICATION_PUBLISHED]),
+      }),
+    ]),
+  }),
+  Object.freeze({
+    edgeId: EDGE_ID.PRIORITY_RECOVERY_PARTITION_PROGRESS,
+    owner: OWNER.PRIORITY_RECOVERY,
+    boundary: BOUNDARY.WORKFLOW_PROGRESS,
+    evidenceInputs: Object.freeze([
+      DECISION_INPUT.UNRESOLVED_SEMANTIC_STATE_IDS,
+      DECISION_INPUT.PRIORITY_BLOCKED_PARTITION_COUNT,
+    ]),
+    outcomes: Object.freeze([
+      Object.freeze({
+        condition: DECISION_CONDITION.PRIORITY_NO_UNRESOLVED_SEMANTIC_STATES,
+        state: EDGE_STATE.SATISFIED,
+        reasons: Object.freeze([REASON.PRIORITY_RECOVERY_SATISFIED]),
+      }),
+      Object.freeze({
+        condition: DECISION_CONDITION.PRIORITY_BLOCKED_PARTITIONS,
+        state: EDGE_STATE.BLOCKED,
+        reasons: Object.freeze([REASON.PRIORITY_RECOVERY_PROGRESS_BLOCKED]),
+      }),
+      Object.freeze({
+        condition: DECISION_CONDITION.PRIORITY_RECOVERING_IN_FLIGHT,
+        state: EDGE_STATE.RETRYABLE,
+        reasons: Object.freeze([REASON.PRIORITY_RECOVERY_RETRYABLE]),
+      }),
+      Object.freeze({
+        condition: DECISION_CONDITION.PRIORITY_UNRESOLVED_WITHOUT_IN_FLIGHT,
+        state: EDGE_STATE.BLOCKED,
+        reasons: Object.freeze([REASON.PRIORITY_RECOVERY_PROGRESS_BLOCKED]),
+      }),
+    ]),
+  }),
+  Object.freeze({
+    edgeId: EDGE_ID.ACTIVE_GATE_SNAPSHOT_COVERAGE,
+    owner: OWNER.ACTIVE_GATE,
+    boundary: BOUNDARY.SNAPSHOT_COVERAGE,
+    evidenceInputs: Object.freeze([
+      DECISION_INPUT.ACTIVE_GATE_READY,
+      DECISION_INPUT.ACTIVE_GATE_STATE,
+      DECISION_INPUT.SNAPSHOT_COVERAGE_COMPLETE,
+    ]),
+    outcomes: Object.freeze([
+      Object.freeze({
+        condition: DECISION_CONDITION.ACTIVE_GATE_READY_OR_COVERED,
+        state: EDGE_STATE.SATISFIED,
+        reasons: Object.freeze([REASON.ACTIVE_GATE_READY]),
+      }),
+      Object.freeze({
+        condition: DECISION_CONDITION.ACTIVE_GATE_TIMED_OUT_INCOMPLETE,
+        state: EDGE_STATE.BLOCKED,
+        reasons: Object.freeze([
+          REASON.ACTIVE_GATE_TIMED_OUT,
+          REASON.SNAPSHOT_COVERAGE_INCOMPLETE,
+        ]),
+      }),
+      Object.freeze({
+        condition: DECISION_CONDITION.ACTIVE_GATE_PROGRESS_MISSING,
+        state: EDGE_STATE.UNKNOWN,
+        reasons: Object.freeze([REASON.EVIDENCE_MISSING]),
+      }),
+      Object.freeze({
+        condition: DECISION_CONDITION.ACTIVE_GATE_COVERAGE_DEFERRED,
+        state: EDGE_STATE.DEFERRED,
+        reasons: Object.freeze([REASON.SNAPSHOT_COVERAGE_INCOMPLETE]),
+      }),
+    ]),
+  }),
+  Object.freeze({
+    edgeId: EDGE_ID.READINESS_STARTUP_SUPPORT,
+    owner: OWNER.READINESS,
+    boundary: BOUNDARY.STARTUP_SUPPORT_EVIDENCE,
+    evidenceInputs: Object.freeze([
+      DECISION_INPUT.ACTIVE_GATE_READY,
+      DECISION_INPUT.READINESS_RECOVERABILITY,
+    ]),
+    outcomes: Object.freeze([
+      Object.freeze({
+        condition: DECISION_CONDITION.READINESS_ACTIVE_GATE_READY,
+        state: EDGE_STATE.SATISFIED,
+        reasons: Object.freeze([REASON.READINESS_SATISFIED]),
+      }),
+      Object.freeze({
+        condition: DECISION_CONDITION.READINESS_TERMINAL_FAILURE,
+        state: EDGE_STATE.TERMINAL_FAILED,
+        reasons: Object.freeze([REASON.READINESS_TERMINAL]),
+      }),
+      Object.freeze({
+        condition: DECISION_CONDITION.READINESS_EVIDENCE_MISSING,
+        state: EDGE_STATE.UNKNOWN,
+        reasons: Object.freeze([REASON.EVIDENCE_MISSING]),
+      }),
+      Object.freeze({
+        condition: DECISION_CONDITION.READINESS_RETRYABLE_FAILURE,
+        state: EDGE_STATE.RETRYABLE,
+        reasons: Object.freeze([REASON.READINESS_RETRYABLE]),
+      }),
+    ]),
+  }),
+  Object.freeze({
+    edgeId: EDGE_ID.TOP_FAILURE_REASONS,
+    owner: OWNER.FAILURE_CLASSIFIER,
+    boundary: BOUNDARY.FAILURE_REASON_RANKING,
+    evidenceInputs: Object.freeze([DECISION_INPUT.TOP_REASONS]),
+    outcomes: Object.freeze([
+      Object.freeze({
+        condition: DECISION_CONDITION.TOP_FAILURES_PRESENT,
+        state: EDGE_STATE.SATISFIED,
+        reasons: Object.freeze([REASON.TOP_FAILURES_PRESENT]),
+      }),
+      Object.freeze({
+        condition: DECISION_CONDITION.TOP_FAILURES_ABSENT,
+        state: EDGE_STATE.SATISFIED,
+        reasons: Object.freeze([REASON.TOP_FAILURES_ABSENT]),
+      }),
+    ]),
+  }),
+]);
+
 const SEVERITY_RANK = Object.freeze({
   [EDGE_STATE.TERMINAL_FAILED]: 0,
   [EDGE_STATE.BLOCKED]: 1,
@@ -217,6 +435,27 @@ function buildTopologyConvergenceGraphFromArtifacts(artifacts = {}) {
     triageSummary: artifacts.triageSummary || artifacts.triage || {},
     report: artifacts.report || {},
   });
+}
+
+function buildTopologyConvergenceDecisionTable() {
+  return {
+    schemaVersion: SCHEMA_VERSION_TOPOLOGY_CONVERGENCE_DECISION_TABLE_V1,
+    states: glossaryEntries(EDGE_STATE),
+    transitions: cloneDecisionTableRows(),
+  };
+}
+
+function buildTopologyConvergenceGlossary() {
+  return {
+    schemaVersion: SCHEMA_VERSION_TOPOLOGY_CONVERGENCE_GLOSSARY_V1,
+    owners: glossaryEntries(OWNER),
+    boundaries: glossaryEntries(BOUNDARY),
+    reasons: glossaryEntries(REASON),
+    semanticStates: glossaryEntries(SEMANTIC_STATE),
+    edgeStates: glossaryEntries(EDGE_STATE),
+    edgeIds: glossaryEntries(EDGE_ID),
+    nodeIds: glossaryEntries(NODE_ID),
+  };
 }
 
 function normalizeTopologyConvergenceInput(input) {
@@ -823,9 +1062,33 @@ function flattenEvidencePath(parentPath, childPath) {
   return `${parentPath}${PATH_SEPARATOR}${childPath}`;
 }
 
+function glossaryEntries(values) {
+  return Object.entries(values).map(([name, value]) => ({
+    name,
+    value,
+  }));
+}
+
+function cloneDecisionTableRows() {
+  return DECISION_TABLE_ROWS.map((row) => ({
+    edgeId: row.edgeId,
+    owner: row.owner,
+    boundary: row.boundary,
+    evidenceInputs: [...row.evidenceInputs],
+    outcomes: row.outcomes.map((outcome) => ({
+      condition: outcome.condition,
+      state: outcome.state,
+      reasons: [...outcome.reasons],
+    })),
+  }));
+}
+
 export {
   EDGE_STATE,
+  EDGE_ID,
   buildTopologyConvergenceGraph,
+  buildTopologyConvergenceDecisionTable,
+  buildTopologyConvergenceGlossary,
   buildTopologyConvergenceGraphFromArtifacts,
   flattenEvidencePath,
 };

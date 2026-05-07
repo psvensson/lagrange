@@ -723,6 +723,40 @@ class ReplicaOperationRepository {
     }
     return this.mergeIncompleteOperationVisibilityOperations([], fallbackOperations);
   }
+  resolveEntityOperationVisibilityWithPersistedTransition(operation = null) {
+    if (!operation?.operationId) {
+      return operation;
+    }
+    const witness = this.getOwnerPersistedTransitionVisibilityWitness(
+      operation.operationId,
+    );
+    const witnessOperation = witness?.operation || null;
+    if (!witnessOperation || !this.isOperationLocallyOwned(witnessOperation)) {
+      return operation;
+    }
+    if (this.isReplicaOperationVisibilitySatisfied(witnessOperation, operation)) {
+      this.clearOwnerPersistedTransitionVisibilityWitness(operation.operationId);
+      return operation;
+    }
+    if (
+      this.isOwnerPersistedTransitionVisibilityLagCandidate(
+        witnessOperation,
+        operation,
+        witness,
+      )
+    ) {
+      return this.cloneIncompleteOperationObservation(witnessOperation);
+    }
+    return operation;
+  }
+  reconcileEntityOperationVisibilityWithPersistedTransitions(operations = []) {
+    return this.mergeIncompleteOperationVisibilityOperations(
+      (Array.isArray(operations) ? operations : []).map((operation) =>
+        this.resolveEntityOperationVisibilityWithPersistedTransition(operation),
+      ),
+      [],
+    );
+  }
   isOwnerPersistedTransitionVisibilityLagCandidate(
     expectedOperation,
     observedOperation,

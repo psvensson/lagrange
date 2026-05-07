@@ -3,6 +3,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
+import {fileURLToPath} from 'node:url';
 
 const ENCODING_UTF8 = 'utf8';
 const NUM_ZERO = 0;
@@ -14,12 +15,23 @@ const DIRECTORY_TEST = 'test';
 const JAVASCRIPT_EXTENSION = '.js';
 const CLI_FLAG_STRICT = '--strict';
 const CLI_FLAG_TOP = '--top';
+const CLI_FLAG_OWNER_BOUNDARY_GUIDANCE = '--owner-boundary-guidance';
+const CLI_FLAG_PREFIX = '--';
 const NEWLINE = '\n';
+const EMPTY_TEXT = '';
 const SOURCE_LINE_THRESHOLD = 800;
 const TEST_LINE_THRESHOLD = 1200;
 const SOURCE_BASELINE_COUNT = 144;
 const TEST_BASELINE_COUNT = 159;
 const DEFAULT_TOP_COUNT = 25;
+const PROCESS_ARG_SCRIPT_INDEX = 1;
+const SEGMENT_FILE_PATTERN =
+  /(?:^|\/)[^/]+-segment-\d+(?:-stage-\d+)?\.js$/u;
+const OWNER_BOUNDARY_GUIDANCE_TITLE = 'Owner-boundary extraction guidance:';
+const OWNER_BOUNDARY_GUIDANCE_EMPTY =
+  'No oversized segment files matched the owner-boundary guidance pattern.';
+const OWNER_BOUNDARY_GUIDANCE_ACTION =
+  'extract one named owner/boundary helper behind the existing entrypoint; keep the public segment seam stable and move only one decision table, state model, or evidence-normalization concern.';
 const FILE_SIZE_SCOPE = Object.freeze({
   SOURCE: 'source',
   TEST: 'test',
@@ -40,6 +52,22 @@ function parseTopCount(args) {
   }
   const value = Number(args[optionIndex + NUM_ONE]);
   return Number.isInteger(value) && value > NUM_ZERO ? value : DEFAULT_TOP_COUNT;
+}
+
+function parseExplicitFilePaths(args) {
+  const filePaths = [];
+  for (let index = NUM_ZERO; index < args.length; index += NUM_ONE) {
+    const arg = args[index];
+    if (arg === CLI_FLAG_TOP) {
+      index += NUM_ONE;
+      continue;
+    }
+    if (arg.startsWith(CLI_FLAG_PREFIX)) {
+      continue;
+    }
+    filePaths.push(arg);
+  }
+  return filePaths;
 }
 
 function normalizeRelativePath(filePath) {
@@ -88,8 +116,45 @@ async function buildFileSizeEntries(scope, directoryPath) {
   return entries.sort((left, right) => right.lines - left.lines);
 }
 
+function classifyFileSizeScope(filePath) {
+  return normalizeRelativePath(path.resolve(filePath)).startsWith(
+    `${DIRECTORY_TEST}${path.sep}`,
+  ) ?
+    FILE_SIZE_SCOPE.TEST :
+    FILE_SIZE_SCOPE.SOURCE;
+}
+
+async function buildExplicitFileSizeEntries(filePaths) {
+  const entries = [];
+  for (const filePath of filePaths) {
+    const resolvedPath = path.resolve(filePath);
+    const scope = classifyFileSizeScope(resolvedPath);
+    const threshold = FILE_SIZE_THRESHOLDS[scope];
+    const content = await fs.readFile(resolvedPath, ENCODING_UTF8);
+    const lines = countLines(content);
+    if (lines > threshold) {
+      entries.push({
+        scope,
+        path: normalizeRelativePath(resolvedPath),
+        lines,
+        threshold,
+      });
+    }
+  }
+  return entries.sort((left, right) => right.lines - left.lines);
+}
+
 function formatEntry(entry) {
   return `${entry.lines} ${entry.path} (threshold ${entry.threshold})`;
+}
+
+function buildOwnerBoundaryGuidanceEntries(entries) {
+  return entries
+    .filter((entry) => SEGMENT_FILE_PATTERN.test(entry.path))
+    .map((entry) => ({
+      ...entry,
+      guidance: OWNER_BOUNDARY_GUIDANCE_ACTION,
+    }));
 }
 
 function buildRatchetErrors(sourceEntries, testEntries, strictMode) {
@@ -132,31 +197,63 @@ function printSummary(sourceEntries, testEntries, topCount) {
   if (largestEntries.length === NUM_ZERO) {
     return;
   }
-  console.log('');
+  console.log(EMPTY_TEXT);
   console.log(`Largest oversized files (${topCount} max):`);
   console.log(largestEntries.map(formatEntry).join(NEWLINE));
+}
+
+function printOwnerBoundaryGuidance(entries) {
+  const guidanceEntries = buildOwnerBoundaryGuidanceEntries(entries);
+  console.log(EMPTY_TEXT);
+  console.log(OWNER_BOUNDARY_GUIDANCE_TITLE);
+  if (guidanceEntries.length === NUM_ZERO) {
+    console.log(OWNER_BOUNDARY_GUIDANCE_EMPTY);
+    return;
+  }
+  console.log(
+    guidanceEntries
+      .map((entry) => `${formatEntry(entry)} - ${entry.guidance}`)
+      .join(NEWLINE),
+  );
 }
 
 async function main() {
   const args = process.argv.slice(2);
   const strictMode = args.includes(CLI_FLAG_STRICT);
+  const ownerBoundaryGuidance = args.includes(CLI_FLAG_OWNER_BOUNDARY_GUIDANCE);
   const topCount = parseTopCount(args);
-  const sourceEntries = await buildFileSizeEntries(
-    FILE_SIZE_SCOPE.SOURCE,
-    DIRECTORY_SRC,
-  );
-  const testEntries = await buildFileSizeEntries(
-    FILE_SIZE_SCOPE.TEST,
-    DIRECTORY_TEST,
-  );
+  const explicitFilePaths = parseExplicitFilePaths(args);
+  const explicitEntries = explicitFilePaths.length > NUM_ZERO ?
+    await buildExplicitFileSizeEntries(explicitFilePaths) :
+    [];
+  const sourceEntries = explicitFilePaths.length > NUM_ZERO ?
+    explicitEntries.filter((entry) => entry.scope === FILE_SIZE_SCOPE.SOURCE) :
+    await buildFileSizeEntries(FILE_SIZE_SCOPE.SOURCE, DIRECTORY_SRC);
+  const testEntries = explicitFilePaths.length > NUM_ZERO ?
+    explicitEntries.filter((entry) => entry.scope === FILE_SIZE_SCOPE.TEST) :
+    await buildFileSizeEntries(FILE_SIZE_SCOPE.TEST, DIRECTORY_TEST);
   printSummary(sourceEntries, testEntries, topCount);
+  if (ownerBoundaryGuidance) {
+    printOwnerBoundaryGuidance([...sourceEntries, ...testEntries]);
+  }
   const errors = buildRatchetErrors(sourceEntries, testEntries, strictMode);
   if (errors.length > NUM_ZERO) {
-    console.error('');
+    console.error(EMPTY_TEXT);
     console.error(errors.join(NEWLINE));
     process.exit(EXIT_FAILURE);
   }
   process.exit(EXIT_SUCCESS);
 }
 
-await main();
+function isDirectRun() {
+  return path.resolve(process.argv[PROCESS_ARG_SCRIPT_INDEX] || EMPTY_TEXT) ===
+    fileURLToPath(import.meta.url);
+}
+
+if (isDirectRun()) {
+  await main();
+}
+
+export {
+  buildOwnerBoundaryGuidanceEntries,
+};

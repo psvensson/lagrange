@@ -3,39 +3,39 @@
 Always-load compact rules for ownership, safety, scope, and quality baseline.
 
 Generated rules: 48
-Estimated tokens: 1687
+Estimated tokens: 1724
 Domains: architecture, governance, style, testing
 
 ## Rules
 
 1. [ARCH-0001] Work packages MUST be one executable concern per file. Do not mix unrelated concerns into one package.
 2. [ARCH-0002] Do not create a second status system in headings, directories, or sidecar trackers when the filename already carries status.
-3. [ARCH-0003] Close a completed package by renaming its file from active-... to done-.... Do not create a second closure marker inside another tracker to compensate for a stale filename.
-4. [ARCH-0004] If a package is not being executed yet, rename it to todo-...; do not leave dormant work in active-....
-5. [ARCH-0005] Do not archive package files into a second package-status directory. Package status is carried by the filename; sprint archival is the exception used to keep the live sprint root small and readable.
-6. [ARCH-0006] The commit MUST include only package-owned changes and package-status or sprint-handoff updates that belong to that slice. Do not sweep unrelated dirty worktree changes into the package commit.
-7. [ARCH-0007] Do not leave known doctrine or system-guideline violations in the affected area behind as "follow-up cleanup" while still closing the package.
-8. [ARCH-0008] Do not start a second active package on the same architectural boundary while the first package still has unresolved in-scope residuals.
-9. [ARCH-0009] Do not close a scenario-driven package or sprint on “hot path fixed” while the original scenario still fails and the new dominant blocker is unnamed.
-10. [ARCH-0010] Do not open a new package merely because a fresh artifact has a different epoch, node id set, count, timestamp, or presentation shape while the same semantic owner and boundary still dominate.
-11. [ARCH-0011] Do not hide guardrail failures by weakening scripts, expanding allowlists, renaming files out of scan scope, or moving code into test-only paths.
-12. [ARCH-0012] Long migration history belongs below the snapshot as a ledger. It must not force readers or sub-agents to reconstruct the current blocker from old package narratives.
-13. [ARCH-0013] Sub-agents may run in parallel only for independent sidecar questions with disjoint owner or file scope. They must not each chase separate interpretations of the same current blocker.
-14. [ARCH-0014] Runtime edits must not start from a sub-agent until the current blocker snapshot names the canonical owner boundary and the smallest focused proof surface.
-15. [ARCH-0015] No inline domain scalars. Do not write raw string, number, null, or undefined values directly in domain logic, runtime/exported structures, or semantic decisions.
-16. [ARCH-0016] Absence is not state. null and undefined must not encode runtime/domain state. Use an explicit named variant instead.
-17. [ARCH-0017] If a scalar or state has no clear owner, stop and define the owner first. Do not inline it “for now”.
-18. [ARCH-0018] Shared contract surfaces must declare: - semantic owner; - canonical evidence inputs; - canonical state or outcome vocabulary; - allowed consumers; - forbidden reinterpretations
-19. [ARCH-0019] Do not expose semantic mode through combinable boolean or tri-state option bags. If callers are choosing between policy variants, define one explicit named mode set and make invalid combinations unrepresentable.
-20. [ARCH-0020] Do not introduce a second cache, snapshot, field, or helper for the same concern unless the role boundary is explicit and non-overlapping.
-21. [ARCH-0021] If it exists, use it. Do not create a second version.
-22. [ARCH-0022] If it exists but needs modification, modify the original. Do not fork it.
-23. [ARCH-0023] If you are unsure whether something already exists, search first. Do not guess.
-24. [ARCH-0024] Callers must not assemble semantic behavior by toggling combinations of booleans that route into overlapping owner behavior.
-25. [ARCH-0025] INSERT OR REPLACE or full-row replacement is FORBIDDEN for steady-state lifecycle/status mutation of existing system rows.
-26. [ARCH-0026] Non-forced readers MUST NOT perform synchronous multi-table authoritative repair on the hot path.
-27. [ARCH-0027] Reader-local caches MUST NOT memoize stale or deferred blocked answers as if they were fresh observations.
-28. [ARCH-0028] If they share a row, field subsets must be explicitly partitioned by owner and never reused across concern boundaries.
+3. [ARCH-0003] The model ledger MUST remain advisory. It MUST NOT replace validation, review subagents, mandatory package sequencing, package closure, or focused commit discipline.
+4. [ARCH-0004] Close a completed package by renaming its file from active-... to done-.... Do not create a second closure marker inside another tracker to compensate for a stale filename.
+5. [ARCH-0005] If a package is not being executed yet, rename it to todo-...; do not leave dormant work in active-....
+6. [ARCH-0006] Do not archive package files into a second package-status directory. Package status is carried by the filename; sprint archival is the exception used to keep the live sprint root small and readable.
+7. [ARCH-0007] The commit MUST include only package-owned changes and package-status or sprint-handoff updates that belong to that slice. Do not sweep unrelated dirty worktree changes into the package commit.
+8. [ARCH-0008] Do not leave known doctrine or system-guideline violations in the affected area behind as "follow-up cleanup" while still closing the package.
+9. [ARCH-0009] Do not start a second active package on the same architectural boundary while the first package still has unresolved in-scope residuals.
+10. [ARCH-0010] Do not close a scenario-driven package or sprint on “hot path fixed” while the original scenario still fails and the new dominant blocker is unnamed.
+11. [ARCH-0011] Do not open a new package merely because a fresh artifact has a different epoch, node id set, count, timestamp, or presentation shape while the same semantic owner and boundary still dominate.
+12. [ARCH-0012] Do not hide guardrail failures by weakening scripts, expanding allowlists, renaming files out of scan scope, or moving code into test-only paths.
+13. [ARCH-0013] Long migration history belongs below the snapshot as a ledger. It must not force readers or sub-agents to reconstruct the current blocker from old package narratives.
+14. [ARCH-0014] Sub-agents may run in parallel only for independent sidecar questions with disjoint owner or file scope. They must not each chase separate interpretations of the same current blocker.
+15. [ARCH-0015] Runtime edits must not start from a sub-agent until the current blocker snapshot names the canonical owner boundary and the smallest focused proof surface.
+16. [ARCH-0016] Parent-session notes, local/manual session labels, and arbitrary text without a real agent id do not satisfy review, fix, or implementation roles unless the user explicitly disables sub-agents for that task.
+17. [ARCH-0017] No inline domain scalars. Do not write raw string, number, null, or undefined values directly in domain logic, runtime/exported structures, or semantic decisions.
+18. [ARCH-0018] Absence is not state. null and undefined must not encode runtime/domain state. Use an explicit named variant instead.
+19. [ARCH-0019] If a scalar or state has no clear owner, stop and define the owner first. Do not inline it “for now”.
+20. [ARCH-0020] Shared contract surfaces must declare: - semantic owner; - canonical evidence inputs; - canonical state or outcome vocabulary; - allowed consumers; - forbidden reinterpretations
+21. [ARCH-0021] Do not expose semantic mode through combinable boolean or tri-state option bags. If callers are choosing between policy variants, define one explicit named mode set and make invalid combinations unrepresentable.
+22. [ARCH-0022] Do not introduce a second cache, snapshot, field, or helper for the same concern unless the role boundary is explicit and non-overlapping.
+23. [ARCH-0023] If it exists, use it. Do not create a second version.
+24. [ARCH-0024] If it exists but needs modification, modify the original. Do not fork it.
+25. [ARCH-0025] If you are unsure whether something already exists, search first. Do not guess.
+26. [ARCH-0026] Callers must not assemble semantic behavior by toggling combinations of booleans that route into overlapping owner behavior.
+27. [ARCH-0027] INSERT OR REPLACE or full-row replacement is FORBIDDEN for steady-state lifecycle/status mutation of existing system rows.
+28. [ARCH-0028] Non-forced readers MUST NOT perform synchronous multi-table authoritative repair on the hot path.
 29. [STYLE-0001] Do not inline domain/runtime scalars when an owner constant or explicit state variant should exist.
 30. [STYLE-0002] Do not introduce synonyms for an existing concept.
 31. [STYLE-0003] Do not expose semantic policy through combinable booleans when one named mode constant set should exist.

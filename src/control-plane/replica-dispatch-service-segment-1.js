@@ -262,6 +262,37 @@ class ReplicaDispatchServiceSegment1 extends EventEmitter {
         this.coordinatorOperationCreatedListener,
       );
     }
+
+    this.enqueueCachedReadyNodeRetriesOnInitialize();
+  }
+
+  /**
+   * Replay already-ready cached nodes through the canonical ready-node queue.
+   * Restart recovery can miss the original ready/cache trigger window, so
+   * initialization must re-enter the same queue path instead of waiting for an
+   * unrelated later heartbeat or cache update.
+   * @private
+   */
+  enqueueCachedReadyNodeRetriesOnInitialize() {
+    const nodeRows = this.getSystemTableRowsFromCache(
+      SYSTEM_TABLE_NAME.NODES,
+    );
+    for (const nodeRow of nodeRows) {
+      const nodeId = this.getNodeIdFromRecord(nodeRow);
+      if (
+        !nodeId ||
+        !wasNodeRecordReadyWhenWritten(nodeRow, {
+          requireActiveStatus: true,
+        })
+      ) {
+        continue;
+      }
+      this.nodeReadyRetryQueue.enqueue(
+        nodeId,
+        RECONCILE_REASON.NODES_CACHE_READY,
+        {nodeRow},
+      );
+    }
   }
 
   /**
@@ -513,7 +544,7 @@ class ReplicaDispatchServiceSegment1 extends EventEmitter {
       return;
     }
 
-    this.enqueueReplicaOperationRow(event?.data, {
+    this.replayReplicaOperationRow(event?.data, {
       pendingReason: RECONCILE_REASON.CDC_OPERATION_PENDING,
       replaceActiveReason: RECONCILE_REASON.CDC_REPLACE_ACTIVE,
     });

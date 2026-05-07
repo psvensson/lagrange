@@ -67,6 +67,12 @@ Mandatory rules:
    trackers when the filename already carries status.
 8. `docs/` is reserved for end-user or operator-facing documentation. Internal
    planning and execution material MUST live under `work/`.
+9. `work/model-ledger.jsonl` MAY record explicit package-level model,
+   reasoning-effort, task-class, outcome, validation, correction-loop, and
+   review-finding evidence to inform future LLM choice.
+10. The model ledger MUST remain advisory. It MUST NOT replace validation,
+    review subagents, mandatory package sequencing, package closure, or focused
+    commit discipline.
 
 The point of this rule is the same as the rest of this document: one concern,
 one owner, one path. Planning must not be allowed to fragment into several
@@ -109,10 +115,16 @@ Mandatory rules:
 13. The commit MUST include only package-owned changes and package-status or
     sprint-handoff updates that belong to that slice. Do not sweep unrelated
     dirty worktree changes into the package commit.
-14. If a push is impossible because no remote is configured, credentials are
-    unavailable, or a human explicitly says not to push, record the unpushed
-    commit SHA and reason in the package or sprint handoff before continuing.
-15. If package-owned and unrelated changes cannot be separated safely, stop and
+14. Packages closed under the current tracker workflow MUST include a Commit
+    And Push Ledger with focused package commit SHA, pushed remote/branch, and
+    an explicit `yes` that the commit contains only package-owned files,
+    package-status updates, or allowed sprint handoff updates. Historical
+    closed-package proof must not be backfilled by invention; if a package is
+    reopened, migrated, or closed again, the current proof rules apply.
+15. If a push is impossible because no remote is configured, credentials are
+    unavailable, or a human explicitly says not to push, stop and ask for human
+    direction before continuing to the next package slice.
+16. If package-owned and unrelated changes cannot be separated safely, stop and
     ask for human direction instead of committing a mixed slice.
 
 ### 0.1.2 Package Closure Deep-Dive Review
@@ -383,8 +395,8 @@ Mandatory rules:
     choosing whether the owner boundary changed, and keeping package status
     filename-first.
 23. When starting or continuing package execution in a sprint, the first
-    sub-agent task must review the most recently executed package on the same
-    sprint or owner boundary.
+    real sub-agent task must review the most recently executed package on the
+    same sprint or owner boundary.
 24. The package-review sub-agent must check whether the last package actually
     closed its stated blocker, left stale status, widened scope, missed
     residual closure, introduced guardrail drift, or left the sprint snapshot
@@ -398,6 +410,9 @@ Mandatory rules:
     their file and owner scopes are explicitly disjoint. The default workflow
     is review previous package, fix previous-package defects if any, then
     implement the current package.
+28. Parent-session notes, local/manual session labels, and arbitrary text
+    without a real agent id do not satisfy review, fix, or implementation
+    roles unless the user explicitly disables sub-agents for that task.
 
 ### 0.1.9 Roadmap And Work-Tracker Truth Reconciliation
 

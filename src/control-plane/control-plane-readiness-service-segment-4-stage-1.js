@@ -521,6 +521,24 @@ class ControlPlaneReadinessServiceSegment4Stage1 extends ControlPlaneReadinessSe
       publicationRecoveryGate,
       publicationObservationState,
       publicationStatus,
+      requiredAckNodeIds:
+        Array.isArray(publicationRecoveryGate?.requiredAckNodeIds) ?
+          publicationRecoveryGate.requiredAckNodeIds :
+          planningSnapshot.requiredAckNodeIds,
+      acknowledgedNodeIds:
+        Array.isArray(publicationRecoveryGate?.acknowledgedNodeIds) ?
+          publicationRecoveryGate.acknowledgedNodeIds :
+          planningSnapshot.acknowledgedNodeIds,
+      pendingAckNodeIds:
+        Array.isArray(publicationRecoveryGate?.pendingAckNodeIds) ?
+          publicationRecoveryGate.pendingAckNodeIds :
+          planningSnapshot.pendingAckNodeIds,
+      pendingAckCount:
+        publicationRecoveryGate?.pendingAckCount ??
+        planningSnapshot.pendingAckCount,
+      pendingAckEvidenceState:
+        publicationRecoveryGate?.pendingAckEvidenceState ??
+        planningSnapshot.pendingAckEvidenceState,
       priorityRecoveryReasonCodes,
       priorityPartitionSummary,
       priorityRecoveryActive: publicationRecoveryGate?.active === true,

@@ -177,6 +177,8 @@ async (t) => {
           observedAt: new Date(now).toISOString(),
           dimensions: {
             [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
+            [CONTROL_PLANE_READINESS_DIMENSION
+              .CONTROL_PLANE_RECOVERY_ELIGIBLE]: true,
           },
           reasons: [],
         };
@@ -573,6 +575,114 @@ test('ReplicaDispatchService ready-node retry re-enters operationDispatchQueue',
     service.operationDispatchQueue = originalOperationDispatchQueue;
     service.stop();
   });
+
+test('ReplicaDispatchService initialize replays already-ready cached nodes ' +
+  'through nodeReadyRetryQueue', async (t) => {
+  initEnv();
+
+  const now = Date.now();
+  const readyNode = {
+    node_id: 'node-2',
+    status: SERVICE_STATUS.ACTIVE,
+    connection_state: STATE.READY,
+    last_heartbeat: now,
+    ready_lease_expires_at: now + 60000,
+  };
+  const pendingRow = {
+    operation_id: 'op-startup-replay-1',
+    source_node_id: 'node-1',
+    target_node_id: 'node-2',
+    workflow_step: WORKFLOW_STEP.PENDING,
+    type: OperationType.REPLACE,
+    partition_id: 'replica_operations-p1',
+  };
+  const enqueueCalls = [];
+  const dispatchCalls = [];
+
+  const service = new ReplicaDispatchService({
+    nodeId: 'node-2',
+    messageRouter: {},
+    cdcIntegrationService: {
+      updateSystemTableRow: async () => ({success: true}),
+      upsertSystemTableRow: async () => ({success: true}),
+    },
+    controlPlaneReadinessService: {
+      getNodeReadinessSync(nodeId) {
+        return {
+          nodeId,
+          dimensions: {
+            [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
+          },
+        };
+      },
+    },
+    systemTableCache: {
+      get(tableName, nodeId) {
+        if (tableName !== 'nodes' || nodeId !== readyNode.node_id) {
+          return null;
+        }
+        return readyNode;
+      },
+      getAll(tableName) {
+        if (tableName === 'nodes') {
+          return [readyNode];
+        }
+        if (tableName === 'replica_operations') {
+          return [pendingRow];
+        }
+        return [];
+      },
+      onCacheChange() {},
+    },
+    rebalanceCoordinator: {
+      async dispatchOperation(operation) {
+        dispatchCalls.push(operation.operationId);
+        return {success: true};
+      },
+      isOperationLocallyOwned(operation) {
+        return (
+          operation?.targetNodeId === 'node-2' ||
+          operation?.target_node_id === 'node-2'
+        );
+      },
+      resolveOperationOwnerNodeId(operation) {
+        return operation?.targetNodeId || operation?.target_node_id || null;
+      },
+    },
+  });
+  const originalNodeReadyRetryQueue = service.nodeReadyRetryQueue;
+  const originalNodeReadyRetryEnqueue =
+    originalNodeReadyRetryQueue.enqueue.bind(originalNodeReadyRetryQueue);
+  service.nodeReadyRetryQueue.enqueue = (nodeId, reason, context) => {
+    enqueueCalls.push({nodeId, reason, context});
+    return true;
+  };
+
+  try {
+    service.initialize();
+    await Promise.resolve();
+
+    t.same(
+      enqueueCalls,
+      [{
+        nodeId: 'node-2',
+        reason: RECONCILE_REASON.NODES_CACHE_READY,
+        context: {
+          nodeRow: readyNode,
+        },
+      }],
+      'initialize should replay already-ready cached nodes through the canonical ready-node queue',
+    );
+    t.same(
+      dispatchCalls,
+      [],
+      'initialize replay must not dispatch operations inline',
+    );
+  } finally {
+    service.nodeReadyRetryQueue.enqueue = originalNodeReadyRetryEnqueue;
+    service.stop();
+  }
+});
 
 test('ReplicaDispatchService shards operation dispatch reconcile so one ' +
   'blocked operation id does not head-of-line block another',
@@ -974,8 +1084,8 @@ test('ReplicaDispatchService ready-node retry prefers cache-visible rows over au
     service.stop();
   });
 
-test('ReplicaDispatchService ready-node retry ignores remote-owned pending ' +
-  'operations',
+test('ReplicaDispatchService ready-node retry wakes remote owners for ' +
+  'remote-owned pending operations',
 async (t) => {
   initEnv();
 
@@ -985,19 +1095,26 @@ async (t) => {
     status: SERVICE_STATUS.ACTIVE,
     connection_state: STATE.READY,
     last_heartbeat: now,
-    ready_lease_expires_at: now + 60000,
+      ready_lease_expires_at: now + 60000,
   };
   const remoteOwnedPendingRow = {
     operation_id: 'op-ready-retry-remote',
     source_node_id: 'node-remote-owner',
     target_node_id: 'node-2',
-    workflow_step: WORKFLOW_STEP.PENDING,
-    type: 'ADD',
+      workflow_step: WORKFLOW_STEP.PENDING,
+      type: 'ADD',
   };
+  const deliveries = [];
   const enqueueCalls = [];
   const service = createService({
     cacheNodes: [readyNode],
     cacheReplicaOperations: [remoteOwnedPendingRow],
+    messageRouter: {
+      async deliver(address, payload) {
+        deliveries.push({address, payload});
+        return {acknowledged: true};
+      },
+    },
     cdcIntegrationService: {
       updateSystemTableRow: async () => ({success: true}),
       upsertSystemTableRow: async () => ({success: true}),
@@ -1005,6 +1122,9 @@ async (t) => {
     rebalanceCoordinator: {
       isOperationLocallyOwned(operation) {
         return operation?.source_node_id === 'node-1';
+      },
+      resolveOperationOwnerNodeId(operation) {
+        return operation?.sourceNodeId || operation?.source_node_id || null;
       },
     },
     controlPlaneReadinessService: {
@@ -1030,10 +1150,38 @@ async (t) => {
     nodeRow: readyNode,
   });
 
+  t.same(
+    deliveries,
+    [{
+      address: 'node-remote-owner/service/replica-dispatch',
+      payload: {
+        type: ControlPlaneMessageType.REPLICA_OPERATION_DISPATCH,
+        [ControlPlaneField.OPERATION_ID]: 'op-ready-retry-remote',
+        [ControlPlaneField.OPERATION_ROW]: {
+          operation_id: 'op-ready-retry-remote',
+          type: 'ADD',
+          partition_id: undefined,
+          replica_id: undefined,
+          source_node_id: 'node-remote-owner',
+          target_node_id: 'node-2',
+          status: undefined,
+          workflow_step: WORKFLOW_STEP.PENDING,
+          created_at: undefined,
+          updated_at: undefined,
+          completed_at: undefined,
+          error_message: undefined,
+          steps_history: '[]',
+          entity_type: 'partition',
+          entity_id: undefined,
+        },
+      },
+    }],
+    'ready-node retry should wake the remote owner directly when the ready target only sees a remote-owned pending operation',
+  );
   t.equal(
     enqueueCalls.length,
     NUM.ZERO,
-    'ready-node retry must ignore pending operations owned by another node',
+    'ready-node retry should not enqueue remote-owned rows for local dispatch reconcile',
   );
 
   service.operationDispatchQueue = originalOperationDispatchQueue;
@@ -1303,6 +1451,199 @@ async (t) => {
       },
     ]],
     'target-owned priority REPLACE rows should remain dispatch-replayable in SENDING',
+  );
+
+  service.operationDispatchQueue = originalOperationDispatchQueue;
+  service.stop();
+});
+
+test('ReplicaDispatchService cache replay wakes remote owners for remote-owned ' +
+  'priority REPLACE pending rows',
+async (t) => {
+  initEnv();
+
+  const deliveries = [];
+  const service = createService({
+    cdcIntegrationService: {
+      updateSystemTableRow: async () => ({success: true}),
+      upsertSystemTableRow: async () => ({success: true}),
+    },
+    messageRouter: {
+      async deliver(address, payload) {
+        deliveries.push({address, payload});
+        return {acknowledged: true};
+      },
+    },
+    rebalanceCoordinator: {
+      resolveOperationOwnerNodeId(operation) {
+        const partitionId = operation?.partitionId || operation?.partition_id;
+        const targetNodeId =
+          operation?.targetNodeId || operation?.target_node_id;
+        const sourceNodeId =
+          operation?.sourceNodeId || operation?.source_node_id;
+        if (operation?.type === OperationType.REPLACE &&
+            partitionId === 'sql_write_operations-p1') {
+          return targetNodeId;
+        }
+        return sourceNodeId || null;
+      },
+    },
+  });
+  const enqueueCalls = [];
+  const originalOperationDispatchQueue = service.operationDispatchQueue;
+  service.operationDispatchQueue = {
+    enqueue(...args) {
+      enqueueCalls.push(args);
+    },
+  };
+
+  service.handleCacheNodeChange('replica_operations', 'INSERT', {
+    operation_id: 'replace-op-remote-cache-1',
+    partition_id: 'sql_write_operations-p1',
+    source_node_id: 'node-1',
+    target_node_id: 'node-2',
+    workflow_step: WORKFLOW_STEP.PENDING,
+    type: OperationType.REPLACE,
+    entity_type: 'partition',
+    entity_id: 'sql_write_operations-p1',
+  });
+
+  await new Promise((resolve) => {
+    setTimeout(resolve, 0);
+  });
+
+  t.same(
+    enqueueCalls,
+    [],
+    'cache replay should not enqueue remote-owned rows onto the local queue',
+  );
+  t.same(
+    deliveries,
+    [{
+      address: 'node-2/service/replica-dispatch',
+      payload: {
+        type: ControlPlaneMessageType.REPLICA_OPERATION_DISPATCH,
+        [ControlPlaneField.OPERATION_ID]: 'replace-op-remote-cache-1',
+        [ControlPlaneField.OPERATION_ROW]: {
+          operation_id: 'replace-op-remote-cache-1',
+          type: OperationType.REPLACE,
+          partition_id: 'sql_write_operations-p1',
+          replica_id: undefined,
+          source_node_id: 'node-1',
+          target_node_id: 'node-2',
+          status: undefined,
+          workflow_step: WORKFLOW_STEP.PENDING,
+          created_at:
+            deliveries[0]?.payload?.[ControlPlaneField.OPERATION_ROW]
+              ?.created_at,
+          updated_at:
+            deliveries[0]?.payload?.[ControlPlaneField.OPERATION_ROW]
+              ?.updated_at,
+          completed_at: undefined,
+          error_message: undefined,
+          steps_history: '[]',
+          entity_type: 'partition',
+          entity_id: 'sql_write_operations-p1',
+        },
+      },
+    }],
+    'cache replay should wake the canonical remote owner for dispatchable rows',
+  );
+
+  service.operationDispatchQueue = originalOperationDispatchQueue;
+  service.stop();
+});
+
+test('ReplicaDispatchService replica_operations CDC replay wakes remote ' +
+  'owners for remote-owned priority REPLACE pending rows',
+async (t) => {
+  initEnv();
+
+  const deliveries = [];
+  const service = createService({
+    cdcIntegrationService: {
+      updateSystemTableRow: async () => ({success: true}),
+      upsertSystemTableRow: async () => ({success: true}),
+    },
+    messageRouter: {
+      async deliver(address, payload) {
+        deliveries.push({address, payload});
+        return {acknowledged: true};
+      },
+    },
+    rebalanceCoordinator: {
+      resolveOperationOwnerNodeId(operation) {
+        const partitionId = operation?.partitionId || operation?.partition_id;
+        const targetNodeId =
+          operation?.targetNodeId || operation?.target_node_id;
+        const sourceNodeId =
+          operation?.sourceNodeId || operation?.source_node_id;
+        if (operation?.type === OperationType.REPLACE &&
+            partitionId === 'sql_write_operations-p1') {
+          return targetNodeId;
+        }
+        return sourceNodeId || null;
+      },
+    },
+  });
+  const enqueueCalls = [];
+  const originalOperationDispatchQueue = service.operationDispatchQueue;
+  service.operationDispatchQueue = {
+    enqueue(...args) {
+      enqueueCalls.push(args);
+    },
+  };
+
+  await service.handleCdcApplied(null, {
+    tableName: 'replica_operations',
+    data: {
+      operation_id: 'replace-op-remote-cdc-1',
+      partition_id: 'sql_write_operations-p1',
+      source_node_id: 'node-1',
+      target_node_id: 'node-2',
+      workflow_step: WORKFLOW_STEP.PENDING,
+      type: OperationType.REPLACE,
+      entity_type: 'partition',
+      entity_id: 'sql_write_operations-p1',
+    },
+  });
+
+  t.same(
+    enqueueCalls,
+    [],
+    'CDC replay should not enqueue remote-owned rows onto the local queue',
+  );
+  t.same(
+    deliveries,
+    [{
+      address: 'node-2/service/replica-dispatch',
+      payload: {
+        type: ControlPlaneMessageType.REPLICA_OPERATION_DISPATCH,
+        [ControlPlaneField.OPERATION_ID]: 'replace-op-remote-cdc-1',
+        [ControlPlaneField.OPERATION_ROW]: {
+          operation_id: 'replace-op-remote-cdc-1',
+          type: OperationType.REPLACE,
+          partition_id: 'sql_write_operations-p1',
+          replica_id: undefined,
+          source_node_id: 'node-1',
+          target_node_id: 'node-2',
+          status: undefined,
+          workflow_step: WORKFLOW_STEP.PENDING,
+          created_at:
+            deliveries[0]?.payload?.[ControlPlaneField.OPERATION_ROW]
+              ?.created_at,
+          updated_at:
+            deliveries[0]?.payload?.[ControlPlaneField.OPERATION_ROW]
+              ?.updated_at,
+          completed_at: undefined,
+          error_message: undefined,
+          steps_history: '[]',
+          entity_type: 'partition',
+          entity_id: 'sql_write_operations-p1',
+        },
+      },
+    }],
+    'CDC replay should wake the canonical remote owner for dispatchable rows',
   );
 
   service.operationDispatchQueue = originalOperationDispatchQueue;

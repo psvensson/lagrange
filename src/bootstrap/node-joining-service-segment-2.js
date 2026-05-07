@@ -4,6 +4,9 @@ import {
   BOOTSTRAP_API_PROBE_REASON,
 } from './bootstrap-api-constants.js';
 import {
+  BOOTSTRAP_PIPELINE_ERROR_CODE,
+} from './bootstrap-constants.js';
+import {
   LIFECYCLE_PHASE,
 } from './lifecycle-controller-constants.js';
 import {
@@ -33,6 +36,7 @@ const {
   STARTUP_JOIN_MODE,
   STRING,
   StartupPipelineRunner,
+  getControlPlaneErrorCode,
   TYPEOF,
   UNIFIED_SERVICE_TYPE,
   WORK_CLASS,
@@ -52,6 +56,26 @@ const {
 } = NODE_JOINING_SERVICE_SHARED;
 
 const JOIN_WORKFLOW_PLAN_VERSION = 'join-startup-plan/v1';
+const RETRYABLE_JOIN_RESUME_ACTION = Object.freeze({
+  RESUME: 'resume',
+  STOP: 'stop',
+});
+const RETRYABLE_JOIN_RESUME_ATTEMPT_BUDGET_MODE = Object.freeze({
+  LIMITED: 'limited',
+  ELAPSED_ONLY: 'elapsed_only',
+});
+const RETRYABLE_JOIN_RESUME_FAILURE_PROFILE = Object.freeze({
+  DEFAULT: 'default_retryable_failure',
+  CONTACTING_SEED_BOOTSTRAP_NOT_READY:
+    'contacting_seed_bootstrap_not_ready',
+});
+const RETRYABLE_JOIN_RESUME_STOP_REASON = Object.freeze({
+  POLICY_DISABLED: 'policy_disabled',
+  ABORT: 'abort',
+  NON_RETRYABLE: 'non_retryable',
+  ATTEMPT_BUDGET_EXHAUSTED: 'attempt_budget_exhausted',
+  ELAPSED_BUDGET_EXHAUSTED: 'elapsed_budget_exhausted',
+});
 
 class NodeJoiningServiceSegment2 extends NodeJoiningServiceSegment1 {
   _buildJoinRuntimeWiringDelegates() {
@@ -367,14 +391,13 @@ class NodeJoiningServiceSegment2 extends NodeJoiningServiceSegment1 {
         };
       } catch (error) {
         const failureResult = await this.handleJoiningFailure(error);
-        if (
-          !this.shouldAutoResumeRetryableJoinFailure(
-            error,
-            failureResult,
-            attempt,
-            resumePolicy,
-          )
-        ) {
+        const resumeDecision = this.resolveRetryableJoinResumeDecision(
+          error,
+          failureResult,
+          attempt,
+          resumePolicy,
+        );
+        if (resumeDecision.action !== RETRYABLE_JOIN_RESUME_ACTION.RESUME) {
           return failureResult;
         }
         const delayMs = this.computeRetryableJoinResumeDelayMs(
@@ -386,7 +409,9 @@ class NodeJoiningServiceSegment2 extends NodeJoiningServiceSegment1 {
           nodeId: this.nodeId,
           joinSessionId: this.joinSessionId,
           attempt,
-          maxAttempts: resumePolicy.maxAttempts,
+          maxAttempts: resumeDecision.maxAttempts,
+          attemptBudgetMode: resumeDecision.attemptBudgetMode,
+          failureProfile: resumeDecision.failureProfile,
           retryAfterMs: delayMs,
           phase: failureResult.phase,
           error: failureResult.error,
@@ -480,15 +505,87 @@ class NodeJoiningServiceSegment2 extends NodeJoiningServiceSegment1 {
         ),
     };
   }
-  shouldAutoResumeRetryableJoinFailure(error, failureResult, attempt, policy) {
-    if (policy?.enabled !== true) {
-      return false;
+  resolveRetryableJoinResumeFailureProfile(error, failureResult) {
+    const phase = failureResult?.phase || this.getPhase();
+    const errorCode =
+      getControlPlaneErrorCode(error) ||
+      getControlPlaneErrorCode(error?.bootstrapResponse);
+    if (
+      phase === JoiningPhase.CONTACTING_SEED &&
+      errorCode === BOOTSTRAP_PIPELINE_ERROR_CODE.BOOTSTRAP_NOT_READY
+    ) {
+      return RETRYABLE_JOIN_RESUME_FAILURE_PROFILE
+        .CONTACTING_SEED_BOOTSTRAP_NOT_READY;
     }
-    if (error?.name === JOINING_ERROR_NAME.ABORT) {
-      return false;
-    }
+    return RETRYABLE_JOIN_RESUME_FAILURE_PROFILE.DEFAULT;
+  }
+  resolveRetryableJoinResumeDecision(error, failureResult, attempt, policy) {
+    const failureProfile = this.resolveRetryableJoinResumeFailureProfile(
+      error,
+      failureResult,
+    );
+    const attemptBudgetMode =
+      failureProfile ===
+      RETRYABLE_JOIN_RESUME_FAILURE_PROFILE
+        .CONTACTING_SEED_BOOTSTRAP_NOT_READY ?
+        RETRYABLE_JOIN_RESUME_ATTEMPT_BUDGET_MODE.ELAPSED_ONLY :
+        RETRYABLE_JOIN_RESUME_ATTEMPT_BUDGET_MODE.LIMITED;
+    const limitedAttemptBudget =
+      attemptBudgetMode === RETRYABLE_JOIN_RESUME_ATTEMPT_BUDGET_MODE.LIMITED ?
+        policy?.maxAttempts || null :
+        null;
     const elapsedMs = this.now() - this.startTime;
-    if (attempt >= policy.maxAttempts || elapsedMs >= policy.maxElapsedMs) {
+    if (policy?.enabled !== true) {
+      return {
+        action: RETRYABLE_JOIN_RESUME_ACTION.STOP,
+        attemptBudgetMode,
+        failureProfile,
+        maxAttempts: limitedAttemptBudget,
+        stopReason: RETRYABLE_JOIN_RESUME_STOP_REASON.POLICY_DISABLED,
+      };
+    } else if (error?.name === JOINING_ERROR_NAME.ABORT) {
+      return {
+        action: RETRYABLE_JOIN_RESUME_ACTION.STOP,
+        attemptBudgetMode,
+        failureProfile,
+        maxAttempts: limitedAttemptBudget,
+        stopReason: RETRYABLE_JOIN_RESUME_STOP_REASON.ABORT,
+      };
+    } else if (isRetryableControlPlaneError(error) !== true) {
+      return {
+        action: RETRYABLE_JOIN_RESUME_ACTION.STOP,
+        attemptBudgetMode,
+        failureProfile,
+        maxAttempts: limitedAttemptBudget,
+        stopReason: RETRYABLE_JOIN_RESUME_STOP_REASON.NON_RETRYABLE,
+      };
+    } else if (elapsedMs >= policy.maxElapsedMs) {
+      this.logger.warn(JOINING_LOG_MSG.RETRYABLE_FAILURE_RESUME_EXHAUSTED, {
+        nodeId: this.nodeId,
+        joinSessionId: this.joinSessionId,
+        attempt,
+        maxAttempts: limitedAttemptBudget,
+        elapsedMs,
+        maxElapsedMs: policy.maxElapsedMs,
+        attemptBudgetMode,
+        failureProfile,
+        exhaustionReason:
+          RETRYABLE_JOIN_RESUME_STOP_REASON.ELAPSED_BUDGET_EXHAUSTED,
+        phase: failureResult?.phase || this.getPhase(),
+        error: failureResult?.error || error?.message || null,
+      });
+      return {
+        action: RETRYABLE_JOIN_RESUME_ACTION.STOP,
+        attemptBudgetMode,
+        failureProfile,
+        maxAttempts: limitedAttemptBudget,
+        stopReason:
+          RETRYABLE_JOIN_RESUME_STOP_REASON.ELAPSED_BUDGET_EXHAUSTED,
+      };
+    } else if (
+      attemptBudgetMode === RETRYABLE_JOIN_RESUME_ATTEMPT_BUDGET_MODE.LIMITED &&
+      attempt >= policy.maxAttempts
+    ) {
       this.logger.warn(JOINING_LOG_MSG.RETRYABLE_FAILURE_RESUME_EXHAUSTED, {
         nodeId: this.nodeId,
         joinSessionId: this.joinSessionId,
@@ -496,12 +593,39 @@ class NodeJoiningServiceSegment2 extends NodeJoiningServiceSegment1 {
         maxAttempts: policy.maxAttempts,
         elapsedMs,
         maxElapsedMs: policy.maxElapsedMs,
+        attemptBudgetMode,
+        failureProfile,
+        exhaustionReason:
+          RETRYABLE_JOIN_RESUME_STOP_REASON.ATTEMPT_BUDGET_EXHAUSTED,
         phase: failureResult?.phase || this.getPhase(),
         error: failureResult?.error || error?.message || null,
       });
-      return false;
+      return {
+        action: RETRYABLE_JOIN_RESUME_ACTION.STOP,
+        attemptBudgetMode,
+        failureProfile,
+        maxAttempts: limitedAttemptBudget,
+        stopReason:
+          RETRYABLE_JOIN_RESUME_STOP_REASON.ATTEMPT_BUDGET_EXHAUSTED,
+      };
+    } else {
+      return {
+        action: RETRYABLE_JOIN_RESUME_ACTION.RESUME,
+        attemptBudgetMode,
+        failureProfile,
+        maxAttempts: limitedAttemptBudget,
+        stopReason: null,
+      };
     }
-    return isRetryableControlPlaneError(error);
+  }
+  shouldAutoResumeRetryableJoinFailure(error, failureResult, attempt, policy) {
+    const decision = this.resolveRetryableJoinResumeDecision(
+      error,
+      failureResult,
+      attempt,
+      policy,
+    );
+    return decision.action === RETRYABLE_JOIN_RESUME_ACTION.RESUME;
   }
   computeRetryableJoinResumeDelayMs(error, attempt, policy) {
     const hintedDelayMs = getControlPlaneRetryAfterMs(error);

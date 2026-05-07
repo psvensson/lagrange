@@ -72,6 +72,11 @@ class ControlPlaneReadinessServiceSegment4Stage3 extends
       ) ?
         directPlanningSnapshot.publicationRecoveryGate.requiredAckNodeIds :
         [];
+    const providedRequiredAckNodeIds = Array.isArray(
+      providedPlanningSnapshot.requiredAckNodeIds,
+    ) ?
+      providedPlanningSnapshot.requiredAckNodeIds :
+      [];
     const directPendingAckCount = Number(
       directPlanningSnapshot.pendingAckCount ??
       directPlanningSnapshot.publicationRecoveryGate?.pendingAckCount ??
@@ -98,12 +103,20 @@ class ControlPlaneReadinessServiceSegment4Stage3 extends
         directHasRequiredAckNodeListDebt !== true
       );
     const shouldUseProvidedAckNodeList =
-      directPendingAckEvidenceState ===
-        PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.COUNT_ONLY &&
-      directHasPendingAckDebt !== true &&
       providedPendingAckEvidenceState !==
         PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.COUNT_ONLY &&
-      Array.isArray(providedPlanningSnapshot.requiredAckNodeIds);
+      providedRequiredAckNodeIds.length > NUM.ZERO &&
+      (
+        directPendingAckEvidenceState ===
+          PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.COUNT_ONLY ||
+        (
+          directPendingAckEvidenceState ===
+            PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE
+              .REQUIRED_ACK_NODE_LIST &&
+          directHasPendingAckDebt !== true &&
+          directHasRequiredAckNodeListDebt !== true
+        )
+      );
     const shouldUseProvidedCountOnlyAckDebt =
       shouldUseProvidedAckNodeList !== true &&
       providedHasCountOnlyAckDebt &&

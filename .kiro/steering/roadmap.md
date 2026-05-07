@@ -72,6 +72,11 @@ Use the paths as follows:
    work that is creating such a package.
 5. Completed work packages are renamed to `done-...` in the filename, then
    committed and pushed as a focused package slice before the next slice starts.
+   Packages closed under the current tracker workflow carry a Commit And Push
+   Ledger naming the focused package commit SHA, pushed remote/branch, and
+   package-only commit confirmation. Historical closed-package proof must not
+   be backfilled by invention; if a package is reopened, migrated, or closed
+   again, the current proof rules apply.
 
 Use `work/sprints/` only to group multiple active packages. Sprint files do not
 replace work packages.
@@ -167,7 +172,7 @@ Required workflow:
    node ids, counters, or presentation-only shape.
 4. Split or activate a new package only when the normalized evidence identifies
    a new owner boundary or materially different next action.
-5. Use sub-agents in sequence across owner-boundary work: artifact evidence
+5. Use real sub-agents in sequence across owner-boundary work: artifact evidence
    extraction, owner-path mapping, focused proof design, then bounded
    implementation.
 6. When starting or continuing a work package, first assign a sub-agent to
@@ -183,6 +188,9 @@ Required workflow:
    disjoint owner or file scope.
 10. The main package owner must reconcile sub-agent results into one package
    status update rather than creating parallel status narratives.
+11. Parent-session notes, local/manual session labels, and arbitrary text
+    without a real agent id do not satisfy review, fix, or implementation
+    roles unless the user explicitly disables sub-agents for that task.
 
 ## Audit Procedure
 

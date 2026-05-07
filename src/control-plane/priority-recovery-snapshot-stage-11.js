@@ -18,7 +18,7 @@ import {
   normalizePriorityRecoveryStringList,
 } from './priority-recovery-helpers.js';
 import {buildPriorityRecoveryPlannerByPartitionId, buildPriorityRecoveryPlannerEntry, buildPriorityRecoverySemanticPartitionSetMap, buildPriorityRecoverySpreadCompletion, buildPriorityRecoverySpreadRelevantOperationContexts, hasPriorityRecoverySpreadGap, resolvePriorityRecoverySemanticState} from './priority-recovery-snapshot-stage-1.js';
-import {buildPriorityRecoveryOrdinarySerialLaneOperationContexts, buildPriorityRecoverySerialWaitOperationContexts} from './priority-recovery-snapshot-stage-3.js';
+import {buildPriorityRecoverySerialWaitOperationContexts, buildPriorityRecoveryWorkflowProgressSerialWaitSourceOperationContexts} from './priority-recovery-snapshot-stage-3.js';
 import {buildPriorityRecoveryClosureWitness} from './priority-recovery-snapshot-stage-4.js';
 import {buildPriorityRecoveryOperationContextFromRecord, buildPriorityRecoveryReplicaOperationContexts, isPriorityRecoveryCompletedPlacementOperationContext, isPriorityRecoveryOperationContextTerminal} from './priority-recovery-snapshot-stage-6.js';
 import {arePriorityRecoveryBlockingOperationsWithoutOwnedTransitions} from './priority-recovery-snapshot-stage-7.js';
@@ -61,7 +61,7 @@ function buildPriorityRecoveryDecisionSnapshots(options = {}) {
       },
     );
   const serialLaneOperationContexts =
-    buildPriorityRecoveryOrdinarySerialLaneOperationContexts(
+    buildPriorityRecoveryWorkflowProgressSerialWaitSourceOperationContexts(
       replicaOperationContexts,
     );
   const learnerPromotionByPartitionId =

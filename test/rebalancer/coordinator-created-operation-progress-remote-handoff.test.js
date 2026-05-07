@@ -7,6 +7,8 @@ import {
   OperationType,
   ReplicaStatus,
 } from '../../src/rebalancer/replica-status.js';
+import {PRIORITY_RECOVERY_COMPLETION_STATE} from
+  '../../src/control-plane/priority-recovery-completion.js';
 import {TIMEOUT_BUDGET_DEFAULT} from
   '../../src/control-plane/timeout-budget.js';
 import {
@@ -25,6 +27,98 @@ const RECENT_INTENT_NON_PRIORITY_OPERATION_ID =
   'recent-intent-non-priority-operation';
 const RECENT_INTENT_PRIORITY_PARTITION_ID = 'sql_write_operations-p1';
 const RECENT_INTENT_NON_PRIORITY_PARTITION_ID = 'customer_orders-p1';
+const REMOTE_PRIORITY_VISIBILITY_OBSERVER_NODE_ID =
+  'remote-priority-visibility-observer-node';
+const REMOTE_PRIORITY_VISIBILITY_OPERATION_ID =
+  'remote-priority-visibility-operation';
+const REMOTE_PRIORITY_VISIBILITY_PARTITION_ID = 'sql_write_operations-p1';
+const REMOTE_PRIORITY_VISIBILITY_TARGET_NODE_ID =
+  'remote-priority-visibility-target-node';
+const REMOTE_PRIORITY_VISIBILITY_REPLICA_ID =
+  'sql_write_operations-p1-r4';
+const REMOTE_PRIORITY_VISIBILITY_DEFERRED_SOURCE =
+  'priority_recovery_authoritative_operation_read';
+
+function buildRemotePriorityVisibilityPlanningSnapshot() {
+  return Object.freeze({
+    priorityRecoveryDecisionSnapshots: {
+      capturedAt: 4000,
+      publicationEpoch: 4,
+      snapshots: [
+        Object.freeze({
+          partitionId: REMOTE_PRIORITY_VISIBILITY_PARTITION_ID,
+          operationId: REMOTE_PRIORITY_VISIBILITY_OPERATION_ID,
+          coordinator: {
+            operationIds: [REMOTE_PRIORITY_VISIBILITY_OPERATION_ID],
+          },
+        }),
+      ],
+    },
+  });
+}
+
+function createRemotePriorityVisibilityCoordinator() {
+  const controlPlaneReadinessService = {
+    ...createMockControlPlaneReadinessService(),
+    async getPriorityRecoveryPlanningAnswerBestEffort() {
+      return buildRemotePriorityVisibilityPlanningSnapshot();
+    },
+  };
+  return new RebalanceCoordinator({
+    nodeId: REMOTE_PRIORITY_VISIBILITY_OBSERVER_NODE_ID,
+    systemTableCache: {
+      get() {
+        return null;
+      },
+      getAll() {
+        return [];
+      },
+      filter() {
+        return [];
+      },
+    },
+    cdcIntegrationService: {
+      async waitForCacheUpdate() {},
+      async executeAuthoritativeSystemTableRead() {
+        return {success: true, rows: [], affectedRows: NUM.ZERO};
+      },
+    },
+    messageRouter: {
+      async deliver() {
+        return {acknowledged: true};
+      },
+    },
+    tablePolicyService: {
+      async getPolicyForPartition() {
+        return {minReplicaCount: NUM.ONE};
+      },
+    },
+    sqlQueryEngine: {
+      async executeQuery() {
+        return {success: true, rows: [], affectedRows: NUM.ZERO};
+      },
+    },
+    controlPlaneReadinessService,
+    transactionCoordinator: createMockTransactionCoordinator(),
+    enableTimeouts: false,
+  });
+}
+
+function buildRemotePriorityVisibilityOperation() {
+  return Object.freeze({
+    operationId: REMOTE_PRIORITY_VISIBILITY_OPERATION_ID,
+    type: OperationType.REPLACE,
+    partitionId: REMOTE_PRIORITY_VISIBILITY_PARTITION_ID,
+    entityType: SERVICE_TYPE.PARTITION,
+    entityId: REMOTE_PRIORITY_VISIBILITY_PARTITION_ID,
+    targetNodeId: REMOTE_PRIORITY_VISIBILITY_TARGET_NODE_ID,
+    replicaId: REMOTE_PRIORITY_VISIBILITY_REPLICA_ID,
+    status: ReplicaStatus.PENDING,
+    workflowStep: WORKFLOW_STEP.PENDING,
+    createdAt: 3000,
+    updatedAt: 3001,
+  });
+}
 
 function createRecentIntentPolicyCoordinator() {
   return new RebalanceCoordinator({
@@ -714,6 +808,106 @@ async (t) => {
     );
   } finally {
     Date.now = originalDateNow;
+    await coordinator.shutdown();
+  }
+});
+
+test('workflowOwner priority recovery partition snapshots recover ' +
+  'authoritative remote operations for observer-only nodes',
+async (t) => {
+  const coordinator = createRemotePriorityVisibilityCoordinator();
+  coordinator.initialize();
+
+  const authoritativeObservationCalls = [];
+  coordinator.workflowOwner.repository.getOperationsByEntityAuthoritativeObservation =
+    async (entityType, entityId) => {
+      authoritativeObservationCalls.push({entityType, entityId});
+      return Object.freeze({
+        state: 'present',
+        operationCount: NUM.ONE,
+        operations: [buildRemotePriorityVisibilityOperation()],
+        deferredOutcome: null,
+        retryAfterMs: null,
+      });
+    };
+
+  try {
+    const snapshot =
+      await coordinator.workflowOwner
+        .getPriorityRecoveryDecisionSnapshotForPartitionOperations(
+          REMOTE_PRIORITY_VISIBILITY_PARTITION_ID,
+          [],
+        );
+
+    t.same(
+      authoritativeObservationCalls,
+      [{
+        entityType: SERVICE_TYPE.PARTITION,
+        entityId: REMOTE_PRIORITY_VISIBILITY_PARTITION_ID,
+      }],
+      'observer-only partition snapshot reads should escalate to the authoritative entity visibility path',
+    );
+    t.match(snapshot, {
+      partitionId: REMOTE_PRIORITY_VISIBILITY_PARTITION_ID,
+      operationId: REMOTE_PRIORITY_VISIBILITY_OPERATION_ID,
+      coordinator: {
+        operationIds: [REMOTE_PRIORITY_VISIBILITY_OPERATION_ID],
+      },
+    });
+  } finally {
+    await coordinator.shutdown();
+  }
+});
+
+test('workflowOwner priority recovery partition snapshots preserve deferred ' +
+  'authoritative-read state when authoritative observation returns the ' +
+  'remote operation plus a deferred outcome',
+async (t) => {
+  const coordinator = createRemotePriorityVisibilityCoordinator();
+  coordinator.initialize();
+
+  coordinator.workflowOwner.repository.getOperationsByEntityAuthoritativeObservation =
+    async () => {
+      return Object.freeze({
+        state: 'deferred',
+        operationCount: NUM.ONE,
+        operations: [buildRemotePriorityVisibilityOperation()],
+        deferredOutcome: Object.freeze({
+          completionState:
+            PRIORITY_RECOVERY_COMPLETION_STATE
+              .AUTHORITATIVE_OPERATION_READ_DEFERRED,
+          retryAfterMs: 250,
+          source: REMOTE_PRIORITY_VISIBILITY_DEFERRED_SOURCE,
+        }),
+        retryAfterMs: 250,
+      });
+    };
+
+  try {
+    const snapshot =
+      await coordinator.workflowOwner
+        .getPriorityRecoveryDecisionSnapshotForPartitionOperations(
+          REMOTE_PRIORITY_VISIBILITY_PARTITION_ID,
+          [],
+        );
+
+    t.equal(
+      snapshot?.operationId,
+      REMOTE_PRIORITY_VISIBILITY_OPERATION_ID,
+      'the planning-snapshot match should still retain the remote operation identity',
+    );
+    t.equal(
+      snapshot?.completion?.state,
+      PRIORITY_RECOVERY_COMPLETION_STATE
+        .AUTHORITATIVE_OPERATION_READ_DEFERRED,
+      'the workflow-owner fallback should preserve the deferred authoritative-read completion state',
+    );
+    t.equal(
+      snapshot?.progress?.nextRequiredAction,
+      'observe_authoritative_visibility',
+      'deferred authoritative reads should keep the partition on the canonical authoritative-visibility action',
+    );
+  } finally {
     await coordinator.shutdown();
   }
 });

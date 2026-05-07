@@ -11,6 +11,12 @@ npm run work:context
 Use that output as the current handoff. It names the active blocker, first files
 to read, proof ladder, useful commands, and dirty worktree summary.
 
+Use `npm run work:model-ledger -- summary` as an advisory signal when choosing
+model and reasoning effort for a package. Record the final package experience
+with `npm run work:model-ledger -- record ...` before closure when the work
+adds useful evidence. The ledger informs future choices; it does not replace
+validation, review subagents, package sequencing, or closure proof.
+
 For steering context, load the compact LLM pack first:
 - `.kiro/steering/llm/README.md`
 - `.kiro/steering/llm/core.md`
@@ -21,8 +27,10 @@ requires source-level detail for the current boundary.
 
 ## Mandatory Subagent Sequencing
 
-Before implementation starts for any new or continued work package, run the
-subagents sequentially and record the result in the package file:
+Real subagents are authorized and required for all sprint or work-package
+implementation work by default. Before implementation starts for any new or
+continued work package, run the subagents sequentially and record the result in
+the package file:
 
 1. A fresh review subagent reviews the most recently executed package on the
    same sprint or owner boundary.
@@ -30,13 +38,35 @@ subagents sequentially and record the result in the package file:
    fixes before implementation starts.
 3. A fresh and separate implementation subagent implements the new/current
    package only after the review/fix ledger is clean.
+4. Commit and push the focused package slice before the next package starts.
 
-Do not parallelize or skip these roles by default. The package's Subagent
-Sequencing Ledger is the durable proof that the sequence happened. Active
-metadata-bearing packages must carry this ledger for `npm run work:validate`;
-historical `done-...` packages without one are not retroactively invalid.
+Parent-session notes, local/manual session labels, or arbitrary text do not
+satisfy the review, fix, or implementation roles unless the user explicitly
+disables subagents for that task. Do not parallelize or skip these roles by
+default.
+
+The package's Subagent Sequencing Ledger is the durable proof that the sequence
+happened. Active metadata-bearing packages must carry checked entries in this
+format:
+
+1. `Agent <name> (<agent-id>) reviewed <package>; result <clean|fixes-required>`
+2. `Agent <name> (<agent-id>) fixed <package>` when review found fixes, or
+   `not-needed` only when the review result is `clean`
+3. `Agent <name> (<agent-id>) implemented <package>`
+
 Checked required ledger entries must not contain template placeholders such as
-`<...>` or pending markers such as `pending-before-implementation-resumes`.
+`<...>`, pending markers such as `pending-before-implementation-resumes`, or
+non-real identities such as `current-session`, `parent Codex`, `manual`,
+`local`, or `session`.
+
+Packages closed under this policy must also carry a Commit And Push Ledger.
+Historical closed packages that predate this proof field are not backfilled by
+invention; if they are reopened, migrated, or closed again, the proof becomes
+mandatory:
+
+1. `Focused package commit: <sha>`
+2. `Pushed to: <remote>/<branch>`
+3. `Commit contains only package-owned files/package-status/allowed sprint handoff: yes`
 
 Canonical steering source documents live under `.kiro/steering/`:
 - `.kiro/steering/system guidelines.md`

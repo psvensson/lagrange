@@ -45,6 +45,7 @@ import {
 import {
 } from '../../src/query/query-constants.js';
 import {
+  BOOTSTRAP_PIPELINE_ERROR_CODE,
   JOIN_PLAN_SEGMENT,
 } from '../../src/bootstrap/bootstrap-constants.js';
 import {STARTUP_JOIN_MODE} from '../../src/bootstrap/rejoin-hints-constants.js';
@@ -1963,6 +1964,97 @@ test('NodeJoiningService - surfaces retryable bootstrap authority after one ' +
   t.ok(
     currentNow < TEST_RETRY_TIMEOUT_MS,
     'phase should not consume the full contact-seed retry window after canonical retryable seed evidence',
+  );
+});
+
+test('NodeJoiningService - contacting-seed bootstrap-not-ready resumes on ' +
+  'elapsed budget after the fixed attempt cap', async (t) => {
+  initializeTestEnvironment();
+
+  const TEST_NODE_ID = 'joining-node-auto-resume-bootstrap-defer-1';
+  const TEST_NODE_ADDRESS = 'ws://localhost:9100';
+  const TEST_SEED_ADDRESS = 'http://localhost:8080';
+  const TEST_MAX_ATTEMPTS = 4;
+  const TEST_ELAPSED_MS = 41056;
+  const TEST_RETRY_AFTER_MS = 1000;
+  const TEST_ERROR_PHASE = 'partitions';
+  const TEST_CONTACTING_SEED_FAILURE = {
+    phase: JoiningPhase.CONTACTING_SEED,
+    error: 'Seed bootstrap not ready (phase: ' + TEST_ERROR_PHASE + ')',
+  };
+
+  const service = new NodeJoiningService({
+    nodeId: TEST_NODE_ID,
+    nodeAddress: TEST_NODE_ADDRESS,
+    seedNodeAddress: TEST_SEED_ADDRESS,
+    config: {
+      autoResumeRetryableFailures: true,
+      retryableFailureResumeMaxAttempts: TEST_MAX_ATTEMPTS,
+    },
+  });
+
+  const policy = service.resolveRetryableJoinResumePolicy();
+  service.startTime = 0;
+  service.now = () => TEST_ELAPSED_MS;
+  const bootstrapNotReady = new Error(TEST_CONTACTING_SEED_FAILURE.error);
+  bootstrapNotReady.deferRetry = true;
+  bootstrapNotReady.retryAfterMs = TEST_RETRY_AFTER_MS;
+  bootstrapNotReady.code = BOOTSTRAP_PIPELINE_ERROR_CODE.BOOTSTRAP_NOT_READY;
+
+  t.equal(
+    service.shouldAutoResumeRetryableJoinFailure(
+      bootstrapNotReady,
+      TEST_CONTACTING_SEED_FAILURE,
+      TEST_MAX_ATTEMPTS,
+      policy,
+    ),
+    true,
+    'contacting-seed bootstrap-not-ready should keep resuming while elapsed budget remains',
+  );
+});
+
+test('NodeJoiningService - fixed attempt cap still stops non-bootstrap ' +
+  'retryable join failures', async (t) => {
+  initializeTestEnvironment();
+
+  const TEST_NODE_ID = 'joining-node-auto-resume-attempt-cap-1';
+  const TEST_NODE_ADDRESS = 'ws://localhost:9101';
+  const TEST_SEED_ADDRESS = 'http://localhost:8080';
+  const TEST_MAX_ATTEMPTS = 4;
+  const TEST_ELAPSED_MS = 41056;
+  const TEST_RETRY_AFTER_MS = 1000;
+  const TEST_FAILURE_MESSAGE = 'Connection to node seed-node-1 closed';
+  const TEST_FAILURE_PHASE = JoiningPhase.QUERYING_STATE;
+
+  const service = new NodeJoiningService({
+    nodeId: TEST_NODE_ID,
+    nodeAddress: TEST_NODE_ADDRESS,
+    seedNodeAddress: TEST_SEED_ADDRESS,
+    config: {
+      autoResumeRetryableFailures: true,
+      retryableFailureResumeMaxAttempts: TEST_MAX_ATTEMPTS,
+    },
+  });
+
+  const policy = service.resolveRetryableJoinResumePolicy();
+  service.startTime = 0;
+  service.now = () => TEST_ELAPSED_MS;
+  const genericRetryableFailure = new Error(TEST_FAILURE_MESSAGE);
+  genericRetryableFailure.deferRetry = true;
+  genericRetryableFailure.retryAfterMs = TEST_RETRY_AFTER_MS;
+
+  t.equal(
+    service.shouldAutoResumeRetryableJoinFailure(
+      genericRetryableFailure,
+      {
+        phase: TEST_FAILURE_PHASE,
+        error: TEST_FAILURE_MESSAGE,
+      },
+      TEST_MAX_ATTEMPTS,
+      policy,
+    ),
+    false,
+    'the fixed attempt cap should still apply to other retryable join failures',
   );
 });
 

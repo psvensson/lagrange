@@ -1,0 +1,40 @@
+{
+  "summary": {
+    "frontierCount": 1,
+    "firstFrontierEdgeId": "active_gate_snapshot_coverage",
+    "firstFrontierState": "blocked"
+  },
+  "frontier": [
+    {
+      "id": "active_gate_snapshot_coverage",
+      "state": "blocked",
+      "owner": "startup_active_gate_owner",
+      "boundary": "snapshot_coverage",
+      "dominantReason": "absent",
+      "evidencePath": "triageSummary.publicationConvergence.activeGate.progress",
+      "reasons": [
+        "active_gate_timed_out",
+        "snapshot_coverage_incomplete"
+      ]
+    }
+  ],
+  "dominantWitness": {
+    "edgeId": "active_gate_snapshot_coverage",
+    "owner": "startup_active_gate_owner",
+    "boundary": "snapshot_coverage",
+    "frontierState": "blocked",
+    "dominantReason": "active_gate_timed_out",
+    "evidencePath": "triageSummary.publicationConvergence.activeGate.progress",
+    "reasons": [
+      "active_gate_timed_out",
+      "snapshot_coverage_incomplete"
+    ],
+    "source": {
+      "activeGateState": "timed_out",
+      "snapshotCoverageComplete": "false",
+      "snapshotCoverageNodeCount": 4,
+      "expectedNodeCount": 5,
+      "blockers": "absent"
+    }
+  }
+}

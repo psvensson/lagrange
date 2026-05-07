@@ -42,6 +42,7 @@ const TEST_TARGET_REPLICA_COUNT = 3;
 const TEST_NO_IN_FLIGHT_OPERATIONS = 0;
 const TEST_READY_LEASE_EXTENSION_MS = 60000;
 const TEST_CREATED_OPERATION_ID = 'op-priority-follow-up-ready-defer';
+const TEST_PENDING_TARGET_OPERATION_ID = 'op-priority-follow-up-pending';
 
 function initializeTestEnvironment() {
   ConfigurationManager.resetInstance();
@@ -259,6 +260,146 @@ test(
         result.moves[0]?.success,
         true,
         'pre-execution should not drop the planner-created follow-up on repair readiness',
+      );
+    } finally {
+      rebalancer.shutdown();
+      ConfigurationManager.resetInstance();
+      LoggingService.resetInstance();
+    }
+  },
+);
+
+test(
+  'UnifiedRebalancer keeps priority follow-up re-entry on feasible targets ' +
+    'after routing-not-ready candidate rejection',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const systemTableCache = createMockCache({
+      nodes: [
+        createNodeRow(TEST_NODE_ID_A),
+        createNodeRow(TEST_NODE_ID_B),
+        createNodeRow(TEST_NODE_ID_C),
+      ],
+      services: [
+        createReplicaRow(TEST_REPLICA_ID_A, TEST_NODE_ID_A),
+      ],
+      partitions: [{
+        partition_id: TEST_PARTITION_ID,
+        table_id: TEST_TABLE_ID,
+      }],
+    });
+    const controlPlaneReadinessService =
+      createMockControlPlaneReadinessService({
+        systemTableCache,
+        readinessByNodeId: {
+          [TEST_NODE_ID_A]: createNodeReadiness(TEST_NODE_ID_A),
+          [TEST_NODE_ID_B]: createNodeReadiness(TEST_NODE_ID_B),
+          [TEST_NODE_ID_C]: createNodeReadiness(TEST_NODE_ID_C),
+        },
+      });
+    const createdOperations = [];
+    const rebalanceCoordinator = {
+      ...createMockCoordinator(),
+      createOperation: async (move) => {
+        createdOperations.push(move);
+        return {
+          operationId: TEST_CREATED_OPERATION_ID,
+          type: move.type,
+          partitionId: move.partitionId,
+          targetNodeId: move.nodeId,
+          replicaId: move.replicaId,
+          status: ReplicaStatus.PENDING,
+          workflowStep: WORKFLOW_STEP.PENDING,
+        };
+      },
+    };
+    const rebalancer = createTestRebalancer({
+      entityId: TEST_PARTITION_ID,
+      entityType: EntityType.PARTITION,
+      nodeId: TEST_NODE_ID_A,
+      systemTableCache,
+      rebalanceCoordinator,
+      controlPlaneReadinessService,
+    });
+
+    rebalancer.initialize();
+    rebalancer.controlPlaneReadinessService = controlPlaneReadinessService;
+    rebalancer.rebalanceCoordinator.controlPlaneReadinessService =
+      controlPlaneReadinessService;
+    rebalancer.setLeader(true);
+    rebalancer.clusterReadinessConfirmed = true;
+    rebalancer.isStabilized = () => true;
+    rebalancer.evaluateState = async () => true;
+    rebalancer.getConfiguredRebalanceBudget = async () =>
+      TEST_TARGET_REPLICA_COUNT;
+    rebalancer.getGlobalInFlightOperationCount = async () =>
+      TEST_NO_IN_FLIGHT_OPERATIONS;
+    rebalancer.getCurrentPriorityRecoveryFollowUpDecisionSnapshot =
+      async () =>
+        Object.freeze({
+          planningSnapshot: Object.freeze({}),
+          decisionSnapshot: Object.freeze({
+            partitionId: TEST_PARTITION_ID,
+            semanticState: PRIORITY_RECOVERY_SEMANTIC_STATE.NEEDS_OPERATION,
+            progress: Object.freeze({
+              nextRequiredAction:
+                PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION
+                  .CREATE_RECOVERY_OPERATION,
+            }),
+            admission: Object.freeze({
+              effectiveEligibleNodeIds: Object.freeze([
+                TEST_NODE_ID_A,
+                TEST_NODE_ID_B,
+                TEST_NODE_ID_C,
+              ]),
+            }),
+            publication: Object.freeze({
+              recoveryActiveNodeIds: Object.freeze([
+                TEST_NODE_ID_A,
+                TEST_NODE_ID_B,
+                TEST_NODE_ID_C,
+              ]),
+            }),
+          }),
+        });
+    rebalancer.getTopologyBlockingInFlightOperations = () => ([
+      Object.freeze({
+        operation_id: TEST_PENDING_TARGET_OPERATION_ID,
+        type: 'ADD',
+        target_node_id: TEST_NODE_ID_B,
+      }),
+    ]);
+    rebalancer.movePlanner.calculateTargetState = async () => ({
+      targetReplicaCount: TEST_TARGET_REPLICA_COUNT,
+      targetNodes: [
+        TEST_NODE_ID_A,
+        TEST_NODE_ID_B,
+      ],
+    });
+    rebalancer.movePlanner.calculateMoves = () => [];
+    rebalancer.movePlanner.applyPressureGating = async (moves) => moves;
+
+    try {
+      const result = await rebalancer.rebalance(
+        TriggerType.PERIODIC,
+        {
+          targetReplicaCount: TEST_TARGET_REPLICA_COUNT,
+          placementConstraints: {
+            spreadAcrossNodes: true,
+          },
+        },
+      );
+
+      t.equal(
+        createdOperations.length,
+        0,
+        'follow-up should not fall back to a routing-rejected target outside the feasible target set',
+      );
+      t.equal(
+        result.moves.length,
+        0,
+        'rebalance should keep waiting when every feasible recovery target is already occupied or in flight',
       );
     } finally {
       rebalancer.shutdown();

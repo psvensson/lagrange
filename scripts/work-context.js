@@ -6,6 +6,7 @@ import path from 'node:path';
 import process from 'node:process';
 import {fileURLToPath} from 'node:url';
 import {promisify} from 'node:util';
+import {validateSubagentSequencingLedger} from './work-tracker.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -18,6 +19,8 @@ const NUM_TWO = 2;
 const NUM_THREE = 3;
 const MAX_GIT_STATUS_LINES = 30;
 const PROCESS_ARG_SCRIPT_INDEX = 1;
+const CLI_FLAG_DIRTY_SCOPE = '--dirty-scope';
+const CLI_FLAG_PACKAGE = '--package';
 const CURRENT_BLOCKER_JSON_PATH = path.join(
   'work',
   'sprints',
@@ -61,6 +64,7 @@ const GIT_DIFF_CHECK_COMMAND = 'git diff --check --';
 const SOURCE_DIRECTORY_PREFIX = 'src/';
 const TEST_DIRECTORY_PREFIX = 'test/';
 const SCRIPT_DIRECTORY_PREFIX = 'scripts/';
+const WORK_DIRECTORY_PREFIX = 'work/';
 const JAVASCRIPT_EXTENSION = '.js';
 const README_FILE_NAME = 'README.md';
 const PLAYBACK_FAILURE_BUNDLE_FILE = 'failure-bundle.json';
@@ -68,6 +72,8 @@ const MARKDOWN_HEADING_PREFIX = '# ';
 const SECTION_HEADING_PREFIX = '## ';
 const CHECKBOX_OPEN_PREFIX = '- [ ]';
 const CHECKBOX_ANY_PREFIX = '- [';
+const PACKAGE_METADATA_OPEN = '<!-- work-package';
+const PACKAGE_METADATA_CLOSE = '-->';
 const MARKDOWN_LIST_PREFIX = '- ';
 const NUMBERED_LIST_PATTERN = /^\d+\.\s+/u;
 const LABEL_SEPARATOR = ': ';
@@ -86,17 +92,20 @@ const GIT_GROUP_TRACKER_GENERATED = 'trackerGenerated';
 const GIT_GROUP_UNRELATED = 'unrelated';
 const DEFAULT_UNKNOWN = 'unknown';
 const OUTPUT_TITLE = '# Work Context';
+const DIRTY_SCOPE_OUTPUT_TITLE = '# Worktree Package Scope';
 const SECTION_CURRENT_BLOCKER = 'Current Blocker';
 const SECTION_CURRENT_STATE = 'Current State';
 const SECTION_NEXT_ACTION = 'Next Action';
 const SECTION_FIRST_FILES = 'First Files To Read';
 const SECTION_TOUCHED_FILES = 'Touched Files';
 const SECTION_PROOF_LADDER = 'Proof Ladder';
+const SECTION_SUBAGENT_SEQUENCING = 'Subagent Sequencing';
 const SECTION_OPEN_CHECKLIST = 'Open Package Checklist';
 const SECTION_OUT_OF_SCOPE = 'Out Of Scope';
 const SECTION_USEFUL_COMMANDS = 'Useful Commands';
 const SECTION_WORKTREE = 'Worktree Summary';
 const PACKAGE_SECTION_OUT_OF_SCOPE = 'Out Of Scope';
+const PACKAGE_SECTION_SUBAGENT_LEDGER = 'Subagent Sequencing Ledger';
 const MESSAGE_CURRENT_BLOCKER_MISSING =
   'No current blocker handoff was found.';
 const MESSAGE_CURRENT_BLOCKER_HINT =
@@ -105,6 +114,45 @@ const MESSAGE_NO_OPEN_CHECKLIST = 'No open checklist items found in package.';
 const MESSAGE_NO_OUT_OF_SCOPE = 'No Out Of Scope section found in package.';
 const MESSAGE_NO_GIT_STATUS = 'No dirty git status entries.';
 const MESSAGE_GIT_STATUS_UNAVAILABLE = 'Git status unavailable.';
+const SUBAGENT_LEDGER_REVIEW_LABEL = 'Review subagent recorded';
+const SUBAGENT_LEDGER_FIX_LABEL =
+  'Fix subagent recorded or explicitly not needed';
+const SUBAGENT_LEDGER_IMPLEMENTATION_LABEL = 'Implementation subagent recorded';
+const SUBAGENT_ROLE_REVIEW = 'review';
+const SUBAGENT_ROLE_FIX = 'fix';
+const SUBAGENT_ROLE_IMPLEMENTATION = 'implementation';
+const SUBAGENT_ROLE_NONE = 'none';
+const SUBAGENT_STATUS_LEDGER_MISSING =
+  'Subagent Sequencing Ledger missing; assign a real review subagent before implementation.';
+const SUBAGENT_STATUS_REVIEW_MISSING =
+  'Review proof missing; assign a real review subagent before implementation.';
+const SUBAGENT_STATUS_FIX_REQUIRED =
+  'Review found fixes-required; assign a separate real fix subagent before implementation.';
+const SUBAGENT_STATUS_FIX_NOT_NEEDED_MISSING =
+  'Review is clean; record fix as not-needed before implementation.';
+const SUBAGENT_STATUS_FIX_MISSING =
+  'Fix proof missing; assign or record the required fix subagent before implementation.';
+const SUBAGENT_STATUS_IMPLEMENTATION_MISSING =
+  'Review/fix proof recorded; assign a separate real implementation subagent before implementation.';
+const SUBAGENT_STATUS_IMPLEMENTATION_RECORDED =
+  'Review, fix, and implementation proof recorded.';
+const SUBAGENT_STATUS_STRICT_VALIDATION_FAILED =
+  'Subagent Sequencing Ledger strict validation failed; repair the recorded proof before implementation.';
+const SUBAGENT_REVIEW_RESULT_CLEAN = 'clean';
+const SUBAGENT_REVIEW_RESULT_FIXES_REQUIRED = 'fixes-required';
+const SUBAGENT_FIX_NOT_NEEDED = 'not-needed';
+const SUBAGENT_REVIEW_RESULT_PATTERN =
+  /result\s+`?(clean|fixes-required)`?/iu;
+const SUBAGENT_AGENT_ID_PATTERN =
+  /\(`?[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}`?\)/iu;
+const SUBAGENT_NON_REAL_IDENTITY_PATTERN =
+  /\b(?:current-session|current session|parent\s+codex|manual|local|session)\b/iu;
+const SUBAGENT_SEQUENCE_ORDER_ERROR_PATTERN = /entries must appear/iu;
+const SUBAGENT_FIX_ERROR_PATTERN =
+  /fix (?:entry|package|agent)|not-needed/iu;
+const SUBAGENT_IMPLEMENTATION_ERROR_PATTERN = /implementation/iu;
+const LEDGER_VALIDATION_REQUIRES_LEDGER = 'requiresLedger';
+const LEDGER_VALIDATION_REQUIRES_STRICT_ENTRIES = 'requiresStrictEntries';
 const FIELD_LABELS = Object.freeze({
   ARTIFACT: 'Artifact',
   BOUNDARY: 'Boundary',
@@ -118,6 +166,8 @@ const FIELD_LABELS = Object.freeze({
   SCENARIO: 'Scenario',
   SPRINT: 'Sprint',
   STATUS: 'Status',
+  SUBAGENT_ROLE: 'Next required subagent role',
+  SUBAGENT_STATUS: 'Subagent sequencing status',
 });
 const GIT_GROUP_LABELS = Object.freeze({
   [GIT_GROUP_PACKAGE_OWNED]: 'Package-owned dirty entries',
@@ -137,6 +187,21 @@ const SHELL_SAFE_PATTERN = /^[A-Za-z0-9_./:@%+=,-]+$/u;
 const SINGLE_QUOTE = '\'';
 const SINGLE_QUOTE_ESCAPE = '\'\\\'\'';
 const GIT_RENAME_SEPARATOR = ' -> ';
+const DOUBLE_QUOTE = '"';
+const FORWARD_SLASH = '/';
+const REGEXP_ESCAPE_REPLACEMENT = '\\$&';
+const METADATA_FIELD_STATUS = 'status';
+const METADATA_FIELD_SCENARIO = 'scenario';
+const METADATA_FIELD_ARTIFACT = 'artifact';
+const METADATA_FIELD_PLAYBACK = 'playback';
+const METADATA_FIELD_OWNER = 'owner';
+const METADATA_FIELD_BOUNDARY = 'boundary';
+const METADATA_FIELD_DOMINANT_REASON = 'dominantReason';
+const METADATA_FIELD_CURRENT_STATE = 'currentState';
+const METADATA_FIELD_NEXT_ACTION = 'nextAction';
+const METADATA_FIELD_PROOF = 'proof';
+const METADATA_FIELD_TOUCHED_FILES = 'touchedFiles';
+const METADATA_FIELD_PREDECESSOR = 'predecessor';
 
 function appendSection(lines, title) {
   lines.push(EMPTY_STRING, `${SECTION_HEADING_PREFIX}${title}`);
@@ -144,6 +209,10 @@ function appendSection(lines, title) {
 
 function normalizeString(value) {
   return String(value || EMPTY_STRING).trim();
+}
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/gu, REGEXP_ESCAPE_REPLACEMENT);
 }
 
 function normalizeStringList(values = []) {
@@ -193,6 +262,14 @@ function commandWithPaths(command, paths = []) {
   ].join(SPACE);
 }
 
+function parseOptionValue(args, optionName) {
+  const optionIndex = args.indexOf(optionName);
+  if (optionIndex < NUM_ZERO) {
+    return EMPTY_STRING;
+  }
+  return normalizeString(args[optionIndex + NUM_ONE]);
+}
+
 async function readTextFile(filePath) {
   return fs.readFile(filePath, ENCODING_UTF8);
 }
@@ -214,6 +291,51 @@ async function readOptionalTextFile(filePath) {
       status: OPTIONAL_TEXT_MISSING,
     };
   }
+}
+
+function parsePackageMetadata(content, filePath) {
+  const openIndex = content.indexOf(PACKAGE_METADATA_OPEN);
+  if (openIndex < NUM_ZERO) {
+    throw new Error(`${filePath}: work-package metadata is required.`);
+  }
+  const jsonStart = openIndex + PACKAGE_METADATA_OPEN.length;
+  const closeIndex = content.indexOf(PACKAGE_METADATA_CLOSE, jsonStart);
+  if (closeIndex < NUM_ZERO) {
+    throw new Error(`${filePath}: work-package metadata closing marker is missing.`);
+  }
+  return JSON.parse(content.slice(jsonStart, closeIndex).trim());
+}
+
+async function buildCurrentBlockerFromPackage(packagePath) {
+  const content = await readTextFile(packagePath);
+  const metadata = parsePackageMetadata(content, packagePath);
+  return {
+    currentBlocker: {
+      sprint: DEFAULT_UNKNOWN,
+      package: packagePath,
+      status: metadataText(metadata, METADATA_FIELD_STATUS),
+      scenario: metadataText(metadata, METADATA_FIELD_SCENARIO),
+      artifact: metadataText(metadata, METADATA_FIELD_ARTIFACT),
+      playback: metadataText(metadata, METADATA_FIELD_PLAYBACK),
+      owner: metadataText(metadata, METADATA_FIELD_OWNER),
+      boundary: metadataText(metadata, METADATA_FIELD_BOUNDARY),
+      dominantReason: metadataText(metadata, METADATA_FIELD_DOMINANT_REASON),
+      currentState: metadataText(metadata, METADATA_FIELD_CURRENT_STATE),
+      nextAction: metadataText(metadata, METADATA_FIELD_NEXT_ACTION),
+      proof: metadataList(metadata, METADATA_FIELD_PROOF),
+      touchedFiles: metadataList(metadata, METADATA_FIELD_TOUCHED_FILES),
+      predecessor: metadataText(metadata, METADATA_FIELD_PREDECESSOR),
+    },
+    packageContent: content,
+  };
+}
+
+function metadataText(metadata, fieldName) {
+  return normalizeString(metadata[fieldName]) || DEFAULT_UNKNOWN;
+}
+
+function metadataList(metadata, fieldName) {
+  return Array.isArray(metadata[fieldName]) ? metadata[fieldName] : [];
 }
 
 async function fileExists(filePath) {
@@ -329,6 +451,182 @@ function extractMarkdownSection(content = EMPTY_STRING, title) {
   return sectionItems;
 }
 
+function extractMarkdownSectionText(content = EMPTY_STRING, title) {
+  const heading = `${SECTION_HEADING_PREFIX}${title}`;
+  const startIndex = content.indexOf(heading);
+  if (startIndex < NUM_ZERO) {
+    return EMPTY_STRING;
+  }
+  const nextHeadingIndex = content.indexOf(
+    `${NEWLINE}${SECTION_HEADING_PREFIX}`,
+    startIndex + heading.length,
+  );
+  return nextHeadingIndex < NUM_ZERO ?
+    content.slice(startIndex) :
+    content.slice(startIndex, nextHeadingIndex);
+}
+
+function findCheckedLedgerItem(ledger, label) {
+  const pattern = new RegExp(
+    `- \\[[xX]\\] ${escapeRegExp(label)}:([\\s\\S]*?)(?=\\n- \\[|$)`,
+    'u',
+  );
+  const match = pattern.exec(ledger);
+  return match ? normalizeString(match[NUM_ZERO].replace(/\s+/gu, SPACE)) : null;
+}
+
+function findReviewResult(reviewItem) {
+  const match = SUBAGENT_REVIEW_RESULT_PATTERN.exec(reviewItem || EMPTY_STRING);
+  return match ? match[NUM_ONE].toLowerCase() : EMPTY_STRING;
+}
+
+function isNotNeededFix(fixItem) {
+  return normalizeString(fixItem).includes(SUBAGENT_FIX_NOT_NEEDED);
+}
+
+function hasRealAgentProof(ledgerItem) {
+  const normalizedItem = normalizeString(ledgerItem);
+  return SUBAGENT_AGENT_ID_PATTERN.test(normalizedItem) &&
+    !SUBAGENT_NON_REAL_IDENTITY_PATTERN.test(normalizedItem);
+}
+
+function findStrictValidationRole(errors) {
+  const firstError = errors[NUM_ZERO] || EMPTY_STRING;
+  if (SUBAGENT_SEQUENCE_ORDER_ERROR_PATTERN.test(firstError)) {
+    return SUBAGENT_ROLE_REVIEW;
+  }
+  if (
+    firstError.includes(SUBAGENT_LEDGER_FIX_LABEL) ||
+    SUBAGENT_FIX_ERROR_PATTERN.test(firstError)
+  ) {
+    return SUBAGENT_ROLE_FIX;
+  }
+  if (
+    firstError.includes(SUBAGENT_LEDGER_IMPLEMENTATION_LABEL) ||
+    SUBAGENT_IMPLEMENTATION_ERROR_PATTERN.test(firstError)
+  ) {
+    return SUBAGENT_ROLE_IMPLEMENTATION;
+  }
+  return SUBAGENT_ROLE_REVIEW;
+}
+
+function buildStrictValidationStatus(errors) {
+  const firstError = normalizeString(errors[NUM_ZERO]);
+  return firstError.length === NUM_ZERO ?
+    SUBAGENT_STATUS_STRICT_VALIDATION_FAILED :
+    `${SUBAGENT_STATUS_STRICT_VALIDATION_FAILED} ${firstError}`;
+}
+
+function buildSubagentRoleStatus(role, status) {
+  return {role, status};
+}
+
+function buildSubagentSequencingStatus(
+  packageContent = EMPTY_STRING,
+  packagePath = EMPTY_STRING,
+) {
+  const ledger = extractMarkdownSectionText(
+    packageContent,
+    PACKAGE_SECTION_SUBAGENT_LEDGER,
+  );
+  if (ledger.length === NUM_ZERO) {
+    return buildSubagentRoleStatus(
+      SUBAGENT_ROLE_REVIEW,
+      SUBAGENT_STATUS_LEDGER_MISSING,
+    );
+  }
+  const reviewItem = findCheckedLedgerItem(ledger, SUBAGENT_LEDGER_REVIEW_LABEL);
+  if (!reviewItem) {
+    return buildSubagentRoleStatus(
+      SUBAGENT_ROLE_REVIEW,
+      SUBAGENT_STATUS_REVIEW_MISSING,
+    );
+  }
+  if (!hasRealAgentProof(reviewItem)) {
+    return buildSubagentRoleStatus(
+      SUBAGENT_ROLE_REVIEW,
+      SUBAGENT_STATUS_REVIEW_MISSING,
+    );
+  }
+  const fixItem = findCheckedLedgerItem(ledger, SUBAGENT_LEDGER_FIX_LABEL);
+  const reviewResult = findReviewResult(reviewItem);
+  if (!reviewResult) {
+    return buildSubagentRoleStatus(
+      SUBAGENT_ROLE_REVIEW,
+      SUBAGENT_STATUS_REVIEW_MISSING,
+    );
+  }
+  if (!fixItem) {
+    return buildSubagentRoleStatus(
+      SUBAGENT_ROLE_FIX,
+      reviewResult === SUBAGENT_REVIEW_RESULT_FIXES_REQUIRED ?
+        SUBAGENT_STATUS_FIX_REQUIRED :
+        SUBAGENT_STATUS_FIX_NOT_NEEDED_MISSING,
+    );
+  }
+  if (
+    reviewResult === SUBAGENT_REVIEW_RESULT_FIXES_REQUIRED &&
+    isNotNeededFix(fixItem)
+  ) {
+    return buildSubagentRoleStatus(
+      SUBAGENT_ROLE_FIX,
+      SUBAGENT_STATUS_FIX_REQUIRED,
+    );
+  }
+  if (!isNotNeededFix(fixItem) && !hasRealAgentProof(fixItem)) {
+    return buildSubagentRoleStatus(
+      SUBAGENT_ROLE_FIX,
+      SUBAGENT_STATUS_FIX_MISSING,
+    );
+  }
+  if (
+    reviewResult === SUBAGENT_REVIEW_RESULT_CLEAN &&
+    !isNotNeededFix(fixItem)
+  ) {
+    return buildSubagentRoleStatus(
+      SUBAGENT_ROLE_FIX,
+      SUBAGENT_STATUS_FIX_NOT_NEEDED_MISSING,
+    );
+  }
+  const implementationItem = findCheckedLedgerItem(
+    ledger,
+    SUBAGENT_LEDGER_IMPLEMENTATION_LABEL,
+  );
+  if (!implementationItem) {
+    return buildSubagentRoleStatus(
+      SUBAGENT_ROLE_IMPLEMENTATION,
+      SUBAGENT_STATUS_IMPLEMENTATION_MISSING,
+    );
+  }
+  if (!hasRealAgentProof(implementationItem)) {
+    return buildSubagentRoleStatus(
+      SUBAGENT_ROLE_IMPLEMENTATION,
+      SUBAGENT_STATUS_IMPLEMENTATION_MISSING,
+    );
+  }
+  const normalizedPackagePath = normalizeString(packagePath);
+  if (normalizedPackagePath.length > NUM_ZERO) {
+    const strictErrors = validateSubagentSequencingLedger(
+      packageContent,
+      normalizedPackagePath,
+      {
+        [LEDGER_VALIDATION_REQUIRES_LEDGER]: true,
+        [LEDGER_VALIDATION_REQUIRES_STRICT_ENTRIES]: true,
+      },
+    );
+    if (strictErrors.length > NUM_ZERO) {
+      return buildSubagentRoleStatus(
+        findStrictValidationRole(strictErrors),
+        buildStrictValidationStatus(strictErrors),
+      );
+    }
+  }
+  return buildSubagentRoleStatus(
+    SUBAGENT_ROLE_NONE,
+    SUBAGENT_STATUS_IMPLEMENTATION_RECORDED,
+  );
+}
+
 async function resolvePathPresenceLabel(filePath) {
   const exists = await fileExists(filePath);
   return `${filePath} (${exists ? PATH_PRESENT : PATH_MISSING})`;
@@ -379,7 +677,7 @@ function buildRelevantLlmDomainPackPaths(currentBlocker) {
   }
   if (
     touchedFiles.some((filePath) => filePath.startsWith(WORK_README_PATH)) ||
-    touchedFiles.some((filePath) => filePath.startsWith('work/'))
+    touchedFiles.some((filePath) => filePath.startsWith(WORK_DIRECTORY_PREFIX))
   ) {
     domainPacks.push(LLM_STEERING_GOVERNANCE_PATH);
   }
@@ -473,10 +771,12 @@ function extractGitStatusPaths(line) {
   if (pathText.includes(GIT_RENAME_SEPARATOR)) {
     return pathText
       .split(GIT_RENAME_SEPARATOR)
+      .map(normalizeGitStatusPath)
       .map(normalizeString)
       .filter((filePath) => filePath.length > NUM_ZERO);
   }
-  return pathText.length > NUM_ZERO ? [pathText] : [];
+  const normalizedPath = normalizeGitStatusPath(pathText);
+  return normalizedPath.length > NUM_ZERO ? [normalizedPath] : [];
 }
 
 function buildPackageOwnedPaths(currentBlocker = {}) {
@@ -489,7 +789,33 @@ function buildPackageOwnedPaths(currentBlocker = {}) {
 }
 
 function pathMatchesAny(filePath, pathSet) {
-  return pathSet.has(filePath);
+  if (pathSet.has(filePath)) {
+    return true;
+  }
+  const directoryPrefix = filePath.endsWith(FORWARD_SLASH) ?
+    filePath :
+    `${filePath}${FORWARD_SLASH}`;
+  for (const ownedPath of pathSet) {
+    if (ownedPath.startsWith(directoryPrefix)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function normalizeGitStatusPath(filePath) {
+  const normalizedPath = normalizeString(filePath);
+  if (
+    normalizedPath.startsWith(DOUBLE_QUOTE) &&
+    normalizedPath.endsWith(DOUBLE_QUOTE)
+  ) {
+    try {
+      return JSON.parse(normalizedPath);
+    } catch (_error) {
+      return normalizedPath.slice(NUM_ONE, -NUM_ONE);
+    }
+  }
+  return normalizedPath;
 }
 
 function groupGitStatusLines(gitStatusLines = [], currentBlocker = {}) {
@@ -591,6 +917,10 @@ async function buildContextLines(currentBlocker, packageContent) {
   const gitStatus = await readGitStatus();
   const artifactLabel = await resolveOptionalPathPresenceValue(currentBlocker.artifact);
   const playbackLabel = await resolveOptionalPathPresenceValue(currentBlocker.playback);
+  const subagentStatus = buildSubagentSequencingStatus(
+    packageContent || EMPTY_STRING,
+    currentBlocker.package,
+  );
 
   appendSection(lines, SECTION_CURRENT_BLOCKER);
   appendKeyValue(lines, FIELD_LABELS.SPRINT, currentBlocker.sprint);
@@ -608,6 +938,10 @@ async function buildContextLines(currentBlocker, packageContent) {
   appendKeyValue(lines, FIELD_LABELS.PLAYBACK, playbackLabel);
   appendKeyValue(lines, FIELD_LABELS.PREDECESSOR, currentBlocker.predecessor);
   appendKeyValue(lines, FIELD_LABELS.PACKAGE_TITLE, packageTitle);
+
+  appendSection(lines, SECTION_SUBAGENT_SEQUENCING);
+  appendKeyValue(lines, FIELD_LABELS.SUBAGENT_ROLE, subagentStatus.role);
+  appendKeyValue(lines, FIELD_LABELS.SUBAGENT_STATUS, subagentStatus.status);
 
   appendSection(lines, SECTION_CURRENT_STATE);
   lines.push(normalizeString(currentBlocker.currentState) || DEFAULT_UNKNOWN);
@@ -650,18 +984,55 @@ async function buildContextLines(currentBlocker, packageContent) {
   return lines;
 }
 
+async function buildDirtyScopeLines(currentBlocker, gitStatusOverride = null) {
+  const lines = [DIRTY_SCOPE_OUTPUT_TITLE];
+  const gitStatus = gitStatusOverride || (await readGitStatus());
+
+  appendSection(lines, SECTION_CURRENT_BLOCKER);
+  appendKeyValue(lines, FIELD_LABELS.PACKAGE, currentBlocker.package);
+  appendKeyValue(lines, FIELD_LABELS.OWNER, currentBlocker.owner);
+  appendKeyValue(lines, FIELD_LABELS.BOUNDARY, currentBlocker.boundary);
+
+  appendSection(lines, SECTION_WORKTREE);
+  appendGitStatus(lines, gitStatus, currentBlocker);
+
+  return lines;
+}
+
 async function main() {
   let currentBlocker;
-  try {
-    currentBlocker = await readJsonFile(CURRENT_BLOCKER_JSON_PATH);
-  } catch (_error) {
-    console.error(MESSAGE_CURRENT_BLOCKER_MISSING);
-    console.error(MESSAGE_CURRENT_BLOCKER_HINT);
-    return EXIT_FAILURE;
+  let packageContent = EMPTY_STRING;
+  const packageOverride = parseOptionValue(process.argv, CLI_FLAG_PACKAGE);
+  if (packageOverride) {
+    try {
+      const packageBlocker = await buildCurrentBlockerFromPackage(packageOverride);
+      currentBlocker = packageBlocker.currentBlocker;
+      packageContent = packageBlocker.packageContent;
+    } catch (error) {
+      console.error(error.message);
+      return EXIT_FAILURE;
+    }
+  } else {
+    try {
+      currentBlocker = await readJsonFile(CURRENT_BLOCKER_JSON_PATH);
+    } catch (_error) {
+      console.error(MESSAGE_CURRENT_BLOCKER_MISSING);
+      console.error(MESSAGE_CURRENT_BLOCKER_HINT);
+      return EXIT_FAILURE;
+    }
   }
 
-  const packageRead = await readOptionalTextFile(currentBlocker.package);
-  const lines = await buildContextLines(currentBlocker, packageRead.content);
+  if (process.argv.includes(CLI_FLAG_DIRTY_SCOPE)) {
+    const lines = await buildDirtyScopeLines(currentBlocker);
+    console.log(lines.join(NEWLINE));
+    return EXIT_SUCCESS;
+  }
+
+  if (!packageContent) {
+    const packageRead = await readOptionalTextFile(currentBlocker.package);
+    packageContent = packageRead.content;
+  }
+  const lines = await buildContextLines(currentBlocker, packageContent);
   console.log(lines.join(NEWLINE));
   return EXIT_SUCCESS;
 }
@@ -677,8 +1048,11 @@ if (isDirectRun()) {
 
 export {
   buildContextLines,
+  buildCurrentBlockerFromPackage,
+  buildDirtyScopeLines,
   buildFirstReadPaths,
   buildOwnerCardPaths,
+  buildSubagentSequencingStatus,
   buildUsefulCommands,
   groupGitStatusLines,
 };

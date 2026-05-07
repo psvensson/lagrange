@@ -1017,10 +1017,13 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
         entityType,
         entityId,
       );
-      const fallbackOperations = this.mergeIncompleteOperationVisibilityOperations(
-        cachedOperations,
-        ownerPersistedFallbackOperations,
-      );
+      const fallbackOperations =
+        this.reconcileEntityOperationVisibilityWithPersistedTransitions(
+          this.mergeIncompleteOperationVisibilityOperations(
+            cachedOperations,
+            ownerPersistedFallbackOperations,
+          ),
+        );
 
       if (!result.success || !result.rows) {
         const deferredOutcome = this.buildDeferredEntityOperationVisibilityOutcome({
@@ -1047,10 +1050,13 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
         return this.buildEntityOperationVisibilityObservation([], null);
       }
 
-      const operations = this.mergeIncompleteOperationVisibilityOperations(
-        result.rows.map((row) => this.rowToOperation(row)),
-        ownerPersistedFallbackOperations,
-      );
+      const operations =
+        this.reconcileEntityOperationVisibilityWithPersistedTransitions(
+          this.mergeIncompleteOperationVisibilityOperations(
+            result.rows.map((row) => this.rowToOperation(row)),
+            ownerPersistedFallbackOperations,
+          ),
+        );
       if (this.shouldDeferEntityOperationEmptyRead(result, queryDurationMs, planningSnapshot)) {
         const deferredOutcome = this.buildDeferredEntityOperationVisibilityOutcome({
           priorityRecoveryActive: true,

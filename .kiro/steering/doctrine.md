@@ -223,6 +223,9 @@ Implementation work should be as explicit and bounded as the runtime design.
 - A package is not complete when the narrow change lands; it is complete only
   after a final deep dive across the affected owner boundaries confirms the
   area is free of known doctrine and system-guideline violations.
+- Use the model ledger as an advisory feedback loop for future model and
+  reasoning-effort choice when a package produces useful evidence. It must not
+  replace validation, review, sequencing, or closure proof.
 
 If the proposed change cannot be described as one bounded concern with clear
 ownership, invariants, and completion criteria, it is not ready for active
@@ -344,12 +347,14 @@ same owner boundary still dominates, continue the current package. If the
 semantic owner, owner boundary, or next required action changes, split or
 activate one new representative package and make the old boundary historical.
 
-Sub-agents should accelerate this sequence, not replace it. Use them first to
-review the most recently executed package on the same sprint or owner boundary.
-If that review finds closure, evidence, residual, guardrail, or snapshot
-problems, use the next sub-agent to fix those problems before new
+Real sub-agents should accelerate this sequence, not replace it. Use them
+first to review the most recently executed package on the same sprint or owner
+boundary. If that review finds closure, evidence, residual, guardrail, or
+snapshot problems, use the next real sub-agent to fix those problems before new
 implementation begins. Then use a separate implementation sub-agent for the
-current package.
+current package. Parent-session notes, local/manual labels, and arbitrary text
+without a real agent id do not satisfy these roles unless the user explicitly
+disables sub-agents for that task.
 
 The normal sequence is:
 
@@ -358,3 +363,4 @@ The normal sequence is:
 3. extract current artifact truth
 4. map the owner path or focused proof surface
 5. implement the current package with bounded file ownership
+6. commit and push the focused package slice with Commit And Push Ledger proof

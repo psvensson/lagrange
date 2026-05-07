@@ -3,19 +3,21 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-07",
+  "closed": "2026-05-07",
   "scenario": "rolling-restart",
-  "artifact": "test-output/reports/rolling-restart-after-contact-seed-timeout-contract-20260507T095019Z.report.json",
-  "playback": "test-output/reports/.playback/rolling-restart-after-contact-seed-timeout-contract-20260507T095019Z/rolling-restart/",
+  "artifact": "test-output/reports/rolling-restart-after-join-resume-budget-20260507T103600Z.report.json",
+  "playback": "test-output/reports/.playback/rolling-restart-after-join-resume-budget-20260507T103600Z/rolling-restart/",
   "owner": "Startup join contacting-seed timeout no-progress behind topology publication missing-active PUBLISHED convergence",
   "boundary": "Startup join / contacting-seed timeout no-progress",
-  "dominantReason": "publication_missing_active_node=11601fe0-72d6-5853-8590-ec2881853e72",
-  "currentState": "The focused bootstrap-request admission repair still holds, and the contact-seed timeout-contract repair closes the raw request-timeout starvation seam. The latest representative rerun now reaches active=4/5 with snapshotCoverage=3/5 at epoch 4 PUBLISHED: nodes 35a..., ebc4..., and 8be8... reach ACTIVE, while 11601... remains the only inactive joiner and now surfaces canonical Seed bootstrap not ready defers instead of generic transport timeouts. The direct boundary stays in startup join contacting_seed, but it narrows from request/transport starvation to seed-owned bootstrap-not-ready no-progress for 11601....",
-  "nextAction": "Extract the 095019Z typed bootstrap-not-ready witness on 11601..., decide whether the lower owner is seed-side bootstrap dependency defer or join auto-resume hold-open/exhaustion on canonical BOOTSTRAP_NOT_READY responses, then repair only that direct startup seam before the next representative rerun.",
+  "dominantReason": "publication_missing_active_node=35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+  "currentState": "The startup join contacting-seed seam is closed by migration. The representative rerun after the join auto-resume budget repair brings 11601... to ACTIVE and keeps contacting_seed retries resumable past attempt 4 while elapsed budget remains, but the live blocker moves to epoch 4 ACK_PENDING publication convergence with pendingAck=1, missingPublished=3, active=2/5, and snapshotCoverage=1/5.",
+  "nextAction": "Continue in work/packages/active-20260507-rolling-restart-topology-publication-missing-active-publication-ack-pending-convergence-reentry.md for the direct topology_publication_owner / publication_convergence frontier.",
   "proof": [
     "Focused bootstrap-request admission regression for authoritative bootstrap-join blockers",
     "Focused seed-contact retry contract regression preserving configured request timeout after retryable seed evidence",
+    "Focused join auto-resume budget regression preserving elapsed-only resume for contacting_seed bootstrap-not-ready failures",
     "Touched-file static guardrails",
     "Representative rolling-restart --fast-local rerun",
     "Focused 095019Z contacting-seed/bootstrap-not-ready witness extraction"
@@ -23,11 +25,12 @@
   "touchedFiles": [
     "src/bootstrap/owners/bootstrap-request-owner.js",
     "test/bootstrap/bootstrap-api.test-part-3.js",
-    "src/bootstrap/phases/contact-seed-phase.js",
+    "src/bootstrap/node-joining-service-segment-2.js",
     "test/bootstrap/node-joining-service.test.js",
-    "work/packages/active-20260507-rolling-restart-topology-publication-missing-active-startup-join-contacting-seed-timeout-no-progress-reentry.md"
+    "work/packages/done-20260507-rolling-restart-topology-publication-missing-active-startup-join-contacting-seed-timeout-no-progress-reentry.md"
   ],
-  "predecessor": "work/packages/done-20260507-rolling-restart-topology-priority-recovery-workflow-progress-event-driven-reentry.md"
+  "predecessor": "work/packages/done-20260507-rolling-restart-topology-priority-recovery-workflow-progress-event-driven-reentry.md",
+  "successor": "work/packages/active-20260507-rolling-restart-topology-publication-missing-active-publication-ack-pending-convergence-reentry.md"
 }
 -->
 
@@ -46,6 +49,20 @@ raises snapshot coverage to `3/5`, and leaves only `11601...` inactive. The
 direct startup owner remains `contacting_seed`, but it is now a typed
 seed-owned `BOOTSTRAP_NOT_READY` no-progress seam rather than raw HTTP timeout
 silence.
+
+Closure update on May 7, 2026: the repeated-evidence contact-seed contraction
+hypothesis did not hold up under the representative rerun. The direct seam was
+one layer higher: join auto-resume stopped retryable `contacting_seed`
+bootstrap-not-ready failures at fixed attempt `4` even while elapsed budget
+remained. This slice therefore reverts the repeated-evidence contraction,
+keeps the earlier timeout-contract repair, and moves the lower owner into
+`NodeJoiningService` join-resume policy. The fresh representative rerun
+`rolling-restart-after-join-resume-budget-20260507T103600Z` proves the startup
+owner is now closed by migration: `11601...` reaches `ACTIVE`, logs on
+`8be8...` show `attemptBudgetMode="elapsed_only"` with retries continuing past
+attempt `4`, and the live blocker migrates to epoch `4` `ACK_PENDING`
+publication convergence with missing-published nodes `35a...`, `ebc4...`, and
+`8be8...`.
 
 ## Current Evidence
 
@@ -178,6 +195,19 @@ Canonical contract shape:
       available, defers authoritative blocked bootstrap-join snapshots after
       startup-complete, preserves recovery-authorized `INIT` projection, and
       adds the focused regression in `bootstrap-api.test-part-3.js`.
+- [x] Continuation review/fix/implementation recorded:
+      `Codex continuation review session 2026-05-07` reviewed the same active
+      package against the latest `095019Z` witness on the shared startup join
+      / `contacting_seed` boundary and found no predecessor bookkeeping or
+      package-closure fixes blocking resumed implementation. `Codex
+      continuation fix session 2026-05-07` reverted the superseded
+      repeated-evidence contact-seed contraction after the representative rerun
+      disproved that hypothesis. `Codex continuation implementation session
+      2026-05-07` then repaired the direct lower owner in
+      `src/bootstrap/node-joining-service-segment-2.js`, added focused join
+      auto-resume regressions in `test/bootstrap/node-joining-service.test.js`,
+      preserved the earlier seed-contact timeout-contract behavior, and updated
+      this package file.
 
 ## Residual Closure Inventory
 
@@ -190,11 +220,15 @@ Canonical contract shape:
       shifting to a seed-side admin snapshot/readiness timeout owner.
 - [x] Add the focused regression and repair that preserves the configured
       request timeout after retryable seed evidence is retained.
-- [ ] Extract the `095019Z` typed bootstrap-not-ready witness on `11601...`.
-- [ ] Decide whether the new lower owner is seed bootstrap dependency defer or
-      join auto-resume hold-open/exhaustion on canonical BOOTSTRAP_NOT_READY.
-- [ ] Split or migrate the package if the typed seed-contact no-progress seam
-      closes and the representative blocker moves to a lower recovery owner.
+- [x] Extract the `095019Z` typed bootstrap-not-ready witness on `11601...`.
+- [x] Decide that the direct lower owner is join auto-resume attempt-budget
+      exhaustion on canonical `BOOTSTRAP_NOT_READY` contact-seed failures, not
+      a new seed-owned bootstrap dependency defer boundary.
+- [x] Add the focused regression and repair that preserves elapsed-budget
+      retries for canonical `contacting_seed` bootstrap-not-ready failures
+      after the fixed attempt cap would otherwise stop progress.
+- [x] Split or migrate the package after the startup seam closes and the
+      representative blocker moves to a lower publication-convergence owner.
 
 ## Static Drift Ledger
 
@@ -210,7 +244,7 @@ Closure:
 - [x] No relevant guardrail count increased.
 - [x] No new touched-file owner-path, decision-boundary, runtime-grammar, or
       metadata-gateway violation remains.
-- [ ] Any out-of-scope inherited violation has a linked follow-on package.
+- [x] Any out-of-scope inherited violation has a linked follow-on package.
 
 ## Validation
 
@@ -234,3 +268,29 @@ Closure:
    `ebc4...`, and `8be8...` now reach `ACTIVE`, while `11601...` no longer
    times out on raw HTTP transport and instead exhausts `contacting_seed`
    progress through canonical `Seed bootstrap not ready` failures.
+8. `npx tap test/bootstrap/node-joining-service.test.js` passed after adding
+   focused regressions proving that canonical `contacting_seed`
+   `BOOTSTRAP_NOT_READY` failures continue auto-resuming on elapsed budget
+   after fixed attempt `4`, while the fixed attempt cap still stops other
+   retryable join failures.
+9. `node scripts/check-guideline-decision-boundaries.js src/bootstrap/node-joining-service-segment-2.js src/bootstrap/phases/contact-seed-phase.js`,
+   `node scripts/check-runtime-grammar-contracts.js src/bootstrap/node-joining-service-segment-2.js src/bootstrap/phases/contact-seed-phase.js`,
+   `node scripts/check-guideline-literals.js src/bootstrap/node-joining-service-segment-2.js src/bootstrap/phases/contact-seed-phase.js test/bootstrap/node-joining-service.test.js`,
+   and `git diff --check -- src/bootstrap/node-joining-service-segment-2.js src/bootstrap/phases/contact-seed-phase.js test/bootstrap/node-joining-service.test.js`
+   all passed for the continuation slice.
+10. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-after-join-resume-budget-20260507T103600Z.report.json --fast-local --verbose`
+    failed after `134.0s`, but it closed this startup seam by migration:
+    `11601...` reaches `ACTIVE`, `8be8...` logs show retryable
+    `contacting_seed` resumes continuing with `attemptBudgetMode="elapsed_only"`
+    and `maxAttempts=null`, and the live blocker moves to epoch `4`
+    `ACK_PENDING` publication convergence with missing-published nodes
+    `35a...`, `ebc4...`, and `8be8...`.
+11. `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-after-join-resume-budget-20260507T103600Z.report.json`
+    reported `rootCauseClass=topology` and dominant reason
+    `publication_missing_active_node=35a891b8-c1a0-5064-9c6e-2acfba61c2a7`.
+12. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-join-resume-budget-20260507T103600Z.report.json`
+    and the matching failure-bundle analysis both selected
+    `topology_publication_owner / publication_convergence` at frontier edge
+    `publication_ack_convergence` with `publicationStatus=ACK_PENDING`,
+    `pendingAckCount=1`, and `missingPublishedCount=3`, so the successor
+    package above now owns the direct boundary.

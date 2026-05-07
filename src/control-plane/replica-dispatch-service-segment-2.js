@@ -540,6 +540,10 @@ class ReplicaDispatchServiceSegment2 extends ReplicaDispatchServiceSegment1 {
         if (!row?.operation_id) {
           continue;
         }
+        if (!this.isReplicaOperationLocallyOwned(row)) {
+          await this.sendDirectDispatchWakeup(this.buildOperationFromRow(row));
+          continue;
+        }
         this.operationDispatchQueue.enqueue(
           row.operation_id,
           RECONCILE_REASON.NODE_READY_DISPATCH_RETRY,
@@ -770,11 +774,13 @@ class ReplicaDispatchServiceSegment2 extends ReplicaDispatchServiceSegment1 {
     const dispatchRows = cacheRows.filter((row) => {
       return (
         isCoordinatorOwnedOperationType(row?.type) &&
-        this.isReplicaOperationLocallyOwned(row) &&
         this.matchesDispatchReplayReadyNode(row, nodeId) &&
         this.isDispatchReplayableOperationRow(row)
       );
     });
+    if (dispatchRows.length > NUM.ZERO) {
+      return dispatchRows;
+    }
 
     if (
       !(await this.shouldUseAuthoritativePriorityRecoveryRediscovery(nodeId))
@@ -898,7 +904,6 @@ class ReplicaDispatchServiceSegment2 extends ReplicaDispatchServiceSegment1 {
           const operationRow = this.buildOperationRowFromCoordinator(operation);
           return (
             isCoordinatorOwnedOperationType(operation?.type) &&
-            this.isReplicaOperationLocallyOwned(operation) &&
             this.matchesDispatchReplayReadyNode(operationRow, nodeId) &&
             this.isDispatchReplayableOperationRow(operationRow)
           );
@@ -1172,7 +1177,7 @@ class ReplicaDispatchServiceSegment2 extends ReplicaDispatchServiceSegment1 {
       if (operation === REPLICA_DISPATCH_SERVICE_LITERAL.DELETE) {
         return;
       }
-      this.enqueueReplicaOperationRow(record, {
+      this.replayReplicaOperationRow(record, {
         pendingReason: RECONCILE_REASON.REPLICA_OPERATIONS_CACHE_PENDING,
         replaceActiveReason:
           RECONCILE_REASON.REPLICA_OPERATIONS_CACHE_REPLACE_ACTIVE,

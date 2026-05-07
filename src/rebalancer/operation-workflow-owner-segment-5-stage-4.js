@@ -421,18 +421,29 @@ class OperationWorkflowOwnerSegment5Stage4 extends OperationWorkflowOwnerSegment
     return this.getPriorityRecoveryPlanningSnapshot(operation);
   }
 
-  resolvePriorityRecoveryIncompleteOperationObservation(operations = []) {
+  resolvePriorityRecoveryIncompleteOperationObservation(
+    operations = [],
+    fallbackObservation = null,
+  ) {
     if (
       !this.repository ||
       typeof this.repository.resolveIncompleteOperationObservation !==
         TYPEOF.FUNCTION
     ) {
-      return null;
+      return (
+        fallbackObservation && typeof fallbackObservation === TYPEOF.OBJECT ?
+          fallbackObservation :
+          null
+      );
     }
     const normalizedOperations = (Array.isArray(operations) ? operations : [])
       .filter((operation) => operation && typeof operation === TYPEOF.OBJECT);
     if (normalizedOperations.length === NUM.ZERO) {
-      return null;
+      return (
+        fallbackObservation && typeof fallbackObservation === TYPEOF.OBJECT ?
+          fallbackObservation :
+          null
+      );
     }
     return this.repository.resolveIncompleteOperationObservation(
       normalizedOperations,

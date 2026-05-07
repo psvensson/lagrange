@@ -63,6 +63,9 @@ const TEST_NON_PRIORITY_SYSTEM_PARTITION_ID = 'service_timers-p1';
 const TEST_USER_REPLACE_PARTITION_ID = 'user_partition-p1';
 const TEST_ENTITY_TYPE = SERVICE_TYPE.PARTITION;
 const TEST_CREATING_STATUS = 'creating';
+const TEST_ACTIVE_STATUS = 'active';
+const TEST_REMOVED_STATUS = 'removed';
+const TEST_FAILED_STATUS = 'failed';
 const VISIBILITY_CONFIRMATION_STATE_DEFERRED = 'deferred';
 const TEST_CACHE_BACKED_VISIBILITY_OPERATION_ID = 'op-cache-backed-visibility';
 const TEST_PENDING_STATUS = 'pending';
@@ -675,6 +678,65 @@ test(
     } finally {
       Date.now = originalNow;
     }
+  },
+);
+
+test(
+  'getOperationsByEntityAuthoritativeObservation replaces stale ' +
+    'authoritative rows with newer locally owned terminal transition witnesses',
+  async (t) => {
+    const repo = createTestRepository({
+      controlPlaneSystemTableGateway: {
+        readRows: async () => ({
+          success: true,
+          rows: [
+            makeRow({
+              type: OperationType.REPLACE,
+              status: TEST_CREATING_STATUS,
+              workflow_step: WORKFLOW_STEP.CREATING,
+              updated_at: 150,
+              completed_at: null,
+            }),
+          ],
+        }),
+        executeQuery: async () => ({success: true}),
+      },
+      systemTableCache: {
+        get: () => null,
+        getAll: () => [],
+        filter: () => [],
+      },
+    });
+    repo.recordOwnerPersistedTransitionVisibilityWitness(
+      repo.rowToOperation(makeRow({
+        type: OperationType.REPLACE,
+        status: TERMINAL_STATUSES.FAILED,
+        workflow_step: WORKFLOW_STEP.FAILED,
+        updated_at: 200,
+        completed_at: 200,
+      })),
+    );
+
+    const observation = await repo.getOperationsByEntityAuthoritativeObservation(
+      TEST_ENTITY_TYPE,
+      TEST_PARTITION_ID,
+    );
+
+    t.equal(
+      observation?.state,
+      INCOMPLETE_OPERATION_OBSERVATION_STATE.PRESENT,
+      'entity visibility should keep the newer locally committed transition visible',
+    );
+    t.same(
+      observation?.operations?.map((operation) => operation.workflowStep),
+      [WORKFLOW_STEP.FAILED],
+      'entity visibility should supersede the stale creating row with the newer failed transition',
+    );
+    t.same(
+      observation?.operations?.map((operation) => operation.status),
+      [TERMINAL_STATUSES.FAILED],
+      'the superseded entity row should preserve the terminal status',
+    );
   },
 );
 
@@ -1474,11 +1536,47 @@ test('isOperationTerminal returns false for active workflow step', async (t) => 
   t.notOk(repo.isOperationTerminal(op));
 });
 
-test('isOperationTerminal falls back to status for raw rows', async (t) => {
+test('isOperationTerminal falls back to type-aware status for raw rows', async (t) => {
   const repo = createTestRepository();
-  for (const status of TERMINAL_STATUSES) {
-    t.ok(repo.isOperationTerminal({status}), `${status} should be terminal`);
-  }
+  t.ok(
+    repo.isOperationTerminal({
+      type: OperationType.ADD,
+      status: TEST_ACTIVE_STATUS,
+    }),
+    'ADD active should be terminal',
+  );
+  t.ok(
+    repo.isOperationTerminal({
+      type: OperationType.REMOVE,
+      status: TEST_REMOVED_STATUS,
+    }),
+    'REMOVE removed should be terminal',
+  );
+  t.ok(
+    repo.isOperationTerminal({
+      type: OperationType.REPLACE,
+      status: TEST_REMOVED_STATUS,
+    }),
+    'REPLACE removed should be terminal',
+  );
+  t.ok(
+    repo.isOperationTerminal({
+      status: TEST_FAILED_STATUS,
+    }),
+    'failed should remain terminal even when the raw row type is unavailable',
+  );
+  t.notOk(
+    repo.isOperationTerminal({
+      status: TEST_ACTIVE_STATUS,
+    }),
+    'active without an operation type should not be treated as terminal',
+  );
+  t.notOk(
+    repo.isOperationTerminal({
+      status: TEST_REMOVED_STATUS,
+    }),
+    'removed without an operation type should not be treated as terminal',
+  );
 });
 
 test('isOperationTerminal returns false for null', async (t) => {

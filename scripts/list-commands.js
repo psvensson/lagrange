@@ -9,6 +9,14 @@ const COMMAND_GROUPS = Object.freeze([
         description: 'Print current blocker, first-read files, proof ladder, and dirty worktree.',
       }),
       Object.freeze({
+        command: 'npm run work:dirty-scope',
+        description: 'Report dirty worktree entries grouped as package-owned, tracker-generated, or unrelated.',
+      }),
+      Object.freeze({
+        command: 'npm run work:model-ledger -- summary',
+        description: 'Summarize recent model and reasoning-effort fit signals.',
+      }),
+      Object.freeze({
         command: 'npm run work:validate',
         description: 'Validate active work-package metadata and checklist state.',
       }),
@@ -33,6 +41,10 @@ const COMMAND_GROUPS = Object.freeze([
         command: 'npm run audit:file-size',
         description: 'Report oversized production and test files.',
       }),
+      Object.freeze({
+        command: 'npm run audit:owner-boundary-segments -- <files...>',
+        description: 'Print extraction guidance for oversized owner-boundary segment files.',
+      }),
     ]),
   }),
   Object.freeze({
@@ -45,6 +57,22 @@ const COMMAND_GROUPS = Object.freeze([
       Object.freeze({
         command: 'npm run analyze:topology-convergence -- <artifact>',
         description: 'Render topology convergence evidence from report or playback artifacts.',
+      }),
+      Object.freeze({
+        command: 'npm run analyze:owner-explain -- <artifact> <edge-or-alias>',
+        description: 'Explain topology evidence snapshot to owner decision outcome.',
+      }),
+      Object.freeze({
+        command: 'npm run analyze:owner-decisions',
+        description: 'Print the topology owner decision table/state-machine index.',
+      }),
+      Object.freeze({
+        command: 'npm run analyze:owner-glossary',
+        description: 'Print canonical topology owner, boundary, reason, and semantic-state glossary.',
+      }),
+      Object.freeze({
+        command: 'npm run work:package:evidence-block -- <artifact>',
+        description: 'Generate a package migration/evidence block from topology analyzer output.',
       }),
       Object.freeze({
         command: 'npm run summarize:harness -- --report-dir test-output/reports',
@@ -102,6 +130,8 @@ const SECTION_PREFIX = '## ';
 const LIST_PREFIX = '- ';
 const DESCRIPTION_SEPARATOR = ' - ';
 const OUTPUT_TITLE = '# Useful Commands';
+const PROCESS_ARG_SCRIPT_INDEX = 1;
+const SCRIPT_FILE_NAME = 'list-commands.js';
 
 function renderCommandList(groups = COMMAND_GROUPS) {
   const lines = [OUTPUT_TITLE, EMPTY_TEXT];
@@ -122,7 +152,10 @@ function main() {
   process.stdout.write(renderCommandList());
 }
 
-if (process.argv[1] && process.argv[1].endsWith('list-commands.js')) {
+if (
+  process.argv[PROCESS_ARG_SCRIPT_INDEX] &&
+  process.argv[PROCESS_ARG_SCRIPT_INDEX].endsWith(SCRIPT_FILE_NAME)
+) {
   main();
 }
 

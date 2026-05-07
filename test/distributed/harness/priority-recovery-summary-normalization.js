@@ -79,6 +79,9 @@ const PRIORITY_RECOVERY_DOMINANT_WITNESS_PRIORITY_DIMENSIONS = Object.freeze([
     rankDelta: resolveSerialWaitSourceDirectBlockerRankDelta,
   }),
   Object.freeze({
+    rankDelta: resolveDirectBlockerAgainstTerminalFollowUpCarrierRankDelta,
+  }),
+  Object.freeze({
     rankDelta: (left, right) =>
       resolvePrecedenceRank(
         left?.waitMode,
@@ -632,6 +635,22 @@ function isPriorityRecoveryDirectSourceBlockerWitness(witness) {
     .length > ZERO;
 }
 
+function isPriorityRecoveryTerminalFollowUpCarrierWitness(witness) {
+  const evidence = buildPriorityRecoveryDominantWitnessEvidence(witness);
+  return (
+    resolvePriorityRecoveryDirectBlockerReasonIds(witness).length === ZERO &&
+    normalizeStringField(witness?.semanticStateId) ===
+      PRIORITY_RECOVERY_SEMANTIC_STATE.BLOCKED_UNCLASSIFIED &&
+    evidence.currentOwner === PRIORITY_RECOVERY_PROGRESS_OWNER.REBALANCER_LEADER &&
+    evidence.blockingBoundary ===
+      PRIORITY_RECOVERY_BLOCKING_BOUNDARY.REBALANCER_HANDOFF &&
+    evidence.nextRequiredAction ===
+      PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.SCHEDULE_FOLLOWUP_REBALANCE &&
+    evidence.actuationState ===
+      PRIORITY_RECOVERY_ACTUATION_STATE.TERMINAL_COMPLETED
+  );
+}
+
 function resolveSerialWaitSourceDirectBlockerRankDelta(left, right) {
   const leftPartitionId = normalizeStringField(left?.partitionId);
   const rightPartitionId = normalizeStringField(right?.partitionId);
@@ -652,6 +671,25 @@ function resolveSerialWaitSourceDirectBlockerRankDelta(left, right) {
     isPriorityRecoveryDirectSourceBlockerWitness(right) === true &&
     normalizeDistinctStringArray(left?.serialWaitPartitionIds)
       .includes(rightPartitionId)
+  ) {
+    return COMPARISON_RIGHT_PRECEDES_LEFT;
+  }
+  return ZERO;
+}
+
+function resolveDirectBlockerAgainstTerminalFollowUpCarrierRankDelta(
+  left,
+  right,
+) {
+  if (
+    isPriorityRecoveryDirectSourceBlockerWitness(left) === true &&
+    isPriorityRecoveryTerminalFollowUpCarrierWitness(right) === true
+  ) {
+    return COMPARISON_LEFT_PRECEDES_RIGHT;
+  }
+  if (
+    isPriorityRecoveryTerminalFollowUpCarrierWitness(left) === true &&
+    isPriorityRecoveryDirectSourceBlockerWitness(right) === true
   ) {
     return COMPARISON_RIGHT_PRECEDES_LEFT;
   }

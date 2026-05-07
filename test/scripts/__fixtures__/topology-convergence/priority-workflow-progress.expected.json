@@ -1,0 +1,49 @@
+{
+  "summary": {
+    "frontierCount": 2,
+    "firstFrontierEdgeId": "priority_recovery_partition_progress",
+    "firstFrontierState": "blocked"
+  },
+  "frontier": [
+    {
+      "id": "priority_recovery_partition_progress",
+      "state": "blocked",
+      "owner": "operation_workflow_owner",
+      "boundary": "workflow_progress",
+      "dominantReason": "priority_recovery_operation_scheduling_event_driven",
+      "evidencePath": "triageSummary.publicationConvergence.activeGate.progress.priorityRecoveryProgressClasses",
+      "reasons": [
+        "priority_recovery_progress_blocked"
+      ]
+    },
+    {
+      "id": "active_gate_snapshot_coverage",
+      "state": "blocked",
+      "owner": "startup_active_gate_owner",
+      "boundary": "snapshot_coverage",
+      "dominantReason": "absent",
+      "evidencePath": "triageSummary.publicationConvergence.activeGate.progress",
+      "reasons": [
+        "active_gate_timed_out",
+        "snapshot_coverage_incomplete"
+      ]
+    }
+  ],
+  "dominantWitness": {
+    "edgeId": "priority_recovery_partition_progress",
+    "owner": "operation_workflow_owner",
+    "boundary": "workflow_progress",
+    "frontierState": "blocked",
+    "dominantReason": "priority_recovery_operation_scheduling_event_driven",
+    "evidencePath": "triageSummary.publicationConvergence.activeGate.progress.priorityRecoveryProgressClasses",
+    "reasons": [
+      "priority_recovery_progress_blocked"
+    ],
+    "source": {
+      "unresolvedSemanticStateIds": "eligible_but_no_operation_created",
+      "blockedPartitionIds": "sql_write_operations-p1",
+      "dominantReason": "priority_recovery_operation_scheduling_event_driven",
+      "failureClass": "topology_convergence_timeout"
+    }
+  }
+}

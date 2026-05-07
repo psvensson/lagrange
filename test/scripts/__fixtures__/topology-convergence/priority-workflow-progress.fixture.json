@@ -1,0 +1,40 @@
+{
+  "scenario": "rolling-restart",
+  "publicationConvergence": {
+    "publicationEpoch": 3,
+    "publicationStatus": "PUBLISHED",
+    "pendingAckCount": 0,
+    "blockedNodeCount": 0,
+    "missingPublishedCount": 0,
+    "recoveryProtocolState": "published",
+    "prioritySpreadPending": false,
+    "activeGate": {
+      "state": "timed_out",
+      "ready": false,
+      "progress": {
+        "snapshotCoverageComplete": false,
+        "snapshotCoverageNodeCount": 4,
+        "expectedNodeCount": 5,
+        "priorityBlockedPartitionCount": 1,
+        "priorityRecoveryProgressClasses": {
+          "unresolvedSemanticStateIds": [
+            "eligible_but_no_operation_created"
+          ],
+          "blockedPartitionIds": [
+            "sql_write_operations-p1"
+          ]
+        }
+      }
+    }
+  },
+  "summary": {
+    "dominantReason": "priority_recovery_operation_scheduling_event_driven",
+    "failureClass": "topology_convergence_timeout",
+    "topReasons": [
+      {
+        "reason": "priority_recovery_operation_scheduling_event_driven",
+        "count": 1
+      }
+    ]
+  }
+}

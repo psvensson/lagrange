@@ -72,6 +72,16 @@ const PRIORITY_RECOVERY_VISIBILITY_OPERATION_FIELD = Object.freeze({
 const PRIORITY_RECOVERY_VISIBILITY_SERVICE_TYPE = Object.freeze({
   PARTITION: 'partition',
 });
+const PRIORITY_RECOVERY_VISIBILITY_SERVICE_STATUS = Object.freeze({
+  ACTIVE: SERVICE_STATUS.ACTIVE,
+  FAILED: 'failed',
+  REMOVED: 'removed',
+});
+const PRIORITY_RECOVERY_VISIBILITY_PROGRESS_SERVICE_STATUS_SET = new Set([
+  PRIORITY_RECOVERY_VISIBILITY_SERVICE_STATUS.ACTIVE,
+  PRIORITY_RECOVERY_VISIBILITY_SERVICE_STATUS.FAILED,
+  PRIORITY_RECOVERY_VISIBILITY_SERVICE_STATUS.REMOVED,
+]);
 
 class UnifiedRebalancerSegment1 extends EventEmitter {
   constructor(options = {}) {
@@ -590,9 +600,11 @@ class UnifiedRebalancerSegment1 extends EventEmitter {
     ).toUpperCase();
     const serviceTableMatches = event?.tableName === SYSTEM_TABLE_NAME.SERVICES;
     const servicePartitionMatches = servicePartitionId === this.entityId;
-    const activePartitionService =
+    const progressPartitionService =
       serviceType === PRIORITY_RECOVERY_VISIBILITY_SERVICE_TYPE.PARTITION &&
-      serviceStatus === SERVICE_STATUS.ACTIVE;
+      PRIORITY_RECOVERY_VISIBILITY_PROGRESS_SERVICE_STATUS_SET.has(
+        serviceStatus,
+      );
     const operationTableMatches =
       event?.tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS;
     const operationPartitionMatches = operationPartitionId === this.entityId;
@@ -609,7 +621,7 @@ class UnifiedRebalancerSegment1 extends EventEmitter {
     const serviceVisibilityProgress =
       serviceTableMatches &&
       servicePartitionMatches &&
-      activePartitionService;
+      progressPartitionService;
     const operationVisibilityProgress =
       operationTableMatches &&
       terminalReplicaOperation;
@@ -618,7 +630,7 @@ class UnifiedRebalancerSegment1 extends EventEmitter {
       priorityPartition: this.isControlPlanePriorityPartition() === true,
       tableMatches: serviceTableMatches,
       partitionMatches: servicePartitionMatches,
-      activePartitionService,
+      progressPartitionService,
       operationTableMatches,
       operationPartitionMatches,
       coordinatorOwnedOperation,

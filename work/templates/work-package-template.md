@@ -88,22 +88,44 @@ Closure:
       metadata-gateway violation remains.
 - [ ] Any out-of-scope inherited violation has a linked follow-on package.
 - [ ] Package-owned changes committed as one focused slice.
-- [ ] Slice commit pushed, or unpushed commit SHA and reason recorded.
+- [ ] Slice commit pushed to the recorded remote/branch.
 
 ## Subagent Sequencing Ledger
 
 Required before implementation starts for every new or continued package.
 Active metadata-bearing packages fail `npm run work:validate` without this
-ledger. Do not check these items until real subagent/session values replace the
-template placeholders; checked placeholders or pending markers are invalid.
+ledger. Do not check these items until real subagent names and agent ids
+replace the template placeholders; checked placeholders, pending markers,
+parent-session labels, local/manual labels, or arbitrary text without agent id
+proof are invalid.
 
-- [ ] Review subagent recorded: `<fresh subagent/session>` reviewed
-      `<most recently executed package>` on `<same sprint or owner boundary>`;
-      result `<clean|fixes required>`.
+- [ ] Review subagent recorded:
+      Agent <name> (<agent-id>) reviewed <package>;
+      result `<clean|fixes-required>`.
 - [ ] Fix subagent recorded or explicitly not needed:
-      `<fresh separate subagent/session|not-needed>`; fixes `<summary|none>`.
-- [ ] Implementation subagent recorded: `<fresh separate subagent/session>`;
-      started only after review/fix ledger was clean.
+      Agent <name> (<agent-id>) fixed <package>, or `not-needed` only
+      when review result is `clean`.
+- [ ] Implementation subagent recorded:
+      Agent <name> (<agent-id>) implemented <this package> after
+      review/fix proof was recorded.
+
+## Commit And Push Ledger
+
+Required before a metadata-bearing package may remain closed as `done-...` or
+`superseded-...`. Do not leave placeholders in closed packages.
+
+- Focused package commit: `<sha>`
+- Pushed to: `<remote>/<branch>`
+- Commit contains only package-owned files/package-status/allowed sprint handoff: `<yes>`
+
+## Model Ledger
+
+Optional advisory record for future model and reasoning-effort choice. This
+does not replace validation, review, sequencing, or closure proof.
+
+- [ ] If this package produced useful model-fit evidence, record it with:
+      `npm run work:model-ledger -- record --package <this package> --model <model> --reasoning-effort <effort> --task-class <class> --outcome <outcome> --validation-status <status> --correction-loops <count> --review-findings <count> --notes <note>`.
+- [ ] If no record is useful, state why.
 
 ## Failure Migration / Contraction
 
@@ -112,9 +134,16 @@ Required for scenario-driven packages after blocker migration.
 - Current dominant blocker:
 - Current semantic owner:
 - Current boundary:
+- Generated evidence block:
+      `npm run work:package:evidence-block -- <artifact>`
+- Owner explain command:
+      `npm run analyze:owner-explain -- <artifact> <edge-or-alias>`
 - Historical migrations that are evidence only:
 - Replayable owner-decision fixture or blocker probe:
 - Presentation surfaces that must consume the decision contract:
+- Decision table / glossary proof:
+      `npm run analyze:owner-decisions`
+      `npm run analyze:owner-glossary`
 
 ## Detection / Analysis Tasks
 
@@ -123,6 +152,11 @@ Required for scenario-driven packages after blocker migration.
 - [ ] Detect duplicate ownership.
 - [ ] Detect implicit state machines.
 - [ ] Detect branch lattices.
+- [ ] If dirty worktree scope matters, run `npm run work:dirty-scope` and
+      classify package-owned versus unrelated entries before committing.
+- [ ] If oversized segment files block review, run
+      `npm run audit:owner-boundary-segments -- <files...>` and record the
+      extraction guidance or the reason extraction is out of scope.
 
 ## Implementation Tasks
 

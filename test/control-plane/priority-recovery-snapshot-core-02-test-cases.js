@@ -80,6 +80,239 @@ export function registerPriorityRecoverySnapshotCore02Tests(context) {
   } = context;
 
   test(
+    'priority recovery decision snapshots keep ordinary partitions behind ' +
+    'fresh emergency workflow progress',
+    async (t) => {
+      const emergencyEligibleNodeIds = [
+        PRIORITY_RECOVERY_ARTIFACT_PENDING_ACK_NODE_ID,
+        PRIORITY_RECOVERY_ARTIFACT_SOURCE_NODE_ID,
+        PRIORITY_RECOVERY_ARTIFACT_TARGET_NODE_ID,
+      ];
+      const emergencyPriorityPartitionSummary = {
+        blockedPartitions: [{
+          partitionId: REPLICA_OPERATION_PRIORITY_PARTITION_ID,
+          requiredDistinctNodeCount:
+          PRIORITY_RECOVERY_ARTIFACT_REQUIRED_DISTINCT_NODE_COUNT,
+          readyDistinctNodeCount:
+          PRIORITY_RECOVERY_ARTIFACT_READY_DISTINCT_NODE_COUNT,
+          spreadGap: PRIORITY_RECOVERY_SINGLE_SPREAD_GAP,
+        }, {
+          partitionId: PRIORITY_RECOVERY_SQL_WRITE_OPERATIONS_PARTITION_ID,
+          requiredDistinctNodeCount:
+          PRIORITY_RECOVERY_ARTIFACT_REQUIRED_DISTINCT_NODE_COUNT,
+          readyDistinctNodeCount:
+          PRIORITY_RECOVERY_ARTIFACT_READY_DISTINCT_NODE_COUNT,
+          spreadGap: PRIORITY_RECOVERY_SINGLE_SPREAD_GAP,
+        }],
+        missingPartitionIds: [
+          REPLICA_OPERATION_PRIORITY_PARTITION_ID,
+          PRIORITY_RECOVERY_SQL_WRITE_OPERATIONS_PARTITION_ID,
+        ],
+        requiredDistinctNodeCount:
+        PRIORITY_RECOVERY_ARTIFACT_REQUIRED_DISTINCT_NODE_COUNT,
+      };
+      const emergencyReplicaOperationRow = {
+        operation_id: PRIORITY_RECOVERY_ARTIFACT_PENDING_OPERATION_ID,
+        partition_id: REPLICA_OPERATION_PRIORITY_PARTITION_ID,
+        entity_type: PRIORITY_RECOVERY_ENTITY_TYPE_PARTITION,
+        operation_type: PRIORITY_RECOVERY_OPERATION_TYPE_REPLACE,
+        status: PRIORITY_RECOVERY_STATUS_PENDING,
+        workflow_step: PRIORITY_RECOVERY_WORKFLOW_STEP_PENDING,
+        source_node_id: PRIORITY_RECOVERY_ARTIFACT_SOURCE_NODE_ID,
+        target_node_id: PRIORITY_RECOVERY_ARTIFACT_TARGET_NODE_ID,
+        replica_id: PRIORITY_RECOVERY_ARTIFACT_SQL_TRANSACTIONS_REPLICA_ID,
+        created_at: PRIORITY_RECOVERY_ARTIFACT_OPERATION_CREATED_AT_MS,
+        updated_at: PRIORITY_RECOVERY_ARTIFACT_OPERATION_CREATED_AT_MS,
+      };
+
+      const directDecisionSnapshots = buildPriorityRecoveryDecisionSnapshots({
+        capturedAt: PRIORITY_RECOVERY_ARTIFACT_SYNTHETIC_CAPTURED_AT_MS,
+        publicationConvergence: {
+          publicationEpoch: PRIORITY_RECOVERY_ARTIFACT_PUBLICATION_EPOCH,
+          publicationStatus: PRIORITY_RECOVERY_PUBLICATION_STATUS_PUBLISHED,
+          publishedActiveNodeIds: emergencyEligibleNodeIds,
+          pendingAckNodeIds: [],
+          priorityPartitionSummary: emergencyPriorityPartitionSummary,
+        },
+        readinessByNodeId: {},
+        workflowAdmissionsByWorkflowId: {},
+        replicaOperationRows: [emergencyReplicaOperationRow],
+        replicaOperations: {
+          operationTimelineById: {},
+        },
+        serviceRows: [],
+        stepTimeoutMsByWorkflowStep: {
+          [PRIORITY_RECOVERY_WORKFLOW_STEP_PENDING]:
+          PRIORITY_RECOVERY_PENDING_TIMEOUT_MS,
+        },
+      });
+      const directWriteSnapshot =
+      directDecisionSnapshots.snapshots.find((entry) =>
+        entry.partitionId ===
+          PRIORITY_RECOVERY_SQL_WRITE_OPERATIONS_PARTITION_ID,
+      );
+      t.match(
+        directWriteSnapshot,
+        {
+          blockerReasons: [
+            PRIORITY_RECOVERY_BLOCKER_REASON_SERIAL_OPERATION_WAIT,
+          ],
+          progress: {
+            currentOwner: PRIORITY_RECOVERY_PROGRESS_OWNER_WORKFLOW,
+            nextRequiredAction:
+            PRIORITY_RECOVERY_PROGRESS_ACTION_WAIT_FOR_PROGRESS,
+            blockingBoundary: PRIORITY_RECOVERY_PROGRESS_BOUNDARY_WORKFLOW,
+          },
+          coordinator: {
+            serialWaitOperationIds: [
+              PRIORITY_RECOVERY_ARTIFACT_PENDING_OPERATION_ID,
+            ],
+            serialWaitPartitionIds: [
+              REPLICA_OPERATION_PRIORITY_PARTITION_ID,
+            ],
+          },
+        },
+        'ordinary priority partitions should defer behind in-flight emergency workflow recovery',
+      );
+
+      const trackedDecisionSnapshots =
+      buildTrackedPriorityRecoveryDecisionSnapshots({
+        publicationEpoch: PRIORITY_RECOVERY_ARTIFACT_PUBLICATION_EPOCH,
+        blockerPartitionIdsByReason: {
+          [PRIORITY_RECOVERY_BLOCKER_REASON_ELIGIBLE_NO_OPERATION]: [
+            PRIORITY_RECOVERY_SQL_WRITE_OPERATIONS_PARTITION_ID,
+          ],
+        },
+        partitionIdsBySemanticState: {
+          [PRIORITY_RECOVERY_SEMANTIC_STATE_RECOVERING_IN_FLIGHT]: [
+            REPLICA_OPERATION_PRIORITY_PARTITION_ID,
+          ],
+          [PRIORITY_RECOVERY_SEMANTIC_STATE_NEEDS_OPERATION]: [
+            PRIORITY_RECOVERY_SQL_WRITE_OPERATIONS_PARTITION_ID,
+          ],
+        },
+        snapshots: [{
+          partitionId: REPLICA_OPERATION_PRIORITY_PARTITION_ID,
+          epoch: PRIORITY_RECOVERY_ARTIFACT_PUBLICATION_EPOCH,
+          operationId: PRIORITY_RECOVERY_ARTIFACT_PENDING_OPERATION_ID,
+          semanticState: PRIORITY_RECOVERY_SEMANTIC_STATE_RECOVERING_IN_FLIGHT,
+          blockerReasons: [],
+          spreadCompletion: {
+            satisfied: false,
+          },
+          completion: {
+            state: PRIORITY_RECOVERY_COMPLETION_STATE.BLOCKED,
+          },
+          conditions: {
+            latestOperationWorkflowStep:
+              PRIORITY_RECOVERY_WORKFLOW_STEP_PENDING,
+            latestOperationStatus: PRIORITY_RECOVERY_STATUS_PENDING,
+          },
+          progress: {
+            currentOwner: PRIORITY_RECOVERY_PROGRESS_OWNER_WORKFLOW,
+            nextRequiredAction:
+              PRIORITY_RECOVERY_PROGRESS_ACTION_WAIT_FOR_PROGRESS,
+            blockingBoundary: PRIORITY_RECOVERY_PROGRESS_BOUNDARY_WORKFLOW,
+            workflowProgressPhaseId:
+              PRIORITY_RECOVERY_PROGRESS_PHASE_DISPATCH_PENDING,
+            waitMode: PRIORITY_RECOVERY_PROGRESS_WAIT_EVENT_DRIVEN,
+          },
+          coordinator: {
+            operationCount: PRIORITY_RECOVERY_SINGLE_OPERATION_COUNT,
+            operationIds: [
+              PRIORITY_RECOVERY_ARTIFACT_PENDING_OPERATION_ID,
+            ],
+            operation: {
+              operationId: PRIORITY_RECOVERY_ARTIFACT_PENDING_OPERATION_ID,
+              partitionId: REPLICA_OPERATION_PRIORITY_PARTITION_ID,
+              type: PRIORITY_RECOVERY_OPERATION_TYPE_REPLACE,
+              status: PRIORITY_RECOVERY_STATUS_PENDING,
+              workflowStep: PRIORITY_RECOVERY_WORKFLOW_STEP_PENDING,
+              sourceNodeId: PRIORITY_RECOVERY_ARTIFACT_SOURCE_NODE_ID,
+              targetNodeId: PRIORITY_RECOVERY_ARTIFACT_TARGET_NODE_ID,
+              replicaId: PRIORITY_RECOVERY_ARTIFACT_SQL_TRANSACTIONS_REPLICA_ID,
+              createdAtMs: PRIORITY_RECOVERY_ARTIFACT_OPERATION_CREATED_AT_MS,
+              updatedAtMs: PRIORITY_RECOVERY_PENDING_OPERATION_UPDATED_AT_MS,
+              latestTimelineInFlight: true,
+              stepTimeoutMs: PRIORITY_RECOVERY_PENDING_TIMEOUT_MS,
+            },
+          },
+          admission: {
+            effectiveEligibleNodeIds: emergencyEligibleNodeIds,
+            effectiveEligibleNodeCount: emergencyEligibleNodeIds.length,
+          },
+          observation: {
+            provenance: {
+              capturedAt: PRIORITY_RECOVERY_ARTIFACT_SYNTHETIC_CAPTURED_AT_MS,
+            },
+          },
+        }, {
+          partitionId: PRIORITY_RECOVERY_SQL_WRITE_OPERATIONS_PARTITION_ID,
+          epoch: PRIORITY_RECOVERY_ARTIFACT_PUBLICATION_EPOCH,
+          operationId: PRIORITY_RECOVERY_ABSENT_OPERATION,
+          semanticState: PRIORITY_RECOVERY_SEMANTIC_STATE_NEEDS_OPERATION,
+          blockerReasons: [
+            PRIORITY_RECOVERY_BLOCKER_REASON_ELIGIBLE_NO_OPERATION,
+          ],
+          planner: {
+            partitionId: PRIORITY_RECOVERY_SQL_WRITE_OPERATIONS_PARTITION_ID,
+            requiredDistinctNodeCount:
+            PRIORITY_RECOVERY_ARTIFACT_REQUIRED_DISTINCT_NODE_COUNT,
+            readyDistinctNodeCount:
+            PRIORITY_RECOVERY_ARTIFACT_READY_DISTINCT_NODE_COUNT,
+            spreadGap: PRIORITY_RECOVERY_SINGLE_SPREAD_GAP,
+            ready: false,
+            reasons: [],
+          },
+          spreadCompletion: {
+            satisfied: false,
+          },
+          coordinator: {
+            operationCount: PRIORITY_RECOVERY_EMPTY_COUNT,
+          },
+          admission: {
+            effectiveEligibleNodeIds: emergencyEligibleNodeIds,
+            effectiveEligibleNodeCount: emergencyEligibleNodeIds.length,
+          },
+          observation: {
+            provenance: {
+              capturedAt: PRIORITY_RECOVERY_ARTIFACT_SYNTHETIC_CAPTURED_AT_MS,
+            },
+          },
+        }],
+      });
+      const trackedWriteSnapshot =
+      trackedDecisionSnapshots.snapshots.find((entry) =>
+        entry.partitionId ===
+          PRIORITY_RECOVERY_SQL_WRITE_OPERATIONS_PARTITION_ID,
+      );
+      t.match(
+        trackedWriteSnapshot,
+        {
+          blockerReasons: [
+            PRIORITY_RECOVERY_BLOCKER_REASON_SERIAL_OPERATION_WAIT,
+          ],
+          progress: {
+            currentOwner: PRIORITY_RECOVERY_PROGRESS_OWNER_WORKFLOW,
+            nextRequiredAction:
+            PRIORITY_RECOVERY_PROGRESS_ACTION_WAIT_FOR_PROGRESS,
+            blockingBoundary: PRIORITY_RECOVERY_PROGRESS_BOUNDARY_WORKFLOW,
+          },
+          coordinator: {
+            serialWaitOperationIds: [
+              PRIORITY_RECOVERY_ARTIFACT_PENDING_OPERATION_ID,
+            ],
+            serialWaitPartitionIds: [
+              REPLICA_OPERATION_PRIORITY_PARTITION_ID,
+            ],
+          },
+        },
+        'tracked snapshot normalization should retain emergency workflow progress as the serial-wait source',
+      );
+    },
+  );
+
+  test(
     'priority recovery owner fixture keeps later priority work behind a fresh pending workflow',
     async (t) => {
       const artifactEligibleNodeIds = [

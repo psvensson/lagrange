@@ -26,6 +26,10 @@ const {
   UNIFIED_REBALANCER_LITERAL,
 } = SHARED;
 
+const PRIORITY_RECOVERY_FOLLOW_UP_TARGET_STATE_FIELD = Object.freeze({
+  TARGET_NODES: 'targetNodes',
+});
+
 class UnifiedRebalancerSegment4Stage3 extends UnifiedRebalancerSegment4Stage2 {
   buildPriorityRecoveryFollowUpHealthyNodeSet(currentReplicas = []) {
     return new Set(
@@ -79,9 +83,32 @@ class UnifiedRebalancerSegment4Stage3 extends UnifiedRebalancerSegment4Stage2 {
     );
   }
 
-  selectPriorityRecoveryFollowUpTargetNodeId(decision, currentReplicas = []) {
+  resolvePriorityRecoveryFollowUpCandidateNodeIds(
+    decision,
+    targetState = null,
+  ) {
     const eligibleNodeIds =
       this.resolvePriorityRecoveryFollowUpEligibleNodeIds(decision);
+    const targetNodeIds = this.normalizePriorityRecoveryFollowUpNodeIds([
+      targetState?.[PRIORITY_RECOVERY_FOLLOW_UP_TARGET_STATE_FIELD.TARGET_NODES],
+    ]);
+    if (targetNodeIds.length === NUM.ZERO) {
+      return eligibleNodeIds;
+    }
+    const targetNodeIdSet = new Set(targetNodeIds);
+    return eligibleNodeIds.filter((nodeId) => targetNodeIdSet.has(nodeId));
+  }
+
+  selectPriorityRecoveryFollowUpTargetNodeId(
+    decision,
+    currentReplicas = [],
+    targetState = null,
+  ) {
+    const eligibleNodeIds =
+      this.resolvePriorityRecoveryFollowUpCandidateNodeIds(
+        decision,
+        targetState,
+      );
     const healthyNodeIds =
       this.buildPriorityRecoveryFollowUpHealthyNodeSet(currentReplicas);
     const occupiedNodeIds =
@@ -206,6 +233,7 @@ class UnifiedRebalancerSegment4Stage3 extends UnifiedRebalancerSegment4Stage2 {
     const targetNodeId = this.selectPriorityRecoveryFollowUpTargetNodeId(
       decision,
       currentReplicas,
+      context.targetState,
     );
     if (!targetNodeId) {
       return this.buildPriorityRecoveryFollowUpMoveOutcome(
@@ -392,6 +420,30 @@ class UnifiedRebalancerSegment4Stage3 extends UnifiedRebalancerSegment4Stage2 {
     const decision =
       context.decision ||
       (await this.getCurrentPriorityRecoveryFollowUpDecisionSnapshot());
+    const currentFollowUpPartitionId =
+      this.resolvePriorityRecoveryFollowUpPartitionId(decision);
+    const currentFollowUpAlreadyPlanned =
+      currentFollowUpPartitionId.length > NUM.ZERO &&
+      normalizedMoves.some((move) =>
+        this.isPriorityRecoveryCurrentFollowUpMove(
+          move,
+          currentFollowUpPartitionId,
+        ),
+      );
+    if (
+      currentFollowUpAlreadyPlanned &&
+      this.isPriorityRecoveryFollowUpOperationRequired(
+        decision?.decisionSnapshot || null,
+      )
+    ) {
+      return this.normalizePriorityRecoveryCurrentFollowUpMoves(
+        normalizedMoves,
+        Object.freeze({
+          followUpPartitionId: currentFollowUpPartitionId,
+          followUpTargetsCurrentEntity: true,
+        }),
+      );
+    }
     let followUpMove = this.buildPriorityRecoveryFollowUpMove({
       ...context,
       decision,

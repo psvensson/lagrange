@@ -34,30 +34,62 @@ Use the tracker utility for current sprint/package mechanics:
 2. `npm run work:context` prints a compact human and LLM handoff with the
    current blocker, first-read files, proof ladder, useful commands, and dirty
    worktree summary.
-3. `npm run work:validate` checks active and metadata-bearing packages for
+3. `npm run work:dirty-scope` prints only the dirty worktree scope report,
+   grouped into package-owned, tracker-generated, and unrelated entries. Add
+   `-- --package work/packages/active-...md` to scope the report to a package
+   other than the generated current blocker.
+4. `npm run work:model-ledger -- summary` prints recent model, reasoning
+   effort, task class, outcome, validation, correction-loop, and review-finding
+   signals with a simple advisory recommendation to escalate, de-escalate, or
+   hold effort.
+5. `npm run work:validate` checks active and metadata-bearing packages for
    filename/header drift, stale open checklist items, and required Subagent
    Sequencing Ledgers on active metadata-bearing packages.
-4. `npm run work:package:close -- --write work/packages/active-...md` renames a
+6. `npm run work:package:close -- --write work/packages/active-...md` renames a
    package to `done-...` only after open checklist items are closed.
-5. `npm run work:package:migrate -- --write work/packages/active-...md`
+7. `npm run work:package:migrate -- --write work/packages/active-...md`
    `work/packages/active-successor.md` performs the same closure gate while
    recording a successor handoff.
-6. `npm run work:package:move -- --write work/packages/todo-...md --to active`
+8. `npm run work:package:move -- --write work/packages/todo-...md --to active`
    performs non-terminal state moves.
-7. After each completed package slice, create one focused git commit containing
+9. `npm run work:package:evidence-block -- <artifact>` generates a Markdown
+   owner/evidence block from topology-convergence analyzer output for package
+   migration or contraction notes.
+10. After each completed package slice, create one focused git commit containing
    only that slice's package-owned changes and push the current branch before
    starting the next slice.
-8. If the slice cannot be pushed because the remote or credentials are
+11. If the slice cannot be pushed because the remote or credentials are
    unavailable, record the unpushed commit SHA and reason in the package or
    sprint handoff. If package-owned and unrelated dirty changes cannot be
    separated safely, stop for human direction instead of committing a mixed
    slice.
 
+Use `npm run work:model-ledger -- record` to append explicit package experience
+to `work/model-ledger.jsonl` when a package adds useful model-fit evidence:
+
+```bash
+npm run work:model-ledger -- record \
+  --package work/packages/active-YYYYMMDD-slug.md \
+  --model gpt-5-codex \
+  --reasoning-effort medium \
+  --task-class workflow-tooling \
+  --outcome success \
+  --validation-status passed \
+  --correction-loops 0 \
+  --review-findings 0 \
+  --notes "short package-specific note"
+```
+
+The ledger is advisory. It helps future agents choose a model and reasoning
+effort, but it never replaces `npm run work:validate`, review/fix/implementation
+subagent sequencing, focused validation, package closure, or commit discipline.
+
 ## Mandatory Subagent Sequencing
 
 Every new or continued work package must make the implementation handoff
-sequential by default. Record the sequence in the package file before runtime,
-test, harness, documentation, or tracker implementation starts.
+sequential with real subagents by default. Record the sequence in the package
+file before runtime, test, harness, documentation, or tracker implementation
+starts.
 
 Required sequence:
 
@@ -67,27 +99,51 @@ Required sequence:
    subagent performs those fixes before implementation starts.
 3. Fresh implementation subagent: after review/fixes are clean, a separate
    subagent implements the new/current package.
+4. Focused commit and push: after the package closes, commit only the
+   package-owned slice and push it before the next slice starts.
 
 The package must record:
 
-1. The review subagent identity or session marker, the package reviewed, the
-   shared sprint or owner boundary, and whether the result was clean or found
-   fixes.
-2. The fix subagent identity or session marker and fix summary, or an explicit
-   `not-needed` entry when the review was clean.
-3. The implementation subagent identity or session marker and confirmation that
-   implementation started only after the review/fix ledger was clean.
+1. Review: `Agent <name> (<agent-id>) reviewed <package>; result <clean|fixes-required>`.
+2. Fix: `Agent <name> (<agent-id>) fixed <package>` when review found fixes,
+   or `not-needed` only when the review result was `clean`.
+3. Implementation: `Agent <name> (<agent-id>) implemented <package>` after the
+   review/fix proof is recorded.
 
 Do not use parallel subagents for these roles unless a human explicitly changes
 the package sequencing contract. The default is review, then fixes if needed,
 then implementation.
 
+Parent-session notes, local/manual session labels, and arbitrary text without a
+real agent id do not satisfy the required roles unless the user explicitly
+disables subagents for the task.
+
 `npm run work:validate` requires this ledger for active metadata-bearing
 packages. Historical `done-...` packages without the ledger remain valid unless
 they add a ledger with open or incomplete required entries. Checked required
-entries must contain completed, truthful subagent/session records; template
-placeholders such as `<...>` and pending markers such as
-`pending-before-implementation-resumes` are validation failures.
+entries must contain real agent identities; template placeholders such as
+`<...>`, pending markers such as `pending-before-implementation-resumes`, and
+non-real identities such as `current-session`, `parent Codex`, `manual`,
+`local`, or `session` are validation failures for packages under the current
+policy. Historical closed-package proof is not backfilled by invention; if a
+package is reopened, migrated, or closed again, the current proof rules apply.
+
+## Commit And Push Ledger
+
+Packages closed under the current tracker workflow must prove the focused
+package slice was committed and pushed. The package file must include:
+
+1. `Focused package commit: <sha>`
+2. `Pushed to: <remote>/<branch>`
+3. `Commit contains only package-owned files/package-status/allowed sprint handoff: yes`
+
+`npm run work:validate` rejects closed metadata-bearing packages marked by the
+tracker as requiring this proof when the ledger is missing, leaves
+placeholders, omits the push target, or does not affirm that the commit
+contains only package-owned files plus package-status or allowed sprint handoff
+updates. Historical closed packages without truthful commit/push proof are not
+backfilled by invention; if they are reopened, migrated, or closed again, the
+proof is required.
 
 ## Triage Rule
 
@@ -230,6 +286,19 @@ package. The contraction package should carry only the current owner,
 boundary, fixture or probe, touched files, and proof ladder. The older package
 may stay queued as history or later re-entry work.
 
+Use the topology convergence analyzer to keep that handoff mechanical:
+
+1. `npm run analyze:topology-convergence -- <artifact>` prints the frontier and
+   dominant witness.
+2. `npm run analyze:owner-explain -- <artifact> <edge-or-alias>` explains the
+   evidence snapshot to owner decision outcome.
+3. `npm run analyze:owner-decisions` prints the explicit owner decision
+   table/state-machine index.
+4. `npm run analyze:owner-glossary` prints the canonical owner, boundary,
+   reason, and semantic-state glossary.
+5. `npm run work:package:evidence-block -- <artifact>` prints a package-ready
+   evidence block using the same analyzer output.
+
 Shared-boundary work is not done when only the implementation changes land.
 The package should update the relevant architecture record and any bounded
 static guardrail in the same work cycle when the boundary contract is durable.
@@ -305,6 +374,10 @@ from increasing. The ratchet uses these thresholds:
 
 Use `npm run audit:file-size:strict` when a package explicitly owns file-size
 cleanup and should fail on any remaining oversized file.
+
+Use `npm run audit:owner-boundary-segments -- <files...>` when an oversized
+segment file blocks LLM review. The command emits extraction guidance for
+segment-shaped files without refactoring runtime behavior by itself.
 
 ## Scoped Static Ratchets
 

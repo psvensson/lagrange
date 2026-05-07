@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-07",
   "scenario": "none",
   "artifact": "none",
@@ -11,8 +11,8 @@
   "owner": "LLM repository orientation and maintainability tooling",
   "boundary": "LLM handoff, command discovery, generated steering, and work-context triage",
   "dominantReason": "llm_operability_review_findings",
-  "currentState": "The follow-up review findings are implemented locally across LLM entrypoint guidance, command discovery, work-context first-read/triage output, dirty worktree grouping, file-scoped runtime-grammar audit discovery, and generated compact steering completeness. The package remains active because the repository already contains unrelated active runtime package changes, so this slice has not been committed or pushed separately.",
-  "nextAction": "When the unrelated runtime package worktree can be separated safely, commit and push only this package-owned LLM operability slice, then rename this package to done.",
+  "currentState": "The follow-up review findings were implemented and are present in pushed commit 1173d3d2. That commit is mixed-scope: it includes the package-owned LLM operability slice plus unrelated runtime and rolling-restart sprint/package changes, so the focused-slice rule was not satisfied for that historical commit.",
+  "nextAction": "No LLM operability implementation work remains in this package. Preserve the mixed-scope commit truth as residual process debt and require future package slices to commit and push only package-owned changes.",
   "proof": [
     "npm run commands",
     "npm run work:context",
@@ -39,7 +39,7 @@
     ".kiro/steering/llm/manifest.json",
     ".kiro/steering/llm/rules.json",
     "work/packages/done-20260507-llm-understandability-hardening.md",
-    "work/packages/active-20260507-llm-operability-follow-up-hardening.md"
+    "work/packages/done-20260507-llm-operability-follow-up-hardening.md"
   ],
   "predecessor": "work/packages/done-20260507-llm-understandability-hardening.md"
 }
@@ -68,8 +68,8 @@ Phase `0.5 - External Usability` developer-workflow preparation.
 
 1. Runtime rolling-restart blocker behavior.
 2. Refactoring large runtime `segment` or `part` files.
-3. Committing or pushing a mixed slice while unrelated active runtime package
-   changes are dirty in the worktree.
+3. Further runtime, sprint, or rolling-restart package correction beyond
+   recording that pushed commit `1173d3d2` was mixed-scope.
 
 ## Subagent Sequencing Ledger
 
@@ -106,9 +106,11 @@ Phase `0.5 - External Usability` developer-workflow preparation.
       report/triage command, and dirty-worktree grouping handoff data.
 - [x] Generated compact steering keeps context for the `docs/` rule.
 - [x] Focused tests cover the changed script behavior.
-- [ ] Focused package commit and push are intentionally deferred until this
-      package-owned slice can be separated from unrelated active runtime
-      package dirty files.
+- [x] Commit/push bookkeeping reconciled with repository history: pushed commit
+      `1173d3d2` contains this package-owned LLM operability slice.
+- [x] Mixed-scope residual recorded: `1173d3d2` also contains unrelated runtime
+      and rolling-restart sprint/package changes, so it must not be treated as
+      a clean focused package-slice precedent.
 
 ## Static Drift Ledger
 
@@ -125,8 +127,10 @@ Closure:
 - [x] Focused script tests passed.
 - [x] `npm run work:validate` passed after the package ledger was added.
 - [x] `git diff --check` passed for the package-owned LLM files.
-- [ ] Focused commit and push not performed because unrelated active runtime
-      package changes are still dirty in the same worktree.
+- [x] Commit/push truth reconciled: package-owned LLM changes are already in
+      pushed commit `1173d3d2`.
+- [x] Process residual recorded: pushed commit `1173d3d2` was mixed-scope and
+      did not satisfy the package focused-slice rule.
 
 ## Validation
 
@@ -137,4 +141,14 @@ Closure:
 5. `npm run audit:runtime-grammar:file -- src/bootstrap/owners/bootstrap-request-owner.js`
 6. `npm run analyze:topology-convergence -- test-output/reports/.playback/rolling-restart-after-contact-seed-timeout-contract-20260507T095019Z/rolling-restart/failure-bundle.json`
 7. `npm test -- test/scripts/work-context.test.js test/scripts/generate-steering-llm-pack.test.js test/scripts/list-commands.test.js`
-8. `git diff --check -- AGENTS.md package.json scripts/work-context.js scripts/list-commands.js scripts/generate-steering-llm-pack.js test/scripts/work-context.test.js test/scripts/list-commands.test.js test/scripts/generate-steering-llm-pack.test.js .kiro/steering/llm/README.md .kiro/steering/llm/core.md .kiro/steering/llm/governance.md .kiro/steering/llm/manifest.json .kiro/steering/llm/rules.json work/packages/done-20260507-llm-understandability-hardening.md work/packages/active-20260507-llm-operability-follow-up-hardening.md`
+8. `git diff --check -- AGENTS.md package.json scripts/work-context.js scripts/list-commands.js scripts/generate-steering-llm-pack.js test/scripts/work-context.test.js test/scripts/list-commands.test.js test/scripts/generate-steering-llm-pack.test.js .kiro/steering/llm/README.md .kiro/steering/llm/core.md .kiro/steering/llm/governance.md .kiro/steering/llm/manifest.json .kiro/steering/llm/rules.json work/packages/done-20260507-llm-understandability-hardening.md work/packages/done-20260507-llm-operability-follow-up-hardening.md`
+9. `npm run work:validate`
+
+## Closure Note
+
+This package is closed as bookkeeping-only follow-up before
+`work:model-ledger` implementation starts. The package-owned LLM operability
+changes were already committed and pushed in `1173d3d2`, but that commit also
+included unrelated runtime and rolling-restart package/sprint changes. The
+remaining obligation is procedural: future slices must not repeat that
+mixed-scope commit shape.

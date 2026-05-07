@@ -479,7 +479,7 @@ function resolvePriorityRecoverySyntheticSerialWaitSourceMode(
   const sourceEvidence =
     buildPriorityRecoverySyntheticSerialWaitSourceEvidence(snapshot);
   if (
-    isPriorityRecoveryOrdinarySerialLaneOperationContext(
+    isPriorityRecoveryWorkflowProgressSerialWaitSourceOperationContext(
       sourceEvidence.coordinatorOperation,
     ) === true
   ) {
@@ -487,7 +487,7 @@ function resolvePriorityRecoverySyntheticSerialWaitSourceMode(
       .COORDINATOR_OPERATION;
   }
   if (
-    isPriorityRecoveryOrdinarySerialLaneOperationContext(
+    isPriorityRecoveryWorkflowProgressSerialWaitSourceOperationContext(
       buildPriorityRecoverySyntheticSerialWaitWorkflowSiblingOperation(
         sourceEvidence,
         operationSnapshotsByPartitionId,
@@ -498,7 +498,7 @@ function resolvePriorityRecoverySyntheticSerialWaitSourceMode(
       .WORKFLOW_SUMMARY_SIBLING;
   }
   if (
-    isPriorityRecoveryOrdinarySerialLaneOperationContext(
+    isPriorityRecoveryWorkflowProgressSerialWaitSourceOperationContext(
       buildPriorityRecoverySyntheticSerialWaitWorkflowSummaryOperation(
         sourceEvidence,
       ),
@@ -693,7 +693,9 @@ function hasPriorityRecoveryLiveSerialWaitSourcePartition(
       sourceContext?.operationId || LOCAL_STR_EMPTY,
     ).trim();
     if (
-      isPriorityRecoveryOrdinarySerialLaneOperationContext(sourceContext) &&
+      isPriorityRecoveryWorkflowProgressSerialWaitSourceOperationContext(
+        sourceContext,
+      ) &&
       sourceOperationId.length > NUM.ZERO &&
       sourceOperationIdSet.has(sourceOperationId)
     ) {
@@ -955,6 +957,29 @@ function isPriorityRecoveryOrdinarySerialLaneOperationContext(
   );
 }
 
+function isPriorityRecoveryWorkflowProgressSerialWaitSourceOperationContext(
+  operationContext,
+) {
+  if (!operationContext || typeof operationContext !== TYPEOF.OBJECT) {
+    return false;
+  }
+  const partitionId = String(operationContext.partitionId || '').trim();
+  if (
+    !isPriorityRecoveryTrackedPartitionId(partitionId) ||
+    isPriorityRecoveryOperationContextTerminal(operationContext)
+  ) {
+    return false;
+  }
+  const operationType = String(operationContext.type || '').toUpperCase();
+  if (operationType === OperationType.ADD) {
+    return true;
+  }
+  return (
+    operationType === OperationType.REPLACE &&
+    isReplaceRemoveDispatchPhase(operationContext) !== true
+  );
+}
+
 function buildPriorityRecoveryOrdinarySerialLaneOperationContexts(
   replicaOperationContexts,
 ) {
@@ -977,6 +1002,30 @@ function buildPriorityRecoveryOrdinarySerialLaneOperationContexts(
     );
 }
 
+function buildPriorityRecoveryWorkflowProgressSerialWaitSourceOperationContexts(
+  replicaOperationContexts,
+) {
+  const byPartitionId =
+    replicaOperationContexts?.byPartitionId &&
+    typeof replicaOperationContexts.byPartitionId === TYPEOF.OBJECT ?
+      replicaOperationContexts.byPartitionId :
+      {};
+  return Object.values(byPartitionId)
+    .flatMap((operationContexts) =>
+      Array.isArray(operationContexts) ? operationContexts : [],
+    )
+    .filter((operationContext) =>
+      isPriorityRecoveryWorkflowProgressSerialWaitSourceOperationContext(
+        operationContext,
+      ),
+    )
+    .sort((left, right) =>
+      String(left.operationId || LOCAL_STR_EMPTY).localeCompare(
+        String(right.operationId || LOCAL_STR_EMPTY),
+      ),
+    );
+}
+
 function buildPriorityRecoverySerialWaitOperationContexts(options = {}) {
   const partitionId = String(options.partitionId || LOCAL_STR_EMPTY).trim();
   if (!isPriorityRecoveryOrdinarySerialLanePartitionId(partitionId)) {
@@ -988,7 +1037,9 @@ function buildPriorityRecoverySerialWaitOperationContexts(options = {}) {
   return (Array.isArray(options.serialLaneOperationContexts) ?
     options.serialLaneOperationContexts :
     []).filter((operationContext) =>
-    isPriorityRecoveryOrdinarySerialLaneOperationContext(operationContext) &&
+    isPriorityRecoveryWorkflowProgressSerialWaitSourceOperationContext(
+      operationContext,
+    ) &&
       isPriorityRecoverySpreadSatisfyingOperationContext(operationContext, {
         eligibleTargetNodeIds,
       }) !== true &&
@@ -1091,6 +1142,7 @@ function resolvePriorityRecoveryFilteredSnapshotBlockerReasons(
 export {
   PRIORITY_RECOVERY_DECISION_SNAPSHOT_CONFLICT_STAGE_TABLE,
   buildPriorityRecoveryOrdinarySerialLaneOperationContexts,
+  buildPriorityRecoveryWorkflowProgressSerialWaitSourceOperationContexts,
   buildPriorityRecoverySerialWaitOperationContexts,
   buildPriorityRecoverySyntheticSerialWaitAssessment,
   buildPriorityRecoverySyntheticSerialWaitSnapshot,
@@ -1101,6 +1153,7 @@ export {
   hasPriorityRecoveryDecisionSnapshotOwnField,
   isPriorityRecoveryOrdinarySerialLaneOperationContext,
   isPriorityRecoveryOrdinarySerialLanePartitionId,
+  isPriorityRecoveryWorkflowProgressSerialWaitSourceOperationContext,
   isPriorityRecoverySourcePartitionStateMap,
   normalizePriorityRecoveryReleasedSerialWaitSnapshots,
   normalizePriorityRecoverySyntheticSerialWaitSnapshots,

@@ -6,6 +6,7 @@ const {
   NUM,
   OPERATION_WORKFLOW_OWNER_LITERAL,
   PRIORITY_RECOVERY_COMPLETION_STATE,
+  SERVICE_TYPE,
   TYPEOF,
   buildPriorityRecoveryDecisionSnapshot,
   buildPriorityRecoveryOperationContextFromRecord,
@@ -13,6 +14,55 @@ const {
 } = SHARED;
 
 class OperationWorkflowOwnerSegment5Stage5 extends OperationWorkflowOwnerSegment5Stage4 {
+  isPriorityRecoveryAuthoritativeOperationReadDeferred(
+    incompleteObservation = null,
+  ) {
+    const deferredVisibilityOutcome =
+      incompleteObservation?.deferredOutcome || null;
+    return (
+      incompleteObservation?.state ===
+        INCOMPLETE_OPERATION_OBSERVATION_STATE.DEFERRED ||
+      deferredVisibilityOutcome?.completionState ===
+        PRIORITY_RECOVERY_COMPLETION_STATE
+          .AUTHORITATIVE_OPERATION_READ_DEFERRED
+    );
+  }
+
+  buildDeferredPriorityRecoveryDecisionSnapshotFromPlanningMatch(
+    partitionId,
+    operationContexts = [],
+    planningSnapshot = null,
+    stepTimeoutMsByWorkflowStep = null,
+    planningDecisionSnapshot = null,
+  ) {
+    const matchedOperationId =
+      typeof planningDecisionSnapshot?.operationId === TYPEOF.STRING &&
+      planningDecisionSnapshot.operationId.length > NUM.ZERO ?
+        planningDecisionSnapshot.operationId :
+        null;
+    const matchedOperationContext =
+      operationContexts.find((operationContext) => {
+        return operationContext?.operationId === matchedOperationId;
+      }) || null;
+    const representativeOperationContext =
+      operationContexts.length === NUM.ONE ? operationContexts[NUM.ZERO] : null;
+    const operationId =
+      matchedOperationId ||
+      representativeOperationContext?.operationId ||
+      null;
+    return buildPriorityRecoveryDecisionSnapshot({
+      partitionId,
+      capturedAt: Date.now(),
+      publicationConvergence: planningSnapshot,
+      operationContexts,
+      operationId,
+      operationContext:
+        matchedOperationContext || representativeOperationContext,
+      stepTimeoutMsByWorkflowStep,
+      authoritativeOperationReadDeferred: true,
+    });
+  }
+
   resolvePriorityRecoveryDecisionSnapshotFromPlanning(
     partitionId,
     operations = [],
@@ -52,8 +102,11 @@ class OperationWorkflowOwnerSegment5Stage5 extends OperationWorkflowOwnerSegment
     partitionId,
     operations = [],
     planningSnapshot = null,
+    incompleteOperationObservation = null,
   ) {
-    const normalizedPartitionId = String(partitionId || '').trim();
+    const normalizedPartitionId = String(
+      partitionId || OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_STRING,
+    ).trim();
     if (
       normalizedPartitionId.length === NUM.ZERO ||
       !planningSnapshot ||
@@ -65,23 +118,12 @@ class OperationWorkflowOwnerSegment5Stage5 extends OperationWorkflowOwnerSegment
       .filter((operation) => {
         return operation && typeof operation === TYPEOF.OBJECT;
       });
-    const planningDecisionSnapshot =
-      this.resolvePriorityRecoveryDecisionSnapshotFromPlanning(
-        normalizedPartitionId,
-        operationRecords,
-        planningSnapshot,
-      );
-    if (planningDecisionSnapshot) {
-      return planningDecisionSnapshot;
-    }
-    const representativeOperationRecord =
-      operationRecords.find((operation) =>
-        operation && typeof operation === TYPEOF.OBJECT,
-      ) || null;
     const capturedAtMs = Date.now();
     const stepTimeoutMsByWorkflowStep =
       this.buildPriorityRecoveryWorkflowStepTimeoutMap(
-        representativeOperationRecord,
+        operationRecords.find((operation) =>
+          operation && typeof operation === TYPEOF.OBJECT,
+        ) || null,
       );
     const operationContexts = operationRecords
       .map((operation) =>
@@ -102,15 +144,33 @@ class OperationWorkflowOwnerSegment5Stage5 extends OperationWorkflowOwnerSegment
     const incompleteObservation =
       this.resolvePriorityRecoveryIncompleteOperationObservation(
         operationRecords,
+        incompleteOperationObservation,
       );
-    const deferredVisibilityOutcome =
-      incompleteObservation?.deferredOutcome || null;
     const authoritativeOperationReadDeferred =
-      incompleteObservation?.state ===
-        INCOMPLETE_OPERATION_OBSERVATION_STATE.DEFERRED ||
-      deferredVisibilityOutcome?.completionState ===
-        PRIORITY_RECOVERY_COMPLETION_STATE
-          .AUTHORITATIVE_OPERATION_READ_DEFERRED;
+      this.isPriorityRecoveryAuthoritativeOperationReadDeferred(
+        incompleteObservation,
+      ) ||
+      this.isPriorityRecoveryAuthoritativeOperationReadDeferred(
+        incompleteOperationObservation,
+      );
+    const planningDecisionSnapshot =
+      this.resolvePriorityRecoveryDecisionSnapshotFromPlanning(
+        normalizedPartitionId,
+        operationRecords,
+        planningSnapshot,
+      );
+    if (planningDecisionSnapshot) {
+      if (authoritativeOperationReadDeferred !== true) {
+        return planningDecisionSnapshot;
+      }
+      return this.buildDeferredPriorityRecoveryDecisionSnapshotFromPlanningMatch(
+        normalizedPartitionId,
+        operationContexts,
+        planningSnapshot,
+        stepTimeoutMsByWorkflowStep,
+        planningDecisionSnapshot,
+      );
+    }
     const representativeOperationContext =
       operationContexts.length === NUM.ONE ? operationContexts[NUM.ZERO] : null;
     return buildPriorityRecoveryDecisionSnapshot({
@@ -145,17 +205,65 @@ class OperationWorkflowOwnerSegment5Stage5 extends OperationWorkflowOwnerSegment
     partitionId,
     operations = [],
   ) {
-    const representativeOperation = (Array.isArray(operations) ? operations : [])
-      .find((operation) => operation && typeof operation === TYPEOF.OBJECT);
+    const normalizedPartitionId = String(
+      partitionId || OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_STRING,
+    ).trim();
+    if (normalizedPartitionId.length === NUM.ZERO) {
+      return null;
+    }
+    let operationRecords = (Array.isArray(operations) ? operations : [])
+      .filter((operation) => operation && typeof operation === TYPEOF.OBJECT);
+    let incompleteObservation =
+      this.resolvePriorityRecoveryIncompleteOperationObservation(
+        operationRecords,
+      );
+    if (
+      operationRecords.length === NUM.ZERO &&
+      this.repository &&
+      typeof this.repository.getOperationsByEntityAuthoritativeObservation ===
+        TYPEOF.FUNCTION
+    ) {
+      const authoritativeObservation =
+        await this.repository.getOperationsByEntityAuthoritativeObservation(
+          SERVICE_TYPE.PARTITION,
+          normalizedPartitionId,
+        );
+      const authoritativeOperations = Array.isArray(
+        authoritativeObservation?.operations,
+      ) ?
+          authoritativeObservation.operations.filter((operation) => {
+            return operation && typeof operation === TYPEOF.OBJECT;
+          }) :
+          [];
+      if (
+        authoritativeOperations.length > NUM.ZERO ||
+        authoritativeObservation?.deferredOutcome
+      ) {
+        operationRecords = authoritativeOperations;
+        incompleteObservation =
+          authoritativeObservation &&
+          typeof authoritativeObservation === TYPEOF.OBJECT ?
+            authoritativeObservation :
+            null;
+      }
+    }
+    const representativeOperation =
+      operationRecords.find(Boolean) ||
+      Object.freeze({
+        partitionId: normalizedPartitionId,
+        entityType: SERVICE_TYPE.PARTITION,
+        entityId: normalizedPartitionId,
+      });
     if (!representativeOperation) {
       return null;
     }
     const planningSnapshot =
       await this.getPriorityRecoveryPlanningSnapshot(representativeOperation);
     return this.buildPriorityRecoveryDecisionSnapshotForOperations(
-      partitionId,
-      operations,
+      normalizedPartitionId,
+      operationRecords,
       planningSnapshot,
+      incompleteObservation,
     );
   }
 }
