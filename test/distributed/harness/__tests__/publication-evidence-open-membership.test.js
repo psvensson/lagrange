@@ -55,6 +55,40 @@ const TEST_PER_NODE_PUBLICATION_DISAGREEMENT_SET = Object.freeze({
   [TEST_SELECTED_MISSING_NODE_IDS[0]]: TEST_SELECTED_MISSING_NODE_IDS,
   [TEST_SELECTED_MISSING_NODE_IDS[1]]: TEST_SELECTED_MISSING_NODE_IDS,
 });
+const STEADY_TEST_NAME =
+  'buildCanonicalPublicationEvidenceFromControlPlane keeps steady-published ' +
+  'selected-membership deficit across current and last meaningful progress';
+const STEADY_PUBLICATION_EPOCH = 4;
+const STEADY_EXPECTED_NODE_COUNT = 3;
+const STEADY_ACTIVE_NODE_COUNT = 1;
+const STEADY_SNAPSHOT_COVERAGE_COUNT = 1;
+const STEADY_ZERO_COUNT = 0;
+const STEADY_EMPTY_REASON_CODES = Object.freeze([]);
+const STEADY_EMPTY_GATE_REASONS = Object.freeze([]);
+const STEADY_BLOCKERS = Object.freeze([
+  'snapshot_coverage=1/3',
+]);
+const STEADY_AUTHORITATIVE_PUBLISHED_NODE_IDS = Object.freeze([
+  'steady-node-a',
+]);
+const STEADY_SELECTED_MISSING_NODE_IDS = Object.freeze([
+  'steady-node-b',
+  'steady-node-c',
+]);
+const STEADY_PER_NODE_PUBLICATION_DISAGREEMENT_SET = Object.freeze({
+  [STEADY_AUTHORITATIVE_PUBLISHED_NODE_IDS[0]]:
+    STEADY_SELECTED_MISSING_NODE_IDS,
+  [STEADY_SELECTED_MISSING_NODE_IDS[0]]: STEADY_SELECTED_MISSING_NODE_IDS,
+  [STEADY_SELECTED_MISSING_NODE_IDS[1]]: STEADY_SELECTED_MISSING_NODE_IDS,
+});
+const STEADY_EMPTY_PROGRESS_CLASSES = Object.freeze({
+  unresolvedClassIds: Object.freeze([]),
+  unresolvedClassCount: STEADY_ZERO_COUNT,
+  unresolvedSemanticStateIds: Object.freeze([]),
+  unresolvedSemanticStateCount: STEADY_ZERO_COUNT,
+  blockedPartitionIds: Object.freeze([]),
+  blockedPartitionCount: STEADY_ZERO_COUNT,
+});
 
 it(TEST_NAME, () => {
   const publicationEvidence = buildCanonicalPublicationEvidenceFromControlPlane({
@@ -147,4 +181,128 @@ it(TEST_NAME, () => {
     TEST_SELECTED_MISSING_NODE_IDS,
   );
   assert.deepEqual(activeGateProgress.gateReasons, TEST_EMPTY_GATE_REASONS);
+});
+
+it(STEADY_TEST_NAME, () => {
+  const steadyLastMeaningfulProgress = {
+    expectedNodeCount: STEADY_EXPECTED_NODE_COUNT,
+    activeNodeCount: STEADY_ACTIVE_NODE_COUNT,
+    snapshotCoverageNodeCount: STEADY_SNAPSHOT_COVERAGE_COUNT,
+    snapshotCoverageComplete: false,
+    publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+    publicationEpoch: STEADY_PUBLICATION_EPOCH,
+    recoveryProtocolState: RECOVERY_PROTOCOL_STATE.STEADY_PUBLISHED,
+    selectedPublishedActiveNodeIds:
+      STEADY_AUTHORITATIVE_PUBLISHED_NODE_IDS,
+    selectedPublishedActiveCount:
+      STEADY_AUTHORITATIVE_PUBLISHED_NODE_IDS.length,
+    selectedMissingPublishedNodeIds: STEADY_SELECTED_MISSING_NODE_IDS,
+    pendingAckCount: STEADY_ZERO_COUNT,
+    missingPublishedCount: STEADY_ZERO_COUNT,
+    perNodePublicationDisagreementSet:
+      STEADY_PER_NODE_PUBLICATION_DISAGREEMENT_SET,
+    gateReasons: STEADY_EMPTY_GATE_REASONS,
+    prioritySpreadSatisfied: true,
+    prioritySpreadGap: STEADY_ZERO_COUNT,
+    priorityBlockedPartitionCount: STEADY_ZERO_COUNT,
+    priorityRecoveryProgressClasses: STEADY_EMPTY_PROGRESS_CLASSES,
+    blockers: STEADY_BLOCKERS,
+  };
+  const publicationEvidence = buildCanonicalPublicationEvidenceFromControlPlane({
+    publicationConvergence: {
+      publicationEpoch: STEADY_PUBLICATION_EPOCH,
+      publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+      recoveryProtocolState: RECOVERY_PROTOCOL_STATE.STEADY_PUBLISHED,
+      publishedActiveNodeIds: STEADY_AUTHORITATIVE_PUBLISHED_NODE_IDS,
+      pendingAckNodeIds: TEST_EMPTY_NODE_IDS,
+      pendingAckCount: STEADY_ZERO_COUNT,
+      missingPublishedNodeIds: TEST_EMPTY_NODE_IDS,
+      missingPublishedCount: STEADY_ZERO_COUNT,
+      publicationPending: false,
+      prioritySpreadPending: false,
+      priorityRecoveryReasonCodes: STEADY_EMPTY_REASON_CODES,
+    },
+    publicationConvergenceGate: {
+      ready: true,
+      publicationEpoch: STEADY_PUBLICATION_EPOCH,
+      publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+      recoveryProtocolState: RECOVERY_PROTOCOL_STATE.STEADY_PUBLISHED,
+      requiredAckNodeIds: STEADY_AUTHORITATIVE_PUBLISHED_NODE_IDS,
+      acknowledgedNodeIds: STEADY_AUTHORITATIVE_PUBLISHED_NODE_IDS,
+      pendingAckNodeIds: TEST_EMPTY_NODE_IDS,
+      pendingAckCount: STEADY_ZERO_COUNT,
+      missingPublishedNodeIds: TEST_EMPTY_NODE_IDS,
+      missingPublishedCount: STEADY_ZERO_COUNT,
+      publicationPending: false,
+      prioritySpreadPending: false,
+      reasonCodes: STEADY_EMPTY_REASON_CODES,
+      reasons: STEADY_EMPTY_REASON_CODES,
+    },
+    priorityRecoveryObservation: {
+      publicationEpoch: STEADY_PUBLICATION_EPOCH,
+      publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+      recoveryProtocolState: RECOVERY_PROTOCOL_STATE.STEADY_PUBLISHED,
+      publishedActiveNodeIds: STEADY_AUTHORITATIVE_PUBLISHED_NODE_IDS,
+      pendingAckNodeIds: TEST_EMPTY_NODE_IDS,
+      pendingAckCount: STEADY_ZERO_COUNT,
+      missingPublishedNodeIds: STEADY_SELECTED_MISSING_NODE_IDS,
+      missingPublishedCount: STEADY_SELECTED_MISSING_NODE_IDS.length,
+      publicationPending: false,
+      prioritySpreadPending: false,
+      priorityRecoveryReasonCodes: STEADY_EMPTY_REASON_CODES,
+      publicationConvergenceGateReasons: STEADY_EMPTY_REASON_CODES,
+    },
+    activeGate: {
+      mode: 'startup',
+      ready: false,
+      progress: {
+        expectedNodeCount: STEADY_EXPECTED_NODE_COUNT,
+        activeNodeCount: STEADY_ACTIVE_NODE_COUNT,
+        snapshotCoverageNodeCount: STEADY_SNAPSHOT_COVERAGE_COUNT,
+        snapshotCoverageComplete: false,
+        publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+        publicationEpoch: STEADY_PUBLICATION_EPOCH,
+        recoveryProtocolState: RECOVERY_PROTOCOL_STATE.STEADY_PUBLISHED,
+        selectedPublishedActiveNodeIds:
+          STEADY_AUTHORITATIVE_PUBLISHED_NODE_IDS,
+        selectedPublishedActiveCount:
+          STEADY_AUTHORITATIVE_PUBLISHED_NODE_IDS.length,
+        selectedMissingPublishedNodeIds: STEADY_SELECTED_MISSING_NODE_IDS,
+        pendingAckCount: STEADY_ZERO_COUNT,
+        missingPublishedCount: STEADY_SELECTED_MISSING_NODE_IDS.length,
+        perNodePublicationDisagreementSet:
+          STEADY_PER_NODE_PUBLICATION_DISAGREEMENT_SET,
+        gateReasons: STEADY_EMPTY_GATE_REASONS,
+        prioritySpreadSatisfied: true,
+        prioritySpreadGap: STEADY_ZERO_COUNT,
+        priorityBlockedPartitionCount: STEADY_ZERO_COUNT,
+        priorityRecoveryProgressClasses: STEADY_EMPTY_PROGRESS_CLASSES,
+        blockers: STEADY_BLOCKERS,
+      },
+      lastMeaningfulProgress: steadyLastMeaningfulProgress,
+    },
+  });
+  const activeGate =
+    publicationEvidence.priorityRecoveryObservation.activeGate;
+
+  assert.equal(
+    publicationEvidence.publicationConvergence.missingPublishedCount,
+    STEADY_SELECTED_MISSING_NODE_IDS.length,
+  );
+  assert.deepEqual(
+    publicationEvidence.publicationConvergence.missingPublishedNodeIds,
+    STEADY_SELECTED_MISSING_NODE_IDS,
+  );
+  assert.equal(
+    activeGate.progress.missingPublishedCount,
+    STEADY_SELECTED_MISSING_NODE_IDS.length,
+  );
+  assert.equal(
+    activeGate.lastMeaningfulProgress.missingPublishedCount,
+    STEADY_SELECTED_MISSING_NODE_IDS.length,
+  );
+  assert.deepEqual(
+    activeGate.lastMeaningfulProgress.selectedMissingPublishedNodeIds,
+    STEADY_SELECTED_MISSING_NODE_IDS,
+  );
 });

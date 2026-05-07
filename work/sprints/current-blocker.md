@@ -4,39 +4,39 @@
 
 Sprint: `work/sprints/active-2026-q2-publication-scoped-consistency-and-node-join-closure.md`
 
-Package: `work/packages/active-20260506-rolling-restart-startup-steady-published-selected-membership-deficit-readiness-timeout-reentry.md`
+Package: `work/packages/active-20260507-rolling-restart-topology-publication-missing-active-workflow-progress-reentry.md`
 
 Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/rolling-restart-after-publication-membership-open-selected-cohort-20260507T002638Z.report.json`
+Artifact: `test-output/reports/rolling-restart-after-steady-published-selected-membership-timeout-alignment-20260507T005730Z.report.json`
 
-Playback: `test-output/reports/.playback/rolling-restart-after-publication-membership-open-selected-cohort-20260507T002638Z/rolling-restart/`
+Playback: `test-output/reports/.playback/rolling-restart-after-steady-published-selected-membership-timeout-alignment-20260507T005730Z/rolling-restart/`
 
 ## Boundary
 
-Owner: `Startup steady-published selected-membership deficit over readiness-timeout fallback and last-meaningful progress retention`
+Owner: `Topology publication missing-active node over operation-workflow progress and replace-remove safety deferral`
 
-Boundary: `Startup steady-published selected-membership deficit / readiness-timeout owner`
+Boundary: `Topology publication missing-active node / operation-workflow progress owner`
 
-Dominant reason: `readiness_probe_timeout_fallback`
+Dominant reason: `publication_missing_active_node=35a891b8-c1a0-5064-9c6e-2acfba61c2a7`
 
-Current state: The pending-ACK selected-membership seam is closed. The representative rerun now fails as startup_recovery_blocked on a fresh-join readiness timeout for 7493... while priorityRecoveryObservation and current activeGate progress on selected snapshot 35a... still carry a four-node steady-published selected-membership deficit that top-level publicationConvergence and lastMeaningfulProgress partially collapse back to 0.
+Current state: The steady-published selected-membership normalization seam is closed. The representative rerun now fails as publication_convergence_blocked on epoch 4 steady_published missingPublishedCount=3, while supporting progress evidence points at replica_operations-p1 under operation_workflow_owner / workflow_progress with replace_remove_safety_blocked deferrals.
 
 ## Next Action
 
-Extract the 002638Z publicationConvergence, priorityRecoveryObservation, activeGate current progress, lastMeaningfulProgress, and error-string fixture; decide whether the canonical owner is current steady-published selected-membership deficit, readiness-timeout fallback, or stale last-meaningful missingPublished normalization between them; then repair only that owner path.
+Extract the 005730Z publicationConvergence, priority recovery progress summary, replica_operations-p1 workflow evidence, and replace_remove_safety_blocked log fixture; decide whether explicit publication_missing_active_node or operation_workflow_owner / workflow_progress now owns the boundary; then repair only that owner path.
 
 ## Proof Ladder
 
-1. `Focused 002638Z steady-published selected-membership deficit / readiness-timeout fixture`
-2. `Owner regression for current versus last-meaningful missingPublished normalization under steady_published startup recovery`
+1. `Focused 005730Z publication missing-active / workflow-progress owner fixture`
+2. `Focused replace-remove-safety and workflow-progress owner regressions`
 3. `Touched-file static guardrails`
 4. `Representative rolling-restart --fast-local rerun`
 
 ## Touched Files
 
-1. `src/control-plane/publication-recovery-evidence.js`
-2. `test/control-plane/publication-recovery-evidence-open-membership.test.js`
-3. `test/distributed/harness/publication-evidence-contract.js`
-4. `test/distributed/harness/failure-bundle-segment-5.js`
-5. `test/distributed/harness/__tests__/failure-bundle.test.js`
+1. `src/rebalancer/operation-workflow-owner-shared.js`
+2. `src/rebalancer/rebalancer-constants.js`
+3. `test/rebalancer/replace-replica-workflow.test.js`
+4. `test/distributed/harness/cluster-segment-7.js`
+5. `test/distributed/harness/failure-bundle-segment-4.js`

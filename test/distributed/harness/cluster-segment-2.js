@@ -94,6 +94,9 @@ const PUBLICATION_CONVERGENCE_GATE_SUMMARY_DECISION_TABLE = Object.freeze([
     matches: () => true,
   }),
 ]);
+const ACTIVE_WAIT_RECOVERY_PROTOCOL_STATE = Object.freeze({
+  STEADY_PUBLISHED: 'steady_published',
+});
 
 /**
  * Preserve a small but meaningful timeout floor for deadline-driven
@@ -137,6 +140,43 @@ function normalizeDistinctStringArray(values) {
         .filter((value) => value.length > ZERO),
     ),
   ].sort((left, right) => left.localeCompare(right));
+}
+
+function resolveSteadyPublishedSelectedMissingCount({
+  expectedNodeCount = ZERO,
+  publicationStatus = PUBLICATION_CONVERGENCE_GATE_SUMMARY_TEXT.EMPTY,
+  recoveryProtocolState = null,
+  priorityPartitionSummary = null,
+  pendingAckNodeIds = [],
+  selectedPublishedActiveNodeIds = [],
+  selectedMissingPublishedNodeIds = [],
+} = {}) {
+  const normalizedExpectedNodeCount =
+    Number.isInteger(expectedNodeCount) && expectedNodeCount > ZERO ?
+      expectedNodeCount :
+      ZERO;
+  const normalizedPendingAckNodeIds =
+    normalizeDistinctStringArray(pendingAckNodeIds);
+  const normalizedSelectedPublishedActiveNodeIds =
+    normalizeDistinctStringArray(selectedPublishedActiveNodeIds);
+  const normalizedSelectedMissingPublishedNodeIds =
+    normalizeDistinctStringArray(selectedMissingPublishedNodeIds);
+  const steadyPublishedSelection =
+    publicationStatus === ACTIVE_WAIT_PUBLICATION_STATUS_PUBLISHED &&
+    normalizedPendingAckNodeIds.length === ZERO &&
+    normalizedSelectedPublishedActiveNodeIds.length > ZERO &&
+    normalizedSelectedMissingPublishedNodeIds.length > ZERO &&
+    normalizedSelectedPublishedActiveNodeIds.length +
+      normalizedSelectedMissingPublishedNodeIds.length ===
+      normalizedExpectedNodeCount &&
+    (
+      recoveryProtocolState ===
+        ACTIVE_WAIT_RECOVERY_PROTOCOL_STATE.STEADY_PUBLISHED ||
+      priorityPartitionSummary?.satisfied === true
+    );
+  return steadyPublishedSelection === true ?
+    normalizedSelectedMissingPublishedNodeIds.length :
+    ZERO;
 }
 
 /**
@@ -1182,6 +1222,16 @@ function buildActiveWaitProgressSnapshot(
     priorityPartitionSummary.blockedPartitionCount >= ZERO ?
       priorityPartitionSummary.blockedPartitionCount :
       null;
+  const steadyPublishedSelectedMissingCount =
+    resolveSteadyPublishedSelectedMissingCount({
+      expectedNodeCount: normalizedExpectedNodeCount,
+      publicationStatus,
+      recoveryProtocolState,
+      priorityPartitionSummary,
+      pendingAckNodeIds,
+      selectedPublishedActiveNodeIds,
+      selectedMissingPublishedNodeIds,
+    });
   const priorityRecoveryDecisionSnapshots =
     snapshotCoverage?.selectedPriorityRecoveryDecisionSnapshots &&
     typeof snapshotCoverage.selectedPriorityRecoveryDecisionSnapshots ===
@@ -1240,7 +1290,10 @@ function buildActiveWaitProgressSnapshot(
       publicationStatus,
       recoveryProtocolState,
       pendingAckCount: pendingAckNodeIds.length,
-      missingPublishedCount,
+      missingPublishedCount: Math.max(
+        missingPublishedCount,
+        steadyPublishedSelectedMissingCount,
+      ),
       gateReasons,
       prioritySpreadSatisfied,
       priorityRecoveryDecisionSnapshots,
@@ -1305,7 +1358,10 @@ function buildActiveWaitProgressSnapshot(
     selectedPublishedActiveCount: selectedPublishedActiveNodeIds.length,
     selectedMissingPublishedNodeIds,
     pendingAckCount: pendingAckNodeIds.length,
-    missingPublishedCount,
+    missingPublishedCount: Math.max(
+      missingPublishedCount,
+      steadyPublishedSelectedMissingCount,
+    ),
     gateReasonCount: gateReasons.length,
     gateReasons,
     prioritySpreadSatisfied,

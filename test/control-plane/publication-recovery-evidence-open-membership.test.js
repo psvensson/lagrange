@@ -35,6 +35,28 @@ const TEST_CURRENT_SELECTED_PUBLICATION_DISAGREEMENT_SET = Object.freeze({
 const TEST_PRIORITY_RECOVERY_REASON_CODES = Object.freeze([
   'publication_epoch_pending',
 ]);
+const STEADY_TEST_NAME =
+  'buildCanonicalPublicationRecoveryEvidence keeps current selected ' +
+  'publication-membership deficit while steady-published startup ' +
+  'progress remains incomplete';
+const STEADY_PUBLICATION_EPOCH = 10;
+const STEADY_EMPTY_REASON_CODES = Object.freeze([]);
+const STEADY_AUTHORITATIVE_PUBLISHED_NODE_IDS = Object.freeze([
+  'steady-node-a',
+]);
+const STEADY_SELECTED_MISSING_NODE_IDS = Object.freeze([
+  'steady-node-b',
+  'steady-node-c',
+]);
+const STEADY_EXPECTED_NODE_COUNT =
+  STEADY_AUTHORITATIVE_PUBLISHED_NODE_IDS.length +
+  STEADY_SELECTED_MISSING_NODE_IDS.length;
+const STEADY_CURRENT_SELECTED_PUBLICATION_DISAGREEMENT_SET = Object.freeze({
+  [STEADY_AUTHORITATIVE_PUBLISHED_NODE_IDS[0]]:
+    STEADY_SELECTED_MISSING_NODE_IDS,
+  [STEADY_SELECTED_MISSING_NODE_IDS[0]]: STEADY_SELECTED_MISSING_NODE_IDS,
+  [STEADY_SELECTED_MISSING_NODE_IDS[1]]: STEADY_SELECTED_MISSING_NODE_IDS,
+});
 
 test(TEST_NAME, (t) => {
   const evidence = buildCanonicalPublicationRecoveryEvidence({
@@ -100,6 +122,91 @@ test(TEST_NAME, (t) => {
   t.same(
     evidence.publicationConvergence.missingPublishedNodeIds,
     TEST_SELECTED_MISSING_NODE_IDS,
+  );
+  t.end();
+});
+
+test(STEADY_TEST_NAME, (t) => {
+  const evidence = buildCanonicalPublicationRecoveryEvidence({
+    publicationConvergence: {
+      publicationEpoch: STEADY_PUBLICATION_EPOCH,
+      publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+      recoveryProtocolState: RECOVERY_PROTOCOL_STATE.STEADY_PUBLISHED,
+      publishedActiveNodeIds: STEADY_AUTHORITATIVE_PUBLISHED_NODE_IDS,
+      pendingAckNodeIds: TEST_EMPTY_NODE_IDS,
+      pendingAckCount: TEST_EMPTY_COUNT,
+      missingPublishedNodeIds: TEST_EMPTY_NODE_IDS,
+      missingPublishedCount: TEST_EMPTY_COUNT,
+      publicationPending: false,
+      prioritySpreadPending: false,
+      priorityRecoveryReasonCodes: STEADY_EMPTY_REASON_CODES,
+    },
+    publicationConvergenceGate: {
+      publicationEpoch: STEADY_PUBLICATION_EPOCH,
+      publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+      recoveryProtocolState: RECOVERY_PROTOCOL_STATE.STEADY_PUBLISHED,
+      requiredAckNodeIds: STEADY_AUTHORITATIVE_PUBLISHED_NODE_IDS,
+      acknowledgedNodeIds: STEADY_AUTHORITATIVE_PUBLISHED_NODE_IDS,
+      pendingAckNodeIds: TEST_EMPTY_NODE_IDS,
+      pendingAckCount: TEST_EMPTY_COUNT,
+      missingPublishedNodeIds: TEST_EMPTY_NODE_IDS,
+      missingPublishedCount: TEST_EMPTY_COUNT,
+      publicationPending: false,
+      prioritySpreadPending: false,
+      reasonCodes: STEADY_EMPTY_REASON_CODES,
+    },
+    priorityRecoveryObservation: {
+      publicationEpoch: STEADY_PUBLICATION_EPOCH,
+      publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+      recoveryProtocolState: RECOVERY_PROTOCOL_STATE.STEADY_PUBLISHED,
+      publishedActiveNodeIds: STEADY_AUTHORITATIVE_PUBLISHED_NODE_IDS,
+      pendingAckNodeIds: TEST_EMPTY_NODE_IDS,
+      pendingAckCount: TEST_EMPTY_COUNT,
+      missingPublishedNodeIds: STEADY_SELECTED_MISSING_NODE_IDS,
+      missingPublishedCount: STEADY_SELECTED_MISSING_NODE_IDS.length,
+      publicationPending: false,
+      prioritySpreadPending: false,
+      priorityRecoveryReasonCodes: STEADY_EMPTY_REASON_CODES,
+    },
+    activeGate: {
+      progress: {
+        expectedNodeCount: STEADY_EXPECTED_NODE_COUNT,
+        publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+        recoveryProtocolState: RECOVERY_PROTOCOL_STATE.STEADY_PUBLISHED,
+        selectedPublishedActiveNodeIds:
+          STEADY_AUTHORITATIVE_PUBLISHED_NODE_IDS,
+        selectedPublishedActiveCount:
+          STEADY_AUTHORITATIVE_PUBLISHED_NODE_IDS.length,
+        selectedMissingPublishedNodeIds: STEADY_SELECTED_MISSING_NODE_IDS,
+        pendingAckCount: TEST_EMPTY_COUNT,
+        missingPublishedCount: STEADY_SELECTED_MISSING_NODE_IDS.length,
+        prioritySpreadSatisfied: true,
+        priorityRecoveryProgressClasses: {
+          unresolvedClassCount: TEST_EMPTY_COUNT,
+          unresolvedSemanticStateCount: TEST_EMPTY_COUNT,
+          blockedPartitionCount: TEST_EMPTY_COUNT,
+        },
+        perNodePublicationDisagreementSet:
+          STEADY_CURRENT_SELECTED_PUBLICATION_DISAGREEMENT_SET,
+      },
+    },
+  });
+
+  t.equal(
+    evidence.publicationConvergenceGate.missingPublishedCount,
+    STEADY_SELECTED_MISSING_NODE_IDS.length,
+  );
+  t.same(
+    evidence.publicationConvergenceGate.missingPublishedNodeIds,
+    STEADY_SELECTED_MISSING_NODE_IDS,
+  );
+  t.equal(
+    evidence.publicationConvergence.missingPublishedCount,
+    STEADY_SELECTED_MISSING_NODE_IDS.length,
+  );
+  t.same(
+    evidence.publicationConvergence.missingPublishedNodeIds,
+    STEADY_SELECTED_MISSING_NODE_IDS,
   );
   t.end();
 });
