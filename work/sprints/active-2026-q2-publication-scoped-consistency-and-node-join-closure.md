@@ -235,7 +235,7 @@ Secondary after the primary path is stable:
 
 The current active representative re-entry package is:
 
-1. [Rolling Restart Startup Publication Open Convergence Priority Serial-Wait Workflow Progress Reentry](../packages/done-20260507-rolling-restart-startup-publication-open-convergence-priority-serial-wait-workflow-progress-reentry.md)
+1. [Rolling Restart Topology Priority Recovery Workflow Progress Serial-Wait Reentry](../packages/active-20260507-rolling-restart-topology-priority-recovery-workflow-progress-serial-wait-reentry.md)
 
 Retained predecessor context file:
 
@@ -386,7 +386,7 @@ Other secondary matrix failures become active packages only after the
 
 Current re-entry package:
 
-1. [Rolling Restart Startup Publication Open Convergence Priority Serial-Wait Workflow Progress Reentry](../packages/done-20260507-rolling-restart-startup-publication-open-convergence-priority-serial-wait-workflow-progress-reentry.md)
+1. [Rolling Restart Topology Priority Recovery Workflow Progress Serial-Wait Reentry](../packages/active-20260507-rolling-restart-topology-priority-recovery-workflow-progress-serial-wait-reentry.md)
 
 Queued convergence-grammar packages:
 

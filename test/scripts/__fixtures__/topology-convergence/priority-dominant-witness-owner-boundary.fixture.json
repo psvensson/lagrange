@@ -27,21 +27,31 @@
           }
         },
         "priorityRecoveryProgressSummary": {
-          "priorityBlockedPartitionCount": 1,
-          "priorityRecoveryProgressClasses": {
-            "unresolvedSemanticStateIds": [
-              "eligible_but_no_operation_created"
-            ],
-            "blockedPartitionIds": [
-              "sql_write_operations-p1"
-            ]
-          },
+          "partitionCount": 2,
           "dominantWitness": {
             "partitionId": "sql_write_operations-p1",
+            "semanticStateId": "needs_operation",
+            "progressClassIds": [
+              "eligible_but_no_operation_created"
+            ],
+            "blockerReasonCodes": [
+              "eligible_but_no_operation_created"
+            ],
             "currentOwner": "rebalancer_leader",
             "blockingBoundary": "operation_scheduling",
             "waitMode": "event_driven",
             "nextRequiredAction": "create_recovery_operation"
+          },
+          "currentOwnerCounts": {
+            "operation_workflow_owner": 1,
+            "rebalancer_leader": 1
+          },
+          "blockingBoundaryCounts": {
+            "workflow_progress": 1,
+            "operation_scheduling": 1
+          },
+          "waitModeCounts": {
+            "event_driven": 2
           }
         }
       },

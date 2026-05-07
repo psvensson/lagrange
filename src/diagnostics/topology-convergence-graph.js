@@ -857,28 +857,25 @@ function normalizePriorityRecoveryEvidence(normalized) {
     progressSummary[SOURCE_FIELD.PRIORITY_RECOVERY_PROGRESS_CLASSES],
   );
   const ownerBoundary = resolvePriorityRecoveryOwnerBoundary(progressSummary);
-  const evidenceSource = selectPriorityRecoveryEvidenceSource(
+  const classSelection = selectPriorityRecoveryClassSelection(
     progressSummaryClasses,
-    ownerBoundary,
+    progressClasses,
   );
-  const classes = evidenceSource === PRIORITY_RECOVERY_EVIDENCE_SOURCE_SUMMARY ?
-    progressSummaryClasses :
-    progressClasses;
 
   return {
     owner: ownerBoundary.owner,
     boundary: ownerBoundary.boundary,
     evidencePath: selectPriorityRecoveryEvidencePath(
       normalized,
-      evidenceSource,
+      classSelection.source,
       ownerBoundary,
     ),
     priorityBlockedPartitionCount: firstFiniteNumber(
       progressSummary.priorityBlockedPartitionCount,
       progress.priorityBlockedPartitionCount,
     ),
-    semanticStateIds: arrayOrEmpty(classes.unresolvedSemanticStateIds),
-    blockedPartitionIds: arrayOrEmpty(classes.blockedPartitionIds),
+    semanticStateIds: arrayOrEmpty(classSelection.classes.unresolvedSemanticStateIds),
+    blockedPartitionIds: arrayOrEmpty(classSelection.classes.blockedPartitionIds),
   };
 }
 
@@ -928,15 +925,17 @@ function resolvePriorityRecoveryOwnerBoundary(progressSummary) {
   };
 }
 
-function selectPriorityRecoveryEvidenceSource(progressSummaryClasses, ownerBoundary) {
+function selectPriorityRecoveryClassSelection(progressSummaryClasses, progressClasses) {
   if (Object.keys(progressSummaryClasses).length > SOURCE_ORDER_BASE) {
-    return PRIORITY_RECOVERY_EVIDENCE_SOURCE_SUMMARY;
+    return {
+      source: PRIORITY_RECOVERY_EVIDENCE_SOURCE_SUMMARY,
+      classes: progressSummaryClasses,
+    };
   }
-  if (ownerBoundary.owner !== OWNER.PRIORITY_RECOVERY ||
-      ownerBoundary.boundary !== BOUNDARY.WORKFLOW_PROGRESS) {
-    return PRIORITY_RECOVERY_EVIDENCE_SOURCE_SUMMARY;
-  }
-  return PRIORITY_RECOVERY_EVIDENCE_SOURCE_PROGRESS;
+  return {
+    source: PRIORITY_RECOVERY_EVIDENCE_SOURCE_PROGRESS,
+    classes: progressClasses,
+  };
 }
 
 function selectPriorityRecoveryEvidencePath(normalized, evidenceSource, ownerBoundary) {

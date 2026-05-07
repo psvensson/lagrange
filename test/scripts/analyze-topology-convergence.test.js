@@ -67,7 +67,7 @@ describe('analyze-topology-convergence CLI', () => {
     assert.deepEqual(projectGoldenFrontier(output), expected);
   });
 
-  it('uses dominant witness owner and boundary from report progress summary', () => {
+  it('keeps dominant witness owner and boundary when report summary omits progress classes', () => {
     const output = runAnalyzerJson(PRIORITY_DOMINANT_WITNESS_FIXTURE_PATH);
     const graph = buildTopologyConvergenceGraph(
       readJson(PRIORITY_DOMINANT_WITNESS_FIXTURE_PATH),

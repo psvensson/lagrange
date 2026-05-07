@@ -264,6 +264,12 @@ Canonical contract shape:
       Agent `Singer` (`019e03a7-1b35-7e32-b0e9-9cd8af71e34c`) implemented
       `work/packages/done-20260507-rolling-restart-startup-publication-open-convergence-priority-serial-wait-workflow-progress-reentry.md`.
 
+## Commit And Push Ledger
+
+- Focused package commit: `061a2815`
+- Pushed to: `origin/codex/pending-ack-eligibility-filter`
+- Commit contains only package-owned files/package-status/allowed sprint handoff: `yes`
+
 ## Residual Closure Inventory
 
 - [x] Extract the epoch `3` `OPEN` publication/startup witness fixture in
