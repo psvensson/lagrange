@@ -631,6 +631,78 @@ function isPriorityRecoverySyntheticSerialWaitOnlyDecisionSnapshot(
   );
 }
 
+function hasPriorityRecoverySerialWaitSourceReferences(snapshot) {
+  const serialWaitPartitionIds = normalizePriorityRecoveryStringList(
+    snapshot?.[PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.COORDINATOR]?.[
+      PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.SERIAL_WAIT_PARTITION_IDS
+    ],
+  );
+  const serialWaitOperationIds = normalizePriorityRecoveryStringList(
+    snapshot?.[PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.COORDINATOR]?.[
+      PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.SERIAL_WAIT_OPERATION_IDS
+    ],
+  );
+  return (
+    serialWaitPartitionIds.length > NUM.ZERO ||
+    serialWaitOperationIds.length > NUM.ZERO
+  );
+}
+
+function hasPriorityRecoveryLiveSerialWaitSourcePartition(
+  snapshot,
+  latestSnapshots = [],
+  operationSnapshotsByPartitionId = new Map(),
+) {
+  const sourceOperationIdSet = new Set(
+    normalizePriorityRecoveryStringList(
+      snapshot?.[PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.COORDINATOR]?.[
+        PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.SERIAL_WAIT_OPERATION_IDS
+      ],
+    ),
+  );
+  const sourcePartitionIdSet = new Set(
+    normalizePriorityRecoveryStringList(
+      snapshot?.[PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.COORDINATOR]?.[
+        PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.SERIAL_WAIT_PARTITION_IDS
+      ],
+    ),
+  );
+  if (sourcePartitionIdSet.size === NUM.ZERO) {
+    return false;
+  }
+  for (const latestSnapshot of Array.isArray(latestSnapshots) ?
+    latestSnapshots :
+    []) {
+    const partitionId = String(
+      latestSnapshot?.[PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.PARTITION_ID] ||
+        LOCAL_STR_EMPTY,
+    ).trim();
+    if (
+      partitionId.length === NUM.ZERO ||
+      !sourcePartitionIdSet.has(partitionId) ||
+      isPriorityRecoverySpreadProgressDecisionSnapshot(latestSnapshot) === true
+    ) {
+      continue;
+    }
+    const sourceContext =
+      resolvePriorityRecoverySyntheticSerialWaitSourceContext(
+        latestSnapshot,
+        operationSnapshotsByPartitionId,
+      );
+    const sourceOperationId = String(
+      sourceContext?.operationId || LOCAL_STR_EMPTY,
+    ).trim();
+    if (
+      isPriorityRecoveryOrdinarySerialLaneOperationContext(sourceContext) &&
+      sourceOperationId.length > NUM.ZERO &&
+      sourceOperationIdSet.has(sourceOperationId)
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function buildPriorityRecoverySubordinatedSerialWaitSourcePartitionIdSet(
   snapshots = [],
 ) {
@@ -661,6 +733,14 @@ function buildPriorityRecoverySubordinatedSerialWaitSourcePartitionIdSet(
 
 function normalizePriorityRecoverySyntheticSerialWaitSnapshots(snapshots = []) {
   const normalizedSnapshots = Array.isArray(snapshots) ? snapshots : [];
+  const latestSnapshots =
+    selectPriorityRecoveryDecisionSnapshotSummarySnapshots(
+      normalizedSnapshots,
+    );
+  const operationSnapshotsByPartitionId =
+    buildPriorityRecoveryDecisionSnapshotOperationSnapshotsByPartitionId(
+      normalizedSnapshots,
+    );
   const syntheticSerialWaitSourceContexts =
     buildPriorityRecoverySyntheticSerialWaitSourceContexts(
       normalizedSnapshots,
@@ -682,6 +762,15 @@ function normalizePriorityRecoverySyntheticSerialWaitSnapshots(snapshots = []) {
     const syntheticNoOperationSnapshot =
       isPriorityRecoverySyntheticNoOperationDecisionSnapshot(snapshot) ===
       true;
+    const preservedSyntheticSerialWaitSnapshot =
+      isPriorityRecoverySyntheticSerialWaitOnlyDecisionSnapshot(snapshot) ===
+        true &&
+      hasPriorityRecoverySerialWaitSourceReferences(snapshot) === true &&
+      hasPriorityRecoveryLiveSerialWaitSourcePartition(
+        snapshot,
+        latestSnapshots,
+        operationSnapshotsByPartitionId,
+      ) === true;
     const retainedSerialWaitCarrierSnapshot =
       isPriorityRecoveryRetainedSerialWaitCarrierDecisionSnapshot(snapshot) ===
         true &&
@@ -693,7 +782,8 @@ function normalizePriorityRecoverySyntheticSerialWaitSnapshots(snapshots = []) {
       return snapshot;
     }
     const serialWaitSourceContexts =
-      retainedSerialWaitCarrierSnapshot === true ?
+      retainedSerialWaitCarrierSnapshot === true ||
+        preservedSyntheticSerialWaitSnapshot === true ?
         retainedSerialWaitSourceContexts :
         syntheticSerialWaitSourceContexts;
     const serialWaitOperationContexts =
