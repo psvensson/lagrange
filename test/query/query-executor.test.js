@@ -145,6 +145,132 @@ test('QueryExecutor - executes SELECT on multiple partitions', async (t) => {
   mockPartitionData.clear();
 });
 
+test('QueryExecutor - executeSelect forwards explicit routing readiness to ' +
+  'partition fanout', async (t) => {
+  const executor = new QueryExecutor({
+    messageRouter: createMockMessageRouter(),
+    systemCache: createMockSystemCache(['nodes-p1']),
+  });
+  const ast = parseSQL('SELECT * FROM nodes');
+  const fanoutCalls = [];
+  executor.executeOnPartitions = async (
+    partitionIds,
+    sql,
+    params,
+    timestamp,
+    forRead,
+    preferLeader,
+    preferSameLatencyGroup,
+    executionOptions = {},
+  ) => {
+    fanoutCalls.push({
+      partitionIds,
+      sql,
+      params,
+      timestamp,
+      forRead,
+      preferLeader,
+      preferSameLatencyGroup,
+      executionOptions,
+    });
+    return [{
+      success: true,
+      partitionId: 'nodes-p1',
+      rows: [{node_id: 'node-1'}],
+    }];
+  };
+
+  const result = await executor.executeSelect(
+    ast,
+    ['nodes-p1'],
+    [],
+    {
+      routingReadinessDimension:
+        CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+    },
+  );
+
+  t.equal(result.success, true);
+  t.equal(fanoutCalls.length, 1, 'select should fan out once');
+  t.equal(
+    fanoutCalls[0].executionOptions.routingReadinessDimension,
+    CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+    'distributed selects should preserve the requested routing readiness dimension',
+  );
+});
+
+test('QueryExecutor - executeCrossPartitionJoin forwards explicit routing ' +
+  'readiness to each table fanout', async (t) => {
+  const executor = new QueryExecutor({
+    messageRouter: createMockMessageRouter(),
+    systemCache: createMockSystemCache(['users-p1', 'profiles-p1']),
+  });
+  const ast = parseSQL(
+    'SELECT * FROM users JOIN profiles ON users.id = profiles.user_id',
+  );
+  const fanoutCalls = [];
+  const rowSets = [
+    [{id: 1, name: 'Alice'}],
+    [{user_id: 1, bio: 'Hello'}],
+  ];
+  executor.executeOnPartitions = async (
+    partitionIds,
+    sql,
+    params,
+    timestamp,
+    forRead,
+    preferLeader,
+    preferSameLatencyGroup,
+    executionOptions = {},
+  ) => {
+    fanoutCalls.push({
+      partitionIds,
+      sql,
+      params,
+      timestamp,
+      forRead,
+      preferLeader,
+      preferSameLatencyGroup,
+      executionOptions,
+    });
+    return [{
+      success: true,
+      partitionId: partitionIds[0],
+      rows: rowSets[fanoutCalls.length - 1] || [],
+    }];
+  };
+  executor.resolveJoinStrategy = () => 'hash';
+  executor.executeJoinByStrategy = () => [{id: 1, name: 'Alice', bio: 'Hello'}];
+  executor.mergeEngine.mergePartitionResults = (results) => ({
+    rows: results[0].rows,
+  });
+
+  const result = await executor.executeCrossPartitionJoin(
+    ast,
+    ['users-p1'],
+    [],
+    {
+      joinPartitions: new Map([
+        ['profiles', ['profiles-p1']],
+      ]),
+      routingReadinessDimension:
+        CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+    },
+    {toString: () => 'ts-1'},
+  );
+
+  t.equal(result.success, true);
+  t.equal(fanoutCalls.length, 2, 'join should fan out once per table');
+  t.same(
+    fanoutCalls.map((call) => call.executionOptions.routingReadinessDimension),
+    [
+      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+    ],
+    'cross-partition joins should preserve the requested routing readiness dimension on every fanout',
+  );
+});
+
 test('QueryExecutor - returns empty for no partitions', async (t) => {
   const executor = new QueryExecutor({
     messageRouter: createMockMessageRouter(),

@@ -403,6 +403,7 @@ class QueryExecutorSegment1 {
       options.preferSameLatencyGroup === true,
       {
         deliveryPriority: options.deliveryPriority,
+        routingReadinessDimension: options.routingReadinessDimension,
         timeoutMs: options.timeoutMs,
         cancellationToken: options.cancellationToken || null,
         tableName: ast.table,
@@ -542,6 +543,7 @@ class QueryExecutorSegment1 {
       options.preferSameLatencyGroup === true,
       {
         deliveryPriority: options.deliveryPriority,
+        routingReadinessDimension: options.routingReadinessDimension,
         timeoutMs: options.timeoutMs,
         cancellationToken: options.cancellationToken || null,
         tableName: ast.from.name,
@@ -588,6 +590,7 @@ class QueryExecutorSegment1 {
           options.preferSameLatencyGroup === true,
           {
             deliveryPriority: options.deliveryPriority,
+            routingReadinessDimension: options.routingReadinessDimension,
             timeoutMs: options.timeoutMs,
             cancellationToken: options.cancellationToken || null,
             tableName: joinTableName,

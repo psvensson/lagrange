@@ -4,39 +4,39 @@
 
 Sprint: `work/sprints/active-2026-q2-publication-scoped-consistency-and-node-join-closure.md`
 
-Package: `work/packages/active-20260507-rolling-restart-topology-publication-missing-active-priority-operation-scheduling-event-driven-reentry.md`
+Package: `work/packages/active-20260507-rolling-restart-topology-publication-missing-active-priority-recovery-eligible-cohort-replace-safety-reentry.md`
 
 Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/rolling-restart-after-bootstrap-request-execution-timeout-20260507T031003Z.report.json`
+Artifact: `test-output/reports/rolling-restart-after-join-select-recovery-routing-20260507T041947Z.report.json`
 
-Playback: `test-output/reports/.playback/rolling-restart-after-bootstrap-request-execution-timeout-20260507T031003Z/rolling-restart/`
+Playback: `test-output/reports/.playback/rolling-restart-after-join-select-recovery-routing-20260507T041947Z/rolling-restart/`
 
 ## Boundary
 
-Owner: `Topology publication missing-active node over rebalancer priority recovery operation scheduling regression after bootstrap-budget closure`
+Owner: `Topology publication missing-active node over priority recovery eligible-cohort replace-safety regression after join-time recovery-routing closure`
 
-Boundary: `Topology publication missing-active node / priority recovery operation scheduling event-driven owner`
+Boundary: `Topology publication missing-active node / priority recovery eligible-cohort replace-safety owner`
 
-Dominant reason: `priority_recovery_operation_scheduling_event_driven`
+Dominant reason: `publication_missing_active_node=11601fe0-72d6-5853-8590-ec2881853e72`
 
-Current state: The bootstrap admission precheck seam and admitted bootstrap request execution-timeout seam are both now closed. The representative rerun reaches epoch 4 PUBLISHED with pending ACK count 0, snapshot coverage 2/5, and seed-side bootstrap responses, but sql_write_operations-p1 returns as the selected priority recovery witness. The normalized blocker is needs_operation under rebalancer_leader / operation_scheduling with progress class eligible_but_no_operation_created while sql_transactions-p1 remains supporting recovering_in_flight context.
+Current state: The join-time distributed recovery-routing seam is closed. The representative rerun still fails at epoch 1 PUBLISHED with active 3/5, coverage 1/5, pending ACK count 0, and missingPublishedCount 4. Fresh runtime evidence now centers on sql_transactions-p1 operation 227d1172-3520-48bc-85d1-a7f2e9b54fe1: target node 11601... already entered REPLACE creation, then the seed rejects the same target as no longer in the current eligible cohort while pre-execution also marks its remove leg blocked on node-ready lease debt.
 
 ## Next Action
 
-Extract the 031003Z operation-scheduling witnesses and operation workflow timeline, add a focused regression for the returned needs_operation / eligible_but_no_operation_created path, repair only the selected rebalancer owner boundary, and rerun one representative rolling-restart scenario.
+Extract the 041947Z sql_transactions-p1 eligible-cohort rejection, lease-blocked pre-execution handoff, and target-side in-progress REPLACE witnesses; add a focused regression for the selected coordinator/rebalancer replace-safety path; repair only that owner boundary; and rerun one representative rolling-restart scenario.
 
 ## Proof Ladder
 
-1. `Focused 031003Z operation-scheduling witness fixture`
-2. `Focused priority recovery operation-scheduling regression`
+1. `Focused 041947Z eligible-cohort replace-safety witness fixture`
+2. `Focused priority recovery eligible-cohort replace-safety regression`
 3. `Touched-file static guardrails`
 4. `Representative rolling-restart --fast-local rerun`
 
 ## Touched Files
 
-1. `src/rebalancer/unified-rebalancer-segment-4-stage-3.js`
-2. `src/rebalancer/unified-rebalancer-segment-4-stage-shared.js`
+1. `src/rebalancer/rebalance-coordinator-segment-5.js`
+2. `src/rebalancer/unified-rebalancer-segment-4-stage-4.js`
 3. `test/rebalancer/priority-follow-up-target-readiness.test.js`
 4. `test/rebalancer/unified-rebalancer.test.js`
-5. `work/packages/active-20260507-rolling-restart-topology-publication-missing-active-priority-operation-scheduling-event-driven-reentry.md`
+5. `work/packages/active-20260507-rolling-restart-topology-publication-missing-active-priority-recovery-eligible-cohort-replace-safety-reentry.md`

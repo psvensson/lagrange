@@ -13,7 +13,7 @@
   "boundary": "Topology publication missing-active node / priority recovery operation scheduling event-driven owner",
   "dominantReason": "priority_recovery_operation_scheduling_event_driven",
   "currentState": "The retained-carrier serial-wait normalization seam is closed. The representative rerun no longer selects sql_write_operations-p1 under rebalancer_leader / operation_scheduling. The fresh artifact reaches epoch 1 PUBLISHED with pending ACK count 0, selected snapshot coverage 1/5, missingPublishedCount 4, selected-snapshot timeout on 11601..., and supporting control_plane_publications-p1 workflow-progress evidence with delivery-source saturation on control_plane_publications-p1-r4.",
-  "nextAction": "Continue in work/packages/active-20260507-rolling-restart-topology-publication-missing-active-control-plane-publication-workflow-progress-reentry.md to extract the 034622Z topology/workflow-progress witnesses, add a focused regression for the selected workflow-progress or transport-saturation seam, repair only that owner boundary, and rerun one representative rolling-restart scenario.",
+  "nextAction": "Continue in work/packages/done-20260507-rolling-restart-topology-publication-missing-active-control-plane-publication-workflow-progress-reentry.md to extract the 034622Z topology/workflow-progress witnesses, add a focused regression for the selected workflow-progress or transport-saturation seam, repair only that owner boundary, and rerun one representative rolling-restart scenario.",
   "proof": [
     "Focused retained-carrier serial-wait regression",
     "Focused stale serial-wait release regression",
@@ -26,14 +26,14 @@
     "work/packages/done-20260507-rolling-restart-topology-publication-missing-active-priority-operation-scheduling-event-driven-reentry.md"
   ],
   "predecessor": "work/packages/done-20260507-rolling-restart-topology-publication-missing-active-startup-bootstrap-request-execution-timeout-reentry.md",
-  "successor": "work/packages/active-20260507-rolling-restart-topology-publication-missing-active-control-plane-publication-workflow-progress-reentry.md"
+  "successor": "work/packages/done-20260507-rolling-restart-topology-publication-missing-active-control-plane-publication-workflow-progress-reentry.md"
 }
 -->
 
 Opened on May 7, 2026 after
 [Rolling Restart Topology Publication Missing-Active Startup Bootstrap Request Execution Timeout Reentry](./done-20260507-rolling-restart-topology-publication-missing-active-startup-bootstrap-request-execution-timeout-reentry.md)
 closed by migration. Closed the same day by migration into
-[Rolling Restart Topology Publication Missing-Active Control-Plane Publication Workflow Progress Reentry](./active-20260507-rolling-restart-topology-publication-missing-active-control-plane-publication-workflow-progress-reentry.md).
+[Rolling Restart Topology Publication Missing-Active Control-Plane Publication Workflow Progress Reentry](./done-20260507-rolling-restart-topology-publication-missing-active-control-plane-publication-workflow-progress-reentry.md).
 
 ## Closure Summary
 
@@ -205,7 +205,7 @@ This package closes by migration. The repaired boundary was tracked
 serial-wait source normalization for the returned
 `sql_write_operations-p1` operation-scheduling witness. The successor package
 is
-[Rolling Restart Topology Publication Missing-Active Control-Plane Publication Workflow Progress Reentry](./active-20260507-rolling-restart-topology-publication-missing-active-control-plane-publication-workflow-progress-reentry.md),
+[Rolling Restart Topology Publication Missing-Active Control-Plane Publication Workflow Progress Reentry](./done-20260507-rolling-restart-topology-publication-missing-active-control-plane-publication-workflow-progress-reentry.md),
 which owns the `034622Z` epoch-1 `PUBLISHED` missing-active stall with
 supporting `control_plane_publications-p1`
 `operation_workflow_owner / workflow_progress` evidence.
