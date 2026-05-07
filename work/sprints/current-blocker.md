@@ -4,37 +4,39 @@
 
 Sprint: `work/sprints/active-2026-q2-publication-scoped-consistency-and-node-join-closure.md`
 
-Package: `work/packages/active-20260506-rolling-restart-publication-ack-pending-selected-membership-deficit-owner-reentry.md`
+Package: `work/packages/active-20260506-rolling-restart-startup-steady-published-selected-membership-deficit-readiness-timeout-reentry.md`
 
 Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/rolling-restart-after-startup-guidance-owner-alignment-20260506T232850Z.report.json`
+Artifact: `test-output/reports/rolling-restart-after-publication-membership-open-selected-cohort-20260507T002638Z.report.json`
 
-Playback: `test-output/reports/.playback/rolling-restart-after-startup-guidance-owner-alignment-20260506T232850Z/rolling-restart/`
+Playback: `test-output/reports/.playback/rolling-restart-after-publication-membership-open-selected-cohort-20260507T002638Z/rolling-restart/`
 
 ## Boundary
 
-Owner: `Publication recovery gate selected-membership deficit over pending ACK convergence and priority-recovery no-progress retention`
+Owner: `Startup steady-published selected-membership deficit over readiness-timeout fallback and last-meaningful progress retention`
 
-Boundary: `Publication ACK-pending selected-membership deficit / pending-ACK owner`
+Boundary: `Startup steady-published selected-membership deficit / readiness-timeout owner`
 
-Dominant reason: `pending_ack_nodes`
+Dominant reason: `readiness_probe_timeout_fallback`
 
-Current state: The startup timeout guidance seam is closed. The representative rerun now fails as publication_convergence_blocked on epoch 5 ACK_PENDING with pending ACK node 35a..., but the selected snapshot on ebc4... still carries missing-published nodes 11601... and 8be8... while normalized publicationConvergence.missingPublishedCount collapses to 0 and last meaningful progress retains eligible_but_no_operation_created predecessor debt.
+Current state: The pending-ACK selected-membership seam is closed. The representative rerun now fails as startup_recovery_blocked on a fresh-join readiness timeout for 7493... while priorityRecoveryObservation and current activeGate progress on selected snapshot 35a... still carry a four-node steady-published selected-membership deficit that top-level publicationConvergence and lastMeaningfulProgress partially collapse back to 0.
 
 ## Next Action
 
-Extract the 232850Z publicationConvergence, activeGate progress, selectedMissingPublishedNodeIds, selectedPublishedActiveNodeIds, and lastMeaningfulProgress fixture; decide whether the canonical owner is current selected publication-membership deficit, pending ACK convergence, or stale authoritative-membership filtering between them; then repair only that owner path.
+Extract the 002638Z publicationConvergence, priorityRecoveryObservation, activeGate current progress, lastMeaningfulProgress, and error-string fixture; decide whether the canonical owner is current steady-published selected-membership deficit, readiness-timeout fallback, or stale last-meaningful missingPublished normalization between them; then repair only that owner path.
 
 ## Proof Ladder
 
-1. `Focused 232850Z selected-membership deficit / pending-ACK fixture`
-2. `Owner regression for current selected missing-published evidence versus pending ACK dominance`
+1. `Focused 002638Z steady-published selected-membership deficit / readiness-timeout fixture`
+2. `Owner regression for current versus last-meaningful missingPublished normalization under steady_published startup recovery`
 3. `Touched-file static guardrails`
 4. `Representative rolling-restart --fast-local rerun`
 
 ## Touched Files
 
-1. `test/distributed/harness/failure-bundle-segment-4.js`
-2. `test/distributed/harness/__tests__/failure-bundle-publication-closure-tail-test-cases.js`
-3. `test/distributed/harness/__tests__/failure-bundle.test.js`
+1. `src/control-plane/publication-recovery-evidence.js`
+2. `test/control-plane/publication-recovery-evidence-open-membership.test.js`
+3. `test/distributed/harness/publication-evidence-contract.js`
+4. `test/distributed/harness/failure-bundle-segment-5.js`
+5. `test/distributed/harness/__tests__/failure-bundle.test.js`
