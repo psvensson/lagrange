@@ -310,6 +310,61 @@ class UnifiedRebalancerSegment4Stage3 extends UnifiedRebalancerSegment4Stage2 {
     });
   }
 
+  resolvePriorityRecoveryCurrentFollowUpPartitionId(move = {}) {
+    return String(
+      move?.[PRIORITY_RECOVERY_FOLLOW_UP_FIELD.PARTITION_ID] ||
+        move?.[PRIORITY_RECOVERY_FOLLOW_UP_FIELD.PARTITION_ID_SNAKE] ||
+        move?.[PRIORITY_RECOVERY_FOLLOW_UP_FIELD.ENTITY_ID] ||
+        UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
+    ).trim();
+  }
+
+  isPriorityRecoveryCurrentFollowUpMove(
+    move = {},
+    followUpPartitionId = UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
+  ) {
+    if (
+      move?.type !== MoveType.ADD &&
+      move?.type !== MoveType.REPLACE
+    ) {
+      return false;
+    }
+    const currentMovePartitionId =
+      this.resolvePriorityRecoveryCurrentFollowUpPartitionId(move);
+    return (
+      followUpPartitionId.length > NUM.ZERO &&
+      currentMovePartitionId === followUpPartitionId
+    );
+  }
+
+  normalizePriorityRecoveryCurrentFollowUpMoves(
+    moves = [],
+    evidence = {},
+  ) {
+    const normalizedMoves = Array.isArray(moves) ? moves : [];
+    if (evidence.followUpTargetsCurrentEntity !== true) {
+      return normalizedMoves;
+    }
+    const followUpPartitionId = String(
+      evidence.followUpPartitionId || UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
+    ).trim();
+    return normalizedMoves.map((move) => {
+      if (
+        !this.isPriorityRecoveryCurrentFollowUpMove(
+          move,
+          followUpPartitionId,
+        )
+      ) {
+        return move;
+      }
+      return Object.freeze({
+        ...move,
+        [REBALANCER_MOVE_FIELD.TARGET_READINESS_MODE]:
+          REBALANCER_TARGET_READINESS_MODE.DEFER_TO_WORKFLOW_OWNER,
+      });
+    });
+  }
+
   resolvePriorityRecoveryFollowUpAugmentationState(evidence = {}) {
     const tableEntry =
       PRIORITY_RECOVERY_FOLLOW_UP_AUGMENTATION_STATE_TABLE.find((entry) =>
@@ -371,6 +426,16 @@ class UnifiedRebalancerSegment4Stage3 extends UnifiedRebalancerSegment4Stage2 {
       PRIORITY_RECOVERY_FOLLOW_UP_AUGMENTATION_ACTION.PREPEND_FOLLOW_UP
     ) {
       return [followUpMove, ...normalizedMoves];
+    }
+    if (
+      augmentationAction ===
+      PRIORITY_RECOVERY_FOLLOW_UP_AUGMENTATION_ACTION
+        .NORMALIZE_CURRENT_FOLLOW_UP
+    ) {
+      return this.normalizePriorityRecoveryCurrentFollowUpMoves(
+        normalizedMoves,
+        augmentationEvidence,
+      );
     }
     return normalizedMoves;
   }
