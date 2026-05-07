@@ -200,6 +200,11 @@ class BootstrapAPI {
         options.bootstrapAdmissionLeaseMs > NUM.ZERO ?
         Math.floor(options.bootstrapAdmissionLeaseMs) :
         BOOTSTRAP_API_DEFAULT.BOOTSTRAP_ADMISSION_LEASE_MS;
+    this.bootstrapRequestExecutionBudgetMs =
+      Number.isFinite(options.bootstrapRequestExecutionBudgetMs) &&
+        options.bootstrapRequestExecutionBudgetMs > NUM.ZERO ?
+        Math.floor(options.bootstrapRequestExecutionBudgetMs) :
+        BOOTSTRAP_API_DEFAULT.BOOTSTRAP_REQUEST_EXECUTION_BUDGET_MS;
     this.inFlightBootstrapRequestCount = NUM.ZERO;
     this.bootstrapAdmissionLeases = new Map();
     this.bootstrapAdmissionSequence = NUM.ZERO;
@@ -236,8 +241,8 @@ class BootstrapAPI {
       new ServiceRegistrationVisibilityOwner({
         delegates: {
           getSystemTableCache: () => this.getSystemTableCache(),
-          executeBootstrapControlPlaneQuery: (sql, params) =>
-            this.executeBootstrapControlPlaneQuery(sql, params),
+          executeBootstrapControlPlaneQuery: (sql, params, options) =>
+            this.executeBootstrapControlPlaneQuery(sql, params, options),
           getCdcIntegrationService: () => this.getCdcIntegrationService(),
           buildRegisterServiceValidationError: (...args) =>
             this.buildRegisterServiceValidationError(...args),
@@ -358,8 +363,8 @@ class BootstrapAPI {
             this.moveReplicaAssignmentSweepIntervalMs,
           getBootstrapAdmissionRetryAfterMs: () =>
             this.bootstrapAdmissionRetryAfterMs,
-          executeBootstrapControlPlaneQuery: (sql, params) =>
-            this.executeBootstrapControlPlaneQuery(sql, params),
+          executeBootstrapControlPlaneQuery: (sql, params, options) =>
+            this.executeBootstrapControlPlaneQuery(sql, params, options),
           executeBootstrapControlPlaneMutation: (mutation, mutationOptions) =>
             this.executeBootstrapControlPlaneMutation(
               mutation,
@@ -415,17 +420,23 @@ class BootstrapAPI {
             this.getBootstrapAuthoritativeTableRows(tableName),
           getBootstrapAdmissionTableRows: (tableName) =>
             this.getBootstrapAdmissionTableRows(tableName),
-          expireMoveReplicaAssignmentReservations: () =>
-            this.expireMoveReplicaAssignmentReservations(),
-          getActiveMoveReplicaAssignmentReservations: () =>
-            this.getActiveMoveReplicaAssignmentReservations(),
+          expireMoveReplicaAssignmentReservations: (options) =>
+            this.expireMoveReplicaAssignmentReservations(options),
+          getActiveMoveReplicaAssignmentReservations: (options) =>
+            this.getActiveMoveReplicaAssignmentReservations(options),
           getBlockingMoveReplicaBootstrapAdmissions: (now) =>
             this.getBlockingMoveReplicaBootstrapAdmissions(now),
-          getMoveReplicaBootstrapExclusionReservations: (now) =>
+          getMoveReplicaBootstrapExclusionReservations: (now, options) =>
             this.moveReplicaAssignmentOwner
-              .getMoveReplicaBootstrapExclusionReservations(now),
-          reserveMoveReplicaAssignment: (targetNodeId, assignment) =>
-            this.reserveMoveReplicaAssignment(targetNodeId, assignment),
+              .getMoveReplicaBootstrapExclusionReservations(now, options),
+          reserveMoveReplicaAssignment: (targetNodeId, assignment, options) =>
+            this.reserveMoveReplicaAssignment(
+              targetNodeId,
+              assignment,
+              options,
+            ),
+          getBootstrapAdmissionRetryAfterMs: () =>
+            this.bootstrapAdmissionRetryAfterMs,
         },
       });
     this.bootstrapReadinessOwner =
@@ -466,6 +477,8 @@ class BootstrapAPI {
             this.maxConcurrentBootstrapRequests,
           getBootstrapAdmissionRetryAfterMs: () =>
             this.bootstrapAdmissionRetryAfterMs,
+          getBootstrapRequestExecutionBudgetMs: () =>
+            this.bootstrapRequestExecutionBudgetMs,
           getBootstrapAdmissionLeaseMs: () =>
             this.bootstrapAdmissionLeaseMs,
           expireStaleBootstrapAdmissions: (now) =>
@@ -483,8 +496,8 @@ class BootstrapAPI {
             this.validateBootstrapRequest(nodeId, nodeAddress),
           checkForConflicts: (nodeId, nodeAddress, options) =>
             this.checkForConflicts(nodeId, nodeAddress, options),
-          getBlockingMoveReplicaBootstrapAdmissions: (now) =>
-            this.getBlockingMoveReplicaBootstrapAdmissions(now),
+          getBlockingMoveReplicaBootstrapAdmissions: (now, options) =>
+            this.getBlockingMoveReplicaBootstrapAdmissions(now, options),
           resolveMoveReplicaBootstrapAdmissionRetryAfterMs:
             (reservation, now) =>
               this.resolveMoveReplicaBootstrapAdmissionRetryAfterMs(
@@ -638,7 +651,7 @@ class BootstrapAPI {
    * @return {Promise<Object>}
    * @private
    */
-  async executeBootstrapControlPlaneQuery(sql, params = []) {
+  async executeBootstrapControlPlaneQuery(sql, params = [], options = {}) {
     const controlPlaneSystemTableGateway =
       this.getControlPlaneSystemTableGateway();
     if (!controlPlaneSystemTableGateway ||
@@ -657,6 +670,7 @@ class BootstrapAPI {
         BOOTSTRAP_CONTROL_PLANE_READ_PROFILE.allowPressureDegrade,
       resourceKeys: BOOTSTRAP_CONTROL_PLANE_READ_PROFILE.resourceKeys,
       pressureRetryAfterMs: this.bootstrapAdmissionRetryAfterMs,
+      timeoutBudget: options.timeoutBudget || null,
       routingReadinessDimension:
         CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
     });

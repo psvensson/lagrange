@@ -293,14 +293,14 @@ function createBootstrapApiRuntimeMethods(options = {}) {
         .normalizeMoveReplicaAssignmentReservationRow(row);
     },
 
-    async getActiveMoveReplicaAssignmentReservations() {
+    async getActiveMoveReplicaAssignmentReservations(options = {}) {
       return this.moveReplicaAssignmentOwner
-        .getActiveMoveReplicaAssignmentReservations();
+        .getActiveMoveReplicaAssignmentReservations(options);
     },
 
-    async getBlockingMoveReplicaBootstrapAdmissions(now = Date.now()) {
+    async getBlockingMoveReplicaBootstrapAdmissions(now = Date.now(), options = {}) {
       return this.moveReplicaAssignmentOwner
-        .getBlockingMoveReplicaBootstrapAdmissions(now);
+        .getBlockingMoveReplicaBootstrapAdmissions(now, options);
     },
 
     isMoveReplicaBootstrapAdmissionBlocked(
@@ -351,9 +351,9 @@ function createBootstrapApiRuntimeMethods(options = {}) {
         .isMoveReplicaAssignmentReservationActive(reservation, now);
     },
 
-    async expireMoveReplicaAssignmentReservations() {
+    async expireMoveReplicaAssignmentReservations(options = {}) {
       return this.moveReplicaAssignmentOwner
-        .expireMoveReplicaAssignmentReservations();
+        .expireMoveReplicaAssignmentReservations(options);
     },
 
     startMoveReplicaAssignmentSweep() {
@@ -392,9 +392,9 @@ function createBootstrapApiRuntimeMethods(options = {}) {
       this.moveReplicaAssignmentSweepTimer = null;
     },
 
-    async reserveMoveReplicaAssignment(targetNodeId, assignment) {
+    async reserveMoveReplicaAssignment(targetNodeId, assignment, options = {}) {
       return this.moveReplicaAssignmentOwner
-        .reserveMoveReplicaAssignment(targetNodeId, assignment);
+        .reserveMoveReplicaAssignment(targetNodeId, assignment, options);
     },
 
     async markMoveReplicaAssignmentReservationTerminal(

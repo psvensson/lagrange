@@ -4,40 +4,39 @@
 
 Sprint: `work/sprints/active-2026-q2-publication-scoped-consistency-and-node-join-closure.md`
 
-Package: `work/packages/active-20260507-rolling-restart-topology-publication-missing-active-startup-bootstrap-request-execution-timeout-reentry.md`
+Package: `work/packages/active-20260507-rolling-restart-topology-publication-missing-active-priority-operation-scheduling-event-driven-reentry.md`
 
 Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/rolling-restart-after-bootstrap-admission-precheck-pressure-20260507T023700Z.report.json`
+Artifact: `test-output/reports/rolling-restart-after-bootstrap-request-execution-timeout-20260507T031003Z.report.json`
 
-Playback: `test-output/reports/.playback/rolling-restart-after-bootstrap-admission-precheck-pressure-20260507T023700Z/rolling-restart/`
+Playback: `test-output/reports/.playback/rolling-restart-after-bootstrap-request-execution-timeout-20260507T031003Z/rolling-restart/`
 
 ## Boundary
 
-Owner: `Startup join contacting-seed bootstrap request execution timeout behind topology publication missing-active reentry`
+Owner: `Topology publication missing-active node over rebalancer priority recovery operation scheduling regression after bootstrap-budget closure`
 
-Boundary: `Startup join / bootstrap request execution budget`
+Boundary: `Topology publication missing-active node / priority recovery operation scheduling event-driven owner`
 
-Dominant reason: `publication_missing_active_node=11601fe0-72d6-5853-8590-ec2881853e72`
+Dominant reason: `priority_recovery_operation_scheduling_event_driven`
 
-Current state: The bootstrap admission precheck seam is closed. The representative rerun now reaches epoch 1 PUBLISHED with snapshot coverage 1/5 and four missing-active nodes, while joiners 8be8... and ebc4... still fail in contacting_seed with raw fetch timeouts after roughly two client HTTP timeout windows. Supporting control-plane publication evidence on 11601... shows control_plane_publications-p1 source-removal safety moved forward from replacement-leader ownership pending to minimum-voter protection, so the strongest live hypothesis is no longer pre-admission pressure. The next direct owner seam is bootstrap request execution timeout: admitted /bootstrap requests can still overrun the joiner HTTP timeout inside assignment or reservation work instead of returning canonical BOOTSTRAP_NOT_READY with retryAfterMs.
+Current state: The bootstrap admission precheck seam and admitted bootstrap request execution-timeout seam are both now closed. The representative rerun reaches epoch 4 PUBLISHED with pending ACK count 0, snapshot coverage 2/5, and seed-side bootstrap responses, but sql_write_operations-p1 returns as the selected priority recovery witness. The normalized blocker is needs_operation under rebalancer_leader / operation_scheduling with progress class eligible_but_no_operation_created while sql_transactions-p1 remains supporting recovering_in_flight context.
 
 ## Next Action
 
-Extract the 023700Z contacting_seed timeout witnesses and supporting control-plane publication progression, add a focused bootstrap regression proving admitted bootstrap requests return canonical BOOTSTRAP_NOT_READY when assignment or reservation work stalls past one bounded server-side request budget, then repair only that owner path and rerun one representative rolling-restart scenario.
+Extract the 031003Z operation-scheduling witnesses and operation workflow timeline, add a focused regression for the returned needs_operation / eligible_but_no_operation_created path, repair only the selected rebalancer owner boundary, and rerun one representative rolling-restart scenario.
 
 ## Proof Ladder
 
-1. `Focused 023700Z contacting-seed timeout fixture`
-2. `Focused bootstrap request execution-timeout regression`
+1. `Focused 031003Z operation-scheduling witness fixture`
+2. `Focused priority recovery operation-scheduling regression`
 3. `Touched-file static guardrails`
 4. `Representative rolling-restart --fast-local rerun`
 
 ## Touched Files
 
-1. `src/bootstrap/bootstrap-api-constants.js`
-2. `src/bootstrap/bootstrap-api.js`
-3. `src/bootstrap/owners/bootstrap-request-owner.js`
-4. `src/bootstrap/owners/bootstrap-join-admission-owner.js`
-5. `test/bootstrap/bootstrap-request-execution-timeout.test.js`
-6. `work/packages/active-20260507-rolling-restart-topology-publication-missing-active-startup-bootstrap-request-execution-timeout-reentry.md`
+1. `src/rebalancer/unified-rebalancer-segment-4-stage-3.js`
+2. `src/rebalancer/unified-rebalancer-segment-4-stage-shared.js`
+3. `test/rebalancer/priority-follow-up-target-readiness.test.js`
+4. `test/rebalancer/unified-rebalancer.test.js`
+5. `work/packages/active-20260507-rolling-restart-topology-publication-missing-active-priority-operation-scheduling-event-driven-reentry.md`

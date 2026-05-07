@@ -117,8 +117,12 @@ class MoveReplicaAssignmentOwner {
     return this.delegates.getBootstrapAdmissionRetryAfterMs?.() || LOCAL_NUM_ZERO;
   }
 
-  async executeBootstrapControlPlaneQuery(sql, params) {
-    return this.delegates.executeBootstrapControlPlaneQuery?.(sql, params);
+  async executeBootstrapControlPlaneQuery(sql, params, options = {}) {
+    return this.delegates.executeBootstrapControlPlaneQuery?.(
+      sql,
+      params,
+      options,
+    );
   }
 
   async executeBootstrapControlPlaneMutation(mutation, options) {
@@ -331,6 +335,9 @@ class MoveReplicaAssignmentOwner {
       queryResult = await this.executeBootstrapControlPlaneQuery(
         BOOTSTRAP_API_SQL.SELECT_MOVE_ASSIGNMENT_RESERVATIONS,
         [BOOTSTRAP_API_ASSIGNMENT.OPERATION_TYPE],
+        {
+          timeoutBudget: options.timeoutBudget || null,
+        },
       );
     } catch (error) {
       if (this.isRetryableMoveReplicaAssignmentPersistenceFailure(error)) {
@@ -936,20 +943,29 @@ class MoveReplicaAssignmentOwner {
     };
   }
 
-  async getActiveMoveReplicaAssignmentReservations() {
+  async getActiveMoveReplicaAssignmentReservations(options = {}) {
     const now = Date.now();
     const reservations =
-      await this.collectMoveReplicaAssignmentReservations({now});
+      await this.collectMoveReplicaAssignmentReservations({
+        now,
+        timeoutBudget: options.timeoutBudget || null,
+      });
     return reservations.filter((reservation) =>
       this.isMoveReplicaAssignmentReservationActive(reservation, now),
     );
   }
 
-  async getBlockingMoveReplicaBootstrapAdmissions(now = Date.now()) {
+  async getBlockingMoveReplicaBootstrapAdmissions(
+    now = Date.now(),
+    options = {},
+  ) {
     const reservations = [];
     const byAssignmentId = new Map();
     const collectedReservations =
-      await this.collectMoveReplicaAssignmentReservations({now});
+      await this.collectMoveReplicaAssignmentReservations({
+        now,
+        timeoutBudget: options.timeoutBudget || null,
+      });
     for (const reservation of collectedReservations) {
       byAssignmentId.set(reservation.assignmentId, reservation);
     }
@@ -969,11 +985,17 @@ class MoveReplicaAssignmentOwner {
     return reservations;
   }
 
-  async getMoveReplicaBootstrapExclusionReservations(now = Date.now()) {
+  async getMoveReplicaBootstrapExclusionReservations(
+    now = Date.now(),
+    options = {},
+  ) {
     const reservations = [];
     const byAssignmentId = new Map();
     const collectedReservations =
-      await this.collectMoveReplicaAssignmentReservations({now});
+      await this.collectMoveReplicaAssignmentReservations({
+        now,
+        timeoutBudget: options.timeoutBudget || null,
+      });
     for (const reservation of collectedReservations) {
       byAssignmentId.set(reservation.assignmentId, reservation);
     }
@@ -1124,7 +1146,7 @@ class MoveReplicaAssignmentOwner {
     ) === null;
   }
 
-  async expireMoveReplicaAssignmentReservations() {
+  async expireMoveReplicaAssignmentReservations(options = {}) {
     const now = Date.now();
     const reservations = [];
     const seenAssignmentIds = new Set();
@@ -1143,7 +1165,10 @@ class MoveReplicaAssignmentOwner {
     }
 
     const cacheOrSqlReservations =
-      await this.collectMoveReplicaAssignmentReservations({now});
+      await this.collectMoveReplicaAssignmentReservations({
+        now,
+        timeoutBudget: options.timeoutBudget || null,
+      });
     for (const reservation of cacheOrSqlReservations) {
       pushReservation(reservation);
     }
@@ -1156,6 +1181,7 @@ class MoveReplicaAssignmentOwner {
         await this.reconcileMoveReplicaAssignmentReservationToCommitted(
           reservation,
           now,
+          options,
         );
         continue;
       }
@@ -1190,6 +1216,7 @@ class MoveReplicaAssignmentOwner {
             MOVE_REPLICA_ASSIGNMENT_INVALIDATION_REASON.SOURCE_OWNER_UNAVAILABLE ?
           MOVE_REPLICA_ASSIGNMENT_ERROR.SOURCE_OWNER_UNAVAILABLE :
           MOVE_REPLICA_ASSIGNMENT_ERROR.RESERVATION_INVALID,
+        options,
       );
       this.getLogger().info(BOOTSTRAP_API_LOG_MSG.MOVE_REPLICA_ASSIGNMENT_EXPIRED, {
         assignmentId: reservation.assignmentId,
@@ -1200,7 +1227,7 @@ class MoveReplicaAssignmentOwner {
     }
   }
 
-  async reserveMoveReplicaAssignment(targetNodeId, assignment) {
+  async reserveMoveReplicaAssignment(targetNodeId, assignment, options = {}) {
     const replicaId = assignment?.replicaToMove;
     if (!replicaId) {
       throw new Error(
@@ -1208,7 +1235,10 @@ class MoveReplicaAssignmentOwner {
       );
     }
 
-    const activeReservations = await this.getActiveMoveReplicaAssignmentReservations();
+    const activeReservations =
+      await this.getActiveMoveReplicaAssignmentReservations({
+        timeoutBudget: options.timeoutBudget || null,
+      });
     const conflictingReservation = activeReservations.find((reservation) =>
       reservation.replicaId === replicaId,
     );
@@ -1249,15 +1279,20 @@ class MoveReplicaAssignmentOwner {
 
     if (this.getSqlQueryEngine()) {
       try {
-        const persistResult = await this.executeBootstrapControlPlaneMutation({
-          operation: 'insert',
-          tableName: TABLES.REPLICA_OPERATIONS,
-          row: this.buildMoveReplicaAssignmentReplicaOperationRow(
-            reservation,
-            WORKFLOW_STEP.PENDING,
-            {createdAt: now},
-          ),
-        });
+        const persistResult = await this.executeBootstrapControlPlaneMutation(
+          {
+            operation: 'insert',
+            tableName: TABLES.REPLICA_OPERATIONS,
+            row: this.buildMoveReplicaAssignmentReplicaOperationRow(
+              reservation,
+              WORKFLOW_STEP.PENDING,
+              {createdAt: now},
+            ),
+          },
+          {
+            timeoutBudget: options.timeoutBudget || null,
+          },
+        );
         if (persistResult?.success === false) {
           if (!this.isRetryableMoveReplicaAssignmentPersistenceFailure(
             persistResult,
@@ -1316,6 +1351,7 @@ class MoveReplicaAssignmentOwner {
     status,
     workflowStep,
     errorMessage = null,
+    options = {},
   ) {
     const reservations = this.getMoveReplicaAssignmentReservations();
     const existing = reservations?.get(assignmentId);
@@ -1330,21 +1366,26 @@ class MoveReplicaAssignmentOwner {
     reservations?.set(assignmentId, nextReservation);
 
     if (this.getSqlQueryEngine()) {
-      const updateResult = await this.executeBootstrapControlPlaneMutation({
-        operation: 'update',
-        tableName: TABLES.REPLICA_OPERATIONS,
-        whereClause: {
-          operation_id: assignmentId,
-        },
-        data: this.buildMoveReplicaAssignmentReplicaOperationUpdateData(
-          nextReservation,
-          workflowStep,
-          {
-            completedAt: now,
-            errorMessage,
+      const updateResult = await this.executeBootstrapControlPlaneMutation(
+        {
+          operation: 'update',
+          tableName: TABLES.REPLICA_OPERATIONS,
+          whereClause: {
+            operation_id: assignmentId,
           },
-        ),
-      });
+          data: this.buildMoveReplicaAssignmentReplicaOperationUpdateData(
+            nextReservation,
+            workflowStep,
+            {
+              completedAt: now,
+              errorMessage,
+            },
+          ),
+        },
+        {
+          timeoutBudget: options.timeoutBudget || null,
+        },
+      );
       if (updateResult?.success === false) {
         this.getLogger().warn(
           BOOTSTRAP_API_LOG_MSG.MOVE_REPLICA_ASSIGNMENT_VALIDATION_FAILED,
@@ -1363,6 +1404,7 @@ class MoveReplicaAssignmentOwner {
   async reconcileMoveReplicaAssignmentReservationToCommitted(
     reservation,
     now = Date.now(),
+    options = {},
   ) {
     if (!reservation?.assignmentId) {
       return;
@@ -1398,20 +1440,25 @@ class MoveReplicaAssignmentOwner {
     );
 
     if (this.getSqlQueryEngine()) {
-      const updateResult = await this.executeBootstrapControlPlaneMutation({
-        operation: 'update',
-        tableName: TABLES.REPLICA_OPERATIONS,
-        whereClause: {
-          operation_id: reservation.assignmentId,
-        },
-        data: this.buildMoveReplicaAssignmentReplicaOperationUpdateData(
-          nextReservation,
-          WORKFLOW_STEP.ACTIVE,
-          {
-            completedAt: now,
+      const updateResult = await this.executeBootstrapControlPlaneMutation(
+        {
+          operation: 'update',
+          tableName: TABLES.REPLICA_OPERATIONS,
+          whereClause: {
+            operation_id: reservation.assignmentId,
           },
-        ),
-      });
+          data: this.buildMoveReplicaAssignmentReplicaOperationUpdateData(
+            nextReservation,
+            WORKFLOW_STEP.ACTIVE,
+            {
+              completedAt: now,
+            },
+          ),
+        },
+        {
+          timeoutBudget: options.timeoutBudget || null,
+        },
+      );
       if (updateResult?.success === false) {
         this.getLogger().warn(
           BOOTSTRAP_API_LOG_MSG.MOVE_REPLICA_ASSIGNMENT_VALIDATION_FAILED,

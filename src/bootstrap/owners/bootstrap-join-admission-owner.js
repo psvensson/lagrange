@@ -4,6 +4,7 @@ import {
   ADDRESS,
   COLUMN,
   ENTITY_TYPE,
+  HTTP_STATUS,
   NUM,
   SERVICE_STATUS,
   SERVICE_TYPE,
@@ -21,12 +22,14 @@ import {
 import {MessageGroupAssignment} from '../message-group-assignment.js';
 import {
   BOOTSTRAP_ASSIGNMENT_STRATEGY,
+  BOOTSTRAP_PIPELINE_ERROR_CODE,
 } from '../bootstrap-constants.js';
 import {
   BOOTSTRAP_API_ERROR,
   BOOTSTRAP_API_LOG_MSG,
   BOOTSTRAP_API_SUBSYSTEM,
 } from '../bootstrap-api-constants.js';
+import {getRemainingBudgetMs} from '../../control-plane/timeout-budget.js';
 
 const BootstrapStrategy = BOOTSTRAP_ASSIGNMENT_STRATEGY;
 
@@ -92,27 +95,66 @@ class BootstrapJoinAdmissionOwner {
       this.getBootstrapAuthoritativeTableRows(tableName);
   }
 
-  async expireMoveReplicaAssignmentReservations() {
-    return this.delegates.expireMoveReplicaAssignmentReservations?.();
+  async expireMoveReplicaAssignmentReservations(options = {}) {
+    return this.delegates.expireMoveReplicaAssignmentReservations?.(options);
   }
 
-  async getActiveMoveReplicaAssignmentReservations() {
-    return this.delegates.getActiveMoveReplicaAssignmentReservations?.() || [];
+  async getActiveMoveReplicaAssignmentReservations(options = {}) {
+    return this.delegates.getActiveMoveReplicaAssignmentReservations?.(
+      options,
+    ) || [];
   }
 
   async getBlockingMoveReplicaBootstrapAdmissions(now = Date.now()) {
     return this.delegates.getBlockingMoveReplicaBootstrapAdmissions?.(now) || [];
   }
 
-  async getMoveReplicaBootstrapExclusionReservations(now = Date.now()) {
-    return this.delegates.getMoveReplicaBootstrapExclusionReservations?.(now) || [];
+  async getMoveReplicaBootstrapExclusionReservations(
+    now = Date.now(),
+    options = {},
+  ) {
+    return this.delegates.getMoveReplicaBootstrapExclusionReservations?.(
+      now,
+      options,
+    ) || [];
   }
 
-  async reserveMoveReplicaAssignment(targetNodeId, assignment) {
+  async reserveMoveReplicaAssignment(targetNodeId, assignment, options = {}) {
     return this.delegates.reserveMoveReplicaAssignment?.(
       targetNodeId,
       assignment,
+      options,
     );
+  }
+
+  getBootstrapAdmissionRetryAfterMs() {
+    return this.delegates.getBootstrapAdmissionRetryAfterMs?.() || NUM.ZERO;
+  }
+
+  hasRemainingBootstrapRequestExecutionBudget(
+    timeoutBudget,
+    now = Date.now(),
+  ) {
+    if (!timeoutBudget || typeof timeoutBudget !== TYPEOF.OBJECT) {
+      return true;
+    }
+    return getRemainingBudgetMs(timeoutBudget, {
+      now: () => now,
+    }) > NUM.ZERO;
+  }
+
+  assertBootstrapRequestExecutionBudget(timeoutBudget) {
+    if (this.hasRemainingBootstrapRequestExecutionBudget(timeoutBudget)) {
+      return;
+    }
+    const error = new Error(BOOTSTRAP_API_ERROR.BOOTSTRAP_NOT_READY);
+    error.statusCode = HTTP_STATUS.SERVICE_UNAVAILABLE;
+    error.errorCode = BOOTSTRAP_PIPELINE_ERROR_CODE.BOOTSTRAP_NOT_READY;
+    error.retryAfterMs = Math.max(
+      NUM.ZERO,
+      this.getBootstrapAdmissionRetryAfterMs(),
+    );
+    throw error;
   }
 
   validateBootstrapRequest(nodeId, nodeAddress) {
@@ -381,11 +423,15 @@ class BootstrapJoinAdmissionOwner {
         return durableRejoinAssignment;
       }
 
-      await this.expireMoveReplicaAssignmentReservations();
+      await this.expireMoveReplicaAssignmentReservations(options);
       const activeReservations =
-        await this.getActiveMoveReplicaAssignmentReservations();
+        await this.getActiveMoveReplicaAssignmentReservations(options);
       const exclusionReservations =
-        await this.getMoveReplicaBootstrapExclusionReservations();
+        await this.getMoveReplicaBootstrapExclusionReservations(
+          Date.now(),
+          options,
+        );
+      this.assertBootstrapRequestExecutionBudget(options.timeoutBudget);
       const excludedReplicaIds = new Set(
         [...activeReservations, ...exclusionReservations]
           .map((reservation) => reservation?.replicaId)
@@ -402,9 +448,11 @@ class BootstrapJoinAdmissionOwner {
         return assignment;
       }
 
+      this.assertBootstrapRequestExecutionBudget(options.timeoutBudget);
       const reservation = await this.reserveMoveReplicaAssignment(
         newNodeId,
         assignment,
+        options,
       );
       return {
         ...assignment,

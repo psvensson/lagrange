@@ -20,10 +20,17 @@ import {
   getControlPlaneRetryAfterMs,
   isRetryableControlPlaneError,
 } from '../../control-plane/control-plane-error-classification.js';
+import {
+  createTopLevelOperationBudget,
+  getRemainingBudgetMs,
+} from '../../control-plane/timeout-budget.js';
 
 const LOCAL_STR_836HW = 'move_replica_handoff_stabilizing';
 const LOCAL_STR_STRING = 'string';
 const LOCAL_NUM_ZERO = 0;
+const BOOTSTRAP_REQUEST_EXECUTION_OPERATION_NAME =
+  'bootstrap_request_execution';
+const BOOTSTRAP_REQUEST_TIMEOUT_BUDGET_FIELD = 'timeoutBudget';
 
 const RETRYABLE_BOOTSTRAP_DEPENDENCY_ERROR_FRAGMENTS = Object.freeze([
   'ControlPlaneSystemTableGateway requires cdcIntegrationService',
@@ -90,6 +97,10 @@ class BootstrapRequestOwner {
     return this.delegates.getBootstrapAdmissionRetryAfterMs?.() || NUM.ZERO;
   }
 
+  getBootstrapRequestExecutionBudgetMs() {
+    return this.delegates.getBootstrapRequestExecutionBudgetMs?.() || NUM.ZERO;
+  }
+
   getBootstrapAdmissionLeaseMs() {
     return this.delegates.getBootstrapAdmissionLeaseMs?.() || NUM.ZERO;
   }
@@ -149,8 +160,11 @@ class BootstrapRequestOwner {
     );
   }
 
-  async getBlockingMoveReplicaBootstrapAdmissions(now) {
-    return this.delegates.getBlockingMoveReplicaBootstrapAdmissions?.(now) || [];
+  async getBlockingMoveReplicaBootstrapAdmissions(now, options = {}) {
+    return this.delegates.getBlockingMoveReplicaBootstrapAdmissions?.(
+      now,
+      options,
+    ) || [];
   }
 
   resolveMoveReplicaBootstrapAdmissionRetryAfterMs(reservation, now) {
@@ -252,6 +266,67 @@ class BootstrapRequestOwner {
     return Math.max(NUM.ZERO, this.getBootstrapAdmissionRetryAfterMs());
   }
 
+  createBootstrapRequestExecutionBudget(startedAtMs) {
+    const configuredBudgetMs = this.getBootstrapRequestExecutionBudgetMs();
+    if (!Number.isFinite(configuredBudgetMs) || configuredBudgetMs <= NUM.ZERO) {
+      return null;
+    }
+    return createTopLevelOperationBudget({
+      configuredBudgetMs,
+      startedAtMs,
+      operationName: BOOTSTRAP_REQUEST_EXECUTION_OPERATION_NAME,
+    });
+  }
+
+  hasRemainingBootstrapRequestExecutionBudget(
+    timeoutBudget,
+    now = Date.now(),
+  ) {
+    if (!timeoutBudget || typeof timeoutBudget !== TYPEOF.OBJECT) {
+      return true;
+    }
+    return getRemainingBudgetMs(timeoutBudget, {
+      now: () => now,
+    }) > NUM.ZERO;
+  }
+
+  buildBootstrapRequestExecutionBudgetDeferredResponse(
+    reply,
+    observedAt = Date.now(),
+  ) {
+    const startupAuthority =
+      this.getStartupAuthoritySnapshotForBootstrapResponse(observedAt);
+    reply.code(HTTP_STATUS.SERVICE_UNAVAILABLE);
+    return this.buildBootstrapNotReadyResponse({
+      error: BOOTSTRAP_API_ERROR.BOOTSTRAP_NOT_READY,
+      code: BOOTSTRAP_PIPELINE_ERROR_CODE.BOOTSTRAP_NOT_READY,
+      reasonCode:
+        BOOTSTRAP_API_PROBE_REASON.CONTROL_PLANE_DEPENDENCY_UNAVAILABLE,
+      retryAfterMs: this.getBootstrapAdmissionRetryAfterMs(),
+      startupAuthority,
+    });
+  }
+
+  attachBootstrapRequestExecutionBudget(options = {}, timeoutBudget) {
+    if (!timeoutBudget || typeof timeoutBudget !== TYPEOF.OBJECT) {
+      return options;
+    }
+    const nextOptions = {
+      ...options,
+    };
+    Object.defineProperty(
+      nextOptions,
+      BOOTSTRAP_REQUEST_TIMEOUT_BUDGET_FIELD,
+      {
+        value: timeoutBudget,
+        enumerable: false,
+        configurable: true,
+        writable: false,
+      },
+    );
+    return nextOptions;
+  }
+
   async handleBootstrapRequest(request, reply) {
     const {nodeId, nodeAddress} = request.body || {};
 
@@ -340,9 +415,26 @@ class BootstrapRequestOwner {
       nodeAddress,
       now,
     });
+    const requestExecutionBudget =
+      this.createBootstrapRequestExecutionBudget(now);
     try {
+      const budgetedBlockingOptions =
+        this.attachBootstrapRequestExecutionBudget(
+          {},
+          requestExecutionBudget,
+        );
       const blockingMoveReplicaAdmissions =
-        await this.getBlockingMoveReplicaBootstrapAdmissions(now);
+        await this.getBlockingMoveReplicaBootstrapAdmissions(
+          now,
+          budgetedBlockingOptions,
+        );
+      if (!this.hasRemainingBootstrapRequestExecutionBudget(
+        requestExecutionBudget,
+      )) {
+        return this.buildBootstrapRequestExecutionBudgetDeferredResponse(
+          reply,
+        );
+      }
       if (blockingMoveReplicaAdmissions.length > NUM.ZERO) {
         const blockingReservation = blockingMoveReplicaAdmissions[NUM.ZERO];
         const retryAfterMs =
@@ -401,11 +493,26 @@ class BootstrapRequestOwner {
           startupAuthority,
         });
       }
+      if (!this.hasRemainingBootstrapRequestExecutionBudget(
+        requestExecutionBudget,
+      )) {
+        return this.buildBootstrapRequestExecutionBudgetDeferredResponse(
+          reply,
+        );
+      }
 
+      const budgetedAssignmentOptions =
+        this.attachBootstrapRequestExecutionBudget(
+          {
+            startupMode: request.body?.startupMode || null,
+          },
+          requestExecutionBudget,
+        );
       const assignment =
-        await this.determineAndReserveMessageGroupAssignment(nodeId, {
-          startupMode: request.body?.startupMode || null,
-        });
+        await this.determineAndReserveMessageGroupAssignment(
+          nodeId,
+          budgetedAssignmentOptions,
+        );
       const currentEpoch = this.getCurrentEpoch();
       const {
         systemTableSnapshots,

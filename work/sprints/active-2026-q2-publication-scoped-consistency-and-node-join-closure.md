@@ -82,28 +82,34 @@ now closed by migration: the focused regression proves the bounded bootstrap
 slot is claimed before MOVE_REPLICA reservation-refresh work, and the fresh
 artifact no longer supports pre-admission stampede as the live owner.
 
-The live representative blocker remains topology publication missing-active
-reentry, but the semantic owner moved again. Failure classification is still
-`publication_convergence_blocked` with root cause class `topology`, and the
-dominant reason is now
-`publication_missing_active_node=11601fe0-72d6-5853-8590-ec2881853e72`.
-Top-level publication convergence now reaches epoch `1` `PUBLISHED` with
-pending ACK count `0`, snapshot coverage `1/5`, and missing-active reasons for
-`11601...`, `35a...`, `8be8...`, and `ebc4...`. The direct startup evidence
-still shows joiners `8be8...` and `ebc4...` failing in `contacting_seed`, but
-the failure is now repeated raw `fetch failed` transport timeout rather than a
-fast canonical bootstrap defer. Supporting seed-side logs on `11601...` show
-`control_plane_publications-p1` source-removal safety moved forward from
-replacement-leader ownership pending to minimum-voter protection, so the
-strongest live hypothesis is no longer pre-admission pressure. The next direct
-bootstrap seam is request execution timeout: admitted `/bootstrap` requests can
-still overrun the joiner HTTP timeout inside assignment or reservation work
-instead of returning canonical `BOOTSTRAP_NOT_READY`.
+The latest May 7 representative rerun after the bootstrap request
+execution-timeout repair is
+`test-output/reports/rolling-restart-after-bootstrap-request-execution-timeout-20260507T031003Z.report.json`.
+It failed after `131.7s`. The previous admitted bootstrap request timeout seam
+is now closed by migration: the focused regression proves one bounded request
+budget flows through blocking-admission reads, reservation expiry, exclusion
+filtering, and MOVE_REPLICA reservation persistence, and seed-side logs now
+prepare canonical bootstrap responses during the rerun.
 
-The current unchecked package task is therefore a new package on the next
-owner boundary: preserve the closed concurrent pre-admission regression, then
-repair startup/bootstrap request execution budget so admitted join requests
-return bounded defer semantics before the joiner HTTP timeout elapses.
+The live representative blocker remains topology publication missing-active
+reentry, but the semantic owner moved again. The latest normalized triage now
+selects root cause class `topology`, dominant reason
+`priority_recovery_operation_scheduling_event_driven`, and failure class
+`priority_recovery_progress_blocked`. Publication convergence reaches epoch
+`4` `PUBLISHED` with pending ACK count `0`, recovery protocol state
+`priority_spread_pending`, and snapshot coverage `2/5`. The selected primary
+witness is `sql_write_operations-p1` with semantic state `needs_operation`,
+owner `rebalancer_leader`, boundary `operation_scheduling`, wait mode
+`event_driven`, next action `create_recovery_operation`, and progress class
+`eligible_but_no_operation_created`, while `sql_transactions-p1` remains
+supporting `recovering_in_flight` context behind pending operation
+`40bb8fa6-d839-4a34-8d81-2aa9c0c22780`.
+
+The current unchecked package task is therefore a successor package on the
+returned priority recovery owner boundary: preserve the closed bootstrap
+request execution-timeout regression, then repair the selected
+`rebalancer_leader / operation_scheduling` path so the runtime creates the
+missing recovery operation or emits one explicit outranking decision.
 
 This sprint keeps the old filename for continuity with the active branch, but
 the execution scope is now runtime stability and harness determinism.
@@ -150,26 +156,27 @@ Secondary after the primary path is stable:
 
 The current active representative re-entry package is:
 
-1. [Rolling Restart Topology Publication Missing-Active Startup Bootstrap Request Execution Timeout Reentry](../packages/active-20260507-rolling-restart-topology-publication-missing-active-startup-bootstrap-request-execution-timeout-reentry.md)
+1. [Rolling Restart Topology Publication Missing-Active Priority Operation Scheduling Event-Driven Reentry](../packages/active-20260507-rolling-restart-topology-publication-missing-active-priority-operation-scheduling-event-driven-reentry.md)
 
 Retained predecessor context file:
 
-1. [Rolling Restart Topology Publication Missing-Active Startup Bootstrap Admission Precheck Pressure Reentry](../packages/done-20260507-rolling-restart-topology-publication-missing-active-startup-bootstrap-admission-precheck-pressure-reentry.md)
-2. [Rolling Restart Topology Publication Missing-Active Priority Operation Scheduling Reentry](../packages/done-20260507-rolling-restart-topology-publication-missing-active-priority-operation-scheduling-reentry.md)
-3. [Rolling Restart Topology Publication Missing-Active Workflow Progress Reentry](../packages/done-20260507-rolling-restart-topology-publication-missing-active-workflow-progress-reentry.md)
-4. [Rolling Restart Startup Steady-Published Selected Membership Deficit Readiness Timeout Reentry](../packages/done-20260506-rolling-restart-startup-steady-published-selected-membership-deficit-readiness-timeout-reentry.md)
-5. [Rolling Restart Publication ACK-Pending Selected Membership Deficit Owner Reentry](../packages/done-20260506-rolling-restart-publication-ack-pending-selected-membership-deficit-owner-reentry.md)
-6. [Rolling Restart Startup Active Gate Snapshot Coverage Selected-Snapshot Timeout Bootstrap Readiness Reentry](../packages/done-20260506-rolling-restart-startup-active-gate-snapshot-coverage-selected-snapshot-timeout-bootstrap-readiness-reentry.md)
-7. [Rolling Restart Published Snapshot Coverage Priority Spread Serial-Wait Workflow Progress Reentry](../packages/done-20260506-rolling-restart-published-snapshot-coverage-priority-spread-serial-wait-workflow-progress-reentry.md)
-8. [Rolling Restart Startup Active Gate Publication Evidence Priority Recovery Consumer Alignment](../packages/done-20260506-rolling-restart-startup-active-gate-publication-evidence-priority-recovery-consumer-alignment.md)
-9. [Rolling Restart Startup Active Gate Snapshot Coverage Priority Serial-Wait Workflow Progress Reentry](../packages/done-20260506-rolling-restart-startup-active-gate-snapshot-coverage-priority-serial-wait-workflow-progress-reentry.md)
-10. [Rolling Restart Startup Active Gate Priority Operation Creation Snapshot Coverage Reentry](../packages/done-20260506-rolling-restart-startup-active-gate-priority-operation-creation-snapshot-coverage-reentry.md)
-11. [Rolling Restart Published Snapshot Coverage Priority Serial-Wait Workflow Progress Reentry](../packages/done-20260506-rolling-restart-published-snapshot-coverage-priority-serial-wait-workflow-progress-reentry.md)
-12. [Rolling Restart Publication ACK-Pending Rebalancer Handoff Admission Reentry](../packages/done-20260506-rolling-restart-publication-ack-pending-rebalancer-handoff-admission-reentry.md)
-13. [Rolling Restart Startup Seed Transport Delivery-Source Saturation Reentry](../packages/done-20260506-rolling-restart-startup-seed-transport-delivery-source-saturation-reentry.md)
-14. [Rolling Restart Startup Publication ACK-Pending Owner-RPC Nodes Repair Reentry](../packages/done-20260506-rolling-restart-startup-publication-ack-pending-owner-rpc-nodes-repair-reentry.md)
-15. [Rolling Restart Topology Publication Snapshot Reachability Reentry](../packages/done-20260505-rolling-restart-topology-publication-snapshot-reachability-reentry.md)
-16. [Rolling Restart Operation Transition Pressure And Over-Target Trim](../packages/todo-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md)
+1. [Rolling Restart Topology Publication Missing-Active Startup Bootstrap Request Execution Timeout Reentry](../packages/done-20260507-rolling-restart-topology-publication-missing-active-startup-bootstrap-request-execution-timeout-reentry.md)
+2. [Rolling Restart Topology Publication Missing-Active Startup Bootstrap Admission Precheck Pressure Reentry](../packages/done-20260507-rolling-restart-topology-publication-missing-active-startup-bootstrap-admission-precheck-pressure-reentry.md)
+3. [Rolling Restart Topology Publication Missing-Active Priority Operation Scheduling Reentry](../packages/done-20260507-rolling-restart-topology-publication-missing-active-priority-operation-scheduling-reentry.md)
+4. [Rolling Restart Topology Publication Missing-Active Workflow Progress Reentry](../packages/done-20260507-rolling-restart-topology-publication-missing-active-workflow-progress-reentry.md)
+5. [Rolling Restart Startup Steady-Published Selected Membership Deficit Readiness Timeout Reentry](../packages/done-20260506-rolling-restart-startup-steady-published-selected-membership-deficit-readiness-timeout-reentry.md)
+6. [Rolling Restart Publication ACK-Pending Selected Membership Deficit Owner Reentry](../packages/done-20260506-rolling-restart-publication-ack-pending-selected-membership-deficit-owner-reentry.md)
+7. [Rolling Restart Startup Active Gate Snapshot Coverage Selected-Snapshot Timeout Bootstrap Readiness Reentry](../packages/done-20260506-rolling-restart-startup-active-gate-snapshot-coverage-selected-snapshot-timeout-bootstrap-readiness-reentry.md)
+8. [Rolling Restart Published Snapshot Coverage Priority Spread Serial-Wait Workflow Progress Reentry](../packages/done-20260506-rolling-restart-published-snapshot-coverage-priority-spread-serial-wait-workflow-progress-reentry.md)
+9. [Rolling Restart Startup Active Gate Publication Evidence Priority Recovery Consumer Alignment](../packages/done-20260506-rolling-restart-startup-active-gate-publication-evidence-priority-recovery-consumer-alignment.md)
+10. [Rolling Restart Startup Active Gate Snapshot Coverage Priority Serial-Wait Workflow Progress Reentry](../packages/done-20260506-rolling-restart-startup-active-gate-snapshot-coverage-priority-serial-wait-workflow-progress-reentry.md)
+11. [Rolling Restart Startup Active Gate Priority Operation Creation Snapshot Coverage Reentry](../packages/done-20260506-rolling-restart-startup-active-gate-priority-operation-creation-snapshot-coverage-reentry.md)
+12. [Rolling Restart Published Snapshot Coverage Priority Serial-Wait Workflow Progress Reentry](../packages/done-20260506-rolling-restart-published-snapshot-coverage-priority-serial-wait-workflow-progress-reentry.md)
+13. [Rolling Restart Publication ACK-Pending Rebalancer Handoff Admission Reentry](../packages/done-20260506-rolling-restart-publication-ack-pending-rebalancer-handoff-admission-reentry.md)
+14. [Rolling Restart Startup Seed Transport Delivery-Source Saturation Reentry](../packages/done-20260506-rolling-restart-startup-seed-transport-delivery-source-saturation-reentry.md)
+15. [Rolling Restart Startup Publication ACK-Pending Owner-RPC Nodes Repair Reentry](../packages/done-20260506-rolling-restart-startup-publication-ack-pending-owner-rpc-nodes-repair-reentry.md)
+16. [Rolling Restart Topology Publication Snapshot Reachability Reentry](../packages/done-20260505-rolling-restart-topology-publication-snapshot-reachability-reentry.md)
+17. [Rolling Restart Operation Transition Pressure And Over-Target Trim](../packages/todo-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md)
 
 ## Queued Packages
 
