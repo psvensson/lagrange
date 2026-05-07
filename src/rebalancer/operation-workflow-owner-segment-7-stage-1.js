@@ -2,6 +2,7 @@ import {OperationWorkflowOwnerSegment6} from './operation-workflow-owner-segment
 import {OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED as SHARED} from './operation-workflow-owner-segment-7-stage-shared.js';
 
 const {
+  EXACT_TARGET_REPLICA_OBSERVATION_OPTIONS,
   NUM,
   OBSERVED_OPERATION_ROW_TARGET_PROGRESS_STATUSES,
   OBSERVED_OPERATION_ROW_TARGET_PROGRESS_TYPES,
@@ -100,6 +101,7 @@ class OperationWorkflowOwnerSegment7Stage1 extends OperationWorkflowOwnerSegment
         operation.replicaId,
         operation.partitionId,
         operation.targetNodeId,
+        EXACT_TARGET_REPLICA_OBSERVATION_OPTIONS,
       );
     return OBSERVED_OPERATION_ROW_TARGET_PROGRESS_STATUSES.has(
       observedTargetStatus,
@@ -120,6 +122,7 @@ class OperationWorkflowOwnerSegment7Stage1 extends OperationWorkflowOwnerSegment
       operation.replicaId,
       operation.partitionId,
       operation.targetNodeId,
+      EXACT_TARGET_REPLICA_OBSERVATION_OPTIONS,
     );
   }
 

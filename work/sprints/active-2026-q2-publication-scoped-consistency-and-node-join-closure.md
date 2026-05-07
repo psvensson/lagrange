@@ -51,29 +51,31 @@ It failed after `126.9s`. The previous pending-ACK selected-membership seam is
 now closed by migration: publication no longer remains `ACK_PENDING`, pending
 ACK count is `0`, and the live blocker moved again.
 
-The latest May 7 representative rerun after the steady-published timeout
-alignment repair is
-`test-output/reports/rolling-restart-after-steady-published-selected-membership-timeout-alignment-20260507T005730Z.report.json`.
-It failed after `130.7s`. The previous steady-published selected-membership
-normalization seam is now closed by migration: top-level publication
-convergence, priority recovery observation, and timeout progress all keep the
-same steady-published `missingPublishedCount=3`.
+The latest May 7 representative rerun after the exact-target observation
+repair is
+`test-output/reports/rolling-restart-after-exact-target-observation-20260507T013352Z.report.json`.
+It failed after `131.2s`. The previous exact-target observation seam is now
+closed by migration: the fresh artifact no longer terminates on
+`replica_operations-p1` sibling fallback.
 
-The live representative blocker is now topology publication missing-active
-workflow-progress reentry. Failure classification is
-`publication_convergence_blocked` with root cause class `topology` and
-dominant reason
-`publication_missing_active_node=35a891b8-c1a0-5064-9c6e-2acfba61c2a7`;
-top-level publication convergence reaches epoch `4` `PUBLISHED` /
-`steady_published` with explicit missing-active reasons for `35a...`,
-`8be8...`, and `ebc4...`, while supporting evidence points at
-`replica_operations-p1` under `operation_workflow_owner / workflow_progress`
-with `replace_remove_safety_blocked` deferrals.
+The live representative blocker remains topology publication missing-active
+workflow-progress reentry. Failure classification is still
+`publication_convergence_blocked` with root cause class `topology`, but the
+dominant reason is now
+`publication_missing_active_node=8be8d30f-4499-5eed-865c-71b4d529a67a`.
+Top-level publication convergence reaches epoch `5` `ACK_PENDING` with
+missing-active reasons for `8be8...` and `ebc4...`, while supporting evidence
+points at `sql_write_operations-p1` under
+`operation_workflow_owner / workflow_progress` with a coordinator-created
+critical `REPLACE` stalling around `dispatch_pending` and target-node
+reservation reconciliation releasing an active reservation as orphaned during
+deferred visibility.
 
-The current unchecked package task is therefore a focused owner-decision
-fixture for explicit `publication_missing_active_node` versus
-`operation_workflow_owner / workflow_progress`, not more pending ACK,
-transport, or startup/readiness-fallback normalization work.
+The current unchecked package task is therefore the next slice in the same
+active package: preserve the closed exact-target observation regression, then
+repair the `sql_write_operations-p1` reservation-visibility or deferred
+owner-read seam, not more pending ACK, transport, or
+startup/readiness-fallback normalization work.
 
 This sprint keeps the old filename for continuity with the active branch, but
 the execution scope is now runtime stability and harness determinism.
@@ -260,31 +262,33 @@ Queued cleanup packages:
 ## Remaining Work Summary
 
 1. Current execution blocker:
-   The latest May 7 representative rerun after the steady-published timeout
-   alignment repair
-   used
-   `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-after-steady-published-selected-membership-timeout-alignment-20260507T005730Z.report.json --fast-local --verbose`.
+   The latest May 7 representative rerun after the exact-target observation
+   repair used
+   `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-after-exact-target-observation-20260507T013352Z.report.json --fast-local --verbose`.
    Report:
-   `test-output/reports/rolling-restart-after-steady-published-selected-membership-timeout-alignment-20260507T005730Z.report.json`.
-   Result: failed after `130.7s`; terminal barrier:
+   `test-output/reports/rolling-restart-after-exact-target-observation-20260507T013352Z.report.json`.
+   Result: failed after `131.2s`; terminal barrier:
    `Not all nodes reached ACTIVE state within 120000ms`.
    The current report classifies as root cause class `topology`, failure class
    `publication_convergence_blocked`, dominant reason
-   `publication_missing_active_node=35a891b8-c1a0-5064-9c6e-2acfba61c2a7`,
+   `publication_missing_active_node=8be8d30f-4499-5eed-865c-71b4d529a67a`,
    and supporting signals for
-   `priorityRecoveryPartition=replica_operations-p1`,
+   `priorityRecoveryPartition=sql_write_operations-p1`,
    `priorityRecoveryOwner=operation_workflow_owner`,
    `priorityRecoveryBoundary=workflow_progress`, and
    `priorityRecoveryNextAction=wait_for_operation_progress`. Top-level
-   publication convergence reaches epoch `4` `PUBLISHED` /
-   `steady_published` with pending ACK count `0`, blocked-node count `0`, and
-   `missingPublishedCount=3` on nodes `35a...|8be8...|ebc4...`. Current
-   active-gate progress on selected snapshot `11601...` now reports
-   `selectedPublishedActiveCount=2`, the same three-node selected
-   missing-published set, and `missingPublishedCount=3`. The terminal error
-   string now keeps those current surfaces aligned by reporting
-   `publicationConvergence=blocked#recovery=steady_published#missingPublished=3`
-   alongside `progress ... missingPublished=3`.
+   publication convergence reaches epoch `5` `ACK_PENDING` with pending ACK
+   count `1`, blocked-node count `0`, and `missingPublishedCount=2` on nodes
+   `8be8...|ebc4...`. Current active-gate progress on selected snapshot
+   `35a...` reports `selectedPublishedActiveCount=3`, the same selected
+   missing-published set, and `missingPublishedCount=2`. The failure bundle
+   also records `sql_write_operations-p1` as `recovering_in_flight` under
+   `operation_workflow_owner / workflow_progress`, with correlation key
+   `sql_write_operations-p1|5|21206e66-4f05-46cf-b439-714de9440cf3`,
+   `dispatch_pending` / `persisted_not_dispatched` evidence, and target-node
+   log lines that release reservation
+   `res-21206e66-4f05-46cf-b439-714de9440cf3` as orphaned during
+   reconciliation.
 2. Completed trace, fixture, and next active task:
    the
    [Rolling Restart Topology Publication Snapshot Reachability Reentry](../packages/done-20260505-rolling-restart-topology-publication-snapshot-reachability-reentry.md)
@@ -294,14 +298,13 @@ Queued cleanup packages:
    reclassifications, transport fairness, mixed-summary witness cleanup,
    retained-carrier release, and the direct source-versus-carrier owner
    repair. Each slice ended in a replayable representative rerun and moved the
-   live blocker forward. The latest closed slice proves the epoch-5
-   `ACK_PENDING` selected-membership seam is no longer the terminal owner. The
-   current unchecked task is therefore the freshly split topology
-   publication-missing-active package: determine whether the direct owner is
-   explicit `publication_missing_active_node`, the named
-   `operation_workflow_owner / workflow_progress` seam on
-   `replica_operations-p1`, or a narrower replace-remove-safety actuation
-   boundary between them.
+   live blocker forward. The latest closed slice proves the exact-target
+   observation seam is no longer the terminal owner. The current unchecked
+   task is therefore the next slice inside the same active topology
+   publication-missing-active package: preserve that focused regression, then
+   repair the `sql_write_operations-p1` reservation-visibility or deferred
+   owner-read seam that can stall a coordinator-created critical `REPLACE`
+   inside `operation_workflow_owner / workflow_progress`.
 3. Harness classification:
    terminal barrier evidence continues to win over stale playback
    reconstruction for active, restart-recovery, load-readiness, convergence,

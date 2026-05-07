@@ -200,11 +200,22 @@ function assignReplicaOperationRepositoryObservationMethods(
    * @param {string} replicaId
    * @param {string} partitionId
    * @param {string} targetNodeId
+   * @param {Object} [options={}]
    * @return {string|null}
    */
-    getObservedReplicaStatusFromCache(replicaId, partitionId, targetNodeId) {
+    getObservedReplicaStatusFromCache(
+      replicaId,
+      partitionId,
+      targetNodeId,
+      options = {},
+    ) {
       return this.normalizeObservedReplicaLifecycle(
-        this.getObservedReplicaRowFromCache(replicaId, partitionId, targetNodeId),
+        this.getObservedReplicaRowFromCache(
+          replicaId,
+          partitionId,
+          targetNodeId,
+          options,
+        ),
       );
     }
     /**

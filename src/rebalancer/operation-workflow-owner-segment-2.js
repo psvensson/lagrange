@@ -7,6 +7,7 @@ const {
   ControlPlaneField,
   ControlPlaneMessageType,
   DISPATCH_RETRY_DELAY_MS,
+  EXACT_TARGET_REPLICA_OBSERVATION_OPTIONS,
   NUM,
   OBSERVED_PROGRESS_RETRY_DELAY_MS,
   OPERATION_OWNER_ACTION,
@@ -29,6 +30,14 @@ const {
   isPriorityControlPlanePartition,
   isRetryableControlPlaneError,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
+
+const LOCAL_PRIORITY_EXACT_TARGET_REPLICA_OBSERVATION_OPTIONS =
+  Object.freeze({
+    ...EXACT_TARGET_REPLICA_OBSERVATION_OPTIONS,
+    authoritativeReadMode:
+      CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
+    allowCacheFallback: false,
+  });
 
 const COORDINATOR_CREATED_LOCAL_OPERATION_PRIME_STATE = Object.freeze({
   DEFAULT: 'default',
@@ -575,11 +584,7 @@ class OperationWorkflowOwnerSegment2 extends OperationWorkflowOwnerSegment1 {
           replicaId,
           partitionId,
           targetNodeId,
-          {
-            authoritativeReadMode:
-              CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
-            allowCacheFallback: false,
-          },
+          LOCAL_PRIORITY_EXACT_TARGET_REPLICA_OBSERVATION_OPTIONS,
         );
       if (
         localObservation?.state === OPERATION_WORKFLOW_OWNER_LITERAL.OBSERVED
@@ -595,6 +600,7 @@ class OperationWorkflowOwnerSegment2 extends OperationWorkflowOwnerSegment1 {
         replicaId,
         partitionId,
         targetNodeId,
+        EXACT_TARGET_REPLICA_OBSERVATION_OPTIONS,
       );
       if (observation?.state === OPERATION_WORKFLOW_OWNER_LITERAL.OBSERVED) {
         return observation.lifecycleStatus;
@@ -612,6 +618,7 @@ class OperationWorkflowOwnerSegment2 extends OperationWorkflowOwnerSegment1 {
       replicaId,
       partitionId,
       targetNodeId,
+      EXACT_TARGET_REPLICA_OBSERVATION_OPTIONS,
     );
   }
 

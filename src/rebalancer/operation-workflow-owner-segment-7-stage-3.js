@@ -2,6 +2,7 @@ import {OperationWorkflowOwnerSegment7Stage2} from './operation-workflow-owner-s
 import {OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED as SHARED} from './operation-workflow-owner-segment-7-stage-shared.js';
 
 const {
+  EXACT_TARGET_REPLICA_OBSERVATION_OPTIONS,
   EXECUTOR_OUTCOME_ACTION,
   EXECUTOR_OUTCOME_ACTION_MAP,
   EXECUTOR_OUTCOME_FIELD,
@@ -502,6 +503,7 @@ class OperationWorkflowOwnerSegment7Stage3 extends OperationWorkflowOwnerSegment
         operation.replicaId,
         operation.partitionId,
         operation.targetNodeId,
+        EXACT_TARGET_REPLICA_OBSERVATION_OPTIONS,
       ) === ReplicaStatus.ACTIVE
     );
   }

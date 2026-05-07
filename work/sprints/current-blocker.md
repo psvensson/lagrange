@@ -8,9 +8,9 @@ Package: `work/packages/active-20260507-rolling-restart-topology-publication-mis
 
 Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/rolling-restart-after-steady-published-selected-membership-timeout-alignment-20260507T005730Z.report.json`
+Artifact: `test-output/reports/rolling-restart-after-exact-target-observation-20260507T013352Z.report.json`
 
-Playback: `test-output/reports/.playback/rolling-restart-after-steady-published-selected-membership-timeout-alignment-20260507T005730Z/rolling-restart/`
+Playback: `test-output/reports/.playback/rolling-restart-after-exact-target-observation-20260507T013352Z/rolling-restart/`
 
 ## Boundary
 
@@ -18,25 +18,28 @@ Owner: `Topology publication missing-active node over operation-workflow progres
 
 Boundary: `Topology publication missing-active node / operation-workflow progress owner`
 
-Dominant reason: `publication_missing_active_node=35a891b8-c1a0-5064-9c6e-2acfba61c2a7`
+Dominant reason: `publication_missing_active_node=8be8d30f-4499-5eed-865c-71b4d529a67a`
 
-Current state: The steady-published selected-membership normalization seam is closed. The representative rerun now fails as publication_convergence_blocked on epoch 4 steady_published missingPublishedCount=3, while supporting progress evidence points at replica_operations-p1 under operation_workflow_owner / workflow_progress with replace_remove_safety_blocked deferrals.
+Current state: The exact-target observation seam is closed. The representative rerun now fails as publication_convergence_blocked on epoch 5 ACK_PENDING missingPublishedCount=2, while supporting workflow evidence points at sql_write_operations-p1 under operation_workflow_owner / workflow_progress with a coordinator-created REPLACE stalled at dispatch_pending and target-node orphan reservation release during deferred visibility.
 
 ## Next Action
 
-Extract the 005730Z publicationConvergence, priority recovery progress summary, replica_operations-p1 workflow evidence, and replace_remove_safety_blocked log fixture; decide whether explicit publication_missing_active_node or operation_workflow_owner / workflow_progress now owns the boundary; then repair only that owner path.
+Extract the 013352Z publicationConvergence, current active-gate progress, sql_write_operations-p1 workflow witness, and target-node reservation log fixture; add a focused reservation-visibility regression; then repair the owner-read or reservation-reconciliation path so active reservations are not released while in-flight operations are only defer-visible.
 
 ## Proof Ladder
 
-1. `Focused 005730Z publication missing-active / workflow-progress owner fixture`
-2. `Focused replace-remove-safety and workflow-progress owner regressions`
+1. `Focused exact-target observation regressions`
+2. `Focused sql_write_operations-p1 reservation visibility regression`
 3. `Touched-file static guardrails`
 4. `Representative rolling-restart --fast-local rerun`
 
 ## Touched Files
 
-1. `src/rebalancer/operation-workflow-owner-shared.js`
-2. `src/rebalancer/rebalancer-constants.js`
-3. `test/rebalancer/replace-replica-workflow.test.js`
-4. `test/distributed/harness/cluster-segment-7.js`
-5. `test/distributed/harness/failure-bundle-segment-4.js`
+1. `src/rebalancer/operation-workflow-owner-segment-2.js`
+2. `src/rebalancer/operation-workflow-owner-shared.js`
+3. `src/rebalancer/rebalance-coordinator-segment-4.js`
+4. `src/rebalancer/rebalance-coordinator-segment-5.js`
+5. `src/rebalancer/replica-operation-repository-observation-methods.js`
+6. `test/rebalancer/coordinator-reservation-lifecycle.test.js`
+7. `test/rebalancer/priority-replace-exact-target-observation.test.js`
+8. `test/rebalancer/replica-operation-observation-contract.test.js`

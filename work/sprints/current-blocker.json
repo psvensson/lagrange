@@ -5,25 +5,28 @@
   "package": "work/packages/active-20260507-rolling-restart-topology-publication-missing-active-workflow-progress-reentry.md",
   "status": "active",
   "scenario": "rolling-restart",
-  "artifact": "test-output/reports/rolling-restart-after-steady-published-selected-membership-timeout-alignment-20260507T005730Z.report.json",
-  "playback": "test-output/reports/.playback/rolling-restart-after-steady-published-selected-membership-timeout-alignment-20260507T005730Z/rolling-restart/",
+  "artifact": "test-output/reports/rolling-restart-after-exact-target-observation-20260507T013352Z.report.json",
+  "playback": "test-output/reports/.playback/rolling-restart-after-exact-target-observation-20260507T013352Z/rolling-restart/",
   "owner": "Topology publication missing-active node over operation-workflow progress and replace-remove safety deferral",
   "boundary": "Topology publication missing-active node / operation-workflow progress owner",
-  "dominantReason": "publication_missing_active_node=35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
-  "currentState": "The steady-published selected-membership normalization seam is closed. The representative rerun now fails as publication_convergence_blocked on epoch 4 steady_published missingPublishedCount=3, while supporting progress evidence points at replica_operations-p1 under operation_workflow_owner / workflow_progress with replace_remove_safety_blocked deferrals.",
-  "nextAction": "Extract the 005730Z publicationConvergence, priority recovery progress summary, replica_operations-p1 workflow evidence, and replace_remove_safety_blocked log fixture; decide whether explicit publication_missing_active_node or operation_workflow_owner / workflow_progress now owns the boundary; then repair only that owner path.",
+  "dominantReason": "publication_missing_active_node=8be8d30f-4499-5eed-865c-71b4d529a67a",
+  "currentState": "The exact-target observation seam is closed. The representative rerun now fails as publication_convergence_blocked on epoch 5 ACK_PENDING missingPublishedCount=2, while supporting workflow evidence points at sql_write_operations-p1 under operation_workflow_owner / workflow_progress with a coordinator-created REPLACE stalled at dispatch_pending and target-node orphan reservation release during deferred visibility.",
+  "nextAction": "Extract the 013352Z publicationConvergence, current active-gate progress, sql_write_operations-p1 workflow witness, and target-node reservation log fixture; add a focused reservation-visibility regression; then repair the owner-read or reservation-reconciliation path so active reservations are not released while in-flight operations are only defer-visible.",
   "proof": [
-    "Focused 005730Z publication missing-active / workflow-progress owner fixture",
-    "Focused replace-remove-safety and workflow-progress owner regressions",
+    "Focused exact-target observation regressions",
+    "Focused sql_write_operations-p1 reservation visibility regression",
     "Touched-file static guardrails",
     "Representative rolling-restart --fast-local rerun"
   ],
   "touchedFiles": [
+    "src/rebalancer/operation-workflow-owner-segment-2.js",
     "src/rebalancer/operation-workflow-owner-shared.js",
-    "src/rebalancer/rebalancer-constants.js",
-    "test/rebalancer/replace-replica-workflow.test.js",
-    "test/distributed/harness/cluster-segment-7.js",
-    "test/distributed/harness/failure-bundle-segment-4.js"
+    "src/rebalancer/rebalance-coordinator-segment-4.js",
+    "src/rebalancer/rebalance-coordinator-segment-5.js",
+    "src/rebalancer/replica-operation-repository-observation-methods.js",
+    "test/rebalancer/coordinator-reservation-lifecycle.test.js",
+    "test/rebalancer/priority-replace-exact-target-observation.test.js",
+    "test/rebalancer/replica-operation-observation-contract.test.js"
   ],
   "predecessor": "work/packages/done-20260506-rolling-restart-startup-steady-published-selected-membership-deficit-readiness-timeout-reentry.md"
 }

@@ -319,14 +319,21 @@ class RebalanceCoordinatorSegment5 extends RebalanceCoordinatorSegment4 {
    * @param {string} replicaId
    * @param {string} partitionId
    * @param {string} targetNodeId
+   * @param {Object} [options={}]
    * @return {string|null}
    * @private
    */
-  getObservedReplicaStatusFromCache(replicaId, partitionId, targetNodeId) {
+  getObservedReplicaStatusFromCache(
+    replicaId,
+    partitionId,
+    targetNodeId,
+    options = {},
+  ) {
     return this.repository.getObservedReplicaStatusFromCache(
       replicaId,
       partitionId,
       targetNodeId,
+      options,
     );
   }
 

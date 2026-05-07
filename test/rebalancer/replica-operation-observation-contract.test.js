@@ -10,6 +10,8 @@ const TEST_NODE_ID = 'node-2';
 const TEST_REPLICA_ADDRESS = 'node-2/partition/replica-1';
 const TEST_OBSERVED_STATE = 'observed';
 const TEST_AUTHORITATIVE_SOURCE = 'authoritative';
+const TEST_PARTITION_NODE_FALLBACK_REPLICA_ID = 'replica-2';
+const TEST_PARTITION_NODE_FALLBACK_ADDRESS = 'node-2/partition/replica-2';
 
 function createRepository(overrides = {}) {
   return new ReplicaOperationRepository({
@@ -193,5 +195,124 @@ test(
       },
       'syncing rows without routable address should not be promoted in observation',
     );
+  },
+);
+
+test(
+  'ReplicaOperationRepository can disable authoritative partition-node fallback ' +
+    'for exact-target observation',
+  async (t) => {
+    const repository = createRepository({
+      controlPlaneSystemTableGateway: {
+        async readAuthoritativeRows(_tableName, _sql, params = []) {
+          if (params[0] === TEST_REPLICA_ID) {
+            return {
+              success: true,
+              rows: [],
+            };
+          }
+          if (
+            params[0] === TEST_PARTITION_ID &&
+            params[1] === TEST_NODE_ID
+          ) {
+            return {
+              success: true,
+              rows: [{
+                service_id: TEST_PARTITION_NODE_FALLBACK_REPLICA_ID,
+                replica_id: TEST_PARTITION_NODE_FALLBACK_REPLICA_ID,
+                partition_id: TEST_PARTITION_ID,
+                node_id: TEST_NODE_ID,
+                service_type: TEST_PARTITION_SERVICE_TYPE,
+                status: ReplicaStatus.ACTIVE,
+                raft_role: RAFT_ROLE.FOLLOWER,
+                address: TEST_PARTITION_NODE_FALLBACK_ADDRESS,
+              }],
+            };
+          }
+          return {
+            success: true,
+            rows: [],
+          };
+        },
+      },
+    });
+
+    const observedWithFallback = await repository.getActualReplicaObservation(
+      TEST_REPLICA_ID,
+      TEST_PARTITION_ID,
+      TEST_NODE_ID,
+    );
+    const observedWithoutFallback =
+      await repository.getActualReplicaObservation(
+        TEST_REPLICA_ID,
+        TEST_PARTITION_ID,
+        TEST_NODE_ID,
+        {allowPartitionNodeFallback: false},
+      );
+
+    t.same(
+      observedWithFallback,
+      {
+        state: TEST_OBSERVED_STATE,
+        source: TEST_AUTHORITATIVE_SOURCE,
+        lifecycleStatus: ReplicaStatus.ACTIVE,
+      },
+      'default partition-node fallback should still surface sibling visibility',
+    );
+    t.same(
+      observedWithoutFallback,
+      {
+        state: 'absent',
+        source: TEST_AUTHORITATIVE_SOURCE,
+      },
+      'exact-target observation should stay absent when fallback is disabled',
+    );
+  },
+);
+
+test(
+  'ReplicaOperationRepository can disable cache partition-node fallback for ' +
+    'exact-target observation',
+  (t) => {
+    const repository = createRepository({
+      systemTableCache: {
+        get() {
+          return null;
+        },
+        getAll() {
+          return [{
+            service_id: TEST_PARTITION_NODE_FALLBACK_REPLICA_ID,
+            replica_id: TEST_PARTITION_NODE_FALLBACK_REPLICA_ID,
+            partition_id: TEST_PARTITION_ID,
+            node_id: TEST_NODE_ID,
+            service_type: TEST_PARTITION_SERVICE_TYPE,
+            status: ReplicaStatus.ACTIVE,
+            raft_role: RAFT_ROLE.FOLLOWER,
+            address: TEST_PARTITION_NODE_FALLBACK_ADDRESS,
+          }];
+        },
+      },
+    });
+
+    t.equal(
+      repository.getObservedReplicaStatusFromCache(
+        TEST_REPLICA_ID,
+        TEST_PARTITION_ID,
+        TEST_NODE_ID,
+      ),
+      ReplicaStatus.ACTIVE,
+      'default cache fallback should still surface sibling visibility',
+    );
+    t.equal(
+      repository.getObservedReplicaStatusFromCache(
+        TEST_REPLICA_ID,
+        TEST_PARTITION_ID,
+        TEST_NODE_ID,
+        {allowPartitionNodeFallback: false},
+      ),
+      null,
+      'exact-target cache status should stay absent when fallback is disabled',
+    );
+    t.end();
   },
 );

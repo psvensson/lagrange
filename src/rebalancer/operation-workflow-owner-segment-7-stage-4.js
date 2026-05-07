@@ -2,6 +2,7 @@ import {OperationWorkflowOwnerSegment7Stage3} from './operation-workflow-owner-s
 import {OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED as SHARED} from './operation-workflow-owner-segment-7-stage-shared.js';
 
 const {
+  EXACT_TARGET_REPLICA_OBSERVATION_OPTIONS,
   FAILURE_LOG_LEVEL,
   NUM,
   OPERATION_LIFECYCLE_ACTION,
@@ -157,6 +158,7 @@ class OperationWorkflowOwnerSegment7Stage4 extends OperationWorkflowOwnerSegment
         operation.replicaId,
         operation.partitionId,
         operation.targetNodeId,
+        EXACT_TARGET_REPLICA_OBSERVATION_OPTIONS,
       );
     return PRIORITY_RECOVERY_OPERATION_DRAIN_ADD_TARGET_STATUSES.has(
       observedTargetStatus,
@@ -204,6 +206,7 @@ class OperationWorkflowOwnerSegment7Stage4 extends OperationWorkflowOwnerSegment
         operation.replicaId,
         operation.partitionId,
         operation.targetNodeId,
+        EXACT_TARGET_REPLICA_OBSERVATION_OPTIONS,
       );
     if (
       PRIORITY_RECOVERY_PRE_SYNC_REPLACE_TARGET_MATERIALIZED_STATUSES.has(
