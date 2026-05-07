@@ -116,6 +116,14 @@ class OperationWorkflowOwnerSegment7Stage4 extends OperationWorkflowOwnerSegment
     ) {
       return null;
     }
+    const targetState =
+      this.resolvePriorityRecoveryPreSyncReplaceTargetState(operation);
+    if (
+      targetState ===
+      PRIORITY_RECOVERY_PRE_SYNC_REPLACE_TARGET_STATE.MATERIALIZED
+    ) {
+      return null;
+    }
     return this.buildPriorityRecoverySupersededTargetError(
       operation,
       targetNodeId,

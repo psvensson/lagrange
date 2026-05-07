@@ -5,6 +5,7 @@ const {
   CONTROL_PLANE_PRIORITY_RECOVERY_REASON,
   CONTROL_PLANE_READINESS_DIMENSION,
   CONTROL_PLANE_READINESS_REASON,
+  EXACT_TARGET_REPLICA_OBSERVATION_OPTIONS,
   NUM,
   INITIAL_PARTITION_IDS,
   OPERATION_METADATA_KEY,
@@ -12,6 +13,7 @@ const {
   OperationType,
   PRIORITY_PUBLICATION_SOURCE_ROLE_STATE,
   PRIORITY_RECOVERY_COMPLETION_STATE,
+  PRIORITY_RECOVERY_PRE_SYNC_REPLACE_TARGET_MATERIALIZED_STATUSES,
   PRIORITY_REMOVE_SAFETY_MEMBERSHIP_SOURCE,
   REBALANCE_COORDINATOR_DEFER_REASON,
   REMOVE_SAFETY_EVALUATION_CLASSIFICATION,
@@ -105,6 +107,10 @@ const PRIORITY_RECOVERY_SUPERSEDED_TARGET_DECISION_TABLE = Object.freeze([
   }),
   Object.freeze({
     state: PRIORITY_RECOVERY_SUPERSEDED_TARGET_DECISION_STATE.DEFER,
+    matches: (evidence) => evidence.materializedPreSyncTarget === true,
+  }),
+  Object.freeze({
+    state: PRIORITY_RECOVERY_SUPERSEDED_TARGET_DECISION_STATE.DEFER,
     matches: (evidence) => evidence.transientReadinessBlockerPresent === true,
   }),
   Object.freeze({
@@ -146,6 +152,7 @@ function buildPriorityRecoverySupersededTargetEvidence({
   priorityPartitionSummary,
   eligibleNodeIds,
   targetReadiness,
+  targetLifecycleStatus,
 }) {
   const targetNodeId = String(operation?.targetNodeId || '').trim();
   const blockedPartitionIds = priorityPartitionSummary ?
@@ -178,7 +185,15 @@ function buildPriorityRecoverySupersededTargetEvidence({
       false ||
     dimensions?.[CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_PUBLISHED] ===
       false;
+  const materializedPreSyncTarget =
+    operation?.type === OperationType.REPLACE &&
+    (operation?.workflowStep === WORKFLOW_STEP.SENDING ||
+      operation?.workflowStep === WORKFLOW_STEP.CREATING) &&
+    PRIORITY_RECOVERY_PRE_SYNC_REPLACE_TARGET_MATERIALIZED_STATUSES.has(
+      targetLifecycleStatus,
+    );
   return Object.freeze({
+    materializedPreSyncTarget,
     targetOutsideEligibleCohort,
     transientReadinessBlockerPresent:
       transientReasonCodePresent || transientDimensionBlockerPresent,
@@ -513,12 +528,24 @@ class OperationWorkflowOwnerSegment6 extends OperationWorkflowOwnerSegment5 {
           participationKind: REMOVE_SAFETY_OWNER_PARTICIPATION_KIND,
         }) :
         null;
+    const targetLifecycleStatus =
+      this.repository &&
+      typeof this.repository.getObservedReplicaStatusFromCache ===
+        TYPEOF.FUNCTION ?
+        this.repository.getObservedReplicaStatusFromCache(
+          operation.replicaId,
+          operation.partitionId,
+          targetNodeId,
+          EXACT_TARGET_REPLICA_OBSERVATION_OPTIONS,
+        ) :
+        null;
     const supersededTargetEvidence =
       buildPriorityRecoverySupersededTargetEvidence({
         operation,
         priorityPartitionSummary,
         eligibleNodeIds,
         targetReadiness,
+        targetLifecycleStatus,
       });
     const supersededTargetDecision =
       decidePriorityRecoverySupersededTarget(supersededTargetEvidence);

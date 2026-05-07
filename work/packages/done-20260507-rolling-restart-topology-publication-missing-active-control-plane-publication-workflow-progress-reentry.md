@@ -13,7 +13,7 @@
   "boundary": "Topology publication missing-active node / control-plane publication workflow progress and recovery-routing propagation",
   "dominantReason": "publication_missing_active_node=11601fe0-72d6-5853-8590-ec2881853e72",
   "currentState": "The distributed SELECT and cross-partition JOIN routing-readiness leak is now closed. The representative rerun no longer falls back to serveEligible fanout on join-time authoritative reads, but the five-node path still fails at epoch 1 PUBLISHED with active 3/5, coverage 1/5, missingPublishedCount 4, and a fresh sql_transactions-p1 REPLACE safety rejection because target node 11601... is no longer in the current eligible cohort while node-ready lease debt remains live.",
-  "nextAction": "Continue in work/packages/active-20260507-rolling-restart-topology-publication-missing-active-priority-recovery-eligible-cohort-replace-safety-reentry.md to extract the 041947Z eligible-cohort rejection and lease-blocked pre-execution witnesses, add a focused regression for the selected replace-safety owner path, repair only that boundary, and rerun one representative rolling-restart scenario.",
+  "nextAction": "Continue in work/packages/done-20260507-rolling-restart-topology-publication-missing-active-priority-recovery-eligible-cohort-replace-safety-reentry.md to extract the 041947Z eligible-cohort rejection and lease-blocked pre-execution witnesses, add a focused regression for the selected replace-safety owner path, repair only that boundary, and rerun one representative rolling-restart scenario.",
   "proof": [
     "Focused query fanout routing-readiness regressions",
     "Touched-file static guardrails",
@@ -25,14 +25,14 @@
     "work/packages/done-20260507-rolling-restart-topology-publication-missing-active-control-plane-publication-workflow-progress-reentry.md"
   ],
   "predecessor": "work/packages/done-20260507-rolling-restart-topology-publication-missing-active-priority-operation-scheduling-event-driven-reentry.md",
-  "successor": "work/packages/active-20260507-rolling-restart-topology-publication-missing-active-priority-recovery-eligible-cohort-replace-safety-reentry.md"
+  "successor": "work/packages/done-20260507-rolling-restart-topology-publication-missing-active-priority-recovery-eligible-cohort-replace-safety-reentry.md"
 }
 -->
 
 Opened on May 7, 2026 after
 [Rolling Restart Topology Publication Missing-Active Priority Operation Scheduling Event-Driven Reentry](./done-20260507-rolling-restart-topology-publication-missing-active-priority-operation-scheduling-event-driven-reentry.md)
 closed by migration. Closed the same day by migration into
-[Rolling Restart Topology Publication Missing-Active Priority Recovery Eligible-Cohort Replace-Safety Reentry](./active-20260507-rolling-restart-topology-publication-missing-active-priority-recovery-eligible-cohort-replace-safety-reentry.md).
+[Rolling Restart Topology Publication Missing-Active Priority Recovery Eligible-Cohort Replace-Safety Reentry](./done-20260507-rolling-restart-topology-publication-missing-active-priority-recovery-eligible-cohort-replace-safety-reentry.md).
 
 ## Closure Summary
 
@@ -196,7 +196,7 @@ Closure:
 This package closes by migration. The repaired boundary was distributed query
 fanout propagation for join-time control-plane recovery routing. The successor
 package is
-[Rolling Restart Topology Publication Missing-Active Priority Recovery Eligible-Cohort Replace-Safety Reentry](./active-20260507-rolling-restart-topology-publication-missing-active-priority-recovery-eligible-cohort-replace-safety-reentry.md),
+[Rolling Restart Topology Publication Missing-Active Priority Recovery Eligible-Cohort Replace-Safety Reentry](./done-20260507-rolling-restart-topology-publication-missing-active-priority-recovery-eligible-cohort-replace-safety-reentry.md),
 which owns the `041947Z` `sql_transactions-p1` eligible-cohort rejection,
 lease-blocked remove path, and the remaining epoch-1 `PUBLISHED`
 missing-active stall.

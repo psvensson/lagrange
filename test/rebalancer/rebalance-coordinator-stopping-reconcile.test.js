@@ -1229,6 +1229,198 @@ test('RebalanceCoordinator fails remote-owned stale priority REPLACE ' +
   }
 });
 
+test('RebalanceCoordinator superseded-target gate preserves local ' +
+  'priority REPLACE progress when the out-of-cohort target is already ' +
+  'creating', async (t) => {
+  const TEST_PARTITION_ID = 'sql_transactions-p1';
+  const TEST_SOURCE_REPLICA_ID = TEST_PARTITION_ID + '-r2';
+  const TEST_TARGET_REPLICA_ID = TEST_PARTITION_ID + '-r4';
+  const TEST_OPERATION_ID = 'priority-drain-local-materialized-creating';
+  const TEST_TARGET_ADDRESS =
+    PRIORITY_DRAIN_TEST_STALE_TARGET_NODE_ID + '/partition/' +
+    TEST_TARGET_REPLICA_ID;
+  const TEST_NOW_MS = Date.now();
+  const coordinator = createTestCoordinator({
+    nodeId: PRIORITY_DRAIN_TEST_STALE_TARGET_NODE_ID,
+    enableTimeouts: false,
+    controlPlaneReadinessService:
+      buildPriorityDrainSupersededReadinessService(
+        TEST_PARTITION_ID,
+        TEST_OPERATION_ID,
+      ),
+    cacheData: {
+      services: [
+        {
+          service_id: TEST_TARGET_REPLICA_ID,
+          replica_id: TEST_TARGET_REPLICA_ID,
+          service_type: PRIORITY_DRAIN_TEST_ENTITY_TYPE,
+          partition_id: TEST_PARTITION_ID,
+          node_id: PRIORITY_DRAIN_TEST_STALE_TARGET_NODE_ID,
+          status: ReplicaStatus.CREATING,
+          raft_role: RAFT_ROLE.FOLLOWER,
+          address: TEST_TARGET_ADDRESS,
+        },
+      ],
+      replicaOperations: [
+        {
+          operation_id: TEST_OPERATION_ID,
+          type: OperationType.REPLACE,
+          partition_id: TEST_PARTITION_ID,
+          replica_id: TEST_TARGET_REPLICA_ID,
+          source_node_id: PRIORITY_DRAIN_TEST_SOURCE_NODE_ID,
+          target_node_id: PRIORITY_DRAIN_TEST_STALE_TARGET_NODE_ID,
+          status: ReplicaStatus.PENDING,
+          workflow_step: WORKFLOW_STEP.SENDING,
+          created_at: TEST_NOW_MS,
+          updated_at: TEST_NOW_MS,
+          completed_at: PRIORITY_DRAIN_TEST_NO_COMPLETED_AT,
+          error_message: PRIORITY_DRAIN_TEST_NO_ERROR_MESSAGE,
+          entity_type: PRIORITY_DRAIN_TEST_ENTITY_TYPE,
+          entity_id: TEST_PARTITION_ID,
+          steps_history: JSON.stringify([
+            {
+              step: WORKFLOW_STEP.PENDING,
+              timestamp: TEST_NOW_MS,
+              sourceReplicaId: TEST_SOURCE_REPLICA_ID,
+            },
+            {
+              step: WORKFLOW_STEP.SENDING,
+              timestamp: TEST_NOW_MS,
+              previousStep: WORKFLOW_STEP.PENDING,
+            },
+          ]),
+        },
+      ],
+    },
+  });
+
+  try {
+    const operation = await coordinator.getOperation(TEST_OPERATION_ID);
+    const supersededTargetError =
+      await coordinator.workflowOwner
+        .getPriorityRecoverySupersededTargetError(operation);
+
+    t.equal(
+      supersededTargetError,
+      null,
+      'materialized local priority replacement targets should defer superseded eligible-cohort failure',
+    );
+  } finally {
+    await coordinator.shutdown();
+  }
+});
+
+test('RebalanceCoordinator preserves pre-sync priority REPLACE progress ' +
+  'when an out-of-cohort target is already creating', async (t) => {
+  const TEST_PARTITION_ID = 'sql_transactions-p1';
+  const TEST_SOURCE_REPLICA_ID = TEST_PARTITION_ID + '-r2';
+  const TEST_TARGET_REPLICA_ID = TEST_PARTITION_ID + '-r4';
+  const TEST_OPERATION_ID = 'priority-drain-remote-materialized-creating';
+  const TEST_NOW_MS = Date.now();
+  const TEST_TARGET_ADDRESS =
+    PRIORITY_DRAIN_TEST_STALE_TARGET_NODE_ID + '/partition/' +
+    TEST_TARGET_REPLICA_ID;
+  const deliveries = [];
+  const coordinator = createTestCoordinator({
+    nodeId: PRIORITY_DRAIN_TEST_SOURCE_NODE_ID,
+    enableTimeouts: false,
+    messageRouter: {
+      async deliver(target, payload) {
+        deliveries.push({target, payload});
+        return {
+          acknowledged: true,
+          status: ReplicaOperationResponseStatus.INITIATED,
+        };
+      },
+    },
+    controlPlaneReadinessService:
+      buildPriorityDrainSupersededReadinessService(
+        TEST_PARTITION_ID,
+        TEST_OPERATION_ID,
+      ),
+    cacheData: {
+      services: [
+        {
+          service_id: TEST_TARGET_REPLICA_ID,
+          replica_id: TEST_TARGET_REPLICA_ID,
+          service_type: PRIORITY_DRAIN_TEST_ENTITY_TYPE,
+          partition_id: TEST_PARTITION_ID,
+          node_id: PRIORITY_DRAIN_TEST_STALE_TARGET_NODE_ID,
+          status: ReplicaStatus.CREATING,
+          raft_role: RAFT_ROLE.FOLLOWER,
+          address: TEST_TARGET_ADDRESS,
+        },
+      ],
+      replicaOperations: [
+        {
+          operation_id: TEST_OPERATION_ID,
+          type: OperationType.REPLACE,
+          partition_id: TEST_PARTITION_ID,
+          replica_id: TEST_TARGET_REPLICA_ID,
+          source_node_id: PRIORITY_DRAIN_TEST_SOURCE_NODE_ID,
+          target_node_id: PRIORITY_DRAIN_TEST_STALE_TARGET_NODE_ID,
+          status: ReplicaStatus.PENDING,
+          workflow_step: WORKFLOW_STEP.SENDING,
+          created_at: TEST_NOW_MS,
+          updated_at: TEST_NOW_MS,
+          completed_at: PRIORITY_DRAIN_TEST_NO_COMPLETED_AT,
+          error_message: PRIORITY_DRAIN_TEST_NO_ERROR_MESSAGE,
+          entity_type: PRIORITY_DRAIN_TEST_ENTITY_TYPE,
+          entity_id: TEST_PARTITION_ID,
+          steps_history: JSON.stringify([
+            {
+              step: WORKFLOW_STEP.PENDING,
+              timestamp: TEST_NOW_MS,
+              sourceReplicaId: TEST_SOURCE_REPLICA_ID,
+            },
+            {
+              step: WORKFLOW_STEP.SENDING,
+              timestamp: TEST_NOW_MS,
+              previousStep: WORKFLOW_STEP.PENDING,
+            },
+          ]),
+        },
+      ],
+    },
+  });
+
+  try {
+    const operation = await coordinator.getOperation(TEST_OPERATION_ID);
+    const progressed =
+      await coordinator.workflowOwner.reconcileOperationProgress(operation);
+    const persistedOperation =
+      await coordinator.getOperation(TEST_OPERATION_ID);
+
+    t.equal(
+      progressed,
+      false,
+      'materialized superseded target should remain in pre-sync progress rather than fail terminally',
+    );
+    t.equal(
+      deliveries.length,
+      0,
+      'materialized target progress should not redispatch replica work',
+    );
+    t.equal(
+      persistedOperation?.workflowStep,
+      WORKFLOW_STEP.SENDING,
+      'materialized superseded target should preserve the in-flight pre-sync step',
+    );
+    t.equal(
+      persistedOperation?.status,
+      ReplicaStatus.PENDING,
+      'materialized superseded target should preserve pending status while the target is still materialized',
+    );
+    t.equal(
+      persistedOperation?.errorMessage,
+      PRIORITY_DRAIN_TEST_NO_ERROR_MESSAGE,
+      'materialized superseded target should not persist an eligible-cohort failure',
+    );
+  } finally {
+    await coordinator.shutdown();
+  }
+});
+
 test('RebalanceCoordinator dispatches source handoff instead of draining a ' +
   'priority REPLACE while the source replica is still active', async (t) => {
   const TEST_PARTITION_ID = 'control_plane_publications-p1';

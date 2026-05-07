@@ -4,39 +4,39 @@
 
 Sprint: `work/sprints/active-2026-q2-publication-scoped-consistency-and-node-join-closure.md`
 
-Package: `work/packages/active-20260507-rolling-restart-topology-publication-missing-active-priority-recovery-eligible-cohort-replace-safety-reentry.md`
+Package: `work/packages/active-20260507-rolling-restart-topology-publication-missing-active-priority-recovery-rebalancer-handoff-terminal-failed-reentry.md`
 
 Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/rolling-restart-after-join-select-recovery-routing-20260507T041947Z.report.json`
+Artifact: `test-output/reports/rolling-restart-after-eligible-cohort-materialized-preserve-20260507T044845Z.report.json`
 
-Playback: `test-output/reports/.playback/rolling-restart-after-join-select-recovery-routing-20260507T041947Z/rolling-restart/`
+Playback: `test-output/reports/.playback/rolling-restart-after-eligible-cohort-materialized-preserve-20260507T044845Z/rolling-restart/`
 
 ## Boundary
 
-Owner: `Topology publication missing-active node over priority recovery eligible-cohort replace-safety regression after join-time recovery-routing closure`
+Owner: `Topology publication missing-active node over priority recovery rebalancer-handoff terminal-failed stalled follow-up progress after eligible-cohort replace-safety closure`
 
-Boundary: `Topology publication missing-active node / priority recovery eligible-cohort replace-safety owner`
+Boundary: `Topology publication missing-active node / priority recovery rebalancer-handoff terminal-failed owner`
 
-Dominant reason: `publication_missing_active_node=11601fe0-72d6-5853-8590-ec2881853e72`
+Dominant reason: `priority_recovery_rebalancer_handoff_terminal_failed`
 
-Current state: The join-time distributed recovery-routing seam is closed. The representative rerun still fails at epoch 1 PUBLISHED with active 3/5, coverage 1/5, pending ACK count 0, and missingPublishedCount 4. Fresh runtime evidence now centers on sql_transactions-p1 operation 227d1172-3520-48bc-85d1-a7f2e9b54fe1: target node 11601... already entered REPLACE creation, then the seed rejects the same target as no longer in the current eligible cohort while pre-execution also marks its remove leg blocked on node-ready lease debt.
+Current state: The prior eligible-cohort replace-safety seam is closed. The representative rerun now reaches epoch 4 PUBLISHED with active 2/5, snapshot coverage 3/5, pending ACK count 0, and recovery protocol state priority_spread_pending. The dominant reason moved to priority_recovery_rebalancer_handoff_terminal_failed: triage selects owner rebalancer_leader, boundary rebalancer_handoff, wait mode stalled, and nextAction schedule_followup_rebalance while sql_transactions-p1 remains recovering_in_flight, sql_write_operations-p1 returns to needs_operation, and replica_operations-p1 stays blocked_unclassified.
 
 ## Next Action
 
-Extract the 041947Z sql_transactions-p1 eligible-cohort rejection, lease-blocked pre-execution handoff, and target-side in-progress REPLACE witnesses; add a focused regression for the selected coordinator/rebalancer replace-safety path; repair only that owner boundary; and rerun one representative rolling-restart scenario.
+Extract the 044845Z rebalancer-handoff witnesses for replica_operations-p1 operation 6c0118c8-21a7-41f6-9f8c-57ecb2801c1d and sql_transactions-p1 operation 2ac8218e-15db-467f-8d23-eb483c72b427; add a focused stalled follow-up regression for the selected rebalancer/workflow handoff boundary; repair only that owner path; and rerun one representative rolling-restart scenario.
 
 ## Proof Ladder
 
-1. `Focused 041947Z eligible-cohort replace-safety witness fixture`
-2. `Focused priority recovery eligible-cohort replace-safety regression`
+1. `Focused 044845Z rebalancer-handoff stalled-follow-up witness fixture`
+2. `Focused priority recovery rebalancer-handoff terminal-failed regression`
 3. `Touched-file static guardrails`
 4. `Representative rolling-restart --fast-local rerun`
 
 ## Touched Files
 
-1. `src/rebalancer/rebalance-coordinator-segment-5.js`
-2. `src/rebalancer/unified-rebalancer-segment-4-stage-4.js`
-3. `test/rebalancer/priority-follow-up-target-readiness.test.js`
-4. `test/rebalancer/unified-rebalancer.test.js`
-5. `work/packages/active-20260507-rolling-restart-topology-publication-missing-active-priority-recovery-eligible-cohort-replace-safety-reentry.md`
+1. `src/rebalancer/unified-rebalancer-segment-4-stage-4.js`
+2. `src/rebalancer/rebalance-coordinator-segment-5.js`
+3. `src/rebalancer/operation-workflow-owner-segment-4.js`
+4. `test/rebalancer/rebalance-coordinator-stopping-reconcile.test.js`
+5. `work/packages/active-20260507-rolling-restart-topology-publication-missing-active-priority-recovery-rebalancer-handoff-terminal-failed-reentry.md`
