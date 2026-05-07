@@ -13,7 +13,7 @@
   "boundary": "Topology publication missing-active node / priority operation scheduling owner",
   "dominantReason": "publication_missing_active_node=8be8d30f-4499-5eed-865c-71b4d529a67a",
   "currentState": "Planner-created current-entity priority follow-up moves now preserve defer_to_workflow_owner readiness semantics through pre-execution, and the representative rerun no longer selects rebalancer_leader / operation_scheduling as the live blocker. The next artifact advances sql_write_operations-p1 to recovering_in_flight behind operation f57d2c14-afae-4f6a-a626-897ff8934175, while two joiners remain stuck in contacting_seed / bootstrap INIT and seed-side evidence now points at startup bootstrap-admission precheck pressure.",
-  "nextAction": "Continue in work/packages/active-20260507-rolling-restart-topology-publication-missing-active-startup-bootstrap-admission-precheck-pressure-reentry.md for the startup/bootstrap admission precheck pressure boundary.",
+  "nextAction": "Continue in work/packages/done-20260507-rolling-restart-topology-publication-missing-active-startup-bootstrap-admission-precheck-pressure-reentry.md for the startup/bootstrap admission precheck pressure boundary.",
   "proof": [
     "Focused 021000Z operation-scheduling / pre-execution handoff fixture",
     "Focused current-entity priority follow-up target-readiness regression",
@@ -27,7 +27,7 @@
     "work/packages/done-20260507-rolling-restart-topology-publication-missing-active-priority-operation-scheduling-reentry.md"
   ],
   "predecessor": "work/packages/done-20260507-rolling-restart-topology-publication-missing-active-workflow-progress-reentry.md",
-  "successor": "work/packages/active-20260507-rolling-restart-topology-publication-missing-active-startup-bootstrap-admission-precheck-pressure-reentry.md"
+  "successor": "work/packages/done-20260507-rolling-restart-topology-publication-missing-active-startup-bootstrap-admission-precheck-pressure-reentry.md"
 }
 -->
 
@@ -203,5 +203,5 @@ Closure:
 This package closes by migration. The repaired boundary was planner-created
 current-entity follow-up readiness deferral inside the unified rebalancer. The
 successor package is
-[Rolling Restart Topology Publication Missing-Active Startup Bootstrap Admission Precheck Pressure Reentry](./active-20260507-rolling-restart-topology-publication-missing-active-startup-bootstrap-admission-precheck-pressure-reentry.md),
+[Rolling Restart Topology Publication Missing-Active Startup Bootstrap Admission Precheck Pressure Reentry](./done-20260507-rolling-restart-topology-publication-missing-active-startup-bootstrap-admission-precheck-pressure-reentry.md),
 which owns the `021309Z` startup/bootstrap pressure evidence.

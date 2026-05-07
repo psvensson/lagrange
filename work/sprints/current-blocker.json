@@ -2,27 +2,29 @@
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
   "sprint": "work/sprints/active-2026-q2-publication-scoped-consistency-and-node-join-closure.md",
-  "package": "work/packages/active-20260507-rolling-restart-topology-publication-missing-active-startup-bootstrap-admission-precheck-pressure-reentry.md",
+  "package": "work/packages/active-20260507-rolling-restart-topology-publication-missing-active-startup-bootstrap-request-execution-timeout-reentry.md",
   "status": "active",
   "scenario": "rolling-restart",
-  "artifact": "test-output/reports/rolling-restart-after-priority-follow-up-readiness-20260507T021309Z.report.json",
-  "playback": "test-output/reports/.playback/rolling-restart-after-priority-follow-up-readiness-20260507T021309Z/rolling-restart/",
-  "owner": "Startup join contacting-seed bootstrap admission precheck pressure behind topology publication missing-active reentry",
-  "boundary": "Startup join / bootstrap admission precheck pressure",
-  "dominantReason": "publication_missing_active_node=8be8d30f-4499-5eed-865c-71b4d529a67a",
-  "currentState": "The priority operation-scheduling seam is closed. The representative rerun now reaches epoch 5 ACK_PENDING with only sql_write_operations-p1 left recovering_in_flight, but joiners 8be8... and ebc4... remain stuck in contacting_seed / bootstrap INIT after the seed had already reached seed_join_ready. Seed-side logs show control-plane query pressure during the same window, and the strongest live hypothesis is that /bootstrap still performs expensive MOVE_REPLICA reservation refresh work before it acquires the bounded bootstrap admission slot, allowing concurrent join requests to stampede the pre-admission hot path.",
-  "nextAction": "Extract the 021309Z startup/bootstrap witnesses and seed-side bootstrap-request timing evidence; add a focused bootstrap regression that proves saturated concurrent join requests do not enter the expensive reservation precheck path after the first request claims the bounded slot; then repair bootstrap request sequencing so admission is acquired before expensive reservation refresh work or otherwise guards that work behind the same slot.",
+  "artifact": "test-output/reports/rolling-restart-after-bootstrap-admission-precheck-pressure-20260507T023700Z.report.json",
+  "playback": "test-output/reports/.playback/rolling-restart-after-bootstrap-admission-precheck-pressure-20260507T023700Z/rolling-restart/",
+  "owner": "Startup join contacting-seed bootstrap request execution timeout behind topology publication missing-active reentry",
+  "boundary": "Startup join / bootstrap request execution budget",
+  "dominantReason": "publication_missing_active_node=11601fe0-72d6-5853-8590-ec2881853e72",
+  "currentState": "The bootstrap admission precheck seam is closed. The representative rerun now reaches epoch 1 PUBLISHED with snapshot coverage 1/5 and four missing-active nodes, while joiners 8be8... and ebc4... still fail in contacting_seed with raw fetch timeouts after roughly two client HTTP timeout windows. Supporting control-plane publication evidence on 11601... shows control_plane_publications-p1 source-removal safety moved forward from replacement-leader ownership pending to minimum-voter protection, so the strongest live hypothesis is no longer pre-admission pressure. The next direct owner seam is bootstrap request execution timeout: admitted /bootstrap requests can still overrun the joiner HTTP timeout inside assignment or reservation work instead of returning canonical BOOTSTRAP_NOT_READY with retryAfterMs.",
+  "nextAction": "Extract the 023700Z contacting_seed timeout witnesses and supporting control-plane publication progression, add a focused bootstrap regression proving admitted bootstrap requests return canonical BOOTSTRAP_NOT_READY when assignment or reservation work stalls past one bounded server-side request budget, then repair only that owner path and rerun one representative rolling-restart scenario.",
   "proof": [
-    "Focused 021309Z startup/bootstrap admission precheck fixture",
-    "Focused bootstrap concurrent pre-admission pressure regression",
+    "Focused 023700Z contacting-seed timeout fixture",
+    "Focused bootstrap request execution-timeout regression",
     "Touched-file static guardrails",
     "Representative rolling-restart --fast-local rerun"
   ],
   "touchedFiles": [
+    "src/bootstrap/bootstrap-api-constants.js",
+    "src/bootstrap/bootstrap-api.js",
     "src/bootstrap/owners/bootstrap-request-owner.js",
-    "src/bootstrap/owners/move-replica-assignment-owner.js",
-    "test/bootstrap/bootstrap-api.test-part-3.js",
-    "work/packages/active-20260507-rolling-restart-topology-publication-missing-active-startup-bootstrap-admission-precheck-pressure-reentry.md"
+    "src/bootstrap/owners/bootstrap-join-admission-owner.js",
+    "test/bootstrap/bootstrap-request-execution-timeout.test.js",
+    "work/packages/active-20260507-rolling-restart-topology-publication-missing-active-startup-bootstrap-request-execution-timeout-reentry.md"
   ],
-  "predecessor": "work/packages/done-20260507-rolling-restart-topology-publication-missing-active-priority-operation-scheduling-reentry.md"
+  "predecessor": "work/packages/done-20260507-rolling-restart-topology-publication-missing-active-startup-bootstrap-admission-precheck-pressure-reentry.md"
 }

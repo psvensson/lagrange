@@ -315,37 +315,6 @@ class BootstrapRequestOwner {
 
     const now = Date.now();
     this.expireStaleBootstrapAdmissions(now);
-    const blockingMoveReplicaAdmissions =
-      await this.getBlockingMoveReplicaBootstrapAdmissions(now);
-    if (blockingMoveReplicaAdmissions.length > NUM.ZERO) {
-      const blockingReservation = blockingMoveReplicaAdmissions[NUM.ZERO];
-      const retryAfterMs =
-        this.resolveMoveReplicaBootstrapAdmissionRetryAfterMs(
-          blockingReservation,
-          now,
-        );
-      this.getLogger().warn(BOOTSTRAP_API_LOG_MSG.BOOTSTRAP_ADMISSION_DEFERRED, {
-        nodeId,
-        nodeAddress,
-        seedNodeId: this.getSeedNodeId(),
-        admissionBlock: LOCAL_STR_836HW,
-        assignmentId: blockingReservation.assignmentId,
-        replicaId: blockingReservation.replicaId,
-        groupId: blockingReservation.groupId || null,
-        sourceNodeId: blockingReservation.sourceNodeId || null,
-        targetNodeId: blockingReservation.targetNodeId,
-        retryAfterMs,
-      });
-      reply.code(HTTP_STATUS.SERVICE_UNAVAILABLE);
-      return this.buildBootstrapNotReadyResponse({
-        error: BOOTSTRAP_API_ERROR.BOOTSTRAP_NOT_READY,
-        code: BOOTSTRAP_PIPELINE_ERROR_CODE.BOOTSTRAP_NOT_READY,
-        reasonCode:
-          BOOTSTRAP_API_PROBE_REASON.MOVE_REPLICA_HANDOFF_STABILIZING,
-        retryAfterMs,
-      });
-    }
-
     if (this.getInFlightBootstrapRequestCount() >=
         this.getMaxConcurrentBootstrapRequests()) {
       this.getLogger().warn(BOOTSTRAP_API_LOG_MSG.BOOTSTRAP_ADMISSION_DEFERRED, {
@@ -372,6 +341,40 @@ class BootstrapRequestOwner {
       now,
     });
     try {
+      const blockingMoveReplicaAdmissions =
+        await this.getBlockingMoveReplicaBootstrapAdmissions(now);
+      if (blockingMoveReplicaAdmissions.length > NUM.ZERO) {
+        const blockingReservation = blockingMoveReplicaAdmissions[NUM.ZERO];
+        const retryAfterMs =
+          this.resolveMoveReplicaBootstrapAdmissionRetryAfterMs(
+            blockingReservation,
+            now,
+          );
+        this.getLogger().warn(
+          BOOTSTRAP_API_LOG_MSG.BOOTSTRAP_ADMISSION_DEFERRED,
+          {
+            nodeId,
+            nodeAddress,
+            seedNodeId: this.getSeedNodeId(),
+            admissionBlock: LOCAL_STR_836HW,
+            assignmentId: blockingReservation.assignmentId,
+            replicaId: blockingReservation.replicaId,
+            groupId: blockingReservation.groupId || null,
+            sourceNodeId: blockingReservation.sourceNodeId || null,
+            targetNodeId: blockingReservation.targetNodeId,
+            retryAfterMs,
+          },
+        );
+        reply.code(HTTP_STATUS.SERVICE_UNAVAILABLE);
+        return this.buildBootstrapNotReadyResponse({
+          error: BOOTSTRAP_API_ERROR.BOOTSTRAP_NOT_READY,
+          code: BOOTSTRAP_PIPELINE_ERROR_CODE.BOOTSTRAP_NOT_READY,
+          reasonCode:
+            BOOTSTRAP_API_PROBE_REASON.MOVE_REPLICA_HANDOFF_STABILIZING,
+          retryAfterMs,
+        });
+      }
+
       const leaderStatus = await this.waitForServiceLeaders({
         startupMode: request.body?.startupMode || null,
       });
@@ -496,7 +499,8 @@ class BootstrapRequestOwner {
         return this.buildBootstrapNotReadyResponse({
           error: BOOTSTRAP_API_ERROR.BOOTSTRAP_NOT_READY,
           code:
-            typeof error?.errorCode === LOCAL_STR_STRING && error.errorCode.length > LOCAL_NUM_ZERO ?
+            typeof error?.errorCode === LOCAL_STR_STRING &&
+            error.errorCode.length > LOCAL_NUM_ZERO ?
               error.errorCode :
               BOOTSTRAP_PIPELINE_ERROR_CODE.BOOTSTRAP_NOT_READY,
           reasonCode:
