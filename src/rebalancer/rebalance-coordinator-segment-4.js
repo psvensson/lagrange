@@ -3,6 +3,60 @@ import {RebalanceCoordinatorSegment3} from './rebalance-coordinator-segment-3.js
 
 const LOCAL_STR_FUNCTION = 'function';
 
+const RESERVATION_ORPHAN_RECONCILE_STATE = Object.freeze({
+  ABSENT_OPERATION: 'absent_operation',
+  DEFERRED_OPERATION_VISIBILITY: 'deferred_operation_visibility',
+  NON_TERMINAL_OPERATION: 'non_terminal_operation',
+  TERMINAL_OPERATION: 'terminal_operation',
+});
+
+const RESERVATION_ORPHAN_RECONCILE_ACTION = Object.freeze({
+  KEEP_ACTIVE: 'keep_active',
+  RELEASE_ACTIVE: 'release_active',
+});
+
+const RESERVATION_ORPHAN_RECONCILE_STATE_TABLE = Object.freeze([
+  Object.freeze({
+    state: RESERVATION_ORPHAN_RECONCILE_STATE.TERMINAL_OPERATION,
+    matches: (evidence) =>
+      evidence.operationVisible === true && evidence.operationTerminal === true,
+  }),
+  Object.freeze({
+    state: RESERVATION_ORPHAN_RECONCILE_STATE.NON_TERMINAL_OPERATION,
+    matches: (evidence) =>
+      evidence.operationVisible === true && evidence.operationTerminal !== true,
+  }),
+  Object.freeze({
+    state: RESERVATION_ORPHAN_RECONCILE_STATE.DEFERRED_OPERATION_VISIBILITY,
+    matches: (evidence) => evidence.ownerReadDeferred === true,
+  }),
+  Object.freeze({
+    state: RESERVATION_ORPHAN_RECONCILE_STATE.ABSENT_OPERATION,
+    matches: () => true,
+  }),
+]);
+
+const RESERVATION_ORPHAN_RECONCILE_ACTION_BY_STATE = Object.freeze(
+  new Map([
+    [
+      RESERVATION_ORPHAN_RECONCILE_STATE.TERMINAL_OPERATION,
+      RESERVATION_ORPHAN_RECONCILE_ACTION.RELEASE_ACTIVE,
+    ],
+    [
+      RESERVATION_ORPHAN_RECONCILE_STATE.NON_TERMINAL_OPERATION,
+      RESERVATION_ORPHAN_RECONCILE_ACTION.KEEP_ACTIVE,
+    ],
+    [
+      RESERVATION_ORPHAN_RECONCILE_STATE.DEFERRED_OPERATION_VISIBILITY,
+      RESERVATION_ORPHAN_RECONCILE_ACTION.KEEP_ACTIVE,
+    ],
+    [
+      RESERVATION_ORPHAN_RECONCILE_STATE.ABSENT_OPERATION,
+      RESERVATION_ORPHAN_RECONCILE_ACTION.RELEASE_ACTIVE,
+    ],
+  ]),
+);
+
 const {
   CONTROL_PLANE_READINESS_DIMENSION,
   DEFAULT_AMPLIFICATION_FACTOR,
@@ -646,6 +700,67 @@ class RebalanceCoordinatorSegment4 extends RebalanceCoordinatorSegment3 {
   }
 
   /**
+   * Read the canonical visibility contract for one reservation-backed
+   * operation before deciding whether the reservation is orphaned.
+   *
+   * @param {string|null} operationId
+   * @return {Promise<Object>}
+   * @private
+   */
+  async getReservationOperationVisibilityObservation(operationId) {
+    if (
+      typeof this.repository?.getOperationByIdVisibilityObservation ===
+      LOCAL_STR_FUNCTION
+    ) {
+      return this.repository.getOperationByIdVisibilityObservation(
+        operationId,
+        {
+          requireOwnerRpcRead: false,
+          allowPriorityRecoveryDeferredVisibility: true,
+        },
+      );
+    }
+    const operation = operationId ? await this.queryOperationById(operationId) : null;
+    return Object.freeze({
+      operation,
+      deferredOutcome: null,
+    });
+  }
+
+  /**
+   * @param {Object|null} visibilityObservation
+   * @return {Object}
+   * @private
+   */
+  buildReservationOrphanReconcileSnapshot(visibilityObservation) {
+    const operation = visibilityObservation?.operation || null;
+    const deferredOutcome =
+      visibilityObservation?.deferredOutcome &&
+      typeof visibilityObservation.deferredOutcome === 'object' ?
+        visibilityObservation.deferredOutcome :
+        null;
+    const evidence = Object.freeze({
+      operationVisible: operation !== null,
+      operationTerminal: this.isOperationTerminal(operation),
+      ownerReadDeferred: deferredOutcome !== null,
+    });
+    const state =
+      RESERVATION_ORPHAN_RECONCILE_STATE_TABLE.find((candidate) =>
+        candidate.matches(evidence),
+      )?.state || RESERVATION_ORPHAN_RECONCILE_STATE.ABSENT_OPERATION;
+    const action =
+      RESERVATION_ORPHAN_RECONCILE_ACTION_BY_STATE.get(state) ||
+      RESERVATION_ORPHAN_RECONCILE_ACTION.KEEP_ACTIVE;
+    return Object.freeze({
+      action,
+      deferredOutcome,
+      evidence,
+      operation,
+      state,
+    });
+  }
+
+  /**
    * Reconcile stale and orphan reservations.
    * - Expire active reservations past their TTL.
    * - Release active reservations whose operations are terminal.
@@ -720,35 +835,43 @@ class RebalanceCoordinatorSegment4 extends RebalanceCoordinatorSegment3 {
 
     if (activeResult.success && activeResult.rows) {
       for (const row of activeResult.rows) {
-        const op = await this.queryOperationById(row.operation_id);
-        const isTerminal = !op || this.isOperationTerminal(op);
-        if (isTerminal) {
-          const transition = await this.transitionActiveReservationById(
-            row.reservation_id,
-            RESERVATION_STATUS.RELEASED,
-            now,
+        const visibilityObservation =
+          await this.getReservationOperationVisibilityObservation(
+            row.operation_id,
           );
-          if (!transition.success) {
-            this.logger.warn(
-              REBALANCE_COORDINATOR_LOG_MSG.RESERVATION_RELEASE_FAILED,
-              {
-                operationId: row.operation_id,
-                reservationId: row.reservation_id,
-                error: transition.error,
-              },
-            );
-            continue;
-          }
-          if (transition.changed) {
-            orphansReleased++;
-            this.logger.info(
-              REBALANCE_COORDINATOR_LOG_MSG.RESERVATION_RECONCILE_ORPHAN,
-              {
-                reservationId: row.reservation_id,
-                operationId: row.operation_id,
-              },
-            );
-          }
+        const reconcileSnapshot =
+          this.buildReservationOrphanReconcileSnapshot(visibilityObservation);
+        if (
+          reconcileSnapshot.action !==
+          RESERVATION_ORPHAN_RECONCILE_ACTION.RELEASE_ACTIVE
+        ) {
+          continue;
+        }
+        const transition = await this.transitionActiveReservationById(
+          row.reservation_id,
+          RESERVATION_STATUS.RELEASED,
+          now,
+        );
+        if (!transition.success) {
+          this.logger.warn(
+            REBALANCE_COORDINATOR_LOG_MSG.RESERVATION_RELEASE_FAILED,
+            {
+              operationId: row.operation_id,
+              reservationId: row.reservation_id,
+              error: transition.error,
+            },
+          );
+          continue;
+        }
+        if (transition.changed) {
+          orphansReleased++;
+          this.logger.info(
+            REBALANCE_COORDINATOR_LOG_MSG.RESERVATION_RECONCILE_ORPHAN,
+            {
+              reservationId: row.reservation_id,
+              operationId: row.operation_id,
+            },
+          );
         }
       }
     }

@@ -58,24 +58,31 @@ It failed after `131.2s`. The previous exact-target observation seam is now
 closed by migration: the fresh artifact no longer terminates on
 `replica_operations-p1` sibling fallback.
 
-The live representative blocker remains topology publication missing-active
-workflow-progress reentry. Failure classification is still
-`publication_convergence_blocked` with root cause class `topology`, but the
-dominant reason is now
-`publication_missing_active_node=8be8d30f-4499-5eed-865c-71b4d529a67a`.
-Top-level publication convergence reaches epoch `5` `ACK_PENDING` with
-missing-active reasons for `8be8...` and `ebc4...`, while supporting evidence
-points at `sql_write_operations-p1` under
-`operation_workflow_owner / workflow_progress` with a coordinator-created
-critical `REPLACE` stalling around `dispatch_pending` and target-node
-reservation reconciliation releasing an active reservation as orphaned during
-deferred visibility.
+The latest May 7 representative rerun after the reservation-visibility repair
+is
+`test-output/reports/rolling-restart-after-reservation-visibility-reconcile-20260507T021000Z.report.json`.
+It failed after `134.9s`. The previous reservation-visibility seam is now
+closed by migration: the fresh artifact no longer terminates on defer-visible
+orphan reservation release or workflow-progress / dispatch-pending actuation.
 
-The current unchecked package task is therefore the next slice in the same
-active package: preserve the closed exact-target observation regression, then
-repair the `sql_write_operations-p1` reservation-visibility or deferred
-owner-read seam, not more pending ACK, transport, or
-startup/readiness-fallback normalization work.
+The live representative blocker remains topology publication missing-active
+reentry, but the semantic owner moved again. Failure classification is still
+`publication_convergence_blocked` with root cause class `topology`, and the
+dominant reason is now
+`publication_missing_active_node=35a891b8-c1a0-5064-9c6e-2acfba61c2a7`.
+Top-level publication convergence reaches epoch `4` `ACK_PENDING` with
+missing-active reasons for `35a891...`, `8be8...`, and `ebc4...`, while the
+selected actionable owner evidence points at
+`sql_transaction_participants-p1`, `sql_transactions-p1`, and
+`sql_write_operations-p1` under `rebalancer_leader / operation_scheduling`.
+Logs on `7493...` show each partition entering rebalancing with `moveCount=1`,
+then pre-execution handoff dropping the move as `node_not_ready` on target
+`11601...` with readiness skip detail `repair_ineligible`.
+
+The current unchecked package task is therefore a new package on the next
+owner boundary: preserve the closed reservation-visibility regression, then
+repair the priority follow-up target-readiness defer seam, not more
+reservation-owner-read or startup normalization work.
 
 This sprint keeps the old filename for continuity with the active branch, but
 the execution scope is now runtime stability and harness determinism.
@@ -122,23 +129,24 @@ Secondary after the primary path is stable:
 
 The current active representative re-entry package is:
 
-1. [Rolling Restart Topology Publication Missing-Active Workflow Progress Reentry](../packages/active-20260507-rolling-restart-topology-publication-missing-active-workflow-progress-reentry.md)
+1. [Rolling Restart Topology Publication Missing-Active Priority Operation Scheduling Reentry](../packages/active-20260507-rolling-restart-topology-publication-missing-active-priority-operation-scheduling-reentry.md)
 
 Retained predecessor context file:
 
-1. [Rolling Restart Startup Steady-Published Selected Membership Deficit Readiness Timeout Reentry](../packages/done-20260506-rolling-restart-startup-steady-published-selected-membership-deficit-readiness-timeout-reentry.md)
-2. [Rolling Restart Publication ACK-Pending Selected Membership Deficit Owner Reentry](../packages/done-20260506-rolling-restart-publication-ack-pending-selected-membership-deficit-owner-reentry.md)
-3. [Rolling Restart Startup Active Gate Snapshot Coverage Selected-Snapshot Timeout Bootstrap Readiness Reentry](../packages/done-20260506-rolling-restart-startup-active-gate-snapshot-coverage-selected-snapshot-timeout-bootstrap-readiness-reentry.md)
-4. [Rolling Restart Published Snapshot Coverage Priority Spread Serial-Wait Workflow Progress Reentry](../packages/done-20260506-rolling-restart-published-snapshot-coverage-priority-spread-serial-wait-workflow-progress-reentry.md)
-5. [Rolling Restart Startup Active Gate Publication Evidence Priority Recovery Consumer Alignment](../packages/done-20260506-rolling-restart-startup-active-gate-publication-evidence-priority-recovery-consumer-alignment.md)
-6. [Rolling Restart Startup Active Gate Snapshot Coverage Priority Serial-Wait Workflow Progress Reentry](../packages/done-20260506-rolling-restart-startup-active-gate-snapshot-coverage-priority-serial-wait-workflow-progress-reentry.md)
-7. [Rolling Restart Startup Active Gate Priority Operation Creation Snapshot Coverage Reentry](../packages/done-20260506-rolling-restart-startup-active-gate-priority-operation-creation-snapshot-coverage-reentry.md)
-8. [Rolling Restart Published Snapshot Coverage Priority Serial-Wait Workflow Progress Reentry](../packages/done-20260506-rolling-restart-published-snapshot-coverage-priority-serial-wait-workflow-progress-reentry.md)
-9. [Rolling Restart Publication ACK-Pending Rebalancer Handoff Admission Reentry](../packages/done-20260506-rolling-restart-publication-ack-pending-rebalancer-handoff-admission-reentry.md)
-10. [Rolling Restart Startup Seed Transport Delivery-Source Saturation Reentry](../packages/done-20260506-rolling-restart-startup-seed-transport-delivery-source-saturation-reentry.md)
-11. [Rolling Restart Startup Publication ACK-Pending Owner-RPC Nodes Repair Reentry](../packages/done-20260506-rolling-restart-startup-publication-ack-pending-owner-rpc-nodes-repair-reentry.md)
-12. [Rolling Restart Topology Publication Snapshot Reachability Reentry](../packages/done-20260505-rolling-restart-topology-publication-snapshot-reachability-reentry.md)
-13. [Rolling Restart Operation Transition Pressure And Over-Target Trim](../packages/todo-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md)
+1. [Rolling Restart Topology Publication Missing-Active Workflow Progress Reentry](../packages/done-20260507-rolling-restart-topology-publication-missing-active-workflow-progress-reentry.md)
+2. [Rolling Restart Startup Steady-Published Selected Membership Deficit Readiness Timeout Reentry](../packages/done-20260506-rolling-restart-startup-steady-published-selected-membership-deficit-readiness-timeout-reentry.md)
+3. [Rolling Restart Publication ACK-Pending Selected Membership Deficit Owner Reentry](../packages/done-20260506-rolling-restart-publication-ack-pending-selected-membership-deficit-owner-reentry.md)
+4. [Rolling Restart Startup Active Gate Snapshot Coverage Selected-Snapshot Timeout Bootstrap Readiness Reentry](../packages/done-20260506-rolling-restart-startup-active-gate-snapshot-coverage-selected-snapshot-timeout-bootstrap-readiness-reentry.md)
+5. [Rolling Restart Published Snapshot Coverage Priority Spread Serial-Wait Workflow Progress Reentry](../packages/done-20260506-rolling-restart-published-snapshot-coverage-priority-spread-serial-wait-workflow-progress-reentry.md)
+6. [Rolling Restart Startup Active Gate Publication Evidence Priority Recovery Consumer Alignment](../packages/done-20260506-rolling-restart-startup-active-gate-publication-evidence-priority-recovery-consumer-alignment.md)
+7. [Rolling Restart Startup Active Gate Snapshot Coverage Priority Serial-Wait Workflow Progress Reentry](../packages/done-20260506-rolling-restart-startup-active-gate-snapshot-coverage-priority-serial-wait-workflow-progress-reentry.md)
+8. [Rolling Restart Startup Active Gate Priority Operation Creation Snapshot Coverage Reentry](../packages/done-20260506-rolling-restart-startup-active-gate-priority-operation-creation-snapshot-coverage-reentry.md)
+9. [Rolling Restart Published Snapshot Coverage Priority Serial-Wait Workflow Progress Reentry](../packages/done-20260506-rolling-restart-published-snapshot-coverage-priority-serial-wait-workflow-progress-reentry.md)
+10. [Rolling Restart Publication ACK-Pending Rebalancer Handoff Admission Reentry](../packages/done-20260506-rolling-restart-publication-ack-pending-rebalancer-handoff-admission-reentry.md)
+11. [Rolling Restart Startup Seed Transport Delivery-Source Saturation Reentry](../packages/done-20260506-rolling-restart-startup-seed-transport-delivery-source-saturation-reentry.md)
+12. [Rolling Restart Startup Publication ACK-Pending Owner-RPC Nodes Repair Reentry](../packages/done-20260506-rolling-restart-startup-publication-ack-pending-owner-rpc-nodes-repair-reentry.md)
+13. [Rolling Restart Topology Publication Snapshot Reachability Reentry](../packages/done-20260505-rolling-restart-topology-publication-snapshot-reachability-reentry.md)
+14. [Rolling Restart Operation Transition Pressure And Over-Target Trim](../packages/todo-20260425-rolling-restart-operation-transition-pressure-and-overtarget-trim.md)
 
 ## Queued Packages
 
@@ -236,6 +244,15 @@ publication missing-active node with supporting
 `operation_workflow_owner / workflow_progress / event_driven` evidence on
 `replica_operations-p1`, including repeated `replace_remove_safety_blocked`
 deferrals.
+The follow-up `20260507T021000Z` rerun then moved again after the
+reservation-visibility slice: target-node orphan reservation release is no
+longer the selected seam, and the live representative boundary is now
+`rebalancer_leader / operation_scheduling`. Three priority partitions return
+to actionable `needs_operation` / `eligible_but_no_operation_created`, while
+rebalancer logs on `7493...` show one planned add-like move per partition
+being dropped at pre-execution on target `11601...` with readiness skip detail
+`repair_ineligible`. The new active package therefore owns priority follow-up
+target-readiness defer normalization.
 
 All final consistency recommendation packages are complete or queued outside
 the current execution path.
@@ -245,7 +262,7 @@ Other secondary matrix failures become active packages only after the
 
 Current re-entry package:
 
-1. [Rolling Restart Topology Publication Missing-Active Workflow Progress Reentry](../packages/active-20260507-rolling-restart-topology-publication-missing-active-workflow-progress-reentry.md)
+1. [Rolling Restart Topology Publication Missing-Active Priority Operation Scheduling Reentry](../packages/active-20260507-rolling-restart-topology-publication-missing-active-priority-operation-scheduling-reentry.md)
 
 Queued convergence-grammar packages:
 

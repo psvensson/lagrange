@@ -4,42 +4,38 @@
 
 Sprint: `work/sprints/active-2026-q2-publication-scoped-consistency-and-node-join-closure.md`
 
-Package: `work/packages/active-20260507-rolling-restart-topology-publication-missing-active-workflow-progress-reentry.md`
+Package: `work/packages/active-20260507-rolling-restart-topology-publication-missing-active-priority-operation-scheduling-reentry.md`
 
 Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/rolling-restart-after-exact-target-observation-20260507T013352Z.report.json`
+Artifact: `test-output/reports/rolling-restart-after-reservation-visibility-reconcile-20260507T021000Z.report.json`
 
-Playback: `test-output/reports/.playback/rolling-restart-after-exact-target-observation-20260507T013352Z/rolling-restart/`
+Playback: `test-output/reports/.playback/rolling-restart-after-reservation-visibility-reconcile-20260507T021000Z/rolling-restart/`
 
 ## Boundary
 
-Owner: `Topology publication missing-active node over operation-workflow progress and replace-remove safety deferral`
+Owner: `Topology publication missing-active node over rebalancer-leader priority operation scheduling`
 
-Boundary: `Topology publication missing-active node / operation-workflow progress owner`
+Boundary: `Topology publication missing-active node / priority operation scheduling owner`
 
-Dominant reason: `publication_missing_active_node=8be8d30f-4499-5eed-865c-71b4d529a67a`
+Dominant reason: `publication_missing_active_node=35a891b8-c1a0-5064-9c6e-2acfba61c2a7`
 
-Current state: The exact-target observation seam is closed. The representative rerun now fails as publication_convergence_blocked on epoch 5 ACK_PENDING missingPublishedCount=2, while supporting workflow evidence points at sql_write_operations-p1 under operation_workflow_owner / workflow_progress with a coordinator-created REPLACE stalled at dispatch_pending and target-node orphan reservation release during deferred visibility.
+Current state: The reservation-visibility seam is closed. The representative rerun now fails at epoch 4 ACK_PENDING with snapshot coverage 1/5 and three priority partitions in needs_operation under rebalancer_leader / operation_scheduling. Rebalancer logs on 7493... show one add-like move planned for each blocked partition, but pre-execution handoff skips those moves as node_not_ready with repair_ineligible target readiness on 11601..., which suggests the current-entity follow-up lane is missing defer_to_workflow_owner target-readiness normalization.
 
 ## Next Action
 
-Extract the 013352Z publicationConvergence, current active-gate progress, sql_write_operations-p1 workflow witness, and target-node reservation log fixture; add a focused reservation-visibility regression; then repair the owner-read or reservation-reconciliation path so active reservations are not released while in-flight operations are only defer-visible.
+Extract the 021000Z priority partition witnesses and pre-execution handoff logs; add a focused rebalancer regression where planner-created current-entity follow-up moves target a recovery-eligible but repair-ineligible node; then repair the augmentation or pre-execution path so needs_operation follow-up moves preserve defer_to_workflow_owner readiness semantics.
 
 ## Proof Ladder
 
-1. `Focused exact-target observation regressions`
-2. `Focused sql_write_operations-p1 reservation visibility regression`
+1. `Focused 021000Z operation-scheduling / pre-execution handoff fixture`
+2. `Focused current-entity priority follow-up target-readiness regression`
 3. `Touched-file static guardrails`
 4. `Representative rolling-restart --fast-local rerun`
 
 ## Touched Files
 
-1. `src/rebalancer/operation-workflow-owner-segment-2.js`
-2. `src/rebalancer/operation-workflow-owner-shared.js`
-3. `src/rebalancer/rebalance-coordinator-segment-4.js`
-4. `src/rebalancer/rebalance-coordinator-segment-5.js`
-5. `src/rebalancer/replica-operation-repository-observation-methods.js`
-6. `test/rebalancer/coordinator-reservation-lifecycle.test.js`
-7. `test/rebalancer/priority-replace-exact-target-observation.test.js`
-8. `test/rebalancer/replica-operation-observation-contract.test.js`
+1. `src/rebalancer/unified-rebalancer-segment-4-stage-3.js`
+2. `src/rebalancer/unified-rebalancer-segment-4-stage-shared.js`
+3. `test/rebalancer/unified-rebalancer-core-03-test-cases.js`
+4. `work/packages/active-20260507-rolling-restart-topology-publication-missing-active-priority-operation-scheduling-reentry.md`

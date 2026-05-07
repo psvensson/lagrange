@@ -30,6 +30,18 @@ import {
   createMockTransactionCoordinator,
 } from './test-helpers.js';
 
+const TEST_DEFERRED_RESERVATION_ID = 'res-deferred';
+const TEST_DEFERRED_OPERATION_ID = 'op-deferred';
+const TEST_DEFERRED_PARTITION_ID = 'p-deferred';
+const TEST_DEFERRED_TARGET_NODE_ID = 'node-deferred';
+const TEST_DEFERRED_CONFIRMATION_STATE = 'deferred';
+const TEST_DEFERRED_OPERATION_VISIBILITY = Object.freeze({
+  operation: null,
+  deferredOutcome: Object.freeze({
+    confirmationState: TEST_DEFERRED_CONFIRMATION_STATE,
+  }),
+});
+
 function initializeConfig(overrides = {}) {
   ConfigurationManager.resetInstance();
   const config = ConfigurationManager.getInstance();
@@ -735,6 +747,47 @@ test('reconcileReservations - skips non-terminal active reservations',
       'reservation stays active');
     t.end();
   });
+
+test('reconcileReservations - skips orphan release while operation visibility ' +
+  'is deferred', async (t) => {
+  initializeConfig();
+  const sqlEngine = createTrackingSqlEngine();
+
+  sqlEngine.reservations.set(TEST_DEFERRED_RESERVATION_ID, {
+    reservation_id: TEST_DEFERRED_RESERVATION_ID,
+    operation_id: TEST_DEFERRED_OPERATION_ID,
+    entity_type: SERVICE_TYPE.PARTITION,
+    entity_id: TEST_DEFERRED_PARTITION_ID,
+    partition_id: TEST_DEFERRED_PARTITION_ID,
+    target_node_id: TEST_DEFERRED_TARGET_NODE_ID,
+    estimated_bytes: NUM.HUNDRED,
+    amplification_factor: NUM.ONE,
+    status: RESERVATION_STATUS.ACTIVE,
+    reason_code: RESERVATION_REASON.ADD_REPLICA,
+    created_at: Date.now(),
+    updated_at: Date.now(),
+    expires_at: Date.now() + NUM.THIRTY_THOUSAND,
+    released_at: null,
+  });
+
+  const {coordinator} = createCoordinatorWithStorage({
+    sqlQueryEngine: sqlEngine,
+  });
+  coordinator.repository.queryOperationById = async () => null;
+  coordinator.repository.getOperationByIdVisibilityObservation = async () =>
+    TEST_DEFERRED_OPERATION_VISIBILITY;
+
+  const result = await coordinator.reconcileReservations();
+
+  t.equal(result.orphansReleased, NUM.ZERO);
+  const reservation = sqlEngine.reservations.get(TEST_DEFERRED_RESERVATION_ID);
+  t.equal(
+    reservation.status,
+    RESERVATION_STATUS.ACTIVE,
+    'reservation stays active while owner visibility is deferred',
+  );
+  t.end();
+});
 
 test('reconcileReservations - works without accounting service',
   async (t) => {
