@@ -9,8 +9,15 @@ npm run work:context
 ```
 
 Use that output as the current handoff. It names the active blocker, first files
-to read, proof ladder, useful commands, and dirty worktree summary. Load the
-steering documents below after the handoff identifies the relevant boundary.
+to read, proof ladder, useful commands, and dirty worktree summary.
+
+For steering context, load the compact LLM pack first:
+- `.kiro/steering/llm/README.md`
+- `.kiro/steering/llm/core.md`
+- one relevant domain pack under `.kiro/steering/llm/`
+
+Use the full steering source documents only when the handoff or compact pack
+requires source-level detail for the current boundary.
 
 ## Mandatory Subagent Sequencing
 
@@ -31,7 +38,7 @@ historical `done-...` packages without one are not retroactively invalid.
 Checked required ledger entries must not contain template placeholders such as
 `<...>` or pending markers such as `pending-before-implementation-resumes`.
 
-Steering documents live under `.kiro/steering/`:
+Canonical steering source documents live under `.kiro/steering/`:
 - `.kiro/steering/system guidelines.md`
 - `.kiro/steering/code-style.md`
 - `.kiro/steering/testing-guidelines.md`

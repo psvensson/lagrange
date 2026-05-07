@@ -47,6 +47,15 @@ const TEST_OBSERVED_PROGRESS_TARGET_REPLICA_ID = 'partition-conv-1-r2';
 const TEST_OBSERVED_PROGRESS_VISIBILITY_DEFERRED_SOURCE =
   'test-observed-progress-visibility-fallback';
 const TEST_OBSERVED_PROGRESS_VISIBILITY_RETRY_AFTER_MS = 25;
+const TEST_DEFERRED_DISPATCH_RETRY_OPERATION_ID =
+  'op-deferred-dispatch-retry-fallback';
+const TEST_DEFERRED_DISPATCH_RETRY_PARTITION_ID = 'sql_write_operations-p1';
+const TEST_DEFERRED_DISPATCH_RETRY_SOURCE_NODE_ID = 'node-remote';
+const TEST_DEFERRED_DISPATCH_RETRY_ACTION = 'dispatch';
+const TEST_DEFERRED_DISPATCH_RETRY_COMPLETION_STATE = 'deferred';
+const TEST_DEFERRED_DISPATCH_RETRY_VISIBILITY_DEFERRED_SOURCE =
+  'test-deferred-dispatch-retry-visibility';
+const TEST_DEFERRED_DISPATCH_RETRY_VISIBILITY_RETRY_AFTER_MS = 50;
 
 function buildOperationOwnerKey(operationId) {
   return `operation:${operationId}`;
@@ -547,6 +556,128 @@ test('Owner-path convergence: all progression entry points ' +
             ),
           ),
           'services cache progression must still route through the shared owner key during visibility fallback',
+        );
+      } finally {
+        await coordinator.shutdown();
+      }
+    },
+  );
+
+  await t.test(
+    'deferred dispatch retry reuses the retained priority REPLACE snapshot ' +
+    'when visibility is deferred',
+    async (t) => {
+      const deferredTimers = [];
+      const visibilityObservationCalls = [];
+      const opRow = buildOperationRow({
+        operationId: TEST_DEFERRED_DISPATCH_RETRY_OPERATION_ID,
+        type: OperationType.REPLACE,
+        partitionId: TEST_DEFERRED_DISPATCH_RETRY_PARTITION_ID,
+        sourceNodeId: TEST_DEFERRED_DISPATCH_RETRY_SOURCE_NODE_ID,
+        targetNodeId: TEST_NODE_ID,
+        workflowStep: WORKFLOW_STEP.PENDING,
+        status: ReplicaStatus.PENDING,
+      });
+      const {
+        coordinator,
+        recordedOwnerKeys,
+        operationMap,
+      } = createConvergenceCoordinator({
+        operationRows: [opRow],
+      });
+      let recordedDispatchAction = null;
+      const retryableError = new Error('deferred dispatch retry regression');
+      retryableError.deferRetry = true;
+      retryableError.retryAfterMs =
+        TEST_DEFERRED_DISPATCH_RETRY_VISIBILITY_RETRY_AFTER_MS;
+
+      coordinator.workflowOwner.setTimeoutFn = (fn, delayMs) => {
+        const handle = {fn, delayMs};
+        deferredTimers.push(handle);
+        return handle;
+      };
+      coordinator.workflowOwner.runOperationOwnerAction =
+        async (action, operation, context) => {
+          recordedDispatchAction = {
+            action,
+            operation,
+            context,
+          };
+        };
+      coordinator.repository.getOperationByIdVisibilityObservation =
+        async (operationId, options = {}) => {
+          visibilityObservationCalls.push({
+            operationId,
+            options: {...options},
+          });
+          return {
+            operation: null,
+            deferredOutcome: {
+              completionState:
+                TEST_DEFERRED_DISPATCH_RETRY_COMPLETION_STATE,
+              retryAfterMs:
+                TEST_DEFERRED_DISPATCH_RETRY_VISIBILITY_RETRY_AFTER_MS,
+              source:
+                TEST_DEFERRED_DISPATCH_RETRY_VISIBILITY_DEFERRED_SOURCE,
+            },
+          };
+        };
+
+      try {
+        const operation = coordinator.repository.rowToOperation(
+          operationMap.get(TEST_DEFERRED_DISPATCH_RETRY_OPERATION_ID),
+        );
+        const deferred = coordinator.workflowOwner.deferDispatchRetry(
+          operation,
+          retryableError,
+        );
+
+        t.equal(
+          deferred,
+          true,
+          'retryable dispatch failure should arm the deferred dispatch retry',
+        );
+        t.equal(
+          deferredTimers.length,
+          1,
+          'deferred dispatch retry should arm one timer',
+        );
+
+        await deferredTimers[0].fn();
+
+        t.equal(
+          recordedDispatchAction?.action,
+          TEST_DEFERRED_DISPATCH_RETRY_ACTION,
+          'deferred dispatch retry should re-enter the dispatch owner action',
+        );
+        t.equal(
+          recordedDispatchAction?.operation?.operationId,
+          TEST_DEFERRED_DISPATCH_RETRY_OPERATION_ID,
+          'deferred dispatch retry should reuse the retained operation snapshot when visibility is deferred',
+        );
+        t.equal(
+          recordedDispatchAction?.operation?.targetNodeId,
+          TEST_NODE_ID,
+          'the retained snapshot should preserve target-owner routing for the priority REPLACE',
+        );
+        t.same(
+          visibilityObservationCalls,
+          [{
+            operationId: TEST_DEFERRED_DISPATCH_RETRY_OPERATION_ID,
+            options: {
+              requireOwnerRpcRead: false,
+              allowPriorityRecoveryDeferredVisibility: true,
+            },
+          }],
+          'dispatch retry should use the repository visibility observation contract before re-entering the owner lane',
+        );
+        t.ok(
+          recordedOwnerKeys.includes(
+            buildOperationOwnerKey(
+              TEST_DEFERRED_DISPATCH_RETRY_OPERATION_ID,
+            ),
+          ),
+          'deferred dispatch retry should still route through the shared owner key',
         );
       } finally {
         await coordinator.shutdown();

@@ -3,7 +3,7 @@
 Always-load compact rules for ownership, safety, scope, and quality baseline.
 
 Generated rules: 48
-Estimated tokens: 1671
+Estimated tokens: 1687
 Domains: architecture, governance, style, testing
 
 ## Rules
@@ -53,6 +53,6 @@ Domains: architecture, governance, style, testing
 43. [STYLE-0005] NEVER introduce eslint override comments.
 44. [STYLE-0006] Shared domain literals belong in their canonical owner module and must be imported from there.
 45. [GOV-0003] Sprint files do not replace work packages.
-46. [GOV-0004] Internal planning, work-package execution, and sprint tracking must not live there.
+46. [GOV-0004] docs/ is reserved for end-user or operator-facing documentation. Internal planning, work-package execution, and sprint tracking must not live there.
 47. [GOV-0005] The row must be in scope for this repository under ../../edition-matrix.md.
 48. [GOV-0006] Broad rows must gain a linked spec or architecture document before active implementation starts.

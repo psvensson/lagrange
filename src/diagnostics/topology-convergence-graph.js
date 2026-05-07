@@ -95,12 +95,14 @@ const REASON = Object.freeze({
 });
 
 const SOURCE_PATH = Object.freeze({
+  FAILURE_BUNDLE: 'failureBundle',
   REPORT_FAILURE_BUNDLE: 'report.failureBundle',
   FAILURE_BUNDLE_PUBLICATION: 'failureBundle.publicationConvergence',
   FAILURE_BUNDLE_SUMMARY: 'failureBundle.summary',
   TRIAGE_PUBLICATION: 'triageSummary.publicationConvergence',
   TRIAGE_SUMMARY: 'triageSummary.summary',
   REPORT_SCENARIO: 'report.scenarios[0]',
+  REPORT_SCENARIO_FAILURE_BUNDLE: 'report.scenarios[0].failureBundle',
   REPORT_SCENARIO_PUBLICATION: 'report.scenarios[0].publicationConvergence',
   REPORT_SCENARIO_PRIORITY_RECOVERY_OBSERVATION:
     'report.scenarios[0].priorityRecoveryObservation',
@@ -218,13 +220,19 @@ function buildTopologyConvergenceGraphFromArtifacts(artifacts = {}) {
 }
 
 function normalizeTopologyConvergenceInput(input) {
-  const report = asRecord(input.report || input);
+  const report = selectReportRecord(input);
   const scenario = firstScenario(report);
-  const failureBundle = firstFailureBundleEvidenceRecord(
-    input.failureBundle,
-    report.failureBundle,
-    scenario.failureBundle,
+  const directFailureBundle = selectDirectFailureBundleRecord(input, report);
+  const failureBundleEvidence = firstFailureBundleEvidenceRecordWithSource(
+    recordCandidate(input.failureBundle, SOURCE_PATH.FAILURE_BUNDLE),
+    recordCandidate(directFailureBundle, SOURCE_PATH.FAILURE_BUNDLE),
+    recordCandidate(report.failureBundle, SOURCE_PATH.REPORT_FAILURE_BUNDLE),
+    recordCandidate(
+      scenario.failureBundle,
+      SOURCE_PATH.REPORT_SCENARIO_FAILURE_BUNDLE,
+    ),
   );
+  const failureBundle = failureBundleEvidence.record;
   const triageSummary = asRecord(input.triageSummary || input.triage);
   const priorityRecoveryObservation = asRecord(scenario.priorityRecoveryObservation);
   const summary = firstRecord(
@@ -311,9 +319,7 @@ function normalizeTopologyConvergenceInput(input) {
       UNKNOWN_VALUE,
     ),
     generatedFrom: {
-      failureBundle: Object.keys(failureBundle).length > SOURCE_ORDER_BASE ?
-        SOURCE_PATH.REPORT_FAILURE_BUNDLE :
-        ABSENT_VALUE,
+      failureBundle: failureBundleEvidence.sourcePath,
       triageSummary: Object.keys(triageSummary).length > SOURCE_ORDER_BASE ?
         SOURCE_PATH.TRIAGE_SUMMARY :
         ABSENT_VALUE,
@@ -457,9 +463,7 @@ function buildTopFailureReasonsEdge(normalized) {
     id: EDGE_ID.TOP_FAILURE_REASONS,
     from: NODE_ID.TOP_FAILURE_REASONS,
     to: NODE_ID.TOP_FAILURE_REASONS,
-    state: normalized.topReasons.length > SOURCE_ORDER_BASE ?
-      EDGE_STATE.DEFERRED :
-      EDGE_STATE.UNKNOWN,
+    state: EDGE_STATE.SATISFIED,
     owner: OWNER.FAILURE_CLASSIFIER,
     boundary: BOUNDARY.FAILURE_REASON_RANKING,
     evidencePath: SOURCE_PATH.TOP_REASONS,
@@ -641,14 +645,20 @@ function firstRecord(...values) {
   return {};
 }
 
-function firstFailureBundleEvidenceRecord(...values) {
-  for (const value of values) {
-    const record = asRecord(value);
+function firstFailureBundleEvidenceRecordWithSource(...candidates) {
+  for (const candidate of candidates) {
+    const record = asRecord(candidate.record);
     if (hasFailureBundleEvidence(record)) {
-      return record;
+      return {
+        record,
+        sourcePath: candidate.sourcePath || ABSENT_VALUE,
+      };
     }
   }
-  return {};
+  return {
+    record: {},
+    sourcePath: ABSENT_VALUE,
+  };
 }
 
 function hasFailureBundleEvidence(record) {
@@ -689,6 +699,45 @@ function firstRecordWithSource(...candidates) {
 function firstScenario(report) {
   const scenarios = arrayOrEmpty(report.scenarios);
   return asRecord(scenarios[FIRST_FRONTIER_INDEX]);
+}
+
+function selectReportRecord(input) {
+  const explicitReport = asRecord(input.report);
+  if (hasReportScenarioEvidence(explicitReport)) {
+    return explicitReport;
+  }
+  if (hasReportScenarioEvidence(input)) {
+    return input;
+  }
+  return {};
+}
+
+function hasReportScenarioEvidence(record) {
+  return Object.keys(firstScenario(asRecord(record))).length > SOURCE_ORDER_BASE;
+}
+
+function selectDirectFailureBundleRecord(input, report) {
+  if (Object.keys(asRecord(report)).length > SOURCE_ORDER_BASE) {
+    return {};
+  }
+  if (Object.keys(asRecord(input.failureBundle)).length > SOURCE_ORDER_BASE) {
+    return {};
+  }
+  if (hasDirectFailureBundleEvidence(input)) {
+    return input;
+  }
+  return {};
+}
+
+function hasDirectFailureBundleEvidence(record) {
+  const directEvidenceRecords = [
+    asRecord(record.publicationConvergence),
+    asRecord(record.readiness),
+    asRecord(record.topFailures),
+  ];
+  return directEvidenceRecords.some((evidenceRecord) => (
+    Object.keys(evidenceRecord).length > SOURCE_ORDER_BASE
+  ));
 }
 
 function firstArray(...values) {

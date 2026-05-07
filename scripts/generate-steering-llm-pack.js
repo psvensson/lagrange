@@ -40,6 +40,7 @@ const LOCAL_NUM_TWO = 2;
 const LOCAL_STR_PARAGRAPH = 'paragraph';
 const LOCAL_STR_0 = '0';
 const LOCAL_STR_NEWLINE = '\n';
+const LOCAL_STR_SENTENCE_JOINER = ' ';
 const LOCAL_STR_HELP = '--help';
 const LOCAL_STR_H = '-h';
 const LOCAL_STR_UTF8 = 'utf8';
@@ -78,6 +79,8 @@ const DEFAULT_RULE_PREFIX = 'RULE';
 
 const NORMATIVE_PATTERN =
   /\b(MUST\s+NOT|SHALL\s+NOT|MUST|SHALL|NEVER|SHOULD|MAY|REQUIRED|FORBIDDEN|DO\s+NOT|ONLY)\b/iu;
+const CONTEXT_DEPENDENT_NORMATIVE_PATTERN =
+  /\bthere\b/iu;
 
 const STRENGTH_PRIORITY = Object.freeze({
   must_not: 5,
@@ -219,9 +222,25 @@ function splitNormativeSentences(paragraph) {
     return [];
   }
 
-  const normative = sentences.filter((sentence) =>
-    NORMATIVE_PATTERN.test(sentence),
-  );
+  const normative = [];
+  for (let index = LOCAL_NUM_ZERO; index < sentences.length; index++) {
+    const sentence = sentences[index];
+    if (!NORMATIVE_PATTERN.test(sentence)) {
+      continue;
+    }
+    const previousSentence = sentences[index - LOCAL_NUM_ONE];
+    if (
+      previousSentence &&
+      !NORMATIVE_PATTERN.test(previousSentence) &&
+      CONTEXT_DEPENDENT_NORMATIVE_PATTERN.test(sentence)
+    ) {
+      normative.push(
+        `${previousSentence}${LOCAL_STR_SENTENCE_JOINER}${sentence}`,
+      );
+      continue;
+    }
+    normative.push(sentence);
+  }
 
   if (normative.length > LOCAL_NUM_ZERO) {
     return normative;

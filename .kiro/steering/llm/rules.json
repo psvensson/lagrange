@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-06T18:57:10.056Z",
+  "generatedAt": "2026-05-07T10:13:52.252Z",
   "sourceDir": ".kiro/steering",
   "llmDir": ".kiro/steering/llm",
   "sourceFiles": [
@@ -38,7 +38,7 @@
     "candidateCount": 926,
     "dedupedRuleCount": 912,
     "exportedRuleCount": 912,
-    "estimatedAllRulesTokens": 29770
+    "estimatedAllRulesTokens": 29786
   },
   "rules": [
     {
@@ -3939,7 +3939,7 @@
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
-      "rule": "Internal planning, work-package execution, and sprint tracking must not live there.",
+      "rule": "docs/ is reserved for end-user or operator-facing documentation. Internal planning, work-package execution, and sprint tracking must not live there.",
       "score": 216,
       "sources": [
         {

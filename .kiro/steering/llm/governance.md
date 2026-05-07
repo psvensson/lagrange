@@ -3,7 +3,7 @@
 Load for roadmap and edition-scope checks.
 
 Generated rules: 41
-Estimated tokens: 1505
+Estimated tokens: 1521
 Domains: governance
 
 ## Rules
@@ -11,7 +11,7 @@ Domains: governance
 1. [GOV-0001] Roadmap corrections discovered during implementation should land with the package or sprint closure that discovered them. Do not leave truth repair as an out-of-band memory item.
 2. [GOV-0002] Do not create a new package solely for changed artifact timestamps, epochs, node ids, counters, or presentation-only shape.
 3. [GOV-0003] Sprint files do not replace work packages.
-4. [GOV-0004] Internal planning, work-package execution, and sprint tracking must not live there.
+4. [GOV-0004] docs/ is reserved for end-user or operator-facing documentation. Internal planning, work-package execution, and sprint tracking must not live there.
 5. [GOV-0005] The row must be in scope for this repository under ../../edition-matrix.md.
 6. [GOV-0006] Broad rows must gain a linked spec or architecture document before active implementation starts.
 7. [GOV-0007] Non-trivial implementation changes must be driven by an active work package under work/packages/, unless the immediate work is the roadmap-sharpening step itself.

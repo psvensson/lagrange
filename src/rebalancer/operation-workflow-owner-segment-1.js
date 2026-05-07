@@ -677,7 +677,10 @@ class OperationWorkflowOwnerSegment1 {
         this.getOperationOwnerSingleFlightKey(operationId),
         async () => {
           const currentOperation =
-            await this.getDeferredDispatchRetryOperation(operationId);
+            await this.getDeferredDispatchRetryOperation(
+              operationId,
+              operation,
+            );
           if (
             !currentOperation ||
             this.repository.isOperationTerminal(currentOperation) ||
@@ -712,16 +715,23 @@ class OperationWorkflowOwnerSegment1 {
    * abandon freshly persisted PENDING operations.
    *
    * @param {string} operationId
+   * @param {Object|null} [fallbackOperation=null]
    * @return {Promise<Object|null>}
    * @private
    */
-  async getDeferredDispatchRetryOperation(operationId) {
+  async getDeferredDispatchRetryOperation(
+    operationId,
+    fallbackOperation = null,
+  ) {
     const visibilityObservation =
       await this.repository.getOperationByIdVisibilityObservation(operationId, {
         requireOwnerRpcRead: false,
         allowPriorityRecoveryDeferredVisibility: true,
       });
-    return visibilityObservation?.operation || null;
+    return this.resolveDeferredRetryVisibleOperation(
+      visibilityObservation,
+      fallbackOperation,
+    );
   }
 
   /**

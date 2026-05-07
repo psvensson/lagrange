@@ -4,6 +4,7 @@ import {execFile} from 'node:child_process';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
+import {fileURLToPath} from 'node:url';
 import {promisify} from 'node:util';
 
 const execFileAsync = promisify(execFile);
@@ -13,32 +14,56 @@ const EXIT_FAILURE = 1;
 const EXIT_SUCCESS = 0;
 const NUM_ZERO = 0;
 const NUM_ONE = 1;
+const NUM_TWO = 2;
+const NUM_THREE = 3;
 const MAX_GIT_STATUS_LINES = 30;
+const PROCESS_ARG_SCRIPT_INDEX = 1;
 const CURRENT_BLOCKER_JSON_PATH = path.join(
   'work',
   'sprints',
   'current-blocker.json',
 );
 const AGENTS_PATH = 'AGENTS.md';
-const STEERING_PATHS = Object.freeze([
-  path.join('.kiro', 'steering', 'system guidelines.md'),
-  path.join('.kiro', 'steering', 'doctrine.md'),
-  path.join('.kiro', 'steering', 'code-style.md'),
-  path.join('.kiro', 'steering', 'testing-guidelines.md'),
+const LLM_STEERING_DIRECTORY = path.join('.kiro', 'steering', 'llm');
+const LLM_STEERING_README_PATH = path.join(LLM_STEERING_DIRECTORY, 'README.md');
+const LLM_STEERING_CORE_PATH = path.join(LLM_STEERING_DIRECTORY, 'core.md');
+const LLM_STEERING_ARCHITECTURE_PATH = path.join(
+  LLM_STEERING_DIRECTORY,
+  'architecture.md',
+);
+const LLM_STEERING_TESTING_PATH = path.join(LLM_STEERING_DIRECTORY, 'testing.md');
+const LLM_STEERING_STYLE_PATH = path.join(LLM_STEERING_DIRECTORY, 'style.md');
+const LLM_STEERING_GOVERNANCE_PATH = path.join(
+  LLM_STEERING_DIRECTORY,
+  'governance.md',
+);
+const COMPACT_STEERING_BASE_PATHS = Object.freeze([
+  LLM_STEERING_README_PATH,
+  LLM_STEERING_CORE_PATH,
 ]);
 const WORK_README_PATH = path.join('work', 'README.md');
 const GIT_COMMAND = 'git';
 const GIT_STATUS_ARGS = Object.freeze(['status', '--short']);
 const NPM_RUN_WORK_CURRENT_BLOCKER_COMMAND = 'npm run work:current-blocker';
 const NPM_RUN_WORK_VALIDATE_COMMAND = 'npm run work:validate';
+const ANALYZE_DISTRIBUTED_FAILURE_COMMAND =
+  'npm run analyze:distributed-failure -- --report';
+const ANALYZE_TOPOLOGY_CONVERGENCE_COMMAND =
+  'npm run analyze:topology-convergence --';
+const SUMMARIZE_HARNESS_COMMAND =
+  'npm run summarize:harness -- --report-dir test-output/reports';
 const CHECK_LITERAL_COMMAND = 'node scripts/check-guideline-literals.js';
 const CHECK_DECISION_BOUNDARY_COMMAND =
   'node scripts/check-guideline-decision-boundaries.js';
-const CHECK_RUNTIME_GRAMMAR_COMMAND =
-  'node scripts/check-runtime-grammar-contracts.js';
+const CHECK_RUNTIME_GRAMMAR_FILE_COMMAND =
+  'npm run audit:runtime-grammar:file --';
 const GIT_DIFF_CHECK_COMMAND = 'git diff --check --';
 const SOURCE_DIRECTORY_PREFIX = 'src/';
+const TEST_DIRECTORY_PREFIX = 'test/';
+const SCRIPT_DIRECTORY_PREFIX = 'scripts/';
 const JAVASCRIPT_EXTENSION = '.js';
+const README_FILE_NAME = 'README.md';
+const PLAYBACK_FAILURE_BUNDLE_FILE = 'failure-bundle.json';
 const MARKDOWN_HEADING_PREFIX = '# ';
 const SECTION_HEADING_PREFIX = '## ';
 const CHECKBOX_OPEN_PREFIX = '- [ ]';
@@ -51,10 +76,14 @@ const SPACE = ' ';
 const NEWLINE = '\n';
 const PATH_PRESENT = 'present';
 const PATH_MISSING = 'missing';
+const PATH_NONE = 'none';
 const OPTIONAL_TEXT_PRESENT = 'optional-text-present';
 const OPTIONAL_TEXT_MISSING = 'optional-text-missing';
 const GIT_STATUS_AVAILABLE = 'git-status-available';
 const GIT_STATUS_UNAVAILABLE_STATE = 'git-status-unavailable';
+const GIT_GROUP_PACKAGE_OWNED = 'packageOwned';
+const GIT_GROUP_TRACKER_GENERATED = 'trackerGenerated';
+const GIT_GROUP_UNRELATED = 'unrelated';
 const DEFAULT_UNKNOWN = 'unknown';
 const OUTPUT_TITLE = '# Work Context';
 const SECTION_CURRENT_BLOCKER = 'Current Blocker';
@@ -90,9 +119,24 @@ const FIELD_LABELS = Object.freeze({
   SPRINT: 'Sprint',
   STATUS: 'Status',
 });
+const GIT_GROUP_LABELS = Object.freeze({
+  [GIT_GROUP_PACKAGE_OWNED]: 'Package-owned dirty entries',
+  [GIT_GROUP_TRACKER_GENERATED]: 'Tracker-generated dirty entries',
+  [GIT_GROUP_UNRELATED]: 'Unrelated dirty entries',
+});
+const GIT_GROUP_EMPTY_MESSAGES = Object.freeze({
+  [GIT_GROUP_PACKAGE_OWNED]: 'No package-owned dirty entries.',
+  [GIT_GROUP_TRACKER_GENERATED]: 'No tracker-generated dirty entries.',
+  [GIT_GROUP_UNRELATED]: 'No unrelated dirty entries.',
+});
+const TRACKER_GENERATED_PATHS = Object.freeze([
+  path.join('work', 'sprints', 'current-blocker.json'),
+  path.join('work', 'sprints', 'current-blocker.md'),
+]);
 const SHELL_SAFE_PATTERN = /^[A-Za-z0-9_./:@%+=,-]+$/u;
 const SINGLE_QUOTE = '\'';
 const SINGLE_QUOTE_ESCAPE = '\'\\\'\'';
+const GIT_RENAME_SEPARATOR = ' -> ';
 
 function appendSection(lines, title) {
   lines.push(EMPTY_STRING, `${SECTION_HEADING_PREFIX}${title}`);
@@ -290,16 +334,87 @@ async function resolvePathPresenceLabel(filePath) {
   return `${filePath} (${exists ? PATH_PRESENT : PATH_MISSING})`;
 }
 
-async function buildFirstReadPathLabels(currentBlocker) {
+function pathHasRealValue(filePath) {
+  const normalizedPath = normalizeString(filePath);
+  return normalizedPath.length > NUM_ZERO && normalizedPath !== PATH_NONE;
+}
+
+function buildOwnerCardPaths(currentBlocker) {
+  const touchedFiles = normalizeStringList(currentBlocker.touchedFiles);
+  const ownerCards = [];
+
+  for (const filePath of touchedFiles) {
+    if (!filePath.startsWith(SOURCE_DIRECTORY_PREFIX)) {
+      continue;
+    }
+    const parts = filePath.split(path.sep);
+    if (parts.length < NUM_TWO) {
+      continue;
+    }
+    ownerCards.push(path.join(SOURCE_DIRECTORY_PREFIX, parts[NUM_ONE], README_FILE_NAME));
+  }
+
+  return normalizeStringList(ownerCards);
+}
+
+function buildRelevantLlmDomainPackPaths(currentBlocker) {
+  const touchedFiles = normalizeStringList(currentBlocker.touchedFiles);
+  const scenario = normalizeString(currentBlocker.scenario);
+  const domainPacks = [];
+  if (touchedFiles.some((filePath) => filePath.startsWith(SOURCE_DIRECTORY_PREFIX))) {
+    domainPacks.push(LLM_STEERING_ARCHITECTURE_PATH);
+  }
+  if (
+    touchedFiles.some((filePath) => filePath.startsWith(TEST_DIRECTORY_PREFIX)) ||
+    pathHasRealValue(currentBlocker.artifact) ||
+    pathHasRealValue(currentBlocker.playback) ||
+    (scenario.length > NUM_ZERO &&
+      scenario !== DEFAULT_UNKNOWN &&
+      scenario !== PATH_NONE)
+  ) {
+    domainPacks.push(LLM_STEERING_TESTING_PATH);
+  }
+  if (touchedFiles.some((filePath) => filePath.startsWith(SCRIPT_DIRECTORY_PREFIX))) {
+    domainPacks.push(LLM_STEERING_STYLE_PATH);
+  }
+  if (
+    touchedFiles.some((filePath) => filePath.startsWith(WORK_README_PATH)) ||
+    touchedFiles.some((filePath) => filePath.startsWith('work/'))
+  ) {
+    domainPacks.push(LLM_STEERING_GOVERNANCE_PATH);
+  }
+  return normalizeStringList(
+    domainPacks.length > NUM_ZERO ? domainPacks : [LLM_STEERING_GOVERNANCE_PATH],
+  );
+}
+
+function buildPlaybackEvidencePaths(currentBlocker) {
+  if (!pathHasRealValue(currentBlocker.playback)) {
+    return [];
+  }
+  return [
+    currentBlocker.playback,
+    path.join(currentBlocker.playback, PLAYBACK_FAILURE_BUNDLE_FILE),
+  ];
+}
+
+function buildFirstReadPaths(currentBlocker) {
   const currentPaths = [
     AGENTS_PATH,
-    ...STEERING_PATHS,
+    ...COMPACT_STEERING_BASE_PATHS,
+    ...buildRelevantLlmDomainPackPaths(currentBlocker),
     WORK_README_PATH,
     currentBlocker.package,
-    currentBlocker.artifact,
+    ...buildOwnerCardPaths(currentBlocker),
+    ...(pathHasRealValue(currentBlocker.artifact) ? [currentBlocker.artifact] : []),
+    ...buildPlaybackEvidencePaths(currentBlocker),
     ...normalizeStringList(currentBlocker.touchedFiles),
-  ].filter((filePath) => normalizeString(filePath).length > NUM_ZERO);
-  const uniquePaths = normalizeStringList(currentPaths);
+  ].filter(pathHasRealValue);
+  return normalizeStringList(currentPaths);
+}
+
+async function buildFirstReadPathLabels(currentBlocker) {
+  const uniquePaths = buildFirstReadPaths(currentBlocker);
   return Promise.all(uniquePaths.map(resolvePathPresenceLabel));
 }
 
@@ -318,19 +433,88 @@ function buildUsefulCommands(currentBlocker) {
     NPM_RUN_WORK_CURRENT_BLOCKER_COMMAND,
     NPM_RUN_WORK_VALIDATE_COMMAND,
   ];
+  if (pathHasRealValue(currentBlocker.artifact)) {
+    commands.push(
+      commandWithPaths(ANALYZE_DISTRIBUTED_FAILURE_COMMAND, [
+        currentBlocker.artifact,
+      ]),
+    );
+    commands.push(
+      commandWithPaths(ANALYZE_TOPOLOGY_CONVERGENCE_COMMAND, [
+        currentBlocker.artifact,
+      ]),
+    );
+  }
+  if (pathHasRealValue(currentBlocker.playback)) {
+    commands.push(
+      commandWithPaths(ANALYZE_TOPOLOGY_CONVERGENCE_COMMAND, [
+        path.join(currentBlocker.playback, PLAYBACK_FAILURE_BUNDLE_FILE),
+      ]),
+    );
+  }
+  commands.push(SUMMARIZE_HARNESS_COMMAND);
   if (runtimeTouchedFiles.length > NUM_ZERO) {
     commands.push(commandWithPaths(CHECK_LITERAL_COMMAND, runtimeTouchedFiles));
     commands.push(
       commandWithPaths(CHECK_DECISION_BOUNDARY_COMMAND, runtimeTouchedFiles),
     );
     commands.push(
-      commandWithPaths(CHECK_RUNTIME_GRAMMAR_COMMAND, runtimeTouchedFiles),
+      commandWithPaths(CHECK_RUNTIME_GRAMMAR_FILE_COMMAND, runtimeTouchedFiles),
     );
   }
   if (touchedFiles.length > NUM_ZERO) {
     commands.push(commandWithPaths(GIT_DIFF_CHECK_COMMAND, touchedFiles));
   }
   return commands;
+}
+
+function extractGitStatusPaths(line) {
+  const pathText = line.slice(NUM_THREE).trim();
+  if (pathText.includes(GIT_RENAME_SEPARATOR)) {
+    return pathText
+      .split(GIT_RENAME_SEPARATOR)
+      .map(normalizeString)
+      .filter((filePath) => filePath.length > NUM_ZERO);
+  }
+  return pathText.length > NUM_ZERO ? [pathText] : [];
+}
+
+function buildPackageOwnedPaths(currentBlocker = {}) {
+  return new Set(normalizeStringList([
+    currentBlocker.package,
+    currentBlocker.predecessor,
+    currentBlocker.sprint,
+    ...normalizeStringList(currentBlocker.touchedFiles),
+  ]));
+}
+
+function pathMatchesAny(filePath, pathSet) {
+  return pathSet.has(filePath);
+}
+
+function groupGitStatusLines(gitStatusLines = [], currentBlocker = {}) {
+  const packageOwnedPaths = buildPackageOwnedPaths(currentBlocker);
+  const trackerGeneratedPaths = new Set(TRACKER_GENERATED_PATHS);
+  const groups = {
+    [GIT_GROUP_PACKAGE_OWNED]: [],
+    [GIT_GROUP_TRACKER_GENERATED]: [],
+    [GIT_GROUP_UNRELATED]: [],
+  };
+
+  for (const line of gitStatusLines) {
+    const paths = extractGitStatusPaths(line);
+    if (paths.some((filePath) => pathMatchesAny(filePath, packageOwnedPaths))) {
+      groups[GIT_GROUP_PACKAGE_OWNED].push(line);
+      continue;
+    }
+    if (paths.some((filePath) => pathMatchesAny(filePath, trackerGeneratedPaths))) {
+      groups[GIT_GROUP_TRACKER_GENERATED].push(line);
+      continue;
+    }
+    groups[GIT_GROUP_UNRELATED].push(line);
+  }
+
+  return groups;
 }
 
 async function readGitStatus() {
@@ -353,7 +537,22 @@ async function readGitStatus() {
   }
 }
 
-function appendGitStatus(lines, gitStatus) {
+function appendGitStatusGroup(lines, groupKey, groupLines) {
+  appendKeyValue(lines, GIT_GROUP_LABELS[groupKey], String(groupLines.length));
+  if (groupLines.length === NUM_ZERO) {
+    lines.push(`${MARKDOWN_LIST_PREFIX}${GIT_GROUP_EMPTY_MESSAGES[groupKey]}`);
+    return;
+  }
+  for (const line of groupLines.slice(NUM_ZERO, MAX_GIT_STATUS_LINES)) {
+    lines.push(`${MARKDOWN_LIST_PREFIX}\`${line}\``);
+  }
+  const remainingCount = groupLines.length - MAX_GIT_STATUS_LINES;
+  if (remainingCount > NUM_ZERO) {
+    lines.push(`${MARKDOWN_LIST_PREFIX}${remainingCount} more entries omitted.`);
+  }
+}
+
+function appendGitStatus(lines, gitStatus, currentBlocker) {
   if (gitStatus.status === GIT_STATUS_UNAVAILABLE_STATE) {
     lines.push(`${MARKDOWN_LIST_PREFIX}${MESSAGE_GIT_STATUS_UNAVAILABLE}`);
     return;
@@ -368,13 +567,21 @@ function appendGitStatus(lines, gitStatus) {
     lines.push(`${MARKDOWN_LIST_PREFIX}${MESSAGE_NO_GIT_STATUS}`);
     return;
   }
-  for (const line of gitStatusLines.slice(NUM_ZERO, MAX_GIT_STATUS_LINES)) {
-    lines.push(`${MARKDOWN_LIST_PREFIX}\`${line}\``);
+  const groupedStatus = groupGitStatusLines(gitStatusLines, currentBlocker);
+  appendGitStatusGroup(lines, GIT_GROUP_PACKAGE_OWNED, groupedStatus.packageOwned);
+  appendGitStatusGroup(
+    lines,
+    GIT_GROUP_TRACKER_GENERATED,
+    groupedStatus.trackerGenerated,
+  );
+  appendGitStatusGroup(lines, GIT_GROUP_UNRELATED, groupedStatus.unrelated);
+}
+
+async function resolveOptionalPathPresenceValue(filePath) {
+  if (!pathHasRealValue(filePath)) {
+    return filePath;
   }
-  const remainingCount = gitStatusLines.length - MAX_GIT_STATUS_LINES;
-  if (remainingCount > NUM_ZERO) {
-    lines.push(`${MARKDOWN_LIST_PREFIX}${remainingCount} more entries omitted.`);
-  }
+  return resolvePathPresenceLabel(filePath);
 }
 
 async function buildContextLines(currentBlocker, packageContent) {
@@ -382,6 +589,8 @@ async function buildContextLines(currentBlocker, packageContent) {
   const packageTitle = extractMarkdownTitle(packageContent || EMPTY_STRING);
   const firstReadPaths = await buildFirstReadPathLabels(currentBlocker);
   const gitStatus = await readGitStatus();
+  const artifactLabel = await resolveOptionalPathPresenceValue(currentBlocker.artifact);
+  const playbackLabel = await resolveOptionalPathPresenceValue(currentBlocker.playback);
 
   appendSection(lines, SECTION_CURRENT_BLOCKER);
   appendKeyValue(lines, FIELD_LABELS.SPRINT, currentBlocker.sprint);
@@ -395,8 +604,8 @@ async function buildContextLines(currentBlocker, packageContent) {
     FIELD_LABELS.DOMINANT_REASON,
     currentBlocker.dominantReason,
   );
-  appendKeyValue(lines, FIELD_LABELS.ARTIFACT, currentBlocker.artifact);
-  appendKeyValue(lines, FIELD_LABELS.PLAYBACK, currentBlocker.playback);
+  appendKeyValue(lines, FIELD_LABELS.ARTIFACT, artifactLabel);
+  appendKeyValue(lines, FIELD_LABELS.PLAYBACK, playbackLabel);
   appendKeyValue(lines, FIELD_LABELS.PREDECESSOR, currentBlocker.predecessor);
   appendKeyValue(lines, FIELD_LABELS.PACKAGE_TITLE, packageTitle);
 
@@ -405,6 +614,9 @@ async function buildContextLines(currentBlocker, packageContent) {
 
   appendSection(lines, SECTION_NEXT_ACTION);
   lines.push(normalizeString(currentBlocker.nextAction) || DEFAULT_UNKNOWN);
+
+  appendSection(lines, SECTION_USEFUL_COMMANDS);
+  appendList(lines, buildUsefulCommands(currentBlocker), DEFAULT_UNKNOWN);
 
   appendSection(lines, SECTION_FIRST_FILES);
   appendList(lines, firstReadPaths, DEFAULT_UNKNOWN);
@@ -432,11 +644,8 @@ async function buildContextLines(currentBlocker, packageContent) {
     MESSAGE_NO_OUT_OF_SCOPE,
   );
 
-  appendSection(lines, SECTION_USEFUL_COMMANDS);
-  appendList(lines, buildUsefulCommands(currentBlocker), DEFAULT_UNKNOWN);
-
   appendSection(lines, SECTION_WORKTREE);
-  appendGitStatus(lines, gitStatus);
+  appendGitStatus(lines, gitStatus, currentBlocker);
 
   return lines;
 }
@@ -457,4 +666,19 @@ async function main() {
   return EXIT_SUCCESS;
 }
 
-process.exitCode = await main();
+function isDirectRun() {
+  return path.resolve(process.argv[PROCESS_ARG_SCRIPT_INDEX] || EMPTY_STRING) ===
+    fileURLToPath(import.meta.url);
+}
+
+if (isDirectRun()) {
+  process.exitCode = await main();
+}
+
+export {
+  buildContextLines,
+  buildFirstReadPaths,
+  buildOwnerCardPaths,
+  buildUsefulCommands,
+  groupGitStatusLines,
+};

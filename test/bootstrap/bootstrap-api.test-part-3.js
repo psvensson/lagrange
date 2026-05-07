@@ -25,7 +25,10 @@ import {
 } from '../../src/constants/index.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {BootstrapReadinessState} from '../../src/bootstrap/bootstrap-readiness-state.js';
-import {LIFECYCLE_REASON} from '../../src/bootstrap/lifecycle-controller-constants.js';
+import {
+  LIFECYCLE_PHASE,
+  LIFECYCLE_REASON,
+} from '../../src/bootstrap/lifecycle-controller-constants.js';
 import {STARTUP_JOIN_MODE} from '../../src/bootstrap/rejoin-hints-constants.js';
 import {
 } from '../../src/control-plane/control-plane-workload-profile.js';
@@ -88,6 +91,11 @@ const BOOTSTRAP_REQUEST_STARTUP_CONTRACT_STARTUP_COMPLETE = true;
 const BOOTSTRAP_REQUEST_STARTUP_CONTRACT_LEADER_READY = Object.freeze({
   ready: true,
 });
+const BOOTSTRAP_REQUEST_STARTUP_CONTRACT_ADMISSION_READY = Object.freeze({
+  ready: true,
+  reasons: BOOTSTRAP_ADMISSION_LEASE_TEST_EMPTY_LIST,
+  retryAfterMs: BOOTSTRAP_ADMISSION_LEASE_TEST_IDLE_COUNT,
+});
 const BOOTSTRAP_REQUEST_STARTUP_CONTRACT_EMPTY_CLUSTER_CONFIG =
   Object.freeze({});
 const BOOTSTRAP_REQUEST_STARTUP_CONTRACT_EMPTY_TABLE_POLICIES =
@@ -112,6 +120,48 @@ const BOOTSTRAP_REQUEST_STARTUP_RECOVERY_REASONS = Object.freeze([
   BOOTSTRAP_PIPELINE_ERROR_CODE.BOOTSTRAP_NOT_READY,
   LIFECYCLE_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
 ]);
+const BOOTSTRAP_REQUEST_STARTUP_BLOCKED_TEST_NAME =
+  'BootstrapAPI - bootstrap request admission defers authoritative bootstrap join blockers after startup completes';
+const BOOTSTRAP_REQUEST_STARTUP_BLOCKED_JOINING_NODE_ID =
+  '550e8400-e29b-41d4-a716-446655440115';
+const BOOTSTRAP_REQUEST_STARTUP_BLOCKED_JOINING_NODE_ADDRESS =
+  'ws://localhost:9095';
+const BOOTSTRAP_REQUEST_STARTUP_BLOCKED_GROUP_ID = 'mg-startup-blocked';
+const BOOTSTRAP_REQUEST_STARTUP_BLOCKED_STATE = 'join_ready';
+const BOOTSTRAP_REQUEST_STARTUP_BLOCKED_RETRY_AFTER_MS = 275;
+const BOOTSTRAP_REQUEST_STARTUP_BLOCKED_INITIAL_EPOCH = 0;
+const BOOTSTRAP_REQUEST_STARTUP_BLOCKED_NO_CALLS = 0;
+const BOOTSTRAP_REQUEST_STARTUP_BLOCKED_METHOD = 'POST';
+const BOOTSTRAP_REQUEST_STARTUP_BLOCKED_REASONS = Object.freeze([
+  LIFECYCLE_REASON.READINESS_STABLE_WINDOW_PENDING,
+  BOOTSTRAP_PIPELINE_ERROR_CODE.BOOTSTRAP_NOT_READY,
+]);
+const BOOTSTRAP_REQUEST_STARTUP_BLOCKED_ASSERTION = Object.freeze({
+  DEFERRED_STATUS:
+    'bootstrap request should defer when authoritative bootstrap join readiness remains blocked',
+  DEFERRED_SUCCESS:
+    'bootstrap response should remain deferred',
+  DEFERRED_ERROR:
+    'bootstrap response should surface bootstrap not ready',
+  DEFERRED_CODE:
+    'bootstrap response should use the bootstrap-not-ready pipeline code',
+  DEFERRED_PHASE:
+    'bootstrap response should surface the blocked bootstrap-join phase',
+  STABLE_WINDOW_REASON:
+    'bootstrap response should preserve the stable-window blocker',
+  AUTHORITY_REASON:
+    'bootstrap response should preserve the authoritative bootstrap blocker',
+  NO_PHASE_INCOMPLETE_REASON:
+    'bootstrap response should not reintroduce startup-incomplete reasons once startup is complete',
+  RETRY_AFTER:
+    'bootstrap response should reuse the blocked join retry guidance',
+  STARTUP_AUTHORITY:
+    'bootstrap response should preserve startup authority evidence',
+  NO_LEADER_READINESS_CALLS:
+    'bootstrap request should defer before leader readiness evaluation',
+  NO_ASSIGNMENT_CALLS:
+    'bootstrap request should defer before assignment selection',
+});
 
 // Initialize configuration and logging for tests
 function initializeTestEnvironment() {
@@ -1397,6 +1447,8 @@ test(BOOTSTRAP_REQUEST_STARTUP_CONTRACT_TEST_NAME, async (t) => {
     BOOTSTRAP_REQUEST_STARTUP_CONTRACT_EMPTY_TABLE_POLICIES;
   api.getLatencyTopologyHints = () =>
     BOOTSTRAP_REQUEST_STARTUP_CONTRACT_NO_HINTS;
+  api.getBootstrapJoinAdmissionSnapshot = async () =>
+    BOOTSTRAP_REQUEST_STARTUP_CONTRACT_ADMISSION_READY;
 
   await api.initialize(0, {
     listen: BOOTSTRAP_ADMISSION_LEASE_TEST_LISTEN_DISABLED,
@@ -1415,6 +1467,143 @@ test(BOOTSTRAP_REQUEST_STARTUP_CONTRACT_TEST_NAME, async (t) => {
     response.statusCode,
     HTTP_STATUS.OK,
     'bootstrap request should use the adapter startup-complete contract',
+  );
+
+  await api.shutdown();
+});
+
+test(BOOTSTRAP_REQUEST_STARTUP_BLOCKED_TEST_NAME, async (t) => {
+  initializeTestEnvironment();
+
+  const readinessSnapshot = {
+    ready: false,
+    phase: LIFECYCLE_PHASE.JOIN_READY,
+    state: BOOTSTRAP_REQUEST_STARTUP_BLOCKED_STATE,
+    reasons: BOOTSTRAP_REQUEST_STARTUP_BLOCKED_REASONS,
+    retryAfterMs: BOOTSTRAP_REQUEST_STARTUP_BLOCKED_RETRY_AFTER_MS,
+    timestamp: Date.now(),
+    bootstrapJoinAuthorityAvailable: true,
+  };
+  const readinessState = {
+    evaluate() {
+      return readinessSnapshot;
+    },
+    getSnapshot() {
+      return readinessSnapshot;
+    },
+    recordProbeResult() {},
+  };
+  let leaderReadinessCallCount = BOOTSTRAP_REQUEST_STARTUP_BLOCKED_NO_CALLS;
+  let assignmentCallCount = BOOTSTRAP_REQUEST_STARTUP_BLOCKED_NO_CALLS;
+
+  const api = new BootstrapAPI({
+    seedNodeId: BOOTSTRAP_REQUEST_STARTUP_CONTRACT_SEED_NODE_ID,
+    seedNodeAddress: BOOTSTRAP_REQUEST_STARTUP_CONTRACT_SEED_NODE_ADDRESS,
+    systemTableCache: createEmptySystemTableCache(),
+    bootstrapStartupAdapter: {
+      phase: BOOTSTRAP_REQUEST_STARTUP_CONTRACT_INCOMPLETE_PHASE,
+      isBootstrapStartupComplete() {
+        return BOOTSTRAP_REQUEST_STARTUP_CONTRACT_STARTUP_COMPLETE;
+      },
+    },
+    readinessState,
+    controlPlaneReadinessService: {
+      getStartupAuthoritySnapshotSync() {
+        return BOOTSTRAP_LEADER_NOT_READY_STARTUP_AUTHORITY;
+      },
+    },
+  });
+
+  api.waitForServiceLeaders = async () => {
+    leaderReadinessCallCount++;
+    return BOOTSTRAP_REQUEST_STARTUP_CONTRACT_LEADER_READY;
+  };
+  api.determineAndReserveMessageGroupAssignment = async () => {
+    assignmentCallCount++;
+    return {
+      strategy: BootstrapStrategy.CREATE_SELF_HOSTED,
+      groupId: BOOTSTRAP_REQUEST_STARTUP_BLOCKED_GROUP_ID,
+    };
+  };
+  api.getClusterConfiguration = () =>
+    BOOTSTRAP_REQUEST_STARTUP_CONTRACT_EMPTY_CLUSTER_CONFIG;
+  api.getReadyNodes = () =>
+    BOOTSTRAP_REQUEST_STARTUP_CONTRACT_EMPTY_READY_NODES;
+  api.getTablePolicies = () =>
+    BOOTSTRAP_REQUEST_STARTUP_CONTRACT_EMPTY_TABLE_POLICIES;
+  api.getLatencyTopologyHints = () =>
+    BOOTSTRAP_REQUEST_STARTUP_CONTRACT_NO_HINTS;
+
+  await api.initialize(BOOTSTRAP_REQUEST_STARTUP_BLOCKED_INITIAL_EPOCH, {
+    listen: BOOTSTRAP_ADMISSION_LEASE_TEST_LISTEN_DISABLED,
+  });
+
+  const response = await api.getFastify().inject({
+    method: BOOTSTRAP_REQUEST_STARTUP_BLOCKED_METHOD,
+    url: BOOTSTRAP_API_ROUTE.BOOTSTRAP,
+    payload: {
+      nodeId: BOOTSTRAP_REQUEST_STARTUP_BLOCKED_JOINING_NODE_ID,
+      nodeAddress: BOOTSTRAP_REQUEST_STARTUP_BLOCKED_JOINING_NODE_ADDRESS,
+    },
+  });
+
+  t.equal(
+    response.statusCode,
+    HTTP_STATUS.SERVICE_UNAVAILABLE,
+    BOOTSTRAP_REQUEST_STARTUP_BLOCKED_ASSERTION.DEFERRED_STATUS,
+  );
+  const body = JSON.parse(response.body);
+  t.equal(
+    body.success,
+    false,
+    BOOTSTRAP_REQUEST_STARTUP_BLOCKED_ASSERTION.DEFERRED_SUCCESS,
+  );
+  t.equal(
+    body.error,
+    BOOTSTRAP_API_ERROR.BOOTSTRAP_NOT_READY,
+    BOOTSTRAP_REQUEST_STARTUP_BLOCKED_ASSERTION.DEFERRED_ERROR,
+  );
+  t.equal(
+    body.code,
+    BOOTSTRAP_PIPELINE_ERROR_CODE.BOOTSTRAP_NOT_READY,
+    BOOTSTRAP_REQUEST_STARTUP_BLOCKED_ASSERTION.DEFERRED_CODE,
+  );
+  t.equal(
+    body.phase,
+    LIFECYCLE_PHASE.JOIN_READY,
+    BOOTSTRAP_REQUEST_STARTUP_BLOCKED_ASSERTION.DEFERRED_PHASE,
+  );
+  t.ok(
+    body.reasons.includes(LIFECYCLE_REASON.READINESS_STABLE_WINDOW_PENDING),
+    BOOTSTRAP_REQUEST_STARTUP_BLOCKED_ASSERTION.STABLE_WINDOW_REASON,
+  );
+  t.ok(
+    body.reasons.includes(BOOTSTRAP_PIPELINE_ERROR_CODE.BOOTSTRAP_NOT_READY),
+    BOOTSTRAP_REQUEST_STARTUP_BLOCKED_ASSERTION.AUTHORITY_REASON,
+  );
+  t.notOk(
+    body.reasons.includes(BOOTSTRAP_API_PROBE_REASON.BOOTSTRAP_PHASE_INCOMPLETE),
+    BOOTSTRAP_REQUEST_STARTUP_BLOCKED_ASSERTION.NO_PHASE_INCOMPLETE_REASON,
+  );
+  t.equal(
+    body.retryAfterMs,
+    BOOTSTRAP_REQUEST_STARTUP_BLOCKED_RETRY_AFTER_MS,
+    BOOTSTRAP_REQUEST_STARTUP_BLOCKED_ASSERTION.RETRY_AFTER,
+  );
+  t.same(
+    body[BOOTSTRAP_API_RESPONSE_FIELD.STARTUP_AUTHORITY],
+    BOOTSTRAP_LEADER_NOT_READY_STARTUP_AUTHORITY,
+    BOOTSTRAP_REQUEST_STARTUP_BLOCKED_ASSERTION.STARTUP_AUTHORITY,
+  );
+  t.equal(
+    leaderReadinessCallCount,
+    BOOTSTRAP_REQUEST_STARTUP_BLOCKED_NO_CALLS,
+    BOOTSTRAP_REQUEST_STARTUP_BLOCKED_ASSERTION.NO_LEADER_READINESS_CALLS,
+  );
+  t.equal(
+    assignmentCallCount,
+    BOOTSTRAP_REQUEST_STARTUP_BLOCKED_NO_CALLS,
+    BOOTSTRAP_REQUEST_STARTUP_BLOCKED_ASSERTION.NO_ASSIGNMENT_CALLS,
   );
 
   await api.shutdown();

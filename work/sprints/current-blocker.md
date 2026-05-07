@@ -4,39 +4,40 @@
 
 Sprint: `work/sprints/active-2026-q2-publication-scoped-consistency-and-node-join-closure.md`
 
-Package: `work/packages/active-20260507-rolling-restart-topology-priority-recovery-workflow-progress-event-driven-reentry.md`
+Package: `work/packages/active-20260507-rolling-restart-topology-publication-missing-active-startup-join-contacting-seed-timeout-no-progress-reentry.md`
 
 Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/rolling-restart-after-bounded-retryable-seed-contact-probe-20260507T072145Z.report.json`
+Artifact: `test-output/reports/rolling-restart-after-contact-seed-timeout-contract-20260507T095019Z.report.json`
 
-Playback: `test-output/reports/.playback/rolling-restart-after-bounded-retryable-seed-contact-probe-20260507T072145Z/rolling-restart/`
+Playback: `test-output/reports/.playback/rolling-restart-after-contact-seed-timeout-contract-20260507T095019Z/rolling-restart/`
 
 ## Boundary
 
-Owner: `Priority recovery workflow progress no-dispatch behind topology publication PUBLISHED priority-spread convergence`
+Owner: `Startup join contacting-seed timeout no-progress behind topology publication missing-active PUBLISHED convergence`
 
-Boundary: `Operation workflow owner / workflow_progress`
+Boundary: `Startup join / contacting-seed timeout no-progress`
 
-Dominant reason: `priority_recovery_workflow_progress_event_driven`
+Dominant reason: `publication_missing_active_node=11601fe0-72d6-5853-8590-ec2881853e72`
 
-Current state: The bounded retryable seed-contact probe repair closes the previous startup no-progress seam. The representative rerun now reaches epoch 4 PUBLISHED with pending ACK count 0 and moves the live blocker to sql_write_operations-p1, where operation 0e957d74-4bae-4a33-90b0-ccf53e765d01 remains durable PENDING on target 35a... with target visibility absent and no workflow-step transitions.
+Current state: The focused bootstrap-request admission repair still holds, and the contact-seed timeout-contract repair closes the raw request-timeout starvation seam. The latest representative rerun now reaches active=4/5 with snapshotCoverage=3/5 at epoch 4 PUBLISHED: nodes 35a..., ebc4..., and 8be8... reach ACTIVE, while 11601... remains the only inactive joiner and now surfaces canonical Seed bootstrap not ready defers instead of generic transport timeouts. The direct boundary stays in startup join contacting_seed, but it narrows from request/transport starvation to seed-owned bootstrap-not-ready no-progress for 11601....
 
 ## Next Action
 
-Extract the 072145Z sql_write_operations-p1 witness set, add a focused reproduction around remote-owned priority REPLACE wake-up and dispatch progression, repair the selected workflow-progress seam, and rerun one representative rolling-restart scenario.
+Extract the 095019Z typed bootstrap-not-ready witness on 11601..., decide whether the lower owner is seed-side bootstrap dependency defer or join auto-resume hold-open/exhaustion on canonical BOOTSTRAP_NOT_READY responses, then repair only that direct startup seam before the next representative rerun.
 
 ## Proof Ladder
 
-1. `Focused 072145Z workflow-progress witness fixture or blocker probe`
-2. `Focused remote-owned priority REPLACE wake-up or dispatch regression`
+1. `Focused bootstrap-request admission regression for authoritative bootstrap-join blockers`
+2. `Focused seed-contact retry contract regression preserving configured request timeout after retryable seed evidence`
 3. `Touched-file static guardrails`
 4. `Representative rolling-restart --fast-local rerun`
+5. `Focused 095019Z contacting-seed/bootstrap-not-ready witness extraction`
 
 ## Touched Files
 
-1. `src/rebalancer/operation-workflow-owner-segment-2.js`
-2. `src/control-plane/replica-dispatch-service-segment-2.js`
-3. `test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js`
-4. `test/control-plane/replica-dispatch-atomic-claim.integration.test.js`
-5. `work/packages/active-20260507-rolling-restart-topology-priority-recovery-workflow-progress-event-driven-reentry.md`
+1. `src/bootstrap/owners/bootstrap-request-owner.js`
+2. `test/bootstrap/bootstrap-api.test-part-3.js`
+3. `src/bootstrap/phases/contact-seed-phase.js`
+4. `test/bootstrap/node-joining-service.test.js`
+5. `work/packages/active-20260507-rolling-restart-topology-publication-missing-active-startup-join-contacting-seed-timeout-no-progress-reentry.md`

@@ -36,7 +36,7 @@ const LOCAL_STR_159CY = 'missingPartitionLeaderNodes=';
 const LOCAL_STR_1AWHD = 'missingMessageGroupLeaderNodes=';
 const LOCAL_STR_SPACE = ' ';
 const MAX_RETRYABLE_SEED_CONTACT_EVIDENCE_RETRIES = 1;
-const MIN_RETRYABLE_SEED_CONTACT_PROBE_TIMEOUT_MS = NUM.ONE;
+const MIN_SEED_CONTACT_REQUEST_TIMEOUT_MS = NUM.ONE;
 const RETRYABLE_SEED_CONTACT_FAILURE_ACTION = Object.freeze({
   RETRY: 'retry',
   SURFACE: 'surface',
@@ -113,23 +113,13 @@ function resolveRetryableSeedContactFailureAction(options = {}) {
     RETRYABLE_SEED_CONTACT_FAILURE_ACTION.RETRY;
 }
 
-function resolveRetryableSeedContactProbeTimeoutMs(options = {}) {
-  const configuredHttpTimeoutMs = Number.isFinite(options.configuredHttpTimeoutMs) ?
+function resolveSeedContactRequestTimeoutMs(options = {}) {
+  return Number.isFinite(options.configuredHttpTimeoutMs) ?
     Math.max(
-      MIN_RETRYABLE_SEED_CONTACT_PROBE_TIMEOUT_MS,
+      MIN_SEED_CONTACT_REQUEST_TIMEOUT_MS,
       Math.floor(options.configuredHttpTimeoutMs),
     ) :
-    MIN_RETRYABLE_SEED_CONTACT_PROBE_TIMEOUT_MS;
-  if (options.hasRetryableSeedContactEvidence !== true) {
-    return configuredHttpTimeoutMs;
-  }
-  const boundedProbeTimeoutMs = Number.isFinite(options.retryAfterMs) ?
-    Math.max(
-      MIN_RETRYABLE_SEED_CONTACT_PROBE_TIMEOUT_MS,
-      Math.floor(options.retryAfterMs),
-    ) :
-    configuredHttpTimeoutMs;
-  return Math.min(configuredHttpTimeoutMs, boundedProbeTimeoutMs);
+    MIN_SEED_CONTACT_REQUEST_TIMEOUT_MS;
 }
 
 /**
@@ -211,10 +201,8 @@ class ContactSeedPhase {
       attempt += LOCAL_NUM_ONE;
       try {
         const httpPostImpl = this.delegates.getHttpPostImpl();
-        const requestTimeoutMs = resolveRetryableSeedContactProbeTimeoutMs({
+        const requestTimeoutMs = resolveSeedContactRequestTimeoutMs({
           configuredHttpTimeoutMs: config.httpTimeoutMs,
-          hasRetryableSeedContactEvidence: lastBootstrapError !== null,
-          retryAfterMs: lastRetryAfterMs,
         });
         const bootstrapRequest = {
           nodeId: this.nodeId,
@@ -263,10 +251,8 @@ class ContactSeedPhase {
         return;
       } catch (error) {
         const retryableTimeoutErrorMessage = JOINING_ERROR_MSG.httpTimeout(
-          resolveRetryableSeedContactProbeTimeoutMs({
+          resolveSeedContactRequestTimeoutMs({
             configuredHttpTimeoutMs: config.httpTimeoutMs,
-            hasRetryableSeedContactEvidence: lastBootstrapError !== null,
-            retryAfterMs: lastRetryAfterMs,
           }),
         );
         const classification = this.classifySeedContactFailure(

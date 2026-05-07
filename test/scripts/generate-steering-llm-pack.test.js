@@ -14,6 +14,10 @@ const TEST_FIRST_CHILD_RULE_TEXT = 'collect evidence';
 const TEST_SECOND_CHILD_RULE_TEXT = 'normalize one snapshot';
 const TEST_THIRD_CHILD_RULE_TEXT = 'emit one canonical outcome and reasons';
 const TEST_UNRELATED_RULE_TEXT = 'Do not create a second owner.';
+const TEST_CONTEXT_ANTECEDENT_TEXT =
+  'docs/ is reserved for end-user or operator-facing documentation.';
+const TEST_CONTEXT_DEPENDENT_RULE_TEXT =
+  'Internal planning, work-package execution, and sprint tracking must not live there.';
 const TEST_ORDERED_PARENT_RULE_TEXT =
   'Semantic decision boundaries must not be implemented as bags of if statements. ' +
   TEST_PARENT_RULE_TEXT;
@@ -41,6 +45,12 @@ const TEST_INCOMPLETE_MARKDOWN = [
   '# Rules',
   '',
   'Required workflow:',
+  '',
+].join('\n');
+const TEST_CONTEXT_DEPENDENT_MARKDOWN = [
+  '# Rules',
+  '',
+  TEST_CONTEXT_ANTECEDENT_TEXT + ' ' + TEST_CONTEXT_DEPENDENT_RULE_TEXT,
   '',
 ].join('\n');
 const TEST_OUTPUT_NAME = 'core';
@@ -113,6 +123,22 @@ test('steering pack parser rejects colon-ended rules without child bullets',
     const candidates = parseTestCandidates(TEST_INCOMPLETE_MARKDOWN);
 
     t.same(candidates, []);
+    t.end();
+  });
+
+test('steering pack parser preserves antecedent for context-dependent rules',
+  (t) => {
+    const candidates = parseTestCandidates(TEST_CONTEXT_DEPENDENT_MARKDOWN);
+    const contextualRule = candidates.find((candidate) =>
+      candidate.text.includes(TEST_CONTEXT_DEPENDENT_RULE_TEXT),
+    );
+
+    t.ok(contextualRule, 'context-dependent rule should be emitted');
+    t.equal(
+      contextualRule.text,
+      TEST_CONTEXT_ANTECEDENT_TEXT + ' ' + TEST_CONTEXT_DEPENDENT_RULE_TEXT,
+      'rule should keep the sentence that defines "there"',
+    );
     t.end();
   });
 

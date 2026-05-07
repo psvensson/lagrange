@@ -28,18 +28,23 @@ const FIXTURE_TOP_REASON_COUNT = 2;
 const ZERO_COUNT = 0;
 const ONE_COUNT = 1;
 const EXPECTED_EDGE_COUNT = 5;
+const EXPECTED_EMPTY_FRONTIER_COUNT = 0;
 const MIN_FRONTIER_COUNT = 1;
 const JSON_ENCODING_UTF8 = 'utf8';
 const NULL_VALUE = null;
 const UNDEFINED_VALUE = undefined;
 const SCENARIO_ROLLING_RESTART = 'rolling-restart';
 const OWNER_OPERATION_WORKFLOW = 'operation_workflow_owner';
+const SOURCE_PATH_ABSENT = 'absent';
+const SOURCE_PATH_FAILURE_BUNDLE = 'failureBundle';
 const ACTIVE_GATE_STATE_TIMED_OUT = 'timed_out';
+const ACTIVE_GATE_STATE_READY = 'ready';
 const PUBLICATION_STATUS_PUBLISHED = 'PUBLISHED';
 const RECOVERY_PROTOCOL_PRIORITY_SPREAD_PENDING = 'priority_spread_pending';
 const EDGE_PRIORITY_RECOVERY = 'priority_recovery_partition_progress';
 const EDGE_SNAPSHOT_COVERAGE = 'active_gate_snapshot_coverage';
 const EDGE_READINESS = 'readiness_startup_support';
+const EDGE_TOP_FAILURE_REASONS = 'top_failure_reasons';
 const ARTIFACT_PATH_20260507 =
   'test-output/reports/.playback/rolling-restart-after-bounded-retryable-seed-contact-probe-20260507T072145Z/rolling-restart/failure-bundle.json';
 const REPORT_ARTIFACT_PATH_20260507 =
@@ -95,6 +100,34 @@ function buildFixtureFailureBundle() {
   };
 }
 
+function buildHealthyFixtureFailureBundle() {
+  const fixture = buildFixtureFailureBundle();
+
+  return {
+    ...fixture,
+    publicationConvergence: {
+      ...fixture.publicationConvergence,
+      activeGate: {
+        ...fixture.publicationConvergence.activeGate,
+        state: ACTIVE_GATE_STATE_READY,
+        ready: true,
+        progress: {
+          ...fixture.publicationConvergence.activeGate.progress,
+          snapshotCoverageNodeCount: FIXTURE_EXPECTED_NODE_COUNT,
+          snapshotCoverageComplete: true,
+          prioritySpreadGap: ZERO_COUNT,
+          priorityBlockedPartitionCount: ZERO_COUNT,
+          priorityRecoveryProgressClasses: {
+            unresolvedSemanticStateIds: [],
+            blockedPartitionIds: [],
+          },
+          blockers: [],
+        },
+      },
+    },
+  };
+}
+
 function findEdge(edges, edgeId) {
   return edges.find((edge) => edge.id === edgeId);
 }
@@ -137,13 +170,31 @@ describe('TopologyConvergenceGraph', () => {
     assertNoNullOrUndefined(graph);
   });
 
-  it('accepts report-shaped input with an embedded failure bundle', () => {
-    const graph = buildTopologyConvergenceGraph({
-      failureBundle: buildFixtureFailureBundle(),
-    });
+  it('accepts direct failure-bundle input and records provenance', () => {
+    const graph = buildTopologyConvergenceGraph(buildFixtureFailureBundle());
 
+    assert.equal(graph.scenario, FIXTURE_SCENARIO);
     assert.equal(graph.summary.edgeCount, EXPECTED_EDGE_COUNT);
     assert.equal(graph.frontier[ZERO_COUNT].owner, OWNER_OPERATION_WORKFLOW);
+    assert.deepEqual(graph.generatedFrom, {
+      failureBundle: SOURCE_PATH_FAILURE_BUNDLE,
+      triageSummary: SOURCE_PATH_ABSENT,
+      report: SOURCE_PATH_ABSENT,
+    });
+  });
+
+  it('converges to an empty frontier when all blocker edges are satisfied', () => {
+    const graph = buildTopologyConvergenceGraphFromArtifacts({
+      failureBundle: buildHealthyFixtureFailureBundle(),
+    });
+
+    assert.equal(findEdge(graph.edges, EDGE_TOP_FAILURE_REASONS).state, EDGE_STATE.SATISFIED);
+    assert.equal(graph.frontier.length, EXPECTED_EMPTY_FRONTIER_COUNT);
+    assert.equal(graph.summary.frontierCount, EXPECTED_EMPTY_FRONTIER_COUNT);
+    assert.equal(graph.summary.firstFrontierEdgeId, SOURCE_PATH_ABSENT);
+    assert.equal(graph.summary.firstFrontierState, SOURCE_PATH_ABSENT);
+    assert.deepEqual(graph.nextExpectedFrontier, []);
+    assertNoNullOrUndefined(graph);
   });
 
   it('builds a graph for the 20260507 playback failure bundle artifact', () => {

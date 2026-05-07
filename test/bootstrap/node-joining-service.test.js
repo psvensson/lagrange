@@ -1637,13 +1637,14 @@ test('NodeJoiningService - exhausted retryable seed-contact timeouts preserve ' 
 });
 
 test('NodeJoiningService - retryable seed-contact bootstrap authority ' +
-  'survives a later transport failure', async (t) => {
+  'preserves the configured request timeout on the retried transport ' +
+  'attempt', async (t) => {
   initializeTestEnvironment();
 
   const TEST_RETRY_AFTER_MS = 5;
   const TEST_RETRY_DELAY_MS = 10;
-  const TEST_HTTP_TIMEOUT_MS = 10;
-  const TEST_RETRY_TIMEOUT_MS = 25;
+  const TEST_HTTP_TIMEOUT_MS = 25;
+  const TEST_RETRY_TIMEOUT_MS = 60;
   const TEST_BOOTSTRAP_PHASE = 'partitions';
   const TEST_STARTUP_AUTHORITY = Object.freeze({
     authorityAvailable: true,
@@ -1660,6 +1661,7 @@ test('NodeJoiningService - retryable seed-contact bootstrap authority ' +
 
   let attempts = 0;
   let currentNow = 0;
+  const observedTimeoutMs = [];
   const retryDelays = [];
   const service = new NodeJoiningService({
     nodeId: '550e8400-e29b-41d4-a716-446655440110',
@@ -1683,6 +1685,7 @@ test('NodeJoiningService - retryable seed-contact bootstrap authority ' +
       const timeoutMs = Number.isFinite(options?.timeoutMs) ?
         options.timeoutMs :
         TEST_HTTP_TIMEOUT_MS;
+      observedTimeoutMs.push(timeoutMs);
       currentNow += timeoutMs;
       if (attempts === 1) {
         const error = new Error(
@@ -1704,8 +1707,8 @@ test('NodeJoiningService - retryable seed-contact bootstrap authority ' +
   t.equal(
     error?.message,
     'Failed to contact seed node: Request timeout after ' +
-      TEST_RETRY_DELAY_MS + 'ms',
-    'phase should keep the transport-timeout context after switching to the bounded retryable probe timeout',
+      TEST_HTTP_TIMEOUT_MS + 'ms',
+    'phase should keep the transport-timeout context while preserving the configured request timeout on the retried request',
   );
   t.equal(
     error?.deferRetry,
@@ -1734,6 +1737,11 @@ test('NodeJoiningService - retryable seed-contact bootstrap authority ' +
     retryDelays,
     [TEST_RETRY_DELAY_MS],
     'phase should still use one bounded retry before surfacing the resumable failure',
+  );
+  t.same(
+    observedTimeoutMs,
+    [TEST_HTTP_TIMEOUT_MS, TEST_HTTP_TIMEOUT_MS],
+    'phase should keep the configured request timeout for retryable transport attempts',
   );
 });
 
@@ -1816,8 +1824,8 @@ test('NodeJoiningService - retained retryable seed-contact evidence ' +
   t.equal(
     secondError?.message,
     'Failed to contact seed node: Request timeout after ' +
-      TEST_RETRY_AFTER_MS + 'ms',
-    'later transport timeout should preserve contact-seed context while using the bounded retryable probe timeout',
+      TEST_HTTP_TIMEOUT_MS + 'ms',
+    'later transport timeout should preserve contact-seed context while keeping the configured request timeout',
   );
   t.equal(
     secondError?.deferRetry,
@@ -1844,13 +1852,13 @@ test('NodeJoiningService - retained retryable seed-contact evidence ' +
   );
   t.same(
     observedTimeoutMs,
-    [TEST_HTTP_TIMEOUT_MS, TEST_RETRY_AFTER_MS],
-    'phase should bound the follow-up probe timeout once retryable seed evidence is retained',
+    [TEST_HTTP_TIMEOUT_MS, TEST_HTTP_TIMEOUT_MS],
+    'phase should keep the configured request timeout once retryable seed evidence is retained',
   );
   t.equal(
     currentNow,
-    TEST_HTTP_TIMEOUT_MS + TEST_RETRY_AFTER_MS,
-    'bounded cross-attempt probe timeout should avoid consuming the full original HTTP timeout again',
+    TEST_HTTP_TIMEOUT_MS + TEST_HTTP_TIMEOUT_MS,
+    'retained retryable seed evidence should not shrink the later transport timeout budget',
   );
 });
 

@@ -109,20 +109,21 @@ on eligible-cohort rejection after target materialization, and target owner
 `sql_transactions-p1-r5`.
 
 The live representative blocker remains in topology recovery, but the semantic
-owner moved again. After the bounded retryable seed-contact probe repair, the
+owner moved again. After the deferred-dispatch visibility fallback repair, the
 representative rerun now reaches epoch `4` `PUBLISHED` with pending ACK count
-`0`, active `2/5`, snapshot coverage `2/5`, and recovery protocol state
-`priority_spread_pending`. Fresh triage evidence selects owner
-`operation_workflow_owner`, boundary `workflow_progress`, wait mode
-`event_driven`, next action `wait_for_operation_progress`, and dominant reason
-`priority_recovery_workflow_progress_event_driven`.
+`0`, active `2/5`, snapshot coverage `2/5`, and no blocked or unresolved
+priority partitions. Fresh triage evidence selects dominant reason
+`publication_missing_active_node=11601...`, while joiner logs on `35a...`,
+`11601...`, and `ebc4...` agree on one lower startup seam: all three nodes
+remain in `contacting_seed`, exhaust retryable seed-contact resume budgets,
+and terminate on repeated `Request timeout after 500ms`.
 
 The current unchecked package task is therefore a successor package on the
-priority-recovery workflow-progress / event-driven no-dispatch boundary:
-preserve the closed startup seed-contact regressions, then repair only the
-selected remote-owned priority REPLACE progression seam so created recovery
-operations either advance canonically or fail through one explicit owner
-state.
+startup join / `contacting_seed` timeout no-progress boundary: preserve the
+closed deferred-dispatch visibility regression, then repair only the selected
+seed-contact timeout owner so the same three missing-published nodes either
+receive canonical bootstrap outcomes or fail through one explicit lower
+startup owner state.
 
 This sprint keeps the old filename for continuity with the active branch, but
 the execution scope is now runtime stability and harness determinism.
@@ -169,7 +170,7 @@ Secondary after the primary path is stable:
 
 The current active representative re-entry package is:
 
-1. [Rolling Restart Topology Priority Recovery Workflow Progress Event-Driven Reentry](../packages/active-20260507-rolling-restart-topology-priority-recovery-workflow-progress-event-driven-reentry.md)
+1. [Rolling Restart Topology Publication Missing-Active Startup Join Contacting Seed Timeout No-Progress Reentry](../packages/active-20260507-rolling-restart-topology-publication-missing-active-startup-join-contacting-seed-timeout-no-progress-reentry.md)
 
 Retained predecessor context file:
 

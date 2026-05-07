@@ -31,6 +31,11 @@ const LOCAL_NUM_ZERO = 0;
 const BOOTSTRAP_REQUEST_EXECUTION_OPERATION_NAME =
   'bootstrap_request_execution';
 const BOOTSTRAP_REQUEST_TIMEOUT_BUDGET_FIELD = 'timeoutBudget';
+const BOOTSTRAP_REQUEST_ADMISSION_DECISION = Object.freeze({
+  ADMIT: 'admit',
+  DEFER_STARTUP_INCOMPLETE: 'defer_startup_incomplete',
+  DEFER_BOOTSTRAP_JOIN_BLOCKED: 'defer_bootstrap_join_blocked',
+});
 
 const RETRYABLE_BOOTSTRAP_DEPENDENCY_ERROR_FRAGMENTS = Object.freeze([
   'ControlPlaneSystemTableGateway requires cdcIntegrationService',
@@ -327,6 +332,43 @@ class BootstrapRequestOwner {
     return nextOptions;
   }
 
+  evaluateBootstrapRequestAdmissionDecision(
+    bootstrapService,
+    bootstrapJoinAdmissionSnapshot,
+  ) {
+    const startupComplete =
+      this.isBootstrapRequestStartupComplete(bootstrapService);
+    const bootstrapJoinAdmissionReady =
+      bootstrapJoinAdmissionSnapshot?.ready === true;
+    const admissionDecision = {
+      decision: BOOTSTRAP_REQUEST_ADMISSION_DECISION.ADMIT,
+      phase: null,
+      reasonCode: null,
+      retryAfterMs: bootstrapJoinAdmissionSnapshot?.retryAfterMs,
+    };
+    if (!bootstrapJoinAdmissionReady && !startupComplete) {
+      admissionDecision.decision =
+        BOOTSTRAP_REQUEST_ADMISSION_DECISION.DEFER_STARTUP_INCOMPLETE;
+      admissionDecision.phase =
+        typeof bootstrapService?.phase === TYPEOF.STRING ?
+          bootstrapService.phase :
+          null;
+      admissionDecision.reasonCode =
+        BOOTSTRAP_API_PROBE_REASON.BOOTSTRAP_PHASE_INCOMPLETE;
+    } else if (
+      !bootstrapJoinAdmissionReady &&
+      bootstrapJoinAdmissionSnapshot?.bootstrapJoinAuthorityAvailable === true
+    ) {
+      admissionDecision.decision =
+        BOOTSTRAP_REQUEST_ADMISSION_DECISION.DEFER_BOOTSTRAP_JOIN_BLOCKED;
+      admissionDecision.phase =
+        typeof bootstrapJoinAdmissionSnapshot?.phase === TYPEOF.STRING ?
+          bootstrapJoinAdmissionSnapshot.phase :
+          null;
+    }
+    return admissionDecision;
+  }
+
   async handleBootstrapRequest(request, reply) {
     const {nodeId, nodeAddress} = request.body || {};
 
@@ -351,9 +393,14 @@ class BootstrapRequestOwner {
     const bootstrapService = this.getBootstrapService();
     const bootstrapJoinAdmissionSnapshot =
       await this.getBootstrapJoinAdmissionSnapshot();
+    const bootstrapRequestAdmissionDecision =
+      this.evaluateBootstrapRequestAdmissionDecision(
+        bootstrapService,
+        bootstrapJoinAdmissionSnapshot,
+      );
     if (
-      !this.isBootstrapRequestStartupComplete(bootstrapService) &&
-      bootstrapJoinAdmissionSnapshot?.ready !== true
+      bootstrapRequestAdmissionDecision.decision !==
+        BOOTSTRAP_REQUEST_ADMISSION_DECISION.ADMIT
     ) {
       const responseTimestamp = Date.now();
       const startupAuthority =
@@ -364,9 +411,9 @@ class BootstrapRequestOwner {
       return this.buildBootstrapNotReadyResponse({
         error: BOOTSTRAP_API_ERROR.BOOTSTRAP_NOT_READY,
         code: BOOTSTRAP_PIPELINE_ERROR_CODE.BOOTSTRAP_NOT_READY,
-        phase: bootstrapService.phase,
-        reasonCode: BOOTSTRAP_API_PROBE_REASON.BOOTSTRAP_PHASE_INCOMPLETE,
-        retryAfterMs: bootstrapJoinAdmissionSnapshot?.retryAfterMs,
+        phase: bootstrapRequestAdmissionDecision.phase,
+        reasonCode: bootstrapRequestAdmissionDecision.reasonCode,
+        retryAfterMs: bootstrapRequestAdmissionDecision.retryAfterMs,
         startupAuthority,
       });
     }

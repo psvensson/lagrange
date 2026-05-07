@@ -84,6 +84,7 @@
     "audit:guideline:decision-boundaries": "node scripts/check-guideline-decision-boundaries.js",
     "audit:guideline:boundary-mode-contracts": "node scripts/check-guideline-boundary-mode-contracts.js",
     "audit:runtime-grammar": "node scripts/check-runtime-grammar-contracts.js && npm run audit:state-machine-pressure",
+    "audit:runtime-grammar:file": "node scripts/check-runtime-grammar-contracts.js",
     "audit:state-machine-pressure": "node scripts/check-state-machine-pressure-preflight.js",
     "steering:llm:pack": "node scripts/generate-steering-llm-pack.js",
     "guard:scenario-policy:file": "node scripts/check-scenario-policy-sql.js",

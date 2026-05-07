@@ -36,6 +36,23 @@ const COMMAND_GROUPS = Object.freeze([
     ]),
   }),
   Object.freeze({
+    title: 'Report And Triage',
+    commands: Object.freeze([
+      Object.freeze({
+        command: 'npm run analyze:distributed-failure -- --report <path>',
+        description: 'Print consolidated distributed report and triage diagnostics.',
+      }),
+      Object.freeze({
+        command: 'npm run analyze:topology-convergence -- <artifact>',
+        description: 'Render topology convergence evidence from report or playback artifacts.',
+      }),
+      Object.freeze({
+        command: 'npm run summarize:harness -- --report-dir test-output/reports',
+        description: 'List latest harness reports by scenario and status.',
+      }),
+    ]),
+  }),
+  Object.freeze({
     title: 'Guideline Guardrails',
     commands: Object.freeze([
       Object.freeze({
@@ -55,7 +72,7 @@ const COMMAND_GROUPS = Object.freeze([
         description: 'Check semantic decision boundaries for independent branch piles.',
       }),
       Object.freeze({
-        command: 'npm run audit:runtime-grammar -- <files...>',
+        command: 'npm run audit:runtime-grammar:file -- <files...>',
         description: 'Check runtime owner-contract and grammar drift.',
       }),
     ]),

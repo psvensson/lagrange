@@ -78,6 +78,25 @@ Phase `0.5 - External Usability` developer-workflow preparation.
 - [x] Opaque constant-name guardrail has focused coverage.
 - [x] CLI naming/license drift corrected at documentation level.
 
+## Subagent Sequencing Ledger
+
+- [x] Review subagent recorded:
+      `Lovelace` (`019e01de-97cb-7171-b249-6fc37d05f942`) performed the
+      follow-up review of this completed package and found prerequisite fixes
+      for LLM entrypoint steering-pack guidance, missing report/triage command
+      discovery, and focused command-entry test coverage before the next LLM
+      orientation package starts.
+- [x] Fix subagent recorded or explicitly not needed:
+      `Descartes` (`019e01e0-c702-7052-b1ba-c4125e93c8e4`) aligned
+      `AGENTS.md` to load the compact LLM steering pack before full steering
+      sources, added report/triage commands to `scripts/list-commands.js`, and
+      strengthened `test/scripts/list-commands.test.js`.
+- [x] Implementation subagent recorded:
+      implementation for the follow-up boundary is recorded in
+      `work/packages/active-20260507-llm-operability-follow-up-hardening.md`;
+      this historical package was not reopened for runtime or feature
+      implementation.
+
 ## Static Drift Ledger
 
 Preflight:

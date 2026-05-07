@@ -129,6 +129,17 @@ Prohibited reinterpretations:
       `Codex verifier-fix session 2026-05-07` reproduced the finding with a
       failing direct-report regression, repaired report normalization, and kept
       the review/fix ledger clean for this bounded verifier continuation.
+- [x] Verifier continuation review source recorded:
+      review agent `019e018b-f1b3-7273-992f-1cfed6b88a05` reviewed this
+      completed diagnostics package on the topology convergence graph boundary;
+      result `fixes-required` for permanently unsatisfied
+      `top_failure_reasons` frontier behavior and wrong direct
+      `failureBundle` provenance on direct failure-bundle input.
+- [x] Verifier continuation fix session recorded:
+      `Codex fix subagent session 2026-05-07T10:37:08+02:00` added failing
+      regressions, repaired `generatedFrom.failureBundle` provenance, made the
+      terminal top-failure edge non-blocking for healthy convergence, and left
+      the review/fix ledger clean for this bounded continuation.
 
 ## Residual Closure Inventory
 
@@ -170,3 +181,9 @@ Closure:
    `node scripts/check-guideline-literals.js src/diagnostics/topology-convergence-graph.js scripts/analyze-topology-convergence.js`.
 7. Diff whitespace passed:
    `git diff --check -- src/diagnostics/topology-convergence-graph.js scripts/analyze-topology-convergence.js test/diagnostics/topology-convergence-graph.test.js test/scripts/analyze-topology-convergence.test.js work/packages/done-20260507-systemic-topology-convergence-graph-diagnostic.md`.
+8. Review-fix targeted diagnostic regression passed:
+   `node --test test/diagnostics/topology-convergence-graph.test.js`.
+9. Review-fix touched-file ESLint passed:
+   `npx eslint src/diagnostics/topology-convergence-graph.js test/diagnostics/topology-convergence-graph.test.js`.
+10. Review-fix diff whitespace passed:
+    `git diff --check -- src/diagnostics/topology-convergence-graph.js test/diagnostics/topology-convergence-graph.test.js work/packages/done-20260507-systemic-topology-convergence-graph-diagnostic.md`.
