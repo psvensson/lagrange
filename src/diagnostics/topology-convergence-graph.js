@@ -26,6 +26,8 @@ const PUBLICATION_STATUS_PUBLISHED = 'PUBLISHED';
 const PRIORITY_RECOVERY_SEMANTIC_RECOVERING_IN_FLIGHT = 'recovering_in_flight';
 const ACTIVE_GATE_STATE_TIMED_OUT = 'timed_out';
 const READINESS_RECOVERABILITY_TERMINAL = 'terminal';
+const PRIORITY_RECOVERY_EVIDENCE_SOURCE_PROGRESS = 'progress';
+const PRIORITY_RECOVERY_EVIDENCE_SOURCE_SUMMARY = 'summary';
 
 const EDGE_STATE = Object.freeze({
   SATISFIED: 'satisfied',
@@ -113,6 +115,10 @@ const SOURCE_PATH = Object.freeze({
   REPORT_SCENARIO_READINESS_FAILURE: 'report.scenarios[0].readinessFailure',
   PRIORITY_RECOVERY_PROGRESS_CLASSES:
     'publicationConvergence.activeGate.progress.priorityRecoveryProgressClasses',
+  PRIORITY_RECOVERY_PROGRESS_SUMMARY:
+    'publicationConvergence.priorityRecoveryProgressSummary',
+  PRIORITY_RECOVERY_DOMINANT_WITNESS:
+    'publicationConvergence.priorityRecoveryProgressSummary.dominantWitness',
   ACTIVE_GATE_PROGRESS: 'publicationConvergence.activeGate.progress',
   READINESS_FAILURE: 'summary.readinessFailure',
   TOP_REASONS: 'summary.topReasons',
@@ -123,8 +129,12 @@ const SOURCE_FIELD = Object.freeze({
   ACTIVE_GATE_PROGRESS: 'activeGateProgress',
   ACTIVE_GATE_BEST_PROGRESS: 'activeGateBestProgress',
   BEST_PROGRESS: 'bestProgress',
+  BLOCKING_BOUNDARY: 'blockingBoundary',
+  CURRENT_OWNER: 'currentOwner',
+  DOMINANT_WITNESS: 'dominantWitness',
   PROGRESS: 'progress',
   PRIORITY_RECOVERY_PROGRESS_CLASSES: 'priorityRecoveryProgressClasses',
+  PRIORITY_RECOVERY_PROGRESS_SUMMARY: 'priorityRecoveryProgressSummary',
   READINESS_FAILURE: 'readinessFailure',
 });
 
@@ -154,6 +164,8 @@ const DECISION_INPUT = Object.freeze({
   READINESS_RECOVERABILITY: 'readiness.recoverability',
   TOP_REASONS: 'topReasons',
 });
+
+let latestDecisionTableOverridesByEdgeId = Object.freeze({});
 
 const DECISION_CONDITION = Object.freeze({
   PUBLICATION_NOT_PUBLISHED: 'publication status is not PUBLISHED',
@@ -408,6 +420,7 @@ function buildTopologyConvergenceGraph(input = {}) {
     ...edge,
     sourceOrder: index + SOURCE_ORDER_BASE,
   }));
+  latestDecisionTableOverridesByEdgeId = buildDecisionTableOverrides(edges);
   const frontier = computeFrontier(edges);
   const nextExpectedFrontier = computeNextExpectedFrontier(edges, frontier);
 
@@ -422,7 +435,26 @@ function buildTopologyConvergenceGraph(input = {}) {
       firstFrontierEdgeId: frontier[FIRST_FRONTIER_INDEX]?.id || ABSENT_VALUE,
       firstFrontierState: frontier[FIRST_FRONTIER_INDEX]?.state || ABSENT_VALUE,
     },
-    nodes: NODE_DEFINITIONS.map((node) => ({...node})),
+    nodes: NODE_DEFINITIONS.map((node) => {
+      if (node.id !== NODE_ID.PRIORITY_RECOVERY_PROGRESS) {
+        return {...node};
+      }
+      return {
+        ...node,
+        owner: firstText(
+          latestDecisionTableOverridesByEdgeId[
+            EDGE_ID.PRIORITY_RECOVERY_PARTITION_PROGRESS
+          ]?.owner,
+          node.owner,
+        ),
+        boundary: firstText(
+          latestDecisionTableOverridesByEdgeId[
+            EDGE_ID.PRIORITY_RECOVERY_PARTITION_PROGRESS
+          ]?.boundary,
+          node.boundary,
+        ),
+      };
+    }),
     edges,
     frontier,
     nextExpectedFrontier,
@@ -538,6 +570,23 @@ function normalizeTopologyConvergenceInput(input) {
     recordCandidate(scenario.priorityRecoveryProgressSummary, SOURCE_PATH.REPORT_SCENARIO),
   );
   const progress = progressEvidence.record;
+  const progressSummaryEvidence = firstRecordWithSource(
+    recordCandidate(
+      publication.priorityRecoveryProgressSummary,
+      flattenEvidencePath(
+        publicationEvidence.sourcePath,
+        SOURCE_FIELD.PRIORITY_RECOVERY_PROGRESS_SUMMARY,
+      ),
+    ),
+    recordCandidate(
+      scenario.priorityRecoveryProgressSummary,
+      flattenEvidencePath(
+        SOURCE_PATH.REPORT_SCENARIO,
+        SOURCE_FIELD.PRIORITY_RECOVERY_PROGRESS_SUMMARY,
+      ),
+    ),
+  );
+  const progressSummary = progressSummaryEvidence.record;
   const readinessFailureEvidence = firstRecordWithSource(
     recordCandidate(scenario.readinessFailure, SOURCE_PATH.REPORT_SCENARIO_READINESS_FAILURE),
     recordCandidate(summary.readinessFailure, SOURCE_PATH.READINESS_FAILURE),
@@ -570,6 +619,7 @@ function normalizeTopologyConvergenceInput(input) {
     publication,
     activeGate,
     progress,
+    progressSummary,
     readinessFailure,
     evidencePath: {
       publication: publicationEvidence.sourcePath,
@@ -578,6 +628,14 @@ function normalizeTopologyConvergenceInput(input) {
         flattenEvidencePath(
           progressEvidence.sourcePath,
           SOURCE_FIELD.PRIORITY_RECOVERY_PROGRESS_CLASSES,
+        ),
+      priorityRecoveryProgressSummary: progressSummaryEvidence.sourcePath,
+      priorityRecoveryDominantWitness: progressSummaryEvidence.sourcePath ===
+        ABSENT_VALUE ?
+        ABSENT_VALUE :
+        flattenEvidencePath(
+          progressSummaryEvidence.sourcePath,
+          SOURCE_FIELD.DOMINANT_WITNESS,
         ),
       activeGateProgress: progressEvidence.sourcePath,
       readinessFailure: readinessFailureEvidence.sourcePath,
@@ -608,24 +666,21 @@ function buildPublicationEdge(normalized) {
 }
 
 function buildPriorityRecoveryEdge(normalized) {
-  const progress = normalized.progress;
-  const classes = asRecord(progress.priorityRecoveryProgressClasses);
-  const semanticStateIds = arrayOrEmpty(classes.unresolvedSemanticStateIds);
-  const blockedPartitionIds = arrayOrEmpty(classes.blockedPartitionIds);
+  const evidence = normalizePriorityRecoveryEvidence(normalized);
   const reasons = [];
-  const state = resolvePriorityRecoveryState(progress, semanticStateIds, reasons);
+  const state = resolvePriorityRecoveryState(evidence, reasons);
 
   return buildEdge({
     id: EDGE_ID.PRIORITY_RECOVERY_PARTITION_PROGRESS,
     from: NODE_ID.PRIORITY_RECOVERY_PROGRESS,
     to: NODE_ID.ACTIVE_GATE_SNAPSHOT_COVERAGE,
     state,
-    owner: OWNER.PRIORITY_RECOVERY,
-    boundary: BOUNDARY.WORKFLOW_PROGRESS,
-    evidencePath: normalized.evidencePath.priorityRecoveryProgressClasses,
+    owner: evidence.owner,
+    boundary: evidence.boundary,
+    evidencePath: evidence.evidencePath,
     source: {
-      unresolvedSemanticStateIds: joinValues(semanticStateIds),
-      blockedPartitionIds: joinValues(blockedPartitionIds),
+      unresolvedSemanticStateIds: joinValues(evidence.semanticStateIds),
+      blockedPartitionIds: joinValues(evidence.blockedPartitionIds),
       dominantReason: textOrUnknown(normalized.summary.dominantReason),
       failureClass: textOrUnknown(
         normalized.summary.failureClass ||
@@ -794,24 +849,106 @@ function resolvePublicationState(evidence, reasons) {
   return EDGE_STATE.SATISFIED;
 }
 
-function resolvePriorityRecoveryState(progress, semanticStateIds, reasons) {
-  if (semanticStateIds.length === SOURCE_ORDER_BASE) {
+function normalizePriorityRecoveryEvidence(normalized) {
+  const progress = normalized.progress;
+  const progressSummary = normalized.progressSummary;
+  const progressClasses = asRecord(progress.priorityRecoveryProgressClasses);
+  const progressSummaryClasses = asRecord(
+    progressSummary[SOURCE_FIELD.PRIORITY_RECOVERY_PROGRESS_CLASSES],
+  );
+  const ownerBoundary = resolvePriorityRecoveryOwnerBoundary(progressSummary);
+  const evidenceSource = selectPriorityRecoveryEvidenceSource(
+    progressSummaryClasses,
+    ownerBoundary,
+  );
+  const classes = evidenceSource === PRIORITY_RECOVERY_EVIDENCE_SOURCE_SUMMARY ?
+    progressSummaryClasses :
+    progressClasses;
+
+  return {
+    owner: ownerBoundary.owner,
+    boundary: ownerBoundary.boundary,
+    evidencePath: selectPriorityRecoveryEvidencePath(
+      normalized,
+      evidenceSource,
+      ownerBoundary,
+    ),
+    priorityBlockedPartitionCount: firstFiniteNumber(
+      progressSummary.priorityBlockedPartitionCount,
+      progress.priorityBlockedPartitionCount,
+    ),
+    semanticStateIds: arrayOrEmpty(classes.unresolvedSemanticStateIds),
+    blockedPartitionIds: arrayOrEmpty(classes.blockedPartitionIds),
+  };
+}
+
+function resolvePriorityRecoveryState(priorityRecoveryEvidence, reasons) {
+  if (priorityRecoveryEvidence.semanticStateIds.length === SOURCE_ORDER_BASE) {
     reasons.push(REASON.PRIORITY_RECOVERY_SATISFIED);
     return EDGE_STATE.SATISFIED;
   }
-  if (Number(progress.priorityBlockedPartitionCount) > SOURCE_ORDER_BASE) {
-    if (semanticStateIds.includes(PRIORITY_RECOVERY_SEMANTIC_RECOVERING_IN_FLIGHT)) {
+  if (priorityRecoveryEvidence.priorityBlockedPartitionCount > SOURCE_ORDER_BASE) {
+    if (priorityRecoveryEvidence.semanticStateIds.includes(
+      PRIORITY_RECOVERY_SEMANTIC_RECOVERING_IN_FLIGHT,
+    )) {
       reasons.push(REASON.PRIORITY_RECOVERY_RETRYABLE);
     }
     reasons.push(REASON.PRIORITY_RECOVERY_PROGRESS_BLOCKED);
     return EDGE_STATE.BLOCKED;
   }
-  if (semanticStateIds.includes(PRIORITY_RECOVERY_SEMANTIC_RECOVERING_IN_FLIGHT)) {
+  if (priorityRecoveryEvidence.semanticStateIds.includes(
+    PRIORITY_RECOVERY_SEMANTIC_RECOVERING_IN_FLIGHT,
+  )) {
     reasons.push(REASON.PRIORITY_RECOVERY_RETRYABLE);
     return EDGE_STATE.RETRYABLE;
   }
   reasons.push(REASON.PRIORITY_RECOVERY_PROGRESS_BLOCKED);
   return EDGE_STATE.BLOCKED;
+}
+
+function resolvePriorityRecoveryOwnerBoundary(progressSummary) {
+  const dominantWitness = asRecord(
+    asRecord(progressSummary)[SOURCE_FIELD.DOMINANT_WITNESS],
+  );
+  const usesDominantWitness =
+    firstText(dominantWitness[SOURCE_FIELD.CURRENT_OWNER], ABSENT_VALUE) !==
+      ABSENT_VALUE ||
+    firstText(dominantWitness[SOURCE_FIELD.BLOCKING_BOUNDARY], ABSENT_VALUE) !==
+      ABSENT_VALUE;
+  return {
+    owner: firstText(
+      dominantWitness[SOURCE_FIELD.CURRENT_OWNER],
+      OWNER.PRIORITY_RECOVERY,
+    ),
+    boundary: firstText(
+      dominantWitness[SOURCE_FIELD.BLOCKING_BOUNDARY],
+      BOUNDARY.WORKFLOW_PROGRESS,
+    ),
+    usesDominantWitness,
+  };
+}
+
+function selectPriorityRecoveryEvidenceSource(progressSummaryClasses, ownerBoundary) {
+  if (Object.keys(progressSummaryClasses).length > SOURCE_ORDER_BASE) {
+    return PRIORITY_RECOVERY_EVIDENCE_SOURCE_SUMMARY;
+  }
+  if (ownerBoundary.owner !== OWNER.PRIORITY_RECOVERY ||
+      ownerBoundary.boundary !== BOUNDARY.WORKFLOW_PROGRESS) {
+    return PRIORITY_RECOVERY_EVIDENCE_SOURCE_SUMMARY;
+  }
+  return PRIORITY_RECOVERY_EVIDENCE_SOURCE_PROGRESS;
+}
+
+function selectPriorityRecoveryEvidencePath(normalized, evidenceSource, ownerBoundary) {
+  if (ownerBoundary.usesDominantWitness &&
+      normalized.evidencePath.priorityRecoveryDominantWitness !== ABSENT_VALUE) {
+    return normalized.evidencePath.priorityRecoveryDominantWitness;
+  }
+  if (evidenceSource === PRIORITY_RECOVERY_EVIDENCE_SOURCE_SUMMARY &&
+      normalized.evidencePath.priorityRecoveryProgressSummary !== ABSENT_VALUE) {
+    return normalized.evidencePath.priorityRecoveryProgressSummary;
+  }
+  return normalized.evidencePath.priorityRecoveryProgressClasses;
 }
 
 function resolveActiveGateSnapshotState(activeGate, progress, reasons) {
@@ -1055,6 +1192,16 @@ function compareNumber(left, right) {
   return left - right;
 }
 
+function firstFiniteNumber(...values) {
+  for (const value of values) {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+  return SOURCE_ORDER_BASE;
+}
+
 function flattenEvidencePath(parentPath, childPath) {
   if (!parentPath || parentPath === ABSENT_VALUE) {
     return childPath;
@@ -1072,8 +1219,14 @@ function glossaryEntries(values) {
 function cloneDecisionTableRows() {
   return DECISION_TABLE_ROWS.map((row) => ({
     edgeId: row.edgeId,
-    owner: row.owner,
-    boundary: row.boundary,
+    owner: firstText(
+      latestDecisionTableOverridesByEdgeId[row.edgeId]?.owner,
+      row.owner,
+    ),
+    boundary: firstText(
+      latestDecisionTableOverridesByEdgeId[row.edgeId]?.boundary,
+      row.boundary,
+    ),
     evidenceInputs: [...row.evidenceInputs],
     outcomes: row.outcomes.map((outcome) => ({
       condition: outcome.condition,
@@ -1081,6 +1234,17 @@ function cloneDecisionTableRows() {
       reasons: [...outcome.reasons],
     })),
   }));
+}
+
+function buildDecisionTableOverrides(edges) {
+  const overrides = {};
+  for (const edge of edges) {
+    overrides[edge.id] = {
+      owner: edge.owner,
+      boundary: edge.boundary,
+    };
+  }
+  return Object.freeze(overrides);
 }
 
 export {

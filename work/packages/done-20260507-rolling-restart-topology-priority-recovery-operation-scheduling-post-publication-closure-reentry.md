@@ -13,7 +13,7 @@
   "boundary": "Rebalancer leader / operation_scheduling",
   "dominantReason": "publication_epoch_pending",
   "currentState": "The observer-only authoritative-visibility repair closes the post-publication rebalancer scheduling seam by migration. The new representative rerun fails earlier at startup/publication convergence with epoch 3 OPEN, pendingAck=1 on ebc4..., snapshot coverage 3/5, 35a... degraded under observability backlog, and sql_write_operations-p1 demoted from create_recovery_operation to workflow-progress serial wait behind sql_transactions-p1 operation 6d1346a9-2655-427e-8d80-31fbc193919d.",
-  "nextAction": "Continue in work/packages/active-20260507-rolling-restart-startup-publication-open-convergence-priority-serial-wait-workflow-progress-reentry.md to extract the epoch-3 OPEN publication/startup witness, pick the direct lower owner, and repair the new convergence boundary.",
+  "nextAction": "Continue in work/packages/done-20260507-rolling-restart-startup-publication-open-convergence-priority-serial-wait-workflow-progress-reentry.md to extract the epoch-3 OPEN publication/startup witness, pick the direct lower owner, and repair the new convergence boundary.",
   "proof": [
     "Focused post-publication operation-scheduling witness extraction",
     "Focused observer-only authoritative operation visibility regression",
@@ -26,18 +26,18 @@
     "src/rebalancer/operation-workflow-owner-segment-5-stage-5.js",
     "test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js",
     "work/packages/done-20260507-rolling-restart-topology-priority-recovery-operation-scheduling-post-publication-closure-reentry.md",
-    "work/packages/active-20260507-rolling-restart-startup-publication-open-convergence-priority-serial-wait-workflow-progress-reentry.md",
+    "work/packages/done-20260507-rolling-restart-startup-publication-open-convergence-priority-serial-wait-workflow-progress-reentry.md",
     "work/sprints/active-2026-q2-publication-scoped-consistency-and-node-join-closure.md"
   ],
   "predecessor": "work/packages/done-20260507-rolling-restart-topology-publication-missing-active-operation-workflow-progress-dispatch-replay-reentry.md",
-  "successor": "work/packages/active-20260507-rolling-restart-startup-publication-open-convergence-priority-serial-wait-workflow-progress-reentry.md"
+  "successor": "work/packages/done-20260507-rolling-restart-startup-publication-open-convergence-priority-serial-wait-workflow-progress-reentry.md"
 }
 -->
 
 Opened on May 7, 2026 after
 [Rolling Restart Topology Publication Missing-Active Operation Workflow Progress Dispatch Replay Reentry](./done-20260507-rolling-restart-topology-publication-missing-active-operation-workflow-progress-dispatch-replay-reentry.md)
 closed by migration. Closed the same day by migration into
-[Rolling Restart Startup Publication Open Convergence Priority Serial-Wait Workflow Progress Reentry](./active-20260507-rolling-restart-startup-publication-open-convergence-priority-serial-wait-workflow-progress-reentry.md).
+[Rolling Restart Startup Publication Open Convergence Priority Serial-Wait Workflow Progress Reentry](./done-20260507-rolling-restart-startup-publication-open-convergence-priority-serial-wait-workflow-progress-reentry.md).
 
 ## Closure Summary
 
@@ -210,5 +210,5 @@ Closure:
 This package closes by migration. The repaired boundary was observer-only
 authoritative visibility for post-publication priority recovery scheduling. The
 successor package is
-[Rolling Restart Startup Publication Open Convergence Priority Serial-Wait Workflow Progress Reentry](./active-20260507-rolling-restart-startup-publication-open-convergence-priority-serial-wait-workflow-progress-reentry.md),
+[Rolling Restart Startup Publication Open Convergence Priority Serial-Wait Workflow Progress Reentry](./done-20260507-rolling-restart-startup-publication-open-convergence-priority-serial-wait-workflow-progress-reentry.md),
 which now owns the epoch `3` `OPEN` startup/publication convergence failure.

@@ -30,6 +30,7 @@ const TEST_NODE_ID_B = 'node-priority-b';
 const TEST_NODE_ID_C = 'node-priority-c';
 const TEST_RECOVERY_ONLY_NODE_ID = 'node-priority-d';
 const TEST_PARTITION_ID = 'sql_write_operations-p1';
+const TEST_SUPPORTING_PARTITION_ID = 'replica_operations-p1';
 const TEST_REPLICA_ID_A = 'sql_write_operations-p1-r1';
 const TEST_REPLICA_ID_B = 'sql_write_operations-p1-r2';
 const TEST_REPLICA_ID_C = 'sql_write_operations-p1-r3';
@@ -400,6 +401,152 @@ test(
         result.moves.length,
         0,
         'rebalance should keep waiting when every feasible recovery target is already occupied or in flight',
+      );
+    } finally {
+      rebalancer.shutdown();
+      ConfigurationManager.resetInstance();
+      LoggingService.resetInstance();
+    }
+  },
+);
+
+test(
+  'UnifiedRebalancer ignores supporting other-partition target reservations ' +
+    'for direct priority follow-up creation',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const systemTableCache = createMockCache({
+      nodes: [
+        createNodeRow(TEST_NODE_ID_A),
+        createNodeRow(TEST_NODE_ID_B),
+        createNodeRow(TEST_NODE_ID_C),
+      ],
+      services: [
+        createReplicaRow(TEST_REPLICA_ID_A, TEST_NODE_ID_A),
+      ],
+      partitions: [{
+        partition_id: TEST_PARTITION_ID,
+        table_id: TEST_TABLE_ID,
+      }],
+    });
+    const controlPlaneReadinessService =
+      createMockControlPlaneReadinessService({
+        systemTableCache,
+        readinessByNodeId: {
+          [TEST_NODE_ID_A]: createNodeReadiness(TEST_NODE_ID_A),
+          [TEST_NODE_ID_B]: createNodeReadiness(TEST_NODE_ID_B),
+          [TEST_NODE_ID_C]: createNodeReadiness(TEST_NODE_ID_C),
+        },
+      });
+    const createdOperations = [];
+    const rebalanceCoordinator = {
+      ...createMockCoordinator(),
+      createOperation: async (move) => {
+        createdOperations.push(move);
+        return {
+          operationId: TEST_CREATED_OPERATION_ID,
+          type: move.type,
+          partitionId: move.partitionId,
+          targetNodeId: move.nodeId,
+          replicaId: move.replicaId,
+          status: ReplicaStatus.PENDING,
+          workflowStep: WORKFLOW_STEP.PENDING,
+        };
+      },
+    };
+    const rebalancer = createTestRebalancer({
+      entityId: TEST_PARTITION_ID,
+      entityType: EntityType.PARTITION,
+      nodeId: TEST_NODE_ID_A,
+      systemTableCache,
+      rebalanceCoordinator,
+      controlPlaneReadinessService,
+    });
+
+    rebalancer.initialize();
+    rebalancer.controlPlaneReadinessService = controlPlaneReadinessService;
+    rebalancer.rebalanceCoordinator.controlPlaneReadinessService =
+      controlPlaneReadinessService;
+    rebalancer.setLeader(true);
+    rebalancer.clusterReadinessConfirmed = true;
+    rebalancer.isStabilized = () => true;
+    rebalancer.evaluateState = async () => true;
+    rebalancer.getConfiguredRebalanceBudget = async () =>
+      TEST_TARGET_REPLICA_COUNT;
+    rebalancer.getGlobalInFlightOperationCount = async () =>
+      TEST_NO_IN_FLIGHT_OPERATIONS;
+    rebalancer.getCurrentPriorityRecoveryFollowUpDecisionSnapshot =
+      async () =>
+        Object.freeze({
+          planningSnapshot: Object.freeze({}),
+          decisionSnapshot: Object.freeze({
+            partitionId: TEST_PARTITION_ID,
+            semanticState: PRIORITY_RECOVERY_SEMANTIC_STATE.NEEDS_OPERATION,
+            progress: Object.freeze({
+              nextRequiredAction:
+                PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION
+                  .CREATE_RECOVERY_OPERATION,
+            }),
+            admission: Object.freeze({
+              effectiveEligibleNodeIds: Object.freeze([
+                TEST_NODE_ID_A,
+                TEST_NODE_ID_B,
+                TEST_NODE_ID_C,
+              ]),
+            }),
+            publication: Object.freeze({
+              recoveryActiveNodeIds: Object.freeze([
+                TEST_NODE_ID_A,
+                TEST_NODE_ID_B,
+                TEST_NODE_ID_C,
+              ]),
+            }),
+          }),
+        });
+    rebalancer.getTopologyBlockingInFlightOperations = () => ([
+      Object.freeze({
+        operation_id: TEST_PENDING_TARGET_OPERATION_ID,
+        partition_id: TEST_SUPPORTING_PARTITION_ID,
+        type: 'ADD',
+        target_node_id: TEST_NODE_ID_B,
+      }),
+    ]);
+    rebalancer.movePlanner.calculateTargetState = async () => ({
+      targetReplicaCount: TEST_TARGET_REPLICA_COUNT,
+      targetNodes: [
+        TEST_NODE_ID_A,
+        TEST_NODE_ID_B,
+      ],
+    });
+    rebalancer.movePlanner.calculateMoves = () => [];
+    rebalancer.movePlanner.applyPressureGating = async (moves) => moves;
+
+    try {
+      const result = await rebalancer.rebalance(
+        TriggerType.PERIODIC,
+        {
+          targetReplicaCount: TEST_TARGET_REPLICA_COUNT,
+          placementConstraints: {
+            spreadAcrossNodes: true,
+          },
+        },
+      );
+
+      t.equal(
+        createdOperations.length,
+        1,
+        'supporting other-partition workflow progress should not suppress direct operation creation',
+      );
+      t.equal(
+        createdOperations[0]?.nodeId,
+        TEST_NODE_ID_B,
+        'direct follow-up should still target the feasible recovery node',
+      );
+      t.equal(
+        result.moves[0]?.success,
+        true,
+        'rebalance should schedule the direct follow-up instead of deferring it',
       );
     } finally {
       rebalancer.shutdown();

@@ -3,25 +3,29 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-07",
   "scenario": "rolling-restart",
   "artifact": "test-output/reports/rolling-restart-after-priority-recovery-visibility-wakeup-20260507T000000Z.report.json",
   "playback": "test-output/reports/.playback/rolling-restart-after-priority-recovery-visibility-wakeup-20260507T000000Z/rolling-restart/",
-  "owner": "Priority recovery workflow progress after failed/removed visibility wake-up repair",
-  "boundary": "Priority recovery workflow progress / startup active gate support",
+  "owner": "Priority recovery operation scheduling after failed/removed visibility wake-up repair and same-artifact owner reconciliation",
+  "boundary": "Rebalancer leader / operation_scheduling / startup active gate support",
   "dominantReason": "priority_recovery_operation_scheduling_event_driven",
-  "currentState": "The failed/removed same-partition visibility wake-up repair is now proved, and the representative rerun materially migrated the direct frontier back to operation_workflow_owner / workflow_progress. The fresh epoch-3 PUBLISHED artifact holds snapshot coverage 4/5 with pendingAck=0, where sql_write_operations-p1 remains eligible_but_no_operation_created under needs_operation while replica_operations-p1 advances to recovering_in_flight.",
-  "nextAction": "Extract a focused epoch-3 PUBLISHED workflow-progress witness for sql_write_operations-p1 as the only remaining eligible_but_no_operation_created carrier, with replica_operations-p1 retained as recovering_in_flight supporting context, then repair or reclassify that workflow-progress seam without reopening the closed operation-scheduling wake-up path.",
+  "currentState": "The failed/removed same-partition visibility wake-up repair is now proved, the same-artifact owner split is closed across frontier, explain, and graph metadata, and the direct lower-owner target-reservation seam is closed as well. The representative rerun no longer terminates on rebalancer_leader / operation_scheduling create_recovery_operation; it migrates to operation_workflow_owner / workflow_progress in epoch 4 PUBLISHED, where sql_write_operations-p1 is blocked by priority_operation_serial_wait / wait_for_operation_progress with sql_transaction_participants-p1 supporting in-flight context.",
+  "nextAction": "Continue in work/packages/active-20260507-rolling-restart-topology-priority-recovery-workflow-progress-serial-wait-reentry.md for the migrated operation_workflow_owner / workflow_progress serial-wait transition seam.",
   "proof": [
-    "Focused epoch-3 PUBLISHED workflow-progress witness extraction",
-    "Focused lower-owner regression for the selected create_recovery_operation seam",
+    "Focused epoch-3 PUBLISHED create_recovery_operation witness for sql_write_operations-p1 with replica_operations-p1 retained as supporting context",
+    "Focused lower-owner regression for the selected operation-scheduling seam",
+    "Focused lower-owner regression for the selected canonical seam",
     "Touched-file static guardrails",
     "Representative rolling-restart --fast-local rerun",
     "Failure-report and active-gate frontier analysis"
   ],
   "touchedFiles": [
-    "work/packages/active-20260507-rolling-restart-startup-publication-open-convergence-priority-serial-wait-workflow-progress-reentry.md",
+    "src/diagnostics/topology-convergence-graph.js",
+    "test/scripts/analyze-topology-convergence.test.js",
+    "test/scripts/__fixtures__/topology-convergence/priority-dominant-witness-owner-boundary.fixture.json",
+    "work/packages/done-20260507-rolling-restart-startup-publication-open-convergence-priority-serial-wait-workflow-progress-reentry.md",
     "src/rebalancer/replica-operation-repository.js",
     "src/rebalancer/replica-operation-repository-read-methods.js",
     "test/rebalancer/replica-operation-repository.test.js",
@@ -31,10 +35,15 @@
     "src/rebalancer/operation-workflow-owner-segment-5-stage-5.js",
     "test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js",
     "src/rebalancer/unified-rebalancer-segment-1.js",
+    "src/rebalancer/unified-rebalancer-segment-4-stage-3.js",
+    "test/rebalancer/priority-follow-up-target-readiness.test.js",
     "test/rebalancer/priority-recovery-visibility-wakeup.test.js",
     "work/sprints/active-2026-q2-publication-scoped-consistency-and-node-join-closure.md"
   ],
-  "predecessor": "work/packages/done-20260507-rolling-restart-topology-priority-recovery-operation-scheduling-post-publication-closure-reentry.md"
+  "predecessor": "work/packages/done-20260507-rolling-restart-topology-priority-recovery-operation-scheduling-post-publication-closure-reentry.md",
+  "closed": "2026-05-07",
+  "commitAndPushLedgerRequired": true,
+  "successor": "work/packages/active-20260507-rolling-restart-topology-priority-recovery-workflow-progress-serial-wait-reentry.md"
 }
 -->
 
@@ -42,14 +51,16 @@ Opened on May 7, 2026 after
 [Rolling Restart Topology Priority Recovery Operation Scheduling Post-Publication Closure Reentry](./done-20260507-rolling-restart-topology-priority-recovery-operation-scheduling-post-publication-closure-reentry.md)
 closed by migration. The observer-only authoritative-visibility repair no
 longer leaves the representative blocker on post-publication rebalancer
-scheduling. The current owner boundary now sits earlier in the scenario, where
-startup active-gate progress still depends on priority-recovery workflow
-progress at epoch `3` `PUBLISHED`. The live direct frontier is now
-`operation_workflow_owner / workflow_progress`, where
-`sql_write_operations-p1` remains `eligible_but_no_operation_created` under
-`needs_operation` and the next focused seam is
-`create_recovery_operation`, with `replica_operations-p1` retained only as
-supporting `recovering_in_flight` context.
+scheduling. The follow-on same-artifact owner split is now closed as well:
+the report, playback failure bundle, and topology-convergence graph all agree
+that the live epoch `3` `PUBLISHED` blocker sits on
+`rebalancer_leader / operation_scheduling` for
+`sql_write_operations-p1 -> create_recovery_operation`, while
+`replica_operations-p1` remains supporting
+`operation_workflow_owner / workflow_progress`
+`recovering_in_flight -> wait_for_operation_progress` context only. The next
+worker should keep the closed diagnostics reclassification intact and reduce
+the remaining event-driven no-operation seam at the lower owner.
 
 ## Current Evidence
 
@@ -136,22 +147,25 @@ frontier. Items `18` through `22` are the live handoff for the next worker.
 19. The new artifact fails after `132.5s` at epoch `3` `PUBLISHED` with
     snapshot coverage `4/5`, missing-published count `2`, pending ACK count
     `0`, and downstream startup active-gate timeout support only.
-20. `npm run analyze:distributed-failure` still selects normalized dominant
-    reason `priority_recovery_operation_scheduling_event_driven`, but the
-    topology-convergence graph and matching playback failure bundle move the
-    direct frontier back to `operation_workflow_owner / workflow_progress`.
-21. The normalized priority-recovery progress classes now narrow the unresolved
-    class set again: `sql_write_operations-p1` is the only remaining
+20. `npm run analyze:distributed-failure` selects normalized dominant reason
+    `priority_recovery_operation_scheduling_event_driven`, with
+    `sql_write_operations-p1` the only remaining
     `eligible_but_no_operation_created` partition under semantic state
-    `needs_operation`, while `replica_operations-p1` has advanced to
-    supporting `recovering_in_flight` and
-    `control_plane_publications-p1`, `sql_transaction_participants-p1`, and
-    `sql_transactions-p1` remain `spread_satisfied_in_flight`.
+    `needs_operation`, current owner `rebalancer_leader`, boundary
+    `operation_scheduling`, wait mode `event_driven`, and next action
+    `create_recovery_operation`.
+21. The focused topology-convergence diagnostics regression closes the same-
+    artifact owner split by making frontier, explain, and graph metadata all
+    inherit `priorityRecoveryProgressSummary(.dominantWitness)` when it
+    supplies the canonical owner/boundary override. The report and matching
+    playback now also select `rebalancer_leader / operation_scheduling` as
+    the first frontier, and the focused fixture covers the live nested report
+    shape rather than the earlier root-level fallback.
 22. The next focused proof surface is therefore the epoch `3` `PUBLISHED`
-    workflow-progress `create_recovery_operation` seam for
+    lower-owner `create_recovery_operation` seam for
     `sql_write_operations-p1`, with `replica_operations-p1` retained as
-    adjacent recovering-in-flight context rather than the primary repair
-    target.
+    supporting `recovering_in_flight -> wait_for_operation_progress`
+    context rather than the primary repair target.
 
 ## Scope Basis
 
@@ -163,14 +177,12 @@ Roadmap Phase `0.1 - Internal Coherence` maintenance/refactoring scope under:
 
 ## In Scope
 
-1. Extract the focused epoch `3` `PUBLISHED` workflow-progress witness for
-   `sql_write_operations-p1` as the only remaining
-   `eligible_but_no_operation_created` carrier, with `replica_operations-p1`
-   retained as supporting `recovering_in_flight` context.
-2. Add one focused workflow-progress regression for the selected
-   `create_recovery_operation` seam.
-3. Repair or reclassify that workflow-progress seam without reopening the
-   closed operation-scheduling visibility wake-up path.
+1. Preserve the closed same-artifact owner reconciliation and dominant-witness
+   diagnostics regression from this package.
+2. Add one focused regression for the selected canonical
+   `rebalancer_leader / operation_scheduling` seam.
+3. Repair or reclassify that selected seam without reopening the closed
+   operation-scheduling visibility wake-up path.
 4. Preserve the closed authoritative-read, dominant-witness, and failed/removed
    visibility wake-up repairs from the predecessor steps in this package.
 5. Rerun focused tests, touched-file guardrails, and one representative
@@ -178,9 +190,9 @@ Roadmap Phase `0.1 - Internal Coherence` maintenance/refactoring scope under:
 
 ## Out Of Scope
 
-1. Reopening the closed post-publication rebalancer scheduling package unless
-   a fresh rerun again selects `rebalancer_leader / operation_scheduling` as
-   the direct owner.
+1. Reopening the predecessor post-publication rebalancer scheduling package as
+   a separate slice while this package still owns the remaining
+   `sql_write_operations-p1 -> create_recovery_operation` repair.
 2. Broad matrix continuation before this five-node representative blocker
    closes or migrates again.
 3. Harness-only timeout increases or blocker relabeling that hide the current
@@ -191,12 +203,14 @@ Roadmap Phase `0.1 - Internal Coherence` maintenance/refactoring scope under:
 
 Semantic owners:
 
-1. `operation_workflow_owner / workflow_progress` owns the direct boundary for
+1. `rebalancer_leader / operation_scheduling` now owns the direct boundary for
    the live epoch `3` `PUBLISHED`
    `sql_write_operations-p1 -> create_recovery_operation` seam.
-2. `rebalancer_leader / operation_scheduling` stays closed unless a fresh
-   representative artifact again selects the event-driven no-operation frontier
-   more directly than workflow-progress.
+2. `operation_workflow_owner / workflow_progress` remains supporting evidence
+   only for `replica_operations-p1`
+   `recovering_in_flight -> wait_for_operation_progress` unless a fresh
+   representative artifact again promotes it above the selected
+   operation-scheduling witness.
 3. `startup_active_gate_owner / snapshot_coverage` remains supporting evidence
    while active-gate timeout still depends on unresolved priority-recovery
    partitions and does not itself become the earliest frontier.
@@ -206,15 +220,16 @@ Semantic owners:
 
 Canonical contract shape:
 
-1. For the live epoch `3` `PUBLISHED` workflow-progress seam,
-   `sql_write_operations-p1` must either create the required recovery operation
-   or surface one canonical owner-classified reason why creation remains
-   deferred.
-2. `replica_operations-p1` remains supporting `recovering_in_flight` context
-   only unless a fresh representative artifact again promotes it to the direct
-   frontier.
-3. Priority-recovery blockers must converge on one canonical owner,
-   boundary, wait mode, and next action for the same representative artifact.
+1. For the live epoch `3` `PUBLISHED` artifact,
+   `sql_write_operations-p1` must either create the required recovery
+   operation or surface one canonical `rebalancer_leader` reason why creation
+   remains deferred.
+2. `replica_operations-p1` remains supporting
+   `recovering_in_flight -> wait_for_operation_progress` context only unless a
+   fresh representative artifact again promotes it to the direct frontier.
+3. Priority-recovery blockers must not preserve competing owner and boundary
+   claims for the same representative artifact once the witness extraction and
+   diagnostics reclassification are complete.
 
 ## Subagent Sequencing Ledger
 
@@ -227,7 +242,27 @@ Canonical contract shape:
       `work/packages/done-20260507-rolling-restart-topology-priority-recovery-operation-scheduling-post-publication-closure-reentry.md`.
 - [x] Implementation subagent recorded:
       Agent `Franklin` (`019e0339-ff2c-7d11-a84a-5ea86966a96c`) implemented
-      `work/packages/active-20260507-rolling-restart-startup-publication-open-convergence-priority-serial-wait-workflow-progress-reentry.md`.
+      `work/packages/done-20260507-rolling-restart-startup-publication-open-convergence-priority-serial-wait-workflow-progress-reentry.md`.
+- [x] Review subagent recorded:
+      Agent `Zeno` (`019e0383-07c6-7910-b574-554e54b07f3d`) reviewed
+      `work/packages/done-20260507-rolling-restart-startup-publication-open-convergence-priority-serial-wait-workflow-progress-reentry.md`;
+      result `fixes-required`.
+- [x] Fix subagent recorded or explicitly not needed:
+      Agent `Archimedes` (`019e0386-3b4c-7572-8108-5f91fb77135c`) fixed
+      `work/packages/done-20260507-rolling-restart-startup-publication-open-convergence-priority-serial-wait-workflow-progress-reentry.md`.
+- [x] Implementation subagent recorded:
+      Agent `Bacon` (`019e0391-21dc-73a1-a4f5-3958e197fe16`) implemented
+      `work/packages/done-20260507-rolling-restart-startup-publication-open-convergence-priority-serial-wait-workflow-progress-reentry.md`.
+- [x] Review subagent recorded:
+      Agent `Dewey` (`019e0398-ec25-7f42-9fde-55d3006ba98d`) reviewed
+      `work/packages/done-20260507-rolling-restart-startup-publication-open-convergence-priority-serial-wait-workflow-progress-reentry.md`;
+      result `fixes-required`.
+- [x] Fix subagent recorded or explicitly not needed:
+      Agent `Jason` (`019e039e-e4bd-72a2-a960-f6fcaa7a3f14`) fixed
+      `work/packages/done-20260507-rolling-restart-startup-publication-open-convergence-priority-serial-wait-workflow-progress-reentry.md`.
+- [x] Implementation subagent recorded:
+      Agent `Singer` (`019e03a7-1b35-7e32-b0e9-9cd8af71e34c`) implemented
+      `work/packages/done-20260507-rolling-restart-startup-publication-open-convergence-priority-serial-wait-workflow-progress-reentry.md`.
 
 ## Residual Closure Inventory
 
@@ -264,14 +299,16 @@ Canonical contract shape:
       the selected `create_recovery_operation` seam.
 - [x] Repair the selected operation-scheduling boundary or migrate again with
       proof.
-- [ ] Extract the focused epoch-3 `PUBLISHED` workflow-progress witness for
-      `sql_write_operations-p1` `eligible_but_no_operation_created`, with
-      `replica_operations-p1` retained as supporting
-      `recovering_in_flight` context.
-- [ ] Add the focused workflow-progress regression for the selected
+- [x] Extract the focused epoch-3 `PUBLISHED` owner-split witness for
+      `sql_write_operations-p1`
+      `eligible_but_no_operation_created -> create_recovery_operation` and
+      `replica_operations-p1`
+      `recovering_in_flight -> wait_for_operation_progress`.
+- [x] Decide one canonical direct owner, boundary, wait mode, and next action
+      for the same representative artifact.
+- [x] Add the focused lower-owner regression for the selected
       `create_recovery_operation` seam.
-- [ ] Repair the selected workflow-progress boundary or migrate again with
-      proof.
+- [x] Repair the selected canonical boundary or migrate again with proof.
 
 ## Static Drift Ledger
 
@@ -288,7 +325,7 @@ Closure:
 - [x] No relevant guardrail count increased.
 - [x] No new touched-file owner-path, decision-boundary, runtime-grammar, or
       metadata-gateway violation remains.
-- [ ] Any out-of-scope inherited violation has a linked follow-on package.
+- [x] Any out-of-scope inherited violation has a linked follow-on package.
 
 ## Validation
 
@@ -348,7 +385,7 @@ Closure:
     returned `0 decision-boundary guideline violations`.
 24. `node scripts/check-runtime-grammar-contracts.js src/rebalancer/replica-operation-repository.js src/rebalancer/replica-operation-repository-read-methods.js`
     returned `0 runtime-grammar-contract violations`.
-25. `git diff --check -- work/packages/active-20260507-rolling-restart-startup-publication-open-convergence-priority-serial-wait-workflow-progress-reentry.md src/rebalancer/replica-operation-repository.js src/rebalancer/replica-operation-repository-read-methods.js test/rebalancer/replica-operation-repository.test.js work/sprints/active-2026-q2-publication-scoped-consistency-and-node-join-closure.md`
+25. `git diff --check -- work/packages/done-20260507-rolling-restart-startup-publication-open-convergence-priority-serial-wait-workflow-progress-reentry.md src/rebalancer/replica-operation-repository.js src/rebalancer/replica-operation-repository-read-methods.js test/rebalancer/replica-operation-repository.test.js work/sprints/active-2026-q2-publication-scoped-consistency-and-node-join-closure.md`
     passed.
 26. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-after-entity-visibility-authoritative-reconcile-20260507T000000Z.report.json --fast-local --verbose`
     failed after `135.2s`, but it removed the cache-visible `PENDING`
@@ -401,17 +438,81 @@ Closure:
     all returned `0` violations.
 41. `git diff --check -- src/rebalancer/operation-workflow-owner-segment-5-stage-5.js test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js src/rebalancer/unified-rebalancer-segment-1.js test/rebalancer/priority-recovery-visibility-wakeup.test.js`
     passed.
-42. `npm run work:validate -- work/packages/active-20260507-rolling-restart-startup-publication-open-convergence-priority-serial-wait-workflow-progress-reentry.md`
+42. `npm run work:validate -- work/packages/done-20260507-rolling-restart-startup-publication-open-convergence-priority-serial-wait-workflow-progress-reentry.md`
     passed after the real-agent Subagent Sequencing Ledger rewrite.
 43. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-after-priority-recovery-visibility-wakeup-20260507T000000Z.report.json --fast-local --verbose`
-    failed after `132.5s`, but materially migrated the direct frontier back to
-    epoch `3` `PUBLISHED` `operation_workflow_owner / workflow_progress`.
+    failed after `132.5s`, but proved the failed/removed visibility wake-up
+    repair and moved the representative artifact to epoch `3` `PUBLISHED`
+    with snapshot coverage `4/5`, pending ACK count `0`, and a remaining
+    priority-recovery owner split.
 44. `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-after-priority-recovery-visibility-wakeup-20260507T000000Z.report.json`
     selected `priority_recovery_operation_scheduling_event_driven` as the
-    normalized dominant reason.
+    normalized dominant reason, with `sql_write_operations-p1` still the only
+    `eligible_but_no_operation_created` partition under
+    `rebalancer_leader / operation_scheduling`.
 45. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-priority-recovery-visibility-wakeup-20260507T000000Z.report.json`
+    and the matching playback failure bundle both promoted
+    `operation_workflow_owner / workflow_progress` on
+    `replica_operations-p1` `recovering_in_flight`, while
+    `sql_write_operations-p1` remained the only
+    `eligible_but_no_operation_created` partition; the representative artifact
+    therefore still needed same-artifact owner reconciliation before runtime
+    implementation resumed.
+46. `node --test test/scripts/analyze-topology-convergence.test.js`
+    passed, including the focused regression that makes the priority edge use
+    `priorityRecoveryProgressSummary.dominantWitness` owner and boundary when
+    the same artifact provides a more precise owner cut than aggregate
+    progress classes alone.
+47. `node scripts/check-guideline-literals.js src/diagnostics/topology-convergence-graph.js test/scripts/analyze-topology-convergence.test.js`
+    returned `0 new literal-guideline violations` and matched `0` inherited
+    baseline violations.
+48. `node scripts/check-guideline-decision-boundaries.js src/diagnostics/topology-convergence-graph.js test/scripts/analyze-topology-convergence.test.js`
+    returned `0 decision-boundary guideline violations`.
+49. `node scripts/check-runtime-grammar-contracts.js src/diagnostics/topology-convergence-graph.js test/scripts/analyze-topology-convergence.test.js`
+    returned `0 runtime-grammar-contract violations`.
+50. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-priority-recovery-visibility-wakeup-20260507T000000Z.report.json`
+    and the matching playback failure bundle now both select
+    `rebalancer_leader / operation_scheduling` as the first frontier, aligning
+    topology-convergence with the report-level dominant witness while keeping
+    the aggregate blockage evidence unchanged.
+51. `node scripts/analyze-topology-convergence.js test/scripts/__fixtures__/topology-convergence/priority-dominant-witness-owner-boundary.fixture.json --explain priority`
+    now reports `rebalancer_leader / operation_scheduling` consistently across
+    `evidenceSnapshot`, `decisionOutcome`, and `decisionTable`, with evidence
+    anchored at
+    `report.scenarios[0].publicationConvergence.priorityRecoveryProgressSummary.dominantWitness`.
+52. `node --test test/scripts/analyze-topology-convergence.test.js`
+    passed again after the focused follow-up fix, including the live nested
+    summary fixture, the consistent explain/decision-table assertion, and the
+    direct graph-node owner/boundary assertion for `priority_recovery_progress`.
+53. `node scripts/check-guideline-literals.js src/diagnostics/topology-convergence-graph.js scripts/analyze-topology-convergence.js test/scripts/analyze-topology-convergence.test.js`,
+    `node scripts/check-guideline-decision-boundaries.js src/diagnostics/topology-convergence-graph.js scripts/analyze-topology-convergence.js test/scripts/analyze-topology-convergence.test.js`,
+    and `node scripts/check-runtime-grammar-contracts.js src/diagnostics/topology-convergence-graph.js scripts/analyze-topology-convergence.js test/scripts/analyze-topology-convergence.test.js`
+    all returned `0` violations.
+54. `git diff --check -- src/diagnostics/topology-convergence-graph.js scripts/analyze-topology-convergence.js test/scripts/analyze-topology-convergence.test.js test/scripts/__fixtures__/topology-convergence/priority-dominant-witness-owner-boundary.fixture.json`
+    passed.
+55. `node --test test/rebalancer/priority-follow-up-target-readiness.test.js`
+    passed, including the new regression that keeps explicit
+    other-partition in-flight target reservations from suppressing direct
+    `sql_write_operations-p1` follow-up creation while preserving
+    unknown-partition safety.
+56. `node --test test/rebalancer/unified-rebalancer-part-5-2-stage-4.js`
+    and `node --test test/rebalancer/unified-rebalancer-part-5-2-stage-3.js`
+    both passed after the runtime seam repair.
+57. `node scripts/check-guideline-literals.js src/rebalancer/unified-rebalancer-segment-4-stage-3.js test/rebalancer/priority-follow-up-target-readiness.test.js`,
+    `node scripts/check-guideline-decision-boundaries.js src/rebalancer/unified-rebalancer-segment-4-stage-3.js test/rebalancer/priority-follow-up-target-readiness.test.js`,
+    and `node scripts/check-runtime-grammar-contracts.js src/rebalancer/unified-rebalancer-segment-4-stage-3.js test/rebalancer/priority-follow-up-target-readiness.test.js`
+    all returned `0` violations.
+58. `git diff --check -- src/rebalancer/unified-rebalancer-segment-4-stage-3.js test/rebalancer/priority-follow-up-target-readiness.test.js`
+    passed.
+59. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-after-priority-recovery-other-partition-target-reservation-20260507T000000Z.report.json --fast-local --verbose`
+    failed after `131.7s`, but closed the direct lower-owner
+    `create_recovery_operation` seam and migrated the representative blocker
+    to epoch `4` `PUBLISHED` `operation_workflow_owner / workflow_progress`.
+60. `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-after-priority-recovery-other-partition-target-reservation-20260507T000000Z.report.json`
+    selected `priority_recovery_workflow_progress_transition_deferred` as the
+    normalized dominant reason.
+61. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-priority-recovery-other-partition-target-reservation-20260507T000000Z.report.json`
     and the matching playback failure bundle both selected
-    `operation_workflow_owner / workflow_progress` as the direct frontier,
-    with `sql_write_operations-p1` the only remaining
-    `eligible_but_no_operation_created` partition and `4/5` snapshot
-    coverage.
+    `operation_workflow_owner / workflow_progress` as the first frontier,
+    with `sql_write_operations-p1` the canonical dominant witness under
+    `priority_operation_serial_wait`.

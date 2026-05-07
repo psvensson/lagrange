@@ -69,9 +69,25 @@ class UnifiedRebalancerSegment4Stage3 extends UnifiedRebalancerSegment4Stage2 {
     return occupiedNodeIds;
   }
 
-  buildPriorityRecoveryFollowUpPendingTargetNodeSet() {
+  buildPriorityRecoveryFollowUpPendingTargetNodeSet(decision = null) {
+    const followUpPartitionId =
+      this.resolvePriorityRecoveryFollowUpPartitionId(decision);
     return new Set(
       this.getTopologyBlockingInFlightOperations()
+        .filter((operation) => {
+          const operationPartitionId = String(
+            operation?.[PRIORITY_RECOVERY_FOLLOW_UP_FIELD.PARTITION_ID] ||
+              operation?.[
+                PRIORITY_RECOVERY_FOLLOW_UP_FIELD.PARTITION_ID_SNAKE
+              ] ||
+              operation?.[PRIORITY_RECOVERY_FOLLOW_UP_FIELD.ENTITY_ID] ||
+              UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
+          ).trim();
+          return (
+            operationPartitionId.length === NUM.ZERO ||
+            operationPartitionId === followUpPartitionId
+          );
+        })
         .map((operation) =>
           String(
             operation?.target_node_id ||
@@ -114,7 +130,7 @@ class UnifiedRebalancerSegment4Stage3 extends UnifiedRebalancerSegment4Stage2 {
     const occupiedNodeIds =
       this.buildPriorityRecoveryFollowUpOccupiedNodeSet(currentReplicas);
     const pendingTargetNodeIds =
-      this.buildPriorityRecoveryFollowUpPendingTargetNodeSet();
+      this.buildPriorityRecoveryFollowUpPendingTargetNodeSet(decision);
     const previousFailedTargetNodeId = String(
       decision?.decisionSnapshot?.coordinator?.operation?.[
         PRIORITY_RECOVERY_FOLLOW_UP_FIELD.TARGET_NODE_ID

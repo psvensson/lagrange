@@ -235,7 +235,7 @@ Secondary after the primary path is stable:
 
 The current active representative re-entry package is:
 
-1. [Rolling Restart Startup Publication Open Convergence Priority Serial-Wait Workflow Progress Reentry](../packages/active-20260507-rolling-restart-startup-publication-open-convergence-priority-serial-wait-workflow-progress-reentry.md)
+1. [Rolling Restart Startup Publication Open Convergence Priority Serial-Wait Workflow Progress Reentry](../packages/done-20260507-rolling-restart-startup-publication-open-convergence-priority-serial-wait-workflow-progress-reentry.md)
 
 Retained predecessor context file:
 
@@ -386,7 +386,7 @@ Other secondary matrix failures become active packages only after the
 
 Current re-entry package:
 
-1. [Rolling Restart Topology Publication Missing-Active Priority Operation Scheduling Reentry](../packages/active-20260507-rolling-restart-topology-publication-missing-active-priority-operation-scheduling-reentry.md)
+1. [Rolling Restart Startup Publication Open Convergence Priority Serial-Wait Workflow Progress Reentry](../packages/done-20260507-rolling-restart-startup-publication-open-convergence-priority-serial-wait-workflow-progress-reentry.md)
 
 Queued convergence-grammar packages:
 
@@ -403,33 +403,29 @@ Queued cleanup packages:
 ## Remaining Work Summary
 
 1. Current execution blocker:
-   The latest May 7 representative rerun after the exact-target observation
-   repair used
-   `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-after-exact-target-observation-20260507T013352Z.report.json --fast-local --verbose`.
+   The latest May 7 representative rerun after the failed/removed visibility
+   wake-up repair used
+   `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-after-priority-recovery-visibility-wakeup-20260507T000000Z.report.json --fast-local --verbose`.
    Report:
-   `test-output/reports/rolling-restart-after-exact-target-observation-20260507T013352Z.report.json`.
-   Result: failed after `131.2s`; terminal barrier:
+   `test-output/reports/rolling-restart-after-priority-recovery-other-partition-target-reservation-20260507T000000Z.report.json`.
+   Result: failed after `131.7s`; terminal barrier:
    `Not all nodes reached ACTIVE state within 120000ms`.
    The current report classifies as root cause class `topology`, failure class
-   `publication_convergence_blocked`, dominant reason
-   `publication_missing_active_node=8be8d30f-4499-5eed-865c-71b4d529a67a`,
-   and supporting signals for
+   `priority_recovery_progress_blocked`, dominant reason
+   `priority_recovery_workflow_progress_transition_deferred`, and supporting
+   signals for
    `priorityRecoveryPartition=sql_write_operations-p1`,
    `priorityRecoveryOwner=operation_workflow_owner`,
-   `priorityRecoveryBoundary=workflow_progress`, and
+   `priorityRecoveryBoundary=workflow_progress`,
+   `priorityRecoveryWaitMode=event_driven`, and
    `priorityRecoveryNextAction=wait_for_operation_progress`. Top-level
-   publication convergence reaches epoch `5` `ACK_PENDING` with pending ACK
-   count `1`, blocked-node count `0`, and `missingPublishedCount=2` on nodes
-   `8be8...|ebc4...`. Current active-gate progress on selected snapshot
-   `35a...` reports `selectedPublishedActiveCount=3`, the same selected
-   missing-published set, and `missingPublishedCount=2`. The failure bundle
-   also records `sql_write_operations-p1` as `recovering_in_flight` under
-   `operation_workflow_owner / workflow_progress`, with correlation key
-   `sql_write_operations-p1|5|21206e66-4f05-46cf-b439-714de9440cf3`,
-   `dispatch_pending` / `persisted_not_dispatched` evidence, and target-node
-   log lines that release reservation
-   `res-21206e66-4f05-46cf-b439-714de9440cf3` as orphaned during
-   reconciliation.
+   publication convergence reaches epoch `4` `PUBLISHED` with pending ACK
+   count `0`, active-gate progress `snapshotCoverage=2/5`, and only
+   downstream startup timeout support. The direct lower-owner
+   `create_recovery_operation` seam is closed: the live blocker now sits on
+   `sql_write_operations-p1` `priority_operation_serial_wait`, with
+   `sql_transaction_participants-p1` retained only as supporting in-flight
+   workflow-progress context.
 2. Completed trace, fixture, and next active task:
    the
    [Rolling Restart Topology Publication Snapshot Reachability Reentry](../packages/done-20260505-rolling-restart-topology-publication-snapshot-reachability-reentry.md)
@@ -440,20 +436,24 @@ Queued cleanup packages:
    retained-carrier release, and the direct source-versus-carrier owner
    repair. Each slice ended in a replayable representative rerun and moved the
    live blocker forward. The latest closed slice proves the exact-target
-   observation seam is no longer the terminal owner. The current unchecked
-   task is therefore the next slice inside the same active topology
-   publication-missing-active package: preserve that focused regression, then
-   repair the `sql_write_operations-p1` reservation-visibility or deferred
-   owner-read seam that can stall a coordinator-created critical `REPLACE`
-   inside `operation_workflow_owner / workflow_progress`.
+   reservation seam is no longer the terminal owner. The current unchecked
+   task is therefore the active
+   [Rolling Restart Topology Priority Recovery Workflow Progress Serial-Wait Reentry](../packages/active-20260507-rolling-restart-topology-priority-recovery-workflow-progress-serial-wait-reentry.md)
+   package: preserve the closed failed/removed visibility wake-up repair,
+   the closed same-artifact owner reconciliation, and the closed lower-owner
+   target-reservation repair, then add the focused workflow-progress
+   regression for the surviving epoch-4 `PUBLISHED`
+   `sql_write_operations-p1 priority_operation_serial_wait /
+   wait_for_operation_progress` seam and repair or reclassify that deferred
+   transition boundary.
 3. Harness classification:
    terminal barrier evidence continues to win over stale playback
    reconstruction for active, restart-recovery, load-readiness, convergence,
-   and quiescence failures. The latest harness slice now also preserves open
-   selected publication-membership deficit through top-level publication
-   convergence and timeout progress, so the current package can decide whether
-   the remaining blocker is direct topology publication debt or a stronger
-   workflow-progress actuation seam. Earlier publication ACK, transport,
+   and quiescence failures. The latest harness slice now also preserves one
+   canonical owner cut across the report, playback, and topology-convergence
+   output for the current representative artifact, so the current package can
+   spend its next regression/repair step on the direct lower owner instead of
+   on presentation disagreement. Earlier publication ACK, transport,
    publication owner-read/remove-safety, and startup-fallback normalization
    fixes remain historical proof only.
 4. Final consistency:
@@ -462,9 +462,10 @@ Queued cleanup packages:
 5. Residual cleanup:
    fence or delete superseded local reconstruction and caller-local pressure
    exception paths through queued packages only after the current
-   topology publication missing-active blocker closes or migrates; keep the
-   previous `052328Z` `sql_write_operations-p1`
-   operation-workflow timeout as a prior residual, not the current blocker.
+   epoch-4 priority-recovery workflow-progress blocker closes or migrates;
+   keep the previous `052328Z` `sql_write_operations-p1`
+   operation-workflow timeout as prior residual history, not the current
+   blocker.
 6. Matrix re-entry:
    after `rolling-restart` passes or moves to a stable named blocker,
    continue with `seven-node-read-write-load-transaction-recovery`, then

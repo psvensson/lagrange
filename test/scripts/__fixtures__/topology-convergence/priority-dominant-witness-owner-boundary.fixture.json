@@ -1,0 +1,54 @@
+{
+  "scenarios": [
+    {
+      "scenario": "rolling-restart",
+      "publicationConvergence": {
+        "publicationEpoch": 3,
+        "publicationStatus": "PUBLISHED",
+        "pendingAckCount": 0,
+        "blockedNodeCount": 0,
+        "missingPublishedCount": 0,
+        "activeGate": {
+          "state": "timed_out",
+          "ready": false,
+          "progress": {
+            "snapshotCoverageComplete": false,
+            "snapshotCoverageNodeCount": 4,
+            "expectedNodeCount": 5,
+            "priorityBlockedPartitionCount": 1,
+            "priorityRecoveryProgressClasses": {
+              "unresolvedSemanticStateIds": [
+                "eligible_but_no_operation_created"
+              ],
+              "blockedPartitionIds": [
+                "sql_write_operations-p1"
+              ]
+            }
+          }
+        },
+        "priorityRecoveryProgressSummary": {
+          "priorityBlockedPartitionCount": 1,
+          "priorityRecoveryProgressClasses": {
+            "unresolvedSemanticStateIds": [
+              "eligible_but_no_operation_created"
+            ],
+            "blockedPartitionIds": [
+              "sql_write_operations-p1"
+            ]
+          },
+          "dominantWitness": {
+            "partitionId": "sql_write_operations-p1",
+            "currentOwner": "rebalancer_leader",
+            "blockingBoundary": "operation_scheduling",
+            "waitMode": "event_driven",
+            "nextRequiredAction": "create_recovery_operation"
+          }
+        }
+      },
+      "summary": {
+        "dominantReason": "priority_recovery_operation_scheduling_event_driven",
+        "failureClass": "topology_convergence_timeout"
+      }
+    }
+  ]
+}
