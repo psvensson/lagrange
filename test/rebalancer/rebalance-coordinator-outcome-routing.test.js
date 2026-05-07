@@ -47,6 +47,11 @@ const TEST_REPLICA_ID = 'partition-1-r1';
 const TEST_REPLACE_PARTITION_ID = 'users-p1';
 const TEST_REPLACE_SOURCE_REPLICA_ID = 'users-p1-r1';
 const TEST_REPLACE_TARGET_REPLICA_ID = 'users-p1-r2';
+const TEST_CRITICAL_CREATE_FAILURE_PARTITION_ID = 'replica_operations-p1';
+const TEST_RETRYABLE_CREATE_FAILURE_MESSAGE =
+  'Operational message-group ingress not ready for replica_operations ' +
+  'CDC subscription';
+const TEST_RETRYABLE_CREATE_FAILURE_RETRY_AFTER_MS = 5000;
 
 /**
  * Build a minimal operation record for testing.
@@ -562,6 +567,79 @@ test('Executor outcome routing through owner-key reconcile path',
             failedEvent.errorMessage,
             /disk full/,
             'error message should propagate',
+          );
+        } finally {
+          await coordinator.shutdown();
+        }
+      },
+    );
+
+    await t.test(
+      'REPLICA_CREATE_FAILED preserves retryable critical create failures ' +
+      'in the owner retry lane',
+      async (t) => {
+        const operation = buildTestOperation({
+          partitionId: TEST_CRITICAL_CREATE_FAILURE_PARTITION_ID,
+          entityId: TEST_CRITICAL_CREATE_FAILURE_PARTITION_ID,
+          status: ReplicaStatus.CREATING,
+          workflowStep: WORKFLOW_STEP.CREATING,
+        });
+        const {coordinator, emitter} =
+          createTestCoordinator({operation});
+        let failedEventCount = 0;
+        coordinator.on(
+          REBALANCE_COORDINATOR_EVENT.OPERATION_FAILED,
+          () => {
+            failedEventCount += 1;
+          },
+        );
+
+        try {
+          emitter.emitOutcome(
+            EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_FAILED,
+            TEST_OPERATION_ID,
+            WORKFLOW_STEP.FAILED,
+            {
+              errorMessage: TEST_RETRYABLE_CREATE_FAILURE_MESSAGE,
+              retryAfterMs: TEST_RETRYABLE_CREATE_FAILURE_RETRY_AFTER_MS,
+              deferRetry: true,
+            },
+          );
+
+          await new Promise((resolve) => setImmediate(resolve));
+          await new Promise((resolve) => setImmediate(resolve));
+
+          t.equal(
+            failedEventCount,
+            0,
+            'retryable critical create failure should not fail terminally',
+          );
+          t.equal(
+            operation.workflowStep,
+            WORKFLOW_STEP.CREATING,
+            'retryable create failure should keep the create-rearm step',
+          );
+          t.equal(
+            operation.status,
+            ReplicaStatus.CREATING,
+            'retryable create failure should preserve the in-flight status',
+          );
+          t.equal(
+            operation.completedAt,
+            null,
+            'retryable create failure should not mark the operation complete',
+          );
+          t.equal(
+            operation.errorMessage,
+            null,
+            'retryable create failure should not persist a terminal error',
+          );
+          t.equal(
+            coordinator.workflowOwner.hasActiveTransitionRetryGrace(
+              TEST_OPERATION_ID,
+            ),
+            true,
+            'retryable create failure should arm transition retry grace',
           );
         } finally {
           await coordinator.shutdown();

@@ -25,12 +25,15 @@ import {
   COORDINATOR_OWNED_OPERATION_TYPES_SQL_CLAUSE,
   OperationType,
   REPLICA_OPERATION_SEMANTIC_PHASE,
+  REPLICA_OPERATION_TERMINAL_RECORD_SQL_CLAUSE,
   ReplicaStatus,
   TERMINAL_STATUSES,
   isReplaceRemoveDispatchPhase,
   TERMINAL_STATUS_SQL_CLAUSE,
+  buildReplicaOperationProgressSnapshot,
   isCoordinatorOwnedOperationType,
   isTerminalReplicaOperationSemanticPhase,
+  isTerminalReplicaOperationRecord,
   isTerminalStep,
   isValidWorkflowStep,
   resolveReplicaOperationSemanticPhase,
@@ -178,7 +181,7 @@ const SQL_BUDGET = Object.freeze({
     'SELECT config_value FROM config WHERE config_key = ? LIMIT 1',
   SELECT_IN_FLIGHT_COUNT: `SELECT COUNT(*) AS total_count FROM replica_operations
      WHERE type IN (${COORDINATOR_OWNED_OPERATION_TYPES_SQL_CLAUSE})
-     AND status NOT IN (${TERMINAL_STATUS_SQL_CLAUSE})`,
+     AND NOT (${REPLICA_OPERATION_TERMINAL_RECORD_SQL_CLAUSE})`,
 });
 
 const PRIORITY_BUDGET_BYPASS_COORDINATOR_OPTIONS = Object.freeze({
@@ -287,6 +290,7 @@ export const UNIFIED_REBALANCER_SHARED = {
   REBALANCER_TRIGGER,
   RECONCILE_REASON,
   REPLICA_OPERATION_SEMANTIC_PHASE,
+  REPLICA_OPERATION_TERMINAL_RECORD_SQL_CLAUSE,
   REPLICA_OPERATION_VISIBILITY_READ_MODE,
   ReplicaStatus,
   SERVICE_STATUS,
@@ -307,6 +311,7 @@ export const UNIFIED_REBALANCER_SHARED = {
   WORKFLOW_STEP,
   adjustToOddCount,
   assertCritical,
+  buildReplicaOperationProgressSnapshot,
   buildControlPlaneWorkloadProfile,
   buildPriorityRecoveryBlockedPartitions,
   buildPriorityRecoveryOperationAssessment,
@@ -336,6 +341,7 @@ export const UNIFIED_REBALANCER_SHARED = {
   isRetryableControlPlaneError,
   isSystemTablePartition,
   isTerminalReplicaOperationSemanticPhase,
+  isTerminalReplicaOperationRecord,
   isTerminalStep,
   isValidWorkflowStep,
   normalizeNodeEndpointRow,

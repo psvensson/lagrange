@@ -254,6 +254,19 @@ const PRIORITY_RECOVERY_PRE_SYNC_REPLACE_TARGET_MATERIALIZED_STATUSES =
       ReplicaStatus.REMOVING,
     ]),
   );
+const PRIORITY_RECOVERY_PRE_SYNC_REPLACE_TARGET_STATE = Object.freeze({
+  NOT_APPLICABLE: 'not_applicable',
+  EVIDENCE_UNAVAILABLE: 'evidence_unavailable',
+  MATERIALIZED: 'materialized',
+  UNMATERIALIZED: 'unmaterialized',
+});
+const PRIORITY_RECOVERY_PRE_SYNC_REPLACE_WORKFLOW_STEPS = Object.freeze(
+  new Set([
+    WORKFLOW_STEP.PENDING,
+    WORKFLOW_STEP.SENDING,
+    WORKFLOW_STEP.CREATING,
+  ]),
+);
 
 const OPERATION_LIFECYCLE_ACTION = Object.freeze({
   COMPLETE_PRIORITY_RECOVERY_DRAIN: 'complete_priority_recovery_drain',
@@ -435,6 +448,39 @@ function buildSelectRowsByTransactionIdsSql(tableName, transactionIds) {
     .join(OPERATION_WORKFLOW_OWNER_LITERAL.COMMA_SPACE)})`;
 }
 
+function isPriorityRecoveryPreSyncReplaceOperation(operation, workflowStep) {
+  return operation?.type === OperationType.REPLACE &&
+    PRIORITY_RECOVERY_PRE_SYNC_REPLACE_WORKFLOW_STEPS.has(workflowStep);
+}
+
+function isPriorityRecoveryPreSyncReplaceTargetStatusMissing(status) {
+  return status === null || typeof status === TYPEOF.UNDEFINED;
+}
+
+function resolvePriorityRecoveryPreSyncReplaceTargetStateFromEvidence(
+  evidence = {},
+) {
+  const operation = evidence.operation;
+  const workflowStep = operation?.workflowStep ?? operation?.workflow_step;
+  const targetLifecycleStatus = evidence.targetLifecycleStatus;
+  if (!isPriorityRecoveryPreSyncReplaceOperation(operation, workflowStep)) {
+    return PRIORITY_RECOVERY_PRE_SYNC_REPLACE_TARGET_STATE.NOT_APPLICABLE;
+  }
+  if (
+    PRIORITY_RECOVERY_PRE_SYNC_REPLACE_TARGET_MATERIALIZED_STATUSES.has(
+      targetLifecycleStatus,
+    )
+  ) {
+    return PRIORITY_RECOVERY_PRE_SYNC_REPLACE_TARGET_STATE.MATERIALIZED;
+  }
+  if (isPriorityRecoveryPreSyncReplaceTargetStatusMissing(
+    targetLifecycleStatus,
+  )) {
+    return PRIORITY_RECOVERY_PRE_SYNC_REPLACE_TARGET_STATE.UNMATERIALIZED;
+  }
+  return PRIORITY_RECOVERY_PRE_SYNC_REPLACE_TARGET_STATE.EVIDENCE_UNAVAILABLE;
+}
+
 /**
  * Owns single-flight owner-key execution, workflow step advancement,
  * claim/dispatch progression, and observed-progress reconciliation.
@@ -487,6 +533,7 @@ export const OPERATION_WORKFLOW_OWNER_SHARED = {
   PRIORITY_PUBLICATION_SOURCE_ROLE_STATE,
   PRIORITY_RECOVERY_COMPLETION_STATE,
   PRIORITY_RECOVERY_PRE_SYNC_REPLACE_TARGET_MATERIALIZED_STATUSES,
+  PRIORITY_RECOVERY_PRE_SYNC_REPLACE_TARGET_STATE,
   PRIORITY_REMOVE_SAFETY_MEMBERSHIP_SOURCE,
   QUERY_ERROR_MSG,
   RAFT_ROLE,
@@ -554,4 +601,5 @@ export const OPERATION_WORKFLOW_OWNER_SHARED = {
   normalizeReplicaRowNodeIds,
   readAuthoritativeControlPlaneRows,
   resolvePriorityRecoveryActiveNodeCohort,
+  resolvePriorityRecoveryPreSyncReplaceTargetStateFromEvidence,
 };

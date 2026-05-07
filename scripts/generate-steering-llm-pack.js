@@ -47,6 +47,9 @@ const LOCAL_STR_RULES_JSON = 'rules.json';
 const LOCAL_STR_MANIFEST_JSON = 'manifest.json';
 const LOCAL_STR_README_MD = 'README.md';
 const LOCAL_STR_1WFBO = 'Generated steering LLM pack';
+const LOCAL_STR_INCOMPLETE_RULE = 'Incomplete generated steering rule';
+const LOCAL_STR_UNKNOWN_RULE = '<unknown-rule>';
+const LOCAL_STR_UNKNOWN_OUTPUT = '<unknown-output>';
 
 const DEFAULT_CONFIG_PATH = path.join(
   '.kiro',
@@ -631,7 +634,21 @@ function selectOutputRules(allRules = [], output = {}) {
   return selected;
 }
 
+function validateCompleteRules(rules = [], outputName = LOCAL_STR_UNKNOWN_OUTPUT) {
+  for (const rule of rules) {
+    if (!isIncompleteRuleText(rule.text)) {
+      continue;
+    }
+    const ruleId = rule.id || LOCAL_STR_UNKNOWN_RULE;
+    throw new Error(
+      `${LOCAL_STR_INCOMPLETE_RULE} in ${outputName}: ${ruleId}`,
+    );
+  }
+}
+
 function renderPackMarkdown(output = {}, rules = []) {
+  validateCompleteRules(rules, output.name);
+
   const ruleLines = rules.map((rule, index) =>
     `${index + 1}. [${rule.id}] ${rule.text}`,
   );
@@ -846,4 +863,6 @@ export {
   appendChildBulletsForParentRule,
   collectBulletListText,
   parseMarkdownCandidates,
+  renderPackMarkdown,
+  validateCompleteRules,
 };

@@ -1,6 +1,8 @@
-# DDB Admin CLI User Guide
+# Lagrange Admin CLI User Guide
 
-This guide covers all features of the DDB Admin CLI, a terminal-based administration tool for the distributed database system.
+This guide covers the Lagrange Admin CLI, a terminal-based administration tool
+for Lagrange. The canonical command is `lagrange-admin`; `ddb-admin` remains a
+compatibility alias.
 
 ## Table of Contents
 

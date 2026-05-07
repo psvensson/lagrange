@@ -27,14 +27,13 @@ const {
   PRIORITY_RECOVERY_PRE_SYNC_REPLACE_DRAIN_DECISION,
   PRIORITY_RECOVERY_PRE_SYNC_REPLACE_DRAIN_DECISION_TABLE,
   PRIORITY_RECOVERY_PRE_SYNC_REPLACE_DRAIN_SOURCE_STATE_BY_DECISION,
-  PRIORITY_RECOVERY_PRE_SYNC_REPLACE_TARGET_MATERIALIZED_STATUSES,
   PRIORITY_RECOVERY_PRE_SYNC_REPLACE_TARGET_STATE,
-  PRIORITY_RECOVERY_PRE_SYNC_REPLACE_TARGET_UNMATERIALIZED_STATUSES,
   REBALANCE_COORDINATOR_LOG_MSG,
   STOPPING_REPLICA_OBSERVATION_STATE,
   TYPEOF,
   isPriorityControlPlanePartition,
   normalizeNodeIdList,
+  resolvePriorityRecoveryPreSyncReplaceTargetStateFromEvidence,
 } = SHARED;
 
 class OperationWorkflowOwnerSegment7Stage4 extends OperationWorkflowOwnerSegment7Stage3 {
@@ -216,22 +215,10 @@ class OperationWorkflowOwnerSegment7Stage4 extends OperationWorkflowOwnerSegment
         operation.targetNodeId,
         EXACT_TARGET_REPLICA_OBSERVATION_OPTIONS,
       );
-    if (
-      PRIORITY_RECOVERY_PRE_SYNC_REPLACE_TARGET_MATERIALIZED_STATUSES.has(
-        observedTargetStatus,
-      )
-    ) {
-      return PRIORITY_RECOVERY_PRE_SYNC_REPLACE_TARGET_STATE.MATERIALIZED;
-    }
-    if (
-      PRIORITY_RECOVERY_PRE_SYNC_REPLACE_TARGET_UNMATERIALIZED_STATUSES.has(
-        observedTargetStatus,
-      )
-    ) {
-      return PRIORITY_RECOVERY_PRE_SYNC_REPLACE_TARGET_STATE.UNMATERIALIZED;
-    }
-    return PRIORITY_RECOVERY_PRE_SYNC_REPLACE_TARGET_STATE
-      .EVIDENCE_UNAVAILABLE;
+    return resolvePriorityRecoveryPreSyncReplaceTargetStateFromEvidence({
+      operation,
+      targetLifecycleStatus: observedTargetStatus,
+    });
   }
 
   buildPriorityRecoveryPreSyncReplaceDrainEvidence(

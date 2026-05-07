@@ -1,5 +1,17 @@
 # AGENTS
 
+## LLM First Step
+
+Before non-trivial implementation work, run:
+
+```bash
+npm run work:context
+```
+
+Use that output as the current handoff. It names the active blocker, first files
+to read, proof ladder, useful commands, and dirty worktree summary. Load the
+steering documents below after the handoff identifies the relevant boundary.
+
 Steering documents live under `.kiro/steering/`:
 - `.kiro/steering/system guidelines.md`
 - `.kiro/steering/code-style.md`

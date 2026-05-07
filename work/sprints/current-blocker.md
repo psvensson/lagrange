@@ -4,39 +4,43 @@
 
 Sprint: `work/sprints/active-2026-q2-publication-scoped-consistency-and-node-join-closure.md`
 
-Package: `work/packages/active-20260507-rolling-restart-topology-publication-missing-active-priority-recovery-rebalancer-handoff-terminal-failed-reentry.md`
+Package: `work/packages/active-20260507-rolling-restart-topology-publication-missing-active-publication-convergence-open-reentry.md`
 
 Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/rolling-restart-after-eligible-cohort-materialized-preserve-20260507T044845Z.report.json`
+Artifact: `test-output/reports/rolling-restart-after-retryable-create-handoff-preserve-20260507T053417Z.report.json`
 
-Playback: `test-output/reports/.playback/rolling-restart-after-eligible-cohort-materialized-preserve-20260507T044845Z/rolling-restart/`
+Playback: `test-output/reports/.playback/rolling-restart-after-retryable-create-handoff-preserve-20260507T053417Z/rolling-restart/`
 
 ## Boundary
 
-Owner: `Topology publication missing-active node over priority recovery rebalancer-handoff terminal-failed stalled follow-up progress after eligible-cohort replace-safety closure`
+Owner: `Topology publication missing-active node over OPEN publication convergence and startup/join witness disagreement`
 
-Boundary: `Topology publication missing-active node / priority recovery rebalancer-handoff terminal-failed owner`
+Boundary: `Topology publication missing-active node / publication convergence owner`
 
-Dominant reason: `priority_recovery_rebalancer_handoff_terminal_failed`
+Dominant reason: `publication_missing_active_node=11601fe0-72d6-5853-8590-ec2881853e72`
 
-Current state: The prior eligible-cohort replace-safety seam is closed. The representative rerun now reaches epoch 4 PUBLISHED with active 2/5, snapshot coverage 3/5, pending ACK count 0, and recovery protocol state priority_spread_pending. The dominant reason moved to priority_recovery_rebalancer_handoff_terminal_failed: triage selects owner rebalancer_leader, boundary rebalancer_handoff, wait mode stalled, and nextAction schedule_followup_rebalance while sql_transactions-p1 remains recovering_in_flight, sql_write_operations-p1 returns to needs_operation, and replica_operations-p1 stays blocked_unclassified.
+Current state: The rebalancer handoff terminal-failed seam is closed. The representative rerun now fails at epoch 5 OPEN publication convergence with pendingAckCount 1 on ebc4..., missingPublishedCount 2 on 11601... and 8be8..., priority spread still pending across replica_operations-p1, sql_transactions-p1, and sql_write_operations-p1, and startup evidence split between fresh joiners stalled in contacting_seed and active nodes timing out on reconnect/query work.
 
 ## Next Action
 
-Extract the 044845Z rebalancer-handoff witnesses for replica_operations-p1 operation 6c0118c8-21a7-41f6-9f8c-57ecb2801c1d and sql_transactions-p1 operation 2ac8218e-15db-467f-8d23-eb483c72b427; add a focused stalled follow-up regression for the selected rebalancer/workflow handoff boundary; repair only that owner path; and rerun one representative rolling-restart scenario.
+Extract the 053417Z publication-convergence witness set for missing-active nodes 11601... and 8be8..., pending-ack node ebc4..., control_plane_publications-p1 source-removal deferral, and the supporting workflow-progress witnesses on replica_operations-p1, sql_transactions-p1, and sql_write_operations-p1; decide whether the direct owner is startup contacting-seed reachability, publication ACK persistence, or operation_workflow_owner / workflow_progress serial wait; add a focused regression for the selected boundary; and rerun one representative rolling-restart scenario.
 
 ## Proof Ladder
 
-1. `Focused 044845Z rebalancer-handoff stalled-follow-up witness fixture`
-2. `Focused priority recovery rebalancer-handoff terminal-failed regression`
+1. `Focused 053417Z publication-convergence witness fixture`
+2. `Focused publication missing-active owner-path regression`
 3. `Touched-file static guardrails`
 4. `Representative rolling-restart --fast-local rerun`
 
 ## Touched Files
 
-1. `src/rebalancer/unified-rebalancer-segment-4-stage-4.js`
-2. `src/rebalancer/rebalance-coordinator-segment-5.js`
-3. `src/rebalancer/operation-workflow-owner-segment-4.js`
-4. `test/rebalancer/rebalance-coordinator-stopping-reconcile.test.js`
-5. `work/packages/active-20260507-rolling-restart-topology-publication-missing-active-priority-recovery-rebalancer-handoff-terminal-failed-reentry.md`
+1. `src/bootstrap/phases/contact-seed-phase.js`
+2. `src/bootstrap/node-joining-service-segment-2.js`
+3. `src/control-plane/control-plane-publication-merge.js`
+4. `src/control-plane/owners/control-plane-publications-owner.js`
+5. `src/rebalancer/operation-workflow-owner-segment-7-stage-3.js`
+6. `src/rebalancer/operation-workflow-owner-segment-7-stage-shared.js`
+7. `test/bootstrap/bootstrap-api.test-part-4.js`
+8. `test/distributed/harness/__tests__/publication-evidence-replay.test.js`
+9. `work/packages/active-20260507-rolling-restart-topology-publication-missing-active-publication-convergence-open-reentry.md`

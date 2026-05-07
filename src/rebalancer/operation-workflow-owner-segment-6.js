@@ -13,7 +13,7 @@ const {
   OperationType,
   PRIORITY_PUBLICATION_SOURCE_ROLE_STATE,
   PRIORITY_RECOVERY_COMPLETION_STATE,
-  PRIORITY_RECOVERY_PRE_SYNC_REPLACE_TARGET_MATERIALIZED_STATUSES,
+  PRIORITY_RECOVERY_PRE_SYNC_REPLACE_TARGET_STATE,
   PRIORITY_REMOVE_SAFETY_MEMBERSHIP_SOURCE,
   REBALANCE_COORDINATOR_DEFER_REASON,
   REMOVE_SAFETY_EVALUATION_CLASSIFICATION,
@@ -35,6 +35,7 @@ const {
   normalizeNodeIdList,
   normalizeReplicaRowNodeIds,
   resolvePriorityRecoveryActiveNodeCohort,
+  resolvePriorityRecoveryPreSyncReplaceTargetStateFromEvidence,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
 
 const PRIORITY_OPERATION_VISIBILITY_DEFERRED_SAFE_REMOVAL_SUFFIX =
@@ -186,12 +187,10 @@ function buildPriorityRecoverySupersededTargetEvidence({
     dimensions?.[CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_PUBLISHED] ===
       false;
   const materializedPreSyncTarget =
-    operation?.type === OperationType.REPLACE &&
-    (operation?.workflowStep === WORKFLOW_STEP.SENDING ||
-      operation?.workflowStep === WORKFLOW_STEP.CREATING) &&
-    PRIORITY_RECOVERY_PRE_SYNC_REPLACE_TARGET_MATERIALIZED_STATUSES.has(
+    resolvePriorityRecoveryPreSyncReplaceTargetStateFromEvidence({
+      operation,
       targetLifecycleStatus,
-    );
+    }) === PRIORITY_RECOVERY_PRE_SYNC_REPLACE_TARGET_STATE.MATERIALIZED;
   return Object.freeze({
     materializedPreSyncTarget,
     targetOutsideEligibleCohort,

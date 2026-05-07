@@ -13,7 +13,7 @@
   "boundary": "Topology publication missing-active node / priority recovery eligible-cohort replace-safety owner",
   "dominantReason": "priority_recovery_rebalancer_handoff_terminal_failed",
   "currentState": "The superseded-target replace-safety seam is closed. The representative rerun no longer terminates on sql_transactions-p1 eligible-cohort rejection after target materialization; sql_transactions-p1 remains recovering_in_flight under operation 2ac8218e-15db-467f-8d23-eb483c72b427, while the live blocker migrates to epoch 4 PUBLISHED with active 2/5, snapshot coverage 3/5, and dominant reason priority_recovery_rebalancer_handoff_terminal_failed.",
-  "nextAction": "Continue in work/packages/active-20260507-rolling-restart-topology-publication-missing-active-priority-recovery-rebalancer-handoff-terminal-failed-reentry.md to extract the 044845Z rebalancer-handoff witnesses for replica_operations-p1 and sql_transactions-p1, add a focused stalled follow-up regression, repair only that owner boundary, and rerun one representative rolling-restart scenario.",
+  "nextAction": "Continue in work/packages/done-20260507-rolling-restart-topology-publication-missing-active-priority-recovery-rebalancer-handoff-terminal-failed-reentry.md to extract the 044845Z rebalancer-handoff witnesses for replica_operations-p1 and sql_transactions-p1, add a focused stalled follow-up regression, repair only that owner boundary, and rerun one representative rolling-restart scenario.",
   "proof": [
     "Focused priority recovery replace-safety regressions",
     "Touched-file static guardrails",
@@ -28,14 +28,14 @@
     "work/packages/done-20260507-rolling-restart-topology-publication-missing-active-priority-recovery-eligible-cohort-replace-safety-reentry.md"
   ],
   "predecessor": "work/packages/done-20260507-rolling-restart-topology-publication-missing-active-control-plane-publication-workflow-progress-reentry.md",
-  "successor": "work/packages/active-20260507-rolling-restart-topology-publication-missing-active-priority-recovery-rebalancer-handoff-terminal-failed-reentry.md"
+  "successor": "work/packages/done-20260507-rolling-restart-topology-publication-missing-active-priority-recovery-rebalancer-handoff-terminal-failed-reentry.md"
 }
 -->
 
 Opened on May 7, 2026 after
 [Rolling Restart Topology Publication Missing-Active Control-Plane Publication Workflow Progress Reentry](./done-20260507-rolling-restart-topology-publication-missing-active-control-plane-publication-workflow-progress-reentry.md)
 closed by migration. Closed the same day by migration into
-[Rolling Restart Topology Publication Missing-Active Priority Recovery Rebalancer Handoff Terminal-Failed Reentry](./active-20260507-rolling-restart-topology-publication-missing-active-priority-recovery-rebalancer-handoff-terminal-failed-reentry.md).
+[Rolling Restart Topology Publication Missing-Active Priority Recovery Rebalancer Handoff Terminal-Failed Reentry](./done-20260507-rolling-restart-topology-publication-missing-active-priority-recovery-rebalancer-handoff-terminal-failed-reentry.md).
 
 ## Closure Summary
 

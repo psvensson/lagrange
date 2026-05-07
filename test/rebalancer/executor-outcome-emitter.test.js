@@ -17,13 +17,19 @@ import {
 } from '../../src/rebalancer/executor-outcome-constants.js';
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
 
+const TEST_OPERATION_ID = 'op-1';
+const TEST_REPLICA_ID = 'r-1';
+const TEST_ERROR_MESSAGE = 'disk full';
+const TEST_ERROR_CODE = 'BOOTSTRAP_NOT_READY';
+const TEST_RETRY_AFTER_MS = 250;
+
 test('ExecutorOutcomeEmitter', async (t) => {
   await t.test('buildExecutorOutcome creates frozen payload', async (t) => {
     const outcome = buildExecutorOutcome(
       EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_ACTIVE,
-      'op-1',
+      TEST_OPERATION_ID,
       WORKFLOW_STEP.ACTIVE,
-      {replicaId: 'r-1'},
+      {replicaId: TEST_REPLICA_ID},
     );
 
     t.equal(
@@ -33,7 +39,7 @@ test('ExecutorOutcomeEmitter', async (t) => {
     );
     t.equal(
       outcome[EXECUTOR_OUTCOME_FIELD.OPERATION_ID],
-      'op-1',
+      TEST_OPERATION_ID,
       'operationId should match',
     );
     t.equal(
@@ -43,7 +49,7 @@ test('ExecutorOutcomeEmitter', async (t) => {
     );
     t.equal(
       outcome[EXECUTOR_OUTCOME_FIELD.REPLICA_ID],
-      'r-1',
+      TEST_REPLICA_ID,
       'replicaId should be included',
     );
     t.type(
@@ -61,13 +67,34 @@ test('ExecutorOutcomeEmitter', async (t) => {
         EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_FAILED,
         'op-2',
         WORKFLOW_STEP.FAILED,
-        {replicaId: 'r-2', errorMessage: 'disk full'},
+        {
+          replicaId: 'r-2',
+          errorMessage: TEST_ERROR_MESSAGE,
+          errorCode: TEST_ERROR_CODE,
+          retryAfterMs: TEST_RETRY_AFTER_MS,
+          deferRetry: true,
+        },
       );
 
       t.equal(
         outcome[EXECUTOR_OUTCOME_FIELD.ERROR_MESSAGE],
-        'disk full',
+        TEST_ERROR_MESSAGE,
         'errorMessage should be included',
+      );
+      t.equal(
+        outcome[EXECUTOR_OUTCOME_FIELD.ERROR_CODE],
+        TEST_ERROR_CODE,
+        'errorCode should be included',
+      );
+      t.equal(
+        outcome[EXECUTOR_OUTCOME_FIELD.RETRY_AFTER_MS],
+        TEST_RETRY_AFTER_MS,
+        'retryAfterMs should be included',
+      );
+      t.equal(
+        outcome[EXECUTOR_OUTCOME_FIELD.DEFER_RETRY],
+        true,
+        'deferRetry should be included',
       );
     },
   );
@@ -90,6 +117,21 @@ test('ExecutorOutcomeEmitter', async (t) => {
         outcome[EXECUTOR_OUTCOME_FIELD.ERROR_MESSAGE],
         undefined,
         'errorMessage should be absent',
+      );
+      t.equal(
+        outcome[EXECUTOR_OUTCOME_FIELD.ERROR_CODE],
+        undefined,
+        'errorCode should be absent',
+      );
+      t.equal(
+        outcome[EXECUTOR_OUTCOME_FIELD.RETRY_AFTER_MS],
+        undefined,
+        'retryAfterMs should be absent',
+      );
+      t.equal(
+        outcome[EXECUTOR_OUTCOME_FIELD.DEFER_RETRY],
+        undefined,
+        'deferRetry should be absent',
       );
     },
   );

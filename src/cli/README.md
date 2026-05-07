@@ -1,6 +1,11 @@
-# DDB Admin CLI
+# Lagrange Admin CLI
 
-A terminal-based curses administration tool for the distributed database system, inspired by K9s for Kubernetes. Provides real-time visibility into cluster state through CDC-synchronized local cache, enabling fast navigation and comprehensive monitoring.
+A terminal-based administration tool for Lagrange, inspired by K9s for
+Kubernetes. It provides real-time visibility into cluster state through the
+CDC-synchronized local cache.
+
+The canonical command is `lagrange-admin`. The legacy `ddb-admin` command is
+kept as a compatibility alias.
 
 ## System Requirements
 
@@ -37,13 +42,13 @@ npm link
 
 ```bash
 # Connect to a specific node
-ddb-admin localhost:8080
+lagrange-admin localhost:8080
 
 # Start with address prompt
-ddb-admin
+lagrange-admin
 
 # Connect in read-only mode (SELECT queries only)
-ddb-admin --read-only localhost:8080
+lagrange-admin --read-only localhost:8080
 ```
 
 ### Basic Navigation
@@ -98,7 +103,7 @@ Configuration is loaded from `~/.ddb-admin/config.json`:
 ### Command-Line Arguments
 
 ```bash
-ddb-admin [options] [node-address]
+lagrange-admin [options] [node-address]
 
 Options:
   -h, --help       Show help message
@@ -182,4 +187,4 @@ Live query controls:
 
 ## License
 
-MIT
+AGPL v3

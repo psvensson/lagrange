@@ -22,6 +22,7 @@ import {
 } from './control-plane-publication-merge.js';
 import {
   NODE_PARTICIPATION_ADMISSION_STATE,
+  isNodeRuntimeParticipationBlocked,
   normalizeNodeParticipationAdmissionState,
 } from './membership-lifecycle-constants.js';
 import {
@@ -122,9 +123,7 @@ function resolveAdmissionBlockedNodeIds(publicationConvergence = null) {
   const participationByNodeId = resolveParticipationByNodeId(publicationConvergence);
   const blockedNodeIds = Object.values(participationByNodeId)
     .filter((participation) =>
-      normalizeNodeParticipationAdmissionState(
-        participation?.admissionState,
-      ) === NODE_PARTICIPATION_ADMISSION_STATE.BLOCKED,
+      isNodeRuntimeParticipationBlocked({participation}),
     )
     .map((participation) => participation?.nodeId);
   const targetNodeId = normalizeOptionalString(

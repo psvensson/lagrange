@@ -306,6 +306,17 @@ If you are just passing through the repo, the fastest way to get oriented is:
 5. run `npm test` if you want to see the project as executable code rather
    than only as documents
 
+If you are an LLM or are handing work to one, start with the compact handoff:
+
+```bash
+npm run work:context
+```
+
+That command prints the current blocker, first files to read, proof ladder,
+useful commands, and dirty worktree summary. After that, load the compact
+steering pack from [.kiro/steering/llm/README.md](.kiro/steering/llm/README.md)
+instead of opening every steering document by default.
+
 ---
 
 ## How It Is Put Together
@@ -412,9 +423,15 @@ examples/                example workloads and supporting material
 scripts/                 tooling, guards, scenario runners, and build helpers
 ```
 
+The highest-traffic runtime directories include local owner cards. Read the
+matching `src/<domain>/README.md` before editing that domain.
+
 Guard commands that are useful while changing the codebase:
 
 ```bash
+# Print common local and LLM workflows
+npm run commands
+
 # Validate staged files against repository guideline checks
 npm run guard:guidelines:staged
 

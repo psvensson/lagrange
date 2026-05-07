@@ -45,6 +45,9 @@ const EXECUTOR_OUTCOME_FIELD = Object.freeze({
   WORKFLOW_STEP: 'workflowStep',
   REPLICA_ID: 'replicaId',
   ERROR_MESSAGE: 'errorMessage',
+  ERROR_CODE: 'errorCode',
+  RETRY_AFTER_MS: 'retryAfterMs',
+  DEFER_RETRY: 'deferRetry',
   TIMESTAMP: 'timestamp',
 });
 

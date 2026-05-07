@@ -41,12 +41,158 @@ const NODE_PARTICIPATION_ADMISSION_STATE = Object.freeze({
   UNAVAILABLE: 'unavailable',
 });
 
+const NODE_RUNTIME_PARTICIPATION_STATE = Object.freeze({
+  INACTIVE: 'inactive',
+  JOINING: 'joining',
+  RECOVERING: 'recovering',
+  PUBLISHED_ACTIVE: 'published_active',
+  SUSPECTED: 'suspected',
+  DRAINING: 'draining',
+  RETIRED: 'retired',
+  BLOCKED: 'blocked',
+});
+
+const NODE_RUNTIME_PARTICIPATION_EVIDENCE_FIELD = Object.freeze({
+  ADMISSION_STATE: 'admissionState',
+  LIFECYCLE_STATE: 'lifecycleState',
+  MEMBER_STATE: 'memberState',
+  PARTICIPATION_STATE: 'participationState',
+  RECOVERY_PROTOCOL_STATE: 'recoveryProtocolState',
+});
+
 const RECOVERY_PROTOCOL_STATE = Object.freeze({
   UNPUBLISHED_OBSERVATION: 'unpublished_observation',
   PUBLICATION_PENDING: 'publication_pending',
   PRIORITY_SPREAD_PENDING: 'priority_spread_pending',
   STEADY_PUBLISHED: 'steady_published',
 });
+
+const NODE_RUNTIME_PARTICIPATION_STATE_RULES = Object.freeze([
+  buildNodeRuntimeParticipationRule(
+    NODE_RUNTIME_PARTICIPATION_STATE.BLOCKED,
+    [
+      buildNodeRuntimeParticipationSignal(
+        NODE_RUNTIME_PARTICIPATION_EVIDENCE_FIELD.ADMISSION_STATE,
+        [NODE_PARTICIPATION_ADMISSION_STATE.BLOCKED],
+      ),
+    ],
+  ),
+  buildNodeRuntimeParticipationRule(
+    NODE_RUNTIME_PARTICIPATION_STATE.RETIRED,
+    [
+      buildNodeRuntimeParticipationSignal(
+        NODE_RUNTIME_PARTICIPATION_EVIDENCE_FIELD.LIFECYCLE_STATE,
+        [MEMBERSHIP_LIFECYCLE_STATE.REMOVED],
+      ),
+      buildNodeRuntimeParticipationSignal(
+        NODE_RUNTIME_PARTICIPATION_EVIDENCE_FIELD.MEMBER_STATE,
+        [MEMBERSHIP_MEMBER_STATE.RETIRED],
+      ),
+      buildNodeRuntimeParticipationSignal(
+        NODE_RUNTIME_PARTICIPATION_EVIDENCE_FIELD.PARTICIPATION_STATE,
+        [NODE_PARTICIPATION_STATE.RETIRED],
+      ),
+    ],
+  ),
+  buildNodeRuntimeParticipationRule(
+    NODE_RUNTIME_PARTICIPATION_STATE.DRAINING,
+    [
+      buildNodeRuntimeParticipationSignal(
+        NODE_RUNTIME_PARTICIPATION_EVIDENCE_FIELD.LIFECYCLE_STATE,
+        [MEMBERSHIP_LIFECYCLE_STATE.DRAINING],
+      ),
+      buildNodeRuntimeParticipationSignal(
+        NODE_RUNTIME_PARTICIPATION_EVIDENCE_FIELD.MEMBER_STATE,
+        [MEMBERSHIP_MEMBER_STATE.DRAINING],
+      ),
+      buildNodeRuntimeParticipationSignal(
+        NODE_RUNTIME_PARTICIPATION_EVIDENCE_FIELD.PARTICIPATION_STATE,
+        [NODE_PARTICIPATION_STATE.DRAINING],
+      ),
+    ],
+  ),
+  buildNodeRuntimeParticipationRule(
+    NODE_RUNTIME_PARTICIPATION_STATE.SUSPECTED,
+    [
+      buildNodeRuntimeParticipationSignal(
+        NODE_RUNTIME_PARTICIPATION_EVIDENCE_FIELD.MEMBER_STATE,
+        [MEMBERSHIP_MEMBER_STATE.UNREACHABLE],
+      ),
+      buildNodeRuntimeParticipationSignal(
+        NODE_RUNTIME_PARTICIPATION_EVIDENCE_FIELD.PARTICIPATION_STATE,
+        [NODE_PARTICIPATION_STATE.SUSPECTED],
+      ),
+    ],
+  ),
+  buildNodeRuntimeParticipationRule(
+    NODE_RUNTIME_PARTICIPATION_STATE.PUBLISHED_ACTIVE,
+    [
+      buildNodeRuntimeParticipationSignal(
+        NODE_RUNTIME_PARTICIPATION_EVIDENCE_FIELD.LIFECYCLE_STATE,
+        [MEMBERSHIP_LIFECYCLE_STATE.PUBLISHED_ACTIVE],
+      ),
+      buildNodeRuntimeParticipationSignal(
+        NODE_RUNTIME_PARTICIPATION_EVIDENCE_FIELD.MEMBER_STATE,
+        [MEMBERSHIP_MEMBER_STATE.SERVING],
+      ),
+      buildNodeRuntimeParticipationSignal(
+        NODE_RUNTIME_PARTICIPATION_EVIDENCE_FIELD.PARTICIPATION_STATE,
+        [NODE_PARTICIPATION_STATE.PUBLISHED_ACTIVE],
+      ),
+    ],
+  ),
+  buildNodeRuntimeParticipationRule(
+    NODE_RUNTIME_PARTICIPATION_STATE.RECOVERING,
+    [
+      buildNodeRuntimeParticipationSignal(
+        NODE_RUNTIME_PARTICIPATION_EVIDENCE_FIELD.LIFECYCLE_STATE,
+        [
+          MEMBERSHIP_LIFECYCLE_STATE.CAUGHT_UP,
+          MEMBERSHIP_LIFECYCLE_STATE.PUBLISH_PENDING,
+        ],
+      ),
+      buildNodeRuntimeParticipationSignal(
+        NODE_RUNTIME_PARTICIPATION_EVIDENCE_FIELD.MEMBER_STATE,
+        [MEMBERSHIP_MEMBER_STATE.CATCHING_UP],
+      ),
+      buildNodeRuntimeParticipationSignal(
+        NODE_RUNTIME_PARTICIPATION_EVIDENCE_FIELD.PARTICIPATION_STATE,
+        [
+          NODE_PARTICIPATION_STATE.CATCHING_UP,
+          NODE_PARTICIPATION_STATE.OBSERVED_PENDING_PUBLISH,
+          NODE_PARTICIPATION_STATE.RECOVERY_PENDING_PUBLISH,
+        ],
+      ),
+      buildNodeRuntimeParticipationSignal(
+        NODE_RUNTIME_PARTICIPATION_EVIDENCE_FIELD.RECOVERY_PROTOCOL_STATE,
+        [
+          RECOVERY_PROTOCOL_STATE.PUBLICATION_PENDING,
+          RECOVERY_PROTOCOL_STATE.PRIORITY_SPREAD_PENDING,
+        ],
+      ),
+    ],
+  ),
+  buildNodeRuntimeParticipationRule(
+    NODE_RUNTIME_PARTICIPATION_STATE.JOINING,
+    [
+      buildNodeRuntimeParticipationSignal(
+        NODE_RUNTIME_PARTICIPATION_EVIDENCE_FIELD.LIFECYCLE_STATE,
+        [
+          MEMBERSHIP_LIFECYCLE_STATE.ADMITTED,
+          MEMBERSHIP_LIFECYCLE_STATE.PROVISIONING,
+        ],
+      ),
+      buildNodeRuntimeParticipationSignal(
+        NODE_RUNTIME_PARTICIPATION_EVIDENCE_FIELD.MEMBER_STATE,
+        [MEMBERSHIP_MEMBER_STATE.JOINING],
+      ),
+      buildNodeRuntimeParticipationSignal(
+        NODE_RUNTIME_PARTICIPATION_EVIDENCE_FIELD.PARTICIPATION_STATE,
+        [NODE_PARTICIPATION_STATE.JOINING],
+      ),
+    ],
+  ),
+]);
 
 const MEMBERSHIP_LIFECYCLE_VALID_TRANSITIONS = Object.freeze({
   [MEMBERSHIP_LIFECYCLE_STATE.ABSENT]: Object.freeze([
@@ -224,6 +370,74 @@ function normalizeParticipationByNodeId(values = {}) {
       });
       return accumulator;
     }, {});
+}
+
+function buildNodeRuntimeParticipationRule(state, signals) {
+  return Object.freeze({
+    state,
+    signals: Object.freeze(signals),
+  });
+}
+
+function buildNodeRuntimeParticipationSignal(field, values) {
+  return Object.freeze({
+    field,
+    values: Object.freeze(new Set(values)),
+  });
+}
+
+function buildNodeRuntimeParticipationEvidence(options = {}) {
+  const participation =
+    options.participation && typeof options.participation === LOCAL_STR_OBJECT ?
+      options.participation :
+      {};
+  return Object.freeze({
+    admissionState: normalizeNodeParticipationAdmissionState(
+      options.admissionState ?? participation.admissionState,
+    ),
+    lifecycleState: normalizeMembershipLifecycleState(
+      options.lifecycleState ?? participation.lifecycleState,
+    ),
+    memberState: normalizeMembershipMemberState(
+      options.memberState ?? participation.memberState,
+    ),
+    participationState: normalizeNodeParticipationState(
+      options.participationState ?? participation.state,
+    ),
+    recoveryProtocolState: normalizeRecoveryProtocolState(
+      options.recoveryProtocolState ?? participation.recoveryProtocolState,
+    ),
+  });
+}
+
+function nodeRuntimeParticipationSignalMatches(signal, evidence) {
+  return signal.values.has(evidence[signal.field]);
+}
+
+function nodeRuntimeParticipationRuleMatches(rule, evidence) {
+  return rule.signals.some((signal) =>
+    nodeRuntimeParticipationSignalMatches(signal, evidence),
+  );
+}
+
+function resolveNodeRuntimeParticipationState(evidence) {
+  const rule = NODE_RUNTIME_PARTICIPATION_STATE_RULES.find((candidate) =>
+    nodeRuntimeParticipationRuleMatches(candidate, evidence),
+  );
+  return rule?.state || NODE_RUNTIME_PARTICIPATION_STATE.INACTIVE;
+}
+
+function buildNodeRuntimeParticipationProjection(options = {}) {
+  const evidence = buildNodeRuntimeParticipationEvidence(options);
+  return Object.freeze({
+    state: resolveNodeRuntimeParticipationState(evidence),
+    admissionState: evidence.admissionState,
+  });
+}
+
+function isNodeRuntimeParticipationBlocked(options = {}) {
+  return buildNodeRuntimeParticipationProjection(options).state ===
+    NODE_RUNTIME_PARTICIPATION_STATE.BLOCKED;
 }
 
 function normalizeParticipationStateCounts(values = {}) {
@@ -433,8 +647,11 @@ export {
   MEMBERSHIP_LIFECYCLE_VALID_TRANSITIONS,
   NODE_PARTICIPATION_ADMISSION_STATE,
   NODE_PARTICIPATION_STATE,
+  NODE_RUNTIME_PARTICIPATION_STATE,
   RECOVERY_PROTOCOL_STATE,
   buildMembershipLifecycleSummary,
+  buildNodeRuntimeParticipationProjection,
+  isNodeRuntimeParticipationBlocked,
   isValidMembershipLifecycleTransition,
   normalizeMembershipLifecycleEpochBoundary,
   normalizeMembershipMemberState,

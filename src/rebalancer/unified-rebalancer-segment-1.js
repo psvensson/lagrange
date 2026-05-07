@@ -27,7 +27,6 @@ const {
   SYSTEM_TABLE_NAME,
   StartupRecoveryCoordinator,
   StoragePressureBehavior,
-  TERMINAL_STATUSES,
   TYPEOF,
   UNIFIED_REBALANCER_LITERAL,
   WORKFLOW_STEP,
@@ -38,7 +37,7 @@ const {
   isPriorityRecoveryEmergencyPartition,
   isPriorityControlPlanePartition,
   isSystemTablePartition,
-  isTerminalStep,
+  isTerminalReplicaOperationRecord,
   resolveTrackedPriorityRecoveryAdmissionPlan,
 } = UNIFIED_REBALANCER_SHARED;
 
@@ -602,8 +601,11 @@ class UnifiedRebalancerSegment1 extends EventEmitter {
     const terminalReplicaOperation =
       coordinatorOwnedOperation &&
       operationPartitionMatches &&
-      (TERMINAL_STATUSES.includes(operationStatus) ||
-        isTerminalStep(operationType, operationWorkflowStep));
+      isTerminalReplicaOperationRecord({
+        type: operationType,
+        workflowStep: operationWorkflowStep,
+        status: operationStatus,
+      });
     const serviceVisibilityProgress =
       serviceTableMatches &&
       servicePartitionMatches &&

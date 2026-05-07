@@ -168,7 +168,7 @@ Secondary after the primary path is stable:
 
 The current active representative re-entry package is:
 
-1. [Rolling Restart Topology Publication Missing-Active Priority Recovery Rebalancer Handoff Terminal-Failed Reentry](../packages/active-20260507-rolling-restart-topology-publication-missing-active-priority-recovery-rebalancer-handoff-terminal-failed-reentry.md)
+1. [Rolling Restart Topology Publication Missing-Active Publication Convergence Open Reentry](../packages/active-20260507-rolling-restart-topology-publication-missing-active-publication-convergence-open-reentry.md)
 
 Retained predecessor context file:
 

@@ -21,11 +21,14 @@ import {
   ADD_WORKFLOW_STEPS,
   REMOVE_WORKFLOW_STEPS,
   REPLACE_WORKFLOW_STEPS,
+  REPLICA_OPERATION_TERMINAL_RECORD_SQL_CLAUSE,
+  buildReplicaOperationProgressSnapshot,
   buildReplicaOperationSemanticWitnesses,
   getWorkflowSteps,
   isValidWorkflowStep,
   getNextWorkflowStep,
   isTerminalReplicaOperationSemanticPhase,
+  isTerminalReplicaOperationRecord,
   isTerminalStep,
   createOperation,
   getAllStatusValues,
@@ -363,6 +366,21 @@ test('Property: ReplicaStatus enum contains all required values', async (t) => {
         'replace source removal should use the shared source_retiring phase',
       );
       t.equal(
+        resolveReplicaOperationSemanticPhase(OperationType.ADD, 'PENDING', 'active'),
+        REPLICA_OPERATION_SEMANTIC_PHASE.SETTLED,
+        'semantic phase rules should preserve terminal status precedence',
+      );
+      t.equal(
+        resolveReplicaOperationSemanticPhase(OperationType.REPLACE, 'ACTIVE', 'removed'),
+        REPLICA_OPERATION_SEMANTIC_PHASE.SETTLED,
+        'REPLACE removed status should win over active workflow evidence',
+      );
+      t.equal(
+        resolveReplicaOperationSemanticPhase(OperationType.REPLACE, 'STOPPING', 'active'),
+        REPLICA_OPERATION_SEMANTIC_PHASE.SOURCE_RETIRING,
+        'REPLACE source retirement should win over active status evidence',
+      );
+      t.equal(
         resolveReplicaOperationSemanticPhase(OperationType.REMOVE, 'REMOVED', 'removed'),
         REPLICA_OPERATION_SEMANTIC_PHASE.SETTLED,
         'terminal success should normalize to settled',
@@ -449,6 +467,60 @@ test('Property: ReplicaStatus enum contains all required values', async (t) => {
           failureWitness: false,
         },
         'settled work should expose all success witnesses',
+      );
+    });
+
+  await t.test('operation record projection keeps REPLACE active in-flight',
+    async (t) => {
+      const replaceActiveRecord = {
+        type: OperationType.REPLACE,
+        workflowStep: 'ACTIVE',
+        status: ReplicaStatus.ACTIVE,
+      };
+      const addActiveRecord = {
+        type: OperationType.ADD,
+        workflowStep: 'ACTIVE',
+        status: ReplicaStatus.ACTIVE,
+      };
+
+      t.notOk(
+        isTerminalReplicaOperationRecord(replaceActiveRecord),
+        'REPLACE active target-ready record must not be terminal',
+      );
+      t.ok(
+        isTerminalReplicaOperationRecord(addActiveRecord),
+        'ADD active record remains terminal',
+      );
+
+      t.same(
+        buildReplicaOperationProgressSnapshot(replaceActiveRecord),
+        {
+          operationType: OperationType.REPLACE,
+          workflowStep: 'ACTIVE',
+          status: ReplicaStatus.ACTIVE,
+          semanticPhase: REPLICA_OPERATION_SEMANTIC_PHASE.TARGET_READY,
+          terminal: false,
+          inFlight: true,
+          activationWitness: true,
+          sourceRetirementWitness: false,
+          settlementWitness: false,
+          failureWitness: false,
+        },
+        'projection should expose one canonical in-flight progress snapshot',
+      );
+    });
+
+  await t.test('operation terminal SQL is operation-aware',
+    async (t) => {
+      t.match(
+        REPLICA_OPERATION_TERMINAL_RECORD_SQL_CLAUSE,
+        /type = 'ADD'.*status IN \('active', 'failed'\)/,
+        'ADD terminal SQL may treat active as terminal',
+      );
+      t.match(
+        REPLICA_OPERATION_TERMINAL_RECORD_SQL_CLAUSE,
+        /type = 'REPLACE'.*status IN \('removed', 'failed'\)/,
+        'REPLACE terminal SQL must not treat active as terminal',
       );
     });
 });

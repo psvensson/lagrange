@@ -766,15 +766,34 @@ class ReplicaHandlerPart1 extends EventEmitter {
         error: error.message,
         stack: error.stack,
       });
+      const failedOutcomeOptions = {
+        replicaId,
+        errorMessage: error.message,
+      };
+      const errorCode =
+        typeof error?.errorCode === REPLICA_HANDLER_TYPEOF.STRING ?
+          error.errorCode :
+          typeof error?.code === REPLICA_HANDLER_TYPEOF.STRING ?
+            error.code :
+            REPLICA_HANDLER_LITERAL.VALUE;
+      if (errorCode.length > NUM.ZERO) {
+        failedOutcomeOptions.errorCode = errorCode;
+      }
+      if (
+        Number.isFinite(error?.retryAfterMs) &&
+        error.retryAfterMs > NUM.ZERO
+      ) {
+        failedOutcomeOptions.retryAfterMs = Math.floor(error.retryAfterMs);
+      }
+      if (error?.deferRetry === true) {
+        failedOutcomeOptions.deferRetry = true;
+      }
       // Emit failed outcome — coordinator will transition workflow.
       this.emitExecutorOutcome(
         EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_FAILED,
         operationId,
         WORKFLOW_STEP.FAILED,
-        {
-          replicaId,
-          errorMessage: error.message,
-        },
+        failedOutcomeOptions,
       );
       await this.updateReplicaStatus(replicaId, ReplicaStatus.FAILED, {
         partitionId,

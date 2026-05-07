@@ -14,7 +14,7 @@ import {
 import {
   PARTITION_TRANSITION_METADATA_FIELD,
   PARTITION_TRANSITION_STATE,
-  RETRYABLE_PARTITION_TRANSITION_STATES,
+  isRetryablePartitionTransitionState,
 } from './partition-constants.js';
 
 const LOCAL_STR_EMPTY = '';
@@ -138,7 +138,7 @@ function isRetryableManagedSplitTransition(transition) {
       transition.transitionState ||
       '',
   );
-  if (RETRYABLE_PARTITION_TRANSITION_STATES.has(state)) {
+  if (isRetryablePartitionTransitionState(state)) {
     return true;
   }
   if (state !== PARTITION_TRANSITION_STATE.FAILED) {

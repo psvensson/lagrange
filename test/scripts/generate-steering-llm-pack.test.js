@@ -1,6 +1,8 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {
   parseMarkdownCandidates,
+  renderPackMarkdown,
+  validateCompleteRules,
 } from '../../scripts/generate-steering-llm-pack.js';
 
 const TEST_SOURCE_FILE = 'system guidelines.md';
@@ -41,6 +43,21 @@ const TEST_INCOMPLETE_MARKDOWN = [
   'Required workflow:',
   '',
 ].join('\n');
+const TEST_OUTPUT_NAME = 'core';
+const TEST_OUTPUT = Object.freeze({
+  name: TEST_OUTPUT_NAME,
+  title: 'Core',
+  description: 'Core rules.',
+});
+const TEST_INCOMPLETE_RULE = Object.freeze({
+  id: 'ARCH-0001',
+  text: 'Required workflow:',
+});
+const TEST_COMPLETE_RULE = Object.freeze({
+  id: 'ARCH-0002',
+  text: 'Do not create a second owner.',
+  domain: TEST_DOMAIN,
+});
 
 function parseTestCandidates(markdown) {
   return parseMarkdownCandidates(markdown, {
@@ -98,3 +115,21 @@ test('steering pack parser rejects colon-ended rules without child bullets',
     t.same(candidates, []);
     t.end();
   });
+
+test('steering pack renderer rejects incomplete generated rule text', (t) => {
+  t.throws(
+    () => validateCompleteRules([TEST_INCOMPLETE_RULE], TEST_OUTPUT_NAME),
+    /Incomplete generated steering rule/u,
+    'validation should fail before incomplete rules enter generated packs',
+  );
+  t.throws(
+    () => renderPackMarkdown(TEST_OUTPUT, [TEST_INCOMPLETE_RULE]),
+    /Incomplete generated steering rule/u,
+    'rendering should enforce the same quality gate',
+  );
+  t.doesNotThrow(
+    () => renderPackMarkdown(TEST_OUTPUT, [TEST_COMPLETE_RULE]),
+    'complete rules should still render',
+  );
+  t.end();
+});

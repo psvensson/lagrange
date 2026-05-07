@@ -33,8 +33,28 @@ const {
   ReplicaStatus,
   TYPEOF,
   WORKFLOW_STEP,
+  isRetryableControlPlaneError,
   isPriorityControlPlanePartition,
 } = SHARED;
+
+const EXECUTOR_FAILURE_RECONCILE_STATE = Object.freeze({
+  DEFER_RETRY: 'defer_retry',
+  FAIL_OPERATION: 'fail_operation',
+});
+
+const EXECUTOR_FAILURE_RECONCILE_STATE_TABLE = Object.freeze([
+  Object.freeze({
+    state: EXECUTOR_FAILURE_RECONCILE_STATE.DEFER_RETRY,
+    matches: (evidence) =>
+      evidence.retryableControlPlaneFailure === true &&
+      evidence.criticalSystemPartition === true &&
+      evidence.dispatchRetryableWorkflowStep === true,
+  }),
+  Object.freeze({
+    state: EXECUTOR_FAILURE_RECONCILE_STATE.FAIL_OPERATION,
+    matches: () => true,
+  }),
+]);
 
 class OperationWorkflowOwnerSegment7Stage3 extends OperationWorkflowOwnerSegment7Stage2 {
   async checkTimeouts() {
@@ -218,6 +238,48 @@ class OperationWorkflowOwnerSegment7Stage3 extends OperationWorkflowOwnerSegment
     });
   }
 
+  buildExecutorFailureOutcomeErrorLike(
+    outcome,
+    fallbackMessage,
+  ) {
+    const errorMessage =
+      outcome?.[EXECUTOR_OUTCOME_FIELD.ERROR_MESSAGE] || fallbackMessage;
+    const error = new Error(errorMessage);
+    const errorCode = outcome?.[EXECUTOR_OUTCOME_FIELD.ERROR_CODE];
+    if (typeof errorCode === TYPEOF.STRING && errorCode.length > NUM.ZERO) {
+      error.code = errorCode;
+      error.errorCode = errorCode;
+    }
+    const retryAfterMs = outcome?.[EXECUTOR_OUTCOME_FIELD.RETRY_AFTER_MS];
+    if (Number.isFinite(retryAfterMs) && retryAfterMs > NUM.ZERO) {
+      error.retryAfterMs = Math.floor(retryAfterMs);
+    }
+    if (outcome?.[EXECUTOR_OUTCOME_FIELD.DEFER_RETRY] === true) {
+      error.deferRetry = true;
+    }
+    return error;
+  }
+
+  buildExecutorFailureReconcileEvidence(operation, errorLike) {
+    return Object.freeze({
+      criticalSystemPartition:
+        this.isCriticalSystemPartition(operation?.partitionId || null),
+      dispatchRetryableWorkflowStep:
+        this.isDispatchRetryableWorkflowStep(operation),
+      retryableControlPlaneFailure:
+        isRetryableControlPlaneError(errorLike),
+    });
+  }
+
+  resolveExecutorFailureReconcileState(evidence) {
+    return (
+      EXECUTOR_FAILURE_RECONCILE_STATE_TABLE.find((entry) =>
+        entry.matches(evidence),
+      )?.state ||
+      EXECUTOR_FAILURE_RECONCILE_STATE.FAIL_OPERATION
+    );
+  }
+
   async reconcileExecutorOutcome(outcome) {
     const operationId = outcome[EXECUTOR_OUTCOME_FIELD.OPERATION_ID];
     const outcomeType = outcome[EXECUTOR_OUTCOME_FIELD.OUTCOME_TYPE];
@@ -291,7 +353,30 @@ class OperationWorkflowOwnerSegment7Stage3 extends OperationWorkflowOwnerSegment
     } else if (mapping.action === EXECUTOR_OUTCOME_ACTION.COMPLETE) {
       await this.completeOperation(operation);
     } else if (mapping.action === EXECUTOR_OUTCOME_ACTION.FAIL) {
-      await this.failOperation(operation, errorMessage || outcomeType);
+      const errorLike = this.buildExecutorFailureOutcomeErrorLike(
+        outcome,
+        errorMessage || outcomeType,
+      );
+      const failureState = this.resolveExecutorFailureReconcileState(
+        this.buildExecutorFailureReconcileEvidence(operation, errorLike),
+      );
+      if (
+        failureState === EXECUTOR_FAILURE_RECONCILE_STATE.DEFER_RETRY &&
+        this.deferTransitionRetry(operationId, errorLike, {
+          boundary: OPERATION_WORKFLOW_OWNER_LITERAL.EXECUTOR_OUTCOME,
+          workflowStep: operation?.workflowStep || null,
+          partitionId: operation?.partitionId || null,
+          updatedAt: operation?.updatedAt,
+          createdAt: operation?.createdAt,
+          operationSnapshot: operation,
+        })
+      ) {
+        return true;
+      }
+      await this.failOperation(
+        operation,
+        errorLike?.message || errorMessage || outcomeType,
+      );
     } else {
       this.logger.warn(REBALANCE_COORDINATOR_LOG_MSG.OUTCOME_UNKNOWN_ACTION, {
         operationId,

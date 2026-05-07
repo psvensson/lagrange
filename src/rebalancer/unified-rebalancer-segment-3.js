@@ -16,11 +16,11 @@ const {
   STATE,
   SYSTEM_TABLE_NAME,
   TABLES,
-  TERMINAL_STATUSES,
   TOPOLOGY_IN_FLIGHT_REPLICA_OPERATION_SOURCE,
   TYPEOF,
   UNIFIED_REBALANCER_LITERAL,
   WORKFLOW_STEP,
+  buildReplicaOperationProgressSnapshot,
   buildPriorityRecoveryBlockedPartitions,
   buildPriorityRecoveryOperationContextFromRecord,
   buildPriorityRecoveryPartitionAssessment,
@@ -33,8 +33,6 @@ const {
   isReplaceRemoveDispatchPhase,
   isReplicaOperationInFlight,
   isReplicaOperationStale,
-  isTerminalReplicaOperationSemanticPhase,
-  isTerminalStep,
   isValidWorkflowStep,
   normalizeReplicaOperationRecord,
   normalizeServiceRow,
@@ -1088,28 +1086,19 @@ class UnifiedRebalancerSegment3 extends UnifiedRebalancerSegment2 {
    * @private
    */
   isTrackedInFlightOperation(operation) {
-    const operationType =
-      operation?.type ||
-      operation?.operation_type ||
-      operation?.operationType ||
-      null;
+    const operationProgress = buildReplicaOperationProgressSnapshot(operation);
+    const operationType = operationProgress.operationType;
     if (operationType && !isCoordinatorOwnedOperationType(operationType)) {
       return false;
     }
-    const semanticPhase = resolveReplicaOperationSemanticPhase(
-      operationType,
-      operation?.workflowStep ?? operation?.workflow_step ?? null,
-      operation?.status || null,
-    );
-    if (isTerminalReplicaOperationSemanticPhase(semanticPhase)) {
+    if (operationProgress.terminal === true) {
       return false;
     }
-    if (semanticPhase !== REPLICA_OPERATION_SEMANTIC_PHASE.UNKNOWN) {
+    if (
+      operationProgress.semanticPhase !==
+      REPLICA_OPERATION_SEMANTIC_PHASE.UNKNOWN
+    ) {
       return true;
-    }
-    const status = String(operation?.status || '').toLowerCase();
-    if (TERMINAL_STATUSES.includes(status)) {
-      return false;
     }
     const workflowStep =
       operation?.workflowStep ?? operation?.workflow_step ?? null;
@@ -1118,9 +1107,6 @@ class UnifiedRebalancerSegment3 extends UnifiedRebalancerSegment2 {
       typeof workflowStep === TYPEOF.STRING &&
       workflowStep.length > NUM.ZERO
     ) {
-      if (isTerminalStep(operationType, workflowStep)) {
-        return false;
-      }
       if (isValidWorkflowStep(operationType, workflowStep)) {
         return true;
       }

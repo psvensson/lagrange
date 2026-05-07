@@ -5,7 +5,7 @@ import {
 import {
   PARTITION_TRANSITION_METADATA_FIELD,
   PARTITION_TRANSITION_STATE,
-  RETRYABLE_PARTITION_TRANSITION_STATES,
+  isRetryablePartitionTransitionState,
   SPLIT_MERGE_LOG_MSG,
 } from './partition-constants.js';
 import {SPLIT_PARTICIPANT_PREFIX} from './split-ack-constants.js';
@@ -643,7 +643,7 @@ class ManagedSplitWorkflowStateMethods {
       return isRetryableManagedSplitTransition(transitionOrState);
     }
     const state = String(transitionOrState || '');
-    if (RETRYABLE_PARTITION_TRANSITION_STATES.has(state)) {
+    if (isRetryablePartitionTransitionState(state)) {
       return true;
     }
     return isRetryableManagedSplitTransition({state});

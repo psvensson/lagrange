@@ -12,22 +12,34 @@ const LOCAL_NUM_ONE = 1;
 const LOCAL_NUM_TWO = 2;
 
 const STRICT_FLAG = '--strict';
+const HELP_FLAG = '--help';
+const HELP_SHORT_FLAG = '-h';
 const SCOPED_FLAG = '--scoped';
 const ARG_SEPARATOR = '--';
 const SCRIPT_COMPLEXITY = 'scripts/check-complexity.js';
 const SCRIPT_COGNITIVE_COMPLEXITY = 'scripts/check-cognitive-complexity.js';
+const USAGE_TEXT = 'Usage: npm run test:metrics:scoped -- <file-or-directory> [...]';
+const STRICT_USAGE_TEXT =
+  'Use --strict before paths to fail on scoped threshold violations.';
 const FILTERED_FLAGS = new Set([
   STRICT_FLAG,
   ARG_SEPARATOR,
+  HELP_FLAG,
+  HELP_SHORT_FLAG,
 ]);
 const args = process.argv.slice(LOCAL_NUM_TWO);
 const strict = args.includes(STRICT_FLAG);
+const helpRequested = args.includes(HELP_FLAG) || args.includes(HELP_SHORT_FLAG);
 const scopedTargets = args.filter((arg) => !FILTERED_FLAGS.has(arg));
 
+if (helpRequested) {
+  console.log(USAGE_TEXT);
+  console.log(STRICT_USAGE_TEXT);
+  process.exit(LOCAL_NUM_ZERO);
+}
+
 if (scopedTargets.length === LOCAL_NUM_ZERO) {
-  console.error(
-    'Usage: npm run test:metrics:scoped -- <file-or-directory> [...]',
-  );
+  console.error(USAGE_TEXT);
   process.exit(LOCAL_NUM_ONE);
 }
 

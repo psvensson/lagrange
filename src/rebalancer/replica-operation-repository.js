@@ -71,18 +71,15 @@ import {
   COORDINATOR_OWNED_OPERATION_TYPES_SQL_CLAUSE,
   OPERATION_METADATA_KEY,
   REPLICA_OPERATION_SEMANTIC_PHASE,
-  TERMINAL_STATUSES,
   OperationType,
   ReplicaStatus,
   buildReplicaOperationSemanticWitnesses,
   getOperationMetadataObject,
   getOperationMetadataString,
   getOperationMetadataStringArray,
+  isTerminalReplicaOperationRecord,
   isReplaceRemoveDispatchPhase,
-  isValidWorkflowStep,
-  isTerminalStep,
   isCoordinatorOwnedOperationType,
-  isTerminalReplicaOperationSemanticPhase,
   resolveReplicaOperationSemanticPhase,
 } from './replica-status.js';
 import {ReplicaOperationField} from './replica-operation-constants.js';
@@ -1285,35 +1282,7 @@ class ReplicaOperationRepository {
     if (!operation) {
       return false;
     }
-    const semanticPhase =
-      operation.semanticPhase ||
-      resolveReplicaOperationSemanticPhase(
-        operation.type || null,
-        operation.workflowStep ?? operation.workflow_step ?? null,
-        operation.status || null,
-      );
-    if (isTerminalReplicaOperationSemanticPhase(semanticPhase)) {
-      return true;
-    }
-    if (semanticPhase !== REPLICA_OPERATION_SEMANTIC_PHASE.UNKNOWN) {
-      return false;
-    }
-    const operationType = operation.type || null;
-    const workflowStep = operation.workflowStep ?? operation.workflow_step ?? null;
-    if (
-      typeof operationType === TYPEOF.STRING &&
-      typeof workflowStep === TYPEOF.STRING &&
-      workflowStep.length > NUM.ZERO
-    ) {
-      if (isTerminalStep(operationType, workflowStep)) {
-        return true;
-      }
-      if (isValidWorkflowStep(operationType, workflowStep)) {
-        return false;
-      }
-    }
-    const status = String(operation.status || '').toLowerCase();
-    return TERMINAL_STATUSES.includes(status);
+    return isTerminalReplicaOperationRecord(operation);
   }
   /**
    * Resolve the owner node ID from an operation or raw row.

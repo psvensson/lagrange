@@ -22,6 +22,7 @@ import {
   SPLIT_MERGE_REASON,
   SPLIT_MERGE_SQL,
   SPLIT_MERGE_STATE,
+  isDeferredPartitionTransitionOutcome,
 } from './partition-constants.js';
 import {
   ADMISSION_DECISION,
@@ -543,9 +544,7 @@ class PartitionSplitMergeManager extends EventEmitter {
     if (!execution || execution.success === true) {
       return LOCAL_STR_EXECUTED;
     }
-    const state = String(execution.state || '').toLowerCase();
-    if (state === PARTITION_TRANSITION_STATE.BLOCKED ||
-        state === PARTITION_TRANSITION_STATE.DEFERRED) {
+    if (isDeferredPartitionTransitionOutcome(execution.state)) {
       return LOCAL_STR_DEFERRED;
     }
     return LOCAL_STR_ERROR;

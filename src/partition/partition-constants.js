@@ -26,6 +26,87 @@ const PARTITION_TRANSITION_STATE = Object.freeze({
   SPLIT_CATCHUP: 'split_catchup',
   SPLIT_CUTOVER_ACTIVE: 'split_cutover_active',
 });
+const PARTITION_TRANSITION_STATE_UNKNOWN = 'unknown';
+
+const PARTITION_TRANSITION_PHASE = Object.freeze({
+  NONE: 'none',
+  ADMISSION: 'admission',
+  SPLIT_PREPARING: 'split_preparing',
+  SPLIT_BACKFILLING: 'split_backfilling',
+  SPLIT_CATCHUP: 'split_catchup',
+  SPLIT_CUTOVER: 'split_cutover',
+});
+
+const PARTITION_TRANSITION_OUTCOME = Object.freeze({
+  UNKNOWN: 'unknown',
+  PENDING: 'pending',
+  RUNNING: 'running',
+  BLOCKED: 'blocked',
+  DEFERRED: 'deferred',
+  FAILED: 'failed',
+});
+
+const PARTITION_TRANSITION_PHASE_BY_STATE = Object.freeze(
+  new Map([
+    [
+      PARTITION_TRANSITION_STATE.ADMISSION_PENDING,
+      PARTITION_TRANSITION_PHASE.ADMISSION,
+    ],
+    [
+      PARTITION_TRANSITION_STATE.SPLIT_PREPARING,
+      PARTITION_TRANSITION_PHASE.SPLIT_PREPARING,
+    ],
+    [
+      PARTITION_TRANSITION_STATE.SPLIT_BACKFILLING,
+      PARTITION_TRANSITION_PHASE.SPLIT_BACKFILLING,
+    ],
+    [
+      PARTITION_TRANSITION_STATE.SPLIT_CATCHUP,
+      PARTITION_TRANSITION_PHASE.SPLIT_CATCHUP,
+    ],
+    [
+      PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE,
+      PARTITION_TRANSITION_PHASE.SPLIT_CUTOVER,
+    ],
+  ]),
+);
+
+const PARTITION_TRANSITION_OUTCOME_BY_STATE = Object.freeze(
+  new Map([
+    [
+      PARTITION_TRANSITION_STATE.ADMISSION_PENDING,
+      PARTITION_TRANSITION_OUTCOME.PENDING,
+    ],
+    [
+      PARTITION_TRANSITION_STATE.BLOCKED,
+      PARTITION_TRANSITION_OUTCOME.BLOCKED,
+    ],
+    [
+      PARTITION_TRANSITION_STATE.DEFERRED,
+      PARTITION_TRANSITION_OUTCOME.DEFERRED,
+    ],
+    [
+      PARTITION_TRANSITION_STATE.FAILED,
+      PARTITION_TRANSITION_OUTCOME.FAILED,
+    ],
+    [
+      PARTITION_TRANSITION_STATE.SPLIT_PREPARING,
+      PARTITION_TRANSITION_OUTCOME.RUNNING,
+    ],
+    [
+      PARTITION_TRANSITION_STATE.SPLIT_BACKFILLING,
+      PARTITION_TRANSITION_OUTCOME.RUNNING,
+    ],
+    [
+      PARTITION_TRANSITION_STATE.SPLIT_CATCHUP,
+      PARTITION_TRANSITION_OUTCOME.RUNNING,
+    ],
+    [
+      PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE,
+      PARTITION_TRANSITION_OUTCOME.RUNNING,
+    ],
+  ]),
+);
 
 /**
  * Set of split lifecycle phases that only ManagedSplitWorkflow may
@@ -52,6 +133,41 @@ const RETRYABLE_PARTITION_TRANSITION_STATES = Object.freeze(new Set([
   PARTITION_TRANSITION_STATE.BLOCKED,
   PARTITION_TRANSITION_STATE.DEFERRED,
 ]));
+
+function normalizePartitionTransitionState(state) {
+  const normalizedState = String(state || '').trim().toLowerCase();
+  return Object.values(PARTITION_TRANSITION_STATE).includes(normalizedState) ?
+    normalizedState :
+    PARTITION_TRANSITION_STATE_UNKNOWN;
+}
+
+function buildPartitionTransitionProjection(state) {
+  const normalizedState = normalizePartitionTransitionState(state);
+  const outcome =
+    PARTITION_TRANSITION_OUTCOME_BY_STATE.get(normalizedState) ||
+    PARTITION_TRANSITION_OUTCOME.UNKNOWN;
+  const phase =
+    PARTITION_TRANSITION_PHASE_BY_STATE.get(normalizedState) ||
+    PARTITION_TRANSITION_PHASE.NONE;
+  return Object.freeze({
+    state: normalizedState,
+    phase,
+    outcome,
+    retryable:
+      outcome === PARTITION_TRANSITION_OUTCOME.BLOCKED ||
+      outcome === PARTITION_TRANSITION_OUTCOME.DEFERRED,
+  });
+}
+
+function isRetryablePartitionTransitionState(state) {
+  return buildPartitionTransitionProjection(state).retryable === true;
+}
+
+function isDeferredPartitionTransitionOutcome(state) {
+  const outcome = buildPartitionTransitionProjection(state).outcome;
+  return outcome === PARTITION_TRANSITION_OUTCOME.BLOCKED ||
+    outcome === PARTITION_TRANSITION_OUTCOME.DEFERRED;
+}
 
 const PARTITION_TRANSITION_METADATA_FIELD = Object.freeze({
   WORKFLOW_ID: 'workflowId',
@@ -277,9 +393,15 @@ export {
   SPLIT_MERGE_REASON,
   SPLIT_MERGE_SQL,
   SPLIT_MERGE_STATE,
+  PARTITION_TRANSITION_OUTCOME,
+  PARTITION_TRANSITION_PHASE,
   PARTITION_TRANSITION_STATE,
+  PARTITION_TRANSITION_STATE_UNKNOWN,
   RETRYABLE_PARTITION_TRANSITION_STATES,
   PARTITION_TRANSITION_METADATA_FIELD,
   PARTITION_SPLIT_MIRROR_ORIGIN,
   SPLIT_OWNER_MANAGED_PHASES,
+  buildPartitionTransitionProjection,
+  isDeferredPartitionTransitionOutcome,
+  isRetryablePartitionTransitionState,
 };

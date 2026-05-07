@@ -16,6 +16,7 @@
  */
 
 import {EventEmitter} from 'events';
+import {NUM} from '../constants/index.js';
 import {
   EXECUTOR_OUTCOME_FIELD,
   EXECUTOR_OUTCOME_LOG_MSG,
@@ -32,6 +33,9 @@ const OUTCOME_EVENT_NAME = 'executorOutcome';
  * @param {Object} [options] - Optional fields.
  * @param {string} [options.replicaId] - Replica ID if applicable.
  * @param {string} [options.errorMessage] - Error message if failed.
+ * @param {string} [options.errorCode] - Canonical retry/failure code.
+ * @param {number} [options.retryAfterMs] - Retry hint for retryable failures.
+ * @param {boolean} [options.deferRetry] - Whether the failure is retryable.
  * @return {Object} Frozen outcome payload.
  */
 function buildExecutorOutcome(
@@ -52,6 +56,20 @@ function buildExecutorOutcome(
   if (options.errorMessage) {
     outcome[EXECUTOR_OUTCOME_FIELD.ERROR_MESSAGE] =
       options.errorMessage;
+  }
+  if (options.errorCode) {
+    outcome[EXECUTOR_OUTCOME_FIELD.ERROR_CODE] =
+      options.errorCode;
+  }
+  if (
+    Number.isFinite(options.retryAfterMs) &&
+    options.retryAfterMs > NUM.ZERO
+  ) {
+    outcome[EXECUTOR_OUTCOME_FIELD.RETRY_AFTER_MS] =
+      Math.floor(options.retryAfterMs);
+  }
+  if (options.deferRetry === true) {
+    outcome[EXECUTOR_OUTCOME_FIELD.DEFER_RETRY] = true;
   }
   return Object.freeze(outcome);
 }
@@ -80,7 +98,7 @@ class ExecutorOutcomeEmitter extends EventEmitter {
    * @param {string} outcomeType - EXECUTOR_OUTCOME_TYPE value.
    * @param {string} operationId - Replica operation ID.
    * @param {string} workflowStep - WORKFLOW_STEP the executor reached.
-   * @param {Object} [options] - Optional replicaId, errorMessage.
+   * @param {Object} [options] - Optional replicaId and retry metadata.
    */
   emitOutcome(outcomeType, operationId, workflowStep, options = {}) {
     if (!operationId) {

@@ -1,4 +1,7 @@
-# DDB Admin CLI Command Reference
+# Lagrange Admin CLI Command Reference
+
+The canonical command is `lagrange-admin`. Existing `ddb-admin` examples remain
+valid as compatibility usage until the dedicated command migration is complete.
 
 Complete reference for all keyboard shortcuts, commands, configuration options, and command-line arguments.
 

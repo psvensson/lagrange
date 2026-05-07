@@ -5,6 +5,15 @@ import {
   MEMBERSHIP_LIFECYCLE_INTENT,
   resolveMembershipJoinIntentType,
 } from '../../src/control-plane/membership-lifecycle-controller.js';
+import {
+  MEMBERSHIP_LIFECYCLE_STATE,
+  NODE_PARTICIPATION_ADMISSION_STATE,
+  NODE_PARTICIPATION_STATE,
+  NODE_RUNTIME_PARTICIPATION_STATE,
+  RECOVERY_PROTOCOL_STATE,
+  buildNodeRuntimeParticipationProjection,
+  isNodeRuntimeParticipationBlocked,
+} from '../../src/control-plane/membership-lifecycle-constants.js';
 
 test('MembershipLifecycleController resolves join and durable rejoin intent types canonically', async (t) => {
   t.equal(
@@ -109,5 +118,42 @@ test('MembershipLifecycleController delegates drain and removal intent through o
       MEMBERSHIP_LIFECYCLE_INTENT.DRAIN,
       MEMBERSHIP_LIFECYCLE_INTENT.REMOVAL,
     ],
+  );
+});
+
+test('membership runtime participation projection normalizes boot and rejoin state', async (t) => {
+  t.same(
+    buildNodeRuntimeParticipationProjection({
+      lifecycleState: MEMBERSHIP_LIFECYCLE_STATE.CAUGHT_UP,
+      participationState: NODE_PARTICIPATION_STATE.RECOVERY_PENDING_PUBLISH,
+      recoveryProtocolState: RECOVERY_PROTOCOL_STATE.PUBLICATION_PENDING,
+    }),
+    {
+      state: NODE_RUNTIME_PARTICIPATION_STATE.RECOVERING,
+      admissionState: NODE_PARTICIPATION_ADMISSION_STATE.UNAVAILABLE,
+    },
+    'durable rejoin recovery should project to one recovering state',
+  );
+
+  t.same(
+    buildNodeRuntimeParticipationProjection({
+      lifecycleState: MEMBERSHIP_LIFECYCLE_STATE.PUBLISHED_ACTIVE,
+      admissionState: NODE_PARTICIPATION_ADMISSION_STATE.BLOCKED,
+    }),
+    {
+      state: NODE_RUNTIME_PARTICIPATION_STATE.BLOCKED,
+      admissionState: NODE_PARTICIPATION_ADMISSION_STATE.BLOCKED,
+    },
+    'admission blocks should dominate published membership evidence',
+  );
+
+  t.ok(
+    isNodeRuntimeParticipationBlocked({
+      participation: {
+        state: NODE_PARTICIPATION_STATE.PUBLISHED_ACTIVE,
+        admissionState: NODE_PARTICIPATION_ADMISSION_STATE.BLOCKED,
+      },
+    }),
+    'active-node projection can consume the same blocker helper',
   );
 });
