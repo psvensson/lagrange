@@ -1047,3 +1047,55 @@ async (t) => {
     await coordinator.shutdown();
   }
 });
+
+test('workflowOwner priority recovery planning-only partition snapshots ' +
+  'preserve deferred authoritative-read state when authoritative ' +
+  'observation returns zero operations plus a deferred outcome',
+async (t) => {
+  const coordinator = createRemotePriorityVisibilityCoordinator();
+  coordinator.initialize();
+
+  coordinator.controlPlaneReadinessService
+    .getPriorityRecoveryPlanningAnswerBestEffort = async () => {
+      return buildRemotePrioritySerialWaitPlanningSnapshot();
+    };
+  coordinator.workflowOwner.repository.getOperationsByEntityAuthoritativeObservation =
+    async () => {
+      return Object.freeze({
+        state: 'deferred',
+        operationCount: NUM.ZERO,
+        operations: [],
+        deferredOutcome: Object.freeze({
+          completionState:
+            PRIORITY_RECOVERY_COMPLETION_STATE
+              .AUTHORITATIVE_OPERATION_READ_DEFERRED,
+          retryAfterMs: 250,
+          source: REMOTE_PRIORITY_VISIBILITY_DEFERRED_SOURCE,
+        }),
+        retryAfterMs: 250,
+      });
+    };
+
+  try {
+    const snapshot =
+      await coordinator.workflowOwner
+        .getPriorityRecoveryDecisionSnapshotForPartitionOperations(
+          REMOTE_PRIORITY_VISIBILITY_PARTITION_ID,
+          [],
+        );
+
+    t.equal(
+      snapshot?.completion?.state,
+      PRIORITY_RECOVERY_COMPLETION_STATE
+        .AUTHORITATIVE_OPERATION_READ_DEFERRED,
+      'planning-only snapshot reuse should not mask deferred authoritative-read completion state',
+    );
+    t.equal(
+      snapshot?.progress?.nextRequiredAction,
+      'observe_authoritative_visibility',
+      'planning-only deferred reads should keep the partition on the canonical authoritative-visibility action',
+    );
+  } finally {
+    await coordinator.shutdown();
+  }
+});

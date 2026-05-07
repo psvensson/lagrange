@@ -136,14 +136,19 @@ Canonical contract shape:
 
 ## Subagent Sequencing Ledger
 
-- [ ] Review subagent recorded:
-- [ ] Fix subagent recorded or explicitly not needed:
+- [x] Review subagent recorded:
+      Agent `Ramanujan` (`019e03ce-efea-7ba2-8faf-171a3797e7df`) reviewed
+      `work/packages/done-20260507-rolling-restart-topology-priority-recovery-workflow-progress-serial-wait-reentry.md`;
+      result `fixes-required`.
+- [x] Fix subagent recorded or explicitly not needed:
+      Agent `Pascal` (`019e03d3-0e55-7d60-bbeb-c88672c8be08`) fixed
+      `work/packages/done-20260507-rolling-restart-topology-priority-recovery-workflow-progress-serial-wait-reentry.md`.
 - [ ] Implementation subagent recorded:
 
 ## Residual Closure Inventory
 
-- [ ] Review the just-closed predecessor package on the same sprint boundary.
-- [ ] Fix any predecessor-review findings before implementation resumes.
+- [x] Review the just-closed predecessor package on the same sprint boundary.
+- [x] Fix any predecessor-review findings before implementation resumes.
 - [ ] Extract the focused epoch-2 workflow-progress witness for
       `sql_transaction_participants-p1` serial wait and supporting
       `replica_operations-p1` plus `sql_write_operations-p1`.

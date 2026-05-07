@@ -168,14 +168,7 @@ class OperationWorkflowOwnerSegment5Stage5 extends OperationWorkflowOwnerSegment
         planningSnapshot,
       );
     if (planningDecisionSnapshot) {
-      if (
-        authoritativeOperationReadDeferred !== true ||
-        this
-          .hasPriorityRecoveryDecisionSnapshotPlanningOnlyWorkflowProgressMatch(
-            planningDecisionSnapshot,
-            operationIds,
-          )
-      ) {
+      if (authoritativeOperationReadDeferred !== true) {
         return planningDecisionSnapshot;
       }
       return this.buildDeferredPriorityRecoveryDecisionSnapshotFromPlanningMatch(

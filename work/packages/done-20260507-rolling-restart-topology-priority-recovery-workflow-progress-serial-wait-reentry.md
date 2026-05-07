@@ -159,6 +159,12 @@ Canonical contract shape:
       Agent `Parfit` (`019e03be-f15d-7751-a4c8-70c09ab42f2a`) implemented
       `work/packages/done-20260507-rolling-restart-topology-priority-recovery-workflow-progress-serial-wait-reentry.md`.
 
+## Commit And Push Ledger
+
+- Focused package commit: `13bdb4dd`
+- Pushed to: `origin/codex/pending-ack-eligibility-filter`
+- Commit contains only package-owned files/package-status/allowed sprint handoff: `yes`
+
 ## Residual Closure Inventory
 
 - [x] Review the just-closed predecessor package on the same sprint boundary.
