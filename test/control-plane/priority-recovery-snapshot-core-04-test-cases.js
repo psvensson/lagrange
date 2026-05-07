@@ -36,12 +36,14 @@ export function registerPriorityRecoverySnapshotCore04Tests(context) {
     PRIORITY_RECOVERY_PROGRESS_BOUNDARY_NONE,
     PRIORITY_RECOVERY_PROGRESS_BOUNDARY_SCHEDULING,
     PRIORITY_RECOVERY_PROGRESS_BOUNDARY_WORKFLOW,
+    PRIORITY_RECOVERY_PROGRESS_CONTRACT_STATE_BLOCKED,
     PRIORITY_RECOVERY_PROGRESS_CONTRACT_STATE_PENDING,
     PRIORITY_RECOVERY_PROGRESS_CONTRACT_STATE_READY,
     PRIORITY_RECOVERY_PROGRESS_EVIDENCE_LAST_PROGRESS,
     PRIORITY_RECOVERY_PROGRESS_EVIDENCE_OPERATION_CONTEXT,
     PRIORITY_RECOVERY_PROGRESS_EVIDENCE_WORKFLOW_STATE,
     PRIORITY_RECOVERY_PROGRESS_NEXT_ACTION_PROCEED,
+    PRIORITY_RECOVERY_PROGRESS_NEXT_ACTION_STOP,
     PRIORITY_RECOVERY_PROGRESS_NEXT_ACTION_WAIT,
     PRIORITY_RECOVERY_PROGRESS_OWNER_NONE,
     PRIORITY_RECOVERY_PROGRESS_OWNER_REBALANCER,
@@ -49,6 +51,7 @@ export function registerPriorityRecoverySnapshotCore04Tests(context) {
     PRIORITY_RECOVERY_PROGRESS_PHASE_SOURCE_REMOVAL,
     PRIORITY_RECOVERY_PROGRESS_WAIT_EVENT_DRIVEN,
     PRIORITY_RECOVERY_PROGRESS_WAIT_NONE,
+    PRIORITY_RECOVERY_PROGRESS_WAIT_STALLED,
     PRIORITY_RECOVERY_PROTOCOL_STATE_PRIORITY_SPREAD_PENDING,
     PRIORITY_RECOVERY_PUBLICATION_STATUS_PUBLISHED,
     PRIORITY_RECOVERY_REASON_OPERATIONAL_TARGET_VISIBLE_ON_ELIGIBLE_NODE,
@@ -419,8 +422,20 @@ export function registerPriorityRecoverySnapshotCore04Tests(context) {
     );
   });
 
-  test('priority recovery observation snapshots prefer explicit semantic-state indexes over local fallback inference',
-    async (t) => {
+  const EXPLICIT_SEMANTIC_STATE_TEST_NAME =
+    'priority recovery observation snapshots prefer explicit semantic-state ' +
+    'indexes over local fallback inference';
+  const EXPLICIT_SEMANTIC_STATE_OWNER_MESSAGE =
+    'observation snapshots should consume the explicit decision-layer ' +
+    'semantic-state mapping before any local inference';
+  const EXPLICIT_SEMANTIC_STATE_INDEX_MESSAGE =
+    'semantic-state indexes should preserve the explicit authoritative ' +
+    'mapping';
+  const EXPLICIT_SEMANTIC_STATE_UNRESOLVED_MESSAGE =
+    'explicit spread-satisfied mapping should keep the partition out of ' +
+    'the unresolved set';
+
+  test(EXPLICIT_SEMANTIC_STATE_TEST_NAME, async (t) => {
       const observationSnapshot = buildPriorityRecoveryObservationSnapshot({
         priorityRecoveryDecisionSnapshots: {
           capturedAt: 2000,
@@ -480,24 +495,39 @@ export function registerPriorityRecoverySnapshotCore04Tests(context) {
       t.equal(
         partitionSnapshot.semanticStateId,
         PRIORITY_RECOVERY_SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT,
-        'observation snapshots should consume the explicit decision-layer semantic-state mapping before any local inference',
+        EXPLICIT_SEMANTIC_STATE_OWNER_MESSAGE,
       );
       t.same(
         observationSnapshot.priorityRecoveryPartitionIdsBySemanticState
           .spread_satisfied_in_flight,
         [PUBLICATION_PRIORITY_PARTITION_ID],
-        'semantic-state indexes should preserve the explicit authoritative mapping',
+        EXPLICIT_SEMANTIC_STATE_INDEX_MESSAGE,
       );
       t.same(
         observationSnapshot.priorityRecoveryUnresolvedPartitionIds,
         [],
-        'explicit spread-satisfied mapping should keep the partition out of the unresolved set',
+        EXPLICIT_SEMANTIC_STATE_UNRESOLVED_MESSAGE,
       );
     });
 
-  test('priority recovery observation snapshots prefer higher publication ' +
-  'epoch progress over later lower-epoch synthetic blockers',
-  async (t) => {
+  const HIGHER_EPOCH_PROGRESS_TEST_NAME =
+    'priority recovery observation snapshots prefer higher publication ' +
+    'epoch progress over later lower-epoch synthetic blockers';
+  const HIGHER_EPOCH_STATE_MESSAGE =
+    'higher publication epoch progress should keep the witness on the ' +
+    'spread-satisfied lane';
+  const HIGHER_EPOCH_CLASS_MESSAGE =
+    'lower-epoch synthetic no-operation blockers should not override ' +
+    'stronger higher-epoch progress';
+  const HIGHER_EPOCH_OPERATION_MESSAGE =
+    'the witness should retain the higher-epoch operation evidence';
+  const HIGHER_EPOCH_OWNER_MESSAGE =
+    'the witness should stay with workflow ownership while higher-epoch ' +
+    'progress is active';
+  const HIGHER_EPOCH_CORRELATION_MESSAGE =
+    'the witness should keep the higher-epoch operation correlation key';
+
+  test(HIGHER_EPOCH_PROGRESS_TEST_NAME, async (t) => {
     const observationSnapshot = buildPriorityRecoveryObservationSnapshot({
       priorityRecoveryDecisionSnapshots: {
         capturedAt: PRIORITY_RECOVERY_LOWER_EPOCH_SYNTHETIC_CAPTURED_AT_MS,
@@ -618,32 +648,54 @@ export function registerPriorityRecoverySnapshotCore04Tests(context) {
     t.equal(
       partitionWitness.semanticStateId,
       PRIORITY_RECOVERY_SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT,
-      'higher publication epoch progress should keep the witness on the spread-satisfied lane',
+      HIGHER_EPOCH_STATE_MESSAGE,
     );
     t.same(
       partitionWitness.progressClassIds,
       [],
-      'lower-epoch synthetic no-operation blockers should not override stronger higher-epoch progress',
+      HIGHER_EPOCH_CLASS_MESSAGE,
     );
     t.same(
       partitionWitness.operationIds,
       [PRIORITY_RECOVERY_HIGHER_EPOCH_PROGRESS_OPERATION_ID],
-      'the witness should retain the higher-epoch operation evidence',
+      HIGHER_EPOCH_OPERATION_MESSAGE,
     );
     t.equal(
       partitionWitness.currentOwner,
       PRIORITY_RECOVERY_PROGRESS_OWNER_WORKFLOW,
-      'the witness should stay with workflow ownership while higher-epoch progress is active',
+      HIGHER_EPOCH_OWNER_MESSAGE,
     );
     t.equal(
       partitionWitness.correlationKey,
       PRIORITY_RECOVERY_HIGHER_EPOCH_PROGRESS_CORRELATION_KEY,
-      'the witness should keep the higher-epoch operation correlation key',
+      HIGHER_EPOCH_CORRELATION_MESSAGE,
     );
   });
 
-  test('priority recovery observation snapshots prefer same-epoch workflow evidence over later synthetic operation-unknown blockers',
-    async (t) => {
+  const SAME_EPOCH_WORKFLOW_TEST_NAME =
+    'priority recovery observation snapshots prefer same-epoch workflow ' +
+    'evidence over later synthetic operation-unknown blockers';
+  const SAME_EPOCH_WORKFLOW_STATE_MESSAGE =
+    'same-epoch workflow-backed spread evidence should remain the current ' +
+    'witness';
+  const SAME_EPOCH_WORKFLOW_CLASS_MESSAGE =
+    'later synthetic eligible-no-operation blockers should not reopen the ' +
+    'same partition when workflow evidence exists';
+  const SAME_EPOCH_WORKFLOW_OWNER_MESSAGE =
+    'workflow ownership should remain current for the selected partition ' +
+    'witness';
+  const SAME_EPOCH_WORKFLOW_VISIBILITY_MESSAGE =
+    'the selected witness should keep the real workflow-state evidence';
+  const SAME_EPOCH_WORKFLOW_CORRELATION_MESSAGE =
+    'the selected witness should keep the real operation correlation key ' +
+    'instead of the synthetic operation_unknown key';
+  const SAME_EPOCH_WORKFLOW_SUMMARY_MESSAGE =
+    'the current semantic-state summary should stay on the workflow-backed ' +
+    'spread witness';
+  const SAME_EPOCH_WORKFLOW_HISTORY_MESSAGE =
+    'the synthetic same-epoch blocker should remain history only';
+
+  test(SAME_EPOCH_WORKFLOW_TEST_NAME, async (t) => {
       const sameEpochPublicationValue = 3;
       const sameEpochWorkflowOperationId = 'op-same-epoch-publication-progress';
       const sameEpochWorkflowCorrelationKey =
@@ -778,44 +830,280 @@ export function registerPriorityRecoverySnapshotCore04Tests(context) {
       t.equal(
         partitionWitness.semanticStateId,
         PRIORITY_RECOVERY_SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT,
-        'same-epoch workflow-backed spread evidence should remain the current witness',
+        SAME_EPOCH_WORKFLOW_STATE_MESSAGE,
       );
       t.same(
         partitionWitness.progressClassIds,
         [],
-        'later synthetic eligible-no-operation blockers should not reopen the same partition when workflow evidence exists',
+        SAME_EPOCH_WORKFLOW_CLASS_MESSAGE,
       );
       t.equal(
         partitionWitness.currentOwner,
         PRIORITY_RECOVERY_PROGRESS_OWNER_WORKFLOW,
-        'workflow ownership should remain current for the selected partition witness',
+        SAME_EPOCH_WORKFLOW_OWNER_MESSAGE,
       );
       t.equal(
         partitionWitness.workflowState,
         PRIORITY_RECOVERY_WORKFLOW_STATE_REMOVE_PHASE,
-        'the selected witness should keep the real workflow-state evidence',
+        SAME_EPOCH_WORKFLOW_VISIBILITY_MESSAGE,
       );
       t.equal(
         partitionWitness.correlationKey,
         sameEpochWorkflowCorrelationKey,
-        'the selected witness should keep the real operation correlation key instead of the synthetic operation_unknown key',
+        SAME_EPOCH_WORKFLOW_CORRELATION_MESSAGE,
       );
       t.same(
         observationSnapshot.priorityRecoveryPartitionIdsBySemanticState
           .spread_satisfied_in_flight,
         [PUBLICATION_PRIORITY_PARTITION_ID],
-        'the current semantic-state summary should stay on the workflow-backed spread witness',
+        SAME_EPOCH_WORKFLOW_SUMMARY_MESSAGE,
       );
       t.same(
         observationSnapshot.priorityRecoveryPartitionIdsBySemanticState
           .needs_operation,
         [],
-        'the synthetic same-epoch blocker should remain history only',
+        SAME_EPOCH_WORKFLOW_HISTORY_MESSAGE,
       );
     });
 
-  test('priority recovery observation snapshots prefer current unresolved decision partitions over stale spread summary ids',
-    async (t) => {
+  const CURRENT_NEEDS_OPERATION_TEST_NAME =
+    'priority recovery observation snapshots prefer explicit same-epoch ' +
+    'needs-operation snapshots over stale terminal follow-up rows';
+
+  test(CURRENT_NEEDS_OPERATION_TEST_NAME, async (t) => {
+      const STALE_OPERATION_ID = 'op-stale-terminal-followup';
+      const OPERATION_UNKNOWN_CORRELATION_SUFFIX = 'operation_unknown';
+      const STALE_CORRELATION_KEY =
+        `${REPLICA_OPERATION_PRIORITY_PARTITION_ID}|` +
+        `${PRIORITY_RECOVERY_SAMPLE_PUBLICATION_EPOCH}|` +
+        `${STALE_OPERATION_ID}`;
+      const CURRENT_CORRELATION_KEY =
+        `${REPLICA_OPERATION_PRIORITY_PARTITION_ID}|` +
+        `${PRIORITY_RECOVERY_SAMPLE_PUBLICATION_EPOCH}|` +
+        `${OPERATION_UNKNOWN_CORRELATION_SUFFIX}`;
+      const STALE_CAPTURE_OFFSET_MS = 100;
+      const STALE_ELIGIBLE_NODE_COUNT = 2;
+      const CURRENT_ELIGIBLE_NODE_COUNT =
+        PRIORITY_RECOVERY_SINGLE_OPERATION_COUNT;
+      const STALE_OPERATION_UPDATED_AT_MS = 6100;
+      const CURRENT_CAPTURED_AT_MS = 7100;
+      const CURRENT_PROGRESS_AT_MS = CURRENT_CAPTURED_AT_MS;
+      const WORKFLOW_STATE_TERMINAL = 'terminal';
+      const NEXT_REQUIRED_ACTION_FOLLOWUP =
+        'schedule_followup_rebalance';
+      const BLOCKING_BOUNDARY_REBALANCER_HANDOFF =
+        'rebalancer_handoff';
+      const CURRENT_BLOCKER_MESSAGE =
+        'explicit same-epoch needs-operation evidence should displace ' +
+        'stale terminal follow-up rows in the current observation summary';
+      const CURRENT_WITNESS_MESSAGE =
+        'the selected partition witness should come from the current ' +
+        'operation-unknown needs-operation snapshot';
+      const observationSnapshot = buildPriorityRecoveryObservationSnapshot({
+        priorityRecoveryDecisionSnapshots:
+          buildTrackedPriorityRecoveryDecisionSnapshots({
+            publicationEpoch: PRIORITY_RECOVERY_SAMPLE_PUBLICATION_EPOCH,
+            blockerPartitionIdsByReason: {
+              [PRIORITY_RECOVERY_BLOCKER_REASON_SERIAL_OPERATION_WAIT]: [],
+              [PRIORITY_RECOVERY_BLOCKER_REASON_ELIGIBLE_NO_OPERATION]: [
+                REPLICA_OPERATION_PRIORITY_PARTITION_ID,
+              ],
+              [PRIORITY_RECOVERY_BLOCKER_REASON_OPERATION_NO_TRANSITIONS]: [],
+              [PRIORITY_RECOVERY_BLOCKER_REASON_RECOVERY_ELIGIBLE_EXCLUDED]:
+                [],
+            },
+            partitionIdsBySemanticState: {
+              [PRIORITY_RECOVERY_SEMANTIC_STATE_CONVERGED]: [],
+              [PRIORITY_RECOVERY_SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT]:
+                [],
+              [PRIORITY_RECOVERY_SEMANTIC_STATE_NEEDS_OPERATION]: [
+                REPLICA_OPERATION_PRIORITY_PARTITION_ID,
+              ],
+              [PRIORITY_RECOVERY_SEMANTIC_STATE_OPERATION_STALLED]: [],
+              [PRIORITY_RECOVERY_SEMANTIC_STATE_LEARNER_PROMOTION_BLOCKED]:
+                [],
+              [PRIORITY_RECOVERY_SEMANTIC_STATE_COORDINATION_MISMATCH]: [],
+              [PRIORITY_RECOVERY_SEMANTIC_STATE_RECOVERING_IN_FLIGHT]: [],
+              [PRIORITY_RECOVERY_SEMANTIC_STATE_BLOCKED_UNCLASSIFIED]: [],
+            },
+            snapshots: [{
+              partitionId: REPLICA_OPERATION_PRIORITY_PARTITION_ID,
+              epoch: PRIORITY_RECOVERY_SAMPLE_PUBLICATION_EPOCH,
+              operationId: STALE_OPERATION_ID,
+              correlationKey: STALE_CORRELATION_KEY,
+              semanticState:
+                PRIORITY_RECOVERY_SEMANTIC_STATE_BLOCKED_UNCLASSIFIED,
+              blockerReasons: [],
+              completion: {
+                state: PRIORITY_RECOVERY_COMPLETION_STATE.BLOCKED,
+              },
+              observation: {
+                workflowState: WORKFLOW_STATE_TERMINAL,
+                visibilityState:
+                  PRIORITY_RECOVERY_VISIBILITY_STATE_CACHE_VISIBLE,
+                convergenceState:
+                  PRIORITY_RECOVERY_CONVERGENCE_STATE_SPREAD_GAP,
+                provenance: {
+                  capturedAt: CURRENT_CAPTURED_AT_MS - STALE_CAPTURE_OFFSET_MS,
+                },
+              },
+              progress: {
+                contractState:
+                  PRIORITY_RECOVERY_PROGRESS_CONTRACT_STATE_BLOCKED,
+                nextAction: PRIORITY_RECOVERY_PROGRESS_NEXT_ACTION_STOP,
+                currentOwner: PRIORITY_RECOVERY_PROGRESS_OWNER_REBALANCER,
+                nextRequiredAction: NEXT_REQUIRED_ACTION_FOLLOWUP,
+                blockingBoundary: BLOCKING_BOUNDARY_REBALANCER_HANDOFF,
+                waitMode: PRIORITY_RECOVERY_PROGRESS_WAIT_STALLED,
+                lastProgressAtMs: STALE_OPERATION_UPDATED_AT_MS,
+                evidenceSourceIds: [
+                  PRIORITY_RECOVERY_PROGRESS_EVIDENCE_LAST_PROGRESS,
+                  PRIORITY_RECOVERY_PROGRESS_EVIDENCE_OPERATION_CONTEXT,
+                  PRIORITY_RECOVERY_PROGRESS_EVIDENCE_WORKFLOW_STATE,
+                ],
+              },
+              actuation: {
+                owner: PRIORITY_RECOVERY_PROGRESS_OWNER_REBALANCER,
+                state: PRIORITY_RECOVERY_ACTUATION_STATE_TERMINAL_COMPLETED,
+              },
+              admission: {
+                effectiveEligibleNodeIds: [
+                  PRIORITY_RECOVERY_NODE_ID_A,
+                  PRIORITY_RECOVERY_NODE_ID_B,
+                ],
+                effectiveEligibleNodeCount: STALE_ELIGIBLE_NODE_COUNT,
+                ineligibleNodes: [],
+                ineligibleNodeIds: [],
+                recoveryEligibleExcludedNodeIds: [],
+              },
+              coordinator: {
+                operationCount: PRIORITY_RECOVERY_SINGLE_OPERATION_COUNT,
+                operationIds: [STALE_OPERATION_ID],
+                operation: {
+                  operationId: STALE_OPERATION_ID,
+                  workflowStep: PRIORITY_RECOVERY_WORKFLOW_STEP_REMOVED,
+                  status: PRIORITY_RECOVERY_STATUS_REMOVED,
+                  updatedAtMs: STALE_OPERATION_UPDATED_AT_MS,
+                },
+              },
+            }, {
+              partitionId: REPLICA_OPERATION_PRIORITY_PARTITION_ID,
+              epoch: PRIORITY_RECOVERY_SAMPLE_PUBLICATION_EPOCH,
+              operationId: null,
+              correlationKey: CURRENT_CORRELATION_KEY,
+              semanticState: PRIORITY_RECOVERY_SEMANTIC_STATE_NEEDS_OPERATION,
+              blockerReasons: [
+                PRIORITY_RECOVERY_BLOCKER_REASON_ELIGIBLE_NO_OPERATION,
+              ],
+              completion: {
+                state: PRIORITY_RECOVERY_COMPLETION_STATE.BLOCKED,
+              },
+              observation: {
+                workflowState: PRIORITY_RECOVERY_OBSERVATION_STATE_NONE,
+                visibilityState: PRIORITY_RECOVERY_OBSERVATION_STATE_NONE,
+                convergenceState:
+                  PRIORITY_RECOVERY_CONVERGENCE_STATE_SPREAD_GAP,
+                provenance: {
+                  capturedAt: CURRENT_CAPTURED_AT_MS,
+                },
+              },
+              progress: {
+                contractState: PRIORITY_RECOVERY_PROGRESS_CONTRACT_STATE_PENDING,
+                nextAction: PRIORITY_RECOVERY_PROGRESS_NEXT_ACTION_WAIT,
+                currentOwner: PRIORITY_RECOVERY_PROGRESS_OWNER_REBALANCER,
+                nextRequiredAction:
+                  PRIORITY_RECOVERY_PROGRESS_ACTION_CREATE_OPERATION,
+                blockingBoundary:
+                  PRIORITY_RECOVERY_PROGRESS_BOUNDARY_SCHEDULING,
+                waitMode: PRIORITY_RECOVERY_PROGRESS_WAIT_EVENT_DRIVEN,
+                lastProgressAtMs: CURRENT_PROGRESS_AT_MS,
+                evidenceSourceIds: [
+                  PRIORITY_RECOVERY_PROGRESS_EVIDENCE_LAST_PROGRESS,
+                ],
+              },
+              admission: {
+                effectiveEligibleNodeIds: [
+                  PRIORITY_RECOVERY_NODE_ID_B,
+                ],
+                effectiveEligibleNodeCount: CURRENT_ELIGIBLE_NODE_COUNT,
+                ineligibleNodes: [],
+                ineligibleNodeIds: [
+                  PRIORITY_RECOVERY_NODE_ID_A,
+                ],
+                recoveryEligibleExcludedNodeIds: [
+                  PRIORITY_RECOVERY_NODE_ID_A,
+                ],
+              },
+              coordinator: {
+                operationCount: PRIORITY_RECOVERY_EMPTY_COUNT,
+                operationIds: [],
+                operation: PRIORITY_RECOVERY_ABSENT_OPERATION,
+              },
+            }],
+          }),
+      });
+      const partitionWitness =
+        observationSnapshot.priorityRecoveryPartitionWitnesses[
+          PRIORITY_RECOVERY_FIRST_PARTITION_WITNESS_INDEX
+        ];
+
+      t.same(
+        observationSnapshot.priorityRecoveryProgressClassIds,
+        [PRIORITY_RECOVERY_BLOCKER_REASON_ELIGIBLE_NO_OPERATION],
+        CURRENT_BLOCKER_MESSAGE,
+      );
+      t.same(
+        observationSnapshot.priorityRecoveryPartitionIdsBySemanticState
+          .needs_operation,
+        [REPLICA_OPERATION_PRIORITY_PARTITION_ID],
+        CURRENT_BLOCKER_MESSAGE,
+      );
+      t.same(
+        partitionWitness?.blockerReasonCodes,
+        [PRIORITY_RECOVERY_BLOCKER_REASON_ELIGIBLE_NO_OPERATION],
+        CURRENT_WITNESS_MESSAGE,
+      );
+      t.same(
+        partitionWitness?.eligibleNodeIds,
+        [PRIORITY_RECOVERY_NODE_ID_B],
+        CURRENT_WITNESS_MESSAGE,
+      );
+      t.same(
+        partitionWitness?.recoveryEligibleExcludedNodeIds,
+        [PRIORITY_RECOVERY_NODE_ID_A],
+        CURRENT_WITNESS_MESSAGE,
+      );
+      t.match(
+        partitionWitness,
+        {
+          currentOwner: PRIORITY_RECOVERY_PROGRESS_OWNER_REBALANCER,
+          nextRequiredAction:
+            PRIORITY_RECOVERY_PROGRESS_ACTION_CREATE_OPERATION,
+          blockingBoundary:
+            PRIORITY_RECOVERY_PROGRESS_BOUNDARY_SCHEDULING,
+          waitMode: PRIORITY_RECOVERY_PROGRESS_WAIT_EVENT_DRIVEN,
+        },
+        CURRENT_WITNESS_MESSAGE,
+      );
+      t.equal(
+        partitionWitness?.correlationKey,
+        CURRENT_CORRELATION_KEY,
+        CURRENT_WITNESS_MESSAGE,
+      );
+    },
+  );
+
+  const CURRENT_UNRESOLVED_DECISION_TEST_NAME =
+    'priority recovery observation snapshots prefer current unresolved ' +
+    'decision partitions over stale spread summary ids';
+  const CURRENT_UNRESOLVED_BLOCKED_MESSAGE =
+    'current unresolved decision evidence should own the blocked partition ' +
+    'id instead of the stale spread-summary partition';
+  const CURRENT_UNRESOLVED_SPREAD_MESSAGE =
+    'the stale spread partition should remain visible only as non-blocking ' +
+    'semantic evidence';
+
+  test(CURRENT_UNRESOLVED_DECISION_TEST_NAME, async (t) => {
       const stalePriorityPartitionSummary = {
         satisfied: false,
         requiredDistinctNodeCount: 3,
@@ -911,7 +1199,7 @@ export function registerPriorityRecoverySnapshotCore04Tests(context) {
       t.same(
         observationSnapshot.priorityRecoveryBlockedPartitionIds,
         [REPLICA_OPERATION_PRIORITY_PARTITION_ID],
-        'current unresolved decision evidence should own the blocked partition id instead of the stale spread-summary partition',
+        CURRENT_UNRESOLVED_BLOCKED_MESSAGE,
       );
       t.same(
         observationSnapshot.priorityRecoveryUnresolvedPartitionIds,
@@ -928,7 +1216,7 @@ export function registerPriorityRecoverySnapshotCore04Tests(context) {
           PRIORITY_RECOVERY_SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT
         ],
         [PUBLICATION_PRIORITY_PARTITION_ID],
-        'the stale spread partition should remain visible only as non-blocking semantic evidence',
+        CURRENT_UNRESOLVED_SPREAD_MESSAGE,
       );
     });
 }

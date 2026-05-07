@@ -444,6 +444,8 @@ function collectPriorityRecoveryPartitionIndexes(
   for (const [partitionId, partitionSnapshots] of snapshotsByPartitionId.entries()) {
     const latestSnapshot = selectLatestPriorityRecoveryPartitionSnapshot(
       partitionSnapshots,
+      null,
+      explicitSemanticStateByPartitionId,
     );
     if (!isRecord(latestSnapshot)) {
       continue;

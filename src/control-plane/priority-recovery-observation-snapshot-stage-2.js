@@ -1,4 +1,7 @@
-import {NUM} from '../constants/index.js';
+import {
+  NUM,
+  TYPEOF,
+} from '../constants/index.js';
 import {
   PRIORITY_RECOVERY_OBSERVATION_STATE_VALUE,
   PRIORITY_RECOVERY_PRESSURE_STATE,
@@ -137,9 +140,37 @@ function resolvePriorityRecoverySnapshotSortEpoch(
   ) ?? NUM.ZERO;
 }
 
+function resolvePriorityRecoveryExplicitSemanticStateMatchRank(
+  snapshot,
+  explicitSemanticStateByPartitionId = null,
+) {
+  const partitionId = String(snapshot?.partitionId || LOCAL_STR_EMPTY).trim();
+  if (
+    partitionId.length === NUM.ZERO ||
+    !(explicitSemanticStateByPartitionId instanceof Map)
+  ) {
+    return LOCAL_NUM_ZERO;
+  }
+  const explicitSemanticState =
+    explicitSemanticStateByPartitionId.get(partitionId) || null;
+  if (typeof explicitSemanticState !== TYPEOF.STRING) {
+    return LOCAL_NUM_ZERO;
+  }
+  const snapshotSemanticState = resolvePriorityRecoverySnapshotSemanticState(
+    snapshot,
+    normalizeDistinctStringArray(snapshot?.blockerReasons),
+    null,
+    true,
+  );
+  return snapshotSemanticState === explicitSemanticState ?
+    LOCAL_NUM_ONE :
+    LOCAL_NUM_ZERO;
+}
+
 function selectLatestPriorityRecoveryPartitionSnapshot(
   partitionSnapshots = [],
   decisionSnapshots = null,
+  explicitSemanticStateByPartitionId = null,
 ) {
   return partitionSnapshots
     .filter((snapshot) => isRecord(snapshot))
@@ -154,6 +185,19 @@ function selectLatestPriorityRecoveryPartitionSnapshot(
       );
       if (leftEpoch !== rightEpoch) {
         return rightEpoch - leftEpoch;
+      }
+      const leftExplicitMatchRank =
+        resolvePriorityRecoveryExplicitSemanticStateMatchRank(
+          left,
+          explicitSemanticStateByPartitionId,
+        );
+      const rightExplicitMatchRank =
+        resolvePriorityRecoveryExplicitSemanticStateMatchRank(
+          right,
+          explicitSemanticStateByPartitionId,
+        );
+      if (leftExplicitMatchRank !== rightExplicitMatchRank) {
+        return rightExplicitMatchRank - leftExplicitMatchRank;
       }
       const leftEvidenceRank =
         resolvePriorityRecoverySnapshotEvidenceRank(left);
@@ -259,6 +303,7 @@ function buildPriorityRecoveryPartitionSnapshot(
   const latestPartitionSnapshot = selectLatestPriorityRecoveryPartitionSnapshot(
     relatedSnapshots,
     decisionSnapshots,
+    explicitSemanticStateByPartitionId,
   );
   const blockerReasonCodes = normalizeDistinctStringArray(
     latestPartitionSnapshot?.blockerReasons,
