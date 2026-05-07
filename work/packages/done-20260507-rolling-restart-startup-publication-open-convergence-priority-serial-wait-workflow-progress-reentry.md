@@ -12,7 +12,7 @@
   "boundary": "Rebalancer leader / operation_scheduling / startup active gate support",
   "dominantReason": "priority_recovery_operation_scheduling_event_driven",
   "currentState": "The failed/removed same-partition visibility wake-up repair is now proved, the same-artifact owner split is closed across frontier, explain, and graph metadata, and the direct lower-owner target-reservation seam is closed as well. The representative rerun no longer terminates on rebalancer_leader / operation_scheduling create_recovery_operation; it migrates to operation_workflow_owner / workflow_progress in epoch 4 PUBLISHED, where sql_write_operations-p1 is blocked by priority_operation_serial_wait / wait_for_operation_progress with sql_transaction_participants-p1 supporting in-flight context.",
-  "nextAction": "Continue in work/packages/active-20260507-rolling-restart-topology-priority-recovery-workflow-progress-serial-wait-reentry.md for the migrated operation_workflow_owner / workflow_progress serial-wait transition seam.",
+  "nextAction": "Continue in work/packages/done-20260507-rolling-restart-topology-priority-recovery-workflow-progress-serial-wait-reentry.md for the migrated operation_workflow_owner / workflow_progress serial-wait transition seam.",
   "proof": [
     "Focused epoch-3 PUBLISHED create_recovery_operation witness for sql_write_operations-p1 with replica_operations-p1 retained as supporting context",
     "Focused lower-owner regression for the selected operation-scheduling seam",
@@ -43,7 +43,7 @@
   "predecessor": "work/packages/done-20260507-rolling-restart-topology-priority-recovery-operation-scheduling-post-publication-closure-reentry.md",
   "closed": "2026-05-07",
   "commitAndPushLedgerRequired": true,
-  "successor": "work/packages/active-20260507-rolling-restart-topology-priority-recovery-workflow-progress-serial-wait-reentry.md"
+  "successor": "work/packages/done-20260507-rolling-restart-topology-priority-recovery-workflow-progress-serial-wait-reentry.md"
 }
 -->
 

@@ -38,6 +38,87 @@ const REMOTE_PRIORITY_VISIBILITY_REPLICA_ID =
   'sql_write_operations-p1-r4';
 const REMOTE_PRIORITY_VISIBILITY_DEFERRED_SOURCE =
   'priority_recovery_authoritative_operation_read';
+const REMOTE_PRIORITY_SERIAL_WAIT_SOURCE_PARTITION_ID =
+  'sql_transaction_participants-p1';
+const REMOTE_PRIORITY_SERIAL_WAIT_SOURCE_OPERATION_ID =
+  'remote-priority-serial-wait-source-operation';
+const REMOTE_PRIORITY_SERIAL_WAIT_LAST_PROGRESS_AT_MS = 5000;
+const REMOTE_PRIORITY_SERIAL_WAIT_CAPTURED_AT_MS = 5000;
+const REMOTE_PRIORITY_SERIAL_WAIT_EPOCH = 4;
+
+function buildRemotePrioritySerialWaitPlanningSnapshot() {
+  return Object.freeze({
+    priorityRecoveryDecisionSnapshots: {
+      capturedAt: REMOTE_PRIORITY_SERIAL_WAIT_CAPTURED_AT_MS,
+      publicationEpoch: REMOTE_PRIORITY_SERIAL_WAIT_EPOCH,
+      snapshots: [
+        Object.freeze({
+          partitionId: REMOTE_PRIORITY_VISIBILITY_PARTITION_ID,
+          operationId: null,
+          blockerReasons: ['priority_operation_serial_wait'],
+          semanticState: 'needs_operation',
+          completion: {
+            state: 'blocked',
+          },
+          observation: {
+            workflowState: 'none',
+            visibilityState: 'none',
+            provenance: {
+              capturedAt: REMOTE_PRIORITY_SERIAL_WAIT_CAPTURED_AT_MS,
+              workflowSource: 'none',
+            },
+          },
+          conditions: {},
+          actuation: {
+            state: 'transition_deferred',
+            owner: 'operation_workflow_owner',
+            workflowProgressPhaseId: 'none',
+            lastProgressAtMs: REMOTE_PRIORITY_SERIAL_WAIT_LAST_PROGRESS_AT_MS,
+          },
+          progress: {
+            contractState: 'pending',
+            nextAction: 'wait',
+            currentOwner: 'operation_workflow_owner',
+            nextRequiredAction: 'wait_for_operation_progress',
+            blockingBoundary: 'workflow_progress',
+            waitMode: 'event_driven',
+            workflowProgressPhaseId: 'none',
+            lastProgressAtMs:
+              REMOTE_PRIORITY_SERIAL_WAIT_LAST_PROGRESS_AT_MS,
+          },
+          planner: {
+            ready: false,
+            spreadGap: 1,
+          },
+          admission: {
+            effectiveEligibleNodeIds: ['eligible-node-a', 'eligible-node-b'],
+            recoveryEligibleExcludedNodeIds: [],
+          },
+          spreadCompletion: {},
+          coordinator: {
+            operationIds: [],
+            serialWaitOperationIds: [
+              REMOTE_PRIORITY_SERIAL_WAIT_SOURCE_OPERATION_ID,
+            ],
+            serialWaitPartitionIds: [
+              REMOTE_PRIORITY_SERIAL_WAIT_SOURCE_PARTITION_ID,
+            ],
+          },
+        }),
+      ],
+    },
+    priorityPartitionSummary: {
+      blockedPartitions: [
+        Object.freeze({
+          partitionId: REMOTE_PRIORITY_VISIBILITY_PARTITION_ID,
+          spreadGap: 1,
+          readyDistinctNodeCount: 1,
+          requiredDistinctNodeCount: 2,
+        }),
+      ],
+    },
+  });
+}
 
 function buildRemotePriorityVisibilityPlanningSnapshot() {
   return Object.freeze({
@@ -344,6 +425,61 @@ async (t) => {
       deliveries.length,
       2,
       'deferred handoff retry should re-send the owner wake-up through the same ingress',
+    );
+  } finally {
+    await coordinator.shutdown();
+  }
+});
+
+test('workflowOwner priority recovery partition snapshots preserve ' +
+  'planning serial-wait witnesses for carrier partitions without local ' +
+  'operation rows',
+async (t) => {
+  const coordinator = createRemotePriorityVisibilityCoordinator();
+  coordinator.initialize();
+
+  coordinator.controlPlaneReadinessService
+    .getPriorityRecoveryPlanningAnswerBestEffort = async () => {
+      return buildRemotePrioritySerialWaitPlanningSnapshot();
+    };
+  coordinator.workflowOwner.repository.getOperationsByEntityAuthoritativeObservation =
+    async () => {
+      return Object.freeze({
+        state: 'present',
+        operationCount: NUM.ZERO,
+        operations: [],
+        deferredOutcome: null,
+        retryAfterMs: null,
+      });
+    };
+
+  try {
+    const snapshot =
+      await coordinator.workflowOwner
+        .getPriorityRecoveryDecisionSnapshotForPartitionOperations(
+          REMOTE_PRIORITY_VISIBILITY_PARTITION_ID,
+          [],
+        );
+
+    t.equal(
+      snapshot?.progress?.nextRequiredAction,
+      'wait_for_operation_progress',
+      'carrier partitions should retain the planning serial-wait next action when the supporting source partition operation is still in flight',
+    );
+    t.equal(
+      snapshot?.progress?.blockingBoundary,
+      'workflow_progress',
+      'carrier partitions should stay on the workflow-progress boundary instead of reopening follow-up scheduling',
+    );
+    t.same(
+      snapshot?.coordinator?.serialWaitPartitionIds,
+      [REMOTE_PRIORITY_SERIAL_WAIT_SOURCE_PARTITION_ID],
+      'carrier snapshots should retain the supporting source partition context from planning',
+    );
+    t.same(
+      snapshot?.coordinator?.serialWaitOperationIds,
+      [REMOTE_PRIORITY_SERIAL_WAIT_SOURCE_OPERATION_ID],
+      'carrier snapshots should retain the supporting source operation context from planning',
     );
   } finally {
     await coordinator.shutdown();

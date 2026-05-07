@@ -90,9 +90,15 @@ class OperationWorkflowOwnerSegment5Stage5 extends OperationWorkflowOwnerSegment
       ).trim();
       return (
         snapshotPartitionId === normalizedPartitionId &&
-        this.hasPriorityRecoveryDecisionSnapshotOperationMatch(
-          snapshot,
-          operationIds,
+        (
+          this.hasPriorityRecoveryDecisionSnapshotOperationMatch(
+            snapshot,
+            operationIds,
+          ) ||
+          this.hasPriorityRecoveryDecisionSnapshotPlanningOnlyWorkflowProgressMatch(
+            snapshot,
+            operationIds,
+          )
         )
       );
     }) || null;
@@ -153,6 +159,8 @@ class OperationWorkflowOwnerSegment5Stage5 extends OperationWorkflowOwnerSegment
       this.isPriorityRecoveryAuthoritativeOperationReadDeferred(
         incompleteOperationObservation,
       );
+    const operationIds =
+      this.collectPriorityRecoveryOperationIds(operationRecords);
     const planningDecisionSnapshot =
       this.resolvePriorityRecoveryDecisionSnapshotFromPlanning(
         normalizedPartitionId,
@@ -160,7 +168,14 @@ class OperationWorkflowOwnerSegment5Stage5 extends OperationWorkflowOwnerSegment
         planningSnapshot,
       );
     if (planningDecisionSnapshot) {
-      if (authoritativeOperationReadDeferred !== true) {
+      if (
+        authoritativeOperationReadDeferred !== true ||
+        this
+          .hasPriorityRecoveryDecisionSnapshotPlanningOnlyWorkflowProgressMatch(
+            planningDecisionSnapshot,
+            operationIds,
+          )
+      ) {
         return planningDecisionSnapshot;
       }
       return this.buildDeferredPriorityRecoveryDecisionSnapshotFromPlanningMatch(

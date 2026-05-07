@@ -235,7 +235,7 @@ Secondary after the primary path is stable:
 
 The current active representative re-entry package is:
 
-1. [Rolling Restart Topology Priority Recovery Workflow Progress Serial-Wait Reentry](../packages/active-20260507-rolling-restart-topology-priority-recovery-workflow-progress-serial-wait-reentry.md)
+1. [Rolling Restart Topology Priority Recovery Workflow Progress Serial-Wait Reentry](../packages/done-20260507-rolling-restart-topology-priority-recovery-workflow-progress-serial-wait-reentry.md)
 
 Retained predecessor context file:
 
@@ -386,7 +386,7 @@ Other secondary matrix failures become active packages only after the
 
 Current re-entry package:
 
-1. [Rolling Restart Topology Priority Recovery Workflow Progress Serial-Wait Reentry](../packages/active-20260507-rolling-restart-topology-priority-recovery-workflow-progress-serial-wait-reentry.md)
+1. [Rolling Restart Topology Priority Recovery Workflow Progress Serial-Wait Reentry](../packages/done-20260507-rolling-restart-topology-priority-recovery-workflow-progress-serial-wait-reentry.md)
 
 Queued convergence-grammar packages:
 
@@ -403,29 +403,29 @@ Queued cleanup packages:
 ## Remaining Work Summary
 
 1. Current execution blocker:
-   The latest May 7 representative rerun after the failed/removed visibility
-   wake-up repair used
-   `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-after-priority-recovery-visibility-wakeup-20260507T000000Z.report.json --fast-local --verbose`.
+   The latest May 7 representative rerun after the planning-only serial-wait
+   carrier repair used
+   `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-after-priority-recovery-planning-serial-wait-reuse-20260507T000000Z.report.json --fast-local --verbose`.
    Report:
-   `test-output/reports/rolling-restart-after-priority-recovery-other-partition-target-reservation-20260507T000000Z.report.json`.
-   Result: failed after `131.7s`; terminal barrier:
+   `test-output/reports/rolling-restart-after-priority-recovery-planning-serial-wait-reuse-20260507T000000Z.report.json`.
+   Result: failed after `132.0s`; terminal barrier:
    `Not all nodes reached ACTIVE state within 120000ms`.
    The current report classifies as root cause class `topology`, failure class
    `priority_recovery_progress_blocked`, dominant reason
    `priority_recovery_workflow_progress_transition_deferred`, and supporting
    signals for
-   `priorityRecoveryPartition=sql_write_operations-p1`,
+   `priorityRecoveryPartition=sql_transaction_participants-p1`,
    `priorityRecoveryOwner=operation_workflow_owner`,
    `priorityRecoveryBoundary=workflow_progress`,
    `priorityRecoveryWaitMode=event_driven`, and
    `priorityRecoveryNextAction=wait_for_operation_progress`. Top-level
-   publication convergence reaches epoch `4` `PUBLISHED` with pending ACK
+   publication convergence reaches epoch `2` `PUBLISHED` with pending ACK
    count `0`, active-gate progress `snapshotCoverage=2/5`, and only
-   downstream startup timeout support. The direct lower-owner
-   `create_recovery_operation` seam is closed: the live blocker now sits on
-   `sql_write_operations-p1` `priority_operation_serial_wait`, with
-   `sql_transaction_participants-p1` retained only as supporting in-flight
-   workflow-progress context.
+   downstream startup timeout support. The planning-only
+   `sql_write_operations-p1` carrier seam is closed: the live blocker now sits
+   on `sql_transaction_participants-p1` `priority_operation_serial_wait`,
+   with `replica_operations-p1` and `sql_write_operations-p1` retained only as
+   supporting in-flight workflow-progress context.
 2. Completed trace, fixture, and next active task:
    the
    [Rolling Restart Topology Publication Snapshot Reachability Reentry](../packages/done-20260505-rolling-restart-topology-publication-snapshot-reachability-reentry.md)
@@ -436,15 +436,15 @@ Queued cleanup packages:
    retained-carrier release, and the direct source-versus-carrier owner
    repair. Each slice ended in a replayable representative rerun and moved the
    live blocker forward. The latest closed slice proves the exact-target
-   reservation seam is no longer the terminal owner. The current unchecked
-   task is therefore the active
-   [Rolling Restart Topology Priority Recovery Workflow Progress Serial-Wait Reentry](../packages/active-20260507-rolling-restart-topology-priority-recovery-workflow-progress-serial-wait-reentry.md)
+   carrier seam is no longer the terminal owner. The current unchecked task is
+   therefore the active
+   [Rolling Restart Topology Priority Recovery Workflow Progress Serial-Wait Source Partition Reentry](../packages/active-20260507-rolling-restart-topology-priority-recovery-workflow-progress-serial-wait-source-partition-reentry.md)
    package: preserve the closed failed/removed visibility wake-up repair,
-   the closed same-artifact owner reconciliation, and the closed lower-owner
-   target-reservation repair, then add the focused workflow-progress
-   regression for the surviving epoch-4 `PUBLISHED`
-   `sql_write_operations-p1 priority_operation_serial_wait /
-   wait_for_operation_progress` seam and repair or reclassify that deferred
+   the closed same-artifact owner reconciliation, the closed lower-owner
+   target-reservation repair, and the closed planning-only carrier repair,
+   then add the focused workflow-progress regression for the surviving epoch-2
+   `PUBLISHED` `sql_transaction_participants-p1 priority_operation_serial_wait
+   / wait_for_operation_progress` seam and repair or reclassify that deferred
    transition boundary.
 3. Harness classification:
    terminal barrier evidence continues to win over stale playback
@@ -462,7 +462,7 @@ Queued cleanup packages:
 5. Residual cleanup:
    fence or delete superseded local reconstruction and caller-local pressure
    exception paths through queued packages only after the current
-   epoch-4 priority-recovery workflow-progress blocker closes or migrates;
+   epoch-2 priority-recovery workflow-progress blocker closes or migrates;
    keep the previous `052328Z` `sql_write_operations-p1`
    operation-workflow timeout as prior residual history, not the current
    blocker.

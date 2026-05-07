@@ -23,6 +23,13 @@ const {
   isPriorityControlPlanePartition,
 } = SHARED;
 
+const PRIORITY_RECOVERY_PLANNING_REUSE_LITERAL = Object.freeze({
+  OPERATION_WORKFLOW_OWNER: 'operation_workflow_owner',
+  SERIAL_OPERATION_WAIT: 'priority_operation_serial_wait',
+  WAIT_FOR_OPERATION_PROGRESS: 'wait_for_operation_progress',
+  WORKFLOW_PROGRESS: 'workflow_progress',
+});
+
 class OperationWorkflowOwnerSegment5Stage4 extends OperationWorkflowOwnerSegment5Stage3 {
   async evaluatePriorityPublicationLeaderRemoveSafety(
     operation,
@@ -530,6 +537,72 @@ class OperationWorkflowOwnerSegment5Stage4 extends OperationWorkflowOwnerSegment
       }
     }
     return false;
+  }
+
+  normalizePriorityRecoveryDecisionSnapshotPartitionIds(values = []) {
+    if (!Array.isArray(values)) {
+      return [];
+    }
+    return values
+      .map((value) =>
+        String(
+          value || OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_STRING,
+        ).trim(),
+      )
+      .filter((value) => value.length > NUM.ZERO);
+  }
+
+  hasPriorityRecoveryDecisionSnapshotPlanningOnlyWorkflowProgressMatch(
+    snapshot,
+    operationIds,
+  ) {
+    const blockerReasons = Array.isArray(snapshot?.blockerReasons) ?
+      snapshot.blockerReasons :
+      [];
+    const serialWaitPartitionIds =
+      this.normalizePriorityRecoveryDecisionSnapshotPartitionIds(
+        snapshot?.coordinator?.serialWaitPartitionIds,
+      );
+    const serialWaitOperationIds =
+      this.collectPriorityRecoveryDecisionSnapshotOperationIds({
+        coordinator: {
+          serialWaitOperationIds:
+            snapshot?.coordinator?.serialWaitOperationIds,
+        },
+      });
+    const evidence = Object.freeze({
+      operationIdsAvailable:
+        operationIds instanceof Set && operationIds.size > NUM.ZERO,
+      currentOwner:
+        snapshot?.progress?.currentOwner ||
+        OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_STRING,
+      nextRequiredAction:
+        snapshot?.progress?.nextRequiredAction ||
+        OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_STRING,
+      blockingBoundary:
+        snapshot?.progress?.blockingBoundary ||
+        OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_STRING,
+      serialWaitSourceAvailable:
+        serialWaitOperationIds.size > NUM.ZERO ||
+        serialWaitPartitionIds.length > NUM.ZERO,
+      serialWaitProgressClass:
+        blockerReasons.includes(
+          PRIORITY_RECOVERY_PLANNING_REUSE_LITERAL.SERIAL_OPERATION_WAIT,
+        ),
+    });
+    return (
+      evidence.operationIdsAvailable !== true &&
+      evidence.currentOwner ===
+        PRIORITY_RECOVERY_PLANNING_REUSE_LITERAL
+          .OPERATION_WORKFLOW_OWNER &&
+      evidence.nextRequiredAction ===
+        PRIORITY_RECOVERY_PLANNING_REUSE_LITERAL
+          .WAIT_FOR_OPERATION_PROGRESS &&
+      evidence.blockingBoundary ===
+        PRIORITY_RECOVERY_PLANNING_REUSE_LITERAL.WORKFLOW_PROGRESS &&
+      evidence.serialWaitSourceAvailable === true &&
+      evidence.serialWaitProgressClass === true
+    );
   }
 }
 
