@@ -2,42 +2,54 @@
 
 # Current Blocker
 
-Sprint: `work/sprints/archived/done-2026-q2-core-topology-control-plane-rewrite.md`
+Sprint: `work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md`
 
-Package: `work/packages/done-20260508-core-topology-legacy-path-deletion-and-proof.md`
+Package: `work/packages/active-20260508-rolling-restart-operation-workflow-progress-persisted-not-dispatched.md`
 
-Scenario: `core-topology-control-plane-rewrite`
+Scenario: `rolling-restart`
 
-Artifact: `none`
+Artifact: `test-output/reports/rolling-restart-current-release-gate-after-dispatch-skip-retry.report.json`
 
-Playback: `none`
+Playback: `test-output/reports/.playback/rolling-restart-current-release-gate-after-dispatch-skip-retry/rolling-restart/`
 
 ## Boundary
 
-Owner: `topology_control_plane`
+Owner: `operation_workflow_owner`
 
-Boundary: `legacy_path_deletion_and_proof`
+Boundary: `rebalancer_handoff`
 
-Dominant reason: `legacy_shadow_paths_remain_after_projection_readiness_contract`
+Dominant reason: `priority_recovery_rebalancer_handoff_retry_scheduled`
 
-Current state: Mutation-readiness published-convergence consumption has been cut over from raw recovery-gate fields to projectionReadinessContract; focused consumer proof, static guards, work validation, and diff checks passed; focused package commit 196e57f3d057a10606e3e2271716306835dc596d is pushed.
+Current state: Ready-node rediscovery now keeps workflow-owner startup skips on the bounded dispatch retry lane. The follow-up rolling-restart rerun no longer reports the single sql_transactions-p1 persisted-not-dispatched workflow-progress witness as the dominant blocker. The fresh frontier is operation_workflow_owner / rebalancer_handoff with priority_recovery_rebalancer_handoff_retry_scheduled across sql_transaction_participants-p1 and sql_write_operations-p1.
 
 ## Next Action
 
-Use a new package if the next representative harness rerun exposes a fresh owner-boundary blocker.
+Resume the rebalancer-handoff retry-scheduled boundary with the fresh dispatch-skip-retry artifact, preserving the dispatch retry fix as package evidence.
 
 ## Proof Ladder
 
-1. `npm run work:context`
-2. `npm run work:validate`
-3. `git diff --check`
+1. `npm run work:package:evidence-block -- test-output/reports/rolling-restart-current-release-gate-after-target-creation-progress-rerun.report.json`
+2. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-target-creation-progress-rerun.report.json --explain priority_recovery_partition_progress`
+3. `Focused operation_workflow_owner workflow_progress regression for timed-out cached PENDING dispatch/reconcile re-entry`
+4. `Touched-file runtime grammar, decision-boundary, literal-owner, syntax, and diff hygiene guardrails`
+5. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-current-release-gate-after-dispatch-skip-retry.report.json --fast-local --verbose`
 
 ## Touched Files
 
-1. `src/control-plane/control-plane-mutation-readiness.js`
-2. `test/control-plane/control-plane-mutation-readiness.test.js`
-3. `test/control-plane/control-plane-system-table-gateway.test.js`
-4. `test/control-plane/control-plane-system-table-gateway-tail-test-cases.js`
-5. `test/query/sql-query-engine.test-part-3.js`
-6. `work/packages/done-20260508-core-topology-legacy-path-deletion-and-proof.md`
-7. `work/model-ledger.jsonl`
+1. `src/control-plane/replica-dispatch-service-segment-1.js`
+2. `src/control-plane/replica-dispatch-service-segment-2.js`
+3. `src/control-plane/replica-dispatch-service-shared.js`
+4. `test/control-plane/replica-dispatch-startup-operation-replay.test.js`
+5. `test/control-plane/replica-dispatch-node-state-update.test-part-2.js`
+6. `src/rebalancer/operation-workflow-owner-segment-1.js`
+7. `src/rebalancer/operation-workflow-owner-segment-4.js`
+8. `src/rebalancer/operation-workflow-owner-segment-7-stage-1.js`
+9. `src/rebalancer/operation-workflow-owner-segment-7-stage-2.js`
+10. `src/rebalancer/unified-rebalancer-segment-4-stage-3.js`
+11. `test/rebalancer/operation-workflow-observed-progress-lane-held.test.js`
+12. `test/rebalancer/priority-follow-up-target-readiness.test.js`
+13. `test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
+14. `work/packages/active-20260508-rolling-restart-operation-workflow-progress-persisted-not-dispatched.md`
+15. `work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md`
+16. `work/sprints/current-blocker.json`
+17. `work/sprints/current-blocker.md`

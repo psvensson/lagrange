@@ -42,6 +42,7 @@ const TEST_RAFT_ROLE_VOTER = 'voter';
 const TEST_TARGET_REPLICA_COUNT = 3;
 const TEST_NO_IN_FLIGHT_OPERATIONS = 0;
 const TEST_READY_LEASE_EXTENSION_MS = 60000;
+const TEST_EXPIRED_READY_LEASE_OFFSET_MS = -1000;
 const TEST_CREATED_OPERATION_ID = 'op-priority-follow-up-ready-defer';
 const TEST_PENDING_TARGET_OPERATION_ID = 'op-priority-follow-up-pending';
 
@@ -61,12 +62,15 @@ function initializeTestEnvironment() {
   }
 }
 
-function createNodeRow(nodeId) {
+function createNodeRow(nodeId, options = {}) {
+  const readyLeaseExpiresAt = Object.hasOwn(options, 'readyLeaseExpiresAt') ?
+    options.readyLeaseExpiresAt :
+    Date.now() + TEST_READY_LEASE_EXTENSION_MS;
   return {
     node_id: nodeId,
     status: NodeStatus.ACTIVE,
     connection_state: 'ready',
-    ready_lease_expires_at: Date.now() + TEST_READY_LEASE_EXTENSION_MS,
+    ready_lease_expires_at: readyLeaseExpiresAt,
   };
 }
 
@@ -135,6 +139,282 @@ function buildCurrentPriorityDecisionSnapshot() {
     }),
   });
 }
+
+test(
+  'UnifiedRebalancer waits instead of creating priority follow-up for a ' +
+    'locally lease-incomplete target',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const expiredReadyLeaseExpiresAt =
+      Date.now() + TEST_EXPIRED_READY_LEASE_OFFSET_MS;
+    const systemTableCache = createMockCache({
+      nodes: [
+        createNodeRow(TEST_NODE_ID_A),
+        createNodeRow(TEST_NODE_ID_B, {
+          readyLeaseExpiresAt: expiredReadyLeaseExpiresAt,
+        }),
+      ],
+      services: [
+        createReplicaRow(TEST_REPLICA_ID_A, TEST_NODE_ID_A),
+      ],
+      partitions: [{
+        partition_id: TEST_PARTITION_ID,
+        table_id: TEST_TABLE_ID,
+      }],
+    });
+    const controlPlaneReadinessService =
+      createMockControlPlaneReadinessService({
+        systemTableCache,
+        readinessByNodeId: {
+          [TEST_NODE_ID_A]: createNodeReadiness(TEST_NODE_ID_A),
+          [TEST_NODE_ID_B]: createNodeReadiness(TEST_NODE_ID_B),
+        },
+      });
+    const createdOperations = [];
+    const rebalanceCoordinator = {
+      ...createMockCoordinator(),
+      createOperation: async (move) => {
+        createdOperations.push(move);
+        return {
+          operationId: TEST_CREATED_OPERATION_ID,
+          type: move.type,
+          partitionId: move.partitionId,
+          targetNodeId: move.nodeId,
+          replicaId: move.replicaId,
+          status: ReplicaStatus.PENDING,
+          workflowStep: WORKFLOW_STEP.PENDING,
+        };
+      },
+    };
+    const rebalancer = createTestRebalancer({
+      entityId: TEST_PARTITION_ID,
+      entityType: EntityType.PARTITION,
+      nodeId: TEST_NODE_ID_A,
+      systemTableCache,
+      rebalanceCoordinator,
+      controlPlaneReadinessService,
+    });
+
+    rebalancer.initialize();
+    rebalancer.controlPlaneReadinessService = controlPlaneReadinessService;
+    rebalancer.rebalanceCoordinator.controlPlaneReadinessService =
+      controlPlaneReadinessService;
+    rebalancer.setLeader(true);
+    rebalancer.clusterReadinessConfirmed = true;
+    rebalancer.isStabilized = () => true;
+    rebalancer.evaluateState = async () => true;
+    rebalancer.getConfiguredRebalanceBudget = async () =>
+      TEST_TARGET_REPLICA_COUNT;
+    rebalancer.getGlobalInFlightOperationCount = async () =>
+      TEST_NO_IN_FLIGHT_OPERATIONS;
+    rebalancer.getCurrentPriorityRecoveryFollowUpDecisionSnapshot =
+      async () =>
+        Object.freeze({
+          planningSnapshot: Object.freeze({}),
+          decisionSnapshot: Object.freeze({
+            partitionId: TEST_PARTITION_ID,
+            semanticState: PRIORITY_RECOVERY_SEMANTIC_STATE.NEEDS_OPERATION,
+            progress: Object.freeze({
+              nextRequiredAction:
+                PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION
+                  .CREATE_RECOVERY_OPERATION,
+            }),
+            admission: Object.freeze({
+              effectiveEligibleNodeIds: Object.freeze([
+                TEST_NODE_ID_A,
+                TEST_NODE_ID_B,
+              ]),
+            }),
+            publication: Object.freeze({
+              recoveryActiveNodeIds: Object.freeze([
+                TEST_NODE_ID_A,
+                TEST_NODE_ID_B,
+              ]),
+            }),
+          }),
+        });
+    rebalancer.movePlanner.calculateTargetState = async () => ({
+      targetReplicaCount: TEST_TARGET_REPLICA_COUNT,
+      targetNodes: [
+        TEST_NODE_ID_A,
+        TEST_NODE_ID_B,
+      ],
+    });
+    rebalancer.movePlanner.calculateMoves = () => [];
+    rebalancer.movePlanner.applyPressureGating = async (moves) => moves;
+
+    try {
+      const result = await rebalancer.rebalance(
+        TriggerType.PERIODIC,
+        {
+          targetReplicaCount: TEST_TARGET_REPLICA_COUNT,
+          placementConstraints: {
+            spreadAcrossNodes: true,
+          },
+        },
+      );
+
+      t.equal(
+        createdOperations.length,
+        0,
+        'known lease-incomplete target should not create a handoff operation',
+      );
+      t.equal(
+        result.moves.length,
+        0,
+        'rebalance should wait when every follow-up target is locally not ready',
+      );
+    } finally {
+      rebalancer.shutdown();
+      ConfigurationManager.resetInstance();
+      LoggingService.resetInstance();
+    }
+  },
+);
+
+test(
+  'UnifiedRebalancer skips locally lease-incomplete priority follow-up ' +
+    'targets while preserving ready alternatives',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const expiredReadyLeaseExpiresAt =
+      Date.now() + TEST_EXPIRED_READY_LEASE_OFFSET_MS;
+    const systemTableCache = createMockCache({
+      nodes: [
+        createNodeRow(TEST_NODE_ID_A),
+        createNodeRow(TEST_NODE_ID_B, {
+          readyLeaseExpiresAt: expiredReadyLeaseExpiresAt,
+        }),
+        createNodeRow(TEST_NODE_ID_C),
+      ],
+      services: [
+        createReplicaRow(TEST_REPLICA_ID_A, TEST_NODE_ID_A),
+      ],
+      partitions: [{
+        partition_id: TEST_PARTITION_ID,
+        table_id: TEST_TABLE_ID,
+      }],
+    });
+    const controlPlaneReadinessService =
+      createMockControlPlaneReadinessService({
+        systemTableCache,
+        readinessByNodeId: {
+          [TEST_NODE_ID_A]: createNodeReadiness(TEST_NODE_ID_A),
+          [TEST_NODE_ID_B]: createNodeReadiness(TEST_NODE_ID_B),
+          [TEST_NODE_ID_C]: createNodeReadiness(TEST_NODE_ID_C),
+        },
+      });
+    const createdOperations = [];
+    const rebalanceCoordinator = {
+      ...createMockCoordinator(),
+      createOperation: async (move) => {
+        createdOperations.push(move);
+        return {
+          operationId: TEST_CREATED_OPERATION_ID,
+          type: move.type,
+          partitionId: move.partitionId,
+          targetNodeId: move.nodeId,
+          replicaId: move.replicaId,
+          status: ReplicaStatus.PENDING,
+          workflowStep: WORKFLOW_STEP.PENDING,
+        };
+      },
+    };
+    const rebalancer = createTestRebalancer({
+      entityId: TEST_PARTITION_ID,
+      entityType: EntityType.PARTITION,
+      nodeId: TEST_NODE_ID_A,
+      systemTableCache,
+      rebalanceCoordinator,
+      controlPlaneReadinessService,
+    });
+
+    rebalancer.initialize();
+    rebalancer.controlPlaneReadinessService = controlPlaneReadinessService;
+    rebalancer.rebalanceCoordinator.controlPlaneReadinessService =
+      controlPlaneReadinessService;
+    rebalancer.setLeader(true);
+    rebalancer.clusterReadinessConfirmed = true;
+    rebalancer.isStabilized = () => true;
+    rebalancer.evaluateState = async () => true;
+    rebalancer.getConfiguredRebalanceBudget = async () =>
+      TEST_TARGET_REPLICA_COUNT;
+    rebalancer.getGlobalInFlightOperationCount = async () =>
+      TEST_NO_IN_FLIGHT_OPERATIONS;
+    rebalancer.getCurrentPriorityRecoveryFollowUpDecisionSnapshot =
+      async () =>
+        Object.freeze({
+          planningSnapshot: Object.freeze({}),
+          decisionSnapshot: Object.freeze({
+            partitionId: TEST_PARTITION_ID,
+            semanticState: PRIORITY_RECOVERY_SEMANTIC_STATE.NEEDS_OPERATION,
+            progress: Object.freeze({
+              nextRequiredAction:
+                PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION
+                  .CREATE_RECOVERY_OPERATION,
+            }),
+            admission: Object.freeze({
+              effectiveEligibleNodeIds: Object.freeze([
+                TEST_NODE_ID_A,
+                TEST_NODE_ID_B,
+                TEST_NODE_ID_C,
+              ]),
+            }),
+            publication: Object.freeze({
+              recoveryActiveNodeIds: Object.freeze([
+                TEST_NODE_ID_A,
+                TEST_NODE_ID_B,
+                TEST_NODE_ID_C,
+              ]),
+            }),
+          }),
+        });
+    rebalancer.movePlanner.calculateTargetState = async () => ({
+      targetReplicaCount: TEST_TARGET_REPLICA_COUNT,
+      targetNodes: [
+        TEST_NODE_ID_A,
+        TEST_NODE_ID_B,
+        TEST_NODE_ID_C,
+      ],
+    });
+    rebalancer.movePlanner.calculateMoves = () => [];
+    rebalancer.movePlanner.applyPressureGating = async (moves) => moves;
+
+    try {
+      const result = await rebalancer.rebalance(
+        TriggerType.PERIODIC,
+        {
+          targetReplicaCount: TEST_TARGET_REPLICA_COUNT,
+          placementConstraints: {
+            spreadAcrossNodes: true,
+          },
+        },
+      );
+
+      t.equal(
+        createdOperations.length,
+        1,
+        'ready alternative target should still create a handoff operation',
+      );
+      t.equal(
+        createdOperations[0]?.nodeId,
+        TEST_NODE_ID_C,
+        'direct follow-up should bypass the lease-incomplete target',
+      );
+      t.equal(
+        result.moves[0]?.success,
+        true,
+        'rebalance should schedule the follow-up on the ready alternative',
+      );
+    } finally {
+      rebalancer.shutdown();
+      ConfigurationManager.resetInstance();
+      LoggingService.resetInstance();
+    }
+  },
+);
 
 test(
   'UnifiedRebalancer preserves deferred target readiness for planner-created ' +

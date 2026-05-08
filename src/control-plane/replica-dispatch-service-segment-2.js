@@ -9,6 +9,7 @@ const {
   DISPATCH_READINESS_ERROR_CODE,
   DISPATCH_READINESS_ERROR_REASON,
   NUM,
+  OPERATION_WORKFLOW_OWNER_REASON,
   OperationType,
   RECONCILE_REASON,
   REPLICA_DISPATCH_SERVICE_LITERAL,
@@ -32,6 +33,12 @@ const DISPATCH_REPLAY_READY_NODE_PHASE = Object.freeze({
   ACTIVE_REPLACE_SOURCE_REMOVAL: 'active_replace_source_removal',
   NOT_REPLAYABLE: 'not_replayable',
 });
+
+const RETRYABLE_DISPATCH_SKIPPED_REASONS = Object.freeze(
+  new Set([
+    OPERATION_WORKFLOW_OWNER_REASON.SHUTDOWN_IN_PROGRESS,
+  ]),
+);
 
 function mergeDispatchRetryRowsByOperationId(
   preferredRows = [],
@@ -263,6 +270,19 @@ class ReplicaDispatchServiceSegment2 extends ReplicaDispatchServiceSegment1 {
         ) {
           return;
         }
+        if (this.shouldRetrySkippedDispatchResult(dispatchResult)) {
+          const retryableDispatchError =
+            this.buildRetryableSkippedDispatchError(dispatchResult);
+          if (
+            this.deferOperationDispatchRetry(
+              operationId,
+              retryableDispatchError,
+              row,
+            )
+          ) {
+            return;
+          }
+        }
         if (
           (!dispatchResult ||
             getControlPlaneErrorMessage(dispatchResult).length === NUM.ZERO) &&
@@ -305,6 +325,41 @@ class ReplicaDispatchServiceSegment2 extends ReplicaDispatchServiceSegment1 {
     } finally {
       this.dispatchInFlight.delete(operationId);
     }
+  }
+
+  /**
+   * Startup can replay ready-node dispatch before the workflow owner has
+   * finished initialization. Treat that owner-boundary skip as retryable so
+   * the durable PENDING row remains on the canonical dispatch queue.
+   *
+   * @param {Object|null} dispatchResult
+   * @return {boolean}
+   * @private
+   */
+  shouldRetrySkippedDispatchResult(dispatchResult) {
+    return (
+      dispatchResult?.skipped === true &&
+      RETRYABLE_DISPATCH_SKIPPED_REASONS.has(dispatchResult.reason)
+    );
+  }
+
+  /**
+   * @param {Object|null} dispatchResult
+   * @return {Error}
+   * @private
+   */
+  buildRetryableSkippedDispatchError(dispatchResult) {
+    const error = new Error(
+      getControlPlaneErrorMessage(dispatchResult) ||
+        dispatchResult?.reason ||
+        REPLICA_DISPATCH_SERVICE_LITERAL.DISPATCH_UNSUCCESSFUL,
+    );
+    error.reason =
+      dispatchResult?.reason ||
+      REPLICA_DISPATCH_SERVICE_LITERAL.DISPATCH_UNSUCCESSFUL;
+    error.deferRetry = true;
+    error.retryAfterMs = this.operationDispatchRetryAfterMs;
+    return error;
   }
 
   /**

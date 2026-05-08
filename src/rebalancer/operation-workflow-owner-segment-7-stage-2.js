@@ -351,6 +351,16 @@ class OperationWorkflowOwnerSegment7Stage2 extends OperationWorkflowOwnerSegment
     return this.reconcileOperationLifecycle(operation, options);
   }
 
+  async reconcileObservedTargetProgressDuringTransitionGrace(operation, now) {
+    if (!this.hasObservedOperationRowTargetProgress(operation)) {
+      return false;
+    }
+    return this.reconcileOperationProgress(operation, {
+      cause: OPERATION_WORKFLOW_OWNER_LITERAL.OBSERVED_PROGRESS,
+      now,
+    });
+  }
+
   getTimeoutForStep(step, operation = null) {
     switch (step) {
     case WORKFLOW_STEP.PENDING:
@@ -486,6 +496,14 @@ class OperationWorkflowOwnerSegment7Stage2 extends OperationWorkflowOwnerSegment
     if (
       this.hasActiveTransitionRetryGrace(operation?.operationId || null, now)
     ) {
+      if (
+        await this.reconcileObservedTargetProgressDuringTransitionGrace(
+          operation,
+          now,
+        )
+      ) {
+        return;
+      }
       if (await this.reconcilePriorityRecoveryOperationDrain(operation)) {
         return;
       }

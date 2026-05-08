@@ -363,6 +363,14 @@ class OperationWorkflowOwnerSegment7Stage1 extends OperationWorkflowOwnerSegment
       cacheOperation,
     );
     for (const operationId of operationIds) {
+      if (this.isOperationOwnerLaneHeld(operationId)) {
+        this.scheduleObservedProgressRetry(
+          operationId,
+          tableName,
+          cacheOperation,
+        );
+        continue;
+      }
       this.operationWorkflowRunExclusive(
         this.getOperationOwnerSingleFlightKey(operationId),
         () => this.reconcileObservedProgressOperation(operationId),

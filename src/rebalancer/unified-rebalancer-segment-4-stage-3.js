@@ -22,9 +22,15 @@ const {
   REBALANCER_SKIP_REASON,
   REBALANCER_TARGET_READINESS_MODE,
   ReplicaStatus,
+  SYSTEM_TABLE_NAME,
   TYPEOF,
   UNIFIED_REBALANCER_LITERAL,
 } = SHARED;
+const {
+  NodeStatus,
+  isNodeReadyLeaseExplicitlyCleared,
+  isNodeRecordReady,
+} = SHARED.UNIFIED_REBALANCER_SHARED;
 
 const PRIORITY_RECOVERY_FOLLOW_UP_TARGET_STATE_FIELD = Object.freeze({
   TARGET_NODES: 'targetNodes',
@@ -115,6 +121,35 @@ class UnifiedRebalancerSegment4Stage3 extends UnifiedRebalancerSegment4Stage2 {
     return eligibleNodeIds.filter((nodeId) => targetNodeIdSet.has(nodeId));
   }
 
+  isPriorityRecoveryFollowUpTargetKnownLocallyNotReady(nodeId) {
+    if (
+      nodeId.length === NUM.ZERO ||
+      typeof this.systemTableCache?.get !== TYPEOF.FUNCTION
+    ) {
+      return false;
+    }
+    const nodeRow = this.systemTableCache.get(SYSTEM_TABLE_NAME.NODES, nodeId);
+    if (!nodeRow || typeof nodeRow !== TYPEOF.OBJECT) {
+      return false;
+    }
+    const status = nodeRow.status;
+    const nodeStatusKnownNotActive =
+      typeof status === TYPEOF.STRING && status !== NodeStatus.ACTIVE;
+    const nodeReady = isNodeRecordReady(nodeRow, {now: Date.now()});
+    const readyLeaseExplicitlyCleared =
+      isNodeReadyLeaseExplicitlyCleared(nodeRow, {
+        requireActiveStatus: false,
+      });
+    return (
+      nodeStatusKnownNotActive ||
+      (
+        status === NodeStatus.ACTIVE &&
+        !nodeReady
+      ) ||
+      readyLeaseExplicitlyCleared
+    );
+  }
+
   selectPriorityRecoveryFollowUpTargetNodeId(
     decision,
     currentReplicas = [],
@@ -140,7 +175,8 @@ class UnifiedRebalancerSegment4Stage3 extends UnifiedRebalancerSegment4Stage2 {
       (nodeId) =>
         !healthyNodeIds.has(nodeId) &&
         !occupiedNodeIds.has(nodeId) &&
-        !pendingTargetNodeIds.has(nodeId),
+        !pendingTargetNodeIds.has(nodeId) &&
+        !this.isPriorityRecoveryFollowUpTargetKnownLocallyNotReady(nodeId),
     );
     const preferredUnusedEligibleNodeId = unusedEligibleNodeIds.find(
       (nodeId) => nodeId !== previousFailedTargetNodeId,
@@ -154,7 +190,9 @@ class UnifiedRebalancerSegment4Stage3 extends UnifiedRebalancerSegment4Stage2 {
     return (
       eligibleNodeIds.find(
         (nodeId) =>
-          !occupiedNodeIds.has(nodeId) && !pendingTargetNodeIds.has(nodeId),
+          !occupiedNodeIds.has(nodeId) &&
+          !pendingTargetNodeIds.has(nodeId) &&
+          !this.isPriorityRecoveryFollowUpTargetKnownLocallyNotReady(nodeId),
       ) ||
       null
     );

@@ -264,6 +264,7 @@ class ReplicaDispatchServiceSegment1 extends EventEmitter {
     }
 
     this.enqueueCachedReadyNodeRetriesOnInitialize();
+    this.enqueueCachedReplicaOperationRetriesOnInitialize();
   }
 
   /**
@@ -292,6 +293,26 @@ class ReplicaDispatchServiceSegment1 extends EventEmitter {
         RECONCILE_REASON.NODES_CACHE_READY,
         {nodeRow},
       );
+    }
+  }
+
+  /**
+   * Replay cached dispatchable replica operation rows through the canonical
+   * dispatch replay path. Restart recovery can lose in-memory queue/timer
+   * state after an acknowledged owner wake, while the durable operation row is
+   * already cache-visible.
+   * @private
+   */
+  enqueueCachedReplicaOperationRetriesOnInitialize() {
+    const operationRows = this.getSystemTableRowsFromCache(
+      SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+    );
+    for (const operationRow of operationRows) {
+      this.replayReplicaOperationRow(operationRow, {
+        pendingReason: RECONCILE_REASON.REPLICA_OPERATIONS_CACHE_PENDING,
+        replaceActiveReason:
+          RECONCILE_REASON.REPLICA_OPERATIONS_CACHE_REPLACE_ACTIVE,
+      });
     }
   }
 

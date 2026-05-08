@@ -35,15 +35,23 @@ const {
 
 const DISPATCH_WAKE_PROGRESS_PREEMPT_STATUSES = Object.freeze(
   new Set([
+    ReplicaStatus.CREATING,
     ReplicaStatus.SYNCING,
     ReplicaStatus.ACTIVE,
     ReplicaStatus.FAILED,
   ]),
 );
 
+const DISPATCH_WAKE_PROGRESS_PREEMPT_WORKFLOW_STEPS = Object.freeze(
+  new Set([
+    WORKFLOW_STEP.SENDING,
+    WORKFLOW_STEP.CREATING,
+  ]),
+);
+
 const DISPATCH_WAKE_PROGRESS_PREEMPT_STATE = Object.freeze({
   OPERATION_UNAVAILABLE: 'operation_unavailable',
-  NON_CREATE_REARM: 'non_create_rearm',
+  NON_PROGRESS_WAKE_STEP: 'non_progress_wake_step',
   NON_WAKE_INPUT: 'non_wake_input',
   PROGRESS_RECONCILER_UNAVAILABLE: 'progress_reconciler_unavailable',
   TARGET_PROGRESS_NOT_OBSERVED: 'target_progress_not_observed',
@@ -56,8 +64,8 @@ const DISPATCH_WAKE_PROGRESS_PREEMPT_STATE_TABLE = Object.freeze([
     matches: (evidence) => evidence.operationAvailable !== true,
   }),
   Object.freeze({
-    state: DISPATCH_WAKE_PROGRESS_PREEMPT_STATE.NON_CREATE_REARM,
-    matches: (evidence) => evidence.createRearmDispatchPhase !== true,
+    state: DISPATCH_WAKE_PROGRESS_PREEMPT_STATE.NON_PROGRESS_WAKE_STEP,
+    matches: (evidence) => evidence.progressWakeWorkflowStep !== true,
   }),
   Object.freeze({
     state: DISPATCH_WAKE_PROGRESS_PREEMPT_STATE.NON_WAKE_INPUT,
@@ -443,7 +451,11 @@ class OperationWorkflowOwnerSegment4 extends OperationWorkflowOwnerSegment3 {
       this.getDispatchWakeObservedTargetStatus(operation);
     return Object.freeze({
       operationAvailable: Boolean(operation),
-      createRearmDispatchPhase: createRearmDispatchPhase === true,
+      progressWakeWorkflowStep:
+        createRearmDispatchPhase === true ||
+        DISPATCH_WAKE_PROGRESS_PREEMPT_WORKFLOW_STEPS.has(
+          operation?.workflowStep,
+        ),
       dispatchWakeInput:
         this.isOperationRowDispatchWakeInput(operationInput) ||
         this.isExplicitDispatchWakeProgressInput(options),

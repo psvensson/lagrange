@@ -10,6 +10,7 @@ import {
 const {
   DISPATCH_RETRY_DELAY_MS,
   NUM,
+  OBSERVED_PROGRESS_RETRY_DELAY_MS,
   OPERATION_OWNER_ACTION,
   OPERATION_WORKFLOW_OWNER_LITERAL,
   OperationType,
@@ -206,6 +207,63 @@ class OperationWorkflowOwnerSegment1 {
     }
     this.clearTimeoutFn(timerHandle);
     this.observedProgressRetryTimerByOperationId.delete(operationId);
+  }
+
+  /**
+   * @param {string} operationId
+   * @param {string} tableName
+   * @param {string} cacheOperation
+   * @param {number} [delayMs=OBSERVED_PROGRESS_RETRY_DELAY_MS]
+   * @return {boolean}
+   */
+  scheduleObservedProgressRetry(
+    operationId,
+    tableName,
+    cacheOperation,
+    delayMs = OBSERVED_PROGRESS_RETRY_DELAY_MS,
+  ) {
+    if (!operationId) {
+      return false;
+    }
+    if (this.observedProgressRetryTimerByOperationId.has(operationId)) {
+      return true;
+    }
+
+    const retryDelayMs =
+      Number.isFinite(delayMs) && delayMs > NUM.ZERO ?
+        delayMs :
+        OBSERVED_PROGRESS_RETRY_DELAY_MS;
+    const timerHandle = this.setTimeoutFn(() => {
+      this.observedProgressRetryTimerByOperationId.delete(operationId);
+      if (this.isShuttingDown || !this.isInitialized) {
+        return;
+      }
+      if (this.isOperationOwnerLaneHeld(operationId)) {
+        this.scheduleObservedProgressRetry(
+          operationId,
+          tableName,
+          cacheOperation,
+          retryDelayMs,
+        );
+        return;
+      }
+      return this.operationWorkflowRunExclusive(
+        this.getOperationOwnerSingleFlightKey(operationId),
+        () => this.reconcileObservedProgressOperation(operationId),
+      ).catch((error) => {
+        this.handleObservedProgressFailure(
+          operationId,
+          tableName,
+          cacheOperation,
+          error,
+        );
+      });
+    }, retryDelayMs);
+    this.observedProgressRetryTimerByOperationId.set(
+      operationId,
+      timerHandle,
+    );
+    return true;
   }
 
   /**
@@ -706,6 +764,8 @@ class OperationWorkflowOwnerSegment1 {
             currentOperation,
             {
               boundary: 'dispatch_retry',
+              cause:
+                OPERATION_WORKFLOW_OWNER_LITERAL.REPLICA_OPERATION_DISPATCH,
               workflowStep: currentOperation.workflowStep || null,
               partitionId: currentOperation.partitionId || null,
               runInlineWhenOwnerLaneHeld: true,

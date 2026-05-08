@@ -34,6 +34,9 @@ import {ReplicaOperationField} from '../rebalancer/replica-operation-constants.j
 import {REPLICA_OPERATION_VISIBILITY_READ_MODE} from '../rebalancer/replica-operation-repository.js';
 import {REBALANCE_COORDINATOR_EVENT} from '../rebalancer/rebalancer-constants.js';
 import {
+  OPERATION_WORKFLOW_OWNER_SHARED,
+} from '../rebalancer/operation-workflow-owner-shared.js';
+import {
   COLUMN,
   NUM,
   SERVICE_STATUS,
@@ -79,6 +82,10 @@ import {MESSAGE_GROUP_CDC_INGRESS_ACTION} from '../message-group/message-group-f
 import {MEMBERSHIP_PUBLICATION_STATUS} from './membership-publication-coordinator.js';
 import {OwnerKeyReconcileQueue} from '../workflow/owner-key-reconcile-queue.js';
 import {RECONCILE_REASON} from '../workflow/reconcile-queue-constants.js';
+
+const {
+  OPERATION_WORKFLOW_OWNER_REASON,
+} = OPERATION_WORKFLOW_OWNER_SHARED;
 const REPLICA_DISPATCH_SERVICE_LITERAL = Object.freeze({
   AUTHORITATIVE: 'authoritative',
   AUTHORITATIVE_PRIORITY_RECOVERY_RETRY:
@@ -219,6 +226,7 @@ export const REPLICA_DISPATCH_SERVICE_SHARED = {
   NODE_STATE_UPDATE_RETRY_POLICY,
   NUM,
   OPERATION_METADATA_KEY,
+  OPERATION_WORKFLOW_OWNER_REASON,
   OperationType,
   OwnerKeyReconcileQueue,
   QUERY_ERROR_CODE,
