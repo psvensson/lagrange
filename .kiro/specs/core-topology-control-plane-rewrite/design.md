@@ -78,8 +78,17 @@ raw evidence from cache, SQL, transport, timers, or phase internals.
 2. Owner boundary inventory.
 3. Boot, join, and rejoin membership kernel.
 4. Partitioning and rebalancing placement/operation kernel.
-5. Projection/readiness consumer contract.
-6. Legacy path deletion and representative proof.
+5. Publication/projection boundary contract.
+6. Projection/readiness consumer contract.
+7. Legacy path deletion and representative proof.
+
+## Inventory Handoff
+
+The pre-runtime inventory lives in
+`.kiro/specs/core-topology-control-plane-rewrite/owner-boundary-inventory.md`.
+It is the source for package sequencing until runtime extraction starts. The
+important split is that publication rows, ACK state, and freshness must be
+canonical before projection/readiness consumers are cut over.
 
 ## Validation Strategy
 

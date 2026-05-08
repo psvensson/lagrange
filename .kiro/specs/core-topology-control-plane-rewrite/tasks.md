@@ -15,12 +15,12 @@
 
 ## 2. Owner Boundary Inventory
 
-- [ ] Inventory boot, join, rejoin, partitioning, rebalancing, publication,
+- [x] Inventory boot, join, rejoin, partitioning, rebalancing, publication,
       projection, and readiness decision paths.
-- [ ] Map each path to membership, placement, operation, publication, or
+- [x] Map each path to membership, placement, operation, publication, or
       projection/readiness.
-- [ ] Identify duplicated evidence interpretation and forbidden fallbacks.
-- [ ] Produce the focused runtime package sequence for extraction.
+- [x] Identify duplicated evidence interpretation and forbidden fallbacks.
+- [x] Produce the focused runtime package sequence for extraction.
 
 ## 3. Boot Join Rejoin Kernel
 
@@ -38,7 +38,15 @@
 - [ ] Prove operation scheduling and workflow progress under representative
       pressure.
 
-## 5. Projection Readiness Contract
+## 5. Publication Projection Boundary
+
+- [ ] Define publication owner rows, ACK/freshness state, and recovery gate
+      state as the only publication stream.
+- [ ] Cut projection consumers away from direct publication-row
+      reinterpretation.
+- [ ] Prove projection/readiness receives publication owner outcomes only.
+
+## 6. Projection Readiness Contract
 
 - [ ] Define the canonical projection snapshot and revision stream.
 - [ ] Define internal, repair, and serve readiness states.
@@ -46,7 +54,7 @@
       contract.
 - [ ] Prove consumers no longer recreate readiness from raw evidence.
 
-## 6. Legacy Path Deletion And Proof
+## 7. Legacy Path Deletion And Proof
 
 - [ ] Delete superseded topology fallback paths and shadow vocabularies.
 - [ ] Add structural guards against transitional-path imports or calls.

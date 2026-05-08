@@ -10,14 +10,14 @@ readiness, operation scheduling, and rebalancer paths.
 
 Active package:
 
-1. [Core Topology Rewrite Spec And Roadmap Rebaseline](../packages/active-20260508-core-topology-rewrite-spec-and-roadmap-rebaseline.md)
+1. [Core Topology Owner Boundary Inventory](../packages/active-20260508-core-topology-owner-boundary-inventory.md)
 
 Current blocker:
 
-1. Phase 0.1 representative gate evidence keeps migrating across topology
-   owners instead of reducing to one stable contract boundary.
-2. The sprint setup must establish the rewrite spec, roadmap truth, package
-   queue, and current-blocker handoff before runtime work starts.
+1. Agent Beauvoir completed the pre-runtime owner-boundary inventory without
+   runtime/source/test edits.
+2. The next runtime package must start with the boot/join/rejoin membership
+   kernel, using the inventory as the owner-boundary handoff.
 
 ## Scope Basis
 
@@ -41,12 +41,14 @@ mutation owner.
 
 ## Package Queue
 
-1. Active: [Core Topology Rewrite Spec And Roadmap Rebaseline](../packages/active-20260508-core-topology-rewrite-spec-and-roadmap-rebaseline.md)
-2. Todo: [Core Topology Owner Boundary Inventory](../packages/todo-20260508-core-topology-owner-boundary-inventory.md)
+1. Done: [Core Topology Rewrite Spec And Roadmap Rebaseline](../packages/done-20260508-core-topology-rewrite-spec-and-roadmap-rebaseline.md)
+2. Active: [Core Topology Owner Boundary Inventory](../packages/active-20260508-core-topology-owner-boundary-inventory.md)
 3. Todo: [Core Topology Boot Join Rejoin Kernel](../packages/todo-20260508-core-topology-boot-join-rejoin-kernel.md)
 4. Todo: [Core Topology Partitioning Rebalancing Kernel](../packages/todo-20260508-core-topology-partitioning-rebalancing-kernel.md)
-5. Todo: [Core Topology Projection Readiness Contract](../packages/todo-20260508-core-topology-projection-readiness-contract.md)
-6. Todo: [Core Topology Legacy Path Deletion And Proof](../packages/todo-20260508-core-topology-legacy-path-deletion-and-proof.md)
+5. Todo: Publication Projection Boundary (package file to create when the
+   partitioning/rebalancing kernel hands off)
+6. Todo: [Core Topology Projection Readiness Contract](../packages/todo-20260508-core-topology-projection-readiness-contract.md)
+7. Todo: [Core Topology Legacy Path Deletion And Proof](../packages/todo-20260508-core-topology-legacy-path-deletion-and-proof.md)
 
 ## Execution Order
 
@@ -55,8 +57,10 @@ mutation owner.
 3. Extract boot/join/rejoin into the membership owner contract.
 4. Extract partitioning/rebalancing into placement and operation owner
    contracts.
-5. Cut projection/readiness consumers over to the canonical contract.
-6. Delete legacy paths and prove the representative gates.
+5. Canonicalize publication rows, ACK/freshness state, and recovery gate state
+   as the only publication stream consumed by projection/readiness.
+6. Cut projection/readiness consumers over to the canonical contract.
+7. Delete legacy paths and prove the representative gates.
 
 ## Out Of Scope
 
@@ -79,3 +83,5 @@ mutation owner.
 3. The architecture spec exists under
    `.kiro/specs/core-topology-control-plane-rewrite/`.
 4. Current-blocker handoff points at the active rewrite package.
+5. The owner-boundary inventory is recorded in
+   `.kiro/specs/core-topology-control-plane-rewrite/owner-boundary-inventory.md`.

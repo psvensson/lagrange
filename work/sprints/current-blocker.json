@@ -2,36 +2,29 @@
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
   "sprint": "work/sprints/active-2026-q2-core-topology-control-plane-rewrite.md",
-  "package": "work/packages/active-20260508-core-topology-rewrite-spec-and-roadmap-rebaseline.md",
+  "package": "work/packages/active-20260508-core-topology-owner-boundary-inventory.md",
   "status": "active",
   "scenario": "core-topology-control-plane-rewrite",
   "artifact": "none",
   "playback": "none",
   "owner": "topology_control_plane",
-  "boundary": "spec_and_roadmap_rebaseline",
-  "dominantReason": "phase_0_1_representative_track_rebaseline",
-  "currentState": "The Core Topology Control-Plane Rewrite sprint is being established as the active Phase 0.1 representative track. This package performs setup only: archive stale root work items, create the idea, sprint, package queue, architecture spec, roadmap rebaseline, and current-blocker handoff without runtime/source-code changes.",
-  "nextAction": "Validate the setup package, keep it active until a focused commit and push records closure proof, then start the owner-boundary inventory successor.",
+  "boundary": "owner_boundary_inventory",
+  "dominantReason": "topology_owner_boundary_inventory_required_before_runtime_extraction",
+  "currentState": "Agent Beauvoir completed the pre-runtime owner-boundary inventory without runtime/source/test edits. The inventory maps boot, join, rejoin, partitioning, rebalancing, publication, projection, readiness, and harness observation to canonical membership, placement, operation, publication, and projection/readiness boundaries.",
+  "nextAction": "Validate the inventory handoff, then start the boot/join/rejoin membership kernel package before runtime extraction.",
   "proof": [
     "npm run work:validate",
     "npm run work:context",
-    "git diff --check -- work/ideas work/packages work/sprints .kiro/specs/core-topology-control-plane-rewrite roadmap.md"
+    "git diff --check -- work/packages/active-20260508-core-topology-owner-boundary-inventory.md .kiro/specs/core-topology-control-plane-rewrite/owner-boundary-inventory.md .kiro/specs/core-topology-control-plane-rewrite/design.md .kiro/specs/core-topology-control-plane-rewrite/tasks.md work/sprints/active-2026-q2-core-topology-control-plane-rewrite.md work/sprints/current-blocker.json work/sprints/current-blocker.md"
   ],
   "touchedFiles": [
-    "work/ideas/idea-20260508-core-topology-rewrite.md",
-    "work/sprints/active-2026-q2-core-topology-control-plane-rewrite.md",
-    "work/sprints/current-blocker.json",
-    "work/sprints/current-blocker.md",
-    "work/packages/active-20260508-core-topology-rewrite-spec-and-roadmap-rebaseline.md",
-    "work/packages/todo-20260508-core-topology-owner-boundary-inventory.md",
-    "work/packages/todo-20260508-core-topology-boot-join-rejoin-kernel.md",
-    "work/packages/todo-20260508-core-topology-partitioning-rebalancing-kernel.md",
-    "work/packages/todo-20260508-core-topology-projection-readiness-contract.md",
-    "work/packages/todo-20260508-core-topology-legacy-path-deletion-and-proof.md",
-    ".kiro/specs/core-topology-control-plane-rewrite/requirements.md",
+    "work/packages/active-20260508-core-topology-owner-boundary-inventory.md",
+    ".kiro/specs/core-topology-control-plane-rewrite/owner-boundary-inventory.md",
     ".kiro/specs/core-topology-control-plane-rewrite/design.md",
     ".kiro/specs/core-topology-control-plane-rewrite/tasks.md",
-    "roadmap.md"
+    "work/sprints/active-2026-q2-core-topology-control-plane-rewrite.md",
+    "work/sprints/current-blocker.json",
+    "work/sprints/current-blocker.md"
   ],
-  "predecessor": null
+  "predecessor": "work/packages/done-20260508-core-topology-rewrite-spec-and-roadmap-rebaseline.md"
 }

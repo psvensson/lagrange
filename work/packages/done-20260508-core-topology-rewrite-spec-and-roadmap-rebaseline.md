@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-08",
   "scenario": "core-topology-control-plane-rewrite",
   "artifact": "none",
@@ -23,8 +23,8 @@
     "work/sprints/active-2026-q2-core-topology-control-plane-rewrite.md",
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md",
-    "work/packages/active-20260508-core-topology-rewrite-spec-and-roadmap-rebaseline.md",
-    "work/packages/todo-20260508-core-topology-owner-boundary-inventory.md",
+    "work/packages/done-20260508-core-topology-rewrite-spec-and-roadmap-rebaseline.md",
+    "work/packages/active-20260508-core-topology-owner-boundary-inventory.md",
     "work/packages/todo-20260508-core-topology-boot-join-rejoin-kernel.md",
     "work/packages/todo-20260508-core-topology-partitioning-rebalancing-kernel.md",
     "work/packages/todo-20260508-core-topology-projection-readiness-contract.md",
@@ -34,7 +34,9 @@
     ".kiro/specs/core-topology-control-plane-rewrite/tasks.md",
     "roadmap.md"
   ],
-  "predecessor": null
+  "predecessor": null,
+  "closed": "2026-05-08",
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -94,7 +96,13 @@ roadmap truth, current-blocker handoff, and later representative harness proof.
 - [x] Fix subagent recorded or explicitly not needed: `not-needed`.
 - [x] Implementation subagent recorded: Agent Bernoulli
       (`019e0876-39cb-72f1-ac3a-ee61df59ab64`) implemented
-      `work/packages/active-20260508-core-topology-rewrite-spec-and-roadmap-rebaseline.md`.
+      `work/packages/done-20260508-core-topology-rewrite-spec-and-roadmap-rebaseline.md`.
+
+## Commit And Push Ledger
+
+- Focused package commit: `485bed1a`
+- Pushed to: `origin/codex/pending-ack-eligibility-filter`
+- Commit contains only package-owned files/package-status/allowed sprint handoff: `yes`
 
 ## Residual Closure Inventory
 
@@ -104,8 +112,8 @@ roadmap truth, current-blocker handoff, and later representative harness proof.
 - [x] Architecture spec documents created.
 - [x] Roadmap Phase 0.1 rebaseline updated.
 - [x] Current-blocker handoff points at this package.
-- [ ] Focused package commit created.
-- [ ] Focused package commit pushed.
+- [x] Focused package commit created.
+- [x] Focused package commit pushed.
 
 ## Static Drift Ledger
 
@@ -119,13 +127,13 @@ Closure:
 - [x] `npm run work:validate`
 - [x] `npm run work:context`
 - [x] `git diff --check -- work/ideas work/packages work/sprints .kiro/specs/core-topology-control-plane-rewrite roadmap.md`
-- [ ] Package-owned changes committed as one focused slice.
-- [ ] Slice commit pushed to the recorded remote/branch.
+- [x] Package-owned changes committed as one focused slice.
+- [x] Slice commit pushed to the recorded remote/branch.
 
 ## Model Ledger
 
-- [ ] No record yet; closure and model-fit evidence should be recorded after
-      validation, commit, and push if the package produces useful evidence.
+- [x] No model-ledger record required; this setup-only package produced no
+      runtime implementation model-fit evidence.
 
 ## Validation
 
