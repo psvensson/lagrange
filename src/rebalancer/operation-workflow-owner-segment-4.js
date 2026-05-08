@@ -82,6 +82,14 @@ const DISPATCH_WAKE_PROGRESS_PREEMPT_ALLOWED_STATES = Object.freeze(
   new Set([DISPATCH_WAKE_PROGRESS_PREEMPT_STATE.PREEMPT_RECONCILE]),
 );
 
+const CREATE_IN_PROGRESS_OBSERVED_RECONCILE_STATUSES = Object.freeze(
+  new Set([
+    ReplicaStatus.SYNCING,
+    ReplicaStatus.ACTIVE,
+    ReplicaStatus.FAILED,
+  ]),
+);
+
 class OperationWorkflowOwnerSegment4 extends OperationWorkflowOwnerSegment3 {
   shouldFailRemoveSafetyHandoffResponse(removeSafetyEvaluation, response) {
     return (
@@ -976,6 +984,14 @@ class OperationWorkflowOwnerSegment4 extends OperationWorkflowOwnerSegment3 {
       response.status === ReplicaOperationResponseStatus.INITIATED ||
       response.status === ReplicaOperationResponseStatus.IN_PROGRESS
     ) {
+      if (
+        response.status === ReplicaOperationResponseStatus.IN_PROGRESS &&
+        await this.reconcileCreateInProgressDispatchResponse(operation)
+      ) {
+        return this.buildSuccessfulOperationResult(operation.operationId, {
+          status: OPERATION_WORKFLOW_OWNER_LITERAL.IN_PROGRESS,
+        });
+      }
       let nextStep = WORKFLOW_STEP.CREATING;
       if (
         operation.type === OperationType.REMOVE ||
@@ -1241,6 +1257,28 @@ class OperationWorkflowOwnerSegment4 extends OperationWorkflowOwnerSegment3 {
       operationId,
       timerHandle,
     );
+  }
+
+  async reconcileCreateInProgressDispatchResponse(operation) {
+    if (
+      typeof this.getObservedOperationRowTargetProgressStatus !==
+        TYPEOF.FUNCTION ||
+      typeof this.applyReconciledReplicaStatus !== TYPEOF.FUNCTION
+    ) {
+      return false;
+    }
+    const observedTargetStatus =
+      this.getObservedOperationRowTargetProgressStatus(operation);
+    if (
+      !CREATE_IN_PROGRESS_OBSERVED_RECONCILE_STATUSES.has(
+        observedTargetStatus,
+      )
+    ) {
+      return false;
+    }
+    return this.applyReconciledReplicaStatus(operation, observedTargetStatus, {
+      cause: OPERATION_WORKFLOW_OWNER_LITERAL.OBSERVED_PROGRESS,
+    });
   }
 
   /**

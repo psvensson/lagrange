@@ -48,6 +48,10 @@ const TEST_REPLACE_PARTITION_ID = 'users-p1';
 const TEST_REPLACE_SOURCE_REPLICA_ID = 'users-p1-r1';
 const TEST_REPLACE_TARGET_REPLICA_ID = 'users-p1-r2';
 const TEST_CRITICAL_CREATE_FAILURE_PARTITION_ID = 'replica_operations-p1';
+const TEST_PRIORITY_RECOVERY_PARTITION_ID = 'sql_transaction_participants-p1';
+const TEST_PRIORITY_RECOVERY_REPLICA_ID = 'sql_transaction_participants-p1-r4';
+const TEST_PRIORITY_RECOVERY_SOURCE_NODE_ID = 'priority-recovery-source-node';
+const TEST_PRIORITY_RECOVERY_TARGET_NODE_ID = TEST_NODE_ID;
 const TEST_RETRYABLE_CREATE_FAILURE_MESSAGE =
   'Operational message-group ingress not ready for replica_operations ' +
   'CDC subscription';
@@ -848,3 +852,54 @@ test('Executor outcome routing through owner-key reconcile path',
     );
   },
 );
+
+test('priority recovery in-progress create dispatch reconciles observed ' +
+  'target progress',
+async (t) => {
+  const deliveries = [];
+  const operation = buildTestOperation({
+    type: OperationType.REPLACE,
+    partitionId: TEST_PRIORITY_RECOVERY_PARTITION_ID,
+    entityId: TEST_PRIORITY_RECOVERY_PARTITION_ID,
+    replicaId: TEST_PRIORITY_RECOVERY_REPLICA_ID,
+    sourceNodeId: TEST_PRIORITY_RECOVERY_SOURCE_NODE_ID,
+    targetNodeId: TEST_PRIORITY_RECOVERY_TARGET_NODE_ID,
+    workflowStep: WORKFLOW_STEP.CREATING,
+    status: ReplicaStatus.CREATING,
+  });
+  const {coordinator} = createTestCoordinator({operation});
+  coordinator.messageRouter = {
+    async deliver(target, payload, options) {
+      deliveries.push({target, payload, options});
+      return {
+        acknowledged: true,
+        status: ReplicaOperationResponseStatus.IN_PROGRESS,
+      };
+    },
+  };
+  coordinator.workflowOwner.messageRouter = coordinator.messageRouter;
+  coordinator.workflowOwner.repository.getObservedReplicaStatusFromCache =
+    () => ReplicaStatus.SYNCING;
+
+  try {
+    await coordinator.workflowOwner.dispatchOperationInternal(operation);
+
+    t.equal(
+      deliveries.length,
+      1,
+      'create rearm should still issue one dispatch request',
+    );
+    t.equal(
+      operation.workflowStep,
+      WORKFLOW_STEP.SYNCING,
+      'in-progress create dispatch should advance to the observed target progress state',
+    );
+    t.equal(
+      operation.status,
+      ReplicaStatus.SYNCING,
+      'in-progress create dispatch should persist the reconciled target status',
+    );
+  } finally {
+    await coordinator.shutdown();
+  }
+});

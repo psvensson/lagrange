@@ -49,6 +49,17 @@ const REPLICA_HANDLER_LITERAL = Object.freeze({
   READ: 'read',
   SYSTEM_TABLE_QUERY_FAILED: 'system table query failed',
 });
+const REPLICA_CREATE_IN_PROGRESS_OUTCOME_BY_STATUS = Object.freeze(
+  new Map([
+    [
+      ReplicaStatus.SYNCING,
+      Object.freeze({
+        outcomeType: EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_SYNCING,
+        workflowStep: WORKFLOW_STEP.SYNCING,
+      }),
+    ],
+  ]),
+);
 /**
  * ReplicaHandler handles replica creation and removal requests on target nodes.
  * Returns immediately with status, then performs async work.
@@ -460,6 +471,10 @@ class ReplicaHandlerPart1 extends EventEmitter {
           status: existingReplica.status,
           nodeId: this.nodeId,
         });
+        this.emitReplicaCreateInProgressOutcome(
+          existingReplica,
+          operationId,
+        );
         return this.buildReplicaOperationResponse(
           ReplicaOperationResponseStatus.IN_PROGRESS,
           {
@@ -539,6 +554,21 @@ class ReplicaHandlerPart1 extends EventEmitter {
         nodeId: this.nodeId,
       },
     );
+  }
+  emitReplicaCreateInProgressOutcome(existingReplica, operationId) {
+    const outcome = REPLICA_CREATE_IN_PROGRESS_OUTCOME_BY_STATUS.get(
+      existingReplica?.status,
+    );
+    if (!outcome) {
+      return false;
+    }
+    this.emitExecutorOutcome(
+      outcome.outcomeType,
+      operationId,
+      outcome.workflowStep,
+      {replicaId: existingReplica.replicaId},
+    );
+    return true;
   }
   /**
    * Async replica creation - reports progress via CDC.

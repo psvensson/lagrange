@@ -63,6 +63,9 @@ const TEST_REMOVED_CLEANUP_DEFERRED_ERROR = 'cleanup needs retry';
 const TEST_ALREADY_ACTIVE_OPERATION_ID = 'op-already-active';
 const TEST_ALREADY_ACTIVE_PARTITION_ID = 'partition-1';
 const TEST_ALREADY_ACTIVE_REPLICA_ID = 'replica-1';
+const TEST_IN_PROGRESS_OPERATION_ID = 'op-in-progress';
+const TEST_IN_PROGRESS_PARTITION_ID = 'partition-1';
+const TEST_IN_PROGRESS_REPLICA_ID = 'replica-1';
 
 /**
  * Create a mock CDC integration service.
@@ -1435,6 +1438,7 @@ test('ReplicaHandler', async (t) => {
     async (t) => {
       const cache = createSeededCache();
       const mockCDC = createMockCDCService(cache);
+      const emittedOutcomes = [];
 
       const handler = new ReplicaHandler({
         nodeId: 'test-node',
@@ -1442,28 +1446,106 @@ test('ReplicaHandler', async (t) => {
         systemTableCache: cache,
         cdcIntegrationService: mockCDC,
         createPartitionService: createMockPartitionServiceFactory(),
+        executorOutcomeEmitter: {
+          emitOutcome(outcomeType, operationId, workflowStep, options) {
+            emittedOutcomes.push({
+              outcomeType,
+              operationId,
+              workflowStep,
+              options,
+            });
+          },
+        },
       });
 
       handler.initialize();
 
       // Pre-populate local replica in creating state
-      handler.localReplicas.set('replica-1', {
-        replicaId: 'replica-1',
-        partitionId: 'partition-1',
+      handler.localReplicas.set(TEST_IN_PROGRESS_REPLICA_ID, {
+        replicaId: TEST_IN_PROGRESS_REPLICA_ID,
+        partitionId: TEST_IN_PROGRESS_PARTITION_ID,
         status: ReplicaStatus.CREATING,
       });
 
       const request = {
-        operationId: 'op-1',
-        partitionId: 'partition-1',
-        replicaId: 'replica-1',
+        operationId: TEST_IN_PROGRESS_OPERATION_ID,
+        partitionId: TEST_IN_PROGRESS_PARTITION_ID,
+        replicaId: TEST_IN_PROGRESS_REPLICA_ID,
       };
 
       const response = await handler.handleCreateReplica(request);
 
       t.equal(response.status, ReplicaOperationResponseStatus.IN_PROGRESS,
         'in_progress');
-      t.equal(response.replicaId, 'replica-1', 'replicaId in response');
+      t.equal(response.replicaId, TEST_IN_PROGRESS_REPLICA_ID,
+        'replicaId in response');
+      t.same(
+        emittedOutcomes,
+        [],
+        'creating idempotency should not emit a workflow progress outcome',
+      );
+
+      handler.shutdown();
+    });
+
+  t.test('handleCreateReplica - emits syncing outcome for syncing replica',
+    async (t) => {
+      const cache = createSeededCache();
+      const mockCDC = createMockCDCService(cache);
+      const emittedOutcomes = [];
+
+      const handler = new ReplicaHandler({
+        nodeId: 'test-node',
+        dataDir: tempDir,
+        systemTableCache: cache,
+        cdcIntegrationService: mockCDC,
+        createPartitionService: createMockPartitionServiceFactory(),
+        executorOutcomeEmitter: {
+          emitOutcome(outcomeType, operationId, workflowStep, options) {
+            emittedOutcomes.push({
+              outcomeType,
+              operationId,
+              workflowStep,
+              options,
+            });
+          },
+        },
+      });
+
+      handler.initialize();
+
+      handler.localReplicas.set(TEST_IN_PROGRESS_REPLICA_ID, {
+        replicaId: TEST_IN_PROGRESS_REPLICA_ID,
+        partitionId: TEST_IN_PROGRESS_PARTITION_ID,
+        status: ReplicaStatus.SYNCING,
+      });
+
+      const request = {
+        operationId: TEST_IN_PROGRESS_OPERATION_ID,
+        partitionId: TEST_IN_PROGRESS_PARTITION_ID,
+        replicaId: TEST_IN_PROGRESS_REPLICA_ID,
+      };
+
+      const response = await handler.handleCreateReplica(request);
+
+      t.equal(response.status, ReplicaOperationResponseStatus.IN_PROGRESS,
+        'in_progress');
+      t.equal(response.replicaId, TEST_IN_PROGRESS_REPLICA_ID,
+        'replicaId in response');
+      t.same(
+        emittedOutcomes,
+        [
+          {
+            outcomeType: EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_SYNCING,
+            operationId: TEST_IN_PROGRESS_OPERATION_ID,
+            workflowStep: WORKFLOW_STEP.SYNCING,
+            options: {
+              replicaId: TEST_IN_PROGRESS_REPLICA_ID,
+            },
+          },
+        ],
+        'syncing idempotency should emit canonical workflow progress',
+      );
 
       handler.shutdown();
     });
