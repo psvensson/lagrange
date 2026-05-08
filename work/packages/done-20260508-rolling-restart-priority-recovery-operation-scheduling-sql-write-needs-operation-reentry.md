@@ -57,6 +57,12 @@ operation_scheduling`, where `sql_write_operations-p1` remains
       Agent `Curie` (`019e066b-5469-7a12-8b63-0f4228f3bd24`) implemented
       `work/packages/done-20260508-rolling-restart-priority-recovery-operation-scheduling-sql-write-needs-operation-reentry.md`.
 
+## Commit And Push Ledger
+
+- Focused package commit: `1dcd59d1`
+- Pushed to: `origin/codex/pending-ack-eligibility-filter`
+- Commit contains only package-owned files/package-status/allowed sprint handoff: `yes`
+
 ## Current Evidence
 
 1. Representative report:
