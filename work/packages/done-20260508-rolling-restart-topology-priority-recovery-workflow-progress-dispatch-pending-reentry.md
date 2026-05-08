@@ -8,9 +8,9 @@
   "scenario": "rolling-restart",
   "artifact": "test-output/reports/rolling-restart-after-priority-recovery-dispatch-pending-reclassify-20260508T000000Z.report.json",
   "playback": "test-output/reports/.playback/rolling-restart-after-priority-recovery-dispatch-pending-reclassify-20260508T000000Z/rolling-restart/",
-  "owner": "Priority recovery workflow progress event-driven wait after timeout authoritative-observation repair",
-  "boundary": "Operation workflow owner / workflow_progress / startup active gate support",
-  "dominantReason": "priority_recovery_workflow_progress_event_driven",
+  "owner": "Priority recovery workflow timeout transition deferred after dispatch-pending reclassification repair",
+  "boundary": "Operation workflow owner / workflow_timeout / startup active gate support",
+  "dominantReason": "priority_recovery_workflow_timeout_transition_deferred",
   "currentState": "The workflow-progress dispatch-pending reclassification repair is proved locally but closes by migration. The representative rerun no longer terminates on event-driven wait_for_operation_progress; epoch 2 PUBLISHED now promotes sql_write_operations-p1 as the dominant operation_workflow_owner witness under operation_stalled / reconcile_stale_operation_progress, with actuation transition_deferred, boundary workflow_timeout, workflow phase dispatch_pending, and startup active-gate snapshot coverage still downstream only.",
   "nextAction": "Continue in work/packages/active-20260508-rolling-restart-topology-priority-recovery-workflow-timeout-dispatch-pending-stale-progress-reentry.md for the migrated sql_write_operations-p1 workflow_timeout dispatch-pending stale-progress seam.",
   "proof": [
@@ -24,6 +24,7 @@
     "work/packages/done-20260508-rolling-restart-topology-priority-recovery-workflow-progress-dispatch-pending-reentry.md",
     "src/rebalancer/operation-workflow-owner-segment-5-stage-5.js",
     "test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js",
+    "work/packages/active-20260508-rolling-restart-topology-priority-recovery-workflow-progress-dispatch-pending-reentry.md",
     "work/packages/active-20260508-rolling-restart-topology-priority-recovery-workflow-timeout-dispatch-pending-stale-progress-reentry.md",
     "work/model-ledger.jsonl",
     "work/sprints/active-2026-q2-publication-scoped-consistency-and-node-join-closure.md",
@@ -167,9 +168,9 @@ Canonical contract shape:
 
 ## Commit And Push Ledger
 
-- Focused package commit: `<pending>`
-- Pushed to: `<pending>`
-- Commit contains only package-owned files/package-status/allowed sprint handoff: `<pending>`
+- Focused package commit: `19bbe521`
+- Pushed to: `origin/codex/pending-ack-eligibility-filter`
+- Commit contains only package-owned files/package-status/allowed sprint handoff: `yes`
 
 ## Residual Closure Inventory
 

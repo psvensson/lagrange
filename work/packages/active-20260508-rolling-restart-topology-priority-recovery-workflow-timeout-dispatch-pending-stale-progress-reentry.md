@@ -139,14 +139,19 @@ Canonical contract shape:
 
 ## Subagent Sequencing Ledger
 
-- [ ] Review subagent recorded:
-- [ ] Fix subagent recorded or explicitly not needed:
+- [x] Review subagent recorded:
+      Agent `Gauss` (`019e0600-10dc-7bc0-a9b1-4f736f679618`) reviewed
+      `work/packages/done-20260508-rolling-restart-topology-priority-recovery-workflow-progress-dispatch-pending-reentry.md`;
+      result `fixes-required`.
+- [x] Fix subagent recorded or explicitly not needed:
+      Agent `James` (`019e0602-72ec-7020-87ea-5d66c58599fb`) fixed
+      `work/packages/done-20260508-rolling-restart-topology-priority-recovery-workflow-progress-dispatch-pending-reentry.md`.
 - [ ] Implementation subagent recorded:
 
 ## Residual Closure Inventory
 
-- [ ] Review the just-closed predecessor package on the same sprint boundary.
-- [ ] Fix any predecessor-review findings before implementation resumes.
+- [x] Review the just-closed predecessor package on the same sprint boundary.
+- [x] Fix any predecessor-review findings before implementation resumes.
 - [ ] Extract the focused epoch-2 workflow-timeout witness for
       `sql_write_operations-p1` and its supporting timeout context.
 - [ ] Add the focused regression for the selected workflow-timeout seam.
