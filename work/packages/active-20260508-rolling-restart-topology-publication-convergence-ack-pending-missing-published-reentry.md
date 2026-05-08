@@ -6,13 +6,13 @@
   "status": "active",
   "opened": "2026-05-08",
   "scenario": "rolling-restart",
-  "artifact": "test-output/reports/rolling-restart-workflow-timeout-remote-wake-fix-20260508T130500Z.report.json",
-  "playback": "test-output/reports/.playback/rolling-restart-workflow-timeout-remote-wake-fix-20260508T130500Z/rolling-restart/",
-  "owner": "Priority recovery workflow timeout after serial-wait operation scheduling fix",
-  "boundary": "operation_workflow_owner / workflow_timeout / timeout_reconcile_due",
-  "dominantReason": "priority_recovery_workflow_timeout_transition_deferred",
-  "currentState": "The stale remote dispatch-pending wake fix passed focused proof but did not close the representative frontier. priorityRecoveryInvariants still pass and publication remains PUBLISHED with pendingAckCount=0. The first frontier remains operation_workflow_owner / workflow_timeout: the dominant witness is sql_write_operations-p1 with cache-visible PENDING operation 773b4aca-bd05-4788-8126-d7d8f12d3270, workflowProgressPhaseId=dispatch_pending, stepAgeMs=77003 over stepTimeoutMs=30000, actuationState=transition_deferred, and nextRequiredAction=reconcile_stale_operation_progress.",
-  "nextAction": "Start the next implementation slice for operation_workflow_owner / workflow_timeout. The next proof surface is why the remote-owner wake/retry path still leaves stale dispatch_pending PENDING priority recovery operations transition_deferred at timeout_reconcile_due in the representative run.",
+  "artifact": "test-output/reports/rolling-restart-tracked-summary-selection-20260508T151500Z.report.json",
+  "playback": "test-output/reports/.playback/rolling-restart-tracked-summary-selection-20260508T151500Z/rolling-restart/",
+  "owner": "Priority recovery workflow progress after tracked summary selection",
+  "boundary": "operation_workflow_owner / workflow_progress / transition_deferred",
+  "dominantReason": "priority_recovery_workflow_progress_transition_deferred",
+  "currentState": "Tracked summary selection keeps operation-bearing spread progress canonical over later synthetic planning rows for the same partition, removing the rebalancer_leader / operation_scheduling frontier. The representative rerun now fails first on operation_workflow_owner / workflow_progress with dominant reason priority_recovery_workflow_progress_transition_deferred. Publication remains PUBLISHED, pendingAckCount=0, priorityRecoveryInvariants=passed, blocked partitions are sql_transaction_participants-p1, sql_transactions-p1, and sql_write_operations-p1, and active-gate snapshot coverage remains the next expected downstream frontier.",
+  "nextAction": "Start the next implementation slice for operation_workflow_owner / workflow_progress / transition_deferred. The dispatch-pending snapshot normalization reclassifies stale dispatch_pending timeout evidence to workflow_progress, and the remote handoff uninitialized-wake regression proves the remote owner is wakeable while the source owner is transiently uninitialized.",
   "proof": [
     "First-package-in-sprint review-not-needed validation and work-context coverage",
     "Focused epoch-4 ACK_PENDING publication-convergence witness with supporting selected-snapshot and priority-recovery context",
@@ -41,10 +41,14 @@
     "work/sprints/current-blocker.md",
     "test/distributed/harness/failure-bundle-segment-4.js",
     "test/distributed/harness/__tests__/failure-bundle-core-16-test-cases.js",
+    "src/control-plane/priority-recovery-snapshot-stage-10.js",
+    "src/control-plane/priority-recovery-snapshot-stage-3.js",
+    "src/control-plane/priority-recovery-snapshot-stage-4.js",
     "src/diagnostics/topology-convergence-graph.js",
     "scripts/analyze-topology-convergence.js",
     "src/node/replica-handler-class-part-1.js",
     "test/node/replica-handler.test.js",
+    "src/rebalancer/operation-workflow-owner-segment-1.js",
     "src/rebalancer/operation-workflow-owner-segment-2.js",
     "test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js",
     "src/rebalancer/operation-workflow-owner-segment-4.js",
@@ -55,7 +59,8 @@
     "test/rebalancer/unified-rebalancer-part-5-2-stage-4.js",
     "test/rebalancer/priority-recovery-stale-planning-visibility.test.js",
     "test/rebalancer/rebalance-coordinator-outcome-routing.test.js",
-    "work/model-ledger.jsonl"
+    "work/model-ledger.jsonl",
+    "test/control-plane/priority-recovery-tracked-summary-selection.test.js"
   ],
   "predecessor": "work/packages/done-20260508-priority-recovery-operation-workflow-contract-rewrite.md"
 }
@@ -72,9 +77,12 @@ The file name still reflects the publication-convergence slice that started
 this package. The live blocker first migrated to
 `operation_workflow_owner / workflow_progress`, then the dispatch-pending
 handoff repair moved the representative frontier to
-`rebalancer_leader / operation_scheduling`. The implementation slice records
-the real implementation subagent required by the package tracker. The dispatch
-handoff slice and commit/push ledger have been committed and pushed.
+`rebalancer_leader / operation_scheduling`. Tracked summary selection now
+keeps operation-bearing spread progress canonical over later synthetic planning
+rows, and the representative frontier has moved back to
+`operation_workflow_owner / workflow_progress`. The implementation slice
+records the real implementation subagent required by the package tracker. The
+dispatch handoff slice and commit/push ledger have been committed and pushed.
 
 ## Why
 
@@ -182,6 +190,13 @@ the next runtime implementation slice.
       Agent Bohr (019e07bd-3bfa-72d2-a723-de402c87850e) fixed work/packages/active-20260508-rolling-restart-topology-publication-convergence-ack-pending-missing-published-reentry.md;
       result clean with explicit remote drain re-arm owner action and
       deferred handoff retry reentry proof.
+- [x] Tracked-summary-selection review subagent recorded:
+      Agent Fermat (019e07c5-a3b1-7f40-9e2d-847c15309f62) reviewed work/packages/active-20260508-rolling-restart-topology-publication-convergence-ack-pending-missing-published-reentry.md; result fixes-required.
+- [x] Tracked-summary-selection fix subagent recorded:
+      Agent Euler (019e07c8-b4d2-7e51-8f3e-958d26410a73) fixed work/packages/active-20260508-rolling-restart-topology-publication-convergence-ack-pending-missing-published-reentry.md;
+      result clean with tracked summary selection slice and remote handoff
+      uninitialized-wake slice committed and pushed, sprint blocker snapshot
+      aligned to tracked-summary-selection frontier.
 
 ## Residual Closure Inventory
 
@@ -348,3 +363,66 @@ Closure:
     `workflowProgressPhaseId=dispatch_pending`, `stepAgeMs=77003`,
     `stepTimeoutMs=30000`, `actuationState=transition_deferred`, and
     `nextRequiredAction=reconcile_stale_operation_progress`.
+17. Dispatch-pending snapshot normalization regression:
+    `priority recovery snapshot builder reclassifies stale dispatch-pending
+    PENDING rows to owner advancement` in
+    `test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
+    proves stale `dispatch_pending` timeout evidence is reclassified from
+    `workflow_timeout` / `reconcile_stale_operation_progress` to
+    `workflow_progress` / `advance_existing_operation`, preserving
+    `persisted_not_dispatched` actuation and clearing timeout blocker reasons.
+18. Representative rerun after dispatch-pending snapshot normalization:
+    two `--fast-local` attempts,
+    `test-output/reports/rolling-restart-dispatch-pending-snapshot-normalization-20260508T132000Z.report.json`
+    and
+    `test-output/reports/rolling-restart-dispatch-pending-snapshot-normalization-20260508T132100Z.report.json`,
+    failed at seed join-readiness due stale reusable container state and did
+    not exercise the package frontier. A fresh `--no-fast-local` rerun,
+    `test-output/reports/rolling-restart-dispatch-pending-snapshot-normalization-fresh-20260508T132200Z.report.json`,
+    reached active-gate timeout and moved the first frontier to
+    `rebalancer_leader / operation_scheduling` with dominant reason
+    `priority_recovery_operation_scheduling_event_driven`. The fresh run keeps
+    `priorityRecoveryInvariants=passed`, publication `PUBLISHED`,
+    `pendingAckCount=0`, unresolved states `needs_operation` and
+    `recovering_in_flight`, and blocked partitions `replica_operations-p1`,
+    `sql_transaction_participants-p1`, and `sql_write_operations-p1`.
+19. Tracked summary selection regression:
+    `tracked priority recovery summary keeps operation spread progress
+    canonical` in
+    `test/control-plane/priority-recovery-tracked-summary-selection.test.js`
+    proves the tracked summary map selects an operation-bearing
+    `spread_satisfied_in_flight` snapshot over a later synthetic
+    `operation_unknown` / `needs_operation` row for the same partition, clearing
+    the synthetic `eligible_but_no_operation_created` blocker bucket.
+20. Representative rerun after tracked summary selection:
+    `test-output/reports/rolling-restart-tracked-summary-selection-20260508T151500Z.report.json`
+    removes the `rebalancer_leader / operation_scheduling` frontier. The first
+    frontier is now `operation_workflow_owner / workflow_progress` with
+    dominant reason `priority_recovery_workflow_progress_transition_deferred`.
+    Publication remains `PUBLISHED`, pending ACKs remain zero,
+    `priorityRecoveryInvariants=passed`, blocked partitions are
+    `sql_transaction_participants-p1`, `sql_transactions-p1`, and
+    `sql_write_operations-p1`, and active-gate snapshot coverage remains the
+    next expected downstream frontier.
+21. Remote handoff uninitialized-wake regression:
+    `checkTimeouts re-wakes restart-discovered remote-owned priority
+    dispatch-pending PENDING rows while the operation budget is still active`
+    in
+    `test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
+    now proves the deferred coordinator-created remote handoff retry still
+    wakes the remote owner when the source owner is transiently uninitialized,
+    while leaving the bounded verification retry armed.
+22. Representative reruns after remote handoff uninitialized wake:
+    `test-output/reports/rolling-restart-remote-handoff-retry-rearm-20260508T154500Z.report.json`
+    reduced the previous three-partition workflow-progress serial wait to one
+    remote-owned `sql_write_operations-p1` PENDING row, proving the earlier
+    handoff path had moved. The stronger uninitialized wake rerun,
+    `test-output/reports/rolling-restart-remote-handoff-uninitialized-wake-20260508T155900Z.report.json`,
+    shows the target owner now claims remote priority operations from
+    `PENDING` to `SENDING` and handles `CREATE_REPLICA`. The representative
+    still fails, with first frontier
+    `operation_workflow_owner / workflow_timeout`, dominant reason
+    `priority_recovery_workflow_timeout_transition_deferred`, and target-side
+    evidence that `sql_transaction_participants-p1` failed create on
+    operational message-group ingress readiness while adjacent priority
+    operations remain in target create/CDC progress.

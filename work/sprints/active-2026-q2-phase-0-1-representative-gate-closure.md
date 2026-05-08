@@ -5,15 +5,18 @@
 Close Phase `0.1 - Internal Coherence` by making the representative gates
 green rather than accumulating more reactive one-off packages.
 
-The immediate representative gate remains `rolling-restart`. The latest proved
-artifact moved the first frontier off publication convergence and back onto
-operation workflow progress:
+The immediate representative gate remains `rolling-restart`. The latest representative artifact moved the first frontier off
+`rebalancer_leader / operation_scheduling` and back onto operation workflow
+progress:
 
 1. owner: `operation_workflow_owner`
-2. boundary: `workflow_progress / event_driven_wait`
+2. boundary: `workflow_progress / transition_deferred`
 3. dominant reason: `priority_recovery_workflow_progress_transition_deferred`
-4. evidence: `sql_transaction_participants-p1` reached `SYNCING` while
-   `sql_transactions-p1` remains `PENDING` in a serial-wait pair
+4. evidence: tracked summary selection keeps operation-bearing spread progress
+   canonical over later synthetic planning rows, clearing the
+   `eligible_but_no_operation_created` bucket; blocked partitions are
+   `sql_transaction_participants-p1`, `sql_transactions-p1`, and
+   `sql_write_operations-p1`
 
 ## Current Blocker Snapshot
 
@@ -23,11 +26,11 @@ Active package:
 
 Latest representative artifact:
 
-1. `test-output/reports/rolling-restart-operation-workflow-progress-repair-20260508T110700Z.report.json`
+1. `test-output/reports/rolling-restart-tracked-summary-selection-20260508T151500Z.report.json`
 
 Latest playback:
 
-1. `test-output/reports/.playback/rolling-restart-operation-workflow-progress-repair-20260508T110700Z/rolling-restart/`
+1. `test-output/reports/.playback/rolling-restart-tracked-summary-selection-20260508T151500Z/rolling-restart/`
 
 The active package is the first package in this sprint, so predecessor review
 is recorded as `not-needed` with reason `first-package-in-sprint`. The first
@@ -101,8 +104,8 @@ closure proof is separated from the 0.1 gate:
 
 ## Validation Ladder
 
-1. `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-operation-workflow-progress-repair-20260508T110700Z.report.json`
-2. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-operation-workflow-progress-repair-20260508T110700Z.report.json`
+1. `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-tracked-summary-selection-20260508T151500Z.report.json`
+2. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-tracked-summary-selection-20260508T151500Z.report.json`
 3. Focused operation-workflow progress regression or classification proof.
 4. Touched-file static guardrails.
 5. `git diff --check`.

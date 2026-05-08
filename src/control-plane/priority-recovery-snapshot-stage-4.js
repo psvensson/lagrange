@@ -27,6 +27,11 @@ import {resolvePriorityRecoveryDecisionSnapshotSemanticState} from './priority-r
 import {buildTrackedPriorityRecoveryDecisionSemanticStateMap, filterPriorityRecoveryDecisionSnapshotConflicts, isPriorityRecoverySourcePartitionStateMap, resolvePriorityRecoveryFilteredSnapshotBlockerReasons, resolvePriorityRecoverySourcePartitionStateIds, selectPriorityRecoveryDecisionSnapshotSummarySnapshots} from './priority-recovery-snapshot-stage-3.js';
 import {buildPriorityRecoveryBlockerPartitionSetMap, buildPriorityRecoveryCompletionPartitionSetMap, normalizePriorityRecoveryBlockerPartitionIdsByReason, normalizePriorityRecoveryPartitionIdSetMap} from './priority-recovery-snapshot-stage-10.js';
 
+const PRIORITY_RECOVERY_OPERATION_SPREAD_PROGRESS_SELECTION_OPTIONS =
+  Object.freeze({
+    prioritizeOperationSpreadProgress: true,
+  });
+
 function resolvePriorityRecoveryFilteredSnapshotSemanticStates(
   snapshot,
   partitionId,
@@ -125,6 +130,7 @@ function buildPriorityRecoveryFilteredDecisionSnapshotSummary(
     buildPriorityRecoveryCompletionPartitionSetMap();
   for (const snapshot of selectPriorityRecoveryDecisionSnapshotSummarySnapshots(
     filteredSnapshots,
+    PRIORITY_RECOVERY_OPERATION_SPREAD_PROGRESS_SELECTION_OPTIONS,
   )) {
     const partitionId = String(
       snapshot?.[PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.PARTITION_ID] ||

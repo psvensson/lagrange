@@ -1,6 +1,15 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
-import {WORKFLOW_STEP} from '../../src/constants/index.js';
+import {NUM, WORKFLOW_STEP} from '../../src/constants/index.js';
+import {buildPriorityRecoveryDecisionSnapshot} from
+  '../../src/control-plane/priority-recovery-snapshot.js';
+import {
+  PRIORITY_RECOVERY_ACTUATION_STATE,
+  PRIORITY_RECOVERY_BLOCKING_BOUNDARY,
+  PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION,
+  PRIORITY_RECOVERY_SEMANTIC_STATE,
+  PRIORITY_RECOVERY_WAIT_MODE,
+} from '../../src/control-plane/priority-recovery-diagnostics-constants.js';
 import {OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED as STAGE_SHARED} from
   '../../src/rebalancer/operation-workflow-owner-segment-7-stage-shared.js';
 import {
@@ -32,6 +41,18 @@ const TEST_REPLICA_DISPATCH_TARGET =
 const TEST_RETRYABLE_HANDOFF_ERROR = 'handoff retryable timeout';
 const TEST_COORDINATOR_CREATED_REMOTE_HANDOFF =
   'coordinator_created_remote_handoff';
+const TEST_PUBLICATION_STATUS_PUBLISHED = 'PUBLISHED';
+const TEST_PUBLICATION_EPOCH = 2;
+const TEST_CAPTURED_AT_MS = 1000000;
+const TEST_OPERATION_CREATED_AT_MS = 900000;
+const TEST_STEP_TIMEOUT_MS = 30000;
+const TEST_SPREAD_GAP = 1;
+const TEST_READY_DISTINCT_NODE_COUNT = 1;
+const TEST_REQUIRED_DISTINCT_NODE_COUNT = 2;
+const TEST_READY_ELIGIBLE_NODE_COUNT = 2;
+const TEST_TIMELINE_LENGTH = 1;
+const TEST_TIMELINE_STEP_COUNT = 1;
+const TEST_EMPTY_LIST = Object.freeze([]);
 
 function buildTransactionCoordinator() {
   return {
@@ -460,4 +481,87 @@ async (t) => {
   );
 
   await coordinator.shutdown();
+});
+
+test('priority recovery snapshot builder reclassifies stale dispatch-pending ' +
+  'PENDING rows to owner advancement',
+(t) => {
+  const snapshot = buildPriorityRecoveryDecisionSnapshot({
+    partitionId: TEST_PARTITION_ID,
+    capturedAt: TEST_CAPTURED_AT_MS,
+    publicationEpoch: TEST_PUBLICATION_EPOCH,
+    publicationConvergence: {
+      publicationEpoch: TEST_PUBLICATION_EPOCH,
+      publicationStatus: TEST_PUBLICATION_STATUS_PUBLISHED,
+      publishedActiveNodeIds: [
+        TEST_SOURCE_NODE_ID,
+        TEST_TARGET_NODE_ID,
+      ],
+      pendingAckNodeIds: TEST_EMPTY_LIST,
+      pendingAckCount: NUM.ZERO,
+    },
+    priorityPartitionSummary: {
+      blockedPartitions: [{
+        partitionId: TEST_PARTITION_ID,
+        spreadGap: TEST_SPREAD_GAP,
+        readyDistinctNodeCount: TEST_READY_DISTINCT_NODE_COUNT,
+        requiredDistinctNodeCount: TEST_REQUIRED_DISTINCT_NODE_COUNT,
+      }],
+      readyEligibleNodeCount: TEST_READY_ELIGIBLE_NODE_COUNT,
+    },
+    operationContexts: [{
+      operationId: TEST_OPERATION_ID,
+      partitionId: TEST_PARTITION_ID,
+      type: TEST_OPERATION_TYPE_REPLACE,
+      status: TEST_STATUS_PENDING,
+      workflowStep: TEST_STEP_PENDING,
+      sourceNodeId: TEST_SOURCE_NODE_ID,
+      targetNodeId: TEST_TARGET_NODE_ID,
+      replicaId: TEST_REPLICA_ID,
+      createdAtMs: TEST_OPERATION_CREATED_AT_MS,
+      updatedAtMs: TEST_OPERATION_CREATED_AT_MS,
+      stepTimeoutMs: TEST_STEP_TIMEOUT_MS,
+      timelineLength: TEST_TIMELINE_LENGTH,
+      timelineStepCount: TEST_TIMELINE_STEP_COUNT,
+      latestTimelineStep: TEST_STEP_PENDING,
+      latestTimelineStatus: TEST_STATUS_PENDING,
+      latestTimelineInFlight: true,
+    }],
+    stepTimeoutMsByWorkflowStep: {
+      [TEST_STEP_PENDING]: TEST_STEP_TIMEOUT_MS,
+    },
+  });
+
+  t.equal(
+    snapshot?.semanticState,
+    PRIORITY_RECOVERY_SEMANTIC_STATE.RECOVERING_IN_FLIGHT,
+    'stale dispatch-pending rows should remain in-flight, not operation-stalled',
+  );
+  t.same(
+    snapshot?.blockerReasons,
+    TEST_EMPTY_LIST,
+    'stale dispatch-pending timeout blocker reasons should be cleared',
+  );
+  t.equal(
+    snapshot?.actuation?.state,
+    PRIORITY_RECOVERY_ACTUATION_STATE.PERSISTED_NOT_DISPATCHED,
+    'stale dispatch-pending rows should preserve persisted-not-dispatched actuation',
+  );
+  t.equal(
+    snapshot?.progress?.nextRequiredAction,
+    PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.ADVANCE_EXISTING_OPERATION,
+    'stale dispatch-pending rows should ask the owner to advance the existing operation',
+  );
+  t.equal(
+    snapshot?.progress?.blockingBoundary,
+    PRIORITY_RECOVERY_BLOCKING_BOUNDARY.WORKFLOW_PROGRESS,
+    'stale dispatch-pending rows should not remain on workflow_timeout',
+  );
+  t.equal(
+    snapshot?.progress?.waitMode,
+    PRIORITY_RECOVERY_WAIT_MODE.EVENT_DRIVEN,
+    'stale dispatch-pending rows should return to event-driven owner progress',
+  );
+
+  t.end();
 });

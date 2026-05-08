@@ -36,6 +36,8 @@ import {buildEffectivePriorityRecoveryAdmission, buildPriorityRecoveryPartitionO
 import {buildPriorityRecoveryPartitionAssessment} from './priority-recovery-snapshot-stage-11.js';
 
 const PRIORITY_RECOVERY_EMPTY_BLOCKER_REASONS = Object.freeze([]);
+const PRIORITY_RECOVERY_LATEST_OPERATION_WORKFLOW_STEP_FIELD =
+  'latestOperationWorkflowStep';
 
 const PRIORITY_RECOVERY_DISPATCH_PENDING_NORMALIZATION_STATE = Object.freeze({
   ADVANCE_OWNER_PROGRESS_FROM_TIMEOUT: 'advance_owner_progress_from_timeout',
@@ -120,6 +122,12 @@ function resolvePriorityRecoveryDispatchPendingNormalizationState(
           PRIORITY_RECOVERY_SNAPSHOT_LITERAL.VALUE,
         latestWorkflowStep: String(
           snapshot?.coordinator?.operation?.workflowStep ||
+            snapshot?.conditions?.[
+              PRIORITY_RECOVERY_LATEST_OPERATION_WORKFLOW_STEP_FIELD
+            ] ||
+            snapshot?.[
+              PRIORITY_RECOVERY_LATEST_OPERATION_WORKFLOW_STEP_FIELD
+            ] ||
             PRIORITY_RECOVERY_SNAPSHOT_LITERAL.VALUE,
         ).trim().toUpperCase(),
       }),
@@ -524,7 +532,7 @@ function buildPriorityRecoveryDecisionSnapshot(options = {}) {
       options.authoritativeOperationReadDeferred === true,
   });
 
-  return {
+  return normalizePriorityRecoveryDispatchPendingDecisionSnapshot({
     partitionId,
     epoch: publicationEpoch,
     operationId,
@@ -572,7 +580,7 @@ function buildPriorityRecoveryDecisionSnapshot(options = {}) {
       learnerPromotion,
     ),
     blockerReasons: assessment.blockerReasons,
-  };
+  });
 }
 
 function buildPriorityRecoveryCompletionPartitionSetMap() {

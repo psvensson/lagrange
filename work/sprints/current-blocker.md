@@ -8,23 +8,23 @@ Package: `work/packages/active-20260508-rolling-restart-topology-publication-con
 
 Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/rolling-restart-workflow-timeout-remote-wake-fix-20260508T130500Z.report.json`
+Artifact: `test-output/reports/rolling-restart-tracked-summary-selection-20260508T151500Z.report.json`
 
-Playback: `test-output/reports/.playback/rolling-restart-workflow-timeout-remote-wake-fix-20260508T130500Z/rolling-restart/`
+Playback: `test-output/reports/.playback/rolling-restart-tracked-summary-selection-20260508T151500Z/rolling-restart/`
 
 ## Boundary
 
-Owner: `Priority recovery workflow timeout after serial-wait operation scheduling fix`
+Owner: `Priority recovery workflow progress after tracked summary selection`
 
-Boundary: `operation_workflow_owner / workflow_timeout / timeout_reconcile_due`
+Boundary: `operation_workflow_owner / workflow_progress / transition_deferred`
 
-Dominant reason: `priority_recovery_workflow_timeout_transition_deferred`
+Dominant reason: `priority_recovery_workflow_progress_transition_deferred`
 
-Current state: The stale remote dispatch-pending wake fix passed focused proof but did not close the representative frontier. priorityRecoveryInvariants still pass and publication remains PUBLISHED with pendingAckCount=0. The first frontier remains operation_workflow_owner / workflow_timeout: the dominant witness is sql_write_operations-p1 with cache-visible PENDING operation 773b4aca-bd05-4788-8126-d7d8f12d3270, workflowProgressPhaseId=dispatch_pending, stepAgeMs=77003 over stepTimeoutMs=30000, actuationState=transition_deferred, and nextRequiredAction=reconcile_stale_operation_progress.
+Current state: Tracked summary selection keeps operation-bearing spread progress canonical over later synthetic planning rows for the same partition, removing the rebalancer_leader / operation_scheduling frontier. The representative rerun now fails first on operation_workflow_owner / workflow_progress with dominant reason priority_recovery_workflow_progress_transition_deferred. Publication remains PUBLISHED, pendingAckCount=0, priorityRecoveryInvariants=passed, blocked partitions are sql_transaction_participants-p1, sql_transactions-p1, and sql_write_operations-p1, and active-gate snapshot coverage remains the next expected downstream frontier.
 
 ## Next Action
 
-Start the next implementation slice for operation_workflow_owner / workflow_timeout. The next proof surface is why the remote-owner wake/retry path still leaves stale dispatch_pending PENDING priority recovery operations transition_deferred at timeout_reconcile_due in the representative run.
+Start the next implementation slice for operation_workflow_owner / workflow_progress / transition_deferred. The dispatch-pending snapshot normalization reclassifies stale dispatch_pending timeout evidence to workflow_progress, and the remote handoff uninitialized-wake regression proves the remote owner is wakeable while the source owner is transiently uninitialized.
 
 ## Proof Ladder
 
@@ -56,18 +56,23 @@ Start the next implementation slice for operation_workflow_owner / workflow_time
 17. `work/sprints/current-blocker.md`
 18. `test/distributed/harness/failure-bundle-segment-4.js`
 19. `test/distributed/harness/__tests__/failure-bundle-core-16-test-cases.js`
-20. `src/diagnostics/topology-convergence-graph.js`
-21. `scripts/analyze-topology-convergence.js`
-22. `src/node/replica-handler-class-part-1.js`
-23. `test/node/replica-handler.test.js`
-24. `src/rebalancer/operation-workflow-owner-segment-2.js`
-25. `test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
-26. `src/rebalancer/operation-workflow-owner-segment-4.js`
-27. `src/rebalancer/unified-rebalancer-segment-2.js`
-28. `src/rebalancer/unified-rebalancer-segment-4-stage-1.js`
-29. `src/rebalancer/unified-rebalancer-segment-4-stage-3.js`
-30. `src/rebalancer/unified-rebalancer-segment-4-stage-shared.js`
-31. `test/rebalancer/unified-rebalancer-part-5-2-stage-4.js`
-32. `test/rebalancer/priority-recovery-stale-planning-visibility.test.js`
-33. `test/rebalancer/rebalance-coordinator-outcome-routing.test.js`
-34. `work/model-ledger.jsonl`
+20. `src/control-plane/priority-recovery-snapshot-stage-10.js`
+21. `src/control-plane/priority-recovery-snapshot-stage-3.js`
+22. `src/control-plane/priority-recovery-snapshot-stage-4.js`
+23. `src/diagnostics/topology-convergence-graph.js`
+24. `scripts/analyze-topology-convergence.js`
+25. `src/node/replica-handler-class-part-1.js`
+26. `test/node/replica-handler.test.js`
+27. `src/rebalancer/operation-workflow-owner-segment-1.js`
+28. `src/rebalancer/operation-workflow-owner-segment-2.js`
+29. `test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
+30. `src/rebalancer/operation-workflow-owner-segment-4.js`
+31. `src/rebalancer/unified-rebalancer-segment-2.js`
+32. `src/rebalancer/unified-rebalancer-segment-4-stage-1.js`
+33. `src/rebalancer/unified-rebalancer-segment-4-stage-3.js`
+34. `src/rebalancer/unified-rebalancer-segment-4-stage-shared.js`
+35. `test/rebalancer/unified-rebalancer-part-5-2-stage-4.js`
+36. `test/rebalancer/priority-recovery-stale-planning-visibility.test.js`
+37. `test/rebalancer/rebalance-coordinator-outcome-routing.test.js`
+38. `work/model-ledger.jsonl`
+39. `test/control-plane/priority-recovery-tracked-summary-selection.test.js`

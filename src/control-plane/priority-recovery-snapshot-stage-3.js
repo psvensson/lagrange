@@ -871,13 +871,39 @@ function resolvePriorityRecoveryDecisionSnapshotSummarySortTimestamp(snapshot) {
     resolvePriorityRecoveryDecisionSnapshotFreshnessMs(snapshot);
 }
 
-function comparePriorityRecoveryDecisionSnapshotSummarySnapshots(left, right) {
+function resolvePriorityRecoveryDecisionSnapshotSummaryEvidenceRank(snapshot) {
+  if (
+    isPriorityRecoverySpreadProgressDecisionSnapshot(snapshot) === true &&
+    hasPriorityRecoveryDecisionSnapshotOperationEvidence(snapshot) === true
+  ) {
+    return NUM.TWO;
+  }
+  return hasPriorityRecoveryDecisionSnapshotOperationEvidence(snapshot) ===
+    true ?
+    NUM.ONE :
+    NUM.ZERO;
+}
+
+function comparePriorityRecoveryDecisionSnapshotSummarySnapshots(
+  left,
+  right,
+  options = {},
+) {
   const leftEpoch = normalizePriorityRecoveryInteger(left?.epoch) ??
     NUM.NEGATIVE_ONE;
   const rightEpoch = normalizePriorityRecoveryInteger(right?.epoch) ??
     NUM.NEGATIVE_ONE;
   if (leftEpoch !== rightEpoch) {
     return leftEpoch - rightEpoch;
+  }
+  if (options.prioritizeOperationSpreadProgress === true) {
+    const leftEvidenceRank =
+      resolvePriorityRecoveryDecisionSnapshotSummaryEvidenceRank(left);
+    const rightEvidenceRank =
+      resolvePriorityRecoveryDecisionSnapshotSummaryEvidenceRank(right);
+    if (leftEvidenceRank !== rightEvidenceRank) {
+      return leftEvidenceRank - rightEvidenceRank;
+    }
   }
   const leftTimestamp =
     resolvePriorityRecoveryDecisionSnapshotSummarySortTimestamp(left);
@@ -893,6 +919,7 @@ function comparePriorityRecoveryDecisionSnapshotSummarySnapshots(left, right) {
 
 function selectPriorityRecoveryDecisionSnapshotSummarySnapshots(
   snapshots = [],
+  options = {},
 ) {
   const latestSnapshotByPartitionId = new Map();
   for (const snapshot of Array.isArray(snapshots) ? snapshots : []) {
@@ -909,6 +936,7 @@ function selectPriorityRecoveryDecisionSnapshotSummarySnapshots(
       comparePriorityRecoveryDecisionSnapshotSummarySnapshots(
         currentSnapshot,
         snapshot,
+        options,
       ) < NUM.ZERO
     ) {
       latestSnapshotByPartitionId.set(partitionId, snapshot);
