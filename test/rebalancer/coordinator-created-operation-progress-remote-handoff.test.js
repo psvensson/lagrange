@@ -66,6 +66,7 @@ const REMOTE_PRIORITY_TIMEOUT_TARGET_NODE_ID =
   'remote-priority-timeout-target-node';
 const REMOTE_PRIORITY_TIMEOUT_REPLICA_ID = 'replica_operations-p1-r4';
 const REMOTE_PRIORITY_TIMEOUT_CAPTURED_AT_MS = 1000000;
+const REMOTE_PRIORITY_EMPTY_OBSERVATION_STATE = 'empty';
 const REMOTE_PRIORITY_TIMEOUT_SUPPORTING_PARTITION_IDS = Object.freeze([
   REMOTE_PRIORITY_SERIAL_WAIT_SOURCE_PARTITION_ID,
   'sql_transactions-p1',
@@ -1474,6 +1475,88 @@ async (t) => {
       snapshot?.coordinator?.serialWaitPartitionIds,
       REMOTE_PRIORITY_TIMEOUT_SUPPORTING_PARTITION_IDS,
       'the stale timeout witness should retain the supporting partition context from planning',
+    );
+  } finally {
+    Date.now = originalDateNow;
+    await coordinator.shutdown();
+  }
+});
+
+test('workflowOwner priority recovery partition snapshots let a resolved ' +
+  'authoritative empty observation displace stale cache-visible timeout ' +
+  'inputs',
+async (t) => {
+  const coordinator = createRemotePriorityVisibilityCoordinator();
+  const originalDateNow = Date.now;
+  const authoritativeObservationCalls = [];
+  Date.now = () => REMOTE_PRIORITY_TIMEOUT_CAPTURED_AT_MS;
+  coordinator.initialize();
+
+  coordinator.controlPlaneReadinessService
+    .getPriorityRecoveryPlanningAnswerBestEffort = async () => {
+      return buildRemotePriorityTimeoutPlanningSnapshot();
+    };
+
+  const creatingTimeoutMs = coordinator.getTimeoutForStep(
+    WORKFLOW_STEP.CREATING,
+    buildRemotePriorityTimeoutOperation(REMOTE_PRIORITY_TIMEOUT_CAPTURED_AT_MS),
+  );
+  const staleStartedAtMs =
+    REMOTE_PRIORITY_TIMEOUT_CAPTURED_AT_MS -
+    creatingTimeoutMs -
+    REMOTE_HANDOFF_TIMEOUT_OVERRUN_MS;
+  const staleCacheVisibleOperation =
+    buildRemotePriorityTimeoutOperation(staleStartedAtMs);
+
+  coordinator.workflowOwner.repository.getOperationsByEntityAuthoritativeObservation =
+    async (entityType, entityId) => {
+      authoritativeObservationCalls.push({entityType, entityId});
+      return Object.freeze({
+        state: REMOTE_PRIORITY_EMPTY_OBSERVATION_STATE,
+        operationCount: NUM.ZERO,
+        operations: [],
+        deferredOutcome: null,
+        retryAfterMs: null,
+      });
+    };
+
+  try {
+    const snapshot =
+      await coordinator.workflowOwner
+        .getPriorityRecoveryDecisionSnapshotForPartitionOperations(
+          REMOTE_PRIORITY_TIMEOUT_PARTITION_ID,
+          [staleCacheVisibleOperation],
+        );
+
+    t.same(
+      authoritativeObservationCalls,
+      [{
+        entityType: SERVICE_TYPE.PARTITION,
+        entityId: REMOTE_PRIORITY_TIMEOUT_PARTITION_ID,
+      }],
+      'cache-visible timeout inputs should still consult the authoritative entity visibility path',
+    );
+    t.equal(
+      snapshot?.operationId,
+      null,
+      'a resolved authoritative empty should clear the stale operation identity from the partition snapshot',
+    );
+    t.same(
+      snapshot?.coordinator?.operationIds,
+      [],
+      'a resolved authoritative empty should remove stale operation contexts from the coordinator contract',
+    );
+    t.ok(
+      snapshot?.progress?.nextRequiredAction !==
+        'reconcile_stale_operation_progress' &&
+        snapshot?.progress?.nextRequiredAction !==
+          'wait_for_operation_progress',
+      'a resolved authoritative empty should stop stale cache-visible operations from driving timeout or workflow-progress follow-up actions',
+    );
+    t.ok(
+      snapshot?.progress?.blockingBoundary !== 'workflow_timeout' &&
+        snapshot?.progress?.blockingBoundary !== 'workflow_progress',
+      'a resolved authoritative empty should move the partition off the stale operation blocker boundaries',
     );
   } finally {
     Date.now = originalDateNow;

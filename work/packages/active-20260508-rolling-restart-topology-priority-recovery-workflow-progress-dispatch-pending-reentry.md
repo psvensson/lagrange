@@ -133,14 +133,19 @@ Canonical contract shape:
 
 ## Subagent Sequencing Ledger
 
-- [ ] Review subagent recorded:
-- [ ] Fix subagent recorded or explicitly not needed:
+- [x] Review subagent recorded:
+      Agent `Hume` (`019e05e4-b612-7dd2-bf81-77527ee62343`) reviewed
+      `work/packages/done-20260508-rolling-restart-topology-priority-recovery-workflow-timeout-stale-operation-progress-reentry.md`;
+      result `fixes-required`.
+- [x] Fix subagent recorded or explicitly not needed:
+      Agent `Kuhn` (`019e05e7-b954-73e3-aa78-3904e786e233`) fixed
+      `work/packages/done-20260508-rolling-restart-topology-priority-recovery-workflow-timeout-stale-operation-progress-reentry.md`.
 - [ ] Implementation subagent recorded:
 
 ## Residual Closure Inventory
 
-- [ ] Review the just-closed predecessor package on the same sprint boundary.
-- [ ] Fix any predecessor-review findings before implementation resumes.
+- [x] Review the just-closed predecessor package on the same sprint boundary.
+- [x] Fix any predecessor-review findings before implementation resumes.
 - [ ] Extract the focused epoch-2 workflow-progress witness for
       `sql_write_operations-p1` dispatch-pending actuation.
 - [ ] Add the focused regression for the selected workflow-progress seam.

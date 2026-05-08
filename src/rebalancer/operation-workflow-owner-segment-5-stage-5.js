@@ -26,7 +26,8 @@ const PRIORITY_RECOVERY_PARTITION_OBSERVATION_SELECTION_TABLE =
           .USE_AUTHORITATIVE_OBSERVATION,
       matches: (evidence) =>
         evidence.authoritativeOperationAvailable === true ||
-        evidence.authoritativeDeferred === true,
+        evidence.authoritativeDeferred === true ||
+        evidence.authoritativeResolvedEmpty === true,
     }),
     Object.freeze({
       state:
@@ -99,6 +100,11 @@ class OperationWorkflowOwnerSegment5Stage5 extends OperationWorkflowOwnerSegment
         authoritativeDeferred:
           this.isPriorityRecoveryAuthoritativeOperationReadDeferred(
             authoritativeObservation,
+          ),
+        authoritativeResolvedEmpty:
+          this.isPriorityRecoveryAuthoritativeOperationObservationResolvedEmpty(
+            authoritativeObservation,
+            authoritativeOperations,
           ),
       });
     if (
@@ -181,6 +187,27 @@ class OperationWorkflowOwnerSegment5Stage5 extends OperationWorkflowOwnerSegment
       deferredVisibilityOutcome?.completionState ===
         PRIORITY_RECOVERY_COMPLETION_STATE
           .AUTHORITATIVE_OPERATION_READ_DEFERRED
+    );
+  }
+
+  isPriorityRecoveryAuthoritativeOperationObservationResolvedEmpty(
+    incompleteObservation = null,
+    authoritativeOperations = [],
+  ) {
+    return (
+      this.isPriorityRecoveryAuthoritativeOperationReadDeferred(
+        incompleteObservation,
+      ) !== true &&
+      (
+        incompleteObservation?.state ===
+          INCOMPLETE_OPERATION_OBSERVATION_STATE.EMPTY ||
+        (
+          incompleteObservation &&
+          typeof incompleteObservation === TYPEOF.OBJECT &&
+          authoritativeOperations.length === NUM.ZERO &&
+          incompleteObservation?.operationCount === NUM.ZERO
+        )
+      )
     );
   }
 

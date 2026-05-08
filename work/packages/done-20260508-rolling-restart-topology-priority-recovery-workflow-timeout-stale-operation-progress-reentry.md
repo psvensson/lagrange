@@ -24,8 +24,12 @@
     "work/packages/done-20260508-rolling-restart-topology-priority-recovery-workflow-timeout-stale-operation-progress-reentry.md",
     "src/rebalancer/operation-workflow-owner-segment-5-stage-5.js",
     "test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js",
+    "work/packages/active-20260508-rolling-restart-topology-priority-recovery-workflow-progress-dispatch-pending-reentry.md",
+    "work/packages/done-20260507-rolling-restart-topology-priority-recovery-workflow-progress-serial-wait-source-partition-reentry.md",
     "work/model-ledger.jsonl",
-    "work/sprints/active-2026-q2-publication-scoped-consistency-and-node-join-closure.md"
+    "work/sprints/active-2026-q2-publication-scoped-consistency-and-node-join-closure.md",
+    "work/sprints/current-blocker.json",
+    "work/sprints/current-blocker.md"
   ],
   "predecessor": "work/packages/done-20260507-rolling-restart-topology-priority-recovery-workflow-progress-serial-wait-source-partition-reentry.md",
   "closed": "2026-05-08",
@@ -168,6 +172,12 @@ Canonical contract shape:
 - [x] Implementation subagent recorded:
       Agent `Averroes` (`019e05d4-8155-7930-910e-c16f985f7f7d`) implemented
       `work/packages/done-20260508-rolling-restart-topology-priority-recovery-workflow-timeout-stale-operation-progress-reentry.md`.
+
+## Commit And Push Ledger
+
+- Focused package commit: `1a1f69a1`
+- Pushed to: `origin/codex/pending-ack-eligibility-filter`
+- Commit contains only package-owned files/package-status/allowed sprint handoff: `yes`
 
 ## Residual Closure Inventory
 
