@@ -63,6 +63,48 @@ class OperationWorkflowOwnerSegment5Stage5 extends OperationWorkflowOwnerSegment
     });
   }
 
+  buildPriorityRecoveryDecisionSnapshotWithRetainedPlanningSerialWaitContext(
+    snapshot,
+    planningDecisionSnapshot,
+  ) {
+    if (
+      !snapshot ||
+      typeof snapshot !== TYPEOF.OBJECT ||
+      !planningDecisionSnapshot ||
+      typeof planningDecisionSnapshot !== TYPEOF.OBJECT
+    ) {
+      return snapshot;
+    }
+    const serialWaitPartitionIds =
+      this.normalizePriorityRecoveryDecisionSnapshotPartitionIds(
+        planningDecisionSnapshot?.coordinator?.serialWaitPartitionIds,
+      );
+    const serialWaitOperationIdSet = new Set();
+    this.addPriorityRecoveryOperationIds(
+      serialWaitOperationIdSet,
+      planningDecisionSnapshot?.coordinator?.serialWaitOperationIds,
+    );
+    const serialWaitOperationIds = [...serialWaitOperationIdSet];
+    if (
+      serialWaitPartitionIds.length === NUM.ZERO &&
+      serialWaitOperationIds.length === NUM.ZERO
+    ) {
+      return snapshot;
+    }
+    return Object.freeze({
+      ...snapshot,
+      coordinator: Object.freeze({
+        ...(snapshot?.coordinator && typeof snapshot.coordinator ===
+          TYPEOF.OBJECT ?
+          snapshot.coordinator :
+          {}),
+        serialWaitOperationCount: serialWaitOperationIds.length,
+        serialWaitOperationIds: Object.freeze(serialWaitOperationIds),
+        serialWaitPartitionIds: Object.freeze(serialWaitPartitionIds),
+      }),
+    });
+  }
+
   resolvePriorityRecoveryDecisionSnapshotFromPlanning(
     partitionId,
     operations = [],
@@ -169,19 +211,22 @@ class OperationWorkflowOwnerSegment5Stage5 extends OperationWorkflowOwnerSegment
       );
     if (planningDecisionSnapshot) {
       if (authoritativeOperationReadDeferred !== true) {
-        return planningDecisionSnapshot;
+        if (operationContexts.length === NUM.ZERO) {
+          return planningDecisionSnapshot;
+        }
+      } else {
+        return this.buildDeferredPriorityRecoveryDecisionSnapshotFromPlanningMatch(
+          normalizedPartitionId,
+          operationContexts,
+          planningSnapshot,
+          stepTimeoutMsByWorkflowStep,
+          planningDecisionSnapshot,
+        );
       }
-      return this.buildDeferredPriorityRecoveryDecisionSnapshotFromPlanningMatch(
-        normalizedPartitionId,
-        operationContexts,
-        planningSnapshot,
-        stepTimeoutMsByWorkflowStep,
-        planningDecisionSnapshot,
-      );
     }
     const representativeOperationContext =
       operationContexts.length === NUM.ONE ? operationContexts[NUM.ZERO] : null;
-    return buildPriorityRecoveryDecisionSnapshot({
+    const snapshot = buildPriorityRecoveryDecisionSnapshot({
       partitionId: normalizedPartitionId,
       capturedAt: capturedAtMs,
       publicationConvergence: planningSnapshot,
@@ -191,6 +236,11 @@ class OperationWorkflowOwnerSegment5Stage5 extends OperationWorkflowOwnerSegment
       stepTimeoutMsByWorkflowStep,
       authoritativeOperationReadDeferred,
     });
+    return this
+      .buildPriorityRecoveryDecisionSnapshotWithRetainedPlanningSerialWaitContext(
+        snapshot,
+        planningDecisionSnapshot,
+      );
   }
 
   async getPriorityRecoveryDecisionSnapshotForOperation(operation) {

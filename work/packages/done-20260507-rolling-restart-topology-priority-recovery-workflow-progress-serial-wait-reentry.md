@@ -12,7 +12,7 @@
   "boundary": "Operation workflow owner / workflow_progress / startup active gate support",
   "dominantReason": "priority_recovery_workflow_progress_transition_deferred",
   "currentState": "The planning-only carrier repair is proved. The focused workflow owner now preserves planning serial-wait witnesses for sql_write_operations-p1 instead of regressing that carrier back to rebalancer_handoff / schedule_followup_rebalance, but the representative rerun still fails and migrates within the same owner boundary: epoch 2 PUBLISHED now selects sql_transaction_participants-p1 as the dominant workflow-progress blocker under priority_operation_serial_wait / wait_for_operation_progress, with replica_operations-p1 and sql_write_operations-p1 retained as supporting serial-wait context and startup active-gate timeout still downstream only.",
-  "nextAction": "Continue in work/packages/active-20260507-rolling-restart-topology-priority-recovery-workflow-progress-serial-wait-source-partition-reentry.md for the migrated sql_transaction_participants-p1 workflow-progress serial-wait seam.",
+  "nextAction": "Continue in work/packages/done-20260507-rolling-restart-topology-priority-recovery-workflow-progress-serial-wait-source-partition-reentry.md for the migrated sql_transaction_participants-p1 workflow-progress serial-wait seam.",
   "proof": [
     "Focused epoch-4 PUBLISHED workflow-progress witness for sql_write_operations-p1 priority_operation_serial_wait with supporting sql_transaction_participants-p1 context",
     "Focused workflow-progress regression for the selected serial-wait transition seam",
@@ -32,7 +32,7 @@
   "predecessor": "work/packages/done-20260507-rolling-restart-startup-publication-open-convergence-priority-serial-wait-workflow-progress-reentry.md",
   "closed": "2026-05-07",
   "commitAndPushLedgerRequired": true,
-  "successor": "work/packages/active-20260507-rolling-restart-topology-priority-recovery-workflow-progress-serial-wait-source-partition-reentry.md"
+  "successor": "work/packages/done-20260507-rolling-restart-topology-priority-recovery-workflow-progress-serial-wait-source-partition-reentry.md"
 }
 -->
 

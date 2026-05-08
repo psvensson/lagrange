@@ -42,9 +42,23 @@ const REMOTE_PRIORITY_SERIAL_WAIT_SOURCE_PARTITION_ID =
   'sql_transaction_participants-p1';
 const REMOTE_PRIORITY_SERIAL_WAIT_SOURCE_OPERATION_ID =
   'remote-priority-serial-wait-source-operation';
+const REMOTE_PRIORITY_SERIAL_WAIT_SOURCE_ACTIVE_OPERATION_ID =
+  'remote-priority-serial-wait-source-active-operation';
+const REMOTE_PRIORITY_SERIAL_WAIT_SOURCE_REMOVED_OPERATION_ID =
+  'remote-priority-serial-wait-source-removed-operation';
+const REMOTE_PRIORITY_SERIAL_WAIT_SOURCE_NODE_ID = 'serial-wait-source-node';
+const REMOTE_PRIORITY_SERIAL_WAIT_SOURCE_TARGET_NODE_ID =
+  'serial-wait-source-target-node';
+const REMOTE_PRIORITY_SERIAL_WAIT_SOURCE_REPLICA_ID =
+  'sql_transaction_participants-p1-r4';
 const REMOTE_PRIORITY_SERIAL_WAIT_LAST_PROGRESS_AT_MS = 5000;
 const REMOTE_PRIORITY_SERIAL_WAIT_CAPTURED_AT_MS = 5000;
 const REMOTE_PRIORITY_SERIAL_WAIT_EPOCH = 4;
+const REMOTE_PRIORITY_SERIAL_WAIT_SOURCE_EPOCH = 2;
+const REMOTE_PRIORITY_SERIAL_WAIT_SOURCE_ACTIVE_CREATED_AT_MS = 3000;
+const REMOTE_PRIORITY_SERIAL_WAIT_SOURCE_ACTIVE_UPDATED_AT_MS = 3001;
+const REMOTE_PRIORITY_SERIAL_WAIT_SOURCE_REMOVED_CREATED_AT_MS = 1000;
+const REMOTE_PRIORITY_SERIAL_WAIT_SOURCE_REMOVED_COMPLETED_AT_MS = 2000;
 
 function buildRemotePrioritySerialWaitPlanningSnapshot() {
   return Object.freeze({
@@ -116,6 +130,84 @@ function buildRemotePrioritySerialWaitPlanningSnapshot() {
           requiredDistinctNodeCount: 2,
         }),
       ],
+    },
+  });
+}
+
+function buildRemotePrioritySerialWaitSourcePlanningSnapshot() {
+  return Object.freeze({
+    publicationEpoch: REMOTE_PRIORITY_SERIAL_WAIT_SOURCE_EPOCH,
+    publicationStatus: 'PUBLISHED',
+    publishedActiveNodeIds: Object.freeze([
+      REMOTE_PRIORITY_SERIAL_WAIT_SOURCE_NODE_ID,
+      REMOTE_PRIORITY_SERIAL_WAIT_SOURCE_TARGET_NODE_ID,
+    ]),
+    pendingAckNodeIds: Object.freeze([]),
+    pendingAckCount: NUM.ZERO,
+    priorityRecoveryDecisionSnapshots: {
+      capturedAt: REMOTE_PRIORITY_SERIAL_WAIT_CAPTURED_AT_MS,
+      publicationEpoch: REMOTE_PRIORITY_SERIAL_WAIT_SOURCE_EPOCH,
+      snapshots: [
+        Object.freeze({
+          partitionId: REMOTE_PRIORITY_SERIAL_WAIT_SOURCE_PARTITION_ID,
+          operationId: REMOTE_PRIORITY_SERIAL_WAIT_SOURCE_REMOVED_OPERATION_ID,
+          blockerReasons: ['priority_operation_serial_wait'],
+          semanticState: 'needs_operation',
+          completion: {
+            state: 'blocked',
+          },
+          observation: {
+            workflowState: 'none',
+            visibilityState: 'none',
+            provenance: {
+              capturedAt: REMOTE_PRIORITY_SERIAL_WAIT_CAPTURED_AT_MS,
+              workflowSource: 'none',
+            },
+          },
+          conditions: {},
+          actuation: {
+            state: 'transition_deferred',
+            owner: 'operation_workflow_owner',
+            workflowProgressPhaseId: 'none',
+            lastProgressAtMs: REMOTE_PRIORITY_SERIAL_WAIT_CAPTURED_AT_MS,
+          },
+          progress: {
+            contractState: 'pending',
+            nextAction: 'wait',
+            currentOwner: 'operation_workflow_owner',
+            nextRequiredAction: 'wait_for_operation_progress',
+            blockingBoundary: 'workflow_progress',
+            waitMode: 'event_driven',
+            workflowProgressPhaseId: 'none',
+            lastProgressAtMs: REMOTE_PRIORITY_SERIAL_WAIT_CAPTURED_AT_MS,
+          },
+          coordinator: {
+            operationIds: [
+              REMOTE_PRIORITY_SERIAL_WAIT_SOURCE_ACTIVE_OPERATION_ID,
+              REMOTE_PRIORITY_SERIAL_WAIT_SOURCE_REMOVED_OPERATION_ID,
+            ],
+            serialWaitOperationIds: [
+              REMOTE_PRIORITY_SERIAL_WAIT_SOURCE_OPERATION_ID,
+              REMOTE_PRIORITY_VISIBILITY_OPERATION_ID,
+            ],
+            serialWaitPartitionIds: [
+              'replica_operations-p1',
+              REMOTE_PRIORITY_VISIBILITY_PARTITION_ID,
+            ],
+          },
+        }),
+      ],
+    },
+    priorityPartitionSummary: {
+      blockedPartitions: [
+        Object.freeze({
+          partitionId: REMOTE_PRIORITY_SERIAL_WAIT_SOURCE_PARTITION_ID,
+          spreadGap: 1,
+          readyDistinctNodeCount: 1,
+          requiredDistinctNodeCount: 2,
+        }),
+      ],
+      readyEligibleNodeCount: 2,
     },
   });
 }
@@ -482,6 +574,112 @@ async (t) => {
       'carrier snapshots should retain the supporting source operation context from planning',
     );
   } finally {
+    await coordinator.shutdown();
+  }
+});
+
+test('workflowOwner priority recovery source partition snapshots prefer ' +
+  'live workflow progress over stale planning serial-wait matches while ' +
+  'preserving supporting carrier context',
+async (t) => {
+  const coordinator = createRemotePriorityVisibilityCoordinator();
+  const originalDateNow = Date.now;
+  Date.now = () => REMOTE_PRIORITY_SERIAL_WAIT_CAPTURED_AT_MS;
+  coordinator.initialize();
+
+  coordinator.controlPlaneReadinessService
+    .getPriorityRecoveryPlanningAnswerBestEffort = async () => {
+      return buildRemotePrioritySerialWaitSourcePlanningSnapshot();
+    };
+  coordinator.workflowOwner.repository.getOperationsByEntityAuthoritativeObservation =
+    async () => {
+      return Object.freeze({
+        state: 'present',
+        operationCount: 2,
+        operations: [
+          Object.freeze({
+            operationId: REMOTE_PRIORITY_SERIAL_WAIT_SOURCE_ACTIVE_OPERATION_ID,
+            type: OperationType.REMOVE,
+            partitionId: REMOTE_PRIORITY_SERIAL_WAIT_SOURCE_PARTITION_ID,
+            entityType: SERVICE_TYPE.PARTITION,
+            entityId: REMOTE_PRIORITY_SERIAL_WAIT_SOURCE_PARTITION_ID,
+            sourceNodeId: REMOTE_PRIORITY_SERIAL_WAIT_SOURCE_NODE_ID,
+            targetNodeId: REMOTE_PRIORITY_SERIAL_WAIT_SOURCE_TARGET_NODE_ID,
+            replicaId: REMOTE_PRIORITY_SERIAL_WAIT_SOURCE_REPLICA_ID,
+            status: ReplicaStatus.PENDING,
+            workflowStep: WORKFLOW_STEP.SENDING,
+            createdAt: REMOTE_PRIORITY_SERIAL_WAIT_SOURCE_ACTIVE_CREATED_AT_MS,
+            updatedAt: REMOTE_PRIORITY_SERIAL_WAIT_SOURCE_ACTIVE_UPDATED_AT_MS,
+            completedAt: null,
+          }),
+          Object.freeze({
+            operationId:
+              REMOTE_PRIORITY_SERIAL_WAIT_SOURCE_REMOVED_OPERATION_ID,
+            type: OperationType.REPLACE,
+            partitionId: REMOTE_PRIORITY_SERIAL_WAIT_SOURCE_PARTITION_ID,
+            entityType: SERVICE_TYPE.PARTITION,
+            entityId: REMOTE_PRIORITY_SERIAL_WAIT_SOURCE_PARTITION_ID,
+            sourceNodeId: REMOTE_PRIORITY_SERIAL_WAIT_SOURCE_NODE_ID,
+            targetNodeId: REMOTE_PRIORITY_SERIAL_WAIT_SOURCE_TARGET_NODE_ID,
+            replicaId: REMOTE_PRIORITY_SERIAL_WAIT_SOURCE_REPLICA_ID,
+            status: ReplicaStatus.REMOVED,
+            workflowStep: WORKFLOW_STEP.REMOVED,
+            createdAt:
+              REMOTE_PRIORITY_SERIAL_WAIT_SOURCE_REMOVED_CREATED_AT_MS,
+            updatedAt:
+              REMOTE_PRIORITY_SERIAL_WAIT_SOURCE_REMOVED_COMPLETED_AT_MS,
+            completedAt:
+              REMOTE_PRIORITY_SERIAL_WAIT_SOURCE_REMOVED_COMPLETED_AT_MS,
+          }),
+        ],
+        deferredOutcome: null,
+        retryAfterMs: null,
+      });
+    };
+
+  try {
+    const snapshot =
+      await coordinator.workflowOwner
+        .getPriorityRecoveryDecisionSnapshotForPartitionOperations(
+          REMOTE_PRIORITY_SERIAL_WAIT_SOURCE_PARTITION_ID,
+          [],
+        );
+
+    t.equal(
+      snapshot?.semanticState,
+      'recovering_in_flight',
+      'source partitions should keep the live in-flight workflow state when authoritative operations exist',
+    );
+    t.equal(
+      snapshot?.actuation?.state,
+      'dispatched_waiting_progress',
+      'source partitions should keep the live workflow-progress actuation state',
+    );
+    t.equal(
+      snapshot?.progress?.nextRequiredAction,
+      'wait_for_operation_progress',
+      'source partitions should keep waiting on workflow progress instead of falling back to a planning-only needs_operation state',
+    );
+    t.equal(
+      snapshot?.coordinator?.operation?.operationId,
+      REMOTE_PRIORITY_SERIAL_WAIT_SOURCE_ACTIVE_OPERATION_ID,
+      'source partitions should target the live in-flight authoritative operation context',
+    );
+    t.same(
+      snapshot?.coordinator?.serialWaitPartitionIds,
+      ['replica_operations-p1', REMOTE_PRIORITY_VISIBILITY_PARTITION_ID],
+      'source partitions should preserve supporting carrier partition context from planning',
+    );
+    t.same(
+      snapshot?.coordinator?.serialWaitOperationIds,
+      [
+        REMOTE_PRIORITY_SERIAL_WAIT_SOURCE_OPERATION_ID,
+        REMOTE_PRIORITY_VISIBILITY_OPERATION_ID,
+      ],
+      'source partitions should preserve supporting carrier operation context from planning',
+    );
+  } finally {
+    Date.now = originalDateNow;
     await coordinator.shutdown();
   }
 });
