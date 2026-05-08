@@ -2,9 +2,9 @@
 
 # Current Blocker
 
-Sprint: `work/sprints/active-2026-q2-core-topology-control-plane-rewrite.md`
+Sprint: `work/sprints/archived/done-2026-q2-core-topology-control-plane-rewrite.md`
 
-Package: `work/packages/active-20260508-core-topology-legacy-path-deletion-and-proof.md`
+Package: `work/packages/done-20260508-core-topology-legacy-path-deletion-and-proof.md`
 
 Scenario: `core-topology-control-plane-rewrite`
 
@@ -20,11 +20,11 @@ Boundary: `legacy_path_deletion_and_proof`
 
 Dominant reason: `legacy_shadow_paths_remain_after_projection_readiness_contract`
 
-Current state: Mutation-readiness published-convergence consumption has been cut over from raw recovery-gate fields to projectionReadinessContract; focused consumer proof, static guards, work validation, and diff checks passed.
+Current state: Mutation-readiness published-convergence consumption has been cut over from raw recovery-gate fields to projectionReadinessContract; focused consumer proof, static guards, work validation, and diff checks passed; focused package commit 196e57f3d057a10606e3e2271716306835dc596d is pushed.
 
 ## Next Action
 
-Close and commit the focused package slice when ready.
+Use a new package if the next representative harness rerun exposes a fresh owner-boundary blocker.
 
 ## Proof Ladder
 
@@ -39,5 +39,5 @@ Close and commit the focused package slice when ready.
 3. `test/control-plane/control-plane-system-table-gateway.test.js`
 4. `test/control-plane/control-plane-system-table-gateway-tail-test-cases.js`
 5. `test/query/sql-query-engine.test-part-3.js`
-6. `work/packages/active-20260508-core-topology-legacy-path-deletion-and-proof.md`
+6. `work/packages/done-20260508-core-topology-legacy-path-deletion-and-proof.md`
 7. `work/model-ledger.jsonl`

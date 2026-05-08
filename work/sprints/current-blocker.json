@@ -1,17 +1,17 @@
 {
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
-  "sprint": "work/sprints/active-2026-q2-core-topology-control-plane-rewrite.md",
-  "package": "work/packages/active-20260508-core-topology-legacy-path-deletion-and-proof.md",
-  "status": "active",
+  "sprint": "work/sprints/archived/done-2026-q2-core-topology-control-plane-rewrite.md",
+  "package": "work/packages/done-20260508-core-topology-legacy-path-deletion-and-proof.md",
+  "status": "done",
   "scenario": "core-topology-control-plane-rewrite",
   "artifact": "none",
   "playback": "none",
   "owner": "topology_control_plane",
   "boundary": "legacy_path_deletion_and_proof",
   "dominantReason": "legacy_shadow_paths_remain_after_projection_readiness_contract",
-  "currentState": "Mutation-readiness published-convergence consumption has been cut over from raw recovery-gate fields to projectionReadinessContract; focused consumer proof, static guards, work validation, and diff checks passed.",
-  "nextAction": "Close and commit the focused package slice when ready.",
+  "currentState": "Mutation-readiness published-convergence consumption has been cut over from raw recovery-gate fields to projectionReadinessContract; focused consumer proof, static guards, work validation, and diff checks passed; focused package commit 196e57f3d057a10606e3e2271716306835dc596d is pushed.",
+  "nextAction": "Use a new package if the next representative harness rerun exposes a fresh owner-boundary blocker.",
   "proof": [
     "npm run work:context",
     "npm run work:validate",
@@ -23,7 +23,7 @@
     "test/control-plane/control-plane-system-table-gateway.test.js",
     "test/control-plane/control-plane-system-table-gateway-tail-test-cases.js",
     "test/query/sql-query-engine.test-part-3.js",
-    "work/packages/active-20260508-core-topology-legacy-path-deletion-and-proof.md",
+    "work/packages/done-20260508-core-topology-legacy-path-deletion-and-proof.md",
     "work/model-ledger.jsonl"
   ],
   "predecessor": "work/packages/done-20260508-core-topology-projection-readiness-contract.md"

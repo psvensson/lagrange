@@ -40,12 +40,13 @@ Projection/readiness is the shared consumer contract above those owners:
 
 ## Initial Package Queue
 
-1. `work/packages/active-20260508-core-topology-rewrite-spec-and-roadmap-rebaseline.md`
-2. `work/packages/todo-20260508-core-topology-owner-boundary-inventory.md`
-3. `work/packages/todo-20260508-core-topology-boot-join-rejoin-kernel.md`
-4. `work/packages/todo-20260508-core-topology-partitioning-rebalancing-kernel.md`
-5. `work/packages/todo-20260508-core-topology-projection-readiness-contract.md`
-6. `work/packages/todo-20260508-core-topology-legacy-path-deletion-and-proof.md`
+1. `work/packages/done-20260508-core-topology-rewrite-spec-and-roadmap-rebaseline.md`
+2. `work/packages/done-20260508-core-topology-owner-boundary-inventory.md`
+3. `work/packages/done-20260508-core-topology-boot-join-rejoin-kernel.md`
+4. `work/packages/done-20260508-core-topology-partitioning-rebalancing-kernel.md`
+5. `work/packages/done-20260508-core-topology-publication-projection-boundary.md`
+6. `work/packages/done-20260508-core-topology-projection-readiness-contract.md`
+7. `work/packages/done-20260508-core-topology-legacy-path-deletion-and-proof.md`
 
 ## Out Of Scope
 

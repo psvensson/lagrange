@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-08",
   "scenario": "core-topology-control-plane-rewrite",
   "artifact": "none",
@@ -11,8 +11,8 @@
   "owner": "topology_control_plane",
   "boundary": "legacy_path_deletion_and_proof",
   "dominantReason": "legacy_shadow_paths_remain_after_projection_readiness_contract",
-  "currentState": "Mutation-readiness published-convergence consumption has been cut over from raw recovery-gate fields to projectionReadinessContract; focused consumer proof, static guards, work validation, and diff checks passed.",
-  "nextAction": "Close and commit the focused package slice when ready.",
+  "currentState": "Mutation-readiness published-convergence consumption has been cut over from raw recovery-gate fields to projectionReadinessContract; focused consumer proof, static guards, work validation, and diff checks passed; focused package commit 196e57f3d057a10606e3e2271716306835dc596d is pushed.",
+  "nextAction": "Use a new package if the next representative harness rerun exposes a fresh owner-boundary blocker.",
   "proof": [
     "npm run work:context",
     "npm run work:validate",
@@ -24,10 +24,12 @@
     "test/control-plane/control-plane-system-table-gateway.test.js",
     "test/control-plane/control-plane-system-table-gateway-tail-test-cases.js",
     "test/query/sql-query-engine.test-part-3.js",
-    "work/packages/active-20260508-core-topology-legacy-path-deletion-and-proof.md",
+    "work/packages/done-20260508-core-topology-legacy-path-deletion-and-proof.md",
     "work/model-ledger.jsonl"
   ],
-  "predecessor": "work/packages/done-20260508-core-topology-projection-readiness-contract.md"
+  "predecessor": "work/packages/done-20260508-core-topology-projection-readiness-contract.md",
+  "closed": "2026-05-08",
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -87,7 +89,13 @@ representative Phase 0.1 proof ladder.
 - [x] Fix subagent recorded or explicitly not needed: not-needed.
 - [x] Implementation subagent recorded: Agent Darwin
       (`019e08f4-be39-79f0-9840-99e68d1d4ed8`) implemented
-      `work/packages/active-20260508-core-topology-legacy-path-deletion-and-proof.md`.
+      `work/packages/done-20260508-core-topology-legacy-path-deletion-and-proof.md`.
+
+## Commit And Push Ledger
+
+- Focused package commit: 196e57f3d057a10606e3e2271716306835dc596d
+- Pushed to: origin/codex/pending-ack-eligibility-filter
+- Commit contains only package-owned files/package-status/allowed sprint handoff: yes
 
 ## Static Drift Ledger
 
@@ -161,7 +169,7 @@ Failure was `LLM API request failed (401)` / `invalid_api_key`.
   passed with 0 violations.
 - `npm run guard:guidelines:file -- src/control-plane/control-plane-mutation-readiness.js`
   blocked by local invalid API key (`401 invalid_api_key`).
-- `npm run work:model-ledger -- record --package work/packages/active-20260508-core-topology-legacy-path-deletion-and-proof.md --model gpt-5-codex --reasoning-effort high --task-class distributed-runtime --outcome done --validation-status focused-passing-work-validate-pending-llm-guard-blocked --correction-loops 1 --review-findings 0 --notes "Deleted mutation-readiness raw recovery-gate convergence path; focused mutation, query, gateway, and rebalancer tests passed; static guards passed; LLM guideline guard blocked by invalid local API key."`
+- `npm run work:model-ledger -- record --package work/packages/done-20260508-core-topology-legacy-path-deletion-and-proof.md --model gpt-5-codex --reasoning-effort high --task-class distributed-runtime --outcome done --validation-status focused-passing-work-validate-pending-llm-guard-blocked --correction-loops 1 --review-findings 0 --notes "Deleted mutation-readiness raw recovery-gate convergence path; focused mutation, query, gateway, and rebalancer tests passed; static guards passed; LLM guideline guard blocked by invalid local API key."`
   recorded model experience.
 - `npm run work:current-blocker` passed and regenerated
   `work/sprints/current-blocker.json` and

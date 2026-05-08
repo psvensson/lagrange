@@ -32,32 +32,32 @@
 
 ## 4. Partitioning Rebalancing Kernel
 
-- [ ] Define placement owner policy and intent vocabulary.
-- [ ] Define operation owner lifecycle, retry, resume, and terminal vocabulary.
-- [ ] Cut split, move, repair, and recovery paths over to placement and
+- [x] Define placement owner policy and intent vocabulary.
+- [x] Define operation owner lifecycle, retry, resume, and terminal vocabulary.
+- [x] Cut split, move, repair, and recovery paths over to placement and
       operation owner contracts.
-- [ ] Prove operation scheduling and workflow progress under representative
+- [x] Prove operation scheduling and workflow progress under representative
       pressure.
 
 ## 5. Publication Projection Boundary
 
-- [ ] Define publication owner rows, ACK/freshness state, and recovery gate
+- [x] Define publication owner rows, ACK/freshness state, and recovery gate
       state as the only publication stream.
-- [ ] Cut projection consumers away from direct publication-row
+- [x] Cut projection consumers away from direct publication-row
       reinterpretation.
-- [ ] Prove projection/readiness receives publication owner outcomes only.
+- [x] Prove projection/readiness receives publication owner outcomes only.
 
 ## 6. Projection Readiness Contract
 
-- [ ] Define the canonical projection snapshot and revision stream.
-- [ ] Define internal, repair, and serve readiness states.
-- [ ] Cut diagnostics, admin, harness, and runtime readers over to the shared
+- [x] Define the canonical projection snapshot and revision stream.
+- [x] Define internal, repair, and serve readiness states.
+- [x] Cut diagnostics, admin, harness, and runtime readers over to the shared
       contract.
-- [ ] Prove consumers no longer recreate readiness from raw evidence.
+- [x] Prove consumers no longer recreate readiness from raw evidence.
 
 ## 7. Legacy Path Deletion And Proof
 
-- [ ] Delete superseded topology fallback paths and shadow vocabularies.
-- [ ] Add structural guards against transitional-path imports or calls.
-- [ ] Run the Phase 0.1 representative proof ladder.
-- [ ] Reconcile roadmap, sprint, package, and current-blocker truth.
+- [x] Delete superseded topology fallback paths and shadow vocabularies.
+- [x] Add structural guards against transitional-path imports or calls.
+- [x] Run the Phase 0.1 representative proof ladder.
+- [x] Reconcile roadmap, sprint, package, and current-blocker truth.

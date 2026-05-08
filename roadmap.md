@@ -59,7 +59,7 @@ Open exit blockers as of May 8, 2026:
 
 | Exit area | Capability Exists | Representative Gate Green | Current blocker |
 |-----------|-------------------|---------------------------|-----------------|
-| Core topology control-plane rewrite | ✅ | 🔧 | Current representative track is `work/sprints/active-2026-q2-core-topology-control-plane-rewrite.md`, with active package `work/packages/active-20260508-core-topology-rewrite-spec-and-roadmap-rebaseline.md` and architecture spec `.kiro/specs/core-topology-control-plane-rewrite/` |
+| Core topology control-plane rewrite | ✅ | 🔧 | Rewrite sprint closed in `work/sprints/archived/done-2026-q2-core-topology-control-plane-rewrite.md`; final package `work/packages/done-20260508-core-topology-legacy-path-deletion-and-proof.md` cut mutation readiness over to `projectionReadinessContract`; next representative harness rerun should open a fresh package only if it exposes a new owner-boundary blocker |
 | Rolling restart under load | ✅ | 🔧 | Gate remains open, but the rolling-restart residuals are archived as predecessor evidence behind the core topology control-plane rewrite track |
 | Priority recovery progress under load | ✅ | 🔧 | Priority-recovery progress remains evidence for the operation-owner successor packages instead of a separate active representative track |
 | Metadata gateway and owner-ingress audit | ✅ | ✅ | `npm run test:metadata-gateway:audit` passed on April 26, 2026 |

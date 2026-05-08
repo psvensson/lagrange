@@ -8,17 +8,17 @@ readiness, operation scheduling, and rebalancer paths.
 
 ## Current Blocker Snapshot
 
-Active package:
+Sprint status:
 
-1. [Core Topology Legacy Path Deletion And Proof](../packages/active-20260508-core-topology-legacy-path-deletion-and-proof.md)
+1. Completed. All rewrite packages are closed and pushed.
 
 Current blocker:
 
-1. Projection/readiness contract is closed and pushed.
-2. Legacy fallback paths, shadow vocabularies, and duplicate decision surfaces
-   need deletion or structural guards.
-3. The next blocker is the required review/fix/implementation subagent
-   sequence for the active legacy path deletion and proof package.
+1. No active package remains in this sprint.
+2. Mutation-readiness published-convergence consumption now uses
+   `projectionReadinessContract` instead of raw recovery-gate fields.
+3. A future representative harness rerun should open a fresh package only if it
+   exposes a new owner-boundary blocker.
 
 ## Scope Basis
 
@@ -48,7 +48,7 @@ mutation owner.
 4. Done: [Core Topology Partitioning Rebalancing Kernel](../packages/done-20260508-core-topology-partitioning-rebalancing-kernel.md)
 5. Done: [Core Topology Publication Projection Boundary](../packages/done-20260508-core-topology-publication-projection-boundary.md)
 6. Done: [Core Topology Projection Readiness Contract](../packages/done-20260508-core-topology-projection-readiness-contract.md)
-7. Active: [Core Topology Legacy Path Deletion And Proof](../packages/active-20260508-core-topology-legacy-path-deletion-and-proof.md)
+7. Done: [Core Topology Legacy Path Deletion And Proof](../packages/done-20260508-core-topology-legacy-path-deletion-and-proof.md)
 
 ## Execution Order
 
@@ -85,3 +85,6 @@ mutation owner.
 4. Current-blocker handoff points at the active rewrite package.
 5. The owner-boundary inventory is recorded in
    `.kiro/specs/core-topology-control-plane-rewrite/owner-boundary-inventory.md`.
+6. All seven rewrite packages are closed and pushed.
+7. Sprint closure handoff points at the closed final package and names the next
+   representative-harness step as future work only if a new blocker appears.
