@@ -33,7 +33,8 @@ continued work package, run the subagents sequentially and record the result in
 the package file:
 
 1. A fresh review subagent reviews the most recently executed package on the
-   same sprint or owner boundary.
+   same sprint or owner boundary. For the first work package in a new sprint,
+   record review as `not-needed` with reason `first-package-in-sprint` instead.
 2. If that review finds fixes, a fresh and separate fix subagent performs those
    fixes before implementation starts.
 3. A fresh and separate implementation subagent implements the new/current
@@ -49,7 +50,9 @@ The package's Subagent Sequencing Ledger is the durable proof that the sequence
 happened. Active metadata-bearing packages must carry checked entries in this
 format:
 
-1. `Agent <name> (<agent-id>) reviewed <package>; result <clean|fixes-required>`
+1. `Agent <name> (<agent-id>) reviewed <package>; result <clean|fixes-required>`,
+   or `not-needed (first-package-in-sprint)` only for the first package in a
+   new sprint
 2. `Agent <name> (<agent-id>) fixed <package>` when review found fixes, or
    `not-needed` only when the review result is `clean`
 3. `Agent <name> (<agent-id>) implemented <package>`

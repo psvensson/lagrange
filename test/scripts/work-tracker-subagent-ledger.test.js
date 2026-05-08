@@ -57,6 +57,30 @@ const WORK_TRACKER_LEDGER_FIXES_REQUIRED_CONTENT = [
   '      `work/packages/active-test-package.md`.',
   '',
 ].join('\n');
+const WORK_TRACKER_LEDGER_FIRST_PACKAGE_CONTENT = [
+  '# Test Package',
+  '',
+  '## Subagent Sequencing Ledger',
+  '',
+  '- [x] Review subagent recorded: `not-needed` (`first-package-in-sprint`).',
+  '- [x] Fix subagent recorded or explicitly not needed: `not-needed`.',
+  '- [x] Implementation subagent recorded:',
+  `      Agent Implement (${IMPLEMENTATION_AGENT_ID}) implemented`,
+  '      `work/packages/active-test-package.md`.',
+  '',
+].join('\n');
+const WORK_TRACKER_LEDGER_AMBIGUOUS_REVIEW_NOT_NEEDED_CONTENT = [
+  '# Test Package',
+  '',
+  '## Subagent Sequencing Ledger',
+  '',
+  '- [x] Review subagent recorded: `not-needed`.',
+  '- [x] Fix subagent recorded or explicitly not needed: `not-needed`.',
+  '- [x] Implementation subagent recorded:',
+  `      Agent Implement (${IMPLEMENTATION_AGENT_ID}) implemented`,
+  '      `work/packages/active-test-package.md`.',
+  '',
+].join('\n');
 const WORK_TRACKER_LEDGER_NO_AGENT_ID_CONTENT = [
   '# Test Package',
   '',
@@ -225,6 +249,24 @@ describe('work tracker subagent sequencing ledger validation', () => {
     );
 
     assert.deepEqual(errors, []);
+  });
+
+  it('accepts not-needed review for the first package in a sprint', () => {
+    const errors = validateSubagentSequencingLedger(
+      WORK_TRACKER_LEDGER_FIRST_PACKAGE_CONTENT,
+      WORK_TRACKER_LEDGER_TEST_FILE,
+    );
+
+    assert.deepEqual(errors, []);
+  });
+
+  it('reports ambiguous not-needed review without first-package reason', () => {
+    const errors = validateSubagentSequencingLedger(
+      WORK_TRACKER_LEDGER_AMBIGUOUS_REVIEW_NOT_NEEDED_CONTENT,
+      WORK_TRACKER_LEDGER_TEST_FILE,
+    );
+
+    assert.match(errors.join('\n'), /first-package-in-sprint/u);
   });
 
   it('reports checked ledger items without real agent id proof', () => {

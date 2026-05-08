@@ -101,7 +101,8 @@ proof are invalid.
 
 - [ ] Review subagent recorded:
       Agent <name> (<agent-id>) reviewed <package>;
-      result `<clean|fixes-required>`.
+      result `<clean|fixes-required>`, or `not-needed`
+      (`first-package-in-sprint`) only for the first package in a new sprint.
 - [ ] Fix subagent recorded or explicitly not needed:
       Agent <name> (<agent-id>) fixed <package>, or `not-needed` only
       when review result is `clean`.

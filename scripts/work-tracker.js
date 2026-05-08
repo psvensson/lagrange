@@ -76,6 +76,8 @@ const AGENT_PROOF_PATTERN_TEXT =
 const SUBAGENT_REVIEW_RESULT_CLEAN = 'clean';
 const SUBAGENT_REVIEW_RESULT_FIXES_REQUIRED = 'fixes-required';
 const SUBAGENT_FIX_NOT_NEEDED = 'not-needed';
+const SUBAGENT_REVIEW_NOT_NEEDED_REASON_FIRST_PACKAGE =
+  'first-package-in-sprint';
 const SUBAGENT_REVIEW_PATTERN = new RegExp(
   AGENT_PROOF_PATTERN_TEXT + '\\s+reviewed\\s+`?([^;`]+)`?\\s*;\\s*' +
     'result\\s+`?(' + SUBAGENT_REVIEW_RESULT_CLEAN + '|' +
@@ -256,11 +258,18 @@ function validateAgentProof(agent, roleLabel, filePath) {
 }
 
 function parseReviewEntry(content) {
+  if (isReviewNotNeededEntry(content)) {
+    return {
+      type: SUBAGENT_FIX_NOT_NEEDED,
+      result: SUBAGENT_REVIEW_RESULT_CLEAN,
+    };
+  }
   const match = SUBAGENT_REVIEW_PATTERN.exec(normalizeLedgerText(content));
   if (!match) {
     return null;
   }
   return {
+    type: 'agent',
     agent: {
       name: normalizeLedgerText(match[NUM_ONE]),
       id: match[NUM_TWO].toLowerCase(),
@@ -268,6 +277,12 @@ function parseReviewEntry(content) {
     packagePath: normalizeLedgerPackage(match[NUM_TWO + NUM_ONE]),
     result: normalizeLedgerFieldValue(match[NUM_TWO + NUM_TWO]).toLowerCase(),
   };
+}
+
+function isReviewNotNeededEntry(content) {
+  const normalizedContent = normalizeLedgerText(content).toLowerCase();
+  return normalizedContent.includes(SUBAGENT_FIX_NOT_NEEDED) &&
+    normalizedContent.includes(SUBAGENT_REVIEW_NOT_NEEDED_REASON_FIRST_PACKAGE);
 }
 
 function isFixNotNeededEntry(content) {
@@ -337,10 +352,13 @@ function validateSubagentLedgerRoles(entries, filePath) {
     errors.push(
       `${filePath}: Subagent Sequencing Ledger review entry must match ` +
       'Agent <name> (<agent-id>) reviewed <package>; result ' +
-      '<clean|fixes-required>.',
+      '<clean|fixes-required>, or `not-needed` for ' +
+      `${SUBAGENT_REVIEW_NOT_NEEDED_REASON_FIRST_PACKAGE}.`,
     );
   }
-  errors.push(...validateAgentProof(review?.agent, 'review', filePath));
+  if (review?.type === 'agent') {
+    errors.push(...validateAgentProof(review.agent, 'review', filePath));
+  }
 
   const fix = parseFixEntry(entries[SUBAGENT_LEDGER_FIX_LABEL].content);
   if (!fix) {
@@ -388,6 +406,7 @@ function validateSubagentLedgerRoles(entries, filePath) {
     );
   }
   if (
+    review.type === 'agent' &&
     fix.type === 'agent' &&
     fix.packagePath !== review.packagePath
   ) {
@@ -403,6 +422,7 @@ function validateSubagentLedgerRoles(entries, filePath) {
     );
   }
   if (
+    review.type === 'agent' &&
     fix.type === 'agent' &&
     fix.agent.id === review.agent.id
   ) {
@@ -411,7 +431,7 @@ function validateSubagentLedgerRoles(entries, filePath) {
       'from the review agent.',
     );
   }
-  if (implementation.agent.id === review.agent.id) {
+  if (review.type === 'agent' && implementation.agent.id === review.agent.id) {
     errors.push(
       `${filePath}: Subagent Sequencing Ledger implementation agent must be ` +
       'separate from the review agent.',

@@ -56,6 +56,18 @@ const TEST_PACKAGE_READY_CONTENT = [
   '      `work/packages/active-20260507-test-package.md`.',
   '',
 ].join('\n');
+const TEST_PACKAGE_FIRST_IN_SPRINT_CONTENT = [
+  '# Test Package',
+  '',
+  '## Subagent Sequencing Ledger',
+  '',
+  '- [x] Review subagent recorded: `not-needed` (`first-package-in-sprint`).',
+  '- [x] Fix subagent recorded or explicitly not needed: `not-needed`.',
+  '- [x] Implementation subagent recorded:',
+  `      Agent Implement (${IMPLEMENTATION_AGENT_ID}) implemented`,
+  '      `work/packages/active-20260507-test-package.md`.',
+  '',
+].join('\n');
 const TEST_PACKAGE_ROLE_ORDER_INVALID_CONTENT = [
   '# Test Package',
   '',
@@ -243,6 +255,9 @@ test('work context reports the next required subagent role', (t) => {
     TEST_PACKAGE_REVIEW_ONLY_CONTENT,
   );
   const ready = buildSubagentSequencingStatus(TEST_PACKAGE_READY_CONTENT);
+  const firstInSprint = buildSubagentSequencingStatus(
+    TEST_PACKAGE_FIRST_IN_SPRINT_CONTENT,
+  );
   const localSession = buildSubagentSequencingStatus(
     TEST_PACKAGE_LOCAL_SESSION_CONTENT,
   );
@@ -253,6 +268,8 @@ test('work context reports the next required subagent role', (t) => {
   t.match(reviewOnly.status, /not-needed/u);
   t.equal(ready.role, 'none');
   t.match(ready.status, /implementation proof recorded/u);
+  t.equal(firstInSprint.role, 'none');
+  t.match(firstInSprint.status, /implementation proof recorded/u);
   t.equal(localSession.role, 'review');
   t.match(localSession.status, /Review proof missing/u);
   t.end();

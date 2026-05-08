@@ -94,7 +94,8 @@ starts.
 Required sequence:
 
 1. Fresh review subagent: review the most recently executed package on the same
-   sprint or owner boundary.
+   sprint or owner boundary. For the first work package in a new sprint, record
+   review as `not-needed` with reason `first-package-in-sprint` instead.
 2. Fresh fix subagent, when needed: if the review finds fixes, a separate
    subagent performs those fixes before implementation starts.
 3. Fresh implementation subagent: after review/fixes are clean, a separate
@@ -104,7 +105,9 @@ Required sequence:
 
 The package must record:
 
-1. Review: `Agent <name> (<agent-id>) reviewed <package>; result <clean|fixes-required>`.
+1. Review: `Agent <name> (<agent-id>) reviewed <package>; result <clean|fixes-required>`,
+   or `not-needed (first-package-in-sprint)` only for the first package in a
+   new sprint.
 2. Fix: `Agent <name> (<agent-id>) fixed <package>` when review found fixes,
    or `not-needed` only when the review result was `clean`.
 3. Implementation: `Agent <name> (<agent-id>) implemented <package>` after the

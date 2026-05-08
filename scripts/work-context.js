@@ -141,6 +141,8 @@ const SUBAGENT_STATUS_STRICT_VALIDATION_FAILED =
 const SUBAGENT_REVIEW_RESULT_CLEAN = 'clean';
 const SUBAGENT_REVIEW_RESULT_FIXES_REQUIRED = 'fixes-required';
 const SUBAGENT_FIX_NOT_NEEDED = 'not-needed';
+const SUBAGENT_REVIEW_NOT_NEEDED_REASON_FIRST_PACKAGE =
+  'first-package-in-sprint';
 const SUBAGENT_REVIEW_RESULT_PATTERN =
   /result\s+`?(clean|fixes-required)`?/iu;
 const SUBAGENT_AGENT_ID_PATTERN =
@@ -476,8 +478,17 @@ function findCheckedLedgerItem(ledger, label) {
 }
 
 function findReviewResult(reviewItem) {
+  if (isNotNeededReview(reviewItem)) {
+    return SUBAGENT_REVIEW_RESULT_CLEAN;
+  }
   const match = SUBAGENT_REVIEW_RESULT_PATTERN.exec(reviewItem || EMPTY_STRING);
   return match ? match[NUM_ONE].toLowerCase() : EMPTY_STRING;
+}
+
+function isNotNeededReview(reviewItem) {
+  const normalizedItem = normalizeString(reviewItem).toLowerCase();
+  return normalizedItem.includes(SUBAGENT_FIX_NOT_NEEDED) &&
+    normalizedItem.includes(SUBAGENT_REVIEW_NOT_NEEDED_REASON_FIRST_PACKAGE);
 }
 
 function isNotNeededFix(fixItem) {
@@ -542,7 +553,7 @@ function buildSubagentSequencingStatus(
       SUBAGENT_STATUS_REVIEW_MISSING,
     );
   }
-  if (!hasRealAgentProof(reviewItem)) {
+  if (!isNotNeededReview(reviewItem) && !hasRealAgentProof(reviewItem)) {
     return buildSubagentRoleStatus(
       SUBAGENT_ROLE_REVIEW,
       SUBAGENT_STATUS_REVIEW_MISSING,
