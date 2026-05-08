@@ -21,6 +21,7 @@ const TEST_REPLICA_DISPATCH_TARGET =
 const TEST_RETRYABLE_HANDOFF_ERROR = 'handoff retryable timeout';
 const TEST_COORDINATOR_CREATED_REMOTE_HANDOFF =
   'coordinator_created_remote_handoff';
+const TEST_OWNER_ACTION_WAKE_REMOTE_OWNER = 'wake_remote_owner';
 
 function buildTransactionCoordinator() {
   return {
@@ -129,6 +130,7 @@ async (t) => {
 
   const coordinator = createCoordinator({
     nodeId: TEST_SOURCE_NODE_ID,
+    sqlQueryEngine,
     transactionCoordinator: buildTransactionCoordinator(),
     systemTableCache: {
       get(tableName, key) {
@@ -201,6 +203,10 @@ async (t) => {
 
   const cachedOperation =
     coordinator.repository.queryCachedIncompleteOperations()[0];
+  const drainSnapshot =
+    await coordinator.workflowOwner.buildPriorityRecoveryOperationDrainSnapshot(
+      cachedOperation,
+    );
 
   await coordinator.checkTimeouts();
   await coordinator.checkTimeouts();
@@ -223,6 +229,11 @@ async (t) => {
     ),
     true,
     'the timeout witness should be eligible for dispatch re-arm while its operation budget remains active',
+  );
+  t.equal(
+    drainSnapshot?.ownerAction,
+    TEST_OWNER_ACTION_WAKE_REMOTE_OWNER,
+    'stale remote-owned timeout witnesses should route through remote-owner wake instead of staying transition-deferred',
   );
 
   t.equal(

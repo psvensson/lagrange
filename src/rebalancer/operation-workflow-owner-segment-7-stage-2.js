@@ -108,6 +108,27 @@ class OperationWorkflowOwnerSegment7Stage2 extends OperationWorkflowOwnerSegment
         options,
       )
     ) {
+      const operationId = String(
+        operation?.operationId ||
+          OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_STRING,
+      ).trim();
+      if (!this.repository.isOperationLocallyOwned(operation)) {
+        if (
+          operationId.length > NUM.ZERO &&
+          this.createdOperationHandoffRetryTimerByOperationId.has(operationId)
+        ) {
+          return true;
+        }
+        const remoteOwnerWoken =
+          await this.wakeCoordinatorCreatedRemoteOwner(operation);
+        return (
+          remoteOwnerWoken === true ||
+          (
+            operationId.length > NUM.ZERO &&
+            this.createdOperationHandoffRetryTimerByOperationId.has(operationId)
+          )
+        );
+      }
       await this.executeOperationFromReconcilePath(operation);
       return true;
     }

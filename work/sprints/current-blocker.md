@@ -8,9 +8,9 @@ Package: `work/packages/active-20260508-rolling-restart-topology-publication-con
 
 Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/rolling-restart-serial-wait-operation-scheduling-fix-20260508T124500Z.report.json`
+Artifact: `test-output/reports/rolling-restart-workflow-timeout-remote-wake-fix-20260508T130500Z.report.json`
 
-Playback: `test-output/reports/.playback/rolling-restart-serial-wait-operation-scheduling-fix-20260508T124500Z/rolling-restart/`
+Playback: `test-output/reports/.playback/rolling-restart-workflow-timeout-remote-wake-fix-20260508T130500Z/rolling-restart/`
 
 ## Boundary
 
@@ -20,11 +20,11 @@ Boundary: `operation_workflow_owner / workflow_timeout / timeout_reconcile_due`
 
 Dominant reason: `priority_recovery_workflow_timeout_transition_deferred`
 
-Current state: The serial-wait no-operation fix removed the rebalancer_leader operation-scheduling frontier. priorityRecoveryInvariants still pass and publication remains PUBLISHED with pendingAckCount=0. The first frontier is now operation_workflow_owner / workflow_timeout: all five priority partitions are owned by operation_workflow_owner, the dominant witness is sql_write_operations-p1 with cache-visible PENDING operation 9d8d9432-cbc6-411f-a343-8ad9ab99df5b, workflowProgressPhaseId=dispatch_pending, stepAgeMs=75457 over stepTimeoutMs=30000, and nextRequiredAction=reconcile_stale_operation_progress.
+Current state: The stale remote dispatch-pending wake fix passed focused proof but did not close the representative frontier. priorityRecoveryInvariants still pass and publication remains PUBLISHED with pendingAckCount=0. The first frontier remains operation_workflow_owner / workflow_timeout: the dominant witness is sql_write_operations-p1 with cache-visible PENDING operation 773b4aca-bd05-4788-8126-d7d8f12d3270, workflowProgressPhaseId=dispatch_pending, stepAgeMs=77003 over stepTimeoutMs=30000, actuationState=transition_deferred, and nextRequiredAction=reconcile_stale_operation_progress.
 
 ## Next Action
 
-Start the next implementation slice for operation_workflow_owner / workflow_timeout. The next proof surface is why stale dispatch_pending PENDING priority recovery operations reach timeout_reconcile_due but remain transition_deferred instead of being reconciled or classified.
+Start the next implementation slice for operation_workflow_owner / workflow_timeout. The next proof surface is why the remote-owner wake/retry path still leaves stale dispatch_pending PENDING priority recovery operations transition_deferred at timeout_reconcile_due in the representative run.
 
 ## Proof Ladder
 
