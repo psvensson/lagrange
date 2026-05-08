@@ -4,7 +4,7 @@
 
 Sprint: `work/sprints/active-2026-q2-core-topology-control-plane-rewrite.md`
 
-Package: `work/packages/active-20260508-core-topology-projection-readiness-contract.md`
+Package: `work/packages/active-20260508-core-topology-legacy-path-deletion-and-proof.md`
 
 Scenario: `core-topology-control-plane-rewrite`
 
@@ -16,15 +16,15 @@ Playback: `none`
 
 Owner: `topology_control_plane`
 
-Boundary: `projection_readiness_contract`
+Boundary: `legacy_path_deletion_and_proof`
 
-Dominant reason: `projection_readiness_consumers_need_one_publication_derived_contract`
+Dominant reason: `legacy_shadow_paths_remain_after_projection_readiness_contract`
 
-Current state: Projection/readiness contract implementation and focused proof are complete; the package is ready for focused commit/push and closure before legacy-path deletion starts.
+Current state: Projection/readiness contract implementation is closed and pushed. Remaining work is to delete or structurally block superseded topology fallback paths, shadow vocabularies, and duplicate decision surfaces, then run the representative proof ladder.
 
 ## Next Action
 
-Commit and push the focused projection/readiness contract slice, close this package, then activate the legacy path deletion and proof successor.
+Run the required review/fix/implementation subagent sequence, then delete or structurally block legacy paths and run the representative proof ladder.
 
 ## Proof Ladder
 
@@ -34,17 +34,7 @@ Commit and push the focused projection/readiness contract slice, close this pack
 
 ## Touched Files
 
-1. `src/control-plane/control-plane-readiness-constants.js`
-2. `src/control-plane/control-plane-readiness-service-segment-1.js`
-3. `src/control-plane/control-plane-readiness-service-segment-2.js`
-4. `src/control-plane/control-plane-readiness-service-segment-3.js`
-5. `src/control-plane/control-plane-readiness-service-shared.js`
-6. `src/control-plane/eligibility-snapshot.js`
-7. `src/control-plane/readiness-transition-state.js`
-8. `test/control-plane/control-plane-readiness-service.test-part-6.js`
-9. `work/model-ledger.jsonl`
-10. `work/packages/active-20260508-core-topology-projection-readiness-contract.md`
-11. `work/packages/done-20260508-core-topology-publication-projection-boundary.md`
-12. `work/sprints/active-2026-q2-core-topology-control-plane-rewrite.md`
-13. `work/sprints/current-blocker.json`
-14. `work/sprints/current-blocker.md`
+1. `work/packages/active-20260508-core-topology-legacy-path-deletion-and-proof.md`
+2. `work/sprints/active-2026-q2-core-topology-control-plane-rewrite.md`
+3. `work/sprints/current-blocker.json`
+4. `work/sprints/current-blocker.md`

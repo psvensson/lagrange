@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-08",
   "scenario": "core-topology-control-plane-rewrite",
   "artifact": "none",
@@ -11,8 +11,8 @@
   "owner": "topology_control_plane",
   "boundary": "projection_readiness_contract",
   "dominantReason": "projection_readiness_consumers_need_one_publication_derived_contract",
-  "currentState": "Projection/readiness contract implementation and focused proof are complete; the package is ready for focused commit/push and closure before legacy-path deletion starts.",
-  "nextAction": "Commit and push the focused projection/readiness contract slice, close this package, then activate the legacy path deletion and proof successor.",
+  "currentState": "Projection/readiness contract implementation and focused proof are complete; this package is closed, committed, and pushed, and the legacy path deletion successor is active.",
+  "nextAction": "No action remains for this closed package; continue execution in the active legacy path deletion and proof successor.",
   "proof": [
     "npm run work:context",
     "npm run work:validate",
@@ -28,13 +28,15 @@
     "src/control-plane/readiness-transition-state.js",
     "test/control-plane/control-plane-readiness-service.test-part-6.js",
     "work/model-ledger.jsonl",
-    "work/packages/active-20260508-core-topology-projection-readiness-contract.md",
+    "work/packages/done-20260508-core-topology-projection-readiness-contract.md",
     "work/packages/done-20260508-core-topology-publication-projection-boundary.md",
     "work/sprints/active-2026-q2-core-topology-control-plane-rewrite.md",
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md"
   ],
-  "predecessor": "work/packages/done-20260508-core-topology-publication-projection-boundary.md"
+  "predecessor": "work/packages/done-20260508-core-topology-publication-projection-boundary.md",
+  "closed": "2026-05-08",
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -96,7 +98,13 @@ ladder.
       `work/packages/done-20260508-core-topology-publication-projection-boundary.md`.
 - [x] Implementation subagent recorded: Agent Faraday
       (`019e08e1-f19c-7320-84a1-f6c419feee8c`) implemented
-      `work/packages/active-20260508-core-topology-projection-readiness-contract.md`.
+      `work/packages/done-20260508-core-topology-projection-readiness-contract.md`.
+
+## Commit And Push Ledger
+
+- Focused package commit: `0fc3db2b`
+- Pushed to: `origin/codex/pending-ack-eligibility-filter`
+- Commit contains only package-owned files/package-status/allowed sprint handoff: `yes`
 
 ## Static Drift Ledger
 
@@ -166,6 +174,6 @@ Failure was `LLM API request failed (401)` / `invalid_api_key`.
 - `npm run work:validate` passed.
 - Parent-session `npm run audit:file-size` passed with the inherited ratchet:
   source `140/144` over 800 lines and test `156/159` over 1200 lines.
-- `npm run work:model-ledger -- record --package work/packages/active-20260508-core-topology-projection-readiness-contract.md --model gpt-5-codex --reasoning-effort high --task-class distributed-runtime --outcome done --validation-status focused-passing-work-validate-passed-llm-guard-blocked --correction-loops 0 --review-findings 0 --notes "Added projection/readiness contract derived from publication boundary, readiness dimensions, and priority recovery; focused readiness tests and static guards passed; LLM guideline guard blocked by invalid local API key."`
+- `npm run work:model-ledger -- record --package work/packages/done-20260508-core-topology-projection-readiness-contract.md --model gpt-5-codex --reasoning-effort high --task-class distributed-runtime --outcome done --validation-status focused-passing-work-validate-passed-llm-guard-blocked --correction-loops 0 --review-findings 0 --notes "Added projection/readiness contract derived from publication boundary, readiness dimensions, and priority recovery; focused readiness tests and static guards passed; LLM guideline guard blocked by invalid local API key."`
   recorded model experience.
 - `git diff --check` passed.

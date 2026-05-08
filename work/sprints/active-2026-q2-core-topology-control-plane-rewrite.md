@@ -10,16 +10,15 @@ readiness, operation scheduling, and rebalancer paths.
 
 Active package:
 
-1. [Core Topology Projection Readiness Contract](../packages/active-20260508-core-topology-projection-readiness-contract.md)
+1. [Core Topology Legacy Path Deletion And Proof](../packages/active-20260508-core-topology-legacy-path-deletion-and-proof.md)
 
 Current blocker:
 
-1. Publication boundary outcomes are closed and pushed.
-2. Projection/readiness needs one canonical publication-derived contract before
-   diagnostics, admin, harness, and runtime readers stop recombining raw owner
-   evidence.
+1. Projection/readiness contract is closed and pushed.
+2. Legacy fallback paths, shadow vocabularies, and duplicate decision surfaces
+   need deletion or structural guards.
 3. The next blocker is the required review/fix/implementation subagent
-   sequence for the active projection/readiness contract package.
+   sequence for the active legacy path deletion and proof package.
 
 ## Scope Basis
 
@@ -48,8 +47,8 @@ mutation owner.
 3. Done: [Core Topology Boot Join Rejoin Kernel](../packages/done-20260508-core-topology-boot-join-rejoin-kernel.md)
 4. Done: [Core Topology Partitioning Rebalancing Kernel](../packages/done-20260508-core-topology-partitioning-rebalancing-kernel.md)
 5. Done: [Core Topology Publication Projection Boundary](../packages/done-20260508-core-topology-publication-projection-boundary.md)
-6. Active: [Core Topology Projection Readiness Contract](../packages/active-20260508-core-topology-projection-readiness-contract.md)
-7. Todo: [Core Topology Legacy Path Deletion And Proof](../packages/todo-20260508-core-topology-legacy-path-deletion-and-proof.md)
+6. Done: [Core Topology Projection Readiness Contract](../packages/done-20260508-core-topology-projection-readiness-contract.md)
+7. Active: [Core Topology Legacy Path Deletion And Proof](../packages/active-20260508-core-topology-legacy-path-deletion-and-proof.md)
 
 ## Execution Order
 
