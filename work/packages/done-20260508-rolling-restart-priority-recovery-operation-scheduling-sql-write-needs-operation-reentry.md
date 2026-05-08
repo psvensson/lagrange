@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-08",
   "scenario": "rolling-restart",
   "artifact": "test-output/reports/rolling-restart-after-publication-ack-pending-canonicalization-20260508T000000Z.report.json",
@@ -21,13 +21,18 @@
     "Failure-report and topology-convergence analysis"
   ],
   "touchedFiles": [
-    "work/packages/active-20260508-rolling-restart-priority-recovery-operation-scheduling-sql-write-needs-operation-reentry.md",
+    "src/rebalancer/unified-rebalancer-segment-4-stage-2.js",
+    "test/rebalancer/unified-rebalancer-part-5-2-stage-2.js",
+    "work/packages/done-20260508-rolling-restart-priority-recovery-operation-scheduling-sql-write-needs-operation-reentry.md",
     "work/model-ledger.jsonl",
     "work/sprints/active-2026-q2-publication-scoped-consistency-and-node-join-closure.md",
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md"
   ],
-  "predecessor": "work/packages/done-20260508-rolling-restart-topology-publication-convergence-ack-pending-reentry.md"
+  "predecessor": "work/packages/done-20260508-rolling-restart-topology-publication-convergence-ack-pending-reentry.md",
+  "closed": "2026-05-08",
+  "commitAndPushLedgerRequired": true,
+  "successor": "work/packages/active-20260508-rolling-restart-startup-active-gate-snapshot-coverage-priority-recovery-stale-planning-visibility-reentry.md"
 }
 -->
 
@@ -47,11 +52,10 @@ operation_scheduling`, where `sql_write_operations-p1` remains
       result `fixes-required`.
 - [x] Fix subagent recorded or explicitly not needed:
       Agent `Gibbs` (`019e064d-b451-7a22-8cef-e821c564e4c2`) fixed
-      `work/packages/done-20260508-rolling-restart-topology-publication-convergence-ack-pending-reentry.md`, or
-      `not-needed` only when review result is `clean`.
-- [ ] Implementation subagent recorded:
-      Agent <name> (<agent-id>) implemented
-      `work/packages/active-20260508-rolling-restart-priority-recovery-operation-scheduling-sql-write-needs-operation-reentry.md`.
+      `work/packages/done-20260508-rolling-restart-topology-publication-convergence-ack-pending-reentry.md`.
+- [x] Implementation subagent recorded:
+      Agent `Curie` (`019e066b-5469-7a12-8b63-0f4228f3bd24`) implemented
+      `work/packages/done-20260508-rolling-restart-priority-recovery-operation-scheduling-sql-write-needs-operation-reentry.md`.
 
 ## Current Evidence
 
@@ -137,27 +141,40 @@ Canonical contract shape:
 
 - [x] Review the just-closed predecessor package on the same sprint boundary.
 - [x] Fix any predecessor-review findings before implementation resumes.
-- [ ] Extract the focused epoch-2 PUBLISHED operation-scheduling witness and
+- [x] Extract the focused epoch-2 PUBLISHED operation-scheduling witness and
       its supporting workflow/startup evidence.
-- [ ] Add the focused regression or classification proof for the selected
+- [x] Add the focused regression or classification proof for the selected
       scheduling seam.
-- [ ] Repair the direct scheduling path or migrate again with proof.
+- [x] Repair the direct scheduling path or migrate again with proof.
 
 ## Static Drift Ledger
 
 Preflight:
 
-- [ ] Relevant guardrails selected by boundary.
-- [ ] File-scoped baseline recorded before production edits for the touched
-      source and focused test files.
+- [x] Relevant guardrails selected by boundary:
+      `node scripts/check-guideline-decision-boundaries.js
+      src/rebalancer/unified-rebalancer-segment-4-stage-1.js
+      src/rebalancer/unified-rebalancer-segment-4-stage-2.js
+      test/rebalancer/unified-rebalancer-part-5-2-stage-2.js`,
+      `node scripts/check-guideline-literals.js
+      src/rebalancer/unified-rebalancer-segment-4-stage-1.js
+      src/rebalancer/unified-rebalancer-segment-4-stage-2.js
+      test/rebalancer/unified-rebalancer-part-5-2-stage-2.js`, and
+      `git diff --check -- src/rebalancer/unified-rebalancer-segment-4-stage-1.js
+      src/rebalancer/unified-rebalancer-segment-4-stage-2.js
+      test/rebalancer/unified-rebalancer-part-5-2-stage-2.js`.
+- [x] File-scoped baseline recorded before production edits for the touched
+      source and focused test files: decision-boundary `0` violations, diff
+      hygiene clean, literal-owner `76` new violations limited to
+      `test/rebalancer/unified-rebalancer-part-5-2-stage-2.js`.
 
 Closure:
 
-- [ ] Same guardrails rerun after implementation.
-- [ ] No relevant guardrail count increased.
-- [ ] No new touched-file decision-boundary, literal-owner, or diff hygiene
+- [x] Same guardrails rerun after implementation.
+- [x] No relevant guardrail count increased.
+- [x] No new touched-file decision-boundary, literal-owner, or diff hygiene
       violation remains.
-- [ ] Representative rerun proof completed before package closure.
+- [x] Representative rerun proof completed before package closure.
 
 ## Validation
 
@@ -170,3 +187,55 @@ Closure:
 3. `npm run analyze:topology-convergence -- test-output/reports/.playback/rolling-restart-after-publication-ack-pending-canonicalization-20260508T000000Z/rolling-restart/failure-bundle.json`
    matched the report-level scheduling frontier and kept startup snapshot
    coverage as the next expected frontier.
+4. Focused witness extraction from the current artifact keeps
+   `sql_write_operations-p1` on `semanticState=needs_operation` with
+   `nextRequiredAction=create_recovery_operation`, while supporting
+   `sql_transactions-p1` remains `recovering_in_flight` under
+   `workflow_progress` with an in-flight replacement operation.
+5. Focused regression proof now exists in
+   `test/rebalancer/unified-rebalancer-part-5-2-stage-2.js` as
+   `checkRebalance reclaims current needs_operation follow-up work when
+   closure-witness surrogate progress only points at another partition`.
+6. `npx tap test/rebalancer/unified-rebalancer-part-5-2-stage-2.js`
+   passes, including
+   `checkRebalance reclaims current needs_operation follow-up work when
+   closure-witness surrogate progress only points at another partition`,
+   after the regression neutralizes the rebalance timer armed by
+   `scheduleNextCheck()`.
+7. `git diff --check -- src/rebalancer/unified-rebalancer-segment-4-stage-2.js
+   test/rebalancer/unified-rebalancer-part-5-2-stage-2.js
+   work/packages/done-20260508-rolling-restart-priority-recovery-operation-scheduling-sql-write-needs-operation-reentry.md`,
+   `node scripts/check-guideline-decision-boundaries.js
+   src/rebalancer/unified-rebalancer-segment-4-stage-2.js
+   test/rebalancer/unified-rebalancer-part-5-2-stage-2.js`, and
+   `node scripts/check-guideline-literals.js
+   src/rebalancer/unified-rebalancer-segment-4-stage-2.js
+   test/rebalancer/unified-rebalancer-part-5-2-stage-2.js`
+   all pass on the touched files.
+8. Representative rerun:
+   `node test/distributed/run.js --config test/distributed/config/local.json
+   --scenario rolling-restart --output
+   test-output/reports/rolling-restart-after-sql-write-operation-scheduling-repair-20260508T000000Z.report.json
+   --fast-local --verbose`
+   failed after `143.1s`.
+9. `npm run analyze:distributed-failure -- --report
+   test-output/reports/rolling-restart-after-sql-write-operation-scheduling-repair-20260508T000000Z.report.json`
+   still classifies the failure as `topology /
+   priority_recovery_operation_scheduling_event_driven`.
+10. `npm run analyze:topology-convergence --` on both the report and playback
+    failure bundle still selects `rebalancer_leader / operation_scheduling`
+    with dominant witness `sql_write_operations-p1`.
+11. The new representative artifact changes the supporting witness shape:
+    `sql_transactions-p1` is now `blocked_unclassified` under
+    `rebalancer_handoff` with `nextRequiredAction=schedule_followup_rebalance`,
+    not `recovering_in_flight`.
+12. Direct playback logs show the `sql_write_operations-p1` rebalancer later
+    advanced beyond the stale report witness: at `2026-05-08T07:24:53.480Z`
+    it started rebalancing with `moveCount=1`, passed pre-execution handoff at
+    `2026-05-08T07:24:53.482Z`, and executed one `replace` move on
+    node `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`.
+13. The failure bundle’s dominant `sql_write_operations-p1` witness was
+    captured earlier at `snapshotCapturedAt=1778225082298`
+    (`2026-05-08T07:24:42.298Z`) and still reports `operation_unknown`,
+    `operationCount=0`, and `visibilityState=none`, so the representative
+    artifact currently lags the later move-execution evidence.

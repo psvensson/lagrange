@@ -12,7 +12,7 @@
   "boundary": "Topology publication owner / publication_convergence / startup active gate support",
   "dominantReason": "publication_pending",
   "currentState": "The direct ACK-pending publication classification seam is repaired and proved. The representative rerun no longer stops on topology_publication_owner/publication_convergence: publication reaches epoch 2 PUBLISHED with pendingAckCount=0, and the first frontier migrates to rebalancer_leader / operation_scheduling on sql_write_operations-p1 while startup active-gate snapshot coverage remains downstream support.",
-  "nextAction": "Continue in work/packages/active-20260508-rolling-restart-priority-recovery-operation-scheduling-sql-write-needs-operation-reentry.md for the migrated sql_write_operations-p1 operation-scheduling seam.",
+  "nextAction": "Continue in work/packages/done-20260508-rolling-restart-priority-recovery-operation-scheduling-sql-write-needs-operation-reentry.md for the migrated sql_write_operations-p1 operation-scheduling seam.",
   "proof": [
     "Focused epoch-5 ACK_PENDING publication-convergence witness with supporting startup and priority-recovery evidence",
     "Focused publication-convergence regression or classification proof for the selected ACK-pending seam",
@@ -26,7 +26,7 @@
     "work/packages/done-20260508-rolling-restart-startup-active-gate-snapshot-coverage-readiness-support-reentry.md",
     "test/distributed/harness/failure-bundle-segment-4.js",
     "test/distributed/harness/__tests__/failure-bundle-core-16-test-cases.js",
-    "work/packages/active-20260508-rolling-restart-priority-recovery-operation-scheduling-sql-write-needs-operation-reentry.md",
+    "work/packages/done-20260508-rolling-restart-priority-recovery-operation-scheduling-sql-write-needs-operation-reentry.md",
     "work/model-ledger.jsonl",
     "work/sprints/active-2026-q2-publication-scoped-consistency-and-node-join-closure.md",
     "work/sprints/current-blocker.json",
@@ -35,7 +35,7 @@
   "predecessor": "work/packages/done-20260508-rolling-restart-startup-active-gate-snapshot-coverage-readiness-support-reentry.md",
   "closed": "2026-05-08",
   "commitAndPushLedgerRequired": true,
-  "successor": "work/packages/active-20260508-rolling-restart-priority-recovery-operation-scheduling-sql-write-needs-operation-reentry.md"
+  "successor": "work/packages/done-20260508-rolling-restart-priority-recovery-operation-scheduling-sql-write-needs-operation-reentry.md"
 }
 -->
 

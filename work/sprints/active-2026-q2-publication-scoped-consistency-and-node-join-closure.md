@@ -254,7 +254,7 @@ Secondary after the primary path is stable:
 
 The current active representative re-entry package is:
 
-1. [Rolling Restart Priority Recovery Operation Scheduling Sql Write Needs Operation Reentry](../packages/active-20260508-rolling-restart-priority-recovery-operation-scheduling-sql-write-needs-operation-reentry.md)
+1. [Rolling Restart Startup Active Gate Snapshot Coverage Priority Recovery Stale Planning Visibility Reentry](../packages/active-20260508-rolling-restart-startup-active-gate-snapshot-coverage-priority-recovery-stale-planning-visibility-reentry.md)
 
 Retained predecessor context file:
 
@@ -405,7 +405,7 @@ Other secondary matrix failures become active packages only after the
 
 Current re-entry package:
 
-1. [Rolling Restart Topology Priority Recovery Workflow Progress Dispatch Pending Reentry](../packages/active-20260508-rolling-restart-topology-priority-recovery-workflow-progress-dispatch-pending-reentry.md)
+1. [Rolling Restart Topology Priority Recovery Workflow Progress Dispatch Pending Reentry](../packages/done-20260508-rolling-restart-topology-priority-recovery-workflow-progress-dispatch-pending-reentry.md)
 
 Queued convergence-grammar packages:
 
@@ -459,7 +459,7 @@ Queued cleanup packages:
    also proves both the source-partition workflow-progress reuse seam and the
    `replica_operations-p1` workflow-timeout seam are no longer terminal
    owners. The current unchecked task is therefore the active
-   [Rolling Restart Topology Priority Recovery Workflow Progress Dispatch Pending Reentry](../packages/active-20260508-rolling-restart-topology-priority-recovery-workflow-progress-dispatch-pending-reentry.md)
+   [Rolling Restart Topology Priority Recovery Workflow Progress Dispatch Pending Reentry](../packages/done-20260508-rolling-restart-topology-priority-recovery-workflow-progress-dispatch-pending-reentry.md)
    package: preserve the closed failed/removed visibility wake-up repair,
    the closed same-artifact owner reconciliation, the closed lower-owner
    target-reservation repair, the closed planning-only carrier repair, the

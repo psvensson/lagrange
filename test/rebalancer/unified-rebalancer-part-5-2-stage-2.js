@@ -18,8 +18,10 @@ import {
   NodeStatus,
   DEFAULT_TABLE_POLICY,
   DEFAULT_MESSAGE_GROUP_POLICY,
+  TriggerType,
 } from '../../src/rebalancer/unified-rebalancer.js';
 import {
+  OperationType,
 } from '../../src/rebalancer/replica-status.js';
 import {
 } from '../../src/rebalancer/rebalancer-constants.js';
@@ -36,6 +38,7 @@ import {
 import {
 } from '../../src/rebalancer/storage-capacity-constants.js';
 import {
+  SYSTEM_TABLE_NAME,
 } from '../../src/bootstrap/system-table-schemas-constants.js';
 import {
   ENDPOINT_STATUS,
@@ -43,6 +46,7 @@ import {
   TRANSPORT_TYPE,
   WORKFLOW_STEP,
 } from '../../src/constants/index.js';
+import {SERVICE_TYPE} from '../../src/constants/service.js';
 import {ENDPOINT_SYNC_HEALTH} from '../../src/runtime/endpoint-sync-constants.js';
 
 // Initialize test environment
@@ -51,14 +55,14 @@ function initializeTestEnvironment() {
   const config = ConfigurationManager.getInstance();
   if (!config.isInitialized()) {
     config.initialize({
-      node: {id: 'test-node'},
-      logging: {level: 'error'},
+      node: {id: TEST_SCALAR.CONFIG_NODE_ID},
+      logging: {level: TEST_SCALAR.LOG_LEVEL_ERROR},
     });
   }
 
   const logging = LoggingService.getInstance();
   if (!logging.isInitialized()) {
-    logging.initialize({level: 'error'});
+    logging.initialize({level: TEST_SCALAR.LOG_LEVEL_ERROR});
   }
 }
 
@@ -75,9 +79,9 @@ function createMockCache(
   const now = Date.now();
   const normalizedNodes = nodes.map((node) => ({
     connection_state: Object.hasOwn(node, 'connection_state') ?
-      node.connection_state : 'ready',
+      node.connection_state : TEST_SCALAR.CONNECTION_STATE_READY,
     ready_lease_expires_at: Object.hasOwn(node, 'ready_lease_expires_at') ?
-      node.ready_lease_expires_at : now + 10000,
+      node.ready_lease_expires_at : now + TEST_NUMBER.READY_LEASE_DURATION_MS,
     ...node,
   }));
   const cache = {
@@ -135,13 +139,13 @@ function createMockPolicyService(partitions = [], tables = []) {
 
 // Create mock message router
 function createMockMessageRouter(
-  connectionState = 'connected',
+  connectionState = TEST_SCALAR.CONNECTION_STATE_CONNECTED,
   connectedNodes = [],
 ) {
   return {
     getConnectionState: () => connectionState,
     getConnectedNodes: () => [...connectedNodes],
-    deliver: async () => ({acknowledged: true, status: 'completed'}),
+    deliver: async () => MOCK_DELIVERY_RESULT,
     pingNode: async () => true,
     isOutboundQueueAvailable: () => true,
   };
@@ -159,24 +163,24 @@ function createMockCoordinator() {
   return {
     getMoveSafetyError: () => null,
     createOperation: async (move) => ({
-      operationId: 'op-' + Date.now(),
+      operationId: TEST_SCALAR.OPERATION_ID_PREFIX + Date.now(),
       type: move.type,
       partitionId: move.partitionId,
       targetNodeId: move.nodeId,
-      status: 'pending',
-      workflowStep: 'pending',
+      status: ReplicaStatus.PENDING,
+      workflowStep: WORKFLOW_STEP.PENDING,
     }),
     executeOperation: async () => ({success: true}),
     canStartAddOperation: async () => true,
     canStartRemoveOperation: async () => true,
     // getStats is called synchronously by UnifiedRebalancer.getStats()
     getStats: () => ({
-      operationsCreated: 0,
-      operationsCompleted: 0,
-      operationsFailed: 0,
-      operationsTimedOut: 0,
-      inFlightOperations: 0,
-      totalOperations: 0,
+      operationsCreated: TEST_NUMBER.ZERO,
+      operationsCompleted: TEST_NUMBER.ZERO,
+      operationsFailed: TEST_NUMBER.ZERO,
+      operationsTimedOut: TEST_NUMBER.ZERO,
+      inFlightOperations: TEST_NUMBER.ZERO,
+      totalOperations: TEST_NUMBER.ZERO,
     }),
     storageAccountingService,
     storageAdmissionService,
@@ -250,9 +254,9 @@ function createMockReadinessService(mockCache) {
 // Create a fully configured rebalancer for testing
 function createTestRebalancer(options = {}) {
   const {
-    entityId = 'partition-1',
+    entityId = TEST_SCALAR.DEFAULT_PARTITION_ID,
     entityType = EntityType.PARTITION,
-    nodeId = 'node-1',
+    nodeId = TEST_SCALAR.DEFAULT_NODE_ID,
     nodes = [],
     services = [],
     partitions = [],
@@ -260,7 +264,7 @@ function createTestRebalancer(options = {}) {
     replicaOperations = [],
     nodeEndpoints = [],
     serviceEndpoints = [],
-    connectionState = 'connected',
+    connectionState = TEST_SCALAR.CONNECTION_STATE_CONNECTED,
     sqlQueryEngine = null,
     controlPlaneSystemTableGateway = null,
     cdcIntegrationService = null,
@@ -314,11 +318,120 @@ function createTestRebalancer(options = {}) {
   });
 }
 
-test('UnifiedRebalancer - Rebalancing Triggers chunk 2', async (t) => {
+const PRIORITY_FOLLOW_UP_NODE_ID_A = 'node-priority-a';
+const PRIORITY_FOLLOW_UP_NODE_ID_B = 'node-priority-b';
+const PRIORITY_FOLLOW_UP_SERVICE_ADDRESS_PREFIX = 'addr-';
+const PRIORITY_FOLLOW_UP_RAFT_ROLE_VOTER = 'voter';
+const PRIORITY_RECOVERY_PUBLICATION_EPOCH = 7;
+const PRIORITY_RECOVERY_READY_REPLICA_COUNT_CANONICAL = 2;
+const PRIORITY_RECOVERY_READY_DISTINCT_NODE_COUNT = 1;
+const PRIORITY_RECOVERY_REQUIRED_DISTINCT_NODE_COUNT = 2;
+const PRIORITY_RECOVERY_SPREAD_GAP = 1;
+const PRIORITY_RECOVERY_CLOSURE_WITNESS_SATISFIED = false;
+const PRIORITY_RECOVERY_PUBLICATION_SPREAD_PENDING = true;
+const PRIORITY_RECOVERY_SEMANTIC_STATE_NEEDS_OPERATION = 'needs_operation';
+const PRIORITY_RECOVERY_SEMANTIC_STATE_RECOVERING_IN_FLIGHT =
+  'recovering_in_flight';
+const PRIORITY_SURROGATE_CREATED_OPERATION_ID =
+  'priority-created-operation';
+const PRIORITY_SURROGATE_PENDING_OPERATION_ID =
+  'priority-surrogate-pending-operation';
+const PRIORITY_RECOVERY_WAIT_FOR_OPERATION_PROGRESS =
+  'wait_for_operation_progress';
+const PRIORITY_RECOVERY_SERIAL_WAIT_BLOCKER_REASON =
+  'priority_operation_serial_wait';
+const PRIORITY_RECOVERY_ABSENT_OPERATION = null;
+const SQL_TRANSACTIONS_PRIORITY_PARTITION_ID = 'sql_transactions-p1';
+const SQL_TRANSACTIONS_PRIORITY_REPLICA_ID_A = 'sql_transactions-p1-r1';
+const SQL_WRITE_OPERATION_PRIORITY_PARTITION_ID = 'sql_write_operations-p1';
+const SQL_WRITE_OPERATION_PRIORITY_REPLICA_ID_A = 'sql_write_operations-p1-r1';
+const TEST_NUMBER = Object.freeze({
+  ZERO: 0,
+  ONE: 1,
+  READY_LEASE_DURATION_MS: 10000,
+  RETRY_AFTER_MS: 250,
+});
+const TEST_SCALAR = Object.freeze({
+  CONFIG_NODE_ID: 'test-node',
+  CONNECTION_STATE_CONNECTED: 'connected',
+  CONNECTION_STATE_READY: 'ready',
+  DEFAULT_NODE_ID: 'node-1',
+  DEFAULT_PARTITION_ID: 'partition-1',
+  DELIVERY_STATUS_COMPLETED: 'completed',
+  EXECUTED_OPERATION_ADD: 'add',
+  LOG_LEVEL_ERROR: 'error',
+  OPERATION_ID_PREFIX: 'op-',
+  SKIP_REASON_BUDGET_EXCEEDED: 'budget_exceeded',
+  TYPE_NUMBER: 'number',
+});
+const MOCK_DELIVERY_RESULT = Object.freeze({
+  acknowledged: true,
+  status: TEST_SCALAR.DELIVERY_STATUS_COMPLETED,
+});
+const TEST_NAME = Object.freeze({
+  CONTAINED_ROUTER_PRESSURE:
+    'checkRebalance lets blocked priority recovery continue under contained router pressure',
+  CREATE_MISSING_WORK_UNDER_CRITICAL_RESERVE:
+    'checkRebalance lets blocked priority recovery create missing work when the control-plane critical reserve is exhausted',
+  DEFERS_FOR_LOCAL_ROUTER_BACKPRESSURE:
+    'checkRebalance defers periodic work when local router is backpressured',
+  DEFERS_UNDER_CRITICAL_RESERVE:
+    'checkRebalance defers blocked priority recovery when the control-plane critical reserve is exhausted',
+  PRESERVES_PRIORITY_RETRY_AFTER_FAILURE:
+    'checkRebalance preserves priority retry cadence after retryable control-plane failures',
+  RECLAIMS_CURRENT_NEEDS_OPERATION:
+    'checkRebalance reclaims current needs_operation follow-up work when closure-witness surrogate progress only points at another partition',
+  RESETS_INTERVAL_ON_ACTIONABLE_MOVES:
+    'checkRebalance resets interval when actionable moves are executed',
+  SHORT_RETRY_NO_ACTIONABLE_MOVES:
+    'checkRebalance keeps priority control-plane partitions on short retry cadence when no actionable moves execute',
+  SHORT_RETRY_STABLE_STATE:
+    'checkRebalance keeps priority control-plane partitions on short retry cadence when state is currently stable',
+  SUITE: 'UnifiedRebalancer - Rebalancing Triggers chunk 2',
+  BYPASSES_STARTUP_AND_STABILIZATION_GATES:
+    'checkRebalance lets priority recovery operation creation bypass startup cluster and stabilization gates',
+});
+const TEST_MESSAGE = Object.freeze({
+  CACHED_PLANNING_IDENTIFIES_MISSING_PRIORITY_WORK:
+    'cached planning evidence should identify missing priority work',
+  CONTAINED_PRESSURE_DOES_NOT_SUPPRESS_BLOCKED_PARTITION:
+    'contained pressure should not suppress the blocked priority partition',
+  CRITICAL_RESERVE_DEFERS_BEFORE_EVALUATION:
+    'critical reserve exhaustion should defer before evaluation',
+  CURRENT_NEEDS_OPERATION_SCHEDULES_FOLLOW_UP:
+    'current needs_operation partition should still schedule one follow-up move',
+  ENTITY_SCOPED_CACHE_INFERRED_OWNERSHIP:
+    'entity-scoped cache reads should infer partition ownership instead of dropping malformed syncing rows',
+  FALLBACK_PERSISTS_ONE_RECOVERY_OPERATION:
+    'fallback should persist one recovery operation',
+  FALLBACK_RETARGETS_CURRENT_BLOCKED_PARTITION:
+    'fallback should keep recovery work on the current blocked partition',
+  FALLBACK_USES_REMAINING_ELIGIBLE_TARGET:
+    'fallback follow-up should use the remaining eligible target node',
+  INTERVAL_RESETS_WHEN_ACTIONABLE_MOVES_EXECUTE:
+    'interval should reset when actionable moves execute',
+  MISSING_PRIORITY_WORK_REACHES_EVALUATION:
+    'missing priority work should reach evaluation despite critical reserve exhaustion',
+  PRIORITY_OPERATION_CREATION_BYPASSES_STARTUP_GATES:
+    'priority operation creation should not wait behind startup planning gates',
+  PRIORITY_PARTITIONS_KEEP_SHORT_RETRY_WHILE_WAITING:
+    'priority partitions should keep the short retry cadence while waiting for the next convergence change',
+  PRIORITY_PRESSURE_DEFER_KEEPS_SHORT_RETRY:
+    'priority recovery pressure defer should keep the short retry cadence',
+  PRIORITY_RETRY_LOOP_AFTER_TRANSIENT_FAILURE:
+    'priority recovery should keep its short retry loop after transient control-plane failures',
+  PRIORITY_SHORT_RETRY_CADENCE:
+    'priority partitions should schedule the next check on the short retry cadence',
+  ROUTER_PRESSURE_DEFER_SCHEDULES_DELAY:
+    'router pressure defer should schedule a delayed retry',
+  ROUTER_PRESSURE_DEFERS_BEFORE_EVALUATION:
+    'router pressure should defer the periodic cycle before evaluation',
+});
+
+test(TEST_NAME.SUITE, async (t) => {
   initializeTestEnvironment();
   await t.test(
-    'checkRebalance keeps priority control-plane partitions on short retry cadence ' +
-      'when no actionable moves execute',
+    TEST_NAME.SHORT_RETRY_NO_ACTIONABLE_MOVES,
     async (t) => {
       const inferredOwnershipRebalancer = createTestRebalancer({
         entityId: 'sql_transactions-p1',
@@ -354,8 +467,8 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 2', async (t) => {
 
       t.equal(
         inferredOwnershipRebalancer.getInFlightOperations().length,
-        1,
-        'entity-scoped cache reads should infer partition ownership instead of dropping malformed syncing rows',
+        TEST_NUMBER.ONE,
+        TEST_MESSAGE.ENTITY_SCOPED_CACHE_INFERRED_OWNERSHIP,
       );
 
       const rebalancer = createTestRebalancer({
@@ -369,11 +482,15 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 2', async (t) => {
       rebalancer.clusterReadinessConfirmed = true;
       rebalancer.isStabilized = () => true;
       rebalancer.evaluateState = async () => true;
-      rebalancer.rebalance = async () => ({
+      const TEST_SKIPPED_MOVE_RESULT = Object.freeze({
         success: true,
         moves: [
-          {success: false, skipped: true, reason: 'budget_exceeded'},
+          {success: false, skipped: true,
+            reason: TEST_SCALAR.SKIP_REASON_BUDGET_EXCEEDED},
         ],
+      });
+      rebalancer.rebalance = async () => ({
+        ...TEST_SKIPPED_MOVE_RESULT,
       });
       const scheduledDelays = [];
       rebalancer.scheduleNextCheck = (overrideDelayMs = null) => {
@@ -385,16 +502,15 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 2', async (t) => {
       await rebalancer.checkRebalance();
 
       t.equal(
-        scheduledDelays[0],
+        scheduledDelays[TEST_NUMBER.ZERO],
         rebalancer.getPriorityRetryDelayMs(),
-        'priority partitions should schedule the next check on the short retry cadence',
+        TEST_MESSAGE.PRIORITY_SHORT_RETRY_CADENCE,
       );
     },
   );
 
   await t.test(
-    'checkRebalance preserves priority retry cadence after retryable ' +
-      'control-plane failures',
+    TEST_NAME.PRESERVES_PRIORITY_RETRY_AFTER_FAILURE,
     async (t) => {
       const rebalancer = createTestRebalancer({
         entityId: 'sql_transactions-p1',
@@ -411,7 +527,7 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 2', async (t) => {
         const error =
           new Error('Workflow participant replica_operations-p1 not found');
         error.deferRetry = true;
-        error.retryAfterMs = 250;
+        error.retryAfterMs = TEST_NUMBER.RETRY_AFTER_MS;
         throw error;
       };
       const scheduledDelays = [];
@@ -424,14 +540,13 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 2', async (t) => {
       t.same(
         scheduledDelays,
         [rebalancer.getPriorityRetryDelayMs()],
-        'priority recovery should keep its short retry loop after transient control-plane failures',
+        TEST_MESSAGE.PRIORITY_RETRY_LOOP_AFTER_TRANSIENT_FAILURE,
       );
     },
   );
 
   await t.test(
-    'checkRebalance keeps priority control-plane partitions on short retry cadence ' +
-      'when state is currently stable',
+    TEST_NAME.SHORT_RETRY_STABLE_STATE,
     async (t) => {
       const rebalancer = createTestRebalancer({
         entityId: 'sql_transactions-p1',
@@ -457,12 +572,12 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 2', async (t) => {
       t.equal(
         rebalancer.currentInterval,
         rebalancer.getPriorityRetryDelayMs(),
-        'priority partitions should keep the short retry cadence while waiting for the next convergence change',
+        TEST_MESSAGE.PRIORITY_PARTITIONS_KEEP_SHORT_RETRY_WHILE_WAITING,
       );
     },
   );
 
-  await t.test('checkRebalance resets interval when actionable moves are executed', async (t) => {
+  await t.test(TEST_NAME.RESETS_INTERVAL_ON_ACTIONABLE_MOVES, async (t) => {
     const rebalancer = createTestRebalancer({
       entityId: 'partition-1',
       entityType: EntityType.PARTITION,
@@ -477,12 +592,17 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 2', async (t) => {
     rebalancer.clusterReadinessConfirmed = true;
     rebalancer.isStabilized = () => true;
     rebalancer.evaluateState = async () => true;
-    rebalancer.rebalance = async () => ({
+    const TEST_EXECUTED_MOVE_RESULT = Object.freeze({
       success: true,
       moves: [
-        {success: true, skipped: false, operation: 'add'},
+        {
+          success: true,
+          skipped: false,
+          operation: TEST_SCALAR.EXECUTED_OPERATION_ADD,
+        },
       ],
     });
+    rebalancer.rebalance = async () => ({...TEST_EXECUTED_MOVE_RESULT});
     rebalancer.scheduleNextCheck = () => {};
 
     rebalancer.currentInterval = rebalancer.maxInterval;
@@ -492,18 +612,20 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 2', async (t) => {
     t.equal(
       rebalancer.currentInterval,
       rebalancer.periodicCheckIntervalMs,
-      'interval should reset when actionable moves execute',
+      TEST_MESSAGE.INTERVAL_RESETS_WHEN_ACTIONABLE_MOVES_EXECUTE,
     );
   });
 
-  await t.test('checkRebalance defers periodic work when local router is backpressured',
+  await t.test(TEST_NAME.DEFERS_FOR_LOCAL_ROUTER_BACKPRESSURE,
     async (t) => {
       const router = createMockMessageRouter('connected');
-      router.getOutboundPressureSummary = () => ({
+      const TEST_LOCAL_ROUTER_BACKPRESSURE_SUMMARY = Object.freeze({
         backpressured: true,
-        saturatedNodeCount: 1,
-        maxPendingUtilization: 1,
+        saturatedNodeCount: TEST_NUMBER.ONE,
+        maxPendingUtilization: TEST_NUMBER.ONE,
       });
+      router.getOutboundPressureSummary = () =>
+        TEST_LOCAL_ROUTER_BACKPRESSURE_SUMMARY;
       const rebalancer = createTestRebalancer({
         entityId: 'partition-1',
         entityType: EntityType.PARTITION,
@@ -516,7 +638,7 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 2', async (t) => {
       rebalancer.clusterReadinessConfirmed = true;
       rebalancer.isStabilized = () => true;
 
-      let evaluateCalls = 0;
+      let evaluateCalls = TEST_NUMBER.ZERO;
       rebalancer.evaluateState = async () => {
         evaluateCalls++;
         return false;
@@ -532,19 +654,18 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 2', async (t) => {
 
       t.equal(
         evaluateCalls,
-        0,
-        'router pressure should defer the periodic cycle before evaluation',
+        TEST_NUMBER.ZERO,
+        TEST_MESSAGE.ROUTER_PRESSURE_DEFERS_BEFORE_EVALUATION,
       );
       t.equal(
         typeof scheduledDelayMs,
-        'number',
-        'router pressure defer should schedule a delayed retry',
+        TEST_SCALAR.TYPE_NUMBER,
+        TEST_MESSAGE.ROUTER_PRESSURE_DEFER_SCHEDULES_DELAY,
       );
     });
 
   await t.test(
-    'checkRebalance lets blocked priority recovery continue under contained ' +
-    'router pressure',
+    TEST_NAME.CONTAINED_ROUTER_PRESSURE,
     async (t) => {
       const TEST_PRIORITY_PARTITION_ID = 'sql_transactions-p1';
       const TEST_CONTAINED_PRESSURE_SUMMARY = Object.freeze({
@@ -579,7 +700,7 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 2', async (t) => {
           partitionId === TEST_PRIORITY_PARTITION_ID,
       });
 
-      let evaluateCalls = 0;
+      let evaluateCalls = TEST_NUMBER.ZERO;
       rebalancer.evaluateState = async () => {
         evaluateCalls++;
         return false;
@@ -590,15 +711,14 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 2', async (t) => {
 
       t.equal(
         evaluateCalls,
-        1,
-        'contained pressure should not suppress the blocked priority partition',
+        TEST_NUMBER.ONE,
+        TEST_MESSAGE.CONTAINED_PRESSURE_DOES_NOT_SUPPRESS_BLOCKED_PARTITION,
       );
     },
   );
 
   await t.test(
-    'checkRebalance defers blocked priority recovery when the control-plane ' +
-    'critical reserve is exhausted',
+    TEST_NAME.DEFERS_UNDER_CRITICAL_RESERVE,
     async (t) => {
       const TEST_PRIORITY_PARTITION_ID = 'sql_transactions-p1';
       const TEST_CRITICAL_RESERVE_EXHAUSTED_SUMMARY = Object.freeze({
@@ -635,7 +755,7 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 2', async (t) => {
           partitionId === TEST_PRIORITY_PARTITION_ID,
       });
 
-      let evaluateCalls = 0;
+      let evaluateCalls = TEST_NUMBER.ZERO;
       let scheduledDelayMs = TEST_UNSCHEDULED;
       rebalancer.evaluateState = async () => {
         evaluateCalls++;
@@ -649,20 +769,19 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 2', async (t) => {
 
       t.equal(
         evaluateCalls,
-        0,
-        'critical reserve exhaustion should defer before evaluation',
+        TEST_NUMBER.ZERO,
+        TEST_MESSAGE.CRITICAL_RESERVE_DEFERS_BEFORE_EVALUATION,
       );
       t.equal(
         scheduledDelayMs,
         rebalancer.getPriorityRetryDelayMs(),
-        'priority recovery pressure defer should keep the short retry cadence',
+        TEST_MESSAGE.PRIORITY_PRESSURE_DEFER_KEEPS_SHORT_RETRY,
       );
     },
   );
 
   await t.test(
-    'checkRebalance lets blocked priority recovery create missing work when ' +
-    'the control-plane critical reserve is exhausted',
+    TEST_NAME.CREATE_MISSING_WORK_UNDER_CRITICAL_RESERVE,
     async (t) => {
       const TEST_PRIORITY_PARTITION_ID = 'sql_write_operations-p1';
       const TEST_PUBLICATION_EPOCH = 4;
@@ -740,7 +859,7 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 2', async (t) => {
       rebalancer.getCriticalSystemLocalServeReadinessBlocker = () => null;
       rebalancer.getLocalControlPlaneMutationReadinessBlocker = () => null;
 
-      let evaluateCalls = 0;
+      let evaluateCalls = TEST_NUMBER.ZERO;
       rebalancer.evaluateState = async () => {
         evaluateCalls++;
         return false;
@@ -754,19 +873,18 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 2', async (t) => {
       t.equal(
         gateSnapshot.priorityRecoveryOperationCreationRequired,
         true,
-        'cached planning evidence should identify missing priority work',
+        TEST_MESSAGE.CACHED_PLANNING_IDENTIFIES_MISSING_PRIORITY_WORK,
       );
       t.equal(
         evaluateCalls,
-        1,
-        'missing priority work should reach evaluation despite critical reserve exhaustion',
+        TEST_NUMBER.ONE,
+        TEST_MESSAGE.MISSING_PRIORITY_WORK_REACHES_EVALUATION,
       );
     },
   );
 
   await t.test(
-    'checkRebalance lets priority recovery operation creation bypass startup ' +
-    'cluster and stabilization gates',
+    TEST_NAME.BYPASSES_STARTUP_AND_STABILIZATION_GATES,
     async (t) => {
       const TEST_PRIORITY_PARTITION_ID = 'sql_write_operations-p1';
       const TEST_PUBLICATION_EPOCH = 7;
@@ -895,7 +1013,7 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 2', async (t) => {
       rebalancer.getCriticalSystemLocalServeReadinessBlocker = () => null;
       rebalancer.getLocalControlPlaneMutationReadinessBlocker = () => null;
 
-      let evaluateCalls = 0;
+      let evaluateCalls = TEST_NUMBER.ZERO;
       rebalancer.evaluateState = async () => {
         evaluateCalls++;
         return false;
@@ -906,8 +1024,277 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 2', async (t) => {
 
       t.equal(
         evaluateCalls,
-        1,
-        'priority operation creation should not wait behind startup planning gates',
+        TEST_NUMBER.ONE,
+        TEST_MESSAGE.PRIORITY_OPERATION_CREATION_BYPASSES_STARTUP_GATES,
+      );
+    },
+  );
+
+  await t.test(
+    TEST_NAME.RECLAIMS_CURRENT_NEEDS_OPERATION,
+    async (t) => {
+      const nodeRows = [
+        {
+          node_id: PRIORITY_FOLLOW_UP_NODE_ID_A,
+          status: NodeStatus.ACTIVE,
+        },
+        {
+          node_id: PRIORITY_FOLLOW_UP_NODE_ID_B,
+          status: NodeStatus.ACTIVE,
+        },
+      ];
+      const serviceRows = [
+        {
+          service_id: SQL_TRANSACTIONS_PRIORITY_REPLICA_ID_A,
+          service_type: SERVICE_TYPE.PARTITION,
+          node_id: PRIORITY_FOLLOW_UP_NODE_ID_A,
+          partition_id: SQL_TRANSACTIONS_PRIORITY_PARTITION_ID,
+          replica_id: SQL_TRANSACTIONS_PRIORITY_REPLICA_ID_A,
+          address:
+            PRIORITY_FOLLOW_UP_SERVICE_ADDRESS_PREFIX +
+            SQL_TRANSACTIONS_PRIORITY_REPLICA_ID_A,
+          raft_role: PRIORITY_FOLLOW_UP_RAFT_ROLE_VOTER,
+          status: ReplicaStatus.ACTIVE,
+        },
+        {
+          service_id: SQL_WRITE_OPERATION_PRIORITY_REPLICA_ID_A,
+          service_type: SERVICE_TYPE.PARTITION,
+          node_id: PRIORITY_FOLLOW_UP_NODE_ID_A,
+          partition_id: SQL_WRITE_OPERATION_PRIORITY_PARTITION_ID,
+          replica_id: SQL_WRITE_OPERATION_PRIORITY_REPLICA_ID_A,
+          address:
+            PRIORITY_FOLLOW_UP_SERVICE_ADDRESS_PREFIX +
+            SQL_WRITE_OPERATION_PRIORITY_REPLICA_ID_A,
+          raft_role: PRIORITY_FOLLOW_UP_RAFT_ROLE_VOTER,
+          status: ReplicaStatus.ACTIVE,
+        },
+      ];
+      const partitionRows = [
+        {
+          partition_id: SQL_TRANSACTIONS_PRIORITY_PARTITION_ID,
+          table_id: SYSTEM_TABLE_NAME.SQL_TRANSACTIONS,
+        },
+        {
+          partition_id: SQL_WRITE_OPERATION_PRIORITY_PARTITION_ID,
+          table_id: SYSTEM_TABLE_NAME.SQL_WRITE_OPERATIONS,
+        },
+      ];
+      const replicaOperations = [{
+        operation_id: PRIORITY_SURROGATE_PENDING_OPERATION_ID,
+        partition_id: SQL_TRANSACTIONS_PRIORITY_PARTITION_ID,
+        type: OperationType.REPLACE,
+        status: ReplicaStatus.PENDING,
+        workflow_step: WORKFLOW_STEP.PENDING,
+        target_node_id: PRIORITY_FOLLOW_UP_NODE_ID_B,
+      }];
+      const priorityPartitionSummary = {
+        satisfied: PRIORITY_RECOVERY_CLOSURE_WITNESS_SATISFIED,
+        blockedPartitions: [
+          {
+            partitionId: SQL_TRANSACTIONS_PRIORITY_PARTITION_ID,
+            readyReplicaCount:
+              PRIORITY_RECOVERY_READY_REPLICA_COUNT_CANONICAL,
+            readyDistinctNodeCount:
+              PRIORITY_RECOVERY_READY_DISTINCT_NODE_COUNT,
+            requiredDistinctNodeCount:
+              PRIORITY_RECOVERY_REQUIRED_DISTINCT_NODE_COUNT,
+            spreadGap: PRIORITY_RECOVERY_SPREAD_GAP,
+          },
+          {
+            partitionId: SQL_WRITE_OPERATION_PRIORITY_PARTITION_ID,
+            readyReplicaCount:
+              PRIORITY_RECOVERY_READY_REPLICA_COUNT_CANONICAL,
+            readyDistinctNodeCount:
+              PRIORITY_RECOVERY_READY_DISTINCT_NODE_COUNT,
+            requiredDistinctNodeCount:
+              PRIORITY_RECOVERY_REQUIRED_DISTINCT_NODE_COUNT,
+            spreadGap: PRIORITY_RECOVERY_SPREAD_GAP,
+          },
+        ],
+      };
+      const priorityRecoveryClosureWitness = {
+        blockedPartitionIds: [
+          SQL_TRANSACTIONS_PRIORITY_PARTITION_ID,
+          SQL_WRITE_OPERATION_PRIORITY_PARTITION_ID,
+        ],
+        unresolvedSemanticStateIds: [
+          PRIORITY_RECOVERY_SEMANTIC_STATE_NEEDS_OPERATION,
+          PRIORITY_RECOVERY_SEMANTIC_STATE_RECOVERING_IN_FLIGHT,
+        ],
+      };
+      const planningSnapshot = {
+        publicationEpoch: PRIORITY_RECOVERY_PUBLICATION_EPOCH,
+        publishedActiveNodeIds: [
+          PRIORITY_FOLLOW_UP_NODE_ID_A,
+          PRIORITY_FOLLOW_UP_NODE_ID_B,
+        ],
+        priorityPartitionSummary,
+        publicationRecoveryGate: {
+          prioritySpreadPending: PRIORITY_RECOVERY_PUBLICATION_SPREAD_PENDING,
+          priorityPartitionSummary,
+          priorityRecoveryClosureWitness,
+        },
+        priorityRecoveryClosureWitness,
+        priorityRecoveryDecisionSnapshots: {
+          snapshots: [
+            {
+              partitionId: SQL_TRANSACTIONS_PRIORITY_PARTITION_ID,
+              semanticState:
+                PRIORITY_RECOVERY_SEMANTIC_STATE_RECOVERING_IN_FLIGHT,
+              blockerReasons: [],
+              coordinator: {
+                operationCount: TEST_NUMBER.ONE,
+                operationIds: [PRIORITY_SURROGATE_PENDING_OPERATION_ID],
+                operation: {
+                  operationId: PRIORITY_SURROGATE_PENDING_OPERATION_ID,
+                  partitionId: SQL_TRANSACTIONS_PRIORITY_PARTITION_ID,
+                  targetNodeId: PRIORITY_FOLLOW_UP_NODE_ID_B,
+                },
+              },
+              admission: {
+                effectiveEligibleNodeIds: [
+                  PRIORITY_FOLLOW_UP_NODE_ID_A,
+                  PRIORITY_FOLLOW_UP_NODE_ID_B,
+                ],
+              },
+              publication: {
+                recoveryActiveNodeIds: [
+                  PRIORITY_FOLLOW_UP_NODE_ID_A,
+                  PRIORITY_FOLLOW_UP_NODE_ID_B,
+                ],
+              },
+            },
+            {
+              partitionId: SQL_WRITE_OPERATION_PRIORITY_PARTITION_ID,
+              semanticState: PRIORITY_RECOVERY_SEMANTIC_STATE_NEEDS_OPERATION,
+              blockerReasons: [PRIORITY_RECOVERY_SERIAL_WAIT_BLOCKER_REASON],
+              planner: {
+                requiredDistinctNodeCount:
+                  PRIORITY_RECOVERY_REQUIRED_DISTINCT_NODE_COUNT,
+                readyDistinctNodeCount:
+                  PRIORITY_RECOVERY_READY_DISTINCT_NODE_COUNT,
+                spreadGap: PRIORITY_RECOVERY_SPREAD_GAP,
+              },
+              progress: {
+                nextRequiredAction:
+                  PRIORITY_RECOVERY_WAIT_FOR_OPERATION_PROGRESS,
+              },
+              admission: {
+                effectiveEligibleNodeIds: [
+                  PRIORITY_FOLLOW_UP_NODE_ID_A,
+                  PRIORITY_FOLLOW_UP_NODE_ID_B,
+                ],
+              },
+              publication: {
+                recoveryActiveNodeIds: [
+                  PRIORITY_FOLLOW_UP_NODE_ID_A,
+                  PRIORITY_FOLLOW_UP_NODE_ID_B,
+                ],
+              },
+              coordinator: {
+                operationCount: TEST_NUMBER.ZERO,
+                operationIds: [],
+                operation: PRIORITY_RECOVERY_ABSENT_OPERATION,
+              },
+            },
+          ],
+        },
+      };
+      const cache = createMockCache(
+        nodeRows,
+        serviceRows,
+        partitionRows,
+        [],
+        replicaOperations,
+      );
+      const readinessService = {
+        ...createMockReadinessService(cache),
+        getPriorityRecoveryPlanningAnswerBestEffort() {
+          return planningSnapshot;
+        },
+        getPriorityRecoveryPlanningAnswerSync() {
+          return planningSnapshot;
+        },
+        membershipPublicationService: {
+          getLatestClusterPublicationSync() {
+            return {
+              priorityPartitionSummary,
+            };
+          },
+        },
+      };
+      const createdOperations = [];
+      const coordinator = {
+        ...createMockCoordinator(),
+        createOperation: async (move) => {
+          createdOperations.push(move);
+          return {
+            operationId: PRIORITY_SURROGATE_CREATED_OPERATION_ID,
+            type: move.type,
+            partitionId: move.partitionId,
+            entityId: move.entityId,
+            targetNodeId: move.nodeId,
+            replicaId: move.replicaId,
+            status: ReplicaStatus.PENDING,
+            workflowStep: WORKFLOW_STEP.PENDING,
+          };
+        },
+      };
+      const rebalancer = createTestRebalancer({
+        entityId: SQL_WRITE_OPERATION_PRIORITY_PARTITION_ID,
+        entityType: EntityType.PARTITION,
+        nodeId: PRIORITY_FOLLOW_UP_NODE_ID_A,
+        rebalanceCoordinator: coordinator,
+        controlPlaneReadinessService: readinessService,
+        nodes: nodeRows,
+        services: serviceRows,
+        partitions: partitionRows,
+        replicaOperations,
+      });
+
+      rebalancer.setLeader(true);
+      rebalancer.clusterReadinessConfirmed = true;
+      rebalancer.isStabilized = () => true;
+      rebalancer.getConfiguredRebalanceBudget = async () =>
+        PRIORITY_RECOVERY_REQUIRED_DISTINCT_NODE_COUNT;
+      rebalancer.getGlobalInFlightOperationCount = async () => TEST_NUMBER.ZERO;
+      rebalancer.scheduleNextCheck = () => {};
+      rebalancer.movePlanner.calculateTargetState = async () => ({
+        targetReplicaCount: PRIORITY_RECOVERY_REQUIRED_DISTINCT_NODE_COUNT,
+        targetNodes: [
+          PRIORITY_FOLLOW_UP_NODE_ID_A,
+          PRIORITY_FOLLOW_UP_NODE_ID_B,
+        ],
+      });
+      rebalancer.movePlanner.calculateMoves = () => [];
+      rebalancer.movePlanner.applyPressureGating = async (moves) => moves;
+
+      const result = await rebalancer.rebalance(TriggerType.PERIODIC, {
+        targetReplicaCount: PRIORITY_RECOVERY_REQUIRED_DISTINCT_NODE_COUNT,
+        placementConstraints: {
+          spreadAcrossNodes: true,
+        },
+      });
+
+      t.equal(
+        result.moves.length,
+        TEST_NUMBER.ONE,
+        TEST_MESSAGE.CURRENT_NEEDS_OPERATION_SCHEDULES_FOLLOW_UP,
+      );
+      t.equal(
+        createdOperations.length,
+        TEST_NUMBER.ONE,
+        TEST_MESSAGE.FALLBACK_PERSISTS_ONE_RECOVERY_OPERATION,
+      );
+      t.equal(
+        createdOperations[TEST_NUMBER.ZERO].partitionId,
+        SQL_WRITE_OPERATION_PRIORITY_PARTITION_ID,
+        TEST_MESSAGE.FALLBACK_RETARGETS_CURRENT_BLOCKED_PARTITION,
+      );
+      t.equal(
+        createdOperations[TEST_NUMBER.ZERO].nodeId,
+        PRIORITY_FOLLOW_UP_NODE_ID_B,
+        TEST_MESSAGE.FALLBACK_USES_REMAINING_ELIGIBLE_TARGET,
       );
     },
   );

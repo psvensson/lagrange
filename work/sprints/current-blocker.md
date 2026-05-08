@@ -4,39 +4,39 @@
 
 Sprint: `work/sprints/active-2026-q2-publication-scoped-consistency-and-node-join-closure.md`
 
-Package: `work/packages/active-20260508-rolling-restart-priority-recovery-operation-scheduling-sql-write-needs-operation-reentry.md`
+Package: `work/packages/active-20260508-rolling-restart-startup-active-gate-snapshot-coverage-priority-recovery-stale-planning-visibility-reentry.md`
 
 Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/rolling-restart-after-publication-ack-pending-canonicalization-20260508T000000Z.report.json`
+Artifact: `test-output/reports/rolling-restart-after-sql-write-operation-scheduling-repair-20260508T000000Z.report.json`
 
-Playback: `test-output/reports/.playback/rolling-restart-after-publication-ack-pending-canonicalization-20260508T000000Z/rolling-restart/`
+Playback: `test-output/reports/.playback/rolling-restart-after-sql-write-operation-scheduling-repair-20260508T000000Z/rolling-restart/`
 
 ## Boundary
 
-Owner: `Priority recovery operation scheduling for sql_write_operations-p1 after publication ACK-pending canonicalization`
+Owner: `Startup active-gate snapshot coverage after sql_write priority operation execution`
 
-Boundary: `Rebalancer leader / operation_scheduling / create_recovery_operation`
+Boundary: `startup_active_gate_owner / snapshot_coverage / priority_recovery_progress_visibility`
 
-Dominant reason: `priority_recovery_operation_scheduling_event_driven`
+Dominant reason: `snapshot_coverage_incomplete_after_priority_move_execution`
 
-Current state: The publication ACK-pending seam is closed by migration. The representative rerun now reaches epoch 2 PUBLISHED with pendingAckCount=0 and no direct publication debt, but the first frontier stalls on sql_write_operations-p1 under semantic state needs_operation with nextRequiredAction=create_recovery_operation while sql_transactions-p1 remains supporting recovering_in_flight workflow evidence and startup snapshot coverage 3/5 stays downstream.
+Current state: The direct sql_write_operations-p1 scheduling seam advanced during the representative rerun: playback logs show the rebalancer started and executed a replace move at 2026-05-08T07:24:53Z. The failure bundle's dominant sql_write_operations-p1 witness was captured earlier at 2026-05-08T07:24:42Z and still reports operation_unknown, operationCount=0, and visibilityState=none, while the scenario times out at startup active-gate snapshot coverage 2/5 under PUBLISHED epoch 4.
 
 ## Next Action
 
-Review the just-closed publication package, then extract one focused epoch-2 PUBLISHED operation-scheduling witness for sql_write_operations-p1 and repair or classify why the rebalancer leader leaves it at needs_operation without reopening the closed publication package.
+Review the just-closed operation-scheduling package, then extract one focused stale-planning visibility witness proving the failure bundle keeps a pre-move priority-recovery snapshot after move execution and repair or classify the planning-only reconstruction path that feeds startup snapshot coverage.
 
 ## Proof Ladder
 
-1. `Focused epoch-2 PUBLISHED sql_write_operations-p1 operation-scheduling witness with supporting sql_transactions-p1 and startup active-gate evidence`
-2. `Focused operation-scheduling regression or classification proof for the selected create_recovery_operation seam`
+1. `Focused stale-planning visibility witness tying pre-move snapshot capture to post-move playback execution`
+2. `Focused regression or blocker probe for planning-only priority recovery reconstruction after move execution`
 3. `Touched-file static guardrails`
 4. `Representative rolling-restart --fast-local rerun`
 5. `Failure-report and topology-convergence analysis`
 
 ## Touched Files
 
-1. `work/packages/active-20260508-rolling-restart-priority-recovery-operation-scheduling-sql-write-needs-operation-reentry.md`
+1. `work/packages/active-20260508-rolling-restart-startup-active-gate-snapshot-coverage-priority-recovery-stale-planning-visibility-reentry.md`
 2. `work/model-ledger.jsonl`
 3. `work/sprints/active-2026-q2-publication-scoped-consistency-and-node-join-closure.md`
 4. `work/sprints/current-blocker.json`

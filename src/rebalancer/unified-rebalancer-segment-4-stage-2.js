@@ -155,6 +155,24 @@ class UnifiedRebalancerSegment4Stage2 extends UnifiedRebalancerSegment4Stage1 {
     );
   }
 
+  selectCurrentPriorityRecoveryFollowUpPartitionId(
+    candidatePartitionIds = [],
+  ) {
+    return candidatePartitionIds.includes(this.entityId) ?
+      this.entityId :
+      UNIFIED_REBALANCER_LITERAL.EMPTY_STRING;
+  }
+
+  selectPreferredPriorityRecoveryFollowUpPartitionId(
+    candidatePartitionIds = [],
+  ) {
+    return this.selectNonLocalPriorityRecoveryFollowUpPartitionId(
+      candidatePartitionIds,
+    ) || this.selectCurrentPriorityRecoveryFollowUpPartitionId(
+      candidatePartitionIds,
+    );
+  }
+
   selectPriorityRecoveryClosureWitnessNeedsOperationPartitionId(
     evidence = {},
   ) {
@@ -164,7 +182,7 @@ class UnifiedRebalancerSegment4Stage2 extends UnifiedRebalancerSegment4Stage1 {
       evidence.candidatePartitionIds :
       [];
     const unblockedCandidatePartitionId =
-      this.selectNonLocalPriorityRecoveryFollowUpPartitionId(
+      this.selectPreferredPriorityRecoveryFollowUpPartitionId(
         candidatePartitionIds,
       );
     if (unblockedCandidatePartitionId) {
@@ -217,7 +235,7 @@ class UnifiedRebalancerSegment4Stage2 extends UnifiedRebalancerSegment4Stage1 {
       ) ?
         evidence.candidatePartitionIds :
         [];
-      return this.selectNonLocalPriorityRecoveryFollowUpPartitionId(
+      return this.selectPreferredPriorityRecoveryFollowUpPartitionId(
         candidatePartitionIds,
       );
     }

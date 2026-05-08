@@ -12,7 +12,7 @@
   "boundary": "Operation workflow owner / workflow_timeout / startup active gate support",
   "dominantReason": "priority_recovery_workflow_timeout_transition_deferred",
   "currentState": "The workflow-timeout authoritative-observation repair is proved. The representative rerun no longer terminates on replica_operations-p1 workflow_timeout; epoch 2 PUBLISHED now migrates to sql_write_operations-p1 as the dominant operation_workflow_owner witness under recovering_in_flight / wait_for_operation_progress, with actuation persisted_not_dispatched, boundary workflow_progress, and startup active-gate snapshot coverage still downstream only.",
-  "nextAction": "Continue in work/packages/active-20260508-rolling-restart-topology-priority-recovery-workflow-progress-dispatch-pending-reentry.md for the migrated sql_write_operations-p1 workflow_progress dispatch-pending seam.",
+  "nextAction": "Continue in work/packages/done-20260508-rolling-restart-topology-priority-recovery-workflow-progress-dispatch-pending-reentry.md for the migrated sql_write_operations-p1 workflow_progress dispatch-pending seam.",
   "proof": [
     "Focused epoch-4 PUBLISHED workflow-timeout witness for replica_operations-p1 with supporting sql_transaction_participants-p1, sql_transactions-p1, and sql_write_operations-p1 context",
     "Focused workflow-timeout regression for the selected stale-operation-progress seam",
@@ -24,7 +24,7 @@
     "work/packages/done-20260508-rolling-restart-topology-priority-recovery-workflow-timeout-stale-operation-progress-reentry.md",
     "src/rebalancer/operation-workflow-owner-segment-5-stage-5.js",
     "test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js",
-    "work/packages/active-20260508-rolling-restart-topology-priority-recovery-workflow-progress-dispatch-pending-reentry.md",
+    "work/packages/done-20260508-rolling-restart-topology-priority-recovery-workflow-progress-dispatch-pending-reentry.md",
     "work/packages/done-20260507-rolling-restart-topology-priority-recovery-workflow-progress-serial-wait-source-partition-reentry.md",
     "work/model-ledger.jsonl",
     "work/sprints/active-2026-q2-publication-scoped-consistency-and-node-join-closure.md",
@@ -34,7 +34,7 @@
   "predecessor": "work/packages/done-20260507-rolling-restart-topology-priority-recovery-workflow-progress-serial-wait-source-partition-reentry.md",
   "closed": "2026-05-08",
   "commitAndPushLedgerRequired": true,
-  "successor": "work/packages/active-20260508-rolling-restart-topology-priority-recovery-workflow-progress-dispatch-pending-reentry.md"
+  "successor": "work/packages/done-20260508-rolling-restart-topology-priority-recovery-workflow-progress-dispatch-pending-reentry.md"
 }
 -->
 
