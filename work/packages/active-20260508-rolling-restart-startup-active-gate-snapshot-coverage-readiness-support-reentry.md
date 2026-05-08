@@ -123,14 +123,19 @@ Canonical contract shape:
 
 ## Subagent Sequencing Ledger
 
-- [ ] Review subagent recorded:
-- [ ] Fix subagent recorded or explicitly not needed:
+- [x] Review subagent recorded:
+      Agent `Avicenna` (`019e0612-38a8-7201-b343-8a4183fb7609`) reviewed
+      `work/packages/done-20260508-rolling-restart-topology-priority-recovery-workflow-timeout-dispatch-pending-stale-progress-reentry.md`;
+      result `fixes-required`.
+- [x] Fix subagent recorded or explicitly not needed:
+      Agent `Noether` (`019e0614-5ad9-7aa3-8d34-d5b417924930`) fixed
+      `work/packages/done-20260508-rolling-restart-topology-priority-recovery-workflow-timeout-dispatch-pending-stale-progress-reentry.md`.
 - [ ] Implementation subagent recorded:
 
 ## Residual Closure Inventory
 
-- [ ] Review the just-closed predecessor package on the same sprint boundary.
-- [ ] Fix any predecessor-review findings before implementation resumes.
+- [x] Review the just-closed predecessor package on the same sprint boundary.
+- [x] Fix any predecessor-review findings before implementation resumes.
 - [ ] Extract the focused epoch-2 active-gate snapshot-coverage witness and
       startup support evidence.
 - [ ] Add the focused regression or classification proof for the selected
