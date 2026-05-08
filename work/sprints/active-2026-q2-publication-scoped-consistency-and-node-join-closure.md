@@ -235,7 +235,7 @@ Secondary after the primary path is stable:
 
 The current active representative re-entry package is:
 
-1. [Rolling Restart Topology Priority Recovery Workflow Progress Dispatch Pending Reentry](../packages/active-20260508-rolling-restart-topology-priority-recovery-workflow-progress-dispatch-pending-reentry.md)
+1. [Rolling Restart Topology Priority Recovery Workflow Timeout Dispatch Pending Stale Progress Reentry](../packages/active-20260508-rolling-restart-topology-priority-recovery-workflow-timeout-dispatch-pending-stale-progress-reentry.md)
 
 Retained predecessor context file:
 

@@ -2,29 +2,31 @@
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
   "sprint": "work/sprints/active-2026-q2-publication-scoped-consistency-and-node-join-closure.md",
-  "package": "work/packages/active-20260508-rolling-restart-topology-priority-recovery-workflow-progress-dispatch-pending-reentry.md",
+  "package": "work/packages/active-20260508-rolling-restart-topology-priority-recovery-workflow-timeout-dispatch-pending-stale-progress-reentry.md",
   "status": "active",
   "scenario": "rolling-restart",
-  "artifact": "test-output/reports/rolling-restart-after-priority-recovery-timeout-authoritative-observation-20260508T000000Z.report.json",
-  "playback": "test-output/reports/.playback/rolling-restart-after-priority-recovery-timeout-authoritative-observation-20260508T000000Z/rolling-restart/",
-  "owner": "Priority recovery workflow progress event-driven wait after timeout authoritative-observation repair",
-  "boundary": "Operation workflow owner / workflow_progress / startup active gate support",
-  "dominantReason": "priority_recovery_workflow_progress_event_driven",
-  "currentState": "The workflow-timeout authoritative-observation repair is closed by migration. The representative rerun now stalls at epoch 2 PUBLISHED with sql_write_operations-p1 as the only blocked operation_workflow_owner witness under recovering_in_flight / wait_for_operation_progress, with actuation persisted_not_dispatched, workflow phase dispatch_pending, and startup active-gate snapshot coverage downstream only.",
-  "nextAction": "Review the just-closed workflow-timeout package, then add one focused epoch-2 PUBLISHED workflow-progress regression for sql_write_operations-p1 recovering_in_flight / wait_for_operation_progress with persisted_not_dispatched actuation, and repair or reclassify that dispatch-pending seam.",
+  "artifact": "test-output/reports/rolling-restart-after-priority-recovery-dispatch-pending-reclassify-20260508T000000Z.report.json",
+  "playback": "test-output/reports/.playback/rolling-restart-after-priority-recovery-dispatch-pending-reclassify-20260508T000000Z/rolling-restart/",
+  "owner": "Priority recovery workflow timeout transition deferred after dispatch-pending reclassification repair",
+  "boundary": "Operation workflow owner / workflow_timeout / startup active gate support",
+  "dominantReason": "priority_recovery_workflow_timeout_transition_deferred",
+  "currentState": "The workflow-progress dispatch-pending reclassification repair is closed by migration. The representative rerun now stalls at epoch 2 PUBLISHED with sql_write_operations-p1 as the dominant operation_workflow_owner witness under operation_stalled / reconcile_stale_operation_progress, with actuation transition_deferred, workflow phase dispatch_pending, latest step PENDING, and startup active-gate snapshot coverage downstream only.",
+  "nextAction": "Review the just-closed workflow-progress dispatch-pending package, then add one focused epoch-2 PUBLISHED workflow-timeout regression for sql_write_operations-p1 operation_stalled / reconcile_stale_operation_progress with dispatch_pending and repair or reclassify that stale-progress timeout seam.",
   "proof": [
-    "Focused epoch-2 PUBLISHED workflow-progress witness for sql_write_operations-p1 recovering_in_flight with persisted_not_dispatched actuation",
-    "Focused workflow-progress regression for the selected dispatch-pending seam",
+    "Focused epoch-2 PUBLISHED workflow-timeout witness for sql_write_operations-p1 with supporting sql_transactions-p1 context",
+    "Focused workflow-timeout regression for the selected dispatch-pending stale-progress seam",
     "Touched-file static guardrails",
     "Representative rolling-restart --fast-local rerun",
     "Failure-report and topology-convergence analysis"
   ],
   "touchedFiles": [
-    "work/packages/active-20260508-rolling-restart-topology-priority-recovery-workflow-progress-dispatch-pending-reentry.md",
+    "work/packages/active-20260508-rolling-restart-topology-priority-recovery-workflow-timeout-dispatch-pending-stale-progress-reentry.md",
     "src/rebalancer/operation-workflow-owner-segment-5-stage-5.js",
     "test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js",
     "work/model-ledger.jsonl",
-    "work/sprints/active-2026-q2-publication-scoped-consistency-and-node-join-closure.md"
+    "work/sprints/active-2026-q2-publication-scoped-consistency-and-node-join-closure.md",
+    "work/sprints/current-blocker.json",
+    "work/sprints/current-blocker.md"
   ],
-  "predecessor": "work/packages/done-20260508-rolling-restart-topology-priority-recovery-workflow-timeout-stale-operation-progress-reentry.md"
+  "predecessor": "work/packages/done-20260508-rolling-restart-topology-priority-recovery-workflow-progress-dispatch-pending-reentry.md"
 }

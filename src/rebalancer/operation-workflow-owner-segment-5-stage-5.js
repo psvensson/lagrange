@@ -70,7 +70,116 @@ const PRIORITY_RECOVERY_INCOMPLETE_OBSERVATION_SELECTION_TABLE =
     }),
   ]);
 
+const PRIORITY_RECOVERY_DISPATCH_PENDING_RECLASSIFICATION_LITERAL =
+  Object.freeze({
+    ADVANCE_EXISTING_OPERATION: 'advance_existing_operation',
+    DISPATCH_PENDING: 'dispatch_pending',
+    OPERATION_WORKFLOW_OWNER: 'operation_workflow_owner',
+    PERSISTED_NOT_DISPATCHED: 'persisted_not_dispatched',
+    WAIT_FOR_OPERATION_PROGRESS: 'wait_for_operation_progress',
+    WORKFLOW_PROGRESS: 'workflow_progress',
+  });
+
+const PRIORITY_RECOVERY_DISPATCH_PENDING_RECLASSIFICATION_STATE =
+  Object.freeze({
+    ADVANCE_OWNER_PROGRESS: 'advance_owner_progress',
+    RETAIN_SNAPSHOT: 'retain_snapshot',
+  });
+
+const PRIORITY_RECOVERY_DISPATCH_PENDING_RECLASSIFICATION_TABLE =
+  Object.freeze([
+    Object.freeze({
+      state:
+        PRIORITY_RECOVERY_DISPATCH_PENDING_RECLASSIFICATION_STATE
+          .ADVANCE_OWNER_PROGRESS,
+      matches: (evidence) =>
+        evidence.currentOwner ===
+          PRIORITY_RECOVERY_DISPATCH_PENDING_RECLASSIFICATION_LITERAL
+            .OPERATION_WORKFLOW_OWNER &&
+        evidence.actuationOwner ===
+          PRIORITY_RECOVERY_DISPATCH_PENDING_RECLASSIFICATION_LITERAL
+            .OPERATION_WORKFLOW_OWNER &&
+        evidence.nextRequiredAction ===
+          PRIORITY_RECOVERY_DISPATCH_PENDING_RECLASSIFICATION_LITERAL
+            .WAIT_FOR_OPERATION_PROGRESS &&
+        evidence.blockingBoundary ===
+          PRIORITY_RECOVERY_DISPATCH_PENDING_RECLASSIFICATION_LITERAL
+            .WORKFLOW_PROGRESS &&
+        evidence.actuationState ===
+          PRIORITY_RECOVERY_DISPATCH_PENDING_RECLASSIFICATION_LITERAL
+            .PERSISTED_NOT_DISPATCHED &&
+        evidence.workflowProgressPhaseId ===
+          PRIORITY_RECOVERY_DISPATCH_PENDING_RECLASSIFICATION_LITERAL
+            .DISPATCH_PENDING,
+    }),
+    Object.freeze({
+      state:
+        PRIORITY_RECOVERY_DISPATCH_PENDING_RECLASSIFICATION_STATE
+          .RETAIN_SNAPSHOT,
+      matches: () => true,
+    }),
+  ]);
+
 class OperationWorkflowOwnerSegment5Stage5 extends OperationWorkflowOwnerSegment5Stage4 {
+  resolvePriorityRecoveryDispatchPendingReclassificationState(
+    snapshot = null,
+  ) {
+    return (
+      PRIORITY_RECOVERY_DISPATCH_PENDING_RECLASSIFICATION_TABLE.find((entry) =>
+        entry.matches({
+          currentOwner:
+            snapshot?.progress?.currentOwner ||
+            OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_STRING,
+          actuationOwner:
+            snapshot?.actuation?.owner ||
+            OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_STRING,
+          nextRequiredAction:
+            snapshot?.progress?.nextRequiredAction ||
+            OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_STRING,
+          blockingBoundary:
+            snapshot?.progress?.blockingBoundary ||
+            OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_STRING,
+          actuationState:
+            snapshot?.actuation?.state ||
+            OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_STRING,
+          workflowProgressPhaseId:
+            snapshot?.progress?.workflowProgressPhaseId ||
+            snapshot?.actuation?.workflowProgressPhaseId ||
+            OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_STRING,
+        }),
+      )?.state ||
+      PRIORITY_RECOVERY_DISPATCH_PENDING_RECLASSIFICATION_STATE.RETAIN_SNAPSHOT
+    );
+  }
+
+  reclassifyPriorityRecoveryDispatchPendingSnapshot(snapshot = null) {
+    if (!snapshot || typeof snapshot !== TYPEOF.OBJECT) {
+      return snapshot;
+    }
+    const reclassificationState =
+      this.resolvePriorityRecoveryDispatchPendingReclassificationState(
+        snapshot,
+      );
+    if (
+      reclassificationState !==
+      PRIORITY_RECOVERY_DISPATCH_PENDING_RECLASSIFICATION_STATE
+        .ADVANCE_OWNER_PROGRESS
+    ) {
+      return snapshot;
+    }
+    return Object.freeze({
+      ...snapshot,
+      progress: Object.freeze({
+        ...(snapshot.progress && typeof snapshot.progress === TYPEOF.OBJECT ?
+          snapshot.progress :
+          {}),
+        nextRequiredAction:
+          PRIORITY_RECOVERY_DISPATCH_PENDING_RECLASSIFICATION_LITERAL
+            .ADVANCE_EXISTING_OPERATION,
+      }),
+    });
+  }
+
   decidePriorityRecoveryPartitionObservationSelection(evidence = {}) {
     return (
       PRIORITY_RECOVERY_PARTITION_OBSERVATION_SELECTION_TABLE.find((entry) =>
@@ -395,20 +504,24 @@ class OperationWorkflowOwnerSegment5Stage5 extends OperationWorkflowOwnerSegment
     if (planningDecisionSnapshot) {
       if (authoritativeOperationReadDeferred !== true) {
         if (operationContexts.length === NUM.ZERO) {
-          return planningDecisionSnapshot;
-        }
-      } else {
-        return this
-          .buildPriorityRecoveryDecisionSnapshotWithRetainedPlanningSerialWaitContext(
-            this.buildDeferredPriorityRecoveryDecisionSnapshotFromPlanningMatch(
-              normalizedPartitionId,
-              operationContexts,
-              planningSnapshot,
-              stepTimeoutMsByWorkflowStep,
-              planningDecisionSnapshot,
-            ),
+          return this.reclassifyPriorityRecoveryDispatchPendingSnapshot(
             planningDecisionSnapshot,
           );
+        }
+      } else {
+        return this.reclassifyPriorityRecoveryDispatchPendingSnapshot(
+          this
+            .buildPriorityRecoveryDecisionSnapshotWithRetainedPlanningSerialWaitContext(
+              this.buildDeferredPriorityRecoveryDecisionSnapshotFromPlanningMatch(
+                normalizedPartitionId,
+                operationContexts,
+                planningSnapshot,
+                stepTimeoutMsByWorkflowStep,
+                planningDecisionSnapshot,
+              ),
+              planningDecisionSnapshot,
+            ),
+        );
       }
     }
     const representativeOperationContext =
@@ -423,11 +536,13 @@ class OperationWorkflowOwnerSegment5Stage5 extends OperationWorkflowOwnerSegment
       stepTimeoutMsByWorkflowStep,
       authoritativeOperationReadDeferred,
     });
-    return this
-      .buildPriorityRecoveryDecisionSnapshotWithRetainedPlanningSerialWaitContext(
-        snapshot,
-        planningDecisionSnapshot,
-      );
+    return this.reclassifyPriorityRecoveryDispatchPendingSnapshot(
+      this
+        .buildPriorityRecoveryDecisionSnapshotWithRetainedPlanningSerialWaitContext(
+          snapshot,
+          planningDecisionSnapshot,
+        ),
+    );
   }
 
   async getPriorityRecoveryDecisionSnapshotForOperation(operation) {
