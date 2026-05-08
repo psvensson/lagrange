@@ -239,6 +239,10 @@ Closure:
 - Pushed to: origin/codex/pending-ack-eligibility-filter
 - Commit contains only package-owned files/package-status/allowed sprint handoff: yes
 
+- Focused Slice A package commit: 84e8cc22
+- Pushed to: origin/codex/pending-ack-eligibility-filter
+- Commit contains only package-owned files/package-status/allowed sprint handoff: yes
+
 ## Focused Evidence
 
 1. Artifact witness:
