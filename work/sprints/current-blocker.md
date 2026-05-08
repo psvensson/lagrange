@@ -24,7 +24,7 @@ Current state: The bounded coordinator-created remote handoff repair removed the
 
 ## Next Action
 
-Commit the focused dispatch-pending handoff slice, then start the next sequencing loop with a fresh review subagent before implementing operation-scheduling repair. The next proof surface is why eligible priority partitions remain action_required with nextRequiredAction=create_recovery_operation while no recovery operation is scheduled.
+Start the next review/fix/implementation loop for rebalancer_leader / operation_scheduling, then investigate why eligible priority partitions remain action_required with nextRequiredAction=create_recovery_operation while no recovery operation is scheduled.
 
 ## Proof Ladder
 

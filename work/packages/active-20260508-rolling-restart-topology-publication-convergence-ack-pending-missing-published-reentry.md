@@ -12,7 +12,7 @@
   "boundary": "rebalancer_leader / operation_scheduling / event_driven_wait",
   "dominantReason": "priority_recovery_operation_scheduling_event_driven",
   "currentState": "The bounded coordinator-created remote handoff repair removed the previous dispatch-pending serial-wait signature. The representative rerun still fails, but the normalized first frontier moved to rebalancer_leader / operation_scheduling with priorityRecoveryInvariants=passed, publication PUBLISHED, pendingAckCount=0, prioritySpread=pending, and blocked partitions replica_operations-p1, sql_transactions-p1, and sql_write_operations-p1 classified as needs_operation / eligible_but_no_operation_created.",
-  "nextAction": "Commit the focused dispatch-pending handoff slice, then start the next sequencing loop with a fresh review subagent before implementing operation-scheduling repair. The next proof surface is why eligible priority partitions remain action_required with nextRequiredAction=create_recovery_operation while no recovery operation is scheduled.",
+  "nextAction": "Start the next review/fix/implementation loop for rebalancer_leader / operation_scheduling, then investigate why eligible priority partitions remain action_required with nextRequiredAction=create_recovery_operation while no recovery operation is scheduled.",
   "proof": [
     "First-package-in-sprint review-not-needed validation and work-context coverage",
     "Focused epoch-4 ACK_PENDING publication-convergence witness with supporting selected-snapshot and priority-recovery context",
@@ -67,9 +67,8 @@ this package. The live blocker first migrated to
 `operation_workflow_owner / workflow_progress`, then the dispatch-pending
 handoff repair moved the representative frontier to
 `rebalancer_leader / operation_scheduling`. The implementation slice records
-the real implementation subagent required by the package tracker; the
-commit/push ledger remains open until the focused slice is committed and
-pushed.
+the real implementation subagent required by the package tracker. The dispatch
+handoff slice and commit/push ledger have been committed and pushed.
 
 ## Why
 
@@ -147,6 +146,10 @@ the next runtime implementation slice.
       Agent Nietzsche (019e0756-ea0e-7490-89e3-c8b65542c4a7) implemented work/packages/active-20260508-rolling-restart-topology-publication-convergence-ack-pending-missing-published-reentry.md;
       result clean with bounded coordinator-created remote handoff delivery
       and dispatch-pending retry regression proof.
+- [x] Continuation review subagent recorded:
+      Agent Pascal (019e0764-d263-7f53-b50b-192f0a6916bb) reviewed work/packages/active-20260508-rolling-restart-topology-publication-convergence-ack-pending-missing-published-reentry.md; result fixes-required.
+- [x] Continuation fix subagent recorded:
+      Agent Locke (019e0767-463c-75e2-af90-18ced40b2fc7) fixed work/packages/active-20260508-rolling-restart-topology-publication-convergence-ack-pending-missing-published-reentry.md.
 
 ## Residual Closure Inventory
 
