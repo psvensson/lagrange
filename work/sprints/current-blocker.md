@@ -8,23 +8,23 @@ Package: `work/packages/active-20260508-rolling-restart-topology-publication-con
 
 Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/rolling-restart-operation-scheduling-repair-20260508T120500Z.report.json`
+Artifact: `test-output/reports/rolling-restart-multi-candidate-operation-scheduling-repair-20260508T123000Z.report.json`
 
-Playback: `test-output/reports/.playback/rolling-restart-operation-scheduling-repair-20260508T120500Z/rolling-restart/`
+Playback: `test-output/reports/.playback/rolling-restart-multi-candidate-operation-scheduling-repair-20260508T123000Z/rolling-restart/`
 
 ## Boundary
 
-Owner: `Priority recovery operation scheduling after dispatch-pending handoff repair`
+Owner: `Priority recovery operation scheduling after multi-candidate surrogate repair`
 
 Boundary: `rebalancer_leader / operation_scheduling / event_driven_wait`
 
 Dominant reason: `priority_recovery_operation_scheduling_event_driven`
 
-Current state: The operation-scheduling reentry repair reduced the representative blocker but did not close it. priorityRecoveryInvariants still pass, publication remains PUBLISHED with pendingAckCount=0, and replica_operations-p1 plus sql_transaction_participants-p1 are now spread_satisfied_in_flight; the remaining first frontier is still rebalancer_leader / operation_scheduling with sql_transactions-p1 and sql_write_operations-p1 classified as needs_operation / eligible_but_no_operation_created.
+Current state: The multi-candidate operation-scheduling repair reduced the representative blocker again but did not close it. priorityRecoveryInvariants still pass and publication remains PUBLISHED with pendingAckCount=0. sql_write_operations-p1 now has a cache-visible PENDING operation and is classified recovering_in_flight / workflow_progress, while sql_transactions-p1 remains needs_operation / eligible_but_no_operation_created with no operationIds and nextRequiredAction=create_recovery_operation.
 
 ## Next Action
 
-Start the next implementation slice for the remaining rebalancer_leader / operation_scheduling blocker. The next proof surface is why sql_transactions-p1 and sql_write_operations-p1 remain action_required with nextRequiredAction=create_recovery_operation while no recovery operation is scheduled.
+Start the next implementation slice for the remaining rebalancer_leader / operation_scheduling blocker. The next proof surface is why sql_transactions-p1 remains action_required with nextRequiredAction=create_recovery_operation and no recovery operation after the same replay scheduled sql_write_operations-p1.
 
 ## Proof Ladder
 
@@ -65,7 +65,9 @@ Start the next implementation slice for the remaining rebalancer_leader / operat
 26. `src/rebalancer/operation-workflow-owner-segment-4.js`
 27. `src/rebalancer/unified-rebalancer-segment-2.js`
 28. `src/rebalancer/unified-rebalancer-segment-4-stage-1.js`
-29. `src/rebalancer/unified-rebalancer-segment-4-stage-shared.js`
-30. `test/rebalancer/priority-recovery-stale-planning-visibility.test.js`
-31. `test/rebalancer/rebalance-coordinator-outcome-routing.test.js`
-32. `work/model-ledger.jsonl`
+29. `src/rebalancer/unified-rebalancer-segment-4-stage-3.js`
+30. `src/rebalancer/unified-rebalancer-segment-4-stage-shared.js`
+31. `test/rebalancer/unified-rebalancer-part-5-2-stage-4.js`
+32. `test/rebalancer/priority-recovery-stale-planning-visibility.test.js`
+33. `test/rebalancer/rebalance-coordinator-outcome-routing.test.js`
+34. `work/model-ledger.jsonl`
