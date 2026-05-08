@@ -32,7 +32,7 @@
   "predecessor": "work/packages/done-20260508-rolling-restart-topology-publication-convergence-ack-pending-reentry.md",
   "closed": "2026-05-08",
   "commitAndPushLedgerRequired": true,
-  "successor": "work/packages/active-20260508-rolling-restart-startup-active-gate-snapshot-coverage-priority-recovery-stale-planning-visibility-reentry.md"
+  "successor": "work/packages/done-20260508-rolling-restart-startup-active-gate-snapshot-coverage-priority-recovery-stale-planning-visibility-reentry.md"
 }
 -->
 

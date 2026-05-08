@@ -1,5 +1,6 @@
 import {UnifiedRebalancerSegment4Stage1} from './unified-rebalancer-segment-4-stage-1.js';
 import {UNIFIED_REBALANCER_SEGMENT_4_STAGE_SHARED as SHARED} from './unified-rebalancer-segment-4-stage-shared.js';
+import {UNIFIED_REBALANCER_SHARED} from './unified-rebalancer-shared.js';
 
 const {
   EntityType,
@@ -22,7 +23,89 @@ const {
   resolvePriorityRecoveryActiveNodeCohort,
 } = SHARED;
 
+const {buildPriorityRecoveryOperationContextFromRecord} =
+  UNIFIED_REBALANCER_SHARED;
+
 class UnifiedRebalancerSegment4Stage2 extends UnifiedRebalancerSegment4Stage1 {
+  buildPriorityRecoveryFollowUpOperationContextsFromCache(partitionId) {
+    const normalizedPartitionId = String(
+      partitionId || UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
+    ).trim();
+    if (
+      normalizedPartitionId.length === NUM.ZERO ||
+      typeof this.systemTableCache?.getAll !== TYPEOF.FUNCTION
+    ) {
+      return Object.freeze([]);
+    }
+    const replicaOperationRows =
+      this.systemTableCache.getAll(SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) || [];
+    const operationContexts = replicaOperationRows
+      .filter((operation) => this.isTrackedInFlightOperation(operation))
+      .map((operation) =>
+        buildPriorityRecoveryOperationContextFromRecord(operation),
+      )
+      .filter(
+        (operationContext) =>
+          operationContext?.partitionId === normalizedPartitionId,
+      );
+    return Object.freeze(operationContexts);
+  }
+
+  resolvePriorityRecoveryFollowUpDecisionSnapshotFromPlanning(
+    planningSnapshot = null,
+    options = {},
+  ) {
+    if (!planningSnapshot || typeof planningSnapshot !== TYPEOF.OBJECT) {
+      return null;
+    }
+    const partitionId = String(
+      options?.[PRIORITY_RECOVERY_FOLLOW_UP_FIELD.PARTITION_ID] ||
+        this.entityId ||
+        UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
+    ).trim();
+    if (partitionId.length === NUM.ZERO) {
+      return null;
+    }
+    const snapshots = Array.isArray(
+      planningSnapshot?.priorityRecoveryDecisionSnapshots?.snapshots,
+    ) ?
+      planningSnapshot.priorityRecoveryDecisionSnapshots.snapshots :
+      [];
+    const planningDecisionSnapshot =
+      snapshots.find((snapshot) => {
+        const snapshotPartitionId =
+          this.resolvePriorityRecoveryFollowUpPartitionId(snapshot);
+        return snapshotPartitionId === partitionId;
+      }) || null;
+    const reconstructedDecisionSnapshot =
+      this.buildPriorityRecoveryFollowUpDecisionSnapshotFromPlanning(
+        planningSnapshot,
+        {
+          ...options,
+          partitionId,
+          includeNonRequiredSnapshot: true,
+        },
+      );
+    if (!planningDecisionSnapshot) {
+      return reconstructedDecisionSnapshot;
+    }
+    if (!reconstructedDecisionSnapshot) {
+      return planningDecisionSnapshot;
+    }
+    const planningOperationRequired =
+      this.isPriorityRecoveryFollowUpOperationRequired(
+        planningDecisionSnapshot,
+      );
+    const reconstructedOperationRequired =
+      this.isPriorityRecoveryFollowUpOperationRequired(
+        reconstructedDecisionSnapshot,
+      );
+    if (planningOperationRequired && !reconstructedOperationRequired) {
+      return reconstructedDecisionSnapshot;
+    }
+    return planningDecisionSnapshot;
+  }
+
   buildPriorityRecoveryClosureWitnessFollowUpSpreadGapByPartitionId(
     planningSnapshot = null,
   ) {
@@ -289,6 +372,8 @@ class UnifiedRebalancerSegment4Stage2 extends UnifiedRebalancerSegment4Stage1 {
     }
     const activeNodeIds =
       resolvePriorityRecoveryActiveNodeCohort(planningSnapshot).activeNodeIds;
+    const operationContexts =
+      this.buildPriorityRecoveryFollowUpOperationContextsFromCache(partitionId);
     const assessment = buildPriorityRecoveryPartitionAssessment({
       partitionId,
       priorityPartitionSummary,
@@ -297,7 +382,7 @@ class UnifiedRebalancerSegment4Stage2 extends UnifiedRebalancerSegment4Stage1 {
         effectiveEligibleNodeCount: activeNodeIds.length,
         ineligibleNodes: [],
       },
-      operationContexts: [],
+      operationContexts,
     });
     const eligibleButNoOperation = assessment.blockerReasons.includes(
       PRIORITY_RECOVERY_FOLLOW_UP_DECISION.ELIGIBLE_NO_OPERATION,
@@ -326,7 +411,8 @@ class UnifiedRebalancerSegment4Stage2 extends UnifiedRebalancerSegment4Stage1 {
       }),
       progress,
     });
-    return this.isPriorityRecoveryFollowUpOperationRequired(decisionSnapshot) ?
+    return options?.includeNonRequiredSnapshot === true ||
+      this.isPriorityRecoveryFollowUpOperationRequired(decisionSnapshot) ?
       decisionSnapshot :
       null;
   }

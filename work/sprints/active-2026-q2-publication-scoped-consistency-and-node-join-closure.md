@@ -254,7 +254,7 @@ Secondary after the primary path is stable:
 
 The current active representative re-entry package is:
 
-1. [Rolling Restart Startup Active Gate Snapshot Coverage Priority Recovery Stale Planning Visibility Reentry](../packages/active-20260508-rolling-restart-startup-active-gate-snapshot-coverage-priority-recovery-stale-planning-visibility-reentry.md)
+1. [Rolling Restart Topology Priority Recovery Workflow Timeout Sql Transaction Participants Dispatch Pending Reentry](../packages/active-20260508-rolling-restart-topology-priority-recovery-workflow-timeout-sql-transaction-participants-dispatch-pending-reentry.md)
 
 Retained predecessor context file:
 

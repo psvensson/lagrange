@@ -340,6 +340,28 @@ class UnifiedRebalancerSegment4Stage1 extends UnifiedRebalancerSegment3 {
     throw new Error(`Unsupported move type: ${moveType}`);
   }
 
+  async getCurrentPriorityRecoveryCoordinatorDecisionSnapshot() {
+    if (!this.isControlPlanePriorityPartition()) {
+      return null;
+    }
+    const workflowOwner = this.rebalanceCoordinator?.workflowOwner || null;
+    if (
+      !workflowOwner ||
+      typeof workflowOwner.getPriorityRecoveryDecisionSnapshotForPartitionOperations !==
+        TYPEOF.FUNCTION
+    ) {
+      return null;
+    }
+    const decisionSnapshot =
+      await workflowOwner.getPriorityRecoveryDecisionSnapshotForPartitionOperations(
+        this.entityId,
+        [],
+      );
+    return decisionSnapshot && typeof decisionSnapshot === TYPEOF.OBJECT ?
+      decisionSnapshot :
+      null;
+  }
+
   async getCurrentPriorityRecoveryFollowUpDecisionSnapshot() {
     if (!this.isControlPlanePriorityPartition()) {
       return null;
@@ -347,18 +369,19 @@ class UnifiedRebalancerSegment4Stage1 extends UnifiedRebalancerSegment3 {
     const planningSnapshot = await this.getPriorityRecoveryPlanningSnapshot({
       partitionId: this.entityId,
     });
-    const snapshots = Array.isArray(
-      planningSnapshot?.priorityRecoveryDecisionSnapshots?.snapshots,
-    ) ?
-      planningSnapshot.priorityRecoveryDecisionSnapshots.snapshots :
-      [];
+    const coordinatorDecisionSnapshot =
+      await this.getCurrentPriorityRecoveryCoordinatorDecisionSnapshot();
+    if (coordinatorDecisionSnapshot) {
+      return Object.freeze({
+        planningSnapshot,
+        decisionSnapshot: coordinatorDecisionSnapshot,
+      });
+    }
     const decisionSnapshot =
-      snapshots.find((snapshot) => snapshot?.partitionId === this.entityId) ||
-      this.buildPriorityRecoveryFollowUpDecisionSnapshotFromPlanning(
+      this.resolvePriorityRecoveryFollowUpDecisionSnapshotFromPlanning(
         planningSnapshot,
         {partitionId: this.entityId},
-      ) ||
-      null;
+      ) || null;
     if (!decisionSnapshot) {
       return null;
     }
@@ -374,36 +397,93 @@ class UnifiedRebalancerSegment4Stage1 extends UnifiedRebalancerSegment3 {
     if (!this.isControlPlanePriorityPartition()) {
       return null;
     }
-    const snapshots = Array.isArray(
-      planningSnapshot?.priorityRecoveryDecisionSnapshots?.snapshots,
-    ) ?
-      planningSnapshot.priorityRecoveryDecisionSnapshots.snapshots :
-      [];
     const closureWitnessPartitionId =
       this.resolvePriorityRecoveryClosureWitnessFollowUpPartitionId(
         planningSnapshot,
       );
-    const decisionSnapshot = snapshots.find((snapshot) => {
-      const partitionId =
-        this.resolvePriorityRecoveryFollowUpPartitionId(snapshot);
-      return (
-        partitionId.length > NUM.ZERO &&
-        partitionId === closureWitnessPartitionId &&
-        this.isPriorityRecoveryFollowUpOperationRequired(snapshot)
+    const resolveDecisionSnapshotForPartitionId = (partitionId) => {
+      const normalizedPartitionId = String(
+        partitionId || UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
+      ).trim();
+      if (normalizedPartitionId.length === NUM.ZERO) {
+        return null;
+      }
+      return this.resolvePriorityRecoveryFollowUpDecisionSnapshotFromPlanning(
+        planningSnapshot,
+        {partitionId: normalizedPartitionId},
       );
-    }) || snapshots.find((snapshot) => {
-      const partitionId = String(
-        snapshot?.[PRIORITY_RECOVERY_FOLLOW_UP_FIELD.PARTITION_ID] ||
+    };
+    const closureWitnessDecisionSnapshot =
+      resolveDecisionSnapshotForPartitionId(closureWitnessPartitionId);
+    if (
+      this.isPriorityRecoveryFollowUpOperationRequired(
+        closureWitnessDecisionSnapshot,
+      )
+    ) {
+      return Object.freeze({
+        planningSnapshot,
+        decisionSnapshot: closureWitnessDecisionSnapshot,
+      });
+    }
+    const priorityPartitionSummary =
+      planningSnapshot?.priorityPartitionSummary ||
+      planningSnapshot?.publicationRecoveryGate?.priorityPartitionSummary ||
+      null;
+    const candidatePartitionIds = Array.isArray(
+      planningSnapshot?.priorityRecoveryDecisionSnapshots?.snapshots,
+    ) ?
+      planningSnapshot.priorityRecoveryDecisionSnapshots.snapshots
+        .map((snapshot) =>
+          this.resolvePriorityRecoveryFollowUpPartitionId(snapshot),
+        )
+        .filter(
+          (partitionId) =>
+            partitionId.length > NUM.ZERO && partitionId !== this.entityId,
+        ) :
+      [];
+    for (const partitionId of candidatePartitionIds) {
+      const decisionSnapshot =
+        resolveDecisionSnapshotForPartitionId(partitionId);
+      if (
+        this.isPriorityRecoveryFollowUpOperationRequired(decisionSnapshot)
+      ) {
+        return Object.freeze({
+          planningSnapshot,
+          decisionSnapshot,
+        });
+      }
+    }
+    const blockedPartitions = Array.isArray(
+      priorityPartitionSummary?.blockedPartitions,
+    ) ?
+      priorityPartitionSummary.blockedPartitions :
+      [];
+    for (const blockedPartition of blockedPartitions) {
+      const blockedPartitionId = String(
+        blockedPartition?.[PRIORITY_RECOVERY_FOLLOW_UP_FIELD.PARTITION_ID] ||
           UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
       ).trim();
-      return (
-        partitionId.length > NUM.ZERO &&
-        partitionId !== this.entityId &&
-        this.isPriorityRecoveryFollowUpOperationRequired(snapshot)
+      if (
+        blockedPartitionId.length === NUM.ZERO ||
+        blockedPartitionId === this.entityId
+      ) {
+        continue;
+      }
+      const decisionSnapshot =
+        resolveDecisionSnapshotForPartitionId(blockedPartitionId);
+      if (
+        this.isPriorityRecoveryFollowUpOperationRequired(decisionSnapshot)
+      ) {
+        return Object.freeze({
+          planningSnapshot,
+          decisionSnapshot,
+        });
+      }
+    }
+    const decisionSnapshot =
+      this.buildPriorityRecoverySurrogateDecisionFromPlanning(
+        planningSnapshot,
       );
-    }) || this.buildPriorityRecoverySurrogateDecisionFromPlanning(
-      planningSnapshot,
-    );
     if (!decisionSnapshot) {
       return null;
     }

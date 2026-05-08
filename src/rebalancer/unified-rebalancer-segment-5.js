@@ -1071,7 +1071,10 @@ class UnifiedRebalancerSegment5 extends UnifiedRebalancerSegment4 {
       ][PRIORITY_RECOVERY_PLANNING_GATE_FIELD.SNAPSHOTS] :
       [];
     const decisionSnapshot =
-      snapshots.find((snapshot) => {
+      this.resolvePriorityRecoveryFollowUpDecisionSnapshotFromPlanning(
+        planningSnapshot,
+        {partitionId: normalizedPartitionId},
+      ) || snapshots.find((snapshot) => {
         const snapshotPartitionId = String(
           snapshot?.[PRIORITY_RECOVERY_PLANNING_GATE_FIELD.PARTITION_ID] ||
             snapshot?.[
@@ -1081,10 +1084,7 @@ class UnifiedRebalancerSegment5 extends UnifiedRebalancerSegment4 {
         ).trim();
         return snapshotPartitionId === normalizedPartitionId;
       }) ||
-      this.buildPriorityRecoveryFollowUpDecisionSnapshotFromPlanning(
-        planningSnapshot,
-        {partitionId: normalizedPartitionId},
-      );
+      null;
     return this.isPriorityRecoveryFollowUpOperationRequired(decisionSnapshot);
   }
 
