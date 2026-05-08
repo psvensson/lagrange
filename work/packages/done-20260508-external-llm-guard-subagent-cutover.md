@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-08",
   "scenario": "external-llm-guard-removal",
   "artifact": "none",
@@ -39,9 +39,11 @@
     "test/scripts/no-external-llm-guards.test.js",
     "work/README.md",
     "work/templates/work-package-template.md",
-    "work/packages/active-20260508-external-llm-guard-subagent-cutover.md"
+    "work/packages/done-20260508-external-llm-guard-subagent-cutover.md"
   ],
-  "predecessor": "work/packages/archived/done-20260507-llm-operability-follow-up-hardening.md"
+  "predecessor": "work/packages/archived/done-20260507-llm-operability-follow-up-hardening.md",
+  "closed": "2026-05-08",
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -89,7 +91,7 @@ subagent review policy.
 - [x] Fix subagent recorded or explicitly not needed: not-needed.
 - [x] Implementation subagent recorded: Agent Codex
       (`019e0911-91e0-7b43-a298-1daac78b19e4`) implemented
-      `work/packages/active-20260508-external-llm-guard-subagent-cutover.md`.
+      `work/packages/done-20260508-external-llm-guard-subagent-cutover.md`.
 
 ## Static Drift Ledger
 
@@ -125,3 +127,9 @@ Implementation:
       passed: 0 runtime-grammar-contract violations.
 - [x] `npm run work:validate` passed.
 - [x] `git diff --check` passed.
+
+## Commit And Push Ledger
+
+- Focused package commit: cb24aea6d2a4641219baed72e2b1d7f4df3548bb
+- Pushed to: origin/codex/pending-ack-eligibility-filter
+- Commit contains only package-owned files/package-status/allowed sprint handoff: yes
