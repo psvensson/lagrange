@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-08",
   "scenario": "rolling-restart",
   "artifact": "test-output/reports/rolling-restart-after-stale-priority-planning-visibility-20260508T000000Z.report.json",
@@ -22,9 +22,11 @@
     "Representative rolling-restart --fast-local rerun only after contract cutover"
   ],
   "touchedFiles": [
-    "work/packages/active-20260508-priority-recovery-operation-workflow-contract-rewrite.md",
+    "work/packages/done-20260508-priority-recovery-operation-workflow-contract-rewrite.md",
+    "work/packages/done-20260508-rolling-restart-startup-active-gate-snapshot-coverage-priority-recovery-stale-planning-visibility-reentry.md",
+    "work/packages/todo-20260508-rolling-restart-topology-publication-convergence-ack-pending-missing-published-reentry.md",
     "work/packages/todo-20260508-rolling-restart-topology-priority-recovery-workflow-timeout-sql-transaction-participants-dispatch-pending-reentry.md",
-    "work/sprints/active-2026-q2-publication-scoped-consistency-and-node-join-closure.md",
+    "work/sprints/archived/done-2026-q2-publication-scoped-consistency-and-node-join-closure.md",
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md",
     "work/model-ledger.jsonl",
@@ -45,7 +47,10 @@
     "test/scripts/analyze-topology-convergence.test.js",
     "test/distributed/harness/__tests__/failure-bundle-core-16-test-cases.js"
   ],
-  "predecessor": "work/packages/todo-20260508-rolling-restart-topology-priority-recovery-workflow-timeout-sql-transaction-participants-dispatch-pending-reentry.md"
+  "predecessor": "work/packages/todo-20260508-rolling-restart-topology-priority-recovery-workflow-timeout-sql-transaction-participants-dispatch-pending-reentry.md",
+  "closed": "2026-05-08",
+  "commitAndPushLedgerRequired": true,
+  "successor": "work/packages/todo-20260508-rolling-restart-topology-publication-convergence-ack-pending-missing-published-reentry.md"
 }
 -->
 
@@ -185,7 +190,13 @@ whole `rolling-restart` scenario:
       `work/packages/todo-20260508-rolling-restart-topology-priority-recovery-workflow-timeout-sql-transaction-participants-dispatch-pending-reentry.md`.
 - [x] Implementation subagent recorded:
       Agent `Chandrasekhar` (`019e06ed-e8f7-7471-9b72-b56b0c550bb0`) implemented
-      `work/packages/active-20260508-priority-recovery-operation-workflow-contract-rewrite.md`.
+      `work/packages/done-20260508-priority-recovery-operation-workflow-contract-rewrite.md`.
+
+## Commit And Push Ledger
+
+- Focused package commit: `293f2c7d`
+- Pushed to: `origin/codex/pending-ack-eligibility-filter`
+- Commit contains only package-owned files/package-status/allowed sprint handoff: `yes`
 
 ## Residual Closure Inventory
 
@@ -239,7 +250,7 @@ Closure:
    passed with `0` decision-boundary violations.
 7. `npm run audit:runtime-grammar:file -- src/control-plane/priority-recovery-snapshot-stage-10.js src/rebalancer/operation-workflow-owner-segment-5-stage-5.js src/diagnostics/topology-convergence-graph.js`
    passed with `0` runtime-grammar violations.
-8. `git diff --check -- work/packages/active-20260508-priority-recovery-operation-workflow-contract-rewrite.md work/packages/todo-20260508-rolling-restart-topology-priority-recovery-workflow-timeout-sql-transaction-participants-dispatch-pending-reentry.md work/sprints/current-blocker.json work/sprints/current-blocker.md src/control-plane/priority-recovery-snapshot-stage-10.js src/control-plane/priority-recovery-snapshot.js src/rebalancer/operation-workflow-owner-segment-5-stage-5.js test/control-plane/priority-recovery-snapshot-core-02-test-cases.js test/control-plane/priority-recovery-snapshot.test.js`
+8. `git diff --check -- work/packages/done-20260508-priority-recovery-operation-workflow-contract-rewrite.md work/packages/todo-20260508-rolling-restart-topology-priority-recovery-workflow-timeout-sql-transaction-participants-dispatch-pending-reentry.md work/sprints/current-blocker.json work/sprints/current-blocker.md src/control-plane/priority-recovery-snapshot-stage-10.js src/control-plane/priority-recovery-snapshot.js src/rebalancer/operation-workflow-owner-segment-5-stage-5.js test/control-plane/priority-recovery-snapshot-core-02-test-cases.js test/control-plane/priority-recovery-snapshot.test.js`
    passed.
 9. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-after-priority-recovery-workflow-contract-rewrite-20260508T095320Z.report.json --fast-local --verbose`
    failed after `136.2s`, but the direct frontier no longer belongs to

@@ -1,30 +1,27 @@
 {
   "schema": "current-blocker-v1",
-  "generatedBy": "scripts/work-tracker.js",
-  "sprint": "work/sprints/active-2026-q2-publication-scoped-consistency-and-node-join-closure.md",
-  "package": "work/packages/active-20260508-rolling-restart-topology-priority-recovery-workflow-timeout-sql-transaction-participants-dispatch-pending-reentry.md",
-  "status": "active",
-  "scenario": "rolling-restart",
-  "artifact": "test-output/reports/rolling-restart-after-stale-priority-planning-visibility-20260508T000000Z.report.json",
-  "playback": "test-output/reports/.playback/rolling-restart-after-stale-priority-planning-visibility-20260508T000000Z/rolling-restart/",
-  "owner": "Priority recovery workflow-timeout reconciliation for sql_transaction_participants-p1 after stale planning visibility repair",
-  "boundary": "operation_workflow_owner / workflow_timeout / dispatch_pending_transition",
-  "dominantReason": "priority_recovery_workflow_timeout_transition_deferred",
-  "currentState": "The stale planning-visibility seam is closed by migration. The closure-driving rerun now advances startup active-gate snapshot coverage to 3/5 and removes the stale sql_write_operations-p1 eligible_but_no_operation_created witness, but epoch 2 PUBLISHED still stalls on sql_transaction_participants-p1 under semantic state operation_stalled with progress class operation_created_but_no_step_transitions, nextRequiredAction reconcile_stale_operation_progress, workflowProgressPhaseId dispatch_pending, and waitMode timeout_reconcile_due.",
-  "nextAction": "Review the just-closed stale-planning-visibility package, then extract one focused epoch-2 PUBLISHED workflow-timeout witness for sql_transaction_participants-p1 and repair or classify why the operation workflow owner leaves it at operation_created_but_no_step_transitions under dispatch_pending without reopening the closed stale-planning-visibility package.",
+  "generatedBy": "manual-closure-update",
+  "status": "none",
+  "sprint": null,
+  "package": null,
+  "scenario": "none",
+  "artifact": "test-output/reports/rolling-restart-after-priority-recovery-workflow-contract-rewrite-20260508T095320Z.report.json",
+  "playback": "test-output/reports/.playback/rolling-restart-after-priority-recovery-workflow-contract-rewrite-20260508T095320Z/rolling-restart/",
+  "owner": "no-active-sprint",
+  "boundary": "none",
+  "dominantReason": "sprint_closed",
+  "currentState": "No active sprint or active package is open. The priority-recovery operation-workflow contract rewrite sprint closed on May 8, 2026 after the representative rolling-restart rerun moved the first frontier to topology_publication_owner / publication_convergence.",
+  "nextAction": "When work resumes, start a fresh review/fix/implementation subagent sequence before activating work/packages/todo-20260508-rolling-restart-topology-publication-convergence-ack-pending-missing-published-reentry.md.",
   "proof": [
-    "Focused epoch-2 PUBLISHED workflow-timeout witness for sql_transaction_participants-p1 with supporting replica_operations-p1, sql_transactions-p1, sql_write_operations-p1, and startup active-gate evidence",
-    "Focused workflow-timeout regression or blocker probe for the selected operation_created_but_no_step_transitions seam",
-    "Touched-file static guardrails",
-    "Representative rolling-restart --fast-local rerun",
-    "Failure-report and topology-convergence analysis"
+    "Shared priority-recovery workflow contract cutover committed as 293f2c7d",
+    "Representative rolling-restart rerun moved the first frontier to topology_publication_owner / publication_convergence"
   ],
   "touchedFiles": [
-    "work/packages/active-20260508-rolling-restart-topology-priority-recovery-workflow-timeout-sql-transaction-participants-dispatch-pending-reentry.md",
-    "work/model-ledger.jsonl",
-    "work/sprints/active-2026-q2-publication-scoped-consistency-and-node-join-closure.md",
+    "work/packages/done-20260508-priority-recovery-operation-workflow-contract-rewrite.md",
+    "work/packages/todo-20260508-rolling-restart-topology-publication-convergence-ack-pending-missing-published-reentry.md",
+    "work/sprints/archived/done-2026-q2-publication-scoped-consistency-and-node-join-closure.md",
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md"
   ],
-  "predecessor": "work/packages/done-20260508-rolling-restart-startup-active-gate-snapshot-coverage-priority-recovery-stale-planning-visibility-reentry.md"
+  "predecessor": "work/packages/done-20260508-priority-recovery-operation-workflow-contract-rewrite.md"
 }

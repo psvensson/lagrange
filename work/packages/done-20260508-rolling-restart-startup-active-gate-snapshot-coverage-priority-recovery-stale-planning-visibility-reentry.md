@@ -30,7 +30,7 @@
   "predecessor": "work/packages/done-20260508-rolling-restart-priority-recovery-operation-scheduling-sql-write-needs-operation-reentry.md",
   "closed": "2026-05-08",
   "commitAndPushLedgerRequired": true,
-  "successor": "work/packages/active-20260508-rolling-restart-topology-priority-recovery-workflow-timeout-sql-transaction-participants-dispatch-pending-reentry.md"
+  "successor": "work/packages/todo-20260508-rolling-restart-topology-priority-recovery-workflow-timeout-sql-transaction-participants-dispatch-pending-reentry.md"
 }
 -->
 
