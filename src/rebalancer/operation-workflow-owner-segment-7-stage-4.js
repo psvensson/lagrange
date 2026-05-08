@@ -347,6 +347,13 @@ class OperationWorkflowOwnerSegment7Stage4 extends OperationWorkflowOwnerSegment
       return PRIORITY_RECOVERY_OPERATION_DRAIN_OWNER_STATE.LOCAL_OWNER;
     }
     if (
+      this.shouldRetryCoordinatorCreatedRemoteHandoff(operation) &&
+      this.isDispatchRetryableWorkflowStep(operation)
+    ) {
+      return PRIORITY_RECOVERY_OPERATION_DRAIN_OWNER_STATE
+        .REMOTE_REARM_REQUIRED;
+    }
+    if (
       drainAction ===
         OPERATION_LIFECYCLE_ACTION.COMPLETE_PRIORITY_RECOVERY_DRAIN ||
       drainAction ===
@@ -372,6 +379,48 @@ class OperationWorkflowOwnerSegment7Stage4 extends OperationWorkflowOwnerSegment
     return (
       drainSnapshot?.ownerAction ===
       PRIORITY_RECOVERY_OPERATION_DRAIN_OWNER_ACTION.ALLOW_RECONCILE
+    );
+  }
+
+  hasActivePriorityRecoveryRemoteOwnerWakeRetry(operationId) {
+    return (
+      operationId.length > NUM.ZERO &&
+      this.createdOperationHandoffRetryTimerByOperationId.has(operationId) &&
+      this.hasActiveTransitionRetryGrace(operationId)
+    );
+  }
+
+  async wakePriorityRecoveryRemoteOwnerFromDrainSnapshot(
+    operation,
+    drainSnapshot,
+  ) {
+    const resolvedDrainSnapshot =
+      drainSnapshot ||
+      await this.buildPriorityRecoveryOperationDrainSnapshot(operation);
+    if (
+      resolvedDrainSnapshot?.ownerAction !==
+      PRIORITY_RECOVERY_OPERATION_DRAIN_OWNER_ACTION.WAKE_REMOTE_OWNER
+    ) {
+      return false;
+    }
+    const operationId = String(
+      operation?.operationId || OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_STRING,
+    ).trim();
+    if (
+      this.hasActivePriorityRecoveryRemoteOwnerWakeRetry(operationId)
+    ) {
+      return true;
+    }
+    if (
+      operationId.length > NUM.ZERO &&
+      this.createdOperationHandoffRetryTimerByOperationId.has(operationId)
+    ) {
+      this.clearCreatedOperationHandoffRetry(operationId);
+    }
+    const woken = await this.wakeCoordinatorCreatedRemoteOwner(operation);
+    return (
+      Boolean(woken) ||
+      this.hasActivePriorityRecoveryRemoteOwnerWakeRetry(operationId)
     );
   }
 

@@ -120,6 +120,14 @@ class OperationWorkflowOwnerSegment7Stage3 extends OperationWorkflowOwnerSegment
       const operationDrainSnapshot =
         await this.buildPriorityRecoveryOperationDrainSnapshot(operation);
       if (
+        await this.wakePriorityRecoveryRemoteOwnerFromDrainSnapshot(
+          operation,
+          operationDrainSnapshot,
+        )
+      ) {
+        continue;
+      }
+      if (
         !this.shouldEnterOperationLifecycleFromDrainSnapshot(
           operationDrainSnapshot,
         )
@@ -156,6 +164,14 @@ class OperationWorkflowOwnerSegment7Stage3 extends OperationWorkflowOwnerSegment
             await this.buildPriorityRecoveryOperationDrainSnapshot(
               timeoutOperation,
             );
+          if (
+            await this.wakePriorityRecoveryRemoteOwnerFromDrainSnapshot(
+              timeoutOperation,
+              timeoutOperationDrainSnapshot,
+            )
+          ) {
+            return;
+          }
           if (
             !this.shouldEnterOperationLifecycleFromDrainSnapshot(
               timeoutOperationDrainSnapshot,

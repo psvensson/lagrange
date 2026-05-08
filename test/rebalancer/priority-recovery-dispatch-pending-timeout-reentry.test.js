@@ -1,16 +1,27 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
+import {OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED as STAGE_SHARED} from
+  '../../src/rebalancer/operation-workflow-owner-segment-7-stage-shared.js';
+import {
+  OperationType,
+  ReplicaStatus,
+} from '../../src/rebalancer/replica-status.js';
+
+const {
+  PRIORITY_RECOVERY_OPERATION_DRAIN_OWNER_ACTION,
+  PRIORITY_RECOVERY_OPERATION_DRAIN_OWNER_STATE,
+} = STAGE_SHARED;
 
 const TEST_ENTITY_TYPE_PARTITION = 'partition';
 const TEST_OPERATION_ID = 'priority-dispatch-pending-timeout-operation';
-const TEST_OPERATION_TYPE_REPLACE = 'REPLACE';
-const TEST_PARTITION_ID = 'sql_transaction_participants-p1';
-const TEST_REPLICA_ID = 'sql_transaction_participants-p1-r4';
+const TEST_OPERATION_TYPE_REPLACE = OperationType.REPLACE;
+const TEST_PARTITION_ID = 'sql_write_operations-p1';
+const TEST_REPLICA_ID = 'sql_write_operations-p1-r4';
 const TEST_SOURCE_NODE_ID = 'node-source';
 const TEST_TARGET_NODE_ID = 'node-target';
-const TEST_STATUS_PENDING = 'pending';
-const TEST_STEP_PENDING = 'PENDING';
+const TEST_STATUS_PENDING = ReplicaStatus.PENDING;
+const TEST_STEP_PENDING = WORKFLOW_STEP.PENDING;
 const TEST_STEP_HISTORY_LAG_MS = 1000;
 const TEST_TIMEOUT_OVERRUN_MS = 1;
 const TEST_HANDOFF_TIMEOUT_MS = 7;
@@ -21,7 +32,6 @@ const TEST_REPLICA_DISPATCH_TARGET =
 const TEST_RETRYABLE_HANDOFF_ERROR = 'handoff retryable timeout';
 const TEST_COORDINATOR_CREATED_REMOTE_HANDOFF =
   'coordinator_created_remote_handoff';
-const TEST_OWNER_ACTION_WAKE_REMOTE_OWNER = 'wake_remote_owner';
 
 function buildTransactionCoordinator() {
   return {
@@ -66,6 +76,7 @@ test('checkTimeouts re-wakes restart-discovered remote-owned priority ' +
 async (t) => {
   const deliveries = [];
   const deferredTimers = [];
+  let deliveryAttempt = 0;
   let updateCount = 0;
   const nowMs = Date.now();
   const operationRow = {
@@ -170,6 +181,15 @@ async (t) => {
     messageRouter: {
       async deliver(target, payload) {
         deliveries.push({target, payload});
+        deliveryAttempt += 1;
+        if (deliveryAttempt === 1) {
+          return {
+            acknowledged: false,
+            error: TEST_RETRYABLE_HANDOFF_ERROR,
+            deferRetry: true,
+            retryAfterMs: TEST_RETRY_AFTER_MS,
+          };
+        }
         return {acknowledged: true, status: 'initiated'};
       },
     },
@@ -209,7 +229,6 @@ async (t) => {
     );
 
   await coordinator.checkTimeouts();
-  await coordinator.checkTimeouts();
 
   t.equal(
     cachedOperation?.operationId,
@@ -231,8 +250,13 @@ async (t) => {
     'the timeout witness should be eligible for dispatch re-arm while its operation budget remains active',
   );
   t.equal(
+    drainSnapshot?.ownerState,
+    PRIORITY_RECOVERY_OPERATION_DRAIN_OWNER_STATE.REMOTE_REARM_REQUIRED,
+    'stale remote-owned timeout witnesses should use the explicit remote drain re-arm owner state',
+  );
+  t.equal(
     drainSnapshot?.ownerAction,
-    TEST_OWNER_ACTION_WAKE_REMOTE_OWNER,
+    PRIORITY_RECOVERY_OPERATION_DRAIN_OWNER_ACTION.WAKE_REMOTE_OWNER,
     'stale remote-owned timeout witnesses should route through remote-owner wake instead of staying transition-deferred',
   );
 
@@ -276,6 +300,30 @@ async (t) => {
     updateCount,
     0,
     'timeout reconciliation should not persist step updates for the remote-owned row before remote progress is observed',
+  );
+
+  await deferredTimers[0].fn();
+
+  t.equal(
+    deliveries.length,
+    2,
+    'the deferred remote handoff retry should re-enter the owner wake path',
+  );
+  t.equal(
+    deliveries[1]?.target,
+    TEST_REPLICA_DISPATCH_TARGET,
+    'deferred remote handoff retry should use the same canonical replica-dispatch ingress',
+  );
+  t.equal(
+    coordinator.workflowOwner.createdOperationHandoffRetryTimerByOperationId
+      .size,
+    1,
+    'successful retry wake should leave the bounded verification lane armed',
+  );
+  t.equal(
+    updateCount,
+    0,
+    'deferred remote handoff retry should not mutate the remote-owned row before owner progress is observed',
   );
 
   await coordinator.shutdown();

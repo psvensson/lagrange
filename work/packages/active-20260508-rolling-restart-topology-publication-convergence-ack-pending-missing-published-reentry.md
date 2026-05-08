@@ -176,6 +176,12 @@ the next runtime implementation slice.
       Agent Harvey (019e07a2-de90-7a10-b95f-230ccdc393e8) implemented work/packages/active-20260508-rolling-restart-topology-publication-convergence-ack-pending-missing-published-reentry.md;
       result bounded stale dispatch-pending timeout remote-owner wake handling
       with focused workflow-timeout regression proof.
+- [x] Workflow-timeout review subagent recorded:
+      Agent Huygens (019e07b5-6694-7b02-a694-8d6d086bf0fb) reviewed work/packages/active-20260508-rolling-restart-topology-publication-convergence-ack-pending-missing-published-reentry.md; result fixes-required.
+- [x] Workflow-timeout fix subagent recorded:
+      Agent Bohr (019e07bd-3bfa-72d2-a723-de402c87850e) fixed work/packages/active-20260508-rolling-restart-topology-publication-convergence-ack-pending-missing-published-reentry.md;
+      result clean with explicit remote drain re-arm owner action and
+      deferred handoff retry reentry proof.
 
 ## Residual Closure Inventory
 
