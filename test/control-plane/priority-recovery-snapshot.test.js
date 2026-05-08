@@ -16,6 +16,7 @@ import {
   buildPriorityRecoveryPublicationContext,
   buildTrackedPriorityRecoveryDecisionSnapshots,
   isPriorityRecoveryEmergencyPartition,
+  normalizePriorityRecoveryDispatchPendingDecisionSnapshot,
   PRIORITY_RECOVERY_CLOSURE_RECORD_ID,
   PRIORITY_RECOVERY_CLOSURE_WITNESS_CLASS,
   PRIORITY_RECOVERY_CLOSURE_WITNESS_STATE,
@@ -147,6 +148,8 @@ const PRIORITY_RECOVERY_PROGRESS_OWNER_NONE = 'none';
 const PRIORITY_RECOVERY_PROGRESS_ACTION_NONE = 'none';
 const PRIORITY_RECOVERY_PROGRESS_ACTION_WAIT_FOR_PROGRESS =
   'wait_for_operation_progress';
+const PRIORITY_RECOVERY_PROGRESS_ACTION_ADVANCE_EXISTING_OPERATION =
+  'advance_existing_operation';
 const PRIORITY_RECOVERY_PROGRESS_ACTION_RECONCILE_STALE_OPERATION =
   'reconcile_stale_operation_progress';
 const PRIORITY_RECOVERY_PROGRESS_ACTION_OBSERVE_VISIBILITY =
@@ -581,6 +584,142 @@ function registerPriorityRecoverySnapshotSupplementalTests(context) {
     'sql_transaction_participants';
   const RETAINED_CARRIER_SERIAL_WAIT_CARRIER_TABLE_NAME =
     'sql_write_operations';
+
+  test(
+    'normalizePriorityRecoveryDispatchPendingDecisionSnapshot advances ' +
+      'persisted dispatch-pending waits',
+    async (t) => {
+      const snapshot = Object.freeze({
+        partitionId: PRIORITY_RECOVERY_SQL_WRITE_OPERATIONS_PARTITION_ID,
+        operationId: PRIORITY_RECOVERY_OPERATION_ID_PENDING_OWNER_WAIT,
+        blockerReasons: Object.freeze([]),
+        semanticState: PRIORITY_RECOVERY_SEMANTIC_STATE_RECOVERING_IN_FLIGHT,
+        actuation: Object.freeze({
+          owner: PRIORITY_RECOVERY_PROGRESS_OWNER_WORKFLOW,
+          state: PRIORITY_RECOVERY_ACTUATION_STATE_PERSISTED_NOT_DISPATCHED,
+          workflowProgressPhaseId:
+            PRIORITY_RECOVERY_PROGRESS_PHASE_DISPATCH_PENDING,
+          lastProgressAtMs: PRIORITY_RECOVERY_PENDING_OPERATION_UPDATED_AT_MS,
+        }),
+        progress: Object.freeze({
+          contractState: PRIORITY_RECOVERY_PROGRESS_CONTRACT_STATE_PENDING,
+          nextAction: PRIORITY_RECOVERY_PROGRESS_NEXT_ACTION_WAIT,
+          currentOwner: PRIORITY_RECOVERY_PROGRESS_OWNER_WORKFLOW,
+          nextRequiredAction:
+            PRIORITY_RECOVERY_PROGRESS_ACTION_WAIT_FOR_PROGRESS,
+          blockingBoundary: PRIORITY_RECOVERY_PROGRESS_BOUNDARY_WORKFLOW,
+          waitMode: PRIORITY_RECOVERY_PROGRESS_WAIT_EVENT_DRIVEN,
+          workflowProgressPhaseId:
+            PRIORITY_RECOVERY_PROGRESS_PHASE_DISPATCH_PENDING,
+          lastProgressAtMs: PRIORITY_RECOVERY_PENDING_OPERATION_UPDATED_AT_MS,
+        }),
+      });
+
+      const normalizedSnapshot =
+        normalizePriorityRecoveryDispatchPendingDecisionSnapshot(snapshot);
+
+      t.equal(
+        normalizedSnapshot?.progress?.nextRequiredAction,
+        PRIORITY_RECOVERY_PROGRESS_ACTION_ADVANCE_EXISTING_OPERATION,
+        'persisted dispatch-pending waits should normalize to owner advancement',
+      );
+      t.equal(
+        normalizedSnapshot?.progress?.blockingBoundary,
+        PRIORITY_RECOVERY_PROGRESS_BOUNDARY_WORKFLOW,
+        'persisted dispatch-pending waits should stay on workflow progress',
+      );
+      t.equal(
+        normalizedSnapshot?.progress?.waitMode,
+        PRIORITY_RECOVERY_PROGRESS_WAIT_EVENT_DRIVEN,
+        'persisted dispatch-pending waits should preserve the event-driven wait mode',
+      );
+      t.equal(
+        normalizedSnapshot?.actuation?.state,
+        PRIORITY_RECOVERY_ACTUATION_STATE_PERSISTED_NOT_DISPATCHED,
+        'persisted dispatch-pending waits should preserve persisted-not-dispatched actuation',
+      );
+    },
+  );
+
+  test(
+    'normalizePriorityRecoveryDispatchPendingDecisionSnapshot rewrites ' +
+      'dispatch-pending timeout snapshots back to owner advancement',
+    async (t) => {
+      const snapshot = Object.freeze({
+        partitionId: PRIORITY_RECOVERY_SQL_WRITE_OPERATIONS_PARTITION_ID,
+        operationId: PRIORITY_RECOVERY_OPERATION_ID_PENDING_REPLACE_STALE,
+        blockerReasons: Object.freeze([
+          PRIORITY_RECOVERY_BLOCKER_REASON_OPERATION_NO_TRANSITIONS,
+        ]),
+        semanticState: PRIORITY_RECOVERY_SEMANTIC_STATE_OPERATION_STALLED,
+        actuation: Object.freeze({
+          owner: PRIORITY_RECOVERY_PROGRESS_OWNER_WORKFLOW,
+          state: PRIORITY_RECOVERY_ACTUATION_STATE_TRANSITION_DEFERRED,
+          workflowProgressPhaseId:
+            PRIORITY_RECOVERY_PROGRESS_PHASE_DISPATCH_PENDING,
+          lastProgressAtMs: PRIORITY_RECOVERY_STALE_OPERATION_PROGRESS_AT_MS,
+        }),
+        progress: Object.freeze({
+          contractState: PRIORITY_RECOVERY_PROGRESS_CONTRACT_STATE_PENDING,
+          nextAction: PRIORITY_RECOVERY_PROGRESS_NEXT_ACTION_RETRY,
+          currentOwner: PRIORITY_RECOVERY_PROGRESS_OWNER_WORKFLOW,
+          nextRequiredAction:
+            PRIORITY_RECOVERY_PROGRESS_ACTION_RECONCILE_STALE_OPERATION,
+          blockingBoundary:
+            PRIORITY_RECOVERY_PROGRESS_BOUNDARY_WORKFLOW_TIMEOUT,
+          waitMode:
+            PRIORITY_RECOVERY_PROGRESS_WAIT_TIMEOUT_RECONCILE_DUE,
+          workflowProgressPhaseId:
+            PRIORITY_RECOVERY_PROGRESS_PHASE_DISPATCH_PENDING,
+          lastProgressAtMs: PRIORITY_RECOVERY_STALE_OPERATION_PROGRESS_AT_MS,
+        }),
+        coordinator: Object.freeze({
+          operation: Object.freeze({
+            workflowStep: PRIORITY_RECOVERY_WORKFLOW_STEP_PENDING,
+          }),
+        }),
+      });
+
+      const normalizedSnapshot =
+        normalizePriorityRecoveryDispatchPendingDecisionSnapshot(snapshot);
+
+      t.same(
+        normalizedSnapshot?.blockerReasons,
+        [],
+        'dispatch-pending timeout normalization should clear stale timeout blocker reasons',
+      );
+      t.equal(
+        normalizedSnapshot?.semanticState,
+        PRIORITY_RECOVERY_SEMANTIC_STATE_RECOVERING_IN_FLIGHT,
+        'dispatch-pending timeout normalization should restore the in-flight semantic state',
+      );
+      t.equal(
+        normalizedSnapshot?.actuation?.state,
+        PRIORITY_RECOVERY_ACTUATION_STATE_PERSISTED_NOT_DISPATCHED,
+        'dispatch-pending timeout normalization should restore persisted-not-dispatched actuation',
+      );
+      t.equal(
+        normalizedSnapshot?.progress?.nextRequiredAction,
+        PRIORITY_RECOVERY_PROGRESS_ACTION_ADVANCE_EXISTING_OPERATION,
+        'dispatch-pending timeout normalization should advance the existing operation',
+      );
+      t.equal(
+        normalizedSnapshot?.progress?.nextAction,
+        PRIORITY_RECOVERY_PROGRESS_NEXT_ACTION_WAIT,
+        'dispatch-pending timeout normalization should wait instead of retrying timeout reconcile',
+      );
+      t.equal(
+        normalizedSnapshot?.progress?.blockingBoundary,
+        PRIORITY_RECOVERY_PROGRESS_BOUNDARY_WORKFLOW,
+        'dispatch-pending timeout normalization should return to workflow-progress ownership',
+      );
+      t.equal(
+        normalizedSnapshot?.progress?.waitMode,
+        PRIORITY_RECOVERY_PROGRESS_WAIT_EVENT_DRIVEN,
+        'dispatch-pending timeout normalization should restore the event-driven wait mode',
+      );
+    },
+  );
 
   test(STALE_SOURCE_SERIAL_WAIT_TEST_NAME, async (t) => {
     const trackedDecisionSnapshots = buildTrackedPriorityRecoveryDecisionSnapshots({

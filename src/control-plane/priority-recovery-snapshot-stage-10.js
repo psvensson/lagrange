@@ -1,10 +1,20 @@
 import {
   NUM,
   TYPEOF,
+  WORKFLOW_STEP,
 } from '../constants/index.js';
 import {CONTROL_PLANE_READINESS_DIMENSION} from './control-plane-readiness-constants.js';
 import {buildActiveMembershipSnapshot as buildPriorityRecoveryPublicationContext} from './active-node-projection.js';
-import {PRIORITY_RECOVERY_PROGRESS_CLASS_IDS} from './priority-recovery-diagnostics-constants.js';
+import {
+  PRIORITY_RECOVERY_ACTUATION_STATE,
+  PRIORITY_RECOVERY_BLOCKING_BOUNDARY,
+  PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION,
+  PRIORITY_RECOVERY_PROGRESS_CLASS_IDS,
+  PRIORITY_RECOVERY_PROGRESS_OWNER,
+  PRIORITY_RECOVERY_SEMANTIC_STATE,
+  PRIORITY_RECOVERY_WAIT_MODE,
+  PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE,
+} from './priority-recovery-diagnostics-constants.js';
 import {
   PRIORITY_RECOVERY_COMPLETION_STATE_IDS,
   buildPriorityRecoveryCompletion,
@@ -14,12 +24,178 @@ import {
   normalizePriorityRecoveryInteger,
   normalizePriorityRecoveryStringList,
 } from './priority-recovery-helpers.js';
+import {
+  OWNER_CONTRACT_NEXT_ACTION,
+  OWNER_CONTRACT_STATE,
+} from './owner-contract-outcome.js';
 import {PRIORITY_RECOVERY_SNAPSHOT_LITERAL} from './priority-recovery-snapshot-stage-shared.js';
 import {buildPriorityRecoveryPlannerByPartitionId, buildPriorityRecoveryPlannerEntry} from './priority-recovery-snapshot-stage-1.js';
 import {buildPriorityRecoveryConditionsContract, selectLatestPriorityRecoveryOperationContext} from './priority-recovery-snapshot-stage-7.js';
 import {buildPriorityRecoveryActuationContract} from './priority-recovery-snapshot-stage-8.js';
 import {buildEffectivePriorityRecoveryAdmission, buildPriorityRecoveryPartitionObservation, buildPriorityRecoveryProgressContract, buildPriorityRecoveryPublicationNodeDecisions, isPriorityRecoverySnapshotObject, resolvePriorityRecoveryDecisionPublicationConvergence, resolvePriorityRecoveryDecisionReadinessByNodeId} from './priority-recovery-snapshot-stage-9.js';
 import {buildPriorityRecoveryPartitionAssessment} from './priority-recovery-snapshot-stage-11.js';
+
+const PRIORITY_RECOVERY_EMPTY_BLOCKER_REASONS = Object.freeze([]);
+
+const PRIORITY_RECOVERY_DISPATCH_PENDING_NORMALIZATION_STATE = Object.freeze({
+  ADVANCE_OWNER_PROGRESS_FROM_TIMEOUT: 'advance_owner_progress_from_timeout',
+  ADVANCE_OWNER_PROGRESS_FROM_WAIT: 'advance_owner_progress_from_wait',
+  RETAIN_SNAPSHOT: 'retain_snapshot',
+});
+
+const PRIORITY_RECOVERY_DISPATCH_PENDING_NORMALIZATION_TABLE =
+  Object.freeze([
+    Object.freeze({
+      state:
+        PRIORITY_RECOVERY_DISPATCH_PENDING_NORMALIZATION_STATE
+          .ADVANCE_OWNER_PROGRESS_FROM_TIMEOUT,
+      matches: (evidence) =>
+        evidence.currentOwner ===
+          PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER &&
+        evidence.actuationOwner ===
+          PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER &&
+        evidence.nextRequiredAction ===
+          PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION
+            .RECONCILE_STALE_OPERATION_PROGRESS &&
+        evidence.blockingBoundary ===
+          PRIORITY_RECOVERY_BLOCKING_BOUNDARY.WORKFLOW_TIMEOUT &&
+        evidence.waitMode ===
+          PRIORITY_RECOVERY_WAIT_MODE.TIMEOUT_RECONCILE_DUE &&
+        evidence.actuationState ===
+          PRIORITY_RECOVERY_ACTUATION_STATE.TRANSITION_DEFERRED &&
+        evidence.workflowProgressPhaseId ===
+          PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.DISPATCH_PENDING &&
+        evidence.latestWorkflowStep ===
+          WORKFLOW_STEP.PENDING,
+    }),
+    Object.freeze({
+      state:
+        PRIORITY_RECOVERY_DISPATCH_PENDING_NORMALIZATION_STATE
+          .ADVANCE_OWNER_PROGRESS_FROM_WAIT,
+      matches: (evidence) =>
+        evidence.currentOwner ===
+          PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER &&
+        evidence.actuationOwner ===
+          PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER &&
+        evidence.nextRequiredAction ===
+          PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.WAIT_FOR_OPERATION_PROGRESS &&
+        evidence.blockingBoundary ===
+          PRIORITY_RECOVERY_BLOCKING_BOUNDARY.WORKFLOW_PROGRESS &&
+        evidence.actuationState ===
+          PRIORITY_RECOVERY_ACTUATION_STATE.PERSISTED_NOT_DISPATCHED &&
+        evidence.workflowProgressPhaseId ===
+          PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.DISPATCH_PENDING,
+    }),
+    Object.freeze({
+      state:
+        PRIORITY_RECOVERY_DISPATCH_PENDING_NORMALIZATION_STATE.RETAIN_SNAPSHOT,
+      matches: () => true,
+    }),
+  ]);
+
+function resolvePriorityRecoveryDispatchPendingNormalizationState(
+  snapshot = null,
+) {
+  return (
+    PRIORITY_RECOVERY_DISPATCH_PENDING_NORMALIZATION_TABLE.find((entry) =>
+      entry.matches({
+        currentOwner:
+          snapshot?.progress?.currentOwner ||
+          PRIORITY_RECOVERY_SNAPSHOT_LITERAL.VALUE,
+        actuationOwner:
+          snapshot?.actuation?.owner || PRIORITY_RECOVERY_SNAPSHOT_LITERAL.VALUE,
+        nextRequiredAction:
+          snapshot?.progress?.nextRequiredAction ||
+          PRIORITY_RECOVERY_SNAPSHOT_LITERAL.VALUE,
+        waitMode:
+          snapshot?.progress?.waitMode || PRIORITY_RECOVERY_SNAPSHOT_LITERAL.VALUE,
+        blockingBoundary:
+          snapshot?.progress?.blockingBoundary ||
+          PRIORITY_RECOVERY_SNAPSHOT_LITERAL.VALUE,
+        actuationState:
+          snapshot?.actuation?.state || PRIORITY_RECOVERY_SNAPSHOT_LITERAL.VALUE,
+        workflowProgressPhaseId:
+          snapshot?.progress?.workflowProgressPhaseId ||
+          snapshot?.actuation?.workflowProgressPhaseId ||
+          PRIORITY_RECOVERY_SNAPSHOT_LITERAL.VALUE,
+        latestWorkflowStep: String(
+          snapshot?.coordinator?.operation?.workflowStep ||
+            PRIORITY_RECOVERY_SNAPSHOT_LITERAL.VALUE,
+        ).trim().toUpperCase(),
+      }),
+    )?.state ||
+    PRIORITY_RECOVERY_DISPATCH_PENDING_NORMALIZATION_STATE.RETAIN_SNAPSHOT
+  );
+}
+
+function normalizePriorityRecoveryDispatchPendingDecisionSnapshot(
+  snapshot = null,
+) {
+  if (!isPriorityRecoverySnapshotObject(snapshot)) {
+    return snapshot;
+  }
+  const normalizationState =
+    resolvePriorityRecoveryDispatchPendingNormalizationState(snapshot);
+  if (
+    normalizationState !==
+      PRIORITY_RECOVERY_DISPATCH_PENDING_NORMALIZATION_STATE
+        .ADVANCE_OWNER_PROGRESS_FROM_TIMEOUT &&
+    normalizationState !==
+      PRIORITY_RECOVERY_DISPATCH_PENDING_NORMALIZATION_STATE
+        .ADVANCE_OWNER_PROGRESS_FROM_WAIT
+  ) {
+    return snapshot;
+  }
+  const progress = isPriorityRecoverySnapshotObject(snapshot.progress) ?
+    snapshot.progress :
+    {};
+  const actuation = isPriorityRecoverySnapshotObject(snapshot.actuation) ?
+    snapshot.actuation :
+    {};
+  const reclassifiedProgress =
+    normalizationState ===
+    PRIORITY_RECOVERY_DISPATCH_PENDING_NORMALIZATION_STATE
+      .ADVANCE_OWNER_PROGRESS_FROM_TIMEOUT ?
+      Object.freeze({
+        ...progress,
+        contractState: OWNER_CONTRACT_STATE.PENDING,
+        nextAction: OWNER_CONTRACT_NEXT_ACTION.WAIT,
+        nextRequiredAction:
+          PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.ADVANCE_EXISTING_OPERATION,
+        blockingBoundary: PRIORITY_RECOVERY_BLOCKING_BOUNDARY.WORKFLOW_PROGRESS,
+        waitMode: PRIORITY_RECOVERY_WAIT_MODE.EVENT_DRIVEN,
+      }) :
+      Object.freeze({
+        ...progress,
+        nextRequiredAction:
+          PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.ADVANCE_EXISTING_OPERATION,
+      });
+  return Object.freeze({
+    ...snapshot,
+    blockerReasons:
+      normalizationState ===
+      PRIORITY_RECOVERY_DISPATCH_PENDING_NORMALIZATION_STATE
+        .ADVANCE_OWNER_PROGRESS_FROM_TIMEOUT ?
+        PRIORITY_RECOVERY_EMPTY_BLOCKER_REASONS :
+        snapshot.blockerReasons,
+    semanticState:
+      normalizationState ===
+      PRIORITY_RECOVERY_DISPATCH_PENDING_NORMALIZATION_STATE
+        .ADVANCE_OWNER_PROGRESS_FROM_TIMEOUT ?
+        PRIORITY_RECOVERY_SEMANTIC_STATE.RECOVERING_IN_FLIGHT :
+        snapshot.semanticState,
+    actuation:
+      normalizationState ===
+      PRIORITY_RECOVERY_DISPATCH_PENDING_NORMALIZATION_STATE
+        .ADVANCE_OWNER_PROGRESS_FROM_TIMEOUT ?
+        Object.freeze({
+          ...actuation,
+          state: PRIORITY_RECOVERY_ACTUATION_STATE.PERSISTED_NOT_DISPATCHED,
+        }) :
+        snapshot.actuation,
+    progress: reclassifiedProgress,
+  });
+}
 
 function resolvePriorityRecoveryDecisionPriorityPartitionSummary(
   options = {},
@@ -511,6 +687,7 @@ export {
   buildPriorityRecoveryDecisionSnapshot,
   buildPriorityRecoveryDefaultLearnerPromotion,
   isPriorityRecoveryReadinessRecoveryEligibleOnly,
+  normalizePriorityRecoveryDispatchPendingDecisionSnapshot,
   normalizePriorityRecoveryBlockerPartitionIdsByReason,
   normalizePriorityRecoveryPartitionIdSetMap,
   recordPriorityRecoveryDecisionSnapshotSummary,
