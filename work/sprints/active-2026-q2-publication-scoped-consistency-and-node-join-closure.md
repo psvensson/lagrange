@@ -235,7 +235,7 @@ Secondary after the primary path is stable:
 
 The current active representative re-entry package is:
 
-1. [Rolling Restart Startup Active Gate Snapshot Coverage Readiness Support Reentry](../packages/active-20260508-rolling-restart-startup-active-gate-snapshot-coverage-readiness-support-reentry.md)
+1. [Rolling Restart Topology Publication Convergence ACK Pending Reentry](../packages/active-20260508-rolling-restart-topology-publication-convergence-ack-pending-reentry.md)
 
 Retained predecessor context file:
 

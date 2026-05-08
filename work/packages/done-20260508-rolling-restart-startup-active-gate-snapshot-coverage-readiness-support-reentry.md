@@ -3,16 +3,16 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-08",
   "scenario": "rolling-restart",
-  "artifact": "test-output/reports/rolling-restart-after-priority-recovery-dispatch-pending-timeout-reclassify-20260508T000000Z.report.json",
-  "playback": "test-output/reports/.playback/rolling-restart-after-priority-recovery-dispatch-pending-timeout-reclassify-20260508T000000Z/rolling-restart/",
-  "owner": "Startup active gate snapshot coverage after dispatch-pending timeout reclassification repair",
-  "boundary": "Startup active gate owner / snapshot_coverage / startup readiness support",
-  "dominantReason": "active_gate_timed_out",
-  "currentState": "The priority-recovery timeout seam is closed by migration. The representative rerun now stalls at epoch 2 PUBLISHED with startup_active_gate_owner / snapshot_coverage as the first frontier, coverage 3/5, two inactive nodes, and startup_readiness_owner support evidence downstream only.",
-  "nextAction": "Review the just-closed workflow-timeout package, then extract one focused epoch-2 PUBLISHED startup active-gate snapshot-coverage witness for coverage 3/5 with the two inactive nodes and repair or classify the direct startup seam without reopening the closed priority-recovery work.",
+  "artifact": "test-output/reports/rolling-restart-after-startup-active-gate-closure-carryover-clear-20260508T000000Z.report.json",
+  "playback": "test-output/reports/.playback/rolling-restart-after-startup-active-gate-closure-carryover-clear-20260508T000000Z/rolling-restart/",
+  "owner": "Topology publication convergence ACK pending after startup active-gate closure carryover repair",
+  "boundary": "Topology publication owner / publication_convergence / startup active gate support",
+  "dominantReason": "publication_pending",
+  "currentState": "The startup active-gate closure-carryover repair is proved. The representative rerun no longer terminates on startup_active_gate_owner/snapshot_coverage; epoch 5 ACK_PENDING now promotes topology_publication_owner / publication_convergence as the first frontier with pendingAckCount=1 and missingPublishedCount=2, while startup active-gate and workflow-progress evidence move downstream only.",
+  "nextAction": "Continue in work/packages/active-20260508-rolling-restart-topology-publication-convergence-ack-pending-reentry.md for the migrated publication ACK-pending seam.",
   "proof": [
     "Focused epoch-2 PUBLISHED startup active-gate snapshot-coverage witness for coverage 3/5 with supporting readiness evidence",
     "Focused startup active-gate regression or classification proof for the selected coverage seam",
@@ -22,12 +22,19 @@
   ],
   "touchedFiles": [
     "work/packages/active-20260508-rolling-restart-startup-active-gate-snapshot-coverage-readiness-support-reentry.md",
-    "work/model-ledger.jsonl",
+    "work/packages/done-20260508-rolling-restart-startup-active-gate-snapshot-coverage-readiness-support-reentry.md",
+    "test/distributed/harness/publication-evidence-contract.js",
+    "test/distributed/harness/__tests__/failure-bundle-core-10-test-cases.js"
+    ,
+    "work/packages/active-20260508-rolling-restart-topology-publication-convergence-ack-pending-reentry.md",
     "work/sprints/active-2026-q2-publication-scoped-consistency-and-node-join-closure.md",
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md"
   ],
-  "predecessor": "work/packages/done-20260508-rolling-restart-topology-priority-recovery-workflow-timeout-dispatch-pending-stale-progress-reentry.md"
+  "predecessor": "work/packages/done-20260508-rolling-restart-topology-priority-recovery-workflow-timeout-dispatch-pending-stale-progress-reentry.md",
+  "closed": "2026-05-08",
+  "commitAndPushLedgerRequired": true,
+  "successor": "work/packages/active-20260508-rolling-restart-topology-publication-convergence-ack-pending-reentry.md"
 }
 -->
 
@@ -62,6 +69,15 @@ downstream.
    frontier once snapshot coverage improves.
 9. `priorityRecoveryProgressSummary` still contains supporting operation
    workflow evidence, but it no longer outranks the active-gate frontier.
+10. The extracted direct witness from both report and playback carries
+    `closureRecordId=CL-003` and
+    `closureWitnessClass=publication_converged_priority_spread_pending`
+    inside `publicationConvergence.activeGate.progress` even though
+    `prioritySpreadSatisfied=true`, `gateReasonCount=0`, and
+    `snapshotCoverageComplete=false`.
+11. That direct-witness mismatch points at stale closure carryover in the
+    canonical active-gate merge path rather than a live priority-spread
+    blocker.
 
 ## Scope Basis
 
@@ -130,34 +146,42 @@ Canonical contract shape:
 - [x] Fix subagent recorded or explicitly not needed:
       Agent `Noether` (`019e0614-5ad9-7aa3-8d34-d5b417924930`) fixed
       `work/packages/done-20260508-rolling-restart-topology-priority-recovery-workflow-timeout-dispatch-pending-stale-progress-reentry.md`.
-- [ ] Implementation subagent recorded:
+- [x] Implementation subagent recorded:
+      Agent `Aquinas` (`019e061a-2026-7ad2-95d7-12380b3092e7`) implemented
+      `work/packages/done-20260508-rolling-restart-startup-active-gate-snapshot-coverage-readiness-support-reentry.md`.
+
+## Commit And Push Ledger
+
+- Focused package commit: `<pending>`
+- Pushed to: `<pending>`
+- Commit contains only package-owned files/package-status/allowed sprint handoff: `<pending>`
 
 ## Residual Closure Inventory
 
 - [x] Review the just-closed predecessor package on the same sprint boundary.
 - [x] Fix any predecessor-review findings before implementation resumes.
-- [ ] Extract the focused epoch-2 active-gate snapshot-coverage witness and
+- [x] Extract the focused epoch-2 active-gate snapshot-coverage witness and
       startup support evidence.
-- [ ] Add the focused regression or classification proof for the selected
+- [x] Add the focused regression or classification proof for the selected
       snapshot-coverage seam.
-- [ ] Repair the selected startup active-gate boundary or migrate again with
+- [x] Repair the selected startup active-gate boundary or migrate again with
       proof.
 
 ## Static Drift Ledger
 
 Preflight:
 
-- [ ] Relevant guardrails selected by boundary.
-- [ ] File-scoped baseline recorded before production edits for touched source
+- [x] Relevant guardrails selected by boundary.
+- [x] File-scoped baseline recorded before production edits for touched source
       and focused test files.
 
 Closure:
 
-- [ ] Same guardrails rerun after implementation.
-- [ ] No relevant guardrail count increased.
-- [ ] No new touched-file owner-path, decision-boundary, runtime-grammar, or
+- [x] Same guardrails rerun after implementation.
+- [x] No relevant guardrail count increased.
+- [x] No new touched-file owner-path, decision-boundary, runtime-grammar, or
       metadata-gateway violation remains.
-- [ ] Any out-of-scope inherited violation has a linked follow-on package.
+- [x] Any out-of-scope inherited violation has a linked follow-on package.
 
 ## Validation
 
@@ -169,9 +193,62 @@ Closure:
    frontier with coverage `3/5`.
 3. `npm run analyze:topology-convergence -- test-output/reports/.playback/rolling-restart-after-priority-recovery-dispatch-pending-timeout-reclassify-20260508T000000Z/rolling-restart/failure-bundle.json`
    matched the report-level startup active-gate frontier and coverage state.
+4. `node --test --test-name-pattern="clears stale priority-spread closure from the direct startup active-gate witness once snapshot coverage owns the blocker|does not classify startup-only active-gate witness in load-mode playback details" test/distributed/harness/__tests__/failure-bundle.test.js`
+   passed `2/2` targeted subtests after the publication-evidence carryover
+   repair.
+5. `node scripts/check-guideline-decision-boundaries.js test/distributed/harness/publication-evidence-contract.js test/distributed/harness/__tests__/failure-bundle-core-10-test-cases.js`
+   reported `0` decision-boundary guideline violations.
+6. `git diff --check -- test/distributed/harness/publication-evidence-contract.js test/distributed/harness/__tests__/failure-bundle-core-10-test-cases.js work/packages/active-20260508-rolling-restart-startup-active-gate-snapshot-coverage-readiness-support-reentry.md`
+   passed.
+7. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-after-startup-active-gate-closure-carryover-clear-20260508T000000Z.report.json --fast-local --verbose`
+   failed after `138.4s`, but the direct frontier moved above startup
+   active-gate coverage.
+8. `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-after-startup-active-gate-closure-carryover-clear-20260508T000000Z.report.json`
+   selected root cause class `topology` and dominant reason
+   `publication_missing_active_node=35a891b8-c1a0-5064-9c6e-2acfba61c2a7`.
+9. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-startup-active-gate-closure-carryover-clear-20260508T000000Z.report.json`
+   and the matching playback failure bundle both selected
+   `topology_publication_owner / publication_convergence` as the first
+   frontier with `publicationStatus=ACK_PENDING`, `pendingAckCount=1`, and
+   `missingPublishedCount=2`.
 
 ## Progress Notes
 
 1. The predecessor timeout package removed priority-recovery timeout from the
    first frontier; startup active-gate snapshot coverage is now the direct
    blocker.
+2. The direct startup witness was not misclassified by
+   `classifyActiveGateClosureWitness()`; the stale CL-003 was being merged back
+   into canonical `activeGate` and `activeGateProgress` records by
+   `publication-evidence-contract.js`.
+3. The local repair now clears that inherited CL-003 carryover when the direct
+   startup active-gate witness has `prioritySpreadSatisfied=true`,
+   `gateReasons=[]`, and incomplete snapshot coverage.
+4. The representative rerun closes this startup package by migration because
+   publication convergence at epoch `5` `ACK_PENDING` now outranks startup
+   active-gate coverage.
+}
+-->
+
+Opened on May 8, 2026 after
+[Rolling Restart Startup Active Gate Snapshot Coverage Readiness Support Reentry](./done-20260508-rolling-restart-startup-active-gate-snapshot-coverage-readiness-support-reentry.md)
+closes by migration. The direct frontier now sits on
+`topology_publication_owner / publication_convergence`, where epoch `5`
+remains `ACK_PENDING` with `pendingAckCount=1`, `missingPublishedCount=2`,
+and downstream startup active-gate and workflow-progress evidence only.
+
+## Subagent Sequencing Ledger
+
+- [ ] Review subagent recorded:
+- [ ] Fix subagent recorded or explicitly not needed:
+- [ ] Implementation subagent recorded:
+
+## Residual Closure Inventory
+
+- [ ] Review the just-closed predecessor package on the same sprint boundary.
+- [ ] Fix any predecessor-review findings before implementation resumes.
+- [ ] Extract the focused epoch-5 ACK_PENDING publication-convergence witness.
+- [ ] Add the focused regression or classification proof for the selected
+      publication-convergence seam.
+- [ ] Repair the selected publication-convergence boundary or migrate again
+      with proof.

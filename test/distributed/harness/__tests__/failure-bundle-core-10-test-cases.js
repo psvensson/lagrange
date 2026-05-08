@@ -146,6 +146,162 @@ export function registerFailureBundleCore10Tests(context) {
   );
 
   it(
+    'clears stale priority-spread closure from the direct startup active-gate witness once snapshot coverage owns the blocker',
+    () => {
+      const CLOSURE_RECORD_ID_PRIORITY_SPREAD = 'CL-003';
+      const CLOSURE_WITNESS_CLASS_PRIORITY_SPREAD =
+        'publication_converged_priority_spread_pending';
+      const PUBLICATION_EPOCH = 2;
+      const PUBLICATION_STATUS_PUBLISHED = 'PUBLISHED';
+      const RECOVERY_PROTOCOL_PRIORITY_SPREAD_PENDING =
+        'priority_spread_pending';
+      const SNAPSHOT_COVERAGE_BLOCKER = 'snapshot_coverage=3/5';
+      const INACTIVE_NODE_BLOCKER = 'inactive_nodes=2';
+      const EXPECTED_NODE_COUNT = 5;
+      const ACTIVE_NODE_COUNT = 3;
+      const INACTIVE_NODE_COUNT = 2;
+      const SNAPSHOT_COVERAGE_NODE_COUNT = 3;
+      const MISSING_NODE_ONE = '11601fe0-72d6-5853-8590-ec2881853e72';
+      const MISSING_NODE_TWO = '35a891b8-c1a0-5064-9c6e-2acfba61c2a7';
+      const MISSING_NODE_THREE = '8be8d30f-4499-5eed-865c-71b4d529a67a';
+      const PUBLISHED_NODE_ONE = '7493b0ab-a054-5fad-a91b-5e331db29304';
+      const PUBLISHED_NODE_TWO = 'ebc4aa0b-06c6-506d-93ea-1dd2deca3f58';
+      const ZERO_COUNT = 0;
+      const THREE_COUNT = 3;
+      const controlPlane = {
+        publicationConvergence: {
+          publicationEpoch: PUBLICATION_EPOCH,
+          publicationStatus: PUBLICATION_STATUS_PUBLISHED,
+          recoveryProtocolState: RECOVERY_PROTOCOL_PRIORITY_SPREAD_PENDING,
+          pendingAckNodeIds: [],
+          pendingAckCount: ZERO_COUNT,
+          missingPublishedNodeIds: [
+            MISSING_NODE_ONE,
+            MISSING_NODE_TWO,
+            MISSING_NODE_THREE,
+          ],
+          missingPublishedCount: THREE_COUNT,
+          publicationPending: true,
+          prioritySpreadPending: true,
+          closureRecordId: CLOSURE_RECORD_ID_PRIORITY_SPREAD,
+          closureWitnessClass: CLOSURE_WITNESS_CLASS_PRIORITY_SPREAD,
+        },
+        publicationConvergenceGate: {
+          ready: false,
+          reasons: [],
+          publicationEpoch: PUBLICATION_EPOCH,
+          publicationStatus: PUBLICATION_STATUS_PUBLISHED,
+          recoveryProtocolState: RECOVERY_PROTOCOL_PRIORITY_SPREAD_PENDING,
+          pendingAckNodeIds: [],
+          pendingAckCount: ZERO_COUNT,
+          missingPublishedNodeIds: [
+            MISSING_NODE_ONE,
+            MISSING_NODE_TWO,
+            MISSING_NODE_THREE,
+          ],
+          missingPublishedCount: THREE_COUNT,
+          priorityPartitionSummary: {
+            satisfied: true,
+            blockedPartitionCount: ZERO_COUNT,
+            totalSpreadGap: ZERO_COUNT,
+          },
+          closureRecordId: CLOSURE_RECORD_ID_PRIORITY_SPREAD,
+          closureWitnessClass: CLOSURE_WITNESS_CLASS_PRIORITY_SPREAD,
+        },
+        priorityRecoveryObservation: {
+          publicationEpoch: PUBLICATION_EPOCH,
+          publicationStatus: PUBLICATION_STATUS_PUBLISHED,
+          recoveryProtocolState: RECOVERY_PROTOCOL_PRIORITY_SPREAD_PENDING,
+          pendingAckNodeIds: [],
+          pendingAckCount: ZERO_COUNT,
+          missingPublishedNodeIds: [
+            MISSING_NODE_ONE,
+            MISSING_NODE_TWO,
+            MISSING_NODE_THREE,
+          ],
+          missingPublishedCount: THREE_COUNT,
+          priorityPartitionSummary: {
+            satisfied: true,
+            blockedPartitionCount: ZERO_COUNT,
+            totalSpreadGap: ZERO_COUNT,
+          },
+          closureRecordId: CLOSURE_RECORD_ID_PRIORITY_SPREAD,
+          closureWitnessClass: CLOSURE_WITNESS_CLASS_PRIORITY_SPREAD,
+        },
+        activeGate: {
+          mode: 'startup',
+          state: 'timed_out',
+          ready: false,
+          closureRecordId: CLOSURE_RECORD_ID_PRIORITY_SPREAD,
+          closureWitnessClass: CLOSURE_WITNESS_CLASS_PRIORITY_SPREAD,
+          progress: {
+            expectedNodeCount: EXPECTED_NODE_COUNT,
+            activeNodeCount: ACTIVE_NODE_COUNT,
+            inactiveNodeCount: INACTIVE_NODE_COUNT,
+            snapshotCoverageNodeCount: SNAPSHOT_COVERAGE_NODE_COUNT,
+            snapshotCoverageComplete: false,
+            publicationStatus: PUBLICATION_STATUS_PUBLISHED,
+            publicationEpoch: PUBLICATION_EPOCH,
+            recoveryProtocolState: RECOVERY_PROTOCOL_PRIORITY_SPREAD_PENDING,
+            selectedPublishedActiveNodeIds: [
+              PUBLISHED_NODE_ONE,
+              PUBLISHED_NODE_TWO,
+            ],
+            selectedMissingPublishedNodeIds: [
+              MISSING_NODE_ONE,
+              MISSING_NODE_TWO,
+              MISSING_NODE_THREE,
+            ],
+            pendingAckNodeIds: [],
+            pendingAckCount: ZERO_COUNT,
+            missingPublishedCount: THREE_COUNT,
+            gateReasons: [],
+            prioritySpreadSatisfied: true,
+            blockers: [
+              INACTIVE_NODE_BLOCKER,
+              SNAPSHOT_COVERAGE_BLOCKER,
+            ],
+          },
+        },
+      };
+
+      const publicationEvidence =
+        buildCanonicalPublicationEvidenceFromControlPlane(controlPlane);
+      const canonicalActiveGate =
+        publicationEvidence.priorityRecoveryObservation?.activeGate;
+      const canonicalActiveGateProgress =
+        publicationEvidence.priorityRecoveryObservation?.activeGateProgress ||
+        canonicalActiveGate?.progress;
+      const publicationConvergence =
+        buildPublicationConvergenceSummary(controlPlane);
+
+      assert.equal(canonicalActiveGate?.closureRecordId, null);
+      assert.equal(canonicalActiveGate?.closureWitnessClass, null);
+      assert.equal(canonicalActiveGateProgress?.closureRecordId, null);
+      assert.equal(canonicalActiveGateProgress?.closureWitnessClass, null);
+      assert.equal(
+        publicationConvergence.activeGateProgress.closureRecordId,
+        null,
+      );
+      assert.equal(
+        publicationConvergence.activeGateProgress.closureWitnessClass,
+        null,
+      );
+      assert.equal(
+        publicationConvergence.activeGateSnapshotCoveragePending,
+        true,
+      );
+      assert.deepEqual(
+        publicationConvergence.activeGateProgress.blockers,
+        [
+          INACTIVE_NODE_BLOCKER,
+          SNAPSHOT_COVERAGE_BLOCKER,
+        ],
+      );
+    },
+  );
+
+  it(
     ACTIVE_GATE_ACK_IDS_CLEAR_STALE_COUNT_TEST_NAME,
     () => {
       const PUBLICATION_EPOCH = 94;

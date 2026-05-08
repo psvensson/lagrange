@@ -121,6 +121,23 @@ function normalizeOptionalString(value) {
     null;
 }
 
+function shouldClearStaleActiveGatePrioritySpreadClosure({
+  closureRecordId = null,
+  closureWitnessClass = null,
+  gateReasons = PUBLICATION_EVIDENCE_EMPTY_LIST,
+  prioritySpreadSatisfied = null,
+  snapshotCoverageComplete = false,
+} = {}) {
+  return closureRecordId === PRIORITY_RECOVERY_CLOSURE_RECORD_ID.PRIORITY_SPREAD &&
+    closureWitnessClass ===
+      PRIORITY_RECOVERY_CLOSURE_WITNESS_CLASS
+        .PUBLICATION_CONVERGED_PRIORITY_SPREAD_PENDING &&
+    normalizeDistinctStringArray(gateReasons).length ===
+      PUBLICATION_EVIDENCE_ZERO &&
+    prioritySpreadSatisfied === true &&
+    snapshotCoverageComplete !== true;
+}
+
 function normalizeBoolean(value) {
   return value === true;
 }
@@ -1353,6 +1370,22 @@ function buildCanonicalPriorityRecoveryActiveGateProgress(
   ) {
     blockers.push(PUBLICATION_EVIDENCE_READY_BLOCKER);
   }
+  const inheritedClosureRecordId =
+    normalizeOptionalString(priorityRecoveryObservation?.closureRecordId) ||
+    normalizeOptionalString(publicationConvergenceGate?.closureRecordId) ||
+    normalizeOptionalString(progress?.closureRecordId);
+  const inheritedClosureWitnessClass =
+    normalizeOptionalString(priorityRecoveryObservation?.closureWitnessClass) ||
+    normalizeOptionalString(publicationConvergenceGate?.closureWitnessClass) ||
+    normalizeOptionalString(progress?.closureWitnessClass);
+  const clearStalePrioritySpreadClosure =
+    shouldClearStaleActiveGatePrioritySpreadClosure({
+      closureRecordId: inheritedClosureRecordId,
+      closureWitnessClass: inheritedClosureWitnessClass,
+      gateReasons: canonicalGateReasons,
+      prioritySpreadSatisfied,
+      snapshotCoverageComplete: progress?.snapshotCoverageComplete === true,
+    });
   return Object.freeze({
     ...progress,
     publicationEpoch:
@@ -1417,13 +1450,13 @@ function buildCanonicalPriorityRecoveryActiveGateProgress(
       priorityRecoveryProgressClasses?.blockedPartitionCount ??
       PUBLICATION_EVIDENCE_ZERO,
     closureRecordId:
-      normalizeOptionalString(priorityRecoveryObservation?.closureRecordId) ||
-      normalizeOptionalString(publicationConvergenceGate?.closureRecordId) ||
-      normalizeOptionalString(progress?.closureRecordId),
+      clearStalePrioritySpreadClosure === true ?
+        null :
+        inheritedClosureRecordId,
     closureWitnessClass:
-      normalizeOptionalString(priorityRecoveryObservation?.closureWitnessClass) ||
-      normalizeOptionalString(publicationConvergenceGate?.closureWitnessClass) ||
-      normalizeOptionalString(progress?.closureWitnessClass),
+      clearStalePrioritySpreadClosure === true ?
+        null :
+        inheritedClosureWitnessClass,
     blockers: Object.freeze(blockers),
     blockerSignature: blockers.join(PUBLICATION_EVIDENCE_TEXT.VALUE_SEPARATOR),
   });
@@ -1572,23 +1605,48 @@ function buildCanonicalPriorityRecoveryActiveGate(
     publicationConvergenceGate,
     readinessMode: activeGate?.mode || null,
   });
+  const inheritedActiveGateClosureRecordId =
+    normalizeOptionalString(activeGate.closureRecordId) ||
+    normalizeOptionalString(
+      priorityRecoveryObservationWithActiveGateClosure.closureRecordId,
+    ) ||
+    normalizeOptionalString(publicationConvergenceGate?.closureRecordId);
+  const inheritedActiveGateClosureWitnessClass =
+    normalizeOptionalString(activeGate.closureWitnessClass) ||
+    normalizeOptionalString(
+      priorityRecoveryObservationWithActiveGateClosure.closureWitnessClass,
+    ) ||
+    normalizeOptionalString(publicationConvergenceGate?.closureWitnessClass);
+  const activeGateClosureProgress =
+    canonicalProgress ||
+    canonicalBestProgress ||
+    canonicalLastMeaningfulProgress;
+  const clearInheritedActiveGatePrioritySpreadClosure =
+    shouldClearStaleActiveGatePrioritySpreadClosure({
+      closureRecordId: inheritedActiveGateClosureRecordId,
+      closureWitnessClass: inheritedActiveGateClosureWitnessClass,
+      gateReasons: activeGateClosureProgress?.gateReasons,
+      prioritySpreadSatisfied: activeGateClosureProgress?.prioritySpreadSatisfied,
+      snapshotCoverageComplete:
+        activeGateClosureProgress?.snapshotCoverageComplete === true,
+    });
   return normalizePriorityRecoveryActiveGateSnapshot({
     activeGate: {
       ...activeGate,
       closureRecordId:
-        normalizeOptionalString(activeGate.closureRecordId) ||
-        normalizeOptionalString(
-          priorityRecoveryObservationWithActiveGateClosure.closureRecordId,
-        ) ||
-        normalizeOptionalString(publicationConvergenceGate?.closureRecordId) ||
-        normalizeOptionalString(activeGateClosureWitness?.closureRecordId),
+        normalizeOptionalString(activeGateClosureWitness?.closureRecordId) ||
+        (
+          clearInheritedActiveGatePrioritySpreadClosure === true ?
+            null :
+            inheritedActiveGateClosureRecordId
+        ),
       closureWitnessClass:
-        normalizeOptionalString(activeGate.closureWitnessClass) ||
-        normalizeOptionalString(
-          priorityRecoveryObservationWithActiveGateClosure.closureWitnessClass,
-        ) ||
-        normalizeOptionalString(publicationConvergenceGate?.closureWitnessClass) ||
-        normalizeOptionalString(activeGateClosureWitness?.closureWitnessClass),
+        normalizeOptionalString(activeGateClosureWitness?.closureWitnessClass) ||
+        (
+          clearInheritedActiveGatePrioritySpreadClosure === true ?
+            null :
+            inheritedActiveGateClosureWitnessClass
+        ),
       progress: canonicalProgress,
       bestProgress: canonicalBestProgress,
       lastMeaningfulProgress: canonicalLastMeaningfulProgress,

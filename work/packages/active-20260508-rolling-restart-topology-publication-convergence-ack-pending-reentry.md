@@ -1,9 +1,10 @@
+# Rolling Restart Topology Publication Convergence ACK Pending Reentry
+
+<!-- work-package
 {
-  "schema": "current-blocker-v1",
-  "generatedBy": "scripts/work-tracker.js",
-  "sprint": "work/sprints/active-2026-q2-publication-scoped-consistency-and-node-join-closure.md",
-  "package": "work/packages/active-20260508-rolling-restart-topology-publication-convergence-ack-pending-reentry.md",
+  "schema": "work-package-v1",
   "status": "active",
+  "opened": "2026-05-08",
   "scenario": "rolling-restart",
   "artifact": "test-output/reports/rolling-restart-after-startup-active-gate-closure-carryover-clear-20260508T000000Z.report.json",
   "playback": "test-output/reports/.playback/rolling-restart-after-startup-active-gate-closure-carryover-clear-20260508T000000Z/rolling-restart/",
@@ -28,3 +29,17 @@
   ],
   "predecessor": "work/packages/done-20260508-rolling-restart-startup-active-gate-snapshot-coverage-readiness-support-reentry.md"
 }
+-->
+
+Opened on May 8, 2026 after
+[Rolling Restart Startup Active Gate Snapshot Coverage Readiness Support Reentry](./done-20260508-rolling-restart-startup-active-gate-snapshot-coverage-readiness-support-reentry.md)
+closes by migration. The direct frontier now sits on
+`topology_publication_owner / publication_convergence`, where epoch `5`
+remains `ACK_PENDING` with `pendingAckCount=1`, `missingPublishedCount=2`,
+and downstream startup active-gate and workflow-progress evidence only.
+
+## Subagent Sequencing Ledger
+
+- [ ] Review subagent recorded:
+- [ ] Fix subagent recorded or explicitly not needed:
+- [ ] Implementation subagent recorded:
