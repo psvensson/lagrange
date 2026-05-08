@@ -9,6 +9,7 @@ export function registerControlPlaneSystemTableGatewayTailTests({
   CONTROL_PLANE_MUTATION_OUTCOME,
   CONTROL_PLANE_MUTATION_OPERATION,
   CONTROL_PLANE_READINESS_DIMENSION,
+  PROJECTION_READINESS_CONTRACT_STATE,
   CONTROL_PLANE_WORKLOAD_CLASS,
   METRICS_LOG_TAG,
   GATEWAY_ROUTING_GAP_OWNER_MISSING,
@@ -33,6 +34,17 @@ export function registerControlPlaneSystemTableGatewayTailTests({
             },
             reasons: [],
             retryAfterMs: 125,
+            projectionReadinessContract: {
+              state: PROJECTION_READINESS_CONTRACT_STATE.RECOVERY_OPEN,
+              ready: false,
+              publication: {
+                ready: false,
+              },
+              priorityRecovery: {
+                active: false,
+              },
+              reasonCodes: ['publication_epoch_pending'],
+            },
             runtimeAuthority: {
               state: 'establishing',
               authorityAvailable: true,

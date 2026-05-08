@@ -11,18 +11,21 @@
   "owner": "topology_control_plane",
   "boundary": "legacy_path_deletion_and_proof",
   "dominantReason": "legacy_shadow_paths_remain_after_projection_readiness_contract",
-  "currentState": "Projection/readiness contract implementation is closed and pushed. Remaining work is to delete or structurally block superseded topology fallback paths, shadow vocabularies, and duplicate decision surfaces, then run the representative proof ladder.",
-  "nextAction": "Run the required review/fix/implementation subagent sequence, then delete or structurally block legacy paths and run the representative proof ladder.",
+  "currentState": "Mutation-readiness published-convergence consumption has been cut over from raw recovery-gate fields to projectionReadinessContract; focused consumer proof, static guards, work validation, and diff checks passed.",
+  "nextAction": "Close and commit the focused package slice when ready.",
   "proof": [
     "npm run work:context",
     "npm run work:validate",
     "git diff --check"
   ],
   "touchedFiles": [
+    "src/control-plane/control-plane-mutation-readiness.js",
+    "test/control-plane/control-plane-mutation-readiness.test.js",
+    "test/control-plane/control-plane-system-table-gateway.test.js",
+    "test/control-plane/control-plane-system-table-gateway-tail-test-cases.js",
+    "test/query/sql-query-engine.test-part-3.js",
     "work/packages/active-20260508-core-topology-legacy-path-deletion-and-proof.md",
-    "work/sprints/active-2026-q2-core-topology-control-plane-rewrite.md",
-    "work/sprints/current-blocker.json",
-    "work/sprints/current-blocker.md"
+    "work/model-ledger.jsonl"
   ],
   "predecessor": "work/packages/done-20260508-core-topology-projection-readiness-contract.md"
 }
@@ -77,27 +80,91 @@ representative Phase 0.1 proof ladder.
 
 ## Subagent Sequencing Ledger
 
-- [ ] Review subagent recorded: pending review of
-      `work/packages/done-20260508-core-topology-projection-readiness-contract.md`.
-- [ ] Fix subagent recorded or explicitly not needed: pending review result.
-- [ ] Implementation subagent recorded: pending clean review/fix ledger.
+- [x] Review subagent recorded: Agent Noether
+      (`019e08f0-a0a7-7c93-b034-a41108c9c3e7`) reviewed
+      `work/packages/done-20260508-core-topology-projection-readiness-contract.md`;
+      result `clean`.
+- [x] Fix subagent recorded or explicitly not needed: not-needed.
+- [x] Implementation subagent recorded: Agent Darwin
+      (`019e08f4-be39-79f0-9840-99e68d1d4ed8`) implemented
+      `work/packages/active-20260508-core-topology-legacy-path-deletion-and-proof.md`.
 
 ## Static Drift Ledger
 
 Preflight:
 
-- [ ] Review the completed projection/readiness package before implementation
+- [x] Review the completed projection/readiness package before implementation
       starts.
-- [ ] Run fixes if the review finds them.
-- [ ] Record the implementation subagent before runtime edits are made for this
+- [x] Run fixes if the review finds them.
+- [x] Record the implementation subagent before runtime edits are made for this
       package.
 
 Implementation:
 
-- [ ] Runtime edits stay within the legacy path deletion/proof boundary.
-- [ ] Existing unrelated dirty files remain untouched.
-- [ ] Structural guardrails prove superseded paths cannot be rebound.
-- [ ] File-scoped literal, decision-boundary, and runtime-grammar guardrails
+- [x] Runtime edits stay within the legacy path deletion/proof boundary.
+- [x] Existing unrelated dirty files remain untouched.
+- [x] Structural guardrails prove superseded paths cannot be rebound.
+- [x] File-scoped literal, decision-boundary, and runtime-grammar guardrails
       pass for touched runtime files.
-- [ ] LLM-backed file guideline guard is run or recorded as blocked by the
+- [x] LLM-backed file guideline guard is run or recorded as blocked by the
       repository-local API key before closure.
+
+LLM-backed guard status: blocked by local invalid API key. Command attempted:
+`npm run guard:guidelines:file -- src/control-plane/control-plane-mutation-readiness.js`.
+Failure was `LLM API request failed (401)` / `invalid_api_key`.
+
+## Implementation Notes
+
+- Removed mutation-readiness published-convergence derivation from raw
+  `priorityControlPlaneRecovery.publicationRecoveryGate` and `active` fields.
+- Mutation readiness now normalizes published-convergence evidence from the
+  canonical `projectionReadinessContract` and its publication and priority
+  recovery summaries.
+- Added focused structural coverage proving the runtime source cannot rebind to
+  the transitional raw recovery-gate fields.
+- Updated direct query and gateway consumer fixtures to provide canonical
+  projection/readiness contract reason evidence.
+
+## Validation Results
+
+- `npm run work:context` passed.
+- Pre-edit guard snapshot:
+  `npm run audit:guideline:literals -- src/control-plane/control-plane-mutation-readiness.js`
+  passed with 0 new violations.
+- Pre-edit guard snapshot:
+  `npm run audit:guideline:decision-boundaries -- src/control-plane/control-plane-mutation-readiness.js`
+  passed with 0 violations.
+- Pre-edit guard snapshot:
+  `npm run audit:runtime-grammar:file -- src/control-plane/control-plane-mutation-readiness.js`
+  passed with 0 violations.
+- `node --test test/control-plane/control-plane-mutation-readiness.test.js`
+  passed: 32 tests, 8 suites.
+- `node --test test/query/sql-query-engine.test-part-3.js` passed: 80 tests,
+  15 suites.
+- `node --test test/control-plane/control-plane-system-table-gateway.test.js`
+  passed: 219 tests, 48 suites.
+- `node --test test/query/sql-query-engine.test-part-8.js` passed as part of
+  the combined consumer run.
+- `node --test test/rebalancer/unified-rebalancer-core-02-test-cases.js`
+  passed as an isolated file and as part of the combined consumer run.
+- Combined consumer run:
+  `node --test test/control-plane/control-plane-mutation-readiness.test.js test/query/sql-query-engine.test-part-8.js test/rebalancer/unified-rebalancer-core-02-test-cases.js`
+  passed: 77 tests, 21 suites, plus the rebalancer file test wrapper.
+- Post-edit guard:
+  `npm run audit:guideline:literals -- src/control-plane/control-plane-mutation-readiness.js`
+  passed with 0 new violations.
+- Post-edit guard:
+  `npm run audit:guideline:decision-boundaries -- src/control-plane/control-plane-mutation-readiness.js`
+  passed with 0 violations.
+- Post-edit guard:
+  `npm run audit:runtime-grammar:file -- src/control-plane/control-plane-mutation-readiness.js`
+  passed with 0 violations.
+- `npm run guard:guidelines:file -- src/control-plane/control-plane-mutation-readiness.js`
+  blocked by local invalid API key (`401 invalid_api_key`).
+- `npm run work:model-ledger -- record --package work/packages/active-20260508-core-topology-legacy-path-deletion-and-proof.md --model gpt-5-codex --reasoning-effort high --task-class distributed-runtime --outcome done --validation-status focused-passing-work-validate-pending-llm-guard-blocked --correction-loops 1 --review-findings 0 --notes "Deleted mutation-readiness raw recovery-gate convergence path; focused mutation, query, gateway, and rebalancer tests passed; static guards passed; LLM guideline guard blocked by invalid local API key."`
+  recorded model experience.
+- `npm run work:current-blocker` passed and regenerated
+  `work/sprints/current-blocker.json` and
+  `work/sprints/current-blocker.md`.
+- `npm run work:validate` passed.
+- `git diff --check` passed.

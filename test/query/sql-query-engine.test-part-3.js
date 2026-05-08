@@ -16,6 +16,7 @@ import {
 } from '../../src/constants/index.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
+  PROJECTION_READINESS_CONTRACT_STATE,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {
 } from '../../src/control-plane/control-plane-readiness-service.js';
@@ -435,6 +436,17 @@ async (t) => {
           },
           reasons: [],
           retryAfterMs: 125,
+          projectionReadinessContract: {
+            state: PROJECTION_READINESS_CONTRACT_STATE.RECOVERY_OPEN,
+            ready: false,
+            publication: {
+              ready: false,
+            },
+            priorityRecovery: {
+              active: false,
+            },
+            reasonCodes: [expectedReasonCode],
+          },
           runtimeAuthority: {
             state: 'establishing',
             authorityAvailable: true,
@@ -680,6 +692,17 @@ test('SQLQueryEngine preserves lower-path retryable failures for critical ' +
           dimensions: CONTROL_PLANE_READY_DIMENSIONS,
           reasons: [],
           retryAfterMs: EXPECTED_RETRY_AFTER_MS,
+          projectionReadinessContract: {
+            state: PROJECTION_READINESS_CONTRACT_STATE.RECOVERY_OPEN,
+            ready: false,
+            publication: {
+              ready: false,
+            },
+            priorityRecovery: {
+              active: false,
+            },
+            reasonCodes: [EXPECTED_REASON_CODE],
+          },
           runtimeAuthority: {
             state: 'establishing',
             authorityAvailable: true,

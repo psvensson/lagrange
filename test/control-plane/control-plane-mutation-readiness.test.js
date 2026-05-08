@@ -1,3 +1,5 @@
+import {readFileSync} from 'node:fs';
+import {fileURLToPath} from 'node:url';
 import {test} from '../../src/test-helpers/tap.js';
 import {
   buildLocalControlPlaneMutationReadinessFailure,
@@ -11,7 +13,17 @@ import {
 } from '../../src/control-plane/control-plane-mutation-readiness.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
+  PROJECTION_READINESS_CONTRACT_STATE,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
+
+const MUTATION_READINESS_SOURCE_PATH = fileURLToPath(new URL(
+  '../../src/control-plane/control-plane-mutation-readiness.js',
+  import.meta.url,
+));
+const LEGACY_PUBLICATION_RECOVERY_GATE_FIELD = 'publicationRecoveryGate';
+const LEGACY_PRIORITY_RECOVERY_FIELD = 'priorityControlPlaneRecovery';
+const PUBLICATION_EPOCH_PENDING_REASON = 'publication_epoch_pending';
+const CONTROL_PLANE_NOT_WRITABLE_REASON = 'control_plane_not_writable';
 
 test('control-plane mutation readiness blocks non-critical work while published convergence is still pending', async (t) => {
   const blocker = getLocalControlPlaneMutationReadinessBlocker({
@@ -25,9 +37,23 @@ test('control-plane mutation readiness blocks non-critical work while published 
             [CONTROL_PLANE_READINESS_DIMENSION.METADATA_PUBLICATION_HEALTHY]: true,
           },
           reasons: [],
+          projectionReadinessContract: {
+            state: PROJECTION_READINESS_CONTRACT_STATE.RECOVERY_OPEN,
+            ready: false,
+            publication: {
+              ready: false,
+            },
+            priorityRecovery: {
+              active: false,
+            },
+            reasonCodes: [PUBLICATION_EPOCH_PENDING_REASON],
+          },
           priorityControlPlaneRecovery: {
-            active: true,
-            reasonCodes: ['publication_epoch_pending'],
+            active: false,
+            reasonCodes: ['legacy_gate_should_not_drive_readiness'],
+            publicationRecoveryGate: {
+              ready: true,
+            },
           },
         };
       },
@@ -41,7 +67,51 @@ test('control-plane mutation readiness blocks non-critical work while published 
   );
   t.same(
     blocker.reasonCodes,
-    ['publication_epoch_pending'],
+    [PUBLICATION_EPOCH_PENDING_REASON],
+  );
+});
+
+test('control-plane mutation readiness ignores legacy raw recovery-gate fields ' +
+  'when the canonical projection contract is publication-ready', async (t) => {
+  const blocker = getLocalControlPlaneMutationReadinessBlocker({
+    nodeId: 'node-1',
+    requirePublishedConvergence: true,
+    controlPlaneReadinessService: {
+      getNodeReadinessSync() {
+        return {
+          dimensions: {
+            [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]: true,
+            [CONTROL_PLANE_READINESS_DIMENSION.METADATA_PUBLICATION_HEALTHY]:
+              true,
+          },
+          reasons: [],
+          projectionReadinessContract: {
+            state: PROJECTION_READINESS_CONTRACT_STATE.SERVE_READY,
+            ready: true,
+            publication: {
+              ready: true,
+            },
+            priorityRecovery: {
+              active: false,
+            },
+            reasonCodes: [],
+          },
+          priorityControlPlaneRecovery: {
+            active: true,
+            reasonCodes: [PUBLICATION_EPOCH_PENDING_REASON],
+            publicationRecoveryGate: {
+              ready: false,
+            },
+          },
+        };
+      },
+    },
+  });
+
+  t.equal(
+    blocker,
+    null,
+    'legacy recovery-gate fields must not rebuild published convergence',
   );
 });
 
@@ -59,7 +129,7 @@ test('control-plane mutation readiness does not block when published convergence
           reasons: [],
           priorityControlPlaneRecovery: {
             active: true,
-            reasonCodes: ['publication_epoch_pending'],
+            reasonCodes: [PUBLICATION_EPOCH_PENDING_REASON],
           },
         };
       },
@@ -82,11 +152,22 @@ test('control-plane mutation readiness does not treat runtime blockers as publis
               true,
           },
           reasons: [],
-          priorityControlPlaneRecovery: {
-            active: false,
-            reasonCodes: ['control_plane_not_writable'],
-            publicationRecoveryGate: {
+          projectionReadinessContract: {
+            state: PROJECTION_READINESS_CONTRACT_STATE.RECOVERY_OPEN,
+            ready: false,
+            publication: {
               ready: true,
+            },
+            priorityRecovery: {
+              active: false,
+            },
+            reasonCodes: [CONTROL_PLANE_NOT_WRITABLE_REASON],
+          },
+          priorityControlPlaneRecovery: {
+            active: true,
+            reasonCodes: ['legacy_gate_should_not_drive_readiness'],
+            publicationRecoveryGate: {
+              ready: false,
             },
           },
         };
@@ -105,7 +186,7 @@ test('control-plane mutation readiness does not treat runtime blockers as publis
   );
   t.same(
     blocker.reasonCodes,
-    ['control_plane_write_unhealthy', 'control_plane_not_writable'],
+    ['control_plane_write_unhealthy', CONTROL_PLANE_NOT_WRITABLE_REASON],
     'the blocker should preserve both the readiness-owned runtime reason and the runtime recovery blocker vocabulary',
   );
 });
@@ -125,6 +206,17 @@ test('control-plane mutation readiness builds one canonical deferred failure ' +
           },
           reasons: [],
           retryAfterMs: 125,
+          projectionReadinessContract: {
+            state: PROJECTION_READINESS_CONTRACT_STATE.RECOVERY_OPEN,
+            ready: false,
+            publication: {
+              ready: false,
+            },
+            priorityRecovery: {
+              active: false,
+            },
+            reasonCodes: [PUBLICATION_EPOCH_PENDING_REASON],
+          },
           runtimeAuthority: {
             state: 'establishing',
             authorityAvailable: true,
@@ -132,11 +224,11 @@ test('control-plane mutation readiness builds one canonical deferred failure ' +
             visibility: {
               state: 'pending_publication',
             },
-            reasonCodes: ['publication_epoch_pending'],
+            reasonCodes: [PUBLICATION_EPOCH_PENDING_REASON],
           },
           priorityControlPlaneRecovery: {
-            active: true,
-            reasonCodes: ['publication_epoch_pending'],
+            active: false,
+            reasonCodes: ['legacy_gate_should_not_drive_readiness'],
           },
         };
       },
@@ -160,7 +252,7 @@ test('control-plane mutation readiness builds one canonical deferred failure ' +
   t.equal(failure.retryAfterMs, 125);
   t.same(
     failure.reasonCodes,
-    ['publication_epoch_pending'],
+    [PUBLICATION_EPOCH_PENDING_REASON],
   );
   t.same(
     failure.failedDimensions,
@@ -173,6 +265,22 @@ test('control-plane mutation readiness builds one canonical deferred failure ' +
   t.equal(
     failure.details?.cause,
     'Message timeout',
+  );
+});
+
+test('control-plane mutation readiness has no structural binding to legacy ' +
+  'published-convergence raw fields', async (t) => {
+  const source = readFileSync(MUTATION_READINESS_SOURCE_PATH, 'utf8');
+
+  t.equal(
+    source.includes(LEGACY_PUBLICATION_RECOVERY_GATE_FIELD),
+    false,
+    'mutation readiness must not read the transitional publication gate',
+  );
+  t.equal(
+    source.includes(LEGACY_PRIORITY_RECOVERY_FIELD),
+    false,
+    'mutation readiness must consume projectionReadinessContract instead',
   );
 });
 

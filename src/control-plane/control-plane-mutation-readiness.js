@@ -10,6 +10,7 @@ import {
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
   CONTROL_PLANE_READINESS_REASON,
+  PROJECTION_READINESS_CONTRACT_STATE,
   READINESS_SNAPSHOT_KEY,
 } from './control-plane-readiness-constants.js';
 import {
@@ -48,12 +49,31 @@ const CONTROL_PLANE_MUTATION_ROUTING_GAP_DEPENDENCY_TABLES =
     SYSTEM_TABLE_NAME.SQL_TRANSACTION_PARTICIPANTS,
     SYSTEM_TABLE_NAME.SQL_WRITE_OPERATIONS,
   ]);
+const NO_PROJECTION_READINESS_CONTRACT = null;
 const REASON_BY_DIMENSION = Object.freeze({
   [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]:
     CONTROL_PLANE_READINESS_REASON.CONTROL_PLANE_WRITE_UNHEALTHY,
   [CONTROL_PLANE_READINESS_DIMENSION.METADATA_PUBLICATION_HEALTHY]:
     CONTROL_PLANE_READINESS_REASON.METADATA_PUBLICATION_DEGRADED,
 });
+const PUBLISHED_CONVERGENCE_DECISION_RULES = Object.freeze([
+  Object.freeze({
+    pending: true,
+    matches: (evidence) => evidence.contractAvailable !== true,
+  }),
+  Object.freeze({
+    pending: true,
+    matches: (evidence) => evidence.publicationReady !== true,
+  }),
+  Object.freeze({
+    pending: true,
+    matches: (evidence) => evidence.priorityRecoveryActive === true,
+  }),
+  Object.freeze({
+    pending: false,
+    matches: () => true,
+  }),
+]);
 
 function normalizeControlPlaneMutationWorkClass(
   workClass,
@@ -98,8 +118,9 @@ function normalizeReasonCodes(readiness, failedDimensions) {
     codes.push(mappedCode);
   }
 
-  for (const code of Array.isArray(readiness?.priorityControlPlaneRecovery?.reasonCodes) ?
-    readiness.priorityControlPlaneRecovery.reasonCodes :
+  const projectionReadinessContract = getProjectionReadinessContract(readiness);
+  for (const code of Array.isArray(projectionReadinessContract?.reasonCodes) ?
+    projectionReadinessContract.reasonCodes :
     []) {
     const normalizedCode = String(code || '');
     if (normalizedCode.length === NUM.ZERO || seen.has(normalizedCode)) {
@@ -112,17 +133,55 @@ function normalizeReasonCodes(readiness, failedDimensions) {
   return Object.freeze(codes);
 }
 
-function isPublishedConvergencePending(readiness = null) {
-  const publicationRecoveryGate =
-    readiness?.priorityControlPlaneRecovery?.publicationRecoveryGate &&
-    typeof readiness.priorityControlPlaneRecovery.publicationRecoveryGate ===
-      TYPEOF.OBJECT ?
-      readiness.priorityControlPlaneRecovery.publicationRecoveryGate :
-      null;
-  if (publicationRecoveryGate) {
-    return publicationRecoveryGate.ready !== true;
+function getProjectionReadinessContract(readiness = null) {
+  const directContract =
+    readiness?.projectionReadinessContract &&
+    typeof readiness.projectionReadinessContract === TYPEOF.OBJECT ?
+      readiness.projectionReadinessContract :
+      NO_PROJECTION_READINESS_CONTRACT;
+  if (directContract) {
+    return directContract;
   }
-  return readiness?.priorityControlPlaneRecovery?.active === true;
+  const compactContract =
+    readiness?.[READINESS_SNAPSHOT_KEY.PROJECTION_READINESS_CONTRACT] &&
+    typeof readiness[READINESS_SNAPSHOT_KEY.PROJECTION_READINESS_CONTRACT] ===
+      TYPEOF.OBJECT ?
+      readiness[READINESS_SNAPSHOT_KEY.PROJECTION_READINESS_CONTRACT] :
+      NO_PROJECTION_READINESS_CONTRACT;
+  return compactContract;
+}
+
+function normalizePublishedConvergenceEvidence(readiness = null) {
+  const projectionReadinessContract = getProjectionReadinessContract(readiness);
+  const publication =
+    projectionReadinessContract?.publication &&
+    typeof projectionReadinessContract.publication === TYPEOF.OBJECT ?
+      projectionReadinessContract.publication :
+      NO_PROJECTION_READINESS_CONTRACT;
+  const priorityRecovery =
+    projectionReadinessContract?.priorityRecovery &&
+    typeof projectionReadinessContract.priorityRecovery === TYPEOF.OBJECT ?
+      projectionReadinessContract.priorityRecovery :
+      NO_PROJECTION_READINESS_CONTRACT;
+  const serveReady =
+    projectionReadinessContract?.state ===
+      PROJECTION_READINESS_CONTRACT_STATE.SERVE_READY &&
+    projectionReadinessContract?.ready === true;
+  return Object.freeze({
+    contractAvailable: !!projectionReadinessContract,
+    publicationReady:
+      typeof publication?.ready === TYPEOF.BOOLEAN ?
+        publication.ready :
+        serveReady,
+    priorityRecoveryActive: priorityRecovery?.active === true,
+  });
+}
+
+function isPublishedConvergencePending(readiness = null) {
+  const evidence = normalizePublishedConvergenceEvidence(readiness);
+  return PUBLISHED_CONVERGENCE_DECISION_RULES.find((rule) =>
+    rule.matches(evidence),
+  ).pending;
 }
 
 function getLocalControlPlaneMutationReadinessBlocker(options = {}) {

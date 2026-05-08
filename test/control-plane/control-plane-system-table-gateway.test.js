@@ -11,6 +11,7 @@ import {
 } from '../../src/control-plane/control-plane-system-table-gateway.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
+  PROJECTION_READINESS_CONTRACT_STATE,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {
   CDC_OPERATION,
@@ -1465,6 +1466,7 @@ registerControlPlaneSystemTableGatewayTailTests({
   CONTROL_PLANE_MUTATION_OUTCOME,
   CONTROL_PLANE_MUTATION_OPERATION,
   CONTROL_PLANE_READINESS_DIMENSION,
+  PROJECTION_READINESS_CONTRACT_STATE,
   CONTROL_PLANE_WORKLOAD_CLASS,
   CDC_OPERATION,
   METRICS_LOG_TAG,

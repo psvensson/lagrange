@@ -20,11 +20,11 @@ Boundary: `legacy_path_deletion_and_proof`
 
 Dominant reason: `legacy_shadow_paths_remain_after_projection_readiness_contract`
 
-Current state: Projection/readiness contract implementation is closed and pushed. Remaining work is to delete or structurally block superseded topology fallback paths, shadow vocabularies, and duplicate decision surfaces, then run the representative proof ladder.
+Current state: Mutation-readiness published-convergence consumption has been cut over from raw recovery-gate fields to projectionReadinessContract; focused consumer proof, static guards, work validation, and diff checks passed.
 
 ## Next Action
 
-Run the required review/fix/implementation subagent sequence, then delete or structurally block legacy paths and run the representative proof ladder.
+Close and commit the focused package slice when ready.
 
 ## Proof Ladder
 
@@ -34,7 +34,10 @@ Run the required review/fix/implementation subagent sequence, then delete or str
 
 ## Touched Files
 
-1. `work/packages/active-20260508-core-topology-legacy-path-deletion-and-proof.md`
-2. `work/sprints/active-2026-q2-core-topology-control-plane-rewrite.md`
-3. `work/sprints/current-blocker.json`
-4. `work/sprints/current-blocker.md`
+1. `src/control-plane/control-plane-mutation-readiness.js`
+2. `test/control-plane/control-plane-mutation-readiness.test.js`
+3. `test/control-plane/control-plane-system-table-gateway.test.js`
+4. `test/control-plane/control-plane-system-table-gateway-tail-test-cases.js`
+5. `test/query/sql-query-engine.test-part-3.js`
+6. `work/packages/active-20260508-core-topology-legacy-path-deletion-and-proof.md`
+7. `work/model-ledger.jsonl`
