@@ -111,6 +111,25 @@ const COORDINATOR_CREATED_OPERATION_ARM_ACTION_BY_STATE = Object.freeze(
 );
 
 class OperationWorkflowOwnerSegment2 extends OperationWorkflowOwnerSegment1 {
+  /**
+   * Remote coordinator-created handoff delivery does not mutate the source
+   * owner's local workflow state. Keep local operation advancement gated on
+   * initialization, but allow priority remote owner wakeups to survive source
+   * readiness transitions.
+   *
+   * @param {Object|null} operation
+   * @return {boolean}
+   * @private
+   */
+  shouldArmCoordinatorCreatedOperationWhileUninitialized(operation) {
+    return (
+      !!operation?.operationId &&
+      !this.isCoordinatorCreatedOperationLocallyOwned(operation) &&
+      this.shouldRetryCoordinatorCreatedRemoteHandoff(operation) &&
+      this.isDispatchRetryableWorkflowStep(operation)
+    );
+  }
+
   deferCoordinatorCreatedRemoteHandoffRetry(operation, errorLike) {
     const operationId = operation?.operationId || null;
     if (
@@ -274,7 +293,15 @@ class OperationWorkflowOwnerSegment2 extends OperationWorkflowOwnerSegment1 {
    */
   async armCoordinatorCreatedOperation(operationInput) {
     const operationId = operationInput?.operationId || null;
-    if (!operationId || this.isShuttingDown || !this.isInitialized) {
+    if (!operationId || this.isShuttingDown) {
+      return false;
+    }
+    if (
+      !this.isInitialized &&
+      !this.shouldArmCoordinatorCreatedOperationWhileUninitialized(
+        operationInput,
+      )
+    ) {
       return false;
     }
 

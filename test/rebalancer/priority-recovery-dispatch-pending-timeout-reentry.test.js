@@ -323,15 +323,31 @@ async (t) => {
     'timeout reconciliation should not persist step updates for the remote-owned row before remote progress is observed',
   );
 
+  coordinator.initialized = false;
   await deferredTimers[0].fn();
 
   t.equal(
     deliveries.length,
     2,
-    'the deferred remote handoff retry should re-enter the owner wake path',
+    'the deferred remote handoff retry should still wake the remote owner while the source owner is transiently uninitialized',
   );
   t.equal(
-    deliveries[1]?.target,
+    coordinator.workflowOwner.createdOperationHandoffRetryTimerByOperationId
+      .size,
+    1,
+    'the successful remote handoff wake should leave the bounded verification lane armed while source initialization recovers',
+  );
+
+  coordinator.initialized = true;
+  await deferredTimers[1].fn();
+
+  t.equal(
+    deliveries.length,
+    3,
+    'the verification retry should continue re-entering the owner wake path after source initialization recovers',
+  );
+  t.equal(
+    deliveries[2]?.target,
     TEST_REPLICA_DISPATCH_TARGET,
     'deferred remote handoff retry should use the same canonical replica-dispatch ingress',
   );
