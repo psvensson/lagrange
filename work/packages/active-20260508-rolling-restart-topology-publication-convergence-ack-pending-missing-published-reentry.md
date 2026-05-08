@@ -6,13 +6,13 @@
   "status": "active",
   "opened": "2026-05-08",
   "scenario": "rolling-restart",
-  "artifact": "test-output/reports/rolling-restart-multi-candidate-operation-scheduling-repair-20260508T123000Z.report.json",
-  "playback": "test-output/reports/.playback/rolling-restart-multi-candidate-operation-scheduling-repair-20260508T123000Z/rolling-restart/",
-  "owner": "Priority recovery operation scheduling after multi-candidate surrogate repair",
-  "boundary": "rebalancer_leader / operation_scheduling / event_driven_wait",
-  "dominantReason": "priority_recovery_operation_scheduling_event_driven",
-  "currentState": "The multi-candidate operation-scheduling repair reduced the representative blocker again but did not close it. priorityRecoveryInvariants still pass and publication remains PUBLISHED with pendingAckCount=0. sql_write_operations-p1 now has a cache-visible PENDING operation and is classified recovering_in_flight / workflow_progress, while sql_transactions-p1 remains needs_operation / eligible_but_no_operation_created with no operationIds and nextRequiredAction=create_recovery_operation.",
-  "nextAction": "Start the next implementation slice for the remaining rebalancer_leader / operation_scheduling blocker. The next proof surface is why sql_transactions-p1 remains action_required with nextRequiredAction=create_recovery_operation and no recovery operation after the same replay scheduled sql_write_operations-p1.",
+  "artifact": "test-output/reports/rolling-restart-serial-wait-operation-scheduling-fix-20260508T124500Z.report.json",
+  "playback": "test-output/reports/.playback/rolling-restart-serial-wait-operation-scheduling-fix-20260508T124500Z/rolling-restart/",
+  "owner": "Priority recovery workflow timeout after serial-wait operation scheduling fix",
+  "boundary": "operation_workflow_owner / workflow_timeout / timeout_reconcile_due",
+  "dominantReason": "priority_recovery_workflow_timeout_transition_deferred",
+  "currentState": "The serial-wait no-operation fix removed the rebalancer_leader operation-scheduling frontier. priorityRecoveryInvariants still pass and publication remains PUBLISHED with pendingAckCount=0. The first frontier is now operation_workflow_owner / workflow_timeout: all five priority partitions are owned by operation_workflow_owner, the dominant witness is sql_write_operations-p1 with cache-visible PENDING operation 9d8d9432-cbc6-411f-a343-8ad9ab99df5b, workflowProgressPhaseId=dispatch_pending, stepAgeMs=75457 over stepTimeoutMs=30000, and nextRequiredAction=reconcile_stale_operation_progress.",
+  "nextAction": "Start the next implementation slice for operation_workflow_owner / workflow_timeout. The next proof surface is why stale dispatch_pending PENDING priority recovery operations reach timeout_reconcile_due but remain transition_deferred instead of being reconciled or classified.",
   "proof": [
     "First-package-in-sprint review-not-needed validation and work-context coverage",
     "Focused epoch-4 ACK_PENDING publication-convergence witness with supporting selected-snapshot and priority-recovery context",
@@ -168,6 +168,10 @@ the next runtime implementation slice.
       Agent Bernoulli (019e077f-a701-74d3-953f-cf5fded3490e) implemented work/packages/active-20260508-rolling-restart-topology-publication-convergence-ack-pending-missing-published-reentry.md;
       result clean with multi-candidate priority recovery operation scheduling
       and focused regression proof.
+- [x] Post-slice review subagent recorded:
+      Agent Linnaeus (019e0792-80c2-7373-bc03-150bee8a0a26) reviewed work/packages/active-20260508-rolling-restart-topology-publication-convergence-ack-pending-missing-published-reentry.md; result fixes-required.
+- [x] Post-slice fix subagent recorded:
+      Agent Anscombe (019e0797-475b-7402-9ae1-fdfdbbc1dbff) fixed work/packages/active-20260508-rolling-restart-topology-publication-convergence-ack-pending-missing-published-reentry.md; result clean with residual serial-wait no-operation surrogate retention covered.
 
 ## Residual Closure Inventory
 
@@ -298,3 +302,22 @@ Closure:
     scheduling witness is `sql_transactions-p1|2|operation_unknown`, with
     `needs_operation`, `eligible_but_no_operation_created`, no `operationIds`,
     and `nextRequiredAction=create_recovery_operation`.
+13. Linnaeus review fix:
+    `rebalance continues surrogate priority recovery scheduling after a
+    repaired priority partition is already in flight` now models the residual
+    event-driven reentry shape: one adjacent priority operation is already in
+    flight, the serial gate is present, and the remaining `sql_transactions-p1`
+    surrogate snapshot is raw `priority_operation_serial_wait` /
+    `wait_for_operation_progress` with no operation IDs. The surrogate loop
+    normalizes that raw wait-shaped snapshot back to the reconstructed
+    operation-required snapshot and creates the missing recovery operation.
+14. Representative rerun after the serial-wait no-operation fix:
+    `test-output/reports/rolling-restart-serial-wait-operation-scheduling-fix-20260508T124500Z.report.json`
+    removes the `rebalancer_leader / operation_scheduling` frontier. The first
+    frontier is now `operation_workflow_owner / workflow_timeout` with dominant
+    reason `priority_recovery_workflow_timeout_transition_deferred`. The
+    dominant witness is `sql_write_operations-p1` with cache-visible PENDING
+    operation `9d8d9432-cbc6-411f-a343-8ad9ab99df5b`,
+    `workflowProgressPhaseId=dispatch_pending`, `stepAgeMs=75457`,
+    `stepTimeoutMs=30000`, and
+    `nextRequiredAction=reconcile_stale_operation_progress`.

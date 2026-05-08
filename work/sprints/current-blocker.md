@@ -8,23 +8,23 @@ Package: `work/packages/active-20260508-rolling-restart-topology-publication-con
 
 Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/rolling-restart-multi-candidate-operation-scheduling-repair-20260508T123000Z.report.json`
+Artifact: `test-output/reports/rolling-restart-serial-wait-operation-scheduling-fix-20260508T124500Z.report.json`
 
-Playback: `test-output/reports/.playback/rolling-restart-multi-candidate-operation-scheduling-repair-20260508T123000Z/rolling-restart/`
+Playback: `test-output/reports/.playback/rolling-restart-serial-wait-operation-scheduling-fix-20260508T124500Z/rolling-restart/`
 
 ## Boundary
 
-Owner: `Priority recovery operation scheduling after multi-candidate surrogate repair`
+Owner: `Priority recovery workflow timeout after serial-wait operation scheduling fix`
 
-Boundary: `rebalancer_leader / operation_scheduling / event_driven_wait`
+Boundary: `operation_workflow_owner / workflow_timeout / timeout_reconcile_due`
 
-Dominant reason: `priority_recovery_operation_scheduling_event_driven`
+Dominant reason: `priority_recovery_workflow_timeout_transition_deferred`
 
-Current state: The multi-candidate operation-scheduling repair reduced the representative blocker again but did not close it. priorityRecoveryInvariants still pass and publication remains PUBLISHED with pendingAckCount=0. sql_write_operations-p1 now has a cache-visible PENDING operation and is classified recovering_in_flight / workflow_progress, while sql_transactions-p1 remains needs_operation / eligible_but_no_operation_created with no operationIds and nextRequiredAction=create_recovery_operation.
+Current state: The serial-wait no-operation fix removed the rebalancer_leader operation-scheduling frontier. priorityRecoveryInvariants still pass and publication remains PUBLISHED with pendingAckCount=0. The first frontier is now operation_workflow_owner / workflow_timeout: all five priority partitions are owned by operation_workflow_owner, the dominant witness is sql_write_operations-p1 with cache-visible PENDING operation 9d8d9432-cbc6-411f-a343-8ad9ab99df5b, workflowProgressPhaseId=dispatch_pending, stepAgeMs=75457 over stepTimeoutMs=30000, and nextRequiredAction=reconcile_stale_operation_progress.
 
 ## Next Action
 
-Start the next implementation slice for the remaining rebalancer_leader / operation_scheduling blocker. The next proof surface is why sql_transactions-p1 remains action_required with nextRequiredAction=create_recovery_operation and no recovery operation after the same replay scheduled sql_write_operations-p1.
+Start the next implementation slice for operation_workflow_owner / workflow_timeout. The next proof surface is why stale dispatch_pending PENDING priority recovery operations reach timeout_reconcile_due but remain transition_deferred instead of being reconciled or classified.
 
 ## Proof Ladder
 

@@ -547,6 +547,26 @@ class UnifiedRebalancerSegment4Stage1 extends UnifiedRebalancerSegment3 {
     return true;
   }
 
+  normalizePriorityRecoverySurrogateFollowUpDecisionSnapshot(
+    planningSnapshot = null,
+    partitionId = UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
+  ) {
+    const decisionSnapshot =
+      this.resolvePriorityRecoveryFollowUpDecisionSnapshotFromPlanning(
+        planningSnapshot,
+        {partitionId},
+      );
+    if (this.isPriorityRecoveryFollowUpOperationRequired(decisionSnapshot)) {
+      return decisionSnapshot;
+    }
+    const operationRequiredSnapshot =
+      this.buildPriorityRecoveryFollowUpDecisionSnapshotFromPlanning(
+        planningSnapshot,
+        {partitionId},
+      );
+    return operationRequiredSnapshot || decisionSnapshot;
+  }
+
   buildPriorityRecoverySurrogateFollowUpDecisions(
     planningSnapshot = null,
   ) {
@@ -581,9 +601,9 @@ class UnifiedRebalancerSegment4Stage1 extends UnifiedRebalancerSegment3 {
       if (normalizedPartitionId.length === NUM.ZERO) {
         return null;
       }
-      return this.resolvePriorityRecoveryFollowUpDecisionSnapshotFromPlanning(
+      return this.normalizePriorityRecoverySurrogateFollowUpDecisionSnapshot(
         planningSnapshot,
-        {partitionId: normalizedPartitionId},
+        normalizedPartitionId,
       );
     };
     const closureWitnessDecisionSnapshot =

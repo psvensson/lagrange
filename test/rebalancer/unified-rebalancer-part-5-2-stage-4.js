@@ -26,7 +26,11 @@ import {
 } from '../../src/rebalancer/rebalancer-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
-import {PRIORITY_RECOVERY_SEMANTIC_STATE} from '../../src/control-plane/priority-recovery-diagnostics-constants.js';
+import {
+  PRIORITY_RECOVERY_BLOCKER_REASON,
+  PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION,
+  PRIORITY_RECOVERY_SEMANTIC_STATE,
+} from '../../src/control-plane/priority-recovery-diagnostics-constants.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
@@ -910,12 +914,10 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 4', async (t) => {
       const TEST_SECOND_REMAINING_REPLICA_ID_A =
         'sql_write_operations-p1-r1';
       const TEST_REPAIRED_OPERATION_ID = 'op-participants-in-flight';
+      const TEST_WAITING_OPERATION_ID = 'op-write-operations-in-flight';
       const TEST_CREATED_OPERATION_ID_PREFIX = 'op-priority-remaining-';
       const TEST_SERVICE_TYPE_PARTITION = 'partition';
       const TEST_RAFT_ROLE_FOLLOWER = 'follower';
-      const TEST_BLOCKER_ELIGIBLE_NO_OPERATION =
-        'eligible_but_no_operation_created';
-      const TEST_NEXT_ACTION_CREATE_OPERATION = 'create_recovery_operation';
       const nodes = Object.freeze([
         Object.freeze({node_id: TEST_NODE_ID_A, status: NodeStatus.ACTIVE}),
         Object.freeze({node_id: TEST_NODE_ID_B, status: NodeStatus.ACTIVE}),
@@ -1003,6 +1005,13 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 4', async (t) => {
           status: ReplicaStatus.PENDING,
           target_node_id: TEST_NODE_ID_B,
         }),
+        Object.freeze({
+          operation_id: TEST_WAITING_OPERATION_ID,
+          partition_id: TEST_SECOND_REMAINING_PARTITION_ID,
+          type: OperationType.ADD,
+          status: ReplicaStatus.PENDING,
+          target_node_id: TEST_NODE_ID_B,
+        }),
       ]);
       const priorityPartitionSummary = Object.freeze({
         satisfied: false,
@@ -1072,10 +1081,23 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 4', async (t) => {
               partitionId: TEST_FIRST_REMAINING_PARTITION_ID,
               semanticState: PRIORITY_RECOVERY_SEMANTIC_STATE.NEEDS_OPERATION,
               blockerReasons: Object.freeze([
-                TEST_BLOCKER_ELIGIBLE_NO_OPERATION,
+                PRIORITY_RECOVERY_BLOCKER_REASON.SERIAL_OPERATION_WAIT,
               ]),
               progress: Object.freeze({
-                nextRequiredAction: TEST_NEXT_ACTION_CREATE_OPERATION,
+                nextRequiredAction:
+                  PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION
+                    .WAIT_FOR_OPERATION_PROGRESS,
+              }),
+              coordinator: Object.freeze({
+                operationCount: 0,
+                operationIds: Object.freeze([]),
+                serialWaitOperationCount: 1,
+                serialWaitOperationIds: Object.freeze([
+                  TEST_REPAIRED_OPERATION_ID,
+                ]),
+                serialWaitPartitionIds: Object.freeze([
+                  TEST_REPAIRED_PARTITION_ID,
+                ]),
               }),
               planner: Object.freeze({
                 requiredDistinctNodeCount:
@@ -1098,12 +1120,17 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 4', async (t) => {
             }),
             Object.freeze({
               partitionId: TEST_SECOND_REMAINING_PARTITION_ID,
-              semanticState: PRIORITY_RECOVERY_SEMANTIC_STATE.NEEDS_OPERATION,
-              blockerReasons: Object.freeze([
-                TEST_BLOCKER_ELIGIBLE_NO_OPERATION,
-              ]),
+              semanticState:
+                PRIORITY_RECOVERY_SEMANTIC_STATE.RECOVERING_IN_FLIGHT,
+              blockerReasons: Object.freeze([]),
               progress: Object.freeze({
-                nextRequiredAction: TEST_NEXT_ACTION_CREATE_OPERATION,
+                nextRequiredAction:
+                  PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION
+                    .WAIT_FOR_OPERATION_PROGRESS,
+              }),
+              coordinator: Object.freeze({
+                operationCount: 1,
+                operationIds: Object.freeze([TEST_WAITING_OPERATION_ID]),
               }),
               planner: Object.freeze({
                 requiredDistinctNodeCount:
@@ -1163,6 +1190,13 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 4', async (t) => {
         controlPlaneReadinessService: readinessService,
         rebalanceCoordinator: {
           ...createMockCoordinator(),
+          async getConcurrentAddCountByPriorityClass() {
+            return {
+              ordinaryPriorityCount: 0,
+              emergencyPriorityCount: 1,
+              priorityCount: 1,
+            };
+          },
           async createOperation(operationRequest) {
             createdOperations.push(operationRequest);
             return {
@@ -1181,7 +1215,7 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 4', async (t) => {
       rebalancer.isStabilized = () => true;
       rebalancer.getConfiguredRebalanceBudget = async () =>
         TEST_REQUIRED_DISTINCT_NODE_COUNT;
-      rebalancer.getGlobalInFlightOperationCount = async () => 0;
+      rebalancer.getGlobalInFlightOperationCount = async () => 1;
       rebalancer.scheduleNextCheck = () => {};
       rebalancer.movePlanner.calculateTargetState = async () => ({
         targetReplicaCount: TEST_REQUIRED_DISTINCT_NODE_COUNT,
@@ -1193,12 +1227,9 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 4', async (t) => {
       await rebalancer.rebalance();
 
       t.same(
-        createdOperations.map((operation) => operation.partitionId).sort(),
-        [
-          TEST_FIRST_REMAINING_PARTITION_ID,
-          TEST_SECOND_REMAINING_PARTITION_ID,
-        ].sort(),
-        'surrogate scheduling should create operations for every remaining eligible partition',
+        createdOperations.map((operation) => operation.partitionId),
+        [TEST_FIRST_REMAINING_PARTITION_ID],
+        'serial-wait surrogate candidate without an operation should remain eligible',
       );
       t.ok(
         createdOperations.every((operation) =>
