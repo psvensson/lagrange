@@ -91,6 +91,10 @@ sequential with real subagents by default. Record the sequence in the package
 file before runtime, test, harness, documentation, or tracker implementation
 starts.
 
+Subagents are orchestrated by Codex sessions and proven by package ledger
+entries. Do not add npm scripts that pretend to spawn or replace the review,
+fix, or implementation subagent roles.
+
 Required sequence:
 
 1. Fresh review subagent: review the most recently executed package on the same
@@ -399,3 +403,11 @@ too large to be useful:
 The default scoped commands do not fail on inherited local debt; use them to
 record before/after counts in the package static drift ledger. Strict scoped
 commands are for cleanup packages or touched boundaries expected to be clean.
+
+Repository validation must stay deterministic and local. Use the local
+guideline audits (`audit:guideline:literals`,
+`audit:guideline:decision-boundaries`,
+`audit:guideline:boundary-mode-contracts`,
+`guard:guideline:constant-names:file`, and
+`audit:runtime-grammar:file`) plus the mandatory Subagent Sequencing Ledger for
+review proof; do not depend on network-backed LLM API checks.

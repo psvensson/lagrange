@@ -98,6 +98,8 @@ ledger. Do not check these items until real subagent names and agent ids
 replace the template placeholders; checked placeholders, pending markers,
 parent-session labels, local/manual labels, or arbitrary text without agent id
 proof are invalid.
+Subagents are orchestrated by Codex sessions and recorded here; npm scripts
+must not stand in for review, fix, or implementation subagents.
 
 - [ ] Review subagent recorded:
       Agent <name> (<agent-id>) reviewed <package>;
@@ -179,7 +181,8 @@ Required for scenario-driven packages after blocker migration.
 1. Targeted unit tests.
 2. Targeted integration tests.
 3. Distributed harness scenarios.
-4. Complexity and dependency checks.
+4. Deterministic local guideline and runtime-grammar guardrails.
+5. Complexity and dependency checks.
 
 ## Done When
 

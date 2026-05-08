@@ -6,7 +6,7 @@ import {KEYS} from 'eslint-visitor-keys';
 
 import {
   EXIT_CODE,
-  GUIDELINE_LLM_SKIP_PATH_PART,
+  GUIDELINE_SKIP_PATH_PART,
   SCRIPT_TEXT,
 } from './guideline-check-constants.js';
 
@@ -75,7 +75,7 @@ function isJavaScriptFile(filePath) {
 
 function shouldSkipDirectory(directoryPath) {
   const normalized = normalizePath(directoryPath);
-  return GUIDELINE_LLM_SKIP_PATH_PART.some((part) =>
+  return GUIDELINE_SKIP_PATH_PART.some((part) =>
     normalized.split(LOCAL_STR_SLASH).includes(part));
 }
 

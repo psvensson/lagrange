@@ -429,11 +429,11 @@ matching `src/<domain>/README.md` before editing that domain.
 Guard commands that are useful while changing the codebase:
 
 ```bash
-# Print common local and LLM workflows
+# Print common local workflows
 npm run commands
 
-# Validate staged files against repository guideline checks
-npm run guard:guidelines:staged
+# Validate active package metadata, checklist state, and subagent proof
+npm run work:validate
 
 # Enforce table_policies ownership rules in scenario SQL
 npm run guard:scenario-policy:file

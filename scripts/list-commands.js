@@ -18,7 +18,7 @@ const COMMAND_GROUPS = Object.freeze([
       }),
       Object.freeze({
         command: 'npm run work:validate',
-        description: 'Validate active work-package metadata and checklist state.',
+        description: 'Validate active work-package metadata, checklist state, and Subagent Sequencing Ledger proof.',
       }),
       Object.freeze({
         command: 'npm run steering:llm:pack',
@@ -84,10 +84,6 @@ const COMMAND_GROUPS = Object.freeze([
     title: 'Guideline Guardrails',
     commands: Object.freeze([
       Object.freeze({
-        command: 'npm run guard:guidelines:staged',
-        description: 'Run the staged LLM guideline guard.',
-      }),
-      Object.freeze({
         command: 'npm run audit:guideline:literals -- <files...>',
         description: 'Check touched files for new unowned runtime literals.',
       }),
@@ -98,6 +94,10 @@ const COMMAND_GROUPS = Object.freeze([
       Object.freeze({
         command: 'npm run audit:guideline:decision-boundaries -- <files...>',
         description: 'Check semantic decision boundaries for independent branch piles.',
+      }),
+      Object.freeze({
+        command: 'npm run audit:guideline:boundary-mode-contracts -- <files...>',
+        description: 'Check boundary-mode contracts for combinable policy options.',
       }),
       Object.freeze({
         command: 'npm run audit:runtime-grammar:file -- <files...>',
