@@ -41,12 +41,12 @@ operation_scheduling`, where `sql_write_operations-p1` remains
 
 ## Subagent Sequencing Ledger
 
-- [ ] Review subagent recorded:
-      Agent <name> (<agent-id>) reviewed
+- [x] Review subagent recorded:
+      Agent `Mendel` (`019e064a-e08c-7cf2-bc5a-b6e700180dce`) reviewed
       `work/packages/done-20260508-rolling-restart-topology-publication-convergence-ack-pending-reentry.md`;
-      result `<clean|fixes-required>`.
-- [ ] Fix subagent recorded or explicitly not needed:
-      Agent <name> (<agent-id>) fixed
+      result `fixes-required`.
+- [x] Fix subagent recorded or explicitly not needed:
+      Agent `Gibbs` (`019e064d-b451-7a22-8cef-e821c564e4c2`) fixed
       `work/packages/done-20260508-rolling-restart-topology-publication-convergence-ack-pending-reentry.md`, or
       `not-needed` only when review result is `clean`.
 - [ ] Implementation subagent recorded:
@@ -135,8 +135,8 @@ Canonical contract shape:
 
 ## Residual Closure Inventory
 
-- [ ] Review the just-closed predecessor package on the same sprint boundary.
-- [ ] Fix any predecessor-review findings before implementation resumes.
+- [x] Review the just-closed predecessor package on the same sprint boundary.
+- [x] Fix any predecessor-review findings before implementation resumes.
 - [ ] Extract the focused epoch-2 PUBLISHED operation-scheduling witness and
       its supporting workflow/startup evidence.
 - [ ] Add the focused regression or classification proof for the selected

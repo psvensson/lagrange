@@ -12,7 +12,7 @@
   "boundary": "Startup active gate owner / snapshot_coverage / readiness support",
   "dominantReason": "BOOTSTRAP_PHASE_INCOMPLETE",
   "currentState": "The startup active-gate closure-carryover repair is proved. The representative rerun no longer terminates on startup_active_gate_owner/snapshot_coverage; epoch 5 ACK_PENDING now promotes topology_publication_owner / publication_convergence as the first frontier with pendingAckCount=1 and missingPublishedCount=2, while startup active-gate and workflow-progress evidence move downstream only.",
-  "nextAction": "Continue in work/packages/done-20260508-rolling-restart-topology-publication-convergence-ack-pending-reentry.md for the migrated publication ACK-pending seam.",
+  "nextAction": "Continue in work/packages/active-20260508-rolling-restart-priority-recovery-operation-scheduling-sql-write-needs-operation-reentry.md for the migrated publication-to-operation-scheduling successor chain.",
   "proof": [
     "Focused epoch-2 PUBLISHED startup active-gate snapshot-coverage witness for coverage 3/5 with supporting readiness evidence",
     "Focused startup active-gate regression or classification proof for the selected coverage seam",
@@ -34,7 +34,7 @@
   "predecessor": "work/packages/done-20260508-rolling-restart-topology-priority-recovery-workflow-timeout-dispatch-pending-stale-progress-reentry.md",
   "closed": "2026-05-08",
   "commitAndPushLedgerRequired": true,
-  "successor": "work/packages/done-20260508-rolling-restart-topology-publication-convergence-ack-pending-reentry.md"
+  "successor": "work/packages/active-20260508-rolling-restart-priority-recovery-operation-scheduling-sql-write-needs-operation-reentry.md"
 }
 -->
 

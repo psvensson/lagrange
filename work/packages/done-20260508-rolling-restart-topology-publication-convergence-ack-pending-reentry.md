@@ -23,6 +23,7 @@
   "touchedFiles": [
     "work/packages/active-20260508-rolling-restart-topology-publication-convergence-ack-pending-reentry.md",
     "work/packages/done-20260508-rolling-restart-topology-publication-convergence-ack-pending-reentry.md",
+    "work/packages/done-20260508-rolling-restart-startup-active-gate-snapshot-coverage-readiness-support-reentry.md",
     "test/distributed/harness/failure-bundle-segment-4.js",
     "test/distributed/harness/__tests__/failure-bundle-core-16-test-cases.js",
     "work/packages/active-20260508-rolling-restart-priority-recovery-operation-scheduling-sql-write-needs-operation-reentry.md",
@@ -63,6 +64,19 @@ and downstream startup active-gate and workflow-progress evidence only.
 - Focused package commit: `6020e71d`
 - Pushed to: `origin/codex/pending-ack-eligibility-filter`
 - Commit contains only package-owned files/package-status/allowed sprint handoff: `yes`
+
+## Package Bookkeeping Note
+
+`6020e71d` remains the focused implementation and closure slice for this
+package. Commit `c56ba7dc` later amended only this closed package markdown to
+fill the Commit And Push Ledger, so the ledger cannot be read as "the last
+commit that touched this file".
+
+Under the current tracker convention, the truthful interpretation is narrower:
+the ledger proves which focused package slice closed and was pushed, while
+later bookkeeping-only edits may still amend the closed package file. This
+repair keeps that interpretation explicit and aligns `touchedFiles` with what
+`6020e71d` actually changed.
 
 ## Current Evidence
 
@@ -194,6 +208,9 @@ Closure:
    matched the report-level scheduling frontier and kept
    `startup_active_gate_owner / snapshot_coverage` only as the next expected
    frontier.
+9. `npm run work:validate -- work/packages/done-20260508-rolling-restart-topology-publication-convergence-ack-pending-reentry.md work/packages/done-20260508-rolling-restart-startup-active-gate-snapshot-coverage-readiness-support-reentry.md`
+   passed after the bookkeeping repair for closure-proof interpretation,
+   predecessor `touchedFiles`, and live successor-chain handoff metadata.
 
 ## Progress Notes
 
