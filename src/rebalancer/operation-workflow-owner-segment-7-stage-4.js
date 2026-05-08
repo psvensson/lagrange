@@ -382,11 +382,11 @@ class OperationWorkflowOwnerSegment7Stage4 extends OperationWorkflowOwnerSegment
     );
   }
 
-  hasActivePriorityRecoveryRemoteOwnerWakeRetry(operationId) {
+  hasActivePriorityRecoveryRemoteOwnerWakeRetry(operationId, now = Date.now()) {
     return (
       operationId.length > NUM.ZERO &&
-      this.createdOperationHandoffRetryTimerByOperationId.has(operationId) &&
-      this.hasActiveTransitionRetryGrace(operationId)
+      this.hasActiveCreatedOperationHandoffRetry(operationId, now) &&
+      this.hasActiveTransitionRetryGrace(operationId, now)
     );
   }
 

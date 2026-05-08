@@ -6,13 +6,13 @@
   "status": "active",
   "opened": "2026-05-08",
   "scenario": "rolling-restart",
-  "artifact": "test-output/reports/rolling-restart-current-release-gate-after-dispatch-skip-retry.report.json",
-  "playback": "test-output/reports/.playback/rolling-restart-current-release-gate-after-dispatch-skip-retry/rolling-restart/",
-  "owner": "operation_workflow_owner",
-  "boundary": "rebalancer_handoff",
-  "dominantReason": "priority_recovery_rebalancer_handoff_retry_scheduled",
-  "currentState": "The workflow-progress package is closed locally after dispatch-skip retry contracted the timed-out persisted-not-dispatched witness. The latest representative artifact still fails the active gate with active=3/5, snapshotCoverage=3/5, publication=PUBLISHED, pendingAck=0, prioritySpread=pending#gap=5, and priorityRecoveryInvariants=passed. Normalized priority-recovery evidence selects operation_workflow_owner / rebalancer_handoff with dominant reason priority_recovery_rebalancer_handoff_retry_scheduled across sql_transaction_participants-p1 and sql_write_operations-p1.",
-  "nextAction": "Implement the rebalancer-handoff retry-scheduled successor boundary using the dispatch-skip-retry artifact, then rerun focused owner tests and rolling-restart.",
+  "artifact": "test-output/reports/rolling-restart-current-release-gate-after-remote-handoff-retry-stale-fix.report.json",
+  "playback": "test-output/reports/.playback/rolling-restart-current-release-gate-after-remote-handoff-retry-stale-fix/rolling-restart/",
+  "owner": "rebalancer_leader",
+  "boundary": "operation_scheduling",
+  "dominantReason": "priority_recovery_operation_scheduling_event_driven",
+  "currentState": "The stale remote-handoff retry fix now clears overdue coordinator-created handoff timers instead of treating them as active progress. The representative rerun no longer selects operation_workflow_owner / rebalancer_handoff as the first frontier. The fresh blocker migrated to rebalancer_leader / operation_scheduling with priority_recovery_operation_scheduling_event_driven across sql_transaction_participants-p1 and sql_write_operations-p1.",
+  "nextAction": "Close this rebalancer-handoff package after review and commit, then open the operation-scheduling successor package from the remote-handoff stale-fix artifact.",
   "proof": [
     "npm run work:package:evidence-block -- test-output/reports/rolling-restart-current-release-gate-after-dispatch-skip-retry.report.json",
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-dispatch-skip-retry.report.json --explain priority_recovery_partition_progress",
@@ -21,15 +21,22 @@
     "node scripts/check-guideline-literals.js src/rebalancer/unified-rebalancer-segment-4-stage-3.js test/rebalancer/priority-follow-up-target-readiness.test.js",
     "node test/rebalancer/priority-follow-up-target-readiness.test.js",
     "node test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js",
-    "node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-current-release-gate-after-rebalancer-handoff-target-readiness.report.json --fast-local --verbose"
+    "node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-current-release-gate-after-rebalancer-handoff-target-readiness.report.json --fast-local --verbose",
+    "npm run work:package:evidence-block -- test-output/reports/rolling-restart-current-release-gate-after-remote-handoff-retry-stale-fix.report.json",
+    "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-remote-handoff-retry-stale-fix.report.json --explain priority_recovery_partition_progress",
+    "node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-current-release-gate-after-remote-handoff-retry-stale-fix.report.json --fast-local --verbose"
   ],
   "touchedFiles": [
     "src/rebalancer/unified-rebalancer-segment-4-stage-3.js",
     "src/rebalancer/operation-workflow-owner-segment-1.js",
+    "src/rebalancer/operation-workflow-owner-segment-2.js",
     "src/rebalancer/operation-workflow-owner-segment-4.js",
     "src/rebalancer/operation-workflow-owner-segment-7-stage-1.js",
+    "src/rebalancer/operation-workflow-owner-segment-7-stage-2.js",
+    "src/rebalancer/operation-workflow-owner-segment-7-stage-4.js",
     "test/rebalancer/priority-follow-up-target-readiness.test.js",
     "test/rebalancer/operation-workflow-observed-progress-lane-held.test.js",
+    "test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js",
     "work/packages/active-20260508-rolling-restart-operation-workflow-progress-persisted-not-dispatched.md",
     "work/packages/active-20260508-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md",
     "work/packages/done-20260508-rolling-restart-operation-workflow-progress-persisted-not-dispatched.md",
@@ -159,6 +166,9 @@ explicitly adopts that scope.
 - [x] Activation fix subagent recorded:
       Agent Noether (`019e09c7-67c7-7b11-8ebe-8c60c72fff15`) fixed
       `work/packages/done-20260508-rolling-restart-operation-workflow-progress-persisted-not-dispatched.md`.
+- [x] Stale remote-handoff implementation subagent recorded:
+      Agent Wegener (`019e09cf-b0fc-71e3-88d7-d6c49fc6759a`) implemented
+      `work/packages/active-20260508-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md`.
 
 ## Static Drift Ledger
 
@@ -178,9 +188,9 @@ Closure:
 
 - [x] Focused target-readiness regression passes.
 - [x] Touched-file static guardrails pass after implementation.
-- [ ] `node test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js`
+- [x] `node test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js`
       passes or is explicitly superseded by a narrower affected test.
-- [ ] Representative `rolling-restart --fast-local` rerun passes or migrates
+- [x] Representative `rolling-restart --fast-local` rerun passes or migrates
       to one named owner boundary.
 - [ ] Package-owned changes are committed as one focused slice.
 - [ ] The focused package slice is pushed before the next package starts.
@@ -188,27 +198,27 @@ Closure:
 ## Failure Migration / Contraction
 
 Current dominant blocker:
-`priority_recovery_rebalancer_handoff_retry_scheduled`.
+`priority_recovery_operation_scheduling_event_driven`.
 
 Current semantic owner:
-`operation_workflow_owner`.
+`rebalancer_leader`.
 
 Current boundary:
-`rebalancer_handoff`.
+`operation_scheduling`.
 
 Generated evidence block:
 
 ```text
-Source artifact: test-output/reports/rolling-restart-current-release-gate-after-dispatch-skip-retry.report.json
+Source artifact: test-output/reports/rolling-restart-current-release-gate-after-remote-handoff-retry-stale-fix.report.json
 Scenario: rolling-restart
 Frontier edge: priority_recovery_partition_progress
-Current semantic owner: operation_workflow_owner
-Current boundary: rebalancer_handoff
+Current semantic owner: rebalancer_leader
+Current boundary: operation_scheduling
 Frontier state: blocked
-Dominant reason: priority_recovery_rebalancer_handoff_retry_scheduled
+Dominant reason: priority_recovery_operation_scheduling_event_driven
 Evidence path: report.scenarios[0].publicationConvergence.priorityRecoveryProgressSummary.dominantWitness
 Reasons: priority_recovery_event_driven_wait, priority_recovery_progress_blocked
-Next explain command: npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-dispatch-skip-retry.report.json --explain priority_recovery_partition_progress
+Next explain command: npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-remote-handoff-retry-stale-fix.report.json --explain priority_recovery_partition_progress
 ```
 
 ## Validation
@@ -294,6 +304,90 @@ Follow-up implementation subagent validation notes:
    passed.
 3. `node test/rebalancer/operation-workflow-observed-progress-lane-held.test.js`
    passed with `10/10` assertions.
+
+Stale remote-handoff implementation subagent validation notes:
+
+1. Added
+   `test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
+   coverage for an overdue `createdOperationHandoffRetryTimer` with a still
+   active longer transition grace.
+2. Before the runtime fix,
+   `node test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
+   failed the new regression: timeout reconciliation sent `0` remote-owner
+   wakes where `1` was expected.
+3. Runtime fix tracks the handoff retry deadline beside the existing timer and
+   routes retry activity checks through
+   `hasActiveCreatedOperationHandoffRetry(...)`, so stale timers are cleared
+   before priority recovery decides whether to suppress a fresh wake.
+4. `node test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
+   passed with `45/45` assertions.
+5. `node test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js`
+   passed with `62/62` assertions.
+6. `node test/rebalancer/priority-follow-up-target-readiness.test.js`
+   passed with `13/13` assertions.
+7. `node test/rebalancer/operation-workflow-observed-progress-lane-held.test.js`
+   passed with `15/15` assertions.
+8. `node test/rebalancer/rebalance-coordinator-timeout-cache-visibility.test.js`
+   passed with `168/168` assertions.
+9. `node --check` passed for
+   `src/rebalancer/operation-workflow-owner-segment-1.js`,
+   `src/rebalancer/operation-workflow-owner-segment-2.js`,
+   `src/rebalancer/operation-workflow-owner-segment-7-stage-2.js`,
+   `src/rebalancer/operation-workflow-owner-segment-7-stage-4.js`, and
+   `test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`.
+10. `node scripts/check-runtime-grammar-contracts.js ...` and
+    `npm run audit:runtime-grammar:file -- ...` passed with `0`
+    runtime-grammar-contract violations for the touched runtime owner files.
+11. `node scripts/check-guideline-decision-boundaries.js ...` passed with
+    `0` decision-boundary guideline violations for the touched runtime/test
+    files.
+12. `node scripts/check-guideline-literals.js ...` passed with `0` new
+    literal-guideline violations and `0` inherited baseline violations for the
+    touched runtime/test files.
+13. `npm run work:current-blocker` passed and regenerated
+    `work/sprints/current-blocker.json` / `work/sprints/current-blocker.md`
+    with the package touched-file additions.
+14. `npm run work:validate` passed with `Work tracker validation OK for 11
+    file(s)`.
+15. Representative
+    `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-current-release-gate-after-remote-handoff-retry-stale-fix.report.json --fast-local --verbose`
+    failed after `131.8s`; the frontier migrated from
+    `operation_workflow_owner / rebalancer_handoff` to
+    `rebalancer_leader / operation_scheduling`.
+16. `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-current-release-gate-after-remote-handoff-retry-stale-fix.report.json`
+    reported dominant reason
+    `priority_recovery_operation_scheduling_event_driven` with
+    `priority_recovery_blocking_boundary_operation_scheduling`.
+17. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-remote-handoff-retry-stale-fix.report.json`
+    selected dominant witness `rebalancer_leader / operation_scheduling`,
+    dominant reason `priority_recovery_operation_scheduling_event_driven`.
+18. `npm run work:package:evidence-block -- test-output/reports/rolling-restart-current-release-gate-after-remote-handoff-retry-stale-fix.report.json`
+    generated the same migrated owner evidence block.
+19. `git diff --check -- src/rebalancer/operation-workflow-owner-segment-1.js src/rebalancer/operation-workflow-owner-segment-2.js src/rebalancer/operation-workflow-owner-segment-7-stage-2.js src/rebalancer/operation-workflow-owner-segment-7-stage-4.js test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js work/packages/active-20260508-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md work/sprints/current-blocker.json work/sprints/current-blocker.md`
+    passed.
+20. `node scripts/check-guideline-literals.js --include-tests test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
+    remains red with `76` existing test-fixture literal violations in the
+    touched file. The stale remote-handoff regression added in this package
+    uses named constants for its new string and numeric evidence.
+21. Parent rerun of
+    `node test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
+    passed with `45/45` assertions after normalizing the new regression
+    literals to suite constants.
+
+Post-fix generated evidence block:
+
+```text
+Source artifact: test-output/reports/rolling-restart-current-release-gate-after-remote-handoff-retry-stale-fix.report.json
+Scenario: rolling-restart
+Frontier edge: priority_recovery_partition_progress
+Current semantic owner: rebalancer_leader
+Current boundary: operation_scheduling
+Frontier state: blocked
+Dominant reason: priority_recovery_operation_scheduling_event_driven
+Evidence path: report.scenarios[0].publicationConvergence.priorityRecoveryProgressSummary.dominantWitness
+Reasons: priority_recovery_event_driven_wait, priority_recovery_progress_blocked
+Next explain command: npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-remote-handoff-retry-stale-fix.report.json --explain priority_recovery_partition_progress
+```
 
 ## Done When
 

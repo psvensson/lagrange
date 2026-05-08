@@ -53,6 +53,7 @@ const TEST_PUBLICATION_EPOCH = 2;
 const TEST_CAPTURED_AT_MS = 1000000;
 const TEST_OPERATION_CREATED_AT_MS = 900000;
 const TEST_STEP_TIMEOUT_MS = 30000;
+const TEST_LONG_REMOTE_HANDOFF_GRACE_MS = TEST_STEP_TIMEOUT_MS;
 const TEST_SPREAD_GAP = 1;
 const TEST_READY_DISTINCT_NODE_COUNT = 1;
 const TEST_REQUIRED_DISTINCT_NODE_COUNT = 2;
@@ -60,6 +61,32 @@ const TEST_READY_ELIGIBLE_NODE_COUNT = 2;
 const TEST_TIMELINE_LENGTH = 1;
 const TEST_TIMELINE_STEP_COUNT = 1;
 const TEST_EMPTY_LIST = Object.freeze([]);
+const TEST_REPLICA_OPERATIONS_TABLE = 'replica_operations';
+const TEST_SERVICES_TABLE = 'services';
+const TEST_QUERY_REPLICA_OPERATIONS_FRAGMENT = 'FROM replica_operations';
+const TEST_QUERY_SERVICES_FRAGMENT = 'FROM services';
+const TEST_DELIVERY_STATUS_INITIATED = 'initiated';
+const TEST_MIN_REPLICA_COUNT = 3;
+const TEST_STALE_REMOTE_HANDOFF_REWAKE_TEST_NAME =
+  'checkTimeouts re-wakes stale remote-owned priority handoff retries ' +
+  'even while transition grace remains active';
+const TEST_ASSERT_STALE_HANDOFF_ARMS_RETRY =
+  'the stale witness should arm the remote handoff retry lane first';
+const TEST_ASSERT_LONGER_GRACE_REMAINS_ACTIVE =
+  'the longer transition grace should still be active after the handoff ' +
+  'retry is overdue';
+const TEST_ASSERT_STALE_HANDOFF_REWAKES_REMOTE_OWNER =
+  'timeout reconciliation should re-wake the remote owner when the armed ' +
+  'handoff retry is overdue';
+const TEST_ASSERT_STALE_HANDOFF_REWAKE_TARGET =
+  'stale handoff retry reconciliation should use the canonical remote ' +
+  'dispatch ingress';
+const TEST_ASSERT_STALE_HANDOFF_REPLACES_TIMER =
+  'the fresh remote owner wake should replace the stale retry with a new ' +
+  'verification timer';
+const TEST_ASSERT_STALE_HANDOFF_REMAINS_SINGLE_TIMER =
+  'exactly one remote handoff retry timer should remain armed after stale ' +
+  'retry reconciliation';
 
 function buildTransactionCoordinator() {
   return {
@@ -371,6 +398,187 @@ async (t) => {
   );
 
   await coordinator.shutdown();
+});
+
+test(TEST_STALE_REMOTE_HANDOFF_REWAKE_TEST_NAME,
+async (t) => {
+  const deliveries = [];
+  const deferredTimers = [];
+  let nowMs = TEST_CAPTURED_AT_MS;
+  const originalDateNow = Date.now;
+  Date.now = () => nowMs;
+  const pendingTimeoutMs = TEST_STEP_TIMEOUT_MS;
+  const operationRow = {
+    operation_id: TEST_OPERATION_ID,
+    type: TEST_OPERATION_TYPE_REPLACE,
+    partition_id: TEST_PARTITION_ID,
+    replica_id: TEST_REPLICA_ID,
+    source_node_id: TEST_SOURCE_NODE_ID,
+    target_node_id: TEST_TARGET_NODE_ID,
+    status: TEST_STATUS_PENDING,
+    workflow_step: TEST_STEP_PENDING,
+    created_at: nowMs,
+    updated_at: nowMs - pendingTimeoutMs - TEST_TIMEOUT_OVERRUN_MS,
+    completed_at: TEST_EMPTY_VALUE,
+    error_message: TEST_EMPTY_VALUE,
+    steps_history: JSON.stringify([{
+      step: TEST_STEP_PENDING,
+      timestamp: nowMs - pendingTimeoutMs - TEST_STEP_HISTORY_LAG_MS,
+    }]),
+    entity_type: TEST_ENTITY_TYPE_PARTITION,
+    entity_id: TEST_PARTITION_ID,
+  };
+
+  const sqlQueryEngine = {
+    async executeQuery(sql) {
+      const normalizedSql = String(sql);
+      if (normalizedSql.includes(TEST_QUERY_REPLICA_OPERATIONS_FRAGMENT)) {
+        return {
+          success: true,
+          rows: [{...operationRow}],
+          affectedRows: NUM.ONE,
+        };
+      }
+      if (normalizedSql.includes(TEST_QUERY_SERVICES_FRAGMENT)) {
+        return {
+          success: true,
+          rows: [],
+          affectedRows: NUM.ZERO,
+        };
+      }
+      return {
+        success: true,
+        rows: [],
+        affectedRows: NUM.ZERO,
+      };
+    },
+  };
+
+  const coordinator = createCoordinator({
+    nodeId: TEST_SOURCE_NODE_ID,
+    sqlQueryEngine,
+    transactionCoordinator: buildTransactionCoordinator(),
+    systemTableCache: {
+      get(tableName, key) {
+        if (tableName !== TEST_REPLICA_OPERATIONS_TABLE) {
+          return null;
+        }
+        return key === TEST_OPERATION_ID ? operationRow : null;
+      },
+      getAll(tableName) {
+        if (tableName !== TEST_REPLICA_OPERATIONS_TABLE) {
+          return [];
+        }
+        return [operationRow];
+      },
+      filter(tableName, predicate) {
+        if (tableName !== TEST_REPLICA_OPERATIONS_TABLE) {
+          return [];
+        }
+        return [operationRow].filter(predicate);
+      },
+    },
+    cdcIntegrationService: {
+      async waitForCacheUpdate() {},
+    },
+    controlPlaneReadinessService: {
+      getNodeReadinessSync(nodeId) {
+        return {
+          nodeId,
+          dimensions: {
+            controlPlaneRecoveryEligible: true,
+            repairEligible: true,
+            serveEligible: true,
+          },
+        };
+      },
+    },
+    messageRouter: {
+      async deliver(target, payload) {
+        deliveries.push({target, payload});
+        return {acknowledged: true, status: TEST_DELIVERY_STATUS_INITIATED};
+      },
+    },
+    tablePolicyService: {
+      async getPolicyForPartition() {
+        return {minReplicaCount: TEST_MIN_REPLICA_COUNT};
+      },
+    },
+    setTimeoutFn(fn, delayMs) {
+      const handle = {fn, delayMs};
+      deferredTimers.push(handle);
+      return handle;
+    },
+    clearTimeoutFn() {},
+    enableTimeouts: false,
+  });
+
+  try {
+    coordinator.initialize();
+
+    const cachedOperation =
+      coordinator.repository.queryCachedIncompleteOperations()[0];
+    coordinator.workflowOwner.recordTransitionRetryGrace(
+      TEST_OPERATION_ID,
+      {
+        boundary: TEST_COORDINATOR_CREATED_REMOTE_HANDOFF,
+        partitionId: TEST_PARTITION_ID,
+        workflowStep: TEST_STEP_PENDING,
+        updatedAt: operationRow.updated_at,
+        createdAt: operationRow.created_at,
+      },
+      TEST_LONG_REMOTE_HANDOFF_GRACE_MS,
+    );
+    t.equal(
+      coordinator.workflowOwner.deferCoordinatorCreatedRemoteHandoffRetry(
+        cachedOperation,
+        {
+          deferRetry: true,
+          retryAfterMs: TEST_RETRY_AFTER_MS,
+          error: TEST_RETRYABLE_HANDOFF_ERROR,
+        },
+      ),
+      true,
+      TEST_ASSERT_STALE_HANDOFF_ARMS_RETRY,
+    );
+
+    nowMs += TEST_RETRY_AFTER_MS + TEST_TIMEOUT_OVERRUN_MS;
+    t.equal(
+      coordinator.workflowOwner.hasActiveTransitionRetryGrace(
+        TEST_OPERATION_ID,
+        nowMs,
+      ),
+      true,
+      TEST_ASSERT_LONGER_GRACE_REMAINS_ACTIVE,
+    );
+
+    await coordinator.checkTimeouts();
+
+    t.equal(
+      deliveries.length,
+      1,
+      TEST_ASSERT_STALE_HANDOFF_REWAKES_REMOTE_OWNER,
+    );
+    t.equal(
+      deliveries[0]?.target,
+      TEST_REPLICA_DISPATCH_TARGET,
+      TEST_ASSERT_STALE_HANDOFF_REWAKE_TARGET,
+    );
+    t.equal(
+      deferredTimers.length,
+      2,
+      TEST_ASSERT_STALE_HANDOFF_REPLACES_TIMER,
+    );
+    t.equal(
+      coordinator.workflowOwner.createdOperationHandoffRetryTimerByOperationId
+        .size,
+      1,
+      TEST_ASSERT_STALE_HANDOFF_REMAINS_SINGLE_TIMER,
+    );
+  } finally {
+    Date.now = originalDateNow;
+    await coordinator.shutdown();
+  }
 });
 
 test('checkTimeouts re-dispatches restart-discovered locally owned priority ' +

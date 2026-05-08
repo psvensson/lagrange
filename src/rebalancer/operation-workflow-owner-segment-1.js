@@ -139,6 +139,7 @@ class OperationWorkflowOwnerSegment1 {
     this.dispatchRetryTimerByOperationId = new Map();
     this.priorityActiveReplaceRetryTimerByOperationId = new Map();
     this.createdOperationHandoffRetryTimerByOperationId = new Map();
+    this.createdOperationHandoffRetryDeadlineMsByOperationId = new Map();
     this.transitionRetryTimerByOperationId = new Map();
     this.transitionRetryGraceDeadlineByOperationId = new Map();
     this.transitionRetryOperationSnapshotByOperationId = new Map();
@@ -188,6 +189,7 @@ class OperationWorkflowOwnerSegment1 {
       this.clearTimeoutFn(timerHandle);
     }
     this.createdOperationHandoffRetryTimerByOperationId.clear();
+    this.createdOperationHandoffRetryDeadlineMsByOperationId.clear();
     for (const timerHandle of this.transitionRetryTimerByOperationId.values()) {
       this.clearTimeoutFn(timerHandle);
     }
@@ -315,6 +317,35 @@ class OperationWorkflowOwnerSegment1 {
     }
     this.clearTimeoutFn(timerHandle);
     this.createdOperationHandoffRetryTimerByOperationId.delete(operationId);
+    this.createdOperationHandoffRetryDeadlineMsByOperationId.delete(operationId);
+  }
+
+  /**
+   * @param {string|null} operationId
+   * @param {number} [now=Date.now()]
+   * @return {boolean}
+   * @private
+   */
+  hasActiveCreatedOperationHandoffRetry(operationId, now = Date.now()) {
+    if (!operationId) {
+      return false;
+    }
+    if (!this.createdOperationHandoffRetryTimerByOperationId.has(operationId)) {
+      this.createdOperationHandoffRetryDeadlineMsByOperationId.delete(
+        operationId,
+      );
+      return false;
+    }
+    const deadlineMs = Number(
+      this.createdOperationHandoffRetryDeadlineMsByOperationId.get(
+        operationId,
+      ),
+    );
+    if (!Number.isFinite(deadlineMs) || deadlineMs <= now) {
+      this.clearCreatedOperationHandoffRetry(operationId);
+      return false;
+    }
+    return true;
   }
 
   /**
@@ -1323,7 +1354,7 @@ class OperationWorkflowOwnerSegment1 {
     }
 
     const replaceExisting = options.replaceExisting === true;
-    if (this.createdOperationHandoffRetryTimerByOperationId.has(operationId)) {
+    if (this.hasActiveCreatedOperationHandoffRetry(operationId)) {
       if (!replaceExisting) {
         return true;
       }
@@ -1335,6 +1366,9 @@ class OperationWorkflowOwnerSegment1 {
     };
     const timerHandle = this.setTimeoutFn(() => {
       this.createdOperationHandoffRetryTimerByOperationId.delete(operationId);
+      this.createdOperationHandoffRetryDeadlineMsByOperationId.delete(
+        operationId,
+      );
       if (this.isShuttingDown) {
         return;
       }
@@ -1351,6 +1385,10 @@ class OperationWorkflowOwnerSegment1 {
     this.createdOperationHandoffRetryTimerByOperationId.set(
       operationId,
       timerHandle,
+    );
+    this.createdOperationHandoffRetryDeadlineMsByOperationId.set(
+      operationId,
+      Date.now() + delayMs,
     );
     return true;
   }

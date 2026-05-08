@@ -115,7 +115,7 @@ class OperationWorkflowOwnerSegment7Stage2 extends OperationWorkflowOwnerSegment
       if (!this.repository.isOperationLocallyOwned(operation)) {
         if (
           operationId.length > NUM.ZERO &&
-          this.createdOperationHandoffRetryTimerByOperationId.has(operationId)
+          this.hasActiveCreatedOperationHandoffRetry(operationId)
         ) {
           return true;
         }
@@ -125,7 +125,7 @@ class OperationWorkflowOwnerSegment7Stage2 extends OperationWorkflowOwnerSegment
           remoteOwnerWoken === true ||
           (
             operationId.length > NUM.ZERO &&
-            this.createdOperationHandoffRetryTimerByOperationId.has(operationId)
+            this.hasActiveCreatedOperationHandoffRetry(operationId)
           )
         );
       }

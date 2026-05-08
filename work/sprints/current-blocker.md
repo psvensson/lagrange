@@ -8,23 +8,23 @@ Package: `work/packages/active-20260508-rolling-restart-operation-workflow-rebal
 
 Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/rolling-restart-current-release-gate-after-dispatch-skip-retry.report.json`
+Artifact: `test-output/reports/rolling-restart-current-release-gate-after-remote-handoff-retry-stale-fix.report.json`
 
-Playback: `test-output/reports/.playback/rolling-restart-current-release-gate-after-dispatch-skip-retry/rolling-restart/`
+Playback: `test-output/reports/.playback/rolling-restart-current-release-gate-after-remote-handoff-retry-stale-fix/rolling-restart/`
 
 ## Boundary
 
-Owner: `operation_workflow_owner`
+Owner: `rebalancer_leader`
 
-Boundary: `rebalancer_handoff`
+Boundary: `operation_scheduling`
 
-Dominant reason: `priority_recovery_rebalancer_handoff_retry_scheduled`
+Dominant reason: `priority_recovery_operation_scheduling_event_driven`
 
-Current state: The workflow-progress package is closed locally after dispatch-skip retry contracted the timed-out persisted-not-dispatched witness. The latest representative artifact still fails the active gate with active=3/5, snapshotCoverage=3/5, publication=PUBLISHED, pendingAck=0, prioritySpread=pending#gap=5, and priorityRecoveryInvariants=passed. Normalized priority-recovery evidence selects operation_workflow_owner / rebalancer_handoff with dominant reason priority_recovery_rebalancer_handoff_retry_scheduled across sql_transaction_participants-p1 and sql_write_operations-p1.
+Current state: The stale remote-handoff retry fix now clears overdue coordinator-created handoff timers instead of treating them as active progress. The representative rerun no longer selects operation_workflow_owner / rebalancer_handoff as the first frontier. The fresh blocker migrated to rebalancer_leader / operation_scheduling with priority_recovery_operation_scheduling_event_driven across sql_transaction_participants-p1 and sql_write_operations-p1.
 
 ## Next Action
 
-Implement the rebalancer-handoff retry-scheduled successor boundary using the dispatch-skip-retry artifact, then rerun focused owner tests and rolling-restart.
+Close this rebalancer-handoff package after review and commit, then open the operation-scheduling successor package from the remote-handoff stale-fix artifact.
 
 ## Proof Ladder
 
@@ -36,19 +36,26 @@ Implement the rebalancer-handoff retry-scheduled successor boundary using the di
 6. `node test/rebalancer/priority-follow-up-target-readiness.test.js`
 7. `node test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js`
 8. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-current-release-gate-after-rebalancer-handoff-target-readiness.report.json --fast-local --verbose`
+9. `npm run work:package:evidence-block -- test-output/reports/rolling-restart-current-release-gate-after-remote-handoff-retry-stale-fix.report.json`
+10. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-remote-handoff-retry-stale-fix.report.json --explain priority_recovery_partition_progress`
+11. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-current-release-gate-after-remote-handoff-retry-stale-fix.report.json --fast-local --verbose`
 
 ## Touched Files
 
 1. `src/rebalancer/unified-rebalancer-segment-4-stage-3.js`
 2. `src/rebalancer/operation-workflow-owner-segment-1.js`
-3. `src/rebalancer/operation-workflow-owner-segment-4.js`
-4. `src/rebalancer/operation-workflow-owner-segment-7-stage-1.js`
-5. `test/rebalancer/priority-follow-up-target-readiness.test.js`
-6. `test/rebalancer/operation-workflow-observed-progress-lane-held.test.js`
-7. `work/packages/active-20260508-rolling-restart-operation-workflow-progress-persisted-not-dispatched.md`
-8. `work/packages/active-20260508-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md`
-9. `work/packages/done-20260508-rolling-restart-operation-workflow-progress-persisted-not-dispatched.md`
-10. `work/packages/todo-20260508-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md`
-11. `work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md`
-12. `work/sprints/current-blocker.json`
-13. `work/sprints/current-blocker.md`
+3. `src/rebalancer/operation-workflow-owner-segment-2.js`
+4. `src/rebalancer/operation-workflow-owner-segment-4.js`
+5. `src/rebalancer/operation-workflow-owner-segment-7-stage-1.js`
+6. `src/rebalancer/operation-workflow-owner-segment-7-stage-2.js`
+7. `src/rebalancer/operation-workflow-owner-segment-7-stage-4.js`
+8. `test/rebalancer/priority-follow-up-target-readiness.test.js`
+9. `test/rebalancer/operation-workflow-observed-progress-lane-held.test.js`
+10. `test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
+11. `work/packages/active-20260508-rolling-restart-operation-workflow-progress-persisted-not-dispatched.md`
+12. `work/packages/active-20260508-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md`
+13. `work/packages/done-20260508-rolling-restart-operation-workflow-progress-persisted-not-dispatched.md`
+14. `work/packages/todo-20260508-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md`
+15. `work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md`
+16. `work/sprints/current-blocker.json`
+17. `work/sprints/current-blocker.md`

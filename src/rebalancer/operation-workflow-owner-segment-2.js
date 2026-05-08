@@ -139,7 +139,7 @@ class OperationWorkflowOwnerSegment2 extends OperationWorkflowOwnerSegment1 {
     ) {
       return false;
     }
-    if (this.createdOperationHandoffRetryTimerByOperationId.has(operationId)) {
+    if (this.hasActiveCreatedOperationHandoffRetry(operationId)) {
       return true;
     }
 
