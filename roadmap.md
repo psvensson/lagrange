@@ -55,12 +55,13 @@ be completed.
 Phase 0.1 is capability-complete in several areas, but not exit-complete.
 Representative gate status is the current source of truth for closure.
 
-Open exit blockers as of April 29, 2026:
+Open exit blockers as of May 8, 2026:
 
 | Exit area | Capability Exists | Representative Gate Green | Current blocker |
 |-----------|-------------------|---------------------------|-----------------|
-| Rolling restart under load | ✅ | 🔧 | `rolling-restart` remains the active representative gate in `work/sprints/active-2026-q2-publication-scoped-consistency-and-node-join-closure.md` |
-| Priority recovery progress under load | ✅ | 🔧 | Publication and restart-recovery gates are closed again; the current representative blocker is the quiescence stable-window timeout in `work/packages/active-20260429-control-plane-quiescence-stable-window-after-publication-closure.md` |
+| Core topology control-plane rewrite | ✅ | 🔧 | Current representative track is `work/sprints/active-2026-q2-core-topology-control-plane-rewrite.md`, with active package `work/packages/active-20260508-core-topology-rewrite-spec-and-roadmap-rebaseline.md` and architecture spec `.kiro/specs/core-topology-control-plane-rewrite/` |
+| Rolling restart under load | ✅ | 🔧 | Gate remains open, but the rolling-restart residuals are archived as predecessor evidence behind the core topology control-plane rewrite track |
+| Priority recovery progress under load | ✅ | 🔧 | Priority-recovery progress remains evidence for the operation-owner successor packages instead of a separate active representative track |
 | Metadata gateway and owner-ingress audit | ✅ | ✅ | `npm run test:metadata-gateway:audit` passed on April 26, 2026 |
 | Decision-boundary guardrail | ✅ | ✅ | `npm run audit:guideline:decision-boundaries` passed on April 26, 2026 |
 | Literal-owner guardrail | ✅ | ✅ | `npm run audit:guideline:literals` passed on April 27, 2026 with 0 new and 0 inherited violations; the inherited baseline is retired at 0 entries |
@@ -134,14 +135,14 @@ deterministic recovery/timeout handling.
 | Distributed test harness | ✅ | ✅ | Harness exists and remains the proof surface |
 | Node failure tests | ✅ | ✅ | No active blocker contradicts this row |
 | Network partition tests | ✅ | ✅ | No active blocker contradicts this row |
-| Rolling restart tests | ✅ | 🔧 | Current representative gate is still failing under load |
+| Rolling restart tests | ✅ | 🔧 | Representative proof is carried by the active core topology control-plane rewrite track |
 | Node join under load | ✅ | ✅ | Historical representative proof exists |
 | Seed restart under load | ✅ | ✅ | No active blocker contradicts this row |
-| Sustained throughput tests | ✅ | 🔧 | Load-pressure behavior is still implicated by `rolling-restart` |
+| Sustained throughput tests | ✅ | 🔧 | Confirmation waits behind the active core topology control-plane rewrite track |
 | Write visibility tests | ✅ | ✅ | No active blocker contradicts this row |
 | WASM service failover | ✅ | ✅ | No active blocker contradicts this row |
 | Partition kill/heal | ✅ | ✅ | No active blocker contradicts this row |
-| 7-node stress scenarios | ✅ | 🔧 | Matrix re-entry waits on the current `rolling-restart` gate |
+| 7-node stress scenarios | ✅ | 🔧 | Matrix re-entry waits on the active core topology control-plane rewrite track |
 | Postgres baseline comparison | ✅ | ✅ | No active blocker contradicts this row |
 | Invariant engine | ✅ | ✅ | Existing proof surface remains valid |
 | Disk full simulation | ✅ | ✅ | No active blocker contradicts this row |
@@ -153,9 +154,9 @@ deterministic recovery/timeout handling.
 The system survives node failure, replica movement, rebalancing, and
 transaction retries without manual intervention.
 
-Exit remains open until the representative gate rows above are green or each
-remaining failure is moved into a narrower active blocker package with an
-explicit owner boundary and static drift ledger.
+Exit remains open until the core topology control-plane rewrite proves the
+representative gates or moves each remaining failure into a narrower active
+blocker package with an explicit owner boundary and static drift ledger.
 
 ---
 
