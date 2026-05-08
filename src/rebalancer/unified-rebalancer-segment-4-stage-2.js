@@ -100,10 +100,11 @@ class UnifiedRebalancerSegment4Stage2 extends UnifiedRebalancerSegment4Stage1 {
       this.isPriorityRecoveryFollowUpOperationRequired(
         reconstructedDecisionSnapshot,
       );
-    if (planningOperationRequired && !reconstructedOperationRequired) {
-      return reconstructedDecisionSnapshot;
-    }
-    return planningDecisionSnapshot;
+    const operationRequirementMatches =
+      planningOperationRequired === reconstructedOperationRequired;
+    return operationRequirementMatches ?
+      planningDecisionSnapshot :
+      reconstructedDecisionSnapshot;
   }
 
   buildPriorityRecoveryClosureWitnessFollowUpSpreadGapByPartitionId(

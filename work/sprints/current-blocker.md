@@ -4,13 +4,13 @@
 
 Sprint: `work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md`
 
-Package: `work/packages/active-20260508-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md`
+Package: `work/packages/active-20260508-rolling-restart-operation-scheduling-sql-transaction-participants-needs-operation-reentry.md`
 
 Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/rolling-restart-current-release-gate-after-remote-handoff-retry-stale-fix.report.json`
+Artifact: `test-output/reports/rolling-restart-current-release-gate-after-operation-scheduling-sql-transaction-participants-fix.report.json`
 
-Playback: `test-output/reports/.playback/rolling-restart-current-release-gate-after-remote-handoff-retry-stale-fix/rolling-restart/`
+Playback: `test-output/reports/.playback/rolling-restart-current-release-gate-after-operation-scheduling-sql-transaction-participants-fix/rolling-restart/`
 
 ## Boundary
 
@@ -20,42 +20,31 @@ Boundary: `operation_scheduling`
 
 Dominant reason: `priority_recovery_operation_scheduling_event_driven`
 
-Current state: The stale remote-handoff retry fix now clears overdue coordinator-created handoff timers instead of treating them as active progress. The representative rerun no longer selects operation_workflow_owner / rebalancer_handoff as the first frontier. The fresh blocker migrated to rebalancer_leader / operation_scheduling with priority_recovery_operation_scheduling_event_driven across sql_transaction_participants-p1 and sql_write_operations-p1.
+Current state: The focused owner regression now proves the sql_transaction_participants-p1 stale serial-wait planning snapshot is reconstructed into current needs_operation recovery work. The representative rerun moved the dominant witness to sql_transactions-p1 but stayed on rebalancer_leader / operation_scheduling with semanticStateId needs_operation, nextRequiredAction create_recovery_operation, actuationState action_required, waitMode event_driven, operationIds empty, and eligibleNodeIds 11601fe0-72d6-5853-8590-ec2881853e72 and 7493b0ab-a054-5fad-a91b-5e331db29304. Supporting blocked partitions are control_plane_publications-p1 under recovering_in_flight / persisted_not_dispatched and sql_write_operations-p1 under recovering_in_flight / dispatched_waiting_progress.
 
 ## Next Action
 
-Close this rebalancer-handoff package after review and commit, then open the operation-scheduling successor package from the remote-handoff stale-fix artifact.
+Continue this package on the same rebalancer_leader / operation_scheduling boundary by tracing why the remaining sql_transactions-p1 needs_operation event-driven create_recovery_operation path is not re-entered after the prior priority follow-up work progresses.
 
 ## Proof Ladder
 
-1. `npm run work:package:evidence-block -- test-output/reports/rolling-restart-current-release-gate-after-dispatch-skip-retry.report.json`
-2. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-dispatch-skip-retry.report.json --explain priority_recovery_partition_progress`
-3. `node scripts/check-runtime-grammar-contracts.js src/rebalancer/unified-rebalancer-segment-4-stage-3.js`
-4. `node scripts/check-guideline-decision-boundaries.js src/rebalancer/unified-rebalancer-segment-4-stage-3.js test/rebalancer/priority-follow-up-target-readiness.test.js`
-5. `node scripts/check-guideline-literals.js src/rebalancer/unified-rebalancer-segment-4-stage-3.js test/rebalancer/priority-follow-up-target-readiness.test.js`
-6. `node test/rebalancer/priority-follow-up-target-readiness.test.js`
-7. `node test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js`
-8. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-current-release-gate-after-rebalancer-handoff-target-readiness.report.json --fast-local --verbose`
-9. `npm run work:package:evidence-block -- test-output/reports/rolling-restart-current-release-gate-after-remote-handoff-retry-stale-fix.report.json`
-10. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-remote-handoff-retry-stale-fix.report.json --explain priority_recovery_partition_progress`
-11. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-current-release-gate-after-remote-handoff-retry-stale-fix.report.json --fast-local --verbose`
+1. `npm run work:package:evidence-block -- test-output/reports/rolling-restart-current-release-gate-after-remote-handoff-retry-stale-fix.report.json`
+2. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-remote-handoff-retry-stale-fix.report.json --explain priority_recovery_partition_progress`
+3. `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-current-release-gate-after-remote-handoff-retry-stale-fix.report.json`
+4. `Focused owner-decision regression for sql_transaction_participants-p1 create_recovery_operation scheduling`
+5. `Touched-file literal, decision-boundary, runtime-grammar, syntax, and diff hygiene guardrails`
+6. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-current-release-gate-after-operation-scheduling-sql-transaction-participants-fix.report.json --fast-local --verbose`
+7. `npm run work:package:evidence-block -- test-output/reports/rolling-restart-current-release-gate-after-operation-scheduling-sql-transaction-participants-fix.report.json`
+8. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-operation-scheduling-sql-transaction-participants-fix.report.json --explain priority_recovery_partition_progress`
+9. `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-current-release-gate-after-operation-scheduling-sql-transaction-participants-fix.report.json`
 
 ## Touched Files
 
-1. `src/rebalancer/unified-rebalancer-segment-4-stage-3.js`
-2. `src/rebalancer/operation-workflow-owner-segment-1.js`
-3. `src/rebalancer/operation-workflow-owner-segment-2.js`
-4. `src/rebalancer/operation-workflow-owner-segment-4.js`
-5. `src/rebalancer/operation-workflow-owner-segment-7-stage-1.js`
-6. `src/rebalancer/operation-workflow-owner-segment-7-stage-2.js`
-7. `src/rebalancer/operation-workflow-owner-segment-7-stage-4.js`
-8. `test/rebalancer/priority-follow-up-target-readiness.test.js`
-9. `test/rebalancer/operation-workflow-observed-progress-lane-held.test.js`
-10. `test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
-11. `work/packages/active-20260508-rolling-restart-operation-workflow-progress-persisted-not-dispatched.md`
-12. `work/packages/active-20260508-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md`
-13. `work/packages/done-20260508-rolling-restart-operation-workflow-progress-persisted-not-dispatched.md`
-14. `work/packages/todo-20260508-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md`
-15. `work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md`
-16. `work/sprints/current-blocker.json`
-17. `work/sprints/current-blocker.md`
+1. `src/rebalancer/unified-rebalancer-segment-4-stage-2.js`
+2. `src/rebalancer/unified-rebalancer-segment-4-stage-3.js`
+3. `src/rebalancer/unified-rebalancer-segment-4-stage-shared.js`
+4. `test/rebalancer/unified-rebalancer-part-5-2-stage-2.js`
+5. `work/packages/active-20260508-rolling-restart-operation-scheduling-sql-transaction-participants-needs-operation-reentry.md`
+6. `work/packages/done-20260508-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md`
+7. `work/sprints/current-blocker.json`
+8. `work/sprints/current-blocker.md`

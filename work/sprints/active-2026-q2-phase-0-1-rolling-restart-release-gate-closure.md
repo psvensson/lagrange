@@ -31,13 +31,13 @@ The matching playback is:
 
 Active package:
 
-1. [Rolling Restart Operation Workflow Rebalancer Handoff Retry Scheduled](../packages/active-20260508-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md)
+1. [Rolling Restart Operation Scheduling Sql Transaction Participants Needs Operation Reentry](../packages/active-20260508-rolling-restart-operation-scheduling-sql-transaction-participants-needs-operation-reentry.md)
 
 Latest representative evidence:
 
 1. Scenario: `rolling-restart`
 2. Report total/passed/failed: `1/0/1`
-3. Duration: approximately `133215ms`
+3. Duration: approximately `131504ms`
 4. Active gate: failed because only `3/5` nodes reached ACTIVE before
    `120000ms`
 5. Snapshot coverage: `3/5`
@@ -47,15 +47,18 @@ Latest representative evidence:
 9. Priority recovery invariants: `passed`
 
 The normalized first frontier is
-`operation_workflow_owner / rebalancer_handoff` with dominant reason
-`priority_recovery_rebalancer_handoff_retry_scheduled`. Startup replay
+`rebalancer_leader / operation_scheduling` with dominant reason
+`priority_recovery_operation_scheduling_event_driven`. Startup replay
 contracted the first `PENDING` / `persisted_not_dispatched` blocker,
 the target-creation observed-progress fix contracted the `CREATING` /
-`dispatched_waiting_progress` blocker, and dispatch-skip retry contracted the
-timed-out `sql_transactions-p1` persisted-not-dispatched witness. The fresh
-blocked partitions are `sql_transaction_participants-p1` and
-`sql_write_operations-p1`, with unresolved semantic states
-`needs_operation,recovering_in_flight`.
+`dispatched_waiting_progress` blocker, dispatch-skip retry contracted the
+timed-out `sql_transactions-p1` persisted-not-dispatched witness, and the stale
+remote-handoff retry plus participant scheduling fixes removed the
+`operation_workflow_owner / rebalancer_handoff` and
+`sql_transaction_participants-p1` selected witnesses. The fresh dominant
+partition is `sql_transactions-p1`; supporting blocked partitions are
+`control_plane_publications-p1` and `sql_write_operations-p1`, with unresolved
+semantic states `needs_operation,recovering_in_flight`.
 
 `startup_active_gate_owner / snapshot_coverage` remains downstream until the
 priority operation workflow progresses or migrates.
@@ -74,8 +77,8 @@ Edition matrix status: Community / AGPL repo.
 
 1. Keep `rolling-restart` as the primary representative release gate until it
    passes or migrates to a new named owner boundary.
-2. The operation-workflow workflow-progress package is locally closed; execute
-   the active rebalancer-handoff retry-scheduled successor boundary next.
+2. The operation-workflow and rebalancer-handoff packages are locally closed;
+   execute the active operation-scheduling successor boundary next.
 3. Preserve the completed core topology control-plane rewrite as predecessor
    proof, not as the current owner.
 4. Keep sustained throughput and 7-node stress confirmation behind the

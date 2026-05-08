@@ -41,7 +41,7 @@
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md"
   ],
-  "predecessor": "work/packages/active-20260508-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md",
+  "predecessor": "work/packages/done-20260508-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md",
   "closed": "2026-05-08",
   "commitAndPushLedgerRequired": true
 }
@@ -264,7 +264,7 @@ adopts that scope.
 
 - [x] Review subagent recorded:
       Agent Zeno (`019e096b-42c5-7be2-8ebd-2642758b6d83`) reviewed
-      `work/packages/active-20260508-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md`;
+      `work/packages/done-20260508-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md`;
       result `clean`.
 - [x] Fix subagent recorded or explicitly not needed: `not-needed`.
 - [x] Implementation subagent recorded:
@@ -422,7 +422,7 @@ Validation progress:
     remains red with `143` reported test-fixture literal violations in the
     predecessor rebalancer fixture files; the new startup replay test remains
     clean.
-20. `git diff --check -- src/control-plane/replica-dispatch-service-segment-1.js test/control-plane/replica-dispatch-startup-operation-replay.test.js src/rebalancer/operation-workflow-owner-segment-1.js src/rebalancer/operation-workflow-owner-segment-4.js src/rebalancer/operation-workflow-owner-segment-7-stage-1.js src/rebalancer/unified-rebalancer-segment-4-stage-3.js test/rebalancer/operation-workflow-observed-progress-lane-held.test.js test/rebalancer/priority-follow-up-target-readiness.test.js test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js work/packages/done-20260508-rolling-restart-operation-workflow-progress-persisted-not-dispatched.md work/packages/active-20260508-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md work/packages/todo-20260508-rolling-restart-operation-workflow-progress-transition-deferred.md work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md work/sprints/current-blocker.json work/sprints/current-blocker.md`
+20. `git diff --check -- src/control-plane/replica-dispatch-service-segment-1.js test/control-plane/replica-dispatch-startup-operation-replay.test.js src/rebalancer/operation-workflow-owner-segment-1.js src/rebalancer/operation-workflow-owner-segment-4.js src/rebalancer/operation-workflow-owner-segment-7-stage-1.js src/rebalancer/unified-rebalancer-segment-4-stage-3.js test/rebalancer/operation-workflow-observed-progress-lane-held.test.js test/rebalancer/priority-follow-up-target-readiness.test.js test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js work/packages/done-20260508-rolling-restart-operation-workflow-progress-persisted-not-dispatched.md work/packages/done-20260508-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md work/packages/todo-20260508-rolling-restart-operation-workflow-progress-transition-deferred.md work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md work/sprints/current-blocker.json work/sprints/current-blocker.md`
     passed.
 21. `node test/control-plane/replica-dispatch-node-state-update.test-part-2.js`
     passed with `41` assertions.

@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-08",
   "scenario": "rolling-restart",
   "artifact": "test-output/reports/rolling-restart-current-release-gate-after-remote-handoff-retry-stale-fix.report.json",
@@ -12,7 +12,7 @@
   "boundary": "operation_scheduling",
   "dominantReason": "priority_recovery_operation_scheduling_event_driven",
   "currentState": "The stale remote-handoff retry fix now clears overdue coordinator-created handoff timers instead of treating them as active progress. The representative rerun no longer selects operation_workflow_owner / rebalancer_handoff as the first frontier. The fresh blocker migrated to rebalancer_leader / operation_scheduling with priority_recovery_operation_scheduling_event_driven across sql_transaction_participants-p1 and sql_write_operations-p1.",
-  "nextAction": "Close this rebalancer-handoff package after review and commit, then open the operation-scheduling successor package from the remote-handoff stale-fix artifact.",
+  "nextAction": "Commit and push already happened; record review/fix proof, close this rebalancer-handoff package, and open the operation-scheduling successor package from the remote-handoff stale-fix artifact.",
   "proof": [
     "npm run work:package:evidence-block -- test-output/reports/rolling-restart-current-release-gate-after-dispatch-skip-retry.report.json",
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-dispatch-skip-retry.report.json --explain priority_recovery_partition_progress",
@@ -38,14 +38,17 @@
     "test/rebalancer/operation-workflow-observed-progress-lane-held.test.js",
     "test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js",
     "work/packages/active-20260508-rolling-restart-operation-workflow-progress-persisted-not-dispatched.md",
-    "work/packages/active-20260508-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md",
+    "work/packages/done-20260508-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md",
     "work/packages/done-20260508-rolling-restart-operation-workflow-progress-persisted-not-dispatched.md",
     "work/packages/todo-20260508-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md",
     "work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md",
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md"
   ],
-  "predecessor": "work/packages/done-20260508-rolling-restart-operation-workflow-progress-persisted-not-dispatched.md"
+  "predecessor": "work/packages/done-20260508-rolling-restart-operation-workflow-progress-persisted-not-dispatched.md",
+  "closed": "2026-05-08",
+  "commitAndPushLedgerRequired": true,
+  "successor": "work/packages/active-20260508-rolling-restart-operation-scheduling-sql-transaction-participants-needs-operation-reentry.md"
 }
 -->
 
@@ -148,17 +151,17 @@ explicitly adopts that scope.
       `work/packages/todo-20260508-rolling-restart-operation-workflow-progress-transition-deferred.md`.
 - [x] Implementation subagent recorded:
       Agent Hooke (`019e0947-8ec0-76f2-b14c-8fb2d826b166`) implemented
-      `work/packages/active-20260508-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md`.
+      `work/packages/done-20260508-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md`.
 - [x] Follow-up review finding recorded:
       Agent Beauvoir (`019e0953-f39c-70a0-9630-5f8f739f0d2e`) reviewed
-      `work/packages/active-20260508-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md`;
+      `work/packages/done-20260508-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md`;
       result `fixes-required`.
 - [x] Follow-up fix subagent recorded:
       Agent Dalton (`019e0958-51e1-7c23-a9f4-0e3c18676356`) fixed
-      `work/packages/active-20260508-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md`.
+      `work/packages/done-20260508-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md`.
 - [x] Follow-up implementation subagent recorded:
       Agent Curie (`019e095d-88d1-7e13-a155-7fd65170821e`) implemented
-      `work/packages/active-20260508-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md`.
+      `work/packages/done-20260508-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md`.
 - [x] Activation review finding recorded:
       Agent Lovelace (`019e09c3-505c-7303-9002-f5f2f8d17d5b`) reviewed
       `work/packages/done-20260508-rolling-restart-operation-workflow-progress-persisted-not-dispatched.md`;
@@ -168,7 +171,7 @@ explicitly adopts that scope.
       `work/packages/done-20260508-rolling-restart-operation-workflow-progress-persisted-not-dispatched.md`.
 - [x] Stale remote-handoff implementation subagent recorded:
       Agent Wegener (`019e09cf-b0fc-71e3-88d7-d6c49fc6759a`) implemented
-      `work/packages/active-20260508-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md`.
+      `work/packages/done-20260508-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md`.
 
 ## Static Drift Ledger
 
@@ -192,8 +195,14 @@ Closure:
       passes or is explicitly superseded by a narrower affected test.
 - [x] Representative `rolling-restart --fast-local` rerun passes or migrates
       to one named owner boundary.
-- [ ] Package-owned changes are committed as one focused slice.
-- [ ] The focused package slice is pushed before the next package starts.
+- [x] Package-owned changes are committed as one focused slice.
+- [x] The focused package slice is pushed before the next package starts.
+
+## Commit And Push Ledger
+
+1. Focused package commit: `1ecf5e48`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
 
 ## Failure Migration / Contraction
 
@@ -252,7 +261,7 @@ Implementation subagent validation notes:
 6. `node scripts/check-guideline-literals.js src/rebalancer/unified-rebalancer-segment-4-stage-3.js test/rebalancer/priority-follow-up-target-readiness.test.js`
    passed with `0` new literal-guideline violations and `0` inherited
    baseline violations.
-7. `git diff --check -- src/rebalancer/unified-rebalancer-segment-4-stage-3.js test/rebalancer/priority-follow-up-target-readiness.test.js work/packages/active-20260508-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md`
+7. `git diff --check -- src/rebalancer/unified-rebalancer-segment-4-stage-3.js test/rebalancer/priority-follow-up-target-readiness.test.js work/packages/done-20260508-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md`
    passed.
 
 Fix subagent follow-up validation notes:
@@ -341,9 +350,12 @@ Stale remote-handoff implementation subagent validation notes:
 11. `node scripts/check-guideline-decision-boundaries.js ...` passed with
     `0` decision-boundary guideline violations for the touched runtime/test
     files.
-12. `node scripts/check-guideline-literals.js ...` passed with `0` new
-    literal-guideline violations and `0` inherited baseline violations for the
-    touched runtime/test files.
+12. Runtime-scoped literal guard:
+    `node scripts/check-guideline-literals.js ...` passed with `0` new
+    literal-guideline violations for the touched runtime/test diff surface.
+    The broader test-file audit with `--include-tests` is tracked separately
+    below because the touched test file still has inherited file-wide fixture
+    literal debt.
 13. `npm run work:current-blocker` passed and regenerated
     `work/sprints/current-blocker.json` / `work/sprints/current-blocker.md`
     with the package touched-file additions.
@@ -363,12 +375,13 @@ Stale remote-handoff implementation subagent validation notes:
     dominant reason `priority_recovery_operation_scheduling_event_driven`.
 18. `npm run work:package:evidence-block -- test-output/reports/rolling-restart-current-release-gate-after-remote-handoff-retry-stale-fix.report.json`
     generated the same migrated owner evidence block.
-19. `git diff --check -- src/rebalancer/operation-workflow-owner-segment-1.js src/rebalancer/operation-workflow-owner-segment-2.js src/rebalancer/operation-workflow-owner-segment-7-stage-2.js src/rebalancer/operation-workflow-owner-segment-7-stage-4.js test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js work/packages/active-20260508-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md work/sprints/current-blocker.json work/sprints/current-blocker.md`
+19. `git diff --check -- src/rebalancer/operation-workflow-owner-segment-1.js src/rebalancer/operation-workflow-owner-segment-2.js src/rebalancer/operation-workflow-owner-segment-7-stage-2.js src/rebalancer/operation-workflow-owner-segment-7-stage-4.js test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js work/packages/done-20260508-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md work/sprints/current-blocker.json work/sprints/current-blocker.md`
     passed.
 20. `node scripts/check-guideline-literals.js --include-tests test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
-    remains red with `76` existing test-fixture literal violations in the
-    touched file. The stale remote-handoff regression added in this package
-    uses named constants for its new string and numeric evidence.
+    remains red with `76` inherited file-wide test-fixture literal violations
+    in the touched file. The stale remote-handoff regression added in this
+    package uses named constants for its new string and numeric evidence and
+    did not add new literal debt.
 21. Parent rerun of
     `node test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
     passed with `45/45` assertions after normalizing the new regression
