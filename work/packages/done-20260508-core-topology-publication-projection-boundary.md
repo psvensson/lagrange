@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-08",
   "scenario": "core-topology-control-plane-rewrite",
   "artifact": "none",
@@ -19,7 +19,7 @@
     "git diff --check"
   ],
   "touchedFiles": [
-    "work/packages/active-20260508-core-topology-publication-projection-boundary.md",
+    "work/packages/done-20260508-core-topology-publication-projection-boundary.md",
     "src/control-plane/recovery-protocol-snapshot.js",
     "src/control-plane/control-plane-readiness-service-segment-4-stage-2.js",
     "src/control-plane/control-plane-publication-story.js",
@@ -28,7 +28,9 @@
     "test/control-plane/control-plane-readiness-service.test-part-2.js",
     "work/model-ledger.jsonl"
   ],
-  "predecessor": "work/packages/done-20260508-core-topology-partitioning-rebalancing-kernel.md"
+  "predecessor": "work/packages/done-20260508-core-topology-partitioning-rebalancing-kernel.md",
+  "closed": "2026-05-08",
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -91,7 +93,13 @@ guardrails, work validation, and the successor readiness proof ladder.
 - [x] Fix subagent recorded or explicitly not needed: `not-needed`.
 - [x] Implementation subagent recorded: Agent Rawls
       (`019e08ce-72e4-7322-88a2-c4c6e05f67c6`) implemented
-      `work/packages/active-20260508-core-topology-publication-projection-boundary.md`.
+      `work/packages/done-20260508-core-topology-publication-projection-boundary.md`.
+
+## Commit And Push Ledger
+
+- Focused package commit: `88115c7a`
+- Pushed to: `origin/codex/pending-ack-eligibility-filter`
+- Commit contains only package-owned files/package-status/allowed sprint handoff: `yes`
 
 ## Static Drift Ledger
 

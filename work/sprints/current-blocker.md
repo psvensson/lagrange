@@ -4,7 +4,7 @@
 
 Sprint: `work/sprints/active-2026-q2-core-topology-control-plane-rewrite.md`
 
-Package: `work/packages/active-20260508-core-topology-publication-projection-boundary.md`
+Package: `work/packages/active-20260508-core-topology-projection-readiness-contract.md`
 
 Scenario: `core-topology-control-plane-rewrite`
 
@@ -16,15 +16,15 @@ Playback: `none`
 
 Owner: `topology_control_plane`
 
-Boundary: `publication_projection_boundary`
+Boundary: `projection_readiness_contract`
 
-Dominant reason: `publication_stream_required_before_projection_readiness_consumer_cutover`
+Dominant reason: `projection_readiness_consumers_need_one_publication_derived_contract`
 
-Current state: Placement and operation owner contracts are closed. Publication rows, ACK/freshness state, and recovery gate state still need one canonical publication stream before projection/readiness consumers can stop recombining raw owner evidence.
+Current state: Publication boundary outcomes are committed and pushed. Projection/readiness consumers still need one canonical contract so diagnostics, admin, harness, and runtime readers stop recombining raw topology owner evidence.
 
 ## Next Action
 
-Run the required review/fix/implementation subagent sequence, then implement the publication/projection owner boundary.
+Run the required review/fix/implementation subagent sequence, then cut the first projection/readiness consumers to the canonical publication-derived contract.
 
 ## Proof Ladder
 
@@ -34,7 +34,7 @@ Run the required review/fix/implementation subagent sequence, then implement the
 
 ## Touched Files
 
-1. `work/packages/active-20260508-core-topology-publication-projection-boundary.md`
+1. `work/packages/active-20260508-core-topology-projection-readiness-contract.md`
 2. `work/sprints/active-2026-q2-core-topology-control-plane-rewrite.md`
 3. `work/sprints/current-blocker.json`
 4. `work/sprints/current-blocker.md`

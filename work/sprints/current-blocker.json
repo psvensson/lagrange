@@ -2,26 +2,26 @@
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
   "sprint": "work/sprints/active-2026-q2-core-topology-control-plane-rewrite.md",
-  "package": "work/packages/active-20260508-core-topology-publication-projection-boundary.md",
+  "package": "work/packages/active-20260508-core-topology-projection-readiness-contract.md",
   "status": "active",
   "scenario": "core-topology-control-plane-rewrite",
   "artifact": "none",
   "playback": "none",
   "owner": "topology_control_plane",
-  "boundary": "publication_projection_boundary",
-  "dominantReason": "publication_stream_required_before_projection_readiness_consumer_cutover",
-  "currentState": "Placement and operation owner contracts are closed. Publication rows, ACK/freshness state, and recovery gate state still need one canonical publication stream before projection/readiness consumers can stop recombining raw owner evidence.",
-  "nextAction": "Run the required review/fix/implementation subagent sequence, then implement the publication/projection owner boundary.",
+  "boundary": "projection_readiness_contract",
+  "dominantReason": "projection_readiness_consumers_need_one_publication_derived_contract",
+  "currentState": "Publication boundary outcomes are committed and pushed. Projection/readiness consumers still need one canonical contract so diagnostics, admin, harness, and runtime readers stop recombining raw topology owner evidence.",
+  "nextAction": "Run the required review/fix/implementation subagent sequence, then cut the first projection/readiness consumers to the canonical publication-derived contract.",
   "proof": [
     "npm run work:context",
     "npm run work:validate",
     "git diff --check"
   ],
   "touchedFiles": [
-    "work/packages/active-20260508-core-topology-publication-projection-boundary.md",
+    "work/packages/active-20260508-core-topology-projection-readiness-contract.md",
     "work/sprints/active-2026-q2-core-topology-control-plane-rewrite.md",
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md"
   ],
-  "predecessor": "work/packages/done-20260508-core-topology-partitioning-rebalancing-kernel.md"
+  "predecessor": "work/packages/done-20260508-core-topology-publication-projection-boundary.md"
 }
