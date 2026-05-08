@@ -346,12 +346,32 @@ class MessageGroupServiceHandler extends EventEmitter {
         status: ReplicaStatus.FAILED,
       });
 
+      const failedOutcomeOptions = {replicaId, errorMessage: error.message};
+      const errorCode =
+        typeof error?.errorCode === TYPEOF.STRING ?
+          error.errorCode :
+          typeof error?.code === TYPEOF.STRING ?
+            error.code :
+            '';
+      if (errorCode.length > NUM.ZERO) {
+        failedOutcomeOptions.errorCode = errorCode;
+      }
+      if (
+        Number.isFinite(error?.retryAfterMs) &&
+        error.retryAfterMs > NUM.ZERO
+      ) {
+        failedOutcomeOptions.retryAfterMs = Math.floor(error.retryAfterMs);
+      }
+      if (error?.deferRetry === true) {
+        failedOutcomeOptions.deferRetry = true;
+      }
+
       // Emit failed outcome — coordinator will transition workflow.
       this.emitExecutorOutcome(
         EXECUTOR_OUTCOME_TYPE.MESSAGE_GROUP_CREATE_FAILED,
         operationId,
         WORKFLOW_STEP.FAILED,
-        {replicaId, errorMessage: error.message},
+        failedOutcomeOptions,
       );
 
       this.logger.error(

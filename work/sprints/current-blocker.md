@@ -2,77 +2,49 @@
 
 # Current Blocker
 
-Sprint: `work/sprints/active-2026-q2-phase-0-1-representative-gate-closure.md`
+Sprint: `work/sprints/active-2026-q2-core-topology-control-plane-rewrite.md`
 
-Package: `work/packages/active-20260508-rolling-restart-topology-publication-convergence-ack-pending-missing-published-reentry.md`
+Package: `work/packages/active-20260508-core-topology-rewrite-spec-and-roadmap-rebaseline.md`
 
-Scenario: `rolling-restart`
+Scenario: `core-topology-control-plane-rewrite`
 
-Artifact: `test-output/reports/rolling-restart-tracked-summary-selection-20260508T151500Z.report.json`
+Artifact: `none`
 
-Playback: `test-output/reports/.playback/rolling-restart-tracked-summary-selection-20260508T151500Z/rolling-restart/`
+Playback: `none`
 
 ## Boundary
 
-Owner: `Priority recovery workflow progress after tracked summary selection`
+Owner: `topology_control_plane`
 
-Boundary: `operation_workflow_owner / workflow_progress / transition_deferred`
+Boundary: `spec_and_roadmap_rebaseline`
 
-Dominant reason: `priority_recovery_workflow_progress_transition_deferred`
+Dominant reason: `phase_0_1_representative_track_rebaseline`
 
-Current state: Tracked summary selection keeps operation-bearing spread progress canonical over later synthetic planning rows for the same partition, removing the rebalancer_leader / operation_scheduling frontier. The representative rerun now fails first on operation_workflow_owner / workflow_progress with dominant reason priority_recovery_workflow_progress_transition_deferred. Publication remains PUBLISHED, pendingAckCount=0, priorityRecoveryInvariants=passed, blocked partitions are sql_transaction_participants-p1, sql_transactions-p1, and sql_write_operations-p1, and active-gate snapshot coverage remains the next expected downstream frontier.
+Current state: The Core Topology Control-Plane Rewrite sprint is being established as the active Phase 0.1 representative track. This package performs setup only: archive stale root work items, create the idea, sprint, package queue, architecture spec, roadmap rebaseline, and current-blocker handoff without runtime/source-code changes.
 
 ## Next Action
 
-Start the next implementation slice for operation_workflow_owner / workflow_progress / transition_deferred. The dispatch-pending snapshot normalization reclassifies stale dispatch_pending timeout evidence to workflow_progress, and the remote handoff uninitialized-wake regression proves the remote owner is wakeable while the source owner is transiently uninitialized.
+Validate the setup package, keep it active until a focused commit and push records closure proof, then start the owner-boundary inventory successor.
 
 ## Proof Ladder
 
-1. `First-package-in-sprint review-not-needed validation and work-context coverage`
-2. `Focused epoch-4 ACK_PENDING publication-convergence witness with supporting selected-snapshot and priority-recovery context`
-3. `Focused publication-convergence regression or classification proof for pendingAckCount=1 and missingPublishedCount=2`
-4. `Touched-file static guardrails`
-5. `Representative rolling-restart --fast-local rerun`
-6. `Failure-report and topology-convergence analysis`
+1. `npm run work:validate`
+2. `npm run work:context`
+3. `git diff --check -- work/ideas work/packages work/sprints .kiro/specs/core-topology-control-plane-rewrite roadmap.md`
 
 ## Touched Files
 
-1. `AGENTS.md`
-2. `roadmap.md`
-3. `scripts/work-context.js`
-4. `scripts/work-tracker.js`
-5. `test/scripts/work-context.test.js`
-6. `test/scripts/work-tracker-subagent-ledger.test.js`
-7. `work/README.md`
-8. `work/templates/work-package-template.md`
-9. `work/packages/active-20260507-work-model-ledger-and-steering-policy.md`
-10. `work/packages/active-20260508-rolling-restart-topology-publication-convergence-ack-pending-missing-published-reentry.md`
-11. `work/packages/todo-20260507-work-model-ledger-and-steering-policy.md`
-12. `work/packages/todo-20260508-rolling-restart-topology-publication-convergence-ack-pending-missing-published-reentry.md`
-13. `work/packages/done-20260508-priority-recovery-operation-workflow-contract-rewrite.md`
-14. `work/sprints/active-2026-q2-phase-0-1-representative-gate-closure.md`
-15. `work/sprints/archived/done-2026-q2-publication-scoped-consistency-and-node-join-closure.md`
-16. `work/sprints/current-blocker.json`
-17. `work/sprints/current-blocker.md`
-18. `test/distributed/harness/failure-bundle-segment-4.js`
-19. `test/distributed/harness/__tests__/failure-bundle-core-16-test-cases.js`
-20. `src/control-plane/priority-recovery-snapshot-stage-10.js`
-21. `src/control-plane/priority-recovery-snapshot-stage-3.js`
-22. `src/control-plane/priority-recovery-snapshot-stage-4.js`
-23. `src/diagnostics/topology-convergence-graph.js`
-24. `scripts/analyze-topology-convergence.js`
-25. `src/node/replica-handler-class-part-1.js`
-26. `test/node/replica-handler.test.js`
-27. `src/rebalancer/operation-workflow-owner-segment-1.js`
-28. `src/rebalancer/operation-workflow-owner-segment-2.js`
-29. `test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
-30. `src/rebalancer/operation-workflow-owner-segment-4.js`
-31. `src/rebalancer/unified-rebalancer-segment-2.js`
-32. `src/rebalancer/unified-rebalancer-segment-4-stage-1.js`
-33. `src/rebalancer/unified-rebalancer-segment-4-stage-3.js`
-34. `src/rebalancer/unified-rebalancer-segment-4-stage-shared.js`
-35. `test/rebalancer/unified-rebalancer-part-5-2-stage-4.js`
-36. `test/rebalancer/priority-recovery-stale-planning-visibility.test.js`
-37. `test/rebalancer/rebalance-coordinator-outcome-routing.test.js`
-38. `work/model-ledger.jsonl`
-39. `test/control-plane/priority-recovery-tracked-summary-selection.test.js`
+1. `work/ideas/idea-20260508-core-topology-rewrite.md`
+2. `work/sprints/active-2026-q2-core-topology-control-plane-rewrite.md`
+3. `work/sprints/current-blocker.json`
+4. `work/sprints/current-blocker.md`
+5. `work/packages/active-20260508-core-topology-rewrite-spec-and-roadmap-rebaseline.md`
+6. `work/packages/todo-20260508-core-topology-owner-boundary-inventory.md`
+7. `work/packages/todo-20260508-core-topology-boot-join-rejoin-kernel.md`
+8. `work/packages/todo-20260508-core-topology-partitioning-rebalancing-kernel.md`
+9. `work/packages/todo-20260508-core-topology-projection-readiness-contract.md`
+10. `work/packages/todo-20260508-core-topology-legacy-path-deletion-and-proof.md`
+11. `.kiro/specs/core-topology-control-plane-rewrite/requirements.md`
+12. `.kiro/specs/core-topology-control-plane-rewrite/design.md`
+13. `.kiro/specs/core-topology-control-plane-rewrite/tasks.md`
+14. `roadmap.md`

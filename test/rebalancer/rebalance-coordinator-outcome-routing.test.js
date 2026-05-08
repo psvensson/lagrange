@@ -56,6 +56,12 @@ const TEST_RETRYABLE_CREATE_FAILURE_MESSAGE =
   'Operational message-group ingress not ready for replica_operations ' +
   'CDC subscription';
 const TEST_RETRYABLE_CREATE_FAILURE_RETRY_AFTER_MS = 5000;
+const TEST_MG_RETRYABLE_PARTITION_ID = TEST_CRITICAL_CREATE_FAILURE_PARTITION_ID;
+const TEST_MG_RETRYABLE_REPLICA_ID = 'replica_operations-p1-r2';
+const TEST_MG_RETRYABLE_CREATE_FAILURE_MESSAGE =
+  'Operational message-group ingress not ready for replica_operations ' +
+  'CDC subscription';
+const TEST_MG_RETRYABLE_CREATE_FAILURE_RETRY_AFTER_MS = 5000;
 
 /**
  * Build a minimal operation record for testing.
@@ -700,6 +706,81 @@ test('Executor outcome routing through owner-key reconcile path',
             WORKFLOW_STEP.ACTIVE,
           );
           await completedEventPromise;
+        } finally {
+          await coordinator.shutdown();
+        }
+      },
+    );
+
+    await t.test(
+      'MESSAGE_GROUP_CREATE_FAILED preserves retryable ingress failures ' +
+      'in the owner retry lane',
+      async (t) => {
+        const operation = buildTestOperation({
+          partitionId: TEST_MG_RETRYABLE_PARTITION_ID,
+          entityId: TEST_MG_RETRYABLE_PARTITION_ID,
+          entityType: 'message_group',
+          replicaId: TEST_MG_RETRYABLE_REPLICA_ID,
+          status: ReplicaStatus.CREATING,
+          workflowStep: WORKFLOW_STEP.CREATING,
+        });
+        const {coordinator, emitter} =
+          createTestCoordinator({operation});
+        let failedEventCount = 0;
+        coordinator.on(
+          REBALANCE_COORDINATOR_EVENT.OPERATION_FAILED,
+          () => {
+            failedEventCount += 1;
+          },
+        );
+
+        try {
+          emitter.emitOutcome(
+            EXECUTOR_OUTCOME_TYPE.MESSAGE_GROUP_CREATE_FAILED,
+            TEST_OPERATION_ID,
+            WORKFLOW_STEP.FAILED,
+            {
+              errorMessage: TEST_MG_RETRYABLE_CREATE_FAILURE_MESSAGE,
+              retryAfterMs: TEST_MG_RETRYABLE_CREATE_FAILURE_RETRY_AFTER_MS,
+              deferRetry: true,
+            },
+          );
+
+          await new Promise((resolve) => setImmediate(resolve));
+          await new Promise((resolve) => setImmediate(resolve));
+
+          t.equal(
+            failedEventCount,
+            0,
+            'retryable message-group ingress failure must not fail terminally',
+          );
+          t.equal(
+            operation.workflowStep,
+            WORKFLOW_STEP.CREATING,
+            'retryable message-group failure should keep the create-rearm step',
+          );
+          t.equal(
+            operation.status,
+            ReplicaStatus.CREATING,
+            'retryable message-group failure should preserve the in-flight status',
+          );
+          t.equal(
+            operation.completedAt,
+            null,
+            'retryable message-group failure should not mark the operation complete',
+          );
+          t.equal(
+            operation.errorMessage,
+            null,
+            'retryable message-group failure should not persist a terminal error',
+          );
+          t.equal(
+            coordinator.workflowOwner.hasActiveTransitionRetryGrace(
+              TEST_OPERATION_ID,
+            ),
+            true,
+            'retryable message-group failure should arm transition retry grace',
+          );
         } finally {
           await coordinator.shutdown();
         }

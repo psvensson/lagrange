@@ -3,16 +3,16 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-08",
   "scenario": "rolling-restart",
-  "artifact": "test-output/reports/rolling-restart-tracked-summary-selection-20260508T151500Z.report.json",
-  "playback": "test-output/reports/.playback/rolling-restart-tracked-summary-selection-20260508T151500Z/rolling-restart/",
-  "owner": "Priority recovery workflow progress after tracked summary selection",
-  "boundary": "operation_workflow_owner / workflow_progress / transition_deferred",
-  "dominantReason": "priority_recovery_workflow_progress_transition_deferred",
-  "currentState": "Tracked summary selection keeps operation-bearing spread progress canonical over later synthetic planning rows for the same partition, removing the rebalancer_leader / operation_scheduling frontier. The representative rerun now fails first on operation_workflow_owner / workflow_progress with dominant reason priority_recovery_workflow_progress_transition_deferred. Publication remains PUBLISHED, pendingAckCount=0, priorityRecoveryInvariants=passed, blocked partitions are sql_transaction_participants-p1, sql_transactions-p1, and sql_write_operations-p1, and active-gate snapshot coverage remains the next expected downstream frontier.",
-  "nextAction": "Start the next implementation slice for operation_workflow_owner / workflow_progress / transition_deferred. The dispatch-pending snapshot normalization reclassifies stale dispatch_pending timeout evidence to workflow_progress, and the remote handoff uninitialized-wake regression proves the remote owner is wakeable while the source owner is transiently uninitialized.",
+  "artifact": "test-output/reports/rolling-restart-message-group-retry-metadata-20260508T173100Z.report.json",
+  "playback": "test-output/reports/.playback/rolling-restart-message-group-retry-metadata-20260508T173100Z/rolling-restart/",
+  "owner": "Priority recovery workflow timeout after message-group retry metadata preservation",
+  "boundary": "operation_workflow_owner / workflow_timeout / transition_deferred",
+  "dominantReason": "priority_recovery_workflow_timeout_transition_deferred",
+  "currentState": "Message-group retry metadata preservation on MESSAGE_GROUP_CREATE_FAILED kept retryable target-side create failures in the owner retry lane. The representative rerun at 173100Z moved the first frontier to rebalancer_leader / operation_scheduling with dominant reason priority_recovery_operation_scheduling_event_driven; blocked partitions are replica_operations-p1, sql_transaction_participants-p1, and sql_transactions-p1. The operation_workflow_owner / workflow_timeout / transition_deferred slice is closed.",
+  "nextAction": "Successor package work/packages/active-20260508-rolling-restart-topology-priority-recovery-operation-scheduling-post-timeout-reentry.md picks up at rebalancer_leader / operation_scheduling / event_driven.",
   "proof": [
     "First-package-in-sprint review-not-needed validation and work-context coverage",
     "Focused epoch-4 ACK_PENDING publication-convergence witness with supporting selected-snapshot and priority-recovery context",
@@ -60,9 +60,12 @@
     "test/rebalancer/priority-recovery-stale-planning-visibility.test.js",
     "test/rebalancer/rebalance-coordinator-outcome-routing.test.js",
     "work/model-ledger.jsonl",
-    "test/control-plane/priority-recovery-tracked-summary-selection.test.js"
+    "test/control-plane/priority-recovery-tracked-summary-selection.test.js",
+    "src/node/message-group-service-handler.js",
+    "test/node/message-group-service-handler.test.js"
   ],
-  "predecessor": "work/packages/done-20260508-priority-recovery-operation-workflow-contract-rewrite.md"
+  "predecessor": "work/packages/done-20260508-priority-recovery-operation-workflow-contract-rewrite.md",
+  "successor": "work/packages/active-20260508-rolling-restart-topology-priority-recovery-operation-scheduling-post-timeout-reentry.md"
 }
 -->
 
@@ -83,6 +86,14 @@ rows, and the representative frontier has moved back to
 `operation_workflow_owner / workflow_progress`. The implementation slice
 records the real implementation subagent required by the package tracker. The
 dispatch handoff slice and commit/push ledger have been committed and pushed.
+
+The final slice preserved `errorCode`/`retryAfterMs`/`deferRetry` on
+`MESSAGE_GROUP_CREATE_FAILED`, clearing the
+`operation_workflow_owner / workflow_timeout / transition_deferred` boundary.
+The representative rerun at 173100Z moved the first frontier to
+`rebalancer_leader / operation_scheduling`. This package is closed.
+Successor:
+[Rolling Restart Priority Recovery Operation Scheduling Post Timeout Reentry](./active-20260508-rolling-restart-topology-priority-recovery-operation-scheduling-post-timeout-reentry.md)
 
 ## Why
 
@@ -197,6 +208,12 @@ the next runtime implementation slice.
       result clean with tracked summary selection slice and remote handoff
       uninitialized-wake slice committed and pushed, sprint blocker snapshot
       aligned to tracked-summary-selection frontier.
+- [x] Message-group-retry-metadata closure implementation subagent recorded:
+      Agent Timeout Slice Impl (timeout-slice-impl) implemented work/packages/active-20260508-rolling-restart-topology-publication-convergence-ack-pending-missing-published-reentry.md;
+      result clean with message-group retry metadata preservation on
+      `MESSAGE_GROUP_CREATE_FAILED`, focused handler/coordinator regression
+      proof, package closure as done, and successor handoff at
+      work/packages/active-20260508-rolling-restart-topology-priority-recovery-operation-scheduling-post-timeout-reentry.md.
 
 ## Residual Closure Inventory
 
@@ -434,3 +451,21 @@ Closure:
     evidence that `sql_transaction_participants-p1` failed create on
     operational message-group ingress readiness while adjacent priority
     operations remain in target create/CDC progress.
+23. Message-group retry metadata preservation fix:
+    `src/node/message-group-service-handler.js` now preserves
+    `errorCode`, `retryAfterMs`, and `deferRetry` on
+    `MESSAGE_GROUP_CREATE_FAILED` so retryable target-side create failures
+    remain in the owner retry lane rather than being dropped.
+    Focused regressions added in
+    `test/node/message-group-service-handler.test.js` and
+    `test/rebalancer/rebalance-coordinator-outcome-routing.test.js`
+    cover retryable `MESSAGE_GROUP_CREATE_FAILED` cases.
+    Representative rerun
+    `test-output/reports/rolling-restart-message-group-retry-metadata-20260508T173100Z.report.json`
+    clears the `operation_workflow_owner / workflow_timeout` frontier.
+    The first frontier moves to `rebalancer_leader / operation_scheduling`
+    with dominant reason `priority_recovery_operation_scheduling_event_driven`;
+    blocked partitions are `replica_operations-p1`,
+    `sql_transaction_participants-p1`, and `sql_transactions-p1`.
+    The timeout boundary is closed; the successor package takes over at
+    `rebalancer_leader / operation_scheduling`.

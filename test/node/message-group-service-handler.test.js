@@ -119,6 +119,9 @@ function createHandler(overrides = {}) {
     cdcIntegrationService: cdc,
     createMessageGroupReplica: async (options) => {
       calls.push({method: 'create', options});
+      if (overrides.createErrorObj) {
+        throw overrides.createErrorObj;
+      }
       if (overrides.createError) {
         throw new Error(overrides.createError);
       }
@@ -389,6 +392,116 @@ describe('MessageGroupServiceHandler', () => {
         'services row publication should fail closed until the replica handler is routable',
       );
       assert.equal(cdc.updates.length, 0);
+    });
+
+  it('forwards retryable create-failure metadata on MESSAGE_GROUP_CREATE_FAILED',
+    async () => {
+      const emittedOutcomes = [];
+      const retryableError = new Error('Operational message-group ingress not ready');
+      retryableError.errorCode = 'INGRESS_NOT_READY';
+      retryableError.retryAfterMs = 5000;
+      retryableError.deferRetry = true;
+
+      const {handler} = createHandler({
+        createErrorObj: retryableError,
+        messageRouter: {
+          isRegistered() {
+            return true;
+          },
+        },
+        executorOutcomeEmitter: {
+          emitOutcome(outcomeType, operationId, workflowStep, options) {
+            emittedOutcomes.push({
+              outcomeType,
+              operationId,
+              workflowStep,
+              options,
+            });
+          },
+        },
+      });
+
+      await handler.handleCreateReplica({
+        [ReplicaOperationField.OPERATION_ID]: 'op-retryable-fail',
+        [ReplicaOperationField.ENTITY_ID]: 'mg-1',
+        [ReplicaOperationField.REPLICA_ID]: 'mg-1-r4',
+      });
+
+      await flushImmediate();
+      await flushImmediate();
+
+      assert.equal(emittedOutcomes.length, 1);
+      const outcome = emittedOutcomes[0];
+      assert.equal(
+        outcome.outcomeType,
+        EXECUTOR_OUTCOME_TYPE.MESSAGE_GROUP_CREATE_FAILED,
+      );
+      assert.equal(
+        outcome.options.errorCode,
+        'INGRESS_NOT_READY',
+        'errorCode must be forwarded for retryable ingress failures',
+      );
+      assert.equal(
+        outcome.options.retryAfterMs,
+        5000,
+        'retryAfterMs must be forwarded so the owner retry lane can rearm',
+      );
+      assert.equal(
+        outcome.options.deferRetry,
+        true,
+        'deferRetry must be forwarded to arm transition retry grace',
+      );
+    });
+
+  it('omits retryable fields when create error has none',
+    async () => {
+      const emittedOutcomes = [];
+      const plainError = new Error('unexpected create failure');
+
+      const {handler} = createHandler({
+        createErrorObj: plainError,
+        messageRouter: {
+          isRegistered() {
+            return true;
+          },
+        },
+        executorOutcomeEmitter: {
+          emitOutcome(outcomeType, operationId, workflowStep, options) {
+            emittedOutcomes.push({outcomeType, options});
+          },
+        },
+      });
+
+      await handler.handleCreateReplica({
+        [ReplicaOperationField.OPERATION_ID]: 'op-plain-fail',
+        [ReplicaOperationField.ENTITY_ID]: 'mg-1',
+        [ReplicaOperationField.REPLICA_ID]: 'mg-1-r4',
+      });
+
+      await flushImmediate();
+      await flushImmediate();
+
+      assert.equal(emittedOutcomes.length, 1);
+      const outcome = emittedOutcomes[0];
+      assert.equal(
+        outcome.outcomeType,
+        EXECUTOR_OUTCOME_TYPE.MESSAGE_GROUP_CREATE_FAILED,
+      );
+      assert.equal(
+        outcome.options.retryAfterMs,
+        undefined,
+        'retryAfterMs must not be set for non-retryable failures',
+      );
+      assert.equal(
+        outcome.options.deferRetry,
+        undefined,
+        'deferRetry must not be set for non-retryable failures',
+      );
+      assert.equal(
+        outcome.options.errorCode,
+        undefined,
+        'errorCode must not be set when error carries no code',
+      );
     });
 
   it('removes an existing local message-group replica discovered via resolver',
