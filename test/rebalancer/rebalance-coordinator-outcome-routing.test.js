@@ -903,3 +903,83 @@ async (t) => {
     await coordinator.shutdown();
   }
 });
+
+test('in-progress remove dispatch does not reconcile active target as ' +
+  'create progress',
+async (t) => {
+  const deliveries = [];
+  let completedEventCount = 0;
+  const operation = buildTestOperation({
+    type: OperationType.REMOVE,
+    partitionId: TEST_PRIORITY_RECOVERY_PARTITION_ID,
+    entityId: TEST_PRIORITY_RECOVERY_PARTITION_ID,
+    replicaId: TEST_PRIORITY_RECOVERY_REPLICA_ID,
+    sourceNodeId: TEST_NODE_ID,
+    targetNodeId: TEST_PRIORITY_RECOVERY_TARGET_NODE_ID,
+    workflowStep: WORKFLOW_STEP.STOPPING,
+    status: ReplicaStatus.REMOVING,
+    stepsHistory: [
+      {
+        step: WORKFLOW_STEP.STOPPING,
+        timestamp: Date.now(),
+      },
+    ],
+  });
+  const {coordinator} = createTestCoordinator({operation});
+  coordinator.messageRouter = {
+    async deliver(target, payload, options) {
+      deliveries.push({target, payload, options});
+      return {
+        acknowledged: true,
+        status: ReplicaOperationResponseStatus.IN_PROGRESS,
+      };
+    },
+  };
+  coordinator.workflowOwner.messageRouter = coordinator.messageRouter;
+  coordinator.workflowOwner.evaluateRemoveSafety = async () => ({});
+  coordinator.workflowOwner.repository.getObservedReplicaStatusFromCache =
+    () => ReplicaStatus.ACTIVE;
+  coordinator.on(
+    REBALANCE_COORDINATOR_EVENT.OPERATION_COMPLETED,
+    () => {
+      completedEventCount += 1;
+    },
+  );
+
+  try {
+    await coordinator.workflowOwner.executeOperationInternal(operation);
+
+    t.equal(
+      deliveries.length,
+      1,
+      'remove rearm should issue one dispatch request',
+    );
+    t.equal(
+      deliveries[0]?.payload?.type,
+      ReplicaOperationMessageType.REMOVE_REPLICA,
+      'remove rearm should keep the remove-phase message type',
+    );
+    t.equal(
+      operation.workflowStep,
+      WORKFLOW_STEP.STOPPING,
+      'in-progress remove dispatch should remain parked in STOPPING',
+    );
+    t.equal(
+      operation.status,
+      ReplicaStatus.REMOVING,
+      'observed active target should not complete a remove operation',
+    );
+    t.equal(
+      operation.completedAt,
+      null,
+      'in-progress remove dispatch should not mark completion',
+    );
+    t.equal(
+      completedEventCount,
+      0,
+      'in-progress remove dispatch should not emit completion',
+    );
+  } finally {
+    await coordinator.shutdown();
+  }
+});

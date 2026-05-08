@@ -986,7 +986,10 @@ class OperationWorkflowOwnerSegment4 extends OperationWorkflowOwnerSegment3 {
     ) {
       if (
         response.status === ReplicaOperationResponseStatus.IN_PROGRESS &&
-        await this.reconcileCreateInProgressDispatchResponse(operation)
+        await this.reconcileCreateInProgressDispatchResponse(
+          operation,
+          replaceRemovePhase,
+        )
       ) {
         return this.buildSuccessfulOperationResult(operation.operationId, {
           status: OPERATION_WORKFLOW_OWNER_LITERAL.IN_PROGRESS,
@@ -1259,7 +1262,19 @@ class OperationWorkflowOwnerSegment4 extends OperationWorkflowOwnerSegment3 {
     );
   }
 
-  async reconcileCreateInProgressDispatchResponse(operation) {
+  async reconcileCreateInProgressDispatchResponse(
+    operation,
+    replaceRemovePhase = false,
+  ) {
+    if (
+      operation?.type !== OperationType.ADD &&
+      (
+        operation?.type !== OperationType.REPLACE ||
+        replaceRemovePhase === true
+      )
+    ) {
+      return false;
+    }
     if (
       typeof this.getObservedOperationRowTargetProgressStatus !==
         TYPEOF.FUNCTION ||

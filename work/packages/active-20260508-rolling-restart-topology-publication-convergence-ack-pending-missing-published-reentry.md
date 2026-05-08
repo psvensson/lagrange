@@ -130,15 +130,15 @@ Canonical contract shape:
 
 ## Subagent Sequencing Ledger
 
-User instruction on May 8, 2026 explicitly waived the review step for this
-first work package. `scripts/work-tracker.js` still requires real review/fix
-proof for strict validation, so package closure remains blocked on policy/tool
-alignment even though the local implementation slice is complete.
+User instruction on May 8, 2026 explicitly waived the initial predecessor
+review step for this first work package. After the first focused implementation
+slice was committed, the normal continuation review/fix sequence resumed before
+the next runtime implementation slice.
 
 - [x] Review subagent recorded:
-      `not-needed` (`first-package-in-sprint`).
+      Agent Hume (019e074b-b93a-7be0-ae00-996b33ca7ffb) reviewed work/packages/active-20260508-rolling-restart-topology-publication-convergence-ack-pending-missing-published-reentry.md; result fixes-required.
 - [x] Fix subagent recorded or explicitly not needed:
-      `not-needed`.
+      Agent Bacon (019e074f-ebb1-72b1-b8fd-876e1a69287c) fixed work/packages/active-20260508-rolling-restart-topology-publication-convergence-ack-pending-missing-published-reentry.md.
 - [x] Implementation subagent recorded:
       Agent Sagan (019e0739-6888-7a73-b578-e50a695954b6) implemented work/packages/active-20260508-rolling-restart-topology-publication-convergence-ack-pending-missing-published-reentry.md;
       result clean with owner-side `IN_PROGRESS` dispatch progress
