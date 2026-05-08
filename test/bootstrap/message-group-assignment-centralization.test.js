@@ -16,6 +16,10 @@ import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {
   BOOTSTRAP_ASSIGNMENT_STRATEGY,
 } from '../../src/bootstrap/bootstrap-constants.js';
+import {STARTUP_JOIN_MODE} from '../../src/bootstrap/rejoin-hints-constants.js';
+import {
+  buildMembershipOwnerOutcome,
+} from '../../src/control-plane/membership-lifecycle-controller.js';
 
 /**
  * Initialize test singletons.
@@ -239,6 +243,70 @@ test('BootstrapAPI excludes non-seed MOVE_REPLICA sources during bootstrap',
     t.notOk(
       result.peerAddresses,
       'create-self-hosted fallback should not reuse arbitrary existing group peer addresses',
+    );
+  },
+);
+
+test('BootstrapAPI assignment consumes restart reentry owner outcome',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const api = new BootstrapAPI({
+      seedNodeId: 'seed-node-1',
+      seedNodeAddress: 'ws://localhost:8080',
+      systemTableCache: createMockCacheWithServices([
+        {
+          service_id: 'mg-existing-r1',
+          service_type: SERVICE_TYPE.MESSAGE_GROUP,
+          node_id: 'new-node-1',
+          group_id: 'mg-existing',
+          replica_id: 'mg-existing-r1',
+          address: 'new-node-1/message-group/mg-existing-r1',
+          raft_role: RAFT_ROLE.FOLLOWER,
+          status: SERVICE_STATUS.ACTIVE,
+        },
+        {
+          service_id: 'mg-existing-r2',
+          service_type: SERVICE_TYPE.MESSAGE_GROUP,
+          node_id: 'seed-node-1',
+          group_id: 'mg-existing',
+          replica_id: 'mg-existing-r2',
+          address: 'seed-node-1/message-group/mg-existing-r2',
+          raft_role: RAFT_ROLE.FOLLOWER,
+          status: SERVICE_STATUS.ACTIVE,
+        },
+        {
+          service_id: 'mg-existing-r3',
+          service_type: SERVICE_TYPE.MESSAGE_GROUP,
+          node_id: 'node-3',
+          group_id: 'mg-existing',
+          replica_id: 'mg-existing-r3',
+          address: 'node-3/message-group/mg-existing-r3',
+          raft_role: RAFT_ROLE.FOLLOWER,
+          status: SERVICE_STATUS.ACTIVE,
+        },
+      ]),
+    });
+
+    const assignment = api.determineMessageGroupAssignment(
+      'new-node-1',
+      {
+        startupMode: STARTUP_JOIN_MODE.FRESH_JOIN,
+        membershipOwnerOutcome: buildMembershipOwnerOutcome({
+          startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
+        }),
+      },
+    );
+
+    t.match(
+      assignment,
+      {
+        strategy: BOOTSTRAP_ASSIGNMENT_STRATEGY.CREATE_SELF_HOSTED,
+        groupId: 'mg-existing',
+        reuseExistingGroup: true,
+        startupReplicaIds: ['mg-existing-r1'],
+      },
+      'restart reentry outcome should reuse existing membership despite fresh startup mode',
     );
   },
 );

@@ -910,6 +910,20 @@ class RebalanceCoordinatorSegment5 extends RebalanceCoordinatorSegment4 {
     const cachedOperationCount = Array.isArray(cachedIncompleteOperations) ?
       cachedIncompleteOperations.length :
       NUM.ZERO;
+    const cachedAddBudgetCandidateCount = (
+      Array.isArray(cachedIncompleteOperations) ?
+        cachedIncompleteOperations :
+        []
+    ).filter((operation) =>
+      this.isConcurrentAddBudgetOperation(operation),
+    ).length;
+    if (
+      cachedAddBudgetCandidateCount >= concurrentAddLimit &&
+      options?.concurrentBudgetReadMode !==
+        REBALANCER_CONCURRENT_BUDGET_READ_MODE.OWNER_RPC_RECHECK_ON_SATURATION
+    ) {
+      return false;
+    }
     const cachedCount = (
       await this.filterConcurrentAddBudgetOperations(
         cachedIncompleteOperations,

@@ -21,6 +21,7 @@ const MEMBERSHIP_OWNER_REASON = Object.freeze({
   EXPLICIT_SEED: 'explicit_seed',
   FRESH_SEED: 'fresh_seed',
   IDENTITY_MISMATCH: 'identity_mismatch',
+  INVALID_STARTUP_MODE: 'invalid_startup_mode',
   JOIN_PROBED_PEER: 'join_probed_peer',
   JOIN_RECOVERED_PEER: 'join_recovered_peer',
   PEER_REQUIRED_BUT_MISSING: 'peer_required_but_missing',

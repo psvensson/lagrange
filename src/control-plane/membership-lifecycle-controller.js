@@ -24,16 +24,24 @@ const MEMBERSHIP_OWNER_STARTUP_MODE_OUTCOME_RULES = Object.freeze([
   Object.freeze({
     startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
     outcomeType: MEMBERSHIP_OWNER_OUTCOME_TYPE.RESTART_REENTRY,
+    reasonCode: MEMBERSHIP_OWNER_REASON.STARTUP_MODE_COMPAT,
   }),
   Object.freeze({
     startupMode: STARTUP_JOIN_MODE.SEED,
     outcomeType: MEMBERSHIP_OWNER_OUTCOME_TYPE.BOOTSTRAP_SEED,
+    reasonCode: MEMBERSHIP_OWNER_REASON.STARTUP_MODE_COMPAT,
   }),
   Object.freeze({
     startupMode: STARTUP_JOIN_MODE.FRESH_JOIN,
     outcomeType: MEMBERSHIP_OWNER_OUTCOME_TYPE.JOIN_ADMISSION,
+    reasonCode: MEMBERSHIP_OWNER_REASON.STARTUP_MODE_COMPAT,
   }),
 ]);
+const MEMBERSHIP_OWNER_INVALID_STARTUP_MODE_RULE = Object.freeze({
+  startupMode: STARTUP_JOIN_MODE.FRESH_JOIN,
+  outcomeType: MEMBERSHIP_OWNER_OUTCOME_TYPE.BLOCKED_STARTUP,
+  reasonCode: MEMBERSHIP_OWNER_REASON.INVALID_STARTUP_MODE,
+});
 
 export const MEMBERSHIP_LIFECYCLE_INTENT = Object.freeze({
   JOIN_ADMISSION: LOCAL_STR_JOIN_ADMISSION,
@@ -64,11 +72,11 @@ function normalizeMembershipOwnerOutcomeType(value) {
     LOCAL_STR_EMPTY;
 }
 
-function resolveMembershipOwnerOutcomeTypeForStartupMode(startupMode) {
+function resolveMembershipOwnerStartupModeRule(startupMode) {
   const normalizedStartupMode = normalizeJoinStartupMode(startupMode);
   return MEMBERSHIP_OWNER_STARTUP_MODE_OUTCOME_RULES.find((rule) =>
     rule.startupMode === normalizedStartupMode,
-  ).outcomeType;
+  ) || MEMBERSHIP_OWNER_INVALID_STARTUP_MODE_RULE;
 }
 
 export function isBootJoinRejoinMembershipOwnerOutcome(value) {
@@ -90,21 +98,21 @@ export function buildMembershipOwnerOutcome(options = {}) {
   ) ?
     normalizedOptions.membershipOwnerOutcome :
     {};
-  const startupMode = normalizeJoinStartupMode(
+  const startupModeRule = resolveMembershipOwnerStartupModeRule(
     suppliedOutcome.startupMode || normalizedOptions.startupMode,
   );
   const outcomeType =
     normalizeMembershipOwnerOutcomeType(suppliedOutcome.outcomeType) ||
-    resolveMembershipOwnerOutcomeTypeForStartupMode(startupMode);
+    startupModeRule.outcomeType;
 
   return {
     semanticOwner: TOPOLOGY_MEMBERSHIP_OWNER_CONTRACT.SEMANTIC_OWNER,
     boundary: TOPOLOGY_MEMBERSHIP_OWNER_CONTRACT.BOUNDARY,
     outcomeType,
-    startupMode,
+    startupMode: startupModeRule.startupMode,
     reasonCode: normalizeString(
       suppliedOutcome.reasonCode || normalizedOptions.reasonCode,
-      MEMBERSHIP_OWNER_REASON.STARTUP_MODE_COMPAT,
+      startupModeRule.reasonCode,
     ),
     evidenceSource: normalizeString(
       suppliedOutcome.evidenceSource ||

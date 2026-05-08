@@ -23,8 +23,7 @@ import {
   BOOTSTRAP_API_LOG_MSG,
 } from '../bootstrap-api-constants.js';
 import {
-  MEMBERSHIP_LIFECYCLE_INTENT,
-  resolveMembershipJoinIntentType,
+  isMembershipOwnerRestartReentryOutcome,
 } from '../../control-plane/membership-lifecycle-controller.js';
 
 const LOCAL_STR_WZ28M = 'All service leaders ready';
@@ -326,8 +325,10 @@ class ServiceLeaderReadinessOwner {
   }
 
   resolveRequiredLeaderTables(options = {}) {
-    return resolveMembershipJoinIntentType(options.startupMode) ===
-      MEMBERSHIP_LIFECYCLE_INTENT.RESTART_REENTRY ?
+    return isMembershipOwnerRestartReentryOutcome({
+      membershipOwnerOutcome: options.membershipOwnerOutcome,
+      startupMode: options.startupMode,
+    }) ?
       DURABLE_REJOIN_REQUIRED_LEADER_TABLES :
       BOOTSTRAP_REQUIRED_LEADER_TABLES;
   }

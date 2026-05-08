@@ -1,6 +1,7 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {
   MEMBERSHIP_OWNER_OUTCOME_TYPE,
+  MEMBERSHIP_OWNER_REASON,
   STARTUP_JOIN_MODE,
   TOPOLOGY_MEMBERSHIP_OWNER_CONTRACT,
 } from '../../src/bootstrap/rejoin-hints-constants.js';
@@ -21,6 +22,8 @@ import {
   isNodeRuntimeParticipationBlocked,
 } from '../../src/control-plane/membership-lifecycle-constants.js';
 
+const TEST_INVALID_STARTUP_MODE = 'bogus';
+
 test('MembershipLifecycleController resolves join and durable rejoin intent types canonically', async (t) => {
   t.equal(
     resolveMembershipJoinIntentType(STARTUP_JOIN_MODE.FRESH_JOIN),
@@ -33,6 +36,28 @@ test('MembershipLifecycleController resolves join and durable rejoin intent type
   t.equal(
     resolveMembershipOwnerOutcomeType(STARTUP_JOIN_MODE.DURABLE_REJOIN),
     MEMBERSHIP_OWNER_OUTCOME_TYPE.RESTART_REENTRY,
+  );
+});
+
+test('MembershipLifecycleController fails closed on invalid startup mode', async (t) => {
+  const outcome = buildMembershipOwnerOutcome({
+    startupMode: TEST_INVALID_STARTUP_MODE,
+  });
+
+  t.match(outcome, {
+    semanticOwner: TOPOLOGY_MEMBERSHIP_OWNER_CONTRACT.SEMANTIC_OWNER,
+    boundary: TOPOLOGY_MEMBERSHIP_OWNER_CONTRACT.BOUNDARY,
+    outcomeType: MEMBERSHIP_OWNER_OUTCOME_TYPE.BLOCKED_STARTUP,
+    startupMode: STARTUP_JOIN_MODE.FRESH_JOIN,
+    reasonCode: MEMBERSHIP_OWNER_REASON.INVALID_STARTUP_MODE,
+  });
+  t.equal(
+    resolveMembershipOwnerOutcomeType(TEST_INVALID_STARTUP_MODE),
+    MEMBERSHIP_OWNER_OUTCOME_TYPE.BLOCKED_STARTUP,
+  );
+  t.equal(
+    resolveMembershipJoinIntentType(TEST_INVALID_STARTUP_MODE),
+    MEMBERSHIP_LIFECYCLE_INTENT.JOIN_ADMISSION,
   );
 });
 

@@ -1,4 +1,11 @@
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
+import {
+  OPERATION_OWNER_RESUME_ACTION,
+  OPERATION_OWNER_RETRY_ACTION,
+  OPERATION_OWNER_RETRY_KIND,
+  buildOperationOwnerResumeOutcome,
+  buildOperationOwnerRetryOutcome,
+} from './topology-owner-constants.js';
 
 const {
   DISPATCH_RETRY_DELAY_MS,
@@ -637,20 +644,25 @@ class OperationWorkflowOwnerSegment1 {
    */
   deferDispatchRetry(operation, errorLike) {
     const operationId = operation?.operationId || null;
-    if (
-      !operationId ||
-      !this.shouldDeferRetryableDispatchFailure(operation, errorLike)
-    ) {
+    const retryAfterMs = getControlPlaneRetryAfterMs(errorLike);
+    const retryOutcome = buildOperationOwnerRetryOutcome({
+      operationId,
+      retryable: this.shouldDeferRetryableDispatchFailure(
+        operation,
+        errorLike,
+      ),
+      timerActive: this.dispatchRetryTimerByOperationId.has(operationId),
+      retryAfterMs,
+      fallbackDelayMs: DISPATCH_RETRY_DELAY_MS,
+      retryKind: OPERATION_OWNER_RETRY_KIND.DISPATCH,
+    });
+    if (retryOutcome.action === OPERATION_OWNER_RETRY_ACTION.REJECT) {
       return false;
     }
-    if (this.dispatchRetryTimerByOperationId.has(operationId)) {
+    if (retryOutcome.action === OPERATION_OWNER_RETRY_ACTION.REUSE_TIMER) {
       return true;
     }
-    const retryAfterMs = getControlPlaneRetryAfterMs(errorLike);
-    const delayMs =
-      Number.isFinite(retryAfterMs) && retryAfterMs > NUM.ZERO ?
-        retryAfterMs :
-        DISPATCH_RETRY_DELAY_MS;
+    const delayMs = retryOutcome.delayMs;
     const errorMessage = this.normalizeErrorMessage(
       errorLike,
       REBALANCE_COORDINATOR_ERROR_MSG.MESSAGE_NOT_ACKED,
@@ -923,21 +935,29 @@ class OperationWorkflowOwnerSegment1 {
     const operation =
       visibilityObservation?.operation ||
       this.getTransitionRetryOperationSnapshot(operationId);
-    if (
-      !operation ||
-      this.repository.isOperationTerminal(operation) ||
-      !this.repository.isOperationLocallyOwned(operation)
-    ) {
+    const now = Date.now();
+    const resumeOutcome = buildOperationOwnerResumeOutcome({
+      operationAvailable: Boolean(operation),
+      terminalOperation: operation ?
+        this.repository.isOperationTerminal(operation) :
+        false,
+      locallyOwned: operation ?
+        this.repository.isOperationLocallyOwned(operation) :
+        false,
+      dispatchRetryable: operation ?
+        this.isDispatchRetryableWorkflowStep(operation) :
+        false,
+      retryGraceActive: this.hasActiveTransitionRetryGrace(operationId, now),
+      stepTimedOut: operation ?
+        this.isOperationStepTimedOut(operation, now) :
+        false,
+    });
+    if (resumeOutcome.action === OPERATION_OWNER_RESUME_ACTION.CLEAR_RETRY) {
       this.clearTransitionRetry(operationId);
       return;
     }
 
-    const now = Date.now();
-    if (
-      this.isDispatchRetryableWorkflowStep(operation) &&
-      (this.hasActiveTransitionRetryGrace(operationId, now) ||
-        !this.isOperationStepTimedOut(operation, now))
-    ) {
+    if (resumeOutcome.action === OPERATION_OWNER_RESUME_ACTION.DISPATCH) {
       await this.runOperationOwnerAction(
         OPERATION_OWNER_ACTION.DISPATCH,
         operation,
@@ -961,19 +981,24 @@ class OperationWorkflowOwnerSegment1 {
    * @private
    */
   deferTransitionRetry(operationId, errorLike, context = {}) {
-    if (!operationId || !isRetryableControlPlaneError(errorLike)) {
+    const retryAfterMs = getControlPlaneRetryAfterMs(errorLike);
+    const retryOutcome = buildOperationOwnerRetryOutcome({
+      operationId,
+      retryable: isRetryableControlPlaneError(errorLike),
+      timerActive: this.transitionRetryTimerByOperationId.has(operationId),
+      retryAfterMs,
+      fallbackDelayMs: TRANSITION_RETRY_DELAY_MS,
+      retryKind: OPERATION_OWNER_RETRY_KIND.TRANSITION,
+    });
+    if (retryOutcome.action === OPERATION_OWNER_RETRY_ACTION.REJECT) {
       return false;
     }
     this.recordTransitionRetryOperationSnapshot(
       context.operationSnapshot || context.operation || null,
     );
-    const retryAfterMs = getControlPlaneRetryAfterMs(errorLike);
-    const delayMs =
-      Number.isFinite(retryAfterMs) && retryAfterMs > NUM.ZERO ?
-        retryAfterMs :
-        TRANSITION_RETRY_DELAY_MS;
+    const delayMs = retryOutcome.delayMs;
     this.recordTransitionRetryGrace(operationId, context, delayMs);
-    if (this.transitionRetryTimerByOperationId.has(operationId)) {
+    if (retryOutcome.action === OPERATION_OWNER_RETRY_ACTION.REUSE_TIMER) {
       return true;
     }
     const errorMessage = this.normalizeErrorMessage(
@@ -1250,7 +1275,7 @@ class OperationWorkflowOwnerSegment1 {
     };
     const timerHandle = this.setTimeoutFn(() => {
       this.createdOperationHandoffRetryTimerByOperationId.delete(operationId);
-      if (this.isShuttingDown || !this.isInitialized) {
+      if (this.isShuttingDown) {
         return;
       }
       return this.operationWorkflowRunExclusive(

@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-08",
   "scenario": "core-topology-control-plane-rewrite",
   "artifact": "none",
@@ -27,7 +27,7 @@
     "npm run audit:runtime-grammar:file -- src/bootstrap/rejoin-hints-constants.js src/bootstrap/rejoin-hints.js src/control-plane/membership-lifecycle-controller.js src/bootstrap/node-joining-service-shared.js src/bootstrap/node-joining-service-segment-1.js src/bootstrap/node-joining-service-segment-2.js src/bootstrap/phases/contact-seed-phase.js src/bootstrap/owners/bootstrap-request-owner.js src/bootstrap/owners/bootstrap-join-admission-owner.js src/bootstrap/shared/node-registration-owner.js src/entrypoint-runtime-helpers.js src/index.js",
     "npm run work:validate",
     "npm run work:context",
-    "git diff --check -- src/bootstrap/rejoin-hints-constants.js src/bootstrap/rejoin-hints.js src/control-plane/membership-lifecycle-controller.js src/bootstrap/node-joining-service-shared.js src/bootstrap/node-joining-service-segment-1.js src/bootstrap/node-joining-service-segment-2.js src/bootstrap/phases/contact-seed-phase.js src/bootstrap/owners/bootstrap-request-owner.js src/bootstrap/owners/bootstrap-join-admission-owner.js src/bootstrap/shared/node-registration-owner.js src/entrypoint-runtime-helpers.js src/index.js test/control-plane/membership-lifecycle-controller.test.js test/bootstrap/rejoin-hints.test.js test/bootstrap/bootstrap-api-rejoin.test.js test/bootstrap/bootstrap-api.test-part-3.js test/entrypoint-runtime-helpers-join-decision.test.js work/packages/active-20260508-core-topology-boot-join-rejoin-kernel.md work/sprints/active-2026-q2-core-topology-control-plane-rewrite.md work/sprints/current-blocker.json work/sprints/current-blocker.md .kiro/specs/core-topology-control-plane-rewrite/tasks.md"
+    "git diff --check -- src/bootstrap/rejoin-hints-constants.js src/bootstrap/rejoin-hints.js src/control-plane/membership-lifecycle-controller.js src/bootstrap/node-joining-service-shared.js src/bootstrap/node-joining-service-segment-1.js src/bootstrap/node-joining-service-segment-2.js src/bootstrap/phases/contact-seed-phase.js src/bootstrap/owners/bootstrap-request-owner.js src/bootstrap/owners/bootstrap-join-admission-owner.js src/bootstrap/shared/node-registration-owner.js src/entrypoint-runtime-helpers.js src/index.js test/control-plane/membership-lifecycle-controller.test.js test/bootstrap/rejoin-hints.test.js test/bootstrap/bootstrap-api-rejoin.test.js test/bootstrap/bootstrap-api.test-part-3.js test/entrypoint-runtime-helpers-join-decision.test.js work/packages/done-20260508-core-topology-boot-join-rejoin-kernel.md work/sprints/active-2026-q2-core-topology-control-plane-rewrite.md work/sprints/current-blocker.json work/sprints/current-blocker.md .kiro/specs/core-topology-control-plane-rewrite/tasks.md"
   ],
   "touchedFiles": [
     "src/bootstrap/rejoin-hints-constants.js",
@@ -47,13 +47,15 @@
     "test/bootstrap/bootstrap-api-rejoin.test.js",
     "test/bootstrap/bootstrap-api.test-part-3.js",
     "test/entrypoint-runtime-helpers-join-decision.test.js",
-    "work/packages/active-20260508-core-topology-boot-join-rejoin-kernel.md",
+    "work/packages/done-20260508-core-topology-boot-join-rejoin-kernel.md",
     "work/sprints/active-2026-q2-core-topology-control-plane-rewrite.md",
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md",
     ".kiro/specs/core-topology-control-plane-rewrite/tasks.md"
   ],
-  "predecessor": "work/packages/done-20260508-core-topology-owner-boundary-inventory.md"
+  "predecessor": "work/packages/done-20260508-core-topology-owner-boundary-inventory.md",
+  "closed": "2026-05-08",
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -111,7 +113,13 @@ the sprint representative proof ladder after runtime implementation.
       `work/packages/done-20260508-core-topology-owner-boundary-inventory.md`.
 - [x] Implementation subagent recorded: Agent Dalton
       (`019e0899-a821-7002-97c7-f4fc33482ede`) implemented
-      `work/packages/active-20260508-core-topology-boot-join-rejoin-kernel.md`.
+      `work/packages/done-20260508-core-topology-boot-join-rejoin-kernel.md`.
+
+## Commit And Push Ledger
+
+- Focused package commit: `e73cd553`
+- Pushed to: `origin/codex/pending-ack-eligibility-filter`
+- Commit contains only package-owned files/package-status/allowed sprint handoff: `yes`
 
 ## Static Drift Ledger
 
@@ -128,7 +136,7 @@ Implementation:
 - [x] Existing unrelated dirty files were not edited.
 - [x] File-scoped literal, decision-boundary, and runtime-grammar guardrails
       passed for touched runtime files.
-- [x] Package remains uncommitted per user instruction.
+- [x] Package implementation committed and pushed as `e73cd553`.
 
 ## Validation
 
@@ -145,4 +153,4 @@ Implementation:
 11. `npm run audit:runtime-grammar:file -- src/bootstrap/rejoin-hints-constants.js src/bootstrap/rejoin-hints.js src/control-plane/membership-lifecycle-controller.js src/bootstrap/node-joining-service-shared.js src/bootstrap/node-joining-service-segment-1.js src/bootstrap/node-joining-service-segment-2.js src/bootstrap/phases/contact-seed-phase.js src/bootstrap/owners/bootstrap-request-owner.js src/bootstrap/owners/bootstrap-join-admission-owner.js src/bootstrap/shared/node-registration-owner.js src/entrypoint-runtime-helpers.js src/index.js`
 12. `npm run work:validate`
 13. `npm run work:context`
-14. `git diff --check -- src/bootstrap/rejoin-hints-constants.js src/bootstrap/rejoin-hints.js src/control-plane/membership-lifecycle-controller.js src/bootstrap/node-joining-service-shared.js src/bootstrap/node-joining-service-segment-1.js src/bootstrap/node-joining-service-segment-2.js src/bootstrap/phases/contact-seed-phase.js src/bootstrap/owners/bootstrap-request-owner.js src/bootstrap/owners/bootstrap-join-admission-owner.js src/bootstrap/shared/node-registration-owner.js src/entrypoint-runtime-helpers.js src/index.js test/control-plane/membership-lifecycle-controller.test.js test/bootstrap/rejoin-hints.test.js test/bootstrap/bootstrap-api-rejoin.test.js test/bootstrap/bootstrap-api.test-part-3.js test/entrypoint-runtime-helpers-join-decision.test.js work/packages/active-20260508-core-topology-boot-join-rejoin-kernel.md work/sprints/active-2026-q2-core-topology-control-plane-rewrite.md work/sprints/current-blocker.json work/sprints/current-blocker.md .kiro/specs/core-topology-control-plane-rewrite/tasks.md`
+14. `git diff --check -- src/bootstrap/rejoin-hints-constants.js src/bootstrap/rejoin-hints.js src/control-plane/membership-lifecycle-controller.js src/bootstrap/node-joining-service-shared.js src/bootstrap/node-joining-service-segment-1.js src/bootstrap/node-joining-service-segment-2.js src/bootstrap/phases/contact-seed-phase.js src/bootstrap/owners/bootstrap-request-owner.js src/bootstrap/owners/bootstrap-join-admission-owner.js src/bootstrap/shared/node-registration-owner.js src/entrypoint-runtime-helpers.js src/index.js test/control-plane/membership-lifecycle-controller.test.js test/bootstrap/rejoin-hints.test.js test/bootstrap/bootstrap-api-rejoin.test.js test/bootstrap/bootstrap-api.test-part-3.js test/entrypoint-runtime-helpers-join-decision.test.js work/packages/done-20260508-core-topology-boot-join-rejoin-kernel.md work/sprints/active-2026-q2-core-topology-control-plane-rewrite.md work/sprints/current-blocker.json work/sprints/current-blocker.md .kiro/specs/core-topology-control-plane-rewrite/tasks.md`

@@ -201,7 +201,11 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
         success: true,
         changed: true,
       });
-      coordinator.queryOperationById = async () => null;
+      coordinator.getReservationOperationVisibilityObservation = async () =>
+        Object.freeze({
+          operation: null,
+          deferredOutcome: null,
+        });
       try {
         await coordinator.releaseReservationForOperation({
           type: 'ADD',

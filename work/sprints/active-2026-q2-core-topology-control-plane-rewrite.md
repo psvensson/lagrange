@@ -10,16 +10,17 @@ readiness, operation scheduling, and rebalancer paths.
 
 Active package:
 
-1. [Core Topology Boot Join Rejoin Kernel](../packages/active-20260508-core-topology-boot-join-rejoin-kernel.md)
+1. [Core Topology Partitioning Rebalancing Kernel](../packages/active-20260508-core-topology-partitioning-rebalancing-kernel.md)
 
 Current blocker:
 
-1. Agent Dalton implemented the boot/join/rejoin membership owner outcome
-   across rejoin hints, startup join decisions, membership lifecycle intents,
-   seed contact, bootstrap admission, and durable rejoin registration.
-2. Focused owner-path validation, file-scoped guardrails, work validation,
-   context refresh, and diff whitespace proof are green; the package remains
-   uncommitted per user instruction.
+1. Placement and operation owner contracts are implemented for the
+   partitioning/rebalancing kernel.
+2. The timeout/cache visibility blocker is fixed and the representative
+   rebalancer proof is green.
+3. The next blocker is package closure: run work validation, commit and push
+   the focused package slice, then activate the publication/projection
+   boundary package.
 
 ## Scope Basis
 
@@ -45,8 +46,8 @@ mutation owner.
 
 1. Done: [Core Topology Rewrite Spec And Roadmap Rebaseline](../packages/done-20260508-core-topology-rewrite-spec-and-roadmap-rebaseline.md)
 2. Done: [Core Topology Owner Boundary Inventory](../packages/done-20260508-core-topology-owner-boundary-inventory.md)
-3. Active: [Core Topology Boot Join Rejoin Kernel](../packages/active-20260508-core-topology-boot-join-rejoin-kernel.md)
-4. Todo: [Core Topology Partitioning Rebalancing Kernel](../packages/todo-20260508-core-topology-partitioning-rebalancing-kernel.md)
+3. Done: [Core Topology Boot Join Rejoin Kernel](../packages/done-20260508-core-topology-boot-join-rejoin-kernel.md)
+4. Active: [Core Topology Partitioning Rebalancing Kernel](../packages/active-20260508-core-topology-partitioning-rebalancing-kernel.md)
 5. Todo: Publication Projection Boundary (package file to create when the
    partitioning/rebalancing kernel hands off)
 6. Todo: [Core Topology Projection Readiness Contract](../packages/todo-20260508-core-topology-projection-readiness-contract.md)

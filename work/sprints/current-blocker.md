@@ -4,7 +4,7 @@
 
 Sprint: `work/sprints/active-2026-q2-core-topology-control-plane-rewrite.md`
 
-Package: `work/packages/active-20260508-core-topology-boot-join-rejoin-kernel.md`
+Package: `work/packages/active-20260508-core-topology-partitioning-rebalancing-kernel.md`
 
 Scenario: `core-topology-control-plane-rewrite`
 
@@ -16,54 +16,48 @@ Playback: `none`
 
 Owner: `topology_control_plane`
 
-Boundary: `boot_join_rejoin_membership_kernel`
+Boundary: `partitioning_rebalancing_kernel`
 
-Dominant reason: `boot_join_rejoin_membership_owner_required_before_runtime_extraction`
+Dominant reason: `placement_operation_owner_required_before_partitioning_rebalancing_runtime_extraction`
 
-Current state: Agent Dalton implemented the boot/join/rejoin membership owner outcome through rejoin hints, startup join decision, node joining, membership lifecycle, bootstrap admission, and durable rejoin registration boundaries. Focused owner-path tests, file-scoped guardrails, work validation, context refresh, and diff whitespace proof passed.
+Current state: Placement and operation owner contracts are implemented. Timeout/cache visibility blocker is fixed: saturated cache-only add budget stays conservative, and reservation cleanup tests isolate storage-reservation reads from operation-owner visibility reads.
 
 ## Next Action
 
-Review the uncommitted package-owned diff and commit only this package slice when ready.
+Run work validation, commit and push the focused package slice, then activate the publication/projection boundary package.
 
 ## Proof Ladder
 
-1. `node --test test/control-plane/membership-lifecycle-controller.test.js`
-2. `node --test test/bootstrap/rejoin-hints.test.js`
-3. `node --test test/bootstrap/bootstrap-api-rejoin.test.js`
-4. `node --test test/bootstrap/node-registration-owner.test.js`
-5. `node --test test/bootstrap/node-joining-service.test-part-3.js`
-6. `node --test test/bootstrap/node-joining-service.test.js`
-7. `node --test test/entrypoint-runtime-helpers-join-decision.test.js`
-8. `node --test test/bootstrap/bootstrap-api.test-part-3.js`
-9. `node scripts/check-guideline-literals.js src/bootstrap/rejoin-hints-constants.js src/bootstrap/rejoin-hints.js src/control-plane/membership-lifecycle-controller.js src/bootstrap/node-joining-service-shared.js src/bootstrap/node-joining-service-segment-1.js src/bootstrap/node-joining-service-segment-2.js src/bootstrap/phases/contact-seed-phase.js src/bootstrap/owners/bootstrap-request-owner.js src/bootstrap/owners/bootstrap-join-admission-owner.js src/bootstrap/shared/node-registration-owner.js src/entrypoint-runtime-helpers.js src/index.js`
-10. `node scripts/check-guideline-decision-boundaries.js src/bootstrap/rejoin-hints-constants.js src/bootstrap/rejoin-hints.js src/control-plane/membership-lifecycle-controller.js src/bootstrap/node-joining-service-shared.js src/bootstrap/node-joining-service-segment-1.js src/bootstrap/node-joining-service-segment-2.js src/bootstrap/phases/contact-seed-phase.js src/bootstrap/owners/bootstrap-request-owner.js src/bootstrap/owners/bootstrap-join-admission-owner.js src/bootstrap/shared/node-registration-owner.js src/entrypoint-runtime-helpers.js src/index.js`
-11. `npm run audit:runtime-grammar:file -- src/bootstrap/rejoin-hints-constants.js src/bootstrap/rejoin-hints.js src/control-plane/membership-lifecycle-controller.js src/bootstrap/node-joining-service-shared.js src/bootstrap/node-joining-service-segment-1.js src/bootstrap/node-joining-service-segment-2.js src/bootstrap/phases/contact-seed-phase.js src/bootstrap/owners/bootstrap-request-owner.js src/bootstrap/owners/bootstrap-join-admission-owner.js src/bootstrap/shared/node-registration-owner.js src/entrypoint-runtime-helpers.js src/index.js`
-12. `npm run work:validate`
-13. `npm run work:context`
-14. `git diff --check -- src/bootstrap/rejoin-hints-constants.js src/bootstrap/rejoin-hints.js src/control-plane/membership-lifecycle-controller.js src/bootstrap/node-joining-service-shared.js src/bootstrap/node-joining-service-segment-1.js src/bootstrap/node-joining-service-segment-2.js src/bootstrap/phases/contact-seed-phase.js src/bootstrap/owners/bootstrap-request-owner.js src/bootstrap/owners/bootstrap-join-admission-owner.js src/bootstrap/shared/node-registration-owner.js src/entrypoint-runtime-helpers.js src/index.js test/control-plane/membership-lifecycle-controller.test.js test/bootstrap/rejoin-hints.test.js test/bootstrap/bootstrap-api-rejoin.test.js test/bootstrap/bootstrap-api.test-part-3.js test/entrypoint-runtime-helpers-join-decision.test.js work/packages/active-20260508-core-topology-boot-join-rejoin-kernel.md work/sprints/active-2026-q2-core-topology-control-plane-rewrite.md work/sprints/current-blocker.json work/sprints/current-blocker.md .kiro/specs/core-topology-control-plane-rewrite/tasks.md`
+1. `node --test test/rebalancer/topology-owner-contracts.test.js`
+2. `node --test test/rebalancer/move-planner-inflight-cleanup.test.js`
+3. `node --test test/rebalancer/rebalance-coordinator-operation-ownership.test.js`
+4. `node --test test/rebalancer/rebalance-coordinator-timeout-cache-visibility.test.js`
+5. `node --test test/rebalancer/rebalance-coordinator-timeout-cache-visibility-tail-test-cases.js`
+6. `node --test test/rebalancer/rebalance-coordinator-timeout-cache-visibility-tail-more-test-cases.js`
+7. `node --test test/control-plane/membership-lifecycle-controller.test.js test/bootstrap/bootstrap-membership-owner-outcome-consumers.test.js test/bootstrap/message-group-assignment-centralization.test.js`
+8. `node scripts/check-guideline-literals.js src/bootstrap/rejoin-hints-constants.js src/control-plane/membership-lifecycle-controller.js src/bootstrap/owners/service-leader-readiness-owner.js src/bootstrap/owners/bootstrap-join-admission-owner.js src/rebalancer/topology-owner-constants.js src/rebalancer/move-planner.js src/rebalancer/operation-workflow-owner-segment-1.js src/rebalancer/rebalance-coordinator-segment-5.js`
+9. `node scripts/check-guideline-decision-boundaries.js src/bootstrap/rejoin-hints-constants.js src/control-plane/membership-lifecycle-controller.js src/bootstrap/owners/service-leader-readiness-owner.js src/bootstrap/owners/bootstrap-join-admission-owner.js src/rebalancer/topology-owner-constants.js src/rebalancer/move-planner.js src/rebalancer/operation-workflow-owner-segment-1.js src/rebalancer/rebalance-coordinator-segment-5.js`
+10. `npm run audit:runtime-grammar:file -- src/bootstrap/rejoin-hints-constants.js src/control-plane/membership-lifecycle-controller.js src/bootstrap/owners/service-leader-readiness-owner.js src/bootstrap/owners/bootstrap-join-admission-owner.js src/rebalancer/topology-owner-constants.js src/rebalancer/move-planner.js src/rebalancer/operation-workflow-owner-segment-1.js src/rebalancer/rebalance-coordinator-segment-5.js`
+11. `npm run work:validate`
+12. `npm run work:context`
+13. `git diff --check`
 
 ## Touched Files
 
 1. `src/bootstrap/rejoin-hints-constants.js`
-2. `src/bootstrap/rejoin-hints.js`
-3. `src/control-plane/membership-lifecycle-controller.js`
-4. `src/bootstrap/node-joining-service-shared.js`
-5. `src/bootstrap/node-joining-service-segment-1.js`
-6. `src/bootstrap/node-joining-service-segment-2.js`
-7. `src/bootstrap/phases/contact-seed-phase.js`
-8. `src/bootstrap/owners/bootstrap-request-owner.js`
-9. `src/bootstrap/owners/bootstrap-join-admission-owner.js`
-10. `src/bootstrap/shared/node-registration-owner.js`
-11. `src/entrypoint-runtime-helpers.js`
-12. `src/index.js`
-13. `test/control-plane/membership-lifecycle-controller.test.js`
-14. `test/bootstrap/rejoin-hints.test.js`
-15. `test/bootstrap/bootstrap-api-rejoin.test.js`
-16. `test/bootstrap/bootstrap-api.test-part-3.js`
-17. `test/entrypoint-runtime-helpers-join-decision.test.js`
-18. `work/packages/active-20260508-core-topology-boot-join-rejoin-kernel.md`
-19. `work/sprints/active-2026-q2-core-topology-control-plane-rewrite.md`
-20. `work/sprints/current-blocker.json`
-21. `work/sprints/current-blocker.md`
-22. `.kiro/specs/core-topology-control-plane-rewrite/tasks.md`
+2. `src/control-plane/membership-lifecycle-controller.js`
+3. `src/bootstrap/owners/service-leader-readiness-owner.js`
+4. `src/bootstrap/owners/bootstrap-join-admission-owner.js`
+5. `test/control-plane/membership-lifecycle-controller.test.js`
+6. `test/bootstrap/bootstrap-membership-owner-outcome-consumers.test.js`
+7. `test/bootstrap/message-group-assignment-centralization.test.js`
+8. `src/rebalancer/topology-owner-constants.js`
+9. `src/rebalancer/move-planner.js`
+10. `src/rebalancer/operation-workflow-owner-segment-1.js`
+11. `src/rebalancer/rebalance-coordinator-segment-5.js`
+12. `test/rebalancer/topology-owner-contracts.test.js`
+13. `test/rebalancer/rebalance-coordinator-timeout-cache-visibility-tail-test-cases.js`
+14. `work/packages/active-20260508-core-topology-partitioning-rebalancing-kernel.md`
+15. `work/sprints/active-2026-q2-core-topology-control-plane-rewrite.md`
+16. `work/sprints/current-blocker.json`
+17. `work/sprints/current-blocker.md`

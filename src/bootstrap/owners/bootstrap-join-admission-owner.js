@@ -18,8 +18,6 @@ import {AuthoritativeControlPlaneView} from
 import {
   isBootJoinRejoinMembershipOwnerOutcome,
   isMembershipOwnerRestartReentryOutcome,
-  MEMBERSHIP_LIFECYCLE_INTENT,
-  resolveMembershipJoinIntentType,
 } from '../../control-plane/membership-lifecycle-controller.js';
 import {MessageGroupAssignment} from '../message-group-assignment.js';
 import {
@@ -391,8 +389,10 @@ class BootstrapJoinAdmissionOwner {
       messageGroups,
       {
         allowRejoinSingleOwnedGroup:
-          resolveMembershipJoinIntentType(options.startupMode) ===
-            MEMBERSHIP_LIFECYCLE_INTENT.RESTART_REENTRY,
+          isMembershipOwnerRestartReentryOutcome({
+            membershipOwnerOutcome: options.membershipOwnerOutcome,
+            startupMode: options.startupMode,
+          }),
         excludedReplicaIds: options.excludedReplicaIds,
         excludedSourceNodeIds,
       },
@@ -446,6 +446,7 @@ class BootstrapJoinAdmissionOwner {
       const assignment = this.determineMessageGroupAssignment(newNodeId, {
         excludedReplicaIds,
         startupMode: options.startupMode,
+        membershipOwnerOutcome: options.membershipOwnerOutcome,
       });
 
       if (assignment.strategy !== BootstrapStrategy.MOVE_REPLICA) {
@@ -471,14 +472,17 @@ class BootstrapJoinAdmissionOwner {
     options = {},
   ) {
     if (
-      resolveMembershipJoinIntentType(options.startupMode) !==
-        MEMBERSHIP_LIFECYCLE_INTENT.RESTART_REENTRY
+      !isMembershipOwnerRestartReentryOutcome({
+        membershipOwnerOutcome: options.membershipOwnerOutcome,
+        startupMode: options.startupMode,
+      })
     ) {
       return null;
     }
 
     const assignment = this.determineMessageGroupAssignment(newNodeId, {
       startupMode: options.startupMode,
+      membershipOwnerOutcome: options.membershipOwnerOutcome,
     });
     if (
       assignment?.strategy === BootstrapStrategy.MOVE_REPLICA ||
