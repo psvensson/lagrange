@@ -42,14 +42,13 @@ creation.
 
 ## Subagent Sequencing Ledger
 
-- [ ] Review subagent recorded:
-      Agent <name> (<agent-id>) reviewed
+- [x] Review subagent recorded:
+      Agent `Russell` (`019e068a-ac97-7812-b394-de2c05aba22c`) reviewed
       `work/packages/done-20260508-rolling-restart-priority-recovery-operation-scheduling-sql-write-needs-operation-reentry.md`;
-      result <clean|fixes-required>.
-- [ ] Fix subagent recorded or explicitly not needed:
-      Agent <name> (<agent-id>) fixed
-      `work/packages/done-20260508-rolling-restart-priority-recovery-operation-scheduling-sql-write-needs-operation-reentry.md`, or
-      `not-needed` only when review result is `clean`.
+      result `fixes-required`.
+- [x] Fix subagent recorded or explicitly not needed:
+      Agent `Feynman` (`019e068c-cdb4-7283-b49b-848a7e72a30f`) fixed
+      `work/packages/done-20260508-rolling-restart-priority-recovery-operation-scheduling-sql-write-needs-operation-reentry.md`.
 - [ ] Implementation subagent recorded:
       Agent <name> (<agent-id>) implemented
       `work/packages/active-20260508-rolling-restart-startup-active-gate-snapshot-coverage-priority-recovery-stale-planning-visibility-reentry.md`.
@@ -137,8 +136,8 @@ Canonical contract shape:
 
 ## Residual Closure Inventory
 
-- [ ] Review the just-closed predecessor package on the same sprint boundary.
-- [ ] Fix any predecessor-review findings before implementation resumes.
+- [x] Review the just-closed predecessor package on the same sprint boundary.
+- [x] Fix any predecessor-review findings before implementation resumes.
 - [ ] Extract the focused stale-planning visibility witness and its supporting
       post-move playback evidence.
 - [ ] Add the focused regression or blocker probe for the selected visibility

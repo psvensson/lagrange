@@ -6,16 +6,16 @@
   "status": "done",
   "opened": "2026-05-08",
   "scenario": "rolling-restart",
-  "artifact": "test-output/reports/rolling-restart-after-publication-ack-pending-canonicalization-20260508T000000Z.report.json",
-  "playback": "test-output/reports/.playback/rolling-restart-after-publication-ack-pending-canonicalization-20260508T000000Z/rolling-restart/",
+  "artifact": "test-output/reports/rolling-restart-after-sql-write-operation-scheduling-repair-20260508T000000Z.report.json",
+  "playback": "test-output/reports/.playback/rolling-restart-after-sql-write-operation-scheduling-repair-20260508T000000Z/rolling-restart/",
   "owner": "Priority recovery operation scheduling for sql_write_operations-p1 after publication ACK-pending canonicalization",
   "boundary": "Rebalancer leader / operation_scheduling / create_recovery_operation",
   "dominantReason": "priority_recovery_operation_scheduling_event_driven",
-  "currentState": "The publication ACK-pending seam is closed by migration. The representative rerun now reaches epoch 2 PUBLISHED with pendingAckCount=0 and no direct publication debt, but the first frontier stalls on sql_write_operations-p1 under semantic state needs_operation with nextRequiredAction=create_recovery_operation while sql_transactions-p1 remains supporting recovering_in_flight workflow evidence and startup snapshot coverage 3/5 stays downstream.",
-  "nextAction": "Review the just-closed publication package, then extract one focused epoch-2 PUBLISHED operation-scheduling witness for sql_write_operations-p1 and repair or classify why the rebalancer leader leaves it at needs_operation without reopening the closed publication package.",
+  "currentState": "The direct sql_write_operations-p1 scheduling seam advanced during the closure-driving rerun. The report and failure bundle still classify rebalancer_leader / operation_scheduling because a stale dominant witness captured at 2026-05-08T07:24:42.298Z keeps sql_write_operations-p1 at needs_operation with operation_unknown, operationCount=0, and visibilityState=none, but playback shows the rebalancer started at 2026-05-08T07:24:53.480Z and executed a replace move at 2026-05-08T07:24:53.482Z while startup snapshot coverage remains 2/5 under PUBLISHED epoch 4.",
+  "nextAction": "Review the just-closed operation-scheduling package, then extract one focused stale-planning visibility witness proving the failure bundle keeps a pre-move priority-recovery snapshot after move execution and repair or classify the planning-only reconstruction path that feeds startup snapshot coverage.",
   "proof": [
-    "Focused epoch-2 PUBLISHED sql_write_operations-p1 operation-scheduling witness with supporting sql_transactions-p1 and startup active-gate evidence",
-    "Focused operation-scheduling regression or classification proof for the selected create_recovery_operation seam",
+    "Focused direct operation-scheduling regression proving current needs_operation follow-up work is reclaimed",
+    "Focused stale-planning visibility witness tying pre-move snapshot capture to post-move playback execution",
     "Touched-file static guardrails",
     "Representative rolling-restart --fast-local rerun",
     "Failure-report and topology-convergence analysis"
@@ -38,11 +38,13 @@
 
 Opened on May 8, 2026 after
 [Rolling Restart Topology Publication Convergence ACK Pending Reentry](./done-20260508-rolling-restart-topology-publication-convergence-ack-pending-reentry.md)
-closes by migration. Publication convergence now reaches `PUBLISHED`, but the
-representative rerun still fails earlier on `rebalancer_leader /
-operation_scheduling`, where `sql_write_operations-p1` remains
-`needs_operation` with no created recovery operation while
-`sql_transactions-p1` only supplies supporting in-flight workflow evidence.
+closes by migration. The focused regression repaired the direct scheduling seam
+enough for the closure-driving rerun to execute a `sql_write_operations-p1`
+`replace` move, but the report and failure bundle still present a stale
+`needs_operation` witness captured about `11s` earlier. This package therefore
+closes by migration to stale priority recovery visibility feeding startup
+active-gate coverage, not by frontier replacement inside the report-level
+artifact.
 
 ## Subagent Sequencing Ledger
 
@@ -66,26 +68,35 @@ operation_scheduling`, where `sql_write_operations-p1` remains
 ## Current Evidence
 
 1. Representative report:
-   `test-output/reports/rolling-restart-after-publication-ack-pending-canonicalization-20260508T000000Z.report.json`.
+   `test-output/reports/rolling-restart-after-sql-write-operation-scheduling-repair-20260508T000000Z.report.json`.
 2. Playback directory:
-   `test-output/reports/.playback/rolling-restart-after-publication-ack-pending-canonicalization-20260508T000000Z/rolling-restart/`.
-3. Result: failed after `130.0s`.
-4. `npm run analyze:distributed-failure` selected root cause class
-   `topology` and dominant reason
-   `priority_recovery_operation_scheduling_event_driven`.
-5. `npm run analyze:topology-convergence` on both report and playback selects
-   `rebalancer_leader / operation_scheduling` as the first frontier.
-6. The dominant witness is `sql_write_operations-p1` with semantic state
-   `needs_operation`, `nextRequiredAction=create_recovery_operation`,
-   `actuationState=action_required`, `waitMode=event_driven`, and
-   `workflowState=none`.
-7. Supporting priority evidence keeps `sql_transactions-p1` on
-   `recovering_in_flight` under `operation_workflow_owner /
-   workflow_progress`.
+   `test-output/reports/.playback/rolling-restart-after-sql-write-operation-scheduling-repair-20260508T000000Z/rolling-restart/`.
+3. Result: failed after `143.1s`; report timestamp `2026-05-08T07:25:55.013Z`.
+4. `npm run analyze:distributed-failure` still classifies the rerun as
+   `topology / priority_recovery_operation_scheduling_event_driven`.
+5. `npm run analyze:topology-convergence` on both the report and playback
+   failure bundle still selects `rebalancer_leader / operation_scheduling` as
+   the first frontier and `startup_active_gate_owner / snapshot_coverage` as
+   the next expected frontier.
+6. The dominant witness remains `sql_write_operations-p1` with
+   `semanticState=needs_operation`,
+   `nextRequiredAction=create_recovery_operation`,
+   `actuationState=action_required`, `waitMode=event_driven`,
+   `workflowState=none`, `visibilityState=none`, and
+   `snapshotCapturedAt=1778225082298` (`2026-05-08T07:24:42.298Z`).
+7. Supporting priority evidence changed shape: `sql_transactions-p1` is now
+   `blocked_unclassified` under `rebalancer_handoff` with
+   `nextRequiredAction=schedule_followup_rebalance` and
+   `latestOperationStatus=removed`.
 8. Supporting startup evidence remains downstream under
-   `startup_active_gate_owner / snapshot_coverage` with coverage `3/5`,
-   `inactive_nodes=1`, and blocker
-   `priority_recovery_progress_class=eligible_but_no_operation_created`.
+   `startup_active_gate_owner / snapshot_coverage` with coverage `2/5`,
+   `inactive_nodes=2`, and blocker signature
+   `inactive_nodes=2|snapshot_coverage=2/5|priority_recovery_progress_class=eligible_but_no_operation_created`.
+9. Playback later advances beyond the stale witness: at
+   `2026-05-08T07:24:53.480Z` the rebalancer starts `sql_write_operations-p1`
+   with `moveCount=1`, then at `2026-05-08T07:24:53.482Z` it reaches
+   `preExecutionHandoffState=ready_to_execute` and executes one `replace`
+   move on node `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`.
 
 ## Scope Basis
 
@@ -98,12 +109,14 @@ Roadmap Phase `0.1 - Internal Coherence` maintenance/refactoring scope under:
 ## In Scope
 
 1. Review the closed publication package before implementation resumes.
-2. Extract one focused epoch `2` `PUBLISHED` operation-scheduling witness for
-   `sql_write_operations-p1`.
+2. Extract one focused `PUBLISHED` operation-scheduling witness for
+   `sql_write_operations-p1` together with the paired playback execution
+   evidence from the same representative rerun.
 3. Add one focused regression or classification proof for the selected
    `create_recovery_operation` seam.
-4. Repair or classify that direct scheduling seam without reopening the closed
-   publication package.
+4. Repair or classify that direct scheduling seam and, if the rerun only
+   advances it in playback, record the explicit migration to stale planning
+   visibility without reopening the closed publication package.
 5. Run focused tests, touched-file static guardrails, and one representative
    `rolling-restart` rerun.
 
@@ -124,34 +137,41 @@ Roadmap Phase `0.1 - Internal Coherence` maintenance/refactoring scope under:
 Semantic owners:
 
 1. `rebalancer_leader / operation_scheduling` owns the direct
-   `sql_write_operations-p1` `needs_operation` seam in the fresh
-   representative artifact.
-2. `operation_workflow_owner / workflow_progress` remains supporting context
-   while `sql_transactions-p1` continues recovering in flight.
-3. `startup_active_gate_owner / snapshot_coverage` remains the next expected
-   frontier only after operation scheduling advances or closes.
+   `sql_write_operations-p1` `needs_operation` seam surfaced by the report and
+   failure-bundle witnesses.
+2. The stale planning and priority-recovery visibility readers own the
+   follow-on truth repair once playback proves the same partition advanced
+   beyond that stale witness in the same rerun.
+3. `startup_active_gate_owner / snapshot_coverage` remains the named
+   downstream consumer and successor frontier once the direct move execution
+   exists.
 
 Canonical contract shape:
 
-1. If `sql_write_operations-p1` remains `needs_operation`, the artifact must
-   identify one canonical scheduling reason for why a recovery operation was
-   not created.
-2. Supporting `sql_transactions-p1` workflow evidence must not be promoted
-   above the direct scheduling blocker while the dominant witness remains on
-   `sql_write_operations-p1`.
-3. This package closes only after a representative rerun proves either the
-   operation-scheduling frontier closes or a new named owner boundary
-   dominates.
+1. If `sql_write_operations-p1` remains `needs_operation` in the report-level
+   artifact, validation must still check whether playback for that same rerun
+   later executed the missing recovery move.
+2. When playback proves a later move on the same partition and epoch, this
+   package may close by migration rather than frontier replacement, but the
+   package record must name the stale-visibility successor boundary explicitly.
+3. Supporting `sql_transactions-p1` evidence may change shape, but it must not
+   erase the fact that the stale `sql_write_operations-p1` witness is what the
+   report-level analyzer still classifies.
+4. This package closes only after a representative rerun proves either the
+   direct scheduling frontier still dominates without later move execution, or
+   the later move execution exists and the named successor package owns the
+   stale planning visibility residual.
 
 ## Residual Closure Inventory
 
 - [x] Review the just-closed predecessor package on the same sprint boundary.
 - [x] Fix any predecessor-review findings before implementation resumes.
-- [x] Extract the focused epoch-2 PUBLISHED operation-scheduling witness and
-      its supporting workflow/startup evidence.
+- [x] Extract the focused operation-scheduling witness and its supporting
+      workflow/startup evidence.
 - [x] Add the focused regression or classification proof for the selected
       scheduling seam.
-- [x] Repair the direct scheduling path or migrate again with proof.
+- [x] Repair the direct scheduling path or record the named stale-visibility
+      migration with proof.
 
 ## Static Drift Ledger
 
@@ -184,31 +204,17 @@ Closure:
 
 ## Validation
 
-1. `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-after-publication-ack-pending-canonicalization-20260508T000000Z.report.json`
-   selected root cause class `topology` and dominant reason
-   `priority_recovery_operation_scheduling_event_driven`.
-2. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-publication-ack-pending-canonicalization-20260508T000000Z.report.json`
-   selected `rebalancer_leader / operation_scheduling` as the first frontier
-   with dominant witness `sql_write_operations-p1`.
-3. `npm run analyze:topology-convergence -- test-output/reports/.playback/rolling-restart-after-publication-ack-pending-canonicalization-20260508T000000Z/rolling-restart/failure-bundle.json`
-   matched the report-level scheduling frontier and kept startup snapshot
-   coverage as the next expected frontier.
-4. Focused witness extraction from the current artifact keeps
-   `sql_write_operations-p1` on `semanticState=needs_operation` with
-   `nextRequiredAction=create_recovery_operation`, while supporting
-   `sql_transactions-p1` remains `recovering_in_flight` under
-   `workflow_progress` with an in-flight replacement operation.
-5. Focused regression proof now exists in
+1. Focused regression proof now exists in
    `test/rebalancer/unified-rebalancer-part-5-2-stage-2.js` as
    `checkRebalance reclaims current needs_operation follow-up work when
    closure-witness surrogate progress only points at another partition`.
-6. `npx tap test/rebalancer/unified-rebalancer-part-5-2-stage-2.js`
+2. `npx tap test/rebalancer/unified-rebalancer-part-5-2-stage-2.js`
    passes, including
    `checkRebalance reclaims current needs_operation follow-up work when
    closure-witness surrogate progress only points at another partition`,
    after the regression neutralizes the rebalance timer armed by
    `scheduleNextCheck()`.
-7. `git diff --check -- src/rebalancer/unified-rebalancer-segment-4-stage-2.js
+3. `git diff --check -- src/rebalancer/unified-rebalancer-segment-4-stage-2.js
    test/rebalancer/unified-rebalancer-part-5-2-stage-2.js
    work/packages/done-20260508-rolling-restart-priority-recovery-operation-scheduling-sql-write-needs-operation-reentry.md`,
    `node scripts/check-guideline-decision-boundaries.js
@@ -218,30 +224,39 @@ Closure:
    src/rebalancer/unified-rebalancer-segment-4-stage-2.js
    test/rebalancer/unified-rebalancer-part-5-2-stage-2.js`
    all pass on the touched files.
-8. Representative rerun:
+4. Representative rerun:
    `node test/distributed/run.js --config test/distributed/config/local.json
    --scenario rolling-restart --output
    test-output/reports/rolling-restart-after-sql-write-operation-scheduling-repair-20260508T000000Z.report.json
    --fast-local --verbose`
    failed after `143.1s`.
-9. `npm run analyze:distributed-failure -- --report
+5. `npm run analyze:distributed-failure -- --report
    test-output/reports/rolling-restart-after-sql-write-operation-scheduling-repair-20260508T000000Z.report.json`
    still classifies the failure as `topology /
    priority_recovery_operation_scheduling_event_driven`.
-10. `npm run analyze:topology-convergence --` on both the report and playback
-    failure bundle still selects `rebalancer_leader / operation_scheduling`
-    with dominant witness `sql_write_operations-p1`.
-11. The new representative artifact changes the supporting witness shape:
-    `sql_transactions-p1` is now `blocked_unclassified` under
-    `rebalancer_handoff` with `nextRequiredAction=schedule_followup_rebalance`,
-    not `recovering_in_flight`.
-12. Direct playback logs show the `sql_write_operations-p1` rebalancer later
-    advanced beyond the stale report witness: at `2026-05-08T07:24:53.480Z`
-    it started rebalancing with `moveCount=1`, passed pre-execution handoff at
-    `2026-05-08T07:24:53.482Z`, and executed one `replace` move on
-    node `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`.
-13. The failure bundle’s dominant `sql_write_operations-p1` witness was
-    captured earlier at `snapshotCapturedAt=1778225082298`
-    (`2026-05-08T07:24:42.298Z`) and still reports `operation_unknown`,
-    `operationCount=0`, and `visibilityState=none`, so the representative
-    artifact currently lags the later move-execution evidence.
+6. `npm run analyze:topology-convergence --` on both the report and playback
+   failure bundle still selects `rebalancer_leader / operation_scheduling`,
+   while `startup_active_gate_owner / snapshot_coverage` remains the next
+   expected frontier.
+7. The closure-driving rerun's dominant witness keeps
+   `sql_write_operations-p1` on `semanticState=needs_operation`,
+   `nextRequiredAction=create_recovery_operation`,
+   `actuationState=action_required`, `waitMode=event_driven`,
+   `workflowState=none`, and `visibilityState=none` at
+   `snapshotCapturedAt=1778225082298`
+   (`2026-05-08T07:24:42.298Z`).
+8. The supporting witness shape changed:
+   `sql_transactions-p1` is now `blocked_unclassified` under
+   `rebalancer_handoff` with `nextRequiredAction=schedule_followup_rebalance`
+   and `latestOperationStatus=removed`, not `recovering_in_flight`.
+9. Direct playback logs show the `sql_write_operations-p1` rebalancer later
+   advanced beyond the stale report witness: at `2026-05-08T07:24:53.480Z` it
+   started rebalancing with `moveCount=1`, then at `2026-05-08T07:24:53.482Z`
+   it reached `preExecutionHandoffState=ready_to_execute` and executed one
+   `replace` move on node `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`.
+10. Because the closure-driving rerun still reports the stale
+    `operation_unknown` witness while playback proves later move execution,
+    this package closed by migration to
+    `startup_active_gate_owner / snapshot_coverage /
+    priority_recovery_progress_visibility`, not by raw frontier replacement in
+    the report-level artifact.
