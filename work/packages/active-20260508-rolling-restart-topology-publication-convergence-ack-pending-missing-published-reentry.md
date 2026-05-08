@@ -6,13 +6,13 @@
   "status": "active",
   "opened": "2026-05-08",
   "scenario": "rolling-restart",
-  "artifact": "test-output/reports/rolling-restart-operation-scheduling-repair-20260508T120500Z.report.json",
-  "playback": "test-output/reports/.playback/rolling-restart-operation-scheduling-repair-20260508T120500Z/rolling-restart/",
-  "owner": "Priority recovery operation scheduling after dispatch-pending handoff repair",
+  "artifact": "test-output/reports/rolling-restart-multi-candidate-operation-scheduling-repair-20260508T123000Z.report.json",
+  "playback": "test-output/reports/.playback/rolling-restart-multi-candidate-operation-scheduling-repair-20260508T123000Z/rolling-restart/",
+  "owner": "Priority recovery operation scheduling after multi-candidate surrogate repair",
   "boundary": "rebalancer_leader / operation_scheduling / event_driven_wait",
   "dominantReason": "priority_recovery_operation_scheduling_event_driven",
-  "currentState": "The operation-scheduling reentry repair reduced the representative blocker but did not close it. priorityRecoveryInvariants still pass, publication remains PUBLISHED with pendingAckCount=0, and replica_operations-p1 plus sql_transaction_participants-p1 are now spread_satisfied_in_flight; the remaining first frontier is still rebalancer_leader / operation_scheduling with sql_transactions-p1 and sql_write_operations-p1 classified as needs_operation / eligible_but_no_operation_created.",
-  "nextAction": "Start the next implementation slice for the remaining rebalancer_leader / operation_scheduling blocker. The next proof surface is why sql_transactions-p1 and sql_write_operations-p1 remain action_required with nextRequiredAction=create_recovery_operation while no recovery operation is scheduled.",
+  "currentState": "The multi-candidate operation-scheduling repair reduced the representative blocker again but did not close it. priorityRecoveryInvariants still pass and publication remains PUBLISHED with pendingAckCount=0. sql_write_operations-p1 now has a cache-visible PENDING operation and is classified recovering_in_flight / workflow_progress, while sql_transactions-p1 remains needs_operation / eligible_but_no_operation_created with no operationIds and nextRequiredAction=create_recovery_operation.",
+  "nextAction": "Start the next implementation slice for the remaining rebalancer_leader / operation_scheduling blocker. The next proof surface is why sql_transactions-p1 remains action_required with nextRequiredAction=create_recovery_operation and no recovery operation after the same replay scheduled sql_write_operations-p1.",
   "proof": [
     "First-package-in-sprint review-not-needed validation and work-context coverage",
     "Focused epoch-4 ACK_PENDING publication-convergence witness with supporting selected-snapshot and priority-recovery context",
@@ -50,7 +50,9 @@
     "src/rebalancer/operation-workflow-owner-segment-4.js",
     "src/rebalancer/unified-rebalancer-segment-2.js",
     "src/rebalancer/unified-rebalancer-segment-4-stage-1.js",
+    "src/rebalancer/unified-rebalancer-segment-4-stage-3.js",
     "src/rebalancer/unified-rebalancer-segment-4-stage-shared.js",
+    "test/rebalancer/unified-rebalancer-part-5-2-stage-4.js",
     "test/rebalancer/priority-recovery-stale-planning-visibility.test.js",
     "test/rebalancer/rebalance-coordinator-outcome-routing.test.js",
     "work/model-ledger.jsonl"
@@ -162,6 +164,10 @@ the next runtime implementation slice.
       Agent Laplace (019e077a-9693-7d10-b4fb-af9ff3c11409) reviewed work/packages/active-20260508-rolling-restart-topology-publication-convergence-ack-pending-missing-published-reentry.md; result clean.
 - [x] Next-slice fix subagent recorded or explicitly not needed:
       not-needed.
+- [x] Next-slice implementation subagent recorded:
+      Agent Bernoulli (019e077f-a701-74d3-953f-cf5fded3490e) implemented work/packages/active-20260508-rolling-restart-topology-publication-convergence-ack-pending-missing-published-reentry.md;
+      result clean with multi-candidate priority recovery operation scheduling
+      and focused regression proof.
 
 ## Residual Closure Inventory
 
@@ -276,3 +282,19 @@ Closure:
     `eligible_but_no_operation_created` partitions are `sql_transactions-p1`
     and `sql_write_operations-p1`, with dominant witness
     `sql_transactions-p1|8|operation_unknown`.
+11. Multi-candidate operation-scheduling regression:
+    `rebalance continues surrogate priority recovery scheduling after a repaired
+    priority partition is already in flight` in
+    `test/rebalancer/unified-rebalancer-part-5-2-stage-4.js` proves surrogate
+    priority recovery continues creating operations for multiple remaining
+    eligible priority partitions after the first candidate is already
+    `spread_satisfied_in_flight`.
+12. Representative rerun after the multi-candidate operation-scheduling fix:
+    `test-output/reports/rolling-restart-multi-candidate-operation-scheduling-repair-20260508T123000Z.report.json`
+    still fails on `rebalancer_leader / operation_scheduling`, but the blocker
+    reduced again. `sql_write_operations-p1` now has operation
+    `ece0b2f2-397f-47f2-9c79-1292740f54fa`, is cache-visible, and is classified
+    `recovering_in_flight` / `workflow_progress`; the remaining operation
+    scheduling witness is `sql_transactions-p1|2|operation_unknown`, with
+    `needs_operation`, `eligible_but_no_operation_created`, no `operationIds`,
+    and `nextRequiredAction=create_recovery_operation`.

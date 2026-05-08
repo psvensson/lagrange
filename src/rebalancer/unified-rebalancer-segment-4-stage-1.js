@@ -491,9 +491,85 @@ class UnifiedRebalancerSegment4Stage1 extends UnifiedRebalancerSegment3 {
   buildPriorityRecoverySurrogateFollowUpDecision(
     planningSnapshot = null,
   ) {
-    if (!this.isControlPlanePriorityPartition()) {
-      return null;
+    const followUpDecision =
+      this.buildPriorityRecoverySurrogateFollowUpDecisions(planningSnapshot)[
+        NUM.ZERO
+      ];
+    if (followUpDecision) {
+      return followUpDecision;
     }
+    const decisionSnapshot =
+      this.buildPriorityRecoverySurrogateDecisionFromPlanning(planningSnapshot);
+    return decisionSnapshot ?
+      Object.freeze({
+        planningSnapshot,
+        decisionSnapshot,
+      }) :
+      null;
+  }
+
+  buildPriorityRecoverySurrogateFollowUpDecisionRecord(
+    planningSnapshot = null,
+    decisionSnapshot = null,
+  ) {
+    return Object.freeze({
+      planningSnapshot,
+      decisionSnapshot,
+    });
+  }
+
+  appendPriorityRecoverySurrogateFollowUpDecision(
+    followUpDecisions,
+    followUpPartitionIds,
+    planningSnapshot,
+    decisionSnapshot,
+  ) {
+    if (
+      !this.isPriorityRecoveryFollowUpOperationRequired(decisionSnapshot)
+    ) {
+      return false;
+    }
+    const partitionId =
+      this.resolvePriorityRecoveryFollowUpPartitionId(decisionSnapshot);
+    if (
+      partitionId.length === NUM.ZERO ||
+      followUpPartitionIds.has(partitionId)
+    ) {
+      return true;
+    }
+    followUpPartitionIds.add(partitionId);
+    followUpDecisions.push(
+      this.buildPriorityRecoverySurrogateFollowUpDecisionRecord(
+        planningSnapshot,
+        decisionSnapshot,
+      ),
+    );
+    return true;
+  }
+
+  buildPriorityRecoverySurrogateFollowUpDecisions(
+    planningSnapshot = null,
+  ) {
+    if (!this.isControlPlanePriorityPartition()) {
+      return Object.freeze([]);
+    }
+    const followUpDecisions = [];
+    const followUpPartitionIds = new Set();
+    let skippedSettledCandidate = false;
+    const addFollowUpDecision = (decisionSnapshot) => {
+      const appended =
+        this.appendPriorityRecoverySurrogateFollowUpDecision(
+          followUpDecisions,
+          followUpPartitionIds,
+          planningSnapshot,
+          decisionSnapshot,
+        );
+      if (appended !== true) {
+        if (decisionSnapshot) {
+          skippedSettledCandidate = true;
+        }
+      }
+    };
     const closureWitnessPartitionId =
       this.resolvePriorityRecoveryClosureWitnessFollowUpPartitionId(
         planningSnapshot,
@@ -512,16 +588,7 @@ class UnifiedRebalancerSegment4Stage1 extends UnifiedRebalancerSegment3 {
     };
     const closureWitnessDecisionSnapshot =
       resolveDecisionSnapshotForPartitionId(closureWitnessPartitionId);
-    if (
-      this.isPriorityRecoveryFollowUpOperationRequired(
-        closureWitnessDecisionSnapshot,
-      )
-    ) {
-      return Object.freeze({
-        planningSnapshot,
-        decisionSnapshot: closureWitnessDecisionSnapshot,
-      });
-    }
+    addFollowUpDecision(closureWitnessDecisionSnapshot);
     const priorityPartitionSummary =
       planningSnapshot?.priorityPartitionSummary ||
       planningSnapshot?.publicationRecoveryGate?.priorityPartitionSummary ||
@@ -541,14 +608,7 @@ class UnifiedRebalancerSegment4Stage1 extends UnifiedRebalancerSegment3 {
     for (const partitionId of candidatePartitionIds) {
       const decisionSnapshot =
         resolveDecisionSnapshotForPartitionId(partitionId);
-      if (
-        this.isPriorityRecoveryFollowUpOperationRequired(decisionSnapshot)
-      ) {
-        return Object.freeze({
-          planningSnapshot,
-          decisionSnapshot,
-        });
-      }
+      addFollowUpDecision(decisionSnapshot);
     }
     const blockedPartitions = Array.isArray(
       priorityPartitionSummary?.blockedPartitions,
@@ -568,26 +628,14 @@ class UnifiedRebalancerSegment4Stage1 extends UnifiedRebalancerSegment3 {
       }
       const decisionSnapshot =
         resolveDecisionSnapshotForPartitionId(blockedPartitionId);
-      if (
-        this.isPriorityRecoveryFollowUpOperationRequired(decisionSnapshot)
-      ) {
-        return Object.freeze({
-          planningSnapshot,
-          decisionSnapshot,
-        });
-      }
+      addFollowUpDecision(decisionSnapshot);
     }
-    const decisionSnapshot =
-      this.buildPriorityRecoverySurrogateDecisionFromPlanning(
-        planningSnapshot,
-      );
-    if (!decisionSnapshot) {
-      return null;
-    }
-    return Object.freeze({
-      planningSnapshot,
-      decisionSnapshot,
-    });
+    const fallbackDecision =
+      this.buildPriorityRecoverySurrogateDecisionFromPlanning(planningSnapshot);
+    addFollowUpDecision(fallbackDecision);
+    return skippedSettledCandidate === true ?
+      Object.freeze(followUpDecisions) :
+      Object.freeze(followUpDecisions.slice(NUM.ZERO, NUM.ONE));
   }
 
   buildPriorityRecoverySurrogateDecisionFromPlanning(
