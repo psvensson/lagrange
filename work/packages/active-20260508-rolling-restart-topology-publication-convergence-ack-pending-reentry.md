@@ -40,6 +40,11 @@ and downstream startup active-gate and workflow-progress evidence only.
 
 ## Subagent Sequencing Ledger
 
-- [ ] Review subagent recorded:
-- [ ] Fix subagent recorded or explicitly not needed:
+- [x] Review subagent recorded:
+      Agent `Poincare` (`019e0632-8b45-75a1-a46d-a0c13d1f9239`) reviewed
+      `work/packages/done-20260508-rolling-restart-startup-active-gate-snapshot-coverage-readiness-support-reentry.md`;
+      result `fixes-required`.
+- [x] Fix subagent recorded or explicitly not needed:
+      Agent `Godel` (`019e0634-9cff-7683-ac30-c54ac830e068`) fixed
+      `work/packages/done-20260508-rolling-restart-startup-active-gate-snapshot-coverage-readiness-support-reentry.md`.
 - [ ] Implementation subagent recorded:
