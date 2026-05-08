@@ -8,23 +8,23 @@ Package: `work/packages/active-20260508-rolling-restart-topology-publication-con
 
 Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/rolling-restart-operation-workflow-progress-repair-20260508T110700Z.report.json`
+Artifact: `test-output/reports/rolling-restart-dispatch-pending-handoff-repair-20260508T112000Z.report.json`
 
-Playback: `test-output/reports/.playback/rolling-restart-operation-workflow-progress-repair-20260508T110700Z/rolling-restart/`
+Playback: `test-output/reports/.playback/rolling-restart-dispatch-pending-handoff-repair-20260508T112000Z/rolling-restart/`
 
 ## Boundary
 
-Owner: `Operation workflow progress transition-deferred after publication convergence root-cause-classification repair`
+Owner: `Priority recovery operation scheduling after dispatch-pending handoff repair`
 
-Boundary: `operation_workflow_owner / workflow_progress / event_driven_wait`
+Boundary: `rebalancer_leader / operation_scheduling / event_driven_wait`
 
-Dominant reason: `priority_recovery_workflow_progress_transition_deferred`
+Dominant reason: `priority_recovery_operation_scheduling_event_driven`
 
-Current state: The owner/handler progress repair advanced the previous target create witness to SYNCING and priorityRecoveryInvariants now pass in the representative rerun. The gate still fails on operation_workflow_owner / workflow_progress with dominant reason priority_recovery_workflow_progress_transition_deferred; the latest frontier is a two-partition serial-wait pair where sql_transaction_participants-p1 has latestOperationWorkflowStep=SYNCING and sql_transactions-p1 has latestOperationWorkflowStep=PENDING.
+Current state: The bounded coordinator-created remote handoff repair removed the previous dispatch-pending serial-wait signature. The representative rerun still fails, but the normalized first frontier moved to rebalancer_leader / operation_scheduling with priorityRecoveryInvariants=passed, publication PUBLISHED, pendingAckCount=0, prioritySpread=pending, and blocked partitions replica_operations-p1, sql_transactions-p1, and sql_write_operations-p1 classified as needs_operation / eligible_but_no_operation_created.
 
 ## Next Action
 
-Commit the focused owner/handler progress slice, then run the next sequencing loop to isolate why the sql_transactions-p1 priority-recovery operation remains PENDING while serial-wait carriers keep event-driven wait_for_operation_progress. Check whether the PENDING row is dispatch-suppressed by mutual serial-wait evidence, owner handoff, or stale planning reconstruction.
+Commit the focused dispatch-pending handoff slice, then start the next sequencing loop with a fresh review subagent before implementing operation-scheduling repair. The next proof surface is why eligible priority partitions remain action_required with nextRequiredAction=create_recovery_operation while no recovery operation is scheduled.
 
 ## Proof Ladder
 
@@ -60,6 +60,8 @@ Commit the focused owner/handler progress slice, then run the next sequencing lo
 21. `scripts/analyze-topology-convergence.js`
 22. `src/node/replica-handler-class-part-1.js`
 23. `test/node/replica-handler.test.js`
-24. `src/rebalancer/operation-workflow-owner-segment-4.js`
-25. `test/rebalancer/rebalance-coordinator-outcome-routing.test.js`
-26. `work/model-ledger.jsonl`
+24. `src/rebalancer/operation-workflow-owner-segment-2.js`
+25. `test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
+26. `src/rebalancer/operation-workflow-owner-segment-4.js`
+27. `test/rebalancer/rebalance-coordinator-outcome-routing.test.js`
+28. `work/model-ledger.jsonl`

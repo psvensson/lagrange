@@ -199,6 +199,9 @@ class OperationWorkflowOwnerSegment2 extends OperationWorkflowOwnerSegment1 {
 
     const deliveryOptions = {
       targetNodeId: ownerNodeId,
+      timeoutMs: this.replicaOperationDispatchTimeoutMs,
+      deliverySource:
+        OPERATION_WORKFLOW_OWNER_LITERAL.COORDINATOR_CREATED_REMOTE_HANDOFF,
     };
     if (
       isPriorityControlPlanePartition({
@@ -228,7 +231,7 @@ class OperationWorkflowOwnerSegment2 extends OperationWorkflowOwnerSegment1 {
         if (
           this.deferCoordinatorCreatedRemoteHandoffRetry(
             operation,
-            handoffError,
+            response,
           )
         ) {
           return false;

@@ -6,13 +6,13 @@
   "status": "active",
   "opened": "2026-05-08",
   "scenario": "rolling-restart",
-  "artifact": "test-output/reports/rolling-restart-operation-workflow-progress-repair-20260508T110700Z.report.json",
-  "playback": "test-output/reports/.playback/rolling-restart-operation-workflow-progress-repair-20260508T110700Z/rolling-restart/",
-  "owner": "Operation workflow progress transition-deferred after publication convergence root-cause-classification repair",
-  "boundary": "operation_workflow_owner / workflow_progress / event_driven_wait",
-  "dominantReason": "priority_recovery_workflow_progress_transition_deferred",
-  "currentState": "The owner/handler progress repair advanced the previous target create witness to SYNCING and priorityRecoveryInvariants now pass in the representative rerun. The gate still fails on operation_workflow_owner / workflow_progress with dominant reason priority_recovery_workflow_progress_transition_deferred; the latest frontier is a two-partition serial-wait pair where sql_transaction_participants-p1 has latestOperationWorkflowStep=SYNCING and sql_transactions-p1 has latestOperationWorkflowStep=PENDING.",
-  "nextAction": "Commit the focused owner/handler progress slice, then run the next sequencing loop to isolate why the sql_transactions-p1 priority-recovery operation remains PENDING while serial-wait carriers keep event-driven wait_for_operation_progress. Check whether the PENDING row is dispatch-suppressed by mutual serial-wait evidence, owner handoff, or stale planning reconstruction.",
+  "artifact": "test-output/reports/rolling-restart-dispatch-pending-handoff-repair-20260508T112000Z.report.json",
+  "playback": "test-output/reports/.playback/rolling-restart-dispatch-pending-handoff-repair-20260508T112000Z/rolling-restart/",
+  "owner": "Priority recovery operation scheduling after dispatch-pending handoff repair",
+  "boundary": "rebalancer_leader / operation_scheduling / event_driven_wait",
+  "dominantReason": "priority_recovery_operation_scheduling_event_driven",
+  "currentState": "The bounded coordinator-created remote handoff repair removed the previous dispatch-pending serial-wait signature. The representative rerun still fails, but the normalized first frontier moved to rebalancer_leader / operation_scheduling with priorityRecoveryInvariants=passed, publication PUBLISHED, pendingAckCount=0, prioritySpread=pending, and blocked partitions replica_operations-p1, sql_transactions-p1, and sql_write_operations-p1 classified as needs_operation / eligible_but_no_operation_created.",
+  "nextAction": "Commit the focused dispatch-pending handoff slice, then start the next sequencing loop with a fresh review subagent before implementing operation-scheduling repair. The next proof surface is why eligible priority partitions remain action_required with nextRequiredAction=create_recovery_operation while no recovery operation is scheduled.",
   "proof": [
     "First-package-in-sprint review-not-needed validation and work-context coverage",
     "Focused epoch-4 ACK_PENDING publication-convergence witness with supporting selected-snapshot and priority-recovery context",
@@ -45,6 +45,8 @@
     "scripts/analyze-topology-convergence.js",
     "src/node/replica-handler-class-part-1.js",
     "test/node/replica-handler.test.js",
+    "src/rebalancer/operation-workflow-owner-segment-2.js",
+    "test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js",
     "src/rebalancer/operation-workflow-owner-segment-4.js",
     "test/rebalancer/rebalance-coordinator-outcome-routing.test.js",
     "work/model-ledger.jsonl"
@@ -61,9 +63,11 @@ proved the old workflow-progress/timeout contract seam and moved the direct
 ## Migration Note
 
 The file name still reflects the publication-convergence slice that started
-this package. The live blocker has now migrated to
-`operation_workflow_owner / workflow_progress`. The implementation slice now
-records the real implementation subagent required by the package tracker; the
+this package. The live blocker first migrated to
+`operation_workflow_owner / workflow_progress`, then the dispatch-pending
+handoff repair moved the representative frontier to
+`rebalancer_leader / operation_scheduling`. The implementation slice records
+the real implementation subagent required by the package tracker; the
 commit/push ledger remains open until the focused slice is committed and
 pushed.
 
@@ -140,9 +144,9 @@ the next runtime implementation slice.
 - [x] Fix subagent recorded or explicitly not needed:
       Agent Bacon (019e074f-ebb1-72b1-b8fd-876e1a69287c) fixed work/packages/active-20260508-rolling-restart-topology-publication-convergence-ack-pending-missing-published-reentry.md.
 - [x] Implementation subagent recorded:
-      Agent Sagan (019e0739-6888-7a73-b578-e50a695954b6) implemented work/packages/active-20260508-rolling-restart-topology-publication-convergence-ack-pending-missing-published-reentry.md;
-      result clean with owner-side `IN_PROGRESS` dispatch progress
-      reconciliation and focused regression proof.
+      Agent Nietzsche (019e0756-ea0e-7490-89e3-c8b65542c4a7) implemented work/packages/active-20260508-rolling-restart-topology-publication-convergence-ack-pending-missing-published-reentry.md;
+      result clean with bounded coordinator-created remote handoff delivery
+      and dispatch-pending retry regression proof.
 
 ## Residual Closure Inventory
 
@@ -223,3 +227,19 @@ Closure:
    `sql_transaction_participants-p1` waits on the `sql_transactions-p1`
    operation while `sql_transactions-p1` remains `PENDING` and waits on the
    participants operation.
+7. Dispatch-pending handoff regression:
+   `coordinator-created remote handoff uses bounded priority delivery for
+   dispatch-pending PENDING rows` in
+   `test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
+   proves remote-owned coordinator-created priority operations use bounded
+   delivery metadata and preserve retry response details for reentry.
+8. Representative rerun after the dispatch-pending handoff fix:
+   `test-output/reports/rolling-restart-dispatch-pending-handoff-repair-20260508T112000Z.report.json`
+   still fails, but the previous serial-wait dispatch-pending witness no longer
+   dominates. The first frontier is now
+   `rebalancer_leader / operation_scheduling` with dominant reason
+   `priority_recovery_operation_scheduling_event_driven`; blocked partitions
+   `replica_operations-p1`, `sql_transactions-p1`, and `sql_write_operations-p1`
+   are classified as `needs_operation` /
+   `eligible_but_no_operation_created`, with
+   `nextRequiredAction=create_recovery_operation`.
