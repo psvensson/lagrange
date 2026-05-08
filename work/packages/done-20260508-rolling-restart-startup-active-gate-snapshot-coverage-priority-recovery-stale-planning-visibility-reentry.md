@@ -56,6 +56,12 @@ representative rerun still times out because the frontier has moved again to
       Agent `McClintock` (`019e0692-c3a3-72d3-9072-0413bb544f10`) implemented
       `work/packages/done-20260508-rolling-restart-startup-active-gate-snapshot-coverage-priority-recovery-stale-planning-visibility-reentry.md`.
 
+## Commit And Push Ledger
+
+- Focused package commit: `ac207b9d`
+- Pushed to: `origin/codex/pending-ack-eligibility-filter`
+- Commit contains only package-owned files/package-status/allowed sprint handoff: `yes`
+
 ## Current Evidence
 
 1. Representative report:
