@@ -4,7 +4,7 @@
 
 Sprint: `work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md`
 
-Package: `work/packages/active-20260508-rolling-restart-operation-workflow-progress-persisted-not-dispatched.md`
+Package: `work/packages/active-20260508-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md`
 
 Scenario: `rolling-restart`
 
@@ -20,36 +20,35 @@ Boundary: `rebalancer_handoff`
 
 Dominant reason: `priority_recovery_rebalancer_handoff_retry_scheduled`
 
-Current state: Ready-node rediscovery now keeps workflow-owner startup skips on the bounded dispatch retry lane. The follow-up rolling-restart rerun no longer reports the single sql_transactions-p1 persisted-not-dispatched workflow-progress witness as the dominant blocker. The fresh frontier is operation_workflow_owner / rebalancer_handoff with priority_recovery_rebalancer_handoff_retry_scheduled across sql_transaction_participants-p1 and sql_write_operations-p1.
+Current state: The workflow-progress package is closed locally after dispatch-skip retry contracted the timed-out persisted-not-dispatched witness. The latest representative artifact still fails the active gate with active=3/5, snapshotCoverage=3/5, publication=PUBLISHED, pendingAck=0, prioritySpread=pending#gap=5, and priorityRecoveryInvariants=passed. Normalized priority-recovery evidence selects operation_workflow_owner / rebalancer_handoff with dominant reason priority_recovery_rebalancer_handoff_retry_scheduled across sql_transaction_participants-p1 and sql_write_operations-p1.
 
 ## Next Action
 
-Resume the rebalancer-handoff retry-scheduled boundary with the fresh dispatch-skip-retry artifact, preserving the dispatch retry fix as package evidence.
+Implement the rebalancer-handoff retry-scheduled successor boundary using the dispatch-skip-retry artifact, then rerun focused owner tests and rolling-restart.
 
 ## Proof Ladder
 
-1. `npm run work:package:evidence-block -- test-output/reports/rolling-restart-current-release-gate-after-target-creation-progress-rerun.report.json`
-2. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-target-creation-progress-rerun.report.json --explain priority_recovery_partition_progress`
-3. `Focused operation_workflow_owner workflow_progress regression for timed-out cached PENDING dispatch/reconcile re-entry`
-4. `Touched-file runtime grammar, decision-boundary, literal-owner, syntax, and diff hygiene guardrails`
-5. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-current-release-gate-after-dispatch-skip-retry.report.json --fast-local --verbose`
+1. `npm run work:package:evidence-block -- test-output/reports/rolling-restart-current-release-gate-after-dispatch-skip-retry.report.json`
+2. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-dispatch-skip-retry.report.json --explain priority_recovery_partition_progress`
+3. `node scripts/check-runtime-grammar-contracts.js src/rebalancer/unified-rebalancer-segment-4-stage-3.js`
+4. `node scripts/check-guideline-decision-boundaries.js src/rebalancer/unified-rebalancer-segment-4-stage-3.js test/rebalancer/priority-follow-up-target-readiness.test.js`
+5. `node scripts/check-guideline-literals.js src/rebalancer/unified-rebalancer-segment-4-stage-3.js test/rebalancer/priority-follow-up-target-readiness.test.js`
+6. `node test/rebalancer/priority-follow-up-target-readiness.test.js`
+7. `node test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js`
+8. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-current-release-gate-after-rebalancer-handoff-target-readiness.report.json --fast-local --verbose`
 
 ## Touched Files
 
-1. `src/control-plane/replica-dispatch-service-segment-1.js`
-2. `src/control-plane/replica-dispatch-service-segment-2.js`
-3. `src/control-plane/replica-dispatch-service-shared.js`
-4. `test/control-plane/replica-dispatch-startup-operation-replay.test.js`
-5. `test/control-plane/replica-dispatch-node-state-update.test-part-2.js`
-6. `src/rebalancer/operation-workflow-owner-segment-1.js`
-7. `src/rebalancer/operation-workflow-owner-segment-4.js`
-8. `src/rebalancer/operation-workflow-owner-segment-7-stage-1.js`
-9. `src/rebalancer/operation-workflow-owner-segment-7-stage-2.js`
-10. `src/rebalancer/unified-rebalancer-segment-4-stage-3.js`
-11. `test/rebalancer/operation-workflow-observed-progress-lane-held.test.js`
-12. `test/rebalancer/priority-follow-up-target-readiness.test.js`
-13. `test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
-14. `work/packages/active-20260508-rolling-restart-operation-workflow-progress-persisted-not-dispatched.md`
-15. `work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md`
-16. `work/sprints/current-blocker.json`
-17. `work/sprints/current-blocker.md`
+1. `src/rebalancer/unified-rebalancer-segment-4-stage-3.js`
+2. `src/rebalancer/operation-workflow-owner-segment-1.js`
+3. `src/rebalancer/operation-workflow-owner-segment-4.js`
+4. `src/rebalancer/operation-workflow-owner-segment-7-stage-1.js`
+5. `test/rebalancer/priority-follow-up-target-readiness.test.js`
+6. `test/rebalancer/operation-workflow-observed-progress-lane-held.test.js`
+7. `work/packages/active-20260508-rolling-restart-operation-workflow-progress-persisted-not-dispatched.md`
+8. `work/packages/active-20260508-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md`
+9. `work/packages/done-20260508-rolling-restart-operation-workflow-progress-persisted-not-dispatched.md`
+10. `work/packages/todo-20260508-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md`
+11. `work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md`
+12. `work/sprints/current-blocker.json`
+13. `work/sprints/current-blocker.md`

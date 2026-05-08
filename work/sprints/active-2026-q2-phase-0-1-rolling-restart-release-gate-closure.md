@@ -31,7 +31,7 @@ The matching playback is:
 
 Active package:
 
-1. [Rolling Restart Operation Workflow Progress Persisted Not Dispatched](../packages/active-20260508-rolling-restart-operation-workflow-progress-persisted-not-dispatched.md)
+1. [Rolling Restart Operation Workflow Rebalancer Handoff Retry Scheduled](../packages/active-20260508-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md)
 
 Latest representative evidence:
 
@@ -74,8 +74,8 @@ Edition matrix status: Community / AGPL repo.
 
 1. Keep `rolling-restart` as the primary representative release gate until it
    passes or migrates to a new named owner boundary.
-2. Execute the active operation-workflow workflow-progress package first, then
-   resume the migrated rebalancer-handoff retry-scheduled boundary.
+2. The operation-workflow workflow-progress package is locally closed; execute
+   the active rebalancer-handoff retry-scheduled successor boundary next.
 3. Preserve the completed core topology control-plane rewrite as predecessor
    proof, not as the current owner.
 4. Keep sustained throughput and 7-node stress confirmation behind the

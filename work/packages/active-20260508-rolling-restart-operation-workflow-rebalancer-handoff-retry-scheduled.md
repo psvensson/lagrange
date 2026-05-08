@@ -3,19 +3,19 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "todo",
+  "status": "active",
   "opened": "2026-05-08",
   "scenario": "rolling-restart",
-  "artifact": "test-output/reports/rolling-restart-current-release-gate-next.report.json",
-  "playback": "test-output/reports/.playback/rolling-restart-current-release-gate-next/rolling-restart/",
+  "artifact": "test-output/reports/rolling-restart-current-release-gate-after-dispatch-skip-retry.report.json",
+  "playback": "test-output/reports/.playback/rolling-restart-current-release-gate-after-dispatch-skip-retry/rolling-restart/",
   "owner": "operation_workflow_owner",
   "boundary": "rebalancer_handoff",
   "dominantReason": "priority_recovery_rebalancer_handoff_retry_scheduled",
-  "currentState": "The workflow-progress package added a focused local-owner dispatch-pending probe and the representative rolling-restart rerun migrated. The current artifact fails the active gate with active=3/5, snapshotCoverage=3/5, publication=PUBLISHED, pendingAck=0, prioritySpread=pending#gap=5, and priorityRecoveryInvariants=passed. Normalized priority-recovery evidence selects operation_workflow_owner / rebalancer_handoff with dominant reason priority_recovery_rebalancer_handoff_retry_scheduled: four priority partitions have dispatch retry evidence against target ebc4aa0b-06c6-506d-93ea-1dd2deca3f58 while the rebalancer topology-settling log names node_ready_lease_incomplete for the same target.",
-  "nextAction": "Fix or classify the priority follow-up target-selection boundary so rebalancer handoff does not create retry-loop operations for nodes already known to have incomplete ready leases, then rerun focused tests and rolling-restart.",
+  "currentState": "The workflow-progress package is closed locally after dispatch-skip retry contracted the timed-out persisted-not-dispatched witness. The latest representative artifact still fails the active gate with active=3/5, snapshotCoverage=3/5, publication=PUBLISHED, pendingAck=0, prioritySpread=pending#gap=5, and priorityRecoveryInvariants=passed. Normalized priority-recovery evidence selects operation_workflow_owner / rebalancer_handoff with dominant reason priority_recovery_rebalancer_handoff_retry_scheduled across sql_transaction_participants-p1 and sql_write_operations-p1.",
+  "nextAction": "Implement the rebalancer-handoff retry-scheduled successor boundary using the dispatch-skip-retry artifact, then rerun focused owner tests and rolling-restart.",
   "proof": [
-    "npm run work:package:evidence-block -- test-output/reports/rolling-restart-current-release-gate-next.report.json",
-    "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-next.report.json --explain priority_recovery_partition_progress",
+    "npm run work:package:evidence-block -- test-output/reports/rolling-restart-current-release-gate-after-dispatch-skip-retry.report.json",
+    "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-dispatch-skip-retry.report.json --explain priority_recovery_partition_progress",
     "node scripts/check-runtime-grammar-contracts.js src/rebalancer/unified-rebalancer-segment-4-stage-3.js",
     "node scripts/check-guideline-decision-boundaries.js src/rebalancer/unified-rebalancer-segment-4-stage-3.js test/rebalancer/priority-follow-up-target-readiness.test.js",
     "node scripts/check-guideline-literals.js src/rebalancer/unified-rebalancer-segment-4-stage-3.js test/rebalancer/priority-follow-up-target-readiness.test.js",
@@ -30,12 +30,15 @@
     "src/rebalancer/operation-workflow-owner-segment-7-stage-1.js",
     "test/rebalancer/priority-follow-up-target-readiness.test.js",
     "test/rebalancer/operation-workflow-observed-progress-lane-held.test.js",
+    "work/packages/active-20260508-rolling-restart-operation-workflow-progress-persisted-not-dispatched.md",
+    "work/packages/active-20260508-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md",
+    "work/packages/done-20260508-rolling-restart-operation-workflow-progress-persisted-not-dispatched.md",
     "work/packages/todo-20260508-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md",
     "work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md",
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md"
   ],
-  "predecessor": "work/packages/todo-20260508-rolling-restart-operation-workflow-progress-transition-deferred.md"
+  "predecessor": "work/packages/done-20260508-rolling-restart-operation-workflow-progress-persisted-not-dispatched.md"
 }
 -->
 
@@ -46,10 +49,10 @@ representative `rolling-restart` gate and migrated to
 ## Current Evidence
 
 1. Representative report:
-   `test-output/reports/rolling-restart-current-release-gate-next.report.json`.
+   `test-output/reports/rolling-restart-current-release-gate-after-dispatch-skip-retry.report.json`.
 2. Playback directory:
-   `test-output/reports/.playback/rolling-restart-current-release-gate-next/rolling-restart/`.
-3. Result: failed after `134525ms`.
+   `test-output/reports/.playback/rolling-restart-current-release-gate-after-dispatch-skip-retry/rolling-restart/`.
+3. Result: failed after approximately `133215ms`.
 4. Active gate: `3/5` nodes reached ACTIVE within `120000ms`.
 5. Progress snapshot: `snapshotCoverage=3/5`, `publication=PUBLISHED`,
    `pendingAck=0`, `prioritySpread=pending#gap=5`.
@@ -59,18 +62,14 @@ representative `rolling-restart` gate and migrated to
    `operation_workflow_owner / rebalancer_handoff`.
 9. Dominant reason:
    `priority_recovery_rebalancer_handoff_retry_scheduled`.
-10. Blocked partitions: `control_plane_publications-p1`,
-    `replica_operations-p1`, `sql_transaction_participants-p1`, and
+10. Blocked partitions: `sql_transaction_participants-p1` and
     `sql_write_operations-p1`.
-11. Dominant witness:
-    `sql_write_operations-p1`, operation
-    `738b81f6-136c-4e8d-bd35-1cb379e44c73`, workflow step `SENDING`,
-    latest status `retry_deferred`, wait mode `retry_scheduled`, retry after
-    `1000ms`, evidence source `operation_dispatch_retry_log`.
-12. Playback logs show the handoff target as
-    `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58` while the same node is also named
-    by rebalancer `topology_settling_blocked` with blocker reason
-    `node_ready_lease_incomplete`.
+11. Unresolved semantic states:
+    `needs_operation,recovering_in_flight`.
+12. The predecessor dispatch-skip retry fix contracted the previous
+    timed-out `sql_transactions-p1` persisted-not-dispatched witness. The
+    active successor starts at the remaining rebalancer-handoff
+    retry-scheduled frontier.
 
 ## Scope Basis
 
@@ -142,17 +141,24 @@ explicitly adopts that scope.
       `work/packages/todo-20260508-rolling-restart-operation-workflow-progress-transition-deferred.md`.
 - [x] Implementation subagent recorded:
       Agent Hooke (`019e0947-8ec0-76f2-b14c-8fb2d826b166`) implemented
-      `work/packages/todo-20260508-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md`.
+      `work/packages/active-20260508-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md`.
 - [x] Follow-up review finding recorded:
       Agent Beauvoir (`019e0953-f39c-70a0-9630-5f8f739f0d2e`) reviewed
-      `work/packages/todo-20260508-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md`;
+      `work/packages/active-20260508-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md`;
       result `fixes-required`.
 - [x] Follow-up fix subagent recorded:
       Agent Dalton (`019e0958-51e1-7c23-a9f4-0e3c18676356`) fixed
-      `work/packages/todo-20260508-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md`.
+      `work/packages/active-20260508-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md`.
 - [x] Follow-up implementation subagent recorded:
       Agent Curie (`019e095d-88d1-7e13-a155-7fd65170821e`) implemented
-      `work/packages/todo-20260508-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md`.
+      `work/packages/active-20260508-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md`.
+- [x] Activation review finding recorded:
+      Agent Lovelace (`019e09c3-505c-7303-9002-f5f2f8d17d5b`) reviewed
+      `work/packages/done-20260508-rolling-restart-operation-workflow-progress-persisted-not-dispatched.md`;
+      result `fixes-required`.
+- [x] Activation fix subagent recorded:
+      Agent Noether (`019e09c7-67c7-7b11-8ebe-8c60c72fff15`) fixed
+      `work/packages/done-20260508-rolling-restart-operation-workflow-progress-persisted-not-dispatched.md`.
 
 ## Static Drift Ledger
 
@@ -193,7 +199,7 @@ Current boundary:
 Generated evidence block:
 
 ```text
-Source artifact: test-output/reports/rolling-restart-current-release-gate-next.report.json
+Source artifact: test-output/reports/rolling-restart-current-release-gate-after-dispatch-skip-retry.report.json
 Scenario: rolling-restart
 Frontier edge: priority_recovery_partition_progress
 Current semantic owner: operation_workflow_owner
@@ -202,7 +208,7 @@ Frontier state: blocked
 Dominant reason: priority_recovery_rebalancer_handoff_retry_scheduled
 Evidence path: report.scenarios[0].publicationConvergence.priorityRecoveryProgressSummary.dominantWitness
 Reasons: priority_recovery_event_driven_wait, priority_recovery_progress_blocked
-Next explain command: npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-next.report.json --explain priority_recovery_partition_progress
+Next explain command: npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-dispatch-skip-retry.report.json --explain priority_recovery_partition_progress
 ```
 
 ## Validation
@@ -236,7 +242,7 @@ Implementation subagent validation notes:
 6. `node scripts/check-guideline-literals.js src/rebalancer/unified-rebalancer-segment-4-stage-3.js test/rebalancer/priority-follow-up-target-readiness.test.js`
    passed with `0` new literal-guideline violations and `0` inherited
    baseline violations.
-7. `git diff --check -- src/rebalancer/unified-rebalancer-segment-4-stage-3.js test/rebalancer/priority-follow-up-target-readiness.test.js work/packages/todo-20260508-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md`
+7. `git diff --check -- src/rebalancer/unified-rebalancer-segment-4-stage-3.js test/rebalancer/priority-follow-up-target-readiness.test.js work/packages/active-20260508-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md`
    passed.
 
 Fix subagent follow-up validation notes:
