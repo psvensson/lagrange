@@ -60,9 +60,9 @@ and downstream startup active-gate and workflow-progress evidence only.
 
 ## Commit And Push Ledger
 
-- Focused package commit:
-- Pushed to:
-- Commit contains only package-owned files/package-status/allowed sprint handoff:
+- Focused package commit: `6020e71d`
+- Pushed to: `origin/codex/pending-ack-eligibility-filter`
+- Commit contains only package-owned files/package-status/allowed sprint handoff: `yes`
 
 ## Current Evidence
 
