@@ -24,7 +24,7 @@ Current state: The operation-scheduling reentry repair reduced the representativ
 
 ## Next Action
 
-Commit the focused operation-scheduling reentry slice, then start the next review/fix/implementation loop for the remaining rebalancer_leader / operation_scheduling blocker. The next proof surface is why sql_transactions-p1 and sql_write_operations-p1 remain action_required with nextRequiredAction=create_recovery_operation while no recovery operation is scheduled.
+Start the next implementation slice for the remaining rebalancer_leader / operation_scheduling blocker. The next proof surface is why sql_transactions-p1 and sql_write_operations-p1 remain action_required with nextRequiredAction=create_recovery_operation while no recovery operation is scheduled.
 
 ## Proof Ladder
 

@@ -12,7 +12,7 @@
   "boundary": "rebalancer_leader / operation_scheduling / event_driven_wait",
   "dominantReason": "priority_recovery_operation_scheduling_event_driven",
   "currentState": "The operation-scheduling reentry repair reduced the representative blocker but did not close it. priorityRecoveryInvariants still pass, publication remains PUBLISHED with pendingAckCount=0, and replica_operations-p1 plus sql_transaction_participants-p1 are now spread_satisfied_in_flight; the remaining first frontier is still rebalancer_leader / operation_scheduling with sql_transactions-p1 and sql_write_operations-p1 classified as needs_operation / eligible_but_no_operation_created.",
-  "nextAction": "Commit the focused operation-scheduling reentry slice, then start the next review/fix/implementation loop for the remaining rebalancer_leader / operation_scheduling blocker. The next proof surface is why sql_transactions-p1 and sql_write_operations-p1 remain action_required with nextRequiredAction=create_recovery_operation while no recovery operation is scheduled.",
+  "nextAction": "Start the next implementation slice for the remaining rebalancer_leader / operation_scheduling blocker. The next proof surface is why sql_transactions-p1 and sql_write_operations-p1 remain action_required with nextRequiredAction=create_recovery_operation while no recovery operation is scheduled.",
   "proof": [
     "First-package-in-sprint review-not-needed validation and work-context coverage",
     "Focused epoch-4 ACK_PENDING publication-convergence witness with supporting selected-snapshot and priority-recovery context",
@@ -158,6 +158,10 @@ the next runtime implementation slice.
       Agent Leibniz (019e076a-2cc4-7881-95bc-792482d53fda) implemented work/packages/active-20260508-rolling-restart-topology-publication-convergence-ack-pending-missing-published-reentry.md;
       result clean with priority recovery operation-scheduling reentry and
       focused recovery-operation creation regression proof.
+- [x] Next-slice review subagent recorded:
+      Agent Laplace (019e077a-9693-7d10-b4fb-af9ff3c11409) reviewed work/packages/active-20260508-rolling-restart-topology-publication-convergence-ack-pending-missing-published-reentry.md; result clean.
+- [x] Next-slice fix subagent recorded or explicitly not needed:
+      not-needed.
 
 ## Residual Closure Inventory
 
