@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-08",
   "scenario": "core-topology-control-plane-rewrite",
   "artifact": "none",
@@ -11,8 +11,8 @@
   "owner": "topology_control_plane",
   "boundary": "partitioning_rebalancing_kernel",
   "dominantReason": "placement_operation_owner_required_before_partitioning_rebalancing_runtime_extraction",
-  "currentState": "Placement and operation owner contracts are implemented. Timeout/cache visibility blocker is fixed: saturated cache-only add budget stays conservative, and reservation cleanup tests isolate storage-reservation reads from operation-owner visibility reads.",
-  "nextAction": "Run work validation, commit and push the focused package slice, then activate the publication/projection boundary package.",
+  "currentState": "Placement and operation owner contracts are implemented, committed, and pushed. Timeout/cache visibility blocker is fixed: saturated cache-only add budget stays conservative, and reservation cleanup tests isolate storage-reservation reads from operation-owner visibility reads.",
+  "nextAction": "Publication/projection boundary package is the next sprint slice.",
   "proof": [
     "node --test test/rebalancer/topology-owner-contracts.test.js",
     "node --test test/rebalancer/move-planner-inflight-cleanup.test.js",
@@ -42,12 +42,14 @@
     "src/rebalancer/rebalance-coordinator-segment-5.js",
     "test/rebalancer/topology-owner-contracts.test.js",
     "test/rebalancer/rebalance-coordinator-timeout-cache-visibility-tail-test-cases.js",
-    "work/packages/active-20260508-core-topology-partitioning-rebalancing-kernel.md",
+    "work/packages/done-20260508-core-topology-partitioning-rebalancing-kernel.md",
     "work/sprints/active-2026-q2-core-topology-control-plane-rewrite.md",
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md"
   ],
-  "predecessor": "work/packages/done-20260508-core-topology-boot-join-rejoin-kernel.md"
+  "predecessor": "work/packages/done-20260508-core-topology-boot-join-rejoin-kernel.md",
+  "closed": "2026-05-08",
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -108,11 +110,17 @@ ladder after implementation.
       `work/packages/done-20260508-core-topology-boot-join-rejoin-kernel.md`.
 - [x] Implementation subagent recorded: Agent Locke
       (`019e08b3-ef89-7930-99e1-2aa62d1b6815`) implemented
-      `work/packages/active-20260508-core-topology-partitioning-rebalancing-kernel.md`.
+      `work/packages/done-20260508-core-topology-partitioning-rebalancing-kernel.md`.
 - [x] Validation fix subagent recorded: Agent Newton
       (`019e08c2-3002-75a1-bb72-a675e97f4a45`) fixed the
       `rebalance-coordinator-timeout-cache-visibility` blocker for
-      `work/packages/active-20260508-core-topology-partitioning-rebalancing-kernel.md`.
+      `work/packages/done-20260508-core-topology-partitioning-rebalancing-kernel.md`.
+
+## Commit And Push Ledger
+
+- Focused package commit: `2005fe90`
+- Pushed to: `origin/codex/pending-ack-eligibility-filter`
+- Commit contains only package-owned files/package-status/allowed sprint handoff: `yes`
 
 ## Review Finding Fixes
 

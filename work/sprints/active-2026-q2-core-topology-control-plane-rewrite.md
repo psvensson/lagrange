@@ -10,17 +10,16 @@ readiness, operation scheduling, and rebalancer paths.
 
 Active package:
 
-1. [Core Topology Partitioning Rebalancing Kernel](../packages/active-20260508-core-topology-partitioning-rebalancing-kernel.md)
+1. [Core Topology Publication Projection Boundary](../packages/active-20260508-core-topology-publication-projection-boundary.md)
 
 Current blocker:
 
-1. Placement and operation owner contracts are implemented for the
-   partitioning/rebalancing kernel.
-2. The timeout/cache visibility blocker is fixed and the representative
-   rebalancer proof is green.
-3. The next blocker is package closure: run work validation, commit and push
-   the focused package slice, then activate the publication/projection
-   boundary package.
+1. Partitioning/rebalancing placement and operation owner contracts are closed
+   and pushed.
+2. Publication rows, ACK/freshness state, and recovery gate state need one
+   canonical stream before projection/readiness consumer cutover.
+3. The next blocker is the required review/fix/implementation subagent
+   sequence for the active publication/projection boundary package.
 
 ## Scope Basis
 
@@ -47,9 +46,8 @@ mutation owner.
 1. Done: [Core Topology Rewrite Spec And Roadmap Rebaseline](../packages/done-20260508-core-topology-rewrite-spec-and-roadmap-rebaseline.md)
 2. Done: [Core Topology Owner Boundary Inventory](../packages/done-20260508-core-topology-owner-boundary-inventory.md)
 3. Done: [Core Topology Boot Join Rejoin Kernel](../packages/done-20260508-core-topology-boot-join-rejoin-kernel.md)
-4. Active: [Core Topology Partitioning Rebalancing Kernel](../packages/active-20260508-core-topology-partitioning-rebalancing-kernel.md)
-5. Todo: Publication Projection Boundary (package file to create when the
-   partitioning/rebalancing kernel hands off)
+4. Done: [Core Topology Partitioning Rebalancing Kernel](../packages/done-20260508-core-topology-partitioning-rebalancing-kernel.md)
+5. Active: [Core Topology Publication Projection Boundary](../packages/active-20260508-core-topology-publication-projection-boundary.md)
 6. Todo: [Core Topology Projection Readiness Contract](../packages/todo-20260508-core-topology-projection-readiness-contract.md)
 7. Todo: [Core Topology Legacy Path Deletion And Proof](../packages/todo-20260508-core-topology-legacy-path-deletion-and-proof.md)
 

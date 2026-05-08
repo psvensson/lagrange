@@ -4,7 +4,7 @@
 
 Sprint: `work/sprints/active-2026-q2-core-topology-control-plane-rewrite.md`
 
-Package: `work/packages/active-20260508-core-topology-partitioning-rebalancing-kernel.md`
+Package: `work/packages/active-20260508-core-topology-publication-projection-boundary.md`
 
 Scenario: `core-topology-control-plane-rewrite`
 
@@ -16,48 +16,25 @@ Playback: `none`
 
 Owner: `topology_control_plane`
 
-Boundary: `partitioning_rebalancing_kernel`
+Boundary: `publication_projection_boundary`
 
-Dominant reason: `placement_operation_owner_required_before_partitioning_rebalancing_runtime_extraction`
+Dominant reason: `publication_stream_required_before_projection_readiness_consumer_cutover`
 
-Current state: Placement and operation owner contracts are implemented. Timeout/cache visibility blocker is fixed: saturated cache-only add budget stays conservative, and reservation cleanup tests isolate storage-reservation reads from operation-owner visibility reads.
+Current state: Placement and operation owner contracts are closed. Publication rows, ACK/freshness state, and recovery gate state still need one canonical publication stream before projection/readiness consumers can stop recombining raw owner evidence.
 
 ## Next Action
 
-Run work validation, commit and push the focused package slice, then activate the publication/projection boundary package.
+Run the required review/fix/implementation subagent sequence, then implement the publication/projection owner boundary.
 
 ## Proof Ladder
 
-1. `node --test test/rebalancer/topology-owner-contracts.test.js`
-2. `node --test test/rebalancer/move-planner-inflight-cleanup.test.js`
-3. `node --test test/rebalancer/rebalance-coordinator-operation-ownership.test.js`
-4. `node --test test/rebalancer/rebalance-coordinator-timeout-cache-visibility.test.js`
-5. `node --test test/rebalancer/rebalance-coordinator-timeout-cache-visibility-tail-test-cases.js`
-6. `node --test test/rebalancer/rebalance-coordinator-timeout-cache-visibility-tail-more-test-cases.js`
-7. `node --test test/control-plane/membership-lifecycle-controller.test.js test/bootstrap/bootstrap-membership-owner-outcome-consumers.test.js test/bootstrap/message-group-assignment-centralization.test.js`
-8. `node scripts/check-guideline-literals.js src/bootstrap/rejoin-hints-constants.js src/control-plane/membership-lifecycle-controller.js src/bootstrap/owners/service-leader-readiness-owner.js src/bootstrap/owners/bootstrap-join-admission-owner.js src/rebalancer/topology-owner-constants.js src/rebalancer/move-planner.js src/rebalancer/operation-workflow-owner-segment-1.js src/rebalancer/rebalance-coordinator-segment-5.js`
-9. `node scripts/check-guideline-decision-boundaries.js src/bootstrap/rejoin-hints-constants.js src/control-plane/membership-lifecycle-controller.js src/bootstrap/owners/service-leader-readiness-owner.js src/bootstrap/owners/bootstrap-join-admission-owner.js src/rebalancer/topology-owner-constants.js src/rebalancer/move-planner.js src/rebalancer/operation-workflow-owner-segment-1.js src/rebalancer/rebalance-coordinator-segment-5.js`
-10. `npm run audit:runtime-grammar:file -- src/bootstrap/rejoin-hints-constants.js src/control-plane/membership-lifecycle-controller.js src/bootstrap/owners/service-leader-readiness-owner.js src/bootstrap/owners/bootstrap-join-admission-owner.js src/rebalancer/topology-owner-constants.js src/rebalancer/move-planner.js src/rebalancer/operation-workflow-owner-segment-1.js src/rebalancer/rebalance-coordinator-segment-5.js`
-11. `npm run work:validate`
-12. `npm run work:context`
-13. `git diff --check`
+1. `npm run work:context`
+2. `npm run work:validate`
+3. `git diff --check`
 
 ## Touched Files
 
-1. `src/bootstrap/rejoin-hints-constants.js`
-2. `src/control-plane/membership-lifecycle-controller.js`
-3. `src/bootstrap/owners/service-leader-readiness-owner.js`
-4. `src/bootstrap/owners/bootstrap-join-admission-owner.js`
-5. `test/control-plane/membership-lifecycle-controller.test.js`
-6. `test/bootstrap/bootstrap-membership-owner-outcome-consumers.test.js`
-7. `test/bootstrap/message-group-assignment-centralization.test.js`
-8. `src/rebalancer/topology-owner-constants.js`
-9. `src/rebalancer/move-planner.js`
-10. `src/rebalancer/operation-workflow-owner-segment-1.js`
-11. `src/rebalancer/rebalance-coordinator-segment-5.js`
-12. `test/rebalancer/topology-owner-contracts.test.js`
-13. `test/rebalancer/rebalance-coordinator-timeout-cache-visibility-tail-test-cases.js`
-14. `work/packages/active-20260508-core-topology-partitioning-rebalancing-kernel.md`
-15. `work/sprints/active-2026-q2-core-topology-control-plane-rewrite.md`
-16. `work/sprints/current-blocker.json`
-17. `work/sprints/current-blocker.md`
+1. `work/packages/active-20260508-core-topology-publication-projection-boundary.md`
+2. `work/sprints/active-2026-q2-core-topology-control-plane-rewrite.md`
+3. `work/sprints/current-blocker.json`
+4. `work/sprints/current-blocker.md`
