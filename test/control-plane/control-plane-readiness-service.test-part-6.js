@@ -11,6 +11,7 @@ import {
   CONTROL_PLANE_PRIORITY_RECOVERY_REASON,
   CONTROL_PLANE_READINESS_DIMENSION,
   CONTROL_PLANE_PUBLICATION_MODE,
+  PROJECTION_READINESS_CONTRACT_STATE,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {
 } from '../../src/control-plane/control-plane-constants.js';
@@ -871,6 +872,43 @@ test('ControlPlaneReadinessService exposes controlPlanePublished while keeping r
     true,
     'recovery eligibility should stay open while the publication epoch is still awaiting acknowledgement so recovery traffic can finish convergence',
   );
+  t.match(readiness.projectionReadinessContract, {
+    state: PROJECTION_READINESS_CONTRACT_STATE.RECOVERY_OPEN,
+    ready: false,
+    recoveryOpen: true,
+    publication: {
+      ready: false,
+      boundaryOutcome: {
+        ready: false,
+        active: true,
+      },
+    },
+    readiness: {
+      recoveryEligible: true,
+      serveEligible: false,
+    },
+    priorityRecovery: {
+      active: true,
+    },
+  }, 'readiness should expose one canonical projection/readiness contract');
+  const participation = await readinessService.getControlPlaneParticipation(
+    nodeId,
+    {
+      maxCachedAgeMs: 0,
+      participationKind:
+        CONTROL_PLANE_PARTICIPATION_KIND.CONTROL_PLANE_RECOVERY,
+    },
+  );
+  t.equal(
+    participation.summary.projectionReadinessState,
+    PROJECTION_READINESS_CONTRACT_STATE.RECOVERY_OPEN,
+    'participation diagnostics should consume the canonical projection/readiness contract state',
+  );
+  t.equal(
+    participation.summary.projectionReadinessContract.priorityRecovery.active,
+    true,
+    'participation diagnostics should carry priority recovery through the canonical contract',
+  );
   t.end();
 });
 
@@ -1011,6 +1049,20 @@ test('ControlPlaneReadinessService splits publication diagnostics from recovery 
     [CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PUBLICATION_EPOCH_PENDING],
     'priority recovery reasons should come from the recovery planning snapshot',
   );
+  t.match(readiness.projectionReadinessContract, {
+    state: PROJECTION_READINESS_CONTRACT_STATE.RECOVERY_OPEN,
+    recoveryOpen: true,
+    publication: {
+      ready: true,
+      boundaryOutcome: null,
+    },
+    priorityRecovery: {
+      active: true,
+      reasonCodes: [
+        CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PUBLICATION_EPOCH_PENDING,
+      ],
+    },
+  }, 'projection/readiness contract should derive priority recovery from the planning lane without rebuilding publication diagnostics');
   t.end();
 });
 

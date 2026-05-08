@@ -11,8 +11,8 @@
   "owner": "topology_control_plane",
   "boundary": "publication_projection_boundary",
   "dominantReason": "publication_stream_required_before_projection_readiness_consumer_cutover",
-  "currentState": "Publication boundary outcome implementation and focused proof are complete; the package is ready for focused commit/push and closure before projection/readiness consumer cutover starts.",
-  "nextAction": "Commit and push the focused publication/projection boundary slice, close this package, then activate the projection/readiness contract successor.",
+  "currentState": "publicationBoundaryOutcome implementation and focused proof are complete; this package is closed, committed, and pushed, and the projection/readiness contract successor is active.",
+  "nextAction": "No action remains for this closed package; continue execution in the active projection/readiness contract successor.",
   "proof": [
     "npm run work:context",
     "npm run work:validate",

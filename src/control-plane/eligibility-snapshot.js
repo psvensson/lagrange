@@ -1,6 +1,8 @@
 import {NUM, TYPEOF} from '../constants/index.js';
 import {
   AUTHORITY_DESCRIPTOR_STATE,
+  CONTROL_PLANE_READINESS_DIMENSION,
+  PROJECTION_READINESS_CONTRACT_STATE,
   PROVISIONING_ELIGIBILITY_STATE,
   READINESS_SNAPSHOT_KEY,
   RUNTIME_AUTHORITY_PUBLICATION_STATE,
@@ -10,6 +12,24 @@ import {
 } from './control-plane-readiness-constants.js';
 
 const LOCAL_STR_EMPTY = '';
+
+const PROJECTION_READINESS_CONTRACT_RULES = Object.freeze([
+  Object.freeze({
+    state: PROJECTION_READINESS_CONTRACT_STATE.SERVE_READY,
+    matches: (evidence) =>
+      evidence.publicationReady === true &&
+      evidence.serveEligible === true &&
+      evidence.priorityRecoveryActive !== true,
+  }),
+  Object.freeze({
+    state: PROJECTION_READINESS_CONTRACT_STATE.RECOVERY_OPEN,
+    matches: (evidence) => evidence.recoveryOpen === true,
+  }),
+  Object.freeze({
+    state: PROJECTION_READINESS_CONTRACT_STATE.BLOCKED,
+    matches: () => true,
+  }),
+]);
 
 function freezeObject(value) {
   return value && typeof value === TYPEOF.OBJECT ?
@@ -53,6 +73,105 @@ function normalizeStringList(values) {
       .map((value) => String(value || LOCAL_STR_EMPTY).trim())
       .filter((value) => value.length > NUM.ZERO),
   )]);
+}
+
+function resolveProjectionReadinessContractDecision(evidence) {
+  return PROJECTION_READINESS_CONTRACT_RULES.find((rule) =>
+    rule.matches(evidence),
+  );
+}
+
+function getMembershipPublicationBoundaryOutcome(membershipPublication) {
+  return membershipPublication?.publicationBoundaryOutcome &&
+    typeof membershipPublication.publicationBoundaryOutcome === TYPEOF.OBJECT ?
+    membershipPublication.publicationBoundaryOutcome :
+    null;
+}
+
+function buildProjectionReadinessContract(snapshot = {}) {
+  const dimensions =
+    snapshot.dimensions && typeof snapshot.dimensions === TYPEOF.OBJECT ?
+      snapshot.dimensions :
+      Object.freeze({});
+  const priorityControlPlaneRecovery =
+    snapshot.priorityControlPlaneRecovery &&
+    typeof snapshot.priorityControlPlaneRecovery === TYPEOF.OBJECT ?
+      snapshot.priorityControlPlaneRecovery :
+      null;
+  const publicationBoundaryOutcome =
+    snapshot.publicationBoundaryOutcome &&
+      typeof snapshot.publicationBoundaryOutcome === TYPEOF.OBJECT ?
+      snapshot.publicationBoundaryOutcome :
+      getMembershipPublicationBoundaryOutcome(snapshot.membershipPublication);
+  const priorityReasonCodes = normalizeStringList(
+    priorityControlPlaneRecovery?.reasonCodes,
+  );
+  const publicationReasonCodes = normalizeStringList(
+    publicationBoundaryOutcome?.reasonCodes,
+  );
+  const evidence = Object.freeze({
+    publicationReady:
+      typeof publicationBoundaryOutcome?.ready === TYPEOF.BOOLEAN ?
+        publicationBoundaryOutcome.ready :
+        dimensions[
+          CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_PUBLISHED
+        ] === true,
+    serveEligible:
+      dimensions[CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE] === true,
+    processAlive:
+      dimensions[CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE] === true,
+    clusterMemberHealthy:
+      dimensions[
+        CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY
+      ] === true,
+    controlPlaneWritable:
+      dimensions[
+        CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE
+      ] === true,
+    repairEligible:
+      dimensions[CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE] === true,
+    recoveryEligible:
+      dimensions[
+        CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE
+      ] === true,
+    priorityRecoveryActive:
+      priorityControlPlaneRecovery?.active === true ||
+      publicationBoundaryOutcome?.active === true,
+  });
+  const recoveryClosed =
+    evidence.recoveryEligible === true &&
+    evidence.controlPlaneWritable === true &&
+    evidence.publicationReady === true &&
+    evidence.clusterMemberHealthy === true &&
+    evidence.processAlive === true &&
+    evidence.priorityRecoveryActive !== true;
+  const contractEvidence = Object.freeze({
+    ...evidence,
+    recoveryOpen: recoveryClosed !== true,
+  });
+  const decision = resolveProjectionReadinessContractDecision(contractEvidence);
+  return Object.freeze({
+    state: decision.state,
+    ready:
+      decision.state === PROJECTION_READINESS_CONTRACT_STATE.SERVE_READY,
+    recoveryOpen: contractEvidence.recoveryOpen,
+    publication: Object.freeze({
+      ready: contractEvidence.publicationReady,
+      boundaryOutcome: freezeObject(publicationBoundaryOutcome),
+    }),
+    readiness: Object.freeze({
+      serveEligible: contractEvidence.serveEligible,
+      repairEligible: contractEvidence.repairEligible,
+      recoveryEligible: contractEvidence.recoveryEligible,
+    }),
+    priorityRecovery: Object.freeze({
+      active: contractEvidence.priorityRecoveryActive,
+      reasonCodes: priorityReasonCodes,
+    }),
+    reasonCodes: Object.freeze([
+      ...new Set([...publicationReasonCodes, ...priorityReasonCodes]),
+    ]),
+  });
 }
 
 function freezeRuntimeAuthoritySummary(runtimeAuthority) {
@@ -141,21 +260,32 @@ function freezeRuntimeAuthoritySummary(runtimeAuthority) {
 }
 
 function createEligibilitySnapshot(snapshot = {}) {
+  const membershipPublication = freezeObject(snapshot.membershipPublication);
+  const priorityControlPlaneRecovery = freezeObject(
+    snapshot.priorityControlPlaneRecovery,
+  );
+  const dimensions = snapshot.dimensions &&
+    typeof snapshot.dimensions === TYPEOF.OBJECT ?
+    Object.freeze({...snapshot.dimensions}) :
+    Object.freeze({});
+  const projectionReadinessContract = buildProjectionReadinessContract({
+    publicationBoundaryOutcome: snapshot.publicationBoundaryOutcome,
+    membershipPublication,
+    priorityControlPlaneRecovery,
+    dimensions,
+  });
   return Object.freeze({
     nodeId: snapshot.nodeId || null,
     lifecycleState: snapshot.lifecycleState || null,
     publication: freezeObject(snapshot.publication),
-    membershipPublication: freezeObject(snapshot.membershipPublication),
-    priorityControlPlaneRecovery:
-      freezeObject(snapshot.priorityControlPlaneRecovery),
+    membershipPublication,
+    priorityControlPlaneRecovery,
     capacity: freezeObject(snapshot.capacity),
     nodeEvidence: freezeObject(snapshot.nodeEvidence),
     observedAt: snapshot.observedAt || null,
     runtimeAuthority: freezeRuntimeAuthoritySummary(snapshot.runtimeAuthority),
-    dimensions: snapshot.dimensions &&
-      typeof snapshot.dimensions === TYPEOF.OBJECT ?
-      Object.freeze({...snapshot.dimensions}) :
-      Object.freeze({}),
+    projectionReadinessContract,
+    dimensions,
     reasons: normalizeReasons(snapshot.reasons),
   });
 }
@@ -197,10 +327,13 @@ function compactEligibilitySnapshot(snapshot, decisionDimension = null) {
       decisionDimension || null,
     [READINESS_SNAPSHOT_KEY.RUNTIME_AUTHORITY]:
       normalizedSnapshot.runtimeAuthority || null,
+    [READINESS_SNAPSHOT_KEY.PROJECTION_READINESS_CONTRACT]:
+      normalizedSnapshot.projectionReadinessContract || null,
   });
 }
 
 export {
+  buildProjectionReadinessContract,
   compactEligibilitySnapshot,
   createEligibilitySnapshot,
   evaluateEligibilityDecision,

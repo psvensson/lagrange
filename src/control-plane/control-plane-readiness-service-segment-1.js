@@ -993,6 +993,10 @@ class ControlPlaneReadinessServiceSegment1 {
           observedAt: summary.observedAt || null,
           lifecycleState: summary.lifecycleState || null,
           reasonCodes: summary.reasonCodes || Object.freeze([]),
+          projectionReadinessContract:
+            summary.projectionReadinessContract || null,
+          projectionReadinessState:
+            summary.projectionReadinessContract?.state || null,
           failedDimensions: Array.isArray(decision?.failedDimensions) ?
             decision.failedDimensions :
             Object.freeze([]),

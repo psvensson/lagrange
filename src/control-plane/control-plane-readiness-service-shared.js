@@ -32,6 +32,7 @@ import {
   CONTROL_PLANE_READINESS_OWNER,
   CONTROL_PLANE_READINESS_REASON,
   CONTROL_PLANE_READINESS_SUBSYSTEM,
+  PROJECTION_READINESS_CONTRACT_STATE,
   PROVISIONING_ELIGIBILITY_STATE,
   RUNTIME_AUTHORITY_PUBLICATION_STATE,
   RUNTIME_AUTHORITY_REPAIR_STATE,
@@ -42,6 +43,7 @@ import {
   compactEligibilitySnapshot,
   createEligibilitySnapshot,
   evaluateEligibilityDecision,
+  buildProjectionReadinessContract,
 } from './eligibility-snapshot.js';
 import {CONTROL_PLANE_PUBLICATION_STATUS} from './control-plane-publication-merge.js';
 import {
@@ -400,6 +402,7 @@ export const CONTROL_PLANE_READINESS_SERVICE_SHARED = {
   OperationLane,
   PRESSURE_STATE,
   PRIORITY_CONTROL_PLANE_RECOVERY_HEALTH_FAILURE,
+  PROJECTION_READINESS_CONTRACT_STATE,
   PROVISIONING_ELIGIBILITY_STATE,
   PUBLICATION_REASON_CONFIG_SAFE_MODE,
   PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE,
@@ -424,6 +427,7 @@ export const CONTROL_PLANE_READINESS_SERVICE_SHARED = {
   TYPEOF,
   assertCritical,
   buildControlPlanePublicationStory,
+  buildProjectionReadinessContract,
   buildParticipationErrorCode,
   buildParticipationErrorMessage,
   buildPublicationRecoveryGateSnapshot,

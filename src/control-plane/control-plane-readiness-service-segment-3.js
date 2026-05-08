@@ -818,6 +818,10 @@ class ControlPlaneReadinessServiceSegment3 extends ControlPlaneReadinessServiceS
       serveEligible: currentState.serveEligible,
       previousRepairEligible: previousState.repairEligible,
       repairEligible: currentState.repairEligible,
+      previousProjectionReadinessContract:
+        previousState.projectionReadinessContract || null,
+      projectionReadinessContract:
+        currentState.projectionReadinessContract || null,
       previousReasonCodes: Object.freeze([...previousState.reasonCodes]),
       reasonCodes: Object.freeze([...currentState.reasonCodes]),
       flippedDimensions: Object.freeze(flippedDimensions),
@@ -856,6 +860,16 @@ class ControlPlaneReadinessServiceSegment3 extends ControlPlaneReadinessServiceS
           flippedDimensions: Array.isArray(entry.flippedDimensions) ?
             Object.freeze([...entry.flippedDimensions]) :
             Object.freeze([]),
+          previousProjectionReadinessContract:
+            entry.previousProjectionReadinessContract &&
+            typeof entry.previousProjectionReadinessContract === TYPEOF.OBJECT ?
+              Object.freeze({...entry.previousProjectionReadinessContract}) :
+              null,
+          projectionReadinessContract:
+            entry.projectionReadinessContract &&
+            typeof entry.projectionReadinessContract === TYPEOF.OBJECT ?
+              Object.freeze({...entry.projectionReadinessContract}) :
+              null,
           rawInputs:
             entry.rawInputs && typeof entry.rawInputs === TYPEOF.OBJECT ?
               Object.freeze({...entry.rawInputs}) :

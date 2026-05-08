@@ -2,6 +2,9 @@ import {NUM, TYPEOF} from '../constants/index.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from './control-plane-readiness-constants.js';
+import {
+  buildProjectionReadinessContract,
+} from './eligibility-snapshot.js';
 
 function normalizeIsoTimestamp(nowValue) {
   return new Date(nowValue).toISOString();
@@ -32,16 +35,13 @@ export function buildReadinessTransitionState(context = {}, nowValue = Date.now(
     context.publication && typeof context.publication === TYPEOF.OBJECT ?
       context.publication :
       {};
-  const priorityControlPlaneRecovery =
-    context.priorityControlPlaneRecovery &&
-    typeof context.priorityControlPlaneRecovery === TYPEOF.OBJECT ?
-      context.priorityControlPlaneRecovery :
-      {};
   const runtimeAuthority =
     context.runtimeAuthority &&
     typeof context.runtimeAuthority === TYPEOF.OBJECT ?
       context.runtimeAuthority :
       {};
+  const projectionReadinessContract =
+    buildProjectionReadinessContract(context);
 
   return Object.freeze({
     observedAt,
@@ -50,6 +50,7 @@ export function buildReadinessTransitionState(context = {}, nowValue = Date.now(
       dimensions[CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE] === true,
     repairEligible:
       dimensions[CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE] === true,
+    projectionReadinessContract,
     reasonCodes: Object.freeze(reasonCodes),
     rawInputs: Object.freeze({
       lastHeartbeat:
@@ -121,11 +122,14 @@ export function buildReadinessTransitionState(context = {}, nowValue = Date.now(
           context.membershipPublication.status :
           null,
       priorityControlPlaneRecoveryActive:
-        priorityControlPlaneRecovery.active === true,
+        projectionReadinessContract.priorityRecovery.active === true,
       priorityControlPlaneRecoveryReasonCodes:
-        Array.isArray(priorityControlPlaneRecovery.reasonCodes) ?
-          Object.freeze([...priorityControlPlaneRecovery.reasonCodes]) :
-          Object.freeze([]),
+        projectionReadinessContract.priorityRecovery.reasonCodes,
+      projectionReadinessState: projectionReadinessContract.state,
+      projectionPublicationReady:
+        projectionReadinessContract.publication.ready === true,
+      projectionPriorityRecoveryActive:
+        projectionReadinessContract.priorityRecovery.active === true,
       runtimeAuthorityState:
         typeof runtimeAuthority.state === TYPEOF.STRING ?
           runtimeAuthority.state :

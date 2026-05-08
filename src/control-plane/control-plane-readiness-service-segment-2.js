@@ -19,6 +19,7 @@ const {
   CONTROL_PLANE_READINESS_OWNER,
   CONTROL_PLANE_READINESS_REASON,
   NUM,
+  PROJECTION_READINESS_CONTRACT_STATE,
   PROVISIONING_ELIGIBILITY_STATE,
   PUBLICATION_REASON_CONFIG_SAFE_MODE,
   PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE,
@@ -77,6 +78,8 @@ class ControlPlaneReadinessServiceSegment2 extends ControlPlaneReadinessServiceS
       lifecyclePhase: participation.lifecyclePhase || null,
       lifecycleState: participation.summary?.lifecycleState || null,
       observedAt: participation.summary?.observedAt || null,
+      projectionReadinessState:
+        participation.summary?.projectionReadinessState || null,
     });
   }
 
@@ -428,6 +431,11 @@ class ControlPlaneReadinessServiceSegment2 extends ControlPlaneReadinessServiceS
         ),
       ] :
       [];
+    const projectionReadinessContract =
+      snapshot?.projectionReadinessContract &&
+      typeof snapshot.projectionReadinessContract === TYPEOF.OBJECT ?
+        snapshot.projectionReadinessContract :
+        null;
     return Object.freeze({
       nodeId,
       observedAt: snapshot?.observedAt || normalizeIsoTimestamp(observedAtMs),
@@ -453,27 +461,23 @@ class ControlPlaneReadinessServiceSegment2 extends ControlPlaneReadinessServiceS
         dimensions[CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE] === true,
       serveEligible:
         dimensions[CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE] === true,
+      projectionReadinessContract,
+      projectionReadinessState:
+        projectionReadinessContract?.state ||
+        PROJECTION_READINESS_CONTRACT_STATE.BLOCKED,
       priorityControlPlaneRecoveryActive:
-        snapshot?.priorityControlPlaneRecovery?.active === true,
-      priorityControlPlaneRecoveryReasonCodes: Array.isArray(
-        snapshot?.priorityControlPlaneRecovery?.reasonCodes,
-      ) ?
-        Object.freeze([...snapshot.priorityControlPlaneRecovery.reasonCodes]) :
-        Object.freeze([]),
+        projectionReadinessContract?.priorityRecovery?.active === true,
+      priorityControlPlaneRecoveryReasonCodes:
+        Array.isArray(
+          projectionReadinessContract?.priorityRecovery?.reasonCodes,
+        ) ?
+          Object.freeze([
+            ...projectionReadinessContract.priorityRecovery.reasonCodes,
+          ]) :
+          Object.freeze([]),
       reasonCodes: Object.freeze(reasonCodes),
-      recoveryActive: !(
-        dimensions[
-          CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE
-        ] === true &&
-        dimensions[CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE] ===
-          true &&
-        dimensions[
-          CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_PUBLISHED
-        ] === true &&
-        dimensions[CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY] ===
-          true &&
-        dimensions[CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE] === true
-      ),
+      recoveryActive:
+        projectionReadinessContract?.recoveryOpen !== false,
     });
   }
 
