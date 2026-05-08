@@ -78,6 +78,15 @@ const REMOTE_PRIORITY_DISPATCH_PENDING_REPLICA_ID =
 const REMOTE_PRIORITY_DISPATCH_PENDING_CAPTURED_AT_MS = 1000000;
 const REMOTE_PRIORITY_DISPATCH_PENDING_LAST_PROGRESS_AT_MS =
   REMOTE_PRIORITY_DISPATCH_PENDING_CAPTURED_AT_MS - 1;
+const REMOTE_PRIORITY_DISPATCH_PENDING_TIMEOUT_EPOCH = 2;
+const REMOTE_PRIORITY_DISPATCH_PENDING_TIMEOUT_SUPPORTING_PARTITION_IDS =
+  Object.freeze([
+    'sql_transactions-p1',
+  ]);
+const REMOTE_PRIORITY_DISPATCH_PENDING_TIMEOUT_SUPPORTING_OPERATION_IDS =
+  Object.freeze([
+    'remote-priority-timeout-sql-transactions-operation',
+  ]);
 const REMOTE_PRIORITY_TIMEOUT_SUPPORTING_PARTITION_IDS = Object.freeze([
   REMOTE_PRIORITY_SERIAL_WAIT_SOURCE_PARTITION_ID,
   'sql_transactions-p1',
@@ -384,6 +393,72 @@ function buildRemotePriorityDispatchPendingPlanningSnapshot() {
   });
 }
 
+function buildRemotePriorityDispatchPendingTimeoutPlanningSnapshot() {
+  return Object.freeze({
+    publicationEpoch: REMOTE_PRIORITY_DISPATCH_PENDING_TIMEOUT_EPOCH,
+    publicationStatus: 'PUBLISHED',
+    priorityRecoveryDecisionSnapshots: {
+      capturedAt: REMOTE_PRIORITY_DISPATCH_PENDING_CAPTURED_AT_MS,
+      publicationEpoch: REMOTE_PRIORITY_DISPATCH_PENDING_TIMEOUT_EPOCH,
+      snapshots: [
+        Object.freeze({
+          partitionId: REMOTE_PRIORITY_DISPATCH_PENDING_PARTITION_ID,
+          operationId: REMOTE_PRIORITY_DISPATCH_PENDING_OPERATION_ID,
+          blockerReasons: ['operation_created_but_no_step_transitions'],
+          semanticState: 'operation_stalled',
+          completion: {
+            state: 'blocked',
+          },
+          observation: {
+            workflowState: 'in_flight',
+            visibilityState: 'cache_visible',
+            provenance: {
+              capturedAt: REMOTE_PRIORITY_DISPATCH_PENDING_CAPTURED_AT_MS,
+              workflowSource: 'system_table_cache',
+            },
+          },
+          conditions: {},
+          actuation: {
+            state: 'transition_deferred',
+            owner: 'operation_workflow_owner',
+            workflowProgressPhaseId: 'dispatch_pending',
+            lastProgressAtMs:
+              REMOTE_PRIORITY_DISPATCH_PENDING_LAST_PROGRESS_AT_MS,
+          },
+          progress: {
+            contractState: 'pending',
+            nextAction: 'retry',
+            currentOwner: 'operation_workflow_owner',
+            nextRequiredAction: 'reconcile_stale_operation_progress',
+            blockingBoundary: 'workflow_timeout',
+            waitMode: 'timeout_reconcile_due',
+            workflowProgressPhaseId: 'dispatch_pending',
+            lastProgressAtMs:
+              REMOTE_PRIORITY_DISPATCH_PENDING_LAST_PROGRESS_AT_MS,
+          },
+          coordinator: {
+            operationIds: [REMOTE_PRIORITY_DISPATCH_PENDING_OPERATION_ID],
+            serialWaitOperationIds:
+              REMOTE_PRIORITY_DISPATCH_PENDING_TIMEOUT_SUPPORTING_OPERATION_IDS,
+            serialWaitPartitionIds:
+              REMOTE_PRIORITY_DISPATCH_PENDING_TIMEOUT_SUPPORTING_PARTITION_IDS,
+          },
+        }),
+      ],
+    },
+    priorityPartitionSummary: {
+      blockedPartitions: [
+        Object.freeze({
+          partitionId: REMOTE_PRIORITY_DISPATCH_PENDING_PARTITION_ID,
+          spreadGap: 1,
+          readyDistinctNodeCount: 1,
+          requiredDistinctNodeCount: 2,
+        }),
+      ],
+    },
+  });
+}
+
 function createRemotePriorityVisibilityCoordinator() {
   const controlPlaneReadinessService = {
     ...createMockControlPlaneReadinessService(),
@@ -463,7 +538,9 @@ function buildRemotePriorityTimeoutOperation(startedAtMs) {
   });
 }
 
-function buildRemotePriorityDispatchPendingOperation() {
+function buildRemotePriorityDispatchPendingOperation(
+  progressAtMs = REMOTE_PRIORITY_DISPATCH_PENDING_LAST_PROGRESS_AT_MS,
+) {
   return Object.freeze({
     operationId: REMOTE_PRIORITY_DISPATCH_PENDING_OPERATION_ID,
     type: OperationType.REPLACE,
@@ -474,8 +551,8 @@ function buildRemotePriorityDispatchPendingOperation() {
     replicaId: REMOTE_PRIORITY_DISPATCH_PENDING_REPLICA_ID,
     status: ReplicaStatus.PENDING,
     workflowStep: WORKFLOW_STEP.PENDING,
-    createdAt: REMOTE_PRIORITY_DISPATCH_PENDING_LAST_PROGRESS_AT_MS,
-    updatedAt: REMOTE_PRIORITY_DISPATCH_PENDING_LAST_PROGRESS_AT_MS,
+    createdAt: progressAtMs,
+    updatedAt: progressAtMs,
   });
 }
 
@@ -933,6 +1010,97 @@ async (t) => {
       snapshot?.progress?.workflowProgressPhaseId,
       'dispatch_pending',
       'dispatch-pending persisted rows should preserve the dispatch-pending workflow phase',
+    );
+  } finally {
+    Date.now = originalDateNow;
+    await coordinator.shutdown();
+  }
+});
+
+test('workflowOwner priority recovery dispatch-pending stale PENDING rows ' +
+  'stay on owner advancement instead of workflow-timeout reconcile',
+async (t) => {
+  const coordinator = createRemotePriorityVisibilityCoordinator();
+  const originalDateNow = Date.now;
+  Date.now = () => REMOTE_PRIORITY_DISPATCH_PENDING_CAPTURED_AT_MS;
+  coordinator.initialize();
+
+  coordinator.controlPlaneReadinessService
+    .getPriorityRecoveryPlanningAnswerBestEffort = async () => {
+      return buildRemotePriorityDispatchPendingTimeoutPlanningSnapshot();
+    };
+
+  const pendingTimeoutMs = coordinator.getTimeoutForStep(
+    WORKFLOW_STEP.PENDING,
+    buildRemotePriorityDispatchPendingOperation(
+      REMOTE_PRIORITY_DISPATCH_PENDING_CAPTURED_AT_MS,
+    ),
+  );
+  const staleProgressAtMs =
+    REMOTE_PRIORITY_DISPATCH_PENDING_CAPTURED_AT_MS -
+    pendingTimeoutMs -
+    REMOTE_HANDOFF_TIMEOUT_OVERRUN_MS;
+  const staleDispatchPendingOperation =
+    buildRemotePriorityDispatchPendingOperation(staleProgressAtMs);
+
+  coordinator.workflowOwner.repository.getOperationsByEntityAuthoritativeObservation =
+    async () => {
+      return Object.freeze({
+        state: 'present',
+        operationCount: NUM.ONE,
+        operations: [staleDispatchPendingOperation],
+        deferredOutcome: null,
+        retryAfterMs: null,
+      });
+    };
+
+  try {
+    const snapshot =
+      await coordinator.workflowOwner
+        .getPriorityRecoveryDecisionSnapshotForPartitionOperations(
+          REMOTE_PRIORITY_DISPATCH_PENDING_PARTITION_ID,
+          [staleDispatchPendingOperation],
+        );
+
+    t.equal(
+      snapshot?.actuation?.state,
+      'persisted_not_dispatched',
+      'stale dispatch-pending PENDING rows should preserve persisted-not-dispatched actuation',
+    );
+    t.equal(
+      snapshot?.progress?.contractState,
+      'pending',
+      'stale dispatch-pending PENDING rows should remain in the pending owner contract state',
+    );
+    t.equal(
+      snapshot?.progress?.nextAction,
+      'wait',
+      'stale dispatch-pending PENDING rows should wait for owner advancement instead of scheduling timeout retry',
+    );
+    t.equal(
+      snapshot?.progress?.nextRequiredAction,
+      'advance_existing_operation',
+      'stale dispatch-pending PENDING rows should surface owner advancement instead of stale-progress reconcile',
+    );
+    t.equal(
+      snapshot?.progress?.blockingBoundary,
+      'workflow_progress',
+      'stale dispatch-pending PENDING rows should stay on the workflow-progress boundary',
+    );
+    t.equal(
+      snapshot?.progress?.waitMode,
+      'event_driven',
+      'stale dispatch-pending PENDING rows should keep the event-driven owner wait mode',
+    );
+    t.equal(
+      snapshot?.progress?.workflowProgressPhaseId,
+      'dispatch_pending',
+      'stale dispatch-pending PENDING rows should preserve the dispatch-pending workflow phase',
+    );
+    t.same(
+      snapshot?.coordinator?.serialWaitPartitionIds,
+      REMOTE_PRIORITY_DISPATCH_PENDING_TIMEOUT_SUPPORTING_PARTITION_IDS,
+      'stale dispatch-pending timeout witnesses should retain the supporting timeout partition context from planning',
     );
   } finally {
     Date.now = originalDateNow;

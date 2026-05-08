@@ -4,42 +4,40 @@
 
 Sprint: `work/sprints/active-2026-q2-publication-scoped-consistency-and-node-join-closure.md`
 
-Package: `work/packages/active-20260508-rolling-restart-topology-priority-recovery-workflow-timeout-dispatch-pending-stale-progress-reentry.md`
+Package: `work/packages/active-20260508-rolling-restart-startup-active-gate-snapshot-coverage-readiness-support-reentry.md`
 
 Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/rolling-restart-after-priority-recovery-dispatch-pending-reclassify-20260508T000000Z.report.json`
+Artifact: `test-output/reports/rolling-restart-after-priority-recovery-dispatch-pending-timeout-reclassify-20260508T000000Z.report.json`
 
-Playback: `test-output/reports/.playback/rolling-restart-after-priority-recovery-dispatch-pending-reclassify-20260508T000000Z/rolling-restart/`
+Playback: `test-output/reports/.playback/rolling-restart-after-priority-recovery-dispatch-pending-timeout-reclassify-20260508T000000Z/rolling-restart/`
 
 ## Boundary
 
-Owner: `Priority recovery workflow timeout transition deferred after dispatch-pending reclassification repair`
+Owner: `Startup active gate snapshot coverage after dispatch-pending timeout reclassification repair`
 
-Boundary: `Operation workflow owner / workflow_timeout / startup active gate support`
+Boundary: `Startup active gate owner / snapshot_coverage / startup readiness support`
 
-Dominant reason: `priority_recovery_workflow_timeout_transition_deferred`
+Dominant reason: `active_gate_timed_out`
 
-Current state: The workflow-progress dispatch-pending reclassification repair is closed by migration. The representative rerun now stalls at epoch 2 PUBLISHED with sql_write_operations-p1 as the dominant operation_workflow_owner witness under operation_stalled / reconcile_stale_operation_progress, with actuation transition_deferred, workflow phase dispatch_pending, latest step PENDING, and startup active-gate snapshot coverage downstream only.
+Current state: The priority-recovery timeout seam is closed by migration. The representative rerun now stalls at epoch 2 PUBLISHED with startup_active_gate_owner / snapshot_coverage as the first frontier, coverage 3/5, two inactive nodes, and startup_readiness_owner support evidence downstream only.
 
 ## Next Action
 
-Review the just-closed workflow-progress dispatch-pending package, then add one focused epoch-2 PUBLISHED workflow-timeout regression for sql_write_operations-p1 operation_stalled / reconcile_stale_operation_progress with dispatch_pending and repair or reclassify that stale-progress timeout seam.
+Review the just-closed workflow-timeout package, then extract one focused epoch-2 PUBLISHED startup active-gate snapshot-coverage witness for coverage 3/5 with the two inactive nodes and repair or classify the direct startup seam without reopening the closed priority-recovery work.
 
 ## Proof Ladder
 
-1. `Focused epoch-2 PUBLISHED workflow-timeout witness for sql_write_operations-p1 with supporting sql_transactions-p1 context`
-2. `Focused workflow-timeout regression for the selected dispatch-pending stale-progress seam`
+1. `Focused epoch-2 PUBLISHED startup active-gate snapshot-coverage witness for coverage 3/5 with supporting readiness evidence`
+2. `Focused startup active-gate regression or classification proof for the selected coverage seam`
 3. `Touched-file static guardrails`
 4. `Representative rolling-restart --fast-local rerun`
 5. `Failure-report and topology-convergence analysis`
 
 ## Touched Files
 
-1. `work/packages/active-20260508-rolling-restart-topology-priority-recovery-workflow-timeout-dispatch-pending-stale-progress-reentry.md`
-2. `src/rebalancer/operation-workflow-owner-segment-5-stage-5.js`
-3. `test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js`
-4. `work/model-ledger.jsonl`
-5. `work/sprints/active-2026-q2-publication-scoped-consistency-and-node-join-closure.md`
-6. `work/sprints/current-blocker.json`
-7. `work/sprints/current-blocker.md`
+1. `work/packages/active-20260508-rolling-restart-startup-active-gate-snapshot-coverage-readiness-support-reentry.md`
+2. `work/model-ledger.jsonl`
+3. `work/sprints/active-2026-q2-publication-scoped-consistency-and-node-join-closure.md`
+4. `work/sprints/current-blocker.json`
+5. `work/sprints/current-blocker.md`
