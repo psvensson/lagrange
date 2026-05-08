@@ -1132,14 +1132,20 @@ function resolveDominantReasonOverride({
   existingDominantReason,
   publicationConvergence,
 }) {
+  const currentPublicationBlockedReason =
+    resolvePublicationBlockedDominantReason(publicationConvergence);
+  if (
+    currentPublicationBlockedReason ===
+    STABILITY_GATE_BLOCKER_PENDING_ACK_NODES
+  ) {
+    return currentPublicationBlockedReason;
+  }
   const missingActiveNodeReason = resolvePublicationMissingActiveNodeReason(
     publicationConvergence,
   );
   if (missingActiveNodeReason) {
     return missingActiveNodeReason;
   }
-  const currentPublicationBlockedReason =
-    resolvePublicationBlockedDominantReason(publicationConvergence);
   if (currentPublicationBlockedReason) {
     return currentPublicationBlockedReason;
   }
@@ -1163,6 +1169,32 @@ function filterReasonCountsForPublicationMissingActiveNode({
 }) {
   if (!isRecord(reasonCounts)) {
     return reasonCounts;
+  }
+  const pendingAckCount = normalizeNonNegativeCount(
+    publicationConvergence?.pendingAckCount,
+  );
+  if (pendingAckCount > ZERO) {
+    const filteredReasonCounts = {};
+    for (const [reason, count] of Object.entries(reasonCounts)) {
+      const normalizedReason = normalizeActiveGateBlockerReason(reason);
+      if (
+        FAILURE_ARTIFACT_STALE_PUBLICATION_REASON_SET.has(normalizedReason) ||
+        normalizedReason ===
+          STABILITY_GATE_BLOCKER_PUBLICATION_MISSING_ACTIVE_NODE ||
+        normalizedReason.startsWith(
+          FAILURE_ARTIFACT_PUBLICATION_MISSING_ACTIVE_NODE_REASON_PREFIX,
+        )
+      ) {
+        continue;
+      }
+      addNormalizedReasonCount(filteredReasonCounts, normalizedReason, count);
+    }
+    addNormalizedReasonCount(
+      filteredReasonCounts,
+      STABILITY_GATE_BLOCKER_PENDING_ACK_NODES,
+      FAILURE_BARRIER_REASON_COUNT,
+    );
+    return filteredReasonCounts;
   }
   const missingActiveNodeReason = resolvePublicationMissingActiveNodeReason(
     publicationConvergence,

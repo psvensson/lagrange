@@ -190,6 +190,25 @@ the focused epoch-3 `PUBLISHED` workflow-progress witness for
 `sql_write_operations-p1` and repair or reclassify that remaining
 `create_recovery_operation` seam without widening the sprint.
 
+The latest May 8 representative rerun after the publication ACK-pending
+canonicalization repair is
+`test-output/reports/rolling-restart-after-publication-ack-pending-canonicalization-20260508T000000Z.report.json`.
+It failed after `130.0s`, but the publication frontier is now closed by
+migration as well. The fresh artifact reaches epoch `2` `PUBLISHED` with
+pending ACK count `0`, and the first frontier moves back to
+`rebalancer_leader / operation_scheduling`. The dominant witness is now
+`sql_write_operations-p1` under semantic state `needs_operation`, with
+`nextRequiredAction=create_recovery_operation`,
+`actuationState=action_required`, and `waitMode=event_driven`, while
+`sql_transactions-p1` remains supporting workflow-progress evidence and
+startup snapshot coverage `3/5` stays downstream.
+
+The current unchecked package task therefore narrows again on the same sprint
+path: preserve the closed publication classification repair, then extract the
+focused epoch-2 `PUBLISHED` operation-scheduling witness for
+`sql_write_operations-p1` and repair or reclassify that no-operation seam
+without widening the sprint.
+
 This sprint keeps the old filename for continuity with the active branch, but
 the execution scope is now runtime stability and harness determinism.
 
@@ -235,7 +254,7 @@ Secondary after the primary path is stable:
 
 The current active representative re-entry package is:
 
-1. [Rolling Restart Topology Publication Convergence ACK Pending Reentry](../packages/active-20260508-rolling-restart-topology-publication-convergence-ack-pending-reentry.md)
+1. [Rolling Restart Priority Recovery Operation Scheduling Sql Write Needs Operation Reentry](../packages/active-20260508-rolling-restart-priority-recovery-operation-scheduling-sql-write-needs-operation-reentry.md)
 
 Retained predecessor context file:
 

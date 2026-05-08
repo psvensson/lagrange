@@ -4,39 +4,39 @@
 
 Sprint: `work/sprints/active-2026-q2-publication-scoped-consistency-and-node-join-closure.md`
 
-Package: `work/packages/active-20260508-rolling-restart-topology-publication-convergence-ack-pending-reentry.md`
+Package: `work/packages/active-20260508-rolling-restart-priority-recovery-operation-scheduling-sql-write-needs-operation-reentry.md`
 
 Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/rolling-restart-after-startup-active-gate-closure-carryover-clear-20260508T000000Z.report.json`
+Artifact: `test-output/reports/rolling-restart-after-publication-ack-pending-canonicalization-20260508T000000Z.report.json`
 
-Playback: `test-output/reports/.playback/rolling-restart-after-startup-active-gate-closure-carryover-clear-20260508T000000Z/rolling-restart/`
+Playback: `test-output/reports/.playback/rolling-restart-after-publication-ack-pending-canonicalization-20260508T000000Z/rolling-restart/`
 
 ## Boundary
 
-Owner: `Topology publication convergence ACK pending after startup active-gate closure carryover repair`
+Owner: `Priority recovery operation scheduling for sql_write_operations-p1 after publication ACK-pending canonicalization`
 
-Boundary: `Topology publication owner / publication_convergence / startup active gate support`
+Boundary: `Rebalancer leader / operation_scheduling / create_recovery_operation`
 
-Dominant reason: `publication_pending`
+Dominant reason: `priority_recovery_operation_scheduling_event_driven`
 
-Current state: The startup active-gate seam is closed by migration. The representative rerun now stalls at epoch 5 ACK_PENDING with topology_publication_owner / publication_convergence as the first frontier, pendingAckCount=1, missingPublishedCount=2, and downstream startup active-gate and workflow-progress evidence only.
+Current state: The publication ACK-pending seam is closed by migration. The representative rerun now reaches epoch 2 PUBLISHED with pendingAckCount=0 and no direct publication debt, but the first frontier stalls on sql_write_operations-p1 under semantic state needs_operation with nextRequiredAction=create_recovery_operation while sql_transactions-p1 remains supporting recovering_in_flight workflow evidence and startup snapshot coverage 3/5 stays downstream.
 
 ## Next Action
 
-Review the just-closed startup active-gate package, then extract one focused epoch-5 ACK_PENDING publication-convergence witness and repair or classify the direct publication seam without reopening the closed startup or priority-recovery work.
+Review the just-closed publication package, then extract one focused epoch-2 PUBLISHED operation-scheduling witness for sql_write_operations-p1 and repair or classify why the rebalancer leader leaves it at needs_operation without reopening the closed publication package.
 
 ## Proof Ladder
 
-1. `Focused epoch-5 ACK_PENDING publication-convergence witness with supporting startup and priority-recovery evidence`
-2. `Focused publication-convergence regression or classification proof for the selected ACK-pending seam`
+1. `Focused epoch-2 PUBLISHED sql_write_operations-p1 operation-scheduling witness with supporting sql_transactions-p1 and startup active-gate evidence`
+2. `Focused operation-scheduling regression or classification proof for the selected create_recovery_operation seam`
 3. `Touched-file static guardrails`
 4. `Representative rolling-restart --fast-local rerun`
 5. `Failure-report and topology-convergence analysis`
 
 ## Touched Files
 
-1. `work/packages/active-20260508-rolling-restart-topology-publication-convergence-ack-pending-reentry.md`
+1. `work/packages/active-20260508-rolling-restart-priority-recovery-operation-scheduling-sql-write-needs-operation-reentry.md`
 2. `work/model-ledger.jsonl`
 3. `work/sprints/active-2026-q2-publication-scoped-consistency-and-node-join-closure.md`
 4. `work/sprints/current-blocker.json`
