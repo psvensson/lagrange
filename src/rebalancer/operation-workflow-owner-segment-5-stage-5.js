@@ -13,7 +13,163 @@ const {
   normalizePriorityRecoveryOperationPartitionId,
 } = SHARED;
 
+const PRIORITY_RECOVERY_PARTITION_OBSERVATION_SELECTION_STATE = Object.freeze({
+  RETAIN_INPUT_OPERATIONS: 'retain_input_operations',
+  USE_AUTHORITATIVE_OBSERVATION: 'use_authoritative_observation',
+});
+
+const PRIORITY_RECOVERY_PARTITION_OBSERVATION_SELECTION_TABLE =
+  Object.freeze([
+    Object.freeze({
+      state:
+        PRIORITY_RECOVERY_PARTITION_OBSERVATION_SELECTION_STATE
+          .USE_AUTHORITATIVE_OBSERVATION,
+      matches: (evidence) =>
+        evidence.authoritativeOperationAvailable === true ||
+        evidence.authoritativeDeferred === true,
+    }),
+    Object.freeze({
+      state:
+        PRIORITY_RECOVERY_PARTITION_OBSERVATION_SELECTION_STATE
+          .RETAIN_INPUT_OPERATIONS,
+      matches: () => true,
+    }),
+  ]);
+
+const PRIORITY_RECOVERY_INCOMPLETE_OBSERVATION_SELECTION_STATE = Object.freeze({
+  EXPLICIT_DEFERRED: 'explicit_deferred',
+  REPOSITORY_RESOLVED: 'repository_resolved',
+  EXPLICIT_FALLBACK: 'explicit_fallback',
+  ABSENT: 'absent',
+});
+
+const PRIORITY_RECOVERY_INCOMPLETE_OBSERVATION_SELECTION_TABLE =
+  Object.freeze([
+    Object.freeze({
+      state:
+        PRIORITY_RECOVERY_INCOMPLETE_OBSERVATION_SELECTION_STATE
+          .EXPLICIT_DEFERRED,
+      matches: (evidence) => evidence.explicitDeferred === true,
+    }),
+    Object.freeze({
+      state:
+        PRIORITY_RECOVERY_INCOMPLETE_OBSERVATION_SELECTION_STATE
+          .REPOSITORY_RESOLVED,
+      matches: (evidence) => evidence.repositoryObservationAvailable === true,
+    }),
+    Object.freeze({
+      state:
+        PRIORITY_RECOVERY_INCOMPLETE_OBSERVATION_SELECTION_STATE
+          .EXPLICIT_FALLBACK,
+      matches: (evidence) => evidence.explicitObservationAvailable === true,
+    }),
+    Object.freeze({
+      state: PRIORITY_RECOVERY_INCOMPLETE_OBSERVATION_SELECTION_STATE.ABSENT,
+      matches: () => true,
+    }),
+  ]);
+
 class OperationWorkflowOwnerSegment5Stage5 extends OperationWorkflowOwnerSegment5Stage4 {
+  decidePriorityRecoveryPartitionObservationSelection(evidence = {}) {
+    return (
+      PRIORITY_RECOVERY_PARTITION_OBSERVATION_SELECTION_TABLE.find((entry) =>
+        entry.matches(evidence),
+      )?.state ||
+      PRIORITY_RECOVERY_PARTITION_OBSERVATION_SELECTION_STATE
+        .RETAIN_INPUT_OPERATIONS
+    );
+  }
+
+  adoptPriorityRecoveryPartitionAuthoritativeObservation(
+    operationRecords = [],
+    incompleteObservation = null,
+    authoritativeObservation = null,
+  ) {
+    const authoritativeOperations = Array.isArray(
+      authoritativeObservation?.operations,
+    ) ?
+        authoritativeObservation.operations.filter((operation) => {
+          return operation && typeof operation === TYPEOF.OBJECT;
+        }) :
+        [];
+    const selection =
+      this.decidePriorityRecoveryPartitionObservationSelection({
+        authoritativeOperationAvailable:
+          authoritativeOperations.length > NUM.ZERO,
+        authoritativeDeferred:
+          this.isPriorityRecoveryAuthoritativeOperationReadDeferred(
+            authoritativeObservation,
+          ),
+      });
+    if (
+      selection ===
+      PRIORITY_RECOVERY_PARTITION_OBSERVATION_SELECTION_STATE
+        .USE_AUTHORITATIVE_OBSERVATION
+    ) {
+      return Object.freeze({
+        operationRecords: authoritativeOperations,
+        incompleteObservation:
+          authoritativeObservation &&
+          typeof authoritativeObservation === TYPEOF.OBJECT ?
+            authoritativeObservation :
+            null,
+      });
+    }
+    return Object.freeze({
+      operationRecords,
+      incompleteObservation,
+    });
+  }
+
+  resolvePriorityRecoveryDecisionIncompleteObservation(
+    operationRecords = [],
+    explicitObservation = null,
+  ) {
+    const repositoryObservation =
+      this.resolvePriorityRecoveryIncompleteOperationObservation(
+        operationRecords,
+        explicitObservation,
+      );
+    const selection =
+      PRIORITY_RECOVERY_INCOMPLETE_OBSERVATION_SELECTION_TABLE.find((entry) =>
+        entry.matches({
+          explicitDeferred:
+            this.isPriorityRecoveryAuthoritativeOperationReadDeferred(
+              explicitObservation,
+            ),
+          explicitObservationAvailable:
+            explicitObservation &&
+            typeof explicitObservation === TYPEOF.OBJECT,
+          repositoryObservationAvailable:
+            repositoryObservation &&
+            typeof repositoryObservation === TYPEOF.OBJECT,
+        }),
+      )?.state ||
+      PRIORITY_RECOVERY_INCOMPLETE_OBSERVATION_SELECTION_STATE.ABSENT;
+    if (
+      selection ===
+      PRIORITY_RECOVERY_INCOMPLETE_OBSERVATION_SELECTION_STATE
+        .EXPLICIT_DEFERRED
+    ) {
+      return explicitObservation;
+    }
+    if (
+      selection ===
+      PRIORITY_RECOVERY_INCOMPLETE_OBSERVATION_SELECTION_STATE
+        .REPOSITORY_RESOLVED
+    ) {
+      return repositoryObservation;
+    }
+    if (
+      selection ===
+      PRIORITY_RECOVERY_INCOMPLETE_OBSERVATION_SELECTION_STATE
+        .EXPLICIT_FALLBACK
+    ) {
+      return explicitObservation;
+    }
+    return null;
+  }
+
   isPriorityRecoveryAuthoritativeOperationReadDeferred(
     incompleteObservation = null,
   ) {
@@ -190,7 +346,7 @@ class OperationWorkflowOwnerSegment5Stage5 extends OperationWorkflowOwnerSegment
         );
       });
     const incompleteObservation =
-      this.resolvePriorityRecoveryIncompleteOperationObservation(
+      this.resolvePriorityRecoveryDecisionIncompleteObservation(
         operationRecords,
         incompleteOperationObservation,
       );
@@ -215,13 +371,17 @@ class OperationWorkflowOwnerSegment5Stage5 extends OperationWorkflowOwnerSegment
           return planningDecisionSnapshot;
         }
       } else {
-        return this.buildDeferredPriorityRecoveryDecisionSnapshotFromPlanningMatch(
-          normalizedPartitionId,
-          operationContexts,
-          planningSnapshot,
-          stepTimeoutMsByWorkflowStep,
-          planningDecisionSnapshot,
-        );
+        return this
+          .buildPriorityRecoveryDecisionSnapshotWithRetainedPlanningSerialWaitContext(
+            this.buildDeferredPriorityRecoveryDecisionSnapshotFromPlanningMatch(
+              normalizedPartitionId,
+              operationContexts,
+              planningSnapshot,
+              stepTimeoutMsByWorkflowStep,
+              planningDecisionSnapshot,
+            ),
+            planningDecisionSnapshot,
+          );
       }
     }
     const representativeOperationContext =
@@ -271,12 +431,8 @@ class OperationWorkflowOwnerSegment5Stage5 extends OperationWorkflowOwnerSegment
     }
     let operationRecords = (Array.isArray(operations) ? operations : [])
       .filter((operation) => operation && typeof operation === TYPEOF.OBJECT);
-    let incompleteObservation =
-      this.resolvePriorityRecoveryIncompleteOperationObservation(
-        operationRecords,
-      );
+    let incompleteObservation = null;
     if (
-      operationRecords.length === NUM.ZERO &&
       this.repository &&
       typeof this.repository.getOperationsByEntityAuthoritativeObservation ===
         TYPEOF.FUNCTION
@@ -286,24 +442,14 @@ class OperationWorkflowOwnerSegment5Stage5 extends OperationWorkflowOwnerSegment
           SERVICE_TYPE.PARTITION,
           normalizedPartitionId,
         );
-      const authoritativeOperations = Array.isArray(
-        authoritativeObservation?.operations,
-      ) ?
-          authoritativeObservation.operations.filter((operation) => {
-            return operation && typeof operation === TYPEOF.OBJECT;
-          }) :
-          [];
-      if (
-        authoritativeOperations.length > NUM.ZERO ||
-        authoritativeObservation?.deferredOutcome
-      ) {
-        operationRecords = authoritativeOperations;
-        incompleteObservation =
-          authoritativeObservation &&
-          typeof authoritativeObservation === TYPEOF.OBJECT ?
-            authoritativeObservation :
-            null;
-      }
+      const adoptedObservation =
+        this.adoptPriorityRecoveryPartitionAuthoritativeObservation(
+          operationRecords,
+          incompleteObservation,
+          authoritativeObservation,
+        );
+      operationRecords = adoptedObservation.operationRecords;
+      incompleteObservation = adoptedObservation.incompleteObservation;
     }
     const representativeOperation =
       operationRecords.find(Boolean) ||

@@ -4,39 +4,39 @@
 
 Sprint: `work/sprints/active-2026-q2-publication-scoped-consistency-and-node-join-closure.md`
 
-Package: `work/packages/active-20260508-rolling-restart-topology-priority-recovery-workflow-timeout-stale-operation-progress-reentry.md`
+Package: `work/packages/active-20260508-rolling-restart-topology-priority-recovery-workflow-progress-dispatch-pending-reentry.md`
 
 Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/rolling-restart-after-priority-recovery-source-partition-progress-reuse-20260507T000000Z.report.json`
+Artifact: `test-output/reports/rolling-restart-after-priority-recovery-timeout-authoritative-observation-20260508T000000Z.report.json`
 
-Playback: `test-output/reports/.playback/rolling-restart-after-priority-recovery-source-partition-progress-reuse-20260507T000000Z/rolling-restart/`
+Playback: `test-output/reports/.playback/rolling-restart-after-priority-recovery-timeout-authoritative-observation-20260508T000000Z/rolling-restart/`
 
 ## Boundary
 
-Owner: `Priority recovery workflow timeout transition deferred after source-partition workflow-progress repair`
+Owner: `Priority recovery workflow progress event-driven wait after timeout authoritative-observation repair`
 
-Boundary: `Operation workflow owner / workflow_timeout / startup active gate support`
+Boundary: `Operation workflow owner / workflow_progress / startup active gate support`
 
-Dominant reason: `priority_recovery_workflow_timeout_transition_deferred`
+Dominant reason: `priority_recovery_workflow_progress_event_driven`
 
-Current state: The source-partition workflow-progress repair is closed by migration. The representative rerun now stalls at epoch 4 PUBLISHED with replica_operations-p1 as the dominant operation_workflow_owner witness under operation_created_but_no_step_transitions / reconcile_stale_operation_progress, while sql_transaction_participants-p1, sql_transactions-p1, and sql_write_operations-p1 remain supporting context and startup active-gate snapshot coverage stays downstream only.
+Current state: The workflow-timeout authoritative-observation repair is closed by migration. The representative rerun now stalls at epoch 2 PUBLISHED with sql_write_operations-p1 as the only blocked operation_workflow_owner witness under recovering_in_flight / wait_for_operation_progress, with actuation persisted_not_dispatched, workflow phase dispatch_pending, and startup active-gate snapshot coverage downstream only.
 
 ## Next Action
 
-Review the just-closed source-partition workflow-progress package, then add one focused epoch-4 PUBLISHED workflow-timeout regression for replica_operations-p1 operation_created_but_no_step_transitions / reconcile_stale_operation_progress with supporting sql_transaction_participants-p1, sql_transactions-p1, and sql_write_operations-p1 context, and repair or reclassify that stale-operation-progress seam.
+Review the just-closed workflow-timeout package, then add one focused epoch-2 PUBLISHED workflow-progress regression for sql_write_operations-p1 recovering_in_flight / wait_for_operation_progress with persisted_not_dispatched actuation, and repair or reclassify that dispatch-pending seam.
 
 ## Proof Ladder
 
-1. `Focused epoch-4 PUBLISHED workflow-timeout witness for replica_operations-p1 with supporting sql_transaction_participants-p1, sql_transactions-p1, and sql_write_operations-p1 context`
-2. `Focused workflow-timeout regression for the selected stale-operation-progress seam`
+1. `Focused epoch-2 PUBLISHED workflow-progress witness for sql_write_operations-p1 recovering_in_flight with persisted_not_dispatched actuation`
+2. `Focused workflow-progress regression for the selected dispatch-pending seam`
 3. `Touched-file static guardrails`
 4. `Representative rolling-restart --fast-local rerun`
 5. `Failure-report and topology-convergence analysis`
 
 ## Touched Files
 
-1. `work/packages/active-20260508-rolling-restart-topology-priority-recovery-workflow-timeout-stale-operation-progress-reentry.md`
+1. `work/packages/active-20260508-rolling-restart-topology-priority-recovery-workflow-progress-dispatch-pending-reentry.md`
 2. `src/rebalancer/operation-workflow-owner-segment-5-stage-5.js`
 3. `test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js`
 4. `work/model-ledger.jsonl`

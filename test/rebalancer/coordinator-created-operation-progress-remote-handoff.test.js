@@ -59,6 +59,23 @@ const REMOTE_PRIORITY_SERIAL_WAIT_SOURCE_ACTIVE_CREATED_AT_MS = 3000;
 const REMOTE_PRIORITY_SERIAL_WAIT_SOURCE_ACTIVE_UPDATED_AT_MS = 3001;
 const REMOTE_PRIORITY_SERIAL_WAIT_SOURCE_REMOVED_CREATED_AT_MS = 1000;
 const REMOTE_PRIORITY_SERIAL_WAIT_SOURCE_REMOVED_COMPLETED_AT_MS = 2000;
+const REMOTE_PRIORITY_TIMEOUT_PARTITION_ID = 'replica_operations-p1';
+const REMOTE_PRIORITY_TIMEOUT_OPERATION_ID =
+  'remote-priority-timeout-operation';
+const REMOTE_PRIORITY_TIMEOUT_TARGET_NODE_ID =
+  'remote-priority-timeout-target-node';
+const REMOTE_PRIORITY_TIMEOUT_REPLICA_ID = 'replica_operations-p1-r4';
+const REMOTE_PRIORITY_TIMEOUT_CAPTURED_AT_MS = 1000000;
+const REMOTE_PRIORITY_TIMEOUT_SUPPORTING_PARTITION_IDS = Object.freeze([
+  REMOTE_PRIORITY_SERIAL_WAIT_SOURCE_PARTITION_ID,
+  'sql_transactions-p1',
+  REMOTE_PRIORITY_VISIBILITY_PARTITION_ID,
+]);
+const REMOTE_PRIORITY_TIMEOUT_SUPPORTING_OPERATION_IDS = Object.freeze([
+  REMOTE_PRIORITY_SERIAL_WAIT_SOURCE_OPERATION_ID,
+  'remote-priority-timeout-sql-transactions-operation',
+  REMOTE_PRIORITY_VISIBILITY_OPERATION_ID,
+]);
 
 function buildRemotePrioritySerialWaitPlanningSnapshot() {
   return Object.freeze({
@@ -230,6 +247,69 @@ function buildRemotePriorityVisibilityPlanningSnapshot() {
   });
 }
 
+function buildRemotePriorityTimeoutPlanningSnapshot() {
+  return Object.freeze({
+    publicationEpoch: REMOTE_PRIORITY_SERIAL_WAIT_EPOCH,
+    publicationStatus: 'PUBLISHED',
+    priorityRecoveryDecisionSnapshots: {
+      capturedAt: REMOTE_PRIORITY_TIMEOUT_CAPTURED_AT_MS,
+      publicationEpoch: REMOTE_PRIORITY_SERIAL_WAIT_EPOCH,
+      snapshots: [
+        Object.freeze({
+          partitionId: REMOTE_PRIORITY_TIMEOUT_PARTITION_ID,
+          operationId: REMOTE_PRIORITY_TIMEOUT_OPERATION_ID,
+          blockerReasons: ['operation_created_but_no_step_transitions'],
+          semanticState: 'operation_stalled',
+          completion: {
+            state: 'blocked',
+          },
+          observation: {
+            workflowState: 'in_flight',
+            visibilityState: 'cache_visible',
+            provenance: {
+              capturedAt: REMOTE_PRIORITY_TIMEOUT_CAPTURED_AT_MS,
+              workflowSource: 'system_table_cache',
+            },
+          },
+          actuation: {
+            state: 'transition_deferred',
+            owner: 'operation_workflow_owner',
+            workflowProgressPhaseId: 'target_creation',
+            lastProgressAtMs: REMOTE_PRIORITY_TIMEOUT_CAPTURED_AT_MS - 1,
+          },
+          progress: {
+            contractState: 'blocked',
+            nextAction: 'retry',
+            currentOwner: 'operation_workflow_owner',
+            nextRequiredAction: 'reconcile_stale_operation_progress',
+            blockingBoundary: 'workflow_timeout',
+            waitMode: 'timeout_reconcile_due',
+            workflowProgressPhaseId: 'target_creation',
+            lastProgressAtMs: REMOTE_PRIORITY_TIMEOUT_CAPTURED_AT_MS - 1,
+          },
+          coordinator: {
+            operationIds: [REMOTE_PRIORITY_TIMEOUT_OPERATION_ID],
+            serialWaitOperationIds:
+              REMOTE_PRIORITY_TIMEOUT_SUPPORTING_OPERATION_IDS,
+            serialWaitPartitionIds:
+              REMOTE_PRIORITY_TIMEOUT_SUPPORTING_PARTITION_IDS,
+          },
+        }),
+      ],
+    },
+    priorityPartitionSummary: {
+      blockedPartitions: [
+        Object.freeze({
+          partitionId: REMOTE_PRIORITY_TIMEOUT_PARTITION_ID,
+          spreadGap: 1,
+          readyDistinctNodeCount: 1,
+          requiredDistinctNodeCount: 2,
+        }),
+      ],
+    },
+  });
+}
+
 function createRemotePriorityVisibilityCoordinator() {
   const controlPlaneReadinessService = {
     ...createMockControlPlaneReadinessService(),
@@ -290,6 +370,22 @@ function buildRemotePriorityVisibilityOperation() {
     workflowStep: WORKFLOW_STEP.PENDING,
     createdAt: 3000,
     updatedAt: 3001,
+  });
+}
+
+function buildRemotePriorityTimeoutOperation(startedAtMs) {
+  return Object.freeze({
+    operationId: REMOTE_PRIORITY_TIMEOUT_OPERATION_ID,
+    type: OperationType.REPLACE,
+    partitionId: REMOTE_PRIORITY_TIMEOUT_PARTITION_ID,
+    entityType: SERVICE_TYPE.PARTITION,
+    entityId: REMOTE_PRIORITY_TIMEOUT_PARTITION_ID,
+    targetNodeId: REMOTE_PRIORITY_TIMEOUT_TARGET_NODE_ID,
+    replicaId: REMOTE_PRIORITY_TIMEOUT_REPLICA_ID,
+    status: ReplicaStatus.PENDING,
+    workflowStep: WORKFLOW_STEP.CREATING,
+    createdAt: startedAtMs,
+    updatedAt: startedAtMs,
   });
 }
 
@@ -1294,6 +1390,93 @@ async (t) => {
       'planning-only deferred reads should keep the partition on the canonical authoritative-visibility action',
     );
   } finally {
+    await coordinator.shutdown();
+  }
+});
+
+test('workflowOwner priority recovery partition snapshots keep deferred ' +
+  'authoritative-read handling when a stale cache-visible operation would ' +
+  'otherwise fall through to workflow-timeout reconcile',
+async (t) => {
+  const coordinator = createRemotePriorityVisibilityCoordinator();
+  const originalDateNow = Date.now;
+  const authoritativeObservationCalls = [];
+  Date.now = () => REMOTE_PRIORITY_TIMEOUT_CAPTURED_AT_MS;
+  coordinator.initialize();
+
+  coordinator.controlPlaneReadinessService
+    .getPriorityRecoveryPlanningAnswerBestEffort = async () => {
+      return buildRemotePriorityTimeoutPlanningSnapshot();
+    };
+
+  const creatingTimeoutMs = coordinator.getTimeoutForStep(
+    WORKFLOW_STEP.CREATING,
+    buildRemotePriorityTimeoutOperation(REMOTE_PRIORITY_TIMEOUT_CAPTURED_AT_MS),
+  );
+  const staleStartedAtMs =
+    REMOTE_PRIORITY_TIMEOUT_CAPTURED_AT_MS -
+    creatingTimeoutMs -
+    REMOTE_HANDOFF_TIMEOUT_OVERRUN_MS;
+  const staleCacheVisibleOperation =
+    buildRemotePriorityTimeoutOperation(staleStartedAtMs);
+
+  coordinator.workflowOwner.repository.getOperationsByEntityAuthoritativeObservation =
+    async (entityType, entityId) => {
+      authoritativeObservationCalls.push({entityType, entityId});
+      return Object.freeze({
+        state: 'deferred',
+        operationCount: NUM.ONE,
+        operations: [staleCacheVisibleOperation],
+        deferredOutcome: Object.freeze({
+          completionState:
+            PRIORITY_RECOVERY_COMPLETION_STATE
+              .AUTHORITATIVE_OPERATION_READ_DEFERRED,
+          retryAfterMs: 250,
+          source: REMOTE_PRIORITY_VISIBILITY_DEFERRED_SOURCE,
+        }),
+        retryAfterMs: 250,
+      });
+    };
+
+  try {
+    const snapshot =
+      await coordinator.workflowOwner
+        .getPriorityRecoveryDecisionSnapshotForPartitionOperations(
+          REMOTE_PRIORITY_TIMEOUT_PARTITION_ID,
+          [staleCacheVisibleOperation],
+        );
+
+    t.same(
+      authoritativeObservationCalls,
+      [{
+        entityType: SERVICE_TYPE.PARTITION,
+        entityId: REMOTE_PRIORITY_TIMEOUT_PARTITION_ID,
+      }],
+      'cache-visible inputs should still consult the authoritative entity visibility path',
+    );
+    t.equal(
+      snapshot?.completion?.state,
+      PRIORITY_RECOVERY_COMPLETION_STATE
+        .AUTHORITATIVE_OPERATION_READ_DEFERRED,
+      'deferred authoritative reads should override stale cache-visible timeout classification',
+    );
+    t.equal(
+      snapshot?.progress?.nextRequiredAction,
+      'observe_authoritative_visibility',
+      'stale cache-visible operations should stay on the canonical authoritative-visibility action while the authoritative read is deferred',
+    );
+    t.equal(
+      snapshot?.progress?.blockingBoundary,
+      'authoritative_visibility',
+      'deferred authoritative reads should stay on the visibility boundary instead of reopening workflow-timeout reconcile',
+    );
+    t.same(
+      snapshot?.coordinator?.serialWaitPartitionIds,
+      REMOTE_PRIORITY_TIMEOUT_SUPPORTING_PARTITION_IDS,
+      'the stale timeout witness should retain the supporting partition context from planning',
+    );
+  } finally {
+    Date.now = originalDateNow;
     await coordinator.shutdown();
   }
 });

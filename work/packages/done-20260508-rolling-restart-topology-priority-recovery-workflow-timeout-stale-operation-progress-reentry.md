@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-08",
   "scenario": "rolling-restart",
   "artifact": "test-output/reports/rolling-restart-after-priority-recovery-source-partition-progress-reuse-20260507T000000Z.report.json",
@@ -11,8 +11,8 @@
   "owner": "Priority recovery workflow timeout transition deferred after source-partition workflow-progress repair",
   "boundary": "Operation workflow owner / workflow_timeout / startup active gate support",
   "dominantReason": "priority_recovery_workflow_timeout_transition_deferred",
-  "currentState": "The source-partition workflow-progress repair is closed by migration. The representative rerun now stalls at epoch 4 PUBLISHED with replica_operations-p1 as the dominant operation_workflow_owner witness under operation_created_but_no_step_transitions / reconcile_stale_operation_progress, while sql_transaction_participants-p1, sql_transactions-p1, and sql_write_operations-p1 remain supporting context and startup active-gate snapshot coverage stays downstream only.",
-  "nextAction": "Review the just-closed source-partition workflow-progress package, then add one focused epoch-4 PUBLISHED workflow-timeout regression for replica_operations-p1 operation_created_but_no_step_transitions / reconcile_stale_operation_progress with supporting sql_transaction_participants-p1, sql_transactions-p1, and sql_write_operations-p1 context, and repair or reclassify that stale-operation-progress seam.",
+  "currentState": "The workflow-timeout authoritative-observation repair is proved. The representative rerun no longer terminates on replica_operations-p1 workflow_timeout; epoch 2 PUBLISHED now migrates to sql_write_operations-p1 as the dominant operation_workflow_owner witness under recovering_in_flight / wait_for_operation_progress, with actuation persisted_not_dispatched, boundary workflow_progress, and startup active-gate snapshot coverage still downstream only.",
+  "nextAction": "Continue in work/packages/active-20260508-rolling-restart-topology-priority-recovery-workflow-progress-dispatch-pending-reentry.md for the migrated sql_write_operations-p1 workflow_progress dispatch-pending seam.",
   "proof": [
     "Focused epoch-4 PUBLISHED workflow-timeout witness for replica_operations-p1 with supporting sql_transaction_participants-p1, sql_transactions-p1, and sql_write_operations-p1 context",
     "Focused workflow-timeout regression for the selected stale-operation-progress seam",
@@ -21,13 +21,16 @@
     "Failure-report and topology-convergence analysis"
   ],
   "touchedFiles": [
-    "work/packages/active-20260508-rolling-restart-topology-priority-recovery-workflow-timeout-stale-operation-progress-reentry.md",
+    "work/packages/done-20260508-rolling-restart-topology-priority-recovery-workflow-timeout-stale-operation-progress-reentry.md",
     "src/rebalancer/operation-workflow-owner-segment-5-stage-5.js",
     "test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js",
     "work/model-ledger.jsonl",
     "work/sprints/active-2026-q2-publication-scoped-consistency-and-node-join-closure.md"
   ],
-  "predecessor": "work/packages/done-20260507-rolling-restart-topology-priority-recovery-workflow-progress-serial-wait-source-partition-reentry.md"
+  "predecessor": "work/packages/done-20260507-rolling-restart-topology-priority-recovery-workflow-progress-serial-wait-source-partition-reentry.md",
+  "closed": "2026-05-08",
+  "commitAndPushLedgerRequired": true,
+  "successor": "work/packages/active-20260508-rolling-restart-topology-priority-recovery-workflow-progress-dispatch-pending-reentry.md"
 }
 -->
 
@@ -71,6 +74,19 @@ supporting context only.
    `sql_transaction_participants-p1`, `sql_transactions-p1`, and
    `sql_write_operations-p1`, while startup active-gate snapshot coverage
    stays downstream only.
+10. After preserving deferred authoritative-read guidance for stale
+    cache-visible timeout witnesses, the representative rerun in
+    `test-output/reports/rolling-restart-after-priority-recovery-timeout-authoritative-observation-20260508T000000Z.report.json`
+    still fails, but it clears the timeout seam entirely: epoch `2`
+    `PUBLISHED` now promotes `sql_write_operations-p1` as the only blocked
+    partition under `operation_workflow_owner / workflow_progress`, with
+    semantic state `recovering_in_flight`, actuation
+    `persisted_not_dispatched`, wait mode `event_driven`, and next action
+    `wait_for_operation_progress`.
+11. The repaired workflow-timeout seam is therefore closed enough to stop
+    spending package effort on `replica_operations-p1` timeout
+    reconciliation; the next worker should spend proof on the migrated
+    `sql_write_operations-p1` workflow-progress dispatch-pending seam.
 
 ## Scope Basis
 
@@ -110,8 +126,10 @@ Roadmap Phase `0.1 - Internal Coherence` maintenance/refactoring scope under:
 
 Semantic owners:
 
-1. `operation_workflow_owner / workflow_timeout` owns the direct epoch `4`
-   `PUBLISHED` `replica_operations-p1` stale-operation-progress seam.
+1. `operation_workflow_owner / workflow_timeout` owns the opening epoch `4`
+   `PUBLISHED` `replica_operations-p1` stale-operation-progress seam, but the
+   final representative rerun clears that timeout witness and migrates the
+   direct blocker to `sql_write_operations-p1` under `workflow_progress`.
 2. `sql_transaction_participants-p1`, `sql_transactions-p1`, and
    `sql_write_operations-p1` remain supporting context unless a fresh
    representative artifact promotes one of them above
@@ -133,9 +151,10 @@ Canonical contract shape:
    workflow-timeout reason why the transition remains deferred.
 2. Supporting priority partitions must not outrank the canonical
    `replica_operations-p1` workflow-timeout witness in the same artifact.
-3. If a fresh representative rerun keeps the same owner boundary but changes
-   only the dominant partition or count shape, this package stays active and
-   absorbs that evidence instead of splitting again.
+3. If the representative rerun clears the timeout seam and moves the direct
+   witness back to `operation_workflow_owner / workflow_progress`, this
+   package closes by migration and the successor package takes ownership of
+   that lower workflow-progress seam.
 
 ## Subagent Sequencing Ledger
 
@@ -146,35 +165,37 @@ Canonical contract shape:
 - [x] Fix subagent recorded or explicitly not needed:
       Agent `Wegener` (`019e05d2-e8bb-7df2-a65b-0861e62d8462`) fixed
       `work/packages/done-20260507-rolling-restart-topology-priority-recovery-workflow-progress-serial-wait-source-partition-reentry.md`.
-- [ ] Implementation subagent recorded:
+- [x] Implementation subagent recorded:
+      Agent `Averroes` (`019e05d4-8155-7930-910e-c16f985f7f7d`) implemented
+      `work/packages/done-20260508-rolling-restart-topology-priority-recovery-workflow-timeout-stale-operation-progress-reentry.md`.
 
 ## Residual Closure Inventory
 
 - [x] Review the just-closed predecessor package on the same sprint boundary.
 - [x] Fix any predecessor-review findings before implementation resumes.
-- [ ] Extract the focused epoch-4 workflow-timeout witness for
+- [x] Extract the focused epoch-4 workflow-timeout witness for
       `replica_operations-p1` and supporting
       `sql_transaction_participants-p1`, `sql_transactions-p1`, and
       `sql_write_operations-p1`.
-- [ ] Add the focused regression for the selected workflow-timeout seam.
-- [ ] Repair the selected workflow-timeout boundary or migrate again with
+- [x] Add the focused regression for the selected workflow-timeout seam.
+- [x] Repair the selected workflow-timeout boundary or migrate again with
       proof.
 
 ## Static Drift Ledger
 
 Preflight:
 
-- [ ] Relevant guardrails selected by boundary.
-- [ ] File-scoped baseline recorded before production edits for touched source
+- [x] Relevant guardrails selected by boundary.
+- [x] File-scoped baseline recorded before production edits for touched source
       and focused test files.
 
 Closure:
 
-- [ ] Same guardrails rerun after implementation.
-- [ ] No relevant guardrail count increased.
-- [ ] No new touched-file owner-path, decision-boundary, runtime-grammar, or
+- [x] Same guardrails rerun after implementation.
+- [x] No relevant guardrail count increased.
+- [x] No new touched-file owner-path, decision-boundary, runtime-grammar, or
       metadata-gateway violation remains.
-- [ ] Any out-of-scope inherited violation has a linked follow-on package.
+- [x] Any out-of-scope inherited violation has a linked follow-on package.
 
 ## Validation
 
@@ -186,3 +207,35 @@ Closure:
    frontier while promoting `replica_operations-p1` to the dominant witness.
 3. `npm run analyze:topology-convergence -- test-output/reports/.playback/rolling-restart-after-priority-recovery-source-partition-progress-reuse-20260507T000000Z/rolling-restart/failure-bundle.json`
    matched the report-level workflow-timeout frontier and dominant witness.
+4. `node test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js`
+   initially failed on the new epoch-4 timeout regression because
+   `getPriorityRecoveryDecisionSnapshotForPartitionOperations(...)` skipped
+   `repository.getOperationsByEntityAuthoritativeObservation(...)` when a
+   stale cache-visible `replica_operations-p1` row was already present,
+   dropping deferred authoritative-read guidance and reclassifying the
+   partition as `workflow_timeout / reconcile_stale_operation_progress`.
+5. After always consulting the authoritative partition observation and
+   preserving explicit deferred-read guidance through the stage-5 decision
+   snapshot path, the same focused test passed with `41/41` assertions green,
+   including the new `replica_operations-p1` epoch-4 timeout regression and
+   its supporting `sql_transaction_participants-p1`,
+   `sql_transactions-p1`, and `sql_write_operations-p1` planning context.
+6. `node scripts/check-guideline-literals.js src/rebalancer/operation-workflow-owner-segment-5-stage-5.js`
+   passed with `0` new literal-guideline violations.
+7. `node scripts/check-guideline-decision-boundaries.js src/rebalancer/operation-workflow-owner-segment-5-stage-5.js`
+   passed with `0` decision-boundary violations.
+8. `npm run audit:runtime-grammar:file -- src/rebalancer/operation-workflow-owner-segment-5-stage-5.js`
+   passed with `0` runtime-grammar-contract violations.
+9. `git diff --check -- src/rebalancer/operation-workflow-owner-segment-5-stage-5.js test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js`
+   passed with no whitespace or conflict-marker issues.
+10. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-after-priority-recovery-timeout-authoritative-observation-20260508T000000Z.report.json --fast-local --verbose`
+    failed after `131.4s`, but cleared the `replica_operations-p1`
+    workflow-timeout stale-operation-progress seam and migrated the direct
+    owner boundary back to `operation_workflow_owner / workflow_progress`.
+11. `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-after-priority-recovery-timeout-authoritative-observation-20260508T000000Z.report.json`
+    selected normalized dominant reason
+    `priority_recovery_workflow_progress_event_driven`.
+12. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-after-priority-recovery-timeout-authoritative-observation-20260508T000000Z.report.json`
+    and the matching playback failure bundle both selected
+    `operation_workflow_owner / workflow_progress` as the first frontier while
+    promoting `sql_write_operations-p1` to the dominant witness.

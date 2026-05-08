@@ -12,7 +12,7 @@
   "boundary": "Operation workflow owner / workflow_progress / startup active gate support",
   "dominantReason": "priority_recovery_workflow_progress_transition_deferred",
   "currentState": "The source-partition workflow-progress repair is proved. The focused workflow owner now prefers live authoritative workflow progress for sql_transaction_participants-p1 while retaining supporting carrier context from planning, but the representative rerun still fails and migrates within the same owner owner boundary family: epoch 4 PUBLISHED now selects replica_operations-p1 as the dominant operation_workflow_owner blocker under operation_created_but_no_step_transitions / reconcile_stale_operation_progress, with sql_transaction_participants-p1 and sql_write_operations-p1 retained as supporting context and startup active-gate timeout still downstream only.",
-  "nextAction": "Continue in work/packages/active-20260508-rolling-restart-topology-priority-recovery-workflow-timeout-stale-operation-progress-reentry.md for the migrated replica_operations-p1 workflow_timeout stale-operation-progress seam.",
+  "nextAction": "Continue in work/packages/done-20260508-rolling-restart-topology-priority-recovery-workflow-timeout-stale-operation-progress-reentry.md for the migrated replica_operations-p1 workflow_timeout stale-operation-progress seam.",
   "proof": [
     "Focused epoch-2 PUBLISHED workflow-progress witness for sql_transaction_participants-p1 priority_operation_serial_wait with supporting replica_operations-p1 and sql_write_operations-p1 context",
     "Focused workflow-progress regression for the selected source-partition serial-wait seam",
@@ -30,7 +30,7 @@
   "predecessor": "work/packages/done-20260507-rolling-restart-topology-priority-recovery-workflow-progress-serial-wait-reentry.md",
   "closed": "2026-05-08",
   "commitAndPushLedgerRequired": true,
-  "successor": "work/packages/active-20260508-rolling-restart-topology-priority-recovery-workflow-timeout-stale-operation-progress-reentry.md"
+  "successor": "work/packages/done-20260508-rolling-restart-topology-priority-recovery-workflow-timeout-stale-operation-progress-reentry.md"
 }
 -->
 
