@@ -79,6 +79,7 @@ const PRIORITY_RECOVERY_DISPATCH_PENDING_RECLASSIFICATION_LITERAL =
     OPERATION_WORKFLOW_OWNER: 'operation_workflow_owner',
     PENDING_STEP: 'PENDING',
     PERSISTED_NOT_DISPATCHED: 'persisted_not_dispatched',
+    RECOVERING_IN_FLIGHT: 'recovering_in_flight',
     RECONCILE_STALE_OPERATION_PROGRESS:
       'reconcile_stale_operation_progress',
     RETRY: 'retry',
@@ -88,6 +89,11 @@ const PRIORITY_RECOVERY_DISPATCH_PENDING_RECLASSIFICATION_LITERAL =
     WAIT_FOR_OPERATION_PROGRESS: 'wait_for_operation_progress',
     WORKFLOW_PROGRESS: 'workflow_progress',
     WORKFLOW_TIMEOUT: 'workflow_timeout',
+  });
+
+const PRIORITY_RECOVERY_DISPATCH_PENDING_RECLASSIFICATION_BLOCKER_REASONS =
+  Object.freeze({
+    NONE: Object.freeze([]),
   });
 
 const PRIORITY_RECOVERY_DISPATCH_PENDING_RECLASSIFICATION_STATE =
@@ -256,6 +262,20 @@ class OperationWorkflowOwnerSegment5Stage5 extends OperationWorkflowOwnerSegment
         });
     return Object.freeze({
       ...snapshot,
+      blockerReasons:
+        reclassificationState ===
+        PRIORITY_RECOVERY_DISPATCH_PENDING_RECLASSIFICATION_STATE
+          .ADVANCE_OWNER_PROGRESS_FROM_TIMEOUT ?
+          PRIORITY_RECOVERY_DISPATCH_PENDING_RECLASSIFICATION_BLOCKER_REASONS
+            .NONE :
+          snapshot.blockerReasons,
+      semanticState:
+        reclassificationState ===
+        PRIORITY_RECOVERY_DISPATCH_PENDING_RECLASSIFICATION_STATE
+          .ADVANCE_OWNER_PROGRESS_FROM_TIMEOUT ?
+          PRIORITY_RECOVERY_DISPATCH_PENDING_RECLASSIFICATION_LITERAL
+            .RECOVERING_IN_FLIGHT :
+          snapshot.semanticState,
       actuation:
         reclassificationState ===
         PRIORITY_RECOVERY_DISPATCH_PENDING_RECLASSIFICATION_STATE

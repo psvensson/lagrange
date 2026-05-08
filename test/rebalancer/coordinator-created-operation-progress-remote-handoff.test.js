@@ -1063,6 +1063,16 @@ async (t) => {
         );
 
     t.equal(
+      snapshot?.semanticState,
+      'recovering_in_flight',
+      'stale dispatch-pending PENDING rows should normalize back to the in-flight semantic state',
+    );
+    t.same(
+      snapshot?.blockerReasons,
+      [],
+      'stale dispatch-pending PENDING rows should clear stale timeout blocker reasons after reclassification',
+    );
+    t.equal(
       snapshot?.actuation?.state,
       'persisted_not_dispatched',
       'stale dispatch-pending PENDING rows should preserve persisted-not-dispatched actuation',

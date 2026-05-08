@@ -155,9 +155,9 @@ Canonical contract shape:
 
 ## Commit And Push Ledger
 
-- Focused package commit: `<pending>`
-- Pushed to: `<pending>`
-- Commit contains only package-owned files/package-status/allowed sprint handoff: `<pending>`
+- Focused package commit: `c4acc4f2`
+- Pushed to: `origin/codex/pending-ack-eligibility-filter`
+- Commit contains only package-owned files/package-status/allowed sprint handoff: `yes`
 
 ## Residual Closure Inventory
 
