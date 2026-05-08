@@ -22,7 +22,6 @@
   ],
   "touchedFiles": [
     "work/packages/done-20260507-rolling-restart-topology-priority-recovery-workflow-progress-serial-wait-source-partition-reentry.md",
-    "src/rebalancer/operation-workflow-owner-segment-5-stage-4.js",
     "src/rebalancer/operation-workflow-owner-segment-5-stage-5.js",
     "test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js",
     "work/model-ledger.jsonl",
@@ -164,6 +163,12 @@ Canonical contract shape:
 - [x] Implementation subagent recorded:
       Agent `Epicurus` (`019e03d8-d16f-72f0-9935-177286b95630`) implemented
       `work/packages/done-20260507-rolling-restart-topology-priority-recovery-workflow-progress-serial-wait-source-partition-reentry.md`.
+
+## Commit And Push Ledger
+
+- Focused package commit: `b3a3ac1e`
+- Pushed to: `origin/codex/pending-ack-eligibility-filter`
+- Commit contains only package-owned files/package-status/allowed sprint handoff: `yes`
 
 ## Residual Closure Inventory
 

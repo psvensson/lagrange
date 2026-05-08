@@ -139,14 +139,19 @@ Canonical contract shape:
 
 ## Subagent Sequencing Ledger
 
-- [ ] Review subagent recorded:
-- [ ] Fix subagent recorded or explicitly not needed:
+- [x] Review subagent recorded:
+      Agent `Bernoulli` (`019e05cf-7a73-7531-b973-71257b08a905`) reviewed
+      `work/packages/done-20260507-rolling-restart-topology-priority-recovery-workflow-progress-serial-wait-source-partition-reentry.md`;
+      result `fixes-required`.
+- [x] Fix subagent recorded or explicitly not needed:
+      Agent `Wegener` (`019e05d2-e8bb-7df2-a65b-0861e62d8462`) fixed
+      `work/packages/done-20260507-rolling-restart-topology-priority-recovery-workflow-progress-serial-wait-source-partition-reentry.md`.
 - [ ] Implementation subagent recorded:
 
 ## Residual Closure Inventory
 
-- [ ] Review the just-closed predecessor package on the same sprint boundary.
-- [ ] Fix any predecessor-review findings before implementation resumes.
+- [x] Review the just-closed predecessor package on the same sprint boundary.
+- [x] Fix any predecessor-review findings before implementation resumes.
 - [ ] Extract the focused epoch-4 workflow-timeout witness for
       `replica_operations-p1` and supporting
       `sql_transaction_participants-p1`, `sql_transactions-p1`, and

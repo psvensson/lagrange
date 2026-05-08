@@ -4,47 +4,40 @@
 
 Sprint: `work/sprints/active-2026-q2-publication-scoped-consistency-and-node-join-closure.md`
 
-Package: `work/packages/active-20260507-rolling-restart-startup-publication-open-convergence-priority-serial-wait-workflow-progress-reentry.md`
+Package: `work/packages/active-20260508-rolling-restart-topology-priority-recovery-workflow-timeout-stale-operation-progress-reentry.md`
 
 Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/rolling-restart-after-priority-recovery-visibility-wakeup-20260507T000000Z.report.json`
+Artifact: `test-output/reports/rolling-restart-after-priority-recovery-source-partition-progress-reuse-20260507T000000Z.report.json`
 
-Playback: `test-output/reports/.playback/rolling-restart-after-priority-recovery-visibility-wakeup-20260507T000000Z/rolling-restart/`
+Playback: `test-output/reports/.playback/rolling-restart-after-priority-recovery-source-partition-progress-reuse-20260507T000000Z/rolling-restart/`
 
 ## Boundary
 
-Owner: `Priority recovery workflow progress after failed/removed visibility wake-up repair`
+Owner: `Priority recovery workflow timeout transition deferred after source-partition workflow-progress repair`
 
-Boundary: `Priority recovery workflow progress / startup active gate support`
+Boundary: `Operation workflow owner / workflow_timeout / startup active gate support`
 
-Dominant reason: `priority_recovery_operation_scheduling_event_driven`
+Dominant reason: `priority_recovery_workflow_timeout_transition_deferred`
 
-Current state: The failed/removed same-partition visibility wake-up repair is now proved, and the representative rerun materially migrated the direct frontier back to operation_workflow_owner / workflow_progress. The fresh epoch-3 PUBLISHED artifact holds snapshot coverage 4/5 with pendingAck=0, where sql_write_operations-p1 remains eligible_but_no_operation_created under needs_operation while replica_operations-p1 advances to recovering_in_flight.
+Current state: The source-partition workflow-progress repair is closed by migration. The representative rerun now stalls at epoch 4 PUBLISHED with replica_operations-p1 as the dominant operation_workflow_owner witness under operation_created_but_no_step_transitions / reconcile_stale_operation_progress, while sql_transaction_participants-p1, sql_transactions-p1, and sql_write_operations-p1 remain supporting context and startup active-gate snapshot coverage stays downstream only.
 
 ## Next Action
 
-Extract a focused epoch-3 PUBLISHED workflow-progress witness for sql_write_operations-p1 as the only remaining eligible_but_no_operation_created carrier, with replica_operations-p1 retained as recovering_in_flight supporting context, then repair or reclassify that workflow-progress seam without reopening the closed operation-scheduling wake-up path.
+Review the just-closed source-partition workflow-progress package, then add one focused epoch-4 PUBLISHED workflow-timeout regression for replica_operations-p1 operation_created_but_no_step_transitions / reconcile_stale_operation_progress with supporting sql_transaction_participants-p1, sql_transactions-p1, and sql_write_operations-p1 context, and repair or reclassify that stale-operation-progress seam.
 
 ## Proof Ladder
 
-1. `Focused epoch-3 PUBLISHED workflow-progress witness extraction`
-2. `Focused lower-owner regression for the selected create_recovery_operation seam`
+1. `Focused epoch-4 PUBLISHED workflow-timeout witness for replica_operations-p1 with supporting sql_transaction_participants-p1, sql_transactions-p1, and sql_write_operations-p1 context`
+2. `Focused workflow-timeout regression for the selected stale-operation-progress seam`
 3. `Touched-file static guardrails`
 4. `Representative rolling-restart --fast-local rerun`
-5. `Failure-report and active-gate frontier analysis`
+5. `Failure-report and topology-convergence analysis`
 
 ## Touched Files
 
-1. `work/packages/active-20260507-rolling-restart-startup-publication-open-convergence-priority-serial-wait-workflow-progress-reentry.md`
-2. `src/rebalancer/replica-operation-repository.js`
-3. `src/rebalancer/replica-operation-repository-read-methods.js`
-4. `test/rebalancer/replica-operation-repository.test.js`
-5. `test/distributed/harness/priority-recovery-summary-normalization.js`
-6. `test/distributed/harness/__tests__/priority-recovery-summary-normalization.test.js`
-7. `test/distributed/harness/__tests__/failure-bundle-core-16-test-cases.js`
-8. `src/rebalancer/operation-workflow-owner-segment-5-stage-5.js`
-9. `test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js`
-10. `src/rebalancer/unified-rebalancer-segment-1.js`
-11. `test/rebalancer/priority-recovery-visibility-wakeup.test.js`
-12. `work/sprints/active-2026-q2-publication-scoped-consistency-and-node-join-closure.md`
+1. `work/packages/active-20260508-rolling-restart-topology-priority-recovery-workflow-timeout-stale-operation-progress-reentry.md`
+2. `src/rebalancer/operation-workflow-owner-segment-5-stage-5.js`
+3. `test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js`
+4. `work/model-ledger.jsonl`
+5. `work/sprints/active-2026-q2-publication-scoped-consistency-and-node-join-closure.md`
