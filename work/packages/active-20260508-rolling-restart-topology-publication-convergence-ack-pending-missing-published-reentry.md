@@ -6,13 +6,13 @@
   "status": "active",
   "opened": "2026-05-08",
   "scenario": "rolling-restart",
-  "artifact": "test-output/reports/rolling-restart-dispatch-pending-handoff-repair-20260508T112000Z.report.json",
-  "playback": "test-output/reports/.playback/rolling-restart-dispatch-pending-handoff-repair-20260508T112000Z/rolling-restart/",
+  "artifact": "test-output/reports/rolling-restart-operation-scheduling-repair-20260508T120500Z.report.json",
+  "playback": "test-output/reports/.playback/rolling-restart-operation-scheduling-repair-20260508T120500Z/rolling-restart/",
   "owner": "Priority recovery operation scheduling after dispatch-pending handoff repair",
   "boundary": "rebalancer_leader / operation_scheduling / event_driven_wait",
   "dominantReason": "priority_recovery_operation_scheduling_event_driven",
-  "currentState": "The bounded coordinator-created remote handoff repair removed the previous dispatch-pending serial-wait signature. The representative rerun still fails, but the normalized first frontier moved to rebalancer_leader / operation_scheduling with priorityRecoveryInvariants=passed, publication PUBLISHED, pendingAckCount=0, prioritySpread=pending, and blocked partitions replica_operations-p1, sql_transactions-p1, and sql_write_operations-p1 classified as needs_operation / eligible_but_no_operation_created.",
-  "nextAction": "Start the next review/fix/implementation loop for rebalancer_leader / operation_scheduling, then investigate why eligible priority partitions remain action_required with nextRequiredAction=create_recovery_operation while no recovery operation is scheduled.",
+  "currentState": "The operation-scheduling reentry repair reduced the representative blocker but did not close it. priorityRecoveryInvariants still pass, publication remains PUBLISHED with pendingAckCount=0, and replica_operations-p1 plus sql_transaction_participants-p1 are now spread_satisfied_in_flight; the remaining first frontier is still rebalancer_leader / operation_scheduling with sql_transactions-p1 and sql_write_operations-p1 classified as needs_operation / eligible_but_no_operation_created.",
+  "nextAction": "Commit the focused operation-scheduling reentry slice, then start the next review/fix/implementation loop for the remaining rebalancer_leader / operation_scheduling blocker. The next proof surface is why sql_transactions-p1 and sql_write_operations-p1 remain action_required with nextRequiredAction=create_recovery_operation while no recovery operation is scheduled.",
   "proof": [
     "First-package-in-sprint review-not-needed validation and work-context coverage",
     "Focused epoch-4 ACK_PENDING publication-convergence witness with supporting selected-snapshot and priority-recovery context",
@@ -48,6 +48,10 @@
     "src/rebalancer/operation-workflow-owner-segment-2.js",
     "test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js",
     "src/rebalancer/operation-workflow-owner-segment-4.js",
+    "src/rebalancer/unified-rebalancer-segment-2.js",
+    "src/rebalancer/unified-rebalancer-segment-4-stage-1.js",
+    "src/rebalancer/unified-rebalancer-segment-4-stage-shared.js",
+    "test/rebalancer/priority-recovery-stale-planning-visibility.test.js",
     "test/rebalancer/rebalance-coordinator-outcome-routing.test.js",
     "work/model-ledger.jsonl"
   ],
@@ -150,6 +154,10 @@ the next runtime implementation slice.
       Agent Pascal (019e0764-d263-7f53-b50b-192f0a6916bb) reviewed work/packages/active-20260508-rolling-restart-topology-publication-convergence-ack-pending-missing-published-reentry.md; result fixes-required.
 - [x] Continuation fix subagent recorded:
       Agent Locke (019e0767-463c-75e2-af90-18ced40b2fc7) fixed work/packages/active-20260508-rolling-restart-topology-publication-convergence-ack-pending-missing-published-reentry.md.
+- [x] Continuation implementation subagent recorded:
+      Agent Leibniz (019e076a-2cc4-7881-95bc-792482d53fda) implemented work/packages/active-20260508-rolling-restart-topology-publication-convergence-ack-pending-missing-published-reentry.md;
+      result clean with priority recovery operation-scheduling reentry and
+      focused recovery-operation creation regression proof.
 
 ## Residual Closure Inventory
 
@@ -246,3 +254,21 @@ Closure:
    are classified as `needs_operation` /
    `eligible_but_no_operation_created`, with
    `nextRequiredAction=create_recovery_operation`.
+9. Operation-scheduling reentry regressions:
+   `UnifiedRebalancer current priority follow-up snapshot keeps planning
+   operation creation when coordinator visibility has no operation` and
+   `UnifiedRebalancer checkRebalance schedules recovery work when coordinator
+   visibility has no operation` in
+   `test/rebalancer/priority-recovery-stale-planning-visibility.test.js` prove
+   planning `needs_operation` / `create_recovery_operation` evidence can
+   re-enter the recovery operation creation lane when coordinator visibility has
+   no authoritative operation.
+10. Representative rerun after the operation-scheduling reentry fix:
+    `test-output/reports/rolling-restart-operation-scheduling-repair-20260508T120500Z.report.json`
+    still fails on `rebalancer_leader / operation_scheduling`, but the blocker
+    reduced from three partitions to two. `replica_operations-p1` now appears in
+    `spread_satisfied_in_flight` with `control_plane_publications-p1` and
+    `sql_transaction_participants-p1`; the remaining `needs_operation` /
+    `eligible_but_no_operation_created` partitions are `sql_transactions-p1`
+    and `sql_write_operations-p1`, with dominant witness
+    `sql_transactions-p1|8|operation_unknown`.

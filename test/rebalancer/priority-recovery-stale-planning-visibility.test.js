@@ -3,6 +3,7 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {
   PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION,
+  PRIORITY_RECOVERY_OBSERVATION_STATE_VALUE,
   PRIORITY_RECOVERY_SEMANTIC_STATE,
 } from '../../src/control-plane/priority-recovery-diagnostics-constants.js';
 import {
@@ -24,6 +25,7 @@ const TEST_TARGET_NODE_ID = 'node-priority-target';
 const TEST_SUPPORTING_NODE_ID = 'node-priority-support';
 const TEST_PARTITION_ID = 'sql_write_operations-p1';
 const TEST_REPLICA_ID = 'sql_write_operations-p1-r1';
+const TEST_CREATED_OPERATION_ID = 'op-priority-recovery-created';
 const TEST_OPERATION_ID = 'op-priority-recovery-live';
 const TEST_PUBLICATION_EPOCH = 4;
 const TEST_BLOCKER_ELIGIBLE_NO_OPERATION =
@@ -32,6 +34,15 @@ const TEST_WAIT_FOR_OPERATION_PROGRESS =
   PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.WAIT_FOR_OPERATION_PROGRESS;
 const TEST_CREATE_RECOVERY_OPERATION =
   PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.CREATE_RECOVERY_OPERATION;
+const TEST_OPERATION_VISIBILITY_NONE =
+  PRIORITY_RECOVERY_OBSERVATION_STATE_VALUE.NONE;
+const TEST_OPERATION_STATUS_UNAVAILABLE =
+  PRIORITY_RECOVERY_OBSERVATION_STATE_VALUE.UNAVAILABLE;
+const TEST_OPERATION_VISIBILITY_CACHE_VISIBLE = 'cache_visible';
+const TEST_OPERATION_WORKFLOW_IN_FLIGHT = 'in_flight';
+const TEST_NODE_STATUS_ACTIVE = 'active';
+const TEST_SERVICE_TYPE_PARTITION = 'partition';
+const TEST_RAFT_ROLE_FOLLOWER = 'follower';
 
 function initializeTestEnvironment() {
   ConfigurationManager.resetInstance();
@@ -153,16 +164,20 @@ function createPriorityRebalancer(options = {}) {
     createPlanningReadinessService(planningSnapshot);
   const rebalanceCoordinator =
     options.rebalanceCoordinator || createMockCoordinator();
+  rebalanceCoordinator.controlPlaneReadinessService = readinessService;
+  const cacheData = options.cacheData || {};
   return createTestRebalancer({
     entityId: TEST_PARTITION_ID,
     entityType: EntityType.PARTITION,
     nodeId: TEST_OWNER_NODE_ID,
     cacheData: {
-      partitions: [{
+      ...cacheData,
+      partitions: cacheData.partitions || [{
         partition_id: TEST_PARTITION_ID,
         table_id: SYSTEM_TABLE_NAME.SQL_WRITE_OPERATIONS,
       }],
-      replicaOperations: options.replicaOperations || [],
+      replicaOperations:
+        options.replicaOperations || cacheData.replicaOperations || [],
     },
     controlPlaneReadinessService: readinessService,
     rebalanceCoordinator,
@@ -182,6 +197,13 @@ test(
           partitionId: TEST_PARTITION_ID,
           semanticState: PRIORITY_RECOVERY_SEMANTIC_STATE.RECOVERING_IN_FLIGHT,
           blockerReasons: Object.freeze([]),
+          observation: Object.freeze({
+            workflowState: TEST_OPERATION_WORKFLOW_IN_FLIGHT,
+            visibilityState: TEST_OPERATION_VISIBILITY_CACHE_VISIBLE,
+          }),
+          conditions: Object.freeze({
+            latestOperationStatus: ReplicaStatus.SYNCING,
+          }),
           progress: Object.freeze({
             nextRequiredAction: TEST_WAIT_FOR_OPERATION_PROGRESS,
           }),
@@ -206,6 +228,154 @@ test(
       decision?.decisionSnapshot?.progress?.nextRequiredAction,
       TEST_WAIT_FOR_OPERATION_PROGRESS,
       'the async follow-up reader should route the successor boundary to workflow progress',
+    );
+  },
+);
+
+test(
+  'UnifiedRebalancer current priority follow-up snapshot keeps planning operation creation when coordinator visibility has no operation',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const planningSnapshot = buildStalePlanningSnapshot();
+    const coordinator = createMockCoordinator();
+    coordinator.workflowOwner = {
+      async getPriorityRecoveryDecisionSnapshotForPartitionOperations() {
+        return Object.freeze({
+          partitionId: TEST_PARTITION_ID,
+          semanticState:
+            PRIORITY_RECOVERY_SEMANTIC_STATE.RECOVERING_IN_FLIGHT,
+          blockerReasons: Object.freeze([]),
+          observation: Object.freeze({
+            workflowState: TEST_OPERATION_VISIBILITY_NONE,
+            visibilityState: TEST_OPERATION_VISIBILITY_NONE,
+          }),
+          conditions: Object.freeze({
+            latestOperationStatus: TEST_OPERATION_STATUS_UNAVAILABLE,
+          }),
+          progress: Object.freeze({
+            nextRequiredAction: TEST_WAIT_FOR_OPERATION_PROGRESS,
+          }),
+        });
+      },
+    };
+    const rebalancer = createPriorityRebalancer({
+      planningSnapshot,
+      rebalanceCoordinator: coordinator,
+    });
+
+    const decision =
+      await rebalancer.getCurrentPriorityRecoveryFollowUpDecisionSnapshot();
+
+    t.equal(
+      decision?.decisionSnapshot?.semanticState,
+      PRIORITY_RECOVERY_SEMANTIC_STATE.NEEDS_OPERATION,
+      'missing authoritative operation visibility should let planning re-enter the operation-creation lane',
+    );
+    t.equal(
+      decision?.decisionSnapshot?.progress?.nextRequiredAction,
+      TEST_CREATE_RECOVERY_OPERATION,
+      'the current priority owner should preserve the create recovery operation action',
+    );
+    t.equal(
+      rebalancer.isPriorityRecoveryFollowUpOperationRequired(
+        decision?.decisionSnapshot,
+      ),
+      true,
+      'the selected follow-up decision should be actionable for operation scheduling',
+    );
+  },
+);
+
+test(
+  'UnifiedRebalancer checkRebalance schedules recovery work when coordinator visibility has no operation',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const createdOperations = [];
+    const planningSnapshot = buildStalePlanningSnapshot();
+    const coordinator = createMockCoordinator();
+    coordinator.workflowOwner = {
+      async getPriorityRecoveryDecisionSnapshotForPartitionOperations() {
+        return Object.freeze({
+          partitionId: TEST_PARTITION_ID,
+          semanticState:
+            PRIORITY_RECOVERY_SEMANTIC_STATE.RECOVERING_IN_FLIGHT,
+          blockerReasons: Object.freeze([]),
+          observation: Object.freeze({
+            workflowState: TEST_OPERATION_VISIBILITY_NONE,
+            visibilityState: TEST_OPERATION_VISIBILITY_NONE,
+          }),
+          conditions: Object.freeze({
+            latestOperationStatus: TEST_OPERATION_STATUS_UNAVAILABLE,
+          }),
+          progress: Object.freeze({
+            nextRequiredAction: TEST_WAIT_FOR_OPERATION_PROGRESS,
+          }),
+        });
+      },
+    };
+    coordinator.createOperation = async (operationRequest) => {
+      createdOperations.push(operationRequest);
+      return {
+        operationId: TEST_CREATED_OPERATION_ID,
+        replicaId: operationRequest.replicaId,
+        targetNodeId: operationRequest.nodeId,
+      };
+    };
+    const rebalancer = createPriorityRebalancer({
+      planningSnapshot,
+      rebalanceCoordinator: coordinator,
+      cacheData: {
+        nodes: [
+          {node_id: TEST_SOURCE_NODE_ID, status: TEST_NODE_STATUS_ACTIVE},
+          {node_id: TEST_TARGET_NODE_ID, status: TEST_NODE_STATUS_ACTIVE},
+          {node_id: TEST_SUPPORTING_NODE_ID, status: TEST_NODE_STATUS_ACTIVE},
+        ],
+        services: [{
+          service_id: TEST_REPLICA_ID,
+          service_type: TEST_SERVICE_TYPE_PARTITION,
+          node_id: TEST_SOURCE_NODE_ID,
+          partition_id: TEST_PARTITION_ID,
+          replica_id: TEST_REPLICA_ID,
+          raft_role: TEST_RAFT_ROLE_FOLLOWER,
+          status: ReplicaStatus.ACTIVE,
+        }],
+        partitions: [{
+          partition_id: TEST_PARTITION_ID,
+          table_id: SYSTEM_TABLE_NAME.SQL_WRITE_OPERATIONS,
+        }],
+      },
+    });
+
+    rebalancer.initialize();
+    rebalancer.isLeader = true;
+    rebalancer.clusterReadinessConfirmed = true;
+    rebalancer.isStabilized = () => true;
+    rebalancer.getCriticalSystemTopologySettlingBlocker = () => null;
+    rebalancer.getCriticalSystemTrafficReadinessBlocker = () => null;
+    rebalancer.getCriticalSystemLocalServeReadinessBlocker = () => null;
+    rebalancer.getLocalControlPlaneMutationReadinessBlocker = () => null;
+    rebalancer.scheduleNextCheck = () => {};
+
+    await rebalancer.checkRebalance();
+
+    t.equal(
+      createdOperations.length,
+      1,
+      'missing authoritative operation visibility should schedule one recovery operation',
+    );
+    t.equal(
+      createdOperations[0]?.partitionId,
+      TEST_PARTITION_ID,
+      'scheduled recovery work should target the blocked priority partition',
+    );
+    t.ok(
+      [
+        TEST_TARGET_NODE_ID,
+        TEST_SUPPORTING_NODE_ID,
+      ].includes(createdOperations[0]?.nodeId),
+      'scheduled recovery work should choose an eligible missing node',
     );
   },
 );

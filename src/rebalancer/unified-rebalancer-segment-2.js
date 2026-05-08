@@ -21,6 +21,7 @@ const {
   TYPEOF,
   UNIFIED_REBALANCER_LITERAL,
   buildPriorityRecoveryOperationAssessment,
+  getPartitionRowFromCache,
   isNodeReadyLeaseExplicitlyCleared,
   isPriorityControlPlanePartition,
   normalizeNodeEndpointRow,
@@ -957,7 +958,11 @@ class UnifiedRebalancerSegment2 extends UnifiedRebalancerSegment1 {
   async getPriorityRecoveryPlanningSnapshot(operation) {
     const partitionId =
       operation?.partitionId || operation?.partition_id || null;
-    if (!isPriorityControlPlanePartition({partitionId})) {
+    const partitionRow = getPartitionRowFromCache(
+      this.systemTableCache,
+      partitionId,
+    );
+    if (!isPriorityControlPlanePartition({partitionId, partitionRow})) {
       return null;
     }
     const readinessService = this.controlPlaneReadinessService;
@@ -1063,7 +1068,11 @@ class UnifiedRebalancerSegment2 extends UnifiedRebalancerSegment1 {
   getPriorityRecoveryPlanningSnapshotSync(operation, options = {}) {
     const partitionId =
       operation?.partitionId || operation?.partition_id || null;
-    if (!isPriorityControlPlanePartition({partitionId})) {
+    const partitionRow = getPartitionRowFromCache(
+      this.systemTableCache,
+      partitionId,
+    );
+    if (!isPriorityControlPlanePartition({partitionId, partitionRow})) {
       return null;
     }
     const readinessService = this.controlPlaneReadinessService;

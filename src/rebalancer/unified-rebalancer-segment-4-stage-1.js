@@ -12,6 +12,7 @@ const {
   PRIORITY_RECOVERY_FOLLOW_UP_DECISION,
   PRIORITY_RECOVERY_FOLLOW_UP_FIELD,
   PRIORITY_RECOVERY_FOLLOW_UP_REQUIREMENT_SEMANTIC_STATES,
+  PRIORITY_RECOVERY_OBSERVATION_STATE_VALUE,
   PRIORITY_TOPOLOGY_CLEANUP_MOVE_REASON_SET,
   RAFT_ROLE,
   REBALANCER_BUDGET_READ_OPTIONS,
@@ -340,6 +341,91 @@ class UnifiedRebalancerSegment4Stage1 extends UnifiedRebalancerSegment3 {
     throw new Error(`Unsupported move type: ${moveType}`);
   }
 
+  normalizePriorityRecoveryCoordinatorDecisionStateValue(value) {
+    const normalizedValue = String(
+      value || UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
+    ).trim();
+    return normalizedValue.length > NUM.ZERO ?
+      normalizedValue :
+      PRIORITY_RECOVERY_OBSERVATION_STATE_VALUE.NONE;
+  }
+
+  isPriorityRecoveryCoordinatorDecisionStatePresent(value) {
+    const normalizedValue =
+      this.normalizePriorityRecoveryCoordinatorDecisionStateValue(value);
+    return (
+      normalizedValue !== PRIORITY_RECOVERY_OBSERVATION_STATE_VALUE.NONE &&
+      normalizedValue !== PRIORITY_RECOVERY_OBSERVATION_STATE_VALUE.UNAVAILABLE
+    );
+  }
+
+  hasPriorityRecoveryCoordinatorDecisionOperationVisibility(
+    decisionSnapshot = null,
+  ) {
+    const observation =
+      decisionSnapshot?.[PRIORITY_RECOVERY_FOLLOW_UP_FIELD.OBSERVATION] || {};
+    const conditions =
+      decisionSnapshot?.[PRIORITY_RECOVERY_FOLLOW_UP_FIELD.CONDITIONS] || {};
+    const visibilityCandidates = Object.freeze([
+      decisionSnapshot?.[
+        PRIORITY_RECOVERY_FOLLOW_UP_FIELD.AUTHORITATIVE_VISIBILITY_STATE
+      ],
+      decisionSnapshot?.[PRIORITY_RECOVERY_FOLLOW_UP_FIELD.VISIBILITY_STATE],
+      observation?.[PRIORITY_RECOVERY_FOLLOW_UP_FIELD.VISIBILITY_STATE],
+    ]);
+    const workflowCandidates = Object.freeze([
+      decisionSnapshot?.[PRIORITY_RECOVERY_FOLLOW_UP_FIELD.WORKFLOW_STATE],
+      observation?.[PRIORITY_RECOVERY_FOLLOW_UP_FIELD.WORKFLOW_STATE],
+    ]);
+    const latestOperationStatusCandidates = Object.freeze([
+      decisionSnapshot?.[
+        PRIORITY_RECOVERY_FOLLOW_UP_FIELD.LATEST_OPERATION_STATUS
+      ],
+      conditions?.[PRIORITY_RECOVERY_FOLLOW_UP_FIELD.LATEST_OPERATION_STATUS],
+    ]);
+    const hasVisibilityEvidence = visibilityCandidates.some((candidate) =>
+      this.isPriorityRecoveryCoordinatorDecisionStatePresent(candidate),
+    );
+    const hasWorkflowEvidence = workflowCandidates.some((candidate) =>
+      this.isPriorityRecoveryCoordinatorDecisionStatePresent(candidate),
+    );
+    const hasLatestOperationStatusEvidence =
+      latestOperationStatusCandidates.some((candidate) =>
+        this.isPriorityRecoveryCoordinatorDecisionStatePresent(candidate),
+      );
+    return (
+      hasVisibilityEvidence ||
+      hasWorkflowEvidence ||
+      hasLatestOperationStatusEvidence
+    );
+  }
+
+  shouldPreferPlanningPriorityRecoveryOperationCreation({
+    coordinatorDecisionSnapshot = null,
+    planningDecisionSnapshot = null,
+  } = {}) {
+    const planningOperationRequired =
+      this.isPriorityRecoveryFollowUpOperationRequired(planningDecisionSnapshot);
+    const coordinatorOperationRequired =
+      this.isPriorityRecoveryFollowUpOperationRequired(
+        coordinatorDecisionSnapshot,
+      );
+    const coordinatorOperationVisible =
+      this.hasPriorityRecoveryCoordinatorDecisionOperationVisibility(
+        coordinatorDecisionSnapshot,
+      );
+    const evidence = Object.freeze({
+      planningOperationRequired,
+      coordinatorOperationRequired,
+      coordinatorOperationVisible,
+    });
+    const shouldUsePlanning =
+      evidence.planningOperationRequired === true &&
+      evidence.coordinatorOperationRequired !== true &&
+      evidence.coordinatorOperationVisible !== true;
+    return shouldUsePlanning;
+  }
+
   async getCurrentPriorityRecoveryCoordinatorDecisionSnapshot() {
     if (!this.isControlPlanePriorityPartition()) {
       return null;
@@ -371,23 +457,34 @@ class UnifiedRebalancerSegment4Stage1 extends UnifiedRebalancerSegment3 {
     });
     const coordinatorDecisionSnapshot =
       await this.getCurrentPriorityRecoveryCoordinatorDecisionSnapshot();
+    const planningDecisionSnapshot =
+      this.resolvePriorityRecoveryFollowUpDecisionSnapshotFromPlanning(
+        planningSnapshot,
+        {partitionId: this.entityId},
+      ) || null;
     if (coordinatorDecisionSnapshot) {
+      if (
+        this.shouldPreferPlanningPriorityRecoveryOperationCreation({
+          coordinatorDecisionSnapshot,
+          planningDecisionSnapshot,
+        })
+      ) {
+        return Object.freeze({
+          planningSnapshot,
+          decisionSnapshot: planningDecisionSnapshot,
+        });
+      }
       return Object.freeze({
         planningSnapshot,
         decisionSnapshot: coordinatorDecisionSnapshot,
       });
     }
-    const decisionSnapshot =
-      this.resolvePriorityRecoveryFollowUpDecisionSnapshotFromPlanning(
-        planningSnapshot,
-        {partitionId: this.entityId},
-      ) || null;
-    if (!decisionSnapshot) {
+    if (!planningDecisionSnapshot) {
       return null;
     }
     return Object.freeze({
       planningSnapshot,
-      decisionSnapshot,
+      decisionSnapshot: planningDecisionSnapshot,
     });
   }
 

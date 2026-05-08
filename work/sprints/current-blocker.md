@@ -8,9 +8,9 @@ Package: `work/packages/active-20260508-rolling-restart-topology-publication-con
 
 Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/rolling-restart-dispatch-pending-handoff-repair-20260508T112000Z.report.json`
+Artifact: `test-output/reports/rolling-restart-operation-scheduling-repair-20260508T120500Z.report.json`
 
-Playback: `test-output/reports/.playback/rolling-restart-dispatch-pending-handoff-repair-20260508T112000Z/rolling-restart/`
+Playback: `test-output/reports/.playback/rolling-restart-operation-scheduling-repair-20260508T120500Z/rolling-restart/`
 
 ## Boundary
 
@@ -20,11 +20,11 @@ Boundary: `rebalancer_leader / operation_scheduling / event_driven_wait`
 
 Dominant reason: `priority_recovery_operation_scheduling_event_driven`
 
-Current state: The bounded coordinator-created remote handoff repair removed the previous dispatch-pending serial-wait signature. The representative rerun still fails, but the normalized first frontier moved to rebalancer_leader / operation_scheduling with priorityRecoveryInvariants=passed, publication PUBLISHED, pendingAckCount=0, prioritySpread=pending, and blocked partitions replica_operations-p1, sql_transactions-p1, and sql_write_operations-p1 classified as needs_operation / eligible_but_no_operation_created.
+Current state: The operation-scheduling reentry repair reduced the representative blocker but did not close it. priorityRecoveryInvariants still pass, publication remains PUBLISHED with pendingAckCount=0, and replica_operations-p1 plus sql_transaction_participants-p1 are now spread_satisfied_in_flight; the remaining first frontier is still rebalancer_leader / operation_scheduling with sql_transactions-p1 and sql_write_operations-p1 classified as needs_operation / eligible_but_no_operation_created.
 
 ## Next Action
 
-Start the next review/fix/implementation loop for rebalancer_leader / operation_scheduling, then investigate why eligible priority partitions remain action_required with nextRequiredAction=create_recovery_operation while no recovery operation is scheduled.
+Commit the focused operation-scheduling reentry slice, then start the next review/fix/implementation loop for the remaining rebalancer_leader / operation_scheduling blocker. The next proof surface is why sql_transactions-p1 and sql_write_operations-p1 remain action_required with nextRequiredAction=create_recovery_operation while no recovery operation is scheduled.
 
 ## Proof Ladder
 
@@ -63,5 +63,9 @@ Start the next review/fix/implementation loop for rebalancer_leader / operation_
 24. `src/rebalancer/operation-workflow-owner-segment-2.js`
 25. `test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
 26. `src/rebalancer/operation-workflow-owner-segment-4.js`
-27. `test/rebalancer/rebalance-coordinator-outcome-routing.test.js`
-28. `work/model-ledger.jsonl`
+27. `src/rebalancer/unified-rebalancer-segment-2.js`
+28. `src/rebalancer/unified-rebalancer-segment-4-stage-1.js`
+29. `src/rebalancer/unified-rebalancer-segment-4-stage-shared.js`
+30. `test/rebalancer/priority-recovery-stale-planning-visibility.test.js`
+31. `test/rebalancer/rebalance-coordinator-outcome-routing.test.js`
+32. `work/model-ledger.jsonl`
