@@ -1,6 +1,9 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {
   buildRecoveryProtocolSnapshot,
+  PUBLICATION_PROJECTION_BOUNDARY_ACK_STATE,
+  PUBLICATION_PROJECTION_BOUNDARY_FRESHNESS_STATE,
+  PUBLICATION_PROJECTION_BOUNDARY_ROW_STATE,
 } from '../../src/control-plane/recovery-protocol-snapshot.js';
 import {
   CONTROL_PLANE_PRIORITY_RECOVERY_REASON,
@@ -21,6 +24,14 @@ test('buildRecoveryProtocolSnapshot classifies unpublished observation explicitl
 
   t.equal(snapshot.publicationObservationState, 'unpublished');
   t.equal(snapshot.recoveryProtocolState, 'unpublished_observation');
+  t.match(snapshot.publicationBoundaryOutcome, {
+    publicationState: PUBLICATION_PROJECTION_BOUNDARY_ROW_STATE.UNPUBLISHED,
+    ackState: PUBLICATION_PROJECTION_BOUNDARY_ACK_STATE.UNAVAILABLE,
+    freshnessState: PUBLICATION_PROJECTION_BOUNDARY_FRESHNESS_STATE.UNPUBLISHED,
+    recoveryGateState: 'unpublished_observation',
+    ready: false,
+    active: true,
+  });
   t.same(
     snapshot.priorityRecoveryReasonCodes,
     [CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PUBLICATION_EPOCH_PENDING],

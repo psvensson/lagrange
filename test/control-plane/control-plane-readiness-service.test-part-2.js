@@ -17,6 +17,11 @@ import {
   ControlPlaneReadinessService,
 } from '../../src/control-plane/control-plane-readiness-service.js';
 import {
+  PUBLICATION_PROJECTION_BOUNDARY_ACK_STATE,
+  PUBLICATION_PROJECTION_BOUNDARY_FRESHNESS_STATE,
+  PUBLICATION_PROJECTION_BOUNDARY_ROW_STATE,
+} from '../../src/control-plane/recovery-protocol-snapshot.js';
+import {
 } from '../../src/control-plane/control-plane-system-table-gateway.js';
 import {
 } from '../../src/cdc/cdc-integration-service.js';
@@ -792,6 +797,24 @@ async (t) => {
       publicationEpoch: 12,
       status: 'PUBLISHED',
       publicationObservationState: 'authoritative',
+      publicationBoundaryOutcome: {
+        publicationState:
+          PUBLICATION_PROJECTION_BOUNDARY_ROW_STATE.PUBLISHED,
+        ackState:
+          PUBLICATION_PROJECTION_BOUNDARY_ACK_STATE.SATISFIED,
+        freshnessState:
+          PUBLICATION_PROJECTION_BOUNDARY_FRESHNESS_STATE.FRESH,
+        ready: true,
+      },
+    },
+    publicationBoundaryOutcome: {
+      publicationState:
+        PUBLICATION_PROJECTION_BOUNDARY_ROW_STATE.PUBLISHED,
+      ackState:
+        PUBLICATION_PROJECTION_BOUNDARY_ACK_STATE.SATISFIED,
+      freshnessState:
+        PUBLICATION_PROJECTION_BOUNDARY_FRESHNESS_STATE.FRESH,
+      ready: true,
     },
   }, 'publication story should bundle metadata, node-state, and membership publication diagnostics');
   t.end();

@@ -8,6 +8,9 @@ import {
 import {
   buildRecoveryProtocolSnapshot,
   NODE_PARTICIPATION_STATE,
+  PUBLICATION_PROJECTION_BOUNDARY_ACK_STATE,
+  PUBLICATION_PROJECTION_BOUNDARY_FRESHNESS_STATE,
+  PUBLICATION_PROJECTION_BOUNDARY_ROW_STATE,
   RECOVERY_PROTOCOL_STATE,
 } from '../../src/control-plane/recovery-protocol-snapshot.js';
 
@@ -81,6 +84,15 @@ test('buildRecoveryProtocolSnapshot derives one canonical participation state pe
       ready: false,
       pendingAckCount: 1,
     });
+    t.match(snapshot.publicationBoundaryOutcome, {
+      publicationState: PUBLICATION_PROJECTION_BOUNDARY_ROW_STATE.ACK_PENDING,
+      ackState: PUBLICATION_PROJECTION_BOUNDARY_ACK_STATE.PENDING,
+      freshnessState:
+        PUBLICATION_PROJECTION_BOUNDARY_FRESHNESS_STATE.ESTABLISHING,
+      recoveryGateState: 'ack_pending',
+      ready: false,
+      active: true,
+    });
     t.match(snapshot.participationByNodeId, {
       'node-a': {
         state: NODE_PARTICIPATION_STATE.PUBLISHED_ACTIVE,
@@ -150,4 +162,34 @@ test('buildRecoveryProtocolSnapshot preserves explicit admission blocking on the
       ],
       'the shared participation model should surface admission blocking without erasing the observed recovery state',
     );
+  });
+
+test('buildRecoveryProtocolSnapshot exposes one publication boundary outcome for ready published rows',
+  async (t) => {
+    const snapshot = buildRecoveryProtocolSnapshot({
+      publicationEpoch: 22,
+      publicationStatus: 'PUBLISHED',
+      publishedActiveNodeIdsPresent: true,
+      publishedActiveNodeIds: ['node-a', 'node-b'],
+      durablePublishedActiveNodeIds: ['node-a', 'node-b'],
+      requiredAckNodeIds: ['node-a', 'node-b'],
+      acknowledgedNodeIds: ['node-a', 'node-b'],
+      priorityPartitionSummary: {
+        satisfied: true,
+        missingPartitionIds: [],
+      },
+    });
+
+    t.match(snapshot.publicationBoundaryOutcome, {
+      publicationEpoch: 22,
+      publicationStatus: 'PUBLISHED',
+      publicationState: PUBLICATION_PROJECTION_BOUNDARY_ROW_STATE.PUBLISHED,
+      ackState: PUBLICATION_PROJECTION_BOUNDARY_ACK_STATE.SATISFIED,
+      freshnessState: PUBLICATION_PROJECTION_BOUNDARY_FRESHNESS_STATE.FRESH,
+      recoveryGateState: 'ready',
+      ready: true,
+      active: false,
+      pendingAckCount: 0,
+      missingPublishedCount: 0,
+    });
   });

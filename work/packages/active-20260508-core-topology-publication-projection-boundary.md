@@ -11,8 +11,8 @@
   "owner": "topology_control_plane",
   "boundary": "publication_projection_boundary",
   "dominantReason": "publication_stream_required_before_projection_readiness_consumer_cutover",
-  "currentState": "Placement and operation owner contracts are closed. Publication rows, ACK/freshness state, and recovery gate state still need one canonical publication stream before projection/readiness consumers can stop recombining raw owner evidence.",
-  "nextAction": "Run the required review/fix/implementation subagent sequence, then implement the publication/projection owner boundary.",
+  "currentState": "Publication boundary outcome implementation and focused proof are complete; the package is ready for focused commit/push and closure before projection/readiness consumer cutover starts.",
+  "nextAction": "Commit and push the focused publication/projection boundary slice, close this package, then activate the projection/readiness contract successor.",
   "proof": [
     "npm run work:context",
     "npm run work:validate",
@@ -20,9 +20,13 @@
   ],
   "touchedFiles": [
     "work/packages/active-20260508-core-topology-publication-projection-boundary.md",
-    "work/sprints/active-2026-q2-core-topology-control-plane-rewrite.md",
-    "work/sprints/current-blocker.json",
-    "work/sprints/current-blocker.md"
+    "src/control-plane/recovery-protocol-snapshot.js",
+    "src/control-plane/control-plane-readiness-service-segment-4-stage-2.js",
+    "src/control-plane/control-plane-publication-story.js",
+    "test/control-plane/recovery-protocol-snapshot.test.js",
+    "test/control-plane/unpublished-recovery-protocol-snapshot.test.js",
+    "test/control-plane/control-plane-readiness-service.test-part-2.js",
+    "work/model-ledger.jsonl"
   ],
   "predecessor": "work/packages/done-20260508-core-topology-partitioning-rebalancing-kernel.md"
 }
@@ -85,7 +89,9 @@ guardrails, work validation, and the successor readiness proof ladder.
       `work/packages/done-20260508-core-topology-partitioning-rebalancing-kernel.md`;
       result `clean`.
 - [x] Fix subagent recorded or explicitly not needed: `not-needed`.
-- [ ] Implementation subagent recorded:
+- [x] Implementation subagent recorded: Agent Rawls
+      (`019e08ce-72e4-7322-88a2-c4c6e05f67c6`) implemented
+      `work/packages/active-20260508-core-topology-publication-projection-boundary.md`.
 
 ## Static Drift Ledger
 
@@ -94,20 +100,64 @@ Preflight:
 - [x] Review the completed partitioning/rebalancing package before
       implementation starts.
 - [x] Run fixes if the review finds them.
-- [ ] Record the implementation subagent before runtime edits are made for this
+- [x] Record the implementation subagent before runtime edits are made for this
       package.
 
 Implementation:
 
-- [ ] Runtime edits stay within the publication/projection boundary.
-- [ ] Existing unrelated dirty files remain untouched.
-- [ ] File-scoped literal, decision-boundary, and runtime-grammar guardrails
+- [x] Runtime edits stay within the publication/projection boundary.
+- [x] Existing unrelated dirty files remain untouched.
+- [x] File-scoped literal, decision-boundary, and runtime-grammar guardrails
       pass for touched runtime files.
+- [x] LLM-backed file guideline guard attempted for touched runtime files;
+      blocked by repository-local invalid API key before producing file
+      findings.
+
+## Implementation Proof
+
+- Added `publicationBoundaryOutcome` to the publication recovery protocol
+  snapshot as the canonical publication/projection outcome for publication row
+  state, ACK state, publication freshness, recovery gate state, readiness, and
+  reason codes.
+- Threaded `publicationBoundaryOutcome` through membership publication
+  diagnostics and the control-plane publication story so diagnostics consumers
+  can read one owner outcome instead of recombining row, ACK, freshness, and
+  recovery-gate fields.
+- Did not cut over successor projection/readiness consumers beyond the bounded
+  diagnostics/story proof for this package.
+- Touched runtime files:
+  - `src/control-plane/recovery-protocol-snapshot.js`
+  - `src/control-plane/control-plane-readiness-service-segment-4-stage-2.js`
+  - `src/control-plane/control-plane-publication-story.js`
+- Touched tests:
+  - `test/control-plane/recovery-protocol-snapshot.test.js`
+  - `test/control-plane/unpublished-recovery-protocol-snapshot.test.js`
+  - `test/control-plane/control-plane-readiness-service.test-part-2.js`
+- Recorded package experience with `npm run work:model-ledger -- record ...`.
 
 ## Validation
 
 1. `npm run work:context`
-2. Focused publication/projection tests - pending.
-3. File-scoped static guardrails - pending.
-4. `npm run work:validate` - pending.
-5. `git diff --check` - pending.
+2. Focused publication/projection tests:
+   - `node --test test/control-plane/recovery-protocol-snapshot.test.js test/control-plane/unpublished-recovery-protocol-snapshot.test.js`
+     - pass, 14 assertions.
+   - `node --test test/control-plane/control-plane-readiness-service.test-part-2.js`
+     - pass, 48 assertions.
+   - `node --test test/control-plane/control-plane-publication-merge.test.js test/control-plane/publication-recovery-gate.test.js test/control-plane/canonical-readiness-consumption.test.js`
+     - pass, 118 assertions.
+3. File-scoped static guardrails:
+   - `npm run audit:guideline:literals -- src/control-plane/recovery-protocol-snapshot.js src/control-plane/control-plane-readiness-service-segment-4-stage-2.js src/control-plane/control-plane-publication-story.js`
+     - pass.
+   - `npm run audit:guideline:decision-boundaries -- src/control-plane/recovery-protocol-snapshot.js src/control-plane/control-plane-readiness-service-segment-4-stage-2.js src/control-plane/control-plane-publication-story.js`
+     - pass.
+   - `npm run audit:runtime-grammar:file -- src/control-plane/recovery-protocol-snapshot.js src/control-plane/control-plane-readiness-service-segment-4-stage-2.js src/control-plane/control-plane-publication-story.js`
+     - pass.
+   - `npm run guard:guidelines:file -- <each touched runtime file>`
+     - blocked by LLM API 401 invalid API key before producing file findings.
+4. `npm run work:validate` - pass.
+5. `git diff --check` - pass.
+
+## Residual Blockers
+
+- LLM-backed `guard:guidelines:file` cannot complete with the configured API
+  key; each touched runtime file returns `invalid_api_key` from the LLM API.

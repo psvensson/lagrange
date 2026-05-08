@@ -371,6 +371,7 @@ class ControlPlaneReadinessServiceSegment4Stage2 extends
       recoveryProtocolState: protocolSnapshot.recoveryProtocolState,
       priorityRecoveryReasonCodes: protocolSnapshot.priorityRecoveryReasonCodes,
       publicationRecoveryGate: protocolSnapshot.publicationRecoveryGate,
+      publicationBoundaryOutcome: protocolSnapshot.publicationBoundaryOutcome,
       createdAt,
       updatedAt,
     });

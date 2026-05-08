@@ -104,6 +104,16 @@ function buildControlPlanePublicationStory(options = {}) {
       options.nodeStatePublicationMode,
     ),
     membershipPublication,
+    ...(
+      membershipPublication?.publicationBoundaryOutcome &&
+        typeof membershipPublication.publicationBoundaryOutcome ===
+          TYPEOF.OBJECT ?
+        {
+          publicationBoundaryOutcome:
+            membershipPublication.publicationBoundaryOutcome,
+        } :
+        {}
+    ),
     publicationRecoveryGate:
       membershipPublication?.publicationRecoveryGate &&
         typeof membershipPublication.publicationRecoveryGate === TYPEOF.OBJECT ?
