@@ -33,6 +33,7 @@ import {META_SERVICE_ID} from '../../constants/wasm-meta.js';
 import {resolveAdvertisedWebSocketAddress} from
   '../../transport/node-address-resolution.js';
 import {
+  isBootJoinRejoinMembershipOwnerOutcome,
   MEMBERSHIP_LIFECYCLE_INTENT,
   resolveMembershipJoinIntentType,
 } from '../../control-plane/membership-lifecycle-controller.js';
@@ -468,6 +469,14 @@ class NodeRegistrationOwner {
     if (typeof joinLifecycleIntentType === TYPEOF.STRING &&
         joinLifecycleIntentType.length > NUM.ZERO) {
       return joinLifecycleIntentType;
+    }
+    const membershipOwnerOutcome =
+      this.delegates.getMembershipOwnerOutcome?.();
+    if (isBootJoinRejoinMembershipOwnerOutcome(membershipOwnerOutcome)) {
+      return resolveMembershipJoinIntentType({
+        membershipOwnerOutcome,
+        startupMode: this.delegates.getJoinStartupMode?.(),
+      });
     }
     return resolveMembershipJoinIntentType(
       this.delegates.getJoinStartupMode?.(),

@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-08",
   "scenario": "core-topology-control-plane-rewrite",
   "artifact": "none",
@@ -16,10 +16,10 @@
   "proof": [
     "npm run work:validate",
     "npm run work:context",
-    "git diff --check -- work/packages/active-20260508-core-topology-owner-boundary-inventory.md .kiro/specs/core-topology-control-plane-rewrite/owner-boundary-inventory.md .kiro/specs/core-topology-control-plane-rewrite/design.md .kiro/specs/core-topology-control-plane-rewrite/tasks.md work/sprints/active-2026-q2-core-topology-control-plane-rewrite.md work/sprints/current-blocker.json work/sprints/current-blocker.md"
+    "git diff --check -- work/packages/done-20260508-core-topology-owner-boundary-inventory.md .kiro/specs/core-topology-control-plane-rewrite/owner-boundary-inventory.md .kiro/specs/core-topology-control-plane-rewrite/design.md .kiro/specs/core-topology-control-plane-rewrite/tasks.md work/sprints/active-2026-q2-core-topology-control-plane-rewrite.md work/sprints/current-blocker.json work/sprints/current-blocker.md"
   ],
   "touchedFiles": [
-    "work/packages/active-20260508-core-topology-owner-boundary-inventory.md",
+    "work/packages/done-20260508-core-topology-owner-boundary-inventory.md",
     ".kiro/specs/core-topology-control-plane-rewrite/owner-boundary-inventory.md",
     ".kiro/specs/core-topology-control-plane-rewrite/design.md",
     ".kiro/specs/core-topology-control-plane-rewrite/tasks.md",
@@ -27,7 +27,9 @@
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md"
   ],
-  "predecessor": "work/packages/done-20260508-core-topology-rewrite-spec-and-roadmap-rebaseline.md"
+  "predecessor": "work/packages/done-20260508-core-topology-rewrite-spec-and-roadmap-rebaseline.md",
+  "closed": "2026-05-08",
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -101,7 +103,20 @@ package sequence, architecture spec, and later representative harness proof.
 
 - [x] Implementation subagent recorded: Agent Beauvoir
       (`019e088c-7b3b-7432-9901-793d0f0b3e44`) implemented
-      `work/packages/active-20260508-core-topology-owner-boundary-inventory.md`.
+      `work/packages/done-20260508-core-topology-owner-boundary-inventory.md`.
+
+## Commit And Push Ledger
+
+- Focused package commit: `34f320cf`
+- Pushed to: `origin/codex/pending-ack-eligibility-filter`
+- Commit contains only package-owned files/package-status/allowed sprint handoff: `yes`
+
+## Closure Status Note
+
+Commit `34f320cf` remains the recorded focused implementation slice for the
+owner-boundary inventory. Hypatia later found successor handoff metadata defects
+before boot/join/rejoin implementation; those defects are repaired in the active
+boot/join/rejoin package without changing this package's implementation commit.
 
 ## Owner Boundary Inventory
 
@@ -175,10 +190,10 @@ Closure:
 
 - [x] `npm run work:validate`
 - [x] `npm run work:context`
-- [x] `git diff --check -- work/packages/active-20260508-core-topology-owner-boundary-inventory.md .kiro/specs/core-topology-control-plane-rewrite/owner-boundary-inventory.md .kiro/specs/core-topology-control-plane-rewrite/design.md .kiro/specs/core-topology-control-plane-rewrite/tasks.md work/sprints/active-2026-q2-core-topology-control-plane-rewrite.md work/sprints/current-blocker.json work/sprints/current-blocker.md`
+- [x] `git diff --check -- work/packages/done-20260508-core-topology-owner-boundary-inventory.md .kiro/specs/core-topology-control-plane-rewrite/owner-boundary-inventory.md .kiro/specs/core-topology-control-plane-rewrite/design.md .kiro/specs/core-topology-control-plane-rewrite/tasks.md work/sprints/active-2026-q2-core-topology-control-plane-rewrite.md work/sprints/current-blocker.json work/sprints/current-blocker.md`
 
 ## Validation
 
 1. `npm run work:validate`
 2. `npm run work:context`
-3. `git diff --check -- work/packages/active-20260508-core-topology-owner-boundary-inventory.md .kiro/specs/core-topology-control-plane-rewrite/owner-boundary-inventory.md .kiro/specs/core-topology-control-plane-rewrite/design.md .kiro/specs/core-topology-control-plane-rewrite/tasks.md work/sprints/active-2026-q2-core-topology-control-plane-rewrite.md work/sprints/current-blocker.json work/sprints/current-blocker.md`
+3. `git diff --check -- work/packages/done-20260508-core-topology-owner-boundary-inventory.md .kiro/specs/core-topology-control-plane-rewrite/owner-boundary-inventory.md .kiro/specs/core-topology-control-plane-rewrite/design.md .kiro/specs/core-topology-control-plane-rewrite/tasks.md work/sprints/active-2026-q2-core-topology-control-plane-rewrite.md work/sprints/current-blocker.json work/sprints/current-blocker.md`

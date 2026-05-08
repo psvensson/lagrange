@@ -29,7 +29,10 @@ import {
   LIFECYCLE_PHASE,
   LIFECYCLE_REASON,
 } from '../../src/bootstrap/lifecycle-controller-constants.js';
-import {STARTUP_JOIN_MODE} from '../../src/bootstrap/rejoin-hints-constants.js';
+import {
+  MEMBERSHIP_OWNER_OUTCOME_TYPE,
+  STARTUP_JOIN_MODE,
+} from '../../src/bootstrap/rejoin-hints-constants.js';
 import {
 } from '../../src/control-plane/control-plane-workload-profile.js';
 
@@ -1736,8 +1739,12 @@ test('BootstrapAPI - forwards durable rejoin startup mode to assignment',
     });
 
     t.equal(response.statusCode, 200);
-    t.same(observedOptions, {
+    t.match(observedOptions, {
       startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
+      membershipOwnerOutcome: {
+        outcomeType: MEMBERSHIP_OWNER_OUTCOME_TYPE.RESTART_REENTRY,
+        startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
+      },
     });
   });
 

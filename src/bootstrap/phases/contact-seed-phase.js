@@ -212,6 +212,12 @@ class ContactSeedPhase {
             startupMode.length > NUM.ZERO) {
           bootstrapRequest.startupMode = startupMode;
         }
+        const membershipOwnerOutcome =
+          this.delegates.getMembershipOwnerOutcome?.();
+        if (membershipOwnerOutcome &&
+            typeof membershipOwnerOutcome === TYPEOF.OBJECT) {
+          bootstrapRequest.membershipOwnerOutcome = membershipOwnerOutcome;
+        }
         const response = await httpPostImpl(
           bootstrapUrl,
           bootstrapRequest,

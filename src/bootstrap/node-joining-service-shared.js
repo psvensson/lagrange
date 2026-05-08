@@ -84,6 +84,7 @@ import {
   CONTROL_PLANE_WORKLOAD_CLASS,
 } from '../control-plane/control-plane-workload-profile.js';
 import {
+  buildMembershipOwnerOutcome,
   resolveMembershipJoinIntentType,
   MembershipLifecycleController,
 } from '../control-plane/membership-lifecycle-controller.js';
@@ -422,6 +423,7 @@ const NODE_JOINING_SERVICE_ROUTING_HELPER_SHARED = Object.freeze({
   isDeliveredTransportDeliveryOutcome,
   isHeartbeatEscalatedControlPlaneNodeStatePublicationMode,
   isRetryableControlPlaneError,
+  buildMembershipOwnerOutcome,
   resolveCanonicalLeaderIdentitySnapshot,
   resolveControlPlaneNodeStatePublicationMode,
   resolveMembershipJoinIntentType,

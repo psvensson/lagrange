@@ -117,6 +117,7 @@ async function resolveLocalClusterIncarnationFence(options = {}) {
  * @param {Object} options.rolloutControls
  * @param {string} options.seedNodeAddress
  * @param {string} options.startupMode
+ * @param {Object} options.membershipOwnerOutcome
  * @param {Object} options.env
  * @return {Promise<void>}
  */
@@ -190,6 +191,7 @@ async function startJoinNode(options) {
   const membershipLifecycleController = new MembershipLifecycleController({
     nodeId,
     startupMode,
+    membershipOwnerOutcome: options.membershipOwnerOutcome,
     delegates: {
       onDrainIntent: ({intent}) => {
         if (bootstrapAPI?.markDraining) {
@@ -217,6 +219,7 @@ async function startJoinNode(options) {
     rolloutControls,
     readinessState: joinReadinessState,
     startupMode,
+    membershipOwnerOutcome: options.membershipOwnerOutcome,
     clusterIncarnationFence,
     membershipLifecycleController,
     onLocalAdminRuntimeReady: async (runtime) => {
@@ -716,6 +719,7 @@ async function main() {
       rolloutControls,
       seedNodeAddress: startupJoinDecision.seedNodeAddress,
       startupMode: startupJoinDecision.startupMode,
+      membershipOwnerOutcome: startupJoinDecision.membershipOwnerOutcome,
       env: process.env,
     });
     return;

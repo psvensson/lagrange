@@ -4,7 +4,7 @@
 
 Sprint: `work/sprints/active-2026-q2-core-topology-control-plane-rewrite.md`
 
-Package: `work/packages/active-20260508-core-topology-owner-boundary-inventory.md`
+Package: `work/packages/active-20260508-core-topology-boot-join-rejoin-kernel.md`
 
 Scenario: `core-topology-control-plane-rewrite`
 
@@ -16,28 +16,54 @@ Playback: `none`
 
 Owner: `topology_control_plane`
 
-Boundary: `owner_boundary_inventory`
+Boundary: `boot_join_rejoin_membership_kernel`
 
-Dominant reason: `topology_owner_boundary_inventory_required_before_runtime_extraction`
+Dominant reason: `boot_join_rejoin_membership_owner_required_before_runtime_extraction`
 
-Current state: Agent Beauvoir completed the pre-runtime owner-boundary inventory without runtime/source/test edits. The inventory maps boot, join, rejoin, partitioning, rebalancing, publication, projection, readiness, and harness observation to canonical membership, placement, operation, publication, and projection/readiness boundaries.
+Current state: Agent Dalton implemented the boot/join/rejoin membership owner outcome through rejoin hints, startup join decision, node joining, membership lifecycle, bootstrap admission, and durable rejoin registration boundaries. Focused owner-path tests, file-scoped guardrails, work validation, context refresh, and diff whitespace proof passed.
 
 ## Next Action
 
-Validate the inventory handoff, then start the boot/join/rejoin membership kernel package before runtime extraction.
+Review the uncommitted package-owned diff and commit only this package slice when ready.
 
 ## Proof Ladder
 
-1. `npm run work:validate`
-2. `npm run work:context`
-3. `git diff --check -- work/packages/active-20260508-core-topology-owner-boundary-inventory.md .kiro/specs/core-topology-control-plane-rewrite/owner-boundary-inventory.md .kiro/specs/core-topology-control-plane-rewrite/design.md .kiro/specs/core-topology-control-plane-rewrite/tasks.md work/sprints/active-2026-q2-core-topology-control-plane-rewrite.md work/sprints/current-blocker.json work/sprints/current-blocker.md`
+1. `node --test test/control-plane/membership-lifecycle-controller.test.js`
+2. `node --test test/bootstrap/rejoin-hints.test.js`
+3. `node --test test/bootstrap/bootstrap-api-rejoin.test.js`
+4. `node --test test/bootstrap/node-registration-owner.test.js`
+5. `node --test test/bootstrap/node-joining-service.test-part-3.js`
+6. `node --test test/bootstrap/node-joining-service.test.js`
+7. `node --test test/entrypoint-runtime-helpers-join-decision.test.js`
+8. `node --test test/bootstrap/bootstrap-api.test-part-3.js`
+9. `node scripts/check-guideline-literals.js src/bootstrap/rejoin-hints-constants.js src/bootstrap/rejoin-hints.js src/control-plane/membership-lifecycle-controller.js src/bootstrap/node-joining-service-shared.js src/bootstrap/node-joining-service-segment-1.js src/bootstrap/node-joining-service-segment-2.js src/bootstrap/phases/contact-seed-phase.js src/bootstrap/owners/bootstrap-request-owner.js src/bootstrap/owners/bootstrap-join-admission-owner.js src/bootstrap/shared/node-registration-owner.js src/entrypoint-runtime-helpers.js src/index.js`
+10. `node scripts/check-guideline-decision-boundaries.js src/bootstrap/rejoin-hints-constants.js src/bootstrap/rejoin-hints.js src/control-plane/membership-lifecycle-controller.js src/bootstrap/node-joining-service-shared.js src/bootstrap/node-joining-service-segment-1.js src/bootstrap/node-joining-service-segment-2.js src/bootstrap/phases/contact-seed-phase.js src/bootstrap/owners/bootstrap-request-owner.js src/bootstrap/owners/bootstrap-join-admission-owner.js src/bootstrap/shared/node-registration-owner.js src/entrypoint-runtime-helpers.js src/index.js`
+11. `npm run audit:runtime-grammar:file -- src/bootstrap/rejoin-hints-constants.js src/bootstrap/rejoin-hints.js src/control-plane/membership-lifecycle-controller.js src/bootstrap/node-joining-service-shared.js src/bootstrap/node-joining-service-segment-1.js src/bootstrap/node-joining-service-segment-2.js src/bootstrap/phases/contact-seed-phase.js src/bootstrap/owners/bootstrap-request-owner.js src/bootstrap/owners/bootstrap-join-admission-owner.js src/bootstrap/shared/node-registration-owner.js src/entrypoint-runtime-helpers.js src/index.js`
+12. `npm run work:validate`
+13. `npm run work:context`
+14. `git diff --check -- src/bootstrap/rejoin-hints-constants.js src/bootstrap/rejoin-hints.js src/control-plane/membership-lifecycle-controller.js src/bootstrap/node-joining-service-shared.js src/bootstrap/node-joining-service-segment-1.js src/bootstrap/node-joining-service-segment-2.js src/bootstrap/phases/contact-seed-phase.js src/bootstrap/owners/bootstrap-request-owner.js src/bootstrap/owners/bootstrap-join-admission-owner.js src/bootstrap/shared/node-registration-owner.js src/entrypoint-runtime-helpers.js src/index.js test/control-plane/membership-lifecycle-controller.test.js test/bootstrap/rejoin-hints.test.js test/bootstrap/bootstrap-api-rejoin.test.js test/bootstrap/bootstrap-api.test-part-3.js test/entrypoint-runtime-helpers-join-decision.test.js work/packages/active-20260508-core-topology-boot-join-rejoin-kernel.md work/sprints/active-2026-q2-core-topology-control-plane-rewrite.md work/sprints/current-blocker.json work/sprints/current-blocker.md .kiro/specs/core-topology-control-plane-rewrite/tasks.md`
 
 ## Touched Files
 
-1. `work/packages/active-20260508-core-topology-owner-boundary-inventory.md`
-2. `.kiro/specs/core-topology-control-plane-rewrite/owner-boundary-inventory.md`
-3. `.kiro/specs/core-topology-control-plane-rewrite/design.md`
-4. `.kiro/specs/core-topology-control-plane-rewrite/tasks.md`
-5. `work/sprints/active-2026-q2-core-topology-control-plane-rewrite.md`
-6. `work/sprints/current-blocker.json`
-7. `work/sprints/current-blocker.md`
+1. `src/bootstrap/rejoin-hints-constants.js`
+2. `src/bootstrap/rejoin-hints.js`
+3. `src/control-plane/membership-lifecycle-controller.js`
+4. `src/bootstrap/node-joining-service-shared.js`
+5. `src/bootstrap/node-joining-service-segment-1.js`
+6. `src/bootstrap/node-joining-service-segment-2.js`
+7. `src/bootstrap/phases/contact-seed-phase.js`
+8. `src/bootstrap/owners/bootstrap-request-owner.js`
+9. `src/bootstrap/owners/bootstrap-join-admission-owner.js`
+10. `src/bootstrap/shared/node-registration-owner.js`
+11. `src/entrypoint-runtime-helpers.js`
+12. `src/index.js`
+13. `test/control-plane/membership-lifecycle-controller.test.js`
+14. `test/bootstrap/rejoin-hints.test.js`
+15. `test/bootstrap/bootstrap-api-rejoin.test.js`
+16. `test/bootstrap/bootstrap-api.test-part-3.js`
+17. `test/entrypoint-runtime-helpers-join-decision.test.js`
+18. `work/packages/active-20260508-core-topology-boot-join-rejoin-kernel.md`
+19. `work/sprints/active-2026-q2-core-topology-control-plane-rewrite.md`
+20. `work/sprints/current-blocker.json`
+21. `work/sprints/current-blocker.md`
+22. `.kiro/specs/core-topology-control-plane-rewrite/tasks.md`

@@ -8,13 +8,20 @@ import {
   RejoinHintsPersistenceService,
   resolveAutoRejoinStartupDecision,
 } from './bootstrap/rejoin-hints.js';
-import {STARTUP_JOIN_MODE} from './bootstrap/rejoin-hints-constants.js';
+import {
+  MEMBERSHIP_OWNER_EVIDENCE_SOURCE,
+  MEMBERSHIP_OWNER_REASON,
+  STARTUP_JOIN_MODE,
+} from './bootstrap/rejoin-hints-constants.js';
 import {LIFECYCLE_REASON} from './bootstrap/lifecycle-controller-constants.js';
 import {CONFIG_KEY} from './config/config-constants.js';
 import {createDynamicConfigStartupWiring} from
   './config/dynamic-config-startup-wiring.js';
 import {createControlPlaneRuntimeBundle} from './control-plane/control-plane-runtime-bundle.js';
 import {createSystemMetadataOwners} from './control-plane/owners/index.js';
+import {
+  buildMembershipOwnerOutcome,
+} from './control-plane/membership-lifecycle-controller.js';
 import {ResourceDiagnosticsSampler} from './diagnostics/resource-diagnostics-sampler.js';
 import {createLiveQueryStartupWiring} from './live-query/live-query-startup-wiring.js';
 import {
@@ -682,18 +689,29 @@ function buildExplicitSeedStartupDecision(options) {
       seedNodeAddress: snapshot.peerAddress,
       startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
       source: snapshot.source,
+      membershipOwnerOutcome: autoRejoinDecision.membershipOwnerOutcome,
     };
   case EXPLICIT_SEED_DECISION_STATE.DURABLE_EXPLICIT_SEED:
     return {
       seedNodeAddress: explicitSeedNodeAddress,
       startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
       source: STARTUP_JOIN_DECISION_SOURCE.EXPLICIT,
+      membershipOwnerOutcome: buildMembershipOwnerOutcome({
+        startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
+        reasonCode: MEMBERSHIP_OWNER_REASON.EXPLICIT_SEED,
+        evidenceSource: MEMBERSHIP_OWNER_EVIDENCE_SOURCE.EXPLICIT,
+      }),
     };
   case EXPLICIT_SEED_DECISION_STATE.FRESH_EXPLICIT_SEED:
     return {
       seedNodeAddress: explicitSeedNodeAddress,
       startupMode: STARTUP_JOIN_MODE.FRESH_JOIN,
       source: STARTUP_JOIN_DECISION_SOURCE.EXPLICIT,
+      membershipOwnerOutcome: buildMembershipOwnerOutcome({
+        startupMode: STARTUP_JOIN_MODE.FRESH_JOIN,
+        reasonCode: MEMBERSHIP_OWNER_REASON.EXPLICIT_SEED,
+        evidenceSource: MEMBERSHIP_OWNER_EVIDENCE_SOURCE.EXPLICIT,
+      }),
     };
   default:
     throw new Error(
@@ -748,6 +766,7 @@ async function resolveStartupJoinDecision(options) {
       seedNodeAddress: null,
       startupMode: STARTUP_JOIN_MODE.SEED,
       source: autoRejoinDecision.source,
+      membershipOwnerOutcome: autoRejoinDecision.membershipOwnerOutcome,
     };
   }
 
@@ -761,6 +780,7 @@ async function resolveStartupJoinDecision(options) {
     seedNodeAddress: autoRejoinDecision.peerAddress,
     startupMode: autoRejoinDecision.startupMode,
     source: autoRejoinDecision.source,
+    membershipOwnerOutcome: autoRejoinDecision.membershipOwnerOutcome,
   };
 }
 

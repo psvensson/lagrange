@@ -6,7 +6,11 @@ import {test} from '../src/test-helpers/tap.js';
 import {
   persistBootstrapRejoinHints,
 } from '../src/bootstrap/rejoin-hints.js';
-import {STARTUP_JOIN_MODE} from '../src/bootstrap/rejoin-hints-constants.js';
+import {
+  MEMBERSHIP_OWNER_OUTCOME_TYPE,
+  STARTUP_JOIN_MODE,
+  TOPOLOGY_MEMBERSHIP_OWNER_CONTRACT,
+} from '../src/bootstrap/rejoin-hints-constants.js';
 import {CONFIG_KEY} from '../src/config/config-constants.js';
 import {
   ENTRYPOINT_DEFAULT,
@@ -28,6 +32,8 @@ const TEST_NODE_WS_PORT = 8082;
 const TEST_NODE_ROLE_JOINER = 'joiner';
 const TEST_DECISION_SOURCE_REJOIN_HINTS = 'rejoin_hints';
 const TEST_DECISION_SOURCE_EXPLICIT = 'explicit';
+const TEST_MEMBERSHIP_REASON_EXPLICIT_SEED = 'explicit_seed';
+const TEST_MEMBERSHIP_REASON_JOIN_PROBED_PEER = 'join_probed_peer';
 const TEST_PROBE_MISS = async () => false;
 const TEST_PROBE_HIT = async () => true;
 const TEST_SERVER_HOST = '127.0.0.1';
@@ -132,10 +138,18 @@ test(
       }),
     );
 
-    t.same(decision, {
+    t.match(decision, {
       seedNodeAddress: TEST_EXPLICIT_SEED_NODE_ADDRESS,
       startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
       source: TEST_DECISION_SOURCE_EXPLICIT,
+      membershipOwnerOutcome: {
+        semanticOwner: TOPOLOGY_MEMBERSHIP_OWNER_CONTRACT.SEMANTIC_OWNER,
+        boundary: TOPOLOGY_MEMBERSHIP_OWNER_CONTRACT.BOUNDARY,
+        outcomeType: MEMBERSHIP_OWNER_OUTCOME_TYPE.RESTART_REENTRY,
+        startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
+        reasonCode: TEST_MEMBERSHIP_REASON_EXPLICIT_SEED,
+        evidenceSource: TEST_DECISION_SOURCE_EXPLICIT,
+      },
     });
   },
 );
@@ -164,10 +178,18 @@ test(
       }),
     );
 
-    t.same(decision, {
+    t.match(decision, {
       seedNodeAddress: TEST_PEER_ADDRESS,
       startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
       source: TEST_DECISION_SOURCE_REJOIN_HINTS,
+      membershipOwnerOutcome: {
+        semanticOwner: TOPOLOGY_MEMBERSHIP_OWNER_CONTRACT.SEMANTIC_OWNER,
+        boundary: TOPOLOGY_MEMBERSHIP_OWNER_CONTRACT.BOUNDARY,
+        outcomeType: MEMBERSHIP_OWNER_OUTCOME_TYPE.RESTART_REENTRY,
+        startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
+        reasonCode: TEST_MEMBERSHIP_REASON_JOIN_PROBED_PEER,
+        evidenceSource: TEST_DECISION_SOURCE_REJOIN_HINTS,
+      },
     });
   },
 );
@@ -220,10 +242,18 @@ test(
       }),
     );
 
-    t.same(decision, {
+    t.match(decision, {
       seedNodeAddress: bootstrapReadyPeerAddress,
       startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
       source: TEST_DECISION_SOURCE_REJOIN_HINTS,
+      membershipOwnerOutcome: {
+        semanticOwner: TOPOLOGY_MEMBERSHIP_OWNER_CONTRACT.SEMANTIC_OWNER,
+        boundary: TOPOLOGY_MEMBERSHIP_OWNER_CONTRACT.BOUNDARY,
+        outcomeType: MEMBERSHIP_OWNER_OUTCOME_TYPE.RESTART_REENTRY,
+        startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
+        reasonCode: TEST_MEMBERSHIP_REASON_JOIN_PROBED_PEER,
+        evidenceSource: TEST_DECISION_SOURCE_REJOIN_HINTS,
+      },
     });
   },
 );
@@ -238,9 +268,17 @@ test('resolveStartupJoinDecision keeps explicit seed for fresh join', async (t) 
     }),
   );
 
-  t.same(decision, {
+  t.match(decision, {
     seedNodeAddress: TEST_EXPLICIT_SEED_NODE_ADDRESS,
     startupMode: STARTUP_JOIN_MODE.FRESH_JOIN,
     source: TEST_DECISION_SOURCE_EXPLICIT,
+    membershipOwnerOutcome: {
+      semanticOwner: TOPOLOGY_MEMBERSHIP_OWNER_CONTRACT.SEMANTIC_OWNER,
+      boundary: TOPOLOGY_MEMBERSHIP_OWNER_CONTRACT.BOUNDARY,
+      outcomeType: MEMBERSHIP_OWNER_OUTCOME_TYPE.JOIN_ADMISSION,
+      startupMode: STARTUP_JOIN_MODE.FRESH_JOIN,
+      reasonCode: TEST_MEMBERSHIP_REASON_EXPLICIT_SEED,
+      evidenceSource: TEST_DECISION_SOURCE_EXPLICIT,
+    },
   });
 });

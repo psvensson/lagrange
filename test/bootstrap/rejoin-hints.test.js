@@ -13,8 +13,10 @@ import {
   resolveAutoRejoinPeerAddress,
 } from '../../src/bootstrap/rejoin-hints.js';
 import {
+  MEMBERSHIP_OWNER_OUTCOME_TYPE,
   REJOIN_HINTS_FILENAME,
   STARTUP_JOIN_MODE,
+  TOPOLOGY_MEMBERSHIP_OWNER_CONTRACT,
 } from '../../src/bootstrap/rejoin-hints-constants.js';
 import {COLUMN, TABLES} from '../../src/constants/index.js';
 
@@ -160,6 +162,17 @@ test('persistBootstrapRejoinHints seeds durable rejoin from the chosen peer',
       startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
       durableStateDetected: true,
       identityMismatch: false,
+      membershipOwnerOutcome: {
+        semanticOwner: TOPOLOGY_MEMBERSHIP_OWNER_CONTRACT.SEMANTIC_OWNER,
+        boundary: TOPOLOGY_MEMBERSHIP_OWNER_CONTRACT.BOUNDARY,
+        outcomeType: MEMBERSHIP_OWNER_OUTCOME_TYPE.RESTART_REENTRY,
+        startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
+        reasonCode: 'join_recovered_peer',
+        evidenceSource: 'rejoin_hints',
+        peerAddressState: 'selected',
+        durableStateDetected: true,
+        identityMismatch: false,
+      },
       clusterIncarnationFence: {
         state: CLUSTER_INCARNATION_FENCE_STATE_CURRENT,
         allowed: true,
@@ -293,6 +306,17 @@ test('resolveAutoRejoinStartupDecision accepts address drift when node ID matche
       startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
       durableStateDetected: true,
       identityMismatch: false,
+      membershipOwnerOutcome: {
+        semanticOwner: TOPOLOGY_MEMBERSHIP_OWNER_CONTRACT.SEMANTIC_OWNER,
+        boundary: TOPOLOGY_MEMBERSHIP_OWNER_CONTRACT.BOUNDARY,
+        outcomeType: MEMBERSHIP_OWNER_OUTCOME_TYPE.RESTART_REENTRY,
+        startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
+        reasonCode: 'join_recovered_peer',
+        evidenceSource: 'rejoin_hints',
+        peerAddressState: 'selected',
+        durableStateDetected: true,
+        identityMismatch: false,
+      },
       clusterIncarnationFence: {
         state: CLUSTER_INCARNATION_FENCE_STATE_CURRENT,
         allowed: true,
@@ -344,6 +368,17 @@ test('resolveAutoRejoinStartupDecision keeps persisted seed role in seed mode',
       startupMode: STARTUP_JOIN_MODE.SEED,
       durableStateDetected: true,
       identityMismatch: false,
+      membershipOwnerOutcome: {
+        semanticOwner: TOPOLOGY_MEMBERSHIP_OWNER_CONTRACT.SEMANTIC_OWNER,
+        boundary: TOPOLOGY_MEMBERSHIP_OWNER_CONTRACT.BOUNDARY,
+        outcomeType: MEMBERSHIP_OWNER_OUTCOME_TYPE.BOOTSTRAP_SEED,
+        startupMode: STARTUP_JOIN_MODE.SEED,
+        reasonCode: 'durable_seed',
+        evidenceSource: 'rejoin_hints',
+        peerAddressState: 'unavailable',
+        durableStateDetected: true,
+        identityMismatch: false,
+      },
       clusterIncarnationFence: {
         state: CLUSTER_INCARNATION_FENCE_STATE_CURRENT,
         allowed: true,
@@ -435,6 +470,17 @@ test('resolveAutoRejoinStartupDecision fails closed on mismatched durable node i
       true,
       'mismatched durable node identity should be explicit in startup diagnostics',
     );
+    t.match(decision.membershipOwnerOutcome, {
+      semanticOwner: TOPOLOGY_MEMBERSHIP_OWNER_CONTRACT.SEMANTIC_OWNER,
+      boundary: TOPOLOGY_MEMBERSHIP_OWNER_CONTRACT.BOUNDARY,
+      outcomeType: MEMBERSHIP_OWNER_OUTCOME_TYPE.BLOCKED_STARTUP,
+      startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
+      reasonCode: 'identity_mismatch',
+      evidenceSource: 'durable_nodes_table',
+      peerAddressState: 'unavailable',
+      durableStateDetected: true,
+      identityMismatch: true,
+    });
     t.match(decision.clusterIncarnationFence, {
       state: CLUSTER_INCARNATION_FENCE_STATE_IDENTITY_MISMATCH,
       allowed: false,

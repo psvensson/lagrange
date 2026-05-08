@@ -11,7 +11,8 @@
 - [x] Rebaseline `roadmap.md` so the rewrite sprint is the current Phase 0.1
       representative track.
 - [x] Update current-blocker handoff.
-- [ ] Commit and push the focused setup package slice.
+- [x] Commit and push the focused setup package slice
+      (`485bed1a` to `origin/codex/pending-ack-eligibility-filter`).
 
 ## 2. Owner Boundary Inventory
 
@@ -24,10 +25,10 @@
 
 ## 3. Boot Join Rejoin Kernel
 
-- [ ] Define the membership owner transition model.
-- [ ] Cut boot, join, and rejoin flows over to membership owner outcomes.
-- [ ] Prove restart and rejoin durability with focused tests.
-- [ ] Preserve pressure and timeout correctness without readiness-side repair.
+- [x] Define the membership owner transition model.
+- [x] Cut boot, join, and rejoin flows over to membership owner outcomes.
+- [x] Prove restart and rejoin durability with focused tests.
+- [x] Preserve pressure and timeout correctness without readiness-side repair.
 
 ## 4. Partitioning Rebalancing Kernel
 

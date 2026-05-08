@@ -16,6 +16,8 @@ import {RAFT_ROLE} from '../../raft/constants.js';
 import {AuthoritativeControlPlaneView} from
   '../../control-plane/authoritative-control-plane-view.js';
 import {
+  isBootJoinRejoinMembershipOwnerOutcome,
+  isMembershipOwnerRestartReentryOutcome,
   MEMBERSHIP_LIFECYCLE_INTENT,
   resolveMembershipJoinIntentType,
 } from '../../control-plane/membership-lifecycle-controller.js';
@@ -258,10 +260,12 @@ class BootstrapJoinAdmissionOwner {
   }
 
   isDurableRejoinSameAddressEvidence(existingNode, nodeAddress, options = {}) {
-    if (
-      resolveMembershipJoinIntentType(options.startupMode) !==
-        MEMBERSHIP_LIFECYCLE_INTENT.RESTART_REENTRY
-    ) {
+    if (!isBootJoinRejoinMembershipOwnerOutcome(
+      options.membershipOwnerOutcome,
+    ) ||
+      !isMembershipOwnerRestartReentryOutcome({
+        membershipOwnerOutcome: options.membershipOwnerOutcome,
+      })) {
       return false;
     }
     return this.getNodeAddressFromRecord(existingNode) === nodeAddress;

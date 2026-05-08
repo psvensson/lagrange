@@ -49,6 +49,7 @@ const {
   _resolveSeedContactRetryAfterMs,
   assertCritical,
   assertRequiredControlPlaneRollout,
+  buildMembershipOwnerOutcome,
   createJoiningPhaseOwners,
   createRuntimeStartupWiring,
   resolveMembershipJoinIntentType,
@@ -137,6 +138,10 @@ class NodeJoiningServiceSegment1 extends EventEmitter {
       options.startupMode.length > NUM.ZERO ?
         options.startupMode :
         STARTUP_JOIN_MODE.FRESH_JOIN;
+    this.membershipOwnerOutcome = buildMembershipOwnerOutcome({
+      membershipOwnerOutcome: options.membershipOwnerOutcome,
+      startupMode: this.startupMode,
+    });
     this.clusterIncarnationFence =
       options.clusterIncarnationFence &&
       typeof options.clusterIncarnationFence === TYPEOF.OBJECT ?
@@ -150,6 +155,7 @@ class NodeJoiningServiceSegment1 extends EventEmitter {
         new MembershipLifecycleController({
           nodeId: this.nodeId,
           startupMode: this.startupMode,
+          membershipOwnerOutcome: this.membershipOwnerOutcome,
           now: this.now,
         }); // Allow tests to bypass real network I/O by providing an in-process HTTP POST.
     this.httpPostImpl =
@@ -552,6 +558,7 @@ class NodeJoiningServiceSegment1 extends EventEmitter {
         getSeedNodeAddress: () => this.seedNodeAddress,
         getNodeAddress: () => this.nodeAddress,
         getJoinStartupMode: () => this.startupMode,
+        getMembershipOwnerOutcome: () => this.membershipOwnerOutcome,
         getLogger: () => this.logger,
         getConfig: () => this.config,
         getNow: () => this.now,
@@ -709,8 +716,12 @@ class NodeJoiningServiceSegment1 extends EventEmitter {
         sendControlPlaneNodeStateUpdate: (options) =>
           this.sendControlPlaneNodeStateUpdate(options),
         getJoinLifecycleIntentType: () =>
-          resolveMembershipJoinIntentType(this.startupMode),
+          resolveMembershipJoinIntentType({
+            membershipOwnerOutcome: this.membershipOwnerOutcome,
+            startupMode: this.startupMode,
+          }),
         getJoinStartupMode: () => this.startupMode,
+        getMembershipOwnerOutcome: () => this.membershipOwnerOutcome,
         getClusterIncarnationFence: () => this.clusterIncarnationFence,
         getDataDir: () => this.dataDir,
         getNodeCapabilities: () => this.getNodeCapabilities(),

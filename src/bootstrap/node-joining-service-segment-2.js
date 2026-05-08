@@ -342,6 +342,7 @@ class NodeJoiningServiceSegment2 extends NodeJoiningServiceSegment1 {
         nodeAddress: this.nodeAddress,
         seedNodeAddress: this.seedNodeAddress,
         startupMode: this.startupMode,
+        membershipOwnerOutcome: this.membershipOwnerOutcome,
       });
     const membershipLifecycleIntentType =
       membershipLifecycleIntent?.intentType ||

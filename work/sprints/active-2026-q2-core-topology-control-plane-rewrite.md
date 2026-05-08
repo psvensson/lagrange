@@ -10,14 +10,16 @@ readiness, operation scheduling, and rebalancer paths.
 
 Active package:
 
-1. [Core Topology Owner Boundary Inventory](../packages/active-20260508-core-topology-owner-boundary-inventory.md)
+1. [Core Topology Boot Join Rejoin Kernel](../packages/active-20260508-core-topology-boot-join-rejoin-kernel.md)
 
 Current blocker:
 
-1. Agent Beauvoir completed the pre-runtime owner-boundary inventory without
-   runtime/source/test edits.
-2. The next runtime package must start with the boot/join/rejoin membership
-   kernel, using the inventory as the owner-boundary handoff.
+1. Agent Dalton implemented the boot/join/rejoin membership owner outcome
+   across rejoin hints, startup join decisions, membership lifecycle intents,
+   seed contact, bootstrap admission, and durable rejoin registration.
+2. Focused owner-path validation, file-scoped guardrails, work validation,
+   context refresh, and diff whitespace proof are green; the package remains
+   uncommitted per user instruction.
 
 ## Scope Basis
 
@@ -42,8 +44,8 @@ mutation owner.
 ## Package Queue
 
 1. Done: [Core Topology Rewrite Spec And Roadmap Rebaseline](../packages/done-20260508-core-topology-rewrite-spec-and-roadmap-rebaseline.md)
-2. Active: [Core Topology Owner Boundary Inventory](../packages/active-20260508-core-topology-owner-boundary-inventory.md)
-3. Todo: [Core Topology Boot Join Rejoin Kernel](../packages/todo-20260508-core-topology-boot-join-rejoin-kernel.md)
+2. Done: [Core Topology Owner Boundary Inventory](../packages/done-20260508-core-topology-owner-boundary-inventory.md)
+3. Active: [Core Topology Boot Join Rejoin Kernel](../packages/active-20260508-core-topology-boot-join-rejoin-kernel.md)
 4. Todo: [Core Topology Partitioning Rebalancing Kernel](../packages/todo-20260508-core-topology-partitioning-rebalancing-kernel.md)
 5. Todo: Publication Projection Boundary (package file to create when the
    partitioning/rebalancing kernel hands off)

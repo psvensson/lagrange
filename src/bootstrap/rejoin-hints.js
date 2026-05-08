@@ -4,10 +4,13 @@ import {join} from 'node:path';
 import {COLUMN, NUM, TABLES, TYPEOF} from '../constants/index.js';
 import {buildClusterIncarnationFence} from './cluster-incarnation-fence.js';
 import {
+  MEMBERSHIP_OWNER_OUTCOME_TYPE,
+  MEMBERSHIP_OWNER_REASON,
   REJOIN_HINTS_FILENAME,
   REJOIN_HINTS_TEMP_SUFFIX,
   REJOIN_HINTS_WRITE_INTERVAL_MS,
   STARTUP_JOIN_MODE,
+  TOPOLOGY_MEMBERSHIP_OWNER_CONTRACT,
 } from './rejoin-hints-constants.js';
 
 const PARTITIONS_DIRNAME = 'partitions';
@@ -43,6 +46,32 @@ const AUTO_REJOIN_DECISION_STATE = Object.freeze({
   PEER_REQUIRED_BUT_MISSING: 'peer_required_but_missing',
   FRESH_SEED: 'fresh_seed',
 });
+const AUTO_REJOIN_MEMBERSHIP_OUTCOME_BY_STATE = Object.freeze({
+  [AUTO_REJOIN_DECISION_STATE.IDENTITY_MISMATCH]: Object.freeze({
+    outcomeType: MEMBERSHIP_OWNER_OUTCOME_TYPE.BLOCKED_STARTUP,
+    reasonCode: MEMBERSHIP_OWNER_REASON.IDENTITY_MISMATCH,
+  }),
+  [AUTO_REJOIN_DECISION_STATE.DURABLE_SEED]: Object.freeze({
+    outcomeType: MEMBERSHIP_OWNER_OUTCOME_TYPE.BOOTSTRAP_SEED,
+    reasonCode: MEMBERSHIP_OWNER_REASON.DURABLE_SEED,
+  }),
+  [AUTO_REJOIN_DECISION_STATE.JOIN_PROBED_PEER]: Object.freeze({
+    outcomeType: MEMBERSHIP_OWNER_OUTCOME_TYPE.RESTART_REENTRY,
+    reasonCode: MEMBERSHIP_OWNER_REASON.JOIN_PROBED_PEER,
+  }),
+  [AUTO_REJOIN_DECISION_STATE.JOIN_RECOVERED_PEER]: Object.freeze({
+    outcomeType: MEMBERSHIP_OWNER_OUTCOME_TYPE.RESTART_REENTRY,
+    reasonCode: MEMBERSHIP_OWNER_REASON.JOIN_RECOVERED_PEER,
+  }),
+  [AUTO_REJOIN_DECISION_STATE.PEER_REQUIRED_BUT_MISSING]: Object.freeze({
+    outcomeType: MEMBERSHIP_OWNER_OUTCOME_TYPE.BLOCKED_STARTUP,
+    reasonCode: MEMBERSHIP_OWNER_REASON.PEER_REQUIRED_BUT_MISSING,
+  }),
+  [AUTO_REJOIN_DECISION_STATE.FRESH_SEED]: Object.freeze({
+    outcomeType: MEMBERSHIP_OWNER_OUTCOME_TYPE.BOOTSTRAP_SEED,
+    reasonCode: MEMBERSHIP_OWNER_REASON.FRESH_SEED,
+  }),
+});
 const IDENTITY_MISMATCH_ERROR_MESSAGE =
   'Persistent cluster state belongs to a different node identity; ' +
   'refusing to start with mismatched data directory';
@@ -54,6 +83,8 @@ const REJOIN_HINTS_PERSIST_FAILED_LOG_MESSAGE =
   'Failed to persist cluster rejoin hints';
 const UNKNOWN_AUTO_REJOIN_DECISION_STATE_ERROR_PREFIX =
   'Unknown auto-rejoin startup decision state: ';
+const UNKNOWN_AUTO_REJOIN_MEMBERSHIP_OUTCOME_STATE_ERROR_PREFIX =
+  'Unknown auto-rejoin membership outcome state: ';
 const SQL_TABLE_EXISTS =
   'SELECT 1 AS present FROM sqlite_master WHERE type = ? AND name = ? LIMIT 1';
 const SQL_SELECT_NODES =
@@ -521,10 +552,43 @@ function resolveAutoRejoinDecisionState(context = {}) {
   return AUTO_REJOIN_DECISION_STATE.FRESH_SEED;
 }
 
+function buildAutoRejoinMembershipOwnerOutcome(decision, state) {
+  const outcomeRule = AUTO_REJOIN_MEMBERSHIP_OUTCOME_BY_STATE[state];
+  if (!outcomeRule) {
+    throw new Error(
+      UNKNOWN_AUTO_REJOIN_MEMBERSHIP_OUTCOME_STATE_ERROR_PREFIX +
+        String(state),
+    );
+  }
+
+  return {
+    semanticOwner: TOPOLOGY_MEMBERSHIP_OWNER_CONTRACT.SEMANTIC_OWNER,
+    boundary: TOPOLOGY_MEMBERSHIP_OWNER_CONTRACT.BOUNDARY,
+    outcomeType: outcomeRule.outcomeType,
+    startupMode: decision.startupMode,
+    reasonCode: outcomeRule.reasonCode,
+    evidenceSource: decision.source,
+    peerAddressState: decision.peerAddressState,
+    durableStateDetected: decision.durableStateDetected === true,
+    identityMismatch: decision.identityMismatch === true,
+    clusterIncarnationFence: decision.clusterIncarnationFence,
+  };
+}
+
+function attachMembershipOwnerOutcome(decision, state) {
+  return {
+    ...decision,
+    membershipOwnerOutcome: buildAutoRejoinMembershipOwnerOutcome(
+      decision,
+      state,
+    ),
+  };
+}
+
 function buildAutoRejoinStartupDecision(context = {}, state) {
   switch (state) {
   case AUTO_REJOIN_DECISION_STATE.IDENTITY_MISMATCH:
-    return {
+    return attachMembershipOwnerOutcome({
       state,
       mode: STARTUP_MODE_FAIL,
       peerAddressState: PEER_ADDRESS_STATE.UNAVAILABLE,
@@ -535,9 +599,9 @@ function buildAutoRejoinStartupDecision(context = {}, state) {
       identityMismatch: true,
       clusterIncarnationFence: context.clusterIncarnationFence,
       error: IDENTITY_MISMATCH_ERROR_MESSAGE,
-    };
+    }, state);
   case AUTO_REJOIN_DECISION_STATE.DURABLE_SEED:
-    return {
+    return attachMembershipOwnerOutcome({
       state,
       mode: STARTUP_MODE_SEED,
       peerAddressState: PEER_ADDRESS_STATE.UNAVAILABLE,
@@ -547,9 +611,9 @@ function buildAutoRejoinStartupDecision(context = {}, state) {
       durableStateDetected: context.durableStateDetected,
       identityMismatch: false,
       clusterIncarnationFence: context.clusterIncarnationFence,
-    };
+    }, state);
   case AUTO_REJOIN_DECISION_STATE.JOIN_PROBED_PEER:
-    return {
+    return attachMembershipOwnerOutcome({
       state,
       mode: STARTUP_MODE_JOIN,
       peerAddressState: PEER_ADDRESS_STATE.SELECTED,
@@ -559,9 +623,9 @@ function buildAutoRejoinStartupDecision(context = {}, state) {
       durableStateDetected: true,
       identityMismatch: false,
       clusterIncarnationFence: context.clusterIncarnationFence,
-    };
+    }, state);
   case AUTO_REJOIN_DECISION_STATE.JOIN_RECOVERED_PEER:
-    return {
+    return attachMembershipOwnerOutcome({
       state,
       mode: STARTUP_MODE_JOIN,
       peerAddressState: PEER_ADDRESS_STATE.SELECTED,
@@ -573,9 +637,9 @@ function buildAutoRejoinStartupDecision(context = {}, state) {
       durableStateDetected: true,
       identityMismatch: false,
       clusterIncarnationFence: context.clusterIncarnationFence,
-    };
+    }, state);
   case AUTO_REJOIN_DECISION_STATE.PEER_REQUIRED_BUT_MISSING:
-    return {
+    return attachMembershipOwnerOutcome({
       state,
       mode: STARTUP_MODE_FAIL,
       peerAddressState: PEER_ADDRESS_STATE.UNAVAILABLE,
@@ -588,9 +652,9 @@ function buildAutoRejoinStartupDecision(context = {}, state) {
       identityMismatch: false,
       clusterIncarnationFence: context.clusterIncarnationFence,
       error: DURABLE_STATE_REJOIN_REQUIRED_ERROR_MESSAGE,
-    };
+    }, state);
   case AUTO_REJOIN_DECISION_STATE.FRESH_SEED:
-    return {
+    return attachMembershipOwnerOutcome({
       state,
       mode: STARTUP_MODE_SEED,
       peerAddressState: PEER_ADDRESS_STATE.UNAVAILABLE,
@@ -600,7 +664,7 @@ function buildAutoRejoinStartupDecision(context = {}, state) {
       durableStateDetected: false,
       identityMismatch: false,
       clusterIncarnationFence: context.clusterIncarnationFence,
-    };
+    }, state);
   default:
     throw new Error(
       UNKNOWN_AUTO_REJOIN_DECISION_STATE_ERROR_PREFIX + String(state),

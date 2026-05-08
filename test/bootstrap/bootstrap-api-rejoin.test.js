@@ -17,6 +17,9 @@ import {
 } from '../../src/constants/index.js';
 import {NODE_STATE} from '../../src/constants/node-state.js';
 import {STARTUP_JOIN_MODE} from '../../src/bootstrap/rejoin-hints-constants.js';
+import {
+  buildMembershipOwnerOutcome,
+} from '../../src/control-plane/membership-lifecycle-controller.js';
 
 function initializeTestEnvironment() {
   ConfigurationManager.resetInstance();
@@ -237,7 +240,7 @@ test('checkForConflicts allows idempotent re-registration when ' +
   );
 });
 
-test('checkForConflicts admits durable same-address rejoin without authoritative read',
+test('checkForConflicts admits durable same-address rejoin from owner outcome',
   async (t) => {
     initializeTestEnvironment();
 
@@ -270,12 +273,15 @@ test('checkForConflicts admits durable same-address rejoin without authoritative
       REJOIN_NODE_ADDRESS,
       {
         startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
+        membershipOwnerOutcome: buildMembershipOwnerOutcome({
+          startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
+        }),
       },
     );
     t.equal(
       result,
       null,
-      'durable same-address rejoin should be admitted from cache evidence',
+      'durable same-address rejoin should be admitted from the owner outcome',
     );
     t.equal(
       authoritativeReadCalled,

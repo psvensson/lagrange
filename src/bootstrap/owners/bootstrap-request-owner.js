@@ -24,6 +24,9 @@ import {
   createTopLevelOperationBudget,
   getRemainingBudgetMs,
 } from '../../control-plane/timeout-budget.js';
+import {
+  buildMembershipOwnerOutcome,
+} from '../../control-plane/membership-lifecycle-controller.js';
 
 const LOCAL_STR_836HW = 'move_replica_handoff_stabilizing';
 const LOCAL_STR_STRING = 'string';
@@ -418,11 +421,18 @@ class BootstrapRequestOwner {
       });
     }
 
+    const requestStartupMode = request.body?.startupMode || null;
+    const membershipOwnerOutcome = buildMembershipOwnerOutcome({
+      membershipOwnerOutcome: request.body?.membershipOwnerOutcome,
+      startupMode: requestStartupMode,
+    });
+
     const conflictError = await this.checkForConflicts(
       nodeId,
       nodeAddress,
       {
-        startupMode: request.body?.startupMode || null,
+        startupMode: requestStartupMode,
+        membershipOwnerOutcome,
       },
     );
     if (conflictError) {
@@ -515,7 +525,8 @@ class BootstrapRequestOwner {
       }
 
       const leaderStatus = await this.waitForServiceLeaders({
-        startupMode: request.body?.startupMode || null,
+        startupMode: requestStartupMode,
+        membershipOwnerOutcome,
       });
       if (!leaderStatus.ready) {
         const responseTimestamp = Date.now();
@@ -551,7 +562,8 @@ class BootstrapRequestOwner {
       const budgetedAssignmentOptions =
         this.attachBootstrapRequestExecutionBudget(
           {
-            startupMode: request.body?.startupMode || null,
+            startupMode: requestStartupMode,
+            membershipOwnerOutcome,
           },
           requestExecutionBudget,
         );

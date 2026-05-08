@@ -1,8 +1,14 @@
 import {test} from '../../src/test-helpers/tap.js';
-import {STARTUP_JOIN_MODE} from '../../src/bootstrap/rejoin-hints-constants.js';
 import {
+  MEMBERSHIP_OWNER_OUTCOME_TYPE,
+  STARTUP_JOIN_MODE,
+  TOPOLOGY_MEMBERSHIP_OWNER_CONTRACT,
+} from '../../src/bootstrap/rejoin-hints-constants.js';
+import {
+  buildMembershipOwnerOutcome,
   MembershipLifecycleController,
   MEMBERSHIP_LIFECYCLE_INTENT,
+  resolveMembershipOwnerOutcomeType,
   resolveMembershipJoinIntentType,
 } from '../../src/control-plane/membership-lifecycle-controller.js';
 import {
@@ -23,6 +29,10 @@ test('MembershipLifecycleController resolves join and durable rejoin intent type
   t.equal(
     resolveMembershipJoinIntentType(STARTUP_JOIN_MODE.DURABLE_REJOIN),
     MEMBERSHIP_LIFECYCLE_INTENT.RESTART_REENTRY,
+  );
+  t.equal(
+    resolveMembershipOwnerOutcomeType(STARTUP_JOIN_MODE.DURABLE_REJOIN),
+    MEMBERSHIP_OWNER_OUTCOME_TYPE.RESTART_REENTRY,
   );
 });
 
@@ -45,6 +55,9 @@ test('MembershipLifecycleController delegates join intent with normalized lifecy
     nodeAddress: 'ws://node-1',
     seedNodeAddress: 'http://seed',
     recoveryEpoch: 'node-1:epoch-7',
+    membershipOwnerOutcome: buildMembershipOwnerOutcome({
+      startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
+    }),
   });
 
   t.equal(submissions.length, 1);
@@ -54,6 +67,11 @@ test('MembershipLifecycleController delegates join intent with normalized lifecy
       intentType: MEMBERSHIP_LIFECYCLE_INTENT.RESTART_REENTRY,
       nodeId: 'node-1',
       startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
+      membershipOwnerOutcome: {
+        semanticOwner: TOPOLOGY_MEMBERSHIP_OWNER_CONTRACT.SEMANTIC_OWNER,
+        boundary: TOPOLOGY_MEMBERSHIP_OWNER_CONTRACT.BOUNDARY,
+        outcomeType: MEMBERSHIP_OWNER_OUTCOME_TYPE.RESTART_REENTRY,
+      },
       joinSessionId: 'session-1',
       requestedAt: 123,
       reasonCode: 'restart_reentry_requested',
