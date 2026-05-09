@@ -62,6 +62,13 @@ const TEST_MG_RETRYABLE_CREATE_FAILURE_MESSAGE =
   'Operational message-group ingress not ready for replica_operations ' +
   'CDC subscription';
 const TEST_MG_RETRYABLE_CREATE_FAILURE_RETRY_AFTER_MS = 5000;
+const TEST_DEFERRED_OUTCOME_RETRY_AFTER_MS = 1;
+const TEST_DEFERRED_OUTCOME_STATE = 'deferred';
+const TEST_PRESENT_OUTCOME_STATE = 'present';
+const TEST_DEFERRED_OUTCOME_COMPLETION_STATE =
+  'authoritative_operation_read_deferred';
+const TEST_REPLICA_OPERATION_UPDATE_SQL_PREFIX =
+  'UPDATE replica_operations';
 
 /**
  * Build a minimal operation record for testing.
@@ -110,6 +117,8 @@ function createTestCoordinator(options = {}) {
   const {
     operation = null,
     persistResults = {success: true, rows: [], affectedRows: 1},
+    setTimeoutFn = setTimeout,
+    clearTimeoutFn = clearTimeout,
   } = options;
 
   const emitter = new ExecutorOutcomeEmitter({logger: console});
@@ -132,7 +141,10 @@ function createTestCoordinator(options = {}) {
         };
       }
     }
-    if (sql.includes('UPDATE') && operation) {
+    if (
+      sql.includes(TEST_REPLICA_OPERATION_UPDATE_SQL_PREFIX) &&
+      operation
+    ) {
       operation.status = params?.[0];
       operation.workflowStep = params?.[1];
       operation.updatedAt = params?.[2];
@@ -187,6 +199,8 @@ function createTestCoordinator(options = {}) {
     },
     operationWorkflowCoordinator: workflowCoordinator,
     executorOutcomeEmitter: emitter,
+    setTimeoutFn,
+    clearTimeoutFn,
     enableTimeouts: false,
   });
   coordinator.initialize();
@@ -462,6 +476,90 @@ test('Executor outcome routing through owner-key reconcile path',
           t.ok(
             ownerKeys.length > 0,
             'outcome must be routed through runExclusive',
+          );
+        } finally {
+          await coordinator.shutdown();
+        }
+      },
+    );
+
+    await t.test(
+      'REPLICA_CREATE_ACTIVE is retried when operation visibility is deferred',
+      async (t) => {
+        const operation = buildTestOperation({
+          workflowStep: WORKFLOW_STEP.CREATING,
+          status: ReplicaStatus.CREATING,
+        });
+        const scheduledTimers = [];
+        const {coordinator, emitter} =
+          createTestCoordinator({
+            operation,
+            setTimeoutFn(callback, delayMs) {
+              const timerHandle = {callback, delayMs};
+              scheduledTimers.push(timerHandle);
+              return timerHandle;
+            },
+            clearTimeoutFn(timerHandle) {
+              timerHandle.cleared = true;
+            },
+          });
+        let visibilityState = TEST_DEFERRED_OUTCOME_STATE;
+        coordinator.repository.getOperationByIdVisibilityObservation =
+          async () => {
+            if (visibilityState === TEST_DEFERRED_OUTCOME_STATE) {
+              return {
+                state: TEST_DEFERRED_OUTCOME_STATE,
+                operation: null,
+                deferredOutcome: {
+                  completionState: TEST_DEFERRED_OUTCOME_COMPLETION_STATE,
+                  retryAfterMs: TEST_DEFERRED_OUTCOME_RETRY_AFTER_MS,
+                },
+                retryAfterMs: TEST_DEFERRED_OUTCOME_RETRY_AFTER_MS,
+              };
+            }
+            return {
+              state: TEST_PRESENT_OUTCOME_STATE,
+              operation,
+              deferredOutcome: null,
+              retryAfterMs: null,
+            };
+          };
+
+        try {
+          emitter.emitOutcome(
+            EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_ACTIVE,
+            TEST_OPERATION_ID,
+            WORKFLOW_STEP.ACTIVE,
+          );
+          await new Promise((resolve) => setImmediate(resolve));
+
+          t.equal(
+            scheduledTimers.length,
+            1,
+            'deferred visibility should retain the executor outcome',
+          );
+          t.equal(
+            scheduledTimers[0].delayMs,
+            TEST_DEFERRED_OUTCOME_RETRY_AFTER_MS,
+            'retry should use the owner visibility retry delay',
+          );
+
+          visibilityState = TEST_PRESENT_OUTCOME_STATE;
+          const completedEventPromise = waitForCoordinatorEvent(
+            coordinator,
+            REBALANCE_COORDINATOR_EVENT.OPERATION_COMPLETED,
+          );
+          await scheduledTimers[0].callback();
+          const completedEvent = await completedEventPromise;
+
+          t.equal(
+            completedEvent.operation.workflowStep,
+            WORKFLOW_STEP.ACTIVE,
+            'retained ACTIVE outcome should complete after visibility recovers',
+          );
+          t.ok(
+            completedEvent.operation.completedAt,
+            'retained ACTIVE outcome should not be lost',
           );
         } finally {
           await coordinator.shutdown();

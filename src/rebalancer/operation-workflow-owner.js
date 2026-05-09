@@ -11,8 +11,12 @@ import {OperationWorkflowOwnerSegment7} from
 import {createOperationWorkflowOwnerAdapter} from
   './operation-workflow-owner-adapter.js';
 import {
+  PRIORITY_RECOVERY_ACTUATION_STATE,
   PRIORITY_RECOVERY_BLOCKING_BOUNDARY,
+  PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION,
+  PRIORITY_RECOVERY_PROGRESS_OWNER,
   PRIORITY_RECOVERY_WAIT_MODE,
+  PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE,
 } from '../control-plane/priority-recovery-diagnostics-constants.js';
 import {
   normalizePriorityRecoveryDispatchPendingDecisionSnapshot,
@@ -24,11 +28,142 @@ import {
 } from './operation-workflow-owner-ports.js';
 
 const OPERATION_WORKFLOW_OWNER_ADAPTER_DEFAULT_CONTEXT = Object.freeze({});
-const OPERATION_WORKFLOW_OWNER_ADAPTER_SNAPSHOT = Object.freeze({
-  DISPATCH_PENDING_PHASE: 'dispatch_pending',
-  DISPATCHED_WAITING_PROGRESS: 'dispatched_waiting_progress',
-  OPERATION_WORKFLOW_OWNER: 'operation_workflow_owner',
-});
+const OPERATION_WORKFLOW_OWNER_EMPTY_TEXT = '';
+const OPERATION_WORKFLOW_OWNER_DISPATCH_PENDING_REENTRY_STATE =
+  Object.freeze({
+    OPERATION_UNAVAILABLE: 'operation_unavailable',
+    NOT_OPERATION_WORKFLOW_OWNER: 'not_operation_workflow_owner',
+    NOT_DISPATCH_PENDING: 'not_dispatch_pending',
+    REBALANCER_HANDOFF_RETRY_ACTIVE: 'rebalancer_handoff_retry_active',
+    PERSISTED_NOT_DISPATCHED: 'persisted_not_dispatched',
+    EVENT_DRIVEN_ADVANCE: 'event_driven_advance',
+    NOT_REENTERABLE: 'not_reenterable',
+  });
+
+const OPERATION_WORKFLOW_OWNER_DISPATCH_PENDING_REENTRY_ALLOWED_STATES =
+  Object.freeze(new Set([
+    OPERATION_WORKFLOW_OWNER_DISPATCH_PENDING_REENTRY_STATE
+      .REBALANCER_HANDOFF_RETRY_ACTIVE,
+    OPERATION_WORKFLOW_OWNER_DISPATCH_PENDING_REENTRY_STATE
+      .PERSISTED_NOT_DISPATCHED,
+    OPERATION_WORKFLOW_OWNER_DISPATCH_PENDING_REENTRY_STATE
+      .EVENT_DRIVEN_ADVANCE,
+  ]));
+
+const OPERATION_WORKFLOW_OWNER_DISPATCH_PENDING_ACTUATION_STATES =
+  Object.freeze(new Set([
+    PRIORITY_RECOVERY_ACTUATION_STATE.PERSISTED_NOT_DISPATCHED,
+    PRIORITY_RECOVERY_ACTUATION_STATE.DISPATCHED_WAITING_PROGRESS,
+  ]));
+
+const OPERATION_WORKFLOW_OWNER_DISPATCH_PENDING_REENTRY_TABLE =
+  Object.freeze([
+    Object.freeze({
+      state:
+        OPERATION_WORKFLOW_OWNER_DISPATCH_PENDING_REENTRY_STATE
+          .OPERATION_UNAVAILABLE,
+      matches: (evidence) => evidence.operationAvailable !== true,
+    }),
+    Object.freeze({
+      state:
+        OPERATION_WORKFLOW_OWNER_DISPATCH_PENDING_REENTRY_STATE
+          .NOT_OPERATION_WORKFLOW_OWNER,
+      matches: (evidence) => evidence.operationWorkflowOwner !== true,
+    }),
+    Object.freeze({
+      state:
+        OPERATION_WORKFLOW_OWNER_DISPATCH_PENDING_REENTRY_STATE
+          .NOT_DISPATCH_PENDING,
+      matches: (evidence) => evidence.dispatchPending !== true,
+    }),
+    Object.freeze({
+      state:
+        OPERATION_WORKFLOW_OWNER_DISPATCH_PENDING_REENTRY_STATE
+          .REBALANCER_HANDOFF_RETRY_ACTIVE,
+      matches: (evidence) => evidence.rebalancerHandoffRetryActive === true,
+    }),
+    Object.freeze({
+      state:
+        OPERATION_WORKFLOW_OWNER_DISPATCH_PENDING_REENTRY_STATE
+          .PERSISTED_NOT_DISPATCHED,
+      matches: (evidence) => evidence.persistedNotDispatched === true,
+    }),
+    Object.freeze({
+      state:
+        OPERATION_WORKFLOW_OWNER_DISPATCH_PENDING_REENTRY_STATE
+          .EVENT_DRIVEN_ADVANCE,
+      matches: (evidence) => evidence.eventDrivenAdvance === true,
+    }),
+    Object.freeze({
+      state:
+        OPERATION_WORKFLOW_OWNER_DISPATCH_PENDING_REENTRY_STATE
+          .NOT_REENTERABLE,
+      matches: () => true,
+    }),
+  ]);
+
+function buildOperationWorkflowOwnerDispatchPendingReentryEvidence(
+  snapshot,
+  operation,
+  rebalancerHandoffRetryActive,
+) {
+  return Object.freeze({
+    operationAvailable: Boolean(operation),
+    operationWorkflowOwner:
+      snapshot?.actuation?.owner ===
+        PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER &&
+      snapshot?.progress?.currentOwner ===
+        PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER,
+    dispatchPending:
+      OPERATION_WORKFLOW_OWNER_DISPATCH_PENDING_ACTUATION_STATES.has(
+        snapshot?.actuation?.state,
+      ) &&
+      snapshot?.actuation?.workflowProgressPhaseId ===
+        PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.DISPATCH_PENDING &&
+      snapshot?.progress?.workflowProgressPhaseId ===
+        PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.DISPATCH_PENDING,
+    persistedNotDispatched:
+      snapshot?.actuation?.state ===
+        PRIORITY_RECOVERY_ACTUATION_STATE.PERSISTED_NOT_DISPATCHED,
+    rebalancerHandoffRetryActive,
+    eventDrivenAdvance:
+      snapshot?.progress?.nextRequiredAction ===
+        PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.ADVANCE_EXISTING_OPERATION &&
+      snapshot?.progress?.blockingBoundary ===
+        PRIORITY_RECOVERY_BLOCKING_BOUNDARY.WORKFLOW_PROGRESS &&
+      snapshot?.progress?.waitMode ===
+        PRIORITY_RECOVERY_WAIT_MODE.EVENT_DRIVEN,
+  });
+}
+
+function resolveOperationWorkflowOwnerDispatchPendingReentryState(evidence) {
+  return (
+    OPERATION_WORKFLOW_OWNER_DISPATCH_PENDING_REENTRY_TABLE.find((entry) =>
+      entry.matches(evidence),
+    )?.state ||
+    OPERATION_WORKFLOW_OWNER_DISPATCH_PENDING_REENTRY_STATE
+      .OPERATION_UNAVAILABLE
+  );
+}
+
+function shouldReenterOperationWorkflowOwnerDispatchPending(
+  owner,
+  snapshot,
+  operation,
+) {
+  const operationId = String(
+    operation?.operationId || OPERATION_WORKFLOW_OWNER_EMPTY_TEXT,
+  ).trim();
+  const evidence = buildOperationWorkflowOwnerDispatchPendingReentryEvidence(
+    snapshot,
+    operation,
+    operationId.length > OPERATION_WORKFLOW_OWNER_EMPTY_TEXT.length &&
+      owner.hasActiveCreatedOperationHandoffRetry(operationId),
+  );
+  return OPERATION_WORKFLOW_OWNER_DISPATCH_PENDING_REENTRY_ALLOWED_STATES.has(
+    resolveOperationWorkflowOwnerDispatchPendingReentryState(evidence),
+  );
+}
 
 function buildPriorityRecoveryDispatchPendingOwnerReentryContext(snapshot) {
   const baseContext = Object.freeze({
@@ -161,17 +296,11 @@ class OperationWorkflowOwner extends OperationWorkflowOwnerSegment7 {
         snapshot,
         operations,
       );
-    if (
-      !operation ||
-      snapshot?.progress?.workflowProgressPhaseId !==
-        OPERATION_WORKFLOW_OWNER_ADAPTER_SNAPSHOT.DISPATCH_PENDING_PHASE ||
-      snapshot?.progress?.currentOwner !==
-        OPERATION_WORKFLOW_OWNER_ADAPTER_SNAPSHOT.OPERATION_WORKFLOW_OWNER ||
-      snapshot?.actuation?.state ===
-        OPERATION_WORKFLOW_OWNER_ADAPTER_SNAPSHOT
-          .DISPATCHED_WAITING_PROGRESS &&
-        !this.hasActiveCreatedOperationHandoffRetry(operation.operationId)
-    ) {
+    if (!shouldReenterOperationWorkflowOwnerDispatchPending(
+      this,
+      snapshot,
+      operation,
+    )) {
       return snapshot;
     }
     return normalizePriorityRecoveryDispatchPendingDecisionSnapshot(

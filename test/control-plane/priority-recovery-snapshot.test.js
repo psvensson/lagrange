@@ -863,6 +863,180 @@ function registerPriorityRecoverySnapshotSupplementalTests(context) {
     },
   );
 
+  test(
+    'normalizePriorityRecoveryDispatchPendingDecisionSnapshot records ' +
+      'event-driven owner advancement without a timeout outcome',
+    async (t) => {
+      const snapshot = Object.freeze({
+        partitionId: PRIORITY_RECOVERY_SQL_WRITE_OPERATIONS_PARTITION_ID,
+        operationId: PRIORITY_RECOVERY_OPERATION_ID_PENDING_REPLACE_STALE,
+        blockerReasons: Object.freeze([]),
+        semanticState: PRIORITY_RECOVERY_SEMANTIC_STATE_RECOVERING_IN_FLIGHT,
+        actuation: Object.freeze({
+          owner: PRIORITY_RECOVERY_PROGRESS_OWNER_WORKFLOW,
+          state:
+            PRIORITY_RECOVERY_ACTUATION_STATE_DISPATCHED_WAITING_PROGRESS,
+          workflowProgressPhaseId:
+            PRIORITY_RECOVERY_PROGRESS_PHASE_DISPATCH_PENDING,
+          lastProgressAtMs: PRIORITY_RECOVERY_STALE_OPERATION_PROGRESS_AT_MS,
+          timeoutReconcileDue: false,
+        }),
+        progress: Object.freeze({
+          contractState: PRIORITY_RECOVERY_PROGRESS_CONTRACT_STATE_PENDING,
+          nextAction: PRIORITY_RECOVERY_PROGRESS_NEXT_ACTION_WAIT,
+          currentOwner: PRIORITY_RECOVERY_PROGRESS_OWNER_WORKFLOW,
+          nextRequiredAction:
+            PRIORITY_RECOVERY_PROGRESS_ACTION_ADVANCE_EXISTING_OPERATION,
+          blockingBoundary: PRIORITY_RECOVERY_PROGRESS_BOUNDARY_WORKFLOW,
+          waitMode: PRIORITY_RECOVERY_PROGRESS_WAIT_EVENT_DRIVEN,
+          workflowProgressPhaseId:
+            PRIORITY_RECOVERY_PROGRESS_PHASE_DISPATCH_PENDING,
+          lastProgressAtMs: PRIORITY_RECOVERY_STALE_OPERATION_PROGRESS_AT_MS,
+        }),
+      });
+
+      const normalizedSnapshot =
+        normalizePriorityRecoveryDispatchPendingDecisionSnapshot(snapshot);
+
+      t.equal(
+        normalizedSnapshot?.operationOwnerObservation?.outcome,
+        OPERATION_WORKFLOW_OUTCOME_VALUES.ADVANCE_EXISTING_OPERATION,
+        'event-driven owner advance should be observed without timeout input',
+      );
+      t.equal(
+        normalizedSnapshot?.operationOwnerObservation?.effectCommand,
+        OPERATION_WORKFLOW_EFFECT_COMMAND_VALUES
+          .ADVANCE_EXISTING_OPERATION_COMMAND,
+        'event-driven owner advance should expose the canonical effect command',
+      );
+      t.equal(
+        normalizedSnapshot?.actuation?.state,
+        PRIORITY_RECOVERY_ACTUATION_STATE_DISPATCHED_WAITING_PROGRESS,
+        'event-driven owner advance should retain dispatched-waiting-progress actuation',
+      );
+      t.equal(
+        normalizedSnapshot?.progress?.nextRequiredAction,
+        PRIORITY_RECOVERY_PROGRESS_ACTION_ADVANCE_EXISTING_OPERATION,
+        'event-driven owner advance should keep the workflow progress action',
+      );
+    },
+  );
+
+  test(
+    'buildPriorityRecoveryDecisionSnapshots preserves owner observation ' +
+      'after appending operation-specific snapshots',
+    async (t) => {
+      const decisionSnapshots = buildPriorityRecoveryDecisionSnapshots({
+        capturedAt: PRIORITY_RECOVERY_TARGET_SERVICE_CAPTURED_AT_MS,
+        publicationConvergence: {
+          publicationEpoch: PRIORITY_RECOVERY_SAMPLE_PUBLICATION_EPOCH,
+          publicationStatus: PRIORITY_RECOVERY_PUBLICATION_STATUS_PUBLISHED,
+          publishedActiveNodeIds: [
+            PRIORITY_RECOVERY_NODE_ID_A,
+            PRIORITY_RECOVERY_NODE_ID_B,
+          ],
+          pendingAckNodeIds: [],
+          priorityPartitionSummary: {
+            satisfied: false,
+            blockedPartitions: [{
+              partitionId: SQL_TRANSACTION_PRIORITY_PARTITION_ID,
+              requiredDistinctNodeCount:
+                PRIORITY_RECOVERY_REQUIRED_DISTINCT_NODE_COUNT,
+              readyDistinctNodeCount: 1,
+              spreadGap: 2,
+            }],
+            missingPartitionIds: [
+              SQL_TRANSACTION_PRIORITY_PARTITION_ID,
+            ],
+            requiredDistinctNodeCount:
+              PRIORITY_RECOVERY_REQUIRED_DISTINCT_NODE_COUNT,
+          },
+          membershipLifecycleSummary: {
+            projectedServingNodeIds: [
+              PRIORITY_RECOVERY_NODE_ID_A,
+              PRIORITY_RECOVERY_NODE_ID_B,
+            ],
+            locallyEligibleNodeIds: [
+              PRIORITY_RECOVERY_NODE_ID_A,
+              PRIORITY_RECOVERY_NODE_ID_B,
+            ],
+          },
+        },
+        readinessByNodeId: {},
+        workflowAdmissionsByWorkflowId: {},
+        replicaOperationRows: [{
+          operation_id: PRIORITY_RECOVERY_OPERATION_ID_PENDING_REPLACE_STALE,
+          partition_id: SQL_TRANSACTION_PRIORITY_PARTITION_ID,
+          entity_type: PRIORITY_RECOVERY_ENTITY_TYPE_PARTITION,
+          operation_type: PRIORITY_RECOVERY_OPERATION_TYPE_REPLACE,
+          status: PRIORITY_RECOVERY_STATUS_PENDING,
+          workflow_step: PRIORITY_RECOVERY_WORKFLOW_STEP_PENDING,
+          source_node_id: PRIORITY_RECOVERY_NODE_ID_A,
+          target_node_id: PRIORITY_RECOVERY_NODE_ID_B,
+          replica_id: PRIORITY_RECOVERY_REPLICA_ID_TARGET_SERVICE_PROGRESS,
+          created_at: PRIORITY_RECOVERY_OPERATION_CREATED_AT_MS,
+          updated_at: PRIORITY_RECOVERY_STALE_OPERATION_PROGRESS_AT_MS,
+        }],
+        serviceRows: [],
+      });
+
+      const appendedSnapshot = decisionSnapshots.snapshots.find((entry) =>
+        entry.partitionId === SQL_TRANSACTION_PRIORITY_PARTITION_ID &&
+        entry.operationId ===
+          PRIORITY_RECOVERY_OPERATION_ID_PENDING_REPLACE_STALE,
+      );
+
+      t.equal(
+        appendedSnapshot?.operationOwnerObservation?.outcome,
+        OPERATION_WORKFLOW_OUTCOME_VALUES.RECONCILE_STALE_PROGRESS,
+        'appended operation snapshots should retain owner re-entry outcomes',
+      );
+      t.equal(
+        appendedSnapshot?.operationOwnerObservation?.correlationKey,
+        appendedSnapshot?.correlationKey,
+        'appended operation snapshots should correlate owner evidence to the operation',
+      );
+      t.equal(
+        appendedSnapshot?.operationOwnerObservation?.requestedOwnerAction,
+        PRIORITY_RECOVERY_PROGRESS_ACTION_ADVANCE_EXISTING_OPERATION,
+        'appended operation snapshots should expose owner advancement',
+      );
+      t.same(
+        decisionSnapshots.blockerPartitionIdsByReason[
+          PRIORITY_RECOVERY_BLOCKER_REASON_OPERATION_NO_TRANSITIONS
+        ],
+        [],
+        'summary blockers should be rebuilt from appended owner snapshots',
+      );
+      t.same(
+        decisionSnapshots.partitionIdsBySemanticState[
+          PRIORITY_RECOVERY_SEMANTIC_STATE_NEEDS_OPERATION
+        ],
+        [],
+        'summary semantic state should not retain the pre-append partition state',
+      );
+      t.same(
+        decisionSnapshots.partitionIdsBySemanticState[
+          PRIORITY_RECOVERY_SEMANTIC_STATE_RECOVERING_IN_FLIGHT
+        ],
+        [SQL_TRANSACTION_PRIORITY_PARTITION_ID],
+        'summary semantic state should follow the appended owner snapshot',
+      );
+      t.notOk(
+        decisionSnapshots.unresolvedSemanticStateIds.includes(
+          PRIORITY_RECOVERY_SEMANTIC_STATE_NEEDS_OPERATION,
+        ),
+        'closure inputs should not retain stale needs-operation state',
+      );
+      t.ok(
+        decisionSnapshots.unresolvedSemanticStateIds.includes(
+          PRIORITY_RECOVERY_SEMANTIC_STATE_RECOVERING_IN_FLIGHT,
+        ),
+        'closure inputs should retain the live recovering state',
+      );
+    },
+  );
+
   test(STALE_SOURCE_SERIAL_WAIT_TEST_NAME, async (t) => {
     const trackedDecisionSnapshots = buildTrackedPriorityRecoveryDecisionSnapshots({
       publicationEpoch: PRIORITY_RECOVERY_SAMPLE_PUBLICATION_EPOCH,
@@ -4921,6 +5095,162 @@ function registerPriorityRecoverySnapshotSupplementalTests(context) {
       RETAINED_CARRIER_SERIAL_WAIT_PRESERVE_PROGRESS_MESSAGE,
     );
   });
+
+  test(
+    'tracked priority recovery decision snapshots keep owner advancement ' +
+      'out of retained serial-wait restoration',
+    async (t) => {
+      const trackedDecisionSnapshots = buildTrackedPriorityRecoveryDecisionSnapshots({
+        publicationEpoch: PRIORITY_RECOVERY_SAMPLE_PUBLICATION_EPOCH,
+        blockerPartitionIdsByReason: {
+          [PRIORITY_RECOVERY_BLOCKER_REASON_SERIAL_OPERATION_WAIT]: [],
+          [PRIORITY_RECOVERY_BLOCKER_REASON_ELIGIBLE_NO_OPERATION]: [],
+          [PRIORITY_RECOVERY_BLOCKER_REASON_OPERATION_NO_TRANSITIONS]: [],
+          [PRIORITY_RECOVERY_BLOCKER_REASON_RECOVERY_ELIGIBLE_EXCLUDED]: [],
+        },
+        partitionIdsBySemanticState: {
+          [PRIORITY_RECOVERY_SEMANTIC_STATE_CONVERGED]: [],
+          [PRIORITY_RECOVERY_SEMANTIC_STATE_RECOVERING_IN_FLIGHT]: [
+            SQL_TRANSACTION_PRIORITY_PARTITION_ID,
+            PRIORITY_RECOVERY_SQL_WRITE_OPERATIONS_PARTITION_ID,
+          ],
+          [PRIORITY_RECOVERY_SEMANTIC_STATE_NEEDS_OPERATION]: [],
+          [PRIORITY_RECOVERY_SEMANTIC_STATE_OPERATION_STALLED]: [],
+          [PRIORITY_RECOVERY_SEMANTIC_STATE_LEARNER_PROMOTION_BLOCKED]: [],
+          [PRIORITY_RECOVERY_SEMANTIC_STATE_COORDINATION_MISMATCH]: [],
+          [PRIORITY_RECOVERY_SEMANTIC_STATE_BLOCKED_UNCLASSIFIED]: [],
+        },
+        snapshots: [{
+          partitionId: SQL_TRANSACTION_PRIORITY_PARTITION_ID,
+          epoch: PRIORITY_RECOVERY_SAMPLE_PUBLICATION_EPOCH,
+          operationId: RETAINED_CARRIER_SERIAL_WAIT_SOURCE_OPERATION_ID,
+          semanticState: PRIORITY_RECOVERY_SEMANTIC_STATE_RECOVERING_IN_FLIGHT,
+          blockerReasons: [],
+          completion: {
+            state: PRIORITY_RECOVERY_COMPLETION_STATE.BLOCKED,
+            reasonCode:
+              SPREAD_SATISFIED_SIBLING_SERIAL_WAIT_REASON_ACTIVE_BLOCKS_SPREAD,
+          },
+          progress: {
+            currentOwner: PRIORITY_RECOVERY_PROGRESS_OWNER_WORKFLOW,
+            nextRequiredAction:
+              PRIORITY_RECOVERY_PROGRESS_ACTION_WAIT_FOR_PROGRESS,
+            blockingBoundary: PRIORITY_RECOVERY_PROGRESS_BOUNDARY_WORKFLOW,
+            waitMode: PRIORITY_RECOVERY_PROGRESS_WAIT_EVENT_DRIVEN,
+            workflowProgressPhaseId:
+              PRIORITY_RECOVERY_PROGRESS_PHASE_DISPATCH_PENDING,
+            lastProgressAtMs: RETAINED_CARRIER_SERIAL_WAIT_SOURCE_PROGRESS_AT_MS,
+          },
+          actuation: {
+            owner: PRIORITY_RECOVERY_PROGRESS_OWNER_WORKFLOW,
+            state: PRIORITY_RECOVERY_ACTUATION_STATE_PERSISTED_NOT_DISPATCHED,
+            workflowProgressPhaseId:
+              PRIORITY_RECOVERY_PROGRESS_PHASE_DISPATCH_PENDING,
+            latestOperationId: RETAINED_CARRIER_SERIAL_WAIT_SOURCE_OPERATION_ID,
+            lastProgressAtMs: RETAINED_CARRIER_SERIAL_WAIT_SOURCE_PROGRESS_AT_MS,
+          },
+          coordinator: {
+            operationCount: PRIORITY_RECOVERY_SINGLE_OPERATION_COUNT,
+            operationIds: [RETAINED_CARRIER_SERIAL_WAIT_SOURCE_OPERATION_ID],
+            operation: {
+              operationId: RETAINED_CARRIER_SERIAL_WAIT_SOURCE_OPERATION_ID,
+              partitionId: SQL_TRANSACTION_PRIORITY_PARTITION_ID,
+              type: PRIORITY_RECOVERY_OPERATION_TYPE_REPLACE,
+              status: PRIORITY_RECOVERY_STATUS_PENDING,
+              workflowStep: PRIORITY_RECOVERY_WORKFLOW_STEP_PENDING,
+            },
+            serialWaitOperationIds: PRIORITY_RECOVERY_EMPTY_OPERATION_IDS,
+            serialWaitPartitionIds: PRIORITY_RECOVERY_EMPTY_OPERATION_IDS,
+          },
+        }, {
+          partitionId: PRIORITY_RECOVERY_SQL_WRITE_OPERATIONS_PARTITION_ID,
+          epoch: PRIORITY_RECOVERY_SAMPLE_PUBLICATION_EPOCH,
+          operationId: PRIORITY_RECOVERY_OPERATION_ID_PENDING_REPLACE_STALE,
+          semanticState: PRIORITY_RECOVERY_SEMANTIC_STATE_RECOVERING_IN_FLIGHT,
+          blockerReasons: [],
+          completion: {
+            state: PRIORITY_RECOVERY_COMPLETION_STATE.BLOCKED,
+            reasonCode:
+              SPREAD_SATISFIED_SIBLING_SERIAL_WAIT_REASON_ACTIVE_BLOCKS_SPREAD,
+          },
+          progress: {
+            currentOwner: PRIORITY_RECOVERY_PROGRESS_OWNER_WORKFLOW,
+            nextRequiredAction:
+              PRIORITY_RECOVERY_PROGRESS_ACTION_ADVANCE_EXISTING_OPERATION,
+            blockingBoundary: PRIORITY_RECOVERY_PROGRESS_BOUNDARY_WORKFLOW,
+            waitMode: PRIORITY_RECOVERY_PROGRESS_WAIT_EVENT_DRIVEN,
+            workflowProgressPhaseId:
+              PRIORITY_RECOVERY_PROGRESS_PHASE_DISPATCH_PENDING,
+            lastProgressAtMs:
+              RETAINED_CARRIER_SERIAL_WAIT_TARGET_CAPTURED_AT_MS,
+          },
+          actuation: {
+            owner: PRIORITY_RECOVERY_PROGRESS_OWNER_WORKFLOW,
+            state: PRIORITY_RECOVERY_ACTUATION_STATE_PERSISTED_NOT_DISPATCHED,
+            workflowProgressPhaseId:
+              PRIORITY_RECOVERY_PROGRESS_PHASE_DISPATCH_PENDING,
+            latestOperationId: PRIORITY_RECOVERY_OPERATION_ID_PENDING_REPLACE_STALE,
+            lastProgressAtMs:
+              RETAINED_CARRIER_SERIAL_WAIT_TARGET_CAPTURED_AT_MS,
+          },
+          admission: {
+            effectiveEligibleNodeIds: [
+              PRIORITY_RECOVERY_NODE_ID_A,
+              PRIORITY_RECOVERY_NODE_ID_B,
+            ],
+          },
+          coordinator: {
+            operationCount: PRIORITY_RECOVERY_SINGLE_OPERATION_COUNT,
+            operationIds: [
+              PRIORITY_RECOVERY_OPERATION_ID_PENDING_REPLACE_STALE,
+            ],
+            operation: {
+              operationId: PRIORITY_RECOVERY_OPERATION_ID_PENDING_REPLACE_STALE,
+              partitionId: PRIORITY_RECOVERY_SQL_WRITE_OPERATIONS_PARTITION_ID,
+              type: PRIORITY_RECOVERY_OPERATION_TYPE_REPLACE,
+              status: PRIORITY_RECOVERY_STATUS_PENDING,
+              workflowStep: PRIORITY_RECOVERY_WORKFLOW_STEP_PENDING,
+            },
+            serialWaitOperationIds: [
+              RETAINED_CARRIER_SERIAL_WAIT_SOURCE_OPERATION_ID,
+            ],
+            serialWaitPartitionIds: [SQL_TRANSACTION_PRIORITY_PARTITION_ID],
+          },
+        }],
+      });
+
+      const trackedTargetSnapshot = trackedDecisionSnapshots.snapshots.find(
+        (snapshot) =>
+          snapshot.partitionId ===
+            PRIORITY_RECOVERY_SQL_WRITE_OPERATIONS_PARTITION_ID,
+      );
+
+      t.same(
+        trackedTargetSnapshot?.blockerReasons,
+        [],
+        'owner advancement should not restore retained serial-wait blockers',
+      );
+      t.equal(
+        trackedTargetSnapshot?.semanticState,
+        PRIORITY_RECOVERY_SEMANTIC_STATE_RECOVERING_IN_FLIGHT,
+        'owner advancement should remain in-flight recovery',
+      );
+      t.same(
+        trackedDecisionSnapshots.blockerPartitionIdsByReason[
+          PRIORITY_RECOVERY_BLOCKER_REASON_SERIAL_OPERATION_WAIT
+        ],
+        [],
+        'summary blockers should not restore serial wait over owner advancement',
+      );
+      t.same(
+        trackedDecisionSnapshots.partitionIdsBySemanticState[
+          PRIORITY_RECOVERY_SEMANTIC_STATE_NEEDS_OPERATION
+        ],
+        [],
+        'summary semantic state should not restore needs-operation state',
+      );
+    },
+  );
 }
 
 const priorityRecoverySnapshotTestContext = {

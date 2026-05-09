@@ -1,4 +1,7 @@
 import {OperationWorkflowOwnerSegment7Stage4} from './operation-workflow-owner-segment-7-stage-4.js';
+import {
+  OPERATION_WORKFLOW_EFFECT_COMMAND_VALUES,
+} from './operation-workflow-owner-constants.js';
 import {OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED as SHARED} from './operation-workflow-owner-segment-7-stage-shared.js';
 
 const {
@@ -23,7 +26,7 @@ const PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_STATE = Object.freeze({
   UNAVAILABLE: 'unavailable',
   NOT_OWNER_ADVANCE: 'not_owner_advance',
   NOT_DISPATCH_PENDING: 'not_dispatch_pending',
-  NOT_TIMEOUT_DUE: 'not_timeout_due',
+  NO_OWNER_REENTRY_EFFECT: 'no_owner_reentry_effect',
   NOT_DISPATCH_RETRYABLE: 'not_dispatch_retryable',
   OWNER_LANE_HELD: 'owner_lane_held',
   REMOTE_RETRY_ACTIVE: 'remote_retry_active',
@@ -45,6 +48,18 @@ const PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_ACTUATION_STATES =
     ]),
   );
 
+const PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_EFFECT_COMMANDS =
+  Object.freeze(
+    new Set([
+      OPERATION_WORKFLOW_EFFECT_COMMAND_VALUES.DISPATCH_LOCAL_OWNER_COMMAND,
+      OPERATION_WORKFLOW_EFFECT_COMMAND_VALUES.WAKE_REMOTE_OWNER_COMMAND,
+      OPERATION_WORKFLOW_EFFECT_COMMAND_VALUES
+        .ADVANCE_EXISTING_OPERATION_COMMAND,
+      OPERATION_WORKFLOW_EFFECT_COMMAND_VALUES
+        .RECONCILE_STALE_PROGRESS_COMMAND,
+    ]),
+  );
+
 const PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_STATE_TABLE = Object.freeze([
   Object.freeze({
     state: PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_STATE.UNAVAILABLE,
@@ -60,8 +75,10 @@ const PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_STATE_TABLE = Object.freeze([
     matches: (evidence) => evidence.dispatchPending !== true,
   }),
   Object.freeze({
-    state: PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_STATE.NOT_TIMEOUT_DUE,
-    matches: (evidence) => evidence.timeoutReconcileDue !== true,
+    state:
+      PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_STATE
+        .NO_OWNER_REENTRY_EFFECT,
+    matches: (evidence) => evidence.ownerReentryEffectAvailable !== true,
   }),
   Object.freeze({
     state:
@@ -166,6 +183,11 @@ class OperationWorkflowOwnerSegment7Stage5 extends OperationWorkflowOwnerSegment
           PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.DISPATCH_PENDING,
       timeoutReconcileDue:
         snapshot?.actuation?.timeoutReconcileDue === true,
+      ownerReentryEffectAvailable:
+        snapshot?.actuation?.timeoutReconcileDue === true ||
+        PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_EFFECT_COMMANDS.has(
+          snapshot?.operationOwnerObservation?.effectCommand,
+        ),
       dispatchRetryable: this.isDispatchRetryableWorkflowStep(operation),
       ownerLaneHeld: this.isOperationOwnerLaneHeld(operationId),
       remoteRetryActive:

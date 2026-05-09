@@ -3,9 +3,12 @@ import {
   TYPEOF,
 } from '../constants/index.js';
 import {
+  PRIORITY_RECOVERY_BLOCKING_BOUNDARY,
   PRIORITY_RECOVERY_BLOCKER_REASON,
+  PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION,
   PRIORITY_RECOVERY_PROGRESS_CLASS_IDS,
   PRIORITY_RECOVERY_PROGRESS_OWNER,
+  PRIORITY_RECOVERY_WAIT_MODE,
 } from './priority-recovery-diagnostics-constants.js';
 import {buildPriorityRecoveryCompletion} from './priority-recovery-completion.js';
 import {isPriorityRecoveryEmergencyPartition} from './priority-recovery-admission-constants.js';
@@ -591,6 +594,34 @@ function buildPriorityRecoverySyntheticSerialWaitSourceContexts(
   return serialWaitOperationContexts;
 }
 
+function isPriorityRecoveryOperationWorkflowProgressAdvancementSnapshot(
+  snapshot,
+) {
+  const progress =
+    snapshot?.[PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.PROGRESS] &&
+    typeof snapshot[PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.PROGRESS] ===
+      TYPEOF.OBJECT ?
+      snapshot[PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.PROGRESS] :
+      null;
+  const actuation =
+    snapshot?.[PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.ACTUATION] &&
+    typeof snapshot[PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.ACTUATION] ===
+      TYPEOF.OBJECT ?
+      snapshot[PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.ACTUATION] :
+      null;
+  return (
+    progress?.currentOwner ===
+      PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER &&
+    actuation?.owner ===
+      PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER &&
+    progress?.nextRequiredAction ===
+      PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.ADVANCE_EXISTING_OPERATION &&
+    progress?.blockingBoundary ===
+      PRIORITY_RECOVERY_BLOCKING_BOUNDARY.WORKFLOW_PROGRESS &&
+    progress?.waitMode === PRIORITY_RECOVERY_WAIT_MODE.EVENT_DRIVEN
+  );
+}
+
 function isPriorityRecoveryRetainedSerialWaitCarrierDecisionSnapshot(
   snapshot,
 ) {
@@ -610,6 +641,8 @@ function isPriorityRecoveryRetainedSerialWaitCarrierDecisionSnapshot(
   return (
     blockerReasons.length === NUM.ZERO &&
     hasPriorityRecoveryDecisionSnapshotOperationEvidence(snapshot) === true &&
+    isPriorityRecoveryOperationWorkflowProgressAdvancementSnapshot(snapshot) !==
+      true &&
     (
       serialWaitPartitionIds.length > NUM.ZERO ||
       serialWaitOperationIds.length > NUM.ZERO

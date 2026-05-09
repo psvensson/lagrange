@@ -36,6 +36,10 @@ const PRIORITY_WORKFLOW_TIMEOUT_TRANSITION_DEFERRED_FIXTURE_PATH =
   `${FIXTURE_DIRECTORY}/priority-workflow-timeout-transition-deferred.fixture.json`;
 const PRIORITY_WORKFLOW_TIMEOUT_TRANSITION_DEFERRED_EXPECTED_PATH =
   `${FIXTURE_DIRECTORY}/priority-workflow-timeout-transition-deferred.expected.json`;
+const PRIORITY_WORKFLOW_PROGRESS_EVENT_DRIVEN_FIXTURE_PATH =
+  `${FIXTURE_DIRECTORY}/priority-workflow-progress-event-driven.fixture.json`;
+const PRIORITY_WORKFLOW_PROGRESS_EVENT_DRIVEN_EXPECTED_PATH =
+  `${FIXTURE_DIRECTORY}/priority-workflow-progress-event-driven.expected.json`;
 const ABSENT_VALUE = 'absent';
 const PRIORITY_EDGE_ALIAS = 'priority';
 const PRIORITY_EDGE_ID = 'priority_recovery_partition_progress';
@@ -98,6 +102,17 @@ describe('analyze-topology-convergence CLI', () => {
     );
     const expected = readJson(
       PRIORITY_WORKFLOW_TIMEOUT_TRANSITION_DEFERRED_EXPECTED_PATH,
+    );
+
+    assert.deepEqual(projectGoldenFrontier(output), expected);
+  });
+
+  it('matches golden frontier fixture for event-driven workflow progress', () => {
+    const output = runAnalyzerJson(
+      PRIORITY_WORKFLOW_PROGRESS_EVENT_DRIVEN_FIXTURE_PATH,
+    );
+    const expected = readJson(
+      PRIORITY_WORKFLOW_PROGRESS_EVENT_DRIVEN_EXPECTED_PATH,
     );
 
     assert.deepEqual(projectGoldenFrontier(output), expected);

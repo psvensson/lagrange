@@ -31,6 +31,7 @@ const {
   REMOVE_SAFETY_READINESS_DIMENSION,
   REPLICA_OPERATION_VISIBILITY_READ_MODE,
   ReplicaStatus,
+  OBSERVED_PROGRESS_RETRY_DELAY_MS,
   TYPEOF,
   WORKFLOW_STEP,
   isRetryableControlPlaneError,
@@ -55,6 +56,64 @@ const EXECUTOR_FAILURE_RECONCILE_STATE_TABLE = Object.freeze([
     matches: () => true,
   }),
 ]);
+
+const EXECUTOR_OUTCOME_OPERATION_VISIBILITY_STATE = Object.freeze({
+  PRESENT: 'present',
+  DEFERRED: 'deferred',
+  EMPTY: 'empty',
+});
+
+const EXECUTOR_OUTCOME_OPERATION_VISIBILITY_ACTION = Object.freeze({
+  USE_OPERATION: 'use_operation',
+  RETRY_OUTCOME: 'retry_outcome',
+  SKIP_OUTCOME: 'skip_outcome',
+});
+
+const EXECUTOR_OUTCOME_OPERATION_VISIBILITY_ACTION_BY_STATE = Object.freeze(
+  new Map([
+    [
+      EXECUTOR_OUTCOME_OPERATION_VISIBILITY_STATE.PRESENT,
+      EXECUTOR_OUTCOME_OPERATION_VISIBILITY_ACTION.USE_OPERATION,
+    ],
+    [
+      EXECUTOR_OUTCOME_OPERATION_VISIBILITY_STATE.DEFERRED,
+      EXECUTOR_OUTCOME_OPERATION_VISIBILITY_ACTION.RETRY_OUTCOME,
+    ],
+    [
+      EXECUTOR_OUTCOME_OPERATION_VISIBILITY_STATE.EMPTY,
+      EXECUTOR_OUTCOME_OPERATION_VISIBILITY_ACTION.SKIP_OUTCOME,
+    ],
+  ]),
+);
+
+const EXECUTOR_OUTCOME_OPERATION_VISIBILITY_STATE_TABLE = Object.freeze([
+  Object.freeze({
+    state: EXECUTOR_OUTCOME_OPERATION_VISIBILITY_STATE.PRESENT,
+    matches: (evidence) => evidence.operationAvailable === true,
+  }),
+  Object.freeze({
+    state: EXECUTOR_OUTCOME_OPERATION_VISIBILITY_STATE.DEFERRED,
+    matches: (evidence) => evidence.visibilityDeferred === true,
+  }),
+  Object.freeze({
+    state: EXECUTOR_OUTCOME_OPERATION_VISIBILITY_STATE.EMPTY,
+    matches: () => true,
+  }),
+]);
+
+const EXECUTOR_OUTCOME_RETRY_WORKFLOW_STEP_RANK = Object.freeze(new Map([
+  [WORKFLOW_STEP.PENDING, NUM.ONE],
+  [WORKFLOW_STEP.SENDING, NUM.TWO],
+  [WORKFLOW_STEP.CREATING, NUM.THREE],
+  [WORKFLOW_STEP.SYNCING, NUM.FOUR],
+  [WORKFLOW_STEP.ACTIVE, NUM.FIVE],
+  [WORKFLOW_STEP.STOPPING, NUM.SIX],
+  [WORKFLOW_STEP.REMOVED, NUM.SEVEN],
+  [WORKFLOW_STEP.FAILED, NUM.SEVEN],
+]));
+
+const EXECUTOR_OUTCOME_VISIBILITY_RETRY_ERROR_MESSAGE =
+  'Executor outcome operation visibility deferred';
 
 class OperationWorkflowOwnerSegment7Stage3 extends OperationWorkflowOwnerSegment7Stage2 {
   async checkTimeouts() {
@@ -296,6 +355,141 @@ class OperationWorkflowOwnerSegment7Stage3 extends OperationWorkflowOwnerSegment
     );
   }
 
+  buildExecutorOutcomeOperationVisibilityEvidence(visibilityObservation) {
+    return Object.freeze({
+      operationAvailable: Boolean(visibilityObservation?.operation),
+      visibilityDeferred:
+        visibilityObservation?.state ===
+          INCOMPLETE_OPERATION_OBSERVATION_STATE.DEFERRED ||
+        Boolean(visibilityObservation?.deferredOutcome),
+    });
+  }
+
+  resolveExecutorOutcomeOperationVisibilityAction(visibilityObservation) {
+    const evidence =
+      this.buildExecutorOutcomeOperationVisibilityEvidence(
+        visibilityObservation,
+      );
+    const state =
+      EXECUTOR_OUTCOME_OPERATION_VISIBILITY_STATE_TABLE.find((entry) =>
+        entry.matches(evidence),
+      )?.state ||
+      EXECUTOR_OUTCOME_OPERATION_VISIBILITY_STATE.EMPTY;
+    return (
+      EXECUTOR_OUTCOME_OPERATION_VISIBILITY_ACTION_BY_STATE.get(state) ||
+      EXECUTOR_OUTCOME_OPERATION_VISIBILITY_ACTION.SKIP_OUTCOME
+    );
+  }
+
+  cloneExecutorOutcomeRetryPayload(outcome) {
+    return Object.freeze({...outcome});
+  }
+
+  getExecutorOutcomeRetryWorkflowStepRank(outcome) {
+    return (
+      EXECUTOR_OUTCOME_RETRY_WORKFLOW_STEP_RANK.get(
+        outcome?.[EXECUTOR_OUTCOME_FIELD.WORKFLOW_STEP],
+      ) ||
+      NUM.NEGATIVE_ONE
+    );
+  }
+
+  selectExecutorOutcomeRetryPayload(existingOutcome, candidateOutcome) {
+    if (!existingOutcome) {
+      return candidateOutcome;
+    }
+    const existingRank =
+      this.getExecutorOutcomeRetryWorkflowStepRank(existingOutcome);
+    const candidateRank =
+      this.getExecutorOutcomeRetryWorkflowStepRank(candidateOutcome);
+    return candidateRank >= existingRank ? candidateOutcome : existingOutcome;
+  }
+
+  clearExecutorOutcomeRetry(operationId) {
+    const timerHandle =
+      this.executorOutcomeRetryTimerByOperationId.get(operationId);
+    if (timerHandle) {
+      this.clearTimeoutFn(timerHandle);
+      this.executorOutcomeRetryTimerByOperationId.delete(operationId);
+    }
+    this.executorOutcomeRetryPayloadByOperationId.delete(operationId);
+  }
+
+  buildExecutorOutcomeVisibilityRetryError(visibilityObservation) {
+    const retryAfterMs = Number.isFinite(visibilityObservation?.retryAfterMs) &&
+      visibilityObservation.retryAfterMs > NUM.ZERO ?
+      Math.floor(visibilityObservation.retryAfterMs) :
+      OBSERVED_PROGRESS_RETRY_DELAY_MS;
+    const error = new Error(EXECUTOR_OUTCOME_VISIBILITY_RETRY_ERROR_MESSAGE);
+    error.code = OPERATION_WORKFLOW_OWNER_LITERAL
+      .CONTROL_PLANE_PRESSURE_DEGRADED;
+    error.errorCode = OPERATION_WORKFLOW_OWNER_LITERAL
+      .CONTROL_PLANE_PRESSURE_DEGRADED;
+    error.deferRetry = true;
+    error.retryAfterMs = retryAfterMs;
+    error.deferredOutcome = visibilityObservation?.deferredOutcome || null;
+    return error;
+  }
+
+  scheduleExecutorOutcomeRetry(outcome, visibilityObservation) {
+    const operationId = outcome?.[EXECUTOR_OUTCOME_FIELD.OPERATION_ID];
+    if (!operationId) {
+      return false;
+    }
+    const retryPayload = this.cloneExecutorOutcomeRetryPayload(outcome);
+    const selectedPayload = this.selectExecutorOutcomeRetryPayload(
+      this.executorOutcomeRetryPayloadByOperationId.get(operationId),
+      retryPayload,
+    );
+    this.executorOutcomeRetryPayloadByOperationId.set(
+      operationId,
+      selectedPayload,
+    );
+    if (this.executorOutcomeRetryTimerByOperationId.has(operationId)) {
+      return true;
+    }
+    const retryError =
+      this.buildExecutorOutcomeVisibilityRetryError(visibilityObservation);
+    const delayMs = retryError.retryAfterMs;
+    this.logger.warn(
+      REBALANCE_COORDINATOR_LOG_MSG.OPERATION_TRANSITION_RETRY_DEFERRED,
+      {
+        operationId,
+        boundary: OPERATION_WORKFLOW_OWNER_LITERAL.EXECUTOR_OUTCOME,
+        workflowStep:
+          selectedPayload[EXECUTOR_OUTCOME_FIELD.WORKFLOW_STEP] || null,
+        partitionId: null,
+        delayMs,
+        errorMessage: retryError.message,
+      },
+    );
+    const timerHandle = this.setTimeoutFn(() => {
+      this.executorOutcomeRetryTimerByOperationId.delete(operationId);
+      const retryOutcome =
+        this.executorOutcomeRetryPayloadByOperationId.get(operationId);
+      this.executorOutcomeRetryPayloadByOperationId.delete(operationId);
+      if (this.isShuttingDown || !this.isInitialized || !retryOutcome) {
+        return;
+      }
+      return this.operationWorkflowRunExclusive(
+        this.getOperationOwnerSingleFlightKey(operationId),
+        () => this.reconcileExecutorOutcome(retryOutcome),
+      ).catch((error) => {
+        this.logger.error(
+          REBALANCE_COORDINATOR_LOG_MSG.OUTCOME_TRANSITION_FAILED,
+          {
+            operationId,
+            outcomeType:
+              retryOutcome[EXECUTOR_OUTCOME_FIELD.OUTCOME_TYPE],
+            error: error.message,
+          },
+        );
+      });
+    }, delayMs);
+    this.executorOutcomeRetryTimerByOperationId.set(operationId, timerHandle);
+    return true;
+  }
+
   async reconcileExecutorOutcome(outcome) {
     const operationId = outcome[EXECUTOR_OUTCOME_FIELD.OPERATION_ID];
     const outcomeType = outcome[EXECUTOR_OUTCOME_FIELD.OUTCOME_TYPE];
@@ -308,14 +502,42 @@ class OperationWorkflowOwnerSegment7Stage3 extends OperationWorkflowOwnerSegment
       workflowStep,
     });
 
-    const operation = await this.repository.queryOperationById(operationId);
-    if (!operation) {
+    const visibilityObservation =
+      await this.repository.getOperationByIdVisibilityObservation(
+        operationId,
+        {
+          requireOwnerRpcRead: false,
+          allowPriorityRecoveryDeferredVisibility: true,
+        },
+      );
+    const visibilityAction =
+      this.resolveExecutorOutcomeOperationVisibilityAction(
+        visibilityObservation,
+      );
+    if (
+      visibilityAction ===
+      EXECUTOR_OUTCOME_OPERATION_VISIBILITY_ACTION.RETRY_OUTCOME
+    ) {
+      return this.scheduleExecutorOutcomeRetry(
+        outcome,
+        visibilityObservation,
+      );
+    }
+
+    const operation = visibilityObservation?.operation || null;
+    if (
+      visibilityAction ===
+        EXECUTOR_OUTCOME_OPERATION_VISIBILITY_ACTION.SKIP_OUTCOME ||
+      !operation
+    ) {
+      this.clearExecutorOutcomeRetry(operationId);
       this.logger.debug(
         REBALANCE_COORDINATOR_LOG_MSG.OUTCOME_OPERATION_NOT_FOUND,
         {operationId, outcomeType},
       );
       return false;
     }
+    this.clearExecutorOutcomeRetry(operationId);
 
     if (this.repository.isOperationTerminal(operation)) {
       this.logger.debug(

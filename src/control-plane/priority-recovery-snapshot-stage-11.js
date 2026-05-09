@@ -139,14 +139,7 @@ function buildPriorityRecoveryDecisionSnapshots(options = {}) {
     if (!partitionSnapshot) {
       continue;
     }
-    recordPriorityRecoveryDecisionSnapshotSummary(
-      partitionId,
-      partitionSnapshot,
-      blockerPartitionIdsByReason,
-      partitionIdsBySemanticState,
-      partitionIdsByCompletionState,
-    );
-    appendPriorityRecoveryPartitionSnapshots(
+    const appendedSnapshots = appendPriorityRecoveryPartitionSnapshots(
       snapshots,
       partitionSnapshot,
       partitionId,
@@ -154,6 +147,15 @@ function buildPriorityRecoveryDecisionSnapshots(options = {}) {
       operationContexts,
       replicaOperationContexts.byOperationId,
     );
+    for (const appendedSnapshot of appendedSnapshots) {
+      recordPriorityRecoveryDecisionSnapshotSummary(
+        partitionId,
+        appendedSnapshot,
+        blockerPartitionIdsByReason,
+        partitionIdsBySemanticState,
+        partitionIdsByCompletionState,
+      );
+    }
   }
 
   const normalizedPartitionIdsBySemanticState =

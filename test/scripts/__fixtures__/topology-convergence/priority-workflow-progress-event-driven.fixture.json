@@ -1,0 +1,97 @@
+{
+  "scenarios": [
+    {
+      "scenario": "rolling-restart",
+      "summary": {
+        "dominantReason": "priority_recovery_workflow_progress_event_driven",
+        "failureClass": "priority_recovery_progress_blocked"
+      },
+      "publicationConvergence": {
+        "publicationStatus": "PUBLISHED",
+        "pendingAckCount": 0,
+        "blockedNodeCount": 0,
+        "missingPublishedCount": 0,
+        "activeGate": {
+          "state": "timed_out",
+          "ready": false,
+          "progress": {
+            "expectedNodeCount": 5,
+            "snapshotCoverageNodeCount": 5,
+            "snapshotCoverageComplete": true,
+            "priorityBlockedPartitionCount": 2,
+            "priorityRecoveryProgressClasses": {
+              "unresolvedSemanticStateIds": [
+                "operation_stalled",
+                "recovering_in_flight"
+              ],
+              "blockedPartitionIds": [
+                "replica_operations-p1",
+                "sql_transactions-p1"
+              ]
+            }
+          }
+        },
+        "priorityRecoveryProgressSummary": {
+          "partitionCount": 2,
+          "dominantWitness": {
+            "partitionId": "sql_transactions-p1",
+            "semanticStateId": "operation_stalled",
+            "progressClassIds": [
+              "operation_created_but_no_step_transitions"
+            ],
+            "blockerReasonCodes": [
+              "operation_created_but_no_step_transitions"
+            ],
+            "authoritativeVisibilityState": "cache_visible",
+            "removeSafetyState": "blocked",
+            "transportPressureState": "none",
+            "progressContractState": "pending",
+            "progressNextAction": "wait",
+            "actuationState": "dispatched_waiting_progress",
+            "actuationOwner": "operation_workflow_owner",
+            "currentOwner": "operation_workflow_owner",
+            "nextRequiredAction": "advance_existing_operation",
+            "blockingBoundary": "workflow_progress",
+            "waitMode": "event_driven",
+            "workflowProgressPhaseId": "dispatch_pending",
+            "stepAgeMs": 47589,
+            "stepTimeoutMs": 30000,
+            "pressureState": "none",
+            "lastProgressAtMs": 1778338432611,
+            "correlationKey": "sql_transactions-p1|2|98afae31-fee4-489c-9e03-a06d1abd0df4",
+            "decisionDimension": "unavailable",
+            "progressEvidenceSourceIds": [
+              "blocker_reasons",
+              "completion_state",
+              "last_progress_timestamp",
+              "operation_context",
+              "workflow_state"
+            ],
+            "witnessIds": [
+              "98afae31-fee4-489c-9e03-a06d1abd0df4",
+              "ed25803e-4dee-4056-8075-774ed63094ca",
+              "sql_transactions-p1|2|98afae31-fee4-489c-9e03-a06d1abd0df4"
+            ],
+            "serialWaitOperationIds": [
+              "ed25803e-4dee-4056-8075-774ed63094ca"
+            ],
+            "serialWaitPartitionIds": [
+              "replica_operations-p1"
+            ],
+            "operationIds": [
+              "98afae31-fee4-489c-9e03-a06d1abd0df4"
+            ],
+            "completionState": "blocked",
+            "workflowState": "in_flight",
+            "visibilityState": "cache_visible",
+            "convergenceState": "spread_gap",
+            "workflowSource": "system_table_cache",
+            "snapshotCapturedAt": 1778338480200,
+            "latestOperationWorkflowStep": "SENDING",
+            "latestOperationStatus": "pending"
+          }
+        }
+      }
+    }
+  ]
+}

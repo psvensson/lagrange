@@ -143,6 +143,8 @@ class OperationWorkflowOwnerSegment1 {
     this.transitionRetryTimerByOperationId = new Map();
     this.transitionRetryGraceDeadlineByOperationId = new Map();
     this.transitionRetryOperationSnapshotByOperationId = new Map();
+    this.executorOutcomeRetryTimerByOperationId = new Map();
+    this.executorOutcomeRetryPayloadByOperationId = new Map();
     this.transitionExecutionAttemptByStepOwnerKey = new Map();
 
     if (
@@ -196,6 +198,11 @@ class OperationWorkflowOwnerSegment1 {
     this.transitionRetryTimerByOperationId.clear();
     this.transitionRetryGraceDeadlineByOperationId.clear();
     this.transitionRetryOperationSnapshotByOperationId.clear();
+    for (const timerHandle of this.executorOutcomeRetryTimerByOperationId.values()) {
+      this.clearTimeoutFn(timerHandle);
+    }
+    this.executorOutcomeRetryTimerByOperationId.clear();
+    this.executorOutcomeRetryPayloadByOperationId.clear();
   }
 
   /**
