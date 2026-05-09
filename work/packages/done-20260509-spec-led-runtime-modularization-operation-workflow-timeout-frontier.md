@@ -43,7 +43,7 @@
   "predecessor": "work/packages/done-20260509-spec-led-runtime-modularization-active-gate-snapshot-coverage-frontier.md",
   "closed": "2026-05-09",
   "commitAndPushLedgerRequired": true,
-  "successor": "work/packages/active-20260509-spec-led-runtime-modularization-publication-convergence-frontier.md"
+  "successor": "work/packages/done-20260509-spec-led-runtime-modularization-publication-convergence-frontier.md"
 }
 -->
 
@@ -249,7 +249,7 @@ Validation notes:
 ## Migration
 
 Successor package:
-`work/packages/active-20260509-spec-led-runtime-modularization-publication-convergence-frontier.md`.
+`work/packages/done-20260509-spec-led-runtime-modularization-publication-convergence-frontier.md`.
 
 ## Done When
 

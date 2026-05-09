@@ -4,7 +4,7 @@
 
 Sprint: `work/sprints/active-2026-q2-spec-led-runtime-modularization.md`
 
-Package: `work/packages/active-20260509-spec-led-runtime-modularization-publication-convergence-frontier.md`
+Package: `work/packages/todo-20260509-spec-led-runtime-modularization-operation-workflow-rebalancer-handoff-frontier.md`
 
 Scenario: `spec-led-runtime-modularization`
 
@@ -14,25 +14,25 @@ Playback: `test-output/reports/.playback/rolling-restart-spec-led-runtime-modula
 
 ## Boundary
 
-Owner: `topology_publication_owner`
+Owner: `operation_workflow_owner`
 
-Boundary: `publication_convergence`
+Boundary: `rebalancer_handoff`
 
-Dominant reason: `pending_acks_present`
+Dominant reason: `priority_recovery_progress_blocked`
 
-Current state: Pascal's implementation removed the count-only pending ACK mismatch, but the representative rerun stayed on topology_publication_owner / publication_convergence. The fresh report shows ACK_PENDING publication evidence with pendingAckCount 1, concrete pendingAckNodeIds [11601fe0-72d6-5853-8590-ec2881853e72], and three missing published nodes.
+Current state: The publication convergence package closed publication_ack_convergence. The representative report now fails first on priority_recovery_partition_progress with operation_workflow_owner / rebalancer_handoff, unresolved semantic states needs_operation and operation_stalled, and blocked partitions replica_operations-p1, sql_transactions-p1, and sql_write_operations-p1.
 
 ## Next Action
 
-Keep this package active and trace why pending ACK node 11601fe0-72d6-5853-8590-ec2881853e72 remains unacknowledged before deleting or guarding the superseded publication fallback branch.
+Review the publication convergence package, freeze the rebalancer handoff witness, then trace why the priority recovery operation workflow remains in retry-scheduled handoff instead of progressing through the canonical workflow owner.
 
 ## Proof Ladder
 
-1. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-publication-convergence.report.json --explain publication_ack_convergence`
-2. `Focused topology_publication_owner publication_convergence fixture from the fresh representative report`
-3. `Focused publication owner/recovery tests selected by pending_acks_present`
-4. `Touched-file static guardrails selected by topology_publication_owner`
-5. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-spec-led-runtime-modularization-publication-convergence.report.json --fast-local --verbose`
+1. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-publication-convergence.report.json --explain priority_recovery_partition_progress`
+2. `Focused operation_workflow_owner rebalancer_handoff fixture from the representative report`
+3. `Focused operation workflow/rebalancer handoff tests selected by priority_recovery_progress_blocked`
+4. `Touched-file static guardrails selected by operation_workflow_owner`
+5. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-spec-led-runtime-modularization-rebalancer-handoff.report.json --fast-local --verbose`
 
 ## Model Fit
 
@@ -44,18 +44,21 @@ Scope shape: `owner-boundary-contraction`
 
 Escalation triggers:
 
-1. `pending ACK evidence requires changes outside topology_publication_owner`
-2. `focused fixture exposes operation workflow timeout as first frontier again`
-3. `representative proof still fails on publication_convergence after owner fix`
+1. `rebalancer handoff evidence requires changes outside operation_workflow_owner`
+2. `focused fixture exposes publication ACK convergence again`
+3. `representative proof still fails on rebalancer_handoff after owner fix`
 
 ## Touched Files
 
-1. `src/control-plane/publication-owner*.js`
-2. `src/control-plane/publication-recovery*.js`
-3. `src/bootstrap/shared/node-state-publication-owner.js`
-4. `test/control-plane/publication*.test.js`
-5. `test/scripts/analyze-topology-convergence.test.js`
-6. `test/diagnostics/topology-convergence-graph.test.js`
-7. `src/diagnostics/topology-convergence-graph.js`
-8. `scripts/analyze-topology-convergence.js`
-9. `work/packages/active-20260509-spec-led-runtime-modularization-publication-convergence-frontier.md`
+1. `src/rebalancer/operation-workflow-owner*.js`
+2. `src/rebalancer/*handoff*.js`
+3. `src/rebalancer/unified-rebalancer*.js`
+4. `src/control-plane/priority-recovery-snapshot*.js`
+5. `test/rebalancer/*workflow*.test.js`
+6. `test/rebalancer/*handoff*.test.js`
+7. `test/control-plane/priority-recovery-snapshot*.js`
+8. `test/scripts/analyze-topology-convergence.test.js`
+9. `test/diagnostics/topology-convergence-graph.test.js`
+10. `src/diagnostics/topology-convergence-graph.js`
+11. `scripts/analyze-topology-convergence.js`
+12. `work/packages/todo-20260509-spec-led-runtime-modularization-operation-workflow-rebalancer-handoff-frontier.md`

@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-09",
   "scenario": "spec-led-runtime-modularization",
   "artifact": "test-output/reports/rolling-restart-spec-led-runtime-modularization-publication-convergence.report.json",
@@ -32,7 +32,7 @@
     "test/diagnostics/topology-convergence-graph.test.js",
     "src/diagnostics/topology-convergence-graph.js",
     "scripts/analyze-topology-convergence.js",
-    "work/packages/active-20260509-spec-led-runtime-modularization-publication-convergence-frontier.md"
+    "work/packages/done-20260509-spec-led-runtime-modularization-publication-convergence-frontier.md"
   ],
   "modelFit": {
     "packageClass": "representative-frontier-closure",
@@ -65,7 +65,10 @@
       "boundary": "rebalancer_handoff",
       "dominantReason": "priority_recovery_progress_blocked"
     }
-  }
+  },
+  "closed": "2026-05-09",
+  "commitAndPushLedgerRequired": true,
+  "successor": "work/packages/todo-20260509-spec-led-runtime-modularization-operation-workflow-rebalancer-handoff-frontier.md"
 }
 -->
 
@@ -189,13 +192,13 @@ guardrails, and representative rolling-restart.
 - [x] Fix subagent recorded or explicitly not needed:
       not-needed.
 - [x] Implementation subagent recorded:
-      Agent Pascal (`019e0cd5-236c-7141-bcc8-68a1bad8dc93`) implemented `work/packages/active-20260509-spec-led-runtime-modularization-publication-convergence-frontier.md`.
+      Agent Pascal (`019e0cd5-236c-7141-bcc8-68a1bad8dc93`) implemented `work/packages/done-20260509-spec-led-runtime-modularization-publication-convergence-frontier.md`.
 - [x] Post-implementation review recorded:
-      Agent Tesla (`019e0ce0-6032-7ba3-80b7-5eb2aa5b5cd9`) reviewed Pascal's implementation slice for `work/packages/active-20260509-spec-led-runtime-modularization-publication-convergence-frontier.md`; result `fixes-required`.
+      Agent Tesla (`019e0ce0-6032-7ba3-80b7-5eb2aa5b5cd9`) reviewed Pascal's implementation slice for `work/packages/done-20260509-spec-led-runtime-modularization-publication-convergence-frontier.md`; result `fixes-required`.
 - [x] Review-finding fix recorded:
-      Agent Cicero (`019e0ce3-4d8e-7a81-9a94-d49007843601`) fixed the package bookkeeping findings for `work/packages/active-20260509-spec-led-runtime-modularization-publication-convergence-frontier.md`.
+      Agent Cicero (`019e0ce3-4d8e-7a81-9a94-d49007843601`) fixed the package bookkeeping findings for `work/packages/done-20260509-spec-led-runtime-modularization-publication-convergence-frontier.md`.
 - [x] Continuation implementation subagent recorded:
-      Agent Nash (`019e0ce6-5d6b-7140-9cd5-aa3fd4b223a5`) implemented the concrete ACK-node residual closure for `work/packages/active-20260509-spec-led-runtime-modularization-publication-convergence-frontier.md`.
+      Agent Nash (`019e0ce6-5d6b-7140-9cd5-aa3fd4b223a5`) implemented the concrete ACK-node residual closure for `work/packages/done-20260509-spec-led-runtime-modularization-publication-convergence-frontier.md`.
 
 ## Detection / Analysis Tasks
 
@@ -326,6 +329,12 @@ guardrails, and representative rolling-restart.
    `topology_publication_owner`.
 4. Touched-file literal, decision-boundary, and runtime-grammar guardrails.
 5. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-spec-led-runtime-modularization-publication-convergence.report.json --fast-local --verbose`
+
+## Commit And Push Ledger
+
+1. Focused package commit: `050da7e0`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
 
 ## Done When
 
