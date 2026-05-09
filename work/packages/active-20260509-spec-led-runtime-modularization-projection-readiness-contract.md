@@ -20,13 +20,22 @@
     "Touched-file decision-boundary and literal guardrails"
   ],
   "touchedFiles": [
-    "src/control-plane/active-node-projection.js",
-    "src/control-plane/control-plane-readiness-service*.js",
-    "src/control-plane/startup-authority-snapshot-owner.js",
     "src/admin/admin-service-discovery-readiness-methods.js",
-    "src/control-plane/projection-readiness-*.js",
-    "test/control-plane/*readiness*.test.js",
-    "test/admin/*readiness*.test.js",
+    "src/control-plane/active-node-projection.js",
+    "src/control-plane/control-plane-readiness-service-segment-1.js",
+    "src/control-plane/control-plane-readiness-service-segment-2.js",
+    "src/control-plane/control-plane-readiness-service-segment-3.js",
+    "src/control-plane/control-plane-readiness-service-segment-4.js",
+    "src/control-plane/control-plane-readiness-service-shared.js",
+    "src/control-plane/startup-authority-snapshot-owner.js",
+    "src/control-plane/projection-readiness-constants.js",
+    "src/control-plane/projection-readiness-decision.js",
+    "src/control-plane/projection-readiness-evidence.js",
+    "src/control-plane/projection-readiness-state.js",
+    "test/admin/admin-service-discovery.test.js",
+    "test/control-plane/active-node-projection.test.js",
+    "test/control-plane/control-plane-readiness-service.test-part-6.js",
+    "test/control-plane/projection-readiness-contract.test.js",
     "work/packages/active-20260509-spec-led-runtime-modularization-projection-readiness-contract.md"
   ],
   "predecessor": "work/packages/done-20260509-spec-led-runtime-modularization-publication-owner-stream.md"
@@ -111,19 +120,46 @@ control-plane readiness tests, admin readiness tests, and static guardrails.
 
 ## Detection / Analysis Tasks
 
-- [ ] Inventory every readiness consumer and raw input.
-- [ ] Map each input to publication stream, operation outcome, placement intent,
+- [x] Inventory every readiness consumer and raw input.
+- [x] Map each input to publication stream, operation outcome, placement intent,
       local liveness, or deletion.
-- [ ] Identify lane conflations and old active-gate aliases.
-- [ ] Record downstream presentation changes for the diagnostics package.
+- [x] Identify lane conflations and old active-gate aliases.
+- [x] Record downstream presentation changes for the diagnostics package.
 
 ## Implementation Tasks
 
-- [ ] Add projection readiness constants, evidence, state, and decision modules.
-- [ ] Implement separate internal, repair, serve, and operator lanes.
-- [ ] Cut readiness services and admin methods to the new outcome.
-- [ ] Add lane-specific fixtures.
-- [ ] Delete stale cache-derived readiness helpers.
+- [x] Add projection readiness constants, evidence, state, and decision modules.
+- [x] Implement separate internal, repair, serve, and operator lanes.
+- [x] Cut readiness services and admin methods to the new outcome.
+- [x] Add lane-specific fixtures.
+- [x] Delete stale cache-derived readiness helpers.
+
+## Implementation Notes
+
+1. Active-node projection now consumes `projection_readiness_owner` lane
+   outcomes and uses the explicit downstream active-gate state for recovery
+   projection. Raw readiness dimensions remain only as compatibility input to
+   the projection-readiness evidence builder.
+2. Control-plane readiness services now build one canonical projection
+   readiness contract from publication diagnostics, priority-recovery owner
+   outcome, runtime authority, and raw runtime serve admission. Recovery
+   planning snapshots no longer fabricate publication-stream readiness, and
+   empty recovery-planning placeholders no longer hold serve readiness open.
+3. Startup authority snapshots consume `projectionReadinessContract.activeGate`
+   and map repair/internal readiness to recovery-pending gate states rather
+   than treating all non-serve states as one blocked state.
+4. Admin service-discovery readiness consumes the projection serve lane when a
+   projection readiness contract is available, preserving existing routing
+   reasons while surfacing the active-gate state.
+5. Input mapping recorded during implementation:
+   publication rows/diagnostics map to publication stream evidence;
+   priority-recovery state maps to operation outcome; provisioning/capacity
+   maps to placement intent; node/service/transport/runtime authority maps to
+   local liveness; missing/deleted node evidence maps to deletion/fail-closed
+   handling.
+6. The stale cache-derived readiness collapse was replaced by the
+   projection-readiness contract builder. Compatibility entrypoints remain as
+   delegators where existing callers still expect the historical shape.
 
 ## Validation
 
@@ -131,6 +167,27 @@ control-plane readiness tests, admin readiness tests, and static guardrails.
 2. Focused control-plane readiness service tests.
 3. Focused admin readiness method tests.
 4. Touched-file decision-boundary and literal guardrails.
+
+## Validation Notes
+
+1. `npx tap test/control-plane/projection-readiness-contract.test.js` passed
+   5 subtests / 18 assertions.
+2. `npx tap test/control-plane/active-node-projection.test.js` passed
+   28 subtests / 55 assertions.
+3. `npx tap test/control-plane/control-plane-readiness-service.test.js` passed
+   19 subtests / 101 assertions.
+4. `npx tap test/control-plane/control-plane-readiness-service.test-part-6.js`
+   passed 14 subtests / 50 assertions.
+5. `npx tap test/admin/admin-service-discovery.test.js` passed
+   17 subtests / 69 assertions.
+6. `node --check` passed for touched production and readiness/admin test files.
+7. `npm run audit:guideline:literals -- <touched production files>` passed:
+   12 files scanned, 0 new violations.
+8. `npm run audit:guideline:decision-boundaries -- <touched production files>`
+   passed: 12 files scanned, 0 violations.
+9. `npm run audit:runtime-grammar:file -- <touched production files>` passed:
+   12 files scanned, 0 violations.
+10. `git diff --check -- <touched files>` passed.
 
 ## Done When
 
@@ -144,3 +201,5 @@ control-plane readiness tests, admin readiness tests, and static guardrails.
       Agent Franklin (`019e0bf6-6828-72c0-82f8-d8ee72803a97`) reviewed `work/packages/done-20260509-spec-led-runtime-modularization-publication-owner-stream.md`; result `fixes-required`.
 - [x] Fix subagent recorded or explicitly not needed:
       Agent Sagan (`019e0bfb-ba69-7312-ba2f-0e0d199e6724`) fixed `work/packages/done-20260509-spec-led-runtime-modularization-publication-owner-stream.md`.
+- [x] Implementation subagent recorded:
+      Agent James (`019e0c07-de5a-7ef0-8100-734606c3e451`) implemented `work/packages/active-20260509-spec-led-runtime-modularization-projection-readiness-contract.md`.

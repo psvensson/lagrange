@@ -875,7 +875,22 @@ class ControlPlaneReadinessServiceSegment1 {
           failedDimensions: Object.freeze([decisionDimension]),
           reasonCodes: Object.freeze([]),
         });
-    const summary = compactEligibilitySnapshot(snapshot, decisionDimension);
+    const compactSummary = compactEligibilitySnapshot(
+      snapshot,
+      decisionDimension,
+    );
+    const summary = compactSummary ?
+      Object.freeze({
+        ...compactSummary,
+        ...(snapshot?.projectionReadinessContract &&
+          typeof snapshot.projectionReadinessContract === TYPEOF.OBJECT ?
+          {
+            projectionReadinessContract:
+              snapshot.projectionReadinessContract,
+          } :
+          {}),
+      }) :
+      null;
     const cacheWatermark = this.buildStoredReadinessSnapshotWatermark(snapshot);
     const localQueryTransport = snapshot?.nodeEvidence ?
       Object.freeze({

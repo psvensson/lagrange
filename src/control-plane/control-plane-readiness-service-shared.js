@@ -43,8 +43,10 @@ import {
   compactEligibilitySnapshot,
   createEligibilitySnapshot,
   evaluateEligibilityDecision,
-  buildProjectionReadinessContract,
 } from './eligibility-snapshot.js';
+import {
+  buildProjectionReadinessContract,
+} from './projection-readiness-state.js';
 import {CONTROL_PLANE_PUBLICATION_STATUS} from './control-plane-publication-merge.js';
 import {
   resolvePriorityRecoveryActiveNodeCohort,

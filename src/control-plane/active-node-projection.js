@@ -28,6 +28,9 @@ import {
 import {
   PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE,
 } from './publication-recovery-gate.js';
+import {
+  buildProjectionReadinessState,
+} from './projection-readiness-state.js';
 
 const LOCAL_STR_EMPTY = '';
 const LOCAL_STR_UPDATEDAT = 'updatedAt';
@@ -404,114 +407,82 @@ function buildProjectionReadinessDimensionOutcome(outcome) {
   return outcome;
 }
 
+function resolveProjectionReadinessRuntimeAuthorityProjection(
+  projectionReadiness,
+) {
+  const runtimeAuthority = projectionReadiness.evidence.runtimeAuthority;
+  if (
+    runtimeAuthority?.provisioning?.eligible !== true
+  ) {
+    return PROJECTION_AUTHORITY_SOURCE.NONE;
+  }
+  if (runtimeAuthority.state === RUNTIME_AUTHORITY_STATE.CONFIRMED) {
+    return PROJECTION_AUTHORITY_SOURCE.RUNTIME_AUTHORITY_CONFIRMED;
+  }
+  if (runtimeAuthority.state === RUNTIME_AUTHORITY_STATE.ESTABLISHING) {
+    return PROJECTION_AUTHORITY_SOURCE.RUNTIME_AUTHORITY_ESTABLISHING;
+  }
+  return PROJECTION_AUTHORITY_SOURCE.NONE;
+}
+
+function resolveProjectionReadinessAuthoritySource(
+  projectionReadiness,
+  options = {},
+) {
+  if (projectionReadiness.lanes.internal.ready === true) {
+    return PROJECTION_AUTHORITY_SOURCE.CLUSTER_MEMBER_HEALTHY;
+  }
+  if (options.allowControlPlaneRecoveryEligibleProjection !== true) {
+    return PROJECTION_AUTHORITY_SOURCE.NONE;
+  }
+  const runtimeAuthoritySource =
+    resolveProjectionReadinessRuntimeAuthorityProjection(projectionReadiness);
+  if (runtimeAuthoritySource !== PROJECTION_AUTHORITY_SOURCE.NONE) {
+    return runtimeAuthoritySource;
+  }
+  return projectionReadiness.evidence.recoveryEligible === true ?
+    PROJECTION_AUTHORITY_SOURCE.RECOVERY_ELIGIBLE_DIMENSION :
+    PROJECTION_AUTHORITY_SOURCE.NONE;
+}
+
 function evaluateProjectionReadinessDimensions(
   readinessEntry = null,
   options = {},
 ) {
-  const readinessDimensions = readinessEntry?.dimensions &&
-    typeof readinessEntry.dimensions === TYPEOF.OBJECT ?
-    readinessEntry.dimensions :
-    null;
-  const runtimeAuthority = readinessEntry?.runtimeAuthority &&
-    typeof readinessEntry.runtimeAuthority === TYPEOF.OBJECT ?
-    readinessEntry.runtimeAuthority :
-    null;
-  const hasDimensionEvidence = Boolean(
-    readinessDimensions &&
-    Object.keys(readinessDimensions).length > NUM.ZERO,
+  const projectionReadiness =
+    readinessEntry?.lanes && typeof readinessEntry.lanes === TYPEOF.OBJECT ?
+      readinessEntry :
+      buildProjectionReadinessState(
+        readinessEntry && typeof readinessEntry === TYPEOF.OBJECT ?
+          readinessEntry :
+          {},
+      );
+  const authoritySource = resolveProjectionReadinessAuthoritySource(
+    projectionReadiness,
+    options,
   );
-  const hasReadinessEvidence = hasDimensionEvidence || Boolean(runtimeAuthority);
-  if (!readinessDimensions ||
-      typeof readinessDimensions !== TYPEOF.OBJECT ||
-      Object.keys(readinessDimensions).length === NUM.ZERO) {
-    if (runtimeAuthority &&
-        options.allowControlPlaneRecoveryEligibleProjection === true &&
-        runtimeAuthority.provisioning?.eligible === true) {
-      if (runtimeAuthority.state === RUNTIME_AUTHORITY_STATE.CONFIRMED) {
-        return buildProjectionReadinessDimensionOutcome({
-          hasReadinessEvidence: true,
-          projectionEligible: true,
-          projectedByRecoveryEligibility: false,
-          projectedByRuntimeAuthority: true,
-          clusterMemberHealthyMissing: true,
-          authoritySource: PROJECTION_AUTHORITY_SOURCE
-            .RUNTIME_AUTHORITY_CONFIRMED,
-        });
-      }
-      if (runtimeAuthority.state === RUNTIME_AUTHORITY_STATE.ESTABLISHING) {
-        return buildProjectionReadinessDimensionOutcome({
-          hasReadinessEvidence: true,
-          projectionEligible: true,
-          projectedByRecoveryEligibility: false,
-          projectedByRuntimeAuthority: true,
-          clusterMemberHealthyMissing: true,
-          authoritySource: PROJECTION_AUTHORITY_SOURCE
-            .RUNTIME_AUTHORITY_ESTABLISHING,
-        });
-      }
-    }
-    return buildProjectionReadinessDimensionOutcome({
-      hasReadinessEvidence,
-      projectionEligible: null,
-      projectedByRecoveryEligibility: false,
-      projectedByRuntimeAuthority: false,
-      clusterMemberHealthyMissing: false,
-      authoritySource: PROJECTION_AUTHORITY_SOURCE.NONE,
-    });
-  }
-  if (readinessDimensions[
-    CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY
-  ] === true) {
-    return buildProjectionReadinessDimensionOutcome({
-      hasReadinessEvidence: true,
-      projectionEligible: true,
-      projectedByRecoveryEligibility: false,
-      projectedByRuntimeAuthority: false,
-      clusterMemberHealthyMissing: false,
-      authoritySource: PROJECTION_AUTHORITY_SOURCE.CLUSTER_MEMBER_HEALTHY,
-    });
-  }
-  if (options.allowControlPlaneRecoveryEligibleProjection === true &&
-      runtimeAuthority &&
-      runtimeAuthority.provisioning?.eligible === true) {
-    if (runtimeAuthority.state === RUNTIME_AUTHORITY_STATE.CONFIRMED) {
-      return buildProjectionReadinessDimensionOutcome({
-        hasReadinessEvidence: true,
-        projectionEligible: true,
-        projectedByRecoveryEligibility: false,
-        projectedByRuntimeAuthority: true,
-        clusterMemberHealthyMissing: true,
-        authoritySource: PROJECTION_AUTHORITY_SOURCE
-          .RUNTIME_AUTHORITY_CONFIRMED,
-      });
-    }
-    if (runtimeAuthority.state === RUNTIME_AUTHORITY_STATE.ESTABLISHING) {
-      return buildProjectionReadinessDimensionOutcome({
-        hasReadinessEvidence: true,
-        projectionEligible: true,
-        projectedByRecoveryEligibility: false,
-        projectedByRuntimeAuthority: true,
-        clusterMemberHealthyMissing: true,
-        authoritySource: PROJECTION_AUTHORITY_SOURCE
-          .RUNTIME_AUTHORITY_ESTABLISHING,
-      });
-    }
-  }
-  const controlPlaneRecoveryEligible = readinessDimensions[
-    CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE
-  ] === true;
+  const projectedByRuntimeAuthority =
+    authoritySource ===
+      PROJECTION_AUTHORITY_SOURCE.RUNTIME_AUTHORITY_CONFIRMED ||
+    authoritySource ===
+      PROJECTION_AUTHORITY_SOURCE.RUNTIME_AUTHORITY_ESTABLISHING;
   const projectedByRecoveryEligibility =
-    options.allowControlPlaneRecoveryEligibleProjection === true &&
-    controlPlaneRecoveryEligible;
+    authoritySource ===
+      PROJECTION_AUTHORITY_SOURCE.RECOVERY_ELIGIBLE_DIMENSION;
+  const projectionEligible =
+    projectionReadiness.lanes.internal.ready === true ||
+    projectedByRuntimeAuthority ||
+    projectedByRecoveryEligibility;
   return buildProjectionReadinessDimensionOutcome({
-    hasReadinessEvidence: true,
-    projectionEligible: projectedByRecoveryEligibility,
+    hasReadinessEvidence:
+      projectionReadiness.evidence.ownerEvidenceAvailable === true,
+    projectionEligible,
     projectedByRecoveryEligibility,
-    projectedByRuntimeAuthority: false,
-    clusterMemberHealthyMissing: true,
-    authoritySource: projectedByRecoveryEligibility ?
-      PROJECTION_AUTHORITY_SOURCE.RECOVERY_ELIGIBLE_DIMENSION :
-      PROJECTION_AUTHORITY_SOURCE.NONE,
+    projectedByRuntimeAuthority,
+    clusterMemberHealthyMissing:
+      projectionReadiness.evidence.clusterMemberHealthy !== true,
+    authoritySource,
+    projectionReadiness,
   });
 }
 

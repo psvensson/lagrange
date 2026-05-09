@@ -1,3 +1,7 @@
+import {
+  buildProjectionReadinessState,
+} from '../control-plane/projection-readiness-state.js';
+
 const LOCAL_STR_REPAIR_REQUIRED = 'repair_required';
 const LOCAL_STR_REPAIR = 'repair';
 const LOCAL_STR_AGEMS = 'ageMs=';
@@ -243,24 +247,13 @@ function assignAdminServiceDiscoveryReadinessMethods(
       const replicaOperationRows = this.systemTableCache.getAll(
         TABLES.REPLICA_OPERATIONS,
       );
+      const projectionReadinessByNodeId =
+        this.buildServiceDiscoveryProjectionReadinessByNodeId(options);
       const activeNodeIds = new Set(
-        nodeRows
-          .map((row) => ({
-            nodeId: firstStringField(
-              row,
-              COLUMN.NODE_ID,
-              'node_id',
-              'nodeId',
-              'id',
-            ),
-            status: firstStringField(row, COLUMN.STATUS, 'status'),
-          }))
-          .filter(
-            (entry) =>
-              entry.nodeId &&
-              String(entry.status || '').toLowerCase() === STATUS_ACTIVE,
-          )
-          .map((entry) => entry.nodeId),
+        this.resolveServiceDiscoveryActiveNodeIds(
+          nodeRows,
+          projectionReadinessByNodeId,
+        ),
       );
       const tablePartitionContext = this.resolveDiscoveryTablePartitionContext(
         tableName,
@@ -321,6 +314,7 @@ function assignAdminServiceDiscoveryReadinessMethods(
         tableFound: tablePartitionContext.tableFound,
         appliedSchemaVersion: tablePartitionContext.appliedSchemaVersion,
         activeNodeIds,
+        projectionReadinessByNodeId,
         schemaReady,
         leadershipStable,
         localTargetReplicaStateByNodeId,
@@ -342,6 +336,97 @@ function assignAdminServiceDiscoveryReadinessMethods(
         replicaOperationSummary,
         replicaOperationDegradationByNodeId,
       };
+    } /**
+     * Build projection-readiness outcomes for service-discovery consumers.
+     * @param {Object} options
+     * @return {Map<string, Object>}
+     */
+    buildServiceDiscoveryProjectionReadinessByNodeId(options = {}) {
+      const providedReadinessByNodeId =
+        options.projectionReadinessByNodeId &&
+          typeof options.projectionReadinessByNodeId === TYPEOF.OBJECT ?
+          options.projectionReadinessByNodeId :
+          options.readinessByNodeId &&
+            typeof options.readinessByNodeId === TYPEOF.OBJECT ?
+            options.readinessByNodeId :
+            options.controlPlaneDiagnostics?.readinessByNodeId &&
+              typeof options.controlPlaneDiagnostics.readinessByNodeId ===
+                TYPEOF.OBJECT ?
+              options.controlPlaneDiagnostics.readinessByNodeId :
+              null;
+      const projectionReadinessByNodeId = new Map();
+      if (!providedReadinessByNodeId) {
+        return projectionReadinessByNodeId;
+      }
+      const entries = providedReadinessByNodeId instanceof Map ?
+        providedReadinessByNodeId.entries() :
+        Object.entries(providedReadinessByNodeId);
+      for (const [nodeId, readiness] of entries) {
+        const normalizedNodeId = String(nodeId || EMPTY_STRING);
+        if (!normalizedNodeId) {
+          continue;
+        }
+        projectionReadinessByNodeId.set(
+          normalizedNodeId,
+          this.normalizeServiceDiscoveryProjectionReadiness(readiness),
+        );
+      }
+      return projectionReadinessByNodeId;
+    } /**
+     * Normalize one projection-readiness entry without rebuilding an already
+     * canonical owner outcome.
+     * @param {Object} readiness
+     * @return {Object}
+     */
+    normalizeServiceDiscoveryProjectionReadiness(readiness) {
+      if (readiness?.lanes && typeof readiness.lanes === TYPEOF.OBJECT) {
+        return readiness;
+      }
+      return buildProjectionReadinessState(readiness || {});
+    } /**
+     * Resolve node IDs that may serve discovery replicas.
+     * @param {Array<Object>} nodeRows
+     * @param {Map<string, Object>} projectionReadinessByNodeId
+     * @return {Array<string>}
+     */
+    resolveServiceDiscoveryActiveNodeIds(
+      nodeRows,
+      projectionReadinessByNodeId,
+    ) {
+      const activeNodeIds = new Set(
+        (Array.isArray(nodeRows) ? nodeRows : ADMIN_CACHE_DUMP.EMPTY)
+          .map((row) => ({
+            nodeId: firstStringField(
+              row,
+              COLUMN.NODE_ID,
+              'node_id',
+              'nodeId',
+              'id',
+            ),
+            status: firstStringField(row, COLUMN.STATUS, 'status'),
+          }))
+          .filter(
+            (entry) =>
+              entry.nodeId &&
+              String(entry.status || EMPTY_STRING).toLowerCase() ===
+                STATUS_ACTIVE,
+          )
+          .map((entry) => entry.nodeId),
+      );
+      if (
+        !(projectionReadinessByNodeId instanceof Map) ||
+        projectionReadinessByNodeId.size === NUM.ZERO
+      ) {
+        return [...activeNodeIds];
+      }
+      for (const [nodeId, projectionReadiness] of projectionReadinessByNodeId) {
+        if (projectionReadiness?.lanes?.serve?.ready === true) {
+          activeNodeIds.add(nodeId);
+        } else {
+          activeNodeIds.delete(nodeId);
+        }
+      }
+      return [...activeNodeIds];
     } /**
      * Resolve local active target partition IDs for table-scoped
      * discovery.
@@ -1247,8 +1332,18 @@ function assignAdminServiceDiscoveryReadinessMethods(
       const healthyEndpoint =
         String(replica?.healthStatus || EMPTY_STRING).toLowerCase() ===
         ENDPOINT_SYNC_HEALTH.HEALTHY;
+      const projectionReadiness =
+        this.resolveServiceDiscoveryProjectionReadiness(
+          nodeId,
+          readinessContext,
+        );
       const routingReady =
-        healthyEndpoint && readinessContext.activeNodeIds.has(nodeId);
+        healthyEndpoint &&
+        this.isServiceDiscoveryProjectionServeReady(
+          nodeId,
+          readinessContext,
+          projectionReadiness,
+        );
       const schemaReady = readinessContext.tableName ?
         readinessContext.tableFound && readinessContext.schemaReady === true :
         true;
@@ -1295,6 +1390,7 @@ function assignAdminServiceDiscoveryReadinessMethods(
         replicaOpsInFlight: readinessContext.replicaOpsInFlight,
         leadershipStable: readinessContext.leadershipStable,
         tableName: readinessContext.tableName,
+        projectionReadiness,
         reasons: this.buildServiceDiscoveryReplicaReadinessReasons({
           localPartitionCdcState,
           localReplicaReady,
@@ -1306,6 +1402,38 @@ function assignAdminServiceDiscoveryReadinessMethods(
           schemaReady,
         }),
       };
+    }
+
+    resolveServiceDiscoveryProjectionReadiness(nodeId, readinessContext) {
+      const projectionReadinessByNodeId =
+        readinessContext.projectionReadinessByNodeId;
+      if (
+        projectionReadinessByNodeId instanceof Map &&
+        projectionReadinessByNodeId.has(nodeId)
+      ) {
+        return projectionReadinessByNodeId.get(nodeId) || null;
+      }
+      if (
+        projectionReadinessByNodeId &&
+        typeof projectionReadinessByNodeId === TYPEOF.OBJECT &&
+        projectionReadinessByNodeId[nodeId]
+      ) {
+        return this.normalizeServiceDiscoveryProjectionReadiness(
+          projectionReadinessByNodeId[nodeId],
+        );
+      }
+      return null;
+    }
+
+    isServiceDiscoveryProjectionServeReady(
+      nodeId,
+      readinessContext,
+      projectionReadiness,
+    ) {
+      if (projectionReadiness) {
+        return projectionReadiness.lanes?.serve?.ready === true;
+      }
+      return readinessContext.activeNodeIds.has(nodeId);
     }
 
     /**

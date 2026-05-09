@@ -5,6 +5,15 @@ import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {
+  PROJECTION_READINESS_ACTIVE_GATE_STATE,
+} from '../../src/control-plane/projection-readiness-constants.js';
+import {
+  buildProjectionReadinessContract,
+} from '../../src/control-plane/projection-readiness-state.js';
+import {
+  CONTROL_PLANE_PUBLICATION_STATUS,
+} from '../../src/control-plane/publication-owner-constants.js';
+import {
   CONTROL_PLANE_DELIVERY_PRIORITY,
 } from '../../src/control-plane/control-plane-constants.js';
 import {
@@ -866,6 +875,69 @@ test(
         reason.code === LOCAL_REPLICA_NOT_VOTER_READY)?.detail,
       PARTITION_ID,
       'local replica readiness should surface the blocked partition id',
+    );
+  },
+);
+
+test(
+  'AdminServiceDiscovery routes replica readiness through projection serve lane',
+  async (t) => {
+    const NODE_ID = 'node-projection-repair-only';
+    const ROUTING_NOT_READY = 'routing_not_ready';
+    const discovery = new AdminServiceDiscovery({
+      nodeId: NODE_ID,
+    });
+    const projectionReadiness = buildProjectionReadinessContract({
+      dimensions: {
+        [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: true,
+        [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: false,
+        [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
+        [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE]:
+          true,
+        [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: false,
+      },
+      membershipPublication: {
+        publicationEpoch: 41,
+        status: CONTROL_PLANE_PUBLICATION_STATUS.ACK_PENDING,
+        requiredAckNodeIds: [NODE_ID],
+        acknowledgedNodeIds: [],
+      },
+    });
+
+    const readiness = discovery.buildServiceDiscoveryReplicaReadiness(
+      {
+        nodeId: NODE_ID,
+        healthStatus: 'healthy',
+      },
+      {
+        activeNodeIds: new Set([NODE_ID]),
+        projectionReadinessByNodeId: new Map([[NODE_ID, projectionReadiness]]),
+        tableName: null,
+        tableFound: true,
+        schemaReady: true,
+        localTargetReplicaStateByNodeId: new Map(),
+        localPartitionCdcState: null,
+        replicaOperationDegradationByNodeId: new Map(),
+        leadershipStable: true,
+        appliedSchemaVersion: null,
+        replicaOpsInFlight: 0,
+      },
+    );
+
+    t.equal(
+      readiness.routingReady,
+      false,
+      'repair-only projection readiness must not admit service-discovery routing',
+    );
+    t.equal(
+      readiness.projectionReadiness.activeGate.state,
+      PROJECTION_READINESS_ACTIVE_GATE_STATE.REPAIR_READY,
+      'admin readiness should preserve the downstream active-gate state',
+    );
+    t.same(
+      readiness.reasons.map((reason) => reason.code),
+      [ROUTING_NOT_READY],
+      'serve-lane denial should surface through the existing routing reason',
     );
   },
 );

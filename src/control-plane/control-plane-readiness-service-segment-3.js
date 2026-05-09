@@ -25,6 +25,7 @@ const {
   RUNTIME_AUTHORITY_VISIBILITY_STATE,
   TYPEOF,
   buildControlPlanePublicationStory,
+  buildProjectionReadinessContract,
   buildReadinessTransitionOwnerState,
   buildReason,
   createEligibilitySnapshot,
@@ -604,6 +605,25 @@ class ControlPlaneReadinessServiceSegment3 extends ControlPlaneReadinessServiceS
         observedAt,
       ),
     ]);
+    const priorityControlPlaneRecovery =
+      this.getPriorityControlPlaneRecoveryState({
+        nodeId,
+        observedAt,
+        publication,
+        membershipPublication,
+        dimensions,
+      });
+    const projectionReadinessContract =
+      this.buildProjectionReadinessContract({
+        nodeId,
+        observedAt,
+        publication,
+        membershipPublication,
+        priorityControlPlaneRecovery,
+        dimensions,
+        reasons,
+        runtimeAuthority,
+      });
 
     return Object.freeze({
       ...createEligibilitySnapshot({
@@ -611,14 +631,20 @@ class ControlPlaneReadinessServiceSegment3 extends ControlPlaneReadinessServiceS
         lifecycleState: null,
         publication,
         membershipPublication,
+        priorityControlPlaneRecovery,
         capacity: null,
         nodeEvidence: null,
         observedAt,
         dimensions,
         reasons,
       }),
+      projectionReadinessContract,
       runtimeAuthority,
     });
+  }
+
+  buildProjectionReadinessContract(context = {}) {
+    return buildProjectionReadinessContract(context);
   }
 
   buildEvaluatedNodeReadinessSnapshot(context = {}) {
@@ -628,6 +654,10 @@ class ControlPlaneReadinessServiceSegment3 extends ControlPlaneReadinessServiceS
       ...context,
       runtimeAuthority,
     });
+    const runtimeServeAdmission = this.buildRuntimeServeAdmissionSnapshot(
+      context,
+      runtimeAuthority,
+    );
     const priorityControlPlaneRecovery =
       this.getPriorityControlPlaneRecoveryState({
         nodeId: context.nodeId,
@@ -637,6 +667,14 @@ class ControlPlaneReadinessServiceSegment3 extends ControlPlaneReadinessServiceS
         membershipPublicationPlanningSnapshot:
           context.membershipPublicationPlanningSnapshot,
         dimensions,
+      });
+    const projectionReadinessContract =
+      this.buildProjectionReadinessContract({
+        ...context,
+        dimensions,
+        priorityControlPlaneRecovery,
+        runtimeAuthority,
+        runtimeServeEligible: runtimeServeAdmission.eligible,
       });
     const reasons = this.buildReasons({
       ...context,
@@ -654,6 +692,7 @@ class ControlPlaneReadinessServiceSegment3 extends ControlPlaneReadinessServiceS
         reasons,
         priorityControlPlaneRecovery,
         runtimeAuthority,
+        projectionReadinessContract,
       }) :
       this.getReadinessTransitionHistory(context.nodeId);
 
@@ -670,6 +709,7 @@ class ControlPlaneReadinessServiceSegment3 extends ControlPlaneReadinessServiceS
         dimensions,
         reasons,
       }),
+      projectionReadinessContract,
       runtimeAuthority,
       recentTransitions,
     });
@@ -898,7 +938,23 @@ class ControlPlaneReadinessServiceSegment3 extends ControlPlaneReadinessServiceS
    * @private
    */
   buildReadinessTransitionState(context) {
-    return buildReadinessTransitionOwnerState(context, this.now());
+    const ownerState = buildReadinessTransitionOwnerState(context, this.now());
+    const projectionReadinessContract =
+      this.buildProjectionReadinessContract(context);
+    return Object.freeze({
+      ...ownerState,
+      projectionReadinessContract,
+      rawInputs: Object.freeze({
+        ...ownerState.rawInputs,
+        projectionReadinessState: projectionReadinessContract.state,
+        projectionPublicationReady:
+          projectionReadinessContract.publication.ready === true,
+        projectionPriorityRecoveryActive:
+          projectionReadinessContract.priorityRecovery.active === true,
+        projectionActiveGateState:
+          projectionReadinessContract.activeGate.state,
+      }),
+    });
   }
 
   async getMembershipPublicationDiagnostics(

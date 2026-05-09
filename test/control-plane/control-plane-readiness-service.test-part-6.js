@@ -14,6 +14,9 @@ import {
   PROJECTION_READINESS_CONTRACT_STATE,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {
+  PROJECTION_READINESS_ACTIVE_GATE_STATE,
+} from '../../src/control-plane/projection-readiness-constants.js';
+import {
 } from '../../src/control-plane/control-plane-constants.js';
 import {
   ControlPlaneReadinessService,
@@ -891,6 +894,26 @@ test('ControlPlaneReadinessService exposes controlPlanePublished while keeping r
       active: true,
     },
   }, 'readiness should expose one canonical projection/readiness contract');
+  t.equal(
+    readiness.dimensions[CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE],
+    false,
+    'serveEligible dimension should consume the projection serve lane',
+  );
+  t.equal(
+    readiness.projectionReadinessContract.lanes.repair.ready,
+    true,
+    'repair lane should stay open for publication convergence',
+  );
+  t.equal(
+    readiness.projectionReadinessContract.lanes.serve.ready,
+    false,
+    'serve lane should stay closed until publication convergence is ready',
+  );
+  t.equal(
+    readiness.projectionReadinessContract.activeGate.state,
+    PROJECTION_READINESS_ACTIVE_GATE_STATE.REPAIR_READY,
+    'readiness should expose downstream active-gate repair state',
+  );
   const participation = await readinessService.getControlPlaneParticipation(
     nodeId,
     {

@@ -11,6 +11,9 @@ import {
   PUBLICATION_RECOVERY_GATE_STATE,
   buildPublicationRecoveryGateSnapshot,
 } from './publication-recovery-gate.js';
+import {
+  PROJECTION_READINESS_ACTIVE_GATE_STATE,
+} from './projection-readiness-constants.js';
 
 const LOCAL_STR_1P74U = 'control_plane_recovery_service_unavailable';
 const LOCAL_STR_RZRDP = 'control_plane_recovery_planning_provider_unavailable';
@@ -96,6 +99,38 @@ function normalizeStartupAuthorityTargetParticipationRecoveryReasons(
 function hasStartupAuthorityPriorityPartitionEvidence(priorityPartitionSummary) {
   return priorityPartitionSummary &&
     typeof priorityPartitionSummary === TYPEOF.OBJECT;
+}
+
+function normalizeStartupProjectionReadinessContract(source = {}) {
+  const contract =
+    source.projectionReadinessContract &&
+      typeof source.projectionReadinessContract === TYPEOF.OBJECT ?
+      source.projectionReadinessContract :
+      source.projectionReadiness &&
+        typeof source.projectionReadiness === TYPEOF.OBJECT ?
+        source.projectionReadiness :
+        null;
+  return contract ? Object.freeze({...contract}) : null;
+}
+
+function normalizeStartupProjectionActiveGate(projectionReadinessContract) {
+  const activeGate =
+    projectionReadinessContract?.activeGate &&
+      typeof projectionReadinessContract.activeGate === TYPEOF.OBJECT ?
+      projectionReadinessContract.activeGate :
+      null;
+  return activeGate ? Object.freeze({...activeGate}) : null;
+}
+
+function isStartupProjectionActiveGateRecoveryOpen(activeGate) {
+  return activeGate?.state ===
+      PROJECTION_READINESS_ACTIVE_GATE_STATE.REPAIR_READY ||
+    activeGate?.state ===
+      PROJECTION_READINESS_ACTIVE_GATE_STATE.INTERNAL_READY;
+}
+
+function isStartupProjectionActiveGateBlocked(activeGate) {
+  return activeGate?.state === PROJECTION_READINESS_ACTIVE_GATE_STATE.BLOCKED;
 }
 
 export function hasTransitionalStartupAuthorityEvidence(options = {}) {
@@ -285,6 +320,10 @@ export function buildStartupAuthoritySnapshotContract(options = {}) {
       typeof options.publicationRecoveryGate === TYPEOF.OBJECT ?
       options.publicationRecoveryGate :
       null;
+  const projectionReadinessContract =
+    normalizeStartupProjectionReadinessContract(options);
+  const projectionReadinessActiveGate =
+    normalizeStartupProjectionActiveGate(projectionReadinessContract);
 
   return Object.freeze({
     state: options.state,
@@ -304,6 +343,12 @@ export function buildStartupAuthoritySnapshotContract(options = {}) {
       options.canonicalStartupNodeIds,
     ),
     publicationRecoveryGate,
+    ...(projectionReadinessContract ?
+      {projectionReadinessContract} :
+      {}),
+    ...(projectionReadinessActiveGate ?
+      {projectionReadinessActiveGate} :
+      {}),
     failure,
     publicationObservationState: publication.observationState,
     ...(publication.epoch.state === AUTHORITY_DESCRIPTOR_STATE.KNOWN ?
@@ -477,6 +522,11 @@ export function buildStartupAuthorityUnavailableSnapshot(
       typeof details.targetParticipation === TYPEOF.OBJECT ?
         details.targetParticipation :
         undefined,
+    projectionReadinessContract:
+      details.projectionReadinessContract &&
+      typeof details.projectionReadinessContract === TYPEOF.OBJECT ?
+        details.projectionReadinessContract :
+        undefined,
     priorityRecoveryReasonCodes: [],
     canonicalStartupNodeIds: details.canonicalStartupNodeIds,
     failureReason,
@@ -494,6 +544,10 @@ export function buildStartupAuthoritySnapshotFromPlanningAnswer(
 
   const publicationRecoveryGate =
     buildPublicationRecoveryGateSnapshot(planningSnapshot);
+  const projectionReadinessContract =
+    normalizeStartupProjectionReadinessContract(planningSnapshot);
+  const projectionReadinessActiveGate =
+    normalizeStartupProjectionActiveGate(projectionReadinessContract);
   const publicationStatus = publicationRecoveryGate.publicationStatus || null;
   const priorityPartitionSummary =
     publicationRecoveryGate.priorityPartitionSummary ||
@@ -563,6 +617,7 @@ export function buildStartupAuthoritySnapshotFromPlanningAnswer(
       priorityRecoveryReasonCodes,
       canonicalStartupNodeIds,
       publicationRecoveryGate,
+      projectionReadinessContract,
     });
   }
 
@@ -598,6 +653,7 @@ export function buildStartupAuthoritySnapshotFromPlanningAnswer(
       priorityRecoveryReasonCodes,
       canonicalStartupNodeIds,
       publicationRecoveryGate,
+      projectionReadinessContract,
     });
   }
 
@@ -639,6 +695,7 @@ export function buildStartupAuthoritySnapshotFromPlanningAnswer(
         priorityRecoveryReasonCodes,
         canonicalStartupNodeIds,
         publicationRecoveryGate,
+        projectionReadinessContract,
       });
     }
     return buildStartupAuthorityUnavailableSnapshot(
@@ -656,6 +713,7 @@ export function buildStartupAuthoritySnapshotFromPlanningAnswer(
         admissionReasonCodes,
         clusterIncarnationFence,
         publicationRecoveryGate,
+        projectionReadinessContract,
       },
     );
   }
@@ -689,6 +747,7 @@ export function buildStartupAuthoritySnapshotFromPlanningAnswer(
         priorityRecoveryReasonCodes,
         canonicalStartupNodeIds,
         publicationRecoveryGate,
+        projectionReadinessContract,
       });
     }
     return buildStartupAuthorityUnavailableSnapshot(
@@ -715,16 +774,23 @@ export function buildStartupAuthoritySnapshotFromPlanningAnswer(
         clusterIncarnationFence,
         canonicalStartupNodeIds,
         publicationRecoveryGate,
+        projectionReadinessContract,
       },
     );
   }
 
   const blocked =
-    targetParticipationReasons.length > NUM.ZERO &&
-    canonicalStartupNodeIds.length === NUM.ZERO;
+    (
+      targetParticipationReasons.length > NUM.ZERO &&
+      canonicalStartupNodeIds.length === NUM.ZERO
+    ) ||
+    isStartupProjectionActiveGateBlocked(projectionReadinessActiveGate);
   const state = blocked ?
     STARTUP_AUTHORITY_STATE.BLOCKED :
-    (priorityRecoveryReasonCodes.length > NUM.ZERO ?
+    (priorityRecoveryReasonCodes.length > NUM.ZERO ||
+      isStartupProjectionActiveGateRecoveryOpen(
+        projectionReadinessActiveGate,
+      ) ?
       STARTUP_AUTHORITY_STATE.RECOVERY_PENDING :
       STARTUP_AUTHORITY_STATE.READY);
 
@@ -754,5 +820,6 @@ export function buildStartupAuthoritySnapshotFromPlanningAnswer(
     priorityRecoveryReasonCodes,
     canonicalStartupNodeIds,
     publicationRecoveryGate,
+    projectionReadinessContract,
   });
 }

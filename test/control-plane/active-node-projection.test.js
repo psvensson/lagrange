@@ -14,6 +14,12 @@ import {
   RUNTIME_AUTHORITY_STATE,
   RUNTIME_AUTHORITY_VISIBILITY_STATE,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
+import {
+  buildProjectionReadinessContract,
+} from '../../src/control-plane/projection-readiness-state.js';
+import {
+  CONTROL_PLANE_PUBLICATION_STATUS,
+} from '../../src/control-plane/publication-owner-constants.js';
 
 const ACTIVE_NODE_ADMISSION_STATE_BLOCKED = 'blocked';
 const ACTIVE_NODE_ADMISSION_REASON_CLUSTER_INTEGRITY =
@@ -227,6 +233,84 @@ test('active-node projection can include recovery-eligible nodes during publicat
         runtimeAuthorityIncludedNodeIds: ['node-2'],
       },
       'convergence projection diagnostics should show recovery-eligible inclusion',
+    );
+  });
+test('active-node projection consumes projection readiness lane outcome',
+  async (t) => {
+    const repairOnlyReadiness = buildProjectionReadinessContract({
+      dimensions: {
+        [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: true,
+        [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: false,
+        [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
+        [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE]:
+          true,
+        [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: false,
+      },
+      membershipPublication: {
+        publicationEpoch: 31,
+        status: CONTROL_PLANE_PUBLICATION_STATUS.ACK_PENDING,
+        requiredAckNodeIds: ['node-2'],
+        acknowledgedNodeIds: [],
+      },
+    });
+    const commonProjectionOptions = {
+      nodeRows: [
+        {
+          node_id: 'node-1',
+          status: 'active',
+          connection_state: 'ready',
+          ready_lease_expires_at: 2000,
+        },
+        {
+          node_id: 'node-2',
+          status: 'active',
+          connection_state: 'ready',
+          ready_lease_expires_at: 2000,
+        },
+      ],
+      serviceRows: [
+        {service_id: 'svc-1', node_id: 'node-1', status: 'active'},
+        {service_id: 'svc-2', node_id: 'node-2', status: 'active'},
+      ],
+      nodeEndpointRows: [
+        {
+          endpoint_id: 'node-1-ws',
+          node_id: 'node-1',
+          transport_type: 'ws',
+          status: 'active',
+          address: 'ws://node-1:8082',
+        },
+        {
+          endpoint_id: 'node-2-ws',
+          node_id: 'node-2',
+          transport_type: 'ws',
+          status: 'active',
+          address: 'ws://node-2:8082',
+        },
+      ],
+      readinessByNodeId: {
+        'node-1': {
+          dimensions: {
+            [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: true,
+          },
+        },
+        'node-2': repairOnlyReadiness,
+      },
+      nowMs: 1000,
+    };
+
+    t.same(
+      resolveCanonicalActiveNodeIds(commonProjectionOptions),
+      ['node-1'],
+      'steady projection should not treat repair-only readiness as serve-ready',
+    );
+    t.same(
+      resolveCanonicalActiveNodeIds({
+        ...commonProjectionOptions,
+        allowControlPlaneRecoveryEligibleProjection: true,
+      }),
+      ['node-1', 'node-2'],
+      'recovery projection should consume the explicit repair lane',
     );
   });
 test('active-node projection can use runtime authority when dimensions lag',
