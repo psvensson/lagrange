@@ -29,7 +29,6 @@ const {
   FAILURE_CLASS_PUBLICATION_CONVERGENCE_BLOCKED,
   ROOT_CAUSE_CLASS_TOPOLOGY,
   STABILITY_GATE_BLOCKER_PENDING_ACK_NODES,
-  STABILITY_GATE_BLOCKER_PUBLICATION_PENDING,
 } = FAILURE_BUNDLE_SEGMENT_1;
 
 export function registerFailureBundleActiveGateTailTests({
@@ -421,7 +420,14 @@ export function registerFailureBundleActiveGateTailTests({
         PRIORITY_RECOVERY_SEMANTIC_STATE.NEEDS_OPERATION;
       const ACTIVE_GATE_COVERAGE_BLOCKER = 'snapshot_coverage=2/5';
       const ACTIVE_GATE_INACTIVE_BLOCKER = 'inactive_nodes=2';
-      const PENDING_ACK_DOMINANT_REASON = 'pending_ack_nodes';
+      const PENDING_ACK_BLOCKER_ALIAS =
+        STABILITY_GATE_BLOCKER_PENDING_ACK_NODES;
+      const PENDING_ACK_OWNER_REASON = 'pending_acks_present';
+      const PUBLICATION_PUBLISHED_OWNER_REASON = 'publication_published';
+      const OWNER_TOPOLOGY_PUBLICATION = 'topology_publication_owner';
+      const BOUNDARY_PUBLICATION_CONVERGENCE = 'publication_convergence';
+      const EDGE_PUBLICATION_ACK_CONVERGENCE =
+        'publication_ack_convergence';
       const PENDING_ACK_NODE_ID = 'selected-pending-ack-node';
       const PUBLISHED_NODE_ONE = 'published-node-one';
       const PUBLISHED_NODE_TWO = 'published-node-two';
@@ -614,18 +620,40 @@ export function registerFailureBundleActiveGateTailTests({
       );
       assert.equal(
         failureClassification.dominantReason,
-        PENDING_ACK_DOMINANT_REASON,
+        PENDING_ACK_OWNER_REASON,
       );
       assert.equal(
         scenarioBundle.summary.dominantReason,
-        PENDING_ACK_DOMINANT_REASON,
+        PENDING_ACK_OWNER_REASON,
+      );
+      const ownerContract =
+        scenarioBundle.diagnostics.failure.ownerContract;
+      assert.equal(
+        ownerContract.dominantWitness.edgeId,
+        EDGE_PUBLICATION_ACK_CONVERGENCE,
+      );
+      assert.equal(
+        ownerContract.dominantWitness.owner,
+        OWNER_TOPOLOGY_PUBLICATION,
+      );
+      assert.equal(
+        ownerContract.dominantWitness.boundary,
+        BOUNDARY_PUBLICATION_CONVERGENCE,
+      );
+      assert.equal(
+        ownerContract.dominantWitness.dominantReason,
+        PENDING_ACK_OWNER_REASON,
+      );
+      assert.deepEqual(
+        ownerContract.dominantWitness.reasons,
+        [PUBLICATION_PUBLISHED_OWNER_REASON, PENDING_ACK_OWNER_REASON],
       );
       assert.ok(
         failureClassification.signals.includes(PENDING_ACK_COUNT_SIGNAL),
       );
       assert.equal(
         scenarioBundle.summary.stabilityGates.convergence.blockers.includes(
-          STABILITY_GATE_BLOCKER_PUBLICATION_PENDING,
+          PENDING_ACK_BLOCKER_ALIAS,
         ),
         true,
       );

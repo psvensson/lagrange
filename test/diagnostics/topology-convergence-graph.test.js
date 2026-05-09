@@ -3,8 +3,10 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {
   EDGE_STATE,
+  buildTopologyConvergenceOwnerPresentation,
   buildTopologyConvergenceGraph,
   buildTopologyConvergenceGraphFromArtifacts,
+  selectTopologyConvergenceDominantWitness,
 } from '../../src/diagnostics/topology-convergence-graph.js';
 
 const FIXTURE_SCENARIO = 'fixture-rolling-restart';
@@ -42,13 +44,18 @@ const ACTIVE_GATE_STATE_READY = 'ready';
 const PUBLICATION_STATUS_PUBLISHED = 'PUBLISHED';
 const RECOVERY_PROTOCOL_PRIORITY_SPREAD_PENDING = 'priority_spread_pending';
 const EDGE_PRIORITY_RECOVERY = 'priority_recovery_partition_progress';
+const EDGE_PUBLICATION_ACK_CONVERGENCE = 'publication_ack_convergence';
 const EDGE_SNAPSHOT_COVERAGE = 'active_gate_snapshot_coverage';
 const EDGE_READINESS = 'readiness_startup_support';
 const EDGE_TOP_FAILURE_REASONS = 'top_failure_reasons';
+const OWNER_TOPOLOGY_PUBLICATION = 'topology_publication_owner';
 const ARTIFACT_PATH_20260507 =
   'test-output/reports/.playback/rolling-restart-after-bounded-retryable-seed-contact-probe-20260507T072145Z/rolling-restart/failure-bundle.json';
 const REPORT_ARTIFACT_PATH_20260507 =
   'test-output/reports/rolling-restart-after-bounded-retryable-seed-contact-probe-20260507T072145Z.report.json';
+const PUBLICATION_ACK_PENDING_STATUS = 'ACK_PENDING';
+const PUBLICATION_PENDING_REASON = 'publication_pending';
+const PENDING_ACKS_PRESENT_REASON = 'pending_acks_present';
 
 function buildFixtureFailureBundle() {
   return {
@@ -128,6 +135,23 @@ function buildHealthyFixtureFailureBundle() {
   };
 }
 
+function buildAckPendingPublicationFixtureFailureBundle() {
+  const fixture = buildHealthyFixtureFailureBundle();
+
+  return {
+    ...fixture,
+    publicationConvergence: {
+      ...fixture.publicationConvergence,
+      publicationStatus: PUBLICATION_ACK_PENDING_STATUS,
+      pendingAckCount: ONE_COUNT,
+      activeGate: {
+        ...fixture.publicationConvergence.activeGate,
+        ready: false,
+      },
+    },
+  };
+}
+
 function findEdge(edges, edgeId) {
   return edges.find((edge) => edge.id === edgeId);
 }
@@ -181,6 +205,36 @@ describe('TopologyConvergenceGraph', () => {
       triageSummary: SOURCE_PATH_ABSENT,
       report: SOURCE_PATH_ABSENT,
     });
+  });
+
+  it('presents publication ACK debt as owner reason before raw status text', () => {
+    const graph = buildTopologyConvergenceGraphFromArtifacts({
+      failureBundle: buildAckPendingPublicationFixtureFailureBundle(),
+    });
+    const presentation = buildTopologyConvergenceOwnerPresentation(graph);
+    const dominantWitness = selectTopologyConvergenceDominantWitness(
+      presentation,
+    );
+
+    assert.equal(
+      graph.summary.firstFrontierEdgeId,
+      EDGE_PUBLICATION_ACK_CONVERGENCE,
+    );
+    assert.equal(graph.summary.firstFrontierOwner, OWNER_TOPOLOGY_PUBLICATION);
+    assert.equal(dominantWitness.edgeId, EDGE_PUBLICATION_ACK_CONVERGENCE);
+    assert.equal(dominantWitness.owner, OWNER_TOPOLOGY_PUBLICATION);
+    assert.equal(dominantWitness.state, EDGE_STATE.BLOCKED);
+    assert.equal(dominantWitness.dominantReason, PENDING_ACKS_PRESENT_REASON);
+    assert.deepEqual(
+      dominantWitness.reasons,
+      [PUBLICATION_PENDING_REASON, PENDING_ACKS_PRESENT_REASON],
+    );
+    assert.equal(
+      dominantWitness.source.publicationStatus,
+      PUBLICATION_ACK_PENDING_STATUS,
+    );
+    assert.equal(dominantWitness.source.pendingAckCount, ONE_COUNT);
+    assertNoNullOrUndefined(graph);
   });
 
   it('converges to an empty frontier when all blocker edges are satisfied', () => {

@@ -9,6 +9,9 @@ import {
   buildTopologyConvergenceDecisionTable,
   buildTopologyConvergenceGraphFromArtifacts,
   buildTopologyConvergenceGlossary,
+  buildTopologyConvergenceOwnerPresentation,
+  buildTopologyConvergenceOwnerWitness,
+  selectTopologyConvergenceDominantWitness,
 } from '../src/diagnostics/topology-convergence-graph.js';
 
 const ARG_HELP_SHORT = '-h';
@@ -56,23 +59,12 @@ const LABEL_DOMINANT_REASON = 'Dominant reason';
 const LABEL_EVIDENCE_PATH = 'Evidence path';
 const LABEL_REASONS = 'Reasons';
 const LABEL_NEXT_EXPLAIN_COMMAND = 'Next explain command';
-const SOURCE_FIELD_DOMINANT_REASON = 'dominantReason';
-const WITNESS_FIELD_EDGE_ID = 'edgeId';
-const WITNESS_FIELD_OWNER = 'owner';
-const WITNESS_FIELD_BOUNDARY = 'boundary';
-const WITNESS_FIELD_FRONTIER_STATE = 'frontierState';
-const WITNESS_FIELD_DOMINANT_REASON = 'dominantReason';
-const WITNESS_FIELD_EVIDENCE_PATH = 'evidencePath';
-const WITNESS_FIELD_REASONS = 'reasons';
-const WITNESS_FIELD_SOURCE = 'source';
 const EDGE_ALIAS_PRIORITY = 'priority';
 const EDGE_ALIAS_PRIORITY_RECOVERY = 'priority-recovery';
-const EDGE_ALIAS_TOPOLOGY = 'topology';
 const EDGE_ALIAS_PUBLICATION = 'publication';
 const EDGE_ALIAS_ACTIVE_GATE = 'active-gate';
 const EDGE_ALIAS_SNAPSHOT = 'snapshot';
 const EDGE_ALIAS_READINESS = 'readiness';
-const EDGE_ALIAS_FAILURE_REASONS = 'failure-reasons';
 const LIST_SEPARATOR = ', ';
 const HELP_TEXT = [
   'Usage: node scripts/analyze-topology-convergence.js <artifact.json> [--explain <edge-id-or-alias>] [--package-evidence-block]',
@@ -95,12 +87,10 @@ const HELP_TEXT = [
 const EDGE_ALIASES = Object.freeze({
   [EDGE_ALIAS_PRIORITY]: EDGE_ID.PRIORITY_RECOVERY_PARTITION_PROGRESS,
   [EDGE_ALIAS_PRIORITY_RECOVERY]: EDGE_ID.PRIORITY_RECOVERY_PARTITION_PROGRESS,
-  [EDGE_ALIAS_TOPOLOGY]: EDGE_ID.PUBLICATION_ACK_CONVERGENCE,
   [EDGE_ALIAS_PUBLICATION]: EDGE_ID.PUBLICATION_ACK_CONVERGENCE,
   [EDGE_ALIAS_ACTIVE_GATE]: EDGE_ID.ACTIVE_GATE_SNAPSHOT_COVERAGE,
   [EDGE_ALIAS_SNAPSHOT]: EDGE_ID.ACTIVE_GATE_SNAPSHOT_COVERAGE,
   [EDGE_ALIAS_READINESS]: EDGE_ID.READINESS_STARTUP_SUPPORT,
-  [EDGE_ALIAS_FAILURE_REASONS]: EDGE_ID.TOP_FAILURE_REASONS,
 });
 
 function main(argv) {
@@ -220,12 +210,15 @@ function buildGraphForArtifact(artifactPath, artifact) {
 }
 
 function selectCliOutput(graph) {
+  const ownerPresentation = buildTopologyConvergenceOwnerPresentation(graph);
   return {
     schemaVersion: graph.schemaVersion,
     scenario: graph.scenario,
     summary: graph.summary,
     frontier: graph.frontier,
-    dominantWitness: buildDominantWitness(selectDominantFrontierEdge(graph)),
+    ownerWitnesses: ownerPresentation.ownerWitnesses,
+    frontierWitnesses: ownerPresentation.frontierWitnesses,
+    dominantWitness: ownerPresentation.dominantWitness,
     nextExpectedFrontier: graph.nextExpectedFrontier,
   };
 }
@@ -247,7 +240,7 @@ function selectExplainOutput(graph, requestedEdgeId) {
     decisionOutcome: {
       state: edge.state,
       frontier: graph.frontier.some((frontierEdge) => frontierEdge.id === edge.id),
-      dominantWitness: buildDominantWitness(edge),
+      dominantWitness: buildTopologyConvergenceOwnerWitness(edge),
     },
     decisionTable: decisionTable.transitions.find((row) => row.edgeId === edge.id),
   };
@@ -276,36 +269,8 @@ function selectDominantFrontierEdge(graph) {
   return graph.frontier[NUM_ZERO] || null;
 }
 
-function buildDominantWitness(edge) {
-  if (!edge) {
-    return {
-      [WITNESS_FIELD_EDGE_ID]: ABSENT_VALUE,
-      [WITNESS_FIELD_OWNER]: ABSENT_VALUE,
-      [WITNESS_FIELD_BOUNDARY]: ABSENT_VALUE,
-      [WITNESS_FIELD_FRONTIER_STATE]: ABSENT_VALUE,
-      [WITNESS_FIELD_DOMINANT_REASON]: ABSENT_VALUE,
-      [WITNESS_FIELD_EVIDENCE_PATH]: ABSENT_VALUE,
-      [WITNESS_FIELD_REASONS]: [],
-      [WITNESS_FIELD_SOURCE]: {},
-    };
-  }
-  return {
-    [WITNESS_FIELD_EDGE_ID]: edge.id,
-    [WITNESS_FIELD_OWNER]: edge.owner,
-    [WITNESS_FIELD_BOUNDARY]: edge.boundary,
-    [WITNESS_FIELD_FRONTIER_STATE]: edge.state,
-    [WITNESS_FIELD_DOMINANT_REASON]:
-      edge.source?.[SOURCE_FIELD_DOMINANT_REASON] ||
-      edge.reasons?.[NUM_ZERO] ||
-      ABSENT_VALUE,
-    [WITNESS_FIELD_EVIDENCE_PATH]: edge.evidencePath,
-    [WITNESS_FIELD_REASONS]: edge.reasons,
-    [WITNESS_FIELD_SOURCE]: edge.source,
-  };
-}
-
 function renderPackageEvidenceBlock(graph, artifactPath) {
-  const witness = buildDominantWitness(selectDominantFrontierEdge(graph));
+  const witness = selectTopologyConvergenceDominantWitness(graph);
   const explainCommand = [
     'npm run analyze:topology-convergence --',
     artifactPath,

@@ -2,7 +2,10 @@
   "summary": {
     "frontierCount": 2,
     "firstFrontierEdgeId": "priority_recovery_partition_progress",
-    "firstFrontierState": "blocked"
+    "firstFrontierState": "blocked",
+    "firstFrontierOwner": "operation_workflow_owner",
+    "firstFrontierBoundary": "workflow_progress",
+    "firstFrontierReason": "priority_recovery_operation_scheduling_event_driven"
   },
   "frontier": [
     {
@@ -33,6 +36,7 @@
     "edgeId": "priority_recovery_partition_progress",
     "owner": "operation_workflow_owner",
     "boundary": "workflow_progress",
+    "state": "blocked",
     "frontierState": "blocked",
     "dominantReason": "priority_recovery_operation_scheduling_event_driven",
     "evidencePath": "triageSummary.publicationConvergence.activeGate.progress.priorityRecoveryProgressClasses",
@@ -44,6 +48,7 @@
       "blockedPartitionIds": "sql_write_operations-p1",
       "dominantReason": "priority_recovery_operation_scheduling_event_driven",
       "failureClass": "topology_convergence_timeout"
-    }
+    },
+    "rootCauseClass": "topology"
   }
 }

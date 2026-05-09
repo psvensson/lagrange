@@ -13,6 +13,7 @@ export function registerFailureBundleCore16Tests(context) {
     PRIORITY_RECOVERY_WAIT_MODE,
     readFile,
     resolve,
+    ROOT_CAUSE_CLASS_STARTUP,
     ROOT_CAUSE_CLASS_TOPOLOGY,
     STABILITY_GATE_BLOCKER_PUBLICATION_MISSING_ACTIVE_NODE,
     UTF8_ENCODING,
@@ -48,7 +49,14 @@ export function registerFailureBundleCore16Tests(context) {
       const ACTIVE_GATE_TERMINAL_REASON = 'stalled_no_progress';
       const SCENARIO_ERROR =
         'Not all nodes reached ACTIVE state within 120000ms';
-      const PENDING_ACK_BLOCKER = 'pending_ack_nodes';
+      const PENDING_ACK_BLOCKER_ALIAS = 'pending_ack_nodes';
+      const PENDING_ACK_OWNER_REASON = 'pending_acks_present';
+      const PUBLICATION_PENDING_OWNER_REASON = 'publication_pending';
+      const OWNER_TOPOLOGY_PUBLICATION = 'topology_publication_owner';
+      const BOUNDARY_PUBLICATION_CONVERGENCE = 'publication_convergence';
+      const EDGE_PUBLICATION_ACK_CONVERGENCE =
+        'publication_ack_convergence';
+      const OWNER_CONTRACT_STATE_BLOCKED = 'blocked';
       const SNAPSHOT_COVERAGE_BLOCKER = 'snapshot_coverage=2/5';
       const INACTIVE_NODE_BLOCKER = 'inactive_nodes=4';
       const ACK_PENDING_NODE_ID = 'ack-pending-node';
@@ -80,7 +88,7 @@ export function registerFailureBundleCore16Tests(context) {
         details: {
           diagnostics: {
             failure: {
-              rootCauseClass: ROOT_CAUSE_CLASS_TOPOLOGY,
+              rootCauseClass: ROOT_CAUSE_CLASS_STARTUP,
               dominantReason: MISSING_NODE_REASON_ONE,
               reasonCounts: {
                 [MISSING_NODE_REASON_ONE]: PENDING_ACK_COUNT,
@@ -217,11 +225,59 @@ export function registerFailureBundleCore16Tests(context) {
       );
       assert.equal(
         failureClassification.dominantReason,
-        PENDING_ACK_BLOCKER,
+        PENDING_ACK_OWNER_REASON,
       );
       assert.equal(
-        scenarioBundle.diagnostics.failure.reasonCounts[PENDING_ACK_BLOCKER],
+        failureClassification.rootCauseClass,
+        ROOT_CAUSE_CLASS_TOPOLOGY,
+      );
+      assert.equal(
+        scenarioBundle.summary.rootCauseClass,
+        ROOT_CAUSE_CLASS_TOPOLOGY,
+      );
+      assert.equal(
+        scenarioBundle.diagnostics.failure.rootCauseClass,
+        ROOT_CAUSE_CLASS_TOPOLOGY,
+      );
+      assert.equal(
+        scenarioBundle.diagnostics.failure.reasonCounts[
+          PENDING_ACK_OWNER_REASON
+        ],
         ONE_COUNT,
+      );
+      const ownerContract =
+        scenarioBundle.diagnostics.failure.ownerContract;
+      assert.equal(
+        ownerContract.dominantWitness.edgeId,
+        EDGE_PUBLICATION_ACK_CONVERGENCE,
+      );
+      assert.equal(
+        ownerContract.dominantWitness.owner,
+        OWNER_TOPOLOGY_PUBLICATION,
+      );
+      assert.equal(
+        ownerContract.dominantWitness.boundary,
+        BOUNDARY_PUBLICATION_CONVERGENCE,
+      );
+      assert.equal(
+        ownerContract.dominantWitness.state,
+        OWNER_CONTRACT_STATE_BLOCKED,
+      );
+      assert.equal(
+        ownerContract.dominantWitness.dominantReason,
+        PENDING_ACK_OWNER_REASON,
+      );
+      assert.deepEqual(
+        ownerContract.dominantWitness.reasons,
+        [PUBLICATION_PENDING_OWNER_REASON, PENDING_ACK_OWNER_REASON],
+      );
+      assert.equal(
+        ownerContract.dominantWitness.source.pendingAckCount,
+        PENDING_ACK_COUNT,
+      );
+      assert.equal(
+        ownerContract.dominantWitness.source.pendingAckCount,
+        publicationConvergence.pendingAckCount,
       );
       assert.equal(
         scenarioBundle.topFailures.topReasons[ZERO_COUNT].reason,
@@ -233,7 +289,7 @@ export function registerFailureBundleCore16Tests(context) {
       );
       assert.equal(
         scenarioBundle.summary.stabilityGates.convergence.blockers.includes(
-          PENDING_ACK_BLOCKER,
+          PENDING_ACK_BLOCKER_ALIAS,
         ),
         true,
       );

@@ -2,7 +2,10 @@
   "summary": {
     "frontierCount": 1,
     "firstFrontierEdgeId": "active_gate_snapshot_coverage",
-    "firstFrontierState": "blocked"
+    "firstFrontierState": "blocked",
+    "firstFrontierOwner": "startup_active_gate_owner",
+    "firstFrontierBoundary": "snapshot_coverage",
+    "firstFrontierReason": "active_gate_timed_out"
   },
   "frontier": [
     {
@@ -22,6 +25,7 @@
     "edgeId": "active_gate_snapshot_coverage",
     "owner": "startup_active_gate_owner",
     "boundary": "snapshot_coverage",
+    "state": "blocked",
     "frontierState": "blocked",
     "dominantReason": "active_gate_timed_out",
     "evidencePath": "triageSummary.publicationConvergence.activeGate.progress",
@@ -35,6 +39,7 @@
       "snapshotCoverageNodeCount": 4,
       "expectedNodeCount": 5,
       "blockers": "absent"
-    }
+    },
+    "rootCauseClass": "startup"
   }
 }

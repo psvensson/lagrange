@@ -78,7 +78,7 @@ the contract and proof ladder are stable.
 5. [Placement Owner Policy Kernel](../packages/done-20260509-spec-led-runtime-modularization-placement-owner-kernel.md)
 6. [Publication Owner Stream Contract](../packages/done-20260509-spec-led-runtime-modularization-publication-owner-stream.md)
 7. [Projection Readiness Contract](../packages/done-20260509-spec-led-runtime-modularization-projection-readiness-contract.md)
-8. [Diagnostics And Harness Consumer Rewrite](../packages/todo-20260509-spec-led-runtime-modularization-diagnostics-harness-consumer.md)
+8. [Diagnostics And Harness Consumer Rewrite](../packages/active-20260509-spec-led-runtime-modularization-diagnostics-harness-consumer.md)
 9. [Legacy Deletion And Representative Proof](../packages/todo-20260509-spec-led-runtime-modularization-legacy-deletion-proof.md)
 
 ## Activation Rules

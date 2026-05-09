@@ -18,10 +18,15 @@ const SCHEMA_VERSION_TOPOLOGY_CONVERGENCE_DECISION_TABLE_V1 =
   'topology-convergence-owner-decision-table-v1';
 const SCHEMA_VERSION_TOPOLOGY_CONVERGENCE_GLOSSARY_V1 =
   'topology-convergence-owner-glossary-v1';
+const SCHEMA_VERSION_TOPOLOGY_CONVERGENCE_OWNER_PRESENTATION_V1 =
+  'topology-convergence-owner-presentation-v1';
 const TYPE_OBJECT = 'object';
 const TYPE_STRING = 'string';
 const BOOLEAN_TRUE_TEXT = 'true';
 const BOOLEAN_FALSE_TEXT = 'false';
+const ROOT_CAUSE_CLASS_TOPOLOGY = 'topology';
+const ROOT_CAUSE_CLASS_STARTUP = 'startup';
+const ROOT_CAUSE_CLASS_UNKNOWN = 'unknown';
 const PUBLICATION_STATUS_PUBLISHED = 'PUBLISHED';
 const PRIORITY_RECOVERY_SEMANTIC_RECOVERING_IN_FLIGHT = 'recovering_in_flight';
 const ACTIVE_GATE_STATE_TIMED_OUT = 'timed_out';
@@ -131,12 +136,39 @@ const SOURCE_FIELD = Object.freeze({
   BEST_PROGRESS: 'bestProgress',
   BLOCKING_BOUNDARY: 'blockingBoundary',
   CURRENT_OWNER: 'currentOwner',
+  DOMINANT_REASON: 'dominantReason',
   DOMINANT_WITNESS: 'dominantWitness',
   PROGRESS: 'progress',
   PRIORITY_RECOVERY_PROGRESS_CLASSES: 'priorityRecoveryProgressClasses',
   PRIORITY_RECOVERY_PROGRESS_SUMMARY: 'priorityRecoveryProgressSummary',
   READINESS_FAILURE: 'readinessFailure',
 });
+
+const OWNER_WITNESS_FIELD = Object.freeze({
+  EDGE_ID: 'edgeId',
+  OWNER: 'owner',
+  BOUNDARY: 'boundary',
+  STATE: 'state',
+  FRONTIER_STATE: 'frontierState',
+  DOMINANT_REASON: 'dominantReason',
+  REASONS: 'reasons',
+  EVIDENCE_PATH: 'evidencePath',
+  SOURCE: 'source',
+  ROOT_CAUSE_CLASS: 'rootCauseClass',
+});
+
+const EDGE_ROOT_CAUSE_CLASS = Object.freeze({
+  [EDGE_ID.PUBLICATION_ACK_CONVERGENCE]: ROOT_CAUSE_CLASS_TOPOLOGY,
+  [EDGE_ID.PRIORITY_RECOVERY_PARTITION_PROGRESS]: ROOT_CAUSE_CLASS_TOPOLOGY,
+  [EDGE_ID.ACTIVE_GATE_SNAPSHOT_COVERAGE]: ROOT_CAUSE_CLASS_STARTUP,
+  [EDGE_ID.READINESS_STARTUP_SUPPORT]: ROOT_CAUSE_CLASS_STARTUP,
+  [EDGE_ID.TOP_FAILURE_REASONS]: ROOT_CAUSE_CLASS_UNKNOWN,
+});
+
+const OWNER_SUPPORTING_REASON_SET = Object.freeze(new Set([
+  REASON.PUBLICATION_PUBLISHED,
+  REASON.PUBLICATION_PENDING,
+]));
 
 const RANK = Object.freeze({
   PRIORITY_RECOVERY: 10,
@@ -423,6 +455,10 @@ function buildTopologyConvergenceGraph(input = {}) {
   latestDecisionTableOverridesByEdgeId = buildDecisionTableOverrides(edges);
   const frontier = computeFrontier(edges);
   const nextExpectedFrontier = computeNextExpectedFrontier(edges, frontier);
+  const ownerPresentation = buildTopologyConvergenceOwnerPresentation({
+    edges,
+    frontier,
+  });
 
   return {
     schemaVersion: SCHEMA_VERSION_TOPOLOGY_CONVERGENCE_GRAPH_V1,
@@ -434,6 +470,14 @@ function buildTopologyConvergenceGraph(input = {}) {
       frontierCount: frontier.length,
       firstFrontierEdgeId: frontier[FIRST_FRONTIER_INDEX]?.id || ABSENT_VALUE,
       firstFrontierState: frontier[FIRST_FRONTIER_INDEX]?.state || ABSENT_VALUE,
+      firstFrontierOwner:
+        ownerPresentation.dominantWitness[OWNER_WITNESS_FIELD.OWNER],
+      firstFrontierBoundary:
+        ownerPresentation.dominantWitness[OWNER_WITNESS_FIELD.BOUNDARY],
+      firstFrontierReason:
+        ownerPresentation.dominantWitness[
+          OWNER_WITNESS_FIELD.DOMINANT_REASON
+        ],
     },
     nodes: NODE_DEFINITIONS.map((node) => {
       if (node.id !== NODE_ID.PRIORITY_RECOVERY_PROGRESS) {
@@ -457,6 +501,9 @@ function buildTopologyConvergenceGraph(input = {}) {
     }),
     edges,
     frontier,
+    ownerWitnesses: ownerPresentation.ownerWitnesses,
+    frontierWitnesses: ownerPresentation.frontierWitnesses,
+    dominantWitness: ownerPresentation.dominantWitness,
     nextExpectedFrontier,
   };
 }
@@ -488,6 +535,40 @@ function buildTopologyConvergenceGlossary() {
     edgeIds: glossaryEntries(EDGE_ID),
     nodeIds: glossaryEntries(NODE_ID),
   };
+}
+
+function buildTopologyConvergenceOwnerPresentation(graph) {
+  const edges = Array.isArray(graph?.edges) ? graph.edges : [];
+  const frontier = Array.isArray(graph?.frontier) ? graph.frontier : [];
+  const ownerWitnesses = edges.map((edge) =>
+    buildTopologyConvergenceOwnerWitness(edge),
+  );
+  const frontierWitnesses = frontier.map((edge) =>
+    buildTopologyConvergenceOwnerWitness(edge),
+  );
+
+  return {
+    schemaVersion: SCHEMA_VERSION_TOPOLOGY_CONVERGENCE_OWNER_PRESENTATION_V1,
+    ownerWitnesses,
+    frontierWitnesses,
+    dominantWitness: selectTopologyConvergenceDominantWitness({
+      frontierWitnesses,
+    }),
+  };
+}
+
+function selectTopologyConvergenceDominantWitness(graphOrPresentation) {
+  const frontierWitnesses = Array.isArray(
+    graphOrPresentation?.frontierWitnesses,
+  ) ?
+    graphOrPresentation.frontierWitnesses :
+    Array.isArray(graphOrPresentation?.frontier) ?
+      graphOrPresentation.frontier.map((edge) =>
+        buildTopologyConvergenceOwnerWitness(edge),
+      ) :
+      [];
+  return frontierWitnesses[FIRST_FRONTIER_INDEX] ||
+    buildAbsentTopologyConvergenceOwnerWitness();
 }
 
 function normalizeTopologyConvergenceInput(input) {
@@ -794,12 +875,47 @@ function computeFrontier(edges) {
   const satisfiedIds = new Set(
     edges.filter((edge) => edge.state === EDGE_STATE.SATISFIED).map((edge) => edge.id),
   );
+  const edgesById = new Map(edges.map((edge) => [edge.id, edge]));
 
   return edges
     .filter((edge) => UNSATISFIED_EDGE_STATES.includes(edge.state))
-    .filter((edge) => edge.dependencies.every((dependencyId) => satisfiedIds.has(dependencyId)))
+    .filter((edge) => edge.dependencies.every((dependencyId) =>
+      isSatisfiedDependencyChain({
+        dependencyId,
+        edgesById,
+        satisfiedIds,
+        visitedIds: new Set(),
+      }),
+    ))
     .sort(compareFrontierEdges)
     .map((edge) => ({...edge}));
+}
+
+function isSatisfiedDependencyChain({
+  dependencyId,
+  edgesById,
+  satisfiedIds,
+  visitedIds,
+}) {
+  if (satisfiedIds.has(dependencyId) !== true) {
+    return false;
+  }
+  if (visitedIds.has(dependencyId)) {
+    return true;
+  }
+  visitedIds.add(dependencyId);
+  const dependencyEdge = edgesById.get(dependencyId);
+  if (!dependencyEdge) {
+    return true;
+  }
+  return dependencyEdge.dependencies.every((ancestorId) =>
+    isSatisfiedDependencyChain({
+      dependencyId: ancestorId,
+      edgesById,
+      satisfiedIds,
+      visitedIds,
+    }),
+  );
 }
 
 function computeNextExpectedFrontier(edges, frontier) {
@@ -829,17 +945,22 @@ function compareFrontierEdges(left, right) {
 }
 
 function resolvePublicationState(evidence, reasons) {
-  if (evidence.publicationStatus !== PUBLICATION_STATUS_PUBLISHED) {
-    reasons.push(REASON.PUBLICATION_PENDING);
-    return EDGE_STATE.BLOCKED;
-  }
-  reasons.push(REASON.PUBLICATION_PUBLISHED);
+  const publicationPublished =
+    evidence.publicationStatus === PUBLICATION_STATUS_PUBLISHED;
+  reasons.push(
+    publicationPublished ?
+      REASON.PUBLICATION_PUBLISHED :
+      REASON.PUBLICATION_PENDING,
+  );
   if (evidence.pendingAckCount > SOURCE_ORDER_BASE) {
     reasons.push(REASON.PENDING_ACKS);
     return EDGE_STATE.BLOCKED;
   }
   if (evidence.blockedNodeCount > SOURCE_ORDER_BASE) {
     reasons.push(REASON.BLOCKED_NODES);
+    return EDGE_STATE.BLOCKED;
+  }
+  if (publicationPublished !== true) {
     return EDGE_STATE.BLOCKED;
   }
   if (evidence.missingPublishedCount > SOURCE_ORDER_BASE) {
@@ -1246,6 +1367,65 @@ function buildDecisionTableOverrides(edges) {
   return Object.freeze(overrides);
 }
 
+function buildTopologyConvergenceOwnerWitness(edge) {
+  if (!edge) {
+    return buildAbsentTopologyConvergenceOwnerWitness();
+  }
+  return {
+    [OWNER_WITNESS_FIELD.EDGE_ID]: textOrAbsent(edge.id),
+    [OWNER_WITNESS_FIELD.OWNER]: textOrAbsent(edge.owner),
+    [OWNER_WITNESS_FIELD.BOUNDARY]: textOrAbsent(edge.boundary),
+    [OWNER_WITNESS_FIELD.STATE]: textOrAbsent(edge.state),
+    [OWNER_WITNESS_FIELD.FRONTIER_STATE]: textOrAbsent(edge.state),
+    [OWNER_WITNESS_FIELD.DOMINANT_REASON]:
+      selectOwnerWitnessDominantReason(edge),
+    [OWNER_WITNESS_FIELD.REASONS]: arrayOrEmpty(edge.reasons),
+    [OWNER_WITNESS_FIELD.EVIDENCE_PATH]: textOrAbsent(edge.evidencePath),
+    [OWNER_WITNESS_FIELD.SOURCE]: asRecord(edge.source),
+    [OWNER_WITNESS_FIELD.ROOT_CAUSE_CLASS]:
+      EDGE_ROOT_CAUSE_CLASS[edge.id] || ROOT_CAUSE_CLASS_UNKNOWN,
+  };
+}
+
+function buildAbsentTopologyConvergenceOwnerWitness() {
+  return {
+    [OWNER_WITNESS_FIELD.EDGE_ID]: ABSENT_VALUE,
+    [OWNER_WITNESS_FIELD.OWNER]: ABSENT_VALUE,
+    [OWNER_WITNESS_FIELD.BOUNDARY]: ABSENT_VALUE,
+    [OWNER_WITNESS_FIELD.STATE]: ABSENT_VALUE,
+    [OWNER_WITNESS_FIELD.FRONTIER_STATE]: ABSENT_VALUE,
+    [OWNER_WITNESS_FIELD.DOMINANT_REASON]: ABSENT_VALUE,
+    [OWNER_WITNESS_FIELD.REASONS]: [],
+    [OWNER_WITNESS_FIELD.EVIDENCE_PATH]: ABSENT_VALUE,
+    [OWNER_WITNESS_FIELD.SOURCE]: {},
+    [OWNER_WITNESS_FIELD.ROOT_CAUSE_CLASS]: ROOT_CAUSE_CLASS_UNKNOWN,
+  };
+}
+
+function selectOwnerWitnessDominantReason(edge) {
+  const sourceDominantReason = textOrAbsent(
+    edge.source?.[SOURCE_FIELD.DOMINANT_REASON],
+  );
+  if (
+    edge.state !== EDGE_STATE.SATISFIED &&
+    sourceDominantReason !== ABSENT_VALUE &&
+    sourceDominantReason !== UNKNOWN_VALUE
+  ) {
+    return sourceDominantReason;
+  }
+  const primaryReason = arrayOrEmpty(edge.reasons).find((reason) =>
+    OWNER_SUPPORTING_REASON_SET.has(reason) !== true,
+  );
+  return textOrAbsent(primaryReason || edge.reasons?.[FIRST_FRONTIER_INDEX]);
+}
+
+function textOrAbsent(value) {
+  if (typeof value === TYPE_STRING && value.length > SOURCE_ORDER_BASE) {
+    return value;
+  }
+  return ABSENT_VALUE;
+}
+
 export {
   EDGE_STATE,
   EDGE_ID,
@@ -1253,5 +1433,8 @@ export {
   buildTopologyConvergenceDecisionTable,
   buildTopologyConvergenceGlossary,
   buildTopologyConvergenceGraphFromArtifacts,
+  buildTopologyConvergenceOwnerPresentation,
+  buildTopologyConvergenceOwnerWitness,
+  selectTopologyConvergenceDominantWitness,
   flattenEvidencePath,
 };

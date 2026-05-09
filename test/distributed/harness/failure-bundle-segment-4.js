@@ -38,6 +38,11 @@ import {
 import {
   PRIORITY_RECOVERY_CLOSURE_WITNESS_STATE,
 } from '../../../src/control-plane/priority-recovery-snapshot.js';
+import {
+  EDGE_STATE,
+  buildTopologyConvergenceGraphFromArtifacts,
+  buildTopologyConvergenceOwnerPresentation,
+} from '../../../src/diagnostics/topology-convergence-graph.js';
 import {FAILURE_BUNDLE_SEGMENT_3} from './failure-bundle-segment-3.js';
 const {
   FAILURE_BUNDLE_SCHEMA_VERSION,
@@ -352,6 +357,22 @@ const PUBLICATION_MISSING_PUBLISHED_EVIDENCE_RULES = Object.freeze([
     }),
   }),
 ]);
+const FAILURE_ARTIFACT_OWNER_CONTRACT_ACTIONABLE_STATES = Object.freeze(
+  new Set([
+    EDGE_STATE.BLOCKED,
+    EDGE_STATE.DEFERRED,
+    EDGE_STATE.RETRYABLE,
+    EDGE_STATE.TERMINAL_FAILED,
+  ]),
+);
+const FAILURE_ARTIFACT_OWNER_CONTRACT_ABSENT_EDGE_ID = 'absent';
+const FAILURE_ARTIFACT_OWNER_CONTRACT_PUBLICATION_EDGE_ID =
+  'publication_ack_convergence';
+const FAILURE_ARTIFACT_OWNER_CONTRACT_PENDING_ACK_REASON =
+  'pending_acks_present';
+const FAILURE_ARTIFACT_OWNER_CONTRACT_UNKNOWN_ROOT_CAUSE_CLASS = 'unknown';
+const FAILURE_ARTIFACT_OWNER_CONTRACT_UNKNOWN_REASON = 'unknown';
+const FAILURE_ARTIFACT_OWNER_CONTRACT_EMPTY_SUMMARY = Object.freeze({});
 const FAILURE_ARTIFACT_STALE_PUBLICATION_REASON_SET = Object.freeze(new Set([
   'control_plane_publication_pending',
   'publishedConvergencePending',
@@ -2089,6 +2110,101 @@ function mergeRetainedPriorityRecoveryObservation(
   };
 }
 
+function buildFailureArtifactOwnerContractPresentation({
+  entry,
+  existingFailure,
+  publicationConvergence,
+  reasonCounts,
+  progressDominantReason,
+}) {
+  if (!isRecord(publicationConvergence)) {
+    return null;
+  }
+  const summary = {
+    ...FAILURE_ARTIFACT_OWNER_CONTRACT_EMPTY_SUMMARY,
+    dominantReason:
+      progressDominantReason ||
+      existingFailure?.dominantReason ||
+      buildDominantReason(reasonCounts) ||
+      UNKNOWN_VALUE,
+    failureClass:
+      existingFailure?.failureClass ||
+      FAILURE_CLASS_UNKNOWN,
+    topReasons: buildTopReasonCounts(reasonCounts),
+  };
+  const graph = buildTopologyConvergenceGraphFromArtifacts({
+    failureBundle: {
+      scenario: entry?.scenario || UNKNOWN_VALUE,
+      summary,
+      publicationConvergence,
+    },
+  });
+  const ownerPresentation = buildTopologyConvergenceOwnerPresentation(graph);
+  return hasActionableOwnerContractWitness(
+    ownerPresentation.dominantWitness,
+  ) ?
+    ownerPresentation :
+    null;
+}
+
+function hasActionableOwnerContractWitness(witness) {
+  return (
+    isRecord(witness) &&
+    witness.edgeId !== FAILURE_ARTIFACT_OWNER_CONTRACT_ABSENT_EDGE_ID &&
+    FAILURE_ARTIFACT_OWNER_CONTRACT_ACTIONABLE_STATES.has(witness.state)
+  );
+}
+
+function resolveOwnerContractDominantReason(ownerContractPresentation) {
+  if (isPendingAckOwnerContractWitness(ownerContractPresentation) !== true) {
+    return null;
+  }
+  const dominantReason = String(
+    ownerContractPresentation?.dominantWitness?.dominantReason || EMPTY_STRING,
+  ).trim();
+  return dominantReason.length > ZERO &&
+    dominantReason !== FAILURE_ARTIFACT_OWNER_CONTRACT_ABSENT_EDGE_ID &&
+    dominantReason !== FAILURE_ARTIFACT_OWNER_CONTRACT_UNKNOWN_REASON ?
+    dominantReason :
+    null;
+}
+
+function resolveOwnerContractRootCauseClass(ownerContractPresentation) {
+  if (isPendingAckOwnerContractWitness(ownerContractPresentation) !== true) {
+    return null;
+  }
+  const rootCauseClass = String(
+    ownerContractPresentation?.dominantWitness?.rootCauseClass || EMPTY_STRING,
+  ).trim();
+  return rootCauseClass.length > ZERO &&
+    rootCauseClass !== FAILURE_ARTIFACT_OWNER_CONTRACT_UNKNOWN_ROOT_CAUSE_CLASS ?
+    rootCauseClass :
+    null;
+}
+
+function isPendingAckOwnerContractWitness(ownerContractPresentation) {
+  const dominantWitness = ownerContractPresentation?.dominantWitness;
+  return (
+    isRecord(dominantWitness) &&
+    dominantWitness.edgeId ===
+      FAILURE_ARTIFACT_OWNER_CONTRACT_PUBLICATION_EDGE_ID &&
+    dominantWitness.dominantReason ===
+      FAILURE_ARTIFACT_OWNER_CONTRACT_PENDING_ACK_REASON
+  );
+}
+
+function addOwnerContractReasonCounts(reasonCounts, ownerContractPresentation) {
+  if (!isRecord(reasonCounts) || !isRecord(ownerContractPresentation)) {
+    return;
+  }
+  const dominantReason = resolveOwnerContractDominantReason(
+    ownerContractPresentation,
+  );
+  if (dominantReason) {
+    addNormalizedReasonCount(reasonCounts, dominantReason);
+  }
+}
+
 function buildFailureArtifact({
   entry,
   readiness,
@@ -2138,6 +2254,19 @@ function buildFailureArtifact({
   const progressDominantReason = buildPriorityRecoveryProgressDominantReason(
     publicationConvergence?.priorityRecoveryProgressSummary,
   );
+  const ownerContractPresentation =
+    buildFailureArtifactOwnerContractPresentation({
+      entry,
+      existingFailure,
+      publicationConvergence,
+      reasonCounts,
+      progressDominantReason,
+    });
+  addOwnerContractReasonCounts(reasonCounts, ownerContractPresentation);
+  const ownerContractDominantReason =
+    resolveOwnerContractDominantReason(ownerContractPresentation);
+  const ownerContractRootCauseClass =
+    resolveOwnerContractRootCauseClass(ownerContractPresentation);
   const finalConsistencyFailure = resolveFinalConsistencyFailure(
     entry,
     controlPlane,
@@ -2152,6 +2281,7 @@ function buildFailureArtifact({
   const dominantReason =
     finalConsistencyReason ||
     quiescenceReason ||
+    ownerContractDominantReason ||
     dominantReasonOverride ||
     failureBarrier?.dominantReason ||
     (typeof existingFailure.dominantReason === 'string' &&
@@ -2170,15 +2300,16 @@ function buildFailureArtifact({
       quiescenceFailure.rootCauseClass :
       failureBarrier?.rootCauseClass ?
         failureBarrier.rootCauseClass :
-        resolveRootCauseClass({
-          rootCauseClass: existingFailure.rootCauseClass,
-          dominantReason,
-          reasonCounts,
-          loadMetrics,
-          firstFaultTimeline,
-          readiness,
-          controlPlane,
-        });
+        ownerContractRootCauseClass ||
+          resolveRootCauseClass({
+            rootCauseClass: existingFailure.rootCauseClass,
+            dominantReason,
+            reasonCounts,
+            loadMetrics,
+            firstFaultTimeline,
+            readiness,
+            controlPlane,
+          });
   const affectedNodeIds = normalizeAffectedNodeIds(
     entry,
     resolveRelevantNodeIds(entry),
@@ -2200,6 +2331,9 @@ function buildFailureArtifact({
     dominantReason,
     reasonCounts,
     affectedNodeIds,
+    ...(ownerContractPresentation ?
+      {ownerContract: ownerContractPresentation} :
+      {}),
     ...(failureBarrier ? {failureBarrier} : {}),
     ...(quiescenceFailure ? {quiescence: quiescenceFailure.quiescence} : {}),
   };

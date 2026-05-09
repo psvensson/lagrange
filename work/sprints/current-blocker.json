@@ -2,31 +2,33 @@
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
   "sprint": "work/sprints/active-2026-q2-spec-led-runtime-modularization.md",
-  "package": "work/packages/active-20260509-spec-led-runtime-modularization-projection-readiness-contract.md",
+  "package": "work/packages/active-20260509-spec-led-runtime-modularization-diagnostics-harness-consumer.md",
   "status": "active",
   "scenario": "spec-led-runtime-modularization",
-  "artifact": "none",
+  "artifact": "test-output/reports/rolling-restart-current-release-gate-after-workflow-timeout-stale-progress-fix.report.json",
   "playback": "none",
-  "owner": "projection_readiness_owner",
-  "boundary": "serve_repair_internal_readiness",
-  "dominantReason": "readiness_consumers_can_still_conflate_projection_lanes",
-  "currentState": "Projection readiness has newer contract pieces, but consumers can still conflate internal repair readiness, serve readiness, publication freshness, and startup active-gate presentation.",
-  "nextAction": "Rewrite projection readiness as a consumer of publication streams and owner outcomes with explicit internal, repair, and serve readiness lanes.",
+  "owner": "diagnostics_observer",
+  "boundary": "owner_contract_presentation",
+  "dominantReason": "diagnostics_and_harness_can_still_reclassify_owner_truth",
+  "currentState": "Diagnostics graph, topology analyzer, and failure-bundle reporting now expose canonical owner witnesses for ACK debt and dominant topology blockers.",
+  "nextAction": "Run parent verification, commit and push the focused diagnostics package slice, then close the package.",
   "proof": [
-    "Focused active-node projection tests",
-    "Focused control-plane readiness service tests",
-    "Focused admin readiness method tests",
-    "Touched-file decision-boundary and literal guardrails"
+    "Focused failure-bundle tests",
+    "Focused topology convergence analyzer tests",
+    "Focused publication evidence harness tests",
+    "Representative rolling-restart rerun if this package owns active gate presentation"
   ],
   "touchedFiles": [
-    "src/control-plane/active-node-projection.js",
-    "src/control-plane/control-plane-readiness-service*.js",
-    "src/control-plane/startup-authority-snapshot-owner.js",
-    "src/admin/admin-service-discovery-readiness-methods.js",
-    "src/control-plane/projection-readiness-*.js",
-    "test/control-plane/*readiness*.test.js",
-    "test/admin/*readiness*.test.js",
-    "work/packages/active-20260509-spec-led-runtime-modularization-projection-readiness-contract.md"
+    "src/diagnostics/topology-convergence-graph.js",
+    "scripts/analyze-topology-convergence.js",
+    "test/diagnostics/topology-convergence-graph.test.js",
+    "test/scripts/analyze-topology-convergence.test.js",
+    "test/scripts/__fixtures__/topology-convergence/active-gate-snapshot.expected.json",
+    "test/scripts/__fixtures__/topology-convergence/priority-workflow-progress.expected.json",
+    "test/distributed/harness/failure-bundle-segment-4.js",
+    "test/distributed/harness/__tests__/failure-bundle-active-gate-tail-test-cases.js",
+    "test/distributed/harness/__tests__/failure-bundle-core-16-test-cases.js",
+    "work/packages/active-20260509-spec-led-runtime-modularization-diagnostics-harness-consumer.md"
   ],
-  "predecessor": "work/packages/done-20260509-spec-led-runtime-modularization-publication-owner-stream.md"
+  "predecessor": "work/packages/done-20260509-spec-led-runtime-modularization-projection-readiness-contract.md"
 }

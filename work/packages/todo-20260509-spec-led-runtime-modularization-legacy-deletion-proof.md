@@ -30,7 +30,7 @@
     "work/sprints/todo-2026-q2-spec-led-runtime-modularization.md",
     "work/packages/todo-20260509-spec-led-runtime-modularization-legacy-deletion-proof.md"
   ],
-  "predecessor": "work/packages/todo-20260509-spec-led-runtime-modularization-diagnostics-harness-consumer.md"
+  "predecessor": "work/packages/active-20260509-spec-led-runtime-modularization-diagnostics-harness-consumer.md"
 }
 -->
 
