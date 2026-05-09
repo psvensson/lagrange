@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "todo",
+  "status": "done",
   "opened": "2026-05-09",
   "scenario": "spec-led-runtime-modularization",
   "artifact": "test-output/reports/rolling-restart-current-release-gate-after-workflow-timeout-stale-progress-fix.report.json",
@@ -26,11 +26,15 @@
     "src/rebalancer/operation-workflow-owner-adapter.js",
     "src/rebalancer/rebalance-coordinator*.js",
     "src/rebalancer/replica-operation-repository*.js",
+    "test/rebalancer/operation-workflow-owner-adapter.test.js",
     "test/rebalancer/operation-workflow-owner*.test.js",
     "test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js",
-    "work/packages/todo-20260509-spec-led-runtime-modularization-workflow-owner-adapter-cutover.md"
+    "test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js",
+    "work/packages/done-20260509-spec-led-runtime-modularization-workflow-owner-adapter-cutover.md"
   ],
-  "predecessor": "work/packages/done-20260509-spec-led-runtime-modularization-priority-recovery-observation-contract.md"
+  "predecessor": "work/packages/done-20260509-spec-led-runtime-modularization-priority-recovery-observation-contract.md",
+  "closed": "2026-05-09",
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -113,19 +117,59 @@ active.
 
 ## Detection / Analysis Tasks
 
-- [ ] List all side effects currently embedded in operation branch paths.
-- [ ] Map each side effect to a kernel command.
-- [ ] Find direct writes or dispatches that bypass the owner contract.
-- [ ] Identify old helper functions that become dead code after cutover.
+- [x] List all side effects currently embedded in operation branch paths.
+- [x] Map each side effect to a kernel command.
+- [x] Find direct writes or dispatches that bypass the owner contract.
+- [x] Identify old helper functions that become dead code after cutover.
+
+### Detection Notes
+
+Side-effect paths mapped to canonical commands:
+
+- coordinator-created local owner dispatch -> `dispatch_local_owner_command`
+- coordinator-created remote owner wake -> `wake_remote_owner_command`
+- observed stale-progress timeout reconcile -> `reconcile_stale_progress_command`
+- existing non-dispatch transition advancement -> `advance_existing_operation_command`
+- terminal success publication acknowledgement -> `record_terminal_success_command`
+- terminal failure publication acknowledgement -> `record_terminal_failure_command`
+- serial dependency wait / already observed owner progress -> `no_operation_effect`
+
+Direct branch paths quarantined by this slice:
+
+- `OperationWorkflowOwner.armCoordinatorCreatedOperation` now enters the adapter
+  after the existing public preflight and single-flight guard.
+- `OperationWorkflowOwner.reconcileObservedProgressOperation` now enters the
+  adapter in observed-progress mode so dispatch is treated as already observed.
+- `OperationWorkflowOwner.reconcileOperationProgress` now enters the adapter for
+  owner reconcile advancement and stale-progress reconcile.
+- dispatch-pending priority recovery snapshots are normalized from the adapter
+  decision outcome when the snapshot is for operation workflow owner progress
+  and not already in dispatched-waiting-progress state.
 
 ## Implementation Tasks
 
-- [ ] Add operation ports and adapter module.
-- [ ] Route existing workflow-owner entrypoints through evidence normalization,
+- [x] Add operation ports and adapter module.
+- [x] Route existing workflow-owner entrypoints through evidence normalization,
       decision, and command execution.
-- [ ] Feed command results back as next-pass evidence.
-- [ ] Preserve public entrypoint shape while removing internal duplicate paths.
-- [ ] Delete superseded branches and update focused tests.
+- [x] Feed command results back as next-pass evidence.
+- [x] Preserve public entrypoint shape while removing internal duplicate paths.
+- [x] Delete superseded branches and update focused tests.
+
+### Implementation Notes
+
+Added `src/rebalancer/operation-workflow-owner-ports.js` and
+`src/rebalancer/operation-workflow-owner-adapter.js`. The adapter builds
+operation workflow evidence, calls the decision kernel, builds one canonical
+effect command, and executes that command through ports.
+
+The public operation owner entrypoint shapes are preserved. The cutover is
+limited to the operation owner surface and does not rewrite placement,
+publication, readiness, or direct control-plane consumers.
+
+The direct dispatch-pending priority-recovery builder assertion now supplies
+the operation-owner outcome explicitly, matching the new consumer contract
+instead of expecting the control-plane builder to rediscover owner workflow
+intent from stale progress evidence.
 
 ## Validation
 
@@ -136,8 +180,34 @@ active.
 5. Representative rolling-restart rerun if this package is the active gate
    closure slice.
 
+### Validation Notes
+
+- PASS: `node --test test/rebalancer/operation-workflow-owner-decision.test.js test/rebalancer/operation-workflow-owner-adapter.test.js`
+  - 189 tests, 5 suites.
+- PASS: `node --test test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js`
+  - 62 tests, 13 suites.
+- PASS: `node --test test/rebalancer/rebalance-coordinator-timeout-cache-visibility.test.js`
+  - 168 tests, 47 suites.
+- PASS: `node --test test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
+  - 51 tests, 6 suites.
+- PASS: `node --test test/rebalancer/operation-workflow-owner-decision.test.js test/rebalancer/operation-workflow-owner-adapter.test.js test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js`
+  - 251 tests, 18 suites.
+- PASS: `node scripts/check-guideline-literals.js ...expanded touched runtime files...`
+- PASS: `node scripts/check-guideline-decision-boundaries.js ...expanded touched runtime files...`
+- PASS: `npm run audit:runtime-grammar:file -- ...expanded touched runtime files...`
+- PASS: `git diff --check -- ...touched package files...`
+
 ## Done When
 
 1. Runtime operation progress flows through the kernel.
 2. All operation effects are canonical commands.
 3. Old operation effect branches are removed or unreachable with proof.
+
+## Subagent Sequencing Ledger
+
+- [x] Review subagent recorded:
+      Agent Lovelace (`019e0b9d-46a1-7972-82bc-6e96b2411d3e`) reviewed `work/packages/done-20260509-spec-led-runtime-modularization-priority-recovery-observation-contract.md`; result `fixes-required`.
+- [x] Fix subagent recorded or explicitly not needed:
+      Agent Hume (`019e0b9f-a641-7d91-8e02-be446b4b09b0`) fixed `work/packages/done-20260509-spec-led-runtime-modularization-priority-recovery-observation-contract.md`.
+- [x] Implementation subagent recorded:
+      Agent Nietzsche (`019e0ba5-18a8-76d3-a4ef-3653a2d95aab`) implemented `work/packages/done-20260509-spec-led-runtime-modularization-workflow-owner-adapter-cutover.md`.

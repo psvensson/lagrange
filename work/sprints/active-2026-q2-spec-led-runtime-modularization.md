@@ -18,7 +18,7 @@ requests. The operation-owner stale-progress command-idle fix is included in the
 same package slice.
 
 Next package:
-`work/packages/todo-20260509-spec-led-runtime-modularization-workflow-owner-adapter-cutover.md`.
+`work/packages/done-20260509-spec-led-runtime-modularization-workflow-owner-adapter-cutover.md`.
 
 Next proof surface: activate the workflow owner adapter cutover package,
 review/fix/implement through real subagents, and route existing workflow facades
@@ -73,7 +73,7 @@ the contract and proof ladder are stable.
 1. [Spec And Reference Pattern Rebaseline](../packages/done-20260509-spec-led-runtime-modularization-spec-and-reference-patterns.md)
 2. [Operation Owner Decision Kernel](../packages/done-20260509-spec-led-runtime-modularization-operation-owner-kernel.md)
 3. [Priority Recovery Observation Contract](../packages/done-20260509-spec-led-runtime-modularization-priority-recovery-observation-contract.md)
-4. [Workflow Owner Adapter Cutover](../packages/todo-20260509-spec-led-runtime-modularization-workflow-owner-adapter-cutover.md)
+4. [Workflow Owner Adapter Cutover](../packages/done-20260509-spec-led-runtime-modularization-workflow-owner-adapter-cutover.md)
 5. [Placement Owner Policy Kernel](../packages/todo-20260509-spec-led-runtime-modularization-placement-owner-kernel.md)
 6. [Publication Owner Stream Contract](../packages/todo-20260509-spec-led-runtime-modularization-publication-owner-stream.md)
 7. [Projection Readiness Contract](../packages/todo-20260509-spec-led-runtime-modularization-projection-readiness-contract.md)

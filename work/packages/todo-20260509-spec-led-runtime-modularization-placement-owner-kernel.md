@@ -28,7 +28,7 @@
     "test/rebalancer/storage-admission*.test.js",
     "work/packages/todo-20260509-spec-led-runtime-modularization-placement-owner-kernel.md"
   ],
-  "predecessor": "work/packages/todo-20260509-spec-led-runtime-modularization-workflow-owner-adapter-cutover.md"
+  "predecessor": "work/packages/done-20260509-spec-led-runtime-modularization-workflow-owner-adapter-cutover.md"
 }
 -->
 

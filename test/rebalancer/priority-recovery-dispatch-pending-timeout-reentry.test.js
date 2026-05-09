@@ -10,6 +10,13 @@ import {
   PRIORITY_RECOVERY_SEMANTIC_STATE,
   PRIORITY_RECOVERY_WAIT_MODE,
 } from '../../src/control-plane/priority-recovery-diagnostics-constants.js';
+import {
+  OPERATION_WORKFLOW_EFFECT_COMMAND_VALUES,
+  OPERATION_WORKFLOW_OUTCOME_VALUES,
+  OPERATION_WORKFLOW_OWNER,
+  OPERATION_WORKFLOW_PROGRESS_DECISION_KERNEL,
+  OPERATION_WORKFLOW_REASON_CODE_VALUES,
+} from '../../src/rebalancer/operation-workflow-owner-constants.js';
 import {OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED as STAGE_SHARED} from
   '../../src/rebalancer/operation-workflow-owner-segment-7-stage-shared.js';
 import {OperationType, ReplicaStatus} from '../../src/rebalancer/replica-status.js';
@@ -39,6 +46,12 @@ const TEST_HANDOFF_TIMEOUT_MS = 7;
 const TEST_RETRY_AFTER_MS = 11;
 const TEST_EMPTY_VALUE = null;
 const TEST_ACTUAL_STATUS_ABSENT = null;
+const TEST_OPERATION_OWNER_STATE =
+  'priority_dispatch_pending_timeout_owner_state';
+const TEST_OPERATION_OWNER_CORRELATION_KEY =
+  'priority_dispatch_pending_timeout_owner_correlation';
+const TEST_OPERATION_OWNER_SOURCE_REVISION =
+  'priority_dispatch_pending_timeout_owner_revision';
 const TEST_REPLICA_DISPATCH_TARGET =
   'node-target/service/replica-dispatch';
 const TEST_REPLICA_HANDLER_DISPATCH_TARGET =
@@ -123,6 +136,25 @@ function buildDispatchPendingReentryPlanningSnapshot() {
       ]),
       readyEligibleNodeCount: TEST_READY_ELIGIBLE_NODE_COUNT,
     }),
+  });
+}
+
+function buildRemoteDispatchPendingOperationOwnerOutcome() {
+  const outcome = OPERATION_WORKFLOW_OUTCOME_VALUES.WAKE_REMOTE_OWNER;
+  return Object.freeze({
+    owner: OPERATION_WORKFLOW_OWNER,
+    boundary: OPERATION_WORKFLOW_PROGRESS_DECISION_KERNEL,
+    state: TEST_OPERATION_OWNER_STATE,
+    outcome,
+    nextRequiredAction: outcome,
+    effectCommand:
+      OPERATION_WORKFLOW_EFFECT_COMMAND_VALUES.WAKE_REMOTE_OWNER_COMMAND,
+    reasons: Object.freeze([
+      OPERATION_WORKFLOW_REASON_CODE_VALUES.REMOTE_OWNER_AUTHORITATIVE,
+      OPERATION_WORKFLOW_REASON_CODE_VALUES.WAKE_REQUIRED,
+    ]),
+    correlationKey: TEST_OPERATION_OWNER_CORRELATION_KEY,
+    sourceRevision: TEST_OPERATION_OWNER_SOURCE_REVISION,
   });
 }
 
@@ -1162,6 +1194,7 @@ test('priority recovery snapshot builder reclassifies stale dispatch-pending ' +
     stepTimeoutMsByWorkflowStep: {
       [TEST_STEP_PENDING]: TEST_STEP_TIMEOUT_MS,
     },
+    operationOwnerOutcome: buildRemoteDispatchPendingOperationOwnerOutcome(),
   });
 
   t.equal(
