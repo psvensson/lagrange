@@ -7,10 +7,10 @@ progress successor boundary.
 ## Current Package Snapshot
 
 Current blocker package:
-`work/packages/active-20260509-spec-led-runtime-modularization-operation-workflow-timeout-frontier.md`.
+`work/packages/todo-20260509-spec-led-runtime-modularization-publication-convergence-frontier.md`.
 
 Owner boundary:
-`operation_workflow_owner / workflow_timeout`.
+`topology_publication_owner / publication_convergence`.
 
 Current state: legacy helper, inference, and alias deletion has been executed
 and closed in
@@ -19,20 +19,21 @@ Publication ACK convergence is now closed in
 `work/packages/done-20260509-spec-led-runtime-modularization-publication-ack-convergence-frontier.md`.
 Active-gate snapshot coverage is now closed by migration in
 `work/packages/done-20260509-spec-led-runtime-modularization-active-gate-snapshot-coverage-frontier.md`.
+Operation workflow timeout is now closed by migration in
+`work/packages/done-20260509-spec-led-runtime-modularization-operation-workflow-timeout-frontier.md`.
 Representative proof did not go green; it migrated the first frontier to
-operation workflow timeout with dominant reason
-`priority_recovery_progress_blocked`.
+publication convergence with dominant reason `pending_acks_present`.
 
 Queued work:
 Next package:
-`work/packages/active-20260509-spec-led-runtime-modularization-operation-workflow-timeout-frontier.md`.
+`work/packages/todo-20260509-spec-led-runtime-modularization-publication-convergence-frontier.md`.
 
 Companion cleanup:
 `work/packages/todo-20260509-spec-led-runtime-modularization-active-gate-report-schema-alias-deletion.md`.
 
-Next proof surface: operation workflow timeout, with a focused workflow owner
+Next proof surface: publication convergence, with a focused publication owner
 fixture from
-`test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot.report.json`,
+`test-output/reports/rolling-restart-spec-led-runtime-modularization-operation-workflow-timeout.report.json`,
 topology-convergence explain proof, and representative rolling-restart rerun.
 
 ## Goal
@@ -91,8 +92,9 @@ the contract and proof ladder are stable.
 9. [Legacy Deletion And Representative Proof](../packages/done-20260509-spec-led-runtime-modularization-legacy-deletion-proof.md)
 10. [Publication ACK Convergence Frontier](../packages/done-20260509-spec-led-runtime-modularization-publication-ack-convergence-frontier.md)
 11. [Active Gate Snapshot Coverage Frontier](../packages/done-20260509-spec-led-runtime-modularization-active-gate-snapshot-coverage-frontier.md)
-12. [Operation Workflow Timeout Frontier](../packages/active-20260509-spec-led-runtime-modularization-operation-workflow-timeout-frontier.md)
-13. [Active Gate Report Schema Alias Deletion](../packages/todo-20260509-spec-led-runtime-modularization-active-gate-report-schema-alias-deletion.md)
+12. [Operation Workflow Timeout Frontier](../packages/done-20260509-spec-led-runtime-modularization-operation-workflow-timeout-frontier.md)
+13. [Publication Convergence Frontier](../packages/todo-20260509-spec-led-runtime-modularization-publication-convergence-frontier.md)
+14. [Active Gate Report Schema Alias Deletion](../packages/todo-20260509-spec-led-runtime-modularization-active-gate-report-schema-alias-deletion.md)
 
 ## Model Fit Strategy
 

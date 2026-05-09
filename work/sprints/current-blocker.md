@@ -4,35 +4,35 @@
 
 Sprint: `work/sprints/active-2026-q2-spec-led-runtime-modularization.md`
 
-Package: `work/packages/active-20260509-spec-led-runtime-modularization-operation-workflow-timeout-frontier.md`
+Package: `work/packages/todo-20260509-spec-led-runtime-modularization-publication-convergence-frontier.md`
 
 Scenario: `spec-led-runtime-modularization`
 
-Artifact: `test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot.report.json`
+Artifact: `test-output/reports/rolling-restart-spec-led-runtime-modularization-operation-workflow-timeout.report.json`
 
-Playback: `test-output/reports/.playback/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot/rolling-restart/`
+Playback: `test-output/reports/.playback/rolling-restart-spec-led-runtime-modularization-operation-workflow-timeout/rolling-restart/`
 
 ## Boundary
 
-Owner: `operation_workflow_owner`
+Owner: `topology_publication_owner`
 
-Boundary: `workflow_timeout`
+Boundary: `publication_convergence`
 
-Dominant reason: `priority_recovery_progress_blocked`
+Dominant reason: `pending_acks_present`
 
-Current state: The active-gate snapshot package removed startup/status and snapshot-lane fallback behavior. The representative rolling-restart rerun now selects operation_workflow_owner / workflow_timeout as the first frontier while active-gate snapshot coverage remains downstream at 2/5.
+Current state: The operation workflow timeout package moved the first frontier off operation_workflow_owner / workflow_timeout. The representative rerun now selects topology_publication_owner / publication_convergence with ACK_PENDING publication evidence, pendingAckCount 1, empty pendingAckNodeIds, and three missing published nodes.
 
 ## Next Action
 
-Freeze the operation workflow timeout witness from the new report, trace the operation workflow owner path for transition-deferred event-driven wait, and rewrite the owner path so stalled priority recovery progress has one canonical outcome.
+Freeze the publication convergence witness from the operation-workflow rerun, trace the publication owner ACK path, and rewrite the owner logic so pending ACK evidence has one canonical outcome and reason source.
 
 ## Proof Ladder
 
-1. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot.report.json --explain priority_recovery_partition_progress`
-2. `Focused operation_workflow_owner workflow_timeout fixture from the representative report`
-3. `Focused operation workflow owner tests selected by workflow_timeout`
-4. `Touched-file static guardrails selected by operation_workflow_owner`
-5. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-spec-led-runtime-modularization-operation-workflow-timeout.report.json --fast-local --verbose`
+1. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-operation-workflow-timeout.report.json --explain publication_ack_convergence`
+2. `Focused topology_publication_owner publication_convergence fixture from the representative report`
+3. `Focused publication owner/recovery tests selected by pending_acks_present`
+4. `Touched-file static guardrails selected by topology_publication_owner`
+5. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-spec-led-runtime-modularization-publication-convergence.report.json --fast-local --verbose`
 
 ## Model Fit
 
@@ -44,17 +44,18 @@ Scope shape: `owner-boundary-contraction`
 
 Escalation triggers:
 
-1. `workflow timeout evidence requires changes outside operation_workflow_owner`
-2. `focused fixture exposes a different first frontier`
-3. `representative proof still fails on workflow_timeout after owner fix`
+1. `pending ACK evidence requires changes outside topology_publication_owner`
+2. `focused fixture exposes operation workflow timeout as first frontier again`
+3. `representative proof still fails on publication_convergence after owner fix`
 
 ## Touched Files
 
-1. `src/rebalancer/operation-workflow-owner*.js`
-2. `src/control-plane/priority-recovery-snapshot*.js`
-3. `test/rebalancer/*workflow*.test.js`
-4. `test/control-plane/priority-recovery-snapshot*.js`
-5. `test/distributed/harness/failure-bundle*.js`
-6. `src/diagnostics/topology-convergence-graph.js`
-7. `scripts/analyze-topology-convergence.js`
-8. `work/packages/active-20260509-spec-led-runtime-modularization-operation-workflow-timeout-frontier.md`
+1. `src/control-plane/publication-owner*.js`
+2. `src/control-plane/publication-recovery*.js`
+3. `src/bootstrap/shared/node-state-publication-owner.js`
+4. `test/control-plane/publication*.test.js`
+5. `test/scripts/analyze-topology-convergence.test.js`
+6. `test/diagnostics/topology-convergence-graph.test.js`
+7. `src/diagnostics/topology-convergence-graph.js`
+8. `scripts/analyze-topology-convergence.js`
+9. `work/packages/todo-20260509-spec-led-runtime-modularization-publication-convergence-frontier.md`

@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-09",
   "scenario": "spec-led-runtime-modularization",
   "artifact": "test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot.report.json",
@@ -28,7 +28,7 @@
     "test/distributed/harness/failure-bundle*.js",
     "src/diagnostics/topology-convergence-graph.js",
     "scripts/analyze-topology-convergence.js",
-    "work/packages/active-20260509-spec-led-runtime-modularization-operation-workflow-timeout-frontier.md"
+    "work/packages/done-20260509-spec-led-runtime-modularization-operation-workflow-timeout-frontier.md"
   ],
   "modelFit": {
     "packageClass": "representative-frontier-closure",
@@ -42,7 +42,8 @@
   },
   "predecessor": "work/packages/done-20260509-spec-led-runtime-modularization-active-gate-snapshot-coverage-frontier.md",
   "closed": "2026-05-09",
-  "commitAndPushLedgerRequired": true
+  "commitAndPushLedgerRequired": true,
+  "successor": "work/packages/todo-20260509-spec-led-runtime-modularization-publication-convergence-frontier.md"
 }
 -->
 
@@ -181,7 +182,13 @@ guardrails, and representative rolling-restart.
 - [x] Fix subagent recorded or explicitly not needed:
       not-needed.
 - [x] Implementation subagent recorded:
-      Agent Ptolemy (`019e0cbe-3acf-7ee0-9faa-3aa88dbb0009`) implemented `work/packages/active-20260509-spec-led-runtime-modularization-operation-workflow-timeout-frontier.md`.
+      Agent Ptolemy (`019e0cbe-3acf-7ee0-9faa-3aa88dbb0009`) implemented `work/packages/done-20260509-spec-led-runtime-modularization-operation-workflow-timeout-frontier.md`.
+
+## Commit And Push Ledger
+
+1. Focused package commit: `a8aa566f2b3d008f7ea88326799fc33f03237c59`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
 
 ## Detection / Analysis Tasks
 
@@ -232,12 +239,17 @@ Validation notes:
    passed: 0 runtime-grammar-contract violations in touched runtime files.
 9. `npm run work:validate`
    passed: work tracker validation OK for 27 files.
-10. `git diff --check -- src/rebalancer/operation-workflow-owner-ports.js src/rebalancer/operation-workflow-owner.js test/rebalancer/operation-workflow-owner-adapter.test.js work/packages/active-20260509-spec-led-runtime-modularization-operation-workflow-timeout-frontier.md`
+10. `git diff --check -- src/rebalancer/operation-workflow-owner-ports.js src/rebalancer/operation-workflow-owner.js test/rebalancer/operation-workflow-owner-adapter.test.js work/packages/done-20260509-spec-led-runtime-modularization-operation-workflow-timeout-frontier.md`
    passed.
 11. Representative rolling-restart failed 0/1 after `129.9s`, but the
     topology analyzer migrated the first frontier to
     `topology_publication_owner / publication_convergence` with
     `pending_acks_present`.
+
+## Migration
+
+Successor package:
+`work/packages/todo-20260509-spec-led-runtime-modularization-publication-convergence-frontier.md`.
 
 ## Done When
 
