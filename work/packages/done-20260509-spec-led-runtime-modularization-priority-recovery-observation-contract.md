@@ -271,6 +271,9 @@ Focused proof after the repair:
 4. `npm run audit:runtime-grammar:file -- src/control-plane/priority-recovery-snapshot-stage-3.js`
    passed with 0 runtime-grammar-contract violations.
 
+Repair commit: `92cdc6c1`, pushed to
+`origin/codex/pending-ack-eligibility-filter`.
+
 ## Done When
 
 1. Priority recovery no longer reconstructs workflow progress.
