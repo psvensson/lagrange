@@ -29,7 +29,7 @@
     "test/admin/*readiness*.test.js",
     "work/packages/todo-20260509-spec-led-runtime-modularization-projection-readiness-contract.md"
   ],
-  "predecessor": "work/packages/active-20260509-spec-led-runtime-modularization-publication-owner-stream.md"
+  "predecessor": "work/packages/done-20260509-spec-led-runtime-modularization-publication-owner-stream.md"
 }
 -->
 

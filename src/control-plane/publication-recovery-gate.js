@@ -4,7 +4,12 @@ import {
 } from './control-plane-readiness-constants.js';
 import {
   CONTROL_PLANE_PUBLICATION_STATUS,
-} from './control-plane-publication-merge.js';
+  PUBLICATION_OWNER_RECOVERY_OUTCOME,
+  PUBLICATION_OWNER_STREAM_OUTCOME,
+} from './publication-owner-constants.js';
+import {
+  buildPublicationOwnerStreamState,
+} from './publication-owner-state.js';
 import {
   RECOVERY_PROTOCOL_STATE,
 } from './membership-lifecycle-constants.js';
@@ -17,7 +22,6 @@ import {
 const LOCAL_STR_EMPTY = '';
 
 const EMPTY_STRING = '';
-const PUBLICATION_OBSERVATION_STATE_UNPUBLISHED = 'unpublished';
 
 const PUBLICATION_PRIORITY_SPREAD_DECISION_SOURCE = Object.freeze({
   CLOSURE_WITNESS: 'closure_witness',
@@ -44,6 +48,48 @@ const PRIORITY_CLOSURE_WITNESS_SUMMARY_STATE = Object.freeze({
   DURABLE_SUMMARY_REFRESHED: 'durable_summary_refreshed',
   RETAINED: 'retained',
 });
+
+const PUBLICATION_RECOVERY_GATE_STREAM_RULES = Object.freeze([
+  Object.freeze({
+    state: PUBLICATION_RECOVERY_GATE_STATE.UNPUBLISHED_OBSERVATION,
+    matches: (context) =>
+      context.publicationOwnerStream?.streamOutcome ===
+        PUBLICATION_OWNER_STREAM_OUTCOME.NOT_STARTED,
+  }),
+  Object.freeze({
+    state: PUBLICATION_RECOVERY_GATE_STATE.ACK_PENDING,
+    matches: (context) =>
+      context.publicationOwnerStream?.streamOutcome ===
+        PUBLICATION_OWNER_STREAM_OUTCOME.WAITING_FOR_ACK,
+  }),
+  Object.freeze({
+    state: PUBLICATION_RECOVERY_GATE_STATE.PUBLICATION_PENDING,
+    matches: (context) =>
+      context.publicationOwnerStream?.streamOutcome ===
+        PUBLICATION_OWNER_STREAM_OUTCOME.PUBLISHING ||
+      context.publicationOwnerStream?.streamOutcome ===
+        PUBLICATION_OWNER_STREAM_OUTCOME.STALE ||
+      context.publicationOwnerStream?.streamOutcome ===
+        PUBLICATION_OWNER_STREAM_OUTCOME.FAILED,
+  }),
+  Object.freeze({
+    state: PUBLICATION_RECOVERY_GATE_STATE
+      .PRIORITY_SPREAD_EVIDENCE_UNAVAILABLE,
+    matches: (context) =>
+      context.publicationOwnerStream?.recoveryOutcome ===
+        PUBLICATION_OWNER_RECOVERY_OUTCOME.WAITING_FOR_RECOVERY_EVIDENCE,
+  }),
+  Object.freeze({
+    state: PUBLICATION_RECOVERY_GATE_STATE.PRIORITY_SPREAD_PENDING,
+    matches: (context) =>
+      context.publicationOwnerStream?.recoveryOutcome ===
+        PUBLICATION_OWNER_RECOVERY_OUTCOME.RECOVERING,
+  }),
+  Object.freeze({
+    state: PUBLICATION_RECOVERY_GATE_STATE.READY,
+    matches: () => true,
+  }),
+]);
 
 function normalizeOptionalString(value) {
   return typeof value === TYPEOF.STRING && value.trim().length > NUM.ZERO ?
@@ -133,7 +179,7 @@ function buildPendingAckEvidence(options = {}) {
       derivedPendingAckNodeIds :
       explicitPendingAckNodeIds.length > NUM.ZERO ?
         explicitPendingAckNodeIds :
-      derivedPendingAckNodeIds;
+        derivedPendingAckNodeIds;
   const pendingAckCountByState = Object.freeze({
     [PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.COUNT_ONLY]:
       Math.max(
@@ -398,40 +444,9 @@ function resolvePublicationPending(options = {}) {
 }
 
 function resolvePublicationRecoveryGateState(context = {}) {
-  const observationState = normalizeOptionalString(
-    context.publicationObservationState,
-  );
-  if (observationState === PUBLICATION_OBSERVATION_STATE_UNPUBLISHED) {
-    return PUBLICATION_RECOVERY_GATE_STATE.UNPUBLISHED_OBSERVATION;
-  }
-  const recoveryProtocolState = normalizeOptionalString(
-    context.recoveryProtocolState,
-  );
-  if (context.publicationStatusNormalized.length === NUM.ZERO &&
-      recoveryProtocolState ===
-        RECOVERY_PROTOCOL_STATE.UNPUBLISHED_OBSERVATION) {
-    return PUBLICATION_RECOVERY_GATE_STATE.UNPUBLISHED_OBSERVATION;
-  }
-  if (
-    context.pendingAckCount > NUM.ZERO ||
-    (
-      context.publicationStatusNormalized ===
-        CONTROL_PLANE_PUBLICATION_STATUS.ACK_PENDING &&
-      context.ackClosureSatisfied !== true
-    )
-  ) {
-    return PUBLICATION_RECOVERY_GATE_STATE.ACK_PENDING;
-  }
-  if (context.publicationPending === true) {
-    return PUBLICATION_RECOVERY_GATE_STATE.PUBLICATION_PENDING;
-  }
-  if (context.prioritySpreadEvidenceUnavailable === true) {
-    return PUBLICATION_RECOVERY_GATE_STATE.PRIORITY_SPREAD_EVIDENCE_UNAVAILABLE;
-  }
-  if (context.prioritySpreadPending === true) {
-    return PUBLICATION_RECOVERY_GATE_STATE.PRIORITY_SPREAD_PENDING;
-  }
-  return PUBLICATION_RECOVERY_GATE_STATE.READY;
+  return PUBLICATION_RECOVERY_GATE_STREAM_RULES.find((rule) =>
+    rule.matches(context),
+  ).state;
 }
 
 function buildPublicationRecoveryGateSnapshot(options = {}) {
@@ -502,6 +517,30 @@ function buildPublicationRecoveryGateSnapshot(options = {}) {
   const publicationStatusNormalized = normalizePublicationStatus(
     options.publicationStatus,
   );
+  const publicationOwnerStream = buildPublicationOwnerStreamState({
+    publicationRevision: options.publicationRevision ?? options.publicationEpoch,
+    desiredPublicationRevision:
+      options.desiredPublicationRevision ?? options.desiredRevision ??
+      options.publicationOwnerStream?.revision?.desired?.value ??
+      options.publicationEpoch,
+    committedPublicationRevision:
+      options.committedPublicationRevision ?? options.committedRevision ??
+      options.publicationOwnerStream?.revision?.committed?.value,
+    publicationStatus: options.publicationStatus,
+    publicationObservationState: options.publicationObservationState,
+    recoveryProtocolState: options.recoveryProtocolState,
+    requiredAckNodeIds,
+    acknowledgedNodeIds,
+    pendingAckNodeIds: effectivePendingAckNodeIds,
+    pendingAckCount,
+    pendingAckEvidenceState: pendingAckEvidence.evidenceState,
+    missingPublishedNodeIds,
+    missingPublishedCount,
+    priorityRecoveryReasonCodes: retainedProvidedReasonCodes,
+    prioritySpreadPending,
+    prioritySpreadEvidenceUnavailable,
+    publicationPendingHint: publicationPending,
+  });
   const reasonCodes = [
     ...(publicationPending || pendingAckCount > NUM.ZERO ? [
       CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PUBLICATION_EPOCH_PENDING,
@@ -517,14 +556,7 @@ function buildPublicationRecoveryGateSnapshot(options = {}) {
   ];
   const dedupedReasonCodes = normalizeDistinctStringArray(reasonCodes);
   const state = resolvePublicationRecoveryGateState({
-    publicationObservationState: options.publicationObservationState,
-    recoveryProtocolState: options.recoveryProtocolState,
-    publicationStatusNormalized,
-    publicationPending,
-    prioritySpreadPending,
-    prioritySpreadEvidenceUnavailable,
-    pendingAckCount,
-    ackClosureSatisfied,
+    publicationOwnerStream,
   });
 
   return Object.freeze({
@@ -547,6 +579,11 @@ function buildPublicationRecoveryGateSnapshot(options = {}) {
       prioritySpreadDecision.priorityPartitionSummary ?
         Object.freeze({...prioritySpreadDecision.priorityPartitionSummary}) :
         null,
+    publicationOwnerStream,
+    streamOutcome: publicationOwnerStream.streamOutcome,
+    ackState: publicationOwnerStream.ackState,
+    freshnessFence: publicationOwnerStream.freshnessFence,
+    recoveryOutcome: publicationOwnerStream.recoveryOutcome,
     priorityRecoveryClosureWitness:
       prioritySpreadDecision.priorityRecoveryClosureWitness ?
         Object.freeze({...prioritySpreadDecision.priorityRecoveryClosureWitness}) :

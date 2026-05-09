@@ -3,6 +3,12 @@ import {
   normalizeControlPlanePublicationRow,
   serializeControlPlanePublicationRow,
 } from './system-row-normalizers.js';
+import {
+  CONTROL_PLANE_PUBLICATION_STATUS,
+} from './publication-owner-constants.js';
+import {
+  resolvePublicationOwnerMergedPublicationStatus,
+} from './publication-owner-decision.js';
 
 const LOCAL_STR_EMPTY = '';
 const LOCAL_STR_PUBLICATION_EPOCH = 'publication_epoch';
@@ -23,13 +29,6 @@ const LOCAL_STR_REASONCODE = 'reasonCode';
 const LOCAL_STR_TRANSITION_HISTORY = 'transition_history';
 const LOCAL_STR_TRANSITIONHISTORY = 'transitionHistory';
 
-const CONTROL_PLANE_PUBLICATION_STATUS = Object.freeze({
-  OPEN: 'OPEN',
-  ACK_PENDING: 'ACK_PENDING',
-  PUBLISHED: 'PUBLISHED',
-  ABANDONED: 'ABANDONED',
-  SUPERSEDED: 'SUPERSEDED',
-});
 const PUBLICATION_ROW_MERGE_MODE = Object.freeze({
   SAME_REVISION: 'same_revision',
   NEW_REVISION: 'new_revision',
@@ -129,65 +128,6 @@ function readPreferredPublicationField(
     return latestValue;
   }
   return fallbackRow?.[snakeField] ?? fallbackRow?.[camelField] ?? null;
-}
-
-function deriveMergedPublicationStatus(
-  primaryStatus,
-  secondaryStatus,
-  acknowledgedNodeIds,
-  requiredAckNodeIds,
-) {
-  if (
-    primaryStatus === CONTROL_PLANE_PUBLICATION_STATUS.SUPERSEDED ||
-    secondaryStatus === CONTROL_PLANE_PUBLICATION_STATUS.SUPERSEDED
-  ) {
-    return CONTROL_PLANE_PUBLICATION_STATUS.SUPERSEDED;
-  }
-  if (
-    primaryStatus === CONTROL_PLANE_PUBLICATION_STATUS.ABANDONED ||
-    secondaryStatus === CONTROL_PLANE_PUBLICATION_STATUS.ABANDONED
-  ) {
-    return CONTROL_PLANE_PUBLICATION_STATUS.ABANDONED;
-  }
-  if (
-    primaryStatus === CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED ||
-    secondaryStatus === CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED ||
-    arePublicationNodeListsEqual(acknowledgedNodeIds, requiredAckNodeIds)
-  ) {
-    return CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED;
-  }
-  if (
-    primaryStatus === CONTROL_PLANE_PUBLICATION_STATUS.ACK_PENDING ||
-    secondaryStatus === CONTROL_PLANE_PUBLICATION_STATUS.ACK_PENDING ||
-    acknowledgedNodeIds.length > NUM.ZERO
-  ) {
-    return CONTROL_PLANE_PUBLICATION_STATUS.ACK_PENDING;
-  }
-  return CONTROL_PLANE_PUBLICATION_STATUS.OPEN;
-}
-
-function deriveRevisionPublicationStatus(
-  status,
-  acknowledgedNodeIds,
-  requiredAckNodeIds,
-) {
-  if (
-    status === CONTROL_PLANE_PUBLICATION_STATUS.SUPERSEDED ||
-    status === CONTROL_PLANE_PUBLICATION_STATUS.ABANDONED ||
-    status === CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED
-  ) {
-    return status;
-  }
-  if (arePublicationNodeListsEqual(acknowledgedNodeIds, requiredAckNodeIds)) {
-    return CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED;
-  }
-  if (
-    status === CONTROL_PLANE_PUBLICATION_STATUS.ACK_PENDING ||
-    acknowledgedNodeIds.length > NUM.ZERO
-  ) {
-    return CONTROL_PLANE_PUBLICATION_STATUS.ACK_PENDING;
-  }
-  return CONTROL_PLANE_PUBLICATION_STATUS.OPEN;
 }
 
 function hasExplicitPublicationNodeList(row, fieldName) {
@@ -307,19 +247,15 @@ function mergeControlPlanePublicationRows(primaryRow, secondaryRow) {
     normalizedFallback,
     PUBLICATION_NODE_LIST_FIELD.ACKNOWLEDGED_NODE_IDS,
   );
-  const status =
-    mergeMode === PUBLICATION_ROW_MERGE_MODE.NEW_REVISION ?
-      deriveRevisionPublicationStatus(
-        normalizedLatest.status,
-        acknowledgedNodeIds,
-        requiredAckNodeIds,
-      ) :
-      deriveMergedPublicationStatus(
-        normalizedPrimary.status,
-        normalizedSecondary.status,
-        acknowledgedNodeIds,
-        requiredAckNodeIds,
-      );
+  const status = resolvePublicationOwnerMergedPublicationStatus({
+    primaryStatus: normalizedPrimary.status,
+    secondaryStatus: normalizedSecondary.status,
+    latestStatus: normalizedLatest.status,
+    acknowledgedNodeIds,
+    requiredAckNodeIds,
+    preservePublishedStatus:
+      mergeMode === PUBLICATION_ROW_MERGE_MODE.SAME_REVISION,
+  });
   const updatedAtCandidates = [
     normalizePublicationPositiveInteger(
       primaryRow?.updated_at ?? primaryRow?.updatedAt,

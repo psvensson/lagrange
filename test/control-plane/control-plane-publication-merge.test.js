@@ -4,6 +4,12 @@ import {
   mergeControlPlanePublicationRows,
   publicationRowSatisfiesDesiredState,
 } from '../../src/control-plane/control-plane-publication-merge.js';
+import {
+  PUBLICATION_OWNER_ACK_STATE,
+  PUBLICATION_OWNER_STREAM_OUTCOME,
+} from '../../src/control-plane/publication-owner-constants.js';
+import {buildPublicationOwnerStreamState} from
+  '../../src/control-plane/publication-owner-state.js';
 
 const PUBLICATION_KIND_CLUSTER_MEMBERSHIP = 'cluster_membership';
 const PUBLICATION_ID_TRIM = 'publication-trim';
@@ -107,6 +113,22 @@ test('mergeControlPlanePublicationRows keeps acknowledgement union for the same 
       merged.status,
       CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
       'the same revision should publish once all required acknowledgements merge',
+    );
+    const stream = buildPublicationOwnerStreamState({
+      publicationRevision: merged.publication_epoch,
+      publicationStatus: merged.status,
+      requiredAckNodeIds: merged.required_ack_node_ids,
+      acknowledgedNodeIds: merged.acknowledged_node_ids,
+    });
+    t.equal(
+      stream.ackState,
+      PUBLICATION_OWNER_ACK_STATE.ACKNOWLEDGED,
+      'merged publication rows should expose ACK completion through the owner stream',
+    );
+    t.equal(
+      stream.streamOutcome,
+      PUBLICATION_OWNER_STREAM_OUTCOME.PUBLISHED,
+      'the merge result should be consumable as a published owner stream',
     );
   });
 

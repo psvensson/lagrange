@@ -19,7 +19,7 @@ intent for target selection while operation workflow execution remains outside
 placement ownership.
 
 Next package:
-`work/packages/active-20260509-spec-led-runtime-modularization-publication-owner-stream.md`.
+`work/packages/done-20260509-spec-led-runtime-modularization-publication-owner-stream.md`.
 
 Next proof surface: publication-owner stream contract with focused publication
 coordinator tests, publication recovery gate tests, publication evidence merge
@@ -76,7 +76,7 @@ the contract and proof ladder are stable.
 3. [Priority Recovery Observation Contract](../packages/done-20260509-spec-led-runtime-modularization-priority-recovery-observation-contract.md)
 4. [Workflow Owner Adapter Cutover](../packages/done-20260509-spec-led-runtime-modularization-workflow-owner-adapter-cutover.md)
 5. [Placement Owner Policy Kernel](../packages/done-20260509-spec-led-runtime-modularization-placement-owner-kernel.md)
-6. [Publication Owner Stream Contract](../packages/active-20260509-spec-led-runtime-modularization-publication-owner-stream.md)
+6. [Publication Owner Stream Contract](../packages/done-20260509-spec-led-runtime-modularization-publication-owner-stream.md)
 7. [Projection Readiness Contract](../packages/todo-20260509-spec-led-runtime-modularization-projection-readiness-contract.md)
 8. [Diagnostics And Harness Consumer Rewrite](../packages/todo-20260509-spec-led-runtime-modularization-diagnostics-harness-consumer.md)
 9. [Legacy Deletion And Representative Proof](../packages/todo-20260509-spec-led-runtime-modularization-legacy-deletion-proof.md)

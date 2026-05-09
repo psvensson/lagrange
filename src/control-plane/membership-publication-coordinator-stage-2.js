@@ -13,6 +13,9 @@ import {
   MEMBERSHIP_LIFECYCLE_STATE,
 } from './membership-lifecycle-constants.js';
 import {
+  buildPublicationOwnerStreamState,
+} from './publication-owner-state.js';
+import {
   normalizeControlPlanePublicationRow,
   serializeControlPlanePublicationRow,
 } from './system-row-normalizers.js';
@@ -523,11 +526,19 @@ function buildMembershipPublicationAcknowledgementDecision(options = {}) {
     acknowledgedNodeIds,
     acknowledgementChanged,
   });
+  const publicationOwnerStream = buildPublicationOwnerStreamState({
+    publicationRevision: normalizedPublication.publicationEpoch,
+    publicationStatus: normalizedPublication.status,
+    requiredAckNodeIds: normalizedPublication.requiredAckNodeIds,
+    acknowledgedNodeIds,
+  });
   return Object.freeze({
     state: machineDecision.action,
     action: machineDecision.action,
     nextStatus: machineDecision.nextStatus,
     reasonCode: machineDecision.reasonCode,
+    publicationOwnerStream,
+    ackState: publicationOwnerStream.ackState,
     acknowledgementChanged,
     allAcknowledged:
       machineDecision.evidence.requiredAckCount > NUM.ZERO &&

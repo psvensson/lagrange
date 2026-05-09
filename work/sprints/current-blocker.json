@@ -2,8 +2,8 @@
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
   "sprint": "work/sprints/active-2026-q2-spec-led-runtime-modularization.md",
-  "package": "work/packages/active-20260509-spec-led-runtime-modularization-publication-owner-stream.md",
-  "status": "active",
+  "package": "work/packages/done-20260509-spec-led-runtime-modularization-publication-owner-stream.md",
+  "status": "done",
   "scenario": "spec-led-runtime-modularization",
   "artifact": "none",
   "playback": "none",
@@ -19,13 +19,21 @@
     "Touched-file decision-boundary and literal guardrails"
   ],
   "touchedFiles": [
-    "src/control-plane/membership-publication-coordinator*.js",
     "src/control-plane/control-plane-publication-merge.js",
+    "src/control-plane/membership-publication-coordinator-class-stage-1.js",
+    "src/control-plane/membership-publication-coordinator-stage-2.js",
+    "src/control-plane/publication-owner-constants.js",
+    "src/control-plane/publication-owner-decision.js",
+    "src/control-plane/publication-owner-evidence.js",
+    "src/control-plane/publication-owner-state.js",
     "src/control-plane/publication-recovery-gate.js",
     "src/control-plane/publication-recovery-evidence.js",
-    "src/control-plane/publication-owner-*.js",
-    "test/control-plane/*publication*.test.js",
-    "work/packages/active-20260509-spec-led-runtime-modularization-publication-owner-stream.md"
+    "test/control-plane/control-plane-publication-merge.test.js",
+    "test/control-plane/membership-publication-coordinator.test.js",
+    "test/control-plane/publication-owner-stream.test.js",
+    "test/control-plane/publication-recovery-evidence.test.js",
+    "test/control-plane/publication-recovery-gate.test.js",
+    "work/packages/done-20260509-spec-led-runtime-modularization-publication-owner-stream.md"
   ],
   "predecessor": "work/packages/done-20260509-spec-led-runtime-modularization-placement-owner-kernel.md"
 }

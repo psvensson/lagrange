@@ -4,7 +4,7 @@
 
 Sprint: `work/sprints/active-2026-q2-spec-led-runtime-modularization.md`
 
-Package: `work/packages/active-20260509-spec-led-runtime-modularization-publication-owner-stream.md`
+Package: `work/packages/done-20260509-spec-led-runtime-modularization-publication-owner-stream.md`
 
 Scenario: `spec-led-runtime-modularization`
 
@@ -35,10 +35,18 @@ Define and implement a publication-owner stream contract with explicit revisions
 
 ## Touched Files
 
-1. `src/control-plane/membership-publication-coordinator*.js`
-2. `src/control-plane/control-plane-publication-merge.js`
-3. `src/control-plane/publication-recovery-gate.js`
-4. `src/control-plane/publication-recovery-evidence.js`
-5. `src/control-plane/publication-owner-*.js`
-6. `test/control-plane/*publication*.test.js`
-7. `work/packages/active-20260509-spec-led-runtime-modularization-publication-owner-stream.md`
+1. `src/control-plane/control-plane-publication-merge.js`
+2. `src/control-plane/membership-publication-coordinator-class-stage-1.js`
+3. `src/control-plane/membership-publication-coordinator-stage-2.js`
+4. `src/control-plane/publication-owner-constants.js`
+5. `src/control-plane/publication-owner-decision.js`
+6. `src/control-plane/publication-owner-evidence.js`
+7. `src/control-plane/publication-owner-state.js`
+8. `src/control-plane/publication-recovery-gate.js`
+9. `src/control-plane/publication-recovery-evidence.js`
+10. `test/control-plane/control-plane-publication-merge.test.js`
+11. `test/control-plane/membership-publication-coordinator.test.js`
+12. `test/control-plane/publication-owner-stream.test.js`
+13. `test/control-plane/publication-recovery-evidence.test.js`
+14. `test/control-plane/publication-recovery-gate.test.js`
+15. `work/packages/done-20260509-spec-led-runtime-modularization-publication-owner-stream.md`

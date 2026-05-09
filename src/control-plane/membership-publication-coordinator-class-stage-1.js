@@ -6,6 +6,9 @@ import {
 import {AuthoritativeControlPlaneView} from './authoritative-control-plane-view.js';
 import {normalizeControlPlanePublicationRow} from './system-row-normalizers.js';
 import {shouldUseAuthoritativePriorityRecoveryRediscovery} from './priority-recovery-snapshot.js';
+import {
+  buildPublicationOwnerStreamState,
+} from './publication-owner-state.js';
 import {DurableWorkflowCoordinator} from '../workflow/durable-workflow-coordinator.js';
 import {OwnerKeyReconcileQueue} from '../workflow/owner-key-reconcile-queue.js';
 import {OperationLane} from '../workflow/operation-lane.js';
@@ -294,10 +297,18 @@ class MembershipPublicationCoordinatorClassStage1 {
     const normalizedPublication = normalizeControlPlanePublicationRow(candidatePublicationRow);
     const requiredAckNodeIds = normalizeNodeIdList(normalizedPublication.requiredAckNodeIds);
     const acknowledgedNodeIds = normalizeNodeIdList(normalizedPublication.acknowledgedNodeIds);
+    const publicationOwnerStream = buildPublicationOwnerStreamState({
+      publicationRevision: normalizedPublication.publicationEpoch,
+      publicationStatus: normalizedPublication.status,
+      requiredAckNodeIds,
+      acknowledgedNodeIds,
+    });
     return Object.freeze({
       nodeId: normalizedNodeId,
       publicationRow: candidatePublicationRow,
       authoritativeRefreshAttempted: shouldAttemptAuthoritativeRefresh,
+      publicationOwnerStream,
+      ackState: publicationOwnerStream.ackState,
       terminal: this.isTerminalPublicationStatus(normalizedPublication.status),
       requiresAcknowledgement: requiredAckNodeIds.includes(normalizedNodeId),
       alreadyAcknowledged: acknowledgedNodeIds.includes(normalizedNodeId),

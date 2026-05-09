@@ -4,7 +4,11 @@ import {
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {
   CONTROL_PLANE_PUBLICATION_STATUS,
-} from '../../src/control-plane/control-plane-publication-merge.js';
+  PUBLICATION_OWNER_ACK_STATE,
+  PUBLICATION_OWNER_FRESHNESS_FENCE,
+  PUBLICATION_OWNER_RECOVERY_OUTCOME,
+  PUBLICATION_OWNER_STREAM_OUTCOME,
+} from '../../src/control-plane/publication-owner-constants.js';
 import {
   RECOVERY_PROTOCOL_STATE,
 } from '../../src/control-plane/membership-lifecycle-constants.js';
@@ -71,6 +75,11 @@ test('buildPublicationRecoveryGateSnapshot classifies acknowledgement lag explic
     t.equal(gate.state, PUBLICATION_RECOVERY_GATE_STATE.ACK_PENDING);
     t.equal(gate.ready, false);
     t.equal(gate.pendingAckCount, 1);
+    t.equal(gate.ackState, PUBLICATION_OWNER_ACK_STATE.WAITING_FOR_ACK);
+    t.equal(
+      gate.streamOutcome,
+      PUBLICATION_OWNER_STREAM_OUTCOME.WAITING_FOR_ACK,
+    );
     t.same(gate.pendingAckNodeIds, [TEST_NODE_ID.SECOND]);
     t.same(gate.reasonCodes, [
       CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PUBLICATION_EPOCH_PENDING,
@@ -327,6 +336,11 @@ test('buildPublicationRecoveryGateSnapshot keeps publication pending when publis
     t.equal(gate.state, PUBLICATION_RECOVERY_GATE_STATE.PUBLICATION_PENDING);
     t.equal(gate.ready, false);
     t.equal(gate.publicationPending, true);
+    t.equal(gate.freshnessFence, PUBLICATION_OWNER_FRESHNESS_FENCE.CONSUMER_LAG);
+    t.equal(
+      gate.recoveryOutcome,
+      PUBLICATION_OWNER_RECOVERY_OUTCOME.WAITING_FOR_CONSUMER,
+    );
     t.equal(gate.missingPublishedCount, 1);
     t.same(gate.missingPublishedNodeIds, [TEST_NODE_ID.SECOND]);
     t.same(gate.reasonCodes, [

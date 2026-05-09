@@ -1,6 +1,11 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {CONTROL_PLANE_PUBLICATION_STATUS} from
   '../../src/control-plane/control-plane-publication-merge.js';
+import {
+  PUBLICATION_OWNER_FRESHNESS_FENCE,
+  PUBLICATION_OWNER_RECOVERY_OUTCOME,
+  PUBLICATION_OWNER_STREAM_OUTCOME,
+} from '../../src/control-plane/publication-owner-constants.js';
 import {RECOVERY_PROTOCOL_STATE} from
   '../../src/control-plane/membership-lifecycle-constants.js';
 import {PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE} from
@@ -331,6 +336,40 @@ test('buildCanonicalPublicationRecoveryEvidence does not reopen publication pend
     t.equal(evidence.publicationConvergence.publicationPending, false);
     t.equal(evidence.publicationConvergence.missingPublishedCount, 0);
     t.same(evidence.publicationConvergence.missingPublishedNodeIds, []);
+    t.end();
+  });
+
+test('buildCanonicalPublicationRecoveryEvidence carries owner stream consumer lag',
+  (t) => {
+    const evidence = buildCanonicalPublicationRecoveryEvidence({
+      publicationConvergence: {
+        publicationEpoch: TEST_PUBLICATION_EPOCH,
+        publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+        recoveryProtocolState: RECOVERY_PROTOCOL_STATE.STEADY_PUBLISHED,
+        requiredAckNodeIds: TEST_AUTHORITATIVE_PUBLISHED_NODE_IDS,
+        acknowledgedNodeIds: TEST_AUTHORITATIVE_PUBLISHED_NODE_IDS,
+        pendingAckNodeIds: TEST_EMPTY_NODE_IDS,
+        pendingAckCount: TEST_EMPTY_PUBLICATION_DEBT_COUNT,
+        missingPublishedNodeIds: [TEST_NODE_ID.SECOND],
+        missingPublishedCount: TEST_PUBLICATION_DEBT_COUNT,
+        priorityRecoveryReasonCodes: [TEST_PUBLICATION_PENDING_REASON_CODE],
+        priorityPartitionSummary: TEST_SATISFIED_PRIORITY_PARTITION_SUMMARY,
+      },
+    });
+
+    t.equal(
+      evidence.publicationConvergence.publicationOwnerStream.freshnessFence,
+      PUBLICATION_OWNER_FRESHNESS_FENCE.CONSUMER_LAG,
+    );
+    t.equal(
+      evidence.publicationConvergence.streamOutcome,
+      PUBLICATION_OWNER_STREAM_OUTCOME.STALE,
+    );
+    t.equal(
+      evidence.publicationConvergence.recoveryOutcome,
+      PUBLICATION_OWNER_RECOVERY_OUTCOME.WAITING_FOR_CONSUMER,
+    );
+    t.equal(evidence.publicationConvergence.publicationPending, true);
     t.end();
   });
 
