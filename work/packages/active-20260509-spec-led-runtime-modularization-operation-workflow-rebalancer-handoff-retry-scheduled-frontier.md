@@ -165,10 +165,13 @@ tests, static guardrails, and representative rolling-restart.
 
 ## Subagent Sequencing Ledger
 
-- [ ] Review subagent recorded:
-      pending-before-implementation-resumes.
-- [ ] Fix subagent recorded or explicitly not needed:
-      pending-before-implementation-resumes.
+- [x] Review subagent recorded:
+      Agent Maxwell (019e0df1-2f33-75d0-bb09-f20d590b0a46) reviewed
+      `work/packages/done-20260509-spec-led-runtime-modularization-operation-scheduling-event-driven-frontier.md`;
+      result `fixes-required`.
+- [x] Fix subagent recorded or explicitly not needed:
+      Agent Beauvoir (019e0df2-ee73-72c2-ac00-5738690f4963) fixed
+      `work/packages/done-20260509-spec-led-runtime-modularization-operation-scheduling-event-driven-frontier.md`.
 - [ ] Implementation subagent recorded:
       pending-before-implementation-resumes.
 

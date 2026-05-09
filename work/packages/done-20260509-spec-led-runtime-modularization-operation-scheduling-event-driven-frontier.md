@@ -170,18 +170,22 @@ static guardrails, and representative rolling-restart.
   boundary `operation_scheduling`, wait mode `event_driven`.
 - Next explain command: `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-workflow-progress-event-driven.report.json --explain priority_recovery_partition_progress`
 
-## Subagent Sequencing Ledger
+## Subagent Sequencing Exception
 
-- [x] Review subagent recorded:
-      Agent Lorentz (019e0dbc-fba9-70b2-a1ee-2fb865733774) reviewed
-      `work/packages/done-20260509-spec-led-runtime-modularization-operation-workflow-progress-event-driven-frontier.md`;
-      result `fixes-required`.
-- [x] Fix subagent recorded or explicitly not needed:
-      Agent Goodall (019e0dcc-13be-7241-b34e-1e27dc48d7a9) fixed
-      `work/packages/done-20260509-spec-led-runtime-modularization-operation-workflow-progress-event-driven-frontier.md`.
-- [x] Implementation subagent recorded:
-      Agent Wegener (019e0de2-415f-7301-8a30-1b15af636ff4) implemented
-      `work/packages/done-20260509-spec-led-runtime-modularization-operation-scheduling-event-driven-frontier.md`.
+The predecessor review/fix sequence was real:
+Agent Lorentz (019e0dbc-fba9-70b2-a1ee-2fb865733774) reviewed
+`work/packages/done-20260509-spec-led-runtime-modularization-operation-workflow-progress-event-driven-frontier.md`;
+result `fixes-required`. Agent Goodall
+(019e0dcc-13be-7241-b34e-1e27dc48d7a9) fixed
+`work/packages/done-20260509-spec-led-runtime-modularization-operation-workflow-progress-event-driven-frontier.md`.
+
+This package does not have truthful standalone implementation-subagent proof.
+Prior wording claimed Agent Wegener
+(019e0de2-415f-7301-8a30-1b15af636ff4) implemented this package, but Wegener
+reported no file edits; the truthful evidence is that Wegener reproduced the
+focused failure and confirmed the selector-level implementation approach. The
+implementation was integrated by the parent session. Do not use the prior
+Wegener wording as implementation proof without a human waiver.
 
 ## Detection / Analysis Tasks
 
