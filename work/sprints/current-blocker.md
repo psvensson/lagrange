@@ -4,7 +4,7 @@
 
 Sprint: `work/sprints/active-2026-q2-spec-led-runtime-modularization.md`
 
-Package: `work/packages/active-20260509-spec-led-runtime-modularization-diagnostics-harness-consumer.md`
+Package: `work/packages/done-20260509-spec-led-runtime-modularization-diagnostics-harness-consumer.md`
 
 Scenario: `spec-led-runtime-modularization`
 
@@ -44,4 +44,4 @@ Run parent verification, commit and push the focused diagnostics package slice, 
 7. `test/distributed/harness/failure-bundle-segment-4.js`
 8. `test/distributed/harness/__tests__/failure-bundle-active-gate-tail-test-cases.js`
 9. `test/distributed/harness/__tests__/failure-bundle-core-16-test-cases.js`
-10. `work/packages/active-20260509-spec-led-runtime-modularization-diagnostics-harness-consumer.md`
+10. `work/packages/done-20260509-spec-led-runtime-modularization-diagnostics-harness-consumer.md`

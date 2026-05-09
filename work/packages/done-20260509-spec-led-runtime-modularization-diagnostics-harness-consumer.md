@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-09",
   "scenario": "spec-led-runtime-modularization",
   "artifact": "test-output/reports/rolling-restart-current-release-gate-after-workflow-timeout-stale-progress-fix.report.json",
@@ -29,9 +29,11 @@
     "test/distributed/harness/failure-bundle-segment-4.js",
     "test/distributed/harness/__tests__/failure-bundle-active-gate-tail-test-cases.js",
     "test/distributed/harness/__tests__/failure-bundle-core-16-test-cases.js",
-    "work/packages/active-20260509-spec-led-runtime-modularization-diagnostics-harness-consumer.md"
+    "work/packages/done-20260509-spec-led-runtime-modularization-diagnostics-harness-consumer.md"
   ],
-  "predecessor": "work/packages/done-20260509-spec-led-runtime-modularization-projection-readiness-contract.md"
+  "predecessor": "work/packages/done-20260509-spec-led-runtime-modularization-projection-readiness-contract.md",
+  "closed": "2026-05-09",
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -197,7 +199,7 @@ owner evidence block generation, and representative report comparison.
     after the exact package `touchedFiles` update.
 14. `npm run work:context` passed after the regenerated handoff and now lists
     exact package touched paths.
-15. `npm run work:dirty-scope -- --package work/packages/active-20260509-spec-led-runtime-modularization-diagnostics-harness-consumer.md`
+15. `npm run work:dirty-scope -- --package work/packages/done-20260509-spec-led-runtime-modularization-diagnostics-harness-consumer.md`
     passed; it reported 10 package-owned dirty entries, 2 tracker-generated
     dirty entries, and 8 unrelated dirty entries.
 16. `npm run work:validate` passed for 23 files.
@@ -215,4 +217,10 @@ owner evidence block generation, and representative report comparison.
 - [x] Fix subagent recorded or explicitly not needed:
       Agent Singer (`019e0c29-de11-72f0-8209-1cd883fb9993`) fixed `work/packages/done-20260509-spec-led-runtime-modularization-projection-readiness-contract.md`.
 - [x] Implementation subagent recorded:
-      Agent Confucius (`019e0c31-44f2-75a1-abd4-5b40adcae506`) implemented `work/packages/active-20260509-spec-led-runtime-modularization-diagnostics-harness-consumer.md`.
+      Agent Confucius (`019e0c31-44f2-75a1-abd4-5b40adcae506`) implemented `work/packages/done-20260509-spec-led-runtime-modularization-diagnostics-harness-consumer.md`.
+
+## Commit And Push Ledger
+
+1. Focused package commit: `b084bf84`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes

@@ -37,7 +37,7 @@
     "work/packages/done-20260509-spec-led-runtime-modularization-placement-owner-kernel.md",
     "work/packages/done-20260509-spec-led-runtime-modularization-publication-owner-stream.md",
     "work/packages/done-20260509-spec-led-runtime-modularization-projection-readiness-contract.md",
-    "work/packages/active-20260509-spec-led-runtime-modularization-diagnostics-harness-consumer.md",
+    "work/packages/done-20260509-spec-led-runtime-modularization-diagnostics-harness-consumer.md",
     "work/packages/todo-20260509-spec-led-runtime-modularization-legacy-deletion-proof.md",
     "work/packages/active-20260509-rolling-restart-operation-workflow-timeout-control-plane-publications-stale-progress-reconcile.md",
     "work/packages/done-20260509-rolling-restart-operation-workflow-timeout-control-plane-publications-stale-progress-reconcile.md",
