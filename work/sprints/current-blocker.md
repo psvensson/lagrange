@@ -4,35 +4,35 @@
 
 Sprint: `work/sprints/active-2026-q2-spec-led-runtime-modularization.md`
 
-Package: `work/packages/active-20260509-spec-led-runtime-modularization-operation-workflow-rebalancer-handoff-frontier.md`
+Package: `work/packages/active-20260509-spec-led-runtime-modularization-operation-workflow-timeout-transition-deferred-frontier.md`
 
 Scenario: `spec-led-runtime-modularization`
 
-Artifact: `test-output/reports/rolling-restart-spec-led-runtime-modularization-publication-convergence.report.json`
+Artifact: `test-output/reports/rolling-restart-spec-led-runtime-modularization-rebalancer-handoff.report.json`
 
-Playback: `test-output/reports/.playback/rolling-restart-spec-led-runtime-modularization-publication-convergence/rolling-restart/`
+Playback: `test-output/reports/.playback/rolling-restart-spec-led-runtime-modularization-rebalancer-handoff/rolling-restart/`
 
 ## Boundary
 
 Owner: `operation_workflow_owner`
 
-Boundary: `rebalancer_handoff`
+Boundary: `workflow_timeout`
 
 Dominant reason: `priority_recovery_progress_blocked`
 
-Current state: Rebalancer handoff was reduced to one operation workflow owner outcome for retry-scheduled priority recovery work. The representative rerun no longer reports rebalancer_handoff; it migrates priority_recovery_partition_progress to operation_workflow_owner / workflow_timeout with workflow_timeout_transition_deferred evidence while publication ACK convergence remains satisfied.
+Current state: The rebalancer handoff package reduced retry-scheduled handoff to a canonical operation workflow owner outcome. The representative report now fails first on priority_recovery_partition_progress with operation_workflow_owner / workflow_timeout, unresolved semantic states operation_stalled and recovering_in_flight, blocked partitions control_plane_publications-p1, replica_operations-p1, and sql_transaction_participants-p1, and dominant source priority_recovery_workflow_timeout_transition_deferred.
 
 ## Next Action
 
-Open or continue a fresh operation_workflow_owner / workflow_timeout package from test-output/reports/rolling-restart-spec-led-runtime-modularization-rebalancer-handoff.report.json.
+With the rebalancer handoff review/fix gates recorded, assign the implementation subagent to freeze the workflow-timeout transition-deferred witness and trace why operation workflow timeout evidence remains transition-deferred instead of re-entering the canonical owner progression path.
 
 ## Proof Ladder
 
-1. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-publication-convergence.report.json --explain priority_recovery_partition_progress`
-2. `Focused operation_workflow_owner rebalancer_handoff fixture from the representative report`
-3. `Focused operation workflow/rebalancer handoff tests selected by priority_recovery_progress_blocked`
+1. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-rebalancer-handoff.report.json --explain priority_recovery_partition_progress`
+2. `Focused operation_workflow_owner workflow_timeout fixture from the representative report`
+3. `Focused operation workflow timeout/reentry tests selected by priority_recovery_workflow_timeout_transition_deferred`
 4. `Touched-file static guardrails selected by operation_workflow_owner`
-5. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-spec-led-runtime-modularization-rebalancer-handoff.report.json --fast-local --verbose`
+5. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-spec-led-runtime-modularization-workflow-timeout-transition-deferred.report.json --fast-local --verbose`
 
 ## Model Fit
 
@@ -44,9 +44,9 @@ Scope shape: `owner-boundary-contraction`
 
 Escalation triggers:
 
-1. `rebalancer handoff evidence requires changes outside operation_workflow_owner`
-2. `focused fixture exposes publication ACK convergence again`
-3. `representative proof still fails on rebalancer_handoff after owner fix`
+1. `workflow timeout evidence requires changes outside operation_workflow_owner`
+2. `focused fixture exposes rebalancer_handoff again`
+3. `representative proof still fails on workflow_timeout after owner fix`
 
 ## Touched Files
 
@@ -62,9 +62,7 @@ Escalation triggers:
 10. `test/distributed/harness/__tests__/priority-recovery-summary-normalization.test.js`
 11. `test/diagnostics/topology-convergence-graph.test.js`
 12. `test/scripts/analyze-topology-convergence.test.js`
-13. `test/scripts/__fixtures__/topology-convergence/priority-rebalancer-handoff.fixture.json`
-14. `test/scripts/__fixtures__/topology-convergence/priority-rebalancer-handoff.expected.json`
-15. `src/diagnostics/topology-convergence-graph.js`
-16. `scripts/analyze-topology-convergence.js`
-17. `work/model-ledger.jsonl`
-18. `work/packages/active-20260509-spec-led-runtime-modularization-operation-workflow-rebalancer-handoff-frontier.md`
+13. `src/diagnostics/topology-convergence-graph.js`
+14. `scripts/analyze-topology-convergence.js`
+15. `work/model-ledger.jsonl`
+16. `work/packages/active-20260509-spec-led-runtime-modularization-operation-workflow-timeout-transition-deferred-frontier.md`

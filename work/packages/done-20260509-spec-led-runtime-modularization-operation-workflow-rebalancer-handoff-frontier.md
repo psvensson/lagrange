@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-09",
   "scenario": "spec-led-runtime-modularization",
   "artifact": "test-output/reports/rolling-restart-spec-led-runtime-modularization-publication-convergence.report.json",
@@ -38,7 +38,7 @@
     "src/diagnostics/topology-convergence-graph.js",
     "scripts/analyze-topology-convergence.js",
     "work/model-ledger.jsonl",
-    "work/packages/active-20260509-spec-led-runtime-modularization-operation-workflow-rebalancer-handoff-frontier.md"
+    "work/packages/done-20260509-spec-led-runtime-modularization-operation-workflow-rebalancer-handoff-frontier.md"
   ],
   "modelFit": {
     "packageClass": "representative-frontier-closure",
@@ -50,7 +50,10 @@
       "representative proof still fails on rebalancer_handoff after owner fix"
     ]
   },
-  "predecessor": "work/packages/done-20260509-spec-led-runtime-modularization-publication-convergence-frontier.md"
+  "predecessor": "work/packages/done-20260509-spec-led-runtime-modularization-publication-convergence-frontier.md",
+  "closed": "2026-05-09",
+  "commitAndPushLedgerRequired": true,
+  "successor": "work/packages/active-20260509-spec-led-runtime-modularization-operation-workflow-timeout-transition-deferred-frontier.md"
 }
 -->
 
@@ -205,7 +208,7 @@ static guardrails, and representative rolling-restart.
 - [x] Fix subagent recorded or explicitly not needed:
       not-needed.
 - [x] Implementation subagent recorded:
-      Agent Averroes (`019e0cfd-15a6-77e1-ab9a-71ec00bf0d2a`) implemented `work/packages/active-20260509-spec-led-runtime-modularization-operation-workflow-rebalancer-handoff-frontier.md`.
+      Agent Averroes (`019e0cfd-15a6-77e1-ab9a-71ec00bf0d2a`) implemented `work/packages/done-20260509-spec-led-runtime-modularization-operation-workflow-rebalancer-handoff-frontier.md`.
 
 ## Detection / Analysis Tasks
 
@@ -253,6 +256,12 @@ static guardrails, and representative rolling-restart.
    - Failed on the representative timeout, but no longer on
      `rebalancer_handoff`; analyzer migrates the residual frontier to
      `operation_workflow_owner / workflow_timeout`.
+
+## Commit And Push Ledger
+
+1. Focused package commit: `5a5b97c6`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
 
 ## Done When
 
