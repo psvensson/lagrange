@@ -4,35 +4,35 @@
 
 Sprint: `work/sprints/active-2026-q2-spec-led-runtime-modularization.md`
 
-Package: `work/packages/active-20260509-spec-led-runtime-modularization-operation-workflow-progress-event-driven-frontier.md`
+Package: `work/packages/active-20260509-spec-led-runtime-modularization-operation-scheduling-event-driven-frontier.md`
 
 Scenario: `spec-led-runtime-modularization`
 
-Artifact: `test-output/reports/rolling-restart-spec-led-runtime-modularization-workflow-timeout-transition-deferred.report.json`
+Artifact: `test-output/reports/rolling-restart-spec-led-runtime-modularization-workflow-progress-event-driven.report.json`
 
-Playback: `test-output/reports/.playback/rolling-restart-spec-led-runtime-modularization-workflow-timeout-transition-deferred/rolling-restart/`
+Playback: `test-output/reports/.playback/rolling-restart-spec-led-runtime-modularization-workflow-progress-event-driven/rolling-restart/`
 
 ## Boundary
 
-Owner: `operation_workflow_owner`
+Owner: `rebalancer_leader`
 
-Boundary: `workflow_progress`
+Boundary: `operation_scheduling`
 
 Dominant reason: `priority_recovery_progress_blocked`
 
-Current state: The workflow timeout transition-deferred package reduced workflow_timeout and rebalancer_handoff evidence. The representative report now fails first on priority_recovery_partition_progress with operation_workflow_owner / workflow_progress, unresolved semantic states operation_stalled and recovering_in_flight, blocked partitions replica_operations-p1 and sql_transactions-p1, and dominant source priority_recovery_workflow_progress_event_driven.
+Current state: The operation workflow progress event-driven package removed the operation_workflow_owner / workflow_progress blocker as the dominant frontier. The representative report now fails first on priority_recovery_partition_progress with rebalancer_leader / operation_scheduling, dominant witness replica_operations-p1, semantic state needs_operation, progress class eligible_but_no_operation_created, and next required action create_recovery_operation.
 
 ## Next Action
 
-Review the just-closed workflow timeout transition-deferred package, fix any findings, then trace why event-driven workflow progress remains blocked after canonical timeout reentry.
+Review the just-closed operation workflow progress event-driven package, fix any findings, then trace why the rebalancer leader does not create the required priority recovery operation for replica_operations-p1.
 
 ## Proof Ladder
 
-1. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-workflow-timeout-transition-deferred.report.json --explain priority_recovery_partition_progress`
-2. `Focused operation_workflow_owner workflow_progress fixture from the representative report`
-3. `Focused operation workflow progress/reentry tests selected by priority_recovery_workflow_progress_event_driven`
-4. `Touched-file static guardrails selected by operation_workflow_owner`
-5. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-spec-led-runtime-modularization-workflow-progress-event-driven.report.json --fast-local --verbose`
+1. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-workflow-progress-event-driven.report.json --explain priority_recovery_partition_progress`
+2. `Focused rebalancer_leader operation_scheduling fixture from the representative report`
+3. `Focused operation scheduling/admission tests selected by priority_recovery_operation_scheduling_event_driven`
+4. `Touched-file static guardrails selected by rebalancer_leader and priority recovery scheduling`
+5. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-spec-led-runtime-modularization-operation-scheduling-event-driven.report.json --fast-local --verbose`
 
 ## Model Fit
 
@@ -44,20 +44,20 @@ Scope shape: `owner-boundary-contraction`
 
 Escalation triggers:
 
-1. `workflow progress evidence requires changes outside operation_workflow_owner`
-2. `focused fixture exposes workflow_timeout or rebalancer_handoff again`
-3. `representative proof still fails on workflow_progress after owner fix`
+1. `operation scheduling evidence requires changes outside rebalancer leader admission or priority recovery scheduling`
+2. `focused fixture exposes workflow_progress, workflow_timeout, or rebalancer_handoff again`
+3. `representative proof still fails on operation_scheduling after rebalancer leader fix`
 
 ## Touched Files
 
-1. `src/rebalancer/operation-workflow-owner*.js`
-2. `src/control-plane/priority-recovery-operation-owner-observation.js`
-3. `src/control-plane/priority-recovery-snapshot*.js`
-4. `test/rebalancer/*workflow*.test.js`
-5. `test/control-plane/priority-recovery-snapshot*.js`
-6. `test/distributed/harness/priority-recovery-summary-normalization.js`
-7. `test/distributed/harness/__tests__/priority-recovery-summary-normalization.test.js`
-8. `test/diagnostics/topology-convergence-graph.test.js`
+1. `src/rebalancer/unified-rebalancer*.js`
+2. `src/rebalancer/move-planner*.js`
+3. `src/rebalancer/provisioning-admission-policy.js`
+4. `src/rebalancer/operation-workflow-owner*.js`
+5. `src/control-plane/priority-recovery-snapshot*.js`
+6. `test/rebalancer/*operation-scheduling*.test.js`
+7. `test/rebalancer/*priority-recovery*.test.js`
+8. `test/control-plane/priority-recovery-snapshot*.js`
 9. `test/scripts/analyze-topology-convergence.test.js`
 10. `work/model-ledger.jsonl`
-11. `work/packages/active-20260509-spec-led-runtime-modularization-operation-workflow-progress-event-driven-frontier.md`
+11. `work/packages/active-20260509-spec-led-runtime-modularization-operation-scheduling-event-driven-frontier.md`

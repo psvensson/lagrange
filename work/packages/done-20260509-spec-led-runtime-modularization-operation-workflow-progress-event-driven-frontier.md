@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-09",
   "scenario": "spec-led-runtime-modularization",
   "artifact": "test-output/reports/rolling-restart-spec-led-runtime-modularization-workflow-timeout-transition-deferred.report.json",
@@ -31,7 +31,7 @@
     "test/diagnostics/topology-convergence-graph.test.js",
     "test/scripts/analyze-topology-convergence.test.js",
     "work/model-ledger.jsonl",
-    "work/packages/active-20260509-spec-led-runtime-modularization-operation-workflow-progress-event-driven-frontier.md"
+    "work/packages/done-20260509-spec-led-runtime-modularization-operation-workflow-progress-event-driven-frontier.md"
   ],
   "modelFit": {
     "packageClass": "representative-frontier-closure",
@@ -43,7 +43,10 @@
       "representative proof still fails on workflow_progress after owner fix"
     ]
   },
-  "predecessor": "work/packages/done-20260509-spec-led-runtime-modularization-operation-workflow-timeout-transition-deferred-frontier.md"
+  "predecessor": "work/packages/done-20260509-spec-led-runtime-modularization-operation-workflow-timeout-transition-deferred-frontier.md",
+  "closed": "2026-05-09",
+  "commitAndPushLedgerRequired": true,
+  "successor": "work/packages/active-20260509-spec-led-runtime-modularization-operation-scheduling-event-driven-frontier.md"
 }
 -->
 
@@ -173,7 +176,7 @@ guardrails, and representative rolling-restart.
 - [x] Fix subagent recorded or explicitly not needed:
       Agent Zeno (`019e0d49-e9d6-70c1-9944-3bee7d44550d`) fixed `work/packages/done-20260509-spec-led-runtime-modularization-operation-workflow-timeout-transition-deferred-frontier.md`.
 - [x] Implementation subagent recorded:
-      Agent Noether (`019e0d5e-cd09-7eb3-a7d3-51f081303e17`) implemented `work/packages/active-20260509-spec-led-runtime-modularization-operation-workflow-progress-event-driven-frontier.md`.
+      Agent Noether (`019e0d5e-cd09-7eb3-a7d3-51f081303e17`) implemented `work/packages/done-20260509-spec-led-runtime-modularization-operation-workflow-progress-event-driven-frontier.md`.
 
 ## Detection / Analysis Tasks
 
@@ -270,3 +273,9 @@ guardrails, and representative rolling-restart.
 3. Static guardrails pass for touched production files.
 4. Representative rolling-restart is green or migrated to a fresh
    owner-boundary package with canonical evidence.
+
+## Commit And Push Ledger
+
+1. Focused package commit: `863c33ae`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
