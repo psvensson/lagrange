@@ -285,6 +285,12 @@ Implementation-subagent validation:
     pushed history; the closure commit records only package-status and
     sprint-handoff metadata.
 
+## Commit And Push Ledger
+
+1. Focused package commit: `423c6493`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
+
 ## Done When
 
 1. Legacy paths are deleted, guarded, or handed to a named successor package.
