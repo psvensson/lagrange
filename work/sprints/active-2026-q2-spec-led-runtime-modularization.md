@@ -7,7 +7,7 @@ progress successor boundary.
 ## Current Package Snapshot
 
 Current blocker package:
-`work/packages/todo-20260509-spec-led-runtime-modularization-publication-convergence-frontier.md`.
+`work/packages/active-20260509-spec-led-runtime-modularization-publication-convergence-frontier.md`.
 
 Owner boundary:
 `topology_publication_owner / publication_convergence`.
@@ -26,7 +26,7 @@ publication convergence with dominant reason `pending_acks_present`.
 
 Queued work:
 Next package:
-`work/packages/todo-20260509-spec-led-runtime-modularization-publication-convergence-frontier.md`.
+`work/packages/active-20260509-spec-led-runtime-modularization-publication-convergence-frontier.md`.
 
 Companion cleanup:
 `work/packages/todo-20260509-spec-led-runtime-modularization-active-gate-report-schema-alias-deletion.md`.
@@ -93,7 +93,7 @@ the contract and proof ladder are stable.
 10. [Publication ACK Convergence Frontier](../packages/done-20260509-spec-led-runtime-modularization-publication-ack-convergence-frontier.md)
 11. [Active Gate Snapshot Coverage Frontier](../packages/done-20260509-spec-led-runtime-modularization-active-gate-snapshot-coverage-frontier.md)
 12. [Operation Workflow Timeout Frontier](../packages/done-20260509-spec-led-runtime-modularization-operation-workflow-timeout-frontier.md)
-13. [Publication Convergence Frontier](../packages/todo-20260509-spec-led-runtime-modularization-publication-convergence-frontier.md)
+13. [Publication Convergence Frontier](../packages/active-20260509-spec-led-runtime-modularization-publication-convergence-frontier.md)
 14. [Active Gate Report Schema Alias Deletion](../packages/todo-20260509-spec-led-runtime-modularization-active-gate-report-schema-alias-deletion.md)
 
 ## Model Fit Strategy

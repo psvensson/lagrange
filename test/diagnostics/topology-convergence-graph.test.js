@@ -59,6 +59,8 @@ const REPORT_ARTIFACT_PATH_PUBLICATION_ACK_FRONTIER =
   'test-output/reports/rolling-restart-spec-led-runtime-modularization-final.report.json';
 const REPORT_ARTIFACT_PATH_PUBLICATION_ACK_REDUCED =
   'test-output/reports/rolling-restart-spec-led-runtime-modularization-publication-ack.report.json';
+const REPORT_ARTIFACT_PATH_PUBLICATION_COUNT_ONLY_ACK =
+  'test-output/reports/rolling-restart-spec-led-runtime-modularization-operation-workflow-timeout.report.json';
 const PUBLICATION_ACK_PENDING_STATUS = 'ACK_PENDING';
 const PUBLICATION_UNKNOWN_STATUS = 'UNKNOWN';
 const PUBLICATION_PENDING_REASON = 'publication_pending';
@@ -301,6 +303,42 @@ describe('TopologyConvergenceGraph', () => {
         dominantWitness.source.missingPublishedNodeIds,
         [...PUBLICATION_ACK_FRONTIER_MISSING_NODE_IDS],
       );
+      assert.equal(dominantWitness.source.pendingAckCount, ONE_COUNT);
+      assert.equal(
+        dominantWitness.source.missingPublishedCount,
+        PUBLICATION_ACK_FRONTIER_MISSING_NODE_IDS.length,
+      );
+      assertNoNullOrUndefined(graph);
+    });
+
+  it('keeps count-only publication ACK debt ahead of missing-publication evidence',
+    () => {
+      const artifact = JSON.parse(
+        fs.readFileSync(
+          REPORT_ARTIFACT_PATH_PUBLICATION_COUNT_ONLY_ACK,
+          JSON_ENCODING_UTF8,
+        ),
+      );
+      const graph = buildTopologyConvergenceGraph(artifact);
+      const presentation = buildTopologyConvergenceOwnerPresentation(graph);
+      const dominantWitness = selectTopologyConvergenceDominantWitness(
+        presentation,
+      );
+
+      assert.equal(
+        graph.summary.firstFrontierEdgeId,
+        EDGE_PUBLICATION_ACK_CONVERGENCE,
+      );
+      assert.equal(graph.summary.firstFrontierOwner, OWNER_TOPOLOGY_PUBLICATION);
+      assert.equal(dominantWitness.edgeId, EDGE_PUBLICATION_ACK_CONVERGENCE);
+      assert.equal(dominantWitness.owner, OWNER_TOPOLOGY_PUBLICATION);
+      assert.equal(dominantWitness.state, EDGE_STATE.BLOCKED);
+      assert.equal(dominantWitness.dominantReason, PENDING_ACKS_PRESENT_REASON);
+      assert.deepEqual(
+        dominantWitness.reasons,
+        [PUBLICATION_PENDING_REASON, PENDING_ACKS_PRESENT_REASON],
+      );
+      assert.deepEqual(dominantWitness.source.pendingAckNodeIds, []);
       assert.equal(dominantWitness.source.pendingAckCount, ONE_COUNT);
       assert.equal(
         dominantWitness.source.missingPublishedCount,

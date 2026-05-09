@@ -1,5 +1,6 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {
+  PUBLICATION_OWNER_ACK_EVIDENCE_STATE,
   CONTROL_PLANE_PUBLICATION_STATUS,
   PUBLICATION_OWNER_ACK_STATE,
   PUBLICATION_OWNER_FRESHNESS_FENCE,
@@ -17,6 +18,7 @@ const TEST_PUBLICATION_REVISION = Object.freeze({
 });
 const TEST_PUBLICATION_COUNT = Object.freeze({
   FRONTIER_PENDING_ACK: 1,
+  FRONTIER_MISSING_PUBLISHED: 3,
 });
 const TEST_NODE_ID = Object.freeze({
   FIRST: 'node-a',
@@ -106,6 +108,67 @@ test('publication owner stream keeps report ACK debt ahead of missing visibility
       TEST_NODE_ID.FRONTIER_MISSING_SECOND,
       TEST_NODE_ID.FRONTIER_MISSING_THIRD,
     ]);
+    t.end();
+  });
+
+test('publication owner stream preserves count-only ACK debt without pending node ids',
+  (t) => {
+    const stream = buildPublicationOwnerStreamState({
+      publicationRevision: TEST_PUBLICATION_REVISION.FRONTIER,
+      publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.ACK_PENDING,
+      pendingAckNodeIds: [],
+      pendingAckCount: TEST_PUBLICATION_COUNT.FRONTIER_PENDING_ACK,
+      missingPublishedNodeIds: [
+        TEST_NODE_ID.FRONTIER_ACK_PENDING,
+        TEST_NODE_ID.FRONTIER_MISSING_SECOND,
+        TEST_NODE_ID.FRONTIER_MISSING_THIRD,
+      ],
+      missingPublishedCount: TEST_PUBLICATION_COUNT.FRONTIER_MISSING_PUBLISHED,
+      recoveryProtocolState:
+        TEST_PUBLICATION_RECOVERY_PROTOCOL.PUBLICATION_PENDING,
+      prioritySpreadPending: true,
+    });
+
+    t.equal(
+      stream.pendingAckEvidenceState,
+      PUBLICATION_OWNER_ACK_EVIDENCE_STATE.COUNT_ONLY,
+    );
+    t.equal(
+      stream.pendingAckCount,
+      TEST_PUBLICATION_COUNT.FRONTIER_PENDING_ACK,
+    );
+    t.same(stream.pendingAckNodeIds, []);
+    t.equal(stream.ackState, PUBLICATION_OWNER_ACK_STATE.WAITING_FOR_ACK);
+    t.equal(stream.freshnessFence, PUBLICATION_OWNER_FRESHNESS_FENCE.ACK_LAG);
+    t.equal(
+      stream.streamOutcome,
+      PUBLICATION_OWNER_STREAM_OUTCOME.WAITING_FOR_ACK,
+    );
+    t.equal(
+      stream.recoveryOutcome,
+      PUBLICATION_OWNER_RECOVERY_OUTCOME.WAITING_FOR_ACK,
+    );
+    t.equal(
+      stream.missingPublishedCount,
+      TEST_PUBLICATION_COUNT.FRONTIER_MISSING_PUBLISHED,
+    );
+    t.end();
+  });
+
+test('publication owner stream does not publish ACK_PENDING status without ACK evidence',
+  (t) => {
+    const stream = buildPublicationOwnerStreamState({
+      publicationRevision: TEST_PUBLICATION_REVISION.FRONTIER,
+      publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.ACK_PENDING,
+    });
+
+    t.equal(stream.ackState, PUBLICATION_OWNER_ACK_STATE.UNAVAILABLE);
+    t.equal(stream.freshnessFence, PUBLICATION_OWNER_FRESHNESS_FENCE.PUBLISHING);
+    t.equal(stream.streamOutcome, PUBLICATION_OWNER_STREAM_OUTCOME.PUBLISHING);
+    t.equal(
+      stream.recoveryOutcome,
+      PUBLICATION_OWNER_RECOVERY_OUTCOME.WAITING_FOR_PUBLICATION,
+    );
     t.end();
   });
 

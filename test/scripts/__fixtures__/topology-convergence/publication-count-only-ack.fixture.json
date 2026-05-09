@@ -1,0 +1,27 @@
+{
+  "scenarios": [
+    {
+      "scenario": "rolling-restart",
+      "publicationConvergence": {
+        "publicationEpoch": 4,
+        "publicationStatus": "ACK_PENDING",
+        "pendingAckNodeIds": [],
+        "pendingAckCount": 1,
+        "blockedNodeCount": 0,
+        "publishedActiveNodeIds": [
+          "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+          "7493b0ab-a054-5fad-a91b-5e331db29304"
+        ],
+        "missingPublishedNodeIds": [
+          "11601fe0-72d6-5853-8590-ec2881853e72",
+          "8be8d30f-4499-5eed-865c-71b4d529a67a",
+          "ebc4aa0b-06c6-506d-93ea-1dd2deca3f58"
+        ],
+        "missingPublishedCount": 3,
+        "publicationPending": true,
+        "recoveryProtocolState": "publication_pending",
+        "prioritySpreadPending": true
+      }
+    }
+  ]
+}

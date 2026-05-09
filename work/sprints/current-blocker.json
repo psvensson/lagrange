@@ -2,19 +2,19 @@
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
   "sprint": "work/sprints/active-2026-q2-spec-led-runtime-modularization.md",
-  "package": "work/packages/todo-20260509-spec-led-runtime-modularization-publication-convergence-frontier.md",
-  "status": "todo",
+  "package": "work/packages/active-20260509-spec-led-runtime-modularization-publication-convergence-frontier.md",
+  "status": "active",
   "scenario": "spec-led-runtime-modularization",
-  "artifact": "test-output/reports/rolling-restart-spec-led-runtime-modularization-operation-workflow-timeout.report.json",
-  "playback": "test-output/reports/.playback/rolling-restart-spec-led-runtime-modularization-operation-workflow-timeout/rolling-restart/",
+  "artifact": "test-output/reports/rolling-restart-spec-led-runtime-modularization-publication-convergence.report.json",
+  "playback": "test-output/reports/.playback/rolling-restart-spec-led-runtime-modularization-publication-convergence/rolling-restart/",
   "owner": "topology_publication_owner",
   "boundary": "publication_convergence",
   "dominantReason": "pending_acks_present",
-  "currentState": "The operation workflow timeout package moved the first frontier off operation_workflow_owner / workflow_timeout. The representative rerun now selects topology_publication_owner / publication_convergence with ACK_PENDING publication evidence, pendingAckCount 1, empty pendingAckNodeIds, and three missing published nodes.",
-  "nextAction": "Freeze the publication convergence witness from the operation-workflow rerun, trace the publication owner ACK path, and rewrite the owner logic so pending ACK evidence has one canonical outcome and reason source.",
+  "currentState": "Pascal's implementation removed the count-only pending ACK mismatch, but the representative rerun stayed on topology_publication_owner / publication_convergence. The fresh report shows ACK_PENDING publication evidence with pendingAckCount 1, concrete pendingAckNodeIds [11601fe0-72d6-5853-8590-ec2881853e72], and three missing published nodes.",
+  "nextAction": "Keep this package active and trace why pending ACK node 11601fe0-72d6-5853-8590-ec2881853e72 remains unacknowledged before deleting or guarding the superseded publication fallback branch.",
   "proof": [
-    "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-operation-workflow-timeout.report.json --explain publication_ack_convergence",
-    "Focused topology_publication_owner publication_convergence fixture from the representative report",
+    "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-publication-convergence.report.json --explain publication_ack_convergence",
+    "Focused topology_publication_owner publication_convergence fixture from the fresh representative report",
     "Focused publication owner/recovery tests selected by pending_acks_present",
     "Touched-file static guardrails selected by topology_publication_owner",
     "node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-spec-led-runtime-modularization-publication-convergence.report.json --fast-local --verbose"
@@ -28,7 +28,7 @@
     "test/diagnostics/topology-convergence-graph.test.js",
     "src/diagnostics/topology-convergence-graph.js",
     "scripts/analyze-topology-convergence.js",
-    "work/packages/todo-20260509-spec-led-runtime-modularization-publication-convergence-frontier.md"
+    "work/packages/active-20260509-spec-led-runtime-modularization-publication-convergence-frontier.md"
   ],
   "modelFit": {
     "packageClass": "representative-frontier-closure",

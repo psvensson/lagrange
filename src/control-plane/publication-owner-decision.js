@@ -35,6 +35,11 @@ const PUBLICATION_OWNER_STATUS_REASONS = Object.freeze({
   ...PUBLICATION_OWNER_TERMINAL_FAILURE_STATUS_REASONS,
 });
 
+const PUBLICATION_OWNER_PENDING_PUBLICATION_STATUS_SET = Object.freeze(new Set([
+  CONTROL_PLANE_PUBLICATION_STATUS.OPEN,
+  CONTROL_PLANE_PUBLICATION_STATUS.ACK_PENDING,
+]));
+
 const PUBLICATION_OWNER_ACK_STATE_RULES = Object.freeze([
   Object.freeze({
     state: PUBLICATION_OWNER_ACK_STATE.WAITING_FOR_ACK,
@@ -131,7 +136,9 @@ function hasPublicationOwnerRevisionLag(evidence, revisionState) {
 
 function hasPublicationOwnerPublicationPending(evidence) {
   return evidence.publicationPendingHint === true ||
-    evidence.publicationStatus === CONTROL_PLANE_PUBLICATION_STATUS.OPEN ||
+    PUBLICATION_OWNER_PENDING_PUBLICATION_STATUS_SET.has(
+      evidence.publicationStatus,
+    ) ||
     isPublicationOwnerPublicationProtocolPending(evidence);
 }
 

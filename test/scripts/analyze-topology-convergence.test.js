@@ -22,6 +22,10 @@ const ACTIVE_GATE_FIXTURE_PATH =
   `${FIXTURE_DIRECTORY}/active-gate-snapshot.fixture.json`;
 const ACTIVE_GATE_EXPECTED_PATH =
   `${FIXTURE_DIRECTORY}/active-gate-snapshot.expected.json`;
+const PUBLICATION_COUNT_ONLY_ACK_FIXTURE_PATH =
+  `${FIXTURE_DIRECTORY}/publication-count-only-ack.fixture.json`;
+const PUBLICATION_COUNT_ONLY_ACK_EXPECTED_PATH =
+  `${FIXTURE_DIRECTORY}/publication-count-only-ack.expected.json`;
 const PRIORITY_DOMINANT_WITNESS_FIXTURE_PATH =
   `${FIXTURE_DIRECTORY}/priority-dominant-witness-owner-boundary.fixture.json`;
 const ABSENT_VALUE = 'absent';
@@ -62,6 +66,13 @@ describe('analyze-topology-convergence CLI', () => {
   it('matches golden frontier fixture for active-gate snapshot coverage', () => {
     const output = runAnalyzerJson(ACTIVE_GATE_FIXTURE_PATH);
     const expected = readJson(ACTIVE_GATE_EXPECTED_PATH);
+
+    assert.deepEqual(projectGoldenFrontier(output), expected);
+  });
+
+  it('matches golden frontier fixture for count-only publication ACK debt', () => {
+    const output = runAnalyzerJson(PUBLICATION_COUNT_ONLY_ACK_FIXTURE_PATH);
+    const expected = readJson(PUBLICATION_COUNT_ONLY_ACK_EXPECTED_PATH);
 
     assert.deepEqual(projectGoldenFrontier(output), expected);
   });

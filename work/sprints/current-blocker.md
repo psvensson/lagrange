@@ -4,13 +4,13 @@
 
 Sprint: `work/sprints/active-2026-q2-spec-led-runtime-modularization.md`
 
-Package: `work/packages/todo-20260509-spec-led-runtime-modularization-publication-convergence-frontier.md`
+Package: `work/packages/active-20260509-spec-led-runtime-modularization-publication-convergence-frontier.md`
 
 Scenario: `spec-led-runtime-modularization`
 
-Artifact: `test-output/reports/rolling-restart-spec-led-runtime-modularization-operation-workflow-timeout.report.json`
+Artifact: `test-output/reports/rolling-restart-spec-led-runtime-modularization-publication-convergence.report.json`
 
-Playback: `test-output/reports/.playback/rolling-restart-spec-led-runtime-modularization-operation-workflow-timeout/rolling-restart/`
+Playback: `test-output/reports/.playback/rolling-restart-spec-led-runtime-modularization-publication-convergence/rolling-restart/`
 
 ## Boundary
 
@@ -20,16 +20,16 @@ Boundary: `publication_convergence`
 
 Dominant reason: `pending_acks_present`
 
-Current state: The operation workflow timeout package moved the first frontier off operation_workflow_owner / workflow_timeout. The representative rerun now selects topology_publication_owner / publication_convergence with ACK_PENDING publication evidence, pendingAckCount 1, empty pendingAckNodeIds, and three missing published nodes.
+Current state: Pascal's implementation removed the count-only pending ACK mismatch, but the representative rerun stayed on topology_publication_owner / publication_convergence. The fresh report shows ACK_PENDING publication evidence with pendingAckCount 1, concrete pendingAckNodeIds [11601fe0-72d6-5853-8590-ec2881853e72], and three missing published nodes.
 
 ## Next Action
 
-Freeze the publication convergence witness from the operation-workflow rerun, trace the publication owner ACK path, and rewrite the owner logic so pending ACK evidence has one canonical outcome and reason source.
+Keep this package active and trace why pending ACK node 11601fe0-72d6-5853-8590-ec2881853e72 remains unacknowledged before deleting or guarding the superseded publication fallback branch.
 
 ## Proof Ladder
 
-1. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-operation-workflow-timeout.report.json --explain publication_ack_convergence`
-2. `Focused topology_publication_owner publication_convergence fixture from the representative report`
+1. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-publication-convergence.report.json --explain publication_ack_convergence`
+2. `Focused topology_publication_owner publication_convergence fixture from the fresh representative report`
 3. `Focused publication owner/recovery tests selected by pending_acks_present`
 4. `Touched-file static guardrails selected by topology_publication_owner`
 5. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-spec-led-runtime-modularization-publication-convergence.report.json --fast-local --verbose`
@@ -58,4 +58,4 @@ Escalation triggers:
 6. `test/diagnostics/topology-convergence-graph.test.js`
 7. `src/diagnostics/topology-convergence-graph.js`
 8. `scripts/analyze-topology-convergence.js`
-9. `work/packages/todo-20260509-spec-led-runtime-modularization-publication-convergence-frontier.md`
+9. `work/packages/active-20260509-spec-led-runtime-modularization-publication-convergence-frontier.md`

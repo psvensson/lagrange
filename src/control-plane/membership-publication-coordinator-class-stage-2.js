@@ -29,6 +29,27 @@ import {
 import {acknowledgeMembershipPublication} from './membership-publication-coordinator-stage-3.js';
 import {MembershipPublicationCoordinatorClassStage1} from './membership-publication-coordinator-class-stage-1.js';
 
+function hasCandidateAcknowledgementRefresh(latestPublicationRow, candidate = {}) {
+  const normalizedLatestPublication =
+    normalizeControlPlanePublicationRow(latestPublicationRow);
+  return Array.isArray(candidate.acknowledgedNodeIds) &&
+    !listEquals(
+      normalizedLatestPublication.acknowledgedNodeIds,
+      candidate.acknowledgedNodeIds,
+    );
+}
+
+function hasCandidateStatusRefresh(latestPublicationRow, candidate = {}) {
+  const normalizedLatestPublication =
+    normalizeControlPlanePublicationRow(latestPublicationRow);
+  const candidateStatus =
+    typeof candidate.publicationStatus === TYPEOF.STRING ?
+      candidate.publicationStatus.toUpperCase() :
+      MEMBERSHIP_PUBLICATION_COORDINATOR_LITERAL.EMPTY;
+  return candidateStatus.length > NUM.ZERO &&
+    candidateStatus !== normalizedLatestPublication.status;
+}
+
 class MembershipPublicationCoordinatorClassStage2 extends
   MembershipPublicationCoordinatorClassStage1 {
   deriveClusterMembershipCandidateSync(options = {}) {
@@ -363,17 +384,26 @@ class MembershipPublicationCoordinatorClassStage2 extends
           });
           const workflow = await this.ensureWorkflow(ownerKey, candidate);
           if (latestPublicationRow && candidate.changed !== true) {
-            if (
+            const shouldRefreshPriorityMetadata =
               candidate.priorityPartitionSummaryChanged === true &&
               ((candidate.priorityPartitionSummary &&
                 typeof candidate.priorityPartitionSummary === TYPEOF.OBJECT) ||
-                (candidate.membershipLifecycleSummary &&
-                  typeof candidate.membershipLifecycleSummary === TYPEOF.OBJECT))
+              (candidate.membershipLifecycleSummary &&
+                typeof candidate.membershipLifecycleSummary === TYPEOF.OBJECT));
+            const shouldRefreshAcknowledgements =
+              hasCandidateAcknowledgementRefresh(latestPublicationRow, candidate);
+            const shouldRefreshStatus =
+              hasCandidateStatusRefresh(latestPublicationRow, candidate);
+            if (
+              shouldRefreshPriorityMetadata ||
+              shouldRefreshAcknowledgements ||
+              shouldRefreshStatus
             ) {
               const refreshedRow = buildPublicationMetadataRefreshRow({
                 publicationRow: latestPublicationRow,
                 priorityPartitionSummary: candidate.priorityPartitionSummary,
                 membershipLifecycleSummary: candidate.membershipLifecycleSummary,
+                acknowledgedNodeIds: candidate.acknowledgedNodeIds,
                 nowMs: this.now(),
               });
               const persistedRow = await this.persistPublicationRow(refreshedRow, options);

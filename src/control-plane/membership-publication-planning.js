@@ -571,6 +571,9 @@ function buildPublicationMetadataRefreshRow(options = {}, helperFns = {}) {
     return publicationRow;
   }
   const normalizedPublication = normalizeControlPlanePublicationRow(publicationRow);
+  const acknowledgedNodeIds = Array.isArray(options.acknowledgedNodeIds) ?
+    helperFns.normalizeNodeIdList(options.acknowledgedNodeIds) :
+    normalizedPublication.acknowledgedNodeIds;
   const priorityPartitionSummary = normalizePriorityPartitionSummary(
     options.priorityPartitionSummary ?? normalizedPublication.priorityPartitionSummary,
     {},
@@ -586,6 +589,8 @@ function buildPublicationMetadataRefreshRow(options = {}, helperFns = {}) {
         null;
   return {
     ...publicationRow,
+    acknowledged_node_ids: acknowledgedNodeIds,
+    acknowledgedNodeIds,
     priority_partition_summary: priorityPartitionSummary,
     priorityPartitionSummary,
     membership_lifecycle_summary: membershipLifecycleSummary,

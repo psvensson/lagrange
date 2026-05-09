@@ -95,8 +95,9 @@ test('buildPublicationRecoveryGateSnapshot preserves count-only publication debt
   (t) => {
     const gate = buildPublicationRecoveryGateSnapshot({
       publicationEpoch: TEST_PUBLICATION_EPOCH,
-      publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+      publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.ACK_PENDING,
       recoveryProtocolState: RECOVERY_PROTOCOL_STATE.PUBLICATION_PENDING,
+      pendingAckNodeIds: TEST_EMPTY_NODE_IDS,
       pendingAckCount: TEST_PUBLICATION_DEBT_COUNT,
       missingPublishedCount: TEST_PUBLICATION_DEBT_COUNT,
       priorityPartitionSummary: TEST_PRIORITY_PARTITION_SUMMARY.SATISFIED,
@@ -105,6 +106,11 @@ test('buildPublicationRecoveryGateSnapshot preserves count-only publication debt
     t.equal(gate.state, PUBLICATION_RECOVERY_GATE_STATE.ACK_PENDING);
     t.equal(gate.ready, false);
     t.equal(gate.pendingAckCount, TEST_PUBLICATION_DEBT_COUNT);
+    t.same(gate.pendingAckNodeIds, TEST_EMPTY_NODE_IDS);
+    t.equal(
+      gate.pendingAckEvidenceState,
+      PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.COUNT_ONLY,
+    );
     t.equal(gate.missingPublishedCount, TEST_PUBLICATION_DEBT_COUNT);
     t.equal(gate.ackPending, true);
     t.equal(gate.publicationPending, true);
