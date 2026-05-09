@@ -16,10 +16,10 @@ import {
 const FIXTURE_OWNER_RECONCILE_QUEUE = 'owner-key-reconcile-queue';
 const FIXTURE_OWNER_REBALANCE_COORD = 'rebalance-coordinator';
 const FIXTURE_OWNER_SPLIT_COORD = 'split-coordinator';
-const FIXTURE_LEGACY_POLLING = 'legacy-polling-loop';
-const FIXTURE_LEGACY_DIRECT = 'legacy-direct-handler';
+const FIXTURE_SUPERSEDED_POLLING = 'superseded-polling-loop';
+const FIXTURE_SUPERSEDED_DIRECT = 'superseded-direct-handler';
 const FIXTURE_TOGGLE_USE_OLD_DISPATCH = 'use_old_dispatch';
-const FIXTURE_TOGGLE_ENABLE_LEGACY = 'enable_legacy_rebalance';
+const FIXTURE_TOGGLE_ENABLE_SUPERSEDED = 'enable_superseded_rebalance';
 const FIXTURE_DETAIL_MSG = 'test detail';
 const EXPECTED_CONCERN_COUNT = 3;
 
@@ -42,7 +42,7 @@ test('VIOLATION_TYPE enum contains all violation types',
       'duplicate_progression',
     );
     t.equal(VIOLATION_TYPE.ACTIVE_TOGGLE, 'active_toggle');
-    t.equal(VIOLATION_TYPE.LEGACY_BRANCH, 'legacy_branch');
+    t.equal(VIOLATION_TYPE.SUPERSEDED_BRANCH, 'superseded_branch');
     t.ok(Object.isFrozen(VIOLATION_TYPE));
   });
 
@@ -75,7 +75,7 @@ test('buildViolation defaults detail to null for non-string',
   async (t) => {
     const result = buildViolation({
       concern: CONCERN.REBALANCE,
-      violationType: VIOLATION_TYPE.LEGACY_BRANCH,
+      violationType: VIOLATION_TYPE.SUPERSEDED_BRANCH,
       detail: undefined,
     });
 
@@ -92,7 +92,7 @@ test('verifyConcern returns empty array for clean single-owner',
       concern: CONCERN.DISPATCH,
       ownerPaths: [FIXTURE_OWNER_RECONCILE_QUEUE],
       activeToggles: [],
-      legacyBranches: [],
+      supersededBranches: [],
     };
 
     const violations = verifyConcern(entry);
@@ -105,10 +105,10 @@ test('verifyConcern detects duplicate progression paths',
       concern: CONCERN.DISPATCH,
       ownerPaths: [
         FIXTURE_OWNER_RECONCILE_QUEUE,
-        FIXTURE_LEGACY_POLLING,
+        FIXTURE_SUPERSEDED_POLLING,
       ],
       activeToggles: [],
-      legacyBranches: [],
+      supersededBranches: [],
     };
 
     const violations = verifyConcern(entry);
@@ -119,38 +119,38 @@ test('verifyConcern detects duplicate progression paths',
     );
     t.equal(violations[0].concern, CONCERN.DISPATCH);
     t.ok(violations[0].detail.includes(FIXTURE_OWNER_RECONCILE_QUEUE));
-    t.ok(violations[0].detail.includes(FIXTURE_LEGACY_POLLING));
+    t.ok(violations[0].detail.includes(FIXTURE_SUPERSEDED_POLLING));
   });
 
 test('verifyConcern detects active toggles', async (t) => {
   const entry = {
     concern: CONCERN.REBALANCE,
     ownerPaths: [FIXTURE_OWNER_REBALANCE_COORD],
-    activeToggles: [FIXTURE_TOGGLE_ENABLE_LEGACY],
-    legacyBranches: [],
+    activeToggles: [FIXTURE_TOGGLE_ENABLE_SUPERSEDED],
+    supersededBranches: [],
   };
 
   const violations = verifyConcern(entry);
   t.equal(violations.length, 1);
   t.equal(violations[0].violationType, VIOLATION_TYPE.ACTIVE_TOGGLE);
-  t.equal(violations[0].detail, FIXTURE_TOGGLE_ENABLE_LEGACY);
+  t.equal(violations[0].detail, FIXTURE_TOGGLE_ENABLE_SUPERSEDED);
 });
 
-test('verifyConcern detects legacy branches', async (t) => {
+test('verifyConcern detects superseded branches', async (t) => {
   const entry = {
     concern: CONCERN.SPLIT,
     ownerPaths: [FIXTURE_OWNER_SPLIT_COORD],
     activeToggles: [],
-    legacyBranches: [FIXTURE_LEGACY_DIRECT],
+    supersededBranches: [FIXTURE_SUPERSEDED_DIRECT],
   };
 
   const violations = verifyConcern(entry);
   t.equal(violations.length, 1);
   t.equal(
     violations[0].violationType,
-    VIOLATION_TYPE.LEGACY_BRANCH,
+    VIOLATION_TYPE.SUPERSEDED_BRANCH,
   );
-  t.equal(violations[0].detail, FIXTURE_LEGACY_DIRECT);
+  t.equal(violations[0].detail, FIXTURE_SUPERSEDED_DIRECT);
 });
 
 test('verifyConcern accumulates multiple violation types',
@@ -159,10 +159,10 @@ test('verifyConcern accumulates multiple violation types',
       concern: CONCERN.DISPATCH,
       ownerPaths: [
         FIXTURE_OWNER_RECONCILE_QUEUE,
-        FIXTURE_LEGACY_POLLING,
+        FIXTURE_SUPERSEDED_POLLING,
       ],
       activeToggles: [FIXTURE_TOGGLE_USE_OLD_DISPATCH],
-      legacyBranches: [FIXTURE_LEGACY_DIRECT],
+      supersededBranches: [FIXTURE_SUPERSEDED_DIRECT],
     };
 
     const violations = verifyConcern(entry);
@@ -171,7 +171,7 @@ test('verifyConcern accumulates multiple violation types',
     const types = violations.map((v) => v.violationType);
     t.ok(types.includes(VIOLATION_TYPE.DUPLICATE_PROGRESSION));
     t.ok(types.includes(VIOLATION_TYPE.ACTIVE_TOGGLE));
-    t.ok(types.includes(VIOLATION_TYPE.LEGACY_BRANCH));
+    t.ok(types.includes(VIOLATION_TYPE.SUPERSEDED_BRANCH));
   });
 
 test('verifyConcern handles null input gracefully', async (t) => {
@@ -185,7 +185,7 @@ test('verifyConcern handles empty ownerPaths as clean',
       concern: CONCERN.DISPATCH,
       ownerPaths: [],
       activeToggles: [],
-      legacyBranches: [],
+      supersededBranches: [],
     };
 
     const violations = verifyConcern(entry);
@@ -226,10 +226,10 @@ test('verifyClosureState detects violations across concerns',
         concern: CONCERN.DISPATCH,
         ownerPaths: [
           FIXTURE_OWNER_RECONCILE_QUEUE,
-          FIXTURE_LEGACY_POLLING,
+          FIXTURE_SUPERSEDED_POLLING,
         ],
         activeToggles: [],
-        legacyBranches: [],
+        supersededBranches: [],
       },
       buildCleanConcernEntry(
         CONCERN.REBALANCE, FIXTURE_OWNER_REBALANCE_COORD,
@@ -275,11 +275,11 @@ test('buildCleanConcernEntry creates frozen entry with one path',
     t.equal(entry.concern, CONCERN.DISPATCH);
     t.same(entry.ownerPaths, [FIXTURE_OWNER_RECONCILE_QUEUE]);
     t.same(entry.activeToggles, []);
-    t.same(entry.legacyBranches, []);
+    t.same(entry.supersededBranches, []);
     t.ok(Object.isFrozen(entry));
     t.ok(Object.isFrozen(entry.ownerPaths));
     t.ok(Object.isFrozen(entry.activeToggles));
-    t.ok(Object.isFrozen(entry.legacyBranches));
+    t.ok(Object.isFrozen(entry.supersededBranches));
   });
 
 test('buildCleanConcernEntry handles empty ownerPath',

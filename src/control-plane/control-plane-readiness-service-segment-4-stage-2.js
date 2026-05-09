@@ -255,17 +255,6 @@ class ControlPlaneReadinessServiceSegment4Stage2 extends
     }
   }
 
-  async getMembershipPublicationPlanningAnswerBestEffort(nodeId, observedAt) {
-    return this.getPriorityRecoveryPlanningAnswerBestEffort(nodeId, observedAt);
-  }
-
-  async getPriorityRecoveryPlanningAnswerBestEffort(nodeId, observedAt) {
-    return this.getMembershipPublicationPlanningSnapshotBestEffort(
-      nodeId,
-      observedAt,
-    );
-  }
-
   async getPriorityRecoveryPlanningSnapshotBestEffort(nodeId, observedAt) {
     return this.getMembershipPublicationPlanningSnapshotBestEffort(
       nodeId,

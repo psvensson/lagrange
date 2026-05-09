@@ -1,7 +1,5 @@
 import {NUM, TYPEOF} from '../constants/index.js';
 import {
-  PRIORITY_RECOVERY_BLOCKER_REASON_PRECEDENCE,
-  PRIORITY_RECOVERY_BLOCKER_TO_SEMANTIC_STATE,
   PRIORITY_RECOVERY_INVARIANT_FALLBACK,
   PRIORITY_RECOVERY_OBSERVATION_STATE_VALUE,
   PRIORITY_RECOVERY_PROGRESS_CLASS_IDS,
@@ -122,38 +120,6 @@ function normalizePriorityRecoveryObservationStateValue(
   return normalizedValue || fallback;
 }
 
-function inferPriorityRecoverySemanticState(snapshot, blockerReasons = []) {
-  for (const blockerReason of PRIORITY_RECOVERY_BLOCKER_REASON_PRECEDENCE) {
-    if (!blockerReasons.includes(blockerReason)) {
-      continue;
-    }
-    return (
-      PRIORITY_RECOVERY_BLOCKER_TO_SEMANTIC_STATE[blockerReason] ||
-      PRIORITY_RECOVERY_SEMANTIC_STATE.BLOCKED_UNCLASSIFIED
-    );
-  }
-  const completionSemanticState = normalizePriorityRecoverySemanticStateId(
-    snapshot?.completion?.state,
-  );
-  if (completionSemanticState) {
-    return completionSemanticState;
-  }
-  if (snapshot?.planner?.ready === true) {
-    return PRIORITY_RECOVERY_SEMANTIC_STATE.CONVERGED;
-  }
-  if (snapshot?.spreadCompletion?.satisfied === true) {
-    return PRIORITY_RECOVERY_SEMANTIC_STATE.SPREAD_SATISFIED_IN_FLIGHT;
-  }
-  if (
-    Number(snapshot?.coordinator?.operationCount) > NUM.ZERO ||
-    (typeof snapshot?.operationId === TYPEOF.STRING &&
-      snapshot.operationId.length > NUM.ZERO)
-  ) {
-    return PRIORITY_RECOVERY_SEMANTIC_STATE.RECOVERING_IN_FLIGHT;
-  }
-  return PRIORITY_RECOVERY_SEMANTIC_STATE.BLOCKED_UNCLASSIFIED;
-}
-
 function buildPriorityRecoveryExplicitSemanticStateByPartitionId(
   partitionIdsBySemanticState = null,
 ) {
@@ -179,12 +145,6 @@ function buildPriorityRecoveryExplicitSemanticStateByPartitionId(
     }
   }
   return explicitSemanticStateByPartitionId;
-}
-
-function shouldAllowLegacyPriorityRecoverySemanticStateInference(
-  partitionIdsBySemanticState = null,
-) {
-  return !isRecord(partitionIdsBySemanticState);
 }
 
 function resolvePriorityRecoveryExplicitSemanticState(
@@ -399,10 +359,6 @@ function collectPriorityRecoveryPartitionIndexes(
   partitionIdsBySemanticState = null,
 ) {
   const indexes = initializePriorityRecoveryPartitionIndexes();
-  const allowLegacySemanticStateInference =
-    shouldAllowLegacyPriorityRecoverySemanticStateInference(
-      partitionIdsBySemanticState,
-    );
   const explicitSemanticStateByPartitionId =
     buildPriorityRecoveryExplicitSemanticStateByPartitionId(
       partitionIdsBySemanticState,
@@ -437,7 +393,6 @@ function collectPriorityRecoveryPartitionIndexes(
         snapshot,
         blockerReasons,
         explicitSemanticStateByPartitionId,
-        allowLegacySemanticStateInference,
       ),
     );
   }
@@ -463,7 +418,6 @@ function collectPriorityRecoveryPartitionIndexes(
       latestSnapshot,
       blockerReasons,
       explicitSemanticStateByPartitionId,
-      allowLegacySemanticStateInference,
     );
     if (!(indexes.partitionIdsBySemanticState[semanticState] instanceof Set)) {
       indexes.partitionIdsBySemanticState[semanticState] = new Set();
@@ -479,9 +433,8 @@ function collectPriorityRecoveryPartitionIndexes(
 
 function resolvePriorityRecoverySnapshotSemanticState(
   snapshot,
-  blockerReasons = [],
+  _blockerReasons = [],
   explicitSemanticStateByPartitionId = null,
-  allowLegacySemanticStateInference = false,
 ) {
   const explicitSemanticState = resolvePriorityRecoveryExplicitSemanticState(
     snapshot,
@@ -490,9 +443,7 @@ function resolvePriorityRecoverySnapshotSemanticState(
   if (explicitSemanticState) {
     return explicitSemanticState;
   }
-  return allowLegacySemanticStateInference === true ?
-    inferPriorityRecoverySemanticState(snapshot, blockerReasons) :
-    null;
+  return null;
 }
 
 function collectPriorityRecoveryDecisionDimension(
@@ -581,7 +532,6 @@ export {
   buildPriorityRecoveryExplicitSemanticStateByPartitionId,
   collectPriorityRecoveryDecisionDimension,
   collectPriorityRecoveryPartitionIndexes,
-  inferPriorityRecoverySemanticState,
   initializePriorityRecoveryPartitionIndexes,
   isRecord,
   normalizeDistinctStringArray,
@@ -596,5 +546,4 @@ export {
   resolvePendingRequiredAckNodeIds,
   resolvePriorityRecoveryExplicitSemanticState,
   resolvePriorityRecoverySnapshotSemanticState,
-  shouldAllowLegacyPriorityRecoverySemanticStateInference,
 };

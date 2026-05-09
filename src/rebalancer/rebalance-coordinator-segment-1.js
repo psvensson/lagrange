@@ -617,7 +617,7 @@ class RebalanceCoordinatorSegment1 extends EventEmitter {
    * Normalize coordinator-facing incomplete-operation visibility reads to one
    * named repository contract.
    *
-   * Legacy boolean adapters stay local here so hot rebalancer callers can move
+   * Boolean adapters stay local here so hot rebalancer callers can move
    * incrementally without reopening the repository boolean bag.
    *
    * @param {Object} [options={}]
@@ -721,12 +721,12 @@ class RebalanceCoordinatorSegment1 extends EventEmitter {
         entityId,
       );
     }
-    const hasCustomLegacyMethod =
+    const hasCustomReadMethod =
       typeof this.repository?.getOperationsByEntityAuthoritative ===
         'function' &&
       this.repository.getOperationsByEntityAuthoritative !==
         ReplicaOperationRepository.prototype.getOperationsByEntityAuthoritative;
-    const operations = hasCustomLegacyMethod ?
+    const operations = hasCustomReadMethod ?
       await this.repository.getOperationsByEntityAuthoritative(
         entityType,
         entityId,
@@ -836,7 +836,7 @@ class RebalanceCoordinatorSegment1 extends EventEmitter {
 
   /**
    * Resolve the canonical owner node for one operation lifecycle.
-   * Source node owns operation progression. Legacy rows may fall back to
+   * Source node owns operation progression. Older rows may use to
    * target node ownership when source is unavailable.
    * @param {Object} operation
    * @return {string|null}

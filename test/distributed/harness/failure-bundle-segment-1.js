@@ -29,8 +29,6 @@ import {
 import {
   PRIORITY_RECOVERY_BLOCKER_REASON,
   PRIORITY_RECOVERY_ACTUATION_STATE,
-  PRIORITY_RECOVERY_BLOCKER_REASON_PRECEDENCE,
-  PRIORITY_RECOVERY_BLOCKER_TO_SEMANTIC_STATE,
   PRIORITY_RECOVERY_CORRELATION_KEY,
   PRIORITY_RECOVERY_OBSERVATION_STATE_VALUE,
   PRIORITY_RECOVERY_PROGRESS_CLASS_IDS,
@@ -185,7 +183,7 @@ const STABILITY_GATE_BLOCKER_PUBLICATION_MISSING_ACTIVE_NODE =
   'publication_missing_active_node';
 const STABILITY_GATE_BLOCKER_PRIORITY_SPREAD_PENDING =
   'priority_spread_pending';
-const STABILITY_GATE_BLOCKER_PENDING_ACK_NODES = 'pending_ack_nodes';
+const STABILITY_GATE_BLOCKER_PENDING_ACKS_PRESENT = 'pending_acks_present';
 const STABILITY_GATE_BLOCKER_BLOCKED_NODES = 'publication_blocked_nodes';
 const STABILITY_GATE_BLOCKER_CLOSURE_RECORD = 'closure_record';
 const STABILITY_GATE_BLOCKER_STARTUP_READINESS = 'startup_readiness_blocked';
@@ -1424,32 +1422,6 @@ function normalizePriorityRecoverySemanticStateId(semanticState) {
     null;
 }
 
-function inferPriorityRecoverySemanticState(snapshot, blockerReasons = []) {
-  for (const blockerReason of PRIORITY_RECOVERY_BLOCKER_REASON_PRECEDENCE) {
-    if (!blockerReasons.includes(blockerReason)) {
-      continue;
-    }
-    return (
-      PRIORITY_RECOVERY_BLOCKER_TO_SEMANTIC_STATE[blockerReason] ||
-      PRIORITY_RECOVERY_SEMANTIC_STATE.BLOCKED_UNCLASSIFIED
-    );
-  }
-  if (snapshot?.planner?.ready === true) {
-    return PRIORITY_RECOVERY_SEMANTIC_STATE.CONVERGED;
-  }
-  if (snapshot?.spreadCompletion?.satisfied === true) {
-    return PRIORITY_RECOVERY_SEMANTIC_STATE.SPREAD_SATISFIED_IN_FLIGHT;
-  }
-  if (
-    Number(snapshot?.coordinator?.operationCount) > ZERO ||
-    (typeof snapshot?.operationId === 'string' &&
-      snapshot.operationId.length > ZERO)
-  ) {
-    return PRIORITY_RECOVERY_SEMANTIC_STATE.RECOVERING_IN_FLIGHT;
-  }
-  return PRIORITY_RECOVERY_SEMANTIC_STATE.BLOCKED_UNCLASSIFIED;
-}
-
 function normalizePriorityRecoveryDecisionSnapshotOperationIds(snapshot) {
   return normalizeDistinctStringArray([
     snapshot?.operationId,
@@ -1755,8 +1727,6 @@ function collectPriorityRecoveryDecisionSummarySets({
     buildPriorityRecoveryExplicitSemanticStateByPartitionId(
       rawPartitionIdsBySemanticState,
     );
-  const allowLegacySemanticStateInference =
-    hasExplicitSemanticStateContract !== true;
 
   for (const snapshot of summarySnapshots) {
     const partitionId = String(snapshot.partitionId || '').trim();
@@ -1774,10 +1744,7 @@ function collectPriorityRecoveryDecisionSummarySets({
       resolvePriorityRecoveryExplicitSemanticState(
         snapshot,
         explicitSemanticStateByPartitionId,
-      ) ||
-      (allowLegacySemanticStateInference === true ?
-        inferPriorityRecoverySemanticState(snapshot, blockerReasons) :
-        null);
+      );
     if (partitionIdsBySemanticState[semanticState] instanceof Set) {
       partitionIdsBySemanticState[semanticState].add(partitionId);
     }
@@ -1900,8 +1867,7 @@ function normalizePriorityRecoveryDecisionSnapshots(value) {
       blockerReasons,
       semanticState:
         normalizePriorityRecoverySemanticStateId(snapshot.semanticState) ||
-        normalizePriorityRecoverySemanticStateId(snapshot.semanticStateId) ||
-        inferPriorityRecoverySemanticState(snapshot, blockerReasons),
+        normalizePriorityRecoverySemanticStateId(snapshot.semanticStateId),
     });
   }
 
@@ -2180,7 +2146,7 @@ export const FAILURE_BUNDLE_SEGMENT_1 = {
   STABILITY_GATE_BLOCKER_PUBLICATION_PENDING,
   STABILITY_GATE_BLOCKER_PUBLICATION_MISSING_ACTIVE_NODE,
   STABILITY_GATE_BLOCKER_PRIORITY_SPREAD_PENDING,
-  STABILITY_GATE_BLOCKER_PENDING_ACK_NODES,
+  STABILITY_GATE_BLOCKER_PENDING_ACKS_PRESENT,
   STABILITY_GATE_BLOCKER_BLOCKED_NODES,
   STABILITY_GATE_BLOCKER_CLOSURE_RECORD,
   STABILITY_GATE_BLOCKER_STARTUP_READINESS,
@@ -2218,7 +2184,6 @@ export const FAILURE_BUNDLE_SEGMENT_1 = {
   normalizeDistinctStringArray,
   buildPriorityRecoveryCorrelationKey,
   normalizePriorityRecoverySemanticStateId,
-  inferPriorityRecoverySemanticState,
   normalizePriorityRecoveryDecisionSnapshots,
   mergePriorityRecoveryDecisionSnapshots,
 };

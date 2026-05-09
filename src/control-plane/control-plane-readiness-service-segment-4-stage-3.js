@@ -403,7 +403,7 @@ class ControlPlaneReadinessServiceSegment4Stage3 extends
         membershipPublication,
       );
     }
-    const planningSnapshot = await this.getMembershipPublicationPlanningAnswerBestEffort(
+    const planningSnapshot = await this.getMembershipPublicationPlanningSnapshotBestEffort(
       nodeId,
       observedAt,
     );

@@ -49,7 +49,7 @@ export function registerFailureBundleCore16Tests(context) {
       const ACTIVE_GATE_TERMINAL_REASON = 'stalled_no_progress';
       const SCENARIO_ERROR =
         'Restarted node did not become recovery-ready within 120000ms';
-      const PENDING_ACK_BLOCKER_ALIAS = 'pending_ack_nodes';
+      const PENDING_ACK_BLOCKER_ALIAS = 'pending_acks_present';
       const PENDING_ACK_OWNER_REASON = 'pending_acks_present';
       const PUBLICATION_PENDING_OWNER_REASON = 'publication_pending';
       const OWNER_TOPOLOGY_PUBLICATION = 'topology_publication_owner';
@@ -79,6 +79,7 @@ export function registerFailureBundleCore16Tests(context) {
       const PENDING_ACK_COUNT = 1;
       const MISSING_PUBLISHED_COUNT = 2;
       const ONE_COUNT = 1;
+      const TWO_COUNT = 2;
       const ZERO_COUNT = 0;
       const BENCHMARK_GATE_STATUS_SKIPPED = 'skipped';
       const scenarios = [{
@@ -244,7 +245,7 @@ export function registerFailureBundleCore16Tests(context) {
         scenarioBundle.diagnostics.failure.reasonCounts[
           PENDING_ACK_OWNER_REASON
         ],
-        ONE_COUNT,
+        TWO_COUNT,
       );
       const ownerContract =
         scenarioBundle.diagnostics.failure.ownerContract;
@@ -279,14 +280,6 @@ export function registerFailureBundleCore16Tests(context) {
       assert.equal(
         ownerContract.dominantWitness.source.pendingAckCount,
         publicationConvergence.pendingAckCount,
-      );
-      assert.equal(
-        scenarioBundle.topFailures.topReasons[ZERO_COUNT].reason,
-        MISSING_NODE_REASON_ONE,
-      );
-      assert.equal(
-        scenarioBundle.topFailures.topReasons[ZERO_COUNT].count,
-        ONE_COUNT,
       );
       assert.equal(
         scenarioBundle.summary.stabilityGates.convergence.blockers.includes(

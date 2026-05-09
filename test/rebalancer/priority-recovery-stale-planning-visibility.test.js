@@ -151,7 +151,7 @@ function buildStalePlanningSnapshot() {
 
 function createPlanningReadinessService(planningSnapshot) {
   const readinessService = createMockControlPlaneReadinessService();
-  readinessService.getPriorityRecoveryPlanningAnswerBestEffort = async () =>
+  readinessService.getPriorityRecoveryPlanningSnapshotBestEffort = async () =>
     planningSnapshot;
   readinessService.getPriorityRecoveryPlanningAnswerSync = () =>
     planningSnapshot;

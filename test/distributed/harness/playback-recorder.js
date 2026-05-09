@@ -60,9 +60,9 @@ const CLUSTER_STAGE_SETUP_CLUSTER_ACTIVE = 'setup.cluster.active';
 
 const CAPTURE_ERROR_MESSAGE = 'capture-error';
 const MODULE_DIR = dirname(fileURLToPath(import.meta.url));
-const REACHABILITY_SOURCE_LEGACY = 'legacy_probe';
+const REACHABILITY_SOURCE_PROBE = 'reachability_probe';
 const REACHABILITY_ERROR_LEGACY_UNAVAILABLE =
-  'legacy reachability probe unavailable';
+  'reachability probe unavailable';
 const REACHABILITY_DETAILS_KEY = 'reachability';
 
 function extractRows(result) {
@@ -136,14 +136,14 @@ function normalizeReachabilityDiagnostics(node, report) {
   };
 }
 
-function buildLegacyReachabilityDiagnostics(node, reachable, errorMessage) {
+function buildReachabilityProbeDiagnostics(node, reachable, errorMessage) {
   return {
     nodeId: String(node?.id || 'unknown'),
     timestamp: Date.now(),
     reachable: reachable === true,
     adminReady: reachable === true,
     reachableBy: reachable === true ?
-      REACHABILITY_SOURCE_LEGACY :
+      REACHABILITY_SOURCE_PROBE :
       null,
     bootstrapHealth: normalizeProbeResult(null),
     adminHealth: normalizeProbeResult(null),
@@ -1269,7 +1269,7 @@ class PlaybackRecorder {
 
   async _probeNodeReachability(node) {
     if (!node || typeof node !== 'object') {
-      return buildLegacyReachabilityDiagnostics(
+      return buildReachabilityProbeDiagnostics(
         node,
         false,
         REACHABILITY_ERROR_LEGACY_UNAVAILABLE,
@@ -1288,17 +1288,17 @@ class PlaybackRecorder {
           Object.prototype.hasOwnProperty.call(result, 'reachable')) {
           return normalizeReachabilityDiagnostics(node, result);
         }
-        return buildLegacyReachabilityDiagnostics(node, result === true);
+        return buildReachabilityProbeDiagnostics(node, result === true);
       }
     } catch (err) {
-      return buildLegacyReachabilityDiagnostics(node, false, err.message);
+      return buildReachabilityProbeDiagnostics(node, false, err.message);
     }
 
     if (typeof node.query === 'function') {
-      return buildLegacyReachabilityDiagnostics(node, true);
+      return buildReachabilityProbeDiagnostics(node, true);
     }
 
-    return buildLegacyReachabilityDiagnostics(
+    return buildReachabilityProbeDiagnostics(
       node,
       false,
       REACHABILITY_ERROR_LEGACY_UNAVAILABLE,

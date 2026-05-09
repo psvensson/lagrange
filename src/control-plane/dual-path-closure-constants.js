@@ -29,8 +29,8 @@ const VIOLATION_TYPE = Object.freeze({
   DUPLICATE_PROGRESSION: 'duplicate_progression',
   /** A temporary migration toggle is still active. */
   ACTIVE_TOGGLE: 'active_toggle',
-  /** A legacy branch coexists with the canonical owner path. */
-  LEGACY_BRANCH: 'legacy_branch',
+  /** A superseded branch coexists with the canonical owner path. */
+  SUPERSEDED_BRANCH: 'superseded_branch',
 });
 
 /**

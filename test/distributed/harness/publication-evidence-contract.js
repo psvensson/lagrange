@@ -15,7 +15,7 @@ import {
 import {classifyActiveGateClosureWitness} from
   './active-gate-closure-classification.js';
 import {
-  deriveLegacyPriorityRecoveryActiveGateFields,
+  derivePriorityRecoveryActiveGateReportFields,
   normalizePriorityRecoveryActiveGateSnapshot,
 } from './active-gate-contract.js';
 
@@ -449,7 +449,7 @@ function buildBestProgressPublicationClosedControlPlane(
     }) :
     null;
   const activeGateFields = projectedActiveGate ?
-    deriveLegacyPriorityRecoveryActiveGateFields(projectedActiveGate) :
+    derivePriorityRecoveryActiveGateReportFields(projectedActiveGate) :
     {};
   const projectedActiveGateBestProgress = projectedActiveGate?.bestProgress ||
     activeGateBestProgress ||
@@ -1943,7 +1943,7 @@ function buildCanonicalPriorityRecoveryObservation(
     rawPublicationConvergenceGate,
   );
   const canonicalActiveGateFields = canonicalActiveGate ?
-    deriveLegacyPriorityRecoveryActiveGateFields(canonicalActiveGate) :
+    derivePriorityRecoveryActiveGateReportFields(canonicalActiveGate) :
     {
       activeGateProgress,
       activeGateBestProgress,
@@ -2420,8 +2420,8 @@ function buildCanonicalControlPlaneDiagnosticsFromControlPlane(controlPlane = nu
       activeGateAdmissionState:
         controlPlane?.activeGateAdmissionState || null,
     });
-  const legacyActiveGateFields = activeGate ?
-    deriveLegacyPriorityRecoveryActiveGateFields(activeGate) :
+  const activeGateReportFields = activeGate ?
+    derivePriorityRecoveryActiveGateReportFields(activeGate) :
     null;
   return {
     ...controlPlane,
@@ -2438,7 +2438,7 @@ function buildCanonicalControlPlaneDiagnosticsFromControlPlane(controlPlane = nu
       controlPlane.priorityRecoveryObservation ||
       null,
     ...(activeGate ? {activeGate} : {}),
-    ...(legacyActiveGateFields || {}),
+    ...(activeGateReportFields || {}),
   };
 }
 

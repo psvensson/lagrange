@@ -54,10 +54,39 @@ const SUBAGENT_LEDGER_REQUIRED_LABELS = Object.freeze([
   SUBAGENT_LEDGER_IMPLEMENTATION_LABEL,
 ]);
 const COMMIT_AND_PUSH_LEDGER_HEADING = '## Commit And Push Ledger';
+const MODEL_FIT_HEADING = '## Model Fit';
 const COMMIT_LEDGER_COMMIT_LABEL = 'Focused package commit';
 const COMMIT_LEDGER_PUSHED_LABEL = 'Pushed to';
 const COMMIT_LEDGER_FOCUSED_SLICE_LABEL =
   'Commit contains only package-owned files/package-status/allowed sprint handoff';
+const MODEL_FIT_PACKAGE_CLASS_LABEL = 'Package class';
+const MODEL_FIT_INTENDED_MINIMUM_MODEL_LABEL = 'Intended minimum model';
+const MODEL_FIT_SCOPE_SHAPE_LABEL = 'Scope shape';
+const MODEL_FIT_OWNED_FILES_LABEL = 'Owned files';
+const MODEL_FIT_FORBIDDEN_FILES_LABEL = 'Forbidden files';
+const MODEL_FIT_FROZEN_DECISIONS_LABEL = 'Frozen decisions';
+const MODEL_FIT_ESCALATION_TRIGGERS_LABEL = 'Escalation triggers';
+const MODEL_FIT_FOCUSED_PROOF_LABEL = 'Focused proof';
+const MODEL_FIT_SPARK_SAFE_CLASS = 'spark-safe';
+const MODEL_FIT_SPARK_MODEL = 'gpt-5.3-codex-spark';
+const MODEL_FIT_LEAF_SLICE_SCOPE = 'leaf-slice';
+const MODEL_FIT_EMPTY_VALUE_PATTERN = /^(?:none|n\/a|na|unknown|tbd|todo)$/iu;
+const MODEL_FIT_FOCUSED_PROOF_COMMAND_PATTERN =
+  /\b(?:npm\s+run|node(?:\s+--test)?|tap|rg|git\s+diff)\b/iu;
+const MODEL_FIT_REQUIRED_SPARK_LABELS = Object.freeze([
+  MODEL_FIT_OWNED_FILES_LABEL,
+  MODEL_FIT_FORBIDDEN_FILES_LABEL,
+  MODEL_FIT_FROZEN_DECISIONS_LABEL,
+  MODEL_FIT_ESCALATION_TRIGGERS_LABEL,
+  MODEL_FIT_FOCUSED_PROOF_LABEL,
+]);
+const MODEL_FIT_OPEN_ENDED_FRONTIER_PATTERNS = Object.freeze([
+  /\bopen-ended\s+frontier\b/iu,
+  /\b(?:any|unknown|whatever|unbounded)\s+frontier\b/iu,
+  /\b(?:find|discover|explore|chase|investigate|fix)\s+(?:(?:a|the|any)\s+)?(?:new|next|fresh)?\s*frontier\b/iu,
+  /\bfrontier\s+(?:appears|emerges|wherever|whatever)\b/iu,
+  /\brepresentative\b[\s\S]{0,120}\b(?:expand|broaden|continue|chase|fix)\b[\s\S]{0,80}\bscope\b/iu,
+]);
 const CHECKBOX_DONE_PREFIX_PATTERN = '- \\[[xX]\\] ';
 const CHECKBOX_ANY_PREFIX = '- [';
 const LEDGER_VALIDATION_REQUIRES_LEDGER = 'requiresLedger';
@@ -172,6 +201,10 @@ function extractSubagentSequencingLedger(content) {
 
 function extractCommitAndPushLedger(content) {
   return extractMarkdownLevelTwoSection(content, COMMIT_AND_PUSH_LEDGER_HEADING);
+}
+
+function extractModelFitSection(content) {
+  return extractMarkdownLevelTwoSection(content, MODEL_FIT_HEADING);
 }
 
 function findCheckedSubagentLedgerEntry(ledger, label) {
@@ -565,6 +598,145 @@ export function validateCommitAndPushLedger(content, filePath, options = {}) {
   ];
 }
 
+function findModelFitField(section, label) {
+  const fieldPattern = new RegExp(
+    `${escapeRegExp(label)}:\\s*([^\\n]+)`,
+    'iu',
+  );
+  const match = fieldPattern.exec(section);
+  return match ? normalizeLedgerFieldValue(match[NUM_ONE]) : null;
+}
+
+function validateModelFitField(filePath, label, value) {
+  if (value === null) {
+    return [`${filePath}: Model Fit is missing ${label}.`];
+  }
+  if (
+    value.length === NUM_ZERO ||
+    MODEL_FIT_EMPTY_VALUE_PATTERN.test(value) ||
+    LEDGER_TEMPLATE_PLACEHOLDER_PATTERN.test(value) ||
+    value.includes(LEDGER_PENDING_BEFORE_IMPLEMENTATION_MARKER)
+  ) {
+    return [`${filePath}: Model Fit ${label} must be a concrete value.`];
+  }
+  return [];
+}
+
+function isSparkSafeModelFit(fields) {
+  return fields[MODEL_FIT_PACKAGE_CLASS_LABEL] === MODEL_FIT_SPARK_SAFE_CLASS ||
+    (fields[MODEL_FIT_INTENDED_MINIMUM_MODEL_LABEL] || EMPTY_TEXT)
+      .toLowerCase()
+      .includes(MODEL_FIT_SPARK_MODEL);
+}
+
+function validateSparkSafeModelFit(content, filePath, fields) {
+  const errors = [];
+  const intendedModel = fields[MODEL_FIT_INTENDED_MINIMUM_MODEL_LABEL] ||
+    EMPTY_TEXT;
+  if (!intendedModel.toLowerCase().includes(MODEL_FIT_SPARK_MODEL)) {
+    errors.push(
+      `${filePath}: gpt-5.3-codex-spark Model Fit intended minimum model ` +
+      'must include ' +
+      `${MODEL_FIT_SPARK_MODEL}.`,
+    );
+  }
+  if (fields[MODEL_FIT_SCOPE_SHAPE_LABEL] !== MODEL_FIT_LEAF_SLICE_SCOPE) {
+    errors.push(
+      `${filePath}: gpt-5.3-codex-spark Model Fit scope shape must be ` +
+      `${MODEL_FIT_LEAF_SLICE_SCOPE}.`,
+    );
+  }
+  for (const label of MODEL_FIT_REQUIRED_SPARK_LABELS) {
+    errors.push(...validateModelFitField(filePath, label, fields[label]));
+  }
+  if (
+    fields[MODEL_FIT_FOCUSED_PROOF_LABEL] &&
+    !MODEL_FIT_FOCUSED_PROOF_COMMAND_PATTERN.test(
+      fields[MODEL_FIT_FOCUSED_PROOF_LABEL],
+    )
+  ) {
+    errors.push(
+      `${filePath}: gpt-5.3-codex-spark Model Fit focused proof must ` +
+      'name a focused ' +
+      'command.',
+    );
+  }
+  if (
+    MODEL_FIT_OPEN_ENDED_FRONTIER_PATTERNS.some((pattern) =>
+      pattern.test(content))
+  ) {
+    errors.push(
+      `${filePath}: gpt-5.3-codex-spark Model Fit must not contain open-ended ` +
+      'frontier language.',
+    );
+  }
+  return errors;
+}
+
+export function validateModelFitContract(content, filePath, options = {}) {
+  const section = extractModelFitSection(content);
+  if (!section) {
+    return options[LEDGER_VALIDATION_REQUIRES_LEDGER] ?
+      [`${filePath}: Model Fit section is required.`] :
+      [];
+  }
+  const fields = {
+    [MODEL_FIT_PACKAGE_CLASS_LABEL]: findModelFitField(
+      section,
+      MODEL_FIT_PACKAGE_CLASS_LABEL,
+    ),
+    [MODEL_FIT_INTENDED_MINIMUM_MODEL_LABEL]: findModelFitField(
+      section,
+      MODEL_FIT_INTENDED_MINIMUM_MODEL_LABEL,
+    ),
+    [MODEL_FIT_SCOPE_SHAPE_LABEL]: findModelFitField(
+      section,
+      MODEL_FIT_SCOPE_SHAPE_LABEL,
+    ),
+    [MODEL_FIT_OWNED_FILES_LABEL]: findModelFitField(
+      section,
+      MODEL_FIT_OWNED_FILES_LABEL,
+    ),
+    [MODEL_FIT_FORBIDDEN_FILES_LABEL]: findModelFitField(
+      section,
+      MODEL_FIT_FORBIDDEN_FILES_LABEL,
+    ),
+    [MODEL_FIT_FROZEN_DECISIONS_LABEL]: findModelFitField(
+      section,
+      MODEL_FIT_FROZEN_DECISIONS_LABEL,
+    ),
+    [MODEL_FIT_ESCALATION_TRIGGERS_LABEL]: findModelFitField(
+      section,
+      MODEL_FIT_ESCALATION_TRIGGERS_LABEL,
+    ),
+    [MODEL_FIT_FOCUSED_PROOF_LABEL]: findModelFitField(
+      section,
+      MODEL_FIT_FOCUSED_PROOF_LABEL,
+    ),
+  };
+  const errors = [
+    ...validateModelFitField(
+      filePath,
+      MODEL_FIT_PACKAGE_CLASS_LABEL,
+      fields[MODEL_FIT_PACKAGE_CLASS_LABEL],
+    ),
+    ...validateModelFitField(
+      filePath,
+      MODEL_FIT_INTENDED_MINIMUM_MODEL_LABEL,
+      fields[MODEL_FIT_INTENDED_MINIMUM_MODEL_LABEL],
+    ),
+    ...validateModelFitField(
+      filePath,
+      MODEL_FIT_SCOPE_SHAPE_LABEL,
+      fields[MODEL_FIT_SCOPE_SHAPE_LABEL],
+    ),
+  ];
+  if (isSparkSafeModelFit(fields)) {
+    errors.push(...validateSparkSafeModelFit(content, filePath, fields));
+  }
+  return errors;
+}
+
 function normalizeCliPath(filePath) {
   return path.normalize(
     path.isAbsolute(filePath) ? filePath : path.join(process.cwd(), filePath),
@@ -713,6 +885,10 @@ async function validatePackageFile(filePath) {
     [LEDGER_VALIDATION_REQUIRES_STRICT_ENTRIES]:
       fileStatus === STATUS_ACTIVE && metadata !== null,
   }));
+  errors.push(...validateModelFitContract(content, relativePath, {
+    [LEDGER_VALIDATION_REQUIRES_LEDGER]:
+      fileStatus === STATUS_ACTIVE && metadata !== null,
+  }));
   errors.push(...validateCommitAndPushLedger(content, relativePath, {
     [LEDGER_VALIDATION_REQUIRES_LEDGER]:
       metadata !== null &&
@@ -824,6 +1000,7 @@ function buildCurrentBlockerPayload(activeSprintFile, activePackageFile, metadat
     nextAction: metadata.nextAction || DEFAULT_UNKNOWN,
     proof: Array.isArray(metadata.proof) ? metadata.proof : [],
     touchedFiles: Array.isArray(metadata.touchedFiles) ? metadata.touchedFiles : [],
+    modelFit: metadata.modelFit || {},
     predecessor: metadata.predecessor || null,
   };
 }
@@ -868,6 +1045,19 @@ function renderCurrentBlockerMarkdown(payload) {
     '## Proof Ladder',
     '',
     formatMarkdownList(payload.proof),
+    '',
+    '## Model Fit',
+    '',
+    `Package class: \`${payload.modelFit?.packageClass || DEFAULT_UNKNOWN}\``,
+    '',
+    'Intended minimum model: ' +
+      `\`${payload.modelFit?.intendedMinimumModel || DEFAULT_UNKNOWN}\``,
+    '',
+    `Scope shape: \`${payload.modelFit?.scopeShape || DEFAULT_UNKNOWN}\``,
+    '',
+    'Escalation triggers:',
+    '',
+    formatMarkdownList(payload.modelFit?.escalationTriggers || []),
     '',
     '## Touched Files',
     '',

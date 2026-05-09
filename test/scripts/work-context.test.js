@@ -8,6 +8,7 @@ import {
   buildCurrentBlockerFromPackage,
   buildDirtyScopeLines,
   buildFirstReadPaths,
+  buildModelFitContext,
   buildOwnerCardPaths,
   buildSubagentSequencingStatus,
   buildUsefulCommands,
@@ -23,6 +24,13 @@ const TEST_BOOTSTRAP_SOURCE_PATH = 'src/bootstrap/phases/contact-seed-phase.js';
 const TEST_BOOTSTRAP_TEST_PATH = 'test/bootstrap/node-joining-service.test.js';
 const TEST_PACKAGE_CONTENT = [
   '# Test Package',
+  '',
+  '## Model Fit',
+  '',
+  '- Package class: `bounded-implementation`',
+  '- Intended minimum model: `gpt-5.3-codex-spark`',
+  '- Scope shape: `leaf-slice`',
+  '- Escalation triggers: package scope expands beyond bootstrap files.',
   '',
   '## Out Of Scope',
   '',
@@ -172,6 +180,12 @@ const TEST_BLOCKER = Object.freeze({
     TEST_BOOTSTRAP_TEST_PATH,
     TEST_PACKAGE_PATH,
   ],
+  modelFit: {
+    packageClass: 'bounded-implementation',
+    intendedMinimumModel: 'gpt-5.3-codex-spark',
+    scopeShape: 'leaf-slice',
+    escalationTriggers: ['package scope expands beyond bootstrap files'],
+  },
   predecessor: TEST_PREDECESSOR_PATH,
 });
 const COMPACT_PACK_README_PATH = '.kiro/steering/llm/README.md';
@@ -195,6 +209,7 @@ const RUNTIME_GRAMMAR_BROAD_FILE_COMMAND =
 const SECTION_USEFUL_COMMANDS = '## Useful Commands';
 const SECTION_FIRST_FILES = '## First Files To Read';
 const SECTION_SUBAGENT_SEQUENCING = '## Subagent Sequencing';
+const SECTION_MODEL_FIT = '## Model Fit';
 const DIRTY_SCOPE_TITLE = '# Worktree Package Scope';
 const PACKAGE_STATUS_LINE = ' M ' + TEST_BOOTSTRAP_SOURCE_PATH;
 const TRACKER_STATUS_LINE = ' M work/sprints/current-blocker.json';
@@ -241,12 +256,30 @@ test('work context advertises triage commands before raw artifact reads',
     t.notOk(commands.includes(RUNTIME_GRAMMAR_BROAD_FILE_COMMAND));
     t.ok(rendered.includes('Playback: ' + TEST_PLAYBACK_PATH + ' (missing)'));
     t.ok(rendered.includes(SECTION_SUBAGENT_SEQUENCING));
+    t.ok(rendered.includes(SECTION_MODEL_FIT));
+    t.ok(rendered.includes('Package class: bounded-implementation'));
+    t.ok(rendered.includes('Intended minimum model: gpt-5.3-codex-spark'));
+    t.ok(rendered.includes('Scope shape: leaf-slice'));
+    t.ok(rendered.includes('Escalation triggers: package scope expands'));
     t.ok(rendered.includes('Next required subagent role: review'));
     t.ok(
       rendered.indexOf(SECTION_USEFUL_COMMANDS) <
         rendered.indexOf(SECTION_FIRST_FILES),
       'triage commands section should precede first raw artifact reads',
     );
+  });
+
+test('work context extracts model fit from package metadata and section text',
+  (t) => {
+    const modelFit = buildModelFitContext(TEST_BLOCKER, TEST_PACKAGE_CONTENT);
+
+    t.equal(modelFit.packageClass, 'bounded-implementation');
+    t.equal(modelFit.intendedMinimumModel, 'gpt-5.3-codex-spark');
+    t.equal(modelFit.scopeShape, 'leaf-slice');
+    t.same(modelFit.escalationTriggers, [
+      'package scope expands beyond bootstrap files.',
+    ]);
+    t.end();
   });
 
 test('work context reports the next required subagent role', (t) => {

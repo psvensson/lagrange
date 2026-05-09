@@ -461,7 +461,7 @@ test(
         executeQuery: async () => ({success: true}),
       },
       controlPlaneReadinessService: {
-        getPriorityRecoveryPlanningAnswerBestEffort() {
+        getPriorityRecoveryPlanningSnapshotBestEffort() {
           return {
             publicationStatus: 'PENDING',
             priorityPartitionSummary: {
@@ -555,7 +555,7 @@ test(
         executeQuery: async () => ({success: true}),
       },
       controlPlaneReadinessService: {
-        getPriorityRecoveryPlanningAnswerBestEffort() {
+        getPriorityRecoveryPlanningSnapshotBestEffort() {
           return {
             publicationStatus: 'PENDING',
             priorityPartitionSummary: {
@@ -621,7 +621,7 @@ test(
         executeQuery: async () => ({success: true}),
       },
       controlPlaneReadinessService: {
-        getPriorityRecoveryPlanningAnswerBestEffort() {
+        getPriorityRecoveryPlanningSnapshotBestEffort() {
           return {
             publicationStatus: 'PENDING',
             priorityPartitionSummary: {
@@ -1011,7 +1011,7 @@ test(
         executeQuery: async () => ({success: true}),
       },
       controlPlaneReadinessService: {
-        getPriorityRecoveryPlanningAnswerBestEffort() {
+        getPriorityRecoveryPlanningSnapshotBestEffort() {
           return {
             publicationStatus: 'PENDING',
             priorityPartitionSummary: {

@@ -2,6 +2,7 @@ import {describe, it} from 'node:test';
 import assert from 'node:assert/strict';
 import {
   validateCommitAndPushLedger,
+  validateModelFitContract,
   validateSubagentSequencingLedger,
 } from '../../scripts/work-tracker.js';
 
@@ -12,6 +13,37 @@ const FIX_AGENT_ID = '019e02b7-ece3-73a2-a664-389d40dfd575';
 const IMPLEMENTATION_AGENT_ID = '019e02b9-7651-7851-bc85-a0cef8a90176';
 const TEST_COMMIT_SHA = 'abcdef1234567890abcdef1234567890abcdef12';
 const TEST_PUSH_TARGET = 'origin/main';
+const MODEL_FIT_VALID_SPARK_SAFE_CONTENT = [
+  '# Test Package',
+  '',
+  '## Model Fit',
+  '',
+  '- Package class: `bounded-implementation`',
+  '- Intended minimum model: `gpt-5.3-codex-spark`',
+  '- Scope shape: `leaf-slice`',
+  '- Owned files: `scripts/work-tracker.js`, `test/scripts/work-tracker-subagent-ledger.test.js`',
+  '- Forbidden files: `src/`, `test/distributed/harness/`',
+  '- Frozen decisions: active package metadata requires the section.',
+  '- Escalation triggers: owned files expand beyond tracker scripts.',
+  '- Focused proof: `node --test test/scripts/work-tracker-subagent-ledger.test.js`',
+  '',
+].join('\n');
+const MODEL_FIT_MISSING_CONTENT = '# Test Package\n';
+const MODEL_FIT_INCOMPLETE_SPARK_SAFE_CONTENT = [
+  '# Test Package',
+  '',
+  '## Model Fit',
+  '',
+  '- Package class: `spark-safe`',
+  '- Intended minimum model: `gpt-5`',
+  '- Scope shape: `broad-frontier`',
+  '- Owned files: `scripts/work-tracker.js`',
+  '- Forbidden files: `src/`',
+  '- Frozen decisions: tracker metadata only.',
+  '- Escalation triggers: find the next frontier.',
+  '- Focused proof: `node --test test/scripts/work-tracker-subagent-ledger.test.js`',
+  '',
+].join('\n');
 const WORK_TRACKER_LEDGER_NO_LEDGER_CONTENT = '# Test Package\n';
 const WORK_TRACKER_LEDGER_OPEN_CONTENT = [
   '# Test Package',
@@ -390,4 +422,40 @@ describe('work tracker commit and push ledger validation', () => {
     assert.match(errors.join('\n'), /must be <remote>\/<branch>/u);
     assert.match(errors.join('\n'), /must be yes/u);
   });
+});
+
+describe('work tracker model fit validation', () => {
+  it('requires model fit on active metadata-bearing packages', () => {
+    const errors = validateModelFitContract(
+      MODEL_FIT_MISSING_CONTENT,
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      {requiresLedger: true},
+    );
+
+    assert.equal(errors.length, 1);
+    assert.match(errors[0], /Model Fit section is required/u);
+  });
+
+  it('accepts a complete Spark-safe leaf-slice contract', () => {
+    const errors = validateModelFitContract(
+      MODEL_FIT_VALID_SPARK_SAFE_CONTENT,
+      WORK_TRACKER_LEDGER_TEST_FILE,
+      {requiresLedger: true},
+    );
+
+    assert.deepEqual(errors, []);
+  });
+
+  it('rejects Spark-safe packages without Spark model, leaf scope, or bounded language',
+    () => {
+      const errors = validateModelFitContract(
+        MODEL_FIT_INCOMPLETE_SPARK_SAFE_CONTENT,
+        WORK_TRACKER_LEDGER_TEST_FILE,
+        {requiresLedger: true},
+      );
+
+      assert.match(errors.join('\n'), /gpt-5\.3-codex-spark/u);
+      assert.match(errors.join('\n'), /leaf-slice/u);
+      assert.match(errors.join('\n'), /open-ended frontier language/u);
+    });
 });

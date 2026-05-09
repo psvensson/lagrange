@@ -923,7 +923,7 @@ export function registerQuorumConditionedRemoveSafetyTailTests({
               priorityPartitionSummary: TEST_STALE_PRIORITY_PARTITION_SUMMARY,
             };
           },
-          async getPriorityRecoveryPlanningAnswerBestEffort(nodeId) {
+          async getPriorityRecoveryPlanningSnapshotBestEffort(nodeId) {
             return {
               publicationStatus: TEST_PUBLICATION_STATUS_ACK_PENDING,
               publishedActiveNodeIdsPresent: true,

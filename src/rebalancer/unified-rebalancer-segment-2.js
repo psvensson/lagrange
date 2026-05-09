@@ -968,11 +968,11 @@ class UnifiedRebalancerSegment2 extends UnifiedRebalancerSegment1 {
     const readinessService = this.controlPlaneReadinessService;
     if (
       !readinessService ||
-      (typeof readinessService.getPriorityRecoveryPlanningAnswerBestEffort !==
+      (typeof readinessService.getPriorityRecoveryPlanningSnapshotBestEffort !==
         TYPEOF.FUNCTION &&
         typeof readinessService.getPriorityRecoveryPlanningSnapshotBestEffort !==
           TYPEOF.FUNCTION &&
-        typeof readinessService.getMembershipPublicationPlanningAnswerBestEffort !==
+        typeof readinessService.getMembershipPublicationPlanningSnapshotBestEffort !==
           TYPEOF.FUNCTION &&
         typeof readinessService.getMembershipPublicationPlanningSnapshotBestEffort !==
           TYPEOF.FUNCTION &&
@@ -985,11 +985,11 @@ class UnifiedRebalancerSegment2 extends UnifiedRebalancerSegment1 {
     const observedAt = Date.now();
     let planningSnapshot = null;
     if (
-      typeof readinessService.getPriorityRecoveryPlanningAnswerBestEffort ===
+      typeof readinessService.getPriorityRecoveryPlanningSnapshotBestEffort ===
       TYPEOF.FUNCTION
     ) {
       planningSnapshot =
-        await readinessService.getPriorityRecoveryPlanningAnswerBestEffort(
+        await readinessService.getPriorityRecoveryPlanningSnapshotBestEffort(
           publicationNodeId,
           observedAt,
         );
@@ -1003,11 +1003,11 @@ class UnifiedRebalancerSegment2 extends UnifiedRebalancerSegment1 {
           observedAt,
         );
     } else if (
-      typeof readinessService.getMembershipPublicationPlanningAnswerBestEffort ===
+      typeof readinessService.getMembershipPublicationPlanningSnapshotBestEffort ===
       TYPEOF.FUNCTION
     ) {
       planningSnapshot =
-        await readinessService.getMembershipPublicationPlanningAnswerBestEffort(
+        await readinessService.getMembershipPublicationPlanningSnapshotBestEffort(
           publicationNodeId,
           observedAt,
         );

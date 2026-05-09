@@ -35,8 +35,7 @@ const OPERATION_SCHEDULING_BOUNDARY = 'operation_scheduling';
 const GLOSSARY_REASON = 'priority_recovery_progress_blocked';
 const GLOSSARY_SEMANTIC_STATE = 'recovering_in_flight';
 const PACKAGE_EVIDENCE_HEADING = '## Generated Owner Evidence Block';
-const DOMINANT_REASON =
-  'priority_recovery_operation_scheduling_event_driven';
+const OWNER_DOMINANT_REASON = 'priority_recovery_progress_blocked';
 const EDGE_STATE_BLOCKED = 'blocked';
 const BLOCKED_REASONS = ['priority_recovery_progress_blocked'];
 const PRIORITY_RECOVERY_DOMINANT_WITNESS_PATH =
@@ -85,7 +84,7 @@ describe('analyze-topology-convergence CLI', () => {
     assert.deepEqual(output.frontier[0].reasons, BLOCKED_REASONS);
     assert.equal(output.dominantWitness.owner, REBALANCER_LEADER_OWNER);
     assert.equal(output.dominantWitness.boundary, OPERATION_SCHEDULING_BOUNDARY);
-    assert.equal(output.dominantWitness.dominantReason, DOMINANT_REASON);
+    assert.equal(output.dominantWitness.dominantReason, OWNER_DOMINANT_REASON);
     assert.equal(
       output.dominantWitness.evidencePath,
       PRIORITY_RECOVERY_DOMINANT_WITNESS_PATH,
@@ -132,9 +131,10 @@ describe('analyze-topology-convergence CLI', () => {
     assert.equal(output.decisionOutcome.frontier, true);
     assert.equal(
       output.decisionOutcome.dominantWitness.dominantReason,
-      DOMINANT_REASON,
+      OWNER_DOMINANT_REASON,
     );
     assert.equal(output.decisionTable.edgeId, PRIORITY_EDGE_ID);
+    assert.equal(output.decisionTable.owner, OPERATION_WORKFLOW_OWNER);
   });
 
   it('explains dominant witness owner and evidence path consistently', () => {
@@ -167,8 +167,8 @@ describe('analyze-topology-convergence CLI', () => {
       PRIORITY_RECOVERY_DOMINANT_WITNESS_PATH,
     );
     assert.equal(output.decisionTable.edgeId, PRIORITY_EDGE_ID);
-    assert.equal(output.decisionTable.owner, REBALANCER_LEADER_OWNER);
-    assert.equal(output.decisionTable.boundary, OPERATION_SCHEDULING_BOUNDARY);
+    assert.equal(output.decisionTable.owner, OPERATION_WORKFLOW_OWNER);
+    assert.equal(output.decisionTable.boundary, WORKFLOW_PROGRESS_BOUNDARY);
   });
 
   it('generates a package migration evidence block from analyzer output', () => {
@@ -177,7 +177,7 @@ describe('analyze-topology-convergence CLI', () => {
     assert.match(output, new RegExp(PACKAGE_EVIDENCE_HEADING, 'u'));
     assert.match(output, new RegExp(OPERATION_WORKFLOW_OWNER, 'u'));
     assert.match(output, new RegExp(WORKFLOW_PROGRESS_BOUNDARY, 'u'));
-    assert.match(output, new RegExp(DOMINANT_REASON, 'u'));
+    assert.match(output, new RegExp(OWNER_DOMINANT_REASON, 'u'));
     assert.match(output, new RegExp(PRIORITY_EDGE_ID, 'u'));
   });
 });

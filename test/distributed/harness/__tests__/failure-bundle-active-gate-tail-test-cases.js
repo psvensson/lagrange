@@ -28,7 +28,7 @@ const ACTIVE_GATE_PENDING_ACK_WORKFLOW_PROGRESS_TEST_NAME =
 const {
   FAILURE_CLASS_PUBLICATION_CONVERGENCE_BLOCKED,
   ROOT_CAUSE_CLASS_TOPOLOGY,
-  STABILITY_GATE_BLOCKER_PENDING_ACK_NODES,
+  STABILITY_GATE_BLOCKER_PENDING_ACKS_PRESENT,
 } = FAILURE_BUNDLE_SEGMENT_1;
 
 export function registerFailureBundleActiveGateTailTests({
@@ -391,7 +391,7 @@ export function registerFailureBundleActiveGateTailTests({
       );
       assert.equal(
         scenarioBundle.summary.stabilityGates.convergence.blockers.includes(
-          STABILITY_GATE_BLOCKER_PENDING_ACK_NODES,
+          STABILITY_GATE_BLOCKER_PENDING_ACKS_PRESENT,
         ),
         true,
       );
@@ -421,7 +421,7 @@ export function registerFailureBundleActiveGateTailTests({
       const ACTIVE_GATE_COVERAGE_BLOCKER = 'snapshot_coverage=2/5';
       const ACTIVE_GATE_INACTIVE_BLOCKER = 'inactive_nodes=2';
       const PENDING_ACK_BLOCKER_ALIAS =
-        STABILITY_GATE_BLOCKER_PENDING_ACK_NODES;
+        STABILITY_GATE_BLOCKER_PENDING_ACKS_PRESENT;
       const PENDING_ACK_OWNER_REASON = 'pending_acks_present';
       const PUBLICATION_PUBLISHED_OWNER_REASON = 'publication_published';
       const OWNER_TOPOLOGY_PUBLICATION = 'topology_publication_owner';

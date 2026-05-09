@@ -974,7 +974,7 @@ class UnifiedRebalancerSegment1 extends EventEmitter {
       recoveryEligibilityRequested:
         decisionDimension ===
         CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
-      legacyRecoveryEligibilitySatisfied:
+      recoveryEligibilitySatisfied:
         dimensions[CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE] !== false &&
         dimensions[
           CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY
@@ -1000,7 +1000,7 @@ class UnifiedRebalancerSegment1 extends EventEmitter {
     ) {
       return false;
     }
-    return readinessEvidence.legacyRecoveryEligibilitySatisfied;
+    return readinessEvidence.recoveryEligibilitySatisfied;
   }
 
   /**

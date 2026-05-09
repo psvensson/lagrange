@@ -20,6 +20,11 @@ const TEST_PACKAGE_PATH =
 const TEST_MODEL = 'gpt-5-codex';
 const TEST_REASONING_EFFORT = 'medium';
 const TEST_TASK_CLASS = 'workflow-tooling';
+const TEST_PACKAGE_CLASS = 'bounded-implementation';
+const TEST_INTENDED_MINIMUM_MODEL = 'gpt-5.3-codex-spark';
+const TEST_SCOPE_SHAPE = 'leaf-slice';
+const TEST_ESCALATED = 'false';
+const TEST_BAILOUT_REASON = 'none';
 const TEST_OUTCOME = 'success';
 const TEST_VALIDATION_STATUS = 'passed';
 const TEST_CORRECTION_LOOPS = '0';
@@ -32,6 +37,11 @@ const FLAG_PACKAGE = '--package';
 const FLAG_MODEL = '--model';
 const FLAG_REASONING_EFFORT = '--reasoning-effort';
 const FLAG_TASK_CLASS = '--task-class';
+const FLAG_PACKAGE_CLASS = '--package-class';
+const FLAG_INTENDED_MINIMUM_MODEL = '--intended-minimum-model';
+const FLAG_SCOPE_SHAPE = '--scope-shape';
+const FLAG_ESCALATED = '--escalated';
+const FLAG_BAILOUT_REASON = '--bailout-reason';
 const FLAG_OUTCOME = '--outcome';
 const FLAG_VALIDATION_STATUS = '--validation-status';
 const FLAG_CORRECTION_LOOPS = '--correction-loops';
@@ -44,6 +54,10 @@ const SUMMARY_RECOMMEND_DEESCALATE = 'Recommendation: de-escalate';
 const SUMMARY_RECOMMEND_HOLD = 'Recommendation: hold';
 const SUMMARY_ENTRIES_EMPTY = 'No entries found.';
 const SUMMARY_MODEL_COUNT = 'Models: gpt-5-codex=1';
+const SUMMARY_PACKAGE_CLASS_COUNT = 'Package classes: bounded-implementation=1';
+const SUMMARY_MINIMUM_MODEL_COUNT =
+  'Intended minimum models: gpt-5.3-codex-spark=1';
+const SUMMARY_ESCALATED_FALSE_COUNT = 'Escalated: false=1';
 
 async function makeTempLedgerPath() {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), TEMP_DIR_PREFIX));
@@ -61,6 +75,16 @@ function buildRecordArgs(ledgerPath) {
     TEST_REASONING_EFFORT,
     FLAG_TASK_CLASS,
     TEST_TASK_CLASS,
+    FLAG_PACKAGE_CLASS,
+    TEST_PACKAGE_CLASS,
+    FLAG_INTENDED_MINIMUM_MODEL,
+    TEST_INTENDED_MINIMUM_MODEL,
+    FLAG_SCOPE_SHAPE,
+    TEST_SCOPE_SHAPE,
+    FLAG_ESCALATED,
+    TEST_ESCALATED,
+    FLAG_BAILOUT_REASON,
+    TEST_BAILOUT_REASON,
     FLAG_OUTCOME,
     TEST_OUTCOME,
     FLAG_VALIDATION_STATUS,
@@ -86,6 +110,11 @@ test('record command writes explicit JSONL entries', async (t) => {
   t.equal(entries[0].model, TEST_MODEL);
   t.equal(entries[0].reasoningEffort, TEST_REASONING_EFFORT);
   t.equal(entries[0].taskClass, TEST_TASK_CLASS);
+  t.equal(entries[0].packageClass, TEST_PACKAGE_CLASS);
+  t.equal(entries[0].intendedMinimumModel, TEST_INTENDED_MINIMUM_MODEL);
+  t.equal(entries[0].scopeShape, TEST_SCOPE_SHAPE);
+  t.equal(entries[0].escalated, false);
+  t.equal(entries[0].bailoutReason, TEST_BAILOUT_REASON);
   t.equal(entries[0].outcome, TEST_OUTCOME);
   t.equal(entries[0].validationStatus, TEST_VALIDATION_STATUS);
   t.equal(entries[0].correctionLoops, 0);
@@ -112,6 +141,13 @@ test('record builder requires explicit package and proof flags', (t) => {
       'correction-loops': '-1',
     }, TEST_RECORDED_AT),
     /correctionLoops must be a non-negative integer/u,
+  );
+  t.throws(
+    () => buildLedgerRecord({
+      ...parsed.flags,
+      escalated: 'maybe',
+    }, TEST_RECORDED_AT),
+    /escalated must be true or false/u,
   );
   t.end();
 });
@@ -146,6 +182,11 @@ test('summary recommends escalation for recent failed proof', (t) => {
       model: TEST_MODEL,
       reasoningEffort: TEST_REASONING_EFFORT,
       taskClass: TEST_TASK_CLASS,
+      packageClass: TEST_PACKAGE_CLASS,
+      intendedMinimumModel: TEST_INTENDED_MINIMUM_MODEL,
+      scopeShape: TEST_SCOPE_SHAPE,
+      escalated: false,
+      bailoutReason: TEST_BAILOUT_REASON,
       outcome: 'partial',
       validationStatus: 'failed',
       correctionLoops: 2,
@@ -155,6 +196,9 @@ test('summary recommends escalation for recent failed proof', (t) => {
   const rendered = renderSummary(summary, 'work/model-ledger.jsonl');
 
   t.match(rendered, SUMMARY_MODEL_COUNT);
+  t.match(rendered, SUMMARY_PACKAGE_CLASS_COUNT);
+  t.match(rendered, SUMMARY_MINIMUM_MODEL_COUNT);
+  t.match(rendered, SUMMARY_ESCALATED_FALSE_COUNT);
   t.match(rendered, SUMMARY_RECOMMEND_ESCALATE);
   t.end();
 });

@@ -557,7 +557,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
           async waitForCacheUpdate() {},
         },
         controlPlaneReadinessService: {
-          getPriorityRecoveryPlanningAnswerBestEffort() {
+          getPriorityRecoveryPlanningSnapshotBestEffort() {
             return {
               publicationStatus: 'PENDING',
               priorityPartitionSummary: {
@@ -701,7 +701,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
           async waitForCacheUpdate() {},
         },
         controlPlaneReadinessService: {
-          getPriorityRecoveryPlanningAnswerBestEffort() {
+          getPriorityRecoveryPlanningSnapshotBestEffort() {
             return {
               publicationStatus: 'PENDING',
               priorityPartitionSummary: {
@@ -798,7 +798,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
           async waitForCacheUpdate() {},
         },
         controlPlaneReadinessService: {
-          getPriorityRecoveryPlanningAnswerBestEffort() {
+          getPriorityRecoveryPlanningSnapshotBestEffort() {
             return {
               publicationStatus: 'PENDING',
               priorityPartitionSummary: {
@@ -1041,7 +1041,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
           async waitForCacheUpdate() {},
         },
         controlPlaneReadinessService: {
-          getPriorityRecoveryPlanningAnswerBestEffort() {
+          getPriorityRecoveryPlanningSnapshotBestEffort() {
             return {
               publicationStatus: 'PENDING',
               priorityPartitionSummary: {
@@ -1134,7 +1134,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
           async waitForCacheUpdate() {},
         },
         controlPlaneReadinessService: {
-          getPriorityRecoveryPlanningAnswerBestEffort() {
+          getPriorityRecoveryPlanningSnapshotBestEffort() {
             return {
               publicationStatus: 'PENDING',
               priorityPartitionSummary: {
@@ -1227,7 +1227,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
           async waitForCacheUpdate() {},
         },
         controlPlaneReadinessService: {
-          getPriorityRecoveryPlanningAnswerBestEffort() {
+          getPriorityRecoveryPlanningSnapshotBestEffort() {
             return {
               publicationStatus: 'PENDING',
               priorityPartitionSummary: {
@@ -1302,7 +1302,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
           async waitForCacheUpdate() {},
         },
         controlPlaneReadinessService: {
-          getPriorityRecoveryPlanningAnswerBestEffort() {
+          getPriorityRecoveryPlanningSnapshotBestEffort() {
             return {
               publicationStatus: 'PENDING',
               priorityPartitionSummary: {
@@ -1391,7 +1391,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
           async waitForCacheUpdate() {},
         },
         controlPlaneReadinessService: {
-          getPriorityRecoveryPlanningAnswerBestEffort() {
+          getPriorityRecoveryPlanningSnapshotBestEffort() {
             return {
               publicationStatus: 'PENDING',
               priorityPartitionSummary: {

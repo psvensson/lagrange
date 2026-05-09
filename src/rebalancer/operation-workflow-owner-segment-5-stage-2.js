@@ -222,11 +222,11 @@ class OperationWorkflowOwnerSegment5Stage2 extends OperationWorkflowOwnerSegment
       !readinessService ||
       (typeof readinessService.getPriorityRecoveryPlanningAnswerForOwnerRead !==
         TYPEOF.FUNCTION &&
-      (typeof readinessService.getPriorityRecoveryPlanningAnswerBestEffort !==
+      (typeof readinessService.getPriorityRecoveryPlanningSnapshotBestEffort !==
         TYPEOF.FUNCTION &&
         typeof readinessService.getPriorityRecoveryPlanningSnapshotBestEffort !==
           TYPEOF.FUNCTION &&
-        typeof readinessService.getMembershipPublicationPlanningAnswerBestEffort !==
+        typeof readinessService.getMembershipPublicationPlanningSnapshotBestEffort !==
           TYPEOF.FUNCTION &&
         typeof readinessService.getMembershipPublicationPlanningSnapshotBestEffort !==
           TYPEOF.FUNCTION))
@@ -248,10 +248,10 @@ class OperationWorkflowOwnerSegment5Stage2 extends OperationWorkflowOwnerSegment
       );
     }
     if (
-      typeof readinessService.getPriorityRecoveryPlanningAnswerBestEffort ===
+      typeof readinessService.getPriorityRecoveryPlanningSnapshotBestEffort ===
       TYPEOF.FUNCTION
     ) {
-      return readinessService.getPriorityRecoveryPlanningAnswerBestEffort(
+      return readinessService.getPriorityRecoveryPlanningSnapshotBestEffort(
         publicationNodeId,
         observedAt,
       );
@@ -266,10 +266,10 @@ class OperationWorkflowOwnerSegment5Stage2 extends OperationWorkflowOwnerSegment
       );
     }
     if (
-      typeof readinessService.getMembershipPublicationPlanningAnswerBestEffort ===
+      typeof readinessService.getMembershipPublicationPlanningSnapshotBestEffort ===
       TYPEOF.FUNCTION
     ) {
-      return readinessService.getMembershipPublicationPlanningAnswerBestEffort(
+      return readinessService.getMembershipPublicationPlanningSnapshotBestEffort(
         publicationNodeId,
         observedAt,
       );

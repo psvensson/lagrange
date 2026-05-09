@@ -920,7 +920,7 @@ async (t) => {
       async waitForCacheUpdate() {},
     },
     controlPlaneReadinessService: {
-      getPriorityRecoveryPlanningAnswerBestEffort() {
+      getPriorityRecoveryPlanningSnapshotBestEffort() {
         return buildDispatchPendingReentryPlanningSnapshot();
       },
       getNodeReadinessSync(nodeId) {

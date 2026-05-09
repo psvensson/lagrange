@@ -34,7 +34,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
           async waitForCacheUpdate() {},
         },
         controlPlaneReadinessService: {
-          getPriorityRecoveryPlanningAnswerBestEffort() {
+          getPriorityRecoveryPlanningSnapshotBestEffort() {
             return {
               publicationStatus: 'PENDING',
               priorityPartitionSummary: {
@@ -849,7 +849,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests(
               },
             };
           },
-          getPriorityRecoveryPlanningAnswerBestEffort() {
+          getPriorityRecoveryPlanningSnapshotBestEffort() {
             return publishedPriorityRecoverySnapshot;
           },
         },

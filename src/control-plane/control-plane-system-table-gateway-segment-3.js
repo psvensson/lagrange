@@ -355,7 +355,7 @@ class ControlPlaneSystemTableGatewaySegment3 extends ControlPlaneSystemTableGate
 
   /**
    * Canonical control-plane mutation ingress for system-table writes.
-   * Legacy insert/update/upsert/delete helpers delegate here so write
+   * System-table insert/update/upsert/delete helpers delegate here so write
    * admission, routing, and backpressure policy stay on one path.
    *
    * @param {Object} mutation

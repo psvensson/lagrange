@@ -898,17 +898,17 @@ class ReplicaOperationRepository {
       return null;
     }
     const observedAt = Date.now();
-    if (typeof readinessService.getPriorityRecoveryPlanningAnswerBestEffort === TYPEOF.FUNCTION) {
+    if (typeof readinessService.getPriorityRecoveryPlanningSnapshotBestEffort === TYPEOF.FUNCTION) {
       return (
-        readinessService.getPriorityRecoveryPlanningAnswerBestEffort(this.nodeId, observedAt) ||
+        readinessService.getPriorityRecoveryPlanningSnapshotBestEffort(this.nodeId, observedAt) ||
         null
       );
     }
     if (
-      typeof readinessService.getMembershipPublicationPlanningAnswerBestEffort === TYPEOF.FUNCTION
+      typeof readinessService.getMembershipPublicationPlanningSnapshotBestEffort === TYPEOF.FUNCTION
     ) {
       return (
-        readinessService.getMembershipPublicationPlanningAnswerBestEffort(
+        readinessService.getMembershipPublicationPlanningSnapshotBestEffort(
           this.nodeId,
           observedAt,
         ) || null

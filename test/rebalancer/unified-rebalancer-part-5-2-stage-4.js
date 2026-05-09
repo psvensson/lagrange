@@ -582,13 +582,13 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 4', async (t) => {
         getPriorityRecoveryPlanningAnswerSync() {
           return planningSnapshot;
         },
-        async getPriorityRecoveryPlanningAnswerBestEffort() {
+        async getPriorityRecoveryPlanningSnapshotBestEffort() {
           return planningSnapshot;
         },
         getMembershipPublicationPlanningAnswerSync() {
           return planningSnapshot;
         },
-        async getMembershipPublicationPlanningAnswerBestEffort() {
+        async getMembershipPublicationPlanningSnapshotBestEffort() {
           return planningSnapshot;
         },
         membershipPublicationService: {
@@ -783,13 +783,13 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 4', async (t) => {
         getPriorityRecoveryPlanningAnswerSync() {
           return planningSnapshot;
         },
-        async getPriorityRecoveryPlanningAnswerBestEffort() {
+        async getPriorityRecoveryPlanningSnapshotBestEffort() {
           return planningSnapshot;
         },
         getMembershipPublicationPlanningAnswerSync() {
           return planningSnapshot;
         },
-        async getMembershipPublicationPlanningAnswerBestEffort() {
+        async getMembershipPublicationPlanningSnapshotBestEffort() {
           return planningSnapshot;
         },
         membershipPublicationService: {
@@ -1166,7 +1166,7 @@ test('UnifiedRebalancer - Rebalancing Triggers chunk 4', async (t) => {
         getPriorityRecoveryPlanningAnswerSync() {
           return planningSnapshot;
         },
-        async getPriorityRecoveryPlanningAnswerBestEffort() {
+        async getPriorityRecoveryPlanningSnapshotBestEffort() {
           return planningSnapshot;
         },
         membershipPublicationService: {

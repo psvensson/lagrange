@@ -11,7 +11,7 @@ import {
   buildPriorityRecoveryCorrelationKey,
   buildPriorityRecoveryPressureConditions,
 } from './priority-recovery-helpers.js';
-import {LOCAL_EMPTY_LIST, LOCAL_NUM_ONE, LOCAL_NUM_TWO, LOCAL_NUM_ZERO, LOCAL_STR_BLOCKERREASONCODES, LOCAL_STR_EMPTY, LOCAL_STR_SEMANTICSTATEIDS, PRIORITY_RECOVERY_OPERATION_ID_FIELD, PRIORITY_RECOVERY_SNAPSHOT_PROGRESS_FIELD, buildPriorityRecoveryExplicitSemanticStateByPartitionId, collectPriorityRecoveryPartitionIndexes, isRecord, normalizeDistinctStringArray, normalizeNonNegativeInteger, normalizePriorityRecoveryBlockedClassIds, normalizePriorityRecoveryObservationStateValue, normalizePriorityRecoverySemanticStatePartitions, resolvePriorityRecoverySnapshotSemanticState, shouldAllowLegacyPriorityRecoverySemanticStateInference} from './priority-recovery-observation-snapshot-stage-1.js';
+import {LOCAL_EMPTY_LIST, LOCAL_NUM_ONE, LOCAL_NUM_TWO, LOCAL_NUM_ZERO, LOCAL_STR_BLOCKERREASONCODES, LOCAL_STR_EMPTY, LOCAL_STR_SEMANTICSTATEIDS, PRIORITY_RECOVERY_OPERATION_ID_FIELD, PRIORITY_RECOVERY_SNAPSHOT_PROGRESS_FIELD, buildPriorityRecoveryExplicitSemanticStateByPartitionId, collectPriorityRecoveryPartitionIndexes, isRecord, normalizeDistinctStringArray, normalizeNonNegativeInteger, normalizePriorityRecoveryBlockedClassIds, normalizePriorityRecoveryObservationStateValue, normalizePriorityRecoverySemanticStatePartitions, resolvePriorityRecoverySnapshotSemanticState} from './priority-recovery-observation-snapshot-stage-1.js';
 
 function resolvePriorityRecoveryWitnessPartitionIds(
   blockedClassIds,
@@ -294,7 +294,6 @@ function buildPriorityRecoveryPartitionSnapshot(
   snapshots,
   decisionSnapshots,
   explicitSemanticStateByPartitionId = null,
-  allowLegacySemanticStateInference = false,
 ) {
   const relatedSnapshots = collectPriorityRecoveryRelatedSnapshots(
     snapshots,
@@ -325,7 +324,6 @@ function buildPriorityRecoveryPartitionSnapshot(
       latestPartitionSnapshot,
       blockerReasonCodes,
       explicitSemanticStateByPartitionId,
-      allowLegacySemanticStateInference,
     ) || null,
     progressClassIds: Object.freeze(blockerReasonCodes),
     blockerReasonCodes: Object.freeze(blockerReasonCodes),
@@ -497,10 +495,6 @@ function buildPriorityRecoveryPartitionWitnesses(decisionSnapshots = null) {
   const snapshots = Array.isArray(decisionSnapshots?.snapshots) ?
     decisionSnapshots.snapshots :
     [];
-  const allowLegacySemanticStateInference =
-    shouldAllowLegacyPriorityRecoverySemanticStateInference(
-      decisionSnapshots?.partitionIdsBySemanticState,
-    );
   const explicitSemanticStateByPartitionId =
     buildPriorityRecoveryExplicitSemanticStateByPartitionId(
       decisionSnapshots?.partitionIdsBySemanticState,
@@ -527,7 +521,6 @@ function buildPriorityRecoveryPartitionWitnesses(decisionSnapshots = null) {
         snapshots,
         decisionSnapshots,
         explicitSemanticStateByPartitionId,
-        allowLegacySemanticStateInference,
       );
     }),
   );

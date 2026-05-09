@@ -660,7 +660,7 @@ export function registerFailureBundleCore01Tests(context) {
       );
       assert.equal(
         scenarioBundle.summary.stabilityGates.convergence.blockers.includes(
-          'pending_ack_nodes',
+          'pending_acks_present',
         ),
         true,
       );
@@ -752,7 +752,7 @@ export function registerFailureBundleCore01Tests(context) {
       );
       assert.equal(
         triageSummary.summary.stabilityGates.convergence.blockers.includes(
-          'pending_ack_nodes',
+          'pending_acks_present',
         ),
         true,
       );
@@ -855,7 +855,7 @@ export function registerFailureBundleCore01Tests(context) {
       assert.match(triageMarkdown, /# Scenario Triage Summary/);
       assert.match(triageMarkdown, /## Stability Gates/);
       assert.match(triageMarkdown, /convergence: status=open/);
-      assert.match(triageMarkdown, /pending_ack_nodes/);
+      assert.match(triageMarkdown, /pending_acks_present/);
       assert.match(triageMarkdown, /## Partitioning/);
       assert.match(triageMarkdown, /replica_spread_stalled/);
       assert.match(triageMarkdown, /Local Primary Nodes: node-1, node-2/);

@@ -14,7 +14,7 @@ import {
   PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE,
 } from '../../../src/control-plane/priority-recovery-diagnostics-constants.js';
 import {
-  deriveLegacyPriorityRecoveryActiveGateFields,
+  derivePriorityRecoveryActiveGateReportFields,
   normalizePriorityRecoveryActiveGateSnapshot,
 } from './active-gate-contract.js';
 import {FAILURE_BUNDLE_SEGMENT_2} from './failure-bundle-segment-2.js';
@@ -96,7 +96,7 @@ const {
   STABILITY_GATE_BLOCKER_PUBLICATION_PENDING,
   STABILITY_GATE_BLOCKER_PUBLICATION_MISSING_ACTIVE_NODE,
   STABILITY_GATE_BLOCKER_PRIORITY_SPREAD_PENDING,
-  STABILITY_GATE_BLOCKER_PENDING_ACK_NODES,
+  STABILITY_GATE_BLOCKER_PENDING_ACKS_PRESENT,
   STABILITY_GATE_BLOCKER_BLOCKED_NODES,
   STABILITY_GATE_BLOCKER_CLOSURE_RECORD,
   STABILITY_GATE_BLOCKER_STARTUP_READINESS,
@@ -134,7 +134,6 @@ const {
   normalizeDistinctStringArray,
   buildPriorityRecoveryCorrelationKey,
   normalizePriorityRecoverySemanticStateId,
-  inferPriorityRecoverySemanticState,
   normalizePriorityRecoveryDecisionSnapshots,
   mergePriorityRecoveryDecisionSnapshots,
   normalizePriorityRecoveryInvariants,
@@ -301,7 +300,7 @@ function buildPlaybackControlPlaneFallback(events) {
   const activeGate = normalizePriorityRecoveryActiveGateSnapshot(
     selectedActiveGateDetails,
   );
-  const legacyActiveGateFields = deriveLegacyPriorityRecoveryActiveGateFields(
+  const activeGateReportFields = derivePriorityRecoveryActiveGateReportFields(
     activeGate,
   );
   const priorityRecoveryDecisionSnapshots =
@@ -350,7 +349,7 @@ function buildPlaybackControlPlaneFallback(events) {
     publishedMembershipObservation,
     activeGateSnapshotCoverage: snapshotCoverage,
     ...(activeGate ? {activeGate} : {}),
-    ...legacyActiveGateFields,
+    ...activeGateReportFields,
     priorityRecoveryDecisionSnapshots,
     priorityRecoveryInvariants,
     readinessByNodeId:
@@ -815,12 +814,12 @@ function resolveDirectActiveGateDiagnostics(diagnostics) {
       ] :
       null,
   });
-  const legacyActiveGateFields = deriveLegacyPriorityRecoveryActiveGateFields(
+  const activeGateReportFields = derivePriorityRecoveryActiveGateReportFields(
     activeGate,
   );
   const directActiveGateDiagnostics = {
     ...(activeGate ? {activeGate} : {}),
-    ...(legacyActiveGateFields || {}),
+    ...(activeGateReportFields || {}),
   };
   if (
     isRecord(
@@ -1913,7 +1912,7 @@ export const FAILURE_BUNDLE_SEGMENT_3 = {
   STABILITY_GATE_BLOCKER_PUBLICATION_PENDING,
   STABILITY_GATE_BLOCKER_PUBLICATION_MISSING_ACTIVE_NODE,
   STABILITY_GATE_BLOCKER_PRIORITY_SPREAD_PENDING,
-  STABILITY_GATE_BLOCKER_PENDING_ACK_NODES,
+  STABILITY_GATE_BLOCKER_PENDING_ACKS_PRESENT,
   STABILITY_GATE_BLOCKER_BLOCKED_NODES,
   STABILITY_GATE_BLOCKER_CLOSURE_RECORD,
   STABILITY_GATE_BLOCKER_STARTUP_READINESS,
@@ -1951,7 +1950,6 @@ export const FAILURE_BUNDLE_SEGMENT_3 = {
   normalizeDistinctStringArray,
   buildPriorityRecoveryCorrelationKey,
   normalizePriorityRecoverySemanticStateId,
-  inferPriorityRecoverySemanticState,
   normalizePriorityRecoveryDecisionSnapshots,
   mergePriorityRecoveryDecisionSnapshots,
   normalizePriorityRecoveryInvariants,

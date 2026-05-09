@@ -144,7 +144,7 @@ class ControlPlaneReadinessServiceSegment4Stage4 extends
   ) {
     try {
       return this.buildStartupAuthoritySnapshotFromPlanningAnswer(
-        await this.getPriorityRecoveryPlanningAnswerBestEffort(
+        await this.getPriorityRecoveryPlanningSnapshotBestEffort(
           nodeId,
           observedAt,
         ),

@@ -39,9 +39,10 @@ Use the tracker utility for current sprint/package mechanics:
    `-- --package work/packages/active-...md` to scope the report to a package
    other than the generated current blocker.
 4. `npm run work:model-ledger -- summary` prints recent model, reasoning
-   effort, task class, outcome, validation, correction-loop, and review-finding
-   signals with a simple advisory recommendation to escalate, de-escalate, or
-   hold effort.
+   effort, task class, package class, intended minimum model, scope shape,
+   escalation, bailout, outcome, validation, correction-loop, and
+   review-finding signals with a simple advisory recommendation to escalate,
+   de-escalate, or hold effort.
 5. `npm run work:validate` checks active and metadata-bearing packages for
    filename/header drift, stale open checklist items, and required Subagent
    Sequencing Ledgers on active metadata-bearing packages.
@@ -73,6 +74,11 @@ npm run work:model-ledger -- record \
   --model gpt-5-codex \
   --reasoning-effort medium \
   --task-class workflow-tooling \
+  --package-class bounded-implementation \
+  --intended-minimum-model gpt-5.3-codex-spark \
+  --scope-shape leaf-slice \
+  --escalated false \
+  --bailout-reason none \
   --outcome success \
   --validation-status passed \
   --correction-loops 0 \
@@ -222,6 +228,14 @@ Every active package should start with a machine-readable metadata comment:
     "src/example.js",
     "test/example.test.js"
   ],
+  "modelFit": {
+    "packageClass": "bounded-implementation",
+    "intendedMinimumModel": "gpt-5.3-codex-spark",
+    "scopeShape": "leaf-slice",
+    "escalationTriggers": [
+      "owned files expand beyond this package"
+    ]
+  },
   "predecessor": "work/packages/done-predecessor.md"
 }
 -->
@@ -272,6 +286,32 @@ Every work package should answer:
       patch
     - what replayable owner-decision fixture or blocker probe represents the
       current blocker
+
+## Model Fit
+
+Active metadata-bearing packages must include a `## Model Fit` section. The
+section records the minimum model the package is designed for and the exact
+conditions that require escalation before scope expands silently.
+
+Required fields for every active metadata-bearing package:
+
+1. `Package class`
+2. `Intended minimum model`
+3. `Scope shape`
+
+Packages whose intended minimum model is `gpt-5.3-codex-spark` are linted as
+bounded leaf slices. They must also name:
+
+1. `Owned files`
+2. `Forbidden files`
+3. `Frozen decisions`
+4. `Escalation triggers`
+5. `Focused proof`
+
+Packages intended for `gpt-5.3-codex-spark` must use
+`Scope shape: leaf-slice` and must not contain open-ended frontier language. If
+a package must chase a new owner boundary, broaden touched files, or reopen
+frozen decisions, mark it as escalated in the model ledger instead.
 
 Package closure also requires one final deep dive across the affected area:
 

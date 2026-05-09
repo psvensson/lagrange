@@ -100,12 +100,14 @@ const SECTION_FIRST_FILES = 'First Files To Read';
 const SECTION_TOUCHED_FILES = 'Touched Files';
 const SECTION_PROOF_LADDER = 'Proof Ladder';
 const SECTION_SUBAGENT_SEQUENCING = 'Subagent Sequencing';
+const SECTION_MODEL_FIT = 'Model Fit';
 const SECTION_OPEN_CHECKLIST = 'Open Package Checklist';
 const SECTION_OUT_OF_SCOPE = 'Out Of Scope';
 const SECTION_USEFUL_COMMANDS = 'Useful Commands';
 const SECTION_WORKTREE = 'Worktree Summary';
 const PACKAGE_SECTION_OUT_OF_SCOPE = 'Out Of Scope';
 const PACKAGE_SECTION_SUBAGENT_LEDGER = 'Subagent Sequencing Ledger';
+const PACKAGE_SECTION_MODEL_FIT = 'Model Fit';
 const MESSAGE_CURRENT_BLOCKER_MISSING =
   'No current blocker handoff was found.';
 const MESSAGE_CURRENT_BLOCKER_HINT =
@@ -160,12 +162,16 @@ const FIELD_LABELS = Object.freeze({
   BOUNDARY: 'Boundary',
   DIRTY_ENTRIES: 'Dirty entries',
   DOMINANT_REASON: 'Dominant reason',
+  ESCALATION_TRIGGERS: 'Escalation triggers',
+  INTENDED_MINIMUM_MODEL: 'Intended minimum model',
+  MODEL_FIT_PACKAGE_CLASS: 'Package class',
   OWNER: 'Owner',
   PACKAGE: 'Package',
   PACKAGE_TITLE: 'Package title',
   PLAYBACK: 'Playback',
   PREDECESSOR: 'Predecessor',
   SCENARIO: 'Scenario',
+  SCOPE_SHAPE: 'Scope shape',
   SPRINT: 'Sprint',
   STATUS: 'Status',
   SUBAGENT_ROLE: 'Next required subagent role',
@@ -204,6 +210,15 @@ const METADATA_FIELD_NEXT_ACTION = 'nextAction';
 const METADATA_FIELD_PROOF = 'proof';
 const METADATA_FIELD_TOUCHED_FILES = 'touchedFiles';
 const METADATA_FIELD_PREDECESSOR = 'predecessor';
+const METADATA_FIELD_MODEL_FIT = 'modelFit';
+const MODEL_FIT_FIELD_PACKAGE_CLASS = 'packageClass';
+const MODEL_FIT_FIELD_INTENDED_MINIMUM_MODEL = 'intendedMinimumModel';
+const MODEL_FIT_FIELD_SCOPE_SHAPE = 'scopeShape';
+const MODEL_FIT_FIELD_ESCALATION_TRIGGERS = 'escalationTriggers';
+const MODEL_FIT_LABEL_PACKAGE_CLASS = 'Package class';
+const MODEL_FIT_LABEL_INTENDED_MINIMUM_MODEL = 'Intended minimum model';
+const MODEL_FIT_LABEL_SCOPE_SHAPE = 'Scope shape';
+const MODEL_FIT_LABEL_ESCALATION_TRIGGERS = 'Escalation triggers';
 
 function appendSection(lines, title) {
   lines.push(EMPTY_STRING, `${SECTION_HEADING_PREFIX}${title}`);
@@ -326,6 +341,7 @@ async function buildCurrentBlockerFromPackage(packagePath) {
       nextAction: metadataText(metadata, METADATA_FIELD_NEXT_ACTION),
       proof: metadataList(metadata, METADATA_FIELD_PROOF),
       touchedFiles: metadataList(metadata, METADATA_FIELD_TOUCHED_FILES),
+      modelFit: metadataModelFit(metadata),
       predecessor: metadataText(metadata, METADATA_FIELD_PREDECESSOR),
     },
     packageContent: content,
@@ -338,6 +354,25 @@ function metadataText(metadata, fieldName) {
 
 function metadataList(metadata, fieldName) {
   return Array.isArray(metadata[fieldName]) ? metadata[fieldName] : [];
+}
+
+function metadataObject(metadata, fieldName) {
+  const value = metadata[fieldName];
+  return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+}
+
+function metadataModelFit(metadata) {
+  const modelFit = metadataObject(metadata, METADATA_FIELD_MODEL_FIT);
+  return {
+    [MODEL_FIT_FIELD_PACKAGE_CLASS]:
+      metadataText(modelFit, MODEL_FIT_FIELD_PACKAGE_CLASS),
+    [MODEL_FIT_FIELD_INTENDED_MINIMUM_MODEL]:
+      metadataText(modelFit, MODEL_FIT_FIELD_INTENDED_MINIMUM_MODEL),
+    [MODEL_FIT_FIELD_SCOPE_SHAPE]:
+      metadataText(modelFit, MODEL_FIT_FIELD_SCOPE_SHAPE),
+    [MODEL_FIT_FIELD_ESCALATION_TRIGGERS]:
+      metadataList(modelFit, MODEL_FIT_FIELD_ESCALATION_TRIGGERS),
+  };
 }
 
 async function fileExists(filePath) {
@@ -466,6 +501,70 @@ function extractMarkdownSectionText(content = EMPTY_STRING, title) {
   return nextHeadingIndex < NUM_ZERO ?
     content.slice(startIndex) :
     content.slice(startIndex, nextHeadingIndex);
+}
+
+function findMarkdownFieldValue(section, label) {
+  const fieldPrefix = `${label}${LABEL_SEPARATOR}`;
+  const itemParts = [];
+  for (const rawLine of section.split(NEWLINE)) {
+    const line = rawLine.trim();
+    if (startsMarkdownListItem(line)) {
+      if (itemParts.length > NUM_ZERO) {
+        break;
+      }
+      const item = stripMarkdownListMarker(line);
+      if (item.toLowerCase().startsWith(fieldPrefix.toLowerCase())) {
+        itemParts.push(item.slice(fieldPrefix.length).trim());
+      }
+      continue;
+    }
+    if (
+      itemParts.length > NUM_ZERO &&
+      line.length > NUM_ZERO &&
+      !line.startsWith(SECTION_HEADING_PREFIX)
+    ) {
+      itemParts.push(line);
+    }
+  }
+  if (itemParts.length === NUM_ZERO) {
+    const pattern = new RegExp(
+      `${escapeRegExp(label)}:\\s*([^\\n]+)`,
+      'iu',
+    );
+    const match = pattern.exec(section);
+    if (!match) {
+      return EMPTY_STRING;
+    }
+    itemParts.push(match[NUM_ONE]);
+  }
+  return normalizeString(itemParts.join(SPACE)).replace(/^`|`$/gu, EMPTY_STRING);
+}
+
+function buildModelFitContext(currentBlocker = {}, packageContent = EMPTY_STRING) {
+  const metadataModel = currentBlocker.modelFit || {};
+  const section = extractMarkdownSectionText(packageContent, PACKAGE_SECTION_MODEL_FIT);
+  const sectionTriggers = findMarkdownFieldValue(
+    section,
+    MODEL_FIT_LABEL_ESCALATION_TRIGGERS,
+  );
+  const triggers = sectionTriggers ?
+    normalizeStringList([sectionTriggers]) :
+    normalizeStringList(metadataModel[MODEL_FIT_FIELD_ESCALATION_TRIGGERS]);
+  return {
+    [MODEL_FIT_FIELD_PACKAGE_CLASS]:
+      findMarkdownFieldValue(section, MODEL_FIT_LABEL_PACKAGE_CLASS) ||
+      metadataModel[MODEL_FIT_FIELD_PACKAGE_CLASS] ||
+      DEFAULT_UNKNOWN,
+    [MODEL_FIT_FIELD_INTENDED_MINIMUM_MODEL]:
+      findMarkdownFieldValue(section, MODEL_FIT_LABEL_INTENDED_MINIMUM_MODEL) ||
+      metadataModel[MODEL_FIT_FIELD_INTENDED_MINIMUM_MODEL] ||
+      DEFAULT_UNKNOWN,
+    [MODEL_FIT_FIELD_SCOPE_SHAPE]:
+      findMarkdownFieldValue(section, MODEL_FIT_LABEL_SCOPE_SHAPE) ||
+      metadataModel[MODEL_FIT_FIELD_SCOPE_SHAPE] ||
+      DEFAULT_UNKNOWN,
+    [MODEL_FIT_FIELD_ESCALATION_TRIGGERS]: triggers,
+  };
 }
 
 function findCheckedLedgerItem(ledger, label) {
@@ -932,6 +1031,10 @@ async function buildContextLines(currentBlocker, packageContent) {
     packageContent || EMPTY_STRING,
     currentBlocker.package,
   );
+  const modelFit = buildModelFitContext(
+    currentBlocker,
+    packageContent || EMPTY_STRING,
+  );
 
   appendSection(lines, SECTION_CURRENT_BLOCKER);
   appendKeyValue(lines, FIELD_LABELS.SPRINT, currentBlocker.sprint);
@@ -953,6 +1056,24 @@ async function buildContextLines(currentBlocker, packageContent) {
   appendSection(lines, SECTION_SUBAGENT_SEQUENCING);
   appendKeyValue(lines, FIELD_LABELS.SUBAGENT_ROLE, subagentStatus.role);
   appendKeyValue(lines, FIELD_LABELS.SUBAGENT_STATUS, subagentStatus.status);
+
+  appendSection(lines, SECTION_MODEL_FIT);
+  appendKeyValue(
+    lines,
+    FIELD_LABELS.MODEL_FIT_PACKAGE_CLASS,
+    modelFit[MODEL_FIT_FIELD_PACKAGE_CLASS],
+  );
+  appendKeyValue(
+    lines,
+    FIELD_LABELS.INTENDED_MINIMUM_MODEL,
+    modelFit[MODEL_FIT_FIELD_INTENDED_MINIMUM_MODEL],
+  );
+  appendKeyValue(lines, FIELD_LABELS.SCOPE_SHAPE, modelFit[MODEL_FIT_FIELD_SCOPE_SHAPE]);
+  appendKeyValue(
+    lines,
+    FIELD_LABELS.ESCALATION_TRIGGERS,
+    normalizeStringList(modelFit[MODEL_FIT_FIELD_ESCALATION_TRIGGERS]).join(', '),
+  );
 
   appendSection(lines, SECTION_CURRENT_STATE);
   lines.push(normalizeString(currentBlocker.currentState) || DEFAULT_UNKNOWN);
@@ -1062,6 +1183,7 @@ export {
   buildCurrentBlockerFromPackage,
   buildDirtyScopeLines,
   buildFirstReadPaths,
+  buildModelFitContext,
   buildOwnerCardPaths,
   buildSubagentSequencingStatus,
   buildUsefulCommands,

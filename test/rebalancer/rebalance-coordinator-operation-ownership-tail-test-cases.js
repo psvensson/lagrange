@@ -1411,7 +1411,7 @@ export function registerRebalanceCoordinatorOperationOwnershipTailTests({
           async waitForCacheUpdate() {},
         },
         controlPlaneReadinessService: {
-          getPriorityRecoveryPlanningAnswerBestEffort() {
+          getPriorityRecoveryPlanningSnapshotBestEffort() {
             planningSnapshotCalls += 1;
             return planningSnapshot;
           },

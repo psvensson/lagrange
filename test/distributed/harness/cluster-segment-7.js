@@ -5,7 +5,7 @@ import {
 } from '../../../src/bootstrap/lifecycle-controller-constants.js';
 import {
   buildPriorityRecoveryActiveGateSnapshot,
-  deriveLegacyPriorityRecoveryActiveGateFields,
+  derivePriorityRecoveryActiveGateReportFields,
   PRIORITY_RECOVERY_ACTIVE_GATE_STATE,
 } from './active-gate-contract.js';
 
@@ -783,7 +783,7 @@ class Cluster extends Cluster5 {
       });
       return {
         activeGate,
-        ...deriveLegacyPriorityRecoveryActiveGateFields(activeGate),
+        ...derivePriorityRecoveryActiveGateReportFields(activeGate),
       };
     };
 
@@ -1508,7 +1508,7 @@ class Cluster extends Cluster5 {
       });
       return {
         activeGate,
-        ...deriveLegacyPriorityRecoveryActiveGateFields(activeGate),
+        ...derivePriorityRecoveryActiveGateReportFields(activeGate),
       };
     };
 

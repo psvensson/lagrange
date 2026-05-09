@@ -3,7 +3,7 @@
  *
  * Verifies that no dual progression paths exist for migrated
  * concerns after a phase closure. Detects temporary toggles,
- * duplicate progression branches, and legacy code paths that
+ * duplicate progression branches, and superseded code paths that
  * should have been removed.
  *
  * Each control-plane concern (dispatch, rebalance, split) must
@@ -52,7 +52,7 @@ function buildViolation(options) {
  *     concern: string,          // CONCERN value
  *     ownerPaths: string[],     // registered progression paths
  *     activeToggles: string[],  // temporary migration toggles
- *     legacyBranches: string[], // legacy branches not yet removed
+ *     supersededBranches: string[], // superseded branches not yet removed
  *   }
  *
  * @param {Object} concernEntry - Concern state snapshot.
@@ -72,8 +72,8 @@ function verifyConcern(concernEntry) {
   const activeToggles = Array.isArray(entry.activeToggles) ?
     entry.activeToggles :
     [];
-  const legacyBranches = Array.isArray(entry.legacyBranches) ?
-    entry.legacyBranches :
+  const supersededBranches = Array.isArray(entry.supersededBranches) ?
+    entry.supersededBranches :
     [];
   const concern = typeof entry.concern === 'string' ?
     entry.concern :
@@ -96,10 +96,10 @@ function verifyConcern(concernEntry) {
     }));
   }
 
-  for (const branch of legacyBranches) {
+  for (const branch of supersededBranches) {
     violations.push(buildViolation({
       concern,
-      violationType: VIOLATION_TYPE.LEGACY_BRANCH,
+      violationType: VIOLATION_TYPE.SUPERSEDED_BRANCH,
       detail: typeof branch === LOCAL_STR_STRING ? branch : null,
     }));
   }
@@ -153,7 +153,7 @@ function verifyClosureState(concernEntries) {
  * @param {string} concern - One of CONCERN values.
  * @param {string} ownerPath - The single canonical owner path.
  * @return {Object} Frozen concern entry with no toggles or
- *   legacy branches.
+ *   superseded branches.
  */
 function buildCleanConcernEntry(concern, ownerPath) {
   return Object.freeze({
@@ -164,7 +164,7 @@ function buildCleanConcernEntry(concern, ownerPath) {
         [],
     ),
     activeToggles: Object.freeze([]),
-    legacyBranches: Object.freeze([]),
+    supersededBranches: Object.freeze([]),
   });
 }
 

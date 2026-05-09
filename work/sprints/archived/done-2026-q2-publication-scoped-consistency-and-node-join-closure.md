@@ -57,7 +57,7 @@ The active contract-rewrite package closes by migration to a queued
 publication-convergence follow-on:
 
 1. [Priority Recovery Operation Workflow Contract Rewrite](../packages/done-20260508-priority-recovery-operation-workflow-contract-rewrite.md)
-2. [Rolling Restart Topology Publication Convergence ACK Pending Missing Published Reentry](../packages/todo-20260508-rolling-restart-topology-publication-convergence-ack-pending-missing-published-reentry.md)
+2. [Rolling Restart Topology Publication Convergence ACK Pending Missing Published Reentry](../packages/active-20260508-rolling-restart-topology-publication-convergence-ack-pending-missing-published-reentry.md)
 
 ## Scope Basis
 
@@ -176,7 +176,7 @@ unless the representative evidence returns to their named boundary:
 6. [Critical replace operation lifecycle convergence owner](../packages/todo-20260424-critical-replace-operation-lifecycle-convergence-owner.md)
 7. [Rolling restart in-flight operation drain and CDC pressure](../packages/todo-20260425-rolling-restart-inflight-operation-drain-and-cdc-pressure.md)
 8. [Structural bookkeeping semantic source names](../packages/todo-20260429-structural-bookkeeping-semantic-source-names.md)
-9. [Rolling Restart Topology Publication Convergence ACK Pending Missing Published Reentry](../packages/todo-20260508-rolling-restart-topology-publication-convergence-ack-pending-missing-published-reentry.md)
+9. [Rolling Restart Topology Publication Convergence ACK Pending Missing Published Reentry](../packages/active-20260508-rolling-restart-topology-publication-convergence-ack-pending-missing-published-reentry.md)
 
 ## Validation Ladder
 

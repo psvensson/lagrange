@@ -90,7 +90,7 @@ const {
   STABILITY_GATE_BLOCKER_PUBLICATION_PENDING,
   STABILITY_GATE_BLOCKER_PUBLICATION_MISSING_ACTIVE_NODE,
   STABILITY_GATE_BLOCKER_PRIORITY_SPREAD_PENDING,
-  STABILITY_GATE_BLOCKER_PENDING_ACK_NODES,
+  STABILITY_GATE_BLOCKER_PENDING_ACKS_PRESENT,
   STABILITY_GATE_BLOCKER_BLOCKED_NODES,
   STABILITY_GATE_BLOCKER_CLOSURE_RECORD,
   STABILITY_GATE_BLOCKER_STARTUP_READINESS,
@@ -126,7 +126,6 @@ const {
   normalizeDistinctStringArray,
   buildPriorityRecoveryCorrelationKey,
   normalizePriorityRecoverySemanticStateId,
-  inferPriorityRecoverySemanticState,
   normalizePriorityRecoveryDecisionSnapshots,
   mergePriorityRecoveryDecisionSnapshots,
   normalizePriorityRecoveryInvariants,
@@ -371,7 +370,7 @@ function buildRestartRecoveryStabilityGate({
   if (
     normalizeNonNegativeCount(publicationConvergence?.pendingAckCount) > ZERO
   ) {
-    blockers.push(STABILITY_GATE_BLOCKER_PENDING_ACK_NODES);
+    blockers.push(STABILITY_GATE_BLOCKER_PENDING_ACKS_PRESENT);
   }
   if (
     normalizeNonNegativeCount(publicationConvergence?.blockedNodeCount) > ZERO
@@ -3045,7 +3044,7 @@ export const FAILURE_BUNDLE_SEGMENT_5 = {
   STABILITY_GATE_BLOCKER_PUBLICATION_PENDING,
   STABILITY_GATE_BLOCKER_PUBLICATION_MISSING_ACTIVE_NODE,
   STABILITY_GATE_BLOCKER_PRIORITY_SPREAD_PENDING,
-  STABILITY_GATE_BLOCKER_PENDING_ACK_NODES,
+  STABILITY_GATE_BLOCKER_PENDING_ACKS_PRESENT,
   STABILITY_GATE_BLOCKER_BLOCKED_NODES,
   STABILITY_GATE_BLOCKER_CLOSURE_RECORD,
   STABILITY_GATE_BLOCKER_STARTUP_READINESS,
@@ -3081,7 +3080,6 @@ export const FAILURE_BUNDLE_SEGMENT_5 = {
   normalizeDistinctStringArray,
   buildPriorityRecoveryCorrelationKey,
   normalizePriorityRecoverySemanticStateId,
-  inferPriorityRecoverySemanticState,
   normalizePriorityRecoveryDecisionSnapshots,
   mergePriorityRecoveryDecisionSnapshots,
   normalizePriorityRecoveryInvariants,

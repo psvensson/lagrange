@@ -187,7 +187,7 @@ function buildPriorityDrainReadinessService(partitionId) {
         },
       };
     },
-    getPriorityRecoveryPlanningAnswerBestEffort() {
+    getPriorityRecoveryPlanningSnapshotBestEffort() {
       return planningSnapshot;
     },
   });
@@ -215,7 +215,7 @@ function buildPriorityDrainOwnerUnavailableReadinessService(
         },
       };
     },
-    getPriorityRecoveryPlanningAnswerBestEffort() {
+    getPriorityRecoveryPlanningSnapshotBestEffort() {
       return planningSnapshot;
     },
   });
@@ -238,7 +238,7 @@ function buildPriorityDrainSupersededReadinessService(
         },
       };
     },
-    getPriorityRecoveryPlanningAnswerBestEffort() {
+    getPriorityRecoveryPlanningSnapshotBestEffort() {
       return planningSnapshot;
     },
   });

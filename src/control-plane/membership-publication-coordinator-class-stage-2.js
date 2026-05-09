@@ -114,8 +114,8 @@ class MembershipPublicationCoordinatorClassStage2 extends
         null :
         this.controlPlaneReadinessService &&
             typeof this.controlPlaneReadinessService
-              .getMembershipPublicationPlanningAnswerBestEffort === TYPEOF.FUNCTION ?
-          await this.controlPlaneReadinessService.getMembershipPublicationPlanningAnswerBestEffort(
+              .getMembershipPublicationPlanningSnapshotBestEffort === TYPEOF.FUNCTION ?
+          await this.controlPlaneReadinessService.getMembershipPublicationPlanningSnapshotBestEffort(
             options.publisherNodeId || this.nodeId,
             normalizePositiveInteger(options.nowMs, this.now()),
           ) :

@@ -33,8 +33,6 @@ const {
   CLUSTER_READINESS_MODE_LOAD,
   CLUSTER_READINESS_MODE_STARTUP,
   INVARIANT_SEVERITY,
-  PRIORITY_RECOVERY_BLOCKER_REASON_PRECEDENCE,
-  PRIORITY_RECOVERY_BLOCKER_TO_SEMANTIC_STATE,
   PRIORITY_RECOVERY_SEMANTIC_STATE,
   PRIORITY_RECOVERY_SEMANTIC_STATE_IDS,
   PRIORITY_RECOVERY_UNRESOLVED_SEMANTIC_STATE_IDS,
@@ -1393,32 +1391,6 @@ function normalizePriorityRecoverySemanticStateId(semanticState) {
     null;
 }
 
-function inferPriorityRecoverySemanticState(snapshot, blockerReasons = []) {
-  for (const blockerReason of PRIORITY_RECOVERY_BLOCKER_REASON_PRECEDENCE) {
-    if (!blockerReasons.includes(blockerReason)) {
-      continue;
-    }
-    return (
-      PRIORITY_RECOVERY_BLOCKER_TO_SEMANTIC_STATE[blockerReason] ||
-      PRIORITY_RECOVERY_SEMANTIC_STATE.BLOCKED_UNCLASSIFIED
-    );
-  }
-  if (snapshot?.planner?.ready === true) {
-    return PRIORITY_RECOVERY_SEMANTIC_STATE.CONVERGED;
-  }
-  if (snapshot?.spreadCompletion?.satisfied === true) {
-    return PRIORITY_RECOVERY_SEMANTIC_STATE.SPREAD_SATISFIED_IN_FLIGHT;
-  }
-  if (
-    Number(snapshot?.coordinator?.operationCount) > ZERO ||
-    (typeof snapshot?.operationId === 'string' &&
-      snapshot.operationId.length > ZERO)
-  ) {
-    return PRIORITY_RECOVERY_SEMANTIC_STATE.RECOVERING_IN_FLIGHT;
-  }
-  return PRIORITY_RECOVERY_SEMANTIC_STATE.BLOCKED_UNCLASSIFIED;
-}
-
 function buildPriorityRecoveryExplicitSemanticStateByPartitionId(
   partitionIdsBySemanticState,
 ) {
@@ -1594,8 +1566,7 @@ function summarizePriorityRecoveryProgressClasses(
       resolvePriorityRecoveryExplicitSemanticState(
         snapshot,
         explicitSemanticStateByPartitionId,
-      ) ||
-      inferPriorityRecoverySemanticState(snapshot, blockerReasons);
+      );
     if (partitionIdsBySemanticState[semanticState] instanceof Set) {
       partitionIdsBySemanticState[semanticState].add(partitionId);
     }
@@ -1657,6 +1628,5 @@ export const CLUSTER_SEGMENT_2 = {
   resolveActiveWaitPublicationStatusRank,
   buildActiveWaitProgressSnapshot,
   normalizePriorityRecoverySemanticStateId,
-  inferPriorityRecoverySemanticState,
   summarizePriorityRecoveryProgressClasses,
 };

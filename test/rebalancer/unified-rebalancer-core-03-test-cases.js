@@ -311,7 +311,7 @@ export function registerUnifiedRebalancerCore03Tests(context) {
       async getNodeReadiness(nodeId) {
         return this.getNodeReadinessSync(nodeId);
       },
-      getPriorityRecoveryPlanningAnswerBestEffort() {
+      getPriorityRecoveryPlanningSnapshotBestEffort() {
         return priorityRecoveryPlanningSnapshot;
       },
       getPriorityRecoveryPlanningAnswerSync() {
@@ -558,7 +558,7 @@ export function registerUnifiedRebalancerCore03Tests(context) {
       async getNodeReadiness(nodeId) {
         return this.getNodeReadinessSync(nodeId);
       },
-      getPriorityRecoveryPlanningAnswerBestEffort() {
+      getPriorityRecoveryPlanningSnapshotBestEffort() {
         return priorityRecoveryPlanningSnapshot;
       },
       getPriorityRecoveryPlanningAnswerSync() {

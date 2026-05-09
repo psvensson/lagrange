@@ -170,7 +170,7 @@ export function registerUnifiedRebalancerCore05Tests(context) {
     );
     const readinessService = {
       ...createMockReadinessService(cache),
-      getPriorityRecoveryPlanningAnswerBestEffort() {
+      getPriorityRecoveryPlanningSnapshotBestEffort() {
         return planningSnapshot;
       },
       getPriorityRecoveryPlanningAnswerSync() {
@@ -389,7 +389,7 @@ export function registerUnifiedRebalancerCore05Tests(context) {
     );
     const readinessService = {
       ...createMockReadinessService(cache),
-      getPriorityRecoveryPlanningAnswerBestEffort() {
+      getPriorityRecoveryPlanningSnapshotBestEffort() {
         return planningSnapshot;
       },
       getPriorityRecoveryPlanningAnswerSync() {
@@ -643,7 +643,7 @@ export function registerUnifiedRebalancerCore05Tests(context) {
     const cache = createMockCache(nodeRows, serviceRows, partitionRows);
     const readinessService = {
       ...createMockReadinessService(cache),
-      getPriorityRecoveryPlanningAnswerBestEffort() {
+      getPriorityRecoveryPlanningSnapshotBestEffort() {
         return planningSnapshot;
       },
       getPriorityRecoveryPlanningAnswerSync() {

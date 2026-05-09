@@ -1141,7 +1141,7 @@ await t.test(
         nodeEndpoints,
         serviceEndpoints,
       )),
-      async getMembershipPublicationPlanningAnswerBestEffort() {
+      async getMembershipPublicationPlanningSnapshotBestEffort() {
         return {
           publishedActiveNodeIdsPresent: true,
           publishedActiveNodeIds: ['node-1', 'node-2'],

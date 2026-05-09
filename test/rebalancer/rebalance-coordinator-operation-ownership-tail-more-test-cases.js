@@ -629,7 +629,7 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
               },
             };
           },
-          getPriorityRecoveryPlanningAnswerBestEffort(nodeId) {
+          getPriorityRecoveryPlanningSnapshotBestEffort(nodeId) {
             canonicalCalls.push(nodeId);
             return Promise.resolve({
               publishedActiveNodeIdsPresent: true,
@@ -648,7 +648,7 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
               }),
             });
           },
-          async getMembershipPublicationPlanningAnswerBestEffort() {
+          async getMembershipPublicationPlanningSnapshotBestEffort() {
             legacyCalls.push(1);
             return {
               publishedActiveNodeIdsPresent: true,

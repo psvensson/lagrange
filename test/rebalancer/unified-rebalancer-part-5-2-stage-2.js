@@ -1242,7 +1242,7 @@ test(TEST_NAME.SUITE, async (t) => {
       );
       const readinessService = {
         ...createMockReadinessService(cache),
-        getPriorityRecoveryPlanningAnswerBestEffort() {
+        getPriorityRecoveryPlanningSnapshotBestEffort() {
           return planningSnapshot;
         },
         getPriorityRecoveryPlanningAnswerSync() {
@@ -1485,7 +1485,7 @@ test(TEST_NAME.SUITE, async (t) => {
       const createdOperationsWithMissingSerialWait = [];
       const missingSerialWaitReadinessService = {
         ...createMockReadinessService(cache),
-        getPriorityRecoveryPlanningAnswerBestEffort() {
+        getPriorityRecoveryPlanningSnapshotBestEffort() {
           return missingSerialWaitPlanningSnapshot;
         },
         getPriorityRecoveryPlanningAnswerSync() {
@@ -1568,7 +1568,7 @@ test(TEST_NAME.SUITE, async (t) => {
 
       const readinessService = {
         ...createMockReadinessService(cache),
-        getPriorityRecoveryPlanningAnswerBestEffort() {
+        getPriorityRecoveryPlanningSnapshotBestEffort() {
           return planningSnapshot;
         },
         getPriorityRecoveryPlanningAnswerSync() {
@@ -1859,7 +1859,7 @@ test(TEST_NAME.SUITE, async (t) => {
       );
       const readinessService = {
         ...createMockReadinessService(cache),
-        getPriorityRecoveryPlanningAnswerBestEffort() {
+        getPriorityRecoveryPlanningSnapshotBestEffort() {
           return planningSnapshot;
         },
         getPriorityRecoveryPlanningAnswerSync() {

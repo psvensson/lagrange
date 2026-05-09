@@ -38,7 +38,7 @@ import {
   normalizePositiveInteger,
   normalizeSqlOperationKind,
   normalizeSystemTableName,
-  resolveLegacyAuthoritativeReadMode,
+  resolveAuthoritativeReadMode,
   stableSerialize,
 } from './control-plane-system-table-gateway-shared.js';
 import {
@@ -731,7 +731,7 @@ class ControlPlaneSystemTableGatewaySegment2 extends ControlPlaneSystemTableGate
         normalizeDistinctStringArray(options.resourceKeys) :
         [],
       phaseScope: normalizePhaseScope(options?.phaseScope),
-      authoritativeReadMode: resolveLegacyAuthoritativeReadMode(options),
+      authoritativeReadMode: resolveAuthoritativeReadMode(options),
       localReadConsistency: options?.localReadConsistency || null,
       replicaFallbackConsistency: options?.replicaFallbackConsistency || null,
       routingReadinessDimension:

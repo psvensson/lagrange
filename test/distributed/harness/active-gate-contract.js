@@ -76,7 +76,7 @@ function inferActiveGateState(options = {}) {
   return PRIORITY_RECOVERY_ACTIVE_GATE_STATE.WAITING;
 }
 
-function buildLegacyNoProgress(activeGate) {
+function buildActiveGateNoProgressReport(activeGate) {
   if (!isRecord(activeGate)) {
     return null;
   }
@@ -258,7 +258,7 @@ export function normalizePriorityRecoveryActiveGateSnapshot(options = {}) {
   ) {
     return null;
   }
-  const legacyState =
+  const resolvedState =
     activeGateNoProgress?.stalled === true ?
       PRIORITY_RECOVERY_ACTIVE_GATE_STATE.STALLED :
       activeGateProgress?.blockerSignature === 'ready' ||
@@ -277,7 +277,7 @@ export function normalizePriorityRecoveryActiveGateSnapshot(options = {}) {
       options.mode ||
       options.readinessMode ||
       null,
-    state: legacyState,
+    state: resolvedState,
     attempts: options.attempts,
     elapsedMs: options.elapsedMs,
     maxAttempts: activeGateNoProgress?.maxAttempts,
@@ -326,7 +326,7 @@ export function normalizePriorityRecoveryActiveGateSnapshot(options = {}) {
   });
 }
 
-export function deriveLegacyPriorityRecoveryActiveGateFields(activeGate) {
+export function derivePriorityRecoveryActiveGateReportFields(activeGate) {
   if (!isRecord(activeGate)) {
     return {
       activeGateProgress: null,
@@ -339,7 +339,7 @@ export function deriveLegacyPriorityRecoveryActiveGateFields(activeGate) {
   return {
     activeGateProgress: activeGate.progress || null,
     activeGateBestProgress: activeGate.bestProgress || null,
-    activeGateNoProgress: buildLegacyNoProgress(activeGate),
+    activeGateNoProgress: buildActiveGateNoProgressReport(activeGate),
     activeGateBlockerHistory:
       activeGate.blockerHistory.length > ZERO ?
         activeGate.blockerHistory :

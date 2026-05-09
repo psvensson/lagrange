@@ -21,6 +21,15 @@
     "src/example.js",
     "test/example.test.js"
   ],
+  "modelFit": {
+    "packageClass": "bounded-implementation",
+    "intendedMinimumModel": "gpt-5.3-codex-spark",
+    "scopeShape": "leaf-slice",
+    "escalationTriggers": [
+      "owned files expand beyond this package",
+      "a frozen decision must be reopened"
+    ]
+  },
   "predecessor": "work/packages/done-predecessor.md"
 }
 -->
@@ -57,6 +66,21 @@ scope that makes this work package valid without a roadmap change.
 1. File or subsystem
 2. File or subsystem
 3. File or subsystem
+
+## Model Fit
+
+Required for active metadata-bearing packages. Use `gpt-5.3-codex-spark` only
+for a bounded leaf slice; otherwise choose a package class and intended model
+that records why escalation is already required.
+
+- Package class: `bounded-implementation`
+- Intended minimum model: `gpt-5.3-codex-spark`
+- Scope shape: `leaf-slice`
+- Owned files: `path/to/owned-file`
+- Forbidden files: `src/runtime-or-other-forbidden-area`
+- Frozen decisions: decision that must not be reopened by this package
+- Escalation triggers: condition that requires a stronger model or human split
+- Focused proof: exact command or proof surface for this leaf slice
 
 ## Shared Boundary Contract
 
@@ -127,7 +151,7 @@ Optional advisory record for future model and reasoning-effort choice. This
 does not replace validation, review, sequencing, or closure proof.
 
 - [ ] If this package produced useful model-fit evidence, record it with:
-      `npm run work:model-ledger -- record --package <this package> --model <model> --reasoning-effort <effort> --task-class <class> --outcome <outcome> --validation-status <status> --correction-loops <count> --review-findings <count> --notes <note>`.
+      `npm run work:model-ledger -- record --package <this package> --model <model> --reasoning-effort <effort> --task-class <class> --package-class <class> --intended-minimum-model <model> --scope-shape <shape> --escalated <true|false> --bailout-reason <reason|none> --outcome <outcome> --validation-status <status> --correction-loops <count> --review-findings <count> --notes <note>`.
 - [ ] If no record is useful, state why.
 
 ## Failure Migration / Contraction

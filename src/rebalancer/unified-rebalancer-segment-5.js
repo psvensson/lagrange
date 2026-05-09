@@ -1269,7 +1269,7 @@ class UnifiedRebalancerSegment5 extends UnifiedRebalancerSegment4 {
   }
 
   /**
-   * Preserve the legacy blocker facade while exposing one explicit
+   * Preserve the blocker facade while exposing one explicit
    * planning-gate decision for the touched rebalancer seam.
    * @return {Promise<{apply: Function, decision: Object}|null>}
    * @private

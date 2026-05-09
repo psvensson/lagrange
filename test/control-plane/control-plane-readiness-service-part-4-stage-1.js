@@ -444,7 +444,7 @@ test('ControlPlaneReadinessService exposes canonical priority-recovery planning 
     });
 
     const answer =
-      await readinessService.getPriorityRecoveryPlanningAnswerBestEffort(
+      await readinessService.getPriorityRecoveryPlanningSnapshotBestEffort(
         'node-priority-best-effort-contract',
         1500,
       );
@@ -618,7 +618,7 @@ test('ControlPlaneReadinessService retains a fresher async priority-recovery pla
     });
 
     const bestEffortAnswer =
-      await readinessService.getPriorityRecoveryPlanningAnswerBestEffort(
+      await readinessService.getPriorityRecoveryPlanningSnapshotBestEffort(
         TARGET_NODE_ID,
         INITIAL_OBSERVED_AT,
       );

@@ -482,7 +482,7 @@ function normalizeAuthoritativeReadMode(value) {
   return null;
 }
 
-function resolveLegacyAuthoritativeReadMode(options = {}) {
+function resolveAuthoritativeReadMode(options = {}) {
   const explicitMode = normalizeAuthoritativeReadMode(
     options?.authoritativeReadMode || options?.ownerReadMode,
   );
@@ -507,7 +507,7 @@ function resolveLegacyAuthoritativeReadMode(options = {}) {
 }
 
 function resolveAuthoritativeReadModeContract(options = {}) {
-  const authoritativeReadMode = resolveLegacyAuthoritativeReadMode(options);
+  const authoritativeReadMode = resolveAuthoritativeReadMode(options);
   switch (authoritativeReadMode) {
   case CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_CONFIRM_EMPTY_WITH_OWNER_RPC:
     return Object.freeze({
@@ -933,7 +933,7 @@ function resolveReadProfileOptions(options = {}) {
     return applyReadWorkloadProfileDefaults(
       {
         ...options,
-        authoritativeReadMode: resolveLegacyAuthoritativeReadMode(options),
+        authoritativeReadMode: resolveAuthoritativeReadMode(options),
       },
       options,
     );
@@ -1044,7 +1044,7 @@ function resolveReadProfileOptions(options = {}) {
     {
       ...resolvedOptions,
       authoritativeReadMode:
-        resolveLegacyAuthoritativeReadMode(resolvedOptions),
+        resolveAuthoritativeReadMode(resolvedOptions),
     },
     options,
   );
@@ -1212,7 +1212,7 @@ export {
   resolveControlPlaneMutationOutcomeSnapshot,
   resolveControlPlaneSystemTableDeliverySource,
   resolveControlPlaneReadIntent,
-  resolveLegacyAuthoritativeReadMode,
+  resolveAuthoritativeReadMode,
   resolveMutationCompletionState,
   resolveReadProfileOptions,
   resolveReadStrategyForProfile,

@@ -4,7 +4,7 @@
 
 Sprint: `work/sprints/active-2026-q2-spec-led-runtime-modularization.md`
 
-Package: `work/packages/done-20260509-spec-led-runtime-modularization-diagnostics-harness-consumer.md`
+Package: `work/packages/active-20260509-spec-led-runtime-modularization-legacy-deletion-proof.md`
 
 Scenario: `spec-led-runtime-modularization`
 
@@ -14,34 +14,33 @@ Playback: `none`
 
 ## Boundary
 
-Owner: `diagnostics_observer`
+Owner: `runtime_contract_closure_owner`
 
-Boundary: `owner_contract_presentation`
+Boundary: `legacy_path_deletion_and_representative_proof`
 
-Dominant reason: `diagnostics_and_harness_can_still_reclassify_owner_truth`
+Dominant reason: `modular_rewrite_not_yet_closed_by_deletion_and_gate_proof`
 
-Current state: Diagnostics graph, topology analyzer, and failure-bundle reporting now expose canonical owner witnesses for ACK debt and dominant topology blockers.
+Current state: After owner rewrites land, old compatibility paths, aliases, helpers, and fallback branches must be deleted or guarded, then representative proof must confirm no new blocker has been hidden.
 
 ## Next Action
 
-Run parent verification, commit and push the focused diagnostics package slice, then close the package.
+Run structural deletion proof, close remaining compatibility paths, and rerun representative rolling-restart or migrate the first new blocker to a fresh owner package.
 
 ## Proof Ladder
 
-1. `Focused failure-bundle tests`
-2. `Focused topology convergence analyzer tests`
-3. `Focused publication evidence harness tests`
-4. `Representative rolling-restart rerun if this package owns active gate presentation`
+1. `rg checks for deleted legacy labels and helpers`
+2. `npm run work:validate`
+3. `Touched-file static guardrails selected by changed owners`
+4. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-spec-led-runtime-modularization-final.report.json --fast-local --verbose`
 
 ## Touched Files
 
-1. `src/diagnostics/topology-convergence-graph.js`
-2. `scripts/analyze-topology-convergence.js`
-3. `test/diagnostics/topology-convergence-graph.test.js`
-4. `test/scripts/analyze-topology-convergence.test.js`
-5. `test/scripts/__fixtures__/topology-convergence/active-gate-snapshot.expected.json`
-6. `test/scripts/__fixtures__/topology-convergence/priority-workflow-progress.expected.json`
-7. `test/distributed/harness/failure-bundle-segment-4.js`
-8. `test/distributed/harness/__tests__/failure-bundle-active-gate-tail-test-cases.js`
-9. `test/distributed/harness/__tests__/failure-bundle-core-16-test-cases.js`
-10. `work/packages/done-20260509-spec-led-runtime-modularization-diagnostics-harness-consumer.md`
+1. `src/rebalancer/operation-workflow-owner*.js`
+2. `src/rebalancer/move-planner*.js`
+3. `src/control-plane/*publication*.js`
+4. `src/control-plane/*readiness*.js`
+5. `src/control-plane/priority-recovery-snapshot*.js`
+6. `test/distributed/harness/*.js`
+7. `scripts/analyze-topology-convergence.js`
+8. `work/sprints/todo-2026-q2-spec-led-runtime-modularization.md`
+9. `work/packages/active-20260509-spec-led-runtime-modularization-legacy-deletion-proof.md`

@@ -490,7 +490,7 @@ test('UnifiedRebalancer - Replica State Management', async (t) => {
           {node_id: 'node-a', status: NodeStatus.ACTIVE},
         ],
         controlPlaneReadinessService: {
-          getPriorityRecoveryPlanningAnswerBestEffort(nodeId) {
+          getPriorityRecoveryPlanningSnapshotBestEffort(nodeId) {
             asyncCalls.push(nodeId);
             return Promise.resolve(planningSnapshot);
           },

@@ -5,7 +5,7 @@
     "firstFrontierState": "blocked",
     "firstFrontierOwner": "operation_workflow_owner",
     "firstFrontierBoundary": "workflow_progress",
-    "firstFrontierReason": "priority_recovery_operation_scheduling_event_driven"
+    "firstFrontierReason": "priority_recovery_progress_blocked"
   },
   "frontier": [
     {
@@ -38,7 +38,7 @@
     "boundary": "workflow_progress",
     "state": "blocked",
     "frontierState": "blocked",
-    "dominantReason": "priority_recovery_operation_scheduling_event_driven",
+    "dominantReason": "priority_recovery_progress_blocked",
     "evidencePath": "triageSummary.publicationConvergence.activeGate.progress.priorityRecoveryProgressClasses",
     "reasons": [
       "priority_recovery_progress_blocked"

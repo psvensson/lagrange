@@ -87,7 +87,7 @@ const {
   STABILITY_GATE_BLOCKER_PUBLICATION_PENDING,
   STABILITY_GATE_BLOCKER_PUBLICATION_MISSING_ACTIVE_NODE,
   STABILITY_GATE_BLOCKER_PRIORITY_SPREAD_PENDING,
-  STABILITY_GATE_BLOCKER_PENDING_ACK_NODES,
+  STABILITY_GATE_BLOCKER_PENDING_ACKS_PRESENT,
   STABILITY_GATE_BLOCKER_BLOCKED_NODES,
   STABILITY_GATE_BLOCKER_CLOSURE_RECORD,
   STABILITY_GATE_BLOCKER_STARTUP_READINESS,
@@ -125,7 +125,6 @@ const {
   normalizeDistinctStringArray,
   buildPriorityRecoveryCorrelationKey,
   normalizePriorityRecoverySemanticStateId,
-  inferPriorityRecoverySemanticState,
   normalizePriorityRecoveryDecisionSnapshots,
   mergePriorityRecoveryDecisionSnapshots,
 } = FAILURE_BUNDLE_SEGMENT_1;
@@ -432,8 +431,6 @@ function summarizePriorityRecoveryDecisionSnapshots(value) {
     buildPriorityRecoveryExplicitSemanticStateByPartitionId(
       decisionSnapshots.partitionIdsBySemanticState,
     );
-  const allowLegacySemanticStateInference =
-    decisionSnapshots.hasExplicitSemanticStateContract !== true;
   const witnessPartitionIds = resolvePriorityRecoveryWitnessPartitionIds(
     [...blockedPartitionIds].sort(),
     unresolvedPartitionIds,
@@ -498,13 +495,7 @@ function summarizePriorityRecoveryDecisionSnapshots(value) {
         resolvePriorityRecoveryExplicitSemanticState(
           latestPartitionSnapshot,
           explicitSemanticStateByPartitionId,
-        ) ||
-        (allowLegacySemanticStateInference === true ?
-          inferPriorityRecoverySemanticState(
-            latestPartitionSnapshot,
-            blockerReasons,
-          ) :
-          null);
+        );
       const decisionDimension =
         String(
           latestPartitionSnapshot?.admission?.decisionDimension || '',
@@ -1454,7 +1445,7 @@ export const FAILURE_BUNDLE_SEGMENT_2 = {
   STABILITY_GATE_BLOCKER_PUBLICATION_PENDING,
   STABILITY_GATE_BLOCKER_PUBLICATION_MISSING_ACTIVE_NODE,
   STABILITY_GATE_BLOCKER_PRIORITY_SPREAD_PENDING,
-  STABILITY_GATE_BLOCKER_PENDING_ACK_NODES,
+  STABILITY_GATE_BLOCKER_PENDING_ACKS_PRESENT,
   STABILITY_GATE_BLOCKER_BLOCKED_NODES,
   STABILITY_GATE_BLOCKER_CLOSURE_RECORD,
   STABILITY_GATE_BLOCKER_STARTUP_READINESS,
@@ -1492,7 +1483,6 @@ export const FAILURE_BUNDLE_SEGMENT_2 = {
   normalizeDistinctStringArray,
   buildPriorityRecoveryCorrelationKey,
   normalizePriorityRecoverySemanticStateId,
-  inferPriorityRecoverySemanticState,
   normalizePriorityRecoveryDecisionSnapshots,
   mergePriorityRecoveryDecisionSnapshots,
   normalizePriorityRecoveryInvariants,

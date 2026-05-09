@@ -121,7 +121,7 @@ const {
   STABILITY_GATE_BLOCKER_PUBLICATION_PENDING,
   STABILITY_GATE_BLOCKER_PUBLICATION_MISSING_ACTIVE_NODE,
   STABILITY_GATE_BLOCKER_PRIORITY_SPREAD_PENDING,
-  STABILITY_GATE_BLOCKER_PENDING_ACK_NODES,
+  STABILITY_GATE_BLOCKER_PENDING_ACKS_PRESENT,
   STABILITY_GATE_BLOCKER_BLOCKED_NODES,
   STABILITY_GATE_BLOCKER_CLOSURE_RECORD,
   STABILITY_GATE_BLOCKER_STARTUP_READINESS,
@@ -159,7 +159,6 @@ const {
   normalizeDistinctStringArray,
   buildPriorityRecoveryCorrelationKey,
   normalizePriorityRecoverySemanticStateId,
-  inferPriorityRecoverySemanticState,
   normalizePriorityRecoveryDecisionSnapshots,
   mergePriorityRecoveryDecisionSnapshots,
   normalizePriorityRecoveryInvariants,
@@ -851,7 +850,7 @@ function resolveStructuredFinalConsistencyFailure(controlPlane) {
     null;
 }
 
-function resolveLegacyFinalConsistencyFailureFromMessage(entry) {
+function resolveFinalConsistencyFailureFromMessage(entry) {
   const errorMessage = String(entry?.error || '');
   if (errorMessage.includes(FINAL_CONSISTENCY_LEADER_MISMATCH_MESSAGE_PREFIX)) {
     return {
@@ -865,7 +864,7 @@ function resolveLegacyFinalConsistencyFailureFromMessage(entry) {
 function resolveFinalConsistencyFailure(entry, controlPlane) {
   return (
     resolveStructuredFinalConsistencyFailure(controlPlane) ||
-    resolveLegacyFinalConsistencyFailureFromMessage(entry)
+    resolveFinalConsistencyFailureFromMessage(entry)
   );
 }
 
@@ -957,7 +956,7 @@ function resolvePublicationBlockedDominantReason(publicationConvergence) {
     return null;
   }
   if (normalizeNonNegativeCount(publicationConvergence.pendingAckCount) > ZERO) {
-    return STABILITY_GATE_BLOCKER_PENDING_ACK_NODES;
+    return STABILITY_GATE_BLOCKER_PENDING_ACKS_PRESENT;
   }
   if (normalizeNonNegativeCount(publicationConvergence.blockedNodeCount) > ZERO) {
     return STABILITY_GATE_BLOCKER_BLOCKED_NODES;
@@ -1152,7 +1151,7 @@ function resolveDominantReasonOverride({
     resolvePublicationBlockedDominantReason(publicationConvergence);
   if (
     currentPublicationBlockedReason ===
-    STABILITY_GATE_BLOCKER_PENDING_ACK_NODES
+    STABILITY_GATE_BLOCKER_PENDING_ACKS_PRESENT
   ) {
     return currentPublicationBlockedReason;
   }
@@ -1207,7 +1206,7 @@ function filterReasonCountsForPublicationMissingActiveNode({
     }
     addNormalizedReasonCount(
       filteredReasonCounts,
-      STABILITY_GATE_BLOCKER_PENDING_ACK_NODES,
+      STABILITY_GATE_BLOCKER_PENDING_ACKS_PRESENT,
       FAILURE_BARRIER_REASON_COUNT,
     );
     return filteredReasonCounts;
@@ -3679,7 +3678,7 @@ function buildConvergenceStabilityGate({
   if (
     normalizeNonNegativeCount(publicationConvergence?.pendingAckCount) > ZERO
   ) {
-    blockers.push(STABILITY_GATE_BLOCKER_PENDING_ACK_NODES);
+    blockers.push(STABILITY_GATE_BLOCKER_PENDING_ACKS_PRESENT);
   }
   if (
     normalizeNonNegativeCount(publicationConvergence?.blockedNodeCount) > ZERO
@@ -3802,7 +3801,7 @@ function buildFailoverStabilityGate({
     normalizeNonNegativeCount(publicationConvergence?.pendingAckCount) > ZERO ||
     pendingAckBlockedNodeCount > ZERO
   ) {
-    blockers.push(STABILITY_GATE_BLOCKER_PENDING_ACK_NODES);
+    blockers.push(STABILITY_GATE_BLOCKER_PENDING_ACKS_PRESENT);
   }
   if (
     normalizeNonNegativeCount(publicationConvergence?.blockedNodeCount) >
@@ -3924,7 +3923,7 @@ export const FAILURE_BUNDLE_SEGMENT_4 = {
   STABILITY_GATE_BLOCKER_PUBLICATION_PENDING,
   STABILITY_GATE_BLOCKER_PUBLICATION_MISSING_ACTIVE_NODE,
   STABILITY_GATE_BLOCKER_PRIORITY_SPREAD_PENDING,
-  STABILITY_GATE_BLOCKER_PENDING_ACK_NODES,
+  STABILITY_GATE_BLOCKER_PENDING_ACKS_PRESENT,
   STABILITY_GATE_BLOCKER_BLOCKED_NODES,
   STABILITY_GATE_BLOCKER_CLOSURE_RECORD,
   STABILITY_GATE_BLOCKER_STARTUP_READINESS,
@@ -3961,7 +3960,6 @@ export const FAILURE_BUNDLE_SEGMENT_4 = {
   normalizeDistinctStringArray,
   buildPriorityRecoveryCorrelationKey,
   normalizePriorityRecoverySemanticStateId,
-  inferPriorityRecoverySemanticState,
   normalizePriorityRecoveryDecisionSnapshots,
   mergePriorityRecoveryDecisionSnapshots,
   normalizePriorityRecoveryInvariants,

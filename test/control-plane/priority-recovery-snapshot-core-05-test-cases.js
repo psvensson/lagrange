@@ -79,6 +79,8 @@ export function registerPriorityRecoverySnapshotCore05Tests(context) {
           },
           snapshots: [{
             partitionId: PUBLICATION_PRIORITY_PARTITION_ID,
+            semanticStateId:
+              PRIORITY_RECOVERY_SEMANTIC_STATE_RECOVERING_IN_FLIGHT,
             blockerReasons: [
               PRIORITY_RECOVERY_BLOCKER_REASON_OPERATION_NO_TRANSITIONS,
             ],
@@ -100,6 +102,8 @@ export function registerPriorityRecoverySnapshotCore05Tests(context) {
             },
           }, {
             partitionId: PUBLICATION_PRIORITY_PARTITION_ID,
+            semanticStateId:
+              PRIORITY_RECOVERY_SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT,
             blockerReasons: [],
             planner: {
               ready: true,

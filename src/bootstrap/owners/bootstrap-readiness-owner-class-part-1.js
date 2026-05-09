@@ -107,11 +107,11 @@ function normalizeLifecyclePhaseFromSnapshot(snapshot) {
   if (Object.values(LIFECYCLE_PHASE).includes(phase)) {
     return phase;
   }
-  const legacyState =
+  const resolvedState =
     typeof snapshot?.state === TYPEOF.STRING ?
       snapshot.state.trim().toLowerCase() :
       '';
-  switch (legacyState) {
+  switch (resolvedState) {
   case BOOTSTRAP_READINESS_OWNER_LITERAL.STARTING:
   case BOOTSTRAP_READINESS_OWNER_LITERAL.BOOTSTRAPPING:
     return LIFECYCLE_PHASE.INIT;

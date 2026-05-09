@@ -299,8 +299,8 @@ class StorageAdmissionService {
     const blockingReasons = [];
     const projectedUtilizationByNodeId = {};
     const readinessSnapshots = {};
-    let legacyReason = STORAGE_ADMISSION_REASON.CAPACITY_AVAILABLE;
-    let legacyProjectedUtilization = null;
+    let resolvedReason = STORAGE_ADMISSION_REASON.CAPACITY_AVAILABLE;
+    let resolvedProjectedUtilization = null;
     const readinessDecisionDimension = this.resolveProvisioningReadinessDecisionDimension(options);
 
     for (const nodeId of candidateNodeIds) {
@@ -334,16 +334,16 @@ class StorageAdmissionService {
       const eligible = failedDimensions.length === NUM.ZERO && capacity.allowed === true;
 
       projectedUtilizationByNodeId[nodeId] = capacity.projectedUtilization;
-      const legacyProvisioningOutcome = this.resolveLegacyProvisioningOutcome({
+      const provisioningOutcome = this.resolveProvisioningOutcome({
         candidateNodeCount: candidateNodeIds.length,
         capacity,
         nodeReasonCodes,
         eligible,
-        currentReason: legacyReason,
-        currentProjectedUtilization: legacyProjectedUtilization,
+        currentReason: resolvedReason,
+        currentProjectedUtilization: resolvedProjectedUtilization,
       });
-      legacyReason = legacyProvisioningOutcome.reason;
-      legacyProjectedUtilization = legacyProvisioningOutcome.projectedUtilization;
+      resolvedReason = provisioningOutcome.reason;
+      resolvedProjectedUtilization = provisioningOutcome.projectedUtilization;
       if (eligible) {
         eligibleNodeIds.push(nodeId);
         continue;
@@ -377,20 +377,20 @@ class StorageAdmissionService {
         decisionTimestamp,
         projectedUtilizationByNodeId,
         projectedUtilization:
-          candidateNodeIds.length === NUM.ONE ? legacyProjectedUtilization : null,
+          candidateNodeIds.length === NUM.ONE ? resolvedProjectedUtilization : null,
         reason:
           candidateNodeIds.length === NUM.ONE ?
-            legacyReason :
+            resolvedReason :
             allowed ?
-              legacyReason :
-              finalizedBlockingReasons[NUM.ZERO] || legacyReason,
+              resolvedReason :
+              finalizedBlockingReasons[NUM.ZERO] || resolvedReason,
         readinessSnapshots,
       }),
       candidateNodeIds,
     );
   }
 
-  resolveLegacyProvisioningOutcome({
+  resolveProvisioningOutcome({
     candidateNodeCount,
     capacity,
     nodeReasonCodes,

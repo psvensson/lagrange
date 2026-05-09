@@ -462,7 +462,7 @@ function buildRemotePriorityDispatchPendingTimeoutPlanningSnapshot() {
 function createRemotePriorityVisibilityCoordinator() {
   const controlPlaneReadinessService = {
     ...createMockControlPlaneReadinessService(),
-    async getPriorityRecoveryPlanningAnswerBestEffort() {
+    async getPriorityRecoveryPlanningSnapshotBestEffort() {
       return buildRemotePriorityVisibilityPlanningSnapshot();
     },
   };
@@ -794,7 +794,7 @@ async (t) => {
   coordinator.initialize();
 
   coordinator.controlPlaneReadinessService
-    .getPriorityRecoveryPlanningAnswerBestEffort = async () => {
+    .getPriorityRecoveryPlanningSnapshotBestEffort = async () => {
       return buildRemotePrioritySerialWaitPlanningSnapshot();
     };
   coordinator.workflowOwner.repository.getOperationsByEntityAuthoritativeObservation =
@@ -851,7 +851,7 @@ async (t) => {
   coordinator.initialize();
 
   coordinator.controlPlaneReadinessService
-    .getPriorityRecoveryPlanningAnswerBestEffort = async () => {
+    .getPriorityRecoveryPlanningSnapshotBestEffort = async () => {
       return buildRemotePrioritySerialWaitSourcePlanningSnapshot();
     };
   coordinator.workflowOwner.repository.getOperationsByEntityAuthoritativeObservation =
@@ -959,7 +959,7 @@ async (t) => {
   coordinator.initialize();
 
   coordinator.controlPlaneReadinessService
-    .getPriorityRecoveryPlanningAnswerBestEffort = async () => {
+    .getPriorityRecoveryPlanningSnapshotBestEffort = async () => {
       return buildRemotePriorityDispatchPendingPlanningSnapshot();
     };
   coordinator.workflowOwner.repository.getOperationsByEntityAuthoritativeObservation =
@@ -1026,7 +1026,7 @@ async (t) => {
   coordinator.initialize();
 
   coordinator.controlPlaneReadinessService
-    .getPriorityRecoveryPlanningAnswerBestEffort = async () => {
+    .getPriorityRecoveryPlanningSnapshotBestEffort = async () => {
       return buildRemotePriorityDispatchPendingTimeoutPlanningSnapshot();
     };
 
@@ -1688,7 +1688,7 @@ async (t) => {
   coordinator.initialize();
 
   coordinator.controlPlaneReadinessService
-    .getPriorityRecoveryPlanningAnswerBestEffort = async () => {
+    .getPriorityRecoveryPlanningSnapshotBestEffort = async () => {
       return buildRemotePrioritySerialWaitPlanningSnapshot();
     };
   coordinator.workflowOwner.repository.getOperationsByEntityAuthoritativeObservation =
@@ -1743,7 +1743,7 @@ async (t) => {
   coordinator.initialize();
 
   coordinator.controlPlaneReadinessService
-    .getPriorityRecoveryPlanningAnswerBestEffort = async () => {
+    .getPriorityRecoveryPlanningSnapshotBestEffort = async () => {
       return buildRemotePriorityTimeoutPlanningSnapshot();
     };
 
@@ -1830,7 +1830,7 @@ async (t) => {
   coordinator.initialize();
 
   coordinator.controlPlaneReadinessService
-    .getPriorityRecoveryPlanningAnswerBestEffort = async () => {
+    .getPriorityRecoveryPlanningSnapshotBestEffort = async () => {
       return buildRemotePriorityTimeoutPlanningSnapshot();
     };
 

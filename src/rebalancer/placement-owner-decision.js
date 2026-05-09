@@ -309,7 +309,7 @@ function buildPlacementOwnerIntent(evidence, filterResult, scoreResult, reservat
   });
 }
 
-function buildLegacyPlacementOwnerOutcome(intent) {
+function buildPlacementOwnerOutcome(intent) {
   return Object.freeze({
     owner: TOPOLOGY_CONTROL_PLANE_OWNER,
     state: intent.state,
@@ -343,7 +343,7 @@ function buildPlacementOwnerDecision(options = {}) {
     scoreResult,
     reservationResult,
     intent,
-    placementOwnerOutcome: buildLegacyPlacementOwnerOutcome(intent),
+    placementOwnerOutcome: buildPlacementOwnerOutcome(intent),
     forbiddenReinterpretations: PLACEMENT_OWNER_REINTERPRETATION,
   });
 }

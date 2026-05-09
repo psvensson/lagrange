@@ -25,6 +25,11 @@ const FLAG_PACKAGE = 'package';
 const FLAG_MODEL = 'model';
 const FLAG_REASONING_EFFORT = 'reasoning-effort';
 const FLAG_TASK_CLASS = 'task-class';
+const FLAG_PACKAGE_CLASS = 'package-class';
+const FLAG_INTENDED_MINIMUM_MODEL = 'intended-minimum-model';
+const FLAG_SCOPE_SHAPE = 'scope-shape';
+const FLAG_ESCALATED = 'escalated';
+const FLAG_BAILOUT_REASON = 'bailout-reason';
 const FLAG_OUTCOME = 'outcome';
 const FLAG_VALIDATION_STATUS = 'validation-status';
 const FLAG_CORRECTION_LOOPS = 'correction-loops';
@@ -35,6 +40,11 @@ const RECORD_FIELD_PACKAGE = 'package';
 const RECORD_FIELD_MODEL = 'model';
 const RECORD_FIELD_REASONING_EFFORT = 'reasoningEffort';
 const RECORD_FIELD_TASK_CLASS = 'taskClass';
+const RECORD_FIELD_PACKAGE_CLASS = 'packageClass';
+const RECORD_FIELD_INTENDED_MINIMUM_MODEL = 'intendedMinimumModel';
+const RECORD_FIELD_SCOPE_SHAPE = 'scopeShape';
+const RECORD_FIELD_ESCALATED = 'escalated';
+const RECORD_FIELD_BAILOUT_REASON = 'bailoutReason';
 const RECORD_FIELD_OUTCOME = 'outcome';
 const RECORD_FIELD_VALIDATION_STATUS = 'validationStatus';
 const RECORD_FIELD_CORRECTION_LOOPS = 'correctionLoops';
@@ -63,7 +73,7 @@ const COUNT_JOINER = ', ';
 const SUMMARY_TITLE = '# Model Ledger Summary';
 const HELP_TEXT = [
   'Usage:',
-  '  node scripts/model-ledger.js record --package <path> --model <name> --reasoning-effort <effort> --task-class <class> --outcome <outcome> --validation-status <status> --correction-loops <count> --review-findings <count> --notes <text>',
+  '  node scripts/model-ledger.js record --package <path> --model <name> --reasoning-effort <effort> --task-class <class> --package-class <class> --intended-minimum-model <model> --scope-shape <shape> --escalated <true|false> --bailout-reason <reason|none> --outcome <outcome> --validation-status <status> --correction-loops <count> --review-findings <count> --notes <text>',
   '  node scripts/model-ledger.js summary [--recent <count>]',
   '',
   'Options:',
@@ -76,6 +86,11 @@ const RECORD_FLAG_TO_FIELD = Object.freeze({
   [FLAG_MODEL]: RECORD_FIELD_MODEL,
   [FLAG_REASONING_EFFORT]: RECORD_FIELD_REASONING_EFFORT,
   [FLAG_TASK_CLASS]: RECORD_FIELD_TASK_CLASS,
+  [FLAG_PACKAGE_CLASS]: RECORD_FIELD_PACKAGE_CLASS,
+  [FLAG_INTENDED_MINIMUM_MODEL]: RECORD_FIELD_INTENDED_MINIMUM_MODEL,
+  [FLAG_SCOPE_SHAPE]: RECORD_FIELD_SCOPE_SHAPE,
+  [FLAG_ESCALATED]: RECORD_FIELD_ESCALATED,
+  [FLAG_BAILOUT_REASON]: RECORD_FIELD_BAILOUT_REASON,
   [FLAG_OUTCOME]: RECORD_FIELD_OUTCOME,
   [FLAG_VALIDATION_STATUS]: RECORD_FIELD_VALIDATION_STATUS,
   [FLAG_CORRECTION_LOOPS]: RECORD_FIELD_CORRECTION_LOOPS,
@@ -87,6 +102,11 @@ const REQUIRED_RECORD_FLAGS = Object.freeze([
   FLAG_MODEL,
   FLAG_REASONING_EFFORT,
   FLAG_TASK_CLASS,
+  FLAG_PACKAGE_CLASS,
+  FLAG_INTENDED_MINIMUM_MODEL,
+  FLAG_SCOPE_SHAPE,
+  FLAG_ESCALATED,
+  FLAG_BAILOUT_REASON,
   FLAG_OUTCOME,
   FLAG_VALIDATION_STATUS,
   FLAG_CORRECTION_LOOPS,
@@ -119,7 +139,10 @@ const SUMMARY_HOLD_REASON =
   'Recent entries do not justify changing model or effort.';
 
 function normalizeText(value) {
-  return String(value || EMPTY_TEXT).trim();
+  if (value === null || value === undefined) {
+    return EMPTY_TEXT;
+  }
+  return String(value).trim();
 }
 
 function parseNonNegativeInteger(value, fieldName) {
@@ -136,6 +159,17 @@ function parsePositiveInteger(value, fieldName) {
     throw new Error(`${fieldName} must be a positive integer.`);
   }
   return parsed;
+}
+
+function parseBoolean(value, fieldName) {
+  const normalized = normalizeLookupValue(value);
+  if (normalized === 'true') {
+    return true;
+  }
+  if (normalized === 'false') {
+    return false;
+  }
+  throw new Error(`${fieldName} must be true or false.`);
 }
 
 function normalizeLookupValue(value) {
@@ -201,6 +235,10 @@ function buildLedgerRecord(flags = {}, recordedAt = new Date().toISOString()) {
       field === RECORD_FIELD_REVIEW_FINDINGS
     ) {
       record[field] = parseNonNegativeInteger(flags[flag], field);
+      continue;
+    }
+    if (field === RECORD_FIELD_ESCALATED) {
+      record[field] = parseBoolean(flags[flag], field);
       continue;
     }
     record[field] = normalizeText(flags[flag]);
@@ -384,6 +422,14 @@ function buildSummary(entries = [], options = {}) {
     models: countBy(recentEntries, RECORD_FIELD_MODEL),
     reasoningEfforts: countBy(recentEntries, RECORD_FIELD_REASONING_EFFORT),
     taskClasses: countBy(recentEntries, RECORD_FIELD_TASK_CLASS),
+    packageClasses: countBy(recentEntries, RECORD_FIELD_PACKAGE_CLASS),
+    intendedMinimumModels: countBy(
+      recentEntries,
+      RECORD_FIELD_INTENDED_MINIMUM_MODEL,
+    ),
+    scopeShapes: countBy(recentEntries, RECORD_FIELD_SCOPE_SHAPE),
+    escalated: countBy(recentEntries, RECORD_FIELD_ESCALATED),
+    bailoutReasons: countBy(recentEntries, RECORD_FIELD_BAILOUT_REASON),
     outcomes: countBy(recentEntries, RECORD_FIELD_OUTCOME),
     validationStatuses: countBy(recentEntries, RECORD_FIELD_VALIDATION_STATUS),
     averageCorrectionLoops: average(
@@ -414,6 +460,15 @@ function renderSummary(summary = {}, ledgerPath = DEFAULT_LEDGER_PATH) {
       renderCounts(summary.reasoningEfforts),
     `${LIST_PREFIX}Task classes${LABEL_SEPARATOR}` +
       renderCounts(summary.taskClasses),
+    `${LIST_PREFIX}Package classes${LABEL_SEPARATOR}` +
+      renderCounts(summary.packageClasses),
+    `${LIST_PREFIX}Intended minimum models${LABEL_SEPARATOR}` +
+      renderCounts(summary.intendedMinimumModels),
+    `${LIST_PREFIX}Scope shapes${LABEL_SEPARATOR}` +
+      renderCounts(summary.scopeShapes),
+    `${LIST_PREFIX}Escalated${LABEL_SEPARATOR}${renderCounts(summary.escalated)}`,
+    `${LIST_PREFIX}Bailout reasons${LABEL_SEPARATOR}` +
+      renderCounts(summary.bailoutReasons),
     `${LIST_PREFIX}Outcomes${LABEL_SEPARATOR}${renderCounts(summary.outcomes)}`,
     `${LIST_PREFIX}Validation statuses${LABEL_SEPARATOR}` +
       renderCounts(summary.validationStatuses),
