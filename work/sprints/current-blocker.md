@@ -4,7 +4,7 @@
 
 Sprint: `work/sprints/active-2026-q2-spec-led-runtime-modularization.md`
 
-Package: `work/packages/active-20260509-spec-led-runtime-modularization-projection-readiness-contract.md`
+Package: `work/packages/done-20260509-spec-led-runtime-modularization-projection-readiness-contract.md`
 
 Scenario: `spec-led-runtime-modularization`
 
@@ -42,4 +42,4 @@ Rewrite projection readiness as a consumer of publication streams and owner outc
 5. `src/control-plane/projection-readiness-*.js`
 6. `test/control-plane/*readiness*.test.js`
 7. `test/admin/*readiness*.test.js`
-8. `work/packages/active-20260509-spec-led-runtime-modularization-projection-readiness-contract.md`
+8. `work/packages/done-20260509-spec-led-runtime-modularization-projection-readiness-contract.md`

@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-09",
   "scenario": "spec-led-runtime-modularization",
   "artifact": "none",
@@ -36,9 +36,11 @@
     "test/control-plane/active-node-projection.test.js",
     "test/control-plane/control-plane-readiness-service.test-part-6.js",
     "test/control-plane/projection-readiness-contract.test.js",
-    "work/packages/active-20260509-spec-led-runtime-modularization-projection-readiness-contract.md"
+    "work/packages/done-20260509-spec-led-runtime-modularization-projection-readiness-contract.md"
   ],
-  "predecessor": "work/packages/done-20260509-spec-led-runtime-modularization-publication-owner-stream.md"
+  "predecessor": "work/packages/done-20260509-spec-led-runtime-modularization-publication-owner-stream.md",
+  "closed": "2026-05-09",
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -202,4 +204,10 @@ control-plane readiness tests, admin readiness tests, and static guardrails.
 - [x] Fix subagent recorded or explicitly not needed:
       Agent Sagan (`019e0bfb-ba69-7312-ba2f-0e0d199e6724`) fixed `work/packages/done-20260509-spec-led-runtime-modularization-publication-owner-stream.md`.
 - [x] Implementation subagent recorded:
-      Agent James (`019e0c07-de5a-7ef0-8100-734606c3e451`) implemented `work/packages/active-20260509-spec-led-runtime-modularization-projection-readiness-contract.md`.
+      Agent James (`019e0c07-de5a-7ef0-8100-734606c3e451`) implemented `work/packages/done-20260509-spec-led-runtime-modularization-projection-readiness-contract.md`.
+
+## Commit And Push Ledger
+
+1. Focused package commit: `156adf43`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
