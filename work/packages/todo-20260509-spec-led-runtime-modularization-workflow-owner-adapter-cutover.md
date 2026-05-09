@@ -30,7 +30,7 @@
     "test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js",
     "work/packages/todo-20260509-spec-led-runtime-modularization-workflow-owner-adapter-cutover.md"
   ],
-  "predecessor": "work/packages/todo-20260509-spec-led-runtime-modularization-priority-recovery-observation-contract.md"
+  "predecessor": "work/packages/done-20260509-spec-led-runtime-modularization-priority-recovery-observation-contract.md"
 }
 -->
 

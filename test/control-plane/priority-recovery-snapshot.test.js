@@ -29,6 +29,13 @@ import {
   PRIORITY_RECOVERY_DECISION_SNAPSHOT_EXPECTED,
   buildPriorityRecoveryActuationDecisionInput,
 } from '../distributed/harness/__fixtures__/priority-recovery-actuation-contract-fixture.js';
+import {
+  OPERATION_WORKFLOW_EFFECT_COMMAND_VALUES,
+  OPERATION_WORKFLOW_OUTCOME_VALUES,
+  OPERATION_WORKFLOW_OWNER,
+  OPERATION_WORKFLOW_PROGRESS_DECISION_KERNEL,
+  OPERATION_WORKFLOW_REASON_CODE_VALUES,
+} from '../../src/rebalancer/operation-workflow-owner-constants.js';
 
 import {
   registerPriorityRecoverySnapshotCore01Tests,
@@ -374,6 +381,30 @@ const PRIORITY_RECOVERY_TERMINAL_REPLACE_OPERATION_CONTEXT = Object.freeze({
   latestTimelineStatus: PRIORITY_RECOVERY_STATUS_COMPLETED,
   latestTimelineInFlight: false,
 });
+const PRIORITY_RECOVERY_OPERATION_OWNER_TEST_STATE =
+  'priority_recovery_snapshot_owner_outcome';
+const PRIORITY_RECOVERY_OPERATION_OWNER_TEST_CORRELATION_KEY =
+  'priority_recovery_snapshot_owner_correlation';
+const PRIORITY_RECOVERY_OPERATION_OWNER_TEST_SOURCE_REVISION =
+  'priority_recovery_snapshot_owner_revision';
+
+function buildPriorityRecoverySnapshotOperationOwnerOutcome(overrides = {}) {
+  const outcome =
+    overrides.outcome ||
+    OPERATION_WORKFLOW_OUTCOME_VALUES.WAIT_FOR_OWNER_PROGRESS;
+  return Object.freeze({
+    owner: OPERATION_WORKFLOW_OWNER,
+    boundary: OPERATION_WORKFLOW_PROGRESS_DECISION_KERNEL,
+    state: PRIORITY_RECOVERY_OPERATION_OWNER_TEST_STATE,
+    outcome,
+    nextRequiredAction: outcome,
+    effectCommand: OPERATION_WORKFLOW_EFFECT_COMMAND_VALUES.NO_OPERATION_EFFECT,
+    reasons: Object.freeze([]),
+    correlationKey: PRIORITY_RECOVERY_OPERATION_OWNER_TEST_CORRELATION_KEY,
+    sourceRevision: PRIORITY_RECOVERY_OPERATION_OWNER_TEST_SOURCE_REVISION,
+    ...overrides,
+  });
+}
 
 function registerPriorityRecoverySnapshotSupplementalTests(context) {
   const {
@@ -616,7 +647,20 @@ function registerPriorityRecoverySnapshotSupplementalTests(context) {
       });
 
       const normalizedSnapshot =
-        normalizePriorityRecoveryDispatchPendingDecisionSnapshot(snapshot);
+        normalizePriorityRecoveryDispatchPendingDecisionSnapshot(
+          snapshot,
+          buildPriorityRecoverySnapshotOperationOwnerOutcome({
+            outcome: OPERATION_WORKFLOW_OUTCOME_VALUES.DISPATCH_LOCAL_OWNER,
+            effectCommand:
+              OPERATION_WORKFLOW_EFFECT_COMMAND_VALUES
+                .DISPATCH_LOCAL_OWNER_COMMAND,
+            reasons: Object.freeze([
+              OPERATION_WORKFLOW_REASON_CODE_VALUES
+                .LOCAL_OWNER_AUTHORITATIVE,
+              OPERATION_WORKFLOW_REASON_CODE_VALUES.DISPATCH_NOT_OBSERVED,
+            ]),
+          }),
+        );
 
       t.equal(
         normalizedSnapshot?.progress?.nextRequiredAction,
@@ -681,7 +725,20 @@ function registerPriorityRecoverySnapshotSupplementalTests(context) {
       });
 
       const normalizedSnapshot =
-        normalizePriorityRecoveryDispatchPendingDecisionSnapshot(snapshot);
+        normalizePriorityRecoveryDispatchPendingDecisionSnapshot(
+          snapshot,
+          buildPriorityRecoverySnapshotOperationOwnerOutcome({
+            outcome: OPERATION_WORKFLOW_OUTCOME_VALUES.DISPATCH_LOCAL_OWNER,
+            effectCommand:
+              OPERATION_WORKFLOW_EFFECT_COMMAND_VALUES
+                .DISPATCH_LOCAL_OWNER_COMMAND,
+            reasons: Object.freeze([
+              OPERATION_WORKFLOW_REASON_CODE_VALUES
+                .LOCAL_OWNER_AUTHORITATIVE,
+              OPERATION_WORKFLOW_REASON_CODE_VALUES.DISPATCH_NOT_OBSERVED,
+            ]),
+          }),
+        );
 
       t.same(
         normalizedSnapshot?.blockerReasons,

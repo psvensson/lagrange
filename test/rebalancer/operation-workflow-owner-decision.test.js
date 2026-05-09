@@ -337,7 +337,11 @@ test('operation workflow decisions map representative blocker states', (t) => {
       name: 'stale timeout progress reconciles through owner',
       input: buildEvidence({
         workflowHistory: buildWorkflowHistory({
+          commandState: OPERATION_WORKFLOW_COMMAND_STATE.IDLE,
           freshnessState: OPERATION_WORKFLOW_HISTORY_FRESHNESS_STATE.STALE,
+        }),
+        dispatchObservation: buildDispatchObservation({
+          commandState: OPERATION_WORKFLOW_COMMAND_STATE.IDLE,
         }),
         timeoutBudget: buildTimeoutBudget({
           timeoutState: OPERATION_WORKFLOW_TIMEOUT_STATE.EXPIRED,
@@ -358,6 +362,58 @@ test('operation workflow decisions map representative blocker states', (t) => {
       reasons: [
         OPERATION_WORKFLOW_REASON_CODES.TIMEOUT_BUDGET_EXPIRED,
         OPERATION_WORKFLOW_REASON_CODES.WORKFLOW_HISTORY_STALE,
+      ],
+    },
+    {
+      name: 'in-flight workflow command blocks stale progress reconcile',
+      input: buildEvidence({
+        workflowHistory: buildWorkflowHistory({
+          freshnessState: OPERATION_WORKFLOW_HISTORY_FRESHNESS_STATE.STALE,
+          commandState: OPERATION_WORKFLOW_COMMAND_STATE.IN_FLIGHT,
+        }),
+        dispatchObservation: buildDispatchObservation({
+          commandState: OPERATION_WORKFLOW_COMMAND_STATE.IDLE,
+        }),
+        timeoutBudget: buildTimeoutBudget({
+          timeoutState: OPERATION_WORKFLOW_TIMEOUT_STATE.EXPIRED,
+          staleProgressState:
+            OPERATION_WORKFLOW_STALE_PROGRESS_STATE.PROVEN,
+        }),
+      }),
+      state: OPERATION_WORKFLOW_PROGRESS_STATES.OWNER_PROGRESS_WAIT_REQUIRED,
+      outcome: OPERATION_WORKFLOW_PROGRESS_OUTCOMES.WAIT_FOR_OWNER_PROGRESS,
+      nextRequiredAction:
+        OPERATION_WORKFLOW_PROGRESS_OUTCOMES.WAIT_FOR_OWNER_PROGRESS,
+      effectCommand:
+        OPERATION_WORKFLOW_EFFECT_COMMANDS.NO_OPERATION_EFFECT,
+      reasons: [
+        OPERATION_WORKFLOW_REASON_CODES.OWNER_PROGRESS_IN_FLIGHT,
+      ],
+    },
+    {
+      name: 'in-flight dispatch command blocks stale progress reconcile',
+      input: buildEvidence({
+        workflowHistory: buildWorkflowHistory({
+          freshnessState: OPERATION_WORKFLOW_HISTORY_FRESHNESS_STATE.STALE,
+          commandState: OPERATION_WORKFLOW_COMMAND_STATE.IDLE,
+        }),
+        dispatchObservation: buildDispatchObservation({
+          commandState: OPERATION_WORKFLOW_COMMAND_STATE.IN_FLIGHT,
+        }),
+        timeoutBudget: buildTimeoutBudget({
+          timeoutState: OPERATION_WORKFLOW_TIMEOUT_STATE.EXPIRED,
+          staleProgressState:
+            OPERATION_WORKFLOW_STALE_PROGRESS_STATE.PROVEN,
+        }),
+      }),
+      state: OPERATION_WORKFLOW_PROGRESS_STATES.OWNER_PROGRESS_WAIT_REQUIRED,
+      outcome: OPERATION_WORKFLOW_PROGRESS_OUTCOMES.WAIT_FOR_OWNER_PROGRESS,
+      nextRequiredAction:
+        OPERATION_WORKFLOW_PROGRESS_OUTCOMES.WAIT_FOR_OWNER_PROGRESS,
+      effectCommand:
+        OPERATION_WORKFLOW_EFFECT_COMMANDS.NO_OPERATION_EFFECT,
+      reasons: [
+        OPERATION_WORKFLOW_REASON_CODES.OWNER_PROGRESS_IN_FLIGHT,
       ],
     },
     {

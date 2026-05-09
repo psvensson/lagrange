@@ -143,6 +143,10 @@ const OPERATION_WORKFLOW_PROGRESS_DECISION_TABLE = Object.freeze([
         OPERATION_WORKFLOW_STALE_PROGRESS_STATE.PROVEN &&
       evidence.workflowHistory.freshnessState ===
         OPERATION_WORKFLOW_HISTORY_FRESHNESS_STATE.STALE &&
+      evidence.workflowHistory.commandState ===
+        OPERATION_WORKFLOW_COMMAND_STATE.IDLE &&
+      evidence.dispatchObservation.commandState ===
+        OPERATION_WORKFLOW_COMMAND_STATE.IDLE &&
       OPERATION_WORKFLOW_KNOWN_OWNER_AUTHORITY_STATES.has(
         evidence.ownerLease.authorityState,
       ),

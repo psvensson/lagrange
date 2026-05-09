@@ -49,7 +49,7 @@
     "test/rebalancer/operation-workflow-owner-decision.test.js",
     "work/packages/todo-20260509-spec-led-runtime-modularization-operation-owner-kernel.md",
     "work/packages/done-20260509-spec-led-runtime-modularization-operation-owner-kernel.md",
-    "work/packages/todo-20260509-spec-led-runtime-modularization-priority-recovery-observation-contract.md",
+    "work/packages/done-20260509-spec-led-runtime-modularization-priority-recovery-observation-contract.md",
     "work/packages/done-20260509-spec-led-runtime-modularization-spec-and-reference-patterns.md",
     "work/sprints/active-2026-q2-spec-led-runtime-modularization.md",
     "work/sprints/current-blocker.json",
