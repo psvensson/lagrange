@@ -4,7 +4,7 @@
 
 Sprint: `work/sprints/active-2026-q2-spec-led-runtime-modularization.md`
 
-Package: `work/packages/done-20260509-spec-led-runtime-modularization-placement-owner-kernel.md`
+Package: `work/packages/active-20260509-spec-led-runtime-modularization-publication-owner-stream.md`
 
 Scenario: `spec-led-runtime-modularization`
 
@@ -14,30 +14,31 @@ Playback: `none`
 
 ## Boundary
 
-Owner: `placement_owner`
+Owner: `publication_owner`
 
-Boundary: `placement_policy_kernel`
+Boundary: `revisioned_publication_stream`
 
-Dominant reason: `placement_policy_interleaves_filter_score_and_runtime_effects`
+Dominant reason: `publication_consumers_can_still_infer_freshness_from_cache_presence`
 
-Current state: Placement and move planning logic can still interleave eligibility filtering, scoring, admission, operation creation, and runtime effects in ways that are hard to audit after topology rewrites.
+Current state: Publication logic has improved, but consumers and recovery gates can still depend on freshness, ACK, and merge interpretations that should belong to a revisioned publication stream contract.
 
 ## Next Action
 
-Rewrite placement as a pure policy kernel with filter, score, reserve, and intent phases before touching operation execution.
+Define and implement a publication-owner stream contract with explicit revisions, ACK state, freshness fences, and recovery outcomes.
 
 ## Proof Ladder
 
-1. `Focused move planner policy tests`
-2. `Focused storage admission tests`
-3. `Placement decision table fixture`
+1. `Focused publication coordinator tests`
+2. `Focused publication recovery gate tests`
+3. `Focused publication evidence merge tests`
 4. `Touched-file decision-boundary and literal guardrails`
 
 ## Touched Files
 
-1. `src/rebalancer/move-planner.js`
-2. `src/rebalancer/placement-owner-constants.js`
-3. `src/rebalancer/placement-owner-decision.js`
-4. `src/rebalancer/placement-owner-evidence.js`
-5. `test/rebalancer/move-planner-placement-owner-kernel.test.js`
-6. `work/packages/done-20260509-spec-led-runtime-modularization-placement-owner-kernel.md`
+1. `src/control-plane/membership-publication-coordinator*.js`
+2. `src/control-plane/control-plane-publication-merge.js`
+3. `src/control-plane/publication-recovery-gate.js`
+4. `src/control-plane/publication-recovery-evidence.js`
+5. `src/control-plane/publication-owner-*.js`
+6. `test/control-plane/*publication*.test.js`
+7. `work/packages/active-20260509-spec-led-runtime-modularization-publication-owner-stream.md`

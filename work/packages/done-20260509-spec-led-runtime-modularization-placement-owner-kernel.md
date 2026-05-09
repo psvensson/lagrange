@@ -154,6 +154,21 @@ Placement target selection now runs through the placement owner kernel:
 
 ### Validation Notes
 
+- FIXED: Ramanujan review finding that placement kernel objects emitted the
+  broader topology owner. `PLACEMENT_OWNER` is now the canonical owner constant
+  for placement evidence, filter, score, reserve, intent, and decision objects;
+  the legacy `placementOwnerOutcome.owner` compatibility output still emits
+  `TOPOLOGY_CONTROL_PLANE_OWNER`.
+- PASS: `node --test test/rebalancer/move-planner-placement-owner-kernel.test.js`
+  - 36 tests, 7 suites.
+- PASS: `node scripts/check-guideline-literals.js src/rebalancer/placement-owner-constants.js src/rebalancer/placement-owner-evidence.js src/rebalancer/placement-owner-decision.js`
+  - 0 new literal-guideline violations.
+- PASS: `node scripts/check-guideline-decision-boundaries.js src/rebalancer/placement-owner-constants.js src/rebalancer/placement-owner-evidence.js src/rebalancer/placement-owner-decision.js`
+  - 0 decision-boundary guideline violations.
+- PASS: `npm run audit:runtime-grammar:file -- src/rebalancer/placement-owner-constants.js src/rebalancer/placement-owner-evidence.js src/rebalancer/placement-owner-decision.js`
+  - 0 runtime-grammar-contract violations.
+- PASS: `git diff --check -- src/rebalancer/placement-owner-constants.js src/rebalancer/placement-owner-evidence.js src/rebalancer/placement-owner-decision.js test/rebalancer/move-planner-placement-owner-kernel.test.js work/sprints/active-2026-q2-spec-led-runtime-modularization.md work/packages/done-20260509-spec-led-runtime-modularization-placement-owner-kernel.md`
+
 - PASS: `node --test test/rebalancer/move-planner-placement-owner-kernel.test.js`
   - 22 tests, 7 suites.
 - PASS: `node --test test/rebalancer/topology-owner-contracts.test.js test/rebalancer/move-planner-capacity-gating.test.js test/rebalancer/storage-admission-service.test.js`

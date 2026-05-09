@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "todo",
+  "status": "active",
   "opened": "2026-05-09",
   "scenario": "spec-led-runtime-modularization",
   "artifact": "none",
@@ -26,7 +26,7 @@
     "src/control-plane/publication-recovery-evidence.js",
     "src/control-plane/publication-owner-*.js",
     "test/control-plane/*publication*.test.js",
-    "work/packages/todo-20260509-spec-led-runtime-modularization-publication-owner-stream.md"
+    "work/packages/active-20260509-spec-led-runtime-modularization-publication-owner-stream.md"
   ],
   "predecessor": "work/packages/done-20260509-spec-led-runtime-modularization-placement-owner-kernel.md"
 }
@@ -134,3 +134,10 @@ guardrails.
 1. Publication exposes a revisioned stream contract.
 2. Consumers no longer infer publication freshness from raw cache signals.
 3. Recovery gate decisions are traceable to publication-owner state.
+
+## Subagent Sequencing Ledger
+
+- [x] Review subagent recorded:
+      Agent Ramanujan (`019e0bd8-dfda-76c1-abb0-f9c312c140be`) reviewed `work/packages/done-20260509-spec-led-runtime-modularization-placement-owner-kernel.md`; result `fixes-required`.
+- [x] Fix subagent recorded or explicitly not needed:
+      Agent Newton (`019e0bdd-d124-7db3-ae0e-f470ec1661b3`) fixed `work/packages/done-20260509-spec-led-runtime-modularization-placement-owner-kernel.md`.

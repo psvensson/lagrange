@@ -7,23 +7,24 @@ progress successor boundary.
 ## Latest Package Snapshot
 
 Latest completed package:
-`work/packages/done-20260509-spec-led-runtime-modularization-workflow-owner-adapter-cutover.md`.
-
-Owner boundary:
-`operation_workflow_owner / workflow_effects_adapter`.
-
-Completed result: workflow-owner entrypoints now execute canonical operation
-decision-kernel effect commands through adapter ports. The post-review repair
-preserves `DISPATCH_LOCAL_OWNER_COMMAND` while restoring coordinator-created
-local `PENDING` priming semantics: ordinary local creations claim only to
-`SENDING`, and critical local creations dispatch from the claimed snapshot.
-
-Next package:
 `work/packages/done-20260509-spec-led-runtime-modularization-placement-owner-kernel.md`.
 
-Next proof surface: placement owner policy kernel implementation can start only
-after the workflow-adapter review fix ledger is clean and the separate
-implementation subagent is recorded for the active placement package.
+Owner boundary:
+`placement_owner / placement_policy_kernel`.
+
+Completed result: placement target selection now runs through one policy
+kernel that emits explicit evidence, filter, score, reserve, intent, and
+legacy compatibility outcome shapes. Move planning consumes the placement
+intent for target selection while operation workflow execution remains outside
+placement ownership.
+
+Next package:
+`work/packages/active-20260509-spec-led-runtime-modularization-publication-owner-stream.md`.
+
+Next proof surface: publication-owner stream contract with focused publication
+coordinator tests, publication recovery gate tests, publication evidence merge
+tests, and touched-file decision-boundary, literal, and runtime grammar
+guardrails.
 
 ## Goal
 
@@ -75,7 +76,7 @@ the contract and proof ladder are stable.
 3. [Priority Recovery Observation Contract](../packages/done-20260509-spec-led-runtime-modularization-priority-recovery-observation-contract.md)
 4. [Workflow Owner Adapter Cutover](../packages/done-20260509-spec-led-runtime-modularization-workflow-owner-adapter-cutover.md)
 5. [Placement Owner Policy Kernel](../packages/done-20260509-spec-led-runtime-modularization-placement-owner-kernel.md)
-6. [Publication Owner Stream Contract](../packages/todo-20260509-spec-led-runtime-modularization-publication-owner-stream.md)
+6. [Publication Owner Stream Contract](../packages/active-20260509-spec-led-runtime-modularization-publication-owner-stream.md)
 7. [Projection Readiness Contract](../packages/todo-20260509-spec-led-runtime-modularization-projection-readiness-contract.md)
 8. [Diagnostics And Harness Consumer Rewrite](../packages/todo-20260509-spec-led-runtime-modularization-diagnostics-harness-consumer.md)
 9. [Legacy Deletion And Representative Proof](../packages/todo-20260509-spec-led-runtime-modularization-legacy-deletion-proof.md)

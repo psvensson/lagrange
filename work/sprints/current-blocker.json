@@ -2,29 +2,30 @@
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
   "sprint": "work/sprints/active-2026-q2-spec-led-runtime-modularization.md",
-  "package": "work/packages/done-20260509-spec-led-runtime-modularization-placement-owner-kernel.md",
-  "status": "done",
+  "package": "work/packages/active-20260509-spec-led-runtime-modularization-publication-owner-stream.md",
+  "status": "active",
   "scenario": "spec-led-runtime-modularization",
   "artifact": "none",
   "playback": "none",
-  "owner": "placement_owner",
-  "boundary": "placement_policy_kernel",
-  "dominantReason": "placement_policy_interleaves_filter_score_and_runtime_effects",
-  "currentState": "Placement and move planning logic can still interleave eligibility filtering, scoring, admission, operation creation, and runtime effects in ways that are hard to audit after topology rewrites.",
-  "nextAction": "Rewrite placement as a pure policy kernel with filter, score, reserve, and intent phases before touching operation execution.",
+  "owner": "publication_owner",
+  "boundary": "revisioned_publication_stream",
+  "dominantReason": "publication_consumers_can_still_infer_freshness_from_cache_presence",
+  "currentState": "Publication logic has improved, but consumers and recovery gates can still depend on freshness, ACK, and merge interpretations that should belong to a revisioned publication stream contract.",
+  "nextAction": "Define and implement a publication-owner stream contract with explicit revisions, ACK state, freshness fences, and recovery outcomes.",
   "proof": [
-    "Focused move planner policy tests",
-    "Focused storage admission tests",
-    "Placement decision table fixture",
+    "Focused publication coordinator tests",
+    "Focused publication recovery gate tests",
+    "Focused publication evidence merge tests",
     "Touched-file decision-boundary and literal guardrails"
   ],
   "touchedFiles": [
-    "src/rebalancer/move-planner.js",
-    "src/rebalancer/placement-owner-constants.js",
-    "src/rebalancer/placement-owner-decision.js",
-    "src/rebalancer/placement-owner-evidence.js",
-    "test/rebalancer/move-planner-placement-owner-kernel.test.js",
-    "work/packages/done-20260509-spec-led-runtime-modularization-placement-owner-kernel.md"
+    "src/control-plane/membership-publication-coordinator*.js",
+    "src/control-plane/control-plane-publication-merge.js",
+    "src/control-plane/publication-recovery-gate.js",
+    "src/control-plane/publication-recovery-evidence.js",
+    "src/control-plane/publication-owner-*.js",
+    "test/control-plane/*publication*.test.js",
+    "work/packages/active-20260509-spec-led-runtime-modularization-publication-owner-stream.md"
   ],
-  "predecessor": "work/packages/done-20260509-spec-led-runtime-modularization-workflow-owner-adapter-cutover.md"
+  "predecessor": "work/packages/done-20260509-spec-led-runtime-modularization-placement-owner-kernel.md"
 }

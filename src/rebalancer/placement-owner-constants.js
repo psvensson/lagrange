@@ -8,6 +8,8 @@ import {
   TOPOLOGY_CONTROL_PLANE_OWNER,
 } from './topology-owner-constants.js';
 
+const PLACEMENT_OWNER = 'placement_owner';
+
 const PLACEMENT_OWNER_PHASE = Object.freeze({
   FILTER: 'filter',
   SCORE: 'score',
@@ -81,6 +83,7 @@ const PLACEMENT_OWNER_TOPOLOGY_SCORE = Object.freeze({
 });
 
 export {
+  PLACEMENT_OWNER,
   PLACEMENT_OWNER_FILTER_ACTION,
   PLACEMENT_OWNER_FILTER_REASON,
   PLACEMENT_OWNER_FILTER_STATE,

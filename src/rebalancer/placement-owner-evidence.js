@@ -1,9 +1,9 @@
 import {COLUMN, NUM, TYPEOF} from '../constants/index.js';
 import {
+  PLACEMENT_OWNER,
   PLACEMENT_OWNER_POLICY,
   PLACEMENT_OWNER_REINTERPRETATION,
   PLACEMENT_OWNER_SCORE_PROFILE,
-  TOPOLOGY_CONTROL_PLANE_OWNER,
 } from './placement-owner-constants.js';
 
 const PLACEMENT_OWNER_EMPTY_STRING = '';
@@ -222,7 +222,7 @@ function normalizePlacementOwnerEvidence(options = {}) {
   const scoreProfile =
     options.scoreProfile || PLACEMENT_OWNER_SCORE_PROFILE.SUITABILITY;
   return Object.freeze({
-    owner: TOPOLOGY_CONTROL_PLANE_OWNER,
+    owner: PLACEMENT_OWNER,
     candidateNodes: Object.freeze(candidateNodes),
     currentReplicas: Object.freeze(currentReplicas),
     policy: options.policy || Object.freeze({}),

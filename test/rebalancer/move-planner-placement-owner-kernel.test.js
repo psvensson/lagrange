@@ -12,6 +12,7 @@ import {
   ADMISSION_REASON,
 } from '../../src/rebalancer/storage-capacity-constants.js';
 import {
+  PLACEMENT_OWNER,
   PLACEMENT_OWNER_FILTER_STATE,
   PLACEMENT_OWNER_INTENT_STATE,
   PLACEMENT_OWNER_POLICY,
@@ -19,6 +20,7 @@ import {
   PLACEMENT_OWNER_SCORE_DIMENSION,
   PLACEMENT_OWNER_SCORE_PROFILE,
   PLACEMENT_OWNER_SCORE_STATE,
+  TOPOLOGY_CONTROL_PLANE_OWNER,
 } from '../../src/rebalancer/placement-owner-constants.js';
 import {
   buildPlacementOwnerDecision,
@@ -111,6 +113,19 @@ function createAccountingService() {
   };
 }
 
+function assertPlacementOwnerKernelOwners(t, decision) {
+  t.equal(decision.owner, PLACEMENT_OWNER);
+  t.equal(decision.evidence.owner, PLACEMENT_OWNER);
+  t.equal(decision.filterResult.owner, PLACEMENT_OWNER);
+  t.equal(decision.scoreResult.owner, PLACEMENT_OWNER);
+  t.equal(decision.reservationResult.owner, PLACEMENT_OWNER);
+  t.equal(decision.intent.owner, PLACEMENT_OWNER);
+  t.equal(
+    decision.placementOwnerOutcome.owner,
+    TOPOLOGY_CONTROL_PLANE_OWNER,
+  );
+}
+
 test('placement owner kernel exposes explicit policy phases', async (t) => {
   await t.test('under-replicated placement emits selected-target intent',
     async (t) => {
@@ -127,6 +142,7 @@ test('placement owner kernel exposes explicit policy phases', async (t) => {
         placementConstraints: {spreadAcrossNodes: true},
       });
 
+      assertPlacementOwnerKernelOwners(t, result.placementOwnerDecision);
       t.equal(
         result.placementOwnerDecision.filterResult.state,
         PLACEMENT_OWNER_FILTER_STATE.CANDIDATES_ACCEPTED,
@@ -224,6 +240,7 @@ test('placement owner kernel exposes explicit policy phases', async (t) => {
         (entry) => entry.nodeId === NODE_2,
       );
 
+      assertPlacementOwnerKernelOwners(t, decision);
       t.same(decision.scoreResult.rankedNodeIds, [NODE_2, NODE_3, NODE_1]);
       t.ok(
         firstScore.dimensions.some(

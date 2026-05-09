@@ -1,5 +1,6 @@
 import {NUM} from '../constants/index.js';
 import {
+  PLACEMENT_OWNER,
   PLACEMENT_OWNER_FILTER_ACTION,
   PLACEMENT_OWNER_FILTER_REASON,
   PLACEMENT_OWNER_FILTER_STATE,
@@ -61,7 +62,7 @@ function buildPlacementOwnerFilterResult(evidence) {
         PLACEMENT_OWNER_FILTER_REASON.CAPACITY_REJECTED_CANDIDATES :
         PLACEMENT_OWNER_FILTER_REASON.CANDIDATES_ACCEPTED;
   return Object.freeze({
-    owner: TOPOLOGY_CONTROL_PLANE_OWNER,
+    owner: PLACEMENT_OWNER,
     phase: PLACEMENT_OWNER_PHASE.FILTER,
     state,
     action,
@@ -188,7 +189,7 @@ function buildPlacementOwnerScoreResult(evidence, filterResult) {
     return left.score - right.score;
   });
   return Object.freeze({
-    owner: TOPOLOGY_CONTROL_PLANE_OWNER,
+    owner: PLACEMENT_OWNER,
     phase: PLACEMENT_OWNER_PHASE.SCORE,
     state:
       rankedCandidates.length === NUM.ZERO ?
@@ -230,7 +231,7 @@ function buildPlacementOwnerReservationResult(evidence, scoreResult) {
     );
   }
   return Object.freeze({
-    owner: TOPOLOGY_CONTROL_PLANE_OWNER,
+    owner: PLACEMENT_OWNER,
     phase: PLACEMENT_OWNER_PHASE.RESERVE,
     state,
     reasons: Object.freeze(
@@ -293,7 +294,7 @@ function buildPlacementOwnerIntent(evidence, filterResult, scoreResult, reservat
       selectIntentTargetNodeIds(scoreResult, reservationResult) :
       [];
   return Object.freeze({
-    owner: TOPOLOGY_CONTROL_PLANE_OWNER,
+    owner: PLACEMENT_OWNER,
     phase: PLACEMENT_OWNER_PHASE.INTENT,
     state,
     action,
@@ -336,7 +337,7 @@ function buildPlacementOwnerDecision(options = {}) {
     reservationResult,
   );
   return Object.freeze({
-    owner: TOPOLOGY_CONTROL_PLANE_OWNER,
+    owner: PLACEMENT_OWNER,
     evidence,
     filterResult,
     scoreResult,
