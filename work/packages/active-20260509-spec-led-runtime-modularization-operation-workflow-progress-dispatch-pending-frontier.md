@@ -176,34 +176,122 @@ Each subagent prompt must ask for concrete file paths, current hypothesis,
 validation status, and blocker status. The parent session records timeout or
 stall outcomes in this package instead of converting missing output into proof.
 
+## Subagent Observability Notes
+
+- Plato (019e0e15-6411-7330-92a4-43eaadefe310) was assigned predecessor
+  review, missed two checkpoint windows, and was closed without proof.
+- Anscombe (019e0e19-533a-7303-984c-0d76ae0e1436) was assigned replacement
+  predecessor review, missed a checkpoint window, and was closed without proof.
+- Kepler (019e0e1c-0fc3-7922-83bc-7d2066b95f50) was assigned narrow
+  predecessor review, missed a checkpoint window, and was closed without proof.
+- Dirac (019e0e1d-6541-79f2-ba39-52c1d38b7f15) completed predecessor review;
+  result `fixes-required`.
+- Lagrange (019e0e1e-6eb2-7141-9ae0-3fc9c3c467e6) completed the fresh fix
+  role; result `waiver-required` because no truthful docs-only fix can invent
+  missing historical implementation-subagent proof for the predecessor.
+- Human waiver recorded on 2026-05-09: waive the missing standalone
+  implementation-subagent proof for
+  `work/packages/done-20260509-spec-led-runtime-modularization-operation-workflow-rebalancer-handoff-retry-scheduled-frontier.md`
+  and allow successor package implementation to proceed despite that sequencing
+  gap.
+- Volta (019e0e62-50b0-73b0-9930-ac0a711f4353) was assigned implementation,
+  returned a checkpoint diagnosis, and made no changes; it is not used as
+  implementation proof.
+- Dewey (019e0e64-1a98-7540-86a7-97cd13049755) completed implementation;
+  result `implemented`.
+
 ## Subagent Sequencing Ledger
 
-- [ ] Review subagent recorded:
-      pending-before-implementation-resumes.
-- [ ] Fix subagent recorded or explicitly not needed:
-      pending-review-result.
-- [ ] Implementation subagent recorded:
-      pending-before-implementation-resumes.
+- [x] Review subagent recorded:
+      Agent Dirac (019e0e1d-6541-79f2-ba39-52c1d38b7f15) reviewed
+      `work/packages/done-20260509-spec-led-runtime-modularization-operation-workflow-rebalancer-handoff-retry-scheduled-frontier.md`;
+      result `fixes-required`.
+- [x] Fix subagent recorded or explicitly not needed:
+      Agent Lagrange (019e0e1e-6eb2-7141-9ae0-3fc9c3c467e6) fixed
+      `work/packages/done-20260509-spec-led-runtime-modularization-operation-workflow-rebalancer-handoff-retry-scheduled-frontier.md`;
+      result `waiver-required`.
+- [x] Implementation subagent recorded:
+      Agent Dewey (019e0e64-1a98-7540-86a7-97cd13049755) implemented
+      `work/packages/active-20260509-spec-led-runtime-modularization-operation-workflow-progress-dispatch-pending-frontier.md`.
 
 ## Detection / Analysis Tasks
 
-- [ ] Review the rebalancer handoff retry-scheduled package before
+- [x] Review the rebalancer handoff retry-scheduled package before
       implementation starts.
-- [ ] Extract the smallest workflow-progress dispatch-pending fixture from the
+- [x] Extract the smallest workflow-progress dispatch-pending fixture from the
       representative report.
-- [ ] Trace operation workflow owner and dispatch service wake/replay evidence
+- [x] Trace operation workflow owner and dispatch service wake/replay evidence
       for operations with no step transitions.
-- [ ] Identify any diagnostics, retry-log, timeout, or active-gate branch that
+- [x] Identify any diagnostics, retry-log, timeout, or active-gate branch that
       masks workflow progress owner evidence.
 
 ## Implementation Tasks
 
-- [ ] Add or update the focused workflow-progress dispatch-pending fixture.
-- [ ] Rewrite the owner logic so event-driven workflow progress has one
+- [x] Add or update the focused workflow-progress dispatch-pending fixture.
+- [x] Rewrite the owner logic so event-driven workflow progress has one
       canonical decision path.
-- [ ] Delete or guard superseded workflow-progress fallback branches.
-- [ ] Update diagnostics/harness consumers only where owner vocabulary changes.
-- [ ] Rerun representative rolling-restart and migrate any fresh frontier.
+- [x] Delete or guard superseded workflow-progress fallback branches.
+- [x] Update diagnostics/harness consumers only where owner vocabulary changes.
+- [x] Rerun representative rolling-restart and migrate any fresh frontier.
+
+## Implementation Notes
+
+- Implemented slice:
+  `src/rebalancer/operation-workflow-owner-segment-7-stage-5.js` no longer
+  requires `operationOwnerObservation.effectCommand` or
+  `timeoutReconcileDue` before dispatch-pending event-driven recovery
+  schedules owner-key re-entry. The scheduler now consumes the already
+  normalized owner-advance and dispatch-pending evidence and lets
+  `armCoordinatorCreatedOperation` run the canonical owner decision/effect.
+- Focused regression:
+  `test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js`
+  strips `operationOwnerObservation` from a persisted-not-dispatched
+  event-driven snapshot with `timeoutReconcileDue: false` and proves re-entry
+  still enqueues owner work.
+- Diagnostics/harness vocabulary:
+  no owner vocabulary changed; no diagnostics consumer update was required.
+
+## Validation Notes
+
+- Passed:
+  `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-rebalancer-handoff-retry-scheduled.report.json --explain priority_recovery_partition_progress`
+- Passed:
+  `node --test test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js`
+- Passed:
+  `node --test test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
+- Passed:
+  `node scripts/check-guideline-literals.js src/rebalancer/operation-workflow-owner-segment-7-stage-5.js`
+- Passed:
+  `node scripts/check-guideline-decision-boundaries.js src/rebalancer/operation-workflow-owner-segment-7-stage-5.js`
+- Passed:
+  `npm run audit:runtime-grammar:file -- src/rebalancer/operation-workflow-owner-segment-7-stage-5.js`
+- Passed:
+  `git diff --check -- src/rebalancer/operation-workflow-owner-segment-7-stage-5.js test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js work/packages/active-20260509-spec-led-runtime-modularization-operation-workflow-progress-dispatch-pending-frontier.md`
+- Failed with migrated frontier:
+  `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-spec-led-runtime-modularization-workflow-progress-dispatch-pending.report.json --fast-local --verbose`
+
+## Migrated Frontier
+
+- Fresh representative frontier:
+  `priority_recovery_partition_progress`.
+- Owner/boundary:
+  `rebalancer_leader / operation_scheduling`.
+- Dominant source:
+  `priority_recovery_operation_scheduling_event_driven`.
+- Dominant semantic states:
+  `needs_operation`, `operation_stalled`, `recovering_in_flight`.
+- Dominant progress class:
+  `eligible_but_no_operation_created`.
+- Dominant witness:
+  `sql_write_operations-p1`, semantic state `needs_operation`, actuation state
+  `action_required`, workflow phase `none`, latest workflow step
+  `unavailable`, latest operation status `unavailable`, next required action
+  `create_recovery_operation`.
+- Package-owned edge status:
+  the previous `operation_workflow_owner / workflow_progress`
+  dispatch-pending witness no longer dominates. The remaining blocker is
+  rebalancer leader operation scheduling for a priority partition with no
+  recovery operation.
 
 ## Validation
 

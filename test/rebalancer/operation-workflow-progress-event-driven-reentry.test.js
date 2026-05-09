@@ -50,6 +50,7 @@ const TEST_DELIVERY_STATUS_INITIATED = 'initiated';
 const TEST_REPLICA_OPERATIONS_TABLE = 'replica_operations';
 const TEST_SERVICES_TABLE = 'services';
 const TEST_ENTITY_TYPE_PARTITION = 'partition';
+const TEST_OPERATION_OWNER_OBSERVATION_FIELD = 'operationOwnerObservation';
 const TEST_REENTRY_TEST_NAME =
   'event-driven dispatch-pending workflow progress re-enters through the ' +
   'operation owner outcome';
@@ -263,6 +264,16 @@ function createEventDrivenCoordinator(deliveries, deferredTimers, operationRow) 
   });
 }
 
+function omitOperationOwnerObservation(snapshot) {
+  return Object.freeze(
+    Object.fromEntries(
+      Object.entries(snapshot).filter(([key]) =>
+        key !== TEST_OPERATION_OWNER_OBSERVATION_FIELD,
+      ),
+    ),
+  );
+}
+
 test(TEST_REENTRY_TEST_NAME, async (t) => {
   const deliveries = [];
   const deferredTimers = [];
@@ -378,6 +389,33 @@ test(TEST_REENTRY_TEST_NAME, async (t) => {
       deliveries.length,
       NUM.TWO,
       'owner-observed event-driven re-entry should enqueue a fresh owner wake',
+    );
+
+    coordinator.workflowOwner.clearCreatedOperationHandoffRetry(
+      operation.operationId,
+    );
+    const observationMissingSnapshot = Object.freeze({
+      ...omitOperationOwnerObservation(snapshot),
+      actuation: Object.freeze({
+        ...snapshot.actuation,
+        timeoutReconcileDue: TEST_EVENT_DRIVEN_ONLY_TIMEOUT_RECONCILE_DUE,
+      }),
+    });
+    t.equal(
+      coordinator.workflowOwner.schedulePriorityRecoveryDispatchPendingReentry(
+        observationMissingSnapshot,
+        [operation],
+      ),
+      true,
+      'persisted-not-dispatched event-driven re-entry should not require an owner observation',
+    );
+    await new Promise((resolve) => {
+      setTimeout(resolve, NUM.ZERO);
+    });
+    t.equal(
+      deliveries.length,
+      NUM.THREE,
+      'observation-missing event-driven re-entry should enqueue owner work',
     );
   } finally {
     Date.now = originalDateNow;
