@@ -6,8 +6,8 @@ Get to the `0.1` release by closing the representative `rolling-restart`
 distributed harness gate, or by migrating each remaining failure to one named
 owner-boundary package with replayable proof.
 
-The current representative gate is `rolling-restart`. The current release-gate
-artifact is:
+The current representative gate is `rolling-restart`. The release-gate artifact
+trail is:
 
 1. `test-output/reports/rolling-restart-current-release-gate-20260508T194848Z.report.json`
 2. `test-output/reports/rolling-restart-current-release-gate-next.report.json`
@@ -16,6 +16,8 @@ artifact is:
 5. `test-output/reports/rolling-restart-current-release-gate-after-target-creation-progress.report.json`
 6. `test-output/reports/rolling-restart-current-release-gate-after-target-creation-progress-rerun.report.json`
 7. `test-output/reports/rolling-restart-current-release-gate-after-dispatch-skip-retry.report.json`
+8. `test-output/reports/rolling-restart-current-release-gate-after-remote-handoff-retry-stale-fix.report.json`
+9. `test-output/reports/rolling-restart-current-release-gate-after-operation-scheduling-sql-transaction-participants-fix.report.json`
 
 The matching playback is:
 
@@ -26,6 +28,8 @@ The matching playback is:
 5. `test-output/reports/.playback/rolling-restart-current-release-gate-after-target-creation-progress/rolling-restart/`
 6. `test-output/reports/.playback/rolling-restart-current-release-gate-after-target-creation-progress-rerun/rolling-restart/`
 7. `test-output/reports/.playback/rolling-restart-current-release-gate-after-dispatch-skip-retry/rolling-restart/`
+8. `test-output/reports/.playback/rolling-restart-current-release-gate-after-remote-handoff-retry-stale-fix/rolling-restart/`
+9. `test-output/reports/.playback/rolling-restart-current-release-gate-after-operation-scheduling-sql-transaction-participants-fix/rolling-restart/`
 
 ## Current Blocker Snapshot
 
@@ -37,28 +41,29 @@ Latest representative evidence:
 
 1. Scenario: `rolling-restart`
 2. Report total/passed/failed: `1/0/1`
-3. Duration: approximately `131504ms`
-4. Active gate: failed because only `3/5` nodes reached ACTIVE before
+3. Duration: approximately `137324ms`
+4. Active gate: failed because only `4/5` nodes reached ACTIVE before
    `120000ms`
-5. Snapshot coverage: `3/5`
+5. Snapshot coverage: `4/5`
 6. Publication: `PUBLISHED`
 7. Pending acknowledgements: `0`
 8. Priority spread: `pending#gap=5`
 9. Priority recovery invariants: `passed`
 
 The normalized first frontier is
-`rebalancer_leader / operation_scheduling` with dominant reason
-`priority_recovery_operation_scheduling_event_driven`. Startup replay
+`operation_workflow_owner / workflow_progress` with dominant reason
+`priority_partitions_not_spread`. Startup replay
 contracted the first `PENDING` / `persisted_not_dispatched` blocker,
 the target-creation observed-progress fix contracted the `CREATING` /
 `dispatched_waiting_progress` blocker, dispatch-skip retry contracted the
 timed-out `sql_transactions-p1` persisted-not-dispatched witness, and the stale
 remote-handoff retry plus participant scheduling fixes removed the
 `operation_workflow_owner / rebalancer_handoff` and
-`sql_transaction_participants-p1` selected witnesses. The fresh dominant
-partition is `sql_transactions-p1`; supporting blocked partitions are
-`control_plane_publications-p1` and `sql_write_operations-p1`, with unresolved
-semantic states `needs_operation,recovering_in_flight`.
+`sql_transaction_participants-p1` selected witnesses. The no-serial-wait
+operation-scheduling fix created recovery work for `sql_transactions-p1`; the
+fresh dominant partition is `sql_write_operations-p1` with operation
+`04b9e396-00b4-4ad7-abee-b9fac1c16f5d` stuck at `dispatch_pending` under
+`persisted_not_dispatched / advance_existing_operation`.
 
 `startup_active_gate_owner / snapshot_coverage` remains downstream until the
 priority operation workflow progresses or migrates.
@@ -108,9 +113,9 @@ Edition matrix status: Community / AGPL repo.
    `rolling-restart --fast-local`.
 6. If `rolling-restart` passes, run sustained throughput and 7-node stress
    confirmation for `0.1`.
-7. If the blocker migrates, open exactly one successor package for the new
-   named owner boundary. The current migration target is
-   `operation_workflow_owner / rebalancer_handoff`.
+7. Close the operation-scheduling package with the migrated frontier and open
+   exactly one successor package for
+   `operation_workflow_owner / workflow_progress`.
 
 ## Validation Ladder
 

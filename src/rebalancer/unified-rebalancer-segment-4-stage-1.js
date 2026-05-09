@@ -11,6 +11,8 @@ const {
   PRIORITY_RECOVERY_CLOSURE_WITNESS_FOLLOW_UP_PRIORITY,
   PRIORITY_RECOVERY_FOLLOW_UP_DECISION,
   PRIORITY_RECOVERY_FOLLOW_UP_FIELD,
+  PRIORITY_RECOVERY_FOLLOW_UP_MOVE_FIELD,
+  PRIORITY_RECOVERY_FOLLOW_UP_MOVE_STATE,
   PRIORITY_RECOVERY_FOLLOW_UP_REQUIREMENT_SEMANTIC_STATES,
   PRIORITY_RECOVERY_OBSERVATION_STATE_VALUE,
   PRIORITY_TOPOLOGY_CLEANUP_MOVE_REASON_SET,
@@ -25,6 +27,26 @@ const {
   UNIFIED_REBALANCER_LITERAL,
   buildControlPlaneWorkloadProfile,
 } = SHARED;
+
+const PRIORITY_RECOVERY_ORDINARY_SERIAL_GATE_STATE = Object.freeze({
+  FOLLOW_UP_WITHOUT_SERIAL_WAIT: 'follow_up_without_serial_wait',
+  SERIAL_GATE_REQUIRED: 'serial_gate_required',
+});
+const PRIORITY_RECOVERY_ORDINARY_SERIAL_GATE_STATE_TABLE = Object.freeze([
+  Object.freeze({
+    state:
+      PRIORITY_RECOVERY_ORDINARY_SERIAL_GATE_STATE
+        .FOLLOW_UP_WITHOUT_SERIAL_WAIT,
+    matches: (evidence) =>
+      evidence.hasPriorityRecoveryFollowUpMove === true &&
+      evidence.hasSerialWaitEvidence === true &&
+      evidence.hasSerialWaitOperationIds !== true,
+  }),
+  Object.freeze({
+    state: PRIORITY_RECOVERY_ORDINARY_SERIAL_GATE_STATE.SERIAL_GATE_REQUIRED,
+    matches: () => true,
+  }),
+]);
 
 class UnifiedRebalancerSegment4Stage1 extends UnifiedRebalancerSegment3 {
   isAddLikeInFlightOperation(operation) {
@@ -138,10 +160,15 @@ class UnifiedRebalancerSegment4Stage1 extends UnifiedRebalancerSegment3 {
     );
   }
 
-  resolvePriorityRecoveryBudgetPartitionId(moves = []) {
-    const candidateMove = (Array.isArray(moves) ? moves : []).find(
+  resolvePriorityRecoveryAddLikeCandidateMove(moves = []) {
+    return (Array.isArray(moves) ? moves : []).find(
       (move) => move?.type === MoveType.ADD || move?.type === MoveType.REPLACE,
-    );
+    ) || null;
+  }
+
+  resolvePriorityRecoveryBudgetPartitionId(moves = []) {
+    const candidateMove =
+      this.resolvePriorityRecoveryAddLikeCandidateMove(moves);
     const partitionId = String(
       candidateMove?.[PRIORITY_RECOVERY_FOLLOW_UP_FIELD.PARTITION_ID] ||
         candidateMove?.[PRIORITY_RECOVERY_FOLLOW_UP_FIELD.PARTITION_ID_SNAKE] ||
@@ -149,6 +176,57 @@ class UnifiedRebalancerSegment4Stage1 extends UnifiedRebalancerSegment3 {
         UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
     ).trim();
     return partitionId;
+  }
+
+  isPriorityRecoveryFollowUpSerialGateMove(move = null) {
+    const followUpMoveState =
+      move?.[PRIORITY_RECOVERY_FOLLOW_UP_MOVE_FIELD.STATE];
+    return (
+      followUpMoveState ===
+        PRIORITY_RECOVERY_FOLLOW_UP_MOVE_STATE.MOVE_CREATED ||
+      followUpMoveState ===
+        PRIORITY_RECOVERY_FOLLOW_UP_MOVE_STATE.SOURCE_FALLBACK_ADD_CREATED
+    );
+  }
+
+  buildPriorityRecoveryOrdinarySerialGateEvidence(moves = []) {
+    const candidateMove =
+      this.resolvePriorityRecoveryAddLikeCandidateMove(moves);
+    const hasSerialWaitEvidence = Array.isArray(
+      candidateMove?.[
+        PRIORITY_RECOVERY_FOLLOW_UP_FIELD.SERIAL_WAIT_OPERATION_IDS
+      ],
+    );
+    const serialWaitOperationIds = hasSerialWaitEvidence ?
+      candidateMove[
+        PRIORITY_RECOVERY_FOLLOW_UP_FIELD.SERIAL_WAIT_OPERATION_IDS
+      ] :
+      [];
+    return Object.freeze({
+      hasPriorityRecoveryFollowUpMove:
+        this.isPriorityRecoveryFollowUpSerialGateMove(candidateMove),
+      hasSerialWaitEvidence,
+      hasSerialWaitOperationIds:
+        serialWaitOperationIds.length > NUM.ZERO,
+    });
+  }
+
+  resolvePriorityRecoveryOrdinarySerialGateState(evidence = {}) {
+    const tableEntry =
+      PRIORITY_RECOVERY_ORDINARY_SERIAL_GATE_STATE_TABLE.find((entry) =>
+        entry.matches(evidence),
+      );
+    return tableEntry ?
+      tableEntry.state :
+      PRIORITY_RECOVERY_ORDINARY_SERIAL_GATE_STATE.SERIAL_GATE_REQUIRED;
+  }
+
+  shouldBypassOrdinaryPriorityRecoverySerialGate(moves = []) {
+    const evidence =
+      this.buildPriorityRecoveryOrdinarySerialGateEvidence(moves);
+    return this.resolvePriorityRecoveryOrdinarySerialGateState(evidence) ===
+      PRIORITY_RECOVERY_ORDINARY_SERIAL_GATE_STATE
+        .FOLLOW_UP_WITHOUT_SERIAL_WAIT;
   }
 
   async canBypassGlobalBudgetForPriorityRecovery(moves = []) {
@@ -217,6 +295,9 @@ class UnifiedRebalancerSegment4Stage1 extends UnifiedRebalancerSegment3 {
       typeof this.rebalanceCoordinator.getConcurrentAddCountByPriorityClass !==
         TYPEOF.FUNCTION
     ) {
+      return null;
+    }
+    if (this.shouldBypassOrdinaryPriorityRecoverySerialGate(moves)) {
       return null;
     }
     const counts =

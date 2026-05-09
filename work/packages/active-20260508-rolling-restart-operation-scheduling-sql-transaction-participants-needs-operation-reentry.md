@@ -8,16 +8,17 @@
   "scenario": "rolling-restart",
   "artifact": "test-output/reports/rolling-restart-current-release-gate-after-operation-scheduling-sql-transaction-participants-fix.report.json",
   "playback": "test-output/reports/.playback/rolling-restart-current-release-gate-after-operation-scheduling-sql-transaction-participants-fix/rolling-restart/",
-  "owner": "rebalancer_leader",
-  "boundary": "operation_scheduling",
-  "dominantReason": "priority_recovery_operation_scheduling_event_driven",
-  "currentState": "The focused owner regression now proves the sql_transaction_participants-p1 stale serial-wait planning snapshot is reconstructed into current needs_operation recovery work. The representative rerun moved the dominant witness to sql_transactions-p1 but stayed on rebalancer_leader / operation_scheduling with semanticStateId needs_operation, nextRequiredAction create_recovery_operation, actuationState action_required, waitMode event_driven, operationIds empty, and eligibleNodeIds 11601fe0-72d6-5853-8590-ec2881853e72 and 7493b0ab-a054-5fad-a91b-5e331db29304. Supporting blocked partitions are control_plane_publications-p1 under recovering_in_flight / persisted_not_dispatched and sql_write_operations-p1 under recovering_in_flight / dispatched_waiting_progress.",
-  "nextAction": "Continue this package on the same rebalancer_leader / operation_scheduling boundary by tracing why the remaining sql_transactions-p1 needs_operation event-driven create_recovery_operation path is not re-entered after the prior priority follow-up work progresses.",
+  "owner": "operation_workflow_owner",
+  "boundary": "workflow_progress",
+  "dominantReason": "priority_partitions_not_spread",
+  "currentState": "The sql_transactions-p1 no-serial-wait operation-scheduling gap is now covered by a focused regression and the representative rerun created recovery operation ab74c173-78e1-4227-a15c-580c22a97930, leaving sql_transactions-p1 as spread_satisfied_in_flight. The representative rolling-restart run still failed after 137324ms with 4/5 nodes ACTIVE and migrated the frontier to operation_workflow_owner / workflow_progress: sql_write_operations-p1 is recovering_in_flight with actuationState persisted_not_dispatched, nextRequiredAction advance_existing_operation, waitMode event_driven, workflowProgressPhaseId dispatch_pending, operationId 04b9e396-00b4-4ad7-abee-b9fac1c16f5d, and stepAgeMs 88969 over stepTimeoutMs 30000.",
+  "nextAction": "Continue with a workflow-progress package or blocker probe for sql_write_operations-p1 persisted_not_dispatched dispatch_pending operation 04b9e396-00b4-4ad7-abee-b9fac1c16f5d, tracing why the workflow owner does not advance or timeout-reconcile the pending operation.",
   "proof": [
     "npm run work:package:evidence-block -- test-output/reports/rolling-restart-current-release-gate-after-remote-handoff-retry-stale-fix.report.json",
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-remote-handoff-retry-stale-fix.report.json --explain priority_recovery_partition_progress",
     "npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-current-release-gate-after-remote-handoff-retry-stale-fix.report.json",
     "Focused owner-decision regression for sql_transaction_participants-p1 create_recovery_operation scheduling",
+    "Focused owner-decision regression for sql_transactions-p1 no-serial-wait create_recovery_operation scheduling",
     "Touched-file literal, decision-boundary, runtime-grammar, syntax, and diff hygiene guardrails",
     "node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-current-release-gate-after-operation-scheduling-sql-transaction-participants-fix.report.json --fast-local --verbose",
     "npm run work:package:evidence-block -- test-output/reports/rolling-restart-current-release-gate-after-operation-scheduling-sql-transaction-participants-fix.report.json",
@@ -25,6 +26,7 @@
     "npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-current-release-gate-after-operation-scheduling-sql-transaction-participants-fix.report.json"
   ],
   "touchedFiles": [
+    "src/rebalancer/unified-rebalancer-segment-4-stage-1.js",
     "src/rebalancer/unified-rebalancer-segment-4-stage-2.js",
     "src/rebalancer/unified-rebalancer-segment-4-stage-3.js",
     "src/rebalancer/unified-rebalancer-segment-4-stage-shared.js",
@@ -81,30 +83,33 @@ Latest representative rerun:
    `test-output/reports/rolling-restart-current-release-gate-after-operation-scheduling-sql-transaction-participants-fix.report.json`.
 2. Playback directory:
    `test-output/reports/.playback/rolling-restart-current-release-gate-after-operation-scheduling-sql-transaction-participants-fix/rolling-restart/`.
-3. Result: failed after approximately `131504ms`.
-4. Active gate: `3/5` nodes reached ACTIVE within `120000ms`.
+3. Result: failed after approximately `137324ms`.
+4. Active gate: `4/5` nodes reached ACTIVE within `120000ms`.
 5. Frontier edge: `priority_recovery_partition_progress`.
-6. Owner and boundary remain:
-   `rebalancer_leader / operation_scheduling`.
-7. Dominant reason remains:
-   `priority_recovery_operation_scheduling_event_driven`.
-8. Dominant witness moved to:
-   `sql_transactions-p1`.
+6. Owner and boundary migrated to:
+   `operation_workflow_owner / workflow_progress`.
+7. Dominant reason:
+   `priority_partitions_not_spread`.
+8. Dominant witness:
+   `sql_write_operations-p1`.
 9. Dominant semantic state:
-   `needs_operation`.
+   `recovering_in_flight`.
 10. Dominant next required action:
-    `create_recovery_operation`.
+    `advance_existing_operation`.
 11. Dominant actuation state and wait mode:
-    `action_required / event_driven`.
-12. Dominant operation ids:
-    none.
-13. Dominant eligible node ids:
-    `11601fe0-72d6-5853-8590-ec2881853e72` and
+    `persisted_not_dispatched / event_driven`.
+12. Dominant workflow progress phase:
+    `dispatch_pending`.
+13. Dominant operation id:
+    `04b9e396-00b4-4ad7-abee-b9fac1c16f5d`.
+14. Dominant eligible node ids:
+    `35a891b8-c1a0-5064-9c6e-2acfba61c2a7` and
     `7493b0ab-a054-5fad-a91b-5e331db29304`.
-14. Supporting blocked partitions:
-    `control_plane_publications-p1` under `recovering_in_flight` with
-    `persisted_not_dispatched`, and `sql_write_operations-p1` under
-    `recovering_in_flight` with `dispatched_waiting_progress`.
+15. Dominant operation age:
+    `stepAgeMs=88969` over `stepTimeoutMs=30000`.
+16. The prior `sql_transactions-p1` witness now has created operation
+    `ab74c173-78e1-4227-a15c-580c22a97930` and is classified as
+    `spread_satisfied_in_flight`.
 
 ## Scope Basis
 
@@ -154,6 +159,10 @@ Initial canonical partition:
 Current canonical partition:
 `sql_transactions-p1`.
 
+Remaining representative blocker after this package:
+`sql_write_operations-p1` under
+`operation_workflow_owner / workflow_progress`.
+
 Allowed consumers:
 priority recovery diagnostics, topology convergence analysis, distributed
 failure summary, and focused rebalancer owner tests.
@@ -179,6 +188,15 @@ Forbidden reinterpretations:
 - [x] Implementation subagent recorded:
       Agent Laplace (`019e09e7-0f65-7d20-93a4-100d7b6b5da0`) implemented
       `work/packages/active-20260508-rolling-restart-operation-scheduling-sql-transaction-participants-needs-operation-reentry.md`.
+- [x] Continuation review subagent recorded:
+      Agent Poincare (`019e09f5-5d8c-7f33-b94d-066fbba5269d`) reviewed
+      `work/packages/active-20260508-rolling-restart-operation-scheduling-sql-transaction-participants-needs-operation-reentry.md`;
+      result `fixes-required`.
+- [x] Continuation fix subagent recorded:
+      Agent Hypatia (`019e09f7-46c4-7a11-a7fd-a563c326784a`) fixed
+      `work/packages/active-20260508-rolling-restart-operation-scheduling-sql-transaction-participants-needs-operation-reentry.md`.
+- [x] Continuation implementation subagent recorded:
+      Agent Linnaeus (019e09fa-3b86-7263-81cc-2e6a0d0aa952) implemented work/packages/active-20260508-rolling-restart-operation-scheduling-sql-transaction-participants-needs-operation-reentry.md.
 
 ## Residual Closure Inventory
 
@@ -187,10 +205,11 @@ Forbidden reinterpretations:
       snapshot.
 - [x] The `sql_transaction_participants-p1` owner-decision fixture or blocker
       probe exists.
-- [ ] The operation-scheduling gap is fixed or the representative rerun
+- [x] The `sql_transactions-p1` owner-decision fixture or blocker probe exists.
+- [x] The operation-scheduling gap is fixed or the representative rerun
       migrates to one named owner boundary.
 - [x] Touched-file static guardrails pass.
-- [ ] Representative `rolling-restart --fast-local` rerun passes or migrates
+- [x] Representative `rolling-restart --fast-local` rerun passes or migrates
       to one named owner boundary.
 
 ## Static Drift Ledger
@@ -205,14 +224,15 @@ Closure:
 - [x] Same guardrails rerun after implementation.
 - [x] No new touched-file decision-boundary, literal-owner, runtime-grammar, or
       diff hygiene violation remains.
-- [ ] The focused package slice is committed and pushed.
+- [x] The focused package slice is committed and pushed.
 
 ## Validation
 
 Required implementation validation:
 
-1. Focused owner-decision regression or blocker probe for the
-   `sql_transaction_participants-p1` `needs_operation` scheduling witness.
+1. Focused owner-decision regressions or blocker probes for the
+   `sql_transaction_participants-p1` and `sql_transactions-p1`
+   `needs_operation` scheduling witnesses.
 2. Focused rebalancer test file selected by the implementation subagent.
 3. Touched-file literal, decision-boundary, runtime-grammar, syntax, and diff
    hygiene guardrails.
@@ -244,14 +264,67 @@ Implementation validation notes:
    passed.
 9. `npm run work:current-blocker` passed and regenerated
    `work/sprints/current-blocker.json` and `work/sprints/current-blocker.md`.
-10. `npm run work:validate` failed because the active package still lacks the
-    checked implementation subagent identity and commit/push ledger entries;
-    those cannot be truthfully filled by this subagent under the no-commit
-    instruction.
+10. `npm run work:validate` passed after Agent Laplace was recorded as the
+    implementation subagent and the focused commit/push ledger proof was added.
 11. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-current-release-gate-after-operation-scheduling-sql-transaction-participants-fix.report.json --fast-local --verbose`
     failed. The representative blocker stayed on
     `rebalancer_leader / operation_scheduling` and moved the dominant witness
     from `sql_transaction_participants-p1` to `sql_transactions-p1`.
+12. `node test/rebalancer/unified-rebalancer-part-5-2-stage-2.js` failed
+    before the continuation runtime fix on the new `sql_transactions-p1`
+    no-serial-wait regression because no recovery operation was persisted when
+    an unrelated ordinary priority recovery operation was already in flight.
+13. `node test/rebalancer/unified-rebalancer-part-5-2-stage-2.js` passed after
+    the continuation runtime fix with `21/21` assertions.
+14. `node test/rebalancer/unified-rebalancer.test-part-2.js` passed with
+    `38/38` assertions, preserving ordinary priority recovery serial gating for
+    generic ordinary moves.
+15. `node --check src/rebalancer/unified-rebalancer-segment-4-stage-1.js`,
+    `node --check src/rebalancer/unified-rebalancer-segment-4-stage-3.js`,
+    `node --check src/rebalancer/unified-rebalancer-segment-4-stage-shared.js`,
+    and
+    `node --check test/rebalancer/unified-rebalancer-part-5-2-stage-2.js`
+    passed.
+16. `node scripts/check-guideline-literals.js src/rebalancer/unified-rebalancer-segment-4-stage-1.js src/rebalancer/unified-rebalancer-segment-4-stage-2.js src/rebalancer/unified-rebalancer-segment-4-stage-3.js src/rebalancer/unified-rebalancer-segment-4-stage-shared.js test/rebalancer/unified-rebalancer-part-5-2-stage-2.js`
+    passed with `0` new literal-guideline violations and `0` inherited
+    baseline violations.
+17. `node scripts/check-guideline-decision-boundaries.js src/rebalancer/unified-rebalancer-segment-4-stage-1.js src/rebalancer/unified-rebalancer-segment-4-stage-2.js src/rebalancer/unified-rebalancer-segment-4-stage-3.js src/rebalancer/unified-rebalancer-segment-4-stage-shared.js test/rebalancer/unified-rebalancer-part-5-2-stage-2.js`
+    passed with `0` decision-boundary guideline violations.
+18. `npm run audit:runtime-grammar:file -- src/rebalancer/unified-rebalancer-segment-4-stage-1.js src/rebalancer/unified-rebalancer-segment-4-stage-2.js src/rebalancer/unified-rebalancer-segment-4-stage-3.js src/rebalancer/unified-rebalancer-segment-4-stage-shared.js test/rebalancer/unified-rebalancer-part-5-2-stage-2.js`
+    passed with `0` runtime-grammar-contract violations.
+19. `git diff --check -- src/rebalancer/unified-rebalancer-segment-4-stage-1.js src/rebalancer/unified-rebalancer-segment-4-stage-3.js src/rebalancer/unified-rebalancer-segment-4-stage-shared.js test/rebalancer/unified-rebalancer-part-5-2-stage-2.js`
+    passed.
+20. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-current-release-gate-after-operation-scheduling-sql-transaction-participants-fix.report.json --fast-local --verbose`
+    failed after `137324ms`. The `sql_transactions-p1` recovery operation was
+    created and classified as `spread_satisfied_in_flight`; the remaining
+    blocker migrated to `operation_workflow_owner / workflow_progress` on
+    `sql_write_operations-p1` with `persisted_not_dispatched` /
+    `advance_existing_operation`.
+21. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-operation-scheduling-sql-transaction-participants-fix.report.json --explain priority_recovery_partition_progress`
+    reported frontier `operation_workflow_owner / workflow_progress` with
+    dominant reason `priority_partitions_not_spread` and blocked partition
+    `sql_write_operations-p1`.
+22. `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-current-release-gate-after-operation-scheduling-sql-transaction-participants-fix.report.json`
+    summarized the representative failure as `0/1` passed,
+    `rootCauseClass=topology`, and dominant reason
+    `priority_partitions_not_spread`.
+23. `npm run work:package:evidence-block -- test-output/reports/rolling-restart-current-release-gate-after-operation-scheduling-sql-transaction-participants-fix.report.json`
+    reported current semantic owner `operation_workflow_owner`, current
+    boundary `workflow_progress`, and dominant reason
+    `priority_partitions_not_spread`.
+24. `npm run work:current-blocker` passed and regenerated
+    `work/sprints/current-blocker.json` and `work/sprints/current-blocker.md`
+    with the migrated workflow-progress blocker.
+25. `npm run work:validate` passed with
+    `Work tracker validation OK for 12 file(s).`
+26. `git diff --check -- src/rebalancer/unified-rebalancer-segment-4-stage-1.js src/rebalancer/unified-rebalancer-segment-4-stage-3.js src/rebalancer/unified-rebalancer-segment-4-stage-shared.js test/rebalancer/unified-rebalancer-part-5-2-stage-2.js work/packages/active-20260508-rolling-restart-operation-scheduling-sql-transaction-participants-needs-operation-reentry.md work/sprints/current-blocker.json work/sprints/current-blocker.md`
+    passed.
+
+## Commit And Push Ledger
+
+- Focused package commit: 4faee41b
+- Pushed to: origin/codex/pending-ack-eligibility-filter
+- Commit contains only package-owned files/package-status/allowed sprint handoff: yes
 
 ## Done When
 

@@ -109,6 +109,8 @@ const PRIORITY_RECOVERY_FOLLOW_UP_FIELD = Object.freeze({
   REQUIRED_DISTINCT_NODE_COUNT: 'requiredDistinctNodeCount',
   SERVICE_ID: 'service_id',
   SEMANTIC_STATE_ID: 'semanticStateId',
+  SERIAL_WAIT_OPERATION_IDS: 'serialWaitOperationIds',
+  SERIAL_WAIT_PARTITION_IDS: 'serialWaitPartitionIds',
   SOURCE_NODE_ID: 'sourceNodeId',
   STATUS: 'status',
   TARGET_NODE_ID: 'targetNodeId',

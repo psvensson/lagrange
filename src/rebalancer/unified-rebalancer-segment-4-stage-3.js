@@ -265,6 +265,41 @@ class UnifiedRebalancerSegment4Stage3 extends UnifiedRebalancerSegment4Stage2 {
     );
   }
 
+  buildPriorityRecoveryFollowUpSerialWaitMoveFields(decision = null) {
+    const coordinator =
+      decision?.decisionSnapshot?.[
+        PRIORITY_RECOVERY_FOLLOW_UP_FIELD.COORDINATOR
+      ] || {};
+    const serialWaitOperationIds = Array.isArray(
+      coordinator?.[
+        PRIORITY_RECOVERY_FOLLOW_UP_FIELD.SERIAL_WAIT_OPERATION_IDS
+      ],
+    ) ?
+      Object.freeze([
+        ...coordinator[
+          PRIORITY_RECOVERY_FOLLOW_UP_FIELD.SERIAL_WAIT_OPERATION_IDS
+        ],
+      ]) :
+      Object.freeze([]);
+    const serialWaitPartitionIds = Array.isArray(
+      coordinator?.[
+        PRIORITY_RECOVERY_FOLLOW_UP_FIELD.SERIAL_WAIT_PARTITION_IDS
+      ],
+    ) ?
+      Object.freeze([
+        ...coordinator[
+          PRIORITY_RECOVERY_FOLLOW_UP_FIELD.SERIAL_WAIT_PARTITION_IDS
+        ],
+      ]) :
+      Object.freeze([]);
+    return Object.freeze({
+      [PRIORITY_RECOVERY_FOLLOW_UP_FIELD.SERIAL_WAIT_OPERATION_IDS]:
+        serialWaitOperationIds,
+      [PRIORITY_RECOVERY_FOLLOW_UP_FIELD.SERIAL_WAIT_PARTITION_IDS]:
+        serialWaitPartitionIds,
+    });
+  }
+
   buildPriorityRecoveryFollowUpMove(context = {}) {
     const decision = context.decision || null;
     if (
@@ -295,6 +330,8 @@ class UnifiedRebalancerSegment4Stage3 extends UnifiedRebalancerSegment4Stage2 {
         PRIORITY_RECOVERY_FOLLOW_UP_MOVE_REASON.TARGET_UNAVAILABLE,
       );
     }
+    const serialWaitMoveFields =
+      this.buildPriorityRecoveryFollowUpSerialWaitMoveFields(decision);
     const healthyReplicas = this.getHealthyReplicas(currentReplicas);
     const targetReplicaCount =
       this.resolvePriorityRecoveryFollowUpTargetReplicaCount(
@@ -318,6 +355,7 @@ class UnifiedRebalancerSegment4Stage3 extends UnifiedRebalancerSegment4Stage2 {
           entityId: partitionId,
           nodeId: targetNodeId,
           reason: MOVE_REASON.INCREASE_REPLICA_COUNT,
+          ...serialWaitMoveFields,
           [REBALANCER_MOVE_FIELD.TARGET_READINESS_MODE]:
             REBALANCER_TARGET_READINESS_MODE.DEFER_TO_WORKFLOW_OWNER,
         }),
@@ -344,6 +382,7 @@ class UnifiedRebalancerSegment4Stage3 extends UnifiedRebalancerSegment4Stage2 {
           entityId: partitionId,
           nodeId: targetNodeId,
           reason: MOVE_REASON.INCREASE_REPLICA_COUNT,
+          ...serialWaitMoveFields,
           [REBALANCER_MOVE_FIELD.TARGET_READINESS_MODE]:
             REBALANCER_TARGET_READINESS_MODE.DEFER_TO_WORKFLOW_OWNER,
         }),
@@ -361,6 +400,7 @@ class UnifiedRebalancerSegment4Stage3 extends UnifiedRebalancerSegment4Stage2 {
         sourceNodeId,
         replicaId,
         reason: MOVE_REASON.REPLACE_REPLICA,
+        ...serialWaitMoveFields,
         [REBALANCER_MOVE_FIELD.TARGET_READINESS_MODE]:
           REBALANCER_TARGET_READINESS_MODE.DEFER_TO_WORKFLOW_OWNER,
       }),
