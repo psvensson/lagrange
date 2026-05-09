@@ -317,6 +317,17 @@ function buildOperationWorkflowOwnerPortDispatchObservation(
   });
 }
 
+function shouldPrimeCoordinatorCreatedLocalOwnerOperation(
+  operation,
+  context,
+) {
+  return context.mode ===
+      OPERATION_WORKFLOW_OWNER_PORT_CONTEXT_MODE
+        .COORDINATOR_CREATED_OPERATION &&
+    getOperationWorkflowOwnerPortWorkflowStep(operation) ===
+      WORKFLOW_STEP.PENDING;
+}
+
 async function readOperationWorkflowOwnerPortDurableOperation(
   owner,
   operationInput,
@@ -359,7 +370,45 @@ async function readOperationWorkflowOwnerPortDurableOperation(
   return OPERATION_WORKFLOW_OWNER_PORT_NO_RECORD;
 }
 
+async function primeCoordinatorCreatedLocalOwnerOperation(
+  owner,
+  operation,
+  context,
+) {
+  owner.clearCreatedOperationHandoffRetry?.(operation.operationId);
+  try {
+    const claimedOperation = await owner.claimPendingDispatchOperation(
+      operation,
+    );
+    return owner.applyCoordinatorCreatedLocalOperationPrimeAction(
+      claimedOperation,
+    );
+  } catch (error) {
+    if (
+      typeof owner.deferTransitionRetry ===
+        OPERATION_WORKFLOW_OWNER_PORT_FUNCTION_TYPE &&
+      owner.deferTransitionRetry(operation.operationId, error, {
+        boundary: context.effectCommand,
+        workflowStep: operation.workflowStep,
+        partitionId: operation.partitionId,
+        updatedAt: operation.updatedAt,
+        createdAt: operation.createdAt,
+      })
+    ) {
+      return false;
+    }
+    throw error;
+  }
+}
+
 async function dispatchOperationWorkflowLocalOwner(owner, operation, context) {
+  if (shouldPrimeCoordinatorCreatedLocalOwnerOperation(operation, context)) {
+    return primeCoordinatorCreatedLocalOwnerOperation(
+      owner,
+      operation,
+      context,
+    );
+  }
   owner.clearCreatedOperationHandoffRetry?.(operation.operationId);
   try {
     const dispatchResult = await owner.dispatchOperationInternal(operation);

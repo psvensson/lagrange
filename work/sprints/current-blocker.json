@@ -1,36 +1,31 @@
 {
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
-  "sprint": "work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md",
-  "package": "work/packages/active-20260509-rolling-restart-operation-workflow-timeout-control-plane-publications-stale-progress-reconcile.md",
+  "sprint": "work/sprints/active-2026-q2-spec-led-runtime-modularization.md",
+  "package": "work/packages/active-20260509-spec-led-runtime-modularization-placement-owner-kernel.md",
   "status": "active",
-  "scenario": "rolling-restart",
-  "artifact": "test-output/reports/rolling-restart-current-release-gate-after-workflow-timeout-stale-progress-fix.report.json",
-  "playback": "test-output/reports/.playback/rolling-restart-current-release-gate-after-workflow-timeout-stale-progress-fix/rolling-restart/",
-  "owner": "operation_workflow_owner",
-  "boundary": "workflow_progress",
-  "dominantReason": "priority_recovery_workflow_progress_transition_deferred",
-  "currentState": "The focused workflow-timeout stale SENDING/pending fix was committed and pushed as 17baca86. It moved control_plane_publications-p1 off workflow_timeout and the representative rolling-restart rerun migrated to operation_workflow_owner / workflow_progress. The current dominant witness is sql_write_operations-p1 with semanticStateId needs_operation, progress class priority_operation_serial_wait, actuationState transition_deferred, waitMode event_driven, nextRequiredAction wait_for_operation_progress, operationId 9fef6a49-1f1d-413a-b257-37a4c69293c8, and serialWaitOperationIds [1a3e89d1-bae0-4a19-9d1e-f11b3a425a9b] on serialWaitPartitionIds [control_plane_publications-p1].",
-  "nextAction": "Open the next package on operation_workflow_owner / workflow_progress for the sql_write_operations-p1 serial-wait blocker behind control_plane_publications-p1 operation 1a3e89d1-bae0-4a19-9d1e-f11b3a425a9b.",
+  "scenario": "spec-led-runtime-modularization",
+  "artifact": "none",
+  "playback": "none",
+  "owner": "placement_owner",
+  "boundary": "placement_policy_kernel",
+  "dominantReason": "placement_policy_interleaves_filter_score_and_runtime_effects",
+  "currentState": "Placement and move planning logic can still interleave eligibility filtering, scoring, admission, operation creation, and runtime effects in ways that are hard to audit after topology rewrites.",
+  "nextAction": "Rewrite placement as a pure policy kernel with filter, score, reserve, and intent phases before touching operation execution.",
   "proof": [
-    "npm run work:package:evidence-block -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-dispatch-pending-fix.report.json",
-    "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-dispatch-pending-fix.report.json --explain priority_recovery_partition_progress",
-    "Focused workflow-timeout regression for control_plane_publications-p1 SENDING/pending dispatch_pending stale progress re-entry",
-    "Touched-file literal, decision-boundary, runtime-grammar, syntax, and diff hygiene guardrails",
-    "node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-current-release-gate-after-workflow-timeout-stale-progress-fix.report.json --fast-local --verbose",
-    "npm run work:package:evidence-block -- test-output/reports/rolling-restart-current-release-gate-after-workflow-timeout-stale-progress-fix.report.json",
-    "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-workflow-timeout-stale-progress-fix.report.json --explain priority_recovery_partition_progress",
-    "npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-current-release-gate-after-workflow-timeout-stale-progress-fix.report.json"
+    "Focused move planner policy tests",
+    "Focused storage admission tests",
+    "Placement decision table fixture",
+    "Touched-file decision-boundary and literal guardrails"
   ],
   "touchedFiles": [
-    "src/control-plane/priority-recovery-snapshot-stage-10.js",
-    "test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js",
-    "work/packages/done-20260509-rolling-restart-operation-workflow-progress-sql-write-operations-dispatch-pending-reentry.md",
-    "work/packages/done-20260508-rolling-restart-operation-scheduling-sql-transaction-participants-needs-operation-reentry.md",
-    "work/packages/active-20260509-rolling-restart-operation-workflow-timeout-control-plane-publications-stale-progress-reconcile.md",
-    "work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md",
-    "work/sprints/current-blocker.json",
-    "work/sprints/current-blocker.md"
+    "src/rebalancer/move-planner*.js",
+    "src/rebalancer/unified-rebalancer*.js",
+    "src/rebalancer/storage-admission-service.js",
+    "src/rebalancer/placement-owner-*.js",
+    "test/rebalancer/move-planner*.test.js",
+    "test/rebalancer/storage-admission*.test.js",
+    "work/packages/active-20260509-spec-led-runtime-modularization-placement-owner-kernel.md"
   ],
-  "predecessor": "work/packages/done-20260509-rolling-restart-operation-workflow-progress-sql-write-operations-dispatch-pending-reentry.md"
+  "predecessor": "work/packages/done-20260509-spec-led-runtime-modularization-workflow-owner-adapter-cutover.md"
 }

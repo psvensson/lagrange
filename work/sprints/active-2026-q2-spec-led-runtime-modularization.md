@@ -7,23 +7,23 @@ progress successor boundary.
 ## Latest Package Snapshot
 
 Latest completed package:
-`work/packages/done-20260509-spec-led-runtime-modularization-priority-recovery-observation-contract.md`.
-
-Owner boundary:
-`priority_recovery_observer / operation_owner_observation`.
-
-Completed result: priority recovery dispatch-pending normalization now consumes
-canonical operation-owner outcomes and emits inert observation records plus owner
-requests. The operation-owner stale-progress command-idle fix is included in the
-same package slice.
-
-Next package:
 `work/packages/done-20260509-spec-led-runtime-modularization-workflow-owner-adapter-cutover.md`.
 
-Next proof surface: activate the workflow owner adapter cutover package,
-review/fix/implement through real subagents, and route existing workflow facades
-through the operation decision kernel so real owner outcomes can flow into
-priority recovery.
+Owner boundary:
+`operation_workflow_owner / workflow_effects_adapter`.
+
+Completed result: workflow-owner entrypoints now execute canonical operation
+decision-kernel effect commands through adapter ports. The post-review repair
+preserves `DISPATCH_LOCAL_OWNER_COMMAND` while restoring coordinator-created
+local `PENDING` priming semantics: ordinary local creations claim only to
+`SENDING`, and critical local creations dispatch from the claimed snapshot.
+
+Next package:
+`work/packages/active-20260509-spec-led-runtime-modularization-placement-owner-kernel.md`.
+
+Next proof surface: placement owner policy kernel implementation can start only
+after the workflow-adapter review fix ledger is clean and the separate
+implementation subagent is recorded for the active placement package.
 
 ## Goal
 
@@ -74,7 +74,7 @@ the contract and proof ladder are stable.
 2. [Operation Owner Decision Kernel](../packages/done-20260509-spec-led-runtime-modularization-operation-owner-kernel.md)
 3. [Priority Recovery Observation Contract](../packages/done-20260509-spec-led-runtime-modularization-priority-recovery-observation-contract.md)
 4. [Workflow Owner Adapter Cutover](../packages/done-20260509-spec-led-runtime-modularization-workflow-owner-adapter-cutover.md)
-5. [Placement Owner Policy Kernel](../packages/todo-20260509-spec-led-runtime-modularization-placement-owner-kernel.md)
+5. [Placement Owner Policy Kernel](../packages/active-20260509-spec-led-runtime-modularization-placement-owner-kernel.md)
 6. [Publication Owner Stream Contract](../packages/todo-20260509-spec-led-runtime-modularization-publication-owner-stream.md)
 7. [Projection Readiness Contract](../packages/todo-20260509-spec-led-runtime-modularization-projection-readiness-contract.md)
 8. [Diagnostics And Harness Consumer Rewrite](../packages/todo-20260509-spec-led-runtime-modularization-diagnostics-harness-consumer.md)

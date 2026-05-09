@@ -197,6 +197,27 @@ intent from stale progress evidence.
 - PASS: `npm run audit:runtime-grammar:file -- ...expanded touched runtime files...`
 - PASS: `git diff --check -- ...touched package files...`
 
+### Post-Closure Review Fix Notes
+
+The mandatory review finding reported before placement implementation is fixed.
+Coordinator-created local `PENDING` operations still route through
+`DISPATCH_LOCAL_OWNER_COMMAND`, but the command executor now preserves the
+previous local-prime semantics: ordinary local creations claim only to
+`SENDING`, while critical local creations dispatch from the claimed `SENDING`
+snapshot. This keeps the kernel/adapter command contract intact without
+collapsing the coordinator-created entrypoint into direct dispatch.
+
+Additional repair validation:
+
+- PASS: `node --test test/rebalancer/coordinator-created-operation-progress.test.js`
+  - 31 tests, 7 suites.
+- PASS: `node --test test/rebalancer/operation-workflow-owner-decision.test.js test/rebalancer/operation-workflow-owner-adapter.test.js test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js test/rebalancer/coordinator-created-operation-progress.test.js`
+  - 282 tests, 25 suites.
+- PASS: `node scripts/check-guideline-literals.js src/rebalancer/operation-workflow-owner-ports.js`
+- PASS: `node scripts/check-guideline-decision-boundaries.js src/rebalancer/operation-workflow-owner-ports.js`
+- PASS: `npm run audit:runtime-grammar:file -- src/rebalancer/operation-workflow-owner-ports.js`
+- PASS: `git diff --check -- src/rebalancer/operation-workflow-owner-ports.js work/packages/active-20260509-spec-led-runtime-modularization-placement-owner-kernel.md work/sprints/active-2026-q2-spec-led-runtime-modularization.md`
+
 ## Done When
 
 1. Runtime operation progress flows through the kernel.

@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "todo",
+  "status": "active",
   "opened": "2026-05-09",
   "scenario": "spec-led-runtime-modularization",
   "artifact": "none",
@@ -26,7 +26,7 @@
     "src/rebalancer/placement-owner-*.js",
     "test/rebalancer/move-planner*.test.js",
     "test/rebalancer/storage-admission*.test.js",
-    "work/packages/todo-20260509-spec-led-runtime-modularization-placement-owner-kernel.md"
+    "work/packages/active-20260509-spec-led-runtime-modularization-placement-owner-kernel.md"
   ],
   "predecessor": "work/packages/done-20260509-spec-led-runtime-modularization-workflow-owner-adapter-cutover.md"
 }
@@ -130,8 +130,38 @@ fixtures, decision table proof, static guardrails.
 3. Placement decision table fixture.
 4. Touched-file decision-boundary and literal guardrails.
 
+### Workflow Adapter Review Fix Notes
+
+The mandatory predecessor review finding is fixed before placement
+implementation starts. The adapter still emits
+`DISPATCH_LOCAL_OWNER_COMMAND`, but the coordinator-created `PENDING` local
+owner executor now restores the previous claim-and-prime semantics through the
+owner transition lane. Ordinary local coordinator-created operations stop after
+the claim to `SENDING`; critical local coordinator-created operations dispatch
+from the claimed `SENDING` snapshot.
+
+Validation for the repair:
+
+- PASS: `node --test test/rebalancer/coordinator-created-operation-progress.test.js`
+  - 31 tests, 7 suites.
+- PASS: `node --test test/rebalancer/operation-workflow-owner-decision.test.js test/rebalancer/operation-workflow-owner-adapter.test.js test/rebalancer/coordinator-created-operation-progress-remote-handoff.test.js test/rebalancer/coordinator-created-operation-progress.test.js`
+  - 282 tests, 25 suites.
+- PASS: `node scripts/check-guideline-literals.js src/rebalancer/operation-workflow-owner-ports.js`
+- PASS: `node scripts/check-guideline-decision-boundaries.js src/rebalancer/operation-workflow-owner-ports.js`
+- PASS: `npm run audit:runtime-grammar:file -- src/rebalancer/operation-workflow-owner-ports.js`
+- PASS: `git diff --check -- src/rebalancer/operation-workflow-owner-ports.js work/packages/done-20260509-spec-led-runtime-modularization-workflow-owner-adapter-cutover.md work/packages/active-20260509-spec-led-runtime-modularization-placement-owner-kernel.md work/sprints/active-2026-q2-spec-led-runtime-modularization.md`
+
 ## Done When
 
 1. Placement emits explicit intents or no-op reasons.
 2. Operation creation is not hidden in placement policy.
 3. Old placement branch piles are deleted or assigned to later adapter cleanup.
+
+## Subagent Sequencing Ledger
+
+- [x] Review subagent recorded:
+      Agent Bohr (`019e0bba-863b-7c43-9e0a-3862c9ff01b4`) reviewed `work/packages/done-20260509-spec-led-runtime-modularization-workflow-owner-adapter-cutover.md`; result `fixes-required`.
+- [x] Fix subagent recorded or explicitly not needed:
+      Agent Mendel (`019e0bbe-6a4b-7a12-8a4e-20a959222684`) fixed `work/packages/done-20260509-spec-led-runtime-modularization-workflow-owner-adapter-cutover.md`.
+- [ ] Implementation subagent recorded:
+      pending-before-implementation-starts
