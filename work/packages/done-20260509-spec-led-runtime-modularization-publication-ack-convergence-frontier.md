@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-09",
   "scenario": "spec-led-runtime-modularization",
   "artifact": "test-output/reports/rolling-restart-spec-led-runtime-modularization-final.report.json",
@@ -30,7 +30,7 @@
     "src/diagnostics/topology-convergence-graph.js",
     "scripts/analyze-topology-convergence.js",
     "work/packages/todo-20260509-spec-led-runtime-modularization-active-gate-snapshot-coverage-frontier.md",
-    "work/packages/active-20260509-spec-led-runtime-modularization-publication-ack-convergence-frontier.md"
+    "work/packages/done-20260509-spec-led-runtime-modularization-publication-ack-convergence-frontier.md"
   ],
   "modelFit": {
     "packageClass": "representative-frontier-closure",
@@ -42,7 +42,10 @@
       "representative proof still fails on publication_ack_convergence after owner fix"
     ]
   },
-  "predecessor": "work/packages/done-20260509-spec-led-runtime-modularization-legacy-deletion-proof.md"
+  "predecessor": "work/packages/done-20260509-spec-led-runtime-modularization-legacy-deletion-proof.md",
+  "closed": "2026-05-09",
+  "commitAndPushLedgerRequired": true,
+  "successor": "work/packages/todo-20260509-spec-led-runtime-modularization-active-gate-snapshot-coverage-frontier.md"
 }
 -->
 
@@ -164,7 +167,7 @@ and representative rolling-restart.
 - [x] Fix subagent recorded or explicitly not needed:
       Agent Epicurus (`019e0c7c-87d6-7de1-ac7b-ca448c0741d5`) fixed `work/packages/done-20260509-spec-led-runtime-modularization-legacy-deletion-proof.md`.
 - [x] Implementation subagent recorded:
-      Agent Mencius (`019e0c84-3d22-76c3-bea0-cfe3ee0ba0b4`) implemented `work/packages/active-20260509-spec-led-runtime-modularization-publication-ack-convergence-frontier.md`.
+      Agent Mencius (`019e0c84-3d22-76c3-bea0-cfe3ee0ba0b4`) implemented `work/packages/done-20260509-spec-led-runtime-modularization-publication-ack-convergence-frontier.md`.
 
 ## Validation
 
@@ -218,6 +221,12 @@ and representative rolling-restart.
   `work/packages/todo-20260509-spec-led-runtime-modularization-active-gate-snapshot-coverage-frontier.md`.
   Active-gate report schema alias cleanup remains out of scope for this
   package.
+
+## Commit And Push Ledger
+
+1. Focused package commit: `b8f0161f`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
 
 ## Done When
 

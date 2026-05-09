@@ -40,7 +40,7 @@
       "representative proof still fails on active_gate_snapshot_coverage after owner fix"
     ]
   },
-  "predecessor": "work/packages/active-20260509-spec-led-runtime-modularization-publication-ack-convergence-frontier.md"
+  "predecessor": "work/packages/done-20260509-spec-led-runtime-modularization-publication-ack-convergence-frontier.md"
 }
 -->
 
@@ -55,7 +55,7 @@ terminal snapshot timeout.
 ## Scope Basis
 
 Successor split from
-`work/packages/active-20260509-spec-led-runtime-modularization-publication-ack-convergence-frontier.md`
+`work/packages/done-20260509-spec-led-runtime-modularization-publication-ack-convergence-frontier.md`
 after the reduced representative report:
 `test-output/reports/rolling-restart-spec-led-runtime-modularization-publication-ack.report.json`.
 This remains Phase `0.1` internal-coherence work in the AGPL repository.

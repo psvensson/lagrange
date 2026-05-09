@@ -4,35 +4,35 @@
 
 Sprint: `work/sprints/active-2026-q2-spec-led-runtime-modularization.md`
 
-Package: `work/packages/active-20260509-spec-led-runtime-modularization-publication-ack-convergence-frontier.md`
+Package: `work/packages/todo-20260509-spec-led-runtime-modularization-active-gate-snapshot-coverage-frontier.md`
 
 Scenario: `spec-led-runtime-modularization`
 
-Artifact: `test-output/reports/rolling-restart-spec-led-runtime-modularization-final.report.json`
+Artifact: `test-output/reports/rolling-restart-spec-led-runtime-modularization-publication-ack.report.json`
 
 Playback: `none`
 
 ## Boundary
 
-Owner: `topology_publication_owner`
+Owner: `startup_active_gate_owner`
 
-Boundary: `publication_convergence`
+Boundary: `snapshot_coverage`
 
-Dominant reason: `pending_acks_present`
+Dominant reason: `active_gate_timed_out`
 
-Current state: Focused publication owner fixtures close unchanged recovery-eligible ACK debt through canonical owner planning. Representative rerun reduced pendingAck to 0, missingPublished to 0, and the analyzer now moves the first frontier to active_gate_snapshot_coverage.
+Current state: Publication ACK convergence is satisfied in the reduced representative report, but startup active gate blocks on snapshot coverage 0/5 with active=4/5 and selected snapshot timeout evidence.
 
 ## Next Action
 
-Migrate this package to the active-gate snapshot coverage successor and keep active-gate report schema alias cleanup separate.
+Freeze the active-gate snapshot coverage fixture from the reduced report, rewrite the startup active-gate owner path so snapshot coverage timeout is explicit owner evidence, and either close the startup frontier or migrate the next owner-boundary blocker.
 
 ## Proof Ladder
 
-1. `Focused publication owner ACK convergence fixture from the representative report`
-2. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-final.report.json --explain publication_ack_convergence`
-3. `node --test test/control-plane/*publication*.test.js test/distributed/harness/__tests__/failure-bundle.test.js test/diagnostics/topology-convergence-graph.test.js test/scripts/analyze-topology-convergence.test.js`
-4. `Touched-file static guardrails selected by topology_publication_owner`
-5. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-spec-led-runtime-modularization-publication-ack.report.json --fast-local --verbose`
+1. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-publication-ack.report.json --explain active_gate_snapshot_coverage`
+2. `Focused active-gate snapshot coverage fixture from the reduced representative report`
+3. `Focused startup/readiness and diagnostics tests selected by startup_active_gate_owner`
+4. `Touched-file static guardrails selected by startup_active_gate_owner`
+5. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot.report.json --fast-local --verbose`
 
 ## Model Fit
 
@@ -44,19 +44,17 @@ Scope shape: `owner-boundary-contraction`
 
 Escalation triggers:
 
-1. `publication ACK convergence requires runtime owner behavior changes`
-2. `focused fixture exposes a different topology owner boundary`
-3. `representative proof still fails on publication_ack_convergence after owner fix`
+1. `snapshot coverage requires runtime active-gate or readiness behavior changes`
+2. `focused fixture exposes a different startup owner boundary`
+3. `representative proof still fails on active_gate_snapshot_coverage after owner fix`
 
 ## Touched Files
 
-1. `src/control-plane/*publication*.js`
-2. `src/control-plane/publication-recovery-*.js`
-3. `src/control-plane/membership-publication-coordinator*.js`
-4. `test/control-plane/*publication*.test.js`
-5. `test/distributed/harness/publication-evidence-contract.js`
-6. `test/distributed/harness/failure-bundle*.js`
-7. `src/diagnostics/topology-convergence-graph.js`
-8. `scripts/analyze-topology-convergence.js`
-9. `work/packages/todo-20260509-spec-led-runtime-modularization-active-gate-snapshot-coverage-frontier.md`
-10. `work/packages/active-20260509-spec-led-runtime-modularization-publication-ack-convergence-frontier.md`
+1. `src/control-plane/*readiness*.js`
+2. `src/control-plane/bootstrap-readiness-owner*.js`
+3. `test/control-plane/*readiness*.test.js`
+4. `test/distributed/harness/active-gate-contract.js`
+5. `test/distributed/harness/failure-bundle*.js`
+6. `src/diagnostics/topology-convergence-graph.js`
+7. `scripts/analyze-topology-convergence.js`
+8. `work/packages/todo-20260509-spec-led-runtime-modularization-active-gate-snapshot-coverage-frontier.md`
