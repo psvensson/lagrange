@@ -3,16 +3,16 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-09",
   "scenario": "spec-led-runtime-modularization",
   "artifact": "test-output/reports/rolling-restart-spec-led-runtime-modularization-workflow-timeout-transition-deferred.report.json",
   "playback": "test-output/reports/.playback/rolling-restart-spec-led-runtime-modularization-workflow-timeout-transition-deferred/rolling-restart/",
   "owner": "operation_workflow_owner",
-  "boundary": "workflow_progress",
+  "boundary": "workflow_timeout",
   "dominantReason": "priority_recovery_progress_blocked",
-  "currentState": "Implementation reduced the priority_recovery_workflow_timeout_transition_deferred frontier. The latest representative report no longer fails on workflow_timeout or rebalancer_handoff; it migrates to priority_recovery_partition_progress with operation_workflow_owner / workflow_progress, unresolved semantic state recovering_in_flight, blocked partition control_plane_publications-p1, and dominant source priority_partitions_not_spread.",
-  "nextAction": "Parent session should review the focused implementation slice, then either close this package as migrated or open the next operation_workflow_owner / workflow_progress package.",
+  "currentState": "Workflow timeout transition-deferred evidence was reduced to canonical operation workflow progress re-entry. The latest representative report no longer fails on workflow_timeout or rebalancer_handoff; it migrates to priority_recovery_partition_progress with operation_workflow_owner / workflow_progress, unresolved semantic states operation_stalled and recovering_in_flight, blocked partitions replica_operations-p1 and sql_transactions-p1, and dominant source priority_recovery_workflow_progress_event_driven.",
+  "nextAction": "Open or continue the successor operation_workflow_owner / workflow_progress package from test-output/reports/rolling-restart-spec-led-runtime-modularization-workflow-timeout-transition-deferred.report.json.",
   "proof": [
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-rebalancer-handoff.report.json --explain priority_recovery_partition_progress",
     "Focused operation_workflow_owner workflow_timeout fixture from the representative report",
@@ -36,7 +36,7 @@
     "src/diagnostics/topology-convergence-graph.js",
     "scripts/analyze-topology-convergence.js",
     "work/model-ledger.jsonl",
-    "work/packages/active-20260509-spec-led-runtime-modularization-operation-workflow-timeout-transition-deferred-frontier.md"
+    "work/packages/done-20260509-spec-led-runtime-modularization-operation-workflow-timeout-transition-deferred-frontier.md"
   ],
   "modelFit": {
     "packageClass": "representative-frontier-closure",
@@ -48,7 +48,30 @@
       "representative proof still fails on workflow_timeout after owner fix"
     ]
   },
-  "predecessor": "work/packages/done-20260509-spec-led-runtime-modularization-operation-workflow-rebalancer-handoff-frontier.md"
+  "predecessor": "work/packages/done-20260509-spec-led-runtime-modularization-operation-workflow-rebalancer-handoff-frontier.md",
+  "currentBlocker": {
+    "report": "test-output/reports/rolling-restart-spec-led-runtime-modularization-workflow-timeout-transition-deferred.report.json",
+    "frontierEdge": "priority_recovery_partition_progress",
+    "owner": "operation_workflow_owner",
+    "boundary": "workflow_progress",
+    "dominantReason": "priority_recovery_progress_blocked",
+    "residual": "workflow_timeout and rebalancer_handoff reduced; representative migrated to event-driven workflow progress",
+    "publicationAckConvergence": {
+      "state": "satisfied",
+      "publicationStatus": "PUBLISHED",
+      "pendingAckCount": 0,
+      "missingPublishedCount": 0
+    },
+    "migratedFrontier": {
+      "edgeId": "priority_recovery_partition_progress",
+      "owner": "operation_workflow_owner",
+      "boundary": "workflow_progress",
+      "dominantReason": "priority_recovery_progress_blocked"
+    }
+  },
+  "closed": "2026-05-09",
+  "commitAndPushLedgerRequired": true,
+  "successor": "work/packages/active-20260509-spec-led-runtime-modularization-operation-workflow-progress-event-driven-frontier.md"
 }
 -->
 
@@ -166,7 +189,7 @@ static guardrails, and representative rolling-restart.
 - [x] Fix subagent recorded or explicitly not needed:
       Agent Curie (`019e0d19-4336-7471-9358-11caf22ae5fe`) fixed `work/packages/done-20260509-spec-led-runtime-modularization-operation-workflow-rebalancer-handoff-frontier.md`.
 - [x] Implementation subagent recorded:
-      Agent Peirce (`019e0d1f-856e-7d30-a49b-a3052fa5d840`) implemented `work/packages/active-20260509-spec-led-runtime-modularization-operation-workflow-timeout-transition-deferred-frontier.md`.
+      Agent Peirce (`019e0d1f-856e-7d30-a49b-a3052fa5d840`) implemented `work/packages/done-20260509-spec-led-runtime-modularization-operation-workflow-timeout-transition-deferred-frontier.md`.
 
 ## Detection / Analysis Tasks
 
@@ -265,3 +288,9 @@ static guardrails, and representative rolling-restart.
 3. Static guardrails pass for touched production files.
 4. Representative rolling-restart is green or migrated to a fresh
    owner-boundary package with canonical evidence.
+
+## Commit And Push Ledger
+
+1. Focused package commit: `18e980d3`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes

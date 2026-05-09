@@ -7,10 +7,10 @@ progress successor boundary.
 ## Current Package Snapshot
 
 Current blocker package:
-`work/packages/active-20260509-spec-led-runtime-modularization-operation-workflow-timeout-transition-deferred-frontier.md`.
+`work/packages/active-20260509-spec-led-runtime-modularization-operation-workflow-progress-event-driven-frontier.md`.
 
 Owner boundary:
-`operation_workflow_owner / workflow_timeout`.
+`operation_workflow_owner / workflow_progress`.
 
 Current state: legacy helper, inference, and alias deletion has been executed
 and closed in
@@ -25,21 +25,23 @@ Publication convergence is now closed by migration in
 `work/packages/done-20260509-spec-led-runtime-modularization-publication-convergence-frontier.md`.
 Operation workflow rebalancer handoff is now closed by migration in
 `work/packages/done-20260509-spec-led-runtime-modularization-operation-workflow-rebalancer-handoff-frontier.md`.
+Operation workflow timeout transition-deferred is now closed by migration in
+`work/packages/done-20260509-spec-led-runtime-modularization-operation-workflow-timeout-transition-deferred-frontier.md`.
 Representative proof did not go green; it migrated the first frontier to
-operation workflow timeout with dominant source
-`priority_recovery_workflow_timeout_transition_deferred`.
+operation workflow progress with dominant source
+`priority_recovery_workflow_progress_event_driven`.
 
 Queued work:
 Next package:
-`work/packages/active-20260509-spec-led-runtime-modularization-operation-workflow-timeout-transition-deferred-frontier.md`.
+`work/packages/active-20260509-spec-led-runtime-modularization-operation-workflow-progress-event-driven-frontier.md`.
 
 Companion cleanup:
 `work/packages/todo-20260509-spec-led-runtime-modularization-active-gate-report-schema-alias-deletion.md`.
 
-Next proof surface: operation workflow timeout transition-deferred evidence,
+Next proof surface: operation workflow progress event-driven evidence,
 with a focused
 operation workflow owner fixture from
-`test-output/reports/rolling-restart-spec-led-runtime-modularization-rebalancer-handoff.report.json`,
+`test-output/reports/rolling-restart-spec-led-runtime-modularization-workflow-timeout-transition-deferred.report.json`,
 topology-convergence explain proof, and representative rolling-restart rerun.
 
 ## Goal
@@ -101,8 +103,9 @@ the contract and proof ladder are stable.
 12. [Operation Workflow Timeout Frontier](../packages/done-20260509-spec-led-runtime-modularization-operation-workflow-timeout-frontier.md)
 13. [Publication Convergence Frontier](../packages/done-20260509-spec-led-runtime-modularization-publication-convergence-frontier.md)
 14. [Operation Workflow Rebalancer Handoff Frontier](../packages/done-20260509-spec-led-runtime-modularization-operation-workflow-rebalancer-handoff-frontier.md)
-15. [Operation Workflow Timeout Transition-Deferred Frontier](../packages/active-20260509-spec-led-runtime-modularization-operation-workflow-timeout-transition-deferred-frontier.md)
-16. [Active Gate Report Schema Alias Deletion](../packages/todo-20260509-spec-led-runtime-modularization-active-gate-report-schema-alias-deletion.md)
+15. [Operation Workflow Timeout Transition-Deferred Frontier](../packages/done-20260509-spec-led-runtime-modularization-operation-workflow-timeout-transition-deferred-frontier.md)
+16. [Operation Workflow Progress Event-Driven Frontier](../packages/active-20260509-spec-led-runtime-modularization-operation-workflow-progress-event-driven-frontier.md)
+17. [Active Gate Report Schema Alias Deletion](../packages/todo-20260509-spec-led-runtime-modularization-active-gate-report-schema-alias-deletion.md)
 
 ## Model Fit Strategy
 

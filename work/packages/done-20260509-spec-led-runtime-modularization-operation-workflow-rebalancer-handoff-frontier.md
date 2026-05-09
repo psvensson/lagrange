@@ -53,7 +53,7 @@
   "predecessor": "work/packages/done-20260509-spec-led-runtime-modularization-publication-convergence-frontier.md",
   "closed": "2026-05-09",
   "commitAndPushLedgerRequired": true,
-  "successor": "work/packages/active-20260509-spec-led-runtime-modularization-operation-workflow-timeout-transition-deferred-frontier.md"
+  "successor": "work/packages/done-20260509-spec-led-runtime-modularization-operation-workflow-timeout-transition-deferred-frontier.md"
 }
 -->
 
