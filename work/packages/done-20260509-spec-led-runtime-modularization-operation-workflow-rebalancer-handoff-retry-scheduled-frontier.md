@@ -291,3 +291,9 @@ attempts as a clean implementation-subagent ledger without a human waiver.
 3. Static guardrails pass for touched production files.
 4. Representative rolling-restart is green or migrated to a fresh
    owner-boundary package with canonical evidence.
+
+## Commit And Push Ledger
+
+1. Focused package commit: `7cf3f9c2`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
