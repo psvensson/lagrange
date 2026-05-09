@@ -12,6 +12,7 @@ const {
   PRIORITY_RECOVERY_FOLLOW_UP_DECISION,
   PRIORITY_RECOVERY_FOLLOW_UP_DECISION_REQUIREMENT,
   PRIORITY_RECOVERY_FOLLOW_UP_FIELD,
+  PRIORITY_RECOVERY_FOLLOW_UP_PARTITION_SELECTION_STATE_TABLE,
   PRIORITY_RECOVERY_FOLLOW_UP_REQUIREMENT_SEMANTIC_STATES,
   PRIORITY_RECOVERY_UNRESOLVED_SEMANTIC_STATE_IDS,
   ReplicaStatus,
@@ -249,12 +250,64 @@ class UnifiedRebalancerSegment4Stage2 extends UnifiedRebalancerSegment4Stage1 {
 
   selectPreferredPriorityRecoveryFollowUpPartitionId(
     candidatePartitionIds = [],
+    options = {},
   ) {
-    return this.selectNonLocalPriorityRecoveryFollowUpPartitionId(
-      candidatePartitionIds,
-    ) || this.selectCurrentPriorityRecoveryFollowUpPartitionId(
-      candidatePartitionIds,
+    return this.resolvePriorityRecoveryFollowUpPartitionSelection(
+      this.buildPriorityRecoveryFollowUpPartitionSelectionEvidence(
+        candidatePartitionIds,
+        options,
+      ),
     );
+  }
+
+  buildPriorityRecoveryFollowUpPartitionSelectionEvidence(
+    candidatePartitionIds = [],
+    options = {},
+  ) {
+    const currentPartitionId = String(
+      this.entityId || UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
+    ).trim();
+    const normalizedCandidatePartitionIds = [];
+    const seenPartitionIds = new Set();
+    for (const partitionId of Array.isArray(candidatePartitionIds) ?
+      candidatePartitionIds :
+      []) {
+      const normalizedPartitionId = String(
+        partitionId || UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
+      ).trim();
+      if (
+        normalizedPartitionId.length === NUM.ZERO ||
+        seenPartitionIds.has(normalizedPartitionId)
+      ) {
+        continue;
+      }
+      seenPartitionIds.add(normalizedPartitionId);
+      normalizedCandidatePartitionIds.push(normalizedPartitionId);
+    }
+    const nonLocalPartitionId =
+      this.selectNonLocalPriorityRecoveryFollowUpPartitionId(
+        normalizedCandidatePartitionIds,
+      );
+    const selectedCurrentPartitionId =
+      this.selectCurrentPriorityRecoveryFollowUpPartitionId(
+        normalizedCandidatePartitionIds,
+      );
+    return Object.freeze({
+      candidatePartitionIds: Object.freeze(normalizedCandidatePartitionIds),
+      currentNeedsOperation: options.currentNeedsOperation === true,
+      currentPartitionId,
+      hasCurrentCandidate: selectedCurrentPartitionId.length > NUM.ZERO,
+      hasNonLocalCandidate: nonLocalPartitionId.length > NUM.ZERO,
+      nonLocalPartitionId,
+    });
+  }
+
+  resolvePriorityRecoveryFollowUpPartitionSelection(evidence = {}) {
+    const tableEntry =
+      PRIORITY_RECOVERY_FOLLOW_UP_PARTITION_SELECTION_STATE_TABLE.find(
+        (entry) => entry.matches(evidence),
+      );
+    return tableEntry.select(evidence);
   }
 
   selectPriorityRecoveryClosureWitnessNeedsOperationPartitionId(
@@ -268,6 +321,9 @@ class UnifiedRebalancerSegment4Stage2 extends UnifiedRebalancerSegment4Stage1 {
     const unblockedCandidatePartitionId =
       this.selectPreferredPriorityRecoveryFollowUpPartitionId(
         candidatePartitionIds,
+        {
+          currentNeedsOperation: evidence.needsOperationRequired === true,
+        },
       );
     if (unblockedCandidatePartitionId) {
       return unblockedCandidatePartitionId;

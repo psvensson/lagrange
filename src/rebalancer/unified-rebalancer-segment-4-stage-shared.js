@@ -208,6 +208,43 @@ const PRIORITY_RECOVERY_CLOSURE_WITNESS_FOLLOW_UP_PRIORITY_FIELD =
     PARTITION_ID: 'partitionId',
     SPREAD_GAP: 'spreadGap',
   });
+const PRIORITY_RECOVERY_FOLLOW_UP_PARTITION_SELECTION_STATE = Object.freeze({
+  CURRENT_NEEDS_OPERATION: 'current_needs_operation',
+  NON_LOCAL_CANDIDATE: 'non_local_candidate',
+  CURRENT_CANDIDATE: 'current_candidate',
+  NONE: 'none',
+});
+const PRIORITY_RECOVERY_FOLLOW_UP_PARTITION_SELECTION_STATE_TABLE =
+  Object.freeze([
+    Object.freeze({
+      state:
+        PRIORITY_RECOVERY_FOLLOW_UP_PARTITION_SELECTION_STATE
+          .CURRENT_NEEDS_OPERATION,
+      matches: (evidence) =>
+        evidence.currentNeedsOperation === true &&
+        evidence.hasCurrentCandidate === true,
+      select: (evidence) => evidence.currentPartitionId,
+    }),
+    Object.freeze({
+      state:
+        PRIORITY_RECOVERY_FOLLOW_UP_PARTITION_SELECTION_STATE
+          .NON_LOCAL_CANDIDATE,
+      matches: (evidence) => evidence.hasNonLocalCandidate === true,
+      select: (evidence) => evidence.nonLocalPartitionId,
+    }),
+    Object.freeze({
+      state:
+        PRIORITY_RECOVERY_FOLLOW_UP_PARTITION_SELECTION_STATE
+          .CURRENT_CANDIDATE,
+      matches: (evidence) => evidence.hasCurrentCandidate === true,
+      select: (evidence) => evidence.currentPartitionId,
+    }),
+    Object.freeze({
+      state: PRIORITY_RECOVERY_FOLLOW_UP_PARTITION_SELECTION_STATE.NONE,
+      matches: () => true,
+      select: () => UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
+    }),
+  ]);
 const REBALANCER_PRE_EXECUTION_READINESS_NODE_ID = Object.freeze({
   UNTARGETED: 'untargeted',
 });
@@ -285,6 +322,8 @@ const UNIFIED_REBALANCER_SEGMENT_4_STAGE_SHARED = Object.freeze({
   PRIORITY_RECOVERY_FOLLOW_UP_MOVE_FIELD,
   PRIORITY_RECOVERY_FOLLOW_UP_MOVE_REASON,
   PRIORITY_RECOVERY_FOLLOW_UP_MOVE_STATE,
+  PRIORITY_RECOVERY_FOLLOW_UP_PARTITION_SELECTION_STATE,
+  PRIORITY_RECOVERY_FOLLOW_UP_PARTITION_SELECTION_STATE_TABLE,
   PRIORITY_RECOVERY_FOLLOW_UP_REQUIREMENT_SEMANTIC_STATES,
   PRIORITY_RECOVERY_FOLLOW_UP_UNOCCUPIED_SERVICE_STATUSES,
   PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION,

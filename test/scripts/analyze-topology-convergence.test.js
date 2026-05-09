@@ -219,8 +219,8 @@ describe('analyze-topology-convergence CLI', () => {
       PRIORITY_RECOVERY_DOMINANT_WITNESS_PATH,
     );
     assert.equal(output.decisionTable.edgeId, PRIORITY_EDGE_ID);
-    assert.equal(output.decisionTable.owner, OPERATION_WORKFLOW_OWNER);
-    assert.equal(output.decisionTable.boundary, WORKFLOW_PROGRESS_BOUNDARY);
+    assert.equal(output.decisionTable.owner, REBALANCER_LEADER_OWNER);
+    assert.equal(output.decisionTable.boundary, OPERATION_SCHEDULING_BOUNDARY);
   });
 
   it('generates a package migration evidence block from analyzer output', () => {

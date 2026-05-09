@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-09",
   "scenario": "spec-led-runtime-modularization",
   "artifact": "test-output/reports/rolling-restart-spec-led-runtime-modularization-workflow-progress-event-driven.report.json",
@@ -21,6 +21,7 @@
     "node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-spec-led-runtime-modularization-operation-scheduling-event-driven.report.json --fast-local --verbose"
   ],
   "touchedFiles": [
+    "scripts/analyze-topology-convergence.js",
     "src/rebalancer/unified-rebalancer*.js",
     "src/rebalancer/move-planner*.js",
     "src/rebalancer/provisioning-admission-policy.js",
@@ -31,7 +32,7 @@
     "test/control-plane/priority-recovery-snapshot*.js",
     "test/scripts/analyze-topology-convergence.test.js",
     "work/model-ledger.jsonl",
-    "work/packages/active-20260509-spec-led-runtime-modularization-operation-scheduling-event-driven-frontier.md"
+    "work/packages/done-20260509-spec-led-runtime-modularization-operation-scheduling-event-driven-frontier.md"
   ],
   "modelFit": {
     "packageClass": "representative-frontier-closure",
@@ -43,7 +44,10 @@
       "representative proof still fails on operation_scheduling after rebalancer leader fix"
     ]
   },
-  "predecessor": "work/packages/done-20260509-spec-led-runtime-modularization-operation-workflow-progress-event-driven-frontier.md"
+  "predecessor": "work/packages/done-20260509-spec-led-runtime-modularization-operation-workflow-progress-event-driven-frontier.md",
+  "closed": "2026-05-09",
+  "commitAndPushLedgerRequired": true,
+  "successor": "work/packages/active-20260509-spec-led-runtime-modularization-operation-workflow-rebalancer-handoff-retry-scheduled-frontier.md"
 }
 -->
 
@@ -175,28 +179,92 @@ static guardrails, and representative rolling-restart.
 - [x] Fix subagent recorded or explicitly not needed:
       Agent Goodall (019e0dcc-13be-7241-b34e-1e27dc48d7a9) fixed
       `work/packages/done-20260509-spec-led-runtime-modularization-operation-workflow-progress-event-driven-frontier.md`.
-- [ ] Implementation subagent recorded:
-      pending-before-implementation-resumes.
+- [x] Implementation subagent recorded:
+      Agent Wegener (019e0de2-415f-7301-8a30-1b15af636ff4) implemented
+      `work/packages/done-20260509-spec-led-runtime-modularization-operation-scheduling-event-driven-frontier.md`.
 
 ## Detection / Analysis Tasks
 
-- [ ] Review the operation workflow progress event-driven package before
+- [x] Review the operation workflow progress event-driven package before
       implementation starts.
-- [ ] Extract the smallest operation-scheduling fixture from the representative
+- [x] Extract the smallest operation-scheduling fixture from the representative
       report.
-- [ ] Trace rebalancer leader scheduling/admission for
+- [x] Trace rebalancer leader scheduling/admission for
       `eligible_but_no_operation_created`.
-- [ ] Identify any diagnostics, admission, or active-gate branch that masks
+- [x] Identify any diagnostics, admission, or active-gate branch that masks
       operation scheduling owner evidence.
 
 ## Implementation Tasks
 
-- [ ] Add or update the focused operation-scheduling fixture.
-- [ ] Rewrite the owner logic so event-driven operation scheduling has one
+- [x] Add or update the focused operation-scheduling fixture.
+- [x] Rewrite the owner logic so event-driven operation scheduling has one
       canonical decision path.
-- [ ] Delete or guard superseded scheduling fallback branches.
-- [ ] Update diagnostics/harness consumers only where owner vocabulary changes.
-- [ ] Rerun representative rolling-restart and migrate any fresh frontier.
+- [x] Delete or guard superseded scheduling fallback branches.
+- [x] Update diagnostics/harness consumers only where owner vocabulary changes.
+- [x] Rerun representative rolling-restart and migrate any fresh frontier.
+
+## Implementation Evidence
+
+- Frozen fixture:
+  `test/rebalancer/unified-rebalancer-part-5-2-stage-2.js` now covers the
+  representative multi-partition closure-witness shape where
+  `replica_operations-p1` is the current owner with `needs_operation` and a
+  non-local priority partition appears first.
+- Root cause: closure-witness follow-up selection preferred a non-local
+  priority candidate before the current owner even when the current owner had
+  explicit `needs_operation` / `create_recovery_operation` evidence.
+- Runtime change: follow-up partition selection now normalizes candidate
+  evidence and resolves through an explicit state table. Current
+  `needs_operation` work wins over non-local candidates; ordinary surrogate
+  selection still keeps its non-local preference.
+- Diagnostic change: topology convergence `--explain` now projects the selected
+  edge owner/boundary into the decision-table row, so explain output no longer
+  contradicts dominant-witness owner evidence.
+- Subagent observability: Pauli
+  (`019e0ddd-0745-7bb0-8344-b6a8c9eb49c6`) inspected the direct
+  current-partition path and reported that it did not reproduce until the
+  fixture included the multi-partition closure-witness/surrogate shape.
+  Wegener (`019e0de2-415f-7301-8a30-1b15af636ff4`) reproduced the focused
+  failure and confirmed the selector-level implementation approach.
+
+## Validation Results
+
+- Red/green fixture:
+  `npx tap test/rebalancer/unified-rebalancer-part-5-2-stage-2.js` first failed
+  with two created operations and `sql_write_operations-p1` selected before
+  `replica_operations-p1`, then passed after the selector rewrite.
+- `npx tap test/rebalancer/unified-rebalancer-part-5-2-stage-3.js test/rebalancer/unified-rebalancer-part-5-2-stage-4.js`
+  passed: 24 passing.
+- `node --test test/scripts/analyze-topology-convergence.test.js`
+  passed: 12 passing.
+- `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-workflow-progress-event-driven.report.json --explain priority_recovery_partition_progress`
+  now reports consistent `rebalancer_leader / operation_scheduling` owner
+  evidence and decision-table owner/boundary.
+- Static guardrails passed for touched files: literal guideline,
+  decision-boundary guideline, runtime grammar, and `git diff --check`.
+- Representative command wrote
+  `test-output/reports/rolling-restart-spec-led-runtime-modularization-operation-scheduling-event-driven.report.json`
+  and failed on a migrated frontier:
+  `operation_workflow_owner / rebalancer_handoff`.
+
+## Migrated Frontier
+
+- Fresh representative frontier:
+  `priority_recovery_partition_progress`.
+- Owner/boundary:
+  `operation_workflow_owner / rebalancer_handoff`.
+- Dominant source:
+  `priority_recovery_rebalancer_handoff_retry_scheduled`.
+- Dominant reasons:
+  `priority_recovery_progress_blocked`,
+  `priority_recovery_event_driven_wait`.
+- Package-owned edge status:
+  the previous `rebalancer_leader / operation_scheduling` witness no longer
+  dominates. The fresh playback created recovery operations for
+  `replica_operations-p1`, `sql_write_operations-p1`,
+  `sql_transactions-p1`, `sql_transaction_participants-p1`, and
+  `control_plane_publications-p1`; the remaining blocker is handoff retry
+  progress under transport backpressure.
 
 ## Validation
 

@@ -7,10 +7,10 @@ progress successor boundary.
 ## Current Package Snapshot
 
 Current blocker package:
-`work/packages/active-20260509-spec-led-runtime-modularization-operation-scheduling-event-driven-frontier.md`.
+`work/packages/active-20260509-spec-led-runtime-modularization-operation-workflow-rebalancer-handoff-retry-scheduled-frontier.md`.
 
 Owner boundary:
-`rebalancer_leader / operation_scheduling`.
+`operation_workflow_owner / rebalancer_handoff`.
 
 Current state: legacy helper, inference, and alias deletion has been executed
 and closed in
@@ -29,21 +29,24 @@ Operation workflow timeout transition-deferred is now closed by migration in
 `work/packages/done-20260509-spec-led-runtime-modularization-operation-workflow-timeout-transition-deferred-frontier.md`.
 Operation workflow progress event-driven is now closed by migration in
 `work/packages/done-20260509-spec-led-runtime-modularization-operation-workflow-progress-event-driven-frontier.md`.
+Operation scheduling event-driven is now closed by migration in
+`work/packages/done-20260509-spec-led-runtime-modularization-operation-scheduling-event-driven-frontier.md`.
 Representative proof did not go green; it migrated the first frontier to
-operation scheduling with dominant source
-`priority_recovery_operation_scheduling_event_driven`.
+operation workflow rebalancer handoff with dominant source
+`priority_recovery_rebalancer_handoff_retry_scheduled`.
 
 Queued work:
 Next package:
-`work/packages/active-20260509-spec-led-runtime-modularization-operation-scheduling-event-driven-frontier.md`.
+`work/packages/active-20260509-spec-led-runtime-modularization-operation-workflow-rebalancer-handoff-retry-scheduled-frontier.md`.
 
 Companion cleanup:
 `work/packages/todo-20260509-spec-led-runtime-modularization-active-gate-report-schema-alias-deletion.md`.
 
-Next proof surface: operation scheduling event-driven evidence,
+Next proof surface: operation workflow rebalancer handoff retry-scheduled
+evidence,
 with a focused
-rebalancer leader fixture from
-`test-output/reports/rolling-restart-spec-led-runtime-modularization-workflow-progress-event-driven.report.json`,
+operation workflow owner fixture from
+`test-output/reports/rolling-restart-spec-led-runtime-modularization-operation-scheduling-event-driven.report.json`,
 topology-convergence explain proof, and representative rolling-restart rerun.
 
 ## Goal
@@ -107,8 +110,9 @@ the contract and proof ladder are stable.
 14. [Operation Workflow Rebalancer Handoff Frontier](../packages/done-20260509-spec-led-runtime-modularization-operation-workflow-rebalancer-handoff-frontier.md)
 15. [Operation Workflow Timeout Transition-Deferred Frontier](../packages/done-20260509-spec-led-runtime-modularization-operation-workflow-timeout-transition-deferred-frontier.md)
 16. [Operation Workflow Progress Event-Driven Frontier](../packages/done-20260509-spec-led-runtime-modularization-operation-workflow-progress-event-driven-frontier.md)
-17. [Operation Scheduling Event-Driven Frontier](../packages/active-20260509-spec-led-runtime-modularization-operation-scheduling-event-driven-frontier.md)
-18. [Active Gate Report Schema Alias Deletion](../packages/todo-20260509-spec-led-runtime-modularization-active-gate-report-schema-alias-deletion.md)
+17. [Operation Scheduling Event-Driven Frontier](../packages/done-20260509-spec-led-runtime-modularization-operation-scheduling-event-driven-frontier.md)
+18. [Operation Workflow Rebalancer Handoff Retry-Scheduled Frontier](../packages/active-20260509-spec-led-runtime-modularization-operation-workflow-rebalancer-handoff-retry-scheduled-frontier.md)
+19. [Active Gate Report Schema Alias Deletion](../packages/todo-20260509-spec-led-runtime-modularization-active-gate-report-schema-alias-deletion.md)
 
 ## Model Fit Strategy
 
@@ -127,10 +131,14 @@ The sprint now separates broad orchestration from Spark-safe leaf work.
    closure package intended for `gpt-5.3-codex`. It owns the rebalancer leader
    operation-scheduling boundary and must not reopen operation workflow
    progress handling unless the focused fixture proves regression.
-5. A package intended for `gpt-5.3-codex-spark` must keep `Scope shape:
+5. `Operation Workflow Rebalancer Handoff Retry-Scheduled Frontier` is a
+   representative frontier closure package intended for `gpt-5.3-codex`. It
+   owns the operation workflow handoff boundary and must not reopen operation
+   scheduling unless the focused fixture proves regression.
+6. A package intended for `gpt-5.3-codex-spark` must keep `Scope shape:
    leaf-slice`, list owned and forbidden files, freeze decisions, name
    escalation triggers, and provide focused proof.
-6. Representative proof may classify a leaf slice as closed, reduced,
+7. Representative proof may classify a leaf slice as closed, reduced,
    migrated, or same-frontier. It must not expand implementation scope inside
    the leaf package.
 

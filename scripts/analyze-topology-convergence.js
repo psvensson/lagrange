@@ -226,6 +226,10 @@ function selectCliOutput(graph) {
 function selectExplainOutput(graph, requestedEdgeId) {
   const edge = selectExplainEdge(graph, requestedEdgeId);
   const decisionTable = buildTopologyConvergenceDecisionTable();
+  const decisionTableRow = selectExplainDecisionTableRow(
+    decisionTable,
+    edge,
+  );
   return {
     schemaVersion: SCHEMA_VERSION_TOPOLOGY_OWNER_EXPLAIN_V1,
     scenario: graph.scenario,
@@ -242,8 +246,19 @@ function selectExplainOutput(graph, requestedEdgeId) {
       frontier: graph.frontier.some((frontierEdge) => frontierEdge.id === edge.id),
       dominantWitness: buildTopologyConvergenceOwnerWitness(edge),
     },
-    decisionTable: decisionTable.transitions.find((row) => row.edgeId === edge.id),
+    decisionTable: decisionTableRow,
   };
+}
+
+function selectExplainDecisionTableRow(decisionTable, edge) {
+  const tableRow = decisionTable.transitions.find(
+    (row) => row.edgeId === edge.id,
+  );
+  return Object.freeze({
+    ...tableRow,
+    owner: edge.owner,
+    boundary: edge.boundary,
+  });
 }
 
 function selectExplainEdge(graph, requestedEdgeId) {
