@@ -194,7 +194,7 @@ test('priority recovery maps persisted-not-dispatched dispatch outcome',
     });
   });
 
-test('priority recovery maps stale timeout progress owner outcome',
+test('priority recovery maps stale timeout progress owner outcome to re-entry',
   async (t) => {
     const ownerOutcome = buildOperationOwnerOutcome({
       outcome: OPERATION_WORKFLOW_OUTCOME_VALUES.RECONCILE_STALE_PROGRESS,
@@ -212,26 +212,23 @@ test('priority recovery maps stale timeout progress owner outcome',
         ownerOutcome,
       );
 
-    t.same(
-      normalizedSnapshot.blockerReasons,
-      [PRIORITY_RECOVERY_BLOCKER_REASON.OPERATION_NO_TRANSITIONS],
-    );
+    t.same(normalizedSnapshot.blockerReasons, []);
     t.equal(
       normalizedSnapshot.semanticState,
-      PRIORITY_RECOVERY_SEMANTIC_STATE.OPERATION_STALLED,
+      PRIORITY_RECOVERY_SEMANTIC_STATE.RECOVERING_IN_FLIGHT,
     );
     t.match(normalizedSnapshot.actuation, {
-      state: PRIORITY_RECOVERY_ACTUATION_STATE.TRANSITION_DEFERRED,
+      owner: PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER,
+      state: PRIORITY_RECOVERY_ACTUATION_STATE.PERSISTED_NOT_DISPATCHED,
     });
     t.match(normalizedSnapshot.progress, {
       contractState: OWNER_CONTRACT_STATE.PENDING,
-      nextAction: OWNER_CONTRACT_NEXT_ACTION.RETRY,
+      nextAction: OWNER_CONTRACT_NEXT_ACTION.WAIT,
       currentOwner: PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER,
       nextRequiredAction:
-        PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION
-          .RECONCILE_STALE_OPERATION_PROGRESS,
-      blockingBoundary: PRIORITY_RECOVERY_BLOCKING_BOUNDARY.WORKFLOW_TIMEOUT,
-      waitMode: PRIORITY_RECOVERY_WAIT_MODE.TIMEOUT_RECONCILE_DUE,
+        PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.ADVANCE_EXISTING_OPERATION,
+      blockingBoundary: PRIORITY_RECOVERY_BLOCKING_BOUNDARY.WORKFLOW_PROGRESS,
+      waitMode: PRIORITY_RECOVERY_WAIT_MODE.EVENT_DRIVEN,
     });
     assertOperationOwnerObservation(t, normalizedSnapshot, {
       outcome: OPERATION_WORKFLOW_OUTCOME_VALUES.RECONCILE_STALE_PROGRESS,
@@ -239,9 +236,8 @@ test('priority recovery maps stale timeout progress owner outcome',
         OPERATION_WORKFLOW_EFFECT_COMMAND_VALUES
           .RECONCILE_STALE_PROGRESS_COMMAND,
       requestedOwnerAction:
-        PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION
-          .RECONCILE_STALE_OPERATION_PROGRESS,
-      message: 'stale reconcile should remain a requested owner action only',
+        PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.ADVANCE_EXISTING_OPERATION,
+      message: 'stale reconcile should request owner progression re-entry',
     });
   });
 

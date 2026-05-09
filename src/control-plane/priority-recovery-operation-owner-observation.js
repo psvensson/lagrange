@@ -69,16 +69,6 @@ const PRIORITY_RECOVERY_OPERATION_OWNER_PROGRESS_DESCRIPTOR = Object.freeze({
     blockingBoundary: PRIORITY_RECOVERY_BLOCKING_BOUNDARY.WORKFLOW_PROGRESS,
     waitMode: PRIORITY_RECOVERY_WAIT_MODE.EVENT_DRIVEN,
   }),
-  RECONCILE_STALE_OPERATION_PROGRESS: Object.freeze({
-    contractState: OWNER_CONTRACT_STATE.PENDING,
-    nextAction: OWNER_CONTRACT_NEXT_ACTION.RETRY,
-    currentOwner: PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER,
-    nextRequiredAction:
-      PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION
-        .RECONCILE_STALE_OPERATION_PROGRESS,
-    blockingBoundary: PRIORITY_RECOVERY_BLOCKING_BOUNDARY.WORKFLOW_TIMEOUT,
-    waitMode: PRIORITY_RECOVERY_WAIT_MODE.TIMEOUT_RECONCILE_DUE,
-  }),
   WAIT_FOR_REBALANCER_HANDOFF_RETRY: Object.freeze({
     contractState: OWNER_CONTRACT_STATE.PENDING,
     nextAction: OWNER_CONTRACT_NEXT_ACTION.RETRY,
@@ -139,10 +129,18 @@ const PRIORITY_RECOVERY_OPERATION_OWNER_RETAIN_DESCRIPTOR =
     progressMode: PRIORITY_RECOVERY_OPERATION_OWNER_FIELD_UPDATE_MODE.RETAIN,
   });
 
+function buildPriorityRecoveryOperationOwnerDescriptorEvidence(
+  ownerOutcome,
+) {
+  return Object.freeze({
+    ownerOutcome,
+  });
+}
+
 const PRIORITY_RECOVERY_OPERATION_OWNER_DESCRIPTOR_TABLE = Object.freeze([
   Object.freeze({
-    matches: (ownerOutcome) =>
-      ownerOutcome.outcome ===
+    matches: (evidence) =>
+      evidence.ownerOutcome.outcome ===
       OPERATION_WORKFLOW_OUTCOME_VALUES.WAIT_FOR_SERIAL_OPERATION,
     descriptor: buildPriorityRecoveryOperationOwnerDescriptor({
       progress:
@@ -165,10 +163,10 @@ const PRIORITY_RECOVERY_OPERATION_OWNER_DESCRIPTOR_TABLE = Object.freeze([
     }),
   }),
   Object.freeze({
-    matches: (ownerOutcome) =>
-      ownerOutcome.outcome ===
+    matches: (evidence) =>
+      evidence.ownerOutcome.outcome ===
         OPERATION_WORKFLOW_OUTCOME_VALUES.DISPATCH_LOCAL_OWNER ||
-      ownerOutcome.outcome ===
+      evidence.ownerOutcome.outcome ===
         OPERATION_WORKFLOW_OUTCOME_VALUES.WAKE_REMOTE_OWNER,
     descriptor: buildPriorityRecoveryOperationOwnerDescriptor({
       progress:
@@ -189,8 +187,8 @@ const PRIORITY_RECOVERY_OPERATION_OWNER_DESCRIPTOR_TABLE = Object.freeze([
     }),
   }),
   Object.freeze({
-    matches: (ownerOutcome) =>
-      ownerOutcome.outcome ===
+    matches: (evidence) =>
+      evidence.ownerOutcome.outcome ===
       OPERATION_WORKFLOW_OUTCOME_VALUES.ADVANCE_EXISTING_OPERATION,
     descriptor: buildPriorityRecoveryOperationOwnerDescriptor({
       progress:
@@ -205,32 +203,30 @@ const PRIORITY_RECOVERY_OPERATION_OWNER_DESCRIPTOR_TABLE = Object.freeze([
     }),
   }),
   Object.freeze({
-    matches: (ownerOutcome) =>
-      ownerOutcome.outcome ===
-      OPERATION_WORKFLOW_OUTCOME_VALUES.RECONCILE_STALE_PROGRESS,
+    matches: (evidence) =>
+      evidence.ownerOutcome.outcome ===
+        OPERATION_WORKFLOW_OUTCOME_VALUES.RECONCILE_STALE_PROGRESS,
     descriptor: buildPriorityRecoveryOperationOwnerDescriptor({
       progress:
         PRIORITY_RECOVERY_OPERATION_OWNER_PROGRESS_DESCRIPTOR
-          .RECONCILE_STALE_OPERATION_PROGRESS,
+          .ADVANCE_EXISTING_OPERATION,
       blockerReasonsMode:
         PRIORITY_RECOVERY_OPERATION_OWNER_FIELD_UPDATE_MODE.REPLACE,
-      blockerReasons: Object.freeze([
-        PRIORITY_RECOVERY_BLOCKER_REASON.OPERATION_NO_TRANSITIONS,
-      ]),
+      blockerReasons: Object.freeze([]),
       semanticStateMode:
         PRIORITY_RECOVERY_OPERATION_OWNER_FIELD_UPDATE_MODE.REPLACE,
-      semanticState: PRIORITY_RECOVERY_SEMANTIC_STATE.OPERATION_STALLED,
+      semanticState: PRIORITY_RECOVERY_SEMANTIC_STATE.RECOVERING_IN_FLIGHT,
       actuationMode:
         PRIORITY_RECOVERY_OPERATION_OWNER_FIELD_UPDATE_MODE.REPLACE,
       actuation: Object.freeze({
         owner: PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER,
-        state: PRIORITY_RECOVERY_ACTUATION_STATE.TRANSITION_DEFERRED,
+        state: PRIORITY_RECOVERY_ACTUATION_STATE.PERSISTED_NOT_DISPATCHED,
       }),
     }),
   }),
   Object.freeze({
-    matches: (ownerOutcome) =>
-      ownerOutcome.outcome ===
+    matches: (evidence) =>
+      evidence.ownerOutcome.outcome ===
       OPERATION_WORKFLOW_OUTCOME_VALUES.WAIT_FOR_REBALANCER_HANDOFF_RETRY,
     descriptor: buildPriorityRecoveryOperationOwnerDescriptor({
       progress:
@@ -252,8 +248,8 @@ const PRIORITY_RECOVERY_OPERATION_OWNER_DESCRIPTOR_TABLE = Object.freeze([
     }),
   }),
   Object.freeze({
-    matches: (ownerOutcome) =>
-      ownerOutcome.outcome ===
+    matches: (evidence) =>
+      evidence.ownerOutcome.outcome ===
       OPERATION_WORKFLOW_OUTCOME_VALUES.WAIT_FOR_OWNER_PROGRESS,
     descriptor: buildPriorityRecoveryOperationOwnerDescriptor({
       progress:
@@ -262,8 +258,8 @@ const PRIORITY_RECOVERY_OPERATION_OWNER_DESCRIPTOR_TABLE = Object.freeze([
     }),
   }),
   Object.freeze({
-    matches: (ownerOutcome) =>
-      ownerOutcome.outcome ===
+    matches: (evidence) =>
+      evidence.ownerOutcome.outcome ===
       OPERATION_WORKFLOW_OUTCOME_VALUES.DEFER_AUTHORITATIVE_VISIBILITY,
     descriptor: buildPriorityRecoveryOperationOwnerDescriptor({
       progress:
@@ -336,10 +332,15 @@ function resolvePriorityRecoveryOperationOwnerOutcome(
   );
 }
 
-function resolvePriorityRecoveryOperationOwnerDescriptor(ownerOutcome) {
+function resolvePriorityRecoveryOperationOwnerDescriptor(
+  ownerOutcome,
+) {
+  const evidence = buildPriorityRecoveryOperationOwnerDescriptorEvidence(
+    ownerOutcome,
+  );
   return (
     PRIORITY_RECOVERY_OPERATION_OWNER_DESCRIPTOR_TABLE.find((entry) =>
-      entry.matches(ownerOutcome),
+      entry.matches(evidence),
     )?.descriptor || PRIORITY_RECOVERY_OPERATION_OWNER_RETAIN_DESCRIPTOR
   );
 }

@@ -778,6 +778,91 @@ function registerPriorityRecoverySnapshotSupplementalTests(context) {
     },
   );
 
+  test(
+    'normalizePriorityRecoveryDispatchPendingDecisionSnapshot re-enters ' +
+      'canonical owner progress from stale timeout outcomes',
+    async (t) => {
+      const snapshot = Object.freeze({
+        partitionId: PRIORITY_RECOVERY_SQL_WRITE_OPERATIONS_PARTITION_ID,
+        operationId: PRIORITY_RECOVERY_OPERATION_ID_PENDING_REPLACE_STALE,
+        blockerReasons: Object.freeze([
+          PRIORITY_RECOVERY_BLOCKER_REASON_OPERATION_NO_TRANSITIONS,
+        ]),
+        semanticState: PRIORITY_RECOVERY_SEMANTIC_STATE_OPERATION_STALLED,
+        actuation: Object.freeze({
+          owner: PRIORITY_RECOVERY_PROGRESS_OWNER_WORKFLOW,
+          state: PRIORITY_RECOVERY_ACTUATION_STATE_TRANSITION_DEFERRED,
+          workflowProgressPhaseId:
+            PRIORITY_RECOVERY_PROGRESS_PHASE_DISPATCH_PENDING,
+          lastProgressAtMs: PRIORITY_RECOVERY_STALE_OPERATION_PROGRESS_AT_MS,
+        }),
+        progress: Object.freeze({
+          contractState: PRIORITY_RECOVERY_PROGRESS_CONTRACT_STATE_PENDING,
+          nextAction: PRIORITY_RECOVERY_PROGRESS_NEXT_ACTION_RETRY,
+          currentOwner: PRIORITY_RECOVERY_PROGRESS_OWNER_WORKFLOW,
+          nextRequiredAction:
+            PRIORITY_RECOVERY_PROGRESS_ACTION_RECONCILE_STALE_OPERATION,
+          blockingBoundary:
+            PRIORITY_RECOVERY_PROGRESS_BOUNDARY_WORKFLOW_TIMEOUT,
+          waitMode:
+            PRIORITY_RECOVERY_PROGRESS_WAIT_TIMEOUT_RECONCILE_DUE,
+          workflowProgressPhaseId:
+            PRIORITY_RECOVERY_PROGRESS_PHASE_DISPATCH_PENDING,
+          lastProgressAtMs: PRIORITY_RECOVERY_STALE_OPERATION_PROGRESS_AT_MS,
+        }),
+      });
+
+      const normalizedSnapshot =
+        normalizePriorityRecoveryDispatchPendingDecisionSnapshot(
+          snapshot,
+          buildPriorityRecoverySnapshotOperationOwnerOutcome({
+            outcome:
+              OPERATION_WORKFLOW_OUTCOME_VALUES.RECONCILE_STALE_PROGRESS,
+            nextRequiredAction:
+              OPERATION_WORKFLOW_OUTCOME_VALUES.RECONCILE_STALE_PROGRESS,
+            effectCommand:
+              OPERATION_WORKFLOW_EFFECT_COMMAND_VALUES
+                .RECONCILE_STALE_PROGRESS_COMMAND,
+            reasons: Object.freeze([
+              OPERATION_WORKFLOW_REASON_CODE_VALUES.TIMEOUT_BUDGET_EXPIRED,
+              OPERATION_WORKFLOW_REASON_CODE_VALUES.WORKFLOW_HISTORY_STALE,
+            ]),
+          }),
+        );
+
+      t.same(
+        normalizedSnapshot?.blockerReasons,
+        [],
+        'canonical stale timeout owner outcomes should clear timeout blockers',
+      );
+      t.equal(
+        normalizedSnapshot?.semanticState,
+        PRIORITY_RECOVERY_SEMANTIC_STATE_RECOVERING_IN_FLIGHT,
+        'canonical stale timeout owner outcomes should re-enter in-flight recovery',
+      );
+      t.equal(
+        normalizedSnapshot?.actuation?.state,
+        PRIORITY_RECOVERY_ACTUATION_STATE_PERSISTED_NOT_DISPATCHED,
+        'canonical stale timeout owner outcomes should restore dispatch actuation',
+      );
+      t.equal(
+        normalizedSnapshot?.progress?.nextRequiredAction,
+        PRIORITY_RECOVERY_PROGRESS_ACTION_ADVANCE_EXISTING_OPERATION,
+        'canonical stale timeout owner outcomes should advance existing operation',
+      );
+      t.equal(
+        normalizedSnapshot?.progress?.blockingBoundary,
+        PRIORITY_RECOVERY_PROGRESS_BOUNDARY_WORKFLOW,
+        'canonical stale timeout owner outcomes should leave workflow_timeout',
+      );
+      t.equal(
+        normalizedSnapshot?.operationOwnerObservation?.requestedOwnerAction,
+        PRIORITY_RECOVERY_PROGRESS_ACTION_ADVANCE_EXISTING_OPERATION,
+        'owner observation should expose the re-entry action',
+      );
+    },
+  );
+
   test(STALE_SOURCE_SERIAL_WAIT_TEST_NAME, async (t) => {
     const trackedDecisionSnapshots = buildTrackedPriorityRecoveryDecisionSnapshots({
       publicationEpoch: PRIORITY_RECOVERY_SAMPLE_PUBLICATION_EPOCH,
@@ -4944,6 +5029,7 @@ const priorityRecoverySnapshotTestContext = {
   PRIORITY_RECOVERY_PRESSURE_STATE_BACKPRESSURED,
   PRIORITY_RECOVERY_PRESSURE_STATE_NONE,
   PRIORITY_RECOVERY_PRESSURE_STATE_WRITE_BACKLOG,
+  PRIORITY_RECOVERY_PROGRESS_ACTION_ADVANCE_EXISTING_OPERATION,
   PRIORITY_RECOVERY_PROGRESS_ACTION_CREATE_OPERATION,
   PRIORITY_RECOVERY_PROGRESS_ACTION_NONE,
   PRIORITY_RECOVERY_PROGRESS_ACTION_OBSERVE_VISIBILITY,

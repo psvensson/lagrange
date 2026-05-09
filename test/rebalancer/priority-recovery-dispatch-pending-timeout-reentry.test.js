@@ -110,6 +110,8 @@ const TEST_ASSERT_SNAPSHOT_REENTRY_TARGET =
   'snapshot re-entry should use the canonical remote replica-dispatch ingress';
 const TEST_ASSERT_SNAPSHOT_REENTRY_NOT_TRANSITION_DEFERRED =
   'snapshot re-entry should not leave the stale SENDING row transition-deferred';
+const TEST_EXPECTED_SENDING_REENTRY_ACTUATION_STATE =
+  PRIORITY_RECOVERY_ACTUATION_STATE.DISPATCHED_WAITING_PROGRESS;
 const TEST_ASSERT_SNAPSHOT_REENTRY_ARMS_RETRY =
   'snapshot re-entry should arm one verification retry for the stale SENDING row';
 const TEST_ASSERT_SNAPSHOT_REENTRY_PRESERVES_PENDING =
@@ -985,7 +987,7 @@ async (t) => {
     );
     t.equal(
       snapshot?.actuation?.state,
-      PRIORITY_RECOVERY_ACTUATION_STATE.PERSISTED_NOT_DISPATCHED,
+      TEST_EXPECTED_SENDING_REENTRY_ACTUATION_STATE,
       TEST_ASSERT_SNAPSHOT_REENTRY_NOT_TRANSITION_DEFERRED,
     );
     t.equal(

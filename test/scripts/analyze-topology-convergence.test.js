@@ -32,6 +32,10 @@ const PRIORITY_REBALANCER_HANDOFF_FIXTURE_PATH =
   `${FIXTURE_DIRECTORY}/priority-rebalancer-handoff.fixture.json`;
 const PRIORITY_REBALANCER_HANDOFF_EXPECTED_PATH =
   `${FIXTURE_DIRECTORY}/priority-rebalancer-handoff.expected.json`;
+const PRIORITY_WORKFLOW_TIMEOUT_TRANSITION_DEFERRED_FIXTURE_PATH =
+  `${FIXTURE_DIRECTORY}/priority-workflow-timeout-transition-deferred.fixture.json`;
+const PRIORITY_WORKFLOW_TIMEOUT_TRANSITION_DEFERRED_EXPECTED_PATH =
+  `${FIXTURE_DIRECTORY}/priority-workflow-timeout-transition-deferred.expected.json`;
 const ABSENT_VALUE = 'absent';
 const PRIORITY_EDGE_ALIAS = 'priority';
 const PRIORITY_EDGE_ID = 'priority_recovery_partition_progress';
@@ -84,6 +88,17 @@ describe('analyze-topology-convergence CLI', () => {
   it('matches golden frontier fixture for retry-scheduled rebalancer handoff', () => {
     const output = runAnalyzerJson(PRIORITY_REBALANCER_HANDOFF_FIXTURE_PATH);
     const expected = readJson(PRIORITY_REBALANCER_HANDOFF_EXPECTED_PATH);
+
+    assert.deepEqual(projectGoldenFrontier(output), expected);
+  });
+
+  it('matches golden frontier fixture for timeout transition-deferred workflow progress', () => {
+    const output = runAnalyzerJson(
+      PRIORITY_WORKFLOW_TIMEOUT_TRANSITION_DEFERRED_FIXTURE_PATH,
+    );
+    const expected = readJson(
+      PRIORITY_WORKFLOW_TIMEOUT_TRANSITION_DEFERRED_EXPECTED_PATH,
+    );
 
     assert.deepEqual(projectGoldenFrontier(output), expected);
   });

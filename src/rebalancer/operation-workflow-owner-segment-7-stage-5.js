@@ -37,6 +37,14 @@ const PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_ALLOWED_STATES =
     ]),
   );
 
+const PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_ACTUATION_STATES =
+  Object.freeze(
+    new Set([
+      PRIORITY_RECOVERY_ACTUATION_STATE.PERSISTED_NOT_DISPATCHED,
+      PRIORITY_RECOVERY_ACTUATION_STATE.DISPATCHED_WAITING_PROGRESS,
+    ]),
+  );
+
 const PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_STATE_TABLE = Object.freeze([
   Object.freeze({
     state: PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_STATE.UNAVAILABLE,
@@ -149,8 +157,9 @@ class OperationWorkflowOwnerSegment7Stage5 extends OperationWorkflowOwnerSegment
         snapshot?.progress?.waitMode ===
           PRIORITY_RECOVERY_WAIT_MODE.EVENT_DRIVEN,
       dispatchPending:
-        snapshot?.actuation?.state ===
-          PRIORITY_RECOVERY_ACTUATION_STATE.PERSISTED_NOT_DISPATCHED &&
+        PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_ACTUATION_STATES.has(
+          snapshot?.actuation?.state,
+        ) &&
         snapshot?.actuation?.workflowProgressPhaseId ===
           PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.DISPATCH_PENDING &&
         snapshot?.progress?.workflowProgressPhaseId ===

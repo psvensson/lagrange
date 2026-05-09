@@ -5,8 +5,20 @@ import {
 import {CONTROL_PLANE_READINESS_DIMENSION} from './control-plane-readiness-constants.js';
 import {buildActiveMembershipSnapshot as buildPriorityRecoveryPublicationContext} from './active-node-projection.js';
 import {
+  PRIORITY_RECOVERY_ACTUATION_STATE,
+  PRIORITY_RECOVERY_BLOCKING_BOUNDARY,
   PRIORITY_RECOVERY_PROGRESS_CLASS_IDS,
+  PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION,
+  PRIORITY_RECOVERY_PROGRESS_OWNER,
+  PRIORITY_RECOVERY_WAIT_MODE,
 } from './priority-recovery-diagnostics-constants.js';
+import {
+  OPERATION_WORKFLOW_EFFECT_COMMAND_VALUES,
+  OPERATION_WORKFLOW_OUTCOME_VALUES,
+  OPERATION_WORKFLOW_OWNER,
+  OPERATION_WORKFLOW_PROGRESS_DECISION_KERNEL,
+  OPERATION_WORKFLOW_REASON_CODE_VALUES,
+} from '../rebalancer/operation-workflow-owner-constants.js';
 import {
   PRIORITY_RECOVERY_COMPLETION_STATE_IDS,
   buildPriorityRecoveryCompletion,
@@ -24,13 +36,55 @@ import {buildPriorityRecoveryActuationContract} from './priority-recovery-snapsh
 import {buildEffectivePriorityRecoveryAdmission, buildPriorityRecoveryPartitionObservation, buildPriorityRecoveryProgressContract, buildPriorityRecoveryPublicationNodeDecisions, isPriorityRecoverySnapshotObject, resolvePriorityRecoveryDecisionPublicationConvergence, resolvePriorityRecoveryDecisionReadinessByNodeId} from './priority-recovery-snapshot-stage-9.js';
 import {buildPriorityRecoveryPartitionAssessment} from './priority-recovery-snapshot-stage-11.js';
 
+function isPriorityRecoveryDispatchPendingTimeoutOwnerReentry(snapshot) {
+  return (
+    snapshot?.actuation?.owner ===
+      PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER &&
+    snapshot?.actuation?.state ===
+      PRIORITY_RECOVERY_ACTUATION_STATE.PERSISTED_NOT_DISPATCHED &&
+    snapshot?.actuation?.timeoutReconcileDue === true &&
+    snapshot?.progress?.currentOwner ===
+      PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER &&
+    snapshot?.progress?.nextRequiredAction ===
+      PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.ADVANCE_EXISTING_OPERATION &&
+    snapshot?.progress?.blockingBoundary ===
+      PRIORITY_RECOVERY_BLOCKING_BOUNDARY.WORKFLOW_PROGRESS &&
+    snapshot?.progress?.waitMode ===
+      PRIORITY_RECOVERY_WAIT_MODE.EVENT_DRIVEN
+  );
+}
+
+function buildPriorityRecoveryTimeoutOwnerReentryOutcome(snapshot) {
+  if (!isPriorityRecoveryDispatchPendingTimeoutOwnerReentry(snapshot)) {
+    return null;
+  }
+  return Object.freeze({
+    owner: OPERATION_WORKFLOW_OWNER,
+    boundary: OPERATION_WORKFLOW_PROGRESS_DECISION_KERNEL,
+    operationKey: snapshot?.operationId,
+    correlationKey: snapshot?.correlationKey,
+    sourceRevision: snapshot?.actuation?.lastProgressAtMs,
+    outcome: OPERATION_WORKFLOW_OUTCOME_VALUES.RECONCILE_STALE_PROGRESS,
+    nextRequiredAction:
+      OPERATION_WORKFLOW_OUTCOME_VALUES.RECONCILE_STALE_PROGRESS,
+    effectCommand:
+      OPERATION_WORKFLOW_EFFECT_COMMAND_VALUES
+        .RECONCILE_STALE_PROGRESS_COMMAND,
+    reasons: Object.freeze([
+      OPERATION_WORKFLOW_REASON_CODE_VALUES.TIMEOUT_BUDGET_EXPIRED,
+      OPERATION_WORKFLOW_REASON_CODE_VALUES.WORKFLOW_HISTORY_STALE,
+    ]),
+  });
+}
+
 function normalizePriorityRecoveryDispatchPendingDecisionSnapshot(
   snapshot = null,
   operationOwnerOutcome = null,
 ) {
   return normalizePriorityRecoverySnapshotFromOperationOwnerOutcome(
     snapshot,
-    operationOwnerOutcome,
+    operationOwnerOutcome ||
+      buildPriorityRecoveryTimeoutOwnerReentryOutcome(snapshot),
   );
 }
 

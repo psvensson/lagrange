@@ -592,6 +592,7 @@ function createOperationWorkflowOwnerPorts(owner) {
 }
 
 export {
+  OPERATION_WORKFLOW_OWNER_PORT_CONTEXT_CAUSE,
   OPERATION_WORKFLOW_OWNER_PORT_CONTEXT_MODE,
   createOperationWorkflowOwnerPorts,
 };

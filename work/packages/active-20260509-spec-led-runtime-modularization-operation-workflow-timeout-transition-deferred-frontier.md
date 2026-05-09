@@ -6,13 +6,13 @@
   "status": "active",
   "opened": "2026-05-09",
   "scenario": "spec-led-runtime-modularization",
-  "artifact": "test-output/reports/rolling-restart-spec-led-runtime-modularization-rebalancer-handoff.report.json",
-  "playback": "test-output/reports/.playback/rolling-restart-spec-led-runtime-modularization-rebalancer-handoff/rolling-restart/",
+  "artifact": "test-output/reports/rolling-restart-spec-led-runtime-modularization-workflow-timeout-transition-deferred.report.json",
+  "playback": "test-output/reports/.playback/rolling-restart-spec-led-runtime-modularization-workflow-timeout-transition-deferred/rolling-restart/",
   "owner": "operation_workflow_owner",
-  "boundary": "workflow_timeout",
+  "boundary": "workflow_progress",
   "dominantReason": "priority_recovery_progress_blocked",
-  "currentState": "The rebalancer handoff package reduced retry-scheduled handoff to a canonical operation workflow owner outcome. The representative report now fails first on priority_recovery_partition_progress with operation_workflow_owner / workflow_timeout, unresolved semantic states operation_stalled and recovering_in_flight, blocked partitions control_plane_publications-p1, replica_operations-p1, and sql_transaction_participants-p1, and dominant source priority_recovery_workflow_timeout_transition_deferred.",
-  "nextAction": "With the rebalancer handoff review/fix gates recorded, assign the implementation subagent to freeze the workflow-timeout transition-deferred witness and trace why operation workflow timeout evidence remains transition-deferred instead of re-entering the canonical owner progression path.",
+  "currentState": "Implementation reduced the priority_recovery_workflow_timeout_transition_deferred frontier. The latest representative report no longer fails on workflow_timeout or rebalancer_handoff; it migrates to priority_recovery_partition_progress with operation_workflow_owner / workflow_progress, unresolved semantic state recovering_in_flight, blocked partition control_plane_publications-p1, and dominant source priority_partitions_not_spread.",
+  "nextAction": "Parent session should review the focused implementation slice, then either close this package as migrated or open the next operation_workflow_owner / workflow_progress package.",
   "proof": [
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-rebalancer-handoff.report.json --explain priority_recovery_partition_progress",
     "Focused operation_workflow_owner workflow_timeout fixture from the representative report",
@@ -165,29 +165,89 @@ static guardrails, and representative rolling-restart.
       Agent Faraday (`019e0d15-523b-7ad0-b1f4-82239412843c`) reviewed `work/packages/done-20260509-spec-led-runtime-modularization-operation-workflow-rebalancer-handoff-frontier.md`; result `fixes-required`.
 - [x] Fix subagent recorded or explicitly not needed:
       Agent Curie (`019e0d19-4336-7471-9358-11caf22ae5fe`) fixed `work/packages/done-20260509-spec-led-runtime-modularization-operation-workflow-rebalancer-handoff-frontier.md`.
-- [ ] Implementation subagent recorded:
-      pending-before-implementation-resumes.
+- [x] Implementation subagent recorded:
+      Agent Peirce (`019e0d1f-856e-7d30-a49b-a3052fa5d840`) implemented `work/packages/active-20260509-spec-led-runtime-modularization-operation-workflow-timeout-transition-deferred-frontier.md`.
 
 ## Detection / Analysis Tasks
 
 - [x] Review the rebalancer handoff package before implementation starts.
       Faraday reviewed the closed predecessor and Curie fixed the tracker-only
       closure proof finding before implementation starts.
-- [ ] Extract the smallest workflow-timeout transition-deferred fixture from
+- [x] Extract the smallest workflow-timeout transition-deferred fixture from
       the representative report.
-- [ ] Trace the operation workflow owner timeout path for transition-deferred
+- [x] Trace the operation workflow owner timeout path for transition-deferred
       priority recovery work.
-- [ ] Identify any diagnostics or active-gate branch that masks timeout owner
+- [x] Identify any diagnostics or active-gate branch that masks timeout owner
       evidence.
 
 ## Implementation Tasks
 
-- [ ] Add or update the focused workflow-timeout fixture.
-- [ ] Rewrite the owner logic so workflow timeout has one canonical decision
+- [x] Add or update the focused workflow-timeout fixture.
+- [x] Rewrite the owner logic so workflow timeout has one canonical decision
       path.
-- [ ] Delete or guard superseded timeout fallback branches.
-- [ ] Update diagnostics/harness consumers only where owner vocabulary changes.
-- [ ] Rerun representative rolling-restart and migrate any fresh frontier.
+- [x] Delete or guard superseded timeout fallback branches.
+- [x] Update diagnostics/harness consumers only where owner vocabulary changes.
+- [x] Rerun representative rolling-restart and migrate any fresh frontier.
+
+## Implementation Evidence
+
+- Frozen fixture/probe:
+  `test/scripts/__fixtures__/topology-convergence/priority-workflow-timeout-transition-deferred.fixture.json`
+  and
+  `test/scripts/__fixtures__/topology-convergence/priority-workflow-timeout-transition-deferred.expected.json`.
+- Root cause: priority recovery consumers translated stale workflow-timeout
+  owner evidence into `transition_deferred` / `workflow_timeout` diagnostics
+  and a stale-progress retry action instead of re-entering the canonical
+  `advance_existing_operation` owner progression path.
+- Runtime change: operation workflow timeout re-entry now preserves the
+  timeout cause into the owner adapter, maps stale timeout outcomes to
+  workflow-progress re-entry, infers the same owner outcome for selected
+  dispatch-pending timeout snapshots, and guards same-operation retry-log
+  handoff witnesses once direct operation workflow progress advancement
+  evidence exists.
+- Handoff/ACK state: the fresh representative report keeps
+  `publication_ack_convergence` satisfied and no longer reports
+  `rebalancer_handoff` or `workflow_timeout`. The remaining
+  `priority_recovery_partition_progress` frontier is
+  `operation_workflow_owner / workflow_progress`.
+
+## Validation Results
+
+- `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-rebalancer-handoff.report.json --explain priority_recovery_partition_progress`
+  passed as the frozen source witness.
+- `npx tap test/rebalancer/operation-workflow-owner-decision.test.js test/control-plane/priority-recovery-snapshot-operation-owner-outcome.test.js test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js test/control-plane/priority-recovery-snapshot.test.js`
+  passed: 626 passing.
+- `node --test test/scripts/analyze-topology-convergence.test.js test/diagnostics/topology-convergence-graph.test.js test/distributed/harness/__tests__/priority-recovery-summary-normalization.test.js`
+  passed: 31 passing.
+- Correction-worker focused regression:
+  `node --test test/distributed/harness/__tests__/priority-recovery-summary-normalization.test.js`
+  passed: 10 passing.
+- Correction-worker analyzer proof on the current representative report
+  re-normalized through the corrected summary normalizer:
+  `npm run analyze:topology-convergence -- /tmp/rolling-restart-spec-led-runtime-modularization-workflow-timeout-transition-deferred.renormalized.report.json`
+  reports first frontier `priority_recovery_partition_progress`,
+  `operation_workflow_owner / workflow_progress`; `rebalancer_handoff` is no
+  longer dominant.
+- Static guardrails passed for touched production files: literal guideline,
+  decision-boundary guideline, runtime grammar, and `git diff --check`.
+- Representative command wrote
+  `test-output/reports/rolling-restart-spec-led-runtime-modularization-workflow-timeout-transition-deferred.report.json`
+  and failed on a migrated frontier:
+  `operation_workflow_owner / workflow_progress`.
+
+## Migrated Frontier
+
+- Fresh representative frontier:
+  `priority_recovery_partition_progress`.
+- Owner/boundary:
+  `operation_workflow_owner / workflow_progress`.
+- Dominant reasons:
+  `priority_recovery_progress_blocked`,
+  `priority_recovery_event_driven_wait`.
+- Package-owned edge status:
+  `workflow_timeout` and `rebalancer_handoff` are reduced; the remaining
+  witness is event-driven workflow progress for `sql_transactions-p1`, with
+  `replica_operations-p1` still blocked in workflow progress.
 
 ## Validation
 

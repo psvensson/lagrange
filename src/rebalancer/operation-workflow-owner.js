@@ -14,6 +14,7 @@ import {
   normalizePriorityRecoveryDispatchPendingDecisionSnapshot,
 } from '../control-plane/priority-recovery-snapshot.js';
 import {
+  OPERATION_WORKFLOW_OWNER_PORT_CONTEXT_CAUSE,
   OPERATION_WORKFLOW_OWNER_PORT_CONTEXT_MODE,
   createOperationWorkflowOwnerPorts,
 } from './operation-workflow-owner-ports.js';
@@ -23,7 +24,27 @@ const OPERATION_WORKFLOW_OWNER_ADAPTER_SNAPSHOT = Object.freeze({
   DISPATCH_PENDING_PHASE: 'dispatch_pending',
   DISPATCHED_WAITING_PROGRESS: 'dispatched_waiting_progress',
   OPERATION_WORKFLOW_OWNER: 'operation_workflow_owner',
+  TIMEOUT_RECONCILE_DUE: 'timeout_reconcile_due',
+  WORKFLOW_TIMEOUT: 'workflow_timeout',
 });
+
+function buildPriorityRecoveryDispatchPendingOwnerReentryContext(snapshot) {
+  const baseContext = Object.freeze({
+    mode: OPERATION_WORKFLOW_OWNER_PORT_CONTEXT_MODE.OWNER_RECONCILE,
+  });
+  if (
+    snapshot?.progress?.blockingBoundary !==
+      OPERATION_WORKFLOW_OWNER_ADAPTER_SNAPSHOT.WORKFLOW_TIMEOUT ||
+    snapshot?.progress?.waitMode !==
+      OPERATION_WORKFLOW_OWNER_ADAPTER_SNAPSHOT.TIMEOUT_RECONCILE_DUE
+  ) {
+    return baseContext;
+  }
+  return Object.freeze({
+    ...baseContext,
+    cause: OPERATION_WORKFLOW_OWNER_PORT_CONTEXT_CAUSE.TIMEOUT,
+  });
+}
 
 class OperationWorkflowOwner extends OperationWorkflowOwnerSegment7 {
   constructor(options) {
@@ -153,9 +174,10 @@ class OperationWorkflowOwner extends OperationWorkflowOwnerSegment7 {
     }
     return normalizePriorityRecoveryDispatchPendingDecisionSnapshot(
       snapshot,
-      this.operationWorkflowOwnerAdapter.decide(operation, {
-        mode: OPERATION_WORKFLOW_OWNER_PORT_CONTEXT_MODE.OWNER_RECONCILE,
-      }),
+      this.operationWorkflowOwnerAdapter.decide(
+        operation,
+        buildPriorityRecoveryDispatchPendingOwnerReentryContext(snapshot),
+      ),
     );
   }
 }

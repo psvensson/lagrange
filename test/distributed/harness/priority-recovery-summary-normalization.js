@@ -6,6 +6,7 @@ import {
   PRIORITY_RECOVERY_OBSERVATION_STATE_VALUE,
   PRIORITY_RECOVERY_PROGRESS_OWNER,
   PRIORITY_RECOVERY_SEMANTIC_STATE,
+  PRIORITY_RECOVERY_WAIT_MODE,
 } from '../../../src/control-plane/priority-recovery-diagnostics-constants.js';
 
 const ZERO = 0;
@@ -15,6 +16,9 @@ const COMPARISON_RIGHT_PRECEDES_LEFT = 1;
 const EMPTY_STRING = '';
 const TYPEOF_OBJECT = 'object';
 const PRIORITY_RECOVERY_PROGRESS_NONE = 'none';
+const PRIORITY_RECOVERY_PROGRESS_EVIDENCE_SOURCE = Object.freeze({
+  OPERATION_DISPATCH_RETRY_LOG: 'operation_dispatch_retry_log',
+});
 const PRIORITY_RECOVERY_WITNESS_FRESHNESS_KEY_PREFIX = Object.freeze({
   CORRELATION: 'correlation',
   OPERATION: 'operation',
@@ -798,6 +802,22 @@ function resolvePriorityRecoveryWitnessFreshnessAtMs(witness) {
 }
 
 function selectFreshestPriorityRecoveryWitness(existingWitness, nextWitness) {
+  if (
+    isPriorityRecoveryOperationWorkflowProgressAdvancementWitness(
+      existingWitness,
+    ) === true &&
+    isPriorityRecoveryDispatchRetryLogWitness(nextWitness) === true
+  ) {
+    return existingWitness;
+  }
+  if (
+    isPriorityRecoveryDispatchRetryLogWitness(existingWitness) === true &&
+    isPriorityRecoveryOperationWorkflowProgressAdvancementWitness(
+      nextWitness,
+    ) === true
+  ) {
+    return nextWitness;
+  }
   const existingFreshnessAtMs =
     resolvePriorityRecoveryWitnessFreshnessAtMs(existingWitness);
   const nextFreshnessAtMs = resolvePriorityRecoveryWitnessFreshnessAtMs(
@@ -812,6 +832,35 @@ function selectFreshestPriorityRecoveryWitness(existingWitness, nextWitness) {
     return nextWitness;
   }
   return existingWitness;
+}
+
+function isPriorityRecoveryDispatchRetryLogWitness(witness) {
+  return (
+    normalizeDistinctStringArray(witness?.progressEvidenceSourceIds)
+      .includes(
+        PRIORITY_RECOVERY_PROGRESS_EVIDENCE_SOURCE
+          .OPERATION_DISPATCH_RETRY_LOG,
+      ) &&
+    normalizeStringField(witness?.blockingBoundary) ===
+      PRIORITY_RECOVERY_BLOCKING_BOUNDARY.REBALANCER_HANDOFF &&
+    normalizeStringField(witness?.waitMode) ===
+      PRIORITY_RECOVERY_WAIT_MODE.RETRY_SCHEDULED
+  );
+}
+
+function isPriorityRecoveryOperationWorkflowProgressAdvancementWitness(witness) {
+  return (
+    normalizeStringField(witness?.currentOwner) ===
+      PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER &&
+    normalizeStringField(witness?.actuationOwner) ===
+      PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER &&
+    normalizeStringField(witness?.blockingBoundary) ===
+      PRIORITY_RECOVERY_BLOCKING_BOUNDARY.WORKFLOW_PROGRESS &&
+    normalizeStringField(witness?.waitMode) ===
+      PRIORITY_RECOVERY_WAIT_MODE.EVENT_DRIVEN &&
+    normalizeStringField(witness?.nextRequiredAction) ===
+      PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.ADVANCE_EXISTING_OPERATION
+  );
 }
 
 function selectFreshestPriorityRecoveryWitnessesByOperation(witnesses) {

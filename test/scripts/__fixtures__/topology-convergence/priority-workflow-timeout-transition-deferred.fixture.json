@@ -1,0 +1,78 @@
+{
+  "scenarios": [
+    {
+      "scenario": "rolling-restart",
+      "summary": {
+        "dominantReason": "priority_recovery_workflow_timeout_transition_deferred",
+        "failureClass": "priority_recovery_progress_blocked"
+      },
+      "publicationConvergence": {
+        "publicationStatus": "PUBLISHED",
+        "pendingAckCount": 0,
+        "blockedNodeCount": 0,
+        "missingPublishedCount": 0,
+        "activeGate": {
+          "state": "timed_out",
+          "ready": false,
+          "progress": {
+            "expectedNodeCount": 5,
+            "snapshotCoverageNodeCount": 5,
+            "snapshotCoverageComplete": true,
+            "priorityBlockedPartitionCount": 3,
+            "priorityRecoveryProgressClasses": {
+              "unresolvedSemanticStateIds": [
+                "operation_stalled",
+                "recovering_in_flight"
+              ],
+              "blockedPartitionIds": [
+                "control_plane_publications-p1",
+                "replica_operations-p1",
+                "sql_transaction_participants-p1"
+              ]
+            },
+            "blockers": [
+              "priority_recovery_progress_class=operation_created_but_no_step_transitions"
+            ]
+          }
+        },
+        "priorityRecoveryProgressSummary": {
+          "partitionCount": 3,
+          "dominantWitness": {
+            "partitionId": "sql_transaction_participants-p1",
+            "semanticStateId": "operation_stalled",
+            "progressContractState": "pending",
+            "progressNextAction": "retry",
+            "actuationState": "transition_deferred",
+            "actuationOwner": "operation_workflow_owner",
+            "currentOwner": "operation_workflow_owner",
+            "nextRequiredAction": "reconcile_stale_operation_progress",
+            "blockingBoundary": "workflow_timeout",
+            "waitMode": "timeout_reconcile_due",
+            "workflowProgressPhaseId": "dispatch_pending",
+            "stepAgeMs": 74121,
+            "stepTimeoutMs": 30000,
+            "correlationKey": "sql_transaction_participants-p1|2|ecef9408-b66f-4f03-a0d7-6341b3c2f621",
+            "progressEvidenceSourceIds": [
+              "blocker_reasons",
+              "completion_state",
+              "last_progress_timestamp",
+              "operation_context",
+              "workflow_state"
+            ],
+            "witnessIds": [
+              "ecef9408-b66f-4f03-a0d7-6341b3c2f621",
+              "sql_transaction_participants-p1|2|ecef9408-b66f-4f03-a0d7-6341b3c2f621"
+            ],
+            "operationIds": [
+              "ecef9408-b66f-4f03-a0d7-6341b3c2f621"
+            ],
+            "completionState": "blocked",
+            "workflowState": "in_flight",
+            "latestOperationWorkflowStep": "PENDING",
+            "latestOperationStatus": "pending"
+          }
+        }
+      }
+    }
+  ]
+}

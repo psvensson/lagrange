@@ -12,6 +12,7 @@ import {
   PRIORITY_RECOVERY_PROGRESS_OWNER,
   PRIORITY_RECOVERY_SEMANTIC_STATE,
   PRIORITY_RECOVERY_WAIT_MODE,
+  PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE,
 } from '../../../../src/control-plane/priority-recovery-diagnostics-constants.js';
 import {
   OWNER_CONTRACT_STATE,
@@ -27,6 +28,10 @@ const SAME_BOUNDARY_TEST_NAME =
   'same-boundary transition-deferred actuation outranks actionable scheduling';
 const SAME_OPERATION_FRESHNESS_TEST_NAME =
   'same-operation retry handoff progress supersedes stale workflow timeout';
+const SAME_OPERATION_REENTRY_TEST_NAME =
+  'same-operation owner re-entry supersedes retry handoff progress';
+const SAME_OPERATION_DIRECT_PROGRESS_TEST_NAME =
+  'same-operation direct workflow progress blocker supersedes retry handoff';
 const SERIAL_WAIT_METADATA_TEST_NAME =
   'serial wait operation metadata survives progress summary normalization';
 const SERIAL_WAIT_SOURCE_BLOCKER_TEST_NAME =
@@ -73,6 +78,8 @@ const OPERATION_STATUS_PENDING = 'pending';
 const OPERATION_STATUS_RETRY_DEFERRED = 'retry_deferred';
 const OPERATION_STATUS_ACTIVE = 'active';
 const OPERATION_STATUS_REMOVED = 'removed';
+const PROGRESS_EVIDENCE_SOURCE_OPERATION_DISPATCH =
+  'operation_dispatch_retry_log';
 const EXPECTED_OWNER_COUNTS = Object.freeze({
   [PRIORITY_RECOVERY_PROGRESS_OWNER.REBALANCER_LEADER]: 1,
   [PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER]: 1,
@@ -256,8 +263,58 @@ const LATER_RETRY_HANDOFF_WITNESS = Object.freeze({
   correlationKey: STALE_WORKFLOW_TIMEOUT_CORRELATION_KEY,
   retryAfterMs: RETRY_HANDOFF_DELAY_MS,
   lastProgressAtMs: RETRY_HANDOFF_PROGRESS_AT_MS,
+  progressEvidenceSourceIds: Object.freeze([
+    PROGRESS_EVIDENCE_SOURCE_OPERATION_DISPATCH,
+  ]),
   latestOperationWorkflowStep: WORKFLOW_STEP_SENDING,
   latestOperationStatus: OPERATION_STATUS_RETRY_DEFERRED,
+});
+const TIMEOUT_OWNER_REENTRY_WITNESS = Object.freeze({
+  partitionId: STALE_WORKFLOW_TIMEOUT_PARTITION_ID,
+  semanticStateId: PRIORITY_RECOVERY_SEMANTIC_STATE.RECOVERING_IN_FLIGHT,
+  progressContractState: OWNER_CONTRACT_STATE.PENDING,
+  actuationState: PRIORITY_RECOVERY_ACTUATION_STATE.PERSISTED_NOT_DISPATCHED,
+  currentOwner: PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER,
+  actuationOwner: PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER,
+  blockingBoundary: PRIORITY_RECOVERY_BLOCKING_BOUNDARY.WORKFLOW_PROGRESS,
+  waitMode: PRIORITY_RECOVERY_WAIT_MODE.EVENT_DRIVEN,
+  nextRequiredAction:
+    PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.ADVANCE_EXISTING_OPERATION,
+  workflowProgressPhaseId:
+    PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.DISPATCH_PENDING,
+  operationIds: Object.freeze([STALE_WORKFLOW_TIMEOUT_OPERATION_ID]),
+  witnessIds: Object.freeze([STALE_WORKFLOW_TIMEOUT_OPERATION_ID]),
+  correlationKey: STALE_WORKFLOW_TIMEOUT_CORRELATION_KEY,
+  lastProgressAtMs: STALE_WORKFLOW_TIMEOUT_PROGRESS_AT_MS,
+  latestOperationWorkflowStep: WORKFLOW_STEP_PENDING,
+  latestOperationStatus: OPERATION_STATUS_PENDING,
+});
+const DIRECT_WORKFLOW_PROGRESS_BLOCKER_WITNESS = Object.freeze({
+  partitionId: STALE_WORKFLOW_TIMEOUT_PARTITION_ID,
+  semanticStateId: PRIORITY_RECOVERY_SEMANTIC_STATE.RECOVERING_IN_FLIGHT,
+  progressClassIds: Object.freeze([
+    PRIORITY_RECOVERY_BLOCKER_REASON.OPERATION_NO_TRANSITIONS,
+  ]),
+  blockerReasonCodes: Object.freeze([
+    PRIORITY_RECOVERY_BLOCKER_REASON.OPERATION_NO_TRANSITIONS,
+  ]),
+  progressContractState: OWNER_CONTRACT_STATE.PENDING,
+  actuationState:
+    PRIORITY_RECOVERY_ACTUATION_STATE.DISPATCHED_WAITING_PROGRESS,
+  currentOwner: PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER,
+  actuationOwner: PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER,
+  blockingBoundary: PRIORITY_RECOVERY_BLOCKING_BOUNDARY.WORKFLOW_PROGRESS,
+  waitMode: PRIORITY_RECOVERY_WAIT_MODE.EVENT_DRIVEN,
+  nextRequiredAction:
+    PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.ADVANCE_EXISTING_OPERATION,
+  workflowProgressPhaseId:
+    PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.DISPATCH_PENDING,
+  operationIds: Object.freeze([STALE_WORKFLOW_TIMEOUT_OPERATION_ID]),
+  witnessIds: Object.freeze([STALE_WORKFLOW_TIMEOUT_OPERATION_ID]),
+  correlationKey: STALE_WORKFLOW_TIMEOUT_CORRELATION_KEY,
+  lastProgressAtMs: STALE_WORKFLOW_TIMEOUT_PROGRESS_AT_MS,
+  latestOperationWorkflowStep: WORKFLOW_STEP_SENDING,
+  latestOperationStatus: OPERATION_STATUS_PENDING,
 });
 const TERMINAL_FOLLOW_UP_SOURCE_BLOCKER_WITNESS = Object.freeze({
   partitionId: TERMINAL_FOLLOW_UP_SOURCE_PARTITION_ID,
@@ -568,5 +625,93 @@ test(SAME_OPERATION_FRESHNESS_TEST_NAME, () => {
   assert.equal(
     progressSummary.dominantWitness.latestOperationStatus,
     OPERATION_STATUS_RETRY_DEFERRED,
+  );
+});
+
+test(SAME_OPERATION_REENTRY_TEST_NAME, () => {
+  const progressSummary = buildPriorityRecoveryProgressSummary({
+    priorityRecoveryPartitionWitnesses: Object.freeze([
+      TIMEOUT_OWNER_REENTRY_WITNESS,
+      LATER_RETRY_HANDOFF_WITNESS,
+    ]),
+  });
+
+  assert.equal(
+    progressSummary.partitionCount,
+    EXPECTED_FRESHENED_PARTITION_COUNT,
+  );
+  assert.deepEqual(progressSummary.blockingBoundaryCounts, {
+    [PRIORITY_RECOVERY_BLOCKING_BOUNDARY.WORKFLOW_PROGRESS]:
+      EXPECTED_FRESHENED_PARTITION_COUNT,
+  });
+  assert.deepEqual(progressSummary.waitModeCounts, {
+    [PRIORITY_RECOVERY_WAIT_MODE.EVENT_DRIVEN]:
+      EXPECTED_FRESHENED_PARTITION_COUNT,
+  });
+  assert.deepEqual(progressSummary.nextRequiredActionCounts, {
+    [PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.ADVANCE_EXISTING_OPERATION]:
+      EXPECTED_FRESHENED_PARTITION_COUNT,
+  });
+  assert.equal(
+    progressSummary.dominantWitness.partitionId,
+    STALE_WORKFLOW_TIMEOUT_PARTITION_ID,
+  );
+  assert.equal(
+    progressSummary.dominantWitness.blockingBoundary,
+    PRIORITY_RECOVERY_BLOCKING_BOUNDARY.WORKFLOW_PROGRESS,
+  );
+  assert.equal(
+    progressSummary.dominantWitness.waitMode,
+    PRIORITY_RECOVERY_WAIT_MODE.EVENT_DRIVEN,
+  );
+  assert.equal(
+    progressSummary.dominantWitness.nextRequiredAction,
+    PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.ADVANCE_EXISTING_OPERATION,
+  );
+});
+
+test(SAME_OPERATION_DIRECT_PROGRESS_TEST_NAME, () => {
+  const progressSummary = buildPriorityRecoveryProgressSummary({
+    priorityRecoveryPartitionWitnesses: Object.freeze([
+      DIRECT_WORKFLOW_PROGRESS_BLOCKER_WITNESS,
+      LATER_RETRY_HANDOFF_WITNESS,
+    ]),
+  });
+
+  assert.equal(
+    progressSummary.partitionCount,
+    EXPECTED_FRESHENED_PARTITION_COUNT,
+  );
+  assert.deepEqual(progressSummary.blockingBoundaryCounts, {
+    [PRIORITY_RECOVERY_BLOCKING_BOUNDARY.WORKFLOW_PROGRESS]:
+      EXPECTED_FRESHENED_PARTITION_COUNT,
+  });
+  assert.deepEqual(progressSummary.waitModeCounts, {
+    [PRIORITY_RECOVERY_WAIT_MODE.EVENT_DRIVEN]:
+      EXPECTED_FRESHENED_PARTITION_COUNT,
+  });
+  assert.deepEqual(progressSummary.nextRequiredActionCounts, {
+    [PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.ADVANCE_EXISTING_OPERATION]:
+      EXPECTED_FRESHENED_PARTITION_COUNT,
+  });
+  assert.equal(
+    progressSummary.dominantWitness.blockingBoundary,
+    PRIORITY_RECOVERY_BLOCKING_BOUNDARY.WORKFLOW_PROGRESS,
+  );
+  assert.equal(
+    progressSummary.dominantWitness.actuationState,
+    PRIORITY_RECOVERY_ACTUATION_STATE.DISPATCHED_WAITING_PROGRESS,
+  );
+  assert.deepEqual(
+    progressSummary.dominantWitness.blockerReasonCodes,
+    [PRIORITY_RECOVERY_BLOCKER_REASON.OPERATION_NO_TRANSITIONS],
+  );
+  assert.equal(
+    progressSummary.dominantWitness.latestOperationWorkflowStep,
+    WORKFLOW_STEP_SENDING,
+  );
+  assert.equal(
+    progressSummary.dominantWitness.latestOperationStatus,
+    OPERATION_STATUS_PENDING,
   );
 });

@@ -482,9 +482,9 @@ function resolvePriorityRecoveryInFlightActuationState(
   ) {
     return null;
   }
-  return progressMetrics.timeoutReconcileDue === true ?
-    PRIORITY_RECOVERY_ACTUATION_STATE.TRANSITION_DEFERRED :
-    resolvePriorityRecoveryDispatchedActuationState(latestOperationContext);
+  return resolvePriorityRecoveryDispatchedActuationState(
+    latestOperationContext,
+  );
 }
 
 function resolvePriorityRecoveryDispatchedActuationState(

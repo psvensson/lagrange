@@ -439,15 +439,14 @@ function resolvePriorityRecoveryInFlightProgressDescriptor(options = {}) {
   }
   if (options.progressMetrics.timeoutReconcileDue === true) {
     return {
-      ...buildPriorityRecoveryRetryScheduledDescriptor(
-        options.scheduledRetry ?
-          PRIORITY_RECOVERY_WAIT_MODE.RETRY_SCHEDULED :
-          PRIORITY_RECOVERY_WAIT_MODE.TIMEOUT_RECONCILE_DUE,
+      ...buildPriorityRecoveryPendingDescriptor(
+        false,
+        PRIORITY_RECOVERY_WAIT_MODE.EVENT_DRIVEN,
       ),
       currentOwner: PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER,
       nextRequiredAction:
-        PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.RECONCILE_STALE_OPERATION_PROGRESS,
-      blockingBoundary: PRIORITY_RECOVERY_BLOCKING_BOUNDARY.WORKFLOW_TIMEOUT,
+        PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.ADVANCE_EXISTING_OPERATION,
+      blockingBoundary: PRIORITY_RECOVERY_BLOCKING_BOUNDARY.WORKFLOW_PROGRESS,
     };
   }
   return {
