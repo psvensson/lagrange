@@ -31,7 +31,7 @@
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md",
     "work/packages/done-20260509-spec-led-runtime-modularization-spec-and-reference-patterns.md",
-    "work/packages/todo-20260509-spec-led-runtime-modularization-operation-owner-kernel.md",
+    "work/packages/done-20260509-spec-led-runtime-modularization-operation-owner-kernel.md",
     "work/packages/todo-20260509-spec-led-runtime-modularization-priority-recovery-observation-contract.md",
     "work/packages/todo-20260509-spec-led-runtime-modularization-workflow-owner-adapter-cutover.md",
     "work/packages/todo-20260509-spec-led-runtime-modularization-placement-owner-kernel.md",

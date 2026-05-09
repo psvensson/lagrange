@@ -59,7 +59,7 @@ Start with the operation owner and priority recovery observation contract.
 Reason:
 
 1. The current representative failure is
-   `operation_workflow_owner / workflow_progress`.
+   `operation_workflow_owner / workflow_progress_decision_kernel`.
 2. The broad priority-recovery snapshot suite is red after recent fixes.
 3. The active code still lets snapshot normalization, operation workflow
    re-entry, timeout reconcile, and diagnostics classification overlap.

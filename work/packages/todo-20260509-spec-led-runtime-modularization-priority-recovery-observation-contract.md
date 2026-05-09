@@ -27,7 +27,7 @@
     "test/control-plane/priority-recovery-snapshot*.js",
     "work/packages/todo-20260509-spec-led-runtime-modularization-priority-recovery-observation-contract.md"
   ],
-  "predecessor": "work/packages/todo-20260509-spec-led-runtime-modularization-operation-owner-kernel.md"
+  "predecessor": "work/packages/done-20260509-spec-led-runtime-modularization-operation-owner-kernel.md"
 }
 -->
 

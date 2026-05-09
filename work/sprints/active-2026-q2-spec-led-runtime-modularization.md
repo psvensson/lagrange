@@ -4,18 +4,26 @@ Status: active. This sprint was activated by human direction on May 9, 2026
 after the prior rolling-restart package closed and handed off a workflow
 progress successor boundary.
 
-## Current Package Snapshot
+## Latest Package Snapshot
 
-Current package:
-`work/packages/done-20260509-spec-led-runtime-modularization-spec-and-reference-patterns.md`.
+Latest completed package:
+`work/packages/done-20260509-spec-led-runtime-modularization-operation-owner-kernel.md`.
 
-Owner boundary: `specification_owner / runtime_module_contracts`.
+Owner boundary:
+`operation_workflow_owner / workflow_progress_decision_kernel`.
 
-Current blocker: the successor sprint must baseline contract-first module
-specifications before any runtime package can edit production or test code.
+Completed result: the pure operation workflow progress decision kernel exists
+with normalized evidence, explicit state/outcome/effect command vocabularies,
+and focused decision-table proof. Runtime adapters and consumers are not cut
+over yet.
 
-Next proof surface: work tracker validation and diff hygiene for the spec pack,
-sprint file, active package, and roadmap pointer.
+Next package:
+`work/packages/todo-20260509-spec-led-runtime-modularization-priority-recovery-observation-contract.md`.
+
+Next proof surface: activate the priority recovery observation package,
+review/fix/implement through real subagents, and cut priority recovery
+snapshots to observe operation-owner outcomes instead of reconstructing
+workflow progress locally.
 
 ## Goal
 
@@ -63,7 +71,7 @@ the contract and proof ladder are stable.
 ## Package Queue
 
 1. [Spec And Reference Pattern Rebaseline](../packages/done-20260509-spec-led-runtime-modularization-spec-and-reference-patterns.md)
-2. [Operation Owner Decision Kernel](../packages/todo-20260509-spec-led-runtime-modularization-operation-owner-kernel.md)
+2. [Operation Owner Decision Kernel](../packages/done-20260509-spec-led-runtime-modularization-operation-owner-kernel.md)
 3. [Priority Recovery Observation Contract](../packages/todo-20260509-spec-led-runtime-modularization-priority-recovery-observation-contract.md)
 4. [Workflow Owner Adapter Cutover](../packages/todo-20260509-spec-led-runtime-modularization-workflow-owner-adapter-cutover.md)
 5. [Placement Owner Policy Kernel](../packages/todo-20260509-spec-led-runtime-modularization-placement-owner-kernel.md)

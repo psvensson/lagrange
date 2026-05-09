@@ -21,9 +21,9 @@ is active and its contract is frozen.
 | Package | Semantic owner | Boundary | Primary contract | Deletion or quarantine target |
 | --- | --- | --- | --- | --- |
 | Spec and reference-pattern rebaseline | `specification_owner` | `runtime_module_contracts` | Specification pack, module template, and sprint queue. | Ambiguous rewrite guidance that lacks a module contract. |
-| Operation owner decision kernel | `operation_owner` | `workflow_progress` | Pure operation progress decision from normalized operation evidence. | Workflow progress, serial wait, timeout, and visibility branch piles outside the owner. |
+| Operation owner decision kernel | `operation_workflow_owner` | `workflow_progress_decision_kernel` | Pure operation progress decision from normalized operation evidence. | Workflow progress, serial wait, timeout, and visibility branch piles outside the owner. |
 | Priority recovery observation contract | `priority_recovery_observation_owner` | `partition_progress_observation` | Partition progress derived from owner outcomes and request contracts. | Snapshot-local operation progress rewrites and shadow progress grammars. |
-| Workflow owner adapter cutover | `operation_owner` | `workflow_owner_adapter` | Existing workflow facades routed through the operation decision kernel. | Duplicate transition, retry, timeout, and dispatch branches in facades. |
+| Workflow owner adapter cutover | `operation_workflow_owner` | `workflow_owner_adapter` | Existing workflow facades routed through the operation decision kernel. | Duplicate transition, retry, timeout, and dispatch branches in facades. |
 | Placement owner policy kernel | `placement_owner` | `placement_policy` | Filter, score, reserve, and emit placement intent. | Survivor-set fallback and pressure branches that mutate placement policy. |
 | Publication owner stream contract | `publication_owner` | `publication_stream` | Revisioned publication, acknowledgement, freshness, and recovery-gate stream. | SQL fallback or diagnostics paths that complete publication. |
 | Projection/readiness consumer contract | `projection_readiness_consumer` | `readiness_projection` | Internal, repair, and serve readiness from owner outcomes and source revisions. | Raw transport, service-row, heartbeat, cache, or ready-lease recombination. |

@@ -1,0 +1,275 @@
+/**
+ * Pure operation workflow progress decision table.
+ */
+
+import {
+  OPERATION_WORKFLOW_COMMAND_STATE,
+  OPERATION_WORKFLOW_DISPATCH_STATE,
+  OPERATION_WORKFLOW_EFFECT_COMMAND_VALUES,
+  OPERATION_WORKFLOW_EVIDENCE_CONTRACT_STATE,
+  OPERATION_WORKFLOW_HISTORY_FRESHNESS_STATE,
+  OPERATION_WORKFLOW_OUTCOME_VALUES,
+  OPERATION_WORKFLOW_OWNER,
+  OPERATION_WORKFLOW_OWNER_AUTHORITY_STATE,
+  OPERATION_WORKFLOW_PROGRESS_DECISION_KERNEL,
+  OPERATION_WORKFLOW_PROGRESS_STATE_VALUES,
+  OPERATION_WORKFLOW_PUBLICATION_FENCE_STATE,
+  OPERATION_WORKFLOW_REASON_CODE_VALUES,
+  OPERATION_WORKFLOW_SERIAL_DEPENDENCY_STATE,
+  OPERATION_WORKFLOW_STALE_PROGRESS_STATE,
+  OPERATION_WORKFLOW_TERMINAL_STATE,
+  OPERATION_WORKFLOW_TIMEOUT_STATE,
+  OPERATION_WORKFLOW_TRANSITION_STATE,
+  OPERATION_WORKFLOW_WAKE_STATE,
+} from './operation-workflow-owner-constants.js';
+import {
+  normalizeOperationWorkflowEvidence,
+} from './operation-workflow-owner-evidence.js';
+
+const OPERATION_WORKFLOW_PROGRESS_OUTCOMES =
+  OPERATION_WORKFLOW_OUTCOME_VALUES;
+
+const OPERATION_WORKFLOW_REASON_CODES =
+  OPERATION_WORKFLOW_REASON_CODE_VALUES;
+
+const OPERATION_WORKFLOW_DEFERRED_PUBLICATION_FENCE_STATES = Object.freeze(
+  new Set([
+    OPERATION_WORKFLOW_PUBLICATION_FENCE_STATE.STALE,
+    OPERATION_WORKFLOW_PUBLICATION_FENCE_STATE.INCOMPLETE,
+  ]),
+);
+
+const OPERATION_WORKFLOW_KNOWN_OWNER_AUTHORITY_STATES = Object.freeze(
+  new Set([
+    OPERATION_WORKFLOW_OWNER_AUTHORITY_STATE.LOCAL_AUTHORITATIVE,
+    OPERATION_WORKFLOW_OWNER_AUTHORITY_STATE.REMOTE_AUTHORITATIVE,
+  ]),
+);
+
+const OPERATION_WORKFLOW_PROGRESS_DECISION_TABLE = Object.freeze([
+  Object.freeze({
+    state: OPERATION_WORKFLOW_PROGRESS_STATE_VALUES.OPERATION_INPUT_REJECTED,
+    outcome:
+      OPERATION_WORKFLOW_PROGRESS_OUTCOMES
+        .REJECT_OUT_OF_CONTRACT_EVIDENCE,
+    nextRequiredAction:
+      OPERATION_WORKFLOW_PROGRESS_OUTCOMES
+        .REJECT_OUT_OF_CONTRACT_EVIDENCE,
+    effectCommand:
+      OPERATION_WORKFLOW_EFFECT_COMMAND_VALUES.NO_OPERATION_EFFECT,
+    reasons: Object.freeze([
+      OPERATION_WORKFLOW_REASON_CODES.OUTSIDE_CONTRACT_EVIDENCE,
+    ]),
+    matches: (evidence) =>
+      evidence.contractState ===
+        OPERATION_WORKFLOW_EVIDENCE_CONTRACT_STATE.OUTSIDE_CONTRACT,
+  }),
+  Object.freeze({
+    state:
+      OPERATION_WORKFLOW_PROGRESS_STATE_VALUES.TERMINAL_FAILURE_OBSERVED,
+    outcome: OPERATION_WORKFLOW_PROGRESS_OUTCOMES.TERMINAL_FAILURE,
+    nextRequiredAction:
+      OPERATION_WORKFLOW_PROGRESS_OUTCOMES.TERMINAL_FAILURE,
+    effectCommand:
+      OPERATION_WORKFLOW_EFFECT_COMMAND_VALUES
+        .RECORD_TERMINAL_FAILURE_COMMAND,
+    reasons: Object.freeze([
+      OPERATION_WORKFLOW_REASON_CODES.DURABLE_FAILURE_RECORDED,
+      OPERATION_WORKFLOW_REASON_CODES.WORKFLOW_HISTORY_TERMINAL,
+    ]),
+    matches: (evidence) =>
+      evidence.durableOperation.terminalState ===
+        OPERATION_WORKFLOW_TERMINAL_STATE.FAILURE &&
+      evidence.workflowHistory.terminalState ===
+        OPERATION_WORKFLOW_TERMINAL_STATE.FAILURE,
+  }),
+  Object.freeze({
+    state:
+      OPERATION_WORKFLOW_PROGRESS_STATE_VALUES.TERMINAL_SUCCESS_OBSERVED,
+    outcome: OPERATION_WORKFLOW_PROGRESS_OUTCOMES.TERMINAL_SUCCESS,
+    nextRequiredAction:
+      OPERATION_WORKFLOW_PROGRESS_OUTCOMES.TERMINAL_SUCCESS,
+    effectCommand:
+      OPERATION_WORKFLOW_EFFECT_COMMAND_VALUES
+        .RECORD_TERMINAL_SUCCESS_COMMAND,
+    reasons: Object.freeze([
+      OPERATION_WORKFLOW_REASON_CODES.DURABLE_SUCCESS_RECORDED,
+      OPERATION_WORKFLOW_REASON_CODES.WORKFLOW_HISTORY_TERMINAL,
+    ]),
+    matches: (evidence) =>
+      evidence.durableOperation.terminalState ===
+        OPERATION_WORKFLOW_TERMINAL_STATE.SUCCESS &&
+      evidence.workflowHistory.terminalState ===
+        OPERATION_WORKFLOW_TERMINAL_STATE.SUCCESS,
+  }),
+  Object.freeze({
+    state:
+      OPERATION_WORKFLOW_PROGRESS_STATE_VALUES
+        .AUTHORITATIVE_VISIBILITY_DEFERRED,
+    outcome:
+      OPERATION_WORKFLOW_PROGRESS_OUTCOMES
+        .DEFER_AUTHORITATIVE_VISIBILITY,
+    nextRequiredAction:
+      OPERATION_WORKFLOW_PROGRESS_OUTCOMES
+        .DEFER_AUTHORITATIVE_VISIBILITY,
+    effectCommand:
+      OPERATION_WORKFLOW_EFFECT_COMMAND_VALUES.NO_OPERATION_EFFECT,
+    reasons: Object.freeze([
+      OPERATION_WORKFLOW_REASON_CODES.PUBLICATION_FENCE_STALE,
+    ]),
+    matches: (evidence) =>
+      OPERATION_WORKFLOW_DEFERRED_PUBLICATION_FENCE_STATES.has(
+        evidence.publicationFence.fenceState,
+      ),
+  }),
+  Object.freeze({
+    state:
+      OPERATION_WORKFLOW_PROGRESS_STATE_VALUES
+        .STALE_PROGRESS_RECONCILE_REQUIRED,
+    outcome: OPERATION_WORKFLOW_PROGRESS_OUTCOMES.RECONCILE_STALE_PROGRESS,
+    nextRequiredAction:
+      OPERATION_WORKFLOW_PROGRESS_OUTCOMES.RECONCILE_STALE_PROGRESS,
+    effectCommand:
+      OPERATION_WORKFLOW_EFFECT_COMMAND_VALUES
+        .RECONCILE_STALE_PROGRESS_COMMAND,
+    reasons: Object.freeze([
+      OPERATION_WORKFLOW_REASON_CODES.TIMEOUT_BUDGET_EXPIRED,
+      OPERATION_WORKFLOW_REASON_CODES.WORKFLOW_HISTORY_STALE,
+    ]),
+    matches: (evidence) =>
+      evidence.timeoutBudget.timeoutState ===
+        OPERATION_WORKFLOW_TIMEOUT_STATE.EXPIRED &&
+      evidence.timeoutBudget.staleProgressState ===
+        OPERATION_WORKFLOW_STALE_PROGRESS_STATE.PROVEN &&
+      evidence.workflowHistory.freshnessState ===
+        OPERATION_WORKFLOW_HISTORY_FRESHNESS_STATE.STALE &&
+      OPERATION_WORKFLOW_KNOWN_OWNER_AUTHORITY_STATES.has(
+        evidence.ownerLease.authorityState,
+      ),
+  }),
+  Object.freeze({
+    state:
+      OPERATION_WORKFLOW_PROGRESS_STATE_VALUES.SERIAL_DEPENDENCY_PENDING,
+    outcome: OPERATION_WORKFLOW_PROGRESS_OUTCOMES.WAIT_FOR_SERIAL_OPERATION,
+    nextRequiredAction:
+      OPERATION_WORKFLOW_PROGRESS_OUTCOMES.WAIT_FOR_SERIAL_OPERATION,
+    effectCommand:
+      OPERATION_WORKFLOW_EFFECT_COMMAND_VALUES.NO_OPERATION_EFFECT,
+    reasons: Object.freeze([
+      OPERATION_WORKFLOW_REASON_CODES.SERIAL_DEPENDENCY_PENDING,
+    ]),
+    matches: (evidence) =>
+      evidence.serialDependency.dependencyState ===
+        OPERATION_WORKFLOW_SERIAL_DEPENDENCY_STATE.PENDING,
+  }),
+  Object.freeze({
+    state:
+      OPERATION_WORKFLOW_PROGRESS_STATE_VALUES.LOCAL_OWNER_DISPATCH_READY,
+    outcome: OPERATION_WORKFLOW_PROGRESS_OUTCOMES.DISPATCH_LOCAL_OWNER,
+    nextRequiredAction:
+      OPERATION_WORKFLOW_PROGRESS_OUTCOMES.DISPATCH_LOCAL_OWNER,
+    effectCommand:
+      OPERATION_WORKFLOW_EFFECT_COMMAND_VALUES
+        .DISPATCH_LOCAL_OWNER_COMMAND,
+    reasons: Object.freeze([
+      OPERATION_WORKFLOW_REASON_CODES.LOCAL_OWNER_AUTHORITATIVE,
+      OPERATION_WORKFLOW_REASON_CODES.DISPATCH_NOT_OBSERVED,
+    ]),
+    matches: (evidence) =>
+      evidence.ownerLease.authorityState ===
+        OPERATION_WORKFLOW_OWNER_AUTHORITY_STATE.LOCAL_AUTHORITATIVE &&
+      evidence.durableOperation.dispatchState ===
+        OPERATION_WORKFLOW_DISPATCH_STATE.NOT_OBSERVED &&
+      evidence.workflowHistory.commandState ===
+        OPERATION_WORKFLOW_COMMAND_STATE.IDLE &&
+      evidence.dispatchObservation.commandState ===
+        OPERATION_WORKFLOW_COMMAND_STATE.IDLE &&
+      evidence.serialDependency.dependencyState ===
+        OPERATION_WORKFLOW_SERIAL_DEPENDENCY_STATE.CLEAR,
+  }),
+  Object.freeze({
+    state:
+      OPERATION_WORKFLOW_PROGRESS_STATE_VALUES.REMOTE_OWNER_WAKE_REQUIRED,
+    outcome: OPERATION_WORKFLOW_PROGRESS_OUTCOMES.WAKE_REMOTE_OWNER,
+    nextRequiredAction:
+      OPERATION_WORKFLOW_PROGRESS_OUTCOMES.WAKE_REMOTE_OWNER,
+    effectCommand:
+      OPERATION_WORKFLOW_EFFECT_COMMAND_VALUES.WAKE_REMOTE_OWNER_COMMAND,
+    reasons: Object.freeze([
+      OPERATION_WORKFLOW_REASON_CODES.REMOTE_OWNER_AUTHORITATIVE,
+      OPERATION_WORKFLOW_REASON_CODES.WAKE_REQUIRED,
+    ]),
+    matches: (evidence) =>
+      evidence.ownerLease.authorityState ===
+        OPERATION_WORKFLOW_OWNER_AUTHORITY_STATE.REMOTE_AUTHORITATIVE &&
+      evidence.dispatchObservation.commandState ===
+        OPERATION_WORKFLOW_COMMAND_STATE.IDLE &&
+      evidence.dispatchObservation.wakeState ===
+        OPERATION_WORKFLOW_WAKE_STATE.REQUIRED,
+  }),
+  Object.freeze({
+    state:
+      OPERATION_WORKFLOW_PROGRESS_STATE_VALUES
+        .EXISTING_OPERATION_ADVANCEMENT_READY,
+    outcome:
+      OPERATION_WORKFLOW_PROGRESS_OUTCOMES.ADVANCE_EXISTING_OPERATION,
+    nextRequiredAction:
+      OPERATION_WORKFLOW_PROGRESS_OUTCOMES.ADVANCE_EXISTING_OPERATION,
+    effectCommand:
+      OPERATION_WORKFLOW_EFFECT_COMMAND_VALUES
+        .ADVANCE_EXISTING_OPERATION_COMMAND,
+    reasons: Object.freeze([
+      OPERATION_WORKFLOW_REASON_CODES.WORKFLOW_TRANSITION_AVAILABLE,
+    ]),
+    matches: (evidence) =>
+      evidence.workflowHistory.transitionState ===
+        OPERATION_WORKFLOW_TRANSITION_STATE.AVAILABLE &&
+      evidence.workflowHistory.commandState ===
+        OPERATION_WORKFLOW_COMMAND_STATE.IDLE &&
+      OPERATION_WORKFLOW_KNOWN_OWNER_AUTHORITY_STATES.has(
+        evidence.ownerLease.authorityState,
+      ),
+  }),
+  Object.freeze({
+    state:
+      OPERATION_WORKFLOW_PROGRESS_STATE_VALUES.OWNER_PROGRESS_WAIT_REQUIRED,
+    outcome: OPERATION_WORKFLOW_PROGRESS_OUTCOMES.WAIT_FOR_OWNER_PROGRESS,
+    nextRequiredAction:
+      OPERATION_WORKFLOW_PROGRESS_OUTCOMES.WAIT_FOR_OWNER_PROGRESS,
+    effectCommand:
+      OPERATION_WORKFLOW_EFFECT_COMMAND_VALUES.NO_OPERATION_EFFECT,
+    reasons: Object.freeze([
+      OPERATION_WORKFLOW_REASON_CODES.OWNER_PROGRESS_IN_FLIGHT,
+    ]),
+    matches: () => true,
+  }),
+]);
+
+function buildOperationWorkflowOutcome(tableEntry, evidence) {
+  return Object.freeze({
+    owner: OPERATION_WORKFLOW_OWNER,
+    boundary: OPERATION_WORKFLOW_PROGRESS_DECISION_KERNEL,
+    state: tableEntry.state,
+    outcome: tableEntry.outcome,
+    nextRequiredAction: tableEntry.nextRequiredAction,
+    effectCommand: tableEntry.effectCommand,
+    reasons: Object.freeze([...tableEntry.reasons]),
+    correlationKey: evidence.correlationKey,
+    sourceRevision: evidence.sourceRevision,
+  });
+}
+
+function decideOperationWorkflowProgress(rawEvidence) {
+  const evidence = normalizeOperationWorkflowEvidence(rawEvidence);
+  const tableEntry = OPERATION_WORKFLOW_PROGRESS_DECISION_TABLE.find((entry) =>
+    entry.matches(evidence),
+  );
+  return buildOperationWorkflowOutcome(tableEntry, evidence);
+}
+
+export {
+  OPERATION_WORKFLOW_PROGRESS_DECISION_TABLE,
+  OPERATION_WORKFLOW_PROGRESS_OUTCOMES,
+  OPERATION_WORKFLOW_REASON_CODES,
+  decideOperationWorkflowProgress,
+};
