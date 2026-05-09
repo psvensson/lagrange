@@ -223,6 +223,12 @@ Reasons: priority_recovery_progress_blocked, priority_recovery_event_driven_wait
 Next explain command: npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot.report.json --explain priority_recovery_partition_progress
 ```
 
+## Commit And Push Ledger
+
+- Focused package commit: `6cdbbcc2`
+- Pushed to: `origin/codex/pending-ack-eligibility-filter`
+- Commit contains only package-owned files/package-status/allowed sprint handoff: `yes`
+
 ## Done When
 
 1. Active-gate snapshot coverage has one owner-bound decision path.
