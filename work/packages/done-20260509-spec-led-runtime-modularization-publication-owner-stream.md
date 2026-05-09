@@ -234,3 +234,9 @@ Validation notes:
       Agent Newton (`019e0bdd-d124-7db3-ae0e-f470ec1661b3`) fixed `work/packages/done-20260509-spec-led-runtime-modularization-placement-owner-kernel.md`.
 - [x] Implementation subagent recorded:
       Agent Copernicus (`019e0be4-5e40-7623-bc3c-db9341a4fd4b`) implemented `work/packages/done-20260509-spec-led-runtime-modularization-publication-owner-stream.md`.
+
+## Commit And Push Ledger
+
+- Focused package commit: `0f15da41`
+- Pushed to: `origin/codex/pending-ack-eligibility-filter`
+- Commit contains only package-owned files/package-status/allowed sprint handoff: `yes`
