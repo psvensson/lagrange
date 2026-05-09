@@ -7,6 +7,7 @@ import {
   PRIORITY_RECOVERY_PROGRESS_OWNER,
   PRIORITY_RECOVERY_SEMANTIC_STATE,
   PRIORITY_RECOVERY_WAIT_MODE,
+  PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE,
 } from '../../../src/control-plane/priority-recovery-diagnostics-constants.js';
 
 const ZERO = 0;
@@ -60,6 +61,19 @@ const PRIORITY_RECOVERY_DOMINANT_WITNESS_CLASS = Object.freeze({
   SUPPORTING_WORKFLOW_SERIAL_WAIT_DEFERRAL:
     'supporting_workflow_serial_wait_deferral',
 });
+const PRIORITY_RECOVERY_WITNESS_SUPERSESSION_DECISION = Object.freeze({
+  KEEP_EXISTING: 'keep_existing_witness',
+  KEEP_NEXT: 'keep_next_witness',
+  COMPARE_FRESHNESS: 'compare_freshness',
+});
+const PRIORITY_RECOVERY_WORKFLOW_PROGRESS_SUPERSEDING_PHASES = Object.freeze(
+  new Set([
+    PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.TARGET_CREATION,
+    PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.TARGET_SYNC,
+    PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.SOURCE_REMOVAL,
+    PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.TERMINAL,
+  ]),
+);
 const PRIORITY_RECOVERY_DOMINANT_WITNESS_PAIR_RULES = Object.freeze([
   Object.freeze({
     leftClassId:
@@ -152,7 +166,27 @@ const PRIORITY_RECOVERY_DOMINANT_WITNESS_RULES = Object.freeze([
       priorityRecoveryDominantWitnessEvidenceHasBlockerReason(
         evidence,
         PRIORITY_RECOVERY_BLOCKER_REASON.SERIAL_OPERATION_WAIT,
-      ),
+    ),
+  }),
+]);
+const PRIORITY_RECOVERY_WITNESS_SUPERSESSION_TABLE = Object.freeze([
+  Object.freeze({
+    decision:
+      PRIORITY_RECOVERY_WITNESS_SUPERSESSION_DECISION.KEEP_EXISTING,
+    matches: (evidence) =>
+      evidence.existingWorkflowProgressSupersedesDispatchRetry === true &&
+      evidence.nextDispatchRetryLog === true,
+  }),
+  Object.freeze({
+    decision: PRIORITY_RECOVERY_WITNESS_SUPERSESSION_DECISION.KEEP_NEXT,
+    matches: (evidence) =>
+      evidence.existingDispatchRetryLog === true &&
+      evidence.nextWorkflowProgressSupersedesDispatchRetry === true,
+  }),
+  Object.freeze({
+    decision:
+      PRIORITY_RECOVERY_WITNESS_SUPERSESSION_DECISION.COMPARE_FRESHNESS,
+    matches: () => true,
   }),
 ]);
 
@@ -801,23 +835,10 @@ function resolvePriorityRecoveryWitnessFreshnessAtMs(witness) {
   return normalizeNonNegativeInteger(witness?.snapshotCapturedAt);
 }
 
-function selectFreshestPriorityRecoveryWitness(existingWitness, nextWitness) {
-  if (
-    isPriorityRecoveryOperationWorkflowProgressAdvancementWitness(
-      existingWitness,
-    ) === true &&
-    isPriorityRecoveryDispatchRetryLogWitness(nextWitness) === true
-  ) {
-    return existingWitness;
-  }
-  if (
-    isPriorityRecoveryDispatchRetryLogWitness(existingWitness) === true &&
-    isPriorityRecoveryOperationWorkflowProgressAdvancementWitness(
-      nextWitness,
-    ) === true
-  ) {
-    return nextWitness;
-  }
+function selectPriorityRecoveryWitnessByFreshness(
+  existingWitness,
+  nextWitness,
+) {
   const existingFreshnessAtMs =
     resolvePriorityRecoveryWitnessFreshnessAtMs(existingWitness);
   const nextFreshnessAtMs = resolvePriorityRecoveryWitnessFreshnessAtMs(
@@ -834,6 +855,66 @@ function selectFreshestPriorityRecoveryWitness(existingWitness, nextWitness) {
   return existingWitness;
 }
 
+function buildPriorityRecoveryWitnessSupersessionEvidence(
+  existingWitness,
+  nextWitness,
+) {
+  return Object.freeze({
+    existingDispatchRetryLog:
+      isPriorityRecoveryDispatchRetryLogWitness(existingWitness),
+    nextDispatchRetryLog:
+      isPriorityRecoveryDispatchRetryLogWitness(nextWitness),
+    existingWorkflowProgressSupersedesDispatchRetry:
+      isPriorityRecoveryOperationWorkflowProgressSupersessionWitness(
+        existingWitness,
+      ),
+    nextWorkflowProgressSupersedesDispatchRetry:
+      isPriorityRecoveryOperationWorkflowProgressSupersessionWitness(
+        nextWitness,
+      ),
+  });
+}
+
+function resolvePriorityRecoveryWitnessSupersessionDecision(evidence) {
+  return PRIORITY_RECOVERY_WITNESS_SUPERSESSION_TABLE.find((entry) =>
+    entry.matches(evidence),
+  ).decision;
+}
+
+function selectPriorityRecoveryWitnessBySupersessionDecision(
+  decision,
+  existingWitness,
+  nextWitness,
+) {
+  if (
+    decision ===
+    PRIORITY_RECOVERY_WITNESS_SUPERSESSION_DECISION.KEEP_EXISTING
+  ) {
+    return existingWitness;
+  }
+  if (
+    decision === PRIORITY_RECOVERY_WITNESS_SUPERSESSION_DECISION.KEEP_NEXT
+  ) {
+    return nextWitness;
+  }
+  return selectPriorityRecoveryWitnessByFreshness(
+    existingWitness,
+    nextWitness,
+  );
+}
+
+function selectFreshestPriorityRecoveryWitness(existingWitness, nextWitness) {
+  const evidence = buildPriorityRecoveryWitnessSupersessionEvidence(
+    existingWitness,
+    nextWitness,
+  );
+  return selectPriorityRecoveryWitnessBySupersessionDecision(
+    resolvePriorityRecoveryWitnessSupersessionDecision(evidence),
+    existingWitness,
+    nextWitness,
+  );
+}
+
 function isPriorityRecoveryDispatchRetryLogWitness(witness) {
   return (
     normalizeDistinctStringArray(witness?.progressEvidenceSourceIds)
@@ -848,8 +929,8 @@ function isPriorityRecoveryDispatchRetryLogWitness(witness) {
   );
 }
 
-function isPriorityRecoveryOperationWorkflowProgressAdvancementWitness(witness) {
-  return (
+function isPriorityRecoveryOperationWorkflowProgressSupersessionWitness(witness) {
+  const workflowProgressOwner = (
     normalizeStringField(witness?.currentOwner) ===
       PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER &&
     normalizeStringField(witness?.actuationOwner) ===
@@ -857,9 +938,17 @@ function isPriorityRecoveryOperationWorkflowProgressAdvancementWitness(witness) 
     normalizeStringField(witness?.blockingBoundary) ===
       PRIORITY_RECOVERY_BLOCKING_BOUNDARY.WORKFLOW_PROGRESS &&
     normalizeStringField(witness?.waitMode) ===
-      PRIORITY_RECOVERY_WAIT_MODE.EVENT_DRIVEN &&
-    normalizeStringField(witness?.nextRequiredAction) ===
-      PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.ADVANCE_EXISTING_OPERATION
+      PRIORITY_RECOVERY_WAIT_MODE.EVENT_DRIVEN
+  );
+  return (
+    workflowProgressOwner === true &&
+    (
+      normalizeStringField(witness?.nextRequiredAction) ===
+        PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.ADVANCE_EXISTING_OPERATION ||
+      PRIORITY_RECOVERY_WORKFLOW_PROGRESS_SUPERSEDING_PHASES.has(
+        normalizeStringField(witness?.workflowProgressPhaseId),
+      )
+    )
   );
 }
 

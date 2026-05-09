@@ -32,6 +32,8 @@ const SAME_OPERATION_REENTRY_TEST_NAME =
   'same-operation owner re-entry supersedes retry handoff progress';
 const SAME_OPERATION_DIRECT_PROGRESS_TEST_NAME =
   'same-operation direct workflow progress blocker supersedes retry handoff';
+const SAME_OPERATION_TARGET_CREATION_TEST_NAME =
+  'same-operation target-creation progress supersedes stale retry handoff';
 const SERIAL_WAIT_METADATA_TEST_NAME =
   'serial wait operation metadata survives progress summary normalization';
 const SERIAL_WAIT_SOURCE_BLOCKER_TEST_NAME =
@@ -66,6 +68,8 @@ const SERIAL_WAIT_SUPPORTING_CARRIER_PROGRESS_AT_MS =
   SAMPLE_CAPTURED_AT_MS - 1000;
 const STALE_WORKFLOW_TIMEOUT_PROGRESS_AT_MS = 1777922869705;
 const RETRY_HANDOFF_PROGRESS_AT_MS = 1777922930548;
+const TARGET_CREATION_PROGRESS_AT_MS = 1777922929548;
+const TARGET_CREATION_CAPTURED_AT_MS = 1777922931548;
 const RETRY_HANDOFF_DELAY_MS = 250;
 const TERMINAL_FOLLOW_UP_SOURCE_PROGRESS_AT_MS = SAMPLE_CAPTURED_AT_MS - 3000;
 const TERMINAL_FOLLOW_UP_CARRIER_PROGRESS_AT_MS = SAMPLE_CAPTURED_AT_MS - 1000;
@@ -74,9 +78,11 @@ const EXPECTED_FRESHENED_PARTITION_COUNT = 1;
 const EXPECTED_EMPTY_OPERATION_IDS = Object.freeze([]);
 const WORKFLOW_STEP_PENDING = 'PENDING';
 const WORKFLOW_STEP_SENDING = 'SENDING';
+const WORKFLOW_STEP_CREATING = 'CREATING';
 const OPERATION_STATUS_PENDING = 'pending';
 const OPERATION_STATUS_RETRY_DEFERRED = 'retry_deferred';
 const OPERATION_STATUS_ACTIVE = 'active';
+const OPERATION_STATUS_CREATING = 'creating';
 const OPERATION_STATUS_REMOVED = 'removed';
 const PROGRESS_EVIDENCE_SOURCE_OPERATION_DISPATCH =
   'operation_dispatch_retry_log';
@@ -315,6 +321,28 @@ const DIRECT_WORKFLOW_PROGRESS_BLOCKER_WITNESS = Object.freeze({
   lastProgressAtMs: STALE_WORKFLOW_TIMEOUT_PROGRESS_AT_MS,
   latestOperationWorkflowStep: WORKFLOW_STEP_SENDING,
   latestOperationStatus: OPERATION_STATUS_PENDING,
+});
+const TARGET_CREATION_WORKFLOW_PROGRESS_WITNESS = Object.freeze({
+  partitionId: STALE_WORKFLOW_TIMEOUT_PARTITION_ID,
+  semanticStateId: PRIORITY_RECOVERY_SEMANTIC_STATE.RECOVERING_IN_FLIGHT,
+  progressContractState: OWNER_CONTRACT_STATE.PENDING,
+  actuationState:
+    PRIORITY_RECOVERY_ACTUATION_STATE.DISPATCHED_WAITING_PROGRESS,
+  currentOwner: PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER,
+  actuationOwner: PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER,
+  blockingBoundary: PRIORITY_RECOVERY_BLOCKING_BOUNDARY.WORKFLOW_PROGRESS,
+  waitMode: PRIORITY_RECOVERY_WAIT_MODE.EVENT_DRIVEN,
+  nextRequiredAction:
+    PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.WAIT_FOR_OPERATION_PROGRESS,
+  workflowProgressPhaseId:
+    PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.TARGET_CREATION,
+  operationIds: Object.freeze([STALE_WORKFLOW_TIMEOUT_OPERATION_ID]),
+  witnessIds: Object.freeze([STALE_WORKFLOW_TIMEOUT_OPERATION_ID]),
+  correlationKey: STALE_WORKFLOW_TIMEOUT_CORRELATION_KEY,
+  lastProgressAtMs: TARGET_CREATION_PROGRESS_AT_MS,
+  snapshotCapturedAt: TARGET_CREATION_CAPTURED_AT_MS,
+  latestOperationWorkflowStep: WORKFLOW_STEP_CREATING,
+  latestOperationStatus: OPERATION_STATUS_CREATING,
 });
 const TERMINAL_FOLLOW_UP_SOURCE_BLOCKER_WITNESS = Object.freeze({
   partitionId: TERMINAL_FOLLOW_UP_SOURCE_PARTITION_ID,
@@ -713,5 +741,51 @@ test(SAME_OPERATION_DIRECT_PROGRESS_TEST_NAME, () => {
   assert.equal(
     progressSummary.dominantWitness.latestOperationStatus,
     OPERATION_STATUS_PENDING,
+  );
+});
+
+test(SAME_OPERATION_TARGET_CREATION_TEST_NAME, () => {
+  const progressSummary = buildPriorityRecoveryProgressSummary({
+    priorityRecoveryPartitionWitnesses: Object.freeze([
+      LATER_RETRY_HANDOFF_WITNESS,
+      TARGET_CREATION_WORKFLOW_PROGRESS_WITNESS,
+    ]),
+  });
+
+  assert.equal(
+    progressSummary.partitionCount,
+    EXPECTED_FRESHENED_PARTITION_COUNT,
+  );
+  assert.deepEqual(progressSummary.blockingBoundaryCounts, {
+    [PRIORITY_RECOVERY_BLOCKING_BOUNDARY.WORKFLOW_PROGRESS]:
+      EXPECTED_FRESHENED_PARTITION_COUNT,
+  });
+  assert.deepEqual(progressSummary.waitModeCounts, {
+    [PRIORITY_RECOVERY_WAIT_MODE.EVENT_DRIVEN]:
+      EXPECTED_FRESHENED_PARTITION_COUNT,
+  });
+  assert.deepEqual(progressSummary.nextRequiredActionCounts, {
+    [PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.WAIT_FOR_OPERATION_PROGRESS]:
+      EXPECTED_FRESHENED_PARTITION_COUNT,
+  });
+  assert.equal(
+    progressSummary.dominantWitness.blockingBoundary,
+    PRIORITY_RECOVERY_BLOCKING_BOUNDARY.WORKFLOW_PROGRESS,
+  );
+  assert.equal(
+    progressSummary.dominantWitness.waitMode,
+    PRIORITY_RECOVERY_WAIT_MODE.EVENT_DRIVEN,
+  );
+  assert.equal(
+    progressSummary.dominantWitness.nextRequiredAction,
+    PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.WAIT_FOR_OPERATION_PROGRESS,
+  );
+  assert.equal(
+    progressSummary.dominantWitness.latestOperationWorkflowStep,
+    WORKFLOW_STEP_CREATING,
+  );
+  assert.equal(
+    progressSummary.dominantWitness.latestOperationStatus,
+    OPERATION_STATUS_CREATING,
   );
 });

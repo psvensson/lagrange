@@ -4,35 +4,35 @@
 
 Sprint: `work/sprints/active-2026-q2-spec-led-runtime-modularization.md`
 
-Package: `work/packages/active-20260509-spec-led-runtime-modularization-operation-workflow-rebalancer-handoff-retry-scheduled-frontier.md`
+Package: `work/packages/active-20260509-spec-led-runtime-modularization-operation-workflow-progress-dispatch-pending-frontier.md`
 
 Scenario: `spec-led-runtime-modularization`
 
-Artifact: `test-output/reports/rolling-restart-spec-led-runtime-modularization-operation-scheduling-event-driven.report.json`
+Artifact: `test-output/reports/rolling-restart-spec-led-runtime-modularization-rebalancer-handoff-retry-scheduled.report.json`
 
-Playback: `test-output/reports/.playback/rolling-restart-spec-led-runtime-modularization-operation-scheduling-event-driven/rolling-restart/`
+Playback: `test-output/reports/.playback/rolling-restart-spec-led-runtime-modularization-rebalancer-handoff-retry-scheduled/rolling-restart/`
 
 ## Boundary
 
 Owner: `operation_workflow_owner`
 
-Boundary: `rebalancer_handoff`
+Boundary: `workflow_progress`
 
 Dominant reason: `priority_recovery_progress_blocked`
 
-Current state: The operation scheduling event-driven package moved the representative proof past rebalancer_leader / operation_scheduling. The fresh representative report now fails first on priority_recovery_partition_progress with operation_workflow_owner / rebalancer_handoff, dominant source priority_recovery_rebalancer_handoff_retry_scheduled, priorityRecoveryInvariants passed, and transport backpressure deferring remote handoff progress.
+Current state: The rebalancer handoff retry-scheduled package removed the stale handoff witness from the representative priority recovery summary. The fresh representative report now fails first on priority_recovery_partition_progress with operation_workflow_owner / workflow_progress, dominant source priority_recovery_workflow_progress_event_driven, priorityRecoveryInvariants passed, and recovery operations stuck in dispatch_pending or waiting-progress states without step transitions.
 
 ## Next Action
 
-Review the just-closed operation scheduling event-driven package, fix any findings, then trace why retry-scheduled rebalancer handoff remains blocked after recovery operations are created for the priority partitions.
+Review the just-closed rebalancer handoff retry-scheduled package, fix any findings, then trace why dispatch-pending priority recovery operations remain event-driven without canonical workflow progress.
 
 ## Proof Ladder
 
-1. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-operation-scheduling-event-driven.report.json --explain priority_recovery_partition_progress`
-2. `Focused operation_workflow_owner rebalancer_handoff fixture from the representative report`
-3. `Focused handoff/retry tests selected by priority_recovery_rebalancer_handoff_retry_scheduled`
-4. `Touched-file static guardrails selected by operation_workflow_owner and rebalancer handoff`
-5. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-spec-led-runtime-modularization-rebalancer-handoff-retry-scheduled.report.json --fast-local --verbose`
+1. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-rebalancer-handoff-retry-scheduled.report.json --explain priority_recovery_partition_progress`
+2. `Focused operation_workflow_owner workflow_progress fixture from the representative report`
+3. `Focused operation workflow owner dispatch-pending/no-step-transition tests selected by priority_recovery_workflow_progress_event_driven`
+4. `Touched-file static guardrails selected by operation_workflow_owner and priority recovery workflow progress`
+5. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-spec-led-runtime-modularization-workflow-progress-dispatch-pending.report.json --fast-local --verbose`
 
 ## Model Fit
 
@@ -44,19 +44,18 @@ Scope shape: `owner-boundary-contraction`
 
 Escalation triggers:
 
-1. `handoff retry evidence requires changes outside operation_workflow_owner or rebalance coordinator handoff`
-2. `focused fixture exposes operation_scheduling or workflow_progress again`
-3. `representative proof still fails on rebalancer_handoff after owner fix`
+1. `workflow progress evidence requires changes outside operation_workflow_owner or dispatch service wake/replay`
+2. `focused fixture exposes operation_scheduling, rebalancer_handoff, or workflow_timeout again`
+3. `representative proof still fails on the same dispatch_pending no-step-transition witness after owner fix`
 
 ## Touched Files
 
 1. `src/rebalancer/operation-workflow-owner*.js`
-2. `src/rebalancer/rebalance-coordinator*.js`
-3. `src/rebalancer/replica-operation-repository*.js`
-4. `src/control-plane/priority-recovery-snapshot*.js`
-5. `test/rebalancer/*handoff*.test.js`
-6. `test/rebalancer/*workflow*.test.js`
-7. `test/control-plane/priority-recovery-snapshot*.js`
-8. `test/scripts/analyze-topology-convergence.test.js`
-9. `work/model-ledger.jsonl`
-10. `work/packages/active-20260509-spec-led-runtime-modularization-operation-workflow-rebalancer-handoff-retry-scheduled-frontier.md`
+2. `src/control-plane/replica-dispatch-service*.js`
+3. `src/control-plane/priority-recovery-snapshot*.js`
+4. `test/rebalancer/*workflow*.test.js`
+5. `test/control-plane/*dispatch*.test.js`
+6. `test/control-plane/priority-recovery-snapshot*.js`
+7. `test/scripts/analyze-topology-convergence.test.js`
+8. `work/model-ledger.jsonl`
+9. `work/packages/active-20260509-spec-led-runtime-modularization-operation-workflow-progress-dispatch-pending-frontier.md`
