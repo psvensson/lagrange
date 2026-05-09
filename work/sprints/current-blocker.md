@@ -20,11 +20,11 @@ Boundary: `workflow_progress`
 
 Dominant reason: `priority_recovery_workflow_progress_transition_deferred`
 
-Current state: The workflow-timeout stale SENDING/pending fix moved control_plane_publications-p1 off workflow_timeout and the representative rolling-restart rerun migrated to operation_workflow_owner / workflow_progress. The current dominant witness is sql_write_operations-p1 with semanticStateId needs_operation, progress class priority_operation_serial_wait, actuationState transition_deferred, waitMode event_driven, nextRequiredAction wait_for_operation_progress, operationId 9fef6a49-1f1d-413a-b257-37a4c69293c8, and serialWaitOperationIds [1a3e89d1-bae0-4a19-9d1e-f11b3a425a9b] on serialWaitPartitionIds [control_plane_publications-p1].
+Current state: The focused workflow-timeout stale SENDING/pending fix was committed and pushed as 17baca86. It moved control_plane_publications-p1 off workflow_timeout and the representative rolling-restart rerun migrated to operation_workflow_owner / workflow_progress. The current dominant witness is sql_write_operations-p1 with semanticStateId needs_operation, progress class priority_operation_serial_wait, actuationState transition_deferred, waitMode event_driven, nextRequiredAction wait_for_operation_progress, operationId 9fef6a49-1f1d-413a-b257-37a4c69293c8, and serialWaitOperationIds [1a3e89d1-bae0-4a19-9d1e-f11b3a425a9b] on serialWaitPartitionIds [control_plane_publications-p1].
 
 ## Next Action
 
-Commit and push the focused workflow-timeout slice, then open the next package on operation_workflow_owner / workflow_progress for the sql_write_operations-p1 serial-wait blocker behind control_plane_publications-p1 operation 1a3e89d1-bae0-4a19-9d1e-f11b3a425a9b.
+Open the next package on operation_workflow_owner / workflow_progress for the sql_write_operations-p1 serial-wait blocker behind control_plane_publications-p1 operation 1a3e89d1-bae0-4a19-9d1e-f11b3a425a9b.
 
 ## Proof Ladder
 
