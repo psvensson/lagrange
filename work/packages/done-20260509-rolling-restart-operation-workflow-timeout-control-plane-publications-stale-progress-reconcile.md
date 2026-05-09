@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-09",
   "scenario": "rolling-restart",
   "artifact": "test-output/reports/rolling-restart-current-release-gate-after-workflow-timeout-stale-progress-fix.report.json",
@@ -28,12 +28,14 @@
     "test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js",
     "work/packages/done-20260509-rolling-restart-operation-workflow-progress-sql-write-operations-dispatch-pending-reentry.md",
     "work/packages/done-20260508-rolling-restart-operation-scheduling-sql-transaction-participants-needs-operation-reentry.md",
-    "work/packages/active-20260509-rolling-restart-operation-workflow-timeout-control-plane-publications-stale-progress-reconcile.md",
+    "work/packages/done-20260509-rolling-restart-operation-workflow-timeout-control-plane-publications-stale-progress-reconcile.md",
     "work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md",
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md"
   ],
-  "predecessor": "work/packages/done-20260509-rolling-restart-operation-workflow-progress-sql-write-operations-dispatch-pending-reentry.md"
+  "predecessor": "work/packages/done-20260509-rolling-restart-operation-workflow-progress-sql-write-operations-dispatch-pending-reentry.md",
+  "closed": "2026-05-09",
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -149,7 +151,7 @@ Closure:
       `work/packages/done-20260509-rolling-restart-operation-workflow-progress-sql-write-operations-dispatch-pending-reentry.md`.
 - [x] Implementation subagent recorded:
       Agent Kant (`019e0a3c-6f1e-7bf0-8113-5d1aa116b3c6`) implemented
-      `work/packages/active-20260509-rolling-restart-operation-workflow-timeout-control-plane-publications-stale-progress-reconcile.md`.
+      `work/packages/done-20260509-rolling-restart-operation-workflow-timeout-control-plane-publications-stale-progress-reconcile.md`.
 
 ## Validation
 

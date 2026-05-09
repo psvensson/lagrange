@@ -33,7 +33,7 @@
   "predecessor": "work/packages/done-20260508-rolling-restart-operation-scheduling-sql-transaction-participants-needs-operation-reentry.md",
   "closed": "2026-05-09",
   "commitAndPushLedgerRequired": true,
-  "successor": "work/packages/active-20260509-rolling-restart-operation-workflow-timeout-control-plane-publications-stale-progress-reconcile.md"
+  "successor": "work/packages/done-20260509-rolling-restart-operation-workflow-timeout-control-plane-publications-stale-progress-reconcile.md"
 }
 -->
 

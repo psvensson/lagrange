@@ -1,5 +1,10 @@
 # Phase 0.1 Rolling Restart Release Gate Closure Sprint
 
+Status: parked todo. This sprint was the active release-gate closure track
+before `work/sprints/active-2026-q2-spec-led-runtime-modularization.md` was
+activated by human direction on May 9, 2026. Its latest closed package and
+representative evidence remain predecessor proof for the new sprint.
+
 ## Goal
 
 Get to the `0.1` release by closing the representative `rolling-restart`
@@ -37,7 +42,7 @@ The matching playback is:
 
 Active package:
 
-1. [Rolling Restart Operation Workflow Timeout Control Plane Publications Stale Progress Reconcile](../packages/active-20260509-rolling-restart-operation-workflow-timeout-control-plane-publications-stale-progress-reconcile.md)
+1. [Rolling Restart Operation Workflow Timeout Control Plane Publications Stale Progress Reconcile](../packages/done-20260509-rolling-restart-operation-workflow-timeout-control-plane-publications-stale-progress-reconcile.md)
 
 Latest representative evidence:
 
