@@ -22,8 +22,12 @@ import {
   PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE,
   buildPublicationRecoveryGateSnapshot,
 } from '../../src/control-plane/publication-recovery-gate.js';
+import {
+  buildPublicationOwnerStreamState,
+} from '../../src/control-plane/publication-owner-state.js';
 
 const TEST_PUBLICATION_EPOCH = 7;
+const TEST_CONFLICTING_PUBLICATION_EPOCH = 3;
 const TEST_PUBLICATION_DEBT_COUNT = 1;
 const TEST_EMPTY_NODE_IDS = Object.freeze([]);
 const TEST_NODE_ID = Object.freeze({
@@ -343,6 +347,55 @@ test('buildPublicationRecoveryGateSnapshot keeps publication pending when publis
     );
     t.equal(gate.missingPublishedCount, 1);
     t.same(gate.missingPublishedNodeIds, [TEST_NODE_ID.SECOND]);
+    t.same(gate.reasonCodes, [
+      CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PUBLICATION_EPOCH_PENDING,
+    ]);
+    t.end();
+  });
+
+test('buildPublicationRecoveryGateSnapshot uses supplied owner stream as authority',
+  (t) => {
+    const publicationOwnerStream = buildPublicationOwnerStreamState({
+      publicationRevision: TEST_PUBLICATION_EPOCH,
+      desiredPublicationRevision: TEST_PUBLICATION_EPOCH,
+      committedPublicationRevision: TEST_PUBLICATION_EPOCH,
+      publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.ACK_PENDING,
+      requiredAckNodeIds: [TEST_NODE_ID.FIRST, TEST_NODE_ID.SECOND],
+      acknowledgedNodeIds: [TEST_NODE_ID.FIRST],
+    });
+
+    const gate = buildPublicationRecoveryGateSnapshot({
+      publicationOwnerStream,
+      publicationEpoch: TEST_CONFLICTING_PUBLICATION_EPOCH,
+      publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+      recoveryProtocolState: RECOVERY_PROTOCOL_STATE.STEADY_PUBLISHED,
+      requiredAckNodeIds: TEST_EMPTY_NODE_IDS,
+      acknowledgedNodeIds: TEST_EMPTY_NODE_IDS,
+      pendingAckCount: 0,
+      priorityPartitionSummary: TEST_PRIORITY_PARTITION_SUMMARY.SATISFIED,
+    });
+
+    t.equal(gate.publicationOwnerStream, publicationOwnerStream);
+    t.equal(gate.state, PUBLICATION_RECOVERY_GATE_STATE.ACK_PENDING);
+    t.equal(gate.publicationEpoch, TEST_PUBLICATION_EPOCH);
+    t.equal(
+      gate.publicationStatus,
+      CONTROL_PLANE_PUBLICATION_STATUS.ACK_PENDING,
+    );
+    t.equal(
+      gate.streamOutcome,
+      PUBLICATION_OWNER_STREAM_OUTCOME.WAITING_FOR_ACK,
+    );
+    t.equal(gate.ackState, PUBLICATION_OWNER_ACK_STATE.WAITING_FOR_ACK);
+    t.same(gate.requiredAckNodeIds, [
+      TEST_NODE_ID.FIRST,
+      TEST_NODE_ID.SECOND,
+    ]);
+    t.same(gate.acknowledgedNodeIds, [TEST_NODE_ID.FIRST]);
+    t.same(gate.pendingAckNodeIds, [TEST_NODE_ID.SECOND]);
+    t.equal(gate.pendingAckCount, TEST_PUBLICATION_DEBT_COUNT);
+    t.equal(gate.publicationPending, true);
+    t.equal(gate.ackPending, true);
     t.same(gate.reasonCodes, [
       CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PUBLICATION_EPOCH_PENDING,
     ]);

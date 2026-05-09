@@ -30,7 +30,6 @@
     "src/control-plane/publication-recovery-gate.js",
     "src/control-plane/publication-recovery-evidence.js",
     "test/control-plane/control-plane-publication-merge.test.js",
-    "test/control-plane/membership-publication-coordinator.test.js",
     "test/control-plane/publication-owner-stream.test.js",
     "test/control-plane/publication-recovery-evidence.test.js",
     "test/control-plane/publication-recovery-gate.test.js",
@@ -219,6 +218,26 @@ Validation notes:
 15. Parent rerun of `npm run work:dirty-scope -- --package work/packages/done-20260509-spec-led-runtime-modularization-publication-owner-stream.md`
     reported 14 package-owned dirty entries, 2 tracker-generated entries, and
     6 unrelated dirty entries.
+16. FIXED: Franklin review finding that cross-revision publication merges could
+    select a stale lower epoch when its timestamp was newer. Cross-revision
+    row selection now uses highest `publicationEpoch`, with timestamp tie-breaks
+    only within the same revision.
+17. FIXED: Franklin review finding that recovery gates could reinterpret raw
+    compatibility fields over a supplied `publicationOwnerStream`. A valid
+    supplied stream is now authoritative for gate state and returned stream
+    fields, with compatibility fields derived from the stream.
+18. FIXED: Franklin review finding that package metadata listed
+    `test/control-plane/membership-publication-coordinator.test.js` as touched
+    even though it was validation-only.
+19. PASS: `npx tap test/control-plane/control-plane-publication-merge.test.js test/control-plane/publication-recovery-gate.test.js`
+    - 96 assertions.
+20. PASS: `npx tap test/control-plane/publication-owner-stream.test.js test/control-plane/control-plane-publication-merge.test.js test/control-plane/publication-recovery-gate.test.js test/control-plane/publication-recovery-evidence.test.js`
+    - 219 assertions.
+21. PASS: post-repair literal, decision-boundary, runtime-grammar, ESLint, and
+    `git diff --check` guardrails for the touched repair files.
+22. PASS: `npm run work:dirty-scope -- --package work/packages/done-20260509-spec-led-runtime-modularization-publication-owner-stream.md`
+    - 5 package-owned dirty entries, 2 tracker-generated entries, and 11
+      unrelated dirty entries.
 
 ## Done When
 

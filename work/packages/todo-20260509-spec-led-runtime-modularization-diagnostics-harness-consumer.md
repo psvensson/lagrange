@@ -27,7 +27,7 @@
     "scripts/analyze-topology-convergence.js",
     "work/packages/todo-20260509-spec-led-runtime-modularization-diagnostics-harness-consumer.md"
   ],
-  "predecessor": "work/packages/todo-20260509-spec-led-runtime-modularization-projection-readiness-contract.md"
+  "predecessor": "work/packages/active-20260509-spec-led-runtime-modularization-projection-readiness-contract.md"
 }
 -->
 

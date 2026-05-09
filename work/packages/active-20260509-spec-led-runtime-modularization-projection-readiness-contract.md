@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "todo",
+  "status": "active",
   "opened": "2026-05-09",
   "scenario": "spec-led-runtime-modularization",
   "artifact": "none",
@@ -27,7 +27,7 @@
     "src/control-plane/projection-readiness-*.js",
     "test/control-plane/*readiness*.test.js",
     "test/admin/*readiness*.test.js",
-    "work/packages/todo-20260509-spec-led-runtime-modularization-projection-readiness-contract.md"
+    "work/packages/active-20260509-spec-led-runtime-modularization-projection-readiness-contract.md"
   ],
   "predecessor": "work/packages/done-20260509-spec-led-runtime-modularization-publication-owner-stream.md"
 }
@@ -137,3 +137,10 @@ control-plane readiness tests, admin readiness tests, and static guardrails.
 1. Readiness lanes are explicit and tested.
 2. Admin and harness-facing readiness surfaces consume readiness outcomes.
 3. Old cache-derived readiness shortcuts are removed or guarded.
+
+## Subagent Sequencing Ledger
+
+- [x] Review subagent recorded:
+      Agent Franklin (`019e0bf6-6828-72c0-82f8-d8ee72803a97`) reviewed `work/packages/done-20260509-spec-led-runtime-modularization-publication-owner-stream.md`; result `fixes-required`.
+- [x] Fix subagent recorded or explicitly not needed:
+      Agent Sagan (`019e0bfb-ba69-7312-ba2f-0e0d199e6724`) fixed `work/packages/done-20260509-spec-led-runtime-modularization-publication-owner-stream.md`.

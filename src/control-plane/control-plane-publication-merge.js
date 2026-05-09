@@ -99,7 +99,14 @@ function doesPublicationNodeListCover(actual = [], expected = []) {
   );
 }
 
-function selectLatestRow(primaryRow, secondaryRow) {
+function getPublicationRowEpoch(row) {
+  return normalizePublicationPositiveInteger(
+    row?.publication_epoch ?? row?.publicationEpoch,
+    null,
+  );
+}
+
+function selectLatestRowByTimestamp(primaryRow, secondaryRow) {
   const primaryTimestamp = getPublicationRowTimestamp(primaryRow);
   const secondaryTimestamp = getPublicationRowTimestamp(secondaryRow);
   if (
@@ -115,6 +122,24 @@ function selectLatestRow(primaryRow, secondaryRow) {
     return primaryRow || null;
   }
   return primaryTimestamp >= secondaryTimestamp ? primaryRow : secondaryRow;
+}
+
+function selectLatestRow(primaryRow, secondaryRow) {
+  const primaryEpoch = getPublicationRowEpoch(primaryRow);
+  const secondaryEpoch = getPublicationRowEpoch(secondaryRow);
+  if (Number.isFinite(primaryEpoch) && Number.isFinite(secondaryEpoch)) {
+    if (primaryEpoch !== secondaryEpoch) {
+      return primaryEpoch > secondaryEpoch ? primaryRow : secondaryRow;
+    }
+    return selectLatestRowByTimestamp(primaryRow, secondaryRow);
+  }
+  if (Number.isFinite(primaryEpoch)) {
+    return primaryRow || null;
+  }
+  if (Number.isFinite(secondaryEpoch)) {
+    return secondaryRow || null;
+  }
+  return selectLatestRowByTimestamp(primaryRow, secondaryRow);
 }
 
 function readPreferredPublicationField(

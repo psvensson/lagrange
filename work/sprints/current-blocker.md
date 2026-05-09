@@ -4,7 +4,7 @@
 
 Sprint: `work/sprints/active-2026-q2-spec-led-runtime-modularization.md`
 
-Package: `work/packages/done-20260509-spec-led-runtime-modularization-publication-owner-stream.md`
+Package: `work/packages/active-20260509-spec-led-runtime-modularization-projection-readiness-contract.md`
 
 Scenario: `spec-led-runtime-modularization`
 
@@ -14,39 +14,32 @@ Playback: `none`
 
 ## Boundary
 
-Owner: `publication_owner`
+Owner: `projection_readiness_owner`
 
-Boundary: `revisioned_publication_stream`
+Boundary: `serve_repair_internal_readiness`
 
-Dominant reason: `publication_consumers_can_still_infer_freshness_from_cache_presence`
+Dominant reason: `readiness_consumers_can_still_conflate_projection_lanes`
 
-Current state: Publication logic has improved, but consumers and recovery gates can still depend on freshness, ACK, and merge interpretations that should belong to a revisioned publication stream contract.
+Current state: Projection readiness has newer contract pieces, but consumers can still conflate internal repair readiness, serve readiness, publication freshness, and startup active-gate presentation.
 
 ## Next Action
 
-Define and implement a publication-owner stream contract with explicit revisions, ACK state, freshness fences, and recovery outcomes.
+Rewrite projection readiness as a consumer of publication streams and owner outcomes with explicit internal, repair, and serve readiness lanes.
 
 ## Proof Ladder
 
-1. `Focused publication coordinator tests`
-2. `Focused publication recovery gate tests`
-3. `Focused publication evidence merge tests`
+1. `Focused active-node projection tests`
+2. `Focused control-plane readiness service tests`
+3. `Focused admin readiness method tests`
 4. `Touched-file decision-boundary and literal guardrails`
 
 ## Touched Files
 
-1. `src/control-plane/control-plane-publication-merge.js`
-2. `src/control-plane/membership-publication-coordinator-class-stage-1.js`
-3. `src/control-plane/membership-publication-coordinator-stage-2.js`
-4. `src/control-plane/publication-owner-constants.js`
-5. `src/control-plane/publication-owner-decision.js`
-6. `src/control-plane/publication-owner-evidence.js`
-7. `src/control-plane/publication-owner-state.js`
-8. `src/control-plane/publication-recovery-gate.js`
-9. `src/control-plane/publication-recovery-evidence.js`
-10. `test/control-plane/control-plane-publication-merge.test.js`
-11. `test/control-plane/membership-publication-coordinator.test.js`
-12. `test/control-plane/publication-owner-stream.test.js`
-13. `test/control-plane/publication-recovery-evidence.test.js`
-14. `test/control-plane/publication-recovery-gate.test.js`
-15. `work/packages/done-20260509-spec-led-runtime-modularization-publication-owner-stream.md`
+1. `src/control-plane/active-node-projection.js`
+2. `src/control-plane/control-plane-readiness-service*.js`
+3. `src/control-plane/startup-authority-snapshot-owner.js`
+4. `src/admin/admin-service-discovery-readiness-methods.js`
+5. `src/control-plane/projection-readiness-*.js`
+6. `test/control-plane/*readiness*.test.js`
+7. `test/admin/*readiness*.test.js`
+8. `work/packages/active-20260509-spec-led-runtime-modularization-projection-readiness-contract.md`

@@ -79,6 +79,58 @@ test('mergeControlPlanePublicationRows trims stale published members on newer me
     );
   });
 
+test('mergeControlPlanePublicationRows selects newer revisions before timestamp tie-breaks',
+  async (t) => {
+    const merged = mergeControlPlanePublicationRows(
+      {
+        publication_id: PUBLICATION_ID_TRIM,
+        publication_kind: PUBLICATION_KIND_CLUSTER_MEMBERSHIP,
+        publication_epoch: PUBLICATION_EPOCH_ONE,
+        status: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+        published_active_node_ids: [...ACTIVE_NODE_IDS_FIVE],
+        required_ack_node_ids: [...ACTIVE_NODE_IDS_FIVE],
+        acknowledged_node_ids: [...ACTIVE_NODE_IDS_FIVE],
+        updated_at: PUBLICATION_UPDATED_AT_NEW,
+      },
+      {
+        publication_id: PUBLICATION_ID_TRIM,
+        publication_kind: PUBLICATION_KIND_CLUSTER_MEMBERSHIP,
+        publication_epoch: PUBLICATION_EPOCH_TWO,
+        status: CONTROL_PLANE_PUBLICATION_STATUS.OPEN,
+        published_active_node_ids: [...ACTIVE_NODE_IDS_THREE],
+        required_ack_node_ids: [...ACTIVE_NODE_IDS_THREE],
+        acknowledged_node_ids: [],
+        updated_at: PUBLICATION_UPDATED_AT_OLD,
+      },
+    );
+
+    t.equal(
+      merged.publication_epoch,
+      PUBLICATION_EPOCH_TWO,
+      'the higher publication revision wins even when its timestamp is older',
+    );
+    t.same(
+      merged.published_active_node_ids,
+      [...ACTIVE_NODE_IDS_THREE],
+      'a reversed timestamp must not resurrect stale published members',
+    );
+    t.same(
+      merged.required_ack_node_ids,
+      [...ACTIVE_NODE_IDS_THREE],
+      'required acknowledgements follow the highest publication revision',
+    );
+    t.same(
+      merged.acknowledged_node_ids,
+      [],
+      'older revision acknowledgements must not publish the newer revision',
+    );
+    t.equal(
+      merged.status,
+      CONTROL_PLANE_PUBLICATION_STATUS.OPEN,
+      'newer revision status is authoritative before timestamp tie-breaks',
+    );
+  });
+
 test('mergeControlPlanePublicationRows keeps acknowledgement union for the same membership revision',
   async (t) => {
     const merged = mergeControlPlanePublicationRows(
