@@ -168,10 +168,13 @@ static guardrails, and representative rolling-restart.
 
 ## Subagent Sequencing Ledger
 
-- [ ] Review subagent recorded:
-      pending-before-implementation-resumes.
-- [ ] Fix subagent recorded or explicitly not needed:
-      pending-review-result.
+- [x] Review subagent recorded:
+      Agent Lorentz (019e0dbc-fba9-70b2-a1ee-2fb865733774) reviewed
+      `work/packages/done-20260509-spec-led-runtime-modularization-operation-workflow-progress-event-driven-frontier.md`;
+      result `fixes-required`.
+- [x] Fix subagent recorded or explicitly not needed:
+      Agent Goodall (019e0dcc-13be-7241-b34e-1e27dc48d7a9) fixed
+      `work/packages/done-20260509-spec-led-runtime-modularization-operation-workflow-progress-event-driven-frontier.md`.
 - [ ] Implementation subagent recorded:
       pending-before-implementation-resumes.
 

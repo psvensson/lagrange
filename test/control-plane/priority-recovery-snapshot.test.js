@@ -865,7 +865,7 @@ function registerPriorityRecoverySnapshotSupplementalTests(context) {
 
   test(
     'normalizePriorityRecoveryDispatchPendingDecisionSnapshot records ' +
-      'event-driven owner advancement without a timeout outcome',
+      'no owner observation when owner outcome is absent',
     async (t) => {
       const snapshot = Object.freeze({
         partitionId: PRIORITY_RECOVERY_SQL_WRITE_OPERATIONS_PARTITION_ID,
@@ -898,33 +898,26 @@ function registerPriorityRecoverySnapshotSupplementalTests(context) {
       const normalizedSnapshot =
         normalizePriorityRecoveryDispatchPendingDecisionSnapshot(snapshot);
 
-      t.equal(
-        normalizedSnapshot?.operationOwnerObservation?.outcome,
-        OPERATION_WORKFLOW_OUTCOME_VALUES.ADVANCE_EXISTING_OPERATION,
-        'event-driven owner advance should be observed without timeout input',
-      );
-      t.equal(
-        normalizedSnapshot?.operationOwnerObservation?.effectCommand,
-        OPERATION_WORKFLOW_EFFECT_COMMAND_VALUES
-          .ADVANCE_EXISTING_OPERATION_COMMAND,
-        'event-driven owner advance should expose the canonical effect command',
+      t.notOk(
+        normalizedSnapshot?.operationOwnerObservation,
+        'dispatch-pending diagnostics must not synthesize owner evidence',
       );
       t.equal(
         normalizedSnapshot?.actuation?.state,
         PRIORITY_RECOVERY_ACTUATION_STATE_DISPATCHED_WAITING_PROGRESS,
-        'event-driven owner advance should retain dispatched-waiting-progress actuation',
+        'snapshot actuation should remain unchanged without owner input',
       );
       t.equal(
         normalizedSnapshot?.progress?.nextRequiredAction,
         PRIORITY_RECOVERY_PROGRESS_ACTION_ADVANCE_EXISTING_OPERATION,
-        'event-driven owner advance should keep the workflow progress action',
+        'snapshot progress should remain unchanged without owner input',
       );
     },
   );
 
   test(
-    'buildPriorityRecoveryDecisionSnapshots preserves owner observation ' +
-      'after appending operation-specific snapshots',
+    'buildPriorityRecoveryDecisionSnapshots does not synthesize owner ' +
+      'observation after appending operation-specific snapshots',
     async (t) => {
       const decisionSnapshots = buildPriorityRecoveryDecisionSnapshots({
         capturedAt: PRIORITY_RECOVERY_TARGET_SERVICE_CAPTURED_AT_MS,
@@ -986,27 +979,16 @@ function registerPriorityRecoverySnapshotSupplementalTests(context) {
           PRIORITY_RECOVERY_OPERATION_ID_PENDING_REPLACE_STALE,
       );
 
-      t.equal(
-        appendedSnapshot?.operationOwnerObservation?.outcome,
-        OPERATION_WORKFLOW_OUTCOME_VALUES.RECONCILE_STALE_PROGRESS,
-        'appended operation snapshots should retain owner re-entry outcomes',
-      );
-      t.equal(
-        appendedSnapshot?.operationOwnerObservation?.correlationKey,
-        appendedSnapshot?.correlationKey,
-        'appended operation snapshots should correlate owner evidence to the operation',
-      );
-      t.equal(
-        appendedSnapshot?.operationOwnerObservation?.requestedOwnerAction,
-        PRIORITY_RECOVERY_PROGRESS_ACTION_ADVANCE_EXISTING_OPERATION,
-        'appended operation snapshots should expose owner advancement',
+      t.notOk(
+        appendedSnapshot?.operationOwnerObservation,
+        'appended operation snapshots should not synthesize owner evidence',
       );
       t.same(
         decisionSnapshots.blockerPartitionIdsByReason[
           PRIORITY_RECOVERY_BLOCKER_REASON_OPERATION_NO_TRANSITIONS
         ],
-        [],
-        'summary blockers should be rebuilt from appended owner snapshots',
+        [SQL_TRANSACTION_PRIORITY_PARTITION_ID],
+        'summary blockers should retain stale timeout evidence without owner input',
       );
       t.same(
         decisionSnapshots.partitionIdsBySemanticState[
@@ -1017,10 +999,10 @@ function registerPriorityRecoverySnapshotSupplementalTests(context) {
       );
       t.same(
         decisionSnapshots.partitionIdsBySemanticState[
-          PRIORITY_RECOVERY_SEMANTIC_STATE_RECOVERING_IN_FLIGHT
+          PRIORITY_RECOVERY_SEMANTIC_STATE_OPERATION_STALLED
         ],
         [SQL_TRANSACTION_PRIORITY_PARTITION_ID],
-        'summary semantic state should follow the appended owner snapshot',
+        'summary semantic state should retain the stalled owner boundary',
       );
       t.notOk(
         decisionSnapshots.unresolvedSemanticStateIds.includes(
@@ -1030,9 +1012,9 @@ function registerPriorityRecoverySnapshotSupplementalTests(context) {
       );
       t.ok(
         decisionSnapshots.unresolvedSemanticStateIds.includes(
-          PRIORITY_RECOVERY_SEMANTIC_STATE_RECOVERING_IN_FLIGHT,
+          PRIORITY_RECOVERY_SEMANTIC_STATE_OPERATION_STALLED,
         ),
-        'closure inputs should retain the live recovering state',
+        'closure inputs should retain the live stalled state',
       );
     },
   );
@@ -5264,6 +5246,11 @@ const priorityRecoverySnapshotTestContext = {
   buildTrackedPriorityRecoveryDecisionSnapshots,
   CONTROL_PLANE_READINESS_DIMENSION,
   isPriorityRecoveryEmergencyPartition,
+  OPERATION_WORKFLOW_EFFECT_COMMAND_VALUES,
+  OPERATION_WORKFLOW_OUTCOME_VALUES,
+  OPERATION_WORKFLOW_OWNER,
+  OPERATION_WORKFLOW_PROGRESS_DECISION_KERNEL,
+  OPERATION_WORKFLOW_REASON_CODE_VALUES,
   PRIORITY_RECOVERY_ABSENT_OPERATION,
   PRIORITY_RECOVERY_ACTIVE_SOURCE_REMOVAL_AGE_MS,
   PRIORITY_RECOVERY_ACTIVE_TARGET_COMPLETION_MESSAGE,

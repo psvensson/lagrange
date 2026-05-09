@@ -115,6 +115,17 @@ const EXECUTOR_OUTCOME_RETRY_WORKFLOW_STEP_RANK = Object.freeze(new Map([
 const EXECUTOR_OUTCOME_VISIBILITY_RETRY_ERROR_MESSAGE =
   'Executor outcome operation visibility deferred';
 
+const EXECUTOR_OUTCOME_VISIBILITY_ABSENCE = Object.freeze({
+  DEFERRED_OUTCOME: Object.freeze({
+    state: 'executor_outcome_deferred_outcome_unavailable',
+  }),
+  OPERATION: Object.freeze({
+    state: 'executor_outcome_operation_unavailable',
+  }),
+  PARTITION_ID: 'executor_outcome_partition_unavailable',
+  WORKFLOW_STEP: 'executor_outcome_workflow_step_unavailable',
+});
+
 class OperationWorkflowOwnerSegment7Stage3 extends OperationWorkflowOwnerSegment7Stage2 {
   async checkTimeouts() {
     if (this.isShuttingDown || !this.isInitialized) {
@@ -287,6 +298,7 @@ class OperationWorkflowOwnerSegment7Stage3 extends OperationWorkflowOwnerSegment
     if (!operationId) {
       return;
     }
+    this.retainExecutorOutcomeRetryPayload(operationId, outcome);
 
     const singleFlightKey = this.getOperationOwnerSingleFlightKey(operationId);
 
@@ -296,8 +308,9 @@ class OperationWorkflowOwnerSegment7Stage3 extends OperationWorkflowOwnerSegment
       if (
         this.deferTransitionRetry(operationId, error, {
           boundary: OPERATION_WORKFLOW_OWNER_LITERAL.EXECUTOR_OUTCOME,
-          workflowStep: outcome?.[EXECUTOR_OUTCOME_FIELD.WORKFLOW_STEP] || null,
-          partitionId: null,
+          workflowStep: outcome?.[EXECUTOR_OUTCOME_FIELD.WORKFLOW_STEP] ||
+            EXECUTOR_OUTCOME_VISIBILITY_ABSENCE.WORKFLOW_STEP,
+          partitionId: EXECUTOR_OUTCOME_VISIBILITY_ABSENCE.PARTITION_ID,
         })
       ) {
         return;
@@ -405,6 +418,19 @@ class OperationWorkflowOwnerSegment7Stage3 extends OperationWorkflowOwnerSegment
     return candidateRank >= existingRank ? candidateOutcome : existingOutcome;
   }
 
+  retainExecutorOutcomeRetryPayload(operationId, outcome) {
+    const retryPayload = this.cloneExecutorOutcomeRetryPayload(outcome);
+    const selectedPayload = this.selectExecutorOutcomeRetryPayload(
+      this.executorOutcomeRetryPayloadByOperationId.get(operationId),
+      retryPayload,
+    );
+    this.executorOutcomeRetryPayloadByOperationId.set(
+      operationId,
+      selectedPayload,
+    );
+    return selectedPayload;
+  }
+
   clearExecutorOutcomeRetry(operationId) {
     const timerHandle =
       this.executorOutcomeRetryTimerByOperationId.get(operationId);
@@ -420,6 +446,11 @@ class OperationWorkflowOwnerSegment7Stage3 extends OperationWorkflowOwnerSegment
       visibilityObservation.retryAfterMs > NUM.ZERO ?
       Math.floor(visibilityObservation.retryAfterMs) :
       OBSERVED_PROGRESS_RETRY_DELAY_MS;
+    const deferredOutcome =
+      visibilityObservation?.deferredOutcome &&
+      typeof visibilityObservation.deferredOutcome === TYPEOF.OBJECT ?
+        visibilityObservation.deferredOutcome :
+        EXECUTOR_OUTCOME_VISIBILITY_ABSENCE.DEFERRED_OUTCOME;
     const error = new Error(EXECUTOR_OUTCOME_VISIBILITY_RETRY_ERROR_MESSAGE);
     error.code = OPERATION_WORKFLOW_OWNER_LITERAL
       .CONTROL_PLANE_PRESSURE_DEGRADED;
@@ -427,7 +458,7 @@ class OperationWorkflowOwnerSegment7Stage3 extends OperationWorkflowOwnerSegment
       .CONTROL_PLANE_PRESSURE_DEGRADED;
     error.deferRetry = true;
     error.retryAfterMs = retryAfterMs;
-    error.deferredOutcome = visibilityObservation?.deferredOutcome || null;
+    error.deferredOutcome = deferredOutcome;
     return error;
   }
 
@@ -436,14 +467,9 @@ class OperationWorkflowOwnerSegment7Stage3 extends OperationWorkflowOwnerSegment
     if (!operationId) {
       return false;
     }
-    const retryPayload = this.cloneExecutorOutcomeRetryPayload(outcome);
-    const selectedPayload = this.selectExecutorOutcomeRetryPayload(
-      this.executorOutcomeRetryPayloadByOperationId.get(operationId),
-      retryPayload,
-    );
-    this.executorOutcomeRetryPayloadByOperationId.set(
+    const selectedPayload = this.retainExecutorOutcomeRetryPayload(
       operationId,
-      selectedPayload,
+      outcome,
     );
     if (this.executorOutcomeRetryTimerByOperationId.has(operationId)) {
       return true;
@@ -457,18 +483,33 @@ class OperationWorkflowOwnerSegment7Stage3 extends OperationWorkflowOwnerSegment
         operationId,
         boundary: OPERATION_WORKFLOW_OWNER_LITERAL.EXECUTOR_OUTCOME,
         workflowStep:
-          selectedPayload[EXECUTOR_OUTCOME_FIELD.WORKFLOW_STEP] || null,
-        partitionId: null,
+          selectedPayload[EXECUTOR_OUTCOME_FIELD.WORKFLOW_STEP] ||
+          EXECUTOR_OUTCOME_VISIBILITY_ABSENCE.WORKFLOW_STEP,
+        partitionId: EXECUTOR_OUTCOME_VISIBILITY_ABSENCE.PARTITION_ID,
         delayMs,
         errorMessage: retryError.message,
       },
     );
     const timerHandle = this.setTimeoutFn(() => {
       this.executorOutcomeRetryTimerByOperationId.delete(operationId);
+      if (this.isShuttingDown || !this.isInitialized) {
+        return;
+      }
+      if (this.isOperationOwnerLaneHeld(operationId)) {
+        const retainedRetryOutcome =
+          this.executorOutcomeRetryPayloadByOperationId.get(operationId);
+        if (retainedRetryOutcome) {
+          this.scheduleExecutorOutcomeRetry(
+            retainedRetryOutcome,
+            visibilityObservation,
+          );
+        }
+        return;
+      }
       const retryOutcome =
         this.executorOutcomeRetryPayloadByOperationId.get(operationId);
       this.executorOutcomeRetryPayloadByOperationId.delete(operationId);
-      if (this.isShuttingDown || !this.isInitialized || !retryOutcome) {
+      if (!retryOutcome) {
         return;
       }
       return this.operationWorkflowRunExclusive(
@@ -524,11 +565,14 @@ class OperationWorkflowOwnerSegment7Stage3 extends OperationWorkflowOwnerSegment
       );
     }
 
-    const operation = visibilityObservation?.operation || null;
+    const operation = visibilityObservation?.operation &&
+      typeof visibilityObservation.operation === TYPEOF.OBJECT ?
+      visibilityObservation.operation :
+      EXECUTOR_OUTCOME_VISIBILITY_ABSENCE.OPERATION;
     if (
       visibilityAction ===
         EXECUTOR_OUTCOME_OPERATION_VISIBILITY_ACTION.SKIP_OUTCOME ||
-      !operation
+      operation === EXECUTOR_OUTCOME_VISIBILITY_ABSENCE.OPERATION
     ) {
       this.clearExecutorOutcomeRetry(operationId);
       this.logger.debug(

@@ -5,6 +5,11 @@ export function registerPriorityRecoverySnapshotCore02Tests(context) {
     buildPriorityRecoveryDecisionSnapshots,
     buildPriorityRecoveryObservationSnapshot,
     buildTrackedPriorityRecoveryDecisionSnapshots,
+    OPERATION_WORKFLOW_EFFECT_COMMAND_VALUES,
+    OPERATION_WORKFLOW_OUTCOME_VALUES,
+    OPERATION_WORKFLOW_OWNER,
+    OPERATION_WORKFLOW_PROGRESS_DECISION_KERNEL,
+    OPERATION_WORKFLOW_REASON_CODE_VALUES,
     PRIORITY_RECOVERY_ABSENT_OPERATION,
     PRIORITY_RECOVERY_ACTUATION_STATE_DISPATCHED_WAITING_PROGRESS,
     PRIORITY_RECOVERY_ACTUATION_STATE_PERSISTED_NOT_DISPATCHED,
@@ -1071,7 +1076,7 @@ export function registerPriorityRecoverySnapshotCore02Tests(context) {
       });
     });
 
-  test('priority recovery decision snapshot applies caller timeout budgets to pending no-transition work',
+  test('priority recovery decision snapshot applies explicit owner timeout budgets to pending no-transition work',
     async (t) => {
       const snapshot = buildPriorityRecoveryDecisionSnapshot({
         partitionId: PUBLICATION_PRIORITY_PARTITION_ID,
@@ -1106,12 +1111,29 @@ export function registerPriorityRecoverySnapshotCore02Tests(context) {
           timelineLength: PRIORITY_RECOVERY_EMPTY_COUNT,
           timelineStepCount: PRIORITY_RECOVERY_EMPTY_COUNT,
         }],
+        operationOwnerOutcome: Object.freeze({
+          owner: OPERATION_WORKFLOW_OWNER,
+          boundary: OPERATION_WORKFLOW_PROGRESS_DECISION_KERNEL,
+          operationKey: PRIORITY_RECOVERY_OPERATION_ID_PENDING_OWNER_WAIT,
+          sourceRevision: PRIORITY_RECOVERY_PENDING_OPERATION_UPDATED_AT_MS,
+          outcome:
+            OPERATION_WORKFLOW_OUTCOME_VALUES.RECONCILE_STALE_PROGRESS,
+          nextRequiredAction:
+            OPERATION_WORKFLOW_OUTCOME_VALUES.RECONCILE_STALE_PROGRESS,
+          effectCommand:
+            OPERATION_WORKFLOW_EFFECT_COMMAND_VALUES
+              .RECONCILE_STALE_PROGRESS_COMMAND,
+          reasons: Object.freeze([
+            OPERATION_WORKFLOW_REASON_CODE_VALUES.TIMEOUT_BUDGET_EXPIRED,
+            OPERATION_WORKFLOW_REASON_CODE_VALUES.WORKFLOW_HISTORY_STALE,
+          ]),
+        }),
       });
 
       t.same(
         snapshot?.blockerReasons,
         [],
-        'overdue pending work should clear stale timeout blockers after owner re-entry',
+        'overdue pending work should clear stale timeout blockers from the owner outcome',
       );
       t.equal(
         snapshot?.semanticState,

@@ -23,6 +23,7 @@ import {
 import {
   EXECUTOR_OUTCOME_TYPE,
   EXECUTOR_OUTCOME_ACTION,
+  EXECUTOR_OUTCOME_FIELD,
 } from '../../src/rebalancer/executor-outcome-constants.js';
 import {
   REBALANCE_COORDINATOR_EVENT,
@@ -69,6 +70,9 @@ const TEST_DEFERRED_OUTCOME_COMPLETION_STATE =
   'authoritative_operation_read_deferred';
 const TEST_REPLICA_OPERATION_UPDATE_SQL_PREFIX =
   'UPDATE replica_operations';
+const TEST_RETRY_PAYLOAD_WAIT_INITIAL_ATTEMPT = 0;
+const TEST_RETRY_PAYLOAD_WAIT_ATTEMPT_INCREMENT = 1;
+const TEST_RETRY_PAYLOAD_WAIT_ATTEMPT_COUNT = 4;
 
 /**
  * Build a minimal operation record for testing.
@@ -232,6 +236,14 @@ function operationToRow(op) {
   };
 }
 
+function buildExecutorOutcomePayload(outcomeType, workflowStep) {
+  return Object.freeze({
+    [EXECUTOR_OUTCOME_FIELD.OPERATION_ID]: TEST_OPERATION_ID,
+    [EXECUTOR_OUTCOME_FIELD.OUTCOME_TYPE]: outcomeType,
+    [EXECUTOR_OUTCOME_FIELD.WORKFLOW_STEP]: workflowStep,
+  });
+}
+
 function waitForCoordinatorEvent(coordinator, eventName, timeoutMs = 2000) {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
@@ -242,6 +254,30 @@ function waitForCoordinatorEvent(coordinator, eventName, timeoutMs = 2000) {
       resolve(event);
     });
   });
+}
+
+async function waitForExecutorOutcomeRetryPayload(
+  coordinator,
+  operationId,
+  workflowStep,
+) {
+  for (
+    let attemptIndex = TEST_RETRY_PAYLOAD_WAIT_INITIAL_ATTEMPT;
+    attemptIndex < TEST_RETRY_PAYLOAD_WAIT_ATTEMPT_COUNT;
+    attemptIndex += TEST_RETRY_PAYLOAD_WAIT_ATTEMPT_INCREMENT
+  ) {
+    const payload =
+      coordinator.workflowOwner.executorOutcomeRetryPayloadByOperationId.get(
+        operationId,
+      );
+    if (payload?.workflowStep === workflowStep) {
+      return payload;
+    }
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  return coordinator.workflowOwner.executorOutcomeRetryPayloadByOperationId.get(
+    operationId,
+  );
 }
 
 test('Executor outcome routing through owner-key reconcile path',
@@ -484,14 +520,14 @@ test('Executor outcome routing through owner-key reconcile path',
     );
 
     await t.test(
-      'REPLICA_CREATE_ACTIVE is retried when operation visibility is deferred',
+      'deferred visibility retains the furthest executor outcome',
       async (t) => {
         const operation = buildTestOperation({
           workflowStep: WORKFLOW_STEP.CREATING,
           status: ReplicaStatus.CREATING,
         });
         const scheduledTimers = [];
-        const {coordinator, emitter} =
+        const {coordinator} =
           createTestCoordinator({
             operation,
             setTimeoutFn(callback, delayMs) {
@@ -526,22 +562,50 @@ test('Executor outcome routing through owner-key reconcile path',
           };
 
         try {
-          emitter.emitOutcome(
-            EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_ACTIVE,
-            TEST_OPERATION_ID,
-            WORKFLOW_STEP.ACTIVE,
+          const deferredVisibilityObservation = Object.freeze({
+            state: TEST_DEFERRED_OUTCOME_STATE,
+            operation: null,
+            deferredOutcome: Object.freeze({
+              completionState: TEST_DEFERRED_OUTCOME_COMPLETION_STATE,
+              retryAfterMs: TEST_DEFERRED_OUTCOME_RETRY_AFTER_MS,
+            }),
+            retryAfterMs: TEST_DEFERRED_OUTCOME_RETRY_AFTER_MS,
+          });
+          coordinator.workflowOwner.scheduleExecutorOutcomeRetry(
+            buildExecutorOutcomePayload(
+              EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_SYNCING,
+              WORKFLOW_STEP.SYNCING,
+            ),
+            deferredVisibilityObservation,
           );
-          await new Promise((resolve) => setImmediate(resolve));
+          coordinator.workflowOwner.scheduleExecutorOutcomeRetry(
+            buildExecutorOutcomePayload(
+              EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_ACTIVE,
+              WORKFLOW_STEP.ACTIVE,
+            ),
+            deferredVisibilityObservation,
+          );
+          const retainedRetryPayload =
+            await waitForExecutorOutcomeRetryPayload(
+              coordinator,
+              TEST_OPERATION_ID,
+              WORKFLOW_STEP.ACTIVE,
+            );
 
           t.equal(
             scheduledTimers.length,
             1,
-            'deferred visibility should retain the executor outcome',
+            'deferred visibility should retain one retry timer',
           );
           t.equal(
             scheduledTimers[0].delayMs,
             TEST_DEFERRED_OUTCOME_RETRY_AFTER_MS,
             'retry should use the owner visibility retry delay',
+          );
+          t.equal(
+            retainedRetryPayload?.workflowStep,
+            WORKFLOW_STEP.ACTIVE,
+            'deferred visibility should retain the furthest queued workflow step',
           );
 
           visibilityState = TEST_PRESENT_OUTCOME_STATE;
@@ -555,7 +619,7 @@ test('Executor outcome routing through owner-key reconcile path',
           t.equal(
             completedEvent.operation.workflowStep,
             WORKFLOW_STEP.ACTIVE,
-            'retained ACTIVE outcome should complete after visibility recovers',
+            'retained furthest ACTIVE outcome should complete after visibility recovers',
           );
           t.ok(
             completedEvent.operation.completedAt,
