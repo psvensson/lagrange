@@ -39,7 +39,7 @@
   "predecessor": "work/packages/done-20260508-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md",
   "closed": "2026-05-09",
   "commitAndPushLedgerRequired": true,
-  "successor": "work/packages/active-20260509-rolling-restart-operation-workflow-progress-sql-write-operations-dispatch-pending-reentry.md"
+  "successor": "work/packages/done-20260509-rolling-restart-operation-workflow-progress-sql-write-operations-dispatch-pending-reentry.md"
 }
 -->
 

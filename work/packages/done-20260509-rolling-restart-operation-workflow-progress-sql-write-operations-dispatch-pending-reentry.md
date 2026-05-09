@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-09",
   "scenario": "rolling-restart",
   "artifact": "test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-dispatch-pending-fix.report.json",
@@ -25,12 +25,15 @@
     "src/rebalancer/operation-workflow-owner-segment-7-stage-shared.js",
     "src/rebalancer/operation-workflow-owner-segment-7-stage-5.js",
     "test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js",
-    "work/packages/active-20260509-rolling-restart-operation-workflow-progress-sql-write-operations-dispatch-pending-reentry.md",
+    "work/packages/done-20260509-rolling-restart-operation-workflow-progress-sql-write-operations-dispatch-pending-reentry.md",
     "work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md",
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md"
   ],
-  "predecessor": "work/packages/done-20260508-rolling-restart-operation-scheduling-sql-transaction-participants-needs-operation-reentry.md"
+  "predecessor": "work/packages/done-20260508-rolling-restart-operation-scheduling-sql-transaction-participants-needs-operation-reentry.md",
+  "closed": "2026-05-09",
+  "commitAndPushLedgerRequired": true,
+  "successor": "work/packages/active-20260509-rolling-restart-operation-workflow-timeout-control-plane-publications-stale-progress-reconcile.md"
 }
 -->
 
@@ -159,7 +162,7 @@ Forbidden reinterpretations:
       `work/packages/done-20260508-rolling-restart-operation-scheduling-sql-transaction-participants-needs-operation-reentry.md`.
 - [x] Implementation subagent recorded:
       Agent Mill (`019e0a21-c9ff-7aa3-9fff-4cf193384530`) implemented
-      `work/packages/active-20260509-rolling-restart-operation-workflow-progress-sql-write-operations-dispatch-pending-reentry.md`.
+      `work/packages/done-20260509-rolling-restart-operation-workflow-progress-sql-write-operations-dispatch-pending-reentry.md`.
 
 ## Validation
 
@@ -245,3 +248,9 @@ Validation notes:
 3. The focused workflow-progress slice has a truthful Commit And Push Ledger
    before closure, and the successor package targets the workflow-timeout
    boundary only after that focused slice is committed and pushed.
+
+## Commit And Push Ledger
+
+- Focused package commit: `546a83715f19cd7be1dd31d859d3bb6a666dadd4`
+- Pushed to: `origin/codex/pending-ack-eligibility-filter`
+- Commit contains only package-owned files/package-status/allowed sprint handoff: `yes`

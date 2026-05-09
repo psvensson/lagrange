@@ -37,7 +37,7 @@ The matching playback is:
 
 Active package:
 
-1. [Rolling Restart Operation Workflow Progress Sql Write Operations Dispatch Pending Reentry](../packages/active-20260509-rolling-restart-operation-workflow-progress-sql-write-operations-dispatch-pending-reentry.md)
+1. [Rolling Restart Operation Workflow Timeout Control Plane Publications Stale Progress Reconcile](../packages/active-20260509-rolling-restart-operation-workflow-timeout-control-plane-publications-stale-progress-reconcile.md)
 
 Latest representative evidence:
 
@@ -90,8 +90,9 @@ Edition matrix status: Community / AGPL repo.
 1. Keep `rolling-restart` as the primary representative release gate until it
    passes or migrates to a new named owner boundary.
 2. The operation-scheduling package is locally closed, and the active
-   workflow-progress successor migrated to `workflow_timeout`; commit and push
-   that focused slice before opening the timeout successor boundary.
+   workflow-progress successor migrated to `workflow_timeout`; the focused
+   slice is committed and pushed, so the timeout successor owns the current
+   boundary.
 3. Preserve the completed core topology control-plane rewrite as predecessor
    proof, not as the current owner.
 4. Keep sustained throughput and 7-node stress confirmation behind the
@@ -115,14 +116,13 @@ Edition matrix status: Community / AGPL repo.
 2. Preserve the target-creation observed-progress proof and regression.
 3. Preserve the workflow-progress dispatch-pending fix and representative rerun
    showing `sql_write_operations-p1` as `spread_satisfied_in_flight`.
-4. Commit and push the focused workflow-progress package slice.
-5. Open exactly one successor package for
+4. Keep exactly one active successor package for
    `operation_workflow_owner / workflow_timeout` and target
    `reconcile_stale_operation_progress` for operation
    `9cc14694-88ba-47df-9c72-ecc301be8312`.
-6. Rerun focused owner tests, touched-file static guardrails, and
+5. Rerun focused owner tests, touched-file static guardrails, and
    `rolling-restart --fast-local`.
-7. If `rolling-restart` passes, run sustained throughput and 7-node stress
+6. If `rolling-restart` passes, run sustained throughput and 7-node stress
    confirmation for `0.1`.
 
 ## Validation Ladder

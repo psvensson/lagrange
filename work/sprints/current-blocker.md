@@ -4,43 +4,46 @@
 
 Sprint: `work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md`
 
-Package: `work/packages/active-20260509-rolling-restart-operation-workflow-progress-sql-write-operations-dispatch-pending-reentry.md`
+Package: `work/packages/active-20260509-rolling-restart-operation-workflow-timeout-control-plane-publications-stale-progress-reconcile.md`
 
 Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-dispatch-pending-fix.report.json`
+Artifact: `test-output/reports/rolling-restart-current-release-gate-after-workflow-timeout-stale-progress-fix.report.json`
 
-Playback: `test-output/reports/.playback/rolling-restart-current-release-gate-after-workflow-progress-dispatch-pending-fix/rolling-restart/`
+Playback: `test-output/reports/.playback/rolling-restart-current-release-gate-after-workflow-timeout-stale-progress-fix/rolling-restart/`
 
 ## Boundary
 
 Owner: `operation_workflow_owner`
 
-Boundary: `workflow_timeout`
+Boundary: `workflow_progress`
 
-Dominant reason: `priority_recovery_workflow_timeout_transition_deferred`
+Dominant reason: `priority_recovery_workflow_progress_transition_deferred`
 
-Current state: The representative rolling-restart rerun after the workflow-progress dispatch-pending fix ran and migrated the first frontier to operation_workflow_owner / workflow_timeout. The prior sql_write_operations-p1 workflow_progress witness is now spread_satisfied_in_flight; the active gate remains failed at 2/5 terminal progress with best 3/5, snapshotCoverage=3/5, publication=PUBLISHED, pendingAck=0, and priority recovery invariants passed. The new dominant witness is control_plane_publications-p1 with semanticStateId operation_stalled, actuationState transition_deferred, nextRequiredAction reconcile_stale_operation_progress, waitMode timeout_reconcile_due, workflowProgressPhaseId dispatch_pending, latestOperationWorkflowStep SENDING, latestOperationStatus pending, operationId 9cc14694-88ba-47df-9c72-ecc301be8312, and blocked partitions control_plane_publications-p1 and sql_transaction_participants-p1.
+Current state: The workflow-timeout stale SENDING/pending fix moved control_plane_publications-p1 off workflow_timeout and the representative rolling-restart rerun migrated to operation_workflow_owner / workflow_progress. The current dominant witness is sql_write_operations-p1 with semanticStateId needs_operation, progress class priority_operation_serial_wait, actuationState transition_deferred, waitMode event_driven, nextRequiredAction wait_for_operation_progress, operationId 9fef6a49-1f1d-413a-b257-37a4c69293c8, and serialWaitOperationIds [1a3e89d1-bae0-4a19-9d1e-f11b3a425a9b] on serialWaitPartitionIds [control_plane_publications-p1].
 
 ## Next Action
 
-Commit and push the focused workflow-progress slice, then open the next package on operation_workflow_owner / workflow_timeout to reconcile stale operation progress for operation 9cc14694-88ba-47df-9c72-ecc301be8312.
+Commit and push the focused workflow-timeout slice, then open the next package on operation_workflow_owner / workflow_progress for the sql_write_operations-p1 serial-wait blocker behind control_plane_publications-p1 operation 1a3e89d1-bae0-4a19-9d1e-f11b3a425a9b.
 
 ## Proof Ladder
 
 1. `npm run work:package:evidence-block -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-dispatch-pending-fix.report.json`
 2. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-dispatch-pending-fix.report.json --explain priority_recovery_partition_progress`
-3. `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-dispatch-pending-fix.report.json`
-4. `Focused operation_workflow_owner workflow_progress regression for sql_write_operations-p1 dispatch_pending persisted_not_dispatched re-entry`
-5. `Touched-file literal, decision-boundary, runtime-grammar, syntax, and diff hygiene guardrails`
-6. `Representative rolling-restart rerun migrated to operation_workflow_owner / workflow_timeout`
+3. `Focused workflow-timeout regression for control_plane_publications-p1 SENDING/pending dispatch_pending stale progress re-entry`
+4. `Touched-file literal, decision-boundary, runtime-grammar, syntax, and diff hygiene guardrails`
+5. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-current-release-gate-after-workflow-timeout-stale-progress-fix.report.json --fast-local --verbose`
+6. `npm run work:package:evidence-block -- test-output/reports/rolling-restart-current-release-gate-after-workflow-timeout-stale-progress-fix.report.json`
+7. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-workflow-timeout-stale-progress-fix.report.json --explain priority_recovery_partition_progress`
+8. `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-current-release-gate-after-workflow-timeout-stale-progress-fix.report.json`
 
 ## Touched Files
 
-1. `src/rebalancer/operation-workflow-owner-segment-7-stage-shared.js`
-2. `src/rebalancer/operation-workflow-owner-segment-7-stage-5.js`
-3. `test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
-4. `work/packages/active-20260509-rolling-restart-operation-workflow-progress-sql-write-operations-dispatch-pending-reentry.md`
-5. `work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md`
-6. `work/sprints/current-blocker.json`
-7. `work/sprints/current-blocker.md`
+1. `src/control-plane/priority-recovery-snapshot-stage-10.js`
+2. `test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
+3. `work/packages/done-20260509-rolling-restart-operation-workflow-progress-sql-write-operations-dispatch-pending-reentry.md`
+4. `work/packages/done-20260508-rolling-restart-operation-scheduling-sql-transaction-participants-needs-operation-reentry.md`
+5. `work/packages/active-20260509-rolling-restart-operation-workflow-timeout-control-plane-publications-stale-progress-reconcile.md`
+6. `work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md`
+7. `work/sprints/current-blocker.json`
+8. `work/sprints/current-blocker.md`

@@ -12,10 +12,7 @@ import {
 } from '../../src/control-plane/priority-recovery-diagnostics-constants.js';
 import {OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED as STAGE_SHARED} from
   '../../src/rebalancer/operation-workflow-owner-segment-7-stage-shared.js';
-import {
-  OperationType,
-  ReplicaStatus,
-} from '../../src/rebalancer/replica-status.js';
+import {OperationType, ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 
 const {
   PRIORITY_RECOVERY_OPERATION_DRAIN_OWNER_ACTION,
@@ -90,18 +87,20 @@ const TEST_ASSERT_STALE_HANDOFF_REMAINS_SINGLE_TIMER =
   'exactly one remote handoff retry timer should remain armed after stale ' +
   'retry reconciliation';
 const TEST_SNAPSHOT_REENTRY_TEST_NAME =
-  'priority recovery snapshots re-enter stale dispatch-pending persisted ' +
-  'operations through the workflow owner';
+  'priority recovery snapshots re-enter stale SENDING pending dispatch-' +
+  'pending workflow-timeout operations through the workflow owner';
 const TEST_ASSERT_SNAPSHOT_REENTRY_ADVANCE_ACTION =
-  'the snapshot should preserve owner advancement for the stale persisted row';
+  'the snapshot should return stale SENDING timeout rows to owner advancement';
 const TEST_ASSERT_SNAPSHOT_REENTRY_WAKES_REMOTE_OWNER =
   'snapshot re-entry should wake the remote operation owner once';
 const TEST_ASSERT_SNAPSHOT_REENTRY_TARGET =
   'snapshot re-entry should use the canonical remote replica-dispatch ingress';
+const TEST_ASSERT_SNAPSHOT_REENTRY_NOT_TRANSITION_DEFERRED =
+  'snapshot re-entry should not leave the stale SENDING row transition-deferred';
 const TEST_ASSERT_SNAPSHOT_REENTRY_ARMS_RETRY =
-  'snapshot re-entry should arm one verification retry for the remote owner';
+  'snapshot re-entry should arm one verification retry for the stale SENDING row';
 const TEST_ASSERT_SNAPSHOT_REENTRY_PRESERVES_PENDING =
-  'snapshot re-entry should not mutate the remote-owned durable row';
+  'snapshot re-entry should preserve the remote-owned durable pending status';
 
 function buildDispatchPendingReentryPlanningSnapshot() {
   return Object.freeze({
@@ -822,17 +821,13 @@ async (t) => {
     source_node_id: TEST_SOURCE_NODE_ID,
     target_node_id: TEST_TARGET_NODE_ID,
     status: TEST_STATUS_PENDING,
-    workflow_step: TEST_STEP_PENDING,
+    workflow_step: WORKFLOW_STEP.SENDING,
     created_at: TEST_OPERATION_CREATED_AT_MS,
     updated_at:
       nowMs - TEST_STEP_TIMEOUT_MS - TEST_TIMEOUT_OVERRUN_MS,
     completed_at: TEST_EMPTY_VALUE,
     error_message: TEST_EMPTY_VALUE,
-    steps_history: JSON.stringify([{
-      step: TEST_STEP_PENDING,
-      timestamp:
-        nowMs - TEST_STEP_TIMEOUT_MS - TEST_STEP_HISTORY_LAG_MS,
-    }]),
+    steps_history: JSON.stringify(TEST_EMPTY_LIST),
     entity_type: TEST_ENTITY_TYPE_PARTITION,
     entity_id: TEST_PARTITION_ID,
   };
@@ -957,6 +952,11 @@ async (t) => {
       TEST_ASSERT_SNAPSHOT_REENTRY_ADVANCE_ACTION,
     );
     t.equal(
+      snapshot?.actuation?.state,
+      PRIORITY_RECOVERY_ACTUATION_STATE.PERSISTED_NOT_DISPATCHED,
+      TEST_ASSERT_SNAPSHOT_REENTRY_NOT_TRANSITION_DEFERRED,
+    );
+    t.equal(
       deliveries.length,
       NUM.ONE,
       TEST_ASSERT_SNAPSHOT_REENTRY_WAKES_REMOTE_OWNER,
@@ -972,8 +972,8 @@ async (t) => {
       TEST_ASSERT_SNAPSHOT_REENTRY_ARMS_RETRY,
     );
     t.equal(
-      operationRow.workflow_step,
-      TEST_STEP_PENDING,
+      operationRow.status,
+      TEST_STATUS_PENDING,
       TEST_ASSERT_SNAPSHOT_REENTRY_PRESERVES_PENDING,
     );
   } finally {

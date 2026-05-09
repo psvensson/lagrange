@@ -34,10 +34,31 @@ import {buildPriorityRecoveryConditionsContract, selectLatestPriorityRecoveryOpe
 import {buildPriorityRecoveryActuationContract} from './priority-recovery-snapshot-stage-8.js';
 import {buildEffectivePriorityRecoveryAdmission, buildPriorityRecoveryPartitionObservation, buildPriorityRecoveryProgressContract, buildPriorityRecoveryPublicationNodeDecisions, isPriorityRecoverySnapshotObject, resolvePriorityRecoveryDecisionPublicationConvergence, resolvePriorityRecoveryDecisionReadinessByNodeId} from './priority-recovery-snapshot-stage-9.js';
 import {buildPriorityRecoveryPartitionAssessment} from './priority-recovery-snapshot-stage-11.js';
+import {ReplicaStatus} from '../rebalancer/replica-status.js';
 
 const PRIORITY_RECOVERY_EMPTY_BLOCKER_REASONS = Object.freeze([]);
 const PRIORITY_RECOVERY_LATEST_OPERATION_WORKFLOW_STEP_FIELD =
   'latestOperationWorkflowStep';
+const PRIORITY_RECOVERY_LATEST_OPERATION_STATUS_FIELD =
+  'latestOperationStatus';
+const PRIORITY_RECOVERY_DISPATCH_PENDING_TIMEOUT_REENTRY_WORKFLOW_STEPS =
+  Object.freeze(
+    new Set([
+      WORKFLOW_STEP.PENDING,
+    ]),
+  );
+const PRIORITY_RECOVERY_DISPATCH_PENDING_STALE_PROGRESS_WORKFLOW_STEPS =
+  Object.freeze(
+    new Set([
+      WORKFLOW_STEP.SENDING,
+    ]),
+  );
+const PRIORITY_RECOVERY_DISPATCH_PENDING_STALE_PROGRESS_STATUSES =
+  Object.freeze(
+    new Set([
+      ReplicaStatus.PENDING,
+    ]),
+  );
 
 const PRIORITY_RECOVERY_DISPATCH_PENDING_NORMALIZATION_STATE = Object.freeze({
   ADVANCE_OWNER_PROGRESS_FROM_TIMEOUT: 'advance_owner_progress_from_timeout',
@@ -67,8 +88,16 @@ const PRIORITY_RECOVERY_DISPATCH_PENDING_NORMALIZATION_TABLE =
           PRIORITY_RECOVERY_ACTUATION_STATE.TRANSITION_DEFERRED &&
         evidence.workflowProgressPhaseId ===
           PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.DISPATCH_PENDING &&
-        evidence.latestWorkflowStep ===
-          WORKFLOW_STEP.PENDING,
+        (
+          PRIORITY_RECOVERY_DISPATCH_PENDING_TIMEOUT_REENTRY_WORKFLOW_STEPS
+            .has(evidence.latestWorkflowStep) ||
+          (
+            PRIORITY_RECOVERY_DISPATCH_PENDING_STALE_PROGRESS_WORKFLOW_STEPS
+              .has(evidence.latestWorkflowStep) &&
+            PRIORITY_RECOVERY_DISPATCH_PENDING_STALE_PROGRESS_STATUSES
+              .has(evidence.latestOperationStatus)
+          )
+        ),
     }),
     Object.freeze({
       state:
@@ -130,6 +159,16 @@ function resolvePriorityRecoveryDispatchPendingNormalizationState(
             ] ||
             PRIORITY_RECOVERY_SNAPSHOT_LITERAL.VALUE,
         ).trim().toUpperCase(),
+        latestOperationStatus: String(
+          snapshot?.coordinator?.operation?.status ||
+            snapshot?.conditions?.[
+              PRIORITY_RECOVERY_LATEST_OPERATION_STATUS_FIELD
+            ] ||
+            snapshot?.[
+              PRIORITY_RECOVERY_LATEST_OPERATION_STATUS_FIELD
+            ] ||
+            PRIORITY_RECOVERY_SNAPSHOT_LITERAL.VALUE,
+        ).trim().toLowerCase(),
       }),
     )?.state ||
     PRIORITY_RECOVERY_DISPATCH_PENDING_NORMALIZATION_STATE.RETAIN_SNAPSHOT
