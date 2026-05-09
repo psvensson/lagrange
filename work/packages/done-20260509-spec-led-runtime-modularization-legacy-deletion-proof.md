@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-09",
   "scenario": "spec-led-runtime-modularization",
   "artifact": "test-output/reports/rolling-restart-current-release-gate-after-workflow-timeout-stale-progress-fix.report.json",
@@ -29,19 +29,24 @@
     "test/control-plane/dual-path-closure.test.js",
     "test/distributed/harness/*.js",
     "scripts/analyze-topology-convergence.js",
-    "work/sprints/todo-2026-q2-spec-led-runtime-modularization.md",
-    "work/packages/active-20260509-spec-led-runtime-modularization-legacy-deletion-proof.md"
+    "work/sprints/active-2026-q2-spec-led-runtime-modularization.md",
+    "work/packages/todo-20260509-spec-led-runtime-modularization-publication-ack-convergence-frontier.md",
+    "work/packages/todo-20260509-spec-led-runtime-modularization-active-gate-report-schema-alias-deletion.md",
+    "work/packages/done-20260509-spec-led-runtime-modularization-legacy-deletion-proof.md"
   ],
   "modelFit": {
     "packageClass": "escalation-required",
-    "intendedMinimumModel": "gpt-5",
+    "intendedMinimumModel": "gpt-5.3-codex",
     "scopeShape": "representative-frontier-closure",
     "escalationTriggers": [
       "runtime owner boundary changes",
       "representative proof may require successor blocker migration"
     ]
   },
-  "predecessor": "work/packages/done-20260509-spec-led-runtime-modularization-diagnostics-harness-consumer.md"
+  "predecessor": "work/packages/done-20260509-spec-led-runtime-modularization-diagnostics-harness-consumer.md",
+  "closed": "2026-05-09",
+  "commitAndPushLedgerRequired": true,
+  "successor": "work/packages/todo-20260509-spec-led-runtime-modularization-publication-ack-convergence-frontier.md"
 }
 -->
 
@@ -97,12 +102,12 @@ representative-gate closure scope.
 3. Old publication and readiness helpers.
 4. Old diagnostics and harness classifiers.
 5. `scripts/analyze-topology-convergence.js`
-6. `work/sprints/todo-2026-q2-spec-led-runtime-modularization.md`
+6. `work/sprints/active-2026-q2-spec-led-runtime-modularization.md`
 
 ## Model Fit
 
 - Package class: `escalation-required`
-- Intended minimum model: `gpt-5`
+- Intended minimum model: `gpt-5.3-codex`
 - Scope shape: `representative-frontier-closure`
 - Escalation triggers: runtime owner boundary changes; representative proof may
   require successor blocker migration.
@@ -141,7 +146,7 @@ report.
 - [x] Delete live legacy paths that are superseded by owner contracts.
 - [x] Remove old aliases and duplicate tests.
 - [x] Add structural guards for any path that must remain temporarily.
-- [ ] Update sprint closure notes with final proof or fresh blocker handoff.
+- [x] Update sprint closure notes with final proof or fresh blocker handoff.
 - [x] Open a successor package if representative proof finds a new first
       frontier or an external artifact contract cannot be deleted in this
       slice.
@@ -153,7 +158,7 @@ report.
 - [x] Fix subagent recorded or explicitly not needed:
       Agent Aquinas (`019e0c51-d05e-7540-beeb-f0d202fb2a32`) fixed `work/packages/done-20260509-spec-led-runtime-modularization-diagnostics-harness-consumer.md`.
 - [x] Implementation subagent recorded:
-      Agent Codex (`019e0c58-3141-77d0-aa9b-0b5516964e01`) implemented `work/packages/active-20260509-spec-led-runtime-modularization-legacy-deletion-proof.md`.
+      Agent Banach (`019e0c58-3141-77d0-aa9b-0b5516964e01`) implemented `work/packages/done-20260509-spec-led-runtime-modularization-legacy-deletion-proof.md`.
 
 ## Implementation Notes
 
@@ -188,6 +193,27 @@ Deletion inventory executed in this slice:
    for `activeGateBestProgress`, `activeGateNoProgress`, and
    `activeGateBlockerHistory`, because those names remain an external
    failure-bundle/report artifact schema contract.
+9. Named representative successor package
+   `work/packages/todo-20260509-spec-led-runtime-modularization-publication-ack-convergence-frontier.md`
+   because the final rolling-restart report moved the first frontier to
+   `topology_publication_owner / publication_convergence` with dominant
+   reason `pending_acks_present`.
+
+## Representative Handoff
+
+The final representative run did not go green. It moved the scenario from the
+legacy deletion boundary to a fresh topology publication boundary:
+
+- Source artifact: `test-output/reports/rolling-restart-spec-led-runtime-modularization-final.report.json`
+- Scenario: `rolling-restart`
+- Frontier edge: `publication_ack_convergence`
+- Current semantic owner: `topology_publication_owner`
+- Current boundary: `publication_convergence`
+- Frontier state: `blocked`
+- Dominant reason: `pending_acks_present`
+- Evidence path: `report.scenarios[0].publicationConvergence`
+- Reasons: `publication_pending, pending_acks_present`
+- Next explain command: `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-final.report.json --explain publication_ack_convergence`
 
 ## Validation
 
@@ -228,6 +254,36 @@ Implementation-subagent validation:
 10. Known guardrail debt: broad literal guard on harness/test paths reports
     existing test-fixture literal debt because those relative paths are treated
     as runtime by the checker. Production touched files are clean.
+11. Parent-session validation passed:
+    `npm run work:validate`.
+12. Parent-session validation passed:
+    `node --test test/scripts/spec-led-runtime-legacy-deletion-guard.test.js`.
+13. Parent-session validation passed:
+    `node --test test/diagnostics/topology-convergence-graph.test.js test/scripts/analyze-topology-convergence.test.js test/distributed/harness/__tests__/failure-bundle.test.js`.
+14. Parent-session validation passed:
+    `node --test test/control-plane/priority-recovery-snapshot.test.js`.
+15. Parent-session validation passed:
+    `node --test test/rebalancer/move-planner-placement-owner-kernel.test.js test/rebalancer/storage-admission-service.test.js test/rebalancer/operation-workflow-owner-decision.test.js test/rebalancer/operation-workflow-owner-adapter.test.js`.
+16. Parent-session validation passed:
+    `node --test test/control-plane/dual-path-closure.test.js`.
+17. Parent-session exact package runtime-source guardrails passed for runtime
+    grammar, literal ownership, and decision boundaries over the changed
+    runtime/diagnostics/analyzer source set.
+18. Broad guardrail note: exact changed production-plus-tooling literal and
+    decision-boundary scans fail on unrelated tooling changes already present
+    in pushed commit `09ce26fb` (`scripts/work-tracker.js`,
+    `scripts/model-ledger.js`, and `scripts/work-context.js`). Those files are
+    outside this runtime closure owner boundary and are not claimed as clean by
+    this package.
+19. Representative validation failed as expected for a migrated blocker:
+    `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-spec-led-runtime-modularization-final.report.json --fast-local --verbose`
+    stopped at `publication_ack_convergence` with `pending_acks_present`.
+20. Representative analyzer proof passed:
+    `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-final.report.json --explain publication_ack_convergence`.
+21. Closure note: runtime implementation changes for this package were already
+    pushed in mixed commit `09ce26fb`. This package does not rewrite that
+    pushed history; the closure commit records only package-status and
+    sprint-handoff metadata.
 
 ## Done When
 

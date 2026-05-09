@@ -4,27 +4,31 @@ Status: active. This sprint was activated by human direction on May 9, 2026
 after the prior rolling-restart package closed and handed off a workflow
 progress successor boundary.
 
-## Latest Package Snapshot
+## Current Package Snapshot
 
-Latest completed package:
-`work/packages/done-20260509-spec-led-runtime-modularization-placement-owner-kernel.md`.
+Current blocker package:
+`work/packages/todo-20260509-spec-led-runtime-modularization-publication-ack-convergence-frontier.md`.
 
 Owner boundary:
-`placement_owner / placement_policy_kernel`.
+`topology_publication_owner / publication_convergence`.
 
-Completed result: placement target selection now runs through one policy
-kernel that emits explicit evidence, filter, score, reserve, intent, and
-legacy compatibility outcome shapes. Move planning consumes the placement
-intent for target selection while operation workflow execution remains outside
-placement ownership.
+Current state: legacy helper, inference, and alias deletion has been executed
+and closed in
+`work/packages/done-20260509-spec-led-runtime-modularization-legacy-deletion-proof.md`.
+Representative proof did not go green; it migrated the first frontier to
+publication ACK convergence with dominant reason `pending_acks_present`.
 
+Queued work:
 Next package:
-`work/packages/done-20260509-spec-led-runtime-modularization-publication-owner-stream.md`.
+`work/packages/todo-20260509-spec-led-runtime-modularization-publication-ack-convergence-frontier.md`.
 
-Next proof surface: publication-owner stream contract with focused publication
-coordinator tests, publication recovery gate tests, publication evidence merge
-tests, and touched-file decision-boundary, literal, and runtime grammar
-guardrails.
+Companion cleanup:
+`work/packages/todo-20260509-spec-led-runtime-modularization-active-gate-report-schema-alias-deletion.md`.
+
+Next proof surface: publication ACK convergence, with a focused
+publication-owner fixture from
+`test-output/reports/rolling-restart-spec-led-runtime-modularization-final.report.json`,
+topology-convergence explain proof, and representative rolling-restart rerun.
 
 ## Goal
 
@@ -79,20 +83,44 @@ the contract and proof ladder are stable.
 6. [Publication Owner Stream Contract](../packages/done-20260509-spec-led-runtime-modularization-publication-owner-stream.md)
 7. [Projection Readiness Contract](../packages/done-20260509-spec-led-runtime-modularization-projection-readiness-contract.md)
 8. [Diagnostics And Harness Consumer Rewrite](../packages/done-20260509-spec-led-runtime-modularization-diagnostics-harness-consumer.md)
-9. [Legacy Deletion And Representative Proof](../packages/active-20260509-spec-led-runtime-modularization-legacy-deletion-proof.md)
+9. [Legacy Deletion And Representative Proof](../packages/done-20260509-spec-led-runtime-modularization-legacy-deletion-proof.md)
+10. [Publication ACK Convergence Frontier](../packages/todo-20260509-spec-led-runtime-modularization-publication-ack-convergence-frontier.md)
+11. [Active Gate Report Schema Alias Deletion](../packages/todo-20260509-spec-led-runtime-modularization-active-gate-report-schema-alias-deletion.md)
+
+## Model Fit Strategy
+
+The sprint now separates broad orchestration from Spark-safe leaf work.
+
+1. `Legacy Deletion And Representative Proof` is `escalation-required` because
+   it spans runtime owner closure and representative proof. Its intended
+   minimum model is `gpt-5.3-codex`.
+2. `Active Gate Report Schema Alias Deletion` is a bounded implementation leaf
+   slice intended for `gpt-5.3-codex-spark`. It may rename/remove diagnostics
+   artifact schema aliases only within its owned files.
+3. `Publication ACK Convergence Frontier` is a representative frontier closure
+   package intended for `gpt-5.3-codex`. It owns the publication convergence
+   boundary and must not expand into active-gate schema cleanup.
+4. A package intended for `gpt-5.3-codex-spark` must keep `Scope shape:
+   leaf-slice`, list owned and forbidden files, freeze decisions, name
+   escalation triggers, and provide focused proof.
+5. Representative proof may classify a leaf slice as closed, reduced,
+   migrated, or same-frontier. It must not expand implementation scope inside
+   the leaf package.
 
 ## Activation Rules
 
 1. Activate only one package at a time.
 2. Before runtime implementation starts, move the selected package to `active`
    and record real review, fix if needed, and implementation subagent proof.
-3. Runtime packages must freeze one filled module contract before production or
+3. Active metadata-bearing packages must carry a `## Model Fit` section before
+   implementation starts.
+4. Runtime packages must freeze one filled module contract before production or
    test edits begin.
-4. Keep the parked rolling-restart sprint as predecessor evidence unless a
+5. Keep the parked rolling-restart sprint as predecessor evidence unless a
    fresh owner-boundary package explicitly reopens it.
-5. Each runtime package starts with a decision-contract fixture or structural
+6. Each runtime package starts with a decision-contract fixture or structural
    guard that fails for the old behavior.
-6. Each runtime package ends with explicit deletion, downgrade, or quarantine of
+7. Each runtime package ends with explicit deletion, downgrade, or quarantine of
    superseded paths.
 
 ## Cross-Package Invariants

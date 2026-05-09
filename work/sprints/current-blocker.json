@@ -2,32 +2,43 @@
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
   "sprint": "work/sprints/active-2026-q2-spec-led-runtime-modularization.md",
-  "package": "work/packages/active-20260509-spec-led-runtime-modularization-legacy-deletion-proof.md",
-  "status": "active",
+  "package": "work/packages/todo-20260509-spec-led-runtime-modularization-publication-ack-convergence-frontier.md",
+  "status": "todo",
   "scenario": "spec-led-runtime-modularization",
-  "artifact": "test-output/reports/rolling-restart-current-release-gate-after-workflow-timeout-stale-progress-fix.report.json",
+  "artifact": "test-output/reports/rolling-restart-spec-led-runtime-modularization-final.report.json",
   "playback": "none",
-  "owner": "runtime_contract_closure_owner",
-  "boundary": "legacy_path_deletion_and_representative_proof",
-  "dominantReason": "modular_rewrite_not_yet_closed_by_deletion_and_gate_proof",
-  "currentState": "After owner rewrites land, old compatibility paths, aliases, helpers, and fallback branches must be deleted or guarded, then representative proof must confirm no new blocker has been hidden.",
-  "nextAction": "Run structural deletion proof, close remaining compatibility paths, and rerun representative rolling-restart or migrate the first new blocker to a fresh owner package.",
+  "owner": "topology_publication_owner",
+  "boundary": "publication_convergence",
+  "dominantReason": "pending_acks_present",
+  "currentState": "Representative rolling-restart moved off legacy deletion and now stops at publication_ack_convergence: publication epoch 4 is ACK_PENDING with pendingAckCount=1 and missingPublishedCount=3.",
+  "nextAction": "Build a focused publication-owner ACK convergence fixture from the final report, prove ACK debt cannot remain hidden behind readiness/startup evidence, and either close ACK convergence or migrate to the next owner frontier.",
   "proof": [
-    "rg checks for deleted legacy labels and helpers",
-    "npm run work:validate",
-    "Touched-file static guardrails selected by changed owners",
-    "node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-spec-led-runtime-modularization-final.report.json --fast-local --verbose"
+    "Focused publication owner ACK convergence fixture from the representative report",
+    "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-final.report.json --explain publication_ack_convergence",
+    "node --test test/control-plane/*publication*.test.js test/distributed/harness/__tests__/failure-bundle.test.js test/diagnostics/topology-convergence-graph.test.js test/scripts/analyze-topology-convergence.test.js",
+    "Touched-file static guardrails selected by topology_publication_owner",
+    "node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-spec-led-runtime-modularization-publication-ack.report.json --fast-local --verbose"
   ],
   "touchedFiles": [
-    "src/rebalancer/operation-workflow-owner*.js",
-    "src/rebalancer/move-planner*.js",
     "src/control-plane/*publication*.js",
-    "src/control-plane/*readiness*.js",
-    "src/control-plane/priority-recovery-snapshot*.js",
-    "test/distributed/harness/*.js",
+    "src/control-plane/publication-recovery-*.js",
+    "src/control-plane/membership-publication-coordinator*.js",
+    "test/control-plane/*publication*.test.js",
+    "test/distributed/harness/publication-evidence-contract.js",
+    "test/distributed/harness/failure-bundle*.js",
+    "src/diagnostics/topology-convergence-graph.js",
     "scripts/analyze-topology-convergence.js",
-    "work/sprints/todo-2026-q2-spec-led-runtime-modularization.md",
-    "work/packages/active-20260509-spec-led-runtime-modularization-legacy-deletion-proof.md"
+    "work/packages/todo-20260509-spec-led-runtime-modularization-publication-ack-convergence-frontier.md"
   ],
-  "predecessor": "work/packages/done-20260509-spec-led-runtime-modularization-diagnostics-harness-consumer.md"
+  "modelFit": {
+    "packageClass": "representative-frontier-closure",
+    "intendedMinimumModel": "gpt-5.3-codex",
+    "scopeShape": "owner-boundary-contraction",
+    "escalationTriggers": [
+      "publication ACK convergence requires runtime owner behavior changes",
+      "focused fixture exposes a different topology owner boundary",
+      "representative proof still fails on publication_ack_convergence after owner fix"
+    ]
+  },
+  "predecessor": "work/packages/done-20260509-spec-led-runtime-modularization-legacy-deletion-proof.md"
 }

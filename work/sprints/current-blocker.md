@@ -4,43 +4,58 @@
 
 Sprint: `work/sprints/active-2026-q2-spec-led-runtime-modularization.md`
 
-Package: `work/packages/active-20260509-spec-led-runtime-modularization-legacy-deletion-proof.md`
+Package: `work/packages/todo-20260509-spec-led-runtime-modularization-publication-ack-convergence-frontier.md`
 
 Scenario: `spec-led-runtime-modularization`
 
-Artifact: `test-output/reports/rolling-restart-current-release-gate-after-workflow-timeout-stale-progress-fix.report.json`
+Artifact: `test-output/reports/rolling-restart-spec-led-runtime-modularization-final.report.json`
 
 Playback: `none`
 
 ## Boundary
 
-Owner: `runtime_contract_closure_owner`
+Owner: `topology_publication_owner`
 
-Boundary: `legacy_path_deletion_and_representative_proof`
+Boundary: `publication_convergence`
 
-Dominant reason: `modular_rewrite_not_yet_closed_by_deletion_and_gate_proof`
+Dominant reason: `pending_acks_present`
 
-Current state: After owner rewrites land, old compatibility paths, aliases, helpers, and fallback branches must be deleted or guarded, then representative proof must confirm no new blocker has been hidden.
+Current state: Representative rolling-restart moved off legacy deletion and now stops at publication_ack_convergence: publication epoch 4 is ACK_PENDING with pendingAckCount=1 and missingPublishedCount=3.
 
 ## Next Action
 
-Run structural deletion proof, close remaining compatibility paths, and rerun representative rolling-restart or migrate the first new blocker to a fresh owner package.
+Build a focused publication-owner ACK convergence fixture from the final report, prove ACK debt cannot remain hidden behind readiness/startup evidence, and either close ACK convergence or migrate to the next owner frontier.
 
 ## Proof Ladder
 
-1. `rg checks for deleted legacy labels and helpers`
-2. `npm run work:validate`
-3. `Touched-file static guardrails selected by changed owners`
-4. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-spec-led-runtime-modularization-final.report.json --fast-local --verbose`
+1. `Focused publication owner ACK convergence fixture from the representative report`
+2. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-final.report.json --explain publication_ack_convergence`
+3. `node --test test/control-plane/*publication*.test.js test/distributed/harness/__tests__/failure-bundle.test.js test/diagnostics/topology-convergence-graph.test.js test/scripts/analyze-topology-convergence.test.js`
+4. `Touched-file static guardrails selected by topology_publication_owner`
+5. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-spec-led-runtime-modularization-publication-ack.report.json --fast-local --verbose`
+
+## Model Fit
+
+Package class: `representative-frontier-closure`
+
+Intended minimum model: `gpt-5.3-codex`
+
+Scope shape: `owner-boundary-contraction`
+
+Escalation triggers:
+
+1. `publication ACK convergence requires runtime owner behavior changes`
+2. `focused fixture exposes a different topology owner boundary`
+3. `representative proof still fails on publication_ack_convergence after owner fix`
 
 ## Touched Files
 
-1. `src/rebalancer/operation-workflow-owner*.js`
-2. `src/rebalancer/move-planner*.js`
-3. `src/control-plane/*publication*.js`
-4. `src/control-plane/*readiness*.js`
-5. `src/control-plane/priority-recovery-snapshot*.js`
-6. `test/distributed/harness/*.js`
-7. `scripts/analyze-topology-convergence.js`
-8. `work/sprints/todo-2026-q2-spec-led-runtime-modularization.md`
-9. `work/packages/active-20260509-spec-led-runtime-modularization-legacy-deletion-proof.md`
+1. `src/control-plane/*publication*.js`
+2. `src/control-plane/publication-recovery-*.js`
+3. `src/control-plane/membership-publication-coordinator*.js`
+4. `test/control-plane/*publication*.test.js`
+5. `test/distributed/harness/publication-evidence-contract.js`
+6. `test/distributed/harness/failure-bundle*.js`
+7. `src/diagnostics/topology-convergence-graph.js`
+8. `scripts/analyze-topology-convergence.js`
+9. `work/packages/todo-20260509-spec-led-runtime-modularization-publication-ack-convergence-frontier.md`

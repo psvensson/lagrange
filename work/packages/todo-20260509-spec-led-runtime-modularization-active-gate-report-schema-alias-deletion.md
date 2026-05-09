@@ -29,7 +29,17 @@
     "test/scripts/analyze-topology-convergence.test.js",
     "work/packages/todo-20260509-spec-led-runtime-modularization-active-gate-report-schema-alias-deletion.md"
   ],
-  "predecessor": "work/packages/active-20260509-spec-led-runtime-modularization-legacy-deletion-proof.md"
+  "modelFit": {
+    "packageClass": "bounded-implementation",
+    "intendedMinimumModel": "gpt-5.3-codex-spark",
+    "scopeShape": "leaf-slice",
+    "escalationTriggers": [
+      "owned files expand outside diagnostics artifact schema surfaces",
+      "migration requires runtime active-gate behavior changes",
+      "representative proof reveals a new owner boundary instead of schema aliases"
+    ]
+  },
+  "predecessor": "work/packages/done-20260509-spec-led-runtime-modularization-legacy-deletion-proof.md"
 }
 -->
 
@@ -42,13 +52,31 @@ schema. Removing them inside the final deletion slice would change external
 artifact contracts and break diagnostics readers without a scoped schema-owner
 migration.
 
-## Scope
+## Scope Basis
+
+Successor split from
+`work/packages/done-20260509-spec-led-runtime-modularization-legacy-deletion-proof.md`
+for the remaining active-gate diagnostics artifact schema aliases. This is a
+Phase `0.1` internal-coherence cleanup within the AGPL repository.
+
+## In Scope
 
 1. Define the canonical active-gate diagnostics artifact shape.
 2. Migrate failure-bundle, analyzer, and topology-convergence consumers from
    the old report aliases to that shape.
 3. Add structural guards that reject the old aliases after migration.
 4. Preserve owner-boundary evidence and representative report readability.
+
+## Model Fit
+
+- Package class: `bounded-implementation`
+- Intended minimum model: `gpt-5.3-codex-spark`
+- Scope shape: `leaf-slice`
+- Owned files: `src/diagnostics/topology-convergence-graph.js`, `scripts/analyze-topology-convergence.js`, `test/distributed/harness/active-gate-contract.js`, `test/distributed/harness/failure-bundle-segment-4.js`, `test/distributed/harness/__tests__/failure-bundle*.js`, `test/diagnostics/topology-convergence-graph.test.js`, `test/scripts/analyze-topology-convergence.test.js`, this package file.
+- Forbidden files: `src/control-plane/`, `src/rebalancer/`, runtime active-gate owner behavior, unrelated sprint/package files.
+- Frozen decisions: this package only renames/removes active-gate report schema aliases; it must not change active-gate semantics or owner-witness classification.
+- Escalation triggers: owned files expand outside diagnostics artifact schema surfaces; migration requires runtime active-gate behavior changes; representative proof reveals a new owner boundary instead of schema aliases.
+- Focused proof: `rg "activeGateBestProgress|activeGateNoProgress|activeGateBlockerHistory" src/diagnostics scripts test/distributed/harness test/diagnostics test/scripts`; `node --test test/diagnostics/topology-convergence-graph.test.js test/scripts/analyze-topology-convergence.test.js test/distributed/harness/__tests__/failure-bundle.test.js`
 
 ## Out Of Scope
 
