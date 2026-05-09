@@ -11,6 +11,10 @@ import {OperationWorkflowOwnerSegment7} from
 import {createOperationWorkflowOwnerAdapter} from
   './operation-workflow-owner-adapter.js';
 import {
+  PRIORITY_RECOVERY_BLOCKING_BOUNDARY,
+  PRIORITY_RECOVERY_WAIT_MODE,
+} from '../control-plane/priority-recovery-diagnostics-constants.js';
+import {
   normalizePriorityRecoveryDispatchPendingDecisionSnapshot,
 } from '../control-plane/priority-recovery-snapshot.js';
 import {
@@ -24,8 +28,6 @@ const OPERATION_WORKFLOW_OWNER_ADAPTER_SNAPSHOT = Object.freeze({
   DISPATCH_PENDING_PHASE: 'dispatch_pending',
   DISPATCHED_WAITING_PROGRESS: 'dispatched_waiting_progress',
   OPERATION_WORKFLOW_OWNER: 'operation_workflow_owner',
-  TIMEOUT_RECONCILE_DUE: 'timeout_reconcile_due',
-  WORKFLOW_TIMEOUT: 'workflow_timeout',
 });
 
 function buildPriorityRecoveryDispatchPendingOwnerReentryContext(snapshot) {
@@ -34,9 +36,9 @@ function buildPriorityRecoveryDispatchPendingOwnerReentryContext(snapshot) {
   });
   if (
     snapshot?.progress?.blockingBoundary !==
-      OPERATION_WORKFLOW_OWNER_ADAPTER_SNAPSHOT.WORKFLOW_TIMEOUT ||
+      PRIORITY_RECOVERY_BLOCKING_BOUNDARY.WORKFLOW_TIMEOUT ||
     snapshot?.progress?.waitMode !==
-      OPERATION_WORKFLOW_OWNER_ADAPTER_SNAPSHOT.TIMEOUT_RECONCILE_DUE
+      PRIORITY_RECOVERY_WAIT_MODE.TIMEOUT_RECONCILE_DUE
   ) {
     return baseContext;
   }

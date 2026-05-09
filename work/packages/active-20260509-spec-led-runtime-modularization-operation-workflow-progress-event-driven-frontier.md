@@ -168,16 +168,16 @@ guardrails, and representative rolling-restart.
 
 ## Subagent Sequencing Ledger
 
-- [ ] Review subagent recorded:
-      pending-before-implementation-resumes.
-- [ ] Fix subagent recorded or explicitly not needed:
-      pending-review-result.
+- [x] Review subagent recorded:
+      Agent Pasteur (`019e0d44-ba20-72c2-a5ce-2139f8de80e0`) reviewed `work/packages/done-20260509-spec-led-runtime-modularization-operation-workflow-timeout-transition-deferred-frontier.md`; result `fixes-required`.
+- [x] Fix subagent recorded or explicitly not needed:
+      Agent Zeno (`019e0d49-e9d6-70c1-9944-3bee7d44550d`) fixed `work/packages/done-20260509-spec-led-runtime-modularization-operation-workflow-timeout-transition-deferred-frontier.md`.
 - [ ] Implementation subagent recorded:
       pending-before-implementation-resumes.
 
 ## Detection / Analysis Tasks
 
-- [ ] Review the workflow timeout transition-deferred package before
+- [x] Review the workflow timeout transition-deferred package before
       implementation starts.
 - [ ] Extract the smallest workflow-progress event-driven fixture from the
       representative report.
