@@ -81,6 +81,8 @@ const OPERATION_WORKFLOW_PROGRESS_STATE_VALUES = Object.freeze({
   SERIAL_DEPENDENCY_PENDING: 'serial_dependency_pending',
   LOCAL_OWNER_DISPATCH_READY: 'local_owner_dispatch_ready',
   REMOTE_OWNER_WAKE_REQUIRED: 'remote_owner_wake_required',
+  REMOTE_OWNER_HANDOFF_RETRY_SCHEDULED:
+    'remote_owner_handoff_retry_scheduled',
   EXISTING_OPERATION_ADVANCEMENT_READY:
     'existing_operation_advancement_ready',
   OWNER_PROGRESS_WAIT_REQUIRED: 'owner_progress_wait_required',
@@ -96,6 +98,8 @@ const OPERATION_WORKFLOW_OUTCOME_VALUES = Object.freeze({
   WAIT_FOR_SERIAL_OPERATION: 'wait_for_serial_operation',
   DISPATCH_LOCAL_OWNER: 'dispatch_local_owner',
   WAKE_REMOTE_OWNER: 'wake_remote_owner',
+  WAIT_FOR_REBALANCER_HANDOFF_RETRY:
+    'wait_for_rebalancer_handoff_retry',
   ADVANCE_EXISTING_OPERATION: 'advance_existing_operation',
   WAIT_FOR_OWNER_PROGRESS: 'wait_for_owner_progress',
 });
@@ -127,6 +131,7 @@ const OPERATION_WORKFLOW_REASON_CODE_VALUES = Object.freeze({
   DISPATCH_NOT_OBSERVED: 'dispatch_not_observed',
   REMOTE_OWNER_AUTHORITATIVE: 'remote_owner_authoritative',
   WAKE_REQUIRED: 'wake_required',
+  REMOTE_HANDOFF_RETRY_SCHEDULED: 'remote_handoff_retry_scheduled',
   WORKFLOW_TRANSITION_AVAILABLE: 'workflow_transition_available',
   OWNER_PROGRESS_IN_FLIGHT: 'owner_progress_in_flight',
 });

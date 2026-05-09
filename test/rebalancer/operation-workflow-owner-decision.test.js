@@ -50,6 +50,12 @@ const TEST_PRIOR_OPERATION_KEY = 'operation-kernel-prior';
 const TEST_FOREIGN_OWNER = 'priority_recovery_observation_owner';
 const TEST_FORBIDDEN_INPUT_VALUE = 'workflow_timeout';
 const TEST_FORBIDDEN_INPUT_FIELD = OPERATION_WORKFLOW_FORBIDDEN_INPUT_FIELDS[0];
+const TEST_REBALANCER_HANDOFF_RETRY_STATE =
+  'remote_owner_handoff_retry_scheduled';
+const TEST_REBALANCER_HANDOFF_RETRY_OUTCOME =
+  'wait_for_rebalancer_handoff_retry';
+const TEST_REBALANCER_HANDOFF_RETRY_REASON =
+  'remote_handoff_retry_scheduled';
 
 const EXPECTED_DECISION_TABLE_STATES = Object.freeze([
   OPERATION_WORKFLOW_PROGRESS_STATES.OPERATION_INPUT_REJECTED,
@@ -59,6 +65,7 @@ const EXPECTED_DECISION_TABLE_STATES = Object.freeze([
   OPERATION_WORKFLOW_PROGRESS_STATES.STALE_PROGRESS_RECONCILE_REQUIRED,
   OPERATION_WORKFLOW_PROGRESS_STATES.SERIAL_DEPENDENCY_PENDING,
   OPERATION_WORKFLOW_PROGRESS_STATES.LOCAL_OWNER_DISPATCH_READY,
+  TEST_REBALANCER_HANDOFF_RETRY_STATE,
   OPERATION_WORKFLOW_PROGRESS_STATES.REMOTE_OWNER_WAKE_REQUIRED,
   OPERATION_WORKFLOW_PROGRESS_STATES.EXISTING_OPERATION_ADVANCEMENT_READY,
   OPERATION_WORKFLOW_PROGRESS_STATES.OWNER_PROGRESS_WAIT_REQUIRED,
@@ -462,6 +469,31 @@ test('operation workflow decisions map representative blocker states', (t) => {
       ],
     },
     {
+      name: 'remote owner handoff waits on the scheduled retry path',
+      input: buildEvidence({
+        ownerLease: buildOwnerLease({
+          authorityState:
+            OPERATION_WORKFLOW_OWNER_AUTHORITY_STATE.REMOTE_AUTHORITATIVE,
+          ownerNodeKey: TEST_REMOTE_OWNER_NODE_KEY,
+        }),
+        dispatchObservation: buildDispatchObservation({
+          wakeState: OPERATION_WORKFLOW_WAKE_STATE.REQUIRED,
+          commandState: OPERATION_WORKFLOW_COMMAND_STATE.IDLE,
+        }),
+        retryBudget: buildRetryBudget({
+          deadlineState: OPERATION_WORKFLOW_RETRY_DEADLINE_STATE.ACTIVE,
+        }),
+      }),
+      state: TEST_REBALANCER_HANDOFF_RETRY_STATE,
+      outcome: TEST_REBALANCER_HANDOFF_RETRY_OUTCOME,
+      nextRequiredAction: TEST_REBALANCER_HANDOFF_RETRY_OUTCOME,
+      effectCommand: OPERATION_WORKFLOW_EFFECT_COMMANDS.NO_OPERATION_EFFECT,
+      reasons: [
+        OPERATION_WORKFLOW_REASON_CODES.REMOTE_OWNER_AUTHORITATIVE,
+        TEST_REBALANCER_HANDOFF_RETRY_REASON,
+      ],
+    },
+    {
       name: 'remote owner wake emits wake command',
       input: buildEvidence({
         ownerLease: buildOwnerLease({
@@ -472,6 +504,9 @@ test('operation workflow decisions map representative blocker states', (t) => {
         dispatchObservation: buildDispatchObservation({
           wakeState: OPERATION_WORKFLOW_WAKE_STATE.REQUIRED,
           commandState: OPERATION_WORKFLOW_COMMAND_STATE.IDLE,
+        }),
+        retryBudget: buildRetryBudget({
+          deadlineState: OPERATION_WORKFLOW_RETRY_DEADLINE_STATE.UNAVAILABLE,
         }),
       }),
       state: OPERATION_WORKFLOW_PROGRESS_STATES.REMOTE_OWNER_WAKE_REQUIRED,

@@ -15,6 +15,8 @@ import {
   OPERATION_WORKFLOW_LEASE_FRESHNESS_STATE,
   OPERATION_WORKFLOW_OWNER_AUTHORITY_STATE,
   OPERATION_WORKFLOW_PUBLICATION_FENCE_STATE,
+  OPERATION_WORKFLOW_RETRY_BUDGET_STATE,
+  OPERATION_WORKFLOW_RETRY_DEADLINE_STATE,
   OPERATION_WORKFLOW_REVISION_VARIANTS,
   OPERATION_WORKFLOW_SERIAL_DEPENDENCY_STATE,
   OPERATION_WORKFLOW_STALE_PROGRESS_STATE,
@@ -330,6 +332,29 @@ function buildOperationWorkflowOwnerPortTimeoutBudget(context) {
   });
 }
 
+function buildOperationWorkflowOwnerPortRetryBudget(owner, operation) {
+  const operationId = getOperationWorkflowOwnerPortOperationId(
+    owner,
+    operation,
+  );
+  const retryScheduled =
+    typeof owner.hasActiveCreatedOperationHandoffRetry ===
+      OPERATION_WORKFLOW_OWNER_PORT_FUNCTION_TYPE &&
+    owner.hasActiveCreatedOperationHandoffRetry(operationId);
+  return Object.freeze({
+    budgetState: retryScheduled === true ?
+      OPERATION_WORKFLOW_RETRY_BUDGET_STATE.AVAILABLE :
+      OPERATION_WORKFLOW_RETRY_BUDGET_STATE.UNAVAILABLE,
+    deadlineState: retryScheduled === true ?
+      OPERATION_WORKFLOW_RETRY_DEADLINE_STATE.ACTIVE :
+      OPERATION_WORKFLOW_RETRY_DEADLINE_STATE.UNAVAILABLE,
+    sourceRevision:
+      operation?.updatedAt ||
+      operation?.createdAt ||
+      OPERATION_WORKFLOW_REVISION_VARIANTS.SOURCE_REVISION_UNAVAILABLE,
+  });
+}
+
 function buildOperationWorkflowOwnerPortPublicationFence() {
   return Object.freeze({
     fenceState: OPERATION_WORKFLOW_PUBLICATION_FENCE_STATE.CURRENT,
@@ -525,6 +550,9 @@ function createOperationWorkflowOwnerPorts(owner) {
     },
     readSerialDependency() {
       return buildOperationWorkflowOwnerPortSerialDependency();
+    },
+    readRetryBudget(operation) {
+      return buildOperationWorkflowOwnerPortRetryBudget(owner, operation);
     },
     readTimeoutBudget(context) {
       return buildOperationWorkflowOwnerPortTimeoutBudget(context);

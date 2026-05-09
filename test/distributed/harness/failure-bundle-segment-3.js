@@ -228,6 +228,16 @@ const PRIORITY_RECOVERY_LOG_DISPATCH_RETRY_BOUNDARY_WITNESS_BY_BOUNDARY =
     }),
   });
 const EMPTY_STRING = '';
+const NEWLINE = '\n';
+const ONE = 1;
+const FAILURE_BUNDLE_SEGMENT_TYPE = Object.freeze({
+  OBJECT: 'object',
+  STRING: 'string',
+});
+const WORKFLOW_DENIED_TRANSITION_STATE = Object.freeze({
+  BLOCKED: 'blocked',
+  DEFERRED: 'deferred',
+});
 
 function buildPlaybackControlPlaneFallback(events) {
   const sortedEvents = [...(Array.isArray(events) ? events : [])]
@@ -440,7 +450,7 @@ function buildPriorityRecoveryLogWitnessFromDispatchRetryDeferral(artifact) {
   return {
     partitionId,
     semanticStateId: PRIORITY_RECOVERY_SEMANTIC_STATE.RECOVERING_IN_FLIGHT,
-    progressContractState: OWNER_CONTRACT_STATE.DEFERRED,
+    progressContractState: OWNER_CONTRACT_STATE.PENDING,
     actuationState:
       PRIORITY_RECOVERY_ACTUATION_STATE.DISPATCHED_WAITING_PROGRESS,
     currentOwner: PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER,
@@ -559,14 +569,16 @@ function buildRestartBoundariesFromPlaybackEvents(events) {
       timestampMs: normalizeNonNegativeCount(event?.timestamp),
       timestamp: toIsoTimestamp(normalizeNonNegativeCount(event?.timestamp)),
       phase:
-        typeof event?.details?.phase === 'string' ?
+        typeof event?.details?.phase === FAILURE_BUNDLE_SEGMENT_TYPE.STRING ?
           event.details.phase :
           UNKNOWN_VALUE,
       snapshot: isRecord(event?.details?.snapshot) ?
         event.details.snapshot :
         null,
       error:
-        typeof event?.details?.error === 'string' ? event.details.error : null,
+        typeof event?.details?.error === FAILURE_BUNDLE_SEGMENT_TYPE.STRING ?
+          event.details.error :
+          null,
     });
   }
   return Object.keys(restartBoundariesByNodeId).length > ZERO ?
@@ -581,9 +593,9 @@ async function collectPlaybackEventInsights(scenarioDir, workspaceRoot) {
   );
   try {
     const content = await readFile(playbackEventsAbsolutePath, UTF8_ENCODING);
-    const events = String(content || '')
-      .split('\n')
-      .map((line) => String(line || '').trim())
+    const events = String(content || EMPTY_STRING)
+      .split(NEWLINE)
+      .map((line) => String(line || EMPTY_STRING).trim())
       .filter((line) => line.length > ZERO)
       .map((line) => {
         try {
@@ -618,9 +630,9 @@ async function collectPlaybackEventInsights(scenarioDir, workspaceRoot) {
 }
 
 function parsePlaybackSnapshotStates(rawContent) {
-  return String(rawContent || '')
-    .split('\n')
-    .map((line) => String(line || '').trim())
+  return String(rawContent || EMPTY_STRING)
+    .split(NEWLINE)
+    .map((line) => String(line || EMPTY_STRING).trim())
     .filter((line) => line.length > ZERO)
     .map((line) => {
       try {
@@ -759,7 +771,7 @@ function resolveReadinessSnapshot(entry, playbackReadiness = null) {
     sutLoadDiscovery: failedArtifacts.sutLoadDiscovery || null,
     lastReadinessTimelineEntry:
       readinessTimeline.length > ZERO ?
-        readinessTimeline[readinessTimeline.length - 1] :
+        readinessTimeline[readinessTimeline.length - ONE] :
         playbackReadiness?.lastReadinessTimelineEntry || null,
   };
 }
@@ -1093,12 +1105,14 @@ function resolveControlPlaneDiagnostics(entry) {
   const heartbeatPublicationByNodeId = {};
   let publicationConvergence =
     directDiagnostics?.publicationConvergence &&
-    typeof directDiagnostics.publicationConvergence === 'object' ?
+    typeof directDiagnostics.publicationConvergence ===
+      FAILURE_BUNDLE_SEGMENT_TYPE.OBJECT ?
       directDiagnostics.publicationConvergence :
       null;
   let priorityRecoveryObservation =
     directDiagnostics?.priorityRecoveryObservation &&
-    typeof directDiagnostics.priorityRecoveryObservation === 'object' ?
+    typeof directDiagnostics.priorityRecoveryObservation ===
+      FAILURE_BUNDLE_SEGMENT_TYPE.OBJECT ?
       directDiagnostics.priorityRecoveryObservation :
       null;
   let priorityRecoveryDecisionSnapshots =
@@ -1120,7 +1134,8 @@ function resolveControlPlaneDiagnostics(entry) {
   const controlPlaneOperations = [];
   let startupRecovery =
     directDiagnostics?.startupRecovery &&
-    typeof directDiagnostics.startupRecovery === 'object' ?
+    typeof directDiagnostics.startupRecovery ===
+      FAILURE_BUNDLE_SEGMENT_TYPE.OBJECT ?
       directDiagnostics.startupRecovery :
       null;
 
@@ -1132,13 +1147,17 @@ function resolveControlPlaneDiagnostics(entry) {
         snapshotsByNodeId :
         directDiagnosticSources;
 
-  if (diagnosticSources && typeof diagnosticSources === 'object') {
+  if (
+    diagnosticSources &&
+    typeof diagnosticSources === FAILURE_BUNDLE_SEGMENT_TYPE.OBJECT
+  ) {
     for (const [snapshotNodeId, snapshot] of Object.entries(
       diagnosticSources,
     )) {
       const controlPlaneDiagnostics =
         snapshot?.controlPlaneDiagnostics &&
-        typeof snapshot.controlPlaneDiagnostics === 'object' ?
+        typeof snapshot.controlPlaneDiagnostics ===
+          FAILURE_BUNDLE_SEGMENT_TYPE.OBJECT ?
           snapshot.controlPlaneDiagnostics :
           null;
       if (!controlPlaneDiagnostics) {
@@ -1147,7 +1166,8 @@ function resolveControlPlaneDiagnostics(entry) {
 
       if (
         controlPlaneDiagnostics.publicationMode &&
-        typeof controlPlaneDiagnostics.publicationMode === 'object'
+        typeof controlPlaneDiagnostics.publicationMode ===
+          FAILURE_BUNDLE_SEGMENT_TYPE.OBJECT
       ) {
         publicationModeByNodeId[snapshotNodeId] =
           controlPlaneDiagnostics.publicationMode;
@@ -1155,14 +1175,16 @@ function resolveControlPlaneDiagnostics(entry) {
       if (
         !publicationConvergence &&
         controlPlaneDiagnostics.publicationConvergence &&
-        typeof controlPlaneDiagnostics.publicationConvergence === 'object'
+        typeof controlPlaneDiagnostics.publicationConvergence ===
+          FAILURE_BUNDLE_SEGMENT_TYPE.OBJECT
       ) {
         publicationConvergence = controlPlaneDiagnostics.publicationConvergence;
       }
       if (
         !priorityRecoveryObservation &&
         controlPlaneDiagnostics.priorityRecoveryObservation &&
-        typeof controlPlaneDiagnostics.priorityRecoveryObservation === 'object'
+        typeof controlPlaneDiagnostics.priorityRecoveryObservation ===
+          FAILURE_BUNDLE_SEGMENT_TYPE.OBJECT
       ) {
         priorityRecoveryObservation =
           controlPlaneDiagnostics.priorityRecoveryObservation;
@@ -1178,7 +1200,8 @@ function resolveControlPlaneDiagnostics(entry) {
       );
       if (
         controlPlaneDiagnostics.heartbeatPublication &&
-        typeof controlPlaneDiagnostics.heartbeatPublication === 'object'
+        typeof controlPlaneDiagnostics.heartbeatPublication ===
+          FAILURE_BUNDLE_SEGMENT_TYPE.OBJECT
       ) {
         heartbeatPublicationByNodeId[snapshotNodeId] =
           controlPlaneDiagnostics.heartbeatPublication;
@@ -1186,7 +1209,8 @@ function resolveControlPlaneDiagnostics(entry) {
       if (
         !startupRecovery &&
         controlPlaneDiagnostics.startupRecovery &&
-        typeof controlPlaneDiagnostics.startupRecovery === 'object'
+        typeof controlPlaneDiagnostics.startupRecovery ===
+          FAILURE_BUNDLE_SEGMENT_TYPE.OBJECT
       ) {
         startupRecovery = controlPlaneDiagnostics.startupRecovery;
       }
@@ -1241,7 +1265,10 @@ function resolveControlPlaneDiagnostics(entry) {
         controlPlaneDiagnostics.timeoutClassifications :
         [];
       for (const timeout of timeouts) {
-        if (!timeout || typeof timeout !== 'object') {
+        if (
+          !timeout ||
+          typeof timeout !== FAILURE_BUNDLE_SEGMENT_TYPE.OBJECT
+        ) {
           continue;
         }
         timeoutClassifications.push({
@@ -1256,7 +1283,10 @@ function resolveControlPlaneDiagnostics(entry) {
         controlPlaneDiagnostics.participationDecisions :
         [];
       for (const decision of decisions) {
-        if (!decision || typeof decision !== 'object') {
+        if (
+          !decision ||
+          typeof decision !== FAILURE_BUNDLE_SEGMENT_TYPE.OBJECT
+        ) {
           continue;
         }
         participationDecisions.push({
@@ -1271,7 +1301,10 @@ function resolveControlPlaneDiagnostics(entry) {
         controlPlaneDiagnostics.authoritativeReadinessRepairs :
         [];
       for (const repair of repairs) {
-        if (!repair || typeof repair !== 'object') {
+        if (
+          !repair ||
+          typeof repair !== FAILURE_BUNDLE_SEGMENT_TYPE.OBJECT
+        ) {
           continue;
         }
         authoritativeReadinessRepairs.push({
@@ -1282,7 +1315,8 @@ function resolveControlPlaneDiagnostics(entry) {
 
       const recoveryEpochs =
         controlPlaneDiagnostics.recoveryEpochsByNodeId &&
-        typeof controlPlaneDiagnostics.recoveryEpochsByNodeId === 'object' ?
+        typeof controlPlaneDiagnostics.recoveryEpochsByNodeId ===
+          FAILURE_BUNDLE_SEGMENT_TYPE.OBJECT ?
           controlPlaneDiagnostics.recoveryEpochsByNodeId :
           {};
       for (const [nodeId, epochs] of Object.entries(recoveryEpochs)) {
@@ -1306,7 +1340,10 @@ function resolveControlPlaneDiagnostics(entry) {
         controlPlaneDiagnostics.controlPlaneOperations :
         [];
       for (const operation of operations) {
-        if (!operation || typeof operation !== 'object') {
+        if (
+          !operation ||
+          typeof operation !== FAILURE_BUNDLE_SEGMENT_TYPE.OBJECT
+        ) {
           continue;
         }
         controlPlaneOperations.push({
@@ -1379,7 +1416,7 @@ function mergeTransitionHistory(existingEntries, nextEntries) {
     ...(Array.isArray(existingEntries) ? existingEntries : []),
     ...(Array.isArray(nextEntries) ? nextEntries : []),
   ]) {
-    if (!entry || typeof entry !== 'object') {
+    if (!entry || typeof entry !== FAILURE_BUNDLE_SEGMENT_TYPE.OBJECT) {
       continue;
     }
     const signature = JSON.stringify({
@@ -1405,7 +1442,10 @@ function mergeTransitionHistory(existingEntries, nextEntries) {
 function resolveControlSnapshot(entry) {
   const diagnostics = resolveFailureDiagnostics(entry);
   const snapshotsByNodeId = diagnostics?.rootCauseBundle?.snapshotsByNodeId;
-  if (snapshotsByNodeId && typeof snapshotsByNodeId === 'object') {
+  if (
+    snapshotsByNodeId &&
+    typeof snapshotsByNodeId === FAILURE_BUNDLE_SEGMENT_TYPE.OBJECT
+  ) {
     return snapshotsByNodeId;
   }
   return null;
@@ -1414,7 +1454,10 @@ function resolveControlSnapshot(entry) {
 function resolveAdminQueryTraceByNodeId(entry) {
   const diagnostics = resolveFailureDiagnostics(entry);
   const traceByNodeId = diagnostics?.rootCauseBundle?.adminQueryTraceByNodeId;
-  if (traceByNodeId && typeof traceByNodeId === 'object') {
+  if (
+    traceByNodeId &&
+    typeof traceByNodeId === FAILURE_BUNDLE_SEGMENT_TYPE.OBJECT
+  ) {
     return traceByNodeId;
   }
   return null;
@@ -1424,14 +1467,14 @@ function resolveLoadMetrics(entry) {
   const diagnostics = resolveFailureDiagnostics(entry);
   if (
     diagnostics?.loadMetrics &&
-    typeof diagnostics.loadMetrics === 'object' &&
+    typeof diagnostics.loadMetrics === FAILURE_BUNDLE_SEGMENT_TYPE.OBJECT &&
     !Array.isArray(diagnostics.loadMetrics)
   ) {
     return diagnostics.loadMetrics;
   }
   if (
     entry?.loadMetrics &&
-    typeof entry.loadMetrics === 'object' &&
+    typeof entry.loadMetrics === FAILURE_BUNDLE_SEGMENT_TYPE.OBJECT &&
     !Array.isArray(entry.loadMetrics)
   ) {
     return entry.loadMetrics;
@@ -1441,9 +1484,11 @@ function resolveLoadMetrics(entry) {
 
 function extractNodeIdsFromText(value) {
   const nodeIds = [];
-  const matches = String(value || '').matchAll(NODE_ID_ERROR_PATTERN);
+  const matches = String(value || EMPTY_STRING).matchAll(
+    NODE_ID_ERROR_PATTERN,
+  );
   for (const match of matches) {
-    const nodeId = String(match?.[1] || '');
+    const nodeId = String(match?.[ONE] || EMPTY_STRING);
     if (nodeId.length > ZERO) {
       nodeIds.push(nodeId);
     }
@@ -1563,8 +1608,13 @@ function resolveWorkflowStartTimestampMs(workflow) {
 }
 
 function resolveWorkflowDeniedTimestampMs(workflow) {
-  const transitionState = String(workflow?.transitionState || '').toLowerCase();
-  if (transitionState !== 'blocked' && transitionState !== 'deferred') {
+  const transitionState = String(
+    workflow?.transitionState || EMPTY_STRING,
+  ).toLowerCase();
+  if (
+    transitionState !== WORKFLOW_DENIED_TRANSITION_STATE.BLOCKED &&
+    transitionState !== WORKFLOW_DENIED_TRANSITION_STATE.DEFERRED
+  ) {
     return null;
   }
   const timestampMs = Date.parse(workflow?.admissionDecisionAt);

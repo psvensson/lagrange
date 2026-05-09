@@ -28,6 +28,10 @@ const PUBLICATION_COUNT_ONLY_ACK_EXPECTED_PATH =
   `${FIXTURE_DIRECTORY}/publication-count-only-ack.expected.json`;
 const PRIORITY_DOMINANT_WITNESS_FIXTURE_PATH =
   `${FIXTURE_DIRECTORY}/priority-dominant-witness-owner-boundary.fixture.json`;
+const PRIORITY_REBALANCER_HANDOFF_FIXTURE_PATH =
+  `${FIXTURE_DIRECTORY}/priority-rebalancer-handoff.fixture.json`;
+const PRIORITY_REBALANCER_HANDOFF_EXPECTED_PATH =
+  `${FIXTURE_DIRECTORY}/priority-rebalancer-handoff.expected.json`;
 const ABSENT_VALUE = 'absent';
 const PRIORITY_EDGE_ALIAS = 'priority';
 const PRIORITY_EDGE_ID = 'priority_recovery_partition_progress';
@@ -73,6 +77,13 @@ describe('analyze-topology-convergence CLI', () => {
   it('matches golden frontier fixture for count-only publication ACK debt', () => {
     const output = runAnalyzerJson(PUBLICATION_COUNT_ONLY_ACK_FIXTURE_PATH);
     const expected = readJson(PUBLICATION_COUNT_ONLY_ACK_EXPECTED_PATH);
+
+    assert.deepEqual(projectGoldenFrontier(output), expected);
+  });
+
+  it('matches golden frontier fixture for retry-scheduled rebalancer handoff', () => {
+    const output = runAnalyzerJson(PRIORITY_REBALANCER_HANDOFF_FIXTURE_PATH);
+    const expected = readJson(PRIORITY_REBALANCER_HANDOFF_EXPECTED_PATH);
 
     assert.deepEqual(projectGoldenFrontier(output), expected);
   });

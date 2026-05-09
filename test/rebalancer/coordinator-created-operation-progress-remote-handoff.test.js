@@ -1017,6 +1017,102 @@ async (t) => {
   }
 });
 
+test('workflowOwner priority recovery dispatch-pending handoff retries use ' +
+  'the operation owner rebalancer-handoff outcome',
+async (t) => {
+  const coordinator = createRemotePriorityVisibilityCoordinator();
+  const originalDateNow = Date.now;
+  const dispatchPendingOperation =
+    buildRemotePriorityDispatchPendingOperation();
+  Date.now = () => REMOTE_PRIORITY_DISPATCH_PENDING_CAPTURED_AT_MS;
+  coordinator.initialize();
+
+  coordinator.controlPlaneReadinessService
+    .getPriorityRecoveryPlanningSnapshotBestEffort = async () => {
+      const planning = buildRemotePriorityDispatchPendingPlanningSnapshot();
+      const snapshot =
+        planning.priorityRecoveryDecisionSnapshots.snapshots[NUM.ZERO];
+      return Object.freeze({
+        ...planning,
+        priorityRecoveryDecisionSnapshots: Object.freeze({
+          ...planning.priorityRecoveryDecisionSnapshots,
+          snapshots: [
+            Object.freeze({
+              ...snapshot,
+              actuation: Object.freeze({
+                ...snapshot.actuation,
+                state: 'dispatched_waiting_progress',
+              }),
+            }),
+          ],
+        }),
+      });
+    };
+  coordinator.workflowOwner.repository.getOperationsByEntityAuthoritativeObservation =
+    async () => {
+      return Object.freeze({
+        state: 'present',
+        operationCount: NUM.ONE,
+        operations: [dispatchPendingOperation],
+        deferredOutcome: null,
+        retryAfterMs: null,
+      });
+    };
+  coordinator.workflowOwner.createdOperationHandoffRetryTimerByOperationId.set(
+    REMOTE_PRIORITY_DISPATCH_PENDING_OPERATION_ID,
+    Object.freeze({}),
+  );
+  coordinator.workflowOwner.createdOperationHandoffRetryDeadlineMsByOperationId
+    .set(
+      REMOTE_PRIORITY_DISPATCH_PENDING_OPERATION_ID,
+      REMOTE_PRIORITY_DISPATCH_PENDING_CAPTURED_AT_MS +
+        REMOTE_HANDOFF_TIMEOUT_OVERRUN_MS,
+    );
+
+  try {
+    const snapshot =
+      await coordinator.workflowOwner
+        .getPriorityRecoveryDecisionSnapshotForPartitionOperations(
+          REMOTE_PRIORITY_DISPATCH_PENDING_PARTITION_ID,
+          [dispatchPendingOperation],
+        );
+
+    t.equal(
+      snapshot?.semanticState,
+      'recovering_in_flight',
+      'scheduled handoff retries remain an in-flight workflow state',
+    );
+    t.equal(
+      snapshot?.progress?.nextAction,
+      'retry',
+      'scheduled handoff retries surface retry as the owner contract action',
+    );
+    t.equal(
+      snapshot?.progress?.nextRequiredAction,
+      'wait_for_operation_progress',
+      'scheduled handoff retries wait for operation progress re-entry',
+    );
+    t.equal(
+      snapshot?.progress?.blockingBoundary,
+      'rebalancer_handoff',
+      'scheduled handoff retries stay on the rebalancer handoff boundary',
+    );
+    t.equal(
+      snapshot?.progress?.waitMode,
+      'retry_scheduled',
+      'scheduled handoff retries expose the retry-scheduled wait mode',
+    );
+    t.equal(
+      snapshot?.operationOwnerObservation?.outcome,
+      'wait_for_rebalancer_handoff_retry',
+      'snapshot carries the canonical operation-owner handoff outcome',
+    );
+  } finally {
+    Date.now = originalDateNow;
+    await coordinator.shutdown();
+  }
+});
+
 test('workflowOwner priority recovery dispatch-pending stale PENDING rows ' +
   'stay on owner advancement instead of workflow-timeout reconcile',
 async (t) => {

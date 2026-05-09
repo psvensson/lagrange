@@ -4,7 +4,7 @@
 
 Sprint: `work/sprints/active-2026-q2-spec-led-runtime-modularization.md`
 
-Package: `work/packages/todo-20260509-spec-led-runtime-modularization-operation-workflow-rebalancer-handoff-frontier.md`
+Package: `work/packages/active-20260509-spec-led-runtime-modularization-operation-workflow-rebalancer-handoff-frontier.md`
 
 Scenario: `spec-led-runtime-modularization`
 
@@ -20,11 +20,11 @@ Boundary: `rebalancer_handoff`
 
 Dominant reason: `priority_recovery_progress_blocked`
 
-Current state: The publication convergence package closed publication_ack_convergence. The representative report now fails first on priority_recovery_partition_progress with operation_workflow_owner / rebalancer_handoff, unresolved semantic states needs_operation and operation_stalled, and blocked partitions replica_operations-p1, sql_transactions-p1, and sql_write_operations-p1.
+Current state: Rebalancer handoff was reduced to one operation workflow owner outcome for retry-scheduled priority recovery work. The representative rerun no longer reports rebalancer_handoff; it migrates priority_recovery_partition_progress to operation_workflow_owner / workflow_timeout with workflow_timeout_transition_deferred evidence while publication ACK convergence remains satisfied.
 
 ## Next Action
 
-Review the publication convergence package, freeze the rebalancer handoff witness, then trace why the priority recovery operation workflow remains in retry-scheduled handoff instead of progressing through the canonical workflow owner.
+Open or continue a fresh operation_workflow_owner / workflow_timeout package from test-output/reports/rolling-restart-spec-led-runtime-modularization-rebalancer-handoff.report.json.
 
 ## Proof Ladder
 
@@ -53,12 +53,18 @@ Escalation triggers:
 1. `src/rebalancer/operation-workflow-owner*.js`
 2. `src/rebalancer/*handoff*.js`
 3. `src/rebalancer/unified-rebalancer*.js`
-4. `src/control-plane/priority-recovery-snapshot*.js`
-5. `test/rebalancer/*workflow*.test.js`
-6. `test/rebalancer/*handoff*.test.js`
-7. `test/control-plane/priority-recovery-snapshot*.js`
-8. `test/scripts/analyze-topology-convergence.test.js`
-9. `test/diagnostics/topology-convergence-graph.test.js`
-10. `src/diagnostics/topology-convergence-graph.js`
-11. `scripts/analyze-topology-convergence.js`
-12. `work/packages/todo-20260509-spec-led-runtime-modularization-operation-workflow-rebalancer-handoff-frontier.md`
+4. `src/control-plane/priority-recovery-operation-owner-observation.js`
+5. `src/control-plane/priority-recovery-snapshot*.js`
+6. `test/rebalancer/*workflow*.test.js`
+7. `test/rebalancer/*handoff*.test.js`
+8. `test/control-plane/priority-recovery-snapshot*.js`
+9. `test/distributed/harness/failure-bundle-segment-3.js`
+10. `test/distributed/harness/__tests__/priority-recovery-summary-normalization.test.js`
+11. `test/diagnostics/topology-convergence-graph.test.js`
+12. `test/scripts/analyze-topology-convergence.test.js`
+13. `test/scripts/__fixtures__/topology-convergence/priority-rebalancer-handoff.fixture.json`
+14. `test/scripts/__fixtures__/topology-convergence/priority-rebalancer-handoff.expected.json`
+15. `src/diagnostics/topology-convergence-graph.js`
+16. `scripts/analyze-topology-convergence.js`
+17. `work/model-ledger.jsonl`
+18. `work/packages/active-20260509-spec-led-runtime-modularization-operation-workflow-rebalancer-handoff-frontier.md`

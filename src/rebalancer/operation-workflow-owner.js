@@ -146,7 +146,8 @@ class OperationWorkflowOwner extends OperationWorkflowOwnerSegment7 {
         OPERATION_WORKFLOW_OWNER_ADAPTER_SNAPSHOT.OPERATION_WORKFLOW_OWNER ||
       snapshot?.actuation?.state ===
         OPERATION_WORKFLOW_OWNER_ADAPTER_SNAPSHOT
-          .DISPATCHED_WAITING_PROGRESS
+          .DISPATCHED_WAITING_PROGRESS &&
+        !this.hasActiveCreatedOperationHandoffRetry(operation.operationId)
     ) {
       return snapshot;
     }

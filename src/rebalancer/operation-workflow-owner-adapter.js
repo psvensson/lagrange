@@ -58,6 +58,8 @@ function buildOperationWorkflowAdapterEvidence({
       ports.readOwnerLease(operation, context),
     [OPERATION_WORKFLOW_EVIDENCE_FIELDS.SERIAL_DEPENDENCY]:
       context.serialDependency || ports.readSerialDependency(operation, context),
+    [OPERATION_WORKFLOW_EVIDENCE_FIELDS.RETRY_BUDGET]:
+      context.retryBudget || ports.readRetryBudget(operation, context),
     [OPERATION_WORKFLOW_EVIDENCE_FIELDS.TIMEOUT_BUDGET]:
       context.timeoutBudget || ports.readTimeoutBudget(context),
     [OPERATION_WORKFLOW_EVIDENCE_FIELDS.PUBLICATION_FENCE]:

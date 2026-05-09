@@ -1,0 +1,54 @@
+{
+  "summary": {
+    "frontierCount": 2,
+    "firstFrontierEdgeId": "priority_recovery_partition_progress",
+    "firstFrontierState": "blocked",
+    "firstFrontierOwner": "operation_workflow_owner",
+    "firstFrontierBoundary": "rebalancer_handoff",
+    "firstFrontierReason": "priority_recovery_progress_blocked"
+  },
+  "frontier": [
+    {
+      "id": "priority_recovery_partition_progress",
+      "state": "blocked",
+      "owner": "operation_workflow_owner",
+      "boundary": "rebalancer_handoff",
+      "dominantReason": "priority_recovery_rebalancer_handoff_retry_scheduled",
+      "evidencePath": "report.scenarios[0].publicationConvergence.priorityRecoveryProgressSummary.dominantWitness",
+      "reasons": [
+        "priority_recovery_progress_blocked"
+      ]
+    },
+    {
+      "id": "active_gate_snapshot_coverage",
+      "state": "blocked",
+      "owner": "startup_active_gate_owner",
+      "boundary": "snapshot_coverage",
+      "dominantReason": "absent",
+      "evidencePath": "report.scenarios[0].publicationConvergence.activeGate.progress",
+      "reasons": [
+        "active_gate_timed_out",
+        "snapshot_coverage_incomplete"
+      ]
+    }
+  ],
+  "dominantWitness": {
+    "edgeId": "priority_recovery_partition_progress",
+    "owner": "operation_workflow_owner",
+    "boundary": "rebalancer_handoff",
+    "state": "blocked",
+    "frontierState": "blocked",
+    "dominantReason": "priority_recovery_progress_blocked",
+    "evidencePath": "report.scenarios[0].publicationConvergence.priorityRecoveryProgressSummary.dominantWitness",
+    "reasons": [
+      "priority_recovery_progress_blocked"
+    ],
+    "source": {
+      "unresolvedSemanticStateIds": "needs_operation,operation_stalled",
+      "blockedPartitionIds": "replica_operations-p1,sql_transactions-p1,sql_write_operations-p1",
+      "dominantReason": "priority_recovery_rebalancer_handoff_retry_scheduled",
+      "failureClass": "priority_recovery_progress_blocked"
+    },
+    "rootCauseClass": "topology"
+  }
+}

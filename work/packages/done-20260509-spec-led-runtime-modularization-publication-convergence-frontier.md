@@ -68,7 +68,7 @@
   },
   "closed": "2026-05-09",
   "commitAndPushLedgerRequired": true,
-  "successor": "work/packages/todo-20260509-spec-led-runtime-modularization-operation-workflow-rebalancer-handoff-frontier.md"
+  "successor": "work/packages/active-20260509-spec-led-runtime-modularization-operation-workflow-rebalancer-handoff-frontier.md"
 }
 -->
 

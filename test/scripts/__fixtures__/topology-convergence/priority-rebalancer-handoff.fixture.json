@@ -1,0 +1,72 @@
+{
+  "scenarios": [
+    {
+      "scenario": "rolling-restart",
+      "summary": {
+        "dominantReason": "priority_recovery_rebalancer_handoff_retry_scheduled",
+        "failureClass": "priority_recovery_progress_blocked"
+      },
+      "publicationConvergence": {
+        "publicationStatus": "PUBLISHED",
+        "pendingAckCount": 0,
+        "blockedNodeCount": 0,
+        "missingPublishedCount": 0,
+        "activeGate": {
+          "state": "timed_out",
+          "ready": false,
+          "progress": {
+            "expectedNodeCount": 5,
+            "snapshotCoverageNodeCount": 3,
+            "snapshotCoverageComplete": false,
+            "priorityBlockedPartitionCount": 3,
+            "priorityRecoveryProgressClasses": {
+              "unresolvedSemanticStateIds": [
+                "needs_operation",
+                "operation_stalled"
+              ],
+              "blockedPartitionIds": [
+                "replica_operations-p1",
+                "sql_transactions-p1",
+                "sql_write_operations-p1"
+              ]
+            },
+            "blockers": [
+              "snapshot_coverage=3/5",
+              "priority_recovery_progress_class=priority_operation_serial_wait",
+              "priority_recovery_progress_class=operation_created_but_no_step_transitions"
+            ]
+          }
+        },
+        "priorityRecoveryProgressSummary": {
+          "partitionCount": 3,
+          "dominantWitness": {
+            "partitionId": "sql_write_operations-p1",
+            "semanticStateId": "recovering_in_flight",
+            "progressContractState": "deferred",
+            "actuationState": "dispatched_waiting_progress",
+            "actuationOwner": "operation_workflow_owner",
+            "currentOwner": "operation_workflow_owner",
+            "nextRequiredAction": "wait_for_operation_progress",
+            "blockingBoundary": "rebalancer_handoff",
+            "waitMode": "retry_scheduled",
+            "workflowProgressPhaseId": "dispatch_pending",
+            "retryAfterMs": 1000,
+            "lastProgressAtMs": 1778333445757,
+            "correlationKey": "sql_write_operations-p1|epoch_unknown|cf2b98db-4aad-4996-9c06-5f4656387a91",
+            "progressEvidenceSourceIds": [
+              "operation_dispatch_retry_log"
+            ],
+            "witnessIds": [
+              "cf2b98db-4aad-4996-9c06-5f4656387a91"
+            ],
+            "operationIds": [
+              "cf2b98db-4aad-4996-9c06-5f4656387a91"
+            ],
+            "latestOperationWorkflowStep": "PENDING",
+            "latestOperationStatus": "retry_deferred"
+          }
+        }
+      }
+    }
+  ]
+}

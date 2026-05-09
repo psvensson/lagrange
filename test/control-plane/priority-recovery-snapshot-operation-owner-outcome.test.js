@@ -32,6 +32,10 @@ const TEST_OWNER_STATE = 'priority_recovery_owner_contract_state';
 const TEST_OPERATION_OWNER_OBSERVATION_STATE_OBSERVED =
   'operation_owner_outcome_observed';
 const TEST_OPERATION_OWNER_EFFECT_EXECUTION_NOT_EXECUTED = 'not_executed';
+const TEST_REBALANCER_HANDOFF_RETRY_OUTCOME =
+  'wait_for_rebalancer_handoff_retry';
+const TEST_REBALANCER_HANDOFF_RETRY_REASON =
+  'remote_handoff_retry_scheduled';
 
 function buildPriorityRecoveryOwnerConsumerSnapshot(overrides = {}) {
   return Object.freeze({
@@ -238,6 +242,51 @@ test('priority recovery maps stale timeout progress owner outcome',
         PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION
           .RECONCILE_STALE_OPERATION_PROGRESS,
       message: 'stale reconcile should remain a requested owner action only',
+    });
+  });
+
+test('priority recovery maps scheduled rebalancer handoff owner outcome',
+  async (t) => {
+    const ownerOutcome = buildOperationOwnerOutcome({
+      outcome: TEST_REBALANCER_HANDOFF_RETRY_OUTCOME,
+      effectCommand:
+        OPERATION_WORKFLOW_EFFECT_COMMAND_VALUES.NO_OPERATION_EFFECT,
+      reasons: Object.freeze([
+        OPERATION_WORKFLOW_REASON_CODE_VALUES.REMOTE_OWNER_AUTHORITATIVE,
+        TEST_REBALANCER_HANDOFF_RETRY_REASON,
+      ]),
+    });
+    const normalizedSnapshot =
+      normalizePriorityRecoveryDispatchPendingDecisionSnapshot(
+        buildPriorityRecoveryOwnerConsumerSnapshot(),
+        ownerOutcome,
+      );
+
+    t.same(normalizedSnapshot.blockerReasons, []);
+    t.equal(
+      normalizedSnapshot.semanticState,
+      PRIORITY_RECOVERY_SEMANTIC_STATE.RECOVERING_IN_FLIGHT,
+    );
+    t.match(normalizedSnapshot.actuation, {
+      owner: PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER,
+      state: PRIORITY_RECOVERY_ACTUATION_STATE.DISPATCHED_WAITING_PROGRESS,
+    });
+    t.match(normalizedSnapshot.progress, {
+      contractState: OWNER_CONTRACT_STATE.PENDING,
+      nextAction: OWNER_CONTRACT_NEXT_ACTION.RETRY,
+      currentOwner: PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER,
+      nextRequiredAction:
+        PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.WAIT_FOR_OPERATION_PROGRESS,
+      blockingBoundary: PRIORITY_RECOVERY_BLOCKING_BOUNDARY.REBALANCER_HANDOFF,
+      waitMode: PRIORITY_RECOVERY_WAIT_MODE.RETRY_SCHEDULED,
+    });
+    assertOperationOwnerObservation(t, normalizedSnapshot, {
+      outcome: TEST_REBALANCER_HANDOFF_RETRY_OUTCOME,
+      effectCommand:
+        OPERATION_WORKFLOW_EFFECT_COMMAND_VALUES.NO_OPERATION_EFFECT,
+      requestedOwnerAction:
+        PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.WAIT_FOR_OPERATION_PROGRESS,
+      message: 'scheduled handoff retry should be observed without effects',
     });
   });
 
