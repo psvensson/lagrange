@@ -360,14 +360,9 @@ Implementation validation notes:
 
 ## Commit And Push Ledger
 
-Prior implementation slice ledger before the Nash review-fix:
-
-- Focused package commit: 1236436a
+- Focused package commit: ef860704
 - Pushed to: origin/codex/pending-ack-eligibility-filter
 - Commit contains only package-owned files/package-status/allowed sprint handoff: yes
-
-Current Nash review-fix slice: pending parent commit and push after
-verification.
 
 ## Done When
 
