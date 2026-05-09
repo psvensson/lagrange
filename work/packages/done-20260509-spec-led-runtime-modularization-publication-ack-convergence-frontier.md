@@ -29,7 +29,7 @@
     "test/distributed/harness/failure-bundle*.js",
     "src/diagnostics/topology-convergence-graph.js",
     "scripts/analyze-topology-convergence.js",
-    "work/packages/todo-20260509-spec-led-runtime-modularization-active-gate-snapshot-coverage-frontier.md",
+    "work/packages/active-20260509-spec-led-runtime-modularization-active-gate-snapshot-coverage-frontier.md",
     "work/packages/done-20260509-spec-led-runtime-modularization-publication-ack-convergence-frontier.md"
   ],
   "modelFit": {
@@ -45,7 +45,7 @@
   "predecessor": "work/packages/done-20260509-spec-led-runtime-modularization-legacy-deletion-proof.md",
   "closed": "2026-05-09",
   "commitAndPushLedgerRequired": true,
-  "successor": "work/packages/todo-20260509-spec-led-runtime-modularization-active-gate-snapshot-coverage-frontier.md"
+  "successor": "work/packages/active-20260509-spec-led-runtime-modularization-active-gate-snapshot-coverage-frontier.md"
 }
 -->
 
@@ -187,7 +187,9 @@ and representative rolling-restart.
 - `node --test test/control-plane/membership-publication-coordinator.test.js`
   passed after adding the unchanged recovery-eligible ACK closure fixture.
 - `node --test test/control-plane/*publication*.test.js test/distributed/harness/__tests__/failure-bundle.test.js test/diagnostics/topology-convergence-graph.test.js test/scripts/analyze-topology-convergence.test.js`
-  passed after parent review repair: 613 tests, 610 pass, 3 skipped.
+  passed after review-finding repair: 613 tests, 613 pass, 0 skipped.
+  The three Task 27 publication interleaving property tests now emit explicit
+  tap pass assertions after their fast-check properties complete.
 - `node scripts/check-guideline-literals.js src/control-plane/*publication*.js src/control-plane/publication-recovery-*.js src/control-plane/membership-publication-coordinator*.js src/diagnostics/topology-convergence-graph.js`
   passed: 19 files, 0 new literal violations.
 - `node scripts/check-guideline-decision-boundaries.js src/control-plane/*publication*.js src/control-plane/publication-recovery-*.js src/control-plane/membership-publication-coordinator*.js src/diagnostics/topology-convergence-graph.js`
@@ -218,7 +220,7 @@ and representative rolling-restart.
   `startup_active_gate_owner`, boundary `snapshot_coverage`, and dominant
   reason `active_gate_timed_out`.
 - Successor package opened:
-  `work/packages/todo-20260509-spec-led-runtime-modularization-active-gate-snapshot-coverage-frontier.md`.
+  `work/packages/active-20260509-spec-led-runtime-modularization-active-gate-snapshot-coverage-frontier.md`.
   Active-gate report schema alias cleanup remains out of scope for this
   package.
 

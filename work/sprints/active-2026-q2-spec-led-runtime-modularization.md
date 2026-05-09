@@ -7,7 +7,7 @@ progress successor boundary.
 ## Current Package Snapshot
 
 Current blocker package:
-`work/packages/todo-20260509-spec-led-runtime-modularization-active-gate-snapshot-coverage-frontier.md`.
+`work/packages/active-20260509-spec-led-runtime-modularization-active-gate-snapshot-coverage-frontier.md`.
 
 Owner boundary:
 `startup_active_gate_owner / snapshot_coverage`.
@@ -22,7 +22,7 @@ active-gate snapshot coverage with dominant reason `active_gate_timed_out`.
 
 Queued work:
 Next package:
-`work/packages/todo-20260509-spec-led-runtime-modularization-active-gate-snapshot-coverage-frontier.md`.
+`work/packages/active-20260509-spec-led-runtime-modularization-active-gate-snapshot-coverage-frontier.md`.
 
 Companion cleanup:
 `work/packages/todo-20260509-spec-led-runtime-modularization-active-gate-report-schema-alias-deletion.md`.
@@ -87,7 +87,7 @@ the contract and proof ladder are stable.
 8. [Diagnostics And Harness Consumer Rewrite](../packages/done-20260509-spec-led-runtime-modularization-diagnostics-harness-consumer.md)
 9. [Legacy Deletion And Representative Proof](../packages/done-20260509-spec-led-runtime-modularization-legacy-deletion-proof.md)
 10. [Publication ACK Convergence Frontier](../packages/done-20260509-spec-led-runtime-modularization-publication-ack-convergence-frontier.md)
-11. [Active Gate Snapshot Coverage Frontier](../packages/todo-20260509-spec-led-runtime-modularization-active-gate-snapshot-coverage-frontier.md)
+11. [Active Gate Snapshot Coverage Frontier](../packages/active-20260509-spec-led-runtime-modularization-active-gate-snapshot-coverage-frontier.md)
 12. [Active Gate Report Schema Alias Deletion](../packages/todo-20260509-spec-led-runtime-modularization-active-gate-report-schema-alias-deletion.md)
 
 ## Model Fit Strategy

@@ -2,8 +2,8 @@
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
   "sprint": "work/sprints/active-2026-q2-spec-led-runtime-modularization.md",
-  "package": "work/packages/todo-20260509-spec-led-runtime-modularization-active-gate-snapshot-coverage-frontier.md",
-  "status": "todo",
+  "package": "work/packages/active-20260509-spec-led-runtime-modularization-active-gate-snapshot-coverage-frontier.md",
+  "status": "active",
   "scenario": "spec-led-runtime-modularization",
   "artifact": "test-output/reports/rolling-restart-spec-led-runtime-modularization-publication-ack.report.json",
   "playback": "none",
@@ -27,7 +27,7 @@
     "test/distributed/harness/failure-bundle*.js",
     "src/diagnostics/topology-convergence-graph.js",
     "scripts/analyze-topology-convergence.js",
-    "work/packages/todo-20260509-spec-led-runtime-modularization-active-gate-snapshot-coverage-frontier.md"
+    "work/packages/active-20260509-spec-led-runtime-modularization-active-gate-snapshot-coverage-frontier.md"
   ],
   "modelFit": {
     "packageClass": "representative-frontier-closure",

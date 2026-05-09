@@ -393,7 +393,7 @@ const eventArbitrary = fc.oneof(
 
 test(
   'task-27 property: join/ack/publish/rebalance interleavings keep publication invariants stable',
-  async () => {
+  async (t) => {
     await fc.assert(
       fc.asyncProperty(
         fc.array(eventArbitrary, {
@@ -416,12 +416,13 @@ test(
       ),
       {numRuns: NUM_RUNS},
     );
+    t.pass();
   },
 );
 
 test(
   'task-27 property: ack duplication/reordering converges to one published ack set',
-  async () => {
+  async (t) => {
     await fc.assert(
       fc.asyncProperty(
         fc.uniqueArray(fc.constantFrom(...NODE_IDS), {
@@ -477,12 +478,13 @@ test(
       ),
       {numRuns: NUM_RUNS},
     );
+    t.pass();
   },
 );
 
 test(
   'task-27 property: rebalance spread events preserve bounded priority spread invariants',
-  async () => {
+  async (t) => {
     await fc.assert(
       fc.asyncProperty(
         fc.array(fc.record({
@@ -518,5 +520,6 @@ test(
       ),
       {numRuns: NUM_RUNS},
     );
+    t.pass();
   },
 );

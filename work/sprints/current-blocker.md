@@ -4,7 +4,7 @@
 
 Sprint: `work/sprints/active-2026-q2-spec-led-runtime-modularization.md`
 
-Package: `work/packages/todo-20260509-spec-led-runtime-modularization-active-gate-snapshot-coverage-frontier.md`
+Package: `work/packages/active-20260509-spec-led-runtime-modularization-active-gate-snapshot-coverage-frontier.md`
 
 Scenario: `spec-led-runtime-modularization`
 
@@ -57,4 +57,4 @@ Escalation triggers:
 5. `test/distributed/harness/failure-bundle*.js`
 6. `src/diagnostics/topology-convergence-graph.js`
 7. `scripts/analyze-topology-convergence.js`
-8. `work/packages/todo-20260509-spec-led-runtime-modularization-active-gate-snapshot-coverage-frontier.md`
+8. `work/packages/active-20260509-spec-led-runtime-modularization-active-gate-snapshot-coverage-frontier.md`

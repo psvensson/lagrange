@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "todo",
+  "status": "active",
   "opened": "2026-05-09",
   "scenario": "spec-led-runtime-modularization",
   "artifact": "test-output/reports/rolling-restart-spec-led-runtime-modularization-publication-ack.report.json",
@@ -28,7 +28,7 @@
     "test/distributed/harness/failure-bundle*.js",
     "src/diagnostics/topology-convergence-graph.js",
     "scripts/analyze-topology-convergence.js",
-    "work/packages/todo-20260509-spec-led-runtime-modularization-active-gate-snapshot-coverage-frontier.md"
+    "work/packages/active-20260509-spec-led-runtime-modularization-active-gate-snapshot-coverage-frontier.md"
   ],
   "modelFit": {
     "packageClass": "representative-frontier-closure",
@@ -140,9 +140,14 @@ guardrails, and representative rolling-restart.
 - Reasons: `active_gate_timed_out, snapshot_coverage_incomplete`
 - Next explain command: `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-publication-ack.report.json --explain active_gate_snapshot_coverage`
 
+## Subagent Sequencing Ledger
+
+- [x] Agent Socrates (019e0ca0-9175-7f62-8949-e054f7db9e0e) reviewed `work/packages/done-20260509-spec-led-runtime-modularization-publication-ack-convergence-frontier.md`; result fixes-required.
+- [x] Agent Poincare (019e0ca3-2125-7fd3-b7e0-7cb8e0aaef71) fixed `work/packages/done-20260509-spec-led-runtime-modularization-publication-ack-convergence-frontier.md`.
+
 ## Detection / Analysis Tasks
 
-- [ ] Review the publication ACK package before implementation starts.
+- [x] Review the publication ACK package before implementation starts.
 - [ ] Extract the smallest active-gate snapshot coverage fixture from the
       reduced report.
 - [ ] Trace the startup active-gate owner path that should settle snapshot
