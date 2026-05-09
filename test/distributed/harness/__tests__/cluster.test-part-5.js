@@ -187,7 +187,7 @@ async () => {
   );
 });
 
-test('Unit: _probeControlSnapshotCoverage falls back to default lane after snapshot-lane failure',
+test('Unit: _probeControlSnapshotCoverage keeps snapshot-lane failures explicit',
   async () => {
     const cluster = createCluster({
       size: 1,
@@ -224,22 +224,17 @@ test('Unit: _probeControlSnapshotCoverage falls back to default lane after snaps
       ['node-a'],
     );
 
-    assert.strictEqual(coverage.completeCoverage, true);
-    assert.strictEqual(probeCalls.length, 2);
+    assert.strictEqual(coverage.completeCoverage, false);
+    assert.strictEqual(probeCalls.length, 1);
     assert.strictEqual(
       probeCalls[0]?.lane,
       'snapshot',
-      'coverage probe should try snapshot lane first',
+      'coverage probe should stay on the snapshot lane',
     );
-    assert.strictEqual(
-      probeCalls[1]?.lane,
-      'default',
-      'coverage probe should fall back to default lane after snapshot lane failure',
-    );
-    assert.strictEqual(
-      coverage.selectedCapturedAtMs,
-      456,
-      'coverage summary should use fallback lane snapshot payload',
+    assert.match(
+      coverage.selectedError,
+      /snapshot lane timed out/u,
+      'coverage summary should preserve the snapshot-lane timeout',
     );
   });
 

@@ -16,7 +16,6 @@ const {
   ACTIVE_WAIT_TIMEOUT_SCALE_PERCENT_DENOMINATOR,
   ACTIVE_WAIT_TIMEOUT_SCALE_PERCENT_PER_EXTRA_NODE,
   ADMIN_QUERY_TIMEOUT_MS,
-  ADMIN_SOCKET_LANE_DEFAULT,
   ADMIN_SOCKET_LANE_SNAPSHOT,
   BENCHMARK_DEFAULTS,
   CLUSTER_READINESS_MODE_LOAD,
@@ -182,30 +181,11 @@ class Cluster5 extends Cluster4 {
         }
       };
       try {
-        let snapshotResult = null;
-        try {
-          snapshotResult = await node.getControlSnapshot({
-            timeoutMs: snapshotTimeoutMs,
-            lane: ADMIN_SOCKET_LANE_SNAPSHOT,
-            forceRepair: options.forceRepair === true,
-          });
-        } catch (snapshotLaneError) {
-          try {
-            snapshotResult = await node.getControlSnapshot({
-              timeoutMs: snapshotTimeoutMs,
-              lane: ADMIN_SOCKET_LANE_DEFAULT,
-              forceRepair: options.forceRepair === true,
-            });
-          } catch (fallbackLaneError) {
-            throw new Error(
-              normalizeProbeError(snapshotLaneError) +
-                '; fallback lane ' +
-                ADMIN_SOCKET_LANE_DEFAULT +
-                ' failed: ' +
-                normalizeProbeError(fallbackLaneError),
-            );
-          }
-        }
+        const snapshotResult = await node.getControlSnapshot({
+          timeoutMs: snapshotTimeoutMs,
+          lane: ADMIN_SOCKET_LANE_SNAPSHOT,
+          forceRepair: options.forceRepair === true,
+        });
         await probeReachabilityDiagnostics();
         const snapshotPayload =
           this._extractControlSnapshotPayload(snapshotResult);

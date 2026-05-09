@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-09",
   "scenario": "spec-led-runtime-modularization",
   "artifact": "test-output/reports/rolling-restart-spec-led-runtime-modularization-publication-ack.report.json",
@@ -25,10 +25,15 @@
     "src/control-plane/bootstrap-readiness-owner*.js",
     "test/control-plane/*readiness*.test.js",
     "test/distributed/harness/active-gate-contract.js",
+    "test/distributed/harness/cluster-segment-7*.js",
     "test/distributed/harness/failure-bundle*.js",
+    "test/distributed/harness/__tests__/cluster.test-part-4.js",
+    "test/distributed/harness/__tests__/cluster.test-part-5.js",
+    "test/distributed/harness/__tests__/failure-bundle-active-gate-tail-test-cases.js",
+    "test/scripts/__fixtures__/topology-convergence/active-gate-snapshot*.json",
     "src/diagnostics/topology-convergence-graph.js",
     "scripts/analyze-topology-convergence.js",
-    "work/packages/active-20260509-spec-led-runtime-modularization-active-gate-snapshot-coverage-frontier.md"
+    "work/packages/done-20260509-spec-led-runtime-modularization-active-gate-snapshot-coverage-frontier.md"
   ],
   "modelFit": {
     "packageClass": "representative-frontier-closure",
@@ -40,7 +45,10 @@
       "representative proof still fails on active_gate_snapshot_coverage after owner fix"
     ]
   },
-  "predecessor": "work/packages/done-20260509-spec-led-runtime-modularization-publication-ack-convergence-frontier.md"
+  "predecessor": "work/packages/done-20260509-spec-led-runtime-modularization-publication-ack-convergence-frontier.md",
+  "closed": "2026-05-09",
+  "commitAndPushLedgerRequired": true,
+  "successor": "work/packages/todo-20260509-spec-led-runtime-modularization-operation-workflow-timeout-frontier.md"
 }
 -->
 
@@ -142,27 +150,31 @@ guardrails, and representative rolling-restart.
 
 ## Subagent Sequencing Ledger
 
-- [x] Agent Socrates (019e0ca0-9175-7f62-8949-e054f7db9e0e) reviewed `work/packages/done-20260509-spec-led-runtime-modularization-publication-ack-convergence-frontier.md`; result fixes-required.
-- [x] Agent Poincare (019e0ca3-2125-7fd3-b7e0-7cb8e0aaef71) fixed `work/packages/done-20260509-spec-led-runtime-modularization-publication-ack-convergence-frontier.md`.
+- [x] Review subagent recorded:
+      Agent Socrates (`019e0ca0-9175-7f62-8949-e054f7db9e0e`) reviewed `work/packages/done-20260509-spec-led-runtime-modularization-publication-ack-convergence-frontier.md`; result `fixes-required`.
+- [x] Fix subagent recorded or explicitly not needed:
+      Agent Poincare (`019e0ca3-2125-7fd3-b7e0-7cb8e0aaef71`) fixed `work/packages/done-20260509-spec-led-runtime-modularization-publication-ack-convergence-frontier.md`.
+- [x] Implementation subagent recorded:
+      Agent Darwin (`019e0ca7-1395-72c3-bc0d-00e09146495d`) implemented `work/packages/done-20260509-spec-led-runtime-modularization-active-gate-snapshot-coverage-frontier.md`.
 
 ## Detection / Analysis Tasks
 
 - [x] Review the publication ACK package before implementation starts.
-- [ ] Extract the smallest active-gate snapshot coverage fixture from the
+- [x] Extract the smallest active-gate snapshot coverage fixture from the
       reduced report.
-- [ ] Trace the startup active-gate owner path that should settle snapshot
+- [x] Trace the startup active-gate owner path that should settle snapshot
       coverage.
-- [ ] Identify any publication/readiness/cache branch that can mask snapshot
+- [x] Identify any publication/readiness/cache branch that can mask snapshot
       coverage timeout.
 
 ## Implementation Tasks
 
-- [ ] Add or update the focused startup active-gate snapshot coverage fixture.
-- [ ] Rewrite the owner logic so snapshot coverage debt has one canonical
+- [x] Add or update the focused startup active-gate snapshot coverage fixture.
+- [x] Rewrite the owner logic so snapshot coverage debt has one canonical
       decision path.
-- [ ] Delete or guard superseded snapshot/readiness fallback branches.
-- [ ] Update diagnostics/harness consumers only where owner vocabulary changes.
-- [ ] Rerun representative rolling-restart and migrate any fresh frontier.
+- [x] Delete or guard superseded snapshot/readiness fallback branches.
+- [x] Update diagnostics/harness consumers only where owner vocabulary changes.
+- [x] Rerun representative rolling-restart and migrate any fresh frontier.
 
 ## Validation
 
@@ -172,6 +184,44 @@ guardrails, and representative rolling-restart.
    `startup_active_gate_owner`.
 4. Touched-file literal, decision-boundary, and runtime-grammar guardrails.
 5. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot.report.json --fast-local --verbose`
+
+## Validation Notes
+
+- `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-publication-ack.report.json --explain active_gate_snapshot_coverage` passed; owner remains `startup_active_gate_owner`, boundary remains `snapshot_coverage`, and selected snapshot timeout evidence is exposed in the active-gate source.
+- `npx tap test/distributed/harness/__tests__/cluster.test-part-4.js test/distributed/harness/__tests__/cluster.test-part-5.js` passed.
+- `npx tap test/scripts/analyze-topology-convergence.test.js test/diagnostics/topology-convergence-graph.test.js` passed.
+- `npx tap test/distributed/harness/__tests__/failure-bundle.test.js` passed.
+- `npm run work:validate` passed.
+- `node scripts/check-guideline-literals.js src/diagnostics/topology-convergence-graph.js` passed.
+- `node scripts/check-guideline-decision-boundaries.js src/diagnostics/topology-convergence-graph.js` passed.
+- `npm run audit:runtime-grammar:file -- src/diagnostics/topology-convergence-graph.js` passed.
+- `git diff --check -- <touched paths>` passed.
+- Broader harness literal scan over `test/distributed/harness/cluster-segment-7-class-4.js` and `test/distributed/harness/cluster-segment-7-class-5.js` still reports inherited unowned literals outside this package slice; decision-boundary and runtime-grammar scans pass for those files.
+- `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot.report.json --fast-local --verbose`
+  failed after the active-gate rewrite, but the first frontier migrated to
+  `operation_workflow_owner / workflow_timeout` with dominant reason
+  `priority_recovery_progress_blocked`. Active-gate snapshot coverage remains
+  blocked downstream at `2/5`, no longer as the first frontier.
+
+## Migration
+
+Successor package:
+`work/packages/todo-20260509-spec-led-runtime-modularization-operation-workflow-timeout-frontier.md`.
+
+Generated owner evidence:
+
+```text
+Source artifact: test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot.report.json
+Scenario: rolling-restart
+Frontier edge: priority_recovery_partition_progress
+Current semantic owner: operation_workflow_owner
+Current boundary: workflow_timeout
+Frontier state: blocked
+Dominant reason: priority_recovery_progress_blocked
+Evidence path: report.scenarios[0].publicationConvergence.priorityRecoveryProgressSummary.dominantWitness
+Reasons: priority_recovery_progress_blocked, priority_recovery_event_driven_wait
+Next explain command: npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot.report.json --explain priority_recovery_partition_progress
+```
 
 ## Done When
 

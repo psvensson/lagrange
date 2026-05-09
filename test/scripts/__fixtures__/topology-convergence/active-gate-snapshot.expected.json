@@ -14,7 +14,7 @@
       "owner": "startup_active_gate_owner",
       "boundary": "snapshot_coverage",
       "dominantReason": "absent",
-      "evidencePath": "triageSummary.publicationConvergence.activeGate.progress",
+      "evidencePath": "report.scenarios[0].publicationConvergence.activeGate.progress",
       "reasons": [
         "active_gate_timed_out",
         "snapshot_coverage_incomplete"
@@ -28,7 +28,7 @@
     "state": "blocked",
     "frontierState": "blocked",
     "dominantReason": "active_gate_timed_out",
-    "evidencePath": "triageSummary.publicationConvergence.activeGate.progress",
+    "evidencePath": "report.scenarios[0].publicationConvergence.activeGate.progress",
     "reasons": [
       "active_gate_timed_out",
       "snapshot_coverage_incomplete"
@@ -36,9 +36,11 @@
     "source": {
       "activeGateState": "timed_out",
       "snapshotCoverageComplete": "false",
-      "snapshotCoverageNodeCount": 4,
+      "snapshotCoverageNodeCount": 0,
       "expectedNodeCount": 5,
-      "blockers": "absent"
+      "selectedSnapshotError": "Admin API query timed out for node 11601fe0-72d6-5853-8590-ec2881853e72 on lane snapshot after 100ms",
+      "readinessDelayCause": "snapshot_timeout",
+      "blockers": "inactive_nodes=1,snapshot_coverage=0/5,snapshot_error"
     },
     "rootCauseClass": "startup"
   }

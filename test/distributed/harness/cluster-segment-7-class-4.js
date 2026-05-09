@@ -57,7 +57,6 @@ import {Cluster3} from './cluster-segment-7-class-3.js';
 const TYPEOF_OBJECT = 'object';
 const TYPEOF_STRING = 'string';
 const EMPTY_STRING = '';
-const EMPTY_RECORD = Object.freeze({});
 const LOAD_PUBLICATION_GATE_WITNESS_READY = 'ready';
 const LOAD_PUBLICATION_GATE_WITNESS_CANONICAL_SNAPSHOT =
   'canonical_snapshot';
@@ -65,6 +64,8 @@ const LOAD_PUBLICATION_GATE_WITNESS_UNAVAILABLE = 'unavailable';
 const ACTIVE_PROBE_REASON_OBSERVABILITY_BACKLOG = 'OBSERVABILITY_BACKLOG';
 const ACTIVE_PROBE_REASON_READINESS_STABLE_WINDOW_PENDING =
   'READINESS_STABLE_WINDOW_PENDING';
+const ACTIVE_PROBE_REASON_READINESS_TIMEOUT_PREFIX =
+  'readiness_probe_timeout=';
 const LOAD_PUBLICATION_GATE_PROJECTABLE_TRAFFIC_REASONS = new Set([
   ACTIVE_PROBE_REASON_PRIORITY_SPREAD_PENDING,
   ACTIVE_PROBE_REASON_PRIORITY_RECOVERY_PENDING,
@@ -137,9 +138,6 @@ const STARTUP_SNAPSHOT_PROJECTION_DECISION_TABLE = Object.freeze([
       evidence.nodePublicationDisagreementCount === ZERO,
   }),
 ]);
-const PARTIAL_COVERAGE_CONVERGENCE_PUBLICATION_STATUS_PUBLISHED =
-  'PUBLISHED';
-const PARTIAL_COVERAGE_CONVERGENCE_ADMIN_HEALTH_SOURCE = 'admin_health';
 const PARTIAL_COVERAGE_CONVERGENCE_OUTCOME_KEEP = Object.freeze({
   converged: false,
 });
@@ -156,38 +154,6 @@ const PARTIAL_COVERAGE_CONVERGENCE_DECISION_TABLE = Object.freeze([
       evidence.snapshotCoverageComplete !== true &&
       evidence.bestCoverageNodeCount > ZERO &&
       evidence.selectedSnapshotErrorPresent !== true,
-  }),
-  Object.freeze({
-    outcome: PARTIAL_COVERAGE_CONVERGENCE_OUTCOME_APPLY,
-    matches: (evidence) =>
-      evidence.readinessMode === CLUSTER_READINESS_MODE_STARTUP &&
-      evidence.activeByStatus === true &&
-      evidence.publicationGateReady === true &&
-      evidence.snapshotCoverageComplete !== true &&
-      evidence.bestCoverageNodeCount > ZERO &&
-      evidence.selectedSnapshotErrorPresent !== true &&
-      evidence.selectedSnapshotReachabilityErrorPresent !== true &&
-      evidence.selectedSnapshotAdminBacked === true &&
-      evidence.publicationStatus ===
-        PARTIAL_COVERAGE_CONVERGENCE_PUBLICATION_STATUS_PUBLISHED &&
-      evidence.pendingAckCount === ZERO &&
-      evidence.missingPublishedCount > ZERO &&
-      evidence.prioritySpreadSatisfied === true,
-  }),
-]);
-const READINESS_TIMEOUT_FALLBACK_OUTCOME_STATUS = Object.freeze({
-  fallbackToStatus: true,
-});
-const READINESS_TIMEOUT_FALLBACK_OUTCOME_BLOCK = Object.freeze({
-  fallbackToStatus: false,
-});
-const READINESS_TIMEOUT_FALLBACK_DECISION_TABLE = Object.freeze([
-  Object.freeze({
-    outcome: READINESS_TIMEOUT_FALLBACK_OUTCOME_STATUS,
-    matches: (evidence) =>
-      evidence.attemptedReadinessProbe === true &&
-      evidence.timeoutShaped === true &&
-      evidence.readinessMode === CLUSTER_READINESS_MODE_STARTUP,
   }),
 ]);
 
@@ -402,7 +368,8 @@ function hasDiagnosticReadinessTimeoutSignal(diagnostic) {
     return true;
   }
   return normalizeDistinctStringArray(diagnostic?.reasons).some((reason) =>
-    reason.startsWith(ACTIVE_PROBE_REASON_READINESS_TIMEOUT_FALLBACK_PREFIX),
+    reason.startsWith(ACTIVE_PROBE_REASON_READINESS_TIMEOUT_PREFIX) ||
+      reason.startsWith(ACTIVE_PROBE_REASON_READINESS_TIMEOUT_FALLBACK_PREFIX),
   );
 }
 
@@ -467,51 +434,12 @@ function projectStartupSnapshotDiagnostic(diagnostic, projectionContext) {
   };
 }
 
-function normalizePartialCoverageObject(value) {
-  return value && typeof value === TYPEOF_OBJECT && Array.isArray(value) !== true ?
-    value :
-    EMPTY_RECORD;
-}
-
-function normalizePartialCoveragePublicationStatus(status) {
-  return typeof status === TYPEOF_STRING ?
-    status.trim().toUpperCase() :
-    EMPTY_STRING;
-}
-
 function normalizePartialCoverageConvergenceEvidence({
   readinessMode,
   activeByStatus,
   snapshotCoverage,
   publicationConvergenceGate,
 }) {
-  const selectedPublicationConvergenceGate = normalizePartialCoverageObject(
-    snapshotCoverage?.selectedPublicationConvergenceGate,
-  );
-  const selectedPublicationConvergence = normalizePartialCoverageObject(
-    snapshotCoverage?.selectedPublicationConvergence,
-  );
-  const priorityPartitionSummary = normalizePartialCoverageObject(
-    selectedPublicationConvergenceGate.priorityPartitionSummary ||
-      selectedPublicationConvergence.priorityPartitionSummary,
-  );
-  const pendingAckNodeIds = normalizeDistinctStringArray([
-    ...normalizeDistinctStringArray(snapshotCoverage?.selectedPendingAckNodeIds),
-    ...normalizeDistinctStringArray(
-      selectedPublicationConvergenceGate.pendingAckNodeIds,
-    ),
-    ...normalizeDistinctStringArray(
-      selectedPublicationConvergence.pendingAckNodeIds,
-    ),
-  ]);
-  const missingPublishedNodeIds = normalizeDistinctStringArray([
-    ...normalizeDistinctStringArray(
-      snapshotCoverage?.selectedMissingPublishedNodeIds,
-    ),
-    ...normalizeDistinctStringArray(
-      selectedPublicationConvergenceGate.missingPublishedNodeIds,
-    ),
-  ]);
   const bestCoverageNodeCount =
     Number.isInteger(snapshotCoverage?.bestCoverageNodeCount) ?
       Math.max(ZERO, snapshotCoverage.bestCoverageNodeCount) :
@@ -519,20 +447,6 @@ function normalizePartialCoverageConvergenceEvidence({
   const selectedSnapshotErrorPresent =
     typeof normalizeOptionalString(snapshotCoverage?.selectedError) ===
       TYPEOF_STRING;
-  const selectedSnapshotReachabilityErrorPresent =
-    typeof normalizeOptionalString(
-      snapshotCoverage?.selectedReachabilityError,
-    ) === TYPEOF_STRING ||
-    typeof normalizeOptionalString(
-      snapshotCoverage?.selectedSnapshotReachabilityError,
-    ) === TYPEOF_STRING;
-  const selectedSnapshotAdminBacked =
-    snapshotCoverage?.selectedAdminReady === true ||
-    snapshotCoverage?.selectedSnapshotAdminReady === true ||
-    snapshotCoverage?.selectedReachableBy ===
-      PARTIAL_COVERAGE_CONVERGENCE_ADMIN_HEALTH_SOURCE ||
-    snapshotCoverage?.selectedSnapshotReachableBy ===
-      PARTIAL_COVERAGE_CONVERGENCE_ADMIN_HEALTH_SOURCE;
   return Object.freeze({
     readinessMode,
     activeByStatus: activeByStatus === true,
@@ -540,16 +454,6 @@ function normalizePartialCoverageConvergenceEvidence({
     snapshotCoverageComplete: snapshotCoverage?.completeCoverage === true,
     bestCoverageNodeCount,
     selectedSnapshotErrorPresent,
-    selectedSnapshotReachabilityErrorPresent,
-    selectedSnapshotAdminBacked,
-    publicationStatus: normalizePartialCoveragePublicationStatus(
-      selectedPublicationConvergenceGate.publicationStatus ||
-        selectedPublicationConvergence.publicationStatus ||
-        selectedPublicationConvergence.status,
-    ),
-    pendingAckCount: pendingAckNodeIds.length,
-    missingPublishedCount: missingPublishedNodeIds.length,
-    prioritySpreadSatisfied: priorityPartitionSummary.satisfied === true,
   });
 }
 
@@ -560,7 +464,7 @@ function decidePartialCoverageConvergence(evidence) {
   return decision?.outcome || PARTIAL_COVERAGE_CONVERGENCE_OUTCOME_KEEP;
 }
 
-function normalizeReadinessTimeoutFallbackEvidence({
+function normalizeReadinessTimeoutEvidence({
   attemptedReadinessProbe,
   error,
   readinessMode,
@@ -572,16 +476,12 @@ function normalizeReadinessTimeoutFallbackEvidence({
   });
 }
 
-function decideReadinessTimeoutFallback(evidence) {
-  const decision = READINESS_TIMEOUT_FALLBACK_DECISION_TABLE.find(
-    (candidate) => candidate.matches(evidence),
-  );
-  return decision?.outcome || READINESS_TIMEOUT_FALLBACK_OUTCOME_BLOCK;
-}
-
-function buildReadinessTimeoutFallbackReason(error) {
-  return ACTIVE_PROBE_REASON_READINESS_TIMEOUT_FALLBACK_PREFIX +
-    String(normalizeProbeError(error));
+function buildReadinessTimeoutReason(error, readinessMode) {
+  const reasonPrefix =
+    readinessMode === CLUSTER_READINESS_MODE_STARTUP ?
+      ACTIVE_PROBE_REASON_READINESS_TIMEOUT_PREFIX :
+      ACTIVE_PROBE_REASON_READINESS_TIMEOUT_FALLBACK_PREFIX;
+  return reasonPrefix + String(normalizeProbeError(error));
 }
 
 class Cluster4 extends Cluster3 {
@@ -600,6 +500,7 @@ class Cluster4 extends Cluster3 {
           remainingMs,
         );
         let attemptedReadinessProbe = false;
+        let attemptedReadinessProbeSource = ACTIVE_PROBE_ACTIVITY_SOURCE_STATUS;
         const buildStatusProbeResult = async (
           statusReason = null,
           activitySource = ACTIVE_PROBE_ACTIVITY_SOURCE_STATUS_QUERY,
@@ -667,6 +568,7 @@ class Cluster4 extends Cluster3 {
               continue;
             }
             attemptedReadinessProbe = true;
+            attemptedReadinessProbeSource = probeSource;
             readiness = await withTimeout(
               node[probeMethod]({
                 timeoutMs: probeTimeoutMs,
@@ -779,50 +681,26 @@ class Cluster4 extends Cluster3 {
             error: null,
           };
         } catch (error) {
-          const fallbackEvidence = normalizeReadinessTimeoutFallbackEvidence({
+          const timeoutEvidence = normalizeReadinessTimeoutEvidence({
             attemptedReadinessProbe,
             error,
             readinessMode,
           });
-          const fallbackDecision =
-            decideReadinessTimeoutFallback(fallbackEvidence);
           if (
-            fallbackDecision.fallbackToStatus === true &&
-            typeof node.getStatus === 'function'
+            timeoutEvidence.attemptedReadinessProbe === true &&
+            timeoutEvidence.timeoutShaped === true
           ) {
-            try {
-              const timeoutFallbackReason =
-                buildReadinessTimeoutFallbackReason(error);
-              const fallbackResult = await buildStatusProbeResult(
-                timeoutFallbackReason,
-                ACTIVE_PROBE_ACTIVITY_SOURCE_STATUS_FALLBACK,
-              );
-              return {
-                ...fallbackResult,
-                admissionReason: timeoutFallbackReason,
-              };
-            } catch (_fallbackError) {
-              // Fall through to explicit error classification below.
-            }
-          }
-          if (
-            fallbackEvidence.attemptedReadinessProbe === true &&
-            fallbackEvidence.timeoutShaped === true
-          ) {
-            const timeoutFallbackReason =
-              buildReadinessTimeoutFallbackReason(error);
+            const timeoutReason =
+              buildReadinessTimeoutReason(error, readinessMode);
             return {
               nodeId: node.id,
               active: false,
               state: INACTIVE_STATE,
               phase: null,
-              reasons: [timeoutFallbackReason],
-              activitySource:
-                readinessMode === CLUSTER_READINESS_MODE_LOAD ?
-                  ACTIVE_PROBE_ACTIVITY_SOURCE_TRAFFIC_READINESS :
-                  ACTIVE_PROBE_ACTIVITY_SOURCE_STATUS,
+              reasons: [timeoutReason],
+              activitySource: attemptedReadinessProbeSource,
               admissionState: STARTUP_ADMISSION_STATE_BLOCKED,
-              admissionReason: timeoutFallbackReason,
+              admissionReason: timeoutReason,
               error: normalizeProbeError(error),
             };
           }

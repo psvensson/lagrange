@@ -1409,7 +1409,7 @@ test(
     );
   });
 
-test('Unit: _probeClusterActiveState falls back to status when readiness probe times out',
+test('Unit: _probeClusterActiveState keeps startup readiness timeouts blocked',
   async () => {
     const cluster = createCluster({
       size: 1,
@@ -1443,26 +1443,110 @@ test('Unit: _probeClusterActiveState falls back to status when readiness probe t
     );
     assert.strictEqual(
       probeResult.allActive,
-      true,
-      'status fallback should keep startup gate open when readiness endpoint is transiently timing out',
+      false,
+      'startup gate should not fall back to status when readiness times out',
     );
     assert.strictEqual(
       probeResult.nodeDiagnostics[0].active,
-      true,
-      'status fallback should preserve active projection for timeout-shaped readiness errors',
+      false,
+      'timeout-shaped startup readiness should keep the node inactive',
     );
     assert.strictEqual(
       probeResult.nodeDiagnostics[0].activitySource,
-      'status_query_fallback',
-      'active diagnostics should expose timeout fallback source for CL-003 witnessing',
+      'bootstrap_readiness',
+      'active diagnostics should preserve the startup readiness source',
     );
     assert.ok(
       probeResult.nodeDiagnostics[0].reasons.some((reason) =>
-        reason.startsWith('readiness_probe_timeout_fallback='),
+        reason.startsWith('readiness_probe_timeout='),
       ),
-      'active diagnostics should include fallback reason witness',
+      'active diagnostics should include the timeout reason witness',
+    );
+    assert.match(
+      probeResult.nodeDiagnostics[0].error,
+      /Node readiness probe timed out for node-a/u,
+      'startup readiness timeout should remain explicit owner evidence',
     );
   });
+
+test(
+  'Unit: _probeClusterActiveState keeps startup gate closed on partial ' +
+    'snapshot coverage even with publication evidence',
+  async () => {
+    const cluster = createCluster({
+      size: 2,
+      docker: {socketPath: '/var/run/docker.sock'},
+      image: 'distributed-db:test',
+    });
+
+    const nodeIds = ['node-a', 'node-b'];
+    const snapshotRow = {
+      nodes: ['node-a'],
+      controlPlaneDiagnostics: {
+        publicationConvergence: {
+          publicationEpoch: 11,
+          publicationStatus: 'PUBLISHED',
+          publishedActiveNodeIds: nodeIds,
+          pendingAckNodeIds: [],
+          acknowledgedNodeIds: nodeIds,
+          priorityPartitionSummary: {
+            satisfied: true,
+          },
+        },
+      },
+    };
+    const createNode = (nodeId) => ({
+      id: nodeId,
+      role: nodeId === 'node-a' ? NODE_ROLES.SEED : NODE_ROLES.JOINER,
+      async probeBootstrapReadiness() {
+        return {
+          status: 200,
+          phase: 'BOOTSTRAP_READY',
+          state: 'active',
+          reasons: [],
+        };
+      },
+      async getReachabilityDiagnostics() {
+        return {
+          adminReady: true,
+          reachable: true,
+          reachableBy: 'admin_health',
+        };
+      },
+      async getControlSnapshot() {
+        return {
+          rows: [snapshotRow],
+        };
+      },
+      async getLogs(_options) {
+        return '';
+      },
+    });
+
+    cluster._nodes.set('node-a', createNode('node-a'));
+    cluster._nodes.set('node-b', createNode('node-b'));
+
+    const probeResult = await cluster._probeClusterActiveState(
+      Date.now() + 1000,
+    );
+
+    assert.strictEqual(
+      probeResult.snapshotCoverage.completeCoverage,
+      false,
+      'fixture should preserve incomplete startup snapshot coverage',
+    );
+    assert.strictEqual(
+      probeResult.publicationConvergenceGate.ready,
+      true,
+      'startup publication gate should not replace snapshot coverage',
+    );
+    assert.strictEqual(
+      probeResult.allActive,
+      false,
+      'startup gate should require complete snapshot coverage',
+    );
+  },
+);
 
 test(
   'Unit: _probeClusterActiveState projects startup timeout from control snapshot',

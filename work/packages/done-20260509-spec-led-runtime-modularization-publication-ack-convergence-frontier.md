@@ -29,7 +29,7 @@
     "test/distributed/harness/failure-bundle*.js",
     "src/diagnostics/topology-convergence-graph.js",
     "scripts/analyze-topology-convergence.js",
-    "work/packages/active-20260509-spec-led-runtime-modularization-active-gate-snapshot-coverage-frontier.md",
+    "work/packages/done-20260509-spec-led-runtime-modularization-active-gate-snapshot-coverage-frontier.md",
     "work/packages/done-20260509-spec-led-runtime-modularization-publication-ack-convergence-frontier.md"
   ],
   "modelFit": {
@@ -45,7 +45,7 @@
   "predecessor": "work/packages/done-20260509-spec-led-runtime-modularization-legacy-deletion-proof.md",
   "closed": "2026-05-09",
   "commitAndPushLedgerRequired": true,
-  "successor": "work/packages/active-20260509-spec-led-runtime-modularization-active-gate-snapshot-coverage-frontier.md"
+  "successor": "work/packages/done-20260509-spec-led-runtime-modularization-active-gate-snapshot-coverage-frontier.md"
 }
 -->
 
@@ -220,7 +220,7 @@ and representative rolling-restart.
   `startup_active_gate_owner`, boundary `snapshot_coverage`, and dominant
   reason `active_gate_timed_out`.
 - Successor package opened:
-  `work/packages/active-20260509-spec-led-runtime-modularization-active-gate-snapshot-coverage-frontier.md`.
+  `work/packages/done-20260509-spec-led-runtime-modularization-active-gate-snapshot-coverage-frontier.md`.
   Active-gate report schema alias cleanup remains out of scope for this
   package.
 

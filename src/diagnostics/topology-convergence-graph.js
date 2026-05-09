@@ -828,6 +828,12 @@ function buildActiveGateSnapshotEdge(normalized) {
       snapshotCoverageComplete: booleanVariant(progress.snapshotCoverageComplete),
       snapshotCoverageNodeCount: numberOrUnknown(progress.snapshotCoverageNodeCount),
       expectedNodeCount: numberOrUnknown(progress.expectedNodeCount),
+      selectedSnapshotError: firstText(
+        progress.selectedSnapshotError,
+        progress.selectedError,
+        progress.readinessDelay?.error,
+      ),
+      readinessDelayCause: textOrUnknown(progress.readinessDelay?.cause),
       blockers: joinValues(arrayOrEmpty(progress.blockers)),
     },
     reasons,

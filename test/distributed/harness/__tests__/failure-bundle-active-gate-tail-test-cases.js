@@ -1019,6 +1019,152 @@ export function registerFailureBundleActiveGateTailTests({
     },
   );
 
+  it(
+    'keeps startup snapshot timeout owner contract on the failure bundle',
+    async () => {
+      const SCENARIO_NAME = 'rolling-restart';
+      const PUBLICATION_STATUS_UNKNOWN = 'UNKNOWN';
+      const ACTIVE_GATE_MODE_STARTUP = 'startup';
+      const ACTIVE_GATE_STATE_TIMED_OUT = 'timed_out';
+      const ACTIVE_GATE_TERMINAL_REASON = 'stalled_no_progress';
+      const EDGE_ACTIVE_GATE_SNAPSHOT_COVERAGE =
+        'active_gate_snapshot_coverage';
+      const OWNER_STARTUP_ACTIVE_GATE = 'startup_active_gate_owner';
+      const BOUNDARY_SNAPSHOT_COVERAGE = 'snapshot_coverage';
+      const OWNER_CONTRACT_STATE_BLOCKED = 'blocked';
+      const ROOT_CAUSE_STARTUP = 'startup';
+      const ACTIVE_GATE_TIMED_OUT_REASON = 'active_gate_timed_out';
+      const SNAPSHOT_COVERAGE_INCOMPLETE_REASON =
+        'snapshot_coverage_incomplete';
+      const SELECTED_SNAPSHOT_ERROR =
+        'Admin API query timed out for node seed-1 on lane snapshot after 100ms';
+      const SNAPSHOT_TIMEOUT_CAUSE = 'snapshot_timeout';
+      const SNAPSHOT_TIMEOUT_SOURCE = 'selectedSnapshotError';
+      const SNAPSHOT_TIMEOUT_RECOVERABILITY = 'terminal';
+      const SNAPSHOT_COVERAGE_BLOCKER = 'snapshot_coverage=0/5';
+      const INACTIVE_NODE_BLOCKER = 'inactive_nodes=1';
+      const SNAPSHOT_ERROR_BLOCKER = 'snapshot_error';
+      const EXPECTED_NODE_COUNT = 5;
+      const ACTIVE_NODE_COUNT = 4;
+      const INACTIVE_NODE_COUNT = 1;
+      const SNAPSHOT_COVERAGE_COUNT = 0;
+      const ONE_COUNT = 1;
+      const ZERO_COUNT = 0;
+      const scenarios = [{
+        scenario: SCENARIO_NAME,
+        passed: false,
+        error: 'Not all nodes reached ACTIVE state within 120000ms',
+        details: {
+          diagnostics: {
+            failure: {
+              rootCauseClass: ROOT_CAUSE_STARTUP,
+              dominantReason: SNAPSHOT_TIMEOUT_CAUSE,
+              reasonCounts: {
+                [SNAPSHOT_TIMEOUT_CAUSE]: ONE_COUNT,
+              },
+            },
+            controlPlaneDiagnostics: {
+              publicationConvergence: {
+                publicationStatus: PUBLICATION_STATUS_UNKNOWN,
+                pendingAckNodeIds: [],
+                pendingAckCount: ZERO_COUNT,
+                blockedNodeIds: [],
+                blockedNodeCount: ZERO_COUNT,
+                missingPublishedNodeIds: [],
+                missingPublishedCount: ZERO_COUNT,
+                publicationPending: false,
+                prioritySpreadPending: false,
+              },
+              activeGate: {
+                mode: ACTIVE_GATE_MODE_STARTUP,
+                state: ACTIVE_GATE_STATE_TIMED_OUT,
+                ready: false,
+                reasonCode: ACTIVE_GATE_TERMINAL_REASON,
+                progress: {
+                  expectedNodeCount: EXPECTED_NODE_COUNT,
+                  activeNodeCount: ACTIVE_NODE_COUNT,
+                  inactiveNodeCount: INACTIVE_NODE_COUNT,
+                  snapshotCoverageNodeCount: SNAPSHOT_COVERAGE_COUNT,
+                  snapshotCoverageComplete: false,
+                  publicationStatus: PUBLICATION_STATUS_UNKNOWN,
+                  pendingAckCount: ZERO_COUNT,
+                  missingPublishedCount: ZERO_COUNT,
+                  selectedSnapshotError: SELECTED_SNAPSHOT_ERROR,
+                  readinessDelay: {
+                    timedOut: true,
+                    cause: SNAPSHOT_TIMEOUT_CAUSE,
+                    source: SNAPSHOT_TIMEOUT_SOURCE,
+                    recoverability: SNAPSHOT_TIMEOUT_RECOVERABILITY,
+                    error: SELECTED_SNAPSHOT_ERROR,
+                  },
+                  blockers: [
+                    INACTIVE_NODE_BLOCKER,
+                    SNAPSHOT_COVERAGE_BLOCKER,
+                    SNAPSHOT_ERROR_BLOCKER,
+                  ],
+                },
+              },
+            },
+          },
+        },
+      }];
+
+      const {scenarioBundles} = await writeFailureBundlesForReport({
+        scenarios,
+        reportOutputPath: state.reportPath,
+        outputDir: state.tempDir,
+        reportSummary: {total: ONE_COUNT, fail: ONE_COUNT, pass: ZERO_COUNT},
+        standardSummary: {scenarios: []},
+        benchmarkRegressionGate: {status: 'skipped'},
+        workspaceRoot: state.tempDir,
+      });
+      const scenarioBundle = JSON.parse(
+        await readFile(
+          resolve(state.tempDir, scenarioBundles[ZERO_COUNT].links.jsonPath),
+          UTF8_ENCODING,
+        ),
+      );
+      const ownerContract =
+        scenarioBundle.diagnostics.failure.ownerContract;
+
+      assert.equal(
+        ownerContract.dominantWitness.edgeId,
+        EDGE_ACTIVE_GATE_SNAPSHOT_COVERAGE,
+      );
+      assert.equal(
+        ownerContract.dominantWitness.owner,
+        OWNER_STARTUP_ACTIVE_GATE,
+      );
+      assert.equal(
+        ownerContract.dominantWitness.boundary,
+        BOUNDARY_SNAPSHOT_COVERAGE,
+      );
+      assert.equal(
+        ownerContract.dominantWitness.state,
+        OWNER_CONTRACT_STATE_BLOCKED,
+      );
+      assert.equal(
+        ownerContract.dominantWitness.dominantReason,
+        ACTIVE_GATE_TIMED_OUT_REASON,
+      );
+      assert.deepEqual(
+        ownerContract.dominantWitness.reasons,
+        [
+          ACTIVE_GATE_TIMED_OUT_REASON,
+          SNAPSHOT_COVERAGE_INCOMPLETE_REASON,
+        ],
+      );
+      assert.equal(
+        ownerContract.dominantWitness.source.selectedSnapshotError,
+        SELECTED_SNAPSHOT_ERROR,
+      );
+      assert.equal(
+        ownerContract.dominantWitness.source.readinessDelayCause,
+        SNAPSHOT_TIMEOUT_CAUSE,
+      );
+    },
+  );
+
   registerFailureBundlePublicationClosureTailTests({
     it,
     assert,
