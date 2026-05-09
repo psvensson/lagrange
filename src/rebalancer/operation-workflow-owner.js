@@ -19,9 +19,6 @@ import {
 } from './operation-workflow-owner-ports.js';
 
 const OPERATION_WORKFLOW_OWNER_ADAPTER_DEFAULT_CONTEXT = Object.freeze({});
-const OPERATION_WORKFLOW_OWNER_ADAPTER_MODE = Object.freeze({
-  OWNER_RECONCILE: 'owner_reconcile',
-});
 const OPERATION_WORKFLOW_OWNER_ADAPTER_SNAPSHOT = Object.freeze({
   DISPATCH_PENDING_PHASE: 'dispatch_pending',
   DISPATCHED_WAITING_PROGRESS: 'dispatched_waiting_progress',
@@ -119,7 +116,7 @@ class OperationWorkflowOwner extends OperationWorkflowOwnerSegment7 {
       operation,
       {
         ...options,
-        mode: OPERATION_WORKFLOW_OWNER_ADAPTER_MODE.OWNER_RECONCILE,
+        mode: OPERATION_WORKFLOW_OWNER_PORT_CONTEXT_MODE.OWNER_RECONCILE,
       },
     );
   }
@@ -156,7 +153,7 @@ class OperationWorkflowOwner extends OperationWorkflowOwnerSegment7 {
     return normalizePriorityRecoveryDispatchPendingDecisionSnapshot(
       snapshot,
       this.operationWorkflowOwnerAdapter.decide(operation, {
-        mode: OPERATION_WORKFLOW_OWNER_ADAPTER_MODE.OWNER_RECONCILE,
+        mode: OPERATION_WORKFLOW_OWNER_PORT_CONTEXT_MODE.OWNER_RECONCILE,
       }),
     );
   }

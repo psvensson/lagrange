@@ -1,5 +1,6 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {
+  OPERATION_WORKFLOW_OUTCOME_VALUES,
   OPERATION_WORKFLOW_COMMAND_STATE,
   OPERATION_WORKFLOW_DISPATCH_STATE,
   OPERATION_WORKFLOW_DURABLE_OPERATION_STATE,
@@ -24,6 +25,12 @@ import {
 import {
   createOperationWorkflowOwnerAdapter,
 } from '../../src/rebalancer/operation-workflow-owner-adapter.js';
+import {
+  OPERATION_WORKFLOW_OWNER_PORT_CONTEXT_MODE,
+  createOperationWorkflowOwnerPorts,
+} from '../../src/rebalancer/operation-workflow-owner-ports.js';
+import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
+import {WORKFLOW_STEP} from '../../src/constants/index.js';
 
 const TEST_OPERATION_ID = 'adapter-operation';
 const TEST_SOURCE_REVISION = 'adapter-source-revision';
@@ -32,9 +39,10 @@ const TEST_LEASE_TERM = 9;
 const TEST_REQUIRED_REVISION = 'adapter-required-revision';
 const TEST_PRIOR_OPERATION_ID = 'adapter-prior-operation';
 
-function buildOperation() {
+function buildOperation(overrides = {}) {
   return Object.freeze({
     operationId: TEST_OPERATION_ID,
+    ...overrides,
   });
 }
 
@@ -195,6 +203,47 @@ function buildAdapterHarness() {
   };
 }
 
+function buildOwnerPortHarness() {
+  const calls = [];
+  const owner = {
+    nodeId: TEST_OWNER_NODE_KEY,
+    repository: {
+      isOperationTerminal() {
+        return false;
+      },
+      isOperationLocallyOwned() {
+        return true;
+      },
+    },
+    resolveCoordinatorCreatedOperationOwnerNodeId() {
+      return TEST_OWNER_NODE_KEY;
+    },
+    isDispatchRetryableWorkflowStep() {
+      return false;
+    },
+    clearCreatedOperationHandoffRetry() {},
+    async dispatchOperationInternal() {
+      calls.push(
+        OPERATION_WORKFLOW_EFFECT_COMMANDS.DISPATCH_LOCAL_OWNER_COMMAND,
+      );
+      return {success: true};
+    },
+    reconcileOperationLifecycle() {
+      calls.push(
+        OPERATION_WORKFLOW_EFFECT_COMMANDS
+          .ADVANCE_EXISTING_OPERATION_COMMAND,
+      );
+      return true;
+    },
+  };
+  return {
+    adapter: createOperationWorkflowOwnerAdapter({
+      ports: createOperationWorkflowOwnerPorts(owner),
+    }),
+    calls,
+  };
+}
+
 test('operation workflow adapter executes canonical effect commands', async (t) => {
   const scenarios = [
     {
@@ -312,4 +361,35 @@ test('operation workflow adapter executes canonical effect commands', async (t) 
       scenario.name,
     );
   }
+});
+
+test('operation workflow owner reconcile routes stale sending pending ' +
+  'dispatch through the dispatch owner path', async (t) => {
+  const harness = buildOwnerPortHarness();
+  const result = await harness.adapter.run(
+    buildOperation({
+      status: ReplicaStatus.PENDING,
+      workflowStep: WORKFLOW_STEP.SENDING,
+      updatedAt: TEST_SOURCE_REVISION,
+    }),
+    {
+      mode: OPERATION_WORKFLOW_OWNER_PORT_CONTEXT_MODE.OWNER_RECONCILE,
+    },
+  );
+
+  t.equal(
+    result.outcome.outcome,
+    OPERATION_WORKFLOW_OUTCOME_VALUES.DISPATCH_LOCAL_OWNER,
+    'stale SENDING/pending owner reconcile should re-enter dispatch',
+  );
+  t.equal(
+    result.command.effectCommand,
+    OPERATION_WORKFLOW_EFFECT_COMMANDS.DISPATCH_LOCAL_OWNER_COMMAND,
+    'dispatch re-entry should use the canonical local owner command',
+  );
+  t.same(
+    harness.calls,
+    [OPERATION_WORKFLOW_EFFECT_COMMANDS.DISPATCH_LOCAL_OWNER_COMMAND],
+    'dispatch re-entry should not fall through to transition advancement',
+  );
 });

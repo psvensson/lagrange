@@ -35,6 +35,7 @@ const OPERATION_WORKFLOW_OWNER_PORT_CONTEXT_CAUSE = Object.freeze({
 const OPERATION_WORKFLOW_OWNER_PORT_CONTEXT_MODE = Object.freeze({
   COORDINATOR_CREATED_OPERATION: 'coordinator_created_operation',
   OBSERVED_PROGRESS: 'observed_progress',
+  OWNER_RECONCILE: 'owner_reconcile',
 });
 const OPERATION_WORKFLOW_OWNER_PORT_FUNCTION_TYPE = 'function';
 const OPERATION_WORKFLOW_OWNER_PORT_OPERATION_ID_UNDERSCORE =
@@ -42,6 +43,54 @@ const OPERATION_WORKFLOW_OWNER_PORT_OPERATION_ID_UNDERSCORE =
 const OPERATION_WORKFLOW_OWNER_PORT_WORKFLOW_STEP_UNDERSCORE =
   'workflow_step';
 const OPERATION_WORKFLOW_OWNER_PORT_STATUS_UNDERSCORE = 'status';
+
+const OPERATION_WORKFLOW_OWNER_PORT_DISPATCH_STATE_TABLE = Object.freeze([
+  Object.freeze({
+    state: OPERATION_WORKFLOW_DISPATCH_STATE.OBSERVED,
+    matches: (evidence) => evidence.observedProgressMode === true,
+  }),
+  Object.freeze({
+    state: OPERATION_WORKFLOW_DISPATCH_STATE.NOT_OBSERVED,
+    matches: (evidence) =>
+      evidence.dispatchPendingReentryCandidate === true,
+  }),
+  Object.freeze({
+    state: OPERATION_WORKFLOW_DISPATCH_STATE.UNAVAILABLE,
+    matches: (evidence) =>
+      evidence.dispatchRetrySupportAvailable !== true,
+  }),
+  Object.freeze({
+    state: OPERATION_WORKFLOW_DISPATCH_STATE.NOT_OBSERVED,
+    matches: (evidence) => evidence.dispatchRetryable === true,
+  }),
+  Object.freeze({
+    state: OPERATION_WORKFLOW_DISPATCH_STATE.OBSERVED,
+    matches: () => true,
+  }),
+]);
+
+const OPERATION_WORKFLOW_OWNER_PORT_TRANSITION_STATE_TABLE = Object.freeze([
+  Object.freeze({
+    state: OPERATION_WORKFLOW_TRANSITION_STATE.AVAILABLE,
+    matches: (evidence) => evidence.observedProgressMode === true,
+  }),
+  Object.freeze({
+    state: OPERATION_WORKFLOW_TRANSITION_STATE.BLOCKED,
+    matches: (evidence) =>
+      evidence.dispatchState ===
+        OPERATION_WORKFLOW_DISPATCH_STATE.NOT_OBSERVED,
+  }),
+  Object.freeze({
+    state: OPERATION_WORKFLOW_TRANSITION_STATE.BLOCKED,
+    matches: (evidence) =>
+      evidence.terminalState !==
+        OPERATION_WORKFLOW_TERMINAL_STATE.NON_TERMINAL,
+  }),
+  Object.freeze({
+    state: OPERATION_WORKFLOW_TRANSITION_STATE.AVAILABLE,
+    matches: () => true,
+  }),
+]);
 
 function isOperationWorkflowOwnerPortRecord(value) {
   return Boolean(value) &&
@@ -130,43 +179,45 @@ function resolveOperationWorkflowOwnerAuthorityState(owner, operation) {
 }
 
 function resolveOperationWorkflowDispatchState(owner, operation, context) {
-  if (
-    context.mode ===
-      OPERATION_WORKFLOW_OWNER_PORT_CONTEXT_MODE.OBSERVED_PROGRESS
-  ) {
-    return OPERATION_WORKFLOW_DISPATCH_STATE.OBSERVED;
-  }
-  if (
-    typeof owner.isDispatchRetryableWorkflowStep !==
-      OPERATION_WORKFLOW_OWNER_PORT_FUNCTION_TYPE
-  ) {
-    return OPERATION_WORKFLOW_DISPATCH_STATE.UNAVAILABLE;
-  }
-  return owner.isDispatchRetryableWorkflowStep(operation) ?
-    OPERATION_WORKFLOW_DISPATCH_STATE.NOT_OBSERVED :
-    OPERATION_WORKFLOW_DISPATCH_STATE.OBSERVED;
+  const dispatchRetrySupportAvailable =
+    typeof owner.isDispatchRetryableWorkflowStep ===
+      OPERATION_WORKFLOW_OWNER_PORT_FUNCTION_TYPE;
+  const evidence = Object.freeze({
+    observedProgressMode:
+      context.mode ===
+        OPERATION_WORKFLOW_OWNER_PORT_CONTEXT_MODE.OBSERVED_PROGRESS,
+    dispatchPendingReentryCandidate:
+      context.mode ===
+        OPERATION_WORKFLOW_OWNER_PORT_CONTEXT_MODE.OWNER_RECONCILE &&
+      getOperationWorkflowOwnerPortWorkflowStep(operation) ===
+        WORKFLOW_STEP.SENDING &&
+      getOperationWorkflowOwnerPortStatus(operation) ===
+        ReplicaStatus.PENDING,
+    dispatchRetrySupportAvailable,
+    dispatchRetryable:
+      dispatchRetrySupportAvailable === true &&
+      owner.isDispatchRetryableWorkflowStep(operation),
+  });
+  return OPERATION_WORKFLOW_OWNER_PORT_DISPATCH_STATE_TABLE.find((entry) =>
+    entry.matches(evidence),
+  ).state;
 }
 
 function resolveOperationWorkflowTransitionState(owner, operation, context) {
-  if (
-    context.mode ===
-      OPERATION_WORKFLOW_OWNER_PORT_CONTEXT_MODE.OBSERVED_PROGRESS
-  ) {
-    return OPERATION_WORKFLOW_TRANSITION_STATE.AVAILABLE;
-  }
-  if (
-    typeof owner.isDispatchRetryableWorkflowStep ===
-      OPERATION_WORKFLOW_OWNER_PORT_FUNCTION_TYPE &&
-    owner.isDispatchRetryableWorkflowStep(operation)
-  ) {
-    return OPERATION_WORKFLOW_TRANSITION_STATE.BLOCKED;
-  }
-  if (resolveOperationWorkflowTerminalState(owner, operation) !==
-    OPERATION_WORKFLOW_TERMINAL_STATE.NON_TERMINAL
-  ) {
-    return OPERATION_WORKFLOW_TRANSITION_STATE.BLOCKED;
-  }
-  return OPERATION_WORKFLOW_TRANSITION_STATE.AVAILABLE;
+  const evidence = Object.freeze({
+    observedProgressMode:
+      context.mode ===
+        OPERATION_WORKFLOW_OWNER_PORT_CONTEXT_MODE.OBSERVED_PROGRESS,
+    dispatchState: resolveOperationWorkflowDispatchState(
+      owner,
+      operation,
+      context,
+    ),
+    terminalState: resolveOperationWorkflowTerminalState(owner, operation),
+  });
+  return OPERATION_WORKFLOW_OWNER_PORT_TRANSITION_STATE_TABLE.find((entry) =>
+    entry.matches(evidence),
+  ).state;
 }
 
 function resolveOperationWorkflowTimeoutState(context) {

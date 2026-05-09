@@ -2,42 +2,42 @@
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
   "sprint": "work/sprints/active-2026-q2-spec-led-runtime-modularization.md",
-  "package": "work/packages/active-20260509-spec-led-runtime-modularization-active-gate-snapshot-coverage-frontier.md",
+  "package": "work/packages/active-20260509-spec-led-runtime-modularization-operation-workflow-timeout-frontier.md",
   "status": "active",
   "scenario": "spec-led-runtime-modularization",
-  "artifact": "test-output/reports/rolling-restart-spec-led-runtime-modularization-publication-ack.report.json",
-  "playback": "none",
-  "owner": "startup_active_gate_owner",
-  "boundary": "snapshot_coverage",
-  "dominantReason": "active_gate_timed_out",
-  "currentState": "Publication ACK convergence is satisfied in the reduced representative report, but startup active gate blocks on snapshot coverage 0/5 with active=4/5 and selected snapshot timeout evidence.",
-  "nextAction": "Freeze the active-gate snapshot coverage fixture from the reduced report, rewrite the startup active-gate owner path so snapshot coverage timeout is explicit owner evidence, and either close the startup frontier or migrate the next owner-boundary blocker.",
+  "artifact": "test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot.report.json",
+  "playback": "test-output/reports/.playback/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot/rolling-restart/",
+  "owner": "operation_workflow_owner",
+  "boundary": "workflow_timeout",
+  "dominantReason": "priority_recovery_progress_blocked",
+  "currentState": "The active-gate snapshot package removed startup/status and snapshot-lane fallback behavior. The representative rolling-restart rerun now selects operation_workflow_owner / workflow_timeout as the first frontier while active-gate snapshot coverage remains downstream at 2/5.",
+  "nextAction": "Freeze the operation workflow timeout witness from the new report, trace the operation workflow owner path for transition-deferred event-driven wait, and rewrite the owner path so stalled priority recovery progress has one canonical outcome.",
   "proof": [
-    "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-publication-ack.report.json --explain active_gate_snapshot_coverage",
-    "Focused active-gate snapshot coverage fixture from the reduced representative report",
-    "Focused startup/readiness and diagnostics tests selected by startup_active_gate_owner",
-    "Touched-file static guardrails selected by startup_active_gate_owner",
-    "node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot.report.json --fast-local --verbose"
+    "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot.report.json --explain priority_recovery_partition_progress",
+    "Focused operation_workflow_owner workflow_timeout fixture from the representative report",
+    "Focused operation workflow owner tests selected by workflow_timeout",
+    "Touched-file static guardrails selected by operation_workflow_owner",
+    "node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-spec-led-runtime-modularization-operation-workflow-timeout.report.json --fast-local --verbose"
   ],
   "touchedFiles": [
-    "src/control-plane/*readiness*.js",
-    "src/control-plane/bootstrap-readiness-owner*.js",
-    "test/control-plane/*readiness*.test.js",
-    "test/distributed/harness/active-gate-contract.js",
+    "src/rebalancer/operation-workflow-owner*.js",
+    "src/control-plane/priority-recovery-snapshot*.js",
+    "test/rebalancer/*workflow*.test.js",
+    "test/control-plane/priority-recovery-snapshot*.js",
     "test/distributed/harness/failure-bundle*.js",
     "src/diagnostics/topology-convergence-graph.js",
     "scripts/analyze-topology-convergence.js",
-    "work/packages/active-20260509-spec-led-runtime-modularization-active-gate-snapshot-coverage-frontier.md"
+    "work/packages/active-20260509-spec-led-runtime-modularization-operation-workflow-timeout-frontier.md"
   ],
   "modelFit": {
     "packageClass": "representative-frontier-closure",
     "intendedMinimumModel": "gpt-5.3-codex",
     "scopeShape": "owner-boundary-contraction",
     "escalationTriggers": [
-      "snapshot coverage requires runtime active-gate or readiness behavior changes",
-      "focused fixture exposes a different startup owner boundary",
-      "representative proof still fails on active_gate_snapshot_coverage after owner fix"
+      "workflow timeout evidence requires changes outside operation_workflow_owner",
+      "focused fixture exposes a different first frontier",
+      "representative proof still fails on workflow_timeout after owner fix"
     ]
   },
-  "predecessor": "work/packages/done-20260509-spec-led-runtime-modularization-publication-ack-convergence-frontier.md"
+  "predecessor": "work/packages/done-20260509-spec-led-runtime-modularization-active-gate-snapshot-coverage-frontier.md"
 }

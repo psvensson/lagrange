@@ -7,7 +7,7 @@ progress successor boundary.
 ## Current Package Snapshot
 
 Current blocker package:
-`work/packages/todo-20260509-spec-led-runtime-modularization-operation-workflow-timeout-frontier.md`.
+`work/packages/active-20260509-spec-led-runtime-modularization-operation-workflow-timeout-frontier.md`.
 
 Owner boundary:
 `operation_workflow_owner / workflow_timeout`.
@@ -25,7 +25,7 @@ operation workflow timeout with dominant reason
 
 Queued work:
 Next package:
-`work/packages/todo-20260509-spec-led-runtime-modularization-operation-workflow-timeout-frontier.md`.
+`work/packages/active-20260509-spec-led-runtime-modularization-operation-workflow-timeout-frontier.md`.
 
 Companion cleanup:
 `work/packages/todo-20260509-spec-led-runtime-modularization-active-gate-report-schema-alias-deletion.md`.
@@ -91,7 +91,7 @@ the contract and proof ladder are stable.
 9. [Legacy Deletion And Representative Proof](../packages/done-20260509-spec-led-runtime-modularization-legacy-deletion-proof.md)
 10. [Publication ACK Convergence Frontier](../packages/done-20260509-spec-led-runtime-modularization-publication-ack-convergence-frontier.md)
 11. [Active Gate Snapshot Coverage Frontier](../packages/done-20260509-spec-led-runtime-modularization-active-gate-snapshot-coverage-frontier.md)
-12. [Operation Workflow Timeout Frontier](../packages/todo-20260509-spec-led-runtime-modularization-operation-workflow-timeout-frontier.md)
+12. [Operation Workflow Timeout Frontier](../packages/active-20260509-spec-led-runtime-modularization-operation-workflow-timeout-frontier.md)
 13. [Active Gate Report Schema Alias Deletion](../packages/todo-20260509-spec-led-runtime-modularization-active-gate-report-schema-alias-deletion.md)
 
 ## Model Fit Strategy

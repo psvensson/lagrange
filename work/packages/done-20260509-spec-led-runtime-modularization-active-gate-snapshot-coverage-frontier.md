@@ -48,7 +48,7 @@
   "predecessor": "work/packages/done-20260509-spec-led-runtime-modularization-publication-ack-convergence-frontier.md",
   "closed": "2026-05-09",
   "commitAndPushLedgerRequired": true,
-  "successor": "work/packages/todo-20260509-spec-led-runtime-modularization-operation-workflow-timeout-frontier.md"
+  "successor": "work/packages/active-20260509-spec-led-runtime-modularization-operation-workflow-timeout-frontier.md"
 }
 -->
 
@@ -206,7 +206,7 @@ guardrails, and representative rolling-restart.
 ## Migration
 
 Successor package:
-`work/packages/todo-20260509-spec-led-runtime-modularization-operation-workflow-timeout-frontier.md`.
+`work/packages/active-20260509-spec-led-runtime-modularization-operation-workflow-timeout-frontier.md`.
 
 Generated owner evidence:
 
