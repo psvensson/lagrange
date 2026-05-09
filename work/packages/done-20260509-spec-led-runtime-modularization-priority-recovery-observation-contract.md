@@ -250,6 +250,27 @@ Static guardrails:
    `priority recovery observation snapshots prefer explicit same-epoch needs-operation snapshots over stale terminal follow-up rows`
    witness-selection case.
 
+## Review Finding Repair Validation
+
+The predecessor review finding was the stale terminal follow-up witness winning
+over the fresher same-epoch `operation_unknown` needs-operation witness in the
+priority recovery observation summary. The fix keeps spread-satisfied workflow
+operation evidence as the strongest same-epoch summary candidate, but stops
+terminal operation evidence from outranking fresher explicit needs-operation
+evidence.
+
+Focused proof after the repair:
+
+1. `node --test test/control-plane/priority-recovery-snapshot.test.js`
+   passed: 377/377 assertions.
+2. `node scripts/check-guideline-literals.js src/control-plane/priority-recovery-snapshot-stage-3.js`
+   passed with 0 new literal-guideline violations and 0 inherited baseline
+   violations.
+3. `node scripts/check-guideline-decision-boundaries.js src/control-plane/priority-recovery-snapshot-stage-3.js`
+   passed with 0 decision-boundary guideline violations.
+4. `npm run audit:runtime-grammar:file -- src/control-plane/priority-recovery-snapshot-stage-3.js`
+   passed with 0 runtime-grammar-contract violations.
+
 ## Done When
 
 1. Priority recovery no longer reconstructs workflow progress.

@@ -878,8 +878,18 @@ function resolvePriorityRecoveryDecisionSnapshotSummaryEvidenceRank(snapshot) {
   ) {
     return NUM.TWO;
   }
-  return hasPriorityRecoveryDecisionSnapshotOperationEvidence(snapshot) ===
-    true ?
+  const coordinatorOperation =
+    snapshot?.[PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.COORDINATOR]?.[
+      PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD.OPERATION
+    ];
+  const terminalOperationEvidence =
+    coordinatorOperation &&
+    typeof coordinatorOperation === TYPEOF.OBJECT &&
+    isPriorityRecoveryOperationContextTerminal(coordinatorOperation) === true;
+  return (
+    hasPriorityRecoveryDecisionSnapshotOperationEvidence(snapshot) === true &&
+    terminalOperationEvidence !== true
+  ) ?
     NUM.ONE :
     NUM.ZERO;
 }
