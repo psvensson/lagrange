@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-09",
   "scenario": "spec-led-runtime-modularization",
   "artifact": "none",
@@ -20,15 +20,16 @@
     "Touched-file decision-boundary and literal guardrails"
   ],
   "touchedFiles": [
-    "src/rebalancer/move-planner*.js",
-    "src/rebalancer/unified-rebalancer*.js",
-    "src/rebalancer/storage-admission-service.js",
-    "src/rebalancer/placement-owner-*.js",
-    "test/rebalancer/move-planner*.test.js",
-    "test/rebalancer/storage-admission*.test.js",
-    "work/packages/active-20260509-spec-led-runtime-modularization-placement-owner-kernel.md"
+    "src/rebalancer/move-planner.js",
+    "src/rebalancer/placement-owner-constants.js",
+    "src/rebalancer/placement-owner-decision.js",
+    "src/rebalancer/placement-owner-evidence.js",
+    "test/rebalancer/move-planner-placement-owner-kernel.test.js",
+    "work/packages/done-20260509-spec-led-runtime-modularization-placement-owner-kernel.md"
   ],
-  "predecessor": "work/packages/done-20260509-spec-led-runtime-modularization-workflow-owner-adapter-cutover.md"
+  "predecessor": "work/packages/done-20260509-spec-led-runtime-modularization-workflow-owner-adapter-cutover.md",
+  "closed": "2026-05-09",
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -109,19 +110,40 @@ fixtures, decision table proof, static guardrails.
 
 ## Detection / Analysis Tasks
 
-- [ ] Inventory current placement inputs and side effects.
-- [ ] Classify each branch as filter, score, reserve, intent, adapter, or
+- [x] Inventory current placement inputs and side effects.
+- [x] Classify each branch as filter, score, reserve, intent, adapter, or
       deletion.
-- [ ] Identify duplicate admission decisions.
-- [ ] Identify all direct operation creation paths owned by placement today.
+- [x] Identify duplicate admission decisions.
+- [x] Identify all direct operation creation paths owned by placement today.
 
 ## Implementation Tasks
 
-- [ ] Add placement constants, evidence, state, and decision modules.
-- [ ] Implement filter and score tables.
-- [ ] Implement reservation and placement intent output.
-- [ ] Update move planner tests to assert policy outputs.
-- [ ] Leave operation execution to the operation owner adapter.
+- [x] Add placement constants, evidence, state, and decision modules.
+- [x] Implement filter and score tables.
+- [x] Implement reservation and placement intent output.
+- [x] Update move planner tests to assert policy outputs.
+- [x] Leave operation execution to the operation owner adapter.
+
+## Implementation Notes
+
+Placement target selection now runs through the placement owner kernel:
+
+- `placement-owner-evidence.js` normalizes candidate nodes, current replicas,
+  policy constraints, capacity diagnostics, and transition reservations or
+  deferrals once.
+- `placement-owner-decision.js` emits explicit `filterResult`, `scoreResult`,
+  `reservationResult`, and `intent` phases, plus the legacy
+  `placementOwnerOutcome` shape for existing consumers.
+- `MovePlanner.calculateTargetState`, partition placement, message-group
+  placement, `sortNodesByLoad`, and `sortNodesBySuitability` consume the kernel
+  for target selection. Move calculation and operation workflow execution remain
+  outside placement.
+- Superseded local topology scoring and placement-target helper branches were
+  deleted from `MovePlanner`; the placement owner kernel is now the single
+  target-selection and scoring path.
+- Existing partial placement owner vocabulary in `topology-owner-constants.js`
+  remains the public compatibility surface; new placement owner modules import
+  and reuse that vocabulary instead of introducing duplicate policy names.
 
 ## Validation
 
@@ -129,6 +151,26 @@ fixtures, decision table proof, static guardrails.
 2. Focused storage admission tests.
 3. Placement decision table fixture.
 4. Touched-file decision-boundary and literal guardrails.
+
+### Validation Notes
+
+- PASS: `node --test test/rebalancer/move-planner-placement-owner-kernel.test.js`
+  - 22 tests, 7 suites.
+- PASS: `node --test test/rebalancer/topology-owner-contracts.test.js test/rebalancer/move-planner-capacity-gating.test.js test/rebalancer/storage-admission-service.test.js`
+  - 151 tests, 54 suites.
+- PASS: `node --test test/rebalancer/move-planner*.test.js test/rebalancer/placement-wrapping-duplicate-adds.test.js test/rebalancer/planner-single-path-enforcement.test.js`
+  - 111 tests, 54 suites.
+- PASS: `node scripts/check-guideline-literals.js src/rebalancer/move-planner.js src/rebalancer/move-planner-state-methods.js src/rebalancer/storage-admission-service.js src/rebalancer/placement-owner-constants.js src/rebalancer/placement-owner-evidence.js src/rebalancer/placement-owner-decision.js`
+  - 0 new literal-guideline violations.
+- PASS: `node scripts/check-guideline-decision-boundaries.js src/rebalancer/move-planner.js src/rebalancer/move-planner-state-methods.js src/rebalancer/storage-admission-service.js src/rebalancer/placement-owner-constants.js src/rebalancer/placement-owner-evidence.js src/rebalancer/placement-owner-decision.js`
+  - 0 decision-boundary guideline violations.
+- PASS: `npm run audit:runtime-grammar:file -- src/rebalancer/move-planner.js src/rebalancer/move-planner-state-methods.js src/rebalancer/storage-admission-service.js src/rebalancer/placement-owner-constants.js src/rebalancer/placement-owner-evidence.js src/rebalancer/placement-owner-decision.js`
+  - 0 runtime-grammar-contract violations.
+- PASS: `git diff --check -- src/rebalancer/move-planner.js src/rebalancer/move-planner-state-methods.js src/rebalancer/storage-admission-service.js src/rebalancer/placement-owner-constants.js src/rebalancer/placement-owner-evidence.js src/rebalancer/placement-owner-decision.js test/rebalancer/move-planner-placement-owner-kernel.test.js test/rebalancer/move-planner-capacity-gating.test.js test/rebalancer/storage-admission-service.test.js work/packages/done-20260509-spec-led-runtime-modularization-placement-owner-kernel.md`
+- PASS: `npm run work:validate`
+  - Work tracker validation OK for 23 file(s).
+- PASS: `npm run work:dirty-scope -- --package work/packages/done-20260509-spec-led-runtime-modularization-placement-owner-kernel.md`
+  - Package-owned dirty entries: 6; unrelated dirty entries: 6.
 
 ### Workflow Adapter Review Fix Notes
 
@@ -149,7 +191,7 @@ Validation for the repair:
 - PASS: `node scripts/check-guideline-literals.js src/rebalancer/operation-workflow-owner-ports.js`
 - PASS: `node scripts/check-guideline-decision-boundaries.js src/rebalancer/operation-workflow-owner-ports.js`
 - PASS: `npm run audit:runtime-grammar:file -- src/rebalancer/operation-workflow-owner-ports.js`
-- PASS: `git diff --check -- src/rebalancer/operation-workflow-owner-ports.js work/packages/done-20260509-spec-led-runtime-modularization-workflow-owner-adapter-cutover.md work/packages/active-20260509-spec-led-runtime-modularization-placement-owner-kernel.md work/sprints/active-2026-q2-spec-led-runtime-modularization.md`
+- PASS: `git diff --check -- src/rebalancer/operation-workflow-owner-ports.js work/packages/done-20260509-spec-led-runtime-modularization-workflow-owner-adapter-cutover.md work/packages/done-20260509-spec-led-runtime-modularization-placement-owner-kernel.md work/sprints/active-2026-q2-spec-led-runtime-modularization.md`
 
 ## Done When
 
@@ -163,5 +205,5 @@ Validation for the repair:
       Agent Bohr (`019e0bba-863b-7c43-9e0a-3862c9ff01b4`) reviewed `work/packages/done-20260509-spec-led-runtime-modularization-workflow-owner-adapter-cutover.md`; result `fixes-required`.
 - [x] Fix subagent recorded or explicitly not needed:
       Agent Mendel (`019e0bbe-6a4b-7a12-8a4e-20a959222684`) fixed `work/packages/done-20260509-spec-led-runtime-modularization-workflow-owner-adapter-cutover.md`.
-- [ ] Implementation subagent recorded:
-      pending-before-implementation-starts
+- [x] Implementation subagent recorded:
+      Agent Gibbs (`019e0bc7-14e3-76e0-b61f-d52bd9c50257`) implemented `work/packages/done-20260509-spec-led-runtime-modularization-placement-owner-kernel.md`.

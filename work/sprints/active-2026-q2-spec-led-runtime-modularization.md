@@ -19,7 +19,7 @@ local `PENDING` priming semantics: ordinary local creations claim only to
 `SENDING`, and critical local creations dispatch from the claimed snapshot.
 
 Next package:
-`work/packages/active-20260509-spec-led-runtime-modularization-placement-owner-kernel.md`.
+`work/packages/done-20260509-spec-led-runtime-modularization-placement-owner-kernel.md`.
 
 Next proof surface: placement owner policy kernel implementation can start only
 after the workflow-adapter review fix ledger is clean and the separate
@@ -74,7 +74,7 @@ the contract and proof ladder are stable.
 2. [Operation Owner Decision Kernel](../packages/done-20260509-spec-led-runtime-modularization-operation-owner-kernel.md)
 3. [Priority Recovery Observation Contract](../packages/done-20260509-spec-led-runtime-modularization-priority-recovery-observation-contract.md)
 4. [Workflow Owner Adapter Cutover](../packages/done-20260509-spec-led-runtime-modularization-workflow-owner-adapter-cutover.md)
-5. [Placement Owner Policy Kernel](../packages/active-20260509-spec-led-runtime-modularization-placement-owner-kernel.md)
+5. [Placement Owner Policy Kernel](../packages/done-20260509-spec-led-runtime-modularization-placement-owner-kernel.md)
 6. [Publication Owner Stream Contract](../packages/todo-20260509-spec-led-runtime-modularization-publication-owner-stream.md)
 7. [Projection Readiness Contract](../packages/todo-20260509-spec-led-runtime-modularization-projection-readiness-contract.md)
 8. [Diagnostics And Harness Consumer Rewrite](../packages/todo-20260509-spec-led-runtime-modularization-diagnostics-harness-consumer.md)

@@ -4,7 +4,7 @@
 
 Sprint: `work/sprints/active-2026-q2-spec-led-runtime-modularization.md`
 
-Package: `work/packages/active-20260509-spec-led-runtime-modularization-placement-owner-kernel.md`
+Package: `work/packages/done-20260509-spec-led-runtime-modularization-placement-owner-kernel.md`
 
 Scenario: `spec-led-runtime-modularization`
 
@@ -35,10 +35,9 @@ Rewrite placement as a pure policy kernel with filter, score, reserve, and inten
 
 ## Touched Files
 
-1. `src/rebalancer/move-planner*.js`
-2. `src/rebalancer/unified-rebalancer*.js`
-3. `src/rebalancer/storage-admission-service.js`
-4. `src/rebalancer/placement-owner-*.js`
-5. `test/rebalancer/move-planner*.test.js`
-6. `test/rebalancer/storage-admission*.test.js`
-7. `work/packages/active-20260509-spec-led-runtime-modularization-placement-owner-kernel.md`
+1. `src/rebalancer/move-planner.js`
+2. `src/rebalancer/placement-owner-constants.js`
+3. `src/rebalancer/placement-owner-decision.js`
+4. `src/rebalancer/placement-owner-evidence.js`
+5. `test/rebalancer/move-planner-placement-owner-kernel.test.js`
+6. `work/packages/done-20260509-spec-led-runtime-modularization-placement-owner-kernel.md`

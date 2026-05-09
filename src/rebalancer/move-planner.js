@@ -45,6 +45,12 @@ import {
   PLACEMENT_OWNER_POLICY,
   buildPlacementOwnerTargetOutcome,
 } from './topology-owner-constants.js';
+import {
+  PLACEMENT_OWNER_SCORE_PROFILE,
+} from './placement-owner-constants.js';
+import {
+  buildPlacementOwnerDecision as buildPlacementOwnerPolicyDecision,
+} from './placement-owner-decision.js';
 const MOVE_PLANNER_LITERAL = Object.freeze({
   MOVEPLANNER_REQUIRES_ENTITYID: 'MovePlanner requires entityId',
   MOVEPLANNER_REQUIRES_ENTITYTYPE: 'MovePlanner requires entityType',
@@ -67,12 +73,6 @@ const PLACEMENT_OCCUPIED_STATUSES = new Set([
   ReplicaStatus.SYNCING,
   ReplicaStatus.ACTIVE,
 ]);
-const MOVE_PLANNER_TOPOLOGY_SCORE = Object.freeze({
-  SAME_GROUP_BONUS: 5,
-  SAME_GROUP_PENALTY: 2,
-  DIVERSITY_NEW_GROUP_BONUS: 4,
-  DIVERSITY_EXISTING_GROUP_PENALTY: 4,
-});
 const CAPACITY_REJECTION_REASON = Object.freeze({
   ADMISSION_ERROR: 'admission_error',
 });
@@ -252,6 +252,7 @@ class MovePlanner {
         policy,
         diagnostics,
         transitionSnapshot,
+        currentReplicas,
       );
     }
 
@@ -263,6 +264,7 @@ class MovePlanner {
       policy,
       diagnostics,
       transitionSnapshot,
+      currentReplicas,
     );
   }
 
@@ -445,6 +447,7 @@ class MovePlanner {
     policy,
     diagnostics,
     transitionSnapshot = null,
+    currentReplicas = null,
   ) {
     const targetNodes = [];
     const diag = diagnostics || {
@@ -458,9 +461,21 @@ class MovePlanner {
     const maxReplicaCount =
       policy.maxReplicaCount ||
       MESSAGE_GROUP_PLACEMENT_DEFAULT_MAX_REPLICA_COUNT;
+    const placementOwnerDecision = this.buildPlacementOwnerPolicyDecision({
+      nodes,
+      targetCount,
+      policy,
+      diagnostics: diag,
+      transitionSnapshot,
+      currentReplicas,
+      placementPolicy: PLACEMENT_OWNER_POLICY.MESSAGE_GROUP_LOCAL_ACCESS,
+      scoreProfile: PLACEMENT_OWNER_SCORE_PROFILE.LOAD,
+    });
+    const sortedNodes = placementOwnerDecision.scoreResult.rankedCandidates
+      .map((candidate) => candidate.node);
 
     // No feasible nodes: we cannot place any replicas.
-    if (!nodes || nodes.length === NUM.ZERO) {
+    if (sortedNodes.length === NUM.ZERO) {
       return buildMessageGroupPlacementResult({
         targetReplicaCount: targetCount,
         targetNodes: [],
@@ -474,38 +489,16 @@ class MovePlanner {
         ),
         availableNodeCount: NUM.ZERO,
         capacityDiagnostics: diag,
+        placementOwnerOutcome: placementOwnerDecision.placementOwnerOutcome,
+        placementOwnerDecision,
       });
     }
 
     // First, ensure we have replicas spread across nodes
     if (policy.placementConstraints?.spreadAcrossNodes) {
-      // Sort nodes by current replica load (prefer less loaded nodes)
-      const sortedNodes = this.sortNodesByLoad(nodes);
-      if (sortedNodes.length === NUM.ZERO) {
-        return buildMessageGroupPlacementResult({
-          targetReplicaCount: targetCount,
-          targetNodes: [],
-          maxReplicaCount,
-          degradedReason: this.getDegradedReason(
-            totalReadyNodes,
-            NUM.ZERO,
-            NUM.ZERO,
-            targetCount,
-            diag,
-          ),
-          availableNodeCount: NUM.ZERO,
-          capacityDiagnostics: diag,
-        });
-      }
       const effectiveCount = Math.min(targetCount, sortedNodes.length);
-      const placementOwnerOutcome = buildPlacementOwnerTargetOutcome({
-        sortedNodes,
-        targetCount: effectiveCount,
-        transitionSnapshot,
-        policy: PLACEMENT_OWNER_POLICY.MESSAGE_GROUP_LOCAL_ACCESS,
-      });
       targetNodes.push(
-        ...placementOwnerOutcome.targetNodeIds,
+        ...placementOwnerDecision.intent.targetNodeIds,
       );
       return buildMessageGroupPlacementResult({
         targetReplicaCount: targetCount,
@@ -520,7 +513,8 @@ class MovePlanner {
         ),
         availableNodeCount: sortedNodes.length,
         capacityDiagnostics: diag,
-        placementOwnerOutcome,
+        placementOwnerOutcome: placementOwnerDecision.placementOwnerOutcome,
+        placementOwnerDecision,
       });
     }
     return buildMessageGroupPlacementResult({
@@ -536,6 +530,7 @@ class MovePlanner {
       ),
       availableNodeCount: nodes.length,
       capacityDiagnostics: diag,
+      placementOwnerDecision,
     });
   }
 
@@ -553,6 +548,7 @@ class MovePlanner {
     policy,
     diagnostics,
     transitionSnapshot = null,
+    currentReplicas = null,
   ) {
     const targetNodes = [];
     const diag = diagnostics || {
@@ -563,9 +559,24 @@ class MovePlanner {
       capacityFilterApplied: false,
     };
     const totalReadyNodes = diag.totalCandidates;
+    const placementOwnerDecision = this.buildPlacementOwnerPolicyDecision({
+      nodes,
+      targetCount,
+      policy,
+      diagnostics: diag,
+      transitionSnapshot,
+      currentReplicas,
+      includeGlobalSystemDeferral: this.isSystemPartitionEntity(),
+      placementPolicy:
+        this.entityType === EntityType.RUNTIME_SERVICE ?
+          PLACEMENT_OWNER_POLICY.RUNTIME_SERVICE_SPREAD :
+          PLACEMENT_OWNER_POLICY.PARTITION_SPREAD,
+      scoreProfile: PLACEMENT_OWNER_SCORE_PROFILE.SUITABILITY,
+    });
 
     // Sort nodes by suitability based on policy constraints
-    const sortedNodes = this.sortNodesBySuitability(nodes, policy);
+    const sortedNodes = placementOwnerDecision.scoreResult.rankedCandidates
+      .map((candidate) => candidate.node);
 
     // No feasible nodes: we cannot place any replicas.
     if (sortedNodes.length === NUM.ZERO) {
@@ -587,32 +598,16 @@ class MovePlanner {
         availableNodeCount: NUM.ZERO,
         capacityDiagnostics: diag,
         prioritySpread,
-        placementOwnerOutcome: buildPlacementOwnerTargetOutcome({
-          sortedNodes: [],
-          targetCount,
-          policy:
-            this.entityType === EntityType.RUNTIME_SERVICE ?
-              PLACEMENT_OWNER_POLICY.RUNTIME_SERVICE_SPREAD :
-              PLACEMENT_OWNER_POLICY.PARTITION_SPREAD,
-        }),
+        placementOwnerOutcome: placementOwnerDecision.placementOwnerOutcome,
+        placementOwnerDecision,
       };
     }
 
     // Keep desired replica target independent of current node count.
     // Placement assigns at most one replica per available node.
     const effectiveCount = Math.min(targetCount, sortedNodes.length);
-    const placementOwnerOutcome = buildPlacementOwnerTargetOutcome({
-      sortedNodes,
-      targetCount: effectiveCount,
-      transitionSnapshot,
-      includeGlobalSystemDeferral: this.isSystemPartitionEntity(),
-      policy:
-        this.entityType === EntityType.RUNTIME_SERVICE ?
-          PLACEMENT_OWNER_POLICY.RUNTIME_SERVICE_SPREAD :
-          PLACEMENT_OWNER_POLICY.PARTITION_SPREAD,
-    });
     targetNodes.push(
-      ...placementOwnerOutcome.targetNodeIds,
+      ...placementOwnerDecision.intent.targetNodeIds,
     );
     const degradedReason = this.getDegradedReason(
       totalReadyNodes,
@@ -639,8 +634,32 @@ class MovePlanner {
       availableNodeCount: sortedNodes.length,
       capacityDiagnostics: diag,
       prioritySpread,
-      placementOwnerOutcome,
+      placementOwnerOutcome: placementOwnerDecision.placementOwnerOutcome,
+      placementOwnerDecision,
     };
+  }
+
+  /**
+   * Run the placement owner kernel for the current planner boundary.
+   * @param {Object} options
+   * @return {Object}
+   * @private
+   */
+  buildPlacementOwnerPolicyDecision(options = {}) {
+    const currentReplicas = Array.isArray(options.currentReplicas) ?
+      options.currentReplicas :
+      this.getCurrentReplicas();
+    return buildPlacementOwnerPolicyDecision({
+      candidateNodes: Array.isArray(options.nodes) ? options.nodes : [],
+      currentReplicas,
+      targetCount: options.targetCount,
+      policy: options.policy,
+      capacityDiagnostics: options.diagnostics,
+      transitionSnapshot: options.transitionSnapshot,
+      includeGlobalSystemDeferral: options.includeGlobalSystemDeferral === true,
+      placementPolicy: options.placementPolicy,
+      scoreProfile: options.scoreProfile,
+    });
   }
 
   /**
@@ -649,12 +668,13 @@ class MovePlanner {
    * @return {Array<Object>} Sorted nodes.
    */
   sortNodesByLoad(nodes) {
-    return [...nodes].sort((a, b) => {
-      // Calculate load score (lower is better)
-      const loadA = this.calculateNodeLoad(a);
-      const loadB = this.calculateNodeLoad(b);
-      return loadA - loadB;
-    });
+    return this.buildPlacementOwnerPolicyDecision({
+      nodes,
+      targetCount: Array.isArray(nodes) ? nodes.length : NUM.ZERO,
+      policy: {},
+      placementPolicy: PLACEMENT_OWNER_POLICY.MESSAGE_GROUP_LOCAL_ACCESS,
+      scoreProfile: PLACEMENT_OWNER_SCORE_PROFILE.LOAD,
+    }).scoreResult.rankedCandidates.map((candidate) => candidate.node);
   }
 
   /**
@@ -666,335 +686,16 @@ class MovePlanner {
    * @return {Array<Object>} Sorted nodes.
    */
   sortNodesBySuitability(nodes, policy) {
-    const constraints = policy.placementConstraints || {};
-    const topologyContext = this.buildTopologyPlacementContext(nodes);
-    return [...nodes].sort((a, b) => {
-      let scoreA = NUM.ZERO;
-      let scoreB = NUM.ZERO;
-
-      // Consider CPU load
-      if (constraints.considerCpuLoad) {
-        const cpuA = a.cpu_usage_percent || NUM.ZERO;
-        const cpuB = b.cpu_usage_percent || NUM.ZERO;
-        scoreA += cpuA;
-        scoreB += cpuB;
-      }
-
-      // Consider memory load
-      if (constraints.considerMemoryLoad) {
-        const memA = a.memory_usage_percent || NUM.ZERO;
-        const memB = b.memory_usage_percent || NUM.ZERO;
-        scoreA += memA;
-        scoreB += memB;
-      }
-
-      // Consider disk space
-      if (constraints.considerDiskSpace) {
-        const diskA = a.disk_usage_percent || NUM.ZERO;
-        const diskB = b.disk_usage_percent || NUM.ZERO;
-        scoreA += diskA;
-        scoreB += diskB;
-      }
-      if (constraints.preferSameLatencyGroup) {
-        scoreA += this.getSameLatencyGroupScoreAdjustment(a, topologyContext);
-        scoreB += this.getSameLatencyGroupScoreAdjustment(b, topologyContext);
-      }
-      if (constraints.preferLatencyGroupDiversity) {
-        scoreA += this.getLatencyGroupDiversityScoreAdjustment(
-          a,
-          topologyContext,
-        );
-        scoreB += this.getLatencyGroupDiversityScoreAdjustment(
-          b,
-          topologyContext,
-        );
-      }
-
-      // Storage-aware tie-breaker: prefer nodes with more available
-      // budget bytes (lower disk_usage_percent as proxy). This keeps
-      // disk usage scoring as a secondary heuristic, not the hard
-      // gate (Req 5.2).
-      if (scoreA === scoreB) {
-        const diskA = a.disk_usage_percent || NUM.ZERO;
-        const diskB = b.disk_usage_percent || NUM.ZERO;
-        return diskA - diskB;
-      }
-      return scoreA - scoreB;
-    });
-  }
-
-  /**
-   * Keep transitional add targets inside the canonical placement target set
-   * while bootstrap/replacement work is still in flight. Without this,
-   * recalculating target nodes from live suitability alone can retarget a
-   * still-bootstrapping replica to a second node and mint an extra ADD.
-   *
-   * @param {Array<Object>} sortedNodes
-   * @param {Object|null} transitionSnapshot
-   * @param {number} targetCount
-   * @return {string[]}
-   * @private
-   */
-  resolveReservedPlacementTargetNodeIds(
-    sortedNodes,
-    transitionSnapshot,
-    targetCount,
-  ) {
-    const normalizedTargetCount =
-      Number.isInteger(targetCount) && targetCount > NUM.ZERO ?
-        targetCount :
-        NUM.ZERO;
-    if (
-      !Array.isArray(sortedNodes) ||
-      sortedNodes.length === NUM.ZERO ||
-      normalizedTargetCount === NUM.ZERO
-    ) {
-      return [];
-    }
-
-    const rankedNodeIds = sortedNodes
-      .map((node) => node?.node_id)
-      .filter(
-        (nodeId) =>
-          typeof nodeId === MOVE_PLANNER_LITERAL.STRING &&
-          nodeId.length > NUM.ZERO,
-      );
-    if (rankedNodeIds.length === NUM.ZERO) {
-      return [];
-    }
-
-    const transitionalNodeIds =
-      transitionSnapshot?.nodesWithEntityAddTransitional instanceof Set ?
-        transitionSnapshot.nodesWithEntityAddTransitional :
-        new Set();
-    return buildPlacementOwnerTargetOutcome({
-      sortedNodes,
-      targetCount: normalizedTargetCount,
-      transitionSnapshot: {
-        nodesWithEntityAddTransitional: transitionalNodeIds,
-      },
-    }).reservedNodeIds
-      .filter((nodeId) => transitionalNodeIds.has(nodeId))
-      .slice(NUM.ZERO, normalizedTargetCount);
-  }
-
-  /**
-   * Deprioritize cluster-global transitional system-add targets during
-   * canonical placement selection so system partitions can still choose
-   * alternative eligible nodes before move emission blocks the occupied
-   * target later in the pipeline.
-   *
-   * Reserved same-entity transitional targets are excluded from this deferred
-   * set because they must remain stable while the owning workflow converges.
-   *
-   * @param {Array<Object>} sortedNodes
-   * @param {Object|null} transitionSnapshot
-   * @param {string[]} [reservedNodeIds=[]]
-   * @return {string[]}
-   * @private
-   */
-  resolveDeferredPlacementTargetNodeIds(
-    sortedNodes,
-    transitionSnapshot,
-    reservedNodeIds = [],
-  ) {
-    if (!Array.isArray(sortedNodes) || sortedNodes.length === NUM.ZERO) {
-      return [];
-    }
-
-    const rankedNodeIds = sortedNodes
-      .map((node) => node?.node_id)
-      .filter(
-        (nodeId) =>
-          typeof nodeId === MOVE_PLANNER_LITERAL.STRING &&
-          nodeId.length > NUM.ZERO,
-      );
-    if (rankedNodeIds.length === NUM.ZERO) {
-      return [];
-    }
-
-    const reservedNodeIdSet = new Set(
-      (Array.isArray(reservedNodeIds) ? reservedNodeIds : []).filter(
-        (nodeId) =>
-          typeof nodeId === MOVE_PLANNER_LITERAL.STRING &&
-          nodeId.length > NUM.ZERO,
-      ),
-    );
-    const deferredNodeIdSet =
-      transitionSnapshot?.nodesWithGlobalSystemAddTransitional instanceof Set ?
-        transitionSnapshot.nodesWithGlobalSystemAddTransitional :
-        new Set();
-    return buildPlacementOwnerTargetOutcome({
-      sortedNodes,
-      targetCount: rankedNodeIds.length,
-      transitionSnapshot: {
-        nodesWithEntityAddTransitional: new Set(reservedNodeIdSet),
-        nodesWithGlobalSystemAddTransitional: deferredNodeIdSet,
-      },
-      includeGlobalSystemDeferral: true,
-    }).deferredNodeIds;
-  }
-
-  /**
-   * Select one canonical target cohort from ranked placement candidates while
-   * preserving any reserved transitional nodes in the final target set.
-   *
-   * @param {Array<Object>} sortedNodes
-   * @param {Object} [options={}]
-   * @param {number} [options.targetCount]
-   * @param {string[]} [options.reservedNodeIds]
-   * @param {string[]} [options.deferredNodeIds]
-   * @return {string[]}
-   * @private
-   */
-  resolvePlacementTargetNodeIds(sortedNodes, options = {}) {
-    const normalizedTargetCount =
-      Number.isInteger(options?.targetCount) && options.targetCount > NUM.ZERO ?
-        options.targetCount :
-        NUM.ZERO;
-    if (
-      !Array.isArray(sortedNodes) ||
-      sortedNodes.length === NUM.ZERO ||
-      normalizedTargetCount === NUM.ZERO
-    ) {
-      return [];
-    }
-
-    const rankedNodeIds = sortedNodes
-      .map((node) => node?.node_id)
-      .filter(
-        (nodeId) =>
-          typeof nodeId === MOVE_PLANNER_LITERAL.STRING &&
-          nodeId.length > NUM.ZERO,
-      );
-    if (rankedNodeIds.length === NUM.ZERO) {
-      return [];
-    }
-
-    return buildPlacementOwnerTargetOutcome({
-      sortedNodes,
-      targetCount: normalizedTargetCount,
-      transitionSnapshot: {
-        nodesWithEntityAddTransitional: new Set(
-          Array.isArray(options?.reservedNodeIds) ?
-            options.reservedNodeIds :
-            [],
-        ),
-        nodesWithGlobalSystemAddTransitional: new Set(
-          Array.isArray(options?.deferredNodeIds) ?
-            options.deferredNodeIds :
-            [],
-        ),
-      },
-      includeGlobalSystemDeferral: true,
-    }).targetNodeIds;
-  }
-
-  /**
-   * Build topology scoring context from available nodes + current replicas.
-   * @param {Array<Object>} nodes - Candidate nodes.
-   * @return {Object}
-   * @private
-   */
-  buildTopologyPlacementContext(nodes) {
-    const nodeGroupById = new Map();
-    for (const node of nodes) {
-      const nodeId = node?.node_id;
-      if (!nodeId) {
-        continue;
-      }
-      nodeGroupById.set(nodeId, node?.latency_group_id || null);
-    }
-    const currentReplicas =
-      typeof this.moveStateProvider.getCurrentReplicas === 'function' ?
-        this.moveStateProvider.getCurrentReplicas() :
-        [];
-    const healthyReplicas =
-      typeof this.moveStateProvider.getHealthyReplicas === 'function' ?
-        this.moveStateProvider.getHealthyReplicas(currentReplicas) :
-        currentReplicas;
-    const existingGroupCounts = new Map();
-    for (const replica of healthyReplicas) {
-      const nodeId = replica?.node_id;
-      const groupId = nodeGroupById.get(nodeId) || null;
-      if (!groupId) {
-        continue;
-      }
-      existingGroupCounts.set(
-        groupId,
-        (existingGroupCounts.get(groupId) || NUM.ZERO) + NUM.ONE,
-      );
-    }
-    return {
-      nodeGroupById,
-      existingGroupCounts,
-      dominantGroupId: this.selectDominantGroupId(existingGroupCounts),
-    };
-  }
-
-  /**
-   * Select dominant latency-group ID by current replica membership.
-   * @param {Map<string, number>} existingGroupCounts
-   * @return {string|null}
-   * @private
-   */
-  selectDominantGroupId(existingGroupCounts) {
-    let dominantGroupId = null;
-    let dominantCount = NUM.ZERO;
-    for (const [groupId, count] of existingGroupCounts.entries()) {
-      if (count > dominantCount) {
-        dominantGroupId = groupId;
-        dominantCount = count;
-        continue;
-      }
-      if (
-        count === dominantCount &&
-        dominantGroupId &&
-        groupId < dominantGroupId
-      ) {
-        dominantGroupId = groupId;
-      }
-    }
-    return dominantGroupId;
-  }
-
-  /**
-   * Score adjustment for same-group locality preference.
-   * @param {Object} node
-   * @param {Object} topologyContext
-   * @return {number}
-   * @private
-   */
-  getSameLatencyGroupScoreAdjustment(node, topologyContext) {
-    const dominantGroupId = topologyContext.dominantGroupId;
-    const nodeGroupId =
-      topologyContext.nodeGroupById.get(node?.node_id) || null;
-    if (!dominantGroupId || !nodeGroupId) {
-      return NUM.ZERO;
-    }
-    if (nodeGroupId === dominantGroupId) {
-      return -MOVE_PLANNER_TOPOLOGY_SCORE.SAME_GROUP_BONUS;
-    }
-    return MOVE_PLANNER_TOPOLOGY_SCORE.SAME_GROUP_PENALTY;
-  }
-
-  /**
-   * Score adjustment for latency-group diversity preference.
-   * @param {Object} node
-   * @param {Object} topologyContext
-   * @return {number}
-   * @private
-   */
-  getLatencyGroupDiversityScoreAdjustment(node, topologyContext) {
-    const nodeGroupId =
-      topologyContext.nodeGroupById.get(node?.node_id) || null;
-    if (!nodeGroupId) {
-      return NUM.ZERO;
-    }
-    if (topologyContext.existingGroupCounts.has(nodeGroupId)) {
-      return MOVE_PLANNER_TOPOLOGY_SCORE.DIVERSITY_EXISTING_GROUP_PENALTY;
-    }
-    return -MOVE_PLANNER_TOPOLOGY_SCORE.DIVERSITY_NEW_GROUP_BONUS;
+    return this.buildPlacementOwnerPolicyDecision({
+      nodes,
+      targetCount: Array.isArray(nodes) ? nodes.length : NUM.ZERO,
+      policy,
+      placementPolicy:
+        this.entityType === EntityType.RUNTIME_SERVICE ?
+          PLACEMENT_OWNER_POLICY.RUNTIME_SERVICE_SPREAD :
+          PLACEMENT_OWNER_POLICY.PARTITION_SPREAD,
+      scoreProfile: PLACEMENT_OWNER_SCORE_PROFILE.SUITABILITY,
+    }).scoreResult.rankedCandidates.map((candidate) => candidate.node);
   }
 
   /**

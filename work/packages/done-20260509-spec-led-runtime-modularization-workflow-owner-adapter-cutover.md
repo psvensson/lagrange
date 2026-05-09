@@ -216,7 +216,7 @@ Additional repair validation:
 - PASS: `node scripts/check-guideline-literals.js src/rebalancer/operation-workflow-owner-ports.js`
 - PASS: `node scripts/check-guideline-decision-boundaries.js src/rebalancer/operation-workflow-owner-ports.js`
 - PASS: `npm run audit:runtime-grammar:file -- src/rebalancer/operation-workflow-owner-ports.js`
-- PASS: `git diff --check -- src/rebalancer/operation-workflow-owner-ports.js work/packages/active-20260509-spec-led-runtime-modularization-placement-owner-kernel.md work/sprints/active-2026-q2-spec-led-runtime-modularization.md`
+- PASS: `git diff --check -- src/rebalancer/operation-workflow-owner-ports.js work/packages/done-20260509-spec-led-runtime-modularization-placement-owner-kernel.md work/sprints/active-2026-q2-spec-led-runtime-modularization.md`
 
 Repair commit: `f027239f`, pushed to
 `origin/codex/pending-ack-eligibility-filter`.
