@@ -28,6 +28,10 @@ const ROOT_CAUSE_CLASS_TOPOLOGY = 'topology';
 const ROOT_CAUSE_CLASS_STARTUP = 'startup';
 const ROOT_CAUSE_CLASS_UNKNOWN = 'unknown';
 const PUBLICATION_STATUS_PUBLISHED = 'PUBLISHED';
+const PUBLICATION_STATUS_OPEN = 'OPEN';
+const PUBLICATION_STATUS_ACK_PENDING = 'ACK_PENDING';
+const PUBLICATION_RECOVERY_PROTOCOL_PUBLICATION_PENDING =
+  'publication_pending';
 const PRIORITY_RECOVERY_SEMANTIC_RECOVERING_IN_FLIGHT = 'recovering_in_flight';
 const ACTIVE_GATE_STATE_TIMED_OUT = 'timed_out';
 const READINESS_RECOVERABILITY_TERMINAL = 'terminal';
@@ -170,6 +174,11 @@ const OWNER_SUPPORTING_REASON_SET = Object.freeze(new Set([
   REASON.PUBLICATION_PENDING,
 ]));
 
+const PUBLICATION_PENDING_STATUS_SET = Object.freeze(new Set([
+  PUBLICATION_STATUS_OPEN,
+  PUBLICATION_STATUS_ACK_PENDING,
+]));
+
 const RANK = Object.freeze({
   PRIORITY_RECOVERY: 10,
   SNAPSHOT_COVERAGE: 20,
@@ -198,11 +207,11 @@ const DECISION_INPUT = Object.freeze({
 });
 
 const DECISION_CONDITION = Object.freeze({
-  PUBLICATION_NOT_PUBLISHED: 'publication status is not PUBLISHED',
+  PUBLICATION_PENDING_EVIDENCE: 'publication pending evidence is present',
   PUBLICATION_PENDING_ACKS: 'pending acknowledgement count is positive',
   PUBLICATION_BLOCKED_NODES: 'blocked publication node count is positive',
   PUBLICATION_MISSING_PUBLISHED: 'missing published node count is positive',
-  PUBLICATION_CLOSED: 'published with no pending acknowledgement blockers',
+  PUBLICATION_CLOSED: 'publication has no pending convergence blockers',
   PRIORITY_NO_UNRESOLVED_SEMANTIC_STATES:
     'priority recovery has no unresolved semantic states',
   PRIORITY_BLOCKED_PARTITIONS:
@@ -240,15 +249,10 @@ const DECISION_TABLE_ROWS = Object.freeze([
     ]),
     outcomes: Object.freeze([
       Object.freeze({
-        condition: DECISION_CONDITION.PUBLICATION_NOT_PUBLISHED,
-        state: EDGE_STATE.BLOCKED,
-        reasons: Object.freeze([REASON.PUBLICATION_PENDING]),
-      }),
-      Object.freeze({
         condition: DECISION_CONDITION.PUBLICATION_PENDING_ACKS,
         state: EDGE_STATE.BLOCKED,
         reasons: Object.freeze([
-          REASON.PUBLICATION_PUBLISHED,
+          REASON.PUBLICATION_PENDING,
           REASON.PENDING_ACKS,
         ]),
       }),
@@ -256,9 +260,14 @@ const DECISION_TABLE_ROWS = Object.freeze([
         condition: DECISION_CONDITION.PUBLICATION_BLOCKED_NODES,
         state: EDGE_STATE.BLOCKED,
         reasons: Object.freeze([
-          REASON.PUBLICATION_PUBLISHED,
+          REASON.PUBLICATION_PENDING,
           REASON.BLOCKED_NODES,
         ]),
+      }),
+      Object.freeze({
+        condition: DECISION_CONDITION.PUBLICATION_PENDING_EVIDENCE,
+        state: EDGE_STATE.BLOCKED,
+        reasons: Object.freeze([REASON.PUBLICATION_PENDING]),
       }),
       Object.freeze({
         condition: DECISION_CONDITION.PUBLICATION_MISSING_PUBLISHED,
@@ -389,6 +398,34 @@ const DECISION_TABLE_ROWS = Object.freeze([
         reasons: Object.freeze([REASON.TOP_FAILURES_ABSENT]),
       }),
     ]),
+  }),
+]);
+
+const PUBLICATION_STATE_RULES = Object.freeze([
+  Object.freeze({
+    state: EDGE_STATE.BLOCKED,
+    reasons: Object.freeze([REASON.PENDING_ACKS]),
+    matches: (evidence) => evidence.pendingAckCount > SOURCE_ORDER_BASE,
+  }),
+  Object.freeze({
+    state: EDGE_STATE.BLOCKED,
+    reasons: Object.freeze([REASON.BLOCKED_NODES]),
+    matches: (evidence) => evidence.blockedNodeCount > SOURCE_ORDER_BASE,
+  }),
+  Object.freeze({
+    state: EDGE_STATE.BLOCKED,
+    reasons: Object.freeze([]),
+    matches: (evidence) => isPublicationPendingEvidence(evidence),
+  }),
+  Object.freeze({
+    state: EDGE_STATE.DEFERRED,
+    reasons: Object.freeze([REASON.MISSING_PUBLISHED]),
+    matches: (evidence) => evidence.missingPublishedCount > SOURCE_ORDER_BASE,
+  }),
+  Object.freeze({
+    state: EDGE_STATE.SATISFIED,
+    reasons: Object.freeze([]),
+    matches: () => true,
   }),
 ]);
 
@@ -944,28 +981,25 @@ function compareFrontierEdges(left, right) {
 
 function resolvePublicationState(evidence, reasons) {
   const publicationPublished =
-    evidence.publicationStatus === PUBLICATION_STATUS_PUBLISHED;
+    evidence.publicationStatus === PUBLICATION_STATUS_PUBLISHED ||
+    isPublicationPendingEvidence(evidence) !== true;
   reasons.push(
     publicationPublished ?
       REASON.PUBLICATION_PUBLISHED :
       REASON.PUBLICATION_PENDING,
   );
-  if (evidence.pendingAckCount > SOURCE_ORDER_BASE) {
-    reasons.push(REASON.PENDING_ACKS);
-    return EDGE_STATE.BLOCKED;
-  }
-  if (evidence.blockedNodeCount > SOURCE_ORDER_BASE) {
-    reasons.push(REASON.BLOCKED_NODES);
-    return EDGE_STATE.BLOCKED;
-  }
-  if (publicationPublished !== true) {
-    return EDGE_STATE.BLOCKED;
-  }
-  if (evidence.missingPublishedCount > SOURCE_ORDER_BASE) {
-    reasons.push(REASON.MISSING_PUBLISHED);
-    return EDGE_STATE.DEFERRED;
-  }
-  return EDGE_STATE.SATISFIED;
+  const decision = PUBLICATION_STATE_RULES.find((rule) =>
+    rule.matches(evidence),
+  );
+  reasons.push(...decision.reasons);
+  return decision.state;
+}
+
+function isPublicationPendingEvidence(evidence) {
+  return evidence.publicationPending === true ||
+    PUBLICATION_PENDING_STATUS_SET.has(evidence.publicationStatus) ||
+    evidence.recoveryProtocolState ===
+      PUBLICATION_RECOVERY_PROTOCOL_PUBLICATION_PENDING;
 }
 
 function normalizePriorityRecoveryEvidence(normalized) {
@@ -1107,15 +1141,21 @@ function resolveReadinessState(readiness, activeGate, reasons) {
 function normalizePublicationEvidence(publication) {
   return {
     publicationStatus: textOrUnknown(publication.publicationStatus),
+    publicationPending: publication.publicationPending === true,
+    recoveryProtocolState: textOrUnknown(publication.recoveryProtocolState),
     pendingAckCount: numberOrZero(publication.pendingAckCount),
     blockedNodeCount: numberOrZero(publication.blockedNodeCount),
     missingPublishedCount: numberOrZero(publication.missingPublishedCount),
     source: {
       publicationEpoch: numberOrUnknown(publication.publicationEpoch),
       publicationStatus: textOrUnknown(publication.publicationStatus),
+      pendingAckNodeIds: arrayOrEmpty(publication.pendingAckNodeIds),
       pendingAckCount: numberOrUnknown(publication.pendingAckCount),
       blockedNodeCount: numberOrUnknown(publication.blockedNodeCount),
+      publishedActiveNodeIds: arrayOrEmpty(publication.publishedActiveNodeIds),
+      missingPublishedNodeIds: arrayOrEmpty(publication.missingPublishedNodeIds),
       missingPublishedCount: numberOrUnknown(publication.missingPublishedCount),
+      publicationPending: booleanVariant(publication.publicationPending),
       recoveryProtocolState: textOrUnknown(publication.recoveryProtocolState),
       prioritySpreadPending: booleanVariant(publication.prioritySpreadPending),
     },

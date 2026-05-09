@@ -54,10 +54,65 @@ const MEMBERSHIP_PUBLICATION_ACK_COMPLETION_STATE = Object.freeze({
   COMPLETE: 'complete',
   PENDING: 'pending',
 });
+const MEMBERSHIP_PUBLICATION_ACK_CARRY_STATE = Object.freeze({
+  RECOVERY_ELIGIBLE_ACK: 'recovery_eligible_ack',
+  OBSERVED_ACK: 'observed_ack',
+});
 const MEMBERSHIP_PUBLICATION_ACK_READINESS_STATE = Object.freeze({
   ELIGIBLE: 'eligible',
   DEFERRED: 'deferred',
 });
+const MEMBERSHIP_PUBLICATION_ACK_READINESS_REASON = Object.freeze({
+  RECOVERY_ELIGIBLE: 'recovery_eligible',
+});
+const MEMBERSHIP_PUBLICATION_ACK_READINESS_RULES = Object.freeze([
+  Object.freeze({
+    state: MEMBERSHIP_PUBLICATION_ACK_READINESS_STATE.ELIGIBLE,
+    reasonCodes: Object.freeze([
+      MEMBERSHIP_PUBLICATION_ACK_READINESS_REASON.RECOVERY_ELIGIBLE,
+    ]),
+    matches: (dimensions) =>
+      dimensions[
+        CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE
+      ] === true &&
+      dimensions[
+        CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY
+      ] === true &&
+      dimensions[
+        CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE
+      ] !== false,
+  }),
+  Object.freeze({
+    state: MEMBERSHIP_PUBLICATION_ACK_READINESS_STATE.DEFERRED,
+    reasonCodes: Object.freeze([
+      CONTROL_PLANE_READINESS_REASON.PROCESS_NOT_ALIVE,
+    ]),
+    matches: (dimensions) =>
+      dimensions[CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE] === false,
+  }),
+  Object.freeze({
+    state: MEMBERSHIP_PUBLICATION_ACK_READINESS_STATE.ELIGIBLE,
+    reasonCodes: Object.freeze([]),
+    matches: () => true,
+  }),
+]);
+const MEMBERSHIP_PUBLICATION_ACK_CARRY_RULES = Object.freeze([
+  Object.freeze({
+    state: MEMBERSHIP_PUBLICATION_ACK_CARRY_STATE.RECOVERY_ELIGIBLE_ACK,
+    nodeIds: (evidence) => [
+      ...evidence.observedAcknowledgedNodeIds,
+      ...evidence.publishableRecoveryActiveNodeIds,
+    ],
+    matches: (evidence) =>
+      evidence.publicationChanged !== true &&
+      evidence.publishableRecoveryActiveNodeIds.length > NUM.ZERO,
+  }),
+  Object.freeze({
+    state: MEMBERSHIP_PUBLICATION_ACK_CARRY_STATE.OBSERVED_ACK,
+    nodeIds: (evidence) => evidence.observedAcknowledgedNodeIds,
+    matches: () => true,
+  }),
+]);
 
 function normalizePartitionIdList(values = []) {
   return [
@@ -799,24 +854,17 @@ function buildPublicationAcknowledgementReadinessDecision(readinessEntry = null)
       reasonCodes: [],
     };
   }
-  const evidence = [
-    {
-      blocked:
-        dimensions[CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE] === false,
-      reasonCode: CONTROL_PLANE_READINESS_REASON.PROCESS_NOT_ALIVE,
-    },
-  ];
-  const reasonCodes = normalizePartitionIdList(
-    evidence
-      .filter((entry) => entry.blocked === true)
-      .map((entry) => entry.reasonCode),
+  const decision = MEMBERSHIP_PUBLICATION_ACK_READINESS_RULES.find((rule) =>
+    rule.matches(dimensions),
   );
-  const eligible = reasonCodes.length === NUM.ZERO;
+  const reasonCodes = decision.state ===
+    MEMBERSHIP_PUBLICATION_ACK_READINESS_STATE.ELIGIBLE ?
+    [] :
+    normalizePartitionIdList(decision.reasonCodes);
+  const eligible =
+    decision.state === MEMBERSHIP_PUBLICATION_ACK_READINESS_STATE.ELIGIBLE;
   return {
-    state:
-      eligible ?
-        MEMBERSHIP_PUBLICATION_ACK_READINESS_STATE.ELIGIBLE :
-        MEMBERSHIP_PUBLICATION_ACK_READINESS_STATE.DEFERRED,
+    state: decision.state,
     eligible,
     reasonCodes,
   };
@@ -917,6 +965,30 @@ function buildMembershipPublicationAckCompletionSnapshot(options = {}, helperFns
     acknowledgedNodeIds,
     pendingAckNodeIds,
   };
+}
+
+function resolveMembershipPublicationAcknowledgedNodeIds(options = {}, helperFns = {}) {
+  const observedAcknowledgedNodeIds = helperFns.normalizeNodeIdList([
+    ...helperFns.resolveCarriedAcknowledgedNodeIds({
+      latestPublicationRow: options.latestPublicationRow,
+      latestPublishedPublicationRow: options.latestPublishedPublicationRow,
+      requiredAckNodeIds: options.requiredAckNodeIds,
+    }),
+    ...(Array.isArray(options.planningAcknowledgedNodeIds) ?
+      options.planningAcknowledgedNodeIds :
+      []),
+  ]);
+  const evidence = Object.freeze({
+    publicationChanged: options.publicationChanged,
+    observedAcknowledgedNodeIds,
+    publishableRecoveryActiveNodeIds: helperFns.normalizeNodeIdList(
+      options.publishableRecoveryActiveNodeIds,
+    ),
+  });
+  const decision = MEMBERSHIP_PUBLICATION_ACK_CARRY_RULES.find((rule) =>
+    rule.matches(evidence),
+  );
+  return helperFns.normalizeNodeIdList(decision.nodeIds(evidence));
 }
 
 function resolveCandidatePublicationStatus(options = {}) {
@@ -1143,23 +1215,6 @@ function deriveMembershipPublicationCandidate(options = {}, helperFns = {}) {
       planningSnapshot.requiredAckNodeIds :
       publishedActiveNodeIds,
   );
-  const acknowledgedNodeIds = helperFns.normalizeNodeIdList([
-    ...helperFns.resolveCarriedAcknowledgedNodeIds({
-      latestPublicationRow,
-      latestPublishedPublicationRow,
-      requiredAckNodeIds,
-    }),
-    ...(Array.isArray(planningSnapshot.acknowledgedNodeIds) ?
-      planningSnapshot.acknowledgedNodeIds :
-      []),
-  ]);
-  const ackCompletionSnapshot = buildMembershipPublicationAckCompletionSnapshot(
-    {
-      requiredAckNodeIds,
-      acknowledgedNodeIds,
-    },
-    helperFns,
-  );
   const sourceTopologyEpoch = helperFns.normalizePositiveInteger(
     planningSnapshot.sourceTopologyEpoch,
     null,
@@ -1183,6 +1238,25 @@ function deriveMembershipPublicationCandidate(options = {}, helperFns = {}) {
       latestPublicationRow.sourceSnapshotVersion,
       sourceSnapshotVersion,
     );
+  const acknowledgedNodeIds = resolveMembershipPublicationAcknowledgedNodeIds(
+    {
+      latestPublicationRow,
+      latestPublishedPublicationRow,
+      requiredAckNodeIds,
+      planningAcknowledgedNodeIds: planningSnapshot.acknowledgedNodeIds,
+      publishableRecoveryActiveNodeIds:
+        publicationAckTargetSnapshot.publishableRecoveryActiveNodeIds,
+      publicationChanged: changed,
+    },
+    helperFns,
+  );
+  const ackCompletionSnapshot = buildMembershipPublicationAckCompletionSnapshot(
+    {
+      requiredAckNodeIds,
+      acknowledgedNodeIds,
+    },
+    helperFns,
+  );
   const candidatePublicationEpoch =
     changed ?
       baselineEpoch + NUM.ONE :

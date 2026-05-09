@@ -253,6 +253,110 @@ test('deriveMembershipPublicationCandidate promotes recovery-eligible projected 
     );
   });
 
+test('deriveMembershipPublicationCandidate closes unchanged recovery-eligible ACK debt through the publication owner',
+  async (t) => {
+    const candidate = deriveMembershipPublicationCandidate({
+      publisherNodeId: 'seed-node',
+      latestPublicationRow: {
+        publication_epoch: 7,
+        status: 'ACK_PENDING',
+        published_active_node_ids: ['node-1', 'node-2'],
+        required_ack_node_ids: ['node-1', 'node-2'],
+        acknowledged_node_ids: ['node-1'],
+      },
+      latestPublishedPublicationRow: {
+        publication_epoch: 6,
+        status: 'PUBLISHED',
+        published_active_node_ids: ['node-1'],
+        required_ack_node_ids: ['node-1'],
+        acknowledged_node_ids: ['node-1'],
+      },
+      nodeRows: [
+        {
+          node_id: 'node-1',
+          status: 'active',
+          connection_state: 'ready',
+          ready_lease_expires_at: 5000,
+        },
+        {
+          node_id: 'node-2',
+          status: 'active',
+          connection_state: 'ready',
+          ready_lease_expires_at: 5000,
+        },
+      ],
+      readinessEntries: [
+        {
+          nodeId: 'node-1',
+          dimensions: {
+            clusterMemberHealthy: true,
+            controlPlanePublished: true,
+            controlPlaneRecoveryEligible: true,
+            controlPlaneWritable: true,
+            repairEligible: true,
+            serveEligible: true,
+          },
+        },
+        {
+          nodeId: 'node-2',
+          dimensions: {
+            clusterMemberHealthy: true,
+            controlPlanePublished: false,
+            controlPlaneRecoveryEligible: true,
+            controlPlaneWritable: true,
+            repairEligible: false,
+            serveEligible: false,
+          },
+        },
+      ],
+      nodeEndpointRows: [
+        {
+          endpoint_id: 'node-1-ws',
+          node_id: 'node-1',
+          transport_type: 'ws',
+          status: 'active',
+          address: 'ws://node-1:8082',
+        },
+        {
+          endpoint_id: 'node-2-ws',
+          node_id: 'node-2',
+          transport_type: 'ws',
+          status: 'active',
+          address: 'ws://node-2:8082',
+        },
+      ],
+      serviceRows: [
+        {service_id: 'svc-1', node_id: 'node-1', status: 'active'},
+        {service_id: 'svc-2', node_id: 'node-2', status: 'active'},
+      ],
+      nowMs: 1000,
+    });
+
+    t.equal(
+      candidate.changed,
+      false,
+      'the fixture must stay on the existing publication epoch',
+    );
+    t.equal(
+      candidate.publicationStatus,
+      'PUBLISHED',
+      'unchanged recovery-eligible ACK debt should close through canonical owner planning',
+    );
+    t.same(
+      candidate.acknowledgedNodeIds,
+      ['node-1', 'node-2'],
+      'the pending required node should be folded into the owner ACK set',
+    );
+    t.same(
+      candidate.membershipLifecycleSummary?.memberStatesByNodeId,
+      {
+        'node-1': 'serving',
+        'node-2': 'serving',
+      },
+      'ACK closure should publish the durable member state instead of preserving publish-pending debt',
+    );
+  });
+
 test('deriveMembershipPublicationCandidate does not block recovery-eligible promotion while recovery epochs are open',
   async (t) => {
     const candidate = deriveMembershipPublicationCandidate({
@@ -747,4 +851,3 @@ test('deriveMembershipPublicationCandidate reopens a stale published membership 
       'the publication candidate should preserve canonical node participation states',
     );
   });
-

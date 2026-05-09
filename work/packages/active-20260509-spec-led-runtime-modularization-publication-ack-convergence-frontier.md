@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "todo",
+  "status": "active",
   "opened": "2026-05-09",
   "scenario": "spec-led-runtime-modularization",
   "artifact": "test-output/reports/rolling-restart-spec-led-runtime-modularization-final.report.json",
@@ -11,8 +11,8 @@
   "owner": "topology_publication_owner",
   "boundary": "publication_convergence",
   "dominantReason": "pending_acks_present",
-  "currentState": "Representative rolling-restart moved off legacy deletion and now stops at publication_ack_convergence: publication epoch 4 is ACK_PENDING with pendingAckCount=1 and missingPublishedCount=3.",
-  "nextAction": "Build a focused publication-owner ACK convergence fixture from the final report, prove ACK debt cannot remain hidden behind readiness/startup evidence, and either close ACK convergence or migrate to the next owner frontier.",
+  "currentState": "Focused publication owner fixtures close unchanged recovery-eligible ACK debt through canonical owner planning. Representative rerun reduced pendingAck to 0, missingPublished to 0, and the analyzer now moves the first frontier to active_gate_snapshot_coverage.",
+  "nextAction": "Migrate this package to the active-gate snapshot coverage successor and keep active-gate report schema alias cleanup separate.",
   "proof": [
     "Focused publication owner ACK convergence fixture from the representative report",
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-final.report.json --explain publication_ack_convergence",
@@ -29,7 +29,8 @@
     "test/distributed/harness/failure-bundle*.js",
     "src/diagnostics/topology-convergence-graph.js",
     "scripts/analyze-topology-convergence.js",
-    "work/packages/todo-20260509-spec-led-runtime-modularization-publication-ack-convergence-frontier.md"
+    "work/packages/todo-20260509-spec-led-runtime-modularization-active-gate-snapshot-coverage-frontier.md",
+    "work/packages/active-20260509-spec-led-runtime-modularization-publication-ack-convergence-frontier.md"
   ],
   "modelFit": {
     "packageClass": "representative-frontier-closure",
@@ -143,18 +144,27 @@ and representative rolling-restart.
 
 ## Detection / Analysis Tasks
 
-- [ ] Review the legacy deletion package before implementation starts.
-- [ ] Extract the smallest publication ACK fixture from the final report.
-- [ ] Trace the publication owner path that should settle ACK debt.
-- [ ] Identify any readiness/startup/cache branch that can mask ACK debt.
+- [x] Review the legacy deletion package before implementation starts.
+- [x] Extract the smallest publication ACK fixture from the final report.
+- [x] Trace the publication owner path that should settle ACK debt.
+- [x] Identify any readiness/startup/cache branch that can mask ACK debt.
 
 ## Implementation Tasks
 
-- [ ] Add or update the focused publication-owner ACK convergence fixture.
-- [ ] Rewrite the owner logic so ACK debt has one canonical decision path.
-- [ ] Delete or guard superseded ACK fallback branches.
-- [ ] Update diagnostics/harness consumers only where owner vocabulary changes.
-- [ ] Rerun representative rolling-restart and migrate any fresh frontier.
+- [x] Add or update the focused publication-owner ACK convergence fixture.
+- [x] Rewrite the owner logic so ACK debt has one canonical decision path.
+- [x] Delete or guard superseded ACK fallback branches.
+- [x] Update diagnostics/harness consumers only where owner vocabulary changes.
+- [x] Rerun representative rolling-restart and migrate any fresh frontier.
+
+## Subagent Sequencing Ledger
+
+- [x] Review subagent recorded:
+      Agent Hooke (`019e0c7a-0e49-7950-a5a9-09d558144d07`) reviewed `work/packages/done-20260509-spec-led-runtime-modularization-legacy-deletion-proof.md`; result `fixes-required`.
+- [x] Fix subagent recorded or explicitly not needed:
+      Agent Epicurus (`019e0c7c-87d6-7de1-ac7b-ca448c0741d5`) fixed `work/packages/done-20260509-spec-led-runtime-modularization-legacy-deletion-proof.md`.
+- [x] Implementation subagent recorded:
+      Agent Mencius (`019e0c84-3d22-76c3-bea0-cfe3ee0ba0b4`) implemented `work/packages/active-20260509-spec-led-runtime-modularization-publication-ack-convergence-frontier.md`.
 
 ## Validation
 
@@ -163,6 +173,51 @@ and representative rolling-restart.
 3. `node --test test/control-plane/*publication*.test.js test/distributed/harness/__tests__/failure-bundle.test.js test/diagnostics/topology-convergence-graph.test.js test/scripts/analyze-topology-convergence.test.js`
 4. Touched-file literal, decision-boundary, and runtime-grammar guardrails.
 5. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-spec-led-runtime-modularization-publication-ack.report.json --fast-local --verbose`
+
+## Validation Notes
+
+- `npm run work:validate` passed: Work tracker validation OK for 25 files.
+- `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-final.report.json --explain publication_ack_convergence`
+  passed. The explain output now preserves `pendingAckNodeIds`,
+  `publishedActiveNodeIds`, and `missingPublishedNodeIds`; the owner decision
+  table ranks pending ACK debt before missing-published evidence.
+- `node --test test/control-plane/membership-publication-coordinator.test.js`
+  passed after adding the unchanged recovery-eligible ACK closure fixture.
+- `node --test test/control-plane/*publication*.test.js test/distributed/harness/__tests__/failure-bundle.test.js test/diagnostics/topology-convergence-graph.test.js test/scripts/analyze-topology-convergence.test.js`
+  passed after parent review repair: 613 tests, 610 pass, 3 skipped.
+- `node scripts/check-guideline-literals.js src/control-plane/*publication*.js src/control-plane/publication-recovery-*.js src/control-plane/membership-publication-coordinator*.js src/diagnostics/topology-convergence-graph.js`
+  passed: 19 files, 0 new literal violations.
+- `node scripts/check-guideline-decision-boundaries.js src/control-plane/*publication*.js src/control-plane/publication-recovery-*.js src/control-plane/membership-publication-coordinator*.js src/diagnostics/topology-convergence-graph.js`
+  passed: 19 files, 0 decision-boundary violations.
+- `npm run audit:runtime-grammar:file -- src/control-plane/*publication*.js src/control-plane/publication-recovery-*.js src/control-plane/membership-publication-coordinator*.js src/diagnostics/topology-convergence-graph.js`
+  failed on inherited baseline only: 5 runtime-grammar-contract violations in
+  `src/control-plane/membership-publication-coordinator.js`.
+- Exact changed production runtime-grammar guard passed:
+  `npm run audit:runtime-grammar:file -- src/control-plane/membership-publication-planning.js src/diagnostics/topology-convergence-graph.js`.
+- Exact changed production literal and decision-boundary guards passed:
+  `node scripts/check-guideline-literals.js src/control-plane/membership-publication-planning.js src/diagnostics/topology-convergence-graph.js`
+  and
+  `node scripts/check-guideline-decision-boundaries.js src/control-plane/membership-publication-planning.js src/diagnostics/topology-convergence-graph.js`.
+- First representative rerun after diagnostics/planning fixture work still
+  failed at `publication_ack_convergence`: `ACK_PENDING`, `pendingAck=1`,
+  `missingPublished=3`.
+- Second representative rerun after canonical ACK carry fix:
+  `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-spec-led-runtime-modularization-publication-ack.report.json --fast-local --verbose`
+  failed overall, but moved off ACK debt in the scenario error:
+  `publicationConvergence=ready`, `pendingAck=0`, `missingPublished=0`,
+  active progress `4/5`, snapshot coverage `0/5`.
+- Parent review fixed the reduced-report analyzer handoff so
+  `publicationStatus=UNKNOWN` with no pending publication evidence, no ACK
+  debt, and no missing-published debt no longer keeps
+  `publication_ack_convergence` blocked.
+- `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-publication-ack.report.json`
+  now reports first frontier `active_gate_snapshot_coverage`, owner
+  `startup_active_gate_owner`, boundary `snapshot_coverage`, and dominant
+  reason `active_gate_timed_out`.
+- Successor package opened:
+  `work/packages/todo-20260509-spec-led-runtime-modularization-active-gate-snapshot-coverage-frontier.md`.
+  Active-gate report schema alias cleanup remains out of scope for this
+  package.
 
 ## Done When
 

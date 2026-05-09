@@ -55,12 +55,28 @@ const ARTIFACT_PATH_20260507 =
   'test-output/reports/.playback/rolling-restart-after-bounded-retryable-seed-contact-probe-20260507T072145Z/rolling-restart/failure-bundle.json';
 const REPORT_ARTIFACT_PATH_20260507 =
   'test-output/reports/rolling-restart-after-bounded-retryable-seed-contact-probe-20260507T072145Z.report.json';
+const REPORT_ARTIFACT_PATH_PUBLICATION_ACK_FRONTIER =
+  'test-output/reports/rolling-restart-spec-led-runtime-modularization-final.report.json';
+const REPORT_ARTIFACT_PATH_PUBLICATION_ACK_REDUCED =
+  'test-output/reports/rolling-restart-spec-led-runtime-modularization-publication-ack.report.json';
 const PUBLICATION_ACK_PENDING_STATUS = 'ACK_PENDING';
+const PUBLICATION_UNKNOWN_STATUS = 'UNKNOWN';
 const PUBLICATION_PENDING_REASON = 'publication_pending';
+const PUBLICATION_PUBLISHED_REASON = 'publication_published';
 const PENDING_ACKS_PRESENT_REASON = 'pending_acks_present';
+const ACTIVE_GATE_TIMED_OUT_REASON = 'active_gate_timed_out';
+const SNAPSHOT_COVERAGE_INCOMPLETE_REASON = 'snapshot_coverage_incomplete';
 const PRIORITY_RECOVERY_BLOCKED_REASON = 'priority_recovery_progress_blocked';
 const ARTIFACT_PRIORITY_RECOVERY_OWNER = 'artifact_priority_owner';
 const ARTIFACT_PRIORITY_RECOVERY_BOUNDARY = 'artifact_priority_boundary';
+const OWNER_STARTUP_ACTIVE_GATE = 'startup_active_gate_owner';
+const PUBLICATION_ACK_FRONTIER_PENDING_NODE_ID =
+  '11601fe0-72d6-5853-8590-ec2881853e72';
+const PUBLICATION_ACK_FRONTIER_MISSING_NODE_IDS = Object.freeze([
+  '35a891b8-c1a0-5064-9c6e-2acfba61c2a7',
+  '8be8d30f-4499-5eed-865c-71b4d529a67a',
+  'ebc4aa0b-06c6-506d-93ea-1dd2deca3f58',
+]);
 
 function buildFixtureFailureBundle() {
   return {
@@ -245,6 +261,96 @@ describe('TopologyConvergenceGraph', () => {
     assert.equal(dominantWitness.source.pendingAckCount, ONE_COUNT);
     assertNoNullOrUndefined(graph);
   });
+
+  it('keeps report-derived publication ACK debt ahead of startup and missing-publication evidence',
+    () => {
+      const artifact = JSON.parse(
+        fs.readFileSync(
+          REPORT_ARTIFACT_PATH_PUBLICATION_ACK_FRONTIER,
+          JSON_ENCODING_UTF8,
+        ),
+      );
+      const graph = buildTopologyConvergenceGraph(artifact);
+      const presentation = buildTopologyConvergenceOwnerPresentation(graph);
+      const dominantWitness = selectTopologyConvergenceDominantWitness(
+        presentation,
+      );
+
+      assert.equal(
+        graph.summary.firstFrontierEdgeId,
+        EDGE_PUBLICATION_ACK_CONVERGENCE,
+      );
+      assert.equal(graph.summary.firstFrontierOwner, OWNER_TOPOLOGY_PUBLICATION);
+      assert.equal(dominantWitness.edgeId, EDGE_PUBLICATION_ACK_CONVERGENCE);
+      assert.equal(dominantWitness.owner, OWNER_TOPOLOGY_PUBLICATION);
+      assert.equal(dominantWitness.state, EDGE_STATE.BLOCKED);
+      assert.equal(dominantWitness.dominantReason, PENDING_ACKS_PRESENT_REASON);
+      assert.deepEqual(
+        dominantWitness.reasons,
+        [PUBLICATION_PENDING_REASON, PENDING_ACKS_PRESENT_REASON],
+      );
+      assert.equal(
+        dominantWitness.source.publicationStatus,
+        PUBLICATION_ACK_PENDING_STATUS,
+      );
+      assert.deepEqual(
+        dominantWitness.source.pendingAckNodeIds,
+        [PUBLICATION_ACK_FRONTIER_PENDING_NODE_ID],
+      );
+      assert.deepEqual(
+        dominantWitness.source.missingPublishedNodeIds,
+        [...PUBLICATION_ACK_FRONTIER_MISSING_NODE_IDS],
+      );
+      assert.equal(dominantWitness.source.pendingAckCount, ONE_COUNT);
+      assert.equal(
+        dominantWitness.source.missingPublishedCount,
+        PUBLICATION_ACK_FRONTIER_MISSING_NODE_IDS.length,
+      );
+      assertNoNullOrUndefined(graph);
+    });
+
+  it('moves the frontier to snapshot coverage when publication ACK debt is reduced',
+    () => {
+      const artifact = JSON.parse(
+        fs.readFileSync(
+          REPORT_ARTIFACT_PATH_PUBLICATION_ACK_REDUCED,
+          JSON_ENCODING_UTF8,
+        ),
+      );
+      const graph = buildTopologyConvergenceGraph(artifact);
+      const publicationWitness = graph.ownerWitnesses.find((witness) =>
+        witness.edgeId === EDGE_PUBLICATION_ACK_CONVERGENCE,
+      );
+      const presentation = buildTopologyConvergenceOwnerPresentation(graph);
+      const dominantWitness = selectTopologyConvergenceDominantWitness(
+        presentation,
+      );
+
+      assert.equal(graph.summary.firstFrontierEdgeId, EDGE_SNAPSHOT_COVERAGE);
+      assert.equal(graph.summary.firstFrontierOwner, OWNER_STARTUP_ACTIVE_GATE);
+      assert.equal(dominantWitness.edgeId, EDGE_SNAPSHOT_COVERAGE);
+      assert.equal(dominantWitness.owner, OWNER_STARTUP_ACTIVE_GATE);
+      assert.equal(dominantWitness.state, EDGE_STATE.BLOCKED);
+      assert.equal(
+        dominantWitness.dominantReason,
+        ACTIVE_GATE_TIMED_OUT_REASON,
+      );
+      assert.deepEqual(
+        dominantWitness.reasons,
+        [ACTIVE_GATE_TIMED_OUT_REASON, SNAPSHOT_COVERAGE_INCOMPLETE_REASON],
+      );
+      assert.equal(publicationWitness.state, EDGE_STATE.SATISFIED);
+      assert.deepEqual(publicationWitness.reasons, [
+        PUBLICATION_PUBLISHED_REASON,
+      ]);
+      assert.equal(
+        publicationWitness.source.publicationStatus,
+        PUBLICATION_UNKNOWN_STATUS,
+      );
+      assert.equal(publicationWitness.source.pendingAckCount, ZERO_COUNT);
+      assert.equal(publicationWitness.source.missingPublishedCount, ZERO_COUNT);
+      assertNoNullOrUndefined(graph);
+    });
 
   it('keeps the decision table deterministic after artifact-specific owner evidence', () => {
     const fixture = buildFixtureFailureBundle();

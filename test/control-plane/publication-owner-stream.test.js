@@ -13,10 +13,22 @@ import {buildPublicationOwnerStreamState} from
 const TEST_PUBLICATION_REVISION = Object.freeze({
   COMMITTED: 4,
   DESIRED: 5,
+  FRONTIER: 4,
+});
+const TEST_PUBLICATION_COUNT = Object.freeze({
+  FRONTIER_PENDING_ACK: 1,
 });
 const TEST_NODE_ID = Object.freeze({
   FIRST: 'node-a',
   SECOND: 'node-b',
+  FRONTIER_ACK_PENDING: '11601fe0-72d6-5853-8590-ec2881853e72',
+  FRONTIER_PUBLISHED: '7493b0ab-a054-5fad-a91b-5e331db29304',
+  FRONTIER_MISSING_FIRST: '35a891b8-c1a0-5064-9c6e-2acfba61c2a7',
+  FRONTIER_MISSING_SECOND: '8be8d30f-4499-5eed-865c-71b4d529a67a',
+  FRONTIER_MISSING_THIRD: 'ebc4aa0b-06c6-506d-93ea-1dd2deca3f58',
+});
+const TEST_PUBLICATION_RECOVERY_PROTOCOL = Object.freeze({
+  PUBLICATION_PENDING: 'publication_pending',
 });
 
 test('publication owner stream exposes pending ACK state by revision',
@@ -58,6 +70,42 @@ test('publication owner stream fences stale consumer revisions',
       stream.recoveryOutcome,
       PUBLICATION_OWNER_RECOVERY_OUTCOME.WAITING_FOR_CONSUMER,
     );
+    t.end();
+  });
+
+test('publication owner stream keeps report ACK debt ahead of missing visibility',
+  (t) => {
+    const stream = buildPublicationOwnerStreamState({
+      publicationRevision: TEST_PUBLICATION_REVISION.FRONTIER,
+      publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.ACK_PENDING,
+      pendingAckNodeIds: [TEST_NODE_ID.FRONTIER_ACK_PENDING],
+      pendingAckCount: TEST_PUBLICATION_COUNT.FRONTIER_PENDING_ACK,
+      missingPublishedNodeIds: [
+        TEST_NODE_ID.FRONTIER_MISSING_FIRST,
+        TEST_NODE_ID.FRONTIER_MISSING_SECOND,
+        TEST_NODE_ID.FRONTIER_MISSING_THIRD,
+      ],
+      recoveryProtocolState:
+        TEST_PUBLICATION_RECOVERY_PROTOCOL.PUBLICATION_PENDING,
+      prioritySpreadPending: true,
+    });
+
+    t.equal(stream.ackState, PUBLICATION_OWNER_ACK_STATE.WAITING_FOR_ACK);
+    t.equal(stream.freshnessFence, PUBLICATION_OWNER_FRESHNESS_FENCE.ACK_LAG);
+    t.equal(
+      stream.streamOutcome,
+      PUBLICATION_OWNER_STREAM_OUTCOME.WAITING_FOR_ACK,
+    );
+    t.equal(
+      stream.recoveryOutcome,
+      PUBLICATION_OWNER_RECOVERY_OUTCOME.WAITING_FOR_ACK,
+    );
+    t.same(stream.pendingAckNodeIds, [TEST_NODE_ID.FRONTIER_ACK_PENDING]);
+    t.same(stream.missingPublishedNodeIds, [
+      TEST_NODE_ID.FRONTIER_MISSING_FIRST,
+      TEST_NODE_ID.FRONTIER_MISSING_SECOND,
+      TEST_NODE_ID.FRONTIER_MISSING_THIRD,
+    ]);
     t.end();
   });
 

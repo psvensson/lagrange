@@ -30,7 +30,7 @@
     "test/distributed/harness/*.js",
     "scripts/analyze-topology-convergence.js",
     "work/sprints/active-2026-q2-spec-led-runtime-modularization.md",
-    "work/packages/todo-20260509-spec-led-runtime-modularization-publication-ack-convergence-frontier.md",
+    "work/packages/active-20260509-spec-led-runtime-modularization-publication-ack-convergence-frontier.md",
     "work/packages/todo-20260509-spec-led-runtime-modularization-active-gate-report-schema-alias-deletion.md",
     "work/packages/done-20260509-spec-led-runtime-modularization-legacy-deletion-proof.md"
   ],
@@ -46,7 +46,7 @@
   "predecessor": "work/packages/done-20260509-spec-led-runtime-modularization-diagnostics-harness-consumer.md",
   "closed": "2026-05-09",
   "commitAndPushLedgerRequired": true,
-  "successor": "work/packages/todo-20260509-spec-led-runtime-modularization-publication-ack-convergence-frontier.md"
+  "successor": "work/packages/active-20260509-spec-led-runtime-modularization-publication-ack-convergence-frontier.md"
 }
 -->
 
@@ -194,7 +194,7 @@ Deletion inventory executed in this slice:
    `activeGateBlockerHistory`, because those names remain an external
    failure-bundle/report artifact schema contract.
 9. Named representative successor package
-   `work/packages/todo-20260509-spec-led-runtime-modularization-publication-ack-convergence-frontier.md`
+   `work/packages/active-20260509-spec-led-runtime-modularization-publication-ack-convergence-frontier.md`
    because the final rolling-restart report moved the first frontier to
    `topology_publication_owner / publication_convergence` with dominant
    reason `pending_acks_present`.

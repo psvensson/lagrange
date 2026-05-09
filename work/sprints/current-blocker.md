@@ -4,7 +4,7 @@
 
 Sprint: `work/sprints/active-2026-q2-spec-led-runtime-modularization.md`
 
-Package: `work/packages/todo-20260509-spec-led-runtime-modularization-publication-ack-convergence-frontier.md`
+Package: `work/packages/active-20260509-spec-led-runtime-modularization-publication-ack-convergence-frontier.md`
 
 Scenario: `spec-led-runtime-modularization`
 
@@ -20,11 +20,11 @@ Boundary: `publication_convergence`
 
 Dominant reason: `pending_acks_present`
 
-Current state: Representative rolling-restart moved off legacy deletion and now stops at publication_ack_convergence: publication epoch 4 is ACK_PENDING with pendingAckCount=1 and missingPublishedCount=3.
+Current state: Focused publication owner fixtures close unchanged recovery-eligible ACK debt through canonical owner planning. Representative rerun reduced pendingAck to 0, missingPublished to 0, and the analyzer now moves the first frontier to active_gate_snapshot_coverage.
 
 ## Next Action
 
-Build a focused publication-owner ACK convergence fixture from the final report, prove ACK debt cannot remain hidden behind readiness/startup evidence, and either close ACK convergence or migrate to the next owner frontier.
+Migrate this package to the active-gate snapshot coverage successor and keep active-gate report schema alias cleanup separate.
 
 ## Proof Ladder
 
@@ -58,4 +58,5 @@ Escalation triggers:
 6. `test/distributed/harness/failure-bundle*.js`
 7. `src/diagnostics/topology-convergence-graph.js`
 8. `scripts/analyze-topology-convergence.js`
-9. `work/packages/todo-20260509-spec-led-runtime-modularization-publication-ack-convergence-frontier.md`
+9. `work/packages/todo-20260509-spec-led-runtime-modularization-active-gate-snapshot-coverage-frontier.md`
+10. `work/packages/active-20260509-spec-led-runtime-modularization-publication-ack-convergence-frontier.md`
