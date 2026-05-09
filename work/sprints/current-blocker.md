@@ -4,49 +4,43 @@
 
 Sprint: `work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md`
 
-Package: `work/packages/active-20260508-rolling-restart-operation-scheduling-sql-transaction-participants-needs-operation-reentry.md`
+Package: `work/packages/active-20260509-rolling-restart-operation-workflow-progress-sql-write-operations-dispatch-pending-reentry.md`
 
 Scenario: `rolling-restart`
 
-Artifact: `test-output/reports/rolling-restart-current-release-gate-after-operation-scheduling-sql-transaction-participants-fix.report.json`
+Artifact: `test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-dispatch-pending-fix.report.json`
 
-Playback: `test-output/reports/.playback/rolling-restart-current-release-gate-after-operation-scheduling-sql-transaction-participants-fix/rolling-restart/`
+Playback: `test-output/reports/.playback/rolling-restart-current-release-gate-after-workflow-progress-dispatch-pending-fix/rolling-restart/`
 
 ## Boundary
 
 Owner: `operation_workflow_owner`
 
-Boundary: `workflow_progress`
+Boundary: `workflow_timeout`
 
-Dominant reason: `priority_partitions_not_spread`
+Dominant reason: `priority_recovery_workflow_timeout_transition_deferred`
 
-Current state: The sql_transactions-p1 no-serial-wait operation-scheduling gap is now covered by a focused regression and the representative rerun created recovery operation ab74c173-78e1-4227-a15c-580c22a97930, leaving sql_transactions-p1 as spread_satisfied_in_flight. The representative rolling-restart run still failed after 137324ms with 4/5 nodes ACTIVE and migrated the frontier to operation_workflow_owner / workflow_progress: sql_write_operations-p1 is recovering_in_flight with actuationState persisted_not_dispatched, nextRequiredAction advance_existing_operation, waitMode event_driven, workflowProgressPhaseId dispatch_pending, operationId 04b9e396-00b4-4ad7-abee-b9fac1c16f5d, and stepAgeMs 88969 over stepTimeoutMs 30000.
+Current state: The representative rolling-restart rerun after the workflow-progress dispatch-pending fix ran and migrated the first frontier to operation_workflow_owner / workflow_timeout. The prior sql_write_operations-p1 workflow_progress witness is now spread_satisfied_in_flight; the active gate remains failed at 2/5 terminal progress with best 3/5, snapshotCoverage=3/5, publication=PUBLISHED, pendingAck=0, and priority recovery invariants passed. The new dominant witness is control_plane_publications-p1 with semanticStateId operation_stalled, actuationState transition_deferred, nextRequiredAction reconcile_stale_operation_progress, waitMode timeout_reconcile_due, workflowProgressPhaseId dispatch_pending, latestOperationWorkflowStep SENDING, latestOperationStatus pending, operationId 9cc14694-88ba-47df-9c72-ecc301be8312, and blocked partitions control_plane_publications-p1 and sql_transaction_participants-p1.
 
 ## Next Action
 
-Continue with a workflow-progress package or blocker probe for sql_write_operations-p1 persisted_not_dispatched dispatch_pending operation 04b9e396-00b4-4ad7-abee-b9fac1c16f5d, tracing why the workflow owner does not advance or timeout-reconcile the pending operation.
+Commit and push the focused workflow-progress slice, then open the next package on operation_workflow_owner / workflow_timeout to reconcile stale operation progress for operation 9cc14694-88ba-47df-9c72-ecc301be8312.
 
 ## Proof Ladder
 
-1. `npm run work:package:evidence-block -- test-output/reports/rolling-restart-current-release-gate-after-remote-handoff-retry-stale-fix.report.json`
-2. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-remote-handoff-retry-stale-fix.report.json --explain priority_recovery_partition_progress`
-3. `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-current-release-gate-after-remote-handoff-retry-stale-fix.report.json`
-4. `Focused owner-decision regression for sql_transaction_participants-p1 create_recovery_operation scheduling`
-5. `Focused owner-decision regression for sql_transactions-p1 no-serial-wait create_recovery_operation scheduling`
-6. `Touched-file literal, decision-boundary, runtime-grammar, syntax, and diff hygiene guardrails`
-7. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-current-release-gate-after-operation-scheduling-sql-transaction-participants-fix.report.json --fast-local --verbose`
-8. `npm run work:package:evidence-block -- test-output/reports/rolling-restart-current-release-gate-after-operation-scheduling-sql-transaction-participants-fix.report.json`
-9. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-operation-scheduling-sql-transaction-participants-fix.report.json --explain priority_recovery_partition_progress`
-10. `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-current-release-gate-after-operation-scheduling-sql-transaction-participants-fix.report.json`
+1. `npm run work:package:evidence-block -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-dispatch-pending-fix.report.json`
+2. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-dispatch-pending-fix.report.json --explain priority_recovery_partition_progress`
+3. `npm run analyze:distributed-failure -- --report test-output/reports/rolling-restart-current-release-gate-after-workflow-progress-dispatch-pending-fix.report.json`
+4. `Focused operation_workflow_owner workflow_progress regression for sql_write_operations-p1 dispatch_pending persisted_not_dispatched re-entry`
+5. `Touched-file literal, decision-boundary, runtime-grammar, syntax, and diff hygiene guardrails`
+6. `Representative rolling-restart rerun migrated to operation_workflow_owner / workflow_timeout`
 
 ## Touched Files
 
-1. `src/rebalancer/unified-rebalancer-segment-4-stage-1.js`
-2. `src/rebalancer/unified-rebalancer-segment-4-stage-2.js`
-3. `src/rebalancer/unified-rebalancer-segment-4-stage-3.js`
-4. `src/rebalancer/unified-rebalancer-segment-4-stage-shared.js`
-5. `test/rebalancer/unified-rebalancer-part-5-2-stage-2.js`
-6. `work/packages/active-20260508-rolling-restart-operation-scheduling-sql-transaction-participants-needs-operation-reentry.md`
-7. `work/packages/done-20260508-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md`
-8. `work/sprints/current-blocker.json`
-9. `work/sprints/current-blocker.md`
+1. `src/rebalancer/operation-workflow-owner-segment-7-stage-shared.js`
+2. `src/rebalancer/operation-workflow-owner-segment-7-stage-5.js`
+3. `test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js`
+4. `work/packages/active-20260509-rolling-restart-operation-workflow-progress-sql-write-operations-dispatch-pending-reentry.md`
+5. `work/sprints/active-2026-q2-phase-0-1-rolling-restart-release-gate-closure.md`
+6. `work/sprints/current-blocker.json`
+7. `work/sprints/current-blocker.md`

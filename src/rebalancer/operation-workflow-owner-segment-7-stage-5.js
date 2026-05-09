@@ -5,6 +5,12 @@ const {
   NUM,
   OPERATION_WORKFLOW_OWNER_LITERAL,
   OperationType,
+  PRIORITY_RECOVERY_ACTUATION_STATE,
+  PRIORITY_RECOVERY_BLOCKING_BOUNDARY,
+  PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION,
+  PRIORITY_RECOVERY_PROGRESS_OWNER,
+  PRIORITY_RECOVERY_WAIT_MODE,
+  PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE,
   REBALANCE_COORDINATOR_DEFER_REASON,
   REBALANCE_COORDINATOR_EVENT,
   REBALANCE_COORDINATOR_LOG_MSG,
@@ -13,7 +19,195 @@ const {
   WORKFLOW_STEP,
 } = SHARED;
 
+const PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_STATE = Object.freeze({
+  UNAVAILABLE: 'unavailable',
+  NOT_OWNER_ADVANCE: 'not_owner_advance',
+  NOT_DISPATCH_PENDING: 'not_dispatch_pending',
+  NOT_TIMEOUT_DUE: 'not_timeout_due',
+  NOT_DISPATCH_RETRYABLE: 'not_dispatch_retryable',
+  OWNER_LANE_HELD: 'owner_lane_held',
+  REMOTE_RETRY_ACTIVE: 'remote_retry_active',
+  REENTER: 'reenter',
+});
+
+const PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_ALLOWED_STATES =
+  Object.freeze(
+    new Set([
+      PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_STATE.REENTER,
+    ]),
+  );
+
+const PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_STATE_TABLE = Object.freeze([
+  Object.freeze({
+    state: PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_STATE.UNAVAILABLE,
+    matches: (evidence) => evidence.operationAvailable !== true,
+  }),
+  Object.freeze({
+    state: PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_STATE.NOT_OWNER_ADVANCE,
+    matches: (evidence) => evidence.ownerAdvance !== true,
+  }),
+  Object.freeze({
+    state:
+      PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_STATE.NOT_DISPATCH_PENDING,
+    matches: (evidence) => evidence.dispatchPending !== true,
+  }),
+  Object.freeze({
+    state: PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_STATE.NOT_TIMEOUT_DUE,
+    matches: (evidence) => evidence.timeoutReconcileDue !== true,
+  }),
+  Object.freeze({
+    state:
+      PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_STATE.NOT_DISPATCH_RETRYABLE,
+    matches: (evidence) => evidence.dispatchRetryable !== true,
+  }),
+  Object.freeze({
+    state: PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_STATE.OWNER_LANE_HELD,
+    matches: (evidence) => evidence.ownerLaneHeld === true,
+  }),
+  Object.freeze({
+    state: PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_STATE.REMOTE_RETRY_ACTIVE,
+    matches: (evidence) => evidence.remoteRetryActive === true,
+  }),
+  Object.freeze({
+    state: PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_STATE.REENTER,
+    matches: () => true,
+  }),
+]);
+
 class OperationWorkflowOwnerSegment7Stage5 extends OperationWorkflowOwnerSegment7Stage4 {
+  async getPriorityRecoveryDecisionSnapshotForPartitionOperations(
+    partitionId,
+    operations = [],
+  ) {
+    const snapshot =
+      await super.getPriorityRecoveryDecisionSnapshotForPartitionOperations(
+        partitionId,
+        operations,
+      );
+    this.schedulePriorityRecoveryDispatchPendingReentry(snapshot, operations);
+    return snapshot;
+  }
+
+  selectPriorityRecoveryDispatchPendingReentryOperation(
+    snapshot,
+    operations = [],
+  ) {
+    const snapshotOperationId = String(
+      snapshot?.coordinator?.operation?.operationId ||
+        snapshot?.operationId ||
+        OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_STRING,
+    ).trim();
+    const operationRecords = Array.isArray(operations) ? operations : [];
+    const matchingOperation = operationRecords.find((operation) => {
+      return (
+        operation &&
+        typeof operation === OPERATION_WORKFLOW_OWNER_LITERAL.OBJECT &&
+        operation.operationId === snapshotOperationId
+      );
+    });
+    if (matchingOperation) {
+      return matchingOperation;
+    }
+    const snapshotOperation = snapshot?.coordinator?.operation || null;
+    if (
+      !snapshotOperation ||
+      typeof snapshotOperation !== OPERATION_WORKFLOW_OWNER_LITERAL.OBJECT ||
+      snapshotOperationId.length === NUM.ZERO
+    ) {
+      return null;
+    }
+    return Object.freeze({
+      ...snapshotOperation,
+      operationId: snapshotOperationId,
+      createdAt: snapshotOperation.createdAtMs,
+      updatedAt: snapshotOperation.updatedAtMs,
+      completedAt: snapshotOperation.completedAtMs,
+    });
+  }
+
+  buildPriorityRecoveryDispatchPendingReentryEvidence(
+    snapshot,
+    operation,
+  ) {
+    const operationId = String(
+      operation?.operationId || OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_STRING,
+    ).trim();
+    return Object.freeze({
+      operationAvailable:
+        operation &&
+        typeof operation === OPERATION_WORKFLOW_OWNER_LITERAL.OBJECT &&
+        operationId.length > NUM.ZERO,
+      ownerAdvance:
+        snapshot?.actuation?.owner ===
+          PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER &&
+        snapshot?.progress?.currentOwner ===
+          PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER &&
+        snapshot?.progress?.nextRequiredAction ===
+          PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.ADVANCE_EXISTING_OPERATION &&
+        snapshot?.progress?.blockingBoundary ===
+          PRIORITY_RECOVERY_BLOCKING_BOUNDARY.WORKFLOW_PROGRESS &&
+        snapshot?.progress?.waitMode ===
+          PRIORITY_RECOVERY_WAIT_MODE.EVENT_DRIVEN,
+      dispatchPending:
+        snapshot?.actuation?.state ===
+          PRIORITY_RECOVERY_ACTUATION_STATE.PERSISTED_NOT_DISPATCHED &&
+        snapshot?.actuation?.workflowProgressPhaseId ===
+          PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.DISPATCH_PENDING &&
+        snapshot?.progress?.workflowProgressPhaseId ===
+          PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.DISPATCH_PENDING,
+      timeoutReconcileDue:
+        snapshot?.actuation?.timeoutReconcileDue === true,
+      dispatchRetryable: this.isDispatchRetryableWorkflowStep(operation),
+      ownerLaneHeld: this.isOperationOwnerLaneHeld(operationId),
+      remoteRetryActive:
+        !this.repository.isOperationLocallyOwned(operation) &&
+        this.hasActiveCreatedOperationHandoffRetry(operationId),
+    });
+  }
+
+  resolvePriorityRecoveryDispatchPendingReentryState(evidence) {
+    return (
+      PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_STATE_TABLE.find((entry) =>
+        entry.matches(evidence),
+      )?.state ||
+      PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_STATE.UNAVAILABLE
+    );
+  }
+
+  shouldSchedulePriorityRecoveryDispatchPendingReentry(snapshot, operation) {
+    const evidence =
+      this.buildPriorityRecoveryDispatchPendingReentryEvidence(
+        snapshot,
+        operation,
+      );
+    return PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_ALLOWED_STATES.has(
+      this.resolvePriorityRecoveryDispatchPendingReentryState(evidence),
+    );
+  }
+
+  schedulePriorityRecoveryDispatchPendingReentry(snapshot, operations = []) {
+    const operation =
+      this.selectPriorityRecoveryDispatchPendingReentryOperation(
+        snapshot,
+        operations,
+      );
+    if (
+      !this.shouldSchedulePriorityRecoveryDispatchPendingReentry(
+        snapshot,
+        operation,
+      )
+    ) {
+      return false;
+    }
+    this.armCoordinatorCreatedOperation(operation).catch((error) => {
+      this.handleDeferredCoordinatorCreatedRemoteHandoffRetryFailure(
+        operation,
+        error,
+      );
+    });
+    return true;
+  }
+
   async handleRecovery() {
     this.logger.info(REBALANCE_COORDINATOR_LOG_MSG.RECOVERY_START, {
       nodeId: this.nodeId,

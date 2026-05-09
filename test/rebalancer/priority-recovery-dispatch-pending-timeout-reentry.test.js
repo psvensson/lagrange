@@ -29,6 +29,7 @@ const TEST_PARTITION_ID = 'sql_write_operations-p1';
 const TEST_LOCAL_OWNER_PARTITION_ID = 'control_plane_publications-p1';
 const TEST_REPLICA_ID = 'sql_write_operations-p1-r4';
 const TEST_LOCAL_OWNER_REPLICA_ID = 'control_plane_publications-p1-r4';
+const TEST_OBSERVER_NODE_ID = 'node-observer';
 const TEST_SOURCE_NODE_ID = 'node-source';
 const TEST_TARGET_NODE_ID = 'node-target';
 const TEST_STATUS_PENDING = ReplicaStatus.PENDING;
@@ -67,6 +68,7 @@ const TEST_QUERY_REPLICA_OPERATIONS_FRAGMENT = 'FROM replica_operations';
 const TEST_QUERY_SERVICES_FRAGMENT = 'FROM services';
 const TEST_DELIVERY_STATUS_INITIATED = 'initiated';
 const TEST_MIN_REPLICA_COUNT = 3;
+const TEST_MICROTASK_DELAY_MS = 0;
 const TEST_STALE_REMOTE_HANDOFF_REWAKE_TEST_NAME =
   'checkTimeouts re-wakes stale remote-owned priority handoff retries ' +
   'even while transition grace remains active';
@@ -87,6 +89,43 @@ const TEST_ASSERT_STALE_HANDOFF_REPLACES_TIMER =
 const TEST_ASSERT_STALE_HANDOFF_REMAINS_SINGLE_TIMER =
   'exactly one remote handoff retry timer should remain armed after stale ' +
   'retry reconciliation';
+const TEST_SNAPSHOT_REENTRY_TEST_NAME =
+  'priority recovery snapshots re-enter stale dispatch-pending persisted ' +
+  'operations through the workflow owner';
+const TEST_ASSERT_SNAPSHOT_REENTRY_ADVANCE_ACTION =
+  'the snapshot should preserve owner advancement for the stale persisted row';
+const TEST_ASSERT_SNAPSHOT_REENTRY_WAKES_REMOTE_OWNER =
+  'snapshot re-entry should wake the remote operation owner once';
+const TEST_ASSERT_SNAPSHOT_REENTRY_TARGET =
+  'snapshot re-entry should use the canonical remote replica-dispatch ingress';
+const TEST_ASSERT_SNAPSHOT_REENTRY_ARMS_RETRY =
+  'snapshot re-entry should arm one verification retry for the remote owner';
+const TEST_ASSERT_SNAPSHOT_REENTRY_PRESERVES_PENDING =
+  'snapshot re-entry should not mutate the remote-owned durable row';
+
+function buildDispatchPendingReentryPlanningSnapshot() {
+  return Object.freeze({
+    publicationEpoch: TEST_PUBLICATION_EPOCH,
+    publicationStatus: TEST_PUBLICATION_STATUS_PUBLISHED,
+    publishedActiveNodeIds: Object.freeze([
+      TEST_SOURCE_NODE_ID,
+      TEST_TARGET_NODE_ID,
+    ]),
+    pendingAckNodeIds: TEST_EMPTY_LIST,
+    pendingAckCount: NUM.ZERO,
+    priorityPartitionSummary: Object.freeze({
+      blockedPartitions: Object.freeze([
+        Object.freeze({
+          partitionId: TEST_PARTITION_ID,
+          spreadGap: TEST_SPREAD_GAP,
+          readyDistinctNodeCount: TEST_READY_DISTINCT_NODE_COUNT,
+          requiredDistinctNodeCount: TEST_REQUIRED_DISTINCT_NODE_COUNT,
+        }),
+      ]),
+      readyEligibleNodeCount: TEST_READY_ELIGIBLE_NODE_COUNT,
+    }),
+  });
+}
 
 function buildTransactionCoordinator() {
   return {
@@ -766,6 +805,181 @@ async (t) => {
   );
 
   await coordinator.shutdown();
+});
+
+test(TEST_SNAPSHOT_REENTRY_TEST_NAME,
+async (t) => {
+  const deliveries = [];
+  const deferredTimers = [];
+  let nowMs = TEST_CAPTURED_AT_MS;
+  const originalDateNow = Date.now;
+  Date.now = () => nowMs;
+  const operationRow = {
+    operation_id: TEST_OPERATION_ID,
+    type: TEST_OPERATION_TYPE_REPLACE,
+    partition_id: TEST_PARTITION_ID,
+    replica_id: TEST_REPLICA_ID,
+    source_node_id: TEST_SOURCE_NODE_ID,
+    target_node_id: TEST_TARGET_NODE_ID,
+    status: TEST_STATUS_PENDING,
+    workflow_step: TEST_STEP_PENDING,
+    created_at: TEST_OPERATION_CREATED_AT_MS,
+    updated_at:
+      nowMs - TEST_STEP_TIMEOUT_MS - TEST_TIMEOUT_OVERRUN_MS,
+    completed_at: TEST_EMPTY_VALUE,
+    error_message: TEST_EMPTY_VALUE,
+    steps_history: JSON.stringify([{
+      step: TEST_STEP_PENDING,
+      timestamp:
+        nowMs - TEST_STEP_TIMEOUT_MS - TEST_STEP_HISTORY_LAG_MS,
+    }]),
+    entity_type: TEST_ENTITY_TYPE_PARTITION,
+    entity_id: TEST_PARTITION_ID,
+  };
+
+  const sqlQueryEngine = {
+    async executeQuery(sql, params = []) {
+      const normalizedSql = String(sql);
+      if (
+        normalizedSql.includes(TEST_QUERY_REPLICA_OPERATIONS_FRAGMENT) &&
+        normalizedSql.includes('WHERE operation_id = ?')
+      ) {
+        const operationId = params[NUM.ZERO];
+        return {
+          success: true,
+          rows: operationId === TEST_OPERATION_ID ? [{...operationRow}] : [],
+          affectedRows:
+            operationId === TEST_OPERATION_ID ? NUM.ONE : NUM.ZERO,
+        };
+      }
+      if (normalizedSql.includes(TEST_QUERY_REPLICA_OPERATIONS_FRAGMENT)) {
+        return {
+          success: true,
+          rows: [{...operationRow}],
+          affectedRows: NUM.ONE,
+        };
+      }
+      if (normalizedSql.includes(TEST_QUERY_SERVICES_FRAGMENT)) {
+        return {
+          success: true,
+          rows: [],
+          affectedRows: NUM.ZERO,
+        };
+      }
+      return {
+        success: true,
+        rows: [],
+        affectedRows: NUM.ZERO,
+      };
+    },
+  };
+
+  const coordinator = createCoordinator({
+    nodeId: TEST_OBSERVER_NODE_ID,
+    sqlQueryEngine,
+    transactionCoordinator: buildTransactionCoordinator(),
+    systemTableCache: {
+      get() {
+        return null;
+      },
+      getAll() {
+        return [];
+      },
+      filter() {
+        return [];
+      },
+    },
+    cdcIntegrationService: {
+      async waitForCacheUpdate() {},
+    },
+    controlPlaneReadinessService: {
+      getPriorityRecoveryPlanningAnswerBestEffort() {
+        return buildDispatchPendingReentryPlanningSnapshot();
+      },
+      getNodeReadinessSync(nodeId) {
+        return {
+          nodeId,
+          dimensions: {
+            controlPlaneRecoveryEligible: true,
+            repairEligible: true,
+            serveEligible: true,
+          },
+        };
+      },
+    },
+    messageRouter: {
+      async deliver(target, payload, options) {
+        deliveries.push({target, payload, options});
+        return {acknowledged: true, status: TEST_DELIVERY_STATUS_INITIATED};
+      },
+    },
+    tablePolicyService: {
+      async getPolicyForPartition() {
+        return {minReplicaCount: TEST_MIN_REPLICA_COUNT};
+      },
+    },
+    setTimeoutFn(fn, delayMs) {
+      const handle = {fn, delayMs};
+      deferredTimers.push(handle);
+      return handle;
+    },
+    clearTimeoutFn() {},
+    enableTimeouts: false,
+  });
+
+  try {
+    coordinator.initialize();
+    const operation = coordinator.repository.rowToOperation(operationRow);
+    coordinator.workflowOwner.repository
+      .getOperationsByEntityAuthoritativeObservation = async () => {
+        return Object.freeze({
+          state: 'present',
+          operationCount: NUM.ONE,
+          operations: Object.freeze([operation]),
+          deferredOutcome: null,
+          retryAfterMs: null,
+        });
+      };
+
+    const snapshot =
+      await coordinator.workflowOwner
+        .getPriorityRecoveryDecisionSnapshotForPartitionOperations(
+          TEST_PARTITION_ID,
+          TEST_EMPTY_LIST,
+        );
+    await new Promise((resolve) => {
+      setTimeout(resolve, TEST_MICROTASK_DELAY_MS);
+    });
+
+    t.equal(
+      snapshot?.progress?.nextRequiredAction,
+      PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.ADVANCE_EXISTING_OPERATION,
+      TEST_ASSERT_SNAPSHOT_REENTRY_ADVANCE_ACTION,
+    );
+    t.equal(
+      deliveries.length,
+      NUM.ONE,
+      TEST_ASSERT_SNAPSHOT_REENTRY_WAKES_REMOTE_OWNER,
+    );
+    t.equal(
+      deliveries[NUM.ZERO]?.target,
+      TEST_REPLICA_DISPATCH_TARGET,
+      TEST_ASSERT_SNAPSHOT_REENTRY_TARGET,
+    );
+    t.equal(
+      deferredTimers.length,
+      NUM.ONE,
+      TEST_ASSERT_SNAPSHOT_REENTRY_ARMS_RETRY,
+    );
+    t.equal(
+      operationRow.workflow_step,
+      TEST_STEP_PENDING,
+      TEST_ASSERT_SNAPSHOT_REENTRY_PRESERVES_PENDING,
+    );
+  } finally {
+    Date.now = originalDateNow;
+    await coordinator.shutdown();
+  }
 });
 
 test('coordinator-created remote handoff uses bounded priority delivery for ' +

@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-08",
   "scenario": "rolling-restart",
   "artifact": "test-output/reports/rolling-restart-current-release-gate-after-operation-scheduling-sql-transaction-participants-fix.report.json",
@@ -31,12 +31,15 @@
     "src/rebalancer/unified-rebalancer-segment-4-stage-3.js",
     "src/rebalancer/unified-rebalancer-segment-4-stage-shared.js",
     "test/rebalancer/unified-rebalancer-part-5-2-stage-2.js",
-    "work/packages/active-20260508-rolling-restart-operation-scheduling-sql-transaction-participants-needs-operation-reentry.md",
+    "work/packages/done-20260508-rolling-restart-operation-scheduling-sql-transaction-participants-needs-operation-reentry.md",
     "work/packages/done-20260508-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md",
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md"
   ],
-  "predecessor": "work/packages/done-20260508-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md"
+  "predecessor": "work/packages/done-20260508-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md",
+  "closed": "2026-05-09",
+  "commitAndPushLedgerRequired": true,
+  "successor": "work/packages/active-20260509-rolling-restart-operation-workflow-progress-sql-write-operations-dispatch-pending-reentry.md"
 }
 -->
 
@@ -187,23 +190,23 @@ Forbidden reinterpretations:
       `work/packages/done-20260508-rolling-restart-operation-workflow-rebalancer-handoff-retry-scheduled.md`.
 - [x] Implementation subagent recorded:
       Agent Laplace (`019e09e7-0f65-7d20-93a4-100d7b6b5da0`) implemented
-      `work/packages/active-20260508-rolling-restart-operation-scheduling-sql-transaction-participants-needs-operation-reentry.md`.
+      `work/packages/done-20260508-rolling-restart-operation-scheduling-sql-transaction-participants-needs-operation-reentry.md`.
 - [x] Continuation review subagent recorded:
       Agent Poincare (`019e09f5-5d8c-7f33-b94d-066fbba5269d`) reviewed
-      `work/packages/active-20260508-rolling-restart-operation-scheduling-sql-transaction-participants-needs-operation-reentry.md`;
+      `work/packages/done-20260508-rolling-restart-operation-scheduling-sql-transaction-participants-needs-operation-reentry.md`;
       result `fixes-required`.
 - [x] Continuation fix subagent recorded:
       Agent Hypatia (`019e09f7-46c4-7a11-a7fd-a563c326784a`) fixed
-      `work/packages/active-20260508-rolling-restart-operation-scheduling-sql-transaction-participants-needs-operation-reentry.md`.
+      `work/packages/done-20260508-rolling-restart-operation-scheduling-sql-transaction-participants-needs-operation-reentry.md`.
 - [x] Continuation implementation subagent recorded:
-      Agent Linnaeus (019e09fa-3b86-7263-81cc-2e6a0d0aa952) implemented work/packages/active-20260508-rolling-restart-operation-scheduling-sql-transaction-participants-needs-operation-reentry.md.
+      Agent Linnaeus (019e09fa-3b86-7263-81cc-2e6a0d0aa952) implemented work/packages/done-20260508-rolling-restart-operation-scheduling-sql-transaction-participants-needs-operation-reentry.md.
 - [x] Post-implementation review subagent recorded:
       Agent Nash (`019e0a15-fbd1-7543-8448-67563b3aaab9`) reviewed
-      `work/packages/active-20260508-rolling-restart-operation-scheduling-sql-transaction-participants-needs-operation-reentry.md`;
+      `work/packages/done-20260508-rolling-restart-operation-scheduling-sql-transaction-participants-needs-operation-reentry.md`;
       result `fixes-required`.
 - [x] Review-fix subagent recorded:
       Agent Hilbert (`019e0a19-f014-73c1-8c8f-7a6565de2bb9`) fixed
-      `work/packages/active-20260508-rolling-restart-operation-scheduling-sql-transaction-participants-needs-operation-reentry.md`.
+      `work/packages/done-20260508-rolling-restart-operation-scheduling-sql-transaction-participants-needs-operation-reentry.md`.
 
 ## Residual Closure Inventory
 
@@ -327,7 +330,7 @@ Implementation validation notes:
     with the migrated workflow-progress blocker.
 25. `npm run work:validate` passed with
     `Work tracker validation OK for 12 file(s).`
-26. `git diff --check -- src/rebalancer/unified-rebalancer-segment-4-stage-1.js src/rebalancer/unified-rebalancer-segment-4-stage-3.js src/rebalancer/unified-rebalancer-segment-4-stage-shared.js test/rebalancer/unified-rebalancer-part-5-2-stage-2.js work/packages/active-20260508-rolling-restart-operation-scheduling-sql-transaction-participants-needs-operation-reentry.md work/sprints/current-blocker.json work/sprints/current-blocker.md`
+26. `git diff --check -- src/rebalancer/unified-rebalancer-segment-4-stage-1.js src/rebalancer/unified-rebalancer-segment-4-stage-3.js src/rebalancer/unified-rebalancer-segment-4-stage-shared.js test/rebalancer/unified-rebalancer-part-5-2-stage-2.js work/packages/done-20260508-rolling-restart-operation-scheduling-sql-transaction-participants-needs-operation-reentry.md work/sprints/current-blocker.json work/sprints/current-blocker.md`
     passed.
 27. Agent Nash (`019e0a15-fbd1-7543-8448-67563b3aaab9`) reviewed this
     package and found the no-serial-wait bypass still promoted absent
@@ -353,7 +356,7 @@ Implementation validation notes:
     passed with `0` decision-boundary guideline violations.
 34. `npm run audit:runtime-grammar:file -- src/rebalancer/unified-rebalancer-segment-4-stage-1.js src/rebalancer/unified-rebalancer-segment-4-stage-3.js src/rebalancer/unified-rebalancer-segment-4-stage-shared.js test/rebalancer/unified-rebalancer-part-5-2-stage-2.js`
     passed with `0` runtime-grammar-contract violations.
-35. `git diff --check -- src/rebalancer/unified-rebalancer-segment-4-stage-1.js src/rebalancer/unified-rebalancer-segment-4-stage-3.js src/rebalancer/unified-rebalancer-segment-4-stage-shared.js test/rebalancer/unified-rebalancer-part-5-2-stage-2.js work/packages/active-20260508-rolling-restart-operation-scheduling-sql-transaction-participants-needs-operation-reentry.md`
+35. `git diff --check -- src/rebalancer/unified-rebalancer-segment-4-stage-1.js src/rebalancer/unified-rebalancer-segment-4-stage-3.js src/rebalancer/unified-rebalancer-segment-4-stage-shared.js test/rebalancer/unified-rebalancer-part-5-2-stage-2.js work/packages/done-20260508-rolling-restart-operation-scheduling-sql-transaction-participants-needs-operation-reentry.md`
     passed.
 36. `npm run work:validate` passed with
     `Work tracker validation OK for 13 file(s).`

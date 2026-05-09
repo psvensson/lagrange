@@ -48,7 +48,7 @@
   "predecessor": "work/packages/done-20260508-rolling-restart-operation-workflow-progress-persisted-not-dispatched.md",
   "closed": "2026-05-08",
   "commitAndPushLedgerRequired": true,
-  "successor": "work/packages/active-20260508-rolling-restart-operation-scheduling-sql-transaction-participants-needs-operation-reentry.md"
+  "successor": "work/packages/done-20260508-rolling-restart-operation-scheduling-sql-transaction-participants-needs-operation-reentry.md"
 }
 -->
 
