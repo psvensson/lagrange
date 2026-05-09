@@ -39,8 +39,7 @@ const PRIORITY_RECOVERY_ORDINARY_SERIAL_GATE_STATE_TABLE = Object.freeze([
         .FOLLOW_UP_WITHOUT_SERIAL_WAIT,
     matches: (evidence) =>
       evidence.hasPriorityRecoveryFollowUpMove === true &&
-      evidence.hasSerialWaitEvidence === true &&
-      evidence.hasSerialWaitOperationIds !== true,
+      evidence.hasExplicitEmptySerialWaitOperationIds === true,
   }),
   Object.freeze({
     state: PRIORITY_RECOVERY_ORDINARY_SERIAL_GATE_STATE.SERIAL_GATE_REQUIRED,
@@ -208,6 +207,9 @@ class UnifiedRebalancerSegment4Stage1 extends UnifiedRebalancerSegment3 {
       hasSerialWaitEvidence,
       hasSerialWaitOperationIds:
         serialWaitOperationIds.length > NUM.ZERO,
+      hasExplicitEmptySerialWaitOperationIds:
+        hasSerialWaitEvidence === true &&
+        serialWaitOperationIds.length === NUM.ZERO,
     });
   }
 

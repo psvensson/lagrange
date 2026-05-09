@@ -197,6 +197,13 @@ Forbidden reinterpretations:
       `work/packages/active-20260508-rolling-restart-operation-scheduling-sql-transaction-participants-needs-operation-reentry.md`.
 - [x] Continuation implementation subagent recorded:
       Agent Linnaeus (019e09fa-3b86-7263-81cc-2e6a0d0aa952) implemented work/packages/active-20260508-rolling-restart-operation-scheduling-sql-transaction-participants-needs-operation-reentry.md.
+- [x] Post-implementation review subagent recorded:
+      Agent Nash (`019e0a15-fbd1-7543-8448-67563b3aaab9`) reviewed
+      `work/packages/active-20260508-rolling-restart-operation-scheduling-sql-transaction-participants-needs-operation-reentry.md`;
+      result `fixes-required`.
+- [x] Review-fix subagent recorded:
+      Agent Hilbert (`019e0a19-f014-73c1-8c8f-7a6565de2bb9`) fixed
+      `work/packages/active-20260508-rolling-restart-operation-scheduling-sql-transaction-participants-needs-operation-reentry.md`.
 
 ## Residual Closure Inventory
 
@@ -208,6 +215,8 @@ Forbidden reinterpretations:
 - [x] The `sql_transactions-p1` owner-decision fixture or blocker probe exists.
 - [x] The operation-scheduling gap is fixed or the representative rerun
       migrates to one named owner boundary.
+- [x] Nash's post-implementation review findings for the no-serial-wait bypass
+      are fixed locally and await parent commit/push.
 - [x] Touched-file static guardrails pass.
 - [x] Representative `rolling-restart --fast-local` rerun passes or migrates
       to one named owner boundary.
@@ -224,7 +233,8 @@ Closure:
 - [x] Same guardrails rerun after implementation.
 - [x] No new touched-file decision-boundary, literal-owner, runtime-grammar, or
       diff hygiene violation remains.
-- [x] The focused package slice is committed and pushed.
+- [x] Commit/push status is explicitly recorded below; the Nash review-fix
+      slice is not committed or pushed by this session.
 
 ## Validation
 
@@ -319,12 +329,45 @@ Implementation validation notes:
     `Work tracker validation OK for 12 file(s).`
 26. `git diff --check -- src/rebalancer/unified-rebalancer-segment-4-stage-1.js src/rebalancer/unified-rebalancer-segment-4-stage-3.js src/rebalancer/unified-rebalancer-segment-4-stage-shared.js test/rebalancer/unified-rebalancer-part-5-2-stage-2.js work/packages/active-20260508-rolling-restart-operation-scheduling-sql-transaction-participants-needs-operation-reentry.md work/sprints/current-blocker.json work/sprints/current-blocker.md`
     passed.
+27. Agent Nash (`019e0a15-fbd1-7543-8448-67563b3aaab9`) reviewed this
+    package and found the no-serial-wait bypass still promoted absent
+    coordinator serial-wait evidence to explicit empty evidence.
+28. `node test/rebalancer/unified-rebalancer-part-5-2-stage-2.js` failed
+    before the Nash review-fix runtime change on the new missing serial-wait
+    evidence assertion: expected `0` created operations, actual `1`.
+29. `node test/rebalancer/unified-rebalancer-part-5-2-stage-2.js` passed
+    after the Nash review-fix runtime change with `22/22` assertions. The
+    focused regression now proves missing serial-wait evidence waits behind an
+    ordinary priority operation, while explicit empty `serialWaitOperationIds`
+    still schedules `sql_transactions-p1`.
+30. `node test/rebalancer/unified-rebalancer.test-part-2.js` passed with
+    `38/38` assertions.
+31. `node --check src/rebalancer/unified-rebalancer-segment-4-stage-1.js`,
+    `node --check src/rebalancer/unified-rebalancer-segment-4-stage-3.js`, and
+    `node --check test/rebalancer/unified-rebalancer-part-5-2-stage-2.js`
+    passed.
+32. `node scripts/check-guideline-literals.js src/rebalancer/unified-rebalancer-segment-4-stage-1.js src/rebalancer/unified-rebalancer-segment-4-stage-3.js src/rebalancer/unified-rebalancer-segment-4-stage-shared.js test/rebalancer/unified-rebalancer-part-5-2-stage-2.js`
+    passed with `0` new literal-guideline violations and `0` inherited
+    baseline violations.
+33. `node scripts/check-guideline-decision-boundaries.js src/rebalancer/unified-rebalancer-segment-4-stage-1.js src/rebalancer/unified-rebalancer-segment-4-stage-3.js src/rebalancer/unified-rebalancer-segment-4-stage-shared.js test/rebalancer/unified-rebalancer-part-5-2-stage-2.js`
+    passed with `0` decision-boundary guideline violations.
+34. `npm run audit:runtime-grammar:file -- src/rebalancer/unified-rebalancer-segment-4-stage-1.js src/rebalancer/unified-rebalancer-segment-4-stage-3.js src/rebalancer/unified-rebalancer-segment-4-stage-shared.js test/rebalancer/unified-rebalancer-part-5-2-stage-2.js`
+    passed with `0` runtime-grammar-contract violations.
+35. `git diff --check -- src/rebalancer/unified-rebalancer-segment-4-stage-1.js src/rebalancer/unified-rebalancer-segment-4-stage-3.js src/rebalancer/unified-rebalancer-segment-4-stage-shared.js test/rebalancer/unified-rebalancer-part-5-2-stage-2.js work/packages/active-20260508-rolling-restart-operation-scheduling-sql-transaction-participants-needs-operation-reentry.md`
+    passed.
+36. `npm run work:validate` passed with
+    `Work tracker validation OK for 13 file(s).`
 
 ## Commit And Push Ledger
 
-- Focused package commit: 4faee41b
+Prior implementation slice ledger before the Nash review-fix:
+
+- Focused package commit: 1236436a
 - Pushed to: origin/codex/pending-ack-eligibility-filter
 - Commit contains only package-owned files/package-status/allowed sprint handoff: yes
+
+Current Nash review-fix slice: pending parent commit and push after
+verification.
 
 ## Done When
 

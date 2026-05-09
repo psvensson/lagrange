@@ -270,34 +270,34 @@ class UnifiedRebalancerSegment4Stage3 extends UnifiedRebalancerSegment4Stage2 {
       decision?.decisionSnapshot?.[
         PRIORITY_RECOVERY_FOLLOW_UP_FIELD.COORDINATOR
       ] || {};
-    const serialWaitOperationIds = Array.isArray(
+    const serialWaitMoveFields = {};
+    if (Array.isArray(
       coordinator?.[
         PRIORITY_RECOVERY_FOLLOW_UP_FIELD.SERIAL_WAIT_OPERATION_IDS
       ],
-    ) ?
-      Object.freeze([
+    )) {
+      serialWaitMoveFields[
+        PRIORITY_RECOVERY_FOLLOW_UP_FIELD.SERIAL_WAIT_OPERATION_IDS
+      ] = Object.freeze([
         ...coordinator[
           PRIORITY_RECOVERY_FOLLOW_UP_FIELD.SERIAL_WAIT_OPERATION_IDS
         ],
-      ]) :
-      Object.freeze([]);
-    const serialWaitPartitionIds = Array.isArray(
+      ]);
+    }
+    if (Array.isArray(
       coordinator?.[
         PRIORITY_RECOVERY_FOLLOW_UP_FIELD.SERIAL_WAIT_PARTITION_IDS
       ],
-    ) ?
-      Object.freeze([
+    )) {
+      serialWaitMoveFields[
+        PRIORITY_RECOVERY_FOLLOW_UP_FIELD.SERIAL_WAIT_PARTITION_IDS
+      ] = Object.freeze([
         ...coordinator[
           PRIORITY_RECOVERY_FOLLOW_UP_FIELD.SERIAL_WAIT_PARTITION_IDS
         ],
-      ]) :
-      Object.freeze([]);
-    return Object.freeze({
-      [PRIORITY_RECOVERY_FOLLOW_UP_FIELD.SERIAL_WAIT_OPERATION_IDS]:
-        serialWaitOperationIds,
-      [PRIORITY_RECOVERY_FOLLOW_UP_FIELD.SERIAL_WAIT_PARTITION_IDS]:
-        serialWaitPartitionIds,
-    });
+      ]);
+    }
+    return Object.freeze(serialWaitMoveFields);
   }
 
   buildPriorityRecoveryFollowUpMove(context = {}) {

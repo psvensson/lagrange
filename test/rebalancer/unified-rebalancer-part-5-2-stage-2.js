@@ -401,7 +401,7 @@ const TEST_NAME = Object.freeze({
   RECONSTRUCTS_CURRENT_NEEDS_OPERATION:
     'checkRebalance reconstructs current needs_operation follow-up when stale serial-wait planning lacks closure witness',
   SCHEDULES_SQL_TRANSACTIONS_WITHOUT_SERIAL_WAIT:
-    'checkRebalance schedules sql_transactions needs_operation follow-up when no serial wait remains',
+    'checkRebalance requires explicit no-serial evidence before bypassing ordinary priority serial wait',
   RECLAIMS_CURRENT_NEEDS_OPERATION:
     'checkRebalance reclaims current needs_operation follow-up work when closure-witness surrogate progress only points at another partition',
   RESETS_INTERVAL_ON_ACTIONABLE_MOVES:
@@ -453,6 +453,8 @@ const TEST_MESSAGE = Object.freeze({
     'sql_transactions no-serial follow-up should persist one recovery operation',
   SQL_TRANSACTIONS_NO_SERIAL_WAIT_RETARGETS_PARTITION:
     'sql_transactions no-serial follow-up should target the current blocker',
+  SQL_TRANSACTIONS_MISSING_SERIAL_WAIT_BLOCKS_OPERATION:
+    'sql_transactions missing serial-wait evidence should wait behind ordinary priority work',
   ROUTER_PRESSURE_DEFER_SCHEDULES_DELAY:
     'router pressure defer should schedule a delayed retry',
   ROUTER_PRESSURE_DEFERS_BEFORE_EVALUATION:
@@ -1459,11 +1461,111 @@ test(TEST_NAME.SUITE, async (t) => {
           ],
         },
       };
+      const missingSerialWaitPlanningSnapshot = {
+        ...planningSnapshot,
+        priorityRecoveryDecisionSnapshots: {
+          snapshots: [
+            {
+              ...planningSnapshot.priorityRecoveryDecisionSnapshots
+                .snapshots[TEST_NUMBER.ZERO],
+              coordinator: {
+                operationCount: TEST_NUMBER.ZERO,
+                operationIds: [],
+                operation: PRIORITY_RECOVERY_ABSENT_OPERATION,
+              },
+            },
+          ],
+        },
+      };
       const cache = createMockCache(
         nodeRows,
         serviceRows,
         partitionRows,
       );
+      const createdOperationsWithMissingSerialWait = [];
+      const missingSerialWaitReadinessService = {
+        ...createMockReadinessService(cache),
+        getPriorityRecoveryPlanningAnswerBestEffort() {
+          return missingSerialWaitPlanningSnapshot;
+        },
+        getPriorityRecoveryPlanningAnswerSync() {
+          return missingSerialWaitPlanningSnapshot;
+        },
+        membershipPublicationService: {
+          getLatestClusterPublicationSync() {
+            return {
+              priorityPartitionSummary,
+              priorityRecoveryClosureWitness,
+            };
+          },
+        },
+      };
+      const missingSerialWaitCoordinator = {
+        ...createMockCoordinator(),
+        getConcurrentAddCountByPriorityClass: async () => ({
+          priorityCount: TEST_NUMBER.ONE,
+          ordinaryPriorityCount: TEST_NUMBER.ONE,
+          emergencyPriorityCount: TEST_NUMBER.ZERO,
+          nonPriorityCount: TEST_NUMBER.ZERO,
+        }),
+        createOperation: async (move) => {
+          createdOperationsWithMissingSerialWait.push(move);
+          return {
+            operationId: PRIORITY_RECOVERY_EXISTING_ORDINARY_OPERATION_ID,
+            type: move.type,
+            partitionId: move.partitionId,
+            entityId: move.entityId,
+            targetNodeId: move.nodeId,
+            replicaId: move.replicaId,
+            status: ReplicaStatus.PENDING,
+            workflowStep: WORKFLOW_STEP.PENDING,
+          };
+        },
+      };
+      const missingSerialWaitRebalancer = createTestRebalancer({
+        entityId: SQL_TRANSACTION_PARTICIPANTS_PRIORITY_PARTITION_ID,
+        entityType: EntityType.PARTITION,
+        nodeId: PRIORITY_FOLLOW_UP_NODE_ID_A,
+        rebalanceCoordinator: missingSerialWaitCoordinator,
+        controlPlaneReadinessService: missingSerialWaitReadinessService,
+        nodes: nodeRows,
+        services: serviceRows,
+        partitions: partitionRows,
+      });
+
+      missingSerialWaitRebalancer.setLeader(true);
+      missingSerialWaitRebalancer.clusterReadinessConfirmed = true;
+      missingSerialWaitRebalancer.isStabilized = () => true;
+      missingSerialWaitRebalancer.getConfiguredRebalanceBudget = async () =>
+        PRIORITY_RECOVERY_REQUIRED_DISTINCT_NODE_COUNT;
+      missingSerialWaitRebalancer.getGlobalInFlightOperationCount = async () =>
+        TEST_NUMBER.ZERO;
+      missingSerialWaitRebalancer.scheduleNextCheck = () => {};
+      missingSerialWaitRebalancer.movePlanner.calculateTargetState =
+        async () => ({
+          targetReplicaCount: PRIORITY_RECOVERY_REQUIRED_DISTINCT_NODE_COUNT,
+          targetNodes: [
+            PRIORITY_FOLLOW_UP_NODE_ID_A,
+            PRIORITY_FOLLOW_UP_NODE_ID_B,
+          ],
+        });
+      missingSerialWaitRebalancer.movePlanner.calculateMoves = () => [];
+      missingSerialWaitRebalancer.movePlanner.applyPressureGating =
+        async (moves) => moves;
+
+      await missingSerialWaitRebalancer.rebalance(TriggerType.PERIODIC, {
+        targetReplicaCount: PRIORITY_RECOVERY_REQUIRED_DISTINCT_NODE_COUNT,
+        placementConstraints: {
+          spreadAcrossNodes: true,
+        },
+      });
+
+      t.equal(
+        createdOperationsWithMissingSerialWait.length,
+        TEST_NUMBER.ZERO,
+        TEST_MESSAGE.SQL_TRANSACTIONS_MISSING_SERIAL_WAIT_BLOCKS_OPERATION,
+      );
+
       const readinessService = {
         ...createMockReadinessService(cache),
         getPriorityRecoveryPlanningAnswerBestEffort() {
