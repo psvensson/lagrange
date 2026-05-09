@@ -265,11 +265,9 @@ function buildProjectionReadinessDecision(evidence) {
     recoveryOpen: state !== PROJECTION_READINESS_CONTRACT_STATE.SERVE_READY,
     lanes: allLanes,
     activeGate,
-    reasonCodes: normalizeProjectionReadinessDecisionReasons([
-      ...allLanes.operator.reasonCodes,
-      ...evidence.publicationReasonCodes,
-      ...evidence.priorityRecoveryReasonCodes,
-    ]),
+    reasonCodes: normalizeProjectionReadinessDecisionReasons(
+      allLanes.operator.reasonCodes,
+    ),
   });
 }
 

@@ -13,7 +13,11 @@ import {
 } from '../../src/control-plane/projection-readiness-state.js';
 import {
   CONTROL_PLANE_PUBLICATION_STATUS,
+  PUBLICATION_OWNER_REASON,
 } from '../../src/control-plane/publication-owner-constants.js';
+import {
+  PRIORITY_RECOVERY_BLOCKER_REASON,
+} from '../../src/control-plane/priority-recovery-diagnostics-constants.js';
 import {
   buildStartupAuthoritySnapshotFromPlanningAnswer,
   STARTUP_AUTHORITY_STATE,
@@ -38,6 +42,28 @@ const TEST_PUBLISHED_MEMBERSHIP = Object.freeze({
   requiredAckNodeIds: Object.freeze([TEST_NODE_ID]),
   acknowledgedNodeIds: Object.freeze([TEST_NODE_ID]),
 });
+const TEST_EMPTY_REASON_CODES = Object.freeze([]);
+const TEST_PUBLICATION_DETAIL_REASON_CODES = Object.freeze([
+  PUBLICATION_OWNER_REASON.ACK_COMPLETE,
+  PUBLICATION_OWNER_REASON.PUBLICATION_STATUS_PUBLISHED,
+  PUBLICATION_OWNER_REASON.STREAM_FRESH,
+]);
+const TEST_PRIORITY_RECOVERY_DETAIL_REASON_CODES = Object.freeze([
+  PRIORITY_RECOVERY_BLOCKER_REASON.SERIAL_OPERATION_WAIT,
+]);
+const TEST_PROJECTION_READINESS_REASON_CODE_SET = new Set(
+  Object.values(PROJECTION_READINESS_REASON),
+);
+
+function assertTopLevelProjectionReadinessReasonsAreCanonical(t, readiness) {
+  t.same(
+    readiness.reasonCodes.filter((reasonCode) =>
+      TEST_PROJECTION_READINESS_REASON_CODE_SET.has(reasonCode) !== true,
+    ),
+    TEST_EMPTY_REASON_CODES,
+    'top-level reason codes should use only projection-readiness reasons',
+  );
+}
 
 test('ProjectionReadiness blocks stale local projection revision by lane',
   (t) => {
@@ -65,6 +91,7 @@ test('ProjectionReadiness blocks stale local projection revision by lane',
       true,
       'stale projection should expose a canonical reason',
     );
+    assertTopLevelProjectionReadinessReasonsAreCanonical(t, readiness);
     t.end();
   });
 
@@ -97,6 +124,7 @@ test('ProjectionReadiness keeps publication lag out of repair lane',
       true,
       'publication lag should use the canonical serve-lane reason',
     );
+    assertTopLevelProjectionReadinessReasonsAreCanonical(t, readiness);
     t.end();
   });
 
@@ -137,6 +165,7 @@ test('ProjectionReadiness reports repair-only operator state',
       PROJECTION_READINESS_ACTIVE_GATE_STATE.REPAIR_READY,
       'downstream active gate should expose repair-ready state',
     );
+    assertTopLevelProjectionReadinessReasonsAreCanonical(t, readiness);
     t.end();
   });
 
@@ -145,6 +174,10 @@ test('ProjectionReadiness reports serve readiness only when all lanes close',
     const readiness = buildProjectionReadinessContract({
       dimensions: TEST_READY_DIMENSIONS,
       membershipPublication: TEST_PUBLISHED_MEMBERSHIP,
+      priorityControlPlaneRecovery: {
+        active: false,
+        reasonCodes: TEST_PRIORITY_RECOVERY_DETAIL_REASON_CODES,
+      },
     });
 
     t.equal(
@@ -160,6 +193,27 @@ test('ProjectionReadiness reports serve readiness only when all lanes close',
       readiness.activeGate.state,
       PROJECTION_READINESS_ACTIVE_GATE_STATE.SERVE_READY,
       'downstream active gate should expose serve readiness',
+    );
+    t.same(
+      readiness.reasonCodes,
+      TEST_EMPTY_REASON_CODES,
+      'serve-ready contract should not expose top-level blocker reasons',
+    );
+    assertTopLevelProjectionReadinessReasonsAreCanonical(t, readiness);
+    t.same(
+      readiness.evidence.publicationReasonCodes,
+      TEST_PUBLICATION_DETAIL_REASON_CODES,
+      'publication detail should remain in evidence reason codes',
+    );
+    t.same(
+      readiness.evidence.priorityRecoveryReasonCodes,
+      TEST_PRIORITY_RECOVERY_DETAIL_REASON_CODES,
+      'priority detail should remain in evidence reason codes',
+    );
+    t.same(
+      readiness.priorityRecovery.reasonCodes,
+      TEST_PRIORITY_RECOVERY_DETAIL_REASON_CODES,
+      'priority detail should remain nested under priority recovery',
     );
     t.end();
   });
