@@ -39,7 +39,9 @@ import {
   PRIORITY_RECOVERY_CLOSURE_WITNESS_STATE,
 } from '../../../src/control-plane/priority-recovery-snapshot.js';
 import {
+  EDGE_ID,
   EDGE_STATE,
+  REASON,
   buildTopologyConvergenceGraphFromArtifacts,
   buildTopologyConvergenceOwnerPresentation,
 } from '../../../src/diagnostics/topology-convergence-graph.js';
@@ -365,13 +367,6 @@ const FAILURE_ARTIFACT_OWNER_CONTRACT_ACTIONABLE_STATES = Object.freeze(
     EDGE_STATE.TERMINAL_FAILED,
   ]),
 );
-const FAILURE_ARTIFACT_OWNER_CONTRACT_ABSENT_EDGE_ID = 'absent';
-const FAILURE_ARTIFACT_OWNER_CONTRACT_PUBLICATION_EDGE_ID =
-  'publication_ack_convergence';
-const FAILURE_ARTIFACT_OWNER_CONTRACT_PENDING_ACK_REASON =
-  'pending_acks_present';
-const FAILURE_ARTIFACT_OWNER_CONTRACT_UNKNOWN_ROOT_CAUSE_CLASS = 'unknown';
-const FAILURE_ARTIFACT_OWNER_CONTRACT_UNKNOWN_REASON = 'unknown';
 const FAILURE_ARTIFACT_OWNER_CONTRACT_EMPTY_SUMMARY = Object.freeze({});
 const FAILURE_ARTIFACT_STALE_PUBLICATION_REASON_SET = Object.freeze(new Set([
   'control_plane_publication_pending',
@@ -2150,7 +2145,6 @@ function buildFailureArtifactOwnerContractPresentation({
 function hasActionableOwnerContractWitness(witness) {
   return (
     isRecord(witness) &&
-    witness.edgeId !== FAILURE_ARTIFACT_OWNER_CONTRACT_ABSENT_EDGE_ID &&
     FAILURE_ARTIFACT_OWNER_CONTRACT_ACTIONABLE_STATES.has(witness.state)
   );
 }
@@ -2159,14 +2153,7 @@ function resolveOwnerContractDominantReason(ownerContractPresentation) {
   if (isPendingAckOwnerContractWitness(ownerContractPresentation) !== true) {
     return null;
   }
-  const dominantReason = String(
-    ownerContractPresentation?.dominantWitness?.dominantReason || EMPTY_STRING,
-  ).trim();
-  return dominantReason.length > ZERO &&
-    dominantReason !== FAILURE_ARTIFACT_OWNER_CONTRACT_ABSENT_EDGE_ID &&
-    dominantReason !== FAILURE_ARTIFACT_OWNER_CONTRACT_UNKNOWN_REASON ?
-    dominantReason :
-    null;
+  return REASON.PENDING_ACKS;
 }
 
 function resolveOwnerContractRootCauseClass(ownerContractPresentation) {
@@ -2177,7 +2164,7 @@ function resolveOwnerContractRootCauseClass(ownerContractPresentation) {
     ownerContractPresentation?.dominantWitness?.rootCauseClass || EMPTY_STRING,
   ).trim();
   return rootCauseClass.length > ZERO &&
-    rootCauseClass !== FAILURE_ARTIFACT_OWNER_CONTRACT_UNKNOWN_ROOT_CAUSE_CLASS ?
+    rootCauseClass !== ROOT_CAUSE_CLASS_UNKNOWN ?
     rootCauseClass :
     null;
 }
@@ -2186,10 +2173,9 @@ function isPendingAckOwnerContractWitness(ownerContractPresentation) {
   const dominantWitness = ownerContractPresentation?.dominantWitness;
   return (
     isRecord(dominantWitness) &&
-    dominantWitness.edgeId ===
-      FAILURE_ARTIFACT_OWNER_CONTRACT_PUBLICATION_EDGE_ID &&
+    dominantWitness.edgeId === EDGE_ID.PUBLICATION_ACK_CONVERGENCE &&
     dominantWitness.dominantReason ===
-      FAILURE_ARTIFACT_OWNER_CONTRACT_PENDING_ACK_REASON
+      REASON.PENDING_ACKS
   );
 }
 
@@ -2298,9 +2284,10 @@ function buildFailureArtifact({
     finalConsistencyFailure.rootCauseClass :
     quiescenceFailure ?
       quiescenceFailure.rootCauseClass :
-      failureBarrier?.rootCauseClass ?
-        failureBarrier.rootCauseClass :
-        ownerContractRootCauseClass ||
+      ownerContractRootCauseClass ?
+        ownerContractRootCauseClass :
+        failureBarrier?.rootCauseClass ?
+          failureBarrier.rootCauseClass :
           resolveRootCauseClass({
             rootCauseClass: existingFailure.rootCauseClass,
             dominantReason,

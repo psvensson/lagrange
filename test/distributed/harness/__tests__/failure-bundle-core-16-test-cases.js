@@ -48,7 +48,7 @@ export function registerFailureBundleCore16Tests(context) {
       const ACTIVE_GATE_STATE_TIMED_OUT = 'timed_out';
       const ACTIVE_GATE_TERMINAL_REASON = 'stalled_no_progress';
       const SCENARIO_ERROR =
-        'Not all nodes reached ACTIVE state within 120000ms';
+        'Restarted node did not become recovery-ready within 120000ms';
       const PENDING_ACK_BLOCKER_ALIAS = 'pending_ack_nodes';
       const PENDING_ACK_OWNER_REASON = 'pending_acks_present';
       const PUBLICATION_PENDING_OWNER_REASON = 'publication_pending';
@@ -109,10 +109,9 @@ export function registerFailureBundleCore16Tests(context) {
                 missingPublishedNodeIds: [MISSING_NODE_ONE, MISSING_NODE_TWO],
                 missingPublishedCount: MISSING_PUBLISHED_COUNT,
                 publicationPending: true,
-                prioritySpreadPending: true,
+                prioritySpreadPending: false,
                 recoveryProtocolState: RECOVERY_PROTOCOL_PUBLICATION_PENDING,
                 priorityRecoveryReasonCodes: [
-                  PRIORITY_SPREAD_REASON,
                   GENERIC_PUBLICATION_REASON,
                 ],
                 publicationRecoveryGate: {
@@ -127,16 +126,14 @@ export function registerFailureBundleCore16Tests(context) {
                   ],
                   missingPublishedCount: MISSING_PUBLISHED_COUNT,
                   publicationPending: true,
-                  prioritySpreadPending: true,
+                  prioritySpreadPending: false,
                   recoveryProtocolState: RECOVERY_PROTOCOL_PUBLICATION_PENDING,
                   reasons: [
-                    PRIORITY_SPREAD_REASON,
                     GENERIC_PUBLICATION_REASON,
                     MISSING_NODE_REASON_ONE,
                     MISSING_NODE_REASON_TWO,
                   ],
                   reasonCodes: [
-                    PRIORITY_SPREAD_REASON,
                     GENERIC_PUBLICATION_REASON,
                     MISSING_NODE_REASON_ONE,
                     MISSING_NODE_REASON_TWO,
@@ -174,9 +171,9 @@ export function registerFailureBundleCore16Tests(context) {
                   pendingAckCount: PENDING_ACK_COUNT,
                   missingPublishedCount: MISSING_PUBLISHED_COUNT,
                   gateReasons: [],
-                  prioritySpreadSatisfied: false,
-                  prioritySpreadGap: MISSING_PUBLISHED_COUNT + ONE_COUNT,
-                  priorityBlockedPartitionCount: ONE_COUNT,
+                  prioritySpreadSatisfied: true,
+                  prioritySpreadGap: ZERO_COUNT,
+                  priorityBlockedPartitionCount: ZERO_COUNT,
                   blockers: [
                     INACTIVE_NODE_BLOCKER,
                     SNAPSHOT_COVERAGE_BLOCKER,
@@ -238,6 +235,10 @@ export function registerFailureBundleCore16Tests(context) {
       assert.equal(
         scenarioBundle.diagnostics.failure.rootCauseClass,
         ROOT_CAUSE_CLASS_TOPOLOGY,
+      );
+      assert.equal(
+        scenarioBundle.diagnostics.failure.failureBarrier.rootCauseClass,
+        ROOT_CAUSE_CLASS_STARTUP,
       );
       assert.equal(
         scenarioBundle.diagnostics.failure.reasonCounts[

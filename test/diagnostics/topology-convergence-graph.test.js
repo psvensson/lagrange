@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {
   EDGE_STATE,
+  buildTopologyConvergenceDecisionTable,
   buildTopologyConvergenceOwnerPresentation,
   buildTopologyConvergenceGraph,
   buildTopologyConvergenceGraphFromArtifacts,
@@ -49,6 +50,7 @@ const EDGE_SNAPSHOT_COVERAGE = 'active_gate_snapshot_coverage';
 const EDGE_READINESS = 'readiness_startup_support';
 const EDGE_TOP_FAILURE_REASONS = 'top_failure_reasons';
 const OWNER_TOPOLOGY_PUBLICATION = 'topology_publication_owner';
+const BOUNDARY_WORKFLOW_PROGRESS = 'workflow_progress';
 const ARTIFACT_PATH_20260507 =
   'test-output/reports/.playback/rolling-restart-after-bounded-retryable-seed-contact-probe-20260507T072145Z/rolling-restart/failure-bundle.json';
 const REPORT_ARTIFACT_PATH_20260507 =
@@ -56,6 +58,9 @@ const REPORT_ARTIFACT_PATH_20260507 =
 const PUBLICATION_ACK_PENDING_STATUS = 'ACK_PENDING';
 const PUBLICATION_PENDING_REASON = 'publication_pending';
 const PENDING_ACKS_PRESENT_REASON = 'pending_acks_present';
+const PRIORITY_RECOVERY_BLOCKED_REASON = 'priority_recovery_progress_blocked';
+const ARTIFACT_PRIORITY_RECOVERY_OWNER = 'artifact_priority_owner';
+const ARTIFACT_PRIORITY_RECOVERY_BOUNDARY = 'artifact_priority_boundary';
 
 function buildFixtureFailureBundle() {
   return {
@@ -181,6 +186,10 @@ describe('TopologyConvergenceGraph', () => {
     assert.equal(graph.scenario, FIXTURE_SCENARIO);
     assert.equal(graph.summary.firstFrontierEdgeId, EDGE_PRIORITY_RECOVERY);
     assert.equal(findEdge(graph.edges, EDGE_PRIORITY_RECOVERY).state, EDGE_STATE.BLOCKED);
+    assert.equal(
+      graph.summary.firstFrontierReason,
+      PRIORITY_RECOVERY_BLOCKED_REASON,
+    );
     assert.equal(findEdge(graph.edges, EDGE_SNAPSHOT_COVERAGE).state, EDGE_STATE.BLOCKED);
     assert.equal(findEdge(graph.edges, EDGE_READINESS).state, EDGE_STATE.TERMINAL_FAILED);
     assert.deepEqual(
@@ -235,6 +244,39 @@ describe('TopologyConvergenceGraph', () => {
     );
     assert.equal(dominantWitness.source.pendingAckCount, ONE_COUNT);
     assertNoNullOrUndefined(graph);
+  });
+
+  it('keeps the decision table deterministic after artifact-specific owner evidence', () => {
+    const fixture = buildFixtureFailureBundle();
+    const graph = buildTopologyConvergenceGraphFromArtifacts({
+      failureBundle: {
+        ...fixture,
+        publicationConvergence: {
+          ...fixture.publicationConvergence,
+          priorityRecoveryProgressSummary: {
+            dominantWitness: {
+              currentOwner: ARTIFACT_PRIORITY_RECOVERY_OWNER,
+              blockingBoundary: ARTIFACT_PRIORITY_RECOVERY_BOUNDARY,
+            },
+            priorityRecoveryProgressClasses:
+              fixture.publicationConvergence.activeGate.progress
+                .priorityRecoveryProgressClasses,
+            priorityBlockedPartitionCount: ONE_COUNT,
+          },
+        },
+      },
+    });
+    const decisionTable = buildTopologyConvergenceDecisionTable();
+    const priorityRecoveryRow = decisionTable.transitions.find((row) =>
+      row.edgeId === EDGE_PRIORITY_RECOVERY,
+    );
+
+    assert.equal(
+      findEdge(graph.edges, EDGE_PRIORITY_RECOVERY).owner,
+      ARTIFACT_PRIORITY_RECOVERY_OWNER,
+    );
+    assert.equal(priorityRecoveryRow.owner, OWNER_OPERATION_WORKFLOW);
+    assert.equal(priorityRecoveryRow.boundary, BOUNDARY_WORKFLOW_PROGRESS);
   });
 
   it('converges to an empty frontier when all blocker edges are satisfied', () => {

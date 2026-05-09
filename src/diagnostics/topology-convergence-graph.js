@@ -197,8 +197,6 @@ const DECISION_INPUT = Object.freeze({
   TOP_REASONS: 'topReasons',
 });
 
-let latestDecisionTableOverridesByEdgeId = Object.freeze({});
-
 const DECISION_CONDITION = Object.freeze({
   PUBLICATION_NOT_PUBLISHED: 'publication status is not PUBLISHED',
   PUBLICATION_PENDING_ACKS: 'pending acknowledgement count is positive',
@@ -452,7 +450,7 @@ function buildTopologyConvergenceGraph(input = {}) {
     ...edge,
     sourceOrder: index + SOURCE_ORDER_BASE,
   }));
-  latestDecisionTableOverridesByEdgeId = buildDecisionTableOverrides(edges);
+  const graphEdgeDeclarationsByEdgeId = buildGraphEdgeDeclarations(edges);
   const frontier = computeFrontier(edges);
   const nextExpectedFrontier = computeNextExpectedFrontier(edges, frontier);
   const ownerPresentation = buildTopologyConvergenceOwnerPresentation({
@@ -486,13 +484,13 @@ function buildTopologyConvergenceGraph(input = {}) {
       return {
         ...node,
         owner: firstText(
-          latestDecisionTableOverridesByEdgeId[
+          graphEdgeDeclarationsByEdgeId[
             EDGE_ID.PRIORITY_RECOVERY_PARTITION_PROGRESS
           ]?.owner,
           node.owner,
         ),
         boundary: firstText(
-          latestDecisionTableOverridesByEdgeId[
+          graphEdgeDeclarationsByEdgeId[
             EDGE_ID.PRIORITY_RECOVERY_PARTITION_PROGRESS
           ]?.boundary,
           node.boundary,
@@ -1006,12 +1004,12 @@ function resolvePriorityRecoveryState(priorityRecoveryEvidence, reasons) {
     return EDGE_STATE.SATISFIED;
   }
   if (priorityRecoveryEvidence.priorityBlockedPartitionCount > SOURCE_ORDER_BASE) {
+    reasons.push(REASON.PRIORITY_RECOVERY_PROGRESS_BLOCKED);
     if (priorityRecoveryEvidence.semanticStateIds.includes(
       PRIORITY_RECOVERY_SEMANTIC_RECOVERING_IN_FLIGHT,
     )) {
       reasons.push(REASON.PRIORITY_RECOVERY_RETRYABLE);
     }
-    reasons.push(REASON.PRIORITY_RECOVERY_PROGRESS_BLOCKED);
     return EDGE_STATE.BLOCKED;
   }
   if (priorityRecoveryEvidence.semanticStateIds.includes(
@@ -1339,14 +1337,8 @@ function glossaryEntries(values) {
 function cloneDecisionTableRows() {
   return DECISION_TABLE_ROWS.map((row) => ({
     edgeId: row.edgeId,
-    owner: firstText(
-      latestDecisionTableOverridesByEdgeId[row.edgeId]?.owner,
-      row.owner,
-    ),
-    boundary: firstText(
-      latestDecisionTableOverridesByEdgeId[row.edgeId]?.boundary,
-      row.boundary,
-    ),
+    owner: row.owner,
+    boundary: row.boundary,
     evidenceInputs: [...row.evidenceInputs],
     outcomes: row.outcomes.map((outcome) => ({
       condition: outcome.condition,
@@ -1356,15 +1348,15 @@ function cloneDecisionTableRows() {
   }));
 }
 
-function buildDecisionTableOverrides(edges) {
-  const overrides = {};
+function buildGraphEdgeDeclarations(edges) {
+  const declarations = {};
   for (const edge of edges) {
-    overrides[edge.id] = {
+    declarations[edge.id] = {
       owner: edge.owner,
       boundary: edge.boundary,
     };
   }
-  return Object.freeze(overrides);
+  return Object.freeze(declarations);
 }
 
 function buildTopologyConvergenceOwnerWitness(edge) {
@@ -1403,16 +1395,6 @@ function buildAbsentTopologyConvergenceOwnerWitness() {
 }
 
 function selectOwnerWitnessDominantReason(edge) {
-  const sourceDominantReason = textOrAbsent(
-    edge.source?.[SOURCE_FIELD.DOMINANT_REASON],
-  );
-  if (
-    edge.state !== EDGE_STATE.SATISFIED &&
-    sourceDominantReason !== ABSENT_VALUE &&
-    sourceDominantReason !== UNKNOWN_VALUE
-  ) {
-    return sourceDominantReason;
-  }
   const primaryReason = arrayOrEmpty(edge.reasons).find((reason) =>
     OWNER_SUPPORTING_REASON_SET.has(reason) !== true,
   );
@@ -1429,6 +1411,7 @@ function textOrAbsent(value) {
 export {
   EDGE_STATE,
   EDGE_ID,
+  REASON,
   buildTopologyConvergenceGraph,
   buildTopologyConvergenceDecisionTable,
   buildTopologyConvergenceGlossary,
