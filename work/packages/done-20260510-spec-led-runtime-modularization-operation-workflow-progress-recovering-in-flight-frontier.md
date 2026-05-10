@@ -50,7 +50,8 @@
     ]
   },
   "predecessor": "work/packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-architecture-gap.md",
-  "closed": "2026-05-10"
+  "closed": "2026-05-10",
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -300,3 +301,9 @@ snapshot coverage residual, not repeat this workflow-progress repair.
   `sql_write_operations-p1` dispatch-pending repair as active next work. This
   closure updates the package, sprint, and current-blocker handoff to the fresh
   `startup_active_gate_owner / snapshot_coverage` residual.
+
+## Commit And Push Ledger
+
+1. Focused package commit: `11532520`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes
