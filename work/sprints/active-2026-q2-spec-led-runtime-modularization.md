@@ -8,32 +8,33 @@ the representative gate before companion cleanup or broad successor work.
 ## Recent Package Snapshot
 
 Recently completed package:
-`work/packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-architecture-gap.md`.
+`work/packages/done-20260510-spec-led-runtime-modularization-operation-workflow-progress-recovering-in-flight-frontier.md`.
 
-**Package status: CLOSED / DONE ARCHITECTURE-GAP RUNTIME OWNER PACKAGE**
+**Package status: CLOSED / DONE REPRESENTATIVE FRONTIER CLOSURE**
 
 Closed owner boundary:
-`startup_active_gate_owner / snapshot_coverage_architecture_gap`.
+`operation_workflow_owner / workflow_progress`.
 
-Current state: implementation froze the BootstrapRequestOwner
-startup-complete stale-evidence contract: bootstrap-join authority must be
-available, the snapshot must not be draining,
-`BOOTSTRAP_PHASE_INCOMPLETE` must be present, and every stale reason must belong
-to the allowed startup-complete set (`BOOTSTRAP_PHASE_INCOMPLETE`,
-`SQL_ENGINE_UNAVAILABLE`, `BOOTSTRAP_NOT_READY`, and
-`PRIORITY_CONTROL_PLANE_RECOVERY_PENDING`). The focused cascade fixture covers
-all four readiness/budget reasons, and the existing phase-only fixture remains
-admitted. Representative rolling restart remains non-green but reduced:
-contact-seed readiness no longer dominates the top failure reasons, which
-migrated to `priority_recovery_workflow_progress_event_driven`, while causal
-analysis still reports `widen_architecture_work / architecture_gap` with
-dominant `active_gate_snapshot_coverage_incomplete`.
+Current state: the active-gate architecture-gap package is closed and pushed.
+The recovering-in-flight workflow-progress package repaired the focused direct
+owner snapshot re-entry so dispatch-pending owner builds now enqueue canonical
+wake work. The fresh representative rerun remains non-green but migrated away
+from the direct workflow-progress repair target: active nodes are `5/5`,
+snapshot coverage is `3/5`, `priorityRecoveryProgressSummary` is absent, and
+causal analysis no longer reports `priority_recovery_event_wait`. The next
+owner boundary is `startup_active_gate_owner / snapshot_coverage`.
 
 Active and queued work:
-No active package is open after the active-gate snapshot coverage architecture-gap
+No active package is open after the recovering-in-flight workflow-progress
 package closed to done. Do not treat
-`work/packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-architecture-gap.md`
+`work/packages/done-20260510-spec-led-runtime-modularization-operation-workflow-progress-recovering-in-flight-frontier.md`
 as current active work.
+
+Recently completed workflow-progress package:
+`work/packages/done-20260510-spec-led-runtime-modularization-operation-workflow-progress-recovering-in-flight-frontier.md`.
+
+Recently completed active-gate architecture-gap package:
+`work/packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-architecture-gap.md`.
 
 Latest closed causal-analysis package:
 `work/packages/done-20260510-spec-led-runtime-modularization-high-level-causal-analysis-infrastructure.md`.
@@ -49,15 +50,12 @@ old diagnostics schema aliases).
 Latest closed proof package:
 `work/packages/done-20260510-spec-led-runtime-modularization-representative-green-proof-or-next-blocker.md`.
 
-Next proof surface: the BootstrapRequestOwner stale readiness/contact-seed
-cascade fixture and runtime owner change are complete for the recently closed
-package. The representative rolling restart remains non-green but reduced, and
-contact-seed readiness no longer dominates the top failure reasons. Continue
-from the reduced frontier by inspecting `operation_workflow_owner /
-workflow_progress` for `priority_recovery_workflow_progress_event_driven` and
-recovering-in-flight priority partitions, while topology/causal analysis may
-still report the first active-gate snapshot coverage frontier. Diagnostics schema
-alias cleanup remains deferred.
+Next proof surface: use
+`test-output/reports/rolling-restart-spec-led-runtime-modularization-operation-workflow-progress-recovering-in-flight.report.json`
+to activate exactly one successor package for
+`startup_active_gate_owner / snapshot_coverage`. Do not repeat the completed
+`sql_write_operations-p1` dispatch-pending workflow-progress repair. Diagnostics
+schema alias cleanup remains deferred.
 
 ## Goal
 
@@ -129,6 +127,7 @@ the contract and proof ladder are stable.
 23. [Active Gate Snapshot Coverage Reachability Frontier](../packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md)
 24. [High-Level Causal-Analysis Infrastructure](../packages/done-20260510-spec-led-runtime-modularization-high-level-causal-analysis-infrastructure.md)
 25. [Active Gate Report Schema Alias Deletion](../packages/todo-20260509-spec-led-runtime-modularization-active-gate-report-schema-alias-deletion.md)
+26. [Operation Workflow Progress Recovering-In-Flight Frontier](../packages/done-20260510-spec-led-runtime-modularization-operation-workflow-progress-recovering-in-flight-frontier.md)
 
 ## Model Fit Strategy
 
@@ -176,9 +175,14 @@ The sprint now separates broad orchestration from Spark-safe leaf work.
     workflow progress, publication convergence, or priority recovery unless the
     focused fixture proves regression.
 11. A package intended for `gpt-5.3-codex-spark` must keep `Scope shape:
-    leaf-slice`, list owned and forbidden files, freeze decisions, name
-    escalation triggers, and provide focused proof.
-12. Representative proof may classify a leaf slice as closed, reduced,
+     leaf-slice`, list owned and forbidden files, freeze decisions, name
+     escalation triggers, and provide focused proof.
+12. `Operation Workflow Progress Recovering-In-Flight Frontier` was a
+    representative frontier closure package intended for `gpt-5.3-codex`. It
+    closed the reduced `operation_workflow_owner / workflow_progress` residual
+    for recovering-in-flight dispatch-pending priority work and must not be
+    repeated unless a focused fixture proves direct regression.
+13. Representative proof may classify a leaf slice as closed, reduced,
     migrated, or same-frontier. It must not expand implementation scope inside
     the leaf package.
 

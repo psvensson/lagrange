@@ -5,22 +5,34 @@
   "package": "none",
   "status": "none",
   "scenario": "spec-led-runtime-modularization",
-  "artifact": "test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability.report.json",
-  "playback": "test-output/reports/.playback/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability/rolling-restart/",
-  "owner": "operation_workflow_owner",
-  "boundary": "workflow_progress",
-  "dominantReason": "priority_recovery_workflow_progress_event_driven",
-  "currentState": "No active package is open. The active-gate snapshot coverage architecture-gap package closed to done in commit 3cefd52d after reducing the contact-seed readiness cascade. The representative artifact remains non-green with the first topology frontier still reported as active_gate_snapshot_coverage, but the next expected/retryable edge is operation_workflow_owner / workflow_progress with priority_recovery_workflow_progress_event_driven and recovering-in-flight priority partitions.",
-  "nextAction": "When work resumes, activate exactly one successor package for operation_workflow_owner / workflow_progress and priority_recovery_workflow_progress_event_driven. Do not reopen diagnostics schema alias cleanup or treat the done active-gate package as active.",
+  "artifact": "test-output/reports/rolling-restart-spec-led-runtime-modularization-operation-workflow-progress-recovering-in-flight.report.json",
+  "playback": "test-output/reports/.playback/rolling-restart-spec-led-runtime-modularization-operation-workflow-progress-recovering-in-flight/rolling-restart/",
+  "owner": "startup_active_gate_owner",
+  "boundary": "snapshot_coverage",
+  "dominantReason": "active_gate_timed_out",
+  "currentState": "No active package is open. The recovering-in-flight workflow-progress package closed the focused direct owner re-entry residual: dispatch-pending SENDING/pending owner snapshot builds now enqueue canonical wake/replay work. The fresh representative artifact remains non-green with activeNodeCount=5/5, snapshotCoverage=3/5, priorityRecoveryProgressSummary absent, closureWitnessClass startup_active_publication_lag, and only class-only recovering_in_flight priority evidence for sql_transactions-p1 and sql_write_operations-p1. Topology and causal analysis now point the next owner boundary at startup_active_gate_owner / snapshot_coverage.",
+  "nextAction": "When work resumes, activate exactly one successor package for startup_active_gate_owner / snapshot_coverage using the fresh recovering-in-flight report. Do not repeat the completed sql_write_operations-p1 dispatch-pending workflow-progress repair and do not reopen diagnostics schema alias cleanup.",
   "proof": [
-    "git --no-pager diff --check",
-    "npm run work:validate"
+    "node test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js",
+    "node test/rebalancer/operation-workflow-owner-adapter.test.js",
+    "node test/control-plane/priority-recovery-snapshot-operation-owner-outcome.test.js",
+    "node scripts/check-guideline-literals.js src/rebalancer/operation-workflow-owner.js test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js",
+    "node scripts/check-guideline-decision-boundaries.js src/rebalancer/operation-workflow-owner.js test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js",
+    "npm run audit:runtime-grammar:file -- src/rebalancer/operation-workflow-owner.js test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js",
+    "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-operation-workflow-progress-recovering-in-flight.report.json",
+    "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-spec-led-runtime-modularization-operation-workflow-progress-recovering-in-flight.report.json",
+    "npm run work:validate",
+    "git diff --check -- package-owned files"
   ],
   "touchedFiles": [
+    "src/rebalancer/operation-workflow-owner.js",
+    "test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js",
+    "work/model-ledger.jsonl",
+    "work/packages/done-20260510-spec-led-runtime-modularization-operation-workflow-progress-recovering-in-flight-frontier.md",
+    "work/sprints/active-2026-q2-spec-led-runtime-modularization.md",
     "work/sprints/current-blocker.json",
-    "work/sprints/current-blocker.md",
-    "work/sprints/active-2026-q2-spec-led-runtime-modularization.md"
+    "work/sprints/current-blocker.md"
   ],
   "modelFit": {},
-  "predecessor": "work/packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-architecture-gap.md"
+  "predecessor": "work/packages/done-20260510-spec-led-runtime-modularization-operation-workflow-progress-recovering-in-flight-frontier.md"
 }

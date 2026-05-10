@@ -183,6 +183,33 @@ function buildPriorityRecoveryDispatchPendingOwnerReentryContext(snapshot) {
   });
 }
 
+function normalizePriorityRecoveryDispatchPendingOwnerSnapshot(
+  owner,
+  snapshot,
+  operation,
+) {
+  if (!shouldReenterOperationWorkflowOwnerDispatchPending(
+    owner,
+    snapshot,
+    operation,
+  )) {
+    return snapshot;
+  }
+  const normalizedSnapshot =
+    normalizePriorityRecoveryDispatchPendingDecisionSnapshot(
+      snapshot,
+      owner.operationWorkflowOwnerAdapter.decide(
+        operation,
+        buildPriorityRecoveryDispatchPendingOwnerReentryContext(snapshot),
+      ),
+    );
+  owner.schedulePriorityRecoveryDispatchPendingReentry(
+    normalizedSnapshot,
+    [operation],
+  );
+  return normalizedSnapshot;
+}
+
 class OperationWorkflowOwner extends OperationWorkflowOwnerSegment7 {
   constructor(options) {
     super(options);
@@ -296,19 +323,10 @@ class OperationWorkflowOwner extends OperationWorkflowOwnerSegment7 {
         snapshot,
         operations,
       );
-    if (!shouldReenterOperationWorkflowOwnerDispatchPending(
+    return normalizePriorityRecoveryDispatchPendingOwnerSnapshot(
       this,
       snapshot,
       operation,
-    )) {
-      return snapshot;
-    }
-    return normalizePriorityRecoveryDispatchPendingDecisionSnapshot(
-      snapshot,
-      this.operationWorkflowOwnerAdapter.decide(
-        operation,
-        buildPriorityRecoveryDispatchPendingOwnerReentryContext(snapshot),
-      ),
     );
   }
 }

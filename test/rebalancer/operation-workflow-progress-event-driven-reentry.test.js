@@ -26,8 +26,10 @@ import {
 import {createMockCache} from './test-helpers.js';
 
 const TEST_PARTITION_ID = 'sql_transactions-p1';
+const TEST_SQL_WRITE_PARTITION_ID = 'sql_write_operations-p1';
 const TEST_OPERATION_ID = 'event-driven-progress-operation';
 const TEST_REPLICA_ID = 'sql_transactions-p1-r4';
+const TEST_SQL_WRITE_REPLICA_ID = 'sql_write_operations-p1-r4';
 const TEST_OBSERVER_NODE_ID = 'node-observer';
 const TEST_SOURCE_NODE_ID = 'node-source';
 const TEST_TARGET_NODE_ID = 'node-target';
@@ -57,6 +59,9 @@ const TEST_REENTRY_TEST_NAME =
 const TEST_PENDING_REENTRY_TEST_NAME =
   'persisted-not-dispatched PENDING workflow progress re-enters through ' +
   'the operation owner outcome';
+const TEST_DIRECT_BUILD_REENTRY_TEST_NAME =
+  'direct owner snapshot build enqueues dispatch-pending workflow progress ' +
+  're-entry';
 
 function buildEventDrivenOperation(overrides = {}) {
   return Object.freeze({
@@ -520,6 +525,70 @@ test(TEST_PENDING_REENTRY_TEST_NAME, async (t) => {
       deferredTimers.length,
       NUM.ONE,
       'the focused PENDING witness should arm the bounded handoff verification lane',
+    );
+  } finally {
+    Date.now = originalDateNow;
+    await coordinator.shutdown();
+  }
+});
+
+test(TEST_DIRECT_BUILD_REENTRY_TEST_NAME, async (t) => {
+  const deliveries = [];
+  const deferredTimers = [];
+  const operation = buildEventDrivenOperation({
+    partitionId: TEST_SQL_WRITE_PARTITION_ID,
+    entityId: TEST_SQL_WRITE_PARTITION_ID,
+    replicaId: TEST_SQL_WRITE_REPLICA_ID,
+  });
+  const operationRow = buildEventDrivenOperationRow({
+    partition_id: TEST_SQL_WRITE_PARTITION_ID,
+    entity_id: TEST_SQL_WRITE_PARTITION_ID,
+    replica_id: TEST_SQL_WRITE_REPLICA_ID,
+  });
+  const coordinator = createEventDrivenCoordinator(
+    deliveries,
+    deferredTimers,
+    operationRow,
+  );
+  const originalDateNow = Date.now;
+  Date.now = () => TEST_CAPTURED_AT_MS;
+
+  try {
+    coordinator.initialize();
+    const snapshot =
+      coordinator.workflowOwner.buildPriorityRecoveryDecisionSnapshotForOperations(
+        operation.partitionId,
+        [operation],
+        buildEventDrivenPlanningSnapshot(),
+      );
+    await new Promise((resolve) => {
+      setTimeout(resolve, NUM.ZERO);
+    });
+
+    t.equal(
+      snapshot?.partitionId,
+      operation.partitionId,
+      'the focused fixture should preserve the sql_write_operations partition',
+    );
+    t.equal(
+      snapshot?.operationOwnerObservation?.outcome,
+      OPERATION_WORKFLOW_OUTCOME_VALUES.WAKE_REMOTE_OWNER,
+      'direct owner snapshot builds should carry the remote wake outcome',
+    );
+    t.equal(
+      snapshot?.operationOwnerObservation?.requestedOwnerAction,
+      PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.ADVANCE_EXISTING_OPERATION,
+      'direct owner snapshots should keep owner advancement requested',
+    );
+    t.equal(
+      deliveries.length,
+      NUM.ONE,
+      'direct owner snapshot builds should enqueue one owner wake',
+    );
+    t.equal(
+      deliveries[NUM.ZERO]?.target,
+      TEST_REPLICA_DISPATCH_TARGET,
+      'direct owner snapshot builds should use the canonical dispatch ingress',
     );
   } finally {
     Date.now = originalDateNow;
