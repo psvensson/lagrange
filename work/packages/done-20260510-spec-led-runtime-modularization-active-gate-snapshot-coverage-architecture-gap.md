@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-10",
   "scenario": "spec-led-runtime-modularization",
   "artifact": "test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability.report.json",
@@ -24,7 +24,7 @@
   "touchedFiles": [
     "src/bootstrap/owners/bootstrap-request-owner.js",
     "test/bootstrap/bootstrap-request-admission-precheck.test.js",
-    "work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-architecture-gap.md",
+    "work/packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-architecture-gap.md",
     "work/model-ledger.jsonl",
     "work/sprints/active-2026-q2-spec-led-runtime-modularization.md",
     "work/sprints/current-blocker.json",
@@ -41,7 +41,9 @@
       "readiness or budget cascade cannot be represented through one startup active-gate owner contract"
     ]
   },
-  "predecessor": "work/packages/done-20260510-spec-led-runtime-modularization-high-level-causal-analysis-infrastructure.md"
+  "predecessor": "work/packages/done-20260510-spec-led-runtime-modularization-high-level-causal-analysis-infrastructure.md",
+  "closed": "2026-05-10",
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -127,7 +129,7 @@ readiness and contact-seed budgets cascade.
 - [x] Fix subagent recorded or explicitly not needed:
       Agent rolling-restart-causal-closure-fix (`e09afd66-25ba-57b5-ac3c-d2f621b9fa23`) fixed `work/packages/done-20260510-spec-led-runtime-modularization-high-level-causal-analysis-infrastructure.md`.
 - [x] Implementation subagent recorded:
-      Agent rolling-restart-active-gate-gap-impl (`27e32982-561d-5246-9c9a-ba1d5d442726`) implemented `work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-architecture-gap.md`.
+      Agent rolling-restart-active-gate-gap-impl (`27e32982-561d-5246-9c9a-ba1d5d442726`) implemented `work/packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-architecture-gap.md`.
 
 ## Implementation Handoff
 
@@ -168,3 +170,8 @@ analysis still keep the first active-gate frontier at
 5. PASS — `npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability.report.json` reports `widen_architecture_work / architecture_gap`, dominant `active_gate_snapshot_coverage_incomplete`, classes `active_gate_snapshot_coverage_incomplete`, `priority_recovery_event_wait`, `startup_readiness_blocked`, and `budget_timeout_cascade`.
 6. PASS — `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability.report.json` reports first frontier `startup_active_gate_owner / snapshot_coverage`; next expected frontier includes `operation_workflow_owner / workflow_progress` with `priority_recovery_event_driven_wait`.
 
+## Commit And Push Ledger
+
+1. Focused package commit: `3cefd52d`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes

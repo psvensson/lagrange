@@ -1,44 +1,26 @@
 {
   "schema": "current-blocker-v1",
-  "generatedBy": "scripts/work-tracker.js",
+  "generatedBy": "manual closure handoff; scripts/work-tracker.js cannot express no-active-package",
   "sprint": "work/sprints/active-2026-q2-spec-led-runtime-modularization.md",
-  "package": "work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-architecture-gap.md",
-  "status": "active",
+  "package": "none",
+  "status": "none",
   "scenario": "spec-led-runtime-modularization",
   "artifact": "test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability.report.json",
   "playback": "test-output/reports/.playback/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability/rolling-restart/",
-  "owner": "startup_active_gate_owner",
-  "boundary": "snapshot_coverage_architecture_gap",
-  "dominantReason": "active_gate_snapshot_coverage_incomplete",
-  "currentState": "Implementation froze startup-complete stale-evidence admission in BootstrapRequestOwner: bootstrap-join authority must be available, the snapshot must not be draining, BOOTSTRAP_PHASE_INCOMPLETE must be present, and every stale reason must belong to the allowed startup-complete set (BOOTSTRAP_PHASE_INCOMPLETE, SQL_ENGINE_UNAVAILABLE, BOOTSTRAP_NOT_READY, PRIORITY_CONTROL_PLANE_RECOVERY_PENDING). The focused cascade fixture covers all four readiness/budget reasons, and the existing phase-only fixture remains admitted. Representative rolling-restart remains non-green, but the readiness/contact-seed budget cascade is reduced: top failure reasons migrated to priority_recovery_workflow_progress_event_driven while causal analysis still reports widen_architecture_work / architecture_gap with dominant active_gate_snapshot_coverage_incomplete.",
-  "nextAction": "Continue from the reduced representative artifact. The contact-seed readiness cascade no longer dominates top reasons; inspect the next owner edge exposed by the same active-gate snapshot coverage frontier: operation_workflow_owner / workflow_progress with priority_recovery_workflow_progress_event_driven and recovering_in_flight priority partitions, without reopening diagnostics schema alias cleanup.",
+  "owner": "operation_workflow_owner",
+  "boundary": "workflow_progress",
+  "dominantReason": "priority_recovery_workflow_progress_event_driven",
+  "currentState": "No active package is open. The active-gate snapshot coverage architecture-gap package closed to done in commit 3cefd52d after reducing the contact-seed readiness cascade. The representative artifact remains non-green with the first topology frontier still reported as active_gate_snapshot_coverage, but the next expected/retryable edge is operation_workflow_owner / workflow_progress with priority_recovery_workflow_progress_event_driven and recovering-in-flight priority partitions.",
+  "nextAction": "When work resumes, activate exactly one successor package for operation_workflow_owner / workflow_progress and priority_recovery_workflow_progress_event_driven. Do not reopen diagnostics schema alias cleanup or treat the done active-gate package as active.",
   "proof": [
-    "npm run work:current-blocker -- --write",
-    "npm run work:validate",
-    "git diff --check -- work/packages work/sprints",
-    "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability.report.json confirms outcome widen_architecture_work, condition architecture_gap, dominant active_gate_snapshot_coverage_incomplete, classes active_gate_snapshot_coverage_incomplete/priority_recovery_event_wait/startup_readiness_blocked/budget_timeout_cascade",
-    "Focused owner fixture: npx tap --reporter=base test/bootstrap/bootstrap-request-admission-precheck.test.js fails on the old stale-cascade admission decision and passes after BootstrapRequestOwner admits the startup-complete readiness budget cascade through the canonical admission path",
-    "Representative rolling-restart rerun stays non-green but reduces the readiness/contact-seed budget cascade; triage top reasons now identify priority_recovery_workflow_progress_event_driven under operation_workflow_owner / workflow_progress while topology still has first frontier active_gate_snapshot_coverage"
+    "git --no-pager diff --check",
+    "npm run work:validate"
   ],
   "touchedFiles": [
-    "src/bootstrap/owners/bootstrap-request-owner.js",
-    "test/bootstrap/bootstrap-request-admission-precheck.test.js",
-    "work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-architecture-gap.md",
-    "work/model-ledger.jsonl",
-    "work/sprints/active-2026-q2-spec-led-runtime-modularization.md",
     "work/sprints/current-blocker.json",
-    "work/sprints/current-blocker.md"
+    "work/sprints/current-blocker.md",
+    "work/sprints/active-2026-q2-spec-led-runtime-modularization.md"
   ],
-  "modelFit": {
-    "packageClass": "architecture-gap runtime owner package",
-    "intendedMinimumModel": "gpt-5.3-codex",
-    "scopeShape": "owner-boundary-contraction/cross-boundary-causal-edge",
-    "escalationTriggers": [
-      "causal critical path no longer starts at topology:active_gate_snapshot_coverage",
-      "proof requires diagnostics schema alias deletion instead of startup active-gate owner contraction",
-      "runtime implementation would need Pro or Enterprise features",
-      "readiness or budget cascade cannot be represented through one startup active-gate owner contract"
-    ]
-  },
-  "predecessor": "work/packages/done-20260510-spec-led-runtime-modularization-high-level-causal-analysis-infrastructure.md"
+  "modelFit": {},
+  "predecessor": "work/packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-architecture-gap.md"
 }

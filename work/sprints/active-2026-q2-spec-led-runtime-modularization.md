@@ -5,14 +5,14 @@ after the prior rolling-restart package closed. It now advances one
 representative rolling-restart frontier at a time and must prove or classify
 the representative gate before companion cleanup or broad successor work.
 
-## Current Package Snapshot
+## Recent Package Snapshot
 
-Current blocker package:
-`work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-architecture-gap.md`.
+Recently completed package:
+`work/packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-architecture-gap.md`.
 
-**Package status: ACTIVE ARCHITECTURE-GAP RUNTIME OWNER PACKAGE**
+**Package status: CLOSED / DONE ARCHITECTURE-GAP RUNTIME OWNER PACKAGE**
 
-Owner boundary:
+Closed owner boundary:
 `startup_active_gate_owner / snapshot_coverage_architecture_gap`.
 
 Current state: implementation froze the BootstrapRequestOwner
@@ -30,9 +30,10 @@ analysis still reports `widen_architecture_work / architecture_gap` with
 dominant `active_gate_snapshot_coverage_incomplete`.
 
 Active and queued work:
-Current active package:
-`work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-architecture-gap.md`
-(active-gate snapshot coverage architecture gap).
+No active package is open after the active-gate snapshot coverage architecture-gap
+package closed to done. Do not treat
+`work/packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-architecture-gap.md`
+as current active work.
 
 Latest closed causal-analysis package:
 `work/packages/done-20260510-spec-led-runtime-modularization-high-level-causal-analysis-infrastructure.md`.
@@ -49,8 +50,8 @@ Latest closed proof package:
 `work/packages/done-20260510-spec-led-runtime-modularization-representative-green-proof-or-next-blocker.md`.
 
 Next proof surface: the BootstrapRequestOwner stale readiness/contact-seed
-cascade fixture and runtime owner change are complete for this active package.
-The representative rolling restart remains non-green but reduced, and
+cascade fixture and runtime owner change are complete for the recently closed
+package. The representative rolling restart remains non-green but reduced, and
 contact-seed readiness no longer dominates the top failure reasons. Continue
 from the reduced frontier by inspecting `operation_workflow_owner /
 workflow_progress` for `priority_recovery_workflow_progress_event_driven` and
