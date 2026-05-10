@@ -8,9 +8,9 @@ Package: `work/packages/active-20260510-spec-led-runtime-modularization-operatio
 
 Scenario: `spec-led-runtime-modularization`
 
-Artifact: `test-output/reports/rolling-restart-spec-led-runtime-modularization-operation-scheduling-sql-write-operations.report.json`
+Artifact: `test-output/reports/rolling-restart-spec-led-runtime-modularization-workflow-progress-sql-transactions-dispatch-pending-direct-diagnostic.report.json`
 
-Playback: `test-output/reports/.playback/rolling-restart-spec-led-runtime-modularization-operation-scheduling-sql-write-operations/rolling-restart/`
+Playback: `test-output/reports/.playback/rolling-restart-spec-led-runtime-modularization-workflow-progress-sql-transactions-dispatch-pending-direct-diagnostic/rolling-restart/`
 
 ## Boundary
 
@@ -20,11 +20,11 @@ Boundary: `workflow_progress`
 
 Dominant reason: `priority_recovery_progress_blocked`
 
-Current state: The workflow-progress implementation now treats persisted PENDING dispatch-pending rows as owner re-entry candidates and attaches owner-advance observation to appended diagnostic snapshots for PENDING persisted-not-dispatched and absent-target SENDING dispatch-pending witnesses. Focused tests and touched-file guardrails pass. The representative rerun reduced the original sql_transactions-p1 stalled/no-transition witness, but the same owner boundary still dominates with recovering_in_flight event-driven PENDING rows on replica_operations-p1 and sql_write_operations-p1 while startup snapshot coverage remains downstream.
+Current state: The workflow-progress implementation now treats persisted PENDING dispatch-pending rows as owner re-entry candidates and applies the owner-advance diagnostic normalization to both appended and direct PENDING persisted-not-dispatched snapshots. Focused tests and touched-file guardrails pass. The fresh representative rerun improved the active gate to 3/5 with priority recovery invariants passing, but the normalized first frontier is now topology_publication_owner / publication_convergence with pendingAck=0 and missingPublished=3. Priority recovery remains the next expected blocker with sql_transaction_participants-p1 operation_stalled SENDING/cache-visible and sql_transactions-p1/sql_write_operations-p1 recovering_in_flight PENDING rows.
 
 ## Next Action
 
-Continue this active package from the fresh representative report: freeze the recovering_in_flight PENDING persisted-not-dispatched residual for replica_operations-p1/sql_write_operations-p1, then determine whether owner re-entry is blocked by operation_workflow_owner scheduling or by transport/startup backpressure before further runtime changes.
+Classify the fresh direct-diagnostic report before more operation_workflow_owner runtime changes: decide whether the topology_publication_owner / publication_convergence frontier is valid or mis-ranked, then either migrate to that owner boundary or continue from the sql_transaction_participants-p1 SENDING/cache-visible workflow-progress timeout witness.
 
 ## Proof Ladder
 
@@ -32,7 +32,7 @@ Continue this active package from the fresh representative report: freeze the re
 2. `Focused operation_workflow_owner workflow_progress fixture for sql_transactions-p1 persisted-not-dispatched/no-step-transition evidence`
 3. `Focused operation workflow owner and dispatch wake/replay tests selected by priority_recovery_workflow_progress_event_driven`
 4. `Touched-file static guardrails selected by operation_workflow_owner and dispatch service ownership`
-5. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-spec-led-runtime-modularization-workflow-progress-sql-transactions-dispatch-pending.report.json --fast-local --verbose`
+5. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-spec-led-runtime-modularization-workflow-progress-sql-transactions-dispatch-pending-direct-diagnostic.report.json --fast-local --verbose`
 
 ## Model Fit
 

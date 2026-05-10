@@ -17,13 +17,15 @@ Current state: prior packages through operation scheduling SQL write operations
 are closed. The proof-only package classified the post-scheduling report as
 `migrated-frontier` into `operation_workflow_owner / workflow_progress`.
 The active workflow-progress package has implemented the first dispatch-pending
-owner re-entry slice and focused diagnostics for persisted `PENDING` and
-absent-target `SENDING` witnesses. The latest representative rerun reduced the
-original `sql_transactions-p1` stalled/no-transition witness, but the first
-frontier remains `operation_workflow_owner / workflow_progress` with
-`recovering_in_flight` event-driven waits on `replica_operations-p1` and
-`sql_write_operations-p1`; downstream startup active-gate snapshot coverage is
-still blocked.
+owner re-entry slice and focused diagnostics for appended and direct persisted
+`PENDING` snapshots plus absent-target `SENDING` witnesses. The latest
+representative rerun improved active-gate progress to `3/5` and priority
+recovery invariants passed, but the normalized first frontier moved to
+`topology_publication_owner / publication_convergence` with `pendingAck=0` and
+`missingPublished=3`. Priority recovery remains the next expected blocker with
+`sql_transaction_participants-p1` `SENDING`/cache-visible `operation_stalled`
+and `sql_transactions-p1` / `sql_write_operations-p1`
+`recovering_in_flight` rows.
 
 Active and queued work:
 Current active package:
@@ -38,12 +40,13 @@ Companion cleanup:
 Latest closed runtime package:
 `work/packages/done-20260509-spec-led-runtime-modularization-operation-scheduling-sql-write-operations-frontier.md`.
 
-Next proof surface: continue the active workflow-progress package from
-`test-output/reports/rolling-restart-spec-led-runtime-modularization-workflow-progress-sql-transactions-dispatch-pending.report.json`.
-Freeze the `replica_operations-p1` / `sql_write_operations-p1`
-`recovering_in_flight` PENDING persisted-not-dispatched residual and determine
-whether owner re-entry is blocked inside `operation_workflow_owner` scheduling
-or by transport/startup backpressure before making further runtime changes.
+Next proof surface: classify
+`test-output/reports/rolling-restart-spec-led-runtime-modularization-workflow-progress-sql-transactions-dispatch-pending-direct-diagnostic.report.json`.
+Decide whether the `topology_publication_owner / publication_convergence`
+frontier is valid or mis-ranked before making further
+`operation_workflow_owner` runtime changes; if priority recovery remains the
+active package boundary, freeze the `sql_transaction_participants-p1`
+`SENDING`/cache-visible workflow-progress timeout witness.
 
 ## Goal
 

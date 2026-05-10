@@ -269,6 +269,18 @@ function buildPriorityRecoveryDispatchPendingDiagnosticOwnerOutcome(
   );
 }
 
+function resolvePriorityRecoveryDecisionOperationOwnerOutcome(
+  options,
+  snapshot,
+  operationContext,
+) {
+  return options.operationOwnerOutcome ||
+    buildPriorityRecoveryDispatchPendingDiagnosticOwnerOutcome(
+      snapshot,
+      operationContext,
+    );
+}
+
 function resolvePriorityRecoveryDecisionPriorityPartitionSummary(
   options = {},
   publicationConvergence = null,
@@ -596,57 +608,62 @@ function buildPriorityRecoveryDecisionSnapshot(options = {}) {
       options.authoritativeOperationReadDeferred === true,
   });
 
-  return normalizePriorityRecoveryDispatchPendingDecisionSnapshot(
-    {
+  const snapshot = {
+    partitionId,
+    epoch: publicationEpoch,
+    operationId,
+    correlationKey: buildPriorityRecoveryCorrelationKey(
       partitionId,
-      epoch: publicationEpoch,
+      publicationEpoch,
       operationId,
-      correlationKey: buildPriorityRecoveryCorrelationKey(
-        partitionId,
-        publicationEpoch,
-        operationId,
-      ),
-      semanticState,
-      completion,
-      observation,
-      conditions,
-      actuation,
-      progress,
-      planner,
-      admission: {
-        ...admission,
-        ineligibleNodeIds: assessment.ineligibleNodeIds,
-        recoveryEligibleExcludedNodeIds:
-          assessment.recoveryEligibleExcludedNodeIds,
-      },
-      spreadCompletion: assessment.spreadCompletion,
-      coordinator: {
-        operationCount: operationContexts.length,
-        operationIds: operationContexts.map((context) => context.operationId),
-        operation: operationContext || latestOperationContext,
-        serialWaitOperationCount: serialWaitOperationContexts.length,
-        serialWaitOperationIds:
-          serialWaitOperationContexts.map(
-            (context) => context.operationId,
-          ),
-        serialWaitPartitionIds: normalizePriorityRecoveryStringList(
-          serialWaitOperationContexts.map(
-            (context) => context.partitionId,
-          ),
-        ),
-      },
-      publication: buildPriorityRecoveryDecisionPublicationSnapshot({
-        publicationConvergence,
-        publicationContext,
-        publicationNodeDecisions,
-      }),
-      readiness: buildPriorityRecoveryDecisionReadinessSnapshot(
-        readinessByNodeId,
-        learnerPromotion,
-      ),
-      blockerReasons: assessment.blockerReasons,
+    ),
+    semanticState,
+    completion,
+    observation,
+    conditions,
+    actuation,
+    progress,
+    planner,
+    admission: {
+      ...admission,
+      ineligibleNodeIds: assessment.ineligibleNodeIds,
+      recoveryEligibleExcludedNodeIds:
+        assessment.recoveryEligibleExcludedNodeIds,
     },
-    options.operationOwnerOutcome,
+    spreadCompletion: assessment.spreadCompletion,
+    coordinator: {
+      operationCount: operationContexts.length,
+      operationIds: operationContexts.map((context) => context.operationId),
+      operation: operationContext || latestOperationContext,
+      serialWaitOperationCount: serialWaitOperationContexts.length,
+      serialWaitOperationIds:
+        serialWaitOperationContexts.map(
+          (context) => context.operationId,
+        ),
+      serialWaitPartitionIds: normalizePriorityRecoveryStringList(
+        serialWaitOperationContexts.map(
+          (context) => context.partitionId,
+        ),
+      ),
+    },
+    publication: buildPriorityRecoveryDecisionPublicationSnapshot({
+      publicationConvergence,
+      publicationContext,
+      publicationNodeDecisions,
+    }),
+    readiness: buildPriorityRecoveryDecisionReadinessSnapshot(
+      readinessByNodeId,
+      learnerPromotion,
+    ),
+    blockerReasons: assessment.blockerReasons,
+  };
+  return normalizePriorityRecoveryDispatchPendingDecisionSnapshot(
+    snapshot,
+    resolvePriorityRecoveryDecisionOperationOwnerOutcome(
+      options,
+      snapshot,
+      operationContext || latestOperationContext,
+    ),
   );
 }
 

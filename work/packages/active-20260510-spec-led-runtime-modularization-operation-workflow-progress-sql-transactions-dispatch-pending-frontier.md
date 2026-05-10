@@ -6,19 +6,19 @@
   "status": "active",
   "opened": "2026-05-10",
   "scenario": "spec-led-runtime-modularization",
-  "artifact": "test-output/reports/rolling-restart-spec-led-runtime-modularization-operation-scheduling-sql-write-operations.report.json",
-  "playback": "test-output/reports/.playback/rolling-restart-spec-led-runtime-modularization-operation-scheduling-sql-write-operations/rolling-restart/",
+  "artifact": "test-output/reports/rolling-restart-spec-led-runtime-modularization-workflow-progress-sql-transactions-dispatch-pending-direct-diagnostic.report.json",
+  "playback": "test-output/reports/.playback/rolling-restart-spec-led-runtime-modularization-workflow-progress-sql-transactions-dispatch-pending-direct-diagnostic/rolling-restart/",
   "owner": "operation_workflow_owner",
   "boundary": "workflow_progress",
   "dominantReason": "priority_recovery_progress_blocked",
-  "currentState": "The workflow-progress implementation now treats persisted PENDING dispatch-pending rows as owner re-entry candidates and attaches owner-advance observation to appended diagnostic snapshots for PENDING persisted-not-dispatched and absent-target SENDING dispatch-pending witnesses. Focused tests and touched-file guardrails pass. The representative rerun reduced the original sql_transactions-p1 stalled/no-transition witness, but the same owner boundary still dominates with recovering_in_flight event-driven PENDING rows on replica_operations-p1 and sql_write_operations-p1 while startup snapshot coverage remains downstream.",
-  "nextAction": "Continue this active package from the fresh representative report: freeze the recovering_in_flight PENDING persisted-not-dispatched residual for replica_operations-p1/sql_write_operations-p1, then determine whether owner re-entry is blocked by operation_workflow_owner scheduling or by transport/startup backpressure before further runtime changes.",
+  "currentState": "The workflow-progress implementation now treats persisted PENDING dispatch-pending rows as owner re-entry candidates and applies the owner-advance diagnostic normalization to both appended and direct PENDING persisted-not-dispatched snapshots. Focused tests and touched-file guardrails pass. The fresh representative rerun improved the active gate to 3/5 with priority recovery invariants passing, but the normalized first frontier is now topology_publication_owner / publication_convergence with pendingAck=0 and missingPublished=3. Priority recovery remains the next expected blocker with sql_transaction_participants-p1 operation_stalled SENDING/cache-visible and sql_transactions-p1/sql_write_operations-p1 recovering_in_flight PENDING rows.",
+  "nextAction": "Classify the fresh direct-diagnostic report before more operation_workflow_owner runtime changes: decide whether the topology_publication_owner / publication_convergence frontier is valid or mis-ranked, then either migrate to that owner boundary or continue from the sql_transaction_participants-p1 SENDING/cache-visible workflow-progress timeout witness.",
   "proof": [
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-operation-scheduling-sql-write-operations.report.json --explain priority_recovery_partition_progress",
     "Focused operation_workflow_owner workflow_progress fixture for sql_transactions-p1 persisted-not-dispatched/no-step-transition evidence",
     "Focused operation workflow owner and dispatch wake/replay tests selected by priority_recovery_workflow_progress_event_driven",
     "Touched-file static guardrails selected by operation_workflow_owner and dispatch service ownership",
-    "node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-spec-led-runtime-modularization-workflow-progress-sql-transactions-dispatch-pending.report.json --fast-local --verbose"
+    "node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-spec-led-runtime-modularization-workflow-progress-sql-transactions-dispatch-pending-direct-diagnostic.report.json --fast-local --verbose"
   ],
   "touchedFiles": [
     "src/rebalancer/operation-workflow-owner*.js",
@@ -182,11 +182,12 @@ slice.
 - Owner reconcile now treats persisted `PENDING`/`pending` dispatch rows as
   dispatch-pending re-entry candidates instead of falling through to transition
   advancement.
-- Appended priority recovery operation snapshots synthesize a diagnostic owner
-  advancement observation for report-shaped `PENDING` +
-  `persisted_not_dispatched` witnesses and for absent-target `SENDING` +
-  `dispatched_waiting_progress` witnesses. Failed/non-active target rows remain
-  excluded so target-service failure evidence does not masquerade as progress.
+- Appended and direct priority recovery operation snapshots synthesize a
+  diagnostic owner advancement observation for report-shaped `PENDING` +
+  `persisted_not_dispatched` witnesses. Appended snapshots also retain the
+  absent-target `SENDING` + `dispatched_waiting_progress` diagnostic. Failed or
+  cache-visible `SENDING` target rows remain excluded so target-service failure
+  evidence does not masquerade as owner progress.
 - Focused coverage now includes the `sql_transactions-p1`-shaped
   persisted-not-dispatched `PENDING` witness, absent-target `SENDING`
   diagnostics, and broad snapshot assertions for the owner-observed in-flight
@@ -197,6 +198,13 @@ slice.
   semantic state is now `recovering_in_flight` for `replica_operations-p1` and
   `sql_write_operations-p1` with timed-out `PENDING` rows. The same run exposes
   downstream `startup_active_gate_owner / snapshot_coverage` pressure.
+- The direct-diagnostic representative rerun improves active-gate progress to
+  `3/5` and reports priority recovery invariants passing. Its normalized first
+  frontier is `topology_publication_owner / publication_convergence` with
+  `pendingAck=0` and `missingPublished=3`; priority recovery is now the next
+  expected blocker, not the first frontier, with `sql_transaction_participants-p1`
+  back as `SENDING`/cache-visible `operation_stalled` and
+  `sql_transactions-p1` / `sql_write_operations-p1` as `recovering_in_flight`.
 
 ## Validation
 
@@ -241,6 +249,27 @@ slice.
   `recovering_in_flight`, reasons are `priority_recovery_progress_blocked` and
   `priority_recovery_event_driven_wait`, and the next expected downstream
   frontier is `startup_active_gate_owner / snapshot_coverage`.
+- PASS:
+  `node --test test/control-plane/priority-recovery-snapshot-operation-owner-outcome.test.js`
+  after adding direct decision-snapshot owner-observation coverage.
+- PASS: `node --test test/control-plane/priority-recovery-snapshot.test.js`
+- PASS:
+  `node scripts/check-guideline-literals.js src/control-plane/priority-recovery-snapshot-stage-10.js`
+- PASS:
+  `node scripts/check-guideline-decision-boundaries.js src/control-plane/priority-recovery-snapshot-stage-10.js`
+- PASS:
+  `npm run audit:runtime-grammar:file -- src/control-plane/priority-recovery-snapshot-stage-10.js`
+- PASS:
+  `git diff --check -- src/control-plane/priority-recovery-snapshot-stage-10.js test/control-plane/priority-recovery-snapshot-operation-owner-outcome.test.js`
+- FAIL, migrated normalized first frontier:
+  `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-spec-led-runtime-modularization-workflow-progress-sql-transactions-dispatch-pending-direct-diagnostic.report.json --fast-local --verbose`
+- PASS, classification:
+  `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-workflow-progress-sql-transactions-dispatch-pending-direct-diagnostic.report.json`
+- Fresh direct-diagnostic classification: first frontier is
+  `topology_publication_owner / publication_convergence` on
+  `publication_ack_convergence`; pending ACK count is `0`, missing published
+  node count is `3`, and priority recovery is listed as the next expected
+  blocker under `operation_workflow_owner / workflow_progress`.
 
 ## Subagent Sequencing Ledger
 

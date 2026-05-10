@@ -14,7 +14,9 @@ import {
   PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE,
 } from '../../src/control-plane/priority-recovery-diagnostics-constants.js';
 import {
+  buildPriorityRecoveryDecisionSnapshot,
   buildPriorityRecoveryDecisionSnapshots,
+  buildPriorityRecoveryOperationContextFromRecord,
   normalizePriorityRecoveryDispatchPendingDecisionSnapshot,
 } from '../../src/control-plane/priority-recovery-snapshot.js';
 import {
@@ -424,6 +426,51 @@ test('priority recovery decision snapshots attach owner observation for ' +
     owner: PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER,
     state: PRIORITY_RECOVERY_ACTUATION_STATE.PERSISTED_NOT_DISPATCHED,
   });
+});
+
+test('direct priority recovery decision snapshots attach owner observation ' +
+  'for persisted PENDING dispatch witnesses', async (t) => {
+  const operationContext = buildPriorityRecoveryOperationContextFromRecord(
+    buildPriorityRecoveryOwnerPendingOperationRow(),
+    {
+      nowMs: TEST_CAPTURED_AT_MS,
+    },
+  );
+  const targetSnapshot = buildPriorityRecoveryDecisionSnapshot({
+    capturedAt: TEST_CAPTURED_AT_MS,
+    partitionId: TEST_PARTITION_ID,
+    publicationConvergence:
+      buildPriorityRecoveryOwnerPublicationConvergence(),
+    operationContexts: Object.freeze([operationContext]),
+    operationId: TEST_OPERATION_ID,
+    operationContext,
+  });
+
+  t.equal(
+    targetSnapshot?.conditions?.latestOperationWorkflowStep,
+    TEST_WORKFLOW_STEP_PENDING,
+    'the direct fixture should preserve the PENDING workflow step',
+  );
+  t.equal(
+    targetSnapshot?.operationOwnerObservation?.outcome,
+    OPERATION_WORKFLOW_OUTCOME_VALUES.ADVANCE_EXISTING_OPERATION,
+    'direct diagnostic snapshots should carry owner advancement observation',
+  );
+  t.equal(
+    targetSnapshot?.operationOwnerObservation?.requestedOwnerAction,
+    PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.ADVANCE_EXISTING_OPERATION,
+    'direct diagnostic snapshots should request existing operation advance',
+  );
+  t.same(
+    targetSnapshot?.blockerReasons,
+    [],
+    'direct owner-observed diagnostics should clear no-transition blockers',
+  );
+  t.equal(
+    targetSnapshot?.semanticState,
+    PRIORITY_RECOVERY_SEMANTIC_STATE.RECOVERING_IN_FLIGHT,
+    'direct owner-observed diagnostics should stay in flight',
+  );
 });
 
 test('priority recovery decision snapshots attach owner observation for ' +
