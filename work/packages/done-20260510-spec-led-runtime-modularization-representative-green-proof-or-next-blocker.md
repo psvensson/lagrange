@@ -11,7 +11,7 @@
   "owner": "representative_gate_owner",
   "boundary": "proof_classification",
   "dominantReason": "pending_representative_proof",
-  "currentState": "Classification is complete: the representative report is migrated-frontier, with first blocked frontier priority_recovery_partition_progress owned by operation_workflow_owner / workflow_progress. The successor package is active and current at work/packages/active-20260510-spec-led-runtime-modularization-operation-workflow-progress-sql-transactions-dispatch-pending-frontier.md.",
+  "currentState": "Classification is complete: the representative report is migrated-frontier, with first blocked frontier priority_recovery_partition_progress owned by operation_workflow_owner / workflow_progress. The successor package is active and current at work/packages/done-20260510-spec-led-runtime-modularization-operation-workflow-progress-sql-transactions-dispatch-pending-frontier.md.",
   "nextAction": "Continue in the active operation_workflow_owner / workflow_progress successor package; runtime implementation starts only after its review/fix ledger is clean and its fresh implementation subagent is recorded.",
   "proof": [
     "node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-spec-led-runtime-modularization-operation-scheduling-sql-write-operations.report.json --fast-local --verbose",
@@ -22,7 +22,7 @@
   ],
   "touchedFiles": [
     "work/packages/done-20260510-spec-led-runtime-modularization-representative-green-proof-or-next-blocker.md",
-    "work/packages/active-20260510-spec-led-runtime-modularization-operation-workflow-progress-sql-transactions-dispatch-pending-frontier.md",
+    "work/packages/done-20260510-spec-led-runtime-modularization-operation-workflow-progress-sql-transactions-dispatch-pending-frontier.md",
     "work/sprints/active-2026-q2-spec-led-runtime-modularization.md",
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md",
@@ -40,7 +40,7 @@
     ]
   },
   "predecessor": "work/packages/done-20260509-spec-led-runtime-modularization-operation-scheduling-sql-write-operations-frontier.md",
-  "successor": "work/packages/active-20260510-spec-led-runtime-modularization-operation-workflow-progress-sql-transactions-dispatch-pending-frontier.md",
+  "successor": "work/packages/done-20260510-spec-led-runtime-modularization-operation-workflow-progress-sql-transactions-dispatch-pending-frontier.md",
   "closed": "2026-05-10",
   "commitAndPushLedgerRequired": true
 }
@@ -93,7 +93,7 @@ This remains Phase `0.1` internal-coherence gate work in the AGPL repository.
 - Intended minimum model: `gpt-5.3-codex-spark`
 - Scope shape: `leaf-slice`
 - Owned files: this package file,
-  `work/packages/active-20260510-spec-led-runtime-modularization-operation-workflow-progress-sql-transactions-dispatch-pending-frontier.md`,
+  `work/packages/done-20260510-spec-led-runtime-modularization-operation-workflow-progress-sql-transactions-dispatch-pending-frontier.md`,
   `work/sprints/active-2026-q2-spec-led-runtime-modularization.md`,
   `work/sprints/current-blocker.json`, `work/sprints/current-blocker.md`, and
   `work/model-ledger.jsonl`.
@@ -168,7 +168,7 @@ The first blocked frontier is `priority_recovery_partition_progress`, owned by
 ## Successor Handoff
 
 Active successor package:
-`work/packages/active-20260510-spec-led-runtime-modularization-operation-workflow-progress-sql-transactions-dispatch-pending-frontier.md`.
+`work/packages/done-20260510-spec-led-runtime-modularization-operation-workflow-progress-sql-transactions-dispatch-pending-frontier.md`.
 
 The successor is now active and is the current sprint blocker. This proof
 package is closed with a truthful Commit And Push Ledger. Runtime

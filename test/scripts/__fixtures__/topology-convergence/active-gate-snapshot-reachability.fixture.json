@@ -1,0 +1,42 @@
+{
+  "scenarios": [
+    {
+      "scenario": "rolling-restart",
+      "publicationConvergence": {
+        "publicationStatus": "PUBLISHED",
+        "pendingAckCount": 0,
+        "blockedNodeCount": 0,
+        "missingPublishedCount": 0,
+        "activeGate": {
+          "mode": "startup",
+          "state": "timed_out",
+          "ready": false,
+          "progress": {
+            "expectedNodeCount": 5,
+            "activeNodeCount": 2,
+            "inactiveNodeCount": 3,
+            "snapshotCoverageNodeCount": 3,
+            "snapshotCoverageComplete": false,
+            "publicationStatus": "PUBLISHED",
+            "pendingAckCount": 0,
+            "missingPublishedCount": 2,
+            "selectedSnapshotNodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+            "selectedSnapshotError": null,
+            "selectedSnapshotReachabilityError": "Control snapshot reachability probe timed out for 35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+            "readinessDelay": {
+              "timedOut": true,
+              "cause": "snapshot_reachability_timeout",
+              "source": "selectedSnapshotReachabilityError",
+              "recoverability": "terminal",
+              "error": "Control snapshot reachability probe timed out for 35a891b8-c1a0-5064-9c6e-2acfba61c2a7"
+            },
+            "blockers": [
+              "inactive_nodes=3",
+              "snapshot_coverage=3/5"
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

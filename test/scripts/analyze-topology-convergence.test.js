@@ -22,6 +22,14 @@ const ACTIVE_GATE_FIXTURE_PATH =
   `${FIXTURE_DIRECTORY}/active-gate-snapshot.fixture.json`;
 const ACTIVE_GATE_EXPECTED_PATH =
   `${FIXTURE_DIRECTORY}/active-gate-snapshot.expected.json`;
+const ACTIVE_GATE_REACHABILITY_FIXTURE_PATH =
+  `${FIXTURE_DIRECTORY}/active-gate-snapshot-reachability.fixture.json`;
+const ACTIVE_GATE_REACHABILITY_EXPECTED_PATH =
+  `${FIXTURE_DIRECTORY}/active-gate-snapshot-reachability.expected.json`;
+const ACTIVE_GATE_PARTIAL_RESIDUAL_FIXTURE_PATH =
+  `${FIXTURE_DIRECTORY}/active-gate-snapshot-partial-residual.fixture.json`;
+const ACTIVE_GATE_PARTIAL_RESIDUAL_EXPECTED_PATH =
+  `${FIXTURE_DIRECTORY}/active-gate-snapshot-partial-residual.expected.json`;
 const PUBLICATION_COUNT_ONLY_ACK_FIXTURE_PATH =
   `${FIXTURE_DIRECTORY}/publication-count-only-ack.fixture.json`;
 const PUBLICATION_COUNT_ONLY_ACK_EXPECTED_PATH =
@@ -82,6 +90,20 @@ describe('analyze-topology-convergence CLI', () => {
   it('matches golden frontier fixture for active-gate snapshot coverage', () => {
     const output = runAnalyzerJson(ACTIVE_GATE_FIXTURE_PATH);
     const expected = readJson(ACTIVE_GATE_EXPECTED_PATH);
+
+    assert.deepEqual(projectGoldenFrontier(output), expected);
+  });
+
+  it('matches golden frontier fixture for active-gate reachability timeout', () => {
+    const output = runAnalyzerJson(ACTIVE_GATE_REACHABILITY_FIXTURE_PATH);
+    const expected = readJson(ACTIVE_GATE_REACHABILITY_EXPECTED_PATH);
+
+    assert.deepEqual(projectGoldenFrontier(output), expected);
+  });
+
+  it('matches golden frontier fixture for active-gate partial residual', () => {
+    const output = runAnalyzerJson(ACTIVE_GATE_PARTIAL_RESIDUAL_FIXTURE_PATH);
+    const expected = readJson(ACTIVE_GATE_PARTIAL_RESIDUAL_EXPECTED_PATH);
 
     assert.deepEqual(projectGoldenFrontier(output), expected);
   });

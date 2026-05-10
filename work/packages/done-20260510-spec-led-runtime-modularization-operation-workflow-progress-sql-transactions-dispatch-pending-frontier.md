@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-10",
   "scenario": "spec-led-runtime-modularization",
   "artifact": "test-output/reports/rolling-restart-spec-led-runtime-modularization-workflow-progress-sql-transactions-dispatch-pending-direct-diagnostic.report.json",
@@ -41,7 +41,7 @@
     "test/scripts/__fixtures__/topology-convergence/priority-workflow-progress-recovering-in-flight.fixture.json",
     "test/scripts/__fixtures__/topology-convergence/priority-workflow-progress-recovering-in-flight.expected.json",
     "work/model-ledger.jsonl",
-    "work/packages/active-20260510-spec-led-runtime-modularization-operation-workflow-progress-sql-transactions-dispatch-pending-frontier.md",
+    "work/packages/done-20260510-spec-led-runtime-modularization-operation-workflow-progress-sql-transactions-dispatch-pending-frontier.md",
     "work/sprints/active-2026-q2-spec-led-runtime-modularization.md",
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md"
@@ -56,7 +56,10 @@
       "representative proof still fails on the same sql_transactions-p1 dispatch_pending no-step-transition witness after owner fix"
     ]
   },
-  "predecessor": "work/packages/done-20260510-spec-led-runtime-modularization-representative-green-proof-or-next-blocker.md"
+  "predecessor": "work/packages/done-20260510-spec-led-runtime-modularization-representative-green-proof-or-next-blocker.md",
+  "closed": "2026-05-10",
+  "commitAndPushLedgerRequired": true,
+  "successor": "work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md"
 }
 -->
 
@@ -266,7 +269,7 @@ slice.
 - PASS:
   `npm run audit:runtime-grammar:file -- src/rebalancer/operation-workflow-owner-ports.js src/control-plane/priority-recovery-snapshot-stage-10.js`
 - PASS:
-  `git diff --check -- src/rebalancer/operation-workflow-owner-ports.js src/control-plane/priority-recovery-snapshot-stage-10.js test/rebalancer/operation-workflow-owner-adapter.test.js test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js test/control-plane/priority-recovery-snapshot-operation-owner-outcome.test.js test/control-plane/priority-recovery-snapshot.test.js work/packages/active-20260510-spec-led-runtime-modularization-operation-workflow-progress-sql-transactions-dispatch-pending-frontier.md work/packages/done-20260510-spec-led-runtime-modularization-representative-green-proof-or-next-blocker.md work/sprints/active-2026-q2-spec-led-runtime-modularization.md work/sprints/current-blocker.json work/sprints/current-blocker.md`
+  `git diff --check -- src/rebalancer/operation-workflow-owner-ports.js src/control-plane/priority-recovery-snapshot-stage-10.js test/rebalancer/operation-workflow-owner-adapter.test.js test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js test/control-plane/priority-recovery-snapshot-operation-owner-outcome.test.js test/control-plane/priority-recovery-snapshot.test.js work/packages/done-20260510-spec-led-runtime-modularization-operation-workflow-progress-sql-transactions-dispatch-pending-frontier.md work/packages/done-20260510-spec-led-runtime-modularization-representative-green-proof-or-next-blocker.md work/sprints/active-2026-q2-spec-led-runtime-modularization.md work/sprints/current-blocker.json work/sprints/current-blocker.md`
 - FAIL, reduced but same owner boundary:
   `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-spec-led-runtime-modularization-workflow-progress-sql-transactions-dispatch-pending.report.json --fast-local --verbose`
 - PASS, classification:
@@ -397,4 +400,10 @@ slice.
       `work/packages/done-20260510-spec-led-runtime-modularization-representative-green-proof-or-next-blocker.md`.
 - [x] Implementation subagent recorded:
       Agent Rawls (019e10db-d43e-7031-9e1f-60e48f1d813d) implemented
-      `work/packages/active-20260510-spec-led-runtime-modularization-operation-workflow-progress-sql-transactions-dispatch-pending-frontier.md`.
+      `work/packages/done-20260510-spec-led-runtime-modularization-operation-workflow-progress-sql-transactions-dispatch-pending-frontier.md`.
+
+## Commit And Push Ledger
+
+1. Focused package commit: `16bc2687`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes

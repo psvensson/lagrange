@@ -1,0 +1,58 @@
+{
+  "summary": {
+    "frontierCount": 2,
+    "firstFrontierEdgeId": "active_gate_snapshot_coverage",
+    "firstFrontierState": "blocked",
+    "firstFrontierOwner": "startup_active_gate_owner",
+    "firstFrontierBoundary": "snapshot_coverage",
+    "firstFrontierReason": "active_gate_timed_out"
+  },
+  "frontier": [
+    {
+      "id": "active_gate_snapshot_coverage",
+      "state": "blocked",
+      "owner": "startup_active_gate_owner",
+      "boundary": "snapshot_coverage",
+      "dominantReason": "absent",
+      "evidencePath": "report.scenarios[0].publicationConvergence.activeGate.progress",
+      "reasons": [
+        "active_gate_timed_out",
+        "snapshot_coverage_incomplete"
+      ]
+    },
+    {
+      "id": "priority_recovery_partition_progress",
+      "state": "retryable",
+      "owner": "operation_workflow_owner",
+      "boundary": "workflow_progress",
+      "dominantReason": "unknown",
+      "evidencePath": "report.scenarios[0].publicationConvergence.activeGate.progress.priorityRecoveryProgressClasses",
+      "reasons": [
+        "priority_recovery_event_driven_wait"
+      ]
+    }
+  ],
+  "dominantWitness": {
+    "edgeId": "active_gate_snapshot_coverage",
+    "owner": "startup_active_gate_owner",
+    "boundary": "snapshot_coverage",
+    "state": "blocked",
+    "frontierState": "blocked",
+    "dominantReason": "active_gate_timed_out",
+    "reasons": [
+      "active_gate_timed_out",
+      "snapshot_coverage_incomplete"
+    ],
+    "evidencePath": "report.scenarios[0].publicationConvergence.activeGate.progress",
+    "source": {
+      "activeGateState": "timed_out",
+      "snapshotCoverageComplete": "false",
+      "snapshotCoverageNodeCount": 2,
+      "expectedNodeCount": 5,
+      "selectedSnapshotError": "unknown",
+      "readinessDelayCause": "none",
+      "blockers": "inactive_nodes=2,snapshot_coverage=2/5"
+    },
+    "rootCauseClass": "startup"
+  }
+}

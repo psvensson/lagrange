@@ -100,6 +100,26 @@ const LOAD_READINESS_STABLE_WINDOW_DECISION_TABLE = Object.freeze([
 const ACTIVE_WAIT_TERMINAL_PROGRESS_DECISION_CURRENT = 'current';
 const ACTIVE_WAIT_TERMINAL_PROGRESS_DECISION_LAST_MEANINGFUL =
   'last_meaningful';
+const ACTIVE_WAIT_TYPE_OBJECT = 'object';
+const ACTIVE_WAIT_READINESS_DELAY_STATE = Object.freeze({
+  ABSENT: 'absent',
+  PRESENT: 'present',
+  TIMED_OUT: 'timed_out',
+});
+const ACTIVE_WAIT_READINESS_DELAY_SOURCE = Object.freeze({
+  NONE: 'none',
+  NO_PROGRESS: 'no_progress',
+  PROGRESS: 'progress',
+});
+const ACTIVE_WAIT_READINESS_DELAY_OUTCOME_NONE = Object.freeze({
+  source: ACTIVE_WAIT_READINESS_DELAY_SOURCE.NONE,
+});
+const ACTIVE_WAIT_READINESS_DELAY_OUTCOME_NO_PROGRESS = Object.freeze({
+  source: ACTIVE_WAIT_READINESS_DELAY_SOURCE.NO_PROGRESS,
+});
+const ACTIVE_WAIT_READINESS_DELAY_OUTCOME_PROGRESS = Object.freeze({
+  source: ACTIVE_WAIT_READINESS_DELAY_SOURCE.PROGRESS,
+});
 const ACTIVE_WAIT_TERMINAL_PROGRESS_DECISION_TABLE = Object.freeze([
   Object.freeze({
     decision: ACTIVE_WAIT_TERMINAL_PROGRESS_DECISION_LAST_MEANINGFUL,
@@ -121,6 +141,32 @@ const ACTIVE_WAIT_TERMINAL_PROGRESS_DECISION_TABLE = Object.freeze([
   }),
   Object.freeze({
     decision: ACTIVE_WAIT_TERMINAL_PROGRESS_DECISION_CURRENT,
+    matches: () => true,
+  }),
+]);
+const ACTIVE_WAIT_READINESS_DELAY_DECISION_TABLE = Object.freeze([
+  Object.freeze({
+    outcome: ACTIVE_WAIT_READINESS_DELAY_OUTCOME_NO_PROGRESS,
+    matches: (evidence) =>
+      evidence.noProgressDelayState === ACTIVE_WAIT_READINESS_DELAY_STATE.TIMED_OUT,
+  }),
+  Object.freeze({
+    outcome: ACTIVE_WAIT_READINESS_DELAY_OUTCOME_PROGRESS,
+    matches: (evidence) =>
+      evidence.progressDelayState === ACTIVE_WAIT_READINESS_DELAY_STATE.TIMED_OUT,
+  }),
+  Object.freeze({
+    outcome: ACTIVE_WAIT_READINESS_DELAY_OUTCOME_NO_PROGRESS,
+    matches: (evidence) =>
+      evidence.noProgressDelayState === ACTIVE_WAIT_READINESS_DELAY_STATE.PRESENT,
+  }),
+  Object.freeze({
+    outcome: ACTIVE_WAIT_READINESS_DELAY_OUTCOME_PROGRESS,
+    matches: (evidence) =>
+      evidence.progressDelayState === ACTIVE_WAIT_READINESS_DELAY_STATE.PRESENT,
+  }),
+  Object.freeze({
+    outcome: ACTIVE_WAIT_READINESS_DELAY_OUTCOME_NONE,
     matches: () => true,
   }),
 ]);
@@ -371,7 +417,60 @@ function buildActiveWaitReadinessFailure({
 }
 
 function isActiveWaitProgressSnapshot(value) {
-  return value && typeof value === 'object' && Array.isArray(value) !== true;
+  return value && typeof value === ACTIVE_WAIT_TYPE_OBJECT &&
+    Array.isArray(value) !== true;
+}
+
+function isActiveWaitReadinessDelay(value) {
+  return value && typeof value === ACTIVE_WAIT_TYPE_OBJECT &&
+    Array.isArray(value) !== true;
+}
+
+function classifyActiveWaitReadinessDelayState(readinessDelay) {
+  if (!isActiveWaitReadinessDelay(readinessDelay)) {
+    return ACTIVE_WAIT_READINESS_DELAY_STATE.ABSENT;
+  }
+  return readinessDelay.timedOut === true ?
+    ACTIVE_WAIT_READINESS_DELAY_STATE.TIMED_OUT :
+    ACTIVE_WAIT_READINESS_DELAY_STATE.PRESENT;
+}
+
+function normalizeActiveWaitReadinessDelayEvidence({
+  noProgress = null,
+  progressSnapshot = null,
+} = {}) {
+  const noProgressReadinessDelay =
+    isActiveWaitReadinessDelay(noProgress?.readinessDelay) ?
+      noProgress.readinessDelay :
+      null;
+  const progressReadinessDelay =
+    isActiveWaitReadinessDelay(progressSnapshot?.readinessDelay) ?
+      progressSnapshot.readinessDelay :
+      null;
+  return Object.freeze({
+    noProgressReadinessDelay,
+    progressReadinessDelay,
+    noProgressDelayState:
+      classifyActiveWaitReadinessDelayState(noProgressReadinessDelay),
+    progressDelayState:
+      classifyActiveWaitReadinessDelayState(progressReadinessDelay),
+  });
+}
+
+function selectActiveWaitReadinessDelay(options = {}) {
+  const evidence = normalizeActiveWaitReadinessDelayEvidence(options);
+  const decision = ACTIVE_WAIT_READINESS_DELAY_DECISION_TABLE.find((entry) =>
+    entry.matches(evidence),
+  );
+  if (decision?.outcome.source === ACTIVE_WAIT_READINESS_DELAY_SOURCE.PROGRESS) {
+    return evidence.progressReadinessDelay;
+  }
+  if (
+    decision?.outcome.source === ACTIVE_WAIT_READINESS_DELAY_SOURCE.NO_PROGRESS
+  ) {
+    return evidence.noProgressReadinessDelay;
+  }
+  return null;
 }
 
 function normalizeActiveWaitProgressCoverageNodeCount(progressSnapshot) {
@@ -740,6 +839,10 @@ class Cluster extends Cluster5 {
         ZERO,
         attempts - (lastMeaningfulProgressAttempt || ZERO),
       );
+      const readinessDelay = selectActiveWaitReadinessDelay({
+        noProgress,
+        progressSnapshot,
+      });
       const maxAttempts =
         Number.isInteger(noProgress?.maxAttempts) &&
         noProgress.maxAttempts > ZERO ?
@@ -769,8 +872,7 @@ class Cluster extends Cluster5 {
         blockerHistory,
         admissionState,
         waitPolicy,
-        readinessDelay:
-          noProgress?.readinessDelay || progressSnapshot?.readinessDelay || null,
+        readinessDelay,
         readinessFailure,
         lastMeaningfulProgress: lastMeaningfulProgressSnapshot || null,
         lastMeaningfulChange,
@@ -1219,19 +1321,28 @@ class Cluster extends Cluster5 {
         reasonCode: ACTIVE_WAIT_NO_PROGRESS_REASON_CODE,
       } :
       null;
-    const finalReadinessFailure = finalNoProgressWithReasonCode ?
+    const finalNoProgressOwnerOutcome = finalNoProgressWithReasonCode ?
+      {
+        ...finalNoProgressWithReasonCode,
+        readinessDelay: selectActiveWaitReadinessDelay({
+          noProgress: finalNoProgressWithReasonCode,
+          progressSnapshot: terminalProgressSnapshot,
+        }),
+      } :
+      null;
+    const finalReadinessFailure = finalNoProgressOwnerOutcome ?
       buildActiveWaitReadinessFailure({
         mode: readinessMode,
-        noProgress: finalNoProgressWithReasonCode,
+        noProgress: finalNoProgressOwnerOutcome,
         attemptsSinceProgress: finalAttemptsSinceProgress,
         maxAttempts: noProgressMaxAttempts,
       }) :
       null;
     if (
-      finalNoProgress &&
-      !Array.isArray(finalNoProgress.activeGateBlockerHistory)
+      finalNoProgressOwnerOutcome &&
+      !Array.isArray(finalNoProgressOwnerOutcome.activeGateBlockerHistory)
     ) {
-      finalNoProgress.activeGateBlockerHistory =
+      finalNoProgressOwnerOutcome.activeGateBlockerHistory =
         summarizeActiveWaitBlockerHistory(blockerHistoryBySignature);
     }
     const timeoutActiveGateDetails = buildActiveGateDetails({
@@ -1239,7 +1350,7 @@ class Cluster extends Cluster5 {
       attempts: pollResult.attempts,
       elapsedMs: pollResult.elapsedMs,
       progressSnapshot: terminalProgressSnapshot,
-      noProgress: finalNoProgressWithReasonCode,
+      noProgress: finalNoProgressOwnerOutcome,
       readinessFailure: finalReadinessFailure,
       reasonCode: ACTIVE_WAIT_NO_PROGRESS_REASON_CODE,
       stalledReason:
@@ -1287,7 +1398,7 @@ class Cluster extends Cluster5 {
       invariantBreaches: priorityRecoveryInvariantBreaches,
       activeGate: timeoutActiveGateDetails.activeGate,
       ...timeoutActiveGateDetails,
-      activeGateNoProgress: finalNoProgress,
+      activeGateNoProgress: finalNoProgressOwnerOutcome,
     });
     const timeoutError = new Error(
       'Not all nodes reached ' +
@@ -1323,9 +1434,9 @@ class Cluster extends Cluster5 {
     );
     timeoutError.diagnostics = {
       activeGate: timeoutActiveGateDetails.activeGate,
-      noProgress: finalNoProgressWithReasonCode ?
+      noProgress: finalNoProgressOwnerOutcome ?
         {
-          ...finalNoProgressWithReasonCode,
+          ...finalNoProgressOwnerOutcome,
           readinessFailure: finalReadinessFailure,
           stalledReason:
               ACTIVE_WAIT_NO_PROGRESS_REASON_CYCLES_PREFIX +

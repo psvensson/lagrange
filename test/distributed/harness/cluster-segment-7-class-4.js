@@ -131,6 +131,19 @@ const STARTUP_SNAPSHOT_PROJECTION_DECISION_TABLE = Object.freeze([
       evidence.diagnosticActive !== true &&
       evidence.timeoutShaped === true &&
       evidence.publicationGateReady === true &&
+      evidence.snapshotCoverageComplete !== true &&
+      evidence.selectedSnapshotAdminReady === true &&
+      evidence.snapshotWitnessClean === true &&
+      evidence.nodeSelectedSnapshotObserved === true &&
+      evidence.nodePublicationDisagreementCount === ZERO,
+  }),
+  Object.freeze({
+    outcome: STARTUP_SNAPSHOT_PROJECTION_OUTCOME_APPLY,
+    matches: (evidence) =>
+      evidence.readinessMode === CLUSTER_READINESS_MODE_STARTUP &&
+      evidence.diagnosticActive !== true &&
+      evidence.timeoutShaped === true &&
+      evidence.publicationGateReady === true &&
       evidence.snapshotCoverageComplete === true &&
       evidence.selectedSnapshotAdminReady === true &&
       evidence.snapshotWitnessClean === true &&
@@ -356,6 +369,9 @@ function buildStartupSnapshotProjectionContext(
     publishedActiveNodeIds: normalizeDistinctStringArray(
       snapshotCoverage?.selectedPublishedActiveNodeIds,
     ),
+    selectedObservedNodeIds: normalizeDistinctStringArray(
+      snapshotCoverage?.selectedObservedNodeIds,
+    ),
     healthyReadinessNodeIds: normalizeDistinctStringArray(
       snapshotCoverage?.selectedHealthyReadinessNodeIds,
     ),
@@ -396,6 +412,8 @@ function normalizeStartupSnapshotProjectionEvidence(
     nodeCanonicalActive:
       projectionContext.publishedActiveNodeIds.includes(nodeId) ||
       projectionContext.healthyReadinessNodeIds.includes(nodeId),
+    nodeSelectedSnapshotObserved:
+      projectionContext.selectedObservedNodeIds.includes(nodeId),
     nodePublicationDisagreementCount: normalizeDistinctStringArray(
       publicationDisagreements,
     ).length,
@@ -796,7 +814,11 @@ class Cluster4 extends Cluster3 {
 
   _extractControlSnapshotPayload(snapshotResult) {
     const rows = Array.isArray(snapshotResult?.rows) ? snapshotResult.rows : [];
-    if (rows.length === ZERO || !rows[ZERO] || typeof rows[ZERO] !== 'object') {
+    if (
+      rows.length === ZERO ||
+      !rows[ZERO] ||
+      typeof rows[ZERO] !== TYPEOF_OBJECT
+    ) {
       return null;
     }
     return rows[ZERO];
@@ -804,7 +826,7 @@ class Cluster4 extends Cluster3 {
 
   _extractControlSnapshotSummary(snapshotResult) {
     const rows = Array.isArray(snapshotResult?.rows) ? snapshotResult.rows : [];
-    if (rows.length === 0) {
+    if (rows.length === ZERO) {
       return {
         nodes: [],
         capturedAtMs: null,
@@ -873,7 +895,7 @@ class Cluster4 extends Cluster3 {
   }
 
   _summarizeControlSnapshotPublication(publication) {
-    if (!publication || typeof publication !== 'object') {
+    if (!publication || typeof publication !== TYPEOF_OBJECT) {
       return null;
     }
     const publishedActiveNodeIds = parseJsonArrayField(
@@ -1259,10 +1281,10 @@ class Cluster4 extends Cluster3 {
           publication.publicationEpoch ?? publication.publication_epoch,
         ) ?? null,
       publicationStatus:
-        typeof publication.publicationStatus === 'string' &&
+        typeof publication.publicationStatus === TYPEOF_STRING &&
         publication.publicationStatus.length > ZERO ?
           publication.publicationStatus :
-          typeof publication.status === 'string' &&
+          typeof publication.status === TYPEOF_STRING &&
               publication.status.length > ZERO ?
             publication.status :
             null,
@@ -1293,7 +1315,7 @@ class Cluster4 extends Cluster3 {
           participationStateCounts,
         } :
         {}),
-      ...(typeof recoveryProtocolState === 'string' &&
+      ...(typeof recoveryProtocolState === TYPEOF_STRING &&
       recoveryProtocolState.length > ZERO ?
         {
           recoveryProtocolState,

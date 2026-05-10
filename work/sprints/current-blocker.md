@@ -4,13 +4,13 @@
 
 Sprint: `work/sprints/active-2026-q2-spec-led-runtime-modularization.md`
 
-Package: `work/packages/active-20260510-spec-led-runtime-modularization-operation-workflow-progress-sql-transactions-dispatch-pending-frontier.md`
+Package: `work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md`
 
 Scenario: `spec-led-runtime-modularization`
 
-Artifact: `test-output/reports/rolling-restart-spec-led-runtime-modularization-workflow-progress-sql-transactions-dispatch-pending-direct-diagnostic.report.json`
+Artifact: `test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability.report.json`
 
-Playback: `test-output/reports/.playback/rolling-restart-spec-led-runtime-modularization-workflow-progress-sql-transactions-dispatch-pending-direct-diagnostic/rolling-restart/`
+Playback: `test-output/reports/.playback/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability/rolling-restart/`
 
 ## Boundary
 
@@ -20,20 +20,23 @@ Boundary: `snapshot_coverage`
 
 Dominant reason: `active_gate_timed_out`
 
-Current state: The workflow-progress slice now keeps event-driven wait_for_operation_progress serial-wait carriers in recovering_in_flight instead of restoring needs_operation / priority_operation_serial_wait, and the topology analyzer ranks all-recovering_in_flight priority evidence as retryable. Focused owner, analyzer, CLI, and touched-file guardrails pass. The latest representative report still fails, but publication ACK convergence is satisfied and priorityRecovery=none/recovering_in_flight; the normalized first blocked frontier has migrated to startup_active_gate_owner / snapshot_coverage with snapshotCoverage=3/5 and selected snapshot reachability timeout for 7493b0ab-a054-5fad-a91b-5e331db29304.
+Current state: Residual clean partial snapshot coverage for selected node 8be8d30f-4499-5eed-865c-71b4d529a67a is traced and frozen. The explain output remains startup_active_gate_owner / snapshot_coverage with snapshotCoverage=2/5, inactive_nodes=2, activeNodeCount=3/5, selectedSnapshotError=unknown, readinessDelayCause=none, publication ACK convergence satisfied, and priority recovery retryable. Focused harness coverage confirms this is true partial runtime coverage with two inactive nodes, not a diagnostics projection or owner-path defect to manufacture ready.
 
 ## Next Action
 
-Close or migrate this workflow-progress package to a successor active-gate snapshot-coverage package using the generated evidence block. Before active-gate implementation, run the required review/fix/implementation subagents and freeze the selectedSnapshotError plus snapshotCoverage=3/5 fixture.
+Review the focused residual classification slice. If accepted, migrate or continue from the true runtime partial-coverage cause behind the two inactive nodes and 2/5 selected snapshot coverage without reopening selected reachability timeout, publication ACK convergence, or priority recovery.
 
 ## Proof Ladder
 
-1. `node --test test/control-plane/priority-recovery-snapshot.test.js`
-2. `node --test test/diagnostics/topology-convergence-graph.test.js`
-3. `node --test test/scripts/analyze-topology-convergence.test.js`
-4. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-workflow-progress-sql-transactions-dispatch-pending-direct-diagnostic.report.json --explain active_gate_snapshot_coverage`
-5. `Touched-file static guardrails selected by operation_workflow_owner and topology convergence analyzer ownership`
-6. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-spec-led-runtime-modularization-workflow-progress-sql-transactions-dispatch-pending-direct-diagnostic.report.json --fast-local --verbose`
+1. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability.report.json --explain active_gate_snapshot_coverage`
+2. `Focused active-gate snapshot reachability fixture for 35a891b8-c1a0-5064-9c6e-2acfba61c2a7 with snapshotCoverage=3/5 and readinessDelayCause=snapshot_reachability_timeout`
+3. `Focused diagnostics-backed selected snapshot regression preserving partial 3/5 coverage while neutralizing redundant reachability timeout`
+4. `Focused clean partial residual fixture for 8be8d30f-4499-5eed-865c-71b4d529a67a with snapshotCoverage=2/5 and readinessDelayCause=none`
+5. `Focused TAP regression proving clean partial startup coverage remains blocked when two nodes are inactive`
+6. `node --test test/diagnostics/topology-convergence-graph.test.js test/scripts/analyze-topology-convergence.test.js`
+7. `TAP_ALLOW_INCOMPLETE_COVERAGE=1 npx tap test/distributed/harness/__tests__/cluster.test-part-5.js`
+8. `Modified-file decision-boundary and runtime-grammar guardrails; literal guard not applicable to legacy TAP test baseline`
+9. `npm run work:validate`
 
 ## Model Fit
 
@@ -45,32 +48,29 @@ Scope shape: `owner-boundary-contraction`
 
 Escalation triggers:
 
-1. `workflow progress evidence requires changes outside operation_workflow_owner or dispatch service wake/replay`
-2. `focused fixture exposes operation_scheduling, rebalancer_handoff, or workflow_timeout again`
-3. `representative proof still fails on the same sql_transactions-p1 dispatch_pending no-step-transition witness after owner fix`
+1. `snapshot reachability requires changes outside startup active-gate owner, readiness, active-gate harness, or diagnostics consumers`
+2. `focused fixture exposes operation_workflow_owner, publication convergence, or priority recovery as the first frontier again`
+3. `representative proof still fails on active_gate_snapshot_coverage after owner repair`
 
 ## Touched Files
 
-1. `src/rebalancer/operation-workflow-owner*.js`
-2. `src/rebalancer/operation-workflow-owner-ports.js`
-3. `src/control-plane/replica-dispatch-service*.js`
-4. `src/control-plane/priority-recovery-snapshot*.js`
-5. `src/control-plane/priority-recovery-snapshot-stage-3.js`
-6. `src/control-plane/priority-recovery-snapshot-stage-10.js`
-7. `test/rebalancer/*workflow*.test.js`
-8. `test/rebalancer/operation-workflow-owner-adapter.test.js`
-9. `test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js`
-10. `test/control-plane/*dispatch*.test.js`
-11. `test/control-plane/priority-recovery-snapshot*.js`
-12. `test/control-plane/priority-recovery-snapshot-operation-owner-outcome.test.js`
-13. `test/control-plane/priority-recovery-snapshot.test.js`
-14. `src/diagnostics/topology-convergence-graph.js`
-15. `test/diagnostics/topology-convergence-graph.test.js`
-16. `test/scripts/analyze-topology-convergence.test.js`
-17. `test/scripts/__fixtures__/topology-convergence/priority-workflow-progress-recovering-in-flight.fixture.json`
-18. `test/scripts/__fixtures__/topology-convergence/priority-workflow-progress-recovering-in-flight.expected.json`
-19. `work/model-ledger.jsonl`
-20. `work/packages/active-20260510-spec-led-runtime-modularization-operation-workflow-progress-sql-transactions-dispatch-pending-frontier.md`
-21. `work/sprints/active-2026-q2-spec-led-runtime-modularization.md`
-22. `work/sprints/current-blocker.json`
-23. `work/sprints/current-blocker.md`
+1. `src/control-plane/*readiness*.js`
+2. `src/control-plane/bootstrap-readiness-owner*.js`
+3. `test/control-plane/*readiness*.test.js`
+4. `test/distributed/harness/active-gate-contract.js`
+5. `test/distributed/harness/cluster-segment-7*.js`
+6. `test/distributed/harness/cluster-segment-7-class-5.js`
+7. `test/distributed/harness/failure-bundle*.js`
+8. `test/distributed/harness/__tests__/cluster.test-part-4.js`
+9. `test/distributed/harness/__tests__/cluster.test-part-5.js`
+10. `test/distributed/harness/__tests__/failure-bundle-active-gate-tail-test-cases.js`
+11. `test/scripts/__fixtures__/topology-convergence/active-gate-snapshot*.json`
+12. `src/diagnostics/topology-convergence-graph.js`
+13. `scripts/analyze-topology-convergence.js`
+14. `test/diagnostics/topology-convergence-graph.test.js`
+15. `test/scripts/analyze-topology-convergence.test.js`
+16. `work/model-ledger.jsonl`
+17. `work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md`
+18. `work/sprints/active-2026-q2-spec-led-runtime-modularization.md`
+19. `work/sprints/current-blocker.json`
+20. `work/sprints/current-blocker.md`

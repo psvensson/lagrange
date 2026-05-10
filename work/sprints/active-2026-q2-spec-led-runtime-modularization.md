@@ -8,52 +8,44 @@ the representative gate before companion cleanup or broad successor work.
 ## Current Package Snapshot
 
 Current blocker package:
-`work/packages/active-20260510-spec-led-runtime-modularization-operation-workflow-progress-sql-transactions-dispatch-pending-frontier.md`.
+`work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md`.
 
 Owner boundary:
 `startup_active_gate_owner / snapshot_coverage`.
 
-Current state: prior packages through operation scheduling SQL write operations
-are closed. The proof-only package classified the post-scheduling report as
-`migrated-frontier` into `operation_workflow_owner / workflow_progress`.
-The active workflow-progress package has implemented the dispatch-pending
-owner re-entry slice and focused diagnostics for appended and direct persisted
-`PENDING` snapshots plus absent/non-active-target `SENDING` witnesses. The
-fresh direct-diagnostic representative rerun reduced the former
-`sql_transaction_participants-p1` `SENDING`/non-active-target
-`operation_stalled` witness to `recovering_in_flight` with no blocker reasons.
-The retained serial-wait repair also keeps event-driven
-`wait_for_operation_progress` carriers in `recovering_in_flight` instead of
-promoting them back to `needs_operation` /
-`priority_operation_serial_wait`. Publication ACK convergence is satisfied
-with `pendingAck=0` and `missingPublished=0`; priority recovery is now a
-retryable edge because all unresolved semantic states are
-`recovering_in_flight`. The normalized first blocked frontier has migrated to
-`startup_active_gate_owner / snapshot_coverage` with `snapshotCoverage=3/5`
-and selected snapshot reachability timeout for
-`7493b0ab-a054-5fad-a91b-5e331db29304`.
+Current state: prior packages through workflow-progress SQL transactions
+dispatch-pending are closed or migrated. The active package froze the original
+`snapshotCoverage=3/5` reachability-timeout witness, repaired readiness-delay
+selection, froze the residual `snapshotCoverage=4/5` partial fixture, repaired
+partial selected-snapshot projection for covered timeout-shaped nodes, repaired
+the selected `35a891b8-c1a0-5064-9c6e-2acfba61c2a7` reachability timeout, and
+now froze the clean residual selected node
+`8be8d30f-4499-5eed-865c-71b4d529a67a`. Focused evidence shows the latest
+representative report is true partial runtime coverage, not an owner-path
+projection defect: `startup_active_gate_owner / snapshot_coverage` remains
+blocked with `snapshotCoverage=2/5`, blockers
+`inactive_nodes=2,snapshot_coverage=2/5`, `activeNodeCount=3/5`, selected
+snapshot error `unknown`, readiness delay cause `none`, publication ACK
+convergence satisfied, and priority recovery not reopened.
 
 Active and queued work:
 Current active package:
-`work/packages/active-20260510-spec-led-runtime-modularization-operation-workflow-progress-sql-transactions-dispatch-pending-frontier.md`.
+`work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md`.
 
-Latest closed proof package:
-`work/packages/done-20260510-spec-led-runtime-modularization-representative-green-proof-or-next-blocker.md`.
+Latest closed runtime package:
+`work/packages/done-20260510-spec-led-runtime-modularization-operation-workflow-progress-sql-transactions-dispatch-pending-frontier.md`.
 
 Companion cleanup:
 `work/packages/todo-20260509-spec-led-runtime-modularization-active-gate-report-schema-alias-deletion.md`.
 
-Latest closed runtime package:
-`work/packages/done-20260509-spec-led-runtime-modularization-operation-scheduling-sql-write-operations-frontier.md`.
+Latest closed proof package:
+`work/packages/done-20260510-spec-led-runtime-modularization-representative-green-proof-or-next-blocker.md`.
 
-Next proof surface: close or migrate the workflow-progress package to a
-successor active-gate snapshot-coverage package using
-`test-output/reports/rolling-restart-spec-led-runtime-modularization-workflow-progress-sql-transactions-dispatch-pending-direct-diagnostic.report.json`.
-Before active-gate implementation starts, run the required review, fix if
-needed, and implementation subagents. The successor fixture should freeze the
-selected snapshot reachability timeout plus `snapshotCoverage=3/5` evidence,
-while publication ACK convergence and priority recovery retryable status stay
-satisfied.
+Next proof surface: review the focused residual classification slice from
+`test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability.report.json`, then migrate or continue from
+the true runtime cause behind the two inactive nodes and 2/5 selected snapshot
+coverage without reopening selected reachability timeout, publication ACK
+convergence, or priority recovery.
 
 ## Goal
 
@@ -121,8 +113,9 @@ the contract and proof ladder are stable.
 19. [Operation Workflow Progress Dispatch-Pending Frontier](../packages/done-20260509-spec-led-runtime-modularization-operation-workflow-progress-dispatch-pending-frontier.md)
 20. [Operation Scheduling SQL Write Operations Frontier](../packages/done-20260509-spec-led-runtime-modularization-operation-scheduling-sql-write-operations-frontier.md)
 21. [Representative Green Proof Or Next Blocker Classification](../packages/done-20260510-spec-led-runtime-modularization-representative-green-proof-or-next-blocker.md)
-22. [Operation Workflow Progress SQL Transactions Dispatch-Pending Frontier](../packages/active-20260510-spec-led-runtime-modularization-operation-workflow-progress-sql-transactions-dispatch-pending-frontier.md)
-23. [Active Gate Report Schema Alias Deletion](../packages/todo-20260509-spec-led-runtime-modularization-active-gate-report-schema-alias-deletion.md)
+22. [Operation Workflow Progress SQL Transactions Dispatch-Pending Frontier](../packages/done-20260510-spec-led-runtime-modularization-operation-workflow-progress-sql-transactions-dispatch-pending-frontier.md)
+23. [Active Gate Snapshot Coverage Reachability Frontier](../packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md)
+24. [Active Gate Report Schema Alias Deletion](../packages/todo-20260509-spec-led-runtime-modularization-active-gate-report-schema-alias-deletion.md)
 
 ## Model Fit Strategy
 
@@ -159,17 +152,22 @@ The sprint now separates broad orchestration from Spark-safe leaf work.
    new owner-boundary package if the normalized evidence moved. It must not
    edit runtime, tests, diagnostics, analyzers, or harness behavior.
 9. `Operation Workflow Progress SQL Transactions Dispatch-Pending Frontier` is
-   a representative frontier closure package intended for `gpt-5.3-codex`.
-   It owns the migrated `operation_workflow_owner / workflow_progress`
-   boundary for the `sql_transactions-p1` persisted-not-dispatched
-   dispatch-pending witness and must not reopen the closed operation scheduling
-   package unless the focused fixture proves regression.
-10. A package intended for `gpt-5.3-codex-spark` must keep `Scope shape:
-   leaf-slice`, list owned and forbidden files, freeze decisions, name
-   escalation triggers, and provide focused proof.
-11. Representative proof may classify a leaf slice as closed, reduced,
-   migrated, or same-frontier. It must not expand implementation scope inside
-   the leaf package.
+    a representative frontier closure package intended for `gpt-5.3-codex`.
+    It owns the migrated `operation_workflow_owner / workflow_progress`
+    boundary for the `sql_transactions-p1` persisted-not-dispatched
+    dispatch-pending witness and must not reopen the closed operation scheduling
+    package unless the focused fixture proves regression.
+10. `Active Gate Snapshot Coverage Reachability Frontier` is a representative
+    frontier closure package intended for `gpt-5.3-codex`. It owns the migrated
+    `startup_active_gate_owner / snapshot_coverage` boundary and must not reopen
+    workflow progress, publication convergence, or priority recovery unless the
+    focused fixture proves regression.
+11. A package intended for `gpt-5.3-codex-spark` must keep `Scope shape:
+    leaf-slice`, list owned and forbidden files, freeze decisions, name
+    escalation triggers, and provide focused proof.
+12. Representative proof may classify a leaf slice as closed, reduced,
+    migrated, or same-frontier. It must not expand implementation scope inside
+    the leaf package.
 
 ## Activation Rules
 

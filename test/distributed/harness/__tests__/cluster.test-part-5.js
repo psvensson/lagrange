@@ -37,6 +37,7 @@ const SNAPSHOT_REPLAY_TEST_DOCKER_SOCKET_PATH = '/var/run/docker.sock';
 const SNAPSHOT_REPLAY_TEST_IMAGE = 'distributed-db:test';
 const SNAPSHOT_REPLAY_TEST_EMPTY_LOG = '';
 const SNAPSHOT_REPLAY_TEST_ADMIN_HEALTH_SOURCE = 'admin_health';
+const SNAPSHOT_REPLAY_TEST_CONTROL_SNAPSHOT_SOURCE = 'control_snapshot';
 const SNAPSHOT_REPLAY_TEST_REPAIR_TRIGGER_CODE =
   'discovery_node_coverage_gap';
 const SNAPSHOT_REPLAY_TEST_REPAIR_RETRY_AFTER_MS = 250;
@@ -98,6 +99,90 @@ const SNAPSHOT_REPLAY_TEST_STALE_MISSING_NODE_IDS = Object.freeze([
   SNAPSHOT_REPLAY_TEST_NODE_ID.STRONG_EXTRA,
   SNAPSHOT_REPLAY_TEST_NODE_ID.STALE_EXTRA,
 ]);
+const SNAPSHOT_REACHABILITY_TIMEOUT_SELECTED_NODE_ID =
+  SNAPSHOT_REPLAY_TEST_NODE_ID.ADMIN_READY_STALE;
+const SNAPSHOT_REACHABILITY_TIMEOUT_ERROR =
+  'Control snapshot reachability probe timed out for ' +
+  SNAPSHOT_REACHABILITY_TIMEOUT_SELECTED_NODE_ID;
+const SNAPSHOT_REACHABILITY_TIMEOUT_OBSERVED_NODE_IDS = Object.freeze([
+  SNAPSHOT_REPLAY_TEST_NODE_ID.ADMIN_READY_STALE,
+  SNAPSHOT_REPLAY_TEST_NODE_ID.SEED,
+  SNAPSHOT_REPLAY_TEST_NODE_ID.STALE_EXTRA,
+]);
+const SNAPSHOT_REACHABILITY_TIMEOUT_PUBLISHED_NODE_IDS =
+  SNAPSHOT_REACHABILITY_TIMEOUT_OBSERVED_NODE_IDS;
+const SNAPSHOT_REACHABILITY_TIMEOUT_MISSING_NODE_IDS = Object.freeze([
+  SNAPSHOT_REPLAY_TEST_NODE_ID.BASELINE,
+  SNAPSHOT_REPLAY_TEST_NODE_ID.STRONG_EXTRA,
+]);
+const ACTIVE_GATE_REACHABILITY_DELAY_TEST_NAME =
+  'Unit: _waitForAllActive keeps terminal reachability delay from selected progress';
+const ACTIVE_GATE_REACHABILITY_DELAY_CLUSTER_SIZE = 5;
+const ACTIVE_GATE_REACHABILITY_DELAY_CONVERGENCE_MS = 30;
+const ACTIVE_GATE_REACHABILITY_DELAY_NODE_IDS = Object.freeze([
+  'seed-1',
+  'joiner-1',
+  'joiner-2',
+  'joiner-3',
+  'joiner-4',
+]);
+const ACTIVE_GATE_REACHABILITY_DELAY_ERROR =
+  'Control snapshot reachability probe timed out for seed-1';
+const ACTIVE_GATE_REACHABILITY_DELAY_CAUSE =
+  'snapshot_reachability_timeout';
+const ACTIVE_GATE_REACHABILITY_DELAY_PUBLICATION_STATUS = 'PUBLISHED';
+const ACTIVE_GATE_REACHABILITY_DELAY_RECOVERY_PROTOCOL_STATE =
+  'priority_spread_pending';
+const ACTIVE_GATE_REACHABILITY_DELAY_ZERO = 0;
+const ACTIVE_GATE_REACHABILITY_DELAY_ONE = 1;
+const ACTIVE_GATE_REACHABILITY_DELAY_ACTIVE_COUNT = 2;
+const ACTIVE_GATE_REACHABILITY_DELAY_INACTIVE_COUNT = 3;
+const ACTIVE_GATE_REACHABILITY_DELAY_SELECTED_COVERAGE_COUNT = 3;
+const ACTIVE_GATE_REACHABILITY_DELAY_BLOCKED_PARTITION_COUNT = 5;
+const ACTIVE_GATE_REACHABILITY_DELAY_TOTAL_SPREAD_GAP = 10;
+const ACTIVE_GATE_REACHABILITY_DELAY_SLEEP_MS = 10;
+const ACTIVE_GATE_REACHABILITY_DELAY_STATE_ACTIVE = 'active';
+const ACTIVE_GATE_REACHABILITY_DELAY_STATE_INACTIVE = 'inactive';
+const ACTIVE_GATE_REACHABILITY_DELAY_STRING_TYPE = 'string';
+const ACTIVE_GATE_REACHABILITY_DELAY_TIMEOUT_MESSAGE =
+  'Not all nodes reached ACTIVE state within';
+const ACTIVE_GATE_REACHABILITY_DELAY_ASSERTION =
+  'startup timeout should keep the selected reachability delay evidence';
+const ACTIVE_GATE_PARTIAL_RESIDUAL_TEST_NAME =
+  'Unit: _probeClusterActiveState keeps clean partial startup coverage blocked';
+const ACTIVE_GATE_PARTIAL_RESIDUAL_TIMEOUT_MS = 5000;
+const ACTIVE_GATE_PARTIAL_RESIDUAL_READY_STATUS = 200;
+const ACTIVE_GATE_PARTIAL_RESIDUAL_BLOCKED_STATUS = 503;
+const ACTIVE_GATE_PARTIAL_RESIDUAL_READY_PHASE = 'JOIN_READY';
+const ACTIVE_GATE_PARTIAL_RESIDUAL_BLOCKED_PHASE = 'CONTROL_READY';
+const ACTIVE_GATE_PARTIAL_RESIDUAL_ACTIVE_STATE = 'active';
+const ACTIVE_GATE_PARTIAL_RESIDUAL_BLOCKED_STATE = 'warming';
+const ACTIVE_GATE_PARTIAL_RESIDUAL_BLOCKED_REASON =
+  'BOOTSTRAP_NOT_READY';
+const ACTIVE_GATE_PARTIAL_RESIDUAL_PUBLICATION_EPOCH = 2;
+const ACTIVE_GATE_PARTIAL_RESIDUAL_EXPECTED_COVERAGE = 2;
+const ACTIVE_GATE_PARTIAL_RESIDUAL_EXPECTED_ACTIVE = 3;
+const ACTIVE_GATE_PARTIAL_RESIDUAL_EXPECTED_INACTIVE = 2;
+const ACTIVE_GATE_PARTIAL_RESIDUAL_SELECTED_NODE_ID =
+  SNAPSHOT_REPLAY_TEST_NODE_ID.STRONG_EXTRA;
+const ACTIVE_GATE_PARTIAL_RESIDUAL_OBSERVED_NODE_IDS = Object.freeze([
+  SNAPSHOT_REPLAY_TEST_NODE_ID.SEED,
+  SNAPSHOT_REPLAY_TEST_NODE_ID.ADMIN_READY_STALE,
+]);
+const ACTIVE_GATE_PARTIAL_RESIDUAL_MISSING_PUBLISHED_NODE_IDS = Object.freeze([
+  SNAPSHOT_REPLAY_TEST_NODE_ID.BASELINE,
+  SNAPSHOT_REPLAY_TEST_NODE_ID.STRONG_EXTRA,
+  SNAPSHOT_REPLAY_TEST_NODE_ID.STALE_EXTRA,
+]);
+const ACTIVE_GATE_PARTIAL_RESIDUAL_READY_NODE_IDS = Object.freeze([
+  SNAPSHOT_REPLAY_TEST_NODE_ID.SEED,
+  SNAPSHOT_REPLAY_TEST_NODE_ID.ADMIN_READY_STALE,
+  SNAPSHOT_REPLAY_TEST_NODE_ID.STRONG_EXTRA,
+]);
+const ACTIVE_GATE_PARTIAL_RESIDUAL_SELECTED_CAPTURED_AT_MS =
+  SNAPSHOT_REPLAY_TEST_ADMIN_CAPTURED_AT_MS;
+const ACTIVE_GATE_PARTIAL_RESIDUAL_STALE_CAPTURED_AT_MS =
+  SNAPSHOT_REPLAY_TEST_SEED_CAPTURED_AT_MS;
 
 
 /**
@@ -321,6 +406,255 @@ test(
     );
   },
 );
+
+test(
+  'Unit: _probeControlSnapshotCoverage keeps diagnostics-backed partial snapshot clean',
+  async () => {
+    const cluster = createCluster({
+      size: SNAPSHOT_REPLAY_TEST_CLUSTER_SIZE,
+      docker: {socketPath: SNAPSHOT_REPLAY_TEST_DOCKER_SOCKET_PATH},
+      image: SNAPSHOT_REPLAY_TEST_IMAGE,
+    });
+    const reachabilityProbeCalls = [];
+    const snapshotByNodeId = new Map([
+      [
+        SNAPSHOT_REACHABILITY_TIMEOUT_SELECTED_NODE_ID,
+        {
+          nodes: SNAPSHOT_REACHABILITY_TIMEOUT_OBSERVED_NODE_IDS,
+          capturedAtMs: SNAPSHOT_REPLAY_TEST_ADMIN_CAPTURED_AT_MS,
+          controlPlaneDiagnostics: {
+            publicationConvergence: {
+              publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+              publishedActiveNodeIds:
+                SNAPSHOT_REACHABILITY_TIMEOUT_PUBLISHED_NODE_IDS,
+              pendingAckNodeIds: [],
+              acknowledgedNodeIds:
+                SNAPSHOT_REACHABILITY_TIMEOUT_PUBLISHED_NODE_IDS,
+            },
+          },
+        },
+      ],
+      [
+        SNAPSHOT_REPLAY_TEST_NODE_ID.STALE_EXTRA,
+        {
+          nodes: SNAPSHOT_REPLAY_TEST_LOWER_COVERAGE_OBSERVED_NODE_IDS,
+          capturedAtMs: SNAPSHOT_REPLAY_TEST_SEED_CAPTURED_AT_MS,
+          controlPlaneDiagnostics: {
+            publicationConvergence: {
+              publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+              publishedActiveNodeIds:
+                SNAPSHOT_REPLAY_TEST_LOWER_COVERAGE_OBSERVED_NODE_IDS,
+              pendingAckNodeIds: [],
+              acknowledgedNodeIds:
+                SNAPSHOT_REPLAY_TEST_LOWER_COVERAGE_OBSERVED_NODE_IDS,
+            },
+          },
+        },
+      ],
+    ]);
+
+    for (const [index, nodeId] of SNAPSHOT_REPLAY_TEST_EXPECTED_NODE_IDS.entries()) {
+      cluster._nodes.set(nodeId, {
+        id: nodeId,
+        role:
+          nodeId === SNAPSHOT_REACHABILITY_TIMEOUT_SELECTED_NODE_ID ?
+            NODE_ROLES.SEED :
+            NODE_ROLES.JOINER,
+        async getStatus() {
+          return {rows: [{status: SERVICE_STATUS.ACTIVE}]};
+        },
+        async getReachabilityDiagnostics() {
+          reachabilityProbeCalls.push(nodeId);
+          if (nodeId === SNAPSHOT_REACHABILITY_TIMEOUT_SELECTED_NODE_ID) {
+            throw new Error(SNAPSHOT_REACHABILITY_TIMEOUT_ERROR);
+          }
+          return {
+            reachable: index % 2 === 0,
+            adminReady: false,
+            reachableBy: null,
+            lastError: null,
+          };
+        },
+        async getControlSnapshot() {
+          const snapshot = snapshotByNodeId.get(nodeId);
+          if (!snapshot) {
+            throw new Error('snapshot lane unavailable for ' + nodeId);
+          }
+          return {rows: [snapshot]};
+        },
+        async getLogs(_options) {
+          return SNAPSHOT_REPLAY_TEST_EMPTY_LOG;
+        },
+      });
+    }
+
+    const coverage = await cluster._probeControlSnapshotCoverage(
+      Date.now() + SNAPSHOT_REPLAY_TEST_DEADLINE_EXTENSION_MS,
+      SNAPSHOT_REPLAY_TEST_EXPECTED_NODE_IDS,
+    );
+
+    assert.strictEqual(
+      coverage.completeCoverage,
+      false,
+      'selected witness should preserve the current partial 3/5 coverage shape',
+    );
+    assert.strictEqual(
+      coverage.bestCoverageNodeCount,
+      SNAPSHOT_REACHABILITY_TIMEOUT_OBSERVED_NODE_IDS.length,
+      'selected witness should keep the best observed coverage count',
+    );
+    assert.strictEqual(
+      coverage.selectedSnapshotNodeId,
+      SNAPSHOT_REACHABILITY_TIMEOUT_SELECTED_NODE_ID,
+      'diagnostics-backed 35a891... witness should remain selected',
+    );
+    assert.deepStrictEqual(
+      coverage.selectedObservedNodeIds,
+      SNAPSHOT_REACHABILITY_TIMEOUT_OBSERVED_NODE_IDS,
+      'selected witness should freeze the observed partial-coverage cohort',
+    );
+    assert.deepStrictEqual(
+      coverage.selectedMissingPublishedNodeIds,
+      SNAPSHOT_REACHABILITY_TIMEOUT_MISSING_NODE_IDS,
+      'selected witness should keep publication ACK debt separate from coverage',
+    );
+    assert.strictEqual(
+      coverage.selectedSnapshotAdminReady,
+      true,
+      'control snapshot diagnostics should provide the admin-backed witness',
+    );
+    assert.strictEqual(
+      coverage.selectedSnapshotReachableBy,
+      SNAPSHOT_REPLAY_TEST_CONTROL_SNAPSHOT_SOURCE,
+      'selected witness should identify control snapshot diagnostics as source',
+    );
+    assert.strictEqual(
+      coverage.selectedSnapshotReachabilityError,
+      null,
+      'redundant reachability timeout should not poison a diagnostics-backed snapshot',
+    );
+    assert.deepStrictEqual(
+      reachabilityProbeCalls.filter(
+        (nodeId) => nodeId === SNAPSHOT_REACHABILITY_TIMEOUT_SELECTED_NODE_ID,
+      ),
+      [SNAPSHOT_REACHABILITY_TIMEOUT_SELECTED_NODE_ID],
+      'diagnostics-backed selected snapshot should preserve the timeout probe',
+    );
+  },
+);
+
+test(ACTIVE_GATE_PARTIAL_RESIDUAL_TEST_NAME, async () => {
+  const cluster = createCluster({
+    size: SNAPSHOT_REPLAY_TEST_CLUSTER_SIZE,
+    docker: {socketPath: SNAPSHOT_REPLAY_TEST_DOCKER_SOCKET_PATH},
+    image: SNAPSHOT_REPLAY_TEST_IMAGE,
+  });
+  const buildReadiness = (nodeId) => {
+    const active =
+      ACTIVE_GATE_PARTIAL_RESIDUAL_READY_NODE_IDS.includes(nodeId);
+    return {
+      status: active ?
+        ACTIVE_GATE_PARTIAL_RESIDUAL_READY_STATUS :
+        ACTIVE_GATE_PARTIAL_RESIDUAL_BLOCKED_STATUS,
+      phase: active ?
+        ACTIVE_GATE_PARTIAL_RESIDUAL_READY_PHASE :
+        ACTIVE_GATE_PARTIAL_RESIDUAL_BLOCKED_PHASE,
+      state: active ?
+        ACTIVE_GATE_PARTIAL_RESIDUAL_ACTIVE_STATE :
+        ACTIVE_GATE_PARTIAL_RESIDUAL_BLOCKED_STATE,
+      reasons: active ? [] : [ACTIVE_GATE_PARTIAL_RESIDUAL_BLOCKED_REASON],
+    };
+  };
+  const buildSnapshotRow = (nodeId) => ({
+    nodes: ACTIVE_GATE_PARTIAL_RESIDUAL_OBSERVED_NODE_IDS,
+    capturedAtMs:
+      nodeId === ACTIVE_GATE_PARTIAL_RESIDUAL_SELECTED_NODE_ID ?
+        ACTIVE_GATE_PARTIAL_RESIDUAL_SELECTED_CAPTURED_AT_MS :
+        ACTIVE_GATE_PARTIAL_RESIDUAL_STALE_CAPTURED_AT_MS,
+    controlPlaneDiagnostics: {
+      publicationConvergence: {
+        publicationEpoch: ACTIVE_GATE_PARTIAL_RESIDUAL_PUBLICATION_EPOCH,
+        publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+        publishedActiveNodeIds: ACTIVE_GATE_PARTIAL_RESIDUAL_OBSERVED_NODE_IDS,
+        pendingAckNodeIds: [],
+        acknowledgedNodeIds: ACTIVE_GATE_PARTIAL_RESIDUAL_OBSERVED_NODE_IDS,
+      },
+    },
+  });
+
+  for (const nodeId of SNAPSHOT_REPLAY_TEST_EXPECTED_NODE_IDS) {
+    cluster._nodes.set(nodeId, {
+      id: nodeId,
+      role:
+        nodeId === SNAPSHOT_REPLAY_TEST_NODE_ID.SEED ?
+          NODE_ROLES.SEED :
+          NODE_ROLES.JOINER,
+      async probeBootstrapReadiness() {
+        return buildReadiness(nodeId);
+      },
+      async getReachabilityDiagnostics() {
+        const active =
+          ACTIVE_GATE_PARTIAL_RESIDUAL_READY_NODE_IDS.includes(nodeId);
+        return {
+          reachable: active,
+          adminReady: active,
+          reachableBy:
+            active === true ? SNAPSHOT_REPLAY_TEST_ADMIN_HEALTH_SOURCE : null,
+          lastError: null,
+        };
+      },
+      async getControlSnapshot() {
+        if (
+          nodeId === ACTIVE_GATE_PARTIAL_RESIDUAL_SELECTED_NODE_ID ||
+          nodeId === SNAPSHOT_REPLAY_TEST_NODE_ID.ADMIN_READY_STALE
+        ) {
+          return {rows: [buildSnapshotRow(nodeId)]};
+        }
+        throw new Error('snapshot lane unavailable for ' + nodeId);
+      },
+      async getLogs(_options) {
+        return SNAPSHOT_REPLAY_TEST_EMPTY_LOG;
+      },
+    });
+  }
+
+  const probeResult = await cluster._probeClusterActiveState(
+    Date.now() + ACTIVE_GATE_PARTIAL_RESIDUAL_TIMEOUT_MS,
+  );
+
+  assert.strictEqual(
+    probeResult.allActive,
+    false,
+    'clean partial startup coverage must stay blocked while nodes are inactive',
+  );
+  assert.strictEqual(
+    probeResult.snapshotCoverage.selectedSnapshotNodeId,
+    ACTIVE_GATE_PARTIAL_RESIDUAL_SELECTED_NODE_ID,
+    'the current residual selected node should remain the selected witness',
+  );
+  assert.strictEqual(
+    probeResult.snapshotCoverage.bestCoverageNodeCount,
+    ACTIVE_GATE_PARTIAL_RESIDUAL_EXPECTED_COVERAGE,
+    'clean residual coverage should remain partial at 2/5',
+  );
+  assert.deepStrictEqual(
+    probeResult.snapshotCoverage.selectedMissingPublishedNodeIds,
+    ACTIVE_GATE_PARTIAL_RESIDUAL_MISSING_PUBLISHED_NODE_IDS,
+    'selected publication debt should remain diagnostics, not readiness',
+  );
+  assert.strictEqual(
+    probeResult.nodeDiagnostics.filter((diagnostic) =>
+      diagnostic.active === true).length,
+    ACTIVE_GATE_PARTIAL_RESIDUAL_EXPECTED_ACTIVE,
+    'the active probe should preserve the observed 3/5 active cohort',
+  );
+  assert.strictEqual(
+    probeResult.nodeDiagnostics.filter((diagnostic) =>
+      diagnostic.active !== true).length,
+    ACTIVE_GATE_PARTIAL_RESIDUAL_EXPECTED_INACTIVE,
+    'the active probe should preserve the two real inactive nodes',
+  );
+});
 
 test('Unit: _probeControlSnapshotCoverage prefers authoritative admin-ready witnesses when coverage ties',
   async () => {
@@ -1993,6 +2327,171 @@ test('Unit: _waitForAllActive rejects CL-004 witness without strong admission',
       collectedFailureLogs,
       true,
       'startup snapshot-timeout path should collect failure logs',
+    );
+  });
+
+test(ACTIVE_GATE_REACHABILITY_DELAY_TEST_NAME,
+  async () => {
+    const cluster = createCluster({
+      size: ACTIVE_GATE_REACHABILITY_DELAY_CLUSTER_SIZE,
+      docker: {socketPath: SNAPSHOT_REPLAY_TEST_DOCKER_SOCKET_PATH},
+      image: SNAPSHOT_REPLAY_TEST_IMAGE,
+      timeouts: {convergence: ACTIVE_GATE_REACHABILITY_DELAY_CONVERGENCE_MS},
+    });
+
+    const buildNodeDiagnostics = () =>
+      ACTIVE_GATE_REACHABILITY_DELAY_NODE_IDS.map((nodeId, index) => ({
+      nodeId,
+      active: index < ACTIVE_GATE_REACHABILITY_DELAY_ACTIVE_COUNT,
+      state: index < ACTIVE_GATE_REACHABILITY_DELAY_ACTIVE_COUNT ?
+        ACTIVE_GATE_REACHABILITY_DELAY_STATE_ACTIVE :
+        ACTIVE_GATE_REACHABILITY_DELAY_STATE_INACTIVE,
+      reasons: [],
+    }));
+    const buildProbeResult = (snapshotCoverage) => ({
+      allActive: false,
+      nodeDiagnostics: buildNodeDiagnostics(),
+      snapshotCoverage,
+      publicationConvergenceGate: {
+        ready: true,
+        reasons: [],
+        publicationStatus: ACTIVE_GATE_REACHABILITY_DELAY_PUBLICATION_STATUS,
+        pendingAckNodeIds: [],
+        missingPublishedNodeIds: [],
+        recoveryProtocolState:
+          ACTIVE_GATE_REACHABILITY_DELAY_RECOVERY_PROTOCOL_STATE,
+        priorityPartitionSummary: {
+          satisfied: false,
+          blockedPartitionCount:
+            ACTIVE_GATE_REACHABILITY_DELAY_BLOCKED_PARTITION_COUNT,
+          totalSpreadGap: ACTIVE_GATE_REACHABILITY_DELAY_TOTAL_SPREAD_GAP,
+        },
+      },
+      priorityRecoveryInvariants: {
+        invariants: [],
+        failingInvariantIds: [],
+        failingInvariantReasonCodes: [],
+        passed: true,
+      },
+    });
+    const selectedProgressResult = buildProbeResult({
+      completeCoverage: false,
+      expectedNodeCount: ACTIVE_GATE_REACHABILITY_DELAY_NODE_IDS.length,
+      bestCoverageNodeCount:
+        ACTIVE_GATE_REACHABILITY_DELAY_SELECTED_COVERAGE_COUNT,
+      selectedNodeId:
+        ACTIVE_GATE_REACHABILITY_DELAY_NODE_IDS[
+          ACTIVE_GATE_REACHABILITY_DELAY_ZERO
+        ],
+      selectedAdminReady: false,
+      selectedReachableBy: null,
+      selectedReachabilityError: ACTIVE_GATE_REACHABILITY_DELAY_ERROR,
+      selectedPublicationConvergence: {
+        publicationEpoch: ACTIVE_GATE_REACHABILITY_DELAY_INACTIVE_COUNT,
+        publicationStatus: ACTIVE_GATE_REACHABILITY_DELAY_PUBLICATION_STATUS,
+        publishedActiveNodeIds: ACTIVE_GATE_REACHABILITY_DELAY_NODE_IDS.slice(
+          ACTIVE_GATE_REACHABILITY_DELAY_ZERO,
+          ACTIVE_GATE_REACHABILITY_DELAY_SELECTED_COVERAGE_COUNT,
+        ),
+        pendingAckNodeIds: [],
+        priorityPartitionSummary: {
+          satisfied: false,
+          blockedPartitionCount:
+            ACTIVE_GATE_REACHABILITY_DELAY_BLOCKED_PARTITION_COUNT,
+          totalSpreadGap: ACTIVE_GATE_REACHABILITY_DELAY_TOTAL_SPREAD_GAP,
+        },
+      },
+      selectedPublishedActiveNodeIds:
+        ACTIVE_GATE_REACHABILITY_DELAY_NODE_IDS.slice(
+          ACTIVE_GATE_REACHABILITY_DELAY_ZERO,
+          ACTIVE_GATE_REACHABILITY_DELAY_SELECTED_COVERAGE_COUNT,
+        ),
+      selectedMissingPublishedNodeIds:
+        ACTIVE_GATE_REACHABILITY_DELAY_NODE_IDS.slice(
+          ACTIVE_GATE_REACHABILITY_DELAY_SELECTED_COVERAGE_COUNT,
+        ),
+      selectedError: null,
+    });
+    const regressedProgressResult = buildProbeResult({
+      completeCoverage: false,
+      expectedNodeCount: ACTIVE_GATE_REACHABILITY_DELAY_NODE_IDS.length,
+      bestCoverageNodeCount: ACTIVE_GATE_REACHABILITY_DELAY_ZERO,
+      selectedNodeId:
+        ACTIVE_GATE_REACHABILITY_DELAY_NODE_IDS[
+          ACTIVE_GATE_REACHABILITY_DELAY_ONE
+        ],
+      selectedAdminReady: false,
+      selectedReachableBy: null,
+      selectedReachabilityError: null,
+      selectedPublicationConvergence: null,
+      selectedPublishedActiveNodeIds: [],
+      selectedMissingPublishedNodeIds: [],
+      selectedError: null,
+    });
+    const probeResults = [
+      selectedProgressResult,
+      regressedProgressResult,
+      regressedProgressResult,
+    ];
+    let probeIndex = ACTIVE_GATE_REACHABILITY_DELAY_ZERO;
+    cluster._probeClusterActiveState = async () => {
+      const result = probeResults[
+        Math.min(
+          probeIndex,
+          probeResults.length - ACTIVE_GATE_REACHABILITY_DELAY_ONE,
+        )
+      ];
+      probeIndex += ACTIVE_GATE_REACHABILITY_DELAY_ONE;
+      return result;
+    };
+    cluster._recordClusterStage = () => {};
+    cluster._collectFailureLogs = async () => {};
+    const originalDateNow = Date.now;
+    let fakeNowMs = ACTIVE_GATE_REACHABILITY_DELAY_ZERO;
+    Date.now = () => fakeNowMs;
+    cluster._sleep = async () => {
+      fakeNowMs += ACTIVE_GATE_REACHABILITY_DELAY_SLEEP_MS;
+    };
+
+    let timeoutError = null;
+    try {
+      await assert.rejects(
+        async () => {
+          await cluster._waitForAllActive();
+        },
+        (error) => {
+          timeoutError = error;
+          return typeof error?.message ===
+            ACTIVE_GATE_REACHABILITY_DELAY_STRING_TYPE &&
+            error.message.includes(
+              ACTIVE_GATE_REACHABILITY_DELAY_TIMEOUT_MESSAGE,
+            );
+        },
+        ACTIVE_GATE_REACHABILITY_DELAY_ASSERTION,
+      );
+    } finally {
+      Date.now = originalDateNow;
+    }
+
+    assert.equal(
+      timeoutError?.diagnostics?.activeGate?.progress?.snapshotCoverageNodeCount,
+      ACTIVE_GATE_REACHABILITY_DELAY_SELECTED_COVERAGE_COUNT,
+    );
+    assert.equal(
+      timeoutError?.diagnostics?.activeGate?.progress?.inactiveNodeCount,
+      ACTIVE_GATE_REACHABILITY_DELAY_INACTIVE_COUNT,
+    );
+    assert.equal(
+      timeoutError?.diagnostics?.activeGate?.readinessDelay?.cause,
+      ACTIVE_GATE_REACHABILITY_DELAY_CAUSE,
+    );
+    assert.equal(
+      timeoutError?.diagnostics?.noProgress?.readinessFailure?.classCode,
+      ACTIVE_GATE_REACHABILITY_DELAY_CAUSE,
+    );
+    assert.equal(
+      timeoutError?.diagnostics?.noProgress?.readinessFailure?.error,
+      ACTIVE_GATE_REACHABILITY_DELAY_ERROR,
     );
   });
 

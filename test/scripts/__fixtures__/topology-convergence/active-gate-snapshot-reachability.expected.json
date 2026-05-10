@@ -1,0 +1,47 @@
+{
+  "summary": {
+    "frontierCount": 1,
+    "firstFrontierEdgeId": "active_gate_snapshot_coverage",
+    "firstFrontierState": "blocked",
+    "firstFrontierOwner": "startup_active_gate_owner",
+    "firstFrontierBoundary": "snapshot_coverage",
+    "firstFrontierReason": "active_gate_timed_out"
+  },
+  "frontier": [
+    {
+      "id": "active_gate_snapshot_coverage",
+      "state": "blocked",
+      "owner": "startup_active_gate_owner",
+      "boundary": "snapshot_coverage",
+      "dominantReason": "absent",
+      "evidencePath": "report.scenarios[0].publicationConvergence.activeGate.progress",
+      "reasons": [
+        "active_gate_timed_out",
+        "snapshot_coverage_incomplete"
+      ]
+    }
+  ],
+  "dominantWitness": {
+    "edgeId": "active_gate_snapshot_coverage",
+    "owner": "startup_active_gate_owner",
+    "boundary": "snapshot_coverage",
+    "state": "blocked",
+    "frontierState": "blocked",
+    "dominantReason": "active_gate_timed_out",
+    "evidencePath": "report.scenarios[0].publicationConvergence.activeGate.progress",
+    "reasons": [
+      "active_gate_timed_out",
+      "snapshot_coverage_incomplete"
+    ],
+    "source": {
+      "activeGateState": "timed_out",
+      "snapshotCoverageComplete": "false",
+      "snapshotCoverageNodeCount": 3,
+      "expectedNodeCount": 5,
+      "selectedSnapshotError": "Control snapshot reachability probe timed out for 35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+      "readinessDelayCause": "snapshot_reachability_timeout",
+      "blockers": "inactive_nodes=3,snapshot_coverage=3/5"
+    },
+    "rootCauseClass": "startup"
+  }
+}

@@ -47,6 +47,7 @@ const LOAD_GATE_PROJECTION_TEST_REACHABILITY_SOURCE = 'admin_health';
 const LOAD_GATE_PROJECTION_TEST_PRIORITY_PARTITION_COUNT = 5;
 const STARTUP_SNAPSHOT_PROJECTION_TEST_NODE_A = 'node-a';
 const STARTUP_SNAPSHOT_PROJECTION_TEST_NODE_B = 'node-b';
+const STARTUP_SNAPSHOT_PROJECTION_TEST_NODE_C = 'node-c';
 const STARTUP_SNAPSHOT_PROJECTION_TEST_TIMEOUT_MS = 1000;
 const STARTUP_SNAPSHOT_PROJECTION_TEST_TIMEOUT_ERROR =
   'Node readiness probe timed out for node-a';
@@ -63,6 +64,10 @@ const STARTUP_SNAPSHOT_PROJECTION_TEST_GATE_REASON =
 const STARTUP_SNAPSHOT_PROJECTION_TEST_ADMISSION_STATE =
   'degraded_but_proceeding';
 const STARTUP_SNAPSHOT_PROJECTION_TEST_DIMENSION = 'clusterMemberHealthy';
+const STARTUP_SNAPSHOT_PROJECTION_TEST_INACTIVE_STATUS = 503;
+const STARTUP_SNAPSHOT_PROJECTION_TEST_INACTIVE_STATE = 'init';
+const STARTUP_SNAPSHOT_PROJECTION_TEST_INACTIVE_REASON = 'BOOTSTRAP_NOT_READY';
+const STARTUP_SNAPSHOT_PROJECTION_TEST_PARTIAL_COVERAGE_COUNT = 2;
 
 /**
  * Feature: distributed-testing-framework
@@ -1545,6 +1550,108 @@ test(
       false,
       'startup gate should require complete snapshot coverage',
     );
+  },
+);
+
+test(
+  'Unit: _probeClusterActiveState projects startup timeout from partial ' +
+    'selected snapshot coverage',
+  async () => {
+    const cluster = createCluster({
+      size: 3,
+      docker: {socketPath: '/var/run/docker.sock'},
+      image: 'distributed-db:test',
+    });
+    const coveredNodeIds = [
+      STARTUP_SNAPSHOT_PROJECTION_TEST_NODE_A,
+      STARTUP_SNAPSHOT_PROJECTION_TEST_NODE_B,
+    ];
+    const missingNodeIds = [STARTUP_SNAPSHOT_PROJECTION_TEST_NODE_C];
+
+    cluster._nodes.set(STARTUP_SNAPSHOT_PROJECTION_TEST_NODE_A, {
+      id: STARTUP_SNAPSHOT_PROJECTION_TEST_NODE_A,
+      role: NODE_ROLES.SEED,
+      async probeBootstrapReadiness() {
+        throw new Error(STARTUP_SNAPSHOT_PROJECTION_TEST_TIMEOUT_ERROR);
+      },
+    });
+    cluster._nodes.set(STARTUP_SNAPSHOT_PROJECTION_TEST_NODE_B, {
+      id: STARTUP_SNAPSHOT_PROJECTION_TEST_NODE_B,
+      role: NODE_ROLES.JOINER,
+      async probeBootstrapReadiness() {
+        return {
+          status: STARTUP_SNAPSHOT_PROJECTION_TEST_READY_STATUS,
+        };
+      },
+    });
+    cluster._nodes.set(STARTUP_SNAPSHOT_PROJECTION_TEST_NODE_C, {
+      id: STARTUP_SNAPSHOT_PROJECTION_TEST_NODE_C,
+      role: NODE_ROLES.JOINER,
+      async probeBootstrapReadiness() {
+        return {
+          status: STARTUP_SNAPSHOT_PROJECTION_TEST_INACTIVE_STATUS,
+          state: STARTUP_SNAPSHOT_PROJECTION_TEST_INACTIVE_STATE,
+          reasons: [STARTUP_SNAPSHOT_PROJECTION_TEST_INACTIVE_REASON],
+        };
+      },
+    });
+    cluster._probeControlSnapshotCoverage = async () => {
+      return {
+        completeCoverage: false,
+        expectedNodeCount: cluster._nodes.size,
+        bestCoverageNodeCount:
+          STARTUP_SNAPSHOT_PROJECTION_TEST_PARTIAL_COVERAGE_COUNT,
+        selectedNodeId: STARTUP_SNAPSHOT_PROJECTION_TEST_NODE_B,
+        selectedAdminReady: true,
+        selectedReachableBy: STARTUP_SNAPSHOT_PROJECTION_TEST_REACHABILITY_SOURCE,
+        selectedObservedNodeIds: coveredNodeIds,
+        selectedPublishedActiveNodeIds: coveredNodeIds,
+        selectedMissingPublishedNodeIds: missingNodeIds,
+        publicationDisagreementByNodeId: {
+          [STARTUP_SNAPSHOT_PROJECTION_TEST_NODE_A]: [],
+          [STARTUP_SNAPSHOT_PROJECTION_TEST_NODE_B]: [],
+          [STARTUP_SNAPSHOT_PROJECTION_TEST_NODE_C]: missingNodeIds,
+        },
+        selectedError: null,
+        selectedReachabilityError: null,
+      };
+    };
+
+    const probeResult = await cluster._probeClusterActiveState(
+      Date.now() + STARTUP_SNAPSHOT_PROJECTION_TEST_TIMEOUT_MS,
+    );
+    const projectedDiagnostic = probeResult.nodeDiagnostics.find(
+      (diagnostic) =>
+        diagnostic.nodeId === STARTUP_SNAPSHOT_PROJECTION_TEST_NODE_A,
+    );
+    const uncoveredDiagnostic = probeResult.nodeDiagnostics.find(
+      (diagnostic) =>
+        diagnostic.nodeId === STARTUP_SNAPSHOT_PROJECTION_TEST_NODE_C,
+    );
+    const activeNodeCount = probeResult.nodeDiagnostics.filter(
+      (diagnostic) => diagnostic.active === true,
+    ).length;
+
+    assert.strictEqual(probeResult.allActive, false);
+    assert.strictEqual(probeResult.snapshotCoverage.completeCoverage, false);
+    assert.strictEqual(
+      activeNodeCount,
+      STARTUP_SNAPSHOT_PROJECTION_TEST_PARTIAL_COVERAGE_COUNT,
+    );
+    assert.strictEqual(projectedDiagnostic.active, true);
+    assert.strictEqual(
+      projectedDiagnostic.activitySource,
+      STARTUP_SNAPSHOT_PROJECTION_TEST_GATE_SOURCE,
+    );
+    assert.strictEqual(
+      projectedDiagnostic.admissionReason,
+      STARTUP_SNAPSHOT_PROJECTION_TEST_GATE_REASON,
+    );
+    assert.strictEqual(
+      projectedDiagnostic.sourceError,
+      STARTUP_SNAPSHOT_PROJECTION_TEST_TIMEOUT_ERROR,
+    );
+    assert.strictEqual(uncoveredDiagnostic.active, false);
   },
 );
 
