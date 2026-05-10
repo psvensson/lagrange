@@ -20,11 +20,12 @@ The active workflow-progress package has implemented the first dispatch-pending
 owner re-entry slice and focused diagnostics for appended and direct persisted
 `PENDING` snapshots plus absent-target `SENDING` witnesses. The latest
 representative rerun improved active-gate progress to `3/5` and priority
-recovery invariants passed, but the normalized first frontier moved to
-`topology_publication_owner / publication_convergence` with `pendingAck=0` and
-`missingPublished=3`. Priority recovery remains the next expected blocker with
-`sql_transaction_participants-p1` `SENDING`/cache-visible `operation_stalled`
-and `sql_transactions-p1` / `sql_write_operations-p1`
+recovery invariants passed. The analyzer classification now keeps
+priority-spread missing-publication evidence subordinate to priority recovery
+when pending ACK debt is gone, so the normalized first frontier is restored to
+`operation_workflow_owner / workflow_progress`. The current blocker is
+`sql_transaction_participants-p1` `SENDING`/non-active-target
+`operation_stalled` plus `sql_transactions-p1` / `sql_write_operations-p1`
 `recovering_in_flight` rows.
 
 Active and queued work:
@@ -40,13 +41,14 @@ Companion cleanup:
 Latest closed runtime package:
 `work/packages/done-20260509-spec-led-runtime-modularization-operation-scheduling-sql-write-operations-frontier.md`.
 
-Next proof surface: classify
+Next proof surface: freeze and repair the
+`sql_transaction_participants-p1` `SENDING`/pending dispatch-pending
+workflow-progress witness from
 `test-output/reports/rolling-restart-spec-led-runtime-modularization-workflow-progress-sql-transactions-dispatch-pending-direct-diagnostic.report.json`.
-Decide whether the `topology_publication_owner / publication_convergence`
-frontier is valid or mis-ranked before making further
-`operation_workflow_owner` runtime changes; if priority recovery remains the
-active package boundary, freeze the `sql_transaction_participants-p1`
-`SENDING`/cache-visible workflow-progress timeout witness.
+The target visibility is `non_active` and timeout reconciliation is due, so the
+operation workflow owner must decide whether the operation re-enters, wakes,
+retires, or fails while publication ACK convergence stays satisfied and active
+gate snapshot coverage remains downstream.
 
 ## Goal
 

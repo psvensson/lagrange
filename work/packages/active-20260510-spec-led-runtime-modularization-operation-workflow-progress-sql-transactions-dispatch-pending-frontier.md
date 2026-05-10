@@ -11,11 +11,12 @@
   "owner": "operation_workflow_owner",
   "boundary": "workflow_progress",
   "dominantReason": "priority_recovery_progress_blocked",
-  "currentState": "The workflow-progress implementation now treats persisted PENDING dispatch-pending rows as owner re-entry candidates and applies the owner-advance diagnostic normalization to both appended and direct PENDING persisted-not-dispatched snapshots. Focused tests and touched-file guardrails pass. The fresh representative rerun improved the active gate to 3/5 with priority recovery invariants passing, but the normalized first frontier is now topology_publication_owner / publication_convergence with pendingAck=0 and missingPublished=3. Priority recovery remains the next expected blocker with sql_transaction_participants-p1 operation_stalled SENDING/cache-visible and sql_transactions-p1/sql_write_operations-p1 recovering_in_flight PENDING rows.",
-  "nextAction": "Classify the fresh direct-diagnostic report before more operation_workflow_owner runtime changes: decide whether the topology_publication_owner / publication_convergence frontier is valid or mis-ranked, then either migrate to that owner boundary or continue from the sql_transaction_participants-p1 SENDING/cache-visible workflow-progress timeout witness.",
+  "currentState": "The workflow-progress implementation now treats persisted PENDING dispatch-pending rows as owner re-entry candidates and applies the owner-advance diagnostic normalization to both appended and direct PENDING persisted-not-dispatched snapshots. Focused tests and touched-file guardrails pass. The fresh direct-diagnostic representative classification has been corrected: priority-spread missing publication evidence no longer outranks priority recovery when publication ACK debt is gone. The normalized first frontier is restored to operation_workflow_owner / workflow_progress with sql_transaction_participants-p1 operation_stalled SENDING/non-active-target and sql_transactions-p1/sql_write_operations-p1 recovering_in_flight PENDING rows; active gate snapshot coverage remains next expected downstream at 3/5.",
+  "nextAction": "Freeze and repair the sql_transaction_participants-p1 SENDING/pending dispatch-pending workflow-progress witness with targetVisibilityState non_active and timeoutReconcileDue true: decide through the operation workflow owner whether it should re-enter, wake, retire, or fail; keep publication ACK convergence satisfied and active gate downstream.",
   "proof": [
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-operation-scheduling-sql-write-operations.report.json --explain priority_recovery_partition_progress",
     "Focused operation_workflow_owner workflow_progress fixture for sql_transactions-p1 persisted-not-dispatched/no-step-transition evidence",
+    "Focused topology convergence graph fixture for priority-spread missing publication subordinate to priority recovery",
     "Focused operation workflow owner and dispatch wake/replay tests selected by priority_recovery_workflow_progress_event_driven",
     "Touched-file static guardrails selected by operation_workflow_owner and dispatch service ownership",
     "node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-spec-led-runtime-modularization-workflow-progress-sql-transactions-dispatch-pending-direct-diagnostic.report.json --fast-local --verbose"
@@ -33,6 +34,8 @@
     "test/control-plane/priority-recovery-snapshot*.js",
     "test/control-plane/priority-recovery-snapshot-operation-owner-outcome.test.js",
     "test/control-plane/priority-recovery-snapshot.test.js",
+    "src/diagnostics/topology-convergence-graph.js",
+    "test/diagnostics/topology-convergence-graph.test.js",
     "test/scripts/analyze-topology-convergence.test.js",
     "work/model-ledger.jsonl",
     "work/packages/active-20260510-spec-led-runtime-modularization-operation-workflow-progress-sql-transactions-dispatch-pending-frontier.md",
@@ -198,13 +201,12 @@ slice.
   semantic state is now `recovering_in_flight` for `replica_operations-p1` and
   `sql_write_operations-p1` with timed-out `PENDING` rows. The same run exposes
   downstream `startup_active_gate_owner / snapshot_coverage` pressure.
-- The direct-diagnostic representative rerun improves active-gate progress to
-  `3/5` and reports priority recovery invariants passing. Its normalized first
-  frontier is `topology_publication_owner / publication_convergence` with
-  `pendingAck=0` and `missingPublished=3`; priority recovery is now the next
-  expected blocker, not the first frontier, with `sql_transaction_participants-p1`
-  back as `SENDING`/cache-visible `operation_stalled` and
-  `sql_transactions-p1` / `sql_write_operations-p1` as `recovering_in_flight`.
+- The direct-diagnostic analyzer classification now treats priority-spread
+  missing-publication evidence as subordinate to priority recovery when there
+  is no pending ACK debt. That keeps publication ACK convergence satisfied
+  while preserving `missingPublishedCount=3`, `publicationPending=true`, and
+  `prioritySpreadPending=true`, and restores the first frontier to
+  `priority_recovery_partition_progress`.
 
 ## Validation
 
@@ -261,15 +263,33 @@ slice.
   `npm run audit:runtime-grammar:file -- src/control-plane/priority-recovery-snapshot-stage-10.js`
 - PASS:
   `git diff --check -- src/control-plane/priority-recovery-snapshot-stage-10.js test/control-plane/priority-recovery-snapshot-operation-owner-outcome.test.js`
-- FAIL, migrated normalized first frontier:
+- FAIL, reduced normalized first frontier:
   `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-spec-led-runtime-modularization-workflow-progress-sql-transactions-dispatch-pending-direct-diagnostic.report.json --fast-local --verbose`
 - PASS, classification:
   `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-workflow-progress-sql-transactions-dispatch-pending-direct-diagnostic.report.json`
+- PASS:
+  `node --test test/diagnostics/topology-convergence-graph.test.js`
+- PASS:
+  `node --test test/scripts/analyze-topology-convergence.test.js`
+- PASS:
+  `node scripts/check-guideline-literals.js src/diagnostics/topology-convergence-graph.js`
+- PASS:
+  `node scripts/check-guideline-decision-boundaries.js src/diagnostics/topology-convergence-graph.js`
+- PASS:
+  `npm run audit:runtime-grammar:file -- src/diagnostics/topology-convergence-graph.js`
+- PASS:
+  `git diff --check -- src/diagnostics/topology-convergence-graph.js test/diagnostics/topology-convergence-graph.test.js`
+- PASS, classification after analyzer repair:
+  `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-workflow-progress-sql-transactions-dispatch-pending-direct-diagnostic.report.json`
+- PASS, current frontier explanation:
+  `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-workflow-progress-sql-transactions-dispatch-pending-direct-diagnostic.report.json --explain priority_recovery_partition_progress`
 - Fresh direct-diagnostic classification: first frontier is
-  `topology_publication_owner / publication_convergence` on
-  `publication_ack_convergence`; pending ACK count is `0`, missing published
-  node count is `3`, and priority recovery is listed as the next expected
-  blocker under `operation_workflow_owner / workflow_progress`.
+  `operation_workflow_owner / workflow_progress` on
+  `priority_recovery_partition_progress`. Publication ACK convergence is
+  satisfied with `pendingAck=0`, `missingPublished=3`, and
+  `prioritySpreadPending=true`; priority recovery remains blocked for
+  `sql_transaction_participants-p1`, `sql_transactions-p1`, and
+  `sql_write_operations-p1`, with active gate snapshot coverage downstream.
 
 ## Subagent Sequencing Ledger
 

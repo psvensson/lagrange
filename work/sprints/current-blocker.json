@@ -10,11 +10,12 @@
   "owner": "operation_workflow_owner",
   "boundary": "workflow_progress",
   "dominantReason": "priority_recovery_progress_blocked",
-  "currentState": "The workflow-progress implementation now treats persisted PENDING dispatch-pending rows as owner re-entry candidates and applies the owner-advance diagnostic normalization to both appended and direct PENDING persisted-not-dispatched snapshots. Focused tests and touched-file guardrails pass. The fresh representative rerun improved the active gate to 3/5 with priority recovery invariants passing, but the normalized first frontier is now topology_publication_owner / publication_convergence with pendingAck=0 and missingPublished=3. Priority recovery remains the next expected blocker with sql_transaction_participants-p1 operation_stalled SENDING/cache-visible and sql_transactions-p1/sql_write_operations-p1 recovering_in_flight PENDING rows.",
-  "nextAction": "Classify the fresh direct-diagnostic report before more operation_workflow_owner runtime changes: decide whether the topology_publication_owner / publication_convergence frontier is valid or mis-ranked, then either migrate to that owner boundary or continue from the sql_transaction_participants-p1 SENDING/cache-visible workflow-progress timeout witness.",
+  "currentState": "The workflow-progress implementation now treats persisted PENDING dispatch-pending rows as owner re-entry candidates and applies the owner-advance diagnostic normalization to both appended and direct PENDING persisted-not-dispatched snapshots. Focused tests and touched-file guardrails pass. The fresh direct-diagnostic representative classification has been corrected: priority-spread missing publication evidence no longer outranks priority recovery when publication ACK debt is gone. The normalized first frontier is restored to operation_workflow_owner / workflow_progress with sql_transaction_participants-p1 operation_stalled SENDING/non-active-target and sql_transactions-p1/sql_write_operations-p1 recovering_in_flight PENDING rows; active gate snapshot coverage remains next expected downstream at 3/5.",
+  "nextAction": "Freeze and repair the sql_transaction_participants-p1 SENDING/pending dispatch-pending workflow-progress witness with targetVisibilityState non_active and timeoutReconcileDue true: decide through the operation workflow owner whether it should re-enter, wake, retire, or fail; keep publication ACK convergence satisfied and active gate downstream.",
   "proof": [
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-operation-scheduling-sql-write-operations.report.json --explain priority_recovery_partition_progress",
     "Focused operation_workflow_owner workflow_progress fixture for sql_transactions-p1 persisted-not-dispatched/no-step-transition evidence",
+    "Focused topology convergence graph fixture for priority-spread missing publication subordinate to priority recovery",
     "Focused operation workflow owner and dispatch wake/replay tests selected by priority_recovery_workflow_progress_event_driven",
     "Touched-file static guardrails selected by operation_workflow_owner and dispatch service ownership",
     "node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-spec-led-runtime-modularization-workflow-progress-sql-transactions-dispatch-pending-direct-diagnostic.report.json --fast-local --verbose"
@@ -32,6 +33,8 @@
     "test/control-plane/priority-recovery-snapshot*.js",
     "test/control-plane/priority-recovery-snapshot-operation-owner-outcome.test.js",
     "test/control-plane/priority-recovery-snapshot.test.js",
+    "src/diagnostics/topology-convergence-graph.js",
+    "test/diagnostics/topology-convergence-graph.test.js",
     "test/scripts/analyze-topology-convergence.test.js",
     "work/model-ledger.jsonl",
     "work/packages/active-20260510-spec-led-runtime-modularization-operation-workflow-progress-sql-transactions-dispatch-pending-frontier.md",

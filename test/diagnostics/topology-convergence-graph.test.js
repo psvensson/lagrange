@@ -390,6 +390,40 @@ describe('TopologyConvergenceGraph', () => {
       assertNoNullOrUndefined(graph);
     });
 
+  it('keeps priority-spread missing publication subordinate to priority recovery',
+    () => {
+      const fixture = buildFixtureFailureBundle();
+      const graph = buildTopologyConvergenceGraphFromArtifacts({
+        failureBundle: {
+          ...fixture,
+          publicationConvergence: {
+            ...fixture.publicationConvergence,
+            publicationPending: true,
+            missingPublishedCount:
+              PUBLICATION_ACK_FRONTIER_MISSING_NODE_IDS.length,
+            missingPublishedNodeIds: [
+              ...PUBLICATION_ACK_FRONTIER_MISSING_NODE_IDS,
+            ],
+          },
+        },
+      });
+      const publicationWitness = graph.ownerWitnesses.find((witness) =>
+        witness.edgeId === EDGE_PUBLICATION_ACK_CONVERGENCE,
+      );
+
+      assert.equal(graph.summary.firstFrontierEdgeId, EDGE_PRIORITY_RECOVERY);
+      assert.equal(graph.summary.firstFrontierOwner, OWNER_OPERATION_WORKFLOW);
+      assert.equal(publicationWitness.state, EDGE_STATE.SATISFIED);
+      assert.deepEqual(publicationWitness.reasons, [
+        PUBLICATION_PUBLISHED_REASON,
+      ]);
+      assert.equal(
+        publicationWitness.source.missingPublishedCount,
+        PUBLICATION_ACK_FRONTIER_MISSING_NODE_IDS.length,
+      );
+      assertNoNullOrUndefined(graph);
+    });
+
   it('keeps the decision table deterministic after artifact-specific owner evidence', () => {
     const fixture = buildFixtureFailureBundle();
     const graph = buildTopologyConvergenceGraphFromArtifacts({

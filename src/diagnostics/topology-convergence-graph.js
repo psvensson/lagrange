@@ -197,6 +197,7 @@ const DECISION_INPUT = Object.freeze({
   PENDING_ACK_COUNT: 'pendingAckCount',
   BLOCKED_NODE_COUNT: 'blockedNodeCount',
   MISSING_PUBLISHED_COUNT: 'missingPublishedCount',
+  PRIORITY_SPREAD_PENDING: 'prioritySpreadPending',
   PRIORITY_BLOCKED_PARTITION_COUNT: 'priorityBlockedPartitionCount',
   UNRESOLVED_SEMANTIC_STATE_IDS: 'unresolvedSemanticStateIds',
   ACTIVE_GATE_READY: 'activeGate.ready',
@@ -210,7 +211,8 @@ const DECISION_CONDITION = Object.freeze({
   PUBLICATION_PENDING_EVIDENCE: 'publication pending evidence is present',
   PUBLICATION_PENDING_ACKS: 'pending acknowledgement count is positive',
   PUBLICATION_BLOCKED_NODES: 'blocked publication node count is positive',
-  PUBLICATION_MISSING_PUBLISHED: 'missing published node count is positive',
+  PUBLICATION_MISSING_PUBLISHED_WITHOUT_PRIORITY_SPREAD:
+    'missing published node count is positive without priority spread pending',
   PUBLICATION_CLOSED: 'publication has no pending convergence blockers',
   PRIORITY_NO_UNRESOLVED_SEMANTIC_STATES:
     'priority recovery has no unresolved semantic states',
@@ -246,6 +248,7 @@ const DECISION_TABLE_ROWS = Object.freeze([
       DECISION_INPUT.PENDING_ACK_COUNT,
       DECISION_INPUT.BLOCKED_NODE_COUNT,
       DECISION_INPUT.MISSING_PUBLISHED_COUNT,
+      DECISION_INPUT.PRIORITY_SPREAD_PENDING,
     ]),
     outcomes: Object.freeze([
       Object.freeze({
@@ -270,7 +273,9 @@ const DECISION_TABLE_ROWS = Object.freeze([
         reasons: Object.freeze([REASON.PUBLICATION_PENDING]),
       }),
       Object.freeze({
-        condition: DECISION_CONDITION.PUBLICATION_MISSING_PUBLISHED,
+        condition:
+          DECISION_CONDITION
+            .PUBLICATION_MISSING_PUBLISHED_WITHOUT_PRIORITY_SPREAD,
         state: EDGE_STATE.DEFERRED,
         reasons: Object.freeze([
           REASON.PUBLICATION_PUBLISHED,
@@ -420,7 +425,8 @@ const PUBLICATION_STATE_RULES = Object.freeze([
   Object.freeze({
     state: EDGE_STATE.DEFERRED,
     reasons: Object.freeze([REASON.MISSING_PUBLISHED]),
-    matches: (evidence) => evidence.missingPublishedCount > SOURCE_ORDER_BASE,
+    matches: (evidence) =>
+      isPublicationMissingPublishedEvidence(evidence),
   }),
   Object.freeze({
     state: EDGE_STATE.SATISFIED,
@@ -1002,10 +1008,20 @@ function resolvePublicationState(evidence, reasons) {
 }
 
 function isPublicationPendingEvidence(evidence) {
-  return evidence.publicationPending === true ||
+  return isPublicationPendingFlagEvidence(evidence) ||
     PUBLICATION_PENDING_STATUS_SET.has(evidence.publicationStatus) ||
     evidence.recoveryProtocolState ===
       PUBLICATION_RECOVERY_PROTOCOL_PUBLICATION_PENDING;
+}
+
+function isPublicationPendingFlagEvidence(evidence) {
+  return evidence.publicationPending === true &&
+    evidence.missingPublishedCount === SOURCE_ORDER_BASE;
+}
+
+function isPublicationMissingPublishedEvidence(evidence) {
+  return evidence.missingPublishedCount > SOURCE_ORDER_BASE &&
+    evidence.prioritySpreadPending !== true;
 }
 
 function normalizePriorityRecoveryEvidence(normalized) {
@@ -1152,6 +1168,7 @@ function normalizePublicationEvidence(publication) {
     pendingAckCount: numberOrZero(publication.pendingAckCount),
     blockedNodeCount: numberOrZero(publication.blockedNodeCount),
     missingPublishedCount: numberOrZero(publication.missingPublishedCount),
+    prioritySpreadPending: publication.prioritySpreadPending === true,
     source: {
       publicationEpoch: numberOrUnknown(publication.publicationEpoch),
       publicationStatus: textOrUnknown(publication.publicationStatus),
