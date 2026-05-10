@@ -3,7 +3,7 @@
 Load for test-first workflow, reliability harness work, and regression policy.
 
 Generated rules: 120
-Estimated tokens: 4364
+Estimated tokens: 4493
 Domains: testing
 
 ## Rules
@@ -71,60 +71,60 @@ Domains: testing
 61. [TEST-0061] A scenario-driven package that changes runtime meaning, decision meaning, or presentation meaning must prove the current blocker in this order: owner-decision fixture or blocker probe, focused owner tests, affected presentation tests, then the representative scenario.
 62. [TEST-0062] Presentation tests are required when failure bundles, triage summaries, admin summaries, active gates, or report writers consume the changed contract. A green owner test alone is not sufficient if presentation can still classify the same evidence under a different blocker.
 63. [TEST-0063] A fresh artifact with different counts, node ids, epochs, or timing does not by itself prove blocker migration. Treat it as the same blocker until the normalized evidence shows a different semantic owner, owner boundary, or next required action.
-64. [TEST-0064] The review must check package closure evidence, residual inventory, guardrail ledger, blocker migration notes, sprint snapshot consistency, and whether the last package's stated next action still matches current artifact evidence.
-65. [TEST-0065] Slow-dependency resilience — inject artificial latency into a dependency (mock that resolves after a delay) and prove the component does not fail, corrupt state, or drop work. It may be slower, but it must remain correct.
-66. [TEST-0066] A representative rerun should not be the next debugging step while the current owner-decision fixture or narrow blocker probe is missing.
-67. [TEST-0067] The test should capture the exact failure scenario from the bug report
-68. [TEST-0068] The failure message should match the reported error
-69. [TEST-0069] The fix should make the failing test pass
-70. [TEST-0070] Is the current problem a repeated pattern? If so, is there a shared abstraction that should exist but does not?
-71. [TEST-0071] When a bug depends on stale cache truth, stale routing, delayed authoritative visibility, no-handler witnesses, or other cross-time evidence races, the regression must replay the witness order that triggered the bug rather than asserting only the final steady state.
-72. [TEST-0072] Implementation work should start only after the current owner boundary and smallest proof surface are named.
-73. [TEST-0073] For control-plane, readiness, topology, and other shared distributed-boundary work, the normal debugging loop must follow one validation ladder instead of jumping straight from unit failures to repeated full distributed reruns.
-74. [TEST-0074] No other tests should break
-75. [TEST-0075] All non-trivial implementation work should have validation owned by its active work package.
-76. [TEST-0076] Runtime packages that touch already oversized files should record whether they are adding local size debt or extracting a smaller owner/helper boundary.
-77. [TEST-0077] These tests should be small and targeted.
-78. [TEST-0078] Work packages should list their targeted owner tests, the relevant boundary-transition scenarios, and the final distributed checkpoint command in that same order.
-79. [TEST-0079] Use npm run audit:file-size:strict only for packages that explicitly own file-size cleanup, because the repository still has inherited oversize files.
-80. [TEST-0080] Only return to suite-local fixes after the shared runner boundary is shown stable.
-81. [TEST-0081] Prefer lowering the shared TAP jobs budget or other runner-wide worker concurrency settings before chasing late aggregate-only assertions.
-82. [TEST-0082] Only restore higher parallelism after the aggregate gate is proven stable at the new boundary.
-83. [TEST-0083] FIX - Only after the test fails, implement the fix
-84. [TEST-0084] Are multiple recent bugs clustering around the same boundary or component? That may indicate a design-level issue worth addressing instead of patching each symptom individually.
-85. [TEST-0085] Missing-row behavior - Add a test proving a missing authoritative row is handled only by the canonical creation owner, not by a local fallback inside an updater.
-86. [TEST-0086] Single in-flight reconcile - Add a regression proving only one progression execution can run for a given owner key at a time.
-87. [TEST-0087] Acknowledgement-before-advance - For executor-owned boundaries, add a regression proving the owner advances only after durable participant acknowledgement rather than cache timing or elapsed time.
-88. [TEST-0088] Prefer focused unit or integration replays over broad scenario-only proof, but keep the original scenario or representative blocker probe in the validation surface.
-89. [TEST-0089] Add tests that assert timeout classification payloads, not only error text.
-90. [TEST-0090] Introduce optional parameters, flags, or configuration that are only used by test harnesses to bypass real logic.
-91. [TEST-0091] Create alternate constructors, factory methods, or initialization paths that only tests call.
-92. [TEST-0092] Run targeted tests only - Don't run the full test suite except at checkpoints
-93. [TEST-0093] Focus on relevant tests - Only run tests related to the feature/file being modified
-94. [TEST-0094] Run failing tests first - When fixing issues, run only the specific failing test(s)
-95. [TEST-0095] If the package or runner boundary requires it, run the shared unit-only gate before any checkpoint distributed rerun.
-96. [TEST-0096] Run a full 5node or 7node harness scenario only after the earlier stages are green.
-97. [TEST-0097] Only after the artifact summaries have been read may raw container or node logs become the primary debugging surface.
-98. [TEST-0098] A separate implementation sub-agent may start the current work package only after the previous-package review is clean or the review findings have been fixed.
-99. [TEST-0099] Assert that callers preserve or consume that contract instead of silently converting it into: - []; - null; - timeout-only failure text; - generic fallback success
-100. [TEST-0100] When isolated subsystem or shard runs pass, but the aggregate TAP gate fails only when all suites run together, treat the problem as a shared runner parallelism-budget concern until proven otherwise.
-101. [TEST-0101] Distributed baseline runs are allowed to discover bugs, but they are not allowed to be the only place those bugs remain reproducible.
-102. [TEST-0102] Local execution may use scripts/run-distributed-validation-ladder.js to make this order explicit.
-103. [TEST-0103] If validation reveals a second concern, split that concern into a new idea or work package instead of silently widening the current one.
-104. [TEST-0104] If that deep dive finds mistakes, irregularities, or doctrine/system guideline violations in the affected area, fix them before renaming the package to done-....
-105. [TEST-0105] A package is not validation-complete while tail-consumer proof is still missing, even if the main owner tests are green.
-106. [TEST-0106] Before editing production code, record the relevant static guardrail status in the active package's static drift ledger.
-107. [TEST-0107] After implementation and focused tests, rerun the same guardrails and record the after state.
-108. [TEST-0108] Run npm run audit:file-size for broad runtime, control-plane, transport, harness, and test-infrastructure packages.
-109. [TEST-0109] Keep one named reference scenario or blocker probe for the package.
-110. [TEST-0110] After targeted regression and owner-path proof is green, rerun that scenario or probe before treating the analysis as closed.
-111. [TEST-0111] If the scenario still fails, record whether the dominant blocker is the same or has migrated.
-112. [TEST-0112] If the blocker migrated, update the active package or split a follow-on package in the same work cycle instead of burying the new blocker in commentary or memory.
-113. [TEST-0113] If artifact-derived evidence tooling exists for the scenario, use it to produce the validation handoff block before writing manual analysis.
-114. [TEST-0114] Confirm whether the failing files are unrelated in domain behavior.
-115. [TEST-0115] Prefer a shared runner or bootstrap fix before editing individual suites.
-116. [TEST-0116] If the crash traces point to Node/V8 startup or worker initialization, harden the shared TAP worker configuration first.
-117. [TEST-0117] Confirm that the same suites pass in smaller grouped or isolated bail runs.
-118. [TEST-0118] Check shared machine budget signals such as available RAM, swap pressure, and TAP worker count before editing individual suites.
-119. [TEST-0119] REPRODUCE - Create a test that demonstrates the bug
-120. [TEST-0120] Use minimal setup to isolate the bug
+64. [TEST-0064] When repeated scenario runs keep failing after local fixes or classification-only reductions, the next validation package must establish a causal-analysis boundary before more runtime fixes. At minimum it must validate the end-to-end phase model, cross-entity causal graph, budget/timeout accounting, invariant review, failure-class taxonomy, and architecture-level stop conditions.
+65. [TEST-0065] A runtime fix that follows causal-analysis escalation must cite the causal model or artifact it uses, then prove that its local regression changes the relevant causal edge rather than only improving the immediate symptom.
+66. [TEST-0066] The review must check package closure evidence, residual inventory, guardrail ledger, blocker migration notes, sprint snapshot consistency, and whether the last package's stated next action still matches current artifact evidence.
+67. [TEST-0067] Slow-dependency resilience — inject artificial latency into a dependency (mock that resolves after a delay) and prove the component does not fail, corrupt state, or drop work. It may be slower, but it must remain correct.
+68. [TEST-0068] A representative rerun should not be the next debugging step while the current owner-decision fixture or narrow blocker probe is missing.
+69. [TEST-0069] The test should capture the exact failure scenario from the bug report
+70. [TEST-0070] The failure message should match the reported error
+71. [TEST-0071] The fix should make the failing test pass
+72. [TEST-0072] Is the current problem a repeated pattern? If so, is there a shared abstraction that should exist but does not?
+73. [TEST-0073] When a bug depends on stale cache truth, stale routing, delayed authoritative visibility, no-handler witnesses, or other cross-time evidence races, the regression must replay the witness order that triggered the bug rather than asserting only the final steady state.
+74. [TEST-0074] Implementation work should start only after the current owner boundary and smallest proof surface are named.
+75. [TEST-0075] For control-plane, readiness, topology, and other shared distributed-boundary work, the normal debugging loop must follow one validation ladder instead of jumping straight from unit failures to repeated full distributed reruns.
+76. [TEST-0076] No other tests should break
+77. [TEST-0077] All non-trivial implementation work should have validation owned by its active work package.
+78. [TEST-0078] Runtime packages that touch already oversized files should record whether they are adding local size debt or extracting a smaller owner/helper boundary.
+79. [TEST-0079] These tests should be small and targeted.
+80. [TEST-0080] Work packages should list their targeted owner tests, the relevant boundary-transition scenarios, and the final distributed checkpoint command in that same order.
+81. [TEST-0081] Use npm run audit:file-size:strict only for packages that explicitly own file-size cleanup, because the repository still has inherited oversize files.
+82. [TEST-0082] Only return to suite-local fixes after the shared runner boundary is shown stable.
+83. [TEST-0083] Prefer lowering the shared TAP jobs budget or other runner-wide worker concurrency settings before chasing late aggregate-only assertions.
+84. [TEST-0084] Only restore higher parallelism after the aggregate gate is proven stable at the new boundary.
+85. [TEST-0085] FIX - Only after the test fails, implement the fix
+86. [TEST-0086] Are multiple recent bugs clustering around the same boundary or component? That may indicate a design-level issue worth addressing instead of patching each symptom individually.
+87. [TEST-0087] Missing-row behavior - Add a test proving a missing authoritative row is handled only by the canonical creation owner, not by a local fallback inside an updater.
+88. [TEST-0088] Single in-flight reconcile - Add a regression proving only one progression execution can run for a given owner key at a time.
+89. [TEST-0089] Acknowledgement-before-advance - For executor-owned boundaries, add a regression proving the owner advances only after durable participant acknowledgement rather than cache timing or elapsed time.
+90. [TEST-0090] Prefer focused unit or integration replays over broad scenario-only proof, but keep the original scenario or representative blocker probe in the validation surface.
+91. [TEST-0091] Add tests that assert timeout classification payloads, not only error text.
+92. [TEST-0092] Introduce optional parameters, flags, or configuration that are only used by test harnesses to bypass real logic.
+93. [TEST-0093] Create alternate constructors, factory methods, or initialization paths that only tests call.
+94. [TEST-0094] Run targeted tests only - Don't run the full test suite except at checkpoints
+95. [TEST-0095] Focus on relevant tests - Only run tests related to the feature/file being modified
+96. [TEST-0096] Run failing tests first - When fixing issues, run only the specific failing test(s)
+97. [TEST-0097] If the package or runner boundary requires it, run the shared unit-only gate before any checkpoint distributed rerun.
+98. [TEST-0098] Run a full 5node or 7node harness scenario only after the earlier stages are green.
+99. [TEST-0099] Only after the artifact summaries have been read may raw container or node logs become the primary debugging surface.
+100. [TEST-0100] A separate implementation sub-agent may start the current work package only after the previous-package review is clean or the review findings have been fixed.
+101. [TEST-0101] Assert that callers preserve or consume that contract instead of silently converting it into: - []; - null; - timeout-only failure text; - generic fallback success
+102. [TEST-0102] When isolated subsystem or shard runs pass, but the aggregate TAP gate fails only when all suites run together, treat the problem as a shared runner parallelism-budget concern until proven otherwise.
+103. [TEST-0103] Distributed baseline runs are allowed to discover bugs, but they are not allowed to be the only place those bugs remain reproducible.
+104. [TEST-0104] Local execution may use scripts/run-distributed-validation-ladder.js to make this order explicit.
+105. [TEST-0105] If validation reveals a second concern, split that concern into a new idea or work package instead of silently widening the current one.
+106. [TEST-0106] If that deep dive finds mistakes, irregularities, or doctrine/system guideline violations in the affected area, fix them before renaming the package to done-....
+107. [TEST-0107] A package is not validation-complete while tail-consumer proof is still missing, even if the main owner tests are green.
+108. [TEST-0108] Before editing production code, record the relevant static guardrail status in the active package's static drift ledger.
+109. [TEST-0109] After implementation and focused tests, rerun the same guardrails and record the after state.
+110. [TEST-0110] Run npm run audit:file-size for broad runtime, control-plane, transport, harness, and test-infrastructure packages.
+111. [TEST-0111] Keep one named reference scenario or blocker probe for the package.
+112. [TEST-0112] After targeted regression and owner-path proof is green, rerun that scenario or probe before treating the analysis as closed.
+113. [TEST-0113] If the scenario still fails, record whether the dominant blocker is the same or has migrated.
+114. [TEST-0114] If the blocker migrated, update the active package or split a follow-on package in the same work cycle instead of burying the new blocker in commentary or memory.
+115. [TEST-0115] If artifact-derived evidence tooling exists for the scenario, use it to produce the validation handoff block before writing manual analysis.
+116. [TEST-0116] Confirm whether the failing files are unrelated in domain behavior.
+117. [TEST-0117] Prefer a shared runner or bootstrap fix before editing individual suites.
+118. [TEST-0118] If the crash traces point to Node/V8 startup or worker initialization, harden the shared TAP worker configuration first.
+119. [TEST-0119] Confirm that the same suites pass in smaller grouped or isolated bail runs.
+120. [TEST-0120] Check shared machine budget signals such as available RAM, swap pressure, and TAP worker count before editing individual suites.

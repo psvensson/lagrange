@@ -286,6 +286,16 @@ Every work package should answer:
       patch
     - what replayable owner-decision fixture or blocker probe represents the
       current blocker
+15. If the representative scenario remains red after repeated local fixes or
+    classification-only reductions:
+    - whether the next package must be causal-analysis infrastructure instead
+      of another tactical runtime patch
+    - what end-to-end phase model the scenario follows
+    - which cross-entity waits and causal edges explain the current blocker
+    - which budgets, retry windows, and deadlines bound each phase
+    - which invariants and failure classes are canonical
+    - what stop conditions decide local fix, owner-boundary migration, broader
+      architecture work, or human escalation
 
 ## Model Fit
 

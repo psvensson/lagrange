@@ -34,6 +34,7 @@ The doctrine is intentionally simple:
 6. shrink porous boundaries when bugs cluster
 7. sharpen work before changing code
 8. keep sprint execution on one current owner boundary
+9. escalate repeated scenario failures into causal analysis
 
 ## 1. One Semantic Owner Per Concern
 
@@ -176,7 +177,26 @@ Prefer:
 Do not respond to repeated distributed failures by adding more scattered local
 special cases. Collapse the behavior into stronger shared building blocks.
 
-## 9. Normalize Evidence Before Adjudicating Decisions
+## 9. Escalate Repeated Scenario Failures Into Causal Analysis
+
+When a representative scenario remains red after multiple local fixes or
+classification-only reductions, the next step is not another local exception.
+The next step is a causal model that explains the whole failure chain.
+
+A causal model must name:
+
+- the end-to-end phases of the scenario
+- the entities and cross-entity waits that form the critical path
+- the nested budgets, retry windows, and deadlines that bound progress
+- the invariants that must hold at each phase boundary
+- the normalized failure classes observed in reports, diagnostics, and logs
+- the stop conditions for continuing local fixes, migrating owner boundary,
+  widening architecture work, or stopping for human direction
+
+Runtime packages that follow such a model should cite it as their scope basis
+and proof surface. Otherwise the sprint is still patching symptoms.
+
+## 10. Normalize Evidence Before Adjudicating Decisions
 
 When one decision depends on several live signals, separate observation from
 policy.
@@ -192,7 +212,7 @@ If fixes keep arriving as new boolean exemptions, the decision boundary is not
 modeled yet. Replace the branch pile with an explicit state model and decision
 table.
 
-## 10. Sharpen Work Before Changing Code
+## 11. Sharpen Work Before Changing Code
 
 Implementation work should be as explicit and bounded as the runtime design.
 

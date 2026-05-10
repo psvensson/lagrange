@@ -414,6 +414,47 @@ Mandatory rules:
     without a real agent id do not satisfy review, fix, or implementation
     roles unless the user explicitly disables sub-agents for that task.
 
+### 0.1.8.1 Causal Analysis Escalation For Repeated Scenario Failures
+
+When scenario-driven work keeps reducing or classifying blockers without making
+the representative gate pass, the next work cycle must move up to causal
+analysis before adding another local runtime patch.
+
+Mandatory rules:
+
+1. Trigger causal-analysis escalation when any of these are true:
+   - the same representative scenario remains red after two material fixes or
+     classification-only reductions on related lifecycle, admission, readiness,
+     recovery, or convergence boundaries
+   - the same owner boundary remains dominant while residual evidence shifts by
+     node, timing, retained evidence, subordinate reason, or artifact shape
+   - package review identifies local tactical treatment as the risk rather than
+     one missing owner-path fix
+   - a package classifies residual evidence as intentional backpressure but the
+     representative gate still fails
+2. The causal-analysis package must not be another symptom patch. It must
+   produce or update a durable diagnostic or architecture boundary that covers:
+   - an end-to-end phase model for the scenario
+   - a cross-entity causal graph with dependency edges and waiting
+     relationships
+   - budget and timeout accounting across nested attempts, retries, admission,
+     locks, and scenario deadlines
+   - invariant review for what must remain true at each phase boundary
+   - a normalized failure-class taxonomy
+   - architecture-level stop conditions that say when to continue local fixes,
+     migrate owner boundary, widen architecture work, or stop for human
+     direction
+3. Runtime owner packages that follow a causal-analysis escalation must cite the
+   relevant causal model section, schema, decision table, fixture, extractor, or
+   diagnostic artifact in their scope basis and proof ladder.
+4. Do not close a causal-analysis package with prose-only conclusions when a
+   reusable schema, decision table, fixture, extractor, or diagnostic artifact
+   is required for successor packages to consume the analysis consistently.
+5. Do not treat intentional backpressure as solved merely because it is
+   classified. If the representative gate remains red, the causal model must
+   explain whether the stop condition is accepted backpressure, insufficient
+   budget, wrong sequencing, missing handoff, or a migrated owner boundary.
+
 ### 0.1.9 Roadmap And Work-Tracker Truth Reconciliation
 
 Roadmap status must not outrun current representative evidence.

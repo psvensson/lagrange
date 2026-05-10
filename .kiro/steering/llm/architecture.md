@@ -3,7 +3,7 @@
 Load for bootstrap/join/rebalance/control-plane/runtime ownership and lifecycle work.
 
 Generated rules: 140
-Estimated tokens: 5003
+Estimated tokens: 5029
 Domains: architecture
 
 ## Rules
@@ -90,8 +90,8 @@ Domains: architecture
 80. [ARCH-0080] A single persisted field MUST NOT carry multiple lifecycle semantics for different owners.
 81. [ARCH-0081] Bootstrap, join, and recovery phases may initialize runtime mechanisms, but steady-state correctness must not depend on phase-owned wiring after completion.
 82. [ARCH-0082] Queries may be slower but MUST NOT fail due to transient topology state.
-83. [ARCH-0083] Bootstrap-only write exceptions must NOT leak into steady-state runtime paths.
-84. [ARCH-0084] If owner references can refresh at runtime, route refresh through the canonical setter path (for example setRebalanceCoordinator) so child dependencies resync; do not mutate coordinator/owner fields directly.
+83. [ARCH-0083] If owner references can refresh at runtime, route refresh through the canonical setter path (for example setRebalanceCoordinator) so child dependencies resync; do not mutate coordinator/owner fields directly.
+84. [ARCH-0084] Bootstrap-only write exceptions must NOT leak into steady-state runtime paths.
 85. [ARCH-0085] Do not introduce new user-visible entity categories unless explicitly required by the platform design.
 86. [ARCH-0086] It is FORBIDDEN to expose internal implementation concepts as ordinary user-facing control surfaces unless explicitly intended by the architecture.
 87. [ARCH-0087] Users may observe diagnostics about these mechanisms, but must not be required to manage them directly in ordinary workflows.
@@ -123,13 +123,13 @@ Domains: architecture
 113. [ARCH-0113] Sub-agent work inside a sprint must be sequential at owner boundaries: first extract canonical evidence from the latest artifact, then map the owner path and smallest proof surface, then implement the bounded change.
 114. [ARCH-0114] When starting or continuing package execution in a sprint, the first real sub-agent task must review the most recently executed package on the same sprint or owner boundary.
 115. [ARCH-0115] If that review finds actionable problems, the next sub-agent task must be a bounded fix for those problems before any new package implementation begins.
-116. [ARCH-0116] A phase must not tear down the only live runtime path.
-117. [ARCH-0117] Pressure must not become hidden drops, memory growth without bounds, or correctness failures.
-118. [ARCH-0118] Never let degraded evidence promote a blocked entity to ready or admitted.
-119. [ARCH-0119] Broad ideas must not go straight into code.
-120. [ARCH-0120] Do not treat a package as complete when only the hot path is fixed. A package is complete only when the hot path, tail consumers, diagnostics or reporting, deletion work, and required proof are all closed.
-121. [ARCH-0121] Use the model ledger as an advisory feedback loop for future model and reasoning-effort choice when a package produces useful evidence. It must not replace validation, review, sequencing, or closure proof.
-122. [ARCH-0122] one declared list of forbidden reinterpretations
+116. [ARCH-0116] Runtime owner packages that follow a causal-analysis escalation must cite the relevant causal model section, schema, decision table, fixture, extractor, or diagnostic artifact in their scope basis and proof ladder.
+117. [ARCH-0117] A phase must not tear down the only live runtime path.
+118. [ARCH-0118] Pressure must not become hidden drops, memory growth without bounds, or correctness failures.
+119. [ARCH-0119] Never let degraded evidence promote a blocked entity to ready or admitted.
+120. [ARCH-0120] Broad ideas must not go straight into code.
+121. [ARCH-0121] Do not treat a package as complete when only the hot path is fixed. A package is complete only when the hot path, tail consumers, diagnostics or reporting, deletion work, and required proof are all closed.
+122. [ARCH-0122] Use the model ledger as an advisory feedback loop for future model and reasoning-effort choice when a package produces useful evidence. It must not replace validation, review, sequencing, or closure proof.
 123. [ARCH-0123] Any given runtime function or semantic concern MUST have one active code path once policy has been normalized.
 124. [ARCH-0124] Boundary normalization happens once at ingress. Runtime logic must consume the normalized state rather than reopening raw storage or transport shapes. at a time.
 125. [ARCH-0125] Initial creation must write the full canonical row shape.
@@ -137,14 +137,14 @@ Domains: architecture
 127. [ARCH-0127] When cache evidence is insufficient, readers MUST consume the owner outcome directly as fresh, stale-but-usable, deferred-refresh, or failed instead of reopening broad repair locally.
 128. [ARCH-0128] Background or deferred repair MUST be scheduled through the owner-held reconcile path rather than through reader-local retry loops.
 129. [ARCH-0129] Forced repair, when a boundary explicitly allows it, MUST still route through the same owner and bounded budget rather than bypassing it with a second repair path.
-130. [ARCH-0130] Any "is active" predicate must gate on the canonical active status set.
-131. [ARCH-0131] Any sweep that expires entries must skip canonical terminal statuses.
-132. [ARCH-0132] Evaluate canonical admission owner (storageAdmissionService) per candidate until the required minimum cohort is satisfiable.
-133. [ARCH-0133] If a phase establishes a subscriber, bridge, queue, retry loop, or cache hydration path needed by steady state, ownership must transfer explicitly to a runtime owner before phase completion.
-134. [ARCH-0134] Handoff completion must be represented by one owner transition, not inferred from phase timers or "good enough" cache visibility.
-135. [ARCH-0135] Policy targets such as strict cohort size or parity must remain owned by explicit policy, not be rewritten opportunistically from the survivors of a local fallback branch.
-136. [ARCH-0136] Capacity reservations or priority isolation must be expressed through the shared pressure contract, not through hidden local queues.
-137. [ARCH-0137] The same spec or task list that introduces a transitional delegator must include its removal task and the target canonical owner.
-138. [ARCH-0138] A structural guard (CI audit, import guard, or equivalent) must prevent new call sites from binding to the transitional path.
-139. [ARCH-0139] The delegator must preserve one semantic owner. It may forward, but it may not add a second decision path.
-140. [ARCH-0140] Search for phase-scoped runtime subscribers, bridges, or retry loops that remain required after phase completion.
+130. [ARCH-0130] one declared list of forbidden reinterpretations
+131. [ARCH-0131] Any "is active" predicate must gate on the canonical active status set.
+132. [ARCH-0132] Any sweep that expires entries must skip canonical terminal statuses.
+133. [ARCH-0133] Evaluate canonical admission owner (storageAdmissionService) per candidate until the required minimum cohort is satisfiable.
+134. [ARCH-0134] If a phase establishes a subscriber, bridge, queue, retry loop, or cache hydration path needed by steady state, ownership must transfer explicitly to a runtime owner before phase completion.
+135. [ARCH-0135] Handoff completion must be represented by one owner transition, not inferred from phase timers or "good enough" cache visibility.
+136. [ARCH-0136] Policy targets such as strict cohort size or parity must remain owned by explicit policy, not be rewritten opportunistically from the survivors of a local fallback branch.
+137. [ARCH-0137] Capacity reservations or priority isolation must be expressed through the shared pressure contract, not through hidden local queues.
+138. [ARCH-0138] The same spec or task list that introduces a transitional delegator must include its removal task and the target canonical owner.
+139. [ARCH-0139] A structural guard (CI audit, import guard, or equivalent) must prevent new call sites from binding to the transitional path.
+140. [ARCH-0140] The delegator must preserve one semantic owner. It may forward, but it may not add a second decision path.

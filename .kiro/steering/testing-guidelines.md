@@ -168,6 +168,15 @@ Required workflow:
     produce the validation handoff block before writing manual analysis.
 13. A representative rerun should not be the next debugging step while the
     current owner-decision fixture or narrow blocker probe is missing.
+14. When repeated scenario runs keep failing after local fixes or
+    classification-only reductions, the next validation package must establish a
+    causal-analysis boundary before more runtime fixes. At minimum it must
+    validate the end-to-end phase model, cross-entity causal graph,
+    budget/timeout accounting, invariant review, failure-class taxonomy, and
+    architecture-level stop conditions.
+15. A runtime fix that follows causal-analysis escalation must cite the causal
+    model or artifact it uses, then prove that its local regression changes the
+    relevant causal edge rather than only improving the immediate symptom.
 
 ## Runner Stability Boundary Policy
 
