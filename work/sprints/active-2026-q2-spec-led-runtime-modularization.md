@@ -8,61 +8,42 @@ the representative gate before companion cleanup or broad successor work.
 ## Current Package Snapshot
 
 Current blocker package:
-`work/packages/active-20260510-spec-led-runtime-modularization-representative-green-proof-or-next-blocker.md`.
+`work/packages/active-20260510-spec-led-runtime-modularization-operation-workflow-progress-sql-transactions-dispatch-pending-frontier.md`.
 
 Owner boundary:
-`representative_gate_owner / proof_classification`.
+`operation_workflow_owner / workflow_progress`.
 
-Current state: legacy helper, inference, and alias deletion has been executed
-and closed in
-`work/packages/done-20260509-spec-led-runtime-modularization-legacy-deletion-proof.md`.
-Publication ACK convergence is now closed in
-`work/packages/done-20260509-spec-led-runtime-modularization-publication-ack-convergence-frontier.md`.
-Active-gate snapshot coverage is now closed by migration in
-`work/packages/done-20260509-spec-led-runtime-modularization-active-gate-snapshot-coverage-frontier.md`.
-Operation workflow timeout is now closed by migration in
-`work/packages/done-20260509-spec-led-runtime-modularization-operation-workflow-timeout-frontier.md`.
-Publication convergence is now closed by migration in
-`work/packages/done-20260509-spec-led-runtime-modularization-publication-convergence-frontier.md`.
-Operation workflow rebalancer handoff is now closed by migration in
-`work/packages/done-20260509-spec-led-runtime-modularization-operation-workflow-rebalancer-handoff-frontier.md`.
-Operation workflow timeout transition-deferred is now closed by migration in
-`work/packages/done-20260509-spec-led-runtime-modularization-operation-workflow-timeout-transition-deferred-frontier.md`.
-Operation workflow progress event-driven is now closed by migration in
-`work/packages/done-20260509-spec-led-runtime-modularization-operation-workflow-progress-event-driven-frontier.md`.
-Operation scheduling event-driven is now closed by migration in
-`work/packages/done-20260509-spec-led-runtime-modularization-operation-scheduling-event-driven-frontier.md`.
-Operation workflow rebalancer handoff retry-scheduled is now closed by
-migration in
-`work/packages/done-20260509-spec-led-runtime-modularization-operation-workflow-rebalancer-handoff-retry-scheduled-frontier.md`.
-Operation workflow progress dispatch-pending is now closed by migration in
-`work/packages/done-20260509-spec-led-runtime-modularization-operation-workflow-progress-dispatch-pending-frontier.md`.
-Operation scheduling SQL write operations is now closed in
-`work/packages/done-20260509-spec-led-runtime-modularization-operation-scheduling-sql-write-operations-frontier.md`.
-The proof-only package classified the latest representative report as
-`migrated-frontier`: the first blocked frontier is now
-`operation_workflow_owner / workflow_progress` on
-`sql_transactions-p1`, with dominant reason
-`priority_recovery_progress_blocked`. The successor package is queued but not
-yet active because this proof package still needs parent commit/push closure.
+Current state: prior packages through operation scheduling SQL write operations
+are closed. The proof-only package classified the post-scheduling report as
+`migrated-frontier` into `operation_workflow_owner / workflow_progress`.
+The active workflow-progress package has implemented the first dispatch-pending
+owner re-entry slice and focused diagnostics for persisted `PENDING` and
+absent-target `SENDING` witnesses. The latest representative rerun reduced the
+original `sql_transactions-p1` stalled/no-transition witness, but the first
+frontier remains `operation_workflow_owner / workflow_progress` with
+`recovering_in_flight` event-driven waits on `replica_operations-p1` and
+`sql_write_operations-p1`; downstream startup active-gate snapshot coverage is
+still blocked.
 
-Queued work:
-Current proof package:
-`work/packages/active-20260510-spec-led-runtime-modularization-representative-green-proof-or-next-blocker.md`.
+Active and queued work:
+Current active package:
+`work/packages/active-20260510-spec-led-runtime-modularization-operation-workflow-progress-sql-transactions-dispatch-pending-frontier.md`.
 
-Latest closed runtime package:
-`work/packages/done-20260509-spec-led-runtime-modularization-operation-scheduling-sql-write-operations-frontier.md`.
+Latest closed proof package:
+`work/packages/done-20260510-spec-led-runtime-modularization-representative-green-proof-or-next-blocker.md`.
 
 Companion cleanup:
 `work/packages/todo-20260509-spec-led-runtime-modularization-active-gate-report-schema-alias-deletion.md`.
 
-Queued migrated successor:
-`work/packages/todo-20260510-spec-led-runtime-modularization-operation-workflow-progress-sql-transactions-dispatch-pending-frontier.md`.
+Latest closed runtime package:
+`work/packages/done-20260509-spec-led-runtime-modularization-operation-scheduling-sql-write-operations-frontier.md`.
 
-Next proof surface: parent session commits and pushes the focused proof slice,
-closes the proof package with a truthful Commit And Push Ledger, moves the
-queued successor to `active`, regenerates `work/sprints/current-blocker.*`, and
-assigns a fresh review subagent before runtime implementation starts.
+Next proof surface: continue the active workflow-progress package from
+`test-output/reports/rolling-restart-spec-led-runtime-modularization-workflow-progress-sql-transactions-dispatch-pending.report.json`.
+Freeze the `replica_operations-p1` / `sql_write_operations-p1`
+`recovering_in_flight` PENDING persisted-not-dispatched residual and determine
+whether owner re-entry is blocked inside `operation_workflow_owner` scheduling
+or by transport/startup backpressure before making further runtime changes.
 
 ## Goal
 
@@ -129,8 +110,8 @@ the contract and proof ladder are stable.
 18. [Operation Workflow Rebalancer Handoff Retry-Scheduled Frontier](../packages/done-20260509-spec-led-runtime-modularization-operation-workflow-rebalancer-handoff-retry-scheduled-frontier.md)
 19. [Operation Workflow Progress Dispatch-Pending Frontier](../packages/done-20260509-spec-led-runtime-modularization-operation-workflow-progress-dispatch-pending-frontier.md)
 20. [Operation Scheduling SQL Write Operations Frontier](../packages/done-20260509-spec-led-runtime-modularization-operation-scheduling-sql-write-operations-frontier.md)
-21. [Representative Green Proof Or Next Blocker Classification](../packages/active-20260510-spec-led-runtime-modularization-representative-green-proof-or-next-blocker.md)
-22. [Operation Workflow Progress SQL Transactions Dispatch-Pending Frontier](../packages/todo-20260510-spec-led-runtime-modularization-operation-workflow-progress-sql-transactions-dispatch-pending-frontier.md)
+21. [Representative Green Proof Or Next Blocker Classification](../packages/done-20260510-spec-led-runtime-modularization-representative-green-proof-or-next-blocker.md)
+22. [Operation Workflow Progress SQL Transactions Dispatch-Pending Frontier](../packages/active-20260510-spec-led-runtime-modularization-operation-workflow-progress-sql-transactions-dispatch-pending-frontier.md)
 23. [Active Gate Report Schema Alias Deletion](../packages/todo-20260509-spec-led-runtime-modularization-active-gate-report-schema-alias-deletion.md)
 
 ## Model Fit Strategy

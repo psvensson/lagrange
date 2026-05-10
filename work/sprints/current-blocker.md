@@ -4,7 +4,7 @@
 
 Sprint: `work/sprints/active-2026-q2-spec-led-runtime-modularization.md`
 
-Package: `work/packages/active-20260510-spec-led-runtime-modularization-representative-green-proof-or-next-blocker.md`
+Package: `work/packages/active-20260510-spec-led-runtime-modularization-operation-workflow-progress-sql-transactions-dispatch-pending-frontier.md`
 
 Scenario: `spec-led-runtime-modularization`
 
@@ -14,45 +14,57 @@ Playback: `test-output/reports/.playback/rolling-restart-spec-led-runtime-modula
 
 ## Boundary
 
-Owner: `representative_gate_owner`
+Owner: `operation_workflow_owner`
 
-Boundary: `proof_classification`
+Boundary: `workflow_progress`
 
-Dominant reason: `pending_representative_proof`
+Dominant reason: `priority_recovery_progress_blocked`
 
-Current state: Classification is complete: the representative report is migrated-frontier, with first blocked frontier priority_recovery_partition_progress owned by operation_workflow_owner / workflow_progress. A single successor package is queued at work/packages/todo-20260510-spec-led-runtime-modularization-operation-workflow-progress-sql-transactions-dispatch-pending-frontier.md.
+Current state: The workflow-progress implementation now treats persisted PENDING dispatch-pending rows as owner re-entry candidates and attaches owner-advance observation to appended diagnostic snapshots for PENDING persisted-not-dispatched and absent-target SENDING dispatch-pending witnesses. Focused tests and touched-file guardrails pass. The representative rerun reduced the original sql_transactions-p1 stalled/no-transition witness, but the same owner boundary still dominates with recovering_in_flight event-driven PENDING rows on replica_operations-p1 and sql_write_operations-p1 while startup snapshot coverage remains downstream.
 
 ## Next Action
 
-Parent session records or verifies implementation-subagent proof, commits and pushes the focused proof slice, closes this proof package with a truthful Commit And Push Ledger, then activates the queued operation_workflow_owner / workflow_progress successor before runtime implementation starts.
+Continue this active package from the fresh representative report: freeze the recovering_in_flight PENDING persisted-not-dispatched residual for replica_operations-p1/sql_write_operations-p1, then determine whether owner re-entry is blocked by operation_workflow_owner scheduling or by transport/startup backpressure before further runtime changes.
 
 ## Proof Ladder
 
-1. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-spec-led-runtime-modularization-operation-scheduling-sql-write-operations.report.json --fast-local --verbose`
-2. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-operation-scheduling-sql-write-operations.report.json`
-3. `npm run work:package:evidence-block -- test-output/reports/rolling-restart-spec-led-runtime-modularization-operation-scheduling-sql-write-operations.report.json when the representative proof is not green`
-4. `npm run work:current-blocker`
-5. `npm run work:validate`
+1. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-operation-scheduling-sql-write-operations.report.json --explain priority_recovery_partition_progress`
+2. `Focused operation_workflow_owner workflow_progress fixture for sql_transactions-p1 persisted-not-dispatched/no-step-transition evidence`
+3. `Focused operation workflow owner and dispatch wake/replay tests selected by priority_recovery_workflow_progress_event_driven`
+4. `Touched-file static guardrails selected by operation_workflow_owner and dispatch service ownership`
+5. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-spec-led-runtime-modularization-workflow-progress-sql-transactions-dispatch-pending.report.json --fast-local --verbose`
 
 ## Model Fit
 
-Package class: `spark-safe`
+Package class: `representative-frontier-closure`
 
-Intended minimum model: `gpt-5.3-codex-spark`
+Intended minimum model: `gpt-5.3-codex`
 
-Scope shape: `leaf-slice`
+Scope shape: `owner-boundary-contraction`
 
 Escalation triggers:
 
-1. `representative report or analyzer output is missing or contradictory`
-2. `proof requires runtime, test, diagnostics, analyzer, or harness code changes`
-3. `scenario still fails on rebalancer_leader / operation_scheduling after the scheduling package claims closure`
-4. `more than one plausible new owner boundary appears in normalized evidence`
+1. `workflow progress evidence requires changes outside operation_workflow_owner or dispatch service wake/replay`
+2. `focused fixture exposes operation_scheduling, rebalancer_handoff, or workflow_timeout again`
+3. `representative proof still fails on the same sql_transactions-p1 dispatch_pending no-step-transition witness after owner fix`
 
 ## Touched Files
 
-1. `work/packages/active-20260510-spec-led-runtime-modularization-representative-green-proof-or-next-blocker.md`
-2. `work/packages/todo-20260510-spec-led-runtime-modularization-operation-workflow-progress-sql-transactions-dispatch-pending-frontier.md`
-3. `work/sprints/active-2026-q2-spec-led-runtime-modularization.md`
-4. `work/sprints/current-blocker.json`
-5. `work/sprints/current-blocker.md`
+1. `src/rebalancer/operation-workflow-owner*.js`
+2. `src/rebalancer/operation-workflow-owner-ports.js`
+3. `src/control-plane/replica-dispatch-service*.js`
+4. `src/control-plane/priority-recovery-snapshot*.js`
+5. `src/control-plane/priority-recovery-snapshot-stage-10.js`
+6. `test/rebalancer/*workflow*.test.js`
+7. `test/rebalancer/operation-workflow-owner-adapter.test.js`
+8. `test/rebalancer/operation-workflow-progress-event-driven-reentry.test.js`
+9. `test/control-plane/*dispatch*.test.js`
+10. `test/control-plane/priority-recovery-snapshot*.js`
+11. `test/control-plane/priority-recovery-snapshot-operation-owner-outcome.test.js`
+12. `test/control-plane/priority-recovery-snapshot.test.js`
+13. `test/scripts/analyze-topology-convergence.test.js`
+14. `work/model-ledger.jsonl`
+15. `work/packages/active-20260510-spec-led-runtime-modularization-operation-workflow-progress-sql-transactions-dispatch-pending-frontier.md`
+16. `work/sprints/active-2026-q2-spec-led-runtime-modularization.md`
+17. `work/sprints/current-blocker.json`
+18. `work/sprints/current-blocker.md`

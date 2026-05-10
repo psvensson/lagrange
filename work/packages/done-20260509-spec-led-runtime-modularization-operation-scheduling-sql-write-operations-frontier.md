@@ -46,7 +46,7 @@
   "predecessor": "work/packages/done-20260509-spec-led-runtime-modularization-operation-workflow-progress-dispatch-pending-frontier.md",
   "closed": "2026-05-10",
   "commitAndPushLedgerRequired": true,
-  "successor": "work/packages/active-20260510-spec-led-runtime-modularization-representative-green-proof-or-next-blocker.md"
+  "successor": "work/packages/done-20260510-spec-led-runtime-modularization-representative-green-proof-or-next-blocker.md"
 }
 -->
 

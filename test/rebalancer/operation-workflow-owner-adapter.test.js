@@ -393,3 +393,34 @@ test('operation workflow owner reconcile routes stale sending pending ' +
     'dispatch re-entry should not fall through to transition advancement',
   );
 });
+
+test('operation workflow owner reconcile routes persisted pending ' +
+  'dispatch through the dispatch owner path', async (t) => {
+  const harness = buildOwnerPortHarness();
+  const result = await harness.adapter.run(
+    buildOperation({
+      status: ReplicaStatus.PENDING,
+      workflowStep: WORKFLOW_STEP.PENDING,
+      updatedAt: TEST_SOURCE_REVISION,
+    }),
+    {
+      mode: OPERATION_WORKFLOW_OWNER_PORT_CONTEXT_MODE.OWNER_RECONCILE,
+    },
+  );
+
+  t.equal(
+    result.outcome.outcome,
+    OPERATION_WORKFLOW_OUTCOME_VALUES.DISPATCH_LOCAL_OWNER,
+    'persisted PENDING/pending owner reconcile should re-enter dispatch',
+  );
+  t.equal(
+    result.command.effectCommand,
+    OPERATION_WORKFLOW_EFFECT_COMMANDS.DISPATCH_LOCAL_OWNER_COMMAND,
+    'persisted PENDING re-entry should use the canonical local owner command',
+  );
+  t.same(
+    harness.calls,
+    [OPERATION_WORKFLOW_EFFECT_COMMANDS.DISPATCH_LOCAL_OWNER_COMMAND],
+    'persisted PENDING re-entry should not fall through to transition advancement',
+  );
+});

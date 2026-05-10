@@ -54,8 +54,11 @@ const TEST_OPERATION_OWNER_OBSERVATION_FIELD = 'operationOwnerObservation';
 const TEST_REENTRY_TEST_NAME =
   'event-driven dispatch-pending workflow progress re-enters through the ' +
   'operation owner outcome';
+const TEST_PENDING_REENTRY_TEST_NAME =
+  'persisted-not-dispatched PENDING workflow progress re-enters through ' +
+  'the operation owner outcome';
 
-function buildEventDrivenOperation() {
+function buildEventDrivenOperation(overrides = {}) {
   return Object.freeze({
     operationId: TEST_OPERATION_ID,
     type: OperationType.REPLACE,
@@ -69,10 +72,11 @@ function buildEventDrivenOperation() {
     workflowStep: WORKFLOW_STEP.SENDING,
     createdAt: TEST_CREATED_AT_MS,
     updatedAt: TEST_UPDATED_AT_MS,
+    ...overrides,
   });
 }
 
-function buildEventDrivenOperationRow() {
+function buildEventDrivenOperationRow(overrides = {}) {
   return Object.freeze({
     operation_id: TEST_OPERATION_ID,
     type: OperationType.REPLACE,
@@ -86,10 +90,15 @@ function buildEventDrivenOperationRow() {
     workflow_step: WORKFLOW_STEP.SENDING,
     created_at: TEST_CREATED_AT_MS,
     updated_at: TEST_UPDATED_AT_MS,
+    ...overrides,
   });
 }
 
-function buildEventDrivenPlanningSnapshot() {
+function buildEventDrivenPlanningSnapshot(options = {}) {
+  const workflowStep = options.workflowStep || WORKFLOW_STEP.SENDING;
+  const actuationState =
+    options.actuationState ||
+    PRIORITY_RECOVERY_ACTUATION_STATE.DISPATCHED_WAITING_PROGRESS;
   return Object.freeze({
     publicationEpoch: TEST_PUBLICATION_EPOCH,
     publicationStatus: 'PUBLISHED',
@@ -122,13 +131,12 @@ function buildEventDrivenPlanningSnapshot() {
             }),
           }),
           conditions: Object.freeze({
-            latestOperationWorkflowStep: WORKFLOW_STEP.SENDING,
+            latestOperationWorkflowStep: workflowStep,
             latestOperationStatus: ReplicaStatus.PENDING,
           }),
           actuation: Object.freeze({
             owner: PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER,
-            state:
-              PRIORITY_RECOVERY_ACTUATION_STATE.DISPATCHED_WAITING_PROGRESS,
+            state: actuationState,
             workflowProgressPhaseId:
               PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.DISPATCH_PENDING,
             stepAgeMs: TEST_STEP_AGE_MS,
@@ -212,7 +220,12 @@ function buildSqlQueryEngine(operationRow) {
   };
 }
 
-function createEventDrivenCoordinator(deliveries, deferredTimers, operationRow) {
+function createEventDrivenCoordinator(
+  deliveries,
+  deferredTimers,
+  operationRow,
+  planningOptions = {},
+) {
   return new RebalanceCoordinator({
     nodeId: TEST_OBSERVER_NODE_ID,
     sqlQueryEngine: buildSqlQueryEngine(operationRow),
@@ -230,7 +243,7 @@ function createEventDrivenCoordinator(deliveries, deferredTimers, operationRow) 
     },
     controlPlaneReadinessService: {
       getPriorityRecoveryPlanningSnapshotBestEffort() {
-        return buildEventDrivenPlanningSnapshot();
+        return buildEventDrivenPlanningSnapshot(planningOptions);
       },
       getNodeReadinessSync(nodeId) {
         return {
@@ -416,6 +429,97 @@ test(TEST_REENTRY_TEST_NAME, async (t) => {
       deliveries.length,
       NUM.THREE,
       'observation-missing event-driven re-entry should enqueue owner work',
+    );
+  } finally {
+    Date.now = originalDateNow;
+    await coordinator.shutdown();
+  }
+});
+
+test(TEST_PENDING_REENTRY_TEST_NAME, async (t) => {
+  const deliveries = [];
+  const deferredTimers = [];
+  const operation = buildEventDrivenOperation({
+    workflowStep: WORKFLOW_STEP.PENDING,
+  });
+  const operationRow = buildEventDrivenOperationRow({
+    workflow_step: WORKFLOW_STEP.PENDING,
+  });
+  const coordinator = createEventDrivenCoordinator(
+    deliveries,
+    deferredTimers,
+    operationRow,
+    {
+      workflowStep: WORKFLOW_STEP.PENDING,
+      actuationState:
+        PRIORITY_RECOVERY_ACTUATION_STATE.PERSISTED_NOT_DISPATCHED,
+    },
+  );
+  const originalDateNow = Date.now;
+  Date.now = () => TEST_CAPTURED_AT_MS;
+
+  try {
+    coordinator.initialize();
+    coordinator.workflowOwner.repository
+      .getOperationsByEntityAuthoritativeObservation = async () => {
+        return Object.freeze({
+          state: 'present',
+          operationCount: NUM.ONE,
+          operations: Object.freeze([operation]),
+          deferredOutcome: null,
+          retryAfterMs: null,
+        });
+      };
+
+    const snapshot =
+      await coordinator.workflowOwner
+        .getPriorityRecoveryDecisionSnapshotForPartitionOperations(
+          TEST_PARTITION_ID,
+          [operation],
+        );
+    await new Promise((resolve) => {
+      setTimeout(resolve, NUM.ZERO);
+    });
+
+    t.equal(
+      snapshot?.conditions?.latestOperationWorkflowStep,
+      WORKFLOW_STEP.PENDING,
+      'the focused witness should preserve the durable PENDING step',
+    );
+    t.equal(
+      snapshot?.actuation?.state,
+      PRIORITY_RECOVERY_ACTUATION_STATE.PERSISTED_NOT_DISPATCHED,
+      'the focused witness should stay persisted-not-dispatched',
+    );
+    t.equal(
+      snapshot?.operationOwnerObservation?.outcome,
+      OPERATION_WORKFLOW_OUTCOME_VALUES.WAKE_REMOTE_OWNER,
+      'the focused PENDING witness should carry the remote wake outcome',
+    );
+    t.equal(
+      snapshot?.operationOwnerObservation?.requestedOwnerAction,
+      PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.ADVANCE_EXISTING_OPERATION,
+      'the focused PENDING witness should keep owner advancement as the requested action',
+    );
+    t.equal(
+      snapshot?.operationOwnerObservation?.effectCommand,
+      OPERATION_WORKFLOW_EFFECT_COMMAND_VALUES.WAKE_REMOTE_OWNER_COMMAND,
+      'the focused PENDING witness should use the remote wake command',
+    );
+    t.equal(
+      deliveries.length,
+      NUM.ONE,
+      'the focused PENDING witness should enqueue one remote owner wake',
+    );
+    t.equal(
+      deliveries[NUM.ZERO]?.target,
+      TEST_REPLICA_DISPATCH_TARGET,
+      'the focused PENDING witness should target the canonical replica-dispatch ingress',
+    );
+    t.equal(
+      deferredTimers.length,
+      NUM.ONE,
+      'the focused PENDING witness should arm the bounded handoff verification lane',
     );
   } finally {
     Date.now = originalDateNow;

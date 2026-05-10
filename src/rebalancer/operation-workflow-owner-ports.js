@@ -45,6 +45,11 @@ const OPERATION_WORKFLOW_OWNER_PORT_OPERATION_ID_UNDERSCORE =
 const OPERATION_WORKFLOW_OWNER_PORT_WORKFLOW_STEP_UNDERSCORE =
   'workflow_step';
 const OPERATION_WORKFLOW_OWNER_PORT_STATUS_UNDERSCORE = 'status';
+const OPERATION_WORKFLOW_OWNER_PORT_RECONCILE_DISPATCH_PENDING_STEPS =
+  Object.freeze(new Set([
+    WORKFLOW_STEP.PENDING,
+    WORKFLOW_STEP.SENDING,
+  ]));
 
 const OPERATION_WORKFLOW_OWNER_PORT_DISPATCH_STATE_TABLE = Object.freeze([
   Object.freeze({
@@ -184,6 +189,7 @@ function resolveOperationWorkflowDispatchState(owner, operation, context) {
   const dispatchRetrySupportAvailable =
     typeof owner.isDispatchRetryableWorkflowStep ===
       OPERATION_WORKFLOW_OWNER_PORT_FUNCTION_TYPE;
+  const workflowStep = getOperationWorkflowOwnerPortWorkflowStep(operation);
   const evidence = Object.freeze({
     observedProgressMode:
       context.mode ===
@@ -191,8 +197,9 @@ function resolveOperationWorkflowDispatchState(owner, operation, context) {
     dispatchPendingReentryCandidate:
       context.mode ===
         OPERATION_WORKFLOW_OWNER_PORT_CONTEXT_MODE.OWNER_RECONCILE &&
-      getOperationWorkflowOwnerPortWorkflowStep(operation) ===
-        WORKFLOW_STEP.SENDING &&
+      OPERATION_WORKFLOW_OWNER_PORT_RECONCILE_DISPATCH_PENDING_STEPS.has(
+        workflowStep,
+      ) &&
       getOperationWorkflowOwnerPortStatus(operation) ===
         ReplicaStatus.PENDING,
     dispatchRetrySupportAvailable,

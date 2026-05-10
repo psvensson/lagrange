@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-10",
   "scenario": "spec-led-runtime-modularization",
   "artifact": "test-output/reports/rolling-restart-spec-led-runtime-modularization-operation-scheduling-sql-write-operations.report.json",
@@ -11,8 +11,8 @@
   "owner": "representative_gate_owner",
   "boundary": "proof_classification",
   "dominantReason": "pending_representative_proof",
-  "currentState": "Classification is complete: the representative report is migrated-frontier, with first blocked frontier priority_recovery_partition_progress owned by operation_workflow_owner / workflow_progress. A single successor package is queued at work/packages/todo-20260510-spec-led-runtime-modularization-operation-workflow-progress-sql-transactions-dispatch-pending-frontier.md.",
-  "nextAction": "Parent session records or verifies implementation-subagent proof, commits and pushes the focused proof slice, closes this proof package with a truthful Commit And Push Ledger, then activates the queued operation_workflow_owner / workflow_progress successor before runtime implementation starts.",
+  "currentState": "Classification is complete: the representative report is migrated-frontier, with first blocked frontier priority_recovery_partition_progress owned by operation_workflow_owner / workflow_progress. The successor package is active and current at work/packages/active-20260510-spec-led-runtime-modularization-operation-workflow-progress-sql-transactions-dispatch-pending-frontier.md.",
+  "nextAction": "Continue in the active operation_workflow_owner / workflow_progress successor package; runtime implementation starts only after its review/fix ledger is clean and its fresh implementation subagent is recorded.",
   "proof": [
     "node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-spec-led-runtime-modularization-operation-scheduling-sql-write-operations.report.json --fast-local --verbose",
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-operation-scheduling-sql-write-operations.report.json",
@@ -21,8 +21,8 @@
     "npm run work:validate"
   ],
   "touchedFiles": [
-    "work/packages/active-20260510-spec-led-runtime-modularization-representative-green-proof-or-next-blocker.md",
-    "work/packages/todo-20260510-spec-led-runtime-modularization-operation-workflow-progress-sql-transactions-dispatch-pending-frontier.md",
+    "work/packages/done-20260510-spec-led-runtime-modularization-representative-green-proof-or-next-blocker.md",
+    "work/packages/active-20260510-spec-led-runtime-modularization-operation-workflow-progress-sql-transactions-dispatch-pending-frontier.md",
     "work/sprints/active-2026-q2-spec-led-runtime-modularization.md",
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md",
@@ -40,7 +40,9 @@
     ]
   },
   "predecessor": "work/packages/done-20260509-spec-led-runtime-modularization-operation-scheduling-sql-write-operations-frontier.md",
-  "successor": "work/packages/todo-20260510-spec-led-runtime-modularization-operation-workflow-progress-sql-transactions-dispatch-pending-frontier.md"
+  "successor": "work/packages/active-20260510-spec-led-runtime-modularization-operation-workflow-progress-sql-transactions-dispatch-pending-frontier.md",
+  "closed": "2026-05-10",
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -91,7 +93,7 @@ This remains Phase `0.1` internal-coherence gate work in the AGPL repository.
 - Intended minimum model: `gpt-5.3-codex-spark`
 - Scope shape: `leaf-slice`
 - Owned files: this package file,
-  `work/packages/todo-20260510-spec-led-runtime-modularization-operation-workflow-progress-sql-transactions-dispatch-pending-frontier.md`,
+  `work/packages/active-20260510-spec-led-runtime-modularization-operation-workflow-progress-sql-transactions-dispatch-pending-frontier.md`,
   `work/sprints/active-2026-q2-spec-led-runtime-modularization.md`,
   `work/sprints/current-blocker.json`, `work/sprints/current-blocker.md`, and
   `work/model-ledger.jsonl`.
@@ -165,15 +167,13 @@ The first blocked frontier is `priority_recovery_partition_progress`, owned by
 
 ## Successor Handoff
 
-Queued successor package:
-`work/packages/todo-20260510-spec-led-runtime-modularization-operation-workflow-progress-sql-transactions-dispatch-pending-frontier.md`.
+Active successor package:
+`work/packages/active-20260510-spec-led-runtime-modularization-operation-workflow-progress-sql-transactions-dispatch-pending-frontier.md`.
 
-The successor is intentionally queued as `todo` rather than activated in this
-subagent pass. This proof package cannot be closed without a truthful Commit
-And Push Ledger. After the parent commits and pushes the focused proof slice,
-it can close this package, move the successor to `active`, regenerate
-`work/sprints/current-blocker.*`, and assign the next required review subagent
-before runtime implementation starts.
+The successor is now active and is the current sprint blocker. This proof
+package is closed with a truthful Commit And Push Ledger. Runtime
+implementation continues only from the active successor package after its
+review/fix ledger is clean and a fresh implementation subagent is recorded.
 
 ## Validation Results
 
@@ -184,7 +184,7 @@ before runtime implementation starts.
   passed and confirmed the owner decision table outcome is `blocked`.
 - `npm run work:package:evidence-block -- test-output/reports/rolling-restart-spec-led-runtime-modularization-operation-scheduling-sql-write-operations.report.json`
   passed and generated the owner evidence block above.
-- `npm run work:model-ledger -- record --package work/packages/active-20260510-spec-led-runtime-modularization-representative-green-proof-or-next-blocker.md --model gpt-5-codex --reasoning-effort high --task-class proof-classification --package-class spark-safe --intended-minimum-model gpt-5.3-codex-spark --scope-shape leaf-slice --escalated false --bailout-reason none --outcome frontier-migrated --validation-status tracker-green --correction-loops 1 --review-findings 1 --notes "Classified existing representative report as migrated-frontier to operation_workflow_owner/workflow_progress and queued one successor package without runtime edits."`
+- `npm run work:model-ledger -- record --package work/packages/done-20260510-spec-led-runtime-modularization-representative-green-proof-or-next-blocker.md --model gpt-5-codex --reasoning-effort high --task-class proof-classification --package-class spark-safe --intended-minimum-model gpt-5.3-codex-spark --scope-shape leaf-slice --escalated false --bailout-reason none --outcome frontier-migrated --validation-status tracker-green --correction-loops 1 --review-findings 1 --notes "Classified existing representative report as migrated-frontier to operation_workflow_owner/workflow_progress and queued one successor package without runtime edits."`
   passed and recorded the Spark-safe proof-classification experience.
 
 ## Subagent Sequencing Ledger
@@ -198,4 +198,10 @@ before runtime implementation starts.
       `work/packages/done-20260509-spec-led-runtime-modularization-operation-scheduling-sql-write-operations-frontier.md`.
 - [x] Implementation subagent recorded:
       Agent Codex implementation subagent (019e10cc-c50a-7be2-96ef-cd8462d7c5e4) implemented
-      `work/packages/active-20260510-spec-led-runtime-modularization-representative-green-proof-or-next-blocker.md`.
+      `work/packages/done-20260510-spec-led-runtime-modularization-representative-green-proof-or-next-blocker.md`.
+
+## Commit And Push Ledger
+
+1. Focused package commit: `5babfd39`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes

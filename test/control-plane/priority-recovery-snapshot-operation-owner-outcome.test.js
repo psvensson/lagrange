@@ -14,6 +14,7 @@ import {
   PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE,
 } from '../../src/control-plane/priority-recovery-diagnostics-constants.js';
 import {
+  buildPriorityRecoveryDecisionSnapshots,
   normalizePriorityRecoveryDispatchPendingDecisionSnapshot,
 } from '../../src/control-plane/priority-recovery-snapshot.js';
 import {
@@ -36,6 +37,21 @@ const TEST_REBALANCER_HANDOFF_RETRY_OUTCOME =
   'wait_for_rebalancer_handoff_retry';
 const TEST_REBALANCER_HANDOFF_RETRY_REASON =
   'remote_handoff_retry_scheduled';
+const TEST_PUBLICATION_EPOCH = 2;
+const TEST_CAPTURED_AT_MS = 1000000;
+const TEST_CREATED_AT_MS = 900000;
+const TEST_UPDATED_AT_MS = 960000;
+const TEST_READY_DISTINCT_NODE_COUNT = 1;
+const TEST_REQUIRED_DISTINCT_NODE_COUNT = 2;
+const TEST_SOURCE_NODE_ID = 'priority-recovery-owner-contract-source';
+const TEST_TARGET_NODE_ID = 'priority-recovery-owner-contract-target';
+const TEST_REPLICA_ID = 'priority-recovery-owner-contract-replica';
+const TEST_ENTITY_TYPE_PARTITION = 'partition';
+const TEST_OPERATION_TYPE_REPLACE = 'REPLACE';
+const TEST_PUBLICATION_STATUS_PUBLISHED = 'PUBLISHED';
+const TEST_WORKFLOW_STEP_PENDING = 'PENDING';
+const TEST_WORKFLOW_STEP_SENDING = 'SENDING';
+const TEST_OPERATION_STATUS_PENDING = 'pending';
 
 function buildPriorityRecoveryOwnerConsumerSnapshot(overrides = {}) {
   return Object.freeze({
@@ -61,6 +77,45 @@ function buildPriorityRecoveryOwnerConsumerSnapshot(overrides = {}) {
       workflowProgressPhaseId:
         PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE.DISPATCH_PENDING,
     }),
+    ...overrides,
+  });
+}
+
+function buildPriorityRecoveryOwnerPublicationConvergence() {
+  return Object.freeze({
+    publicationEpoch: TEST_PUBLICATION_EPOCH,
+    publicationStatus: TEST_PUBLICATION_STATUS_PUBLISHED,
+    publishedActiveNodeIds: Object.freeze([
+      TEST_SOURCE_NODE_ID,
+      TEST_TARGET_NODE_ID,
+    ]),
+    pendingAckNodeIds: Object.freeze([]),
+    priorityPartitionSummary: Object.freeze({
+      satisfied: false,
+      blockedPartitions: Object.freeze([
+        Object.freeze({
+          partitionId: TEST_PARTITION_ID,
+          readyDistinctNodeCount: TEST_READY_DISTINCT_NODE_COUNT,
+          requiredDistinctNodeCount: TEST_REQUIRED_DISTINCT_NODE_COUNT,
+        }),
+      ]),
+    }),
+  });
+}
+
+function buildPriorityRecoveryOwnerPendingOperationRow(overrides = {}) {
+  return Object.freeze({
+    operation_id: TEST_OPERATION_ID,
+    partition_id: TEST_PARTITION_ID,
+    entity_type: TEST_ENTITY_TYPE_PARTITION,
+    operation_type: TEST_OPERATION_TYPE_REPLACE,
+    status: TEST_OPERATION_STATUS_PENDING,
+    workflow_step: TEST_WORKFLOW_STEP_PENDING,
+    source_node_id: TEST_SOURCE_NODE_ID,
+    target_node_id: TEST_TARGET_NODE_ID,
+    replica_id: TEST_REPLICA_ID,
+    created_at: TEST_CREATED_AT_MS,
+    updated_at: TEST_UPDATED_AT_MS,
     ...overrides,
   });
 }
@@ -318,3 +373,105 @@ test('priority recovery records wait/no-op owner outcome without effects',
       message: 'wait/no-op should be observed without executing effects',
     });
   });
+
+test('priority recovery decision snapshots attach owner observation for ' +
+  'persisted PENDING dispatch witnesses', async (t) => {
+  const decisionSnapshots = buildPriorityRecoveryDecisionSnapshots({
+    capturedAt: TEST_CAPTURED_AT_MS,
+    publicationConvergence:
+      buildPriorityRecoveryOwnerPublicationConvergence(),
+    readinessByNodeId: Object.freeze({}),
+    workflowAdmissionsByWorkflowId: Object.freeze({}),
+    replicaOperationRows: Object.freeze([
+      buildPriorityRecoveryOwnerPendingOperationRow(),
+    ]),
+    replicaOperations: Object.freeze({
+      operationTimelineById: Object.freeze({}),
+    }),
+    serviceRows: Object.freeze([]),
+  });
+  const targetSnapshot = decisionSnapshots.snapshots.find((entry) =>
+    entry.partitionId === TEST_PARTITION_ID &&
+    entry.operationId === TEST_OPERATION_ID,
+  );
+
+  t.equal(
+    targetSnapshot?.conditions?.latestOperationWorkflowStep,
+    TEST_WORKFLOW_STEP_PENDING,
+    'the fixture should preserve the PENDING workflow step',
+  );
+  t.equal(
+    targetSnapshot?.operationOwnerObservation?.outcome,
+    OPERATION_WORKFLOW_OUTCOME_VALUES.ADVANCE_EXISTING_OPERATION,
+    'diagnostic snapshots should carry the owner advancement observation',
+  );
+  t.equal(
+    targetSnapshot?.operationOwnerObservation?.requestedOwnerAction,
+    PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION.ADVANCE_EXISTING_OPERATION,
+    'diagnostic snapshots should keep owner advancement as the requested action',
+  );
+  t.same(
+    targetSnapshot?.blockerReasons,
+    [],
+    'owner-observed dispatch-pending diagnostics should clear no-transition blockers',
+  );
+  t.equal(
+    targetSnapshot?.semanticState,
+    PRIORITY_RECOVERY_SEMANTIC_STATE.RECOVERING_IN_FLIGHT,
+    'owner-observed dispatch-pending diagnostics should stay in flight',
+  );
+  t.match(targetSnapshot?.actuation, {
+    owner: PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER,
+    state: PRIORITY_RECOVERY_ACTUATION_STATE.PERSISTED_NOT_DISPATCHED,
+  });
+});
+
+test('priority recovery decision snapshots attach owner observation for ' +
+  'persisted SENDING dispatch witnesses', async (t) => {
+  const decisionSnapshots = buildPriorityRecoveryDecisionSnapshots({
+    capturedAt: TEST_CAPTURED_AT_MS,
+    publicationConvergence:
+      buildPriorityRecoveryOwnerPublicationConvergence(),
+    readinessByNodeId: Object.freeze({}),
+    workflowAdmissionsByWorkflowId: Object.freeze({}),
+    replicaOperationRows: Object.freeze([
+      buildPriorityRecoveryOwnerPendingOperationRow({
+        workflow_step: TEST_WORKFLOW_STEP_SENDING,
+      }),
+    ]),
+    replicaOperations: Object.freeze({
+      operationTimelineById: Object.freeze({}),
+    }),
+    serviceRows: Object.freeze([]),
+  });
+  const targetSnapshot = decisionSnapshots.snapshots.find((entry) =>
+    entry.partitionId === TEST_PARTITION_ID &&
+    entry.operationId === TEST_OPERATION_ID,
+  );
+
+  t.equal(
+    targetSnapshot?.conditions?.latestOperationWorkflowStep,
+    TEST_WORKFLOW_STEP_SENDING,
+    'the fixture should preserve the SENDING workflow step',
+  );
+  t.equal(
+    targetSnapshot?.operationOwnerObservation?.outcome,
+    OPERATION_WORKFLOW_OUTCOME_VALUES.ADVANCE_EXISTING_OPERATION,
+    'diagnostic snapshots should carry the sending owner observation',
+  );
+  t.same(
+    targetSnapshot?.blockerReasons,
+    [],
+    'owner-observed sending diagnostics should clear no-transition blockers',
+  );
+  t.equal(
+    targetSnapshot?.semanticState,
+    PRIORITY_RECOVERY_SEMANTIC_STATE.RECOVERING_IN_FLIGHT,
+    'owner-observed sending diagnostics should stay in flight',
+  );
+  t.match(targetSnapshot?.actuation, {
+    owner: PRIORITY_RECOVERY_PROGRESS_OWNER.OPERATION_WORKFLOW_OWNER,
+    state:
+      PRIORITY_RECOVERY_ACTUATION_STATE.DISPATCHED_WAITING_PROGRESS,
+  });
+});
