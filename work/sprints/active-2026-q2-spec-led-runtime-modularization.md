@@ -1,16 +1,17 @@
 # Spec-Led Runtime Modularization Sprint
 
 Status: active. This sprint was activated by human direction on May 9, 2026
-after the prior rolling-restart package closed and handed off a workflow
-progress successor boundary.
+after the prior rolling-restart package closed. It now advances one
+representative rolling-restart frontier at a time and must prove or classify
+the representative gate before companion cleanup or broad successor work.
 
 ## Current Package Snapshot
 
 Current blocker package:
-`work/packages/active-20260509-spec-led-runtime-modularization-operation-workflow-progress-dispatch-pending-frontier.md`.
+`work/packages/active-20260509-spec-led-runtime-modularization-operation-scheduling-sql-write-operations-frontier.md`.
 
 Owner boundary:
-`operation_workflow_owner / workflow_progress`.
+`rebalancer_leader / operation_scheduling`.
 
 Current state: legacy helper, inference, and alias deletion has been executed
 and closed in
@@ -34,22 +35,30 @@ Operation scheduling event-driven is now closed by migration in
 Operation workflow rebalancer handoff retry-scheduled is now closed by
 migration in
 `work/packages/done-20260509-spec-led-runtime-modularization-operation-workflow-rebalancer-handoff-retry-scheduled-frontier.md`.
+Operation workflow progress dispatch-pending is now closed by migration in
+`work/packages/done-20260509-spec-led-runtime-modularization-operation-workflow-progress-dispatch-pending-frontier.md`.
 Representative proof did not go green; it migrated the first frontier to
-operation workflow progress with dominant source
-`priority_recovery_workflow_progress_event_driven`.
+rebalancer leader operation scheduling with dominant source
+`priority_recovery_operation_scheduling_event_driven`.
 
 Queued work:
-Next package:
-`work/packages/active-20260509-spec-led-runtime-modularization-operation-workflow-progress-dispatch-pending-frontier.md`.
+Current runtime package:
+`work/packages/active-20260509-spec-led-runtime-modularization-operation-scheduling-sql-write-operations-frontier.md`.
+
+Required proof gate before any companion cleanup or broad successor work:
+`work/packages/todo-20260510-spec-led-runtime-modularization-representative-green-proof-or-next-blocker.md`.
 
 Companion cleanup:
 `work/packages/todo-20260509-spec-led-runtime-modularization-active-gate-report-schema-alias-deletion.md`.
 
-Next proof surface: operation workflow progress dispatch-pending evidence,
-with a focused
-operation workflow owner fixture from
-`test-output/reports/rolling-restart-spec-led-runtime-modularization-rebalancer-handoff-retry-scheduled.report.json`,
+Next proof surface: operation scheduling evidence for
+`sql_write_operations-p1` with a focused rebalancer leader fixture from
+`test-output/reports/rolling-restart-spec-led-runtime-modularization-workflow-progress-dispatch-pending.report.json`,
 topology-convergence explain proof, and representative rolling-restart rerun.
+If the rerun passes, the proof gate records representative green evidence and
+hands off to Phase 0.1 closure. If it fails, the proof gate either updates the
+same active package when the owner boundary is unchanged or activates exactly
+one new owner-boundary frontier package when the normalized evidence moved.
 
 ## Goal
 
@@ -114,8 +123,10 @@ the contract and proof ladder are stable.
 16. [Operation Workflow Progress Event-Driven Frontier](../packages/done-20260509-spec-led-runtime-modularization-operation-workflow-progress-event-driven-frontier.md)
 17. [Operation Scheduling Event-Driven Frontier](../packages/done-20260509-spec-led-runtime-modularization-operation-scheduling-event-driven-frontier.md)
 18. [Operation Workflow Rebalancer Handoff Retry-Scheduled Frontier](../packages/done-20260509-spec-led-runtime-modularization-operation-workflow-rebalancer-handoff-retry-scheduled-frontier.md)
-19. [Operation Workflow Progress Dispatch-Pending Frontier](../packages/active-20260509-spec-led-runtime-modularization-operation-workflow-progress-dispatch-pending-frontier.md)
-20. [Active Gate Report Schema Alias Deletion](../packages/todo-20260509-spec-led-runtime-modularization-active-gate-report-schema-alias-deletion.md)
+19. [Operation Workflow Progress Dispatch-Pending Frontier](../packages/done-20260509-spec-led-runtime-modularization-operation-workflow-progress-dispatch-pending-frontier.md)
+20. [Operation Scheduling SQL Write Operations Frontier](../packages/active-20260509-spec-led-runtime-modularization-operation-scheduling-sql-write-operations-frontier.md)
+21. [Representative Green Proof Or Next Blocker Classification](../packages/todo-20260510-spec-led-runtime-modularization-representative-green-proof-or-next-blocker.md)
+22. [Active Gate Report Schema Alias Deletion](../packages/todo-20260509-spec-led-runtime-modularization-active-gate-report-schema-alias-deletion.md)
 
 ## Model Fit Strategy
 
@@ -142,10 +153,19 @@ The sprint now separates broad orchestration from Spark-safe leaf work.
    frontier closure package intended for `gpt-5.3-codex`. It owns the operation
    workflow progress boundary and must not reopen handoff retry-log summary
    shadowing unless the focused fixture proves regression.
-7. A package intended for `gpt-5.3-codex-spark` must keep `Scope shape:
+7. `Operation Scheduling SQL Write Operations Frontier` is a representative
+   frontier closure package intended for `gpt-5.3-codex`. It owns the
+   rebalancer leader operation-scheduling boundary and must not reopen
+   workflow progress unless the focused fixture proves regression.
+8. `Representative Green Proof Or Next Blocker Classification` is a
+   proof-only leaf package intended for `gpt-5.3-codex-spark`. It may run and
+   analyze the representative scenario, update tracker truth, and activate one
+   new owner-boundary package if the normalized evidence moved. It must not
+   edit runtime, tests, diagnostics, analyzers, or harness behavior.
+9. A package intended for `gpt-5.3-codex-spark` must keep `Scope shape:
    leaf-slice`, list owned and forbidden files, freeze decisions, name
    escalation triggers, and provide focused proof.
-8. Representative proof may classify a leaf slice as closed, reduced,
+10. Representative proof may classify a leaf slice as closed, reduced,
    migrated, or same-frontier. It must not expand implementation scope inside
    the leaf package.
 
@@ -164,6 +184,13 @@ The sprint now separates broad orchestration from Spark-safe leaf work.
    guard that fails for the old behavior.
 7. Each runtime package ends with explicit deletion, downgrade, or quarantine of
    superseded paths.
+8. After the active runtime frontier package closes, activate the representative
+   proof/classification package before companion cleanup, schema cleanup, or
+   any broad successor runtime work.
+9. If representative proof still fails on the same owner boundary, update the
+   active package snapshot instead of creating a new package. If it fails on a
+   new owner boundary, activate exactly one successor frontier with a generated
+   evidence block.
 
 ## Cross-Package Invariants
 
@@ -187,3 +214,5 @@ The sprint now separates broad orchestration from Spark-safe leaf work.
    by the migration map are deleted or guarded as unreachable.
 4. Representative rolling-restart proof is green or has migrated to a fresh
    owner-boundary package with a canonical evidence block.
+5. No companion cleanup package starts while the representative proof gate is
+   unclassified.

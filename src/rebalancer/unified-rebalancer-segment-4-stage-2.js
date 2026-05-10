@@ -466,6 +466,18 @@ class UnifiedRebalancerSegment4Stage2 extends UnifiedRebalancerSegment4Stage1 {
         concreteEligibleNodeIds: Object.freeze([...activeNodeIds]),
         publishedActiveNodeIds: Object.freeze([...activeNodeIds]),
       }),
+      ...(eligibleButNoOperation && operationContexts.length === NUM.ZERO ?
+        {
+          [PRIORITY_RECOVERY_FOLLOW_UP_FIELD.COORDINATOR]:
+            Object.freeze({
+              serialWaitOperationCount: NUM.ZERO,
+              [PRIORITY_RECOVERY_FOLLOW_UP_FIELD.SERIAL_WAIT_OPERATION_IDS]:
+                Object.freeze([]),
+              [PRIORITY_RECOVERY_FOLLOW_UP_FIELD.SERIAL_WAIT_PARTITION_IDS]:
+                Object.freeze([]),
+            }),
+        } :
+        {}),
       progress,
     });
     return options?.includeNonRequiredSnapshot === true ||

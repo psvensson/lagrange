@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-09",
   "scenario": "spec-led-runtime-modularization",
   "artifact": "test-output/reports/rolling-restart-spec-led-runtime-modularization-rebalancer-handoff-retry-scheduled.report.json",
@@ -29,7 +29,11 @@
     "test/control-plane/priority-recovery-snapshot*.js",
     "test/scripts/analyze-topology-convergence.test.js",
     "work/model-ledger.jsonl",
-    "work/packages/active-20260509-spec-led-runtime-modularization-operation-workflow-progress-dispatch-pending-frontier.md"
+    "work/packages/done-20260509-spec-led-runtime-modularization-operation-workflow-progress-dispatch-pending-frontier.md",
+    "work/packages/active-20260509-spec-led-runtime-modularization-operation-scheduling-sql-write-operations-frontier.md",
+    "work/sprints/active-2026-q2-spec-led-runtime-modularization.md",
+    "work/sprints/current-blocker.json",
+    "work/sprints/current-blocker.md"
   ],
   "modelFit": {
     "packageClass": "representative-frontier-closure",
@@ -41,7 +45,10 @@
       "representative proof still fails on the same dispatch_pending no-step-transition witness after owner fix"
     ]
   },
-  "predecessor": "work/packages/done-20260509-spec-led-runtime-modularization-operation-workflow-rebalancer-handoff-retry-scheduled-frontier.md"
+  "predecessor": "work/packages/done-20260509-spec-led-runtime-modularization-operation-workflow-rebalancer-handoff-retry-scheduled-frontier.md",
+  "closed": "2026-05-09",
+  "commitAndPushLedgerRequired": true,
+  "successor": "work/packages/active-20260509-spec-led-runtime-modularization-operation-scheduling-sql-write-operations-frontier.md"
 }
 -->
 
@@ -309,3 +316,9 @@ stall outcomes in this package instead of converting missing output into proof.
 3. Static guardrails pass for touched production files.
 4. Representative rolling-restart is green or migrated to a fresh
    owner-boundary package with canonical evidence.
+
+## Commit And Push Ledger
+
+1. Focused package commit: `b7570cd0`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes

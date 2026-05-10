@@ -403,6 +403,8 @@ const TEST_NAME = Object.freeze({
     'checkRebalance reconstructs current needs_operation follow-up when stale serial-wait planning lacks closure witness',
   SCHEDULES_SQL_TRANSACTIONS_WITHOUT_SERIAL_WAIT:
     'checkRebalance requires explicit no-serial evidence before bypassing ordinary priority serial wait',
+  SCHEDULES_RECONSTRUCTED_SQL_WRITE_WITHOUT_SERIAL_WAIT:
+    'checkRebalance preserves no-serial evidence for reconstructed sql_write_operations priority recovery',
   RECLAIMS_CURRENT_NEEDS_OPERATION:
     'checkRebalance reclaims current needs_operation follow-up work when closure-witness surrogate progress only points at another partition',
   SCHEDULES_CURRENT_REPLICA_OPERATIONS_NEEDS_OPERATION:
@@ -466,6 +468,10 @@ const TEST_MESSAGE = Object.freeze({
     'sql_transactions no-serial follow-up should target the current blocker',
   SQL_TRANSACTIONS_MISSING_SERIAL_WAIT_BLOCKS_OPERATION:
     'sql_transactions missing serial-wait evidence should wait behind ordinary priority work',
+  SQL_WRITE_RECONSTRUCTED_NO_SERIAL_WAIT_PERSISTS_OPERATION:
+    'reconstructed sql_write_operations no-serial follow-up should persist one recovery operation',
+  SQL_WRITE_RECONSTRUCTED_NO_SERIAL_WAIT_RETARGETS_PARTITION:
+    'reconstructed sql_write_operations no-serial follow-up should target the current blocker',
   ROUTER_PRESSURE_DEFER_SCHEDULES_DELAY:
     'router pressure defer should schedule a delayed retry',
   ROUTER_PRESSURE_DEFERS_BEFORE_EVALUATION:
@@ -1930,6 +1936,172 @@ test(TEST_NAME.SUITE, async (t) => {
         createdOperations[TEST_NUMBER.ZERO]?.partitionId,
         SQL_TRANSACTIONS_PRIORITY_PARTITION_ID,
         TEST_MESSAGE.SQL_TRANSACTIONS_NO_SERIAL_WAIT_RETARGETS_PARTITION,
+      );
+    },
+  );
+
+  await t.test(
+    TEST_NAME.SCHEDULES_RECONSTRUCTED_SQL_WRITE_WITHOUT_SERIAL_WAIT,
+    async (t) => {
+      const nodeRows = [
+        {
+          node_id: PRIORITY_FOLLOW_UP_NODE_ID_A,
+          status: NodeStatus.ACTIVE,
+        },
+        {
+          node_id: PRIORITY_FOLLOW_UP_NODE_ID_B,
+          status: NodeStatus.ACTIVE,
+        },
+      ];
+      const serviceRows = [
+        {
+          service_id: SQL_WRITE_OPERATION_PRIORITY_REPLICA_ID_A,
+          service_type: SERVICE_TYPE.PARTITION,
+          node_id: PRIORITY_FOLLOW_UP_NODE_ID_A,
+          partition_id: SQL_WRITE_OPERATION_PRIORITY_PARTITION_ID,
+          replica_id: SQL_WRITE_OPERATION_PRIORITY_REPLICA_ID_A,
+          address:
+            PRIORITY_FOLLOW_UP_SERVICE_ADDRESS_PREFIX +
+            SQL_WRITE_OPERATION_PRIORITY_REPLICA_ID_A,
+          raft_role: PRIORITY_FOLLOW_UP_RAFT_ROLE_VOTER,
+          status: ReplicaStatus.ACTIVE,
+        },
+      ];
+      const partitionRows = [
+        {
+          partition_id: SQL_WRITE_OPERATION_PRIORITY_PARTITION_ID,
+          table_id: SYSTEM_TABLE_NAME.SQL_WRITE_OPERATIONS,
+        },
+      ];
+      const priorityPartitionSummary = {
+        satisfied: PRIORITY_RECOVERY_CLOSURE_WITNESS_SATISFIED,
+        blockedPartitions: [
+          {
+            partitionId: SQL_WRITE_OPERATION_PRIORITY_PARTITION_ID,
+            readyReplicaCount:
+              PRIORITY_RECOVERY_READY_REPLICA_COUNT_CANONICAL,
+            readyDistinctNodeCount:
+              PRIORITY_RECOVERY_READY_DISTINCT_NODE_COUNT,
+            requiredDistinctNodeCount:
+              PRIORITY_RECOVERY_REQUIRED_DISTINCT_NODE_COUNT,
+            spreadGap: PRIORITY_RECOVERY_SPREAD_GAP,
+          },
+        ],
+      };
+      const priorityRecoveryClosureWitness = {
+        blockedPartitionIds: [
+          SQL_WRITE_OPERATION_PRIORITY_PARTITION_ID,
+        ],
+        unresolvedSemanticStateIds: [
+          PRIORITY_RECOVERY_SEMANTIC_STATE_NEEDS_OPERATION,
+        ],
+      };
+      const planningSnapshot = {
+        publicationEpoch: PRIORITY_RECOVERY_PUBLICATION_EPOCH,
+        publishedActiveNodeIds: [
+          PRIORITY_FOLLOW_UP_NODE_ID_A,
+          PRIORITY_FOLLOW_UP_NODE_ID_B,
+        ],
+        priorityPartitionSummary,
+        priorityRecoveryClosureWitness,
+        publicationRecoveryGate: {
+          prioritySpreadPending: PRIORITY_RECOVERY_PUBLICATION_SPREAD_PENDING,
+          priorityPartitionSummary,
+          priorityRecoveryClosureWitness,
+        },
+      };
+      const cache = createMockCache(
+        nodeRows,
+        serviceRows,
+        partitionRows,
+      );
+      const readinessService = {
+        ...createMockReadinessService(cache),
+        getPriorityRecoveryPlanningSnapshotBestEffort() {
+          return planningSnapshot;
+        },
+        getPriorityRecoveryPlanningAnswerSync() {
+          return planningSnapshot;
+        },
+        membershipPublicationService: {
+          getLatestClusterPublicationSync() {
+            return {
+              priorityPartitionSummary,
+              priorityRecoveryClosureWitness,
+            };
+          },
+        },
+      };
+      const createdOperations = [];
+      const coordinator = {
+        ...createMockCoordinator(),
+        getConcurrentAddCountByPriorityClass: async () => ({
+          priorityCount: TEST_NUMBER.ONE,
+          ordinaryPriorityCount: TEST_NUMBER.ONE,
+          emergencyPriorityCount: TEST_NUMBER.ZERO,
+          nonPriorityCount: TEST_NUMBER.ZERO,
+        }),
+        createOperation: async (move) => {
+          createdOperations.push(move);
+          return {
+            operationId: PRIORITY_SURROGATE_CREATED_OPERATION_ID,
+            type: move.type,
+            partitionId: move.partitionId,
+            entityId: move.entityId,
+            targetNodeId: move.nodeId,
+            replicaId: move.replicaId,
+            status: ReplicaStatus.PENDING,
+            workflowStep: WORKFLOW_STEP.PENDING,
+          };
+        },
+      };
+      const rebalancer = createTestRebalancer({
+        entityId: SQL_WRITE_OPERATION_PRIORITY_PARTITION_ID,
+        entityType: EntityType.PARTITION,
+        nodeId: PRIORITY_FOLLOW_UP_NODE_ID_A,
+        rebalanceCoordinator: coordinator,
+        controlPlaneReadinessService: readinessService,
+        nodes: nodeRows,
+        services: serviceRows,
+        partitions: partitionRows,
+      });
+
+      rebalancer.setLeader(true);
+      rebalancer.clusterReadinessConfirmed = true;
+      rebalancer.isStabilized = () => true;
+      rebalancer.getConfiguredRebalanceBudget = async () =>
+        PRIORITY_RECOVERY_REQUIRED_DISTINCT_NODE_COUNT;
+      rebalancer.getGlobalInFlightOperationCount = async () =>
+        TEST_NUMBER.ZERO;
+      rebalancer.scheduleNextCheck = () => {};
+      rebalancer.movePlanner.calculateTargetState = async () => ({
+        targetReplicaCount: PRIORITY_RECOVERY_REQUIRED_DISTINCT_NODE_COUNT,
+        targetNodes: [
+          PRIORITY_FOLLOW_UP_NODE_ID_A,
+          PRIORITY_FOLLOW_UP_NODE_ID_B,
+        ],
+      });
+      rebalancer.movePlanner.calculateMoves = () => [];
+      rebalancer.movePlanner.applyPressureGating = async (moves) => moves;
+
+      await rebalancer.rebalance(TriggerType.PERIODIC, {
+        targetReplicaCount: PRIORITY_RECOVERY_REQUIRED_DISTINCT_NODE_COUNT,
+        placementConstraints: {
+          spreadAcrossNodes: true,
+        },
+      });
+
+      t.equal(
+        createdOperations.length,
+        TEST_NUMBER.ONE,
+        TEST_MESSAGE
+          .SQL_WRITE_RECONSTRUCTED_NO_SERIAL_WAIT_PERSISTS_OPERATION,
+      );
+      t.equal(
+        createdOperations[TEST_NUMBER.ZERO]?.partitionId,
+        SQL_WRITE_OPERATION_PRIORITY_PARTITION_ID,
+        TEST_MESSAGE
+          .SQL_WRITE_RECONSTRUCTED_NO_SERIAL_WAIT_RETARGETS_PARTITION,
       );
     },
   );

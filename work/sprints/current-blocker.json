@@ -2,43 +2,43 @@
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
   "sprint": "work/sprints/active-2026-q2-spec-led-runtime-modularization.md",
-  "package": "work/packages/active-20260509-spec-led-runtime-modularization-operation-workflow-progress-dispatch-pending-frontier.md",
+  "package": "work/packages/active-20260509-spec-led-runtime-modularization-operation-scheduling-sql-write-operations-frontier.md",
   "status": "active",
   "scenario": "spec-led-runtime-modularization",
-  "artifact": "test-output/reports/rolling-restart-spec-led-runtime-modularization-rebalancer-handoff-retry-scheduled.report.json",
-  "playback": "test-output/reports/.playback/rolling-restart-spec-led-runtime-modularization-rebalancer-handoff-retry-scheduled/rolling-restart/",
-  "owner": "operation_workflow_owner",
-  "boundary": "workflow_progress",
+  "artifact": "test-output/reports/rolling-restart-spec-led-runtime-modularization-workflow-progress-dispatch-pending.report.json",
+  "playback": "test-output/reports/.playback/rolling-restart-spec-led-runtime-modularization-workflow-progress-dispatch-pending/rolling-restart/",
+  "owner": "rebalancer_leader",
+  "boundary": "operation_scheduling",
   "dominantReason": "priority_recovery_progress_blocked",
-  "currentState": "The rebalancer handoff retry-scheduled package removed the stale handoff witness from the representative priority recovery summary. The fresh representative report now fails first on priority_recovery_partition_progress with operation_workflow_owner / workflow_progress, dominant source priority_recovery_workflow_progress_event_driven, priorityRecoveryInvariants passed, and recovery operations stuck in dispatch_pending or waiting-progress states without step transitions.",
-  "nextAction": "Review the just-closed rebalancer handoff retry-scheduled package, fix any findings, then trace why dispatch-pending priority recovery operations remain event-driven without canonical workflow progress.",
+  "currentState": "The workflow progress dispatch-pending package moved the representative proof past operation_workflow_owner / workflow_progress. The fresh representative report now fails first on priority_recovery_partition_progress with rebalancer_leader / operation_scheduling, dominant source priority_recovery_operation_scheduling_event_driven, priorityRecoveryInvariants passed, and sql_write_operations-p1 eligible but without a recovery operation.",
+  "nextAction": "Review the just-closed workflow progress dispatch-pending package, fix any findings, then trace why the rebalancer leader leaves sql_write_operations-p1 eligible with no recovery operation after other priority partitions are in flight.",
   "proof": [
-    "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-rebalancer-handoff-retry-scheduled.report.json --explain priority_recovery_partition_progress",
-    "Focused operation_workflow_owner workflow_progress fixture from the representative report",
-    "Focused operation workflow owner dispatch-pending/no-step-transition tests selected by priority_recovery_workflow_progress_event_driven",
-    "Touched-file static guardrails selected by operation_workflow_owner and priority recovery workflow progress",
-    "node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-spec-led-runtime-modularization-workflow-progress-dispatch-pending.report.json --fast-local --verbose"
+    "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-workflow-progress-dispatch-pending.report.json --explain priority_recovery_partition_progress",
+    "Focused rebalancer_leader operation_scheduling fixture from the representative report",
+    "Focused operation scheduling tests selected by priority_recovery_operation_scheduling_event_driven",
+    "Touched-file static guardrails selected by rebalancer_leader and priority recovery operation scheduling",
+    "node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-spec-led-runtime-modularization-operation-scheduling-sql-write-operations.report.json --fast-local --verbose"
   ],
   "touchedFiles": [
-    "src/rebalancer/operation-workflow-owner*.js",
-    "src/control-plane/replica-dispatch-service*.js",
+    "src/rebalancer/rebalance-coordinator*.js",
+    "src/rebalancer/unified-rebalancer*.js",
     "src/control-plane/priority-recovery-snapshot*.js",
-    "test/rebalancer/*workflow*.test.js",
-    "test/control-plane/*dispatch*.test.js",
+    "test/rebalancer/*operation*.test.js",
+    "test/rebalancer/*priority-recovery*.test.js",
     "test/control-plane/priority-recovery-snapshot*.js",
     "test/scripts/analyze-topology-convergence.test.js",
     "work/model-ledger.jsonl",
-    "work/packages/active-20260509-spec-led-runtime-modularization-operation-workflow-progress-dispatch-pending-frontier.md"
+    "work/packages/active-20260509-spec-led-runtime-modularization-operation-scheduling-sql-write-operations-frontier.md"
   ],
   "modelFit": {
     "packageClass": "representative-frontier-closure",
     "intendedMinimumModel": "gpt-5.3-codex",
     "scopeShape": "owner-boundary-contraction",
     "escalationTriggers": [
-      "workflow progress evidence requires changes outside operation_workflow_owner or dispatch service wake/replay",
-      "focused fixture exposes operation_scheduling, rebalancer_handoff, or workflow_timeout again",
-      "representative proof still fails on the same dispatch_pending no-step-transition witness after owner fix"
+      "operation scheduling evidence requires changes outside rebalancer_leader or priority recovery scheduling",
+      "focused fixture exposes operation_workflow_owner, rebalancer_handoff, or workflow_timeout again",
+      "representative proof still fails on sql_write_operations-p1 eligible_but_no_operation_created after scheduling fix"
     ]
   },
-  "predecessor": "work/packages/done-20260509-spec-led-runtime-modularization-operation-workflow-rebalancer-handoff-retry-scheduled-frontier.md"
+  "predecessor": "work/packages/done-20260509-spec-led-runtime-modularization-operation-workflow-progress-dispatch-pending-frontier.md"
 }
