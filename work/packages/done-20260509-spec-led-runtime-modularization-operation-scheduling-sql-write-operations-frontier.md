@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-09",
   "scenario": "spec-led-runtime-modularization",
   "artifact": "test-output/reports/rolling-restart-spec-led-runtime-modularization-workflow-progress-dispatch-pending.report.json",
@@ -31,7 +31,7 @@
     "test/control-plane/priority-recovery-snapshot*.js",
     "test/scripts/analyze-topology-convergence.test.js",
     "work/model-ledger.jsonl",
-    "work/packages/active-20260509-spec-led-runtime-modularization-operation-scheduling-sql-write-operations-frontier.md"
+    "work/packages/done-20260509-spec-led-runtime-modularization-operation-scheduling-sql-write-operations-frontier.md"
   ],
   "modelFit": {
     "packageClass": "representative-frontier-closure",
@@ -43,7 +43,10 @@
       "representative proof still fails on sql_write_operations-p1 eligible_but_no_operation_created after scheduling fix"
     ]
   },
-  "predecessor": "work/packages/done-20260509-spec-led-runtime-modularization-operation-workflow-progress-dispatch-pending-frontier.md"
+  "predecessor": "work/packages/done-20260509-spec-led-runtime-modularization-operation-workflow-progress-dispatch-pending-frontier.md",
+  "closed": "2026-05-10",
+  "commitAndPushLedgerRequired": true,
+  "successor": "work/packages/active-20260510-spec-led-runtime-modularization-representative-green-proof-or-next-blocker.md"
 }
 -->
 
@@ -185,7 +188,7 @@ stall outcomes in this package instead of converting missing output into proof.
       not-needed.
 - [x] Implementation subagent recorded:
       Agent Pascal (019e10ba-eb99-7f61-8eb3-3402d85bb56a) implemented
-      `work/packages/active-20260509-spec-led-runtime-modularization-operation-scheduling-sql-write-operations-frontier.md`.
+      `work/packages/done-20260509-spec-led-runtime-modularization-operation-scheduling-sql-write-operations-frontier.md`.
 
 ## Detection / Analysis Tasks
 
@@ -268,9 +271,9 @@ stall outcomes in this package instead of converting missing output into proof.
 - PASS:
   `git diff --check -- 'src/rebalancer/unified-rebalancer-segment-4-stage-2.js' 'test/rebalancer/unified-rebalancer-part-5-2-stage-2.js'`
 - PASS:
-  `git diff --check -- src/rebalancer/unified-rebalancer-segment-4-stage-2.js test/rebalancer/unified-rebalancer-part-5-2-stage-2.js work/packages/active-20260509-spec-led-runtime-modularization-operation-scheduling-sql-write-operations-frontier.md`
+  `git diff --check -- src/rebalancer/unified-rebalancer-segment-4-stage-2.js test/rebalancer/unified-rebalancer-part-5-2-stage-2.js work/packages/done-20260509-spec-led-runtime-modularization-operation-scheduling-sql-write-operations-frontier.md`
 - PASS:
-  `perl -ne 'print "$ARGV:$.:$_" if /[ \t]$/' 'work/packages/active-20260509-spec-led-runtime-modularization-operation-scheduling-sql-write-operations-frontier.md'`
+  `perl -ne 'print "$ARGV:$.:$_" if /[ \t]$/' 'work/packages/done-20260509-spec-led-runtime-modularization-operation-scheduling-sql-write-operations-frontier.md'`
 - MIGRATED:
   `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-spec-led-runtime-modularization-operation-scheduling-sql-write-operations.report.json --fast-local --verbose`
   moved the representative blocker to `operation_workflow_owner /
@@ -296,3 +299,9 @@ stall outcomes in this package instead of converting missing output into proof.
 3. Static guardrails pass for touched production files.
 4. Representative rolling-restart is green or migrated to a fresh
    owner-boundary package with canonical evidence.
+
+## Commit And Push Ledger
+
+1. Focused package commit: `66ad7638`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes

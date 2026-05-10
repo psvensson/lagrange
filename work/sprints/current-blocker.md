@@ -4,58 +4,55 @@
 
 Sprint: `work/sprints/active-2026-q2-spec-led-runtime-modularization.md`
 
-Package: `work/packages/active-20260509-spec-led-runtime-modularization-operation-scheduling-sql-write-operations-frontier.md`
+Package: `work/packages/active-20260510-spec-led-runtime-modularization-representative-green-proof-or-next-blocker.md`
 
 Scenario: `spec-led-runtime-modularization`
 
-Artifact: `test-output/reports/rolling-restart-spec-led-runtime-modularization-workflow-progress-dispatch-pending.report.json`
+Artifact: `test-output/reports/rolling-restart-spec-led-runtime-modularization-operation-scheduling-sql-write-operations.report.json`
 
-Playback: `test-output/reports/.playback/rolling-restart-spec-led-runtime-modularization-workflow-progress-dispatch-pending/rolling-restart/`
+Playback: `test-output/reports/.playback/rolling-restart-spec-led-runtime-modularization-operation-scheduling-sql-write-operations/rolling-restart/`
 
 ## Boundary
 
-Owner: `rebalancer_leader`
+Owner: `representative_gate_owner`
 
-Boundary: `operation_scheduling`
+Boundary: `proof_classification`
 
-Dominant reason: `priority_recovery_progress_blocked`
+Dominant reason: `pending_representative_proof`
 
-Current state: The workflow progress dispatch-pending package moved the representative proof past operation_workflow_owner / workflow_progress. The fresh representative report now fails first on priority_recovery_partition_progress with rebalancer_leader / operation_scheduling, dominant source priority_recovery_operation_scheduling_event_driven, priorityRecoveryInvariants passed, and sql_write_operations-p1 eligible but without a recovery operation.
+Current state: Classification is complete: the representative report is migrated-frontier, with first blocked frontier priority_recovery_partition_progress owned by operation_workflow_owner / workflow_progress. A single successor package is queued at work/packages/todo-20260510-spec-led-runtime-modularization-operation-workflow-progress-sql-transactions-dispatch-pending-frontier.md.
 
 ## Next Action
 
-Review the just-closed workflow progress dispatch-pending package, fix any findings, then trace why the rebalancer leader leaves sql_write_operations-p1 eligible with no recovery operation after other priority partitions are in flight.
+Parent session records or verifies implementation-subagent proof, commits and pushes the focused proof slice, closes this proof package with a truthful Commit And Push Ledger, then activates the queued operation_workflow_owner / workflow_progress successor before runtime implementation starts.
 
 ## Proof Ladder
 
-1. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-workflow-progress-dispatch-pending.report.json --explain priority_recovery_partition_progress`
-2. `Focused rebalancer_leader operation_scheduling fixture from the representative report`
-3. `Focused operation scheduling tests selected by priority_recovery_operation_scheduling_event_driven`
-4. `Touched-file static guardrails selected by rebalancer_leader and priority recovery operation scheduling`
-5. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-spec-led-runtime-modularization-operation-scheduling-sql-write-operations.report.json --fast-local --verbose`
+1. `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-spec-led-runtime-modularization-operation-scheduling-sql-write-operations.report.json --fast-local --verbose`
+2. `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-operation-scheduling-sql-write-operations.report.json`
+3. `npm run work:package:evidence-block -- test-output/reports/rolling-restart-spec-led-runtime-modularization-operation-scheduling-sql-write-operations.report.json when the representative proof is not green`
+4. `npm run work:current-blocker`
+5. `npm run work:validate`
 
 ## Model Fit
 
-Package class: `representative-frontier-closure`
+Package class: `spark-safe`
 
-Intended minimum model: `gpt-5.3-codex`
+Intended minimum model: `gpt-5.3-codex-spark`
 
-Scope shape: `owner-boundary-contraction`
+Scope shape: `leaf-slice`
 
 Escalation triggers:
 
-1. `operation scheduling evidence requires changes outside rebalancer_leader or priority recovery scheduling`
-2. `focused fixture exposes operation_workflow_owner, rebalancer_handoff, or workflow_timeout again`
-3. `representative proof still fails on sql_write_operations-p1 eligible_but_no_operation_created after scheduling fix`
+1. `representative report or analyzer output is missing or contradictory`
+2. `proof requires runtime, test, diagnostics, analyzer, or harness code changes`
+3. `scenario still fails on rebalancer_leader / operation_scheduling after the scheduling package claims closure`
+4. `more than one plausible new owner boundary appears in normalized evidence`
 
 ## Touched Files
 
-1. `src/rebalancer/rebalance-coordinator*.js`
-2. `src/rebalancer/unified-rebalancer*.js`
-3. `src/control-plane/priority-recovery-snapshot*.js`
-4. `test/rebalancer/*operation*.test.js`
-5. `test/rebalancer/*priority-recovery*.test.js`
-6. `test/control-plane/priority-recovery-snapshot*.js`
-7. `test/scripts/analyze-topology-convergence.test.js`
-8. `work/model-ledger.jsonl`
-9. `work/packages/active-20260509-spec-led-runtime-modularization-operation-scheduling-sql-write-operations-frontier.md`
+1. `work/packages/active-20260510-spec-led-runtime-modularization-representative-green-proof-or-next-blocker.md`
+2. `work/packages/todo-20260510-spec-led-runtime-modularization-operation-workflow-progress-sql-transactions-dispatch-pending-frontier.md`
+3. `work/sprints/active-2026-q2-spec-led-runtime-modularization.md`
+4. `work/sprints/current-blocker.json`
+5. `work/sprints/current-blocker.md`
