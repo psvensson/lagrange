@@ -77,6 +77,72 @@ const RETRYABLE_JOIN_RESUME_STOP_REASON = Object.freeze({
   ATTEMPT_BUDGET_EXHAUSTED: 'attempt_budget_exhausted',
   ELAPSED_BUDGET_EXHAUSTED: 'elapsed_budget_exhausted',
 });
+const BOOTSTRAP_NOT_READY_LIMITED_RESUME_FAILURE_KINDS = Object.freeze([
+  JOINING_SEED_CONTACT_FAILURE_KIND.CLIENT_ATTEMPT_DEADLINE_EXHAUSTED,
+  JOINING_SEED_CONTACT_FAILURE_KIND.REQUEST_EXECUTION_BUDGET_EXHAUSTED,
+]);
+const BOOTSTRAP_NOT_READY_LIMITED_RESUME_REASON_CODES = Object.freeze([
+  BOOTSTRAP_API_PROBE_REASON.CLIENT_ATTEMPT_DEADLINE_EXHAUSTED,
+  BOOTSTRAP_API_PROBE_REASON.BOOTSTRAP_REQUEST_EXECUTION_BUDGET_EXHAUSTED,
+]);
+
+function hasBootstrapResponseReason(error, reasonCodes) {
+  const reasons = Array.isArray(error?.bootstrapResponse?.reasons) ?
+    error.bootstrapResponse.reasons :
+    [];
+  return reasonCodes.some((reasonCode) => reasons.includes(reasonCode));
+}
+
+function isLimitedResumeBootstrapNotReadyFailure(error) {
+  return BOOTSTRAP_NOT_READY_LIMITED_RESUME_FAILURE_KINDS.includes(
+    error?.seedContactFailureKind,
+  ) ||
+    hasBootstrapResponseReason(
+      error,
+      BOOTSTRAP_NOT_READY_LIMITED_RESUME_REASON_CODES,
+    );
+}
+
+function normalizeBootstrapResponseReasons(error) {
+  if (!Array.isArray(error?.bootstrapResponse?.reasons)) {
+    return [];
+  }
+  return error.bootstrapResponse.reasons.filter((reason) =>
+    typeof reason === TYPEOF.STRING && reason.length > NUM.ZERO,
+  );
+}
+
+function buildSeedContactFailureDiagnostics(error) {
+  const bootstrapResponse = error?.bootstrapResponse || null;
+  const diagnostics = {
+    seedContactFailureKind:
+      typeof error?.seedContactFailureKind === TYPEOF.STRING &&
+      error.seedContactFailureKind.length > NUM.ZERO ?
+        error.seedContactFailureKind :
+        null,
+    bootstrapResponseCode:
+      typeof bootstrapResponse?.code === TYPEOF.STRING &&
+      bootstrapResponse.code.length > NUM.ZERO ?
+        bootstrapResponse.code :
+        null,
+    bootstrapResponsePhase:
+      typeof bootstrapResponse?.phase === TYPEOF.STRING &&
+      bootstrapResponse.phase.length > NUM.ZERO ?
+        bootstrapResponse.phase :
+        null,
+    bootstrapResponseState:
+      typeof bootstrapResponse?.state === TYPEOF.STRING &&
+      bootstrapResponse.state.length > NUM.ZERO ?
+        bootstrapResponse.state :
+        null,
+    bootstrapResponseReasons: normalizeBootstrapResponseReasons(error),
+    bootstrapResponseRetryAfterMs:
+      Number.isFinite(bootstrapResponse?.retryAfterMs) ?
+        Math.max(NUM.ZERO, Math.floor(bootstrapResponse.retryAfterMs)) :
+        null,
+  };
+  return diagnostics;
+}
 
 class NodeJoiningServiceSegment2 extends NodeJoiningServiceSegment1 {
   _buildJoinRuntimeWiringDelegates() {
@@ -417,6 +483,7 @@ class NodeJoiningServiceSegment2 extends NodeJoiningServiceSegment1 {
           retryAfterMs: delayMs,
           phase: failureResult.phase,
           error: failureResult.error,
+          ...buildSeedContactFailureDiagnostics(error),
         });
         await this.sleep(delayMs);
       }
@@ -508,6 +575,9 @@ class NodeJoiningServiceSegment2 extends NodeJoiningServiceSegment1 {
     };
   }
   isRetryableJoinResumeBootstrapNotReadyFailure(error, failureResult) {
+    if (isLimitedResumeBootstrapNotReadyFailure(error)) {
+      return false;
+    }
     if (
       error?.seedContactFailureKind ===
       JOINING_SEED_CONTACT_FAILURE_KIND.BOOTSTRAP_NOT_READY
@@ -1028,6 +1098,7 @@ class NodeJoiningServiceSegment2 extends NodeJoiningServiceSegment1 {
         error: error.message,
         stack: error.stack,
         joinReadiness: error?.joinReadiness || null,
+        ...buildSeedContactFailureDiagnostics(error),
       });
       this.emit(JoiningEvent.PHASE_FAILED, {
         phase: phaseName,

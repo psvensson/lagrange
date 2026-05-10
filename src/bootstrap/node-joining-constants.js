@@ -26,6 +26,10 @@ const JOINING_DEFAULT = Object.freeze({
 
 const JOINING_SEED_CONTACT_FAILURE_KIND = Object.freeze({
   BOOTSTRAP_NOT_READY: 'bootstrap_not_ready',
+  CLIENT_ATTEMPT_DEADLINE_EXHAUSTED:
+    'client_attempt_deadline_exhausted',
+  REQUEST_EXECUTION_BUDGET_EXHAUSTED:
+    'request_execution_budget_exhausted',
 });
 
 const JOINING_UNIFIED_RECONCILE = Object.freeze({

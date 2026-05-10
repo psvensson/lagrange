@@ -29,6 +29,7 @@ import {
 } from '../../src/bootstrap/node-joining-constants.js';
 import {
   BOOTSTRAP_API_PROBE_REASON,
+  BOOTSTRAP_API_REQUEST_FIELD,
   BOOTSTRAP_API_RESPONSE_FIELD,
 } from '../../src/bootstrap/bootstrap-api-constants.js';
 import {
@@ -81,6 +82,9 @@ const TEST_SEED_CONTACT_AUTHORITY = Object.freeze({
     state: 'none',
   }),
 });
+const TEST_CONTACT_SEED_ATTEMPT_NOW_MS = 1000;
+const TEST_CONTACT_SEED_HTTP_TIMEOUT_MS = 50;
+const TEST_CONTACT_SEED_RETRY_TIMEOUT_MS = 100;
 
 // Initialize configuration and logging for tests
 function initializeTestEnvironment() {
@@ -948,6 +952,44 @@ test('NodeJoiningService - retries bootstrap when seed responds BOOTSTRAP_NOT_RE
       service.getSeedContactStartupAuthoritySnapshot(),
       TEST_SEED_CONTACT_AUTHORITY,
       'should retain startup authority from the retryable seed response',
+    );
+  });
+
+test('NodeJoiningService - sends contact-seed attempt deadline to seed',
+  async (t) => {
+    initializeTestEnvironment();
+
+    let capturedBootstrapRequest = null;
+    const service = new NodeJoiningService({
+      nodeId: '550e8400-e29b-41d4-a716-446655440098',
+      nodeAddress: 'ws://localhost:9090',
+      seedNodeAddress: 'http://localhost:8080',
+      now: () => TEST_CONTACT_SEED_ATTEMPT_NOW_MS,
+      config: {
+        httpTimeoutMs: TEST_CONTACT_SEED_HTTP_TIMEOUT_MS,
+        leadershipWaitTimeoutMs: TEST_CONTACT_SEED_RETRY_TIMEOUT_MS,
+      },
+      httpPost: async (_url, request) => {
+        capturedBootstrapRequest = request;
+        return {
+          success: true,
+          seedNodeId: 'seed-node-1',
+          seedNodeWsAddress: DEFAULT_SEED_WS_ADDRESS,
+          messageGroupAssignment: {
+            strategy: AssignmentStrategy.CREATE_SELF_HOSTED,
+          },
+        };
+      },
+    });
+
+    await service.phaseContactSeed();
+
+    t.equal(
+      capturedBootstrapRequest?.[
+        BOOTSTRAP_API_REQUEST_FIELD.CLIENT_ATTEMPT_DEADLINE_MS
+      ],
+      TEST_CONTACT_SEED_ATTEMPT_NOW_MS + TEST_CONTACT_SEED_HTTP_TIMEOUT_MS,
+      'bootstrap request should carry the client contact-seed attempt deadline',
     );
   });
 
@@ -1835,6 +1877,8 @@ test('NodeJoiningService - retained retryable seed-contact evidence ' +
   'survives a later cross-attempt transport failure', async (t) => {
   initializeTestEnvironment();
 
+  const TEST_ELAPSED_MS = 41056;
+  const TEST_MAX_ATTEMPTS = 4;
   const TEST_RETRY_AFTER_MS = 5;
   const TEST_HTTP_TIMEOUT_MS = 10;
   const TEST_BOOTSTRAP_PHASE = 'partitions';
@@ -1861,12 +1905,14 @@ test('NodeJoiningService - retained retryable seed-contact evidence ' +
     now: () => currentNow,
     sleep: async () => {},
     config: {
+      autoResumeRetryableFailures: true,
       httpTimeoutMs: TEST_HTTP_TIMEOUT_MS,
       leadershipWaitTimeoutMs: TEST_HTTP_TIMEOUT_MS,
       leadershipWaitInitialDelayMs: TEST_HTTP_TIMEOUT_MS,
       leadershipWaitMaxDelayMs: TEST_HTTP_TIMEOUT_MS,
       leadershipWaitBackoffMultiplier: 1,
       leadershipWaitJitterRatio: 0,
+      retryableFailureResumeMaxAttempts: TEST_MAX_ATTEMPTS,
     },
     httpPost: async (_url, _payload, options = {}) => {
       attempts += 1;
@@ -1924,6 +1970,11 @@ test('NodeJoiningService - retained retryable seed-contact evidence ' +
     'retained retryable evidence should keep the later transport failure retryable',
   );
   t.equal(
+    secondError?.seedContactFailureKind,
+    JOINING_SEED_CONTACT_FAILURE_KIND.BOOTSTRAP_NOT_READY,
+    'retained bootstrap-not-ready evidence should keep the seed-contact owner marker',
+  );
+  t.equal(
     secondError?.retryAfterMs,
     TEST_RETRY_AFTER_MS,
     'retained retryable evidence should keep the retry hint across attempts',
@@ -1950,6 +2001,188 @@ test('NodeJoiningService - retained retryable seed-contact evidence ' +
     currentNow,
     TEST_HTTP_TIMEOUT_MS + TEST_HTTP_TIMEOUT_MS,
     'retained retryable seed evidence should not shrink the later transport timeout budget',
+  );
+
+  const policy = service.resolveRetryableJoinResumePolicy();
+  service.startTime = 0;
+  service.now = () => TEST_ELAPSED_MS;
+  t.equal(
+    service.shouldAutoResumeRetryableJoinFailure(
+      secondError,
+      {
+        phase: JoiningPhase.CONTACTING_SEED,
+        error: secondError.message,
+      },
+      TEST_MAX_ATTEMPTS,
+      policy,
+    ),
+    true,
+    'retained bootstrap-not-ready transport timeout should keep the seed-contact resume budget',
+  );
+});
+
+test('NodeJoiningService - client deadline bootstrap defer uses fixed resume cap',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const TEST_MAX_ATTEMPTS = 4;
+    const TEST_ELAPSED_MS = 41056;
+    const TEST_RETRY_AFTER_MS = 5;
+    const TEST_HTTP_TIMEOUT_MS = 10;
+    const TEST_RETRYABLE_RESPONSE = Object.freeze({
+      success: false,
+      error: 'Bootstrap not ready',
+      code: BOOTSTRAP_PIPELINE_ERROR_CODE.BOOTSTRAP_NOT_READY,
+      reasons: Object.freeze([
+        BOOTSTRAP_API_PROBE_REASON.CLIENT_ATTEMPT_DEADLINE_EXHAUSTED,
+      ]),
+      retryAfterMs: TEST_RETRY_AFTER_MS,
+    });
+
+    let currentNow = 0;
+    const service = new NodeJoiningService({
+      nodeId: '550e8400-e29b-41d4-a716-446655440121',
+      nodeAddress: 'ws://localhost:9090',
+      seedNodeAddress: 'http://localhost:8080',
+      now: () => currentNow,
+      sleep: async () => {},
+      config: {
+        autoResumeRetryableFailures: true,
+        httpTimeoutMs: TEST_HTTP_TIMEOUT_MS,
+        leadershipWaitTimeoutMs: TEST_HTTP_TIMEOUT_MS,
+        leadershipWaitInitialDelayMs: TEST_HTTP_TIMEOUT_MS,
+        leadershipWaitMaxDelayMs: TEST_HTTP_TIMEOUT_MS,
+        leadershipWaitBackoffMultiplier: 1,
+        leadershipWaitJitterRatio: 0,
+        retryableFailureResumeMaxAttempts: TEST_MAX_ATTEMPTS,
+      },
+      httpPost: async () => {
+        currentNow += TEST_HTTP_TIMEOUT_MS;
+        const error = new Error(
+          `HTTP 503: ${JSON.stringify(TEST_RETRYABLE_RESPONSE)}`,
+        );
+        error.statusCode = 503;
+        throw error;
+      },
+    });
+
+    const error = await t.rejects(
+      service.phaseContactSeed(),
+      'client-deadline bootstrap defer should remain retryable',
+    );
+
+    t.equal(
+      error?.seedContactFailureKind,
+      JOINING_SEED_CONTACT_FAILURE_KIND.CLIENT_ATTEMPT_DEADLINE_EXHAUSTED,
+      'client-deadline bootstrap defer should carry the deadline failure marker',
+    );
+    t.equal(
+      error?.deferRetry,
+      true,
+      'client-deadline bootstrap defer should stay retryable',
+    );
+    const policy = service.resolveRetryableJoinResumePolicy();
+    service.startTime = 0;
+    service.now = () => TEST_ELAPSED_MS;
+    t.equal(
+      service.shouldAutoResumeRetryableJoinFailure(
+        error,
+        {
+          phase: JoiningPhase.CONTACTING_SEED,
+          error: error.message,
+        },
+        TEST_MAX_ATTEMPTS,
+        policy,
+      ),
+      false,
+      'client-deadline bootstrap defer should not bypass the fixed resume cap',
+    );
+  });
+
+test('NodeJoiningService - retained client deadline evidence keeps transport ' +
+  'timeout on the fixed resume cap', async (t) => {
+  initializeTestEnvironment();
+
+  const TEST_MAX_ATTEMPTS = 4;
+  const TEST_ELAPSED_MS = 41056;
+  const TEST_RETRY_AFTER_MS = 5;
+  const TEST_HTTP_TIMEOUT_MS = 10;
+  const TEST_RETRYABLE_RESPONSE = Object.freeze({
+    success: false,
+    error: 'Bootstrap not ready',
+    code: BOOTSTRAP_PIPELINE_ERROR_CODE.BOOTSTRAP_NOT_READY,
+    reasons: Object.freeze([
+      BOOTSTRAP_API_PROBE_REASON.CLIENT_ATTEMPT_DEADLINE_EXHAUSTED,
+    ]),
+    retryAfterMs: TEST_RETRY_AFTER_MS,
+  });
+
+  let attempts = 0;
+  let currentNow = 0;
+  const service = new NodeJoiningService({
+    nodeId: '550e8400-e29b-41d4-a716-446655440122',
+    nodeAddress: 'ws://localhost:9090',
+    seedNodeAddress: 'http://localhost:8080',
+    now: () => currentNow,
+    sleep: async () => {},
+    config: {
+      autoResumeRetryableFailures: true,
+      httpTimeoutMs: TEST_HTTP_TIMEOUT_MS,
+      leadershipWaitTimeoutMs: TEST_HTTP_TIMEOUT_MS,
+      leadershipWaitInitialDelayMs: TEST_HTTP_TIMEOUT_MS,
+      leadershipWaitMaxDelayMs: TEST_HTTP_TIMEOUT_MS,
+      leadershipWaitBackoffMultiplier: 1,
+      leadershipWaitJitterRatio: 0,
+      retryableFailureResumeMaxAttempts: TEST_MAX_ATTEMPTS,
+    },
+    httpPost: async () => {
+      attempts += 1;
+      currentNow += TEST_HTTP_TIMEOUT_MS;
+      if (attempts === 1) {
+        const error = new Error(
+          `HTTP 503: ${JSON.stringify(TEST_RETRYABLE_RESPONSE)}`,
+        );
+        error.statusCode = 503;
+        throw error;
+      }
+      throw new Error('Request timeout after ' + TEST_HTTP_TIMEOUT_MS + 'ms');
+    },
+  });
+
+  await t.rejects(
+    service.phaseContactSeed(),
+    'first attempt should retain client-deadline bootstrap evidence',
+  );
+  const timeoutError = await t.rejects(
+    service.phaseContactSeed(),
+    'later transport timeout should retain client-deadline evidence',
+  );
+
+  t.equal(
+    timeoutError?.seedContactFailureKind,
+    JOINING_SEED_CONTACT_FAILURE_KIND.CLIENT_ATTEMPT_DEADLINE_EXHAUSTED,
+    'retained client-deadline evidence should keep the deadline marker',
+  );
+  t.equal(
+    timeoutError?.deferRetry,
+    true,
+    'retained client-deadline transport timeout should remain retryable',
+  );
+  const policy = service.resolveRetryableJoinResumePolicy();
+  service.startTime = 0;
+  service.now = () => TEST_ELAPSED_MS;
+  t.equal(
+    service.shouldAutoResumeRetryableJoinFailure(
+      timeoutError,
+      {
+        phase: JoiningPhase.CONTACTING_SEED,
+        error: timeoutError.message,
+      },
+      TEST_MAX_ATTEMPTS,
+      policy,
+    ),
+    false,
+    'retained client-deadline transport timeout should not use elapsed-only resume',
   );
 });
 

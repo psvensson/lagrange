@@ -20,11 +20,11 @@ Boundary: `snapshot_coverage`
 
 Dominant reason: `active_gate_timed_out`
 
-Current state: Continuation repaired retained seed-contact evidence resume classification: direct BOOTSTRAP_NOT_READY contact-seed failures still use elapsed-only auto-resume, but later transport timeouts that only carry retained bootstrap-not-ready evidence now fall back to the fixed retryable resume attempt cap. The representative rerun refreshed the residual fixture to snapshotCoverage=3/5, inactive_nodes=3, activeNodeCount=2/5, selected snapshot 8be8d30f-4499-5eed-865c-71b4d529a67a, selectedSnapshotError=unknown, readinessDelayCause=none. Node 8be8d30f-4499-5eed-865c-71b4d529a67a reached nodeDiagnostics active, while joiners 11601fe0-72d6-5853-8590-ec2881853e72 and ebc4aa0b-06c6-506d-93ea-1dd2deca3f58 now exhaust the fixed contact-seed resume cap instead of looping elapsed-only; seed readiness probe timeout for 7493b0ab-a054-5fad-a91b-5e331db29304 persists. Publication ACK convergence was not reopened; priority recovery appears in triage as subordinate/event-driven, but the analyzer frontier remains startup_active_gate_owner / snapshot_coverage.
+Current state: Representative rerun after deadline/request-budget not-ready classification and retained contact-seed diagnostics is SAME-FRONTIER-DIAGNOSTIC under startup_active_gate_owner / snapshot_coverage: active-gate best progress snapshotCoverage=3/5, inactive_nodes=2, activeNodeCount=3/5, selected snapshot 11601fe0-72d6-5853-8590-ec2881853e72, selectedSnapshotError=unknown, readinessDelayCause=none, and activeGateState=timed_out. Seed 7493b0ab-a054-5fad-a91b-5e331db29304 plus nodes 35a891b8-c1a0-5064-9c6e-2acfba61c2a7 and 11601fe0-72d6-5853-8590-ec2881853e72 reach ACTIVE. Residual inactive joiners 8be8d30f-4499-5eed-865c-71b4d529a67a and ebc4aa0b-06c6-506d-93ea-1dd2deca3f58 remain in contacting_seed. Their retained bootstrap-not-ready response evidence now survives later 30s transport timeouts in playback: node 8be8d30f-4499-5eed-865c-71b4d529a67a carries PRIORITY_CONTROL_PLANE_RECOVERY_PENDING plus MOVE_REPLICA_HANDOFF_STABILIZING, and node ebc4aa0b-06c6-506d-93ea-1dd2deca3f58 carries READINESS_STABLE_WINDOW_PENDING plus MOVE_REPLICA_HANDOFF_STABILIZING. The final artifact does not show CLIENT_ATTEMPT_DEADLINE_EXHAUSTED or BOOTSTRAP_REQUEST_EXECUTION_BUDGET_EXHAUSTED for the residual joiners, so their elapsed-only retry path remains ordinary bootstrap-not-ready. Publication ACK convergence and priority recovery partition progress are satisfied in the failure-bundle topology graph; frontierCount=1 and the analyzer first frontier remains active_gate_snapshot_coverage.
 
 ## Next Action
 
-Continue on the same startup active-gate snapshot coverage boundary by tracing the residual seed readiness timeout and two contact-seed transport-timeout joiners after fixed resume-cap classification; do not reopen priority recovery/workflow progress unless the topology analyzer frontier migrates.
+Keep startup active-gate snapshot coverage as the controlling analyzer boundary. Next smallest proof should decide whether MOVE_REPLICA_HANDOFF_STABILIZING bootstrap-not-ready evidence is delaying startup active-gate snapshot coverage through admission timing/backpressure, or whether the analyzer frontier migrates after coverage improves. Do not move package ownership to operation workflow or implement rebalancer handoff logic unless local analyzer evidence makes that owner the first frontier or package escalation criteria require it.
 
 ## Proof Ladder
 
@@ -42,6 +42,38 @@ Continue on the same startup active-gate snapshot coverage boundary by tracing t
 12. `npm run work:validate`
 13. `Focused NodeJoiningService regression proving retained BOOTSTRAP_NOT_READY seed evidence no longer converts a later contact-seed transport timeout into elapsed-only auto-resume; direct bootstrap-not-ready remains elapsed-only.`
 14. `Representative rerun after retained-evidence resume classification refreshed the residual to snapshotCoverage=3/5 with node 8be8d30f-4499-5eed-865c-71b4d529a67a nodeDiagnostics active, activeGate activeNodeCount=2/5, two contact-seed joiners exhausting the fixed resume cap, and seed readiness timeout still present under startup_active_gate_owner / snapshot_coverage.`
+15. `Focused analyzer fixture refreshed from the resume-cap residual artifact: snapshotCoverage=3/5, inactive_nodes=3, activeNodeCount=2/5, selected snapshot 8be8d30f-4499-5eed-865c-71b4d529a67a, readinessDelayCause=none, seed readiness timeout plus two fixed-cap contact-seed transport-timeout joiners.`
+16. `Focused harness regression adjusted to preserve seed-timeout partial startup coverage while keeping selected publication debt diagnostics-only.`
+17. `node --test test/scripts/analyze-topology-convergence.test.js && TAP_ALLOW_INCOMPLETE_COVERAGE=1 npx tap --reporter=base test/distributed/harness/__tests__/cluster.test-part-5.js`
+18. `node scripts/check-guideline-decision-boundaries.js test/distributed/harness/__tests__/cluster.test-part-5.js test/scripts/analyze-topology-convergence.test.js; npm run audit:runtime-grammar:file -- test/distributed/harness/__tests__/cluster.test-part-5.js test/scripts/analyze-topology-convergence.test.js; git diff --check -- touched files`
+19. `Representative rerun after retained seed-contact owner-marker repair: startup_active_gate_owner / snapshot_coverage, snapshotCoverage=3/5, inactive_nodes=2, activeNodeCount=3/5, selected snapshot 35a891b8-c1a0-5064-9c6e-2acfba61c2a7, selectedSnapshotError=unknown, readinessDelayCause=none, priority recovery satisfied.`
+20. `Focused analyzer fixture and active-gate harness regression refreshed to the current two-node contact-seed residual with nodes 8be8d30f-4499-5eed-865c-71b4d529a67a and ebc4aa0b-06c6-506d-93ea-1dd2deca3f58 inactive.`
+21. `Focused BootstrapAPI regression proving startup-complete seed bootstrap admission ignores only stale BOOTSTRAP_PHASE_INCOMPLETE bootstrap-join snapshot evidence and preserves non-stale 503 blockers.`
+22. `npx tap --reporter=base test/bootstrap/bootstrap-request-admission-precheck.test.js`
+23. `node scripts/check-guideline-literals.js src/bootstrap/owners/bootstrap-request-owner.js; node scripts/check-guideline-decision-boundaries.js src/bootstrap/owners/bootstrap-request-owner.js test/bootstrap/bootstrap-request-admission-precheck.test.js; npm run audit:runtime-grammar:file -- src/bootstrap/owners/bootstrap-request-owner.js test/bootstrap/bootstrap-request-admission-precheck.test.js; git diff --check -- src/bootstrap/owners/bootstrap-request-owner.js test/bootstrap/bootstrap-request-admission-precheck.test.js work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md`
+24. `Representative rerun after startup-complete stale admission repair: startup_active_gate_owner / snapshot_coverage, snapshotCoverage=3/5, inactive_nodes=1, activeNodeCount=4/5, selected snapshot 8be8d30f-4499-5eed-865c-71b4d529a67a, selectedSnapshotError=unknown, readinessDelayCause=none, recoveryProtocolState=priority_spread_pending.`
+25. `Focused analyzer fixture and active-gate harness regression refreshed to the current one-node contact-seed residual with ebc4aa0b-06c6-506d-93ea-1dd2deca3f58 inactive.`
+26. `Focused BootstrapJoinAdmissionOwner regression proving assignment-lock wait observes the shared bootstrap request execution budget and returns canonical BOOTSTRAP_NOT_READY before caller HTTP timeout.`
+27. `Representative rerun after budget-aware assignment-lock repair: startup_active_gate_owner / snapshot_coverage, snapshotCoverage=2/5, inactive_nodes=2, activeNodeCount=3/5, selected snapshot 35a891b8-c1a0-5064-9c6e-2acfba61c2a7, selectedSnapshotError=unknown, readinessDelayCause=none, recoveryProtocolState=priority_spread_pending.`
+28. `Fix subagent repaired assignment-lock budget exhaustion so BUDGET_EXHAUSTED deterministically emits canonical BOOTSTRAP_NOT_READY before assignment work.`
+29. `npx tap --reporter=base test/bootstrap/bootstrap-request-execution-timeout.test.js`
+30. `node scripts/check-guideline-literals.js src/bootstrap/owners/bootstrap-join-admission-owner.js test/bootstrap/bootstrap-request-execution-timeout.test.js; node scripts/check-guideline-decision-boundaries.js src/bootstrap/owners/bootstrap-join-admission-owner.js test/bootstrap/bootstrap-request-execution-timeout.test.js; npm run audit:runtime-grammar:file -- src/bootstrap/owners/bootstrap-join-admission-owner.js test/bootstrap/bootstrap-request-execution-timeout.test.js`
+31. `npm run work:validate`
+32. `Focused BootstrapAPI regression proving expired client contact-seed attempts are deferred as BOOTSTRAP_NOT_READY before leader readiness, assignment work, or admission-slot claim.`
+33. `Fix subagent regression reproduced initially valid client contact-seed attempts expiring during async pre-admission work after one bootstrap admission slot was claimed.`
+34. `Focused BootstrapAPI regression proving initially valid client contact-seed attempts that expire during async pre-admission work are deferred as BOOTSTRAP_NOT_READY before admission-slot claim, admitted blocking checks, leader readiness, or assignment work.`
+35. `Focused NodeJoiningService regression proving contact-seed sends clientAttemptDeadlineMs to the seed based on the current HTTP attempt budget.`
+36. `Representative rerun after client contact-seed deadline propagation: startup_active_gate_owner / snapshot_coverage, best snapshotCoverage=3/5, inactive_nodes=2, activeNodeCount=3/5, selected snapshot 35a891b8-c1a0-5064-9c6e-2acfba61c2a7, selectedSnapshotError=unknown, readinessDelayCause=none, with subordinate operation_workflow_owner / rebalancer_handoff priority recovery progress.`
+37. `Focused analyzer fixture and active-gate harness regression refreshed to the current two-node contact-seed residual with active-gate best snapshotCoverage=3/5 and residual inactive joiners 8be8d30f-4499-5eed-865c-71b4d529a67a plus ebc4aa0b-06c6-506d-93ea-1dd2deca3f58.`
+38. `node --test test/scripts/analyze-topology-convergence.test.js; TAP_ALLOW_INCOMPLETE_COVERAGE=1 npx tap --reporter=base test/distributed/harness/__tests__/cluster.test-part-5.js`
+39. `node scripts/check-guideline-literals.js src/bootstrap/bootstrap-api-constants.js src/bootstrap/owners/bootstrap-request-owner.js src/bootstrap/phases/contact-seed-phase.js; node scripts/check-guideline-decision-boundaries.js src/bootstrap/bootstrap-api-constants.js src/bootstrap/owners/bootstrap-request-owner.js src/bootstrap/phases/contact-seed-phase.js test/bootstrap/bootstrap-request-execution-timeout.test.js test/bootstrap/node-joining-service.test.js test/bootstrap/bootstrap-request-admission-precheck.test.js test/distributed/harness/__tests__/cluster.test-part-5.js test/scripts/analyze-topology-convergence.test.js; npm run audit:runtime-grammar:file -- focused modified files`
+40. `npm run work:model-ledger -- record ...`
+41. `npm run work:current-blocker -- --write`
+42. `npm run work:validate`
+43. `Focused BootstrapAPI regression proving shared request execution budget exhaustion is surfaced as BOOTSTRAP_REQUEST_EXECUTION_BUDGET_EXHAUSTED.`
+44. `Focused NodeJoiningService regressions proving CLIENT_ATTEMPT_DEADLINE_EXHAUSTED and BOOTSTRAP_REQUEST_EXECUTION_BUDGET_EXHAUSTED bootstrap-not-ready evidence use the fixed resume cap instead of elapsed-only retry.`
+45. `Representative rerun after retained contact-seed diagnostics: startup_active_gate_owner / snapshot_coverage, snapshotCoverage=3/5, inactive_nodes=2, activeNodeCount=3/5, selected snapshot 11601fe0-72d6-5853-8590-ec2881853e72, selectedSnapshotError=unknown, readinessDelayCause=none; residual bootstrap-not-ready reasons are MOVE_REPLICA_HANDOFF_STABILIZING plus priority or readiness stable-window evidence.`
+46. `Failure-bundle topology analysis after the diagnostic run: frontierCount=1, publication_ack_convergence satisfied, priority_recovery_partition_progress satisfied, dominant witness active_gate_snapshot_coverage.`
 
 ## Model Fit
 
@@ -71,15 +103,20 @@ Escalation triggers:
 10. `test/distributed/harness/__tests__/failure-bundle-active-gate-tail-test-cases.js`
 11. `test/scripts/__fixtures__/topology-convergence/active-gate-snapshot*.json`
 12. `src/diagnostics/topology-convergence-graph.js`
-13. `src/bootstrap/owners/bootstrap-request-owner.js`
-14. `src/bootstrap/phases/contact-seed-phase.js`
-15. `test/bootstrap/node-joining-service.test.js`
-16. `scripts/analyze-topology-convergence.js`
-17. `test/diagnostics/topology-convergence-graph.test.js`
-18. `test/bootstrap/bootstrap-request-execution-timeout.test.js`
-19. `test/scripts/analyze-topology-convergence.test.js`
-20. `work/model-ledger.jsonl`
-21. `work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md`
-22. `work/sprints/active-2026-q2-spec-led-runtime-modularization.md`
-23. `work/sprints/current-blocker.json`
-24. `work/sprints/current-blocker.md`
+13. `src/bootstrap/bootstrap-api-constants.js`
+14. `src/bootstrap/node-joining-constants.js`
+15. `src/bootstrap/node-joining-service-segment-2.js`
+16. `src/bootstrap/owners/bootstrap-join-admission-owner.js`
+17. `src/bootstrap/owners/bootstrap-request-owner.js`
+18. `src/bootstrap/phases/contact-seed-phase.js`
+19. `test/bootstrap/node-joining-service.test.js`
+20. `scripts/analyze-topology-convergence.js`
+21. `test/diagnostics/topology-convergence-graph.test.js`
+22. `test/bootstrap/bootstrap-request-admission-precheck.test.js`
+23. `test/bootstrap/bootstrap-request-execution-timeout.test.js`
+24. `test/scripts/analyze-topology-convergence.test.js`
+25. `work/model-ledger.jsonl`
+26. `work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md`
+27. `work/sprints/active-2026-q2-spec-led-runtime-modularization.md`
+28. `work/sprints/current-blocker.json`
+29. `work/sprints/current-blocker.md`

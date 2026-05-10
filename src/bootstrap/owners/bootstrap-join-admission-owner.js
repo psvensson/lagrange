@@ -27,6 +27,7 @@ import {
 import {
   BOOTSTRAP_API_ERROR,
   BOOTSTRAP_API_LOG_MSG,
+  BOOTSTRAP_API_PROBE_REASON,
   BOOTSTRAP_API_SUBSYSTEM,
 } from '../bootstrap-api-constants.js';
 import {getRemainingBudgetMs} from '../../control-plane/timeout-budget.js';
@@ -43,6 +44,10 @@ const NODE_ROW_FIELD = Object.freeze({
 });
 const REJOIN_AUTHORITY_SOURCE = Object.freeze({
   LOCAL_CACHE_RESTART_REENTRY: 'local_cache_restart_reentry',
+});
+const MOVE_REPLICA_ASSIGNMENT_LOCK_WAIT_OUTCOME = Object.freeze({
+  ACQUIRED: 'acquired',
+  BUDGET_EXHAUSTED: 'budget_exhausted',
 });
 
 class BootstrapJoinAdmissionOwner {
@@ -147,14 +152,21 @@ class BootstrapJoinAdmissionOwner {
     if (this.hasRemainingBootstrapRequestExecutionBudget(timeoutBudget)) {
       return;
     }
+    throw this.createBootstrapRequestExecutionBudgetExhaustedError();
+  }
+
+  createBootstrapRequestExecutionBudgetExhaustedError() {
     const error = new Error(BOOTSTRAP_API_ERROR.BOOTSTRAP_NOT_READY);
     error.statusCode = HTTP_STATUS.SERVICE_UNAVAILABLE;
     error.errorCode = BOOTSTRAP_PIPELINE_ERROR_CODE.BOOTSTRAP_NOT_READY;
+    error.reasonCode =
+      BOOTSTRAP_API_PROBE_REASON
+        .BOOTSTRAP_REQUEST_EXECUTION_BUDGET_EXHAUSTED;
     error.retryAfterMs = Math.max(
       NUM.ZERO,
       this.getBootstrapAdmissionRetryAfterMs(),
     );
-    throw error;
+    return error;
   }
 
   validateBootstrapRequest(nodeId, nodeAddress) {
@@ -401,18 +413,65 @@ class BootstrapJoinAdmissionOwner {
     return this.augmentAssignmentWithPeerAddresses(assignment, messageGroups);
   }
 
-  async withMoveReplicaAssignmentReservationLock(action) {
+  async waitForMoveReplicaAssignmentReservationLock(
+    previousLock,
+    timeoutBudget,
+  ) {
+    if (!timeoutBudget || typeof timeoutBudget !== TYPEOF.OBJECT) {
+      await previousLock;
+      return MOVE_REPLICA_ASSIGNMENT_LOCK_WAIT_OUTCOME.ACQUIRED;
+    }
+
+    const remainingBudgetMs = getRemainingBudgetMs(timeoutBudget);
+    if (remainingBudgetMs <= NUM.ZERO) {
+      return MOVE_REPLICA_ASSIGNMENT_LOCK_WAIT_OUTCOME.BUDGET_EXHAUSTED;
+    }
+
+    let clearBudgetTimer = () => {};
+    const lockAcquired = previousLock.then(() =>
+      MOVE_REPLICA_ASSIGNMENT_LOCK_WAIT_OUTCOME.ACQUIRED,
+    );
+    const budgetExhausted = new Promise((resolve) => {
+      const budgetTimer = setTimeout(
+        () => resolve(
+          MOVE_REPLICA_ASSIGNMENT_LOCK_WAIT_OUTCOME.BUDGET_EXHAUSTED,
+        ),
+        remainingBudgetMs,
+      );
+      clearBudgetTimer = () => clearTimeout(budgetTimer);
+    });
+    const outcome = await Promise.race([lockAcquired, budgetExhausted]);
+    clearBudgetTimer();
+    return outcome;
+  }
+
+  async withMoveReplicaAssignmentReservationLock(action, options = {}) {
     const previousLock = this.moveReplicaAssignmentReservationLock;
     let releaseLock;
     this.moveReplicaAssignmentReservationLock = new Promise((resolve) => {
       releaseLock = resolve;
     });
 
-    await previousLock;
+    let lockAcquired = false;
     try {
+      const lockWaitOutcome =
+        await this.waitForMoveReplicaAssignmentReservationLock(
+          previousLock,
+          options.timeoutBudget,
+        );
+      if (lockWaitOutcome ===
+          MOVE_REPLICA_ASSIGNMENT_LOCK_WAIT_OUTCOME.BUDGET_EXHAUSTED) {
+        throw this.createBootstrapRequestExecutionBudgetExhaustedError();
+      }
+      this.assertBootstrapRequestExecutionBudget(options.timeoutBudget);
+      lockAcquired = true;
       return await action();
     } finally {
-      releaseLock();
+      if (lockAcquired) {
+        releaseLock();
+      } else {
+        previousLock.then(releaseLock, releaseLock);
+      }
     }
   }
 
@@ -464,7 +523,7 @@ class BootstrapJoinAdmissionOwner {
         assignmentId: reservation.assignmentId,
         assignmentLeaseExpiresAt: reservation.leaseExpiresAt,
       };
-    });
+    }, options);
   }
 
   tryResolveDurableRejoinExistingMessageGroupAssignment(

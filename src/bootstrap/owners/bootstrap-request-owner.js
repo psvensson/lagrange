@@ -14,6 +14,7 @@ import {
   BOOTSTRAP_API_ERROR,
   BOOTSTRAP_API_LOG_MSG,
   BOOTSTRAP_API_PROBE_REASON,
+  BOOTSTRAP_API_REQUEST_FIELD,
   BOOTSTRAP_API_RESPONSE_FIELD,
 } from '../bootstrap-api-constants.js';
 import {
@@ -39,6 +40,36 @@ const BOOTSTRAP_REQUEST_ADMISSION_DECISION = Object.freeze({
   DEFER_STARTUP_INCOMPLETE: 'defer_startup_incomplete',
   DEFER_BOOTSTRAP_JOIN_BLOCKED: 'defer_bootstrap_join_blocked',
 });
+const BOOTSTRAP_REQUEST_STALE_STARTUP_COMPLETE_REASON_CODES = Object.freeze([
+  BOOTSTRAP_API_PROBE_REASON.BOOTSTRAP_PHASE_INCOMPLETE,
+]);
+const BOOTSTRAP_REQUEST_CLIENT_ATTEMPT_DEADLINE_STATE = Object.freeze({
+  UNBOUNDED: 'unbounded',
+  ACTIVE: 'active',
+  EXPIRED: 'expired',
+});
+const BOOTSTRAP_REQUEST_CLIENT_ATTEMPT_DEADLINE_DECISION = Object.freeze({
+  PROCEED: 'proceed',
+  DEFER_EXPIRED: 'defer_expired',
+});
+const BOOTSTRAP_REQUEST_UNBOUNDED_CLIENT_ATTEMPT_DEADLINE = Object.freeze({
+  state: BOOTSTRAP_REQUEST_CLIENT_ATTEMPT_DEADLINE_STATE.UNBOUNDED,
+  deadlineMs: NUM.ZERO,
+  remainingBudgetMs: NUM.ZERO,
+});
+const BOOTSTRAP_REQUEST_DEFER_STAGE = Object.freeze({
+  REQUEST_START: 'request_start',
+  BOOTSTRAP_JOIN_ADMISSION: 'bootstrap_join_admission',
+  ADMISSION_BOUNDARY: 'admission_boundary',
+  ADMISSION_SATURATION: 'admission_saturation',
+  ADMISSION_CLAIM: 'admission_claim',
+  REQUEST_EXECUTION_START: 'request_execution_start',
+  BLOCKING_MOVE_REPLICA_ADMISSIONS: 'blocking_move_replica_admissions',
+  SERVICE_LEADER_READINESS: 'service_leader_readiness',
+  ASSIGNMENT_RESERVATION: 'assignment_reservation',
+  RESPONSE_PREPARED: 'response_prepared',
+  RETRYABLE_ERROR: 'retryable_error',
+});
 
 const RETRYABLE_BOOTSTRAP_DEPENDENCY_ERROR_FRAGMENTS = Object.freeze([
   'ControlPlaneSystemTableGateway requires cdcIntegrationService',
@@ -47,6 +78,95 @@ const RETRYABLE_BOOTSTRAP_DEPENDENCY_ERROR_FRAGMENTS = Object.freeze([
 const BOOTSTRAP_REQUEST_ADMISSION_ID_UNTRACKED =
   'bootstrap_request_admission_untracked';
 const BOOTSTRAP_REQUEST_ADMISSION_EMPTY_EXPIRATIONS = Object.freeze([]);
+
+function normalizeBootstrapRequestAdmissionReason(reason) {
+  if (typeof reason !== TYPEOF.STRING) {
+    return null;
+  }
+  const normalized = reason.trim();
+  return normalized.length > NUM.ZERO ? normalized : null;
+}
+
+function normalizeBootstrapRequestAdmissionReasons(snapshot) {
+  if (!Array.isArray(snapshot?.reasons)) {
+    return [];
+  }
+  return [
+    ...new Set(
+      snapshot.reasons
+        .map((reason) => normalizeBootstrapRequestAdmissionReason(reason))
+        .filter((reason) => reason !== null),
+    ),
+  ];
+}
+
+function hasOnlyStaleBootstrapPhaseIncompleteReason(snapshot) {
+  const reasons = normalizeBootstrapRequestAdmissionReasons(snapshot);
+  return reasons.length ===
+    BOOTSTRAP_REQUEST_STALE_STARTUP_COMPLETE_REASON_CODES.length &&
+    BOOTSTRAP_REQUEST_STALE_STARTUP_COMPLETE_REASON_CODES.every((reason) =>
+      reasons.includes(reason),
+    );
+}
+
+function canAdmitStartupCompleteStaleBootstrapPhaseSnapshot(
+  startupComplete,
+  snapshot,
+) {
+  return startupComplete === true &&
+    snapshot?.draining !== true &&
+    snapshot?.bootstrapJoinAuthorityAvailable === true &&
+    hasOnlyStaleBootstrapPhaseIncompleteReason(snapshot);
+}
+
+function normalizeBootstrapRequestClientAttemptDeadlineMs(requestBody) {
+  const rawDeadlineMs =
+    requestBody?.[BOOTSTRAP_API_REQUEST_FIELD.CLIENT_ATTEMPT_DEADLINE_MS];
+  if (!Number.isFinite(rawDeadlineMs)) {
+    return NUM.ZERO;
+  }
+  const deadlineMs = Math.floor(rawDeadlineMs);
+  return deadlineMs > NUM.ZERO ? deadlineMs : NUM.ZERO;
+}
+
+function evaluateBootstrapRequestClientAttemptDeadline(
+  requestBody,
+  observedAtMs,
+) {
+  const deadlineMs =
+    normalizeBootstrapRequestClientAttemptDeadlineMs(requestBody);
+  if (deadlineMs <= NUM.ZERO) {
+    return BOOTSTRAP_REQUEST_UNBOUNDED_CLIENT_ATTEMPT_DEADLINE;
+  }
+  const remainingBudgetMs = Math.max(
+    NUM.ZERO,
+    deadlineMs - observedAtMs,
+  );
+  return Object.freeze({
+    state: remainingBudgetMs > NUM.ZERO ?
+      BOOTSTRAP_REQUEST_CLIENT_ATTEMPT_DEADLINE_STATE.ACTIVE :
+      BOOTSTRAP_REQUEST_CLIENT_ATTEMPT_DEADLINE_STATE.EXPIRED,
+    deadlineMs,
+    remainingBudgetMs,
+  });
+}
+
+function normalizeBootstrapRequestClientAttemptDeadlineSnapshot(
+  requestBody,
+  observedAtMs,
+) {
+  const clientAttemptDeadline =
+    evaluateBootstrapRequestClientAttemptDeadline(requestBody, observedAtMs);
+  return Object.freeze({
+    decision:
+      clientAttemptDeadline.state ===
+        BOOTSTRAP_REQUEST_CLIENT_ATTEMPT_DEADLINE_STATE.EXPIRED ?
+        BOOTSTRAP_REQUEST_CLIENT_ATTEMPT_DEADLINE_DECISION.DEFER_EXPIRED :
+        BOOTSTRAP_REQUEST_CLIENT_ATTEMPT_DEADLINE_DECISION.PROCEED,
+    observedAtMs,
+    clientAttemptDeadline,
+  });
+}
 
 class BootstrapRequestOwner {
   constructor(options = {}) {
@@ -274,13 +394,26 @@ class BootstrapRequestOwner {
     return Math.max(NUM.ZERO, this.getBootstrapAdmissionRetryAfterMs());
   }
 
-  createBootstrapRequestExecutionBudget(startedAtMs) {
+  createBootstrapRequestExecutionBudget(
+    startedAtMs,
+    clientAttemptDeadline =
+      BOOTSTRAP_REQUEST_UNBOUNDED_CLIENT_ATTEMPT_DEADLINE,
+  ) {
     const configuredBudgetMs = this.getBootstrapRequestExecutionBudgetMs();
     if (!Number.isFinite(configuredBudgetMs) || configuredBudgetMs <= NUM.ZERO) {
       return null;
     }
+    const clientAttemptRemainingBudgetMs = Math.max(
+      NUM.ZERO,
+      clientAttemptDeadline.deadlineMs - startedAtMs,
+    );
+    const effectiveBudgetMs =
+      clientAttemptDeadline.state ===
+        BOOTSTRAP_REQUEST_CLIENT_ATTEMPT_DEADLINE_STATE.ACTIVE ?
+        Math.min(configuredBudgetMs, clientAttemptRemainingBudgetMs) :
+        configuredBudgetMs;
     return createTopLevelOperationBudget({
-      configuredBudgetMs,
+      configuredBudgetMs: effectiveBudgetMs,
       startedAtMs,
       operationName: BOOTSTRAP_REQUEST_EXECUTION_OPERATION_NAME,
     });
@@ -298,18 +431,99 @@ class BootstrapRequestOwner {
     }) > NUM.ZERO;
   }
 
+  logBootstrapRequestDeferred(options = {}) {
+    const clientAttemptDeadline =
+      options.clientAttemptDeadline &&
+      typeof options.clientAttemptDeadline === TYPEOF.OBJECT ?
+        options.clientAttemptDeadline :
+        null;
+    const timeoutBudget =
+      options.timeoutBudget &&
+      typeof options.timeoutBudget === TYPEOF.OBJECT ?
+        options.timeoutBudget :
+        null;
+    const observedAtMs = Number.isFinite(options.observedAtMs) ?
+      Math.floor(options.observedAtMs) :
+      Date.now();
+    const logPayload = {
+      nodeId: options.nodeId || null,
+      nodeAddress: options.nodeAddress || null,
+      seedNodeId: this.getSeedNodeId(),
+      deferStage: options.deferStage || null,
+      reasonCode: options.reasonCode || null,
+      retryAfterMs: Number.isFinite(options.retryAfterMs) ?
+        Math.floor(options.retryAfterMs) :
+        this.getBootstrapAdmissionRetryAfterMs(),
+      observedAtMs,
+    };
+    if (clientAttemptDeadline) {
+      logPayload.clientAttemptDeadlineState = clientAttemptDeadline.state;
+      logPayload.clientAttemptDeadlineMs = clientAttemptDeadline.deadlineMs;
+      logPayload.clientAttemptRemainingBudgetMs =
+        clientAttemptDeadline.remainingBudgetMs;
+    }
+    if (timeoutBudget) {
+      logPayload.requestExecutionRemainingBudgetMs =
+        getRemainingBudgetMs(timeoutBudget, {now: () => observedAtMs});
+      logPayload.requestExecutionConfiguredBudgetMs =
+        timeoutBudget.configuredBudgetMs;
+    }
+    this.getLogger().warn(
+      BOOTSTRAP_API_LOG_MSG.BOOTSTRAP_REQUEST_DEFERRED,
+      logPayload,
+    );
+  }
+
   buildBootstrapRequestExecutionBudgetDeferredResponse(
     reply,
-    observedAt = Date.now(),
+    options = {},
   ) {
+    const observedAt = Number.isFinite(options.observedAtMs) ?
+      Math.floor(options.observedAtMs) :
+      Date.now();
+    const reasonCode =
+      BOOTSTRAP_API_PROBE_REASON
+        .BOOTSTRAP_REQUEST_EXECUTION_BUDGET_EXHAUSTED;
+    this.logBootstrapRequestDeferred({
+      ...options,
+      observedAtMs: observedAt,
+      reasonCode,
+      retryAfterMs: this.getBootstrapAdmissionRetryAfterMs(),
+    });
     const startupAuthority =
       this.getStartupAuthoritySnapshotForBootstrapResponse(observedAt);
     reply.code(HTTP_STATUS.SERVICE_UNAVAILABLE);
     return this.buildBootstrapNotReadyResponse({
       error: BOOTSTRAP_API_ERROR.BOOTSTRAP_NOT_READY,
       code: BOOTSTRAP_PIPELINE_ERROR_CODE.BOOTSTRAP_NOT_READY,
-      reasonCode:
-        BOOTSTRAP_API_PROBE_REASON.CONTROL_PLANE_DEPENDENCY_UNAVAILABLE,
+      reasonCode,
+      retryAfterMs: this.getBootstrapAdmissionRetryAfterMs(),
+      startupAuthority,
+    });
+  }
+
+  buildBootstrapRequestClientAttemptExpiredDeferredResponse(
+    reply,
+    options = {},
+  ) {
+    const observedAt = Number.isFinite(options.observedAtMs) ?
+      Math.floor(options.observedAtMs) :
+      Date.now();
+    const reasonCode =
+      BOOTSTRAP_API_PROBE_REASON.CLIENT_ATTEMPT_DEADLINE_EXHAUSTED;
+    this.logBootstrapRequestDeferred({
+      ...options,
+      observedAtMs: observedAt,
+      reasonCode,
+      retryAfterMs: this.getBootstrapAdmissionRetryAfterMs(),
+    });
+    const startupAuthority =
+      this.getStartupAuthoritySnapshotForBootstrapResponse(observedAt);
+    reply.code(HTTP_STATUS.SERVICE_UNAVAILABLE);
+    return this.buildBootstrapNotReadyResponse({
+      error: BOOTSTRAP_API_ERROR.BOOTSTRAP_NOT_READY,
+      code: BOOTSTRAP_PIPELINE_ERROR_CODE.BOOTSTRAP_NOT_READY,
+      reasonCode,
       retryAfterMs: this.getBootstrapAdmissionRetryAfterMs(),
       startupAuthority,
     });
@@ -341,8 +555,14 @@ class BootstrapRequestOwner {
   ) {
     const startupComplete =
       this.isBootstrapRequestStartupComplete(bootstrapService);
+    const staleStartupCompletePhaseOnly =
+      canAdmitStartupCompleteStaleBootstrapPhaseSnapshot(
+        startupComplete,
+        bootstrapJoinAdmissionSnapshot,
+      );
     const bootstrapJoinAdmissionReady =
-      bootstrapJoinAdmissionSnapshot?.ready === true;
+      bootstrapJoinAdmissionSnapshot?.ready === true ||
+      staleStartupCompletePhaseOnly;
     const admissionDecision = {
       decision: BOOTSTRAP_REQUEST_ADMISSION_DECISION.ADMIT,
       phase: null,
@@ -373,7 +593,8 @@ class BootstrapRequestOwner {
   }
 
   async handleBootstrapRequest(request, reply) {
-    const {nodeId, nodeAddress} = request.body || {};
+    const requestBody = request.body || {};
+    const {nodeId, nodeAddress} = requestBody;
 
     this.getLogger().info(BOOTSTRAP_API_LOG_MSG.RECEIVED_BOOTSTRAP_REQUEST, {
       nodeId,
@@ -393,6 +614,29 @@ class BootstrapRequestOwner {
       return {error: validationError};
     }
 
+    const requestStartedAtMs = Date.now();
+    const requestStartDeadlineSnapshot =
+      normalizeBootstrapRequestClientAttemptDeadlineSnapshot(
+        requestBody,
+        requestStartedAtMs,
+      );
+    if (
+      requestStartDeadlineSnapshot.decision ===
+        BOOTSTRAP_REQUEST_CLIENT_ATTEMPT_DEADLINE_DECISION.DEFER_EXPIRED
+    ) {
+      return this.buildBootstrapRequestClientAttemptExpiredDeferredResponse(
+        reply,
+        {
+          nodeId,
+          nodeAddress,
+          deferStage: BOOTSTRAP_REQUEST_DEFER_STAGE.REQUEST_START,
+          observedAtMs: requestStartDeadlineSnapshot.observedAtMs,
+          clientAttemptDeadline:
+            requestStartDeadlineSnapshot.clientAttemptDeadline,
+        },
+      );
+    }
+
     const bootstrapService = this.getBootstrapService();
     const bootstrapJoinAdmissionSnapshot =
       await this.getBootstrapJoinAdmissionSnapshot();
@@ -410,6 +654,15 @@ class BootstrapRequestOwner {
         this.getStartupAuthoritySnapshotForBootstrapResponse(
           responseTimestamp,
         );
+      this.logBootstrapRequestDeferred({
+        nodeId,
+        nodeAddress,
+        deferStage:
+          BOOTSTRAP_REQUEST_DEFER_STAGE.BOOTSTRAP_JOIN_ADMISSION,
+        observedAtMs: responseTimestamp,
+        reasonCode: bootstrapRequestAdmissionDecision.reasonCode,
+        retryAfterMs: bootstrapRequestAdmissionDecision.retryAfterMs,
+      });
       reply.code(HTTP_STATUS.SERVICE_UNAVAILABLE);
       return this.buildBootstrapNotReadyResponse({
         error: BOOTSTRAP_API_ERROR.BOOTSTRAP_NOT_READY,
@@ -421,9 +674,9 @@ class BootstrapRequestOwner {
       });
     }
 
-    const requestStartupMode = request.body?.startupMode || null;
+    const requestStartupMode = requestBody.startupMode || null;
     const membershipOwnerOutcome = buildMembershipOwnerOutcome({
-      membershipOwnerOutcome: request.body?.membershipOwnerOutcome,
+      membershipOwnerOutcome: requestBody.membershipOwnerOutcome,
       startupMode: requestStartupMode,
     });
 
@@ -445,10 +698,34 @@ class BootstrapRequestOwner {
       return {error: conflictError};
     }
 
-    const now = Date.now();
-    this.expireStaleBootstrapAdmissions(now);
+    const admissionBoundaryDeadlineSnapshot =
+      normalizeBootstrapRequestClientAttemptDeadlineSnapshot(
+        requestBody,
+        Date.now(),
+      );
+    if (
+      admissionBoundaryDeadlineSnapshot.decision ===
+        BOOTSTRAP_REQUEST_CLIENT_ATTEMPT_DEADLINE_DECISION.DEFER_EXPIRED
+    ) {
+      return this.buildBootstrapRequestClientAttemptExpiredDeferredResponse(
+        reply,
+        {
+          nodeId,
+          nodeAddress,
+          deferStage: BOOTSTRAP_REQUEST_DEFER_STAGE.ADMISSION_BOUNDARY,
+          observedAtMs: admissionBoundaryDeadlineSnapshot.observedAtMs,
+          clientAttemptDeadline:
+            admissionBoundaryDeadlineSnapshot.clientAttemptDeadline,
+        },
+      );
+    }
+
+    this.expireStaleBootstrapAdmissions(
+      admissionBoundaryDeadlineSnapshot.observedAtMs,
+    );
     if (this.getInFlightBootstrapRequestCount() >=
         this.getMaxConcurrentBootstrapRequests()) {
+      const retryAfterMs = this.getBootstrapAdmissionRetryAfterMs();
       this.getLogger().warn(BOOTSTRAP_API_LOG_MSG.BOOTSTRAP_ADMISSION_DEFERRED, {
         nodeId,
         nodeAddress,
@@ -456,25 +733,78 @@ class BootstrapRequestOwner {
         inFlightBootstrapRequests: this.getInFlightBootstrapRequestCount(),
         maxConcurrentBootstrapRequests:
           this.getMaxConcurrentBootstrapRequests(),
-        retryAfterMs: this.getBootstrapAdmissionRetryAfterMs(),
+        retryAfterMs,
+      });
+      this.logBootstrapRequestDeferred({
+        nodeId,
+        nodeAddress,
+        deferStage: BOOTSTRAP_REQUEST_DEFER_STAGE.ADMISSION_SATURATION,
+        observedAtMs: admissionBoundaryDeadlineSnapshot.observedAtMs,
+        reasonCode: BOOTSTRAP_API_PROBE_REASON.JOIN_ADMISSION_BACKPRESSURED,
+        retryAfterMs,
+        clientAttemptDeadline:
+          admissionBoundaryDeadlineSnapshot.clientAttemptDeadline,
       });
       reply.code(HTTP_STATUS.SERVICE_UNAVAILABLE);
       return this.buildBootstrapNotReadyResponse({
         error: BOOTSTRAP_API_ERROR.BOOTSTRAP_NOT_READY,
         code: BOOTSTRAP_PIPELINE_ERROR_CODE.BOOTSTRAP_NOT_READY,
         reasonCode: BOOTSTRAP_API_PROBE_REASON.JOIN_ADMISSION_BACKPRESSURED,
-        retryAfterMs: this.getBootstrapAdmissionRetryAfterMs(),
+        retryAfterMs,
       });
     }
 
+    const admissionClaimDeadlineSnapshot =
+      normalizeBootstrapRequestClientAttemptDeadlineSnapshot(
+        requestBody,
+        Date.now(),
+      );
+    if (
+      admissionClaimDeadlineSnapshot.decision ===
+        BOOTSTRAP_REQUEST_CLIENT_ATTEMPT_DEADLINE_DECISION.DEFER_EXPIRED
+    ) {
+      return this.buildBootstrapRequestClientAttemptExpiredDeferredResponse(
+        reply,
+        {
+          nodeId,
+          nodeAddress,
+          deferStage: BOOTSTRAP_REQUEST_DEFER_STAGE.ADMISSION_CLAIM,
+          observedAtMs: admissionClaimDeadlineSnapshot.observedAtMs,
+          clientAttemptDeadline:
+            admissionClaimDeadlineSnapshot.clientAttemptDeadline,
+        },
+      );
+    }
+
+    const now = admissionClaimDeadlineSnapshot.observedAtMs;
     const admission = this.acquireBootstrapAdmission({
       nodeId,
       nodeAddress,
       now,
     });
     const requestExecutionBudget =
-      this.createBootstrapRequestExecutionBudget(now);
+      this.createBootstrapRequestExecutionBudget(
+        now,
+        admissionClaimDeadlineSnapshot.clientAttemptDeadline,
+      );
     try {
+      if (!this.hasRemainingBootstrapRequestExecutionBudget(
+        requestExecutionBudget,
+      )) {
+        return this.buildBootstrapRequestClientAttemptExpiredDeferredResponse(
+          reply,
+          {
+            nodeId,
+            nodeAddress,
+            deferStage:
+              BOOTSTRAP_REQUEST_DEFER_STAGE.REQUEST_EXECUTION_START,
+            observedAtMs: now,
+            clientAttemptDeadline:
+              admissionClaimDeadlineSnapshot.clientAttemptDeadline,
+            timeoutBudget: requestExecutionBudget,
+          },
+        );
+      }
       const budgetedBlockingOptions =
         this.attachBootstrapRequestExecutionBudget(
           {},
@@ -490,6 +820,14 @@ class BootstrapRequestOwner {
       )) {
         return this.buildBootstrapRequestExecutionBudgetDeferredResponse(
           reply,
+          {
+            nodeId,
+            nodeAddress,
+            deferStage:
+              BOOTSTRAP_REQUEST_DEFER_STAGE
+                .BLOCKING_MOVE_REPLICA_ADMISSIONS,
+            timeoutBudget: requestExecutionBudget,
+          },
         );
       }
       if (blockingMoveReplicaAdmissions.length > NUM.ZERO) {
@@ -514,6 +852,17 @@ class BootstrapRequestOwner {
             retryAfterMs,
           },
         );
+        this.logBootstrapRequestDeferred({
+          nodeId,
+          nodeAddress,
+          deferStage:
+            BOOTSTRAP_REQUEST_DEFER_STAGE
+              .BLOCKING_MOVE_REPLICA_ADMISSIONS,
+          reasonCode:
+            BOOTSTRAP_API_PROBE_REASON.MOVE_REPLICA_HANDOFF_STABILIZING,
+          retryAfterMs,
+          timeoutBudget: requestExecutionBudget,
+        });
         reply.code(HTTP_STATUS.SERVICE_UNAVAILABLE);
         return this.buildBootstrapNotReadyResponse({
           error: BOOTSTRAP_API_ERROR.BOOTSTRAP_NOT_READY,
@@ -542,6 +891,14 @@ class BootstrapRequestOwner {
           missingMessageGroupLeaderNodes:
             leaderStatus.missingMessageGroupLeaderNodes,
         });
+        this.logBootstrapRequestDeferred({
+          nodeId,
+          nodeAddress,
+          deferStage: BOOTSTRAP_REQUEST_DEFER_STAGE.SERVICE_LEADER_READINESS,
+          observedAtMs: responseTimestamp,
+          reasonCode: BOOTSTRAP_PIPELINE_ERROR_CODE.LEADER_METADATA_INCOMPLETE,
+          timeoutBudget: requestExecutionBudget,
+        });
         reply.code(HTTP_STATUS.SERVICE_UNAVAILABLE);
         return this.buildBootstrapNotReadyResponse({
           error: BOOTSTRAP_API_ERROR.BOOTSTRAP_NOT_READY,
@@ -556,6 +913,12 @@ class BootstrapRequestOwner {
       )) {
         return this.buildBootstrapRequestExecutionBudgetDeferredResponse(
           reply,
+          {
+            nodeId,
+            nodeAddress,
+            deferStage: BOOTSTRAP_REQUEST_DEFER_STAGE.SERVICE_LEADER_READINESS,
+            timeoutBudget: requestExecutionBudget,
+          },
         );
       }
 
@@ -577,6 +940,12 @@ class BootstrapRequestOwner {
       )) {
         return this.buildBootstrapRequestExecutionBudgetDeferredResponse(
           reply,
+          {
+            nodeId,
+            nodeAddress,
+            deferStage: BOOTSTRAP_REQUEST_DEFER_STAGE.ASSIGNMENT_RESERVATION,
+            timeoutBudget: requestExecutionBudget,
+          },
         );
       }
       const currentEpoch = this.getCurrentEpoch();
@@ -646,6 +1015,21 @@ class BootstrapRequestOwner {
         timestamp: responseTimestamp,
       };
 
+      if (!this.hasRemainingBootstrapRequestExecutionBudget(
+        requestExecutionBudget,
+      )) {
+        return this.buildBootstrapRequestExecutionBudgetDeferredResponse(
+          reply,
+          {
+            nodeId,
+            nodeAddress,
+            deferStage: BOOTSTRAP_REQUEST_DEFER_STAGE.RESPONSE_PREPARED,
+            observedAtMs: responseTimestamp,
+            timeoutBudget: requestExecutionBudget,
+          },
+        );
+      }
+
       this.getLogger().info(BOOTSTRAP_API_LOG_MSG.RESPONSE_PREPARED, {
         nodeId,
         strategy: assignment.strategy,
@@ -661,12 +1045,35 @@ class BootstrapRequestOwner {
           this.getStartupAuthoritySnapshotForBootstrapResponse(
             responseTimestamp,
           );
+        const requestExecutionBudgetExhausted =
+          this.hasRemainingBootstrapRequestExecutionBudget(
+            requestExecutionBudget,
+            responseTimestamp,
+          ) !== true;
+        const reasonCode =
+          typeof error?.reasonCode === TYPEOF.STRING &&
+          error.reasonCode.length > NUM.ZERO ?
+            error.reasonCode :
+            requestExecutionBudgetExhausted ?
+              BOOTSTRAP_API_PROBE_REASON
+                .BOOTSTRAP_REQUEST_EXECUTION_BUDGET_EXHAUSTED :
+            BOOTSTRAP_API_PROBE_REASON.CONTROL_PLANE_DEPENDENCY_UNAVAILABLE;
         this.getLogger().warn(BOOTSTRAP_API_LOG_MSG.BOOTSTRAP_FAILED, {
           nodeId,
           nodeAddress,
           error: error.message,
           code: error?.errorCode || error?.code || null,
+          reasonCode,
           retryAfterMs,
+        });
+        this.logBootstrapRequestDeferred({
+          nodeId,
+          nodeAddress,
+          deferStage: BOOTSTRAP_REQUEST_DEFER_STAGE.RETRYABLE_ERROR,
+          observedAtMs: responseTimestamp,
+          reasonCode,
+          retryAfterMs,
+          timeoutBudget: requestExecutionBudget,
         });
         reply.code(HTTP_STATUS.SERVICE_UNAVAILABLE);
         return this.buildBootstrapNotReadyResponse({
@@ -676,8 +1083,7 @@ class BootstrapRequestOwner {
             error.errorCode.length > LOCAL_NUM_ZERO ?
               error.errorCode :
               BOOTSTRAP_PIPELINE_ERROR_CODE.BOOTSTRAP_NOT_READY,
-          reasonCode:
-            BOOTSTRAP_API_PROBE_REASON.CONTROL_PLANE_DEPENDENCY_UNAVAILABLE,
+          reasonCode,
           retryAfterMs,
           startupAuthority,
         });

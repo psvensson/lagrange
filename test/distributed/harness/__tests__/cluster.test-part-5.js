@@ -149,7 +149,7 @@ const ACTIVE_GATE_REACHABILITY_DELAY_TIMEOUT_MESSAGE =
 const ACTIVE_GATE_REACHABILITY_DELAY_ASSERTION =
   'startup timeout should keep the selected reachability delay evidence';
 const ACTIVE_GATE_PARTIAL_RESIDUAL_TEST_NAME =
-  'Unit: _probeClusterActiveState classifies seed-timeout partial startup coverage';
+  'Unit: _probeClusterActiveState classifies contact-seed partial startup coverage';
 const ACTIVE_GATE_PARTIAL_RESIDUAL_TIMEOUT_MS = 5000;
 const ACTIVE_GATE_PARTIAL_RESIDUAL_READY_STATUS = 200;
 const ACTIVE_GATE_PARTIAL_RESIDUAL_BLOCKED_STATUS = 503;
@@ -159,28 +159,32 @@ const ACTIVE_GATE_PARTIAL_RESIDUAL_ACTIVE_STATE = 'active';
 const ACTIVE_GATE_PARTIAL_RESIDUAL_BLOCKED_STATE = 'warming';
 const ACTIVE_GATE_PARTIAL_RESIDUAL_BLOCKED_REASON =
   'BOOTSTRAP_NOT_READY';
-const ACTIVE_GATE_PARTIAL_RESIDUAL_PUBLICATION_EPOCH = 2;
+const ACTIVE_GATE_PARTIAL_RESIDUAL_PUBLICATION_EPOCH = 3;
 const ACTIVE_GATE_PARTIAL_RESIDUAL_EXPECTED_COVERAGE = 3;
 const ACTIVE_GATE_PARTIAL_RESIDUAL_EXPECTED_ACTIVE = 3;
 const ACTIVE_GATE_PARTIAL_RESIDUAL_EXPECTED_INACTIVE = 2;
 const ACTIVE_GATE_PARTIAL_RESIDUAL_SELECTED_NODE_ID =
-  SNAPSHOT_REPLAY_TEST_NODE_ID.STRONG_EXTRA;
+  SNAPSHOT_REPLAY_TEST_NODE_ID.ADMIN_READY_STALE;
 const ACTIVE_GATE_PARTIAL_RESIDUAL_OBSERVED_NODE_IDS = Object.freeze([
+  SNAPSHOT_REPLAY_TEST_NODE_ID.SEED,
   SNAPSHOT_REPLAY_TEST_NODE_ID.BASELINE,
-  SNAPSHOT_REPLAY_TEST_NODE_ID.STRONG_EXTRA,
-  SNAPSHOT_REPLAY_TEST_NODE_ID.STALE_EXTRA,
+  SNAPSHOT_REPLAY_TEST_NODE_ID.ADMIN_READY_STALE,
 ]);
 const ACTIVE_GATE_PARTIAL_RESIDUAL_MISSING_PUBLISHED_NODE_IDS = Object.freeze([
-  SNAPSHOT_REPLAY_TEST_NODE_ID.ADMIN_READY_STALE,
   SNAPSHOT_REPLAY_TEST_NODE_ID.STRONG_EXTRA,
   SNAPSHOT_REPLAY_TEST_NODE_ID.STALE_EXTRA,
 ]);
 const ACTIVE_GATE_PARTIAL_RESIDUAL_PUBLISHED_ACTIVE_NODE_IDS = Object.freeze([
   SNAPSHOT_REPLAY_TEST_NODE_ID.BASELINE,
+  SNAPSHOT_REPLAY_TEST_NODE_ID.ADMIN_READY_STALE,
   SNAPSHOT_REPLAY_TEST_NODE_ID.SEED,
 ]);
 const ACTIVE_GATE_PARTIAL_RESIDUAL_READY_NODE_IDS = Object.freeze([
+  SNAPSHOT_REPLAY_TEST_NODE_ID.SEED,
   SNAPSHOT_REPLAY_TEST_NODE_ID.BASELINE,
+  SNAPSHOT_REPLAY_TEST_NODE_ID.ADMIN_READY_STALE,
+]);
+const ACTIVE_GATE_PARTIAL_RESIDUAL_INACTIVE_NODE_IDS = Object.freeze([
   SNAPSHOT_REPLAY_TEST_NODE_ID.STRONG_EXTRA,
   SNAPSHOT_REPLAY_TEST_NODE_ID.STALE_EXTRA,
 ]);
@@ -188,10 +192,6 @@ const ACTIVE_GATE_PARTIAL_RESIDUAL_SELECTED_CAPTURED_AT_MS =
   SNAPSHOT_REPLAY_TEST_ADMIN_CAPTURED_AT_MS;
 const ACTIVE_GATE_PARTIAL_RESIDUAL_STALE_CAPTURED_AT_MS =
   SNAPSHOT_REPLAY_TEST_SEED_CAPTURED_AT_MS;
-const ACTIVE_GATE_PARTIAL_RESIDUAL_SEED_TIMEOUT =
-  'Node readiness probe timed out for ' + SNAPSHOT_REPLAY_TEST_NODE_ID.SEED;
-
-
 /**
  * Feature: distributed-testing-framework
  * Property 5: Multi-Host Container Distribution
@@ -598,9 +598,6 @@ test(ACTIVE_GATE_PARTIAL_RESIDUAL_TEST_NAME, async () => {
           NODE_ROLES.SEED :
           NODE_ROLES.JOINER,
       async probeBootstrapReadiness() {
-        if (nodeId === SNAPSHOT_REPLAY_TEST_NODE_ID.SEED) {
-          throw new Error(ACTIVE_GATE_PARTIAL_RESIDUAL_SEED_TIMEOUT);
-        }
         return buildReadiness(nodeId);
       },
       async getReachabilityDiagnostics() {
@@ -646,7 +643,7 @@ test(ACTIVE_GATE_PARTIAL_RESIDUAL_TEST_NAME, async () => {
   assert.strictEqual(
     probeResult.snapshotCoverage.bestCoverageNodeCount,
     ACTIVE_GATE_PARTIAL_RESIDUAL_EXPECTED_COVERAGE,
-    'seed-timeout residual coverage should remain partial at 3/5',
+    'contact-seed residual coverage should remain partial at 3/5',
   );
   assert.deepStrictEqual(
     probeResult.snapshotCoverage.selectedMissingPublishedNodeIds,
@@ -665,11 +662,12 @@ test(ACTIVE_GATE_PARTIAL_RESIDUAL_TEST_NAME, async () => {
     ACTIVE_GATE_PARTIAL_RESIDUAL_EXPECTED_INACTIVE,
     'the active probe should preserve the two real inactive nodes',
   );
-  assert.ok(
-    probeResult.nodeDiagnostics.some((diagnostic) =>
-      diagnostic.nodeId === SNAPSHOT_REPLAY_TEST_NODE_ID.SEED &&
-      diagnostic.error === ACTIVE_GATE_PARTIAL_RESIDUAL_SEED_TIMEOUT),
-    'the residual should preserve the seed readiness timeout evidence',
+  assert.deepStrictEqual(
+    probeResult.nodeDiagnostics
+      .filter((diagnostic) => diagnostic.active !== true)
+      .map((diagnostic) => diagnostic.nodeId),
+    ACTIVE_GATE_PARTIAL_RESIDUAL_INACTIVE_NODE_IDS,
+    'the residual should preserve the contact-seed inactive joiner cohort',
   );
 });
 
