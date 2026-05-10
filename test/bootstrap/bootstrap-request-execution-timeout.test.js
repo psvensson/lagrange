@@ -5,7 +5,10 @@ import {
   BOOTSTRAP_API_PROBE_REASON,
   BOOTSTRAP_API_RESPONSE_FIELD,
 } from '../../src/bootstrap/bootstrap-api-constants.js';
-import {BOOTSTRAP_PIPELINE_ERROR_CODE} from
+import {
+  BOOTSTRAP_ASSIGNMENT_STRATEGY,
+  BOOTSTRAP_PIPELINE_ERROR_CODE,
+} from
   '../../src/bootstrap/bootstrap-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
@@ -56,6 +59,11 @@ const TEST_STARTUP_AUTHORITY = Object.freeze({
 });
 const TEST_TIMEOUT_ERROR_MESSAGE =
   'bootstrap request execution budget exhausted';
+const TEST_ASSIGNMENT_GROUP_ID = 'mg-test';
+const TEST_ASSIGNMENT = Object.freeze({
+  strategy: BOOTSTRAP_ASSIGNMENT_STRATEGY.CREATE_SELF_HOSTED,
+  groupId: TEST_ASSIGNMENT_GROUP_ID,
+});
 
 function initializeTestEnvironment() {
   ConfigurationManager.resetInstance();
@@ -188,3 +196,70 @@ test(TEST_NAME, async (t) => {
     LoggingService.resetInstance();
   }
 });
+
+test(
+  'BootstrapAPI defers when assignment reservation exhausts the request budget',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const api = new BootstrapAPI({
+      seedNodeId: TEST_SEED_NODE_ID,
+      seedNodeAddress: TEST_SEED_NODE_ADDRESS,
+      systemTableCache: TEST_SYSTEM_TABLE_CACHE,
+      bootstrapAdmissionRetryAfterMs: TEST_RETRY_AFTER_MS,
+      bootstrapRequestExecutionBudgetMs: TEST_REQUEST_EXECUTION_BUDGET_MS,
+      controlPlaneReadinessService: {
+        getStartupAuthoritySnapshotSync() {
+          return TEST_STARTUP_AUTHORITY;
+        },
+      },
+    });
+
+    api.getBlockingMoveReplicaBootstrapAdmissions = async () =>
+      TEST_EMPTY_LIST;
+    api.waitForServiceLeaders = async () => TEST_READY_STATUS;
+    api.determineAndReserveMessageGroupAssignment = async () => {
+      await new Promise((resolve) => setTimeout(resolve, TEST_STALL_MS));
+      return TEST_ASSIGNMENT;
+    };
+
+    await api.initialize(0, {listen: TEST_LISTEN_DISABLED});
+
+    try {
+      const response = await api.getFastify().inject({
+        method: 'POST',
+        url: '/bootstrap',
+        payload: {
+          nodeId: TEST_REQUEST_NODE_ID,
+          nodeAddress: TEST_REQUEST_NODE_ADDRESS,
+        },
+      });
+
+      t.equal(
+        response.statusCode,
+        HTTP_STATUS.SERVICE_UNAVAILABLE,
+        'budget-exhausted successful assignment should still defer bootstrap',
+      );
+      const body = JSON.parse(response.body);
+      t.equal(
+        body.error,
+        BOOTSTRAP_API_ERROR.BOOTSTRAP_NOT_READY,
+        'deferred response should preserve the canonical bootstrap-not-ready error',
+      );
+      t.equal(
+        body.retryAfterMs,
+        TEST_RETRY_AFTER_MS,
+        'deferred response should retain the bootstrap retry hint',
+      );
+      t.equal(
+        api.inFlightBootstrapRequestCount,
+        0,
+        'bootstrap admission count should be released after budget defer',
+      );
+    } finally {
+      await api.shutdown();
+      ConfigurationManager.resetInstance();
+      LoggingService.resetInstance();
+    }
+  },
+);

@@ -11,14 +11,15 @@
   "owner": "startup_active_gate_owner",
   "boundary": "snapshot_coverage",
   "dominantReason": "active_gate_timed_out",
-  "currentState": "Residual clean partial snapshot coverage for selected node 8be8d30f-4499-5eed-865c-71b4d529a67a is traced, frozen, reviewed clean, and committed in 87f207f3. The explain output remains startup_active_gate_owner / snapshot_coverage with snapshotCoverage=2/5, inactive_nodes=2, activeNodeCount=3/5, selectedSnapshotError=unknown, readinessDelayCause=none, publication ACK convergence satisfied, and priority recovery retryable. Focused harness coverage confirms this is true partial runtime coverage with two inactive nodes, not a diagnostics projection or owner-path defect to manufacture ready.",
-  "nextAction": "Continue from the true runtime partial-coverage cause behind the two inactive nodes and 2/5 selected snapshot coverage without reopening selected reachability timeout, publication ACK convergence, or priority recovery.",
+  "currentState": "Bootstrap request execution-budget repair landed and reviewed clean for original inactive joiners 11601fe0-72d6-5853-8590-ec2881853e72 and ebc4aa0b-06c6-506d-93ea-1dd2deca3f58. Playback showed the seed prepared a MOVE_REPLICA bootstrap response after the joiner HTTP request had already timed out because BootstrapRequestOwner did not re-check the shared bootstrap request budget after assignment reservation returned successfully. Focused regression now defers expired successful assignment as BOOTSTRAP_NOT_READY, and the representative rerun made both original inactive joiners active. The scenario remains startup_active_gate_owner / snapshot_coverage with snapshotCoverage=3/5, inactive_nodes=2, activeNodeCount=3/5, selectedSnapshotError=unknown, readinessDelayCause=none, publication ACK convergence not reopened, and priority recovery retryable.",
+  "nextAction": "Continue from the new true runtime partial-coverage residual behind snapshotCoverage=3/5 and inactive evidence for seed readiness timeout plus node 35 inactive without reopening the repaired original joiner path, publication ACK convergence, or priority recovery.",
   "proof": [
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability.report.json --explain active_gate_snapshot_coverage",
     "Focused active-gate snapshot reachability fixture for 35a891b8-c1a0-5064-9c6e-2acfba61c2a7 with snapshotCoverage=3/5 and readinessDelayCause=snapshot_reachability_timeout",
     "Focused diagnostics-backed selected snapshot regression preserving partial 3/5 coverage while neutralizing redundant reachability timeout",
     "Focused clean partial residual fixture for 8be8d30f-4499-5eed-865c-71b4d529a67a with snapshotCoverage=2/5 and readinessDelayCause=none",
     "Focused TAP regression proving clean partial startup coverage remains blocked when two nodes are inactive",
+    "Focused BootstrapAPI regression proving an assignment reservation that exhausts the shared bootstrap request execution budget returns BOOTSTRAP_NOT_READY instead of a stale success response",
     "node --test test/diagnostics/topology-convergence-graph.test.js test/scripts/analyze-topology-convergence.test.js",
     "TAP_ALLOW_INCOMPLETE_COVERAGE=1 npx tap test/distributed/harness/__tests__/cluster.test-part-5.js",
     "Modified-file decision-boundary and runtime-grammar guardrails; literal guard not applicable to legacy TAP test baseline",
@@ -37,8 +38,10 @@
     "test/distributed/harness/__tests__/failure-bundle-active-gate-tail-test-cases.js",
     "test/scripts/__fixtures__/topology-convergence/active-gate-snapshot*.json",
     "src/diagnostics/topology-convergence-graph.js",
+    "src/bootstrap/owners/bootstrap-request-owner.js",
     "scripts/analyze-topology-convergence.js",
     "test/diagnostics/topology-convergence-graph.test.js",
+    "test/bootstrap/bootstrap-request-execution-timeout.test.js",
     "test/scripts/analyze-topology-convergence.test.js",
     "work/model-ledger.jsonl",
     "work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md",
@@ -213,6 +216,18 @@ that predecessor returned clean before this successor implementation started.
   true partial runtime coverage inside `startup_active_gate_owner /
   snapshot_coverage`, not a diagnostics projection, active-node accounting, or
   owner-path readiness defect. No runtime readiness was manufactured.
+- Continuation traced the original inactive joiners
+  `11601fe0-72d6-5853-8590-ec2881853e72` and
+  `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58` to seed bootstrap request budget
+  leakage: the seed could finish MOVE_REPLICA assignment reservation and return
+  a success bootstrap response after the joiner's HTTP request budget had
+  already timed out. `BootstrapRequestOwner` now re-checks the shared request
+  execution budget immediately after assignment reservation and returns the
+  canonical `BOOTSTRAP_NOT_READY` defer response instead of a stale success. The
+  representative rerun made both original inactive joiners active and reduced
+  the selected snapshot from 2/5 to 3/5, but the same owner boundary remains
+  blocked by true partial runtime coverage with two residual inactive/error
+  nodes.
 
 ## Validation
 
@@ -242,6 +257,10 @@ that predecessor returned clean before this successor implementation started.
 21. PASS — `node --test test/diagnostics/topology-convergence-graph.test.js test/scripts/analyze-topology-convergence.test.js` after updating the residual fixture to the current 2/5 witness.
 22. PASS — `TAP_ALLOW_INCOMPLETE_COVERAGE=1 npx tap test/distributed/harness/__tests__/cluster.test-part-5.js` with the clean partial startup coverage regression.
 23. PASS — `node scripts/check-guideline-decision-boundaries.js test/distributed/harness/__tests__/cluster.test-part-5.js test/scripts/analyze-topology-convergence.test.js`; `npm run audit:runtime-grammar:file -- test/distributed/harness/__tests__/cluster.test-part-5.js test/scripts/analyze-topology-convergence.test.js`; `git diff --check -- ...`. Literal guard on this legacy TAP test file remains outside applicable proof because it reports inherited test-literal baseline noise.
+24. PASS — `npx tap --reporter=base test/bootstrap/bootstrap-request-execution-timeout.test.js` after adding the bootstrap request budget regression.
+25. PASS — `node scripts/check-guideline-literals.js src/bootstrap/owners/bootstrap-request-owner.js`; `node scripts/check-guideline-decision-boundaries.js src/bootstrap/owners/bootstrap-request-owner.js test/bootstrap/bootstrap-request-execution-timeout.test.js`; `npm run audit:runtime-grammar:file -- src/bootstrap/owners/bootstrap-request-owner.js test/bootstrap/bootstrap-request-execution-timeout.test.js`; `git diff --check -- src/bootstrap/owners/bootstrap-request-owner.js test/bootstrap/bootstrap-request-execution-timeout.test.js`.
+26. SAME-FRONTIER-REDUCED — `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability.report.json --fast-local --verbose` failed with first frontier `startup_active_gate_owner / snapshot_coverage`, `snapshotCoverage=3/5`, blockers `inactive_nodes=2,snapshot_coverage=3/5`. The original inactive joiners `11601fe0-72d6-5853-8590-ec2881853e72` and `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58` reached active; residual inactive/error evidence moved to seed readiness timeout plus node `35a891b8-c1a0-5064-9c6e-2acfba61c2a7` inactive.
+27. PASS — `npm run work:validate`.
 
 ## Continuation Notes
 
@@ -271,6 +290,24 @@ that predecessor returned clean before this successor implementation started.
 - [x] Continuation review subagent recorded:
       Agent active-gate-clean-partial-review
       (active-gate-clean-partial-revi) reviewed
+      work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md;
+      result clean.
+- [x] Continuation fix subagent recorded or explicitly not needed:
+      not-needed.
+- [x] Continuation review subagent recorded:
+      Agent active-gate-runtime-partial-review
+      (active-gate-runtime-partial-re) reviewed
+      work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md;
+      result clean.
+- [x] Continuation fix subagent recorded or explicitly not needed:
+      not-needed.
+- [x] Continuation implementation subagent recorded:
+      Agent active-gate-inactive-joiners-impl
+      (active-gate-inactive-joiners-i) implemented
+      work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md.
+- [x] Continuation review subagent recorded:
+      Agent active-gate-inactive-joiners-review
+      (active-gate-inactive-joiners-r) reviewed
       work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md;
       result clean.
 - [x] Continuation fix subagent recorded or explicitly not needed:

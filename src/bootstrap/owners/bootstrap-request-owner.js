@@ -572,6 +572,13 @@ class BootstrapRequestOwner {
           nodeId,
           budgetedAssignmentOptions,
         );
+      if (!this.hasRemainingBootstrapRequestExecutionBudget(
+        requestExecutionBudget,
+      )) {
+        return this.buildBootstrapRequestExecutionBudgetDeferredResponse(
+          reply,
+        );
+      }
       const currentEpoch = this.getCurrentEpoch();
       const {
         systemTableSnapshots,

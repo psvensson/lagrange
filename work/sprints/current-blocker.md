@@ -20,11 +20,11 @@ Boundary: `snapshot_coverage`
 
 Dominant reason: `active_gate_timed_out`
 
-Current state: Residual clean partial snapshot coverage for selected node 8be8d30f-4499-5eed-865c-71b4d529a67a is traced, frozen, reviewed clean, and committed in 87f207f3. The explain output remains startup_active_gate_owner / snapshot_coverage with snapshotCoverage=2/5, inactive_nodes=2, activeNodeCount=3/5, selectedSnapshotError=unknown, readinessDelayCause=none, publication ACK convergence satisfied, and priority recovery retryable. Focused harness coverage confirms this is true partial runtime coverage with two inactive nodes, not a diagnostics projection or owner-path defect to manufacture ready.
+Current state: Bootstrap request execution-budget repair landed and reviewed clean for original inactive joiners 11601fe0-72d6-5853-8590-ec2881853e72 and ebc4aa0b-06c6-506d-93ea-1dd2deca3f58. Playback showed the seed prepared a MOVE_REPLICA bootstrap response after the joiner HTTP request had already timed out because BootstrapRequestOwner did not re-check the shared bootstrap request budget after assignment reservation returned successfully. Focused regression now defers expired successful assignment as BOOTSTRAP_NOT_READY, and the representative rerun made both original inactive joiners active. The scenario remains startup_active_gate_owner / snapshot_coverage with snapshotCoverage=3/5, inactive_nodes=2, activeNodeCount=3/5, selectedSnapshotError=unknown, readinessDelayCause=none, publication ACK convergence not reopened, and priority recovery retryable.
 
 ## Next Action
 
-Continue from the true runtime partial-coverage cause behind the two inactive nodes and 2/5 selected snapshot coverage without reopening selected reachability timeout, publication ACK convergence, or priority recovery.
+Continue from the new true runtime partial-coverage residual behind snapshotCoverage=3/5 and inactive evidence for seed readiness timeout plus node 35 inactive without reopening the repaired original joiner path, publication ACK convergence, or priority recovery.
 
 ## Proof Ladder
 
@@ -33,10 +33,11 @@ Continue from the true runtime partial-coverage cause behind the two inactive no
 3. `Focused diagnostics-backed selected snapshot regression preserving partial 3/5 coverage while neutralizing redundant reachability timeout`
 4. `Focused clean partial residual fixture for 8be8d30f-4499-5eed-865c-71b4d529a67a with snapshotCoverage=2/5 and readinessDelayCause=none`
 5. `Focused TAP regression proving clean partial startup coverage remains blocked when two nodes are inactive`
-6. `node --test test/diagnostics/topology-convergence-graph.test.js test/scripts/analyze-topology-convergence.test.js`
-7. `TAP_ALLOW_INCOMPLETE_COVERAGE=1 npx tap test/distributed/harness/__tests__/cluster.test-part-5.js`
-8. `Modified-file decision-boundary and runtime-grammar guardrails; literal guard not applicable to legacy TAP test baseline`
-9. `npm run work:validate`
+6. `Focused BootstrapAPI regression proving an assignment reservation that exhausts the shared bootstrap request execution budget returns BOOTSTRAP_NOT_READY instead of a stale success response`
+7. `node --test test/diagnostics/topology-convergence-graph.test.js test/scripts/analyze-topology-convergence.test.js`
+8. `TAP_ALLOW_INCOMPLETE_COVERAGE=1 npx tap test/distributed/harness/__tests__/cluster.test-part-5.js`
+9. `Modified-file decision-boundary and runtime-grammar guardrails; literal guard not applicable to legacy TAP test baseline`
+10. `npm run work:validate`
 
 ## Model Fit
 
@@ -66,11 +67,13 @@ Escalation triggers:
 10. `test/distributed/harness/__tests__/failure-bundle-active-gate-tail-test-cases.js`
 11. `test/scripts/__fixtures__/topology-convergence/active-gate-snapshot*.json`
 12. `src/diagnostics/topology-convergence-graph.js`
-13. `scripts/analyze-topology-convergence.js`
-14. `test/diagnostics/topology-convergence-graph.test.js`
-15. `test/scripts/analyze-topology-convergence.test.js`
-16. `work/model-ledger.jsonl`
-17. `work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md`
-18. `work/sprints/active-2026-q2-spec-led-runtime-modularization.md`
-19. `work/sprints/current-blocker.json`
-20. `work/sprints/current-blocker.md`
+13. `src/bootstrap/owners/bootstrap-request-owner.js`
+14. `scripts/analyze-topology-convergence.js`
+15. `test/diagnostics/topology-convergence-graph.test.js`
+16. `test/bootstrap/bootstrap-request-execution-timeout.test.js`
+17. `test/scripts/analyze-topology-convergence.test.js`
+18. `work/model-ledger.jsonl`
+19. `work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md`
+20. `work/sprints/active-2026-q2-spec-led-runtime-modularization.md`
+21. `work/sprints/current-blocker.json`
+22. `work/sprints/current-blocker.md`
