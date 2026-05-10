@@ -4,7 +4,7 @@
 
 Sprint: `work/sprints/active-2026-q2-spec-led-runtime-modularization.md`
 
-Package: `work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md`
+Package: `work/packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md`
 
 Scenario: `spec-led-runtime-modularization`
 
@@ -50,7 +50,7 @@ Keep startup active-gate snapshot coverage as the controlling analyzer boundary.
 20. `Focused analyzer fixture and active-gate harness regression refreshed to the current two-node contact-seed residual with nodes 8be8d30f-4499-5eed-865c-71b4d529a67a and ebc4aa0b-06c6-506d-93ea-1dd2deca3f58 inactive.`
 21. `Focused BootstrapAPI regression proving startup-complete seed bootstrap admission ignores only stale BOOTSTRAP_PHASE_INCOMPLETE bootstrap-join snapshot evidence and preserves non-stale 503 blockers.`
 22. `npx tap --reporter=base test/bootstrap/bootstrap-request-admission-precheck.test.js`
-23. `node scripts/check-guideline-literals.js src/bootstrap/owners/bootstrap-request-owner.js; node scripts/check-guideline-decision-boundaries.js src/bootstrap/owners/bootstrap-request-owner.js test/bootstrap/bootstrap-request-admission-precheck.test.js; npm run audit:runtime-grammar:file -- src/bootstrap/owners/bootstrap-request-owner.js test/bootstrap/bootstrap-request-admission-precheck.test.js; git diff --check -- src/bootstrap/owners/bootstrap-request-owner.js test/bootstrap/bootstrap-request-admission-precheck.test.js work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md`
+23. `node scripts/check-guideline-literals.js src/bootstrap/owners/bootstrap-request-owner.js; node scripts/check-guideline-decision-boundaries.js src/bootstrap/owners/bootstrap-request-owner.js test/bootstrap/bootstrap-request-admission-precheck.test.js; npm run audit:runtime-grammar:file -- src/bootstrap/owners/bootstrap-request-owner.js test/bootstrap/bootstrap-request-admission-precheck.test.js; git diff --check -- src/bootstrap/owners/bootstrap-request-owner.js test/bootstrap/bootstrap-request-admission-precheck.test.js work/packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md`
 24. `Representative rerun after startup-complete stale admission repair: startup_active_gate_owner / snapshot_coverage, snapshotCoverage=3/5, inactive_nodes=1, activeNodeCount=4/5, selected snapshot 8be8d30f-4499-5eed-865c-71b4d529a67a, selectedSnapshotError=unknown, readinessDelayCause=none, recoveryProtocolState=priority_spread_pending.`
 25. `Focused analyzer fixture and active-gate harness regression refreshed to the current one-node contact-seed residual with ebc4aa0b-06c6-506d-93ea-1dd2deca3f58 inactive.`
 26. `Focused BootstrapJoinAdmissionOwner regression proving assignment-lock wait observes the shared bootstrap request execution budget and returns canonical BOOTSTRAP_NOT_READY before caller HTTP timeout.`
@@ -79,7 +79,7 @@ Keep startup active-gate snapshot coverage as the controlling analyzer boundary.
 49. `PASS — npm run analyze:topology-convergence -- test-output/reports/.playback/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability/rolling-restart/failure-bundle.json confirmed first frontier active_gate_snapshot_coverage under startup_active_gate_owner / snapshot_coverage.`
 50. `PASS — npm run work:model-ledger -- record ... recorded same-frontier-classified for the MOVE_REPLICA classification-only slice.`
 51. `PASS — npm run work:current-blocker -- --write refreshed current blocker tracker after package metadata updates.`
-52. `PASS — git diff --check -- work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md work/sprints/current-blocker.json work/sprints/current-blocker.md work/model-ledger.jsonl.`
+52. `PASS — git diff --check -- work/packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md work/sprints/current-blocker.json work/sprints/current-blocker.md work/model-ledger.jsonl.`
 53. `PASS — npm run work:validate reported Work tracker validation OK for 38 file(s).`
 
 ## Model Fit
@@ -123,7 +123,7 @@ Escalation triggers:
 23. `test/bootstrap/bootstrap-request-execution-timeout.test.js`
 24. `test/scripts/analyze-topology-convergence.test.js`
 25. `work/model-ledger.jsonl`
-26. `work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md`
+26. `work/packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md`
 27. `work/sprints/active-2026-q2-spec-led-runtime-modularization.md`
 28. `work/sprints/current-blocker.json`
 29. `work/sprints/current-blocker.md`

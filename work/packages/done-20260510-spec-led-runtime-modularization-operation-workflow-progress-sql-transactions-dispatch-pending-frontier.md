@@ -59,7 +59,7 @@
   "predecessor": "work/packages/done-20260510-spec-led-runtime-modularization-representative-green-proof-or-next-blocker.md",
   "closed": "2026-05-10",
   "commitAndPushLedgerRequired": true,
-  "successor": "work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md"
+  "successor": "work/packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md"
 }
 -->
 

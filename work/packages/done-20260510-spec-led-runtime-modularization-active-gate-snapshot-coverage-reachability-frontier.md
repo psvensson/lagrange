@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-10",
   "scenario": "spec-led-runtime-modularization",
   "artifact": "test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability.report.json",
@@ -36,7 +36,7 @@
     "Focused analyzer fixture and active-gate harness regression refreshed to the current two-node contact-seed residual with nodes 8be8d30f-4499-5eed-865c-71b4d529a67a and ebc4aa0b-06c6-506d-93ea-1dd2deca3f58 inactive.",
     "Focused BootstrapAPI regression proving startup-complete seed bootstrap admission ignores only stale BOOTSTRAP_PHASE_INCOMPLETE bootstrap-join snapshot evidence and preserves non-stale 503 blockers.",
     "npx tap --reporter=base test/bootstrap/bootstrap-request-admission-precheck.test.js",
-    "node scripts/check-guideline-literals.js src/bootstrap/owners/bootstrap-request-owner.js; node scripts/check-guideline-decision-boundaries.js src/bootstrap/owners/bootstrap-request-owner.js test/bootstrap/bootstrap-request-admission-precheck.test.js; npm run audit:runtime-grammar:file -- src/bootstrap/owners/bootstrap-request-owner.js test/bootstrap/bootstrap-request-admission-precheck.test.js; git diff --check -- src/bootstrap/owners/bootstrap-request-owner.js test/bootstrap/bootstrap-request-admission-precheck.test.js work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md",
+    "node scripts/check-guideline-literals.js src/bootstrap/owners/bootstrap-request-owner.js; node scripts/check-guideline-decision-boundaries.js src/bootstrap/owners/bootstrap-request-owner.js test/bootstrap/bootstrap-request-admission-precheck.test.js; npm run audit:runtime-grammar:file -- src/bootstrap/owners/bootstrap-request-owner.js test/bootstrap/bootstrap-request-admission-precheck.test.js; git diff --check -- src/bootstrap/owners/bootstrap-request-owner.js test/bootstrap/bootstrap-request-admission-precheck.test.js work/packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md",
     "Representative rerun after startup-complete stale admission repair: startup_active_gate_owner / snapshot_coverage, snapshotCoverage=3/5, inactive_nodes=1, activeNodeCount=4/5, selected snapshot 8be8d30f-4499-5eed-865c-71b4d529a67a, selectedSnapshotError=unknown, readinessDelayCause=none, recoveryProtocolState=priority_spread_pending.",
     "Focused analyzer fixture and active-gate harness regression refreshed to the current one-node contact-seed residual with ebc4aa0b-06c6-506d-93ea-1dd2deca3f58 inactive.",
     "Focused BootstrapJoinAdmissionOwner regression proving assignment-lock wait observes the shared bootstrap request execution budget and returns canonical BOOTSTRAP_NOT_READY before caller HTTP timeout.",
@@ -60,13 +60,13 @@
     "Focused NodeJoiningService regressions proving CLIENT_ATTEMPT_DEADLINE_EXHAUSTED and BOOTSTRAP_REQUEST_EXECUTION_BUDGET_EXHAUSTED bootstrap-not-ready evidence use the fixed resume cap instead of elapsed-only retry.",
     "Representative rerun after retained contact-seed diagnostics: startup_active_gate_owner / snapshot_coverage, snapshotCoverage=3/5, inactive_nodes=2, activeNodeCount=3/5, selected snapshot 11601fe0-72d6-5853-8590-ec2881853e72, selectedSnapshotError=unknown, readinessDelayCause=none; residual bootstrap-not-ready reasons are MOVE_REPLICA_HANDOFF_STABILIZING plus priority or readiness stable-window evidence.",
     "Failure-bundle topology analysis after the diagnostic run: frontierCount=1, publication_ack_convergence satisfied, priority_recovery_partition_progress satisfied, dominant witness active_gate_snapshot_coverage.",
-    "CLASSIFICATION-ONLY \u2014 playback trace of residual nodes 8be8d30f-4499-5eed-865c-71b4d529a67a and ebc4aa0b-06c6-506d-93ea-1dd2deca3f58 showed retained MOVE_REPLICA_HANDOFF_STABILIZING bootstrap-not-ready evidence as bootstrap admission backpressure, with no CLIENT_ATTEMPT_DEADLINE_EXHAUSTED or BOOTSTRAP_REQUEST_EXECUTION_BUDGET_EXHAUSTED residual.",
-    "PASS \u2014 npx tap --reporter=base test/bootstrap/move-replica-assignment-token.test.js preserved the MOVE_REPLICA admission contract (195 pass), including deferral while a non-terminal handoff stabilizes.",
-    "PASS \u2014 npm run analyze:topology-convergence -- test-output/reports/.playback/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability/rolling-restart/failure-bundle.json confirmed first frontier active_gate_snapshot_coverage under startup_active_gate_owner / snapshot_coverage.",
-    "PASS \u2014 npm run work:model-ledger -- record ... recorded same-frontier-classified for the MOVE_REPLICA classification-only slice.",
-    "PASS \u2014 npm run work:current-blocker -- --write refreshed current blocker tracker after package metadata updates.",
-    "PASS \u2014 git diff --check -- work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md work/sprints/current-blocker.json work/sprints/current-blocker.md work/model-ledger.jsonl.",
-    "PASS \u2014 npm run work:validate reported Work tracker validation OK for 38 file(s)."
+    "CLASSIFICATION-ONLY — playback trace of residual nodes 8be8d30f-4499-5eed-865c-71b4d529a67a and ebc4aa0b-06c6-506d-93ea-1dd2deca3f58 showed retained MOVE_REPLICA_HANDOFF_STABILIZING bootstrap-not-ready evidence as bootstrap admission backpressure, with no CLIENT_ATTEMPT_DEADLINE_EXHAUSTED or BOOTSTRAP_REQUEST_EXECUTION_BUDGET_EXHAUSTED residual.",
+    "PASS — npx tap --reporter=base test/bootstrap/move-replica-assignment-token.test.js preserved the MOVE_REPLICA admission contract (195 pass), including deferral while a non-terminal handoff stabilizes.",
+    "PASS — npm run analyze:topology-convergence -- test-output/reports/.playback/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability/rolling-restart/failure-bundle.json confirmed first frontier active_gate_snapshot_coverage under startup_active_gate_owner / snapshot_coverage.",
+    "PASS — npm run work:model-ledger -- record ... recorded same-frontier-classified for the MOVE_REPLICA classification-only slice.",
+    "PASS — npm run work:current-blocker -- --write refreshed current blocker tracker after package metadata updates.",
+    "PASS — git diff --check -- work/packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md work/sprints/current-blocker.json work/sprints/current-blocker.md work/model-ledger.jsonl.",
+    "PASS — npm run work:validate reported Work tracker validation OK for 38 file(s)."
   ],
   "touchedFiles": [
     "src/control-plane/*readiness*.js",
@@ -94,7 +94,7 @@
     "test/bootstrap/bootstrap-request-execution-timeout.test.js",
     "test/scripts/analyze-topology-convergence.test.js",
     "work/model-ledger.jsonl",
-    "work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md",
+    "work/packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md",
     "work/sprints/active-2026-q2-spec-led-runtime-modularization.md",
     "work/sprints/current-blocker.json",
     "work/sprints/current-blocker.md"
@@ -109,7 +109,9 @@
       "representative proof still fails on active_gate_snapshot_coverage after owner repair"
     ]
   },
-  "predecessor": "work/packages/done-20260510-spec-led-runtime-modularization-operation-workflow-progress-sql-transactions-dispatch-pending-frontier.md"
+  "predecessor": "work/packages/done-20260510-spec-led-runtime-modularization-operation-workflow-progress-sql-transactions-dispatch-pending-frontier.md",
+  "closed": "2026-05-10",
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -501,7 +503,7 @@ that predecessor returned clean before this successor implementation started.
 50. PASS — `node scripts/check-guideline-literals.js src/bootstrap/phases/contact-seed-phase.js src/bootstrap/node-joining-service-segment-2.js`;
     `node scripts/check-guideline-decision-boundaries.js src/bootstrap/phases/contact-seed-phase.js src/bootstrap/node-joining-service-segment-2.js test/bootstrap/node-joining-service.test.js`;
     `npm run audit:runtime-grammar:file -- src/bootstrap/phases/contact-seed-phase.js src/bootstrap/node-joining-service-segment-2.js test/bootstrap/node-joining-service.test.js`;
-    `git diff --check -- src/bootstrap/phases/contact-seed-phase.js src/bootstrap/node-joining-service-segment-2.js test/bootstrap/node-joining-service.test.js work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md`.
+    `git diff --check -- src/bootstrap/phases/contact-seed-phase.js src/bootstrap/node-joining-service-segment-2.js test/bootstrap/node-joining-service.test.js work/packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md`.
 51. SAME-FRONTIER-REDUCED — `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability.report.json --fast-local --verbose`
     failed with analyzer frontier `startup_active_gate_owner /
     snapshot_coverage`, `snapshotCoverage=3/5`, `inactive_nodes=2`,
@@ -525,7 +527,7 @@ that predecessor returned clean before this successor implementation started.
 56. PASS — `npm run work:current-blocker -- --write`; `npm run work:model-ledger -- record ...`;
     `npm run work:validate`.
 57. PASS — `TAP_ALLOW_INCOMPLETE_COVERAGE=1 npx tap --reporter=base test/distributed/harness/__tests__/cluster.test-part-5.js`;
-    `git diff --check -- test/distributed/harness/__tests__/cluster.test-part-5.js work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md`
+    `git diff --check -- test/distributed/harness/__tests__/cluster.test-part-5.js work/packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md`
     after the contact-seed residual assertion-message fix.
 58. PASS — `npx tap --reporter=base test/bootstrap/bootstrap-request-admission-precheck.test.js`
     after adding the startup-complete stale `BOOTSTRAP_PHASE_INCOMPLETE`
@@ -533,7 +535,7 @@ that predecessor returned clean before this successor implementation started.
 59. PASS — `node scripts/check-guideline-literals.js src/bootstrap/owners/bootstrap-request-owner.js`;
     `node scripts/check-guideline-decision-boundaries.js src/bootstrap/owners/bootstrap-request-owner.js test/bootstrap/bootstrap-request-admission-precheck.test.js`;
     `npm run audit:runtime-grammar:file -- src/bootstrap/owners/bootstrap-request-owner.js test/bootstrap/bootstrap-request-admission-precheck.test.js`;
-    `git diff --check -- src/bootstrap/owners/bootstrap-request-owner.js test/bootstrap/bootstrap-request-admission-precheck.test.js work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md`.
+    `git diff --check -- src/bootstrap/owners/bootstrap-request-owner.js test/bootstrap/bootstrap-request-admission-precheck.test.js work/packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md`.
 60. PASS — `node scripts/check-guideline-literals.js src/bootstrap/owners/bootstrap-request-owner.js src/bootstrap/phases/contact-seed-phase.js src/bootstrap/node-joining-service-segment-2.js`;
     `node scripts/check-guideline-decision-boundaries.js src/bootstrap/owners/bootstrap-request-owner.js test/bootstrap/bootstrap-request-admission-precheck.test.js src/bootstrap/phases/contact-seed-phase.js src/bootstrap/node-joining-service-segment-2.js test/bootstrap/node-joining-service.test.js test/distributed/harness/__tests__/cluster.test-part-5.js test/scripts/analyze-topology-convergence.test.js`;
     `npm run audit:runtime-grammar:file -- src/bootstrap/owners/bootstrap-request-owner.js test/bootstrap/bootstrap-request-admission-precheck.test.js src/bootstrap/phases/contact-seed-phase.js src/bootstrap/node-joining-service-segment-2.js test/bootstrap/node-joining-service.test.js test/distributed/harness/__tests__/cluster.test-part-5.js test/scripts/analyze-topology-convergence.test.js`;
@@ -638,7 +640,7 @@ that predecessor returned clean before this successor implementation started.
     `npm run audit:runtime-grammar:file -- src/bootstrap/owners/bootstrap-request-owner.js test/bootstrap/bootstrap-request-execution-timeout.test.js`.
 91. PASS — `npm run work:validate` validated the updated package proof and
     subagent ledger (`38 file(s)`).
-92. PASS — `git diff --check -- src/bootstrap/owners/bootstrap-request-owner.js test/bootstrap/bootstrap-request-execution-timeout.test.js work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md`.
+92. PASS — `git diff --check -- src/bootstrap/owners/bootstrap-request-owner.js test/bootstrap/bootstrap-request-execution-timeout.test.js work/packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md`.
 93. PASS — `node --check src/bootstrap/owners/bootstrap-request-owner.js`;
     `node --check src/bootstrap/phases/contact-seed-phase.js`;
     `node --check src/bootstrap/node-joining-service-segment-2.js`;
@@ -663,7 +665,7 @@ that predecessor returned clean before this successor implementation started.
 100. PASS — `npm run audit:runtime-grammar:file -- src/bootstrap/bootstrap-api-constants.js src/bootstrap/node-joining-constants.js src/bootstrap/owners/bootstrap-join-admission-owner.js src/bootstrap/owners/bootstrap-request-owner.js src/bootstrap/phases/contact-seed-phase.js src/bootstrap/node-joining-service-segment-2.js test/bootstrap/bootstrap-request-execution-timeout.test.js test/bootstrap/node-joining-service.test.js test/bootstrap/bootstrap-request-admission-precheck.test.js`
     scanned `9` JavaScript files and found `0` runtime-grammar-contract
     violations.
-101. PASS — `git diff --check -- src/bootstrap/bootstrap-api-constants.js src/bootstrap/node-joining-constants.js src/bootstrap/owners/bootstrap-join-admission-owner.js src/bootstrap/owners/bootstrap-request-owner.js src/bootstrap/phases/contact-seed-phase.js src/bootstrap/node-joining-service-segment-2.js test/bootstrap/bootstrap-request-execution-timeout.test.js test/bootstrap/node-joining-service.test.js test/bootstrap/bootstrap-request-admission-precheck.test.js work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md`.
+101. PASS — `git diff --check -- src/bootstrap/bootstrap-api-constants.js src/bootstrap/node-joining-constants.js src/bootstrap/owners/bootstrap-join-admission-owner.js src/bootstrap/owners/bootstrap-request-owner.js src/bootstrap/phases/contact-seed-phase.js src/bootstrap/node-joining-service-segment-2.js test/bootstrap/bootstrap-request-execution-timeout.test.js test/bootstrap/node-joining-service.test.js test/bootstrap/bootstrap-request-admission-precheck.test.js work/packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md`.
 102. SAME-FRONTIER-DIAGNOSTIC — `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability.report.json --fast-local --verbose`
     failed `0/1` after `132.0s`; analyzer frontier remains
     `startup_active_gate_owner / snapshot_coverage` with
@@ -678,13 +680,13 @@ that predecessor returned clean before this successor implementation started.
     produced `frontierCount=1`, first frontier
     `active_gate_snapshot_coverage`, publication ACK convergence satisfied, and
     priority recovery partition progress satisfied.
-105. PASS — `npm run work:model-ledger -- record --package work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md --model gpt-5.3-codex --reasoning-effort high --task-class implementation --package-class representative-frontier-closure --intended-minimum-model gpt-5.3-codex --scope-shape owner-boundary-contraction --escalated true --bailout-reason none --outcome same-frontier-diagnostic --validation-status focused-pass-representative-same-frontier --correction-loops 1 --review-findings 0 --notes "..."`
+105. PASS — `npm run work:model-ledger -- record --package work/packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md --model gpt-5.3-codex --reasoning-effort high --task-class implementation --package-class representative-frontier-closure --intended-minimum-model gpt-5.3-codex --scope-shape owner-boundary-contraction --escalated true --bailout-reason none --outcome same-frontier-diagnostic --validation-status focused-pass-representative-same-frontier --correction-loops 1 --review-findings 0 --notes "..."`
     recorded `same-frontier-diagnostic`.
 106. PASS — `npm run work:current-blocker -- --write` updated
     `work/sprints/current-blocker.json` and `work/sprints/current-blocker.md`.
 107. PASS — `npm run work:validate` reported `Work tracker validation OK for
     38 file(s)`.
-108. PASS — `git diff --check -- src/bootstrap/bootstrap-api-constants.js src/bootstrap/node-joining-constants.js src/bootstrap/owners/bootstrap-join-admission-owner.js src/bootstrap/owners/bootstrap-request-owner.js src/bootstrap/phases/contact-seed-phase.js src/bootstrap/node-joining-service-segment-2.js test/bootstrap/bootstrap-request-execution-timeout.test.js test/bootstrap/node-joining-service.test.js work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md work/model-ledger.jsonl work/sprints/current-blocker.json work/sprints/current-blocker.md`.
+108. PASS — `git diff --check -- src/bootstrap/bootstrap-api-constants.js src/bootstrap/node-joining-constants.js src/bootstrap/owners/bootstrap-join-admission-owner.js src/bootstrap/owners/bootstrap-request-owner.js src/bootstrap/phases/contact-seed-phase.js src/bootstrap/node-joining-service-segment-2.js test/bootstrap/bootstrap-request-execution-timeout.test.js test/bootstrap/node-joining-service.test.js work/packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md work/model-ledger.jsonl work/sprints/current-blocker.json work/sprints/current-blocker.md`.
 109. CLASSIFICATION-ONLY — playback inspection of residual contact-seed nodes
     confirmed `MOVE_REPLICA_HANDOFF_STABILIZING` is retained bootstrap admission
     backpressure alongside priority/stable-window evidence, with no deadline or
@@ -699,9 +701,15 @@ that predecessor returned clean before this successor implementation started.
 113. PASS — `npm run work:current-blocker -- --write` refreshed
     `work/sprints/current-blocker.json` and `work/sprints/current-blocker.md`
     after package metadata updates.
-114. PASS — `git diff --check -- work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md work/sprints/current-blocker.json work/sprints/current-blocker.md work/model-ledger.jsonl`.
+114. PASS — `git diff --check -- work/packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md work/sprints/current-blocker.json work/sprints/current-blocker.md work/model-ledger.jsonl`.
 115. PASS — `npm run work:validate` reported `Work tracker validation OK for
     38 file(s)`.
+
+## Commit And Push Ledger
+
+- Focused package commit: `75ffdb39`
+- Pushed to: `origin/codex/pending-ack-eligibility-filter`
+- Commit contains only package-owned files/package-status/allowed sprint handoff: `yes`
 
 ## Continuation Notes
 
@@ -746,183 +754,190 @@ that predecessor returned clean before this successor implementation started.
 - [x] Fix subagent recorded or explicitly not needed:
       `not-needed`.
 - [x] Implementation subagent recorded:
-      Agent active-gate-implementation (626e22da-18de-4041-9ceb-c3ec027b6b42) implemented work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md.
+      Agent active-gate-implementation (626e22da-18de-4041-9ceb-c3ec027b6b42) implemented work/packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md.
 - [x] Continuation review subagent recorded:
       Agent active-gate-timeout-review (active-gate-timeout-review) reviewed
-      work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md;
+      work/packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md;
+      result clean.
+- [x] Continuation fix subagent recorded or explicitly not needed:
+      not-needed.
+- [x] Continuation review subagent recorded:
+      Agent active-gate-boundary-review
+      (active-gate-boundary-review) reviewed
+      work/packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md;
       result clean.
 - [x] Continuation fix subagent recorded or explicitly not needed:
       not-needed.
 - [x] Continuation review subagent recorded:
       Agent active-gate-move-replica-residual-review
       (active-gate-move-replica-resid) reviewed
-      work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md;
+      work/packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md;
       result clean.
 - [x] Continuation fix subagent recorded or explicitly not needed:
       not-needed.
 - [x] Continuation implementation subagent recorded:
       Agent active-gate-resume-cap-residual-impl
       (active-gate-resume-cap-residual-impl) implemented
-      work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md.
+      work/packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md.
 - [x] Continuation review subagent recorded:
       Agent active-gate-two-of-five-review
       (active-gate-two-of-five-review) reviewed
-      work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md;
+      work/packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md;
       result clean.
 - [x] Continuation fix subagent recorded or explicitly not needed:
       not-needed.
 - [x] Continuation review subagent recorded:
       Agent active-gate-seed-admin-review
       (active-gate-seed-admin-review) reviewed
-      work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md;
+      work/packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md;
       result clean.
 - [x] Continuation fix subagent recorded or explicitly not needed:
       not-needed.
 - [x] Continuation implementation subagent recorded:
       Agent active-gate-clean-partial-implementation
       (active-gate-clean-partial-impl) implemented
-      work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md.
+      work/packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md.
 - [x] Continuation review subagent recorded:
       Agent active-gate-clean-partial-review
       (active-gate-clean-partial-revi) reviewed
-      work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md;
+      work/packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md;
       result clean.
 - [x] Continuation fix subagent recorded or explicitly not needed:
       not-needed.
 - [x] Continuation review subagent recorded:
       Agent active-gate-runtime-partial-review
       (active-gate-runtime-partial-re) reviewed
-      work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md;
+      work/packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md;
       result clean.
 - [x] Continuation fix subagent recorded or explicitly not needed:
       not-needed.
 - [x] Continuation implementation subagent recorded:
       Agent active-gate-inactive-joiners-impl
       (active-gate-inactive-joiners-i) implemented
-      work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md.
+      work/packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md.
 - [x] Continuation review subagent recorded:
       Agent active-gate-inactive-joiners-review
       (active-gate-inactive-joiners-r) reviewed
-      work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md;
+      work/packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md;
       result clean.
 - [x] Continuation fix subagent recorded or explicitly not needed:
       not-needed.
 - [x] Continuation implementation subagent recorded:
       Agent active-gate-seed-readiness-impl
       (active-gate-seed-readiness-imp) implemented
-      work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md.
+      work/packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md.
 - [x] Continuation review subagent recorded:
       Agent active-gate-seed-readiness-review
       (active-gate-seed-readiness-rev) reviewed
-      work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md;
+      work/packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md;
       result clean.
 - [x] Continuation fix subagent recorded or explicitly not needed:
       not-needed.
 - [x] Continuation implementation subagent recorded:
       Agent active-gate-seed-admin-impl
       (active-gate-seed-admin-impl) implemented
-      work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md.
+      work/packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md.
 - [x] Continuation review subagent recorded:
       Agent active-gate-seed-admin-implementation-review
       (active-gate-seed-admin-impleme) reviewed
-      work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md;
+      work/packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md;
       result clean.
 - [x] Continuation fix subagent recorded or explicitly not needed:
       not-needed.
 - [x] Continuation implementation subagent recorded:
       Agent active-gate-two-of-five-impl
       (active-gate-two-of-five-impl) implemented
-      work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md.
+      work/packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md.
 - [x] Continuation review subagent recorded:
       Agent active-gate-two-of-five-implementation-review
       (active-gate-two-of-five-implem) reviewed
-      work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md;
+      work/packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md;
       result fixes-required.
 - [x] Continuation fix subagent recorded:
       Agent active-gate-two-of-five-fix
       (active-gate-two-of-five-fix) fixed
-      work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md.
+      work/packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md.
 - [x] Continuation review subagent recorded:
       Agent active-gate-resume-cap-residual-review
       (active-gate-resume-cap-residua) reviewed
-      work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md;
+      work/packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md;
       result clean.
 - [x] Continuation fix subagent recorded or explicitly not needed:
       not-needed.
 - [x] Continuation review subagent recorded:
       Agent active-gate-seed-contact-budget-review
       (019e122f-de91-76d1-bd1e-1ed1cd355f91) reviewed
-      work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md;
+      work/packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md;
       result clean.
 - [x] Continuation fix subagent recorded or explicitly not needed:
       not-needed.
 - [x] Continuation implementation subagent recorded:
       Agent active-gate-seed-contact-budget-impl
       (019e1233-6a2a-7b11-b437-58fdf264837a) implemented
-      work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md.
+      work/packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md.
 - [x] Continuation review subagent recorded:
       Agent active-gate-contact-seed-residual-review
       (019e1242-0650-7be0-9f51-9466a5fc6f63) reviewed
-      work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md;
+      work/packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md;
       result fixes-required.
 - [x] Continuation fix subagent recorded:
       Agent active-gate-contact-seed-residual-fix
       (019e1245-6707-7082-a73d-d056db0ed383) fixed
-      work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md.
+      work/packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md.
 - [x] Continuation implementation subagent recorded:
       Agent active-gate-contact-seed-residual-implementation
       (019e1248-d72f-7e81-916b-7d30aa997387) implemented
-      work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md.
+      work/packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md.
 - [x] Continuation review subagent recorded:
       Agent active-gate-one-node-residual-review
       (019e1257-9da1-7fc1-994e-aee5c42682b9) reviewed
-      work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md;
+      work/packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md;
       result clean.
 - [x] Continuation fix subagent recorded or explicitly not needed:
       not-needed.
 - [x] Continuation implementation subagent recorded:
       Agent active-gate-one-node-residual-impl
       (019e125b-026f-75a0-a7d1-9e732a022acd) implemented
-      work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md.
+      work/packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md.
 - [x] Continuation review subagent recorded:
       Agent active-gate-assignment-lock-budget-review
       (019e1267-064a-7f63-83f1-d8700a3bd2c7) reviewed
-      work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md;
+      work/packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md;
       result fixes-required.
 - [x] Continuation fix subagent recorded:
       Agent active-gate-assignment-lock-budget-fix
       (019e1269-dbe6-79d1-b28e-5993d4974297) fixed
-      work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md.
+      work/packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md.
 - [x] Continuation implementation subagent recorded:
       Agent active-gate-client-deadline-implementation
       (019e126e-dd43-7881-83e3-f3d05618ca62) implemented
-      work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md.
+      work/packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md.
 - [x] Continuation review subagent recorded:
       Agent active-gate-client-deadline-review
       (019e1280-586e-7ee3-80b6-2b8cee3213b3) reviewed
-      work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md;
+      work/packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md;
       result fixes-required.
 - [x] Continuation fix subagent recorded:
       Agent active-gate-client-deadline-fix
       (019e1284-7df0-7510-a2de-a946e0510dbe) fixed
-      work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md.
+      work/packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md.
 - [x] Continuation implementation subagent recorded:
       Agent active-gate-contact-seed-defer-diagnostics-implementation
       (019e128d-24b8-7e92-83de-d23686585176) implemented
-      work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md.
+      work/packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md.
 - [x] Continuation review subagent recorded:
       Agent active-gate-resume-cap-review-retry-2
       (active-gate-resume-cap-review-1) reviewed
-      work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md;
+      work/packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md;
       result clean.
 - [x] Continuation fix subagent recorded or explicitly not needed:
       not-needed.
 - [x] Continuation implementation subagent recorded:
-      Agent active-gate-move-replica-residual-impl (active-gate-move-replica-residual-impl) implemented work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md.
+      Agent active-gate-move-replica-residual-impl (active-gate-move-replica-residual-impl) implemented work/packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md.
 - [x] Continuation review subagent recorded:
       Agent active-gate-move-replica-implementation-review
       (active-gate-move-replica-imple) reviewed
-      work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md;
+      work/packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md;
       result clean.
 - [x] Continuation fix subagent recorded or explicitly not needed:
       not-needed.

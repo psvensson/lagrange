@@ -8,7 +8,7 @@ the representative gate before companion cleanup or broad successor work.
 ## Current Package Snapshot
 
 Current blocker package:
-`work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md`.
+`work/packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md`.
 
 Owner boundary:
 `startup_active_gate_owner / snapshot_coverage`.
@@ -34,7 +34,7 @@ startup active-gate snapshot coverage frontier.
 
 Active and queued work:
 Current active package:
-`work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md`.
+`work/packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md`.
 
 Latest closed runtime package:
 `work/packages/done-20260510-spec-led-runtime-modularization-operation-workflow-progress-sql-transactions-dispatch-pending-frontier.md`.
@@ -120,7 +120,7 @@ the contract and proof ladder are stable.
 20. [Operation Scheduling SQL Write Operations Frontier](../packages/done-20260509-spec-led-runtime-modularization-operation-scheduling-sql-write-operations-frontier.md)
 21. [Representative Green Proof Or Next Blocker Classification](../packages/done-20260510-spec-led-runtime-modularization-representative-green-proof-or-next-blocker.md)
 22. [Operation Workflow Progress SQL Transactions Dispatch-Pending Frontier](../packages/done-20260510-spec-led-runtime-modularization-operation-workflow-progress-sql-transactions-dispatch-pending-frontier.md)
-23. [Active Gate Snapshot Coverage Reachability Frontier](../packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md)
+23. [Active Gate Snapshot Coverage Reachability Frontier](../packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md)
 24. [Active Gate Report Schema Alias Deletion](../packages/todo-20260509-spec-led-runtime-modularization-active-gate-report-schema-alias-deletion.md)
 
 ## Model Fit Strategy
