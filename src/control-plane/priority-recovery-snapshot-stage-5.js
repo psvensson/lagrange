@@ -463,6 +463,7 @@ function buildPriorityRecoveryReplicaOperationContext(
       String(latestTimelineEntry?.status || '').toLowerCase() || null,
     latestTimelineInFlight: latestTimelineEntry?.inFlight === true,
     targetVisibilityState: targetServiceEvidence.visibilityState,
+    targetServiceTerminalState: targetServiceEvidence.terminalState,
     ...(Number.isFinite(targetServiceEvidence.progressAtMs) ?
       {targetServiceProgressAtMs: targetServiceEvidence.progressAtMs} :
       {}),

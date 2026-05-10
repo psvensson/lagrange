@@ -16,17 +16,18 @@ Owner boundary:
 Current state: prior packages through operation scheduling SQL write operations
 are closed. The proof-only package classified the post-scheduling report as
 `migrated-frontier` into `operation_workflow_owner / workflow_progress`.
-The active workflow-progress package has implemented the first dispatch-pending
+The active workflow-progress package has implemented the dispatch-pending
 owner re-entry slice and focused diagnostics for appended and direct persisted
-`PENDING` snapshots plus absent-target `SENDING` witnesses. The latest
-representative rerun improved active-gate progress to `3/5` and priority
-recovery invariants passed. The analyzer classification now keeps
-priority-spread missing-publication evidence subordinate to priority recovery
-when pending ACK debt is gone, so the normalized first frontier is restored to
-`operation_workflow_owner / workflow_progress`. The current blocker is
+`PENDING` snapshots plus absent/non-active-target `SENDING` witnesses. The
+fresh direct-diagnostic representative rerun reduced the former
 `sql_transaction_participants-p1` `SENDING`/non-active-target
-`operation_stalled` plus `sql_transactions-p1` / `sql_write_operations-p1`
-`recovering_in_flight` rows.
+`operation_stalled` witness to `recovering_in_flight` with no blocker reasons,
+and publication ACK convergence is satisfied with `pendingAck=0` and
+`missingPublished=0`. The normalized first frontier remains
+`operation_workflow_owner / workflow_progress`; the current dominant witness is
+`sql_write_operations-p1` `needs_operation` /
+`priority_operation_serial_wait` behind `sql_transaction_participants-p1` and
+`sql_transactions-p1`, with active gate snapshot coverage downstream at `2/5`.
 
 Active and queued work:
 Current active package:
@@ -42,13 +43,14 @@ Latest closed runtime package:
 `work/packages/done-20260509-spec-led-runtime-modularization-operation-scheduling-sql-write-operations-frontier.md`.
 
 Next proof surface: freeze and repair the
-`sql_transaction_participants-p1` `SENDING`/pending dispatch-pending
-workflow-progress witness from
+`sql_write_operations-p1` / `sql_transactions-p1`
+`priority_operation_serial_wait` summary classification from
 `test-output/reports/rolling-restart-spec-led-runtime-modularization-workflow-progress-sql-transactions-dispatch-pending-direct-diagnostic.report.json`.
-The target visibility is `non_active` and timeout reconciliation is due, so the
-operation workflow owner must decide whether the operation re-enters, wakes,
-retires, or fails while publication ACK convergence stays satisfied and active
-gate snapshot coverage remains downstream.
+Direct decision snapshots show event-driven `recovering_in_flight`
+workflow-progress waits, while priority recovery observation still promotes
+the serial-wait summary to `needs_operation` and `transition_deferred`.
+Publication ACK convergence must stay satisfied and active gate snapshot
+coverage must remain downstream.
 
 ## Goal
 

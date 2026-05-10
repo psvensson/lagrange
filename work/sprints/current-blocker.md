@@ -20,11 +20,11 @@ Boundary: `workflow_progress`
 
 Dominant reason: `priority_recovery_progress_blocked`
 
-Current state: The workflow-progress implementation now treats persisted PENDING dispatch-pending rows as owner re-entry candidates and applies the owner-advance diagnostic normalization to both appended and direct PENDING persisted-not-dispatched snapshots. Focused tests and touched-file guardrails pass. The fresh direct-diagnostic representative classification has been corrected: priority-spread missing publication evidence no longer outranks priority recovery when publication ACK debt is gone. The normalized first frontier is restored to operation_workflow_owner / workflow_progress with sql_transaction_participants-p1 operation_stalled SENDING/non-active-target and sql_transactions-p1/sql_write_operations-p1 recovering_in_flight PENDING rows; active gate snapshot coverage remains next expected downstream at 3/5.
+Current state: The workflow-progress implementation now treats persisted PENDING dispatch-pending rows as owner re-entry candidates and applies owner-advance diagnostic normalization to PENDING persisted-not-dispatched snapshots plus SENDING dispatch-pending snapshots with absent or non-active non-terminal targets. Focused tests and touched-file guardrails pass. The fresh direct-diagnostic representative rerun reduced the former sql_transaction_participants-p1 operation_stalled SENDING/non-active witness to recovering_in_flight with no blocker reasons, and publication ACK convergence is satisfied with pendingAck=0 and missingPublished=0. The normalized first frontier remains operation_workflow_owner / workflow_progress; the dominant witness migrated to sql_write_operations-p1 needs_operation / priority_operation_serial_wait behind sql_transaction_participants-p1 and sql_transactions-p1, with active gate snapshot coverage downstream at 2/5.
 
 ## Next Action
 
-Freeze and repair the sql_transaction_participants-p1 SENDING/pending dispatch-pending workflow-progress witness with targetVisibilityState non_active and timeoutReconcileDue true: decide through the operation workflow owner whether it should re-enter, wake, retire, or fail; keep publication ACK convergence satisfied and active gate downstream.
+Freeze and repair the sql_write_operations-p1 / sql_transactions-p1 priority_operation_serial_wait summary classification: direct decision snapshots are recovering_in_flight with event-driven workflow-progress waits, while priority recovery observation still promotes the serial-wait summary to needs_operation and transition_deferred. Decide whether the serial-wait carrier should normalize to in-flight owner progress or expose a separate owner action without reopening publication ACK convergence.
 
 ## Proof Ladder
 

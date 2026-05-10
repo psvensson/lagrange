@@ -54,6 +54,7 @@ const TEST_PUBLICATION_STATUS_PUBLISHED = 'PUBLISHED';
 const TEST_WORKFLOW_STEP_PENDING = 'PENDING';
 const TEST_WORKFLOW_STEP_SENDING = 'SENDING';
 const TEST_OPERATION_STATUS_PENDING = 'pending';
+const TEST_TARGET_VISIBILITY_NON_ACTIVE = 'non_active';
 
 function buildPriorityRecoveryOwnerConsumerSnapshot(overrides = {}) {
   return Object.freeze({
@@ -521,4 +522,44 @@ test('priority recovery decision snapshots attach owner observation for ' +
     state:
       PRIORITY_RECOVERY_ACTUATION_STATE.DISPATCHED_WAITING_PROGRESS,
   });
+});
+
+test('priority recovery decision snapshots attach owner observation for ' +
+  'SENDING dispatch witnesses with non-active targets', async (t) => {
+  const operationContext = Object.freeze({
+    ...buildPriorityRecoveryOperationContextFromRecord(
+      buildPriorityRecoveryOwnerPendingOperationRow({
+        workflow_step: TEST_WORKFLOW_STEP_SENDING,
+      }),
+      {
+        nowMs: TEST_CAPTURED_AT_MS,
+      },
+    ),
+    targetVisibilityState: TEST_TARGET_VISIBILITY_NON_ACTIVE,
+  });
+  const targetSnapshot = buildPriorityRecoveryDecisionSnapshot({
+    capturedAt: TEST_CAPTURED_AT_MS,
+    partitionId: TEST_PARTITION_ID,
+    publicationConvergence:
+      buildPriorityRecoveryOwnerPublicationConvergence(),
+    operationContexts: Object.freeze([operationContext]),
+    operationId: TEST_OPERATION_ID,
+    operationContext,
+  });
+
+  t.equal(
+    targetSnapshot?.coordinator?.operation?.targetVisibilityState,
+    TEST_TARGET_VISIBILITY_NON_ACTIVE,
+    'the fixture should preserve the non-active target visibility state',
+  );
+  t.equal(
+    targetSnapshot?.operationOwnerObservation?.outcome,
+    OPERATION_WORKFLOW_OUTCOME_VALUES.ADVANCE_EXISTING_OPERATION,
+    'non-active target diagnostics should carry the sending owner observation',
+  );
+  t.same(
+    targetSnapshot?.blockerReasons,
+    [],
+    'non-active target owner diagnostics should clear no-transition blockers',
+  );
 });

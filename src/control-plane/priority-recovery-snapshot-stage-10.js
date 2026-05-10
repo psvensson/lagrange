@@ -26,6 +26,7 @@ import {
 import {normalizePriorityRecoverySnapshotFromOperationOwnerOutcome} from './priority-recovery-operation-owner-observation.js';
 import {
   PRIORITY_RECOVERY_SNAPSHOT_LITERAL,
+  PRIORITY_RECOVERY_TARGET_SERVICE_TERMINAL_STATE,
   PRIORITY_RECOVERY_TARGET_VISIBILITY_STATE,
 } from './priority-recovery-snapshot-stage-shared.js';
 import {buildPriorityRecoveryPlannerByPartitionId, buildPriorityRecoveryPlannerEntry} from './priority-recovery-snapshot-stage-1.js';
@@ -81,6 +82,16 @@ const PRIORITY_RECOVERY_DISPATCH_PENDING_DIAGNOSTIC_TARGET_TABLE =
         evidence.workflowStep === WORKFLOW_STEP.SENDING &&
         evidence.targetVisibilityState ===
           PRIORITY_RECOVERY_TARGET_VISIBILITY_STATE.ABSENT,
+    }),
+    Object.freeze({
+      state:
+        PRIORITY_RECOVERY_DISPATCH_PENDING_DIAGNOSTIC_TARGET_STATE.COMPATIBLE,
+      matches: (evidence) =>
+        evidence.workflowStep === WORKFLOW_STEP.SENDING &&
+        evidence.targetVisibilityState ===
+          PRIORITY_RECOVERY_TARGET_VISIBILITY_STATE.NON_ACTIVE &&
+        evidence.targetServiceTerminalState !==
+          PRIORITY_RECOVERY_TARGET_SERVICE_TERMINAL_STATE.TERMINAL,
     }),
     Object.freeze({
       state:
@@ -192,11 +203,17 @@ function buildPriorityRecoveryDispatchPendingDiagnosticOwnerEvidence(
     operationContext?.targetVisibilityState,
     PRIORITY_RECOVERY_SNAPSHOT_LITERAL.VALUE,
   );
+  const targetServiceTerminalState =
+    normalizePriorityRecoveryDiagnosticOwnerText(
+      operationContext?.targetServiceTerminalState,
+      PRIORITY_RECOVERY_SNAPSHOT_LITERAL.VALUE,
+    );
   const targetState =
     resolvePriorityRecoveryDispatchPendingDiagnosticTargetState(
       Object.freeze({
         workflowStep,
         targetVisibilityState,
+        targetServiceTerminalState,
       }),
     );
   return Object.freeze({

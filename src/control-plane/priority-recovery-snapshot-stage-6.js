@@ -44,6 +44,7 @@ import {
   PRIORITY_RECOVERY_STATUS_SYNCING,
   PRIORITY_RECOVERY_TARGET_SERVICE_PROGRESS_STATUSES,
   PRIORITY_RECOVERY_TARGET_SERVICE_PROGRESS_UNAVAILABLE_AT_MS,
+  PRIORITY_RECOVERY_TARGET_SERVICE_TERMINAL_STATE,
   PRIORITY_RECOVERY_TARGET_VISIBILITY_STATE,
   PRIORITY_RECOVERY_TERMINAL_OPERATION_STATUS_SET,
   STATUS_ACTIVE,
@@ -214,6 +215,14 @@ function resolvePriorityRecoveryTargetServiceRowVisibilityState(serviceRow) {
   return PRIORITY_RECOVERY_TARGET_VISIBILITY_STATE.NON_ACTIVE;
 }
 
+function resolvePriorityRecoveryTargetServiceRowTerminalState(serviceRow) {
+  return PRIORITY_RECOVERY_TERMINAL_OPERATION_STATUS_SET.has(
+    resolvePriorityRecoveryTargetServiceRowStatus(serviceRow),
+  ) ?
+    PRIORITY_RECOVERY_TARGET_SERVICE_TERMINAL_STATE.TERMINAL :
+    PRIORITY_RECOVERY_TARGET_SERVICE_TERMINAL_STATE.NON_TERMINAL;
+}
+
 function isPriorityRecoveryTargetServiceRowProgressing(
   serviceRow,
   visibilityState,
@@ -264,6 +273,7 @@ function buildPriorityRecoveryTargetServiceEvidence(options = {}) {
   let hasMatchingTargetServiceRow = false;
   let hasOperationalMatchingTargetServiceRow = false;
   let hasActiveMatchingTargetServiceRow = false;
+  let hasTerminalMatchingTargetServiceRow = false;
   let targetServiceProgressAtMs =
     PRIORITY_RECOVERY_TARGET_SERVICE_PROGRESS_UNAVAILABLE_AT_MS;
   for (const serviceRow of serviceRows) {
@@ -276,6 +286,12 @@ function buildPriorityRecoveryTargetServiceEvidence(options = {}) {
       continue;
     }
     hasMatchingTargetServiceRow = true;
+    if (
+      resolvePriorityRecoveryTargetServiceRowTerminalState(serviceRow) ===
+      PRIORITY_RECOVERY_TARGET_SERVICE_TERMINAL_STATE.TERMINAL
+    ) {
+      hasTerminalMatchingTargetServiceRow = true;
+    }
     const targetServiceRowVisibilityState =
       resolvePriorityRecoveryTargetServiceRowVisibilityState(serviceRow);
     const rowProgressAtMs =
@@ -325,6 +341,11 @@ function buildPriorityRecoveryTargetServiceEvidence(options = {}) {
   ].find((entry) => entry.matches === true).state;
   return Object.freeze({
     visibilityState,
+    terminalState: hasMatchingTargetServiceRow === true ?
+      hasTerminalMatchingTargetServiceRow === true ?
+        PRIORITY_RECOVERY_TARGET_SERVICE_TERMINAL_STATE.TERMINAL :
+        PRIORITY_RECOVERY_TARGET_SERVICE_TERMINAL_STATE.NON_TERMINAL :
+      PRIORITY_RECOVERY_TARGET_SERVICE_TERMINAL_STATE.UNKNOWN,
     ...(targetServiceProgressAtMs >
       PRIORITY_RECOVERY_TARGET_SERVICE_PROGRESS_UNAVAILABLE_AT_MS ?
       {progressAtMs: targetServiceProgressAtMs} :
