@@ -47,11 +47,11 @@
     "source": {
       "activeGateState": "timed_out",
       "snapshotCoverageComplete": "false",
-      "snapshotCoverageNodeCount": 2,
+      "snapshotCoverageNodeCount": 3,
       "expectedNodeCount": 5,
       "selectedSnapshotError": "unknown",
       "readinessDelayCause": "none",
-      "blockers": "inactive_nodes=2,snapshot_coverage=2/5"
+      "blockers": "inactive_nodes=2,snapshot_coverage=3/5"
     },
     "rootCauseClass": "startup"
   }

@@ -16,19 +16,20 @@ Owner boundary:
 Current state: prior packages through workflow-progress SQL transactions
 dispatch-pending are closed or migrated. The active package froze the original
 `snapshotCoverage=3/5` reachability-timeout witness, repaired readiness-delay
-selection, froze the residual `snapshotCoverage=4/5` partial fixture, repaired
-partial selected-snapshot projection for covered timeout-shaped nodes, repaired
-the selected `35a891b8-c1a0-5064-9c6e-2acfba61c2a7` reachability timeout, froze
-the clean residual selected node `8be8d30f-4499-5eed-865c-71b4d529a67a`, and
-repaired the original inactive joiner path. The seed was returning a
-MOVE_REPLICA bootstrap success after the joiner HTTP request had timed out;
-`BootstrapRequestOwner` now re-checks the shared bootstrap request budget after
-assignment reservation and defers expired work as `BOOTSTRAP_NOT_READY`. The
-representative report remains true partial runtime coverage at
-`startup_active_gate_owner / snapshot_coverage`, now with `snapshotCoverage=3/5`,
-blockers `inactive_nodes=2,snapshot_coverage=3/5`, `activeNodeCount=3/5`,
-selected snapshot error `unknown`, readiness delay cause `none`, publication ACK
-convergence not reopened, and priority recovery retryable.
+selection, froze and reduced partial fixtures, repaired selected-snapshot
+projection, repaired the selected `35a891b8-c1a0-5064-9c6e-2acfba61c2a7`
+reachability timeout, and repaired the original inactive joiner path. The latest
+continuation classified the remaining artifact as true startup active-gate
+partial runtime coverage rather than a reopened selected reachability timeout,
+publication ACK, priority recovery, or original inactive-joiner regression. The
+current report remains `startup_active_gate_owner / snapshot_coverage` with
+`snapshotCoverage=3/5`, blockers `inactive_nodes=2,snapshot_coverage=3/5`,
+`activeNodeCount=3/5`, selected snapshot error `unknown`, readiness delay cause
+`none`, seed readiness probe timeout evidence for
+`7493b0ab-a054-5fad-a91b-5e331db29304`, node
+`35a891b8-c1a0-5064-9c6e-2acfba61c2a7` inactive after retryable seed-contact
+failures, publication ACK convergence not reopened, and priority recovery
+retryable.
 
 Active and queued work:
 Current active package:
@@ -43,11 +44,12 @@ Companion cleanup:
 Latest closed proof package:
 `work/packages/done-20260510-spec-led-runtime-modularization-representative-green-proof-or-next-blocker.md`.
 
-Next proof surface: continue from the new true runtime partial-coverage residual
-behind 3/5 selected snapshot coverage in
-`test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability.report.json`
-without reopening the repaired original joiner path, publication ACK convergence,
-or priority recovery.
+Next proof surface: continue from the focused 3/5 seed-timeout partial-coverage
+classification in
+`test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability.report.json`.
+If implementation continues on the same owner boundary, trace seed/admin
+responsiveness and join seed-contact budget interaction without reopening the
+repaired original joiner path, publication ACK convergence, or priority recovery.
 
 ## Goal
 

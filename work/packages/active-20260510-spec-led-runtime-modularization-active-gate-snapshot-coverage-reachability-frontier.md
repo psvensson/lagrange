@@ -11,14 +11,14 @@
   "owner": "startup_active_gate_owner",
   "boundary": "snapshot_coverage",
   "dominantReason": "active_gate_timed_out",
-  "currentState": "Bootstrap request execution-budget repair landed and reviewed clean for original inactive joiners 11601fe0-72d6-5853-8590-ec2881853e72 and ebc4aa0b-06c6-506d-93ea-1dd2deca3f58. Playback showed the seed prepared a MOVE_REPLICA bootstrap response after the joiner HTTP request had already timed out because BootstrapRequestOwner did not re-check the shared bootstrap request budget after assignment reservation returned successfully. Focused regression now defers expired successful assignment as BOOTSTRAP_NOT_READY, and the representative rerun made both original inactive joiners active. The scenario remains startup_active_gate_owner / snapshot_coverage with snapshotCoverage=3/5, inactive_nodes=2, activeNodeCount=3/5, selectedSnapshotError=unknown, readinessDelayCause=none, publication ACK convergence not reopened, and priority recovery retryable.",
-  "nextAction": "Continue from the new true runtime partial-coverage residual behind snapshotCoverage=3/5 and inactive evidence for seed readiness timeout plus node 35 inactive without reopening the repaired original joiner path, publication ACK convergence, or priority recovery.",
+  "currentState": "Continuation classified and reviewed the latest residual as true startup active-gate partial runtime coverage, not a reopened selected reachability timeout, publication ACK, priority recovery, or original inactive-joiner regression. The current artifact remains startup_active_gate_owner / snapshot_coverage with snapshotCoverage=3/5, inactive_nodes=2, activeNodeCount=3/5, selectedSnapshotError=unknown, readinessDelayCause=none, seed readiness probe timeout evidence for 7493b0ab-a054-5fad-a91b-5e331db29304, node 35a891b8-c1a0-5064-9c6e-2acfba61c2a7 inactive after retryable seed-contact failures, publication ACK convergence not reopened, and priority recovery retryable.",
+  "nextAction": "Continue on this same owner boundary by tracing seed/admin responsiveness and join seed-contact budget interaction from the classified 3/5 fixture without reopening the repaired original joiner path, publication ACK convergence, or priority recovery.",
   "proof": [
     "npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability.report.json --explain active_gate_snapshot_coverage",
     "Focused active-gate snapshot reachability fixture for 35a891b8-c1a0-5064-9c6e-2acfba61c2a7 with snapshotCoverage=3/5 and readinessDelayCause=snapshot_reachability_timeout",
     "Focused diagnostics-backed selected snapshot regression preserving partial 3/5 coverage while neutralizing redundant reachability timeout",
-    "Focused clean partial residual fixture for 8be8d30f-4499-5eed-865c-71b4d529a67a with snapshotCoverage=2/5 and readinessDelayCause=none",
-    "Focused TAP regression proving clean partial startup coverage remains blocked when two nodes are inactive",
+    "Focused seed-timeout partial residual fixture for 8be8d30f-4499-5eed-865c-71b4d529a67a with snapshotCoverage=3/5, readinessDelayCause=none, seed readiness timeout evidence, and node 35 inactive",
+    "Focused TAP regression proving seed-timeout partial startup coverage remains blocked when two nodes are inactive",
     "Focused BootstrapAPI regression proving an assignment reservation that exhausts the shared bootstrap request execution budget returns BOOTSTRAP_NOT_READY instead of a stale success response",
     "node --test test/diagnostics/topology-convergence-graph.test.js test/scripts/analyze-topology-convergence.test.js",
     "TAP_ALLOW_INCOMPLETE_COVERAGE=1 npx tap test/distributed/harness/__tests__/cluster.test-part-5.js",
@@ -216,6 +216,7 @@ that predecessor returned clean before this successor implementation started.
   true partial runtime coverage inside `startup_active_gate_owner /
   snapshot_coverage`, not a diagnostics projection, active-node accounting, or
   owner-path readiness defect. No runtime readiness was manufactured.
+
 - Continuation traced the original inactive joiners
   `11601fe0-72d6-5853-8590-ec2881853e72` and
   `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58` to seed bootstrap request budget
@@ -228,6 +229,18 @@ that predecessor returned clean before this successor implementation started.
   the selected snapshot from 2/5 to 3/5, but the same owner boundary remains
   blocked by true partial runtime coverage with two residual inactive/error
   nodes.
+
+- Continuation classified the latest residual rather than changing runtime code.
+  The current artifact's selected snapshot remains clean (`selectedSnapshotError`
+  `unknown`, readiness delay `none`) while startup active-gate coverage is still
+  truly partial at `snapshotCoverage=3/5`: the seed readiness probe timed out,
+  node `35a891b8-c1a0-5064-9c6e-2acfba61c2a7` stayed inactive after retryable
+  seed-contact failures, and the original repaired joiners stayed active. The
+  focused analyzer fixture and harness regression now freeze that seed-timeout /
+  inactive-node shape as `startup_active_gate_owner / snapshot_coverage` without
+  reclassifying it as publication ACK, priority recovery, or selected reachability
+  timeout debt. No runtime readiness was manufactured.
+
 
 ## Validation
 
@@ -261,6 +274,11 @@ that predecessor returned clean before this successor implementation started.
 25. PASS — `node scripts/check-guideline-literals.js src/bootstrap/owners/bootstrap-request-owner.js`; `node scripts/check-guideline-decision-boundaries.js src/bootstrap/owners/bootstrap-request-owner.js test/bootstrap/bootstrap-request-execution-timeout.test.js`; `npm run audit:runtime-grammar:file -- src/bootstrap/owners/bootstrap-request-owner.js test/bootstrap/bootstrap-request-execution-timeout.test.js`; `git diff --check -- src/bootstrap/owners/bootstrap-request-owner.js test/bootstrap/bootstrap-request-execution-timeout.test.js`.
 26. SAME-FRONTIER-REDUCED — `node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability.report.json --fast-local --verbose` failed with first frontier `startup_active_gate_owner / snapshot_coverage`, `snapshotCoverage=3/5`, blockers `inactive_nodes=2,snapshot_coverage=3/5`. The original inactive joiners `11601fe0-72d6-5853-8590-ec2881853e72` and `ebc4aa0b-06c6-506d-93ea-1dd2deca3f58` reached active; residual inactive/error evidence moved to seed readiness timeout plus node `35a891b8-c1a0-5064-9c6e-2acfba61c2a7` inactive.
 27. PASS — `npm run work:validate`.
+28. PASS — `npm run analyze:topology-convergence -- test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability.report.json --explain active_gate_snapshot_coverage` confirmed the latest residual remains `startup_active_gate_owner / snapshot_coverage` with `snapshotCoverage=3/5`, `inactive_nodes=2`, selected snapshot error `unknown`, and readiness delay `none`.
+29. PASS — `node --test test/scripts/analyze-topology-convergence.test.js` after refreshing the partial residual fixture from the latest seed-timeout / node-35-inactive artifact.
+30. PASS — `TAP_ALLOW_INCOMPLETE_COVERAGE=1 npx tap --reporter=base test/distributed/harness/__tests__/cluster.test-part-5.js` after updating the active-gate harness regression to preserve seed readiness timeout evidence plus two inactive nodes at `snapshotCoverage=3/5`.
+31. PASS — `node scripts/check-guideline-decision-boundaries.js test/distributed/harness/__tests__/cluster.test-part-5.js test/scripts/analyze-topology-convergence.test.js`; `npm run audit:runtime-grammar:file -- test/distributed/harness/__tests__/cluster.test-part-5.js test/scripts/analyze-topology-convergence.test.js`; `git diff --check -- ...` for modified package files.
+32. PASS — `npm run work:validate` after tracker regeneration and model-ledger record.
 
 ## Continuation Notes
 
@@ -308,6 +326,17 @@ that predecessor returned clean before this successor implementation started.
 - [x] Continuation review subagent recorded:
       Agent active-gate-inactive-joiners-review
       (active-gate-inactive-joiners-r) reviewed
+      work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md;
+      result clean.
+- [x] Continuation fix subagent recorded or explicitly not needed:
+      not-needed.
+- [x] Continuation implementation subagent recorded:
+      Agent active-gate-seed-readiness-impl
+      (active-gate-seed-readiness-imp) implemented
+      work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md.
+- [x] Continuation review subagent recorded:
+      Agent active-gate-seed-readiness-review
+      (active-gate-seed-readiness-rev) reviewed
       work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md;
       result clean.
 - [x] Continuation fix subagent recorded or explicitly not needed:
