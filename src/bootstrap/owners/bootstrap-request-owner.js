@@ -9,6 +9,7 @@ import {
   BOOTSTRAP_PHASE,
   BOOTSTRAP_PIPELINE_ERROR_CODE,
 } from '../bootstrap-constants.js';
+import {LIFECYCLE_REASON} from '../lifecycle-controller-constants.js';
 import {
   BOOTSTRAP_API_DEFAULT,
   BOOTSTRAP_API_ERROR,
@@ -42,7 +43,14 @@ const BOOTSTRAP_REQUEST_ADMISSION_DECISION = Object.freeze({
 });
 const BOOTSTRAP_REQUEST_STALE_STARTUP_COMPLETE_REASON_CODES = Object.freeze([
   BOOTSTRAP_API_PROBE_REASON.BOOTSTRAP_PHASE_INCOMPLETE,
+  BOOTSTRAP_PIPELINE_ERROR_CODE.SQL_ENGINE_UNAVAILABLE,
+  BOOTSTRAP_PIPELINE_ERROR_CODE.BOOTSTRAP_NOT_READY,
+  LIFECYCLE_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
 ]);
+const BOOTSTRAP_REQUEST_REQUIRED_STALE_STARTUP_COMPLETE_REASON_CODES =
+  Object.freeze([
+    BOOTSTRAP_API_PROBE_REASON.BOOTSTRAP_PHASE_INCOMPLETE,
+  ]);
 const BOOTSTRAP_REQUEST_CLIENT_ATTEMPT_DEADLINE_STATE = Object.freeze({
   UNBOUNDED: 'unbounded',
   ACTIVE: 'active',
@@ -100,23 +108,26 @@ function normalizeBootstrapRequestAdmissionReasons(snapshot) {
   ];
 }
 
-function hasOnlyStaleBootstrapPhaseIncompleteReason(snapshot) {
+function hasStartupCompleteStaleAdmissionReasons(snapshot) {
   const reasons = normalizeBootstrapRequestAdmissionReasons(snapshot);
-  return reasons.length ===
-    BOOTSTRAP_REQUEST_STALE_STARTUP_COMPLETE_REASON_CODES.length &&
-    BOOTSTRAP_REQUEST_STALE_STARTUP_COMPLETE_REASON_CODES.every((reason) =>
-      reasons.includes(reason),
+  const hasRequiredReasons =
+    BOOTSTRAP_REQUEST_REQUIRED_STALE_STARTUP_COMPLETE_REASON_CODES.every(
+      (reason) => reasons.includes(reason),
     );
+  const hasOnlyStaleReasons = reasons.every((reason) =>
+    BOOTSTRAP_REQUEST_STALE_STARTUP_COMPLETE_REASON_CODES.includes(reason),
+  );
+  return reasons.length > NUM.ZERO && hasRequiredReasons && hasOnlyStaleReasons;
 }
 
-function canAdmitStartupCompleteStaleBootstrapPhaseSnapshot(
+function canAdmitStartupCompleteStaleAdmissionSnapshot(
   startupComplete,
   snapshot,
 ) {
   return startupComplete === true &&
     snapshot?.draining !== true &&
     snapshot?.bootstrapJoinAuthorityAvailable === true &&
-    hasOnlyStaleBootstrapPhaseIncompleteReason(snapshot);
+    hasStartupCompleteStaleAdmissionReasons(snapshot);
 }
 
 function normalizeBootstrapRequestClientAttemptDeadlineMs(requestBody) {
@@ -555,14 +566,14 @@ class BootstrapRequestOwner {
   ) {
     const startupComplete =
       this.isBootstrapRequestStartupComplete(bootstrapService);
-    const staleStartupCompletePhaseOnly =
-      canAdmitStartupCompleteStaleBootstrapPhaseSnapshot(
+    const staleStartupCompleteAdmission =
+      canAdmitStartupCompleteStaleAdmissionSnapshot(
         startupComplete,
         bootstrapJoinAdmissionSnapshot,
       );
     const bootstrapJoinAdmissionReady =
       bootstrapJoinAdmissionSnapshot?.ready === true ||
-      staleStartupCompletePhaseOnly;
+      staleStartupCompleteAdmission;
     const admissionDecision = {
       decision: BOOTSTRAP_REQUEST_ADMISSION_DECISION.ADMIT,
       phase: null,

@@ -3,7 +3,7 @@
 <!-- work-package
 {
   "schema": "work-package-v1",
-  "status": "active",
+  "status": "done",
   "opened": "2026-05-10",
   "scenario": "spec-led-runtime-modularization",
   "artifact": "test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability.report.json",
@@ -42,7 +42,7 @@
     "test/diagnostics/invariant-review.test.js",
     "test/diagnostics/failure-class-taxonomy.test.js",
     "test/diagnostics/stop-condition-decision.test.js",
-    "work/packages/active-20260510-spec-led-runtime-modularization-high-level-causal-analysis-infrastructure.md"
+    "work/packages/done-20260510-spec-led-runtime-modularization-high-level-causal-analysis-infrastructure.md"
   ],
   "modelFit": {
     "packageClass": "diagnostics-infrastructure",
@@ -93,7 +93,9 @@
     "Workflow progress, operation scheduling, or publication ACK convergence implementation",
     "Pro or Enterprise diagnostic features"
   ],
-  "predecessor": "work/packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md"
+  "predecessor": "work/packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md",
+  "closed": "2026-05-10",
+  "commitAndPushLedgerRequired": true
 }
 -->
 
@@ -175,11 +177,11 @@ Prohibited reinterpretations: do not treat causal-analysis schema as runtime dec
 ## Subagent Sequencing Ledger
 
 - [x] Review subagent recorded:
-      Agent rolling-restart-active-causal-review (`8e146807-818f-5f67-ad87-3f29353153ab`) reviewed `work/packages/active-20260510-spec-led-runtime-modularization-high-level-causal-analysis-infrastructure.md`; result `fixes-required`.
+      Agent rolling-restart-active-causal-review (`8e146807-818f-5f67-ad87-3f29353153ab`) reviewed `work/packages/done-20260510-spec-led-runtime-modularization-high-level-causal-analysis-infrastructure.md`; result `fixes-required`.
 - [x] Fix subagent recorded or explicitly not needed:
-      Agent rolling-restart-active-causal-ledger-fix (`87f4a58c-0fc2-5c2c-a410-8e2d09afd02e`) fixed `work/packages/active-20260510-spec-led-runtime-modularization-high-level-causal-analysis-infrastructure.md`.
+      Agent rolling-restart-active-causal-ledger-fix (`87f4a58c-0fc2-5c2c-a410-8e2d09afd02e`) fixed `work/packages/done-20260510-spec-led-runtime-modularization-high-level-causal-analysis-infrastructure.md`.
 - [x] Implementation subagent recorded:
-      Agent rolling-restart-causal-analysis-impl (3e6f5b4d-37a6-5afd-9d76-4f52da9c724b) implemented work/packages/active-20260510-spec-led-runtime-modularization-high-level-causal-analysis-infrastructure.md.
+      Agent rolling-restart-causal-analysis-impl (3e6f5b4d-37a6-5afd-9d76-4f52da9c724b) implemented work/packages/done-20260510-spec-led-runtime-modularization-high-level-causal-analysis-infrastructure.md.
 
 ## Implementation Notes
 
@@ -235,10 +237,10 @@ Summary:
 - [x] `node scripts/check-guideline-literals.js src/diagnostics/causal-analysis-schema.js src/diagnostics/causal-graph-builder.js src/diagnostics/budget-timeout-accounting.js src/diagnostics/invariant-review.js src/diagnostics/failure-class-taxonomy.js src/diagnostics/stop-condition-decision.js src/diagnostics/index.js`
 - [x] `node scripts/check-guideline-decision-boundaries.js src/diagnostics/causal-analysis-schema.js src/diagnostics/causal-graph-builder.js src/diagnostics/budget-timeout-accounting.js src/diagnostics/invariant-review.js src/diagnostics/failure-class-taxonomy.js src/diagnostics/stop-condition-decision.js src/diagnostics/index.js`
 - [x] `npm --silent run audit:runtime-grammar:file -- src/diagnostics/causal-analysis-schema.js src/diagnostics/causal-graph-builder.js src/diagnostics/budget-timeout-accounting.js src/diagnostics/invariant-review.js src/diagnostics/failure-class-taxonomy.js src/diagnostics/stop-condition-decision.js src/diagnostics/index.js`
-- [x] `git diff --check -- src/diagnostics/causal-analysis-schema.js src/diagnostics/causal-graph-builder.js src/diagnostics/budget-timeout-accounting.js src/diagnostics/invariant-review.js src/diagnostics/failure-class-taxonomy.js src/diagnostics/stop-condition-decision.js src/diagnostics/index.js scripts/analyze-causal-model.js test/diagnostics/causal-analysis-schema.test.js test/diagnostics/causal-graph-builder.test.js test/diagnostics/budget-timeout-accounting.test.js test/diagnostics/invariant-review.test.js test/diagnostics/failure-class-taxonomy.test.js test/diagnostics/stop-condition-decision.test.js work/packages/active-20260510-spec-led-runtime-modularization-high-level-causal-analysis-infrastructure.md package.json`
+- [x] `git diff --check -- src/diagnostics/causal-analysis-schema.js src/diagnostics/causal-graph-builder.js src/diagnostics/budget-timeout-accounting.js src/diagnostics/invariant-review.js src/diagnostics/failure-class-taxonomy.js src/diagnostics/stop-condition-decision.js src/diagnostics/index.js scripts/analyze-causal-model.js test/diagnostics/causal-analysis-schema.test.js test/diagnostics/causal-graph-builder.test.js test/diagnostics/budget-timeout-accounting.test.js test/diagnostics/invariant-review.test.js test/diagnostics/failure-class-taxonomy.test.js test/diagnostics/stop-condition-decision.test.js work/packages/done-20260510-spec-led-runtime-modularization-high-level-causal-analysis-infrastructure.md package.json`
 - [x] `npm run work:current-blocker -- --write`
 - [x] `npm run work:validate`
-- [x] `npm run work:model-ledger -- record --package work/packages/active-20260510-spec-led-runtime-modularization-high-level-causal-analysis-infrastructure.md --model gpt-5.3-codex --reasoning-effort high --task-class diagnostics-infrastructure --package-class diagnostics-infrastructure --intended-minimum-model gpt-5.3-codex --scope-shape cross-domain-foundation --escalated true --bailout-reason none --outcome architecture-gap-classified --validation-status focused-green-causal-analysis --correction-loops 1 --review-findings 1 --notes causal-analysis-framework-added-with-cli-tests-and-guardrails`
+- [x] `npm run work:model-ledger -- record --package work/packages/done-20260510-spec-led-runtime-modularization-high-level-causal-analysis-infrastructure.md --model gpt-5.3-codex --reasoning-effort high --task-class diagnostics-infrastructure --package-class diagnostics-infrastructure --intended-minimum-model gpt-5.3-codex --scope-shape cross-domain-foundation --escalated true --bailout-reason none --outcome architecture-gap-classified --validation-status focused-green-causal-analysis --correction-loops 1 --review-findings 1 --notes causal-analysis-framework-added-with-cli-tests-and-guardrails`
 - [x] Final review fix validation: report and failure-bundle analyses both list
       `startup_readiness_blocked` and both report invariant counts
       `failed=1`, `unknown=0`, `passed=5`.
@@ -258,3 +260,9 @@ Summary:
       `generatedFrom.failureBundle=failure_bundle`, and active failed report /
       failure-bundle causal outputs keep their previously validated blockers and
       architecture-gap outcome.
+
+## Commit And Push Ledger
+
+1. Focused package commit: `90b6fda5`
+2. Pushed to: `origin/codex/pending-ack-eligibility-filter`
+3. Commit contains only package-owned files/package-status/allowed sprint handoff: yes

@@ -1,6 +1,11 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {BootstrapAPI, BootstrapStrategy} from '../../src/bootstrap/bootstrap-api.js';
-import {BOOTSTRAP_PHASE} from '../../src/bootstrap/bootstrap-constants.js';
+import {
+  BOOTSTRAP_PHASE,
+  BOOTSTRAP_PIPELINE_ERROR_CODE,
+} from '../../src/bootstrap/bootstrap-constants.js';
+import {LIFECYCLE_REASON} from
+  '../../src/bootstrap/lifecycle-controller-constants.js';
 import {BOOTSTRAP_API_PROBE_REASON} from
   '../../src/bootstrap/bootstrap-api-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
@@ -36,13 +41,22 @@ const TEST_STALE_PHASE_INCOMPLETE_NODE_ID =
 const TEST_STALE_PHASE_INCOMPLETE_NODE_ADDRESS = 'ws://localhost:9098';
 const TEST_REAL_BLOCKER_NODE_ID = '550e8400-e29b-41d4-a716-446655440019';
 const TEST_REAL_BLOCKER_NODE_ADDRESS = 'ws://localhost:9099';
+const TEST_STALE_CASCADE_NODE_ID = '550e8400-e29b-41d4-a716-446655440020';
+const TEST_STALE_CASCADE_NODE_ADDRESS = 'ws://localhost:9100';
 const TEST_STALE_PHASE_INCOMPLETE_GROUP_ID = 'mg-stale-phase-incomplete';
 const TEST_REAL_BLOCKER_GROUP_ID = 'mg-real-blocker';
+const TEST_STALE_CASCADE_GROUP_ID = 'mg-stale-cascade';
 const TEST_STALE_PHASE_INCOMPLETE_REASON = Object.freeze([
   BOOTSTRAP_API_PROBE_REASON.BOOTSTRAP_PHASE_INCOMPLETE,
 ]);
 const TEST_REAL_BLOCKER_REASON = Object.freeze([
   BOOTSTRAP_API_PROBE_REASON.CONTROL_PLANE_DEPENDENCY_UNAVAILABLE,
+]);
+const TEST_STALE_CASCADE_REASONS = Object.freeze([
+  BOOTSTRAP_API_PROBE_REASON.BOOTSTRAP_PHASE_INCOMPLETE,
+  BOOTSTRAP_PIPELINE_ERROR_CODE.SQL_ENGINE_UNAVAILABLE,
+  BOOTSTRAP_PIPELINE_ERROR_CODE.BOOTSTRAP_NOT_READY,
+  LIFECYCLE_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
 ]);
 const TEST_STALE_PHASE_INCOMPLETE_ADMISSION_SNAPSHOT = Object.freeze({
   ready: TEST_READY_FALSE,
@@ -54,6 +68,12 @@ const TEST_REAL_BLOCKER_ADMISSION_SNAPSHOT = Object.freeze({
   ready: TEST_READY_FALSE,
   phase: BOOTSTRAP_PHASE.COMPLETE,
   reasons: TEST_REAL_BLOCKER_REASON,
+  bootstrapJoinAuthorityAvailable: true,
+});
+const TEST_STALE_CASCADE_ADMISSION_SNAPSHOT = Object.freeze({
+  ready: TEST_READY_FALSE,
+  phase: BOOTSTRAP_PHASE.INFRASTRUCTURE,
+  reasons: TEST_STALE_CASCADE_REASONS,
   bootstrapJoinAuthorityAvailable: true,
 });
 const TEST_STARTUP_COMPLETE_ADAPTER = Object.freeze({
@@ -176,6 +196,69 @@ test('BootstrapAPI admits stale startup-incomplete join snapshot after startup c
         counters.assignmentCalls,
         TEST_ACTIVE_COUNT,
         'stale startup-phase evidence should still run assignment reservation',
+      );
+    } finally {
+      await api.shutdown();
+      ConfigurationManager.resetInstance();
+      LoggingService.resetInstance();
+    }
+  });
+
+test('BootstrapAPI admits startup-complete readiness budget cascade through the owner boundary',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const counters = {
+      leaderReadinessCalls: TEST_IDLE_COUNT,
+      assignmentCalls: TEST_IDLE_COUNT,
+    };
+    const api = new BootstrapAPI({
+      seedNodeId: TEST_SEED_NODE_ID,
+      seedNodeAddress: TEST_SEED_NODE_ADDRESS,
+      systemTableCache: TEST_SYSTEM_TABLE_CACHE,
+      bootstrapStartupAdapter: TEST_STARTUP_COMPLETE_ADAPTER,
+    });
+
+    api.getBootstrapJoinAdmissionSnapshot = async () =>
+      TEST_STALE_CASCADE_ADMISSION_SNAPSHOT;
+    installSuccessfulBootstrapBackend(
+      api,
+      TEST_STALE_CASCADE_GROUP_ID,
+      counters,
+    );
+
+    await api.initialize(TEST_IDLE_COUNT, {listen: TEST_LISTEN_DISABLED});
+
+    try {
+      const response = await api.getFastify().inject({
+        method: 'POST',
+        url: '/bootstrap',
+        payload: {
+          nodeId: TEST_STALE_CASCADE_NODE_ID,
+          nodeAddress: TEST_STALE_CASCADE_NODE_ADDRESS,
+        },
+      });
+      const body = JSON.parse(response.body);
+
+      t.equal(
+        response.statusCode,
+        HTTP_STATUS.OK,
+        'startup-complete stale readiness cascade should not stop contact-seed admission',
+      );
+      t.equal(
+        body.messageGroupAssignment.groupId,
+        TEST_STALE_CASCADE_GROUP_ID,
+        'readiness cascade evidence should reach normal assignment reservation',
+      );
+      t.equal(
+        counters.leaderReadinessCalls,
+        TEST_ACTIVE_COUNT,
+        'stale readiness cascade should still run leader readiness checks',
+      );
+      t.equal(
+        counters.assignmentCalls,
+        TEST_ACTIVE_COUNT,
+        'stale readiness cascade should still run assignment reservation',
       );
     } finally {
       await api.shutdown();

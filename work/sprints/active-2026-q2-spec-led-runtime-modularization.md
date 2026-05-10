@@ -8,62 +8,55 @@ the representative gate before companion cleanup or broad successor work.
 ## Current Package Snapshot
 
 Current blocker package:
-`work/packages/active-20260510-spec-led-runtime-modularization-high-level-causal-analysis-infrastructure.md`.
+`work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-architecture-gap.md`.
 
-**Package status: ACTIVE CAUSAL-ANALYSIS INFRASTRUCTURE**
+**Package status: ACTIVE ARCHITECTURE-GAP RUNTIME OWNER PACKAGE**
 
 Owner boundary:
-`diagnostics_owner / causal_analysis_framework`.
+`startup_active_gate_owner / snapshot_coverage_architecture_gap`.
 
-Current state: prior packages through workflow-progress SQL transactions
-dispatch-pending are closed or migrated. The active package is a classification
-frontier that froze and reduced successive startup active-gate snapshot coverage
-witnesses, repaired readiness-delay selection, selected-snapshot projection,
-inactive joiner bootstrap request budget leakage, seed-contact retry budgeting,
-and now the retained seed-contact evidence resume classification. Direct
-`BOOTSTRAP_NOT_READY` contact-seed failures still use elapsed-only auto-resume,
-but later transport timeouts carrying retained bootstrap-not-ready evidence now
-obey the fixed retryable resume attempt cap. The current report remains
-`startup_active_gate_owner / snapshot_coverage` with `snapshotCoverage=3/5`,
-blockers `inactive_nodes=3,snapshot_coverage=3/5`, `activeNodeCount=2/5`,
-selected snapshot `8be8d30f-4499-5eed-865c-71b4d529a67a`, selected snapshot
-error `unknown`, readiness delay cause `none`, two residual contact-seed
-transport-timeout joiners exhausting `attempt_budget_exhausted`, and seed
-readiness timeout evidence for `7493b0ab-a054-5fad-a91b-5e331db29304`.
-Publication ACK convergence was not reopened; priority recovery appears in
-triage as subordinate/event-driven, while topology explain still selects the
-startup active-gate snapshot coverage frontier.
-
-This frontier package has completed its classification role. Before further
-tactical runtime owner patches, the high-level causal-analysis infrastructure
-must be established to trace root-cause chains, bound recovery budgets,
-account for timeout cascades, enumerate failure classes, and define stop
-conditions for rolling restart.
+Current state: implementation froze the BootstrapRequestOwner
+startup-complete stale-evidence contract: bootstrap-join authority must be
+available, the snapshot must not be draining,
+`BOOTSTRAP_PHASE_INCOMPLETE` must be present, and every stale reason must belong
+to the allowed startup-complete set (`BOOTSTRAP_PHASE_INCOMPLETE`,
+`SQL_ENGINE_UNAVAILABLE`, `BOOTSTRAP_NOT_READY`, and
+`PRIORITY_CONTROL_PLANE_RECOVERY_PENDING`). The focused cascade fixture covers
+all four readiness/budget reasons, and the existing phase-only fixture remains
+admitted. Representative rolling restart remains non-green but reduced:
+contact-seed readiness no longer dominates the top failure reasons, which
+migrated to `priority_recovery_workflow_progress_event_driven`, while causal
+analysis still reports `widen_architecture_work / architecture_gap` with
+dominant `active_gate_snapshot_coverage_incomplete`.
 
 Active and queued work:
 Current active package:
-`work/packages/active-20260510-spec-led-runtime-modularization-high-level-causal-analysis-infrastructure.md`
-(high-level causal-analysis infrastructure).
+`work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-architecture-gap.md`
+(active-gate snapshot coverage architecture gap).
 
-Latest closed runtime package:
-`work/packages/done-20260510-spec-led-runtime-modularization-operation-workflow-progress-sql-transactions-dispatch-pending-frontier.md`.
+Latest closed causal-analysis package:
+`work/packages/done-20260510-spec-led-runtime-modularization-high-level-causal-analysis-infrastructure.md`.
 
 Most recent classification closure:
 `work/packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md`.
 
 Deferred companion cleanup:
 `work/packages/todo-20260509-spec-led-runtime-modularization-active-gate-report-schema-alias-deletion.md`
-(remains deferred until after causal-analysis infrastructure is established).
+(remains deferred because the causal output points at the architecture gap, not
+old diagnostics schema aliases).
 
 Latest closed proof package:
 `work/packages/done-20260510-spec-led-runtime-modularization-representative-green-proof-or-next-blocker.md`.
 
-Next proof surface: After causal-analysis infrastructure is established,
-continue from the refreshed 3/5 partial-coverage classification in
-`test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability.report.json`.
-Trace the residual seed readiness timeout and two contact-seed transport-timeout
-joiners within the causal-analysis framework, accounting for resource budgets,
-phase dependencies, and stop conditions.
+Next proof surface: the BootstrapRequestOwner stale readiness/contact-seed
+cascade fixture and runtime owner change are complete for this active package.
+The representative rolling restart remains non-green but reduced, and
+contact-seed readiness no longer dominates the top failure reasons. Continue
+from the reduced frontier by inspecting `operation_workflow_owner /
+workflow_progress` for `priority_recovery_workflow_progress_event_driven` and
+recovering-in-flight priority partitions, while topology/causal analysis may
+still report the first active-gate snapshot coverage frontier. Diagnostics schema
+alias cleanup remains deferred.
 
 ## Goal
 
@@ -133,7 +126,7 @@ the contract and proof ladder are stable.
 21. [Representative Green Proof Or Next Blocker Classification](../packages/done-20260510-spec-led-runtime-modularization-representative-green-proof-or-next-blocker.md)
 22. [Operation Workflow Progress SQL Transactions Dispatch-Pending Frontier](../packages/done-20260510-spec-led-runtime-modularization-operation-workflow-progress-sql-transactions-dispatch-pending-frontier.md)
 23. [Active Gate Snapshot Coverage Reachability Frontier](../packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md)
-24. [High-Level Causal-Analysis Infrastructure](../packages/active-20260510-spec-led-runtime-modularization-high-level-causal-analysis-infrastructure.md)
+24. [High-Level Causal-Analysis Infrastructure](../packages/done-20260510-spec-led-runtime-modularization-high-level-causal-analysis-infrastructure.md)
 25. [Active Gate Report Schema Alias Deletion](../packages/todo-20260509-spec-led-runtime-modularization-active-gate-report-schema-alias-deletion.md)
 
 ## Model Fit Strategy

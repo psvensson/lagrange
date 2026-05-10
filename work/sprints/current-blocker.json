@@ -2,73 +2,43 @@
   "schema": "current-blocker-v1",
   "generatedBy": "scripts/work-tracker.js",
   "sprint": "work/sprints/active-2026-q2-spec-led-runtime-modularization.md",
-  "package": "work/packages/active-20260510-spec-led-runtime-modularization-high-level-causal-analysis-infrastructure.md",
+  "package": "work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-architecture-gap.md",
   "status": "active",
   "scenario": "spec-led-runtime-modularization",
   "artifact": "test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability.report.json",
   "playback": "test-output/reports/.playback/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability/rolling-restart/",
-  "owner": "diagnostics_owner",
-  "boundary": "causal_analysis_framework",
-  "dominantReason": "active_gate_classification_incomplete_requires_causal_model",
-  "currentState": "The active-gate snapshot-coverage reachability frontier package is a classification closure, not a runtime resolver. The representative rolling-restart report is still failing with snapshotCoverage=3/5 and residual seed readiness timeout / contact-seed transport-timeout joiners. Before further tactical runtime owner patches, the high-level causal-analysis framework must be established to trace root-cause chains, bound recovery budgets, account for timeout cascades, enumerate failure classes, and define stop conditions for rolling restart.",
-  "nextAction": "Establish the causal-analysis infrastructure framework covering all six user-requested capabilities: (1) end-to-end phase model for rolling restart lifecycle, (2) cross-node causal graph capturing dependency chains between components, (3) budget/timeout accounting model tracking resource limits, (4) invariant review for constraint preservation, (5) failure-class taxonomy for normalized failure modes, and (6) architecture-level stop condition definition. Emit canonical causal-analysis schema and decision table suitable for future runtime owner packages.",
+  "owner": "startup_active_gate_owner",
+  "boundary": "snapshot_coverage_architecture_gap",
+  "dominantReason": "active_gate_snapshot_coverage_incomplete",
+  "currentState": "Implementation froze startup-complete stale-evidence admission in BootstrapRequestOwner: bootstrap-join authority must be available, the snapshot must not be draining, BOOTSTRAP_PHASE_INCOMPLETE must be present, and every stale reason must belong to the allowed startup-complete set (BOOTSTRAP_PHASE_INCOMPLETE, SQL_ENGINE_UNAVAILABLE, BOOTSTRAP_NOT_READY, PRIORITY_CONTROL_PLANE_RECOVERY_PENDING). The focused cascade fixture covers all four readiness/budget reasons, and the existing phase-only fixture remains admitted. Representative rolling-restart remains non-green, but the readiness/contact-seed budget cascade is reduced: top failure reasons migrated to priority_recovery_workflow_progress_event_driven while causal analysis still reports widen_architecture_work / architecture_gap with dominant active_gate_snapshot_coverage_incomplete.",
+  "nextAction": "Continue from the reduced representative artifact. The contact-seed readiness cascade no longer dominates top reasons; inspect the next owner edge exposed by the same active-gate snapshot coverage frontier: operation_workflow_owner / workflow_progress with priority_recovery_workflow_progress_event_driven and recovering_in_flight priority partitions, without reopening diagnostics schema alias cleanup.",
   "proof": [
+    "npm run work:current-blocker -- --write",
     "npm run work:validate",
-    "git diff --check",
-    "src/diagnostics/causal-analysis-schema.js defines end-to-end phase model with canonical vocabulary",
-    "src/diagnostics/causal-graph-builder.js or equivalent builds cross-node causal chains from report data",
-    "src/diagnostics/budget-timeout-accounting.js or equivalent models resource limits and cascade behavior",
-    "src/diagnostics/invariant-review.js or equivalent validates constraint preservation",
-    "src/diagnostics/failure-class-taxonomy.js or equivalent normalizes failure modes",
-    "src/diagnostics/stop-condition-decision.js or equivalent defines architecture-level stop conditions",
-    "test/diagnostics/causal-analysis-schema.test.js validates schema, phase model, and decision tables",
-    "npm run analyze:causal-model validates both report and failure-bundle inputs",
-    "node test/distributed/run.js --config test/distributed/config/local.json --scenario rolling-restart --output test-output/reports/rolling-restart-spec-led-runtime-modularization-causal-analysis.report.json --fast-local --verbose",
-    "Scripts produce new causal-analysis artifact; no regressions in topology-convergence analysis"
+    "git diff --check -- work/packages work/sprints",
+    "npm --silent run analyze:causal-model -- test-output/reports/rolling-restart-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability.report.json confirms outcome widen_architecture_work, condition architecture_gap, dominant active_gate_snapshot_coverage_incomplete, classes active_gate_snapshot_coverage_incomplete/priority_recovery_event_wait/startup_readiness_blocked/budget_timeout_cascade",
+    "Focused owner fixture: npx tap --reporter=base test/bootstrap/bootstrap-request-admission-precheck.test.js fails on the old stale-cascade admission decision and passes after BootstrapRequestOwner admits the startup-complete readiness budget cascade through the canonical admission path",
+    "Representative rolling-restart rerun stays non-green but reduces the readiness/contact-seed budget cascade; triage top reasons now identify priority_recovery_workflow_progress_event_driven under operation_workflow_owner / workflow_progress while topology still has first frontier active_gate_snapshot_coverage"
   ],
   "touchedFiles": [
-    "src/diagnostics/causal-analysis-schema.js",
-    "src/diagnostics/causal-graph-builder.js",
-    "src/diagnostics/budget-timeout-accounting.js",
-    "src/diagnostics/invariant-review.js",
-    "src/diagnostics/failure-class-taxonomy.js",
-    "src/diagnostics/stop-condition-decision.js",
-    "src/diagnostics/index.js",
-    "scripts/analyze-causal-model.js",
-    "test/diagnostics/causal-analysis-schema.test.js",
-    "test/diagnostics/causal-graph-builder.test.js",
-    "test/diagnostics/budget-timeout-accounting.test.js",
-    "test/diagnostics/invariant-review.test.js",
-    "test/diagnostics/failure-class-taxonomy.test.js",
-    "test/diagnostics/stop-condition-decision.test.js",
-    "work/packages/active-20260510-spec-led-runtime-modularization-high-level-causal-analysis-infrastructure.md"
+    "src/bootstrap/owners/bootstrap-request-owner.js",
+    "test/bootstrap/bootstrap-request-admission-precheck.test.js",
+    "work/packages/active-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-architecture-gap.md",
+    "work/model-ledger.jsonl",
+    "work/sprints/active-2026-q2-spec-led-runtime-modularization.md",
+    "work/sprints/current-blocker.json",
+    "work/sprints/current-blocker.md"
   ],
   "modelFit": {
-    "packageClass": "diagnostics-infrastructure",
+    "packageClass": "architecture-gap runtime owner package",
     "intendedMinimumModel": "gpt-5.3-codex",
-    "scopeShape": "cross-domain-foundation",
-    "ownedDomain": "causal-analysis framework, rolling-restart phase model, cross-node dependency chains, resource budget accounting, failure taxonomy, stop-condition decision tables",
-    "forbiddenFiles": [
-      "src/control-plane/",
-      "src/rebalancer/",
-      "src/operations/",
-      "test/rebalancer/",
-      "test/control-plane/",
-      "test/operations/",
-      "unrelated sprint/package files"
-    ],
-    "frozenDecisions": [
-      "This package owns infrastructure only; it does not implement runtime owner patches or resolve active-gate fixture regressions",
-      "Schema and decision tables must be canonical and reusable by successor runtime packages",
-      "Causal-analysis artifacts are read-only views; they do not drive runtime decisions",
-      "The framework establishes vocabulary and boundaries but does not change active-gate or other owner behavior"
-    ],
+    "scopeShape": "owner-boundary-contraction/cross-boundary-causal-edge",
     "escalationTriggers": [
-      "causal-analysis schema requires runtime owner behavior changes",
-      "failure-class taxonomy reveals missing owner boundaries not in current diagnostics",
-      "budget/timeout accounting exposes dead-code or orphaned fallback paths in runtime",
-      "stop-condition decision table contradicts existing phase model invariants"
+      "causal critical path no longer starts at topology:active_gate_snapshot_coverage",
+      "proof requires diagnostics schema alias deletion instead of startup active-gate owner contraction",
+      "runtime implementation would need Pro or Enterprise features",
+      "readiness or budget cascade cannot be represented through one startup active-gate owner contract"
     ]
   },
-  "predecessor": "work/packages/done-20260510-spec-led-runtime-modularization-active-gate-snapshot-coverage-reachability-frontier.md"
+  "predecessor": "work/packages/done-20260510-spec-led-runtime-modularization-high-level-causal-analysis-infrastructure.md"
 }
